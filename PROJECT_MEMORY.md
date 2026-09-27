@@ -86,6 +86,29 @@ en-drift ✅ · check:content ✅ · check:stats ✅ · check:mp-attrs ✅ · ch
 
 ---
 
+### ★多端同屏图标自绘化（2026-09-29 用户要求「风格统一」）
+
+**问题**：演示页图标全靠 emoji（⌚📱📲📖📐💻🚗📺 / 🎧🎵🔌🎒🔋📦🏠⚙️ / ❤️▮▮▮⌁）——emoji 由**系统字体**
+渲染，跨平台字形/配色不一（Windows 彩色方块 / macOS Apple 风格 / Linux 又一套），与站点既有线性
+图标语言（`website/src/components/FeatureIcon.vue`）冲突，且无法随形态主题着色（暗色形态尤其突兀）。
+
+**做法**：新增 `website/src/components/DemoIcon.vue`（24 图标内联 SVG，与 FeatureIcon 同源风格：
+24×24 · stroke=currentColor · 1.7 描边 · 纯几何 path · **1em 尺寸** → 既有字号规则直接生效、零布局改动）。
+覆盖三类：设备剪影 8（与 FORM_PROFILES 一一对应）· 内容槽 12 · 状态栏 3。
+
+**分层纪律（重要）**：框架层 `p-formfactor` **不引入图标依赖**——小程序端内联 SVG 不可用，
+图标应走 `p-svg`/图片资源。故只去掉框架硬编码的 emoji 前缀（降级条 🎙、驾驶提醒 ⚠），
+文案入口（`degraded-hint`/`drive-hint`）保持宿主注入；`↕`（表冠方向）与 `⌘K`（快捷键图例）
+是纯文本字形且承担语义，保留。
+
+**门禁**：`tests/fluid-formfactor-render.test.ts` 新增 2 例——① 演示三文件出现 emoji 即红
+（注释行 / ★✓箭头 / 站点级状态标记 ✅🟡 豁免——后者是「真实/愿景」文本标记，与 Home.vue/ends.ts 同一约定）；
+② DemoIcon 必须覆盖演示所需全部图标名（缺名会静默退化成 box 兜底）。
+
+**验收**：e2e 14/14（几何零变化）· 单测 14/14 · en-drift/content/stats 绿 · vue-tsc 干净。
+
+---
+
 ### ★本轮教训（折叠线上新增两条）
 
 | 错误 | 性质 | 纪律 |
