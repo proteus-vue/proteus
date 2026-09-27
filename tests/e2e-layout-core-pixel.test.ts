@@ -48,7 +48,7 @@ interface LayoutSpec {
   maxWidth?: ResolvedLength
   padding?: { top?: number; right?: number; bottom?: number; left?: number }
   margin?: { top?: number; right?: number; bottom?: number; left?: number }
-  position?: 'static' | 'absolute'
+  position?: 'static' | 'relative' | 'absolute'
   top?: ResolvedLength
   left?: ResolvedLength
   overflow?: 'visible' | 'hidden'
@@ -238,6 +238,60 @@ const CASES: Case[] = [
       [pn(2, { display: 'none', height: N(50) }), pn(3, { height: N(30) }), pn(4, { height: N(20) })],
     ),
   },
+  /* ────────── ★层叠（stacking）用例组：命中/绘制序的地基 ──────────
+     为什么单独成组：绘制序的「两相位」模型（在流 → 定位）是命中正确性的核心，
+     而这些用例专门制造**重叠**，让浏览器 elementsFromPoint 把相位关系暴露出来。
+     实测背景：初版模型是纯树序，靠这组用例（探针 D/E 等价结构）才发现是错的。 */
+  {
+    // 探针 D/E 的等价结构：**深层 static 子树内的 absolute** vs 更外层**后置**的在流兄弟
+    name: '★层叠：深层 absolute 覆盖后置在流兄弟（相位按层叠上下文，非按父级）',
+    root: withChildren(
+      pn(1, { flexDirection: 'column', width: N(200), height: N(120) }),
+      [
+        withChildren(pn(2, { flexDirection: 'column', width: N(200), height: N(60) }), [
+          withChildren(pn(3, { flexDirection: 'column', width: N(200), height: N(10) }), [
+            pn(4, { position: 'absolute', top: N(20), left: N(20), width: N(100), height: N(60) }),
+          ]),
+        ]),
+        pn(5, { width: N(200), height: N(60), margin: { top: -40 } }),
+      ],
+    ),
+  },
+  {
+    // absolute 弟弟 vs 在流哥哥：弟弟必须画在哥哥**之上**（即使在流元素树序更靠后）
+    name: '★层叠：absolute 覆盖后置的在流兄弟',
+    root: withChildren(
+      pn(1, { flexDirection: 'column', width: N(200), height: N(120) }),
+      [
+        pn(2, { width: N(200), height: N(40) }),
+        pn(3, { position: 'absolute', top: N(20), left: N(20), width: N(100), height: N(60) }),
+        pn(4, { width: N(200), height: N(60), margin: { top: -50 } }),
+      ],
+    ),
+  },
+  {
+    // 两个 absolute 重叠：**树序靠后**者在上（同相位内按树序）
+    name: '★层叠：两个 absolute 重叠（同相位按树序）',
+    root: withChildren(
+      pn(1, { flexDirection: 'column', width: N(200), height: N(120) }),
+      [
+        pn(2, { position: 'absolute', top: N(10), left: N(10), width: N(120), height: N(80) }),
+        pn(3, { position: 'absolute', top: N(40), left: N(40), width: N(120), height: N(80) }),
+      ],
+    ),
+  },
+  {
+    // relative 也属「定位元素」→ 绘制在在流兄弟之上（本仓翻译必须**最小化**才测得准，
+    // 因为给所有元素加 relative 会把这个语义抹平——见 styleFor 注释）
+    name: '★层叠：relative 覆盖后置在流兄弟',
+    root: withChildren(
+      pn(1, { flexDirection: 'column', width: N(200), height: N(120) }),
+      [
+        pn(2, { width: N(200), height: N(60) }),
+        pn(4, { position: 'relative', top: N(-30), width: N(200), height: N(60) }),
+      ],
+    ),
+  },
   {
     name: 'overflow:hidden 不影响布局（只裁剪）',
     root: withChildren(
@@ -255,8 +309,21 @@ function cssValue(v: ResolvedLength | 'auto' | undefined): string | undefined {
 }
 
 /**
+ * 该节点是否有 absolute 子级（决定是否需要 `position:relative` 建立 containing block）
+ *
+ * ★只判断**直接子级**：求解器的 absolute containing block 是**父**的 padding 盒
+ *   （本仓 M1 已与浏览器对拍确认），故只需直接父级定位。
+ */
+function hasAbsoluteChild(node: PNode): boolean {
+  return node.children.some((c) => c.props.layout.position === 'absolute')
+}
+
+/**
  * 把 PNode 逐属性翻译成 CSS —— **刻意保持「朴素」**：不模拟求解器的任何内部决策，
  * 让浏览器用标准 CSS 算法算出基准真值。
+ *
+ * ★「朴素」的含义包括**不得副作用**：翻译只能表达 PNode 已有的语义，
+ *   不能顺手引入新语义（如给所有元素加 relative 会改变层叠相位——见下方注释）。
  */
 function styleFor(node: PNode): string {
   const L = node.props.layout
@@ -289,12 +356,24 @@ function styleFor(node: PNode): string {
     e('padding', L.padding)
     e('margin', L.margin)
     // ★containing block 对齐：求解器的 absolute 子级以**父 padding 盒**为基准，
-    //   故非 absolute 元素统一 relative（否则 absolute 子级会去找更上层定位祖先）
-    out.push(`position:${L.position === 'absolute' ? 'absolute' : 'relative'}`)
+    //   故**有 absolute 子级的**元素设为 relative（否则 absolute 子级会去找更上层定位祖先）。
+    //
+    // ★★这里必须**最小化**（本仓实测踩到，含真实后果）：
+    //   初版给**所有**非 absolute 元素加 `position:relative` —— 不仅对齐 containing block，
+    //   还**悄悄改变了层叠语义**：CSS 里 relative 属于「定位元素」，绘制在在流元素之上
+    //   （相位 2），于是「在流兄弟」被提升到绝对定位元素之上 → 浏览器给出的命中序
+    //   与**真实 CSS 语义**不符（`absolute 定位` 用例实测：浏览器报 [4,3]，真 CSS 应为 [3,4]）。
+    //   那会让命中对拍**测的是翻译层的假象**，而不是 Profile 的语义。
+    //   ⇒ 只有「直接父级」需要 relative（建立 containing block），其余保持 static。
+    out.push(`position:${L.position === 'absolute' ? 'absolute' : hasAbsoluteChild(node) ? 'relative' : L.position === 'relative' ? 'relative' : 'static'}`)
     if (L.position === 'absolute') {
       if (L.top) out.push(`top:${cssValue(L.top)}`)
       if (L.left) out.push(`left:${cssValue(L.left)}`)
       out.push('right:auto', 'bottom:auto')
+    } else if (L.position === 'relative') {
+      // ★relative 的 inset 是**视觉偏移**：不改布局、不影响兄弟（与求解器语义一致）
+      if (L.top) out.push(`top:${cssValue(L.top)}`)
+      if (L.left) out.push(`left:${cssValue(L.left)}`)
     }
     if (L.overflow && L.overflow !== 'visible') out.push(`overflow:${L.overflow}`)
   }
@@ -415,6 +494,20 @@ interface GoldenCase {
   textMeasures: Record<number, { width: number; height: number }>
   /** 浏览器基准真值（已换算为相对根原点，与求解器同口径） */
   rects: Record<number, { x: number; y: number; width: number; height: number }>
+  /**
+   * ★★命中测试基准真值（浏览器 `elementsFromPoint`）。
+   *
+   * 【为什么必须有】（M3 事件系统的地基）
+   *   命中的正确性依赖「逆绘制序 + 裁剪（overflow）」—— 这两条如果各端自己实现，
+   *   必然出现「同一份 IR 在浏览器点得到、在 Rust 点不到」这类**语义分叉**。
+   *   故与布局同法：把浏览器当**真值基准**，Rust 侧只消费冻结的 golden。
+   *
+   * 【坐标口径】与 `rects` 同——已换算为「相对根原点」（见 `normPoint`）。
+   *
+   * 【顺序语义】`ids` 自**最上层到根**（浏览器 `elementsFromPoint` 的原生顺序）——
+   *   即 Rust 侧 `hit_path` 的期望值。
+   */
+  hitProbes: Array<{ x: number; y: number; ids: number[] }>
 }
 
 /** LayoutNode 树 → 扁平 golden 节点表 */
@@ -466,6 +559,8 @@ describe('★★M1-5 出口条件：求解器 vs 真实浏览器布局（逐像�
   let mismatches: Mismatch[] = []
   let comparedNodes = 0
   let textNodeTotal = 0
+  let hitProbeTotal = 0
+  let hitProbeHitTotal = 0
 
   beforeAll(async () => {
     browser = await chromium.launch()
@@ -503,6 +598,51 @@ describe('★★M1-5 出口条件：求解器 vs 真实浏览器布局（逐像�
       const rootB = browserRects[c.root.id]!
       const rootM = solved.rects.get(c.root.id)!
 
+      // ── 命中测试探针（★浏览器 elementsFromPoint 为真值）
+      //
+      // 探针网格：视口范围内按 1/12 × 1/16 分数取点，**加 0.5 偏移**避开「恰好落在
+      // 盒边界」的整数坐标（边界归属在亚像素下有歧义，会让 golden 不稳定）。
+      const probes: Array<{ x: number; y: number }> = []
+      for (let i = 1; i < 12; i++) {
+        for (let j = 1; j < 16; j++) {
+          probes.push({ x: Math.round((VIEWPORT.width * i) / 12) + 0.5, y: Math.round((VIEWPORT.height * j) / 16) + 0.5 })
+        }
+      }
+      // 再加「盒子内部」采样：每个节点的中心点（覆盖小盒子——网格可能整片错过它）
+      const centers = (node: PNode): void => {
+        const r = browserRects[node.id]
+        if (r && r.width > 0 && r.height > 0) {
+          probes.push({ x: r.x + r.width / 2 + 0.5, y: r.y + r.height / 2 + 0.5 })
+        }
+        node.children.forEach(centers)
+      }
+      centers(c.root)
+
+      const hitRaw = (await page.evaluate((pts) => {
+        const out: Array<{ x: number; y: number; ids: number[] }> = []
+        for (const p of pts) {
+          // ★elementsFromPoint 已按「最上层 → 最下层」返回（与 Rust hit_path 同序）
+          const els = document.elementsFromPoint(p.x, p.y)
+          const ids: number[] = []
+          for (const el of els) {
+            const v = (el as HTMLElement).dataset ? (el as HTMLElement).dataset.lc : undefined
+            if (v !== undefined) ids.push(Number(v))
+          }
+          out.push({ x: p.x, y: p.y, ids })
+        }
+        return out
+      }, probes)) as Array<{ x: number; y: number; ids: number[] }>
+
+      // 归一为「相对根原点」坐标（与 rects 同口径）
+      const normPoint = (p: { x: number; y: number }): { x: number; y: number } => ({
+        x: p.x - rootB.x + rootM.x,
+        y: p.y - rootB.y + rootM.y,
+      })
+      const hitProbes = hitRaw.map((h) => {
+        const n = normPoint(h)
+        return { x: n.x, y: n.y, ids: h.ids }
+      })
+
       // ── 冻结 golden（引擎就绪输入 + 浏览器实测输出，已归一为「相对根原点」）
       const normRects: GoldenCase['rects'] = {}
       for (const [idStr, b] of Object.entries(browserRects)) {
@@ -513,11 +653,15 @@ describe('★★M1-5 出口条件：求解器 vs 真实浏览器布局（逐像�
           height: b.height,
         }
       }
+      hitProbeTotal += hitProbes.length
+      hitProbeHitTotal += hitProbes.filter((h) => h.ids.length > 0).length
+
       goldenCases.push({
         name: c.name,
         nodes: serializeLayoutTree(tree[0]!),
         textMeasures: Object.fromEntries(measurements),
         rects: normRects,
+        hitProbes,
       })
 
       // ── ③ 逐节点比对（浏览器坐标换算为「相对根原点」，与求解器同口径）
@@ -541,9 +685,21 @@ describe('★★M1-5 出口条件：求解器 vs 真实浏览器布局（逐像�
         comparedNodes++
         const mine = { x: m.x + rootM.x, y: m.y + rootM.y, width: m.width, height: m.height }
         const theirs = { x: b.x - rootB.x + rootM.x, y: b.y - rootB.y + rootM.y, width: b.width, height: b.height }
+        // ★防空跑：非有限值（NaN/Infinity）必须当场暴露，而不是靠 delta 比较
+        //   （`NaN > TOLERANCE` 是 false → 求解器产出 NaN 几何时比对会**静默通过**；
+        //    本仓实测踩到：golden 里混入非法值后比对仍全绿。用 isFinite 显式拦截。）
+        for (const prop of ['x', 'y', 'width', 'height'] as const) {
+          if (!Number.isFinite(mine[prop])) {
+            mismatches.push({ caseName: c.name, nodeId: id, prop: `${prop}(非有限)`, mine: mine[prop], browser: theirs[prop], delta: Infinity })
+          }
+        }
         for (const prop of ['x', 'y', 'width', 'height'] as const) {
           const delta = Math.abs(mine[prop] - theirs[prop])
-          if (delta > TOLERANCE) {
+          // ★★NaN 必须算不一致（本仓实测踩到）：`NaN > TOLERANCE` 是 **false**，
+          //   于是求解器产出 NaN 几何时比对会**静默通过**（恰好与浏览器 0 相比也不报）。
+          //   这正是「golden 里混入非法值」能溜过比对的原因——用 `!(delta <= TOLERANCE)` 修复。
+          const bad = !(delta <= TOLERANCE)
+          if (bad) {
             mismatches.push({ caseName: c.name, nodeId: id, prop, mine: mine[prop], browser: theirs[prop], delta })
           }
         }
@@ -560,7 +716,7 @@ describe('★★M1-5 出口条件：求解器 vs 真实浏览器布局（逐像�
     //   只在**比对全绿**时写（避免把失败状态冻结进去）
     const golden = {
       generatedBy: `tests/e2e-layout-core-pixel.test.ts（真实 Chromium；browser ${browser.version()}）`,
-      note: '★基准真值 = 浏览器。Rust 侧 conformance 直接消费本文件，无需浏览器。重新生成：pnpm run test:e2e:web',
+      note: '★基准真值 = 浏览器（布局 rects 用 getBoundingClientRect，命中 hitProbes 用 elementsFromPoint）。Rust 侧 conformance 直接消费本文件，无需浏览器。重新生成：pnpm run test:e2e:web',
       viewport: VIEWPORT,
       tolerance: TOLERANCE,
       cases: goldenCases,
@@ -574,9 +730,14 @@ describe('★★M1-5 出口条件：求解器 vs 真实浏览器布局（逐像�
     // ★防空跑：若用例构建失败/选择器失效，比对节点数会塌缩，此断言会拦住「什么都没比却绿了」
     // ★防空跑：用例构建失败 / 选择器失效时节点数会塌缩（实测 17 例 = 67 个有盒节点）
     expect(comparedNodes, '参与比对的节点数').toBeGreaterThanOrEqual(60)
-    expect(CASES.length).toBeGreaterThanOrEqual(17)
+    expect(CASES.length).toBeGreaterThanOrEqual(21)
     // 实测 4 个文本节点（两个文本用例共 4 个）——数量下探即说明用例或度量桥失效
     expect(textNodeTotal, '文本度量条目总数（浏览器注入）').toBeGreaterThanOrEqual(4)
+    // ★命中探针防空跑：必须有足量「有命中」的探针（全为空的 golden 会让 Rust 侧恒真通过）
+    // 实测：17 用例 × (11×15 网格 + 各节点中心) = 探针总数 ≥ 2800，其中有命中 ≥ 375
+    // （用例都是小盒子放在 375×667 视口里，网格点多数落在空白处——这是用例几何的正常结果）
+    expect(hitProbeTotal, '命中探针总数').toBeGreaterThanOrEqual(2800)
+    expect(hitProbeHitTotal, '有命中的探针数').toBeGreaterThanOrEqual(250)
   })
 
   it('破坏性：把求解器的一个尺寸改错 → 比对必须报出不一致（证明比对有效，非恒真）', async () => {

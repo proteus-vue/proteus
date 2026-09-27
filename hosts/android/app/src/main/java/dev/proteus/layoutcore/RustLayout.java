@@ -34,6 +34,7 @@ final class RustLayout {
     private static native boolean nativeDestroy(long handle);
     private static native int nativeHandleCount();
     private static native String nativeReadRects(long handle);
+    private static native String nativeHitTest(long handle, float x, float y);
 
     static boolean isLoaded() { return loaded; }
     static String getLoadError() { return loadError; }
@@ -89,6 +90,20 @@ final class RustLayout {
     /** 当前存活的树数（诊断：确认 destroy 真的释放） */
     static int handleCount() {
         return loaded ? nativeHandleCount() : -1;
+    }
+
+    /**
+     * ★★**命中测试**（M3 事件系统的几何地基）：屏幕坐标 → 节点。
+     *
+     * 【为什么直接问核心，而不是在 Java 侧镜像一份几何】
+     *   镜像必然漂移（滚动偏移/裁剪/增量布局都会改几何），且要在 Java 里重写
+     *   「逆绘制序 + 裁剪感知」的语义 —— 那正是「引擎语义泄漏到三端」的反例。
+     *   这里只传坐标，由核心用**它自己算出的几何**判定。
+     *
+     * @return JSON：`{ ok, target, path, chain }`（target=null 表示未命中）
+     */
+    static String hitTest(long handle, float x, float y) {
+        return loaded ? nativeHitTest(handle, x, y) : "{\"ok\":false,\"error\":\"native 未加载：" + loadError + "\"}";
     }
 
     /** ★§9.3 长列表复用池跑批（4000 行 / 滚到底再回滚） */

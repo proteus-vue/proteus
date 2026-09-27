@@ -1,0 +1,86 @@
+{
+  "generatedBy": "tests/paint-order-probe.mjs（真实 Chromium）",
+  "note": "★绘制序真值：定位元素（relative/absolute）绘制在**在流**元素之上；相位按**层叠上下文**而非按父级（见 D/E）。Rust 侧 hit.rs 的两相位模型据此校准。",
+  "browser": "151.0.7922.34",
+  "probes": [
+    {
+      "id": "A",
+      "desc": "在流在前，absolute 在后（同一父）",
+      "point": {
+        "x": 30,
+        "y": 40
+      },
+      "topDownIds": [
+        "abs",
+        "infl",
+        "w"
+      ]
+    },
+    {
+      "id": "B",
+      "desc": "absolute 在前，在流在后（★同父内树序颠倒——仍应 absolute 在上）",
+      "point": {
+        "x": 30,
+        "y": 40
+      },
+      "topDownIds": [
+        "abs",
+        "infl",
+        "w"
+      ]
+    },
+    {
+      "id": "C",
+      "desc": "两个 relative 重叠（同相位 → 树序靠后在上）",
+      "point": {
+        "x": 30,
+        "y": 40
+      },
+      "topDownIds": [
+        "b",
+        "a",
+        "w"
+      ]
+    },
+    {
+      "id": "D",
+      "desc": "★A(static) 内的 absolute vs root 下后置的 static 兄弟 B",
+      "point": {
+        "x": 30,
+        "y": 40
+      },
+      "topDownIds": [
+        "A1",
+        "B",
+        "A",
+        "root"
+      ]
+    },
+    {
+      "id": "E",
+      "desc": "★两层 static 嵌套内的 absolute vs 更外层后置 static（相位按层叠上下文，非按父级）",
+      "point": {
+        "x": 30,
+        "y": 40
+      },
+      "topDownIds": [
+        "A1",
+        "B",
+        "A",
+        "root"
+      ]
+    },
+    {
+      "id": "F",
+      "desc": "纯 static 兄弟（基线：树序靠后在上）",
+      "point": {
+        "x": 30,
+        "y": 40
+      },
+      "topDownIds": [
+        "Y",
+        "root"
+      ]
+    }
+  ]
+}

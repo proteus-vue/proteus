@@ -51,6 +51,18 @@ struct GoldenCase {
     nodes: Vec<GoldenNode>,
     text_measures: HashMap<String, GoldenSize>,
     rects: HashMap<String, GoldenRect>,
+    /// ★★命中测试基准真值（浏览器 `elementsFromPoint`）——M3 事件系统的地基。
+    ///   `ids` 自**最上层到根**，即 `hit_path` 的期望值。
+    #[serde(default)]
+    hit_probes: Vec<GoldenHitProbe>,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct GoldenHitProbe {
+    x: f32,
+    y: f32,
+    ids: Vec<u32>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -308,6 +320,139 @@ fn conformance_browser_layout() {
     );
 }
 
+/// ★★命中测试 conformance：以浏览器 `elementsFromPoint` 为真值基准（M3 事件系统出口条件）
+///
+/// 【为什么命中也要对拍，而不是「自己写测试自己过」】
+///   命中正确性依赖两条**容易分叉的语义**：
+///     ① **逆绘制序**：后画的在上 → 命中要取「最后绘制且含点」者
+///     ② **裁剪（overflow:hidden）**：被裁掉的部分不可命中，且**不得回落到父级**
+///   任何一条写错，「点到的元素」与「看到的元素」就不一致 —— 这是自绘框架最隐蔽的一类 bug
+///   （用户现象：「点了没反应」或「点到了看不见的东西」）。故与布局同法锚定浏览器。
+///
+/// 【本测试比什么】对每个探针点，Rust `hit_path` 必须**逐位等于**浏览器
+///   `elementsFromPoint` 过滤出的 id 序列（自上层到根）。
+///   比只比 target 更强：顺序错、多余节点、缺失节点都会被抓到。
+///
+/// 【已知不建模的差异】CSS 绘制的「定位元素在流之上」（CSS 2.1 附录 E）
+///   本模型未实现（Profile 未纳入 z-index）。golden 生成侧的翻译给所有元素加了
+///   `position:relative`（containing block 对齐需要），而 `z-index:auto` 的定位元素
+///   按**树序**绘制 → 与「纯树序」模型一致，故两侧可比。若将来引入 z-index，
+///   **绘制与命中必须同时改**（二者永远互为逆序），并同步本测试。
+#[test]
+fn conformance_hit_test_against_browser() {
+    let golden = load_golden();
+    let mut total = 0usize;
+    let mut with_hit = 0usize;
+    let mut failures: Vec<String> = Vec::new();
+
+    for case in &golden.cases {
+        let (mut tree, _order) = to_tree(case);
+        let mut engine = TaffyEngine::new().with_measurer(Box::new(to_measurer(case)));
+        engine.layout(
+            &mut tree,
+            RootConstraint {
+                width: AvailableSpace::Definite(golden.viewport.width),
+                height: AvailableSpace::Definite(golden.viewport.height),
+            },
+        );
+
+        // 探针期望值以 **id** 给出 → 换算为索引序列（布局后索引才稳定可比）
+        let id_to_index: HashMap<u32, usize> =
+            case.nodes.iter().enumerate().map(|(i, g)| (g.id, i)).collect();
+
+        for probe in &case.hit_probes {
+            total += 1;
+            if !probe.ids.is_empty() {
+                with_hit += 1;
+            }
+            let got_ids: Vec<u32> = proteus_layout_core::hit_path(&tree, probe.x, probe.y)
+                .iter()
+                .map(|&i| tree.get(i).id)
+                .collect();
+
+            if got_ids != probe.ids {
+                // 期望索引（用于错误信息里指明是哪个节点，便于定位）
+                let exp_idx: Vec<String> = probe
+                    .ids
+                    .iter()
+                    .map(|id| match id_to_index.get(id) {
+                        Some(i) => format!("{id}(idx{i})"),
+                        None => format!("{id}(未知)"),
+                    })
+                    .collect();
+                failures.push(format!(
+                    "[{}] 点 ({:.1},{:.1})：Rust {:?} vs 浏览器 期望 [{}({})]",
+                    case.name,
+                    probe.x,
+                    probe.y,
+                    got_ids,
+                    exp_idx.join(", "),
+                    probe.ids.iter().map(|i| i.to_string()).collect::<Vec<_>>().join(", ")
+                ));
+            }
+        }
+    }
+
+    println!("命中 conformance：比对 {total} 个探针（其中 {with_hit} 个有命中）");
+    assert!(total >= 2800, "探针数过少（{total}）——防空跑");
+    assert!(with_hit >= 250, "有命中的探针过少（{with_hit}）——防空跑");
+    assert!(
+        failures.is_empty(),
+        "命中结果与浏览器不一致（{} / {} 处）：\n{}",
+        failures.len(),
+        total,
+        failures.iter().take(15).cloned().collect::<Vec<_>>().join("\n")
+    );
+}
+
+/// ★破坏性验证：把命中实现「弄坏」（忽略裁剪）必须立刻报错——证明上面的对拍不是恒真。
+///
+/// 手法：手工构造一个 `overflow:hidden` 的父 + 溢出子级，点在**裁剪区外**；
+/// 用「朴素实现」（只比矩形、不管裁剪）与真实 `hit_path` 对照，两者必须**给出不同答案**。
+/// 若某次重构让二者一致（说明裁剪被忽略），本测试会失败。
+#[test]
+fn destructive_ignoring_clip_must_change_the_answer() {
+    use proteus_layout_core::Overflow;
+
+    // 父 0,0,50,50 overflow:hidden；子 0,0,200,200（大幅溢出）
+    let mut tree = LayoutTree::new();
+    let mut parent = LNode::new(1, LStyle { width: Some(50.0), height: Some(50.0), ..Default::default() });
+    parent.style.overflow = Overflow::Hidden;
+    parent.rect = proteus_layout_core::Rect { x: 0.0, y: 0.0, width: 50.0, height: 50.0 };
+    let mut child = LNode::new(2, LStyle { width: Some(200.0), height: Some(200.0), ..Default::default() });
+    child.rect = proteus_layout_core::Rect { x: 0.0, y: 0.0, width: 200.0, height: 200.0 };
+
+    let pi = tree.push(parent);
+    let ci = tree.push(child);
+    tree.add_child(pi, ci);
+    tree.roots.push(pi);
+
+    // 点在子级盒内、但超出父的裁剪区（y=120 > 50）
+    let (x, y) = (10.0, 120.0);
+    let clipped: Vec<u32> = proteus_layout_core::hit_path(&tree, x, y)
+        .iter()
+        .map(|&i| tree.get(i).id)
+        .collect();
+    assert!(clipped.is_empty(), "★裁剪生效：该点应无命中（子被裁、父不含）—— 实际 {clipped:?}");
+
+    // 朴素实现（忽略裁剪，只看矩形包含）：会错误地返回子级
+    let naive: Vec<u32> = tree
+        .nodes
+        .iter()
+        .enumerate()
+        .filter(|(_, n)| {
+            let r = n.rect;
+            x >= r.x && x < r.x + r.width && y >= r.y && y < r.y + r.height
+        })
+        .map(|(i, _)| tree.nodes[i].id)
+        .collect();
+    assert!(
+        !naive.is_empty(),
+        "★朴素实现必须给出不同答案（否则本测试失去破坏性意义）—— 它应错误命中子级"
+    );
+    assert_ne!(clipped, naive, "★裁剪语义必须真的改变结果");
+}
+
 /// 引擎身份与版本锁（DCP-1：必须 0.14，禁止降级到 0.13——后者有 measure 指数退化）
 #[test]
 fn engine_identity_is_taffy_014() {
@@ -475,4 +620,151 @@ fn destructive_changed_input_must_mismatch() {
         "★改了输入却仍与 golden 一致（差 {delta:.2}dp）——比对逻辑有问题（可能直接返回了 golden 值）"
     );
     println!("破坏性验证通过：改宽 +20dp → 与浏览器基线差 {delta:.2}dp（预期不符）");
+}
+
+/* ────────────── ★绘制序真值：消费浏览器探针（tests/golden/paint-order-probes.json） ────────────── */
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct PaintProbeFile {
+    generated_by: String,
+    probes: Vec<PaintProbe>,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct PaintProbe {
+    id: String,
+    desc: String,
+    point: ProbePoint,
+    /// 自**最上层到最下层**（浏览器 `elementsFromPoint` 的原生顺序）
+    top_down_ids: Vec<String>,
+}
+
+#[derive(Debug, Deserialize)]
+struct ProbePoint {
+    x: f32,
+    y: f32,
+}
+
+/// ★★绘制序 conformance：两相位模型必须与**真实 Chromium** 的 `elementsFromPoint` 一致。
+///
+/// 【为什么这条测试存在】
+///   绘制序是命中正确性的地基，也是本模块**唯一一处「直觉会写错」**的地方：
+///   初版实现是纯树序，探针 D/E 证明那是错的（相位按**层叠上下文**而非按父级）。
+///   探针脚本 `tests/paint-order-probe.mjs` 把浏览器真值冻结成 JSON；
+///   本测试把它转成等价的 Rust 树，再断言 `hit_path` 逐位一致。
+///   ⇒ 浏览器真值 → **机器可检**，而不是躺在文档里的一段话。
+///
+/// 【几何来源】探针 HTML 的几何是**手写内联样式**（不是布局算出来的），
+///   故这里按同一份声明手工给 rect——两侧的几何同源，比较的才是**顺序语义**。
+#[test]
+fn conformance_paint_order_against_browser_probes() {
+    // ★探针文件在**仓库根**的 tests/golden/（绘制序探针与布局 golden 分开放：
+    //   前者由 `tests/paint-order-probe.mjs` 生成，后者由 e2e 对拍顺带冻结）
+    let path = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .join("../../tests/golden/paint-order-probes.json");
+    let raw = fs::read_to_string(&path).expect("绘制序探针文件应存在（生成：node tests/paint-order-probe.mjs）");
+    let file: PaintProbeFile = serde_json::from_str(&raw).expect("探针 JSON 应可解析");
+    assert!(file.generated_by.contains("Chromium"), "真值必须来自真实浏览器：{}", file.generated_by);
+
+    // 探针 id → 该场景的等价 Rust 树（几何按探针的声明样式手工构造）
+    let build = |id: &str| -> Option<(LayoutTree, HashMap<String, u32>)> {
+        let mut names: HashMap<String, u32> = HashMap::new();
+        let mut tree = LayoutTree::new();
+        let mut add = |tree: &mut LayoutTree, names: &mut HashMap<String, u32>, name: &str, style: LStyle, rect: proteus_layout_core::Rect| -> u32 {
+            let id = (names.len() as u32) + 1;
+            names.insert(name.to_string(), id);
+            let mut n = LNode::new(id, style);
+            n.rect = rect;
+            tree.push(n)
+        };
+        let boxed = |w: f32, h: f32| LStyle { width: Some(w), height: Some(h), ..Default::default() };
+        let abs = |w: f32, h: f32| LStyle {
+            width: Some(w),
+            height: Some(h),
+            position: Position::Absolute,
+            ..Default::default()
+        };
+        let rc = |x: f32, y: f32, w: f32, h: f32| proteus_layout_core::Rect { x, y, width: w, height: h };
+
+        let root_idx = match id {
+            "A" | "B" => {
+                // w(200×100, relative) > [infl 100×60 @y10, abs 100×60 @(20,20)]
+                let w = add(&mut tree, &mut names, "w", boxed(200.0, 100.0), rc(0.0, 0.0, 200.0, 100.0));
+                let infl = add(&mut tree, &mut names, "infl", boxed(100.0, 60.0), rc(0.0, 10.0, 100.0, 60.0));
+                let a = add(&mut tree, &mut names, "abs", abs(100.0, 60.0), rc(20.0, 20.0, 100.0, 60.0));
+                tree.add_child(w, infl);
+                tree.add_child(w, a);
+                w
+            }
+            "C" => {
+                // w(200×100, relative) > [a 100×60 @y10, b 100×60 @(20,60-40=20)]
+                let w = add(&mut tree, &mut names, "w", boxed(200.0, 100.0), rc(0.0, 0.0, 200.0, 100.0));
+                let a = add(&mut tree, &mut names, "a", boxed(100.0, 60.0), rc(0.0, 10.0, 100.0, 60.0));
+                let b = add(&mut tree, &mut names, "b", boxed(100.0, 60.0), rc(20.0, 20.0, 100.0, 60.0));
+                tree.add_child(w, a);
+                tree.add_child(w, b);
+                w
+            }
+            "D" | "E" => {
+                // root(200×120) > [A(200×60) > (E: A0 200×10 >) A1 abs 100×60 @(20,20) ; B 200×60 @y20]
+                let root = add(&mut tree, &mut names, "root", boxed(200.0, 120.0), rc(0.0, 0.0, 200.0, 120.0));
+                let a = add(&mut tree, &mut names, "A", boxed(200.0, 60.0), rc(0.0, 0.0, 200.0, 60.0));
+                let parent = if id == "E" {
+                    let a0 = add(&mut tree, &mut names, "A0", boxed(200.0, 10.0), rc(0.0, 0.0, 200.0, 10.0));
+                    tree.add_child(a, a0);
+                    a0
+                } else {
+                    a
+                };
+                let a1 = add(&mut tree, &mut names, "A1", abs(100.0, 60.0), rc(20.0, 20.0, 100.0, 60.0));
+                tree.add_child(parent, a1);
+                let b = add(&mut tree, &mut names, "B", boxed(200.0, 60.0), rc(0.0, 20.0, 200.0, 60.0));
+                tree.add_child(root, a);
+                tree.add_child(root, b);
+                root
+            }
+            "F" => {
+                // root(200×120) > [X 200×40 @y0, Y 200×40 @y20]
+                let root = add(&mut tree, &mut names, "root", boxed(200.0, 120.0), rc(0.0, 0.0, 200.0, 120.0));
+                let x = add(&mut tree, &mut names, "X", boxed(200.0, 40.0), rc(0.0, 0.0, 200.0, 40.0));
+                let y = add(&mut tree, &mut names, "Y", boxed(200.0, 40.0), rc(0.0, 20.0, 200.0, 40.0));
+                tree.add_child(root, x);
+                tree.add_child(root, y);
+                root
+            }
+            _ => return None,
+        };
+        tree.roots.push(root_idx);
+        Some((tree, names))
+    };
+
+    let mut checked = 0usize;
+    let mut failures: Vec<String> = Vec::new();
+    for probe in &file.probes {
+        let Some((tree, names)) = build(&probe.id) else {
+            failures.push(format!("探针 {} 无对应构造（测试需补齐）", probe.id));
+            continue;
+        };
+        let got: Vec<String> = proteus_layout_core::hit_path(&tree, probe.point.x, probe.point.y)
+            .iter()
+            .map(|&i| {
+                let id = tree.get(i).id;
+                names
+                    .iter()
+                    .find(|(_, &v)| v == id)
+                    .map(|(k, _)| k.clone())
+                    .unwrap_or_else(|| format!("?{id}"))
+            })
+            .collect();
+        checked += 1;
+        if got != probe.top_down_ids {
+            failures.push(format!("[{}] {}：Rust {:?} vs 浏览器 {:?}", probe.id, probe.desc, got, probe.top_down_ids));
+        }
+    }
+
+    println!("绘制序 conformance：比对 {checked} 个浏览器探针");
+    assert!(checked >= 6, "探针数过少（{checked}）——防空跑");
+    assert!(failures.is_empty(), "绘制序与浏览器不一致：\n{}", failures.join("\n"));
 }

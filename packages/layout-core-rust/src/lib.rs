@@ -19,12 +19,14 @@
 //   · `ffi`             → **C ABI 边界**（三端共享：iOS ObjC++ / Android JNI / 鸿蒙 NAPI）
 //   · `blob`            → **二进制扁平化产物**（M0 计划项；实测证实的硬需求，见模块头注释）
 //   · `recycle`         → **列表复用池 + 生命周期状态机**（§12.6 三档 + 方向敏感预加载区）
+//   · `hit`             → **命中测试**（逆绘制序 + 裁剪感知；事件系统的几何地基）
 //   · `conformance`     → 以**浏览器 golden** 为准的对拍（tests/ 侧消费）
 //
 // ★尚未落地（诚实边界，后续里程碑）：`flatten/` `materialize/` `paint-hint/` `recycle/` `render/`
 pub mod blob;
 pub mod engine;
 pub mod ffi;
+pub mod hit;
 #[cfg(target_os = "android")]
 pub mod jni;
 pub mod node;
@@ -38,6 +40,9 @@ pub use engine::{
 pub use node::{LNode, LayoutTree, NodeIndex, TextMeasureRequest, NO_PARENT};
 pub use style::{Display, Edges, FlexDirection, LStyle, Overflow, Position, Rect, Size};
 pub use taffy_engine::TaffyEngine;
+
+// ★M3 `hit/`：命中测试（逆绘制序 + 裁剪感知——事件系统的几何地基）
+pub use hit::{bubble_chain, geometry, hit_path, hit_result, hit_test, paint_order, rect_contains, HitResult, NodeGeometry};
 
 // ★M3 `recycle/`：列表复用池 + 生命周期状态机（§5.1 / §12.6）
 pub use recycle::{Lifecycle, ListStateMachine, ListWindow, RecycleConfig, RecyclePool, ScrollDirection, VisibleRange};
