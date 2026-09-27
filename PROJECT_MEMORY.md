@@ -104,6 +104,42 @@ emoji 前缀（降级条/驾驶提醒），文案入口保持宿主注入；`↕
 
 ---
 
+### ★★App 路线 M0 完成：渲染 IR（PNode）（2026-09-29，提交 `cf28ee37`）
+
+**用户「继续 App 端路线」** → 推进 `Proteus_App端高性能渲染落地方案.md` 的 **M0（IR 扩展与编译期分析）**。
+纯 Node 侧，把已验证的性能结论**固化成编译期契约**。
+
+**新增 4 模块**（`packages/component-ir/src/`）：
+| 文件 | 内容 |
+|---|---|
+| `pnode.ts` | PNode 类型：kind · PProps（layout/paint/text）· PFlags · DynamicBinding · PaintHint · PTree |
+| `pnode-style.ts` | 样式归一化：**单位折叠** + **L1–L5 分级管控** + PaintHint 推导 |
+| `pnode-analyze.ts` | 编译期分析：静态子树后序传播 · **拍平判定** · 违规报错 · 统计 |
+| `pnode-build.ts` | 构建器（轻量声明 / ComponentIR 两入口）+ 语义→绘制类型映射 |
+
+**三条纪律（各有依据）**
+1. **单位编译期折叠完**：px/pt → dp；%/vw/vh/rpx/em/rem → 比例系数 + **基准语义精确**
+   （vw=viewportWidth · em=fontSize · rem=rootFontSize · % 随轴）——Profile §8.3「运行时不解析 CSS」。
+2. **分级管控**：L1/L2 归一化；**L3（z-index/fixed/sticky/filter/shadow/3D）→ 标 `needsCompositingLayer`
+   + warn**（iOS 每合成层一块 backing store）；**Profile 外 → error**（不留运行时静默降级）；
+   L4（font-family/direction）接受但不进 IR（平台文本栈）。
+3. **PaintHint 编译期推导**，每条绑一条**已实测**策略：`isPureBackground`（不分配 backing store）·
+   `isMonochrome`（紧凑格式 −39%）· `needsCompositingLayer`（合成层预算）·
+   `staticSubtree`/`flattenEligible`（**拍平主路径 −91% 内存 / −32% 耗时**）。
+
+**★拍平判定**：8 类资格条件逐条可解释（非绘制型/动态/事件/动画目标/组件根/合成层/transform/结构边界），
+理由入 trace；`requestFlatten` 显式请求但不合资格 → **error `css.flatten-violation`**（报出具体原因）。
+依据：拍平后无独立绘制对象 ⇒ 事件/截图/z-index 不可达——**只有编译期能判**。
+
+**验证**：新增 `tests/pnode-m0.test.ts` **20 用例**；**破坏性验证**两类注入均被抓
+（vw 基准错写、拍平忽略事件）；全量 **3621 passed / 3 failed**（3 项预存环境问题）；
+根 vue-tsc 干净；check:content / check:docs / check:consistency 全绿。
+
+**下一步（M1）**：C++ 排版核心骨架（Yoga 起步）+ 脏区域标记 + 平台无关绘制指令流；
+出口条件「Headless 后端输出正确指令流，与 VueDom 布局结果逐像素比对」。
+
+---
+
 ### ★★★挖出并修复真实框架缺陷：Prettier 风格多行三元被截断（2026-09-29，提交 `f4141dc2`）
 
 **用户问「刚才是不是发现了框架真实缺陷？useElement 的缺陷？」** → 追问促成的自查，结论分两半：
