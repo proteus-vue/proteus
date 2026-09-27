@@ -104,6 +104,29 @@ emoji 前缀（降级条/驾驶提醒），文案入口保持宿主注入；`↕
 
 ---
 
+### ★真机已配对，唯一剩余阻塞 = 签名身份（2026-09-29，提交 `a57cd1a8`）
+
+**当前设备状态（已核实）**：
+- 设备：`yunlai的iPhone` · **iPhone13,2（iPhone 12）** · iOS **26.3** (23D125) · wired
+- UDID：`00008101-001938AC1A68801E` · 配对状态：**available (paired)**（我执行了 `devicectl manage pair`）
+- **签名身份：0 个**（`security find-identity -v -p codesigning` 空；Provisioning Profiles 目录不存在
+  → 从未成功签名过）⇒ **iOS 真机安装必须签名，这是唯一剩余阻塞**
+
+**解决只需一步**：Xcode → Settings → Accounts → 登录 Apple ID（免费个人团队即可）→
+`security find-identity` 会出现 `Apple Development: ...` → 重跑 `run-device.sh` 即完成。
+
+**★设备探测踩坑两次（值得记）**：`devicectl list devices` 的 **reality 列只标注异常值（simulated）**——
+真机那行该列**为空**。故：
+- 初版 `awk '/physical|connected/ {print $3}'` → 模拟器状态列也是 connected，被算进来
+- 第二版 `grep physical` → **真机反被漏掉**（脚本报「未发现真机」而设备明明已配对）
+- **定稿**：`grep -v simulated` + UDID 正则（**排除法**）
+⇒ 教训：解析 CLI 表格输出时，**不要假设「正向标记一定存在」**，先 `cat -v` 看真实列。
+
+**脚本改进**：签名缺失时**仍然编译真机版并报告产物**，exit 3 并列待办——
+把「代码可编译」与「环境可安装」变成**两个独立信号**，避免配好账号后又撞代码问题。
+
+---
+
 ### ★真机实验已就绪（2026-09-29，提交 `19deac56`）——待用户插设备 + 登录 Apple ID
 
 用户「真机我有」→ 把模拟器测不出的两条假设（**H4 layer 深度→commit**、**H3 滚动 FPS**）
