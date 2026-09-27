@@ -49,7 +49,7 @@ unsupported  → 不渲染（该形态确实没有这条路径）
 
 （`—` = unsupported；表由 `FORM_CAP_KEYS × FORM_PROFILES` 生成，与源码逐项对账）
 
-两处值得注意：**车机 `skuMulti` 是唯一的 fallback**——渲染「🎙/↻ 语音或旋钮选择」的降级条（宿主可经 `degraded-hint` 注入文案），而非静默删除；**TV 没有 `dense`**——10ft 观看距离下高密度信息不可读。
+两处值得注意：**车机 `skuMulti` 是唯一的 fallback**——渲染「语音或旋钮选择」的降级条（文案由宿主经 `degraded-hint` 注入；框架层不含 emoji/图标——MP 端内联 SVG 不可用，图标应走 `p-svg` 或图片资源），而非静默删除；**TV 没有 `dense`**——10ft 观看距离下高密度信息不可读。
 
 ## 消费点：每项都要有可观测后果
 

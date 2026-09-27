@@ -161,6 +161,59 @@ describe('★p-formfactor 渲染与能力声明同源（二次复审 P0 回归�
   })
 })
 
+describe('★演示图标风格统一（2026-09-29）：多端同屏演示区不得再用 emoji', () => {
+  it('演示三文件（页面/内容槽）不出现 emoji——图标一律走 DemoIcon 自绘集', () => {
+    // 背景：演示页原用 emoji（⌚📱📲📖📐💻🚗📺 / 🎧🎵🔌🎒🔋📦🏠⚙️ / ▮▮▮⌁❤️）作图标——
+    //   emoji 由**系统字体**渲染，跨平台字形/配色不一（Windows 彩色方块 / macOS Apple 风格 / Linux 又一套），
+    //   与站点既有线性图标语言（FeatureIcon）冲突，也无法随形态主题着色。
+    //   现全部替换为 DemoIcon（24×24 · stroke=currentColor · 1em 尺寸），本门禁防止 emoji 回流。
+    const fs = require('node:fs') as typeof import('node:fs')
+    const files = [
+      '../website/src/pages/MultiDevice.vue',
+      '../website/src/components/fluid-product/index.vue',
+      '../website/src/components/DemoIcon.vue',
+    ]
+    // emoji 区间（排除 ★✓→ 等本仓通用的排版符号——它们在注释/文案里承担语义，不是图标）
+    const EMOJI = /[\u{1F000}-\u{1FAFF}\u{2600}-\u{27BF}\u{2B00}-\u{2BFF}\u{FE0F}\u{231A}\u{231B}\u{2300}-\u{23FF}\u{25A0}-\u{25FF}\u{2190}-\u{21FF}]/u
+    // 允许：排版符号（★✓箭头）+ **站点级状态标记** ✅/🟡（Home.vue / ends.ts / stats.ts 同一约定——
+    //   它们是「真实/愿景」的文本标记，不是图标；只换本页会与全站其余页面不一致）
+    const ALLOW = new Set(['★', '✓', '→', '←', '↑', '↓', '↔', '⇄', '⇒', '✅', '🟡'])
+    const problems: string[] = []
+    for (const f of files) {
+      const text = fs.readFileSync(require('node:path').resolve(__dirname, f), 'utf8')
+      const lines = text.split('\n')
+      lines.forEach((line, i) => {
+        // 跳过注释行（注释里可以引用「原 emoji 是什么」这类说明）
+        const isComment = /^\s*(\/\/|\*|\/\*|<!--)/.test(line)
+        if (isComment) return
+        for (const m of line.matchAll(new RegExp(EMOJI, 'gu'))) {
+          if (ALLOW.has(m[0])) continue
+          problems.push(`${f}:${i + 1} 「${m[0]}」`)
+        }
+      })
+    }
+    expect(problems, `演示区出现 emoji（须改用 DemoIcon 自绘图标）：\n${problems.join('\n')}`).toEqual([])
+  })
+
+  it('DemoIcon 覆盖演示所需的全部图标名（缺名会静默退化成 box 兜底）', () => {
+    const fs = require('node:fs') as typeof import('node:fs')
+    const iconSrc = fs.readFileSync(require('node:path').resolve(__dirname, '../website/src/components/DemoIcon.vue'), 'utf8')
+    const names = [...iconSrc.matchAll(/^\s{2}'?([a-z-]+)'?:\s*\[/gm)].map((m) => m[1]!)
+    const need = [
+      // 形态（FORM_PROFILES 八项）
+      'watch', 'phone', 'flip', 'fold', 'tablet', 'pc', 'car', 'tv',
+      // 内容槽（演示商品）
+      'headphones', 'earpads', 'cable', 'case', 'battery-charge', 'box',
+      'home', 'audio', 'orders', 'settings', 'cart', 'bookmark',
+      // 状态栏
+      'signal', 'battery', 'heart',
+    ]
+    const missing = need.filter((n) => !names.includes(n))
+    expect(missing, `DemoIcon 缺少图标：${missing.join(', ')}`).toEqual([])
+    expect(names.length, 'DemoIcon 图标数应 ≥ 需求数').toBeGreaterThanOrEqual(need.length)
+  })
+})
+
 describe('★国内厂商折叠规范落地（2026-09-28 小米/ITGSA 三区域 + 宽高比）', () => {
   it('★两类半开各自的网格结构 + 折痕空行（区域 3 结构上无元素）', async () => {
     // 小米《大屏应用 UX 设计指南》原文：「避免区域 3 内出现任何元素」（区域 3 = 折痕/形变区）。

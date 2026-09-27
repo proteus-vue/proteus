@@ -19,6 +19,8 @@ import { computed, nextTick, onMounted, onUnmounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { locale } from '../i18n'
 import FluidProduct from '../components/fluid-product/index.vue'
+// ★自绘图标集（2026-09-29 风格统一）：emoji 由系统字体渲染、跨平台字形不一 → 全站改线性图标
+import DemoIcon from '../components/DemoIcon.vue'
 // ★★Fluid System v2：形态画像 SSOT（本页所有形态信息都从这里读——页面不重复定义能力/拓扑）
 import { FORM_PROFILES, FORM_CAP_KEYS, capsLabel, resolveAspectClass, vendorSizeClass } from '@proteus-vue/fluid'
 import type { DeviceForm, FormProfile, FormPosture } from '@proteus-vue/fluid'
@@ -34,11 +36,13 @@ const showSource = ref(true)
 /** ★端清单 = FORM_PROFILES 的形态 SSOT（布局/导航/能力/缩放全部从画像读，页面不重复定义） */
 interface Target {
   key: DeviceForm
+  /** ★自绘图标名（DemoIcon 的键——不再是 emoji：emoji 跨平台字形不一，与线性图标语言冲突） */
   ic: string
   profile: FormProfile
 }
+/** 形态 → 自绘图标（DemoIcon 同名键；设备剪影与 FORM_PROFILES 一一对应） */
 const ICONS: Record<DeviceForm, string> = {
-  watch: '⌚', phone: '📱', flip: '📲', fold: '📖', tablet: '📐', pc: '💻', car: '🚗', tv: '📺',
+  watch: 'watch', phone: 'phone', flip: 'flip', fold: 'fold', tablet: 'tablet', pc: 'pc', car: 'car', tv: 'tv',
 }
 const TARGETS: Target[] = (Object.keys(FORM_PROFILES) as DeviceForm[]).map((k) => ({
   key: k,
@@ -420,7 +424,7 @@ const sourceHtml = computed(() => highlight(fluidSource, 'vue'))
             :class="{ active: t.key === active }"
             @click="active = t.key"
           >
-            <span class="dev-ic">{{ t.ic }}</span>
+            <DemoIcon class="dev-ic" :name="t.ic" />
             <span class="dev-nm">{{ isEn ? t.profile.label.en : t.profile.label.zh }}</span>
             <span class="dev-meta">{{ t.profile.input }}</span>
           </button>
@@ -485,7 +489,16 @@ const sourceHtml = computed(() => highlight(fluidSource, 'vue'))
                  帧层不再绘制任何折痕。 -->
             <div v-if="target.profile.frame.statusBar" class="statusbar" :class="{ 'statusbar--watch': target.profile.frame.watchFace }">
               <span>{{ target.profile.frame.watchFace ? '10:24' : '9:41' }}</span>
-              <span>{{ target.profile.frame.watchFace ? '❤️ 72' : '▮▮▮ ⌁' }}</span>
+              <!-- ★状态栏图标同源自绘（原 ❤️ / ▮▮▮ ⌁ 为 emoji 与几何字符） -->
+              <span class="sb-icons">
+                <template v-if="target.profile.frame.watchFace">
+                  <DemoIcon class="sb-ic" name="heart" />72
+                </template>
+                <template v-else>
+                  <DemoIcon class="sb-ic" name="signal" />
+                  <DemoIcon class="sb-ic" name="battery" />
+                </template>
+              </span>
             </div>
             <div class="app-body">
               <FluidProduct
@@ -650,7 +663,8 @@ const sourceHtml = computed(() => highlight(fluidSource, 'vue'))
 }
 .dev-btn:hover { border-color: rgba(124, 92, 255, 0.5); }
 .dev-btn.active { border-color: var(--brand); background: var(--brand-soft); color: var(--ink); }
-.dev-ic { font-size: 17px; }
+.dev-ic { font-size: 17px; color: var(--muted); }
+.dev-btn.active .dev-ic { color: var(--brand-ink); }
 .dev-nm { font-size: 11.5px; font-weight: 700; }
 .dev-meta { font-size: 9.5px; opacity: 0.75; }
 
@@ -700,33 +714,14 @@ const sourceHtml = computed(() => highlight(fluidSource, 'vue'))
   overflow: hidden;
   background: #f7f8fa;
 }
-.hinge {
-  position: absolute;
-  top: 0;
-  bottom: 0;
-  left: 50%;
-  transform: translateX(-50%);
-  width: 10px;
-  background: linear-gradient(90deg, rgba(0, 0, 0, 0.06), rgba(0, 0, 0, 0.16), rgba(0, 0, 0, 0.06));
-  z-index: 4;
-  pointer-events: none;
-}
-/* ★水平铰链（tabletop 半折）：横贯折痕 */
-.hinge--h {
-  top: 50%;
-  bottom: auto;
-  left: 0;
-  right: 0;
-  transform: translateY(-50%);
-  width: auto;
-  height: 10px;
-  background: linear-gradient(180deg, rgba(0, 0, 0, 0.06), rgba(0, 0, 0, 0.16), rgba(0, 0, 0, 0.06));
-}
 .notch {
   position: absolute; top: 0; left: 50%; transform: translateX(-50%);
   width: 96px; height: 20px; background: #000;
   border-radius: 0 0 12px 12px; z-index: 5;
 }
+.sb-icons { display: inline-flex; align-items: center; gap: 3px; }
+.sb-ic { font-size: 11px; }
+.statusbar--watch .sb-ic { font-size: 12px; }
 .statusbar--watch {
   justify-content: space-between;
   font-size: 11px;
