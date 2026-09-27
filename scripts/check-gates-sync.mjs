@@ -29,8 +29,9 @@ const WF_DIR = path.join(ROOT, '.github', 'workflows')
  * ★判定标准：CI 无法满足其前置条件（需已部署环境 / 需人工介入 / 需真机）。
  */
 const LOCAL_ONLY = {
-  // 目前为空——本会话已把全部 check:* 接进 CI（含 pages.yml 的 check:live）。
-  // 新增条目须写明「为何 CI 跑不了」。
+  // ★需 macOS + Xcode 工具链（swiftc / JavaScriptCore）——CI 跑在 ubuntu-latest，无法执行。
+  //   覆盖：iOS 竖切 M1 链路（Vue → Dispatcher → native 后端 → JSC 桥 → 宿主树）。
+  'check:ios-host': '需 macOS + Xcode（swiftc/JavaScriptCore）；CI 为 ubuntu-latest',
 }
 
 const pkg = JSON.parse(fs.readFileSync(path.join(ROOT, 'package.json'), 'utf8'))

@@ -29,3 +29,7 @@ popover-open.png
 
 # 本地工具缓存（scripts/check-publish-drift.mjs 的 pack/判定缓存）
 .cache/
+# hosts：原生宿主构建产物（bundle.js 已被 dist/ 规则覆盖）
+hosts/**/build/
+hosts/**/*.app/
+hosts/**/verify-jsc

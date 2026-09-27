@@ -57,6 +57,7 @@
     "preview:website": "pnpm --filter website preview",
     "check:alltarget": "node scripts/check-all-target-wording.mjs",
     "check:fluid-wording": "node scripts/check-fluid-wording.mjs",
+    "check:ios-host": "node hosts/ios/bridge/build.mjs && node hosts/ios/verify.mjs",
     "gen:mp-spec": "node scripts/gen-mp-spec.mjs",
     "check:mp-spec": "node scripts/gen-mp-spec.mjs --check",
     "check:mp-attrs": "node scripts/gen-mp-component-attrs.mjs --check && node scripts/audit-component-attrs.mjs",
