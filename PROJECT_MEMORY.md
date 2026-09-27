@@ -104,6 +104,41 @@ emoji 前缀（降级条/驾驶提醒），文案入口保持宿主注入；`↕
 
 ---
 
+### ★★内存主因三层定位（2026-09-29，提交 `f2314117`/`1efe14f8`）——用户 Checklist 证实有效
+
+**触发**：用户问「CALayer 内存问题业内没方案吗？uni-app x 蒸汽模式好像也走这路线」+
+提供 `docs/iOS端内存诊断Checklist.md`。**两次质询各推动一层定位**，最终推翻我前一轮结论。
+
+**三层隔离（11 变体，真机进程隔离，各轮波动 <0.5%）**
+| 层 | 对照 | 结论 |
+|---|---|---|
+| ① view vs layer | F CALayer 仅色块 **4.9MB** < G UIView 仅色块 **9.9MB** | **CALayer 结构反而更省** ⇒ 原「CALayer +78%」错 |
+| ② 文本渲染器 | **I CALayer 结构 + UILabel 96.0MB** ≪ C CALayer + CATextLayer **186.7MB**（B 纯 UIView 100.8MB） | **主因是 CATextLayer 而非 CALayer**——I 比纯 UIView 方案还省 5% |
+| ③ 表单格式 | **J `gray8Uint` 114.9MB（−39%，省 72MB）** · K `isOpaque` 187.0MB（**无效**） | **用户 Checklist §P0-1 实测证实**；§P0-4 的 opaque 项无效 |
+
+**★最终推荐：拍平（H）——两项同时最优**
+| 路线 | 耗时 | 内存 |
+|---|---|---|
+| A UIView+AutoLayout | 525.1 ms | 104.7 MB |
+| B UIView+手算 | 365.2 ms | 100.8 MB |
+| C CALayer+CATextLayer | 190.5 ms | 186.7 MB |
+| **H ★拍平（一行一 layer）** | **129.9 ms** | **17.7 MB** |
+⇒ 比 C 再快 32%、内存其 1/10（4050 元素 → **50 个绘制对象**）。
+**「真/假拍平」判据**：看 **backing store 总数**降没降，**不是**看 layer 数。
+
+**★与业界一致（调研带来源）**：uni-app x 蒸汽模式 `flatten`（官方原文「不创建独立元素，绘制在父上」；
+其路线是「**原生渲染管线 + 自研 UI 框架**」而**非自绘**——与我此前的判断一致）·
+Texture `shouldRasterizeDescendants`（**不创建**子 view/layer）· ArkUI `markNodeGroup` · RN view flattening。
+**代价（业界一致）**：拍平节点不支持事件/截图/z-index ⇒ 须 IR 层判定 + 编译期报错。
+
+**落地产物**：方案文档 §12.1/12.2/12.3/§9.2/坑位#11 全部补实测；**Checklist 回填数字（未改其结构）**；
+`check:ios-exp-docs` 扩到 **ms + MB 双维度**（破坏性验证过）；`measure-memory.sh` 支持 **A–K 11 变体**。
+
+**★方法论（本线第三次自己推翻自己）**：H4 二维对照 → H3 场景不对等 → 内存三层隔离。
+**用户的外部质疑是纠正盲区最快的路径**；且每次都要先问「测量本身可信吗」。
+
+---
+
 ### ★★H3 也真机证伪 + 内存发现（2026-09-29，提交 `6ae80d16`）——三项选型结论落地
 
 **① H3 滚动 FPS：真机证伪**（文档称「UILabel 30 vs CATextLayer 58 FPS」）
