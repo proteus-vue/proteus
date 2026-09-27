@@ -104,6 +104,59 @@ emoji 前缀（降级条/驾驶提醒），文案入口保持宿主注入；`↕
 
 ---
 
+### ★★★M2 Android 真机闭环跑通（Redmi · Android 17）——布局 5ms vs 原生 452ms（2026-09-29，提交 `31e3872d`）
+
+**触发**：用户「安卓USB调试已打开」→ 探测到 **Redmi M098FE · Android 17（API 37）· arm64-v8a · 1200×2608**。
+据此完成 M2（Android 最小闭环）的真机验证。
+
+**★真机结果**
+```
+一致性（浏览器基准）: ok=true · 17 用例 / 67 节点 · 最大偏差 0.375dp（容差 0.5dp）· 0 失败
+纯排版 4050 元素     : 中位 1.562ms（20 次）
+```
+| 阶段 | Proteus | 原生 View | 比值 |
+|---|---|---|---|
+| 布局阶段（含对象创建） | **5ms** | **452ms**（其中 398ms = **创建 4051 个 View 对象**） | **0.011** |
+| 绘制阶段（同口径录制 DisplayList） | **11ms** | 6ms | **1.83** |
+
+**★★绘制更慢是真实发现（已如实记录，不掩盖）**：Proteus 每格画「色块 + 文本」两条指令
+共 4000 次 Canvas 调用；原生把绘制下沉进 4051 个 View 各自录制。
+→ **这是 M3 的明确优化目标**（批绘制 / 合并同色块 / 文本走 StaticLayout 预排版——方案 §6.1 已指明）。
+
+**★★三次自我纠错（「数字太好看就要怀疑」的实战）**
+| # | 我最初的口径 | 问题 | 修正 |
+|---|---|---|---|
+| 1 | 「Proteus 18ms vs 原生 478ms = **38×**」 | 两段**组成不同**（原生含对象创建不含 draw；Proteus 含 draw 无对象创建）→ 比值**无法归因** | 拆三段分别计时，给「同口径可比项」 |
+| 2 | Proteus 绘制 8ms vs 原生 5ms（**软件位图**） | 软件光栅化**不是方案规定路径**（§6.1 = DisplayList → RenderThread → GPU） | 补 `RenderNode`/`RecordingCanvas` 硬件录制路径 |
+| 3 | 绘制「Proteus 慢 2 倍」 | **内容不对等**：Proteus 每格设蓝底，原生 TextView 没设 → **像素自检 14803 vs 2479** 直接暴露 | §9.2「严格复刻」：对照组也设背景；像素统计改用 alpha 口径 |
+
+**★自检机制的价值**：第 3 条是**像素统计自检**抓到的（不靠肉眼）——若不查「两边是否真画了同样的东西」，
+「绘制慢 2.4 倍」会带着错误量级进入记忆。**「实验装置自检」应成为性能测量的标配**。
+
+**★M2 交付物**（`hosts/android/`）
+· `app/.../RustLayout.java`（JNI 门面 + 符号自检）· `MainActivity.java`（三段计时 + 原生对照组 + 像素自检）
+· `ProteusHostView.java`（§6.1 规格：单宿主 View + Canvas 下发，不走 ViewGroup 递归）
+· `build-and-run.sh`（**无 Gradle**：aapt2 → javac → d8 → apksigner → adb install）
+· `results/`（四份真机报告存档）
+· Rust 侧新增 `src/jni.rs`（与 iOS 的 C ABI 并列，共用同一份核心）
+
+**★四个工具链坑（都固化进脚本）**
+| # | 坑 | 正解 |
+|---|---|---|
+| 1 | `crate-type` 缺 **cdylib** → Android JNI 出不了 `.so`（staticlib 只给静态链接） | `["rlib", "staticlib", "cdylib"]` 三产物 |
+| 2 | JDK 17 起 `-bootclasspath` 只允许配合 `--release` | 用 `--release 17` + `-classpath android.jar` |
+| 3 | d8 要求输出目录**预先存在** | `mkdir -p` 后再调 |
+| 4 | `sdkmanager` 需 **JDK 17+**（Android Studio 自带 JDK 11） | 本仓自带 JDK 17 于 `.tools/jdk17` |
+
+**★工具链落位（磁盘纪律）**：NDK r27c（~700MB）+ JDK 17 装在 **data1 的 `.tools/`**（已 gitignore），
+构建产物落 `spike/target`；内置盘无新增占用。
+
+**★诚实边界**：本 APK `debuggable=true`（需 `run-as` 取报告），而 §9.2 要求
+**release 包 + 杀进程重进 + Perfetto 确认大核 + 温度监控 + 5 次取均值**。
+故数字用于**方向与归因判断**，**不作为验收结论**（报告内已写 caveat）。
+
+---
+
 ### ★★★Rust 排版核心**真机验证通过**：iPhone 12 · 4050 元素 3.22ms · 与浏览器偏差 0.375dp（2026-09-29，提交 `03c98555`）
 
 **触发**：用户「我现在有真机」。探测发现是 **iPhone 12**（`yunlai的iPhone`，UDID `00008101-…`），
