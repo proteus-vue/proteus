@@ -9,7 +9,9 @@
 # 【为什么必须真机】JS 逻辑层性能必须在**真实 JavaScriptCore** 上量（模拟器与桌面 JSC
 #   的 JIT 策略不同，桌面数字不代表设备）；且 CALayer 渲染需要真实 GPU。
 #
-# 用法：bash hosts/ios/run-selfdraw.sh [设备UDID]
+# 用法：bash hosts/ios/run-selfdraw.sh [--bench] [设备UDID]
+#   --bench  跑**逻辑层基准**（复杂响应式用例 + 规模扫描）而非自绘场景；
+#            报告落到 results/logic-bench-report.json
 set -euo pipefail
 
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -23,17 +25,30 @@ APP="$BUILD/ProteusSelfDraw.app"
 BUNDLE_ID="${PROTEUS_BUNDLE_ID:-dev.proteus.experiments}"
 export CARGO_TARGET_DIR="${CARGO_TARGET_DIR:-$ROOT/spike/target}"
 
-UDID="${1:-}"
-[ -n "$UDID" ] || UDID="$(xcrun devicectl list devices 2>/dev/null | grep -vE 'simulated' | grep -oE '[0-9A-F]{8}-[0-9A-F]{16}' | head -1 || true)"
+MODE="selfdraw"
+UDID=""
+for a in "$@"; do
+  case "$a" in
+    --bench) MODE="bench" ;;
+    *) [ -z "$UDID" ] && UDID="$a" ;;
+  esac
+done
+if [ -z "$UDID" ]; then
+  UDID="$(xcrun devicectl list devices 2>/dev/null | grep -vE 'simulated' | grep -oE '[0-9A-F]{8}-[0-9A-F]{16}' | head -1 || true)"
+fi
 [ -n "$UDID" ] || { echo "✗ 未发现真机"; exit 2; }
-echo "==> 目标设备：$UDID"
+echo "==> 目标设备：$UDID · 模式：$MODE"
 
 echo "==> ① 构建 TS 侧（renderer-app 的 dist —— 自绘适配器所在）"
 # ★必须先构建：bundle 用 alias 指向 dist（renderer-app 不是根依赖，无 node_modules link）
 (cd "$ROOT" && pnpm --filter @proteus-vue/renderer-app run build 2>&1 | tail -2)
 
-echo "==> ② JS bundle（Vue + 自绘适配器 → 单文件 IIFE）"
-(cd "$ROOT" && node hosts/ios/bridge/build-selfdraw.mjs 2>&1 | tail -1)
+echo "==> ② JS bundle（Vue + 适配器 → 单文件 IIFE）[$MODE]"
+if [ "$MODE" = "bench" ]; then
+  (cd "$ROOT" && node hosts/ios/bridge/build-bench.mjs 2>&1 | tail -1)
+else
+  (cd "$ROOT" && node hosts/ios/bridge/build-selfdraw.mjs 2>&1 | tail -1)
+fi
 
 echo "==> ③ 编译 Rust 核心（iOS release）"
 export PATH="$HOME/.cargo/bin:$PATH"
@@ -49,7 +64,11 @@ xcrun --sdk iphoneos swiftc -O -target arm64-apple-ios15.0 \
   -o "$APP/ProteusSelfDraw" "$HERE/ProteusHost/selfdraw-scene.swift" "$LIB"
 
 echo "==> ⑤ 组装 .app"
-cp "$HERE/bridge/dist/bundle-selfdraw.js" "$APP/bundle-selfdraw.js"
+if [ "$MODE" = "bench" ]; then
+  cp "$HERE/bridge/dist/bundle-bench.js" "$APP/bundle-bench.js"
+else
+  cp "$HERE/bridge/dist/bundle-selfdraw.js" "$APP/bundle-selfdraw.js"
+fi
 # ★描述文件与 entitlements 从**描述文件原样提取**（本仓 iOS 竖切实测的坑：
 #   手工拼装会 0xe8008016 invalid entitlements；免费个人团队还需 team-identifier
 #   + keychain-access-groups，少一项即无效）
@@ -108,20 +127,28 @@ echo "    身份：$IDENTITY · 描述文件：$(basename "$PROFILE")"
 
 echo "==> ⑦ 安装并启动"
 xcrun devicectl device install app --device "$UDID" "$APP" 2>&1 | grep -iE "installed|error" | tail -2 || true
-xcrun devicectl device process launch --device "$UDID" "$BUNDLE_ID" 2>&1 | tail -2 || true
+if [ "$MODE" = "bench" ]; then
+  # ★启动参数：宿主据此选择 bundle 与报告名（`--bench`）
+  xcrun devicectl device process launch --device "$UDID" "$BUNDLE_ID" --bench 2>&1 | tail -2 || true
+else
+  xcrun devicectl device process launch --device "$UDID" "$BUNDLE_ID" 2>&1 | tail -2 || true
+fi
 
 echo "==> ⑧ 取回报告与截图"
 sleep 6
 mkdir -p "$HERE/results"
-for f in selfdraw-report.json selfdraw-final.png; do
+REPORT_FILE="selfdraw-report.json"
+SNAP_FILE="selfdraw-final.png"
+if [ "$MODE" = "bench" ]; then REPORT_FILE="logic-bench-report.json"; SNAP_FILE="bench-final.png"; fi
+for f in "$REPORT_FILE" "$SNAP_FILE"; do
   xcrun devicectl device copy from --device "$UDID" --domain-type appDataContainer \
     --domain-identifier "$BUNDLE_ID" --source "Documents/$f" \
     --destination "$HERE/results/$f" 2>&1 | tail -1 || true
 done
-echo "    报告：$HERE/results/selfdraw-report.json"
-[ -f "$HERE/results/selfdraw-report.json" ] && python3 -c "
+echo "    报告：$HERE/results/$REPORT_FILE"
+[ -f "$HERE/results/$REPORT_FILE" ] && python3 -c "
 import json,sys
-d=json.load(open('$HERE/results/selfdraw-report.json'))
+d=json.load(open('$HERE/results/$REPORT_FILE'))
 print('  引擎：', d.get('engine'))
 jr=d.get('js_report',{})
 print('  宿主报告：引擎', d.get('engine'), '· 层数', d.get('layer_count'), '· 节点', d.get('host_node_count'))

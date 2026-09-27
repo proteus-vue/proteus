@@ -44,6 +44,8 @@ interface SelfDrawNative {
   done(summaryJson: string): void
 }
 declare const proteusSelfDraw: SelfDrawNative
+/** 快照名（宿主按模式注入；此处仅作默认） */
+const BN = { snapshot: 'selfdraw-final' }
 
 const VP = (globalThis as unknown as { __PROTEUS_VIEWPORT__?: { width: number; height: number } })
   .__PROTEUS_VIEWPORT__ ?? { width: 390, height: 844 }
@@ -236,7 +238,7 @@ const api = {
   finalize2(): string {
     const req = adapter.toRequest(VP)
     const hostOut = proteusSelfDraw.update(JSON.stringify(req))
-    const shot = proteusSelfDraw.snapshot('selfdraw-final')
+    const shot = proteusSelfDraw.snapshot(BN.snapshot)
     const jsAvg = jsOnly.length > 0 ? jsOnly.reduce((x, y) => x + y, 0) / jsOnly.length : -1
     const report = {
       runtime: 'JavaScriptCore（系统自带，与 iOS 竖切同一运行时）',
