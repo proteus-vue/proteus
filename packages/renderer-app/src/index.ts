@@ -9,6 +9,9 @@ import type { NativeAdapter } from './native'
 export type { NativeAdapter, NativeNode, NativeTextNode, NativeElementNode, NativeCommentNode } from './native'
 export { createAppHostConfig } from './host'
 export { createMockAdapter } from './adapters/mock'
+// ★自绘管线适配器：Vue 渲染树 → 排版核心的布局请求（App 端自绘链路的接头）
+export { createSelfDrawAdapter, foldLength } from './adapters/selfdraw'
+export type { SelfDrawAdapter, SelfDrawRequest, SelfDrawNodeSpec } from './adapters/selfdraw'
 
 /**
  * 创建 App 渲染器：createRenderer(host config) 包装——业务调用方：
