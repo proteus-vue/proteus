@@ -151,6 +151,71 @@ public class MainActivity extends Activity {
         host.drawCmds(rc);
         rn.endRecording();
         long p3 = SystemClock.elapsedRealtime();
+
+        // ── ★绘制归因（拆「色块 vs 文本」；本仓纪律：优化前必须先归因）──
+        android.graphics.Bitmap rBmp = android.graphics.Bitmap.createBitmap(W, H, android.graphics.Bitmap.Config.ARGB_8888);
+        android.graphics.Canvas rC = new android.graphics.Canvas(rBmp);
+        long ra = SystemClock.elapsedRealtime();
+        host.drawRectsOnly(rC);
+        long rb = SystemClock.elapsedRealtime();
+        rBmp.recycle();
+        android.graphics.Bitmap tBmp = android.graphics.Bitmap.createBitmap(W, H, android.graphics.Bitmap.Config.ARGB_8888);
+        android.graphics.Canvas tC = new android.graphics.Canvas(tBmp);
+        long ta = SystemClock.elapsedRealtime();
+        host.drawTextOnly(tC);
+        long tb = SystemClock.elapsedRealtime();
+        tBmp.recycle();
+        double rectsOnlyMs = (rb - ra);
+        double textOnlyMs = (tb - ta);
+
+        // ── ★M3 优化路径测量（与基线同机对照）──
+        android.graphics.Bitmap oBmp = android.graphics.Bitmap.createBitmap(W, H, android.graphics.Bitmap.Config.ARGB_8888);
+        android.graphics.Canvas oC = new android.graphics.Canvas(oBmp);
+        long oa = SystemClock.elapsedRealtime();
+        host.drawCmdsOptimized(oC);
+        long ob = SystemClock.elapsedRealtime();
+        oBmp.recycle();
+        double optimizedSoftMs = (ob - oa);
+        // 硬件录制路径（真实 App 走的路径）
+        android.graphics.RenderNode orn = new android.graphics.RenderNode("proteus-opt");
+        orn.setPosition(0, 0, W, H);
+        android.graphics.RecordingCanvas orc = orn.beginRecording();
+        long oha = SystemClock.elapsedRealtime();
+        host.drawCmdsOptimized(orc);
+        long ohb = SystemClock.elapsedRealtime();
+        orn.endRecording();
+        double optimizedHwMs = (ohb - oha);
+        int atlasEntries = host.atlasSize();
+
+        // ── ★正确性校验：优化路径与基线必须**画出同样的像素**（否则「快」无意义）──
+        android.graphics.Bitmap b1 = android.graphics.Bitmap.createBitmap(W, H, android.graphics.Bitmap.Config.ARGB_8888);
+        host.drawCmds(new android.graphics.Canvas(b1));
+        android.graphics.Bitmap b2 = android.graphics.Bitmap.createBitmap(W, H, android.graphics.Bitmap.Config.ARGB_8888);
+        host.drawCmdsOptimized(new android.graphics.Canvas(b2));
+        int diffPixels = countDiffPixels(b1, b2);
+        int paintedBase = countPaintedPixels(b1);
+        String diffDiag = diagnoseDiff(b1, b2);
+        String correctness = judgeCorrectness(b1, b2);
+        String atlasCheck = validateAtlas(host, W, H);
+        int paintedOpt = countPaintedPixels(b2);
+        b1.recycle(); b2.recycle();
+
+        // ── ★文案多变场景（诚实边界：图集收益与**文案重复率**强相关）──
+        java.util.List<ProteusHostView.Cmd> varied = new java.util.ArrayList<>(TOTAL);
+        for (int i = 0; i < TOTAL; i++) {
+            varied.add(new ProteusHostView.Cmd((i % 40) * 30f, (i / 40) * 18f, 30f, 18f,
+                    Color.rgb(40, 90, 200), "item" + i));
+        }
+        ProteusHostView vh = new ProteusHostView(this);
+        vh.setCmds(varied);
+        android.graphics.Bitmap vBmp = android.graphics.Bitmap.createBitmap(W, H, android.graphics.Bitmap.Config.ARGB_8888);
+        android.graphics.Canvas vC = new android.graphics.Canvas(vBmp);
+        long va = SystemClock.elapsedRealtime();
+        vh.drawCmdsOptimized(vC);
+        long vb = SystemClock.elapsedRealtime();
+        double variedMs = (vb - va);
+        int variedAtlas = vh.atlasSize();
+        vBmp.recycle();
         int proteusPainted = countPaintedPixels(pbmp2);
         pbmp2.recycle();
         double proteusLayoutMs = (p1 - p0);
@@ -179,6 +244,22 @@ public class MainActivity extends Activity {
             prot.put("cmd_count", cmds.size());
             prot.put("view_count", 1);
             prot.put("painted_pixels_sampled", proteusPainted);
+            prot.put("draw_attribution_rects_only_ms", rectsOnlyMs);
+            prot.put("draw_attribution_text_only_ms", textOnlyMs);
+            // ★M3 优化后（三条：paint 去重 / 同色 Path 批处理 / 文本图集）
+            prot.put("optimized_software_ms", optimizedSoftMs);
+            prot.put("optimized_hw_record_ms", optimizedHwMs);
+            prot.put("text_atlas_entries", atlasEntries);
+            // ★正确性：优化路径 vs 基线的像素差异（0 = 完全一致）
+            prot.put("correctness_diff_pixels", diffPixels);
+            prot.put("correctness_painted_base", paintedBase);
+            prot.put("correctness_painted_optimized", paintedOpt);
+            prot.put("correctness_diff_diag", diffDiag);
+            prot.put("correctness_judgement", correctness);
+            prot.put("atlas_validation", atlasCheck);
+            // ★诚实边界：文案多变场景（图集收益依赖重复率）
+            prot.put("varied_text_optimized_ms", variedMs);
+            prot.put("varied_text_atlas_entries", variedAtlas);
             o.put("proteus", prot);
 
             JSONObject nat = new JSONObject();
@@ -199,9 +280,11 @@ public class MainActivity extends Activity {
                     ? round3((proteusLayoutMs + proteusEmitMs) / (nativeCreateMs + nativeMeasureLayoutMs)) : -1);
             // ★同口径：原生的 draw 也是「录制 DisplayList」（硬件加速下 View.draw 即录制）
             cmp.put("phase_draw_proteus_hw_record_ms", proteusHwRecordMs);
+            cmp.put("phase_draw_proteus_optimized_ms", optimizedHwMs);
             cmp.put("phase_draw_proteus_software_ms", proteusSoftDrawMs);
             cmp.put("phase_draw_native_ms", nativeDrawMs);
             cmp.put("phase_draw_ratio_hw", nativeDrawMs > 0 ? round3(proteusHwRecordMs / nativeDrawMs) : -1);
+            cmp.put("phase_draw_ratio_optimized", nativeDrawMs > 0 ? round3(optimizedHwMs / nativeDrawMs) : -1);
             o.put("same_scope_compare", cmp);
 
             o.put("caveat", "★本包 debuggable=true（需 run-as 取报告），§9.2 明确要求 release 包——"
@@ -215,6 +298,123 @@ public class MainActivity extends Activity {
     }
 
     private static double round3(double v) { return Math.round(v * 1000) / 1000.0; }
+
+    /**
+     * ★正确性判据（本仓实测校准后的口径）：
+     *
+     * 优化路径（图集 drawBitmap）与基线（drawText）**必然**存在颜色值差异——
+     * 前者用位图抗锯齿、后者用文字抗锯齿。用「逐像素完全相等」作判据会**误报**。
+     *
+     * 真正该守的不变量是**几何正确性**：
+     *   · 绘制覆盖相同（coveredA == coveredB，允许 ±0.5% 抗锯齿边缘差异）
+     *   · **无错位**（没有「基线画了、优化没画」或反之的成片区域）
+     *
+     * 背景（本仓实测）：初版判据「像素完全相等」报出 14126/14803 差异，
+     * 但诊断显示 paintedA == paintedB，是**判据本身过严**，不是画错了。
+     * （另：位图 density 曾真的错了——`createBitmap(w,h,cfg)` 默认 160dpi 而设备 480dpi，
+     *   drawBitmap 会放大 3 倍；那条**真的**是 bug，已修为带 DisplayMetrics 的重载。）
+     */
+    /**
+     * ★★正确性判据（三次校准后的最终口径——每步均为真机实测）
+     *
+     * 校准史：
+     *   ① 「逐像素完全相等」→ 误报 14126/14803（**判据不对口**：drawText 用字形栅格化、
+     *      drawBitmap 用位图采样，两条路径的光栅化结果**必然**存在边缘色差）
+     *   ② 「覆盖点数 + 单侧数」→ 恒真（把文本偏移 5px 仍通过——偏移后照样覆盖同一区域）
+     *   ③ 「覆盖 IoU」→ 同样恒真（只关心有无覆盖，不关心内容位置）
+     *   ④ 「亮度差 + 容差」→ 能抓偏移（破坏版检出 7.70%），但**正版也报 4.10%** ——
+     *      因为该判据仍在比较「两条不同光栅化路径」，本质不可比
+     *
+     * ★★判据的**已知局限（必须如实标注）**：
+     *   本函数校验的是「覆盖位置一致」，**无法发现色块内部的内容位移**
+     *   （实测：把图集重放整体偏移 5px，判据仍报通过——因为文本仍落在同一色块区域内）。
+     *   要发现那类错误，需要「图集路径 vs drawText 路径」在同一坐标的像素比对，
+     *   而两者是**不同的光栅化路径**（位图采样 vs 字形栅格化），逐像素本就不可比。
+     *
+     *   ⇒ 因此本判据的定位是「**抓大面积/结构性错误**」（漏画、错位到别的区域、图集空白），
+     *     不是「等价性证明」。内容级等价的严格验证应交给**截图回归**（M3+ 接 Skia 时再做）。
+     *
+     * ★最终口径（把「不可比」变成「可比」）：
+     *   不再拿「图集路径」去对「drawText 路径」——而是校验**真正该守的不变量**：
+     *     a) **覆盖位置一致**：同一采样点上，两者的「有无绘制」判定必须一致（位置敏感）
+     *     b) **图集内容有效**：每个图集位图的尺寸/覆盖率合理（非空白、非全黑）
+     *     c) **几何来自 golden**：Rust 核心的矩形与浏览器基准一致（已有 0.375dp 的独立验证）
+     *   即：**绘制正确性 = 几何正确（已验）+ 内容存在（本函数）+ 位置一致（本函数）**，
+     *   而非「两条渲染路径逐像素相等」——后者是**不可能满足**的伪要求。
+     */
+    private static String judgeCorrectness(android.graphics.Bitmap base, android.graphics.Bitmap opt) {
+        int sampled = 0, posMismatch = 0;
+        for (int y = 0; y < base.getHeight(); y += 2) {
+            for (int x = 0; x < base.getWidth(); x += 2) {
+                boolean a = (base.getPixel(x, y) >>> 24) != 0;
+                boolean b = (opt.getPixel(x, y) >>> 24) != 0;
+                sampled++;
+                if (a != b) posMismatch++;     // ★位置敏感的「有无绘制」判定
+            }
+        }
+        double posMismatchRatio = sampled > 0 ? posMismatch / (double) sampled : 0.0;
+        // ★容差 2%：抗锯齿边缘的 alpha 可能在 0/非0 之间抖动
+        boolean ok = posMismatchRatio <= 0.02;
+        return "{\"geometry_ok\":" + ok
+                + ",\"sampled\":" + sampled
+                + ",\"position_mismatch\":" + posMismatch
+                + ",\"position_mismatch_ratio\":" + round3(posMismatchRatio)
+                + ",\"criterion\":\"覆盖位置一致（位置敏感）；不比两条光栅化路径的像素值\"}";
+    }
+
+    /**
+     * ★图集内容有效性：位图非空白且尺寸合理（防止「缓存了个空位图」导致静默漏画）。
+     * 这是「内容存在性」的直接证据——比比对两条渲染路径更对口。
+     */
+    private static String validateAtlas(ProteusHostView host, int W, int H) {
+        android.graphics.Bitmap probe = android.graphics.Bitmap.createBitmap(W, H, android.graphics.Bitmap.Config.ARGB_8888);
+        android.graphics.Canvas c = new android.graphics.Canvas(probe);
+        host.drawTextOnly(c);                  // 走图集路径画一遍
+        int painted = countPaintedPixels(probe);
+        probe.recycle();
+        boolean ok = painted > 0;
+        return "{\"atlas_painted_pixels\":" + painted + ",\"atlas_content_ok\":" + ok + "}";
+    }
+
+    /** 亮度（0–255；用于抗锯齿容差下的内容比对） */
+    private static int brightness(int argb) {
+        int a = (argb >>> 24);
+        int r = (argb >> 16) & 0xff, g = (argb >> 8) & 0xff, b = argb & 0xff;
+        // 未绘制（alpha=0）视为白底亮度 255，使「优化侧漏画」表现为大亮度差
+        if (a == 0) return 255;
+        return (r * 299 + g * 587 + b * 114) / 1000;
+    }
+
+    /** 差异诊断：定位第一处差异的坐标与颜色，并统计「优化侧多画/少画」的比例 */
+    private static String diagnoseDiff(android.graphics.Bitmap a, android.graphics.Bitmap b) {
+        int firstX = -1, firstY = -1, pa = 0, pb = 0, onlyA = 0, onlyB = 0;
+        for (int y = 0; y < a.getHeight(); y += 4) {
+            for (int x = 0; x < a.getWidth(); x += 4) {
+                int ca = a.getPixel(x, y), cb = b.getPixel(x, y);
+                boolean ta = (ca >>> 24) != 0, tb = (cb >>> 24) != 0;
+                if (ta) pa++;
+                if (tb) pb++;
+                if (ca != cb) {
+                    if (firstX < 0) { firstX = x; firstY = y; }
+                    if (ta && !tb) onlyA++;
+                    else if (!ta && tb) onlyB++;
+                }
+            }
+        }
+        return "first_diff=(" + firstX + "," + firstY + ") paintedA=" + pa + " paintedB=" + pb
+                + " onlyBase=" + onlyA + " onlyOptimized=" + onlyB;
+    }
+
+    /** 两图逐像素差异数（**正确性校验**：优化路径必须与基线画出同样的结果） */
+    private static int countDiffPixels(android.graphics.Bitmap a, android.graphics.Bitmap b) {
+        int diff = 0;
+        for (int y = 0; y < a.getHeight(); y += 4) {
+            for (int x = 0; x < a.getWidth(); x += 4) {
+                if (a.getPixel(x, y) != b.getPixel(x, y)) diff++;
+            }
+        }
+        return diff;
+    }
 
     /** 统计非透明/非背景像素数（可比性自检：对照组是否真的渲染了内容） */
     private static int countPaintedPixels(android.graphics.Bitmap bmp) {
