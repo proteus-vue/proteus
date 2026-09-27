@@ -44,3 +44,32 @@ export type {
   DegradationReport,
   PropDiagnostic,
 } from './degradation'
+
+/* ─────────────────── ★★M0：渲染 IR（PNode）——App 端高性能渲染的编译期产物 ───────────────────
+   定位：`ComponentIR`（语义层「是什么」）与 `IRNode`（后端运行时节点）之间的**渲染层**
+   （「怎么画」：样式已归一化 + 单位已折叠 + 携带编译期判定的 flags）。
+   ★ 本层是**新增**的，不修改既有形状 —— 既有五后端零影响（计划 §11.3）。
+   ★ 承载已实测的绘制策略：拍平（−91% 内存）· 单色紧凑格式（−39%）· 纯背景不进绘制。
+   见 docs/Proteus_CSS_Profile规格.md §3–§4 与 docs/proteus-performance-plan/10-ios-memory.md。 */
+export type {
+  PKind,
+  ResolvedLength,
+  Edges,
+  LayoutProps,
+  PaintProps,
+  TextProps,
+  PaintHint,
+  PProps,
+  PFlags,
+  PNode,
+  PTree,
+  DynamicBinding,
+  UpdateKind,
+  PDiagnostic,
+} from './pnode'
+export { resolveLength, parseStyleString, normalizeStyleDecls, normalizeStyleString, expandEdges, parseTransform, camel, splitTopLevel } from './pnode-style'
+export type { LengthContext, NormalizeOptions, NormalizeResult } from './pnode-style'
+export { analyzePTree, flattenRate, groupBindingsByNode } from './pnode-analyze'
+export type { AnalyzeOptions, AnalyzeResult, NodeFacts } from './pnode-analyze'
+export { buildPTree, buildPTreeFromComponentIR, rawFromComponentIR, kindFromSemantic, inferUpdateKind } from './pnode-build'
+export type { PRawNode, BuildOptions } from './pnode-build'
