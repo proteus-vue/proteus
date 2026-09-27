@@ -104,6 +104,49 @@ emoji 前缀（降级条/驾驶提醒），文案入口保持宿主注入；`↕
 
 ---
 
+### ★★★Rust 排版核心**真机验证通过**：iPhone 12 · 4050 元素 3.22ms · 与浏览器偏差 0.375dp（2026-09-29，提交 `03c98555`）
+
+**触发**：用户「我现在有真机」。探测发现是 **iPhone 12**（`yunlai的iPhone`，UDID `00008101-…`），
+**无 Android 设备**（`adb devices` 空）——故本轮的合理用途是把刚建成、已过浏览器对拍的
+Rust 排版核心送上真机（M2 的 Android 闭环仍需 Android 设备）。
+
+**★真机实测（iPhone 12 · release）**
+```
+一致性：ok=true · 17 用例 / 67 节点 · 最大偏差 0.375dp（容差 0.5dp）· 0 失败
+性能  ：4050 元素 · 中位 3.222ms（20 次；min 2.978 / max 5.776）
+```
+· 3.22ms 落进 60FPS 帧预算（16.67ms）——对比 DCP-1 spike 里 Yoga 桌面冷启动 2.73ms，
+  **自研核心在真机上没有性能落差**
+· **★★判据跟着核心一起上机**：golden（浏览器基准）随 app bundle 装入设备，
+  `proteus_layout_conformance` 在真机上重算并比对 →「真机算的与浏览器一致」是**设备上量出来的事实**，
+  而非推断。这是本仓「以浏览器为布局真值基准」（方案 §5.7）第一次落到真机。
+
+**新增 `src/ffi.rs`：C ABI（三端共享同一份接口）**
+`proteus_layout_version` / `proteus_layout_conformance(golden)` / `proteus_layout_bench(n, iters)`
+/ `proteus_layout_free_string`。设计取舍：
+· **跨界只传 JSON 字符串，不传结构体**——① 结构体 ABI 依赖对齐/字段顺序，跨语言易踩坑
+  ② 可观测（真机报告就是靠它带回来的）③ 生产路径（M2+）再按二进制 flat buffer + 零拷贝优化
+· **panic 防护**：`catch_unwind` 包住入口（跨 FFI panic 是 UB；含空指针/非法 UTF-8 测试）
+
+**★★FFI 边界又抓出两个「静默丢字段」——「跨边界」是一类独立风险面**
+| # | 缺失 | 症状 |
+|---|---|---|
+| 1 | `isText` 未识别 | golden 不含文本字面量（度量按 id 查表）→ 文本节点全按 0 尺寸，几何全错 |
+| 2 | `min/max` 四轴未映射 | 「max-width 夹取」用例偏差 **35dp** |
+· 关键教训：**同一份 golden 在 Rust 直测里通过、经 FFI 却失败** →
+  测试必须**同时覆盖「直连」与「过边界」两条路径**（本轮 6 项直测 + 4 项 FFI 测）
+
+**★真机宿主的三个脚本坑（已固化进 `run-layout-core.sh`）**
+| # | 坑 | 正解 |
+|---|---|---|
+| 1 | **必须用 rustup 的 toolchain**：本机 PATH 里 rustc 来自 Homebrew（`/opt/homebrew/bin/rustc`），而 iOS target 装在 `~/.cargo` → 报 `can't find crate for 'core'` | 脚本显式前置 `$HOME/.cargo/bin` 并**校验解析结果**（不静默降级） |
+| 2 | 描述文件**不在** `~/Library/MobileDevice/Provisioning Profiles/`（那里为空） | 实际在 `~/Library/Developer/Xcode/UserData/Provisioning Profiles/` |
+| 3 | entitlements **必须从描述文件原样提取**，手工拼装会 `0xe8008016 invalid entitlements` | 免费个人团队还要求 team-identifier 与 keychain-access-groups（少一项即无效） |
+
+**验证**：`cargo test` **10/10**（6 项 conformance + 4 项 FFI：含破坏性、空指针、坏 JSON 不 panic）
+
+---
+
 ### ★★Rust 排版核心骨架落地：与浏览器对拍 67 节点最大偏差 0.375dp（2026-09-29，提交 `a0ec5923`）
 
 **DCP-1 定案后的第一步**：把 L1 排版核心的 Rust 实现立起来（`packages/layout-core-rust/`），
