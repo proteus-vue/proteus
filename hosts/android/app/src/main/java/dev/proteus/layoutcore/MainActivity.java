@@ -243,6 +243,12 @@ public class MainActivity extends Activity {
             String hit = hitTestRun();
             sb.append(hit).append('\n');
             writeReport("layout-hit.json", hit);
+        } else if ("gesture".equals(testPath)) {
+            // ★★M3 手势验收（方案 §6 映射表：平台识别器 + 核心命中标注 target）
+            sb.append("【③ 手势：平台识别器（GestureDetector） + 核心命中 target】\n");
+            String g = gestureRun();
+            sb.append(g).append('\n');
+            writeReport("layout-gesture.json", g);
         } else if ("recycle".equals(testPath)) {
             // ★§9.3 长列表验收：4000 行滚到底再回滚，看复用率与内存收敛
             sb.append("【③ §9.3 长列表复用池（4000 行 / 滚动到底再回滚）】\n");
@@ -1891,5 +1897,228 @@ public class MainActivity extends Activity {
             return "{\"ok\":false,\"error\":\"" + e.getMessage() + "\"}";
         }
     }
+
+
+    /**
+     * ★★M3 手势验收：**平台识别器 + 核心命中标注 target**。
+     *
+     * 【方案依据】06-gesture-animation.md 的映射表：tap→`GestureDetector`、
+     *   longPress→`LongPressGesture`、swipe→`FlingGesture` —— **各端用平台识别器**。
+     *   本仓只做两件事：① 归一为**语义事件**（跨端同形 API）② 用核心命中给事件标 target。
+     *
+     * 【为什么必须真机跑（不能只在无头环境验）】
+     *   tap/longpress 的判定依赖**真实时间**（长按阈值来自 `ViewConfiguration`，
+     *   fling 的速度来自 `VelocityTracker` 对**真实时间戳**的拟合）——这些是平台行为，
+     *   只能真机验。故本场景用真实 MotionEvent 序列 + 真实延时驱动**同一条 onTouchEvent**。
+     *
+     * 【四个手势的验证点】
+     *   · tap       → 落在「卡片」上（target 必须是命中那个节点，而非宿主/根）
+     *   · longpress → 需**真实等待**长按阈值（platform 的 Handler 计时）
+     *   · fling     → 方向由速度主轴判定（水平位移为主 → left/right）
+     *   · scroll    → 报告位移读数
+     */
+    private String gestureRun() {
+        final int W = 300, H = 300;
+        // 场景：顶栏(2) / 卡片(3) 含一个 absolute 子(4) / 底栏(6)
+        //   → 探针点选在 (150,90)：命中 4（绝对定位元素绘制在在流之上，M3 命中测试已验）
+        //     故手势的 target 应为 **4** —— 这同时验证了「命中 → 手势」的接线
+        StringBuilder nodes = new StringBuilder(2 * 1024);
+        nodes.append("{\"viewport\":{\"width\":").append(W).append(",\"height\":").append(H)
+             .append("},\"nodes\":[")
+             .append("{\"id\":1,\"parentId\":null,\"width\":300.0,\"height\":300.0,\"flexDirection\":\"column\"}")
+             .append(",{\"id\":2,\"parentId\":1,\"width\":300.0,\"height\":60.0}")
+             .append(",{\"id\":3,\"parentId\":1,\"width\":300.0,\"height\":180.0}")
+             .append(",{\"id\":4,\"parentId\":3,\"position\":\"absolute\",\"top\":20.0,\"left\":30.0,\"width\":240.0,\"height\":140.0}")
+             .append(",{\"id\":6,\"parentId\":1,\"width\":300.0,\"height\":60.0}")
+             .append("],\"textMeasures\":{}}");
+
+        long handle = RustLayout.create(nodes.toString());
+        if (handle <= 0) return "{\"ok\":false,\"error\":\"Rust 建树失败\"}";
+
+        final ProteusHostView host = new ProteusHostView(this);
+        host.attachCore(handle);
+        final java.util.List<String> log = new java.util.ArrayList<>();
+        host.setGestureListener(new ProteusHostView.GestureListener() {
+            @Override public void onGesture(String type, int targetId, int[] chain, float x, float y,
+                                            android.os.Bundle extra) {
+                log.add(type + "|target=" + targetId + "|chain=" + java.util.Arrays.toString(chain)
+                        + "|dir=" + extra.getString("direction", "-")
+                        + "|dx=" + Math.round(extra.getFloat("dx_total", 0) * 10) / 10.0);
+            }
+        });
+        root.addView(host, new FrameLayout.LayoutParams(W, H));
+        this.keepAlive = new Object[]{host, log};
+
+        // ★★★用**真实时间**驱动（不能只发 DOWN——tap/longpress/fling 全依赖真实时间流逝）
+        //
+        // 【本仓实测连踩两次的同一个坑，值得完整记下】
+        //   ① 初版：把「DOWN、500ms 后 UP、1000ms 后 fling…」一次性 `postDelayed` 排队。
+        //      但 `runAll` 此前已占用主线程**数秒**（bench + 文本对比），消息被处理时
+        //      **截止时刻早已全部过期** → 背靠背零间隔执行。现象：longpress 不触发，
+        //      看起来像「平台识别器不工作」。
+        //   ② 二版：改成链式（每步发完再排下一步），但**首步延迟与汇总延迟仍按「排队时刻」算**
+        //      → 仍然过期。现象：汇总比手势序列**先**执行（recognized=0）。
+        //   ⇒ 正解：**整条脚本只在主线程空闲后开始计**，之后每步的延迟都从
+        //      **上一步实际执行的时刻**起算；汇总也串在链尾（不作为独立的定时任务）。
+        //   教训与全仓一致：**测量装置的时序设计必须与它要测的东西对齐**
+        //   （同类已有：固定 sleep 让截图落后一步 / 测量位图污染内存读数）。
+        final float PX = 150f, PY = 90f;
+        final long lpThreshold = android.view.ViewConfiguration.getLongPressTimeout();
+        final int DOWN = android.view.MotionEvent.ACTION_DOWN;
+        final int MOVE = android.view.MotionEvent.ACTION_MOVE;
+        final int UP = android.view.MotionEvent.ACTION_UP;
+
+        // 脚本：四个手势，每个手势 = 若干 {action,x,y,距上一步的延迟ms}
+        //   gap = 手势之间的间隔（也是「距上一步」）
+        final java.util.List<float[][]> script = new java.util.ArrayList<>();
+        script.add(new float[][]{ {DOWN, PX, PY, 300}, {UP, PX, PY, 60} });                                  // tap
+        script.add(new float[][]{ {DOWN, PX, PY, 400}, {UP, PX, PY, lpThreshold + 250} });                   // longpress
+        script.add(new float[][]{ {DOWN, PX, PY, 400},                                                       // fling 右
+                {MOVE, PX + 40, PY, 20}, {MOVE, PX + 80, PY, 20}, {MOVE, PX + 130, PY, 20},
+                {MOVE, PX + 180, PY, 20}, {UP, PX + 180, PY, 20} });
+        // ④ 慢速小位移拖动：★这是**负向检查**——总时长必须**短于长按阈值**，
+        //    否则它会被识别成长按（本仓实测踩到：初版 720ms → 多出一个 longpress，
+        //    让人以为「长按判据不准」，其实是脚本自己按太久了）。
+        //    期望：不产生 longpress、也不构成 fling（速度低）。
+        script.add(new float[][]{ {DOWN, PX, PY, 400},
+                {MOVE, PX, PY + 3, 40}, {MOVE, PX, PY + 10, 80}, {MOVE, PX, PY + 30, 120},
+                {UP, PX, PY + 45, 160} });
+
+        // 收尾：串在链尾执行（★不做独立定时任务——否则又会按「排队时刻」算而提前/过期）
+        final Runnable finalize = () -> {
+            android.util.Log.i(TAG, "手势汇总开始：已识别 " + log.size() + " 个事件");
+            String joined = android.text.TextUtils.join(" ;; ", log);
+            boolean hasTap = contains(log, "tap|target=4|");
+            boolean hasLong = contains(log, "longpress|target=4|");
+            boolean hasFling = contains(log, "fling|target=4|");
+            int flingIdx = indexOfPrefix(log, "fling|");
+            String flingDir = flingIdx >= 0 ? log.get(flingIdx).split("\\|")[3].replace("dir=", "") : "-";
+            boolean flingOk = "right".equals(flingDir);
+            boolean scrollSeen = indexOfPrefix(log, "scroll|") >= 0;
+            // ★负向判据（比「有没有」更强的检查）：
+            //   · longpress 恰好 1 次 —— 多出即说明某段脚本按太久了（时间语义）
+            //   · fling 恰好 1 次   —— 慢拖不应被判成 fling（速度语义）
+            int longCount = countPrefix(log, "longpress|");
+            int flingCount = countPrefix(log, "fling|");
+            boolean countsOk = (longCount == 1) && (flingCount == 1);
+            boolean ok = hasTap && hasLong && hasFling && flingOk && countsOk;
+            try {
+                org.json.JSONObject out = new org.json.JSONObject();
+                out.put("ok", ok);
+                out.put("path", "gesture");
+                out.put("viewport", W + "x" + H);
+                out.put("probe", PX + "," + PY);
+                out.put("expect_target", 4);
+                out.put("tap_ok", hasTap);
+                out.put("longpress_ok", hasLong);
+                out.put("fling_ok", hasFling);
+                out.put("fling_direction", flingDir);
+                out.put("scroll_seen", scrollSeen);
+                out.put("longpress_count", longCount);
+                out.put("fling_count", flingCount);
+                out.put("counts_ok", countsOk);   // ★负向检查：慢拖不产生额外 longpress/fling
+                out.put("longpress_threshold_ms", lpThreshold);
+                out.put("recognized", log.size());
+                out.put("events", joined);
+                out.put("note", "★方案 §6：手势用**平台识别器**（GestureDetector），本仓只做语义归一 + "
+                        + "用核心命中标注 target。tap/longpress/fling 的 target 都应为 4（证明「命中 → 手势」接线正确）。"
+                        + "★整条脚本只在主线程空闲后开始计时，每步延迟从上一步**实际执行时刻**起算，汇总串在链尾——"
+                        + "前两版都因「按排队时刻算」而全部过期（见源码注释）。");
+                String json = out.toString(2);
+                writeReport("layout-gesture.json", json);
+                RustLayout.destroy(handle);
+                android.util.Log.i(TAG, "手势验收报告：\n" + json);
+            } catch (Exception e) {
+                android.util.Log.e(TAG, "手势报告失败", e);
+            }
+        };
+        // ★post(0)：此刻（runAll 仍在跑）排入，但**真正的计时从它被执行的那一刻开始**
+        new android.os.Handler(getMainLooper()).post(() -> new GestureScriptRunner(host, script, finalize).start());
+
+        return "{\"ok\":true,\"note\":\"手势序列已排入主线程队列（真实时间驱动），报告异步写入 layout-gesture.json\"}";
+    }
+
+    /**
+     * ★★手势脚本执行器：**串行执行、每步延迟从上一步实际执行时刻起算**。
+     *
+     * 【为什么必须是「实际执行时刻」而不是「排队时刻」】
+     *   若在 runAll 里（主线程被占数秒）就按 `now + delay` 排定所有截止时刻，
+     *   等主线程空闲时这些时刻**已全部过期** → 背靠背零间隔执行 → 依赖真实时间的
+     *   手势（longpress）永不触发。本仓实测**连踩两次**（见 `gestureRun` 注释）。
+     *   ⇒ 本执行器只在**第一步真正执行时**才开始排下一步。
+     *
+     * 【为什么写成内部类而不是局部 lambda】Java 的局部变量不能自我引用
+     *   （`step.run()` 里引用 `step` 会报「可能尚未初始化」）→ 状态与方法放进类里。
+     */
+    private final class GestureScriptRunner {
+        private final ProteusHostView host;
+        private final java.util.List<float[][]> script;
+        private final Runnable finalize;
+        private final android.os.Handler handler;
+        /** ★整段脚本共享：平台按 downTime 归组同一手势；每个手势的新 DOWN 会重置它 */
+        private final long[] downTime = {0};
+        private int gi = 0;   // 手势序号
+        private int si = 0;   // 手势内步序号
+
+        GestureScriptRunner(ProteusHostView host, java.util.List<float[][]> script, Runnable finalize) {
+            this.host = host;
+            this.script = script;
+            this.finalize = finalize;
+            this.handler = new android.os.Handler(getMainLooper());
+        }
+
+        /** 开始（★从被调用的这一刻计时——调用点必须是主线程空闲之后） */
+        void start() {
+            android.util.Log.i(TAG, "手势脚本开始执行（主线程空闲后计时）");
+            step();
+        }
+
+        private void step() {
+            if (gi >= script.size()) {
+                android.util.Log.i(TAG, "手势脚本执行完毕");
+                if (finalize != null) finalize.run();
+                return;
+            }
+            float[][] gesture = script.get(gi);
+            if (si >= gesture.length) {
+                gi++;
+                si = 0;
+                handler.post(this::step);      // 下一个手势（首步自带 gap 延迟）
+                return;
+            }
+            final float[] st = gesture[si];
+            final int action = (int) st[0];
+            final float x = st[1], y = st[2];
+            final long delay = (long) st[3];
+            si++;
+
+            handler.postDelayed(() -> {
+                // ★此刻是**真实执行时刻**；下一步的延迟从这里起算
+                long now = android.os.SystemClock.uptimeMillis();
+                if (action == android.view.MotionEvent.ACTION_DOWN) downTime[0] = now;
+                android.view.MotionEvent e = android.view.MotionEvent.obtain(downTime[0], now, action, x, y, 0);
+                host.onTouchEvent(e);
+                e.recycle();
+                step();          // ★链式：这一步真的发完了，才排下一步
+            }, Math.max(delay, 1));
+        }
+    }
+
+    private static boolean contains(java.util.List<String> list, String sub) {
+        for (String s : list) if (s.startsWith(sub)) return true;
+        return false;
+    }
+
+    private static int countPrefix(java.util.List<String> list, String prefix) {
+        int n = 0;
+        for (String s : list) if (s.startsWith(prefix)) n++;
+        return n;
+    }
+
+    private static int indexOfPrefix(java.util.List<String> list, String prefix) {
+        for (int i = 0; i < list.size(); i++) if (list.get(i).startsWith(prefix)) return i;
+        return -1;
+    }
+
 
 }
