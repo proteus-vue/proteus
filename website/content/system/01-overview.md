@@ -72,7 +72,7 @@ group: 柔性系统
 | 我想… | 读这几篇 | 用时 |
 |---|---|---|
 | **把页面排版做对** | 本页 → [柔性网格](/docs/system/03-fluid-grid) → [自适应侧边栏](/docs/system/04-sidebar) | 15 分钟 |
-| **一套代码跑多端** | [形态画像](/docs/system/06-form-profiles) → [一套内容槽，七种形态](/docs/system/11-formfactor-composition) → [多端同屏演示](/multi-device) | 30 分钟 |
+| **一套代码跑多端** | [形态画像](/docs/system/06-form-profiles) → [一套内容槽，八种形态](/docs/system/11-formfactor-composition) → [多端同屏演示](/multi-device) | 30 分钟 |
 | **理解尺寸怎么求解** | [流体度量](/docs/system/07-fluid-metrics) → [容器查询](/docs/system/02-container-query) | 20 分钟 |
 | **接折叠屏 / 车机 / TV** | [折叠姿态](/docs/system/09-postures) → [焦点导航](/docs/system/10-focus-navigation) → [能力三态](/docs/system/08-capabilities) | 30 分钟 |
 | **查 API 与门禁** | [断点与形态](/docs/system/05-breakpoints) → [p-formfactor API](/docs/component/p-formfactor) | 按需 |
@@ -128,7 +128,7 @@ proteus fluid:check   # 编译期门禁：FLD 规则机器可查，CI 强制
 | G-22 四原语 | `p-fluid` 流式 / `p-grid` 网格 / `p-stack` 弹性栈 / `p-fit` 内在尺寸 | ✅ |
 | S1–S4 | `@proteus-vue/fluid` 拆包 + `p-split`/`p-zone` + `p-safe`/`p-aspect` + `p-sidebar`/`p-toolbar` + `p-scale` 无障碍 | ✅ |
 | G-22.5 形态区间 | `p-adaptive`（sheet / dialog / popover）+ `p-modal` 自动切换 | ✅ |
-| **L2 形态层** | **形态画像 7 形态 + 流体度量 v3 + 能力三态 14 项 + 折叠三姿态 + 焦点导航 + `p-formfactor`** | **✅** |
+| **L2 形态层** | **形态画像 8 形态 + 流体度量 v3 + 能力三态 14 项 + 折叠三姿态 + 焦点导航 + `p-formfactor`** | **✅** |
 | S5 全端 | 组件目录入包 + App 端原生求解器接口；`useContainerProfile()` 组合入口 | ⬜ |
 
 > 状态图例：✅ 已落地可验证 · ⬜ 未实现。运行时核心是独立包 `@proteus-vue/fluid`（纯逻辑、零依赖）：`createContainerQuery` / `createSizeAwareObserver` / `createDeviceEnv` / `detectFluidCapabilities` / `createAdaptiveController`。
@@ -136,6 +136,6 @@ proteus fluid:check   # 编译期门禁：FLD 规则机器可查，CI 强制
 ## 下一步
 
 - **只想动手**：上面的 30 秒示例 + [柔性网格](/docs/system/03-fluid-grid) 足够开始
-- **要做多端**：[多端同屏演示](/multi-device) 亲手切七种形态（右栏看能力三态）
-- **通读全专区**：[容器查询](/docs/system/02-container-query) · [柔性网格](/docs/system/03-fluid-grid) · [自适应侧边栏](/docs/system/04-sidebar) · [断点与形态](/docs/system/05-breakpoints) · [形态画像](/docs/system/06-form-profiles) · [流体度量](/docs/system/07-fluid-metrics) · [能力三态](/docs/system/08-capabilities) · [折叠姿态](/docs/system/09-postures) · [焦点导航](/docs/system/10-focus-navigation) · [一套内容槽，七种形态](/docs/system/11-formfactor-composition)
+- **要做多端**：[多端同屏演示](/multi-device) 亲手切八种形态（右栏看能力三态）
+- **通读全专区**：[容器查询](/docs/system/02-container-query) · [柔性网格](/docs/system/03-fluid-grid) · [自适应侧边栏](/docs/system/04-sidebar) · [断点与形态](/docs/system/05-breakpoints) · [形态画像](/docs/system/06-form-profiles) · [流体度量](/docs/system/07-fluid-metrics) · [能力三态](/docs/system/08-capabilities) · [折叠姿态](/docs/system/09-postures) · [焦点导航](/docs/system/10-focus-navigation) · [一套内容槽，八种形态](/docs/system/11-formfactor-composition)
 - **相关分区**：[语义原语](/docs/primitives) · [组件总览](/docs/12-components-intro) · [端与成熟度](/docs/framework/ends-matrix)

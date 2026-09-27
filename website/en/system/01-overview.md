@@ -1,12 +1,12 @@
 ---
-title: Flex System overview
+title: Fluid System overview
 order: 1
 group: 柔性系统
 ---
 
-# Flex System
+# Fluid System
 
-**The Flex System is Proteus's layout semantics layer.** You declare only *what* you want — a font size that varies between two widths, a minimum card width, when a sidebar should appear — and the framework derives *which structure, what metrics, which capabilities* from the **container width** and the **device form**, then hands the geometry to each target's **layout implementation**.
+**The Fluid System is Proteus's layout semantics layer.** You declare only *what* you want — a font size that varies between two widths, a minimum card width, when a sidebar should appear — and the framework derives *which structure, what metrics, which capabilities* from the **container width** and the **device form**, then hands the geometry to each target's **layout implementation**.
 
 > **The boundary, stated plainly**: the framework does **not** build its own cross-target layout engine (no in-house Yoga / Skia as a unified engine). It hands the semantics to each target — either a **native layout container** (CSS Grid / `UIStackView` / `ConstraintLayout` / ArkUI / Skyline) **or a third-party self-drawing engine backend** (`BackendId` already registers `skia` / `canvas2d` / `flutter`; the Flutter backend's layout reuses Flutter's internal Yoga layer). Both kinds of backend consume **the same layout semantics** — which is exactly where "one codebase, isomorphic across targets" lands.
 
@@ -28,7 +28,7 @@ Hand-written responsive CSS (breakpoints plus hand-computed columns — and it *
 @media (min-width: 1440px) { .grid { grid-template-columns: repeat(4, 1fr); } }
 ```
 
-The Flex System (declare only a minimum column width; the count is solved from the **container**):
+The Fluid System (declare only a minimum column width; the count is solved from the **container**):
 
 ```vue
 <p-grid :min-col-width="250" :gap="14">
@@ -62,7 +62,7 @@ The other two common primitives (fluid typography, adaptive sidebar):
 | Concept | In one sentence | Read more |
 |---|---|---|
 | **Container solving** | Breakpoints key off the **container** width, not the viewport — correct in any container | [Container queries](/docs/system/02-container-query) |
-| **Form profiles** | One `FORM_PROFILES` table declares 7 device forms (input / viewing distance / topology / navigation / capabilities); the framework swaps layout from it | [Form profiles](/docs/system/06-form-profiles) |
+| **Form profiles** | One `FORM_PROFILES` table declares 8 device forms (input / viewing distance / topology / navigation / capabilities); the framework swaps layout from it | [Form profiles](/docs/system/06-form-profiles) |
 | **Capability tri-state** | A capability is not a boolean: `supported` / `fallback` (a degradation path) / `unsupported`, each with a render consequence | [Capability tri-state](/docs/system/08-capabilities) |
 
 Underneath sits one solving formula: **sizes are driven by container width alone** — `k = clamp(min, w/ref, max)`, every variable `k × baseline` ([Fluid metrics](/docs/system/07-fluid-metrics)).
@@ -72,7 +72,7 @@ Underneath sits one solving formula: **sizes are driven by container width alone
 | I want to… | Read these | Time |
 |---|---|---|
 | **Get page layout right** | This page → [Fluid grid](/docs/system/03-fluid-grid) → [Adaptive sidebar](/docs/system/04-sidebar) | 15 min |
-| **One codebase across targets** | [Form profiles](/docs/system/06-form-profiles) → [One set of slots, seven forms](/docs/system/11-formfactor-composition) → [Multi-device demo](/multi-device) | 30 min |
+| **One codebase across targets** | [Form profiles](/docs/system/06-form-profiles) → [One set of slots, eight forms](/docs/system/11-formfactor-composition) → [Multi-device demo](/multi-device) | 30 min |
 | **Understand how sizes are solved** | [Fluid metrics](/docs/system/07-fluid-metrics) → [Container queries](/docs/system/02-container-query) | 20 min |
 | **Handle foldables / in-car / TV** | [Fold postures](/docs/system/09-postures) → [Focus navigation](/docs/system/10-focus-navigation) → [Capability tri-state](/docs/system/08-capabilities) | 30 min |
 | **Look up APIs and gates** | [Breakpoints & forms](/docs/system/05-breakpoints) → [p-formfactor API](/docs/component/p-formfactor) | as needed |
@@ -119,7 +119,7 @@ One sentence for the difference: **L1 makes "a card inside a narrow container" c
 | FLD004 | `p-grid` must declare `min-col-width` |
 | FLD008 | No manual `if (width < 600)` width branching |
 
-This is not a slogan: **this entire site ships zero `@media`** (the home page uses `v-p-fluid`, capability cards use `p-grid`, docs pages use `p-sidebar`) and CI blocks hand-written breakpoints — the official site is itself the Flex System's acceptance ground.
+This is not a slogan: **this entire site ships zero `@media`** (the home page uses `v-p-fluid`, capability cards use `p-grid`, docs pages use `p-sidebar`) and CI blocks hand-written breakpoints — the official site is itself the Fluid System's acceptance ground.
 
 ## Landing status (honest tiering)
 
@@ -128,7 +128,7 @@ This is not a slogan: **this entire site ships zero `@media`** (the home page us
 | G-22 four primitives | `p-fluid` / `p-grid` / `p-stack` / `p-fit` | ✅ |
 | S1–S4 | `@proteus-vue/fluid` split-out + `p-split`/`p-zone` + `p-safe`/`p-aspect` + `p-sidebar`/`p-toolbar` + `p-scale` accessibility | ✅ |
 | G-22.5 form ranges | `p-adaptive` (sheet / dialog / popover) + `p-modal` auto-switching | ✅ |
-| **L2 form layer** | **7 form profiles + fluid metrics v3 + 14 capability tri-states + 3 fold postures + focus navigation + `p-formfactor`** | **✅** |
+| **L2 form layer** | **8 form profiles + fluid metrics v3 + 14 capability tri-states + 3 fold postures + focus navigation + `p-formfactor`** | **✅** |
 | S5 all ends | Component catalog into the packages + the App-side native solver interface; `useContainerProfile()` composite entry | ⬜ |
 
 > Status legend: ✅ landed and verifiable · ⬜ not implemented. The runtime core is the standalone, dependency-free `@proteus-vue/fluid` package: `createContainerQuery` / `createSizeAwareObserver` / `createDeviceEnv` / `detectFluidCapabilities` / `createAdaptiveController`.
@@ -136,6 +136,6 @@ This is not a slogan: **this entire site ships zero `@media`** (the home page us
 ## Next steps
 
 - **Just want to build**: the 30-second snippet above plus [Fluid grid](/docs/system/03-fluid-grid) is enough to start
-- **Going multi-target**: [Multi-device demo](/multi-device) — switch all seven forms by hand (the right panel shows the capability tri-state)
-- **Read the whole section**: [Container queries](/docs/system/02-container-query) · [Fluid grid](/docs/system/03-fluid-grid) · [Adaptive sidebar](/docs/system/04-sidebar) · [Breakpoints & forms](/docs/system/05-breakpoints) · [Form profiles](/docs/system/06-form-profiles) · [Fluid metrics](/docs/system/07-fluid-metrics) · [Capability tri-state](/docs/system/08-capabilities) · [Fold postures](/docs/system/09-postures) · [Focus navigation](/docs/system/10-focus-navigation) · [One set of slots, seven forms](/docs/system/11-formfactor-composition)
+- **Going multi-target**: [Multi-device demo](/multi-device) — switch all eight forms by hand (the right panel shows the capability tri-state)
+- **Read the whole section**: [Container queries](/docs/system/02-container-query) · [Fluid grid](/docs/system/03-fluid-grid) · [Adaptive sidebar](/docs/system/04-sidebar) · [Breakpoints & forms](/docs/system/05-breakpoints) · [Form profiles](/docs/system/06-form-profiles) · [Fluid metrics](/docs/system/07-fluid-metrics) · [Capability tri-state](/docs/system/08-capabilities) · [Fold postures](/docs/system/09-postures) · [Focus navigation](/docs/system/10-focus-navigation) · [One set of slots, eight forms](/docs/system/11-formfactor-composition)
 - **Related sections**: [Semantic primitives](/docs/primitives) · [Components overview](/docs/12-components-intro) · [Ends & maturity](/docs/framework/ends-matrix)

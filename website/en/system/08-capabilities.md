@@ -6,7 +6,7 @@ group: 柔性系统
 
 # Capability tri-state & degradation
 
-> **A capability is not a boolean.** "The in-car display does not support multi-SKU picking" is wrong — the real constraint is "while driving, do not do fine multi-selection; use voice/rotary single-select instead". The Flex System expresses that with a tri-state and makes every entry produce an **observable render consequence**.
+> **A capability is not a boolean.** "The in-car display does not support multi-SKU picking" is wrong — the real constraint is "while driving, do not do fine multi-selection; use voice/rotary single-select instead". The Fluid System expresses that with a tri-state and makes every entry produce an **observable render consequence**.
 
 ## Tri-state semantics
 
@@ -24,7 +24,7 @@ unsupported  → do not render (this form genuinely has no such path)
 | `capsDegraded(level)` | Whether it is `fallback` (the degraded path was taken) |
 | `capsLabel(level)` | Normalises to the tri-state string (boolean compatibility: `true→supported` / `false→unsupported`) |
 
-> ⚠️ **Bare truthiness is forbidden**: `v-if="caps.drawer"` is **always true** for the string `'unsupported'` — a real P0 we hit (all seven forms rendered fake badges while the panel said "unsupported"). Both components and the SSOT must go through `capsEnabled()`; a static-scan gate blocks bare usage.
+> ⚠️ **Bare truthiness is forbidden**: `v-if="caps.drawer"` is **always true** for the string `'unsupported'` — a real P0 we hit (every form rendered fake badges while the panel said "unsupported"). Both components and the SSOT must go through `capsEnabled()`; a static-scan gate blocks bare usage.
 
 ## The 14 capabilities and the truth table
 

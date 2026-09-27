@@ -6,7 +6,7 @@ group: 柔性系统
 
 # Focus navigation engine
 
-> **A remote has exactly one d-pad.** In-car rotary knobs, TV remotes, keyboard tabbing — these forms have no freedom to "point and click", so they need dependable **spatial navigation**: press a direction and the focus moves to the geometrically most reasonable target. The Flex System ships that logic as zero-dependency pure functions (`navigateFocus` in `@proteus-vue/fluid`), auto-enabled by capability declarations.
+> **A remote has exactly one d-pad.** In-car rotary knobs, TV remotes, keyboard tabbing — these forms have no freedom to "point and click", so they need dependable **spatial navigation**: press a direction and the focus moves to the geometrically most reasonable target. The Fluid System ships that logic as zero-dependency pure functions (`navigateFocus` in `@proteus-vue/fluid`), auto-enabled by capability declarations.
 
 ## Why DOM order is not enough
 

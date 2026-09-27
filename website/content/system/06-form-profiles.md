@@ -30,6 +30,7 @@ group: 柔性系统
 | `watch` | dial（表冠） | compact | `glance` 一屏一意 | page-stack | glance 抬腕 | dark（AMOLED 常亮） |
 | `phone` | touch | regular | `stack` 单列 + Tab | bottom-tabs | arm 臂长 | light |
 | `fold` | touch | regular | `duo` 双窗格（展开态） | side-tabs（三姿态侧置） | arm | light |
+| `flip` | touch | regular | `stack` 单列（展开态 · 半折上下分区） | bottom-tabs（半折侧置） | arm | light |
 | `tablet` | touch | regular | `rail-split` 侧栏分栏 | rail | arm | light |
 | `pc` | cursor | regular | `rail-grid` 侧栏多列 | side-nav | desk 桌面 | light |
 | `car` | remote（旋钮） | comfortable | `dashboard` 驾驶舱 | focus-tree | dashboard 驾驶位 | dark |
@@ -60,7 +61,7 @@ group: 柔性系统
    - `caps.driveAware` ⇒ `distance=dashboard`；`caps.crown` ⇒ `input∈{dial,remote}`
    - 暗色/浅色对比度：`text/bg ≥ 4.5`、`accent/bg ≥ 3`（WCAG AA）
    - 姿态集齐备、展开视口 > 折叠视口、折叠/展开拓扑必须不同
-2. **键集 SSOT** `FORM_CAP_KEYS`（14 项）——七形态的 `caps` 键集必须逐项相等（防幽灵字段/漏声明）。
+2. **键集 SSOT** `FORM_CAP_KEYS`（14 项）——八形态的 `caps` 键集必须逐项相等（防幽灵字段/漏声明）。
 3. **渲染级对账**——`data-pf-caps` 摘要与画像声明逐项一致，且每项能力都有真实渲染后果（防「面板绿点不可证伪」）。
 
 ```bash

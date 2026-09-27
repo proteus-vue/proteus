@@ -5,7 +5,7 @@
 //   渲染出的形态完全不同、能力声明也完全不同。这就是**柔性系统**要演示的东西。
 //
 // ★零伪造：左栏展示的就是本页正在执行的**同一份源码**（?raw 直读 fluid-product/index.vue），
-//   中栏七端全部在页面上**真渲染**——
+//   中栏八端全部在页面上**真渲染**——
 //     · 设备框是**真实 mockup**（比例/圆角/刘海/状态栏/折痕由画像 frame 驱动，居中完整呈现）；
 //       内容度量宽 = 帧显示宽（≤ 画像上限宽与舞台可用宽），无 transform: scale、无裁剪；
 //     · 形态画像（FORM_PROFILES）驱动拓扑/导航/能力/视觉语言/流体度量——同一份内容槽换形态即换形态，
@@ -360,7 +360,7 @@ const sourceHtml = computed(() => highlight(fluidSource, 'vue'))
   <p-view class="six-root">
     <header class="hero">
       <h1>
-        {{ isEn ? 'One source, ' : '同一份源码，' }}<em>{{ isEn ? 'seven form factors' : '七种设备形态' }}</em>
+        {{ isEn ? 'One source, ' : '同一份源码，' }}<em>{{ isEn ? 'eight device forms' : '八种设备形态' }}</em>
       </h1>
       <p>
         {{

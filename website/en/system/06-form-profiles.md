@@ -6,7 +6,7 @@ group: 柔性系统
 
 # Form profiles
 
-> **Width tells size apart; it cannot tell forms apart.** A 1280px in-car display and a 1280px PC share the same width yet have nothing else in common — the former is rotary + voice, large hit areas, no fine scrolling; the latter is mouse + keyboard, dense three columns, hover feedback. The Flex System's second layer makes "device form" a first-class citizen: one `FORM_PROFILES` table declares every difference, and the framework swaps layout, navigation and capability set from it.
+> **Width tells size apart; it cannot tell forms apart.** A 1280px in-car display and a 1280px PC share the same width yet have nothing else in common — the former is rotary + voice, large hit areas, no fine scrolling; the latter is mouse + keyboard, dense three columns, hover feedback. The Fluid System's second layer makes "device form" a first-class citizen: one `FORM_PROFILES` table declares every difference, and the framework swaps layout, navigation and capability set from it.
 
 ## Why width is not enough
 
@@ -30,6 +30,7 @@ Conclusion: a form is the combination of **input continuity + viewing distance +
 | `watch` | dial (crown) | compact | `glance` one screen, one meaning | page-stack | glance | dark (always-on AMOLED) |
 | `phone` | touch | regular | `stack` single column + tabs | bottom-tabs | arm | light |
 | `fold` | touch | regular | `duo` two panes (expanded) | side-tabs (all postures) | arm | light |
+| `flip` | touch | regular | `stack` single column (expanded · half-fold splits top/bottom) | bottom-tabs (side-tabs in half-fold) | arm | light |
 | `tablet` | touch | regular | `rail-split` rail + split | rail | arm | light |
 | `pc` | cursor | regular | `rail-grid` rail + grid | side-nav | desk | light |
 | `car` | remote (rotary) | comfortable | `dashboard` cockpit | focus-tree | dashboard | dark |

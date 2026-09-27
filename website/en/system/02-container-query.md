@@ -100,4 +100,4 @@ The component thin shells only do "state bridging"; all solving logic lives in t
 
 - [Fluid grid](/docs/system/03-fluid-grid): p-grid declares only the minimum column width, solved in pure CSS
 - [Adaptive sidebar](/docs/system/04-sidebar): the three-state state machine + in-vehicle d-pad focus
-- [Flex System overview](/docs/system/01-overview): back to the big picture
+- [Fluid System overview](/docs/system/01-overview): back to the big picture

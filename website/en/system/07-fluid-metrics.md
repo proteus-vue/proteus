@@ -73,7 +73,7 @@ The same form has a **different vertical budget** at different stage widths (a r
 | **1512** | **The user's actual screen (a shared factor behind earlier misses)** | Same as above |
 | 1600 | Design-review wide stage | Same as above |
 
-Machine gate: `tests/e2e-website-multidevice.test.ts` (real Chromium, two viewports × seven forms, including in-session switching).
+Machine gate: `tests/e2e-website-multidevice.test.ts` (real Chromium, two viewports × eight forms, including in-session switching).
 
 ## Boundaries and degradation
 
