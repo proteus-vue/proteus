@@ -25,10 +25,13 @@ mkdir -p "$BUILD" "$RESULTS"
 echo "==> ① 探测已连接真机"
 UDID="${1:-}"
 if [ -z "$UDID" ]; then
-  # ★只取 reality=physical 的设备：devicectl 输出最后一列是 reality（simulated/physical）
-  #   踩坑：初版用 `/physical|connected/` 匹配整行 → 把模拟器（现实列=simulated、状态列=connected）也算进来，
-  #   且 awk $3 取到的是名字片段（"Pro"）而非 UDID。
-  UDID="$(xcrun devicectl list devices 2>/dev/null | grep -E 'physical' | grep -vE 'simulated' | head -1 | grep -oE '[0-9A-F]{8}-[0-9A-F]{16}' | head -1 || true)"
+  # ★设备甄别规则（两次修正后的版本）
+  #   踩坑① 初版 `awk '/physical|connected/ {print $3}'` → 模拟器状态列也是 connected，被算进来；
+  #          且 $3 取到名字片段（"Pro"）而非 UDID。
+  #   踩坑② 改用 `grep physical` → **真机那行的 reality 列是空的**（只有 simulated 的才标出来），
+  #          于是真机反被漏掉（脚本报「未发现真机」而设备明明已配对）。
+  #   正解：**排除法**——取「有 UDID 且整行不含 simulated」的第一台。
+  UDID="$(xcrun devicectl list devices 2>/dev/null | grep -vE 'simulated' | grep -oE '[0-9A-F]{8}-[0-9A-F]{16}' | head -1 || true)"
 fi
 if [ -z "$UDID" ]; then
   cat <<'MSG'
@@ -48,17 +51,16 @@ echo "    设备 UDID: $UDID"
 
 echo "==> ② 探测签名身份"
 IDENTITY="$(security find-identity -v -p codesigning 2>/dev/null | awk -F'"' '/Apple Development|iPhone Developer/ {print $2; exit}')"
-if [ -z "$IDENTITY" ]; then
-  cat <<'MSG'
-✗ 没有可用的代码签名身份（Apple Development 证书）。
-
-  解决：Xcode → Settings → Accounts → 登录 Apple ID（免费个人团队即可），
-        Xcode 会自动创建开发证书与本机私钥；完成后 `security find-identity -v -p codesigning` 应有输出。
-MSG
-  exit 2
-fi
 TEAM_ID="$(security find-identity -v -p codesigning 2>/dev/null | grep -o '([A-Z0-9]*)' | head -1 | tr -d '()' || true)"
-echo "    身份: $IDENTITY (team ${TEAM_ID:-unknown})"
+if [ -z "$IDENTITY" ]; then
+  echo "    ✗ 无签名身份（Apple Development 证书）——环境未就绪，但**先做编译验证**以排除代码问题"
+  # ★设计取舍：签名缺失时仍然编译——这样「代码是否可编译」与「环境是否可安装」是**两个独立信号**，
+  #   用户配好 Apple ID 后能立刻知道是环境问题而非代码问题（避免来回试错）。
+  SKIP_SIGN=1
+else
+  SKIP_SIGN=0
+  echo "    身份: $IDENTITY (team ${TEAM_ID:-unknown})"
+fi
 
 echo "==> ③ 编译（release + 真机 SDK）"
 # ★用 `xcrun --sdk iphoneos swiftc`（而非 -sdk 标志）：后者会让 clang 仍用 macOS sysroot
@@ -69,6 +71,22 @@ xcrun --sdk iphoneos swiftc -O \
   -parse-as-library \
   -o "$BUILD/ProteusExperiments" \
   "$HERE/main-device.swift"
+
+if [ "$SKIP_SIGN" = "1" ]; then
+  echo "==> ④ 跳过签名（无身份）——编译验证已完成"
+  file "$BUILD/ProteusExperiments" | sed 's/^/    /'
+  cat <<'MSG'
+
+  ★ 环境待办（脚本已确认设备可探测，只差签名）：
+      Xcode → Settings → Accounts → 用 Apple ID 登录（免费个人团队即可）
+      登录后 `security find-identity -v -p codesigning` 应出现 "Apple Development: ..."，
+      然后重跑本脚本即可完成安装与实验。
+
+  ★ 同时确认设备已配对（本脚本会自动探测；若未配对可执行）：
+      xcrun devicectl manage pair --device <UDID>
+MSG
+  exit 3
+fi
 
 echo "==> ④ 组装 + 签名 .app"
 rm -rf "$APP"; mkdir -p "$APP"
