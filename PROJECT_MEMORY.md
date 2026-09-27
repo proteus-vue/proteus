@@ -104,6 +104,39 @@ emoji 前缀（降级条/驾驶提醒），文案入口保持宿主注入；`↕
 
 ---
 
+### ★★iOS 竖切 M1 已跑通（2026-09-29，提交 `a17fae89`）——App 原生路线第一段落地
+
+**决策背景**：用户问「App 默认接入原生渲染还是自绘渲染」→ 核实后判定**默认原生映射**：
+`native.ts` + `04-component-mapping.md`（p-view→UIView 全量映射表）已有；**Skia 自绘零实现**
+（引擎枚举 `EngineId` 只有 6 个，Skia 连 Tier 都没进）；且 `<pg-glass>` 系统级玻璃/无障碍/文本栈
+只有原生路径能给。自绘的「不用写三套」吸引力用**已有的 Flutter 后端**即可覆盖（矩阵已验证 Tier 1）。
+★Dispatcher + 热切换三策略已落地 ⇒ 这个决定**不是不可逆的**（同 App 不同页面换引擎是已有能力）。
+
+**链路（全部消费既有资产，未新增框架能力）**：
+标准 Vue render → VNode → **G-41 Dispatcher**（方案 B 转发层）→ `createNativeBackend(adapter,'ios')`
+→ `NativeViewAdapter`（新增宿主实现）→ `globalThis.proteusNative`（Swift JSExport 注入）→ 真实 UIKit 树。
+实测：`p-view→UIView` · `p-text→UILabel` · `p-stack→UIStackView`；样式/文本（含中文）透传；Dispatcher 轨迹 29 条。
+
+**交付**：`hosts/ios/`（entry.ts · build.mjs esbuild IIFE 452KB · main.swift JSExport 桥 + 视图注册表 ·
+build.sh 组装 .app 无 xcodeproj · verify-jsc.swift 宿主桩 · verify.mjs 三层验收）。
+门禁：`pnpm check:ios-host`（16 断言 + 破坏性验证过：换 headless 后端即 8 项红）；
+`check:gates-sync` 登记 **LOCAL_ONLY**（需 macOS + Xcode，CI 是 ubuntu）——通道仍一致（24 CI + 1 本地）。
+
+**★竖切暴露的真实缺陷（mock 永远测不出）**：初版快照从宿主 root 找子视图，而 JS 创建的根从未挂到
+root 上 → `topLevel: []`（9 视图都建了却「看不见」）。修：ready 时 `mountRoots` + 快照「根」定义为
+**无父节点者**。**教训：跨边界挂载点是竖切的头号缺口，mock 阶段永远绿。**
+
+**诚实边界**（README 详列）：只映射看得见的少数属性 · **无 flex/grid 求解**（布局交 UIKit 缺省）·
+无手势/动画/Glass · 用 JSExport 非真 JSI（契约同形，替换成本可控）· H-01~H-08 仍跑 stub。
+
+**本机环境**：iOS Simulator runtime 需 `xcodebuild -downloadPlatform iOS`（8.05 GB）；
+下载完成前用**真实 JavaScriptCore + 宿主桩**验收（CI 可跑的口径），UIView 外观由模拟器人工确认。
+另：Android 工具链**实际齐全**（Android Studio 2023.1 + 自带 JDK17 + SDK platform-34/build-tools/adb +
+Gradle 缓存 + Emulator + Genymotion，仅缺 system-image 与 AVD）；鸿蒙 DevEco 6.1.1 **自带 SDK**
+（openharmony + hms + hvigorw/ohpm/hdc），但二进制有 `com.apple.quarantine` 隔离属性（SIGKILL）。
+
+---
+
 ### ★历史：折叠屏演示落地（计划 03 · S1–S5，提交 `9b78fa58`）
 
 用户实测四缺陷全修：半开 = 内屏一半（书本式 693×298 横长条 / 翻盖式 360×440 竖方形，占内屏 50%）·
