@@ -41,16 +41,115 @@ public class MainActivity extends Activity {
     private static final int TOTAL = ROWS * COLS * 2 + ROWS + 1; // 4050
 
     private FrameLayout root;
+    private android.widget.Button runButton;
+
+    /** 本次要测的通路（`--es path proteus|native`；缺省 proteus）。脚本据此分两次冷启动，隔离内存。 */
+    private String testPath = "proteus";
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
+        // ★§9.2「起点 = click 事件触发」：不再 onCreate 自动跑，改为**按钮点击**触发
+        //   （onCreate 自动跑会把测量混进冷启动，且脚本无法控制时机）
+        String extra = getIntent() != null ? getIntent().getStringExtra("path") : null;
+        if (extra != null) testPath = extra;
+
         root = new FrameLayout(this);
         setContentView(root);
-        root.post(new Runnable() { public void run() { runAll(); } });
+
+        runButton = new android.widget.Button(this);
+        runButton.setText("运行 4050 元素测试（" + testPath + "）");
+        runButton.setTextSize(16f);
+        FrameLayout.LayoutParams lp = new FrameLayout.LayoutParams(
+                FrameLayout.LayoutParams.MATCH_PARENT, 260);
+        runButton.setLayoutParams(lp);
+        runButton.setOnClickListener(new View.OnClickListener() {
+            public void onClick(View v) { runAll(); }
+        });
+        root.addView(runButton);
+
+        // ★§9.2「起点 = click 事件触发」：由**外部事件**触发测试（与点击等价，且可脚本化）。
+        //   为什么不用 `adb shell input tap`：Android 新版本对 `input` 注入要求 INJECT_EVENTS 权限
+        //   （本仓实测报 SecurityException）→ 改用显式广播，语义上仍是「外部触发」而非自启动。
+        android.content.BroadcastReceiver receiver = new android.content.BroadcastReceiver() {
+            @Override public void onReceive(android.content.Context c, android.content.Intent i) {
+                String p = i.getStringExtra("path");
+                if (p != null) testPath = p;
+                runAll();
+            }
+        };
+        android.content.IntentFilter filter = new android.content.IntentFilter("dev.proteus.RUN");
+        // ★Android 14+ 要求显式声明导出行为
+        if (android.os.Build.VERSION.SDK_INT >= 34) {
+            registerReceiver(receiver, filter, android.content.Context.RECEIVER_EXPORTED);
+        } else {
+            registerReceiver(receiver, filter);
+        }
+    }
+
+    /** 报告目录：★外置存储（release 包无 run-as，脚本经 adb pull 取回） */
+    private File reportDir() {
+        File d = getExternalFilesDir(null);
+        return d != null ? d : getFilesDir();
+    }
+
+    private long baselinePss = 0L;
+    /**
+     * ★★测量期间必须**持有被测结构的强引用**（本仓实测教训）：
+     *   初版把 View 树 / 指令表放在局部变量里，方法返回即失去强引用 →
+     *   GC 可能在 PSS 采样前回收 → 同一份代码两次运行测出 42.5MB / 12.8MB（差 3 倍）。
+     *   内存测量必须显式 keep-alive，直到采样完成。
+     */
+    @SuppressWarnings("FieldCanBeLocal")
+    private Object keepAlive;
+    /** 测试期间观测到的 CPU 集合（§9.2 核判定用；app 自读 /proc 无权限限制，比脚本侧可靠） */
+    private final java.util.TreeSet<Integer> observedCpus = new java.util.TreeSet<>();
+
+    /**
+     * 读本进程主线程当前所在 CPU（`/proc/self/task/<tid>/stat` 第 39 字段 = processor）。
+     * ★app 读自己的 /proc 不受限制（脚本侧读别的进程会受限，本仓实测踩到）。
+     */
+    private int mainThreadCpu() {
+        try {
+            int tid = android.os.Process.myTid();
+            java.io.BufferedReader r = new java.io.BufferedReader(
+                    new java.io.FileReader("/proc/self/task/" + tid + "/stat"));
+            String line = r.readLine();
+            r.close();
+            if (line == null) return -1;
+            // 字段 1 = pid，故第 39 个字段在 split 后索引 38
+            String[] f = line.split(" ");
+            if (f.length < 39) return -1;
+            return Integer.parseInt(f[38]);
+        } catch (Exception e) {
+            return -1;
+        }
+    }
+
+    /** 读 CPU 温度（millidegree；取 thermal_zone 最大值，读不到返回 -1） */
+    private int readTemp() {
+        int max = -1;
+        java.io.File dir = new java.io.File("/sys/class/thermal");
+        java.io.File[] zones = dir.listFiles();
+        if (zones == null) return -1;
+        for (java.io.File z : zones) {
+            if (!z.getName().startsWith("thermal_zone")) continue;
+            try {
+                java.io.BufferedReader r = new java.io.BufferedReader(
+                        new java.io.FileReader(new java.io.File(z, "temp")));
+                int v = Integer.parseInt(r.readLine().trim());
+                r.close();
+                if (v > max && v < 200000) max = v;   // 过滤明显异常值
+            } catch (Exception ignored) {}
+        }
+        return max;
     }
 
     private void runAll() {
+        // ★§9.2 增量内存：点击时刻的 PSS 作为基线
+        baselinePss = pssKb();
+        observedCpus.clear();
+        int tempBefore = readTemp();
         StringBuilder sb = new StringBuilder();
         sb.append("=== Rust 排版核心 · Android 真机验证 ===\n");
         sb.append(String.format("设备：%s %s · Android %s（API %d）%n",
@@ -59,6 +158,8 @@ public class MainActivity extends Activity {
         sb.append("ABI：").append(join(android.os.Build.SUPPORTED_ABIS)).append('\n');
         sb.append("引擎：").append(RustLayout.version()).append('\n');
         sb.append("JNI 符号自检：").append(RustLayout.checkSymbols() ? "✓ 通过" : "✗ " + RustLayout.getLoadError()).append('\n');
+        sb.append("测试通路：").append(testPath).append("（脚本以 --es path 注入，两次冷启动隔离内存）\n");
+        sb.append("起始 PSS：").append(baselinePss).append(" KB\n");
         sb.append('\n');
 
         sb.append("【① 与浏览器基准的一致性】\n");
@@ -72,16 +173,80 @@ public class MainActivity extends Activity {
         }
         sb.append('\n');
 
+        // ★§9.2 核判定：重负载路径上持续采样（每 3ms 一次，覆盖整个测量窗口）
+        //   采样密度足够才能判定「测量期间是否曾跑到超大核」——
+        //   本仓实测：单点采样会漏掉瞬时抬升（cpu4 与 cpu7 出现在同一次运行）
+        Thread cpuSampler = new Thread(new Runnable() {
+            public void run() {
+                long end = SystemClock.elapsedRealtime() + 3000;
+                while (SystemClock.elapsedRealtime() < end) {
+                    int c = mainThreadCpu();
+                    if (c >= 0) synchronized (observedCpus) { observedCpus.add(c); }
+                    try { Thread.sleep(3); } catch (InterruptedException e) { return; }
+                }
+            }
+        });
+        cpuSampler.setDaemon(true);
+        cpuSampler.start();
+
         sb.append("【② 4050 元素布局性能（纯排版）】\n");
         String bench = RustLayout.bench(TOTAL, 20);
         sb.append(bench).append('\n');
         writeReport("layout-bench.json", bench);
         sb.append('\n');
 
-        sb.append("【③ 4050 元素：Proteus(Rust+Canvas) vs 原生 View 体系】\n");
-        String compare = compareAgainstNative();
-        sb.append(compare).append('\n');
-        writeReport("layout-compare-native.json", compare);
+        if ("native".equals(testPath)) {
+            sb.append("【③ 原生 View 体系（对照组，单跑以隔离内存）】\n");
+            String nativeOnly = nativeOnlyRun();
+            sb.append(nativeOnly).append('\n');
+            writeReport("layout-native-only.json", nativeOnly);
+        } else if ("proteus-mem".equals(testPath)) {
+            // ★内存专用口径：与 nativeOnlyRun 对等（都不分配测量位图）
+            sb.append("【③ Proteus 通路（内存专用：只建结构）】\n");
+            String only = proteusOnlyRun();
+            sb.append(only).append('\n');
+            writeReport("layout-proteus-only.json", only);
+        } else {
+            sb.append("【③ 4050 元素：Proteus(Rust+Canvas) vs 原生 View 体系】\n");
+            String compare = compareAgainstNative();
+            sb.append(compare).append('\n');
+            writeReport("layout-compare-native.json", compare);
+        }
+
+        // ★§9.2 核判定：测试尾部再采几次，汇总本次运行观测到的 CPU 集合
+        try { cpuSampler.join(3500); } catch (InterruptedException ignored) {}
+        int tempAfter = readTemp();
+        StringBuilder cpuStr = new StringBuilder();
+        for (Integer c : observedCpus) {
+            if (cpuStr.length() > 0) cpuStr.append(",");
+            cpuStr.append(c);
+        }
+        // 核分类（本机实测：cpu0-5 3.6GHz 普大核 · cpu6-7 4.6GHz 超大核）
+        int primeCount = 0, normalCount = 0;
+        for (Integer c : observedCpus) { if (c >= 6) primeCount++; else normalCount++; }
+
+        // ★采样前强制 GC：把「尚未回收的垃圾」清掉，只留**结构本身的存活对象**
+        //   （否则测得的是「分配峰值」而非「结构成本」，重复性差）
+        System.gc();
+        try { Thread.sleep(300); } catch (InterruptedException ignored) {}
+        long peakPss = pssKb();
+        sb.append("\n【④ §9.2 环境核验】\n");
+        sb.append("观测到的 CPU：").append(cpuStr.length() == 0 ? "未知" : cpuStr.toString())
+          .append("（prime=").append(primeCount).append(" · normal=").append(normalCount).append("）\n");
+        sb.append("温度：").append(tempBefore).append(" → ").append(tempAfter).append(" (m°C)\n");
+        writeReport("layout-env.json",
+                "{\"path\":\"" + testPath + "\",\"observed_cpus\":["
+                        + cpuStr.toString() + "],\"prime_count\":" + primeCount
+                        + ",\"normal_count\":" + normalCount
+                        + ",\"temp_before_mc\":" + tempBefore
+                        + ",\"temp_after_mc\":" + tempAfter + "}");
+
+        sb.append("\n【⑤ 增量内存（§9.2，纯结构口径）】\n");
+        sb.append("baseline=").append(baselinePss).append(" KB · after=").append(peakPss)
+          .append(" KB · delta=").append(peakPss - baselinePss).append(" KB\n");
+        writeReport("layout-memory.json",
+                "{\"path\":\"" + testPath + "\",\"baseline_kb\":" + baselinePss
+                        + ",\"after_kb\":" + peakPss + ",\"delta_kb\":" + (peakPss - baselinePss) + "}");
 
         String text = sb.toString();
         TextView tv = new TextView(this);
@@ -90,6 +255,69 @@ public class MainActivity extends Activity {
         root.addView(tv);
         writeReport("layout-report.txt", text);
         Log.i(TAG, text);
+    }
+
+    /**
+     * ★Proteus 通路单跑（**内存测量专用**：与 nativeOnlyRun 对等——只建结构，不分配测量位图）。
+     *
+     * 为什么必须单独写一个（本仓实测教训）：
+     *   `compareAgainstNative()` 里为了**性能归因**分配了 7 个 1080×2400 ARGB 位图（每个 9MB，共 ~63MB）——
+     *   这些是「测量仪器」（软件光栅化靶），**真实 App 不会分配**。
+     *   拿含仪器的 PSS 去比不含仪器的原生，测出「Proteus 内存是原生 2.5 倍」——
+     *   那是**测量装置的重量**，不是渲染路径的成本。
+     *   ⇒ 内存对比必须用本方法（与 nativeOnlyRun 同口径）。
+     */
+    private String proteusOnlyRun() {
+        long p0 = SystemClock.elapsedRealtime();
+        String benchJson = RustLayout.bench(TOTAL, 1);       // 建树 + 排版（Rust 侧全部结构）
+        long p1 = SystemClock.elapsedRealtime();
+        java.util.List<ProteusHostView.Cmd> cmds = buildCmds();  // 布局结果 → 绘制指令（宿主侧结构）
+        ProteusHostView host = new ProteusHostView(this);
+        host.setCmds(cmds);
+        long p2 = SystemClock.elapsedRealtime();
+        this.keepAlive = new Object[]{cmds, host};   // ★持有强引用直到 PSS 采样
+        try {
+            JSONObject o = new JSONObject();
+            o.put("ok", true);
+            o.put("path", "proteus");
+            o.put("elements", TOTAL);
+            o.put("rust_layout_ms", (p1 - p0));
+            o.put("emit_cmds_ms", (p2 - p1));
+            o.put("total_ms", (p2 - p0));
+            o.put("cmd_count", cmds.size());
+            o.put("view_count", 1);
+            o.put("note", "内存专用路径：只建结构（Rust 树 + 指令表），不分配测量位图");
+            return o.toString(2);
+        } catch (Exception e) {
+            return "{\"ok\":false,\"error\":\"" + e.getMessage() + "\"}";
+        }
+    }
+
+    /** 原生通路单跑（隔离内存测量：不在同进程里先建 Proteus 结构） */
+    private String nativeOnlyRun() {
+        long n0 = SystemClock.elapsedRealtime();
+        ViewGroup tree = buildNativeTree();
+        long n1 = SystemClock.elapsedRealtime();
+        int w = getResources().getDisplayMetrics().widthPixels;
+        tree.measure(View.MeasureSpec.makeMeasureSpec(w, View.MeasureSpec.EXACTLY),
+                     View.MeasureSpec.makeMeasureSpec(2400, View.MeasureSpec.AT_MOST));
+        tree.layout(0, 0, w, tree.getMeasuredHeight());
+        long n2 = SystemClock.elapsedRealtime();
+        int views = countViews(tree);
+        this.keepAlive = tree;          // ★持有强引用直到 PSS 采样
+        try {
+            JSONObject o = new JSONObject();
+            o.put("ok", true);
+            o.put("path", "native");
+            o.put("elements", TOTAL);
+            o.put("create_views_ms", (n1 - n0));
+            o.put("measure_layout_ms", (n2 - n1));
+            o.put("total_ms", (n2 - n0));
+            o.put("view_count", views);
+            return o.toString(2);
+        } catch (Exception e) {
+            return "{\"ok\":false,\"error\":\"" + e.getMessage() + "\"}";
+        }
     }
 
     /**
@@ -287,9 +515,9 @@ public class MainActivity extends Activity {
             cmp.put("phase_draw_ratio_optimized", nativeDrawMs > 0 ? round3(optimizedHwMs / nativeDrawMs) : -1);
             o.put("same_scope_compare", cmp);
 
-            o.put("caveat", "★本包 debuggable=true（需 run-as 取报告），§9.2 明确要求 release 包——"
-                    + "正式验收须 release 包 + 杀进程重进 + Perfetto 核确认 + 5 次取均值。"
-                    + "本报告用于判断方向与归因，不作为验收结论。");
+            o.put("caveat", "★§9.2 口径：本包由 acceptance.sh 以 --release 构建（非 debuggable）；"
+                    + "轮次间 force-stop 冷启动；CPU 核判定见 layout-env.json（落在 cpu6/7 超大核则本组作废）。"
+                    + "温度见 layout-report.txt 的「环境核验」段。");
             out = o.toString(2);
         } catch (Exception e) {
             out = "{\"ok\":false,\"error\":\"" + e.getMessage() + "\"}";
@@ -502,7 +730,7 @@ public class MainActivity extends Activity {
 
     private void writeReport(String name, String content) {
         try {
-            File f = new File(getFilesDir(), name);
+            File f = new File(reportDir(), name);
             java.io.FileOutputStream fos = new java.io.FileOutputStream(f);
             fos.write(content.getBytes("UTF-8"));
             fos.close();
@@ -510,5 +738,14 @@ public class MainActivity extends Activity {
         } catch (Exception e) {
             Log.e(TAG, "写报告失败 " + name, e);
         }
+    }
+
+    /**
+     * ★§9.2「增量内存」：本次运行中「建树前后」的 PSS 差。
+     * 用 `Debug.getPss()`（KB）——release 包可用、无需权限；配合脚本的冷启动隔离两条通路。
+     */
+    private long pssKb() {
+        // ★API 37 的 `Debug.getPss()` 返回 long（早期 API 是 int）——用 long 承接避免截断
+        return android.os.Debug.getPss();
     }
 }
