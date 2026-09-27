@@ -342,6 +342,33 @@
             17.7,
             17.8
           ]
+        },
+        "I": {
+          "label": "CALayer结构+UILabel文本",
+          "median_mb": 96,
+          "runs": [
+            96,
+            96,
+            96.1
+          ]
+        },
+        "J": {
+          "label": "CATextLayer+gray8Uint(P0-1)",
+          "median_mb": 114.9,
+          "runs": [
+            114.9,
+            114.9,
+            114.7
+          ]
+        },
+        "K": {
+          "label": "CATextLayer+opaque(P0-4)",
+          "median_mb": 187,
+          "runs": [
+            187.1,
+            187,
+            186.9
+          ]
         }
       }
     }
