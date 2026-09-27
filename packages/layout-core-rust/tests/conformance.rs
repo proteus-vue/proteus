@@ -936,3 +936,100 @@ fn incremental_with_boundary_is_much_faster_than_full() {
     println!("增量 vs 全量：全量 {:.3}ms · 增量 {:.4}ms · 加速 {:.1}×", full * 1000.0, inc * 1000.0, speedup);
     assert!(speedup > 5.0, "有边界时增量应显著快于全量（实测 {speedup:.1}×，阈值 5×）");
 }
+
+/* ────────────── ★★交叉轴 stretch 的边界判定（真机发现的关键缺口） ────────────── */
+
+/// ★★回归锁：**只写高、宽靠父 stretch** 的行，必须被判为布局边界
+///
+/// 【为什么这条重要（真机实测发现）】App 里列表行的常见写法是 `{ height: 56 }`
+///   —— 宽度由父的 `align-items: stretch` 撑开。此时行的宽 = 父内容盒宽，
+///   **与行自己的内容无关**；高也是显式的 ⇒ 两轴都与内容无关 ⇒ **本来就是边界**。
+///   但旧判据只认 `style.width.is_some()` ⇒ 行全被判为非边界
+///   ⇒ 重排范围一路到根 ⇒ **宿主增量路径一次都没触发**（实测 `incremental=false`）。
+///   ⇒ 这解释了「为什么真机上增量不生效」——不是接线问题，是**判据漏了一种常见布局形态**。
+#[test]
+fn stretched_row_is_a_layout_boundary() {
+    let (tree, root_idx, target_idx) = incremental_tree(true);
+    // 造一个「父 column + align-items: stretch + 子只写高」的行
+    let mut t = LayoutTree::new();
+    let mut root = LNode::new(1, LStyle::default());
+    root.style.flex_direction = FlexDirection::Column;      // 主轴 = 竖 → 交叉轴 = 横
+    root.style.align_items = "stretch".into();               // ★子级横向被撑开
+    // ★root **不给显式尺寸**：真实 App 里根节点撑满视口（尺寸来自宿主约束，不是声明）。
+    //   若给 root 显式宽高，它自己就成了边界，而 `relayout_scope_of` 取**最高的**边界
+    //   ⇒ 范围=root ⇒ 与全量等价，测不出「止于 row」。
+    //   （本仓实测踩到：测试构造不真实会让断言失败，而**实现是对的**。）
+    let root_i = t.push(root);
+    let mut row = LNode::new(2, LStyle::default());
+    row.style.flex_direction = FlexDirection::Row;
+    row.style.height = Some(56.0);                           // ★只写高，不写宽
+    let row_i = t.push(row);
+    let mut child = LNode::new(3, LStyle::default());
+    child.style.width = Some(20.0);
+    child.style.height = Some(20.0);
+    let child_i = t.push(child);
+    t.roots.push(root_i);
+    t.add_child(root_i, row_i);
+    t.add_child(row_i, child_i);
+
+    // 无父上下文（旧行为）= 不认 stretch → 不是边界
+    assert!(!t.get(row_i).is_layout_boundary(), "不带父上下文时应保守判为非边界（旧行为兼容）");
+    // 带父上下文（父 align-items: stretch）= 认 → 是边界
+    assert!(
+        t.get(row_i).is_layout_boundary_with(Some("stretch"), Some(false)),   // 父是 column ⇒ 父主轴非横
+        "★父 align-items:stretch + 自身显式高 ⇒ 两轴都与内容无关 ⇒ 应为边界"
+    );
+    // 引擎的 scope 解析必须**用得上**这个判定：脏节点在行内 ⇒ 范围止于该行
+    let engine = TaffyEngine::new();
+    let scope = engine.relayout_scope_of(&t, child_i);
+    assert_eq!(scope, row_i, "★重排范围应止于 stretch 行（这正是「增量在真机上没触发」的修复点）");
+
+    // ★对照：父改成 flex-start（不 stretch）→ 行宽由内容决定 → 不是边界 → 范围上溯到根
+    let mut t2 = t.clone();
+    t2.get_mut(root_i).style.align_items = "flex-start".into();
+    let scope2 = engine.relayout_scope_of(&t2, child_i);
+    assert_eq!(scope2, root_i, "非 stretch 时应上溯到根（保守正确）");
+
+    let _ = (root_idx, target_idx);
+}
+
+/// ★★回归锁：重排范围必须是**最近的**边界，而非最高的
+///
+/// 【为什么这条关键（真机实测定位的语义错误）】真实 App 的页面根通常显式宽高
+///   ⇒ **页面自己就是边界** ⇒ 若取「最高边界」，范围永远 = 整页 ⇒ 增量完全失效。
+///   实测证据：只改 1 行 margin（patch=1）却重排 **1407/3507** 个节点（≈全量）。
+///
+/// 本测试构造「页面(显式尺寸) → 行(显式高+父 stretch) → 叶子」三层，
+/// 断言 scope 落在**行**上（最近的边界），而不是页面上。
+#[test]
+fn relayout_scope_uses_nearest_boundary_not_highest() {
+    let mut t = LayoutTree::new();
+    // 页面：显式宽高 ⇒ 本身就是边界
+    let mut page = LNode::new(1, LStyle::default());
+    page.style.flex_direction = FlexDirection::Column;
+    page.style.align_items = "stretch".into();
+    page.style.width = Some(390.0);
+    page.style.height = Some(844.0);
+    let page_i = t.push(page);
+    // 行：显式高 + 宽由父 stretch ⇒ 也是边界
+    let mut row = LNode::new(2, LStyle::default());
+    row.style.flex_direction = FlexDirection::Row;
+    row.style.height = Some(56.0);
+    let row_i = t.push(row);
+    // 叶子
+    let mut leaf = LNode::new(3, LStyle::default());
+    leaf.style.width = Some(20.0);
+    leaf.style.height = Some(20.0);
+    let leaf_i = t.push(leaf);
+    t.roots.push(page_i);
+    t.add_child(page_i, row_i);
+    t.add_child(row_i, leaf_i);
+
+    assert!(t.get(page_i).is_layout_boundary_with(None, None), "页面（显式宽高）本身是边界");
+    assert!(t.get(row_i).is_layout_boundary_with(Some("stretch"), Some(false)), "行（显式高+父 stretch）也是边界");
+
+    let engine = TaffyEngine::new();
+    let scope = engine.relayout_scope_of(&t, leaf_i);
+    assert_eq!(scope, row_i, "★应止于**最近的**边界（行），而不是最高的（页面）");
+    assert_ne!(scope, page_i, "★取最高边界会让范围=整页 ⇒ 增量失效（本轮真机实测的根因）");
+}

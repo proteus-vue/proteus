@@ -379,12 +379,18 @@ impl LayoutEngine for TaffyEngine {
             return self.layout(tree, c);
         }
 
-        // 边界有显式宽高 ⇒ 根约束就是它自己的尺寸（这正是「边界」的定义）
+        // ★★根约束 = 该边界节点**上次布局的实际尺寸**（而不是它的声明尺寸）
+        //
+        // 【为什么不能用声明尺寸（本仓实测）】交叉轴 stretch 的节点**没有声明宽**
+        //   （宽由父撑开）⇒ `style.width` 是 `None` ⇒ 用 `INFINITY` 会让子树按
+        //   「不限宽」重排 → 内容换行/换行反推的尺寸全变 ⇒ **几何错**（不是慢，是错）。
+        //   而边界的定义就是「对外尺寸与内容无关」⇒ 它上次的实际尺寸**本次依然成立**，
+        //   直接拿 `rect` 用即可（首帧无 rect 时退回声明尺寸/INFINITY）。
+        let scope_rect = tree.get(scope).rect;
         let scope_style = tree.get(scope).style.clone();
-        let constraint = RootConstraint::definite(
-            scope_style.width.unwrap_or(f32::INFINITY),
-            scope_style.height.unwrap_or(f32::INFINITY),
-        );
+        let cw = if scope_rect.width > 0.0 { scope_rect.width } else { scope_style.width.unwrap_or(f32::INFINITY) };
+        let ch = if scope_rect.height > 0.0 { scope_rect.height } else { scope_style.height.unwrap_or(f32::INFINITY) };
+        let constraint = RootConstraint::definite(cw, ch);
 
         // 取子树 + 前序索引映射（一次 O(范围)，避免逐节点重扫）
         let order = preorder(tree, scope);
@@ -428,21 +434,41 @@ impl LayoutEngine for TaffyEngine {
 }
 
 impl TaffyEngine {
-    /// 沿 parent 链向上找**最高的布局边界**；没有则用树根（§5.4 T2 的核心机制）
+    /// 沿 parent 链向上找**最近的（最低的）布局边界**；没有则用树根（§5.4 T2 的核心机制）
+    ///
+    /// ★★「最近」而非「最高」——本轮真机实测纠正的一处语义错误（影响极大）
+    ///
+    /// 【为什么是最近】边界节点的定义是「对外尺寸与内容无关」⇒ 它一旦罩住变更，
+    ///   **重排不需要外溢到更高的边界**（更高的边界尺寸也不会变）。
+    ///   取「最高」会让范围尽可能大：真实 App 的页面根通常显式宽高 ⇒ **页面自己就是边界**
+    ///   ⇒ 「最高边界」永远等于页面 ⇒ 增量完全失效。
+    ///   实测：只改 1 行的 margin（patch=1），却重排整页 **1407/3507 个节点**，
+    ///   耗时 7.6ms/20.1ms —— 与全量几乎无差别。
+    ///
+    /// 【安全性】取最近边界是安全的：边界的对外尺寸不因子树而变（这正是「边界」的定义），
+    ///   故子树重排不会改变祖先链上的任何几何。若链上不存在边界，才退回树根（全量）。
     pub fn relayout_scope_of(&self, tree: &LayoutTree, dirty: NodeIndex) -> NodeIndex {
         let mut cur = dirty;
-        let mut boundary: Option<NodeIndex> = None;
         loop {
             let node = tree.get(cur);
-            if node.is_layout_boundary() {
-                boundary = Some(cur);
+            // ★把**父的 align-items 与父的轴系**传进判定：交叉轴 stretch 的节点，其该轴尺寸
+            //   由父决定、与自身内容无关 ⇒ 它也是边界（本仓实测：不认 stretch 会让 App 的列表行
+            //   全部被判为非边界 → 增量一次都触发不了）
+            let (parent_align, parent_horiz) = if node.parent == NO_PARENT {
+                (None, None)
+            } else {
+                let p = tree.get(node.parent);
+                (Some(p.style.align_items.as_str()), Some(p.style.flex_direction.is_horizontal()))
+            };
+            if node.is_layout_boundary_with(parent_align, parent_horiz) {
+                return cur;      // ★第一个（最近的）边界即停——见上方注释
             }
             if node.parent == NO_PARENT {
                 break;
             }
             cur = node.parent;
         }
-        boundary.unwrap_or(cur)
+        cur      // 无任何边界 ⇒ 树根（全量）
     }
 }
 

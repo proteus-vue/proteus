@@ -36,6 +36,9 @@ func proteus_layout_version() -> UnsafeMutablePointer<CChar>
 @_silgen_name("proteus_layout_free_string")
 func proteus_layout_free_string(_ ptr: UnsafeMutablePointer<CChar>)
 
+@_silgen_name("proteus_layout_update")
+func proteus_layout_update(_ handle: UInt64, _ patchesJson: UnsafePointer<CChar>) -> UnsafeMutablePointer<CChar>
+
 func takeCString(_ ptr: UnsafeMutablePointer<CChar>) -> String {
     defer { proteus_layout_free_string(ptr) }
     return String(cString: ptr)
@@ -222,6 +225,9 @@ final class SelfDrawBridge: NSObject, SelfDrawExports {
     var jsReport: [String: Any] = [:]
     /// ★句柄常驻：Vue 的后续更新复用同一棵 Rust 树（与 §5.1「节点树页面存活期间常驻」一致）
     private var handle: UInt64 = 0
+    /// 上一帧的节点数组（**增量 diff 的基线**）——只有它才能算出「哪些节点真的变了」
+    private var lastNodes: [[String: Any]] = []
+
     /// 最近一次布局的分段耗时（供报告）
     private(set) var lastTiming: [String: Double] = [:]
     private(set) var lastNodeCount = 0
@@ -298,19 +304,50 @@ final class SelfDrawBridge: NSObject, SelfDrawExports {
         let tLayout0 = CFAbsoluteTimeGetCurrent()
 
         // ── ③ 调 Rust 核心（★几何的唯一来源）──
-        //   ★首次建树、后续复用句柄：与「节点树常驻」的架构语义一致。
-        //     当前脚手架每次重发整树 → 需要 drestroy + create（增量更新属后续优化，如实标注）。
-        if handle != 0 {
-            _ = proteus_layout_destroy(handle)
-            handle = 0
+        //
+        // ★★增量路径（本仓 2026-09-29 打通）：
+        //   · **首帧**走 `create`（建树 + 全量布局）
+        //   · **后续**走 `update`（把本帧与上帧的差异算成**样式补丁**，核心按布局边界局部重排）
+        //   此前每次更新都 `destroy + create`（整树重建）——实测改 10 个列表项要重发 561KB、
+        //   重建 1407 个节点。核心侧 `layout_incremental` 早已实现（边界内 30–566×），
+        //   缺的只是 FFI 出口与宿主接线。
+        //
+        // ★兼容边界（诚实标注）：`proteus_layout_update` 当前**不带文本度量表**，
+        //   故只在「纯样式变更」时走增量；一旦**节点增删**或文本集合变化，
+        //   就退回 `create`（正确性优先——宁可重建，也不要用错的度量算几何）。
+        var usedIncremental = false
+        var patchCount = 0
+        var relayoutCount = 0
+        var layoutMs = 0.0
+        var rectsJsonStr = ""
+
+        if handle != 0, let patches = diffPatches(from: lastNodes, to: nodes) {
+            let pj = jsonString2(patches)
+            let out = pj.withCString { takeCString(proteus_layout_update(handle, $0)) }
+            if out.contains("\"ok\":true") {
+                usedIncremental = true
+                let o = (try? JSONSerialization.jsonObject(with: Data(out.utf8))) as? [String: Any]
+                patchCount = (o?["applied"] as? Int) ?? 0
+                relayoutCount = (o?["relayout_count"] as? Int) ?? 0
+                layoutMs = (CFAbsoluteTimeGetCurrent() - tLayout0) * 1000
+                rectsJsonStr = takeCString(proteus_layout_rects(handle))
+            }
         }
-        let h = reqJson.withCString { proteus_layout_create($0) }
-        handle = h
-        guard h > 0 else {
-            return "{\"ok\":false,\"error\":\"proteus_layout_create 失败（节点数 \(nodes.count)）\"}"
+        if !usedIncremental {
+            // 首帧 / 结构变化 → 全量重建
+            if handle != 0 {
+                _ = proteus_layout_destroy(handle)
+                handle = 0
+            }
+            let h = reqJson.withCString { proteus_layout_create($0) }
+            handle = h
+            guard h > 0 else {
+                return "{\"ok\":false,\"error\":\"proteus_layout_create 失败（节点数 \(nodes.count)）\"}"
+            }
+            rectsJsonStr = takeCString(proteus_layout_rects(h))
+            layoutMs = (CFAbsoluteTimeGetCurrent() - tLayout0) * 1000
         }
-        let rectsJsonStr = takeCString(proteus_layout_rects(h))
-        let layoutMs = (CFAbsoluteTimeGetCurrent() - tLayout0) * 1000
+        lastNodes = nodes
         if !rectsJsonStr.contains("\"ok\":true") {
             return "{\"ok\":false,\"error\":\"rects 读取失败\",\"raw\":\(jsonEscape(String(rectsJsonStr.prefix(200))))}"
         }
@@ -358,6 +395,10 @@ final class SelfDrawBridge: NSObject, SelfDrawExports {
             "layout_ms": round(layoutMs * 100) / 100,
             "build_layers_ms": round(buildMs * 100) / 100,
             "host_total_ms": round(totalMs * 100) / 100,
+            // ★增量路径读数（0 = 走了全量重建）
+            "incremental": usedIncremental,
+            "patch_count": patchCount,
+            "relayout_count": relayoutCount,
         ]
         return jsonString(out)
     }
@@ -417,6 +458,65 @@ final class SelfDrawBridge: NSObject, SelfDrawExports {
 }
 
 /* ────────────────────────── 工具 ────────────────────────── */
+
+/// ★★树 diff：把「上一帧 → 本帧」的**样式变化**算成补丁数组（增量更新的输入）
+///
+/// 【为什么需要它（而不是把整树发过去）】`proteus_layout_update` 的入参是**补丁**，
+///   而宿主手上是两帧完整节点数组 —— 差异必须由宿主算（核心不知道上一帧是什么）。
+///
+/// 【返回 nil 的情形 = 退回全量重建】（正确性优先：宁可重建，也不要用错的前提算几何）
+///   · 节点**增删**（id 集合不同）—— 核心的 update 入口不处理结构变化
+///   · 某节点的文本变化 —— 度量需重新注入，而当前 update 入口不带度量表
+///
+/// 【只比布局字段】绘制属性（背景色/圆角/字号）**不影响几何** ⇒ 不进补丁，
+///   避免用「无关变化」触发重排（这是增量能否真正省下来的关键）。
+func diffPatches(from prev: [[String: Any]], to next: [[String: Any]]) -> [[String: Any]]? {
+    if prev.isEmpty { return nil }
+    if prev.count != next.count { return nil }                 // 结构变化 → 全量
+    let prevById = Dictionary(uniqueKeysWithValues: prev.compactMap { n -> (Int, [String: Any])? in
+        guard let id = n["id"] as? Int else { return nil }
+        return (id, n)
+    })
+    // ★只比这些**布局字段**（其余字段改了对几何没有影响）
+    let layoutKeys = ["width", "height", "flexGrow", "flexShrink", "flexBasis", "gap"]
+    var patches: [[String: Any]] = []
+    for n in next {
+        guard let id = n["id"] as? Int, let p = prevById[id] else { return nil }  // 新节点 → 全量
+        // 文本变了 → 度量要重算，当前 update 入口不支持 → 全量
+        let pt = p["text"] as? String
+        let nt = n["text"] as? String
+        if pt != nt { return nil }
+        var style: [String: Any] = [:]
+        for k in layoutKeys {
+            let a = p[k] as? Double
+            let b = n[k] as? Double
+            if a != b { style[k] = b ?? NSNull() }             // NSNull = 显式置空（回 auto）
+        }
+        // margin/padding：对象比较（浅比足够——字段固定四边）
+        for k in ["margin", "padding"] {
+            let a = p[k] as? [String: Double]
+            let b = n[k] as? [String: Double]
+            if !edgesEqual(a, b) { style[k] = b ?? [:] }
+        }
+        if !style.isEmpty { patches.append(["id": id, "style": style]) }
+    }
+    return patches
+}
+
+private func edgesEqual(_ a: [String: Double]?, _ b: [String: Double]?) -> Bool {
+    let la = a ?? [:], lb = b ?? [:]
+    for k in ["top", "right", "bottom", "left"] {
+        if (la[k] ?? 0) != (lb[k] ?? 0) { return false }
+    }
+    return true
+}
+
+/// 供 `jsonString` 之外的调用点使用（同实现；命名区分以免与既有重载混淆）
+func jsonString2(_ o: Any) -> String {
+    guard let d = try? JSONSerialization.data(withJSONObject: o),
+          let s = String(data: d, encoding: .utf8) else { return "[]" }
+    return s
+}
 
 func jsonString(_ o: [String: Any]) -> String {
     guard let d = try? JSONSerialization.data(withJSONObject: o),

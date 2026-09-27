@@ -186,3 +186,37 @@ pub extern "system" fn Java_dev_proteus_layoutcore_RustLayout_nativeHitTest<'loc
     .unwrap_or_else(|_| "{\"ok\":false,\"error\":\"panic（已捕获）\"}".to_string());
     into_java_string(&mut env, out)
 }
+
+/// `RustLayout.nativeUpdate(handle: Long, patchesJson: String): String`
+///
+/// ★增量重排（生产路径）。此前宿主只能 destroy+create（整树重建）——
+///   实测改 10 个列表项要重发 561KB、重建 1407 个节点。本入口走核心的 `layout_incremental`（边界内 30–566×）。
+#[no_mangle]
+pub extern "system" fn Java_dev_proteus_layoutcore_RustLayout_nativeUpdate<'local>(
+    mut env: JNIEnv<'local>,
+    _class: JClass<'local>,
+    handle: jni::sys::jlong,
+    patches: JString<'local>,
+) -> jstring {
+    // ★JNIEnv 不是 UnwindSafe ⇒ 必须**先在闭包外**把 Java 字符串取成 Rust String，
+    //   闭包内只处理纯 Rust 数据（否则 E0277：may not be safely transferred across an unwind boundary）
+    let raw: String = match env.get_string(&patches) {
+        Ok(s) => s.into(),
+        Err(e) => return into_java_string(&mut env, format!("{{\"ok\":false,\"error\":\"patches 读取失败：{e}\"}}")),
+    };
+    let out = std::panic::catch_unwind(|| -> String {
+        let c = match std::ffi::CString::new(raw) {
+            Ok(c) => c,
+            Err(_) => return "{\"ok\":false,\"error\":\"patches 含 NUL\"}".to_string(),
+        };
+        let p = unsafe { crate::ffi::proteus_layout_update(handle as u64, c.as_ptr()) };
+        if p.is_null() {
+            return "{\"ok\":false,\"error\":\"null\"}".to_string();
+        }
+        let ret = unsafe { std::ffi::CStr::from_ptr(p) }.to_string_lossy().into_owned();
+        unsafe { crate::ffi::proteus_layout_free_string(p) };
+        ret
+    })
+    .unwrap_or_else(|_| "{\"ok\":false,\"error\":\"panic（已捕获）\"}".to_string());
+    into_java_string(&mut env, out)
+}

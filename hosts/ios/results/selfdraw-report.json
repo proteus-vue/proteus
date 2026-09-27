@@ -823,12 +823,12 @@
   },
   "host_node_count" : 91,
   "host_timing_last" : {
-    "build_layers_ms" : 2.982020378112793,
-    "host_total_ms" : 5.2800178527832031,
-    "layout_ms" : 0.46992301940917969,
-    "measure_ms" : 0.97203254699707031
+    "build_layers_ms" : 2.8169155120849609,
+    "host_total_ms" : 5.1779747009277344,
+    "layout_ms" : 0.47194957733154297,
+    "measure_ms" : 0.98502635955810547
   },
-  "js_js_avg_ms" : 0.90000000000000002,
+  "js_js_avg_ms" : 0.82499999999999996,
   "js_ok" : true,
   "js_phases" : 3,
   "js_report" : {
@@ -841,18 +841,51 @@
       "texts" : 26
     },
     "host_final_raw" : {
-      "build_layers_ms" : 2.98,
-      "host_total_ms" : 5.2800000000000002,
+      "build_layers_ms" : 2.8199999999999998,
+      "host_total_ms" : 5.1799999999999997,
+      "incremental" : false,
       "layer_count" : 91,
       "layout_ms" : 0.46999999999999997,
-      "measure_ms" : 0.96999999999999997,
+      "measure_ms" : 0.98999999999999999,
       "node_count" : 91,
       "ok" : true,
+      "patch_count" : 0,
       "phase" : "update",
+      "relayout_count" : 0,
       "request_bytes" : 5759
     },
+    "host_raw_by_phase" : {
+      "update_grow" : {
+        "build_layers_ms" : 1.49,
+        "host_total_ms" : 6.8200000000000003,
+        "incremental" : false,
+        "layer_count" : 217,
+        "layout_ms" : 1.0900000000000001,
+        "measure_ms" : 2.23,
+        "node_count" : 217,
+        "ok" : true,
+        "patch_count" : 0,
+        "phase" : "update",
+        "relayout_count" : 0,
+        "request_bytes" : 13931
+      },
+      "update_style" : {
+        "build_layers_ms" : 1.3999999999999999,
+        "host_total_ms" : 6.0800000000000001,
+        "incremental" : true,
+        "layer_count" : 217,
+        "layout_ms" : 0.65000000000000002,
+        "measure_ms" : 1.96,
+        "node_count" : 217,
+        "ok" : true,
+        "patch_count" : 0,
+        "phase" : "update",
+        "relayout_count" : 0,
+        "request_bytes" : 13931
+      }
+    },
     "js_only_throughput" : {
-      "avg_ms" : 0.90000000000000002,
+      "avg_ms" : 0.82499999999999996,
       "iterations" : 40,
       "max_ms" : 2,
       "note" : "★每次 = Vue 响应式变更 → 重渲染 → diff\/patch → 树拍平 → 数值折叠（**不含**宿主调用与 JSON 序列化）"
@@ -869,37 +902,37 @@
     },
     "phases" : {
       "mount" : {
-        "host_ms" : 10,
+        "host_ms" : 9,
         "node_count" : 91,
         "patch_count" : 152,
         "serialize_ms" : 0,
         "to_request_ms" : 0,
         "total_ms" : 12,
-        "vue_ms" : 2
-      },
-      "update_grow" : {
-        "host_ms" : 8,
-        "node_count" : 217,
-        "patch_count" : 280,
-        "serialize_ms" : 0,
-        "to_request_ms" : 0,
-        "total_ms" : 11,
         "vue_ms" : 3
       },
+      "update_grow" : {
+        "host_ms" : 7,
+        "node_count" : 217,
+        "patch_count" : 280,
+        "serialize_ms" : 1,
+        "to_request_ms" : 0,
+        "total_ms" : 10,
+        "vue_ms" : 2
+      },
       "update_style" : {
-        "host_ms" : 8,
+        "host_ms" : 7,
         "node_count" : 217,
         "patch_count" : 153,
         "serialize_ms" : 0,
-        "to_request_ms" : 1,
-        "total_ms" : 10,
+        "to_request_ms" : 0,
+        "total_ms" : 8,
         "vue_ms" : 1
       }
     },
     "runtime" : "JavaScriptCore（系统自带，与 iOS 竖切同一运行时）",
     "snapshot" : {
       "ok" : true,
-      "path" : "\/var\/mobile\/Containers\/Data\/Application\/F3E8D299-0A77-4439-9A9C-01FCC315129F\/Documents\/selfdraw-final.png"
+      "path" : "\/var\/mobile\/Containers\/Data\/Application\/FDEBF3EA-037F-4272-88F3-4B8EF44A08A0\/Documents\/selfdraw-final.png"
     },
     "unknown_keys" : {
 
@@ -1549,5 +1582,5 @@
       "y" : 0
     }
   },
-  "tree_hash" : "93846fc7"
+  "tree_hash" : "02e0dc70"
 }

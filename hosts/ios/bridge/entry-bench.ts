@@ -40,6 +40,11 @@ const BN = { snapshot: 'bench-final' }
 const VP = (globalThis as unknown as { __PROTEUS_VIEWPORT__?: { width: number; height: number } })
   .__PROTEUS_VIEWPORT__ ?? { width: 390, height: 844 }
 const now = (): number => Date.now()
+/** 宽松解析（宿主返回可能是字符串或已是对象） */
+const safeParseAny = (s: any): any => {
+  if (s && typeof s === 'object') return s
+  try { return JSON.parse(String(s)) } catch { return undefined }
+}
 
 /* ────────────────────────── 用例结果 ────────────────────────── */
 
@@ -76,6 +81,8 @@ interface BenchApp {
   setItems: (items: { id: number; title: string; sub: string }[]) => void
   mutateDeep: () => void
   setScaleBase: (n: number) => void
+  /** ★只改**第 i 行**的 margin（布局字段、不改结构/文本 ⇒ 应触发增量且**范围限于该行**） */
+  setRowMargin: (i: number, px: number) => void
   renderCount: () => number
   items: () => { id: number; title: string; sub: string }[]
 }
@@ -108,6 +115,10 @@ function makeApp(initial: number): BenchApp {
   container.parent = adapter.root
 
   const size = ref(initial)          // 外部直接驱动规模（避免每次改 items 清空）
+  // ★逐行 margin：改**单行**属于「局部布局样式变更」⇒ 走增量路径且**范围应限于该行**
+  //   （踩坑：初版用**共享**的 rowMargin → 所有行的 margin 一起变 → patch=500、
+  //    重排覆盖所有行 ⇒ 看起来像「增量退化」，实际是**用例本身不是局部变更**）
+  const rowMargins = ref<Record<number, number>>({})
 
   const App = {
     name: 'BenchApp',
@@ -120,7 +131,7 @@ function makeApp(initial: number): BenchApp {
           key: it.id,
           style: {
             flexDirection: 'row', alignItems: 'center',
-            height: 56, flexShrink: 0, margin: { bottom: 8 }, padding: { left: 16, right: 16 },
+            height: 56, flexShrink: 0, margin: { bottom: rowMargins.value[it.id] ?? 8 }, padding: { left: 16, right: 16 },
             backgroundColor: '#1b1b21', borderRadius: 12,
           },
         }, [
@@ -155,6 +166,7 @@ function makeApp(initial: number): BenchApp {
     setItems: (v) => { items.value = v },
     mutateDeep: () => { deep.a.b.c.v = deep.a.b.c.v + 1 },
     setScaleBase: (v) => { scaleBase.value = v },
+    setRowMargin: (i, px) => { rowMargins.value = { ...rowMargins.value, [i]: px } },
     renderCount: () => renders,
     items: () => items.value,
   }
@@ -508,6 +520,51 @@ CASES.push({
     }
     await runOne('naive', mkNaive)      // 每次新建 style
     await runOne('hoisted', mkHoisted)  // 样式提升（编译器做法）
+  },
+})
+
+/* J. ★★增量路径端到端：改**样式**（不改结构）→ 宿主应走增量而非重建 */
+CASES.push({
+  name: 'J_incremental_e2e',
+  note: '★增量路径端到端：改 n 项中若干项的**样式**（不改结构/文本）→ 观测宿主 incremental / relayout_count',
+  fn: async () => {
+    for (const n of [50, 200, 500]) {
+      const app = makeApp(n)
+      // 首帧：全量（create）
+      app.adapter.resetStats()
+      const req0 = app.adapter.toRequest(VP)
+      proteusSelfDraw.mount(JSON.stringify(req0))
+
+      // ★改「样式」——只动 margin（布局字段）但**不增删节点、不改文本**
+      //   ⇒ 宿主 diffPatches 应产出非空补丁 → 走 proteus_layout_update（增量）
+      app.adapter.resetStats()
+      const t0 = now()
+      app.setRowMargin(Math.floor(n / 2), 20)    // ★只改**中间一行**（真正的局部变更）
+      await nextTick()
+      const tVue = now()
+      const req = app.adapter.toRequest(VP)
+      const tReq = now()
+      const treeJson = JSON.stringify(req)
+      const tSer = now()
+      const hostOut = proteusSelfDraw.update(treeJson)
+      const tHost = now()
+      const h = safeParseAny(hostOut)
+      results.push({
+        case: `J_incremental_${n}`,
+        note: `规模 ${n}：改 1 行样式（margin）→ 期望走增量`,
+        items: n, nodes: req.nodes.length,
+        vue_ms: tVue - t0, to_request_ms: tReq - tVue, serialize_ms: tSer - tReq,
+        host_ms: tHost - tSer, total_ms: tHost - t0,
+        patch_count: app.adapter.patchCount(), request_bytes: treeJson.length,
+        extra: {
+          host_incremental: h?.["incremental"],
+          host_patches: h?.["patch_count"],
+          host_relayout: h?.["relayout_count"],
+          host_layout_ms: h?.["layout_ms"],
+          host_build_layers_ms: h?.["build_layers_ms"],
+        },
+      })
+    }
   },
 })
 
