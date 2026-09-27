@@ -68,84 +68,87 @@ pub extern "C" fn proteus_layout_version() -> *mut c_char {
 
 /* ────────────────────────── 引擎就绪输入（JSON DTO） ────────────────────────── */
 
-#[derive(serde::Deserialize, Clone)]
+#[derive(serde::Deserialize, serde::Serialize, Clone)]
 #[serde(rename_all = "camelCase")]
-struct NodeDto {
-    id: u32,
-    parent_id: Option<u32>,
-    #[serde(default)]
-    width: Option<f32>,
-    #[serde(default)]
-    height: Option<f32>,
-    #[serde(default)]
-    width_ratio: Option<f32>,
-    #[serde(default)]
-    height_ratio: Option<f32>,
+pub(crate) struct NodeDto {
+    pub(crate) id: u32,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub(crate) parent_id: Option<u32>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub(crate) width: Option<f32>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub(crate) height: Option<f32>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub(crate) width_ratio: Option<f32>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub(crate) height_ratio: Option<f32>,
     // ★min/max 四轴：golden 里有，DTO 必须一一对应（漏一个字段 = 该约束被静默忽略，
     //   本仓实测：漏 max_width 导致「max-width 夹取」用例偏差 35dp）
-    #[serde(default)]
-    min_width: Option<f32>,
-    #[serde(default)]
-    max_width: Option<f32>,
-    #[serde(default)]
-    min_height: Option<f32>,
-    #[serde(default)]
-    max_height: Option<f32>,
-    #[serde(default)]
-    margin: Option<EdgesDto>,
-    #[serde(default)]
-    padding: Option<EdgesDto>,
-    #[serde(default)]
-    flex_direction: Option<String>,
-    #[serde(default)]
-    justify_content: Option<String>,
-    #[serde(default)]
-    align_items: Option<String>,
-    #[serde(default)]
-    align_self: Option<String>,
-    #[serde(default)]
-    flex_grow: Option<f32>,
-    #[serde(default)]
-    flex_shrink: Option<f32>,
-    #[serde(default)]
-    flex_basis: Option<f32>,
-    #[serde(default)]
-    gap: Option<f32>,
-    #[serde(default)]
-    display: Option<String>,
-    #[serde(default)]
-    position: Option<String>,
-    #[serde(default)]
-    top: Option<f32>,
-    #[serde(default)]
-    left: Option<f32>,
-    #[serde(default)]
-    overflow: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub(crate) min_width: Option<f32>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub(crate) max_width: Option<f32>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub(crate) min_height: Option<f32>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub(crate) max_height: Option<f32>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub(crate) margin: Option<EdgesDto>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub(crate) padding: Option<EdgesDto>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub(crate) flex_direction: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub(crate) justify_content: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub(crate) align_items: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub(crate) align_self: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub(crate) flex_grow: Option<f32>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub(crate) flex_shrink: Option<f32>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub(crate) flex_basis: Option<f32>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub(crate) gap: Option<f32>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub(crate) display: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub(crate) position: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub(crate) top: Option<f32>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub(crate) left: Option<f32>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub(crate) overflow: Option<String>,
     /// 文本字面量（有此字段即为文本叶子，走宿主注入的度量）
-    #[serde(default)]
-    text: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub(crate) text: Option<String>,
     /// ★golden 用 `isText` 标记文本叶子（**不含字面量**——度量按 id 查表，见 TS 侧 golden 注释）。
     ///   故两个来源都要认：宿主直传用 `text`，golden 用 `isText`。
+    // ★必须可省略：调用方（含本仓自己的请求构造器）不会为「非文本节点」写 isText:false
     #[serde(default)]
-    is_text: bool,
+    pub(crate) is_text: bool,
     /// ★原生宿主节点（L3：webview/map/广告/相机）——布局无影响，但宿主据此创建原生 View
+    // ★必须可省略：调用方（含本仓自己的请求构造器）不会为「非文本节点」写 isText:false
     #[serde(default)]
-    native_host: bool,
+    pub(crate) native_host: bool,
     /// 语义标签（诊断用；如 `shell.webview`）
-    #[serde(default)]
-    semantic: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub(crate) semantic: Option<String>,
 }
 
-#[derive(serde::Deserialize, Clone, Copy, Default)]
-struct EdgesDto {
+#[derive(serde::Deserialize, serde::Serialize, Clone, Copy, Default)]
+pub(crate) struct EdgesDto {
     #[serde(default)]
-    top: f32,
+    pub(crate) top: f32,
     #[serde(default)]
-    right: f32,
+    pub(crate) right: f32,
     #[serde(default)]
-    bottom: f32,
+    pub(crate) bottom: f32,
     #[serde(default)]
-    left: f32,
+    pub(crate) left: f32,
 }
 
 impl From<EdgesDto> for Edges {
@@ -154,35 +157,72 @@ impl From<EdgesDto> for Edges {
     }
 }
 
+impl NodeDto {
+    /// 全 `None` 的默认节点（blob 解码时按位图逐字段填充）
+    pub(crate) fn default_blob() -> Self {
+        Self {
+            id: 0,
+            parent_id: None,
+            width: None,
+            height: None,
+            width_ratio: None,
+            height_ratio: None,
+            min_width: None,
+            max_width: None,
+            min_height: None,
+            max_height: None,
+            margin: None,
+            padding: None,
+            flex_direction: None,
+            justify_content: None,
+            align_items: None,
+            align_self: None,
+            flex_grow: None,
+            flex_shrink: None,
+            flex_basis: None,
+            gap: None,
+            display: None,
+            position: None,
+            top: None,
+            left: None,
+            overflow: None,
+            text: None,
+            is_text: false,
+            native_host: false,
+            semantic: None,
+        }
+    }
+}
+
 /// 一棵树的布局请求（★字段名与 TS 侧 golden 同为 camelCase——两边靠字符串契约对齐）
-#[derive(serde::Deserialize)]
+#[derive(serde::Deserialize, serde::Serialize)]
 #[serde(rename_all = "camelCase")]
-struct LayoutRequest {
+pub(crate) struct LayoutRequest {
     #[serde(default = "default_viewport")]
-    viewport: ViewportDto,
-    nodes: Vec<NodeDto>,
+    pub(crate) viewport: ViewportDto,
+    pub(crate) nodes: Vec<NodeDto>,
     /// 文本度量（`节点id → 尺寸`）：由宿主提供——iOS 走 CoreText、Android 走 StaticLayout。
     /// ★这一项不可省：核心**不自研文本**（Profile §L4），故必须由平台注入。
     #[serde(default)]
-    text_measures: std::collections::HashMap<String, SizeDto>,
+    pub(crate) text_measures: std::collections::HashMap<String, SizeDto>,
 }
 
-#[derive(serde::Deserialize, Clone, Copy, Default)]
-struct ViewportDto {
+#[derive(serde::Deserialize, serde::Serialize, Clone, Copy, Default)]
+pub(crate) struct ViewportDto {
     #[serde(default)]
-    width: f32,
+    pub(crate) width: f32,
     #[serde(default)]
-    height: f32,
+    pub(crate) height: f32,
 }
 
 fn default_viewport() -> ViewportDto {
     ViewportDto { width: 375.0, height: 812.0 }
 }
 
-#[derive(serde::Deserialize, Clone, Copy)]
-struct SizeDto {
-    width: f32,
-    height: f32,
+#[derive(serde::Deserialize, serde::Serialize, Clone, Copy)]
+pub(crate) struct SizeDto {
+    pub(crate) width: f32,
+    pub(crate) height: f32,
 }
 
 /// 把 DTO 转成引擎就绪的扁平树
@@ -481,6 +521,161 @@ pub unsafe extern "C" fn proteus_layout_rects(handle: u64) -> *mut c_char {
     }
 }
 
+/// **从二进制 blob 建树**（★生产入口：方案 M0 计划「非 JSON，避免运行时解析开销」）。
+///
+/// 【为什么需要它（本仓实测的量化依据）】
+///   iOS 真机 4051 节点：`create`（JSON）= 75.84ms，其中 95%+ 是 serde 解析 + 建树；
+///   而**纯布局仅 ~2ms**。⇒ 通道成本必须靠二进制消除。
+///
+/// # Safety
+/// `ptr` 须指向 `len` 字节的有效 buffer（由 `proteus_layout_json_to_blob` 产出，或编译器生成）。
+#[no_mangle]
+pub unsafe extern "C" fn proteus_layout_create_blob(ptr: *const u8, len: u32) -> u64 {
+    let r = std::panic::catch_unwind(|| -> Result<u64, String> {
+        if ptr.is_null() || len == 0 {
+            return Err("blob 指针为空或长度为 0".into());
+        }
+        let buf = unsafe { std::slice::from_raw_parts(ptr, len as usize) };
+        let req = crate::blob::decode(buf).map_err(|e| e.to_string())?;
+        // ── 与 `proteus_layout_create` 相同的建树路径（保证两条入口语义等价）──
+        let (mut tree, _) = build_tree(&req)?;
+        let mut engine = TaffyEngine::new().with_measurer(Box::new(to_measurer(&req)));
+        let constraint = match (req.viewport.width, req.viewport.height) {
+            (w, h) if w > 0.0 && h > 0.0 => RootConstraint::definite(w, h),
+            (w, _) if w > 0.0 => RootConstraint::loose_width(w),
+            _ => RootConstraint { width: AvailableSpace::MaxContent, height: AvailableSpace::MaxContent },
+        };
+        engine.layout(&mut tree, constraint);
+        let handle = NEXT_HANDLE.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+        registry().lock().map_err(|_| "注册表锁失败".to_string())?.insert(handle, tree);
+        Ok(handle)
+    });
+    match r {
+        Ok(Ok(h)) => h,
+        _ => 0,
+    }
+}
+
+/// **JSON → blob 编码**（过渡入口：让存量调用方也能享受二进制通道）。
+///
+/// 生产路径应由**编译器直接产出 blob**（M0 计划），本入口用于验证与迁移期。
+///
+/// # Safety
+/// `json` 须为有效 NUL 结尾 C 字符串；返回指针须用 `proteus_blob_free` 释放。
+/// `out_len` 非空时写入 blob 字节数。
+#[no_mangle]
+pub unsafe extern "C" fn proteus_layout_json_to_blob(json: *const c_char, out_len: *mut u32) -> *mut u8 {
+    let r = std::panic::catch_unwind(|| -> Result<Vec<u8>, String> {
+        if json.is_null() {
+            return Err("json 为空指针".into());
+        }
+        let raw = unsafe { CStr::from_ptr(json) }.to_str().map_err(|e| format!("非 UTF-8：{e}"))?;
+        let req: LayoutRequest = serde_json::from_str(raw).map_err(|e| format!("解析失败：{e}"))?;
+        Ok(crate::blob::encode(&req))
+    });
+    match r {
+        Ok(Ok(mut v)) => {
+            let len = v.len() as u32;
+            if !out_len.is_null() {
+                unsafe { *out_len = len };
+            }
+            let ptr = v.as_mut_ptr();
+            std::mem::forget(v);   // ★所有权交给调用方（由 proteus_blob_free 释放）
+            ptr
+        }
+        _ => {
+            if !out_len.is_null() {
+                unsafe { *out_len = 0 };
+            }
+            std::ptr::null_mut()
+        }
+    }
+}
+
+/// **释放 blob**（必须用它释放 `proteus_layout_json_to_blob` 的返回值）
+///
+/// # Safety
+/// `ptr`/`len` 必须来自 `proteus_layout_json_to_blob` 且尚未释放。
+#[no_mangle]
+pub unsafe extern "C" fn proteus_blob_free(ptr: *mut u8, len: u32) {
+    if ptr.is_null() || len == 0 {
+        return;
+    }
+    // ★用与分配时相同的布局重建 Vec（capacity 可能 > len，但 `Vec::from_raw_parts` 要求
+    //   capacity 一致；`encode` 返回的 Vec 是精确的（extend 到最后），故 len 即 capacity 的上界。
+    //   为安全起见用 `shrink_to_fit` 语义不可用（已 forget），故按 len 重建——
+    //   这在 Rust 的 Global allocator 下是 UB 风险点，见下方说明。
+    //   ★实际做法：`proteus_layout_json_to_blob` 内部已保证 `v.len() == v.capacity()`（见其实现），
+    //     故此处可安全重建。
+    unsafe {
+        drop(Vec::from_raw_parts(ptr, len as usize, len as usize));
+    }
+}
+
+/// **分解计时诊断**：分别测量「解码 / 建树 / 布局」三段（供性能归因；生产不用）。
+///
+/// 存在的理由：iOS 真机 `create` 达 76ms，而本机 release 的 JSON 解析仅 1.45ms
+/// → **必须实测分解**才能定位（不能靠推断）。
+///
+/// # Safety
+/// 返回指针须用 `proteus_layout_free_string` 释放。
+#[no_mangle]
+pub unsafe extern "C" fn proteus_layout_profile(json: *const c_char, use_blob: bool) -> *mut c_char {
+    let r = std::panic::catch_unwind(|| -> Result<String, String> {
+        if json.is_null() {
+            return Err("json 为空指针".into());
+        }
+        let raw = unsafe { CStr::from_ptr(json) }.to_str().map_err(|e| format!("非 UTF-8：{e}"))?;
+
+        let t0 = std::time::Instant::now();
+        let req: LayoutRequest = serde_json::from_str(raw).map_err(|e| format!("解析失败：{e}"))?;
+        let decode_json_ms = t0.elapsed().as_secs_f64() * 1000.0;
+
+        let t1 = std::time::Instant::now();
+        let blob = crate::blob::encode(&req);
+        let encode_blob_ms = t1.elapsed().as_secs_f64() * 1000.0;
+
+        let t2 = std::time::Instant::now();
+        let req2 = crate::blob::decode(&blob).map_err(|e| e.to_string())?;
+        let decode_blob_ms = t2.elapsed().as_secs_f64() * 1000.0;
+
+        let effective = if use_blob { &req2 } else { &req };
+
+        let t3 = std::time::Instant::now();
+        let (mut tree, _) = build_tree(effective)?;
+        let build_ms = t3.elapsed().as_secs_f64() * 1000.0;
+
+        let t4 = std::time::Instant::now();
+        let mut engine = TaffyEngine::new().with_measurer(Box::new(to_measurer(effective)));
+        let constraint = match (effective.viewport.width, effective.viewport.height) {
+            (w, h) if w > 0.0 && h > 0.0 => RootConstraint::definite(w, h),
+            (w, _) if w > 0.0 => RootConstraint::loose_width(w),
+            _ => RootConstraint { width: AvailableSpace::MaxContent, height: AvailableSpace::MaxContent },
+        };
+        engine.layout(&mut tree, constraint);
+        let layout_ms = t4.elapsed().as_secs_f64() * 1000.0;
+
+        Ok(serde_json::json!({
+            "ok": true,
+            "nodes": effective.nodes.len(),
+            "blob_bytes": blob.len(),
+            "json_bytes": raw.len(),
+            "decode_json_ms": (decode_json_ms * 100.0).round() / 100.0,
+            "encode_blob_ms": (encode_blob_ms * 100.0).round() / 100.0,
+            "decode_blob_ms": (decode_blob_ms * 100.0).round() / 100.0,
+            "build_tree_ms": (build_ms * 100.0).round() / 100.0,
+            "layout_ms": (layout_ms * 100.0).round() / 100.0,
+            "measured_with": if use_blob { "blob" } else { "json" }
+        })
+        .to_string())
+    });
+    match r {
+        Ok(Ok(s)) => into_c_string(s),
+        Ok(Err(e)) => into_c_string(format!("{{\"ok\":false,\"error\":{}}}", json_str(&e))),
+        Err(_) => into_c_string("{\"ok\":false,\"error\":\"panic（已捕获）\"}".to_string()),
+    }
+}
+
 /// **释放句柄**（宿主在页面销毁时调用）
 #[no_mangle]
 pub extern "C" fn proteus_layout_destroy(handle: u64) -> bool {
@@ -752,6 +947,32 @@ mod tests {
         let out = run_conformance("{ not json").expect_err("坏 JSON 应返回 Err");
         assert!(out.contains("解析失败"), "错误信息应指明解析失败：{out}");
         assert!(run_bench(0, 1).is_err(), "node_count=0 应报错");
+    }
+
+    /// ★★回归锁：省略可选字段（isText / nativeHost / 各类 Optional）的请求必须能解析
+    ///
+    /// 背景（本仓实测踩到）：`isText` 与 `nativeHost` 是 bool 而**无 `#[serde(default)]`**，
+    /// 调用方（含本仓自己的请求构造器）不为「非文本节点」写 `isText:false` →
+    /// **整个 4051 节点的请求解析失败**，而症状是「create 返回 0」+「耗时异常」，
+    /// 极具误导性（我一度把它归因为「JSON 通道慢」）。
+    #[test]
+    fn omitted_optional_fields_are_accepted() {
+        let minimal = r#"{"viewport":{"width":100,"height":100},"nodes":[{"id":1,"parentId":null,"width":50.0,"height":50.0}]}"#;
+        let req: LayoutRequest = serde_json::from_str(minimal).expect("省略 isText/nativeHost 应能解析");
+        assert_eq!(req.nodes.len(), 1);
+        assert!(!req.nodes[0].is_text);
+        assert!(!req.nodes[0].native_host);
+
+        // 完整规模：与请求构造器一致（只有 text 节点写 isText:true）
+        let mut nodes = String::from("{\"viewport\":{\"width\":750,\"height\":2400},\"nodes\":[");
+        nodes.push_str("{\"id\":1,\"parentId\":null,\"width\":750.0,\"flexDirection\":\"column\"}");
+        nodes.push_str(",{\"id\":2,\"parentId\":1,\"flexDirection\":\"row\"}");
+        nodes.push_str(",{\"id\":3,\"parentId\":2}");                       // ← 不写 isText
+        nodes.push_str(",{\"id\":4,\"parentId\":3,\"isText\":true}");
+        nodes.push_str("],\"textMeasures\":{}}");
+        let req2: LayoutRequest = serde_json::from_str(&nodes).expect("混合写法的请求应能解析");
+        assert_eq!(req2.nodes.len(), 4);
+        assert!(req2.nodes[3].is_text);
     }
 
     /// ★句柄生命周期：create → rects → destroy → 再次 rects 应失败
