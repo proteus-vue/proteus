@@ -20,7 +20,7 @@ xcrun devicectl device install app --device "$UDID" "$HERE/build/ProteusExperime
 
 OUT="$HERE/results/memory-isolated.txt"
 : > "$OUT"
-for v in A B C; do
+for v in A B C D E F G H; do
   echo "" | tee -a "$OUT"
   echo "--- 变体 $v ---" | tee -a "$OUT"
   for i in $(seq 1 "$ROUNDS"); do
@@ -47,7 +47,10 @@ echo "==> 中位数汇总" | tee -a "$OUT"
 python3 - "$HERE/results" "$ROUNDS" <<'PY' | tee -a "$OUT"
 import json, statistics, sys, pathlib
 res = pathlib.Path(sys.argv[1]); rounds = int(sys.argv[2])
-for v, name in [('A','UIView+AutoLayout'), ('B','UIView+手算frame'), ('C','CALayer+手算frame')]:
+for v, name in [('A','UIView+AutoLayout(共享文本)'), ('B','UIView+手算(共享文本)'), ('C','CALayer+手算(共享文本)'),
+                ('D','UIView+手算(唯一文本)'), ('E','CALayer+手算(唯一文本)'),
+                ('F','CALayer 仅色块(无文本)'), ('G','UIView 仅色块(无文本)'),
+                ('H','★拍平:一行一layer(文本画进父)')]:
     vals = []
     for i in range(1, rounds+1):
         try:

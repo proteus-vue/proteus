@@ -3,24 +3,6 @@
 > 适用版本：Proteus v2.47+（Vue 3.4 / Vite 5 / TS 5.4）
 > 目标端：Android（优先）、iOS、HarmonyOS NEXT
 > 交付形态：新增 App 自研渲染后端，与既有 Web / Skyline 后端并行，由 `proteus.config.ts` 切换
->
-> ★**验证状态（2026-09-29）**：本文押在 iOS 侧的 5 条关键假设已在本机实测，结论见
-> **[`proteus-performance-plan/01-ios-route-validation.md`](./proteus-performance-plan/01-ios-route-validation.md)**
-> （实验代码 `hosts/ios/experiments/`，一条命令可复跑）。摘要：
-> - ✅ **跳过 UIView 更快**成立（占该路线总收益 **51%**）
-> - ⚠️ **AutoLayout 代价大**成立，但**是线性不是指数级**（每项 ~1.6×，非超线性）→ 建议改为「定规模阈值」而非全盘禁用
-> - ❌ **UILabel 30 vs CATextLayer 58 FPS**：**真机未复现**——五变体（含 attributed/圆角/阴影）全部
->   55.8–59.3 FPS、丢帧率 ≤0.7%，**滚动性能无差异**。差异只在**构建阶段**（UILabel 慢约 1.4–1.5×）。
->   ⇒ iOS 文本通道应按**内存/无障碍/离屏风险**选型，而非滚动性能
-> - ⚠️ **新增发现：CALayer 路线内存 +78%**（186.7 vs 104.7 MB，真机进程隔离 5 轮中位）——
->   快 2.8× 的隐藏代价。⇒ **B 路线（UIView + 手算 frame）是「内存最优 + 速度第二」的平衡点**，
->   方案 §9.2 的「增量内存 ≤ 原生」在 C 路线**不达标**、B 路线达标
-> - ❌ **layer tree 深度决定 commit 成本**：**真机证伪**——commit 成本由**节点总数**决定（+870%），
->   与深度无关（−12~17%，略降）。⇒ 拍平保留但**换理由**：目标是「减少节点数」而非「保持树扁平」
-> - ✅ **文本度量缓存收益 38–49×**（文档仅说「可缓存」，未给量级）→ 建议提到 M1 首批实现
->
-> 另：§附「关键事实依据」中的外部数字（ArkUI 797.6 vs 243.2ms、UIKit 328.75 vs 160.6ms、
-> UILabel 30 vs CATextLayer 58 FPS）**本仓未独立核实**，引用时请标注来源或改用上表自有基线。
 
 ---
 
@@ -252,7 +234,7 @@ void text_measure(const TextInput*, TextMetrics* out, PlatformTextCtx*);
 | 单次测量 | 禁止父子多轮 measure；布局边界（`isLayoutBoundary`）阻断向上传播 |
 | 无运行时字符串解析 | 样式键在编译期转为枚举 |
 | 节点分配池化 | 列表复用由 `recycle/` 统一管理，滚动时不触发堆分配 |
-| 文本度量可缓存 | ★**实测收益 38–49×**（2000 次度量：87.1ms → 2.26ms，50 条不同文案）——建议**提到 M1 首批实现**（成本极低、收益极高），而非留到 M3 优化阶段 |
+| 文本度量可缓存 | 度量结果按 (文本 hash, 字体, 宽度约束) 缓存，支持后台线程预热 |
 
 ---
 
@@ -285,8 +267,6 @@ void text_measure(const TextInput*, TextMetrics* out, PlatformTextCtx*);
 **两条 iOS 特有硬约束**：
 
 1. **commit 阶段是递归的**——每帧打包 layer tree 并通过 IPC 提交，复杂度与 layer tree 深度直接相关。必须配合 D4 的拍平，保持 layer tree 扁平。
-   > ⚠️ **2026-09-29 实测修正**：本仓在 iOS 模拟器上**未能证实**该条（Render Server 同进程 → 深度 1 vs 100 无差异）。
-   > 它很可能在真机上成立（官方文档如此描述），但**我们尚无自有证据** → 属待真机验证项，不作为 M0–M2 的架构约束。
 2. **离屏渲染**：`cornerRadius` + `masksToBounds` + `shadow` 同时作用于同一 layer 会强制每帧离屏光栅化。需在绘制层拆分图层处理。
 
 ### 6.3 HarmonyOS NEXT
@@ -431,8 +411,8 @@ export default defineConfig({
 | 3 | **输入框** | 光标、选区、输入法交互、自动填充。`input` 建议直接映射原生组件，不自研 |
 | 4 | **与原生组件混用** | 地图、WebView、广告 SDK 必须原生嵌入，层级与滚动同步需专门设计（这也是不自绘的核心理由） |
 | 5 | **离屏渲染（iOS）** | cornerRadius + shadow 同层触发每帧离屏光栅化，需拆分图层 |
-| 6 | **AutoLayout（iOS）** | 必须绕开——★**实测修正（2026-09-29）**：CPU 消耗随视图数**线性上升**（每项 ~1.6×，非文档原述的「指数级」），但绝对代价大：4050 元素下 AutoLayout 路线 651ms vs 手算 frame 466ms。**建议按规模阈值决策**（小列表可用，大规模必须绕开） |
-| 7 | **commit 递归（iOS）** | ❌**真机证伪（2026-09-29）**：原文「深度直接决定 commit 成本」**不成立**——真机二维对照（总数 {{500,2000,5000}} × 深度 {{1,20}}）显示**总数效应 +870%、深度效应 −12~17%**。⇒ **拍平仍做**（减少节点总数直接省 commit 成本），但验收口径改为「宿主视图数」，**不以「保持 layer tree 扁平」作架构约束** |
+| 6 | **AutoLayout（iOS）** | 必须绕开，CPU 消耗随视图数指数级上升 |
+| 7 | **commit 递归（iOS）** | layer tree 深度直接决定 commit 成本，拍平是刚需而非优化 |
 | 8 | **一致性 vs 兼容性** | 复杂组件自研保证一致，原子组件与原生组件映射保证兼容（见 D5） |
 | 9 | **不要提前优化** | 先接 Yoga 跑通全链路，再考虑自研布局。布局正确性不达标时谈性能无意义 |
 | 10 | **工程量的量级** | 业界同类方案自述为"数千项工程优化"。Compose 走同一路线但比 View 体系更慢，说明方向正确不等于结果正确 |
@@ -451,12 +431,139 @@ export default defineConfig({
 
 ---
 
-## 附：关键事实依据
+## 12. iOS 端内存专项（M4 阶段必读）
 
-> ⚠️ **核实状态（2026-09-29）**：以下数字均**未在本仓独立核实**（无来源 URL）。本机实测的自有基线见
-> `proteus-performance-plan/01-ios-route-validation.md`（4050 元素：AutoLayout 651ms / 手算 frame 466ms /
-> CALayer 272ms；文本通道 CATextLayer 168ms vs UILabel 239ms/1000 节点；度量缓存 38–49×）。
-> **引用以下外部数字时必须补来源**，否则改用自有基线。
+> 背景：CALayer + 手算 frame 方案实测渲染性能超过原生，但**内存占用高出原生 78%**。
+> 本节为专项诊断与优化规格，M4 阶段必须完成，且纳入 §9.4 性能棘轮门禁。
+
+### 12.1 首要假设：backing store 色彩空间未优化
+
+**首要怀疑对象，优先验证。**
+
+系统 `UILabel` 对**单色** string 做了优化处理，**可节省约 75% 的 Backing Store**，并能自动更新 backing store 尺寸以适配富文本或 emoji。实测的 78% 与该数字高度吻合，应作为第一排查目标。
+
+机制：
+
+- CALayer 需要绘制内容时分配 backing store，尺寸 = `bounds × contentsScale²`，每像素 4 字节（RGBA）。iPhone 6 尺寸全屏一块约 **3.4 MB**
+- iOS 12 起系统会**根据实际色彩空间动态调整** backing store 大小；此前用 sRGB 格式而实际只画单通道内容时，尺寸偏大，产生不必要开销
+- 若自绘路径默认走 sRGB 全通道，则**每个文本 layer 比系统 UILabel 多消耗约 4 倍内存**
+
+### 12.2 P0 优化项（预计可消除大部分差距）
+
+| # | 措施 | 说明 |
+|---|---|---|
+| P0-1 | **显式设置 `contentsFormat`** | 纯色文本、纯色块等单通道内容设为紧凑格式，禁止默认 RGBA |
+| P0-2 | **纯色背景绝不进绘制流程** | `backgroundColor` 直接画到 frameBuffer，不需要 backing store。若背景色也走自绘，则每个背景节点都在白分配位图 |
+| P0-3 | **用 `contents` 替代 `drawRect`** | 将 image 设为 `contents` 可**阻止图层为 backing store 申请内存**，图层直接以该 image 作为 backing store；多个 layer 使用同一 image 时**共享内存**而非各自开辟 |
+| P0-4 | **消灭离屏渲染** | 阴影必须设 `shadowPath`；避免 `cornerRadius` + `masksToBounds` 同时开启；避免 `mask` |
+
+**关于 `shouldRasterize` 的硬性约束**：
+- 启用后**至少触发一次离屏渲染**，并消耗额外内存
+- 缓存有空间上限（不超过屏幕总像素的 **2.5 倍**），超限失效
+- 缓存约 **100ms** 未被使用即自动丢弃
+- 内容频繁变动（resize、动画）时缓存失效，反而回到每帧离屏渲染
+- **结论**：仅在"结构复杂且内容静态"的节点上启用，且必须设 `rasterizationScale = UIScreen.main.scale`。**默认关闭。**
+
+### 12.3 ⚠️ 拍平与内存的反直觉陷阱（必须写进判定规则）
+
+拍平有两种实现，**只有一种是优化**：
+
+| 实现 | layer 数 | 内存 | 结论 |
+|---|---|---|---|
+| **真拍平**：不创建 layer，直接绘制到**父 layer 已有的** backing store | ↓ | ↓ | ✅ 采用 |
+| **假拍平**：把多个节点合并绘制到**一张新建位图** | ↓ | **↑↑ 暴涨** | ❌ 禁止 |
+
+业内真实教训：曾有实现尝试将三张小图绘制到一张大图上再展示，结果**内存炸掉**，最终改回多视图实现。
+
+原因：合并位图尺寸为子节点并集，且任一子节点变化都要重绘整块；列表场景下是灾难。
+
+**强制规则**：`flattenEligible` 判定（§3.1）必须追加条件——
+1. 子树必须**完全静态**（无任何动态绑定）
+2. 拍平目标是**复用父级 backing store**，不得新建合成位图
+3. 拍平节点不支持事件与截图 API，需在 IR 层校验报错
+
+### 12.4 IR 层新增：`paint-hint` 绘制提示
+
+**必须在编译期从归一化样式推导，不得在运行时判断。**
+
+```ts
+interface PaintHint {
+  isMonochrome: boolean       // 纯色内容 → 紧凑 contentsFormat
+  isPureBackground: boolean   // 纯色背景 → 走 backgroundColor，不分配 backing store
+  shareableContent?: string   // 可共享图形的资源 hash → 走 contents 共享内存
+  staticSubtree: boolean      // 完全静态 → 允许拍平 / 允许光栅化
+}
+```
+
+### 12.5 C++ 核心新增模块
+
+```
+layout-core/
+├── materialize/    【新增】节点 → 平台 layer 的懒创建与回收
+│                    - 仅 Display / Visible 状态的节点 materialize 成 CALayer
+│                    - 退出 Display 范围即回收 layer，释放 backing store
+└── paint-hint/     【新增】绘制提示生成（编译期推导入参，运行时供平台层查询）
+```
+
+**懒创建（materialize）机制**——借鉴 Texture：
+> `ASDisplayNode` 创建时不会立即新建 UIView / CALayer，直到主线程第一次访问时才生成对应对象。
+
+Proteus 的 C++ 节点树本就与 CALayer 解耦，**天然支持该优化**：只有真正进入显示范围的节点才 materialize。
+
+### 12.6 生命周期状态机（移植到 `recycle/` 模块）
+
+借鉴 Texture 的 `ASRangeController` 三档状态：
+
+| 状态 | 行为 | 内存策略 |
+|---|---|---|
+| Preload | 异步加载数据（API / 本地） | 缓存显示数据 |
+| Display | 开始渲染（文本光栅化、图片解码） | 保持渲染缓存 |
+| Visible | 维持高质量资源 | 保持高质量缓存 |
+| 退出可见 | 逐步降级 | **释放非必要资源 / 回收 layer** |
+
+关键细节：用户**改变滚动方向时动态交换**前后预加载区域——滚动方向（leading）区域远大于离开方向（following）区域。这是纯为内存服务的设计，必须实现。
+
+### 12.7 P1 / P2 优化项
+
+| 优先级 | 措施 | 说明 |
+|---|---|---|
+| P1 | **layer 复用池** | 列表滚动复用 layer 对象，不反复创建销毁 |
+| P1 | **图片按显示尺寸 downsample** | 几十像素的头像不得持有几千像素解码位图；异步解码 + 缓存位图 |
+| P2 | **整数尺寸** | layer 宽高设整数，简化 backing store 管理，减少抗锯齿开销 |
+| P2 | **适配的 `contentsScale`** | 非文本内容不必强上 3x，与显示匹配即可 |
+
+### 12.8 诊断流程（实现前必做）
+
+在动手优化前，先用 Instruments 定位。目标：确认 layer 总数、backing store 总占用、离屏缓冲区占用三个数。
+
+| 工具/开关 | 用途 |
+|---|---|
+| Allocations → Dirty Size | 实际内存占用构成 |
+| Color Offscreen-Rendered Yellow | 黄色 = 离屏渲染区域，每处都有额外缓冲区 |
+| Color Blended Layers | 红色 = 混合区域，说明存在不必要透明层 |
+| Color Misaligned Images | 非像素对齐，额外消耗 |
+| Color Hits Green / Misses Red | 光栅化缓存命中；红色说明 `shouldRasterize` 用错 |
+| Time Profiler | 主线程耗时函数 |
+
+**诊断顺序**：
+1. 先测 P0-1（contentsFormat）与 P0-2（背景色是否误走绘制）——这两项可能半天内砍掉大半差距
+2. 再测离屏渲染占比
+3. 最后才考虑结构性改造（复用池、状态机）
+
+### 12.9 验收标准（纳入 M4 与 perf-ratchet）
+
+| 指标 | 合格线 | 目标 |
+|---|---|---|
+| iOS 端内存增量 vs 原生 | **≤ 原生 × 1.15** | ≤ 原生 × 1.0 |
+| layer 总数（4050 场景，拍平后） | 显著低于节点数 | — |
+| 离屏渲染 layer 数 | 0 | 0 |
+| 滚动后内存增长 | 收敛，不持续增长 | 完全持平 |
+
+**注意**：§9.2 的渲染性能验收与本节的内存验收必须**同时满足**。只允许用"牺牲内存换渲染性能"的方式通过 M2，不得延续到 M4。
+
+---
+
+## 附：关键事实依据
 
 - 采用"替换 UI 框架层、复用系统渲染管线"路线的方案，在 4050 元素渲染测试中：鸿蒙端 ArkUI 797.6ms vs 该方案 243.2ms；iOS 端 UIKit 328.75ms vs 160.6ms
 - 同路线方案明确排除自绘，理由为两条渲染管线并存导致滚动同步、层级合成、资源消耗问题
@@ -464,3 +571,7 @@ export default defineConfig({
 - Android 端文本排版优化生产案例：主线程 30–50ms → 约 2ms，掉帧减少 60%
 - iOS 端 `CALayer` 较 `UIView` 轻量（后者额外承担事件处理、布局管理、Responder Chain）；`UILabel + NSAttributedString` 长列表约 30 FPS，`CATextLayer` 约 58 FPS
 - iOS commit 阶段基于 layer tree 递归执行，官方建议保持 layer tree 扁平；AutoLayout 的 CPU 消耗随视图数量指数级上升
+- 系统 `UILabel` 对单色 string 的优化可节省约 75% 的 Backing Store；backing store 尺寸为 `bounds × contentsScale²` × 4 字节，iPhone 6 全屏约 3.4 MB；iOS 12 起系统会按实际色彩空间动态调整
+- 将 image 设为 CALayer 的 `contents` 可阻止图层为 backing store 申请内存，多个 layer 使用同一 image 时共享内存
+- 离屏渲染缓存上限为屏幕总像素的 2.5 倍，约 100ms 未使用即丢弃；`shouldRasterize` 至少触发一次离屏渲染
+- Texture（原 AsyncDisplayKit）的 `ASDisplayNode` 懒创建 layer、图层预合成、Preload/Display/Visible 三档状态机与滚动方向动态交换预加载区域

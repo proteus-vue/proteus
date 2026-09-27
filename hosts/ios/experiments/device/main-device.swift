@@ -250,6 +250,12 @@ func exp1() -> [String: Any] {
     out["A_uiview_autolayout"] = summarize(a)
     out["B_uiview_manualframe"] = summarize(b)
     out["C_calayer_manualframe"] = summarize(c)
+    // ★H 路线（拍平：一行一个 layer，文本画进父）：测耗时以便与内存数据合成完整取舍
+    var h: [Phase] = []
+    for _ in 0..<repeats {
+        h.append(runOnce(host: host, build: { }, layout: { _ = buildCompactRows(host: host) }))
+    }
+    out["H_flattened_rows"] = summarize(h)
     return out
 }
 
@@ -485,6 +491,21 @@ func exp6() -> [String: Any] {
     return out
 }
 
+// ───────────────────────── 拍平实验：一行一个 layer（工业界「少 layer 承载多文本」）─────────────────────────
+/// 对应业界成熟做法：Texture 的 `shouldRasterizeDescendants`/子树光栅化、ArkUI 的 `markNodeGroup`、
+/// RN 的 view flattening、uni-app x 的 `flatten`——**不为每个元素建独立对象，画进父级**。
+/// 这里把它落成最小形态：一行 = 一个 CALayer，行内所有文本由 `draw(in:)` 画进**同一个** backing store。
+final class TextRowLayer: CALayer {
+    var texts: [(String, CGPoint)] = []
+    override func draw(in ctx: CGContext) {
+        UIGraphicsPushContext(ctx)
+        for (str, origin) in texts {
+            (str as NSString).draw(at: origin, withAttributes: [.font: FONT, .foregroundColor: UIColor.white])
+        }
+        UIGraphicsPopContext()
+    }
+}
+
 // ───────────────────────── 滚动基准助手（exp7 用）─────────────────────────
 /// 用 CADisplayLink 驱动滚动并记录**每一帧的实际间隔**，从而算出真实 FPS 与丢帧。
 ///
@@ -651,6 +672,119 @@ func exp7() -> [String: Any] {
     return out
 }
 
+/// 拍平路线构建（exp1 耗时 + exp8 内存共用）：一行一个 layer，行内文本画进同一个 backing store
+@discardableResult
+func buildCompactRows(host: UIView) -> Int {
+    var y: CGFloat = 0
+    let rowH: CGFloat = 44
+    let cols = COLS
+    for r in 0..<ROWS {
+        let row = TextRowLayer()
+        row.isGeometryFlipped = true
+        row.frame = CGRect(x: 0, y: y, width: host.bounds.width, height: rowH)
+        row.backgroundColor = UIColor(white: 0.12, alpha: 1).cgColor
+        row.contentsScale = UIScreen.main.scale
+        row.isOpaque = true
+        row.texts = (0..<cols).map { c in
+            let idx = r * cols + c
+            return (TEXTS[idx % TEXTS.count], CGPoint(x: 8 + CGFloat(c) * (host.bounds.width / CGFloat(cols)), y: 12))
+        }
+        host.layer.addSublayer(row)
+        row.setNeedsDisplay()
+        y += rowH
+    }
+    return ROWS
+}
+
+// ───────────────────────── 内存变体构建器（exp8 隔离测量的入口）─────────────────────────
+//
+// 【为什么需要变体矩阵】初版只测 A/B/C 三条路线，得到「CALayer 内存 +78%」——但该结论有**两个混淆变量**：
+//   ① **文本渲染缓存共享**：初测每 2000 个文本节点只有 50 条不同文案，
+//      若系统对相同文案共享光栅化结果，则「共享文本」组的内存被系统性低估；
+//   ② **文本 vs 结构**：CALayer 组的元素含 CATextLayer（需绘制 → 分配 backing store），
+//      UIView 组含 UILabel——差异可能来自「谁在绘制」，而非「view vs layer」本身。
+//   故引入 8 个变体，逐个隔离：
+//     A UIView+AutoLayout(共享文本)   B UIView+手算(共享)   C CALayer+手算(共享)
+//     D UIView+手算(**唯一文本**)     E CALayer+手算(**唯一文本**)     ← 检验 ①
+//     F CALayer 仅色块(**无文本**)    G UIView 仅色块(**无文本**)       ← 检验 ②
+//     H **拍平**：一行一个 layer，文本画进父级                                       ← 检验业界方案
+func buildMemVariant(host: UIView, kind: String) {
+    let uniqueText = (kind == "D" || kind == "E")
+    let withText = !(kind == "F" || kind == "G")
+    let useLayer = (kind == "C" || kind == "E" || kind == "F")
+    let rows = ROWS, cols = COLS
+    let rowH: CGFloat = 44
+
+    if kind == "A" { buildAutoLayout(host: host); return }
+    if kind == "H" { buildCompactRows(host: host); return }
+
+    var textCache: [String: CGSize] = [:]
+    for t in TEXTS { textCache[t] = measure(t) }
+    var y: CGFloat = 0
+    for r in 0..<rows {
+        var rowH2 = rowH
+        var sizes: [CGSize] = []
+        var texts: [String] = []
+        for c in 0..<cols {
+            let idx = r * cols + c
+            let t = uniqueText ? "行\(r)-列\(c) 唯一文案 \(idx)" : TEXTS[idx % TEXTS.count]
+            texts.append(t)
+            if withText {
+                let sz = textCache[t] ?? measure(t)
+                sizes.append(sz)
+                rowH2 = max(rowH2, sz.height + ITEM_PAD * 2)
+            } else {
+                sizes.append(CGSize(width: 60, height: 20))
+            }
+        }
+        let rowFrame = CGRect(x: 0, y: y, width: host.bounds.width, height: rowH2)
+        if useLayer {
+            let row = CALayer(); row.frame = rowFrame
+            row.backgroundColor = UIColor(white: 0.12, alpha: 1).cgColor
+            host.layer.addSublayer(row)
+            var x: CGFloat = 0
+            for c in 0..<cols {
+                let sz = sizes[c]
+                let w = sz.width + ITEM_PAD * 2
+                let item = CALayer()
+                item.frame = CGRect(x: x, y: 0, width: w, height: rowH2)
+                item.backgroundColor = UIColor(white: 0.2, alpha: 1).cgColor
+                row.addSublayer(item)
+                if withText {
+                    let tl = CATextLayer()
+                    tl.contentsScale = UIScreen.main.scale
+                    tl.frame = CGRect(x: ITEM_PAD, y: ITEM_PAD, width: sz.width, height: sz.height)
+                    tl.string = texts[c]
+                    tl.font = FONT; tl.fontSize = FONT.pointSize
+                    tl.foregroundColor = UIColor.white.cgColor
+                    tl.isWrapped = false
+                    item.addSublayer(tl)
+                }
+                x += w + ITEM_GAP
+            }
+        } else {
+            let row = UIView(frame: rowFrame)
+            row.backgroundColor = UIColor(white: 0.12, alpha: 1)
+            host.addSubview(row)
+            var x: CGFloat = 0
+            for c in 0..<cols {
+                let sz = sizes[c]
+                let w = sz.width + ITEM_PAD * 2
+                let item = UIView(frame: CGRect(x: x, y: 0, width: w, height: rowH2))
+                item.backgroundColor = UIColor(white: 0.2, alpha: 1)
+                row.addSubview(item)
+                if withText {
+                    let l = UILabel(frame: CGRect(x: ITEM_PAD, y: ITEM_PAD, width: sz.width, height: sz.height))
+                    l.font = FONT; l.textColor = .white; l.text = texts[c]
+                    item.addSubview(l)
+                }
+                x += w + ITEM_GAP
+            }
+        }
+        y += rowH2 + ROW_GAP
+    }
+}
+
 // ───────────────────────── 实验 8：增量内存（方案 §9.2 验收项）─────────────────────────
 //
 // 【文档 §9.2】要求「增量内存 ≤ 原生」——本实验量三条路线各自构建 4050 元素后的常驻内存增量。
@@ -737,12 +871,7 @@ final class ExpSceneDelegate: UIResponder, UIWindowSceneDelegate {
                 for _ in 0..<5 { RunLoop.current.run(mode: .default, before: Date().addingTimeInterval(0.05)) }
 
                 let before = residentMB()
-                switch variant {
-                case "A": buildAutoLayout(host: host)
-                case "B": buildManualFrames(host: host)
-                case "C": buildManualFrames(host: host, useCALayer: true)
-                default: break
-                }
+                buildMemVariant(host: host, kind: variant)
                 // 强制布局 + 提交（backing store / 约束求解都是延迟的）
                 CATransaction.begin()
                 CATransaction.setDisableActions(true)
