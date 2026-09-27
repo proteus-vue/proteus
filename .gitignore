@@ -42,3 +42,5 @@ hosts/ios/experiments/results/run*.json
 hosts/ios/experiments/device/results/device*.json
 hosts/ios/experiments/device/build/
 hosts/ios/experiments/device/.provision-work/
+hosts/ios/experiments/device/results/mem-*.json
+hosts/ios/experiments/device/results/memory-isolated.txt

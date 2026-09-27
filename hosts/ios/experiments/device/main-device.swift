@@ -485,6 +485,226 @@ func exp6() -> [String: Any] {
     return out
 }
 
+// ───────────────────────── 滚动基准助手（exp7 用）─────────────────────────
+/// 用 CADisplayLink 驱动滚动并记录**每一帧的实际间隔**，从而算出真实 FPS 与丢帧。
+///
+/// 【为什么不用 UIView.animate + 事后统计】那只能拿到「总耗时」，拿不到帧间隔分布；
+///   而 H3 关心的正是「滚动过程中是否掉帧」（文档称 UILabel 30 FPS vs CATextLayer 58 FPS）。
+///   CADisplayLink 每帧回调一次 → 相邻回调的时间差即该帧的真实渲染间隔。
+final class ScrollBench: NSObject {
+    private var link: CADisplayLink?
+    private var last: CFTimeInterval = 0
+    private var start: CFTimeInterval = 0
+    private var offsetPerSec: CGFloat = 0
+    private var view: UIScrollView?
+    private(set) var frameMs: [Double] = []
+    private(set) var done = false
+    var duration: Double = 2.0
+
+    func start(_ scroll: UIScrollView, distance: CGFloat, duration: Double = 2.0) {
+        self.view = scroll; self.duration = duration
+        offsetPerSec = distance / CGFloat(duration)
+        frameMs.removeAll(keepingCapacity: true)
+        done = false; last = 0
+        start = CACurrentMediaTime()
+        let l = CADisplayLink(target: self, selector: #selector(tick))
+        l.add(to: .main, forMode: .common)
+        link = l
+    }
+
+    @objc private func tick() {
+        let now = CACurrentMediaTime()
+        if last > 0 { frameMs.append((now - last) * 1000) }
+        last = now
+        let elapsed = now - start
+        if let v = view {
+            v.contentOffset = CGPoint(x: 0, y: CGFloat(elapsed) * offsetPerSec)
+        }
+        if elapsed >= duration {
+            link?.invalidate(); link = nil; done = true
+        }
+    }
+
+    /// 统计：平均 FPS、P95 帧时间、丢帧率（>1.5×16.7ms 视为掉帧）
+    func stats() -> [String: Double] {
+        let f = frameMs.filter { $0 > 0 }.sorted()
+        guard !f.isEmpty else { return ["fps": 0, "p95ms": 0, "dropRate": 0, "frames": 0] }
+        let avg = f.reduce(0, +) / Double(f.count)
+        let p95 = f[Int(Double(f.count) * 0.95)]
+        let drops = f.filter { $0 > 16.7 * 1.5 }.count
+        return [
+            "fps": (1000 / avg * 10).rounded() / 10,
+            "p95ms": (p95 * 100).rounded() / 100,
+            "dropRate": (Double(drops) / Double(f.count) * 1000).rounded() / 10,
+            "frames": Double(f.count),
+        ]
+    }
+}
+
+/// 常驻内存（MB）——方案 §9.2 要求报「增量内存」，这是量它的入口
+func residentMB() -> Double {
+    var info = mach_task_basic_info()
+    var count = mach_msg_type_number_t(MemoryLayout<mach_task_basic_info>.size / MemoryLayout<integer_t>.size)
+    let kr = withUnsafeMutablePointer(to: &info) { ptr -> kern_return_t in
+        ptr.withMemoryRebound(to: integer_t.self, capacity: Int(count)) { ip in
+            task_info(mach_task_self_, task_flavor_t(MACH_TASK_BASIC_INFO), ip, &count)
+        }
+    }
+    return kr == KERN_SUCCESS ? Double(info.resident_size) / 1_048_576 : -1
+}
+
+// ───────────────────────── 实验 7：滚动 FPS（H3 的真机实证）─────────────────────────
+//
+// 【文档主张】「UILabel + **NSAttributedString** 长列表约 30 FPS，CATextLayer 约 58 FPS」（§附，未核实）。
+//   ★注意文档原文写的是 **attributed**（富文本）——纯字符串的 UILabel 很轻，测不出差异。
+//     故本实验设三组：UILabel(纯串) / **UILabel(attributed)** / CATextLayer，
+//     第三组才是文档的实际场景。
+// 【怎么量】CADisplayLink 驱动**真实滚动**，记录每帧间隔 → 平均 FPS / P95 帧时间 / 丢帧率。
+//   滚动距离与时长固定，唯一变量 = 文本节点类型。
+func exp7() -> [String: Any] {
+    var out: [String: Any] = [:]
+    let rows = 300, cols = 4, rowH: CGFloat = 44
+    let attr: [NSAttributedString.Key: Any] = [
+        .font: FONT,
+        .foregroundColor: UIColor.white,
+        .kern: 0.2,
+    ]
+    // kind: 0=UILabel 纯串 · 1=UILabel attributed · 2=CATextLayer
+    //       3=UILabel heavy（attributed + 圆角 + 阴影，贴近真实列表 cell）· 4=CATextLayer heavy
+    for (name, kind) in [("UILabel_plain", 0), ("UILabel_attributed", 1), ("CATextLayer", 2),
+                          ("UILabel_heavy", 3), ("CATextLayer_heavy", 4)] {
+        let host = visibleHost!
+        host.subviews.forEach { $0.removeFromSuperview() }
+        host.layer.sublayers?.forEach { $0.removeFromSuperlayer() }
+
+        let scroll = UIScrollView(frame: host.bounds)
+        scroll.backgroundColor = .black
+        host.addSubview(scroll)
+        var cache: [String: CGSize] = [:]
+        for t in TEXTS {
+            cache[t] = (kind == 1 || kind == 3) ? (t as NSString).size(withAttributes: attr) : measure(t)
+        }
+
+        var y: CGFloat = 0
+        for r in 0..<rows {
+            let rowFrame = CGRect(x: 0, y: y, width: host.bounds.width, height: rowH)
+            if kind == 2 || kind == 4 {
+                let row = CALayer(); row.frame = rowFrame
+                if kind == 4 {
+                    // heavy：圆角 + 阴影（真实 cell 常见，会触发离屏或额外合成）
+                    row.backgroundColor = UIColor(white: 0.12, alpha: 1).cgColor
+                    row.cornerRadius = 10
+                    row.shadowOpacity = 0.25
+                    row.shadowRadius = 3
+                    row.shadowOffset = CGSize(width: 0, height: 1)
+                }
+                scroll.layer.addSublayer(row)
+                for c in 0..<cols {
+                    let t = TEXTS[(r * cols + c) % TEXTS.count]
+                    let sz = cache[t]!
+                    let l = CATextLayer()
+                    l.contentsScale = UIScreen.main.scale
+                    l.frame = CGRect(x: 8 + CGFloat(c) * (host.bounds.width / CGFloat(cols)),
+                                     y: 12, width: sz.width, height: sz.height)
+                    l.string = t; l.font = FONT; l.fontSize = FONT.pointSize
+                    l.foregroundColor = UIColor.white.cgColor; l.isWrapped = false
+                    row.addSublayer(l)
+                }
+            } else {
+                let row = UIView(frame: rowFrame)
+                row.backgroundColor = UIColor(white: 0.12, alpha: 1)
+                if kind == 3 {
+                    row.layer.cornerRadius = 10
+                    row.layer.shadowOpacity = 0.25
+                    row.layer.shadowRadius = 3
+                    row.layer.shadowOffset = CGSize(width: 0, height: 1)
+                }
+                scroll.addSubview(row)
+                for c in 0..<cols {
+                    let t = TEXTS[(r * cols + c) % TEXTS.count]
+                    let sz = cache[t]!
+                    let l = UILabel(frame: CGRect(x: 8 + CGFloat(c) * (host.bounds.width / CGFloat(cols)),
+                                                  y: 12, width: sz.width, height: sz.height))
+                    if kind == 1 || kind == 3 {
+                        l.attributedText = NSAttributedString(string: t, attributes: attr)
+                    } else {
+                        l.font = FONT; l.textColor = .white; l.text = t
+                    }
+                    row.addSubview(l)
+                }
+            }
+            y += rowH
+        }
+        scroll.contentSize = CGSize(width: host.bounds.width, height: y)
+
+        // CADisplayLink 需要 run loop 驱动：嵌套 run loop 泵帧（实验环境可接受）
+        let bench = ScrollBench()
+        bench.start(scroll, distance: y - host.bounds.height, duration: 2.5)
+        let deadline = Date().addingTimeInterval(10)
+        while !bench.done && Date() < deadline {
+            RunLoop.current.run(mode: .default, before: Date().addingTimeInterval(0.02))
+        }
+        out[name] = bench.stats()
+    }
+    visibleHost!.subviews.forEach { $0.removeFromSuperview() }
+    visibleHost!.layer.sublayers?.forEach { $0.removeFromSuperlayer() }
+    return out
+}
+
+// ───────────────────────── 实验 8：增量内存（方案 §9.2 验收项）─────────────────────────
+//
+// 【文档 §9.2】要求「增量内存 ≤ 原生」——本实验量三条路线各自构建 4050 元素后的常驻内存增量。
+//
+// ★测量协议（初版不可靠，已修）：初版只测一次、且基线被前面实验污染（残留 subview + 未回收内存），
+//   得到「CALayer 比 AutoLayout 多 29%」这种反直觉结果。现改为：
+//     ① 每条路线**独立测 3 轮**，每轮之间 `autoreleasepool` + 短暂 run loop 让内存回收；
+//     ② 基线取「清理后稳定值」而非首次读数；
+//     ③ **报告每轮而非只报中位**——内存测量方差大，隐藏方差等于隐藏不确定性。
+func exp8() -> [String: Any] {
+    var out: [String: Any] = [:]
+    let host = visibleHost!
+
+    /// 清空 + 泵 run loop 让 ARC/图层释放（同步等待回收）
+    func cleanAndSettle() {
+        host.subviews.forEach { $0.removeFromSuperview() }
+        host.layer.sublayers?.forEach { $0.removeFromSuperlayer() }
+        for _ in 0..<5 {
+            RunLoop.current.run(mode: .default, before: Date().addingTimeInterval(0.05))
+        }
+    }
+
+    cleanAndSettle()
+    let base = residentMB()
+    out["baseline_mb"] = (base * 10).rounded() / 10
+
+    func measure(_ build: () -> Void) -> [Double] {
+        var rows: [Double] = []
+        for _ in 0..<3 {
+            cleanAndSettle()
+            let before = residentMB()
+            build()
+            // ★强制走一遍布局+提交：CALayer 的 backing store 与 UIView 的约束求解都是**延迟**的，
+            //   不渲染就量 → 内存增量偏低（实测初版 CALayer 报 0 MB，明显不真实）。
+            CATransaction.begin()
+            CATransaction.setDisableActions(true)
+            host.setNeedsLayout(); host.layoutIfNeeded()
+            CATransaction.commit()
+            CATransaction.flush()
+            for _ in 0..<3 { RunLoop.current.run(mode: .default, before: Date().addingTimeInterval(0.03)) }
+            let after = residentMB()
+            rows.append(((after - before) * 10).rounded() / 10)
+            cleanAndSettle()
+        }
+        return rows
+    }
+
+    out["autoLayout_runs_mb"] = measure { buildAutoLayout(host: host) }
+    out["manualFrame_runs_mb"] = measure { buildManualFrames(host: host) }
+    out["calayer_runs_mb"] = measure { buildManualFrames(host: host, useCALayer: true) }
+    cleanAndSettle()
+    return out
+}
+
 // ───────────────────────── App 启动：跑全部实验并落盘 ─────────────────────────
 final class ExpSceneDelegate: UIResponder, UIWindowSceneDelegate {
     var window: UIWindow?
@@ -504,6 +724,55 @@ final class ExpSceneDelegate: UIResponder, UIWindowSceneDelegate {
         //   （实测第一次跑 180s 超时、Documents 为空、进程仍在——故改为增量落盘 + 进度打点）
         DispatchQueue.main.async {
             let dir = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)[0]
+
+            // ★进程隔离模式（PROTEUS_EXP_ONLY=mem_A|mem_B|mem_C）：
+            //   内存测量**必须在干净进程里做单点测量**——进程内多轮测量会被前一实验的残留
+            //   与系统内存压力污染（实测同一变体三轮 48→157→166 MB 累积、另有 -0.7/86 MB 离群）。
+            //   用法见 device/measure-memory.sh（每次启动只测一个变体，重复 N 次取中位）。
+            if let only = ProcessInfo.processInfo.environment["PROTEUS_EXP_ONLY"], only.hasPrefix("mem_") {
+                let variant = String(only.dropFirst(4))
+                let host = visibleHost!
+                host.subviews.forEach { $0.removeFromSuperview() }
+                host.layer.sublayers?.forEach { $0.removeFromSuperlayer() }
+                for _ in 0..<5 { RunLoop.current.run(mode: .default, before: Date().addingTimeInterval(0.05)) }
+
+                let before = residentMB()
+                switch variant {
+                case "A": buildAutoLayout(host: host)
+                case "B": buildManualFrames(host: host)
+                case "C": buildManualFrames(host: host, useCALayer: true)
+                default: break
+                }
+                // 强制布局 + 提交（backing store / 约束求解都是延迟的）
+                CATransaction.begin()
+                CATransaction.setDisableActions(true)
+                host.setNeedsLayout(); host.layoutIfNeeded()
+                CATransaction.commit(); CATransaction.flush()
+                for _ in 0..<5 { RunLoop.current.run(mode: .default, before: Date().addingTimeInterval(0.03)) }
+                let after = residentMB()
+
+                let payload: [String: Any] = [
+                    "exp8_isolated": [
+                        "variant": variant,
+                        "before_mb": (before * 10).rounded() / 10,
+                        "after_mb": (after * 10).rounded() / 10,
+                        "delta_mb": ((after - before) * 10).rounded() / 10,
+                    ],
+                    "meta": [
+                        "device": "Physical Device", "model": ProcessInfo.processInfo.machineName,
+                        "systemVersion": UIDevice.current.systemVersion,
+                        "progress": "ALL_DONE", "mode": "isolated-memory",
+                    ],
+                ]
+                if let data = try? JSONSerialization.data(withJSONObject: payload, options: [.prettyPrinted, .sortedKeys]) {
+                    try? data.write(to: dir.appendingPathComponent("experiments.json"))
+                    print("[PROTEUS_EXP] ALL_DONE")
+                }
+                // 测完即退出（隔离模式：单点测量，不参与后续实验）
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) { exit(0) }
+                return
+            }
+
             var report: [String: Any] = [:]
             let t0 = CACurrentMediaTime()
             func flush(_ tag: String) {
@@ -529,7 +798,9 @@ final class ExpSceneDelegate: UIResponder, UIWindowSceneDelegate {
             report["exp4_layer_depth"] = exp4(); flush("exp4_done")
             report["exp6_commit_cost_driver"] = exp6(); flush("exp6_done")
             report["exp2_scale_curve"] = exp2(); flush("exp2_done")
-            report["exp1_three_routes_4050"] = exp1(); flush("ALL_DONE")
+            report["exp1_three_routes_4050"] = exp1(); flush("exp1_done")
+            report["exp7_scroll_fps"] = exp7(); flush("exp7_done")
+            report["exp8_memory"] = exp8(); flush("ALL_DONE")
         }
     }
 }
