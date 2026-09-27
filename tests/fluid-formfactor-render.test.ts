@@ -161,38 +161,51 @@ describe('★p-formfactor 渲染与能力声明同源（二次复审 P0 回归�
   })
 })
 
-describe('★演示图标风格统一（2026-09-29）：多端同屏演示区不得再用 emoji', () => {
-  it('演示三文件（页面/内容槽）不出现 emoji——图标一律走 DemoIcon 自绘集', () => {
-    // 背景：演示页原用 emoji（⌚📱📲📖📐💻🚗📺 / 🎧🎵🔌🎒🔋📦🏠⚙️ / ▮▮▮⌁❤️）作图标——
-    //   emoji 由**系统字体**渲染，跨平台字形/配色不一（Windows 彩色方块 / macOS Apple 风格 / Linux 又一套），
-    //   与站点既有线性图标语言（FeatureIcon）冲突，也无法随形态主题着色。
-    //   现全部替换为 DemoIcon（24×24 · stroke=currentColor · 1em 尺寸），本门禁防止 emoji 回流。
+describe('★图标风格统一（2026-09-29）：官网源码不得用 emoji 承担视觉角色', () => {
+  it('全站 src（页面/组件/文案数据）图标位不出现 emoji——一律走自绘图标集', () => {
+    // 背景（用户实测两轮）：① 多端同屏页原用 emoji（⌚📱📲📖📐💻🚗📺 / 🎧🎵🔌🎒🔋📦🏠⚙️ / ▮▮▮⌁❤️）
+    //   ② 修完**多端同屏页**后，用户又发现**首页**的多端同屏横幅没更新——因为门禁只扫了 3 个文件。
+    //   emoji 由**系统字体**渲染：跨平台字形/配色不一（Windows 彩色方块 / macOS Apple 风格 / Linux 又一套），
+    //   与站点既有线性图标语言（FeatureIcon/DemoIcon）冲突，且无法随形态主题着色。
+    //   本门禁**扫全站 website/src**（避免「改了 A 漏了 B」复发）。
     const fs = require('node:fs') as typeof import('node:fs')
-    const files = [
-      '../website/src/pages/MultiDevice.vue',
-      '../website/src/components/fluid-product/index.vue',
-      '../website/src/components/DemoIcon.vue',
-    ]
-    // emoji 区间（排除 ★✓→ 等本仓通用的排版符号——它们在注释/文案里承担语义，不是图标）
+    const pathMod = require('node:path') as typeof import('node:path')
+    const SRC = pathMod.resolve(__dirname, '../website/src')
+    // emoji 区间（含 dingbats/符号箭头区——图标位常混用）
     const EMOJI = /[\u{1F000}-\u{1FAFF}\u{2600}-\u{27BF}\u{2B00}-\u{2BFF}\u{FE0F}\u{231A}\u{231B}\u{2300}-\u{23FF}\u{25A0}-\u{25FF}\u{2190}-\u{21FF}]/u
-    // 允许：排版符号（★✓箭头）+ **站点级状态标记** ✅/🟡（Home.vue / ends.ts / stats.ts 同一约定——
-    //   它们是「真实/愿景」的文本标记，不是图标；只换本页会与全站其余页面不一致）
-    const ALLOW = new Set(['★', '✓', '→', '←', '↑', '↓', '↔', '⇄', '⇒', '✅', '🟡'])
+    // 允许：① 排版符号（★✓→← 等——本仓通用语义标记）
+    //      ② **状态标记** ✅🟡📋⬜❌（ends.ts / stats.ts / Home 对标表同一约定：它们是「已落地/部分/规划」
+    //         的文本口径，与「图标」不同类；且 Home 的对标表是**竞品对照矩阵**，符号即语义）
+    //      ③ ● ▸ ▾ ✗ ✎ ⌕（文本控件字形：LIVE 点 / 折叠箭头 / 报错前缀 / 编辑标记 / 搜索标记）
+    const ALLOW = new Set([
+      '★', '✓', '→', '←', '↑', '↓', '↔', '⇄', '⇒', '◆', '↗',
+      '✅', '🟡', '📋', '⬜', '❌',
+      '●', '▸', '▾', '✗', '✎', '⌕',
+    ])
     const problems: string[] = []
-    for (const f of files) {
-      const text = fs.readFileSync(require('node:path').resolve(__dirname, f), 'utf8')
-      const lines = text.split('\n')
+    const walk = (dir: string): string[] => {
+      const out: string[] = []
+      for (const e of fs.readdirSync(dir, { withFileTypes: true })) {
+        const p = pathMod.join(dir, e.name)
+        if (e.isDirectory()) {
+          if (e.name === 'node_modules') continue
+          out.push(...walk(p))
+        } else if (/\.(vue|ts)$/.test(e.name)) out.push(p)
+      }
+      return out
+    }
+    for (const file of walk(SRC)) {
+      const lines = fs.readFileSync(file, 'utf8').split('\n')
       lines.forEach((line, i) => {
-        // 跳过注释行（注释里可以引用「原 emoji 是什么」这类说明）
-        const isComment = /^\s*(\/\/|\*|\/\*|<!--)/.test(line)
-        if (isComment) return
+        // 注释行跳过（注释里允许引述「原 emoji 是什么」这类说明）
+        if (/^\s*(\/\/|\*|\/\*|<!--)/.test(line)) return
         for (const m of line.matchAll(new RegExp(EMOJI, 'gu'))) {
           if (ALLOW.has(m[0])) continue
-          problems.push(`${f}:${i + 1} 「${m[0]}」`)
+          problems.push(`${pathMod.relative(pathMod.resolve(__dirname, '..'), file)}:${i + 1} 「${m[0]}」`)
         }
       })
     }
-    expect(problems, `演示区出现 emoji（须改用 DemoIcon 自绘图标）：\n${problems.join('\n')}`).toEqual([])
+    expect(problems, `官网源码出现 emoji（须改用自绘图标 DemoIcon/FeatureIcon）：\n${problems.join('\n')}`).toEqual([])
   })
 
   it('DemoIcon 覆盖演示所需的全部图标名（缺名会静默退化成 box 兜底）', () => {
@@ -200,17 +213,18 @@ describe('★演示图标风格统一（2026-09-29）：多端同屏演示区不
     const iconSrc = fs.readFileSync(require('node:path').resolve(__dirname, '../website/src/components/DemoIcon.vue'), 'utf8')
     const names = [...iconSrc.matchAll(/^\s{2}'?([a-z-]+)'?:\s*\[/gm)].map((m) => m[1]!)
     const need = [
-      // 形态（FORM_PROFILES 八项）
+      // 形态（FORM_PROFILES 八项——多端同屏页 + 首页横幅共用）
       'watch', 'phone', 'flip', 'fold', 'tablet', 'pc', 'car', 'tv',
       // 内容槽（演示商品）
       'headphones', 'earpads', 'cable', 'case', 'battery-charge', 'box',
       'home', 'audio', 'orders', 'settings', 'cart', 'bookmark',
       // 状态栏
       'signal', 'battery', 'heart',
+      // 生态页卡片
+      'globe', 'blocks', 'bolt', 'plus-circle',
     ]
     const missing = need.filter((n) => !names.includes(n))
     expect(missing, `DemoIcon 缺少图标：${missing.join(', ')}`).toEqual([])
-    expect(names.length, 'DemoIcon 图标数应 ≥ 需求数').toBeGreaterThanOrEqual(need.length)
   })
 })
 
