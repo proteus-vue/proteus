@@ -15,7 +15,8 @@
 #   · JDK 17+：本仓库位在 .tools/jdk17
 #   · Rust target：rustup target add aarch64-linux-android
 #
-# 用法：bash hosts/android/build-and-run.sh [--no-install]
+# 用法：bash hosts/android/build-and-run.sh [--no-install] [--release]
+#   --release  ★§9.2 正式验收要求：非 debuggable 包（debug 模式数据无效）
 set -euo pipefail
 
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -44,6 +45,12 @@ TOOLCHAIN="$NDK/toolchains/llvm/prebuilt/$HOST_TAG"
 API=24
 LINKER="$TOOLCHAIN/bin/aarch64-linux-android${API}-clang"
 [ -x "$LINKER" ] || { echo "✗ 找不到 NDK clang：$LINKER"; ls "$TOOLCHAIN/bin/" | grep -E "^aarch64-linux-android[0-9]+-clang$" | head -5; exit 2; }
+
+# ★§9.2：正式验收必须 release 包。debuggable 只影响 APK 的 manifest 与 dex 优化级别，
+#   Rust 侧始终是 release（见下方 cargo --release）
+MODE="debug"
+if [ "${1:-}" = "--release" ] || [ "${2:-}" = "--release" ]; then MODE="release"; fi
+echo "    构建模式：$MODE$([ "$MODE" = "release" ] && echo "（§9.2 正式验收口径）" || echo "（冒烟用；debug 数据不可作验收）")"
 
 mkdir -p "$BUILD"
 
@@ -78,10 +85,17 @@ javac --release 17 -classpath "$PLATFORM" \
 echo "    class 文件 $(find "$CLASSES" -name '*.class' | wc -l | tr -d ' ') 个"
 
 echo "==> ③ 打包资源与清单（aapt2）"
+MANIFEST="$APP/src/main/AndroidManifest.xml"
+if [ "$MODE" = "release" ]; then
+  # ★release：从清单里去掉 android:debuggable（debug 包数据 §9.2 明确作废）
+  MANIFEST="$BUILD/AndroidManifest.release.xml"
+  sed 's/ *android:debuggable="true"//' "$APP/src/main/AndroidManifest.xml" > "$MANIFEST"
+  grep -q debuggable "$MANIFEST" && { echo "✗ release 清单仍含 debuggable"; exit 3; }
+fi
 APK="$BUILD/proteus-layoutcore.apk"
 rm -f "$APK"
 "$BT/aapt2" link -o "$APK" -I "$PLATFORM" \
-  --manifest "$APP/src/main/AndroidManifest.xml" \
+  --manifest "$MANIFEST" \
   --min-sdk-version 24 --target-sdk-version 34 \
   -A "$APP/src/main/assets" \
   --java "$BUILD/gen" 2>&1 | head -10

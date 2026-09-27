@@ -1,0 +1,2 @@
+1|proteus-first-install|||7,7,7,7,7,7|95000|95000
+1|native-first-install|||7,7,7,7,7,7|95000|95000

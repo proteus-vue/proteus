@@ -1,0 +1,27 @@
+=== Rust 排版核心 · Android 真机验证 ===
+设备：Xiaomi M098FE · Android 17（API 37）
+ABI：arm64-v8a
+引擎：proteus-layout-core 0.1.0 · engine=taffy-0.14 · taffy 锁定 0.14（0.13 有 measure 指数退化）
+JNI 符号自检：✓ 通过
+测试通路：native（脚本以 --es path 注入，两次冷启动隔离内存）
+起始 PSS：59111 KB
+
+【① 与浏览器基准的一致性】
+{"ok":true,"cases":17,"compared_nodes":67,"max_delta_dp":0.375,"tolerance_dp":0.5,"failures":[]}
+
+【② 4050 元素布局性能（纯排版）】
+{"ok":true,"node_count":4051,"iterations":20,"median_ms":2.002,"min_ms":1.876,"max_ms":6.011,"measure_calls_first":0}
+
+【③ 原生 View 体系（对照组，单跑以隔离内存）】
+{
+  "ok": true,
+  "path": "native",
+  "elements": 4051,
+  "create_views_ms": 63,
+  "measure_layout_ms": 16,
+  "total_ms": 79,
+  "view_count": 4051
+}
+
+【④ 增量内存（§9.2）】
+baseline=59111 KB · after=101085 KB · delta=41974 KB
