@@ -38,3 +38,7 @@ hosts/ios/experiments/build/
 hosts/ios/experiments/results/experiments.json
 hosts/ios/experiments/results/run*.json
 # ★但 summary.json 入库：它是「4 次重跑中位」的权威汇总，是文档数字的证据（同 stats.ts 的定位）
+# 真机单次运行原始数据（同模拟器侧：只入库 summary.json）
+hosts/ios/experiments/device/results/device*.json
+hosts/ios/experiments/device/build/
+hosts/ios/experiments/device/.provision-work/

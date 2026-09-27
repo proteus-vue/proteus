@@ -441,6 +441,50 @@ func exp5() -> [String: Any] {
     return out
 }
 
+// ───────────────────────── 实验 6：commit 成本的真正决定因素（H4 补测）─────────────────────────
+//
+// 【为什么补测】原 exp4 固定「总数 2000、只变深度」→ 测不出深度影响，
+//   但这**无法区分**两种假设：成本由「深度」决定 vs 由「节点总数」决定。
+//   本实验做**二维对照**（总数 × 深度），才能判定：
+//     · 若同深度下总数↑成本↑、同总数下深度↑成本不变 → **成本由总数决定**（H4 伪）
+//     · 若同总数下深度↑成本↑ → **成本由深度决定**（H4 真）
+func exp6() -> [String: Any] {
+    var out: [String: Any] = [:]
+    func build(host: UIView, total: Int, depth: Int) {
+        let chains = max(1, total / max(1, depth))
+        if depth <= 1 {
+            for i in 0..<total {
+                let v = UIView(frame: CGRect(x: CGFloat(i % 100), y: CGFloat(i / 100) * 8, width: 4, height: 6))
+                v.backgroundColor = UIColor(white: 0.3, alpha: 1)
+                host.addSubview(v)
+            }
+        } else {
+            for _ in 0..<chains {
+                var parent = host
+                for _ in 0..<depth {
+                    let v = UIView(frame: CGRect(x: 0, y: 0, width: 4, height: 6))
+                    v.backgroundColor = UIColor(white: 0.3, alpha: 1)
+                    parent.addSubview(v)
+                    parent = v
+                }
+            }
+        }
+    }
+    // 二维：总数 {500, 2000, 5000} × 深度 {1, 20}
+    for total in [500, 2000, 5000] {
+        for depth in [1, 20] {
+            let host = visibleHost!
+            var ms: [Double] = []
+            for _ in 0..<5 {
+                let ph = runOnce(host: host, build: { }, layout: { build(host: host, total: total, depth: depth) })
+                ms.append(ph.commit)
+            }
+            out["total\(total)_depth\(depth)_commit"] = p(median(ms))
+        }
+    }
+    return out
+}
+
 // ───────────────────────── App 启动：跑全部实验并落盘 ─────────────────────────
 final class ExpSceneDelegate: UIResponder, UIWindowSceneDelegate {
     var window: UIWindow?
@@ -483,6 +527,7 @@ final class ExpSceneDelegate: UIResponder, UIWindowSceneDelegate {
             report["exp5_measure_cache"] = exp5(); flush("exp5_done")
             report["exp3_text_channel"] = exp3(); flush("exp3_done")
             report["exp4_layer_depth"] = exp4(); flush("exp4_done")
+            report["exp6_commit_cost_driver"] = exp6(); flush("exp6_done")
             report["exp2_scale_curve"] = exp2(); flush("exp2_done")
             report["exp1_three_routes_4050"] = exp1(); flush("ALL_DONE")
         }

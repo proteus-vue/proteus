@@ -112,28 +112,47 @@ cat > "$APP/Info.plist" <<PLIST
 </plist>
 PLIST
 
-# 无 .xcodeproj 的签名：codesign + 内嵌 provisioning profile（若存在）
-PROFILE="$(ls ~/Library/Developer/Xcode/UserData/Provisioning\ Profiles/*.mobileprovision 2>/dev/null | head -1 || true)"
-SIGN_ARGS=(--force --sign "$IDENTITY" --timestamp=none)
-if [ -n "$PROFILE" ]; then
-  cp "$PROFILE" "$APP/embedded.mobileprovision"
-  ENTITLEMENTS="$BUILD/entitlements.plist"
-  # 从描述文件里提取 application-identifier（免费账号为 <TEAMID>.<bundleid>）
-  security cms -D -i "$PROFILE" > "$BUILD/profile.plist" 2>/dev/null || true
-  APPID="$(/usr/libexec/PlistBuddy -c 'Print :Entitlements:application-identifier' "$BUILD/profile.plist" 2>/dev/null || true)"
-  if [ -n "$APPID" ]; then
-    cat > "$ENTITLEMENTS" <<ENT
-<?xml version="1.0" encoding="UTF-8"?>
-<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
-<plist version="1.0"><dict>
-  <key>application-identifier</key><string>$APPID</string>
-  <key>get-task-allow</key><true/>
-</dict></plist>
-ENT
-    SIGN_ARGS+=(--entitlements "$ENTITLEMENTS")
-  fi
+# ── 签名：必须用**与 bundle id 匹配**的描述文件 + 其携带的 entitlements ──
+#   踩坑记录（实测 0xe8008016 invalid entitlements）：
+#     初版手工拼 `<TEAMID>.<bundleid>` 并只写 application-identifier/get-task-allow
+#     → 安装时报 "Failed to verify code signature ... invalid entitlements"。
+#   根因：免费个人团队的描述文件除 application-identifier 外，**还要求**
+#     `com.apple.developer.team-identifier` 与 `keychain-access-groups`（少一项即签名无效）。
+#   正解：**从描述文件里原样提取 entitlement**，不做任何手工拼装。
+PROFILE=""
+for pf in ~/Library/Developer/Xcode/UserData/Provisioning\ Profiles/*.mobileprovision; do
+  [ -f "$pf" ] || continue
+  security cms -D -i "$pf" > "$BUILD/probe.plist" 2>/dev/null || continue
+  APPID="$(/usr/libexec/PlistBuddy -c 'Print :Entitlements:application-identifier' "$BUILD/probe.plist" 2>/dev/null || true)"
+  case "$APPID" in
+    *".$BUNDLE_ID") PROFILE="$pf"; break ;;
+  esac
+done
+
+if [ -z "$PROFILE" ]; then
+  cat <<MSG
+✗ 未找到匹配 bundle id（$BUNDLE_ID）的描述文件。
+
+  Xcode 只在**实际构建某个工程**时才会为该 bundle id 生成描述文件。
+  请任选其一：
+    a) 用 Xcode 打开任一 iOS 工程并把 Bundle Identifier 设为 $BUNDLE_ID 后构建一次；或
+    b) 先跑本仓库的触发脚本：
+         bash hosts/ios/experiments/device/provision.sh
+       它会用最小工程为 $BUNDLE_ID 申请描述文件（需已登录 Apple ID）。
+MSG
+  exit 4
 fi
-codesign "${SIGN_ARGS[@]}" "$APP" 2>&1 | tail -3
+echo "    描述文件: $(basename "$PROFILE")"
+
+cp "$PROFILE" "$APP/embedded.mobileprovision"
+security cms -D -i "$PROFILE" > "$BUILD/profile.plist" 2>/dev/null
+# ★原样导出描述文件携带的 entitlements（不手工拼装——见上方踩坑记录）
+/usr/libexec/PlistBuddy -x -c 'Print :Entitlements' "$BUILD/profile.plist" > "$BUILD/entitlements.plist"
+
+codesign --force --sign "$IDENTITY" --timestamp=none \
+  --entitlements "$BUILD/entitlements.plist" "$APP" 2>&1 | tail -3
+echo "    签名完成，校验："
+codesign -dv --entitlements - "$APP" 2>&1 | grep -E "Identifier|application-identifier|team-identifier" | sed 's/^/      /'
 
 echo "==> ⑤ 安装到设备"
 xcrun devicectl device install app --device "$UDID" "$APP"
@@ -143,25 +162,24 @@ xcrun devicectl device process launch --device "$UDID" --console "$BUNDLE_ID" > 
 LAUNCH_PID=$!
 DEADLINE=$(( $(date +%s) + 240 ))
 while [ "$(date +%s)" -lt "$DEADLINE" ]; do
-  if grep -q "ALL_DONE" "$BUILD/device-console.log" 2>/dev/null; then break; fi
+  if grep -q "PROTEUS_EXP. ALL_DONE" "$BUILD/device-console.log" 2>/dev/null; then break; fi
   sleep 3
 done
 kill "$LAUNCH_PID" 2>/dev/null || true
 
-# 从控制台抓 JSON（真机沙盒需通过 devicectl 拷贝）
-if grep -q "PROTEUS_EXPERIMENTS_DONE" "$BUILD/device-console.log" 2>/dev/null; then
-  python3 - "$BUILD/device-console.log" "$RESULTS/device.json" <<'PY'
-import json, re, sys
-text = open(sys.argv[1], encoding='utf-8', errors='replace').read()
-m = re.search(r'\{[\s\S]*\}\s*$', text)
-if m:
-    json.dump(json.loads(m.group()), open(sys.argv[2], 'w'), ensure_ascii=False, indent=2)
-    print('report →', sys.argv[2])
-PY
-else
-  echo "✗ 未从控制台取到报告（最后一次输出）："; tail -20 "$BUILD/device-console.log" || true
-  echo "  → 也可用 Instruments 采集：xcrun xctrace record --template 'Core Animation' --device $UDID --launch $BUNDLE_ID"
+if ! grep -q "PROTEUS_EXP. ALL_DONE" "$BUILD/device-console.log" 2>/dev/null; then
+  echo "✗ 实验未跑完（最后一次输出）："; tail -20 "$BUILD/device-console.log" || true
+  echo "  → 也可用 Instruments：xcrun xctrace record --template 'Core Animation' --device $UDID --launch $BUNDLE_ID"
   exit 1
 fi
+
+# ★真机报告取自**设备沙盒**（不走 stdout）——真机 console 只回显 print/进度打点，
+#   完整 JSON 在 App 容器里，需经 devicectl 拷贝。
+#   踩坑：初版只从 stdout 正则抓 JSON → 真机上永远抓不到（日志里只有 9 行进度打点）。
+echo "==> ⑦ 从设备沙盒取回报告"
+xcrun devicectl device copy from --device "$UDID" \
+  --domain-type appDataContainer --domain-identifier "$BUNDLE_ID" \
+  --source Documents/experiments.json --destination "$RESULTS/device.json" 2>&1 | tail -2
+
 echo "==> 完成：$RESULTS/device.json"
 cat "$RESULTS/device.json"
