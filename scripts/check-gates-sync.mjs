@@ -32,6 +32,7 @@ const LOCAL_ONLY = {
   // ★需 macOS + Xcode 工具链（swiftc / JavaScriptCore）——CI 跑在 ubuntu-latest，无法执行。
   //   覆盖：iOS 竖切 M1 链路（Vue → Dispatcher → native 后端 → JSC 桥 → 宿主树）。
   'check:ios-host': '需 macOS + Xcode（swiftc/JavaScriptCore）；CI 为 ubuntu-latest',
+  'check:ios-perf': '同上（性能基线需真实 JavaScriptCore；真机数字另需模拟器/设备）',
 }
 
 const pkg = JSON.parse(fs.readFileSync(path.join(ROOT, 'package.json'), 'utf8'))
