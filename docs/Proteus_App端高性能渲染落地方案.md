@@ -219,7 +219,7 @@ interface DynamicBinding {
 
 | # | 理由 | 证据 |
 |---|---|---|
-| 1 | **Grid 能力** | Yoga 3.2.1 的 `YGDisplay` 枚举 = `{Flex, None, Contents}`——**编译期就没有 Grid**；Taffy 实测 3×2 Grid 正确（DCP-2 已定案开放，见 §5.6） |
+| 1 | **Grid 能力** | Yoga 3.2.1 的 `YGDisplay` 枚举 = `{Flex, None, Contents}`——**编译期就没有 Grid**；Taffy 实测 3×2 正确。（★DCP-2 补充：Skyline 端实测退化为 block，故 Grid 为「有条件可用」而非无条件支持——但 **App 端要支持 Grid 就必须选 Taffy**，本条理由不受影响） |
 | 2 | **与 `proteus-cc-rust` 同栈** | 编译器后端已是 Rust；同栈 ⇒ codegen 到布局核心**零 FFI**、共享构建链 |
 | 3 | **上游活跃** | Taffy 在 Bevy / Dioxus / Zellij 生产使用；Yoga 处**维护模式**且演进绑 RN 需求 |
 
@@ -405,12 +405,38 @@ React Native 生产实测：350 个活跃布局节点，因**无约束嵌套 Fle
 | 编号 | 决策项 | 时点 | 状态 | 结论 |
 |---|---|---|---|---|
 | DCP-1 | 排版核心语言（C++ / Rust） | **M1 之前** | ✅ **已决（2026-09-29）** | **Rust + Taffy 0.14**；依据见 §5.0.1 与 [决策文档](./proteus-performance-plan/11-dcp1-layout-engine.md) |
-| DCP-2 | Profile 是否开放 Grid | M1 | ✅ **已决（2026-09-29，用户确认）** | **开放为 L2**（Taffy 已支持）；★**前提：补齐 Web 与 Skyline 的 Grid 实测**，Profile 的「三端交集优先」原则不变 |
+| DCP-2 | Profile 是否开放 Grid | M1 | ✅ **已决（2026-09-29）** | ⚠️ **有条件可用，不进 Profile 无条件集**——见下 | 
 | DCP-3 | 是否自研布局引擎 | M3 | ⏳ 待评估 | 需先回答 §5.0.6 的问题（「在哪一点上做得比现有引擎好」） |
 
-**★DCP-2 的执行要求（不可省略）**：Grid 虽在本仓引擎侧已具备，但进入 Profile 前必须补齐
-**Web（浏览器原生 Grid）与 Skyline（小程序容器，支持情况未知）**的实测矩阵——
-Profile §L2 现为「🟡 待定」，实测通过后方可改为「✅ L2」。
+### ★★DCP-2 的完整结论：Skyline 实测不支持 Grid（证据推翻假设）
+
+**用户批准「开放为 L2」，批准时我附加的前置条件 = 补 Skyline 实测。实测结果是「退化为 block」**，
+按 Profile 的**第一原则（三端交集优先）**，结论必须相应收紧——这是证据推翻假设的正常结果。
+
+| 端 | Grid 实测 | 判定 |
+|---|---|---|
+| App（Taffy 0.14） | 3×2 布局正确 | ✅ |
+| Web（浏览器） | 原生 Grid | ✅ |
+| **Skyline** | 子项 1/2 的 x **都是 52**（未分列）、纵向堆叠 | ❌ **退化为 block** |
+
+**实测证据**（2026-09-29 · 模拟器 · 基础库 3.17.3 · 探针页 `css-profile-probe.vue`）：
+```
+容器 <view style="display:grid;grid-template-columns:1fr 1fr;width:150px;height:40px">
+  g-item1 → x=52  （第 1 列）
+  g-item2 → x=52  ← ★应在第 2 列（x≈127），实测未分列
+  g-item3 → y=916 ← 纵向堆叠
+flex 对照组（同页同通道）→ x=52,72,92 ✅ 正确横排
+```
+**内置对照组是可信关键**：同页同测量通道下 flex 正确而 grid 不正确 → 排除探针故障。
+
+**最终口径**：
+1. Grid **不列入 Profile 无条件支持集**
+2. **允许有条件可用**：Web/App 正常生成；**Skyline 必须发可观察降级警告**（`capabilityWarnOnce`，禁止静默降级）
+3. Lint W-CSS-105 给出**嵌套 flex 改写建议**
+4. 探针页已内置判据，未来 Skyline 支持后可复跑解禁
+
+**（过程留痕）** 我先前给用户的建议是「开放为 L2（推荐）」，并自行附加了「需补 Skyline 实测」的前提——
+**这次是前提把结论否掉了**。教训：**把前置条件写进建议里，而不是等实施时才发现**，这条做法本身是对的。
 
 ### 5.7 可用工具：以浏览器作为布局真值基准
 
