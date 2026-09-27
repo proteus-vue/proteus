@@ -104,6 +104,33 @@ emoji 前缀（降级条/驾驶提醒），文案入口保持宿主注入；`↕
 
 ---
 
+### ★★iOS 竖切**模拟器端到端跑通**（2026-09-29，提交 `bf44bd39`）——真实 UIKit 渲染 + 5 个宿主级缺陷
+
+**结果**：JS → 9 视图 → 真实 UIKit 树 → 布局 → **屏幕可见**（深色背景 + 标题 + 副标题 + 两枚按钮），
+快照与 JS 语义树逐项对账一致（背景 `#101020` / 字号 28·15·16 / 圆角 12 / 中文文本）。
+
+**★模拟器暴露的 5 个缺陷——纯 JSC 验证器（替身对象树）全部测不出**（这是「竖切不可被单测替代」的铁证）
+
+| # | 缺陷 | 现象 | 根因/修法 |
+|---|---|---|---|
+| 1 | 未采用 UIScene 生命周期 | 进程 0.5s 退出、Documents 空、**无崩溃报告** | iOS 27 SDK 强制（系统日志 `UIScene life cycle is required`）→ `@main` + `configurationForConnecting` + SceneDelegate |
+| 2 | JS ready 早于 Scene 连接 | 快照永不落盘 | JS 在 didFinishLaunching 跑完而 onReady 未注册 → `pendingReady` + `flushPendingReady()` |
+| 3 | CSS 百分比 UIKit 不认 | 根视图 0×0、**整屏全黑** | `width/height:100%` 是 CSS 概念 → 映射四边贴齐约束 |
+| 4 | UIStackView 用错 API | 背景可见但**文字全 0×0** | 必须 `addArrangedSubview`（`addSubview` 不参与 stack 布局） |
+| 5 | stack 多余空间分配 | 首个 label 被撑到 714px | `.fill` 会挑一个 arrangedSubview 拉伸 → 屏幕级容器加弹性尾部 spacer；**内层 stack 不可加**（否则变弹性容器反抢，实测内层被撑到 792px） |
+
+**排错关键手段**：`trace()` 全程打点写 `Documents/trace.log`——**simctl 的 `--console-pty` 抓不到 print**
+（前两个缺陷只能从文件/系统日志看出）。快照增 `hostSpacers` 计数，区分「JS 语义节点」与「宿主内部补的视图」。
+
+**M1 边界（写入 README，非缺陷）**：不做布局求解（无 padding/margin/gap/flex；垂直靠 UIKit 缺省 +
+尾部 spacer 顶对齐；文字左侧轻微裁切待 M3 消除）· 未接手势/动画/Glass · H-01~H-08 仍跑 stub。
+
+**对性能路线的影响**：新增第 6 条「宿主布局语义差异」到 M3 输入清单——
+**性能优化（P0-b 扁平化 / P1-a 列表回收）之前在原生侧做布局求解更划算**：
+现在每个节点都靠 UIKit 约束链，扁平化与复用都要先有「框架自己的布局意图」。
+
+---
+
 ### ★★App 性能路线已定序（2026-09-29，提交 `94dcf364`）——实测基线 + 四家对照 + 棘轮门禁
 
 **用户目标**：「App 端跑通后目标是极致高性能，参考 Flutter / NativeScript-Vue / RN 新架构 / Lynx」。
