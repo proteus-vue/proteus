@@ -270,15 +270,125 @@ public class ProteusHostView extends ViewGroup {
     /** 触摸点数（诊断：确认事件真的到了宿主） */
     public int touchEventCount = 0;
 
+    /* ── ★★手势（M3「事件系统、手势」的后半段）── */
+
+    /**
+     * 语义手势回调（**与平台手势识别器对接**，不自研状态机）。
+     *
+     * ★★为什么用平台的 `GestureDetector` 而不是自写状态机（方案 06 的明确规定）：
+     *   方案 §6 的映射表写得很清楚 —— tap→`GestureDetector`、longPress→`LongPressGesture`、
+     *   swipe→`FlingGesture`，**各端用平台识别器**。理由与本仓「不自研文本基础设施」同源：
+     *   手势的**判定阈值/时间窗/速度计算**是平台长年调优的结果（各家厂商的可达性、
+     *   触摸采样率、防抖都不一样），自研必然在各端产生不一致的手感与优先级，
+     *   而手势恰恰是**用户最能感知**的交互层。
+     *   ⇒ 本仓只做两件事：① 把平台手势**归一为语义事件**（跨端同形的 API）
+     *     ② 用**核心算出的命中节点**给事件标注 target（这是自绘才需要补的那一环）。
+     */
+    public interface GestureListener {
+        /**
+         * @param type     语义手势类型：tap / longpress / fling / scroll
+         * @param targetId 手势**起始**时的命中节点（-1 = 未命中）
+         * @param chain    冒泡链（target 自身 + 全部祖先）
+         * @param x,y      手势起点（**内容坐标**）
+         * @param extra    类型相关读数（fling 的速度 / scroll 的距离与方向）
+         */
+        void onGesture(String type, int targetId, int[] chain, float x, float y, android.os.Bundle extra);
+    }
+
+    private GestureListener gestureListener;
+    /** ★手势的 target 在 **DOWN 时刻**确定（与 Android/CSS 一致：手势归属按下时命中的那个节点，
+     *  中途划过别的节点不改归属） */
+    private int gestureTarget = -1;
+    private int[] gestureChain = new int[0];
+    private float gestureStartX = 0f, gestureStartY = 0f;
+    private android.view.GestureDetector gestureDetector;
+
+    /** 最近一次识别到的手势（诊断/验收读它） */
+    public String lastGestureType = "";
+    public int lastGestureTarget = -1;
+    public String lastGestureDetail = "";
+
+    public void setGestureListener(GestureListener l) {
+        this.gestureListener = l;
+    }
+
+    /** 手势识别器（懒建：只有需要时才创建，避免普通场景多一个对象） */
+    private android.view.GestureDetector detector() {
+        if (gestureDetector == null) {
+            gestureDetector = new android.view.GestureDetector(getContext(),
+                    new android.view.GestureDetector.SimpleOnGestureListener() {
+                        @Override public boolean onDown(android.view.MotionEvent e) { return true; }
+
+                        @Override public boolean onSingleTapUp(android.view.MotionEvent e) {
+                            report("tap", e, null);
+                            return true;
+                        }
+
+                        @Override public void onLongPress(android.view.MotionEvent e) {
+                            report("longpress", e, null);
+                        }
+
+                        @Override public boolean onFling(android.view.MotionEvent e1, android.view.MotionEvent e2,
+                                                        float vx, float vy) {
+                            if (e1 == null || e2 == null) return false;
+                            android.os.Bundle b = new android.os.Bundle();
+                            b.putFloat("vx", vx);
+                            b.putFloat("vy", vy);
+                            // 方向按**主轴**判定（|vx| 与 |vy| 比较）——与 Flutter/RN 的惯例一致
+                            String dir = Math.abs(vx) >= Math.abs(vy)
+                                    ? (vx > 0 ? "right" : "left")
+                                    : (vy > 0 ? "down" : "up");
+                            b.putString("direction", dir);
+                            b.putFloat("speed", (float) Math.hypot(vx, vy));
+                            report("fling", e2, b);
+                            return true;
+                        }
+
+                        @Override public boolean onScroll(android.view.MotionEvent e1, android.view.MotionEvent e2,
+                                                         float dx, float dy) {
+                            if (e1 == null || e2 == null) return false;
+                            android.os.Bundle b = new android.os.Bundle();
+                            b.putFloat("dx", dx);
+                            b.putFloat("dy", dy);
+                            report("scroll", e2, b);
+                            return true;
+                        }
+                    });
+        }
+        return gestureDetector;
+    }
+
+    /** 归一为语义手势并上报（target 用 DOWN 时刻定下的那个） */
+    private void report(String type, android.view.MotionEvent e, android.os.Bundle extra) {
+        if (extra == null) extra = new android.os.Bundle();
+        // 位移读数（tap/longpress 也用得上：区分「按住没动」与「按住了但滑了」）
+        extra.putFloat("dx_total", e.getX() - gestureStartX);
+        extra.putFloat("dy_total", e.getY() - gestureStartY);
+        lastGestureType = type;
+        lastGestureTarget = gestureTarget;
+        lastGestureDetail = type + " target=" + gestureTarget + " " + extra;
+        android.util.Log.i("proteus", "手势识别：" + lastGestureDetail);
+        if (gestureListener != null) {
+            gestureListener.onGesture(type, gestureTarget, gestureChain, gestureStartX, gestureStartY, extra);
+        }
+        invalidate();
+    }
+
     @Override
     public boolean onTouchEvent(android.view.MotionEvent ev) {
         touchEventCount++;
-        // ★只处理 DOWN：UP 的坐标与 DOWN 可能不同（拖动），M3 的手势系统留给上层（06-gesture）
-        if (ev.getActionMasked() != android.view.MotionEvent.ACTION_DOWN) {
-            return true;      // 消费，避免同一个手势被重复上报
+        final int action = ev.getActionMasked();
+        if (action == android.view.MotionEvent.ACTION_DOWN) {
+            // ★DOWN 时刻做命中 → 这一整个手势都归它（与平台语义一致）
+            dispatchHit(ev.getX(), ev.getY());
+            gestureTarget = lastHitTarget;
+            gestureChain = lastHitChain;
+            gestureStartX = lastHitX;
+            gestureStartY = lastHitY;
         }
-        dispatchHit(ev.getX(), ev.getY());
-        return true;
+        // ★交给平台识别器判定 tap / longpress / fling / scroll（不自研阈值与时间窗）
+        detector().onTouchEvent(ev);
+        return true;      // 消费，避免同一个手势被重复上报
     }
 
     /**

@@ -1,0 +1,19 @@
+{
+  "ok": true,
+  "path": "gesture",
+  "viewport": "300x300",
+  "probe": "150.0,90.0",
+  "expect_target": 4,
+  "tap_ok": true,
+  "longpress_ok": true,
+  "fling_ok": true,
+  "fling_direction": "right",
+  "scroll_seen": true,
+  "longpress_count": 1,
+  "fling_count": 1,
+  "counts_ok": true,
+  "longpress_threshold_ms": 400,
+  "recognized": 8,
+  "events": "tap|target=4|chain=[4, 3, 1]|dir=-|dx=0.0 ;; longpress|target=4|chain=[4, 3, 1]|dir=-|dx=0.0 ;; scroll|target=4|chain=[4, 3, 1]|dir=-|dx=40.0 ;; scroll|target=4|chain=[4, 3, 1]|dir=-|dx=80.0 ;; scroll|target=4|chain=[4, 3, 1]|dir=-|dx=130.0 ;; scroll|target=4|chain=[4, 3, 1]|dir=-|dx=180.0 ;; fling|target=4|chain=[4, 3, 1]|dir=right|dx=180.0 ;; scroll|target=4|chain=[4, 3, 1]|dir=-|dx=0.0",
+  "note": "★方案 §6：手势用**平台识别器**（GestureDetector），本仓只做语义归一 + 用核心命中标注 target。tap\/longpress\/fling 的 target 都应为 4（证明「命中 → 手势」接线正确）。★整条脚本只在主线程空闲后开始计时，每步延迟从上一步**实际执行时刻**起算，汇总串在链尾——前两版都因「按排队时刻算」而全部过期（见源码注释）。"
+}
