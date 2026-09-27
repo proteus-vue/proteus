@@ -1,0 +1,15 @@
+Apple clang version 21.0.0 (clang-2100.3.34.2)
+Target: aarch64-unknown-linux-android24
+Thread model: posix
+InstalledDir: /Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin
+ignoring nonexistent directory "/Volumes/data1/work/office/debug/proteus/.tools/ndk/toolchains/llvm/prebuilt/darwin-x86_64/sysroot/usr/local/include"
+ignoring nonexistent directory "/Volumes/data1/work/office/debug/proteus/.tools/ndk/toolchains/llvm/prebuilt/darwin-x86_64/sysroot/include"
+ignoring duplicate directory "/Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/lib/clang/21/include"
+ignoring duplicate directory "/Volumes/data1/work/office/debug/proteus/.tools/ndk/toolchains/llvm/prebuilt/darwin-x86_64/sysroot/usr/include/aarch64-linux-android"
+ignoring duplicate directory "/Volumes/data1/work/office/debug/proteus/.tools/ndk/toolchains/llvm/prebuilt/darwin-x86_64/sysroot/usr/include"
+#include "..." search starts here:
+#include <...> search starts here:
+ /Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/lib/clang/21/include
+ /Volumes/data1/work/office/debug/proteus/.tools/ndk/toolchains/llvm/prebuilt/darwin-x86_64/sysroot/usr/include/aarch64-linux-android
+ /Volumes/data1/work/office/debug/proteus/.tools/ndk/toolchains/llvm/prebuilt/darwin-x86_64/sysroot/usr/include
+End of search list.
