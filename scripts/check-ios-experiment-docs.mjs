@@ -25,7 +25,8 @@ const summary = JSON.parse(fs.readFileSync(SUMMARY, 'utf8'))
 const m = summary.exp1_total_median_ms
 const docs = [
   'docs/Proteus_App端高性能渲染落地方案.md',
-  'docs/proteus-performance-plan/01-ios-route-validation.md',
+  'docs/proteus-performance-plan/09-ios-route-validation.md',
+  'docs/proteus-performance-plan/10-ios-memory.md',
 ]
 const TOL = 30 // ms——文档取整/四舍五入的容差
 
@@ -98,16 +99,19 @@ const MEM_TRUTH = new Map([
 ])
 
 /** 表格行首标识 → 该行的 (ms 真值 | MB 真值)——用行首匹配标识，天然避免子串串扰 */
+// ★行首标识匹配（第 6 次修正）：表格里变体列可能只是裸字母 `A`（无后继空格）
+//   ⇒ 必须写成 `^A(?:\s|$)` 形式；此前用 `^A[ \u00a0]` 要求后随空格 → **裸字母行全部漏检**
+//   （实测：给 10-ios-memory.md 注入 888.8MB 却未报警，就是这条造成的静默空过）。
 const ROW_KEYS = [
-  { key: /^A[ \u00a0]|^A_uiview_autolayout/, id: 'A_uiview_autolayout' },
-  { key: /^B[ \u00a0]|^B_uiview_manualframe/, id: 'B_uiview_manualframe' },
-  { key: /^C[ \u00a0]|^C_calayer_manualframe/, id: 'C_calayer_manualframe' },
-  { key: /^H[ \u00a0]|^H_flattened/, id: 'H_flattened_rows' },
-  { key: /^I[ \u00a0]/, id: 'I_calayer_uikittext' },
-  { key: /^J[ \u00a0]/, id: 'J_calayer_gray8' },
-  { key: /^K[ \u00a0]/, id: 'K_calayer_opaque' },
-  { key: /^F[ \u00a0]/, id: 'F_calayer_solid' },
-  { key: /^G[ \u00a0]/, id: 'G_uiview_solid' },
+  { key: /^A(?:\s|$)|^A_uiview_autolayout/, id: 'A_uiview_autolayout' },
+  { key: /^B(?:\s|$)|^B_uiview_manualframe/, id: 'B_uiview_manualframe' },
+  { key: /^C(?:\s|$)|^C_calayer_manualframe/, id: 'C_calayer_manualframe' },
+  { key: /^H(?:\s|$)|^H_flattened/, id: 'H_flattened_rows' },
+  { key: /^I(?:\s|$)|^I_calayer_uikittext/, id: 'I_calayer_uikittext' },
+  { key: /^J(?:\s|$)|^J_calayer_gray8/, id: 'J_calayer_gray8' },
+  { key: /^K(?:\s|$)|^K_calayer_opaque/, id: 'K_calayer_opaque' },
+  { key: /^F(?:\s|$)|^F_calayer_solid/, id: 'F_calayer_solid' },
+  { key: /^G(?:\s|$)|^G_uiview_solid/, id: 'G_uiview_solid' },
 ]
 for (const file of docs) {
   const lines = fs.readFileSync(path.join(ROOT, file), 'utf8').split('\n')

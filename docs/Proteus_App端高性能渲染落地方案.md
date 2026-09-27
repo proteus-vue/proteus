@@ -6,7 +6,7 @@
 >
 > ---
 > **★开工前假设验证（2026-09-29，真机 iPhone 12 / iOS 26.3 实测）** —— 完整报告见
-> [`proteus-performance-plan/01-ios-route-validation.md`](./proteus-performance-plan/01-ios-route-validation.md)，
+> [`proteus-performance-plan/09-ios-route-validation.md`](./proteus-performance-plan/09-ios-route-validation.md)，
 > 实验代码 `hosts/ios/experiments/`（可复跑：`bash hosts/ios/experiments/device/run-device.sh`）。
 >
 > | 假设 | 结论 |

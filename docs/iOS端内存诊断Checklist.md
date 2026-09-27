@@ -9,7 +9,7 @@
 > ### ★本仓已预跑实测（2026-09-29，真机 iPhone 12 / iOS 26.3）——可跳过部分诊断
 >
 > 用 `hosts/ios/experiments/device/measure-memory.sh`（进程隔离，每次启动只测一个变体）
-> 跑了 **11 个变体**，结论如下（完整数据见 `proteus-performance-plan/01-ios-route-validation.md` §2.6）：
+> 跑了 **11 个变体**，结论如下（完整数据见 `proteus-performance-plan/09-ios-route-validation.md` §2.6）：
 >
 > | 变体 | 增量内存 | 对应 Checklist 项 |
 > |---|---|---|
