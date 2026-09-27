@@ -15,12 +15,12 @@
 //
 // ★诚实边界：端能力表（TARGETS.caps）在本页按端注入——真实项目里它来自端 profile
 //   （与组件文档「双端兼容进度表」同源协议：supported / fallback / unsupported 三态）。
-import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
+import { computed, nextTick, onMounted, onUnmounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { locale } from '../i18n'
 import FluidProduct from '../components/fluid-product/index.vue'
 // ★★Fluid System v2：形态画像 SSOT（本页所有形态信息都从这里读——页面不重复定义能力/拓扑）
-import { FORM_PROFILES, FORM_CAP_KEYS, capsLabel } from '@proteus-vue/fluid'
+import { FORM_PROFILES, FORM_CAP_KEYS, capsLabel, resolveAspectClass, vendorSizeClass } from '@proteus-vue/fluid'
 import type { DeviceForm, FormProfile, FormPosture } from '@proteus-vue/fluid'
 // ★SSOT：左栏源码 = 正在执行的这份文件（vite ?raw——零双源，不存在「展示的源码 ≠ 跑的源码」）
 import fluidSource from '../components/fluid-product/index.vue?raw'
@@ -151,6 +151,116 @@ const effectiveProfile = computed(() => {
   if (!po || !activePostures.value.length) return base
   return { ...base, topology: po.topology, nav: po.nav, viewport: po.viewport }
 })
+
+/**
+ * ★★折叠专区（2026-09-29 计划 03 · S3）：把「厂商理念 → 框架机制 → 演示可见 → 门禁可验证」
+ *   落到一个面板里——理念不能只停在文档，否则「研究白做」。
+ *   面板四段：① 姿态几何（含半开占比）② 铰链与折痕（三区域规则）③ 厂商档位对照（ITGSA 600/840dp）
+ *   ④ 端注入几何入口（机型几何/折痕宽度由端上报——这是「不只按三星一家」的机制保证）。
+ */
+const isFoldable = computed(() => activePostures.value.length > 0)
+/** ① 姿态几何：应用区尺寸 + 占比（半开 = 内屏的一半）+ 宽高比分类 */
+const postureGeom = computed(() => {
+  const po = activePosture.value
+  const full = activePostures.value.find((x) => x.key === 'expanded')
+  if (!po) return null
+  const ar = po.viewport.width / po.viewport.height
+  const share = full ? (po.viewport.width * po.viewport.height) / (full.viewport.width * full.viewport.height) : 0
+  return {
+    size: `${po.viewport.width}×${po.viewport.height}`,
+    ar: ar.toFixed(2),
+    aspect: resolveAspectClass(po.viewport.width, po.viewport.height),
+    sharePct: Math.round(share * 100),
+    isHalf: po.key === 'book' || po.key === 'tabletop',
+    topo: po.topology,
+  }
+})
+/** ② 铰链与折痕：设备固有轴（hinge）vs 屏幕上的折痕走向（crease）——两者是不同的量 */
+const hingeInfo = computed(() => {
+  const po = activePosture.value
+  if (!po) return null
+  const crease = po.crease
+  return {
+    hinge: po.hinge ?? '—',
+    crease: crease ? `${crease.axis === 'horizontal' ? '水平' : '竖直'} · ${crease.at === 'bottom' ? '窗口底缘' : '贯穿中部'}` : isEn.value ? 'none (cover screen — no crease visible)' : '无（外屏看不到折痕）',
+    bandVisible: !!crease && crease.at === 'bottom',
+  }
+})
+/** ③ 厂商档位对照（ITGSA / 小米 600-840dp 宽度断点 + 480/900 高度断点） */
+const vendorInfo = computed(() => {
+  const vp = activePosture.value?.viewport ?? target.value.profile.viewport
+  const v = vendorSizeClass(vp.width, vp.height)
+  const ZH: Record<string, string> = { compact: 'Compact', medium: 'Medium', expanded: 'Expanded' }
+  return {
+    width: `${v.width}`,
+    height: `${v.height}`,
+    label: `${ZH[v.width]} (${vp.width}dp) · ${ZH[v.height]} (${vp.height}dp)`,
+  }
+})
+/** ④ 端注入的折痕带宽度（px）——真机由端上报；0 = 用演示壳默认（流体单位） */
+const injectedCreaseBand = ref(0)
+const CREASE_PRESETS = [
+  { px: 0, zh: '演示壳默认', en: 'mock default' },
+  { px: 8, zh: '窄铰链 8px', en: 'narrow 8px' },
+  { px: 24, zh: '宽铰链 24px', en: 'wide 24px' },
+]
+/** ⑤ 功能对照（Apple「跨姿态保持同样功能」）：当前姿态下哪些槽被收起 + 理由（不得静默丢失） */
+const functionCompare = computed(() => {
+  const po = activePosture.value
+  if (!po) return []
+  const half = po.key === 'book' || po.key === 'tabletop'
+  const rows: Array<{ name: string; on: boolean; why: string }> = [
+    { name: isEn.value ? 'multi-SKU picker' : '多规格选择', on: true, why: isEn.value ? 'purchase path — never hidden' : '购买路径——任何姿态都不隐藏' },
+    { name: isEn.value ? 'primary action (buy)' : '主操作（购买）', on: true, why: isEn.value ? 'purchase path' : '购买路径' },
+    {
+      name: isEn.value ? 'secondary action (save)' : '次操作（收藏）',
+      on: !half,
+      why: half ? (isEn.value ? 'collapsed in half-open (space); reachable when folded/expanded' : '半开空间不足时收起；折叠态/展开态仍可达') : (isEn.value ? 'available' : '可用'),
+    },
+    {
+      name: isEn.value ? 'long description' : '长描述',
+      on: !half,
+      why: half ? (isEn.value ? 'secondary text — collapsed in half-open' : '次要信息——半开收起') : (isEn.value ? 'available' : '可用'),
+    },
+    {
+      name: isEn.value ? 'recommendations' : '推荐区',
+      on: true,
+      why: isEn.value ? 'kept (compact row in half-open)' : '保留（半开时降为紧凑行）',
+    },
+  ]
+  return rows
+})
+
+/**
+ * ★★连续性可视化（2026-09-29 · S4）：切换姿态**前后**的业务状态对照。
+ *   取值来自**真实渲染**的 `data-biz-*`（不是另存一份影子状态）——切换前快照 → 切换后回读，
+ *   两者必须完全相同（「状态不丢」的可见 + 可断言证据）。
+ *   诚实边界：这是「同一实例重排」的演示层证据；框架级连续性契约（onFormChange / 端姿态事件）
+ *   仍属 OS 路线图（02），本页不外宣称。
+ */
+const bizNote = ref('耳机')
+const bizBefore = ref('')
+const bizAfter = ref('')
+function readBiz(): string {
+  const el = document.querySelector('.frame .p-formfactor') as HTMLElement | null
+  if (!el) return ''
+  return [el.dataset.bizSku ?? '', el.dataset.bizCount ?? '', el.dataset.bizNote ?? ''].join('|')
+}
+function fmtBiz(s: string): string {
+  const [sku, count, note] = s.split('|')
+  if (!sku) return isEn.value ? '(no state yet)' : '（暂无状态）'
+  return `SKU=${sku} · ${isEn.value ? 'count' : '计数'}=${count} · ${isEn.value ? 'note' : '备注'}「${note}」`
+}
+/** 切入点选在切换之后回读（nextTick + 一帧）——避免读到重排中途的瞬时值 */
+async function snapshotBiz(): Promise<void> {
+  bizAfter.value = readBiz()
+}
+watch([postureKey, active], async (_nv, ov) => {
+  if (bizBefore.value === '' || (ov && ov.length)) bizBefore.value = readBiz()
+  await nextTick()
+  requestAnimationFrame(() => void snapshotBiz())
+})
+const bizPreserved = computed(() => bizBefore.value !== '' && bizAfter.value !== '' && bizBefore.value === bizAfter.value)
 
 /** 形态筛选（按输入族聚焦查看——触控系 / 指针系 / 遥控系；默认全部） */
 type FilterKey = 'all' | 'touch' | 'cursor' | 'remote'
@@ -316,25 +426,46 @@ const sourceHtml = computed(() => highlight(fluidSource, 'vue'))
           </button>
         </div>
 
-        <!-- ★折叠屏姿态切换（报告 P0-2：折叠/半折/展开——演示 app continuity） -->
-        <div v-if="activePostures.length" class="postures">
-          <button
-            v-for="po in activePostures"
-            :key="po.key"
-            type="button"
-            class="posture-btn"
-            :class="{ on: postureKey === po.key }"
-            @click="postureKey = po.key"
-          >
-            {{ isEn ? po.label.en : po.label.zh }}
-            <span class="posture-dim">{{ po.viewport.width }}×{{ po.viewport.height }}</span>
-          </button>
+        <!-- ★★折叠专区（2026-09-29 计划 03 · S3）：轴 1 设备类型（由切换器承担）· 轴 2 姿态 -->
+        <div v-if="isFoldable" class="fold-zone">
+          <div class="fold-head">
+            <span class="fold-title">{{ isEn ? 'Foldable zone' : '折叠专区' }}</span>
+            <span class="fold-sub">{{ isEn ? 'postures are one continuous device, not fixed sizes' : '姿态是同一台设备的连续过程，不是又一个固定尺寸' }}</span>
+          </div>
+          <!-- 轴 2：姿态（含几何摘要） -->
+          <div class="postures">
+            <button
+              v-for="po in activePostures"
+              :key="po.key"
+              type="button"
+              class="posture-btn"
+              :class="{ on: postureKey === po.key }"
+              @click="postureKey = po.key"
+            >
+              {{ isEn ? po.label.en : po.label.zh }}
+              <span class="posture-dim">{{ po.viewport.width }}×{{ po.viewport.height }}</span>
+            </button>
+          </div>
+          <!-- 端注入·折痕几何（机型几何由端注入——「不只按三星一家」的机制保证） -->
+          <div class="inject-row">
+            <span class="inject-label">{{ isEn ? 'End-injected crease band' : '端注入折痕带' }}</span>
+            <button
+              v-for="p in CREASE_PRESETS"
+              :key="p.px"
+              type="button"
+              class="inject-btn"
+              :class="{ on: injectedCreaseBand === p.px }"
+              @click="injectedCreaseBand = p.px"
+            >
+              {{ isEn ? p.en : p.zh }}
+            </button>
+          </div>
         </div>
 
         <!-- 形态摘要条 -->
         <div class="device-meta">
           <span><b>{{ isEn ? 'Current' : '当前端' }}：</b>{{ isEn ? target.profile.label.en : target.profile.label.zh }}</span>
-          <span class="backend-tag">{{ target.profile.topology }} · {{ target.profile.nav }}</span>
+          <span class="backend-tag">{{ effectiveProfile.topology }} · {{ effectiveProfile.nav }}</span>
           <span class="dm-dist">{{ target.profile.distance }}</span>
         </div>
 
@@ -346,14 +477,12 @@ const sourceHtml = computed(() => highlight(fluidSource, 'vue'))
             :style="frameStyle"
           >
             <span v-if="target.profile.frame.notch" class="notch" aria-hidden="true" />
-            <!-- ★折叠屏铰链折痕（报告 P1-2 + 二次复审：方向随姿态——tabletop 是水平铰链，
-                 此前恒定竖折痕 → 折痕方向与真实铰链矛盾） -->
-            <span
-              v-if="target.profile.frame.hinge"
-              class="hinge"
-              :class="{ 'hinge--h': activePosture?.hinge === 'horizontal' }"
-              aria-hidden="true"
-            />
+            <!-- ★★折痕（2026-09-29 用户实测纠错）：此前帧上恒画一条（按 frame.hinge）→
+                 折叠态（外屏根本看不到折痕）也在画 = **假折痕**；且方向只看 activePosture.hinge，
+                 与「折痕在窗口内何处」无关。
+                 现折痕由内容层（p-formfactor）按**姿态几何**渲染：只在半开（铰链在窗口底缘）画带，
+                 展开态不画带（平坦态折痕是浅痕、不构成布局区域），折叠态不画。
+                 帧层不再绘制任何折痕。 -->
             <div v-if="target.profile.frame.statusBar" class="statusbar" :class="{ 'statusbar--watch': target.profile.frame.watchFace }">
               <span>{{ target.profile.frame.watchFace ? '10:24' : '9:41' }}</span>
               <span>{{ target.profile.frame.watchFace ? '❤️ 72' : '▮▮▮ ⌁' }}</span>
@@ -364,6 +493,8 @@ const sourceHtml = computed(() => highlight(fluidSource, 'vue'))
                 :posture="activePostures.length ? postureKey : ''"
                 :width="contentWidth"
                 :height="frameHeight"
+                :note="bizNote"
+                :crease-band="injectedCreaseBand"
               />
             </div>
           </div>
@@ -401,6 +532,61 @@ const sourceHtml = computed(() => highlight(fluidSource, 'vue'))
             }}
           </p-text>
         </p-view>
+
+        <!-- ★★折叠面板（2026-09-29 计划 03 · S3/S4）：理念 → 机制 → 可见物 → 判据 的四段闭环 -->
+        <template v-if="isFoldable && postureGeom">
+          <h4 class="cap-title">{{ isEn ? 'Foldable · posture geometry' : '折叠 · 姿态几何' }}</h4>
+          <div class="ir">
+            <div class="row"><span class="k">{{ isEn ? 'POSTURE' : '姿态' }}</span><span class="v">{{ activePosture ? (isEn ? activePosture.label.en : activePosture.label.zh) : '' }}</span></div>
+            <div class="row"><span class="k">{{ isEn ? 'APP AREA' : '应用区' }}</span><span class="v">{{ postureGeom.size }} · {{ postureGeom.ar }}</span></div>
+            <div class="row"><span class="k">{{ isEn ? 'ASPECT' : '宽高比档' }}</span><span class="v">{{ postureGeom.aspect }}</span></div>
+            <div class="row">
+              <span class="k">{{ isEn ? 'SHARE OF INNER' : '占内屏' }}</span>
+              <span class="v" :class="{ 'v--ok': postureGeom.isHalf && postureGeom.sharePct >= 40 && postureGeom.sharePct <= 75 }">
+                {{ postureGeom.sharePct }}%{{ postureGeom.isHalf ? (isEn ? ' (= half of inner screen)' : '（≈ 内屏的一半）') : '' }}
+              </span>
+            </div>
+            <div class="row"><span class="k">{{ isEn ? 'TOPOLOGY' : '拓扑' }}</span><span class="v">{{ postureGeom.topo }}</span></div>
+          </div>
+
+          <h4 class="cap-title">{{ isEn ? 'Hinge & crease (three-region rule)' : '铰链与折痕（三区域规则）' }}</h4>
+          <div class="ir">
+            <div class="row"><span class="k">{{ isEn ? 'HINGE AXIS' : '铰链轴' }}</span><span class="v">{{ hingeInfo?.hinge }}</span></div>
+            <div class="row"><span class="k">{{ isEn ? 'CREASE ON SCREEN' : '屏幕上折痕' }}</span><span class="v">{{ hingeInfo?.crease }}</span></div>
+            <div class="row">
+              <span class="k">{{ isEn ? 'BAND' : '折痕带' }}</span>
+              <span class="v">{{ hingeInfo?.bandVisible ? (isEn ? 'visible · no elements inside' : '可见 · 带内无元素') : (isEn ? 'not drawn' : '未绘制') }}</span>
+            </div>
+          </div>
+
+          <h4 class="cap-title">{{ isEn ? 'Vendor size class (ITGSA 600/840dp)' : '厂商档位（ITGSA 600/840dp）' }}</h4>
+          <div class="ir">
+            <div class="row"><span class="k">{{ isEn ? 'WIDTH CLASS' : '宽度档' }}</span><span class="v">{{ vendorInfo.width }}</span></div>
+            <div class="row"><span class="k">{{ isEn ? 'HEIGHT CLASS' : '高度档' }}</span><span class="v">{{ vendorInfo.height }}</span></div>
+          </div>
+
+          <h4 class="cap-title">{{ isEn ? 'Same functionality across postures' : '跨姿态功能一致' }}</h4>
+          <div class="fn-table">
+            <div v-for="f in functionCompare" :key="f.name" class="fn-row" :class="{ 'fn-off': !f.on }">
+              <span class="fn-dot" />
+              <span class="fn-nm">{{ f.name }}</span>
+              <span class="fn-why">{{ f.why }}</span>
+            </div>
+          </div>
+
+          <h4 class="cap-title">{{ isEn ? 'Continuity: state before ⇄ after' : '连续性：切换前后业务状态' }}</h4>
+          <div class="biz">
+            <div class="row"><span class="k">{{ isEn ? 'BEFORE' : '切换前' }}</span><span class="v">{{ fmtBiz(bizBefore) }}</span></div>
+            <div class="row"><span class="k">{{ isEn ? 'AFTER' : '切换后' }}</span><span class="v">{{ fmtBiz(bizAfter) }}</span></div>
+            <div class="biz-verdict" :class="{ 'biz-ok': bizPreserved }">
+              {{ bizPreserved ? (isEn ? '✓ identical — state preserved (same instance re-layout, no remount)' : '✓ 完全一致——状态保留（同一实例重排，未重新挂载）') : (isEn ? 'switch a posture to verify' : '切换一个姿态以验证') }}
+            </div>
+          </div>
+          <label class="biz-input">
+            <span>{{ isEn ? 'type here, then switch posture' : '在此输入，再切姿态' }}</span>
+            <input v-model="bizNote" type="text" :placeholder="isEn ? 'business note' : '业务备注'" />
+          </label>
+        </template>
       </div>
     </section>
   </p-view>
@@ -580,6 +766,40 @@ const sourceHtml = computed(() => highlight(fluidSource, 'vue'))
 .cap-v { font-size: 10px; color: var(--dim); }
 .cap-note { margin-top: 12px; }
 .cap-note-text { font-size: 11px; color: var(--dim); line-height: 1.6; }
+
+/* ★★折叠专区（姿态轴 + 端注入入口）*/
+.fold-zone {
+  margin-bottom: 12px; padding: 10px 12px;
+  border: 1px solid rgba(124, 92, 255, 0.28); border-radius: 12px;
+  background: linear-gradient(180deg, rgba(124, 92, 255, 0.07), transparent);
+}
+.fold-head { display: flex; align-items: baseline; gap: 8px; flex-wrap: wrap; margin-bottom: 8px; }
+.fold-title { font-size: 12px; font-weight: 800; color: var(--ink); }
+.fold-sub { font-size: 10.5px; color: var(--dim); }
+.inject-row { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+.inject-label { font-size: 10.5px; color: var(--dim); }
+.inject-btn {
+  font-size: 10.5px; color: var(--muted); background: var(--panel2);
+  border: 1px solid var(--line); border-radius: 999px; padding: 3px 9px; cursor: pointer;
+}
+.inject-btn.on { color: var(--brand-ink); border-color: rgba(124, 92, 255, 0.55); background: var(--brand-soft); }
+
+/* 折叠面板：功能对照 */
+.fn-table { display: grid; gap: 6px; }
+.fn-row { display: grid; grid-template-columns: 8px minmax(84px, auto) 1fr; align-items: baseline; gap: 8px; padding: 6px 9px; border-radius: 8px; background: rgba(61, 220, 151, 0.07); border: 1px solid rgba(61, 220, 151, 0.22); }
+.fn-row.fn-off { background: rgba(255, 180, 84, 0.12); border-color: rgba(255, 180, 84, 0.38); }
+.fn-dot { width: 6px; height: 6px; border-radius: 50%; background: var(--ok, #3ddc97); }
+.fn-row.fn-off .fn-dot { background: var(--warn, #ffb454); }
+.fn-nm { font-size: 11px; font-weight: 700; color: var(--ink); }
+.fn-why { font-size: 10.5px; color: var(--dim); line-height: 1.5; }
+
+/* 连续性对照 */
+.biz { display: grid; gap: 6px; }
+.biz-verdict { font-size: 10.5px; color: var(--dim); padding: 6px 9px; border-radius: 8px; background: var(--panel2); border: 1px dashed var(--line); }
+.biz-verdict.biz-ok { color: var(--ok, #3ddc97); border-style: solid; border-color: rgba(61, 220, 151, 0.35); background: rgba(61, 220, 151, 0.08); }
+.biz-input { display: flex; align-items: center; gap: 8px; margin-top: 8px; font-size: 10.5px; color: var(--dim); }
+.biz-input input { flex: 1; min-width: 0; font-size: 11px; padding: 5px 8px; color: var(--ink); background: var(--panel2); border: 1px solid var(--line); border-radius: 8px; }
+.row .v.v--ok { color: var(--ok, #3ddc97); }
 
 /* ★2026-09-26 D-2：原 @media 视口断点 → @container 容器查询（.work 自身即容器——
    窄容器（分栏容器变窄）落单栏，与页面宽度解耦：嵌入卡片/分栏容器里同样正确） */

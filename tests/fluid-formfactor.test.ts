@@ -20,6 +20,7 @@ import {
   resolveFrameVars,
   resolveAspectClass,
   aspectMediaCap,
+  vendorSizeClass,
   capsLabel,
   capsEnabled,
   capsDegraded,
@@ -177,6 +178,86 @@ describe('★形态画像表（SSOT）自洽性', () => {
     expect(validateFormProfiles()).toEqual([])
   })
 
+  it('★★半开几何与命名（2026-09-29 用户实测纠错）：半开 = 内屏的一半 · 折痕在底缘 · 折叠态无假折痕', () => {
+    // 用户实测暴露的两个错（此前数据 + 命名都是我造的）：
+    //   ① 半开视口与展开态**同值**（596×693）——物理上不可能：半开（悬停）时应用区只是内屏的一半
+    //   ② 命名「半折（书本模式）」——书本式是被**打开约 90°**（half-open），不是折成两半；
+    //      「半折」只适用于翻盖式（clamshell）。小米原文只写 Book / TableTop，无「半折书本」一说。
+    for (const f of ['fold', 'flip'] as DeviceForm[]) {
+      const ps = FORM_PROFILES[f].postures!
+      const half = ps.find((x) => x.key === 'book' || x.key === 'tabletop')!
+      const full = ps.find((x) => x.key === 'expanded')!
+      const fold = ps.find((x) => x.key === 'folded')!
+      // ① 半开 = 内屏的一半（面积占比 40–75%；真机换算恰为 50%）
+      const ratio = (half.viewport.width * half.viewport.height) / (full.viewport.width * full.viewport.height)
+      expect(ratio, `${f}: 半开面积应为内屏的一半（实际 ${(ratio * 100).toFixed(0)}%）`).toBeGreaterThan(0.4)
+      expect(ratio).toBeLessThan(0.75)
+      // ② 半开视口不得与展开态同值（用户实测暴露的那条）
+      expect(
+        half.viewport.width === full.viewport.width && half.viewport.height === full.viewport.height,
+        `${f}: 半开视口与展开态同值`,
+      ).toBe(false)
+      // ③ 半开折痕在窗口**底缘**（朝向用户的那半屏，铰链在下方）
+      expect(half.crease, `${f}/${half.key} 须声明折痕位置`).toEqual({ axis: 'horizontal', at: 'bottom' })
+      // ④ 展开态折痕**贯穿中部**
+      expect(full.crease?.at, `${f}/expanded 折痕应在中部`).toBe('middle')
+      // ⑤ 折叠态（外屏）看不到折痕——不得声明（防「假折痕」回归）
+      expect(fold.crease, `${f}/folded 不得声明折痕`).toBeUndefined()
+    }
+    // ⑥ 命名：书本式 = 半开（悬停态）· 翻盖式 = 半折（桌面模式）——只用规范原文
+    const foldHalf = FORM_PROFILES.fold.postures!.find((x) => x.key === 'book')!
+    expect(foldHalf.label.zh).toContain('半开')
+    expect(foldHalf.label.zh).not.toContain('半折')
+    expect(foldHalf.label.en.toLowerCase()).toContain('half-open')
+    const flipHalf = FORM_PROFILES.flip.postures!.find((x) => x.key === 'tabletop')!
+    expect(flipHalf.label.zh).toContain('半折')
+    expect(flipHalf.label.en).toContain('TableTop')
+    // ⑦ 真机换算溯源（三星官网 px ÷3）：Fold6 半开 2160×928 → 693×298 · Flip6 半开 1080×1320 → 360×440
+    expect(foldHalf.viewport).toEqual({ width: 693, height: 298 })
+    expect(flipHalf.viewport).toEqual({ width: 360, height: 440 })
+    // flip 展开态与真机比例一致（1080×2640 = 0.409；此前 820 高偏胖）
+    const flipFull = FORM_PROFILES.flip.postures!.find((x) => x.key === 'expanded')!
+    expect(flipFull.viewport.width / flipFull.viewport.height).toBeCloseTo(1080 / 2640, 2)
+  })
+
+  it('★两类半折**可辨不同**（用户实测「看不到两种半折模式」的机器判据）：铰链相反 · 拓扑不同 · 宽高比分类不同', () => {
+    // 小米原文分 TableTop（上下对折）与 Book（左右对折）——若两类半开渲染出来一样，理念即白做。
+    const foldHalf = FORM_PROFILES.fold.postures!.find((x) => x.key === 'book')!
+    const flipHalf = FORM_PROFILES.flip.postures!.find((x) => x.key === 'tabletop')!
+    expect(foldHalf.hinge).not.toBe(flipHalf.hinge)
+    expect(foldHalf.topology).not.toBe(flipHalf.topology)
+    expect(resolveAspectClass(foldHalf.viewport.width, foldHalf.viewport.height)).not.toBe(
+      resolveAspectClass(flipHalf.viewport.width, flipHalf.viewport.height),
+    )
+    // 书本式半开是**横长条**（2.33:1，像 laptop），翻盖式半折是**竖方形**（0.82，像小电视）
+    expect(foldHalf.viewport.width / foldHalf.viewport.height).toBeGreaterThan(2)
+    expect(flipHalf.viewport.width / flipHalf.viewport.height).toBeLessThan(1)
+  })
+
+  it('★厂商档位映射（2026-09-29 · ITGSA/小米 600-840dp 宽度断点 + 480/900 高度断点）', () => {
+    // 两条独立维度（华为「双维度断点」）：宽度档与高度档各自判定，不可互相替代——
+    //   · 书本式半开 693×298：宽度 medium / 高度 compact（宽而矮）
+    //   · 书本式展开 596×693：宽度 compact / 高度 medium
+    //   · 车机 1280×480：宽度 expanded / 高度 compact
+    const cases: Array<[number, number, string, string]> = [
+      [360, 880, 'compact', 'medium'],   // flip 展开（竖长条）
+      [596, 693, 'compact', 'medium'],   // fold 展开（近方形）
+      [693, 298, 'medium', 'compact'],   // fold 半开（横长条）
+      [1280, 480, 'expanded', 'medium'], // 车机 8/3（高度 480 恰为 medium 下界）
+      [1280, 479, 'expanded', 'compact'], // 断点边界：<480 才是 compact
+      [1920, 1080, 'expanded', 'expanded'], // TV
+    ]
+    for (const [w, h, wantW, wantH] of cases) {
+      const r = vendorSizeClass(w, h)
+      expect(r.width, `${w}×${h} 宽度档`).toBe(wantW)
+      expect(r.height, `${w}×${h} 高度档`).toBe(wantH)
+    }
+    // 与我们的容器断点是**两套坐标**：厂商档只管取舍层级，容器断点管组件内部变化
+    // （同一容器宽在两类折叠里可能落不同厂商档——正说明二者不可互推）
+    expect(vendorSizeClass(FORM_PROFILES.fold.postures!.find((x) => x.key === 'book')!.viewport.width, 298).width).toBe('medium')
+    expect(vendorSizeClass(FORM_PROFILES.flip.postures!.find((x) => x.key === 'expanded')!.viewport.width, 880).width).toBe('compact')
+  })
+
   it('★宽高比分类（2026-09-28 华为「纵向断点」/ 小米「高度断点 + 禁用 rotation」）', () => {
     // 小米原文：断点有**宽度**（600/840dp）与**高度**（480/900dp）两条独立维度，且
     //   「不要使用 rotation，而是根据宽高的大小做布局处理」；华为《布局基础》同理把
@@ -186,21 +267,23 @@ describe('★形态画像表（SSOT）自洽性', () => {
     expect(resolveAspectClass(1194, 834)).toBe('wide') // 平板 4:3（1.43）
     expect(resolveAspectClass(1440, 900)).toBe('wide') // PC 16:10
     expect(resolveAspectClass(466, 678)).toBe('tall') // Duo 外屏（0.69 竖）
-    expect(resolveAspectClass(673, 420)).toBe('wide') // 半折（1.60 扁）
+    expect(resolveAspectClass(693, 298)).toBe('ultra-wide') // 书本式半开（2.33 横长条）
     expect(resolveAspectClass(198, 242)).toBe('tall') // 手表
     expect(resolveAspectClass(0, 100)).toBe('balanced') // 非法尺寸回退
     // 媒体高度上限随宽高比收紧（越扁越让位给信息与操作）
     expect(Number.parseFloat(aspectMediaCap('tall'))).toBeGreaterThan(Number.parseFloat(aspectMediaCap('wide')))
     expect(Number.parseFloat(aspectMediaCap('wide'))).toBeGreaterThan(Number.parseFloat(aspectMediaCap('ultra-wide')))
     // 同一形态不同姿态落入不同分类（证明姿态感知必要）
-    // ★2026-09-28：fold（书本式）两姿态——外屏竖长条(tall) / 内屏近方形(tall，0.86<0.85 判据外)
+    // ★2026-09-29 按真机半开几何重算：fold（书本式）外屏竖长条(tall) / 半开横长条(ultra-wide) / 内屏近方形(balanced)
     const folded = FORM_PROFILES.fold.postures!.find((x) => x.key === 'folded')!
+    const half = FORM_PROFILES.fold.postures!.find((x) => x.key === 'book')!
     const expanded = FORM_PROFILES.fold.postures!.find((x) => x.key === 'expanded')!
     expect(resolveAspectClass(folded.viewport.width, folded.viewport.height)).toBe('tall')
+    expect(resolveAspectClass(half.viewport.width, half.viewport.height)).toBe('ultra-wide')
     expect(resolveAspectClass(expanded.viewport.width, expanded.viewport.height)).toBe('balanced')
-    // flip（翻盖式）半折是横置坐立（tabletop，宽高比 0.86 → balanced）
+    // flip（翻盖式）半折 = 内屏上半（360×440 = 0.82 竖方形 → tall，与书本式的 ultra-wide 分属两类）
     const flipTable = FORM_PROFILES.flip.postures!.find((x) => x.key === 'tabletop')!
-    expect(resolveAspectClass(flipTable.viewport.width, flipTable.viewport.height)).toBe('balanced')
+    expect(resolveAspectClass(flipTable.viewport.width, flipTable.viewport.height)).toBe('tall')
   })
 
   it('★安全区按展示缩放投影（2026-09-27）：TV overscan 在缩略壳内仍为**设备的 5%**', () => {
@@ -349,7 +432,7 @@ describe('★形态画像表（SSOT）自洽性', () => {
     expect(fFolded.viewport.width).toBeLessThan(500)
     expect(fExpanded.topology).toBe('duo')
     expect(fFolded.topology).toBe('stack')
-    // 半折 = Book 模式（**竖直**铰链，左右两半——「像翻书一样」）
+    // 半开 = Book 模式（**竖直**铰链，左右两半——「像翻书一样」；half-open 非「半折」）
     expect(fBook.hinge).toBe('vertical')
     // ② flip（翻盖式 / 上下对折）
     const flipP = FORM_PROFILES.flip.postures
@@ -358,7 +441,7 @@ describe('★形态画像表（SSOT）自洽性', () => {
     const pFolded = flipP!.find((x) => x.key === 'folded')!
     const pTable = flipP!.find((x) => x.key === 'tabletop')!
     const pExpanded = flipP!.find((x) => x.key === 'expanded')!
-    // 连续性：展开态**更高**（竖长条：外屏近方形 → 内屏 360×820）
+    // 连续性：展开态**更高**（竖长条：外屏近方形 340×354 → 内屏 360×880）
     expect(pExpanded.viewport.height).toBeGreaterThan(pFolded.viewport.height)
     // 半折 = TableTop 模式（**水平**铰链，上半展示 / 下半操作）
     expect(pTable.hinge).toBe('horizontal')

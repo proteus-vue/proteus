@@ -85,24 +85,59 @@ describe('★p-formfactor 渲染与能力声明同源（二次复审 P0 回归�
     }
   })
 
-  it('⑥ 姿态覆盖：fold + tabletop → data-pf-nav=tabs（nav 字段必须有渲染后果）', async () => {
+  it('⑥ 姿态覆盖：fold/flip 各自的姿态 → 拓扑与导航随姿态变化（nav 字段必须有渲染后果）', async () => {
     const folded = await mountForm('fold', { posture: 'folded' })
     // ★2026-09-28 借鉴 Apple HIG（iPhone Duo）：宽而矮的外屏把控件移到侧边 → side-tabs
     expect(root(folded).dataset.pfNav).toBe('side-tabs')
     expect(root(folded).dataset.pfPosture).toBe('folded')
-    // ★2026-09-28：fold 的半折键是 **book**（书本式竖直铰链）；tabletop 属 flip（翻盖式）
+    // ★2026-09-29：fold 的半开键是 **book**（书本式 half-open 横长条）；tabletop 属 flip（翻盖式半折）
     const book = await mountForm('fold', { posture: 'book' })
     expect(root(book).dataset.pfNav).toBe('side-tabs')
+    expect(root(book).dataset.pfTopology).toBe('duo')
     const table = await mountForm('flip', { posture: 'tabletop' })
     expect(root(table).dataset.pfNav).toBe('side-tabs')
+    expect(root(table).dataset.pfTopology).toBe('stack')
     const expanded = await mountForm('fold', { posture: 'expanded' })
     expect(root(expanded).dataset.pfTopology).toBe('duo')
+  })
+
+  it('⑥b ★★折痕只在真能看到铰链的姿态渲染（2026-09-29 用户实测「假折痕」回归锁）', async () => {
+    // 用户实测原话：折痕在**折叠态/展开态也被绘制**（假折痕）——外屏上根本没有折痕；
+    // 平坦展开态折痕是浅痕、不构成布局区域。只有**半开（悬停）**姿态有可见折痕带（铰链在窗口底缘）。
+    const cases: Array<[DeviceForm, string, string, string]> = [
+      // form, posture, 期望 data-pf-crease（渲染的带）, 期望 data-pf-crease-geom（姿态几何）
+      ['fold', 'folded', '', ''],            // 折叠态：无折痕
+      ['fold', 'book', 'horizontal-bottom', 'horizontal-bottom'],   // 半开：底缘折痕带
+      ['fold', 'expanded', '', 'vertical-middle'],                  // 展开：折痕贯穿中部（不画带）
+      ['flip', 'folded', '', ''],            // 翻盖折叠态：无折痕
+      ['flip', 'tabletop', 'horizontal-bottom', 'horizontal-bottom'],// 半折：底缘折痕带
+      ['flip', 'expanded', '', 'horizontal-middle'],                // 展开：水平折痕在中部（不画带）
+    ]
+    for (const [form, posture, wantBand, wantGeom] of cases) {
+      const el = await mountForm(form, { posture })
+      const r = root(el)
+      expect(r.dataset.pfCrease, `${form}/${posture} 渲染的折痕带`).toBe(wantBand)
+      expect(r.dataset.pfCreaseGeom, `${form}/${posture} 折痕几何`).toBe(wantGeom)
+      expect(!!el.querySelector('.pf-crease'), `${form}/${posture} .pf-crease 元素`).toBe(wantBand !== '')
+    }
+  })
+
+  it('⑥c ★折痕带宽度可**端注入**（机型几何交给端——「不只按三星做」的机制保证）', async () => {
+    // 真机上端把铰链几何（env(fold-*) / FoldingFeature.bounds）换算后注入；缺省走演示壳默认值。
+    const el = document.createElement('div')
+    const app = createApp({
+      render: () => h(PFormfactor as never, { declared: 'fold', posture: 'book', width: 470, creaseBand: 24 } as never, {} as never),
+    })
+    app.mount(el)
+    await nextTick()
+    const style = root(el).getAttribute('style') ?? ''
+    expect(style, '注入的折痕带宽度须进入 CSS 变量').toContain('--pf-crease-band: 24px')
   })
 
   it('⑦ Tab 栏渲染：fold 三姿态必须有导航（此前 caps.tabs=unsupported → Tab 被过滤 = 零导航）', async () => {
     const phone = await mountForm('phone')
     expect(!!phone.querySelector('.pf-tabbar'), '手机 Tab 栏').toBe(true)
-    for (const posture of ['folded', 'tabletop', 'expanded'] as const) {
+    for (const posture of ['folded', 'book', 'expanded'] as const) {
       const el = await mountForm('fold', { posture })
       expect(!!el.querySelector('.pf-tabbar'), `折叠屏 ${posture} 应有 Tab 导航`).toBe(true)
     }
@@ -127,33 +162,35 @@ describe('★p-formfactor 渲染与能力声明同源（二次复审 P0 回归�
 })
 
 describe('★国内厂商折叠规范落地（2026-09-28 小米/ITGSA 三区域 + 宽高比）', () => {
-  it('半折：body 是「展示行 · **折痕空行** · 操作行 · 推荐行」四行网格（区域 3 结构上无元素）', async () => {
+  it('★两类半开各自的网格结构 + 折痕空行（区域 3 结构上无元素）', async () => {
     // 小米《大屏应用 UX 设计指南》原文：「避免区域 3 内出现任何元素」（区域 3 = 折痕/形变区）。
-    // 实现取「**空网格行**」：第 2 行不分配给任何元素 → 「带内无元素」由结构保证，而非样式巧合。
-    const el = await mountForm('fold', { posture: 'tabletop' })
-    await nextTick()
-    const body = el.querySelector('.pf-body') as HTMLElement
-    expect(body, '半折须有 .pf-body').toBeTruthy()
-    // 断言：样式表声明了 4 行网格 + 折痕带伪元素占位（构建期可证伪——删掉规则即红）
+    // 实现取「**空网格行**」：折痕带所在行不分配给任何元素 → 由结构保证，而非样式巧合。
+    // ★2026-09-29：两类半开结构不同（书本式横长条左右分栏 / 翻盖式竖方形上下分区）。
     const styleText = fs.readFileSync(
       path.resolve(__dirname, '../packages/components/p-formfactor/index.vue'),
       'utf8',
     )
-    const startAt = styleText.indexOf('.p-formfactor.posture-tabletop .pf-body {')
-    const endAt = styleText.indexOf('/* ── 拓扑：stack（手机')
-    const tabletopBlock = styleText.slice(startAt, endAt > startAt ? endAt : startAt + 6000)
-    // ① 四行网格（展示 · 折痕带 · 操作 · 推荐）
-    expect(/(grid-template-rows:[^;]*){2}/.test(tabletopBlock.replace(/\s+/g, ' ')) || tabletopBlock.includes('grid-template-rows'), '半折须声明行分配').toBe(true)
-    const rowCount = (tabletopBlock.match(/grid-template-rows:([^;]*);/) || [])[1]
-      ?.trim().split(/\s+(?![^(]*\))/).length ?? 0
-    expect(rowCount, `半折应为 4 行网格（实际 ${rowCount}）`).toBe(4)
-    // ② 折痕带是**空行**：用 ::before 占位且无内容分配（`grid-row: 2`）
-    expect(tabletopBlock, '折痕带须用 ::before 占位在第 2 行').toContain('grid-row: 2')
-    // ③ SKU 与主操作在第 3 行（下半屏=操作区）、推荐在第 4 行
-    expect(tabletopBlock).toContain('grid-row: 3')
-    expect(tabletopBlock).toContain('grid-row: 4')
-    // ④ SKU 不被隐藏（Apple「跨姿态同样功能」；本仓曾隐藏 = 丢购买路径）
-    expect(tabletopBlock).not.toMatch(/posture-tabletop[^}]*\.pf-sku\s*{[^}]*display:\s*none/)
+    const blockOf = (sel: string, endMark: string): string => {
+      const a = styleText.indexOf(sel)
+      const b = styleText.indexOf(endMark, a)
+      expect(a, `未找到 ${sel}`).toBeGreaterThan(-1)
+      return styleText.slice(a, b > a ? b : a + 6000)
+    }
+    const bookBlock = blockOf('/* 书本式半开（fold · Book 模式）', '/* 翻盖式半折（flip · TableTop')
+    const tableBlock = blockOf('.p-formfactor.posture-tabletop .pf-body {', '/* ── 拓扑：stack（手机')
+    // ① 书本式半开：横长条 → 左右两列（展示 | 推荐列），折痕带在**窗口底缘**
+    expect(bookBlock, '书本式半开须左右分栏').toContain('grid-template-columns')
+    expect(bookBlock, '书本式半开给底缘折痕带留位').toContain('padding-bottom: var(--pf-crease-band')
+    // ② 翻盖式半折：竖方形 → 行结构 + 折痕空行（末行 ::after 占位，无元素分配）
+    expect(tableBlock, '翻盖式半折须声明行分配').toContain('grid-template-rows')
+    expect(tableBlock, '折痕空行须用 ::after 占位（末行）').toMatch(/pf-body::after[\s\S]*?grid-row:\s*5/)
+    expect(tableBlock, '折痕带宽度消费端注入变量').toContain('--pf-crease-band')
+    // ③ SKU 与主操作同在下半屏（操作区）——SKU 不被隐藏（Apple「跨姿态同样功能」）
+    expect(tableBlock).not.toMatch(/posture-tabletop[^}]*\.pf-sku\s*{[^}]*display:\s*none/)
+    // ④ 规格槽：两类半开都不得换行（横长条/竖方形都放不下两行规格）
+    for (const [name, blk] of [['book', bookBlock], ['tabletop', tableBlock]] as const) {
+      expect(blk, `${name} 规格槽须单行横滚`).toContain('flex-wrap: nowrap')
+    }
   })
 
   it('宽高比分类：极扁（车机）与竖屏（折叠外屏）分属不同类，媒体上限随宽高比收紧', () => {

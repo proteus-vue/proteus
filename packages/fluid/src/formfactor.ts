@@ -240,6 +240,11 @@ export function aspectMediaCap(aspect: AspectClass): string {
  *   `expanded`（展开态：内屏，双窗格）
  *   ★连续性（app continuity）：状态与视口在姿态间**连续重排**（不重启、不丢状态）——
  *   框架据 postures 切换拓扑/导航/视口，业务零分支。
+ *
+ * ★★★半开（悬停）几何（2026-09-29 用户实测纠错——此前 fold 的 book 与 expanded 写成同值）：
+ *   半开时应用区只有**内屏的一半**（朝向用户的那半；另一半平放/背向）。视口换算见 FORM_PROFILES.fold。
+ *   ⚠ 命名：书本式的半开是 **half-open（悬停态）**，不是「半折」——「半折」只适用于翻盖式
+ *   （clamshell，确实折了一半）；小米原文分「Book 模式」（左右对折）与「TableTop 桌面模式」（上下对折）。
  */
 export interface FormPosture {
   /** 姿态键 */
@@ -251,8 +256,17 @@ export interface FormPosture {
   nav: NavTopology
   /** 该姿态视口（连续性：折叠 340 → 展开 673） */
   viewport: { width: number; height: number }
-  /** 半折铰链方向（tabletop=水平铰链「上展示/下操作」· book=竖直铰链「左右分区」） */
+  /** 铰链方向（**设备固有轴**：tabletop=水平铰链「上展示/下操作」· book=竖直铰链「左右分区」） */
   hinge?: 'horizontal' | 'vertical'
+  /**
+   * ★折痕在**本姿态窗口内**的位置（2026-09-29 新增——此前演示在折叠态/展开态也画折痕＝假折痕）：
+   *   · 半开姿态（tabletop/book）：窗口 = 朝向用户的那半屏，铰链在窗口**底缘** → `{ axis:'horizontal', at:'bottom' }`
+   *   · 展开姿态：窗口 = 整块内屏，铰链**贯穿中部**（fold 竖直 / flip 水平）→ `at:'middle'`
+   *   · 折叠姿态：窗口 = 外屏，看不到折痕 → **不声明**（门禁禁止声明，防假折痕回归）
+   * `axis` 是折痕在屏幕上的走向（与设备固有轴 `hinge` 可能不同：书本式半开时设备被转 90°，
+   * 铰链仍竖直、但屏幕上的折痕是水平的——两者是不同的量，不可混用）。
+   */
+  crease?: { axis: 'horizontal' | 'vertical'; at: 'middle' | 'bottom' }
   /** ★姿态级度量覆盖（2026-09-26 三审）：外屏（340pt）在内屏基准（ref:420）下 k=0.81
    *  → 正文 9.7px、规格 Chip 22px（连 WCAG 2.5.8 的 24px 都不达）。
    *  外屏沿用内屏度量基准是错的——Samsung/Google 均按「窄手机」处理外屏。 */
@@ -361,19 +375,25 @@ export const FORM_PROFILES: Record<DeviceForm, FormProfile> = {
     nav: 'tabs',
     mediaRatio: '1/1',
     safe: { side: 0, bottom: 16 },
-    // ★姿态集（报告 P0-2）：折叠态外屏（单列+Tab）→ 半折 tabletop（水平铰链）→ 展开态内屏（双窗格）
-    //   连续性语义：视口 340 → 673，拓扑 stack → duo（状态跨姿态连续重排，不重启）
+    // ★姿态集（报告 P0-2）：折叠态外屏（单列）→ 半开（悬停，宽横条）→ 展开态内屏（双窗格）
+    //   连续性语义：视口 320 → 693 → 596，拓扑 stack → duo（状态跨姿态连续重排，不重启）
     // ★★★fold = **书本式（左右对折）**（2026-09-28 按真机规格重写）：
     //   实测 Z Fold6（三星官网）：内屏 2160×1856px / 7.6" → **近方形 0.86**；
     //                             外屏 968×2376px / 6.3" → **竖长条 0.44**（像一部窄手机）
     //   ★修正：此前把「Duo 外屏 466×678（0.69，宽而矮）」当作所有折叠的外屏——那是 flip 的形态；
     //     且展开 0.70 / 折叠 0.69 几乎同比例，而真机是 0.86 / 0.44（**互换**）。
-    //   半折用 **book**（竖直铰链、左右两半）——小米规范原文的 Book「像翻书一样」模式。
+    //   半开用 **book**（竖直铰链、左右两半）——小米规范原文的 Book「像翻书一样」模式。
+    //   ★★★半开几何（2026-09-29 用户实测纠错）：**应用区 = 内屏的一半**（朝向用户的那半）。
+    //     书本式半开（laptop/flex 位）时设备被转 90°：朝向用户的那半在屏幕上呈
+    //     **2160×928** 的横长条（宽=内屏长边，高=内屏短边的一半）——k=0.321（与展开态同一比例尺）：
+    //       2160×0.321 = 693 · 928×0.321 = 298 → **693×298（2.33:1）**。
+    //     面积校验：693×298 / (596×693) = **50%**（正是「一半」；此前写成与展开同值 596×693 是错的）。
     postures: [
       { key: 'folded', label: { zh: '折叠态（外屏）', en: 'Folded (cover)' }, topology: 'stack', nav: 'side-tabs', viewport: { width: 320, height: 727 }, ratio: { baseFont: 13, ref: 320, min: 0.85, max: 1.5 } },
-      { key: 'book', label: { zh: '半折（书本模式）', en: 'Half-folded (book)' }, topology: 'stack', nav: 'side-tabs', viewport: { width: 596, height: 693 }, hinge: 'vertical' },
-      // 内屏近方形（Fold6 2160×1856 = 0.86）——596 宽对应高 ≈ 693
-      { key: 'expanded', label: { zh: '展开态（内屏）', en: 'Expanded (inner)' }, topology: 'duo', nav: 'side-tabs', viewport: { width: 596, height: 693 } },
+      // ★半开（悬停 half-open）：宽横条 · 铰链在窗口**底缘**（crease.at='bottom'）· 内容分左右两区
+      { key: 'book', label: { zh: '半开（悬停态）', en: 'Half-open (flex)' }, topology: 'duo', nav: 'side-tabs', viewport: { width: 693, height: 298 }, hinge: 'vertical', crease: { axis: 'horizontal', at: 'bottom' } },
+      // 内屏近方形（Fold6 2160×1856 = 0.86）——596 宽对应高 ≈ 693；折痕**贯穿中部**（竖直）
+      { key: 'expanded', label: { zh: '展开态（内屏）', en: 'Expanded (inner)' }, topology: 'duo', nav: 'side-tabs', viewport: { width: 596, height: 693 }, crease: { axis: 'vertical', at: 'middle' } },
     ],
     viewport: { width: 596, height: 693 },
     distance: 'arm',
@@ -384,7 +404,6 @@ export const FORM_PROFILES: Record<DeviceForm, FormProfile> = {
   // ★★★flip（2026-09-28 新增第 8 形态）= **翻盖式（上下对折）**：
   //   实测 Z Flip6（三星官网）：内屏 2640×1080px / 6.7" → **竖长条 0.44**；外屏 720×748px / 3.4" → **近方形 0.96**
   //   ——与 fold 恰好**互换**（fold 内方外长 · flip 内长外方）。
-  //   半折用 **tabletop**（水平铰链）：机身坐立，**上半屏展示 + 下半屏操作**（小米规范 TableTop 模式）。
   flip: {
     form: 'flip',
     label: { zh: '小折叠（翻盖）', en: 'Flip' },
@@ -394,12 +413,18 @@ export const FORM_PROFILES: Record<DeviceForm, FormProfile> = {
     nav: 'bottom-tabs',
     mediaRatio: '4/3',
     safe: { side: 0, bottom: 16 },
+    // ★★★半开几何（2026-09-29 用户实测纠错）：翻盖式半折（TableTop 桌面模式）时应用区 = 内屏**上半**
+    //   —— 2640×1080px 竖屏对折 → 朝向用户的上半 = **1080×1320px**，k=0.333（与展开态同一比例尺）：
+    //       1080×0.333 = 360 · 1320×0.333 = 440 → **360×440（0.82）**。面积 / 展开 = 50%（正是「一半」）。
+    //   ★展开态：整块内屏 1080×2640px × 0.333 = **360×880**（比值 0.41 = 真机 0.409，此前 820 偏胖）；
+    //     折痕**水平贯穿中部**（翻盖式的铰链轴本就是水平的，展开平放时折痕仍在屏幕中线）。
+    //   ★半折用 side-tabs：铰链（折痕带）在窗口**底缘**，Tab 放底部会压折痕 → 控件侧置（Apple vertical controls）。
     postures: [
       { key: 'folded', label: { zh: '折叠态（外屏）', en: 'Folded (cover)' }, topology: 'glance', nav: 'page-stack', viewport: { width: 340, height: 354 }, ratio: { baseFont: 13, ref: 340, min: 0.85, max: 1.4 } },
-      { key: 'tabletop', label: { zh: '半折（桌面模式）', en: 'Tabletop (flex)' }, topology: 'stack', nav: 'side-tabs', viewport: { width: 360, height: 420 }, hinge: 'horizontal' },
-      { key: 'expanded', label: { zh: '展开态（内屏）', en: 'Expanded (inner)' }, topology: 'stack', nav: 'bottom-tabs', viewport: { width: 360, height: 820 } },
+      { key: 'tabletop', label: { zh: '半折（桌面模式）', en: 'Half-folded (TableTop)' }, topology: 'stack', nav: 'side-tabs', viewport: { width: 360, height: 440 }, hinge: 'horizontal', crease: { axis: 'horizontal', at: 'bottom' } },
+      { key: 'expanded', label: { zh: '展开态（内屏）', en: 'Expanded (inner)' }, topology: 'stack', nav: 'bottom-tabs', viewport: { width: 360, height: 880 }, crease: { axis: 'horizontal', at: 'middle' } },
     ],
-    viewport: { width: 360, height: 820 },
+    viewport: { width: 360, height: 880 },
     distance: 'arm',
     visual: { theme: 'light', bg: '#f6f7fb', surface: '#ffffff', text: '#17171f', dim: '#616875', brand: '#6f4ae8', accent: '#6f4ae8', focus: 'none', ratio: { baseFont: 13, ref: 360, min: 0.8, max: 1.5 } },
     frame: { ar: '9/19', maxWidth: 300, notch: true, statusBar: true, radius: 22, hinge: true },
@@ -731,6 +756,33 @@ export function validateFormProfiles(
           problems.push(`${f}: 折叠态与展开态拓扑须不同（否则无「形态切换」可言）`)
         }
       }
+      // ★★★半开占比（2026-09-29 用户实测纠错）：半开（悬停）时应用区只是**内屏的一半**——
+      //   朝向用户的那半朝向用户、另一半平放/背向（书本式 693×298 / 内屏 596×693 = 50%）。
+      //   此前 fold 把 book 与 expanded 写成同值（596×693）＝「半开 = 全屏」，物理上不可能。
+      //   ★顺序纪律：本段必须在 expanded 取出**之后**（撰写期间的一版试改放在前面 → ReferenceError、门禁全红）。
+      if (half && expanded) {
+        const halfArea = half.viewport.width * half.viewport.height
+        const fullArea = expanded.viewport.width * expanded.viewport.height
+        const ratio = fullArea > 0 ? halfArea / fullArea : 0
+        if (ratio < 0.4 || ratio > 0.75) {
+          problems.push(`${f}/${half.key}: 半开应用区应约为内屏的一半（实测占比 ${(ratio * 100).toFixed(0)}%，须 40–75%）`)
+        }
+        if (half.viewport.width === expanded.viewport.width && half.viewport.height === expanded.viewport.height) {
+          problems.push(`${f}/${half.key}: 半开视口与展开态同值（${half.viewport.width}×${expanded.viewport.height}）——半开只占内屏一半`)
+        }
+        // ★折痕位置（2026-09-29）：半开时铰链在窗口**底缘**；展开态铰链**贯穿中部**；折叠态无折痕。
+        if (!half.crease) {
+          problems.push(`${f}/${half.key}: 半开姿态须声明 crease（折痕在窗口哪一侧——半开时铰链在底缘）`)
+        } else if (half.crease.at !== 'bottom' || half.crease.axis !== 'horizontal') {
+          problems.push(`${f}/${half.key}: 半开折痕应为「水平 · 底缘」（实际 ${half.crease.axis}/${half.crease.at}）`)
+        }
+      }
+      if (expanded && (!expanded.crease || expanded.crease.at !== 'middle')) {
+        problems.push(`${f}/expanded: 展开态折痕须贯穿窗口中部的竖直/水平带（crease.at 应为 middle）`)
+      }
+      if (folded?.crease) {
+        problems.push(`${f}/folded: 折叠态（外屏）看不到折痕——不得声明 crease（防「假折痕」回归）`)
+      }
     }
     if (p.density === 'compact' && p.input === 'remote') problems.push(`${f}: 遥控形态不应 compact（远距离可读性）`)
     // ★视觉语言自洽：遥控/键盘形态必须可见焦点（焦点环）；10ft/驾驶形态字号须显著放大
@@ -820,7 +872,49 @@ export function validateFormProfiles(
       }
     }
   }
+  // ★★两类半折必须**可辨不同**（2026-09-29，用户实测「看不到两种半折模式」）：
+  //   小米原文分「TableTop 桌面模式（上下对折）」与「Book 书本模式（左右对折）」——
+  //   若两类设备半开后的拓扑与宽高比分类相同，演示里就看不出是两种模式（理念白做）。
+  const halfOf = (form: DeviceForm): FormPosture | undefined =>
+    (profiles[form]?.postures ?? []).find((x) => x.key === 'book' || x.key === 'tabletop')
+  const foldHalf = halfOf('fold')
+  const flipHalf = halfOf('flip')
+  if (foldHalf && flipHalf) {
+    if (foldHalf.hinge === flipHalf.hinge) {
+      problems.push('两类折叠的半折铰链方向必须相反（书本式竖直 / 翻盖式水平）')
+    }
+    if (foldHalf.topology === flipHalf.topology) {
+      problems.push(`两类半折的布局拓扑须不同（实际都是 ${foldHalf.topology}）——否则演示里看不出两种模式`)
+    }
+    const a1 = resolveAspectClass(foldHalf.viewport.width, foldHalf.viewport.height)
+    const a2 = resolveAspectClass(flipHalf.viewport.width, flipHalf.viewport.height)
+    if (a1 === a2) {
+      problems.push(`两类半折的宽高比分类须不同（实际都是 ${a1}）——书本式横长条 / 翻盖式竖方形`)
+    }
+  }
   return problems
+}
+
+/**
+ * ★★厂商档位（2026-09-29 计划 03 · S5）：国内厂商统一基线（ITGSA 白皮书 / 小米《大屏应用 UX 设计指南》
+ * 引 Google）把窗口分为三档，**宽度**断点 <600 / 600–840 / ≥840 dp；**高度**断点 <480 / 480–900 / ≥900。
+ *
+ * 我们自己的容器断点是**设计稿驱动的连续档**（188/328/469/609——见 container query 章节），
+ * 与厂商档位是**两套坐标**：前者管「同一个组件在容器里怎么变」，后者管「厂商要求界面按哪档取舍」。
+ * 本函数把任意窗口尺寸翻译成厂商档位，供演示/面板显示与适配决策——**映射关系显式化，而非各写各的**。
+ */
+export type VendorSizeClass = 'compact' | 'medium' | 'expanded'
+
+export interface VendorSizeInfo {
+  /** 厂商**宽度**档（<600 compact · 600–840 medium · ≥840 expanded） */
+  width: VendorSizeClass
+  /** 厂商**高度**档（<480 compact · 480–900 medium · ≥900 expanded）——独立维度（华为「双维度断点」） */
+  height: VendorSizeClass
+}
+
+export function vendorSizeClass(width: number, height: number): VendorSizeInfo {
+  const cls = (v: number, a: number, b: number): VendorSizeClass => (v < a ? 'compact' : v < b ? 'medium' : 'expanded')
+  return { width: cls(width, 600, 840), height: cls(height, 480, 900) }
 }
 
 /* ───────────────────────── 响应式形态上下文 ───────────────────────── */

@@ -36,7 +36,8 @@ order: 6
 | `declared` | 宿主声明形态（权威）——watch/car/tv 必须声明；缺省 → 按注入/测量尺寸推断 | `String as () => DeviceForm \| null` | `null` | 否 |
 | `degradedHint` | 降级路径提示文案（宿主注入——组件层不含 i18n 依赖；缺省走中性英文图标串） | `String` | `''` | 否 |
 | `driveHint` | ★驾驶提醒文案（driveAware 形态显示；**宿主注入优先**——三审：此前默认值硬编码中文， | `String` | `''` | 否 |
-| `posture` | ★姿态（折叠屏等动态形态：folded / tabletop / expanded——覆盖画像的拓扑与视口） | `String` | `''` | 否 |
+| `posture` | ★姿态（折叠屏等动态形态：folded / book / tabletop / expanded——覆盖画像的拓扑与视口） | `String` | `''` | 否 |
+| `creaseBand` | ★★端注入·折痕带宽度 px（真机读 env(fold-*) / FoldingFeature.bounds 后注入；0 = 演示壳默认） | `Number` | `0` | 否 |
 | `width` | 容器尺寸注入（宿主/测试；缺省用容器自身测量） | `Number` | `0` | 否 |
 | `height` | 高度（px） | `Number` | `0` | 否 |
 
@@ -60,7 +61,12 @@ order: 6
 #### `posture`
 
 - **类型**：`String`　**默认值**：`''`　**必填**：否
-- **说明**：★姿态（折叠屏等动态形态：folded / tabletop / expanded——覆盖画像的拓扑与视口）
+- **说明**：★姿态（折叠屏等动态形态：folded / book / tabletop / expanded——覆盖画像的拓扑与视口）
+
+#### `creaseBand`
+
+- **类型**：`Number`　**默认值**：`0`　**必填**：否
+- **说明**：★★端注入·折痕带宽度 px（真机读 env(fold-*) / FoldingFeature.bounds 后注入；0 = 演示壳默认）
 
 #### `width`
 

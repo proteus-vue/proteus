@@ -17,7 +17,7 @@ Container queries ([page 2 in this section](/docs/system/02-container-query)) fi
 | In-car | 1280–1920 | Rotary / steering-wheel keys + voice, **no fine manipulation while driving** | ❌ Same width as PC |
 | TV | 1920 (viewed at 10ft) | Remote d-pad + focus ring, **readable at distance** | ❌ Same width as PC |
 | Watch | 198 | Crown + a wrist-raise glance, **one screen, one meaning** | ⚠️ Merely "very narrow" — the semantics is one-glance |
-| Foldable | 340 ⇄ 673 | **One device, two forms** (folded / tabletop / expanded) | ❌ Width is dynamic |
+| Foldable | 320 ⇄ 693 | **One device, continuous postures** (folded 320 / half-open 693×298 / expanded 596×693) | ❌ Width is dynamic |
 
 Conclusion: a form is the combination of **input continuity + viewing distance + capability set**, and must be modelled explicitly.
 
