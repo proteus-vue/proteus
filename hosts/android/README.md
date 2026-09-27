@@ -67,3 +67,33 @@ adb logcat -d -s proteus:I | tail -60
 | 1 | **必须用 rustup 的 toolchain** | 本机 PATH 上 `rustc` 来自 Homebrew，而 Android target 装在 `~/.cargo` → 脚本显式前置并校验 |
 | 2 | **NDK clang 必须显式传给 cargo** | 不设 `CARGO_TARGET_AARCH64_LINUX_ANDROID_LINKER` 会用系统 clang，链接阶段失败 |
 | 3 | **sdkmanager 需要 JDK 17+** | Android Studio 自带的是 JDK 11（`UnsupportedClassVersionError`）→ 本仓自带 JDK 17 于 `.tools/jdk17` |
+
+## 截图回归（内容级等价验证）
+
+```bash
+# 1) 部署场景（app 用 Rust 几何摆放 20 行色块）
+adb shell am start -n dev.proteus.layoutcore/.MainActivity --es path shot
+adb shell "am broadcast -a dev.proteus.RUN --es path shot -p dev.proteus.layoutcore"
+# 2) 截图 + 核验
+adb exec-out screencap -p > scene.png
+adb shell "cat /sdcard/Android/data/dev.proteus.layoutcore/files/layout-shot-scene.json" > scene.json
+PYTHONPATH=.tools/py python3 screenshot-verify.py scene.json scene.png
+```
+
+**它验证什么**：**Rust 算出的几何 → 屏幕上的真实像素**（两个独立来源的比对）。
+- 期望侧：宿主机按**场景规格**独立重算（`offset_top + i×row_h`）+ 自己算行色
+- 实测侧：设备**系统截图**（走完整显示管线 SurfaceFlinger → 屏幕）
+- 故「Rust 布局算错」或「绘制画错」都会失败
+
+**★六个实测坑（都已固化在代码里）**
+
+| # | 坑 | 正解 |
+|---|---|---|
+| 1 | 截图带 **Display P3** ICC → 与 sRGB 期望值比对失败（饱和色 Δ≈37，中间色 Δ≈6） | 用 `ImageCms` 转换到 sRGB 再比 |
+| 2 | 场景 View 被排到按钮之后（差 272px） | 用**绝对定位** + 报告 `view_origin_*` |
+| 3 | 布局未完成就读 `getLocationOnScreen`（得 0×0） | `post()` 到布局之后读 |
+| 4 | 报告 TextView **盖在场景上**（截图中表现为行内灰色横条） | 截图模式不上屏报告 |
+| 5 | 只采行中心 → **3px 错位检不出** | 加**边界区采样**（fy=0.08/0.92） |
+| 6 | 期望值取自 app 自己的报告 = **自己判自己的卷** | 宿主机**独立重算**几何与颜色 |
+
+**破坏性验证**：仅绘制侧偏移 4px → 20 行**全部检出**（边界区不符）+ 给出 `dy=-16` 诊断。
