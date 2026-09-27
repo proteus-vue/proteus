@@ -1,0 +1,30 @@
+[package]
+name = "proteus-layout-core"
+version = "0.1.0"
+edition = "2021"
+description = "★★L1 排版布局核心（App 端高性能渲染）：扁平节点树 + 可替换 LayoutEngine + 脏区/布局边界。DCP-1 定案后端 = Taffy 0.14"
+license = "Apache-2.0"
+
+# ★★为什么是 Rust + Taffy（DCP-1，2026-09-29 已定案，勿擅改）
+#   决策文档：docs/proteus-performance-plan/11-dcp1-layout-engine.md
+#   · Grid 能力：Yoga 的 YGDisplay 枚举 = {Flex, None, Contents}，编译期就没有 Grid
+#   · 与 proteus-cc-rust 同栈 ⇒ codegen 到布局核心零 FFI
+#   · 上游活跃（Yoga 处维护模式，演进绑 RN 需求）
+#
+# ★★版本锁：必须 0.14，禁止降级到 0.13
+#   实测（spike/dcp1-layout-engine）：0.13 在「深链 + auto 尺寸容器」下 measure 次数
+#   呈 3×2^d−2 指数爆炸（深度 12 达 12286 次），0.14 为有界常数 13。
+#   该退化无法用工程手段绕过（flex_basis 仍指数、min_size 无效），复跑见 spike 的 run.sh。
+[dependencies]
+taffy = { version = "0.14.0", default-features = false, features = ["std", "flexbox", "grid", "taffy_tree"] }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+
+[lib]
+name = "proteus_layout_core"
+path = "src/lib.rs"
+
+[profile.release]
+opt-level = 3
+lto = true
+codegen-units = 1

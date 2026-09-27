@@ -119,7 +119,16 @@ function scanImports(dir) {
 
 console.log('[packages] ★npm 发布前包健康检查')
 const pkgDirs = fs.readdirSync(PKGS, { withFileTypes: true }).filter((e) => e.isDirectory())
+/** ★非 npm 包豁免（如 Rust crate）：既有 *_rust 后缀惯例（见 compiler-backend-rust），
+ *  外加「有 Cargo.toml 且无 package.json」的双条件判定——两者都满足才跳过，
+ *  避免「忘记了 package.json」被误当成「这是个 Rust 包」。 */
+const isRustCrate = (dir) => fs.existsSync(path.join(PKGS, dir, 'Cargo.toml')) && !fs.existsSync(path.join(PKGS, dir, 'package.json'))
+let skippedRust = 0
 for (const entry of pkgDirs) {
+  if (isRustCrate(entry.name)) {
+    skippedRust++
+    continue
+  }
   const pkgDir = path.join(PKGS, entry.name)
   const pkgFile = path.join(pkgDir, 'package.json')
   let pkg
@@ -218,7 +227,9 @@ checkTemplateAlignment()
 
 // ⑦ 发布清单（docs/packages.md）与 workspace 一致性
 console.log('\n[packages] 汇总')
-console.log(`  ${pkgDirs.length} 个包 · ${errors} error / ${warns} warn`)
+// ★跳过数必须可见（避免「静默跳过」掩盖「忘记写 package.json」）
+const skipNote = skippedRust > 0 ? `（跳过 ${skippedRust} 个 Rust crate：有 Cargo.toml 无 package.json）` : ''
+console.log(`  ${pkgDirs.length - skippedRust} 个包${skipNote} · ${errors} error / ${warns} warn`)
 if (errors) {
   console.log('[packages] ✗ 存在发布阻断项——修复后重跑（npm run build --workspaces 可重建全部 dist）')
   process.exit(1)

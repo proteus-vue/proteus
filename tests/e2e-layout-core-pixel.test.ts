@@ -23,6 +23,8 @@
 //
 // 容差：≤ 0.5dp（Profile §8.1 布局盒模型容差）
 import { describe, it, expect, beforeAll, afterAll } from 'vitest'
+import fs from 'node:fs'
+import path from 'node:path'
 import { chromium } from 'playwright'
 import type { Browser } from 'playwright'
 import type { PNode, ResolvedLength } from '../packages/component-ir/src/pnode'
@@ -365,6 +367,99 @@ interface Mismatch {
 
 const TOLERANCE = 0.5
 
+/* ────────────────────── golden 导出（供 Rust 排版核心 conformance 消费） ────────────────────── */
+
+/**
+ * 布局输入的**扁平可序列化**形态——引擎就绪（全是数值，无 CSS 字符串）。
+ * ★为什么导出它：DCP-1 定案「Rust + Taffy」后，App 端 L1 排版核心是 Rust；它的正确性必须
+ *   锚定到**浏览器**（方案 §5.7：以浏览器为布局真值基准），而不是锚定到本仓的 TS 参考实现。
+ *   故本文件在跑 Chromium 对拍的同时，把「引擎就绪输入 + 浏览器实测输出」一并冻结成 JSON，
+ *   Rust 侧的 `tests/conformance.rs` 直接消费它——**无需浏览器即可回归**。
+ */
+interface GoldenNode {
+  id: number
+  parentId: number | null
+  tag: string
+  width?: number
+  height?: number
+  widthRatio?: number
+  heightRatio?: number
+  minWidth?: number
+  maxWidth?: number
+  minHeight?: number
+  maxHeight?: number
+  margin: { top: number; right: number; bottom: number; left: number }
+  padding: { top: number; right: number; bottom: number; left: number }
+  flexDirection: string
+  justifyContent: string
+  alignItems: string
+  alignSelf?: string
+  flexGrow: number
+  flexShrink: number
+  flexBasis?: number
+  flexBasisRatio?: number
+  gap: number
+  display: string
+  position: string
+  top?: number
+  left?: number
+  overflow: string
+  /** 是否文本叶子（Rust 侧据此决定是否走注入的度量回调） */
+  isText: boolean
+}
+
+interface GoldenCase {
+  name: string
+  nodes: GoldenNode[]
+  /** 文本度量（浏览器实测值；id → size）——Rust 侧作为「平台注入」的返回值 */
+  textMeasures: Record<number, { width: number; height: number }>
+  /** 浏览器基准真值（已换算为相对根原点，与求解器同口径） */
+  rects: Record<number, { x: number; y: number; width: number; height: number }>
+}
+
+/** LayoutNode 树 → 扁平 golden 节点表 */
+function serializeLayoutTree(root: LayoutNode): GoldenNode[] {
+  const out: GoldenNode[] = []
+  const walk = (n: LayoutNode, parentId: number | null): void => {
+    out.push({
+      id: n.id,
+      parentId,
+      tag: n.tag,
+      width: typeof n.width === 'number' ? n.width : undefined,
+      height: typeof n.height === 'number' ? n.height : undefined,
+      widthRatio: n.widthRatio,
+      heightRatio: n.heightRatio,
+      minWidth: n.minWidth,
+      maxWidth: n.maxWidth,
+      minHeight: n.minHeight,
+      maxHeight: n.maxHeight,
+      margin: n.margin,
+      padding: n.padding,
+      flexDirection: n.flexDirection,
+      justifyContent: n.justifyContent,
+      alignItems: n.alignItems,
+      alignSelf: n.alignSelf,
+      flexGrow: n.flexGrow,
+      flexShrink: n.flexShrink,
+      flexBasis: typeof n.flexBasis === 'number' ? n.flexBasis : undefined,
+      flexBasisRatio: n.flexBasisRatio,
+      gap: n.gap,
+      display: n.display,
+      position: n.position,
+      top: n.top,
+      left: n.left,
+      overflow: n.overflow,
+      isText: n.measureText !== undefined,
+    })
+    for (const c of n.children) walk(c, n.id)
+  }
+  walk(root, null)
+  return out
+}
+
+/** golden 落盘位置（Rust crate 的测试夹具目录） */
+const GOLDEN_PATH = path.resolve(__dirname, '../packages/layout-core-rust/tests/golden/browser-layout.json')
+
 describe('★★M1-5 出口条件：求解器 vs 真实浏览器布局（逐像素 ≤ 0.5dp）', () => {
   let browser: Browser
   let page: import('playwright').Page
@@ -382,6 +477,7 @@ describe('★★M1-5 出口条件：求解器 vs 真实浏览器布局（逐像�
   })
 
   it('全部用例逐节点比对（x / y / width / height）', async () => {
+    const goldenCases: GoldenCase[] = []
     for (const c of CASES) {
       // ── ① 求解器（度量按用例取——见 measureTextsInBrowser 注释）
       const measurements = await measureTextsInBrowser(page, [c])
@@ -406,6 +502,23 @@ describe('★★M1-5 出口条件：求解器 vs 真实浏览器布局（逐像�
 
       const rootB = browserRects[c.root.id]!
       const rootM = solved.rects.get(c.root.id)!
+
+      // ── 冻结 golden（引擎就绪输入 + 浏览器实测输出，已归一为「相对根原点」）
+      const normRects: GoldenCase['rects'] = {}
+      for (const [idStr, b] of Object.entries(browserRects)) {
+        normRects[Number(idStr)] = {
+          x: b.x - rootB.x + rootM.x,
+          y: b.y - rootB.y + rootM.y,
+          width: b.width,
+          height: b.height,
+        }
+      }
+      goldenCases.push({
+        name: c.name,
+        nodes: serializeLayoutTree(tree[0]!),
+        textMeasures: Object.fromEntries(measurements),
+        rects: normRects,
+      })
 
       // ── ③ 逐节点比对（浏览器坐标换算为「相对根原点」，与求解器同口径）
       const hidden = new Set<number>()
@@ -442,6 +555,19 @@ describe('★★M1-5 出口条件：求解器 vs 真实浏览器布局（逐像�
       .map((m) => `  ✗ [${m.caseName}] #${m.nodeId}.${m.prop}: 求解器 ${m.mine.toFixed(2)} vs 浏览器 ${m.browser.toFixed(2)}（差 ${m.delta.toFixed(2)}dp）`)
       .join('\n')
     expect(mismatches, `与浏览器布局不一致（容差 ${TOLERANCE}dp）：\n${report}`).toEqual([])
+
+    // ★冻结 golden（供 Rust 排版核心 conformance 消费；无浏览器即可回归）
+    //   只在**比对全绿**时写（避免把失败状态冻结进去）
+    const golden = {
+      generatedBy: `tests/e2e-layout-core-pixel.test.ts（真实 Chromium；browser ${browser.version()}）`,
+      note: '★基准真值 = 浏览器。Rust 侧 conformance 直接消费本文件，无需浏览器。重新生成：pnpm run test:e2e:web',
+      viewport: VIEWPORT,
+      tolerance: TOLERANCE,
+      cases: goldenCases,
+    }
+    fs.mkdirSync(path.dirname(GOLDEN_PATH), { recursive: true })
+    fs.writeFileSync(GOLDEN_PATH, `${JSON.stringify(golden, null, 2)}\n`)
+    expect(goldenCases.length, 'golden 用例数应与 CASES 一致').toBe(CASES.length)
   })
 
   it('比对规模有效性：参与比对的节点数足够（防空跑通过）', () => {
