@@ -83,15 +83,31 @@ const ROUTE_TRUTH = new Map([
   ['A_uiview_autolayout', [m.A_uiview_autolayout, DEV.exp1_total_ms.A_uiview_autolayout.median]],
   ['B_uiview_manualframe', [m.B_uiview_manualframe, DEV.exp1_total_ms.B_uiview_manualframe.median]],
   ['C_calayer_manualframe', [m.C_calayer_manualframe, DEV.exp1_total_ms.C_calayer_manualframe.median]],
+  ['H_flattened_rows', [DEV.exp1_total_ms.H_flattened_rows?.median ?? 129.9]],
   ['CATextLayer', [summary.exp3_text_median_ms.CATextLayer_1000, DEV.exp3_text_ms.CATextLayer_1000.median]],
   ['UILabel', [summary.exp3_text_median_ms.UILabel_1000, DEV.exp3_text_ms.UILabel_1000.median]],
 ])
 
-/** 表格行里「行首标识 → 该行所有 3 位数 ms」——用行首匹配路由名，天然避免子串串扰 */
+// ★内存真值（真机 11 变体矩阵，MB）——文档写这些数字时须与 summary 一致
+const MEMV = summary.device_run.exp8_memory_matrix?.variants ?? {}
+const MEM_TRUTH = new Map([
+  ['A_uiview_autolayout', 104.6], ['B_uiview_manualframe', 100.9], ['C_calayer_manualframe', 186.9],
+  ['D_uiview_manualframe_unique', 101.0], ['E_calayer_manualframe_unique', 221.7],
+  ['F_calayer_solid', 4.9], ['G_uiview_solid', 9.8], ['H_flattened_rows', 17.7],
+  ['I_calayer_uikittext', 96.0], ['J_calayer_gray8', 114.9], ['K_calayer_opaque', 187.0],
+])
+
+/** 表格行首标识 → 该行的 (ms 真值 | MB 真值)——用行首匹配标识，天然避免子串串扰 */
 const ROW_KEYS = [
-  { key: /^A |^A_uiview_autolayout/, label: 'A', id: 'A_uiview_autolayout' },
-  { key: /^B |^B_uiview_manualframe/, label: 'B', id: 'B_uiview_manualframe' },
-  { key: /^C |^C_calayer_manualframe/, label: 'C', id: 'C_calayer_manualframe' },
+  { key: /^A[ \u00a0]|^A_uiview_autolayout/, id: 'A_uiview_autolayout' },
+  { key: /^B[ \u00a0]|^B_uiview_manualframe/, id: 'B_uiview_manualframe' },
+  { key: /^C[ \u00a0]|^C_calayer_manualframe/, id: 'C_calayer_manualframe' },
+  { key: /^H[ \u00a0]|^H_flattened/, id: 'H_flattened_rows' },
+  { key: /^I[ \u00a0]/, id: 'I_calayer_uikittext' },
+  { key: /^J[ \u00a0]/, id: 'J_calayer_gray8' },
+  { key: /^K[ \u00a0]/, id: 'K_calayer_opaque' },
+  { key: /^F[ \u00a0]/, id: 'F_calayer_solid' },
+  { key: /^G[ \u00a0]/, id: 'G_uiview_solid' },
 ]
 for (const file of docs) {
   const lines = fs.readFileSync(path.join(ROOT, file), 'utf8').split('\n')
@@ -102,13 +118,29 @@ for (const file of docs) {
     const first = cells[0].replace(/\*\*/g, '')
     for (const rk of ROW_KEYS) {
       if (!rk.key.test(first)) continue
-      const truth = ROUTE_TRUTH.get(rk.id)
-      // 该行内每个单元格的数字都要能被某条真值解释（表格里模拟器/真机并列 → 真值集含两者）
-      for (const cell of cells) {
-        for (const mm of cell.matchAll(/(\d{3})(?:\.\d+)?\s*ms/g)) {
-          const num = Number(mm[1])
-          const nearest = Math.min(...truth.map((v) => Math.abs(num - Math.round(v))))
-          if (nearest > 30) problems.push(`${file}: 表格行「${first}」出现 ${num}ms，真值 ${truth.map((v) => Math.round(v)).join('/')}ms（模拟器/真机 ±30）`)
+      // ① ms 值：与耗时真值比对（容差 30ms）
+      const timeTruth = ROUTE_TRUTH.get(rk.id)
+      if (timeTruth) {
+        for (const cell of cells) {
+          for (const mm of cell.matchAll(/(\d{3})(?:\.\d+)?\s*ms/g)) {
+            const num = Number(mm[1])
+            const nearest = Math.min(...timeTruth.map((v) => Math.abs(num - Math.round(v))))
+            if (nearest > 30) problems.push(`${file}: 行「${first}」的 ${num}ms ≠ 真值 ${timeTruth.map((v) => Math.round(v)).join('/')}ms`)
+          }
+        }
+      }
+      // ② MB 值：与内存真值比对（容差 3MB）——覆盖 11 变体矩阵表
+      //   ★只校验行内**第一个** MB（= 该变体的主测量值）：
+      //     实测踩坑——行内还可能出现「省 72MB」这类**差值**，全量校验会误报。
+      const memTruth = MEM_TRUTH.get(rk.id)
+      if (memTruth != null) {
+        const joined = cells.join(' | ')
+        const firstMb = joined.match(/(\d{1,3}(?:\.\d+)?)\s*MB/)
+        if (firstMb) {
+          const num = Number(firstMb[1])
+          if (Math.abs(num - memTruth) > 3) {
+            problems.push(`${file}: 行「${first}」的首个 MB 值 ${num} ≠ 真值 ${memTruth}（差值/推算值不参与校验）`)
+          }
         }
       }
     }
