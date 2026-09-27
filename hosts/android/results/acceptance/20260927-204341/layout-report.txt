@@ -1,0 +1,23 @@
+=== Rust 排版核心 · Android 真机验证 ===
+设备：Xiaomi M098FE · Android 17（API 37）
+ABI：arm64-v8a
+引擎：proteus-layout-core 0.1.0 · engine=taffy-0.14 · taffy 锁定 0.14（0.13 有 measure 指数退化）
+JNI 符号自检：✓ 通过
+测试通路：recycle（脚本以 --es path 注入，两次冷启动隔离内存）
+起始 PSS：59173 KB
+
+【① 与浏览器基准的一致性】
+{"ok":true,"cases":17,"compared_nodes":67,"max_delta_dp":0.375,"tolerance_dp":0.5,"failures":[]}
+
+【② 4050 元素布局性能（纯排版）】
+{"ok":true,"node_count":4051,"iterations":20,"median_ms":1.936,"min_ms":1.854,"max_ms":7.317,"measure_calls_first":0}
+
+【③ §9.3 长列表复用池（4000 行 / 滚动到底再回滚）】
+{"ok":true,"rows":4000,"frames":400,"final_first_visible":19,"created":42,"reused":7926,"discarded":0,"reuse_ratio":0.9947,"max_live_rows":22,"final_live_rows":22,"demoted_total":4788,"pooled":20}
+
+【④ §9.2 环境核验】
+观测到的 CPU：0,1,4,5（prime=0 · normal=4）
+温度：95000 → 95000 (m°C)
+
+【⑤ 增量内存（§9.2，纯结构口径）】
+baseline=59173 KB · after=71282 KB · delta=12109 KB

@@ -200,6 +200,10 @@ public class MainActivity extends Activity {
             String nativeOnly = nativeOnlyRun();
             sb.append(nativeOnly).append('\n');
             writeReport("layout-native-only.json", nativeOnly);
+        } else if ("scroll".equals(testPath)) {
+            sb.append("【③ §9.3 平台侧滚动（Choreographer 帧率 + RenderNode 池）】\n");
+            String start = scrollListRun();
+            sb.append(start).append('\n');
         } else if ("recycle".equals(testPath)) {
             // ★§9.3 长列表验收：4000 行滚到底再回滚，看复用率与内存收敛
             sb.append("【③ §9.3 长列表复用池（4000 行 / 滚动到底再回滚）】\n");
@@ -271,6 +275,161 @@ public class MainActivity extends Activity {
         root.addView(tv);
         writeReport("layout-report.txt", text);
         Log.i(TAG, text);
+    }
+
+    /**
+     * ★★§9.3 平台侧验收：**真实滚动 + RenderNode 池化 + 帧率测量**。
+     *
+     * 与前一轮（Rust 侧 `recycle` 跑批）的分工：
+     *   · Rust 侧已验收「哪些行该存在/释放」的**决策逻辑**（复用率 0.9947）
+     *   · 本方法验收**平台侧执行**：真实 RenderNode 对象是否被复用、滚动时是否掉帧
+     *
+     * 帧率测量用 **`Choreographer.FrameCallback`**：它回调的是**真实 vsync 时刻**，
+     * 相邻回调的间隔即实际帧间隔（比「画完计时」更接近用户感知的流畅度）。
+     *
+     * ★它同时满足 §9.3 原文「回滚到顶部的过程中统计帧率」——滚动轨迹与 Rust 侧一致（下→上）。
+     */
+    private String scrollListRun() {
+        final int ROWS = 4000;
+        final int VISIBLE_ROWS = 14;
+        final float ROW_H = 60f;
+        final int W = getResources().getDisplayMetrics().widthPixels;
+        final int H = getResources().getDisplayMetrics().heightPixels;
+        final int FRAMES = 600;
+
+        final ProteusHostView.ListRenderer renderer = new ProteusHostView.ListRenderer(VISIBLE_ROWS + 16);
+
+        // ★把宿主 View 挂进窗口（这样 onDraw 的 canvas 来自**窗口**，帧会被显示系统统计）
+        final ProteusHostView listView = new ProteusHostView(this);
+        listView.enableListMode(renderer);
+        // 铺满屏幕、置于按钮下方（可见性对测量无影响，但必须在窗口里）
+        FrameLayout.LayoutParams lp = new FrameLayout.LayoutParams(W, H);
+        lp.topMargin = 0;
+        root.addView(listView, lp);
+
+        final long[] intervals = new long[FRAMES];
+        final int[] idx = {0};
+        final long[] lastVsync = {0};
+        final int[] frameCount = {0};
+        final int[] maxActive = {0};
+        final double[] firstRowTrace = new double[FRAMES];
+
+        final android.view.Choreographer choreographer = android.view.Choreographer.getInstance();
+        final android.view.Choreographer.FrameCallback callback = new android.view.Choreographer.FrameCallback() {
+            @Override public void doFrame(long frameTimeNanos) {
+                int f = frameCount[0];
+                if (f >= FRAMES) {
+                    maxActive[0] = Math.max(maxActive[0], renderer.activeCount());
+                    writeScrollReport(ROWS, FRAMES, renderer, intervals, idx[0], firstRowTrace, maxActive[0]);
+                    return;
+                }
+                if (lastVsync[0] != 0) {
+                    long dt = (frameTimeNanos - lastVsync[0]) / 1_000_000L;
+                    if (idx[0] < FRAMES) intervals[idx[0]++] = dt;
+                }
+                lastVsync[0] = frameTimeNanos;
+
+                // 轨迹：前半滚到底、后半回滚到顶（§9.3「回滚到顶部」）
+                double progress = (double) f / FRAMES;
+                double p = progress < 0.5 ? progress * 2.0 : (1.0 - progress) * 2.0;
+                double firstRowExact = p * (ROWS - VISIBLE_ROWS);
+                int firstRow = (int) firstRowExact;
+                firstRowTrace[f] = firstRowExact;
+
+                boolean backward = progress >= 0.5;
+                int above = backward ? 8 : 2;
+                int below = backward ? 2 : 8;
+                int from = Math.max(0, firstRow - above);
+                int to = Math.min(ROWS - 1, firstRow + VISIBLE_ROWS - 1 + below);
+
+                renderer.releaseOutside(from, to);
+                for (int row = from; row <= to; row++) {
+                    if (renderer.hasRow(row)) continue;
+                    float y = (float) ((row - firstRowExact) * ROW_H);
+                    // 仅建屏幕范围内的行（真实可见性裁剪）
+                    if (y + ROW_H < 0 || y > H) continue;
+                    renderer.acquireRow(row, 0, y, W, ROW_H - 2f,
+                            (row % 2 == 0) ? 0xFF2E5AA8 : 0xFF3E7AC8, "row " + row);
+                }
+                maxActive[0] = Math.max(maxActive[0], renderer.activeCount());
+
+                // ★驱动**真实重绘**（onDraw → 窗口 canvas → 显示系统统计）
+                listView.requestListFrame();
+
+                frameCount[0]++;
+                choreographer.postFrameCallback(this);
+            }
+        };
+        choreographer.postFrameCallback(callback);
+        return "{\"ok\":true,\"note\":\"滚动已启动（挂在窗口的真实 View 上驱动重绘），报告异步写入 layout-scroll.json\"}";
+    }
+
+    /** 滚动验收报告（帧率统计） */
+    private void writeScrollReport(int rows, int frames, ProteusHostView.ListRenderer renderer,
+                                   long[] intervals, int n, double[] trace, int maxActive) {
+        if (n == 0) n = 1;
+        long[] copy = java.util.Arrays.copyOf(intervals, n);
+        long[] sorted = copy.clone();
+        java.util.Arrays.sort(sorted);
+        double avg = 0;
+        for (long v : copy) avg += v;
+        avg /= copy.length;
+        long p50 = sorted[sorted.length / 2];
+        long p95 = sorted[(int) (sorted.length * 0.95)];
+        long p99 = sorted[Math.min(sorted.length - 1, (int) (sorted.length * 0.99))];
+        long max = sorted[sorted.length - 1];
+        // ★★★掉帧判据的三次校准（每次都是真机实测打脸，如实记录）：
+        //   ① 硬编码 60Hz（>17ms 算掉帧）→ 报 0.67%，**明显偏低**（设备是 120Hz，8ms 帧间期也正常）
+        //   ② 改用设备刷新率（>8.75ms 算掉帧）→ 报 48.75%，**明显偏高**——
+        //      因为帧间隔是 8ms/16ms 两档（120Hz 与 60Hz 的 vsync 节拍量化），
+        //      而「某帧落在 16ms 档」**不等于渲染慢了**（可能只是那一帧没有新内容要提交）
+        //   ③ **最终认识**：`Choreographer.FrameCallback` 的间隔**不是渲染耗时**，
+        //      它只能反映「回调节拍」；**渲染侧的权威读数是系统 `dumpsys gfxinfo`**
+        //      （其中有 p50/p95 绘制耗时、掉帧数、Slow UI thread 等）。
+        //
+        // ⇒ 本函数的输出定位为**辅助观测**（帧节拍分布），**不作为掉帧结论**；
+        //   结论以 `gfxinfo` 为准（acceptance.sh 会采集）。
+        final double refreshHz = getDisplayRefreshHz();
+        final double budgetMs = 1000.0 / refreshHz;
+        int janky = 0, severe = 0;
+        for (long v : copy) {
+            // 采样间隔 > 2 个 vsync 周期 → 至少漏了一拍（可观测的"节拍不齐"）
+            if (v > budgetMs * 2.1) janky++;
+            if (v > budgetMs * 3.5) severe++;
+        }
+        double fps = copy.length > 0 ? 1000.0 / avg : 0;
+        try {
+            JSONObject o = new JSONObject();
+            o.put("ok", true);
+            o.put("path", "scroll");
+            o.put("rows", rows);
+            o.put("frames_sampled", copy.length);
+            o.put("avg_frame_ms", Math.round(avg * 100) / 100.0);
+            o.put("fps_avg", Math.round(fps * 10) / 10.0);
+            o.put("p50_ms", p50);
+            o.put("p95_ms", p95);
+            o.put("p99_ms", p99);
+            o.put("max_ms", max);
+            o.put("beat_miss_frames", janky);          // 「节拍不齐」= 间隔 >2 个 vsync
+            o.put("beat_miss_ratio", Math.round(janky * 10000.0 / copy.length) / 10000.0);
+            o.put("beat_severe_frames", severe);
+            // ★平台侧池化读数
+            o.put("rn_created", renderer.createdCount());
+            o.put("rn_reused", renderer.reusedCount());
+            o.put("rn_pooled", renderer.pooledCount());
+            o.put("rn_reuse_ratio", Math.round(renderer.reuseRatio() * 10000) / 10000.0);
+            o.put("rn_max_active", maxActive);
+            o.put("device_refresh_hz", Math.round(refreshHz * 10) / 10.0);
+            o.put("frame_budget_ms", Math.round(budgetMs * 100) / 100.0);
+            o.put("p50_hz", p50 > 0 ? Math.round(1000.0 / p50 * 10) / 10.0 : 0);
+            o.put("note", "★本文件为**辅助观测**（Choreographer 帧节拍分布，轨迹=滚到底再回滚到顶）。"
+                    + "Choreographer 间隔不是渲染耗时，故**掉帧结论以 dumpsys gfxinfo 为准**（acceptance.sh 采集）");
+            String json = o.toString(2);
+            writeReport("layout-scroll.json", json);
+            android.util.Log.i(TAG, "滚动验收报告：\n" + json);
+        } catch (Exception e) {
+            android.util.Log.e(TAG, "写滚动报告失败", e);
+        }
     }
 
     /**
@@ -824,6 +983,18 @@ public class MainActivity extends Activity {
      * ★§9.2「增量内存」：本次运行中「建树前后」的 PSS 差。
      * 用 `Debug.getPss()`（KB）——release 包可用、无需权限；配合脚本的冷启动隔离两条通路。
      */
+    /** 设备当前刷新率（Hz）——掉帧判定必须用它（本机是 185Hz 屏，硬编码 60 会误判） */
+    private double getDisplayRefreshHz() {
+        try {
+            if (android.os.Build.VERSION.SDK_INT >= 30) {
+                return getDisplay() != null ? getDisplay().getRefreshRate() : 60.0;
+            }
+            return getWindowManager().getDefaultDisplay().getRefreshRate();
+        } catch (Throwable t) {
+            return 60.0;
+        }
+    }
+
     private long pssKb() {
         // ★API 37 的 `Debug.getPss()` 返回 long（早期 API 是 int）——用 long 承接避免截断
         return android.os.Debug.getPss();
