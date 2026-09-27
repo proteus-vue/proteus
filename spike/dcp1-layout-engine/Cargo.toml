@@ -1,0 +1,40 @@
+[package]
+name = "dcp1-layout-engine-spike"
+version = "0.0.0"
+edition = "2021"
+publish = false
+
+# ★DCP-1 spike（方案 §5.0.5 / §5.6）：排版核心语言二选一 —— C++ + Yoga vs Rust + Taffy
+#
+# 结论（2026-09-29）：见 docs/proteus-performance-plan/11-dcp1-layout-engine.md
+#   → **选 Rust + Taffy 0.14**（Grid 支持 + measure 无退化 + 与 compiler-backend-rust 同栈）
+#   → **0.13 不可用**：深链 auto 尺寸容器下 measure 次数 3×2^d−2 指数爆炸（本 spike 实测）
+#
+# 依赖版本锚定：taffy 0.14（0.13 有指数退化，勿降级）
+[dependencies]
+taffy = { version = "0.14.0", default-features = false, features = ["std", "flexbox", "grid", "taffy_tree"] }
+
+[profile.release]
+opt-level = 3
+lto = true
+codegen-units = 1
+
+[[bin]]
+name = "dcp1"          # 主 spike：语义 + measure + 增量 + 性能
+path = "main.rs"
+
+[[bin]]
+name = "sweep"         # 深度扫描：验证 measure 不随深度退化（0.13 的回归锁）
+path = "sweep.rs"
+
+[[bin]]
+name = "mitigations"   # 规避方案验证（记录「为何不能靠工程手段绕过」）
+path = "mitigations.rs"
+
+[[bin]]
+name = "crosscheck"    # 与 M1 浏览器基线交叉验证
+path = "crosscheck.rs"
+
+[[bin]]
+name = "verify_probe"  # 测量装置自证（约束确实在变）
+path = "verify_probe.rs"
