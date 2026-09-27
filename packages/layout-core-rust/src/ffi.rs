@@ -528,6 +528,42 @@ pub unsafe extern "C" fn proteus_layout_rects(handle: u64) -> *mut c_char {
     }
 }
 
+/// **命中测试**：屏幕坐标 → 节点（方案 §M3「事件系统 / 手势」的几何地基）。
+///
+/// 返回 `{ ok, target, path, chain }`（`target = null` 表示未命中）——三端共用同一实现，
+/// 保证「同一份 IR 在 Android/iOS/鸿蒙点到的节点一致」。
+///
+/// 【为什么跨界返回整条链而不是只返回 target】
+///   宿主派发事件需要的是**冒泡链**（DOM 语义：事件沿祖先链传播，无论祖先是否在点上）。
+///   两个语义必须分开（本仓 `hit.rs` 模块头注释详述）：
+///     · `path`  = 几何上被点到的节点（自上层到根）——验证/调试用
+///     · `chain` = target + 全部祖先（纯结构）——**事件派发用**
+///   子级溢出父盒时二者不同（父不在点上，但仍是冒泡目标）——只返回 target 会让宿主算错。
+///
+/// # Safety
+/// 返回指针须用 `proteus_layout_free_string` 释放。
+#[no_mangle]
+pub unsafe extern "C" fn proteus_layout_hit_test(handle: u64, x: f32, y: f32) -> *mut c_char {
+    let r = std::panic::catch_unwind(|| -> Result<String, String> {
+        let reg = registry().lock().map_err(|_| "注册表锁失败".to_string())?;
+        let tree = reg.get(&handle).ok_or_else(|| format!("句柄 {handle} 不存在"))?;
+        let res = crate::hit::hit_result(tree, x, y);
+        let ids = |v: &Vec<crate::node::NodeIndex>| -> Vec<u32> { v.iter().map(|&i| tree.get(i).id).collect() };
+        Ok(serde_json::json!({
+            "ok": true,
+            "target": res.target.map(|i| tree.get(i).id),
+            "path": ids(&res.path),
+            "chain": ids(&res.chain),
+        })
+        .to_string())
+    });
+    match r {
+        Ok(Ok(s)) => into_c_string(s),
+        Ok(Err(e)) => into_c_string(format!("{{\"ok\":false,\"error\":{}}}", json_str(&e))),
+        Err(_) => into_c_string("{\"ok\":false,\"error\":\"panic（已捕获）\"}".to_string()),
+    }
+}
+
 /// **从二进制 blob 建树**（★生产入口：方案 M0 计划「非 JSON，避免运行时解析开销」）。
 ///
 /// 【为什么需要它（本仓实测的量化依据）】
@@ -954,6 +990,57 @@ mod tests {
         let out = run_conformance("{ not json").expect_err("坏 JSON 应返回 Err");
         assert!(out.contains("解析失败"), "错误信息应指明解析失败：{out}");
         assert!(run_bench(0, 1).is_err(), "node_count=0 应报错");
+    }
+
+    /// ★命中测试 FFI：跨界必须与核心同语义（target / path / chain 三者都对）
+    ///
+    /// 布局（100×100 根 + 3 个 40×40 子级横排）后按坐标命中——
+    /// 这条测试同时锁住「句柄 → 布局 → 命中」的完整链路（宿主真实调用路径）。
+    #[test]
+    fn hit_test_entry_reports_target_path_and_chain() {
+        let req = serde_json::json!({
+            "viewport": {"width": 375.0, "height": 812.0},
+            "nodes": [
+                {"id": 1, "parentId": null, "width": 100.0, "height": 100.0, "flexDirection": "column"},
+                {"id": 2, "parentId": 1, "width": 40.0, "height": 40.0},
+                {"id": 3, "parentId": 1, "width": 40.0, "height": 40.0},
+                // ★不写 position/overflow/isText —— 顺带复验「省略可选字段可解析」
+            ],
+            "textMeasures": {}
+        }).to_string();
+        let c = std::ffi::CString::new(req).unwrap();
+        let h = unsafe { proteus_layout_create(c.as_ptr()) };
+        assert!(h > 0, "create 应返回有效句柄");
+
+        let call = |x: f32, y: f32| -> serde_json::Value {
+            let p = unsafe { proteus_layout_hit_test(h, x, y) };
+            let s = unsafe { std::ffi::CStr::from_ptr(p) }.to_str().unwrap().to_string();
+            unsafe { proteus_layout_free_string(p) };
+            serde_json::from_str(&s).unwrap()
+        };
+
+        // 第一个子级（0,0)-(40,40) 内
+        let a = call(20.0, 20.0);
+        assert_eq!(a["ok"], true);
+        assert_eq!(a["target"], 2, "应命中第一个子级：{a}");
+        assert_eq!(a["path"], serde_json::json!([2, 1]), "路径 = 自上层到根");
+        assert_eq!(a["chain"], serde_json::json!([2, 1]), "冒泡链 = target + 祖先");
+
+        // 两个子级之间（垂直方向超出子级高度但在根内）→ 命中根
+        let b = call(20.0, 80.0);
+        assert_eq!(b["target"], 1, "该点只在根内：{b}");
+        assert_eq!(b["chain"], serde_json::json!([1]));
+
+        // 完全在外 → 未命中（三个数组均为空）
+        let m = call(500.0, 500.0);
+        assert_eq!(m["target"], serde_json::Value::Null, "界外应未命中");
+        assert_eq!(m["path"], serde_json::json!([]));
+        assert_eq!(m["chain"], serde_json::json!([]));
+
+        // 销毁后命中必须安全报错（不得 panic / 不得读到已释放内存）
+        assert!(proteus_layout_destroy(h));
+        let dead = call(20.0, 20.0);
+        assert_eq!(dead["ok"], false, "已销毁句柄应报错：{dead}");
     }
 
     /// ★★回归锁：省略可选字段（isText / nativeHost / 各类 Optional）的请求必须能解析

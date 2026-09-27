@@ -159,3 +159,30 @@ pub extern "system" fn Java_dev_proteus_layoutcore_RustLayout_nativeReadRects<'l
     .unwrap_or_else(|_| "{\"ok\":false,\"error\":\"panic（已捕获）\"}".to_string());
     into_java_string(&mut env, out)
 }
+
+/// `RustLayout.nativeHitTest(handle: Long, x: Float, y: Float): String`
+///
+/// ★★为什么不经过 Java 侧的几何镜像（本仓 M3 事件系统的关键决策）：
+///   宿主 View 拿到触摸点后**直接把坐标交给核心**，由核心用自己算出的几何判定命中。
+///   Java 侧不保留第二份矩形表 —— 那份镜像必然与核心漂移（滚动偏移、裁剪、后续增量布局），
+///   且要在 Java 里重写「逆绘制序 + 裁剪感知」的语义，正是「引擎语义泄漏到三端」的反例。
+#[no_mangle]
+pub extern "system" fn Java_dev_proteus_layoutcore_RustLayout_nativeHitTest<'local>(
+    mut env: JNIEnv<'local>,
+    _class: JClass<'local>,
+    handle: jni::sys::jlong,
+    x: jni::sys::jfloat,
+    y: jni::sys::jfloat,
+) -> jstring {
+    let out = std::panic::catch_unwind(|| -> String {
+        let p = unsafe { crate::ffi::proteus_layout_hit_test(handle as u64, x, y) };
+        if p.is_null() {
+            return "{\"ok\":false,\"error\":\"null\"}".to_string();
+        }
+        let s = unsafe { std::ffi::CStr::from_ptr(p) }.to_string_lossy().into_owned();
+        unsafe { crate::ffi::proteus_layout_free_string(p) };
+        s
+    })
+    .unwrap_or_else(|_| "{\"ok\":false,\"error\":\"panic（已捕获）\"}".to_string());
+    into_java_string(&mut env, out)
+}

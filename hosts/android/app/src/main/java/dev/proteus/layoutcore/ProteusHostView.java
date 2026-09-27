@@ -231,6 +231,111 @@ public class ProteusHostView extends ViewGroup {
         return sb.append(']').toString();
     }
 
+    /* ══════════ ★★事件系统：触摸派发（M3）——自绘路线的第一个「可响应输入」闭环 ══════════ */
+
+    /** 命中的回调（宿主/业务方在此处理 tap/gesture） */
+    public interface HitListener {
+        /**
+         * @param targetId 命中的节点 id（-1 = 未命中）
+         * @param chain    冒泡链（target 自身 + 全部祖先，自深到浅）——事件沿它传播
+         * @param x        触摸点（**内容坐标**：已加回滚动偏移）
+         * @param y        触摸点（内容坐标）
+         */
+        void onHit(int targetId, int[] chain, float x, float y);
+    }
+
+    /** Rust 树的句柄（`0` = 未接入核心 → 触摸不派发）。由 MainActivity 在建树后设置。 */
+    private long coreHandle = 0L;
+    private HitListener hitListener;
+
+    /**
+     * 接入 Rust 核心的树句柄 —— **触摸派发的前置条件**。
+     *
+     * ★为什么必须显式接入（而不是宿主自己算几何）：见 `RustLayout.hitTest` 注释——
+     *   几何的唯一来源是核心，宿主不保留第二份，避免漂移。
+     */
+    public void attachCore(long handle) {
+        this.coreHandle = handle;
+    }
+
+    public void setHitListener(HitListener l) {
+        this.hitListener = l;
+    }
+
+    /** 上次命中的诊断读数（`targetId` -1 = 未命中）——供验收脚本核验 */
+    public int lastHitTarget = -1;
+    public int[] lastHitChain = new int[0];
+    public float lastHitX = 0f, lastHitY = 0f;
+
+    /** 触摸点数（诊断：确认事件真的到了宿主） */
+    public int touchEventCount = 0;
+
+    @Override
+    public boolean onTouchEvent(android.view.MotionEvent ev) {
+        touchEventCount++;
+        // ★只处理 DOWN：UP 的坐标与 DOWN 可能不同（拖动），M3 的手势系统留给上层（06-gesture）
+        if (ev.getActionMasked() != android.view.MotionEvent.ACTION_DOWN) {
+            return true;      // 消费，避免同一个手势被重复上报
+        }
+        dispatchHit(ev.getX(), ev.getY());
+        return true;
+    }
+
+    /**
+     * 按**屏幕/视图坐标**做命中派发（与 `onTouchEvent` 同一条代码路径）。
+     *
+     * ★抽成公开方法不是为了绕过 onTouchEvent，而是为了**可测**：
+     *   设备上 `adb shell input tap` 需要 INJECT_EVENTS 权限（本仓已实测被拒），
+     *   故验收脚本让 app 自己调用本方法——它走的是**同一个** `dispatchHit`，
+     *   与真实触摸的区别仅在「事件从哪来」。
+     */
+    public void dispatchHit(float viewX, float viewY) {
+        // ★坐标换算：绘制是「canvas.translate(0, -scrollY)」后再画内容，
+        //   故屏幕坐标 → 内容坐标要**加回** scrollY。
+        //   若不做这一步，列表滚动后命中会整体偏移（越往下滚错得越多）——
+        //   这正是「命中必须由核心算、且与滚动同源」的原因之一。
+        final float contentX = viewX;
+        final float contentY = viewY + scrollY;
+        lastHitX = contentX;
+        lastHitY = contentY;
+
+        int targetId = -1;
+        int[] chain = new int[0];
+        if (coreHandle != 0L) {
+            String json = RustLayout.hitTest(coreHandle, contentX, contentY);
+            try {
+                org.json.JSONObject o = new org.json.JSONObject(json);
+                if (o.optBoolean("ok", false)) {
+                    if (!o.isNull("target")) targetId = o.getInt("target");
+                    org.json.JSONArray arr = o.optJSONArray("chain");
+                    if (arr != null) {
+                        chain = new int[arr.length()];
+                        for (int i = 0; i < arr.length(); i++) chain[i] = arr.getInt(i);
+                    }
+                }
+            } catch (Exception e) {
+                android.util.Log.e("ProteusHostView", "命中结果解析失败：" + json, e);
+            }
+        }
+        lastHitTarget = targetId;
+        lastHitChain = chain;
+        if (hitListener != null) hitListener.onHit(targetId, chain, contentX, contentY);
+        invalidate();     // 命中态可视化（例如高亮）由子类/监听方决定
+    }
+
+    /** 命中诊断转储（验收脚本读它） */
+    public String hitDump() {
+        StringBuilder sb = new StringBuilder();
+        sb.append("{\"target\":").append(lastHitTarget).append(",\"chain\":[");
+        for (int i = 0; i < lastHitChain.length; i++) {
+            if (i > 0) sb.append(',');
+            sb.append(lastHitChain[i]);
+        }
+        sb.append("],\"x\":").append(lastHitX).append(",\"y\":").append(lastHitY)
+          .append(",\"touch_events\":").append(touchEventCount).append('}');
+        return sb.toString();
+    }
+
     /* ══════════ ★滚动列表模式（§9.3）：把 ListRenderer 接到**真实 View 绘制管线** ══════════ */
 
     private ListRenderer listRenderer;

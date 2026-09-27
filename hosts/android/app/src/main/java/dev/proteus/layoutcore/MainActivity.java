@@ -233,6 +233,16 @@ public class MainActivity extends Activity {
             String shot = setupScreenshotScene();
             sb.append(shot).append('\n');
             writeReport("layout-shot-scene.json", shot);
+        } else if ("hit".equals(testPath)) {
+            // ★★★M3 事件系统：命中测试闭环
+            //   三个独立层次，缺一不可：
+            //     ① **核心正确性** → 与浏览器 golden 对拍（3547 探针，已在 conformance 里跑）
+            //     ② **独立实现对拍** → 同一几何喂 Android 原生 View 体系，比「谁被点到」
+            //     ③ **端到端** → 真实宿主 dispatchHit（含滚动偏移换算 + JNI 往返）
+            sb.append("【③ 事件系统：命中测试（三层验证）】\n");
+            String hit = hitTestRun();
+            sb.append(hit).append('\n');
+            writeReport("layout-hit.json", hit);
         } else if ("recycle".equals(testPath)) {
             // ★§9.3 长列表验收：4000 行滚到底再回滚，看复用率与内存收敛
             sb.append("【③ §9.3 长列表复用池（4000 行 / 滚动到底再回滚）】\n");
@@ -1703,4 +1713,174 @@ public class MainActivity extends Activity {
         // ★API 37 的 `Debug.getPss()` 返回 long（早期 API 是 int）——用 long 承接避免截断
         return android.os.Debug.getPss();
     }
+
+    /**
+     * ★★★M3 事件系统验收：**命中测试三层验证**。
+     *
+     * 【为什么是三层（而不是「跑一下看看」）】
+     *   第 ① 层（浏览器 golden）证明**语义**对：3547 个探针逐位等于 Chromium `elementsFromPoint`。
+     *     但它是**无头**验证——不能证明「真机上这条链路是通的」。
+     *   第 ② 层（Android 原生 View 镜像）提供**独立实现**对拍：同一组几何，
+     *     问平台自己的 `dispatchTouchEvent` 命中了谁。两侧无共享代码 → 有信息量。
+     *   第 ③ 层（端到端）走真实宿主 `dispatchHit` → JNI → 核心，
+     *     并**验证滚动偏移换算**（这是最容易错的一环：漏了就会「越往下滚错得越多」）。
+     *
+     * 【已知语义边界（如实标注，不当全等）】
+     *   镜像只覆盖「子级都在父盒内」的用例 —— Android 子 View 超出父边界收不到触摸，
+     *   而 CSS `overflow:visible` 时子级仍可命中。溢出/裁剪由 ① 层（浏览器 golden）覆盖。
+     */
+    private String hitTestRun() {
+        // ── 场景：嵌套 + 重叠 + 裁剪（覆盖命中语义的三类关键情形）──
+        //   root 300×300
+        //     ├── 1 顶栏 300×60              （在流）
+        //     ├── 2 卡片 300×180             （在流，含两个重叠子级）
+        //     │     ├── 3 卡片底 240×140 @(30,20)
+        //     │     └── 4 卡片上 140×100 @(60,50)   ← 与 3 重叠（4 树序在后 → 在上）
+        //     └── 5 底栏 300×60              （在流）
+        final int W = 300, H = 300;
+        StringBuilder nodes = new StringBuilder(4 * 1024);
+        nodes.append("{\"viewport\":{\"width\":").append(W).append(",\"height\":").append(H)
+             .append("},\"nodes\":[")
+             .append("{\"id\":1,\"parentId\":null,\"width\":300.0,\"height\":300.0,\"flexDirection\":\"column\"}")
+             .append(",{\"id\":2,\"parentId\":1,\"width\":300.0,\"height\":60.0}")
+             .append(",{\"id\":3,\"parentId\":1,\"width\":300.0,\"height\":180.0}")
+             .append(",{\"id\":4,\"parentId\":3,\"position\":\"absolute\",\"top\":20.0,\"left\":30.0,\"width\":240.0,\"height\":140.0}")
+             .append(",{\"id\":5,\"parentId\":3,\"position\":\"absolute\",\"top\":50.0,\"left\":60.0,\"width\":140.0,\"height\":100.0}")
+             .append(",{\"id\":6,\"parentId\":1,\"width\":300.0,\"height\":60.0}")
+             .append("],\"textMeasures\":{}}");
+
+        long handle = RustLayout.create(nodes.toString());
+        if (handle <= 0) return "{\"ok\":false,\"error\":\"Rust 建树失败\"}";
+
+        // 读回几何（唯一来源 = 核心）
+        java.util.Map<Integer, float[]> rects = new java.util.HashMap<>();
+        java.util.Map<Integer, Integer> parents = new java.util.HashMap<>();
+        parents.put(2, 1); parents.put(3, 1); parents.put(4, 3); parents.put(5, 3); parents.put(6, 1);
+        String rectsJson = RustLayout.readRects(handle);
+        try {
+            org.json.JSONObject o = new org.json.JSONObject(rectsJson);
+            org.json.JSONObject rs = o.getJSONObject("rects");
+            java.util.Iterator<String> it = rs.keys();
+            while (it.hasNext()) {
+                String k = it.next();
+                org.json.JSONObject r = rs.getJSONObject(k);
+                rects.put(Integer.parseInt(k), new float[]{
+                        (float) r.getDouble("x"), (float) r.getDouble("y"),
+                        (float) r.getDouble("width"), (float) r.getDouble("height")});
+            }
+        } catch (Exception e) {
+            RustLayout.destroy(handle);
+            return "{\"ok\":false,\"error\":\"几何解析失败：" + e.getMessage() + "\"}";
+        }
+
+        // ── ② 独立实现对拍：Android 原生 View 体系 ──
+        MirrorHit mirror = new MirrorHit(this);
+        mirror.add(1, 0, this);
+        // ★加入顺序 = **Rust 树序**（同一份"绘制顺序"输入，让平台自己决定谁在上）
+        for (int id : new int[]{2, 3, 4, 5, 6}) mirror.add(id, parents.get(id), this);
+        mirror.layoutAll(rects, parents);
+
+        // ── ③ 端到端：真实宿主（接入句柄 → 真实 dispatchHit 路径）──
+        ProteusHostView host = new ProteusHostView(this);
+        host.attachCore(handle);
+        final java.util.List<ProteusHostView.Cmd> cmds = new java.util.ArrayList<>();
+        for (java.util.Map.Entry<Integer, float[]> e : rects.entrySet()) {
+            float[] r = e.getValue();
+            cmds.add(new ProteusHostView.Cmd(r[0], r[1], r[2], r[3],
+                    (e.getKey() % 2 == 0) ? 0xFF2E5AA8 : 0xFF3E7AC8, null));
+        }
+        host.setCmds(cmds);
+        root.addView(host, new FrameLayout.LayoutParams(W, H));
+        this.keepAlive = new Object[]{host, mirror, cmds};
+
+        // ── 探针点（选定以覆盖各语义分支）──
+        //   (150,30)   仅顶栏 2         (150,90)   卡片 3（不含 4/5）→ 命中 3
+        //   (100,110)  3 与 4 重叠区 → 4（树序在后在上）   注意 4@y=80..220, 3@y=60..240
+        //   (150,140)  3、4、5 三者重叠 → 5
+        //   (150,290)  仅底栏 6
+        //   (400,400)  界外 → 未命中
+        final int[][] probes = {{150, 30}, {150, 90}, {100, 110}, {150, 140}, {150, 290}, {400, 400}};
+
+        StringBuilder log = new StringBuilder();
+        int agree = 0, compared = 0, mismatch = 0;
+        log.append("  探针          核心(Rust)    镜像(Android)   端到端(host)   结果\n");
+        log.append("  " + "-".repeat(66) + "\n");
+        StringBuilder detail = new StringBuilder();
+
+        for (int[] p : probes) {
+            int px = p[0], py = p[1];
+            // ① 核心直接问
+            int coreTarget = -1;
+            String hj = RustLayout.hitTest(handle, px, py);
+            try {
+                org.json.JSONObject ho = new org.json.JSONObject(hj);
+                if (ho.optBoolean("ok", false) && !ho.isNull("target")) coreTarget = ho.getInt("target");
+            } catch (Exception ignored) {}
+            // ② 平台独立实现
+            int mirrorTarget = mirror.hitAt(px, py);
+            // ③ 端到端（真实宿主路径：含滚动偏移换算 —— 此处 scrollY=0，故应与 coreTarget 相同）
+            host.dispatchHit(px, py);
+            int e2eTarget = host.lastHitTarget;
+
+            compared++;
+            boolean ok = (coreTarget == mirrorTarget) && (coreTarget == e2eTarget);
+            if (ok) agree++; else mismatch++;
+            log.append(String.format("  (%3d,%3d)      %-12s %-14s %-14s %s%n",
+                    px, py, coreTarget, mirrorTarget, e2eTarget, ok ? "✓" : "✗"));
+            if (!ok) {
+                detail.append(String.format("(%d,%d)：核心 %d · 镜像 %d · 端到端 %d；",
+                        px, py, coreTarget, mirrorTarget, e2eTarget));
+            }
+        }
+
+        // ── ★滚动偏移换算验证（最容易错的一环）──
+        //   同一个**屏幕**点，在不同 scrollY 下必须命中**不同**节点——否则说明
+        //   「屏幕坐标 → 内容坐标」的换算没生效（漏加 scrollY 时命中会整体上移，
+        //   越往下滚错得越多）。
+        //
+        //   构造（期望值由宿主机按几何**独立算出**，不用 app 报告里的数）：
+        //     屏幕(150,50)：scrollY=0  → 内容(150,50) → 顶栏 2（0..60）
+        //                   scrollY=40 → 内容(150,90) → 节点 4（卡片内 absolute，y 80..220）
+        //   两个期望值**不同** → 本检查可判别（若换算缺失，两次都会得 2）。
+        host.setContentScrollY(0);
+        host.dispatchHit(150, 50);
+        int at0 = host.lastHitTarget;
+        host.setContentScrollY(40);
+        host.dispatchHit(150, 50);
+        int at40 = host.lastHitTarget;
+        boolean scrollOk = (at0 == 2 && at40 == 4);
+        host.setContentScrollY(0);
+        if (!scrollOk) {
+            mismatch++;
+            detail.append("滚动偏移换算：scrollY=0 期望 2 实得 ").append(at0)
+                  .append("；scrollY=40 期望 4 实得 ").append(at40).append("；");
+        }
+        log.append(String.format("  ★滚动换算：屏幕(150,50) scrollY=0 → %d（期望 2）；scrollY=40 → %d（期望 4）%s%n",
+                at0, at40, scrollOk ? " ✓" : " ✗"));
+
+        boolean ok = mismatch == 0;
+        try {
+            org.json.JSONObject out = new org.json.JSONObject();
+            out.put("ok", ok);
+            out.put("path", "hit");
+            out.put("viewport", W + "x" + H);
+            out.put("probes_compared", compared);
+            out.put("independent_agreement", agree);        // 与 Android 平台派发一致数
+            out.put("mismatch", mismatch);
+            out.put("scroll_offset_check", scrollOk);
+            out.put("touch_events", host.touchEventCount);   // 真实 MotionEvent 数（脚本路径为 0；见 dispatchHit 注释）
+            out.put("log", log.toString());
+            out.put("detail", detail.toString());
+            out.put("note", "★三层验证：核心语义由浏览器 golden 覆盖（3547 探针）；"
+                    + "此处对拍**独立实现**（Android View 体系的 dispatchTouchEvent）与**端到端**（真实宿主 + JNI）。"
+                    + "镜像只覆盖「子级在父盒内」——溢出/裁剪语义见 conformance。");
+            String json = out.toString(2);
+            RustLayout.destroy(handle);
+            return json;
+        } catch (Exception e) {
+            RustLayout.destroy(handle);
+            return "{\"ok\":false,\"error\":\"" + e.getMessage() + "\"}";
+        }
+    }
+
 }

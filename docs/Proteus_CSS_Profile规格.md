@@ -207,10 +207,46 @@ Web 端是**零转换直跑标准 SPA**，用的就是浏览器原生 CSS。因�
 |---|---|---|
 | flex / flex-direction / justify-content / align-items | Yoga 起步 | ✅ M1 起 |
 | gap / row-gap / column-gap | — | ✅ |
-| position: relative / absolute | 需 containing block 判定 | 🟡 M3 |
+| position: relative / absolute | 需 containing block 判定 | ✅ M3（**含层叠相位**：定位元素绘制在在流元素之上——见下「层叠相位」） |
 | overflow: hidden / scroll | — | 🟡 M3 |
 | **grid** | App/Web 真支持（Taffy/浏览器）；★**Skyline 实测退化为 block** | ⚠️ **有条件可用**（非 Profile 无条件集）：Skyline 必须发降级警告 |
 | text-overflow / max-lines 截断 | 依赖平台文本度量 | 🟡 M3 |
+
+#### ★★L2-1 · 层叠相位（Stacking Phase）—— 绘制序的规范口径
+
+> **为什么必须写进 Profile**：绘制序是**命中测试**的地基（看到的在上 = 点到的在上）。
+> 若各端各自实现绘制序，必然出现「同一份 IR 在 Android 点得到、在 iOS 点不到」——
+> 这类分叉对用户表现为「点了没反应」或「点到了看不见的东西」，且极难定位。
+
+**规范（本 Profile 采用 CSS 2.1 附录 E 的简化模型）**：绘制按**层叠上下文**展开，上下文内分两个相位：
+
+| 相位 | 内容 | 顺序 |
+|---|---|---|
+| 1 | **在流**后代（`position: static`，含其子树内联展开） | 树序 |
+| 2 | **定位**后代（`position: relative/absolute`），各自展开为独立上下文 | 树序 |
+
+**★关键一点（本仓用真实 Chromium 探针实测确认，勿凭直觉）**：
+**相位按「层叠上下文」而非按「父级」** ——
+
+```
+root(static)
+ ├── A(static)                    ← 相位 1
+ │    └── A0(static)              ← 相位 1
+ │         └── A1(absolute)       ← ★相位 2（虽然 A/A0 都是 static）
+ └── B(static, 树序在后)          ← 相位 1
+```
+⇒ `A1`（深层 absolute）绘制在 `B`（外层后置的在流兄弟）**之上**。
+若按「父级内子级树序」实现，`A1` 会跑到 `B` 下面 —— **画错且点错**。
+
+**证据入口**：`tests/paint-order-probe.mjs`（真实 Chromium 探针，6 例）
+→ 真值冻结在 `tests/golden/paint-order-probes.json`
+→ 由 `packages/layout-core-rust/tests/conformance.rs::conformance_paint_order_against_browser_probes` **机器核验**。
+实现见 `packages/layout-core-rust/src/hit.rs`（`paint_order` 是唯一顺序真相来源，命中是其严格逆序）。
+
+**★与完整 CSS 的差距（诚实边界）**：
+- **未实现** `z-index`（L3：需完整层叠上下文 + 合成层管理，直接推高内存）
+- **未实现** `position: fixed/sticky`（L3）
+- 故本 Profile 的层叠可归纳为一句：**定位元素整体在在流元素之上；同相位内按树序**。
 
 ### L3 · 高成本（默认关闭，编译期标记，按需启用）
 
