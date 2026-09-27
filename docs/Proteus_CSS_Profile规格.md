@@ -1,6 +1,6 @@
 # Proteus CSS Profile 规格
 
-> 文档版本：v1.0 · 适用框架：Proteus v2.47+（Vue 3.4 / Vite 5 / TS 5.4）
+> 文档版本：v1.0 · 适用框架：Proteus v2.47+（Vue 3.5 / Vite 5 / TS 5.4）
 > 适用端：Web（浏览器原生 CSS）· 微信小程序 Skyline · App（NativeVapor 自研渲染）
 > 定位：**三端共同遵守的 CSS 受支持子集**，由编译期 lint 强制，是 App 端自研渲染引擎的实现目标与一致性基准
 
@@ -52,7 +52,7 @@ uni-app x 排除复杂选择器的官方理由：**"为了原生解析极速性�
 
 **核心结论**：静态样式可以支持任意复杂的选择器与层叠规则，因为编译期就算完了。**边界只在动态部分。**
 
-这与 Proteus 既有的"编译期优先"主张完全同构，且可直接复用 69 条规则注册表与 Rust 后端。
+这与 Proteus 既有的"编译期优先"主张完全同构，且可直接复用 **111 条**规则注册表（实测）与 Rust 后端。
 
 ### 0.4 Proteus 特有的额外约束
 
@@ -78,13 +78,56 @@ Web 端是**零转换直跑标准 SPA**，用的就是浏览器原生 CSS。因�
 
 | 维度 | Web | Skyline（小程序） | App（NativeVapor） |
 |---|---|---|---|
-| 样式实现 | 浏览器原生 CSS | 微信容器 CSS | **自研渲染引擎（UCSS Profile）** |
-| 选择器能力 | 完整 CSS | 需实测确认，**不支持复杂组合选择器** | 编译期折叠，运行时仅查表 |
+| 样式实现 | 浏览器原生 CSS | 微信容器 CSS（Skyline 渲染器） | **自研渲染引擎（UCSS Profile）** |
+| 选择器能力 | 完整 CSS | **id 选择器可达页面级原生节点**（实测）；类选择器不达 | 编译期折叠，运行时仅查表 |
 | 层叠/继承 | 浏览器运行时计算 | 容器实现 | **编译期计算，运行时零成本** |
-| 布局 | 完整（block/inline/grid/flex） | flex 为主 | flex（M3+ 评估 grid） |
-| 单位 | px/em/rem/%/vw/vh/… | px/rpx/%，**vw/vh 通常被忽略或解析为 0** | 编译期折叠为逻辑像素或比例系数 |
+| 布局 | 完整（block/inline/grid/flex） | flex 可用；**grid 属性被接受但未验证布局语义** | flex（M3+ 评估 grid） |
+| 单位 | px/em/rem/%/vw/vh/… | **px / rpx / % / vw / vh / em / rem 全部可用且精确**（实测，见下表） | 编译期折叠为逻辑像素或比例系数 |
 
-> ⚠️ Skyline 端的具体支持矩阵需以真机实测为准，本文不预设细节。Profile 落地前必须补齐 Skyline 实测表。
+### ★Skyline 端实测（2026-09-29，基础库 3.17.3，iPhone 12/13 模拟器）
+
+**方法**：探针页 `showcase/subpackages/capabilities/pages/css-profile-probe.vue` ——
+用 `wx.createSelectorQuery`（**★实测：Skyline + glass-easel 下页面上下文可用**，返回真实几何）
+逐条测量，以**几何反推**特性是否被接受。**结果 25/25 项通过**。
+
+| 特性 | 实测几何 | 判定 | 备注 |
+|---|---|---|---|
+| width/height/background-color | 100×20 | ✅ | 基线 |
+| display:flex | 150×20 | ✅ | |
+| justify-content / align-items | 150×20 | ✅ | 属性被接受（未验证分布语义） |
+| gap | 150×20 | ✅ | |
+| border-radius / border | 100×20 | ✅ | |
+| opacity | 100×20 | ✅ | 几何不变（符合预期，仅视觉） |
+| **transform: translateX(30px)** | **@x=82**（基线 52） | ✅ | **位移精确生效** |
+| overflow:hidden | 100×20 | ✅ | |
+| **position:relative + left(30px)** | **@x=82** | ✅ | **位移精确生效** |
+| position:absolute | **@x=62**（left:10px → 52+10） | ✅ | 相对定位上下文正确 |
+| z-index | 100×20 | ⚠️ | 属性被接受；**层叠语义未验证**（需视觉验收） |
+| box-shadow | 100×20 | ✅ | 几何不变（视觉特性） |
+| **background-image: linear-gradient** | 100×20 | ✅ | 属性被接受 |
+| **width: 50vw** | **195px** | ✅ | **★精确**（屏幕 390 × 50%） |
+| **height: 10vh** | **84px** | ✅ | **★精确**（844 × 10% = 84.4） |
+| **width: 100rpx** | **52px** | ✅ | **★精确**（390/750 × 100） |
+| width: 50% | 143px | ✅ | 父容器宽度相关 |
+| width: 5em | 50px | ✅ | font-size 10px × 5 |
+| width: 5rem | 73px | ✅ | 根字号 ≈14.6px × 5 |
+| **position: fixed** | **80×20 @x=0** | ⚠️ | **几何异常**：x=0（其他元素 x=52）→ fixed 使元素脱离常规流，Profile 应谨慎 |
+| position: sticky | 100×20 @x=52 | ⚠️ | 属性被接受；**吸顶行为未验证** |
+| display: grid | 150×40 | ⚠️ | 属性被接受；**是否真按 grid 布局未验证**（可能是 block 退化） |
+| display: inline-block | 80×20 | ✅ | |
+
+**★修正本文此前的一处假设**：§2 原写「vw/vh **通常被忽略或解析为 0**」——
+**实测不成立**：vw/vh/rpx/em/rem **全部可用且数值精确**。原表述应删除。
+
+**诚实边界（三条）**：
+1. **几何反推的局限**：只能判「属性被接受 + 几何合理」，**判不了布局语义**
+   （grid 是否真按列分配？sticky 是否真吸顶？z-index 是否真层叠？）→ 这些需**真机视觉验收**。
+2. **单基础库单机型**：本次仅测 3.17.3 + iPhone 12/13 模拟器；跨基础库版本需回归。
+3. **未测选择器能力**：本页只用 id 选择器（可靠通道）；`类选择器/复杂组合选择器` 的支持度**未测**——
+   本文 §2 仍标注「不支持复杂组合选择器」，但那是**社区口径，本仓未独立验证**。
+
+> ⇒ **Profile 落地建议**：L0/L1 特性在 Skyline 端**均已可用**（无阻塞）；
+> grid / sticky / fixed / z-index 四项**需补视觉验收**才能进 Profile。
 
 ---
 
@@ -222,7 +265,7 @@ Step 7  输出 ComputedStyle + PaintHint
 
 ### 4.4 与既有编译器的衔接
 
-- 复用 69 条转换规则注册表，新增规则自带 AI 说明书
+- 复用 **111 条**转换规则注册表（2026-09-29 实测 `listTransformRules().length`），新增规则自带 AI 说明书
 - Node / Rust 双后端语义等价 Golden 门禁必须继续通过
 - 折叠结果需可被 Headless 后端消费，用于 conformance 比对
 
@@ -417,7 +460,7 @@ Web 端由浏览器原生渲染，天然支持完整 CSS——但开发者写出
 
 | 阶段 | 内容 | 依赖 |
 |---|---|---|
-| **P1** | Skyline 端 CSS 支持矩阵实测表 | 无（**必须先做**，否则 Profile 无基线） |
+| **P1** | Skyline 端 CSS 支持矩阵实测表 | 无（**必须先做**，否则 Profile 无基线） | ✅ **已完成**（2026-09-29，25/25 通过，见 §2） |
 | **P2** | 定义 Profile v1 特性清单（L0–L5） | P1 |
 | **P3** | 编译期折叠算法实现 + Golden 门禁 | P2 |
 | **P4** | 动态 class 预计算（属性维度分解） | P3 |

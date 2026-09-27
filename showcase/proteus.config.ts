@@ -64,6 +64,7 @@ const config: ProteusConfig = {
       'p-button': { title: 'p-button 按钮' },
       'p-input': { title: 'p-input 输入框' },
       'camera': { title: 'useCamera 相机' },
+      'css-profile-probe': { title: 'CSS Profile 探针' },
     },
   },
   rules: { disabled: [], mapping: {}, customTags: {} },
