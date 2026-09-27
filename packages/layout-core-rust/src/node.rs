@@ -25,6 +25,14 @@ pub const NO_PARENT: NodeIndex = u32::MAX;
 pub struct TextMeasureRequest {
     /// 文本内容（平台侧据此 shaping；核心不解析其语义）
     pub text: String,
+    /// **字体签名**（调用方提供的稳定哈希；由编译器/平台按字体属性算出）。
+    ///
+    /// 为什么要它：Profile §5.3 规定度量缓存键是 **(文本 hash, 字体, 宽度约束)**——
+    /// 「字体」这一维必须进入键，否则「同文案不同字号」会错误命中同一缓存项。
+    /// Rust 侧**不解析字体属性**（那是 L4：复用平台文本栈），只透传这个签名。
+    /// 缺省 0 = 调用方不区分字体（单字体场景下安全）。
+    #[serde(default)]
+    pub style_key: u32,
 }
 
 /// 扁平节点

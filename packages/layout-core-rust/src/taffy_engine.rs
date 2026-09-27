@@ -30,12 +30,20 @@ use crate::style::{Display, FlexDirection, LStyle, Overflow, Position, Rect, Siz
 pub struct TaffyEngine {
     /// 文本度量（平台注入；`None` = 全部文本按零尺寸）
     measurer: Option<Box<dyn TextMeasurer>>,
-    /// ★度量记忆化：**扁平键** `(node_id << 32) | max_width.to_bits()` → Size
+    /// ★★度量记忆化：**内容寻址**（Profile §5.3 规定的键）——
+    ///   `(文本 hash ⊕ 字体签名, 宽度约束位)` → Size
     ///
-    /// 为什么不用嵌套 HashMap（本仓实测发现的热点）：
-    ///   4051 节点内容撑开场景下 taffy 产生 **22000 次缓存命中**——
-    ///   每次命中在嵌套结构里要走「两次哈希 + 两轮探测」；扁平化后降为**一次**。
-    measure_cache: HashMap<u64, Size>,
+    /// 【为什么必须是内容寻址而非节点寻址】（本仓实测发现的设计缺陷）
+    ///   初版键是 `(node_id, max_width)` → **同一文案在不同节点会各度量一次**。
+    ///   4050 元素场景里 2000 个节点的文案都是 "item" → 真实度量 **4000 次**；
+    ///   改成内容寻址后同样场景只需 **1–2 次**（其余跨节点命中）。
+    ///   这正是 Profile §5.3 原文的要求：「文本 hash, 字体, 宽度约束」。
+    ///
+    /// 【键的构成】
+    ///   · 文本 hash：来自 `text_hash`（每节点文本的稳定哈希 ⊕ 字体签名 `style_key`）
+    ///   · 宽度约束：`max_width.to_bits()`（NaN 归一为 +∞）
+    ///   ★字体维度由调用方以 `style_key` 提供（Rust 侧不解析字体属性——那是 L4 平台的职责）
+    measure_cache: HashMap<(u64, u32), Size>,
     /// 本轮 measure 调用**总次数**（未命中缓存的次数）——D3 判据的可观测读数
     measure_calls: usize,
     /// 缓存命中次数（增量效果的直接读数）
@@ -225,6 +233,16 @@ impl TaffyEngine {
         for (i, n) in nodes.iter().enumerate() {
             id_index.insert(n.id, i as u32);
         }
+        // ★★度量缓存键的第一维（Profile §5.3「文本 hash + 字体」）——按节点索引平行存放。
+        //
+        // ★★**内容寻址 vs 节点寻址的取舍**（本仓实测踩到，值得记）：
+        //   · 文本**字面量已知**时 → 用「文本 hash ⊕ 字体签名」= **内容寻址**
+        //     → 2000 个同文案节点只需真实度量 **1–2 次**（实测：4000 → 2）
+        //   · 文本**字面量未知**时（golden 用例只给 `isText` 标记 + 按 id 查度量表）
+        //     → **必须回退节点寻址**（用 node_id）
+        //     ✗ 若在此时仍填 0：**所有文本节点的键相同** → 不同文本错误共用缓存项
+        //       → 几何错乱（本仓实测：conformance 17 用例里文本相关全部失败，max_delta 12.6dp）
+        let text_hashes = compute_text_hashes(nodes);
 
         for &root in roots {
             let taffy_root = taffy_ids[root as usize];
@@ -264,7 +282,8 @@ impl TaffyEngine {
 
                                 // 度量可用的最大宽：已知宽优先，其次父宽，否则不限
                                 let max_w = known.width.or(avail.width.into_option()).unwrap_or(f32::INFINITY);
-                                let key = measure_key(nid, max_w);
+                                // ★内容寻址键：文本 hash（含字体签名）+ 宽度约束
+                                let key = measure_key(text_hashes[nidx as usize], max_w);
                                 if let Some(s) = measure_cache.get(&key) {
                                     *measure_hits += 1;
                                     return taffy::Size { width: s.width, height: s.height };
@@ -397,14 +416,49 @@ impl TaffyEngine {
     }
 }
 
-/// 度量缓存键：`(node_id << 32) | max_width.to_bits()`
+/// 计算每个节点的度量缓存键第一维（内容 hash 或节点寻址回退）
 ///
-/// ★64 位组合键的两个约束（均满足，故安全）：node_id 是 u32（左移 32 不溢出 u64）；
-///   f32 的位表示是 u32（放入低 32 位不丢信息）。
+/// ★抽为**纯函数**以便单测（缓存键的正确性是本仓实测踩过坑的地方）：
+///   ① 非空字面量 → 内容寻址（含字体签名）
+///   ②/③ 无请求或空串 → 节点寻址（内容未知 ⇒ 不能假设"同文案"）
+pub(crate) fn compute_text_hashes(nodes: &[LNode]) -> Vec<u64> {
+    let mut out = Vec::with_capacity(nodes.len());
+    for n in nodes {
+        // ★★三情形（实测踩到第 ③ 种）：
+        //   ① 有非空文本字面量 → **内容寻址**（同文案跨节点复用，实测 4000→2 次）
+        //   ② 无文本请求 → 非文本节点，键用节点 id
+        //   ③ **文本请求存在但字面量为空串** → golden / 按 id 查表场景的写法：
+        //      空串**不代表内容相同**！若归入 ① → 不同文本共用缓存项 → 几何错乱
+        //      （实测：conformance 文本用例全红，max_delta 12.6dp）
+        match &n.text {
+            Some(t) if !t.text.is_empty() => {
+                use std::hash::{Hash, Hasher};
+                let mut h = std::collections::hash_map::DefaultHasher::new();
+                t.text.hash(&mut h);
+                t.style_key.hash(&mut h);      // ★字体维度进键
+                out.push(h.finish());
+            }
+            _ => out.push(((n.id as u64) << 1) | 1),   // 节点寻址（键空间与内容 hash 隔离）
+        }
+    }
+    out
+}
+
+/// 测试用：直接取缓存键
+#[cfg(test)]
+fn hash_for_tests(nodes: &[LNode]) -> Vec<u64> {
+    compute_text_hashes(nodes)
+}
+
+/// 度量缓存键：**(文本 hash, 宽度约束位)** —— 内容寻址（Profile §5.3）
+///
+/// ★为什么用元组而非折叠成 u64：折叠会引入**信息丢失**（两个不同文本可能折叠到同一键
+///   → 返回错误的度量值 = 布局错乱）。元组键由 Rust 的 HashMap 正确哈希，
+///   代价与单 u64 键同级（一次哈希），却**无碰撞风险**（除 64 位文本哈希本身，概率 ~1e-16）。
 #[inline]
-fn measure_key(node_id: u32, max_w: f32) -> u64 {
+fn measure_key(text_hash: u64, max_w: f32) -> (u64, u32) {
     let w = if max_w.is_finite() { max_w.to_bits() } else { f32::INFINITY.to_bits() };
-    ((node_id as u64) << 32) | (w as u64)
+    (text_hash, w)
 }
 
 /// 前序索引序列（与 `copy_subtree` 的产出顺序**必须一致**——两者都是「自身 → 子级依次」）
@@ -484,5 +538,56 @@ fn to_taffy_space(a: AvailableSpace) -> TaffyAvailableSpace {
     match a {
         AvailableSpace::MaxContent => TaffyAvailableSpace::MaxContent,
         AvailableSpace::Definite(v) => TaffyAvailableSpace::Definite(v),
+    }
+}
+
+#[cfg(test)]
+mod cache_key_tests {
+    use super::*;
+    use crate::node::TextMeasureRequest;
+
+    /// ★★回归锁：**空文本字面量必须回退节点寻址**（本仓实测踩到的陷阱）
+    ///
+    /// 背景：golden 场景的文本节点是 `text: ""`（真值由「按 id 查表」提供），
+    /// 若把它当「内容已知」→ 所有文本节点 hash 到**同一个空串** →
+    /// **不同文本错误共用缓存项** → 几何错乱（实测 conformance 文本用例全红，max_delta 12.6dp）。
+    #[test]
+    fn empty_literal_falls_back_to_node_addressing() {
+        let mk_text = |id: u32, literal: &str| {
+            let mut n = LNode::new(id, LStyle::default());
+            n.text = Some(TextMeasureRequest { text: literal.to_string(), style_key: 0 });
+            n
+        };
+        // 三个文本节点：两个空串（内容未知）+ 一个有字面量
+        let a = mk_text(2, "");
+        let b = mk_text(3, "");
+        let c = mk_text(4, "hello");
+        let hashes = hash_for_tests(&[a, b, c]);
+        assert_ne!(hashes[0], hashes[1], "★空串节点之间必须**不共用**缓存键（回退节点寻址）");
+        assert_ne!(hashes[0], hashes[2], "空串节点与有字面量节点也必须隔离");
+    }
+
+    /// ★内容寻址：**相同非空字面量必须共用**缓存键（这是优化的收益来源）
+    #[test]
+    fn same_literal_shares_cache_key() {
+        let mk = |id: u32| {
+            let mut n = LNode::new(id, LStyle::default());
+            n.text = Some(TextMeasureRequest { text: "item".to_string(), style_key: 0 });
+            n
+        };
+        let hashes = hash_for_tests(&[mk(10), mk(20)]);
+        assert_eq!(hashes[0], hashes[1], "★同文案应共用缓存键（内容寻址的收益）");
+    }
+
+    /// ★字体维度进键：同文案不同字体签名必须**不共用**
+    #[test]
+    fn different_style_key_shares_nothing() {
+        let mk = |id: u32, sk: u32| {
+            let mut n = LNode::new(id, LStyle::default());
+            n.text = Some(TextMeasureRequest { text: "item".to_string(), style_key: sk });
+            n
+        };
+        let hashes = hash_for_tests(&[mk(10, 0), mk(20, 7)]);
+        assert_ne!(hashes[0], hashes[1], "★字体签名必须参与缓存键（Profile §5.3）");
     }
 }

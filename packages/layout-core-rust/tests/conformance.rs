@@ -193,7 +193,7 @@ fn to_tree(case: &GoldenCase) -> (LayoutTree, Vec<u32>) {
         node.tag = g.tag.clone();
         if g.is_text {
             // 文本内容不入 golden（度量按 id 查表）→ 占位即可
-            node.text = Some(proteus_layout_core::TextMeasureRequest { text: String::new() });
+            node.text = Some(proteus_layout_core::TextMeasureRequest { text: String::new(), style_key: 0 });
         }
         let idx = tree.push(node);
         index_of.insert(g.id, idx);
@@ -326,7 +326,7 @@ fn measure_bounded_and_depth_independent() {
         let mut tree = LayoutTree::new();
         // 文本叶子
         let mut leaf = LNode::new(1, LStyle::default());
-        leaf.text = Some(proteus_layout_core::TextMeasureRequest { text: String::new() });
+        leaf.text = Some(proteus_layout_core::TextMeasureRequest { text: String::new(), style_key: 0 });
         tree.push(leaf);
         // 逐层包裹（auto 尺寸容器——正是 0.13 爆炸的形状）
         let mut cur: u32 = 0;
