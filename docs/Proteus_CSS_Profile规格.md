@@ -87,8 +87,15 @@ Web 端是**零转换直跑标准 SPA**，用的就是浏览器原生 CSS。因�
 ### ★Skyline 端实测（2026-09-29，基础库 3.17.3，iPhone 12/13 模拟器）
 
 **方法**：探针页 `showcase/subpackages/capabilities/pages/css-profile-probe.vue` ——
-用 `wx.createSelectorQuery`（**★实测：Skyline + glass-easel 下页面上下文可用**，返回真实几何）
-逐条测量，以**几何反推**特性是否被接受。**结果 25/25 项通过**。
+逐条测量并以**几何反推**特性是否被接受。**结果 25/25 项通过**。
+
+**★两条通道均已验证可用（A/B 对照实测）**：
+- 框架能力 Hook `useElement('#id')` → `boundingClientRect()` 返回 `OK:100x20`
+- 原生 `wx.createSelectorQuery().select('#id').boundingClientRect()` 返回 `OK:100x20`
+⇒ **两者一致**（`cap.useElement` 在 MP 端可用，无需绕过框架 API）。
+> ⚠️ **纠正一处我先前的误判**：初版探针页注释写「useElement 在 MP 端句柄可创建但测量无返回」——
+> 那是**读错字段**造成的（E2E 里读实例属性 `p.rows`，而 ref 值在 MP 编译后落在 `p.data.rows`）。
+> 经 A/B 对照证伪，**框架 API 无缺陷**；正确读法是 `p.data.rows`。
 
 | 特性 | 实测几何 | 判定 | 备注 |
 |---|---|---|---|
