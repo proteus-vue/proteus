@@ -230,3 +230,41 @@ bash hosts/android/build-and-run.sh --no-install --release
 产出：`hosts/android/results/acceptance/<时间戳>/`
 （`layout-conformance.json` · `layout-bench.json` · `layout-compare-native.json` ·
 `layout-native-only.json` · `layout-proteus-only.json` · `layout-memory.json` · `layout-env.json` · `raw.txt`）
+
+---
+
+## ★★M3 事件系统（命中测试）验收 —— `--es path hit`
+
+方案 §M3「事件系统、手势」的**几何地基**：把屏幕坐标映射到节点。
+
+### 三层验证（缺一不可）
+
+| 层 | 回答什么 | 读法 |
+|---|---|---|
+| ① **核心语义** | 「逆绘制序 + 裁剪」是否与浏览器一致 | `cargo test`：命中 conformance **3547 探针**逐位等于 Chromium `elementsFromPoint` |
+| ② **独立实现对拍** | 平台自己的派发是否与我一致 | 真机报告 `independent_agreement`：Android `ViewGroup.dispatchTouchEvent` 镜像 vs 核心 |
+| ③ **端到端** | 真机上这条链路通不通 | 真机报告 `mismatch`（含**滚动偏移换算**的判别性检查） |
+
+### 运行
+
+```bash
+# Android
+adb shell am start -n dev.proteus.layoutcore/.MainActivity --es path hit
+adb shell "am broadcast -a dev.proteus.RUN --es path hit -p dev.proteus.layoutcore"
+adb pull /sdcard/Android/data/dev.proteus.layoutcore/files/layout-hit.json
+
+# iOS（同一份探针，写在 hosts/ios/ProteusHost/layout-core-bench.swift）
+bash hosts/ios/run-layout-bench.sh
+
+# 跨端一致性（两端逐位相同才算成立）
+python3 hosts/cross-device-hit.py
+```
+
+### ★诚实边界
+
+- **镜像（②）只覆盖「子级在父盒内」的用例**：Android 子 View 超出父边界收不到触摸，
+  而 CSS `overflow:visible` 时子级**仍可命中**。溢出/裁剪语义由 ①（浏览器 golden）覆盖。
+- **跨端探针集刻意小（6 点）**：覆盖「在流/定位重叠、裁剪外、界外」四类分支，
+  但**不等于**全语义覆盖——完整语义在 conformance 的 3547 个探针里。
+- **未实现** `z-index` / `position:fixed|sticky`（L3，需合成层管理）。当前层叠语义 =
+  「定位元素整体在在流元素之上；同相位内按树序」（规范见 CSS Profile §L2-1 层叠相位）。

@@ -38,6 +38,9 @@ func proteus_layout_free_string(_ ptr: UnsafeMutablePointer<CChar>)
 @_silgen_name("proteus_layout_profile")
 func proteus_layout_profile(_ json: UnsafePointer<CChar>, _ useBlob: Bool) -> UnsafeMutablePointer<CChar>
 
+@_silgen_name("proteus_layout_hit_test")
+func proteus_layout_hit_test(_ handle: UInt64, _ x: Float, _ y: Float) -> UnsafeMutablePointer<CChar>
+
 func takeString(_ ptr: UnsafeMutablePointer<CChar>) -> String {
     defer { proteus_layout_free_string(ptr) }
     return String(cString: ptr)
@@ -354,6 +357,11 @@ final class BenchViewController: UIViewController {
         //   每个 item 都要走内容测量，与 Android 侧「item 定宽高」的基准**口径不同**。
         out["rust_layout_note"] = "含 serde 解析 349KB JSON + 4051 节点的内容测量（item 不设宽高）" 
 
+        // ── ★★命中测试（M3 事件系统）：证明「三端共享同一份核心」不止于布局 ──
+        //   两端（Android / iOS）**无共享代码**，但调的是同一个 Rust 函数。
+        //   把同一组探针跑在两端：结果必须逐位相同 —— 这是「一套语义多端一致」的直接证据。
+        out["hit_probes"] = runHitProbes(handle: handle)
+
         var rects: [String: [String: Double]] = [:]
         if let d = rectsJson.data(using: .utf8),
            let root = try? JSONSerialization.jsonObject(with: d) as? [String: Any],
@@ -468,6 +476,74 @@ final class BenchViewController: UIViewController {
         拍平/原生 = \(verdict["flat_vs_native_ratio"] ?? "?")（目标 ≤1.15）
         """
         view.addSubview(label)
+    }
+
+    /// ★★命中测试探针：与 Android `MainActivity.hitTestRun` **同一份场景与探针点**。
+    ///
+    /// 【为什么两端要用同一份探针】
+    ///   「三端共享核心」这句话必须可验证：两端各自用**自己的 C ABI / JNI 绑定**调同一个
+    ///   `proteus_layout_hit_test`。同一场景 + 同一探针 → 结果**逐位相同**才算成立。
+    ///   若某端绑定写错（参数顺序、坐标轴、类型宽度），这里会立刻暴露。
+    ///
+    /// 场景（与 Android 完全一致）：
+    ///   root 300×300
+    ///     ├── 2 顶栏 300×60（在流）
+    ///     ├── 3 卡片 300×180（在流）
+    ///     │     ├── 4 absolute 240×140 @(30,20)  → 绝对 y 80..220
+    ///     │     └── 5 absolute 140×100 @(60,50)  → 绝对 y 110..210
+    ///     └── 6 底栏 300×60
+    private func runHitProbes(handle: UInt64) -> [String: Any] {
+        let nodes = """
+        {"viewport":{"width":300,"height":300},"nodes":[
+         {"id":1,"parentId":null,"width":300.0,"height":300.0,"flexDirection":"column"},
+         {"id":2,"parentId":1,"width":300.0,"height":60.0},
+         {"id":3,"parentId":1,"width":300.0,"height":180.0},
+         {"id":4,"parentId":3,"position":"absolute","top":20.0,"left":30.0,"width":240.0,"height":140.0},
+         {"id":5,"parentId":3,"position":"absolute","top":50.0,"left":60.0,"width":140.0,"height":100.0},
+         {"id":6,"parentId":1,"width":300.0,"height":60.0}
+        ],"textMeasures":{}}
+        """
+        let hitHandle = nodes.withCString { proteus_layout_create($0) }
+        guard hitHandle > 0 else { return ["ok": false, "error": "建树失败"] }
+
+        // ★期望值由**本文件独立声明**（不取自任何一端的结果）——
+        //   两侧各自与期望比，避免「共同错」被当成一致。
+        //   期望依据（纯几何 + 两相位绘制序）：
+        //     (150,30)  仅 2                          → 2
+        //     (150,90)  3 与 4（4 是定位元素 → 在 3 之上）→ 4
+        //     (100,110) 3、4、5 → 5（5 树序在 4 之后）
+        //     (150,140) 同上                           → 5
+        //     (150,290) 仅 6                           → 6
+        //     (400,400) 界外                           → -1
+        let probes: [(Float, Float, Int)] = [
+            (150, 30, 2), (150, 90, 4), (100, 110, 5), (150, 140, 5), (150, 290, 6), (400, 400, -1),
+        ]
+        var rows: [[String: Any]] = []
+        var mismatch = 0
+        for (x, y, expect) in probes {
+            let json = takeString(proteus_layout_hit_test(hitHandle, x, y))
+            var target = -99
+            var chain: [Int] = []
+            if let d = json.data(using: .utf8),
+               let o = try? JSONSerialization.jsonObject(with: d) as? [String: Any] {
+                if let t = o["target"] as? Int { target = t }
+                else if o["target"] is NSNull { target = -1 }
+                if let c = o["chain"] as? [Int] { chain = c }
+            }
+            let ok = target == expect
+            if !ok { mismatch += 1 }
+            rows.append(["x": x, "y": y, "expect": expect, "target": target, "chain": chain, "ok": ok, "raw": json])
+        }
+        let _ = proteus_layout_destroy(hitHandle)
+
+        let okAll = mismatch == 0
+        let summary = rows.map { r -> String in
+            let ok = (r["ok"] as? Bool) ?? false
+            return "(\(r["x"] ?? 0),\(r["y"] ?? 0)) → \(r["target"] ?? 0) 期望 \(r["expect"] ?? 0) \(ok ? "✓" : "✗")"
+        }.joined(separator: " | ")
+        NSLog("[proteus] 命中探针 %@", summary)
+        return ["ok": okAll, "mismatch": mismatch, "probes": rows, "summary": summary,
+                "note": "★与 Android MainActivity.hitTestRun 同一场景与探针；两端无共享代码但共用同一 Rust 核心"]
     }
 
     private func writeReport(_ out: [String: Any]) {
