@@ -1,0 +1,7 @@
+{
+  "ok": true,
+  "failures": [],
+  "z_order": "native-on-top",
+  "native_host_geometry_driven_by_rust": true,
+  "screenshot": "native-host-regression.png"
+}

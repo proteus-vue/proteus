@@ -4,18 +4,32 @@ import android.content.Context;
 import android.graphics.Canvas;
 import android.graphics.Color;
 import android.graphics.Paint;
+import android.graphics.RectF;
 import android.view.View;
+import android.view.ViewGroup;
 
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 
 /**
- * ★宿主自绘 View（方案 §6.1 规格：**单个宿主 View + Canvas 下发，不走 ViewGroup 递归**）。
+ * ★★宿主 View（方案 §6.1 规格）——**角色等同 Compose 的 `AndroidComposeView`（一个 ViewGroup）**。
  *
  * 与原生对照组的差别正是 M2 要证明的事：
  *   原生   = 4050 个 View 对象各自 measure/layout/draw（View 体系递归）
- *   Proteus = 1 个 View + N 条绘制指令（无 View 树、无 View 体系递归）
+ *   Proteus = 1 个宿主 + N 条绘制指令（**自绘内容无 View 树、无 View 体系递归**）
+ *
+ * 【为什么是 ViewGroup 而不是 View】（M3 原生组件混用，方案 L3 层「必须预留」）
+ *   地图 / WebView / 广告 SDK 必须以**原生 View** 嵌入（这是不自绘的核心理由之一，
+ *   见方案 §9 坑位 #4：「层级与滚动同步需专门设计」）。
+ *   而 View 无法承载子 View → 升级为 ViewGroup：
+ *     · **自绘内容**（色块/文本）仍走 `onDraw` 的 Canvas 指令（无 View 树）
+ *     · **native-host 节点**作为**子 View**，其 measure/layout **完全由 Rust 几何驱动**
+ *       （不走 ViewGroup 的默认排布逻辑 → 布局仍由排版核心决定）
+ *     · **z-order**：子 View 由 `dispatchDraw` 在 `onDraw` **之后**绘制
+ *       → 原生 View 天然在自绘内容**之上**（这是 Android 的固有约束，已如实记录）
  */
-public class ProteusHostView extends View {
+public class ProteusHostView extends ViewGroup {
     /** 绘制指令（由 Rust 核心的布局结果生成） */
     public static final class Cmd {
         final float x, y, w, h;
@@ -25,6 +39,13 @@ public class ProteusHostView extends View {
             this.x = x; this.y = y; this.w = w; this.h = h; this.color = color; this.text = text;
         }
     }
+
+    /* ══════════ ★native-host 节点（原生 View 嵌入，方案 L3） ══════════ */
+
+    /** 节点 id → 原生 View */
+    private final Map<Integer, View> nativeHosts = new HashMap<>();
+    /** 节点 id → Rust 几何（**位置/尺寸的唯一来源**；子 View 的 measure/layout 都用它） */
+    private final Map<Integer, RectF> nativeRects = new HashMap<>();
 
     private List<Cmd> cmds = java.util.Collections.emptyList();
     private final Paint bgPaint = new Paint();
@@ -42,6 +63,89 @@ public class ProteusHostView extends View {
     public void setCmds(List<Cmd> value) {
         this.cmds = value;
         invalidate();
+    }
+
+    /* ── native-host 接入 ── */
+
+    /**
+     * 注册一个原生视图作为 `native-host` 节点的载体。
+     *
+     * @param nodeId Rust 树里的节点 id（几何按它查）
+     * @param v      原生 View（WebView / MapView / 第三方 SDK View）
+     */
+    public void addNativeHost(int nodeId, View v) {
+        nativeHosts.put(nodeId, v);
+        addView(v);
+        requestLayout();
+    }
+
+    /**
+     * 设置 native-host 节点的几何（**必须来自 Rust 排版核心**）。
+     *
+     * ★为什么几何必须外部传入：方案要求「布局使用排版核心，不走 ViewGroup 递归」。
+     *   若让子 View 自己 measure，就退回了 View 体系；这里显式用 Rust 的结果驱动，
+     *   子 View 只负责「按给定尺寸渲染自己」。
+     *
+     * @param rects 节点 id → 相对**宿主**的矩形（Rust 几何 + 场景偏移）
+     */
+    public void setNativeHostGeometry(Map<Integer, RectF> rects) {
+        nativeRects.clear();
+        nativeRects.putAll(rects);
+        requestLayout();
+    }
+
+    public int nativeHostCount() {
+        return nativeHosts.size();
+    }
+
+    /* ── ViewGroup 生命周期：用 Rust 几何驱动 ── */
+
+    @Override
+    protected void onMeasure(int widthSpec, int heightSpec) {
+        // 宿主自身：接受 parent 给的尺寸（它由外部布局决定）
+        int w = MeasureSpec.getSize(widthSpec);
+        int h = MeasureSpec.getSize(heightSpec);
+        // ★子 View（native-host）：**尺寸来自 Rust 几何**（EXACTLY）——不退化为 View 体系测量
+        for (Map.Entry<Integer, View> e : nativeHosts.entrySet()) {
+            RectF rect = nativeRects.get(e.getKey());
+            int nw = rect != null ? Math.round(rect.width()) : 0;
+            int nh = rect != null ? Math.round(rect.height()) : 0;
+            e.getValue().measure(
+                    MeasureSpec.makeMeasureSpec(nw, MeasureSpec.EXACTLY),
+                    MeasureSpec.makeMeasureSpec(nh, MeasureSpec.EXACTLY));
+        }
+        setMeasuredDimension(w, h);
+    }
+
+    @Override
+    protected void onLayout(boolean changed, int l, int t, int r, int b) {
+        // ★子 View（native-host）：**位置来自 Rust 几何**（绝对定位，非流式排布）
+        for (Map.Entry<Integer, View> e : nativeHosts.entrySet()) {
+            RectF rect = nativeRects.get(e.getKey());
+            if (rect == null) continue;
+            View v = e.getValue();
+            v.layout(Math.round(rect.left), Math.round(rect.top),
+                     Math.round(rect.right), Math.round(rect.bottom));
+        }
+    }
+
+    /** 报告 native-host 的当前布局（核验用：确认 Rust 几何真的落到了子 View 上） */
+    public String nativeHostLayoutDump() {
+        StringBuilder sb = new StringBuilder("[");
+        boolean first = true;
+        for (Map.Entry<Integer, View> e : nativeHosts.entrySet()) {
+            View v = e.getValue();
+            if (!first) sb.append(',');
+            first = false;
+            sb.append("{\"nodeId\":").append(e.getKey())
+              .append(",\"left\":").append(v.getLeft())
+              .append(",\"top\":").append(v.getTop())
+              .append(",\"width\":").append(v.getWidth())
+              .append(",\"height\":").append(v.getHeight())
+              .append(",\"visible\":").append(v.getVisibility() == View.VISIBLE)
+              .append("}");
+        }
+        return sb.append(']').toString();
     }
 
     /* ══════════ ★滚动列表模式（§9.3）：把 ListRenderer 接到**真实 View 绘制管线** ══════════ */

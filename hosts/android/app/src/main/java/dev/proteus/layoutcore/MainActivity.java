@@ -204,6 +204,16 @@ public class MainActivity extends Activity {
             sb.append("【③ §9.3 平台侧滚动（Choreographer 帧率 + RenderNode 池）】\n");
             String start = scrollListRun();
             sb.append(start).append('\n');
+        } else if ("shot-native".equals(testPath)) {
+            // ★★M3 原生组件混用（方案 L3：「map / webview / 广告 / 第三方 SDK 以原生 View 嵌入」）
+            //   验证三件事：
+            //     ① native-host 节点的**位置/尺寸由 Rust 几何决定**（不退化为 View 体系测量）
+            //     ② 原生 View 与自绘内容**共存于同一宿主**
+            //     ③ **z-order 约束**（原生 View 在自绘内容之上——Android 固有，需如实记录）
+            sb.append("【③ 原生组件混用场景（native-host）】\n");
+            String shotN = setupNativeHostScene();
+            sb.append(shotN).append('\n');
+            writeReport("layout-native-host.json", shotN);
         } else if ("shot".equals(testPath)) {
             // ★★截图回归（内容级等价验证）
             //   目的：闭环验证「**Rust 算出的几何 → 屏幕上的真实像素**」。
@@ -295,7 +305,10 @@ public class MainActivity extends Activity {
         //   报告 TextView 是后加的子 View → **盖在场景之上** → 其文本行被截进截图，
         //   在场景里表现为「行内部出现灰色横条」（实测 y=732/760-772 正是文字行）。
         //   截图核验要求屏幕上只有被测场景；报告已写文件，不需要上屏。
-        if (!"shot".equals(testPath)) {
+        // ★截图类场景（shot / shot-native）都不上屏报告：
+        //   否则报告 TextView 盖在场景上，其文字像素会污染采样
+        //   （实测：overlap 行采到 #787A84 —— 那是文字抗锯齿像素，不是场景内容）
+        if (!testPath.startsWith("shot")) {
             TextView tv = new TextView(this);
             tv.setText(text);
             tv.setTextSize(9f);
@@ -518,6 +531,198 @@ public class MainActivity extends Activity {
         } catch (Exception e) {
             return "{\"ok\":false,\"error\":\"" + e.getMessage() + "\"}";
         }
+    }
+
+    /**
+     * ★★原生组件混用场景：在自绘内容中嵌入一个 **WebView**（native-host 节点）。
+     *
+     * 场景布局（全部由 **Rust 核心**算出）：
+     *   root(column, w=750)
+     *     ├─ row0..2  自绘色块（3 × 40px）
+     *     ├─ **native-host**  ← WebView，高度 200px（Rust 几何决定位置）
+     *     ├─ rowA     自绘色块（40px）
+     *     └─ rowB     自绘色块（40px）
+     *
+     * ★z-order 验证（关键）：再放一个**与 native-host 区域重叠**的自绘色块（`overlapRow`），
+     *   用于验证「原生 View 与自绘内容重叠时谁在上面」——这是 Android 的固有约束
+     *   （子 View 由 dispatchDraw 在 onDraw 之后绘制 → 原生在上），必须**实测确认并记录**，
+     *   而不能假设。
+     */
+    private String setupNativeHostScene() {
+        final int W = 750;
+        final int ROW_H = 40;
+        final int HOST_H = 200;       // native-host 高度
+        final int LEFT = 60, TOP = 200;
+
+        // 行定义：[id, kind]  —— kind: 0=自绘色块, 1=native-host, 2=与 host 重叠的自绘色块
+        final int[][] LAYOUT = {
+                {0, 0}, {1, 0}, {2, 0},
+                {3, 1},               // native-host
+                {4, 0},
+                {5, 2},               // ★与 native-host **重叠**的自绘色块（z-order 测试）
+        };
+
+        StringBuilder nodes = new StringBuilder(8 * 1024);
+        nodes.append("{\"viewport\":{\"width\":").append(W).append(",\"height\":").append(TOP + 6 * ROW_H + 400).append("},\"nodes\":[");
+        nodes.append("{\"id\":1,\"parentId\":null,\"width\":").append(W).append(".0,\"flexDirection\":\"column\"}");
+        int nid = 2;
+        int nativeHostNodeId = -1;
+        int nativeHostTop = -1;
+        int flowY = 0;                 // 流式布局的累计 y
+        for (int[] row : LAYOUT) {
+            int h = row[1] == 1 ? HOST_H : ROW_H;
+            int hostTop = -1;          // 若本行是 native-host，记录它的 top（供 overlap 行对齐）
+            nodes.append(",{\"id\":").append(nid).append(",\"parentId\":1,\"width\":").append(W)
+                 .append(".0,\"height\":").append(h).append(".0");
+            if (row[1] == 1) {
+                nodes.append(",\"nativeHost\":true,\"semantic\":\"shell.webview\"");
+                nativeHostNodeId = nid;
+                nativeHostTop = flowY;
+            }
+            if (row[1] == 2) {
+                // ★★绝对定位，top **与 native-host 完全相同** → 真正重叠（z-order 测试的前提）
+                //   初版放在 column 流里 → 排在 native-host 之下 → 根本没测到 z-order
+                nodes.append(",\"position\":\"absolute\",\"top\":").append(nativeHostTop).append(".0,\"left\":0.0");
+            } else {
+                flowY += h;
+            }
+            nodes.append("}");
+            nid++;
+        }
+        nodes.append("],\"textMeasures\":{}}");
+
+        long handle = RustLayout.create(nodes.toString());
+        if (handle <= 0) return "{\"ok\":false,\"error\":\"Rust 建树失败\"}";
+        String rectsJson = RustLayout.readRects(handle);
+
+        // ★★从 **Rust 结果**读 native-host 清单（而不是 Java 侧维护场景表）——
+        //   保证「IR 判定谁是 native-host」与「宿主创建原生 View」**同源**，不会不同步。
+        java.util.Set<Integer> nativeHostIds = new java.util.HashSet<>();
+        try {
+            org.json.JSONArray nh = new org.json.JSONObject(rectsJson).optJSONArray("native_hosts");
+            if (nh != null) for (int i = 0; i < nh.length(); i++) nativeHostIds.add(nh.getInt(i));
+        } catch (Exception ignored) {}
+
+        // 解析 Rust 几何 → 绘制指令 + native 几何
+        java.util.List<ProteusHostView.Cmd> cmds = new java.util.ArrayList<>();
+        java.util.Map<Integer, android.graphics.RectF> nativeRects = new java.util.HashMap<>();
+        org.json.JSONArray expect = new org.json.JSONArray();
+        try {
+            org.json.JSONObject rects = new org.json.JSONObject(rectsJson).getJSONObject("rects");
+            int idx = 2;
+            int rowNo = 0;
+            for (int[] row : LAYOUT) {
+                org.json.JSONObject r = rects.getJSONObject(String.valueOf(idx));
+                float x = LEFT + (float) r.getDouble("x");
+                float y = TOP + (float) r.getDouble("y");
+                float w = (float) r.getDouble("width");
+                float h = (float) r.getDouble("height");
+                // ★判定依据 = Rust 回传的 native_hosts（不是本地 LAYOUT 表）
+                boolean isNative = nativeHostIds.contains(idx);
+                if (isNative) {
+                    nativeRects.put(idx, new android.graphics.RectF(x, y, x + w, y + h));
+                } else {
+                    int color = row[1] == 2 ? 0xFFE53935 : rowColor2(rowNo);   // 重叠行用醒目红
+                    cmds.add(new ProteusHostView.Cmd(x, y, w, h, color, null));
+                }
+                org.json.JSONObject e = new org.json.JSONObject();
+                e.put("seq", rowNo);
+                e.put("nodeId", idx);
+                e.put("kind", isNative ? "native-host" : (row[1] == 2 ? "overlap-selfdraw" : "self-draw"));
+                e.put("x", Math.round(x));
+                e.put("y", Math.round(y));
+                e.put("w", Math.round(w));
+                e.put("h", Math.round(h));
+                expect.put(e);
+                idx++;
+                rowNo++;
+            }
+        } catch (Exception ex) {
+            if (handle > 0) RustLayout.destroy(handle);
+            return "{\"ok\":false,\"error\":\"几何解析失败：" + ex.getMessage() + "\"}";
+        }
+
+        // native-host 节点 id：从 Rust 回传的清单取第一个（★不再依赖 Java 侧变量）
+        if (nativeHostIds.isEmpty()) {
+            if (handle > 0) RustLayout.destroy(handle);
+            return "{\"ok\":false,\"error\":\"Rust 未回传 native_hosts（IR 判定缺失）\"}";
+        }
+        final int hostNodeId = nativeHostIds.iterator().next();
+
+        // 建宿主 + 场景
+        final ProteusHostView scene = new ProteusHostView(this);
+        scene.setCmds(cmds);
+        scene.setBackgroundColor(0xFFFFFFFF);
+
+        // ★创建原生 View（WebView：真实场景；内联 HTML，无网络依赖）
+        android.webkit.WebView wv = new android.webkit.WebView(this);
+        wv.setBackgroundColor(0xFF1565C0);            // 醒目蓝：便于截图核验（不依赖 HTML 加载时序）
+        wv.loadDataWithBaseURL(null,
+                "<html><body style='margin:0;background:#1565C0;color:#fff;font:16px sans-serif'>"
+                        + "<div style='padding:12px'>native WebView<br>（native-host 节点）</div></body></html>",
+                "text/html", "UTF-8", null);
+        scene.addNativeHost(hostNodeId, wv);
+        scene.setNativeHostGeometry(nativeRects);
+
+        FrameLayout.LayoutParams lp = new FrameLayout.LayoutParams(1080, 2400);
+        lp.leftMargin = 0; lp.topMargin = 0;
+        root.addView(scene, lp);
+        runButton.setVisibility(android.view.View.GONE);
+
+        final long h2 = handle;
+        final org.json.JSONArray expectFinal = expect;
+        final int hostNodeIdF = hostNodeId;
+        scene.post(new Runnable() {
+            @Override public void run() {
+                try {
+                    int[] loc = new int[2];
+                    scene.getLocationOnScreen(loc);
+                    org.json.JSONObject o = new org.json.JSONObject();
+                    o.put("ok", true);
+                    o.put("path", "shot-native");
+                    o.put("offset_left", LEFT);
+                    o.put("offset_top", TOP);
+                    o.put("native_host_node_id", hostNodeIdF);
+                    // ★报告里给出**场景规格**（测试定义）——供宿主机**独立重算**期望位置，
+                    //   避免「用 app 的测量结果当期望」= 自己判自己
+                    o.put("spec", new org.json.JSONObject()
+                            .put("row_h", ROW_H)
+                            .put("host_h", HOST_H)
+                            .put("offset_left", LEFT)
+                            .put("offset_top", TOP)
+                            .put("layout", "0,self;1,self;2,self;3,native;4,self;5,overlap@3"));
+                    o.put("expected", expectFinal);
+                    o.put("native_host_layout", new org.json.JSONArray(scene.nativeHostLayoutDump()));
+                    o.put("view_origin_x", loc[0]);
+                    o.put("view_origin_y", loc[1]);
+                    o.put("view_width", scene.getWidth());
+                    o.put("view_height", scene.getHeight());
+                    o.put("z_order_note", "★Android 固有约束：子 View（native-host）由 dispatchDraw 在 onDraw **之后**绘制 → 原生 View 在自绘内容之上。本场景的 overlap-selfdraw 行用于**实测确认**该约束");
+                    writeReport("layout-native-host.json", o.toString(2));
+                } catch (Exception e) {
+                    writeReport("layout-native-host.json", "{\"ok\":false,\"error\":\"" + e.getMessage() + "\"}");
+                }
+                if (h2 > 0) RustLayout.destroy(h2);
+            }
+        });
+
+        try {
+            org.json.JSONObject o = new org.json.JSONObject();
+            o.put("ok", true);
+            o.put("path", "shot-native");
+            o.put("note", "占位——真实报告由 scene.post() 在布局完成后写入");
+            return o.toString(2);
+        } catch (Exception e) {
+            return "{\"ok\":false,\"error\":\"" + e.getMessage() + "\"}";
+        }
+    }
+
+    /** 自绘行色（与 shot 场景的行色错开，便于区分两类场景） */
+    private static int rowColor2(int i) {
+        int r = 30 + (i * 30) % 180;
+        int g = 160 - (i * 20) % 120;
+        int b = 70 + (i * 25) % 160;
+        return 0xFF000000 | (r << 16) | (g << 8) | b;
     }
 
     /** 行色：可预测的公式（宿主机用同一公式独立计算期望值） */

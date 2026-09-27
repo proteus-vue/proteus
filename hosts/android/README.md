@@ -97,3 +97,30 @@ PYTHONPATH=.tools/py python3 screenshot-verify.py scene.json scene.png
 | 6 | 期望值取自 app 自己的报告 = **自己判自己的卷** | 宿主机**独立重算**几何与颜色 |
 
 **破坏性验证**：仅绘制侧偏移 4px → 20 行**全部检出**（边界区不符）+ 给出 `dy=-16` 诊断。
+
+## M3 原生组件混用（native-host）
+
+```bash
+adb shell am start -n dev.proteus.layoutcore/.MainActivity --es path shot-native
+adb shell "am broadcast -a dev.proteus.RUN --es path shot-native -p dev.proteus.layoutcore"
+adb exec-out screencap -p > nh.png
+adb shell "cat /sdcard/Android/data/dev.proteus.layoutcore/files/layout-native-host.json" > nh.json
+PYTHONPATH=.tools/py python3 native-host-verify.py nh.json nh.png
+```
+
+**验三件事**（期望由宿主机按**场景规格**独立重算）：
+1. **位置由 Rust 几何驱动**：子 View 的 left/top/w/h == 排版核心算出的几何
+2. **原生 View 真的在渲染**：截图在该区域取到 WebView 的颜色
+3. **z-order 实测**：与 native-host 重叠的自绘色块，屏幕上显示哪个
+
+**★实测结论**：**原生 View 在自绘内容之上**（Android 固有约束：子 View 由 `dispatchDraw` 在 `onDraw` 之后绘制）。
+这正是方案 §9 坑位 #4 预警的「层级需专门设计」——现在是**实测确认**而非假设。
+
+| 检查 | 结果 |
+|---|---|
+| ① 位置由 Rust 几何驱动 | ✓ (60,320) 750×200 精确一致 |
+| ② 原生 View 真在渲染 | ✓ WebView 蓝 |
+| ③ z-order | **native-on-top**（如实记录约束） |
+| 自绘行复核 | 4/4 ✓ |
+
+**破坏性验证**：native-host 几何偏移 25px → **2 处失败被检出**（位置不符 + 相邻自绘行被遮）。

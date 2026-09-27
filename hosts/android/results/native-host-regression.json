@@ -1,0 +1,85 @@
+{
+  "ok": true,
+  "path": "shot-native",
+  "offset_left": 60,
+  "offset_top": 200,
+  "native_host_node_id": 5,
+  "spec": {
+    "row_h": 40,
+    "host_h": 200,
+    "offset_left": 60,
+    "offset_top": 200,
+    "layout": "0,self;1,self;2,self;3,native;4,self;5,overlap@3"
+  },
+  "expected": [
+    {
+      "seq": 0,
+      "nodeId": 2,
+      "kind": "self-draw",
+      "x": 60,
+      "y": 200,
+      "w": 750,
+      "h": 40
+    },
+    {
+      "seq": 1,
+      "nodeId": 3,
+      "kind": "self-draw",
+      "x": 60,
+      "y": 240,
+      "w": 750,
+      "h": 40
+    },
+    {
+      "seq": 2,
+      "nodeId": 4,
+      "kind": "self-draw",
+      "x": 60,
+      "y": 280,
+      "w": 750,
+      "h": 40
+    },
+    {
+      "seq": 3,
+      "nodeId": 5,
+      "kind": "native-host",
+      "x": 60,
+      "y": 320,
+      "w": 750,
+      "h": 200
+    },
+    {
+      "seq": 4,
+      "nodeId": 6,
+      "kind": "self-draw",
+      "x": 60,
+      "y": 520,
+      "w": 750,
+      "h": 40
+    },
+    {
+      "seq": 5,
+      "nodeId": 7,
+      "kind": "overlap-selfdraw",
+      "x": 60,
+      "y": 320,
+      "w": 750,
+      "h": 40
+    }
+  ],
+  "native_host_layout": [
+    {
+      "nodeId": 5,
+      "left": 60,
+      "top": 320,
+      "width": 750,
+      "height": 200,
+      "visible": true
+    }
+  ],
+  "view_origin_x": 0,
+  "view_origin_y": 312,
+  "view_width": 1080,
+  "view_height": 2400,
+  "z_order_note": "★Android 固有约束：子 View（native-host）由 dispatchDraw 在 onDraw **之后**绘制 → 原生 View 在自绘内容之上。本场景的 overlap-selfdraw 行用于**实测确认**该约束"
+}

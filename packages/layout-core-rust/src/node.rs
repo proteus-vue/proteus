@@ -46,6 +46,16 @@ pub struct LNode {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub text: Option<TextMeasureRequest>,
 
+    /// ★**原生宿主节点**（方案 L3：map / webview / 广告 / 相机等必须原生嵌入）。
+    ///
+    /// 对**布局**无影响（它就是一个有尺寸的盒子）——但对**平台层**是关键信息：
+    ///   · 宿主据此为该节点创建真实原生 View（而非自绘）
+    ///   · 且必须确保它**不被拍平**（M0 的 `flattenEligible` 已排除 native-host）
+    ///
+    /// 语义来源：编译期 IR 的 `PNode.kind === 'native-host'`（M0 已实现，见 `kindFromSemantic`）。
+    #[serde(default)]
+    pub native_host: bool,
+
     // ── 求解输出 ──
     /// 相对**父内容盒**的位置与自身尺寸（绝对坐标由 `LayoutTree::absolute_rects` 叠加）
     #[serde(default)]
@@ -59,7 +69,17 @@ pub struct LNode {
 
 impl LNode {
     pub fn new(id: u32, style: LStyle) -> Self {
-        Self { id, tag: String::new(), style, parent: NO_PARENT, children: Vec::new(), text: None, rect: Rect::default(), dirty: false }
+        Self {
+            id,
+            tag: String::new(),
+            style,
+            parent: NO_PARENT,
+            children: Vec::new(),
+            text: None,
+            native_host: false,
+            rect: Rect::default(),
+            dirty: false,
+        }
     }
 
     /// 是否为布局边界（§5.4）：宽高均显式 **且自身有子级** ⇒ 内部变更不外溢

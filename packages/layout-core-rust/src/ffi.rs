@@ -128,6 +128,12 @@ struct NodeDto {
     ///   故两个来源都要认：宿主直传用 `text`，golden 用 `isText`。
     #[serde(default)]
     is_text: bool,
+    /// ★原生宿主节点（L3：webview/map/广告/相机）——布局无影响，但宿主据此创建原生 View
+    #[serde(default)]
+    native_host: bool,
+    /// 语义标签（诊断用；如 `shell.webview`）
+    #[serde(default)]
+    semantic: Option<String>,
 }
 
 #[derive(serde::Deserialize, Clone, Copy, Default)]
@@ -257,6 +263,11 @@ fn build_tree(req: &LayoutRequest) -> Result<(LayoutTree, Vec<u32>), String> {
         // 文本叶子：金标用 `isText`，宿主可直传 `text`；两者都视为「需要度量」
         if dto.is_text || dto.text.is_some() {
             node.text = Some(crate::node::TextMeasureRequest { text: dto.text.clone().unwrap_or_default() });
+        }
+        // ★原生宿主标记（L3）：布局无影响，但会**回传**给宿主，供其创建原生 View
+        node.native_host = dto.native_host;
+        if let Some(sem) = &dto.semantic {
+            node.tag = sem.clone();
         }
         let idx = tree.push(node);
         index_of.insert(dto.id, idx);
@@ -452,7 +463,16 @@ pub unsafe extern "C" fn proteus_layout_rects(handle: u64) -> *mut c_char {
                 );
             }
         }
-        Ok(serde_json::json!({"ok": true, "node_count": tree.len(), "rects": rects}).to_string())
+        // ★回传 native-host 节点清单：宿主据此决定「哪些节点创建原生 View」
+        //   （而不是让宿主自己维护一份场景表——那会导致 IR 与宿主不同步）
+        let native_hosts: Vec<u32> = tree.nodes.iter().filter(|n| n.native_host).map(|n| n.id).collect();
+        Ok(serde_json::json!({
+            "ok": true,
+            "node_count": tree.len(),
+            "native_hosts": native_hosts,
+            "rects": rects
+        })
+        .to_string())
     });
     match r {
         Ok(Ok(s)) => into_c_string(s),
