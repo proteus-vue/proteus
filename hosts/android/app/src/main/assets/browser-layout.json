@@ -1,0 +1,2507 @@
+{
+  "generatedBy": "tests/e2e-layout-core-pixel.test.ts（真实 Chromium；browser 151.0.7922.34）",
+  "note": "★基准真值 = 浏览器。Rust 侧 conformance 直接消费本文件，无需浏览器。重新生成：pnpm run test:e2e:web",
+  "viewport": {
+    "width": 375,
+    "height": 667
+  },
+  "tolerance": 0.5,
+  "cases": [
+    {
+      "name": "row + gap + justify-content:space-between + align-items:center",
+      "nodes": [
+        {
+          "id": 1,
+          "parentId": null,
+          "tag": "view",
+          "width": 320,
+          "height": 80,
+          "margin": {
+            "top": 0,
+            "right": 0,
+            "bottom": 0,
+            "left": 0
+          },
+          "padding": {
+            "top": 0,
+            "right": 10,
+            "bottom": 0,
+            "left": 10
+          },
+          "flexDirection": "row",
+          "justifyContent": "space-between",
+          "alignItems": "center",
+          "flexGrow": 0,
+          "flexShrink": 1,
+          "gap": 0,
+          "display": "flex",
+          "position": "static",
+          "overflow": "visible",
+          "isText": false
+        },
+        {
+          "id": 2,
+          "parentId": 1,
+          "tag": "view",
+          "width": 50,
+          "height": 30,
+          "margin": {
+            "top": 0,
+            "right": 0,
+            "bottom": 0,
+            "left": 0
+          },
+          "padding": {
+            "top": 0,
+            "right": 0,
+            "bottom": 0,
+            "left": 0
+          },
+          "flexDirection": "column",
+          "justifyContent": "flex-start",
+          "alignItems": "stretch",
+          "flexGrow": 0,
+          "flexShrink": 1,
+          "gap": 0,
+          "display": "flex",
+          "position": "static",
+          "overflow": "visible",
+          "isText": false
+        },
+        {
+          "id": 3,
+          "parentId": 1,
+          "tag": "view",
+          "width": 80,
+          "height": 50,
+          "margin": {
+            "top": 0,
+            "right": 0,
+            "bottom": 0,
+            "left": 0
+          },
+          "padding": {
+            "top": 0,
+            "right": 0,
+            "bottom": 0,
+            "left": 0
+          },
+          "flexDirection": "column",
+          "justifyContent": "flex-start",
+          "alignItems": "stretch",
+          "flexGrow": 0,
+          "flexShrink": 1,
+          "gap": 0,
+          "display": "flex",
+          "position": "static",
+          "overflow": "visible",
+          "isText": false
+        },
+        {
+          "id": 4,
+          "parentId": 1,
+          "tag": "view",
+          "width": 40,
+          "height": 40,
+          "margin": {
+            "top": 0,
+            "right": 0,
+            "bottom": 0,
+            "left": 0
+          },
+          "padding": {
+            "top": 0,
+            "right": 0,
+            "bottom": 0,
+            "left": 0
+          },
+          "flexDirection": "column",
+          "justifyContent": "flex-start",
+          "alignItems": "stretch",
+          "flexGrow": 0,
+          "flexShrink": 1,
+          "gap": 0,
+          "display": "flex",
+          "position": "static",
+          "overflow": "visible",
+          "isText": false
+        }
+      ],
+      "textMeasures": {},
+      "rects": {
+        "1": {
+          "x": 0,
+          "y": 0,
+          "width": 320,
+          "height": 80
+        },
+        "2": {
+          "x": 10,
+          "y": 25,
+          "width": 50,
+          "height": 30
+        },
+        "3": {
+          "x": 125,
+          "y": 15,
+          "width": 80,
+          "height": 50
+        },
+        "4": {
+          "x": 270,
+          "y": 20,
+          "width": 40,
+          "height": 40
+        }
+      }
+    },
+    {
+      "name": "column + padding/margin + 主轴间距",
+      "nodes": [
+        {
+          "id": 1,
+          "parentId": null,
+          "tag": "view",
+          "width": 300,
+          "margin": {
+            "top": 0,
+            "right": 0,
+            "bottom": 0,
+            "left": 0
+          },
+          "padding": {
+            "top": 16,
+            "right": 20,
+            "bottom": 16,
+            "left": 20
+          },
+          "flexDirection": "column",
+          "justifyContent": "flex-start",
+          "alignItems": "stretch",
+          "flexGrow": 0,
+          "flexShrink": 1,
+          "gap": 0,
+          "display": "flex",
+          "position": "static",
+          "overflow": "visible",
+          "isText": false
+        },
+        {
+          "id": 2,
+          "parentId": 1,
+          "tag": "view",
+          "height": 40,
+          "margin": {
+            "top": 0,
+            "right": 0,
+            "bottom": 8,
+            "left": 0
+          },
+          "padding": {
+            "top": 0,
+            "right": 0,
+            "bottom": 0,
+            "left": 0
+          },
+          "flexDirection": "column",
+          "justifyContent": "flex-start",
+          "alignItems": "stretch",
+          "flexGrow": 0,
+          "flexShrink": 1,
+          "gap": 0,
+          "display": "flex",
+          "position": "static",
+          "overflow": "visible",
+          "isText": false
+        },
+        {
+          "id": 3,
+          "parentId": 1,
+          "tag": "view",
+          "height": 60,
+          "margin": {
+            "top": 0,
+            "right": 0,
+            "bottom": 8,
+            "left": 0
+          },
+          "padding": {
+            "top": 0,
+            "right": 0,
+            "bottom": 0,
+            "left": 0
+          },
+          "flexDirection": "column",
+          "justifyContent": "flex-start",
+          "alignItems": "stretch",
+          "flexGrow": 0,
+          "flexShrink": 1,
+          "gap": 0,
+          "display": "flex",
+          "position": "static",
+          "overflow": "visible",
+          "isText": false
+        },
+        {
+          "id": 4,
+          "parentId": 1,
+          "tag": "view",
+          "height": 20,
+          "margin": {
+            "top": 0,
+            "right": 0,
+            "bottom": 0,
+            "left": 0
+          },
+          "padding": {
+            "top": 0,
+            "right": 0,
+            "bottom": 0,
+            "left": 0
+          },
+          "flexDirection": "column",
+          "justifyContent": "flex-start",
+          "alignItems": "stretch",
+          "flexGrow": 0,
+          "flexShrink": 1,
+          "gap": 0,
+          "display": "flex",
+          "position": "static",
+          "overflow": "visible",
+          "isText": false
+        }
+      ],
+      "textMeasures": {},
+      "rects": {
+        "1": {
+          "x": 0,
+          "y": 0,
+          "width": 300,
+          "height": 168
+        },
+        "2": {
+          "x": 20,
+          "y": 16,
+          "width": 260,
+          "height": 40
+        },
+        "3": {
+          "x": 20,
+          "y": 64,
+          "width": 260,
+          "height": 60
+        },
+        "4": {
+          "x": 20,
+          "y": 132,
+          "width": 260,
+          "height": 20
+        }
+      }
+    },
+    {
+      "name": "flex-grow 权重分配（1:2:1）",
+      "nodes": [
+        {
+          "id": 1,
+          "parentId": null,
+          "tag": "view",
+          "width": 400,
+          "height": 50,
+          "margin": {
+            "top": 0,
+            "right": 0,
+            "bottom": 0,
+            "left": 0
+          },
+          "padding": {
+            "top": 0,
+            "right": 0,
+            "bottom": 0,
+            "left": 0
+          },
+          "flexDirection": "row",
+          "justifyContent": "flex-start",
+          "alignItems": "stretch",
+          "flexGrow": 0,
+          "flexShrink": 1,
+          "gap": 0,
+          "display": "flex",
+          "position": "static",
+          "overflow": "visible",
+          "isText": false
+        },
+        {
+          "id": 2,
+          "parentId": 1,
+          "tag": "view",
+          "height": 50,
+          "margin": {
+            "top": 0,
+            "right": 0,
+            "bottom": 0,
+            "left": 0
+          },
+          "padding": {
+            "top": 0,
+            "right": 0,
+            "bottom": 0,
+            "left": 0
+          },
+          "flexDirection": "column",
+          "justifyContent": "flex-start",
+          "alignItems": "stretch",
+          "flexGrow": 1,
+          "flexShrink": 1,
+          "gap": 0,
+          "display": "flex",
+          "position": "static",
+          "overflow": "visible",
+          "isText": false
+        },
+        {
+          "id": 3,
+          "parentId": 1,
+          "tag": "view",
+          "height": 50,
+          "margin": {
+            "top": 0,
+            "right": 0,
+            "bottom": 0,
+            "left": 0
+          },
+          "padding": {
+            "top": 0,
+            "right": 0,
+            "bottom": 0,
+            "left": 0
+          },
+          "flexDirection": "column",
+          "justifyContent": "flex-start",
+          "alignItems": "stretch",
+          "flexGrow": 2,
+          "flexShrink": 1,
+          "gap": 0,
+          "display": "flex",
+          "position": "static",
+          "overflow": "visible",
+          "isText": false
+        },
+        {
+          "id": 4,
+          "parentId": 1,
+          "tag": "view",
+          "height": 50,
+          "margin": {
+            "top": 0,
+            "right": 0,
+            "bottom": 0,
+            "left": 0
+          },
+          "padding": {
+            "top": 0,
+            "right": 0,
+            "bottom": 0,
+            "left": 0
+          },
+          "flexDirection": "column",
+          "justifyContent": "flex-start",
+          "alignItems": "stretch",
+          "flexGrow": 1,
+          "flexShrink": 1,
+          "gap": 0,
+          "display": "flex",
+          "position": "static",
+          "overflow": "visible",
+          "isText": false
+        }
+      ],
+      "textMeasures": {},
+      "rects": {
+        "1": {
+          "x": 0,
+          "y": 0,
+          "width": 400,
+          "height": 50
+        },
+        "2": {
+          "x": 0,
+          "y": 0,
+          "width": 100,
+          "height": 50
+        },
+        "3": {
+          "x": 100,
+          "y": 0,
+          "width": 200,
+          "height": 50
+        },
+        "4": {
+          "x": 300,
+          "y": 0,
+          "width": 100,
+          "height": 50
+        }
+      }
+    },
+    {
+      "name": "flex-shrink 按 shrink×base 加权收缩",
+      "nodes": [
+        {
+          "id": 1,
+          "parentId": null,
+          "tag": "view",
+          "width": 200,
+          "height": 40,
+          "margin": {
+            "top": 0,
+            "right": 0,
+            "bottom": 0,
+            "left": 0
+          },
+          "padding": {
+            "top": 0,
+            "right": 0,
+            "bottom": 0,
+            "left": 0
+          },
+          "flexDirection": "row",
+          "justifyContent": "flex-start",
+          "alignItems": "stretch",
+          "flexGrow": 0,
+          "flexShrink": 1,
+          "gap": 10,
+          "display": "flex",
+          "position": "static",
+          "overflow": "visible",
+          "isText": false
+        },
+        {
+          "id": 2,
+          "parentId": 1,
+          "tag": "view",
+          "width": 150,
+          "height": 40,
+          "margin": {
+            "top": 0,
+            "right": 0,
+            "bottom": 0,
+            "left": 0
+          },
+          "padding": {
+            "top": 0,
+            "right": 0,
+            "bottom": 0,
+            "left": 0
+          },
+          "flexDirection": "column",
+          "justifyContent": "flex-start",
+          "alignItems": "stretch",
+          "flexGrow": 0,
+          "flexShrink": 1,
+          "gap": 0,
+          "display": "flex",
+          "position": "static",
+          "overflow": "visible",
+          "isText": false
+        },
+        {
+          "id": 3,
+          "parentId": 1,
+          "tag": "view",
+          "width": 150,
+          "height": 40,
+          "margin": {
+            "top": 0,
+            "right": 0,
+            "bottom": 0,
+            "left": 0
+          },
+          "padding": {
+            "top": 0,
+            "right": 0,
+            "bottom": 0,
+            "left": 0
+          },
+          "flexDirection": "column",
+          "justifyContent": "flex-start",
+          "alignItems": "stretch",
+          "flexGrow": 0,
+          "flexShrink": 1,
+          "gap": 0,
+          "display": "flex",
+          "position": "static",
+          "overflow": "visible",
+          "isText": false
+        }
+      ],
+      "textMeasures": {},
+      "rects": {
+        "1": {
+          "x": 0,
+          "y": 0,
+          "width": 200,
+          "height": 40
+        },
+        "2": {
+          "x": 0,
+          "y": 0,
+          "width": 95,
+          "height": 40
+        },
+        "3": {
+          "x": 105,
+          "y": 0,
+          "width": 95,
+          "height": 40
+        }
+      }
+    },
+    {
+      "name": "flex-basis 优先于 width",
+      "nodes": [
+        {
+          "id": 1,
+          "parentId": null,
+          "tag": "view",
+          "width": 300,
+          "height": 40,
+          "margin": {
+            "top": 0,
+            "right": 0,
+            "bottom": 0,
+            "left": 0
+          },
+          "padding": {
+            "top": 0,
+            "right": 0,
+            "bottom": 0,
+            "left": 0
+          },
+          "flexDirection": "row",
+          "justifyContent": "flex-start",
+          "alignItems": "stretch",
+          "flexGrow": 0,
+          "flexShrink": 1,
+          "gap": 10,
+          "display": "flex",
+          "position": "static",
+          "overflow": "visible",
+          "isText": false
+        },
+        {
+          "id": 2,
+          "parentId": 1,
+          "tag": "view",
+          "width": 200,
+          "height": 40,
+          "margin": {
+            "top": 0,
+            "right": 0,
+            "bottom": 0,
+            "left": 0
+          },
+          "padding": {
+            "top": 0,
+            "right": 0,
+            "bottom": 0,
+            "left": 0
+          },
+          "flexDirection": "column",
+          "justifyContent": "flex-start",
+          "alignItems": "stretch",
+          "flexGrow": 0,
+          "flexShrink": 1,
+          "flexBasis": 100,
+          "gap": 0,
+          "display": "flex",
+          "position": "static",
+          "overflow": "visible",
+          "isText": false
+        },
+        {
+          "id": 3,
+          "parentId": 1,
+          "tag": "view",
+          "height": 40,
+          "margin": {
+            "top": 0,
+            "right": 0,
+            "bottom": 0,
+            "left": 0
+          },
+          "padding": {
+            "top": 0,
+            "right": 0,
+            "bottom": 0,
+            "left": 0
+          },
+          "flexDirection": "column",
+          "justifyContent": "flex-start",
+          "alignItems": "stretch",
+          "flexGrow": 1,
+          "flexShrink": 1,
+          "gap": 0,
+          "display": "flex",
+          "position": "static",
+          "overflow": "visible",
+          "isText": false
+        }
+      ],
+      "textMeasures": {},
+      "rects": {
+        "1": {
+          "x": 0,
+          "y": 0,
+          "width": 300,
+          "height": 40
+        },
+        "2": {
+          "x": 0,
+          "y": 0,
+          "width": 100,
+          "height": 40
+        },
+        "3": {
+          "x": 110,
+          "y": 0,
+          "width": 190,
+          "height": 40
+        }
+      }
+    },
+    {
+      "name": "百分比尺寸 + 父 padding（★基准 = 父内容盒）",
+      "nodes": [
+        {
+          "id": 1,
+          "parentId": null,
+          "tag": "view",
+          "width": 300,
+          "height": 200,
+          "margin": {
+            "top": 0,
+            "right": 0,
+            "bottom": 0,
+            "left": 0
+          },
+          "padding": {
+            "top": 0,
+            "right": 25,
+            "bottom": 0,
+            "left": 25
+          },
+          "flexDirection": "column",
+          "justifyContent": "flex-start",
+          "alignItems": "stretch",
+          "flexGrow": 0,
+          "flexShrink": 1,
+          "gap": 0,
+          "display": "flex",
+          "position": "static",
+          "overflow": "visible",
+          "isText": false
+        },
+        {
+          "id": 2,
+          "parentId": 1,
+          "tag": "view",
+          "height": 30,
+          "widthRatio": 0.5,
+          "margin": {
+            "top": 0,
+            "right": 0,
+            "bottom": 0,
+            "left": 0
+          },
+          "padding": {
+            "top": 0,
+            "right": 0,
+            "bottom": 0,
+            "left": 0
+          },
+          "flexDirection": "column",
+          "justifyContent": "flex-start",
+          "alignItems": "stretch",
+          "flexGrow": 0,
+          "flexShrink": 1,
+          "gap": 0,
+          "display": "flex",
+          "position": "static",
+          "overflow": "visible",
+          "isText": false
+        },
+        {
+          "id": 3,
+          "parentId": 1,
+          "tag": "view",
+          "height": 30,
+          "widthRatio": 1,
+          "margin": {
+            "top": 10,
+            "right": 0,
+            "bottom": 0,
+            "left": 0
+          },
+          "padding": {
+            "top": 0,
+            "right": 0,
+            "bottom": 0,
+            "left": 0
+          },
+          "flexDirection": "column",
+          "justifyContent": "flex-start",
+          "alignItems": "stretch",
+          "flexGrow": 0,
+          "flexShrink": 1,
+          "gap": 0,
+          "display": "flex",
+          "position": "static",
+          "overflow": "visible",
+          "isText": false
+        }
+      ],
+      "textMeasures": {},
+      "rects": {
+        "1": {
+          "x": 0,
+          "y": 0,
+          "width": 300,
+          "height": 200
+        },
+        "2": {
+          "x": 25,
+          "y": 0,
+          "width": 125,
+          "height": 30
+        },
+        "3": {
+          "x": 25,
+          "y": 40,
+          "width": 250,
+          "height": 30
+        }
+      }
+    },
+    {
+      "name": "align-self 覆盖 + align-items:flex-end",
+      "nodes": [
+        {
+          "id": 1,
+          "parentId": null,
+          "tag": "view",
+          "width": 300,
+          "height": 100,
+          "margin": {
+            "top": 0,
+            "right": 0,
+            "bottom": 0,
+            "left": 0
+          },
+          "padding": {
+            "top": 0,
+            "right": 0,
+            "bottom": 0,
+            "left": 0
+          },
+          "flexDirection": "row",
+          "justifyContent": "flex-start",
+          "alignItems": "flex-end",
+          "flexGrow": 0,
+          "flexShrink": 1,
+          "gap": 0,
+          "display": "flex",
+          "position": "static",
+          "overflow": "visible",
+          "isText": false
+        },
+        {
+          "id": 2,
+          "parentId": 1,
+          "tag": "view",
+          "width": 60,
+          "height": 30,
+          "margin": {
+            "top": 0,
+            "right": 0,
+            "bottom": 0,
+            "left": 0
+          },
+          "padding": {
+            "top": 0,
+            "right": 0,
+            "bottom": 0,
+            "left": 0
+          },
+          "flexDirection": "column",
+          "justifyContent": "flex-start",
+          "alignItems": "stretch",
+          "flexGrow": 0,
+          "flexShrink": 1,
+          "gap": 0,
+          "display": "flex",
+          "position": "static",
+          "overflow": "visible",
+          "isText": false
+        },
+        {
+          "id": 3,
+          "parentId": 1,
+          "tag": "view",
+          "width": 60,
+          "height": 30,
+          "margin": {
+            "top": 0,
+            "right": 0,
+            "bottom": 0,
+            "left": 0
+          },
+          "padding": {
+            "top": 0,
+            "right": 0,
+            "bottom": 0,
+            "left": 0
+          },
+          "flexDirection": "column",
+          "justifyContent": "flex-start",
+          "alignItems": "stretch",
+          "alignSelf": "flex-start",
+          "flexGrow": 0,
+          "flexShrink": 1,
+          "gap": 0,
+          "display": "flex",
+          "position": "static",
+          "overflow": "visible",
+          "isText": false
+        },
+        {
+          "id": 4,
+          "parentId": 1,
+          "tag": "view",
+          "width": 60,
+          "height": 30,
+          "margin": {
+            "top": 0,
+            "right": 0,
+            "bottom": 0,
+            "left": 0
+          },
+          "padding": {
+            "top": 0,
+            "right": 0,
+            "bottom": 0,
+            "left": 0
+          },
+          "flexDirection": "column",
+          "justifyContent": "flex-start",
+          "alignItems": "stretch",
+          "alignSelf": "center",
+          "flexGrow": 0,
+          "flexShrink": 1,
+          "gap": 0,
+          "display": "flex",
+          "position": "static",
+          "overflow": "visible",
+          "isText": false
+        }
+      ],
+      "textMeasures": {},
+      "rects": {
+        "1": {
+          "x": 0,
+          "y": 0,
+          "width": 300,
+          "height": 100
+        },
+        "2": {
+          "x": 0,
+          "y": 70,
+          "width": 60,
+          "height": 30
+        },
+        "3": {
+          "x": 60,
+          "y": 0,
+          "width": 60,
+          "height": 30
+        },
+        "4": {
+          "x": 120,
+          "y": 35,
+          "width": 60,
+          "height": 30
+        }
+      }
+    },
+    {
+      "name": "三层嵌套（row→column→row）",
+      "nodes": [
+        {
+          "id": 1,
+          "parentId": null,
+          "tag": "view",
+          "width": 360,
+          "height": 200,
+          "margin": {
+            "top": 0,
+            "right": 0,
+            "bottom": 0,
+            "left": 0
+          },
+          "padding": {
+            "top": 10,
+            "right": 10,
+            "bottom": 10,
+            "left": 10
+          },
+          "flexDirection": "row",
+          "justifyContent": "flex-start",
+          "alignItems": "stretch",
+          "flexGrow": 0,
+          "flexShrink": 1,
+          "gap": 12,
+          "display": "flex",
+          "position": "static",
+          "overflow": "visible",
+          "isText": false
+        },
+        {
+          "id": 2,
+          "parentId": 1,
+          "tag": "view",
+          "margin": {
+            "top": 0,
+            "right": 0,
+            "bottom": 0,
+            "left": 0
+          },
+          "padding": {
+            "top": 0,
+            "right": 0,
+            "bottom": 0,
+            "left": 0
+          },
+          "flexDirection": "column",
+          "justifyContent": "flex-start",
+          "alignItems": "stretch",
+          "flexGrow": 1,
+          "flexShrink": 1,
+          "gap": 6,
+          "display": "flex",
+          "position": "static",
+          "overflow": "visible",
+          "isText": false
+        },
+        {
+          "id": 3,
+          "parentId": 2,
+          "tag": "view",
+          "height": 40,
+          "margin": {
+            "top": 0,
+            "right": 0,
+            "bottom": 0,
+            "left": 0
+          },
+          "padding": {
+            "top": 0,
+            "right": 0,
+            "bottom": 0,
+            "left": 0
+          },
+          "flexDirection": "row",
+          "justifyContent": "flex-start",
+          "alignItems": "stretch",
+          "flexGrow": 0,
+          "flexShrink": 1,
+          "gap": 4,
+          "display": "flex",
+          "position": "static",
+          "overflow": "visible",
+          "isText": false
+        },
+        {
+          "id": 4,
+          "parentId": 3,
+          "tag": "view",
+          "width": 30,
+          "height": 40,
+          "margin": {
+            "top": 0,
+            "right": 0,
+            "bottom": 0,
+            "left": 0
+          },
+          "padding": {
+            "top": 0,
+            "right": 0,
+            "bottom": 0,
+            "left": 0
+          },
+          "flexDirection": "column",
+          "justifyContent": "flex-start",
+          "alignItems": "stretch",
+          "flexGrow": 0,
+          "flexShrink": 1,
+          "gap": 0,
+          "display": "flex",
+          "position": "static",
+          "overflow": "visible",
+          "isText": false
+        },
+        {
+          "id": 5,
+          "parentId": 3,
+          "tag": "view",
+          "height": 40,
+          "margin": {
+            "top": 0,
+            "right": 0,
+            "bottom": 0,
+            "left": 0
+          },
+          "padding": {
+            "top": 0,
+            "right": 0,
+            "bottom": 0,
+            "left": 0
+          },
+          "flexDirection": "column",
+          "justifyContent": "flex-start",
+          "alignItems": "stretch",
+          "flexGrow": 1,
+          "flexShrink": 1,
+          "gap": 0,
+          "display": "flex",
+          "position": "static",
+          "overflow": "visible",
+          "isText": false
+        },
+        {
+          "id": 6,
+          "parentId": 2,
+          "tag": "view",
+          "height": 60,
+          "margin": {
+            "top": 4,
+            "right": 0,
+            "bottom": 0,
+            "left": 0
+          },
+          "padding": {
+            "top": 0,
+            "right": 0,
+            "bottom": 0,
+            "left": 0
+          },
+          "flexDirection": "column",
+          "justifyContent": "flex-start",
+          "alignItems": "stretch",
+          "flexGrow": 0,
+          "flexShrink": 1,
+          "gap": 0,
+          "display": "flex",
+          "position": "static",
+          "overflow": "visible",
+          "isText": false
+        },
+        {
+          "id": 7,
+          "parentId": 1,
+          "tag": "view",
+          "width": 100,
+          "margin": {
+            "top": 0,
+            "right": 0,
+            "bottom": 0,
+            "left": 0
+          },
+          "padding": {
+            "top": 0,
+            "right": 0,
+            "bottom": 0,
+            "left": 0
+          },
+          "flexDirection": "column",
+          "justifyContent": "flex-start",
+          "alignItems": "stretch",
+          "flexGrow": 0,
+          "flexShrink": 1,
+          "gap": 0,
+          "display": "flex",
+          "position": "static",
+          "overflow": "visible",
+          "isText": false
+        },
+        {
+          "id": 8,
+          "parentId": 7,
+          "tag": "view",
+          "height": 30,
+          "margin": {
+            "top": 0,
+            "right": 0,
+            "bottom": 0,
+            "left": 0
+          },
+          "padding": {
+            "top": 0,
+            "right": 0,
+            "bottom": 0,
+            "left": 0
+          },
+          "flexDirection": "column",
+          "justifyContent": "flex-start",
+          "alignItems": "stretch",
+          "flexGrow": 0,
+          "flexShrink": 1,
+          "gap": 0,
+          "display": "flex",
+          "position": "static",
+          "overflow": "visible",
+          "isText": false
+        },
+        {
+          "id": 9,
+          "parentId": 7,
+          "tag": "view",
+          "height": 30,
+          "margin": {
+            "top": 0,
+            "right": 0,
+            "bottom": 0,
+            "left": 0
+          },
+          "padding": {
+            "top": 0,
+            "right": 0,
+            "bottom": 0,
+            "left": 0
+          },
+          "flexDirection": "column",
+          "justifyContent": "flex-start",
+          "alignItems": "stretch",
+          "flexGrow": 0,
+          "flexShrink": 1,
+          "gap": 0,
+          "display": "flex",
+          "position": "static",
+          "overflow": "visible",
+          "isText": false
+        }
+      ],
+      "textMeasures": {},
+      "rects": {
+        "1": {
+          "x": 0,
+          "y": 0,
+          "width": 360,
+          "height": 200
+        },
+        "2": {
+          "x": 10,
+          "y": 10,
+          "width": 228,
+          "height": 180
+        },
+        "3": {
+          "x": 10,
+          "y": 10,
+          "width": 228,
+          "height": 40
+        },
+        "4": {
+          "x": 10,
+          "y": 10,
+          "width": 30,
+          "height": 40
+        },
+        "5": {
+          "x": 44,
+          "y": 10,
+          "width": 194,
+          "height": 40
+        },
+        "6": {
+          "x": 10,
+          "y": 60,
+          "width": 228,
+          "height": 60
+        },
+        "7": {
+          "x": 250,
+          "y": 10,
+          "width": 100,
+          "height": 180
+        },
+        "8": {
+          "x": 250,
+          "y": 10,
+          "width": 100,
+          "height": 30
+        },
+        "9": {
+          "x": 250,
+          "y": 40,
+          "width": 100,
+          "height": 30
+        }
+      }
+    },
+    {
+      "name": "文本单行（度量由浏览器注入）",
+      "nodes": [
+        {
+          "id": 1,
+          "parentId": null,
+          "tag": "view",
+          "width": 340,
+          "margin": {
+            "top": 0,
+            "right": 0,
+            "bottom": 0,
+            "left": 0
+          },
+          "padding": {
+            "top": 0,
+            "right": 12,
+            "bottom": 0,
+            "left": 12
+          },
+          "flexDirection": "row",
+          "justifyContent": "flex-start",
+          "alignItems": "center",
+          "flexGrow": 0,
+          "flexShrink": 1,
+          "gap": 8,
+          "display": "flex",
+          "position": "static",
+          "overflow": "visible",
+          "isText": false
+        },
+        {
+          "id": 2,
+          "parentId": 1,
+          "tag": "text",
+          "margin": {
+            "top": 0,
+            "right": 0,
+            "bottom": 0,
+            "left": 0
+          },
+          "padding": {
+            "top": 0,
+            "right": 0,
+            "bottom": 0,
+            "left": 0
+          },
+          "flexDirection": "column",
+          "justifyContent": "flex-start",
+          "alignItems": "stretch",
+          "flexGrow": 0,
+          "flexShrink": 1,
+          "gap": 0,
+          "display": "flex",
+          "position": "static",
+          "overflow": "visible",
+          "isText": true
+        },
+        {
+          "id": 3,
+          "parentId": 1,
+          "tag": "text",
+          "margin": {
+            "top": 0,
+            "right": 0,
+            "bottom": 0,
+            "left": 0
+          },
+          "padding": {
+            "top": 0,
+            "right": 0,
+            "bottom": 0,
+            "left": 0
+          },
+          "flexDirection": "column",
+          "justifyContent": "flex-start",
+          "alignItems": "stretch",
+          "flexGrow": 0,
+          "flexShrink": 1,
+          "gap": 0,
+          "display": "flex",
+          "position": "static",
+          "overflow": "visible",
+          "isText": true
+        },
+        {
+          "id": 4,
+          "parentId": 1,
+          "tag": "view",
+          "height": 20,
+          "margin": {
+            "top": 0,
+            "right": 0,
+            "bottom": 0,
+            "left": 0
+          },
+          "padding": {
+            "top": 0,
+            "right": 0,
+            "bottom": 0,
+            "left": 0
+          },
+          "flexDirection": "column",
+          "justifyContent": "flex-start",
+          "alignItems": "stretch",
+          "flexGrow": 1,
+          "flexShrink": 1,
+          "gap": 0,
+          "display": "flex",
+          "position": "static",
+          "overflow": "visible",
+          "isText": false
+        }
+      ],
+      "textMeasures": {
+        "2": {
+          "width": 64,
+          "height": 16
+        },
+        "3": {
+          "width": 51.375,
+          "height": 14
+        }
+      },
+      "rects": {
+        "1": {
+          "x": 0,
+          "y": 0,
+          "width": 340,
+          "height": 20
+        },
+        "2": {
+          "x": 12,
+          "y": 2,
+          "width": 64,
+          "height": 16
+        },
+        "3": {
+          "x": 84,
+          "y": 3,
+          "width": 51.375,
+          "height": 14
+        },
+        "4": {
+          "x": 143.375,
+          "y": 0,
+          "width": 184.625,
+          "height": 20
+        }
+      }
+    },
+    {
+      "name": "文本纵向堆叠（父高由内容撑开）",
+      "nodes": [
+        {
+          "id": 1,
+          "parentId": null,
+          "tag": "view",
+          "width": 300,
+          "margin": {
+            "top": 0,
+            "right": 0,
+            "bottom": 0,
+            "left": 0
+          },
+          "padding": {
+            "top": 0,
+            "right": 0,
+            "bottom": 0,
+            "left": 0
+          },
+          "flexDirection": "column",
+          "justifyContent": "flex-start",
+          "alignItems": "stretch",
+          "flexGrow": 0,
+          "flexShrink": 1,
+          "gap": 0,
+          "display": "flex",
+          "position": "static",
+          "overflow": "visible",
+          "isText": false
+        },
+        {
+          "id": 2,
+          "parentId": 1,
+          "tag": "text",
+          "margin": {
+            "top": 0,
+            "right": 0,
+            "bottom": 0,
+            "left": 0
+          },
+          "padding": {
+            "top": 0,
+            "right": 0,
+            "bottom": 0,
+            "left": 0
+          },
+          "flexDirection": "column",
+          "justifyContent": "flex-start",
+          "alignItems": "stretch",
+          "flexGrow": 0,
+          "flexShrink": 1,
+          "gap": 0,
+          "display": "flex",
+          "position": "static",
+          "overflow": "visible",
+          "isText": true
+        },
+        {
+          "id": 3,
+          "parentId": 1,
+          "tag": "text",
+          "margin": {
+            "top": 0,
+            "right": 0,
+            "bottom": 0,
+            "left": 0
+          },
+          "padding": {
+            "top": 0,
+            "right": 0,
+            "bottom": 0,
+            "left": 0
+          },
+          "flexDirection": "column",
+          "justifyContent": "flex-start",
+          "alignItems": "stretch",
+          "flexGrow": 0,
+          "flexShrink": 1,
+          "gap": 0,
+          "display": "flex",
+          "position": "static",
+          "overflow": "visible",
+          "isText": true
+        },
+        {
+          "id": 4,
+          "parentId": 1,
+          "tag": "view",
+          "height": 12,
+          "margin": {
+            "top": 0,
+            "right": 0,
+            "bottom": 0,
+            "left": 0
+          },
+          "padding": {
+            "top": 0,
+            "right": 0,
+            "bottom": 0,
+            "left": 0
+          },
+          "flexDirection": "column",
+          "justifyContent": "flex-start",
+          "alignItems": "stretch",
+          "flexGrow": 0,
+          "flexShrink": 1,
+          "gap": 0,
+          "display": "flex",
+          "position": "static",
+          "overflow": "visible",
+          "isText": false
+        }
+      ],
+      "textMeasures": {
+        "2": {
+          "width": 80,
+          "height": 20
+        },
+        "3": {
+          "width": 104,
+          "height": 13
+        }
+      },
+      "rects": {
+        "1": {
+          "x": 0,
+          "y": 0,
+          "width": 300,
+          "height": 45
+        },
+        "2": {
+          "x": 0,
+          "y": 0,
+          "width": 300,
+          "height": 20
+        },
+        "3": {
+          "x": 0,
+          "y": 20,
+          "width": 300,
+          "height": 13
+        },
+        "4": {
+          "x": 0,
+          "y": 33,
+          "width": 300,
+          "height": 12
+        }
+      }
+    },
+    {
+      "name": "absolute 定位（脱离流 + top/left）",
+      "nodes": [
+        {
+          "id": 1,
+          "parentId": null,
+          "tag": "view",
+          "width": 300,
+          "height": 150,
+          "margin": {
+            "top": 0,
+            "right": 0,
+            "bottom": 0,
+            "left": 0
+          },
+          "padding": {
+            "top": 20,
+            "right": 0,
+            "bottom": 0,
+            "left": 30
+          },
+          "flexDirection": "column",
+          "justifyContent": "flex-start",
+          "alignItems": "stretch",
+          "flexGrow": 0,
+          "flexShrink": 1,
+          "gap": 0,
+          "display": "flex",
+          "position": "static",
+          "overflow": "visible",
+          "isText": false
+        },
+        {
+          "id": 2,
+          "parentId": 1,
+          "tag": "view",
+          "height": 40,
+          "margin": {
+            "top": 0,
+            "right": 0,
+            "bottom": 0,
+            "left": 0
+          },
+          "padding": {
+            "top": 0,
+            "right": 0,
+            "bottom": 0,
+            "left": 0
+          },
+          "flexDirection": "column",
+          "justifyContent": "flex-start",
+          "alignItems": "stretch",
+          "flexGrow": 0,
+          "flexShrink": 1,
+          "gap": 0,
+          "display": "flex",
+          "position": "static",
+          "overflow": "visible",
+          "isText": false
+        },
+        {
+          "id": 3,
+          "parentId": 1,
+          "tag": "view",
+          "width": 80,
+          "height": 30,
+          "margin": {
+            "top": 0,
+            "right": 0,
+            "bottom": 0,
+            "left": 0
+          },
+          "padding": {
+            "top": 0,
+            "right": 0,
+            "bottom": 0,
+            "left": 0
+          },
+          "flexDirection": "column",
+          "justifyContent": "flex-start",
+          "alignItems": "stretch",
+          "flexGrow": 0,
+          "flexShrink": 1,
+          "gap": 0,
+          "display": "flex",
+          "position": "absolute",
+          "top": 50,
+          "left": 60,
+          "overflow": "visible",
+          "isText": false
+        },
+        {
+          "id": 4,
+          "parentId": 1,
+          "tag": "view",
+          "height": 40,
+          "margin": {
+            "top": 0,
+            "right": 0,
+            "bottom": 0,
+            "left": 0
+          },
+          "padding": {
+            "top": 0,
+            "right": 0,
+            "bottom": 0,
+            "left": 0
+          },
+          "flexDirection": "column",
+          "justifyContent": "flex-start",
+          "alignItems": "stretch",
+          "flexGrow": 0,
+          "flexShrink": 1,
+          "gap": 0,
+          "display": "flex",
+          "position": "static",
+          "overflow": "visible",
+          "isText": false
+        }
+      ],
+      "textMeasures": {},
+      "rects": {
+        "1": {
+          "x": 0,
+          "y": 0,
+          "width": 300,
+          "height": 150
+        },
+        "2": {
+          "x": 30,
+          "y": 20,
+          "width": 270,
+          "height": 40
+        },
+        "3": {
+          "x": 60,
+          "y": 50,
+          "width": 80,
+          "height": 30
+        },
+        "4": {
+          "x": 30,
+          "y": 60,
+          "width": 270,
+          "height": 40
+        }
+      }
+    },
+    {
+      "name": "justify-content:center + row + 定宽子级",
+      "nodes": [
+        {
+          "id": 1,
+          "parentId": null,
+          "tag": "view",
+          "width": 300,
+          "height": 60,
+          "margin": {
+            "top": 0,
+            "right": 0,
+            "bottom": 0,
+            "left": 0
+          },
+          "padding": {
+            "top": 0,
+            "right": 0,
+            "bottom": 0,
+            "left": 0
+          },
+          "flexDirection": "row",
+          "justifyContent": "center",
+          "alignItems": "center",
+          "flexGrow": 0,
+          "flexShrink": 1,
+          "gap": 10,
+          "display": "flex",
+          "position": "static",
+          "overflow": "visible",
+          "isText": false
+        },
+        {
+          "id": 2,
+          "parentId": 1,
+          "tag": "view",
+          "width": 40,
+          "height": 20,
+          "margin": {
+            "top": 0,
+            "right": 0,
+            "bottom": 0,
+            "left": 0
+          },
+          "padding": {
+            "top": 0,
+            "right": 0,
+            "bottom": 0,
+            "left": 0
+          },
+          "flexDirection": "column",
+          "justifyContent": "flex-start",
+          "alignItems": "stretch",
+          "flexGrow": 0,
+          "flexShrink": 1,
+          "gap": 0,
+          "display": "flex",
+          "position": "static",
+          "overflow": "visible",
+          "isText": false
+        },
+        {
+          "id": 3,
+          "parentId": 1,
+          "tag": "view",
+          "width": 60,
+          "height": 30,
+          "margin": {
+            "top": 0,
+            "right": 0,
+            "bottom": 0,
+            "left": 0
+          },
+          "padding": {
+            "top": 0,
+            "right": 0,
+            "bottom": 0,
+            "left": 0
+          },
+          "flexDirection": "column",
+          "justifyContent": "flex-start",
+          "alignItems": "stretch",
+          "flexGrow": 0,
+          "flexShrink": 1,
+          "gap": 0,
+          "display": "flex",
+          "position": "static",
+          "overflow": "visible",
+          "isText": false
+        }
+      ],
+      "textMeasures": {},
+      "rects": {
+        "1": {
+          "x": 0,
+          "y": 0,
+          "width": 300,
+          "height": 60
+        },
+        "2": {
+          "x": 95,
+          "y": 20,
+          "width": 40,
+          "height": 20
+        },
+        "3": {
+          "x": 145,
+          "y": 15,
+          "width": 60,
+          "height": 30
+        }
+      }
+    },
+    {
+      "name": "justify-content:flex-end + space-around",
+      "nodes": [
+        {
+          "id": 1,
+          "parentId": null,
+          "tag": "view",
+          "width": 300,
+          "height": 40,
+          "margin": {
+            "top": 0,
+            "right": 0,
+            "bottom": 0,
+            "left": 0
+          },
+          "padding": {
+            "top": 0,
+            "right": 0,
+            "bottom": 0,
+            "left": 0
+          },
+          "flexDirection": "row",
+          "justifyContent": "space-around",
+          "alignItems": "stretch",
+          "flexGrow": 0,
+          "flexShrink": 1,
+          "gap": 0,
+          "display": "flex",
+          "position": "static",
+          "overflow": "visible",
+          "isText": false
+        },
+        {
+          "id": 2,
+          "parentId": 1,
+          "tag": "view",
+          "width": 50,
+          "height": 40,
+          "margin": {
+            "top": 0,
+            "right": 0,
+            "bottom": 0,
+            "left": 0
+          },
+          "padding": {
+            "top": 0,
+            "right": 0,
+            "bottom": 0,
+            "left": 0
+          },
+          "flexDirection": "column",
+          "justifyContent": "flex-start",
+          "alignItems": "stretch",
+          "flexGrow": 0,
+          "flexShrink": 1,
+          "gap": 0,
+          "display": "flex",
+          "position": "static",
+          "overflow": "visible",
+          "isText": false
+        },
+        {
+          "id": 3,
+          "parentId": 1,
+          "tag": "view",
+          "width": 50,
+          "height": 40,
+          "margin": {
+            "top": 0,
+            "right": 0,
+            "bottom": 0,
+            "left": 0
+          },
+          "padding": {
+            "top": 0,
+            "right": 0,
+            "bottom": 0,
+            "left": 0
+          },
+          "flexDirection": "column",
+          "justifyContent": "flex-start",
+          "alignItems": "stretch",
+          "flexGrow": 0,
+          "flexShrink": 1,
+          "gap": 0,
+          "display": "flex",
+          "position": "static",
+          "overflow": "visible",
+          "isText": false
+        },
+        {
+          "id": 4,
+          "parentId": 1,
+          "tag": "view",
+          "width": 50,
+          "height": 40,
+          "margin": {
+            "top": 0,
+            "right": 0,
+            "bottom": 0,
+            "left": 0
+          },
+          "padding": {
+            "top": 0,
+            "right": 0,
+            "bottom": 0,
+            "left": 0
+          },
+          "flexDirection": "column",
+          "justifyContent": "flex-start",
+          "alignItems": "stretch",
+          "flexGrow": 0,
+          "flexShrink": 1,
+          "gap": 0,
+          "display": "flex",
+          "position": "static",
+          "overflow": "visible",
+          "isText": false
+        }
+      ],
+      "textMeasures": {},
+      "rects": {
+        "1": {
+          "x": 0,
+          "y": 0,
+          "width": 300,
+          "height": 40
+        },
+        "2": {
+          "x": 25,
+          "y": 0,
+          "width": 50,
+          "height": 40
+        },
+        "3": {
+          "x": 125,
+          "y": 0,
+          "width": 50,
+          "height": 40
+        },
+        "4": {
+          "x": 225,
+          "y": 0,
+          "width": 50,
+          "height": 40
+        }
+      }
+    },
+    {
+      "name": "column + flex-grow 主轴分配 + 内层 padding",
+      "nodes": [
+        {
+          "id": 1,
+          "parentId": null,
+          "tag": "view",
+          "width": 320,
+          "height": 400,
+          "margin": {
+            "top": 0,
+            "right": 0,
+            "bottom": 0,
+            "left": 0
+          },
+          "padding": {
+            "top": 0,
+            "right": 0,
+            "bottom": 0,
+            "left": 0
+          },
+          "flexDirection": "column",
+          "justifyContent": "flex-start",
+          "alignItems": "stretch",
+          "flexGrow": 0,
+          "flexShrink": 1,
+          "gap": 0,
+          "display": "flex",
+          "position": "static",
+          "overflow": "visible",
+          "isText": false
+        },
+        {
+          "id": 2,
+          "parentId": 1,
+          "tag": "view",
+          "height": 100,
+          "margin": {
+            "top": 0,
+            "right": 0,
+            "bottom": 0,
+            "left": 0
+          },
+          "padding": {
+            "top": 0,
+            "right": 0,
+            "bottom": 0,
+            "left": 0
+          },
+          "flexDirection": "column",
+          "justifyContent": "flex-start",
+          "alignItems": "stretch",
+          "flexGrow": 0,
+          "flexShrink": 1,
+          "gap": 0,
+          "display": "flex",
+          "position": "static",
+          "overflow": "visible",
+          "isText": false
+        },
+        {
+          "id": 3,
+          "parentId": 1,
+          "tag": "view",
+          "margin": {
+            "top": 0,
+            "right": 0,
+            "bottom": 0,
+            "left": 0
+          },
+          "padding": {
+            "top": 8,
+            "right": 8,
+            "bottom": 0,
+            "left": 8
+          },
+          "flexDirection": "column",
+          "justifyContent": "flex-start",
+          "alignItems": "stretch",
+          "flexGrow": 1,
+          "flexShrink": 1,
+          "gap": 0,
+          "display": "flex",
+          "position": "static",
+          "overflow": "visible",
+          "isText": false
+        },
+        {
+          "id": 4,
+          "parentId": 3,
+          "tag": "view",
+          "margin": {
+            "top": 0,
+            "right": 0,
+            "bottom": 0,
+            "left": 0
+          },
+          "padding": {
+            "top": 0,
+            "right": 0,
+            "bottom": 0,
+            "left": 0
+          },
+          "flexDirection": "column",
+          "justifyContent": "flex-start",
+          "alignItems": "stretch",
+          "flexGrow": 1,
+          "flexShrink": 1,
+          "gap": 0,
+          "display": "flex",
+          "position": "static",
+          "overflow": "visible",
+          "isText": false
+        },
+        {
+          "id": 5,
+          "parentId": 1,
+          "tag": "view",
+          "height": 50,
+          "margin": {
+            "top": 0,
+            "right": 0,
+            "bottom": 0,
+            "left": 0
+          },
+          "padding": {
+            "top": 0,
+            "right": 0,
+            "bottom": 0,
+            "left": 0
+          },
+          "flexDirection": "column",
+          "justifyContent": "flex-start",
+          "alignItems": "stretch",
+          "flexGrow": 0,
+          "flexShrink": 1,
+          "gap": 0,
+          "display": "flex",
+          "position": "static",
+          "overflow": "visible",
+          "isText": false
+        }
+      ],
+      "textMeasures": {},
+      "rects": {
+        "1": {
+          "x": 0,
+          "y": 0,
+          "width": 320,
+          "height": 400
+        },
+        "2": {
+          "x": 0,
+          "y": 0,
+          "width": 320,
+          "height": 100
+        },
+        "3": {
+          "x": 0,
+          "y": 100,
+          "width": 320,
+          "height": 250
+        },
+        "4": {
+          "x": 8,
+          "y": 108,
+          "width": 304,
+          "height": 242
+        },
+        "5": {
+          "x": 0,
+          "y": 350,
+          "width": 320,
+          "height": 50
+        }
+      }
+    },
+    {
+      "name": "max-width 夹取 + 收缩（不越界）",
+      "nodes": [
+        {
+          "id": 1,
+          "parentId": null,
+          "tag": "view",
+          "width": 200,
+          "height": 30,
+          "margin": {
+            "top": 0,
+            "right": 0,
+            "bottom": 0,
+            "left": 0
+          },
+          "padding": {
+            "top": 0,
+            "right": 0,
+            "bottom": 0,
+            "left": 0
+          },
+          "flexDirection": "row",
+          "justifyContent": "flex-start",
+          "alignItems": "stretch",
+          "flexGrow": 0,
+          "flexShrink": 1,
+          "gap": 10,
+          "display": "flex",
+          "position": "static",
+          "overflow": "visible",
+          "isText": false
+        },
+        {
+          "id": 2,
+          "parentId": 1,
+          "tag": "view",
+          "height": 30,
+          "maxWidth": 60,
+          "margin": {
+            "top": 0,
+            "right": 0,
+            "bottom": 0,
+            "left": 0
+          },
+          "padding": {
+            "top": 0,
+            "right": 0,
+            "bottom": 0,
+            "left": 0
+          },
+          "flexDirection": "column",
+          "justifyContent": "flex-start",
+          "alignItems": "stretch",
+          "flexGrow": 1,
+          "flexShrink": 1,
+          "gap": 0,
+          "display": "flex",
+          "position": "static",
+          "overflow": "visible",
+          "isText": false
+        },
+        {
+          "id": 3,
+          "parentId": 1,
+          "tag": "view",
+          "height": 30,
+          "margin": {
+            "top": 0,
+            "right": 0,
+            "bottom": 0,
+            "left": 0
+          },
+          "padding": {
+            "top": 0,
+            "right": 0,
+            "bottom": 0,
+            "left": 0
+          },
+          "flexDirection": "column",
+          "justifyContent": "flex-start",
+          "alignItems": "stretch",
+          "flexGrow": 1,
+          "flexShrink": 1,
+          "gap": 0,
+          "display": "flex",
+          "position": "static",
+          "overflow": "visible",
+          "isText": false
+        }
+      ],
+      "textMeasures": {},
+      "rects": {
+        "1": {
+          "x": 0,
+          "y": 0,
+          "width": 200,
+          "height": 30
+        },
+        "2": {
+          "x": 0,
+          "y": 0,
+          "width": 60,
+          "height": 30
+        },
+        "3": {
+          "x": 70,
+          "y": 0,
+          "width": 130,
+          "height": 30
+        }
+      }
+    },
+    {
+      "name": "display:none 不参与布局（兄弟不被推开）",
+      "nodes": [
+        {
+          "id": 1,
+          "parentId": null,
+          "tag": "view",
+          "width": 200,
+          "margin": {
+            "top": 0,
+            "right": 0,
+            "bottom": 0,
+            "left": 0
+          },
+          "padding": {
+            "top": 0,
+            "right": 0,
+            "bottom": 0,
+            "left": 10
+          },
+          "flexDirection": "column",
+          "justifyContent": "flex-start",
+          "alignItems": "stretch",
+          "flexGrow": 0,
+          "flexShrink": 1,
+          "gap": 0,
+          "display": "flex",
+          "position": "static",
+          "overflow": "visible",
+          "isText": false
+        },
+        {
+          "id": 2,
+          "parentId": 1,
+          "tag": "view",
+          "height": 50,
+          "margin": {
+            "top": 0,
+            "right": 0,
+            "bottom": 0,
+            "left": 0
+          },
+          "padding": {
+            "top": 0,
+            "right": 0,
+            "bottom": 0,
+            "left": 0
+          },
+          "flexDirection": "column",
+          "justifyContent": "flex-start",
+          "alignItems": "stretch",
+          "flexGrow": 0,
+          "flexShrink": 1,
+          "gap": 0,
+          "display": "none",
+          "position": "static",
+          "overflow": "visible",
+          "isText": false
+        },
+        {
+          "id": 3,
+          "parentId": 1,
+          "tag": "view",
+          "height": 30,
+          "margin": {
+            "top": 0,
+            "right": 0,
+            "bottom": 0,
+            "left": 0
+          },
+          "padding": {
+            "top": 0,
+            "right": 0,
+            "bottom": 0,
+            "left": 0
+          },
+          "flexDirection": "column",
+          "justifyContent": "flex-start",
+          "alignItems": "stretch",
+          "flexGrow": 0,
+          "flexShrink": 1,
+          "gap": 0,
+          "display": "flex",
+          "position": "static",
+          "overflow": "visible",
+          "isText": false
+        },
+        {
+          "id": 4,
+          "parentId": 1,
+          "tag": "view",
+          "height": 20,
+          "margin": {
+            "top": 0,
+            "right": 0,
+            "bottom": 0,
+            "left": 0
+          },
+          "padding": {
+            "top": 0,
+            "right": 0,
+            "bottom": 0,
+            "left": 0
+          },
+          "flexDirection": "column",
+          "justifyContent": "flex-start",
+          "alignItems": "stretch",
+          "flexGrow": 0,
+          "flexShrink": 1,
+          "gap": 0,
+          "display": "flex",
+          "position": "static",
+          "overflow": "visible",
+          "isText": false
+        }
+      ],
+      "textMeasures": {},
+      "rects": {
+        "1": {
+          "x": 0,
+          "y": 0,
+          "width": 200,
+          "height": 50
+        },
+        "2": {
+          "x": 0,
+          "y": 0,
+          "width": 0,
+          "height": 0
+        },
+        "3": {
+          "x": 10,
+          "y": 0,
+          "width": 190,
+          "height": 30
+        },
+        "4": {
+          "x": 10,
+          "y": 30,
+          "width": 190,
+          "height": 20
+        }
+      }
+    },
+    {
+      "name": "overflow:hidden 不影响布局（只裁剪）",
+      "nodes": [
+        {
+          "id": 1,
+          "parentId": null,
+          "tag": "view",
+          "width": 200,
+          "height": 100,
+          "margin": {
+            "top": 0,
+            "right": 0,
+            "bottom": 0,
+            "left": 0
+          },
+          "padding": {
+            "top": 0,
+            "right": 0,
+            "bottom": 0,
+            "left": 0
+          },
+          "flexDirection": "column",
+          "justifyContent": "flex-start",
+          "alignItems": "stretch",
+          "flexGrow": 0,
+          "flexShrink": 1,
+          "gap": 0,
+          "display": "flex",
+          "position": "static",
+          "overflow": "hidden",
+          "isText": false
+        },
+        {
+          "id": 2,
+          "parentId": 1,
+          "tag": "view",
+          "height": 80,
+          "margin": {
+            "top": 0,
+            "right": 0,
+            "bottom": 0,
+            "left": 0
+          },
+          "padding": {
+            "top": 0,
+            "right": 0,
+            "bottom": 0,
+            "left": 0
+          },
+          "flexDirection": "column",
+          "justifyContent": "flex-start",
+          "alignItems": "stretch",
+          "flexGrow": 0,
+          "flexShrink": 1,
+          "gap": 0,
+          "display": "flex",
+          "position": "static",
+          "overflow": "visible",
+          "isText": false
+        },
+        {
+          "id": 3,
+          "parentId": 1,
+          "tag": "view",
+          "height": 80,
+          "margin": {
+            "top": 0,
+            "right": 0,
+            "bottom": 0,
+            "left": 0
+          },
+          "padding": {
+            "top": 0,
+            "right": 0,
+            "bottom": 0,
+            "left": 0
+          },
+          "flexDirection": "column",
+          "justifyContent": "flex-start",
+          "alignItems": "stretch",
+          "flexGrow": 0,
+          "flexShrink": 1,
+          "gap": 0,
+          "display": "flex",
+          "position": "static",
+          "overflow": "visible",
+          "isText": false
+        }
+      ],
+      "textMeasures": {},
+      "rects": {
+        "1": {
+          "x": 0,
+          "y": 0,
+          "width": 200,
+          "height": 100
+        },
+        "2": {
+          "x": 0,
+          "y": 0,
+          "width": 200,
+          "height": 50
+        },
+        "3": {
+          "x": 0,
+          "y": 50,
+          "width": 200,
+          "height": 50
+        }
+      }
+    }
+  ]
+}

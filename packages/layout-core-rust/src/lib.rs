@@ -22,6 +22,8 @@
 // ★尚未落地（诚实边界，后续里程碑）：`flatten/` `materialize/` `paint-hint/` `recycle/` `render/`
 pub mod engine;
 pub mod ffi;
+#[cfg(target_os = "android")]
+pub mod jni;
 pub mod node;
 pub mod style;
 pub mod taffy_engine;
@@ -32,3 +34,8 @@ pub use engine::{
 pub use node::{LNode, LayoutTree, NodeIndex, TextMeasureRequest, NO_PARENT};
 pub use style::{Display, Edges, FlexDirection, LStyle, Overflow, Position, Rect, Size};
 pub use taffy_engine::TaffyEngine;
+
+// ★crate 根转出（供 jni.rs 以 `crate::xxx` 引用，避免两处逻辑分叉）
+#[cfg(target_os = "android")]
+pub(crate) use ffi::into_java_string;
+pub(crate) use ffi::{json_str, run_bench, run_conformance};

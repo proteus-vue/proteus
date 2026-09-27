@@ -20,12 +20,20 @@ taffy = { version = "0.14.0", default-features = false, features = ["std", "flex
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 
+# ★JNI 绑定：仅 Android 目标需要（本机 cargo test 不受影响）
+[target.'cfg(target_os = "android")'.dependencies]
+jni = "0.21"
+
 [lib]
 name = "proteus_layout_core"
 path = "src/lib.rs"
 # ★staticlib：iOS（ObjC++/Swift 直接链接）与 Android（JNI 静态链接）都用它；
 #   ★rlib：供本仓 Rust 测试与后续 Rust 侧消费（cargo test 需要）
-crate-type = ["staticlib", "rlib"]
+# ★三种产物各有用途（缺一不可）：
+#   · rlib      —— 本仓 Rust 测试与后续 Rust 侧消费（cargo test 需要）
+#   · staticlib —— iOS（ObjC++/Swift 直接链接）
+#   · cdylib    —— ★Android（JNI 必须动态库 lib<name>.so；staticlib 出不了 .so）
+crate-type = ["rlib", "staticlib", "cdylib"]
 
 [profile.release]
 opt-level = 3

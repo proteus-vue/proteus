@@ -1,0 +1,49 @@
+=== Rust 排版核心 · Android 真机验证 ===
+设备：Xiaomi M098FE · Android 17（API 37）
+ABI：arm64-v8a
+引擎：proteus-layout-core 0.1.0 · engine=taffy-0.14 · taffy 锁定 0.14（0.13 有 measure 指数退化）
+JNI 符号自检：✓ 通过
+
+【① 与浏览器基准的一致性】
+{"ok":true,"cases":17,"compared_nodes":67,"max_delta_dp":0.375,"tolerance_dp":0.5,"failures":[]}
+
+【② 4050 元素布局性能（纯排版）】
+{"ok":true,"node_count":4051,"iterations":20,"median_ms":1.562,"min_ms":1.499,"max_ms":5.699,"measure_calls_first":0}
+
+【③ 4050 元素：Proteus(Rust+Canvas) vs 原生 View 体系】
+{
+  "ok": true,
+  "elements": 4051,
+  "rows": 50,
+  "cols": 40,
+  "proteus": {
+    "rust_layout_ms": 5,
+    "rust_layout_median_of20_ms": 2.008,
+    "emit_cmds_ms": 0,
+    "canvas_draw_software_ms": 9,
+    "canvas_record_displaylist_ms": 11,
+    "total_ms": 16,
+    "cmd_count": 2000,
+    "view_count": 1,
+    "painted_pixels_sampled": 14803
+  },
+  "native": {
+    "create_views_ms": 398,
+    "measure_layout_ms": 54,
+    "draw_ms": 6,
+    "total_ms": 458,
+    "view_count": 4051,
+    "measured_height": 2400,
+    "painted_pixels_sampled": 11340
+  },
+  "same_scope_compare": {
+    "phase_layout_proteus_ms": 5,
+    "phase_layout_native_ms": 452,
+    "phase_layout_ratio": 0.011,
+    "phase_draw_proteus_hw_record_ms": 11,
+    "phase_draw_proteus_software_ms": 9,
+    "phase_draw_native_ms": 6,
+    "phase_draw_ratio_hw": 1.833
+  },
+  "caveat": "★本包 debuggable=true（需 run-as 取报告），§9.2 明确要求 release 包——正式验收须 release 包 + 杀进程重进 + Perfetto 核确认 + 5 次取均值。本报告用于判断方向与归因，不作为验收结论。"
+}

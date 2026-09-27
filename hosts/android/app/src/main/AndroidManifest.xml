@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- hosts/android/app/src/main/AndroidManifest.xml —— M2 真机验证宿主 -->
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    package="dev.proteus.layoutcore">
+    <application
+        android:label="Proteus LayoutCore"
+        android:debuggable="true"
+        android:allowBackup="false"
+        android:hasCode="true">
+        <activity
+            android:name=".MainActivity"
+            android:exported="true"
+            android:configChanges="orientation|screenSize|keyboardHidden">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+        </activity>
+    </application>
+</manifest>

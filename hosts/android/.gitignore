@@ -1,0 +1,2 @@
+# 构建产物（APK / class / dex / keystore —— 本地生成，勿入库）
+build/
