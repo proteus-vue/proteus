@@ -16,7 +16,7 @@ Everything Proteus ships boils down to **one semantic catalog (183 primitives, t
 |---|---|---|---|---|
 | Semantic components | layout / ui / shell (p-* 59) | `p-view` `p-grid` `p-stack`… | —— | [Semantic components overview](/docs/12-components-intro) |
 | Capability hooks | capability (50 useXxx) | —— | `useFetch` `useStorage` `useCamera`… | [Capability system](/docs/18-capability-system) |
-| Flex layout | fluid (G-22) | `p-fluid` `p-fit` `p-scale`… | `v-p-fluid` | [Flex System overview](/docs/system/01-overview) |
+| Flex layout | fluid (G-22) | `p-fluid` `p-fit` `p-scale`… | `v-p-fluid` | [Fluid System overview](/docs/system/01-overview) |
 | Desktop/system | desktop (G-24, 21 modules) | —— | `createScrollObserver` `copyText` `v-p-shortcut`… | **this section (below)** |
 | Gesture | gesture (G-32 B4) | `p-*` gesture components | `v-gesture` `useGesture` | **this section (below)** |
 | Engineering primitives | engineering (E1-E28 + R1-R4) | `p-animate` `p-router-link` (component form) | `createEngineering`-family injection-based factories | **this section (below)** |

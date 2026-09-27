@@ -30,7 +30,7 @@ interface NavLink {
 const links: NavLink[] = [
   { to: '/', label: '首页', key: 'home' },
   { to: '/playground', label: 'Playground', key: 'playground' },
-  // ★#489 同一份语义 → 六端形态（站内页——同壳同风格、双语）
+  // ★#489 同一份语义 → 八种设备形态（站内页——同壳同风格、双语）
   { to: '/multi-device', label: '多端同屏', key: 'multidev' },
   // ★2026-09-26 P0-3：生态栏目（官方工程案例起步——对标 Flutter Showcase 的导航位）
   { to: '/ecosystem', label: '生态', key: 'ecosystem' },

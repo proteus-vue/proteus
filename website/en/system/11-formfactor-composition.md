@@ -1,16 +1,16 @@
 ---
-title: One set of slots, seven forms
+title: One set of slots, eight forms
 order: 11
 group: 柔性系统
 ---
 
-# One set of slots, seven forms
+# One set of slots, eight forms
 
 > The previous ten pages explain **how the framework solves**; this one is **how business code is written**. The answer: write **one set of semantic content slots** and let the framework derive everything form-related — no `if (form === 'car')`, no breakpoints, no capability checks in business code.
 
 ## The divide: changing the form, not scaling it
 
-| | Responsive layout | Flex System |
+| | Responsive layout | Fluid System |
 |---|---|---|
 | Adaptation basis | Viewport width | **Form** (input + viewing distance + capability set) |
 | What varies | Size scaling of one layout | **Swapped topology, navigation, capability set and visual language** |
@@ -55,33 +55,34 @@ The demo page's complete slot implementation ([`website/src/components/fluid-pro
 
 The eight slots (`rail` / `media` / `heading` / `price` / `sku` / `actions` / `recommend` / `tabbar`) are **semantic slots**: the framework decides, form by form, what each becomes, where it sits, and whether it renders at all.
 
-## The same content, seven results
+## The same content, eight results
 
 | Form | Topology | Navigation | Capability trade-offs (this example) | Visuals |
 |---|---|---|---|---|
 | Watch | One screen, one meaning (media/recommendation not rendered) | page stack | description collapsed, title clamped to 2 lines, two buttons side by side | dark AMOLED |
 | Phone | Single column + tabs | bottom-tabs | All capabilities available | light |
-| Foldable | Two panes when expanded · wide/portrait half-open | side-tabs | SKU available; half-open collapses description & secondary action (with reasons) | light |
+| Foldable (book style) | Two panes when expanded · wide half-open | side-tabs | SKU available; half-open collapses description & secondary action (with reasons) | light |
+| Flip (clamshell) | Single column when expanded · portrait half-fold | side-tabs / bottom-tabs | Same (single-row cards, primary action only in half-fold) | light |
 | Tablet | Rail + split | rail | + multi-column recommendations | light |
 | PC | Rail + three columns + hover | side-nav | + hover / keyboard focus ring | light |
 | In-car | Cockpit (media ｜ info / actions ｜ tiles) | focus-tree | SKU → **degradation bar**, only 3 recommendations, 76dp hit areas | dark cockpit |
 | TV | Hero + horizontal poster row | focus-row | no dense information, media ×2.6, 3px focus ring | dark immersive |
 
-**One template** produces all seven results above — that is the divide between a "Flex System" and responsive layout.
+**One template** produces all eight results above — that is the divide between a "Fluid System" and responsive layout.
 
 ## Verifiable: the demo page and its machine gates
 
 [Multi-device](/multi-device) is an interactive acceptance ground (`?device=` / `?posture=` are shareable):
 
 - The left column shows **the very same source being executed** (read via `?raw`, syntax highlighted)
-- The centre renders all seven forms for real (device frames centred and complete, not screenshots)
+- The centre renders all eight forms for real (device frames centred and complete, not screenshots)
 - The right panel shows the derived form plus the **14 capability tri-states** (with degradation paths marked)
 
 The machine gates behind it (real Chromium, not eyeballing):
 
 | Gate | Criterion |
 |---|---|
-| Two viewports × seven forms | Zero overlap, zero out-of-bounds, zero cropping; one-screen forms (watch/car/tv) do not overflow |
+| Two viewports × eight forms | Zero overlap, zero out-of-bounds, zero cropping; one-screen forms (watch/car/tv) do not overflow |
 | Media-content occlusion | In overlay topologies the hero visual must not cover interactive items |
 | Primary label readability | One-screen forms must not ellipsis-truncate titles/prices/tile names |
 | Composition balance | The in-car info group must be vertically centred against the media panel (10px tolerance) |
@@ -102,6 +103,6 @@ pnpm test:e2e:website   # run the same geometry gates locally
 
 ## Next steps
 
-- [Multi-device demo](/multi-device): switch all seven forms by hand
+- [Multi-device demo](/multi-device): switch all eight forms by hand
 - [p-formfactor API](/docs/component/p-formfactor): props / slots / implementation notes
 - [Form profiles](/docs/system/06-form-profiles): back to the layer above — the SSOT table that drives everything

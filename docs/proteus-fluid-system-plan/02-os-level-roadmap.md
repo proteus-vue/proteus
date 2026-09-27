@@ -4,6 +4,9 @@
 > 输入与无障碍 / 流体运行时与性能 / 缺陷猎手 / 产品化价值）。三审收口已交付（提交 `1609b3bc`），
 > 本文件记录复审暴露的**结构性差距**与到「OS 级柔性系统」的路线。
 > 新会话读此文件时先读 `PROJECT_MEMORY.md` 的「当前状态速览」。
+> ★**定位（2026-09-29 收口后）**：本文件描述的是**下一阶段（动态信号 / 运行时契约）**的输入——
+> 静态形态求解阶段已收口，收口结论与「未收项核实状态」见 [04-closure.md](./04-closure.md) §3；
+> 其中 P2-7（`nav` 已有 CSS 消费者）等条目在收口时已复核更新。
 
 ## 0. 七视角一致结论（交叉印证）
 
@@ -130,8 +133,8 @@ Web `env(fold-*)`，缺则退回 reported。组件改用 `senseForm` 并把 `Res
 | 形态画像 | form profile | 保留（`FormProfile`） |
 | 能力三态 | capability tri-state | `supported / fallback / unsupported` |
 | 降级路径 | fallback path | 保留 |
-| 折叠姿态 | posture（folded / tabletop / expanded） | 保留 |
+| 折叠姿态 | posture（folded / book / tabletop / expanded） | 保留（book = 书本式半开 · tabletop = 翻盖式半折——**两类设备各自的半折叠语义**） |
 | 流体度量 | fluid metrics (k, clamped) | 弃用「缩放系数 / scale factor」（旧版概念） |
 | 展示帧 | mockup frame | 弃用「展示壳」作对外词 |
-| 端 | end / render backend | **端 ≠ 形态**：首页/生态页「六端形态」漏折叠屏，需改「七形态」 |
+| 端 | end / render backend | **端 ≠ 形态**：首页/生态页曾写「六端形态」（漏折叠屏）→ 已改为「八种设备形态」（2026-09-29 收口；机器门禁 `check:fluid-wording`） |
 | 多端同屏（页面名） | Multi-device | 建议改「多形态同屏 / Form Wall」以免与「端」撞义 |

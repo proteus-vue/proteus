@@ -33,9 +33,9 @@ const cases = computed(() => [
     icon: '📱',
     title: isEn.value ? 'Multi-device demo' : '多端同屏',
     desc: isEn.value
-      ? 'One product-detail page rendered into six form factors — phone / tablet / PC / in-car / TV / watch. Switch the device and watch the render decision change, not your code.'
-      : '同一份商品详情页渲染成六种终端形态——手机 / 平板 / PC / 车机 / TV / 手表。切换设备看渲染决策的变化，而不是你的代码。',
-    tags: isEn.value ? ['6 form factors', 'render backend'] : ['六端形态', '渲染后端'],
+      ? 'One product-detail page rendered into eight device forms — watch / phone / foldable (book) / flip / tablet / PC / in-car / TV. Switch the form and watch the render decision change, not your code.'
+      : '同一份商品详情页渲染成八种设备形态——手表 / 手机 / 折叠屏（书本式）/ 小折叠（翻盖式）/ 平板 / PC / 车机 / TV。切换形态看渲染决策的变化，而不是你的代码。',
+    tags: isEn.value ? ['8 device forms', 'render backend'] : ['八种形态', '渲染后端'],
     link: '/multi-device',
     linkText: isEn.value ? 'Open demo' : '打开演示',
   },

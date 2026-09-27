@@ -24,7 +24,7 @@ unsupported  → 不渲染（该形态确实没有这条路径）
 | `capsDegraded(level)` | 是否为 `fallback`（走了降级） |
 | `capsLabel(level)` | 归一为三态字符串（`boolean` 兼容旧写法：`true→supported` / `false→unsupported`） |
 
-> ⚠️ **禁止裸真值判断**：`v-if="caps.drawer"` 对字符串 `'unsupported'` **恒真**——这是一个真实踩过的 P0（七形态全渲染假徽标，而面板显示「未支持」）。组件与 SSOT 内的判断必须走 `capsEnabled()`；静态扫描门禁会拦住裸写法。
+> ⚠️ **禁止裸真值判断**：`v-if="caps.drawer"` 对字符串 `'unsupported'` **恒真**——这是一个真实踩过的 P0（当时全形态渲染假徽标，而面板显示「未支持」）。组件与 SSOT 内的判断必须走 `capsEnabled()`；静态扫描门禁会拦住裸写法。
 
 ## 14 项能力与真值表
 

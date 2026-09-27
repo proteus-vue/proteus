@@ -72,7 +72,7 @@ All the rules above can be disabled via `rules.disabled` in `proteus.config.ts` 
 
 ## Relationship to fluid layout
 
-px→rpx solves **unit proportionality**; fluid layout (`v-p-fluid` / p-grid auto-fill) solves **structural self-adaptation** — the latter is Proteus's actual layout proposition, and the style transform is only a compatibility layer. See the Flex System section for details.
+px→rpx solves **unit proportionality**; fluid layout (`v-p-fluid` / p-grid auto-fill) solves **structural self-adaptation** — the latter is Proteus's actual layout proposition, and the style transform is only a compatibility layer. See the Fluid System section for details.
 
 ## Next steps
 

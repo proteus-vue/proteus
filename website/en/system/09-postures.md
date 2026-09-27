@@ -6,7 +6,7 @@ group: 柔性系统
 
 # Fold postures & continuity
 
-> **A foldable is a dynamic form**: one device switches between "folded cover screen / half-open (flex) / expanded inner screen", and an app should not restart, should not lose state, and should rearrange continuously. The Flex System makes postures first-class data — `postures[]` declares each posture's topology, navigation, viewport, crease position and metric baseline.
+> **A foldable is a dynamic form**: one device switches between "folded cover screen / half-open (flex) / expanded inner screen", and an app should not restart, should not lose state, and should rearrange continuously. The Fluid System makes postures first-class data — `postures[]` declares each posture's topology, navigation, viewport, crease position and metric baseline.
 
 ## First, the two fold types are **two different devices**
 

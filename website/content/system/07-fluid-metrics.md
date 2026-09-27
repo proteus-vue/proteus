@@ -73,7 +73,7 @@ expect(dp).toBeGreaterThanOrEqual(44)   // 触控（HIG 44pt / Material 48dp 的
 | **1512** | **用户实际屏幕（曾漏检的共同因素）** | 同上 |
 | 1600 | 设计评审宽舞台 | 同上 |
 
-机器门禁：`tests/e2e-website-multidevice.test.ts`（真 Chromium 双视口 × 七形态，含同会话切换）。
+机器门禁：`tests/e2e-website-multidevice.test.ts`（真 Chromium 双视口 × 八形态，含同会话切换）。
 
 ## 边界与降级
 

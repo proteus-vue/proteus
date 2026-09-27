@@ -105,7 +105,7 @@ G-44 测试层已把三维矩阵参数化：`W_BREAK [320,600,840,1200,1920] × 
   表冠语义（`caps.crown` + 视觉提示 + 热区）、单列一屏（`glance` 拓扑：隐媒体/推荐、标题限 2 行）
 - ✅ TV 焦点模式（`hero-focus-row` 拓扑 + `caps.focusRows` 横向焦点行 + 3px 强调色焦点环）
 - ✅ 车机 driving-safe（`caps.driveAware` 降动效 + `caps.skuMulti='fallback'` 降级条 + 第 4+ 推荐项不渲染 + 76dp 热区）
-- ✅ 三维特征的**运行时落地形态**：`FORM_PROFILES`（7 形态画像）+ `resolveFluidMetrics`（容器驱动度量）
+- ✅ 三维特征的**运行时落地形态**：`FORM_PROFILES`（8 形态画像）+ `resolveFluidMetrics`（容器驱动度量）
   ——详见[形态画像](/docs/system/06-form-profiles)与[流体度量](/docs/system/07-fluid-metrics)
 - ⬜ `useContainerProfile()` 组合查询入口（三维 Profile3D 的运行时便捷封装）
 

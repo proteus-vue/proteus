@@ -107,7 +107,7 @@ Component layout decisions (column count, split panes, folding) use container br
 - ✅ TV focus mode (`hero-focus-row` topology + `caps.focusRows` poster row + a 3px accent focus ring)
 - ✅ In-vehicle driving-safe (`caps.driveAware` motion gate + `caps.skuMulti='fallback'` degradation bar +
   4th-and-later recommendations not rendered + 76dp hit areas)
-- ✅ The **runtime shape** of the three-dimensional characteristics: `FORM_PROFILES` (7 form profiles) +
+- ✅ The **runtime shape** of the three-dimensional characteristics: `FORM_PROFILES` (8 form profiles) +
   `resolveFluidMetrics` (container-driven metrics) — see [Form profiles](/docs/system/06-form-profiles)
   and [Fluid metrics](/docs/system/07-fluid-metrics)
 - ⬜ `useContainerProfile()` composite-query entry (a runtime convenience wrapper over the Profile3D matrix)
@@ -120,5 +120,5 @@ Component layout decisions (column count, split panes, folding) use container br
 
 - [Form profiles](/docs/system/06-form-profiles): how "form" lands as the framework's SSOT
 - [Full-target adaptation](/docs/21-device-adaptation): G-24 desktop primitives + G-25 full-target
-- [Flex System overview](/docs/system/01-overview): back to the big picture
+- [Fluid System overview](/docs/system/01-overview): back to the big picture
 - [Containers & hosts](/docs/framework/33-containers-hosts): container form and host runtime

@@ -187,6 +187,12 @@ jobs:
       - name: 官网数字门禁（stats.ts 声明值 vs 源码实际值——防「数字过时」静默上线）
         run: cd website && pnpm run check:stats
 
+      # ★2026-09-29 新增：柔性系统对外口径门禁——形态数量（与 FORM_PROFILES 键数机器对账）/
+      #   弃用术语（Flex System → Fluid System）/ 命名纪律（书本式半开不得写作「半折」）。
+      #   背景：收口评审时发现站内写「六种/七种设备形态」而实际已是 8 个（fold/flip 拆类后未同步）。
+      - name: 柔性系统口径门禁（形态数/术语/命名——防「官网说 N 种而源码是 M 种」）
+        run: node scripts/check-fluid-wording.mjs
+
       # ★2026-09-20 新增：外部报告台账门禁——`docs/外部报告台账.json` 的**schema 与自洽性**校验
       #   （必填字段 / 枚举合法 / blocker 必带 repro / partial 必带 related / fixed_in 不得比已验版本新；
       #    台账本身不合格 → exit 2 → CI 红）。
