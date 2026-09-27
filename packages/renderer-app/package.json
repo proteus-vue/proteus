@@ -1,7 +1,7 @@
 {
   "name": "@proteus-vue/renderer-app",
   "version": "0.3.0-beta.11",
-  "description": "Proteus App 渲染器（app-plan B1）：Vue createRenderer 自定义 host config（NativeAdapter 抽象）——标准 Vue SFC 的 App 原生运行时通道",
+  "description": "Proteus App \u6e32\u67d3\u5668\uff08app-plan B1\uff09\uff1aVue createRenderer \u81ea\u5b9a\u4e49 host config\uff08NativeAdapter \u62bd\u8c61\uff09\u2014\u2014\u6807\u51c6 Vue SFC \u7684 App \u539f\u751f\u8fd0\u884c\u65f6\u901a\u9053",
   "type": "module",
   "license": "Apache-2.0",
   "main": "./dist/index.js",
@@ -12,14 +12,19 @@
       "import": "./dist/index.js",
       "default": "./dist/index.js"
     },
-    "./package.json": "./package.json"
+    "./package.json": "./package.json",
+    "./adapters/selfdraw": {
+      "types": "./dist/adapters/selfdraw.d.ts",
+      "import": "./dist/adapters/selfdraw.js",
+      "default": "./dist/adapters/selfdraw.js"
+    }
   },
   "files": [
     "dist",
     "README.md"
   ],
   "scripts": {
-    "build": "tsc -p tsconfig.build.json --emitDeclarationOnly && esbuild src/index.ts --bundle --format=esm --platform=node --outfile=dist/index.js --external:@vue/runtime-core"
+    "build": "tsc -p tsconfig.build.json --emitDeclarationOnly && esbuild src/index.ts --bundle --format=esm --platform=node --outfile=dist/index.js --external:@vue/runtime-core && esbuild src/adapters/selfdraw.ts --bundle --format=esm --platform=node --outfile=dist/adapters/selfdraw.js --external:@vue/runtime-core"
   },
   "peerDependencies": {
     "@vue/runtime-core": "^3.4.0"
