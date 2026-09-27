@@ -1,0 +1,114 @@
+{
+  "offset_left" : 60,
+  "offset_top" : 200,
+  "node_layers" : 12,
+  "row_w" : 600,
+  "ok" : true,
+  "expected" : [
+    {
+      "w" : 600,
+      "color" : "#285AC8",
+      "x" : 60,
+      "h" : 40,
+      "row" : 0,
+      "y" : 200
+    },
+    {
+      "row" : 1,
+      "y" : 240,
+      "w" : 600,
+      "h" : 40,
+      "x" : 60,
+      "color" : "#326BC1"
+    },
+    {
+      "w" : 600,
+      "color" : "#3C7CBA",
+      "h" : 40,
+      "x" : 60,
+      "y" : 280,
+      "row" : 2
+    },
+    {
+      "color" : "#468DB3",
+      "x" : 60,
+      "row" : 3,
+      "y" : 320,
+      "w" : 600,
+      "h" : 40
+    },
+    {
+      "color" : "#509EAC",
+      "y" : 360,
+      "h" : 40,
+      "w" : 600,
+      "row" : 4,
+      "x" : 60
+    },
+    {
+      "h" : 40,
+      "color" : "#5AAFA5",
+      "row" : 5,
+      "y" : 400,
+      "x" : 60,
+      "w" : 600
+    },
+    {
+      "w" : 600,
+      "h" : 40,
+      "y" : 440,
+      "color" : "#64C09E",
+      "row" : 6,
+      "x" : 60
+    },
+    {
+      "row" : 7,
+      "x" : 60,
+      "w" : 600,
+      "color" : "#6ED197",
+      "y" : 480,
+      "h" : 40
+    },
+    {
+      "row" : 8,
+      "x" : 60,
+      "y" : 520,
+      "w" : 600,
+      "h" : 40,
+      "color" : "#78E290"
+    },
+    {
+      "w" : 600,
+      "x" : 60,
+      "color" : "#825D89",
+      "row" : 9,
+      "h" : 40,
+      "y" : 560
+    },
+    {
+      "row" : 10,
+      "h" : 40,
+      "y" : 600,
+      "w" : 600,
+      "color" : "#8C6E82",
+      "x" : 60
+    },
+    {
+      "x" : 60,
+      "w" : 600,
+      "color" : "#967F7B",
+      "row" : 11,
+      "y" : 640,
+      "h" : 40
+    }
+  ],
+  "view_origin_y" : 0,
+  "row_h" : 40,
+  "engine" : "proteus-layout-core 0.1.0 · engine=taffy-0.14 · taffy 锁定 0.14（0.13 有 measure 指数退化）",
+  "rows" : 12,
+  "path" : "calayer-scene",
+  "view_width" : 390,
+  "view_height" : 844,
+  "view_origin_x" : 0,
+  "note" : "★M4 CALayer 路线：宿主 UIView + CALayer 树（跳过 UIView），几何由 Rust 核心驱动；场景规格与 Android shot 同规格 → 同一个核验脚本可对拍"
+}
