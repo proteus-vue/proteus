@@ -188,6 +188,73 @@
       "scale": 3,
       "screen": "390x844",
       "systemVersion": "26.3"
+    },
+    "exp7_scroll_fps": {
+      "CATextLayer": {
+        "fps": 57.3,
+        "p95ms": 16.93,
+        "dropRate": 0.7,
+        "frames": 144
+      },
+      "CATextLayer_heavy": {
+        "fps": 57.3,
+        "p95ms": 17.06,
+        "dropRate": 0.7,
+        "frames": 144
+      },
+      "UILabel_attributed": {
+        "fps": 57.3,
+        "p95ms": 16.96,
+        "dropRate": 0.7,
+        "frames": 144
+      },
+      "UILabel_heavy": {
+        "fps": 59.3,
+        "p95ms": 17.05,
+        "dropRate": 0,
+        "frames": 143
+      },
+      "UILabel_plain": {
+        "fps": 55.8,
+        "p95ms": 16.98,
+        "dropRate": 0.7,
+        "frames": 140
+      }
+    },
+    "exp8_memory_isolated_mb": {
+      "note": "★进程隔离测量（每次启动只测一个变体，5 轮取中位）——进程内连测会被污染（实测 48→157→166MB 累积）",
+      "routes": {
+        "A_uiview_autolayout": {
+          "median": 104.7,
+          "runs": [
+            104.5,
+            104.6,
+            105,
+            104.7,
+            104.9
+          ]
+        },
+        "B_uiview_manualframe": {
+          "median": 101,
+          "runs": [
+            101,
+            101,
+            101,
+            100.9,
+            100.8
+          ]
+        },
+        "C_calayer_manualframe": {
+          "median": 186.7,
+          "runs": [
+            186.7,
+            186.9,
+            186.8,
+            186.7,
+            186.6
+          ]
+        }
+      }
     }
   }
 }
