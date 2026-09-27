@@ -43,11 +43,39 @@ public class ProteusHostView extends View {
         invalidate();
     }
 
+    /* ══════════ ★滚动列表模式（§9.3）：把 ListRenderer 接到**真实 View 绘制管线** ══════════ */
+
+    private ListRenderer listRenderer;
+
+    /**
+     * 启用滚动列表模式。
+     *
+     * ★★为什么必须挂到真实 View 上（本仓实测教训）：
+     *   初版在宿主里**自建 `RenderNode` 并录制**，但那个 node **从未挂进窗口** →
+     *   显示系统根本没收到帧（系统 `dumpsys gfxinfo` 只统计到 31 帧，全是冷启动画面），
+     *   于是「帧间隔」测到的只是 Choreographer 的回调节拍，**与渲染无关**。
+     *   正解：把列表绘制放进**在窗口里的 View** 的 `onDraw`，由 `invalidate()` 驱动真实帧。
+     */
+    public void enableListMode(ListRenderer r) {
+        this.listRenderer = r;
+        invalidate();
+    }
+
+    /** 请求重绘（由滚动驱动每帧调用 → 产生真实帧） */
+    public void requestListFrame() {
+        invalidate();
+    }
+
     public int cmdCount() { return cmds.size(); }
 
     @Override
     protected void onDraw(Canvas canvas) {
         super.onDraw(canvas);
+        // ★滚动列表模式：绘制列表内容（这是**真实帧**的来源——canvas 来自窗口）
+        if (listRenderer != null) {
+            listRenderer.draw(canvas);
+            return;
+        }
         drawCmds(canvas);
     }
 
@@ -284,4 +312,98 @@ public class ProteusHostView extends View {
 
     /** 报告「不拍平」结构的对象数（供报告与内存归因） */
     public int unflattenedCount() { return unflattened.size(); }
+
+    /* ══════════ ★§9.3 平台侧：滚动列表 + RenderNode 池化 + 帧率测量 ══════════ */
+
+    /**
+     * 滚动列表渲染器：**平台侧**真实对象（`RenderNode`）的复用池。
+     *
+     * 与 Rust 侧 `recycle::RecyclePool` 的关系：
+     *   · Rust 侧负责**决定**「哪些行该存在、哪些该释放」（平台无关逻辑，已验收）
+     *   · 本类负责**执行**：把 RenderNode 对象放进池里复用，滚动时不新建
+     *
+     * ★这是 §12.7 P1「layer 复用池」在 Android 上的落地（`RenderNode` 即 layer 的等价物）。
+     */
+    public static final class ListRenderer {
+        private final java.util.ArrayDeque<android.graphics.RenderNode> pool = new java.util.ArrayDeque<>();
+        private final java.util.HashMap<Integer, android.graphics.RenderNode> active = new java.util.HashMap<>();
+        private final int poolCap;
+        private int created = 0;
+        private int reused = 0;
+        private int drawn = 0;
+
+        public ListRenderer(int poolCap) { this.poolCap = poolCap; }
+
+        public void acquireRow(int row, float x, float y, float w, float h, int color, String text) {
+            android.graphics.RenderNode node = pool.pollLast();
+            if (node == null) {
+                node = new android.graphics.RenderNode("row-" + row);
+                created++;
+            } else {
+                reused++;
+            }
+            node.setPosition((int) x, (int) y, (int) (x + w), (int) (y + h));
+            android.graphics.RecordingCanvas rc = node.beginRecording();
+            android.graphics.Paint paint = new android.graphics.Paint();
+            paint.setColor(color);
+            rc.drawRect(0f, 0f, w, h, paint);
+            if (text != null) {
+                android.graphics.Paint tp = new android.graphics.Paint(android.graphics.Paint.ANTI_ALIAS_FLAG);
+                tp.setColor(android.graphics.Color.WHITE);
+                tp.setTextSize(10f);
+                rc.drawText(text, 4f, h * 0.75f, tp);
+            }
+            node.endRecording();
+            active.put(row, node);
+        }
+
+        public void releaseRow(int row) {
+            android.graphics.RenderNode node = active.remove(row);
+            if (node == null) return;
+            if (pool.size() < poolCap) pool.addLast(node);
+        }
+
+        /** 清空全部（回收所有 Row 到池） */
+        public void releaseAll(java.util.List<Integer> rows) {
+            for (Integer r : rows) releaseRow(r);
+        }
+
+        /** 绘制当前活跃行（逐个 drawRenderNode） */
+        public void draw(android.graphics.Canvas canvas) {
+            drawn++;
+            for (android.graphics.RenderNode n : active.values()) {
+                canvas.drawRenderNode(n);
+            }
+        }
+
+        public boolean hasRow(int row) { return active.containsKey(row); }
+
+        /** 释放窗口外的行（★滚动时的主要回收动作——不释放则内存随滚动累积） */
+        public int releaseOutside(int from, int to) {
+            int released = 0;
+            java.util.Iterator<java.util.Map.Entry<Integer, android.graphics.RenderNode>> it = active.entrySet().iterator();
+            java.util.List<android.graphics.RenderNode> back = new java.util.ArrayList<>();
+            while (it.hasNext()) {
+                java.util.Map.Entry<Integer, android.graphics.RenderNode> e = it.next();
+                int row = e.getKey();
+                if (row < from || row > to) {
+                    android.graphics.RenderNode n = e.getValue();
+                    if (pool.size() < poolCap) pool.addLast(n);
+                    it.remove();
+                    released++;
+                }
+            }
+            return released;
+        }
+
+        public int activeCount() { return active.size(); }
+        public int createdCount() { return created; }
+        public int reusedCount() { return reused; }
+        public int pooledCount() { return pool.size(); }
+        public int drawCalls() { return drawn; }
+        public double reuseRatio() {
+            int total = created + reused;
+            return total == 0 ? 0.0 : (double) reused / total;
+        }
+    }
 }

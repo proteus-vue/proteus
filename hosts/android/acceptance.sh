@@ -16,7 +16,8 @@
 #
 # 【两条通路分两次冷启动】`--es path proteus|native` —— 隔离内存（同进程先后建树会互相污染）
 #
-# 用法：bash hosts/android/acceptance.sh [--runs 5] [--skip-build]
+# 用法：bash hosts/android/acceptance.sh [--runs 5] [--skip-build] [--fresh-install]
+#   --fresh-install  ★破坏性：卸载后重装（仅用于「初次安装 vs 闲时优化」对照；默认增量安装）
 set -euo pipefail
 
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -32,6 +33,7 @@ while [ $# -gt 0 ]; do
   case "$1" in
     --runs) RUNS="$2"; shift 2 ;;
     --skip-build) SKIP_BUILD=1; shift ;;
+    --fresh-install) FRESH_INSTALL=1; shift ;;
     *) echo "未知参数：$1"; exit 2 ;;
   esac
 done
@@ -47,9 +49,34 @@ APK="$HERE/build/proteus-layoutcore.apk"
 
 echo "==> 安装 release 包"
 "$ADB" wait-for-device
-# ★先卸载：§9.2 要区分「初次安装」与「闲时优化」，且避免残留数据干扰
-"$ADB" uninstall "$PKG" >/dev/null 2>&1 || true
-"$ADB" install "$APK" 2>&1 | tail -2
+
+# ★★「卸载」是**破坏性动作**，默认不做（本仓实测教训）：
+#   初版无条件 `uninstall` → 某次因 MIUI 的「USB 安装」开关关闭，卸载成功但重装被拒
+#   （INSTALL_FAILED_USER_RESTRICTED）→ 设备上变成**无 app 状态**，后续所有验收都跑不了。
+#   现在：默认**增量安装**（`-r`）；仅当显式传 `--fresh-install` 才卸载重装。
+INSTALL_OK=0
+if [ "${FRESH_INSTALL:-0}" = "1" ]; then
+  echo "    （--fresh-install：先卸载，用于「初次安装」组数据）"
+  "$ADB" uninstall "$PKG" >/dev/null 2>&1 || true
+  if "$ADB" install "$APK" 2>&1 | tail -2 | grep -q Success; then INSTALL_OK=1; fi
+else
+  if "$ADB" install -r -t "$APK" 2>&1 | tail -2 | grep -q Success; then INSTALL_OK=1; fi
+fi
+
+# ★安装失败必须**立即中止**（否则后面所有"测量"都跑在空设备上，产出假数据/空报告）
+if [ "$INSTALL_OK" != "1" ]; then
+  cat <<'MSG'
+✗ 安装失败——已中止（不继续跑验收，避免产出空数据）。
+
+  常见原因（MIUI / 部分国产 ROM）：
+    · 设置 → 更多设置 → 开发者选项 → 打开「USB 安装」（独立于「USB 调试」）
+    · 或设备上弹出了安装确认框但未点允许
+
+  提示：不要用「卸载再装」的方式绕过——卸载成功但重装失败会让设备变成无 app 状态。
+MSG
+  exit 3
+fi
+echo "    ✓ 安装成功"
 
 # ── 工具函数 ─────────────────────────────────────────────────────────
 
@@ -155,6 +182,20 @@ echo "    报告目录：$DEST"
 ls -1 "$DEST" | head -10
 
 echo
+echo "==> 采集系统帧率读数（§9.3 权威口径：dumpsys gfxinfo）"
+GFX="$DEST/gfxinfo.txt"
+# ★必须先 reset，否则 gfxinfo 是**进程生命周期累计**（含冷启动画面），与滚动无关
+"$ADB" shell "dumpsys gfxinfo $PKG reset" >/dev/null 2>&1
+echo "    → gfxinfo 已 reset；触发滚动验收…"
+"$ADB" shell am force-stop "$PKG" >/dev/null 2>&1; sleep 1
+"$ADB" shell am start -n "$ACTIVITY" --es path scroll >/dev/null 2>&1; sleep 3
+"$ADB" shell "am broadcast -a dev.proteus.RUN --es path scroll -p $PKG" >/dev/null 2>&1
+sleep 16
+"$ADB" shell "dumpsys gfxinfo $PKG" 2>/dev/null | tr -d '\r' > "$GFX"
+grep -E "Total frames rendered|Janky frames \(|50th percentile|90th percentile|95th percentile|99th percentile|Slow UI thread|Slow issue draw commands|Slow bitmap uploads" "$GFX" | sed 's/^/    /'
+# 同时取回滚动辅助观测
+"$ADB" pull "/sdcard/Android/data/$PKG/files/layout-scroll.json" "$DEST/layout-scroll.json" >/dev/null 2>&1 || true
+
 echo "==> 汇总"
 python3 - "$DEST" <<'PY'
 import json, sys, glob, os, statistics
@@ -204,6 +245,25 @@ if pm and nv:
     verdict = '✓ 达标（≤原生×0.8）' if ratio <= 0.8 else ('△ 合格（≤原生）' if ratio <= 1.0 else '✗ 不达标')
     print(f"  → 比值 proteus/native = {ratio:.3f}  {verdict}")
     print(f"     绝对值：Proteus {int(p_)} KB ({p_/1024:.1f} MB) · 原生 {int(n_)} KB ({n_/1024:.1f} MB)")
+
+# ★§9.3 帧率判读（以系统 gfxinfo 为准）
+print()
+print("═══ §9.3 帧率（系统 dumpsys gfxinfo）═══")
+gfx_path = os.path.join(dest, 'gfxinfo.txt')
+if os.path.exists(gfx_path):
+    gfx = open(gfx_path).read()
+    import re
+    for pat, label in [(r'Total frames rendered: (\d+)', '总帧数'),
+                       (r'Janky frames: (\d+) \(([\d.]+)%\)', '掉帧'),
+                       (r'50th percentile: (\d+)ms', 'p50 绘制'),
+                       (r'95th percentile: (\d+)ms', 'p95 绘制'),
+                       (r'Slow UI thread: (\d+)', 'UI 线程慢')]:
+        m = re.search(pat, gfx)
+        if m:
+            print(f"  {label}: {' '.join(m.groups())}")
+    print("  （系统以 60Hz 为基准判定 Janky；本机为 120Hz 屏，故该比例偏保守）")
+else:
+    print("  ⚠ 未采集到 gfxinfo")
 
 # ★最终核判定以 **app 自报的 layout-env.json** 为准（脚本侧采样只能代表瞬时）
 print()
