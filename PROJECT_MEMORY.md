@@ -12,7 +12,7 @@
 - **核心理念（架构方向已定案，决策 #290）**：**一份标准 Vue 源码 → 语义 IR（C-IR/CompilerIR）→ 可插拔渲染后端**（Render anywhere, on any engine）；不再是「小程序编译器」——小程序降级为 Layer 1 兼容层
 - **四层可插拔（原则 #10 终极形态）**：编译（G-29 CompilerBackend）/ 逻辑（JS 引擎）/ UI（G-27 RenderBackend）/ 能力（G-28 NativeBackend）
 - **技术栈**：Vue 3.4+ / Vite 5 / TypeScript 5.4+ / 微信基础库 2.29.2+（Skyline + wx.router）
-- **包规模**：42 个 @proteus-vue/* workspace 包（★2026-09-29 layout-core = App 排版核心，第 42 个）（check:pkg 0 error；31→38 修正 → G-07 glass 39 → Skyline 收口 worklet 40 → ★2026-09-14 组件库拆包 `@proteus-vue/components` 41；版本统一 0.3.0-beta.8，见「当前状态速览」）
+- **包规模**：**43 个 @proteus-vue/* npm 包**（+ `packages/layout-core-rust` = **cargo crate，非 npm 包**，故不计数）（★2026-09-29 layout-core = App 排版核心）（check:pkg 0 error · `pnpm check:stats` 校验 ✓；31→38 修正 → G-07 glass 39 → Skyline 收口 worklet 40 → ★2026-09-14 组件库拆包 `@proteus-vue/components` 41 → ★Vapor 线新增 `@proteus-vue/slot-runtime` 42 + `@proteus-vue/layout-core` 43；版本统一 0.3.0-beta.8，见「当前状态速览」）
 - **文档**：`docs/proteus-architecture.md`（L0 规约·真理来源）→ `docs/board-inventory.md`（全景索引）→ `docs/roadmap.md`（版本线）→ `roadmap-2-plan`（里程碑线）→ 各 plan
 
 ---
@@ -48,7 +48,33 @@
   只有**可复制代码块**里的引用才真正有害。
 · 破坏性验证：恢复 `p-card` → 红并精确报 `03-fluid-grid.md:31`；还原 → 575 md 全过。
 
-## 当前状态速览（最近一次更新：2026-09-28 **V0 探针：编译器路线诊断成立**）★新会话以此为准
+## 当前状态速览（最近一次更新：2026-09-28 **Vapor IR V0~V4 全链路闭环 + 追加批次**）★新会话以此为准
+
+> ★★**Vapor IR 能力线：V0~V4 全部完成 + 追加批次全部完成（2026-09-28）**
+> —— 目标「抹平 Vue 的 diff 开销」已达成并**真机量化**。
+> · **里程碑**（方案 §9，`docs/Proteus_VaporIR更新编译器设计方案.md`）：
+>   V0 探针（真机 78ms→9ms · patchProp **5003→7**）· V1 指令集（12 opcode + 二进制线格式 +
+>   **真跨语言 golden**：TS 编码 → Rust 解码 → 语义比对）· V2 编译期响应式转换
+>   （`proteus explain --vapor` · L1 覆盖率 **77.8%**）· V3 App 端打通（真机类A P95 **0.36ms**）·
+>   V4 收尾（二进制返回通道 / 浏览器增量对拍 / Vue 3.4-3.6 逐字节兼容 / 性能棘轮 /
+>   列表映射 / **全量 SFC→端上渲染**）
+> · **V4 后追加批次**（超出原方案，真机 A/B 均已量化）：
+>   | 能力 | 真机证据（iPhone 12） |
+>   |---|---|
+>   | 结构变更增量（增/删/**头部插入**/**中间插入**） | 336KB→56KB · 280KB→**526B** · 308KB→**28KB** |
+>   | 文本变更增量 | 281KB→**15KB**（150ms→75ms） |
+>   | 整树重排 relayout（持久 taffy 树） | **17.16ms→1.52ms** · 度量调用 6003→**0** |
+>   | 跨节点度量复用（`textStyleKey` 进键） | CoreText 调用**降 4×**（4000 行 8002→2001） |
+>   | 内存回收（孤点压实） | 10 轮 churn **末轮孤点 0** · 节点数有界 4909 |
+> · **验证体系 5 层**：单元 / 不变式（**增量 ≡ 全量**）/ **浏览器对拍**（全量 + 增量两套 golden）/
+>   像素级 / **性能棘轮**（两层判据：性能上限 + **优化路径生效证明**）
+> · **16 条实测纪律**（全部来自踩坑，含「测量装置必须先自测」「判据必须能变红」
+>   「对自报状态比较是空判据」）——见 `docs/proteus-vapor-honest-boundaries.md`
+> · ★**诚实边界**：真机读数受热降频影响（比值可信、绝对值不跨轮比）；
+>   类B（边界自身外盒变化）**9.7ms 未达** §10 的 3ms 目标；Playground（PG0~PG4）为规划态、零实现代码
+> · **剩余开项**：`textStyleKey` 只覆盖 fontSize（字重/字族未建模）· 宿主列表映射真机长列表 ·
+>   Android 接线 · 事件系统（命中测试已跨端验证，自绘场景未接）
+
 
 > ★★**方向 A 已过 V0 关卡 · 真机达标**（方案 `docs/Proteus_VaporIR更新编译器设计方案.md` §9）：
 > · **真机（权威 · iPhone 12 / iOS 26.3 · 报告 `7094b968-094631`）**：
