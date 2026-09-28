@@ -40,6 +40,14 @@ func proteus_layout_free_string(_ ptr: UnsafeMutablePointer<CChar>)
 
 @_silgen_name("proteus_layout_update")
 func proteus_layout_update(_ handle: UInt64, _ patchesJson: UnsafePointer<CChar>) -> UnsafeMutablePointer<CChar>
+
+/// ★★结构变更（插入/摘除子树）——「增删行」的增量路径（此前只能重发整棵树）
+@_silgen_name("proteus_layout_splice")
+func proteus_layout_splice(_ handle: UInt64, _ spliceJson: UnsafePointer<CChar>) -> UnsafeMutablePointer<CChar>
+
+/// ★★注入/更新文本度量（宿主度量后推入；不触发重排）
+@_silgen_name("proteus_layout_set_text_measures")
+func proteus_layout_set_text_measures(_ handle: UInt64, _ measuresJson: UnsafePointer<CChar>) -> UnsafeMutablePointer<CChar>
 /// ★Vapor IR V3：二进制指令流入口（字节指针 + 长度）
 @_silgen_name("proteus_layout_apply_ops")
 func proteus_layout_apply_ops(_ handle: UInt64, _ ptr: UnsafePointer<UInt8>, _ len: UInt32) -> UnsafeMutablePointer<CChar>
@@ -83,6 +91,14 @@ func physFootprintMB() -> Double {
     func update(_ treeJson: String) -> String
     /// ★★**增量更新**：只发改动过的节点的样式补丁（跨边界字节数从 280KB 降到几十字节）
     func updatePatches(_ patchesJson: String) -> String
+    /// ★★**结构变更（增删行）**：`{removes:[id], inserts:[{parentId,nodes:[...]}], textMeasures:{}}`
+    ///
+    /// 【为什么必须有（本仓实测的功能缺口）】此前增删行只能**重发整棵树**
+    ///   （真机 S5：500→600 项 230ms，几乎全是搬运成本）。本入口把「结构变了什么」
+    ///   直接交给核心（`proteus_layout_splice`），宿主只增删对应层的子树。
+    ///   ★只支持**追加**（核心侧架构限制：中间插入会显式拒绝并提示重发整棵树——
+    ///     本仓纪律「宁可拒绝不可静默错序」）。
+    func splice(_ spliceJson: String) -> String
     /// ★★**Vapor IR V3：二进制指令流入口**（V1 编码 → Rust 解码 → 应用 → 多范围增量重排）
     ///
     /// 【为什么另开一个入口而不是复用 updatePatches】
@@ -155,6 +171,16 @@ final class SelfDrawView: UIView {
     private var depthById: [Int: Int] = [:]
     /// 节点 id → 父 id（增量更新时判断父子关系用）
     private var parentById: [Int: Int] = [:]
+    /// 节点 id → **子 id 列表**（结构变更的层维护用）
+    ///
+    /// 【为什么需要（结构增量的必要簿记）】`layer.sublayers` 虽是现成的，但结构变更时：
+    ///   ① 摘除要按**节点 id** 递归清理各字典（`layersById`/`depthById`/…）——
+    ///      直接从 CALayer 反查 id 需要反查表，绕一圈且易漏；
+    ///   ② 插入落点需要知道"父的当前子列表"以判定末尾位置。
+    ///   ⇒ 与 `layersById` 同处维护一份 **id 级的子列表**（O(1) 增删）。
+    ///   ⚠ 纪律：**本表与 CALayer 树必须同步更新**（两者是同一事实的两份视图，
+    ///     分叉 ⇒ 层树与 id 簿记不一致 ⇒ 后续所有增量操作都在错的基础上做）。
+    private var childrenById: [Int: [Int]] = [:]
     /// 实际下发的 CALayer frame（**父相对**）与父 id —— 供核验脚本对照核心几何
     private(set) var builtFrames: [Int: CGRect] = [:]
     private(set) var builtParents: [Int: Int] = [:]
@@ -183,11 +209,45 @@ final class SelfDrawView: UIView {
         absOriginByNodeId.removeAll(keepingCapacity: true)
         layersById.removeAll(keepingCapacity: true)
         parentById.removeAll(keepingCapacity: true)
+        childrenById.removeAll(keepingCapacity: true)
         builtFrames.removeAll(keepingCapacity: true)
         builtParents.removeAll(keepingCapacity: true)
         // ★建新树 ⇒ 滚动偏移归零（见 resetContentOffset 的说明：视图状态会跨用例泄漏）
         resetContentOffset()
         CATransaction.commit()
+    }
+
+    /// 建层：按 style 造一个层（文本 ⇒ CATextLayer；否则 CALayer）
+    ///
+    /// 【为什么抽成方法（本仓纪律：同一语义一处实现）】全量重建（`buildLayers`）与
+    ///   **结构增量**（`insertLayers`）都要造层——两份实现必然分叉 ⇒
+    ///   新插入的行会与全量树**外观不一致**（静默错，且只有像素比对能发现）。
+    private func makeLayer(style: [String: Any]) -> CALayer {
+        let text = style["text"] as? String
+        let fontSize = style["fontSize"] as? CGFloat
+        if let text = text, !text.isEmpty {
+            // 文本叶子 → CATextLayer（GPU 加速；不创建 UIView，也不自栅格化）
+            let tl = CATextLayer()
+            tl.string = text
+            tl.font = CGFont("Helvetica" as CFString)
+            tl.fontSize = fontSize ?? 14
+            tl.foregroundColor = (style["color"] as? String).flatMap(parseHexColor)?.cgColor ?? UIColor.white.cgColor
+            tl.alignmentMode = .left
+            tl.truncationMode = .end
+            // ★contentsScale 必须显式设置：否则 Retina 上文本模糊（CATextLayer 不继承自动缩放）
+            tl.contentsScale = UIScreen.main.scale
+            tl.isWrapped = false
+            return tl
+        }
+        let layer = CALayer()
+        if let bg = (style["backgroundColor"] as? String).flatMap(parseHexColor) {
+            layer.backgroundColor = bg.cgColor
+        }
+        if let r = style["borderRadius"] as? CGFloat, r > 0 {
+            layer.cornerRadius = r
+            layer.masksToBounds = true
+        }
+        return layer
     }
 
     /// 按几何建 CALayer 树
@@ -200,32 +260,7 @@ final class SelfDrawView: UIView {
         CATransaction.setDisableActions(true)
         var byId: [Int: CALayer] = [:]
         for item in flat {
-            let layer: CALayer
-            let text = item.style["text"] as? String
-            let fontSize = item.style["fontSize"] as? CGFloat
-            if let text = text, !text.isEmpty {
-                // 文本叶子 → CATextLayer（GPU 加速；不创建 UIView，也不自栅格化）
-                let tl = CATextLayer()
-                tl.string = text
-                tl.font = CGFont("Helvetica" as CFString)
-                tl.fontSize = fontSize ?? 14
-                tl.foregroundColor = (item.style["color"] as? String).flatMap(parseHexColor)?.cgColor ?? UIColor.white.cgColor
-                tl.alignmentMode = .left
-                tl.truncationMode = .end
-                // ★contentsScale 必须显式设置：否则 Retina 上文本模糊（CATextLayer 不继承自动缩放）
-                tl.contentsScale = UIScreen.main.scale
-                tl.isWrapped = false
-                layer = tl
-            } else {
-                layer = CALayer()
-                if let bg = (item.style["backgroundColor"] as? String).flatMap(parseHexColor) {
-                    layer.backgroundColor = bg.cgColor
-                }
-                if let r = item.style["borderRadius"] as? CGFloat, r > 0 {
-                    layer.cornerRadius = r
-                    layer.masksToBounds = true
-                }
-            }
+            let layer = makeLayer(style: item.style)
             // ★几何**完全来自 Rust 核心**（位置/尺寸都不是 UIKit 算的）
             //
             // ★★坐标系换算（本仓实测踩到，是本场景最关键的一处）：
@@ -248,6 +283,9 @@ final class SelfDrawView: UIView {
             builtParents[item.id] = item.parentId ?? -1
             layersById[item.id] = layer
             parentById[item.id] = item.parentId ?? -1
+            if let pid = item.parentId {
+                childrenById[pid, default: []].append(item.id)
+            }
             if let pid = item.parentId, let parent = byId[pid] {
                 parent.addSublayer(layer)
             } else {
@@ -266,6 +304,148 @@ final class SelfDrawView: UIView {
         // ★V4：建层后清延迟更新簿记（新树 ⇒ 旧簿记失效）
         pendingOffscreen.removeAll(keepingCapacity: true)
         CATransaction.commit()
+    }
+
+    /* ────────────────────────── ★V7：结构变更的层维护 ────────────────────────── */
+
+    /// ★★**摘除子树**（递归清理层与全部 id 簿记）
+    ///
+    /// 【为什么必须递归清理（本仓纪律：不留下"半死"状态）】层树与簿记表是**同一事实的两份视图**
+    ///   （见 `childrenById` 注释）。若只 `removeFromSuperlayer` 而不清表：
+    ///   ① 后续更新会命中"存在但已不可见"的层（几何改了却看不见 ⇒ 静默错）；
+    ///   ② `pendingOffscreen` 里的旧账会在滚动时把孤层刷回来；
+    ///   ③ `layerNodes.count` 成为虚数（内存读数与层数读数失真）。
+    ///   ⇒ 一次性把该子树在**所有**表里清干净。
+    func removeLayersSubtree(rootId: Int) {
+        // ★父 id **先取**：下面的循环会把它从表里清掉（顺序错了就摘不出父子链）
+        let pid0 = builtParents[rootId] ?? parentById[rootId] ?? -1
+        CATransaction.begin()
+        CATransaction.setDisableActions(true)
+        var stack = [rootId]
+        var removedLayers = 0
+        var removedObjects = Set<ObjectIdentifier>()
+        while let id = stack.popLast() {
+            for c in childrenById[id] ?? [] { stack.append(c) }
+            if let l = layersById[id] {
+                l.removeFromSuperlayer()
+                removedObjects.insert(ObjectIdentifier(l))
+                removedLayers += 1
+            }
+            layersById.removeValue(forKey: id)
+            depthById.removeValue(forKey: id)
+            parentById.removeValue(forKey: id)
+            childrenById.removeValue(forKey: id)
+            builtFrames.removeValue(forKey: id)
+            builtParents.removeValue(forKey: id)
+            rectsByNodeId.removeValue(forKey: id)
+            metaByNodeId.removeValue(forKey: id)
+            absOriginByNodeId.removeValue(forKey: id)
+            pendingOffscreen.removeValue(forKey: id)   // ★旧账一并作废
+        }
+        // ★从父的子列表里摘掉（否则父的 childrenById 永远指着死 id）
+        if pid0 >= 0, var sibs = childrenById[pid0] {
+            sibs.removeAll { $0 == rootId }
+            childrenById[pid0] = sibs
+        }
+        // ★layerNodes 是清空/计数用的扁平列表——必须同步（否则 clearLayers 漏摘、计数失真）
+        layerNodes.removeAll { removedObjects.contains(ObjectIdentifier($0)) }
+        builtLayerCount = layerNodes.count
+        lastSpliceRemoved += removedLayers
+        CATransaction.commit()
+    }
+
+    /// ★★**插入子树**（按 `(parentId, index=末尾)` 落点建层；节点**父在前**）
+    ///
+    /// 【输入从哪来】splice 响应里的 `inserts` 明细（JS 侧 `takeSplice()` 产出）——
+    ///   含新节点的**完整样式**（tag/style/text），与全量树的规格同源（`fillSpec` 单实现）。
+    ///
+    /// 【为什么不在这里设 frame】新节点的几何在**同一批**的 rects 里返回；
+    ///   由调用方随后走 `updateLayersIncremental`（按父链深度排序 ⇒ 父原点先算好）统一设帧。
+    ///   在此设帧会用到**尚未更新**的父原点（顺序错误 ⇒ 几何错，本仓已踩过坐标系双重偏移）。
+    func insertLayers(_ inserts: [[String: Any]]) -> Int {
+        CATransaction.begin()
+        CATransaction.setDisableActions(true)
+        var created = 0
+        lastInsertedIds.removeAll(keepingCapacity: true)
+        for ins in inserts {
+            guard let parentId = ins["parentId"] as? Int,
+                  let nodes = ins["nodes"] as? [[String: Any]] else { continue }
+            for n in nodes {
+                guard let id = n["id"] as? Int else { continue }
+                // 该节点在块内的父（缺省/非块内 ⇒ 落点父）
+                let rawPid = n["parentId"] as? Int
+                let pid = (rawPid != nil && layersById[rawPid!] != nil) ? rawPid! : parentId
+                let parentLayer: CALayer = layersById[pid] ?? self.layer
+                let style = spliceStyleOf(n)
+                let layer = makeLayer(style: style)
+                parentLayer.addSublayer(layer)
+                layersById[id] = layer
+                parentById[id] = pid
+                childrenById[pid, default: []].append(id)
+                depthById[id] = (depthById[pid] ?? 0) + 1
+                metaByNodeId[id] = style
+                layerNodes.append(layer)
+                lastInsertedIds.append(id)
+                created += 1
+            }
+        }
+        builtLayerCount = layerNodes.count
+        lastSpliceInserted += created
+        CATransaction.commit()
+        return created
+    }
+
+    /// 从 splice 的节点描述符里取**绘制字段**（与全量路径 `render` 的取法同款：
+    /// 只认 backgroundColor/color/text/fontSize/borderRadius，其余不进层）
+    private func spliceStyleOf(_ n: [String: Any]) -> [String: Any] {
+        var style: [String: Any] = [:]
+        for k in ["backgroundColor", "color", "text"] {
+            if let v = n[k] as? String { style[k] = v }
+        }
+        if let fs = n["fontSize"] as? Double { style["fontSize"] = CGFloat(fs) }
+        if let br = n["borderRadius"] as? Double { style["borderRadius"] = CGFloat(br) }
+        return style
+    }
+
+    /// ★★最近一次 splice 的层维护读数（诊断 + 判据："层真的被增删了"）
+    private(set) var lastSpliceRemoved = 0
+    private(set) var lastSpliceInserted = 0
+    /// ★最近一次 splice 插入的节点 id（供"插入文本的度量是否真的生效"自检）
+    private(set) var lastInsertedIds: [Int] = []
+    func resetSpliceCounters() { lastSpliceRemoved = 0; lastSpliceInserted = 0; lastInsertedIds.removeAll() }
+
+    /// ★★**插入文本的度量自检**（设备侧不变量）
+    ///
+    /// 【为什么必须有（本仓实测的静默错几何缺陷）】核心的重排引擎曾用 `NullTextMeasurer`
+    ///   ⇒ 范围内文本被塌成 0 高（**首帧正确、更新后错**，静态用例发现不了）。
+    ///   修法（度量表随句柄持久化 + splice 带 textMeasures）已在 Rust 单测覆盖，
+    ///   但**宿主这条注入路径**（`fontSize ?? 14` 就地度量 → 塞进请求）此前**无任何判据**。
+    ///
+    /// 【★首版自检写错了（本仓实测的测量装置缺陷，被自检自身暴露）】首版只看 `layer.frame.height`：
+    ///   而插入的行在**列表末尾（视口外）** ⇒ 200 个文本层全部走"延后记账"
+    ///   （`visibleOnly=true` 下不可见层不设 frame）⇒ frame 仍是默认 0
+    ///   ⇒ 报"200/200 零高"——**是测量口径的假象，不是度量失败**（差点误导我）。
+    ///   ⇒ 正解：几何来源是**二者之一**——① 已应用 ⇒ `layer.frame`；
+    ///     ② 未应用（视口外延后）⇒ `pendingOffscreen` 的记账 rect。
+    ///     两者都没有 = 该节点**不在核心变化集里**（这才是真缺陷）⇒ 单列 `missing`。
+    /// - Returns: (文本层数, 已知几何里高≈0 的条数, 无任何几何的条数)
+    func insertedTextZeroHeight() -> (text: Int, zero: Int, missing: Int) {
+        var text = 0
+        var zero = 0
+        var missing = 0
+        for id in lastInsertedIds {
+            guard let style = metaByNodeId[id],
+                  let t = style["text"] as? String, !t.isEmpty else { continue }
+            text += 1
+            if let q = pendingOffscreen[id] {
+                if q.height < 0.5 { zero += 1 }
+            } else if let l = layersById[id] {
+                if l.frame.height < 0.5 { zero += 1 }
+            } else {
+                missing += 1
+            }
+        }
+        return (text, zero, missing)
     }
 
     /* ────────────────────────── ★V4：可见区判定 + 延迟更新簿记 ────────────────────────── */
@@ -713,6 +893,114 @@ final class SelfDrawBridge: NSObject, SelfDrawExports {
                            "update_ms": round(updateMs * 100) / 100,
                            "layers_ms": round(layersMs * 100) / 100,
                            // ★三段分解（sort/frames/commit）——定位 layers 残余的唯一依据
+                           "host_total_ms": round(totalMs * 100) / 100])
+    }
+
+    /// ★★**结构变更（增删行）**：把 splice 明细交给核心 + **宿主层树增量增删**
+    ///
+    /// 【与 updatePatches 的关系】同一条层更新通道（`updateLayersIncremental`），
+    ///   差别在**先**增删层子树（核心的响应里给了变化集，新节点的几何就在其中）。
+    ///   顺序敏感：① 摘除（先把"死"的层拿掉）→ ② 插入（建出"活"的层）→ ③ 统一设帧
+    ///   （按父链深度排序 ⇒ 新节点的父原点一定是**更新过的**；
+    ///    若在 ② 里直接设帧，用的是**旧**父原点 ⇒ 几何错，本仓已踩过坐标系双重偏移）。
+    ///
+    /// 【返回值】`{ ok, removed, inserted, relayout_count, changed_rects, updated_layers, ... }`
+    ///   —— `inserted_layers`/`removed_layers` 是**宿主侧实际增删的层数**（与核心的
+    ///   removed/inserted 对账：两者不等即"层树与树结构分叉"，必须可观测）。
+    func splice(_ spliceJson: String) -> String {
+        guard let view = view, handle != 0 else {
+            return "{\"ok\":false,\"error\":\"未建树或未接入核心\"}"
+        }
+        let t0 = CFAbsoluteTimeGetCurrent()
+
+        // ── ⓪ ★宿主度量新插入的文本（文本尺寸只能由宿主算：CoreText / StaticLayout）──
+        //
+        // 【为什么必须在这里做（本仓实测的静默错几何）】插入的行**必然含文本**，
+        //   而文本尺寸不在 style 里——它是 `textMeasures` 表（建树时注入）。新节点不在
+        //   任何表里 ⇒ 若不带度量，核心要么按 0 高（修复前：文字消失）、要么按旧表（几何偏）。
+        //   ⇒ 本方法把 `inserts[].nodes` 里的文本**就地度量**，并塞进请求的 `textMeasures`。
+        //   ★度量规则与全量路径 `render` **逐字一致**（`fontSize ?? 14`）——
+        //     两份规则分叉 ⇒ 增量插入的行与全量重建的行**尺寸不同**（且只差在不显眼处）。
+        var req = (try? JSONSerialization.jsonObject(with: Data(spliceJson.utf8))) as? [String: Any] ?? [:]
+        var measures: [String: [String: Double]] = [:]
+        if let inserts = req["inserts"] as? [[String: Any]] {
+            for ins in inserts {
+                guard let nodes = ins["nodes"] as? [[String: Any]] else { continue }
+                for n in nodes {
+                    guard let text = n["text"] as? String, !text.isEmpty, let id = n["id"] as? Int else { continue }
+                    let fontSize = (n["fontSize"] as? Double).map { CGFloat($0) } ?? 14
+                    let sz = SelfDrawBridge.measureText(text, fontSize: fontSize)
+                    measures["\(id)"] = ["width": Double(sz.width), "height": Double(sz.height)]
+                }
+            }
+        }
+        if !measures.isEmpty { req["textMeasures"] = measures }
+        let effectiveJson: String = measures.isEmpty
+            ? spliceJson
+            : (jsonString2(req) as String)
+
+        let out = effectiveJson.withCString { takeCString(proteus_layout_splice(handle, $0)) }
+        let spliceMs = (CFAbsoluteTimeGetCurrent() - t0) * 1000
+        guard out.contains("\"ok\":true") else {
+            return "{\"ok\":false,\"error\":\"splice 失败\",\"raw\":\(jsonEscape(String(out.prefix(300))))}"
+        }
+        let o = (try? JSONSerialization.jsonObject(with: Data(out.utf8))) as? [String: Any]
+        let removed = (o?["removed"] as? Int) ?? 0
+        let inserted = (o?["inserted"] as? Int) ?? 0
+        let relayout = (o?["relayout_count"] as? Int) ?? 0
+
+        // ★请求明细（removes/inserts）——宿主层维护的依据（核心只看几何，不看层）
+        let reqObj = (try? JSONSerialization.jsonObject(with: Data(spliceJson.utf8))) as? [String: Any]
+        let reqRemoves = (reqObj?["removes"] as? [Int]) ?? []
+        let reqInserts = (reqObj?["inserts"] as? [[String: Any]]) ?? []
+
+        // ① 摘除层子树
+        view.resetSpliceCounters()
+        for rid in reqRemoves { view.removeLayersSubtree(rootId: rid) }
+        // ② 插入新层（几何由 ③ 统一设）
+        let insertedLayers = view.insertLayers(reqInserts)
+
+        // ③ 变化集 → 统一设帧（含新节点；按父链深度排序在 updateLayersIncremental 内）
+        var changed: [(id: Int, abs: CGRect)] = []
+        if let rm = o?["rects"] as? [String: [String: Double]] {
+            for (k, r) in rm {
+                guard let nid = Int(k) else { continue }
+                changed.append((id: nid, abs: CGRect(x: r["x"] ?? 0, y: r["y"] ?? 0,
+                                                    width: r["width"] ?? 0, height: r["height"] ?? 0)))
+            }
+        }
+        let tL = CFAbsoluteTimeGetCurrent()
+        let updated = view.updateLayersIncremental(changed: changed, visibleOnly: SelfDrawBridge.optMode == "v4")
+        let layersMs = (CFAbsoluteTimeGetCurrent() - tL) * 1000
+        if updated < 0 {
+            // ★层树与树结构分叉 ⇒ 必须重发整树（调用方据 full_required 走全量）
+            return "{\"ok\":false,\"full_required\":true,\"error\":\"变化集与本地层不匹配（需全量重建）\"}"
+        }
+        let totalMs = (CFAbsoluteTimeGetCurrent() - t0) * 1000
+        let mem = physFootprintMB()
+        SelfDrawBridge.memPeakMB = max(SelfDrawBridge.memPeakMB, mem)
+        let t = (o?["timing"] as? [String: Any]) ?? [:]
+        // ★插入文本的度量自检（见 insertedTextZeroHeight 的说明）——**设备侧判据**
+        let tx = view.insertedTextZeroHeight()
+        lastTiming = ["measure_ms": 0, "layout_ms": (spliceMs * 100).rounded() / 100,
+                      "build_layers_ms": (layersMs * 100).rounded() / 100,
+                      "host_total_ms": (totalMs * 100).rounded() / 100]
+        return jsonString(["ok": true, "path": "splice", "incremental": true,
+                           "in_bytes": spliceJson.count,
+                           "removed": removed, "inserted": inserted,
+                           "removed_layers": view.lastSpliceRemoved,
+                           "inserted_layers": insertedLayers,
+                           "inserted_text_layers": tx.text,
+                           "inserted_text_zero_height": tx.zero,
+                           "inserted_text_missing_geom": tx.missing,
+                           "relayout_count": relayout,
+                           "changed_rects": changed.count, "updated_layers": updated,
+                           "splice_ms": round(spliceMs * 100) / 100,
+                           "relayout_ms": round(((t["relayout_ms"] as? Double) ?? 0) * 100) / 100,
+                           "layers_ms": round(layersMs * 100) / 100,
+                           "layer_count": view.builtLayerCount,
+                           "mem_mb": round(mem * 10) / 10,
+                           "mem_peak_mb": round(SelfDrawBridge.memPeakMB * 10) / 10,
                            "host_total_ms": round(totalMs * 100) / 100])
     }
 
@@ -1338,9 +1626,33 @@ final class SelfDrawViewController: UIViewController {
 
         // ★模式：`--bench` 跑逻辑层基准（复杂响应式用例 + 规模扫描），否则跑自绘场景
         let isBench = ProcessInfo.processInfo.arguments.contains("--bench")
+        // ★★用例过滤（`--cases=S5,V4`）：只跑指定前缀的用例
+        //
+        // 【为什么需要（效率纪律：定向验证不得跑全量）】bench 有 46 个用例、全套数分钟；
+        //   而验证某个改动往往只需 2–4 个用例（如 S5 结构变更）。没有过滤就只能整套跑，
+        //   与「全量单测不得无目的重复」同源的浪费。
+        //   注入全局量（而非改 bundle）：JS 侧读 `__PROTEUS_CASES__` 自行过滤，两端解耦。
+        let caseFilter = ProcessInfo.processInfo.arguments
+            .first { $0.hasPrefix("--cases=") }?
+            .dropFirst("--cases=".count)
+            .split(separator: ",").map { $0.trimmingCharacters(in: .whitespaces) } ?? []
         if isBench {
-            SelfDrawBridge.reportFileName = "logic-bench-report"
-            SelfDrawBridge.snapshotName = "bench-final"
+            // ★★过滤跑写**独立文件**（本仓实测踩到的坑，代价=白等 10 分钟）
+            //
+            // 【故障链】过滤跑与全量跑写同一个 `logic-bench-report` ⇒ ① 会**覆盖全量基准**
+            //   （历史读数不可再生）；② 取报告的脚本若按过滤名去拉，设备上**永远没有那个文件**
+            //   ⇒ 拷贝静默失败（`|| true`）⇒ 空等到超时，现象是"App 明明起来了、脚本毫无输出"。
+            //   ⇒ 正解：**文件名由同一处（宿主）决定并让两端一致**：
+            //     有过滤 → `bench-filtered-<slug>`；无过滤 → `logic-bench-report`。
+            if caseFilter.isEmpty {
+                SelfDrawBridge.reportFileName = "logic-bench-report"
+                SelfDrawBridge.snapshotName = "bench-final"
+            } else {
+                // slug 规则必须与 run-selfdraw.sh 的 `tr ',' '_'` 一致（两端同一命名规则）
+                let slug = caseFilter.joined(separator: "_")
+                SelfDrawBridge.reportFileName = "bench-filtered-\(slug)"
+                SelfDrawBridge.snapshotName = "bench-filtered-\(slug)"
+            }
         }
         let bundleName = isBench ? "bundle-bench" : "bundle-selfdraw"
         guard let url = Bundle.main.url(forResource: bundleName, withExtension: "js"),
@@ -1351,6 +1663,11 @@ final class SelfDrawViewController: UIViewController {
         let vp = jsonString(["width": w, "height": h])
         NSLog("[proteus] selfdraw 启动 · viewport=%@", vp)
         ctx.evaluateScript("var __PROTEUS_VIEWPORT__ = \(vp);")
+        if !caseFilter.isEmpty {
+            let arr = caseFilter.map { "\"\($0)\"" }.joined(separator: ",")
+            ctx.evaluateScript("var __PROTEUS_CASES__ = [\(arr)];")
+            NSLog("[proteus] 用例过滤：%@", caseFilter.joined(separator: ","))
+        }
         ctx.evaluateScript(src, withSourceURL: url)
 
         // ★★逐相位驱动（本仓实测的关键点）
