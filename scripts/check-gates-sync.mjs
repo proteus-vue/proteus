@@ -35,6 +35,13 @@ const LOCAL_ONLY = {
   'check:ios-perf': '同上（性能基线需真实 JavaScriptCore；真机数字另需模拟器/设备）',
   'check:ios-exp-docs': '文档↔实验数字一致性；依赖 hosts/ios/experiments/results/（本机跑出的产物，不入库）',
   'check:ios-exp-compile': '实验代码（模拟器/真机两变体）可编译性；需 Xcode 工具链（CI 为 ubuntu-latest）',
+  // ★★「提交 ≠ 交付」门禁（2026-09-28 新增，背景：一天 111 个提交漏推送 —— 用户指出）。
+  //   CI 里跑它**没有意义**：CI 的 checkout 是 detached HEAD（或 `refs/pull/*`），
+  //   "本地领先 upstream N 个提交"这个状态在 CI 中天然为 0 ⇒ **恒绿，属假门禁**。
+  //   它的作用域是**开发机收尾**：`pnpm verify` 结束时提醒；收尾用 `check:pushed:strict` 强制。
+  //   ⇒ 归入 LOCAL_ONLY 而非接 CI（接了反而给人"CI 在管这件事"的错觉）。
+  'check:pushed': '面向开发机收尾；CI 的 detached HEAD 下恒为 0 ⇒ 接 CI 是假门禁',
+  'check:pushed:strict': '同上（strict 只是把提醒改为 exit 1，供收尾显式调用）',
 }
 
 const pkg = JSON.parse(fs.readFileSync(path.join(ROOT, 'package.json'), 'utf8'))
