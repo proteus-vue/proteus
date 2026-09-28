@@ -57,6 +57,14 @@ export interface VaporBuildOptions {
    * `true` = 全部放行；`number[]` = 只放行指定 listId（推荐，粒度细）。
    */
   allowIndexKey?: boolean | number[]
+  /**
+   * ★★Vue 解析器注入（方案 §8.1：编译器不依赖 Vue 版本）
+   *
+   * 【用法】兼容性测试传 3.4 / 3.6 的 `parse` / `compileScript` / `domParse`，
+   *   断言三版产物**逐字节相同** ⇒ 这才是"不绑版本"的**证据**（而非声明）。
+   * 缺省用本仓锁定的版本（`package.json` 的 `@vue/compiler-sfc`）。
+   */
+  compat?: import('./sources').VueCompatDeps
 }
 
 /**
@@ -114,7 +122,7 @@ export interface VaporBuildResult {
 export function buildVaporSubscriptions(source: string, filename = 'anonymous.vue', opts: VaporBuildOptions = {}): VaporBuildResult {
   const notes: string[] = []
   const diagnostics: VaporDiagnostic[] = []
-  const srcScan = scanReactiveSources(source, filename)
+  const srcScan = scanReactiveSources(source, filename, opts.compat)
   if (!srcScan.ok) {
     // ★整体降级：源不可信 ⇒ 全部 L0（不猜）
     return {
@@ -135,7 +143,7 @@ export function buildVaporSubscriptions(source: string, filename = 'anonymous.vu
     }
   }
 
-  const bindings = collectTemplateBindings(source, filename)
+  const bindings = collectTemplateBindings(source, filename, opts.compat)
   const pure = new Set(opts.pureSymbols ?? [])
   const forceL0 = new Set(opts.forceL0Slots ?? [])
 

@@ -32,6 +32,8 @@
 | 15 | （附带）祖先行链已注入 `rowCtx` | **已实现**（祖先链 `RowRef.ancestors` + `ancestorScopesOf`） | 同上 |
 | 16 | 「无 `:key` 只有提示、拦不住」 | **已闭**：升级为 error + 结构化诊断 + 逃生通道 | `compiler/src/vapor/build.ts` · `tests/vapor-list-e2e.test.ts` |
 | 17 | 「`notes` 是自由文本、门禁无法消费」 | **已闭**：新增 `VaporDiagnostic`（severity/code/message/hint） | 同上 |
+| 18 | **「注释声明用官方 `bindings` 定语义，实测根本没参与判定」** | **已闭**：真校正（含 `setup-reactive-const` / `setup-maybe-ref` / `setup-ref` 三类实测值）| `compiler/src/vapor/sources.ts` |
+| 19 | 「cli 漏声明 `@proteus-vue/slot-runtime` 依赖」 | **已闭**：补声明（此前靠 pnpm 隐式提升才没炸） | `packages/cli/package.json` |
 
 ---
 
@@ -49,7 +51,7 @@
 
 | # | 边界 | 现状 | 建议 |
 |---|---|---|---|
-| 4 | **Vue 版本兼容只测了 3.5.42** | 方案 §8 要求 3.4 / 3.5 / 3.6 全适配；`sources.ts` 里 0 处版本分支 | 至少对 3.4 与 3.6 各跑一遍编译产物 + 端到端 |
+| 4 | ~~**Vue 版本兼容只测了 3.5.42**~~ | ✅ **已闭（2026-09-28）**：解析器做成**可注入** + 新增 `tests/vapor-vue-compat.test.ts`（5 个 SFC 样本 × 3 版 = 12 用例）⇒ **3.4.38 / 3.5.42 / 3.6.0-rc.9 产物逐字节相同**；并断言诊断（如无 `:key`）不因版本而异。★3.6 目前是 **RC**（非最终稳定版） | — | — |
 | 5 | **宿主侧列表映射未接**（真实滚动列表） | `ListRegistry` 已就绪，但**演示里没有真实长列表**驱动它 | 用真实列表场景验证（也顺带验证复用池） |
 | 6 | **`layers` 段在类A 极小场景仍有常数开销** | 类A `layers` 0.02–0.5ms（可见层少）⇒ 属固定成本，非瓶颈 | 观察即可；如需再优化需 profile |
 

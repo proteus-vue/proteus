@@ -92,6 +92,7 @@ export type {
   VaporBuildOptions,
   VaporBuildResult,
   VaporDiagnostic,
+  VueCompatDeps,
 } from './vapor'
 export type { SfcMacros, MacroModelRef } from './sfc-macros'
 

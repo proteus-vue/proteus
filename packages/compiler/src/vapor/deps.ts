@@ -15,6 +15,7 @@
 //   依赖的是**列表项字段**而非顶层源 ⇒ 归属该列表的 `itemKey` 语义（V1 的 LIST_UPDATE 承接）。
 //   本模块把这类依赖单独标注（`listRelative`），供 Step 3 建图时区分。
 import { parse as domParse } from '@vue/compiler-dom'
+import type { VueCompatDeps } from './sources'
 import { parse as babelParse } from '@babel/parser'
 import type { ReactiveSource } from './sources'
 
@@ -289,10 +290,17 @@ export interface TemplateBindingRef {
  * ★与既有 `transformTemplateToWxml` 的关系：那条管线是**小程序产物**（wxml）的生成路径，
  *   本函数只做**依赖分析**、不改任何产物——两者共享同一份官方 AST，互不干扰。
  */
-export function collectTemplateBindings(source: string, filename = 'anonymous.vue'): TemplateBindingRef[] {
+export function collectTemplateBindings(
+  source: string,
+  filename = 'anonymous.vue',
+  /** ★可注入（缺省用本仓锁定的 Vue 版本）；兼容性测试传 3.4 / 3.6 的解析器 */
+  compat?: Pick<VueCompatDeps, 'sfcParse' | 'domParse'>,
+): TemplateBindingRef[] {
+  const vueParse = compat?.sfcParse ?? sfcParse
+  const dom = compat?.domParse ?? domParse
   let tpl = ''
   try {
-    const d = sfcParse(source, { filename }).descriptor
+    const d = vueParse(source, { filename }).descriptor
     tpl = d.template?.content ?? ''
   } catch {
     return []
@@ -302,7 +310,7 @@ export function collectTemplateBindings(source: string, filename = 'anonymous.vu
   const out: TemplateBindingRef[] = []
   let ast
   try {
-    ast = domParse(tpl, { comments: false })
+    ast = dom(tpl, { comments: false })
   } catch {
     return out
   }
