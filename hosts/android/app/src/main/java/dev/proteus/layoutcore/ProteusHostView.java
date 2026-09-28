@@ -973,6 +973,69 @@ public class ProteusHostView extends ViewGroup {
          *   漂移是静默的（只是多建/少建几行对象，任何几何断言都发现不了）。
          *   ⇒ 现在直接把核心给的行号列表执行掉（与 iOS 的 `scrollRows` 同一条路）。
          */
+        /**
+         * ★★**按行子树录制**（整树级虚拟化：一行 ≠ 一个色块，而是**一棵小树**）。
+         *
+         * 【与 `acquireRow` 的差别】`acquireRow` 把一行压成一个「色块 + 文本」；
+         *   本方法按**SFC 产出的真实节点集**录制——行内每个节点（容器/圆点/文字）
+         *   各画各的矩形与文本，全部录进**同一个 `RenderNode`**（= Android 的 layer 等价物）。
+         *   ⇒ 这才是"整树级虚拟化"：**层**的粒度是行，而**行内的树**被完整还原。
+         *
+         * 【为什么仍是"一行的所有节点进一个 RenderNode"（而不是一节点一 RenderNode）】
+         *   Android 的 `RenderNode` 是**录制容器**：一个 node 内可含多条绘制命令。
+         *   行内节点数在 SFC 里是编译期已知的固定值 ⇒ 一个 node 承载整行**对象数恒定**
+         *   （500 行 × 3 节点 = 1500 节点，但活跃对象只有 ~24 个行 node）——
+         *   与 iOS 一节点一 CALayer 的差别是**平台特性**（CALayer 不能承载多条独立绘制命令
+         *   而不合层），不是语义差别。★如实记录，不在两端假装同构。
+         *
+         * - Parameter parts: 行内各节点**相对行原点**的矩形 + 样式（由调用方从核心几何减去行原点得到）
+         */
+        public void acquireRowSubtree(int row, float x, float y, float w, float h, RowPart[] parts) {
+            android.graphics.RenderNode node = pool.pollLast();
+            if (node == null) {
+                node = new android.graphics.RenderNode("row-" + row);
+                created++;
+            } else {
+                reused++;
+            }
+            node.setPosition((int) x, (int) y, (int) (x + w), (int) (y + h));
+            android.graphics.RecordingCanvas rc = node.beginRecording();
+            android.graphics.Paint paint = new android.graphics.Paint();
+            android.graphics.Paint tp = new android.graphics.Paint(android.graphics.Paint.ANTI_ALIAS_FLAG);
+            tp.setColor(android.graphics.Color.WHITE);
+            for (RowPart p : parts) {
+                if (p.color != 0) {
+                    paint.setColor(p.color);
+                    // ★圆角：SFC 里行容器与圆点都带 borderRadius（不还原就与 iOS 视觉不一致）
+                    if (p.radius > 0) rc.drawRoundRect(p.dx, p.dy, p.dx + p.w, p.dy + p.h, p.radius, p.radius, paint);
+                    else rc.drawRect(p.dx, p.dy, p.dx + p.w, p.dy + p.h, paint);
+                }
+                if (p.text != null && !p.text.isEmpty()) {
+                    tp.setTextSize(p.fontSize > 0 ? p.fontSize : 14f);
+                    if (p.textColor != 0) tp.setColor(p.textColor);
+                    rc.drawText(p.text, p.dx, p.dy + p.fontSize * 0.85f, tp);
+                }
+            }
+            node.endRecording();
+            active.put(row, node);
+        }
+
+        /** 行内一个节点的绘制规格（**相对行原点**） */
+        public static final class RowPart {
+            public final float dx, dy, w, h;
+            public final int color;        // 0 = 不画底
+            public final float radius;     // 圆角（0 = 直角）
+            public final String text;      // null = 非文本
+            public final int textColor;    // 0 = 用默认
+            public final float fontSize;
+            public RowPart(float dx, float dy, float w, float h, int color, float radius,
+                           String text, int textColor, float fontSize) {
+                this.dx = dx; this.dy = dy; this.w = w; this.h = h;
+                this.color = color; this.radius = radius;
+                this.text = text; this.textColor = textColor; this.fontSize = fontSize;
+            }
+        }
+
         public int releaseRows(int[] rows) {
             int released = 0;
             for (int row : rows) {

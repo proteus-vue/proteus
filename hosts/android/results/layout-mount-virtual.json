@@ -1,0 +1,777 @@
+{
+  "ok": true,
+  "path": "mount-virtual",
+  "note": "★★整树级虚拟化：同一份 SFC 产物（与 iOS V12 同源）· 核心给决策、宿主执行",
+  "sfc_rows": 500,
+  "nodes": 1502,
+  "row_height_from_core": 56,
+  "live_rows": 17,
+  "rn_created": 25,
+  "rn_reused": 950,
+  "rn_reuse_ratio": 0.9744,
+  "rn_pooled": 8,
+  "core_acquire_events": 975,
+  "platform_created_plus_reused": 975,
+  "max_per_frame": 17,
+  "max_missing_in_visible": 0,
+  "trace": [
+    {
+      "step": 0,
+      "first_visible": 0,
+      "acquired": 17,
+      "released": 0,
+      "missing_in_visible": 0
+    },
+    {
+      "step": 1,
+      "first_visible": 9,
+      "acquired": 15,
+      "released": 7,
+      "missing_in_visible": 0
+    },
+    {
+      "step": 2,
+      "first_visible": 18,
+      "acquired": 9,
+      "released": 9,
+      "missing_in_visible": 0
+    },
+    {
+      "step": 3,
+      "first_visible": 27,
+      "acquired": 9,
+      "released": 9,
+      "missing_in_visible": 0
+    },
+    {
+      "step": 4,
+      "first_visible": 36,
+      "acquired": 9,
+      "released": 9,
+      "missing_in_visible": 0
+    },
+    {
+      "step": 5,
+      "first_visible": 45,
+      "acquired": 9,
+      "released": 9,
+      "missing_in_visible": 0
+    },
+    {
+      "step": 6,
+      "first_visible": 54,
+      "acquired": 9,
+      "released": 9,
+      "missing_in_visible": 0
+    },
+    {
+      "step": 7,
+      "first_visible": 63,
+      "acquired": 9,
+      "released": 9,
+      "missing_in_visible": 0
+    },
+    {
+      "step": 8,
+      "first_visible": 72,
+      "acquired": 9,
+      "released": 9,
+      "missing_in_visible": 0
+    },
+    {
+      "step": 9,
+      "first_visible": 81,
+      "acquired": 9,
+      "released": 9,
+      "missing_in_visible": 0
+    },
+    {
+      "step": 10,
+      "first_visible": 90,
+      "acquired": 9,
+      "released": 9,
+      "missing_in_visible": 0
+    },
+    {
+      "step": 11,
+      "first_visible": 99,
+      "acquired": 9,
+      "released": 9,
+      "missing_in_visible": 0
+    },
+    {
+      "step": 12,
+      "first_visible": 108,
+      "acquired": 9,
+      "released": 9,
+      "missing_in_visible": 0
+    },
+    {
+      "step": 13,
+      "first_visible": 117,
+      "acquired": 9,
+      "released": 9,
+      "missing_in_visible": 0
+    },
+    {
+      "step": 14,
+      "first_visible": 126,
+      "acquired": 9,
+      "released": 9,
+      "missing_in_visible": 0
+    },
+    {
+      "step": 15,
+      "first_visible": 135,
+      "acquired": 9,
+      "released": 9,
+      "missing_in_visible": 0
+    },
+    {
+      "step": 16,
+      "first_visible": 144,
+      "acquired": 9,
+      "released": 9,
+      "missing_in_visible": 0
+    },
+    {
+      "step": 17,
+      "first_visible": 153,
+      "acquired": 9,
+      "released": 9,
+      "missing_in_visible": 0
+    },
+    {
+      "step": 18,
+      "first_visible": 162,
+      "acquired": 9,
+      "released": 9,
+      "missing_in_visible": 0
+    },
+    {
+      "step": 19,
+      "first_visible": 171,
+      "acquired": 9,
+      "released": 9,
+      "missing_in_visible": 0
+    },
+    {
+      "step": 20,
+      "first_visible": 180,
+      "acquired": 9,
+      "released": 9,
+      "missing_in_visible": 0
+    },
+    {
+      "step": 21,
+      "first_visible": 189,
+      "acquired": 9,
+      "released": 9,
+      "missing_in_visible": 0
+    },
+    {
+      "step": 22,
+      "first_visible": 198,
+      "acquired": 9,
+      "released": 9,
+      "missing_in_visible": 0
+    },
+    {
+      "step": 23,
+      "first_visible": 207,
+      "acquired": 9,
+      "released": 9,
+      "missing_in_visible": 0
+    },
+    {
+      "step": 24,
+      "first_visible": 216,
+      "acquired": 9,
+      "released": 9,
+      "missing_in_visible": 0
+    },
+    {
+      "step": 25,
+      "first_visible": 225,
+      "acquired": 9,
+      "released": 9,
+      "missing_in_visible": 0
+    },
+    {
+      "step": 26,
+      "first_visible": 234,
+      "acquired": 9,
+      "released": 9,
+      "missing_in_visible": 0
+    },
+    {
+      "step": 27,
+      "first_visible": 243,
+      "acquired": 9,
+      "released": 9,
+      "missing_in_visible": 0
+    },
+    {
+      "step": 28,
+      "first_visible": 252,
+      "acquired": 9,
+      "released": 9,
+      "missing_in_visible": 0
+    },
+    {
+      "step": 29,
+      "first_visible": 261,
+      "acquired": 9,
+      "released": 9,
+      "missing_in_visible": 0
+    },
+    {
+      "step": 30,
+      "first_visible": 270,
+      "acquired": 9,
+      "released": 9,
+      "missing_in_visible": 0
+    },
+    {
+      "step": 31,
+      "first_visible": 279,
+      "acquired": 9,
+      "released": 9,
+      "missing_in_visible": 0
+    },
+    {
+      "step": 32,
+      "first_visible": 288,
+      "acquired": 9,
+      "released": 9,
+      "missing_in_visible": 0
+    },
+    {
+      "step": 33,
+      "first_visible": 297,
+      "acquired": 9,
+      "released": 9,
+      "missing_in_visible": 0
+    },
+    {
+      "step": 34,
+      "first_visible": 306,
+      "acquired": 9,
+      "released": 9,
+      "missing_in_visible": 0
+    },
+    {
+      "step": 35,
+      "first_visible": 315,
+      "acquired": 9,
+      "released": 9,
+      "missing_in_visible": 0
+    },
+    {
+      "step": 36,
+      "first_visible": 324,
+      "acquired": 9,
+      "released": 9,
+      "missing_in_visible": 0
+    },
+    {
+      "step": 37,
+      "first_visible": 333,
+      "acquired": 9,
+      "released": 9,
+      "missing_in_visible": 0
+    },
+    {
+      "step": 38,
+      "first_visible": 342,
+      "acquired": 9,
+      "released": 9,
+      "missing_in_visible": 0
+    },
+    {
+      "step": 39,
+      "first_visible": 351,
+      "acquired": 9,
+      "released": 9,
+      "missing_in_visible": 0
+    },
+    {
+      "step": 40,
+      "first_visible": 360,
+      "acquired": 9,
+      "released": 9,
+      "missing_in_visible": 0
+    },
+    {
+      "step": 41,
+      "first_visible": 369,
+      "acquired": 9,
+      "released": 9,
+      "missing_in_visible": 0
+    },
+    {
+      "step": 42,
+      "first_visible": 378,
+      "acquired": 9,
+      "released": 9,
+      "missing_in_visible": 0
+    },
+    {
+      "step": 43,
+      "first_visible": 387,
+      "acquired": 9,
+      "released": 9,
+      "missing_in_visible": 0
+    },
+    {
+      "step": 44,
+      "first_visible": 396,
+      "acquired": 9,
+      "released": 9,
+      "missing_in_visible": 0
+    },
+    {
+      "step": 45,
+      "first_visible": 405,
+      "acquired": 9,
+      "released": 9,
+      "missing_in_visible": 0
+    },
+    {
+      "step": 46,
+      "first_visible": 414,
+      "acquired": 9,
+      "released": 9,
+      "missing_in_visible": 0
+    },
+    {
+      "step": 47,
+      "first_visible": 423,
+      "acquired": 9,
+      "released": 9,
+      "missing_in_visible": 0
+    },
+    {
+      "step": 48,
+      "first_visible": 432,
+      "acquired": 9,
+      "released": 9,
+      "missing_in_visible": 0
+    },
+    {
+      "step": 49,
+      "first_visible": 441,
+      "acquired": 9,
+      "released": 9,
+      "missing_in_visible": 0
+    },
+    {
+      "step": 50,
+      "first_visible": 450,
+      "acquired": 9,
+      "released": 9,
+      "missing_in_visible": 0
+    },
+    {
+      "step": 51,
+      "first_visible": 459,
+      "acquired": 9,
+      "released": 9,
+      "missing_in_visible": 0
+    },
+    {
+      "step": 52,
+      "first_visible": 468,
+      "acquired": 9,
+      "released": 9,
+      "missing_in_visible": 0
+    },
+    {
+      "step": 53,
+      "first_visible": 477,
+      "acquired": 9,
+      "released": 9,
+      "missing_in_visible": 0
+    },
+    {
+      "step": 54,
+      "first_visible": 468,
+      "acquired": 15,
+      "released": 15,
+      "missing_in_visible": 0
+    },
+    {
+      "step": 55,
+      "first_visible": 459,
+      "acquired": 9,
+      "released": 9,
+      "missing_in_visible": 0
+    },
+    {
+      "step": 56,
+      "first_visible": 450,
+      "acquired": 9,
+      "released": 9,
+      "missing_in_visible": 0
+    },
+    {
+      "step": 57,
+      "first_visible": 441,
+      "acquired": 9,
+      "released": 9,
+      "missing_in_visible": 0
+    },
+    {
+      "step": 58,
+      "first_visible": 432,
+      "acquired": 9,
+      "released": 9,
+      "missing_in_visible": 0
+    },
+    {
+      "step": 59,
+      "first_visible": 423,
+      "acquired": 9,
+      "released": 9,
+      "missing_in_visible": 0
+    },
+    {
+      "step": 60,
+      "first_visible": 414,
+      "acquired": 9,
+      "released": 9,
+      "missing_in_visible": 0
+    },
+    {
+      "step": 61,
+      "first_visible": 405,
+      "acquired": 9,
+      "released": 9,
+      "missing_in_visible": 0
+    },
+    {
+      "step": 62,
+      "first_visible": 396,
+      "acquired": 9,
+      "released": 9,
+      "missing_in_visible": 0
+    },
+    {
+      "step": 63,
+      "first_visible": 387,
+      "acquired": 9,
+      "released": 9,
+      "missing_in_visible": 0
+    },
+    {
+      "step": 64,
+      "first_visible": 378,
+      "acquired": 9,
+      "released": 9,
+      "missing_in_visible": 0
+    },
+    {
+      "step": 65,
+      "first_visible": 369,
+      "acquired": 9,
+      "released": 9,
+      "missing_in_visible": 0
+    },
+    {
+      "step": 66,
+      "first_visible": 360,
+      "acquired": 9,
+      "released": 9,
+      "missing_in_visible": 0
+    },
+    {
+      "step": 67,
+      "first_visible": 351,
+      "acquired": 9,
+      "released": 9,
+      "missing_in_visible": 0
+    },
+    {
+      "step": 68,
+      "first_visible": 342,
+      "acquired": 9,
+      "released": 9,
+      "missing_in_visible": 0
+    },
+    {
+      "step": 69,
+      "first_visible": 333,
+      "acquired": 9,
+      "released": 9,
+      "missing_in_visible": 0
+    },
+    {
+      "step": 70,
+      "first_visible": 324,
+      "acquired": 9,
+      "released": 9,
+      "missing_in_visible": 0
+    },
+    {
+      "step": 71,
+      "first_visible": 315,
+      "acquired": 9,
+      "released": 9,
+      "missing_in_visible": 0
+    },
+    {
+      "step": 72,
+      "first_visible": 306,
+      "acquired": 9,
+      "released": 9,
+      "missing_in_visible": 0
+    },
+    {
+      "step": 73,
+      "first_visible": 297,
+      "acquired": 9,
+      "released": 9,
+      "missing_in_visible": 0
+    },
+    {
+      "step": 74,
+      "first_visible": 288,
+      "acquired": 9,
+      "released": 9,
+      "missing_in_visible": 0
+    },
+    {
+      "step": 75,
+      "first_visible": 279,
+      "acquired": 9,
+      "released": 9,
+      "missing_in_visible": 0
+    },
+    {
+      "step": 76,
+      "first_visible": 270,
+      "acquired": 9,
+      "released": 9,
+      "missing_in_visible": 0
+    },
+    {
+      "step": 77,
+      "first_visible": 261,
+      "acquired": 9,
+      "released": 9,
+      "missing_in_visible": 0
+    },
+    {
+      "step": 78,
+      "first_visible": 252,
+      "acquired": 9,
+      "released": 9,
+      "missing_in_visible": 0
+    },
+    {
+      "step": 79,
+      "first_visible": 243,
+      "acquired": 9,
+      "released": 9,
+      "missing_in_visible": 0
+    },
+    {
+      "step": 80,
+      "first_visible": 234,
+      "acquired": 9,
+      "released": 9,
+      "missing_in_visible": 0
+    },
+    {
+      "step": 81,
+      "first_visible": 225,
+      "acquired": 9,
+      "released": 9,
+      "missing_in_visible": 0
+    },
+    {
+      "step": 82,
+      "first_visible": 216,
+      "acquired": 9,
+      "released": 9,
+      "missing_in_visible": 0
+    },
+    {
+      "step": 83,
+      "first_visible": 207,
+      "acquired": 9,
+      "released": 9,
+      "missing_in_visible": 0
+    },
+    {
+      "step": 84,
+      "first_visible": 198,
+      "acquired": 9,
+      "released": 9,
+      "missing_in_visible": 0
+    },
+    {
+      "step": 85,
+      "first_visible": 189,
+      "acquired": 9,
+      "released": 9,
+      "missing_in_visible": 0
+    },
+    {
+      "step": 86,
+      "first_visible": 180,
+      "acquired": 9,
+      "released": 9,
+      "missing_in_visible": 0
+    },
+    {
+      "step": 87,
+      "first_visible": 171,
+      "acquired": 9,
+      "released": 9,
+      "missing_in_visible": 0
+    },
+    {
+      "step": 88,
+      "first_visible": 162,
+      "acquired": 9,
+      "released": 9,
+      "missing_in_visible": 0
+    },
+    {
+      "step": 89,
+      "first_visible": 153,
+      "acquired": 9,
+      "released": 9,
+      "missing_in_visible": 0
+    },
+    {
+      "step": 90,
+      "first_visible": 144,
+      "acquired": 9,
+      "released": 9,
+      "missing_in_visible": 0
+    },
+    {
+      "step": 91,
+      "first_visible": 135,
+      "acquired": 9,
+      "released": 9,
+      "missing_in_visible": 0
+    },
+    {
+      "step": 92,
+      "first_visible": 126,
+      "acquired": 9,
+      "released": 9,
+      "missing_in_visible": 0
+    },
+    {
+      "step": 93,
+      "first_visible": 117,
+      "acquired": 9,
+      "released": 9,
+      "missing_in_visible": 0
+    },
+    {
+      "step": 94,
+      "first_visible": 108,
+      "acquired": 9,
+      "released": 9,
+      "missing_in_visible": 0
+    },
+    {
+      "step": 95,
+      "first_visible": 99,
+      "acquired": 9,
+      "released": 9,
+      "missing_in_visible": 0
+    },
+    {
+      "step": 96,
+      "first_visible": 90,
+      "acquired": 9,
+      "released": 9,
+      "missing_in_visible": 0
+    },
+    {
+      "step": 97,
+      "first_visible": 81,
+      "acquired": 9,
+      "released": 9,
+      "missing_in_visible": 0
+    },
+    {
+      "step": 98,
+      "first_visible": 72,
+      "acquired": 9,
+      "released": 9,
+      "missing_in_visible": 0
+    },
+    {
+      "step": 99,
+      "first_visible": 63,
+      "acquired": 9,
+      "released": 9,
+      "missing_in_visible": 0
+    },
+    {
+      "step": 100,
+      "first_visible": 54,
+      "acquired": 9,
+      "released": 9,
+      "missing_in_visible": 0
+    },
+    {
+      "step": 101,
+      "first_visible": 45,
+      "acquired": 9,
+      "released": 9,
+      "missing_in_visible": 0
+    },
+    {
+      "step": 102,
+      "first_visible": 36,
+      "acquired": 9,
+      "released": 9,
+      "missing_in_visible": 0
+    },
+    {
+      "step": 103,
+      "first_visible": 27,
+      "acquired": 9,
+      "released": 9,
+      "missing_in_visible": 0
+    },
+    {
+      "step": 104,
+      "first_visible": 18,
+      "acquired": 9,
+      "released": 9,
+      "missing_in_visible": 0
+    },
+    {
+      "step": 105,
+      "first_visible": 9,
+      "acquired": 9,
+      "released": 9,
+      "missing_in_visible": 0
+    },
+    {
+      "step": 106,
+      "first_visible": 0,
+      "acquired": 1,
+      "released": 9,
+      "missing_in_visible": 0
+    }
+  ],
+  "check_rows_bounded": true,
+  "check_reuse_works": true,
+  "check_not_rebuilt": true,
+  "check_reconciled": true,
+  "check_no_missing": true,
+  "fwd_kept_above": 0,
+  "back_kept_above": 8,
+  "check_preload_swapped": true,
+  "verdict": "PASS"
+}

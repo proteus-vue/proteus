@@ -56,6 +56,76 @@ process.stdout.write(JSON.stringify({
 const raw = execFileSync('npx', ['tsx', '-e', script], { cwd: ROOT, encoding: 'utf-8' })
 const fx = JSON.parse(raw)
 
+/* ══════════ ★整树级虚拟化夹具：SFC → 模板实例化（与 iOS 同一份 SFC / 同一生产者） ══════════ */
+//
+// 【为什么用同一份 SFC（跨端可比的关键）】iOS 的 V11/V12 用的是 `hosts/ios/bridge/gen-vapor-table.mjs`
+//   里那份 SFC（页面 + 标题 + v-for 行）。Android 若要"能消费 SFC 产出"，就该吃**同一份产物**
+//   —— 否则两端的"已验证"说的不是同一件事（本仓纪律：先问比较对象是否可比）。
+//   ⇒ 本脚本在同一构建期跑同一份 SFC 的编译 + 实例化，产出 `{viewport, nodes, rows}` 落进 assets。
+//
+// 【为什么落 assets 而不是冻进 Java 源码】1500+ 节点的 JSON 塞进 Java 字符串字面量既难读也难 diff；
+//   assets 是本仓既有通路（`build-and-run.sh` 的 `aapt2 -A` 已在打包它）。
+const TREE_ROWS = 500
+const vaporSfc = `<template>
+  <p-view style="flex-direction: column; padding-top: 60px; padding-left: 16px; background-color: #101020">
+    <p-text style="font-size: 24px; color: #ffffff; margin-bottom: 12px">Vapor 全量 SFC</p-text>
+    <p-view v-for="item in list" :key="item.id" style="flex-direction: row; align-items: center; height: 56px; flex-shrink: 0; margin-bottom: 8px; background-color: #1b1b21; border-radius: 12px">
+      <p-view :width="item.dotW" style="height: 36px; flex-shrink: 0; background-color: #6f4ae8; border-radius: 18px" />
+      <p-text :width="item.textW" style="font-size: 16px; color: #ffffff">{{ item.title }}</p-text>
+    </p-view>
+  </p-view>
+</template>
+
+<script setup lang="ts">
+const list = ref([{ id: 1, dotW: 36, textW: 120, title: 'a' }])
+</script>
+`
+const treeScript = `
+import { buildVaporSubscriptions, buildLayoutTemplate } from '${path.join(ROOT, 'packages/compiler/src/index.ts')}'
+import { instantiateTemplate, ListRegistry } from '${path.join(ROOT, 'packages/slot-runtime/src/index.ts')}'
+
+const sfc = ${JSON.stringify(vaporSfc)}
+const tpl = buildLayoutTemplate(sfc, 'android.vue').template
+const { table } = buildVaporSubscriptions(sfc, 'android.vue')
+const ROWS = ${TREE_ROWS}
+const rows = Array.from({ length: ROWS }, (_, i) => ({
+  id: i + 1, dotW: 36, textW: 120, title: '行 ' + (i + 1),
+}))
+const data: any = { list: rows }
+const inst = instantiateTemplate(tpl, {
+  viewport: { width: 400, height: 844 }, read: (n) => data[n], table, registry: new ListRegistry(),
+})
+process.stdout.write(JSON.stringify({
+  ok: !!(inst.virtual && inst.virtual.rows.length === ROWS),
+  viewport: inst.viewport,
+  nodes: inst.nodes,
+  rows: inst.virtual ? inst.virtual.rows : [],
+  stats: inst.stats,
+  templateNodes: tpl.nodes.length,
+  rowSubtree: tpl.lists.length ? tpl.lists[0].subtreeIds.length : 0,
+}))
+`
+const tmpTreeDir = fs.mkdtempSync(path.join(ROOT, '.tmp-tree-fixture-'))
+const tmpTreeScript = path.join(tmpTreeDir, 'tree-fixture.ts')
+fs.writeFileSync(tmpTreeScript, treeScript)
+const treeRaw = execFileSync('npx', ['tsx', tmpTreeScript], { cwd: ROOT, encoding: 'utf-8' })
+fs.rmSync(tmpTreeDir, { recursive: true, force: true })
+const tree = JSON.parse(treeRaw)
+if (!tree.ok) {
+  console.error(`✗ SFC 实例化未产出虚拟化描述（rows=${tree.rows.length}）`)
+  process.exit(2)
+}
+const TREE_ASSET = path.join(HERE, 'app/src/main/assets/vapor-tree.json')
+fs.mkdirSync(path.dirname(TREE_ASSET), { recursive: true })
+fs.writeFileSync(TREE_ASSET, JSON.stringify({
+  note: '★★生成物（勿手改）——与 iOS V11/V12 同一份 SFC 的实例化产物；生成：node hosts/android/gen-ops-fixture.mjs',
+  sfc_rows: TREE_ROWS,
+  row_subtree: tree.rowSubtree,
+  ...tree,
+}))
+console.log(`[android-ops-fixture] ✅ 生成 assets/vapor-tree.json`)
+console.log(`    ${tree.nodes.length} 节点 · ${tree.rows.length} 行 · 每行 ${tree.rowSubtree} 节点`)
+
 /* ── ★组装 splice 夹具：payload 取自**适配器真实产出**（`takeSplice()`） ── */
 //
 // 【为什么 splice 也要跨语言夹具（与 applyOps 同一纪律）】splice 的 payload 是
