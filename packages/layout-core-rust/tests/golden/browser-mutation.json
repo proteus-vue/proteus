@@ -1,0 +1,497 @@
+{
+  "generatedBy": "tests/e2e-layout-incremental-conformance.test.ts",
+  "note": "★增量路径的浏览器基准：变更前/后两态。Rust 侧消费方式见 tests/incremental_browser_conformance.rs",
+  "viewport": {
+    "width": 375,
+    "height": 667
+  },
+  "tolerance": 0.5,
+  "scenarios": [
+    {
+      "name": "类A · 改行内子节点尺寸（边界内，应有穷重排）",
+      "nodes": [
+        {
+          "id": 0,
+          "parentId": null,
+          "width": 375,
+          "height": 600,
+          "flexDirection": "column"
+        },
+        {
+          "id": 1,
+          "parentId": 0,
+          "width": 375,
+          "height": 60,
+          "flexDirection": "row",
+          "flexShrink": 0
+        },
+        {
+          "id": 2,
+          "parentId": 1,
+          "width": 36,
+          "height": 36
+        },
+        {
+          "id": 3,
+          "parentId": 0,
+          "width": 375,
+          "height": 60,
+          "flexDirection": "row",
+          "flexShrink": 0
+        },
+        {
+          "id": 4,
+          "parentId": 3,
+          "width": 36,
+          "height": 36
+        },
+        {
+          "id": 5,
+          "parentId": 0,
+          "width": 375,
+          "height": 60,
+          "flexDirection": "row",
+          "flexShrink": 0
+        },
+        {
+          "id": 6,
+          "parentId": 5,
+          "width": 36,
+          "height": 36
+        }
+      ],
+      "mutation": {
+        "id": 2,
+        "key": "layout.width",
+        "value": 80
+      },
+      "expectIncremental": true,
+      "rectsBefore": {
+        "0": {
+          "x": 0,
+          "y": 0,
+          "width": 375,
+          "height": 600
+        },
+        "1": {
+          "x": 0,
+          "y": 0,
+          "width": 375,
+          "height": 60
+        },
+        "2": {
+          "x": 0,
+          "y": 0,
+          "width": 36,
+          "height": 36
+        },
+        "3": {
+          "x": 0,
+          "y": 60,
+          "width": 375,
+          "height": 60
+        },
+        "4": {
+          "x": 0,
+          "y": 60,
+          "width": 36,
+          "height": 36
+        },
+        "5": {
+          "x": 0,
+          "y": 120,
+          "width": 375,
+          "height": 60
+        },
+        "6": {
+          "x": 0,
+          "y": 120,
+          "width": 36,
+          "height": 36
+        }
+      },
+      "rectsAfter": {
+        "0": {
+          "x": 0,
+          "y": 0,
+          "width": 375,
+          "height": 600
+        },
+        "1": {
+          "x": 0,
+          "y": 0,
+          "width": 375,
+          "height": 60
+        },
+        "2": {
+          "x": 0,
+          "y": 0,
+          "width": 80,
+          "height": 36
+        },
+        "3": {
+          "x": 0,
+          "y": 60,
+          "width": 375,
+          "height": 60
+        },
+        "4": {
+          "x": 0,
+          "y": 60,
+          "width": 36,
+          "height": 36
+        },
+        "5": {
+          "x": 0,
+          "y": 120,
+          "width": 375,
+          "height": 60
+        },
+        "6": {
+          "x": 0,
+          "y": 120,
+          "width": 36,
+          "height": 36
+        }
+      }
+    },
+    {
+      "name": "类B · 改行自身高度（兄弟移位，范围上浮根）",
+      "nodes": [
+        {
+          "id": 0,
+          "parentId": null,
+          "width": 375,
+          "height": 600,
+          "flexDirection": "column"
+        },
+        {
+          "id": 1,
+          "parentId": 0,
+          "width": 375,
+          "height": 60,
+          "flexDirection": "row",
+          "flexShrink": 0
+        },
+        {
+          "id": 2,
+          "parentId": 1,
+          "width": 36,
+          "height": 36
+        },
+        {
+          "id": 3,
+          "parentId": 0,
+          "width": 375,
+          "height": 60,
+          "flexDirection": "row",
+          "flexShrink": 0
+        },
+        {
+          "id": 4,
+          "parentId": 3,
+          "width": 36,
+          "height": 36
+        },
+        {
+          "id": 5,
+          "parentId": 0,
+          "width": 375,
+          "height": 60,
+          "flexDirection": "row",
+          "flexShrink": 0
+        },
+        {
+          "id": 6,
+          "parentId": 5,
+          "width": 36,
+          "height": 36
+        }
+      ],
+      "mutation": {
+        "id": 1,
+        "key": "layout.height",
+        "value": 140
+      },
+      "expectIncremental": true,
+      "rectsBefore": {
+        "0": {
+          "x": 0,
+          "y": 0,
+          "width": 375,
+          "height": 600
+        },
+        "1": {
+          "x": 0,
+          "y": 0,
+          "width": 375,
+          "height": 60
+        },
+        "2": {
+          "x": 0,
+          "y": 0,
+          "width": 36,
+          "height": 36
+        },
+        "3": {
+          "x": 0,
+          "y": 60,
+          "width": 375,
+          "height": 60
+        },
+        "4": {
+          "x": 0,
+          "y": 60,
+          "width": 36,
+          "height": 36
+        },
+        "5": {
+          "x": 0,
+          "y": 120,
+          "width": 375,
+          "height": 60
+        },
+        "6": {
+          "x": 0,
+          "y": 120,
+          "width": 36,
+          "height": 36
+        }
+      },
+      "rectsAfter": {
+        "0": {
+          "x": 0,
+          "y": 0,
+          "width": 375,
+          "height": 600
+        },
+        "1": {
+          "x": 0,
+          "y": 0,
+          "width": 375,
+          "height": 140
+        },
+        "2": {
+          "x": 0,
+          "y": 0,
+          "width": 36,
+          "height": 36
+        },
+        "3": {
+          "x": 0,
+          "y": 140,
+          "width": 375,
+          "height": 60
+        },
+        "4": {
+          "x": 0,
+          "y": 140,
+          "width": 36,
+          "height": 36
+        },
+        "5": {
+          "x": 0,
+          "y": 200,
+          "width": 375,
+          "height": 60
+        },
+        "6": {
+          "x": 0,
+          "y": 200,
+          "width": 36,
+          "height": 36
+        }
+      }
+    },
+    {
+      "name": "非零偏移链 · 改深层叶子宽（范围非根，验证坐标换算）",
+      "nodes": [
+        {
+          "id": 0,
+          "parentId": null,
+          "width": 320,
+          "height": 480,
+          "flexDirection": "column"
+        },
+        {
+          "id": 1,
+          "parentId": 0,
+          "width": 200,
+          "height": 160,
+          "flexDirection": "column",
+          "margin": {
+            "top": 40
+          }
+        },
+        {
+          "id": 2,
+          "parentId": 1,
+          "width": 120,
+          "height": 80,
+          "flexDirection": "row",
+          "margin": {
+            "left": 24
+          }
+        },
+        {
+          "id": 3,
+          "parentId": 2,
+          "width": 30,
+          "height": 30,
+          "margin": {
+            "top": 12
+          }
+        }
+      ],
+      "mutation": {
+        "id": 3,
+        "key": "layout.width",
+        "value": 90
+      },
+      "expectIncremental": true,
+      "rectsBefore": {
+        "0": {
+          "x": 0,
+          "y": 0,
+          "width": 320,
+          "height": 480
+        },
+        "1": {
+          "x": 0,
+          "y": 40,
+          "width": 200,
+          "height": 160
+        },
+        "2": {
+          "x": 24,
+          "y": 40,
+          "width": 120,
+          "height": 80
+        },
+        "3": {
+          "x": 24,
+          "y": 52,
+          "width": 30,
+          "height": 30
+        }
+      },
+      "rectsAfter": {
+        "0": {
+          "x": 0,
+          "y": 0,
+          "width": 320,
+          "height": 480
+        },
+        "1": {
+          "x": 0,
+          "y": 40,
+          "width": 200,
+          "height": 160
+        },
+        "2": {
+          "x": 24,
+          "y": 40,
+          "width": 120,
+          "height": 80
+        },
+        "3": {
+          "x": 24,
+          "y": 52,
+          "width": 90,
+          "height": 30
+        }
+      }
+    },
+    {
+      "name": "contention · flex-grow 兄弟存在（改尺寸会重分配 ⇒ 必须回退全量）",
+      "nodes": [
+        {
+          "id": 0,
+          "parentId": null,
+          "width": 300,
+          "height": 400,
+          "flexDirection": "column"
+        },
+        {
+          "id": 1,
+          "parentId": 0,
+          "width": 300,
+          "height": 50,
+          "flexShrink": 0
+        },
+        {
+          "id": 2,
+          "parentId": 0,
+          "width": 300,
+          "flexGrow": 1,
+          "height": 100,
+          "flexShrink": 0
+        },
+        {
+          "id": 3,
+          "parentId": 2,
+          "width": 20,
+          "height": 20
+        }
+      ],
+      "mutation": {
+        "id": 1,
+        "key": "layout.height",
+        "value": 120
+      },
+      "expectIncremental": false,
+      "rectsBefore": {
+        "0": {
+          "x": 0,
+          "y": 0,
+          "width": 300,
+          "height": 400
+        },
+        "1": {
+          "x": 0,
+          "y": 0,
+          "width": 300,
+          "height": 50
+        },
+        "2": {
+          "x": 0,
+          "y": 50,
+          "width": 300,
+          "height": 350
+        },
+        "3": {
+          "x": 0,
+          "y": 50,
+          "width": 20,
+          "height": 20
+        }
+      },
+      "rectsAfter": {
+        "0": {
+          "x": 0,
+          "y": 0,
+          "width": 300,
+          "height": 400
+        },
+        "1": {
+          "x": 0,
+          "y": 0,
+          "width": 300,
+          "height": 120
+        },
+        "2": {
+          "x": 0,
+          "y": 120,
+          "width": 300,
+          "height": 280
+        },
+        "3": {
+          "x": 0,
+          "y": 120,
+          "width": 20,
+          "height": 20
+        }
+      }
+    }
+  ]
+}
