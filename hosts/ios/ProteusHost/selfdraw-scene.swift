@@ -102,6 +102,14 @@ func physFootprintMB() -> Double {
     ///     以字符串返回微秒值（字符串而非 Double：避免 JS Number 的 53 位精度在
     ///     大时间戳上损失亚微秒分辨率）。
     func nowUs() -> String
+    /// ★V4：滚动视图（dx/dy 像素）——触发 layoutSubviews → 补刷已滚入的待更新层
+    ///
+    /// 【为什么放在**容器视图**上而不是滚动视图上】本自绘层树不用 UIScrollView
+    ///   （滚动由 native-host 跟随 + 根层 bounds 平移表达）⇒ 用 bounds.origin 平移即可触发
+    ///   `layoutSubviews`，与真实滚动同一条代码路径。
+    func scrollBy(_ dx: Double, _ dy: Double) -> String
+    /// ★V4：待补刷统计（诊断 + 滚动用例的判据）
+    func pendingStats() -> String
     /// ★★V4 A/B 开关：'v4'（默认：二进制返回 + 只更可见层）| 'v3'（旧路径：JSON 返回 + 全部层）
     ///
     /// 【为什么要有它（诚实对照）】优化前后若用**不同的基准树**测，比较无意义
@@ -134,6 +142,8 @@ final class SelfDrawView: UIView {
     private var absOriginByNodeId: [Int: CGPoint] = [:]
     /// ★节点 id → 已建好的 CALayer（**增量更新的前提**：有它才能只改frame、不重建）
     private var layersById: [Int: CALayer] = [:]
+    /// 节点 id → 层深度（建层时预计算，供增量更新的父序排序 O(1) 查询）
+    private var depthById: [Int: Int] = [:]
     /// 节点 id → 父 id（增量更新时判断父子关系用）
     private var parentById: [Int: Int] = [:]
     /// 实际下发的 CALayer frame（**父相对**）与父 id —— 供核验脚本对照核心几何
@@ -236,6 +246,10 @@ final class SelfDrawView: UIView {
             layerNodes.append(layer)
             rectsByNodeId[item.id] = item.rect
             metaByNodeId[item.id] = item.style
+            // ★建树时**顺带算深度**（本仓实测的性能修复）：`depthOf` 每次沿父链上溯 O(深度)，
+            //   而排序要 O(n log n) 次比较 ⇒ 4003 节点实测 sort 段 **19.38ms**（占 layers 段 88%）。
+            //   建层时父必已建好 ⇒ 直接 parent 深度 +1，O(1)。
+            depthById[item.id] = item.parentId.flatMap { depthById[$0] }.map { $0 + 1 } ?? 0
         }
         builtLayerCount = layerNodes.count
         // ★V4：建层后清延迟更新簿记（新树 ⇒ 旧簿记失效）
@@ -245,8 +259,32 @@ final class SelfDrawView: UIView {
 
     /* ────────────────────────── ★V4：可见区判定 + 延迟更新簿记 ────────────────────────── */
 
-    /// 当前可见区（宿主根视图 bounds；滚动由 native-host 跟随，故取 bounds 即可）
-    var visibleBounds: CGRect { self.bounds }
+    /// 内容滚动偏移（= 根层被移动了多少；滚动 = 移动内容，**视口固定**）
+    ///
+    /// 【★本仓实测的模型错误（滚动用例 FAIL 暴露的）】首版把「可见区」写成 `self.bounds`
+    ///   并让 `scrollBy` 去平移 `self.bounds` —— 但层的坐标是**内容坐标**（绝对），
+    ///   平移 bounds 会让「视口」和「内容」一起移动 ⇒ **永远判不出"滚入"** ⇒ 补刷恒为 0。
+    ///   ⇒ 正确模型：**视口固定在屏幕 `[0,0,W,H]`**，滚动 = 移动**内容**（根层位置偏移）。
+    ///   判可见性 = 「内容坐标 r」与「屏幕窗口 + 偏移」相交判定。
+    private(set) var contentOffset = CGPoint.zero
+
+    /// 屏幕固定视口（可见区判定的基准）
+    var visibleBounds: CGRect { CGRect(origin: .zero, size: self.bounds.size) }
+
+    /// 应用滚动偏移：移动内容（根层的 sublayerTransform 平移），并记录偏移量
+    ///
+    /// - Returns: 新的内容偏移
+    @discardableResult
+    func applyContentOffset(dx: CGFloat, dy: CGFloat) -> CGPoint {
+        contentOffset.x += dx
+        contentOffset.y += dy
+        // ★用 sublayerTransform 平移（不动各层 frame ⇒ 不破坏「内容坐标」语义）
+        var t = CATransform3DIdentity
+        t.m41 = -contentOffset.x
+        t.m42 = -contentOffset.y
+        self.layer.sublayerTransform = t
+        return contentOffset
+    }
 
     /// 视口外的待更新层（id → 目标绝对 rect）——滚入视野前必须刷上
     ///
@@ -259,6 +297,8 @@ final class SelfDrawView: UIView {
     private(set) var lastDeferredCount = 0
     /// 本次更新里「补刷」的层数
     private(set) var lastFlushedCount = 0
+    /// 当前待补刷（视口外延后）的层数
+    var pendingCount: Int { pendingOffscreen.count }
 
     /// ★★滚动/几何变化钩子：视图 bounds 变化时补刷「已滚入视野」的待更新层
     ///
@@ -279,8 +319,12 @@ final class SelfDrawView: UIView {
 
     /// 判断矩形是否与可见区相交（含少量余量：预取一屏，避免滚动时才补刷）
     private func intersectsVisible(_ r: CGRect) -> Bool {
-        let vb = visibleBounds.insetBy(dx: 0, dy: -visibleBounds.height) // 上下各预取一屏
-        return vb.intersects(r)
+        // ★把**内容坐标**矩形换算到**屏幕坐标**（减去内容偏移），再与固定视口相交判定
+        let onScreen = r.offsetBy(dx: -contentOffset.x, dy: -contentOffset.y)
+        // ★预取**半屏**（首版用了「上下各一屏」= 三屏高 ⇒ 803 节点的树几乎全算可见）
+        //   ⇒ 优化形同失效，且滚动用例没有待补刷项可验证。半屏兼顾「滚动不抖」与「真剔除」。
+        let vb = visibleBounds.insetBy(dx: 0, dy: -visibleBounds.height / 2)
+        return vb.intersects(onScreen)
     }
 
     /// ★补刷：把当前已可见的待更新层应用掉（滚动前后调用）
@@ -336,11 +380,21 @@ final class SelfDrawView: UIView {
     ///   改为**按父链深度排序**（深度小的先处理）。
     ///
     /// - Returns: 实际更新的层数；有任何一个节点在本地找不到对应 layer 则返回 -1（调用方应退回全量重建）
+    /// 最近一次层更新的**三段分解**（V4 下半：定位 `layers` 段残余）
+    ///
+    /// 【为什么必须拆（本仓实测）】原先只报一个 `layers_ms`，把三件不同的事混在一起：
+    ///   · 排序/可见性过滤（纯 Swift 计算）
+    ///   · `layer.frame = ...` 逐层赋值（含 CA 内部簿记）
+    ///   · `CATransaction.commit()` —— **隐式布局与提交**（含 GPU 侧准备，异步部分不可测）
+    ///   4003 个子层改 frame 时，第三段往往才是大头——不拆就永远查不到。
+    private(set) var lastLayerTiming: [String: Double] = [:]
+
     func updateLayersIncremental(
         changed: [(id: Int, abs: CGRect)],
         /// ★V4：是否**只更新可见层**（不可见的记账延后）。false = 旧行为（全部更新），用于 A/B
         visibleOnly: Bool = true
     ) -> Int {
+        lastLayerTiming = [:]
         guard !changed.isEmpty else { return 0 }
         // 逐节点检查是否都有对应的已有层；缺任何一个 ⇒ 退回全量（正确性优先）
         for c in changed where layersById[c.id] == nil { return -1 }
@@ -363,47 +417,62 @@ final class SelfDrawView: UIView {
         //   `depthOf` 每次都沿父链上溯 O(深度) ⇒ 4003 节点排序变成 O(n·深度·log n)
         //   ⇒ 实测类A（只动 **1 个**节点）`layers` 段从 0.09ms **涨到 5.99ms**——
         //   优化反而制造了新热点。⇒ 先 O(n) 建表，排序只查表。
-        var depthCache: [Int: Int] = [:]
-        depthCache.reserveCapacity(changed.count)
-        for c in changed where depthCache[c.id] == nil {
-            depthCache[c.id] = depthOf(c.id)
-        }
-        let sorted = changed.sorted { (depthCache[$0.id] ?? 0) < (depthCache[$1.id] ?? 0) }
+        let tSortStart = CFAbsoluteTimeGetCurrent()
+        // ★★先**过滤**（O(n)、只需可见性判定）再**排序**（只排留下的）
+        //
+        // 【本仓实测的第三处顺序错误】首版是「先排序全部 4003，再过滤出可见的 ~180」
+        //   ⇒ 白花 O(n log n) 次比较 + O(n) 次深度查询 ⇒ `sort` 段 **18.4ms**，
+        //   而真正要排序的只有约 180 个（O(k log k) 可忽略）。
+        //   ⇒ 顺序反过来：过滤不需要深度信息，排序才需要。
+        var vis: [(id: Int, abs: CGRect)] = []
+        var off: [(id: Int, abs: CGRect)] = []
         if visibleOnly {
-            visible = sorted.filter { intersectsVisible($0.abs) }
-            offscreen = sorted.filter { !intersectsVisible($0.abs) }
+            vis.reserveCapacity(changed.count / 8)
+            for c in changed {
+                if intersectsVisible(c.abs) { vis.append(c) } else { off.append(c) }
+            }
         } else {
-            visible = sorted   // 旧路径：全部更新（不剔除）
-            offscreen = []
+            vis = changed
         }
+        let sortedVisible = vis.sorted { depthOf($0.id) < depthOf($1.id) }
+        let sortedOff = visibleOnly ? off : []
+        visible = sortedVisible
+        offscreen = sortedOff
+
+        let tSortDone = CFAbsoluteTimeGetCurrent()
+        lastLayerTiming["sort_ms"] = (tSortDone - tSortStart) * 1000
 
         CATransaction.begin()
         CATransaction.setDisableActions(true)
-        defer { CATransaction.commit() }
-
         var updated = 0
         for c in visible {
             applyOneLayer(id: c.id, abs: c.abs)
             updated += 1
         }
+        let tFramesDone = CFAbsoluteTimeGetCurrent()
+        lastLayerTiming["frames_ms"] = (tFramesDone - tSortDone) * 1000
         for c in offscreen {
             pendingOffscreen[c.id] = c.abs // ★记账（不是丢弃）
         }
+        let tBookDone = CFAbsoluteTimeGetCurrent()
+        // ★提交单独计时（含隐式布局 + 提交；GPU 异步部分不计入——宿主同步路径到此为止）
+        CATransaction.commit()
+        lastLayerTiming["commit_ms"] = (CFAbsoluteTimeGetCurrent() - tBookDone) * 1000
+        lastLayerTiming["total_ms"] = (CFAbsoluteTimeGetCurrent() - tSortStart) * 1000
+        lastLayerTiming["count"] = Double(updated)
         lastDeferredCount = offscreen.count
         return updated
     }
 
     /// 节点在层树中的深度（沿 `parentById` 上溯；带防环保护）
+    /// 节点深度（★建层时预计算，见 buildLayers；查表 O(1)）
+    ///
+    /// 【为什么不再沿父链上溯（本仓实测）】上溯版在「4003 个节点排序」时被调用 O(n log n) 次，
+    ///   实测 `sort` 段 **19.38ms**，而 `frames` 段只有 0.46ms
+    ///   ——瓶颈根本不在 CA 提交，而在这个自制的上溯循环。
+    ///   建层时父必已建好 ⇒ 递推即可（`depthById` 由 buildLayers 填充）。
     private func depthOf(_ id: Int) -> Int {
-        var d = 0
-        var cur = parentById[id] ?? -1
-        var guard_ = 0
-        while cur >= 0 && guard_ < 4096 {
-            d += 1
-            cur = parentById[cur] ?? -1
-            guard_ += 1
-        }
-        return d
+        depthById[id] ?? 0
     }
 
     /// ★实际 CALayer frame 清单（宿主侧读数）——与核心 rects 对照，证明「几何真的被用上了」
@@ -597,6 +666,7 @@ final class SelfDrawBridge: NSObject, SelfDrawExports {
                            "changed_rects": changed.count, "updated_layers": updated,
                            "update_ms": round(updateMs * 100) / 100,
                            "layers_ms": round(layersMs * 100) / 100,
+                           // ★三段分解（sort/frames/commit）——定位 layers 残余的唯一依据
                            "host_total_ms": round(totalMs * 100) / 100])
     }
 
@@ -607,6 +677,22 @@ final class SelfDrawBridge: NSObject, SelfDrawExports {
         mach_timebase_info(&tb)
         return tb
     }()
+
+    func scrollBy(_ dx: Double, _ dy: Double) -> String {
+        guard let view = view else { return "{\"ok\":false,\"error\":\"无视图\"}" }
+        // ★滚动 = 移动**内容**（视口固定）：根层的 sublayerTransform/position 平移 + 记账偏移
+        //   （不用 UIScrollView——本自绘层树由 native-host 跟随，滚动是根层偏移）
+        let off = view.applyContentOffset(dx: CGFloat(dx), dy: CGFloat(dy))
+        // 显式触发补刷（确定性：测试里不依赖 UIKit 的回调时机）
+        view.setNeedsLayout()
+        view.layoutSubviews()
+        return "{\"ok\":true,\"flushed\":\(view.lastFlushedCount),\"offsetY\":\(Double(off.y))}"
+    }
+
+    func pendingStats() -> String {
+        guard let view = view else { return "{\"ok\":false}" }
+        return "{\"ok\":true,\"pending\":\(view.pendingCount),\"last_flushed\":\(view.lastFlushedCount),\"last_deferred\":\(view.lastDeferredCount)}"
+    }
 
     /// V4 优化开关（默认开；A/B 时置 'v3'）
     static var optMode = "v4"
@@ -719,9 +805,9 @@ final class SelfDrawBridge: NSObject, SelfDrawExports {
           lastGeom[c.id] = sig
         }
         lastGeomChanged = geomChanged
-        let tL = CFAbsoluteTimeGetCurrent()
         let updated = view.updateLayersIncremental(changed: changed, visibleOnly: useV4)
-        let layersMs = (CFAbsoluteTimeGetCurrent() - tL) * 1000
+        let layerTiming = view.lastLayerTiming
+        let layersMs = layerTiming["total_ms"] ?? 0
         let totalMs = (CFAbsoluteTimeGetCurrent() - t0) * 1000
         let mem = physFootprintMB()
         SelfDrawBridge.memPeakMB = max(SelfDrawBridge.memPeakMB, mem)
@@ -734,9 +820,17 @@ final class SelfDrawBridge: NSObject, SelfDrawExports {
                            "scopes": scopes, "changed_rects": changed.count, "updated_layers": updated,
                            "unsupported_count": unsupported.count,
                            "apply_ms": round(applyMs * 100) / 100,
+                           // ★Rust 侧分段（本仓实测：总账 72ms 里约 40ms 曾"去向不明"——
+                           //   因为 apply_ms 只覆盖「指令应用」，**不含重排**（relayout_ms 在 timing 里没被浮出）
+                           "relayout_ms": round((((o?["timing"] as? [String: Any])?["relayout_ms"] as? Double) ?? 0) * 100) / 100,
+                           "collect_ms": round((((o?["timing"] as? [String: Any])?["collect_ms"] as? Double) ?? 0) * 100) / 100,
                            "rects_parse_ms": round(rectsParseMs * 100) / 100,
                            "rects_bin_ms": round(rectsBinMs * 100) / 100,
                            "opt_mode": SelfDrawBridge.optMode,
+                           // ★layers 三段分解（V4 下半：定位残余的唯一依据）
+                           "layers_sort_ms": round((layerTiming["sort_ms"] ?? 0) * 100) / 100,
+                           "layers_frames_ms": round((layerTiming["frames_ms"] ?? 0) * 100) / 100,
+                           "layers_commit_ms": round((layerTiming["commit_ms"] ?? 0) * 100) / 100,
                            "geom_changed": geomChanged,
                            "geom_total": changed.count,
                            "deferred": view.lastDeferredCount,
