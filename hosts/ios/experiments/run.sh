@@ -40,6 +40,12 @@ cat > "$APP/Info.plist" <<PLIST
   <key>MinimumOSVersion</key><string>15.0</string>
   <key>UIDeviceFamily</key><array><integer>1</integer><integer>2</integer></array>
   <key>UILaunchScreen</key><dict/>
+  <!-- ★启动屏**背景色**（本仓实测踩到的白屏根因）：
+       `UILaunchScreen` 空 dict ⇒ iOS 用**系统背景色**⇒ 浅色模式下是**白**，
+       而本应用是深色（背景 #101020 / 黑）⇒ 启动瞬间**白一下**再变黑。
+       `UIUserInterfaceStyle = Dark` 让系统背景 = 黑 ⇒ 启动屏与首帧连续（白闪消失）。
+       ★本应用所有颜色都是硬编码深色 ⇒ 强制深色**语义正确**（不是权宜之计）。 -->
+  <key>UIUserInterfaceStyle</key><string>Dark</string>
   <key>UIApplicationSceneManifest</key>
   <dict><key>UIApplicationSupportsMultipleScenes</key><false/><key>UISceneConfigurations</key><dict/></dict>
   <key>UISupportedInterfaceOrientations</key>

@@ -284,6 +284,30 @@ diff/patch 随**页面规模**线性、**与"改了多少"无关**。
 
 ---
 
+#### ★★★2026-09-28 启动白闪根因（`UILaunchScreen` 空 dict）+ 修正
+
+**用户观察**：「应用启动会白屏一下」。**排查结论：不是"内容白屏"，是"壳子启动白闪"**——
+而且根因与网络/产物/dev server **全无关**：
+
+| 环节 | 实际值 | 后果 |
+|---|---|---|
+| `Info.plist` 的 `UILaunchScreen` | **空 dict** | iOS 用**系统背景色**（浅色 = **白**） |
+| 应用配色 | 硬编码深色（`#101020` / 黑）· 未设 `UIUserInterfaceStyle` | 跟随系统 ⇒ 用户浅色模式下启动屏是**白** |
+| 时序 | — | **白（启动屏）→ 黑（`viewDidLoad`）→ 深色内容** |
+
+**修法**：`UIUserInterfaceStyle = Dark`（**7 个 runner 脚本**一并修）。
+★**为什么不塞启动图**：应用所有颜色都是硬编码深色 ⇒ 强制深色**语义正确**，
+且系统背景色随之变黑 ⇒ 启动屏与首帧**连续**（白闪消失）。
+
+**设备验证**（新增 `launch_diag` 读数）：`forced_style=Dark` · `interface_style=Dark` ·
+`launch_screen_keys=[]` ⇒ 外观已强制，系统背景 = 黑 ✅
+
+**★方法论教训（值得记）**：我曾收到一份"白屏分析"（讲骨架屏、dev/release 差异、FS0 六段打点）——
+但**它讲的是 Playground 壳子**（本仓**规划态·零实现**），且 `FS0 六段打点` 在本仓**不存在**。
+⇒ 差点按一套不适用的框架去"优化"。**纪律：先问"这是哪个 App"**——本仓有**多个**真机 App
+（selfdraw 自绘 / calayer / layout-bench / experiments / 未来的 Playground），
+"白屏"在它们身上的成因完全不同。
+
 #### ★★★2026-09-28 事件系统接通（自绘场景从"完全不能交互"到真机 PASS）
 
 **问题（本仓实测的功能缺口）**：核心 `hit.rs` + FFI `proteus_layout_hit_test`（返回 `target` +
