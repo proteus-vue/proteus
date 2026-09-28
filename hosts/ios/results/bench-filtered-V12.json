@@ -1,0 +1,1744 @@
+{
+  "engine" : "proteus-layout-core 0.1.0 · engine=taffy-0.14 · taffy 锁定 0.14（0.13 有 measure 指数退化）",
+  "geometry_all" : {
+    "0" : {
+      "bg" : "#101020",
+      "color" : "",
+      "h" : 64101,
+      "text" : "",
+      "w" : 177,
+      "x" : 0,
+      "y" : 0
+    },
+    "1" : {
+      "bg" : "",
+      "color" : "#ffffff",
+      "h" : 29,
+      "text" : "Vapor 全量 SFC",
+      "w" : 161,
+      "x" : 16,
+      "y" : 60
+    },
+    "1601" : {
+      "bg" : "#1b1b21",
+      "color" : "",
+      "h" : 56,
+      "text" : "",
+      "w" : 161,
+      "x" : 16,
+      "y" : 34213
+    },
+    "1602" : {
+      "bg" : "#6f4ae8",
+      "color" : "",
+      "h" : 36,
+      "text" : "",
+      "w" : 36,
+      "x" : 16,
+      "y" : 34223
+    },
+    "1603" : {
+      "bg" : "",
+      "color" : "#ffffff",
+      "h" : 20,
+      "text" : "行 534",
+      "w" : 120,
+      "x" : 52,
+      "y" : 34231
+    },
+    "1604" : {
+      "bg" : "#1b1b21",
+      "color" : "",
+      "h" : 56,
+      "text" : "",
+      "w" : 161,
+      "x" : 16,
+      "y" : 34277
+    },
+    "1605" : {
+      "bg" : "#6f4ae8",
+      "color" : "",
+      "h" : 36,
+      "text" : "",
+      "w" : 36,
+      "x" : 16,
+      "y" : 34287
+    },
+    "1606" : {
+      "bg" : "",
+      "color" : "#ffffff",
+      "h" : 20,
+      "text" : "行 535",
+      "w" : 120,
+      "x" : 52,
+      "y" : 34295
+    },
+    "1607" : {
+      "bg" : "#1b1b21",
+      "color" : "",
+      "h" : 56,
+      "text" : "",
+      "w" : 161,
+      "x" : 16,
+      "y" : 34341
+    },
+    "1608" : {
+      "bg" : "#6f4ae8",
+      "color" : "",
+      "h" : 36,
+      "text" : "",
+      "w" : 36,
+      "x" : 16,
+      "y" : 34351
+    },
+    "1609" : {
+      "bg" : "",
+      "color" : "#ffffff",
+      "h" : 20,
+      "text" : "行 536",
+      "w" : 120,
+      "x" : 52,
+      "y" : 34359
+    },
+    "1610" : {
+      "bg" : "#1b1b21",
+      "color" : "",
+      "h" : 56,
+      "text" : "",
+      "w" : 161,
+      "x" : 16,
+      "y" : 34405
+    },
+    "1611" : {
+      "bg" : "#6f4ae8",
+      "color" : "",
+      "h" : 36,
+      "text" : "",
+      "w" : 36,
+      "x" : 16,
+      "y" : 34415
+    },
+    "1612" : {
+      "bg" : "",
+      "color" : "#ffffff",
+      "h" : 20,
+      "text" : "行 537",
+      "w" : 120,
+      "x" : 52,
+      "y" : 34423
+    },
+    "1613" : {
+      "bg" : "#1b1b21",
+      "color" : "",
+      "h" : 56,
+      "text" : "",
+      "w" : 161,
+      "x" : 16,
+      "y" : 34469
+    },
+    "1614" : {
+      "bg" : "#6f4ae8",
+      "color" : "",
+      "h" : 36,
+      "text" : "",
+      "w" : 36,
+      "x" : 16,
+      "y" : 34479
+    },
+    "1615" : {
+      "bg" : "",
+      "color" : "#ffffff",
+      "h" : 20,
+      "text" : "行 538",
+      "w" : 120,
+      "x" : 52,
+      "y" : 34487
+    },
+    "1616" : {
+      "bg" : "#1b1b21",
+      "color" : "",
+      "h" : 56,
+      "text" : "",
+      "w" : 161,
+      "x" : 16,
+      "y" : 34533
+    },
+    "1617" : {
+      "bg" : "#6f4ae8",
+      "color" : "",
+      "h" : 36,
+      "text" : "",
+      "w" : 36,
+      "x" : 16,
+      "y" : 34543
+    },
+    "1618" : {
+      "bg" : "",
+      "color" : "#ffffff",
+      "h" : 20,
+      "text" : "行 539",
+      "w" : 120,
+      "x" : 52,
+      "y" : 34551
+    },
+    "1619" : {
+      "bg" : "#1b1b21",
+      "color" : "",
+      "h" : 56,
+      "text" : "",
+      "w" : 161,
+      "x" : 16,
+      "y" : 34597
+    },
+    "1620" : {
+      "bg" : "#6f4ae8",
+      "color" : "",
+      "h" : 36,
+      "text" : "",
+      "w" : 36,
+      "x" : 16,
+      "y" : 34607
+    },
+    "1621" : {
+      "bg" : "",
+      "color" : "#ffffff",
+      "h" : 20,
+      "text" : "行 540",
+      "w" : 120,
+      "x" : 52,
+      "y" : 34615
+    },
+    "1622" : {
+      "bg" : "#1b1b21",
+      "color" : "",
+      "h" : 56,
+      "text" : "",
+      "w" : 161,
+      "x" : 16,
+      "y" : 34661
+    },
+    "1623" : {
+      "bg" : "#6f4ae8",
+      "color" : "",
+      "h" : 36,
+      "text" : "",
+      "w" : 36,
+      "x" : 16,
+      "y" : 34671
+    },
+    "1624" : {
+      "bg" : "",
+      "color" : "#ffffff",
+      "h" : 20,
+      "text" : "行 541",
+      "w" : 120,
+      "x" : 52,
+      "y" : 34679
+    },
+    "1625" : {
+      "bg" : "#1b1b21",
+      "color" : "",
+      "h" : 56,
+      "text" : "",
+      "w" : 161,
+      "x" : 16,
+      "y" : 34725
+    },
+    "1626" : {
+      "bg" : "#6f4ae8",
+      "color" : "",
+      "h" : 36,
+      "text" : "",
+      "w" : 36,
+      "x" : 16,
+      "y" : 34735
+    },
+    "1627" : {
+      "bg" : "",
+      "color" : "#ffffff",
+      "h" : 20,
+      "text" : "行 542",
+      "w" : 120,
+      "x" : 52,
+      "y" : 34743
+    },
+    "1628" : {
+      "bg" : "#1b1b21",
+      "color" : "",
+      "h" : 56,
+      "text" : "",
+      "w" : 161,
+      "x" : 16,
+      "y" : 34789
+    },
+    "1629" : {
+      "bg" : "#6f4ae8",
+      "color" : "",
+      "h" : 36,
+      "text" : "",
+      "w" : 36,
+      "x" : 16,
+      "y" : 34799
+    },
+    "1630" : {
+      "bg" : "",
+      "color" : "#ffffff",
+      "h" : 20,
+      "text" : "行 543",
+      "w" : 120,
+      "x" : 52,
+      "y" : 34807
+    },
+    "1631" : {
+      "bg" : "#1b1b21",
+      "color" : "",
+      "h" : 56,
+      "text" : "",
+      "w" : 161,
+      "x" : 16,
+      "y" : 34853
+    },
+    "1632" : {
+      "bg" : "#6f4ae8",
+      "color" : "",
+      "h" : 36,
+      "text" : "",
+      "w" : 36,
+      "x" : 16,
+      "y" : 34863
+    },
+    "1633" : {
+      "bg" : "",
+      "color" : "#ffffff",
+      "h" : 20,
+      "text" : "行 544",
+      "w" : 120,
+      "x" : 52,
+      "y" : 34871
+    },
+    "1634" : {
+      "bg" : "#1b1b21",
+      "color" : "",
+      "h" : 56,
+      "text" : "",
+      "w" : 161,
+      "x" : 16,
+      "y" : 34917
+    },
+    "1635" : {
+      "bg" : "#6f4ae8",
+      "color" : "",
+      "h" : 36,
+      "text" : "",
+      "w" : 36,
+      "x" : 16,
+      "y" : 34927
+    },
+    "1636" : {
+      "bg" : "",
+      "color" : "#ffffff",
+      "h" : 20,
+      "text" : "行 545",
+      "w" : 120,
+      "x" : 52,
+      "y" : 34935
+    },
+    "1637" : {
+      "bg" : "#1b1b21",
+      "color" : "",
+      "h" : 56,
+      "text" : "",
+      "w" : 161,
+      "x" : 16,
+      "y" : 34981
+    },
+    "1638" : {
+      "bg" : "#6f4ae8",
+      "color" : "",
+      "h" : 36,
+      "text" : "",
+      "w" : 36,
+      "x" : 16,
+      "y" : 34991
+    },
+    "1639" : {
+      "bg" : "",
+      "color" : "#ffffff",
+      "h" : 20,
+      "text" : "行 546",
+      "w" : 120,
+      "x" : 52,
+      "y" : 34999
+    },
+    "1640" : {
+      "bg" : "#1b1b21",
+      "color" : "",
+      "h" : 56,
+      "text" : "",
+      "w" : 161,
+      "x" : 16,
+      "y" : 35045
+    },
+    "1641" : {
+      "bg" : "#6f4ae8",
+      "color" : "",
+      "h" : 36,
+      "text" : "",
+      "w" : 36,
+      "x" : 16,
+      "y" : 35055
+    },
+    "1642" : {
+      "bg" : "",
+      "color" : "#ffffff",
+      "h" : 20,
+      "text" : "行 547",
+      "w" : 120,
+      "x" : 52,
+      "y" : 35063
+    },
+    "1643" : {
+      "bg" : "#1b1b21",
+      "color" : "",
+      "h" : 56,
+      "text" : "",
+      "w" : 161,
+      "x" : 16,
+      "y" : 35109
+    },
+    "1644" : {
+      "bg" : "#6f4ae8",
+      "color" : "",
+      "h" : 36,
+      "text" : "",
+      "w" : 36,
+      "x" : 16,
+      "y" : 35119
+    },
+    "1645" : {
+      "bg" : "",
+      "color" : "#ffffff",
+      "h" : 20,
+      "text" : "行 548",
+      "w" : 120,
+      "x" : 52,
+      "y" : 35127
+    },
+    "1646" : {
+      "bg" : "#1b1b21",
+      "color" : "",
+      "h" : 56,
+      "text" : "",
+      "w" : 161,
+      "x" : 16,
+      "y" : 35173
+    },
+    "1647" : {
+      "bg" : "#6f4ae8",
+      "color" : "",
+      "h" : 36,
+      "text" : "",
+      "w" : 36,
+      "x" : 16,
+      "y" : 35183
+    },
+    "1648" : {
+      "bg" : "",
+      "color" : "#ffffff",
+      "h" : 20,
+      "text" : "行 549",
+      "w" : 120,
+      "x" : 52,
+      "y" : 35191
+    },
+    "1649" : {
+      "bg" : "#1b1b21",
+      "color" : "",
+      "h" : 56,
+      "text" : "",
+      "w" : 161,
+      "x" : 16,
+      "y" : 35237
+    },
+    "1650" : {
+      "bg" : "#6f4ae8",
+      "color" : "",
+      "h" : 36,
+      "text" : "",
+      "w" : 36,
+      "x" : 16,
+      "y" : 35247
+    },
+    "1651" : {
+      "bg" : "",
+      "color" : "#ffffff",
+      "h" : 20,
+      "text" : "行 550",
+      "w" : 120,
+      "x" : 52,
+      "y" : 35255
+    },
+    "1652" : {
+      "bg" : "#1b1b21",
+      "color" : "",
+      "h" : 56,
+      "text" : "",
+      "w" : 161,
+      "x" : 16,
+      "y" : 35301
+    },
+    "1653" : {
+      "bg" : "#6f4ae8",
+      "color" : "",
+      "h" : 36,
+      "text" : "",
+      "w" : 36,
+      "x" : 16,
+      "y" : 35311
+    },
+    "1654" : {
+      "bg" : "",
+      "color" : "#ffffff",
+      "h" : 20,
+      "text" : "行 551",
+      "w" : 120,
+      "x" : 52,
+      "y" : 35319
+    },
+    "1655" : {
+      "bg" : "#1b1b21",
+      "color" : "",
+      "h" : 56,
+      "text" : "",
+      "w" : 161,
+      "x" : 16,
+      "y" : 35365
+    },
+    "1656" : {
+      "bg" : "#6f4ae8",
+      "color" : "",
+      "h" : 36,
+      "text" : "",
+      "w" : 36,
+      "x" : 16,
+      "y" : 35375
+    },
+    "1657" : {
+      "bg" : "",
+      "color" : "#ffffff",
+      "h" : 20,
+      "text" : "行 552",
+      "w" : 120,
+      "x" : 52,
+      "y" : 35383
+    },
+    "1658" : {
+      "bg" : "#1b1b21",
+      "color" : "",
+      "h" : 56,
+      "text" : "",
+      "w" : 161,
+      "x" : 16,
+      "y" : 35429
+    },
+    "1659" : {
+      "bg" : "#6f4ae8",
+      "color" : "",
+      "h" : 36,
+      "text" : "",
+      "w" : 36,
+      "x" : 16,
+      "y" : 35439
+    },
+    "1660" : {
+      "bg" : "",
+      "color" : "#ffffff",
+      "h" : 20,
+      "text" : "行 553",
+      "w" : 120,
+      "x" : 52,
+      "y" : 35447
+    },
+    "1661" : {
+      "bg" : "#1b1b21",
+      "color" : "",
+      "h" : 56,
+      "text" : "",
+      "w" : 161,
+      "x" : 16,
+      "y" : 35493
+    },
+    "1662" : {
+      "bg" : "#6f4ae8",
+      "color" : "",
+      "h" : 36,
+      "text" : "",
+      "w" : 36,
+      "x" : 16,
+      "y" : 35503
+    },
+    "1663" : {
+      "bg" : "",
+      "color" : "#ffffff",
+      "h" : 20,
+      "text" : "行 554",
+      "w" : 120,
+      "x" : 52,
+      "y" : 35511
+    },
+    "1664" : {
+      "bg" : "#1b1b21",
+      "color" : "",
+      "h" : 56,
+      "text" : "",
+      "w" : 161,
+      "x" : 16,
+      "y" : 35557
+    },
+    "1665" : {
+      "bg" : "#6f4ae8",
+      "color" : "",
+      "h" : 36,
+      "text" : "",
+      "w" : 36,
+      "x" : 16,
+      "y" : 35567
+    },
+    "1666" : {
+      "bg" : "",
+      "color" : "#ffffff",
+      "h" : 20,
+      "text" : "行 555",
+      "w" : 120,
+      "x" : 52,
+      "y" : 35575
+    },
+    "1667" : {
+      "bg" : "#1b1b21",
+      "color" : "",
+      "h" : 56,
+      "text" : "",
+      "w" : 161,
+      "x" : 16,
+      "y" : 35621
+    },
+    "1668" : {
+      "bg" : "#6f4ae8",
+      "color" : "",
+      "h" : 36,
+      "text" : "",
+      "w" : 36,
+      "x" : 16,
+      "y" : 35631
+    },
+    "1669" : {
+      "bg" : "",
+      "color" : "#ffffff",
+      "h" : 20,
+      "text" : "行 556",
+      "w" : 120,
+      "x" : 52,
+      "y" : 35639
+    },
+    "1670" : {
+      "bg" : "#1b1b21",
+      "color" : "",
+      "h" : 56,
+      "text" : "",
+      "w" : 161,
+      "x" : 16,
+      "y" : 35685
+    },
+    "1671" : {
+      "bg" : "#6f4ae8",
+      "color" : "",
+      "h" : 36,
+      "text" : "",
+      "w" : 36,
+      "x" : 16,
+      "y" : 35695
+    },
+    "1672" : {
+      "bg" : "",
+      "color" : "#ffffff",
+      "h" : 20,
+      "text" : "行 557",
+      "w" : 120,
+      "x" : 52,
+      "y" : 35703
+    }
+  },
+  "host_node_count" : 3002,
+  "host_timing_last" : {
+    "build_layers_ms" : 0,
+    "host_total_ms" : 2.3300000000000001,
+    "layout_ms" : 2.2000000000000002,
+    "measure_ms" : 0
+  },
+  "js_completed" : 1,
+  "js_ok" : true,
+  "js_report" : {
+    "build_id" : "cf6899ae-195219",
+    "case_filter" : [
+      "V12"
+    ],
+    "case_timings_ms" : {
+      "V12_scroll_recycle" : 220
+    },
+    "cases" : [
+      {
+        "case" : "V12_scroll_recycle",
+        "extra" : {
+          "backward" : [
+            {
+              "acquired" : 15,
+              "dir" : "backward",
+              "first" : 252,
+              "released" : 15
+            },
+            {
+              "acquired" : 9,
+              "dir" : "backward",
+              "first" : 243,
+              "released" : 9
+            },
+            {
+              "acquired" : 9,
+              "dir" : "backward",
+              "first" : 234,
+              "released" : 9
+            },
+            {
+              "acquired" : 8,
+              "dir" : "backward",
+              "first" : 16,
+              "released" : 8
+            },
+            {
+              "acquired" : 8,
+              "dir" : "backward",
+              "first" : 7,
+              "released" : 9
+            },
+            {
+              "acquired" : 0,
+              "dir" : "backward",
+              "first" : 0,
+              "released" : 9
+            }
+          ],
+          "checks" : {
+            "boundedPerFrame" : true,
+            "dirBackward" : true,
+            "dirForward" : true,
+            "farRowUnmaterialized" : true,
+            "fewLayers" : true,
+            "fewRows" : true,
+            "inRowMaterialized" : true,
+            "killSwitch" : true,
+            "layersBounded" : true,
+            "notRebuiltEachFrame" : true,
+            "offscreenUpdateApplied" : true,
+            "offscreenUpdateVisible" : true,
+            "pixelDeviceOk" : true,
+            "pixelDot" : true,
+            "realChurn" : true,
+            "reuseWorks" : true
+          },
+          "covered" : "virtualized mount + direction-sensitive recycle + layer pool reuse + rollback",
+          "down_stats" : {
+            "content_offset_y" : 16800,
+            "is_virtual" : true,
+            "layer_count" : 74,
+            "layers_created" : 74,
+            "layers_dropped" : 0,
+            "layers_returned" : 777,
+            "layers_reused" : 777,
+            "materialized_row_list" : [
+              259,
+              260,
+              261,
+              262,
+              263,
+              264,
+              265,
+              266,
+              267,
+              268,
+              269,
+              270,
+              271,
+              272,
+              273,
+              274,
+              275,
+              276,
+              277,
+              278,
+              279,
+              280,
+              281,
+              282
+            ],
+            "materialized_rows" : 24,
+            "node_count" : 3002,
+            "ok" : true,
+            "pool_capacity" : 96,
+            "pool_size" : 0,
+            "recycle" : {
+              "acquire_events" : 283,
+              "demote_events" : 261,
+              "first_preload" : 259,
+              "last_preload" : 282,
+              "live" : 24,
+              "ok" : true,
+              "release_events" : 259,
+              "updates" : 31
+            },
+            "row_count" : 1000
+          },
+          "forward" : [
+            {
+              "acquired" : 15,
+              "dir" : "forward",
+              "first" : 7,
+              "last" : 20,
+              "released" : 5
+            },
+            {
+              "acquired" : 9,
+              "dir" : "forward",
+              "first" : 16,
+              "last" : 29,
+              "released" : 9
+            },
+            {
+              "acquired" : 8,
+              "dir" : "forward",
+              "first" : 24,
+              "last" : 37,
+              "released" : 8
+            },
+            {
+              "acquired" : 9,
+              "dir" : "forward",
+              "first" : 243,
+              "last" : 256,
+              "released" : 9
+            },
+            {
+              "acquired" : 9,
+              "dir" : "forward",
+              "first" : 252,
+              "last" : 265,
+              "released" : 9
+            },
+            {
+              "acquired" : 9,
+              "dir" : "forward",
+              "first" : 261,
+              "last" : 274,
+              "released" : 9
+            }
+          ],
+          "kill_stats" : {
+            "created_delta" : 174,
+            "end" : {
+              "content_offset_y" : 34720,
+              "is_virtual" : true,
+              "layer_count" : 74,
+              "layers_created" : 248,
+              "layers_dropped" : 174,
+              "layers_returned" : 3357,
+              "layers_reused" : 3357,
+              "materialized_row_list" : [
+                533,
+                534,
+                535,
+                536,
+                537,
+                538,
+                539,
+                540,
+                541,
+                542,
+                543,
+                544,
+                545,
+                546,
+                547,
+                548,
+                549,
+                550,
+                551,
+                552,
+                553,
+                554,
+                555,
+                556
+              ],
+              "materialized_rows" : 24,
+              "node_count" : 3002,
+              "ok" : true,
+              "pool_capacity" : 0,
+              "pool_size" : 0,
+              "recycle" : {
+                "acquire_events" : 1201,
+                "demote_events" : 1169,
+                "first_preload" : 533,
+                "last_preload" : 556,
+                "live" : 24,
+                "ok" : true,
+                "release_events" : 1177,
+                "updates" : 135
+              },
+              "row_count" : 1000
+            },
+            "reused_delta" : 0,
+            "start" : {
+              "content_offset_y" : 38080,
+              "is_virtual" : true,
+              "layer_count" : 74,
+              "layers_created" : 74,
+              "layers_dropped" : 0,
+              "layers_returned" : 3357,
+              "layers_reused" : 3357,
+              "materialized_row_list" : [
+                591,
+                592,
+                593,
+                594,
+                595,
+                596,
+                597,
+                598,
+                599,
+                600,
+                601,
+                602,
+                603,
+                604,
+                605,
+                606,
+                607,
+                608,
+                609,
+                610,
+                611,
+                612,
+                613,
+                614
+              ],
+              "materialized_rows" : 24,
+              "node_count" : 3002,
+              "ok" : true,
+              "pool_capacity" : 0,
+              "pool_size" : 0,
+              "recycle" : {
+                "acquire_events" : 1143,
+                "demote_events" : 1117,
+                "first_preload" : 591,
+                "last_preload" : 614,
+                "live" : 24,
+                "ok" : true,
+                "release_events" : 1119,
+                "updates" : 129
+              },
+              "row_count" : 1000
+            }
+          },
+          "mount_ms" : 100,
+          "mount_stats" : {
+            "content_offset_y" : 0,
+            "is_virtual" : true,
+            "layer_count" : 44,
+            "layers_created" : 44,
+            "layers_dropped" : 0,
+            "layers_returned" : 0,
+            "layers_reused" : 0,
+            "materialized_row_list" : [
+              0,
+              1,
+              2,
+              3,
+              4,
+              5,
+              6,
+              7,
+              8,
+              9,
+              10,
+              11,
+              12,
+              13
+            ],
+            "materialized_rows" : 14,
+            "node_count" : 3002,
+            "ok" : true,
+            "pool_capacity" : 96,
+            "pool_size" : 0,
+            "recycle" : {
+              "acquire_events" : 14,
+              "demote_events" : 0,
+              "first_preload" : 0,
+              "last_preload" : 13,
+              "live" : 14,
+              "ok" : true,
+              "release_events" : 0,
+              "updates" : 1
+            },
+            "row_count" : 1000
+          },
+          "node_count" : 3002,
+          "not_covered" : "手势\/命中在虚拟化下的坐标（tapAt 走内容坐标，未额外验证）；Android 侧同款接线",
+          "offscreen_apply" : {
+            "apply_ms" : 2.2000000000000002,
+            "changed_rects" : 3,
+            "collect_ms" : 0,
+            "deferred" : 0,
+            "deferred_nodes" : 3,
+            "flushed" : 0,
+            "geom_changed" : 3,
+            "geom_total" : 3,
+            "host_total_ms" : 2.3300000000000001,
+            "in_bytes" : 8974,
+            "incremental" : true,
+            "layers_commit_ms" : 0,
+            "layers_frames_ms" : 0,
+            "layers_ms" : 0,
+            "layers_sort_ms" : 0,
+            "ok" : true,
+            "opt_mode" : "v4",
+            "patch_count" : 1,
+            "path" : "applyOps",
+            "pending_visible_overlap" : 0,
+            "rects_bin_ms" : 0.02,
+            "rects_parse_ms" : 0.080000000000000002,
+            "refreshed_rows" : 0,
+            "relayout_count" : 3,
+            "relayout_ms" : 0.040000000000000001,
+            "scopes" : [
+              1802
+            ],
+            "stale_cleared" : 0,
+            "text_layers_applied" : 0,
+            "text_updates" : 1,
+            "unsupported_count" : 0,
+            "updated_layers" : 3,
+            "virtual" : true
+          },
+          "offscreen_far_row" : 600,
+          "offscreen_text_seen" : "改过 601",
+          "pixel_at_dot" : "#6F4AE8",
+          "probe_far_row" : {
+            "child_rects" : [
+              {
+                "cx" : 96.5,
+                "cy" : 449,
+                "h" : 56,
+                "w" : 161,
+                "x" : 16,
+                "y" : 421
+              },
+              {
+                "cx" : 34,
+                "cy" : 449,
+                "h" : 36,
+                "w" : 36,
+                "x" : 16,
+                "y" : 431
+              },
+              {
+                "cx" : 112,
+                "cy" : 449,
+                "h" : 20,
+                "w" : 120,
+                "x" : 52,
+                "y" : 439
+              }
+            ],
+            "child_texts" : [
+              "",
+              "",
+              "改过 601"
+            ],
+            "layer_count" : 74,
+            "materialized" : true,
+            "ok" : true,
+            "row_index" : 600,
+            "row_rect" : {
+              "cx" : 96.5,
+              "cy" : 449,
+              "h" : 56,
+              "w" : 161,
+              "x" : 16,
+              "y" : 421
+            }
+          },
+          "probe_offscreen_row" : {
+            "child_rects" : [
+              {
+                "cx" : 96.5,
+                "cy" : -37823,
+                "h" : 56,
+                "w" : 161,
+                "x" : 16,
+                "y" : -37851
+              },
+              {
+                "cx" : 34,
+                "cy" : -37823,
+                "h" : 36,
+                "w" : 36,
+                "x" : 16,
+                "y" : -37841
+              },
+              {
+                "cx" : 112,
+                "cy" : -37823,
+                "h" : 20,
+                "w" : 120,
+                "x" : 52,
+                "y" : -37833
+              }
+            ],
+            "child_texts" : [
+              "<no-layer>",
+              "<no-layer>",
+              "<no-layer>"
+            ],
+            "layer_count" : 74,
+            "materialized" : false,
+            "ok" : true,
+            "row_index" : 2,
+            "row_rect" : {
+              "cx" : 96.5,
+              "cy" : -37823,
+              "h" : 56,
+              "w" : 161,
+              "x" : 16,
+              "y" : -37851
+            }
+          },
+          "runtime" : {
+            "l0_slots" : 0,
+            "l1_slots" : 4
+          },
+          "scroll_ms_total" : 13,
+          "up_stats" : {
+            "content_offset_y" : 0,
+            "is_virtual" : true,
+            "layer_count" : 44,
+            "layers_created" : 74,
+            "layers_dropped" : 0,
+            "layers_returned" : 1584,
+            "layers_reused" : 1554,
+            "materialized_row_list" : [
+              0,
+              1,
+              2,
+              3,
+              4,
+              5,
+              6,
+              7,
+              8,
+              9,
+              10,
+              11,
+              12,
+              13
+            ],
+            "materialized_rows" : 14,
+            "node_count" : 3002,
+            "ok" : true,
+            "pool_capacity" : 96,
+            "pool_size" : 30,
+            "recycle" : {
+              "acquire_events" : 542,
+              "demote_events" : 524,
+              "first_preload" : 0,
+              "last_preload" : 13,
+              "live" : 14,
+              "ok" : true,
+              "release_events" : 528,
+              "updates" : 61
+            },
+            "row_count" : 1000
+          },
+          "verdict" : "PASS"
+        },
+        "host_ms" : 100,
+        "items" : 1000,
+        "nodes" : 3002,
+        "note" : "1000 行虚拟化：挂载只物化 14 行 \/ 44 层 · 滚动 30 帧（↓269取\/259放 · ↑259取\/269放）· 建层 74 \/ 复用 1554",
+        "patch_count" : 74,
+        "request_bytes" : 0,
+        "serialize_ms" : 0,
+        "to_request_ms" : 0,
+        "total_ms" : 113,
+        "vue_ms" : 0
+      }
+    ],
+    "ceiling" : [
+
+    ],
+    "completed" : 1,
+    "frame_budget_ms" : 16.699999999999999,
+    "init_diag" : {
+      "errors" : [
+
+      ],
+      "stages" : [
+        "before-S2:15",
+        "after-S:30"
+      ]
+    },
+    "kind" : "logic-bench",
+    "notes" : [
+      "★四段分解：vue（响应式→重渲染→diff\/patch）\/ 适配器（拍平+折叠）\/ 序列化（JSON，即跨界成本）\/ 宿主（度量+布局+建层）",
+      "★★必须逐用例由宿主驱动：JSC 的 evaluateScript 不排空微任务，而 Vue 更新调度正是微任务",
+      "★A 组是规模扫描（12→1000 项），用于回答「边界成本随规模如何增长」",
+      "★F 组验证 Vue 的批处理：同 tick 100 次变更应合并为 1 次渲染（extra.renders）",
+      "★H 组对比 JSON 与扁平数值编码，直接支撑「是否值得上 JSI\/二进制通道」的决策"
+    ],
+    "result_count" : 1,
+    "runtime" : "JavaScriptCore（系统自带）",
+    "total_cases" : 1,
+    "viewport" : {
+      "height" : 844,
+      "width" : 390
+    }
+  },
+  "js_total" : 1,
+  "launch_diag" : {
+    "first_frame_ms" : -0,
+    "forced_style" : "Dark",
+    "interface_style" : "Dark",
+    "launch_screen_keys" : [
+
+    ]
+  },
+  "layer_count" : 74,
+  "layer_frames" : {
+    "0" : {
+      "h" : 64101,
+      "parentId" : -1,
+      "w" : 177,
+      "x" : 0,
+      "y" : 0
+    },
+    "1" : {
+      "h" : 29,
+      "parentId" : 0,
+      "w" : 161,
+      "x" : 16,
+      "y" : 60
+    },
+    "1601" : {
+      "h" : 56,
+      "parentId" : 0,
+      "w" : 161,
+      "x" : 16,
+      "y" : 34213
+    },
+    "1602" : {
+      "h" : 36,
+      "parentId" : 1601,
+      "w" : 36,
+      "x" : 0,
+      "y" : 10
+    },
+    "1603" : {
+      "h" : 20,
+      "parentId" : 1601,
+      "w" : 120,
+      "x" : 36,
+      "y" : 18
+    },
+    "1604" : {
+      "h" : 56,
+      "parentId" : 0,
+      "w" : 161,
+      "x" : 16,
+      "y" : 34277
+    },
+    "1605" : {
+      "h" : 36,
+      "parentId" : 1604,
+      "w" : 36,
+      "x" : 0,
+      "y" : 10
+    },
+    "1606" : {
+      "h" : 20,
+      "parentId" : 1604,
+      "w" : 120,
+      "x" : 36,
+      "y" : 18
+    },
+    "1607" : {
+      "h" : 56,
+      "parentId" : 0,
+      "w" : 161,
+      "x" : 16,
+      "y" : 34341
+    },
+    "1608" : {
+      "h" : 36,
+      "parentId" : 1607,
+      "w" : 36,
+      "x" : 0,
+      "y" : 10
+    },
+    "1609" : {
+      "h" : 20,
+      "parentId" : 1607,
+      "w" : 120,
+      "x" : 36,
+      "y" : 18
+    },
+    "1610" : {
+      "h" : 56,
+      "parentId" : 0,
+      "w" : 161,
+      "x" : 16,
+      "y" : 34405
+    },
+    "1611" : {
+      "h" : 36,
+      "parentId" : 1610,
+      "w" : 36,
+      "x" : 0,
+      "y" : 10
+    },
+    "1612" : {
+      "h" : 20,
+      "parentId" : 1610,
+      "w" : 120,
+      "x" : 36,
+      "y" : 18
+    },
+    "1613" : {
+      "h" : 56,
+      "parentId" : 0,
+      "w" : 161,
+      "x" : 16,
+      "y" : 34469
+    },
+    "1614" : {
+      "h" : 36,
+      "parentId" : 1613,
+      "w" : 36,
+      "x" : 0,
+      "y" : 10
+    },
+    "1615" : {
+      "h" : 20,
+      "parentId" : 1613,
+      "w" : 120,
+      "x" : 36,
+      "y" : 18
+    },
+    "1616" : {
+      "h" : 56,
+      "parentId" : 0,
+      "w" : 161,
+      "x" : 16,
+      "y" : 34533
+    },
+    "1617" : {
+      "h" : 36,
+      "parentId" : 1616,
+      "w" : 36,
+      "x" : 0,
+      "y" : 10
+    },
+    "1618" : {
+      "h" : 20,
+      "parentId" : 1616,
+      "w" : 120,
+      "x" : 36,
+      "y" : 18
+    },
+    "1619" : {
+      "h" : 56,
+      "parentId" : 0,
+      "w" : 161,
+      "x" : 16,
+      "y" : 34597
+    },
+    "1620" : {
+      "h" : 36,
+      "parentId" : 1619,
+      "w" : 36,
+      "x" : 0,
+      "y" : 10
+    },
+    "1621" : {
+      "h" : 20,
+      "parentId" : 1619,
+      "w" : 120,
+      "x" : 36,
+      "y" : 18
+    },
+    "1622" : {
+      "h" : 56,
+      "parentId" : 0,
+      "w" : 161,
+      "x" : 16,
+      "y" : 34661
+    },
+    "1623" : {
+      "h" : 36,
+      "parentId" : 1622,
+      "w" : 36,
+      "x" : 0,
+      "y" : 10
+    },
+    "1624" : {
+      "h" : 20,
+      "parentId" : 1622,
+      "w" : 120,
+      "x" : 36,
+      "y" : 18
+    },
+    "1625" : {
+      "h" : 56,
+      "parentId" : 0,
+      "w" : 161,
+      "x" : 16,
+      "y" : 34725
+    },
+    "1626" : {
+      "h" : 36,
+      "parentId" : 1625,
+      "w" : 36,
+      "x" : 0,
+      "y" : 10
+    },
+    "1627" : {
+      "h" : 20,
+      "parentId" : 1625,
+      "w" : 120,
+      "x" : 36,
+      "y" : 18
+    },
+    "1628" : {
+      "h" : 56,
+      "parentId" : 0,
+      "w" : 161,
+      "x" : 16,
+      "y" : 34789
+    },
+    "1629" : {
+      "h" : 36,
+      "parentId" : 1628,
+      "w" : 36,
+      "x" : 0,
+      "y" : 10
+    },
+    "1630" : {
+      "h" : 20,
+      "parentId" : 1628,
+      "w" : 120,
+      "x" : 36,
+      "y" : 18
+    },
+    "1631" : {
+      "h" : 56,
+      "parentId" : 0,
+      "w" : 161,
+      "x" : 16,
+      "y" : 34853
+    },
+    "1632" : {
+      "h" : 36,
+      "parentId" : 1631,
+      "w" : 36,
+      "x" : 0,
+      "y" : 10
+    },
+    "1633" : {
+      "h" : 20,
+      "parentId" : 1631,
+      "w" : 120,
+      "x" : 36,
+      "y" : 18
+    },
+    "1634" : {
+      "h" : 56,
+      "parentId" : 0,
+      "w" : 161,
+      "x" : 16,
+      "y" : 34917
+    },
+    "1635" : {
+      "h" : 36,
+      "parentId" : 1634,
+      "w" : 36,
+      "x" : 0,
+      "y" : 10
+    },
+    "1636" : {
+      "h" : 20,
+      "parentId" : 1634,
+      "w" : 120,
+      "x" : 36,
+      "y" : 18
+    },
+    "1637" : {
+      "h" : 56,
+      "parentId" : 0,
+      "w" : 161,
+      "x" : 16,
+      "y" : 34981
+    },
+    "1638" : {
+      "h" : 36,
+      "parentId" : 1637,
+      "w" : 36,
+      "x" : 0,
+      "y" : 10
+    },
+    "1639" : {
+      "h" : 20,
+      "parentId" : 1637,
+      "w" : 120,
+      "x" : 36,
+      "y" : 18
+    },
+    "1640" : {
+      "h" : 56,
+      "parentId" : 0,
+      "w" : 161,
+      "x" : 16,
+      "y" : 35045
+    },
+    "1641" : {
+      "h" : 36,
+      "parentId" : 1640,
+      "w" : 36,
+      "x" : 0,
+      "y" : 10
+    },
+    "1642" : {
+      "h" : 20,
+      "parentId" : 1640,
+      "w" : 120,
+      "x" : 36,
+      "y" : 18
+    },
+    "1643" : {
+      "h" : 56,
+      "parentId" : 0,
+      "w" : 161,
+      "x" : 16,
+      "y" : 35109
+    },
+    "1644" : {
+      "h" : 36,
+      "parentId" : 1643,
+      "w" : 36,
+      "x" : 0,
+      "y" : 10
+    },
+    "1645" : {
+      "h" : 20,
+      "parentId" : 1643,
+      "w" : 120,
+      "x" : 36,
+      "y" : 18
+    },
+    "1646" : {
+      "h" : 56,
+      "parentId" : 0,
+      "w" : 161,
+      "x" : 16,
+      "y" : 35173
+    },
+    "1647" : {
+      "h" : 36,
+      "parentId" : 1646,
+      "w" : 36,
+      "x" : 0,
+      "y" : 10
+    },
+    "1648" : {
+      "h" : 20,
+      "parentId" : 1646,
+      "w" : 120,
+      "x" : 36,
+      "y" : 18
+    },
+    "1649" : {
+      "h" : 56,
+      "parentId" : 0,
+      "w" : 161,
+      "x" : 16,
+      "y" : 35237
+    },
+    "1650" : {
+      "h" : 36,
+      "parentId" : 1649,
+      "w" : 36,
+      "x" : 0,
+      "y" : 10
+    },
+    "1651" : {
+      "h" : 20,
+      "parentId" : 1649,
+      "w" : 120,
+      "x" : 36,
+      "y" : 18
+    },
+    "1652" : {
+      "h" : 56,
+      "parentId" : 0,
+      "w" : 161,
+      "x" : 16,
+      "y" : 35301
+    },
+    "1653" : {
+      "h" : 36,
+      "parentId" : 1652,
+      "w" : 36,
+      "x" : 0,
+      "y" : 10
+    },
+    "1654" : {
+      "h" : 20,
+      "parentId" : 1652,
+      "w" : 120,
+      "x" : 36,
+      "y" : 18
+    },
+    "1655" : {
+      "h" : 56,
+      "parentId" : 0,
+      "w" : 161,
+      "x" : 16,
+      "y" : 35365
+    },
+    "1656" : {
+      "h" : 36,
+      "parentId" : 1655,
+      "w" : 36,
+      "x" : 0,
+      "y" : 10
+    },
+    "1657" : {
+      "h" : 20,
+      "parentId" : 1655,
+      "w" : 120,
+      "x" : 36,
+      "y" : 18
+    },
+    "1658" : {
+      "h" : 56,
+      "parentId" : 0,
+      "w" : 161,
+      "x" : 16,
+      "y" : 35429
+    },
+    "1659" : {
+      "h" : 36,
+      "parentId" : 1658,
+      "w" : 36,
+      "x" : 0,
+      "y" : 10
+    },
+    "1660" : {
+      "h" : 20,
+      "parentId" : 1658,
+      "w" : 120,
+      "x" : 36,
+      "y" : 18
+    },
+    "1661" : {
+      "h" : 56,
+      "parentId" : 0,
+      "w" : 161,
+      "x" : 16,
+      "y" : 35493
+    },
+    "1662" : {
+      "h" : 36,
+      "parentId" : 1661,
+      "w" : 36,
+      "x" : 0,
+      "y" : 10
+    },
+    "1663" : {
+      "h" : 20,
+      "parentId" : 1661,
+      "w" : 120,
+      "x" : 36,
+      "y" : 18
+    },
+    "1664" : {
+      "h" : 56,
+      "parentId" : 0,
+      "w" : 161,
+      "x" : 16,
+      "y" : 35557
+    },
+    "1665" : {
+      "h" : 36,
+      "parentId" : 1664,
+      "w" : 36,
+      "x" : 0,
+      "y" : 10
+    },
+    "1666" : {
+      "h" : 20,
+      "parentId" : 1664,
+      "w" : 120,
+      "x" : 36,
+      "y" : 18
+    },
+    "1667" : {
+      "h" : 56,
+      "parentId" : 0,
+      "w" : 161,
+      "x" : 16,
+      "y" : 35621
+    },
+    "1668" : {
+      "h" : 36,
+      "parentId" : 1667,
+      "w" : 36,
+      "x" : 0,
+      "y" : 10
+    },
+    "1669" : {
+      "h" : 20,
+      "parentId" : 1667,
+      "w" : 120,
+      "x" : 36,
+      "y" : 18
+    },
+    "1670" : {
+      "h" : 56,
+      "parentId" : 0,
+      "w" : 161,
+      "x" : 16,
+      "y" : 35685
+    },
+    "1671" : {
+      "h" : 36,
+      "parentId" : 1670,
+      "w" : 36,
+      "x" : 0,
+      "y" : 10
+    },
+    "1672" : {
+      "h" : 20,
+      "parentId" : 1670,
+      "w" : 120,
+      "x" : 36,
+      "y" : 18
+    }
+  },
+  "tree_hash" : "8cc34449"
+}

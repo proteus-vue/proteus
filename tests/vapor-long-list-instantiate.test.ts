@@ -153,4 +153,57 @@ describe('V11 · 长列表实例化（规模上去后的正确性与复杂度）
     }
     expect(roots, '应有唯一根').toBe(1)
   })
+
+  /* ─────────────── ★★虚拟化描述（宿主按行物化/回收的前提）─────────────── */
+
+  it('★★⑥ 虚拟化行表：行数/顺序/整行覆盖都正确（宿主按它物化 ⇒ 错一个就是错一层）', () => {
+    const { tpl, table } = build()
+    const N = 500
+    const rows = makeRows(N)
+    const data: Record<string, unknown> = { list: rows }
+    const inst = instantiateTemplate(tpl, { viewport: { width: 390, height: 844 }, read: (n) => data[n], table })
+
+    expect(inst.virtual, '单列表必须给出虚拟化描述').toBeTruthy()
+    const vr = inst.virtual!.rows
+    expect(vr.length).toBe(N)
+    // ★行号必须**升序**（宿主对可见区做二分查找的前提）
+    expect(vr.map((r) => r.index)).toEqual(Array.from({ length: N }, (_, i) => i))
+    // ★行键来自数据（订阅表的 itemKeyField = id）
+    expect(vr[0]!.key).toBe('1')
+    expect(vr[N - 1]!.key).toBe(String(N))
+
+    const rowSubtree = tpl.lists[0]!.subtreeIds.length
+    const instIds = new Set(inst.nodes.map((n) => n.id))
+    const seen = new Set<number>()
+    for (const r of vr) {
+      expect(r.ids.length, `行 ${r.index} 的节点数应等于行子树规模`).toBe(rowSubtree)
+      // 行根必须是该行 ids 的**首个**（宿主按 ids 顺序建层，父必须在前）
+      expect(r.ids[0], `行 ${r.index} 的 ids[0] 应为行根`).toBe(r.root)
+      // 整行覆盖：每个 id 真实存在、且**不跨行复用**
+      for (const id of r.ids) {
+        expect(instIds.has(id), `行 ${r.index} 的节点 ${id} 不在实例树里`).toBe(true)
+        expect(seen.has(id), `节点 ${id} 同时属于多行（行集合重叠 ⇒ 宿主会重复建/错杀层）`).toBe(false)
+        seen.add(id)
+      }
+    }
+    // ★行节点总数 + 静态节点 = 全树（不重不漏的定量判据）
+    const staticNodes = tpl.nodes.filter((n) => !tpl.lists[0]!.subtreeIds.includes(n.id)).length
+    expect(seen.size + staticNodes).toBe(inst.nodes.length)
+  })
+
+  it('★★⑦ 破坏性：若行表只含行根（= 宿主自己按 listId 分组的做法），⑥ 的覆盖判据必须变红', () => {
+    const { tpl, table } = build()
+    const rows = makeRows(20)
+    const data: Record<string, unknown> = { list: rows }
+    const inst = instantiateTemplate(tpl, { viewport: { width: 390, height: 844 }, read: (n) => data[n], table })
+    const rowSubtree = tpl.lists[0]!.subtreeIds.length
+    // ⇒ 反例：宿主自行按 listId 分组 —— 行内子节点不带 listId ⇒ 只能拿到行根
+    const rootOnly = inst.virtual!.rows.map((r) => ({ ...r, ids: [r.root] }))
+    expect(rootOnly.every((r) => r.ids.length === 1), '反例构造应确实只含行根').toBe(true)
+    // ⇒ 用反例去跑⑥的"整行覆盖"判据，必须失败（证明该判据有区分力）
+    const covered = new Set(rootOnly.flatMap((r) => r.ids))
+    const expected = inst.virtual!.rows.flatMap((r) => r.ids)
+    expect(covered.size, '只拿行根覆盖不到整行 ⇒ ⑥ 的判据会红').toBeLessThan(expected.length)
+    expect(expected.length / rowSubtree, '行表应覆盖全部行的全部节点').toBe(rows.length)
+  })
 })

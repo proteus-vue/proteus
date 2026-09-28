@@ -1957,20 +1957,20 @@
   },
   "host_node_count" : 217,
   "host_timing_last" : {
-    "build_layers_ms" : 3.1139850616455078,
-    "host_total_ms" : 12.597918510437012,
-    "layout_ms" : 1.6890764236450195,
-    "measure_ms" : 5.3620338439941406
+    "build_layers_ms" : 3.2221078872680664,
+    "host_total_ms" : 14.850020408630371,
+    "layout_ms" : 1.8280744552612305,
+    "measure_ms" : 6.6549777984619141
   },
   "js_completed" : 1,
   "js_ok" : true,
   "js_report" : {
-    "build_id" : "34559ee9-190533",
+    "build_id" : "cf6899ae-195312",
     "case_filter" : [
       "V10"
     ],
     "case_timings_ms" : {
-      "V10_paint_channel" : 82
+      "V10_paint_channel" : 88
     },
     "cases" : [
       {
@@ -1988,8 +1988,9 @@
             "in_bytes" : 166,
             "incremental" : true,
             "ok" : true,
+            "paint_deferred_to_source" : 0,
             "paint_layers_applied" : 1,
-            "paint_ms" : 0.050000000000000003,
+            "paint_ms" : 0.070000000000000007,
             "paint_patches" : 1,
             "path" : "paintPatches"
           },
@@ -2000,7 +2001,7 @@
           "row_id" : 6,
           "verdict" : "PASS"
         },
-        "host_ms" : 0.050000000000000003,
+        "host_ms" : 0.070000000000000007,
         "items" : 30,
         "nodes" : 217,
         "note" : "绘制通道：改行底色 → paint 1 条 · 宿主应用 1 层 · 像素 #00FF00",
@@ -2023,7 +2024,7 @@
       ],
       "stages" : [
         "before-S2:15",
-        "after-S:28"
+        "after-S:30"
       ]
     },
     "kind" : "logic-bench",
@@ -3573,5 +3574,5 @@
       "y" : 0
     }
   },
-  "tree_hash" : "a5c8b5b8"
+  "tree_hash" : "8b7e8e4c"
 }

@@ -65,6 +65,20 @@ func proteus_layout_rects_bin(_ handle: UInt64, _ outLen: UnsafeMutablePointer<U
 @_silgen_name("proteus_rects_free")
 func proteus_rects_free(_ ptr: UnsafeMutablePointer<UInt8>, _ len: UInt32)
 
+/* ★★列表复用池（§12.6）：核心给**决策**（哪些行该 acquire/release），宿主执行**动作** */
+
+@_silgen_name("proteus_recycle_create")
+func proteus_recycle_create(_ itemCount: UInt32, _ leadingRows: UInt32, _ followingRows: UInt32) -> UInt64
+
+@_silgen_name("proteus_recycle_update")
+func proteus_recycle_update(_ handle: UInt64, _ firstVisible: UInt32, _ lastVisible: UInt32) -> UnsafeMutablePointer<CChar>
+
+@_silgen_name("proteus_recycle_stats")
+func proteus_recycle_stats(_ handle: UInt64) -> UnsafeMutablePointer<CChar>
+
+@_silgen_name("proteus_recycle_destroy")
+func proteus_recycle_destroy(_ handle: UInt64)
+
 func takeCString(_ ptr: UnsafeMutablePointer<CChar>) -> String {
     defer { proteus_layout_free_string(ptr) }
     return String(cString: ptr)
@@ -127,12 +141,41 @@ func physFootprintMB() -> Double {
     ///     以字符串返回微秒值（字符串而非 Double：避免 JS Number 的 53 位精度在
     ///     大时间戳上损失亚微秒分辨率）。
     func nowUs() -> String
+    /// ★★**虚拟化挂载**（§12.5 materialize · §12.7 P1）：整棵树都进核心（几何/命中口径不变），
+    ///   但**只物化可见区 + 预加载区的行**的 CALayer；行进出由核心复用池的决策驱动。
+    ///
+    /// 入参：`{viewport, nodes, textMeasures?, rows:[{index,key,root,ids}], poolCapacity?}`
+    ///   `rows` 来自 `instantiateTemplate` 的 `virtual.rows`（**整行节点集合**——
+    ///   宿主自己按 listId 分组只能拿到行根，见该字段注释）。
+    ///
+    /// 出参：`{ok, node_count, layer_count, materialized_rows, created, reused, ...}`
+    ///
+    /// ★为何另开入口（而不是给 mount 加开关）：全量挂载的读数（V6/V11）已进历史基线，
+    ///   同一入口里改语义会让**旧读数与新读数不可比**（本仓纪律：改变已发布读数必须显式）。
+    func mountVirtual(_ requestJson: String) -> String
+    /// ★★虚拟化滚动：**像素量**（dx/dy）→ 宿主换算可见行 → 向核心复用池要决策（acquire/release）
+    ///   → 执行层物化/回收 → 返回本帧动作明细（判据：`acquired`/`released` 与复用池对账）
+    func scrollRows(_ dx: Double, _ dy: Double) -> String
+    /// ★★虚拟化读数（层数/建层数/复用数/池大小/已物化行）——复用池是否真的在起作用的直接证据
+    func virtualStats() -> String
+    /// 设置层池容量（`0` ⇒ 完全不复用）——**破坏性验证**用：关掉复用，判据必须变红
+    func setPoolCapacity(_ n: Double) -> String
     /// ★V4：滚动视图（dx/dy 像素）——触发 layoutSubviews → 补刷已滚入的待更新层
     ///
     /// 【为什么放在**容器视图**上而不是滚动视图上】本自绘层树不用 UIScrollView
     ///   （滚动由 native-host 跟随 + 根层 bounds 平移表达）⇒ 用 bounds.origin 平移即可触发
     ///   `layoutSubviews`，与真实滚动同一条代码路径。
     func scrollBy(_ dx: Double, _ dy: Double) -> String
+    /// ★★**虚拟化探针**（坐标必须来自几何推导，不手算——本仓纪律）
+    ///
+    /// 入参：行号。出参：`{ok, materialized, row_rect(屏幕坐标), child_rects(屏幕坐标数组)}`
+    ///
+    /// 【为什么必须有（本仓的坐标纪律）】像素验证要用"行内某元素的中心点"采样——
+    ///   任何手算坐标都会随样式/字重/行高变化而错位（本仓已因手算坐标翻车 3 次）。
+    ///   ⇒ 由宿主从**核心几何 + 内容偏移**算出屏幕坐标，JS 只负责采样。
+    ///   `materialized: false` 时 rect 仍给出（**核心几何是全量的**）——这本身就是判据：
+    ///   屏外的行"有几何、无层"。 */
+    func virtualProbe(_ rowIndex: Double) -> String
     /// ★V4：待补刷统计（诊断 + 滚动用例的判据）
     func pendingStats() -> String
     /// ★★V5：**批量像素采样**（渲染一次读多点）——像素级验证的判据
@@ -143,7 +186,11 @@ func physFootprintMB() -> Double {
     ///
     /// 入参：`[{"x":10,"y":100}, ...]`（屏幕坐标，逻辑点）
     /// 出参：`{"ok":true,"pixels":["#RRGGBB", ...]}`（与入参同序）
+    ///   ★格式由**本函数显式声明**（byteOrder32Big|premultipliedLast）⇒ 不再依赖系统给的字节序；
+    ///     装置自检见 `pixelFormatSelfTest()`（**像素判据的前置**，本轮 R/B 互换就是它抓出来的）。
     func samplePixels(_ json: String) -> String
+    /// ★★像素格式自检（三色标定）——测量装置必须先自测（本仓纪律）
+    func pixelFormatSelfTest() -> String
     /// ★★V9：**注入一次 tap**（走与真实触摸**同一条链**：`emitGesture` → 核心命中 → JS 派发）
     ///
     /// 【为什么需要它（诚实边界）】`touchesBegan/Ended` 是 UIKit 的 UI 事件，**JS 无法伪造**
@@ -911,50 +958,72 @@ final class SelfDrawView: UIView {
     /// - Returns: 实际应用的层数（诊断读数：证明 paint 通道真的生效）
     func applyPaintPatches(_ patches: [[String: Any]]) -> Int {
         var applied = 0
+        var deferred = 0
         CATransaction.begin()
         CATransaction.setDisableActions(true)
         for p in patches {
             guard let id = p["id"] as? Int, let paint = p["paint"] as? [String: Any] else { continue }
-            guard let layer = layersById[id] else { continue }
-            // ① 背景色（CALayer）
-            if let bgAny = paint["backgroundColor"] {
-                layer.backgroundColor = (bgAny as? String).flatMap(parseHexColor)?.cgColor
-            }
-            // ② 文本层专有：string / 字号 / 字重 / 前景色
-            if let tl = layer as? CATextLayer {
-                if let colorAny = paint["color"] {
-                    tl.foregroundColor = (colorAny as? String).flatMap(parseHexColor)?.cgColor
-                        ?? UIColor.white.cgColor
+            guard let layer = layersById[id] else {
+                // ★★虚拟化：层不存在（屏外未物化）⇒ 写进**真源**，物化时自然带上
+                //
+                // 【为什么不能直接跳过（本仓纪律：更新与物化解耦）】跳过 ⇒ 滚入时
+                //   该行显示**旧颜色**（几何/文本都对，只有颜色错）⇒ 只有像素比对能发现。
+                if nodesById[id] != nil {
+                    var m = nodesById[id]!
+                    for (k, v) in paint { m[k] = v }
+                    nodesById[id] = m
+                    deferred += 1
                 }
-                let fs = (paint["fontSize"] as? CGFloat) ?? tl.fontSize
-                let fw = (paint["fontWeight"] as? CGFloat) ?? 400
-                if paint["fontSize"] != nil || paint["fontWeight"] != nil {
-                    let ufont = SelfDrawBridge.font(size: fs, weight: fw)
-                    // ★字体变了 ⇒ 必须同时更新 `font` 与 `fontSize`（CATextLayer 两者独立）
-                    tl.font = CGFont(ufont.fontName as CFString)
-                    tl.fontSize = fs
-                }
+                continue
             }
-            // ③ 圆角（null ⇒ 归零）
-            if let brAny = paint["borderRadius"] {
-                let r = (brAny as? CGFloat) ?? 0
-                layer.cornerRadius = r
-                layer.masksToBounds = r > 0
-            }
-            // ④ 透明度
-            if let opAny = paint["opacity"] {
-                let op = (opAny as? CGFloat) ?? 1
-                layer.opacity = Float(op)
-            }
-            // ⑤ 更新 meta（后续度量/诊断读它——保持"层 = meta"一致）
-            var m = metaByNodeId[id] ?? [:]
-            for (k, v) in paint where !(v is NSNull) { m[k] = v }
-            for (k, v) in paint where v is NSNull { m.removeValue(forKey: k) }
-            metaByNodeId[id] = m
+            configurePaint(layer, paint: paint, id: id)
             applied += 1
         }
         CATransaction.commit()
+        lastPaintDeferred = deferred
         return applied
+    }
+
+    /// ★最近一次 paint 补丁里**因未物化而落真源**的条数（诊断：证明"屏外不被丢弃"）
+    private(set) var lastPaintDeferred = 0
+
+    /// 把 paint 快照应用到层上（**同一语义一处实现**：即时应用与物化时都走它）
+    private func configurePaint(_ layer: CALayer, paint: [String: Any], id: Int) {
+        // ① 背景色（CALayer）
+        if let bgAny = paint["backgroundColor"] {
+            layer.backgroundColor = (bgAny as? String).flatMap(parseHexColor)?.cgColor
+        }
+        // ② 文本层专有：string / 字号 / 字重 / 前景色
+        if let tl = layer as? CATextLayer {
+            if let colorAny = paint["color"] {
+                tl.foregroundColor = (colorAny as? String).flatMap(parseHexColor)?.cgColor
+                    ?? UIColor.white.cgColor
+            }
+            let fs = (paint["fontSize"] as? CGFloat) ?? tl.fontSize
+            let fw = (paint["fontWeight"] as? CGFloat) ?? 400
+            if paint["fontSize"] != nil || paint["fontWeight"] != nil {
+                let ufont = SelfDrawBridge.font(size: fs, weight: fw)
+                // ★字体变了 ⇒ 必须同时更新 `font` 与 `fontSize`（CATextLayer 两者独立）
+                tl.font = CGFont(ufont.fontName as CFString)
+                tl.fontSize = fs
+            }
+        }
+        // ③ 圆角（null ⇒ 归零）
+        if let brAny = paint["borderRadius"] {
+            let r = (brAny as? CGFloat) ?? 0
+            layer.cornerRadius = r
+            layer.masksToBounds = r > 0
+        }
+        // ④ 透明度
+        if let opAny = paint["opacity"] {
+            let op = (opAny as? CGFloat) ?? 1
+            layer.opacity = Float(op)
+        }
+        // ⑤ 更新 meta（后续度量/诊断读它——保持"层 = meta"一致）
+        var m = metaByNodeId[id] ?? [:]
+        for (k, v) in paint where !(v is NSNull) { m[k] = v }
+        for (k, v) in paint where v is NSNull { m.removeValue(forKey: k) }
+        metaByNodeId[id] = m
     }
 
     /// ★★**层序对账（对真实层序）**：把「CALayer 子层顺序」与「核心的 children 顺序」比较
@@ -1026,6 +1095,437 @@ final class SelfDrawView: UIView {
         try? data.write(to: url)
         return url.path
     }
+
+    /* ═══════════════════ ★★虚拟化：按行物化 / 回收 layer（§12.5 materialize · §12.7 P1） ═══════════════════ */
+
+    /// 一行（虚拟化的最小粒度）——来自实例化产物的 `virtual.rows`
+    struct VirtualRow {
+        let index: Int
+        let key: String
+        let root: Int
+        /// 该行全部节点 id（**父在前** ⇒ 可顺序建层）
+        let ids: [Int]
+    }
+
+    /// 行表（按行号升序——宿主对可见区做二分/扫描的前提）
+    private var virtualRows: [VirtualRow] = []
+    /// 行根节点 id → 行号（插入定位用：兄弟中找"下一个更大的行号"）
+    private var rowIndexByRoot: [Int: Int] = [:]
+    /// 任意行内节点 id → 行号（回收时按节点找行）
+    private var rowOfNode: [Int: Int] = [:]
+    /// 已物化的行号集合（**池的账本**：acquire/release 的作用域）
+    private var materializedRows = Set<Int>()
+    /// ★★**层对象池**（free list）——release 的行把层**归还**，acquire 的行优先取用
+    private var layerPool: [CALayer] = []
+    /// 池容量（可由用例调小做**破坏性验证**：容量 0 ⇒ 复用必然发生不了）
+    private(set) var layerPoolCapacity = 96
+    func setLayerPoolCapacity(_ n: Int) {
+        layerPoolCapacity = max(0, n)
+        if layerPool.count > layerPoolCapacity {
+            layerPool.removeLast(layerPool.count - layerPoolCapacity)
+        }
+    }
+    private(set) var layersCreated = 0
+    private(set) var layersReused = 0
+    /// 归还进池的次数（与 reuse 对照：**归还 > 0 而复用 = 0** 说明池没起作用）
+    private(set) var layersReturned = 0
+    /// 池满被丢弃的层数（诊断"池容量是否成为瓶颈"）
+    private(set) var layersDropped = 0
+    /// 节点 id → 节点规格（物化时建层/填内容用；**虚拟化下这是内容的唯一真源**）
+    private var nodesById: [Int: [String: Any]] = [:]
+    /// 节点 id → 绝对 rect（物化时设帧用；与核心同口径）
+    private var nodeRects: [Int: CGRect] = [:]
+    /// 行表状态下测得的**物化事件**读数（供 A/B 与判据）
+    private(set) var lastMaterializeFrontier = 0
+
+    var isVirtual: Bool { !virtualRows.isEmpty }
+
+    /// 初始化虚拟化（由桥在 mountVirtual 里调用一次）
+    func setupVirtual(rows: [VirtualRow], nodes: [[String: Any]], rects: [Int: CGRect], poolCapacity: Int) {
+        virtualRows = rows.sorted { $0.index < $1.index }
+        rowIndexByRoot = [:]
+        rowOfNode = [:]
+        for r in virtualRows {
+            rowIndexByRoot[r.root] = r.index
+            for id in r.ids { rowOfNode[id] = r.index }
+        }
+        nodesById = [:]
+        for n in nodes {
+            if let id = n["id"] as? Int { nodesById[id] = n }
+        }
+        nodeRects = rects
+        layerPoolCapacity = max(0, poolCapacity)
+        layerPool.removeAll()
+        materializedRows.removeAll()
+        layersCreated = 0
+        layersReused = 0
+        layersReturned = 0
+        layersDropped = 0
+    }
+
+    /// 更新虚拟化下的**真源**（**不触碰层**）——未物化的行在下次物化时自然拿到新值
+    ///
+    /// 【为什么必须有（虚拟化最容易出的静默错）】行在视口外时若"更新被丢弃"，
+    ///   滚入时会显示**旧内容/旧几何**——而所有几何断言都对着核心（正确的）⇒ 全绿。
+    ///   ⇒ 纪律：**更新必须落到真源（本表），与是否物化解耦**。
+    func updateVirtualSource(changed: [(id: Int, abs: CGRect)], textUpdates: [String: Any]) {
+        for c in changed {
+            nodeRects[c.id] = c.abs
+        }
+        for (k, v) in textUpdates {
+            guard let id = Int(k), let t = v as? String else { continue }
+            nodesById[id]?["text"] = t
+        }
+    }
+
+    /// ★从核心几何 + 内容偏移推导**可见行区间**（不假设行高——行高由核心算）
+    ///
+    /// 【为什么用几何推导而不是 `offsetY / rowHeight`】行高在本仓可被样式/文本改变
+    ///   （flexShrink、字重、换行）⇒ 任何"常量行高"的假设都会在某个用例上错位。
+    ///   本函数扫描行根 rect（行表有序）⇒ 与核心始终同口径。
+    func visibleRowRange() -> (first: Int, last: Int)? {
+        guard !virtualRows.isEmpty else { return nil }
+        let top = contentOffset.y
+        let bottom = contentOffset.y + bounds.height
+        var first = -1
+        var last = -1
+        for r in virtualRows {
+            guard let rect = nodeRects[r.root] else { continue }
+            if rect.maxY < top { continue }        // 完全在视口上方
+            if rect.minY > bottom { break }        // 行号有序 ⇒ 后面都在下方
+            if first < 0 { first = r.index }
+            last = r.index
+        }
+        if first < 0 {   // 全空（视口落在了列表外）⇒ 取最近的一行，避免 acquire 空集
+            let nearest = virtualRows.min(by: { abs(($0.index == 0 ? 0 : nodeRects[$0.root]?.minY ?? 0) - top)
+                                              < abs(($1.index == 0 ? 0 : nodeRects[$1.root]?.minY ?? 0) - top) })
+            return nearest.map { ($0.index, $0.index) }
+        }
+        return (first, last)
+    }
+
+    /// 在兄弟层（父的已物化子层）中找到**应插在**第 `index` 行之前的位置
+    ///
+    /// 【为什么必须做（层序 = 绘制顺序 = 命中顺序）】`addSublayer` 恒为追加 ⇒
+    ///   乱序 acquire（回滚时先补下面的行）会让**层序与核心 children 序不一致**
+    ///   ⇒ z-order/重叠绘制/命中测试与核心不符，且几何断言发现不了（本仓已踩过同款）。
+    private func insertRowLayer(_ layer: CALayer, rowIndex: Int, parentId: Int) {
+        let parentLayer: CALayer = layersById[parentId] ?? self.layer
+        let sibs = childrenById[parentId] ?? []
+        var inserted = false
+        for sid in sibs {
+            // 兄弟里第一个"行号更大"的行根 ⇒ 插到它前面
+            if let si = rowIndexByRoot[sid], si > rowIndex, let sl = layersById[sid] {
+                parentLayer.insertSublayer(layer, below: sl)
+                inserted = true
+                break
+            }
+        }
+        if !inserted { parentLayer.addSublayer(layer) }
+        _ = parentId
+    }
+
+    /// 物化一行（建/取层 + 填内容 + 设帧 + 插到正确层序位）
+    @discardableResult
+    func materializeRow(_ rowIndex: Int) -> Int {
+        guard let row = virtualRows.first(where: { $0.index == rowIndex }) else { return 0 }
+        guard !materializedRows.contains(rowIndex) else { return 0 }
+        CATransaction.begin()
+        CATransaction.setDisableActions(true)
+        var made = 0
+        for id in row.ids {
+            guard let spec = nodesById[id] else { continue }
+            guard layersById[id] == nil else { continue }   // 已物化（防御：重复 acquire）
+            let style = SelfDrawView.styleOf(spec)
+            let (layer, reused) = acquireLayer(style: style)
+            if !reused { made += 1 }
+            // ★帧 = 节点绝对 rect − 父绝对原点（父的 rect 也在核心几何里 ⇒ 与物化顺序无关）
+            let abs = nodeRects[id] ?? .zero
+            let pid = (spec["parentId"] as? Int) ?? -1
+            let parentOrigin = pid >= 0 ? (nodeRects[pid]?.origin ?? .zero) : .zero
+            let f = CGRect(x: abs.minX - parentOrigin.x, y: abs.minY - parentOrigin.y,
+                           width: abs.width, height: abs.height)
+            layer.frame = f
+            if let pidAny = spec["parentId"] as? Int, pidAny >= 0 {
+                if id == row.root {
+                    insertRowLayer(layer, rowIndex: rowIndex, parentId: pidAny)
+                } else {
+                    (layersById[pidAny] ?? self.layer).addSublayer(layer)
+                }
+                childrenById[pidAny, default: []].append(id)
+                parentById[id] = pidAny
+            } else {
+                self.layer.addSublayer(layer)
+                parentById[id] = -1
+            }
+            layersById[id] = layer
+            depthById[id] = depthOf(id)
+            builtFrames[id] = f
+            builtParents[id] = pid
+            rectsByNodeId[id] = abs
+            metaByNodeId[id] = style
+            layerNodes.append(layer)
+            made += 0
+        }
+        materializedRows.insert(rowIndex)
+        builtLayerCount = layerNodes.count
+        CATransaction.commit()
+        return made
+    }
+
+    /// 回收一行（层归还池 + 清空该行全部簿记）
+    @discardableResult
+    func dematerializeRow(_ rowIndex: Int) -> Int {
+        guard let row = virtualRows.first(where: { $0.index == rowIndex }),
+              materializedRows.contains(rowIndex) else { return 0 }
+        CATransaction.begin()
+        CATransaction.setDisableActions(true)
+        var returned = 0
+        // ★父 id 先取（下面会把表清掉）
+        let rootParent = parentById[row.root] ?? (nodesById[row.root]?["parentId"] as? Int) ?? -1
+        // 逆序回收（子先于父：避免父的 childrenById 被提前清空导致子找不到落点）
+        for id in row.ids.reversed() {
+            if let l = layersById[id] {
+                l.removeFromSuperlayer()
+                if layerPool.count < layerPoolCapacity {
+                    layerPool.append(l)
+                    layersReturned += 1
+                    returned += 1
+                } else {
+                    layersDropped += 1
+                }
+                layerNodes.removeAll { $0 === l }
+            }
+            layersById.removeValue(forKey: id)
+            depthById.removeValue(forKey: id)
+            parentById.removeValue(forKey: id)
+            childrenById.removeValue(forKey: id)
+            builtFrames.removeValue(forKey: id)
+            builtParents.removeValue(forKey: id)
+            rectsByNodeId.removeValue(forKey: id)
+            metaByNodeId.removeValue(forKey: id)
+            absOriginByNodeId.removeValue(forKey: id)
+            pendingOffscreen.removeValue(forKey: id)
+        }
+        if rootParent >= 0, var sibs = childrenById[rootParent] {
+            sibs.removeAll { $0 == row.root }
+            childrenById[rootParent] = sibs
+        }
+        materializedRows.remove(rowIndex)
+        builtLayerCount = layerNodes.count
+        CATransaction.commit()
+        return returned
+    }
+
+    /// 取一个层：**同类型**优先从池里复用（类型不匹配不复用——CATextLayer 当容器会残留 string）
+    private func acquireLayer(style: [String: Any]) -> (CALayer, Bool) {
+        let wantsText = !((style["text"] as? String) ?? "").isEmpty
+        if let i = layerPool.firstIndex(where: { wantsText ? ($0 is CATextLayer) : !($0 is CATextLayer) }) {
+            let l = layerPool.remove(at: i)
+            configureLayer(l, style: style)
+            layersReused += 1
+            return (l, true)
+        }
+        layersCreated += 1
+        return (makeLayer(style: style), false)
+    }
+
+    /// 把节点规格里的绘制字段取出来（与全量路径同款；单一实现避免分叉）
+    static func styleOf(_ n: [String: Any]) -> [String: Any] {
+        var style: [String: Any] = [:]
+        for k in ["backgroundColor", "color", "text"] {
+            if let v = n[k] as? String { style[k] = v }
+        }
+        if let fs = n["fontSize"] as? Double { style["fontSize"] = CGFloat(fs) }
+        if let fs = n["fontSize"] as? CGFloat { style["fontSize"] = fs }
+        if let fw = n["fontWeight"] as? Double { style["fontWeight"] = CGFloat(fw) }
+        if let fw = n["fontWeight"] as? CGFloat { style["fontWeight"] = fw }
+        if let br = n["borderRadius"] as? Double { style["borderRadius"] = CGFloat(br) }
+        if let br = n["borderRadius"] as? CGFloat { style["borderRadius"] = br }
+        return style
+    }
+
+    /// ★★**复用层时必须清空全部可绘制属性**（本仓纪律：复用 = 完全重配，不是"覆盖部分字段"）
+    ///
+    /// 【为什么（复用池最容易出的静默错）】被复用的层带着**上一个节点的外观**：
+    ///   容器层若原带 `cornerRadius=18`，而新节点没有 borderRadius ⇒ 若不清零，
+    ///   新行会**多出圆角**（几何全对、像素错）——而"多圆角"这种差异只有像素比对能发现。
+    private func configureLayer(_ layer: CALayer, style: [String: Any]) {
+        let text = (style["text"] as? String) ?? ""
+        if let tl = layer as? CATextLayer {
+            if text.isEmpty {
+                tl.string = ""            // 防御：文本层被复用成容器（类型已在 acquireLayer 过滤）
+            } else {
+                let fs = (style["fontSize"] as? CGFloat) ?? 14
+                let fw = (style["fontWeight"] as? CGFloat) ?? 400
+                tl.string = text
+                tl.font = CGFont(SelfDrawBridge.font(size: fs, weight: fw).fontName as CFString)
+                tl.fontSize = fs
+                tl.foregroundColor = (style["color"] as? String).flatMap(parseHexColor)?.cgColor
+                    ?? UIColor.white.cgColor
+                tl.alignmentMode = .left
+                tl.truncationMode = .end
+                tl.isWrapped = false
+                tl.contentsScale = UIScreen.main.scale
+            }
+        }
+        // 非文本属性：**缺省即清零**（不留上一个节点的痕迹）
+        layer.backgroundColor = (style["backgroundColor"] as? String).flatMap(parseHexColor)?.cgColor
+        let r = (style["borderRadius"] as? CGFloat) ?? 0
+        layer.cornerRadius = r
+        layer.masksToBounds = r > 0
+        layer.opacity = 1
+    }
+
+    /// 虚拟化读数（判据 + 诊断）
+    func virtualStats() -> [String: Any] {
+        [
+            "is_virtual": isVirtual,
+            "node_count": nodesById.count,
+            "row_count": virtualRows.count,
+            "materialized_rows": materializedRows.count,
+            "materialized_row_list": materializedRows.sorted().prefix(40).map { $0 },
+            "layer_count": layerNodes.count,
+            "layers_created": layersCreated,
+            "layers_reused": layersReused,
+            "layers_returned": layersReturned,
+            "layers_dropped": layersDropped,
+            "pool_size": layerPool.count,
+            "pool_capacity": layerPoolCapacity,
+            "content_offset_y": contentOffset.y,
+        ]
+    }
+
+    /// 某行根节点在**屏幕坐标**下的 rect（供像素采样——坐标由几何推导，不手算）
+    func rowScreenRect(_ rowIndex: Int) -> CGRect? {
+        guard let row = virtualRows.first(where: { $0.index == rowIndex }),
+              let abs = nodeRects[row.root] else { return nil }
+        return abs.offsetBy(dx: -contentOffset.x, dy: -contentOffset.y)
+    }
+
+    /// 某行内**指定序号节点**（`ids` 下标）在屏幕坐标下的 rect —— 例如 `1` 通常是行内首个绘制元素
+    func rowChildScreenRect(_ rowIndex: Int, childAt: Int) -> CGRect? {
+        guard let row = virtualRows.first(where: { $0.index == rowIndex }),
+              childAt >= 0, childAt < row.ids.count,
+              let abs = nodeRects[row.ids[childAt]] else { return nil }
+        return abs.offsetBy(dx: -contentOffset.x, dy: -contentOffset.y)
+    }
+
+    /// 该行是否已物化（像素判据的前置：未物化的行采样必然是空白）
+    func isRowMaterialized(_ rowIndex: Int) -> Bool { materializedRows.contains(rowIndex) }
+
+    /// 某行的节点数（探针按 `0..<n` 枚举行内元素）
+    func rowNodeCount(_ rowIndex: Int) -> Int {
+        virtualRows.first(where: { $0.index == rowIndex })?.ids.count ?? 0
+    }
+
+    /// ★某行各节点的**实际呈现文本**（层上的 `string`，不是真源）——验证"复用后是否串内容"
+    ///
+    /// 【为什么读层而不读真源（判据强度）】复用池最经典的静默错是**串内容**：
+    ///   层被复用了，但文本/颜色没被完全重配 ⇒ 显示上一行的内容
+    ///   （几何/结构全对，只有肉眼/像素能发现）。读真源只会读到我刚写进去的值 ⇒ **空判据**。
+    func rowNodeTexts(_ rowIndex: Int) -> [String] {
+        guard let row = virtualRows.first(where: { $0.index == rowIndex }) else { return [] }
+        return row.ids.map { id in
+            if let tl = layersById[id] as? CATextLayer { return tl.string as? String ?? "" }
+            // 未物化 ⇒ 明确标注（不返回真源值——那会掩盖"层根本没建"）
+            return layersById[id] == nil ? "<no-layer>" : ""
+        }
+    }
+
+    /// ★物化**静态部分**（不属于任何行的节点：根容器 / 标题 / 页脚 …）
+    ///
+    /// 【为什么必须（虚拟化最容易出的层树错误）】行层挂到 `layersById[pid] ?? self.layer`——
+    ///   若容器从未物化，行层会**挂到根层**（几何仍对，因为帧是从核心 rect 算的），
+    ///   但**层序**变成"行先于静态节点"或反之 ⇒ 与核心 children 序不符
+    ///   ⇒ 重叠绘制/z-order 与核心不一致（本仓踩过同款，几何断言发现不了）。
+    ///   ⇒ 静态节点（数量恒定且极少）直接全量物化。
+    ///
+    /// - Parameter nodes: 实例化产物的完整节点表（**父在前**）
+    @discardableResult
+    func materializeStaticNodes(_ nodes: [[String: Any]]) -> Int {
+        CATransaction.begin()
+        CATransaction.setDisableActions(true)
+        var made = 0
+        for n in nodes {
+            guard let id = n["id"] as? Int, rowOfNode[id] == nil, layersById[id] == nil else { continue }
+            let style = SelfDrawView.styleOf(n)
+            let (layer, reused) = acquireLayer(style: style)
+            if !reused { made += 1 }
+            let abs = nodeRects[id] ?? .zero
+            let pid = (n["parentId"] as? Int) ?? -1
+            let parentOrigin = pid >= 0 ? (nodeRects[pid]?.origin ?? .zero) : .zero
+            let f = CGRect(x: abs.minX - parentOrigin.x, y: abs.minY - parentOrigin.y,
+                           width: abs.width, height: abs.height)
+            layer.frame = f
+            if pid >= 0 {
+                (layersById[pid] ?? self.layer).addSublayer(layer)
+                childrenById[pid, default: []].append(id)
+            } else {
+                self.layer.addSublayer(layer)
+            }
+            layersById[id] = layer
+            parentById[id] = pid
+            depthById[id] = (depthById[pid] ?? -1) + 1
+            builtFrames[id] = f
+            builtParents[id] = pid
+            rectsByNodeId[id] = abs
+            metaByNodeId[id] = style
+            layerNodes.append(layer)
+        }
+        builtLayerCount = layerNodes.count
+        CATransaction.commit()
+        return made
+    }
+
+    /// ★★**虚拟化下的更新**：先落**真源**（与物化解耦），再只刷**已物化**的行
+    ///
+    /// 【为什么不能用 `updateLayersIncremental`（虚拟化下的静默错）】该函数要求
+    ///   **每个变化节点都有层**，缺一个就返回 -1（调用方退回全量重建）——
+    ///   而虚拟化下**大部分行根本没有层** ⇒ 每次更新都会退回全量（层数爆炸，虚拟化形同失效）。
+    ///   反过来"只刷有层的、其余丢弃"更糟：屏外行在滚入时会显示**旧内容/旧几何**，
+    ///   而所有断言都对着核心（正确的）⇒ 全绿。
+    ///   ⇒ 正解：变化**一律写进真源**（`nodesById`/`nodeRects`），已物化的行立即重刷。
+    func applyVirtualUpdate(changed: [(id: Int, abs: CGRect)], textUpdates: [String: Any]) -> (updatedRows: Int, deferredNodes: Int, textApplied: Int) {
+        // ★先落真源（含文本）——屏外行滚入时读它（与物化解耦，见 updateVirtualSource 注释）
+        updateVirtualSource(changed: changed, textUpdates: textUpdates)
+        if !textUpdates.isEmpty {
+            _ = applyTextUpdates(textUpdates)   // 已物化的层立即落字
+        }
+        var touched = Set<Int>()
+        for c in changed { if let r = rowOfNode[c.id] { touched.insert(r) } }
+        var refreshed = 0
+        for r in touched where materializedRows.contains(r) {
+            refreshRow(r)
+            refreshed += 1
+        }
+        // 未物化的变化节点数（诊断：>0 说明确实存在"屏外待生效"的内容）
+        let deferred = changed.reduce(0) { $0 + (rowOfNode[$1.id] != nil && !materializedRows.contains(rowOfNode[$1.id]!) ? 1 : 0) }
+        return (refreshed, deferred, textUpdates.count)
+    }
+
+    /// 重刷一行（层已存在 ⇒ 只改帧与内容；层序不动）
+    private func refreshRow(_ rowIndex: Int) {
+        guard let row = virtualRows.first(where: { $0.index == rowIndex }) else { return }
+        CATransaction.begin()
+        CATransaction.setDisableActions(true)
+        for id in row.ids {
+            guard let layer = layersById[id], let abs = nodeRects[id] else { continue }
+            let pid = parentById[id] ?? -1
+            let parentOrigin = pid >= 0 ? (nodeRects[pid]?.origin ?? .zero) : .zero
+            let f = CGRect(x: abs.minX - parentOrigin.x, y: abs.minY - parentOrigin.y,
+                           width: abs.width, height: abs.height)
+            layer.frame = f
+            builtFrames[id] = f
+            rectsByNodeId[id] = abs
+            if let spec = nodesById[id] {
+                let style = SelfDrawView.styleOf(spec)
+                configureLayer(layer, style: style)
+                metaByNodeId[id] = style
+            }
+        }
+        CATransaction.commit()
+    }
 }
 
 /// `#RRGGBB` / `#AARRGGBB` → UIColor
@@ -1051,6 +1551,8 @@ final class SelfDrawBridge: NSObject, SelfDrawExports {
     var jsReport: [String: Any] = [:]
     /// ★句柄常驻：Vue 的后续更新复用同一棵 Rust 树（与 §5.1「节点树页面存活期间常驻」一致）
     private var handle: UInt64 = 0
+    /// ★★复用池句柄（§12.6：核心给决策、宿主执行动作）——`mountVirtual` 时创建
+    private var recycleHandle: UInt64 = 0
     /// 上一帧的节点数组（**增量 diff 的基线**）——只有它才能算出「哪些节点真的变了」
     private var lastNodes: [[String: Any]] = []
 
@@ -1143,6 +1645,220 @@ final class SelfDrawBridge: NSObject, SelfDrawExports {
 
     func update(_ treeJson: String) -> String {
         return render(treeJson: treeJson, phase: "update")
+    }
+
+    /* ═══════════════════ ★★虚拟化：挂载 / 滚动 / 读数 ═══════════════════ */
+
+    /// 见协议声明（`mountVirtual`）
+    ///
+    /// 流程（顺序敏感）：
+    ///   ① 全量几何：整棵树进核心（**不裁剪节点树**）—— 这是「命中测试/增量更新/行内分发」
+    ///      全部保持原口径的前提；虚拟化省的是**层**，不是树。
+    ///   ② 建复用池句柄：行数来自 `rows.count`（核心据此夹取预载区）。
+    ///   ③ 可见行 → 物化（含预载区：由**核心**的 `first_preload/last_preload` 决定，
+    ///      宿主不自己算预载——方向敏感规则属平台无关逻辑，已在核心单测锁定）。
+    func mountVirtual(_ requestJson: String) -> String {
+        guard let view = view else { return "{\"ok\":false,\"error\":\"view 未设置\"}" }
+        let t0 = CFAbsoluteTimeGetCurrent()
+        guard let d = requestJson.data(using: .utf8),
+              let root = (try? JSONSerialization.jsonObject(with: d)) as? [String: Any],
+              let nodes = root["nodes"] as? [[String: Any]],
+              let rowsRaw = root["rows"] as? [[String: Any]] else {
+            return "{\"ok\":false,\"error\":\"mountVirtual 入参解析失败（需 {viewport,nodes,rows}）\"}"
+        }
+        var rows: [SelfDrawView.VirtualRow] = []
+        for r in rowsRaw {
+            guard let index = r["index"] as? Int, let rootId = r["root"] as? Int,
+                  let ids = r["ids"] as? [Int] else { continue }
+            rows.append(.init(index: index, key: (r["key"] as? String) ?? "\(index)", root: rootId, ids: ids))
+        }
+        guard !rows.isEmpty else { return "{\"ok\":false,\"error\":\"rows 为空（虚拟化无意义）\"}" }
+
+        // ① 文本度量 + ② 核心建树（与全量 mount 同一条路——几何口径必须完全一致）
+        SelfDrawBridge.resetMeasureStats()
+        var textMeasures: [String: [String: Double]] = [:]
+        for n in nodes {
+            guard let text = n["text"] as? String, !text.isEmpty, let id = n["id"] as? Int else { continue }
+            let fs = (n["fontSize"] as? Double).map { CGFloat($0) } ?? 14
+            let fw = (n["fontWeight"] as? Double).map { CGFloat($0) } ?? 400
+            let sz = SelfDrawBridge.measureText(text, fontSize: fs, fontWeight: fw)
+            textMeasures["\(id)"] = ["width": Double(sz.width), "height": Double(sz.height)]
+        }
+        let req: [String: Any] = [
+            "viewport": root["viewport"] as? [String: Any] ?? ["width": 390, "height": 844],
+            "nodes": nodes, "textMeasures": textMeasures,
+        ]
+        guard let reqData = try? JSONSerialization.data(withJSONObject: req),
+              let reqJson = String(data: reqData, encoding: .utf8) else {
+            return "{\"ok\":false,\"error\":\"核心请求组装失败\"}"
+        }
+        if handle != 0 { _ = proteus_layout_destroy(handle); handle = 0 }
+        handle = reqJson.withCString { proteus_layout_create($0) }
+        guard handle > 0 else {
+            return "{\"ok\":false,\"error\":\"proteus_layout_create 失败（节点数 \(nodes.count)）\"}"
+        }
+        let layoutMs = (CFAbsoluteTimeGetCurrent() - t0) * 1000
+
+        // 几何（全量读一次——物化要用整棵树的 rect 设帧，与可见性无关）
+        let rectsStr = takeCString(proteus_layout_rects(handle))
+        guard let rd = rectsStr.data(using: .utf8),
+              let ro = (try? JSONSerialization.jsonObject(with: rd)) as? [String: Any],
+              let rectsJson = ro["rects"] as? [String: [String: Double]] else {
+            return "{\"ok\":false,\"error\":\"几何解析失败\"}"
+        }
+        var rects: [Int: CGRect] = [:]
+        for (k, r) in rectsJson {
+            guard let id = Int(k) else { continue }
+            rects[id] = CGRect(x: r["x"] ?? 0, y: r["y"] ?? 0, width: r["width"] ?? 0, height: r["height"] ?? 0)
+        }
+
+        // ③ 虚拟化初始化（清层 + 真源表 + 空池）
+        view.clearLayers()
+        let poolCap = (root["poolCapacity"] as? Int) ?? 96
+        view.setupVirtual(rows: rows, nodes: nodes, rects: rects, poolCapacity: poolCap)
+        // ★静态部分（容器/标题等，不属于任何行）全量物化——否则行层会挂到根层
+        //   （几何仍对但层序错 ⇒ 重叠绘制/z-order 与核心不符；见 materializeStaticNodes 注释）
+        view.materializeStaticNodes(nodes)
+
+        // ④ 复用池句柄
+        if recycleHandle != 0 { proteus_recycle_destroy(recycleHandle) }
+        recycleHandle = proteus_recycle_create(UInt32(rows.count), 0, 0)
+
+        // ⑤ 首帧：可见区 → 核心决策 → 物化（含预载区）
+        let scrolled = applyVirtualScroll(dx: 0, dy: 0, explicitRange: view.visibleRowRange())
+        lastNodes = nodes
+        lastNodeCount = nodes.count
+        lastTreeHash = String(format: "%08x", requestJson.hashValue)
+        let st = view.virtualStats()
+        let totalMs = (CFAbsoluteTimeGetCurrent() - t0) * 1000
+        return jsonString([
+            "ok": true, "path": "mountVirtual", "node_count": nodes.count,
+            "layer_count": view.builtLayerCount,
+            "materialized_rows": st["materialized_rows"] ?? 0,
+            "measure_ms": 0, "layout_ms": round(layoutMs * 100) / 100, "host_total_ms": round(totalMs * 100) / 100,
+            "request_bytes": reqJson.count,
+            "first_frame": scrolled,
+            "mem_mb": round(physFootprintMB() * 10) / 10,
+            "virtual": st,
+        ])
+    }
+
+    /// 见协议声明（`scrollRows`）
+    func scrollRows(_ dx: Double, _ dy: Double) -> String {
+        guard let view = view, recycleHandle != 0 else {
+            return "{\"ok\":false,\"error\":\"未做虚拟化挂载\"}"
+        }
+        let t0 = CFAbsoluteTimeGetCurrent()
+        let out = applyVirtualScroll(dx: CGFloat(dx), dy: CGFloat(dy), explicitRange: nil)
+        let ms = (CFAbsoluteTimeGetCurrent() - t0) * 1000
+        var o = out
+        o["scroll_ms"] = round(ms * 100) / 100
+        o["virtual"] = view.virtualStats()
+        return jsonString(o)
+    }
+
+    /// ★★本帧的虚拟化执行（挂载首帧与滚动共用——**同一语义一处实现**）
+    ///
+    /// 顺序（每步都有本仓踩过的理由）：
+    ///   ① 先应用内容偏移（可见区判定必须用**新**偏移）
+    ///   ② 可见行由**几何**推导（不假设行高——行高由核心算，可被样式/文本改变）
+    ///   ③ 向核心复用池要决策（acquire/release 含**方向敏感预载区**）
+    ///   ④ **先 release 再 acquire**（反了 ⇒ 本帧要建的层无法复用刚释放的 ⇒ 复用率虚低）
+    ///   ⑤ acquire 的行物化（层从池里取；内容/帧/层序都按当前真源填）
+    private func applyVirtualScroll(dx: CGFloat, dy: CGFloat, explicitRange: (first: Int, last: Int)?) -> [String: Any] {
+        guard let view = view else { return ["ok": false, "error": "无视图"] }
+        if dx != 0 || dy != 0 {
+            _ = view.applyContentOffset(dx: dx, dy: dy)
+        }
+        guard let range = explicitRange ?? view.visibleRowRange() else {
+            return ["ok": false, "error": "无可见行（行表为空）"]
+        }
+        let dec = takeCString(proteus_recycle_update(recycleHandle, UInt32(range.first), UInt32(range.last)))
+        guard let dd = dec.data(using: .utf8),
+              let d = (try? JSONSerialization.jsonObject(with: dd)) as? [String: Any],
+              (d["ok"] as? Bool) == true else {
+            return ["ok": false, "error": "核心复用池决策失败", "raw": String(dec.prefix(200))]
+        }
+        let acquire = (d["acquire"] as? [Int]) ?? []
+        let release = (d["release"] as? [Int]) ?? []
+
+        var released = 0
+        for r in release { released += view.dematerializeRow(r) }
+        var createdRows = 0
+        for r in acquire {
+            view.materializeRow(r)
+            createdRows += 1
+        }
+        _ = view.flushPendingIfVisible()
+        return [
+            "ok": true,
+            "direction": d["direction"] ?? "idle",
+            "first_visible": d["first_visible"] ?? -1,
+            "last_visible": d["last_visible"] ?? -1,
+            "first_preload": d["first_preload"] ?? -1,
+            "last_preload": d["last_preload"] ?? -1,
+            "acquired": acquire,
+            "released": release,
+            "acquired_rows": createdRows,
+            "released_rows": released,
+            "demoted": d["demoted"] ?? 0,       // ★核心直接解码（避免在 Swift 里重解 JSON 字符串）
+            "live_rows": d["live"] ?? 0,
+        ]
+    }
+
+    /// 见协议声明（`virtualStats`）
+    func virtualStats() -> String {
+        guard let view = view else { return "{\"ok\":false,\"error\":\"无视图\"}" }
+        var st = view.virtualStats()
+        if recycleHandle != 0 {
+            let s = takeCString(proteus_recycle_stats(recycleHandle))
+            if let sd = s.data(using: .utf8),
+               let so = (try? JSONSerialization.jsonObject(with: sd)) as? [String: Any] {
+                st["recycle"] = so
+            }
+        }
+        st["ok"] = true
+        return jsonString(st)
+    }
+
+    /// 见协议声明（`setPoolCapacity`）——破坏性验证：容量 0 ⇒ 复用必然为 0
+    func setPoolCapacity(_ n: Double) -> String {
+        guard let view = view else { return "{\"ok\":false,\"error\":\"无视图\"}" }
+        view.setLayerPoolCapacity(Int(n))
+        return jsonString(["ok": true, "pool_capacity": view.layerPoolCapacity])
+    }
+
+    /// 见协议声明（`virtualProbe`）
+    func virtualProbe(_ rowIndex: Double) -> String {
+        guard let view = view, view.isVirtual else {
+            return "{\"ok\":false,\"error\":\"非虚拟化\"}"
+        }
+        let ri = Int(rowIndex)
+        guard let rowRect = view.rowScreenRect(ri) else {
+            return "{\"ok\":false,\"error\":\"无该行几何（行号越界）\"}"
+        }
+        let n = view.rowNodeCount(ri)
+        var childRects: [[String: Double]] = []
+        for i in 0..<n {
+            if let r = view.rowChildScreenRect(ri, childAt: i) {
+                childRects.append(["x": Double(r.minX), "y": Double(r.minY),
+                                   "w": Double(r.width), "h": Double(r.height),
+                                   "cx": Double(r.midX), "cy": Double(r.midY)])
+            }
+        }
+        return jsonString([
+            "ok": true,
+            "row_index": ri,
+            "materialized": view.isRowMaterialized(ri),
+            "row_rect": ["x": Double(rowRect.minX), "y": Double(rowRect.minY),
+                         "w": Double(rowRect.width), "h": Double(rowRect.height),
+                         "cx": Double(rowRect.midX), "cy": Double(rowRect.midY)],
+            "child_rects": childRects,
+            // ★行内各节点的**当前文本**（来自真源/层的实际呈现）——用于验证
+            //   "屏外更新滚入后是否生效"（复用池最经典的静默错：显示上一行的内容）
+            "child_texts": view.rowNodeTexts(ri),
+            "layer_count": view.builtLayerCount,
+        ])
     }
 
     /// ★★增量更新：把 JS 侧的**样式补丁**直接转给核心（不经过宿主 diff、不解析整树）
@@ -1275,6 +1991,9 @@ final class SelfDrawBridge: NSObject, SelfDrawExports {
         return jsonString(["ok": true, "path": "paintPatches", "incremental": true,
                            "in_bytes": patchesJson.count, "paint_patches": arr.count,
                            "paint_layers_applied": applied,
+                           // ★虚拟化：层不存在（屏外）的补丁落**真源**（诊断读数——
+                           //   0 说明本用例没有屏外节点，非 0 说明这条路径真的被走到过）
+                           "paint_deferred_to_source": view.lastPaintDeferred,
                            "paint_ms": round(ms * 100) / 100])
     }
 
@@ -1292,6 +2011,15 @@ final class SelfDrawBridge: NSObject, SelfDrawExports {
     func splice(_ spliceJson: String) -> String {
         guard let view = view, handle != 0 else {
             return "{\"ok\":false,\"error\":\"未建树或未接入核心\"}"
+        }
+        // ★虚拟化下 splice 一律拒绝（**宁可拒绝不可静默错**）
+        //
+        // 【为什么不能直接跑】splice 的增删是**按节点 id 的层级操作**，而虚拟化下大部分行
+        //   **根本没有层**（未物化）⇒ 它会对着"不存在的层"增删 ⇒ 层树与核心结构静默分叉
+        //   （现象：滚动到某处突然多/少内容，而所有几何断言都对着核心 ⇒ 全绿）。
+        //   ⇒ 正解：虚拟化下的行数变化走**重新 `mountVirtual`**（真源与池一起重建，语义明确）。
+        if view.isVirtual {
+            return "{\"ok\":false,\"error\":\"虚拟化下不支持 splice（层未全量物化）——请重新 mountVirtual\",\"virtual\":true}"
         }
         let t0 = CFAbsoluteTimeGetCurrent()
 
@@ -1496,21 +2224,44 @@ final class SelfDrawBridge: NSObject, SelfDrawExports {
             return "{\"ok\":false,\"error\":\"视图尺寸为 0\"}"
         }
         // ★渲染一次（与 snapshot 同款：layer.render —— UIKit 的 snapshotView 不含 CALayer 子层）
-        let fmt = UIGraphicsImageRendererFormat.default()
-        fmt.scale = 1 // ★scale=1 ⇒ 1 点 = 1 像素，采样坐标与逻辑点一一对应（免去换算）
-        let renderer = UIGraphicsImageRenderer(size: size, format: fmt)
-        let img = renderer.image { ctx in
-            view.layer.render(in: ctx.cgContext)
+        //
+        // ★★**自己建位图上下文 + 显式指定像素格式**（不再读系统给的那个）
+        //
+        // 【为什么（本仓实测的第十个测量装置缺陷）】首版直接用 `UIGraphicsImageRenderer`
+        //   产出的 CGImage、按 `(ptr[0],ptr[1],ptr[2])` 当 RGB 读。作者当时**确实做了三色标定**，
+        //   标定读数也正确（纯红→`#0000FF`），但**结论推反了**：那组读数证明的是 **BGRA 布局**
+        //   （byte0=蓝），却被写成了"本机是 RGBA 布局"⇒ R/B 至今互换。
+        //   ★为什么长期没被发现：**此前所有像素判据都用纯绿**（`#00FF00`），而绿在 R/B 互换下
+        //   **不变** ⇒ 判据恒绿。本轮的紫色圆点（`#6F4AE8`）第一次让互换暴露为 `#E84A6F`。
+        //   ⇒ 正解：不猜系统格式，`CGBitmapInfo` 显式声明 `byteOrder32Big | premultipliedLast`
+        //     （= 内存里恒为 R,G,B,A），与设备/系统无关。
+        let w = Int(size.width.rounded())
+        let h = Int(size.height.rounded())
+        guard w > 0, h > 0 else { return "{\"ok\":false,\"error\":\"视图尺寸为 0\"}" }
+        let bpr = w * 4
+        var buf = [UInt8](repeating: 0, count: bpr * h)
+        let cgOut: CGImage? = buf.withUnsafeMutableBytes { raw -> CGImage? in
+            guard let base = raw.baseAddress,
+                  let ctx = CGContext(data: base, width: w, height: h, bitsPerComponent: 8,
+                                      bytesPerRow: bpr, space: CGColorSpaceCreateDeviceRGB(),
+                                      bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue
+                                          | CGBitmapInfo.byteOrder32Big.rawValue) else { return nil }
+            // 与 UIGraphicsImageRenderer 同一条渲染路径（只是目标上下文由我们指定）
+            UIGraphicsPushContext(ctx)
+            // ★★**必须翻转 CTM**（本仓实测：自建上下文的第一版就踩了，被 V5 标定判据当场抓出）
+            //
+            // 【为什么】CoreGraphics 的原点在**左下**（y 向上），UIKit 在**左上**（y 向下）——
+            //   `UIGraphicsImageRenderer` 给的是**已翻转**的上下文，而手建 CGContext **不是**。
+            //   ⇒ 不翻转则渲染结果**上下颠倒**（现象：采样 y 越大命中的行越靠上）。
+            //   ★实测证据：期望行 24/28/32（屏幕 y 递增）却读到 30/26/22 —— 正是翻转的特征；
+            //     按 `raster_y ↦ UIKit_y = H − raster_y` 反推可**逐点命中**（不是玄学，是可验证的）。
+            ctx.translateBy(x: 0, y: CGFloat(h))
+            ctx.scaleBy(x: 1, y: -1)
+            view.layer.render(in: ctx)
+            UIGraphicsPopContext()
+            return ctx.makeImage()
         }
-        guard let cg = img.cgImage else { return "{\"ok\":false,\"error\":\"无 CGImage\"}" }
-        guard let provider = cg.dataProvider, let cfData = provider.data else {
-            return "{\"ok\":false,\"error\":\"无像素数据\"}"
-        }
-        let ptr = CFDataGetBytePtr(cfData)!
-        let bpr = cg.bytesPerRow
-        let bpp = cg.bitsPerPixel / 8
-        let w = cg.width
-        let h = cg.height
+        guard cgOut != nil else { return "{\"ok\":false,\"error\":\"位图上下文创建失败\"}" }
         var out: [String] = []
         for p in pts {
             let x = Int(p["x"] ?? 0)
@@ -1519,20 +2270,72 @@ final class SelfDrawBridge: NSObject, SelfDrawExports {
                 out.append("out-of-bounds")
                 continue
             }
-            let off = y * bpr + x * bpp
-            // ★★字节序：实测为 **RGBA**（不是我在注释里先验假设的 BGRA）
-            //
-            // 【怎么确定的（值得记）】用三块**纯色标定**（纯红/纯绿/纯蓝）采样后比对：
-            //   · 期望（第 1 块）纯红 `#FF0000` ⇒ 实得 `#0000FF`
-            //   · 第 2 块纯绿 `#00FF00` ⇒ 实得 `#00FF00` ✓
-            //   ⇒ **红蓝互换** ⇒ 本机 CGImage 是 RGBA 布局。
-            //   ★如果只按"文档常见值"猜（我首版就猜了 BGRA），会得到一个**看起来合理但错**的读数
-            //     ——正是本仓反复吃亏的"先验假设 vs 实测"。
-            let r = ptr[off], g = ptr[off + 1], b = ptr[off + 2]
+            // ★格式已显式声明为 byteOrder32Big|premultipliedLast ⇒ 内存序恒为 R,G,B,A
+            let off = y * bpr + x * 4
+            let r = buf[off], g = buf[off + 1], b = buf[off + 2]
             out.append(String(format: "#%02X%02X%02X", r, g, b))
         }
         let payload: [String: Any] = ["ok": true, "pixels": out, "size": ["w": Double(w), "h": Double(h)]]
         return jsonString(payload)
+    }
+
+    /// ★★**像素格式自检**（测量装置必须先自测——本仓纪律）
+    ///
+    /// 在**同一个上下文配置**下画三块纯色并读回，返回"期望 → 实得"的映射。
+    /// 判据：`ok == true`（三色全对 **且** 方向正确）。这不是"顺手加的"，而是**像素判据的前置**——
+    /// 采样装置错了，它给的一切读数都是错的（本轮连踩两处：R/B 互换 + 自建上下文未翻转）。
+    ///
+    /// ★为什么还要测**方向**（色标定测不出来）：色标定只验证"通道映射"，而**垂直翻转**
+    ///   会让"通道全对、位置全错"——现象是"每个点都取到了另一个位置的合法颜色"
+    ///   （本轮实测：期望行 24/28/32 读到 30/26/22）。
+    ///   ⇒ 加一块"上红下蓝"的竖条：栅格 y=0 必须是红、y=h-1 必须是蓝。
+    func pixelFormatSelfTest() -> String {
+        var probes: [String: Any] = [:]
+        var allOk = true
+        for (name, color) in [("red", UIColor.red), ("green", UIColor.green), ("blue", UIColor.blue)] {
+            let w = 4, h = 4, bpr = 16
+            var buf = [UInt8](repeating: 0, count: bpr * h)
+            buf.withUnsafeMutableBytes { raw in
+                guard let base = raw.baseAddress,
+                      let ctx = CGContext(data: base, width: w, height: h, bitsPerComponent: 8,
+                                          bytesPerRow: bpr, space: CGColorSpaceCreateDeviceRGB(),
+                                          bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue
+                                              | CGBitmapInfo.byteOrder32Big.rawValue) else { return }
+                ctx.setFillColor(color.cgColor)
+                ctx.fill(CGRect(x: 0, y: 0, width: 4, height: 4))
+            }
+            let got = String(format: "#%02X%02X%02X", buf[0], buf[1], buf[2])
+            let expect = name == "red" ? "#FF0000" : (name == "green" ? "#00FF00" : "#0000FF")
+            let pass = got == expect
+            allOk = allOk && pass
+            probes[name] = ["expect": expect, "got": got, "pass": pass]
+        }
+        // ★方向自检：上红下蓝（用与 samplePixels **完全同一条**建上下文+翻转代码路径）
+        let w = 4, h = 8, bpr = 16
+        var buf2 = [UInt8](repeating: 0, count: bpr * h)
+        buf2.withUnsafeMutableBytes { raw in
+            guard let base = raw.baseAddress,
+                  let ctx = CGContext(data: base, width: w, height: h, bitsPerComponent: 8,
+                                      bytesPerRow: bpr, space: CGColorSpaceCreateDeviceRGB(),
+                                      bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue
+                                          | CGBitmapInfo.byteOrder32Big.rawValue) else { return }
+            // ★与 samplePixels 一致的翻转（漏了这步 ⇒ 上下颠倒）
+            ctx.translateBy(x: 0, y: CGFloat(h))
+            ctx.scaleBy(x: 1, y: -1)
+            ctx.setFillColor(UIColor.red.cgColor)                 // UIKit 上半（y 小）
+            ctx.fill(CGRect(x: 0, y: 0, width: 4, height: 4))
+            ctx.setFillColor(UIColor.blue.cgColor)                // UIKit 下半（y 大）
+            ctx.fill(CGRect(x: 0, y: 4, width: 4, height: 4))
+        }
+        let top = String(format: "#%02X%02X%02X", buf2[0], buf2[1], buf2[2])
+        let bottom = String(format: "#%02X%02X%02X", buf2[(h - 1) * bpr], buf2[(h - 1) * bpr + 1], buf2[(h - 1) * bpr + 2])
+        let orientOk = top == "#FF0000" && bottom == "#0000FF"
+        allOk = allOk && orientOk
+        probes["orientation"] = ["expect": "top=#FF0000 bottom=#0000FF",
+                                 "got": "top=\(top) bottom=\(bottom)", "pass": orientOk,
+                                 "note": "栅格 y 递增必须对应 UIKit y 递增（上红下蓝）"]
+        return jsonString(["ok": allOk, "probes": probes,
+                           "format": "byteOrder32Big|premultipliedLast + CTM 翻转（显式声明）"])
     }
 
     func pendingStats() -> String {
@@ -1655,7 +2458,18 @@ final class SelfDrawBridge: NSObject, SelfDrawExports {
           lastGeom[c.id] = sig
         }
         lastGeomChanged = geomChanged
-        let updated = view.updateLayersIncremental(changed: changed, visibleOnly: useV4)
+        let updated: Int
+        var virtualOut: [String: Any] = [:]
+        if view.isVirtual {
+            // ★★虚拟化路径：变化先落**真源**，只刷已物化的行（见 applyVirtualUpdate 注释；
+            //   走 updateLayersIncremental 会因"屏外行没有层"而每次退回全量 ⇒ 虚拟化失效）
+            let r = view.applyVirtualUpdate(changed: changed, textUpdates: textUpdates)
+            updated = changed.count
+            virtualOut = ["virtual": true, "refreshed_rows": r.updatedRows,
+                          "deferred_nodes": r.deferredNodes]
+        } else {
+            updated = view.updateLayersIncremental(changed: changed, visibleOnly: useV4)
+        }
         let layerTiming = view.lastLayerTiming
         let layersMs = layerTiming["total_ms"] ?? 0
         let totalMs = (CFAbsoluteTimeGetCurrent() - t0) * 1000
@@ -1690,7 +2504,8 @@ final class SelfDrawBridge: NSObject, SelfDrawExports {
                            "stale_cleared": view.lastStalePendingCleared,
                            "pending_visible_overlap": view.lastPendingVisibleOverlap,
                            "layers_ms": round(layersMs * 100) / 100,
-                           "host_total_ms": round(totalMs * 100) / 100])
+                           "host_total_ms": round(totalMs * 100) / 100]
+                           .merging(virtualOut) { a, _ in a })
     }
 
     /// 核心：渲染树 → (CoreText 度量) → Rust 核心 → CALayer 树
