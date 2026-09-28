@@ -671,19 +671,19 @@
   "host_node_count" : 3002,
   "host_timing_last" : {
     "build_layers_ms" : 0,
-    "host_total_ms" : 2.3100000000000001,
-    "layout_ms" : 2.1800000000000002,
+    "host_total_ms" : 2.4199999999999999,
+    "layout_ms" : 2.3199999999999998,
     "measure_ms" : 0
   },
   "js_completed" : 1,
   "js_ok" : true,
   "js_report" : {
-    "build_id" : "aa7137cf-200538",
+    "build_id" : "9fd5f96a-211151",
     "case_filter" : [
       "V12"
     ],
     "case_timings_ms" : {
-      "V12_scroll_recycle" : 223
+      "V12_scroll_recycle" : 231
     },
     "cases" : [
       {
@@ -734,6 +734,8 @@
             "farRowUnmaterialized" : true,
             "fewLayers" : true,
             "fewRows" : true,
+            "hitOnMaterializedRow" : true,
+            "hitOnUnmaterializedRow" : true,
             "inRowMaterialized" : true,
             "killSwitch" : true,
             "layersBounded" : true,
@@ -841,6 +843,54 @@
               "released" : 9
             }
           ],
+          "hit_on_materialized" : {
+            "expectedIds" : [
+              1802,
+              1803,
+              1804
+            ],
+            "hit" : {
+              "chain_len" : 3,
+              "ok" : true,
+              "stats" : {
+                "hits" : 1,
+                "last_chain_len" : 3,
+                "last_target" : 1803
+              },
+              "target" : 1803,
+              "x" : 34,
+              "y" : 38529
+            },
+            "rowY" : 38529,
+            "usedXY" : [
+              34,
+              38529
+            ]
+          },
+          "hit_on_unmaterialized" : {
+            "expectedIds" : [
+              62,
+              63,
+              64
+            ],
+            "hit" : {
+              "chain_len" : 3,
+              "ok" : true,
+              "stats" : {
+                "hits" : 2,
+                "last_chain_len" : 3,
+                "last_target" : 63
+              },
+              "target" : 63,
+              "x" : 34,
+              "y" : 1409
+            },
+            "rowY" : 1409,
+            "usedXY" : [
+              34,
+              1409
+            ]
+          },
           "kill_stats" : {
             "created_delta" : 174,
             "end" : {
@@ -947,7 +997,7 @@
               "row_count" : 1000
             }
           },
-          "mount_ms" : 102,
+          "mount_ms" : 103,
           "mount_stats" : {
             "content_offset_y" : 0,
             "is_virtual" : true,
@@ -990,9 +1040,9 @@
             "row_count" : 1000
           },
           "node_count" : 3002,
-          "not_covered" : "手势\/命中在虚拟化下的坐标（tapAt 走内容坐标，未额外验证）；Android 侧同款接线",
+          "not_covered" : "真实 UITouch（tapAt 绕过 UITouch，只覆盖「命中→派发」）；Android 侧同款",
           "offscreen_apply" : {
-            "apply_ms" : 2.1800000000000002,
+            "apply_ms" : 2.3199999999999998,
             "changed_rects" : 3,
             "collect_ms" : 0,
             "deferred" : 0,
@@ -1000,7 +1050,7 @@
             "flushed" : 0,
             "geom_changed" : 3,
             "geom_total" : 3,
-            "host_total_ms" : 2.3100000000000001,
+            "host_total_ms" : 2.4199999999999999,
             "in_bytes" : 8974,
             "incremental" : true,
             "layers_commit_ms" : 0,
@@ -1012,11 +1062,11 @@
             "patch_count" : 1,
             "path" : "applyOps",
             "pending_visible_overlap" : 0,
-            "rects_bin_ms" : 0.029999999999999999,
-            "rects_parse_ms" : 0.089999999999999997,
+            "rects_bin_ms" : 0.02,
+            "rects_parse_ms" : 0.059999999999999998,
             "refreshed_rows" : 0,
             "relayout_count" : 3,
-            "relayout_ms" : 0.040000000000000001,
+            "relayout_ms" : 0.059999999999999998,
             "scopes" : [
               1802
             ],
@@ -1031,6 +1081,20 @@
           "offscreen_text_seen" : "改过 601",
           "pixel_at_dot" : "#6F4AE8",
           "probe_far_row" : {
+            "child_content_centers" : [
+              {
+                "cx" : 96.5,
+                "cy" : 38529
+              },
+              {
+                "cx" : 34,
+                "cy" : 38529
+              },
+              {
+                "cx" : 112,
+                "cy" : 38529
+              }
+            ],
             "child_rects" : [
               {
                 "cx" : 96.5,
@@ -1065,6 +1129,13 @@
             "layer_count" : 74,
             "materialized" : true,
             "ok" : true,
+            "row_content" : {
+              "cy" : 38529,
+              "h" : 56,
+              "w" : 161,
+              "x" : 16,
+              "y" : 38501
+            },
             "row_index" : 600,
             "row_rect" : {
               "cx" : 96.5,
@@ -1076,6 +1147,20 @@
             }
           },
           "probe_offscreen_row" : {
+            "child_content_centers" : [
+              {
+                "cx" : 96.5,
+                "cy" : 257
+              },
+              {
+                "cx" : 34,
+                "cy" : 257
+              },
+              {
+                "cx" : 112,
+                "cy" : 257
+              }
+            ],
             "child_rects" : [
               {
                 "cx" : 96.5,
@@ -1110,6 +1195,13 @@
             "layer_count" : 74,
             "materialized" : false,
             "ok" : true,
+            "row_content" : {
+              "cy" : 257,
+              "h" : 56,
+              "w" : 161,
+              "x" : 16,
+              "y" : 229
+            },
             "row_index" : 2,
             "row_rect" : {
               "cx" : 96.5,
@@ -1168,7 +1260,7 @@
           },
           "verdict" : "PASS"
         },
-        "host_ms" : 102,
+        "host_ms" : 103,
         "items" : 1000,
         "nodes" : 3002,
         "note" : "1000 行虚拟化：挂载只物化 14 行 \/ 44 层 · 滚动 30 帧（↓269取\/259放 · ↑259取\/269放）· 建层 74 \/ 复用 1554",
@@ -1176,7 +1268,7 @@
         "request_bytes" : 0,
         "serialize_ms" : 0,
         "to_request_ms" : 0,
-        "total_ms" : 115,
+        "total_ms" : 116,
         "vue_ms" : 0
       }
     ],
@@ -1212,7 +1304,9 @@
   },
   "js_total" : 1,
   "launch_diag" : {
-    "first_frame_ms" : 0,
+    "bootstrap_ms" : 52.439999999999998,
+    "first_frame_ms" : 57.68,
+    "first_frame_source" : "kernel:p_starttime",
     "forced_style" : "Dark",
     "interface_style" : "Dark",
     "launch_screen_keys" : [
@@ -1740,5 +1834,5 @@
       "y" : 18
     }
   },
-  "tree_hash" : "9738c551"
+  "tree_hash" : "a213e4ca"
 }
