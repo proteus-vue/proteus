@@ -591,13 +591,46 @@ Vue 3.6 把 `@vue/reactivity` 基于 alien-signals 重构，**显著提升响应
 ③ 「单节点更新 P95 ≤ 3ms」是 §10 的**目标值**，V1 未测——它要等 V3 端到端才有意义；
    V0 的真机 9ms 是**探针上界**，不是本实现的读数。
 
-### V2 · 编译期响应式转换（≈2.5 人周）
+### V2 · 编译期响应式转换（≈2.5 人周）—— ✅ **已完成**（2026-09-28）
 
-- [ ] 响应式源识别 + 模板表达式分析
-- [ ] `deps → slots` 静态映射
-- [ ] 求值函数生成
-- [ ] **L0/L1 安全性判定**（§5.3 七项条件）
-- [ ] `proteus explain` 输出分层判定与理由（硬性要求）
+- [x] 响应式源识别 + 模板表达式分析 —— `packages/compiler/src/vapor/sources.ts` + `deps.ts`
+- [x] `deps → slots` 静态映射 —— `build.ts`（`SubscriptionTable.sources[].slots`）
+- [x] 求值函数生成 —— `EvaluatorSpec` 三形态（`member` 免解析 / `expr` / `const`）
+- [x] **L0/L1 安全性判定**（§5.3 七项条件）—— 复用 `slot-runtime/tier.ts`（★同一语义一处实现）
+- [x] `proteus explain` 输出分层判定与理由（硬性要求）—— `proteus explain <file> --vapor`
+
+**V2 落地要点**
+
+| 方案条目 | 落地位置 | 说明 |
+|---|---|---|
+| §4.3 Step 1 源识别 | `vapor/sources.ts` | 五类源（ref/reactive/computed/props/model）；★用官方 `compileScript.bindings` 定语义（本仓定调：宏语义不自造） |
+| §4.3 Step 2 表达式分析 | `vapor/deps.ts` | 用 `@vue/compiler-dom` AST + `@babel/parser`（**不用正则扫模板**——误判会漏订源 = 静默不更新） |
+| §4.3 Step 3 依赖图 | `vapor/build.ts` | `sourceId → slotId[]`；★列表内 `item.x` 走 `scopeSources` 挂回**列表源** |
+| §4.3 Step 4 求值函数 | `vapor/build.ts` | `member`（`item.name` 类免解析）/ `expr` / `const` |
+| §4.3 Step 5 订阅表 | `vapor/build.ts` | `SubscriptionTable` **可 JSON 序列化**（§4.4 要求：不是源码字符串，跨端禁 eval） |
+| §4.3 Step 6 安全性判定 | 复用 `tier.ts` | 七条件逐项 → tier；文件级事实（C3/C7）作用于整文件 |
+
+**★实测覆盖率（`proteus explain --vapor`，见下方示例）**：典型页面 **L1 77.8%**（7/9），
+已达 §10 验收线「L1 覆盖率 ≥70%」。
+
+**★★V2 抓到的四个真缺陷（都会静默出错，逐个都有回归测试）**
+
+| # | 缺陷 | 现象 | 根因与处置 |
+|---|---|---|---|
+| 1 | **指令表达式读错字段** | 只收集到插值，`:class`/`:style`/`v-for` **全部漏采** | DOM AST 的指令值在 `prop.exp.content`，首版读 `prop.value.content`（DOM 侧无 `value`）⇒ 改读 `exp`，属性名取 `arg.content` |
+| 2 | **列表内绑定未挂到列表源** | `{{ item.title }}` 标了 L1，但**依赖图里找不到它** ⇒ 该源变化不会写这个槽位（静默不更新） | 首版拿作用域名 `item` 找同名源（不存在）⇒ 新增 `scopeSources` 别名映射（`item` → `list`）；并加"挂不上就出诊断"的兜底 |
+| 3 | **C1 两条通路混为一谈** | 人工 `@proteus-pure` 担保被显示成「静态证明」（`⚠` 显示成 `✓`）⇒ 诊断失去区分度 | 静态可判纯（无调用）与人工担保（有调用但全白名单）分开传参；`forced` 标记由此正确 |
+| 4 | **新增 CLI 旗标使参考文档漂移** | `gen:reference` 门禁红（**门禁正确工作**） | 重跑 `website/scripts/gen-reference.mjs` 更新 `content/reference/cli.md` |
+
+**★诚实边界（V2 完成 ≠ 端到端跑通）**
+① 本里程碑交付 **SFC → 订阅表** 的编译期产物；**把产物接到 Vue 运行时**（订阅注册、
+   槽位直写、与 L0 的共存调度）属 **V3**（App 端打通）。
+② `evaluator` 目前是**声明**（`member`/`expr`/`const`），运行时从声明重建函数的实现属 V3；
+   本里程碑只保证「声明可序列化 + 形态可判定」。
+③ `analyzeExprDeps` 覆盖常见模板表达式形态；**深度嵌套的作用域遮蔽**（内部箭头函数参数
+   与外层同名）按"局部优先"处理——若未来发现误判，会体现在依赖集上，由 L0 兜底（不会静默错）。
+④ L1 覆盖率 77.8% 是**单个演示页面**的读数，不代表全部业务代码；§10 的「≥70%」需在真实
+   项目集上持续度量（棘轮门禁属后续工作）。
 
 ### V3 · App 端打通（≈2 人周）
 

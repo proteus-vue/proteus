@@ -71,6 +71,8 @@ export interface ExplainArgs {
   target: string
   /** ★M0：额外输出渲染 IR 决策 trace（拍平资格 / 静态子树 / PaintHint） */
   withIR?: boolean
+  /** ★--vapor：追加 Vapor 槽位分层判定（方案 §5.5 硬性要求） */
+  withVapor?: boolean
   /** ★M0：只显示受阻（不可拍平）节点——排查「为什么这个不能拍平」 */
   onlyBlocked?: boolean
   /** ★M0：节点显示上限（防输出爆炸） */
@@ -91,6 +93,7 @@ export function parseExplainArgs(argv: string[]): ExplainArgs {
   return {
     target,
     ...(flags.has('--ir') ? { withIR: true } : {}),
+    ...(flags.has('--vapor') ? { withVapor: true } : {}),
     ...(flags.has('--only-blocked') ? { onlyBlocked: true } : {}),
     ...(Number.isFinite(maxNodes) ? { maxNodes: maxNodes as number } : {}),
   }
@@ -600,7 +603,7 @@ export const HELP_GROUPS: HelpGroup[] = [
     titleEn: 'Diagnostics & tools',
     entries: [
       {
-        usage: 'proteus explain <vue 文件 | 规则 ID> [--ir] [--only-blocked] [--max-nodes N]',
+        usage: 'proteus explain <vue 文件 | 规则 ID> [--ir] [--vapor] [--only-blocked] [--max-nodes N]',
         desc: 'vue 文件 → 决策 trace（该文件实际触发的全部转换规则）\n      规则 ID  → 该规则的 AI 说明书（what/why/when/example/verify/source）\n      --ir     → 追加渲染 IR 决策 trace（拍平资格 / 静态子树 / PaintHint；M0）',
         descEn: 'vue file → decision trace (all transform rules actually triggered by that file)\n      rule ID → the AI manual for that rule (what/why/when/example/verify/source)\n      --ir     → also print the render-IR decision trace (flatten eligibility / static subtree / PaintHint; M0)',
       },
