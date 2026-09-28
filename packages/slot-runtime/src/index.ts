@@ -37,6 +37,9 @@ export type { ConditionId, TierFacts, TierDecision, ExplainRow } from './tier'
 
 // ★V3：订阅表契约 + 订阅表驱动的槽位运行时（方案 §1.3 L1 的完整形态）
 export type { SubscriptionTable, SourceSubscription, SlotSubscription, EvaluatorSpec } from './table'
+// ★V6：表达式程序（含运算的表达式的标准求值路径）
+export { evalExpr } from './expr'
+export type { ExprProgram, ExprContext, BinOp, UnOp, LogicOp } from './expr'
 // ★V4：列表项注册表（让 LIST_UPDATE 在 JS 侧可解析）
 export { ListRegistry } from './list-registry'
 export { VaporRuntime, tierOf } from './runtime'

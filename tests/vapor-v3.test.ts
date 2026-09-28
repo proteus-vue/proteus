@@ -182,13 +182,32 @@ describe('V3 · 求值函数重建（声明 → 实现）', () => {
     expect(impls.get(2)!(ctx)).toBe('hi')
   })
 
-  it('★★不支持的表达式形态必须**上报**（不许静默跳过 = 静默不更新）', () => {
+  it('★★含运算的表达式现在**能求值**（V6 表达式程序；此前落到 expr ⇒ 永不更新）', () => {
+    // 【本仓的进展记录】V3 时这条断言的是"`n + 1` 会未实例化并上报"——那是当时的**缺口**。
+    //   V6 引入**表达式程序**（方案 §4.3 Step 4）后，含运算的表达式被编译成可序列化程序
+    //   ⇒ 正常实例化、正常求值。⇒ 断言更新为"新行为"，同时保留"不支持的要上报"覆盖（下一条）。
     const src = sfc(`const n = ref(1)\n`, `<p-view :style="n + 1" />`)
     const { table } = buildVaporSubscriptions(src, 'a.vue')
-    // `n + 1` 是 expr 形态且非纯路径 ⇒ 本参考实现不实例化
+    const spec = table.evaluators.find((e) => e.form === 'program')
+    expect(spec, '`n + 1` 应被编译为 program').toBeTruthy()
     const { vapor } = makeRuntime(table)
     const res = vapor.load({ read: () => 1 }, () => {})
-    expect(res.unsupportedEvaluators.length).toBeGreaterThan(0)
+    expect(res.uninstantiatedSlots.length).toBe(0) // ★不再未实例化
+  })
+
+  it('★★**真正不受支持**的构造仍必须上报（不许静默）', () => {
+    // 【构造的选择（本仓实测的辨析）】
+    //   · `f(n)`（函数调用）⇒ 会因 **C1 纯度**被**判 L0** ⇒ 槽位进 `l0Slots`、**不进 sources**
+    //     ⇒ 运行时的 `uninstantiatedSlots` 扫不到它。**这是分层设计的正确行为**（L0 本就不归运行时接管），
+    //     不是缺口。⇒ 用它验证"上报通路"是**选错了对象**（我一度这么写，测试红）。
+    //   · `a == 1`（宽松相等）⇒ **无调用** ⇒ 纯度可证 ⇒ 是 **L1**；而编译器**拒绝**该运算符
+    //     ⇒ 保持 `expr` ⇒ 运行时未实例化 ⇒ **正好验证上报通路**。
+    const src = sfc(`const a = ref(1)\n`, `<p-view :style="a == 1" />`)
+    const { table } = buildVaporSubscriptions(src, 'a.vue')
+    expect(table.evaluators.some((e) => e.form === 'expr'), '宽松相等应保持 expr').toBe(true)
+    const { vapor } = makeRuntime(table)
+    const res = vapor.load({ read: () => 1 }, () => {})
+    expect(res.unsupportedEvaluators.length, 'L1 但表达式不受支持 ⇒ 必须上报').toBeGreaterThan(0)
     expect(res.unsupportedEvaluators[0].reason).toContain('未实例化')
   })
 

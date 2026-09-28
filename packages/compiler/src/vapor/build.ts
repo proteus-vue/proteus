@@ -25,6 +25,7 @@ import type {
   EvaluatorSpec,
 } from '@proteus-vue/slot-runtime'
 import { scanReactiveSources } from './sources'
+import { compileExpr } from './expr'
 import type { ReactiveSource } from './sources'
 import { analyzeExprDeps, collectTemplateBindings } from './deps'
 import type { ExprDeps, TemplateBindingRef } from './deps'
@@ -190,7 +191,24 @@ export function buildVaporSubscriptions(source: string, filename = 'anonymous.vu
     })
 
     const evaluatorId = evaluators.length
-    evaluators.push(makeEvaluator(evaluatorId, ref.code, deps))
+    const evBuilt = makeEvaluator(evaluatorId, ref.code, deps)
+    evaluators.push(evBuilt.spec)
+    // ★★编译期就上报「参考实现无法求值」的表达式（比运行时上报更早、更可行动）
+    //
+    // 【为什么提前到编译期】运行时上报只能告诉"某槽位未生效"；
+    //   而编译期知道**具体是什么语法不被支持**（如"不支持宽松相等 ==/!="）⇒ 可直接给出改法。
+    //   ★注：这不是 error 级——该槽位仍会走 L0（标准 Vue 渲染）或由各端执行器消费，
+    //     行为正确、只是无加速。故定为 warn（可在门禁里按需升级）。
+    if (evBuilt.unsupported) {
+      diagnostics.push({
+        severity: 'warn',
+        code: 'VAPOR_EXPR_UNSUPPORTED',
+        message: `表达式 \`${ref.code}\` 无法编译为可求值程序：${evBuilt.unsupported}`,
+        hint: '该槽位在参考实现下不会更新（各端可注入自己的表达式执行器）；或改写为受支持的子集',
+        slotId: mySlot,
+        line: ref.line,
+      })
+    }
 
     // ★★v-for 行内绑定 ⇒ 产出 **list-item 槽位**（方案 §2.3；本仓实测补的功能缺口）
     //
@@ -373,18 +391,36 @@ function emptyTable(): SubscriptionTable {
 }
 
 /** 求值函数规格：能静态判定的走 `member`（热路径免解析），否则 `expr` */
-function makeEvaluator(evaluatorId: number, code: string, deps: ExprDeps): EvaluatorSpec {
+function makeEvaluator(
+  evaluatorId: number,
+  code: string,
+  deps: ExprDeps,
+): { spec: EvaluatorSpec; unsupported?: string } {
   const trimmed = code.trim()
-  // 纯成员访问（最常见形态：`item.name`）：免解析直接取值
+  void deps
+  // ① 纯成员访问（最常见形态：`item.name`）：免解析直接取值
   if (/^[A-Za-z_$][\w$]*(\.[A-Za-z_$][\w$]*)*$/.test(trimmed)) {
-    const [root, ...rest] = trimmed.split('.')
-    return { evaluatorId, form: 'member', root, path: trimmed, pure: true }
+    const [root] = trimmed.split('.')
+    return { spec: { evaluatorId, form: 'member', root, path: trimmed, pure: true } }
   }
-  // 字面量常量
+  // ② 字面量常量
   if (/^(\d+(\.\d+)?|'[^']*'|"[^"]*"|true|false|null)$/.test(trimmed)) {
-    return { evaluatorId, form: 'const', pure: true }
+    return { spec: { evaluatorId, form: 'const', expr: trimmed, pure: true } }
   }
-  return { evaluatorId, form: 'expr', expr: trimmed, pure: !deps.hasCall }
+  // ③ ★★结构化表达式程序（方案 §4.3 Step 4 的落地）
+  //
+  // 【为什么要有这一档（本仓实测的功能缺口）】`{{ n + 1 }}` / `{{ group.title + item.name }}`
+  //   这类**含运算**的表达式此前落到 ④ 的 `expr` 形态 ⇒ 参考实现**不认识** ⇒ 该槽位永不更新。
+  //   而这类表达式在实际模板里极常见 ⇒ 编译成程序（可序列化、跨端可执行）。
+  const compiled = compileExpr(trimmed)
+  if (compiled.ok) {
+    return { spec: { evaluatorId, form: 'program', program: compiled.program, pure: true } }
+  }
+  // ④ 兜底：保留原始文本（**参考实现不支持** ⇒ 运行时会上报；各端可用自家表达式执行器消费）
+  return {
+    spec: { evaluatorId, form: 'expr', expr: trimmed, pure: false },
+    unsupported: compiled.unsupported,
+  }
 }
 
 /** propKey → 槽位种类（与 component-ir 的 inferUpdateKind 同口径，但归到 slot-runtime 的 SlotKind） */

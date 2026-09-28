@@ -82,7 +82,18 @@ export interface SourceSubscription {
  */
 export interface EvaluatorSpec {
   evaluatorId: number
-  form: 'expr' | 'const' | 'member'
+  /**
+   * 求值器形态
+   *
+   * · `member`  纯成员访问（免解析，最快）
+   * · `const`   常量
+   * · **`program` 结构化表达式程序**（★方案 §4.3 Step 4 的落地形态：可序列化、跨端可执行）
+   * · `expr`    原始表达式文本（**参考实现不支持** ⇒ 会进 `uninstantiatedSlots` 上报；
+   *             各端可用自己的表达式执行器消费它：Hermes function 构造 / Web `new Function` / MP 走 WXS）
+   */
+  form: 'expr' | 'const' | 'member' | 'program'
+  /** `form='program'` 时的表达式程序（纯 JSON） */
+  program?: import('./expr').ExprProgram
   /** form='expr' 时的表达式源码 */
   expr?: string
   /** form='member' 时的完整路径（`a.b.c`）与其根名 */
