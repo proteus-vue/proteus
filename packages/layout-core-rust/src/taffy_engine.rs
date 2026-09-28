@@ -36,6 +36,23 @@ pub struct TaffyEngine {
     /// 键：`copy_ms`（把范围子树拷进新树）/ `build_ms`（taffy 建树）/ `solve_ms`（compute_layout）
     ///     / `writeback_ms`（结果回写 + 平移）/ `total_ms`
     pub last_phases: std::collections::BTreeMap<String, f64>,
+    /// ★多范围重排的**相位累加**（每个范围累加 copy/solve/writeback/merge——见 phases_mut）
+    pub phase_acc: std::collections::BTreeMap<&'static str, f64>,
+    /// ★★**持久 taffy 树**（真增量的载体——本仓实测：每轮重建 ⇒ 丢失 taffy 内部缓存）
+    ///
+    /// 【为什么必须有它（本仓实测的量化依据）】同形状 2001 节点树的基准（`examples/taffy-floor-bench.rs`）：
+    ///   · 每轮**重建** taffy 树 + 求解：**2.96ms**
+    ///   · 保留树 + **只 set 变更节点** + 求解：**0.089ms**（**33×**）
+    ///   而本仓的 `layout_incremental` 此前**每个范围都新建一棵 taffy 树**（`layout_subtree_and_writeback`
+    ///   里 `TaffyEngine::new()` + `build_taffy`）⇒ S4 形态（300 个文本范围）每个范围白付一次
+    ///   taffy 建树固定成本（桌面 3.3µs／范围 · 真机约 30µs × 300 ≈ 9ms，正是设备读数）。
+    ///   ⇒ 正解：树**随句柄持久**，每次只 `set_style(变更节点)` 后求解（taffy 自己的缓存生效）。
+    ///
+    /// 【失效条件（任一 ⇒ 整棵重建）】`taffy_ids.len() != tree.len()`（结构变更：splice 增删）。
+    /// 【安全前提】调用方必须把**所有被改过 style 的节点**经 `sync_styles` 告知——
+    ///   本仓的 FFI 路径（patch/ops/splice）都满足（改动与脏节点一一对应）；
+    ///   `layout()` 公开入口保持"整棵重建"语义（外部调用方可能任意改 style，不做假设）。
+    persistent_taffy: Option<TaffyTree<u32>>,
     /// ★★V5 平移传播：本轮的**变化根**（脏子树根 + 被平移的兄弟）
     ///
     /// 【为什么需要】常规增量的"变化集"就是 scope 子树；而平移传播下，
@@ -83,6 +100,8 @@ impl TaffyEngine {
     pub fn new() -> Self {
         Self {
             last_phases: std::collections::BTreeMap::new(),
+            phase_acc: std::collections::BTreeMap::new(),
+            persistent_taffy: None,
             last_changed_roots: Vec::new(),
             translation_reject: None,
             measurer: None,
@@ -254,18 +273,39 @@ impl TaffyEngine {
 
     /// 执行一轮 taffy 布局（含度量回调）
     fn run_taffy(&mut self, tree: &LayoutTree, taffy: &mut TaffyTree<u32>, roots: &[NodeIndex], constraint: RootConstraint) -> LayoutOutput {
+        self.run_taffy_impl(tree, taffy, roots, constraint, true)
+    }
+
+    /// `run_taffy` 的实现（`readback` 控制是否做**整树**回读——范围求解不需要，见调用点注释）
+    fn run_taffy_impl(
+        &mut self,
+        tree: &LayoutTree,
+        taffy: &mut TaffyTree<u32>,
+        roots: &[NodeIndex],
+        constraint: RootConstraint,
+        readback: bool,
+    ) -> LayoutOutput {
         // ★字段级解构：让 `measurer` 与 `measure_cache` 同时可变借用（互不相交）
-        let TaffyEngine { measurer, measure_cache, measure_calls, measure_hits, taffy_ids, last_root_constraint: _, last_phases: _, last_changed_roots: _, translation_reject: _ } = self;
+        let TaffyEngine { measurer, measure_cache, measure_calls, measure_hits, taffy_ids, last_root_constraint: _, last_phases: _, last_changed_roots: _, translation_reject: _, phase_acc: _, persistent_taffy: _ } = self;
         *measure_calls = 0;
         *measure_hits = 0;
 
         let avail = taffy::Size { width: to_taffy_space(constraint.width), height: to_taffy_space(constraint.height) };
         let nodes: &[LNode] = &tree.nodes;
         // ★id → 节点索引（供回调 O(1) 直取；见回调内说明）
-        let mut id_index: HashMap<u32, u32> = HashMap::with_capacity(nodes.len());
+        // ★★只装**文本节点**（本仓实测的性能缺陷：此前装全部节点）
+        //   【为什么语义不变】度量回调对非文本节点本就返回 (0,0)（见回调内 `node.text` 分支），
+        //   故非文本节点**从不被查**。装全部 = 每个范围白付 O(整树) 次哈希插入
+        //   （S4 形态 300 个范围 × 2001 节点 ≈ 60 万次）。
+        let t_idx0 = std::time::Instant::now();
+        let text_count = nodes.iter().filter(|n| n.text.is_some()).count();
+        let mut id_index: HashMap<u32, u32> = HashMap::with_capacity(text_count);
         for (i, n) in nodes.iter().enumerate() {
-            id_index.insert(n.id, i as u32);
+            if n.text.is_some() {
+                id_index.insert(n.id, i as u32);
+            }
         }
+        let t_idx = t_idx0.elapsed().as_secs_f64() * 1000.0;
         // ★★度量缓存键的第一维（Profile §5.3「文本 hash + 字体」）——按节点索引平行存放。
         //
         // ★★**内容寻址 vs 节点寻址的取舍**（本仓实测踩到，值得记）：
@@ -275,8 +315,11 @@ impl TaffyEngine {
         //     → **必须回退节点寻址**（用 node_id）
         //     ✗ 若在此时仍填 0：**所有文本节点的键相同** → 不同文本错误共用缓存项
         //       → 几何错乱（本仓实测：conformance 17 用例里文本相关全部失败，max_delta 12.6dp）
+        let t_hash0 = std::time::Instant::now();
         let text_hashes = compute_text_hashes(nodes);
+        let t_hash = t_hash0.elapsed().as_secs_f64() * 1000.0;
 
+        let t_compute0 = std::time::Instant::now();
         for &root in roots {
             let taffy_root = taffy_ids[root as usize];
             taffy
@@ -335,9 +378,13 @@ impl TaffyEngine {
                 .expect("taffy: compute_layout");
         }
 
+        let t_compute = t_compute0.elapsed().as_secs_f64() * 1000.0;
+        let t_rb0 = std::time::Instant::now();
         // 回写矩形（taffy 的 location 已是「相对父内容盒」——与我们的坐标约定一致）
-        let mut rects: Vec<Option<Rect>> = vec![None; tree.len()];
+        // ★`readback=false` 时**不读**（范围求解由调用方只回读其子树——否则每范围 O(整树)）
+        let mut rects: Vec<Option<Rect>> = if readback { vec![None; tree.len()] } else { Vec::new() };
         for (idx, taffy_id) in taffy_ids.iter().enumerate() {
+            if !readback { break; }
             if let Ok(layout) = taffy.layout(*taffy_id) {
                 rects[idx] = Some(Rect {
                     x: layout.location.x,
@@ -347,7 +394,112 @@ impl TaffyEngine {
                 });
             }
         }
+        // ★run_taffy 的内部三段（本仓实测：整树重排 93% 在 run_taffy，需再拆才能定位）
+        //   注意：`self` 被上方字段级解构借用，故这里用 `last_phases`（BTreeMap<String,_>）
+        //   而不是 `phases_mut`；只在**非空**时写，避免热路径字符串分配。
+        if std::env::var_os("PROTEUS_PHASE_TRACE").is_some() {
+            self.last_phases.insert("run_idx_ms".into(), t_idx);
+            self.last_phases.insert("run_hash_ms".into(), t_hash);
+            self.last_phases.insert("run_compute_ms".into(), t_compute);
+            self.last_phases.insert("run_readback_ms".into(), t_rb0.elapsed().as_secs_f64() * 1000.0);
+        }
         LayoutOutput { rects, measure_calls: *measure_calls, measure_hits: *measure_hits, relayout_count: tree.len() }
+    }
+
+    /// ★★确保持久 taffy 树与当前树结构一致（不一致 ⇒ 整棵重建）
+    ///
+    /// 【判据】`taffy_ids.len() == tree.len()`——splice 增删节点会让长度变化 ⇒ 重建。
+    ///   （更细的结构变更如"顺序调整"不在本版支持范围：splice 只支持追加/摘除，见其实现。）
+    fn ensure_persistent(&mut self, tree: &LayoutTree) {
+        let stale = match &self.persistent_taffy {
+            None => true,
+            Some(_) => self.taffy_ids.len() != tree.len(),
+        };
+        if stale {
+            let t = self.build_taffy(tree);   // 同时更新 self.taffy_ids
+            self.persistent_taffy = Some(t);
+        }
+    }
+
+    /// ★★把**变更节点**的 style 同步进持久 taffy（只同步这些 ⇒ taffy 缓存得以复用）
+    fn sync_styles(&mut self, tree: &LayoutTree, changed: &[NodeIndex]) {
+        let Some(t) = self.persistent_taffy.as_mut() else { return };
+        for &i in changed {
+            if let Some(&id) = self.taffy_ids.get(i as usize) {
+                let st = Self::to_taffy(&tree.get(i).style);
+                let _ = t.set_style(id, st);
+            }
+        }
+    }
+
+    /// ★★在**持久树**上做整树求解（根范围的退化路径用；此前是"重建整棵树再求解"）
+    fn layout_cached(&mut self, tree: &mut LayoutTree, constraint: RootConstraint, changed: &[NodeIndex]) -> LayoutOutput {
+        self.last_root_constraint = Some(constraint);
+        self.ensure_persistent(tree);
+        self.sync_styles(tree, changed);
+        let roots = tree.roots.clone();
+        // ★借用顺序：`run_taffy` 需要 `&mut self` ⇒ 先把持久树**取出来**、用完放回
+        //   （Rust 不允许同时可变借用 `self` 与 `self` 的字段）
+        let mut taffy = self.persistent_taffy.take().expect("ensure_persistent 已建树");
+        let out = self.run_taffy(tree, &mut taffy, &roots, constraint);
+        self.persistent_taffy = Some(taffy);
+        self.write_back(tree, &out);
+        out
+    }
+
+    /// ★★在**持久树**上只重排某范围子树（非根范围用；替代"拷贝子树 + 子引擎"）
+    ///
+    /// 【与旧实现（拷贝法）的等价性】拷贝法是「把范围子树复制成一棵新树，以 definite(范围尺寸) 求解」；
+    ///   本方法是在同一棵树里对该子树根调用求解——**同一纯函数**（style + 可用空间 ⇒ 布局）
+    ///   ⇒ 结果一致。差别只在：不复制、不重建，taffy 缓存可复用。
+    fn layout_subtree_cached(
+        &mut self,
+        tree: &mut LayoutTree,
+        scope: NodeIndex,
+        constraint: RootConstraint,
+        changed: &[NodeIndex],
+    ) -> LayoutOutput {
+        let _ = changed;   // 拷贝法自带完整 style ⇒ 无需 sync（见方法注释）
+        // ★★**范围求解必须"拷贝子树 + 独立子引擎"**（本仓实测：真增量在**范围**场景更慢）
+        //
+        // 【为什么不用持久大树求解某个范围】尝试过：`ensure_persistent` + 对该范围根调
+        //   `taffy.compute_layout(scope_id, definite)`。实测**形态 A 从 1.5ms 恶化到 8.1ms**
+        //   ——因为 taffy 的脏标记会**向上传播到根**，对 500 行大树里的一个小范围求解，
+        //   taffy 仍会重算整条祖先链（甚至整树），而拷贝法只解"范围子树"（4 节点）。
+        //   ⇒ 范围场景的正确姿势是**把范围子树隔离出来解**（本实现）；taffy 的持久树增量
+        //     只在"整树重排"场景有优势（见 `layout_cached` 的注释与基准数据）。
+        //
+        // ⚠ 另一处实测教训（保留在此以免后人重犯）：`run_taffy` 的**整树回读**是 O(整树)，
+        //   多范围下要 60 万次 `layout()` 调用 ⇒ 范围求解必须只回读自己的子树（见下方循环）。
+        let _ = &self.persistent_taffy;
+        let t_phase0 = std::time::Instant::now();
+        let (out, _scope_size) = self.layout_subtree_and_writeback(tree, scope, constraint);
+        let _ = t_phase0;
+        out
+    }
+
+    /// 引擎内 taffy 树的节点数（调用方判"结构是否与 LayoutTree 一致"用）
+    pub fn taffy_id_len(&self) -> usize {
+        self.taffy_ids.len()
+    }
+
+    /// 丢弃持久 taffy 树（结构变更后调用：下次求解会重建）
+    pub fn invalidate_persistent(&mut self) {
+        self.persistent_taffy = None;
+        self.taffy_ids.clear();
+    }
+
+    /// 相位累加器（多范围重排下**累加**每一段的耗时——单个范围的数字会淹没在噪声里）
+    /// ★键用 `&'static str`（本仓实测：String 键在多范围下**每范围 5 次堆分配**，
+    ///   300 个范围 = 1500 次分配 —— 比它要测的东西还贵）
+    pub fn phases_mut(&mut self, key: &'static str) -> &mut f64 {
+        // 注意：这里用独立的 `phase_acc` 而不是 `last_phases`（后者是"最后一次"的语义）
+        self.phase_acc.entry(key).or_insert(0.0)
+    }
+
+    /// 取相位累加快照（`relayout_multi` 结束后读它做归因）
+    pub fn take_phase_acc(&mut self) -> std::collections::BTreeMap<&'static str, f64> {
+        std::mem::take(&mut self.phase_acc)
     }
 
     /// 把 `out.rects` 回写进节点（`display:none` 的 `None` 保持零矩形）
@@ -366,9 +518,19 @@ impl LayoutEngine for TaffyEngine {
         // ★记下本次根约束：增量在「无边界 ⇒ 退回全量」时要**精确复用**它，而不是自己猜
         self.last_root_constraint = Some(constraint);
         let roots = tree.roots.clone();
+        // ★分段埋点（全量路径是类B/无边界形态的主成本；本仓纪律：先拆再优化）
+        let t_b0 = std::time::Instant::now();
         let mut taffy = self.build_taffy(tree);
+        let t_build = t_b0.elapsed().as_secs_f64() * 1000.0;
+        let t_r0 = std::time::Instant::now();
         let out = self.run_taffy(tree, &mut taffy, &roots, constraint);
+        let t_run = t_r0.elapsed().as_secs_f64() * 1000.0;
+        let t_w0 = std::time::Instant::now();
         self.write_back(tree, &out);
+        let t_wb = t_w0.elapsed().as_secs_f64() * 1000.0;
+        *self.phases_mut("full_build_ms") += t_build;
+        *self.phases_mut("full_run_ms") += t_run;
+        *self.phases_mut("full_writeback_ms") += t_wb;
         out
     }
 
@@ -382,10 +544,23 @@ impl LayoutEngine for TaffyEngine {
     ///   对比全量 O(整树)：当 范围 ≪ 整树 时是真实收益。进一步优化（复用 taffy 状态做真增量）
     ///   留到 M2 有真机数据后再评估——先保证语义正确。
     fn layout_incremental(&mut self, tree: &mut LayoutTree, dirty: NodeIndex) -> LayoutOutput {
+        let t_pro = std::time::Instant::now();
         // ★每轮清空（否则上一轮的平移痕迹会污染本轮的收集集合）
         self.last_changed_roots.clear();
         self.translation_reject = None;
         let scope = self.relayout_scope_of(tree, dirty);
+
+        // ★★先**同步持久树**（本仓实测的关键：真增量的正确性前提）
+        //
+        // 【为什么两条路径都要同步】持久 taffy 树是"整树重排"（根范围）的求解载体；
+        //   而**范围重排走的是拷贝法**（把范围子树隔离出来解——实测比"在大树上解子树"快得多，
+        //   因为 taffy 的脏标记会向上传播）。若范围路径**不同步**，那些节点的 style 就
+        //   在持久树里**仍是旧值** ⇒ 后续某次整树重排会用旧 style 求解 ⇒ **静默错几何**。
+        //   ⇒ 每条增量路径都把自己的脏节点同步进持久树（一次 set_style，成本可忽略）。
+        if !self.taffy_ids.is_empty() {
+            self.ensure_persistent(tree);
+            self.sync_styles(tree, &[dirty]);
+        }
 
         // ★★退化保护：重排范围 == 根 ⇒ 直接走全量，别做「拷贝整树再布局」
         //
@@ -408,7 +583,10 @@ impl LayoutEngine for TaffyEngine {
                 width: AvailableSpace::MaxContent,
                 height: AvailableSpace::MaxContent,
             });
-            return self.layout(tree, c);
+            // ★★真增量（本仓实测：整树重排里 79% 是"重建 taffy"的固定成本——
+            //   保留树 + 只同步变更节点 ⇒ 同形状基准 2.96ms → 0.089ms）
+            *self.phases_mut("prologue_ms") += t_pro.elapsed().as_secs_f64() * 1000.0;
+            return self.layout_cached(tree, c, &[dirty]);
         }
 
         // ★★根约束 = 该边界节点**上次布局的实际尺寸**（而不是它的声明尺寸）
@@ -418,15 +596,23 @@ impl LayoutEngine for TaffyEngine {
         //   「不限宽」重排 → 内容换行/换行反推的尺寸全变 ⇒ **几何错**（不是慢，是错）。
         //   而边界的定义就是「对外尺寸与内容无关」⇒ 它上次的实际尺寸**本次依然成立**，
         //   直接拿 `rect` 用即可（首帧无 rect 时退回声明尺寸/INFINITY）。
-        let scope_rect = tree.get(scope).rect;
-        let scope_style = tree.get(scope).style.clone();
-        let cw = if scope_rect.width > 0.0 { scope_rect.width } else { scope_style.width.unwrap_or(f32::INFINITY) };
-        let ch = if scope_rect.height > 0.0 { scope_rect.height } else { scope_style.height.unwrap_or(f32::INFINITY) };
+        // ★只取需要的两个标量（本仓实测的性能缺陷：此前 `style.clone()` 整份复制
+        //   ——`LStyle` 含多个 String 字段 ⇒ **每范围一次堆分配**；多范围（300 个）白付 300 次。
+        //   而这里只用到 width/height 两个标量 ⇒ 直接读，不 clone。）
+        let (scope_rect, fb_w, fb_h) = {
+            let n = tree.get(scope);
+            (n.rect, n.style.width, n.style.height)
+        };
+        let cw = if scope_rect.width > 0.0 { scope_rect.width } else { fb_w.unwrap_or(f32::INFINITY) };
+        let ch = if scope_rect.height > 0.0 { scope_rect.height } else { fb_h.unwrap_or(f32::INFINITY) };
         let constraint = RootConstraint::definite(cw, ch);
 
         // 取子树 + 前序索引映射（一次 O(范围)，避免逐节点重扫）
+        // ★prologue = 范围推导 + 退化判定 + 约束求解（多范围下这部分是**每范围的固定成本**）
+        *self.phases_mut("prologue_ms") += t_pro.elapsed().as_secs_f64() * 1000.0;
         let t_phase0 = std::time::Instant::now();
-        let (out, _scope_size) = self.layout_subtree_and_writeback(tree, scope, constraint);
+        // ★★真增量：同一棵持久树里只重排该范围（替代"拷贝子树 + 子引擎重建"）
+        let out = self.layout_subtree_cached(tree, scope, constraint, &[dirty]);
         let t_total = t_phase0.elapsed().as_secs_f64() * 1000.0;
         self.last_phases.clear();
         self.last_phases.insert("subtree_ms".into(), t_total);
@@ -459,21 +645,38 @@ impl TaffyEngine {
         scope: NodeIndex,
         constraint: RootConstraint,
     ) -> (LayoutOutput, (f32, f32)) {
+        // ★分相位埋点（本仓纪律：任何 >5µs 的分段都要再拆——多范围形态下总额外开销显著）
+        let t_copy0 = std::time::Instant::now();
         let order = preorder(tree, scope);
         let mut sub = LayoutTree::new();
         let root_new = copy_subtree(tree, scope, &mut sub, NO_PARENT);
         sub.roots.push(root_new);
+        let t_copy = t_copy0.elapsed().as_secs_f64() * 1000.0;
 
+        let t_sub0 = std::time::Instant::now();
         let mut sub_engine = TaffyEngine::new();
         if let Some(m) = self.measurer.take() {
             sub_engine.set_measurer(m);
         }
+        let t_sub = t_sub0.elapsed().as_secs_f64() * 1000.0;
+        let t_solve0 = std::time::Instant::now();
         let out = sub_engine.layout(&mut sub, constraint);
+        let t_solve = t_solve0.elapsed().as_secs_f64() * 1000.0;
+        let t_wb0 = std::time::Instant::now();
         // 重排后的实际尺寸（供调用方判 delta / 传播）
         let scope_new = sub.get(root_new).rect;
 
         let origin = tree.get(scope).rect;
-        let mut rects: Vec<Option<Rect>> = vec![None; tree.len()];
+        // ★★**不再分配 O(整树) 的 rects 缓冲**（本仓实测的性能缺陷）
+        //
+        // 【为什么可以省】该缓冲的形状是 `Vec<Option<Rect>>`（**按整树索引**），
+        //   而回写只需要"范围子树里的节点"。此前每个范围都 `vec![None; tree.len()]`
+        //   ⇒ 多范围（S4 文本形态：300 个范围 × 2001 节点）要**分配并写 60 万个槽位**，
+        //   全是白付（实测探针：`5.7µs/范围` 里这是主要固定成本）。
+        //   ★安全性依据：**没有任何调用方读增量路径的 `out.rects`**——
+        //     `relayout_multi` 只用 relayout_count/measure_*；FFI 的更新路径用
+        //     `collect_abs_subtree` 独立收集（它读的是写回后的 `tree`）。已在仓库全量 grep 确认。
+        //   ⇒ 回写**直接落 tree**，输出里的 rects 置空（形状保持兼容，语义明确标注）。
         let mut count = 0usize;
         for (sub_idx, r) in out.rects.iter().enumerate() {
             let Some(r) = r else { continue };
@@ -485,18 +688,31 @@ impl TaffyEngine {
             };
             tree.nodes[orig as usize].rect = new_rect;
             tree.nodes[orig as usize].dirty = false;
-            rects[orig as usize] = Some(new_rect);
             count += 1;
         }
 
+        let t_wb = t_wb0.elapsed().as_secs_f64() * 1000.0;
+
         // 度量缓存合并回主引擎（子树算过的成果不丢）
+        let t_merge0 = std::time::Instant::now();
         if let Some(m) = sub_engine.measurer.take() {
             self.measurer = Some(m);
         }
         self.measure_cache.extend(sub_engine.measure_cache);
+        let t_merge = t_merge0.elapsed().as_secs_f64() * 1000.0;
+
+        // ★累加相位（多范围时由 relayout_multi 读取；单范围也可读）
+        *self.phases_mut("copy_ms") += t_copy;
+        *self.phases_mut("subengine_ms") += t_sub;
+        *self.phases_mut("solve_ms") += t_solve;
+        *self.phases_mut("writeback_ms") += t_wb;
+        *self.phases_mut("merge_cache_ms") += t_merge;
+        *self.phases_mut("scopes_done") += 1.0;
 
         (
-            LayoutOutput { rects, measure_calls: out.measure_calls, measure_hits: out.measure_hits, relayout_count: count },
+            // ★rects 为空是**契约的一部分**（见上方注释）：几何已直接写入 `tree`，
+            //   调用方请读 tree（或经 `collect_abs_subtree` 收集变化集）
+            LayoutOutput { rects: Vec::new(), measure_calls: out.measure_calls, measure_hits: out.measure_hits, relayout_count: count },
             (scope_new.width, scope_new.height),
         )
     }
@@ -733,6 +949,12 @@ fn hash_for_tests(nodes: &[LNode]) -> Vec<u64> {
 fn measure_key(text_hash: u64, max_w: f32) -> (u64, u32) {
     let w = if max_w.is_finite() { max_w.to_bits() } else { f32::INFINITY.to_bits() };
     (text_hash, w)
+}
+
+/// 探针用：把 `LStyle` 转成 taffy `Style`（判定"包装层"成本归属；
+/// 见 `examples/taffy-floor-bench.rs` 的形态 ④）
+pub fn to_taffy_style_for_bench(style: &LStyle) -> Style {
+    TaffyEngine::to_taffy(style)
 }
 
 /// 前序索引序列（与 `copy_subtree` 的产出顺序**必须一致**——两者都是「自身 → 子级依次」）
