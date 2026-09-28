@@ -77,7 +77,7 @@ const BN = { snapshot: 'bench-final' }
 // ★构建标识：每次构建写入，用于**确凿判定**设备上跑的是哪份代码
 //   （踩坑：靠文件 mtime 判断"报告是否刷新"不可靠——新建目标文件的时间恒为"现在"；
 //    且我看不出设备实际执行的是旧 bundle，白跑一轮。有了这个字段就能一眼判定。）
-const BUILD_ID = '732f0b3a-152950'
+const BUILD_ID = 'a59b4dbf-155432'
 const now = (): number => Date.now()
 /** 宽松解析（宿主返回可能是字符串或已是对象） */
 const safeParseAny = (s: any): any => {
@@ -1545,45 +1545,88 @@ CASES.push({
   },
 })
 
-/* S4 · 文本击穿：改大量文案（内容寻址缓存必然未命中） */
+/* S4 · 文本击穿：改 300 行文案（★2026-09-28：走文本补丁增量，与全量对照） */
 CASES.push({
   name: 'S4_text_churn',
-  note: '★文本击穿：改 300 行文案（**击穿内容寻址度量缓存**）——文本度量是平台最贵的一步',
+  note: '★文本击穿：改 300 行文案 —— 文本补丁增量 vs 全量重发（同用例 A/B）',
   fn: async () => {
     const N = 500
     const app = makeApp(N)
     mountApp(app, N)                    // ★必须：见 mountApp 注释
-    app.adapter.resetStats()
-    const t0 = now()
-    app.churnText(300, 'R1')                 // 300 行文案变化
-    await nextTick()
-    const tVue = now()
-    const patches = app.adapter.takePatches()
-    const tReq = now()
-    let hostOut: string
-    let bytes = 0
-    if (patches === null) {
-      const r = app.adapter.toRequest(VP)
-      const tj = JSON.stringify(r)
-      bytes = tj.length
-      hostOut = proteusSelfDraw.update(tj)
-    } else {
-      bytes = JSON.stringify(patches).length
-      hostOut = proteusSelfDraw.updatePatches(JSON.stringify(patches))
+
+    /**
+     * 跑一次「改 k 行文案」并记录四段分解
+     *
+     * @param viaPatch  true = 走 updatePatches（文本补丁增量）；false = 强制全量（对照）
+     */
+    const runOne = async (label: string, viaPatch: boolean) => {
+      app.adapter.resetStats()
+      // ★文案必须**每次都不同**，否则击不穿内容寻址的度量缓存（本仓实测：
+      //   重复文案会命中缓存 ⇒ 读者会误以为"文本变更不贵"）
+      const tag = `R${label}`
+      const t0 = now()
+      app.churnText(300, tag)
+      await nextTick()
+      const tVue = now()
+      const patches = app.adapter.takePatches()
+      let payload: unknown
+      let mode = viaPatch ? 'patch' : 'FULL-by-design'
+      if (patches === null) {
+        mode = 'FULL-required'
+        payload = app.adapter.toRequest(VP)
+      } else if (viaPatch) {
+        payload = patches
+      } else {
+        payload = app.adapter.toRequest(VP)   // 对照：同样改数据，但强制整树重发
+        mode = 'FULL-by-design'
+      }
+      const tReq = now()
+      const payloadJson = JSON.stringify(payload)
+      const tSer = now()
+      const bytes = payloadJson.length
+      const hostOut = patches !== null && viaPatch
+        ? proteusSelfDraw.updatePatches(payloadJson)
+        : proteusSelfDraw.update(payloadJson)
+      const tHost = now()
+      const h = safeParseAny(hostOut)
+      app.adapter.markFullSync()
+      // ★形状：文本在 `style.text` 内（适配器/Rust/宿主三处同形状——见 Rust 的
+      //   `text_field_must_be_inside_style` 测试；本仓实测顶层形状会被静默忽略）
+      const textPatches = patches === null
+        ? -1
+        : patches.filter((x) => (x as { style?: { text?: string } }).style?.text !== undefined).length
+      results.push({
+        case: `S4_text_churn_${label}`,
+        note: `改 300 行文案（${N} 项页面 · ${mode}）`,
+        items: N, nodes: (h?.["node_count"] as number) ?? 0,
+        vue_ms: tVue - t0, to_request_ms: tReq - tVue, serialize_ms: tSer - tReq,
+        host_ms: tHost - tSer, total_ms: tHost - t0,
+        patch_count: app.adapter.patchCount(), request_bytes: bytes,
+        extra: {
+          mode, text_patches: textPatches,
+          relayout: h?.["relayout_count"], scopes: h?.["scopes"],
+          // ★文本落层读数（本轮修的静默错显示缺陷：不落层 = 屏幕文字停留旧值）
+          text_updates: h?.["text_updates"], text_layers_applied: h?.["text_layers_applied"],
+          measures_injected: h?.["measures_injected"],
+          // ★★设备侧不变量：**有文本补丁就必须有度量注入**（本仓实测的形状分叉：
+          //   宿主曾找顶层 `text` ⇒ 注入 0 条 ⇒ 核心按旧尺寸算几何 ⇒ 字被裁且无报错）。
+          //   注意：同文案可能命中度量缓存 ⇒ 允许 injected ≤ patches，但**不得为 0**
+          //   （只要真的改了文案，就至少有一条新度量）。
+          measure_invariant_ok: (() => {
+            if (mode !== 'patch') return true
+            const tp = patches === null ? 0 : patches.filter((x) => (x as { style?: { text?: string } }).style?.text !== undefined).length
+            if (tp === 0) return true
+            return ((h?.["measures_injected"] as number) ?? 0) > 0
+          })(),
+          measure_hits: h?.["measure_cache_hits"], measure_misses: h?.["measure_cache_misses"],
+          updated_layers: h?.["updated_layers"],
+        },
+      })
+      markCeiling('text_churn', `改 300 行文案（${mode}）`, tHost - t0, '文本变更（缓存未命中）')
     }
-    const tHost = now()
-    const h = safeParseAny(hostOut)
-    results.push({
-      case: 'S4_text_churn',
-      note: `改 300 行文案（${N} 项页面）`,
-      items: N, nodes: 0,
-      vue_ms: tVue - t0, to_request_ms: tReq - tVue, serialize_ms: tHost - tReq,
-      host_ms: tHost - tReq, total_ms: tHost - t0,
-      patch_count: app.adapter.patchCount(), request_bytes: bytes,
-      extra: { relayout: h?.["relayout_count"], patches_sent: patches === null ? 'FULL' : patches.length,
-               measure_hits: h?.["measure_cache_hits"], measure_misses: h?.["measure_cache_misses"] },
-    })
-    markCeiling('text_churn', '改 300 行文案', tHost - t0, '文本变更（缓存未命中）')
+    // ★同用例 A/B：全量先跑（对照），再跑补丁增量
+    await runOne('FULL', false)
+    await runOne('patch', true)
     app.dispose()
   },
 })

@@ -78,12 +78,17 @@ describe('V0 探针装置自检（桌面）', () => {
     const N = 20
     const app = mounted(N, 'memo')
     app.adapter.resetStats()
-    // ★① 文本变更在当前管线里**走全量**（已知限制，V1/V2 的待解项之一）：
-    //   适配器 `setElementText` 会 `createText` ⇒ 置结构标志 ⇒ takePatches() 返回 null。
-    //   本断言把这个现状**钉住**（而不是假装文本也能增量）——它正是"编译器路线"要动的地方之一。
+    // ★① 文本变更**现在走补丁增量**（2026-09-28 修复；此前只能全量）
+    //   【为什么这条断言变过】旧实现里 `setElementText` 会"清空 children + 新建文本节点"
+    //   ⇒ 新 id ⇒ 结构变更 ⇒ `takePatches()` 返回 null ⇒ **整树重发**
+    //   （真机 S4 实测 300 行文案 = 281KB / 150ms）。首版测试把这个**现状**钉住并注明
+    //   "它正是编译器路线要动的地方之一"——现在动了：适配器**复用同一文本节点**
+    //   ⇒ id 稳定 ⇒ 内容更新 ⇒ 走补丁（真机 A/B：281KB→15KB · 150ms→71ms）。
     app.churnText(5, 'X')
     await nextTick()
-    expect(app.adapter.takePatches()).toBeNull()
+    const tp = app.adapter.takePatches()
+    expect(tp, '文本更新现在应产出补丁（而非 null ⇒ 全量）').not.toBeNull()
+    expect(tp!.filter((x) => (x.style as { text?: string }).text !== undefined).length).toBeGreaterThan(0)
     // ★② 依赖数组内的**布局**字段变更必须被看到（证明 memo 会失效重建，不是冻结）
     app.setDotSize(3, 30)
     await nextTick()

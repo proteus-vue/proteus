@@ -90,10 +90,13 @@ describe('V7 · 结构 diff：适配器侧', () => {
     app.unmount()
   })
 
-  it('★★③c 文本内容替换（setElementText）⇒ 旧文本移除 + 新文本插入（不得只剩一半）', async () => {
-    // 【为什么要单独测（本仓实测的缺陷）】Vue 对 `h('p-text', {...}, '文本')` 走
-    //   `hostSetElementText`：**替换**全部子节点。此前适配器只登记**元素**的新建/移除
-    //   ⇒ 结果是"旧文本被摘掉、新文本从不插入" ⇒ **文字消失**（而结构计数全都正常）。
+  it('★★③c 文本内容更新 ⇒ 走**补丁**通道（不再是结构变更）', async () => {
+    // 【★本用例的语义在 2026-09-28 变了（行为改进）】此前 `setElementText` 会
+    //   "清空 children + 新建文本节点" ⇒ 新 id ⇒ 结构变更 ⇒ **被迫全量重发**
+    //   （真机 S4：300 行文案 281KB）。现在**复用同一文本节点**（id 稳定）⇒ 内容更新 ⇒ 走补丁。
+    //   ⇒ 本用例改为锁定新语义：**无结构变更 + 有文本补丁**。
+    //   ★原用例想保护的缺陷（"旧子节点没登记移除 ⇒ Rust 侧残留叠加"）现在的触发条件
+    //     是"子节点形态真的变了"——那条保护搬到了 ③d（见下），不能丢。
     const adapter = createSelfDrawAdapter() as ReturnType<typeof createSelfDrawAdapter> & { takeSplice(): unknown }
     const renderer = createAppRenderer(adapter)
     const label = ref('A')
@@ -108,12 +111,44 @@ describe('V7 · 结构 diff：适配器侧', () => {
 
     label.value = 'B'
     await nextTick()
-    const sp = adapter.takeSplice() as { removes: number[]; inserts: Array<{ nodes: Array<{ text?: string }> }> }
-    expect(typeof sp, `替换文本应产出 splice（实得 ${JSON.stringify(sp)}）`).not.toBe('string')
-    // ★两半都要有：摘旧文本 + 插新文本
-    expect(sp.removes.length, '旧文本必须登记为移除').toBe(1)
-    const texts = sp.inserts.flatMap((g) => g.nodes).map((n) => n.text)
-    expect(texts, '新文本必须登记为插入（否则文字消失）').toContain('B')
+    expect(adapter.takeSplice(), '文本更新不是结构变更').toBeNull()
+    const patches = adapter.takePatches() as Array<{ id: number; style: Record<string, unknown> }> | null
+    expect(patches, '文本更新必须走补丁通道（此前是 null ⇒ 全量）').not.toBeNull()
+    expect(patches!.some((x) => x.style.text === 'B'), '应含文本补丁').toBe(true)
+    app.unmount()
+  })
+
+  it('★★③d 子节点**形态真变**（1 个 → 2 个）⇒ 旧子节点必须登记移除（原 ③c 的保护）', async () => {
+    // 【为什么保留这条】单文本 → 多子节点是**真结构变更**；此时若不清掉旧子节点，
+    //   核心侧会残留（旧文本层不消失、新层叠加 ⇒ "两行字重叠"）。这条保护不能因为
+    //   "文本更新改走补丁"而丢失——它现在只在**形态变化**时触发。
+    const adapter = createSelfDrawAdapter() as ReturnType<typeof createSelfDrawAdapter> & {
+      takeSplice(): unknown
+      takePatches(): unknown
+    }
+    const renderer = createAppRenderer(adapter)
+    const mode = ref<'one' | 'two'>('one')
+    const App = {
+      render: () =>
+        h('p-view', { style: { height: 40 } }, [
+          mode.value === 'one' ? h('p-text', {}, 'A') : h('p-text', {}, 'A2'),
+          ...(mode.value === 'two' ? [h('p-text', {}, 'B')] : []),
+        ]),
+    }
+    const container = adapter.createElement('p-view')
+    adapter.root.children.push(container)
+    container.parent = adapter.root
+    const app = renderer.createApp(App)
+    app.mount(container)
+    await nextTick()
+    adapter.markFullSync()
+
+    mode.value = 'two'
+    await nextTick()
+    // ★形态变 ⇒ 必须走全量或结构通道（不得被当成"纯文本补丁"吞掉）
+    const patches = adapter.takePatches()
+    const splice = adapter.takeSplice()
+    expect(patches === null || splice !== null, '形态变更必须走全量或结构通道').toBe(true)
     app.unmount()
   })
 

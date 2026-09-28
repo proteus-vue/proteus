@@ -723,6 +723,13 @@ final class SelfDrawView: UIView {
         depthById[id] ?? 0
     }
 
+    /// 取某节点建层时记录的 **fontSize**（文本补丁的度量要用它——与全量渲染同源）
+    func fontSizeOf(id: Int) -> Double? {
+        if let fs = metaByNodeId[id]?["fontSize"] as? CGFloat { return Double(fs) }
+        if let fs = metaByNodeId[id]?["fontSize"] as? Double { return fs }
+        return nil
+    }
+
     /// ★实际 CALayer frame 清单（宿主侧读数）——与核心 rects 对照，证明「几何真的被用上了」
     ///
     /// `parentId` 一并导出：三端坐标口径不同（核心 rects = **绝对**；CALayer frame = **父相对**），
@@ -865,6 +872,35 @@ final class SelfDrawBridge: NSObject, SelfDrawExports {
             return "{\"ok\":false,\"error\":\"未建树或未接入核心\"}"
         }
         let t0 = CFAbsoluteTimeGetCurrent()
+
+        // ── ★★文本补丁：**先度量再注入**（本仓实测的闭环缺口）──
+        //
+        // 【为什么必须在这里做（真机 S4 的根因链）】文本尺寸只能由宿主度量，而核心的
+        //   `TableTextMeasurer` 是**按 nodeId 查表**（内容不同 ⇒ 表里的旧尺寸就是错的）。
+        //   ⇒ 补丁里带 `text` 时必须：① 用该节点的 fontSize 重新度量 ② `set_text_measures`
+        //     注入 ③ 再发补丁 ⇒ 核心才会用**新文本的新尺寸**重排。
+        //   ★漏掉任何一步的症状：核心几何按旧尺寸算（字被裁/留白），而**没有任何报错**。
+        var measures: [String: [String: Double]] = [:]
+        if let d = patchesJson.data(using: .utf8),
+           let arr = (try? JSONSerialization.jsonObject(with: d)) as? [[String: Any]] {
+            for p in arr {
+                // ★形状：`{id, style:{text}}`（与适配器产出、Rust StylePatch **三处同形状**）
+                //   本仓实测：首版在此找顶层 `text` ⇒ 度量**一条都没注入** ⇒ 核心按旧尺寸算几何
+                //   （字变长了盒子没变 ⇒ 字被裁），而 applied 照数 300 —— 又一处静默形状分叉。
+                guard let id = p["id"] as? Int,
+                      let style = p["style"] as? [String: Any],
+                      let text = style["text"] as? String else { continue }
+                // fontSize 取宿主建层时留下的 meta（与全量渲染同源，不猜默认值）
+                let fs = (view.fontSizeOf(id: id)).map { CGFloat($0) } ?? 14
+                let sz = SelfDrawBridge.measureText(text, fontSize: fs)
+                measures["\(id)"] = ["width": Double(sz.width), "height": Double(sz.height)]
+            }
+        }
+        if !measures.isEmpty {
+            let mj = jsonString2(measures)
+            _ = mj.withCString { takeCString(proteus_layout_set_text_measures(handle, $0)) }
+        }
+
         let out = patchesJson.withCString { takeCString(proteus_layout_update(handle, $0)) }
         let updateMs = (CFAbsoluteTimeGetCurrent() - t0) * 1000
         guard out.contains("\"ok\":true") else {
@@ -893,6 +929,11 @@ final class SelfDrawBridge: NSObject, SelfDrawExports {
                                                     width: r["width"] ?? 0, height: r["height"] ?? 0)))
             }
         }
+        // ★★文本落层（与 applyOps 同一条路：`text_updates` → CATextLayer.string）
+        //   见 applyTextUpdates 注释（不落层 = 屏幕文字停留旧值，几何断言发现不了）
+        let textUpdates = (o?["text_updates"] as? [String: Any]) ?? [:]
+        let textApplied = textUpdates.isEmpty ? 0 : view.applyTextUpdates(textUpdates)
+
         let tL = CFAbsoluteTimeGetCurrent()
         // ★遗留路径（S2/V0/J 用例走这条）**保持全量更新**：它的语义已进历史读数，
         //   若在此启用「只更可见层」会静默改变那些基线（本仓纪律：改变已发布读数必须显式）。
@@ -911,6 +952,9 @@ final class SelfDrawBridge: NSObject, SelfDrawExports {
         return jsonString(["ok": true, "path": "updatePatches", "incremental": true,
                            "in_bytes": patchesJson.count,
                            "patch_count": applied, "relayout_count": relayout,
+                           "text_updates": textUpdates.count,
+                           "text_layers_applied": textApplied,
+                           "measures_injected": measures.count,
                            "changed_rects": changed.count, "updated_layers": updated,
                            "update_ms": round(updateMs * 100) / 100,
                            "layers_ms": round(layersMs * 100) / 100,
