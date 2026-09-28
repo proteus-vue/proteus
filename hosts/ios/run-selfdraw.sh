@@ -1,6 +1,11 @@
 #!/usr/bin/env bash
 # hosts/ios/run-selfdraw.sh —— ★★跑通「标准 Vue 应用 → 自绘管线」（真机）
 #
+# ★★纪律（本机踩坑）：**`$VAR` 不得直接接全角字符**（如 `（$VAR）`）——
+#   macOS 自带 bash 3.2 在**非 UTF-8 locale** 下会把全角字符的首字节吞进变量名
+#   （现象：`PROFILE_DIR\xEF: unbound variable` + `set -u` 直接中断）。
+#   ⇒ 一律写成 `${VAR}`。终端里跑没事（locale 是 UTF-8），但被工具/CI 以 C locale 调用时必炸。
+#
 # 【验证什么】
 #   标准 Vue 组件 → Vue 自定义渲染器 → 语义树 → **Rust 排版核心算几何** → CALayer 树
 #   —— 全链路**无 UIKit 布局参与**（这是与既有竖切 entry.ts 的本质差别）。
@@ -34,7 +39,13 @@ for a in "$@"; do
   esac
 done
 if [ -z "$UDID" ]; then
-  UDID="$(xcrun devicectl list devices 2>/dev/null | grep -vE 'simulated' | grep -oE '[0-9A-F]{8}-[0-9A-F]{16}' | head -1 || true)"
+  # ★设备标识有**两种形态**（本机实测：Xcode 26.5 + 无线配对给出的是标准 UUID）：
+  #   · 旧：ECID 式  00008101-001938AC1A68801E   （8-16）
+  #   · 新：标准 UUID F02622D7-29CC-5E75-9AF9-A3AB36BC5C55 （8-4-4-4-12）
+  #   只认前者会让探测**静默返回空**（现象 = "✗ 未发现真机"，但设备其实连着）——
+  #   本仓已踩：同一台 iPhone 12 在两种 Xcode 下标识形态不同。故两种都认。
+  UDID="$(xcrun devicectl list devices 2>/dev/null | grep -vE 'simulated' \
+    | grep -oE '[0-9A-Fa-f]{8}-([0-9A-Fa-f]{4}-){3}[0-9A-Fa-f]{12}|[0-9A-Fa-f]{8}-[0-9A-Fa-f]{16}' | head -1 || true)"
 fi
 [ -n "$UDID" ] || { echo "✗ 未发现真机"; exit 2; }
 echo "==> 目标设备：$UDID · 模式：$MODE"
@@ -81,7 +92,7 @@ cp "$HERE/bridge/dist/bundle-bench.js" "$APP/bundle-bench.js"
 #   + keychain-access-groups，少一项即无效）
 PROFILE_DIR="$HOME/Library/Developer/Xcode/UserData/Provisioning Profiles"
 PROFILE="$(ls -t "$PROFILE_DIR"/*.mobileprovision 2>/dev/null | head -1 || true)"
-[ -n "$PROFILE" ] || { echo "✗ 未找到描述文件（$PROFILE_DIR）"; exit 3; }
+[ -n "$PROFILE" ] || { echo "✗ 未找到描述文件（${PROFILE_DIR}）"; exit 3; }
 PLIST_TMP="$(mktemp -d)"
 security cms -D -i "$PROFILE" > "$PLIST_TMP/profile.plist" 2>/dev/null
 TEAM_ID="$(/usr/libexec/PlistBuddy -c 'Print :TeamIdentifier:0' "$PLIST_TMP/profile.plist" 2>/dev/null || echo "")"
@@ -126,7 +137,7 @@ for pf in "$HOME/Library/Developer/Xcode/UserData/Provisioning Profiles"/*.mobil
   APPID="$(/usr/libexec/PlistBuddy -c 'Print :Entitlements:application-identifier' "$PROBE" 2>/dev/null || true)"
   case "$APPID" in *".$BUNDLE_ID") PROFILE="$pf"; break ;; esac
 done
-[ -n "$PROFILE" ] || { echo "✗ 无匹配描述文件（BUNDLE_ID=$BUNDLE_ID；换一个已 provision 的 ID：PROTEUS_BUNDLE_ID=... ）"; exit 3; }
+[ -n "$PROFILE" ] || { echo "✗ 无匹配描述文件（BUNDLE_ID=${BUNDLE_ID}；换一个已 provision 的 ID：PROTEUS_BUNDLE_ID=... ）"; exit 3; }
 /usr/libexec/PlistBuddy -x -c 'Print :Entitlements' "$PROBE" > "$BUILD/entitlements.plist"
 cp "$PROFILE" "$APP/embedded.mobileprovision"
 codesign --force --sign "$IDENTITY" --entitlements "$BUILD/entitlements.plist" --timestamp=none "$APP" 2>&1 | tail -1

@@ -13,7 +13,8 @@ set -euo pipefail
 BUNDLE_ID="${1:-dev.proteus.experiments}"
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 WORK="$HERE/.provision-work"
-DEVICE="$(xcrun devicectl list devices 2>/dev/null | grep -vE 'simulated' | grep -oE '[0-9A-F]{8}-[0-9A-F]{16}' | head -1 || true)"
+DEVICE="$(xcrun devicectl list devices 2>/dev/null | grep -vE 'simulated' \
+  | grep -oE '[0-9A-Fa-f]{8}-([0-9A-Fa-f]{4}-){3}[0-9A-Fa-f]{12}|[0-9A-Fa-f]{8}-[0-9A-Fa-f]{16}' | head -1 || true)"
 
 [ -n "$DEVICE" ] || { echo "✗ 未发现真机（先连接并信任）"; exit 2; }
 
