@@ -357,19 +357,83 @@ export function collectTemplateBindings(source: string, filename = 'anonymous.vu
         // ★先扫一遍该元素的 `:key`（v-for 的行标识字段）——必须在处理其它绑定**之前**拿到，
         //   否则「:key 写在插值之后」的模板会让前面的绑定拿不到 keyField。
         let keyFieldOfElement: string | undefined
+        let forCodeOfElement: string | undefined
         for (const p of n.props ?? []) {
           if (p.name === 'bind' && p.arg?.content === 'key' && p.exp?.content) {
             keyFieldOfElement = p.exp.content.trim()
           }
+          if (p.name === 'for' && p.exp?.content) {
+            forCodeOfElement = p.exp.content.trim()
+          }
         }
+
+        // ★★先建立**行上下文**，再处理该元素的其余绑定（本仓实测的正确性修复）
+        //
+        // 【为什么（实测的静默 bug）】Vue 语义：元素上有 `v-for` ⇒ **它的所有绑定都属于该行**
+        //   （与属性书写顺序无关）。而首版是「按属性顺序处理」：v-for 分支只更新
+        //   `nextScopeSources`，同一元素上**写在 v-for 之前的绑定**（如
+        //   `<p-view v-for=… :key=… :width="item.w">` 里的 `:width` 也走旧值）拿到的仍是
+        //   **外层**的 `scopeSources` ⇒ `item` 未映射 ⇒ 该槽位挂不到任何源 ⇒
+        //   **被静默丢出依赖图**（实测：decisions 显示 slot_2 为 L1、stats.l1 计入它，
+        //    但 `table.sources` 里没有它 ⇒ 运行时永不写 ⇒ 静默不更新）。
+        //   ⇒ 正解：**先扫 v-for 建上下文**（与 `:key` 同一手法），再处理其余绑定。
+        let rowCtxOfElement: ListCtx = listCtx
+        let rowScopeSources: Record<string, string> = scopeSources
+        let rowScopes: string[] = scopes
+        if (forCodeOfElement) {
+          const parts = forCodeOfElement.split(/\s+(?:in|of)\s+/)
+          const alias = parts[0]?.trim() ?? ''
+          const names = alias.replace(/[()]/g, '').split(',').map((x) => x.trim()).filter(Boolean)
+          const exprText = (parts.slice(1).join(' ') ?? '').trim()
+          rowScopes = [...scopes, ...names]
+          rowScopeSources = { ...scopeSources }
+          const listRoot = exprText.split('.')[0]?.replace(/[^\w$]/g, '') ?? ''
+          const topRoot = scopeSources[listRoot] ?? listRoot
+          for (const nm of names) rowScopeSources[nm] = topRoot
+          const rawExprOrField = exprText.split('.').filter(Boolean).pop() ?? exprText
+          for (const nm of names) rowScopeSources[`__field__${nm}`] = rawExprOrField
+          const isTopLevel = exprText.split('.').filter(Boolean).length === 1
+          for (const nm of names) rowScopeSources[`__kind__${nm}`] = isTopLevel ? 'top' : 'nested'
+          // ★★sourceExpr 必须在**污染前**计算（本仓实测的遮蔽陷阱）
+          //
+          // 【为什么】`aliasToFieldPath` 需要靠 `__field__<别名>` 把别名翻成字段名。
+          //   但遮蔽时（内外层同名 `item`）本行的 `__field__item` 会**覆盖**外层的，
+          //   而且是**先写映射、后算路径**——于是内层 `item.items` 的别名 `item`
+          //   被翻成**外层**的字段名 `items` ⇒ 路径变成 `items.items`（多一段）。
+          //   ⇒ 正解：**用翻译前的映射算路径**，再写本行的映射。
+          const srcPathBeforeShadow = aliasToFieldPath(exprText, scopeSources)
+          rowCtxOfElement = {
+            listId: nextListId++,
+            scope: names[0] ?? '',
+            sourceExpr: srcPathBeforeShadow,
+            parentListId: listCtx?.listId,
+            keyField: keyFieldOfElement,
+            vforElementIndex: myElementIndex,
+            isKeyBinding: false,
+          }
+          // v-for 的**源表达式**绑定（`list.items`）用**外层** scopeSources（它不属行内）
+          if (exprText) {
+            out.push(
+              binding(exprText, 'v-for', 'list.items', tag, line, scopes, inBranch, scopeSources, myElementIndex),
+            )
+          }
+        }
+
         for (const p of n.props ?? []) {
           const EXPR = 7 /* DIRECTIVE */
           const name = p.name
           const expCode = p.exp?.content
           if (!expCode) continue
           const expLine = line ?? p.exp?.loc?.start?.line
-          // v-for：作用域引入别名（`item in list` / `(item, idx) in list`）
+          // v-for：已在上方**预扫描**中处理（建上下文 + 推源绑定）——此处跳过
           if (name === 'for') {
+            nextScopes = rowScopes
+            nextScopeSources = rowScopeSources
+            nextListCtx = rowCtxOfElement
+            activeListCtx = rowCtxOfElement
+            continue
+          }
+          if (false as boolean) {
             const parts = String(expCode).split(/\s+(?:in|of)\s+/)
             const alias = parts[0]?.trim() ?? ''
             const names = alias.replace(/[()]/g, '').split(',').map((s) => s.trim()).filter(Boolean)
@@ -428,13 +492,13 @@ export function collectTemplateBindings(source: string, filename = 'anonymous.vu
           }
           // v-if / v-else-if：条件本身是依赖；★其**内部**属「运行时分支」（C5）
           if (name === 'if' || name === 'else-if') {
-            out.push(binding(String(expCode), `v-${name}`, 'visible', tag, expLine, scopes, inBranch, scopeSources, myElementIndex, activeListCtx ?? undefined))
+            out.push(binding(String(expCode), `v-${name}`, 'visible', tag, expLine, nextScopes, inBranch, nextScopeSources, myElementIndex, activeListCtx ?? undefined))
             nextBranch = true
             continue
           }
           // v-show 与 v-if 不同：节点**始终在树内**，只是可见性切换 ⇒ 不算运行时分支
           if (name === 'show') {
-            out.push(binding(String(expCode), 'v-show', 'visible', tag, expLine, scopes, inBranch, scopeSources, myElementIndex, activeListCtx ?? undefined))
+            out.push(binding(String(expCode), 'v-show', 'visible', tag, expLine, nextScopes, inBranch, nextScopeSources, myElementIndex, activeListCtx ?? undefined))
             continue
           }
           // 动态绑定（:x / v-bind:x / v-model）——★属性名在 arg 里
@@ -450,9 +514,9 @@ export function collectTemplateBindings(source: string, filename = 'anonymous.vu
                 propKey,
                 tag,
                 expLine,
-                scopes,
+                nextScopes,
                 inBranch,
-                scopeSources,
+                nextScopeSources,
                 myElementIndex,
                 (activeListCtx ?? undefined),
                 // ★`:key` 自身标记（它不是可更新渲染属性 ⇒ 建槽位时跳过；但它的表达式是**行标识字段**）

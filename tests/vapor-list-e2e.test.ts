@@ -299,6 +299,70 @@ describe('V4 · ★嵌套 v-for（本仓实测补的未验证项）', () => {
     expect(textOps[0].nodeId).toBe(3003)
   })
 
+  it('★★别名遮蔽（内外层同名 item）：两个层级都必须入依赖图，路径不得互相污染', () => {
+    // 【本仓实测的两个真缺陷】
+    //   ① **外层槽位被静默丢出依赖图**：Vue 语义是「元素上有 v-for ⇒ 它的所有绑定都属于该行」，
+    //      而按属性顺序处理时，写在 v-for 之后的绑定（`:width`）用的仍是**外层** scopeSources
+    //      ⇒ `item` 未映射 ⇒ 挂不到任何源 ⇒ 运行时**永不写该槽位**（静默不更新）。
+    //      症状很隐蔽：`decisions` 显示它为 L1、`stats.l1` 把它计入，但 `table.sources` 里没有。
+    //      ⇒ 修复：**先扫 v-for 建行上下文**，再处理其余绑定（与 `:key` 同一手法）。
+    //   ② **遮蔽下路径污染**：内外层同名 `item` ⇒ 本行 `__field__item` 覆盖外层的
+    //      ⇒ 内层 `item.items` 的别名被翻成外层字段名 ⇒ 路径变 `items.items`（多一段）。
+    //      ⇒ 修复：**用翻译前的映射算路径**，再写本行映射。
+    const src = sfc(
+      `const groups = ref([{ id: 1, w: 10, items: [{ id: 2, h: 5, name: 'x' }] }])\n`,
+      `<p-view v-for="item in groups" :key="item.id" :width="item.w">\n  <p-text v-for="item in item.items" :key="item.id" :height="item.h">{{ item.name }}</p-text>\n</p-view>`,
+    )
+    const { table } = buildVaporSubscriptions(src, 'shadow.vue')
+    const items = table.sources.flatMap((s) => s.slots).filter((x) => x.kind === 'list-item')
+    const outer = items.find((x) => x.listId === 0)
+    // ★按 propKey 精确选（内层有两个 list-item 槽位：:height 与 {{ }}）
+    const inner = items.find((x) => x.listId === 1 && x.propKey === 'text.content')
+
+    // ① 外层槽位必须**在依赖图里**（首版缺失 ⇒ 静默不更新）
+    expect(outer, '★外层槽位必须入依赖图（首版被静默丢弃）').toBeTruthy()
+    expect(outer!.sourceExpr).toBe('groups')   // 顶层：路径就是顶层源名
+    expect(outer!.itemValueField).toBe('w')
+    // ② 内层路径 = 纯字段路径（不得因遮蔽变成 items.items）
+    expect(inner).toBeTruthy()
+    expect(inner!.sourceExpr).toBe('items')
+    expect(inner!.itemValueField).toBe('name')
+    expect(inner!.itemKeyField).toBe('id')
+  })
+
+  it('★★遮蔽 + 端到端：改内层行 ⇒ 打到内层节点（不串到外层）', () => {
+    const src = sfc(
+      `const groups = ref([{ id: 1, w: 10, items: [{ id: 2, h: 5, name: 'x' }] }])\n`,
+      `<p-view v-for="item in groups" :key="item.id" :width="item.w">\n  <p-text v-for="item in item.items" :key="item.id" :height="item.h" />\n</p-view>`,
+    )
+    const { table } = buildVaporSubscriptions(src, 'shadow2.vue')
+    const items = table.sources.flatMap((s) => s.slots).filter((x) => x.kind === 'list-item')
+    const outer = items.find((x) => x.listId === 0)!
+    const inner = items.find((x) => x.listId === 1)!
+    const reg = new ListRegistry()
+    reg.registerItems(0, [{ itemKey: '1', slotNodes: { [outer.itemSlotId!]: 1001 } }])
+    reg.registerItems(1, [{ itemKey: '2', slotNodes: { [inner.itemSlotId!]: 2002 } }])
+    const { ops, sink } = collector()
+    const rt = new SlotRuntime(new PropKeyTable(), new StringPool(), sink)
+    const vapor = new VaporRuntime(table, rt, VaporRuntime.buildEvaluators(table.evaluators), reg)
+    const data = [{ id: 1, w: 10, items: [{ id: 2, h: 5, name: 'x' }] }]
+    const ctx: EvalContext = {
+      read: (n) => (n === 'groups' ? data : n === 'item' ? data[0].items[0] : undefined),
+    }
+    const triggers = new Map<string, () => void>()
+    vapor.load(ctx, (n, cb) => triggers.set(n, cb))
+    vapor.relink(ctx)
+    rt.flush()
+    ops.length = 0
+    // 改内层行高度
+    data[0].items[0].h = 42
+    triggers.get('groups')!()
+    rt.flush()
+    const styleOps = ops.filter((o) => o.op === OpCode.SET_STYLE) as Array<{ nodeId: number; value: number }>
+    expect(styleOps.some((o) => o.nodeId === 2002 && o.value === 42)).toBe(true) // ★打到内层
+    expect(styleOps.some((o) => o.nodeId === 1001)).toBe(false)                  // ★不串外层
+  })
+
   it('★单层列表不受影响（回归）', () => {
     const { table } = buildVaporSubscriptions(
       sfc(`const list = ref([{ id: 1, w: 5 }])\n`, `<p-view v-for="item in list" :key="item.id"><p-text :width="item.w" /></p-view>`),
