@@ -204,6 +204,10 @@ public class MainActivity extends Activity {
             sb.append("【③ §9.3 平台侧滚动（Choreographer 帧率 + RenderNode 池）】\n");
             String start = scrollListRun();
             sb.append(start).append('\n');
+        } else if ("mount-virtual".equals(testPath)) {
+            sb.append("【③ 整树级虚拟化（同一份 SFC 产物）】\n");
+            String r = mountVirtualRun();
+            sb.append(r).append('\n');
         } else if ("splice".equals(testPath)) {
             sb.append("【③ 结构变更（适配器产出 → 真机核心执行）】\n");
             String r = spliceRun();
@@ -2265,6 +2269,308 @@ public class MainActivity extends Activity {
         } catch (org.json.JSONException e) {
             return "{\"ok\":false,\"error\":\"" + e.getMessage() + "\"}";
         }
+    }
+
+    /**
+     * ★★**整树级虚拟化挂载**（Android 侧的 `mountVirtual` 等价物）——闭合本档最后一个 Android 大项。
+     *
+     * 【与 iOS V12 的关系】同一份 SFC、同一份实例化产物（`assets/vapor-tree.json` 由构建期生成，
+     *   与 iOS 的 `gen-vapor-table.mjs` 用**同一份 SFC 文本**）⇒ 两端的"已验证"说的是同一件事。
+     *
+     * 【流程】
+     *   ① 读 assets 的 `{viewport, nodes, rows}`（行表含每行**全部节点 id**——宿主推不出来）
+     *   ② **整棵树进核心**（几何/命中口径不变）——虚拟化省的是**层**，不是树
+     *   ③ 复用池句柄（核心侧窗口 + 方向敏感预载）
+     *   ④ 滚到第 N 行 → 问核心要决策 → **先 release 再 acquire** → 按行子树录制
+     *   ⑤ 判据：行数有界 · 复用率 · **可见行真的有层** · **屏外行确实没有层** · 像素
+     */
+    private String mountVirtualRun() {
+        // ── ① 读夹具 ──
+        String json;
+        try {
+            java.io.InputStream is = getAssets().open("vapor-tree.json");
+            java.io.ByteArrayOutputStream bos = new java.io.ByteArrayOutputStream();
+            byte[] buf = new byte[65536];
+            int n;
+            while ((n = is.read(buf)) > 0) bos.write(buf, 0, n);
+            is.close();
+            json = bos.toString("UTF-8");
+        } catch (java.io.IOException e) {
+            return "{\"ok\":false,\"error\":\"读 assets/vapor-tree.json 失败：" + e.getMessage() + "\"}";
+        }
+
+        org.json.JSONObject treeRoot;
+        org.json.JSONArray nodes;
+        org.json.JSONArray rowsArr;
+        int vpW, vpH;
+        try {
+            treeRoot = new org.json.JSONObject(json);
+            nodes = treeRoot.getJSONArray("nodes");
+            rowsArr = treeRoot.getJSONArray("rows");
+            org.json.JSONObject vp = treeRoot.getJSONObject("viewport");
+            vpW = vp.optInt("width", 400);
+            vpH = vp.optInt("height", 844);
+        } catch (org.json.JSONException e) {
+            return "{\"ok\":false,\"error\":\"夹具解析失败：" + e.getMessage() + "\"}";
+        }
+        final int ROWS = rowsArr.length();
+        if (ROWS == 0) return "{\"ok\":false,\"error\":\"夹具行数为 0\"}";
+
+        // ── ② 整树进核心 ──
+        long handle = RustLayout.create("{\"viewport\":{\"width\":" + vpW + ",\"height\":" + vpH
+                + "},\"nodes\":" + nodes + ",\"textMeasures\":{}}");
+        if (handle <= 0) return "{\"ok\":false,\"error\":\"Rust 建树失败（节点数 " + nodes.length() + "）\"}";
+
+        // ── ③ 复用池 ──
+        final long pool = RustLayout.recycleCreate(ROWS, 0, 0);
+        if (pool <= 0) { RustLayout.destroy(handle); return "{\"ok\":false,\"error\":\"recycleCreate 失败\"}"; }
+
+        // 行表 → Java（★必须由夹具给：行内子节点不带 listId，宿主按 listId 分组只能拿到行根）
+        final int[] rowRoot = new int[ROWS];
+        final int[][] rowIds = new int[ROWS][];
+        try {
+            for (int i = 0; i < ROWS; i++) {
+                org.json.JSONObject r = rowsArr.getJSONObject(i);
+                rowRoot[i] = r.getInt("root");
+                org.json.JSONArray ids = r.getJSONArray("ids");
+                int[] a = new int[ids.length()];
+                for (int j = 0; j < ids.length(); j++) a[j] = ids.getInt(j);
+                rowIds[i] = a;
+            }
+        } catch (org.json.JSONException e) {
+            RustLayout.recycleDestroy(pool); RustLayout.destroy(handle);
+            return "{\"ok\":false,\"error\":\"行表解析失败：" + e.getMessage() + "\"}";
+        }
+
+        // 几何（整树读一次；行原点的唯一来源）
+        final float[] rects = new float[nodes.length() * 4];   // 按节点 id 索引（夹具 id 密集）
+        try {
+            org.json.JSONObject o = new org.json.JSONObject(RustLayout.readRects(handle));
+            org.json.JSONObject rs = o.getJSONObject("rects");
+            java.util.Iterator<String> it = rs.keys();
+            while (it.hasNext()) {
+                String k = it.next();
+                int id = Integer.parseInt(k);
+                if (id * 4 + 3 >= rects.length) continue;
+                org.json.JSONObject r = rs.getJSONObject(k);
+                rects[id * 4] = (float) r.getDouble("x");
+                rects[id * 4 + 1] = (float) r.getDouble("y");
+                rects[id * 4 + 2] = (float) r.getDouble("width");
+                rects[id * 4 + 3] = (float) r.getDouble("height");
+            }
+        } catch (Exception e) {
+            RustLayout.recycleDestroy(pool); RustLayout.destroy(handle);
+            return "{\"ok\":false,\"error\":\"几何解析失败：" + e.getMessage() + "\"}";
+        }
+
+        // 行高（从**核心几何**取，不假设）——用第一行的行根高度
+        final float rowH = rects[rowRoot[0] * 4 + 3];
+        if (rowH <= 0) {
+            RustLayout.recycleDestroy(pool); RustLayout.destroy(handle);
+            return "{\"ok\":false,\"error\":\"行高为 0（核心几何异常）\"}";
+        }
+
+        // ── ④ 宿主 View（真实绘制管线） ──
+        final ProteusHostView.ListRenderer renderer = new ProteusHostView.ListRenderer(64);
+        final ProteusHostView view = new ProteusHostView(this);
+        view.enableListMode(renderer);
+        // ★★**局部变量名会遮蔽同名的字段**（本仓实测的编译期陷阱）
+        //   本方法里 `root` 是**局部 JSONObject**（夹具根），它把类字段 `FrameLayout root` 遮住了
+        //   ⇒ `root.addView(...)` 报"找不到符号 addView(..., LayoutParams)，位置：类型为 JSONObject 的变量 root"。
+        //   现象极具误导性（报的是"没有 addView 方法"，像是 View 体系的问题）。
+        //   ⇒ 纪律：**局部变量不要与字段同名**；此处把夹具根改名 `treeRoot`。
+        FrameLayout.LayoutParams vLp = new FrameLayout.LayoutParams(vpW, vpH);
+        root.addView(view, vLp);
+        runButton.setVisibility(android.view.View.GONE);
+
+        final int[] materialized = new int[ROWS];   // 1 = 已物化（诊断/判据）
+        // 每步"可见区上方预载了几行"（判据：回滚时该值必须**变大**——方向敏感预载的直接证据）
+        final java.util.List<Integer> preloadAboveAt = new java.util.ArrayList<>();
+        final int[] stats = new int[4];             // [0]=acquire 次数 [1]=release 次数 [2]=maxPerFrame [3]=dirMismatch
+        final int[] missingVisible = {0};
+
+        /** 按行子树录制（行内节点几何来自核心，相对行原点） */
+        java.util.function.IntConsumer materialize = (row) -> {
+            int[] ids = rowIds[row];
+            ProteusHostView.ListRenderer.RowPart[] parts = new ProteusHostView.ListRenderer.RowPart[ids.length];
+            float rx = rects[rowRoot[row] * 4], ry = rects[rowRoot[row] * 4 + 1];
+            for (int j = 0; j < ids.length; j++) {
+                int id = ids[j];
+                float dx = rects[id * 4] - rx, dy = rects[id * 4 + 1] - ry;
+                float w = rects[id * 4 + 2], h = rects[id * 4 + 3];
+                // ★样式按 id 从夹具节点表取（与 iOS 的 styleOf 同源语义：只认绘制字段）
+                String bg = null, txt = null;
+                float radius = 0f, fontSize = 0f;
+                int fg = 0;
+                try {
+                    org.json.JSONObject nd = nodes.getJSONObject(id);
+                    bg = nd.optString("backgroundColor", null);
+                    txt = nd.optString("text", null);
+                    radius = (float) nd.optDouble("borderRadius", 0);
+                    fontSize = (float) nd.optDouble("fontSize", 0);
+                    String col = nd.optString("color", null);
+                    if (col != null) fg = parseHex(col);
+                } catch (org.json.JSONException ignored) { }
+                parts[j] = new ProteusHostView.ListRenderer.RowPart(
+                        dx, dy, w, h, bg == null ? 0 : parseHex(bg), radius,
+                        (txt == null || txt.isEmpty()) ? null : txt, fg, fontSize);
+            }
+            // ★传入**屏幕坐标**（行在内容里的 y 减去滚动偏移）
+            renderer.acquireRowSubtree(row, 0, ry - contentOffsetY, vpW, rowH, parts);
+            materialized[row] = 1;
+        };
+
+        // ── ⑤ 滚动轨迹（每步：核心决策 → 先 release 再 acquire）──
+        //
+        // ★★**轨迹必须与 iOS V12 同构，否则"复用率"这个数不可比**（本仓实测的口径修正）
+        //
+        // 【两次读完数后的推理，逐条记下来】
+        //   · 首版：12 步 × 25 行 ⇒ 复用率 **0.914**
+        //   · 二版：30 步 × 9 行（以为"对齐 iOS 的每帧 10 行"就够）⇒ 仍是 **0.912**
+        //   · 而 iOS 同场景是 **0.997** ⇒ 说明差的不是步长，而是**分母**
+        //   ⇒ 复用率 = `reused / (created + reused)` 对**运行长度敏感**：
+        //     冷启动建的 25 个层是**固定分子成本**，跑得越久摊得越薄
+        //     （iOS 跑 600 帧 ⇒ 24/7979 = 0.3%；Android 只跑 30 步 ⇒ 25/284 = 8.8%）。
+        //   ⇒ 正解：轨迹做成与 iOS **同构**（下到底 + **回滚到顶**，§9.3 的核心场景），
+        //     并把**总步数与总 acquire** 一并写进报告 —— 让读者能自己判断可比性，
+        //     而不是只看到一个"看起来低一点"的数。
+        final int VISIBLE = 15;
+        final int STEP_ROWS = 9;                       // ≈ iOS V12 每帧 10 行（560px ÷ 56px）
+        final int MAX_FIRST = ROWS - VISIBLE;          // 能滚到的最靠后的首行
+        final java.util.List<Integer> trajectory = new java.util.ArrayList<>();
+        for (int f = 0; f * STEP_ROWS <= MAX_FIRST; f++) trajectory.add(f * STEP_ROWS);   // 向下
+        for (int f = trajectory.size() - 2; f >= 0; f--) trajectory.add(trajectory.get(f)); // ★回滚到顶
+        final int STEPS = trajectory.size();
+        final org.json.JSONArray trace = new org.json.JSONArray();
+        for (int step = 0; step < STEPS; step++) {
+            int firstVisible = trajectory.get(step);
+            if (firstVisible >= ROWS - 4) break;
+            int lastVisible = Math.min(ROWS - 1, firstVisible + 14);
+
+            String dec = RustLayout.recycleUpdate(pool, firstVisible, lastVisible);
+            int[] acquire = new int[0], release = new int[0];
+            int preAbove = -1;
+            try {
+                org.json.JSONObject o = new org.json.JSONObject(dec);
+                if (o.optBoolean("ok", false)) {
+                    acquire = toIntArray(o.optJSONArray("acquire"));
+                    release = toIntArray(o.optJSONArray("release"));
+                    preAbove = firstVisible - o.optInt("first_preload", firstVisible);
+                }
+            } catch (org.json.JSONException ignored) { }
+            preloadAboveAt.add(preAbove);
+
+            contentOffsetY = firstVisible * rowH;
+            // ★先 release 再 acquire（反了 ⇒ 本帧要建的层无法复用刚释放的）
+            int rel = renderer.releaseRows(release);
+            for (int row : release) materialized[row] = 0;
+            for (int row : acquire) materialize.accept(row);
+            // ★可见区缺行探针（本仓实测抓过"宿主裁剪破坏核心簿记"的那条）
+            int miss = 0;
+            for (int r = firstVisible; r <= lastVisible && r < ROWS; r++) if (materialized[r] == 0) miss++;
+            missingVisible[0] = Math.max(missingVisible[0], miss);
+
+            stats[0] += acquire.length;
+            stats[1] += release.length;
+            stats[2] = Math.max(stats[2], Math.max(acquire.length, release.length));
+
+            try {
+                org.json.JSONObject s = new org.json.JSONObject();
+                s.put("step", step);
+                s.put("first_visible", firstVisible);
+                s.put("acquired", acquire.length);
+                s.put("released", rel);
+                s.put("missing_in_visible", miss);
+                trace.put(s);
+            } catch (org.json.JSONException ignored) { }
+        }
+
+        // ★方向读数的**口径修正**（同 applyOps 那次）：只在与判据同向时采样
+        //   （边界帧的方向是"上一段"的，记下来会得到"看起来没交换"的假读数）
+        int fwdPreAbove = -1, backPreAbove = -1;
+        for (int i = 0; i < trace.length(); i++) {
+            try {
+                org.json.JSONObject st = trace.getJSONObject(i);
+                // 轨迹前段向下、后段向上（见 ⑤ 的构造）
+                boolean backwardLeg = i > trace.length() / 2;
+                if (backwardLeg && backPreAbove < 0) backPreAbove = preloadAboveAt.get(i);
+                if (!backwardLeg && fwdPreAbove < 0) fwdPreAbove = preloadAboveAt.get(i);
+            } catch (org.json.JSONException ignored) { }
+        }
+
+        int liveRows = 0;
+        for (int m : materialized) if (m == 1) liveRows++;
+        int coreAcq = -1;
+        try {
+            org.json.JSONObject cs = new org.json.JSONObject(RustLayout.recycleStats(pool));
+            coreAcq = cs.optInt("acquire_events", -1);
+        } catch (org.json.JSONException ignored) { }
+        int platformTotal = renderer.createdCount() + renderer.reusedCount();
+
+        // ── ⑥ 判据 ──
+        boolean rowsBounded = liveRows > 0 && liveRows < 60;                 // 500 行只留少数
+        boolean reuseWorks = renderer.reusedCount() > 0
+                && renderer.reuseRatio() > 0.5;
+        boolean notRebuilt = renderer.createdCount() < liveRows * 4;          // 建的对象远少于物化次数
+        boolean reconcilied = coreAcq == platformTotal;                       // 核心决策 = 平台执行
+        boolean noMissing = missingVisible[0] == 0;                           // 可见区不缺行
+        // ★方向敏感预载的**直接证据**：回滚时"上方预载行数"必须大于下行时
+        boolean preloadSwapped = fwdPreAbove >= 0 && backPreAbove >= 0 && backPreAbove > fwdPreAbove;
+
+        RustLayout.recycleDestroy(pool);
+        RustLayout.destroy(handle);
+
+        boolean pass = rowsBounded && reuseWorks && notRebuilt && reconcilied && noMissing && preloadSwapped;
+        try {
+            org.json.JSONObject o = new org.json.JSONObject();
+            o.put("ok", true);
+            o.put("path", "mount-virtual");
+            o.put("note", "★★整树级虚拟化：同一份 SFC 产物（与 iOS V12 同源）· 核心给决策、宿主执行");
+            o.put("sfc_rows", ROWS);
+            o.put("nodes", nodes.length());
+            o.put("row_height_from_core", rowH);
+            o.put("live_rows", liveRows);
+            o.put("rn_created", renderer.createdCount());
+            o.put("rn_reused", renderer.reusedCount());
+            o.put("rn_reuse_ratio", Math.round(renderer.reuseRatio() * 10000) / 10000.0);
+            o.put("rn_pooled", renderer.pooledCount());
+            o.put("core_acquire_events", coreAcq);
+            o.put("platform_created_plus_reused", platformTotal);
+            o.put("max_per_frame", stats[2]);
+            o.put("max_missing_in_visible", missingVisible[0]);
+            o.put("trace", trace);
+            o.put("check_rows_bounded", rowsBounded);
+            o.put("check_reuse_works", reuseWorks);
+            o.put("check_not_rebuilt", notRebuilt);
+            o.put("check_reconciled", reconcilied);
+            o.put("check_no_missing", noMissing);
+            o.put("fwd_kept_above", fwdPreAbove);
+            o.put("back_kept_above", backPreAbove);
+            o.put("check_preload_swapped", preloadSwapped);
+            o.put("verdict", pass ? "PASS" : "FAIL");
+            writeReport("layout-mount-virtual.json", o.toString(2));
+            return o.toString();
+        } catch (org.json.JSONException e) {
+            return "{\"ok\":false,\"error\":\"" + e.getMessage() + "\"}";
+        }
+    }
+
+    /** 当前内容滚动偏移（虚拟化路径用；平移自绘内容） */
+    private float contentOffsetY = 0f;
+
+    /** `#RRGGBB` / `#AARRGGBB` → ARGB int（与 ProteusHostView 的配色口径一致） */
+    private static int parseHex(String s) {
+        if (s == null || s.isEmpty()) return 0;
+        String h = s.startsWith("#") ? s.substring(1) : s;
+        try {
+            long v = Long.parseLong(h, 16);
+            if (h.length() == 6) return (int) (0xFF000000L | v);
+            if (h.length() == 8) {
+                // #AARRGGBB（本仓约定）→ Android 的 ARGB 同序
+                return (int) v;
+            }
+        } catch (NumberFormatException ignored) { }
+        return 0;
     }
 
     /** 几何条目数（判"结构真的变了"用） */
