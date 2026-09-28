@@ -43,6 +43,15 @@ func proteus_layout_update(_ handle: UInt64, _ patchesJson: UnsafePointer<CChar>
 /// ★Vapor IR V3：二进制指令流入口（字节指针 + 长度）
 @_silgen_name("proteus_layout_apply_ops")
 func proteus_layout_apply_ops(_ handle: UInt64, _ ptr: UnsafePointer<UInt8>, _ len: UInt32) -> UnsafeMutablePointer<CChar>
+/// ★Vapor IR V4：**不带 rects 的 apply**（二进制通道场景——省掉 JSON 序列化与宿主解析）
+@_silgen_name("proteus_layout_apply_ops_norects")
+func proteus_layout_apply_ops_norects(_ handle: UInt64, _ ptr: UnsafePointer<UInt8>, _ len: UInt32) -> UnsafeMutablePointer<CChar>
+/// ★Vapor IR V4：变化集二进制返回（整流矩形）
+@_silgen_name("proteus_layout_rects_bin")
+func proteus_layout_rects_bin(_ handle: UInt64, _ outLen: UnsafeMutablePointer<UInt32>) -> UnsafeMutablePointer<UInt8>
+/// 释放上面返回值
+@_silgen_name("proteus_rects_free")
+func proteus_rects_free(_ ptr: UnsafeMutablePointer<UInt8>, _ len: UInt32)
 
 func takeCString(_ ptr: UnsafeMutablePointer<CChar>) -> String {
     defer { proteus_layout_free_string(ptr) }
@@ -93,6 +102,12 @@ func physFootprintMB() -> Double {
     ///     以字符串返回微秒值（字符串而非 Double：避免 JS Number 的 53 位精度在
     ///     大时间戳上损失亚微秒分辨率）。
     func nowUs() -> String
+    /// ★★V4 A/B 开关：'v4'（默认：二进制返回 + 只更可见层）| 'v3'（旧路径：JSON 返回 + 全部层）
+    ///
+    /// 【为什么要有它（诚实对照）】优化前后若用**不同的基准树**测，比较无意义
+    ///   （本仓实测：类B 基准树因缺 flexShrink 而"没有几何变化"，旧读数与优化后不可比）。
+    ///   ⇒ 提供运行时开关，**同一棵树、同一用例**里分别测两条路径。
+    func setOptMode(_ mode: String) -> String
     /// 截图落盘（验证「屏幕上真的画出来了」）
     func snapshot(_ name: String) -> String
     /// JS 侧自报读数（Vue mount / update 耗时 + patch 次数）
@@ -223,7 +238,88 @@ final class SelfDrawView: UIView {
             metaByNodeId[item.id] = item.style
         }
         builtLayerCount = layerNodes.count
+        // ★V4：建层后清延迟更新簿记（新树 ⇒ 旧簿记失效）
+        pendingOffscreen.removeAll(keepingCapacity: true)
         CATransaction.commit()
+    }
+
+    /* ────────────────────────── ★V4：可见区判定 + 延迟更新簿记 ────────────────────────── */
+
+    /// 当前可见区（宿主根视图 bounds；滚动由 native-host 跟随，故取 bounds 即可）
+    var visibleBounds: CGRect { self.bounds }
+
+    /// 视口外的待更新层（id → 目标绝对 rect）——滚入视野前必须刷上
+    ///
+    /// 【为什么不直接丢弃（正确性红线）】CALayer.frame 是**持久状态**：若因为「当前不可见」
+    ///   就不更新，滚动到该位置时会显示**旧几何**（错位）。⇒ 必须**记账**，
+    ///   在滚入视野前补刷（见 `flushPendingIfVisible`）。
+    private var pendingOffscreen: [Int: CGRect] = [:]
+
+    /// 本次更新里「因不可见被延迟」的层数（诊断；同时是正确性的可观测点）
+    private(set) var lastDeferredCount = 0
+    /// 本次更新里「补刷」的层数
+    private(set) var lastFlushedCount = 0
+
+    /// ★★滚动/几何变化钩子：视图 bounds 变化时补刷「已滚入视野」的待更新层
+    ///
+    /// 【为什么必须有（正确性红线）】`updateLayersIncremental` 会把**不可见**层的更新
+    ///   记进 `pendingOffscreen` 延后处理（见其注释）。若没有这个钩子，滚动后那些层
+    ///   仍显示**旧几何**（错位）。⇒ 必须在此补刷。
+    ///
+    /// 【为什么放 layoutSubviews（而不是加 UIScrollView 代理）】本视图的自绘层树
+    ///   **不依赖 UIScrollView**（滚动由 native-host 跟随 + 本视图 bounds 平移表达），
+    ///   故 `layoutSubviews` 就是「可见区变了」的统一入口——一处实现覆盖全部触发源。
+    override func layoutSubviews() {
+        super.layoutSubviews()
+        // ★只在有待更新项时才动（热路径：每次 layout 都遍历一遍会白花）
+        if !pendingOffscreen.isEmpty {
+            flushPendingIfVisible()
+        }
+    }
+
+    /// 判断矩形是否与可见区相交（含少量余量：预取一屏，避免滚动时才补刷）
+    private func intersectsVisible(_ r: CGRect) -> Bool {
+        let vb = visibleBounds.insetBy(dx: 0, dy: -visibleBounds.height) // 上下各预取一屏
+        return vb.intersects(r)
+    }
+
+    /// ★补刷：把当前已可见的待更新层应用掉（滚动前后调用）
+    @discardableResult
+    func flushPendingIfVisible() -> Int {
+        guard !pendingOffscreen.isEmpty else { return 0 }
+        var flushed = 0
+        CATransaction.begin()
+        CATransaction.setDisableActions(true)
+        defer { CATransaction.commit() }
+        let ready = pendingOffscreen.filter { intersectsVisible($0.value) }
+        // ★★必须**按父链深度升序**补刷（本仓实测的隐患）
+        //   `applyOneLayer` 用 `absOriginByNodeId[父]` 换算父相对坐标——若子先于父被刷，
+        //   用的就是父的**旧原点** ⇒ frame 错位。
+        //   字典遍历顺序不确定 ⇒ 必须显式排序（与 `updateLayersIncremental` 同一条纪律）。
+        var depthCache: [Int: Int] = [:]
+        for id in ready.keys where depthCache[id] == nil {
+            depthCache[id] = depthOf(id)
+        }
+        for (id, abs) in ready.sorted(by: { (depthCache[$0.key] ?? 0) < (depthCache[$1.key] ?? 0) }) {
+            pendingOffscreen.removeValue(forKey: id)
+            applyOneLayer(id: id, abs: abs)
+            flushed += 1
+        }
+        lastFlushedCount = flushed
+        return flushed
+    }
+
+    /// 应用单个层的 frame（供即时更新与补刷共用——★同一语义一处实现）
+    private func applyOneLayer(id: Int, abs: CGRect) {
+        guard let layer = layersById[id] else { return }
+        let pid = parentById[id] ?? -1
+        let parentOrigin = pid >= 0 ? (absOriginByNodeId[pid] ?? .zero) : .zero
+        absOriginByNodeId[id] = abs.origin
+        let f = CGRect(x: abs.minX - parentOrigin.x, y: abs.minY - parentOrigin.y,
+                       width: abs.width, height: abs.height)
+        layer.frame = f
+        builtFrames[id] = f
+        rectsByNodeId[id] = abs
     }
 
     /// ★★**增量更新层**：只改「核心报告变化的那些节点」的 frame（不重建、不销毁任何层）
@@ -241,31 +337,59 @@ final class SelfDrawView: UIView {
     ///
     /// - Returns: 实际更新的层数；有任何一个节点在本地找不到对应 layer 则返回 -1（调用方应退回全量重建）
     func updateLayersIncremental(
-        changed: [(id: Int, abs: CGRect)]
+        changed: [(id: Int, abs: CGRect)],
+        /// ★V4：是否**只更新可见层**（不可见的记账延后）。false = 旧行为（全部更新），用于 A/B
+        visibleOnly: Bool = true
     ) -> Int {
         guard !changed.isEmpty else { return 0 }
         // 逐节点检查是否都有对应的已有层；缺任何一个 ⇒ 退回全量（正确性优先）
         for c in changed where layersById[c.id] == nil { return -1 }
 
+        // ★★V4：**只更新可见层的 frame**，不可见的记账延后（V3 类B 的第二优化项）
+        //
+        // 【为什么能省（V3 真机读数）】类B 场景 `layers` 段 **13.34ms / 4003 层**；
+        //   而视口 844px ÷ 行高 56px ≈ **15 行可见**（共 1000 行）⇒ 绝大多数层不在屏上。
+        //   layer.frame 的赋值成本与「是否可见」无关（CA 仍要处理），故按可见性分流能直接砍掉大头。
+        //
+        // 【正确性红线】不可见的**不能丢**（frame 是持久状态，滚入时会显示旧几何）
+        //   ⇒ 记进 `pendingOffscreen`，由 `flushPendingIfVisible()` 在滚入前补刷。
+        //   ⚠ 本里程碑**尚无滚动钩子**：调用方需在滚动时自行调用补刷（诚实边界，见文档）。
+        let visible: [(id: Int, abs: CGRect)]
+        let offscreen: [(id: Int, abs: CGRect)]
+        // 父链深度升序（保证用到父的**已更新**原点）——两个集合各自排
+        // ★★按父链深度升序（保证用到父的**已更新**原点）——但**先建一次深度表**
+        //
+        // 【为什么（本仓实测的回退）】首版直接 `sorted { depthOf($0.id) < depthOf($1.id) }`：
+        //   `depthOf` 每次都沿父链上溯 O(深度) ⇒ 4003 节点排序变成 O(n·深度·log n)
+        //   ⇒ 实测类A（只动 **1 个**节点）`layers` 段从 0.09ms **涨到 5.99ms**——
+        //   优化反而制造了新热点。⇒ 先 O(n) 建表，排序只查表。
+        var depthCache: [Int: Int] = [:]
+        depthCache.reserveCapacity(changed.count)
+        for c in changed where depthCache[c.id] == nil {
+            depthCache[c.id] = depthOf(c.id)
+        }
+        let sorted = changed.sorted { (depthCache[$0.id] ?? 0) < (depthCache[$1.id] ?? 0) }
+        if visibleOnly {
+            visible = sorted.filter { intersectsVisible($0.abs) }
+            offscreen = sorted.filter { !intersectsVisible($0.abs) }
+        } else {
+            visible = sorted   // 旧路径：全部更新（不剔除）
+            offscreen = []
+        }
+
         CATransaction.begin()
         CATransaction.setDisableActions(true)
         defer { CATransaction.commit() }
 
-        // ★按父链深度升序处理（保证用到父的**已更新**原点）
-        let sorted = changed.sorted { depthOf($0.id) < depthOf($1.id) }
         var updated = 0
-        for c in sorted {
-            guard let layer = layersById[c.id] else { continue }
-            let pid = parentById[c.id] ?? -1
-            let parentOrigin = pid >= 0 ? (absOriginByNodeId[pid] ?? .zero) : .zero
-            absOriginByNodeId[c.id] = c.abs.origin
-            let f = CGRect(x: c.abs.minX - parentOrigin.x, y: c.abs.minY - parentOrigin.y,
-                           width: c.abs.width, height: c.abs.height)
-            layer.frame = f
-            builtFrames[c.id] = f
-            rectsByNodeId[c.id] = c.abs
+        for c in visible {
+            applyOneLayer(id: c.id, abs: c.abs)
             updated += 1
         }
+        for c in offscreen {
+            pendingOffscreen[c.id] = c.abs // ★记账（不是丢弃）
+        }
+        lastDeferredCount = offscreen.count
         return updated
     }
 
@@ -339,6 +463,15 @@ final class SelfDrawBridge: NSObject, SelfDrawExports {
 
     /// 最近一次布局的分段耗时（供报告）
     private(set) var lastTiming: [String: Double] = [:]
+    /// ★★上一次更新提交的几何快照（id → "x,y,w,h"）——用于**自检「几何真的变了吗」**
+    ///
+    /// 【为什么必须自检（本仓实测的第八个测量装置缺陷）】类B 基准树少了 `flexShrink: 0`，
+    ///   1001 行被 flexbox 压缩到内容高度 ⇒ 「改行高 56→80」**根本没产生几何变化**，
+    ///   但用例仍报了 47.9ms 的漂亮数字（全量重排 + 全量传输 + 全量层更新，
+    ///   全都作用在一棵"没有变化"的树上）。⇒ 计时**必须配变化量自检**，否则又在测空气。
+    private var lastGeom: [Int: String] = [:]
+    /// 最近一次更新里几何**真的变了**的节点数（自检读数）
+    private(set) var lastGeomChanged = 0
     private(set) var lastNodeCount = 0
     private(set) var lastTreeHash = ""
 
@@ -392,6 +525,9 @@ final class SelfDrawBridge: NSObject, SelfDrawExports {
         // ★每次 mount 重置内存峰值：加压是**逐档递增**的，峰值必须按档记，
         //   否则高档位的数字里混着低档位的占用，无法判断"哪一档越线"
         SelfDrawBridge.memPeakMB = physFootprintMB()
+        // ★重置几何快照（新树 ⇒ 旧快照无意义；否则首帧会把全部节点算成"刚变化"）
+        lastGeom.removeAll(keepingCapacity: true)
+        lastGeomChanged = 0
         return render(treeJson: treeJson, phase: "mount")
     }
 
@@ -441,7 +577,10 @@ final class SelfDrawBridge: NSObject, SelfDrawExports {
             }
         }
         let tL = CFAbsoluteTimeGetCurrent()
-        let updated = view.updateLayersIncremental(changed: changed)
+        // ★遗留路径（S2/V0/J 用例走这条）**保持全量更新**：它的语义已进历史读数，
+        //   若在此启用「只更可见层」会静默改变那些基线（本仓纪律：改变已发布读数必须显式）。
+        //   Vapor 新路径（applyOps）才用 visibleOnly——见其实现。
+        let updated = view.updateLayersIncremental(changed: changed, visibleOnly: false)
         let layersMs = (CFAbsoluteTimeGetCurrent() - tL) * 1000
         if updated < 0 {
             return "{\"ok\":false,\"error\":\"变化集与本地层不匹配（需全量重建）\"}"
@@ -468,6 +607,14 @@ final class SelfDrawBridge: NSObject, SelfDrawExports {
         mach_timebase_info(&tb)
         return tb
     }()
+
+    /// V4 优化开关（默认开；A/B 时置 'v3'）
+    static var optMode = "v4"
+
+    func setOptMode(_ mode: String) -> String {
+        SelfDrawBridge.optMode = (mode == "v3") ? "v3" : "v4"
+        return "{\"ok\":true,\"mode\":\"\(SelfDrawBridge.optMode)\"}"
+    }
 
     func nowUs() -> String {
         let tb = Self.timebase
@@ -497,8 +644,14 @@ final class SelfDrawBridge: NSObject, SelfDrawExports {
         var bytes = [UInt8](repeating: 0, count: arr.count)
         for (i, v) in arr.enumerated() where v >= 0 && v <= 255 { bytes[i] = UInt8(v) }
 
+        // ★v4 模式走 **norects** 入口：矩形已由二进制通道取，JSON 里不再冗余携带
+        //   （本仓实测：4003 条的序列化 ~10ms + 宿主解析 ~19ms 全是白付）
+        let useV4ForOut = (SelfDrawBridge.optMode == "v4")
         let out: String = bytes.withUnsafeBufferPointer { buf in
             guard let base = buf.baseAddress else { return "{\"ok\":false,\"error\":\"空指令流\"}" }
+            if useV4ForOut {
+                return takeCString(proteus_layout_apply_ops_norects(handle, base, UInt32(buf.count)))
+            }
             return takeCString(proteus_layout_apply_ops(handle, base, UInt32(buf.count)))
         }
         let applyMs = (CFAbsoluteTimeGetCurrent() - t0) * 1000
@@ -512,19 +665,62 @@ final class SelfDrawBridge: NSObject, SelfDrawExports {
         let scopes = (o?["scopes"] as? [Int]) ?? []
         let unsupported = (o?["unsupported"] as? [[String: Any]]) ?? []
 
-        // 变化集 → layer 增量更新（与 updatePatches 同一条路径）
+        // ★矩形解析单独计时（本题材实测：类B 场景 4003 条矩形，JSON 解析 **19.35ms**——最大单项）
+        let rectsParseMs = (CFAbsoluteTimeGetCurrent() - tParse0) * 1000
+
+        // ★★V4：变化集走**二进制**（不再解析 JSON 的 rects 字段）
+        //
+        // 【为什么（V3 真机读数）】类B 分解：rects_parse 19.35ms · apply 15.43ms · layers 13.34ms
+        //   ⇒ 返回通道的 JSON 解析是最大单项。格式见 `rects_bin.rs`（16B 头 + 20B/条，全小端）。
+        //   体积对照：4003 条 222KB(JSON) → 80KB(本格式)，且解码是顺序读。
+        let tBin0 = CFAbsoluteTimeGetCurrent()
+        var outLen: UInt32 = 0
         var changed: [(id: Int, abs: CGRect)] = []
-        if let rm = o?["rects"] as? [String: [String: Double]] {
+        let useV4 = (SelfDrawBridge.optMode == "v4")
+        if !useV4, let rm = o?["rects"] as? [String: [String: Double]] {
+            // 'v3' 模式：走 JSON 矩形（与优化前一致；用于 A/B 对照）
             for (k, r) in rm {
                 guard let nid = Int(k) else { continue }
                 changed.append((id: nid, abs: CGRect(x: r["x"] ?? 0, y: r["y"] ?? 0,
                                                     width: r["width"] ?? 0, height: r["height"] ?? 0)))
             }
         }
-        // ★矩形解析单独计时（本仓实测：类B 场景 4003 条矩形，这段是真成本而非零头）
-        let rectsParseMs = (CFAbsoluteTimeGetCurrent() - tParse0) * 1000
+        let binPtr: UnsafeMutablePointer<UInt8>? = useV4 ? proteus_layout_rects_bin(handle, &outLen) : nil
+        // ★判据用 outLen（Rust 侧失败时把它置 0）+ 指针存在性
+        if let bp = binPtr, outLen >= 16 {
+            let buf = UnsafeBufferPointer(start: bp, count: Int(outLen))
+            // 顺序读：magic(4) version(4) count(4) reserved(4) 之后是 count × (id u32 + 4 × f32)
+            let u32at: (Int) -> UInt32 = { o in
+                UInt32(buf[o]) | (UInt32(buf[o + 1]) << 8) | (UInt32(buf[o + 2]) << 16) | (UInt32(buf[o + 3]) << 24)
+            }
+            let f32at: (Int) -> Float = { o in Float(bitPattern: u32at(o)) }
+            let count = Int(u32at(8))
+            if count > 0 && 16 + count * 20 <= Int(outLen) {
+                changed.reserveCapacity(count)
+                for i in 0..<count {
+                    let o = 16 + i * 20
+                    changed.append((id: Int(u32at(o)),
+                                    abs: CGRect(x: CGFloat(f32at(o + 4)), y: CGFloat(f32at(o + 8)),
+                                                width: CGFloat(f32at(o + 12)), height: CGFloat(f32at(o + 16)))))
+                }
+            }
+            proteus_rects_free(bp, outLen)
+        }
+        let rectsBinMs = (CFAbsoluteTimeGetCurrent() - tBin0) * 1000
+
+        // ★★几何变化量自检：与上一帧快照比对，统计**真的移动/改尺寸**的节点数
+        //
+        // 【判据意义】若这个数为 0，说明本次"更新"对几何无影响
+        //   ⇒ 此时报告的耗时**不能**用来论证"重排有多快"（可能全在搬运空变化）
+        var geomChanged = 0
+        for c in changed {
+          let sig = "\(c.abs.origin.x),\(c.abs.origin.y),\(c.abs.size.width),\(c.abs.size.height)"
+          if lastGeom[c.id] != sig { geomChanged += 1 }
+          lastGeom[c.id] = sig
+        }
+        lastGeomChanged = geomChanged
         let tL = CFAbsoluteTimeGetCurrent()
-        let updated = view.updateLayersIncremental(changed: changed)
+        let updated = view.updateLayersIncremental(changed: changed, visibleOnly: useV4)
         let layersMs = (CFAbsoluteTimeGetCurrent() - tL) * 1000
         let totalMs = (CFAbsoluteTimeGetCurrent() - t0) * 1000
         let mem = physFootprintMB()
@@ -539,6 +735,12 @@ final class SelfDrawBridge: NSObject, SelfDrawExports {
                            "unsupported_count": unsupported.count,
                            "apply_ms": round(applyMs * 100) / 100,
                            "rects_parse_ms": round(rectsParseMs * 100) / 100,
+                           "rects_bin_ms": round(rectsBinMs * 100) / 100,
+                           "opt_mode": SelfDrawBridge.optMode,
+                           "geom_changed": geomChanged,
+                           "geom_total": changed.count,
+                           "deferred": view.lastDeferredCount,
+                           "flushed": view.lastFlushedCount,
                            "layers_ms": round(layersMs * 100) / 100,
                            "host_total_ms": round(totalMs * 100) / 100])
     }
@@ -644,7 +846,8 @@ final class SelfDrawBridge: NSObject, SelfDrawExports {
                     }
                 }
                 let tLayers0 = CFAbsoluteTimeGetCurrent()
-                let updatedLayers = view.updateLayersIncremental(changed: changed)
+                // ★遗留路径（整树 diff 的 update()）同样保持全量更新——理由见 updatePatches
+                let updatedLayers = view.updateLayersIncremental(changed: changed, visibleOnly: false)
                 let layersMs = (CFAbsoluteTimeGetCurrent() - tLayers0) * 1000
                 if updatedLayers >= 0 {
                     usedIncremental = true

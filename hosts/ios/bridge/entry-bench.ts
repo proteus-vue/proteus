@@ -49,6 +49,8 @@ interface SelfDrawNative {
    *   桌面 JSC 有 `performance.now()`，**真机没有** ⇒ 只能由宿主提供。
    */
   nowUs?(): string
+  /** ★V4 A/B：'v4'（二进制返回 + 只更可见层）| 'v3'（JSON 返回 + 全部层） */
+  setOptMode?(mode: string): string
   snapshot(name: string): string
   report(json: string): void
   done(summaryJson: string): void
@@ -61,7 +63,7 @@ const BN = { snapshot: 'bench-final' }
 // ★构建标识：每次构建写入，用于**确凿判定**设备上跑的是哪份代码
 //   （踩坑：靠文件 mtime 判断"报告是否刷新"不可靠——新建目标文件的时间恒为"现在"；
 //    且我看不出设备实际执行的是旧 bundle，白跑一轮。有了这个字段就能一眼判定。）
-const BUILD_ID = 'a675b6c7-105905'
+const BUILD_ID = '8b4f8724-113817'
 const now = (): number => Date.now()
 /** 宽松解析（宿主返回可能是字符串或已是对象） */
 const safeParseAny = (s: any): any => {
@@ -898,6 +900,10 @@ CASES.push({
           min_ms: samples[0], max_ms: samples[samples.length - 1],
           l1_slots: loadRes.l1Slots, l0_slots: loadRes.l0Slots,
           unsupported_evaluators: loadRes.unsupportedEvaluators.length,
+          host_geom_changed: lastOut?.geom_changed,
+          host_geom_total: lastOut?.geom_total,
+          host_deferred: lastOut?.deferred,
+          host_rects_bin_ms: lastOut?.rects_bin_ms,
           flushes: rt.getStats().flushes,
           ops_total: rt.getStats().opsEmitted,
           host_relayout: lastOut?.relayout_count,
@@ -950,13 +956,17 @@ CASES.push({
     {
       const largeNodes: Array<Record<string, unknown>> = [
         { id: 0, parentId: null, flexDirection: 'column', width: VP.width, height: VP.height },
-        { id: 2, parentId: 0, flexDirection: 'row', width: VP.width - 32, height: 56 },
+        // ★★必须 flexShrink:0（本仓实测的第三个基准树缺陷）：
+        //   1001 行 × 56px 挤在 844px 的根里，不设它会被 flexbox 压缩到内容高度(36px)
+        //   ⇒ 「改行高 56→80」**根本不产生几何变化**（实测：变了的节点 = 0/4003），
+        //   用例却照报 47.9ms（全量重排 + 全量传输 + 全量层更新，全作用在一棵"没变化"的树上）。
+        { id: 2, parentId: 0, flexDirection: 'row', width: VP.width - 32, height: 56, flexShrink: 0 },
         { id: 1, parentId: 2, width: 36, height: 36 },
       ]
       const ROWS = 1000
       for (let i = 0; i < ROWS; i++) {
         const rid = 100 + i * 4
-        largeNodes.push({ id: rid, parentId: 0, flexDirection: 'row', width: VP.width - 32, height: 56 })
+        largeNodes.push({ id: rid, parentId: 0, flexDirection: 'row', width: VP.width - 32, height: 56, flexShrink: 0 })
         largeNodes.push({ id: rid + 1, parentId: rid, width: 36, height: 36 })
         largeNodes.push({ id: rid + 2, parentId: rid, flexGrow: 1, flexDirection: 'column' })
         largeNodes.push({ id: rid + 3, parentId: rid + 2, width: 120, height: 16 })
@@ -1010,12 +1020,84 @@ CASES.push({
             p50_ms: pickB(0.5), p95_ms: pickB(0.95), p99_ms: pickB(0.99),
             min_ms: classBSamples[0], max_ms: classBSamples[classBSamples.length - 1],
             host_rects_parse_ms: lastOut?.rects_parse_ms,
+            // ★V4 自检与优化读数
+            host_geom_changed: lastOut?.geom_changed,   // 「几何真的变了」的节点数（应为大量）
+            host_geom_total: lastOut?.geom_total,
+            host_rects_bin_ms: lastOut?.rects_bin_ms,   // 二进制返回解码耗时
+            host_deferred: lastOut?.deferred,           // 因不可见被延迟的层数
+            host_flushed: lastOut?.flushed,
             host_relayout: lastOut?.relayout_count,
             host_scopes: lastOut?.scopes,
             host_updated_layers: lastOut?.updated_layers,
             host_apply_ms: lastOut?.apply_ms,
             host_layers_ms: lastOut?.layers_ms,
             host_unsupported: lastOut?.unsupported_count,
+          },
+        })
+      }
+    }
+
+    // ── ★★V4 A/B：同树同用例对比「旧路径（JSON+全量层）」vs「新路径（二进制+可见层）」──
+    //
+    // 【为什么要 A/B 而不是只报优化后】两个读数必须来自**同一棵基准树**才可比——
+    //   本仓实测教训：旧类B 读数取自一棵"改行高不产生几何变化"的坏树，与新读数不可比。
+    {
+      const mkTree = () => {
+        const nodes: Array<Record<string, unknown>> = [
+          { id: 0, parentId: null, flexDirection: 'column', width: VP.width, height: VP.height },
+          { id: 2, parentId: 0, flexDirection: 'row', width: VP.width - 32, height: 56, flexShrink: 0 },
+          { id: 1, parentId: 2, width: 36, height: 36 },
+        ]
+        for (let i = 0; i < 1000; i++) {
+          const rid = 100 + i * 4
+          nodes.push({ id: rid, parentId: 0, flexDirection: 'row', width: VP.width - 32, height: 56, flexShrink: 0 })
+          nodes.push({ id: rid + 1, parentId: rid, width: 36, height: 36 })
+          nodes.push({ id: rid + 2, parentId: rid, flexGrow: 1, flexDirection: 'column' })
+          nodes.push({ id: rid + 3, parentId: rid + 2, width: 120, height: 16 })
+        }
+        return { viewport: VP, nodes }
+      }
+      const runAB = (mode: 'v3' | 'v4') => {
+        proteusSelfDraw.setOptMode?.(mode)
+        const m = safeParseAny(proteusSelfDraw.mount(JSON.stringify(mkTree())))
+        if (!m?.ok) return null
+        const keys = new PropKeyTable()
+        const strings = new StringPool()
+        const cap: Uint8Array[] = []
+        const rt = new SlotRuntime(keys, strings, (b) => cap.push(b))
+        const hk = keys.intern('layout.height')
+        const N = 100
+        let last: Record<string, unknown> | undefined
+        const t0 = clock()
+        for (let i = 0; i < N; i++) {
+          rt.buffer.push({ op: 0x02, nodeId: 2, keyId: hk, value: i % 2 ? 60 : 56 })
+          rt.flush()
+          const b = cap.pop()
+          if (b) last = safeParseAny(proteusSelfDraw.applyOps(JSON.stringify(Array.from(b))))
+        }
+        const total = clock() - t0
+        return { perIterUs: (total / N) * 1000, last, nodes: (m.node_count as number) ?? 0 }
+      }
+      const abV3 = runAB('v3')
+      const abV4 = runAB('v4')
+      proteusSelfDraw.setOptMode?.('v4') // 复位
+      if (abV3 && abV4) {
+        results.push({
+          case: 'V4_classB_AB',
+          note: '★★V4 A/B（同树同用例）：v3=JSON返回+全量层 · v4=二进制返回+可见层',
+          items: 1000, nodes: abV4.nodes,
+          vue_ms: abV4.perIterUs / 1000, to_request_ms: 0, serialize_ms: 0,
+          host_ms: (abV4.last?.host_total_ms as number) ?? 0,
+          total_ms: abV4.perIterUs * 100 / 1000,
+          patch_count: 100, request_bytes: (abV4.last?.in_bytes as number) ?? 0,
+          extra: {
+            v3_amortized_us: Math.round(abV3.perIterUs * 1000) / 1000,
+            v4_amortized_us: Math.round(abV4.perIterUs * 1000) / 1000,
+            speedup: Math.round((abV3.perIterUs / Math.max(abV4.perIterUs, 0.001)) * 100) / 100,
+            v3_rects_bin_ms: abV3.last?.rects_bin_ms, v3_layers_ms: abV3.last?.host_layers_ms,
+            v4_rects_bin_ms: abV4.last?.rects_bin_ms, v4_layers_ms: abV4.last?.host_layers_ms,
+            v4_deferred: abV4.last?.deferred,
+            v3_geom: abV3.last?.geom_changed, v4_geom: abV4.last?.geom_changed,
           },
         })
       }

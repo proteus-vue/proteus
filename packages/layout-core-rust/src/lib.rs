@@ -23,6 +23,7 @@
 //   · `conformance`     → 以**浏览器 golden** 为准的对拍（tests/ 侧消费）
 //   · `ops`             → **更新指令流解码**（Vapor IR V1：与 TS 侧 slot-runtime 逐字节对齐）
 //   · `ops_apply`       → **指令的布局应用**（Vapor IR V3：指令 → 树变更 → 多范围增量重排）
+//   · `rects_bin`       → **变化集二进制返回通道**（V4：回程免 JSON 解析——V3 类B 的最大单项）
 //
 // ★尚未落地（诚实边界，后续里程碑）：`flatten/` `materialize/` `paint-hint/` `recycle/` `render/`
 pub mod blob;
@@ -31,6 +32,7 @@ pub mod ffi;
 pub mod hit;
 pub mod ops;
 pub mod ops_apply;
+pub mod rects_bin;
 #[cfg(target_os = "android")]
 pub mod jni;
 pub mod node;
