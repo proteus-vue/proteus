@@ -41,6 +41,13 @@ export interface LoadResult {
   unknownSources: string[]
   /** 无法实例化的求值函数（形态不支持等）——同样上报 */
   unsupportedEvaluators: Array<{ evaluatorId: number; reason: string }>
+  /**
+   * ★行内槽位中**求值器未能实例化**的（诊断）
+   *
+   * 典型触发：表达式引用**外层别名**（`{{ group.title + item.name }}`）或含运算
+   * ⇒ 编译器给 `expr` 形态，而参考实现只支持纯路径（完整求值需目标端执行器）。
+   */
+  uninstantiatedSlots: Array<{ slotId: number; evaluatorId: number; propKey: string }>
 }
 
 /**
@@ -58,6 +65,15 @@ export class VaporRuntime {
   private readonly slotById = new Map<number, { slot: Slot; spec: SubscriptionTable['sources'][number]['slots'][number]; evalId: number }>()
   private readonly evalImpls = new Map<number, (ctx: EvalContext) => unknown>()
   private readonly sourcesOfSlot = new Map<number, string[]>()
+  /**
+   * ★★未能实例化求值器的槽位（**诊断，不许静默**）
+   *
+   * 【为什么必须有（本仓实测）】表达式引用外层别名或含运算时编译器给 `expr` 形态，
+   *   而 `expr` 只支持纯路径 ⇒ `impl` 为 undefined。首版**直接 continue** ⇒
+   *   该槽位永不写、且无任何提示（静默不更新的典型）。
+   */
+  readonly uninstantiatedSlots: Array<{ slotId: number; evaluatorId: number; propKey: string }> = []
+
   /** ★行内槽位的按键值缓存（`slotId:key` → 上次值）——只发变化行 */
   private readonly itemValueCache = new Map<string, unknown>()
   private loaded = false
@@ -197,12 +213,28 @@ export class VaporRuntime {
       })
     }
 
+    // ★★实例化检查要在**返回之前**做（本仓实测的时序坑）
+    //
+    // 【为什么】`load()` 只**注册订阅**，真正的求值发生在 `relink()` / 源变化时
+    //   ⇒ 若把检查放在求值路径里，`load()` 返回的清单**永远是空的**（push 晚于 return）。
+    //   ⇒ 正解：在这里**按槽位逐条检查**「求值器是否已实例化」，与是否已求值无关。
+    for (const src of this.table.sources) {
+      for (const spec of src.slots) {
+        if (spec.kind !== 'list-item') continue
+        if (!this.evaluators.get(spec.evaluatorId)) {
+          this.uninstantiatedSlots.push({ slotId: spec.slotId, evaluatorId: spec.evaluatorId, propKey: spec.propKey })
+        }
+      }
+    }
+
     this.loaded = true
     return {
       l1Slots,
       l0Slots: this.table.l0Slots.length,
       unknownSources,
       unsupportedEvaluators,
+      // ★行内槽位的未实例化清单（与 unsupportedEvaluators 同性质：**上报而非静默**）
+      uninstantiatedSlots: this.uninstantiatedSlots.slice(),
     }
   }
 
@@ -253,7 +285,19 @@ export class VaporRuntime {
     //   · 顶层（parentListId 未定义）⇒ 直接读源
     //   · 嵌套 ⇒ 先算出**父列表的行集**，再在每一行上按 sourceExpr 末段取本层数组
     //   ⇒ 递归 ⇒ 任意层数都成立（旧实现只回溯一层，第三层起取不到）
-    type RowRef = { key: string; row: Record<string, unknown> }
+    /**
+     * 一行数据 + 它的**祖先行链**
+     *
+     * 【为什么带祖先（本仓实测的边界补齐）】内层表达式可能引用**外层别名**
+     *   （如 `{{ group.title + item.name }}`）；首版只绑"当前行的别名" ⇒ 外层别名
+     *   读 `undefined`（不崩，但值不对）。本字段是修它的依据。
+     */
+    type RowRef = {
+      key: string
+      row: Record<string, unknown>
+      /** 祖先行链（自外向内；不含自身）——与各层别名按序对应 */
+      ancestors: Array<Record<string, unknown>>
+    }
     const rowsCache = new Map<number, RowRef[]>()
 
     const rowsOfList = (listId: number, spec: typeof itemSlots[number]): RowRef[] => {
@@ -282,39 +326,78 @@ export class VaporRuntime {
       //   （首段若是别名，则它前面的层级已经包含在 sourceExpr 里了——见下方段序处理。）
       const segs = (spec.sourceExpr ?? '').split('.').filter(Boolean)
       const topRows = ctx.read(src.sourceName)
-      if (!Array.isArray(topRows)) { console.error('[DIAG] topRows 非数组, src.sourceName=', src.sourceName, 'val=', typeof topRows); return out }
+      if (!Array.isArray(topRows)) return out
       // 段序：sourceExpr 的每一段都是「沿当前行集向下取一层」的字段名；
       // 若首段恰好等于顶层源名（最外层），跳过它（已由 topRows 提供）。
       const walkSegs = segs[0] === src.sourceName ? segs.slice(1) : segs
       // 逐段展开：从顶层行集开始，每段把「每行的该字段」展开成新行集
-      let currentRows: Record<string, unknown>[] = topRows as Record<string, unknown>[]
+      let current: Array<{ row: Record<string, unknown>; ancestors: Array<Record<string, unknown>> }> = (
+        topRows as Record<string, unknown>[]
+      ).map((row) => ({ row, ancestors: [] }))
       for (let seg = 0; seg < walkSegs.length; seg++) {
         const field = walkSegs[seg]
-        const next: Record<string, unknown>[] = []
-        for (const r of currentRows) {
-          const arr = r?.[field]
-          if (Array.isArray(arr)) for (const x of arr) next.push(x as Record<string, unknown>)
+        const next: typeof current = []
+        for (const c of current) {
+          const arr = c.row?.[field]
+          if (!Array.isArray(arr)) continue
+          for (const x of arr) {
+            // ★子行的祖先 = 父行的祖先 + 父行自身（累积 ⇒ 任意层）
+            next.push({ row: x as Record<string, unknown>, ancestors: [...c.ancestors, c.row] })
+          }
         }
-        currentRows = next
+        current = next
       }
-      for (let i = 0; i < currentRows.length; i++) out.push({ key: keyOf(currentRows[i], i), row: currentRows[i] })
-      console.error('[DIAG] listId=', listId, 'src=', src.sourceName, 'srcExpr=', spec.sourceExpr, 'segs=', JSON.stringify(segs), 'walkSegs=', JSON.stringify(walkSegs), 'rows=', out.length)
+      for (let i = 0; i < current.length; i++) {
+        out.push({ key: keyOf(current[i].row, i), row: current[i].row, ancestors: current[i].ancestors })
+      }
       rowsCache.set(listId, out)
       return out
     }
 
     for (const spec of itemSlots) {
       const impl = this.evaluators.get(spec.evaluatorId)
-      if (!impl) continue
+      if (!impl) {
+        // ★★不许静默跳过（本仓纪律：不静默）——记下"该槽位的求值器未能实例化"
+        //
+        // 【实测的触发形态】表达式**引用了外层别名**（如 `{{ group.title + item.name }}`）
+        //   或含运算 ⇒ 编译器给 `expr` 形态；而 `expr` 参考实现**只支持纯路径**
+        //   （完整表达式求值需目标端执行器，见 `buildEvaluators` 的诚实边界）。
+        //   首版此处直接 `continue` ⇒ 该槽位**永不写**，且**无任何提示**。
+        this.uninstantiatedSlots.push({ slotId: spec.slotId, evaluatorId: spec.evaluatorId, propKey: spec.propKey })
+        continue
+      }
       const scope = spec.scope ?? ''
       const rows = rowsOfList(spec.listId ?? -1, spec)
-      for (const { key, row } of rows) {
+      for (const rowRef of rows) {
+        const key: string = rowRef.key
+        const row: Record<string, unknown> = rowRef.row
         // ★行作用域上下文：把 v-for 别名绑到**当前行**（内层行在内层列表场景下就是 row）
         //
         // 【诚实边界】本实现只保证「当前行的别名」可见；**外层别名**（`group`）在
         //   内层表达式里被引用时（如 `{{ group.title + item.name }}`）尚未支持——
         //   那需要把外层行也注入上下文，属后续工作（当前不静默出错：会读到 undefined）。
-        const rowCtx: EvalContext = scope ? { read: (n) => (n === scope ? row : ctx.read(n)) } : ctx
+        // ★★rowCtx：当前行别名 + **各层祖先行别名**（本仓实测的边界补齐）
+        //
+        // 【为什么】内层表达式可引用外层别名（`{{ group.title + item.name }}`）。
+        //   首版只绑当前行 ⇒ 外层别名读 undefined（不崩，但值不对）。
+        //
+        // 【别名从哪来】产物里每层列表的 `scope` 就是该层别名；祖先行链与别名链**一一对应**
+        //   由「自外向内」顺序对齐（`rowsOfList` 累积 ancestors 时的顺序与之相同）。
+        //   故：`ancestorScopes` 数组 = 本列表及其各父列表的 scope。
+        const ancestorScopes = this.ancestorScopesOf(spec.listId ?? -1)
+        // ★注意：祖先在 **rowRef** 上（不是 row 上）——`row` 是纯数据对象
+        const ancestors: Array<Record<string, unknown>> = rowRef.ancestors
+        const rowCtx: EvalContext = scope
+          ? {
+              read: (n) => {
+                if (n === scope) return row
+                // 祖先别名：别名链与祖先链**同为「自外向内」** ⇒ 按同一位置取
+                const idx = ancestorScopes.indexOf(n)
+                if (idx >= 0 && idx < ancestors.length) return ancestors[idx]
+                return ctx.read(n)
+              },
+            }
+          : ctx
         const value = impl(rowCtx)
         const cacheKey = `${spec.slotId}:${key}`
         if (this.itemValueCache.get(cacheKey) === value) continue
@@ -354,6 +437,27 @@ export class VaporRuntime {
     for (const src of this.table.sources) {
       this.writeSlotsOfSource(src.sourceName, ctx)
     }
+  }
+
+  /**
+   * 某列表的**别名链**（自外向内；末位是它自身的 scope）
+   *
+   * 【为什么需要】`rowCtx` 要按位置把「祖先行」绑给对应的外层别名——
+   *   而位置对应关系依赖"自外向内"的稳定顺序（由 `parentListId` 逐级上溯构造）。
+   */
+  private ancestorScopesOf(listId: number): string[] {
+    const chain: string[] = []
+    let cur: number | undefined = listId
+    const allSlots = this.table.sources.flatMap((x) => x.slots)
+    let guard = 0
+    while (cur !== undefined && guard < 32) {
+      const spec = allSlots.find((x) => x.kind === 'list-item' && x.listId === cur)
+      if (!spec) break
+      chain.unshift(spec.scope ?? '')
+      cur = spec.parentListId
+      guard++
+    }
+    return chain
   }
 
   /** 取某源的行数组（列表源 ⇒ 数组；非数组返回空）——仅供「无 :key 时用下标兜底」 */
