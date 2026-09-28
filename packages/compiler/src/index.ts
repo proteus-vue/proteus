@@ -69,6 +69,29 @@ export type { VueCompatEntry, VueCompatStatus, VueCompatGroup } from './vue-comp
 // ★★2026-09-08 架构定调：宏语义权威源 = @vue/compiler-sfc compileScript（不手造）；见 sfc-macros.ts
 // eslint-disable-next-line import/no-named-as-default
 export { extractSfcMacros } from './sfc-macros'
+// ★Vapor for Proteus IR（V2）：编译期响应式转换——响应式源识别 / 依赖分析 / 订阅表 / 分层判定
+export {
+  scanReactiveSources,
+  analyzeExprDeps,
+  analyzeAstDeps,
+  collectTemplateBindings,
+  normalizePropKey,
+  buildVaporSubscriptions,
+  slotKindOf,
+} from './vapor'
+export type {
+  ReactiveSource,
+  SourceKind,
+  SourceScanResult,
+  ExprDeps,
+  TemplateBindingRef,
+  SubscriptionTable,
+  SourceSubscription,
+  SlotSubscription,
+  EvaluatorSpec,
+  VaporBuildOptions,
+  VaporBuildResult,
+} from './vapor'
 export type { SfcMacros, MacroModelRef } from './sfc-macros'
 
 // 阶段二：决策 trace（explainTransform 输出源码触发的全部转换规则）

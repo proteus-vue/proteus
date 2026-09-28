@@ -108,8 +108,8 @@ async function main(): Promise<void> {
       break
     }
     case 'explain': {
-      const { target, withIR, onlyBlocked, maxNodes } = parseExplainArgs(rest)
-      console.log(explainTarget(target, { withIR, onlyBlocked, maxNodes }))
+      const { target, withIR, withVapor, onlyBlocked, maxNodes } = parseExplainArgs(rest)
+      console.log(explainTarget(target, { withIR, withVapor, onlyBlocked, maxNodes }))
       break
     }
     case 'rules': {

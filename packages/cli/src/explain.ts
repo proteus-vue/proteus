@@ -8,6 +8,10 @@ import { explainTransform, formatTransformTrace, getTransformRule, formatTransfo
 //   渲染 IR 决策与「转换规则 trace」是两类问题（前者=画什么/怎么画，后者=源码怎么改写），
 //   故以 **--ir 开关并列**而非混入 —— 既有输出零变化。
 import { buildPTree, analyzePTree, formatPTrace, rawFromComponentIR, toComponentIR } from '@proteus-vue/component-ir'
+// ★★Vapor IR V2 出口条件（方案 §5.5：「proteus explain 必须能输出每个槽位的分层判定与理由」
+//   ——「没有这个能力，L0/L1 混跑将完全无法调试。这是硬性要求」）
+import { buildVaporSubscriptions } from '@proteus-vue/compiler'
+import { decisionsToRows } from '@proteus-vue/slot-runtime'
 
 export interface ExplainTargetOptions {
   /** 额外输出「渲染 IR 决策 trace」（拍平资格 / 静态子树 / PaintHint） */
@@ -16,6 +20,45 @@ export interface ExplainTargetOptions {
   onlyBlocked?: boolean
   /** 节点显示上限（防输出爆炸） */
   maxNodes?: number
+  /** ★额外输出「Vapor 槽位分层判定」（方案 §5.5 硬性要求：L0/L1 混跑的可观测性） */
+  withVapor?: boolean
+}
+
+/**
+ * Vapor 槽位分层判定报告（方案 §5.5 的输出形态）
+ *
+ * 【为什么必须有（方案原文）】「没有这个能力，L0/L1 混跑将完全无法调试。这是硬性要求。」
+ *   输出三块：① 逐槽位判定（slot / 片段 / 层级 / 理由）
+ *             ② 依赖图（源 → 槽位；解释"这个源变化会写哪些槽位"）
+ *             ③ 覆盖率与降级原因汇总（L1 覆盖率是 §10 验收指标）
+ */
+export function explainVapor(source: string, opts: ExplainTargetOptions = {}): string {
+  const res = buildVaporSubscriptions(source, 'explain.vue')
+  const lines: string[] = []
+  lines.push('── Vapor 槽位分层（Vapor for Proteus IR · V2） ──')
+  if (!res.ok) {
+    lines.push('  ✗ 源扫描失败 ⇒ 全部降级 L0（不猜测）：')
+    for (const n of res.notes) lines.push(`    ${n}`)
+    return lines.join('\n')
+  }
+  lines.push(...decisionsToRows(res.decisions).map((l) => `  ${l}`))
+  const { l1, l0, l1Rate } = res.table.stats
+  lines.push('')
+  lines.push(`  L1 覆盖率：${(l1Rate * 100).toFixed(1)}%（L1 ${l1} / L0 ${l0}，合计 ${l1 + l0} 个槽位）`)
+  if (res.table.sources.length > 0) {
+    lines.push('')
+    lines.push('  依赖图（源 → 槽位）：')
+    for (const s of res.table.sources) {
+      const ids = s.slots.map((x) => `slot_${x.slotId}(${x.propKey})`).join(', ')
+      lines.push(`    ${s.sourceName} [${s.sourceKind}] → ${ids}`)
+    }
+  }
+  if (res.notes.length > 0 && opts.onlyBlocked) {
+    lines.push('')
+    lines.push('  诊断：')
+    for (const n of res.notes) lines.push(`    ${n}`)
+  }
+  return lines.join('\n')
 }
 
 /**
@@ -55,6 +98,8 @@ export function explainTarget(target: string, opts: ExplainTargetOptions = {}): 
     const base = formatTransformTrace(result)
     // ★--ir：追加渲染 IR 决策 trace（M0 出口条件）
     if (opts.withIR) return `${base}\n\n${explainIR(source, opts)}`
+    // ★--vapor：追加槽位分层判定（V2 出口条件，方案 §5.5 硬性要求）
+    if (opts.withVapor) return `${base}\n\n${explainVapor(source, opts)}`
     return base
   }
   const rule = getTransformRule(target)

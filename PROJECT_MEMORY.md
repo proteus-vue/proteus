@@ -59,7 +59,7 @@
 >   `relayout` = 7005（**整树重排**）——标题 margin 改变其后所有行位置 ⇒ 宿主侧另有
 >   与 Vue 无关的 O(树规模) 热点（与增量布局的边界判定同源）。
 > · **桌面通道**（`bash hosts/ios/run-v0-probe.sh`）：10–14ms → 1–3ms，与真机同比率同方向。
-> · **下一步**：~~V1~~ **V1 已完成**（指令集 + slot-runtime 包 + 真跨语言 golden）⇒ **下一步 = V2**（编译期响应式转换）。
+> · **下一步**：~~V1~~（指令集 + slot-runtime + 真跨语言 golden）· ~~V2~~（编译期响应式转换 + `explain --vapor`，L1 覆盖率 77.8%）**均已完成** ⇒ **下一步 = V3**（App 端打通：JSI 对接 + Rust 指令消费 + P95 实测）。
 >
 > ★**真机通道已全线打通（2026-09-28）——三层阻塞已解决**：
 > ① **签名身份**：用户新增 Apple ID（`lyl@shxuxi.cn` · Personal Team `XKH568R7A5`）后证书已签发，
@@ -368,6 +368,40 @@ Golden 双端门禁）；真机复跑待签名恢复后补，报告含 `V0_*` �
 
 **下一步 = V2（编译期响应式转换，≈2.5 人周）**：响应式源识别 → `deps → slots` 静态映射 →
 求值函数生成 → L0/L1 判定接线 → `proteus explain` 输出分层理由。
+
+### ★★★Vapor IR **V2 完成**：编译期响应式转换（含 `proteus explain --vapor`）（2026-09-28）
+
+**依据**：方案 §9 的 V2 里程碑（§4.3 六步全落地 + §5.5 可观测性硬性要求）。
+
+**六步落地**（全部在 `packages/compiler/src/vapor/`）：
+| Step | 文件 | 做法 |
+|---|---|---|
+| 1 源识别 | `sources.ts` | 五类源（ref/reactive/computed/props/model）；★用官方 `compileScript.bindings` 定语义（本仓定调「宏语义不自造」） |
+| 2 表达式分析 | `deps.ts` | `@vue/compiler-dom` AST + `@babel/parser`——**不用正则扫模板**（误判会漏订源 = 静默不更新） |
+| 3 依赖图 | `build.ts` | `sourceId → slotId[]`；列表内 `item.x` 经 `scopeSources` 挂回**列表源** |
+| 4 求值函数 | `build.ts` | `member`（免解析）/ `expr` / `const` |
+| 5 订阅表 | `build.ts` | `SubscriptionTable` **可 JSON 序列化**（§4.4：不是源码字符串，跨端禁 eval） |
+| 6 分层判定 | 复用 `slot-runtime/tier.ts` | 七条件；★同一语义一处实现（不在编译器另写一份） |
+
+**可观测性（§5.5 硬性要求已兑现）**：`proteus explain <file> --vapor` 输出
+逐槽位判定 + **依赖图**（源→槽位）+ **L1 覆盖率**。实测典型页面 **77.8%**（7/9），达 §10「≥70%」。
+
+**★★V2 抓到的四个真缺陷（都会静默出错，均有回归测试）**
+| # | 缺陷 | 现象 | 处置 |
+|---|---|---|---|
+| 1 | **指令表达式读错字段** | 只收到插值，`:class`/`:style`/`v-for` **全漏采** | DOM AST 指令值在 `prop.exp.content`（首版读 `prop.value.content`，DOM 侧无该字段）；属性名取 `arg.content` |
+| 2 | **列表内绑定未挂到列表源** | `{{ item.title }}` 标 L1 但**依赖图里没有它** ⇒ 该源变化不写此槽位（静默不更新） | 新增 `scopeSources` 别名映射（item→list）+ 「挂不上就出诊断」兜底 |
+| 3 | **C1 两条通路混为一谈** | 人工 `@proteus-pure` 担保显示成「静态证明」（⚠ 显示成 ✓）⇒ 诊断失去区分度 | 静态可判纯 vs 人工担保分开传参 |
+| 4 | **新增 CLI 旗标致参考文档漂移** | `gen:reference` 门禁红（**门禁正确工作**） | 重跑 `gen-reference.mjs` |
+
+**★诚实边界**
+① 交付的是 **SFC → 订阅表** 的编译期产物；**接到 Vue 运行时**（订阅注册 / 槽位直写 /
+   与 L0 共存调度）属 **V3**。
+② evaluator 目前是**声明**，运行时从声明重建函数的实现属 V3。
+③ 77.8% 是**单个演示页**读数，不代表全部业务代码；持续度量需棘轮门禁（后续）。
+
+**下一步 = V3（App 端打通，≈2 人周）**：槽位运行时对接 JSI → Rust 侧指令消费
+（指令的**布局应用**）→ 一帧一次 flush 调度对齐 Choreographer → **单节点更新 P95 实测**。
 
 ### ★★★真机闪退事故：适配器 id 冲突 → taffy 无限递归（2026-09-29，提交 `f7631cd7`）
 
