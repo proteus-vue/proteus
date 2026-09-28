@@ -693,14 +693,28 @@ pub unsafe extern "C" fn proteus_layout_update(handle: u64, patches_json: *const
         }
         let tree = &mut entry.tree;
         let mut applied = 0usize;
-        let mut last_dirty: Option<u32> = None;
+        // ★**全部**脏节点的索引（不是只有最后一个）——本仓实测的缺陷：多补丁只重排最后一个
+        //   ⇒ 其余节点的几何**静默过期**（单补丁用例发现不了；文本批量改 300 行会暴露）
+        let mut dirty_ids: Vec<u32> = Vec::with_capacity(targets.len());
+        let mut text_updates: Vec<(u32, String)> = Vec::new();
         for (id, idx) in targets {
             // ★按 id 在补丁里找（targets 跳过了未知 id，故不能按下标对齐）
             let Some(p) = patches.iter().find(|q| q.id == id) else { continue };
+            // ★★文本更新明细（本仓实测的静默错显示缺陷）：PatchStyle.text 会改
+            //   `node.text.text`，而**屏幕上的字在宿主的 CATextLayer.string 上** ⇒
+            //   不回报它，改文案后核心几何已变、屏幕还是旧字（几何断言全绿）。
+            //   这里用前后比对取"真的变了"（与 ops 路径同口径）。
+            let before_text = tree.nodes[idx].text.as_ref().map(|r| r.text.clone());
             p.apply_to(&mut tree.nodes[idx])?;
+            let after_text = tree.nodes[idx].text.as_ref().map(|r| r.text.clone());
+            if after_text != before_text {
+                if let Some(t) = after_text {
+                    text_updates.push((id, t));
+                }
+            }
             tree.nodes[idx].dirty = true;
             applied += 1;
-            last_dirty = Some(idx as u32);
+            dirty_ids.push(idx as u32);
         }
         if std::env::var_os("PROTEUS_DEBUG").is_some() {
             eprintln!("[proteus] update handle={handle} patches={} applied={applied}", patches.len());
@@ -714,19 +728,18 @@ pub unsafe extern "C" fn proteus_layout_update(handle: u64, patches_json: *const
             }).to_string());
         }
 
-        // ★增量重排（作用域由布局边界决定；无边界时会自动退回全量，见 layout_incremental）
-        let dirty = last_dirty.unwrap();
-        let scope = {
-            // ★先把 scope 记下来：下面要用它算「变化节点的绝对坐标」
-            let e = TaffyEngine::new();
-            e.relayout_scope_of(tree, dirty)
-        };
+        // ★★多范围增量重排（**每个脏节点各自的重排范围**，不是只重排最后一个）
+        //
+        // 【为什么改用 relayout_multi（本仓实测的缺陷）】此前只把 `last_dirty` 传给
+        //   `layout_incremental` ⇒ 一次 update 带 N 个补丁时，**只有最后一个节点所在范围**
+        //   被重排，其余节点的几何**静默过期**（画面与核心不一致，且无任何报错）。
+        //   单补丁用例（S2/S4 旧版）恰好发现不了；批量改文本/多补丁更新必然踩到。
+        //   relayout_multi 会去除互相嵌套的范围、逐个重排，并回报**变化根**
+        //   （平移传播时它含被平移的兄弟 ⇒ 必须用它收集，否则兄弟不被更新）。
         let t_eng0 = std::time::Instant::now();
-        // ★用**句柄持有的度量表**（见 TreeEntry::measures：无它则文本在增量后塌成 0 高）
-        let mut engine = TaffyEngine::new()
-            .with_measurer(Box::new(TableTextMeasurer::new(measures)));
-        let out = engine.layout_incremental(tree, dirty);
+        let multi = crate::ops_apply::relayout_multi_with_measures(tree, &dirty_ids, &measures);
         let t_engine_new = t_eng0.elapsed().as_secs_f64() * 1000.0;
+        let roots: &[u32] = if multi.changed_roots.is_empty() { &multi.scopes } else { &multi.changed_roots };
 
         // ★★只返回**变化节点**的绝对矩形（宿主据此只更新那几个 layer，而不是重建整棵层树）
         //
@@ -740,20 +753,26 @@ pub unsafe extern "C" fn proteus_layout_update(handle: u64, patches_json: *const
         //   —— 与全量等价，宿主仍能正确处理（只是没有收益）。
         let t_collect0 = std::time::Instant::now();
         let mut changed = serde_json::Map::new();
-        {
-            let (pox, poy) = parent_origin_of(tree, scope);
-            collect_abs_subtree(tree, scope, pox, poy, &mut changed);
+        for &sc in roots {
+            let (pox, poy) = parent_origin_of(tree, sc);
+            collect_abs_subtree(tree, sc, pox, poy, &mut changed);
         }
         let t_collect = t_collect0.elapsed().as_secs_f64() * 1000.0;
         // 整树矩形仍可经 proteus_layout_rects 取（兼容）；此处只给变化集
-        let _ = &out;
+        // `scope_id` 保留（既有测试与调用方读它）——取**首个**范围；多范围见 `scopes`
+        let text_updates_json: serde_json::Value = serde_json::Value::Object(
+            text_updates.iter().map(|(id, t)| (id.to_string(), serde_json::json!(t))).collect(),
+        );
         Ok(serde_json::json!({
             "ok": true,
             "applied": applied,
-            "relayout_count": out.relayout_count,
-            "measure_calls": out.measure_calls,
-            "measure_hits": out.measure_hits,
-            "scope_id": tree.get(scope).id,
+            "relayout_count": multi.relayout_count,
+            "measure_calls": multi.measure_calls,
+            "measure_hits": multi.measure_hits,
+            "scope_id": roots.first().map(|&i| tree.get(i).id),
+            "scopes": multi.scopes,
+            "changed_roots": multi.changed_roots,
+            "text_updates": text_updates_json,
             "changed_count": changed.len(),
             "rects": changed,
             // ★分段计时（诊断用：定位剩下的 cost 在哪一段）
@@ -2350,6 +2369,69 @@ mod tests {
         unsafe { proteus_layout_destroy(fresh) };
     }
 
+    /// ★★**多补丁 update 必须重排全部脏节点**（不是只重排最后一个）
+    ///
+    /// 【为什么必须有（本仓实测的缺陷）】此前 update 只把 `last_dirty` 传给
+    ///   `layout_incremental` ⇒ 一次带 N 个补丁时**只有最后一个节点所在范围**被重排，
+    ///   其余节点的几何**静默过期**（核心与屏幕不一致、零报错）。
+    ///   判据：两个**互不相同**的边界行各改一个叶子 ⇒ 两行都应出现在变化集里，
+    ///   且与「句柄当前全量矩形」（独立实现）一致。
+    #[test]
+    fn update_with_multiple_patches_relayouts_all() {
+        // 两行（各带显式宽高 ⇒ 各自是布局边界），行内一个叶子
+        let tree = serde_json::json!({
+            "viewport": {"width": 375.0, "height": 800.0},
+            "nodes": [
+                {"id": 1, "parentId": null, "flexDirection": "column", "width": 375.0, "height": 800.0},
+                {"id": 10, "parentId": 1, "flexDirection": "row", "width": 343.0, "height": 50.0, "flexShrink": 0.0},
+                {"id": 11, "parentId": 10, "width": 30.0, "height": 30.0},
+                {"id": 20, "parentId": 1, "flexDirection": "row", "width": 343.0, "height": 50.0, "flexShrink": 0.0},
+                {"id": 21, "parentId": 20, "width": 30.0, "height": 30.0}
+            ],
+            "textMeasures": {}
+        });
+        let handle = unsafe {
+            let c = CString::new(tree.to_string()).unwrap();
+            proteus_layout_create(c.as_ptr())
+        };
+        assert_ne!(handle, 0);
+
+        // 同时改**两个不同行**的叶子（旧实现只重排最后一个 ⇒ 另一个静默过期）
+        let patch = r#"[{"id":11,"style":{"width":40.0}},{"id":21,"style":{"width":55.0}}]"#;
+        let pc = CString::new(patch).unwrap();
+        let out = unsafe {
+            let p = proteus_layout_update(handle, pc.as_ptr());
+            let s = CStr::from_ptr(p).to_str().unwrap().to_string();
+            proteus_layout_free_string(p);
+            s
+        };
+        let v: serde_json::Value = serde_json::from_str(&out).unwrap();
+        assert_eq!(v["ok"], true, "update 应成功：{out}");
+        assert_eq!(v["applied"], 2);
+
+        // ★判据一：两个节点都在变化集里（旧实现只有后者）
+        let rects = v["rects"].as_object().expect("应有变化集");
+        assert!(rects.contains_key("11"), "★节点 11 未出现在变化集（多补丁未全重排）：{out}");
+        assert!(rects.contains_key("21"), "★节点 21 未出现在变化集：{out}");
+
+        // ★判据二：与句柄的全量矩形（独立实现）一致
+        let full = unsafe {
+            let p = proteus_layout_rects(handle);
+            let s = CStr::from_ptr(p).to_str().unwrap().to_string();
+            proteus_layout_free_string(p);
+            s
+        };
+        let fv: serde_json::Value = serde_json::from_str(&full).unwrap();
+        for id in ["11", "21"] {
+            let w = fv["rects"][id]["width"].as_f64().unwrap();
+            let expect = if id == "11" { 40.0 } else { 55.0 };
+            assert!((w - expect).abs() < 0.01, "节点 {id} 宽应为 {expect}，实为 {w}（几何未跟着变）");
+            let cw = rects[id]["width"].as_f64().unwrap();
+            assert!((cw - w).abs() < 0.01, "变化集与全量不一致：{id} {cw} vs {w}");
+        }
+        unsafe { proteus_layout_destroy(handle) };
+    }
+
     /// ★★**文本更新必须回报给宿主**（`text_updates`）——否则屏幕文字停留在旧值
     ///
     /// 【为什么是设备级缺陷（本仓实测）】增量路径只改 layer 的 frame，而文本在
@@ -2398,6 +2480,120 @@ mod tests {
         assert_eq!(out["ok"], true, "applyOps 应成功：{out}");
         assert_eq!(out["applied"], 1);
         assert_eq!(out["text_updates"]["101"], "new", "★必须回报文本更新（否则屏幕文字停留在旧值）：{out}");
+        unsafe { proteus_layout_destroy(handle) };
+    }
+
+    /// ★★**形状判据**：`text` 必须在 `style` **内**——顶层 `{id,text}` 被 serde 静默忽略
+    ///
+    /// 【为什么必须有这条（本仓实测：静默无效的经典形状分叉）】设备上曾出现
+    ///   `text_patches=300` 而 `text_updates=0`：适配器发顶层 `{id,text}`，
+    ///   而 `StylePatch` 的形状是 `{id, style:{...}}` ⇒ serde 忽略未知顶层字段、
+    ///   `applied` 照数 300 ⇒ **看着成功、改动为零**（且无任何报错）。
+    ///   本测试把两侧的形状契约**钉死在 Rust 这一侧**（JS 侧另有 `style.text` 断言）。
+    #[test]
+    fn text_field_must_be_inside_style() {
+        let tree = serde_json::json!({
+            "viewport": {"width": 375.0, "height": 800.0},
+            "nodes": [
+                {"id": 1, "parentId": null, "flexDirection": "column", "width": 375.0, "height": 800.0},
+                {"id": 11, "parentId": 1, "text": "old"}
+            ],
+            "textMeasures": {"11": {"width": 30.0, "height": 19.0}}
+        });
+        let handle = unsafe {
+            let c = CString::new(tree.to_string()).unwrap();
+            proteus_layout_create(c.as_ptr())
+        };
+        assert_ne!(handle, 0);
+
+        // ① **错误形状**（顶层 text）：不得生效——且本测试把这个"静默"钉住
+        let bad = r#"[{"id":11,"text":"WRONG"}]"#;
+        let bc = CString::new(bad).unwrap();
+        let bout = unsafe {
+            let p = proteus_layout_update(handle, bc.as_ptr());
+            let s = CStr::from_ptr(p).to_str().unwrap().to_string();
+            proteus_layout_free_string(p);
+            s
+        };
+        let bv: serde_json::Value = serde_json::from_str(&bout).unwrap();
+        assert_eq!(
+            bv["text_updates"].as_object().map(|o| o.len()).unwrap_or(0),
+            0,
+            "★顶层 text 必须**不生效**（这正是形状分叉静默的机制）：{bout}"
+        );
+
+        // ② **正确形状**（style 内）：必须生效
+        let good = r#"[{"id":11,"style":{"text":"RIGHT"}}]"#;
+        let gc = CString::new(good).unwrap();
+        let gout = unsafe {
+            let p = proteus_layout_update(handle, gc.as_ptr());
+            let s = CStr::from_ptr(p).to_str().unwrap().to_string();
+            proteus_layout_free_string(p);
+            s
+        };
+        let gv: serde_json::Value = serde_json::from_str(&gout).unwrap();
+        assert_eq!(gv["text_updates"]["11"], "RIGHT", "★style 内的 text 必须生效：{gout}");
+        unsafe { proteus_layout_destroy(handle) };
+    }
+
+    /// ★★**update 路径的文本更新也要回报**（`text_updates`）+ 度量变化后几何跟着变
+    ///
+    /// 【与 ops 路径的对应】ops 路径的回报见 `apply_ops_reports_text_updates`；
+    ///   而 `update`（样式/文本补丁 JSON 入口）此前**完全没有**这个回报 ⇒
+    ///   PatchStyle.text 改了核心、屏幕字不变。本测试同时锁定：
+    ///   ① 回报了 text_updates；② **新度量被用上**（文本高按注入的度量变化）。
+    #[test]
+    fn update_path_reports_text_updates_and_uses_new_measure() {
+        let tree = serde_json::json!({
+            "viewport": {"width": 375.0, "height": 800.0},
+            "nodes": [
+                {"id": 1, "parentId": null, "flexDirection": "column", "width": 375.0, "height": 800.0},
+                {"id": 10, "parentId": 1, "flexDirection": "row", "alignItems": "flex-start",
+                 "width": 343.0, "height": 100.0, "flexShrink": 0.0},
+                {"id": 11, "parentId": 10, "text": "短"}
+            ],
+            "textMeasures": {"11": {"width": 20.0, "height": 19.0}}
+        });
+        let handle = unsafe {
+            let c = CString::new(tree.to_string()).unwrap();
+            proteus_layout_create(c.as_ptr())
+        };
+        assert_ne!(handle, 0);
+
+        // ① 注入新度量（模拟宿主度量"一段更长的文案"）
+        let measures = r#"{"11":{"width": 30.0, "height": 57.0}}"#;
+        let mc = CString::new(measures).unwrap();
+        let mout = unsafe {
+            let p = proteus_layout_set_text_measures(handle, mc.as_ptr());
+            let s = CStr::from_ptr(p).to_str().unwrap().to_string();
+            proteus_layout_free_string(p);
+            s
+        };
+        assert_eq!(serde_json::from_str::<serde_json::Value>(&mout).unwrap()["ok"], true, "度量注入应成功：{mout}");
+
+        // ② 改文本字面量
+        let patch = r#"[{"id":11,"style":{"text":"一段更长的文案"}}]"#;
+        let pc = CString::new(patch).unwrap();
+        let out = unsafe {
+            let p = proteus_layout_update(handle, pc.as_ptr());
+            let s = CStr::from_ptr(p).to_str().unwrap().to_string();
+            proteus_layout_free_string(p);
+            s
+        };
+        let v: serde_json::Value = serde_json::from_str(&out).unwrap();
+        assert_eq!(v["ok"], true, "update 应成功：{out}");
+        assert_eq!(v["text_updates"]["11"], "一段更长的文案", "★必须回报文本更新：{out}");
+
+        // ③ 新度量必须被用上（文本高 19 → 57；行高 100 是固定外盒，故看文本自身）
+        let full = unsafe {
+            let p = proteus_layout_rects(handle);
+            let s = CStr::from_ptr(p).to_str().unwrap().to_string();
+            proteus_layout_free_string(p);
+            s
+        };
+        let fv: serde_json::Value = serde_json::from_str(&full).unwrap();
+        let h = fv["rects"]["11"]["height"].as_f64().unwrap();
+        assert!((h - 57.0).abs() < 0.01, "★文本高应为注入的新度量 57，实为 {h}（度量未生效 ⇒ 屏幕上字会被裁/留白）");
         unsafe { proteus_layout_destroy(handle) };
     }
 

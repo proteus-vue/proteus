@@ -289,6 +289,17 @@ export function createSelfDrawAdapter(): SelfDrawAdapter {
   }
   /** ★本批次内被 patchProp 改过的节点（增量补丁的候选集） */
   const dirty = new Set<object>()
+  /**
+   * ★★**文本内容更新**（文本节点 → 新文本）——走补丁通道，**不是**结构变更
+   *
+   * 【为什么必须单列（本仓实测：文本变更一直被迫走全量）】Vue 对 `h('p-text', {...}, '文案')`
+   *   的内容更新走 `hostSetElementText`。而适配器首版**清空 children + 新建文本节点**
+   *   ⇒ 置结构标志 ⇒ `takePatches()` 返回 null ⇒ **整树重发**（真机 S4：改 300 行文案
+   *   要重发 280KB / 254ms，而核心侧真正需要的只是 300 条 SET_TEXT 补丁）。
+   *   ⇒ 正解：**复用同一文本节点**（id 不变）⇒ 内容更新，id 稳定 ⇒ 可走补丁通道。
+   *   ★与"结构变更走 splice"是同一原则的两面：**id 的稳定性决定能走哪条通道**。
+   */
+  const textDirty = new Map<object, string>()
   /** ★本批次是否发生**结构变化**（增删节点）——结构变化必须走全量（update 入口不收样式） */
   let structuralChange = false
   /**
@@ -432,6 +443,22 @@ export function createSelfDrawAdapter(): SelfDrawAdapter {
       patches++
     },
     setElementText(el: NativeElementNode, text: string): void {
+      // ★★**复用既有文本节点**（本仓实测的关键修正：文本变更一直被迫走全量）
+      //
+      // 【为什么（真机 S4 读数）】改 300 行文案要走**全量**（280KB / 254ms）——而核心侧
+      //   真正需要的只是 300 条 SET_TEXT 补丁。根因就是这里"重建节点"：
+      //   新 id ⇒ 旧节点要删、新节点要插 ⇒ 结构变更 ⇒ 全量。
+      //   ⇒ 单文本子节点时**原地改内容**（id 不变）⇒ 走补丁通道。
+      //   ★只有形态真的变了（0 个或多个子节点）才退回"替换"（那是真的结构变更）。
+      const only = el.children.length === 1 ? el.children[0] : null
+      if (only && only.__kind === 'text') {
+        if (only.text !== text) {
+          only.text = text
+          textDirty.set(only, text)
+          patches++
+        }
+        return
+      }
       // ★★被整体替换的既有子节点**必须逐个登记为移除**（本仓实测的静默分叉）
       //
       // 【故障链（本仓实测）】Vue 的 `h('p-text', {...}, 'label')` 内容变化走
@@ -629,7 +656,10 @@ export function createSelfDrawAdapter(): SelfDrawAdapter {
       structuralChange = false
       const batch = Array.from(dirty)
       dirty.clear()
-      // 结构变化 ⇒ 必须全量（核心的 update 入口只收样式补丁）
+      const textBatch = Array.from(textDirty)
+      textDirty.clear()
+      // 结构变化 ⇒ 必须全量（核心的 update 入口只收样式补丁）——
+      // ★文本补丁也被全量覆盖（新树自带新文案）⇒ 一并丢弃，不重复发
       if (structural) return null
       const out: Array<{ id: number; style: Record<string, unknown> }> = []
       for (const node of batch) {
@@ -638,6 +668,18 @@ export function createSelfDrawAdapter(): SelfDrawAdapter {
         if (id === undefined) continue
         const style = layoutStyleOf(el.props)
         if (Object.keys(style).length > 0) out.push({ id, style })
+      }
+      // ★★文本补丁必须发成 `{id, style:{text}}`（**不是**顶层 `{id, text}`）
+      //
+      // 【为什么（本仓实测：形状分叉导致静默无效）】Rust 的 `StylePatch` 形状是
+      //   `{id, style:{...}}`，`text` 在 **style 内**。首版发成顶层 `{id, text}`
+      //   ⇒ serde 忽略未知的顶层字段、`applied` 照数 300 ⇒ **看着成功、其实什么都没改**
+      //   （设备读数：`text_patches=300` 而 `text_updates=0`）。
+      //   ⇒ 与样式补丁**同一形状**（本就该如此：文本也是"这个节点的某个属性"）。
+      for (const [node, text] of textBatch) {
+        const id = idOf.get(node)
+        if (id === undefined) continue
+        out.push({ id, style: { text } })
       }
       return out
     },
@@ -652,6 +694,7 @@ export function createSelfDrawAdapter(): SelfDrawAdapter {
       createdNodes.clear()
       removedNodeIds.clear()
       movedExisting = false
+      textDirty.clear()
     },
     patchCount: () => patches,
     createdCount: () => ({ elements, texts }),
