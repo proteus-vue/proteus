@@ -36,6 +36,13 @@ pub struct TaffyEngine {
     /// 键：`copy_ms`（把范围子树拷进新树）/ `build_ms`（taffy 建树）/ `solve_ms`（compute_layout）
     ///     / `writeback_ms`（结果回写 + 平移）/ `total_ms`
     pub last_phases: std::collections::BTreeMap<String, f64>,
+    /// ★★V5 平移传播：本轮的**变化根**（脏子树根 + 被平移的兄弟）
+    ///
+    /// 【为什么需要】常规增量的"变化集"就是 scope 子树；而平移传播下，
+    ///   变化的是「脏子树 ∪ 若干直接兄弟」——收集层必须按这个集合取矩形，
+    ///   否则会漏掉被平移的兄弟（宿主不更新其位置 ⇒ **画面停在旧位置**）。
+    ///   空 = 走常规 scope 语义。
+    pub last_changed_roots: Vec<NodeIndex>,
     /// ★★度量记忆化：**内容寻址**（Profile §5.3 规定的键）——
     ///   `(文本 hash ⊕ 字体签名, 宽度约束位)` → Size
     ///
@@ -70,6 +77,7 @@ impl TaffyEngine {
     pub fn new() -> Self {
         Self {
             last_phases: std::collections::BTreeMap::new(),
+            last_changed_roots: Vec::new(),
             measurer: None,
             measure_cache: HashMap::new(),
             measure_calls: 0,
@@ -240,7 +248,7 @@ impl TaffyEngine {
     /// 执行一轮 taffy 布局（含度量回调）
     fn run_taffy(&mut self, tree: &LayoutTree, taffy: &mut TaffyTree<u32>, roots: &[NodeIndex], constraint: RootConstraint) -> LayoutOutput {
         // ★字段级解构：让 `measurer` 与 `measure_cache` 同时可变借用（互不相交）
-        let TaffyEngine { measurer, measure_cache, measure_calls, measure_hits, taffy_ids, last_root_constraint: _, last_phases: _ } = self;
+        let TaffyEngine { measurer, measure_cache, measure_calls, measure_hits, taffy_ids, last_root_constraint: _, last_phases: _, last_changed_roots: _ } = self;
         *measure_calls = 0;
         *measure_hits = 0;
 
@@ -367,6 +375,8 @@ impl LayoutEngine for TaffyEngine {
     ///   对比全量 O(整树)：当 范围 ≪ 整树 时是真实收益。进一步优化（复用 taffy 状态做真增量）
     ///   留到 M2 有真机数据后再评估——先保证语义正确。
     fn layout_incremental(&mut self, tree: &mut LayoutTree, dirty: NodeIndex) -> LayoutOutput {
+        // ★每轮清空（否则上一轮的平移痕迹会污染本轮的收集集合）
+        self.last_changed_roots.clear();
         let scope = self.relayout_scope_of(tree, dirty);
 
         // ★★退化保护：重排范围 == 根 ⇒ 直接走全量，别做「拷贝整树再布局」
@@ -377,6 +387,13 @@ impl LayoutEngine for TaffyEngine {
         //   ⇒ 宁可退化为全量（1.0×），也不要「越用越慢」的假增量。
         let is_root_scope = tree.get(scope).parent == NO_PARENT;
         if is_root_scope {
+            // ★★V5：范围退化到根时，**先尝试平移传播**（类B 这类"兄弟移位"场景可免全量）
+            //
+            // 【为什么值得试（本仓实测）】类B 桌面 3.87ms / 真机 18ms，而其中后续兄弟
+            //   只是整体位移 ⇒ 无需重解 flexbox。前提不满足时本函数返回 None（回退全量）。
+            if let Some(out) = self.try_translation_relayout(tree, dirty) {
+                return out;
+            }
             // 复用最近一次全量布局的约束（首次无记录时用「紧尺寸」兜底：范围是整树，
             // 根若为 auto 尺寸，MaxContent 语义与全量首帧一致）
             let c = self.last_root_constraint.unwrap_or(RootConstraint {
@@ -401,68 +418,14 @@ impl LayoutEngine for TaffyEngine {
 
         // 取子树 + 前序索引映射（一次 O(范围)，避免逐节点重扫）
         let t_phase0 = std::time::Instant::now();
-        let order = preorder(tree, scope);
-        let mut sub = LayoutTree::new();
-        let root_new = copy_subtree(tree, scope, &mut sub, NO_PARENT);
-        sub.roots.push(root_new);
-        let t_copy = t_phase0.elapsed().as_secs_f64() * 1000.0;
-
-        let mut sub_engine = TaffyEngine::new();
-        if let Some(m) = self.measurer.take() {
-            sub_engine.set_measurer(m);
-        }
-        let t_solve0 = std::time::Instant::now();
-        let out = sub_engine.layout(&mut sub, constraint);
-        let t_solve = t_solve0.elapsed().as_secs_f64() * 1000.0;
-        // ★子引擎的分段（建树）要带出来——`layout()` 内部自行记录
-        let sub_build = sub_engine.last_phases.get("build_ms").copied().unwrap_or(0.0);
-        let sub_total = sub_engine.last_phases.get("total_ms").copied().unwrap_or(0.0);
-
-        // 结果平移回原树（子树的绝对原点 = 范围节点在原树中的相对位置）
-        let origin = tree.get(scope).rect;
-        let mut rects: Vec<Option<Rect>> = vec![None; tree.len()];
-        let mut count = 0usize;
-        for (sub_idx, r) in out.rects.iter().enumerate() {
-            let Some(r) = r else { continue };
-            let Some(&orig) = order.get(sub_idx) else { continue };
-            // ★★本仓实测修正的坐标缺陷：范围**非根**时多叠加了一次范围自身的位置
-                //
-                // 【坐标约定】`rect` 是**相对父内容盒**（见 `layout()` 内的注释与
-                //   `parent_origin_of()` 的父链累加），而 taffy 给的 `r` **已是相对范围根**
-                //   ⇒ 再加 `origin` 会叠加两次范围偏移。
-                //   · 范围 == 根 ⇒ origin = (0,0) ⇒ 恰好正确（**此前所有测试都在此前提下**）
-                //   · 范围 ≠ 根 ⇒ 子节点坐标偏移了范围自身的位置
-                //     实测 root→row(margin-top 50)→dot(margin-top 10)：dot 绝对 y 报 **110**（应为 60）
-                // 【为何长期隐身】设备基准的绑定目标恰在**首行**（偏移 0）⇒ 错误被 0 掩盖。
-                //   ⇒ 教训：**「恰好为 0 的偏移」会让坐标类错误隐身**，测试须用非零偏移的中间节点。
-                let shifted = if orig == scope {
-                    origin // 范围根：位置由父决定，本次重排不改它
-                } else {
-                    Rect { x: r.x, y: r.y, width: r.width, height: r.height } // `r` 已相对范围根
-                };
-            tree.nodes[orig as usize].rect = shifted;
-            tree.nodes[orig as usize].dirty = false;
-            rects[orig as usize] = Some(shifted);
-            count += 1;
-        }
-
-        // 度量缓存合并回主引擎（子树算过的成果不丢）
-        if let Some(m) = sub_engine.measurer.take() {
-            self.measurer = Some(m);
-        }
-        // 扁平缓存直接 extend（子树的度量成果不丢）
-        self.measure_cache.extend(sub_engine.measure_cache);
-
+        let (out, _scope_size) = self.layout_subtree_and_writeback(tree, scope, constraint);
         let t_total = t_phase0.elapsed().as_secs_f64() * 1000.0;
         self.last_phases.clear();
-        self.last_phases.insert("copy_ms".into(), t_copy);
-        self.last_phases.insert("build_ms".into(), sub_build.max(0.0));
-        self.last_phases.insert("solve_ms".into(), (sub_total - sub_build).max(0.0));
-        self.last_phases.insert("writeback_ms".into(), (t_total - t_copy - t_solve).max(0.0));
+        self.last_phases.insert("subtree_ms".into(), t_total);
         self.last_phases.insert("total_ms".into(), t_total);
-        self.last_phases.insert("scope_node_count".into(), count as f64);
+        self.last_phases.insert("scope_node_count".into(), out.relayout_count as f64);
 
-        LayoutOutput { rects, measure_calls: out.measure_calls, measure_hits: out.measure_hits, relayout_count: count }
+        LayoutOutput { rects: out.rects, measure_calls: out.measure_calls, measure_hits: out.measure_hits, relayout_count: out.relayout_count }
     }
 
     fn name(&self) -> &'static str {
@@ -471,6 +434,176 @@ impl LayoutEngine for TaffyEngine {
 }
 
 impl TaffyEngine {
+    /// ★★把 `scope` 子树按 `constraint` 重排并**回写**原树（子节点 rect 相对 scope）
+    ///
+    /// 【为什么抽成公用（本仓纪律：同一语义一处实现）】增量路径与**平移传播**都要做这件事，
+    ///   两份实现必然分叉（尤其坐标换算这种易错处）。
+    ///
+    /// 【坐标约定（本仓实测修正过一处缺陷，务必遵守）】回写时：
+    ///   · 范围根 → 保持原 rect（它的位置由父决定，本次重排不改它）
+    ///   · 其子节点 → **直接采用 taffy 给的 `r`**（它已相对范围根）
+    ///   ✗ 错误写法：`origin + r`（把范围自身位置叠加两次——范围非根时几何会错）
+    ///
+    /// 返回 `(输出, scope 重排后的实际尺寸)`
+    fn layout_subtree_and_writeback(
+        &mut self,
+        tree: &mut LayoutTree,
+        scope: NodeIndex,
+        constraint: RootConstraint,
+    ) -> (LayoutOutput, (f32, f32)) {
+        let order = preorder(tree, scope);
+        let mut sub = LayoutTree::new();
+        let root_new = copy_subtree(tree, scope, &mut sub, NO_PARENT);
+        sub.roots.push(root_new);
+
+        let mut sub_engine = TaffyEngine::new();
+        if let Some(m) = self.measurer.take() {
+            sub_engine.set_measurer(m);
+        }
+        let out = sub_engine.layout(&mut sub, constraint);
+        // 重排后的实际尺寸（供调用方判 delta / 传播）
+        let scope_new = sub.get(root_new).rect;
+
+        let origin = tree.get(scope).rect;
+        let mut rects: Vec<Option<Rect>> = vec![None; tree.len()];
+        let mut count = 0usize;
+        for (sub_idx, r) in out.rects.iter().enumerate() {
+            let Some(r) = r else { continue };
+            let Some(&orig) = order.get(sub_idx) else { continue };
+            let new_rect = if orig == scope {
+                origin // 范围根：位置由父决定，本次重排不改它
+            } else {
+                Rect { x: r.x, y: r.y, width: r.width, height: r.height } // `r` 已相对范围根
+            };
+            tree.nodes[orig as usize].rect = new_rect;
+            tree.nodes[orig as usize].dirty = false;
+            rects[orig as usize] = Some(new_rect);
+            count += 1;
+        }
+
+        // 度量缓存合并回主引擎（子树算过的成果不丢）
+        if let Some(m) = sub_engine.measurer.take() {
+            self.measurer = Some(m);
+        }
+        self.measure_cache.extend(sub_engine.measure_cache);
+
+        (
+            LayoutOutput { rects, measure_calls: out.measure_calls, measure_hits: out.measure_hits, relayout_count: count },
+            (scope_new.width, scope_new.height),
+        )
+    }
+
+    /// ★★V5：**平移传播**——当范围退化到根时，尝试用「重排脏子树 + 平移其后续兄弟」代替整树全量。
+    ///
+    /// 【要解决的问题（本仓实测的定量依据）】类B（改行高 ⇒ 兄弟移位）在当前实现下
+    ///   **必然全量**：`relayout_scope_of` 返回根 ⇒ 走退化保护 ⇒ `layout()` 整树。
+    ///   桌面 release 实测 4003 节点 **3.87ms**（真机 18ms，占总耗时 63%）。
+    ///   而这类变更的后续兄弟**只是整体位移、尺寸未变** ⇒ 无需重解 flexbox。
+    ///
+    /// 【为什么成立（几何论证）】容器 P 主轴向尺寸**已定**（前提⑤）⇒ P 的尺寸不变
+    ///   ⇒ 孙子层及以上的几何不受影响；子项无 grow/shrink/百分比（前提②③④）
+    ///   ⇒ 子项尺寸只由自身决定 ⇒ 唯一变化是**主轴向的累计偏移**。
+    ///
+    /// 【前提（全部满足才走本路径；任一条不满足返回 None 让调用方回退全量——正确性优先）】
+    ///   ① P 的 `justify-content` = `flex-start`（否则空间重分配 ⇒ 不是纯平移）
+    ///   ② P 的子项**无 `flex-grow`**（否则自由空间重分配 ⇒ 尺寸会变）
+    ///   ③ P 的子项**无 `flex-shrink`**（否则溢出收缩 ⇒ 尺寸会变）
+    ///   ④ P 的子项**两轴均无百分比尺寸**（否则尺寸依赖 P ⇒ 间接依赖）
+    ///   ⑤ P 主轴向尺寸**已声明**（auto 需向上递归传播——本版保守拒绝，不做跨层）
+    ///   ⑥ 脏节点 D 的**主轴向尺寸已声明**（否则 delta 未知）
+    fn try_translation_relayout(&mut self, tree: &mut LayoutTree, dirty: NodeIndex) -> Option<LayoutOutput> {
+        let p = tree.get(dirty).parent;
+        if p == NO_PARENT {
+            return None; // 脏节点就是根：无父可平移
+        }
+        let (p_style, p_children) = {
+            let pn = tree.get(p);
+            (pn.style.clone(), pn.children.clone())
+        };
+        let horizontal = p_style.flex_direction.is_horizontal();
+
+        // ① 主轴对齐
+        if p_style.justify_content != "flex-start" {
+            return None;
+        }
+        // ②③④ 逐子项
+        for &c in &p_children {
+            let cs = &tree.get(c).style;
+            if cs.flex_grow > 0.0 || cs.flex_shrink != 0.0 {
+                return None;
+            }
+            if cs.width_ratio.is_some() || cs.height_ratio.is_some() {
+                return None;
+            }
+        }
+        // ⑤ P 主轴向已声明
+        let p_main = if horizontal { p_style.width } else { p_style.height };
+        p_main?;
+        // ⑥ D 主轴向已声明
+        let d_style = tree.get(dirty).style.clone();
+        let d_main_new = if horizontal { d_style.width } else { d_style.height }?;
+        let d_old = tree.get(dirty).rect;
+        let d_main_old = if horizontal { d_old.width } else { d_old.height };
+
+        // ── 重排 D 的子树（D 尺寸变了 ⇒ 其内部排布可能变）──
+        //   约束：主轴用**新声明值**；交叉轴用旧实际尺寸（与既有增量同款依据：
+        //   交叉轴尺寸不由内容决定，故上次的实际值本次依然成立）
+        let (cw, ch) = if horizontal {
+            (d_main_new, if d_old.height > 0.0 { d_old.height } else { d_style.height.unwrap_or(f32::INFINITY) })
+        } else {
+            (if d_old.width > 0.0 { d_old.width } else { d_style.width.unwrap_or(f32::INFINITY) }, d_main_new)
+        };
+        let (out, d_size) = self.layout_subtree_and_writeback(tree, dirty, RootConstraint::definite(cw, ch));
+
+        // ★实际 delta 用**重排后的真实尺寸**（可能因 min/max 夹取而与声明值不同）
+        let d_main_actual = if horizontal { d_size.0 } else { d_size.1 };
+        let delta = d_main_actual - d_main_old;
+
+        // ★★脏节点**自身**的尺寸也要写回（本仓实测：不变式测试抓到的第一个 bug）
+        //
+        // 【为什么】`layout_subtree_and_writeback` 对**范围根**保持原 rect 不变
+        //   （那是增量路径的正确语义：范围根的位置/尺寸由父决定、重排不该改它）。
+        //   但平移传播里脏节点 D **正是尺寸变了的那个** ⇒ 必须显式写回它重排后的实际尺寸。
+        //   （实测症状：D 的高度停在旧值 56，而全量给 90。）
+        if horizontal {
+            tree.nodes[dirty as usize].rect.width = d_size.0;
+        } else {
+            tree.nodes[dirty as usize].rect.height = d_size.1;
+        }
+
+        // ── 平移后续兄弟（★只改直接兄弟的 rect——它们的子节点 rect 是**相对父**的，
+        //     父动了子自然跟着动 ⇒ 无需逐个调整，这正是「平移」省的地方）──
+        let mut changed: Vec<NodeIndex> = vec![dirty];
+        if delta.abs() > 0.001 {
+            let mut after = false;
+            for &c in &p_children {
+                if c == dirty {
+                    after = true;
+                    continue;
+                }
+                if !after {
+                    continue;
+                }
+                if horizontal {
+                    tree.nodes[c as usize].rect.x += delta;
+                } else {
+                    tree.nodes[c as usize].rect.y += delta;
+                }
+                tree.nodes[c as usize].dirty = true;
+                changed.push(c);
+            }
+        }
+
+        self.last_phases.clear();
+        self.last_phases.insert("translation_delta".into(), delta as f64);
+        self.last_phases.insert("translation_shifted".into(), (changed.len() - 1) as f64);
+        self.last_phases.insert("total_ms".into(), 0.0);
+        // ★告知收集层：本轮的"变化根"是这些（而非 scope）
+        self.last_changed_roots = changed;
+
+        Some(out)
+    }
+
     /// 沿 parent 链向上找**最近的（最低的）布局边界**；没有则用树根（§5.4 T2 的核心机制）
     ///
     /// ★★「最近」而非「最高」——本轮真机实测纠正的一处语义错误（影响极大）

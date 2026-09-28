@@ -100,6 +100,53 @@ fn three_layer_tree() -> (LayoutTree, [NodeIndex; 4]) {
     (t, [r, outer, inner, leaf])
 }
 
+/// 一个「带 flex-grow 兄弟」的树 —— ★**必须回退全量**的场景（平移前提②不满足）
+///
+/// 【为什么单列（本仓实测）】我用「不平移兄弟」做了破坏性验证（抓到）；
+///   但用「无视 grow 前提」做破坏时**测试全绿**——说明守卫**从未被触发**，是覆盖缺口。
+///   ⇒ 补本用例：P 的子项里有一个 `flex-grow: 1`，改另一个子项的高度会让
+///     **自由空间重新分配 ⇒ grow 项的尺寸变化** ⇒ 纯平移不成立。
+///   若实现错误地走了平移，grow 项尺寸会停在旧值 ⇒ 与全量不一致 ⇒ 本用例会红。
+fn grow_sibling_tree() -> (LayoutTree, Vec<NodeIndex>) {
+    let mut t = LayoutTree::new();
+    let r = t.push(mk(
+        1,
+        NO_PARENT,
+        LStyle {
+            display: Display::Flex,
+            flex_direction: FlexDirection::Column,
+            width: Some(300.0),
+            height: Some(400.0),
+            ..Default::default()
+        },
+    ));
+    t.roots.push(r);
+    // A：可改高度的项（无 grow）
+    let a = t.push(mk(
+        2,
+        r,
+        LStyle { width: Some(300.0), height: Some(50.0), flex_shrink: 0.0, ..Default::default() },
+    ));
+    t.nodes[r as usize].children.push(a);
+    // B：flex-grow:1 的项（自由空间分配者 —— 前提②不满足）
+    let b = t.push(mk(
+        3,
+        r,
+        LStyle {
+            display: Display::Flex,
+            flex_direction: FlexDirection::Column,
+            width: Some(300.0),
+            flex_grow: 1.0,
+            flex_shrink: 0.0,
+            ..Default::default()
+        },
+    ));
+    t.nodes[r as usize].children.push(b);
+    let inner = t.push(mk(4, b, LStyle { width: Some(20.0), height: Some(20.0), ..Default::default() }));
+    t.nodes[b as usize].children.push(inner);
+    (t, vec![a, b, inner])
+}
+
 /// 一个「列表行」树：多行 + 每行内含子节点（类A/类B 的形态）
 fn list_tree(rows: u32) -> (LayoutTree, Vec<NodeIndex>) {
     let mut t = LayoutTree::new();
@@ -244,6 +291,41 @@ fn incremental_equals_full_when_boundary_itself_changes() {
     let full = snapshot_abs(&fresh);
 
     assert_equivalent("列表行·类B（边界自身变化）", &inc, &full);
+}
+
+#[test]
+fn grow_sibling_forces_full_relayout_and_stays_equivalent() {
+    // ★本用例的意义：**守卫被触发**（前提②不满足 ⇒ 必须回退全量）
+    let (mut tree, ids) = grow_sibling_tree();
+    let a = ids[0];
+    let mut eng = TaffyEngine::new().with_measurer(Box::new(proteus_layout_core::NullTextMeasurer));
+    eng.layout(&mut tree, RootConstraint::definite(300.0, 400.0));
+
+    // 改 A 的高度 50 → 120（若错误地走平移，grow 项 B 的尺寸不会重分配）
+    tree.nodes[a as usize].style.height = Some(120.0);
+    tree.nodes[a as usize].dirty = true;
+    let scope = eng.relayout_scope_of(&tree, a);
+    // 范围应为根（父是根）⇒ 会尝试平移；但前提②不满足 ⇒ 守卫应拒绝 ⇒ 回退全量
+    // ★范围返回的是**索引**不是 id：根在索引 0
+    assert_eq!(scope, 0, "范围应为根（A 的父就是根）");
+    eng.layout_incremental(&mut tree, a);
+    let inc = snapshot_abs(&tree);
+
+    let (mut fresh, ids2) = grow_sibling_tree();
+    let a2 = ids2[0];
+    fresh.nodes[a2 as usize].style.height = Some(120.0);
+    let mut eng2 = TaffyEngine::new().with_measurer(Box::new(proteus_layout_core::NullTextMeasurer));
+    eng2.layout(&mut fresh, RootConstraint::definite(300.0, 400.0));
+    let full = snapshot_abs(&fresh);
+
+    assert_equivalent("grow 兄弟（前提②不满足）", &inc, &full);
+    // ★额外断言：grow 项 B 的高度**确实重分配了**（若走平移会停在旧值）
+    let b_h = inc.get(&3).expect("B 应在快照里").3;
+    let b_h_full = full.get(&3).expect("B 应在全量快照里").3;
+    assert!(
+        (b_h - b_h_full).abs() < 0.01,
+        "★ grow 项 B 的高度应与全量一致（错误地走平移会停在旧值）：增量 {b_h} vs 全量 {b_h_full}"
+    );
 }
 
 #[test]
