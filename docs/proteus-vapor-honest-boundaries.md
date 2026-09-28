@@ -59,6 +59,10 @@
 | 10 | **★★relayout：每帧重建整棵 taffy 树（真增量的最大浪费）** | ✅ **已闭（2026-09-28）**：基准探针（`examples/taffy-floor-bench.rs`）证明**纯 taffy 求解同形状 2001 节点只要 0.015ms**，而本仓整树重排 3.15ms（**200×**）；逐层二分定位到：`relayout_multi` **每次调用都 `TaffyEngine::new()`** ⇒ 每帧重建整棵 taffy 树并**丢失其内部缓存**。<br>实测基准（同形状 2001 节点）：每轮新建 **2.96ms** → 复用引擎 + 只同步变更节点 **0.065ms**（**45×**）。<br>⇒ 引擎按**句柄**持久（线程局部 `ENGINES`——taffy 非 `Send`，不能进 `Mutex` 注册表），三入口（update/apply_ops/splice）共用；结构变更按 `taffy_id_len()` 判失效并重建。 | `layout-core-rust/src/ffi.rs` 的 `with_engine` · `taffy_engine.rs` 的 `persistent_taffy` · `ops_apply.rs` 的 `relayout_multi_in` · 基准 `examples/{taffy-floor-bench,relayout-multi-bench}.rs` | ★**仍存边界**：**范围**求解仍走"拷贝子树 + 独立子引擎"（实测比"在大树上解子树"快得多——taffy 的脏标记会向上传播到根，见 `layout_subtree_cached` 注释）⇒ 多范围形态下每范围仍有一次拷贝（`copy_ms` 0.13ms/300 范围，已很小） |
 | 11 | **★测量纪律：性能断言进单测会因并发抖动假红** | ◐ **已标注（2026-09-28）**：`blob_scales_to_real_size_and_decodes_fast` 比较两次墙钟计时，`cargo test` 并行时偶发红（单独跑稳定 4.3×）⇒ 失败信息里已加"并发抖动 vs 实现退化"的判别提示 | `layout-core-rust/src/blob.rs` | 后续性能类断言建议**打上串行标记**（`#[serial]`）或改为"结构性判据"（如调用次数）而非墙钟比较 |
 
+| 12 | **★★relayout 真凶：`build_taffy` 产物未存进 `persistent_taffy`** | ✅ **已闭（2026-09-28，真机 11.3×）**：诊断铁证 `engine_diag={"has_persistent":false,"cache_len":0,"taffy_len_before":5002}` ⇒ 每次增量重排都重建整棵 taffy 树 + 度量缓存为空。真机（V0_header · 5002 节点整树重排）：**relayout_ms 17.16 → 1.52**、**measure_calls 6003 → 0**、host_ms 52–58 → 36–38；三档（plain/memo/comp）读数恢复一致（1.52/1.55/1.52，此前 plain 恒慢 11× 被误读为"首轮成本"） | `taffy_engine.rs` 的 `layout()` · `ffi.rs` 的 `with_engine`/预建 · 真机 `bench-filtered-V0.json` | — |
+| 13 | **★结构变更的引擎失效判据不能只看长度** | ✅ **已闭（2026-09-28，测试抓到）**：splice **摘除只断链不删节点** ⇒ `tree.len()` 不变 ⇒ 长度判据抓不到拓扑变化 ⇒ 引擎用"还连着被摘子树"的旧 taffy ⇒ 几何错。⇒ 由知道结构变了的调用方**显式 `invalidate_persistent()`** | `ffi.rs` 的 splice 路径 · 测试 `splice_remove_detaches_subtree` | — |
+| 14 | **★内容寻址把"同文本不同字号"错误合并** | ✅ **已闭（2026-09-28，自查发现）**：缓存键原为 `(text_hash, max_w)`，而 `TableTextMeasurer` 是**按 nodeId 查表**（尺寸可因字号而异）⇒ 同文本 + 同宽约束但不同字号会被合并 ⇒ 其中一个尺寸错（实测：字号 16/28 两节点都算 16 高，差 12dp、**无报错**）。⇒ `style_key == 0`（字体不可区分）时**回退节点寻址**（正确 > 复用）；两条测试锁两个方向 | `taffy_engine.rs` 的 `compute_text_hashes` · 测试 `same_text_different_font_size_must_not_share_cache` + `same_literal_without_style_key_falls_back_to_node_addressing` | ★仍存边界：跨节点复用需宿主把字号编成 `style_key`（当前恒 0 ⇒ 复用关闭，属**保守取值**） |
+
 ### P1 · 影响覆盖可信度（不影响正确性）
 
 | # | 边界 | 现状 | 建议 |
@@ -95,6 +99,10 @@
 | 10 | **跨用例共享的视图状态必须在新树建立时归零** | `contentOffset` 泄漏 ⇒ "几何对但屏幕错" |
 | 11 | **守卫必须可观测**（记下"被哪条拒绝"） | 否则"有守卫"与"守卫生效"无法区分 |
 | 12 | **同一语义一处实现** | `apply_ops` 重复实现被收敛为 `apply_ops_impl` |
+| 13 | **★加读数时先确认端到端能读到非空** | 本轮为拿一条 `engine_diag` 折腾 4 轮（内联副本绕过统一入口 → 侧信道没写 → 宿主没透传 → JS 取错路径） |
+| 14 | **★★"建了但没存"是静默的**（跨调用复用点必须验证状态真的留下） | `build_taffy` 产物未存 ⇒ 无报错，只表现为"优化没效果"（与度量表/文本回报同族） |
+| 15 | **结构变更的失效判据不能只看长度**（splice 只断链不删节点） | `splice_remove_detaches_subtree` 抓到引擎用了旧树 |
+| 16 | **跨语言/跨层形状契约两端各留判据** | `text` 顶层 vs `style` 内：单端测试只能证明自己那一半 |
 
 ---
 
