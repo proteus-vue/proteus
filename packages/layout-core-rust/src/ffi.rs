@@ -503,6 +503,13 @@ pub(crate) struct TreeEntry {
     pub(crate) tree: LayoutTree,
     /// 节点 id → 索引（建树时构建一次；update 直接复用）
     pub(crate) id_to_idx: std::collections::HashMap<u32, u32>,
+    /// ★★最近一次增量更新**重排过的范围**（V4 二进制返回通道用它限定范围）
+    ///
+    /// 【为什么必须记（本仓实测的回退）】首版 `proteus_layout_rects_bin` 返回**整棵树**的矩形，
+    ///   而 JSON 路径返回的是**变化范围的子树**。于是类A（只改 1 个圆点）也拿到 4003 条
+    ///   ⇒ 宿主对 4003 条做排序/可见性过滤 ⇒ `layers` 从 0.06ms **涨到 4.38ms**。
+    ///   ⇒ 语义必须与 JSON 路径一致：**只返回重排范围内**的矩形。
+    pub(crate) last_scopes: Vec<u32>,
 }
 
 impl TreeEntry {
@@ -511,7 +518,8 @@ impl TreeEntry {
         for (i, n) in tree.nodes.iter().enumerate() {
             id_to_idx.insert(n.id, i as u32);
         }
-        Self { tree, id_to_idx }
+        Self {
+            last_scopes: Vec::new(), tree, id_to_idx }
     }
 }
 
@@ -1277,41 +1285,62 @@ pub(crate) fn json_str(s: &str) -> String {
 /// # Safety
 /// `ptr` 须指向 `len` 字节的有效 buffer（由 TS 侧 `encodeOps` 产出）。
 /// 返回指针须用 `proteus_layout_free_string` 释放。
-#[no_mangle]
-pub unsafe extern "C" fn proteus_layout_apply_ops(handle: u64, ptr: *const u8, len: u32) -> *mut c_char {
-    let r = std::panic::catch_unwind(|| -> Result<String, String> {
-        if ptr.is_null() || len == 0 {
-            return Err("指令流指针为空或长度为 0".into());
-        }
-        let buf = unsafe { std::slice::from_raw_parts(ptr, len as usize) };
-        let dec = crate::ops::decode_ops(buf)?;
+/// 内部实现：`with_rects=false` 时**不收集也不序列化**矩形（V4 二进制通道下宿主不需要它）
+///
+/// 【为什么必须能省（本仓实测）】v4 模式下宿主改用二进制取矩形，但 JSON 返回体里若仍带
+///   `rects` ⇒ 4003 条矩形的**序列化（~10ms）+ 宿主解析（~19ms）**全部白付一遍。
+///   ⇒ 提供本开关，让 JSON 只承载元信息（applied/relayout/scopes，都很小）。
+fn apply_ops_impl(handle: u64, ptr: *const u8, len: u32, with_rects: bool) -> Result<String, String> {
+    if ptr.is_null() || len == 0 {
+        return Err("指令流指针为空或长度为 0".into());
+    }
+    let buf = unsafe { std::slice::from_raw_parts(ptr, len as usize) };
+    let dec = crate::ops::decode_ops(buf)?;
 
-        let t0 = std::time::Instant::now();
-        let mut reg = registry().lock().map_err(|_| "注册表锁失败".to_string())?;
-        let entry = reg.get_mut(&handle).ok_or_else(|| format!("句柄 {handle} 不存在"))?;
-        let t_lock = t0.elapsed().as_secs_f64() * 1000.0;
+    let t0 = std::time::Instant::now();
+    let mut reg = registry().lock().map_err(|_| "注册表锁失败".to_string())?;
+    let entry = reg.get_mut(&handle).ok_or_else(|| format!("句柄 {handle} 不存在"))?;
+    let t_lock = t0.elapsed().as_secs_f64() * 1000.0;
 
-        let t_apply0 = std::time::Instant::now();
-        let outcome = crate::ops_apply::apply_ops_to_tree(&mut entry.tree, &dec);
-        let t_apply = t_apply0.elapsed().as_secs_f64() * 1000.0;
+    let t_apply0 = std::time::Instant::now();
+    let outcome = crate::ops_apply::apply_ops_to_tree(&mut entry.tree, &dec);
+    let t_apply = t_apply0.elapsed().as_secs_f64() * 1000.0;
 
-        // 无几何变更（例如只改颜色）⇒ 不重排
-        if outcome.dirty.is_empty() {
-            return Ok(serde_json::json!({
-                "ok": true, "applied": outcome.applied, "paint_only": outcome.paint_only,
-                "dirty": outcome.dirty, "relayout_count": 0, "scopes": [],
-                "unsupported": outcome.unsupported.iter()
-                    .map(|(c, m)| serde_json::json!({"op": *c as u8, "reason": m}))
-                    .collect::<Vec<_>>(),
-                "timing": {"lock_ms": t_lock, "apply_ms": t_apply, "relayout_ms": 0.0, "collect_ms": 0.0},
-            }).to_string());
-        }
+    let unsupported_json: Vec<serde_json::Value> = outcome
+        .unsupported
+        .iter()
+        .map(|(c, m)| serde_json::json!({"op": *c as u8, "reason": m}))
+        .collect();
 
-        let t_rel0 = std::time::Instant::now();
-        let multi = crate::ops_apply::relayout_multi(&mut entry.tree, &outcome.dirty);
-        let t_rel = t_rel0.elapsed().as_secs_f64() * 1000.0;
+    if outcome.dirty.is_empty() {
+        return Ok(serde_json::json!({
+            "ok": true, "applied": outcome.applied, "paint_only": outcome.paint_only,
+            "dirty": outcome.dirty, "relayout_count": 0, "scopes": [],
+            "unsupported": unsupported_json,
+            "timing": {"lock_ms": t_lock, "apply_ms": t_apply, "relayout_ms": 0.0, "collect_ms": 0.0},
+        })
+        .to_string());
+    }
 
-        // 收集变化节点的绝对矩形（宿主据此只更新那几个 layer）
+    let t_rel0 = std::time::Instant::now();
+    let multi = crate::ops_apply::relayout_multi(&mut entry.tree, &outcome.dirty);
+    let t_rel = t_rel0.elapsed().as_secs_f64() * 1000.0;
+
+    // ★记下本次重排范围（供 `proteus_layout_rects_bin` 限定返回范围）
+    entry.last_scopes = multi.scopes.clone();
+
+    let mut out = serde_json::json!({
+        "ok": true,
+        "applied": outcome.applied,
+        "paint_only": outcome.paint_only,
+        "dirty": outcome.dirty,
+        "relayout_count": multi.relayout_count,
+        "scopes": multi.scopes,
+        "unsupported": unsupported_json,
+        "timing": {"lock_ms": t_lock, "apply_ms": t_apply, "relayout_ms": t_rel, "collect_ms": 0.0},
+    });
+
+    if with_rects {
         let t_col0 = std::time::Instant::now();
         let mut changed = serde_json::Map::new();
         for &sc in &multi.scopes {
@@ -1319,32 +1348,111 @@ pub unsafe extern "C" fn proteus_layout_apply_ops(handle: u64, ptr: *const u8, l
             collect_abs_subtree(&entry.tree, sc, pox, poy, &mut changed);
         }
         let t_col = t_col0.elapsed().as_secs_f64() * 1000.0;
+        out["rects"] = serde_json::Value::Object(changed);
+        out["timing"]["collect_ms"] = serde_json::json!(t_col);
+    }
+    Ok(out.to_string())
+}
 
-        Ok(serde_json::json!({
-            "ok": true,
-            "applied": outcome.applied,
-            "paint_only": outcome.paint_only,
-            "dirty": outcome.dirty,
-            "relayout_count": multi.relayout_count,
-            "scopes": multi.scopes,
-            "rects": changed,
-            "unsupported": outcome.unsupported.iter()
-                .map(|(c, m)| serde_json::json!({"op": *c as u8, "reason": m}))
-                .collect::<Vec<_>>(),
-            "timing": {"lock_ms": t_lock, "apply_ms": t_apply, "relayout_ms": t_rel, "collect_ms": t_col},
-        }).to_string())
+/// ★V4：**不带 rects 的 apply**（宿主改用二进制取矩形时的首选入口）
+///
+/// # Safety
+/// 同 `proteus_layout_apply_ops`；返回指针须用 `proteus_layout_free_string` 释放。
+#[no_mangle]
+pub unsafe extern "C" fn proteus_layout_apply_ops_norects(handle: u64, ptr: *const u8, len: u32) -> *mut c_char {
+    match std::panic::catch_unwind(|| apply_ops_impl(handle, ptr, len, false)) {
+        Ok(Ok(s)) => CString::new(s).map(|c| c.into_raw()).unwrap_or(std::ptr::null_mut()),
+        Ok(Err(e)) => CString::new(serde_json::json!({"ok": false, "error": e}).to_string())
+            .map(|c| c.into_raw())
+            .unwrap_or(std::ptr::null_mut()),
+        Err(_) => CString::new(serde_json::json!({"ok": false, "error": "内部 panic（已捕获）"}).to_string())
+            .map(|c| c.into_raw())
+            .unwrap_or(std::ptr::null_mut()),
+    }
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn proteus_layout_apply_ops(handle: u64, ptr: *const u8, len: u32) -> *mut c_char {
+    // ★统一走 `apply_ops_impl`（同一语义一处实现——本仓纪律）：
+    //   本入口 = with_rects=true（兼容既有调用方，JSON 里带 `rects`）；
+    //   二进制通道场景请用 `proteus_layout_apply_ops_norects`（省掉序列化与宿主解析）。
+    match std::panic::catch_unwind(|| apply_ops_impl(handle, ptr, len, true)) {
+        Ok(Ok(s)) => CString::new(s).map(|c| c.into_raw()).unwrap_or(std::ptr::null_mut()),
+        Ok(Err(e)) => CString::new(serde_json::json!({"ok": false, "error": e}).to_string())
+            .map(|c| c.into_raw())
+            .unwrap_or(std::ptr::null_mut()),
+        Err(_) => CString::new(serde_json::json!({"ok": false, "error": "内部 panic（已捕获）"}).to_string())
+            .map(|c| c.into_raw())
+            .unwrap_or(std::ptr::null_mut()),
+    }
+}
+
+/// ★V4 —— **变化集二进制返回**：应用指令后把变化矩形以二进制写回
+///
+/// 【与 `proteus_layout_apply_ops` 的关系】
+///   后者返回 JSON（含 `rects` 字段，222KB / 4003 条）；本函数**只返回二进制矩形**（80KB）。
+///   调用方可先 `apply_ops` 拿元信息（applied/relayout/scopes，这些都很小），
+///   再用本函数取几何——把最大的那块通道换成二进制。
+///   （也可以一步到位：见 `proteus_layout_apply_ops_bin`。）
+///
+/// # Safety
+/// `out_len` 须为有效指针（写入字节数）。返回指针须用 `proteus_rects_free` 释放。
+#[no_mangle]
+pub unsafe extern "C" fn proteus_layout_rects_bin(handle: u64, out_len: *mut u32) -> *mut u8 {
+    let r = std::panic::catch_unwind(|| -> Result<Vec<u8>, String> {
+        let reg = registry().lock().map_err(|_| "注册表锁失败".to_string())?;
+        let entry = reg.get(&handle).ok_or_else(|| format!("句柄 {handle} 不存在"))?;
+        // ★★只收集**最近一次重排范围内**的矩形（与 JSON 路径同语义）
+        //
+        // 【为什么（本仓实测的回退）】若返回整树，类A（只改 1 个圆点）也会给宿主 4003 条
+        //   ⇒ 宿主白做排序/过滤 ⇒ `layers` 0.06ms → 4.38ms。
+        //   `last_scopes` 为空（尚未 apply 过 / 全量场景）才退回整树。
+        let mut items: Vec<(u32, crate::style::Rect)> = Vec::new();
+        if entry.last_scopes.is_empty() {
+            items.reserve(entry.tree.len());
+            for &root in &entry.tree.roots {
+                crate::rects_bin::collect_abs_pairs(&entry.tree, root, 0.0, 0.0, &mut items);
+            }
+        } else {
+            for &scope in &entry.last_scopes {
+                let (pox, poy) = parent_origin_of(&entry.tree, scope);
+                crate::rects_bin::collect_abs_pairs(&entry.tree, scope, pox, poy, &mut items);
+            }
+        }
+        Ok(crate::rects_bin::encode_rects(&items))
     });
     match r {
-        Ok(Ok(s)) => CString::new(s).map(|c| c.into_raw()).unwrap_or(std::ptr::null_mut()),
-        Ok(Err(e)) => {
-            let s = serde_json::json!({"ok": false, "error": e}).to_string();
-            CString::new(s).map(|c| c.into_raw()).unwrap_or(std::ptr::null_mut())
+        Ok(Ok(bytes)) => {
+            if !out_len.is_null() {
+                unsafe { *out_len = bytes.len() as u32 };
+            }
+            let mut v = bytes;
+            v.shrink_to_fit();
+            let ptr = v.as_mut_ptr();
+            std::mem::forget(v);
+            ptr
         }
-        Err(_) => {
-            let s = serde_json::json!({"ok": false, "error": "内部 panic（已捕获）"}).to_string();
-            CString::new(s).map(|c| c.into_raw()).unwrap_or(std::ptr::null_mut())
+        _ => {
+            if !out_len.is_null() {
+                unsafe { *out_len = 0 };
+            }
+            std::ptr::null_mut()
         }
     }
+}
+
+/// 释放 `proteus_layout_rects_bin` 的返回值
+///
+/// # Safety
+/// `ptr`/`len` 必须来自 `proteus_layout_rects_bin` 且尚未释放。
+#[no_mangle]
+pub unsafe extern "C" fn proteus_rects_free(ptr: *mut u8, len: u32) {
+    if ptr.is_null() || len == 0 {
+        return;
+    }
+    // 与分配时同布局重建（encode_rects 用 Vec::with_capacity 后 extend，capacity 可能 > len；
+    // 已在写出前 shrink_to_fit ⇒ capacity == len）
+    unsafe { drop(Vec::from_raw_parts(ptr, len as usize, len as usize)) };
 }
 
 #[cfg(test)]
