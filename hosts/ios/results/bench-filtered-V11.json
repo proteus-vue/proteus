@@ -27023,19 +27023,19 @@
   "host_node_count" : 3002,
   "host_timing_last" : {
     "build_layers_ms" : 0.01,
-    "host_total_ms" : 2.3599999999999999,
-    "layout_ms" : 2.2400000000000002,
+    "host_total_ms" : 2.3399999999999999,
+    "layout_ms" : 2.23,
     "measure_ms" : 0
   },
   "js_completed" : 1,
   "js_ok" : true,
   "js_report" : {
-    "build_id" : "0b7ebdc2-192630",
+    "build_id" : "aa7137cf-200754",
     "case_filter" : [
       "V11"
     ],
     "case_timings_ms" : {
-      "V11_long_list" : 173
+      "V11_long_list" : 178
     },
     "cases" : [
       {
@@ -27051,12 +27051,12 @@
           },
           "covered" : "long-list instantiate + per-row dispatch",
           "geom_changed" : 3,
-          "instantiate_ms" : 18,
+          "instantiate_ms" : 19,
           "l0_slots" : 0,
           "l1_slots" : 4,
           "layer_count" : 3002,
-          "mount_ms" : 130,
-          "not_covered" : "scroll recycle pool on device",
+          "mount_ms" : 134,
+          "not_covered" : "scroll recycle pool on device（见 V12）",
           "op_count" : 1,
           "registry_stats" : {
             "hits" : 3001,
@@ -27064,55 +27064,19 @@
             "misses" : 0
           },
           "relayout" : 3,
-          "scope_diag" : [
-            {
-              "dirty" : 1500,
-              "dirty_children" : 0,
-              "dirty_h" : 36,
-              "dirty_is_boundary" : false,
-              "dirty_parent" : 1499,
-              "dirty_w" : 60,
-              "hops" : [
-                {
-                  "align_self" : null,
-                  "boundary" : true,
-                  "children" : 2,
-                  "h" : 56,
-                  "id" : 1499,
-                  "parent_align" : "stretch",
-                  "parent_horiz" : false,
-                  "w" : null
-                },
-                {
-                  "align_self" : null,
-                  "boundary" : false,
-                  "children" : 1001,
-                  "h" : null,
-                  "id" : 0,
-                  "parent_align" : null,
-                  "parent_horiz" : null,
-                  "w" : null
-                }
-              ],
-              "scope" : 1499,
-              "scope_children" : 2,
-              "scope_h" : 56,
-              "scope_w" : null
-            }
-          ],
           "uninstantiated" : 0,
           "unsupported" : 0,
           "verdict" : "PASS"
         },
-        "host_ms" : 130,
+        "host_ms" : 134,
         "items" : 1000,
         "nodes" : 3002,
         "note" : "1000 行 SFC 产物：实例化 3002 节点 · 挂载 3002 层 · 改 1 行发 1 条指令",
         "patch_count" : 3001,
         "request_bytes" : 8964,
         "serialize_ms" : 0,
-        "to_request_ms" : 18,
-        "total_ms" : 148,
+        "to_request_ms" : 19,
+        "total_ms" : 153,
         "vue_ms" : 0
       }
     ],
@@ -27127,7 +27091,7 @@
       ],
       "stages" : [
         "before-S2:15",
-        "after-S:29"
+        "after-S:31"
       ]
     },
     "kind" : "logic-bench",
@@ -48172,5 +48136,5 @@
       "y" : 18
     }
   },
-  "tree_hash" : "e4b96de1"
+  "tree_hash" : "163a33c1"
 }

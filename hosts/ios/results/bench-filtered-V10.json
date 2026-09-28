@@ -1957,20 +1957,20 @@
   },
   "host_node_count" : 217,
   "host_timing_last" : {
-    "build_layers_ms" : 3.2221078872680664,
-    "host_total_ms" : 14.850020408630371,
-    "layout_ms" : 1.8280744552612305,
-    "measure_ms" : 6.6549777984619141
+    "build_layers_ms" : 3.3750534057617188,
+    "host_total_ms" : 13.953089714050293,
+    "layout_ms" : 1.9870996475219727,
+    "measure_ms" : 5.6979656219482422
   },
   "js_completed" : 1,
   "js_ok" : true,
   "js_report" : {
-    "build_id" : "cf6899ae-195312",
+    "build_id" : "aa7137cf-200642",
     "case_filter" : [
       "V10"
     ],
     "case_timings_ms" : {
-      "V10_paint_channel" : 88
+      "V10_paint_channel" : 87
     },
     "cases" : [
       {
@@ -1985,12 +1985,12 @@
           "covered" : "adapter→host paint channel + pixel",
           "first_row_y" : 152,
           "host_out" : {
-            "in_bytes" : 166,
+            "in_bytes" : 184,
             "incremental" : true,
             "ok" : true,
             "paint_deferred_to_source" : 0,
             "paint_layers_applied" : 1,
-            "paint_ms" : 0.070000000000000007,
+            "paint_ms" : 0.059999999999999998,
             "paint_patches" : 1,
             "path" : "paintPatches"
           },
@@ -2001,12 +2001,12 @@
           "row_id" : 6,
           "verdict" : "PASS"
         },
-        "host_ms" : 0.070000000000000007,
+        "host_ms" : 0.059999999999999998,
         "items" : 30,
         "nodes" : 217,
         "note" : "绘制通道：改行底色 → paint 1 条 · 宿主应用 1 层 · 像素 #00FF00",
         "patch_count" : 551,
-        "request_bytes" : 166,
+        "request_bytes" : 184,
         "serialize_ms" : 0,
         "to_request_ms" : 0,
         "total_ms" : 0,
@@ -2024,7 +2024,7 @@
       ],
       "stages" : [
         "before-S2:15",
-        "after-S:30"
+        "after-S:31"
       ]
     },
     "kind" : "logic-bench",
@@ -2045,7 +2045,7 @@
   },
   "js_total" : 1,
   "launch_diag" : {
-    "first_frame_ms" : 0,
+    "first_frame_ms" : -0,
     "forced_style" : "Dark",
     "interface_style" : "Dark",
     "launch_screen_keys" : [
@@ -3574,5 +3574,5 @@
       "y" : 0
     }
   },
-  "tree_hash" : "8b7e8e4c"
+  "tree_hash" : "bb0a4d2a"
 }

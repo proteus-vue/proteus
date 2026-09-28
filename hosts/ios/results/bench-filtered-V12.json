@@ -671,19 +671,19 @@
   "host_node_count" : 3002,
   "host_timing_last" : {
     "build_layers_ms" : 0,
-    "host_total_ms" : 2.3300000000000001,
-    "layout_ms" : 2.2000000000000002,
+    "host_total_ms" : 2.3100000000000001,
+    "layout_ms" : 2.1800000000000002,
     "measure_ms" : 0
   },
   "js_completed" : 1,
   "js_ok" : true,
   "js_report" : {
-    "build_id" : "cf6899ae-195219",
+    "build_id" : "aa7137cf-200538",
     "case_filter" : [
       "V12"
     ],
     "case_timings_ms" : {
-      "V12_scroll_recycle" : 220
+      "V12_scroll_recycle" : 223
     },
     "cases" : [
       {
@@ -947,7 +947,7 @@
               "row_count" : 1000
             }
           },
-          "mount_ms" : 100,
+          "mount_ms" : 102,
           "mount_stats" : {
             "content_offset_y" : 0,
             "is_virtual" : true,
@@ -992,7 +992,7 @@
           "node_count" : 3002,
           "not_covered" : "手势\/命中在虚拟化下的坐标（tapAt 走内容坐标，未额外验证）；Android 侧同款接线",
           "offscreen_apply" : {
-            "apply_ms" : 2.2000000000000002,
+            "apply_ms" : 2.1800000000000002,
             "changed_rects" : 3,
             "collect_ms" : 0,
             "deferred" : 0,
@@ -1000,7 +1000,7 @@
             "flushed" : 0,
             "geom_changed" : 3,
             "geom_total" : 3,
-            "host_total_ms" : 2.3300000000000001,
+            "host_total_ms" : 2.3100000000000001,
             "in_bytes" : 8974,
             "incremental" : true,
             "layers_commit_ms" : 0,
@@ -1012,8 +1012,8 @@
             "patch_count" : 1,
             "path" : "applyOps",
             "pending_visible_overlap" : 0,
-            "rects_bin_ms" : 0.02,
-            "rects_parse_ms" : 0.080000000000000002,
+            "rects_bin_ms" : 0.029999999999999999,
+            "rects_parse_ms" : 0.089999999999999997,
             "refreshed_rows" : 0,
             "relayout_count" : 3,
             "relayout_ms" : 0.040000000000000001,
@@ -1168,7 +1168,7 @@
           },
           "verdict" : "PASS"
         },
-        "host_ms" : 100,
+        "host_ms" : 102,
         "items" : 1000,
         "nodes" : 3002,
         "note" : "1000 行虚拟化：挂载只物化 14 行 \/ 44 层 · 滚动 30 帧（↓269取\/259放 · ↑259取\/269放）· 建层 74 \/ 复用 1554",
@@ -1176,7 +1176,7 @@
         "request_bytes" : 0,
         "serialize_ms" : 0,
         "to_request_ms" : 0,
-        "total_ms" : 113,
+        "total_ms" : 115,
         "vue_ms" : 0
       }
     ],
@@ -1191,7 +1191,7 @@
       ],
       "stages" : [
         "before-S2:15",
-        "after-S:30"
+        "after-S:31"
       ]
     },
     "kind" : "logic-bench",
@@ -1212,7 +1212,7 @@
   },
   "js_total" : 1,
   "launch_diag" : {
-    "first_frame_ms" : -0,
+    "first_frame_ms" : 0,
     "forced_style" : "Dark",
     "interface_style" : "Dark",
     "launch_screen_keys" : [
@@ -1740,5 +1740,5 @@
       "y" : 18
     }
   },
-  "tree_hash" : "8cc34449"
+  "tree_hash" : "9738c551"
 }

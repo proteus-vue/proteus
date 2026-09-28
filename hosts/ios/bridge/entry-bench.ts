@@ -92,6 +92,22 @@ interface SelfDrawNative {
   virtualStats?(): string
   /** ★V12：虚拟化探针（某行的屏幕坐标 rect + 是否已物化）——坐标由宿主推导，不手算 */
   virtualProbe?(rowIndex: number): string
+  /**
+   * ★★**几何 + 字体探针**（V13）：节点的屏幕 rect + **层上实际字体名**
+   *
+   * 【为什么要读层上的字体名】几何宽度只能证明"**度量**时用了不同字体"；
+   *   本仓已有"度量与绘制分叉 ⇒ 字被裁而报告全绿"的同族教训（见 `font(size:weight:)` 注释）。
+   */
+  measureProbe?(json: string): string
+  /**
+   * ★★**拆掉当前树**（销毁核心句柄 + 清层 + 重置 diff 基线）——下一次 `mount` 走**真全量**
+   *
+   * 【为什么需要（本仓实测的路径语义，V13 差点被它坑）】`mount` 是**增量语义**：
+   *   `handle != 0` 时先做节点 diff，且只处理**布局**字段 ⇒ "只改了字体族"的第二次 mount
+   *   布局补丁为空 ⇒ **什么都不做**（层上字体仍是上一次的）。
+   *   对照实验必须显式拆树，否则会把"没生效"读成"这个维度不影响结果"。
+   */
+  clearTree?(): string
   /** ★V12：设置层池容量（0 ⇒ 完全不复用）——**破坏性验证**用 */
   setPoolCapacity?(n: number): string
   snapshot(name: string): string
@@ -106,7 +122,7 @@ const BN = { snapshot: 'bench-final' }
 // ★构建标识：每次构建写入，用于**确凿判定**设备上跑的是哪份代码
 //   （踩坑：靠文件 mtime 判断"报告是否刷新"不可靠——新建目标文件的时间恒为"现在"；
 //    且我看不出设备实际执行的是旧 bundle，白跑一轮。有了这个字段就能一眼判定。）
-const BUILD_ID = 'cf6899ae-195312'
+const BUILD_ID = 'aa7137cf-200754'
 const now = (): number => Date.now()
 /** 宽松解析（宿主返回可能是字符串或已是对象） */
 const safeParseAny = (s: any): any => {
@@ -2379,6 +2395,91 @@ CASES.push({
         runtime: { l1_slots: loadRes.l1Slots, l0_slots: loadRes.l0Slots },
         covered: 'virtualized mount + direction-sensitive recycle + layer pool reuse + rollback',
         not_covered: '手势/命中在虚拟化下的坐标（tapAt 走内容坐标，未额外验证）；Android 侧同款接线',
+      },
+    })
+  },
+})
+
+/* V13 · ★★fontFamily 端到端（语义角色 → 平台字体；度量与绘制同源） */
+CASES.push({
+  name: 'V13_font_family',
+  note: '★★字体族：同文本同字号三种字族 ⇒ 度量必须不同 + 层上字体真的换了（含"全 system"反例对照）',
+  fn: async () => {
+    const ROLES = ['system', 'serif', 'monospace']
+    // ★样本文本选宽度差异明显的（serif/等宽对 "MMMM iii WWWW" 的度量差最大）
+    const TEXT = 'MMMM iii WWWW'
+    const build = (roles: string[]): Array<Record<string, unknown>> => {
+      const nodes: Array<Record<string, unknown>> = [
+        { id: 0, parentId: null, flexDirection: 'column', width: VP.width, height: VP.height },
+      ]
+      roles.forEach((role, i) => {
+        nodes.push({ id: 100 + i, parentId: 0, flexDirection: 'row', alignItems: 'center',
+          width: VP.width, height: 60, flexShrink: 0 })
+        nodes.push({ id: 200 + i, parentId: 100 + i, text: TEXT, fontSize: 24, fontWeight: 400,
+          fontFamily: role, flexShrink: 0 })
+      })
+      return nodes
+    }
+    const probe = (roles: string[]): { w: number[]; font: string[]; mount: any } => {
+      // ★必须**显式拆树**：`mount` 是增量语义（只 diff 布局字段）⇒ 紧接着 mount 一棵
+      //   "只改了字族"的树会**什么都不做**（层上字体保持上一次）——本档初版就被它坑了：
+      //   对照组的宽度与实验组**完全相同**，差点读成"字族不影响度量"。
+      proteusSelfDraw.clearTree?.()
+      const nodes = build(roles)
+      const m = safeParseAny(proteusSelfDraw.mount(JSON.stringify({ viewport: VP, nodes })))
+      const p = safeParseAny(proteusSelfDraw.measureProbe?.(
+        JSON.stringify({ nodes: roles.map((_, i) => 200 + i) })) ?? '{}')
+      const byId = (p?.nodes ?? {}) as Record<string, { layer_w?: number; font_name?: string }>
+      return {
+        w: roles.map((_, i) => byId[String(200 + i)]?.layer_w ?? -1),
+        font: roles.map((_, i) => byId[String(200 + i)]?.font_name ?? ''),
+        mount: m,
+      }
+    }
+
+    const withFamilies = probe(ROLES)
+    const allSystem = probe(['system', 'system', 'system'])
+
+    const distinct = new Set(withFamilies.w.filter((w) => w > 0))
+    const distinctSystem = new Set(allSystem.w.filter((w) => w > 0))
+    const fontNames = new Set(withFamilies.font.filter(Boolean))
+
+    const checks = {
+      mountOk: !!withFamilies.mount?.ok && !!allSystem.mount?.ok,
+      // ★① 三种字族 ⇒ 至少两种不同宽度（字体库可能缺 face，故不要求三种全不同）
+      familyAffectsMeasure: distinct.size >= 2,
+      // ★② 反例对照：全 system ⇒ 必须**完全同宽**（否则①的差异来自别处）
+      sameFamilySameWidth: distinctSystem.size === 1,
+      // ★③ 两组确实不同（否则①②在描述同一件无关的事）
+      familyChangesMeasure: withFamilies.w.join(',') !== allSystem.w.join(','),
+      // ★★④ **层上的字体名**必须不同（证明"绘制侧也换了"——不只是度量侧）
+      //   这是本档最硬的一条：度量对而绘制没换 ⇒ 字被裁且报告全绿（本仓已有同族教训）
+      fontActuallyChangedOnLayer: fontNames.size >= 2,
+      // ★⑤ 两端词汇表一致（无未知角色回退）
+      noFallback: ((withFamilies.mount?.font_family_fallbacks as number) ?? -1) === 0,
+      // ★★⑥ `CGFont` 解析不得失败（失败 ⇒ **层上没有字体** ⇒ 绘制回退默认体、
+      //   而度量用的是指定字体 ⇒ 度量/绘制分叉。本档首跑就抓到 monospace 命中此坑）
+      cgFontResolved: ((withFamilies.mount?.cgfont_fallbacks as number) ?? -1) === 0,
+      // ★⑦ 对照组确实被重建过（防"拆树没生效 ⇒ 两组是同一棵树"的假对照）
+      controlRebuilt: withFamilies.w.join(',') !== allSystem.w.join(',')
+        || withFamilies.font.join(',') !== allSystem.font.join(','),
+    }
+    const verdict = Object.values(checks).every(Boolean) ? 'PASS' : 'FAIL'
+    results.push({
+      case: 'V13_font_family',
+      note: `字体族 ${ROLES.join('/')}：宽度 [${withFamilies.w.join(', ')}] · 全 system [${allSystem.w.join(', ')}] · 层上字体 ${withFamilies.font.map((f) => f.split(':').pop()?.slice(0, 14) ?? '?').join(' | ')}`,
+      items: ROLES.length, nodes: withFamilies.mount?.node_count ?? 0,
+      vue_ms: 0, to_request_ms: 0, serialize_ms: 0, host_ms: 0, total_ms: 0,
+      patch_count: 0, request_bytes: 0,
+      extra: {
+        verdict, checks, roles: ROLES, sample_text: TEXT,
+        widths_by_family: withFamilies.w, widths_all_system: allSystem.w,
+        fonts_by_family: withFamilies.font,
+        mounts: { with_families: withFamilies.mount, all_system: allSystem.mount },
+        covered: '适配器语义角色 → 宿主平台字体：度量差异 + 反例对照 + 层上字体名',
+        // ★诚实边界：证明的是"字族改变了度量/绘制用的字体"（宽度 + 字体名）；
+        //   **字形级**比对（衬线真的画出衬线）需与已知渲染对照，未做；自定义字体（@font-face）未支持
+        not_covered: '字形级墨迹比对；自定义字体（@font-face / 打包字体）',
       },
     })
   },
