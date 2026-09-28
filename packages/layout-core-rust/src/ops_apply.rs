@@ -1,0 +1,430 @@
+// packages/layout-core-rust/src/ops_apply.rs
+// ★★Vapor for Proteus IR · V3 —— **指令流的布局应用**（V1 只做了解码，本模块把它落到树上）
+//
+// 【为什么单独一个模块（而不是塞进 ffi.rs）】
+//   ffi.rs 是 **C ABI 边界**（只做参数编解码 + 错误包装）；
+//   「指令语义 → 树变更」是**可单独测试的逻辑**（不需要 FFI 句柄、不需要真机）。
+//   本仓纪律：能在纯函数层验证的，不放到 FFI 层（真机一轮 3–4 分钟，桌面一轮毫秒级）。
+//
+// 【与既有 `StylePatch` 路径的关系（不是重复建设）】
+//   既有路径：JSON `[{id, style:{...}}]` —— 每帧跨边界要**文本解析**（本仓实测：4051 节点
+//     场景布局耗时 95%+ 是 JSON 通道成本）。
+//   本路径：二进制指令流（V1 编码）——顺序读 + 定长字段，无字符扫描。
+//   两条路径**并存**：JSON 路径保持兼容（既有测试全绿），二进制路径给 Vapor 用。
+//
+// 【★多节点重排：本模块补上的真缺口】
+//   既有 `proteus_layout_update` 只对 `last_dirty`（最后一个脏节点）重排——
+//   单个补丁没问题，但**批量指令天然涉及多节点**（一帧 N 个槽位直写）。
+//   若沿用"只算最后一个"，其余节点的几何会**静默过期**（UI 停在旧位置）。
+//   ⇒ 本模块实现「多个脏节点 → 若干互不嵌套的重排范围 → 各自重排」。
+use crate::engine::LayoutEngine; // ★layout_incremental 定义在 trait 上，必须 import trait
+use crate::node::{LNode, LayoutTree};
+use crate::ops::{OpCode, UpdateOp};
+use crate::taffy_engine::TaffyEngine;
+
+/// 指令应用的结果（供 FFI 组装返回体）
+#[derive(Debug, Default)]
+pub struct ApplyOutcome {
+    /// 成功应用的指令数
+    pub applied: usize,
+    /// 被标记为脏的节点（去重后的索引）
+    pub dirty: Vec<u32>,
+    /// ★无法应用的指令（**必须上报**——静默忽略 = UI 静默不更新，本仓最危险的失效模式）
+    pub unsupported: Vec<(OpCode, String)>,
+    /// 仅影响绘制（不影响几何）的指令数——它们不需要重排
+    pub paint_only: usize,
+}
+
+/// 把解码后的指令应用到树上（**不改几何，只改节点状态**；重排由调用方决定）
+///
+/// @param keys 指令流里的键表（keyId → 归一化属性名，如 `layout.width`）
+pub fn apply_ops_to_tree(tree: &mut LayoutTree, dec: &crate::ops::DecodedOps) -> ApplyOutcome {
+    let mut out = ApplyOutcome::default();
+    let mut dirty_set = std::collections::HashSet::new();
+
+    for op in &dec.ops {
+        match op {
+            UpdateOp::SetStyle { node_id, key_id, value } | UpdateOp::SetProp { node_id, key_id, value } => {
+                let Some(key) = dec.key_of(*key_id) else {
+                    out.unsupported.push((op.code(), format!("keyId {key_id} 越界（键表 {} 项）", dec.keys.len())));
+                    continue;
+                };
+                let Some(idx) = node_index_of(tree, *node_id) else {
+                    out.unsupported.push((op.code(), format!("nodeId {node_id} 不在树上")));
+                    continue;
+                };
+                match apply_style_key(&mut tree.nodes[idx], key, *value) {
+                    Ok(true) => {
+                        tree.nodes[idx].dirty = true;
+                        dirty_set.insert(idx as u32);
+                        out.applied += 1;
+                    }
+                    Ok(false) => {
+                        // 绘制类键（paint.*）不改几何 ⇒ 不重排（宿主自行处理绘制）
+                        out.paint_only += 1;
+                        out.applied += 1;
+                    }
+                    Err(msg) => out.unsupported.push((op.code(), msg)),
+                }
+            }
+            UpdateOp::SetText { node_id, text_ref } => {
+                let Some(text) = dec.string_of(*text_ref) else {
+                    out.unsupported.push((op.code(), format!("textRef {text_ref} 越界")));
+                    continue;
+                };
+                let Some(idx) = node_index_of(tree, *node_id) else {
+                    out.unsupported.push((op.code(), format!("nodeId {node_id} 不在树上")));
+                    continue;
+                };
+                // ★文本变化会改变度量 ⇒ 必须重排（内容寻址的度量缓存按文本取值，天然失效）
+                //   `text` 是 `Option<TextMeasureRequest>`（含 style_key 字体签名）——
+                //   本层只改**文本内容**，保留调用方给的字体签名（不猜字体）。
+                match tree.nodes[idx].text.as_mut() {
+                    Some(req) => {
+                        if req.text != *text {
+                            req.text = text.to_string();
+                            tree.nodes[idx].dirty = true;
+                            dirty_set.insert(idx as u32);
+                        }
+                    }
+                    None => {
+                        // 非文本叶子：SET_TEXT 落在它身上是**上游错误**（编译期不该产出）⇒ 上报
+                        out.unsupported.push((
+                            op.code(),
+                            format!("nodeId {node_id} 不是文本叶子，SET_TEXT 无法应用"),
+                        ));
+                        continue;
+                    }
+                }
+                out.applied += 1;
+            }
+            UpdateOp::ToggleVis { node_id, visible } => {
+                let Some(idx) = node_index_of(tree, *node_id) else {
+                    out.unsupported.push((op.code(), format!("nodeId {node_id} 不在树上")));
+                    continue;
+                };
+                // 可见性 = display:none 语义（不占布局空间）⇒ 必须重排
+                // ★`display` 是**非 Option 枚举**（style.rs）：Flex 为默认，None 表不占位
+                let want = if *visible { crate::style::Display::Flex } else { crate::style::Display::None };
+                if tree.nodes[idx].style.display != want {
+                    tree.nodes[idx].style.display = want;
+                    tree.nodes[idx].dirty = true;
+                    dirty_set.insert(idx as u32);
+                }
+                out.applied += 1;
+            }
+            UpdateOp::ListUpdate { list_id, item_key_ref, slot_id, value } => {
+                // ★诚实边界：LIST_UPDATE 需要**宿主侧的列表映射**（itemKey → 节点 id），
+                //   而布局核心只知道节点树、不知道"哪些节点属于哪个列表的哪一项"。
+                //   ⇒ 本层不猜：上报为 unsupported，由宿主先解析成具体 nodeId 再重下指令。
+                let key = dec.string_of(*item_key_ref).unwrap_or("<越界>");
+                out.unsupported.push((
+                    op.code(),
+                    format!("LIST_UPDATE 需宿主解析列表映射（listId={list_id}, itemKey={key}, slotId={slot_id}, value={value}）"),
+                ));
+            }
+            UpdateOp::RemoveNode { node_id } => {
+                let Some(idx) = node_index_of(tree, *node_id) else {
+                    out.unsupported.push((op.code(), format!("nodeId {node_id} 不在树上")));
+                    continue;
+                };
+                // 结构变更：从父链摘除并置脏（子树整体不再参与布局）
+                let p = tree.nodes[idx].parent;
+                detach_subtree(tree, idx);
+                out.applied += 1;
+                // ★parent 是**索引 + 哨兵**（NO_PARENT = u32::MAX），不是 Option
+                if p != crate::node::NO_PARENT {
+                    tree.nodes[p as usize].dirty = true;
+                    dirty_set.insert(p);
+                }
+            }
+            UpdateOp::InsertBlock { block_id, .. } => out.unsupported.push((
+                op.code(),
+                format!("INSERT_BLOCK 需编译期块实例（blockId={block_id}）；本层不构造新节点"),
+            )),
+            UpdateOp::MoveNode { node_id, .. } => out.unsupported.push((
+                op.code(),
+                format!("MOVE_NODE 需宿主先解析目标父与位次（nodeId={node_id}）"),
+            )),
+            UpdateOp::ListSet { list_id, .. } => out.unsupported.push((
+                op.code(),
+                format!("LIST_SET 需宿主列表映射（listId={list_id}）"),
+            )),
+            UpdateOp::ListSplice { list_id, .. } => out.unsupported.push((
+                op.code(),
+                format!("LIST_SPLICE 需宿主列表映射（listId={list_id}）"),
+            )),
+            UpdateOp::SetAttrs { node_id, attrs } => {
+                // 批量属性：逐项按样式键应用（与 SET_STYLE 同语义，只是合并成一条指令）
+                let Some(idx) = node_index_of(tree, *node_id) else {
+                    out.unsupported.push((op.code(), format!("nodeId {node_id} 不在树上")));
+                    continue;
+                };
+                let mut any_layout = false;
+                let mut bad: Option<String> = None;
+                for (key_id, value) in attrs {
+                    let Some(key) = dec.key_of(*key_id) else {
+                        bad = Some(format!("keyId {key_id} 越界"));
+                        break;
+                    };
+                    match apply_style_key(&mut tree.nodes[idx], key, *value) {
+                        Ok(true) => any_layout = true,
+                        Ok(false) => {}
+                        Err(msg) => {
+                            bad = Some(msg);
+                            break;
+                        }
+                    }
+                }
+                if let Some(msg) = bad {
+                    out.unsupported.push((op.code(), msg));
+                } else {
+                    if any_layout {
+                        tree.nodes[idx].dirty = true;
+                        dirty_set.insert(idx as u32);
+                    }
+                    out.applied += 1;
+                }
+            }
+            UpdateOp::CallComponentUpdate { component_id, slot_id, .. } => out.unsupported.push((
+                op.code(),
+                format!("CALL_COMPONENT_UPDATE 需组件边界调度（componentId={component_id}, slotId={slot_id}）"),
+            )),
+        }
+    }
+
+    out.dirty = {
+        let mut v: Vec<u32> = dirty_set.into_iter().collect();
+        v.sort_unstable();
+        v
+    };
+    out
+}
+
+/// 按 id 找节点索引（★O(n) 扫描：本函数用于**批量应用**的冷路径；
+///   FFI 侧有缓存的 `id_to_idx`，生产路径走那个）
+fn node_index_of(tree: &LayoutTree, id: u32) -> Option<usize> {
+    tree.nodes.iter().position(|n| n.id == id)
+}
+
+/// 摘除子树（把自己从父的 children 里去掉）——结构变更用
+fn detach_subtree(tree: &mut LayoutTree, idx: usize) {
+    let parent = tree.nodes[idx].parent;
+    tree.nodes[idx].parent = crate::node::NO_PARENT;
+    if parent != crate::node::NO_PARENT {
+        let pi = parent as usize;
+        tree.nodes[pi].children.retain(|c| *c as usize != idx);
+    }
+}
+
+/**
+ * 把归一化属性名 + f32 值应用到节点样式
+ *
+ * @returns `Ok(true)` = 改了**几何相关**样式（需重排）；`Ok(false)` = 仅绘制；
+ *          `Err` = 该键本层不支持（**上报**，不静默忽略）
+ *
+ * 【键名与 component-ir / slot-runtime 的约定】**必须与 TS 侧一致**：
+ *   `layout.width` / `layout.height` / `layout.flexGrow` / `layout.flexShrink` / `layout.flexBasis` /
+ *   `layout.gap` / `layout.display`；`paint.*` 与 `text.*` 属绘制（除 `layout.` 前缀外均不改几何）。
+ *   ★不一致的后果是**静默不更新**（键名对不上 → 找不到字段 → 值丢失），故本函数对未知
+ *   `layout.*` 键返回 Err 而不是 Ok(false)。
+ */
+pub fn apply_style_key(node: &mut LNode, key: &str, value: f32) -> Result<bool, String> {
+    let s = &mut node.style;
+    let v = value;
+    match key {
+        "layout.width" => {
+            s.width = if v.is_finite() { Some(v) } else { None };
+            Ok(true)
+        }
+        "layout.height" => {
+            s.height = if v.is_finite() { Some(v) } else { None };
+            Ok(true)
+        }
+        "layout.minWidth" => {
+            s.min_width = if v.is_finite() { Some(v) } else { None };
+            Ok(true)
+        }
+        "layout.maxWidth" => {
+            s.max_width = if v.is_finite() { Some(v) } else { None };
+            Ok(true)
+        }
+        "layout.minHeight" => {
+            s.min_height = if v.is_finite() { Some(v) } else { None };
+            Ok(true)
+        }
+        "layout.maxHeight" => {
+            s.max_height = if v.is_finite() { Some(v) } else { None };
+            Ok(true)
+        }
+        "layout.flexGrow" => {
+            s.flex_grow = v;
+            Ok(true)
+        }
+        "layout.flexShrink" => {
+            s.flex_shrink = v;
+            Ok(true)
+        }
+        "layout.flexBasis" => {
+            s.flex_basis = if v.is_finite() { Some(v) } else { None };
+            Ok(true)
+        }
+        "layout.gap" => {
+            s.gap = v;
+            Ok(true)
+        }
+        "layout.display" => {
+            s.display = if v == 0.0 { crate::style::Display::None } else { crate::style::Display::Flex };
+            Ok(true)
+        }
+        k if k.starts_with("paint.") || k.starts_with("text.") || k.starts_with("attr.") => Ok(false),
+        other => Err(format!("本层不支持布局键 `{other}`（若为几何属性，请在 ops_apply 的映射表里登记）")),
+    }
+}
+
+/* ────────────────────────── ★多范围增量重排 ────────────────────────── */
+
+/// 一次重排的结果（多范围合并后的读数）
+#[derive(Debug, Default)]
+pub struct MultiRelayout {
+    /// 实际重排的范围根（去重且互不嵌套后的节点 id）
+    pub scopes: Vec<u32>,
+    /// 重排覆盖的节点总数（各范围求和）
+    pub relayout_count: usize,
+    /// 文本度量调用次数
+    pub measure_calls: usize,
+    /// 文本度量缓存命中
+    pub measure_hits: usize,
+}
+
+/**
+ * ★★多脏节点的增量重排（V3 补的真缺口）
+ *
+ * 【为什么不逐个重排就完事】两个脏节点可能落在**同一个范围**里（同一布局边界下），
+ *   逐个重排会把同一子树算两遍；也可能一个范围**包含**另一个（嵌套边界）。
+ *   ⇒ 先求各自范围 → 去掉被包含者（保留最外层）→ 再逐个重排。
+ *
+ * 【正确性依据】范围的语义是「最近的布局边界」——其对外尺寸与内容无关
+ *   （`relayout_scope_of` 的注释有完整推导）。多个互不嵌套的范围**彼此独立**
+ *   ⇒ 各自重排互不影响，顺序无关。
+ *
+ * 【诚实边界】若某脏节点在链上找不到边界 ⇒ 范围 = 树根 ⇒ 退化为全量
+ *   （与既有单节点路径同款兜底；不会算错，只是没有收益）。
+ */
+pub fn relayout_multi(tree: &mut LayoutTree, dirty: &[u32]) -> MultiRelayout {
+    let eng = TaffyEngine::new();
+
+    // ① 每个脏节点 → 它所属的重排范围
+    let mut scopes: Vec<u32> = Vec::new();
+    for &d in dirty {
+        let di = d as usize;
+        if di >= tree.len() {
+            continue;
+        }
+        let sc = eng.relayout_scope_of(tree, d);
+        scopes.push(sc);
+    }
+    scopes.sort_unstable();
+    scopes.dedup();
+
+    // ② 去掉「被别的范围包含」的范围（保留最外层 ⇒ 不重复算同一子树）
+    let kept: Vec<u32> = scopes
+        .iter()
+        .copied()
+        .filter(|&a| !scopes.iter().any(|&b| b != a && is_ancestor(tree, b, a)))
+        .collect();
+
+    // ③ 逐个重排
+    let mut out = MultiRelayout { scopes: kept.clone(), ..Default::default() };
+    let mut engine = TaffyEngine::new().with_measurer(Box::new(crate::engine::NullTextMeasurer));
+    for sc in kept {
+        let r = engine.layout_incremental(tree, sc);
+        out.relayout_count += r.relayout_count;
+        out.measure_calls += r.measure_calls;
+        out.measure_hits += r.measure_hits;
+    }
+    out
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::style::LStyle;
+
+    fn node(id: u32, parent: u32, style: LStyle) -> LNode {
+        LNode { id, tag: String::new(), style, parent, children: vec![], text: None, native_host: false, dirty: false, rect: Default::default() }
+    }
+
+    /// 三个兄弟行各含一个圆点：改**两个**圆点 ⇒ 应产出两个互不嵌套的范围
+    #[test]
+    fn multi_relayout_keeps_ranges_separate() {
+        let mut tree = LayoutTree::new();
+        let root = LStyle { display: crate::style::Display::Flex, flex_direction: crate::style::FlexDirection::Column, width: Some(300.0), height: Some(400.0), ..Default::default() };
+        tree.push(node(1, crate::node::NO_PARENT, root));
+        for (row_id, dot_id, base) in [(2u32, 3u32, 0usize), (4, 5, 1), (6, 7, 2)] {
+            let row = LStyle {
+                display: crate::style::Display::Flex, flex_direction: crate::style::FlexDirection::Row,
+                height: Some(50.0), flex_shrink: 0.0, ..Default::default()
+            };
+            tree.push(node(row_id, 0, row));
+            tree.nodes[0].children.push((row_id - 1) as u32);
+            let dot = LStyle { width: Some(20.0), height: Some(20.0), ..Default::default() };
+            tree.push(node(dot_id, (row_id - 1) as u32, dot));
+            tree.nodes[(row_id - 1) as usize].children.push((dot_id - 1) as u32);
+            void(base);
+        }
+        let _ = root;
+        assert_eq!(tree.len(), 7);
+        // 标脏两个圆点（索引 2 与 4）
+        let out = relayout_multi(&mut tree, &[2, 4]);
+        // 两个范围应**互不嵌套**（各自是不同行的子节点）
+        assert_eq!(out.scopes.len(), 2, "两个脏节点应产出两个范围：{:?}", out.scopes);
+        assert_ne!(out.scopes[0], out.scopes[1]);
+        // 范围不应是树根（否则等于全量）
+        // ★注意 scopes 是**索引**不是 id：根在索引 0。
+        //   （本测试首版把 id 1 当根、断言 !contains(&1) —— 而索引 1 恰好是第二行，
+        //    于是误报失败。教训：id 与索引在同一函数里混用时必须显式注明。）
+        assert!(!out.scopes.contains(&0), "范围不应退化为树根（索引 0）：{:?}", out.scopes);
+    }
+
+    /// 嵌套情形：父子都脏 ⇒ 只保留最外层（不重复算同一子树）
+    #[test]
+    fn nested_dirty_nodes_collapse_to_outer_scope() {
+        let mut tree = LayoutTree::new();
+        let root = LStyle { display: crate::style::Display::Flex, flex_direction: crate::style::FlexDirection::Column, width: Some(300.0), height: Some(400.0), ..Default::default() };
+        tree.push(node(1, crate::node::NO_PARENT, root));
+        let mid = LStyle { display: crate::style::Display::Flex, flex_direction: crate::style::FlexDirection::Column, height: Some(200.0), flex_shrink: 0.0, ..Default::default() };
+        tree.push(node(2, 0, mid));
+        tree.nodes[0].children.push(1);
+        let leaf = LStyle { width: Some(50.0), height: Some(50.0), ..Default::default() };
+        tree.push(node(3, 1, leaf));
+        tree.nodes[1].children.push(2);
+
+        let out = relayout_multi(&mut tree, &[1, 2]);
+        assert_eq!(out.scopes.len(), 1, "嵌套的脏节点应收敛为一个范围：{:?}", out.scopes);
+    }
+
+    /// ★样式键应用：未知 layout.* 键必须报错（不静默丢值）
+    #[test]
+    fn unknown_layout_key_is_error_not_silent() {
+        let mut n = node(1, crate::node::NO_PARENT, LStyle::default());
+        assert!(apply_style_key(&mut n, "layout.width", 10.0).is_ok());
+        assert!(apply_style_key(&mut n, "paint.backgroundColor", 255.0).is_ok());
+        // 未知的 layout.* 键：必须是 Err（静默返回 Ok(false) 会让值悄悄丢失）
+        assert!(apply_style_key(&mut n, "layout.nonexistentThing", 1.0).is_err());
+    }
+
+    fn void<T>(_: T) {}
+}
+
+/// `a` 是否为 `b` 的祖先（含自身？**不含**——调用处已保证 a != b）
+fn is_ancestor(tree: &LayoutTree, a: u32, b: u32) -> bool {
+    let mut cur = tree.nodes[b as usize].parent;
+    while cur != crate::node::NO_PARENT {
+        if cur == a {
+            return true;
+        }
+        cur = tree.nodes[cur as usize].parent;
+    }
+    false
+}

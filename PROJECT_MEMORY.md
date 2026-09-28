@@ -59,7 +59,7 @@
 >   `relayout` = 7005（**整树重排**）——标题 margin 改变其后所有行位置 ⇒ 宿主侧另有
 >   与 Vue 无关的 O(树规模) 热点（与增量布局的边界判定同源）。
 > · **桌面通道**（`bash hosts/ios/run-v0-probe.sh`）：10–14ms → 1–3ms，与真机同比率同方向。
-> · **下一步**：~~V1~~（指令集 + slot-runtime + 真跨语言 golden）· ~~V2~~（编译期响应式转换 + `explain --vapor`，L1 覆盖率 77.8%）**均已完成** ⇒ **下一步 = V3**（App 端打通：JSI 对接 + Rust 指令消费 + P95 实测）。
+> · **下一步**：~~V1~~ · ~~V2~~ · ~~V3~~（**真机 P95 = 1ms**，达 §10 目标线）**均已完成** ⇒ **下一步 = V4**（Web 真值 conformance · Vue 版本兼容 · 性能棘轮 · 宿主列表映射解锁 LIST_UPDATE · 全量 SFC 端上渲染）。
 >
 > ★**真机通道已全线打通（2026-09-28）——三层阻塞已解决**：
 > ① **签名身份**：用户新增 Apple ID（`lyl@shxuxi.cn` · Personal Team `XKH568R7A5`）后证书已签发，
@@ -402,6 +402,41 @@ Golden 双端门禁）；真机复跑待签名恢复后补，报告含 `V0_*` �
 
 **下一步 = V3（App 端打通，≈2 人周）**：槽位运行时对接 JSI → Rust 侧指令消费
 （指令的**布局应用**）→ 一帧一次 flush 调度对齐 Choreographer → **单节点更新 P95 实测**。
+
+### ★★★Vapor IR **V3 完成**：单节点更新真机 **P95 = 1ms**（达 §10 目标线）（2026-09-28）
+
+**依据**：方案 §9 的 V3 里程碑（槽位运行时对接 JSI · Rust 指令消费 · P95 实测）。
+
+**★★真机读数（iPhone 12 / iOS 26.3 · 报告 `089d848b-103149` · 25/25 用例）**
+| 路径 | p50 | p95 | 说明 |
+|---|---|---|---|
+| S2 基线（现网 Vue VDOM） | 82ms | — | 改 1 个圆点 = 整树重渲染 |
+| V0 探针（Vue 原生手段**上界**） | 10ms | 9ms | `withMemo` 手工替代——**不是本实现** |
+| **V3 完整链路（本实现）** | **0ms** | **1ms** | 订阅表 → 槽位直写 → 二进制指令 → Rust 应用 |
+
+⇒ **达 §10 验收**（P95 ≤ 10ms 合格线 / ≤ 3ms 目标值）。宿主侧：`apply_ms` 0.02ms ·
+`layers_ms` 0.01ms · 重排 2 节点 · `unsupported=0` · 101 flush / 100 次更新（每帧一次）。
+
+**落地**：Swift 宿主 `applyOps()`（二进制入口，与 `updatePatches` 的 JSON 路径并存）；
+Rust `ops_apply.rs` + FFI `proteus_layout_apply_ops`；编译器打在 **bundle 外**
+（`gen-vapor-table.mjs` 构建期生成订阅表——方案 §4.4 要求，实测把编译器打进 app 会拽进 @babel/*）。
+
+**★V3 补的三个真缺口（都会静默出错）**
+| # | 缺口 | 症状 | 处置 |
+|---|---|---|---|
+| 1 | Rust 只对**最后一个**脏节点重排 | 批量指令时其余节点几何**静默过期** | `relayout_multi`：多脏节点 → 去嵌套 → 各自重排 |
+| 2 | nodeId 用「绑定序号」 | 绑定拿到错误的 nodeId（如根）⇒ **指令写到别的节点**，几何静默不对 | `elementIndex`（模板序 DFS 每个**元素**编号，与 IR builder 同源） |
+| 3 | `NodeDto` 是**扁平**字段（非嵌套 `style`） | 测试树形状写错 ⇒ 尺寸被**静默忽略**、几何全 0 | 端到端测试层暴露（两侧单测都绿也照样错） |
+
+**★诚实边界**
+① 已支持 `SET_STYLE`/`SET_PROP`(layout.*)/`SET_TEXT`/`TOGGLE_VIS`/`SET_ATTRS`/`REMOVE_NODE`；
+   **明确上报 unsupported**（不猜）：`LIST_*`（需宿主列表映射）/`INSERT_BLOCK`/`MOVE_NODE`/`CALL_COMPONENT_UPDATE`。
+② `:style` 归一为 `paint.style`（不透明）⇒ 按「仅绘制」处理不重排；走几何须用 `:width` 类明确绑定。
+③ 本里程碑用**最小编译产物**（单绑定）验证通路；全量 SFC → 端上渲染属 V4。
+④ `bytes→JSON 数组` 是 JSExport 妥协（ArrayBuffer 不稳）；45 字节可忽略，ARM 侧 JSI 直传属优化。
+
+**下一步 = V4（一致性与收尾）**：Web 真值 conformance · Vue 3.4/3.5/3.6 兼容 ·
+性能棘轮门禁 · ★宿主侧列表映射（解锁 LIST_UPDATE）· ★全量 SFC 端上渲染。
 
 ### ★★★真机闪退事故：适配器 id 冲突 → taffy 无限递归（2026-09-29，提交 `f7631cd7`）
 

@@ -34,6 +34,10 @@ for (const f of ['index.js', 'adapters/selfdraw.js']) {
   }
 }
 
+// ★V3：构建期生成订阅表（编译器不进 app——见 gen-vapor-table.mjs 顶注）
+const { execFileSync } = await import('node:child_process')
+execFileSync('node', [path.join(HERE, 'gen-vapor-table.mjs')], { cwd: ROOT, stdio: 'inherit' })
+
 await build({
   entryPoints: [path.join(HERE, 'entry-bench.ts')],
   outfile: OUT,

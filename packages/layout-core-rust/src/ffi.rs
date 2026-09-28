@@ -1263,6 +1263,90 @@ pub(crate) fn json_str(s: &str) -> String {
     out
 }
 
+/// ★★Vapor IR V3 —— **应用二进制指令流**（一次调用完成：解码 → 应用 → 多范围增量重排）
+///
+/// 【与 `proteus_layout_update` 的分工】
+///   · `proteus_layout_update`：JSON 补丁（`[{id, style}]`）——兼容路径，需文本解析
+///   · 本函数：**二进制指令流**（V1 编码）——顺序读 + 定长字段，无字符扫描
+///     本仓实测：4051 节点场景「布局耗时」95%+ 是 JSON 通道成本 ⇒ 每帧走的路径必须免解析。
+///
+/// 【★为什么需要它（V3 补的真缺口）】既有 update 只对**最后一个**脏节点重排；
+///   而批量指令天然涉及多个节点（一帧 N 个槽位直写）⇒ 其余节点几何会**静默过期**。
+///   本入口用 `ops_apply::relayout_multi`：多脏节点 → 若干互不嵌套的范围 → 各自重排。
+///
+/// # Safety
+/// `ptr` 须指向 `len` 字节的有效 buffer（由 TS 侧 `encodeOps` 产出）。
+/// 返回指针须用 `proteus_layout_free_string` 释放。
+#[no_mangle]
+pub unsafe extern "C" fn proteus_layout_apply_ops(handle: u64, ptr: *const u8, len: u32) -> *mut c_char {
+    let r = std::panic::catch_unwind(|| -> Result<String, String> {
+        if ptr.is_null() || len == 0 {
+            return Err("指令流指针为空或长度为 0".into());
+        }
+        let buf = unsafe { std::slice::from_raw_parts(ptr, len as usize) };
+        let dec = crate::ops::decode_ops(buf)?;
+
+        let t0 = std::time::Instant::now();
+        let mut reg = registry().lock().map_err(|_| "注册表锁失败".to_string())?;
+        let entry = reg.get_mut(&handle).ok_or_else(|| format!("句柄 {handle} 不存在"))?;
+        let t_lock = t0.elapsed().as_secs_f64() * 1000.0;
+
+        let t_apply0 = std::time::Instant::now();
+        let outcome = crate::ops_apply::apply_ops_to_tree(&mut entry.tree, &dec);
+        let t_apply = t_apply0.elapsed().as_secs_f64() * 1000.0;
+
+        // 无几何变更（例如只改颜色）⇒ 不重排
+        if outcome.dirty.is_empty() {
+            return Ok(serde_json::json!({
+                "ok": true, "applied": outcome.applied, "paint_only": outcome.paint_only,
+                "dirty": outcome.dirty, "relayout_count": 0, "scopes": [],
+                "unsupported": outcome.unsupported.iter()
+                    .map(|(c, m)| serde_json::json!({"op": *c as u8, "reason": m}))
+                    .collect::<Vec<_>>(),
+                "timing": {"lock_ms": t_lock, "apply_ms": t_apply, "relayout_ms": 0.0, "collect_ms": 0.0},
+            }).to_string());
+        }
+
+        let t_rel0 = std::time::Instant::now();
+        let multi = crate::ops_apply::relayout_multi(&mut entry.tree, &outcome.dirty);
+        let t_rel = t_rel0.elapsed().as_secs_f64() * 1000.0;
+
+        // 收集变化节点的绝对矩形（宿主据此只更新那几个 layer）
+        let t_col0 = std::time::Instant::now();
+        let mut changed = serde_json::Map::new();
+        for &sc in &multi.scopes {
+            let (pox, poy) = parent_origin_of(&entry.tree, sc);
+            collect_abs_subtree(&entry.tree, sc, pox, poy, &mut changed);
+        }
+        let t_col = t_col0.elapsed().as_secs_f64() * 1000.0;
+
+        Ok(serde_json::json!({
+            "ok": true,
+            "applied": outcome.applied,
+            "paint_only": outcome.paint_only,
+            "dirty": outcome.dirty,
+            "relayout_count": multi.relayout_count,
+            "scopes": multi.scopes,
+            "rects": changed,
+            "unsupported": outcome.unsupported.iter()
+                .map(|(c, m)| serde_json::json!({"op": *c as u8, "reason": m}))
+                .collect::<Vec<_>>(),
+            "timing": {"lock_ms": t_lock, "apply_ms": t_apply, "relayout_ms": t_rel, "collect_ms": t_col},
+        }).to_string())
+    });
+    match r {
+        Ok(Ok(s)) => CString::new(s).map(|c| c.into_raw()).unwrap_or(std::ptr::null_mut()),
+        Ok(Err(e)) => {
+            let s = serde_json::json!({"ok": false, "error": e}).to_string();
+            CString::new(s).map(|c| c.into_raw()).unwrap_or(std::ptr::null_mut())
+        }
+        Err(_) => {
+            let s = serde_json::json!({"ok": false, "error": "内部 panic（已捕获）"}).to_string();
+            CString::new(s).map(|c| c.into_raw()).unwrap_or(std::ptr::null_mut())
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -1585,6 +1669,149 @@ mod tests {
         unsafe { proteus_layout_free_string(p) };
         assert!(s.contains("\"ok\":false"));
         assert!(!proteus_layout_destroy(999999), "销毁无效句柄应返回 false");
+    }
+
+    // ────────────────────── ★Vapor IR V3：二进制指令流的 FFI 入口 ──────────────────────
+
+    /// 生成一份用于测试的指令字节流（与 TS 侧编码格式一致的最小实现）
+    fn encode_test_ops(keys: &[&str], strings: &[&str], ops: &[crate::ops::UpdateOp]) -> Vec<u8> {
+        let mut out = Vec::new();
+        out.extend_from_slice(&crate::ops::OPS_MAGIC.to_le_bytes());
+        out.extend_from_slice(&crate::ops::OPS_VERSION.to_le_bytes());
+        out.extend_from_slice(&(ops.len() as u32).to_le_bytes());
+        out.extend_from_slice(&(keys.len() as u32).to_le_bytes());
+        out.extend_from_slice(&(strings.len() as u32).to_le_bytes());
+        for k in keys {
+            out.extend_from_slice(&(k.len() as u16).to_le_bytes());
+            out.extend_from_slice(k.as_bytes());
+        }
+        for s in strings {
+            out.extend_from_slice(&(s.len() as u16).to_le_bytes());
+            out.extend_from_slice(s.as_bytes());
+        }
+        for op in ops {
+            out.push(op.code() as u8);
+            match op {
+                crate::ops::UpdateOp::SetStyle { node_id, key_id, value } => {
+                    out.extend_from_slice(&node_id.to_le_bytes());
+                    out.extend_from_slice(&key_id.to_le_bytes());
+                    out.extend_from_slice(&value.to_le_bytes());
+                }
+                crate::ops::UpdateOp::SetText { node_id, text_ref } => {
+                    out.extend_from_slice(&node_id.to_le_bytes());
+                    out.extend_from_slice(&text_ref.to_le_bytes());
+                }
+                crate::ops::UpdateOp::ToggleVis { node_id, visible } => {
+                    out.extend_from_slice(&node_id.to_le_bytes());
+                    out.push(if *visible { 1 } else { 0 });
+                }
+                other => panic!("测试编码器未覆盖：{other:?}"),
+            }
+        }
+        out
+    }
+
+    /// ★★V3 端到端（桌面层）：指令流 → 树变更 → 多范围增量重排
+    #[test]
+    fn apply_ops_binary_stream_updates_geometry() {
+        // 两个兄弟行，各含一个圆点；改两行的圆点尺寸（**两个**脏节点）
+        let req_json = r#"{
+            "viewport": {"width": 300.0, "height": 400.0},
+            "nodes": [
+                {"id":1,"parentId":null,"tag":"root","style":{"flexDirection":"column","width":300.0,"height":400.0}},
+                {"id":2,"parentId":1,"tag":"row","style":{"flexDirection":"row","height":50.0,"flexShrink":0.0}},
+                {"id":3,"parentId":2,"tag":"dot","style":{"width":20.0,"height":20.0}},
+                {"id":4,"parentId":1,"tag":"row","style":{"flexDirection":"row","height":50.0,"flexShrink":0.0}},
+                {"id":5,"parentId":4,"tag":"dot","style":{"width":20.0,"height":20.0}}
+            ]
+        }"#;
+        let handle = unsafe {
+            let c = CString::new(req_json).unwrap();
+            proteus_layout_create(c.as_ptr())
+        };
+        assert_ne!(handle, 0, "建树应成功");
+
+        // 改两个圆点（id 3、5）的宽度 —— 批量指令
+        let ops = vec![
+            crate::ops::UpdateOp::SetStyle { node_id: 3, key_id: 0, value: 80.0 },
+            crate::ops::UpdateOp::SetStyle { node_id: 5, key_id: 0, value: 90.0 },
+        ];
+        let bytes = encode_test_ops(&["layout.width"], &[], &ops);
+        let out = unsafe {
+            let p = proteus_layout_apply_ops(handle, bytes.as_ptr(), bytes.len() as u32);
+            let s = CStr::from_ptr(p).to_str().unwrap().to_string();
+            proteus_layout_free_string(p);
+            s
+        };
+        assert!(out.contains("\"ok\":true"), "应用应成功：{out}");
+        let v: serde_json::Value = serde_json::from_str(&out).unwrap();
+        assert_eq!(v["applied"].as_u64(), Some(2), "两条指令都应应用");
+        assert!(v["dirty"].as_array().map(|a| a.len()).unwrap_or(0) >= 2, "应报告 ≥2 个脏节点");
+        // ★多范围重排：两个兄弟在不同的行下 ⇒ 应各自落在自己的范围（不是全树）
+        let relayout = v["relayout_count"].as_u64().unwrap_or(0);
+        assert!(relayout > 0, "应发生重排");
+        assert!(relayout <= 5, "重排范围不应超过全树（实测 {relayout}）");
+
+        // 几何确实变了（不是只标记不重算）
+        let rects = unsafe {
+            let p = proteus_layout_rects(handle);
+            let s = CStr::from_ptr(p).to_str().unwrap().to_string();
+            proteus_layout_free_string(p);
+            s
+        };
+        assert!(rects.contains("80") || rects.contains("90"), "新尺寸应反映在矩形里：{rects}");
+        assert!(unsafe { proteus_layout_destroy(handle) });
+    }
+
+    /// ★恶意/损坏的指令流必须被拒绝（不能 panic、不能静默改错树）
+    #[test]
+    fn apply_ops_rejects_corrupt_stream() {
+        let req_json = r#"{"viewport":{"width":100.0,"height":100.0},"nodes":[{"id":1,"parentId":null,"tag":"root","style":{"width":100.0,"height":100.0}}]}"#;
+        let handle = unsafe {
+            let c = CString::new(req_json).unwrap();
+            proteus_layout_create(c.as_ptr())
+        };
+        // ① 垃圾字节
+        let junk = vec![0xde, 0xad, 0xbe, 0xef, 0x00, 0x01, 0x02, 0x03];
+        let out = unsafe {
+            let p = proteus_layout_apply_ops(handle, junk.as_ptr(), junk.len() as u32);
+            let s = CStr::from_ptr(p).to_str().unwrap().to_string();
+            proteus_layout_free_string(p);
+            s
+        };
+        assert!(out.contains("\"ok\":false"), "垃圾流应被拒绝：{out}");
+        // ② 空指针
+        let out2 = unsafe {
+            let p = proteus_layout_apply_ops(handle, std::ptr::null(), 0);
+            let s = CStr::from_ptr(p).to_str().unwrap().to_string();
+            proteus_layout_free_string(p);
+            s
+        };
+        assert!(out2.contains("\"ok\":false"), "空指针应报错而非 panic：{out2}");
+        assert!(unsafe { proteus_layout_destroy(handle) });
+    }
+
+    /// ★未知节点 id 的指令必须**上报**（静默忽略 = UI 静默不更新）
+    #[test]
+    fn apply_ops_reports_unknown_node() {
+        let req_json = r#"{"viewport":{"width":100.0,"height":100.0},"nodes":[{"id":1,"parentId":null,"tag":"root","style":{"width":100.0,"height":100.0}}]}"#;
+        let handle = unsafe {
+            let c = CString::new(req_json).unwrap();
+            proteus_layout_create(c.as_ptr())
+        };
+        let ops = vec![crate::ops::UpdateOp::SetStyle { node_id: 999, key_id: 0, value: 10.0 }];
+        let bytes = encode_test_ops(&["layout.width"], &[], &ops);
+        let out = unsafe {
+            let p = proteus_layout_apply_ops(handle, bytes.as_ptr(), bytes.len() as u32);
+            let s = CStr::from_ptr(p).to_str().unwrap().to_string();
+            proteus_layout_free_string(p);
+            s
+        };
+        let v: serde_json::Value = serde_json::from_str(&out).unwrap();
+        assert_eq!(v["applied"].as_u64(), Some(0), "未知节点不应计入 applied");
+        assert!(v["unsupported"].as_array().map(|a| !a.is_empty()).unwrap_or(false),
+                "★必须上报 unsupported（否则是静默不更新）：{out}");
+        assert!(unsafe { proteus_layout_destroy(handle) });
     }
 
     /// FFI 边界：空指针 / 非法 UTF-8 不得 panic

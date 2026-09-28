@@ -48,6 +48,9 @@ jobs:
       - name: 排版核心单测 + 更新指令双端对齐（Vapor IR V1：TS 编码 ⇄ Rust 解码的跨语言契约）
         run: pnpm run test:rust
 
+      - name: 构建 V3 端到端驱动（TS「指令 → Rust 应用 → 几何」链路的测试载体）
+        run: cargo build --manifest-path packages/layout-core-rust/Cargo.toml --example ops_roundtrip
+
       - name: 依赖声明完整性审计（#422：pnpm 严格解析——import vs package.json 零缺失）
         run: node scripts/check-deps.mjs
 
