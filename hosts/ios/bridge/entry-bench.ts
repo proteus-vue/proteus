@@ -55,6 +55,8 @@ interface SelfDrawNative {
   scrollBy?(dx: Double, dy: Double): String
   /** ★V4：当前待补刷（视口外）的层数 + 上次补刷数 */
   pendingStats?(): String
+  /** ★★V5：批量像素采样（渲染一次读多点）—— 像素级验证的判据 */
+  samplePixels?(json: String): String
   snapshot(name: string): string
   report(json: string): void
   done(summaryJson: string): void
@@ -67,7 +69,7 @@ const BN = { snapshot: 'bench-final' }
 // ★构建标识：每次构建写入，用于**确凿判定**设备上跑的是哪份代码
 //   （踩坑：靠文件 mtime 判断"报告是否刷新"不可靠——新建目标文件的时间恒为"现在"；
 //    且我看不出设备实际执行的是旧 bundle，白跑一轮。有了这个字段就能一眼判定。）
-const BUILD_ID = 'c559d567-123950'
+const BUILD_ID = '15541abd-132713'
 const now = (): number => Date.now()
 /** 宽松解析（宿主返回可能是字符串或已是对象） */
 const safeParseAny = (s: any): any => {
@@ -1216,6 +1218,134 @@ CASES.push({
               (staleProbe?.pending_visible_overlap ?? 1) === 0
                 ? 'PASS'
                 : 'FAIL',
+          },
+        })
+      }
+    }
+
+    // ── ★★V5 像素级验证：滚动后屏幕上的**颜色序列**必须与几何一致 ──
+    //
+    // 【为什么要它（本仓反复标注的缺口）】此前所有验证都停在"**几何**算对了"
+    //   （rect/坐标/增量≡全量不变式），而"**屏幕上真的画对了**"从未验证。
+    //   延迟补刷（只更可见层）尤其需要：几何对 ≠ 屏幕对。
+    //
+    // 【判据设计】每行给**唯一的背景色**（R 通道编码行号）⇒ 在屏幕上采样若干点，
+    //   断言各点颜色 = 「该位置**应该**显示的那一行」的颜色。
+    //   · 若补刷漏了 ⇒ 该处仍是**旧几何**的行（颜色错）
+    //   · 若坐标系错 ⇒ 整片颜色序列错位
+    //   ⇒ 这是一个**端到端**判据：几何 → 层 frame → 渲染像素，全链一致才通过。
+    {
+      proteusSelfDraw.setOptMode?.('v4')
+      // 行几何：全部高 60、无间距 ⇒ 行 i 占内容 y ∈ [i*60, i*60+60)
+      // 更新后：行 0 高 60→200 ⇒ 行 i≥1 下移 140 ⇒ 行 i 起点 = 140 + i*60
+      const ROWS = 40
+      const rowColor = (i: number): string => {
+        const r = (8 + i * 6) % 256
+        return `#${r.toString(16).padStart(2, '0').toUpperCase()}2040`
+      }
+      const nodes: Array<Record<string, unknown>> = [
+        { id: 0, parentId: null, flexDirection: 'column', width: VP.width, height: VP.height },
+        // ★色彩标定块（前三行固定为纯红/纯绿/纯蓝——用于反推宿主的色彩/字节变换）
+        { id: 900, parentId: 0, width: VP.width, height: 60, flexShrink: 0, backgroundColor: '#FF0000' },
+        { id: 901, parentId: 0, width: VP.width, height: 60, flexShrink: 0, backgroundColor: '#00FF00' },
+        { id: 902, parentId: 0, width: VP.width, height: 60, flexShrink: 0, backgroundColor: '#0000FF' },
+        // 行 0（绑定目标，元素序 id=1）
+        { id: 1, parentId: 0, width: VP.width, height: 60, flexShrink: 0, backgroundColor: rowColor(0) },
+      ]
+      for (let i = 1; i < ROWS; i++) {
+        nodes.push({ id: 100 + i, parentId: 0, width: VP.width, height: 60, flexShrink: 0, backgroundColor: rowColor(i) })
+      }
+      const m = safeParseAny(proteusSelfDraw.mount(JSON.stringify({ viewport: VP, nodes })))
+      if (m?.ok) {
+        // 改行 0 高度 60→200（元素序 id=1）
+        const keys = new PropKeyTable()
+        const strings = new StringPool()
+        const cap: Uint8Array[] = []
+        const rt = new SlotRuntime(keys, strings, (b) => cap.push(b))
+        rt.buffer.push({ op: 0x02, nodeId: 1, keyId: keys.intern('layout.height'), value: 200 })
+        rt.flush()
+        const b = cap.pop()
+        const upd = b ? safeParseAny(proteusSelfDraw.applyOps(JSON.stringify(Array.from(b)))) : undefined
+        const deferred = (upd?.deferred as number) ?? 0
+
+        // ★★三段采样（本仓纪律：判据失败时先排除"判据自身有问题"）
+        //   ① mount 后（无滚动、无更新）：行 i 在内容 [i*60, i*60+60) ⇒ 采样 y=30+60i
+        //   ② 更新后（无滚动）：行 0 高 60→200，行 i≥1 移到 [140+i*60, ...)
+        //   ③ 滚动后：内容整体上移
+        // ★★色彩标定（本仓纪律：判据偏差时先做**标定实验**，而不是推断）
+        //   取三行各一采样点（几何已确认顺序排列）⇒ 由「期望 vs 实得」反推变换：
+        //   若 R/G/B 单调且可逆 ⇒ 色彩空间转换；若成对互换 ⇒ 字节序。
+        const stageA = safeParseAny(
+          proteusSelfDraw.samplePixels?.(JSON.stringify([0, 1, 2].map((i) => ({ x: 195, y: 30 + i * 60 })))) ?? '{}',
+        )
+        const stageApix: string[] = (stageA?.pixels as string[]) ?? []
+        const stageAexp = [rowColor(0), rowColor(1), rowColor(2)]
+        const calibOut = safeParseAny(
+          proteusSelfDraw.samplePixels?.(JSON.stringify([
+            { x: 195, y: 30 },
+            { x: 195, y: 90 },
+            { x: 195, y: 150 },
+          ])) ?? '{}',
+        )
+        const calibration = {
+          expect: ['#FF0000 (纯红)', '#00FF00 (纯绿)', '#0000FF (纯蓝)'],
+          got: (calibOut?.pixels as string[]) ?? [],
+        }
+
+        // 滚到能看到**被延后**的那些行（预取半屏 ⇒ 内容 y > 1266 的行被延后）
+        const SCROLL = 1540
+        proteusSelfDraw.scrollBy?.(0, SCROLL)
+        const flushed = (safeParseAny(proteusSelfDraw.pendingStats?.() ?? '{}').last_flushed as number) ?? 0
+
+        // 采样：这几个屏幕 y 分别应命中哪一行（内容 y = SCROLL + 屏幕 y）
+        //
+        // ★★坐标推导（本仓实测：首版漏算标定块，整体偏 2 行）
+        //   本用例的树里前 3 行是**色彩标定块**（纯红/纯绿/纯蓝），行 0 是第 4 行（元素序 id=1）。
+        //   更新后布局（内容坐标）：
+        //     · 标定块 3 行：y ∈ [0,180)
+        //     · 行 0（改成高 200）：y ∈ [180, 380)
+        //     · 行 i（i≥1）：y ∈ [380 + (i-1)*60, 380 + i*60)
+        //   ⇒ 行 i 的起点 = 380 + (i-1)*60 = 320 + i*60
+        //   ★首版公式写成 140 + i*60（漏了标定块 180 与行0 的额外高度）⇒ 采样点系统性偏 2 行。
+        const CALIB_ROWS = 3
+        const rowStart = (i: number): number => (i === 0 ? CALIB_ROWS * 60 : CALIB_ROWS * 60 + 200 + (i - 1) * 60)
+        const probes: Array<{ y: number; row: number }> = []
+        for (const row of [24, 28, 32, 36]) {
+          const y = rowStart(row) - SCROLL + 20 // 行内偏 20px（避开边界）
+          if (y > 0 && y < 800) probes.push({ y, row })
+        }
+        const sampleOut = safeParseAny(
+          proteusSelfDraw.samplePixels?.(JSON.stringify(probes.map((p) => ({ x: 195, y: p.y })))) ?? '{}',
+        )
+        const pixels: string[] = (sampleOut?.pixels as string[]) ?? []
+        const mismatches: string[] = []
+        probes.forEach((p, i) => {
+          const got = pixels[i] ?? 'n/a'
+          const want = rowColor(p.row)
+          if (got.toUpperCase() !== want.toUpperCase()) mismatches.push(`y=${p.y} 行${p.row}: 期望 ${want} 实得 ${got}`)
+        })
+        results.push({
+          case: 'V5_pixel_after_scroll',
+          note: '★★像素级验证：滚动后屏幕颜色序列必须与几何一致（几何对 ≠ 屏幕对）',
+          items: ROWS, nodes: (m.node_count as number) ?? 0,
+          vue_ms: 0, to_request_ms: 0, serialize_ms: 0, host_ms: 0,
+          total_ms: 0, patch_count: 0, request_bytes: 0,
+          extra: {
+            deferred,
+            flushed_on_scroll: flushed,
+            scroll: SCROLL,
+            probes: probes.length,
+            pixels,
+            expected: probes.map((p) => rowColor(p.row)),
+            mismatches,
+            // ★三段采样（隔离"渲染本身坏" vs "滚动后坏"）
+            stageA_after_mount: { pixels: stageApix, expected: stageAexp },
+            // ★标定：纯红/纯绿/纯蓝三块（各自 y 段中心）
+            calib: calibration,
+            stageA_ok: stageApix.length === 3 && stageApix.every((v, i) => v.toUpperCase() === stageAexp[i]),
+            node_count: (m.node_count as number) ?? 0,
+            // ★判据：探针非空 + 补刷确实发生 + 颜色全对
+            verdict: probes.length > 0 && flushed > 0 && mismatches.length === 0 ? 'PASS' : 'FAIL',
           },
         })
       }
