@@ -226,6 +226,28 @@ export interface TemplateBindingRef {
   /** 该表达式所处的 v-for 作用域变量栈（自外向内） */
   scopes: string[]
   /**
+   * ★v-for 上下文（该绑定位于某个 v-for 行模板内时才有）
+   *
+   * 【为什么必须有（本仓实测的功能缺口）】v-for 内的绑定（如 `{{ item.title }}`）
+   *   若按普通槽位产出，它的 `nodeId` 是**模板级**的——而 v-for 的行会实例化 N 次，
+   *   根本没有单一固定 nodeId ⇒ 指令会写到"模板那个节点"上（错）。
+   *   ⇒ 这类绑定必须产出 `list-item` 槽位：由运行时按 (listId, itemKey, itemSlotId)
+   *     **解析出具体行的节点**（`ListRegistry` 的职责）。
+   */
+  listContext?: {
+    /** 该 v-for 的稳定 id（按出现顺序分配 ⇒ 产物可复现） */
+    listId: number
+    /** v-for 别名（`item in list` 的 `item`） */
+    scope: string
+    /** `:key` 的表达式（如 `item.id`）——运行时的**行标识字段**；无 `:key` 时为 undefined */
+    keyField?: string
+    /** 该 v-for 元素在模板序中的元素序号（供运行时算行内相对偏移） */
+    vforElementIndex: number
+    /** 是否就是 `:key` 绑定自身（它不是可更新的渲染属性，建槽位时跳过） */
+    isKeyBinding: boolean
+  }
+
+  /**
    * ★作用域别名 → 其**所属列表的源表达式根名**（`item` → `list`）
    *
    * 【为什么必须有（本仓实测：首版漏了它）】`{{ item.title }}` 的依赖是"列表某项的字段"，
@@ -276,6 +298,8 @@ export function collectTemplateBindings(source: string, filename = 'anonymous.vu
   }
 
   let nextElementIndex = 0
+  let nextListId = 0 // ★v-for 的稳定 id（按出现顺序 ⇒ 产物可复现）
+  type ListCtx = NonNullable<TemplateBindingRef['listContext']> | null
   const walk = (
     nodes: unknown[],
     scopes: string[],
@@ -283,6 +307,8 @@ export function collectTemplateBindings(source: string, filename = 'anonymous.vu
     scopeSources: Record<string, string> = {},
     /** ★当前所在元素（插值不是元素，它归属父元素） */
     parentElementIndex = 0,
+    /** ★当前所处的 v-for 上下文（外层为 null） */
+    listCtx: ListCtx = null,
   ): void => {
     for (const raw of nodes) {
       const n = raw as {
@@ -310,10 +336,22 @@ export function collectTemplateBindings(source: string, filename = 'anonymous.vu
       let nextScopes = scopes
       let nextBranch = inBranch
       let nextScopeSources = scopeSources
+      // ★该元素内所有绑定的 v-for 上下文：v-for 自身的**其它**绑定（:key/:class…）也属于该行
+      //   ⇒ 从 nextListCtx 的初值（外层上下文）与 v-for 分支新设的上下文合并取"最深"
+      let nextListCtx: ListCtx = listCtx
+      let activeListCtx: ListCtx = listCtx
 
       if (n.type === 1 /* ELEMENT */) {
         // ★每个元素（无论是否含绑定）都占一个序号——与 IR builder 的 DFS 编号一致
         const myElementIndex = nextElementIndex++
+        // ★先扫一遍该元素的 `:key`（v-for 的行标识字段）——必须在处理其它绑定**之前**拿到，
+        //   否则「:key 写在插值之后」的模板会让前面的绑定拿不到 keyField。
+        let keyFieldOfElement: string | undefined
+        for (const p of n.props ?? []) {
+          if (p.name === 'bind' && p.arg?.content === 'key' && p.exp?.content) {
+            keyFieldOfElement = p.exp.content.trim()
+          }
+        }
         for (const p of n.props ?? []) {
           const EXPR = 7 /* DIRECTIVE */
           const name = p.name
@@ -328,7 +366,23 @@ export function collectTemplateBindings(source: string, filename = 'anonymous.vu
             nextScopes = [...scopes, ...names]
             // v-for 的**源表达式**（`in` 之后那半）也是依赖（用**外层**作用域解析）
             const srcExpr = parts.slice(1).join(' ')
-            if (srcExpr) out.push(binding(srcExpr, 'v-for', 'list.items', tag, expLine, scopes, inBranch, scopeSources, myElementIndex))
+            if (srcExpr) {
+              out.push({
+                ...binding(srcExpr, 'v-for', 'list.items', tag, expLine, scopes, inBranch, scopeSources, myElementIndex),
+                // v-for 自身的**源绑定**是「整体换数据源」（list-data），不带 listContext
+              })
+            }
+            // ★建立行的 v-for 上下文：后续该元素（含自身其它绑定）与其子树内的绑定都带上它
+            nextListCtx = {
+              listId: nextListId++,
+              scope: names[0] ?? '',
+              keyField: keyFieldOfElement,
+              vforElementIndex: myElementIndex,
+              isKeyBinding: false,
+            }
+            // ★同一元素内**其余绑定**（:key / :class / 其它 prop）也属于该行 ⇒ 立即置为当前上下文
+            //   （v-for 在 props 里可能排在 :key 之后，故不能只靠循环开头的初值）
+            activeListCtx = nextListCtx
             // ★别名 → 列表源根名（`item in list` ⇒ item → list）
             const listRoot = srcExpr.trim().split('.')[0]?.replace(/[^\w$]/g, '') ?? ''
             if (listRoot) {
@@ -339,13 +393,13 @@ export function collectTemplateBindings(source: string, filename = 'anonymous.vu
           }
           // v-if / v-else-if：条件本身是依赖；★其**内部**属「运行时分支」（C5）
           if (name === 'if' || name === 'else-if') {
-            out.push(binding(String(expCode), `v-${name}`, 'visible', tag, expLine, scopes, inBranch, scopeSources, myElementIndex))
+            out.push(binding(String(expCode), `v-${name}`, 'visible', tag, expLine, scopes, inBranch, scopeSources, myElementIndex, activeListCtx ?? undefined))
             nextBranch = true
             continue
           }
           // v-show 与 v-if 不同：节点**始终在树内**，只是可见性切换 ⇒ 不算运行时分支
           if (name === 'show') {
-            out.push(binding(String(expCode), 'v-show', 'visible', tag, expLine, scopes, inBranch, scopeSources, myElementIndex))
+            out.push(binding(String(expCode), 'v-show', 'visible', tag, expLine, scopes, inBranch, scopeSources, myElementIndex, activeListCtx ?? undefined))
             continue
           }
           // 动态绑定（:x / v-bind:x / v-model）——★属性名在 arg 里
@@ -353,10 +407,26 @@ export function collectTemplateBindings(source: string, filename = 'anonymous.vu
             const arg = name === 'model' ? (p.arg?.content ?? 'modelValue') : (p.arg?.content ?? '')
             // 无 arg 的 v-bind="obj"（展开对象）：无法静态定位属性 ⇒ 记为 attrs（C2 交由解析结果判）
             const propKey = arg ? normalizePropKey(arg) : 'attr.spread'
-            out.push(binding(String(expCode), arg ? `:${arg}` : 'v-bind', propKey, tag, expLine, scopes, inBranch, scopeSources, myElementIndex))
+            const isKey = arg === 'key'
+            out.push(
+              binding(
+                String(expCode),
+                arg ? `:${arg}` : 'v-bind',
+                propKey,
+                tag,
+                expLine,
+                scopes,
+                inBranch,
+                scopeSources,
+                myElementIndex,
+                (activeListCtx ?? undefined),
+                // ★`:key` 自身标记（它不是可更新渲染属性 ⇒ 建槽位时跳过；但它的表达式是**行标识字段**）
+                isKey,
+              ),
+            )
           }
         }
-        walk((n.children ?? []) as unknown[], nextScopes, nextBranch, nextScopeSources, myElementIndex)
+        walk((n.children ?? []) as unknown[], nextScopes, nextBranch, nextScopeSources, myElementIndex, nextListCtx ?? listCtx)
         continue
       }
       // ★插值（type 5）本身不是元素：它归属**最近遍历到的元素**（INTERPOLATION 只出现在元素子节点里）
@@ -365,7 +435,9 @@ export function collectTemplateBindings(source: string, filename = 'anonymous.vu
         const c = n.content as { content?: string; loc?: { start?: { line?: number } } } | undefined
         const code = typeof c === 'object' ? c.content : (c as unknown as string)
         if (code) {
-          out.push(binding(String(code), '{{ }}', 'text.content', tag, c?.loc?.start?.line ?? line, scopes, inBranch, scopeSources, parentElementIndex))
+          out.push(
+            binding(String(code), '{{ }}', 'text.content', tag, c?.loc?.start?.line ?? line, scopes, inBranch, scopeSources, parentElementIndex, activeListCtx ?? undefined),
+          )
         }
         continue
       }
@@ -377,6 +449,9 @@ export function collectTemplateBindings(source: string, filename = 'anonymous.vu
   return out
 }
 
+/** v-for 上下文的「非 null」形态（供 binding() 的参数类型用） */
+type ListCtxArg = NonNullable<TemplateBindingRef['listContext']> | undefined
+
 function binding(
   code: string,
   where: string,
@@ -387,8 +462,22 @@ function binding(
   inRuntimeBranch: boolean,
   scopeSources: Record<string, string> = {},
   elementIndex = 0,
+  listContext: ListCtxArg = undefined,
+  isKeyBinding = false,
 ): TemplateBindingRef {
-  return { code: code.trim(), where, propKey, tag, line, scopes: [...scopes], inRuntimeBranch, scopeSources: { ...scopeSources }, elementIndex }
+  return {
+    code: code.trim(),
+    where,
+    propKey,
+    tag,
+    line,
+    scopes: [...scopes],
+    inRuntimeBranch,
+    scopeSources: { ...scopeSources },
+    elementIndex,
+    // ★`isKeyBinding` 只在该绑定自身是 `:key` 时为真（其余继承上下文）
+    listContext: listContext ? { ...listContext, isKeyBinding } : undefined,
+  }
 }
 
 /** 属性名 → IR 归一化 propKey（与 component-ir 约定对齐；未知前缀归 attr） */

@@ -86,6 +86,8 @@ export function buildVaporSubscriptions(source: string, filename = 'anonymous.vu
   const forceL0 = new Set(opts.forceL0Slots ?? [])
 
   let slotId = opts.startSlotId ?? 0
+  /** ★每个列表的「行模板内槽位序号」计数器（itemSlotId 的来源） */
+  const listSlotCounters = new Map<number, number>()
   const slotsBySource = new Map<number, SlotSubscription[]>()
   const evaluators: EvaluatorSpec[] = []
   const l0Slots: SubscriptionTable['l0Slots'] = []
@@ -127,6 +129,71 @@ export function buildVaporSubscriptions(source: string, filename = 'anonymous.vu
 
     const evaluatorId = evaluators.length
     evaluators.push(makeEvaluator(evaluatorId, ref.code, deps))
+
+    // ★★v-for 行内绑定 ⇒ 产出 **list-item 槽位**（方案 §2.3；本仓实测补的功能缺口）
+    //
+    // 【为什么不能当普通槽位】`{{ item.title }}` 的 nodeId 是**模板级**的，而 v-for 的行会实例化
+    //   N 次 ⇒ 没有单一固定 nodeId ⇒ 指令会写到"模板那个节点"上（几何/内容静默不对）。
+    //   ⇒ 产出 `list-item`：运行时按 (listId, itemKey, itemSlotId) 解析出**具体行**的节点。
+    //   `:key` 绑定自身**建槽位时跳过**——它是 diff 提示、不是可更新渲染属性；
+    //   但它的表达式已作为 `keyField` 记进上下文（运行时的行标识字段）。
+    const inList = ref.listContext && !ref.listContext.isKeyBinding
+    if (inList) {
+      const listId = ref.listContext!.listId
+      const itemSlotId = listSlotCounters.get(listId) ?? 0
+      listSlotCounters.set(listId, itemSlotId + 1)
+      const itemKind: 'style' | 'text' = ref.propKey.startsWith('text.') && ref.propKey !== 'text.color' && ref.propKey !== 'text.fontSize' ? 'text' : 'style'
+      // ★从依赖路径里取「相对行对象的字段名」（`item.title` → `title`）
+      const scope = ref.listContext!.scope
+      const relPath = deps.listRelative.find((r) => r.scope === scope)?.path ?? ''
+      const itemValueField = relPath.startsWith(`${scope}.`) ? relPath.slice(scope.length + 1) : undefined
+      // ★行标识字段：来自 `:key="item.id"`（相对路径 `id`）
+      const keyExpr = ref.listContext!.keyField
+      const itemKeyField = keyExpr && keyExpr.startsWith(`${scope}.`) ? keyExpr.slice(scope.length + 1) : undefined
+      const itemSlot: SlotSubscription = {
+        slotId: mySlot,
+        nodeId: myNode, // 模板级序号（诊断用；实际目标由 ListRegistry 解析）
+        evaluatorId,
+        tier: decision.tier,
+        kind: 'list-item',
+        propKey: ref.propKey,
+        listId,
+        itemSlotId,
+        itemKind,
+        itemValueField,
+        itemKeyField,
+        scope, // ★v-for 别名（运行时行作用域求值用）
+      }
+      slotRecords.push({ slot: itemSlot, deps, ref })
+      decisions.push({
+        slotId: mySlot,
+        snippet: `${ref.where}="${ref.code}"`,
+        tier: decision.tier,
+        reason: `${decision.reason} · ★行内槽位（listId=${listId} itemSlotId=${itemSlotId} key=${ref.listContext!.keyField ?? '<无 :key>'}）`,
+        mark: decision.forced ? '⚠' : decision.tier === 'L1' ? '✓' : '✗',
+      })
+      if (decision.tier === 'L0') {
+        l0Slots.push({ slotId: mySlot, nodeId: myNode, propKey: ref.propKey, reason: decision.reason })
+        continue
+      }
+      // 挂到列表源（行由该列表驱动）
+      const listRoots = [...new Set(deps.listRelative.map((r) => ref.scopeSources[r.scope] ?? r.scope))]
+      for (const rootName of listRoots) {
+        const src = srcScan.byName.get(rootName)
+        if (!src) continue
+        const list = slotsBySource.get(src.sourceId) ?? []
+        if (!list.some((x) => x.slotId === mySlot)) list.push(itemSlot)
+        slotsBySource.set(src.sourceId, list)
+      }
+      const keyWarn = ref.listContext!.keyField ? '' : '（★该 v-for 无 :key ⇒ 行标识不稳定，运行时须用下标兜底——方案坑位 #5）'
+      notes.push(`slot_${mySlot} 行内槽位：${ref.code} → listId=${listId} itemSlotId=${itemSlotId}${keyWarn}`)
+      continue
+    }
+    if (ref.listContext?.isKeyBinding) {
+      // :key 不建槽位（非渲染属性）——跳过但要留痕，便于 explain 追查
+      notes.push(`:key="${ref.code}" 不建槽位（行标识字段，非可更新渲染属性）`)
+      continue
+    }
 
     const slot: SlotSubscription = { slotId: mySlot, nodeId: myNode, evaluatorId, tier: decision.tier, kind, propKey: ref.propKey }
     slotRecords.push({ slot, deps, ref })

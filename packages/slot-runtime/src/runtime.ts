@@ -15,7 +15,9 @@
 //   生产环境用 Vue 的 `watch`/`effect` 接，测试用同步桩。这样：
 //     · 本模块可独立测试（不依赖 Vue 版本）
 //     · 换响应式实现（如方案 §8 讨论的 alien-signals）不用改这里
+import { OpCode } from './opcode'
 import type { SlotKind, UpdateTier } from './opcode'
+import type { ListRegistry } from './list-registry'
 import { SlotRuntime, createSlot } from './slot'
 import type { Slot } from './slot'
 import type { EvaluatorSpec, SubscriptionTable } from './table'
@@ -56,6 +58,8 @@ export class VaporRuntime {
   private readonly slotById = new Map<number, { slot: Slot; spec: SubscriptionTable['sources'][number]['slots'][number]; evalId: number }>()
   private readonly evalImpls = new Map<number, (ctx: EvalContext) => unknown>()
   private readonly sourcesOfSlot = new Map<number, string[]>()
+  /** ★行内槽位的按键值缓存（`slotId:key` → 上次值）——只发变化行 */
+  private readonly itemValueCache = new Map<string, unknown>()
   private loaded = false
 
   constructor(
@@ -63,6 +67,13 @@ export class VaporRuntime {
     readonly rt: SlotRuntime,
     /** 求值函数的**实现**（由 evaluator 声明重建；id → 函数） */
     private readonly evaluators: Map<number, (ctx: EvalContext) => unknown>,
+    /**
+     * ★V4：列表项注册表（可选）
+     *
+     * 提供它 ⇒ `list-item` 槽位在发指令前解析出**具体行的节点**，从而发普通 SET_STYLE/SET_TEXT
+     *（核心无需懂列表）；不提供或未登记 ⇒ 回退 `LIST_UPDATE`（宿主自持映射的场景）。
+     */
+    private readonly registry?: ListRegistry,
   ) {}
 
   /**
@@ -148,18 +159,25 @@ export class VaporRuntime {
         // 每个槽位只建一次（一个源可能出现在多个 slot 里；同一槽位也可能被多个源引用）
         let slot = this.slots.get(spec.slotId)
         if (!slot) {
+          // ★V4：列表行内槽位用**编译器产出的真实** listId/itemSlotId（V3 时是占位值）
+          //   —— 配合 `ListRegistry` 把 (listId, itemKey, itemSlotId) 解析成具体行的节点。
           slot = createSlot(
             {
               id: spec.slotId,
               nodeId: spec.nodeId,
               kind: spec.kind as SlotKind,
               keyId: this.rt.keys.intern(spec.propKey),
-              listId: spec.slotId, // ★列表槽位：listId 由调用方在 nodeId 语义里携带（V3 简化）
-              listSlotId: spec.slotId,
+              listId: spec.listId ?? spec.slotId,
+              listSlotId: spec.itemSlotId ?? spec.slotId,
+              itemKind: spec.itemKind,
+              itemValueField: spec.itemValueField,
+              itemKeyField: spec.itemKeyField,
+              scope: spec.scope,
             },
             this.rt.keys,
             this.rt.strings,
             undefined as unknown,
+            this.registry, // ★传入注册表（缺省 ⇒ list-item 回退 LIST_UPDATE，保持 V3 行为）
           )
           this.slots.set(spec.slotId, slot)
         }
@@ -192,14 +210,89 @@ export class VaporRuntime {
   writeSlotsOfSource(sourceName: string, ctx: EvalContext): void {
     for (const src of this.table.sources) {
       if (src.sourceName !== sourceName) continue
+      // ★★列表行内槽位走**独立通道**（本仓实测的设计纠正，我为此试错三轮）
+      //
+      // 【为什么不能走"脏槽位"】`LIST_UPDATE` 的语义是「(listId, itemKey, slotId, value)」
+      //   ——**每行一条指令**；而"一个槽位持有一个值"的模型**装不下 N 行**
+      //   （写 N 次只剩最后一次；且 `Object.is` 短路会误判成"没变"）。
+      //   ⇒ 正解：**按行迭代** + 用**按键缓存的上一轮值**做 diff + 只发变化行的指令。
+      //     这保住 O(1)（只改 1 行 ⇒ 只发 1 条），且不误用槽位模型。
+      this.writeListItems(src, ctx)
+
       for (const spec of src.slots) {
+        if (spec.kind === 'list-item') continue // 已由上方通道处理
+        // ★`list-data` 也**不走标量写值**（本仓实测：它是报错源，不是 list-item）
+        //
+        // 【为什么】`LIST_SET` 的载荷是**编译期分配的「数据源引用号」**（数字），
+        //   不是数组本身——「整体换数据源」是结构性操作，不是"把数组写进一个槽位"。
+        //   把它当标量写 ⇒ 求值器返回数组 ⇒ `toF32(数组)` 抛错（本仓实测就是这个）。
+        //   ⇒ 结构性的 LIST_SET/LIST_SPLICE 属独立课题（需数据源引用协议），当前显式跳过。
+        if (spec.kind === 'list-data') continue
         const entry = this.slotById.get(spec.slotId)
         const impl = this.evaluators.get(spec.evaluatorId)
         if (!entry || !impl) continue
-        const next = impl(ctx)
-        // ★直写：setSlot 内部 Object.is 短路 + 标脏 + 排帧（V1 已实现）
-        this.rt.setSlot(entry.slot, next as never)
+        this.rt.setSlot(entry.slot, impl(ctx) as never)
       }
+    }
+  }
+
+  /**
+   * ★列表行内槽位通道：按行求值 → 与上一轮**按 key 缓存**的值 diff → 只发变化行
+   *
+   * 【关键：行作用域求值】`item.w` 的求值需要**当前行**绑定到 v-for 作用域。
+   *   故每行构造一个 `rowCtx`：`read(scope)` 返回该行，其余名透传原 ctx。
+   *   （编译器在槽位上给了 `scope` 才能这么做——见 SlotSubscription.scope）
+   */
+  private writeListItems(src: SubscriptionTable['sources'][number], ctx: EvalContext): void {
+    const itemSlots = src.slots.filter((x) => x.kind === 'list-item')
+    if (itemSlots.length === 0) return
+    const rows = ctx.read(src.sourceName)
+    if (!Array.isArray(rows)) return
+
+    for (const spec of itemSlots) {
+      const impl = this.evaluators.get(spec.evaluatorId)
+      if (!impl) continue
+      const scope = spec.scope ?? ''
+      for (let i = 0; i < rows.length; i++) {
+        const row = rows[i] as Record<string, unknown>
+        // ★行作用域上下文：v-for 别名 → 当前行
+        const rowCtx: EvalContext = scope
+          ? { read: (n) => (n === scope ? row : ctx.read(n)) }
+          : ctx
+        const value = impl(rowCtx)
+        // ★行标识：优先 `:key` 字段；无 `:key` 用下标（不稳定——构表时已产出诊断）
+        const key = spec.itemKeyField && row && row[spec.itemKeyField] !== undefined ? String(row[spec.itemKeyField]) : String(i)
+        // ★按键 diff：只发**真的变了**的行（保住「改 1 行 = 1 条指令」）
+        const cacheKey = `${spec.slotId}:${key}`
+        if (this.itemValueCache.get(cacheKey) === value) continue
+        this.itemValueCache.set(cacheKey, value)
+        this.emitListItem(spec, key, value)
+      }
+    }
+  }
+
+  /** 发一条行内更新指令：解析得到 nodeId 就发普通指令，否则回退 LIST_UPDATE */
+  private emitListItem(spec: SubscriptionTable['sources'][number]['slots'][number], key: string, value: unknown): void {
+    const nodeId = this.registry?.resolveNode(spec.listId ?? -1, key, spec.itemSlotId ?? -1)
+    if (nodeId !== undefined) {
+      if ((spec.itemKind ?? 'style') === 'text') {
+        this.rt.buffer.push({ op: OpCode.SET_TEXT, nodeId, textRef: this.rt.strings.intern(String(value)) })
+      } else {
+        this.rt.buffer.push({
+          op: OpCode.SET_STYLE,
+          nodeId,
+          keyId: this.rt.keys.intern(spec.propKey),
+          value: typeof value === 'number' ? value : Number(value) || 0,
+        })
+      }
+    } else {
+      this.rt.buffer.push({
+        op: OpCode.LIST_UPDATE,
+        listId: spec.listId ?? -1,
+        itemKeyRef: this.rt.strings.intern(key),
+        slotId: spec.itemSlotId ?? -1,
+        value: typeof value === 'number' ? value : Number(value) || 0,
+      })
     }
   }
 
@@ -208,6 +301,12 @@ export class VaporRuntime {
     for (const src of this.table.sources) {
       this.writeSlotsOfSource(src.sourceName, ctx)
     }
+  }
+
+  /** 取某源的行数组（列表源 ⇒ 数组；非数组返回空）——仅供「无 :key 时用下标兜底」 */
+  private rowsOfSource(sourceName: string, ctx: EvalContext): unknown[] {
+    const v = ctx.read(sourceName)
+    return Array.isArray(v) ? v : []
   }
 
   /** 某槽位是否已建立订阅（诊断：确认"这个槽位真的被接管了"） */

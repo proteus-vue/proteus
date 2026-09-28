@@ -50,6 +50,12 @@ export interface SlotSpec {
    *   缺省 'style'（列表项里样式绑定更常见）。
    */
   itemKind?: 'style' | 'text'
+  /** 行对象里的**取值字段**（`item.w` ⇒ 'w'）——发射器据此组 `{key, value}` 的 value */
+  itemValueField?: string
+  /** 行对象里的**标识字段**（`:key="item.id"` ⇒ 'id'）——组 `{key, value}` 的 key */
+  itemKeyField?: string
+  /** v-for 别名（行作用域求值用） */
+  scope?: string
 }
 
 /**
