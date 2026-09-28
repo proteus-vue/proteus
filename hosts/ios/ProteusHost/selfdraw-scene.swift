@@ -176,6 +176,24 @@ func physFootprintMB() -> Double {
     ///   `materialized: false` 时 rect 仍给出（**核心几何是全量的**）——这本身就是判据：
     ///   屏外的行"有几何、无层"。 */
     func virtualProbe(_ rowIndex: Double) -> String
+    /// ★★**几何 + 字体探针**（坐标与字体名都必须来自宿主测量，不手算——本仓纪律）
+    ///
+    /// 入参：`{nodes?:[节点 id]}`。出参：每个节点的**屏幕 rect**（核心绝对几何 + 内容偏移）、
+    ///   **层宽高**、**层上实际字体名**（`CATextLayer.font` 反查）。
+    ///
+    /// 【为什么字体名要读层（判据强度）】几何宽度不同只能证明"**度量**时用了不同字体"；
+    ///   "**绘制**时也用了" 是另一件事——本仓已有同族教训（度量与绘制分叉 ⇒ 字被裁而报告全绿）。
+    ///   读层上的 `font`/`fontSize` 才闭环到"屏幕上真的会这样画"。
+    func measureProbe(_ json: String) -> String
+    /// ★★**拆掉当前树**（销毁核心句柄 + 清层 + 重置 diff 基线）——下一次 `mount` 走**真全量**
+    ///
+    /// 【为什么需要（本仓实测的路径语义）】`mount` 是**增量语义**：`handle != 0` 时它先做
+    ///   节点 diff，且**只处理布局字段**（绘制属性在该路径上是"建层时的快照"，不参与更新）。
+    ///   ⇒ 紧接着再 `mount` 一棵"只改了字体族"的树 ⇒ 布局补丁为空 ⇒ **什么都不做**
+    ///   （现象：层上的字体仍是上一次的）。V13 的"全 system 反例对照"正是被这一点坑到
+    ///   ——两组读数完全相同，差点被读成"字族不影响度量"。
+    ///   ⇒ 需要真正重建时（对照实验、换主题）必须**显式拆树**：语义明确，不让调用方猜。
+    func clearTree() -> String
     /// ★V4：待补刷统计（诊断 + 滚动用例的判据）
     func pendingStats() -> String
     /// ★★V5：**批量像素采样**（渲染一次读多点）——像素级验证的判据
@@ -298,9 +316,10 @@ final class SelfDrawView: UIView {
             tl.string = text
             let fs = fontSize ?? 14
             let fw = (style["fontWeight"] as? CGFloat) ?? 400
-            // ★字体由统一构造器给出（与度量同源——见 `font(size:weight:)` 注释）
-            let ufont = SelfDrawBridge.font(size: fs, weight: fw)
-            tl.font = CGFont(ufont.fontName as CFString)
+            // ★字体由统一构造器给出（与度量同源——见 `font(size:weight:family:)` 注释）
+            let ufont = SelfDrawBridge.font(size: fs, weight: fw,
+                                            family: (style["fontFamily"] as? String) ?? "system")
+            tl.font = SelfDrawBridge.cgFont(of: ufont)
             tl.fontSize = fs
             tl.foregroundColor = (style["color"] as? String).flatMap(parseHexColor)?.cgColor ?? UIColor.white.cgColor
             tl.alignmentMode = .left
@@ -496,17 +515,12 @@ final class SelfDrawView: UIView {
         return created
     }
 
-    /// 从 splice 的节点描述符里取**绘制字段**（与全量路径 `render` 的取法同款：
-    /// 只认 backgroundColor/color/text/fontSize/borderRadius，其余不进层）
+    /// 从 splice 的节点描述符里取**绘制字段**
+    ///
+    /// ★本方法是 `SelfDrawView.styleOf` 的**转发**（本仓纪律：同一语义一处实现）——
+    ///   两份实现必然分叉，且分叉表现为"增量插入的行与全量重建的行外观不一致"（静默错，只有像素比对能发现）。
     private func spliceStyleOf(_ n: [String: Any]) -> [String: Any] {
-        var style: [String: Any] = [:]
-        for k in ["backgroundColor", "color", "text"] {
-            if let v = n[k] as? String { style[k] = v }
-        }
-        if let fs = n["fontSize"] as? Double { style["fontSize"] = CGFloat(fs) }
-        if let fw = n["fontWeight"] as? Double { style["fontWeight"] = CGFloat(fw) }   // ★字重（见 font(size:weight:) 注释）
-        if let br = n["borderRadius"] as? Double { style["borderRadius"] = CGFloat(br) }
-        return style
+        SelfDrawView.styleOf(n)
     }
 
     /// ★★最近一次 splice 的层维护读数（诊断 + 判据："层真的被增删了"）
@@ -1001,10 +1015,12 @@ final class SelfDrawView: UIView {
             }
             let fs = (paint["fontSize"] as? CGFloat) ?? tl.fontSize
             let fw = (paint["fontWeight"] as? CGFloat) ?? 400
-            if paint["fontSize"] != nil || paint["fontWeight"] != nil {
-                let ufont = SelfDrawBridge.font(size: fs, weight: fw)
+            // ★字族也是字体维度：paint 里带它（或带 fontSize/weight）都要重建字体
+            let fam = (paint["fontFamily"] as? String) ?? metaByNodeId[id]?["fontFamily"] as? String ?? "system"
+            if paint["fontSize"] != nil || paint["fontWeight"] != nil || paint["fontFamily"] != nil {
+                let ufont = SelfDrawBridge.font(size: fs, weight: fw, family: fam)
                 // ★字体变了 ⇒ 必须同时更新 `font` 与 `fontSize`（CATextLayer 两者独立）
-                tl.font = CGFont(ufont.fontName as CFString)
+                tl.font = SelfDrawBridge.cgFont(of: ufont)
                 tl.fontSize = fs
             }
         }
@@ -1333,7 +1349,7 @@ final class SelfDrawView: UIView {
     /// 把节点规格里的绘制字段取出来（与全量路径同款；单一实现避免分叉）
     static func styleOf(_ n: [String: Any]) -> [String: Any] {
         var style: [String: Any] = [:]
-        for k in ["backgroundColor", "color", "text"] {
+        for k in ["backgroundColor", "color", "text", "fontFamily"] {
             if let v = n[k] as? String { style[k] = v }
         }
         if let fs = n["fontSize"] as? Double { style["fontSize"] = CGFloat(fs) }
@@ -1343,6 +1359,23 @@ final class SelfDrawView: UIView {
         if let br = n["borderRadius"] as? Double { style["borderRadius"] = CGFloat(br) }
         if let br = n["borderRadius"] as? CGFloat { style["borderRadius"] = br }
         return style
+    }
+
+    /// ★取某节点建层时记录的 **fontFamily**（文本补丁的度量要用它——与绘制同源）
+    func fontFamilyOf(id: Int) -> String? {
+        metaByNodeId[id]?["fontFamily"] as? String
+    }
+
+    /// 全部已物化节点 id（探针缺省作用域）
+    func allNodeIds() -> [Int] { Array(layersById.keys).sorted() }
+
+    /// 取节点对应的层（探针用——`layersById` 是 private）
+    func layerFor(id: Int) -> CALayer? { layersById[id] }
+
+    /// ★节点在**屏幕坐标**下的 rect（内容坐标 − 内容偏移）——供像素/布局探针
+    func screenRect(of id: Int) -> CGRect? {
+        guard let abs = rectsByNodeId[id] else { return nil }
+        return abs.offsetBy(dx: -contentOffset.x, dy: -contentOffset.y)
     }
 
     /// ★★**复用层时必须清空全部可绘制属性**（本仓纪律：复用 = 完全重配，不是"覆盖部分字段"）
@@ -1359,7 +1392,9 @@ final class SelfDrawView: UIView {
                 let fs = (style["fontSize"] as? CGFloat) ?? 14
                 let fw = (style["fontWeight"] as? CGFloat) ?? 400
                 tl.string = text
-                tl.font = CGFont(SelfDrawBridge.font(size: fs, weight: fw).fontName as CFString)
+                tl.font = SelfDrawBridge.cgFont(of: SelfDrawBridge.font(
+                    size: fs, weight: fw,
+                    family: (style["fontFamily"] as? String) ?? "system"))
                 tl.fontSize = fs
                 tl.foregroundColor = (style["color"] as? String).flatMap(parseHexColor)?.cgColor
                     ?? UIColor.white.cgColor
@@ -1594,20 +1629,145 @@ final class SelfDrawBridge: NSObject, SelfDrawExports {
     ///     字体构造与度量同处一类，`makeLayer` 经 `SelfDrawBridge.font` 取同一支字体。
     ///
     /// - Parameter weight: CSS 口径字重（400 = normal，700 = bold）
-    static func font(size: CGFloat, weight: CGFloat) -> UIFont {
+    /// - Parameter family: **语义角色**（`system`/`serif`/`monospace`/`rounded`/`condensed`）
+    ///
+    ///   ★★**为什么收角色而不是 CSS 原始清单**：见适配器 `SelfDrawNodeSpec.fontFamily` 注释——
+    ///   CSS 是候选清单且平台字体名不同，解析与回退规则必须**只写一遍**（在适配器里），
+    ///   宿主只做「角色 → 平台字体」这一件平台相关的事。
+    ///
+    ///   ★iOS 的角色映射（不确定的名字一律**不猜**——用系统 API 查，查不到回退 system 并计数）：
+    ///   | 角色 | iOS 映射 |
+    ///   |---|---|
+    ///   | `system` | `UIFont.systemFont(ofSize:weight:)`（含 weight 变体） |
+    ///   | `serif` | `UIFont(name: "Times New Roman", size:)`；缺则 `UIFontDescriptor.withDesign(.serif)` |
+    ///   | `monospace` | `UIFont.monospacedSystemFont(ofSize:weight:)`（iOS 13+，最稳） |
+    ///   | `rounded` | `UIFontDescriptor.withDesign(.rounded)` |
+    ///   | `condensed` | `UIFontDescriptor.withDesign(.condensed)` |
+    ///   ⚠ 设计族（serif/rounded/condensed）经 descriptor 拿到的字体**可能不带 weight 变体**
+    ///     ⇒ 实现里**先试设计族、再用 `withSymbolicTraits` 叠字重**，失败则按角色回退系统族
+    ///     ——不静默混用（混用 = 度量与绘制看着都对但字长得不对，属像素级差异）。
+    static func font(size: CGFloat, weight: CGFloat, family: String = "system") -> UIFont {
+        let base = systemFont(size: size, weight: weight)
+        switch family {
+        case "system":
+            return base
+        case "monospace":
+            // ★等宽走专用 API（iOS 13+）：`monospacedSystemFont` 同时保留字重语义
+            return UIFont.monospacedSystemFont(ofSize: size, weight: uiFontWeight(weight))
+        case "serif":
+            if let f = UIFont(name: "Times New Roman", size: size) {
+                return adjustWeight(f, weight) ?? f
+            }
+            return designFont(size: size, weight: weight, design: .serif) ?? base
+        case "rounded":
+            return designFont(size: size, weight: weight, design: .rounded) ?? base
+        case "condensed":
+            // ★注意：`SystemDesign` 枚举里**没有** condensed（实测 SDK：只有 default/rounded/
+            //   serif/monospaced）⇒ 用 `UIFontDescriptorTraitCondensed` **符号特征**表达
+            //   （该常量在 iOS 13+ 可用，与本宿主最低版本相符）。
+            //   取不到则**显式回退并计数**（不悄悄用 system 而不留痕迹）
+            guard let d = UIFont.systemFont(ofSize: size).fontDescriptor.withSymbolicTraits(.traitCondensed) else {
+                fontFamilyFallbackCount += 1
+                lastUnknownFontFamily = "condensed@no-face"
+                return base
+            }
+            return UIFont(descriptor: d, size: size)
+        default:
+            // ★未知角色：**显式回退 + 计数**（不静默）——两端契约不一致时必须可见
+            fontFamilyFallbackCount += 1
+            lastUnknownFontFamily = family
+            return base
+        }
+    }
+
+    /// CSS 字重 → `UIFont.Weight`（与 `systemFont(size:weight:)` 同口径——单一映射表）
+    private static func uiFontWeight(_ weight: CGFloat) -> UIFont.Weight {
+        if weight >= 700 { return .bold }
+        if weight >= 600 { return .semibold }
+        if weight <= 300 { return .light }
+        return .regular
+    }
+
+    /// 系统字体（按字重档位取变体）——`font(size:weight:family:)` 的 system 分支
+    private static func systemFont(size: CGFloat, weight: CGFloat) -> UIFont {
         if weight >= 700 { return UIFont.boldSystemFont(ofSize: size) }
         if weight >= 600 { return UIFont.systemFont(ofSize: size, weight: .semibold) }
         if weight <= 300 { return UIFont.systemFont(ofSize: size, weight: .light) }
         return UIFont.systemFont(ofSize: size)
     }
 
-    static func measureText(_ text: String, fontSize: CGFloat, fontWeight: CGFloat = 400) -> CGSize {
+    /// 用 `UIFontDescriptor` 的**设计族**取字体（serif/rounded/condensed），并尽量叠上字重
+    private static func designFont(size: CGFloat, weight: CGFloat, design: UIFontDescriptor.SystemDesign) -> UIFont? {
+        guard let d0 = UIFont.systemFont(ofSize: size).fontDescriptor.withDesign(design) else { return nil }
+        // ★先把字重叠到设计族的 descriptor 上（trait 会挑同族更粗/更细的一支）；
+        //   失败则退回设计族默认字重（**不混用系统族**——那会让"字族生效了"变成假象）
+        if let withTrait = d0.withSymbolicTraits(symbolicTraits(weight)) {
+            return UIFont(descriptor: withTrait, size: size)
+        }
+        return UIFont(descriptor: d0, size: size)
+    }
+
+    /// 字重 → `UIFontDescriptor.SymbolicTraits`（仅粗/常规/细三档，与 §字重档位同口径）
+    private static func symbolicTraits(_ weight: CGFloat) -> UIFontDescriptor.SymbolicTraits {
+        var t: UIFontDescriptor.SymbolicTraits = []
+        if weight >= 600 { t.insert(.traitBold) }
+        else if weight <= 300 { t.insert(.traitLooseLeading) }   // 近似"细"（CJK 无真轻体时的安全选择）
+        return t
+    }
+
+    /// 给指定字体**叠字重**（如 Times New Roman + bold）；无对应 face 则返回 nil（调用方回退）
+    private static func adjustWeight(_ font: UIFont, _ weight: CGFloat) -> UIFont? {
+        guard weight >= 600 else { return font }
+        guard let d = font.fontDescriptor.withSymbolicTraits(.traitBold) else { return nil }
+        return UIFont(descriptor: d, size: font.pointSize)
+    }
+
+    /// ★★`UIFont` → `CGFont`（`CATextLayer.font` 需要它）——**必须走 CTFont，不能直接 CGFont(name)**
+    ///
+    /// 【为什么（本仓实测的真缺陷，被 V13 抓到）】系统私有字体名**以点开头**
+    ///   （`.SFUI-Regular` / `.SFMono-Regular`）——`CGFont(name)` 对它们**返回 nil**，
+    ///   而 `CATextLayer.font = nil` ⇒ 该层**回退默认字体**。
+    ///   现象：**度量用等宽、绘制用默认体**（本仓 V13 实测 `monospace` 行 `font_name` 为空）
+    ///   ⇒ 正是本仓反复吃过的"度量与绘制分叉"（字被裁或留白，而几何断言全绿）。
+    ///   ⇒ 正解：`CTFont` 能解析这些名字（`CTFontCreateWithFontDescriptor` 更稳），
+    ///     再经 `CTFontCopyGraphicsFont` 取真正的 `CGFont`。
+    static func cgFont(of font: UIFont) -> CGFont? {
+        // ① 先试直接按名构造（公开字体名走这条，最直接）
+        if let cg = CGFont(font.fontName as CFString) { return cg }
+        // ② 私有名/别名 ⇒ 经 CTFont 解析（descriptor 路径对系统字体最可靠）
+        let ct = CTFontCreateWithFontDescriptor(font.fontDescriptor as CTFontDescriptor, font.pointSize, nil)
+        // ★`CTFontCopyGraphicsFont` 在 Swift 里返回**非可选** `CGFont`（它保证有图形字体；
+        //   失败路径是 CTFont 本身拿不到——已由上面 descriptor 构造保证）
+        return CTFontCopyGraphicsFont(ct, nil)
+        // ③ 仍失败 ⇒ **计数**（不静默：绘制字体会与度量分叉，必须可观测）
+        cgFontFallbackCount += 1
+        lastCGFontFailure = font.fontName
+        return nil
+    }
+
+    /// `CGFont` 解析失败次数与最后失败的名字（诊断：非零即"度量/绘制分叉"的前兆）
+    private(set) static var cgFontFallbackCount = 0
+    private(set) static var lastCGFontFailure = ""
+    static func resetFontFamilyStats() {
+        fontFamilyFallbackCount = 0
+        lastUnknownFontFamily = ""
+        cgFontFallbackCount = 0
+        lastCGFontFailure = ""
+    }
+
+    /// 字体族回退计数（诊断：证明"未知角色"这条路径真的被走到过 / 为 0 证明契约一致）
+    private(set) static var fontFamilyFallbackCount = 0
+    private(set) static var lastUnknownFontFamily = ""
+
+    static func measureText(_ text: String, fontSize: CGFloat, fontWeight: CGFloat = 400,
+                            fontFamily: String = "system") -> CGSize {
         if text.isEmpty { return .zero }
-        // ★缓存键必须含**字重**（本仓实测的同一类缺陷：键不含某维度 ⇒ 不同字体共用度量 ⇒ 静默错几何）
-        let key = "\(fontSize)\u{1}\(fontWeight)\u{1}\(text)"
+        // ★缓存键必须含**字重与字族**（本仓实测的同一类缺陷：键不含某维度 ⇒ 不同字体共用度量 ⇒ 静默错几何）
+        //   ★三层维度与适配器 `fontSignature` 的输入**逐项对应**（新增维度必须两边同时加）
+        let key = "\(fontSize)\u{1}\(fontWeight)\u{1}\(fontFamily)\u{1}\(text)"
         if let hit = measureCache[key] { measureCacheHits += 1; return hit }
         measureCacheMisses += 1
-        let font = SelfDrawBridge.font(size: fontSize, weight: fontWeight)
+        let font = SelfDrawBridge.font(size: fontSize, weight: fontWeight, family: fontFamily)
         let attrs: [NSAttributedString.Key: Any] = [.font: font]
         let size = (text as NSString).size(withAttributes: attrs)
         // ★向上取整到整点：真机实测文本宽度常带小数（如 47.33pt），
@@ -1676,12 +1836,14 @@ final class SelfDrawBridge: NSObject, SelfDrawExports {
 
         // ① 文本度量 + ② 核心建树（与全量 mount 同一条路——几何口径必须完全一致）
         SelfDrawBridge.resetMeasureStats()
+        SelfDrawBridge.resetFontFamilyStats()
         var textMeasures: [String: [String: Double]] = [:]
         for n in nodes {
             guard let text = n["text"] as? String, !text.isEmpty, let id = n["id"] as? Int else { continue }
             let fs = (n["fontSize"] as? Double).map { CGFloat($0) } ?? 14
             let fw = (n["fontWeight"] as? Double).map { CGFloat($0) } ?? 400
-            let sz = SelfDrawBridge.measureText(text, fontSize: fs, fontWeight: fw)
+            let fam = (n["fontFamily"] as? String) ?? "system"
+            let sz = SelfDrawBridge.measureText(text, fontSize: fs, fontWeight: fw, fontFamily: fam)
             textMeasures["\(id)"] = ["width": Double(sz.width), "height": Double(sz.height)]
         }
         let req: [String: Any] = [
@@ -1828,6 +1990,40 @@ final class SelfDrawBridge: NSObject, SelfDrawExports {
         return jsonString(["ok": true, "pool_capacity": view.layerPoolCapacity])
     }
 
+    /// 见协议声明（`measureProbe`）——节点几何 + **层上实际字体名**
+    ///
+    /// 【为什么要读"层上"的字体名】见协议注释：几何宽度只能证明度量侧；
+    ///   本仓已有"度量与绘制分叉 ⇒ 字被裁而报告全绿"的同族教训。
+    func measureProbe(_ json: String) -> String {
+        guard let view = view else { return "{\"ok\":false,\"error\":\"无视图\"}" }
+        var ids: [Int] = []
+        if let d = json.data(using: .utf8),
+           let o = (try? JSONSerialization.jsonObject(with: d)) as? [String: Any],
+           let raw = o["nodes"] as? [Int] {
+            ids = raw
+        }
+        if ids.isEmpty { ids = view.allNodeIds() }
+        var out: [String: Any] = [:]
+        for id in ids {
+            guard let layer = view.layerFor(id: id) else { out["\(id)"] = ["layer_missing": true]; continue }
+            var e: [String: Any] = [
+                "layer_w": Double(layer.frame.width), "layer_h": Double(layer.frame.height),
+            ]
+            if let tl = layer as? CATextLayer {
+                e["string"] = (tl.string as? String) ?? ""
+                // ★层上**实际**字体（CGFont 描述含字体名）——"绘制侧真的用了这个字体"的硬证据
+                e["font_name"] = tl.font.map { String(describing: $0) } ?? ""
+                e["font_size"] = Double(tl.fontSize)
+            }
+            if let screen = view.screenRect(of: id) {
+                e["screen_x"] = Double(screen.minX); e["screen_y"] = Double(screen.minY)
+                e["screen_w"] = Double(screen.width); e["screen_h"] = Double(screen.height)
+            }
+            out["\(id)"] = e
+        }
+        return jsonString(["ok": true, "nodes": out, "content_offset_y": Double(view.contentOffset.y)])
+    }
+
     /// 见协议声明（`virtualProbe`）
     func virtualProbe(_ rowIndex: Double) -> String {
         guard let view = view, view.isVirtual else {
@@ -1895,7 +2091,9 @@ final class SelfDrawBridge: NSObject, SelfDrawExports {
                 // fontSize / fontWeight 取宿主建层时留下的 meta（与全量渲染同源，不猜默认值）
                 let fs = (view.fontSizeOf(id: id)).map { CGFloat($0) } ?? 14
                 let fw = (view.fontWeightOf(id: id)).map { CGFloat($0) } ?? 400
-                let sz = SelfDrawBridge.measureText(text, fontSize: fs, fontWeight: fw)
+                // ★字族也取宿主 meta（与绘制同源）——漏了它 ⇒ 度量的字体与绘制的字体不同
+                let fam = view.fontFamilyOf(id: id) ?? "system"
+                let sz = SelfDrawBridge.measureText(text, fontSize: fs, fontWeight: fw, fontFamily: fam)
                 measures["\(id)"] = ["width": Double(sz.width), "height": Double(sz.height)]
             }
         }
@@ -2040,7 +2238,8 @@ final class SelfDrawBridge: NSObject, SelfDrawExports {
                     guard let text = n["text"] as? String, !text.isEmpty, let id = n["id"] as? Int else { continue }
                     let fontSize = (n["fontSize"] as? Double).map { CGFloat($0) } ?? 14
                     let fw = (n["fontWeight"] as? Double).map { CGFloat($0) } ?? 400
-                    let sz = SelfDrawBridge.measureText(text, fontSize: fontSize, fontWeight: fw)
+                    let fam = (n["fontFamily"] as? String) ?? "system"
+                    let sz = SelfDrawBridge.measureText(text, fontSize: fontSize, fontWeight: fw, fontFamily: fam)
                     measures["\(id)"] = ["width": Double(sz.width), "height": Double(sz.height)]
                 }
             }
@@ -2338,6 +2537,16 @@ final class SelfDrawBridge: NSObject, SelfDrawExports {
                            "format": "byteOrder32Big|premultipliedLast + CTM 翻转（显式声明）"])
     }
 
+    /// 见协议声明（`clearTree`）
+    func clearTree() -> String {
+        if handle != 0 { _ = proteus_layout_destroy(handle); handle = 0 }
+        if recycleHandle != 0 { proteus_recycle_destroy(recycleHandle); recycleHandle = 0 }
+        view?.clearLayers()
+        lastNodes = []
+        lastGeom.removeAll(keepingCapacity: true)
+        return "{\"ok\":true,\"cleared\":true}"
+    }
+
     func pendingStats() -> String {
         guard let view = view else { return "{\"ok\":false}" }
         return "{\"ok\":true,\"pending\":\(view.pendingCount),\"last_flushed\":\(view.lastFlushedCount),\"last_deferred\":\(view.lastDeferredCount)}"
@@ -2523,13 +2732,15 @@ final class SelfDrawBridge: NSObject, SelfDrawExports {
 
         // ── ① 注入文本度量（平台职责：CoreText；命中内容寻址缓存）──
         SelfDrawBridge.resetMeasureStats()
+        SelfDrawBridge.resetFontFamilyStats()
         let tMeasure0 = CFAbsoluteTimeGetCurrent()
         var textMeasures: [String: [String: Double]] = [:]
         for n in nodes {
             guard let text = n["text"] as? String, !text.isEmpty, let id = n["id"] as? Int else { continue }
             let fontSize = (n["fontSize"] as? Double).map { CGFloat($0) } ?? 14
             let fw = (n["fontWeight"] as? Double).map { CGFloat($0) } ?? 400
-            let sz = SelfDrawBridge.measureText(text, fontSize: fontSize, fontWeight: fw)
+            let fam = (n["fontFamily"] as? String) ?? "system"
+            let sz = SelfDrawBridge.measureText(text, fontSize: fontSize, fontWeight: fw, fontFamily: fam)
             textMeasures["\(id)"] = ["width": Double(sz.width), "height": Double(sz.height)]
         }
         let measureMs = (CFAbsoluteTimeGetCurrent() - tMeasure0) * 1000
@@ -2642,6 +2853,12 @@ final class SelfDrawBridge: NSObject, SelfDrawExports {
                         "in_bytes": treeJson.count,
                         "measure_cache_hits": SelfDrawBridge.measureCacheHits,
                         "measure_cache_misses": SelfDrawBridge.measureCacheMisses,
+                        // ★字体族契约读数（两端词汇表是否一致：非零即为契约分叉）
+                        "font_family_fallbacks": SelfDrawBridge.fontFamilyFallbackCount,
+                        "unknown_font_family": SelfDrawBridge.lastUnknownFontFamily,
+                        // ★CGFont 解析失败 ⇒ **度量/绘制分叉**的前兆（必须可观测，不能静默）
+                        "cgfont_fallbacks": SelfDrawBridge.cgFontFallbackCount,
+                        "cgfont_failure": SelfDrawBridge.lastCGFontFailure,
                         "_host_timing": ["diff_ms": round(diffMs * 100) / 100,
                                          "update_ffi_ms": round(updateMs * 100) / 100,
                                          "layers_ms": round(layersMs * 100) / 100,
@@ -2685,14 +2902,11 @@ final class SelfDrawBridge: NSObject, SelfDrawExports {
         for (id, pid, n) in sortedNodes {
             guard let r = rects["\(id)"] else { continue }
             let rect = CGRect(x: r["x"] ?? 0, y: r["y"] ?? 0, width: r["width"] ?? 0, height: r["height"] ?? 0)
-            var style: [String: Any] = [:]
-            for k in ["backgroundColor", "color", "text"] {
-                if let v = n[k] as? String { style[k] = v }
-            }
-            if let fs = n["fontSize"] as? Double { style["fontSize"] = CGFloat(fs) }
-            if let fw = n["fontWeight"] as? Double { style["fontWeight"] = CGFloat(fw) }
-            if let br = n["borderRadius"] as? Double { style["borderRadius"] = CGFloat(br) }
-            flat.append((id: id, parentId: pid, rect: rect, style: style))
+            // ★绘制字段经**单一实现**抽取（`SelfDrawView.styleOf`）
+            //   此前这里是**第三份手写副本**（只认 backgroundColor/color/text/fontSize/fontWeight/
+            //   borderRadius）⇒ 新增 `fontFamily` 时**必然漏改这里** ⇒ 全量挂载的文本没有字族，
+            //   而增量/虚拟化路径有 —— 分叉且静默（本仓纪律：同一语义一处实现）。
+            flat.append((id: id, parentId: pid, rect: rect, style: SelfDrawView.styleOf(n)))
         }
         view.clearLayers()
         view.buildLayers(flat: flat)
@@ -2722,6 +2936,10 @@ final class SelfDrawBridge: NSObject, SelfDrawExports {
             // ★度量读数（跨节点复用的判据：同文案应只真实度量少数次）
             "measure_cache_hits": SelfDrawBridge.measureCacheHits,
             "measure_cache_misses": SelfDrawBridge.measureCacheMisses,
+            "font_family_fallbacks": SelfDrawBridge.fontFamilyFallbackCount,
+            "unknown_font_family": SelfDrawBridge.lastUnknownFontFamily,
+            "cgfont_fallbacks": SelfDrawBridge.cgFontFallbackCount,
+            "cgfont_failure": SelfDrawBridge.lastCGFontFailure,
             "mem_mb": round(physFootprintMB() * 10) / 10,
             "mem_peak_mb": round(SelfDrawBridge.memPeakMB * 10) / 10,
         ]

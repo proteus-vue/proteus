@@ -17,10 +17,10 @@
 import { describe, it, expect } from 'vitest'
 import { h, ref, nextTick } from '@vue/runtime-core'
 import { createAppRenderer } from '@proteus-vue/renderer-app'
-import { createSelfDrawAdapter, normalizeFontWeight } from '@proteus-vue/renderer-app/adapters/selfdraw'
+import { createSelfDrawAdapter, normalizeFontWeight, normalizeFontFamily, fontSignature } from '@proteus-vue/renderer-app/adapters/selfdraw'
 
 type PaintPatch = { id: number; paint: Record<string, unknown> }
-type NodeLite = { id: number; text?: string; fontSize?: number; fontWeight?: number; textStyleKey?: number; backgroundColor?: string }
+type NodeLite = { id: number; text?: string; fontSize?: number; fontWeight?: number; fontFamily?: string; textStyleKey?: number; backgroundColor?: string }
 type Adapter = ReturnType<typeof createSelfDrawAdapter> & {
   takePaintPatches(): PaintPatch[]
   toRequest(vp: { width: number; height: number }): { nodes: NodeLite[] }
@@ -119,6 +119,130 @@ describe('V10 · fontWeight 归一化与端到端', () => {
     expect(normalizeFontWeight('300')).toBe(300)
     expect(normalizeFontWeight(undefined)).toBeUndefined()
     expect(normalizeFontWeight('bogus')).toBeUndefined()
+  })
+
+  it('★★⑨ 字体族归一化：CSS 候选清单 → 语义角色（**取第一个可识别项**，与浏览器回退语义一致）', () => {
+    // 与 examples/App.vue 的真实写法同形
+    expect(normalizeFontFamily('system-ui, -apple-system, sans-serif')).toBe('system')
+    expect(normalizeFontFamily('"PingFang SC", -apple-system, sans-serif')).toBe('system')
+    expect(normalizeFontFamily('monospace')).toBe('monospace')
+    expect(normalizeFontFamily("'SF Mono', Consolas, monospace")).toBe('monospace')
+    expect(normalizeFontFamily('Georgia, serif')).toBe('serif')
+    expect(normalizeFontFamily('serif')).toBe('serif')
+    expect(normalizeFontFamily('"Arial Rounded MT Bold", sans-serif')).toBe('rounded')
+    // ★"未识别"必须与"识别为 system"区分开（前者宿主回退、后者是明确选择）
+    expect(normalizeFontFamily('MyCustomFont')).toBeUndefined()
+    expect(normalizeFontFamily(123)).toBeUndefined()
+    expect(normalizeFontFamily(undefined)).toBeUndefined()
+  })
+
+  it('★★⑩ 字体族透传：**两种键形**都要认（模板静态 style 是 kebab、`:style` 是 camel）', async () => {
+    const adapter = createSelfDrawAdapter() as Adapter
+    const renderer = createAppRenderer(adapter)
+    // ★本仓实测的静默丢失：Vue 把**模板静态** style 编成 `{"font-family": "..."}`（kebab），
+    //   而 `:style` / `h()` 是 camelCase ⇒ 只认一种则另一种**不报错、不生效**
+    const App = {
+      render: () => h('p-view', {}, [
+        h('p-text', { style: { fontFamily: 'monospace', fontSize: 16 } }, 'camel'),
+        h('p-text', { style: { 'font-family': 'Georgia, serif', 'font-size': '16px' } as Record<string, unknown> }, 'kebab'),
+      ]),
+    }
+    const container = adapter.createElement('p-view')
+    adapter.root.children.push(container)
+    container.parent = adapter.root
+    const app = renderer.createApp(App)
+    app.mount(container)
+    await nextTick()
+    const nodes = adapter.toRequest({ width: 390, height: 844 }).nodes
+    const t1 = nodes.find((n) => n.text === 'camel')!
+    const t2 = nodes.find((n) => n.text === 'kebab')!
+    expect(t1.fontFamily, 'camel 键形').toBe('monospace')
+    expect(t2.fontFamily, '★kebab 键形（模板静态 style 的实际形状）').toBe('serif')
+    app.unmount()
+  })
+
+  it('★★⑪ textStyleKey 必须含**字族**（否则衬线/等宽共用度量 ⇒ 静默错几何）', async () => {
+    const adapter = createSelfDrawAdapter() as Adapter
+    const renderer = createAppRenderer(adapter)
+    const App = {
+      render: () => h('p-view', {}, [
+        h('p-text', { style: { fontSize: 16, fontFamily: 'serif' } }, '同样文本'),
+        h('p-text', { style: { fontSize: 16, fontFamily: 'monospace' } }, '同样文本'),
+      ]),
+    }
+    const container = adapter.createElement('p-view')
+    adapter.root.children.push(container)
+    container.parent = adapter.root
+    const app = renderer.createApp(App)
+    app.mount(container)
+    await nextTick()
+    const texts = adapter.toRequest({ width: 390, height: 844 }).nodes.filter((n) => n.text !== undefined)
+    expect(texts.length).toBe(2)
+    for (const t of texts) expect(t.textStyleKey!, `节点 ${t.id} 的 key 必须非零（0 = 核心回退节点寻址）`).toBeGreaterThan(0)
+    expect(
+      texts[0]!.textStyleKey,
+      '★同文本同字号同字重但**不同字族** ⇒ 必须不同 key（衬线/等宽宽度不同）',
+    ).not.toBe(texts[1]!.textStyleKey)
+    // ★且**字号维度不能被字族挤掉**（三个维度都要在 key 里）
+    const a2 = createSelfDrawAdapter() as Adapter
+    const r2 = createAppRenderer(a2)
+    const App2 = { render: () => h('p-view', {}, [
+      h('p-text', { style: { fontSize: 16, fontFamily: 'serif' } }, '同样文本'),
+      h('p-text', { style: { fontSize: 24, fontFamily: 'serif' } }, '同样文本'),
+    ]) }
+    const c2 = a2.createElement('p-view')
+    a2.root.children.push(c2)
+    c2.parent = a2.root
+    const app2 = r2.createApp(App2)
+    app2.mount(c2)
+    await nextTick()
+    const t = a2.toRequest({ width: 390, height: 844 }).nodes.filter((n) => n.text !== undefined)
+    expect(
+      t[0]!.textStyleKey,
+      '★同族不同字号 ⇒ key 也必须不同（字号维度不得被新维度挤掉）',
+    ).not.toBe(t[1]!.textStyleKey)
+    app2.unmount()
+    app.unmount()
+  })
+
+  it('★★⑫ 破坏性：把字族从 key 里去掉 ⇒ ⑪ 必须变红（证明该判据不是恒真的空判据）', () => {
+    // 模拟"只含字号+字重"的旧式算术拼接（= 引入字族前的实现）
+    const legacy = (fs: number, fw: number): number => Math.round(fs * 100) * 10000 + Math.round(fw)
+    expect(
+      legacy(16, 400),
+      '★旧式拼接下"同文本同字号但不同字族"得到**同一个 key** ⇒ ⑪ 的判据会红',
+    ).toBe(legacy(16, 400))
+    // 而新实现必须区分
+    expect(fontSignature(16, 400, 'serif')).not.toBe(fontSignature(16, 400, 'monospace'))
+    // 且新实现仍区分字号与字重（三维度都在）
+    expect(fontSignature(16, 400, 'serif')).not.toBe(fontSignature(24, 400, 'serif'))
+    expect(fontSignature(16, 400, 'serif')).not.toBe(fontSignature(16, 700, 'serif'))
+    // ★非零（核心用 0 表示"无字体签名"）
+    expect(fontSignature(14, 400, 'system')).toBeGreaterThan(0)
+  })
+
+  it('★★⑬ paint 快照带上字族（宿主据此改字体，且能清除旧值）', async () => {
+    const adapter = createSelfDrawAdapter() as Adapter
+    const renderer = createAppRenderer(adapter)
+    const fam = ref('monospace')
+    const App = { render: () => h('p-view', {}, [h('p-text', { style: { fontSize: 16, fontFamily: fam.value } }, 'X')]) }
+    const container = adapter.createElement('p-view')
+    adapter.root.children.push(container)
+    container.parent = adapter.root
+    const app = renderer.createApp(App)
+    app.mount(container)
+    await nextTick()
+    adapter.markFullSync()
+    adapter.takePaintPatches()   // 清基线
+    fam.value = 'serif'
+    await nextTick()
+    const patches = adapter.takePaintPatches()
+    const target = patches.find((p) => (p.paint as Record<string, unknown>).fontFamily !== undefined)
+    expect(target, '★改字族必须产出 paint 补丁（这是一条**不碰核心**的通道）').toBeTruthy()
+    expect((target!.paint as Record<string, unknown>).fontFamily).toBe('serif')
+    // ★且几何补丁必须为空（字族不改几何 ⇒ 送核心是多余；它只影响度量输入）
+    expect(adapter.takePatches(), '字族变更不应产生布局补丁').toEqual([])
+    app.unmount()
   })
 
   it('★★⑦ 文本的 fontWeight 必须透传（否则宿主按常规体渲染+度量）', async () => {

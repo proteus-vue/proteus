@@ -72,7 +72,21 @@ export interface SelfDrawNodeSpec {
    */
   fontWeight?: number
   /**
-   * ★★**字体维度签名**（进核心的度量缓存键）——由适配器按 `fontSize` 算出
+   * 绘制用：**字体族（语义角色，已归一化）**——不是 CSS 原始清单
+   *
+   * 【为什么发语义角色而不是原始 CSS 串（本仓纪律：契约要自描述）】
+   *   CSS 的 `font-family` 是**候选清单**（`"PingFang SC", -apple-system, sans-serif`），
+   *   且各平台可用字体名不同（iOS 没有 `PingFang SC` 的 Android 对应物）。
+   *   若把原始串发给宿主 ⇒ 每个平台各写一套解析与回退规则 ⇒ 必然分叉，且分叉是静默的
+   *   （只是"字长得不一样"，几何/像素判据都不一定发现）。
+   *   ⇒ 归一化发生在**一处**（本文件）：候选清单 → **角色**（`system`/`serif`/`monospace`/
+   *     `rounded`/`condensed`）；宿主只做「角色 → 平台字体」这一件平台相关的事。
+   *   ★载荷里带的是**角色字符串**（而非槽位下标）——两端不一致时是**可见的**（未知角色 ⇒
+   *     宿主显式回退 system 并上报），不是静默错位。
+   */
+  fontFamily?: string
+  /**
+   * ★★**字体维度签名**（进核心的度量缓存键）——由适配器按 `fontSize`/`fontWeight`/`fontFamily` 算出
    *
    * 【为什么必须有（本仓实测的静默错几何 + 性能双缺口）】
    *   核心的度量缓存键是 `(text_hash, max_w)`，而 hash 里唯一能区分字体的就是 `style_key`。
@@ -80,8 +94,12 @@ export interface SelfDrawNodeSpec {
    *   · 核心的保守处置是"`style_key == 0` ⇒ 回退节点寻址"（正确，但**失去跨节点复用**：
    *     500 行同文案要 500 次度量而不是 1 次）
    *   ⇒ 适配器把字体维度**算好下发**，两者兼得。
-   *   ★取值约定：与宿主**度量输入同源**（当前 = `fontSize`）——将来若引入字重/字族，
-   *     必须在此与宿主度量处**同时**扩展（否则键不覆盖新维度 ⇒ 又回到静默错几何）。
+   *
+   * 【★取值约定：必须覆盖**全部**进度量的字体维度】
+   *   宿主度量输入 =（文本，fontSize，fontWeight，fontFamily）⇒ 本键必须三者全含。
+   *   **少一个维度 ⇒ 不同字体被错误合并 ⇒ 其中一个尺寸错（静默）**——本仓已在
+   *   "只含字号"时代踩过一次（字重），故此处改为**逐维度显式参与**的混算，
+   *   并在新增字体维度时**同时**改这里与宿主度量处（见 `fontSignature`）。
    */
   textStyleKey?: number
   /** 绘制用：圆角 */
@@ -175,7 +193,7 @@ export interface SelfDrawAdapter extends NativeAdapter {
 }
 
 /** 绘制相关的键（**不进布局核心**——核心只管几何；绘制由宿主的指令流消费） */
-const PAINT_KEYS = new Set(['backgroundColor', 'color', 'fontSize', 'fontWeight', 'borderRadius', 'borderColor', 'borderWidth', 'opacity'])
+const PAINT_KEYS = new Set(['backgroundColor', 'color', 'fontSize', 'fontWeight', 'fontFamily', 'borderRadius', 'borderColor', 'borderWidth', 'opacity'])
 
 /** 布局相关的键（进核心；其余键既非布局也非绘制 → 忽略并计数，便于发现「静默丢失」） */
 const LAYOUT_KEYS = new Set([
@@ -309,6 +327,112 @@ export function normalizeFontWeight(v: unknown): number | undefined {
 export const DEFAULT_FONT_WEIGHT = 400
 
 /**
+ * ★★**字体族语义角色**（本适配器与宿主之间的**契约词汇表**）
+ *
+ * 【为什么是"角色"而不是字体名】见 `SelfDrawNodeSpec.fontFamily` 的注释：
+ *   CSS 的 font-family 是**候选清单**，且平台可用字体名不同 ⇒ 原始串跨端必然分叉。
+ *   角色是平台无关的语义（"衬线体"/"等宽体"…），宿主各自映射到可用的平台字体。
+ *
+ * 【诚实边界】当前是可枚举的 5 个角色（覆盖 CSS 通用族 + 最常见的具体族）；
+ *   自定义字体（`@font-face` / 打包字体）**未支持**——需要字体资源注册通道，属后续。
+ *   ⇒ 未知族名**显式回退 `system`**，并计入 `fontFamilyStats`（不静默丢弃）。
+ */
+export const FONT_FAMILY_ROLES = ['system', 'serif', 'monospace', 'rounded', 'condensed'] as const
+export type FontFamilyRole = (typeof FONT_FAMILY_ROLES)[number]
+
+/** 缺省角色（= 平台默认字体）——宿主也按此兜底，两端同口径 */
+export const DEFAULT_FONT_FAMILY: FontFamilyRole = 'system'
+
+/**
+ * 字体名/通用族 → **语义角色**（`undefined` = 未识别，调用方按缺省处理）
+ *
+ * | 输入 | 角色 |
+ * |---|---|
+ * | `-apple-system` / `system-ui` / `sans-serif` / `Helvetica` / `Roboto` / 空 | `system` |
+ * | `serif` / `Georgia` / `Times` / `Songti` / `宋体` | `serif` |
+ * | `monospace` / `Menlo` / `Consolas` / `SF Mono` / `Courier` | `monospace` |
+ * | `rounded` / `Arial Rounded` / `SF Pro Rounded` | `rounded` |
+ * | `condensed` / `Roboto Condensed` | `condensed` |
+ *
+ * ★只取**清单里的第一个可识别项**（正是浏览器的实际语义：按序回退）。
+ *   清单全不可识别 ⇒ `undefined`（调用方用 `system`，并计入诊断）。
+ */
+export function normalizeFontFamily(v: unknown): FontFamilyRole | undefined {
+  if (typeof v !== 'string') return undefined
+  // 逗号分隔的候选清单；逐项 trim + 去引号（`"PingFang SC", serif`）
+  const candidates = v.split(',').map((s) => s.trim().replace(/^["']|["']$/g, '').toLowerCase())
+  for (const c of candidates) {
+    if (!c) continue
+    if (c === 'system' || c === 'system-ui' || c === '-apple-system' || c === 'sans-serif' || c === 'sans') return 'system'
+    if (c === 'serif' || c.includes('serif') && !c.includes('sans')) return 'serif'
+    if (c === 'monospace' || c === 'mono') return 'monospace'
+    if (c.includes('rounded')) return 'rounded'
+    if (c.includes('condensed')) return 'condensed'
+    // 常见具体族名（大小写已归一）
+    if (c.includes('georgia') || c.includes('times') || c.includes('songti') || c.includes('宋')) return 'serif'
+    if (c.includes('menlo') || c.includes('consolas') || c.includes('courier') || c.includes('mono')) return 'monospace'
+    if (c === 'helvetica' || c === 'roboto' || c === 'arial' || c === 'pingfang' || c.includes('pingfang')) return 'system'
+  }
+  return undefined
+}
+
+/**
+ * ★★**字体维度签名**（进核心度量缓存键的 u32）——覆盖**全部**度量输入维度
+ *
+ * 【为什么从"算术拼接"改成"混算"（本仓实测的正确性推理）】
+ *   旧式 `round(fs*100)*10000 + weight` 是**为两个维度量身定制**的：字号占高位、
+ *   字重占低位，靠"低位不串"保证不碰撞。加入 `fontFamily`（字符串维度）后：
+ *   · 继续"算术拼接"要给字符串留位（如 `familySlot*1e8 + fsPart*10000 + weight`），
+ *     而 u32 上限 4.29e9 ⇒ 字号到 100 时只剩 42 个槽位，且这**要求两端维护同一张槽位表**
+ *     ——正是本仓反复吃亏的"跨层隐式契约"（表错了没人报错，只是几何悄悄错）。
+ *   · ⇒ 改为**逐维度混入稳定哈希**：无表、无槽位上限、新增维度只需加一行。
+ *
+ * 【碰撞分析（为什么不担心）】键是 u32（2^32 ≈ 4.3e9）。一个应用的字体签名数
+ *   ≈ 字号数 × 字重数 × 族数 ≈ 20 × 4 × 5 = 400 ⇒ 碰撞概率 ≈ 400²/(2·2^32) ≈ 1.9e-5。
+ *   且碰撞**只影响跨节点度量复用**（合并后之一尺寸错），不影响单节点正确性。
+ *   ★仍保留"hash 为 0 ⇒ 回退节点寻址"的语义：本函数保证结果恒非 0（见下）。
+ *
+ * 【★新增字体维度时的纪律】本函数与宿主 `SelfDrawBridge.font(...)` 的输入必须**同时**扩展，
+ *   否则键不覆盖新维度 ⇒ 又回到"不同字体共用度量 ⇒ 一个尺寸错（静默）"。
+ */
+export function fontSignature(fontSize: number, fontWeight: number, fontFamily: FontFamilyRole): number {
+  // FNV-1a（32 位）：实现短、分布好、跨 JS 引擎确定（不需要密码学强度）
+  let h = 0x811c9dc5
+  const mix = (s: string): void => {
+    for (let i = 0; i < s.length; i++) {
+      h ^= s.charCodeAt(i)
+      // 乘 16777619（FNV 质数）——用 Math.imul 保持 32 位整数语义
+      h = Math.imul(h, 0x01000193)
+    }
+    h ^= 0x1f   // 维度分隔符（避免 ("1","23") 与 ("12","3") 同类歧义）
+    h = Math.imul(h, 0x01000193)
+  }
+  mix(String(Math.round(fontSize * 100)))   // 字号（×100 ⇒ 保留 0.01 精度）
+  mix(String(Math.round(fontWeight)))
+  mix(fontFamily)
+  // ★u32 且**非 0**（核心用 0 表示"无字体签名 ⇒ 回退节点寻址"）
+  return (h >>> 0) || 1
+}
+
+/**
+ * ★★从样式对象取某键——**同时认 camelCase 与 kebab-case**
+ *
+ * 【为什么必须两形状兼容（本仓实测的静默丢失）】同一个 CSS 属性会以**两种键形**到达适配器：
+ *   · 模板**静态** `style="font-family: monospace"` ⇒ Vue 编译成 `{"font-family": "monospace"}`
+ *     （实测：`compile('<div style="font-family: monospace">')` 产出 kebab 键）
+ *   · `:style="{ fontFamily: 'monospace' }"` / `h(tag, { style: { fontFamily } })` ⇒ camelCase
+ *   ⇒ 只认一种 ⇒ 另一种**静默丢失**（不报错、不进未知键桶、样式就是不生效）。
+ *   本仓已有同族教训（`style` 子对象 vs 顶层字段）。⇒ 一处实现，两处调用点共用。
+ */
+function styleValue(style: Record<string, unknown> | undefined, camelKey: string): unknown {
+  if (!style) return undefined
+  const v = style[camelKey]
+  if (v !== undefined) return v
+  const kebab = camelKey.replace(/[A-Z]/g, (c) => `-${c.toLowerCase()}`)
+  return style[kebab]
+}
+
+/**
  * 取节点的**绘制属性快照**（`PAINT_KEYS` 全量；缺省键为 **null**）
  *
  * 【为什么是"快照"而不是"本批 delta"】宿主需要能**清除**旧值（如移除 borderRadius ⇒
@@ -316,17 +440,13 @@ export const DEFAULT_FONT_WEIGHT = 400
  *   绘制键最多 8 个 ⇒ 全量快照的代价可忽略，换来宿主侧逻辑平凡。
  */
 export function paintOf(props: Record<string, unknown>): Record<string, unknown> {
-  const flat: Record<string, unknown> = {}
-  for (const [k, v] of Object.entries(props)) {
-    if (k === 'style' && v && typeof v === 'object' && !Array.isArray(v)) {
-      Object.assign(flat, v as Record<string, unknown>)
-    } else {
-      flat[k] = v
-    }
-  }
+  const styleObj = (props.style && typeof props.style === 'object' && !Array.isArray(props.style))
+    ? props.style as Record<string, unknown>
+    : undefined
   const out: Record<string, unknown> = {}
   for (const k of PAINT_KEYS) {
-    const v = flat[k]
+    // ★两形状（camel/kebab）+ 顶层直挂，三者同序查找（见 `styleValue` 注释）
+    const v = styleValue(styleObj, k) ?? props[k]
     if (v === undefined || v === null) { out[k] = null; continue }
     if (k === 'backgroundColor' || k === 'color' || k === 'borderColor') {
       out[k] = typeof v === 'string' ? v : null
@@ -335,6 +455,12 @@ export function paintOf(props: Record<string, unknown>): Record<string, unknown>
     if (k === 'fontWeight') {
       const w = normalizeFontWeight(v)
       out[k] = w === undefined ? null : w
+      continue
+    }
+    if (k === 'fontFamily') {
+      // ★发**语义角色**（不是原始 CSS 清单）；未识别 ⇒ null（宿主回退 system，两端同口径）
+      const fam = normalizeFontFamily(v)
+      out[k] = fam ?? null
       continue
     }
     out[k] = typeof v === 'number' ? v : (typeof v === 'string' && Number.isFinite(Number(v)) ? Number(v) : null)
@@ -551,25 +677,38 @@ export function createSelfDrawAdapter(): SelfDrawAdapter {
       const parent = node.__kind === 'text' ? (parentOf.get(node) ?? null) : null
       const pStyle = (parent && parent.props.style && typeof parent.props.style === 'object' && !Array.isArray(parent.props.style))
         ? parent.props.style as Record<string, unknown>
-        : {}
-      const fs = tStyle.fontSize ?? props.fontSize ?? pStyle.fontSize ?? (parent ? parent.props.fontSize : undefined)
+        : undefined
+      // ★★取字体维度**必须走 `styleValue`**（两形状：camel/kebab）
+      //   【本仓实测的静默丢失】`h('p-text', { style: { 'font-size': '16px' } })`（= 模板静态
+      //   style 的真实形状）用 `tStyle.fontSize` 找不到 ⇒ `fsNum = NaN` ⇒ **整个字体块被跳过**
+      //   （字号/字重/字族**全不发**），现象与"样式没写"完全一样。本档 ⑩ 用例抓到。
+      const fs = styleValue(tStyle, 'fontSize') ?? props.fontSize
+        ?? styleValue(pStyle, 'fontSize') ?? (parent ? parent.props.fontSize : undefined)
       const fsNum = typeof fs === 'number' ? fs : (typeof fs === 'string' ? Number(fs.replace(/px$/i, '')) : NaN)
       // ★字重同样**从父元素继承**（与 fontSize 同一理由：`fontWeight` 写在 `p-text` 元素上）
-      const fwRaw = tStyle.fontWeight ?? props.fontWeight ?? pStyle.fontWeight ?? (parent ? parent.props.fontWeight : undefined)
+      const fwRaw = styleValue(tStyle, 'fontWeight') ?? props.fontWeight
+        ?? styleValue(pStyle, 'fontWeight') ?? (parent ? parent.props.fontWeight : undefined)
       const fwNum = normalizeFontWeight(fwRaw) ?? DEFAULT_FONT_WEIGHT
+      // ★字体族同样**从父元素继承**（同上：`font-family` 写在 `p-text` 元素上，文本叶子是匿名子节点）
+      const famRaw = styleValue(tStyle, 'fontFamily') ?? props.fontFamily
+        ?? styleValue(pStyle, 'fontFamily') ?? (parent ? parent.props.fontFamily : undefined)
+      const famRole = normalizeFontFamily(famRaw) ?? DEFAULT_FONT_FAMILY
       if (Number.isFinite(fsNum) && fsNum > 0) {
         spec.fontSize = fsNum
         spec.fontWeight = fwNum
-        // ★字体维度进缓存键：**字号 × 字重**（与宿主度量输入同源）
+        spec.fontFamily = famRole
+        // ★字体维度进缓存键：**字号 × 字重 × 字族**（与宿主度量输入同源）
         //
         // 【为什么必须含字重（本仓实测的正确性缺口）】度量缓存键是 `(text_hash, max_w)`，
         //   而 hash 里区分字体的只有本字段。若不含字重 ⇒ 「同文本 + 同字号 + 一粗一常规」
         //   会被**错误合并**同一缓存项 ⇒ 其中一个尺寸错（本仓已在字号维度踩过同一坑）。
-        //   布局：`round(fs*100) * 10000 + weight`（weight ∈ [100,900] ⇒ 低位不串）。
-        spec.textStyleKey = Math.round(fsNum * 100) * 10000 + Math.round(fwNum)
+        // 【为什么必须含字族】同一理由——衬线体与等宽体对同一文案的宽度**不同**。
+        // ⇒ 实现见 `fontSignature`（FNV-1a 混算；含"为什么不再是算术拼接"的原因）
+        spec.textStyleKey = fontSignature(fsNum, fwNum, famRole)
       }
       // 同理继承颜色（否则文本用宿主的白色兜底 ⇒ 深色主题下说明文字看不见）
-      const col = tStyle.color ?? props.color ?? pStyle.color ?? (parent ? parent.props.color : undefined)
+      const col = styleValue(tStyle, 'color') ?? props.color
+        ?? styleValue(pStyle, 'color') ?? (parent ? parent.props.color : undefined)
       if (typeof col === 'string') spec.color = col
       return
     }
@@ -592,22 +731,32 @@ export function createSelfDrawAdapter(): SelfDrawAdapter {
         flat[k] = v
       }
     }
+    const pStyleObj = (props.style && typeof props.style === 'object' && !Array.isArray(props.style))
+      ? props.style as Record<string, unknown>
+      : undefined
 
     // ── 布局属性 → 引擎就绪形态（★与 takePatches 共用同一实现）──
     Object.assign(spec, layoutStyleOf(props))
     // 绘制属性透传（不进核心）
     for (const key of PAINT_KEYS) {
-      const src = (props.style && typeof props.style === 'object')
-        ? (props.style as Record<string, unknown>)[key] ?? props[key]
-        : props[key]
+      // ★两形状兼容（模板静态 style 是 kebab、`:style`/`h()` 是 camel）——见 `styleValue` 注释
+      const src = styleValue(pStyleObj, key) ?? props[key]
       if (key === 'backgroundColor' || key === 'color') {
         if (typeof src === 'string') spec[key] = src
       } else if (key === 'fontWeight') {
         // ★字重是 `string | number`（'bold' / 700）⇒ 归一化后再落（其它键是纯 number）
         const w = normalizeFontWeight(src)
         if (w !== undefined) spec.fontWeight = w
-      } else if (typeof src === 'number') {
-        spec[key as 'fontSize'] = src
+      } else if (key === 'fontFamily') {
+        // ★字体族是字符串清单 ⇒ 归一化成**语义角色**；未识别则**不落**（宿主回退 system）
+        const fam = normalizeFontFamily(src)
+        if (fam !== undefined) spec.fontFamily = fam
+      } else {
+        // ★数值键：`number` 直用；**数字串也认**（模板静态 style 的值全是字符串，
+        //   如 `style="font-size: 16px"`）——只认 number 会让静态样式**静默不生效**
+        const n = typeof src === 'number' ? src
+          : (typeof src === 'string' ? Number(src.replace(/px$/i, '')) : NaN)
+        if (Number.isFinite(n)) spec[key as 'fontSize'] = n
       }
     }
   }

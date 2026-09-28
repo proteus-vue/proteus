@@ -2,134 +2,134 @@
   "engine" : "proteus-layout-core 0.1.0 · engine=taffy-0.14 · taffy 锁定 0.14（0.13 有 measure 指数退化）",
   "geometry_all" : {
     "0" : {
-      "bg" : "",
+      "bg" : "#101020",
       "color" : "",
-      "h" : 68,
+      "h" : 293,
       "text" : "",
-      "w" : 100,
+      "w" : 177,
       "x" : 0,
       "y" : 0
     },
     "1" : {
       "bg" : "",
-      "color" : "",
-      "h" : 17,
+      "color" : "#ffffff",
+      "h" : 29,
       "text" : "Vapor 全量 SFC",
-      "w" : 100,
-      "x" : 0,
-      "y" : 0
+      "w" : 161,
+      "x" : 16,
+      "y" : 60
     },
     "2" : {
-      "bg" : "",
+      "bg" : "#1b1b21",
       "color" : "",
-      "h" : 17,
+      "h" : 56,
       "text" : "",
-      "w" : 100,
-      "x" : 0,
-      "y" : 17
+      "w" : 161,
+      "x" : 16,
+      "y" : 101
     },
     "3" : {
-      "bg" : "",
+      "bg" : "#6f4ae8",
       "color" : "",
-      "h" : 0,
+      "h" : 36,
       "text" : "",
-      "w" : 100,
-      "x" : 0,
-      "y" : 17
+      "w" : 36,
+      "x" : 16,
+      "y" : 111
     },
     "4" : {
       "bg" : "",
-      "color" : "",
-      "h" : 17,
+      "color" : "#ffffff",
+      "h" : 20,
       "text" : "列表项 1",
-      "w" : 100,
-      "x" : 0,
-      "y" : 17
+      "w" : 120,
+      "x" : 52,
+      "y" : 119
     },
     "5" : {
-      "bg" : "",
+      "bg" : "#1b1b21",
       "color" : "",
-      "h" : 17,
+      "h" : 56,
       "text" : "",
-      "w" : 100,
-      "x" : 0,
-      "y" : 34
+      "w" : 161,
+      "x" : 16,
+      "y" : 165
     },
     "6" : {
-      "bg" : "",
+      "bg" : "#6f4ae8",
       "color" : "",
-      "h" : 0,
+      "h" : 36,
       "text" : "",
       "w" : 60,
-      "x" : 0,
-      "y" : 34
+      "x" : 16,
+      "y" : 175
     },
     "7" : {
       "bg" : "",
-      "color" : "",
-      "h" : 17,
+      "color" : "#ffffff",
+      "h" : 20,
       "text" : "列表项 2",
-      "w" : 100,
-      "x" : 0,
-      "y" : 34
+      "w" : 120,
+      "x" : 76,
+      "y" : 183
     },
     "8" : {
-      "bg" : "",
+      "bg" : "#1b1b21",
       "color" : "",
-      "h" : 17,
+      "h" : 56,
       "text" : "",
-      "w" : 100,
-      "x" : 0,
-      "y" : 51
+      "w" : 161,
+      "x" : 16,
+      "y" : 229
     },
     "9" : {
-      "bg" : "",
+      "bg" : "#6f4ae8",
       "color" : "",
-      "h" : 0,
+      "h" : 36,
       "text" : "",
-      "w" : 100,
-      "x" : 0,
-      "y" : 51
+      "w" : 36,
+      "x" : 16,
+      "y" : 239
     },
     "10" : {
       "bg" : "",
-      "color" : "",
-      "h" : 17,
+      "color" : "#ffffff",
+      "h" : 20,
       "text" : "改过的第 3 行",
-      "w" : 100,
-      "x" : 0,
-      "y" : 51
+      "w" : 120,
+      "x" : 52,
+      "y" : 247
     }
   },
   "host_node_count" : 11,
   "host_timing_last" : {
     "build_layers_ms" : 0.01,
-    "host_total_ms" : 0.33000000000000002,
-    "layout_ms" : 0.20999999999999999,
+    "host_total_ms" : 0.25,
+    "layout_ms" : 0.13,
     "measure_ms" : 0
   },
   "js_completed" : 1,
   "js_ok" : true,
   "js_report" : {
-    "build_id" : "732f0b3a-152950",
+    "build_id" : "aa7137cf-200614",
     "case_filter" : [
       "V6"
     ],
     "case_timings_ms" : {
-      "V6_sfc_full_tree" : 10
+      "V6_sfc_full_tree" : 9
     },
     "cases" : [
       {
         "case" : "V6_sfc_full_tree",
         "extra" : {
-          "geom_changed" : 11,
+          "geom_changed" : 6,
           "id_stats" : {
             "allocatedIds" : 6,
             "reusedTemplateIds" : 3,
             "rows" : 11,
             "valuesFilled" : 9
           },
-          "instantiate_ms" : 0.63,
+          "instantiate_ms" : 0.64000000000000001,
           "instantiated_nodes" : 11,
           "l0_slots" : 0,
           "l1_slots" : 4,
@@ -146,15 +146,15 @@
           "unsupported_count" : 0,
           "verdict" : "PASS"
         },
-        "host_ms" : 0.33000000000000002,
+        "host_ms" : 0.25,
         "items" : 3,
         "nodes" : 11,
         "note" : "★★全量 SFC → 模板实例化 → 挂载 → 行内更新（V4 最后一项遗留：节点树由 SFC 生成）",
         "patch_count" : 11,
         "request_bytes" : 139,
         "serialize_ms" : 0,
-        "to_request_ms" : 0.6304161548614502,
-        "total_ms" : 0.6304161548614502,
+        "to_request_ms" : 0.64220786094665527,
+        "total_ms" : 0.64220786094665527,
         "vue_ms" : 0
       }
     ],
@@ -169,7 +169,7 @@
       ],
       "stages" : [
         "before-S2:15",
-        "after-S:26"
+        "after-S:31"
       ]
     },
     "kind" : "logic-bench",
@@ -189,85 +189,93 @@
     }
   },
   "js_total" : 1,
+  "launch_diag" : {
+    "first_frame_ms" : -0,
+    "forced_style" : "Dark",
+    "interface_style" : "Dark",
+    "launch_screen_keys" : [
+
+    ]
+  },
   "layer_count" : 11,
   "layer_frames" : {
     "0" : {
-      "h" : 68,
+      "h" : 293,
       "parentId" : -1,
-      "w" : 100,
+      "w" : 177,
       "x" : 0,
       "y" : 0
     },
     "1" : {
-      "h" : 17,
+      "h" : 29,
       "parentId" : 0,
-      "w" : 100,
-      "x" : 0,
-      "y" : 0
+      "w" : 161,
+      "x" : 16,
+      "y" : 60
     },
     "2" : {
-      "h" : 17,
+      "h" : 56,
       "parentId" : 0,
-      "w" : 100,
-      "x" : 0,
-      "y" : 17
+      "w" : 161,
+      "x" : 16,
+      "y" : 101
     },
     "3" : {
-      "h" : 0,
+      "h" : 36,
       "parentId" : 2,
-      "w" : 100,
+      "w" : 36,
       "x" : 0,
-      "y" : 0
+      "y" : 10
     },
     "4" : {
-      "h" : 17,
+      "h" : 20,
       "parentId" : 2,
-      "w" : 100,
-      "x" : 0,
-      "y" : 0
+      "w" : 120,
+      "x" : 36,
+      "y" : 18
     },
     "5" : {
-      "h" : 17,
+      "h" : 56,
       "parentId" : 0,
-      "w" : 100,
-      "x" : 0,
-      "y" : 34
+      "w" : 161,
+      "x" : 16,
+      "y" : 165
     },
     "6" : {
-      "h" : 0,
+      "h" : 36,
       "parentId" : 5,
       "w" : 60,
       "x" : 0,
-      "y" : 0
+      "y" : 10
     },
     "7" : {
-      "h" : 17,
+      "h" : 20,
       "parentId" : 5,
-      "w" : 100,
-      "x" : 0,
-      "y" : 0
+      "w" : 120,
+      "x" : 60,
+      "y" : 18
     },
     "8" : {
-      "h" : 17,
+      "h" : 56,
       "parentId" : 0,
-      "w" : 100,
-      "x" : 0,
-      "y" : 51
+      "w" : 161,
+      "x" : 16,
+      "y" : 229
     },
     "9" : {
-      "h" : 0,
+      "h" : 36,
       "parentId" : 8,
-      "w" : 100,
+      "w" : 36,
       "x" : 0,
-      "y" : 0
+      "y" : 10
     },
     "10" : {
-      "h" : 17,
+      "h" : 20,
       "parentId" : 8,
-      "w" : 100,
-      "x" : 0,
-      "y" : 0
+      "w" : 120,
+      "x" : 36,
+      "y" : 18
     }
   },
-  "tree_hash" : "2c3f334a"
+  "tree_hash" : "ac161fbf"
 }
