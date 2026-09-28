@@ -1,7 +1,7 @@
 {
   "name": "proteus-vue",
   "version": "0.1.0",
-  "description": "Proteus\uff1aVue \u8de8\u7aef\u7f16\u8bd1\u6846\u67b6\uff08\u5c0f\u7a0b\u5e8f Skyline + Web\uff09\u2014\u2014 \u4e00\u4efd Vue \u6e90\u7801\uff0c\u7f16\u8bd1\u5668\u5316\u4f5c\u5343\u7aef\u5f62\u6001",
+  "description": "Proteus：Vue 跨端编译框架（小程序 Skyline + Web）—— 一份 Vue 源码，编译器化作千端形态",
   "license": "Apache-2.0",
   "repository": {
     "type": "git",
@@ -49,6 +49,7 @@
     "check:docs": "tsx scripts/gen-docs.ts --check",
     "check:gates-sync": "node scripts/check-gates-sync.mjs",
     "test": "vitest run --exclude \"tests/e2e-*.test.ts\"",
+    "test:rust": "cargo test --manifest-path packages/layout-core-rust/Cargo.toml",
     "test:e2e:web": "pnpm run build:web && node tests/paint-order-probe.mjs && vitest run --no-file-parallelism tests/e2e-layout-core-pixel.test.ts tests/e2e-web.test.ts tests/e2e-web-keypaths.test.ts tests/e2e-render-backend-demo.test.ts tests/e2e-overlay-family.test.ts tests/e2e-web-stack-snap.test.ts",
     "test:e2e:website": "pnpm --filter website build && vitest run --no-file-parallelism tests/e2e-website-multidevice.test.ts",
     "test:update": "vitest run -u --exclude \"tests/e2e-*.test.ts\"",

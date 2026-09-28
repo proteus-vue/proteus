@@ -50,6 +50,8 @@
       "@proteus-vue/module": ["packages/module/src/index.ts"],
       "@proteus-vue/pinia-sync": ["packages/pinia-sync/src/index.ts"],
       "@proteus-vue/renderer-app": ["packages/renderer-app/src/index.ts"],
+      // ★Vapor for Proteus IR（V1）：指令集（OpCode/OpBuffer）+ 槽位运行时
+      "@proteus-vue/slot-runtime": ["packages/slot-runtime/src/index.ts"],
       "@proteus-vue/security": ["packages/security/src/index.ts"],
       "@proteus-vue/devtools": ["packages/devtools/src/index.ts"],
       "@proteus-vue/hmr": ["packages/hmr/src/index.ts"],

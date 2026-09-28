@@ -59,7 +59,7 @@
 >   `relayout` = 7005（**整树重排**）——标题 margin 改变其后所有行位置 ⇒ 宿主侧另有
 >   与 Vue 无关的 O(树规模) 热点（与增量布局的边界判定同源）。
 > · **桌面通道**（`bash hosts/ios/run-v0-probe.sh`）：10–14ms → 1–3ms，与真机同比率同方向。
-> · **下一步**：V1（IR 扩展与指令集）可开工。
+> · **下一步**：~~V1~~ **V1 已完成**（指令集 + slot-runtime 包 + 真跨语言 golden）⇒ **下一步 = V2**（编译期响应式转换）。
 >
 > ★**真机通道已全线打通（2026-09-28）——三层阻塞已解决**：
 > ① **签名身份**：用户新增 Apple ID（`lyl@shxuxi.cn` · Personal Team `XKH568R7A5`）后证书已签发，
@@ -330,6 +330,44 @@ diff/patch 随**页面规模**线性、**与"改了多少"无关**。
 
 **下一步**：V1（IR 扩展与指令集：`opCode`/`tier`/`deps`、`OpCode`/`OpBuffer`、`Slot`、`LIST_UPDATE`、
 Golden 双端门禁）；真机复跑待签名恢复后补，报告含 `V0_*` 用例。
+
+### ★★★Vapor IR **V1 完成**：指令集 + 槽位运行时 + ★真跨语言 golden（2026-09-28）
+
+**依据**：《Vapor for Proteus IR 设计方案》§9 的 V1 里程碑（方案自定「V0 通过才可开工」，V0 已达标）。
+
+**新增第 43 个包 `@proteus-vue/slot-runtime`**（方案 §1.3 的 L1 层），四块：
+
+| 模块 | 内容 |
+|---|---|
+| `opcode.ts` | **12 条指令**（属性/内容/结构/列表/组件边界五类）+ `PropKeyTable` / `StringPool`（编译期 intern ⇒ 运行时无字符串解析） |
+| `buffer.ts` | **OpBuffer + 二进制线上格式**（头 20B + 键表 + 字符串池 + 定长指令体）。为什么非 JSON：blob.rs 已实测「4051 节点布局耗时 95%+ 是 JSON 通道成本」，而更新指令走的是**每帧**热路径 |
+| `slot.ts` | 槽位容器 + 发射器 + 帧调度：`setSlot`（`Object.is` 短路）→ 标脏 → **同帧只 flush 一次** |
+| `list.ts` / `tier.ts` | `LIST_UPDATE`（item 级 = 1 条指令）+ 分层判定（§5 七条件 + 双逃生通道 + `explain` 输出） |
+
+**★真跨语言 golden 门禁（不是"各测各的往返"）**：
+`tests/update-ops-golden.test.ts`（TS 生成 bytes + canonical JSON）⇄
+`packages/layout-core-rust/tests/ops_conformance.rs`（Rust 读**同一份 bytes** 解码 → 语义比对）。
+**破坏性验证已做**：改 golden 里一个字段 ⇒ 门禁红；恢复 ⇒ 绿。已接入 CI（`pnpm run test:rust`，
+含 `dtolnay/rust-toolchain` 步骤）。
+
+**★V1 过程中修掉/避开的四个真缺陷（都会静默出错）**
+| # | 缺陷 | 现象 | 处置 |
+|---|---|---|---|
+| 1 | **分层条件极性写反** | C3–C7 是否定式（"**不**在动态组件内"），首版统一按"必须为 true"判 ⇒ 没出现动态组件的绑定反被判 L0，**方向完全相反** | 加 `expect` 极性字段（单测立即抓到） |
+| 2 | **golden 表示层假红** | 指令体是 f32：TS canonical JSON 存 f64 `0.3333333333333333`，Rust 解出 f32 `0.3333333432674408` ⇒ 同一字节流被判"不一致" | TS 侧 `Math.fround` 归一 + Rust 侧**数值感知**比对（精确相等，不做容差） |
+| 3 | **常量名撞内置对象** | 路径常量命名 `JSON` ⇒ 遮蔽全局，报 `JSON.stringify is not a function` 却看不出原因 | 改名 `JSON_PATH` |
+| 4 | **新增包未接门禁链** | 第 43 个包让官网声明的 42 过时 ⇒ `check:stats` 红（**门禁正确工作**） | 更新为 43 + 注明"第 43 个 = slot-runtime" |
+
+**★诚实边界（V1 ≠ 性能已到手）**
+① 交付的是**指令集 + 槽位运行时 + 通道**；**编译器生成这些调用**属 **V2**——
+   目前槽位由调用方手工 `setSlot`（与 V0 手工给 `withMemo` 依赖数组同一手法，先验机制）。
+② Rust 侧只做**解码 + 契约测试**；指令的**布局应用**（LIST_UPDATE 落到复用池等）属 **V3**。
+③ 「单节点更新 P95 ≤ 3ms」是 §10 **目标值**，V1 未测（要等端到端）；V0 的真机 9ms 是**探针上界**，
+   **不是**本实现的读数。
+④ `proteus explain` 的 CLI 接线（§5.5 表形态）已有 `decisionsToRows`，**尚未接 CLI**——属 V2。
+
+**下一步 = V2（编译期响应式转换，≈2.5 人周）**：响应式源识别 → `deps → slots` 静态映射 →
+求值函数生成 → L0/L1 判定接线 → `proteus explain` 输出分层理由。
 
 ### ★★★真机闪退事故：适配器 id 冲突 → taffy 无限递归（2026-09-29，提交 `f7631cd7`）
 

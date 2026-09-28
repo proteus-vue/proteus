@@ -71,7 +71,7 @@ export { resolveLength, parseStyleString, normalizeStyleDecls, normalizeStyleStr
 export type { LengthContext, NormalizeOptions, NormalizeResult } from './pnode-style'
 export { analyzePTree, flattenRate, groupBindingsByNode } from './pnode-analyze'
 export type { AnalyzeOptions, AnalyzeResult, NodeFacts } from './pnode-analyze'
-export { buildPTree, buildPTreeFromComponentIR, rawFromComponentIR, kindFromSemantic, inferUpdateKind } from './pnode-build'
+export { buildPTree, buildPTreeFromComponentIR, rawFromComponentIR, kindFromSemantic, inferUpdateKind, inferOpCode } from './pnode-build'
 export type { PRawNode, BuildOptions } from './pnode-build'
 /* ★M0 出口条件：渲染 IR 决策 trace（`proteus explain --ir`）——拍平资格/静态子树/PaintHint */
 export { formatPTrace, formatPNodeLine, decisionOf, walkPTree } from './pnode-trace'

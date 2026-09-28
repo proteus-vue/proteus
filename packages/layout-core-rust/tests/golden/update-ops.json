@@ -1,0 +1,121 @@
+{
+  "version": 1,
+  "keys": [
+    "layout.width",
+    "paint.backgroundColor",
+    "layout.gap"
+  ],
+  "strings": [
+    "无线降噪耳机 Pro 🎧",
+    "",
+    "new-a",
+    "new-b",
+    "id-4021"
+  ],
+  "ops": [
+    {
+      "op": 1,
+      "nodeId": 7,
+      "keyId": 0,
+      "value": 120.5
+    },
+    {
+      "op": 2,
+      "nodeId": 8,
+      "keyId": 1,
+      "value": -1.25
+    },
+    {
+      "op": 3,
+      "nodeId": 9,
+      "textRef": 0
+    },
+    {
+      "op": 3,
+      "nodeId": 10,
+      "textRef": 1
+    },
+    {
+      "op": 4,
+      "nodeId": 11,
+      "attrs": []
+    },
+    {
+      "op": 4,
+      "nodeId": 12,
+      "attrs": [
+        {
+          "keyId": 2,
+          "value": 8
+        }
+      ]
+    },
+    {
+      "op": 5,
+      "nodeId": 13,
+      "visible": false
+    },
+    {
+      "op": 5,
+      "nodeId": 14,
+      "visible": true
+    },
+    {
+      "op": 16,
+      "blockId": 1,
+      "refNodeId": 15,
+      "pos": 0
+    },
+    {
+      "op": 16,
+      "blockId": 2,
+      "refNodeId": 16,
+      "pos": 1
+    },
+    {
+      "op": 17,
+      "nodeId": 17
+    },
+    {
+      "op": 18,
+      "nodeId": 18,
+      "refNodeId": 19,
+      "pos": 1
+    },
+    {
+      "op": 32,
+      "listId": 3,
+      "dataRef": 4
+    },
+    {
+      "op": 33,
+      "listId": 3,
+      "start": 0,
+      "delCount": 0,
+      "itemKeyRefs": []
+    },
+    {
+      "op": 33,
+      "listId": 3,
+      "start": 5,
+      "delCount": 2,
+      "itemKeyRefs": [
+        2,
+        3
+      ]
+    },
+    {
+      "op": 34,
+      "listId": 3,
+      "itemKeyRef": 4,
+      "slotId": 7,
+      "value": 0.3333333432674408
+    },
+    {
+      "op": 48,
+      "componentId": 5,
+      "slotId": 6,
+      "value": 1.5
+    }
+  ]
+}

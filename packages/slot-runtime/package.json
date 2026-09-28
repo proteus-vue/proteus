@@ -1,0 +1,24 @@
+{
+  "name": "@proteus-vue/slot-runtime",
+  "version": "0.3.0-beta.11",
+  "description": "Vapor for Proteus IR（V1）：平台无关的更新指令集（OpCode/OpBuffer）+ 槽位容器（Slot/emit）——把「更新一个节点」从 O(子树规模) 降为 O(1) 槽位写入",
+  "type": "module",
+  "license": "Apache-2.0",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js",
+      "default": "./dist/index.js"
+    },
+    "./package.json": "./package.json"
+  },
+  "files": [
+    "dist",
+    "README.md"
+  ],
+  "scripts": {
+    "build": "tsc -p tsconfig.build.json --emitDeclarationOnly && esbuild src/index.ts --bundle --format=esm --platform=neutral --outfile=dist/index.js"
+  }
+}

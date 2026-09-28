@@ -414,6 +414,9 @@ importers:
       '@proteus-vue/contracts':
         specifier: 0.3.0-beta.11
         version: link:../contracts
+      '@proteus-vue/slot-runtime':
+        specifier: 0.3.0-beta.11
+        version: link:../slot-runtime
 
   packages/components:
     dependencies:
@@ -678,6 +681,8 @@ importers:
       vue:
         specifier: ^3.4.0
         version: 3.5.42(typescript@5.9.3)
+
+  packages/slot-runtime: {}
 
   packages/style-safety: {}
 
