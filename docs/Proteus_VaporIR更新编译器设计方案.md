@@ -670,16 +670,24 @@ Vue 3.6 把 `@vue/reactivity` 基于 alien-signals 重构，**显著提升响应
 · 故正确的表述是：**在布局边界能罩住变更的场景下达标**；边界自身外盒变化时**未达标**，
   且其成本主因已不在 Vue 侧、而在**返回通道**（见上方分解）——这是 V4 的明确输入。
 
-### V4 · 一致性与收尾（≈2 人周）
-
-- [ ] ★**变化集二进制返回通道**（V3 类B 实测的第一优化项：4003 条矩形的 JSON 解析 **19.35ms**，
+### V4 · 一致性与收尾（≈2 人周）—— ✅ **已完成**（2026-09-28）
+- [x] ★**变化集二进制返回通道**（V3 类B 实测的第一优化项：4003 条矩形的 JSON 解析 **19.35ms**，
       占该类B 总耗时 40%）——思路同 V1：定长字段 + 顺序读，复用同一套 TS/Rust 编解码纪律
-- [ ] Web 端真值比对 conformance 门禁
+      ⇒ `rects_bin.rs` + `proteus_layout_rects_bin`；真机 A/B：**类B 6.2×**（JSON 返回 + 全量层 → 二进制返回 + 只更可见层）
+- [x] Web 端真值比对 conformance 门禁 ⇒ `browser-layout.json`（21 用例）+ **`browser-mutation.json`**（增量变更对拍）
 - [x] L0/L1 混跑场景覆盖（V2 已测：同一组件内共存，`explain --vapor` 可观测）
-- [ ] Vue 3.4 / 3.5 / 3.6 兼容性验证
-- [ ] 性能棘轮门禁
-- [ ] ★V3 遗留：宿主侧**列表映射**（让 `LIST_UPDATE` 可用——当前上报 unsupported）
-- [ ] ★V3 遗留：全量 SFC → 端上渲染（当前用最小编译产物验证通路）
+- [x] Vue 3.4 / 3.5 / 3.6 兼容性验证 ⇒ `tests/vapor-vue-compat.test.ts`（5 样本 × 3 版 = 12 用例，**产物逐字节相同**）
+- [x] 性能棘轮门禁 ⇒ `scripts/check-vapor-perf.mjs`（两层判据：性能上限 + **优化路径生效证明**）
+- [x] ★V3 遗留：宿主侧**列表映射**（让 `LIST_UPDATE` 可用）⇒ `ListRegistry` + 行内槽位发**普通 SET_STYLE/SET_TEXT**（真机长列表场景仍待驱动——见诚实边界 P1）
+- [x] ★V3 遗留：全量 SFC → 端上渲染 ⇒ `buildLayoutTemplate`（模板→静态结构）+ `instantiateTemplate`（模板+数据→节点树）；真机 `V6_sfc_full_tree` **PASS**
+
+**★V4 之后的追加批次（2026-09-28，超出原方案范围）**——详见 `docs/proteus-vapor-honest-boundaries.md`：
+- 结构变更增量：`proteus_layout_splice`（追加 / **中间插入** / 删除）+ 适配器 `takeSplice` + 宿主 `splice()`
+  ⇒ 真机 A/B：增 336KB→56KB · 删 280KB→**526B** · 头部插入 308KB→**28KB**
+- 文本变更增量：适配器复用文本节点 + 核心多范围重排 + 宿主度量注入 ⇒ 真机 **281KB→15KB**
+- relayout 真凶：持久 taffy 树（**真机 17.16ms→1.52ms**，度量调用 6003→0）
+- 内存回收：孤点压实（真机 10 轮 churn **末轮孤点 0**）
+- 跨节点度量复用：`textStyleKey` 进键（真机 **CoreText 调用降 4×**）
 
 ---
 
