@@ -153,12 +153,13 @@ describe('V2 Step 3-5 · 依赖图与订阅表', () => {
     expect(byName.b).toEqual(['text.content'])
   })
 
-  it('★求值函数：纯成员访问走 member（免解析），复杂表达式走 expr', () => {
+  it('★求值函数：纯成员访问走 member（免解析），含运算表达式走 program', () => {
     const src = sfc(`const item = ref({})\nconst n = ref(1)\n`, `<p-view :title="item.name">{{ n + 1 }}</p-view>`)
     const res = buildVaporSubscriptions(src, 'a.vue')
     const forms = res.table.evaluators.map((e) => e.form)
     expect(forms).toContain('member')
-    expect(forms).toContain('expr')
+    // ★V6：含运算的表达式编译为 **program**（此前是 `expr` ⇒ 参考实现不支持 ⇒ 永不更新）
+    expect(forms).toContain('program')
   })
 
   it('★订阅表可 JSON 序列化（方案 §4.4：产物必须可下发，不能是源码字符串）', () => {

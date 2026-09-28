@@ -34,6 +34,8 @@
 | 17 | 「`notes` 是自由文本、门禁无法消费」 | **已闭**：新增 `VaporDiagnostic`（severity/code/message/hint） | 同上 |
 | 18 | **「注释声明用官方 `bindings` 定语义，实测根本没参与判定」** | **已闭**：真校正（含 `setup-reactive-const` / `setup-maybe-ref` / `setup-ref` 三类实测值）| `compiler/src/vapor/sources.ts` |
 | 19 | 「cli 漏声明 `@proteus-vue/slot-runtime` 依赖」 | **已闭**：补声明（此前靠 pnpm 隐式提升才没炸） | `packages/cli/package.json` |
+| 20 | 「含运算的表达式落到 `expr` ⇒ 槽位永不更新」 | **已闭**：表达式程序（`form='program'`）| `compiler/src/vapor/expr.ts` · `slot-runtime/src/expr.ts` · `tests/vapor-expr-program.test.ts` |
+| 21 | 「`undefined` 被编成 `null` ⇒ `a === undefined` 静默算错」 | **已闭**：独立 `undef` 节点（破坏性验证命中） | 同上 |
 
 ---
 
@@ -44,7 +46,7 @@
 | # | 边界 | 现状 | 影响面 | 建议 |
 |---|---|---|---|---|
 | 1 | ~~**无 `:key` 的 `v-for` 用下标兜底**~~ | ✅ **已闭（2026-09-28）**：改为 **error 级结构化诊断**（`VAPOR_VFOR_WITHOUT_KEY`，带可执行 `hint`）⇒ `hasErrors=true`，**调用方应阻断**；逃生通道 `allowIndexKey`（`true` 或 `[listId]`，显式放行）；`proteus explain --vapor` 显眼展示 | — | — |
-| 2 | **外层别名在内层表达式被引用** | ★**已缩窄**：真因是表达式含运算 ⇒ 编译器给 `expr` 形态 ⇒ 参考实现只支持纯路径 ⇒ 求值器**未实例化**。**已从"静默"改为"上报"**（`LoadResult.uninstantiatedSlots`，有常驻用例 + 破坏性验证） | 该类表达式**仍然不会被更新**（限制仍在），但**不再是静默失效**——调用方可据此降级 | 要真正支持需目标端表达式执行器（Hermes function 构造 / Web `new Function` / MP 走 WXS）——属三端执行层工作 |
+| 2 | ~~**外层别名在内层表达式被引用**~~ | ✅ **已闭（2026-09-28）**：根因是表达式**含运算** ⇒ 落到 `expr` 形态 ⇒ 不支持求值。⇒ 新增**表达式程序**（方案 §4.3 Step 4）：编译期把表达式编成**可序列化程序**（纯 JSON，跨端免 eval），运行时解释执行。覆盖算术/比较/严格相等/逻辑短路/空值合并/三元/成员/计算成员/对象/数组/模板串；**不支持的构造编译期拒绝 + 上报**（`VAPOR_EXPR_UNSUPPORTED`，warn）| 见右 | ★仍不支持（**刻意**）：函数调用（纯度属 C1）、宽松 `==`/`!=`（语义微妙，宁可拒绝不冒险）、可选链 `?.`、赋值/自增、内联函数 |
 | 3 | **结构性列表变更未实现** | `LIST_SET`/`LIST_SPLICE` 在运行时**显式跳过**（`kind === 'list-data'` 的 continue） | 增删行/整表替换**不会更新**（静默）；当前只支持行内字段更新 | 需「数据源引用协议」——独立课题 |
 
 ### P1 · 影响覆盖可信度（不影响正确性）

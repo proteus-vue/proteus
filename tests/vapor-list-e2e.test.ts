@@ -404,8 +404,27 @@ describe('V4 · ★嵌套 v-for（本仓实测补的未验证项）', () => {
     const rt = new SlotRuntime(new PropKeyTable(), new StringPool(), () => {})
     const vapor = new VaporRuntime(table, rt, VaporRuntime.buildEvaluators(table.evaluators), new ListRegistry())
     const res = vapor.load({ read: () => undefined }, () => {})
-    expect(res.uninstantiatedSlots.length).toBeGreaterThan(0) // ★首版这里恒为空（静默）
-    expect(res.uninstantiatedSlots[0].propKey).toBe('text.content')
+    // ★V6 起：外层别名 + 运算的表达式**能编译为 program** ⇒ 不再未实例化。
+    //   （V4 时这里是 `> 0`——那反映当时的缺口；现在缺口已闭 ⇒ 更新为"应为 0"。）
+    //   但"未实例化必上报"的机制仍受保护——见下方用**函数调用**（真不支持）验证的那条。
+    expect(res.uninstantiatedSlots.length).toBe(0)
+
+    // ★机制仍须可观测：用**真不受支持**的构造（函数调用）验证上报通路
+    // ★用「无调用但语法不受支持」的构造（宽松相等）——调用会被判 L0（不归运行时管），
+    //   扫不到上报清单（本仓实测辨析：见 vapor-v3 同条用例的说明）
+    const unsupported = buildVaporSubscriptions(
+      sfc(`const n = ref(1)\n`, `<p-text :width="n == 1" />`),
+      'unsup.vue',
+    )
+    const rt2 = new SlotRuntime(new PropKeyTable(), new StringPool(), () => {})
+    const vapor2 = new VaporRuntime(unsupported.table, rt2, VaporRuntime.buildEvaluators(unsupported.table.evaluators), new ListRegistry())
+    const res2 = vapor2.load({ read: () => undefined }, () => {})
+    // ★两个上报通道语义不同（本仓实测辨析）：
+    //   · `unsupportedEvaluators` —— **通用**通道（任何形态未实例化都进这里）
+    //   · `uninstantiatedSlots`   —— **行内槽位专用**（`kind='list-item'`，配合列表通道）
+    //   本用例的 `n == 1` 是普通 style 槽位 ⇒ 走**通用**通道。
+    //   （我一度断言 `uninstantiatedSlots` ⇒ 测试红；那是选错了通道，不是缺功能。）
+    expect(res2.unsupportedEvaluators.length, '不受支持的表达式应走通用上报通道').toBeGreaterThan(0)
   })
 
   it('★单层列表不受影响（回归）', () => {

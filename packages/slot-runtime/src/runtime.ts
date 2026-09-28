@@ -18,6 +18,7 @@
 import { OpCode } from './opcode'
 import type { SlotKind, UpdateTier } from './opcode'
 import type { ListRegistry } from './list-registry'
+import { evalExpr } from './expr'
 import { SlotRuntime, createSlot } from './slot'
 import type { Slot } from './slot'
 import type { EvaluatorSpec, SubscriptionTable } from './table'
@@ -117,6 +118,14 @@ export class VaporRuntime {
             }
             return v
           })
+          break
+        }
+        case 'program': {
+          // ★★结构化表达式程序：用本包的解释器执行（方案 §4.3 Step 4 的落地）
+          //   这是「含运算的表达式」的**标准路径**——不再落到 `expr` 形态而失效。
+          const prog = s.program
+          if (!prog) break // 缺程序体属产物异常 ⇒ 保持未实例化（上报）
+          out.set(s.evaluatorId, (ctx) => evalExpr(prog, ctx as { read(name: string): unknown }))
           break
         }
         case 'const': {
