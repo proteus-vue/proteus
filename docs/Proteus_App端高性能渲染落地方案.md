@@ -685,7 +685,7 @@ export default defineConfig({
 
 ### M3 · Android 端补全（≈6 人周）—— ◐ **部分完成**（核实于 2026-09-28）
 
-- [x] `list` 复用池 —— ✅ `packages/layout-core-rust/src/recycle.rs`（621 行，Lifecycle/方向敏感预载/RecyclePool）+ `hosts/android/results/layout-recycle.json`（4000 行 **reuse_ratio 0.9947**）
+- [x] `list` 复用池 —— ✅ `packages/layout-core-rust/src/recycle.rs`（Lifecycle/方向敏感预载/RecyclePool）+ `hosts/android/results/layout-recycle.json`（4000 行 **reuse_ratio 0.9947**）+ ★**iOS 自绘宿主已接线（2026-09-28）**：`proteus_recycle_{create,update,stats,destroy}` FFI（**核心只给决策、平台只执行动作**）+ `mountVirtual`/`scrollRows`（虚拟化：3002 节点只物化 **14 行/44 层** · 建层 **74** / 复用 **1554** · 层数恒定 · **真机 `V12_scroll_recycle` PASS**；见 `docs/proteus-vapor-honest-boundaries.md` #26）
 - [x] `rich-text` —— ⚠️ **仅 IR 声明**（`component-ir/src/primitives.ts` 标 `status:'implemented'`），**无宿主渲染证据**
 - [ ] 与原生组件混用（map / webview）—— ◐ **仅 Android**：`hosts/android/README.md` M3（WebView 宿主）+ `native-host-verify.py` + `scroll-sync-verify.py`（z-order 实测 native-on-top）
 - [x] 事件系统、手势 —— ✅ `packages/gesture/src/`（tap/longpress/pan）+ `hosts/android/results/{gesture,hit/layout-hit}.json`
@@ -748,6 +748,21 @@ export default defineConfig({
 ### 9.3 长列表验收（M3）
 
 死亡长列表定义：4000 行数据、7.4M JSON、每行 40+ 元素、嵌套 10+ 层、共渲染约 2 万元素、含阴影/圆角/边框。回滚到顶部的过程中统计帧率。
+
+**★当前实测状态（2026-09-28，分两步，均真机 iPhone 12）**：
+
+| 步骤 | 形态 | 实测 |
+|---|---|---|
+| ① 纯逻辑跑批 | `recycle.rs` 4000 行 / 400 帧（含回滚） | `reuse_ratio` **0.9947** · `max_live` 22 · `demoted` 4788（Android 侧报告 + 本机单测） |
+| ② **端上虚拟化** | `V12_scroll_recycle`：1000 行 SFC 产物 → 模板实例化 → `mountVirtual` → 60 帧滚动（下 30 + 回 30） | 3002 节点 → **只物化 14 行/44 层** · 每帧 acquire/release **≤15** · **建层 74 / 复用 1554**（95.5%）· 层数恒定 **74** · **PASS** |
+
+②相对①补上的是**平台侧执行**：核心只给「本帧 acquire/release 哪几行 + 方向」的**决策**，
+宿主执行「取/还 CALayer」的**动作**（层的同类型复用 + 完全重配 + 按行号序插入）。
+⇒ 「滚动时不触发堆分配」这条现在有**端上证据**（建层总数 74，与滚动距离无关），不只是纯逻辑推演。
+
+★**尚未覆盖**（诚实边界，见 `proteus-vapor-honest-boundaries.md` #26）：
+文档原定义的「4000 行 / 每行 40+ 元素 / 2 万元素」规模未在端上跑；
+虚拟化下 `splice`（行数变化需重新 `mountVirtual`）；帧率（fps）未采集——本档量的是层与复用读数。
 
 ### 9.4 性能棘轮门禁
 
