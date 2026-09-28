@@ -122,7 +122,7 @@ const BN = { snapshot: 'bench-final' }
 // ★构建标识：每次构建写入，用于**确凿判定**设备上跑的是哪份代码
 //   （踩坑：靠文件 mtime 判断"报告是否刷新"不可靠——新建目标文件的时间恒为"现在"；
 //    且我看不出设备实际执行的是旧 bundle，白跑一轮。有了这个字段就能一眼判定。）
-const BUILD_ID = '9fd5f96a-211151'
+const BUILD_ID = 'df61c1ac-211343'
 const now = (): number => Date.now()
 /** 宽松解析（宿主返回可能是字符串或已是对象） */
 const safeParseAny = (s: any): any => {
@@ -2441,6 +2441,118 @@ CASES.push({
         runtime: { l1_slots: loadRes.l1Slots, l0_slots: loadRes.l0Slots },
         covered: 'virtualized mount + direction-sensitive recycle + layer pool reuse + rollback',
         not_covered: '真实 UITouch（tapAt 绕过 UITouch，只覆盖「命中→派发」）；Android 侧同款',
+      },
+    })
+  },
+})
+
+/* V14 · ★★S2 内存收敛（滚动 3 个来回后内存不得持续增长）—— iOS checklist 唯一未闭项 */
+CASES.push({
+  name: 'V14_s2_memory_convergence',
+  note: '★★S2 内存收敛：1000 行虚拟化列表滚动 3 个完整来回，逐步采样 phys_footprint，判「收敛」而非「单点低」',
+  fn: async () => {
+    const builtTpl = vaporTableJson as unknown as {
+      ok: boolean
+      table: import('@proteus-vue/slot-runtime').SubscriptionTable
+      template: import('@proteus-vue/slot-runtime').LayoutTemplate
+    }
+    if (!builtTpl.ok || !builtTpl.template || !proteusSelfDraw.mountVirtual) {
+      results.push({ case: 'V14_s2_memory_convergence', note: '✗ 模板产物/宿主入口不可用', items: 0, nodes: 0,
+        vue_ms: -1, to_request_ms: -1, serialize_ms: -1, host_ms: -1, total_ms: -1, patch_count: -1, request_bytes: -1 })
+      return
+    }
+    const tpl = builtTpl.template
+    const table = builtTpl.table
+    const ROWS = 1000
+    const rows = Array.from({ length: ROWS }, (_, i) => ({ id: i + 1, dotW: 36, textW: 120, title: `行 ${i + 1}` }))
+    const data: Record<string, unknown> = { list: rows }
+    const inst = instantiateTemplate(tpl, { viewport: VP, read: (n) => data[n], table, registry: new ListRegistry() })
+    if (!inst.virtual) {
+      results.push({ case: 'V14_s2_memory_convergence', note: '✗ 无虚拟化描述', items: 0, nodes: inst.nodes.length,
+        vue_ms: -1, to_request_ms: -1, serialize_ms: -1, host_ms: -1, total_ms: -1, patch_count: -1, request_bytes: -1 })
+      return
+    }
+    const mountOut = safeParseAny(proteusSelfDraw.mountVirtual(JSON.stringify({
+      viewport: VP, nodes: inst.nodes, rows: inst.virtual.rows,
+    })))
+    const memAfterMount = (safeParseAny(proteusSelfDraw.virtualStats?.() ?? '{}').mem_mb as number)
+      ?? (mountOut?.mem_mb as number) ?? -1
+
+    // ★★判据设计（"收敛"必须是趋势，不是单点）
+    //
+    // 【为什么单点读数不够（本仓纪律：单点比较是空判据）】"内存低"与"内存收敛"是两件事：
+    //   一个每轮增长 2MB 的实现，在第 1 轮也可能"很低"。⇒ 必须**滚动多个来回**并看**趋势**。
+    //   判据：末轮峰值 ≤ 首轮峰值 + 容差（容差给 3MB —— 光栅缓存/分配器碎片有合理波动）。
+    //   ★反向判据（防"什么都没做"）：每轮必须有真实的层增删（reused 增长）——
+    //     否则"内存没涨"只是因为**根本没在滚动**（本仓见过的"空判据"形态）。
+    const STEP = 560          // 10 行/帧
+    const FRAMES_PER_LEG = 68 // 68×560px ≈ 全表（1000 行 × 64px = 64000px）
+    const ROUNDS = 3
+    const legs: Array<{ round: number; dir: string; mem: number }> = []
+    let reusedStart = -1
+    let reusedEnd = -1
+    let churn = 0
+
+    for (let r = 0; r < ROUNDS; r++) {
+      // 向下一趟
+      for (let i = 0; i < FRAMES_PER_LEG; i++) {
+        const o = safeParseAny(proteusSelfDraw.scrollRows(0, STEP) ?? '{}')
+        churn += (((o.acquired as number[]) ?? []).length + ((o.released as number[]) ?? []).length)
+        if (reusedStart < 0) reusedStart = (o.virtual as { layers_reused?: number })?.layers_reused ?? -1
+        reusedEnd = (o.virtual as { layers_reused?: number })?.layers_reused ?? reusedEnd
+      }
+      legs.push({ round: r, dir: 'down', mem: (safeParseAny(proteusSelfDraw.scrollRows(0, 0) ?? '{}').mem_mb as number) ?? -1 })
+      // 回滚一趟（§9.3 的核心场景）
+      for (let i = 0; i < FRAMES_PER_LEG; i++) {
+        const o = safeParseAny(proteusSelfDraw.scrollRows(0, -STEP) ?? '{}')
+        churn += (((o.acquired as number[]) ?? []).length + ((o.released as number[]) ?? []).length)
+        reusedEnd = (o.virtual as { layers_reused?: number })?.layers_reused ?? reusedEnd
+      }
+      legs.push({ round: r, dir: 'up', mem: (safeParseAny(proteusSelfDraw.scrollRows(0, 0) ?? '{}').mem_mb as number) ?? -1 })
+    }
+
+    const finalStats = safeParseAny(proteusSelfDraw.virtualStats?.() ?? '{}')
+    const mems = legs.map((l) => l.mem).filter((m) => m > 0)
+    // 首轮（第 1 趟向下结束） vs 末轮（最后一趟回滚结束）
+    const firstMem = mems.length > 0 ? mems[0]! : -1
+    const lastMem = mems.length > 0 ? mems[mems.length - 1]! : -1
+    const peakMem = mems.length > 0 ? Math.max(...mems) : -1
+    const growth = lastMem - firstMem
+
+    const checks = {
+      mountOk: !!mountOut?.ok,
+      // ★内存读数有效（>0；三者都有效才算）
+      memValid: mems.length === ROUNDS * 2 && mems.every((m) => m > 0),
+      // ★★**收敛判据**：末轮 ≤ 首轮 + 3MB（3 个来回后不持续增长）
+      converged: growth <= 3,
+      // ★★**反向判据**：滚动期间**真的有层复用**（否则"内存没涨"是因为没滚动——空判据）
+      realChurn: churn > 1000 && reusedEnd > reusedStart,
+      // ★层数仍有界（虚拟化没退化成全量物化）
+      layersBounded: ((finalStats.layer_count as number) ?? 1e9) < 400,
+      // ★复用率守住（与 V12 同口径）
+      reuseWorks: ((finalStats.layers_reused as number) ?? 0) > 0
+        && ((finalStats.layers_reused as number) / (((finalStats.layers_reused as number) ?? 0) + ((finalStats.layers_created as number) ?? 1))) > 0.5,
+    }
+    const verdict = Object.values(checks).every(Boolean) ? 'PASS' : 'FAIL'
+    results.push({
+      case: 'V14_s2_memory_convergence',
+      note: `${ROWS} 行 × ${ROUNDS} 个完整来回：内存 ${mems.join(' → ')} MB（首 ${firstMem} · 末 ${lastMem} · 峰 ${peakMem}）· 层增删 ${churn} 次`,
+      items: ROWS, nodes: inst.nodes.length,
+      vue_ms: 0, to_request_ms: 0, serialize_ms: 0, host_ms: 0, total_ms: 0,
+      patch_count: 0, request_bytes: 0,
+      extra: {
+        verdict, checks,
+        mem_after_mount: memAfterMount,
+        mem_sequence: mems,
+        legs,
+        first_mem: firstMem, last_mem: lastMem, peak_mem: peakMem, growth_mb: Math.round(growth * 10) / 10,
+        churn_events: churn,
+        layers_reused: finalStats.layers_reused,
+        layers_created: finalStats.layers_created,
+        layer_count: finalStats.layer_count,
+        covered: '滚动 3 个来回的 phys_footprint 趋势 + 反向判据（确有层复用）',
+        // ★诚实边界：只测了**虚拟化路径**的收敛；非虚拟化路径（全量物化）的内存收敛未测
+        not_covered: '非虚拟化路径的内存收敛；Instruments 级别的 backing store 细分',
       },
     })
   },
