@@ -50,20 +50,37 @@
 
 ## 当前状态速览（最近一次更新：2026-09-28 **V0 探针：编译器路线诊断成立**）★新会话以此为准
 
-> ★★**方向 A 已过 V0 关卡**（方案 `docs/Proteus_VaporIR更新编译器设计方案.md` §9；
-> 本机复跑 `bash hosts/ios/run-v0-probe.sh`）：
-> · **结论**：单节点更新的 O(n) 成本**确实**在「VNode 重建 + 整树 patch 遍历」——
->   决定性证据 = `patchProp` 调用 **5003 → 7**（≈715×）；耗时 10–14ms → **1–3ms**（桌面 JSC）。
-> · **未闭环项**：① 真机复跑被**签名/平台组件**阻塞（见下）；
->   ② 桌面绝对毫秒 ≠ 设备（真机 79ms ≈ 桌面 6–8×）⇒ 外推真机 memo 档约 **8–20ms**，
->   **不得**用桌面数字宣称真机达标。
-> · **下一步**：V1（IR 扩展与指令集）可开工；真机复跑待签名恢复后补，报告含 `V0_*` 用例。
+> ★★**方向 A 已过 V0 关卡 · 真机达标**（方案 `docs/Proteus_VaporIR更新编译器设计方案.md` §9）：
+> · **真机（权威 · iPhone 12 / iOS 26.3 · 报告 `7094b968-094631`）**：
+>   单节点更新 **78ms → 9ms**（v-memo 等价物，8.7×）/ 10ms（组件拆分）；
+>   `patchProp` **5003 → 7**；`V0_SELFCHECK_FAIL` **0 条**（三用法宿主读数逐位一致）。
+>   ⇒ 判读表第一档成立（70ms → 10ms 量级），**达到 §10「单节点更新 P95 ≤ 10ms」合格线**。
+> · **额外发现（方向 B 靶子）**：零行变更场景 Vue 侧同降 9ms，但宿主侧 78–89ms、
+>   `relayout` = 7005（**整树重排**）——标题 margin 改变其后所有行位置 ⇒ 宿主侧另有
+>   与 Vue 无关的 O(树规模) 热点（与增量布局的边界判定同源）。
+> · **桌面通道**（`bash hosts/ios/run-v0-probe.sh`）：10–14ms → 1–3ms，与真机同比率同方向。
+> · **下一步**：V1（IR 扩展与指令集）可开工。
 >
-> ★**本机真机通道当前不可用（2026-09-28 实测，勿重复排查）**：
-> ① 代码签名身份**已过期**（唯一身份 `kagsdeiMac.local` 报 `CSSMERR_TP_CERT_EXPIRED`，valid=0）；
-> ② `~/Library/Developer/Xcode/UserData/Provisioning Profiles/` 目录**不存在**（描述文件全丢）；
-> ③ Xcode 26.5 **缺 iOS 26.5 平台组件**（`xcodebuild` 报 "iOS 26.5 is not installed"）→ 连申请描述文件都失败。
-> ⇒ 恢复 = Xcode 登录 Apple ID 重签证书 + 下载平台组件；此前真机项一律走桌面通道或标注未验证。
+> ★**真机通道已全线打通（2026-09-28）——三层阻塞已解决**：
+> ① **签名身份**：用户新增 Apple ID（`lyl@shxuxi.cn` · Personal Team `XKH568R7A5`）后证书已签发，
+>   但报 `CSSMERR_TP_NOT_TRUSTED` —— 根因是**缺 WWDR G3 中间证书**（Xcode 自带只有 G6）：
+>   已从 apple.com/certificateauthority 取 `AppleWWDRCAG3.cer` 并 `security add-certificates` 装入登录钥匙串
+>   ⇒ `security find-identity -v -p codesigning` 现已 **1 valid identity**。
+> ② **旧描述文件已废**：仓库内历史构建残留的 profile（team `F4R3P3L477`，有效期到 2026-10-04，
+>   含本机 UDID）其签名证书是 `lyunlai@dingtalk.com (CF6SQC2G5X)` —— **私钥不在钥匙串**
+>   （指纹 B5:13:FF:F5… 与现存两个身份均不匹配）⇒ 无法用它签名，只能为新团队重新申请。
+> ③ **Xcode 26.5 平台组件缺失（根因已定位）**：`xcodebuild` 判定设备目的地不可用并报
+>   "iOS 26.5 is not installed"——本机 iOS 运行时只有 17.0/17.4/18.0（旧 Xcode 时代的），
+>   **Xcode 26.5 从未装过自己的 iOS 平台组件**（此前设备实验走 devicectl + swiftc，不需要它）。
+>   ⇒ 已按报错指引执行 `xcodebuild -downloadPlatform iOS`（arm64 档 8.52 GB）**安装完成**，
+>   设备目的地恢复正常。
+> ④ **bundle id 冲突**：`dev.proteus.experiments` 仍被旧团队占用（免费团队不可复用）⇒ 新包名
+>   **`cn.shxuxi.proteus.experiments`**（描述文件已生成，team `XKH568R7A5` · 证书 `lyl@shxuxi.cn` · 有效至 2026-10-05）。
+> ⑤ **免费账号 3 应用上限**：设备上旧团队三个应用占满名额 ⇒ 卸载被取代的
+>   `dev.proteus.experiments`（★`uninstall` 收 **bundle id**，不是 application-identifier）后安装成功。
+> ⑥ **需用户在设备上手动信任证书**（设置 → 通用 → VPN与设备管理）——iOS 强制步骤，脚本无法代做。
+> ★**现行跑法**：`PROTEUS_BUNDLE_ID=cn.shxuxi.proteus.experiments bash hosts/ios/run-selfdraw.sh --bench`
+>   （注：默认 `BUNDLE_ID` 仍是 `dev.proteus.experiments`，需显式覆盖或改默认值）。
 
 > ★★**上一阶段（App 端自绘路线）已收口**（提交 `7669a9dd`，详见下方「加压测试逼出性能天花板」一节）：
 > · **已完成**：Vue → 自定义渲染器 → **Rust 核心算几何** → CALayer 自绘，端到端真机跑通；
@@ -266,16 +283,24 @@ diff/patch 随**页面规模**线性、**与"改了多少"无关**。
 两个场景分离「补丁」与「遍历」两种成本：**dot**（单节点更新，= 方案 §0.4 场景）与
 **header**（零行变更，归因整树重建+遍历的固定成本）。
 
-**★读数（1000 项 · 桌面 JSC · 7 次取中位 · 复跑 `bash hosts/ios/run-v0-probe.sh`）**
-| 用例 | plain | v-memo 等价物 | 组件拆分 |
+**★★真机读数（权威 · iPhone 12 / iOS 26.3 · 1000 项 · 报告 build_id `7094b968-094631` · 24/24 用例）**
+| 用例 | plain（现状） | v-memo 等价物 | 组件拆分 |
 |---|---|---|---|
-| 单节点更新（改第 500 行圆点） | 10–14ms | **1–3ms** | **1–3ms** |
-| 零行变更（改标题 margin） | 9–25ms | **0–1ms** | **0–2ms** |
+| **单节点更新（改第 500 行圆点）** | **78ms** | **9ms**（8.7×） | **10ms**（7.8×） |
+| 零行变更（改标题 margin） | 80ms | 9ms | 12ms |
 | **`patchProp` 调用次数** | **5003** | **7** | **7** |
 
-★**决定性证据是 patchProp 的 5003 → 7（≈715×）**：这直接证明现状的 O(n) 成本
-**确实**在「整棵 patch 遍历 + 逐节点标脏」，而不在响应式或 diff 算法本身——
-用 Vue 原生手段把未变子树挡在遍历之外，成本随即降到 1–3ms 量级。**归因成立，方案不暂停。**
+★**决定性证据是 patchProp 的 5003 → 7**：直接证明现状的 O(n) 成本**确实**在
+「整棵 patch 遍历 + 逐节点标脏」，不在响应式或 diff 算法本身——用 Vue 原生手段把未变子树
+挡在遍历之外，真机耗时即 **78ms → 9ms**。⇒ 判读表第一档成立（70ms → 10ms 量级），
+**达到方案 §10「单节点更新 P95 ≤ 10ms」合格线**。**归因成立，方案不暂停。**
+
+**★★真机带出的额外发现（方向 B 的新靶子）**：零行变更场景（改标题 margin）Vue 侧同样降到 9ms，
+**但宿主侧要 78–89ms、`relayout` = 7005 节点（整树重排）**——标题 margin 改变其后所有行的位置。
+⇒ 宿主侧存在**与 Vue 无关的 O(树规模) 热点**（与增量布局的边界判定同源），是方向 B 的明确靶子。
+
+**装置可信度三重**：① 桌面自检 6/6；② 真机 `V0_SELFCHECK_FAIL` **0 条**（三用法 relayout/layers 逐位一致）；
+③ 真机 plain 与既有 S2 基线吻合（78ms vs 81ms）。桌面通道（`run-v0-probe.sh`）10–14ms → 1–3ms，同比率同方向。
 
 **★★测量装置纪律（本轮新增，第五次同类）**
 · 桌面自检先行：`tests/v0-probe-mechanism.test.ts`（6/6）——真机一轮 3–4 分钟，
@@ -283,8 +308,8 @@ diff/patch 随**页面规模**线性、**与"改了多少"无关**。
   确实跳过未变行的 VNode 创建、comp 的行渲染次数**只 +1**、`plain` 的 patchProp 仍是 O(n)。
 · 等价性自检入真机用例：`V0_SELFCHECK_FAIL`——三用法的宿主读数（relayout/updated_layers）
   必须一致，否则数字不可比、探针结论作废（与 `S2_SELFCHECK_FAIL` 同款）。
-· 桌面 JSC ≠ 设备：**绝对毫秒不可跨**（真机 79ms ≈ 桌面 6–8×）；按比率外推真机 memo 档
-  约 **8–20ms**——**不得**宣称真机已达 ≤10ms 目标，该目标仍需真机复跑确认。
+· 桌面 JSC ≠ 设备：**绝对毫秒不可跨**（真机 79ms ≈ 桌面 6–8×）——桌面通道只用于
+  「比率与量级」与「无签名时的快速回归」；**结论一律以真机为准**（本轮真机 9ms 已确认外推成立）。
 
 **★本轮排掉的环境阻塞（真机通道当前不可用，勿重复排查）**
 ① 代码签名身份**已过期**（`kagsdeiMac.local` → `CSSMERR_TP_CERT_EXPIRED`，valid=0）；

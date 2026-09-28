@@ -27,7 +27,10 @@ APP="$BUILD/ProteusSelfDraw.app"
 # ★包名必须与**已 provision 的描述文件**匹配（免费个人团队无法任意新增 App ID）。
 #   本机可用的 ID 见：for pf in ~/Library/Developer/Xcode/UserData/Provisioning\ Profiles/*.mobileprovision;
 #     do security cms -D -i "$pf" | PlistBuddy -c "Print :Entitlements:application-identifier" /dev/stdin; done
-BUNDLE_ID="${PROTEUS_BUNDLE_ID:-dev.proteus.experiments}"
+# ★2026-09-28 换默认值：旧包名 `dev.proteus.experiments` 属**旧团队 F4R3P3L477**（其签名证书私钥已丢），
+#   且该设备上的免费账号名额被旧团队三个应用占满（**上限 3 个**）⇒ 改用新团队 XKH568R7A5 的包名。
+#   若描述文件缺失，先跑：bash hosts/ios/experiments/device/provision.sh cn.shxuxi.proteus.experiments XKH568R7A5
+BUNDLE_ID="${PROTEUS_BUNDLE_ID:-cn.shxuxi.proteus.experiments}"
 export CARGO_TARGET_DIR="${CARGO_TARGET_DIR:-$ROOT/spike/target}"
 
 MODE="selfdraw"
@@ -144,19 +147,56 @@ codesign --force --sign "$IDENTITY" --entitlements "$BUILD/entitlements.plist" -
 echo "    身份：$IDENTITY · 描述文件：$(basename "$PROFILE")"
 
 echo "==> ⑦ 安装并启动"
-xcrun devicectl device install app --device "$UDID" "$APP" 2>&1 | grep -iE "installed|error" | tail -2 || true
+# ★★安装必须**校验成功**，失败即停（本仓实测踩坑：安装失败时脚本继续往下走，
+#   在第 ⑧ 段**盲等一个永远不会到来的报告**，白等 10 分钟还看不出原因）。
+#   免费开发者账号在设备上最多装 **3 个** App；超限的报错形如
+#   `maximum number of installed apps using a free developer profile: {...}`
+#   ⇒ 卸载该清单里不再需要的旧应用即可（注意 uninstall 收的是 **bundle id**
+#     如 `dev.proteus.experiments`，**不是** application-identifier `TEAM.dev.proteus.experiments`）。
+INSTALL_LOG="$(mktemp)"
+if ! xcrun devicectl device install app --device "$UDID" "$APP" > "$INSTALL_LOG" 2>&1; then
+  echo "✗ 安装失败——原因（详见下方）："
+  grep -E "maximum number of installed apps|Invalid|error [0-9]+|无法安装|Failed" "$INSTALL_LOG" | head -6 | sed 's/^/    /'
+  echo "    ★若是「max 3 apps」：用 bundle id 卸载旧应用后重跑，例如"
+  echo "      xcrun devicectl device uninstall app --device $UDID <bundle-id>"
+  rm -f "$INSTALL_LOG"
+  exit 4
+fi
+grep -iE "installed" "$INSTALL_LOG" | tail -1 | sed 's/^/    /'
+rm -f "$INSTALL_LOG"
+
 # ★★从**桌面点开**等价于不带参数启动 = 自绘场景（两个 bundle 都在包内，任选其一都可用）。
 #   `--bench` 只是显式指定跑基准。
 # ★★必须先**终止旧进程**（本仓实测踩到：`process launch` 对已运行的应用只是切到前台，
 #   于是「重装 + 启动」后跑的还是**旧代码**，而报告 build_id 不变——我因此白查了好几轮，
 #   还误以为「S 组注册失败」。⇒ 纪律：重装后必须 terminate 再 launch。）
 xcrun devicectl device process terminate --device "$UDID" "$BUNDLE_ID" >/dev/null 2>&1 || true
-sleep 2
+# ★terminate 是**异步**的，但不能固定 sleep 盲等（本仓效率纪律）：
+#   复用仓库自带的**条件等待**脚本，探测「该可执行文件已不在设备进程列表」。
+#   ★注意匹配的锚点：`device info processes` 列的是**可执行路径**
+#   （我们的 = `ProteusSelfDraw`），不含 bundle id——故用可执行名而非 $BUNDLE_ID。
+#   探测不到 = 就绪（含"本来就没在跑"，故用 `! grep`）。
+bash "$ROOT/.agents/skills/ai-efficiency-rules/scripts/wait_for.sh" \
+  --cmd "! xcrun devicectl device info processes --device $UDID 2>/dev/null | grep -q ProteusSelfDraw" \
+  --timeout 20 --interval 3 >/dev/null 2>&1 || true
+# ★★启动同样必须校验（本仓实测：首次用新证书安装后，启动会被拦为
+#   "profile has not been explicitly trusted by the user" —— 需在设备上
+#   设置 → 通用 → VPN与设备管理 → 信任该开发者证书；此步骤无法由脚本代做）。
+LAUNCH_LOG="$(mktemp)"
 if [ "$MODE" = "bench" ]; then
-  xcrun devicectl device process launch --device "$UDID" "$BUNDLE_ID" --bench 2>&1 | tail -2 || true
+  xcrun devicectl device process launch --device "$UDID" "$BUNDLE_ID" --bench > "$LAUNCH_LOG" 2>&1 || true
 else
-  xcrun devicectl device process launch --device "$UDID" "$BUNDLE_ID" 2>&1 | tail -2 || true
+  xcrun devicectl device process launch --device "$UDID" "$BUNDLE_ID" > "$LAUNCH_LOG" 2>&1 || true
 fi
+if grep -qiE "not been explicitly trusted|invalid code signature|error 3 \(0x03\)" "$LAUNCH_LOG"; then
+  echo "✗ 启动被拦：需在**设备上手动信任开发者证书**"
+  echo "    设置 → 通用 → VPN与设备管理 → 「Apple Development: …」→ 信任"
+  echo "    （iOS 的强制步骤，脚本无法代做）"
+  rm -f "$LAUNCH_LOG"
+  exit 5
+fi
+tail -1 "$LAUNCH_LOG" | sed 's/^/    /'
+rm -f "$LAUNCH_LOG"
 
 echo "==> ⑧ 取回报告与截图"
 mkdir -p "$HERE/results"
