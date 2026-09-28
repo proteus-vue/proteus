@@ -293,6 +293,139 @@ fn incremental_equals_full_when_boundary_itself_changes() {
     assert_equivalent("列表行·类B（边界自身变化）", &inc, &full);
 }
 
+/// ★★六条前提守卫的**逐条覆盖**（每条都必须被触发过，否则等于没测）
+///
+/// 【为什么单列这一组（本仓实测的教训）】首轮我用「无视 grow 前提」做破坏性验证时
+///   **测试全绿** —— 说明守卫**从未被触发**。逐条覆盖才能保证每条守卫都真的在守。
+///   判据两层：① 断言**具体哪条**守卫拒绝（`translation_reject`）；② 仍与全量等价。
+#[test]
+fn translation_guards_each_reject_and_stay_equivalent() {
+    // 辅助：构造「P 有若干兄弟子项」的树并可定制，返回 (tree, [P, A, B])
+    fn build(customize: impl Fn(&mut LStyle, &mut LStyle)) -> (LayoutTree, Vec<NodeIndex>) {
+        let mut p_style = LStyle {
+            display: Display::Flex,
+            flex_direction: FlexDirection::Column,
+            width: Some(300.0),
+            height: Some(400.0),
+            ..Default::default()
+        };
+        let mut a_style = LStyle { width: Some(300.0), height: Some(50.0), flex_shrink: 0.0, ..Default::default() };
+        let mut b_style = LStyle { width: Some(300.0), height: Some(50.0), flex_shrink: 0.0, ..Default::default() };
+        customize(&mut p_style, &mut a_style);
+        let mut t = LayoutTree::new();
+        let p = t.push(mk(1, NO_PARENT, p_style));
+        t.roots.push(p);
+        let a = t.push(mk(2, p, a_style));
+        t.nodes[p as usize].children.push(a);
+        let b = t.push(mk(3, p, b_style));
+        t.nodes[p as usize].children.push(b);
+        (t, vec![p, a, b])
+    }
+
+    // ★① justify-content 非 flex-start ⇒ 拒绝
+    {
+        let (mut tree, ids) = build(|p, _a| p.justify_content = "space-between".into());
+        let (a, p) = (ids[1], ids[0]);
+        let mut eng = TaffyEngine::new().with_measurer(Box::new(proteus_layout_core::NullTextMeasurer));
+        eng.layout(&mut tree, RootConstraint::definite(300.0, 400.0));
+        tree.nodes[a as usize].style.height = Some(90.0);
+        tree.nodes[a as usize].dirty = true;
+        assert_eq!(eng.relayout_scope_of(&tree, a), p, "范围应为根");
+        eng.layout_incremental(&mut tree, a);
+        assert_eq!(
+            eng.translation_reject,
+            Some("justify-content != flex-start"),
+            "★ 应被 ① 拒绝（否则本用例没覆盖到该守卫）"
+        );
+    }
+
+    // ★⑤ P 主轴向尺寸未声明 ⇒ 拒绝（auto 尺寸需向上传播，本版保守拒绝）
+    {
+        let (mut tree, ids) = build(|p, _a| {
+            p.height = None;
+            p.flex_grow = 0.0;
+        });
+        let (a, p) = (ids[1], ids[0]);
+        let mut eng = TaffyEngine::new().with_measurer(Box::new(proteus_layout_core::NullTextMeasurer));
+        eng.layout(&mut tree, RootConstraint::definite(300.0, 400.0));
+        tree.nodes[a as usize].style.height = Some(90.0);
+        tree.nodes[a as usize].dirty = true;
+        assert_eq!(eng.relayout_scope_of(&tree, a), p, "范围应为根");
+        eng.layout_incremental(&mut tree, a);
+        assert_eq!(
+            eng.translation_reject,
+            Some("parent main-axis size not declared"),
+            "★ 应被 ⑤ 拒绝"
+        );
+    }
+
+    // ★⑥ 脏节点主轴向尺寸未声明 ⇒ 拒绝（delta 未知）
+    {
+        let (mut tree, ids) = build(|_p, a| a.height = None);
+        let (a, p) = (ids[1], ids[0]);
+        let mut eng = TaffyEngine::new().with_measurer(Box::new(proteus_layout_core::NullTextMeasurer));
+        eng.layout(&mut tree, RootConstraint::definite(300.0, 400.0));
+        // 用一个**会改变几何**但不改主轴向尺寸的变更（改宽度）来触发路径
+        tree.nodes[a as usize].style.width = Some(120.0);
+        tree.nodes[a as usize].dirty = true;
+        assert_eq!(eng.relayout_scope_of(&tree, a), p, "范围应为根");
+        eng.layout_incremental(&mut tree, a);
+        assert_eq!(
+            eng.translation_reject,
+            Some("dirty node main-axis size not declared"),
+            "★ 应被 ⑥ 拒绝"
+        );
+    }
+
+    // ★③ flex-shrink 非 0 ⇒ 拒绝
+    {
+        let (mut tree, ids) = build(|_p, _a| {});
+        // 把兄弟 B 的 shrink 改成 1
+        tree.nodes[ids[2] as usize].style.flex_shrink = 1.0;
+        let (a, p) = (ids[1], ids[0]);
+        let mut eng = TaffyEngine::new().with_measurer(Box::new(proteus_layout_core::NullTextMeasurer));
+        eng.layout(&mut tree, RootConstraint::definite(300.0, 400.0));
+        tree.nodes[a as usize].style.height = Some(90.0);
+        tree.nodes[a as usize].dirty = true;
+        assert_eq!(eng.relayout_scope_of(&tree, a), p, "范围应为根");
+        eng.layout_incremental(&mut tree, a);
+        assert_eq!(eng.translation_reject, Some("child flex-shrink != 0"), "★ 应被 ③ 拒绝");
+    }
+
+    // ★④ 子项有百分比尺寸 ⇒ 拒绝
+    {
+        let (mut tree, ids) = build(|_p, _a| {});
+        tree.nodes[ids[2] as usize].style.width = None;
+        tree.nodes[ids[2] as usize].style.width_ratio = Some(0.5);
+        let (a, p) = (ids[1], ids[0]);
+        let mut eng = TaffyEngine::new().with_measurer(Box::new(proteus_layout_core::NullTextMeasurer));
+        eng.layout(&mut tree, RootConstraint::definite(300.0, 400.0));
+        tree.nodes[a as usize].style.height = Some(90.0);
+        tree.nodes[a as usize].dirty = true;
+        assert_eq!(eng.relayout_scope_of(&tree, a), p, "范围应为根");
+        eng.layout_incremental(&mut tree, a);
+        assert_eq!(
+            eng.translation_reject,
+            Some("child has percentage size"),
+            "★ 应被 ④ 拒绝"
+        );
+    }
+
+    // ★② flex-grow ⇒ 拒绝（已有独立用例验证等价性，这里只断言拒绝原因）
+    {
+        let (mut tree, ids) = build(|_p, _a| {});
+        tree.nodes[ids[2] as usize].style.flex_grow = 1.0;
+        let (a, p) = (ids[1], ids[0]);
+        let mut eng = TaffyEngine::new().with_measurer(Box::new(proteus_layout_core::NullTextMeasurer));
+        eng.layout(&mut tree, RootConstraint::definite(300.0, 400.0));
+        tree.nodes[a as usize].style.height = Some(90.0);
+        tree.nodes[a as usize].dirty = true;
+        assert_eq!(eng.relayout_scope_of(&tree, a), p, "范围应为根");
+        eng.layout_incremental(&mut tree, a);
+        assert_eq!(eng.translation_reject, Some("child flex-grow > 0"), "★ 应被 ② 拒绝");
+    }
+}
+
 #[test]
 fn grow_sibling_forces_full_relayout_and_stays_equivalent() {
     // ★本用例的意义：**守卫被触发**（前提②不满足 ⇒ 必须回退全量）
