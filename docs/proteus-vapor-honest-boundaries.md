@@ -30,6 +30,8 @@
 | 13 | 「`rowsOfList` 只回溯一层」 | **已闭**：改为**纯按 sourceExpr 逐级求值**（任意层） | `runtime.ts` 的 `rowsOfList` |
 | 14 | 「行内槽位求值器未实例化时静默 `continue`」 | **已闭**（改为**上报** `uninstantiatedSlots`） | `runtime.ts` 的 `load()` + `tests/vapor-list-e2e.test.ts` |
 | 15 | （附带）祖先行链已注入 `rowCtx` | **已实现**（祖先链 `RowRef.ancestors` + `ancestorScopesOf`） | 同上 |
+| 16 | 「无 `:key` 只有提示、拦不住」 | **已闭**：升级为 error + 结构化诊断 + 逃生通道 | `compiler/src/vapor/build.ts` · `tests/vapor-list-e2e.test.ts` |
+| 17 | 「`notes` 是自由文本、门禁无法消费」 | **已闭**：新增 `VaporDiagnostic`（severity/code/message/hint） | 同上 |
 
 ---
 
@@ -39,7 +41,7 @@
 
 | # | 边界 | 现状 | 影响面 | 建议 |
 |---|---|---|---|---|
-| 1 | **无 `:key` 的 `v-for` 用下标兜底** | 只产诊断（`★该 v-for 无 :key`），**未强制拦截** | 方案坑位 #5：splice 后**命中错行**（静默错内容） | 建议**编译期报错**或至少 warn 级阻断（阈值可商议） |
+| 1 | ~~**无 `:key` 的 `v-for` 用下标兜底**~~ | ✅ **已闭（2026-09-28）**：改为 **error 级结构化诊断**（`VAPOR_VFOR_WITHOUT_KEY`，带可执行 `hint`）⇒ `hasErrors=true`，**调用方应阻断**；逃生通道 `allowIndexKey`（`true` 或 `[listId]`，显式放行）；`proteus explain --vapor` 显眼展示 | — | — |
 | 2 | **外层别名在内层表达式被引用** | ★**已缩窄**：真因是表达式含运算 ⇒ 编译器给 `expr` 形态 ⇒ 参考实现只支持纯路径 ⇒ 求值器**未实例化**。**已从"静默"改为"上报"**（`LoadResult.uninstantiatedSlots`，有常驻用例 + 破坏性验证） | 该类表达式**仍然不会被更新**（限制仍在），但**不再是静默失效**——调用方可据此降级 | 要真正支持需目标端表达式执行器（Hermes function 构造 / Web `new Function` / MP 走 WXS）——属三端执行层工作 |
 | 3 | **结构性列表变更未实现** | `LIST_SET`/`LIST_SPLICE` 在运行时**显式跳过**（`kind === 'list-data'` 的 continue） | 增删行/整表替换**不会更新**（静默）；当前只支持行内字段更新 | 需「数据源引用协议」——独立课题 |
 

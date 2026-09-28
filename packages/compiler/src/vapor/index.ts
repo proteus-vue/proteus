@@ -6,6 +6,7 @@ export { analyzeExprDeps, analyzeAstDeps, collectTemplateBindings, normalizeProp
 export type { ExprDeps, TemplateBindingRef } from './deps'
 export { buildVaporSubscriptions, slotKindOf } from './build'
 export type {
+  VaporDiagnostic,
   SubscriptionTable,
   SourceSubscription,
   SlotSubscription,

@@ -36,6 +36,19 @@ export function explainVapor(source: string, opts: ExplainTargetOptions = {}): s
   const res = buildVaporSubscriptions(source, 'explain.vue')
   const lines: string[] = []
   lines.push('── Vapor 槽位分层（Vapor for Proteus IR · V2） ──')
+  // ★★诊断优先展示（本仓纪律：**不静默**）——error 级必须显眼
+  //   （典型：无 `:key` ⇒ splice 后静默错行，方案坑位 #5）
+  const errs = res.diagnostics.filter((d) => d.severity === 'error')
+  const warns = res.diagnostics.filter((d) => d.severity === 'warn')
+  for (const d of errs) {
+    lines.push(`  ✗ [${d.code}] ${d.message}`)
+    if (d.hint) lines.push(`      → ${d.hint}`)
+  }
+  for (const d of warns) {
+    lines.push(`  ⚠ [${d.code}] ${d.message}`)
+    if (d.hint) lines.push(`      → ${d.hint}`)
+  }
+  if (errs.length > 0 || warns.length > 0) lines.push('')
   if (!res.ok) {
     lines.push('  ✗ 源扫描失败 ⇒ 全部降级 L0（不猜测）：')
     for (const n of res.notes) lines.push(`    ${n}`)
