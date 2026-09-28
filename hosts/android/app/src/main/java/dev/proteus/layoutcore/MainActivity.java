@@ -204,6 +204,10 @@ public class MainActivity extends Activity {
             sb.append("【③ §9.3 平台侧滚动（Choreographer 帧率 + RenderNode 池）】\n");
             String start = scrollListRun();
             sb.append(start).append('\n');
+        } else if ("font-family".equals(testPath)) {
+            sb.append("【③ 字体族映射（与 iOS V13 同契约）】\n");
+            String r = fontFamilyRun();
+            sb.append(r).append('\n');
         } else if ("mount-virtual".equals(testPath)) {
             sb.append("【③ 整树级虚拟化（同一份 SFC 产物）】\n");
             String r = mountVirtualRun();
@@ -2706,6 +2710,89 @@ public class MainActivity extends Activity {
             writeReport("layout-mount-virtual.json", o.toString(2));
         } catch (org.json.JSONException e) {
             writeReport("layout-mount-virtual.json", "{\"ok\":false,\"error\":\"" + e.getMessage() + "\"}");
+        }
+    }
+
+    /**
+     * ★★**字体族映射 + 字形级差异**（与 iOS `V13_font_family` 同契约、同判据形态）。
+     *
+     * 【为什么字形级要单独测（iOS 侧的标准做法）】"角色传到了宿主"与"真的换了字体"是两件事：
+     *   宿主可能把角色收下却**没有应用**（本仓 iOS 侧实测过 `CGFont(name:)` 对私有名返回 nil
+     *   ⇒ 度量用等宽、绘制回退默认体，**分叉且几何断言全绿**）。
+     *   ⇒ 判据必须落到**渲染结果**：本档用 `Paint.measureText` 的**宽度差**（字形宽度是字体的直接函数）
+     *     + `Typeface` 实例是否真的不同（身份断言）。
+     *
+     * 【判据】
+     *   ① 三种角色（system/serif/monospace）对**同一文本同一字号**的宽度**至少两种不同**
+     *   ② 反例对照：全用 system ⇒ 宽度**完全相同**（否则①的差异来自别处）
+     *   ③ `Typeface` 对象身份不同（证明映射真的换了族，不只是"数值碰巧不同"）
+     *   ④ 未知角色 ⇒ 回退计数 +1（两端词汇表不一致必须可见）
+     */
+    private String fontFamilyRun() {
+        final String sample = "MMMM iii WWWW";   // 宽度差异明显的样本（与 iOS V13 同）
+        final float size = 48f;
+        final String[] roles = {"system", "serif", "monospace"};
+        float[] widths = new float[roles.length];
+        android.graphics.Typeface[] faces = new android.graphics.Typeface[roles.length];
+        android.graphics.Paint p = new android.graphics.Paint(android.graphics.Paint.ANTI_ALIAS_FLAG);
+        for (int i = 0; i < roles.length; i++) {
+            android.graphics.Typeface tf = ProteusHostView.typefaceOf(roles[i], 400, null);
+            faces[i] = tf;
+            p.setTypeface(tf);
+            p.setTextSize(size);
+            widths[i] = p.measureText(sample);
+        }
+        // 反例对照：全 system
+        float[] same = new float[roles.length];
+        for (int i = 0; i < roles.length; i++) {
+            p.setTypeface(ProteusHostView.typefaceOf("system", 400, null));
+            p.setTextSize(size);
+            same[i] = p.measureText(sample);
+        }
+        // 未知角色回退计数
+        int[] fb = {0};
+        ProteusHostView.typefaceOf("MyCustomFont", 400, fb);
+
+        java.util.Set<Float> distinct = new java.util.HashSet<>();
+        for (float w : widths) distinct.add(Math.round(w * 100) / 100f);
+        java.util.Set<Float> distinctSame = new java.util.HashSet<>();
+        for (float w : same) distinctSame.add(Math.round(w * 100) / 100f);
+        java.util.Set<Integer> faceIds = new java.util.HashSet<>();
+        for (android.graphics.Typeface f : faces) faceIds.add(System.identityHashCode(f));
+
+        boolean familyAffectsMeasure = distinct.size() >= 2;
+        boolean sameFamilySameWidth = distinctSame.size() == 1;
+        boolean familyChangesMeasure = Math.abs(widths[0] - widths[1]) > 0.01f || Math.abs(widths[1] - widths[2]) > 0.01f;
+        boolean typefaceDiffers = faceIds.size() >= 2;
+        boolean unknownFallsBack = fb[0] == 1;
+
+        boolean pass = familyAffectsMeasure && sameFamilySameWidth && familyChangesMeasure
+                && typefaceDiffers && unknownFallsBack;
+        try {
+            org.json.JSONObject o = new org.json.JSONObject();
+            o.put("ok", true);
+            o.put("path", "font-family");
+            o.put("note", "★★与 iOS V13 同契约（语义角色词汇表）· 判据落到渲染宽度 + Typeface 身份");
+            o.put("roles", new org.json.JSONArray(roles));
+            o.put("sample", sample);
+            o.put("size_px", size);
+            o.put("widths_by_family", new org.json.JSONArray(new float[]{
+                    Math.round(widths[0] * 100) / 100f, Math.round(widths[1] * 100) / 100f, Math.round(widths[2] * 100) / 100f}));
+            o.put("widths_all_system", new org.json.JSONArray(new float[]{
+                    Math.round(same[0] * 100) / 100f, Math.round(same[1] * 100) / 100f, Math.round(same[2] * 100) / 100f}));
+            o.put("distinct_widths", distinct.size());
+            o.put("distinct_typefaces", faceIds.size());
+            o.put("unknown_role_fallbacks", fb[0]);
+            o.put("check_family_affects_measure", familyAffectsMeasure);
+            o.put("check_same_family_same_width", sameFamilySameWidth);
+            o.put("check_family_changes_measure", familyChangesMeasure);
+            o.put("check_typeface_differs", typefaceDiffers);
+            o.put("check_unknown_falls_back", unknownFallsBack);
+            o.put("verdict", pass ? "PASS" : "FAIL");
+            writeReport("layout-font-family.json", o.toString(2));
+            return o.toString();
+        } catch (org.json.JSONException e) {
+            return "{\"ok\":false,\"error\":\"" + e.getMessage() + "\"}";
         }
     }
 

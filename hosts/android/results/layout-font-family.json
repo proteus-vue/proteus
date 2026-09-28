@@ -1,0 +1,31 @@
+{
+  "ok": true,
+  "path": "font-family",
+  "note": "★★与 iOS V13 同契约（语义角色词汇表）· 判据落到渲染宽度 + Typeface 身份",
+  "roles": [
+    "system",
+    "serif",
+    "monospace"
+  ],
+  "sample": "MMMM iii WWWW",
+  "size_px": 48,
+  "widths_by_family": [
+    416,
+    449,
+    377
+  ],
+  "widths_all_system": [
+    416,
+    416,
+    416
+  ],
+  "distinct_widths": 3,
+  "distinct_typefaces": 3,
+  "unknown_role_fallbacks": 1,
+  "check_family_affects_measure": true,
+  "check_same_family_same_width": true,
+  "check_family_changes_measure": true,
+  "check_typeface_differs": true,
+  "check_unknown_falls_back": true,
+  "verdict": "PASS"
+}
