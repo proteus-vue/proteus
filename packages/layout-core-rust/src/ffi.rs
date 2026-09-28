@@ -383,6 +383,39 @@ fn build_tree(req: &LayoutRequest) -> Result<(LayoutTree, Vec<u32>), String> {
                 return Err(format!("节点 {} 的 parent 指向自己（自环）", n.id));
             }
         }
+        // ★★④ parent 与 children **双向一致**（本仓新增：`build_taffy` 改按 `children` 顺序连父子）
+        //
+        // 【为什么必须校验】`build_taffy` 现在**只信 `children`**（那是布局/绘制顺序的单一事实来源，
+        //   见其注释）。若某节点的 `parent` 有值但**不在**父的 `children` 里 ⇒ 它会被**静默漏掉**
+        //   （不参与布局 ⇒ 几何为零/缺失，且无报错）。⇒ 在校验层把两种表示钉成一致。
+        for i in 0..tree.len() {
+            let n = &tree.nodes[i];
+            if n.parent != crate::node::NO_PARENT {
+                let p = n.parent as usize;
+                if p >= tree.len() {
+                    return Err(format!("节点 {} 的 parent 越界", n.id));
+                }
+                if !tree.nodes[p].children.iter().any(|&c| c == i as u32) {
+                    return Err(format!(
+                        "节点 {} 的 parent={} 但不在其 children 里（两种父子表示不一致）",
+                        n.id, tree.nodes[p].id
+                    ));
+                }
+            }
+            for &c in &n.children {
+                let ci = c as usize;
+                if ci >= tree.len() {
+                    return Err(format!("节点 {} 的 children 含越界索引 {c}", n.id));
+                }
+                if tree.nodes[ci].parent != i as u32 {
+                    return Err(format!(
+                        "节点 {} 的 children 含 {}，但后者的 parent 不是它（两种父子表示不一致）",
+                        n.id, tree.nodes[ci].id
+                    ));
+                }
+            }
+        }
+
         // 无环性：逐节点上溯，步数不得超过节点总数
         for i in 0..tree.len() {
             let mut cur = tree.nodes[i].parent;
@@ -1600,29 +1633,26 @@ pub unsafe extern "C" fn proteus_layout_splice(handle: u64, splice_json: *const 
                     let Some(&p) = entry.id_to_idx.get(&pid) else {
                         return Err(format!("落点 parentId {pid} 不在树上"));
                     };
-                    // ★★落点 `index` 的**当前不可用**（本仓实测的架构限制）
+                    // ★★落点 `index`：**支持中间插入**（2026-09-28 解禁；此前显式拒绝）
                     //
-                    // 【为什么】`build_taffy`（重建 taffy 树时）**按 `tree.nodes` 的数组顺序**
-                    //   连父子——它**完全忽略 `node.children` 的排列**（注释写着"顺序 = children 顺序"，
-                    //   但实现是遍历数组）。而 splice 插入的节点在数组里**只能追加到末尾**
-                    //   ⇒ 想插到中间，就必须**同时**改 children **和数组顺序**。
-                    //
-                    // 【本轮的处置（诚实标注）】不动数组（搬数组 = O(n)，且会打乱 taffy_ids 的
-                    //   索引对应），而是**显式拒绝** `index` 非末尾的请求 ⇒ 调用方改走
-                    //   「重发整棵树」（那条路已支持任意顺序）。
-                    //   ★这比"接受参数但静默按末尾插"好——后者会让**行序错**且无提示。
-                    //   ⇒ 要支持中间插入，需给节点加**顺序键**并让 build_taffy 依 children 建树——
-                    //     属独立改造（见盘点表 P0-3 的余项）。
+                    // 【为什么以前只能追加】`build_taffy` 按 `tree.nodes` 的**数组顺序**连父子
+                    //   ⇒ 数组序即布局序 ⇒ 插中间要搬数组（O(n) 且 `taffy_ids` 索引对齐会乱）。
+                    // 【现在为什么可以】`build_taffy` 已改为**只信 `children` 顺序**
+                    //   （单一事实来源；`parent`↔`children` 一致性由输入图校验强制）
+                    //   ⇒ 插入 = 在父的 `children` 里 `insert(at, r)`（**O(块大小)**，不搬数组）。
+                    //   ★与 DOM/`insertBefore` 语义一致：`index` 是该父的**子位序号**（0-based）。
                     let cur_len = entry.tree.get(p).children.len();
                     let at = ins.index.unwrap_or(cur_len);
-                    if at != cur_len {
+                    if at > cur_len {
                         return Err(format!(
-                            "index={at} 非末尾（当前 {cur_len}）——本版 splice 仅支持**追加**；中间插入请重发整棵树（见代码注释的架构限制）"
+                            "index={at} 越界（父 {} 当前 {cur_len} 个子节点）",
+                            entry.tree.get(p).id
                         ));
                     }
-                    for &r in &block_roots {
+                    // 块内顺序保持（`block_roots` 已按 dto 出现顺序）——逐个插在同一位之后
+                    for (k, &r) in block_roots.iter().enumerate() {
                         entry.tree.nodes[r as usize].parent = p;
-                        entry.tree.nodes[p as usize].children.push(r);
+                        entry.tree.nodes[p as usize].children.insert(at + k, r);
                     }
                     entry.tree.nodes[p as usize].dirty = true;
                     dirty_roots.push(p);
@@ -1679,6 +1709,30 @@ pub unsafe extern "C" fn proteus_layout_splice(handle: u64, splice_json: *const 
         }
         let t_col = t_col0.elapsed().as_secs_f64() * 1000.0;
 
+        // ★★**子序对账数据**（本仓实测的判据缺口）：把受影响的父及其**当前 children 序**回传，
+        //   供宿主与自己的层序逐位对账——像素判据证明不了层序（行不重叠 ⇒ 屏幕上看不出）。
+        //   只回传**本次动过的父**（脏根 + 插入落点），避免整树序列化。
+        let mut child_order = serde_json::Map::new();
+        {
+            let mut parents: Vec<u32> = dirty_roots.clone();
+            for ins in &req.inserts {
+                if let Some(pid) = ins.parent_id {
+                    if let Some(&p) = entry.id_to_idx.get(&pid) {
+                        parents.push(p);
+                    }
+                }
+            }
+            parents.sort_unstable();
+            parents.dedup();
+            for p in parents {
+                if (p as usize) >= entry.tree.len() {
+                    continue;
+                }
+                let n = entry.tree.get(p);
+                let kids: Vec<u32> = n.children.iter().map(|&c| entry.tree.get(c).id).collect();
+                child_order.insert(n.id.to_string(), serde_json::json!(kids));
+            }
+        }
         Ok(serde_json::json!({
             "ok": true,
             "removed": removed,
@@ -1686,6 +1740,7 @@ pub unsafe extern "C" fn proteus_layout_splice(handle: u64, splice_json: *const 
             "relayout_count": multi.relayout_count,
             "scopes": entry.last_scopes,
             "rects": changed,
+            "child_order": child_order,
             "node_count": entry.tree.len(),
             "timing": {"lock_ms": t_lock, "relayout_ms": t_rel, "collect_ms": t_col},
         })
@@ -2839,6 +2894,72 @@ mod tests {
         unsafe { proteus_layout_destroy(handle2) };
     }
 
+    /// ★★**中间插入**：splice 插到第 k 位后的几何 == **从头全量建树（同顺序）**的几何
+    ///
+    /// 【为什么是核心判据（本仓的架构解禁）】此前 splice 只能追加（数组序=布局序的架构限制）。
+    ///   解禁后 `build_taffy` 只信 `children` 顺序 ⇒ 插入 = 在父的 children 里插一项。
+    ///   本测试用**行序**作为可观察量（`y` 坐标即行序）：若顺序错了，y 会立刻对不上。
+    #[test]
+    fn splice_middle_insert_matches_fresh_full_build() {
+        // 5 行（id 100..104，各含一个圆点）
+        let handle = unsafe {
+            let c = CString::new(list_tree_json(5)).unwrap();
+            proteus_layout_create(c.as_ptr())
+        };
+        assert_ne!(handle, 0);
+
+        // 插到**第 2 位**（index=2 ⇒ 新行应落在 100/101 之后、102 之前）
+        let out = splice(
+            handle,
+            serde_json::json!({
+                "inserts": [{
+                    "parentId": 1, "index": 2,
+                    "nodes": [
+                        {"id": 900, "parentId": 1, "flexDirection": "row", "width": 343.0, "height": 50.0, "flexShrink": 0.0},
+                        {"id": 901, "parentId": 900, "width": 30.0, "height": 30.0}
+                    ]
+                }]
+            }),
+        );
+        assert_eq!(out["ok"], true, "中间插入应成功（此前被显式拒绝）：{out}");
+        assert_eq!(out["inserted"], 1);
+
+        // 对照：从头建「顺序为 100,101,900,102,103,104」的树
+        let mut nodes = vec![serde_json::json!({"id":1,"parentId":null,"flexDirection":"column","width":375.0,"height":800.0})];
+        for &rid in &[100u32, 101, 900, 102, 103, 104] {
+            nodes.push(serde_json::json!({"id":rid,"parentId":1,"flexDirection":"row","width":343.0,"height":50.0,"flexShrink":0.0}));
+            let dot = if rid == 900 { 901 } else { 1000 + (rid - 100) };
+            nodes.push(serde_json::json!({"id":dot,"parentId":rid,"width":30.0,"height":30.0}));
+        }
+        let handle2 = unsafe {
+            let c = CString::new(serde_json::json!({"viewport":{"width":375.0,"height":800.0},"nodes":nodes}).to_string()).unwrap();
+            proteus_layout_create(c.as_ptr())
+        };
+        let fresh = rects_of(handle2);
+
+        // ★逐节点比对绝对矩形（**行序错会立刻体现在 y 上**）
+        let after = rects_of(handle);
+        let a = after["rects"].as_object().expect("变化集");
+        let f = fresh["rects"].as_object().expect("全量树矩形");
+        let mut compared = 0;
+        for (id, r) in a {
+            if let Some(fr) = f.get(id) {
+                for k in ["x", "y", "width", "height"] {
+                    let av = r[k].as_f64().unwrap_or(f64::NAN);
+                    let fv = fr[k].as_f64().unwrap_or(f64::NAN);
+                    assert!(
+                        (av - fv).abs() < 0.01,
+                        "★节点 {id} 的 {k} 不一致：splice {av} vs 全量 {fv}（中间插入的顺序/几何错）"
+                    );
+                }
+                compared += 1;
+            }
+        }
+        assert!(compared >= 5, "至少应比对到被影响的行（实测 {compared}）");
+        unsafe { proteus_layout_destroy(handle) };
+        unsafe { proteus_layout_destroy(handle2) };
+    }
+
     /// ★★摘除：被摘的整棵子树**不再出现**在变化集里；兄弟上移（几何与全量一致）
     #[test]
     fn splice_remove_detaches_subtree() {
@@ -2898,17 +3019,16 @@ mod tests {
             serde_json::json!({ "inserts": [{ "parentId": 99999, "nodes": [{"id": 700, "parentId": 99999, "width": 10.0}] }] }),
         );
         assert_eq!(bad3["ok"], false, "落点不存在应报错");
-        // ④ ★中间插入被**显式拒绝**（架构限制：见 splice 内注释——数组序=布局序，
-        //    而 splice 只能追加到数组末尾 ⇒ 中间插入必须走"重发整棵树"）
-        //    ★为什么必须拒绝而不是"静默按末尾插"：后者会让**行序错**且零提示。
+        // ④ ★`index` **越界**应被拒绝（本仓 2026-09-28 解禁中间插入后，只保留越界校验）
+        //    ★为什么必须拒绝而不是"静默夹到末尾"：后者会让**行序错**且零提示。
         let bad4 = splice(
             handle,
-            serde_json::json!({ "inserts": [{ "parentId": 1, "index": 1, "nodes": [{"id": 800, "parentId": 1, "width": 10.0}] }] }),
+            serde_json::json!({ "inserts": [{ "parentId": 1, "index": 999, "nodes": [{"id": 800, "parentId": 1, "width": 10.0}] }] }),
         );
-        assert_eq!(bad4["ok"], false, "中间插入应被拒绝：{bad4}");
+        assert_eq!(bad4["ok"], false, "index 越界应被拒绝：{bad4}");
         assert!(
-            bad4["error"].as_str().unwrap_or("").contains("非末尾"),
-            "拒绝理由应指明是 index 问题：{bad4}"
+            bad4["error"].as_str().unwrap_or("").contains("越界"),
+            "拒绝理由应指明是 index 越界：{bad4}"
         );
 
         // ⑤ 空指针

@@ -74,8 +74,23 @@ fi
 echo "==> 本次 BUILD_ID：$BUILD_ID"
 
 echo "==> ② JS bundle（两个都建——见步骤⑤的说明）"
-(cd "$ROOT" && node hosts/ios/bridge/build-selfdraw.mjs 2>&1 | tail -1)
-(cd "$ROOT" && node hosts/ios/bridge/build-bench.mjs 2>&1 | tail -1)
+# ★★**构建失败必须中断**（本仓实测：`build-bench` 因 TS 重复声明失败，
+#   而 `| tail -1` + `set -e` 在子 shell 管道里**没能拦住** ⇒ 跑了旧 bundle，
+#   设备读数与源码不符，我为此白查 4 轮）。⇒ 显式检查退出码并在失败时报错。
+# ★注意：管道里 `$?` 是 **tail 的**退出码（本仓实测：首版这么写仍然漏报）
+#   ⇒ 必须用 `PIPESTATUS[0]` 取 node 的退出码。
+build_bundle() {
+  local script="$1"
+  local out
+  out="$( (cd "$ROOT" && node "hosts/ios/bridge/$script") 2>&1 )" || {
+    echo "✗ bundle 构建失败：$script"
+    echo "$out" | tail -5 | sed 's/^/    /'
+    exit 6
+  }
+  echo "$out" | tail -1
+}
+build_bundle build-selfdraw.mjs
+build_bundle build-bench.mjs
 
 echo "==> ③ 编译 Rust 核心（iOS release）"
 export PATH="$HOME/.cargo/bin:$PATH"
@@ -94,8 +109,7 @@ echo "==> ⑤ 组装 .app"
 # ★★两个 bundle **都装**（本仓实测踩到：只装当前模式那个 ⇒ 从桌面点开时
 #   没有 `--bench` 启动参数 ⇒ 找不到 bundle-selfdraw.js ⇒ 应用起不来（黑屏/闪退）。
 #   修复：构建阶段把两个都编出来、都塞进 .app；运行时按启动参数选。
-(cd "$ROOT" && node hosts/ios/bridge/build-selfdraw.mjs 2>&1 | tail -1)
-(cd "$ROOT" && node hosts/ios/bridge/build-bench.mjs 2>&1 | tail -1)
+# ★② 已构建（若那里失败会 exit 6）；此处只拷贝——**重复构建既慢又掩盖失败**
 cp "$HERE/bridge/dist/bundle-selfdraw.js" "$APP/bundle-selfdraw.js"
 cp "$HERE/bridge/dist/bundle-bench.js" "$APP/bundle-bench.js"
 # ★描述文件与 entitlements 从**描述文件原样提取**（本仓 iOS 竖切实测的坑：
