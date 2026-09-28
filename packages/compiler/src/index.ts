@@ -78,6 +78,8 @@ export {
   normalizePropKey,
   buildVaporSubscriptions,
   slotKindOf,
+  buildLayoutTemplate,
+  parseStaticStyle,
 } from './vapor'
 export type {
   ReactiveSource,
@@ -93,6 +95,9 @@ export type {
   VaporBuildResult,
   VaporDiagnostic,
   VueCompatDeps,
+  LayoutTemplate,
+  LayoutNode,
+  ListTemplate,
 } from './vapor'
 export type { SfcMacros, MacroModelRef } from './sfc-macros'
 

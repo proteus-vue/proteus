@@ -33,6 +33,13 @@ pub struct ApplyOutcome {
     pub unsupported: Vec<(OpCode, String)>,
     /// 仅影响绘制（不影响几何）的指令数——它们不需要重排
     pub paint_only: usize,
+    /// ★★**文本更新明细**（nodeId, 新文本）——宿主据此更新 CATextLayer.string
+    ///
+    /// 【为什么必须回报（本仓实测的静默错显示缺陷）】增量路径只更新 layer 的 **frame**，
+    ///   而文本内容在 `CATextLayer.string` 上 ⇒ 不回报它，改文案后**核心几何已变、屏幕文字还是旧的**
+    ///   （结构/几何全对，只有肉眼能发现）。全量重建路径不受影响（重建层时带上新文本），
+    ///   故此前只改样式的用例发现不了——本仓 V6（SFC 端到端，含 `{{ item.title }}`）暴露。
+    pub text_updates: Vec<(u32, String)>,
 }
 
 /// 把解码后的指令应用到树上（**不改几何，只改节点状态**；重排由调用方决定）
@@ -85,6 +92,8 @@ pub fn apply_ops_to_tree(tree: &mut LayoutTree, dec: &crate::ops::DecodedOps) ->
                             req.text = text.to_string();
                             tree.nodes[idx].dirty = true;
                             dirty_set.insert(idx as u32);
+                            // ★回报给宿主（见 text_updates 注释）——仅**真的变了**才记
+                            out.text_updates.push((*node_id, text.to_string()));
                         }
                     }
                     None => {

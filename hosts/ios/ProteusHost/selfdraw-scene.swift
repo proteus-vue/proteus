@@ -560,6 +560,28 @@ final class SelfDrawView: UIView {
         return flushed
     }
 
+    /// ★★把**文本更新**落到层上（CATextLayer.string）
+    ///
+    /// 【为什么必须有（本仓实测的静默错显示缺陷）】增量路径此前只改 frame，
+    ///   而文本内容在 `CATextLayer.string` 上 ⇒ 改文案后**核心几何已变、屏幕文字还是旧的**
+    ///   （几何断言全绿，只有肉眼能发现）。Rust 侧现已回报 `text_updates`（见 ApplyOutcome）。
+    func applyTextUpdates(_ updates: [String: Any]) -> Int {
+        var applied = 0
+        for (k, v) in updates {
+            guard let id = Int(k), let text = v as? String, let layer = layersById[id] else { continue }
+            if let tl = layer as? CATextLayer {
+                tl.string = text
+                applied += 1
+            }
+            // 更新 meta（层 dump / 诊断读它）
+            if var m = metaByNodeId[id] {
+                m["text"] = text
+                metaByNodeId[id] = m
+            }
+        }
+        return applied
+    }
+
     /// 应用单个层的 frame（供即时更新与补刷共用——★同一语义一处实现）
     private func applyOneLayer(id: Int, abs: CGRect) {
         guard let layer = layersById[id] else { return }
@@ -1182,6 +1204,10 @@ final class SelfDrawBridge: NSObject, SelfDrawExports {
         }
         let rectsBinMs = (CFAbsoluteTimeGetCurrent() - tBin0) * 1000
 
+        // ★★文本更新落层（见 applyTextUpdates 注释）
+        let textUpdates = (o?["text_updates"] as? [String: Any]) ?? [:]
+        let textApplied = textUpdates.isEmpty ? 0 : view.applyTextUpdates(textUpdates)
+
         // ★★几何变化量自检：与上一帧快照比对，统计**真的移动/改尺寸**的节点数
         //
         // 【判据意义】若这个数为 0，说明本次"更新"对几何无影响
@@ -1207,6 +1233,8 @@ final class SelfDrawBridge: NSObject, SelfDrawExports {
                            "patch_count": applied, "relayout_count": relayout,
                            "scopes": scopes, "changed_rects": changed.count, "updated_layers": updated,
                            "unsupported_count": unsupported.count,
+                           "text_updates": textUpdates.count,
+                           "text_layers_applied": textApplied,
                            "apply_ms": round(applyMs * 100) / 100,
                            // ★Rust 侧分段（本仓实测：总账 72ms 里约 40ms 曾"去向不明"——
                            //   因为 apply_ms 只覆盖「指令应用」，**不含重排**（relayout_ms 在 timing 里没被浮出）
