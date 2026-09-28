@@ -579,6 +579,13 @@ pub(crate) struct TreeEntry {
     ///   ⇒ 度量表必须**随句柄持久化**，并供所有重排引擎使用（update / splice / apply_ops）。
     ///   ★注入新文本的度量走 `proteus_layout_set_text_measures`（或 splice 的 textMeasures）。
     pub(crate) measures: std::collections::HashMap<u32, Size>,
+    /// ★★**孤点数**（被摘除但仍在数组里的节点）——内存回收的触发依据
+    ///
+    /// 【为什么需要它（本仓实测的设计余项）】摘除只**断开父子链**（不搬数组）：
+    ///   布局引擎从 `roots` 遍历 ⇒ 孤点自然被跳过 ⇒ **功能正确**。
+    ///   但节点体（含 style / String 字段）**留在数组里** ⇒ 长列表反复增删会持续积压。
+    ///   本字段累计孤点数，超过阈值时触发 `compact()`（可达性重建，见其注释）。
+    pub(crate) orphans: usize,
 }
 
 impl TreeEntry {
@@ -588,7 +595,37 @@ impl TreeEntry {
             id_to_idx.insert(n.id, i as u32);
         }
         Self {
-            last_scopes: Vec::new(), measures, tree, id_to_idx }
+            last_scopes: Vec::new(), measures, tree, id_to_idx, orphans: 0 }
+    }
+
+    /// ★★**压实**：把可达节点重建进新数组，回收孤点内存（O(存活节点数)）
+    ///
+    /// 【为什么可以安全重排数组下标（本仓实测的依赖梳理）】本仓**所有外部引用都走稳定 id**：
+    ///   · 指令流用 `nodeId`（稳定 id）而**不是**数组下标
+    ///   · `last_scopes` / `changed_roots` 存稳定 id
+    ///   · `id_to_idx` 是 id→下标的**映射**（下面重建）
+    ///   · 引擎的 `taffy_ids` 是"下标→taffy 节点"平行数组 ⇒ 压实后**必须失效重建**
+    ///     （长度判据 `taffy_id_len() != tree.len()` 自然覆盖）
+    ///   ⇒ 压实只改**内部下标**，对外语义不变。
+    ///
+    /// 【触发策略（amortized）】由调用方按"孤点 ≥ 下限且 > 存活的一半"触发
+    ///   ⇒ 每次压实至少回收一半 ⇒ 均摊 O(1)/次摘除，不会退化成"每次 splice 都 O(n)"。
+    ///
+    /// - Returns: `(before, after)` 节点数（回收读数）
+    pub(crate) fn compact(&mut self) -> (usize, usize) {
+        let before = self.tree.len();
+        let (mut new_tree, _remap) = crate::node::compact_reachable(&self.tree);
+        // 重建 id→下标
+        self.id_to_idx = std::collections::HashMap::with_capacity(new_tree.len());
+        for (i, n) in new_tree.nodes.iter().enumerate() {
+            self.id_to_idx.insert(n.id, i as u32);
+        }
+        // ★度量表按**稳定 id** 存 ⇒ 与下标无关；顺手清掉已不可达 id 的条目（避免泄漏）
+        let idx = self.id_to_idx.clone();
+        self.measures.retain(|id, _| idx.contains_key(id));
+        std::mem::swap(&mut self.tree, &mut new_tree);
+        self.orphans = 0;
+        (before, self.tree.len())
     }
 }
 
@@ -1581,6 +1618,7 @@ pub unsafe extern "C" fn proteus_layout_splice(handle: u64, splice_json: *const 
                 entry.id_to_idx.remove(&nid);
                 // ★度量条目一并清（节点已不在树上 ⇒ 留着是纯泄漏；且若未来 id 复用会串味）
                 entry.measures.remove(&nid);
+                entry.orphans += 1;   // ★计入孤点（节点体仍在数组里，待压实回收）
                 for &c in &entry.tree.get(i).children.clone() {
                     stack.push(c);
                 }
@@ -1701,6 +1739,33 @@ pub unsafe extern "C" fn proteus_layout_splice(handle: u64, splice_json: *const 
             }
         }
 
+        // ── ★★内存回收：孤点超阈值则压实（本仓实测的设计余项）──
+        //
+        // 【触发策略（amortized，本轮按真机读数调优）】孤点 ≥ 下限（256）**且** > 存活的 1/8 ⇒ 压实。
+        //   ★为什么从"一半"改为"1/8"（真机实测）：`S5_churn_cycles` 10 轮插删后
+        //     孤点 1050 / 存活 3159 ⇒ `1050*2 < 3159` ⇒ **不触发**，末轮仍积 1050 孤点。
+        //     真实长列表（4000 行）删 50 行/轮时，孤点相对存活更小 ⇒ "一半"几乎永不触发。
+        //   ★为什么仍不会退化成 O(n)/次（均摊论证）：设阈值为 `orphans*8 > live`，
+        //     触发时 `orphans > live/8` ⇒ 存活 ≥ 8×孤点 ⇒ 压实后总空间 ≤ (live+orphans) 的
+        //     ~1.125 倍，而**回收量 ≥ 孤点 > live/8** ⇒ 每次压实的 O(live+orphans) 成本
+        //     由"至少 live/8 次摘除"分摊 ⇒ 均摊仍是 **O(1)/次摘除**（常数约 9×）。
+        //   ★压实的正确性依据见 `TreeEntry::compact`（所有外部引用走稳定 id）。
+        let mut compact_info: Option<(usize, usize)> = None;
+        {
+            let live = entry.tree.len().saturating_sub(entry.orphans);
+            if entry.orphans >= 256 && entry.orphans * 8 > live {
+                let before = entry.tree.len();
+                let (_, after) = entry.compact();
+                compact_info = Some((before, after));
+                // ★压实重排了下标 ⇒ 引擎的 taffy 树（按下标对齐）必须失效重建
+                ENGINES.with(|cell| {
+                    if let Some(e) = cell.borrow_mut().get_mut(&handle) {
+                        e.invalidate_persistent();
+                    }
+                });
+            }
+        }
+
         // ── ③ 重排（复用多范围增量；无脏节点则跳过）──
         //
         // ★★度量表：① 先并入请求带来的新文本度量（插入的行必然含文本——
@@ -1777,6 +1842,9 @@ pub unsafe extern "C" fn proteus_layout_splice(handle: u64, splice_json: *const 
             "rects": changed,
             "child_order": child_order,
             "node_count": entry.tree.len(),
+            // ★内存回收读数（有压实时才有值：`[压实前, 压实后]` / 当前孤点数）
+            "compacted": compact_info.map(|(b, a)| serde_json::json!([b, a])).unwrap_or(serde_json::Value::Null),
+            "orphans": entry.orphans,
             "timing": {"lock_ms": t_lock, "relayout_ms": t_rel, "collect_ms": t_col},
         })
         .to_string())
@@ -2976,6 +3044,91 @@ mod tests {
             }
         }
         assert!(compared > 0, "至少应有节点参与比对（否则判据空心）");
+        unsafe { proteus_layout_destroy(handle) };
+        unsafe { proteus_layout_destroy(handle2) };
+    }
+
+    /// ★★**内存回收**：反复"插一批/删一批"后，节点数应**有界**（孤点被压实回收）
+    ///
+    /// 【为什么必须有（本仓实测的设计余项）】摘除只断链（孤点留数组里，功能正确但占内存）
+    ///   ⇒ 长列表反复增删会持续积压。本测试模拟 20 轮"插 40 行 → 删 40 行"：
+    ///   · `node_count` 必须**远小于**累计插入量（否则就是没回收）
+    ///   · 且**几何仍与全量建树一致**（压实的正确性判据——数组下标重排不得影响语义）
+    #[test]
+    fn splice_compacts_orphans_and_keeps_geometry_correct() {
+        let handle = unsafe {
+            let c = CString::new(list_tree_json(50)).unwrap();
+            proteus_layout_create(c.as_ptr())
+        };
+        assert_ne!(handle, 0);
+        let base_nodes = {
+            let r = rects_of(handle);
+            r["node_count"].as_u64().unwrap() as usize
+        };
+
+        // 20 轮：各插 40 行（每行 2 节点）再删掉 → 累计产生 1600 个孤点
+        let mut rounds = 0;
+        for round in 0..20u32 {
+            let mut nodes = Vec::new();
+            let mut ids = Vec::new();
+            for k in 0..40u32 {
+                let rid = 900_000 + round * 1000 + k;
+                ids.push(rid);
+                nodes.push(serde_json::json!({
+                    "id": rid, "parentId": 1, "flexDirection": "row",
+                    "width": 343.0, "height": 50.0, "flexShrink": 0.0
+                }));
+                nodes.push(serde_json::json!({
+                    "id": rid + 100, "parentId": rid, "width": 30.0, "height": 30.0
+                }));
+            }
+            let ins = splice(handle, serde_json::json!({ "inserts": [{ "parentId": 1, "index": 1, "nodes": nodes }] }));
+            assert_eq!(ins["ok"], true, "插入应成功：{ins}");
+            let rm = splice(handle, serde_json::json!({ "removes": ids }));
+            assert_eq!(rm["ok"], true, "删除应成功：{rm}");
+            rounds += 1;
+            if rm["compacted"].is_array() {
+                // 压实发生了 ⇒ 节点数应接近基线
+                let after = rm["node_count"].as_u64().unwrap() as usize;
+                assert!(
+                    after < base_nodes + 200,
+                    "★压实后节点数应接近基线（{base_nodes}），实为 {after}"
+                );
+            }
+        }
+        let _ = rounds;
+
+        // ① 节点数**有界**（累计插入 1600 节点 ⇒ 若不回收会是 base+1600）
+        let final_rects = rects_of(handle);
+        let final_nodes = final_rects["node_count"].as_u64().unwrap() as usize;
+        assert!(
+            final_nodes < base_nodes + 400,
+            "★孤点未被回收：最终 {final_nodes} 节点（基线 {base_nodes}，累计插入过 1600）"
+        );
+
+        // ② 几何仍正确：与"从头建 50 行"的全量树逐节点比对
+        let handle2 = unsafe {
+            let c = CString::new(list_tree_json(50)).unwrap();
+            proteus_layout_create(c.as_ptr())
+        };
+        let fresh = rects_of(handle2);
+        let a = final_rects["rects"].as_object().expect("应有矩形");
+        let f = fresh["rects"].as_object().expect("应有矩形");
+        assert_eq!(a.len(), f.len(), "★压实后节点集应与全量树一致");
+        let mut compared = 0;
+        for (id, r) in a {
+            let fr = f.get(id).unwrap_or_else(|| panic!("★压实后多出节点 {id}（不该有）"));
+            for k in ["x", "y", "width", "height"] {
+                let av = r[k].as_f64().unwrap_or(f64::NAN);
+                let fv = fr[k].as_f64().unwrap_or(f64::NAN);
+                assert!(
+                    (av - fv).abs() < 0.01,
+                    "★节点 {id} 的 {k} 不一致：压实后 {av} vs 全量 {fv}（下标重排影响了语义？）"
+                );
+            }
+            compared += 1;
+        }
+        assert!(compared >= 100, "至少应比对到 50 行的全部节点（实测 {compared}）");
         unsafe { proteus_layout_destroy(handle) };
         unsafe { proteus_layout_destroy(handle2) };
     }

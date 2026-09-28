@@ -1203,6 +1203,10 @@ final class SelfDrawBridge: NSObject, SelfDrawExports {
                            "removed": removed, "inserted": inserted,
                            "removed_layers": view.lastSpliceRemoved,
                            "inserted_layers": insertedLayers,
+                           // ★内存回收读数（孤点压实：`[前, 后]` / 当前孤点数 / 节点总数）
+                           "compacted": o?["compacted"] ?? NSNull(),
+                           "orphans": o?["orphans"] ?? 0,
+                           "core_node_count": o?["node_count"] ?? 0,
                            "child_order_applied": co.applied,
                            "child_order_missing": co.missing,
                            "child_order_checked": recon.checked,
