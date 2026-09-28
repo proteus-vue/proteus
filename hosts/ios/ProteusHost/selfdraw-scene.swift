@@ -1929,6 +1929,13 @@ final class SelfDrawBridge: NSObject, SelfDrawExports {
         var o = out
         o["scroll_ms"] = round(ms * 100) / 100
         o["virtual"] = view.virtualStats()
+        // ★★**内存读数**（S2 收敛判据：滚动几个来回后内存应**收敛**，不持续增长）
+        //
+        // 【为什么必须由宿主在**每个滚动步**里报（而不是只在结束时取一次）】"收敛"是**趋势**，
+        //   单点读数无法判定（本仓纪律：对自报状态/单点读数比较是空判据）。
+        //   由宿主在滚动动作的同一处取，保证"读数与该步的层状态同源"。
+        //   ★用 `phys_footprint`（iOS 上最贴近真实占用，也是 OOM 杀进程看的那个数）。
+        o["mem_mb"] = round(physFootprintMB() * 10) / 10
         return jsonString(o)
     }
 
