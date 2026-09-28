@@ -164,6 +164,69 @@ const w = ref(1)
     expect(slot.nodeId).toBe(2)
   })
 
+  it('★★非零偏移的中间节点：绝对坐标不得被叠加两次（本仓实测的潜伏缺陷）', () => {
+    // 【为什么单列这条用例（本仓实测的教训）】
+    //   `layout_incremental` 的回写公式一度是 `origin + r`——而 taffy 的 `r` **已相对范围根**
+    //   ⇒ 范围自身位置被叠加两次。**该缺陷从 M1 起存活很久**，因为：
+    //     · 范围 == 树根 ⇒ origin=(0,0) ⇒ 恰好正确
+    //     · 目标在**偏移 0** 处 ⇒ 错误被 0 掩盖
+    //     · 而此前所有测试与设备基准**都落在**这两种情形
+    //   ⇒ 本用例刻意用**非零偏移**（row margin-top 50 + dot margin-top 10），
+    //     并断言**绝对坐标**（沿父链累加），把整类错误钉死。
+    const sfc = `<template>
+  <p-view>
+    <p-view>
+      <p-view :width="dotWidth" />
+    </p-view>
+  </p-view>
+</template>
+
+<script setup lang="ts">
+const dotWidth = ref(20)
+</script>
+`
+    // ★树 id **必须等于元素序**（本仓实测的对齐纪律，我又踩了一次）：
+    //   SFC 是三层嵌套 ⇒ 元素序 root=**0** · row=**1** · dot=**2**
+    //   ⇒ 树里 dot 的 id 必须是 **2**（不是 1）。首版写成 id=1，于是指令打到了 row 上
+    //     （现象：`scopes=[0]` 全树重排、row 的宽变成 70）——**看起来像坐标错，其实是 id 错位**。
+    const treeJson = JSON.stringify({
+      viewport: { width: 300, height: 300 },
+      nodes: [
+        { id: 0, parentId: null, flexDirection: 'column', width: 300, height: 300 },
+        { id: 1, parentId: 0, flexDirection: 'column', width: 300, height: 100, margin: { top: 50 } },
+        { id: 2, parentId: 1, width: 20, height: 20, margin: { top: 10 } },
+      ],
+    })
+    const { table } = buildVaporSubscriptions(sfc, 'offset.vue')
+    const keys = new PropKeyTable()
+    const strings = new StringPool()
+    const captured: Uint8Array[] = []
+    const rt = new SlotRuntime(keys, strings, (b) => captured.push(b))
+    let dotWidth = 20
+    const ctx: EvalContext = { read: (n) => (n === 'dotWidth' ? dotWidth : undefined) }
+    const vapor = new VaporRuntime(table, rt, VaporRuntime.buildEvaluators(table.evaluators))
+    const triggers = new Map<string, () => void>()
+    vapor.load(ctx, (n, cb) => triggers.set(n, cb))
+
+    dotWidth = 70
+    triggers.get('dotWidth')!()
+    rt.flush()
+    expect(captured.length).toBe(1)
+
+    const res = rustRoundTrip(treeJson, captured[0])
+    // ★`rects` 给的是**绝对**坐标（`collect_abs_pairs` 已沿父链累加过）
+    //   ⇒ 直接断言 dot 的绝对 y = 60（row 的 50 + dot 相对的 10）。
+    //   ★本条用例我写错过两次，两次都值得记：
+    //     ① 树 id 与元素序不对齐（dot 写成 id=1）⇒ 指令打到 row 上，**看起来像坐标错**
+    //     ② 断言里又加了一次 row.y（`dot.y + row.y`）⇒ 110，**是断言错、不是实现错**
+    //   ⇒ 纪律：**绝对/相对坐标在断言里必须标明口径**，且树 id 必须等于元素序。
+    const dot = res.rects['2']   // dot 的 id = 2（= 元素序）
+    const row = res.rects['1']   // row 的 id = 1
+    expect(row.y).toBeCloseTo(50, 1)      // row 绝对 y（margin-top 50）
+    expect(dot.y).toBeCloseTo(60, 1)      // ★dot 绝对 y = 50 + 10（不得为 110）
+    expect(dot.width).toBeCloseTo(70, 1)
+  })
+
   it('★指令无法应用时必须上报（未知节点 → unsupported 非空）', () => {
     const treeJson = JSON.stringify({
       viewport: { width: 100, height: 100 },
