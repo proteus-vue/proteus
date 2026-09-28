@@ -5,6 +5,18 @@
 > 依赖：《App 端高性能渲染落地方案》M2、《Vapor for Proteus IR 设计方案》V1、《App 端路由与动画系统设计方案》RT0–RT2
 > 本文档术语与上述文档保持一致
 
+
+> ⚠ **实施状态：规划态（2026-09-28 逐项核实）**
+>
+> | 阶段 | 状态 | 说明 |
+> |---|---|---|
+> | BM0 测量设施 | ◐ | **已有四件套**：`hosts/android/perfetto-analyze.py`（核归属）· `acceptance.sh`（gfxinfo + release/杀进程/5 轮/热控）· `hosts/ios/experiments/device/measure-memory.sh`（进程隔离）。**缺**：输入延迟采集 · GC 暂停统计 · 5 分钟长跑 |
+> | BM1 B1 主案例 | ◐ | **4050 列表资产已有**（`hosts/android/.../MainActivity.java` + `hosts/ios/README-BENCH.md`）。**缺**：共享元素飞入 / 手势下拉返回的 App 侧实现 · 10000 档负载梯度 |
+> | BM2~BM5 | ❌ | 实时数据升级 / B2-B4 案例 / Flutter·RN·原生对照 App / Playground 挂载 —— 均无 |
+>
+> ⇒ 本规格的**测量方法学已被 M2 验收部分采用**（`hosts/android/ACCEPTANCE.md` 的三项对打口径即出于此），
+> 但**完整 benchmark 报告尚未产出**。
+
 ---
 
 ## 0. 核心原则

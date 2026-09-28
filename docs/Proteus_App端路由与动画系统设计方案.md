@@ -333,39 +333,46 @@ Skyline 通过 `share-element` 实现共享元素转场（如列表页图片飞�
 
 **出口**：拿到"指令路径 vs JS 路径"的实测对比。**未验证前不得开始 RT1。**
 
-### RT1 · 路由框架（≈2.5 人周）
+### RT1 · 路由框架（≈2.5 人周）—— ◐ **部分完成**（核实于 2026-09-28）
 
-- [ ] 统一路由 API（上层与现有 `proteus.config.ts` 配置兼容）
-- [ ] routeType 映射表（§3.2）
-- [ ] App 端路由实现（解除 §3.3 五条限制）
-- [ ] Skyline 端映射验证
-- [ ] 页面栈层数实测
+- [x] 统一路由 API（上层与现有 `proteus.config.ts` 配置兼容）—— ✅ `packages/router/src/{navigation,merge,rules,schema,skyline}.ts` + `tests/router*.test.ts`（20+ 测试文件）
+- [x] routeType 映射表（§3.2）—— ✅ `router/src/rules.ts:131` + `schema.ts:28` + `presets/{halfScreen,scaleDown,slideUp}.ts`
+- [ ] App 端路由实现（解除 §3.3 五条限制）—— ❌ 无证据（**这是 RT1 的核心价值，仍待做**）
+- [x] Skyline 端映射验证 —— ✅ `router/src/skyline.ts` + `tests/platform-variant-router.test.ts`
+- [ ] 页面栈层数实测 —— ❌ 无证据
 
-### RT2 · 动画指令（≈3 人周，依赖 RT0 结论）
+### RT2 · 动画指令（≈3 人周，依赖 RT0 结论）—— ❌ **未实现**（核实于 2026-09-28）
 
-- [ ] `AnimOpCode` 指令集
-- [ ] 动画表达式编译器（生成 `AnimExpr`）
-- [ ] Rust 侧曲线查表与插值
-- [ ] 槽位与动画状态绑定
-- [ ] 每帧批处理（与现有 flush 调度合并）
+- [ ] `AnimOpCode` 指令集 —— ❌ 全仓 `AnimOpCode`/`AnimExpr` 命中 8 处，**7 处在本方案自身、0 处实现**
+- [ ] 动画表达式编译器（生成 `AnimExpr`）—— ❌
+- [ ] Rust 侧曲线查表与插值 —— ❌
+- [ ] 槽位与动画状态绑定 —— ❌
+- [ ] 每帧批处理（与现有 flush 调度合并）—— ❌
 
-### RT3 · 手势最小集（≈2 人周）
+> ⚠ **勿与 worklet 路线混淆**：`packages/worklet/`（`easing` / `runtime`）是**已完成**的 worklet 动画能力，
+> 但它**不是本方案的 IR 指令路径**（本方案要的是"指令驱动动画"以走编译器优化）。
+> ⇒ 本方案 §1 声称的"超越 Skyline 的动画能力"目前**未兑现**（RT0 spike 也未做）。
 
-- [ ] tap / pan / long-press
-- [ ] 框架自动管理手势生命周期
-- [ ] `ANIM_SEEK` 手势驱动链路
+### RT3 · 手势最小集（≈2 人周）—— ◐ **大部分完成**（核实于 2026-09-28）
 
-### RT4 · 共享元素转场（≈1.5 人周）
+- [x] tap / pan / long-press —— ✅ `packages/gesture/src/recognizers.ts` + Web 接线 `use-gesture.ts` + 真机 `hosts/android/results/gesture.json`
+- [x] 框架自动管理手势生命周期 —— ✅ 同上（与渲染器接线）
+- [ ] `ANIM_SEEK` 手势驱动链路 —— ❌ 无证据（依赖 RT2 的动画指令，**未实现**）
 
-- [ ] 编译期全局稳定 ID
-- [ ] 几何插值指令
-- [ ] 跨端 conformance 验证
+### RT4 · 共享元素转场（≈1.5 人周）—— ❌ **未实现**（核实于 2026-09-28）
 
-### RT5 · 手势协商与复杂手势（≈3 人周，建议单独立项）
+- [ ] 编译期全局稳定 ID —— ◐ **仅 IR 声明**（`component-ir/src/primitives.ts` E29 + `map.ts` 的 `skyline: 'share-element'`），无编译期实现
+- [ ] 几何插值指令 —— ❌ 无证据
+- [ ] 跨端 conformance 验证 —— ❌ 无证据
 
-- [ ] 嵌套滚动冲突协商
-- [ ] Android / iOS 语义对齐
-- [ ] 缩放、双击、多指
+> ⚠ **勿混淆**：小程序侧有 `p-share-element` 组件（`showcase/.../p-share-element.vue`），
+> 那是 **Skyline 端能力**，与本方案的 **IR 指令驱动 App 端转场**不是一回事。
+
+### RT5 · 手势协商与复杂手势（≈3 人周，建议单独立项）—— ❌ **未实现**（核实于 2026-09-28）
+
+- [ ] 嵌套滚动冲突协商 —— ❌ 无协商代码
+- [ ] Android / iOS 语义对齐 —— ❌ 无证据
+- [ ] 缩放、双击、多指 —— ❌ 无证据（注：`pinch`/`rotate` 若已在 RT3 的 recognizers 里，属"识别"而非"协商"）
 
 ---
 

@@ -4,6 +4,15 @@
 > 适用：Proteus v2.47+（Vue 3.4 / Vite 5 / TS 5.4）
 > 结论：**能做，但必须严格界定"兼容到什么程度"**——不是 100% 兼容，而是覆盖目标项目集合的通用子集
 
+
+> ⚠ **实施状态：规划态 · UC0 未启动（2026-09-28 核实）**
+>
+> 全仓 `uni_modules` / `pages.json` / `APP-PLUS` / `nvue` / `uniCloud` —— **零命中**（packages/scripts/hosts/spike/examples 全扫）。
+> UC0~UC7 均未开工。本方案自身的出口条件（「未拿到扫描数据不得开始 UC1」）与现状一致。
+>
+> ⚠ **勿与已落地能力混淆**：`packages/compat-miniprogram` 是**微信小程序**（`wx.*`）兼容 + `migrate:mp` codemod，
+> 与 uni-app **无关**；`__MP__`/`__WEB__` 宏是本仓自研条件编译，也非 uni 条件编译。
+
 ---
 
 ## 0. 结论摘要

@@ -517,23 +517,23 @@ export default defineConfig({
 
 ## 8. 分阶段里程碑
 
-### M0 · IR 扩展与编译期分析（≈2 人周）
+### M0 · IR 扩展与编译期分析（≈2 人周）—— ✅ **已完成**（勾选于 2026-09-28 逐项核实）
 
-- [ ] 扩展 `PNode` / `PFlags` / `DynamicBinding`
-- [ ] 实现静态子树识别与提升
-- [ ] 实现拍平判定 + 违规报错
-- [ ] 样式归一化 + 单位折叠
-- [ ] Golden 门禁：Node/Rust 双端对齐
+- [x] 扩展 `PNode` / `PFlags` / `DynamicBinding` —— `packages/component-ir/src/pnode.ts`
+- [x] 实现静态子树识别与提升 —— `pnode-analyze.ts` 填 `staticSubtree`；`layout-core/src/render-cmd.ts` 消费
+- [x] 实现拍平判定 + 违规报错 —— `pnode-analyze.ts:117` 报 `css.flatten-violation`
+- [x] 样式归一化 + 单位折叠 —— `component-ir/src/pnode-style.ts`（`normalizeStyleString` / `resolveLength`）
+- [x] Golden 门禁：Node/Rust 双端对齐 —— `tests/golden.test.ts` + `packages/layout-core-rust/tests/golden/`（`conformance.rs` 逐节点比对）
 
-**出口条件**：`proteus explain` 能输出拍平/静态提升的完整决策 trace。
+**出口条件**：`proteus explain` 能输出拍平/静态提升的完整决策 trace —— ✅ `packages/cli/src/explain.ts` + `component-ir/src/pnode-trace.ts`
 
-### M0.5 · 排版核心语言 Spike（≈0.5 人周）★ 决策前置
+### M0.5 · 排版核心语言 Spike（≈0.5 人周）★ 决策前置 —— ✅ **已完成并决案**（2026-09-29）
 
-- [ ] Yoga vs Taffy 对比 spike（接入成本、Grid 支持、性能）
-- [ ] 决定排版核心语言：C++ 还是 Rust（DCP-1）
-- [ ] 决定 Profile 是否开放 Grid（DCP-2）
+- [x] Yoga vs Taffy 对比 spike（接入成本、Grid 支持、性能）—— `docs/proteus-performance-plan/11-dcp1-layout-engine.md` + `spike/dcp1-layout-engine/`
+- [x] 决定排版核心语言：C++ 还是 Rust（DCP-1）—— **决：Rust + Taffy 0.14**（三条硬证据：Grid 能力 / 与 `proteus-cc-rust` 同栈 / 上游活跃）
+- [x] 决定 Profile 是否开放 Grid（DCP-2）—— **决：有条件可用**（Skyline 端实测退化为 block ⇒ 非无条件）
 
-**出口条件**：DCP-1 / DCP-2 有书面结论。**此决策不得延后至 M1 之后。**
+**出口条件**：DCP-1 / DCP-2 有书面结论 —— ✅ 见上（★**必须锁 taffy 0.14**：0.13 有 measure 指数退化，详见决策文档 §2）
 
 ### M1 · 排版核心骨架 —— ✅ **已用 Node 参考实现完成**（2026-09-29）
 
@@ -574,34 +574,40 @@ export default defineConfig({
 5. min/max 夹取需**冻结—再分配**（CSS §9.7），否则被夹住的空间不会转给兄弟（差 35dp）
 6. `display:none` 在 CSS 中**无盒**（不产生 rects，也不产生绘制指令）
 
-### M2 · Android 端最小闭环（≈3 人周）★ 关键验证点
+### M2 · Android 端最小闭环（≈3 人周）★ 关键验证点 —— ✅ **已通过**（勾选于 2026-09-28 逐项核实）
 
-- [ ] 仅实现三个组件：`view` / `text` / `image`
-- [ ] 宿主 View + Canvas 下发
-- [ ] Java/Kotlin ↔ C++ 绑定
-- [ ] **跑 4050 元素测试与原生 View 体系对打**
+- [x] 仅实现三个组件：`view` / `text` / `image` —— `hosts/android/app/src/main/java/dev/proteus/layoutcore/{RustLayout,MainActivity}.java`
+- [x] 宿主 View + Canvas 下发 —— 同上
+- [x] Java/Kotlin ↔ C++ 绑定 —— **实际走 Rust**：`packages/layout-core-rust/src/jni.rs`（JNI 入口）
+- [x] **跑 4050 元素测试与原生 View 体系对打** —— `hosts/android/ACCEPTANCE.md`：**三项全部达标**
+      （布局 **0.063×** · 绘制 **0.667×** · 内存 **0.331×**，即均**优于**原生）+ 10+ 次运行记录在 `hosts/android/results/acceptance/`
 
-**出口条件**：见 §9.2。这一关过不了，整条路线应重新评估。
+**出口条件**：见 §9.2 —— ✅ **本关已过**（路线无需重估）；★决定后端语言为 Rust（M0.5 DCP-1）
 
-### M3 · Android 端补全（≈6 人周）
+### M3 · Android 端补全（≈6 人周）—— ◐ **部分完成**（核实于 2026-09-28）
 
-- [ ] `list` 复用池 + `rich-text`
-- [ ] 与原生组件混用（map / webview）
-- [ ] 事件系统、手势
-- [ ] 调试工具链（节点树 inspect、帧耗时打点）
+- [x] `list` 复用池 —— ✅ `packages/layout-core-rust/src/recycle.rs`（621 行，Lifecycle/方向敏感预载/RecyclePool）+ `hosts/android/results/layout-recycle.json`（4000 行 **reuse_ratio 0.9947**）
+- [x] `rich-text` —— ⚠️ **仅 IR 声明**（`component-ir/src/primitives.ts` 标 `status:'implemented'`），**无宿主渲染证据**
+- [ ] 与原生组件混用（map / webview）—— ◐ **仅 Android**：`hosts/android/README.md` M3（WebView 宿主）+ `native-host-verify.py` + `scroll-sync-verify.py`（z-order 实测 native-on-top）
+- [x] 事件系统、手势 —— ✅ `packages/gesture/src/`（tap/longpress/pan）+ `hosts/android/results/{gesture,hit/layout-hit}.json`
+- [ ] 调试工具链（节点树 inspect、帧耗时打点）—— ◐ `packages/devtools/` 有；**帧耗时打点未见证据**
 
-### M4 · iOS 端 CALayer 路线（≈4 人周）
+### M4 · iOS 端 CALayer 路线（≈4 人周）—— ◐ **大部分完成**（核实于 2026-09-28）
 
-- [ ] 复用 C++ 排版核心
-- [ ] CALayer 树 + CoreText 异步排版
-- [ ] 拍平 + 离屏渲染规避
-- [ ] 与 Android 端一致性 conformance 门禁
+- [x] 复用 C++ 排版核心 —— ✅ **实际复用 Rust 核**：`hosts/ios/experiments/device/layout-core-device.swift` + `results/layout-core-bench-ios.json`
+- [x] CALayer 树 + CoreText 异步排版 —— ✅ `hosts/ios/README-CALAYER.md`（**12/12 通过**）+ CoreText 度量（`selfdraw-scene.swift` 的 `measureText`，含内容寻址缓存）
+- [x] 拍平 + 离屏渲染规避 —— ✅ `hosts/ios/README-BENCH.md` + `docs/proteus-performance-plan/10-ios-memory.md`（**真/假拍平辨析**：50 块位图 vs 4000 块）
+- [ ] 与 Android 端一致性 conformance 门禁 —— ◐ `hosts/cross-device-hit.py` 已有跨端命中测试，**但无 CI script 挂载**
 
-### M5 · 鸿蒙端 + 收尾（≈4 人周）
+### M5 · 鸿蒙端 + 收尾（≈4 人周）—— ❌ **未做**（核实于 2026-09-28）
 
-- [ ] 鸿蒙绘制层接入
-- [ ] 无障碍 / Semantics 语义树（合规必需，见 §10）
-- [ ] 性能棘轮门禁常态化
+- [ ] 鸿蒙绘制层接入 —— ❌ 无代码（全仓仅 `.md`）
+- [ ] 无障碍 / Semantics 语义树（合规必需，见 §10）—— ❌ 无证据（`component-ir` 无 semantics 字段）
+- [ ] 性能棘轮门禁常态化 —— ◐ **门禁已存在**（`scripts/check-vapor-perf.mjs`，两层判据：性能上限 + **优化路径生效证明**），**但未接入 `pnpm verify` 链** ⇒ 待接线
+
+> ⚠ **§9.4 的一处不实**：文中称新增包 `@proteus-vue/perf-ratchet` —— **该包不存在**；
+> 实际落地形式是 `scripts/check-vapor-perf.mjs` + `package.json` 的 `check:vapor-perf`。
+> （本仓纪律：文档提到的产物必须可 grep 到；此类"声称有包但无包"会导致后续会话白找。）
 
 ---
 

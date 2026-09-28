@@ -30,7 +30,7 @@
 > - §P0-3（`contents` 共享）→ **未测**（无重复图片场景）；
 > - §P0-4（`isOpaque` / `shouldRasterize`）→ `isOpaque` 实测**无效**；离屏渲染需 Instruments（未测）；
 > - §5.1（真/假拍平）→ **已验证**：H 是「真拍平」（50 块位图而非 4000 块）；
-> - §5.2/§5.4（懒创建 / 状态机）→ **未测**（属长列表滚动场景，需 S2）；
+> - §5.2（懒创建 materialize）→ **未实现**；§5.4（三档状态机）→ **核心已实现**（`recycle.rs` + Android 落地，见该节；仅 S2 内存收敛复测待做）；
 > - §6.1 验收（内存 ≤ 原生 × 1.15）→ **H 路线 −83%、I 路线 −8% 均达标**；
 >   C 路线 +79% 不达标。
 >
@@ -239,8 +239,14 @@ layer 数：`______________` → `______________`
 | Visible | 维持高质量资源 | 保持高质量缓存 |
 | 退出可见 | 逐步降级 | **释放资源 / 回收 layer** |
 
-- [ ] 实现三档状态机
-- [ ] **滚动方向变化时动态交换前后预加载区域**（leading 区域 >> following 区域）
+- [x] 实现三档状态机 —— ✅ **已实现**（⚠ 本节曾在 2026-09-28 核实中修正：原文标未做，实际已有）
+      `packages/layout-core-rust/src/recycle.rs`（`Lifecycle::{Preload,Display,Visible}` + 退出可见降级 +
+      `RecyclePool`）+ `lib.rs` 导出 + `ffi.rs` 的 `proteus_recycle_bench`；Android 执行侧
+      `hosts/android/.../MainActivity.java` 的 recycle 路径
+- [x] **滚动方向变化时动态交换前后预加载区域**（leading 区域 >> following 区域）—— ✅ **已实现**
+      （同文件：方向敏感窗口）⇒ 真机证据 `hosts/android/results/layout-recycle.json`
+      （4000 行 **reuse_ratio 0.9947**）
+- [ ] **复测 S2 内存收敛** —— 仍缺（唯一未闭项）
 - [ ] 复测 S2：滚动到底再回滚，内存应**收敛**，不持续增长
 
 S2 滚动 3 个来回后内存：`______________ MB`（是否收敛：是 / 否）
@@ -270,7 +276,9 @@ S2 滚动 3 个来回后内存：`______________ MB`（是否收敛：是 / 否�
 
 ### 6.2 纳入 perf-ratchet
 
-- [ ] 上述指标全部纳入 `@proteus-vue/perf-ratchet` CI 门禁
+- [ ] 上述指标全部纳入 ⚠ **`@proteus-vue/perf-ratchet`（该包不存在——2026-09-28 核实）**；实际门禁为三个：
+`scripts/check-vapor-perf.mjs`（`check:vapor-perf`，Vapor 性能棘轮）· `hosts/ios/bench.mjs`（`check:ios-perf`）·
+`scripts/check-ios-experiment-docs.mjs`（文档数字↔`summary.json` 对账）。**内存尚未纳入任何棘轮**（缺口） CI 门禁
 - [ ] 内存回退超过阈值即阻断合并
 
 ---
