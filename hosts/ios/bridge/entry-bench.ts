@@ -83,7 +83,7 @@ const BN = { snapshot: 'bench-final' }
 // ★构建标识：每次构建写入，用于**确凿判定**设备上跑的是哪份代码
 //   （踩坑：靠文件 mtime 判断"报告是否刷新"不可靠——新建目标文件的时间恒为"现在"；
 //    且我看不出设备实际执行的是旧 bundle，白跑一轮。有了这个字段就能一眼判定。）
-const BUILD_ID = '34559ee9-190533'
+const BUILD_ID = '0b7ebdc2-192630'
 const now = (): number => Date.now()
 /** 宽松解析（宿主返回可能是字符串或已是对象） */
 const safeParseAny = (s: any): any => {
@@ -2045,6 +2045,108 @@ CASES.push({
       },
     })
     app.dispose()
+  },
+})
+
+/* V11 · ★★真实长列表：1000 行 SFC 产物 → 实例化 → 挂载 → 行内更新（ListRegistry 真机驱动） */
+CASES.push({
+  name: 'V11_long_list',
+  note: '★★真实长列表（1000 行）：SFC 模板实例化 + ListRegistry 行内解析 → 更新第 N 行只发 1 条指令',
+  fn: async () => {
+    const builtTpl = vaporTableJson as unknown as {
+      ok: boolean
+      table: import('@proteus-vue/slot-runtime').SubscriptionTable
+      template: import('@proteus-vue/slot-runtime').LayoutTemplate
+    }
+    if (!builtTpl.ok || !builtTpl.template) {
+      results.push({ case: 'V11_long_list', note: '✗ 模板产物不可用', items: 0, nodes: 0,
+        vue_ms: -1, to_request_ms: -1, serialize_ms: -1, host_ms: -1, total_ms: -1, patch_count: -1, request_bytes: -1 })
+      return
+    }
+    const tpl = builtTpl.template
+    const table = builtTpl.table
+    const ROWS = 1000
+    let rows = Array.from({ length: ROWS }, (_, i) => ({
+      id: i + 1, dotW: 36, textW: 120, title: `行 ${i + 1}`,
+    }))
+    const data: Record<string, unknown> = { list: rows }
+    const read = (n: string): unknown => data[n]
+    const registry = new ListRegistry()
+
+    // ① 实例化（模板 + 1000 行 → 节点树）
+    const tInst0 = now()
+    const inst = instantiateTemplate(tpl, { viewport: VP, read, table, registry })
+    const instantiateMs = now() - tInst0
+
+    // ② 挂载（宿主度量 + 核心布局 + 建层）
+    const tMount0 = now()
+    const mountOut = safeParseAny(proteusSelfDraw.mount(JSON.stringify({ viewport: VP, nodes: inst.nodes })))
+    const mountMs = now() - tMount0
+
+    // ③ 行内更新：改**第 500 行**的圆点宽（应只发 1 条 SET_STYLE，命中该行节点）
+    const keys = new PropKeyTable()
+    const strings = new StringPool()
+    const cap: Uint8Array[] = []
+    const rt = new SlotRuntime(keys, strings, (b) => cap.push(b))
+    const vapor = new VaporRuntime(table, rt, VaporRuntime.buildEvaluators(table.evaluators), registry)
+    const triggers = new Map<string, () => void>()
+    let listRows = rows
+    const ctx = { read: (n: string) => (n === 'list' ? listRows : read(n)) }
+    const loadRes = vapor.load(ctx, (name, cb) => triggers.set(name, cb))
+    vapor.relink(ctx)
+    rt.flush()
+    cap.length = 0
+
+    // 改第 500 行（只动一行 ⇒ 应只发 1 条指令）
+    const nextRows = listRows.map((r, i) => (i === 499 ? { ...r, dotW: 60 } : r))
+    listRows = nextRows
+    data.list = nextRows
+    triggers.get('list')?.()
+    rt.flush()
+    const bytes = cap.pop()
+    const applyOut = bytes ? safeParseAny(proteusSelfDraw.applyOps(JSON.stringify(Array.from(bytes)))) : undefined
+
+    const checks = {
+      // ★实例化产物规模正确（静态 + 1000×行子树）
+      instOk: inst.nodes.length > 3000,
+      // ★挂载成功且层数 ≈ 节点数
+      mountOk: !!mountOut?.ok && (mountOut?.layer_count as number) > 3000,
+      // ★只发 1 条指令（ListRegistry 解析到具体行 ⇒ 不是 LIST_UPDATE 回退）
+      oneOp: (applyOut?.patch_count as number) === 1,
+      // ★无 unsupported（LIST_UPDATE 被上报 ⇒ 说明注册表没解析成功）
+      noUnsupported: ((applyOut?.unsupported_count as number) ?? 0) === 0,
+      // ★几何真的变了（变化量自检——本仓纪律：计时必须配"变化量"）
+      geomChanged: ((applyOut?.geom_changed as number) ?? 0) >= 1,
+      // ★重排范围小（行是边界 ⇒ 不该整树重排）
+      smallScope: ((applyOut?.relayout_count as number) ?? 1e9) < 100,
+    }
+    const verdict = Object.values(checks).every(Boolean) ? 'PASS' : 'FAIL'
+    results.push({
+      case: 'V11_long_list',
+      note: `${ROWS} 行 SFC 产物：实例化 ${inst.nodes.length} 节点 · 挂载 ${mountOut?.layer_count ?? 0} 层 · 改 1 行发 ${applyOut?.patch_count ?? -1} 条指令`,
+      items: ROWS, nodes: inst.nodes.length,
+      vue_ms: 0, to_request_ms: instantiateMs, serialize_ms: 0,
+      host_ms: mountMs, total_ms: instantiateMs + mountMs,
+      patch_count: rt.getStats().opsEmitted, request_bytes: (applyOut?.in_bytes as number) ?? 0,
+      extra: {
+        verdict, checks,
+        instantiate_ms: Math.round(instantiateMs * 100) / 100,
+        mount_ms: Math.round(mountMs * 100) / 100,
+        layer_count: mountOut?.layer_count,
+        op_count: applyOut?.patch_count,
+        unsupported: applyOut?.unsupported_count,
+        relayout: applyOut?.relayout_count,
+        geom_changed: applyOut?.geom_changed,
+        l1_slots: loadRes.l1Slots, l0_slots: loadRes.l0Slots,
+        uninstantiated: loadRes.uninstantiatedSlots.length,
+        // ★ListRegistry 驱动成功的直接证据（resolveNode 命中数）
+        registry_stats: (registry as unknown as { stats?: unknown }).stats,
+        // ★诚实边界：本档验证"长列表实例化 + 行内更新只发 1 条"；
+        //   真机**滚动复用池**（recycle.rs）未接（那是另一条线）
+        covered: 'long-list instantiate + per-row dispatch',
+        not_covered: 'scroll recycle pool on device',
+      },
+    })
   },
 })
 

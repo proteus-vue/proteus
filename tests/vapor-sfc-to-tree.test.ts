@@ -177,7 +177,9 @@ describe('V4 · ★★SFC 产物 → 实例化成端上节点树', () => {
     const titleNode = inst.nodes.find((n) => n.id === titleSlot.nodeId)!
     expect(titleNode.text, '行内文本必须已回填（否则首帧空白）').toBe('a')
     const widthNode = inst.nodes.find((n) => n.id === widthSlot.nodeId)!
-    expect(widthNode.style?.width, '行内样式必须已回填（否则首帧几何错）').toBe(10)
+    // ★形态：样式**平铺在顶层**（核心 NodeDto 契约——放 `style` 子对象会被静默忽略）
+    expect(widthNode.width, '行内样式必须已回填到**顶层**（否则核心看不到 ⇒ 布局按全 auto 算）').toBe(10)
+    expect(widthNode.style, '★不得再产出 `style` 子对象（那是接口不匹配的形态）').toBeUndefined()
     // 第 2 行（新分配 id）也必须回填
     const rows = inst.nodes.filter((n) => n.text === 'b' || n.text === 'c')
     expect(rows.length, '第 2/3 行的文本也应回填').toBe(2)
