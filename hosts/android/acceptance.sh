@@ -221,6 +221,37 @@ grep -E "Total frames rendered|Janky frames \(|50th percentile|90th percentile|9
 # 同时取回滚动辅助观测
 "$ADB" pull "/sdcard/Android/data/$PKG/files/layout-scroll.json" "$DEST/layout-scroll.json" >/dev/null 2>&1 || true
 
+echo "==> 采集「核心驱动滚动」读数（复用池决策来自 Rust；与 iOS V12 同一条路）"
+# ★与上面那条路径的差别：上面宿主自己算窗口（已收敛到核心，但报告字段是 §9.3 口径）；
+#   本条是 scroll-core 专用路径，直接输出**核心决策 ↔ 平台执行**的对账读数。
+"$ADB" shell "rm -f /sdcard/Android/data/$PKG/files/layout-scroll-core.json" >/dev/null 2>&1 || true
+"$ADB" shell am force-stop "$PKG" >/dev/null 2>&1; sleep 1
+"$ADB" shell am start -n "$ACTIVITY" --es path scroll-core >/dev/null 2>&1; sleep 3
+"$ADB" shell "am broadcast -a dev.proteus.RUN --es path scroll-core -p $PKG" >/dev/null 2>&1
+# ★条件探测（不固定 sleep 盲等）：600 帧 ≈ 10s，给 60s 上限
+SC_T=0
+while [ "$SC_T" -lt 60 ]; do
+  if "$ADB" shell "test -f /sdcard/Android/data/$PKG/files/layout-scroll-core.json" >/dev/null 2>&1; then break; fi
+  sleep 3; SC_T=$((SC_T + 3))
+done
+"$ADB" pull "/sdcard/Android/data/$PKG/files/layout-scroll-core.json" "$DEST/layout-scroll-core.json" >/dev/null 2>&1 || true
+if [ -f "$DEST/layout-scroll-core.json" ]; then
+  python3 - "$DEST/layout-scroll-core.json" <<'PYSC'
+import json, sys
+d = json.load(open(sys.argv[1]))
+core_acq = (d.get('core_stats') or {}).get('acquire_events', -1)
+plat = d.get('rn_created', -1) + d.get('rn_reused', -1)
+print(f"    预载区交换 {d.get('preload_swapped')}（forward 上{d.get('fwd_kept_above')}/下{d.get('fwd_kept_below')}"
+      f" · backward 上{d.get('back_kept_above')}/下{d.get('back_kept_below')}）")
+print(f"    层数恒定 {d.get('rn_max_active')} · 复用率 {d.get('rn_reuse_ratio')} · 每帧有界 {d.get('max_per_frame')}")
+print(f"    ★账目对账：核心 acquire_events {core_acq} vs 平台 created+reused {plat}"
+      f" → {'✅ 一致' if core_acq == plat else '❌ 不一致（宿主重判了？）'}")
+print(f"    ★可见区缺行 {d.get('max_missing_in_visible')}（>0 ⇒ 核心认为存在的行宿主没建）")
+PYSC
+else
+  echo "    ⚠ 未取回 layout-scroll-core.json（滚动未跑完？）"
+fi
+
 echo "==> 汇总"
 python3 - "$DEST" <<'PY'
 import json, sys, glob, os, statistics
