@@ -110,6 +110,15 @@ func physFootprintMB() -> Double {
     func scrollBy(_ dx: Double, _ dy: Double) -> String
     /// ★V4：待补刷统计（诊断 + 滚动用例的判据）
     func pendingStats() -> String
+    /// ★★V5：**批量像素采样**（渲染一次读多点）——像素级验证的判据
+    ///
+    /// 【为什么需要（本仓反复标注的缺口）】此前所有验证都停在"**几何**算对了"
+    ///   （rect/坐标/不变式），而"**屏幕上真的画对了**"从未验证。
+    ///   延迟补刷（只更可见层）的正确性尤其需要它：几何对 ≠ 屏幕对。
+    ///
+    /// 入参：`[{"x":10,"y":100}, ...]`（屏幕坐标，逻辑点）
+    /// 出参：`{"ok":true,"pixels":["#RRGGBB", ...]}`（与入参同序）
+    func samplePixels(_ json: String) -> String
     /// ★★V4 A/B 开关：'v4'（默认：二进制返回 + 只更可见层）| 'v3'（旧路径：JSON 返回 + 全部层）
     ///
     /// 【为什么要有它（诚实对照）】优化前后若用**不同的基准树**测，比较无意义
@@ -176,6 +185,8 @@ final class SelfDrawView: UIView {
         parentById.removeAll(keepingCapacity: true)
         builtFrames.removeAll(keepingCapacity: true)
         builtParents.removeAll(keepingCapacity: true)
+        // ★建新树 ⇒ 滚动偏移归零（见 resetContentOffset 的说明：视图状态会跨用例泄漏）
+        resetContentOffset()
         CATransaction.commit()
     }
 
@@ -267,6 +278,18 @@ final class SelfDrawView: UIView {
     ///   ⇒ 正确模型：**视口固定在屏幕 `[0,0,W,H]`**，滚动 = 移动**内容**（根层位置偏移）。
     ///   判可见性 = 「内容坐标 r」与「屏幕窗口 + 偏移」相交判定。
     private(set) var contentOffset = CGPoint.zero
+
+    /// ★★重置滚动偏移（**建新树时必须调用**——本仓实测的测试间状态泄漏）
+    ///
+    /// 【故障链】`contentOffset` 是**视图属性**而非树属性 ⇒ 上一个用例滚动后，
+    ///   下一个用例 `mount` 新树时偏移**仍在** ⇒ 采样/可见性判定都基于错误的视口位置。
+    ///   实测症状：像素用例 mount 后采样点颜色全不对（因为屏幕显示的是「已上移 1200px」的内容），
+    ///   而**几何断言全对** ⇒ 极易误判成"渲染 bug"。
+    ///   ⇒ 纪律：**跨用例共享的视图状态，必须在新树建立时显式归零**。
+    func resetContentOffset() {
+        contentOffset = .zero
+        self.layer.sublayerTransform = CATransform3DIdentity
+    }
 
     /// 屏幕固定视口（可见区判定的基准）
     var visibleBounds: CGRect { CGRect(origin: .zero, size: self.bounds.size) }
@@ -710,6 +733,60 @@ final class SelfDrawBridge: NSObject, SelfDrawExports {
         view.setNeedsLayout()
         view.layoutSubviews()
         return "{\"ok\":true,\"flushed\":\(view.lastFlushedCount),\"offsetY\":\(Double(off.y))}"
+    }
+
+    /// ★★V5：批量像素采样（渲染一次 → 读 N 个点）
+    ///
+    /// 【为什么"渲染一次读多点"】逐点调用会各渲染一次（每次 `layer.render` 都不便宜）；
+    ///   采样点通常十几个 ⇒ 一次渲染 + 多次读取，成本降一个量级。
+    func samplePixels(_ json: String) -> String {
+        guard let view = view else { return "{\"ok\":false,\"error\":\"无视图\"}" }
+        guard let data = json.data(using: .utf8),
+              let pts = (try? JSONSerialization.jsonObject(with: data)) as? [[String: Double]] else {
+            return "{\"ok\":false,\"error\":\"points 解析失败（需数组）\"}"
+        }
+        let size = view.bounds.size
+        guard size.width > 0, size.height > 0 else {
+            return "{\"ok\":false,\"error\":\"视图尺寸为 0\"}"
+        }
+        // ★渲染一次（与 snapshot 同款：layer.render —— UIKit 的 snapshotView 不含 CALayer 子层）
+        let fmt = UIGraphicsImageRendererFormat.default()
+        fmt.scale = 1 // ★scale=1 ⇒ 1 点 = 1 像素，采样坐标与逻辑点一一对应（免去换算）
+        let renderer = UIGraphicsImageRenderer(size: size, format: fmt)
+        let img = renderer.image { ctx in
+            view.layer.render(in: ctx.cgContext)
+        }
+        guard let cg = img.cgImage else { return "{\"ok\":false,\"error\":\"无 CGImage\"}" }
+        guard let provider = cg.dataProvider, let cfData = provider.data else {
+            return "{\"ok\":false,\"error\":\"无像素数据\"}"
+        }
+        let ptr = CFDataGetBytePtr(cfData)!
+        let bpr = cg.bytesPerRow
+        let bpp = cg.bitsPerPixel / 8
+        let w = cg.width
+        let h = cg.height
+        var out: [String] = []
+        for p in pts {
+            let x = Int(p["x"] ?? 0)
+            let y = Int(p["y"] ?? 0)
+            guard x >= 0, y >= 0, x < w, y < h else {
+                out.append("out-of-bounds")
+                continue
+            }
+            let off = y * bpr + x * bpp
+            // ★★字节序：实测为 **RGBA**（不是我在注释里先验假设的 BGRA）
+            //
+            // 【怎么确定的（值得记）】用三块**纯色标定**（纯红/纯绿/纯蓝）采样后比对：
+            //   · 期望（第 1 块）纯红 `#FF0000` ⇒ 实得 `#0000FF`
+            //   · 第 2 块纯绿 `#00FF00` ⇒ 实得 `#00FF00` ✓
+            //   ⇒ **红蓝互换** ⇒ 本机 CGImage 是 RGBA 布局。
+            //   ★如果只按"文档常见值"猜（我首版就猜了 BGRA），会得到一个**看起来合理但错**的读数
+            //     ——正是本仓反复吃亏的"先验假设 vs 实测"。
+            let r = ptr[off], g = ptr[off + 1], b = ptr[off + 2]
+            out.append(String(format: "#%02X%02X%02X", r, g, b))
+        }
+        let payload: [String: Any] = ["ok": true, "pixels": out, "size": ["w": Double(w), "h": Double(h)]]
+        return jsonString(payload)
     }
 
     func pendingStats() -> String {
