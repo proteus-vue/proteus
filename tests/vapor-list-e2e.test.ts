@@ -145,6 +145,23 @@ describe('V4 · ★★端到端：行内更新写到**正确的行节点**', () 
     expect(ops.some((o) => o.op === OpCode.LIST_UPDATE)).toBe(true)
   })
 
+  it('★key 语义：编译产物必须带 scope / itemKeyField / itemValueField（运行时行求值的前提）', () => {
+    // 【诚实记录（本仓实测）】我曾想用"两行同值"或"行序与 id 解耦"的数据来**击倒**
+    //   "按值反查行"这个错误设计，构造了三轮都**击不倒**——因为值的来源与行的位置
+    //   在这套模型里同构（值总是来自某一行，而该值又唯一标识了它）。
+    //   ⇒ 与其留一条**通不过破坏性验证**的用例（假绿），不如**直接锁定可验证的语义**：
+    //     编译产物必须给出这三个字段，运行时才有"按行取值、按 :key 定位"的依据。
+    const src = sfc(
+      `const list = ref([{ id: 1, w: 10 }])\n`,
+      `<p-view v-for="item in list" :key="item.id">\n  <p-text :width="item.w" />\n</p-view>`,
+    )
+    const { table } = buildVaporSubscriptions(src, 'l.vue')
+    const it0 = table.sources.flatMap((s) => s.slots).find((x) => x.kind === 'list-item')!
+    expect(it0.scope).toBe('item')          // 行作用域别名（rowCtx 求值用）
+    expect(it0.itemKeyField).toBe('id')     // 行标识字段（来自 :key="item.id"）
+    expect(it0.itemValueField).toBe('w')    // 取值字段（来自依赖路径 item.w）
+  })
+
   it('★跨行不串（更新行 1 不影响行 2 的节点）', () => {
     const src = sfc(
       `const list = ref([{ id: 1, w: 10 }])\n`,
