@@ -97,8 +97,20 @@ export function instantiateTemplate(tpl: LayoutTemplate, opts: InstantiateOption
   let valuesFilled = 0
 
   const emit = (n: LayoutNode, id: number, parentId: number | null): void => {
+    // ★★**样式必须摊平到节点顶层**（本仓实测的接口不匹配缺陷）
+    //
+    // 【为什么（这条链此前静默失效）】核心的 `NodeDto` 期望样式字段**平铺在节点上**
+    //   （`{"id":2,"height":56,"flexDirection":"row"}`），而首版把样式放在
+    //   **`style: {...}` 子对象**里 ⇒ serde 只认顶层字段 ⇒ **所有样式解析为 None**
+    //   （height/flexDirection/alignItems 全丢）⇒ 布局按"全部 auto"算
+    //   ⇒ 行不是布局边界 ⇒ **增量更新退化为整树重排**（真机 V11：relayout=3002）。
+    //   ★更糟的是：`mount` 仍会成功、层也会建（几何是"某种"结果）⇒ **V6 判据全过（假绿）**。
+    //   ⇒ 形态与 `SelfDrawNodeSpec`（自绘适配器的产物）**逐字段一致**——
+    //     那条链已验证可行（S1/S5 等真机用例），本函数与之对齐。
     const out: InstantiatedNode = { id, parentId }
-    if (n.style && Object.keys(n.style).length > 0) out.style = { ...n.style }
+    if (n.style) for (const [k, v] of Object.entries(n.style)) {
+      ;(out as Record<string, unknown>)[k] = v
+    }
     if (n.text !== undefined) out.text = n.text
     nodes.push(out)
     byId.set(id, out)
@@ -149,7 +161,8 @@ export function instantiateTemplate(tpl: LayoutTemplate, opts: InstantiateOption
           if (f.kind === 'text') {
             target.text = String(v)
           } else {
-            target.style = { ...(target.style ?? {}), [f.key]: v }
+            // ★回填也写**顶层**（与 emit 的摊平一致——否则回填的键核心看不到）
+            ;(target as Record<string, unknown>)[f.key] = v
           }
           valuesFilled++
         }

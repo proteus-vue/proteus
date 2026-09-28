@@ -598,6 +598,51 @@ mod tests {
         );
     }
 
+    /// ★★**只有 `height` 的列表行是否为边界**（对齐真实 SFC 形态）
+    ///
+    /// 【为什么单列（本仓实测的真实现象）】真机 `V11_long_list`（1000 行 SFC）改行内圆点宽后
+    ///   `relayout=3002`（**整树**）——而既有类A 测试的行是 `{width, height}` 双显式。
+    ///   差别：真实 SFC 的行只有 `height: 56px`（**无 width**）。本测试判定它是不是边界。
+    ///
+    /// 判据：若**是**边界 ⇒ `relayout_scope_of(圆点)` 应返回**行**（范围小）；
+    ///   若**不是** ⇒ 上浮到根（`relayout` 全树）——那 1000 行列表的行内更新就**永远整树重排**。
+    #[test]
+    fn row_with_only_height_is_layout_boundary() {
+        let mut tree = LayoutTree::new();
+        let root_style = LStyle {
+            display: crate::style::Display::Flex,
+            flex_direction: crate::style::FlexDirection::Column,
+            width: Some(390.0),
+            height: Some(844.0),
+            ..Default::default()
+        };
+        let root = tree.push(node(1, crate::node::NO_PARENT, root_style));
+        tree.roots.push(root);
+        // ★与真实 SFC 同形：行**只有 height**（无 width），flexDirection: row
+        let row_style = LStyle {
+            display: crate::style::Display::Flex,
+            flex_direction: crate::style::FlexDirection::Row,
+            height: Some(56.0),
+            flex_shrink: 0.0,
+            ..Default::default()
+        };
+        let row = tree.push(node(2, root, row_style));
+        tree.nodes[root as usize].children.push(row);
+        // 行内圆点（脏节点）
+        let dot_style = LStyle { width: Some(36.0), height: Some(36.0), ..Default::default() };
+        let dot = tree.push(node(3, row, dot_style));
+        tree.nodes[row as usize].children.push(dot);
+
+        let eng = crate::taffy_engine::TaffyEngine::new();
+        let scope = eng.relayout_scope_of(&tree, dot);
+        assert_eq!(
+            tree.get(scope).id, 2,
+            "★只有 height 的行**必须是布局边界**（范围应止于它）——否则 1000 行列表的行内更新永远整树重排。\
+             实际范围 = 节点 {}（id=2 是行）",
+            tree.get(scope).id
+        );
+    }
+
     /// ★★决定性回归：`relayout_multi` 必须把**脏节点**传给 `layout_incremental`
     ///
     /// 【为什么单列（本仓实测的第二个真缺陷，破坏性验证已确认）】`layout_incremental(tree, x)`

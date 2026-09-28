@@ -47,10 +47,16 @@ export interface LayoutTemplate {
   ok: boolean
 }
 
-/** 引擎就绪的节点规格（实例化产物；与 renderer-app 自绘适配器的 SelfDrawNodeSpec 同形） */
+/** 引擎就绪的节点规格（实例化产物）
+ *
+ * ★★**样式键必须平铺在顶层**（本仓实测的接口不匹配缺陷）——核心 `NodeDto` 只认顶层字段；
+ *   放进 `style` 子对象会被 serde 静默忽略（样式全丢 ⇒ 布局按全 auto 算 ⇒ 增量退化整树重排）。
+ *   本接口与 `renderer-app` 的 `SelfDrawNodeSpec` **逐字段同形**（那条链已真机验证）。
+ */
 export interface InstantiatedNode {
   id: number
   parentId: number | null
-  style?: Record<string, unknown>
   text?: string
+  /** 样式字段（width / height / flexDirection / margin / …）——**平铺在节点顶层** */
+  [styleKey: string]: unknown
 }
