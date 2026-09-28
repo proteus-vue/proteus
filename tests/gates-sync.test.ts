@@ -42,7 +42,12 @@ function declaredLocalOnly(): Map<string, string> {
   const src = fs.readFileSync(path.join(ROOT, 'scripts', 'check-gates-sync.mjs'), 'utf8')
   const block = src.match(/const LOCAL_ONLY\s*=\s*\{([\s\S]*?)\n\}/)?.[1] ?? ''
   const out = new Map<string, string>()
-  for (const m of block.matchAll(/'(check:[\w-]+)'\s*:\s*'([^']*)'/g)) out.set(m[1]!, m[2]!)
+  // ★字符类必须含 `:`——门禁名可以是 `check:a:b` 形式（如 `check:pushed:strict`）。
+  //   实测踩到：原正则 `[\w-]+` 在**第二个冒号处停住** ⇒ 该键解析不出来 ⇒
+  //   明明已在 LOCAL_ONLY 登记，本测试仍报"未接入任何 workflow"（**假红**）。
+  //   教训与适配器的 camel/kebab 同族：**解析器的字符集就是它的能力边界**，
+  //   少一个字符 = 某个合法输入被静默漏掉（此处表现为假红；若用在"过滤放行"上就是假绿）。
+  for (const m of block.matchAll(/'(check:[\w:-]+)'\s*:\s*'([^']*)'/g)) out.set(m[1]!, m[2]!)
   return out
 }
 
