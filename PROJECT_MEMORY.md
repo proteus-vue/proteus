@@ -284,6 +284,35 @@ diff/patch 随**页面规模**线性、**与"改了多少"无关**。
 
 ---
 
+#### ★★★2026-09-28 事件系统接通（自绘场景从"完全不能交互"到真机 PASS）
+
+**问题（本仓实测的功能缺口）**：核心 `hit.rs` + FFI `proteus_layout_hit_test`（返回 `target` +
+**冒泡链 chain**）**早已存在且跨端验证**，但**自绘场景从未接线**——适配器 `patchProp` 对 `onXxx`
+**只计数不登记**（注释写"由核心命中测试 + 平台手势承担"，而那条链不存在）
+⇒ **屏幕上点任何东西都没反应**。
+
+**三段补齐（分层清晰）**
+| 层 | 职责 | 关键点 |
+|---|---|---|
+| 适配器 | 处理器表 + 派发 | `normalizeEventType`（`onClick ≡ tap`、**全小写归一**）· `dispatchEvent` 沿**核心给的 chain** 冒泡 · `stopPropagation` · 异常**上报不吞** |
+| 宿主视图 | 触摸 → 内容坐标 | `touchesBegan/Ended` + tap 时序判定（displacement ≤10pt、时长 ≤0.5s）· **只传坐标+类型**（不碰核心/JS——分层） |
+| 桥接层 | 命中 + 派发 | `emitGesture` 调核心拿 chain · `onDispatchToJS` 经 JSContext 直呼 `__proteus_dispatch` |
+
+**判据**
+· TS 10 条（归一化 4 + 派发/冒泡/停止传播/异常上报/移除清理 6）——破坏性验证 ⇒ 4 红
+· **真机 `V9_event_dispatch` PASS**：注入 3 次 tap → 命中第 1/2/3 行（id 6/15/22）→
+  JS 收到 3 次，**坐标与目标逐一匹配**（`checks` 四项全 True）
+
+**★附带修复一个静默缺陷**：`onLongPress` 归一成 `longPress`，而 gesture 层发的是 `longpress`
+⇒ **两边不匹配、事件静默不触发**。已统一全小写。
+
+**★诚实边界**：`tapAt` **绕过 UITouch**（复用 `emitGesture`）⇒ 覆盖「核心命中 → 外壳派发」；
+「UITouch → 内容坐标换算 + tap 时序判定」需人手/XCUITest（用例里显式标注 `not_covered`）。
+
+**★坐标手算第三次出错（教训）**：首版 tap 坐标用 `60 + i*64 + 28`（假设首行从 padding.top 起）
+⇒ 第一发**命中标题**（id=5）而非行。⇒ 改为**先探针一次 tap 反推首行起点**（`firstRowY`），
+不再手算。**这与"采样点手算三次全错"是同一类错误——坐标必须从实测反推。**
+
 #### ★★★2026-09-28 内存回收（孤点压实）—— splice 的最后一块能力
 
 **问题**：摘除只断链（孤点留在 Rust 数组里，功能正确但**占内存**）⇒ 长列表反复增删持续积压。

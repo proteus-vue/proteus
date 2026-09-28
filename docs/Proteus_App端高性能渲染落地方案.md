@@ -90,24 +90,16 @@ UI 框架层（组件 + 排版）          ❌ 弃用系统组件，自研
 - 只有最终的"把指令交给系统"那一步是平台代码
 - 与既有 `RustBackend`（`proteus-cc-rust` CLI → 同一份 CompilerIR JSON）天然契合，codegen 到 C++ 是现有能力的延伸
 
-### D3. 布局引擎：**Taffy 0.14**（Rust），抽象接口保证可替换（★2026-09-29 定案）
+### D3. 布局引擎：引擎可替换，Yoga 起步
 
 | 阶段 | 方案 | 理由 |
 |---|---|---|
-| M1–M2 | **Taffy 0.14**（Rust，Flexbox + Grid） | 与 `proteus-cc-rust` 同栈零 FFI；支持 Grid；上游活跃。**必须锁 0.14**（0.13 有 measure 指数退化，见 §5.0.1） |
-| M3+ | 按需评估自研 | 需先回答"在哪一点上做得比现有引擎好"（见 §5.0.6） |
-
-> **原为「Yoga 起步」**：spike 实测后改为 Taffy（Yoga 无 Grid、处维护模式，但 measure 表现更优——
-> 详见 §5.0.1 的三条硬证据与 [DCP-1 决策文档](./proteus-performance-plan/11-dcp1-layout-engine.md)）。
+| M0–M2 | **Yoga**（Flexbox 成熟实现），或按 DCP-1 结论选 Taffy | 快速验证全链路，避免布局正确性成为瓶颈 |
+| M3+ | 按需评估自研 / Taffy | 需先回答"在哪一点上做得比现有引擎好"（见 §5.0.6） |
 
 **详见 §5.0 布局引擎选型与 §5.6 决策检查点。**
 
-**布局协议约束（必须遵守）**：约束自顶向下、尺寸自底向上、**单次测量**，禁止 View 体系那种"父子多轮 measure"。这点是 Compose 相对 View 体系做对的地方，直接抄。
-
-> ★**判据口径（2026-09-29 用户确认）**：本条禁的是「**测量次数随树深度退化**」（View 体系 O(n·depth)），
-> **不是**字面的「每节点必须只测 1 次」。合格判据 = **每节点测量数有界、且与深度无关**，
-> 且**平台文本度量必须按 (文本, 字体, 宽度约束) 缓存**。实测：Yoga 恒 1 次、Taffy 0.14 恒 13 次
-> （两者均为有界常数，详情见 §5.3 与 DCP-1 决策文档）。
+**布局协议约束（必须遵守）**：约束自顶向下、尺寸自底向上、**严格单次测量**，禁止 View 体系那种"父子多轮 measure"。这点是 Compose 相对 View 体系做对的地方，直接抄。
 
 **抽象边界约束**：`LayoutEngine` 接口必须在 M1 落地，引擎原生 API 不得泄漏到 `layout/` 模块之外（§5.1）。
 
@@ -209,27 +201,9 @@ interface DynamicBinding {
 
 ### 5.0 布局引擎选型
 
-#### 5.0.1 结论（★2026-09-29 已定案）
+#### 5.0.1 结论
 
-> **DCP-1 已决：Rust + Taffy 0.14**（M1–M2 使用；M3 再评估自研或替换）。
-> 决策文档：[`proteus-performance-plan/11-dcp1-layout-engine.md`](./proteus-performance-plan/11-dcp1-layout-engine.md)，
-> spike 可复跑：`spike/dcp1-layout-engine/run.sh`。
-
-**定案理由（三条硬证据，均为实测）**：
-
-| # | 理由 | 证据 |
-|---|---|---|
-| 1 | **Grid 能力** | Yoga 3.2.1 的 `YGDisplay` 枚举 = `{Flex, None, Contents}`——**编译期就没有 Grid**；Taffy 实测 3×2 正确。（★DCP-2 补充：Skyline 端实测退化为 block，故 Grid 为「有条件可用」而非无条件支持——但 **App 端要支持 Grid 就必须选 Taffy**，本条理由不受影响） |
-| 2 | **与 `proteus-cc-rust` 同栈** | 编译器后端已是 Rust；同栈 ⇒ codegen 到布局核心**零 FFI**、共享构建链 |
-| 3 | **上游活跃** | Taffy 在 Bevy / Dioxus / Zellij 生产使用；Yoga 处**维护模式**且演进绑 RN 需求 |
-
-**★★关键约束：必须锁 `taffy = "0.14"`，禁止降级到 0.13。**
-0.13 在「深链 + auto 尺寸容器」下 measure 次数呈 **`3×2^d−2` 指数爆炸**（深度 12 达 12286 次），
-0.14 为**有界常数 13**。此退化**无法靠工程手段绕过**（`flex_basis` 仍指数、`min_size` 无效），
-详见决策文档 §2。**这与 §5.4.1 记载的 RN 事故（无约束嵌套容器）是同一类形状。**
-
-**两引擎的语义正确性均已实测**：Yoga 13/13、Taffy 13/13 与 M1 的浏览器对拍基线一致——
-即「引擎本身都正确」，M1 阶段发现的 6 个语义缺陷是**本仓 Node 参考实现**的，与引擎无关。
+**M1–M2 使用 Yoga；M3 再评估自研或替换。** 排版核心语言（C++ / Rust）**必须在 M1 之前定案**（见 §5.6）。
 
 #### 5.0.2 Yoga 现状（纠正常见误解）
 
@@ -277,17 +251,6 @@ Yoga 并非停止维护。2026 年仍在持续提交：
 
 **此项必须在 M1 前定案**：排版核心语言一旦选定，后期更换成本极高。
 
-> ### ✅ **DCP-1 已决（2026-09-29）：Rust 排版核心 + Taffy 0.14**
->
-> 上表为**决策时的原始对比**，实际 spike 又测出两项表中未列的关键事实（见 §5.0.1）：
-> ① **Taffy 的 measure 表现不如 Yoga**（恒 13 次 vs 恒 1 次；但**都与深度无关**，均合格）
-> ② **Taffy 0.13 有 measure 指数退化**，必须用 0.14
-> ③ **Taffy 的 4050 节点性能反而更快**（0.056ms vs Yoga 2.73ms）
->
-> **「Taffy 较新」这条风险已由 spike 量化消解**：不是靠「应该没问题」，而是靠
-> 「实测语义 13/13 与浏览器一致 + 定位并规避了 0.13 的退化」。
-> 完整数据：[`11-dcp1-layout-engine.md`](./proteus-performance-plan/11-dcp1-layout-engine.md)。
-
 #### 5.0.6 不要因「Yoga 老」而自研
 
 反直觉但重要的证据：某纯 TypeScript 布局引擎通过两项**算法**优化（主轴位置由累积和改为线性递推；默认值字段在构建期折叠为常量），使 hot-structural 场景从 **450µs 降至 70µs**，最终在 9 个场景中全部快过 WASM Yoga。作者结论：
@@ -299,6 +262,132 @@ Yoga 并非停止维护。2026 年仍在持续提交：
 2. 「Yoga 是老设计」也不构成必须自研的理由——老内核经十余年生产打磨，正确性远高于快速重写版本
 
 **自研前必须能回答**：我要在哪一点上做得比 Yoga 好？否则即为重复劳动。
+
+#### 5.0.7 Taffy 扩展能力评估（★ 新增决策维度）
+
+> 背景：DCP-1（排版核心语言）原纠结于「要不要 Grid」。调研发现还有一个
+> 更重要的维度——**引擎的扩展开放度**。若预期后续会自研布局特性（如为列表做特调），
+> 这是实打实的加分项，**可能改变 M0.5 spike 的结论**。
+
+##### ① 核心机制：算法调度权在宿主手里
+
+`LayoutPartialTree::compute_child_layout` 是**必须由实现方提供的 required method**。
+Taffy 官方 `custom_tree_owned_unsafe` 示例中的形态：
+
+```rust
+fn compute_child_layout(&mut self, node_id, inputs) -> LayoutOutput {
+    compute_cached_layout(self, node_id, inputs, |tree, node_id, inputs| {
+        match node.kind {
+            NodeKind::Flexbox => compute_flexbox_layout(tree, node_id, inputs),
+            NodeKind::Grid    => compute_grid_layout(tree, node_id, inputs),
+            NodeKind::Text    => compute_leaf_layout(/* ... */ text_measure_function),
+            NodeKind::Image   => compute_leaf_layout(/* ... */ image_measure_function),
+            // ← 可自行添加 arm（自研算法）
+        }
+    })
+}
+```
+
+**flexbox / grid / block 是三个可选项，不是封闭集合。** 新增第四种布局算法 =
+加一个 match arm，属第一等公民，非 hack。
+
+##### ② 四类扩展的能力边界（天差地别）
+
+| 类型 | 举例 | Taffy 支持度 |
+|---|---|---|
+| **A. 新增布局算法** | 自研瀑布流、绝对定位增强、自研 grid | ✅ **完全支持**（加 match arm） |
+| **B. 叶子节点外部测量** | 文本（CoreText / StaticLayout）、图片固有尺寸 | ✅ **官方一等公民**（measure function + `NodeContext` 泛型） |
+| **C. 外围包装层降级/近似** | `display:contents`、table、`position:fixed` | ✅ **官方设计意图**（见 ③） |
+| **D. 给 `Style` 加新 CSS 属性** | 新增布局属性 | ❌ **不行**——`Style` 为固定 struct，无扩展点 |
+
+**D 是唯一硬边界**，但可用 ③ 的模式绕开。
+
+> 注：B 类对本项目的 `text_measure` 平台注入设计（§5.2）是天然契合——
+> Taffy 的 `NodeContext` 泛型正是为"测量时携带每节点应用数据"而设。
+
+##### ③ ★ 最值得抄的模式：Blitz 的外围包装层
+
+Dioxus Blitz（Stylo + Taffy 的浏览器引擎）面对同样问题，其解法可直接复用：
+
+| CSS 特性 | Blitz 的处理 |
+|---|---|
+| `display: contents` | ❌ Taffy 不支持 → **在自有树构建层做 children 提升**，不进 Taffy |
+| table 布局 | ⚠️ **用 CSS Grid 算法 + `TableTreeWrapper` 近似** |
+| `max-content` / `min-content` / `fit-content` | 全部**映射为 Auto** |
+| `position: fixed` / `sticky` / `static` | **近似映射**为 Absolute / Relative |
+| subgrid / masonry | ❌ 返回空 |
+| anchor positioning | ❌ 不支持 |
+
+**核心思路**：`stylo_taffy` 是**纯转换层、零布局逻辑**——不支持的特性在
+**进入 Taffy 之前**就被降级、近似或提升掉。
+
+**与 Proteus 天生契合**：项目本就有语义 IR + 编译期折叠 + `LayoutEngine` 抽象层
+（§5.1 / §5.2 / CSS Profile §4）。**把不支持的特性在 IR 层解决掉**，
+正是既有设计已在做的事，无需为 Taffy 改架构。
+
+##### ④ Taffy 官方明确不支持的特性（供 CSS Profile 参考）
+
+来自 Servo 接入 Taffy 后跑 WPT 的结果：
+
+- safe/unsafe alignment
+- `flex-basis: content` / `fit-content`
+- `writing-mode`（及依赖它的 direction）
+- 非 fallback baseline 对齐
+- 百分比对不确定交叉轴高度的解析（存在 bug）
+- 替换元素（img）尺寸计算的若干 bug
+- **Grid 侧**：subgrid、masonry 不支持
+
+**客观数据**：接入 Taffy 后 Servo 的 WPT 通过率——
+css-flexbox **58.5% → 71.7%**，css-grid **0% → 40.5%**。
+
+**结论**：Grid 是「能处理常见网格」，**不是完整 CSS Grid 替代品**。
+
+##### ⑤ 三条扩展路线（按顺序尝试）
+
+| 路线 | 做法 | 成本 |
+|---|---|---|
+| **① 外围包装**（先做） | 不支持的特性在 IR / 转换层降级或近似 | 低 |
+| **② dispatch 混用** | 在 `compute_child_layout` 加 arm，自研算法与 Taffy 共存 | 中 |
+| **③ fork** | 改 Taffy 源码 | 高，但**有先例** |
+
+**dispatch 混用比想象中宽**：可只自研某一类布局（如列表瀑布流），其余仍交 Taffy。
+
+**关于 fork——生态已有现成案例**：
+
+| fork | 扩展内容 |
+|---|---|
+| `genet-taffy` | CSS float、flex order、positioned-grid |
+| `mentore` | Telemaco 维护；block / grid / float / content sizing；**API 与 Taffy 完全一致，Cargo.toml 一行替换** |
+
+fork 是社区常见做法，且可做到**接口兼容、替换成本极低**。需要时 fork，
+上游更新时跟进合并，接口不变。
+
+##### ⑥ 一个需要计入稳定性的约束
+
+`LayoutPartialTree` 是**所有下游消费方**（Bevy、Servo、Zed GPUI、Blitz、Slint、Floem）
+共同的扩展点——**改这个 trait 会波及全部下游**。
+
+**双向含义**：
+- 有利：Taffy 团队改 trait 会极谨慎 → 本项目的实现稳定性高
+- 不利：若走 fork 路线，trait 变更时需跟进合并 → 成本须计入
+
+另外两条对项目有利的性质：Taffy 默认 `#![no_std]`、`#![deny(unsafe_code)]`，
+与内核要求不冲突。
+
+##### ⑦ 对 §5.0.5 决策的修正
+
+| 维度 | C++ + Yoga | Rust + Taffy |
+|---|---|---|
+| 与 `proteus-cc-rust` 同栈 | ❌ | ✅ |
+| Grid | ❌ | ✅ |
+| **扩展开放度**（新增） | ❌ 无官方扩展点 | ✅ **`compute_child_layout` 为开放 dispatch** |
+| **叶子外部测量**（新增） | 需自建 | ✅ 官方一等公民 |
+| 生态成熟度 | 十余年生产验证 | 较新 |
+
+**DCP-1 新增评估问题**：项目后续是否预期自研布局特性（如列表特调）？
+若是，**Taffy 的扩展开放度是实打实的加分项**。
+
+**执行要求**：M0.5 spike 必须把「扩展开放度」纳入评估项，不能只看 Grid 与性能。
 
 ### 5.1 模块划分
 
@@ -355,8 +444,7 @@ public:
 
 | 约束 | 说明 |
 |---|---|
-| 单次测量（★判据已定案） | 禁止**随深度退化**的多轮 measure；合格判据 = 每节点测量数**有界且与深度无关**。实测：Yoga 恒 1 · Taffy 0.14 恒 13 · M1 Node 参考实现恒 1（深度 100 亦然）。布局边界（`isLayoutBoundary`）阻断脏传播 |
-| 平台度量缓存（★由「优化」升为「必需」） | Taffy 的 13 次测量使缓存成为前置条件：文本度量必须按 (文本 hash, 字体, 宽度约束) 缓存 |
+| 单次测量 | 禁止父子多轮 measure；布局边界（`isLayoutBoundary`）阻断向上传播 |
 | 无运行时字符串解析 | 样式键在编译期转为枚举 |
 | 节点分配池化 | 列表复用由 `recycle/` 统一管理，滚动时不触发堆分配 |
 | 文本度量可缓存 | 度量结果按 (文本 hash, 字体, 宽度约束) 缓存，支持后台线程预热 |
@@ -402,41 +490,17 @@ React Native 生产实测：350 个活跃布局节点，因**无约束嵌套 Fle
 
 ### 5.6 决策检查点
 
-| 编号 | 决策项 | 时点 | 状态 | 结论 |
-|---|---|---|---|---|
-| DCP-1 | 排版核心语言（C++ / Rust） | **M1 之前** | ✅ **已决（2026-09-29）** | **Rust + Taffy 0.14**；依据见 §5.0.1 与 [决策文档](./proteus-performance-plan/11-dcp1-layout-engine.md) |
-| DCP-2 | Profile 是否开放 Grid | M1 | ✅ **已决（2026-09-29）** | ⚠️ **有条件可用，不进 Profile 无条件集**——见下 | 
-| DCP-3 | 是否自研布局引擎 | M3 | ⏳ 待评估 | 需先回答 §5.0.6 的问题（「在哪一点上做得比现有引擎好」） |
+| 编号 | 决策项 | 时点 | 说明 |
+|---|---|---|---|
+| DCP-1 | 排版核心语言（C++ / Rust） | **M1 之前** | 需半天 spike 对比 Yoga vs Taffy，逾期变更成本极高 |
+| DCP-1a | **是否预期后续自研布局特性**（★ 新增） | **M1 之前** | 若是，Taffy 的扩展开放度（§5.0.7）为决定性加分项，直接影响 DCP-1 |
+| DCP-2 | Profile 是否开放 Grid | M1 | 直接影响 DCP-1（Yoga 无 Grid） |
+| DCP-3 | 是否自研布局引擎 | M3 | 需先回答 §5.0.6 的问题；优先级为 ①外围包装 → ②dispatch 混用 → ③fork |
 
-### ★★DCP-2 的完整结论：Skyline 实测不支持 Grid（证据推翻假设）
-
-**用户批准「开放为 L2」，批准时我附加的前置条件 = 补 Skyline 实测。实测结果是「退化为 block」**，
-按 Profile 的**第一原则（三端交集优先）**，结论必须相应收紧——这是证据推翻假设的正常结果。
-
-| 端 | Grid 实测 | 判定 |
-|---|---|---|
-| App（Taffy 0.14） | 3×2 布局正确 | ✅ |
-| Web（浏览器） | 原生 Grid | ✅ |
-| **Skyline** | 子项 1/2 的 x **都是 52**（未分列）、纵向堆叠 | ❌ **退化为 block** |
-
-**实测证据**（2026-09-29 · 模拟器 · 基础库 3.17.3 · 探针页 `css-profile-probe.vue`）：
-```
-容器 <view style="display:grid;grid-template-columns:1fr 1fr;width:150px;height:40px">
-  g-item1 → x=52  （第 1 列）
-  g-item2 → x=52  ← ★应在第 2 列（x≈127），实测未分列
-  g-item3 → y=916 ← 纵向堆叠
-flex 对照组（同页同通道）→ x=52,72,92 ✅ 正确横排
-```
-**内置对照组是可信关键**：同页同测量通道下 flex 正确而 grid 不正确 → 排除探针故障。
-
-**最终口径**：
-1. Grid **不列入 Profile 无条件支持集**
-2. **允许有条件可用**：Web/App 正常生成；**Skyline 必须发可观察降级警告**（`capabilityWarnOnce`，禁止静默降级）
-3. Lint W-CSS-105 给出**嵌套 flex 改写建议**
-4. 探针页已内置判据，未来 Skyline 支持后可复跑解禁
-
-**（过程留痕）** 我先前给用户的建议是「开放为 L2（推荐）」，并自行附加了「需补 Skyline 实测」的前提——
-**这次是前提把结论否掉了**。教训：**把前置条件写进建议里，而不是等实施时才发现**，这条做法本身是对的。
+**M0.5 spike 强制评估项**（缺一不可）：
+1. Grid 是否需要（DCP-2）
+2. **扩展开放度是否满足预期**（DCP-1a）
+3. 性能与精度（§5.4 / §5.5）
 
 ### 5.7 可用工具：以浏览器作为布局真值基准
 
@@ -517,97 +581,66 @@ export default defineConfig({
 
 ## 8. 分阶段里程碑
 
-### M0 · IR 扩展与编译期分析（≈2 人周）—— ✅ **已完成**（勾选于 2026-09-28 逐项核实）
+### M0 · IR 扩展与编译期分析（≈2 人周）
 
-- [x] 扩展 `PNode` / `PFlags` / `DynamicBinding` —— `packages/component-ir/src/pnode.ts`
-- [x] 实现静态子树识别与提升 —— `pnode-analyze.ts` 填 `staticSubtree`；`layout-core/src/render-cmd.ts` 消费
-- [x] 实现拍平判定 + 违规报错 —— `pnode-analyze.ts:117` 报 `css.flatten-violation`
-- [x] 样式归一化 + 单位折叠 —— `component-ir/src/pnode-style.ts`（`normalizeStyleString` / `resolveLength`）
-- [x] Golden 门禁：Node/Rust 双端对齐 —— `tests/golden.test.ts` + `packages/layout-core-rust/tests/golden/`（`conformance.rs` 逐节点比对）
+- [ ] 扩展 `PNode` / `PFlags` / `DynamicBinding`
+- [ ] 实现静态子树识别与提升
+- [ ] 实现拍平判定 + 违规报错
+- [ ] 样式归一化 + 单位折叠
+- [ ] Golden 门禁：Node/Rust 双端对齐
 
-**出口条件**：`proteus explain` 能输出拍平/静态提升的完整决策 trace —— ✅ `packages/cli/src/explain.ts` + `component-ir/src/pnode-trace.ts`
+**出口条件**：`proteus explain` 能输出拍平/静态提升的完整决策 trace。
 
-### M0.5 · 排版核心语言 Spike（≈0.5 人周）★ 决策前置 —— ✅ **已完成并决案**（2026-09-29）
+### M0.5 · 排版核心语言 Spike（≈0.5 人周）★ 决策前置
 
-- [x] Yoga vs Taffy 对比 spike（接入成本、Grid 支持、性能）—— `docs/proteus-performance-plan/11-dcp1-layout-engine.md` + `spike/dcp1-layout-engine/`
-- [x] 决定排版核心语言：C++ 还是 Rust（DCP-1）—— **决：Rust + Taffy 0.14**（三条硬证据：Grid 能力 / 与 `proteus-cc-rust` 同栈 / 上游活跃）
-- [x] 决定 Profile 是否开放 Grid（DCP-2）—— **决：有条件可用**（Skyline 端实测退化为 block ⇒ 非无条件）
+- [ ] Yoga vs Taffy 对比 spike（接入成本、Grid 支持、性能）
+- [ ] 决定排版核心语言：C++ 还是 Rust（DCP-1）
+- [ ] 决定 Profile 是否开放 Grid（DCP-2）
 
-**出口条件**：DCP-1 / DCP-2 有书面结论 —— ✅ 见上（★**必须锁 taffy 0.14**：0.13 有 measure 指数退化，详见决策文档 §2）
+**出口条件**：DCP-1 / DCP-2 有书面结论。**此决策不得延后至 M1 之后。**
 
-### M1 · 排版核心骨架 —— ✅ **已用 Node 参考实现完成**（2026-09-29）
+### M1 · 排版核心骨架（≈3 人周）
 
-> **落地路径调整（用户已确认）**：先做 **Node 侧参考实现**（`packages/layout-core`）而非直接 C++。
-> 理由：布局正确性未达标时谈性能无意义；Node 侧反馈环最快（单测毫秒级），且能直接与浏览器对拍。
-> C++ 移植（M2+）以本实现为**语义基准**，避免「边写 C++ 边猜语义」。
+- [ ] 节点树（扁平数组）
+- [ ] 接入布局引擎（按 DCP-1 结论），实现单次测量布局
+- [ ] **`LayoutEngine` 抽象接口落地，实现 API 不得外泄**（§5.1）
+- [ ] 脏区域标记与最小重排（`isLayoutBoundary` 生效）
+- [ ] 跨端舍入策略定案（§5.5）
+- [ ] 平台无关绘制指令流
+- [ ] **dirty 冒泡压力测试 T1–T4（§5.4）**
 
-- [x] 节点树（扁平数组语义 + 稳定整数 id + 父指针）
-- [x] **自研 flex 求解器**（未接 Yoga——先证明语义；DCP-1 的引擎选择见 M0.5）
-- [x] **单次测量布局**（`measureCalls == nodeCount` 由测试精确锁定）
-- [x] `LayoutEngine` 接口边界（`ConstraintFor` 是百分比语义的唯一落点，见 §5.1）
-- [x] **脏区域标记与最小重排**（`isLayoutBoundary` 生效 + 度量缓存复用）
-- [ ] 跨端舍入策略定案（§5.5）——待 M2 真机数据
-- [x] 平台无关绘制指令流（`RenderCmd`：背景/文本/图片/边框 + 裁剪，含拍平并入清单）
-- [x] **dirty 冒泡压力测试 T1–T4（§5.4）**
+**出口条件**：
+1. Headless 后端能输出正确的指令流，与 VueDom 后端布局结果逐像素比对通过
+2. **T2 对照测试证明 `isLayoutBoundary` 真实生效**（关闭边界须显著劣于开启）
 
-**出口条件（均已达成）**：
-1. ✅ 指令流正确：`tests/layout-core-render-cmd.test.ts`（绝对坐标 / 拍平不新建位图 / 裁剪边界）
-2. ✅ **布局与真实浏览器逐像素一致**：`tests/e2e-layout-core-pixel.test.ts`——
-   17 用例 / 67 个有盒节点，**x/y/w/h 全部 ≤ 0.5dp**（Chromium 为基准真值）
-3. ✅ **T2 对照证明 `isLayoutBoundary` 真实生效**：开边界重排 4 节点/0.59ms（作用域=边界子树），
-   关边界退化为整树根/15 节点/1.55ms——**结构量与墙钟双双显著劣化**
+### M2 · Android 端最小闭环（≈3 人周）★ 关键验证点
 
-**实测数字**（356 节点 / 深度 12；`npx vitest run tests/layout-core-*` 可复跑）：
-| 指标 | 实测 |
-|---|---|
-| 单次测量 | `measureCalls == nodeCount`（10501 节点树实测） |
-| 增量布局（单点变更） | 访问 **4.8%** 节点、文本 shaping **1 次**（全量 8000 次）、提速 **4.0×** |
-| T1 深层脏更新（356 节点 / 深度 12） | **0.59ms**（预算 3ms） |
-| T2 无边界对照 | **1.55ms** + 重排范围扩到整树根（15 节点） |
-| T4 高频更新 60 连击 | P50 **0.15ms** / P95 **0.63ms** / max 1.18ms |
+- [ ] 仅实现三个组件：`view` / `text` / `image`
+- [ ] 宿主 View + Canvas 下发
+- [ ] Java/Kotlin ↔ C++ 绑定
+- [ ] **跑 4050 元素测试与原生 View 体系对打**
 
-**★对拍暴露并修掉的真实语义缺陷**（都是浏览器基准真值抓出来的，不是自测发现的）：
-1. 主轴 auto 的 flex base size 应为 **max-content**（不是「填满可用」）——嵌套 row→column 差 112dp
-2. 主轴尺寸被 grow/shrink 改变后，**子树必须按最终尺寸重排**（精化测量；靠文本度量记忆化控制成本）
-3. 交叉轴对齐的参照系是**容器内容盒**，不是「可用空间」（视口 667 下居中 16dp 文本，y 差 323.5dp）
-4. `left/top` 从**父 padding 盒**起算，不叠加父 padding（父 padding-left 30 时差 30dp）
-5. min/max 夹取需**冻结—再分配**（CSS §9.7），否则被夹住的空间不会转给兄弟（差 35dp）
-6. `display:none` 在 CSS 中**无盒**（不产生 rects，也不产生绘制指令）
+**出口条件**：见 §9.2。这一关过不了，整条路线应重新评估。
 
-### M2 · Android 端最小闭环（≈3 人周）★ 关键验证点 —— ✅ **已通过**（勾选于 2026-09-28 逐项核实）
+### M3 · Android 端补全（≈6 人周）
 
-- [x] 仅实现三个组件：`view` / `text` / `image` —— `hosts/android/app/src/main/java/dev/proteus/layoutcore/{RustLayout,MainActivity}.java`
-- [x] 宿主 View + Canvas 下发 —— 同上
-- [x] Java/Kotlin ↔ C++ 绑定 —— **实际走 Rust**：`packages/layout-core-rust/src/jni.rs`（JNI 入口）
-- [x] **跑 4050 元素测试与原生 View 体系对打** —— `hosts/android/ACCEPTANCE.md`：**三项全部达标**
-      （布局 **0.063×** · 绘制 **0.667×** · 内存 **0.331×**，即均**优于**原生）+ 10+ 次运行记录在 `hosts/android/results/acceptance/`
+- [ ] `list` 复用池 + `rich-text`
+- [ ] 与原生组件混用（map / webview）
+- [ ] 事件系统、手势
+- [ ] 调试工具链（节点树 inspect、帧耗时打点）
 
-**出口条件**：见 §9.2 —— ✅ **本关已过**（路线无需重估）；★决定后端语言为 Rust（M0.5 DCP-1）
+### M4 · iOS 端 CALayer 路线（≈4 人周）
 
-### M3 · Android 端补全（≈6 人周）—— ◐ **部分完成**（核实于 2026-09-28）
+- [ ] 复用 C++ 排版核心
+- [ ] CALayer 树 + CoreText 异步排版
+- [ ] 拍平 + 离屏渲染规避
+- [ ] 与 Android 端一致性 conformance 门禁
 
-- [x] `list` 复用池 —— ✅ `packages/layout-core-rust/src/recycle.rs`（621 行，Lifecycle/方向敏感预载/RecyclePool）+ `hosts/android/results/layout-recycle.json`（4000 行 **reuse_ratio 0.9947**）
-- [x] `rich-text` —— ⚠️ **仅 IR 声明**（`component-ir/src/primitives.ts` 标 `status:'implemented'`），**无宿主渲染证据**
-- [ ] 与原生组件混用（map / webview）—— ◐ **仅 Android**：`hosts/android/README.md` M3（WebView 宿主）+ `native-host-verify.py` + `scroll-sync-verify.py`（z-order 实测 native-on-top）
-- [x] 事件系统、手势 —— ✅ `packages/gesture/src/`（tap/longpress/pan）+ `hosts/android/results/{gesture,hit/layout-hit}.json`
-- [ ] 调试工具链（节点树 inspect、帧耗时打点）—— ◐ `packages/devtools/` 有；**帧耗时打点未见证据**
+### M5 · 鸿蒙端 + 收尾（≈4 人周）
 
-### M4 · iOS 端 CALayer 路线（≈4 人周）—— ◐ **大部分完成**（核实于 2026-09-28）
-
-- [x] 复用 C++ 排版核心 —— ✅ **实际复用 Rust 核**：`hosts/ios/experiments/device/layout-core-device.swift` + `results/layout-core-bench-ios.json`
-- [x] CALayer 树 + CoreText 异步排版 —— ✅ `hosts/ios/README-CALAYER.md`（**12/12 通过**）+ CoreText 度量（`selfdraw-scene.swift` 的 `measureText`，含内容寻址缓存）
-- [x] 拍平 + 离屏渲染规避 —— ✅ `hosts/ios/README-BENCH.md` + `docs/proteus-performance-plan/10-ios-memory.md`（**真/假拍平辨析**：50 块位图 vs 4000 块）
-- [ ] 与 Android 端一致性 conformance 门禁 —— ◐ `hosts/cross-device-hit.py` 已有跨端命中测试，**但无 CI script 挂载**
-
-### M5 · 鸿蒙端 + 收尾（≈4 人周）—— ❌ **未做**（核实于 2026-09-28）
-
-- [ ] 鸿蒙绘制层接入 —— ❌ 无代码（全仓仅 `.md`）
-- [ ] 无障碍 / Semantics 语义树（合规必需，见 §10）—— ❌ 无证据（`component-ir` 无 semantics 字段）
-- [ ] 性能棘轮门禁常态化 —— ◐ **门禁已存在**（`scripts/check-vapor-perf.mjs`，两层判据：性能上限 + **优化路径生效证明**），**但未接入 `pnpm verify` 链** ⇒ 待接线
-
-> ⚠ **§9.4 的一处不实**：文中称新增包 `@proteus-vue/perf-ratchet` —— **该包不存在**；
-> 实际落地形式是 `scripts/check-vapor-perf.mjs` + `package.json` 的 `check:vapor-perf`。
-> （本仓纪律：文档提到的产物必须可 grep 到；此类"声称有包但无包"会导致后续会话白找。）
+- [ ] 鸿蒙绘制层接入
+- [ ] 无障碍 / Semantics 语义树（合规必需，见 §10）
+- [ ] 性能棘轮门禁常态化
 
 ---
 

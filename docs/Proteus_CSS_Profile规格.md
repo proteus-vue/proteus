@@ -1,6 +1,6 @@
 # Proteus CSS Profile 规格
 
-> 文档版本：v1.0 · 适用框架：Proteus v2.47+（Vue 3.5 / Vite 5 / TS 5.4）
+> 文档版本：v1.0 · 适用框架：Proteus v2.47+（Vue 3.4 / Vite 5 / TS 5.4）
 > 适用端：Web（浏览器原生 CSS）· 微信小程序 Skyline · App（NativeVapor 自研渲染）
 > 定位：**三端共同遵守的 CSS 受支持子集**，由编译期 lint 强制，是 App 端自研渲染引擎的实现目标与一致性基准
 
@@ -52,7 +52,7 @@ uni-app x 排除复杂选择器的官方理由：**"为了原生解析极速性�
 
 **核心结论**：静态样式可以支持任意复杂的选择器与层叠规则，因为编译期就算完了。**边界只在动态部分。**
 
-这与 Proteus 既有的"编译期优先"主张完全同构，且可直接复用 **111 条**规则注册表（实测）与 Rust 后端。
+这与 Proteus 既有的"编译期优先"主张完全同构，且可直接复用 69 条规则注册表与 Rust 后端。
 
 ### 0.4 Proteus 特有的额外约束
 
@@ -74,99 +74,17 @@ Web 端是**零转换直跑标准 SPA**，用的就是浏览器原生 CSS。因�
 
 ---
 
-> ### ★★DCP-2 决策记录（2026-09-29）：Grid **不进入 Profile 的无条件支持集**
->
-> **用户已批准「开放为 L2」，但批准时附带的前置条件（补 Skyline 实测）实测结果为「不支持」**——
-> 按本 Profile 的**第一原则（三端交集优先）**，结论必须相应收紧。这是「证据推翻假设」的正常结果。
->
-> | 端 | Grid 实测 | 判定 |
-> |---|---|---|
-> | **App**（Taffy 0.14） | 3×2 Grid 布局正确（cell[3].y=30） | ✅ 真支持 |
-> | **Web**（浏览器） | 原生 Grid，标准实现 | ✅ 真支持 |
-> | **Skyline**（微信容器） | ★**退化为 block**：子项 1/2 的 x **都是 52**（未分列）、子项纵向堆叠 | ❌ **不支持** |
->
-> **★Skyline 实测证据（2026-09-29，模拟器 · 基础库 3.17.3）**：
-> ```
-> 容器：<view style="display:grid;grid-template-columns:1fr 1fr;width:150px;height:40px">
->   g-item1 → x=52, y=884      ← 第 1 列
->   g-item2 → x=52             ← ★应到第 2 列（x≈127），实测仍在 52 → 未分列
->   g-item3 → y=916            ← 纵向堆叠（相邻项 16px 高 + 堆叠）
-> flex 对照组（同页/同测量通道）→ x=52, 72, 92  ✅ 正确横排（证明测量通道有效，非探针故障）
-> ```
-> **内置对照组是这条结论可信的关键**：同一页面、同一 `createSelectorQuery` 通道下
-> flex 正确而 grid 不正确 → 排除「探针坏了」的可能。
->
-> **据此的 Profile 口径（v1）**：
-> 1. Grid **不列入 Profile 的无条件支持集**（否则「Web 跑通 ≠ App/Skyline 一致」，违反 §7.3）
-> 2. 但**允许有条件的可用性**：编译期检测到 `display:grid` 时——
->    · Web / App：正常生成
->    · **Skyline：必须发出可观察的降级警告**（复用既有 `capabilityWarnOnce` 机制，**禁止静默降级**）
-> 3. Lint 给出**嵌套 flex 改写建议**（W-CSS-105 恢复为警告级，措辞改为「跨端不一致」而非「未开放」）
-> 4. 若未来 Skyline 支持 Grid，本条目可解禁——探针页 `css-profile-probe.vue` 已含判据，可复跑验证
-
----
-
 ## 2. 三端基线对照
 
 | 维度 | Web | Skyline（小程序） | App（NativeVapor） |
 |---|---|---|---|
-| 样式实现 | 浏览器原生 CSS | 微信容器 CSS（Skyline 渲染器） | **自研渲染引擎（UCSS Profile）** |
-| 选择器能力 | 完整 CSS | **id 选择器可达页面级原生节点**（实测）；类选择器不达 | 编译期折叠，运行时仅查表 |
+| 样式实现 | 浏览器原生 CSS | 微信容器 CSS | **自研渲染引擎（UCSS Profile）** |
+| 选择器能力 | 完整 CSS | 需实测确认，**不支持复杂组合选择器** | 编译期折叠，运行时仅查表 |
 | 层叠/继承 | 浏览器运行时计算 | 容器实现 | **编译期计算，运行时零成本** |
-| 布局 | 完整（block/inline/grid/flex） | flex 可用；★**grid 实测退化为 block**（2026-09-29） | flex + **grid**（Taffy 原生） |
-| 单位 | px/em/rem/%/vw/vh/… | **px / rpx / % / vw / vh / em / rem 全部可用且精确**（实测，见下表） | 编译期折叠为逻辑像素或比例系数 |
+| 布局 | 完整（block/inline/grid/flex） | flex 为主 | flex（M3+ 评估 grid） |
+| 单位 | px/em/rem/%/vw/vh/… | px/rpx/%，**vw/vh 通常被忽略或解析为 0** | 编译期折叠为逻辑像素或比例系数 |
 
-### ★Skyline 端实测（2026-09-29，基础库 3.17.3，iPhone 12/13 模拟器）
-
-**方法**：探针页 `showcase/subpackages/capabilities/pages/css-profile-probe.vue` ——
-逐条测量并以**几何反推**特性是否被接受。**结果 25/25 项通过**。
-
-**★两条通道均已验证可用（A/B 对照实测）**：
-- 框架能力 Hook `useElement('#id')` → `boundingClientRect()` 返回 `OK:100x20`
-- 原生 `wx.createSelectorQuery().select('#id').boundingClientRect()` 返回 `OK:100x20`
-⇒ **两者一致**（`cap.useElement` 在 MP 端可用，无需绕过框架 API）。
-> ⚠️ **纠正一处我先前的误判**：初版探针页注释写「useElement 在 MP 端句柄可创建但测量无返回」——
-> 那是**读错字段**造成的（E2E 里读实例属性 `p.rows`，而 ref 值在 MP 编译后落在 `p.data.rows`）。
-> 经 A/B 对照证伪，**框架 API 无缺陷**；正确读法是 `p.data.rows`。
-
-| 特性 | 实测几何 | 判定 | 备注 |
-|---|---|---|---|
-| width/height/background-color | 100×20 | ✅ | 基线 |
-| display:flex | 150×20 | ✅ | |
-| justify-content / align-items | 150×20 | ✅ | 属性被接受（未验证分布语义） |
-| gap | 150×20 | ✅ | |
-| border-radius / border | 100×20 | ✅ | |
-| opacity | 100×20 | ✅ | 几何不变（符合预期，仅视觉） |
-| **transform: translateX(30px)** | **@x=82**（基线 52） | ✅ | **位移精确生效** |
-| overflow:hidden | 100×20 | ✅ | |
-| **position:relative + left(30px)** | **@x=82** | ✅ | **位移精确生效** |
-| position:absolute | **@x=62**（left:10px → 52+10） | ✅ | 相对定位上下文正确 |
-| z-index | 100×20 | ⚠️ | 属性被接受；**层叠语义未验证**（需视觉验收） |
-| box-shadow | 100×20 | ✅ | 几何不变（视觉特性） |
-| **background-image: linear-gradient** | 100×20 | ✅ | 属性被接受 |
-| **width: 50vw** | **195px** | ✅ | **★精确**（屏幕 390 × 50%） |
-| **height: 10vh** | **84px** | ✅ | **★精确**（844 × 10% = 84.4） |
-| **width: 100rpx** | **52px** | ✅ | **★精确**（390/750 × 100） |
-| width: 50% | 143px | ✅ | 父容器宽度相关 |
-| width: 5em | 50px | ✅ | font-size 10px × 5 |
-| width: 5rem | 73px | ✅ | 根字号 ≈14.6px × 5 |
-| **position: fixed** | **80×20 @x=0** | ⚠️ | **几何异常**：x=0（其他元素 x=52）→ fixed 使元素脱离常规流，Profile 应谨慎 |
-| position: sticky | 100×20 @x=52 | ⚠️ | 属性被接受；**吸顶行为未验证** |
-| display: grid | 150×40 | ⚠️ | 属性被接受；**是否真按 grid 布局未验证**（可能是 block 退化） |
-| display: inline-block | 80×20 | ✅ | |
-
-**★修正本文此前的一处假设**：§2 原写「vw/vh **通常被忽略或解析为 0**」——
-**实测不成立**：vw/vh/rpx/em/rem **全部可用且数值精确**。原表述应删除。
-
-**诚实边界（三条）**：
-1. **几何反推的局限**：只能判「属性被接受 + 几何合理」，**判不了布局语义**
-   （grid 是否真按列分配？sticky 是否真吸顶？z-index 是否真层叠？）→ 这些需**真机视觉验收**。
-2. **单基础库单机型**：本次仅测 3.17.3 + iPhone 12/13 模拟器；跨基础库版本需回归。
-3. **未测选择器能力**：本页只用 id 选择器（可靠通道）；`类选择器/复杂组合选择器` 的支持度**未测**——
-   本文 §2 仍标注「不支持复杂组合选择器」，但那是**社区口径，本仓未独立验证**。
-
-> ⇒ **Profile 落地建议**：L0/L1 特性在 Skyline 端**均已可用**（无阻塞）；
-> grid / sticky / fixed / z-index 四项**需补视觉验收**才能进 Profile。
+> ⚠️ Skyline 端的具体支持矩阵需以真机实测为准，本文不预设细节。Profile 落地前必须补齐 Skyline 实测表。
 
 ---
 
@@ -207,46 +125,10 @@ Web 端是**零转换直跑标准 SPA**，用的就是浏览器原生 CSS。因�
 |---|---|---|
 | flex / flex-direction / justify-content / align-items | Yoga 起步 | ✅ M1 起 |
 | gap / row-gap / column-gap | — | ✅ |
-| position: relative / absolute | 需 containing block 判定 | ✅ M3（**含层叠相位**：定位元素绘制在在流元素之上——见下「层叠相位」） |
+| position: relative / absolute | 需 containing block 判定 | 🟡 M3 |
 | overflow: hidden / scroll | — | 🟡 M3 |
-| **grid** | App/Web 真支持（Taffy/浏览器）；★**Skyline 实测退化为 block** | ⚠️ **有条件可用**（非 Profile 无条件集）：Skyline 必须发降级警告 |
+| **grid** | 可评估现成实现或降级为嵌套 flex | 🟡 待定 |
 | text-overflow / max-lines 截断 | 依赖平台文本度量 | 🟡 M3 |
-
-#### ★★L2-1 · 层叠相位（Stacking Phase）—— 绘制序的规范口径
-
-> **为什么必须写进 Profile**：绘制序是**命中测试**的地基（看到的在上 = 点到的在上）。
-> 若各端各自实现绘制序，必然出现「同一份 IR 在 Android 点得到、在 iOS 点不到」——
-> 这类分叉对用户表现为「点了没反应」或「点到了看不见的东西」，且极难定位。
-
-**规范（本 Profile 采用 CSS 2.1 附录 E 的简化模型）**：绘制按**层叠上下文**展开，上下文内分两个相位：
-
-| 相位 | 内容 | 顺序 |
-|---|---|---|
-| 1 | **在流**后代（`position: static`，含其子树内联展开） | 树序 |
-| 2 | **定位**后代（`position: relative/absolute`），各自展开为独立上下文 | 树序 |
-
-**★关键一点（本仓用真实 Chromium 探针实测确认，勿凭直觉）**：
-**相位按「层叠上下文」而非按「父级」** ——
-
-```
-root(static)
- ├── A(static)                    ← 相位 1
- │    └── A0(static)              ← 相位 1
- │         └── A1(absolute)       ← ★相位 2（虽然 A/A0 都是 static）
- └── B(static, 树序在后)          ← 相位 1
-```
-⇒ `A1`（深层 absolute）绘制在 `B`（外层后置的在流兄弟）**之上**。
-若按「父级内子级树序」实现，`A1` 会跑到 `B` 下面 —— **画错且点错**。
-
-**证据入口**：`tests/paint-order-probe.mjs`（真实 Chromium 探针，6 例）
-→ 真值冻结在 `tests/golden/paint-order-probes.json`
-→ 由 `packages/layout-core-rust/tests/conformance.rs::conformance_paint_order_against_browser_probes` **机器核验**。
-实现见 `packages/layout-core-rust/src/hit.rs`（`paint_order` 是唯一顺序真相来源，命中是其严格逆序）。
-
-**★与完整 CSS 的差距（诚实边界）**：
-- **未实现** `z-index`（L3：需完整层叠上下文 + 合成层管理，直接推高内存）
-- **未实现** `position: fixed/sticky`（L3）
-- 故本 Profile 的层叠可归纳为一句：**定位元素整体在在流元素之上；同相位内按树序**。
 
 ### L3 · 高成本（默认关闭，编译期标记，按需启用）
 
@@ -340,7 +222,7 @@ Step 7  输出 ComputedStyle + PaintHint
 
 ### 4.4 与既有编译器的衔接
 
-- 复用 **111 条**转换规则注册表（2026-09-29 实测 `listTransformRules().length`），新增规则自带 AI 说明书
+- 复用 69 条转换规则注册表，新增规则自带 AI 说明书
 - Node / Rust 双后端语义等价 Golden 门禁必须继续通过
 - 折叠结果需可被 Headless 后端消费，用于 conformance 比对
 
@@ -349,7 +231,7 @@ Step 7  输出 ComputedStyle + PaintHint
 ```ts
 interface ComputedStyle {
   // 布局
-  display: 'flex' | 'grid' | 'none'  // grid 为「有条件可用」：Skyline 端退化为 block（须警告）
+  display: 'flex' | 'none'          // L2，grid 待定
   flexDirection: 'row' | 'column' | 'row-reverse' | 'column-reverse'
   justifyContent: JustifyValue
   alignItems: AlignValue
@@ -482,8 +364,7 @@ interface PaintHint {
 | W-CSS-102 | 使用了 `!important` | 建议改用 @layer |
 | W-CSS-103 | 使用了 ID 选择器 | 特异性过高，后续覆盖困难 |
 | W-CSS-104 | 单节点动态属性数接近阈值 | — |
-| W-CSS-105 | 使用了 grid | **跨端不一致**：Web/App 真支持，**Skyline 实测退化为 block**（子项纵向堆叠）。提供嵌套 flex 改写建议；Skyline 端必须发可观察降级警告 |
-| W-CSS-106 | **大列表项的内容自适应尺寸**（容器不设宽高、尺寸由内部文字撑开） | **内禀成本高**：真机实测 4050 元素「内容撑开」**69.15ms** vs 「定宽高」**11.33ms**（**6.1×**）——要让尺寸由文字决定，就必须先量文字再反推盒子（auto 尺寸链触发 min/max-content 探测）。**建议**：列表项等**批量重复**场景显式给定宽高或 max-width；确需自适应的，**限定在叶子文本**上（不要整个容器链都 auto） |
+| W-CSS-105 | 使用了 grid（若 Profile 未开放） | 提供嵌套 flex 改写建议 |
 
 ### 7.3 lint 与 Web 端的关系（关键）
 
@@ -534,15 +415,15 @@ Web 端由浏览器原生渲染，天然支持完整 CSS——但开发者写出
 
 ## 9. 实施顺序
 
-| 阶段 | 内容 | 依赖 | 实际状态（2026-09-28 逐项核实） |
-|---|---|---|---|
-| **P1** | Skyline 端 CSS 支持矩阵实测表 | 无（**必须先做**，否则 Profile 无基线） | ✅ **已完成**（2026-09-29，25/25 通过，见 §2）—— 证据 `showcase/subpackages/capabilities/pages/css-profile-probe.vue` + `tests/e2e-mp-css-profile-grid.test.ts` |
-| **P2** | 定义 Profile v1 特性清单（L0–L5） | P1 | ✅ 本文档 §3（规格即产物） |
-| **P3** | 编译期折叠算法实现 + Golden 门禁 | P2 | ◐ **部分**：单位折叠 ✅（`component-ir/src/pnode-style.ts` 的 `normalizeStyleString`/`resolveLength`）+ Golden ✅（`tests/golden.test.ts`）；**§4 全量折叠算法（选择器/特异性/层叠相位）无独立实现证据** |
-| **P4** | 动态 class 预计算（属性维度分解） | P3 | ❌ **未实现**（全仓无按属性维度分解的预计算实现） |
-| **P5** | Lint 规则（E-CSS / W-CSS） | P2 | ◐ **仅 1 条**：`component-ir/src/pnode-analyze.ts:116` 的 `E-CSS-006`（拍平违规）；其余规则未实现（注：`cli/css-check.ts` 属 **css-compat 通道**，非本规则集） |
-| **P6** | Web 端 lint 接入（一致性前置） | P5 | ❌ **未实现** |
-| **P7** | App 端 ComputedStyle 消费 + conformance 比对 | P3、M1 排版核心 | ◐ ComptonStyle 契约 = `PProps`（`component-ir/src/pnode.ts`）；浏览器基准 conformance ✅（`layout-core-rust/tests/conformance.rs`）；**App 端消费链仅部分** |
+| 阶段 | 内容 | 依赖 |
+|---|---|---|
+| **P1** | Skyline 端 CSS 支持矩阵实测表 | 无（**必须先做**，否则 Profile 无基线） |
+| **P2** | 定义 Profile v1 特性清单（L0–L5） | P1 |
+| **P3** | 编译期折叠算法实现 + Golden 门禁 | P2 |
+| **P4** | 动态 class 预计算（属性维度分解） | P3 |
+| **P5** | Lint 规则（E-CSS / W-CSS） | P2 |
+| **P6** | Web 端 lint 接入（一致性前置） | P5 |
+| **P7** | App 端 ComputedStyle 消费 + conformance 比对 | P3、M1 排版核心 |
 
 > P1 的 Skyline 实测表是**前置项**。Profile 必须是三端交集，缺了 Skyline 基线会导致后续返工。
 

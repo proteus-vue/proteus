@@ -61,9 +61,12 @@ export interface BenchApp {
 export function buildBenchRow(
   it: { id: number; title: string; sub: string; tint?: string },
   dot: number, margin: number, c: string, extra: string | null,
+  /** ★V9：行级 tap 处理器（事件探针用；不传则无处理器——见 event-dispatch 测试的注意事项） */
+  onTap?: (e: { currentTarget: number; target: number; x: number; y: number }) => void,
 ): ReturnType<typeof h> {
   return h('p-view', {
     key: it.id,
+    ...(onTap ? { onClick: onTap } : {}),
     style: {
       flexDirection: 'row', alignItems: 'center',
       height: 56, flexShrink: 0, margin: { bottom: margin }, padding: { left: 16, right: 16 },
@@ -126,6 +129,21 @@ export function makeApp(initial: number, strategy: BenchStrategy = 'plain'): Ben
 
   const adapter = createSelfDrawAdapter()
   const renderer = createAppRenderer(adapter)
+  // ★★V9：**事件探针**（真机端到端验证"触摸 → 核心命中 → JS 派发"）
+  //
+  // 【为什么必须能观测】此前事件链**从未接线** ⇒ 自绘场景不能交互。
+  //   光"能派发"不够——必须证明**真机触摸**能走到 Vue 的处理器上（含冒泡与坐标）。
+  const tapLog: Array<{ id: number; target: number; x: number; y: number; title: string }> = []
+  ;(globalThis as unknown as { __proteusTapLog?: unknown }).__proteusTapLog = tapLog
+  const onRowTapProbe = (e: { currentTarget: number; target: number; x: number; y: number }) => {
+    tapLog.push({
+      id: e.currentTarget,
+      target: e.target,
+      x: Math.round(e.x * 100) / 100,
+      y: Math.round(e.y * 100) / 100,
+      title: 'row-tap',
+    })
+  }
   const container = adapter.createElement('p-view')
   adapter.root.children.push(container)
   container.parent = adapter.root
@@ -166,7 +184,7 @@ export function makeApp(initial: number, strategy: BenchStrategy = 'plain'): Ben
         if (strategy === 'comp') {
           return h(V0Row, { key: it.id, row: it, dot, margin, accent: c, extra })
         }
-        return buildBenchRow(it, dot, margin, c, extra)
+        return buildBenchRow(it, dot, margin, c, extra, onRowTapProbe)
       })
       return h('p-view', {
         style: {

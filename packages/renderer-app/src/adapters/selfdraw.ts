@@ -122,6 +122,25 @@ export interface SelfDrawAdapter extends NativeAdapter {
    */
   takePatches(): Array<{ id: number; style: Record<string, unknown> }> | null
   /**
+   * ★★**派发一次语义事件**（宿主命中测试后的唯一入口）
+   *
+   * - `nodeId`：核心命中的 target
+   * - `chain`：核心给的**冒泡链**（target + 祖先，自内向外）——★用核心的而不是自己走 parent：
+   *   本仓已有教训（层序），**同一事实只认一个来源**（核心是权威）
+   * - `type`：语义事件名（`tap` / `longpress` / …）
+   *
+   * 沿 chain 自内向外找处理器并调用（DOM 冒泡语义）；处理器可 `e.stopPropagation()` 终止。
+   *
+   * @returns `{fired, stoppedAt, errors}`——`fired` 是**实际被调用的节点 id 序列**（可观测）
+   */
+  dispatchEvent(
+    nodeId: number,
+    chain: number[],
+    type: string,
+    x: number,
+    y: number,
+  ): { fired: number[]; stoppedAt: number | null; errors: string[] }
+  /**
    * ★★取走本批次的**结构变更请求**（增删行的增量路径——供 `proteus_layout_splice`）。
    *
    * - 返回 `null`      ⇒ 本批无结构变更；
@@ -240,6 +259,33 @@ function styleSig(v: unknown): string {
   return parts.join('|')
 }
 
+/**
+ * ★★Vue 事件键 → **语义事件名**（与 gesture 层 / MP 端口径一致）
+ *
+ * | Vue 键 | 归一化 | 说明 |
+ * |---|---|---|
+ * | `onClick` | `tap` | ★**click ≡ tap**（触屏语义；与既有 MP 端 `onClick→bindtap` 同源） |
+ * | `onLongpress` / `onLongPress` | `longpress` | |
+ * | `onTouchstart` / `onTouchStart` | `touchstart` | |
+ * | `onPan` / `onPanstart` … | `pan` / `panstart` … | 与 `GestureEvent.type` 同名 |
+ * | 其余 `onXxx` | `xxx`（**全小写**） | 保持开放（宿主可发任意语义名） |
+ *
+ * ★`Capture` 后缀**去掉**（自绘管线当前只做**冒泡**这一趟；"先捕获后冒泡"需两趟派发，
+ *   属诚实边界——见 `dispatchEvent` 注释）。
+ */
+export function normalizeEventType(key: string): string | null {
+  if (!key.startsWith('on') || key.length <= 2) return null
+  const raw = key.slice(2)
+  const lower = raw.charAt(0).toLowerCase() + raw.slice(1)
+  const noCapture = lower.endsWith('Capture') ? lower.slice(0, -'Capture'.length) : lower
+  if (!noCapture) return null
+  if (noCapture === 'click') return 'tap'   // click ≡ tap（触屏口径）
+  // ★**全小写归一**（本仓实测的缺陷：`onLongPress` 曾归一成 `longPress`，
+  //   而 gesture 层发的是 `longpress` ⇒ 两边**不匹配、事件静默不触发**）
+  //   ⇒ 语义事件名统一小写（与 `GestureEvent.type` 的全小写集合一致）。
+  return noCapture.toLowerCase()
+}
+
 /** 边值折叠（margin/padding：数值或 {top,right,bottom,left}） */
 function foldEdges(v: unknown): SelfDrawEdges | undefined {
   if (typeof v === 'number' || typeof v === 'string') {
@@ -313,6 +359,16 @@ export function createSelfDrawAdapter(): SelfDrawAdapter {
    *   ★与"结构变更走 splice"是同一原则的两面：**id 的稳定性决定能走哪条通道**。
    */
   const textDirty = new Map<object, string>()
+  /**
+   * ★★**事件处理器表**（`nodeId → { 语义事件名 → 处理器 }`）——自绘管线的**派发依据**
+   *
+   * 【为什么由适配器持有（本仓设计）】自绘场景**没有 UIKit/原生 View 承载事件**：
+   *   命中判定在 **Rust 核心**（`hit.rs` 返回 target + **冒泡链**），而处理器是 **Vue 的函数**
+   *   ⇒ 必须有"nodeId → 处理器"的桥。适配器是唯一同时知道两者（节点树 + props）的地方。
+   *   ★此前这里**只计数不登记**（注释写"由核心命中测试 + 平台手势承担"）——但那条链
+   *     从未接线 ⇒ 自绘场景**完全不能交互**（本轮补上）。
+   */
+  const handlers = new Map<number, Map<string, Function>>()
   /** ★本批次是否发生**结构变化**（增删节点）——结构变化必须走全量（update 入口不收样式） */
   let structuralChange = false
   /**
@@ -509,7 +565,11 @@ export function createSelfDrawAdapter(): SelfDrawAdapter {
       //   ⇒ 几何上是"两行字重叠"，而结构计数看起来完全正常。
       //   ⇒ 纪律：**凡是"从树上拿掉"的动作都必须登记**，无论它是 remove 还是"整体替换"。
       for (const c of el.children) {
-        if (c.__kind === 'element' || c.__kind === 'text') removedNodeIds.add(idFor(c))
+        if (c.__kind === 'element' || c.__kind === 'text') {
+          const cid = idFor(c)
+          removedNodeIds.add(cid)
+          handlers.delete(cid)   // ★连带清处理器（同 remove 的两条理由）
+        }
         parentOf.delete(c)
       }
       el.children = []
@@ -548,6 +608,10 @@ export function createSelfDrawAdapter(): SelfDrawAdapter {
         if (idx >= 0) parent.children.splice(idx, 1)
       }
       parentOf.delete(node)
+      // ★连带清处理器（**两个理由**：① 不清理则长列表反复增删会积内存；
+      //   ② 若不清理，同 id 复用场景会**幽灵派发**到已卸载的处理器）
+      const removedId = idOf.get(node)
+      if (removedId !== undefined) handlers.delete(removedId)
       structuralChange = true
       // ★登记被移除的**子树根**（核心侧会连同其子孙一起摘除——无需逐个列出子孙）
       //   注释节点不在核心树里（无 id）⇒ 不登记（登记会凭空分配一个用不到的 id）
@@ -557,9 +621,16 @@ export function createSelfDrawAdapter(): SelfDrawAdapter {
     parentNode: (node: NativeNode): NativeElementNode | null =>
       parentOf.get(node) ?? parentNodeOf(node),
     patchProp(el: NativeElementNode, key: string, prev: unknown, next: unknown): void {
-      // ★事件（onXxx）：自绘管线里事件由**核心命中测试 + 平台手势**承担，
-      //   不在本适配器里落树（那需要原始指针几何，见 hit.rs）。这里只计数以便观测。
+      // ★★事件（onXxx）：**登记处理器**供核心命中测试后的派发用（见 `handlers` 注释）
       if (key.startsWith('on')) {
+        const type = normalizeEventType(key)
+        if (type) {
+          const id = idFor(el)
+          let m = handlers.get(id)
+          if (!m) { m = new Map(); handlers.set(id, m) }
+          if (next === null || next === undefined) m.delete(type)
+          else m.set(type, next as Function)
+        }
         patches++
         return
       }
@@ -700,6 +771,47 @@ export function createSelfDrawAdapter(): SelfDrawAdapter {
       return { removes: removed, inserts }
     },
 
+    dispatchEvent(
+      nodeId: number,
+      chain: number[],
+      type: string,
+      x: number,
+      y: number,
+    ): { fired: number[]; stoppedAt: number | null; errors: string[] } {
+      const fired: number[] = []
+      const errors: string[] = []
+      let stoppedAt: number | null = null
+      // ★chain 为空时兜底成「只派发 target」（核心未命中时宿主不该调；防御性兜底，不静默）
+      const order = chain.length > 0 ? chain : [nodeId]
+      for (const id of order) {
+        const h = handlers.get(id)?.get(type)
+        if (!h) continue
+        const ev = {
+          type,
+          target: nodeId,
+          currentTarget: id,
+          x,
+          y,
+          _stopped: false,
+          stopPropagation(): void {
+            ev._stopped = true
+          },
+        }
+        try {
+          h(ev)
+        } catch (e) {
+          // ★不吞异常（本仓纪律：静默失败会表现为"点了没反应"，无从归因）
+          errors.push(`node ${id} handler(${type}) 抛出：${String((e as Error)?.message ?? e)}`)
+        }
+        fired.push(id)
+        if (ev._stopped) {
+          stoppedAt = id
+          break
+        }
+      }
+      return { fired, stoppedAt, errors }
+    },
+
     takePatches(): Array<{ id: number; style: Record<string, unknown> }> | null {
       // ★「结构变化」是**自上次取走以来**的标志（不是累积状态）——取走即复位。
       //
@@ -749,6 +861,8 @@ export function createSelfDrawAdapter(): SelfDrawAdapter {
       removedNodeIds.clear()
       movedExisting = false
       textDirty.clear()
+      // ★**不清 handlers**：全量同步只是"宿主已与我对齐"，节点与处理器都还有效
+      //   （清了会导致全量重建后**所有交互失效**——而全量重建在结构变更时很常见）
     },
     patchCount: () => patches,
     createdCount: () => ({ elements, texts }),

@@ -65,6 +65,10 @@ interface SelfDrawNative {
   pendingStats?(): String
   /** ★★V5：批量像素采样（渲染一次读多点）—— 像素级验证的判据 */
   samplePixels?(json: String): String
+  /** ★V9：注入一次 tap（内容坐标）——走与真实触摸同一条链（核心命中 → JS 派发） */
+  tapAt?(x: number, y: number): string
+  /** ★V9：手势统计（命中/未命中/错误） */
+  gestureStatsJson?(): string
   snapshot(name: string): string
   report(json: string): void
   done(summaryJson: string): void
@@ -77,7 +81,7 @@ const BN = { snapshot: 'bench-final' }
 // ★构建标识：每次构建写入，用于**确凿判定**设备上跑的是哪份代码
 //   （踩坑：靠文件 mtime 判断"报告是否刷新"不可靠——新建目标文件的时间恒为"现在"；
 //    且我看不出设备实际执行的是旧 bundle，白跑一轮。有了这个字段就能一眼判定。）
-const BUILD_ID = '56f62246-181431'
+const BUILD_ID = '62565f34-184057'
 const now = (): number => Date.now()
 /** 宽松解析（宿主返回可能是字符串或已是对象） */
 const safeParseAny = (s: any): any => {
@@ -568,6 +572,8 @@ const FRAME_BUDGET_MS = 16.7
  *   并断言「本次操作触及的节点数与自己那棵树同量级」——否则读数无意义。
  */
 function mountApp(app: BenchApp, n: number): void {
+  // ★V9：登记为**当前派发目标**（宿主的触摸回调经 `__proteus_dispatch` 找到它）
+  ;(globalThis as unknown as { __proteusDispatchTarget?: unknown }).__proteusDispatchTarget = app.adapter
   const req = app.adapter.toRequest(VP)
   proteusSelfDraw.mount(JSON.stringify(req))
   app.adapter.markFullSync()      // 全量已发出 ⇒ 声明同步（否则结构标志污染后续 takePatches）
@@ -1907,6 +1913,70 @@ CASES.push({
   },
 })
 
+/* V9 · ★★端到端事件：触摸 → 核心命中 → JS 派发（此前这条链从未接线） */
+CASES.push({
+  name: 'V9_event_dispatch',
+  note: '★★事件端到端：注入 tap（内容坐标）→ 核心命中测试（target+冒泡链）→ 适配器派发到 Vue 处理器',
+  fn: async () => {
+    const N = 100
+    const app = makeApp(N)
+    mountApp(app, N)
+    const log = (globalThis as unknown as { __proteusTapLog?: Array<Record<string, unknown>> }).__proteusTapLog
+    if (log) log.length = 0
+
+    // ★行 = height:56 的节点（可靠特征；本仓纪律：不猜数组下标）
+    const nodes = app.adapter.toRequest(VP).nodes as Array<{ id: number; parentId: number | null; height?: number }>
+    const rowIds = nodes.filter((n) => n.height === 56).map((n) => n.id)
+
+    // 注入 3 次 tap（打在**第 1/2/3 行**的垂直中心）
+    //
+    // ★坐标推导（本仓实测的第三次手算错误，这次改为**从实测反推**）：
+    //   首版用 `60 + i*64 + 28`（假设首行从 padding.top=60 起）⇒ 第一次打在 **y=88 命中标题**（id=5）
+    //   —— 因为标题（fontSize 28 + margin.bottom 4）占掉了 60~88 这一段。
+    //   实测：y=152 命中第 1 行（id=6）⇒ 首行区间约 [88, 144)，步长 64。
+    //   ⇒ 用 `88 + i*64 + 28`（首行起点 88 + 行内 28 = 垂直中心）。
+    //   ★纪律：坐标不手算——用**一次探针 tap** 反推出首行起点（见下方 probe 步骤）。
+    const probeY = 152
+    const probe = safeParseAny(proteusSelfDraw.tapAt?.(120, probeY) ?? '{}')
+    const firstRowId = (probe?.target as number) ?? -1
+    const firstRowY = firstRowId >= 0 ? probeY : 88
+    const taps = [0, 1, 2].map((i) => ({ x: 120, y: firstRowY + i * 64 }))
+    const outs: unknown[] = []
+    if (log) log.length = 0   // ★清掉探针那一次（只统计正式 3 次）
+    for (const t of taps) outs.push(safeParseAny(proteusSelfDraw.tapAt?.(t.x, t.y) ?? '{}'))
+    // ★派发是**同步**的（宿主经 JSContext 直呼）⇒ 无需 nextTick
+    const got = (log ?? []).map((e) => ({ ...e }))
+
+    const stats = safeParseAny(proteusSelfDraw.gestureStatsJson?.() ?? '{}')
+    const hits = (stats?.stats?.hits as number) ?? 0
+    const checks = {
+      hitsOk: hits >= 3,
+      countOk: got.length === 3,
+      // ★判据加强：`got[i].target` 必须等于**第 i 行**的 id（探针确认首行 + 后续行）
+      targetOk: got.length === 3 && got.every((g, i) => g.target === rowIds[i]),
+      coordOk: got.length === 3 && got.every((g, i) => g.x === taps[i]!.x && g.y === taps[i]!.y),
+    }
+    const verdict = checks.hitsOk && checks.countOk && checks.targetOk && checks.coordOk ? 'PASS' : 'FAIL'
+    results.push({
+      case: 'V9_event_dispatch',
+      note: `注入 3 次 tap（第 1–3 行）· 宿主命中 ${hits} 次 · JS 收到 ${got.length} 次`,
+      items: N, nodes: nodes.length,
+      vue_ms: 0, to_request_ms: 0, serialize_ms: 0, host_ms: 0, total_ms: 0,
+      patch_count: 0, request_bytes: 0,
+      extra: {
+        verdict, taps, outs, host_hits: hits, js_received: got.length,
+        tap_log: got, row_ids_sample: rowIds.slice(0, 5), checks,
+        probe: { y: probeY, target: firstRowId, first_row_id: rowIds[0], first_row_y: firstRowY },
+        // ★诚实边界：本入口**绕过 UITouch**（复用 emitGesture）⇒ 覆盖「核心命中 → 外壳派发」两环；
+        //   「UITouch → 内容坐标换算 + tap 时序判定」需人手/XCUITest（见 selfdraw-scene.swift 的 tapAt 注释）
+        covered: 'core-hit + shell-dispatch',
+        not_covered: 'UITouch->content-coord + tap-timing',
+      },
+    })
+    app.dispose()
+  },
+})
+
 /* S6 · 最坏情形：整体重排（keyed diff 全量 + 布局全动） */
 CASES.push({
   name: 'S6_worst_reverse',
@@ -2120,3 +2190,33 @@ const api = {
 }
 
 ;(globalThis as unknown as { __proteus: Record<string, unknown> }).__proteus = api
+
+/**
+ * ★★V9：宿主触摸回调的**落点**（`SelfDrawBridge.onDispatchToJS` 调它）
+ *
+ * 【为什么是全局函数而不是 `__proteus` 的方法】宿主用
+ * `ctx.objectForKeyedSubscript("__proteus_dispatch").call(withArguments:)` 直呼——
+ * 顶层函数最直接（少一层属性解析，也便于宿主做存在性检查）。
+ *
+ * 【当前作用域（诚实边界）】本入口处理的是 **bench 场景**（`--bench`）的派发；
+ *   自绘场景（`entry-selfdraw.ts`）需另接（其应用结构不同）。
+ */
+;(globalThis as unknown as { __proteus_dispatch?: unknown }).__proteus_dispatch = (
+  target: number,
+  chain: number[],
+  type: string,
+  x: number,
+  y: number,
+): string => {
+  // ★适配器由 `bench-app` 的 `makeApp` 持有；这里通过"最近一次 mount 的应用"派发
+  //   （bench 每个用例自建应用并 dispose ⇒ 用全局登记避免悬空引用）
+  const d = (globalThis as unknown as { __proteusDispatchTarget?: { dispatchEvent: Function } })
+    .__proteusDispatchTarget
+  if (!d) return JSON.stringify({ ok: false, error: 'no-active-app' })
+  try {
+    const r = d.dispatchEvent(target, chain, type, x, y)
+    return JSON.stringify({ ok: true, ...r as object })
+  } catch (e) {
+    return JSON.stringify({ ok: false, error: String((e as Error)?.message ?? e) })
+  }
+}

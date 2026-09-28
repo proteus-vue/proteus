@@ -45,6 +45,10 @@ func proteus_layout_update(_ handle: UInt64, _ patchesJson: UnsafePointer<CChar>
 @_silgen_name("proteus_layout_splice")
 func proteus_layout_splice(_ handle: UInt64, _ spliceJson: UnsafePointer<CChar>) -> UnsafeMutablePointer<CChar>
 
+/// ★★**命中测试**（核心算：target + 冒泡链 chain）——触摸派发的依据
+@_silgen_name("proteus_layout_hit_test")
+func proteus_layout_hit_test(_ handle: UInt64, _ x: Float, _ y: Float) -> UnsafeMutablePointer<CChar>
+
 /// ★★注入/更新文本度量（宿主度量后推入；不触发重排）
 @_silgen_name("proteus_layout_set_text_measures")
 func proteus_layout_set_text_measures(_ handle: UInt64, _ measuresJson: UnsafePointer<CChar>) -> UnsafeMutablePointer<CChar>
@@ -135,6 +139,17 @@ func physFootprintMB() -> Double {
     /// 入参：`[{"x":10,"y":100}, ...]`（屏幕坐标，逻辑点）
     /// 出参：`{"ok":true,"pixels":["#RRGGBB", ...]}`（与入参同序）
     func samplePixels(_ json: String) -> String
+    /// ★★V9：**注入一次 tap**（走与真实触摸**同一条链**：`emitGesture` → 核心命中 → JS 派发）
+    ///
+    /// 【为什么需要它（诚实边界）】`touchesBegan/Ended` 是 UIKit 的 UI 事件，**JS 无法伪造**
+    ///   ⇒ 若只靠真实触摸，设备用例无法自动验证（需人手点）。
+    ///   本入口**绕过 UITouch**但**复用 `emitGesture`** ⇒ 覆盖「命中 → 派发」这两环；
+    ///   唯一未覆盖的是「UITouch → 内容坐标换算」（那部分靠 `touchesEnded` 的 tap 时序判定，
+    ///   需人手或 XCUITest 覆盖）。
+    /// - Parameters: x/y 为**内容坐标**（与核心 rects 同口径）
+    func tapAt(_ x: Double, _ y: Double) -> String
+    /// ★V9：手势统计（命中/未命中/错误——证明"触摸真的走到了核心"）
+    func gestureStatsJson() -> String
     /// ★★V4 A/B 开关：'v4'（默认：二进制返回 + 只更可见层）| 'v3'（旧路径：JSON 返回 + 全部层）
     ///
     /// 【为什么要有它（诚实对照）】优化前后若用**不同的基准树**测，比较无意义
@@ -742,6 +757,57 @@ final class SelfDrawView: UIView {
         return updated
     }
 
+    /* ────────────────────────── ★V9：触摸 → 命中 → 派发 ────────────────────────── */
+
+    /// 触摸回调（由桥接层注入：把「内容坐标 + 语义类型」交给桥接层）
+    ///
+    /// 【为什么用回调而不是直接持有 JSContext / 核心句柄（本仓设计）】`SelfDrawView` 是纯 UI 层：
+    ///   不应知道 JS 的存在、也不该持有排版核心句柄（否则 UI / 运行时 / 核心三层耦合）。
+    ///   ⇒ 视图只负责「把触摸转成内容坐标 + 限定时序（tap 判定）」；
+    ///     命中测试（核心）与 JS 派发（桥接层）都在上层完成。
+    var onGesture: ((Double, Double, String) -> Void)?
+
+    /// 最近一次触摸的起点（用于判定 tap / longpress 与提供坐标）
+    private var touchStart: (x: Double, y: Double, t: CFAbsoluteTime)?
+
+    /// 触摸结束到派发的**最大位移**（超过则不算 tap——与 gesture 层的 threshold 同口径）
+    private let tapSlop: Double = 10.0
+    /// tap 的最长时长（超过则可能是长按；当前只区分 tap，长按留待 gesture 层）
+    private let tapMaxDuration: Double = 0.5
+
+    override func touchesBegan(_ touches: Set<UITouch>, with event: UIEvent?) {
+        guard let t = touches.first else { return }
+        let p = t.location(in: self)
+        touchStart = (Double(p.x), Double(p.y), CFAbsoluteTimeGetCurrent())
+    }
+
+    override func touchesEnded(_ touches: Set<UITouch>, with event: UIEvent?) {
+        defer { touchStart = nil }
+        guard let t = touches.first, let start = touchStart else { return }
+        let p = t.location(in: self)
+        let dx = Double(p.x) - start.x
+        let dy = Double(p.y) - start.y
+        let dist = (dx * dx + dy * dy).squareRoot()
+        let dt = CFAbsoluteTimeGetCurrent() - start.t
+        // ★只在「短时 + 小位移」时算 tap（与 gesture 层 threshold 同口径）
+        //   ⇒ 拖动/长按不会误报成 tap（误报会让"滑动列表"触发"点击行"）
+        guard dist <= tapSlop, dt <= tapMaxDuration else { return }
+        // ★用**绝对内容坐标**（核心的 rects 是内容坐标；self.bounds 是视口）
+        //   ⇒ 加上滚动偏移（内容被移了，但核心坐标不动）
+        let ax = Double(p.x) + Double(contentOffset.x)
+        let ay = Double(p.y) + Double(contentOffset.y)
+        emitGesture(x: ax, y: ay, type: "tap")
+    }
+
+    override func touchesCancelled(_ touches: Set<UITouch>, with event: UIEvent?) {
+        touchStart = nil
+    }
+
+    /// 发一次语义手势（内容坐标）——桥接层在此回调里做**核心命中测试 + JS 派发**
+    func emitGesture(x: Double, y: Double, type: String) {
+        onGesture?(x, y, type)
+    }
+
     /// 节点在层树中的深度（沿 `parentById` 上溯；带防环保护）
     /// 节点深度（★建层时预计算，见 buildLayers；查表 O(1)）
     ///
@@ -1223,6 +1289,67 @@ final class SelfDrawBridge: NSObject, SelfDrawExports {
                            "mem_mb": round(mem * 10) / 10,
                            "mem_peak_mb": round(SelfDrawBridge.memPeakMB * 10) / 10,
                            "host_total_ms": round(totalMs * 100) / 100])
+    }
+
+    /* ────────────────────────── ★V9：命中测试 → JS 派发 ────────────────────────── */
+
+    /// ★★**触摸 → 命中（核心）→ 派发（JS）** 的唯一落点
+    ///
+    /// 【分工（本仓分层设计）】
+    ///   · `SelfDrawView`：触摸 → **内容坐标** + tap 时序判定（不碰核心/JS）
+    ///   · **本方法**：调核心 `proteus_layout_hit_test` 拿 `target` + **冒泡链 `chain`**
+    ///   · JS 适配器 `dispatchEvent`：沿 chain 派发（DOM 冒泡语义，见其注释）
+    ///
+    /// 【为什么命中在核心而不是宿主自己算】本仓已有教训（层序/坐标系）：**同一事实只认一个来源**。
+    ///   几何与可见性都在核心（含 `display:none`、overflow 裁剪）⇒ 宿主自己按 rectangle 叠层
+    ///   判断必然与核心分歧（且分歧只在特定布局下暴露）。
+    ///
+    /// 【为什么把 chain 原样传下去】DOM 语义要求沿祖先链冒泡；核心已算好（含"子级溢出父盒"的
+    ///   特例，见 hit.rs 模块头）⇒ 宿主与 JS 都**不该自己推**。
+    func emitGesture(x: Double, y: Double, type: String) {
+        guard handle != 0 else { return }
+        let out = takeCString(proteus_layout_hit_test(handle, Float(x), Float(y)))
+        guard let d = out.data(using: .utf8),
+              let o = (try? JSONSerialization.jsonObject(with: d)) as? [String: Any],
+              (o["ok"] as? Bool) == true else {
+            gestureStats["hit_errors"] = (gestureStats["hit_errors"] as? Int ?? 0) + 1
+            return
+        }
+        gestureStats["hits"] = (gestureStats["hits"] as? Int ?? 0) + 1
+        // 未命中：只记账（不派发——没有 target 就没有 event.target）
+        guard let target = o["target"] as? Int else {
+            gestureStats["misses"] = (gestureStats["misses"] as? Int ?? 0) + 1
+            return
+        }
+        let chain = (o["chain"] as? [Int]) ?? [target]
+        // ★记录本次命中的 target/链长（诊断：见 tapAt 注释）
+        gestureStats["last_target"] = target
+        gestureStats["last_chain_len"] = chain.count
+        // ★交给 JS（经 JSContext 从控制器注入；桥接层不直接持有 ctx，避免循环引用）
+        onDispatchToJS?(target, chain, type, x, y)
+    }
+
+    /// JS 派发回调（由控制器注入：调 `__proteus_dispatch`）
+    var onDispatchToJS: ((Int, [Int], String, Double, Double) -> Void)?
+
+    /// 手势统计（诊断：命中/未命中/错误——证明"触摸真的走到了核心"）
+    private(set) var gestureStats: [String: Int] = [:]
+
+    /// 见协议声明（`tapAt`）
+    func tapAt(_ x: Double, _ y: Double) -> String {
+        guard handle != 0 else { return "{\"ok\":false,\"error\":\"未建树\"}" }
+        emitGesture(x: x, y: y, type: "tap")
+        // ★回传**本次命中的 target/chain**（诊断必需——本仓实测：没有它就无法定位
+        //   "宿主命中但 JS 没收到"是命中错节点、还是派发链断了）
+        let lastTarget = gestureStats["last_target"] ?? -1
+        let lastChain = gestureStats["last_chain_len"] ?? 0
+        return jsonString(["ok": true, "x": x, "y": y, "target": lastTarget,
+                           "chain_len": lastChain, "stats": gestureStats])
+    }
+
+    /// 见协议声明（`gestureStatsJson`）
+    func gestureStatsJson() -> String {
+        jsonString(["ok": true, "stats": gestureStats])
     }
 
     /// ★高分辨率单调时钟（微秒）。用 mach_absolute_time + timebase 换算——
@@ -1848,6 +1975,20 @@ final class SelfDrawViewController: UIViewController {
         }
         jsContext = ctx
         ctx.setObject(bridge, forKeyedSubscript: "proteusSelfDraw" as NSString)
+        // ★★V9：把「触摸 → 命中 → JS 派发」接上（此前这条链**从未接线** ⇒ 自绘场景不能交互）
+        //
+        // 方向：`SelfDrawView.onGesture`（触摸）→ `bridge.emitGesture`（命中）
+        //       → `onDispatchToJS`（本闭包）→ JS 的 `__proteus_dispatch`（适配器 dispatchEvent）
+        // ★用闭包而非桥接层直持 ctx：避免「桥 ↔ ctx」循环引用（ctx 强引用桥）
+        bridge.view?.onGesture = { [weak bridge] x, y, type in
+            bridge?.emitGesture(x: x, y: y, type: type)
+        }
+        bridge.onDispatchToJS = { [weak ctx] target, chain, type, x, y in
+            guard let ctx = ctx else { return }
+            guard let fn = ctx.objectForKeyedSubscript("__proteus_dispatch") else { return }
+            // ★`call(withArguments:)` 传原生数组（JSContext 自动桥接为 JS Array/Number）
+            _ = fn.call(withArguments: [target, chain, type, x, y])
+        }
 
         // 异常可观测（否则 JS 报错静默失败）
         ctx.exceptionHandler = { _, exc in
