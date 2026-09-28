@@ -1666,6 +1666,41 @@ pub unsafe extern "C" fn proteus_layout_splice(handle: u64, splice_json: *const 
             inserted += block_roots.len();
         }
 
+        // ── ★★内部一致性自检（本仓实测：splice 后核心的 children/parent 曾分叉）──
+        //
+        // 【为什么必须有】输入图校验只覆盖**create 时**的输入；而 splice **改的是核心内部状态**
+        //   （在父的 children 里 insert / 断链摘除）⇒ 若某处漏改一侧，就会出现
+        //   "children 里有它但 parent 不是它"或反之 ⇒ 后续 build_taffy / 收集 / 命中测试
+        //   全都在**不一致的树**上工作（症状：层序/几何与预期不符，且无报错）。
+        //   真机实测：宿主对账报 `首个差异@51`（宿主按 parentId 归类 vs 核心 children 序）。
+        {
+            let len = entry.tree.len();
+            for i in 0..len {
+                let n = entry.tree.get(i as u32);
+                for &c in &n.children {
+                    let ci = c as usize;
+                    if ci >= len || entry.tree.get(c).parent != i as u32 {
+                        return Err(format!(
+                            "★splice 后内部不一致：节点 {} 的 children 含 {}，但其 parent={}",
+                            n.id,
+                            entry.tree.get(c).id,
+                            entry.tree.get(c).parent
+                        ));
+                    }
+                }
+                if n.parent != crate::node::NO_PARENT {
+                    let p = n.parent as usize;
+                    if p >= len || !entry.tree.get(n.parent).children.iter().any(|&c| c == i as u32) {
+                        return Err(format!(
+                            "★splice 后内部不一致：节点 {} 的 parent={} 但不在其 children 里",
+                            n.id,
+                            entry.tree.get(n.parent).id
+                        ));
+                    }
+                }
+            }
+        }
+
         // ── ③ 重排（复用多范围增量；无脏节点则跳过）──
         //
         // ★★度量表：① 先并入请求带来的新文本度量（插入的行必然含文本——
