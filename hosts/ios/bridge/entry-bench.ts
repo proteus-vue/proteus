@@ -28,7 +28,7 @@ import { createSelfDrawAdapter } from '@proteus-vue/renderer-app/adapters/selfdr
 import { makeApp, VP } from './bench-app'
 // ★Vapor IR V3：槽位运行时（指令生成侧）。订阅表由**构建期**生成并随包下发
 //   （编译器不进 app——它依赖 @babel/*，且 app 里没有解析 SFC 的场景；见 gen-vapor-table.mjs）
-import { SlotRuntime, VaporRuntime, PropKeyTable, StringPool } from '@proteus-vue/slot-runtime'
+import { SlotRuntime, VaporRuntime, PropKeyTable, StringPool, ListRegistry, instantiateTemplate } from '@proteus-vue/slot-runtime'
 import vaporTableJson from './dist/vapor-table.json'
 import type { BenchApp } from './bench-app'
 
@@ -77,7 +77,7 @@ const BN = { snapshot: 'bench-final' }
 // ★构建标识：每次构建写入，用于**确凿判定**设备上跑的是哪份代码
 //   （踩坑：靠文件 mtime 判断"报告是否刷新"不可靠——新建目标文件的时间恒为"现在"；
 //    且我看不出设备实际执行的是旧 bundle，白跑一轮。有了这个字段就能一眼判定。）
-const BUILD_ID = 'e7bf2937-150716'
+const BUILD_ID = '732f0b3a-152950'
 const now = (): number => Date.now()
 /** 宽松解析（宿主返回可能是字符串或已是对象） */
 const safeParseAny = (s: any): any => {
@@ -1370,6 +1370,142 @@ CASES.push({
       patch_count: 0, request_bytes: 0,
       extra: { clock: clockName, ticks_in_512: ticks, min_nonzero_ms: minNonZero === Infinity ? null : minNonZero },
     })
+  },
+})
+
+/* V6 · ★★全量 SFC → 端上渲染（V4 里程碑最后一项遗留） */
+CASES.push({
+  name: 'V6_sfc_full_tree',
+  note: '★★全量 SFC → 模板实例化 → 真机挂载 → 行内更新（节点树由 SFC 生成，而非手写节点数组）',
+  fn: async () => {
+// ── ★★V6：**全量 SFC → 端上渲染**（V4 里程碑最后一项遗留）──
+// ★本用例自带时钟（`clock` 是 V3 用例内的局部量，跨用例不可见——本仓实测踩到：
+//   直接引用会报 `Can't find variable: clock`，且**整个用例静默零结果**）
+const tclock = (): number => {
+  const us = proteusSelfDraw.nowUs?.()
+  if (typeof us === 'string') {
+    const v = Number(us)
+    if (Number.isFinite(v) && v > 0) return v / 1000
+  }
+  return Date.now()
+}
+//
+// 【这条链此前断在哪（本仓实测）】V3/V4 的设备验证都用**手写节点数组**
+//   （上方 largeNodes 一行行写死 id/parentId/style），编译器只产出订阅表
+//   ⇒ "Vapor 能替代 Vue 运行时"缺最后一环证据：**节点树本身从未由 SFC 生成**。
+//
+// 【本用例验证什么】同一份 SFC 的两件编译产物（模板 + 订阅表）：
+//   ① 模板实例化成节点树（v-for 展开、静态样式、文本占位）
+//   ② 挂载到真机（宿主度量 + Rust 布局 + 建层）
+//   ③ 改行数据 ⇒ 行内槽位发**普通 SET_STYLE/SET_TEXT**（注册表解析到实际行节点）
+//   ⇒ 判据：树成型（层数/节点数）+ 指令命中 + 几何真的变了 + 无 unsupported
+{
+  const builtTpl = vaporTableJson as unknown as {
+    ok: boolean
+    table: import('@proteus-vue/slot-runtime').SubscriptionTable
+    template: import('@proteus-vue/slot-runtime').LayoutTemplate
+    templateDiagnostics: Array<{ severity: string; message: string }>
+  }
+  const tplOk = builtTpl.ok && builtTpl.template && builtTpl.template.nodes.length > 0
+  if (!tplOk) {
+    results.push({
+      case: 'V6_sfc_full_tree',
+      note: `✗ 模板产物不可用：${(builtTpl.templateDiagnostics ?? []).map((d) => d.message).join('; ').slice(0, 160)}`,
+      items: 0, nodes: 0, vue_ms: -1, to_request_ms: -1, serialize_ms: -1, host_ms: -1,
+      total_ms: -1, patch_count: -1, request_bytes: -1,
+    })
+  } else {
+    const tpl = builtTpl.template
+    const table = builtTpl.table
+    // ★行数据（3 行；与生成期 SFC 的数据形状一致：id / dotW / textW / title）
+    let rows = [
+      { id: 1, dotW: 36, textW: 120, title: '列表项 1' },
+      { id: 2, dotW: 36, textW: 120, title: '列表项 2' },
+      { id: 3, dotW: 36, textW: 120, title: '列表项 3' },
+    ]
+    const data: Record<string, unknown> = { list: rows }
+    const read = (n: string): unknown => data[n]
+    const registry = new ListRegistry()
+
+    // ① 实例化（模板 + 数据 → 引擎就绪树）
+    const instT0 = tclock()
+    const inst = instantiateTemplate(tpl, { viewport: VP, read, table, registry })
+    const instantiateMs = tclock() - instT0
+
+    // ② 首帧：**由实例化产物驱动**（含文本 → 宿主度量注入走既有通道）
+    const mountOut = safeParseAny(proteusSelfDraw.mount(JSON.stringify({ viewport: VP, nodes: inst.nodes })))
+    if (!mountOut?.ok) {
+      results.push({
+        case: 'V6_sfc_full_tree',
+        note: `✗ 由 SFC 产物挂载失败：${JSON.stringify(mountOut)?.slice(0, 160)}`,
+        items: 0, nodes: inst.nodes.length, vue_ms: -1, to_request_ms: -1, serialize_ms: -1,
+        host_ms: -1, total_ms: -1, patch_count: -1, request_bytes: -1,
+      })
+    } else {
+      // ③ 改第 2 行的圆点宽 + 第 3 行文案 ⇒ 行内槽位应发普通指令
+      const keys = new PropKeyTable()
+      const strings = new StringPool()
+      const cap: Uint8Array[] = []
+      const rt = new SlotRuntime(keys, strings, (b) => cap.push(b))
+      const vapor = new VaporRuntime(table, rt, VaporRuntime.buildEvaluators(table.evaluators), registry)
+      const triggers = new Map<string, () => void>()
+      let listRows = rows
+      const ctx = { read: (n: string) => (n === 'list' ? listRows : read(n)) }
+      const loadRes = vapor.load(ctx, (name, cb) => triggers.set(name, cb))
+      vapor.relink(ctx)
+      rt.flush()
+      cap.length = 0  // 丢掉首帧
+
+      listRows = [{ ...rows[0]! }, { ...rows[1]!, dotW: 60 }, { ...rows[2]!, title: '改过的第 3 行' }]
+      triggers.get('list')?.()
+      rt.flush()
+      const bytes = cap.pop()
+      const applyOut = bytes ? safeParseAny(proteusSelfDraw.applyOps(JSON.stringify(Array.from(bytes)))) : undefined
+
+      // ④ 判据：指令命中 + 几何变化 + 无 unsupported
+      const opsApplied = (applyOut?.patch_count as number) ?? 0
+      const unsupported = (applyOut?.unsupported_count as number) ?? 0
+      const geomChanged = (applyOut?.geom_changed as number) ?? 0
+      // ★文本落层读数（本仓实测的静默错显示缺陷：核心变了、屏幕文字还是旧的——
+      //   增量路径此前只改 frame，而文本在 CATextLayer.string 上。本轮改文案 1 处 ⇒ 两项都必须 ≥1）
+      const textUpdates = (applyOut?.text_updates as number) ?? 0
+      const textLayersApplied = (applyOut?.text_layers_applied as number) ?? 0
+      const verdict =
+        opsApplied >= 2 && unsupported === 0 && geomChanged >= 1 && (mountOut.layer_count as number) > 0
+          && textUpdates >= 1 && textLayersApplied >= 1
+          ? 'PASS' : 'FAIL'
+      results.push({
+        case: 'V6_sfc_full_tree',
+        note: '★★全量 SFC → 模板实例化 → 挂载 → 行内更新（V4 最后一项遗留：节点树由 SFC 生成）',
+        items: rows.length, nodes: inst.nodes.length,
+        vue_ms: 0, to_request_ms: instantiateMs, serialize_ms: 0,
+        host_ms: (applyOut?.host_total_ms as number) ?? 0, total_ms: instantiateMs,
+        patch_count: rt.getStats().opsEmitted,
+        request_bytes: (applyOut?.in_bytes as number) ?? 0,
+        extra: {
+          verdict,
+          instantiate_ms: Math.round(instantiateMs * 100) / 100,
+          template_nodes: tpl.nodes.length,
+          template_lists: tpl.lists.length,
+          instantiated_nodes: inst.nodes.length,
+          id_stats: inst.stats,
+          layer_count: mountOut.layer_count,
+          mount_node_count: mountOut.node_count,
+          ops_applied: opsApplied,
+          ops_emitted: rt.getStats().opsEmitted,
+          unsupported_count: unsupported,
+          geom_changed: geomChanged,
+          text_updates: textUpdates,
+          text_layers_applied: textLayersApplied,
+          l1_slots: loadRes.l1Slots, l0_slots: loadRes.l0Slots,
+          uninstantiated: loadRes.uninstantiatedSlots.length,
+          template_diags: builtTpl.templateDiagnostics.length,
+          mem_mb: applyOut?.mem_mb,
+        },
+      })
+    }
+  }
+}
   },
 })
 

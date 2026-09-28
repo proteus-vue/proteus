@@ -1,0 +1,273 @@
+{
+  "engine" : "proteus-layout-core 0.1.0 · engine=taffy-0.14 · taffy 锁定 0.14（0.13 有 measure 指数退化）",
+  "geometry_all" : {
+    "0" : {
+      "bg" : "",
+      "color" : "",
+      "h" : 68,
+      "text" : "",
+      "w" : 100,
+      "x" : 0,
+      "y" : 0
+    },
+    "1" : {
+      "bg" : "",
+      "color" : "",
+      "h" : 17,
+      "text" : "Vapor 全量 SFC",
+      "w" : 100,
+      "x" : 0,
+      "y" : 0
+    },
+    "2" : {
+      "bg" : "",
+      "color" : "",
+      "h" : 17,
+      "text" : "",
+      "w" : 100,
+      "x" : 0,
+      "y" : 17
+    },
+    "3" : {
+      "bg" : "",
+      "color" : "",
+      "h" : 0,
+      "text" : "",
+      "w" : 100,
+      "x" : 0,
+      "y" : 17
+    },
+    "4" : {
+      "bg" : "",
+      "color" : "",
+      "h" : 17,
+      "text" : "列表项 1",
+      "w" : 100,
+      "x" : 0,
+      "y" : 17
+    },
+    "5" : {
+      "bg" : "",
+      "color" : "",
+      "h" : 17,
+      "text" : "",
+      "w" : 100,
+      "x" : 0,
+      "y" : 34
+    },
+    "6" : {
+      "bg" : "",
+      "color" : "",
+      "h" : 0,
+      "text" : "",
+      "w" : 60,
+      "x" : 0,
+      "y" : 34
+    },
+    "7" : {
+      "bg" : "",
+      "color" : "",
+      "h" : 17,
+      "text" : "列表项 2",
+      "w" : 100,
+      "x" : 0,
+      "y" : 34
+    },
+    "8" : {
+      "bg" : "",
+      "color" : "",
+      "h" : 17,
+      "text" : "",
+      "w" : 100,
+      "x" : 0,
+      "y" : 51
+    },
+    "9" : {
+      "bg" : "",
+      "color" : "",
+      "h" : 0,
+      "text" : "",
+      "w" : 100,
+      "x" : 0,
+      "y" : 51
+    },
+    "10" : {
+      "bg" : "",
+      "color" : "",
+      "h" : 17,
+      "text" : "改过的第 3 行",
+      "w" : 100,
+      "x" : 0,
+      "y" : 51
+    }
+  },
+  "host_node_count" : 11,
+  "host_timing_last" : {
+    "build_layers_ms" : 0.01,
+    "host_total_ms" : 0.33000000000000002,
+    "layout_ms" : 0.20999999999999999,
+    "measure_ms" : 0
+  },
+  "js_completed" : 1,
+  "js_ok" : true,
+  "js_report" : {
+    "build_id" : "732f0b3a-152950",
+    "case_filter" : [
+      "V6"
+    ],
+    "case_timings_ms" : {
+      "V6_sfc_full_tree" : 10
+    },
+    "cases" : [
+      {
+        "case" : "V6_sfc_full_tree",
+        "extra" : {
+          "geom_changed" : 11,
+          "id_stats" : {
+            "allocatedIds" : 6,
+            "reusedTemplateIds" : 3,
+            "rows" : 11,
+            "valuesFilled" : 9
+          },
+          "instantiate_ms" : 0.63,
+          "instantiated_nodes" : 11,
+          "l0_slots" : 0,
+          "l1_slots" : 4,
+          "layer_count" : 11,
+          "mount_node_count" : 11,
+          "ops_applied" : 2,
+          "ops_emitted" : 11,
+          "template_diags" : 0,
+          "template_lists" : 1,
+          "template_nodes" : 5,
+          "text_layers_applied" : 1,
+          "text_updates" : 1,
+          "uninstantiated" : 0,
+          "unsupported_count" : 0,
+          "verdict" : "PASS"
+        },
+        "host_ms" : 0.33000000000000002,
+        "items" : 3,
+        "nodes" : 11,
+        "note" : "★★全量 SFC → 模板实例化 → 挂载 → 行内更新（V4 最后一项遗留：节点树由 SFC 生成）",
+        "patch_count" : 11,
+        "request_bytes" : 139,
+        "serialize_ms" : 0,
+        "to_request_ms" : 0.6304161548614502,
+        "total_ms" : 0.6304161548614502,
+        "vue_ms" : 0
+      }
+    ],
+    "ceiling" : [
+
+    ],
+    "completed" : 1,
+    "frame_budget_ms" : 16.699999999999999,
+    "init_diag" : {
+      "errors" : [
+
+      ],
+      "stages" : [
+        "before-S2:15",
+        "after-S:26"
+      ]
+    },
+    "kind" : "logic-bench",
+    "notes" : [
+      "★四段分解：vue（响应式→重渲染→diff\/patch）\/ 适配器（拍平+折叠）\/ 序列化（JSON，即跨界成本）\/ 宿主（度量+布局+建层）",
+      "★★必须逐用例由宿主驱动：JSC 的 evaluateScript 不排空微任务，而 Vue 更新调度正是微任务",
+      "★A 组是规模扫描（12→1000 项），用于回答「边界成本随规模如何增长」",
+      "★F 组验证 Vue 的批处理：同 tick 100 次变更应合并为 1 次渲染（extra.renders）",
+      "★H 组对比 JSON 与扁平数值编码，直接支撑「是否值得上 JSI\/二进制通道」的决策"
+    ],
+    "result_count" : 1,
+    "runtime" : "JavaScriptCore（系统自带）",
+    "total_cases" : 1,
+    "viewport" : {
+      "height" : 844,
+      "width" : 390
+    }
+  },
+  "js_total" : 1,
+  "layer_count" : 11,
+  "layer_frames" : {
+    "0" : {
+      "h" : 68,
+      "parentId" : -1,
+      "w" : 100,
+      "x" : 0,
+      "y" : 0
+    },
+    "1" : {
+      "h" : 17,
+      "parentId" : 0,
+      "w" : 100,
+      "x" : 0,
+      "y" : 0
+    },
+    "2" : {
+      "h" : 17,
+      "parentId" : 0,
+      "w" : 100,
+      "x" : 0,
+      "y" : 17
+    },
+    "3" : {
+      "h" : 0,
+      "parentId" : 2,
+      "w" : 100,
+      "x" : 0,
+      "y" : 0
+    },
+    "4" : {
+      "h" : 17,
+      "parentId" : 2,
+      "w" : 100,
+      "x" : 0,
+      "y" : 0
+    },
+    "5" : {
+      "h" : 17,
+      "parentId" : 0,
+      "w" : 100,
+      "x" : 0,
+      "y" : 34
+    },
+    "6" : {
+      "h" : 0,
+      "parentId" : 5,
+      "w" : 60,
+      "x" : 0,
+      "y" : 0
+    },
+    "7" : {
+      "h" : 17,
+      "parentId" : 5,
+      "w" : 100,
+      "x" : 0,
+      "y" : 0
+    },
+    "8" : {
+      "h" : 17,
+      "parentId" : 0,
+      "w" : 100,
+      "x" : 0,
+      "y" : 51
+    },
+    "9" : {
+      "h" : 0,
+      "parentId" : 8,
+      "w" : 100,
+      "x" : 0,
+      "y" : 0
+    },
+    "10" : {
+      "h" : 17,
+      "parentId" : 8,
+      "w" : 100,
+      "x" : 0,
+      "y" : 0
+    }
+  },
+  "tree_hash" : "2c3f334a"
+}

@@ -42,5 +42,9 @@ export { evalExpr } from './expr'
 export type { ExprProgram, ExprContext, BinOp, UnOp, LogicOp } from './expr'
 // ★V4：列表项注册表（让 LIST_UPDATE 在 JS 侧可解析）
 export { ListRegistry } from './list-registry'
+// ★V4：LayoutTemplate 契约 + 实例化（模板 + 数据 → 引擎就绪节点树）
+export type { LayoutTemplate, LayoutNode, ListTemplate, InstantiatedNode } from './layout-template'
+export { instantiateTemplate } from './instantiate'
+export type { InstantiateOptions, InstantiateResult } from './instantiate'
 export { VaporRuntime, tierOf } from './runtime'
 export type { SourceSubscriber, EvalContext, LoadResult } from './runtime'

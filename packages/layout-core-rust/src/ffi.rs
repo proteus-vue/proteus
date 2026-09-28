@@ -1633,6 +1633,10 @@ fn apply_ops_impl(handle: u64, ptr: *const u8, len: u32, with_rects: bool) -> Re
         .iter()
         .map(|(c, m)| serde_json::json!({"op": *c as u8, "reason": m}))
         .collect();
+    // ★文本更新明细（见 ApplyOutcome::text_updates）——空时省略（省字节），有则必传
+    let text_updates_json: serde_json::Value = serde_json::Value::Object(
+        outcome.text_updates.iter().map(|(id, t)| (id.to_string(), serde_json::json!(t))).collect(),
+    );
 
     if outcome.dirty.is_empty() {
         return Ok(serde_json::json!({
@@ -1663,6 +1667,7 @@ fn apply_ops_impl(handle: u64, ptr: *const u8, len: u32, with_rects: bool) -> Re
         "scopes": multi.scopes,
         "changed_roots": multi.changed_roots,
         "unsupported": unsupported_json,
+        "text_updates": text_updates_json,
         "timing": {"lock_ms": t_lock, "apply_ms": t_apply, "relayout_ms": t_rel, "collect_ms": 0.0,
                    "engine_phases": eng_phases},
     });
@@ -2343,6 +2348,57 @@ mod tests {
         assert_eq!(f["rects"]["101"]["height"].as_f64(), Some(19.0), "对照（全量）应是 19");
         unsafe { proteus_layout_destroy(handle) };
         unsafe { proteus_layout_destroy(fresh) };
+    }
+
+    /// ★★**文本更新必须回报给宿主**（`text_updates`）——否则屏幕文字停留在旧值
+    ///
+    /// 【为什么是设备级缺陷（本仓实测）】增量路径只改 layer 的 frame，而文本在
+    ///   `CATextLayer.string` 上。核心此前只回报几何 ⇒ 改文案后**核心已变、屏幕还是旧字**，
+    ///   且几何断言全绿（只有肉眼能发现）。V6（SFC 端到端含 `{{ item.title }}`）暴露。
+    #[test]
+    fn apply_ops_reports_text_updates() {
+        let tree = serde_json::json!({
+            "viewport": {"width": 375.0, "height": 800.0},
+            "nodes": [
+                {"id": 1, "parentId": null, "flexDirection": "column", "width": 375.0, "height": 800.0},
+                {"id": 101, "parentId": 1, "text": "old"},
+            ],
+            "textMeasures": {"101": {"width": 30.0, "height": 19.0}}
+        });
+        let handle = unsafe {
+            let c = CString::new(tree.to_string()).unwrap();
+            proteus_layout_create(c.as_ptr())
+        };
+        assert_ne!(handle, 0);
+
+        // 用 TS 编码器同款格式构造一条 SET_TEXT（key 表空，字符串池 1 项）
+        let keys: Vec<String> = vec![];
+        let strings = vec!["new".to_string()];
+        let mut buf: Vec<u8> = Vec::new();
+        buf.extend_from_slice(&0x504F5650u32.to_le_bytes()); // magic "PVOP"
+        buf.extend_from_slice(&1u32.to_le_bytes());          // version
+        buf.extend_from_slice(&1u32.to_le_bytes());          // opCount
+        buf.extend_from_slice(&(keys.len() as u32).to_le_bytes());
+        buf.extend_from_slice(&(strings.len() as u32).to_le_bytes());
+        // 键表 / 字符串池：每项 = u16 长度（含结尾 NUL）+ UTF-8 字节 + NUL
+        for k in &keys { buf.extend_from_slice(&(k.len() as u16).to_le_bytes()); buf.extend_from_slice(k.as_bytes()); }
+        // ★长度字段是**纯字节数**（不含 NUL）——本仓实测：写成 len+1 会解出尾随 '\0'
+        for s2 in &strings { buf.extend_from_slice(&(s2.len() as u16).to_le_bytes()); buf.extend_from_slice(s2.as_bytes()); }
+        // 指令体（定长 9B，见 buffer.ts 的 encodeOp/SET_TEXT）
+        buf.push(0x03);                                       // SET_TEXT
+        buf.extend_from_slice(&101u32.to_le_bytes());         // nodeId
+        buf.extend_from_slice(&0u32.to_le_bytes());           // textRef
+
+        let out = unsafe {
+            let p = proteus_layout_apply_ops(handle, buf.as_ptr(), buf.len() as u32);
+            let s = CStr::from_ptr(p).to_str().unwrap().to_string();
+            proteus_layout_free_string(p);
+            serde_json::from_str::<serde_json::Value>(&s).unwrap()
+        };
+        assert_eq!(out["ok"], true, "applyOps 应成功：{out}");
+        assert_eq!(out["applied"], 1);
+        assert_eq!(out["text_updates"]["101"], "new", "★必须回报文本更新（否则屏幕文字停留在旧值）：{out}");
+        unsafe { proteus_layout_destroy(handle) };
     }
 
     /// ★★**结构变更后的度量连续性**：splice 插入的行**含文本**时，其文本尺寸仍需正确

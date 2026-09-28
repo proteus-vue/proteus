@@ -258,6 +258,24 @@ diff/patch 随**页面规模**线性、**与"改了多少"无关**。
 
 ---
 
+#### ★★★2026-09-28 V4 收官：全量 SFC → 端上渲染（最后一项遗留）
+
+**补齐的链**：此前设备验证全用**手写节点数组**（编译器只产订阅表）⇒ 节点树从未由 SFC 生成。
+- 编译期 `buildLayoutTemplate`（`compiler/src/vapor/template.ts`）：模板 → 静态结构
+  （**字符串 style → 引擎字段**、静态文本占位、v-for 行模板 + subtreeIds）
+- 运行时 `instantiateTemplate`（`slot-runtime/src/instantiate.ts`）：模板 + 数据 → 节点树
+  （v-for 展开、**初始值回填**、`ListRegistry` 回填 ⇒ 行内槽位可发普通 SET_STYLE/SET_TEXT）
+- 真机：`--bench --cases=V6` → 11 节点树挂载 11 层、2 条指令、几何变 11 处、文本落层 1 处、PASS
+
+**本轮实测抓到的两个新缺陷（都已修 + 判据 + 破坏性验证）**
+| # | 缺陷 | 证据 | 修法 |
+|---|---|---|---|
+| 1 | **实例化重复产出**（行内子节点不设 listId ⇒ 静态分支与行克隆各产出一次） | 设备报 `proteus_layout_create 失败（节点数 13）` | 按 `lists[].subtreeIds` 判"是否属行模板"，属行的只经克隆产出 |
+| 2 | **增量路径不改文本 ⇒ 屏幕文字停留旧值**（只改 frame，而文本在 CATextLayer.string 上） | V6 改造：关掉宿主落层 ⇒ `verdict=FAIL`（text_updates=1 / applied=0） | Rust `ApplyOutcome.text_updates` 回报 + 宿主 `applyTextUpdates()` 落层 |
+
+★两条纪律（新增）：**实例化产物必须有 id 唯一性判据**（核心拒收才暴露）；
+**"文本改了"必须端到端验证到层**（几何全绿 ≠ 屏幕对）。
+
 #### ★★★2026-09-28 结构变更增量（splice）打通 —— 附带 5 个缺陷与 1 条新红线
 
 **成果**（真机 `--bench --cases=S5` · 同起点同幅度 A/B）：
