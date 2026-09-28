@@ -555,13 +555,41 @@ Vue 3.6 把 `@vue/reactivity` 基于 alien-signals 重构，**显著提升响应
 ③ 读数取自**单次真机运行**（每档 1 次操作 × 7 次取中位的桌面口径不同：真机为单次读数，
    但 78ms 与既有 S2 基线 81ms 吻合，且三档差异（78/9/10）远超噪声）。
 
-### V1 · IR 扩展与指令集（≈1.5 人周）
+### V1 · IR 扩展与指令集（≈1.5 人周）—— ✅ **已完成**（2026-09-28）
 
-- [ ] `DynamicBinding` 扩展（`opCode` / `tier` / `deps`）
-- [ ] `OpCode` 指令集与 `OpBuffer` 实现
-- [ ] `Slot` 容器与 `emit` 发射器
-- [ ] `LIST_UPDATE` 指令（item 级更新）
-- [ ] Golden 门禁：Node/Rust 双端对齐
+- [x] `DynamicBinding` 扩展（`opCode` / `tier` / `deps`）—— `packages/component-ir/src/pnode.ts`
+- [x] `OpCode` 指令集与 `OpBuffer` 实现 —— 新增包 **`@proteus-vue/slot-runtime`**（第 43 个）
+- [x] `Slot` 容器与 `emit` 发射器 —— `slot-runtime/src/slot.ts`（含帧调度：同帧多次写入只 flush 一次）
+- [x] `LIST_UPDATE` 指令（item 级更新）—— `slot-runtime/src/list.ts`（1 条指令 = 1 次 item 更新）
+- [x] Golden 门禁：Node/Rust 双端对齐 —— `tests/update-ops-golden.test.ts` ⇄
+      `packages/layout-core-rust/tests/ops_conformance.rs`（★真跨语言：TS 编码 → Rust 解码 → 语义比对）
+
+**V1 落地要点（与方案原文的对应关系）**
+
+| 方案条目 | 落地位置 | 说明 |
+|---|---|---|
+| §2.2 指令集 12 条 | `slot-runtime/src/opcode.ts` | 号值即线上判别字节；`InserPos` / `SlotKind` 齐备 |
+| §2.4 OpBuffer 批处理 | `slot-runtime/src/buffer.ts` | 二进制线上格式（**非 JSON**）：头 20B + 键表 + 字符串池 + 定长指令体 |
+| §3.1 槽位/发射器 | `slot-runtime/src/slot.ts` | `createSlot` = 编译器生成发射函数的**运行时等价物**（同 V0 用 `withMemo` 替代 `v-memo` 的手法） |
+| §3.3 写入即更新 | `slot-runtime/src/slot.ts` | `setSlot`：`Object.is` 短路 → 标脏 → 帧调度 → `emit` → 一次提交 |
+| §2.3 LIST_UPDATE | `slot-runtime/src/list.ts` | 另有 `emitItemUpdates` 批量入口（业务最常见形态） |
+| §5 分层判定 | `slot-runtime/src/tier.ts` | 七项准入 + 双逃生通道 + `explain` 输出（§5.5 硬性要求） |
+
+**★V1 过程中修掉/避开的四个真缺陷（值得记，都会静默出错）**
+
+| # | 缺陷 | 现象 | 处置 |
+|---|---|---|---|
+| 1 | **分层条件极性写反** | C3–C7 是**否定式**（"不在动态组件内"），首版统一按"必须为 true"判 ⇒ 任何**没出现动态组件**的绑定反被判 L0（方向完全相反） | 加 `expect` 极性字段；单测立即抓到 |
+| 2 | **golden 表示层假红** | 指令体数值是 f32；TS 侧 canonical JSON 存原始 f64（`0.3333333333333333`），Rust 解出 f32（`0.3333333432674408`）⇒ 同一字节流被判"不一致" | canonical 视图统一 `Math.fround` 归一；Rust 侧用**数值感知**比对（不做容差——精确相等） |
+| 3 | **常量名撞内置对象** | 把路径常量命名为 `JSON` ⇒ 遮蔽全局 `JSON`，报 `JSON.stringify is not a function` 却看不出原因 | 改名 `JSON_PATH` |
+| 4 | **新增包未接门禁链** | 新包导致官网声明的包数（42）过时 ⇒ `check:stats` 红（**门禁正确工作**） | 更新为 43 并注明第 43 个是谁 |
+
+**★诚实边界（V1 不等于「性能已到手」）**
+① 本里程碑交付的是**指令集 + 槽位运行时 + 通道**；**编译器生成**这些调用属 V2——
+   目前槽位由调用方手工 `setSlot`（与 V0 探针手工给 `withMemo` 依赖数组是同一手法）。
+② Rust 侧本里程碑只做**解码 + 契约测试**；`LIST_UPDATE` 等指令的**布局应用**属 V3（App 端打通）。
+③ 「单节点更新 P95 ≤ 3ms」是 §10 的**目标值**，V1 未测——它要等 V3 端到端才有意义；
+   V0 的真机 9ms 是**探针上界**，不是本实现的读数。
 
 ### V2 · 编译期响应式转换（≈2.5 人周）
 

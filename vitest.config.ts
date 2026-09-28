@@ -104,6 +104,8 @@ export default defineConfig({
       { find: '@proteus-vue/create-proteus', replacement: fileURLToPath(new URL('./packages/create-proteus/src/index.ts', import.meta.url)) },
       { find: '@proteus-vue/pinia-sync', replacement: fileURLToPath(new URL('./packages/pinia-sync/src/index.ts', import.meta.url)) },
       { find: '@proteus-vue/renderer-app', replacement: fileURLToPath(new URL('./packages/renderer-app/src/index.ts', import.meta.url)) },
+      // ★Vapor for Proteus IR（V1）：@proteus-vue/slot-runtime 包（指令集 + 槽位运行时）
+      { find: '@proteus-vue/slot-runtime', replacement: fileURLToPath(new URL('./packages/slot-runtime/src/index.ts', import.meta.url)) },
       // i18n-plan B1：@proteus-vue/i18n 包（tests/i18n.test.ts 直接引用）
       { find: '@proteus-vue/i18n', replacement: fileURLToPath(new URL('./packages/i18n/src/index.ts', import.meta.url)) },
       // css-compat G-21：@proteus-vue/css-compat 包（★B2 数据层子路径在父路径前）

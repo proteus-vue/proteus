@@ -21,12 +21,14 @@
 //   · `recycle`         → **列表复用池 + 生命周期状态机**（§12.6 三档 + 方向敏感预加载区）
 //   · `hit`             → **命中测试**（逆绘制序 + 裁剪感知；事件系统的几何地基）
 //   · `conformance`     → 以**浏览器 golden** 为准的对拍（tests/ 侧消费）
+//   · `ops`             → **更新指令流解码**（Vapor IR V1：与 TS 侧 slot-runtime 逐字节对齐）
 //
 // ★尚未落地（诚实边界，后续里程碑）：`flatten/` `materialize/` `paint-hint/` `recycle/` `render/`
 pub mod blob;
 pub mod engine;
 pub mod ffi;
 pub mod hit;
+pub mod ops;
 #[cfg(target_os = "android")]
 pub mod jni;
 pub mod node;

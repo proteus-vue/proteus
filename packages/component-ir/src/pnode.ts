@@ -194,6 +194,31 @@ export interface DynamicBinding {
   /** 更新表达式标识（指向编译期生成的更新表达式） */
   exprId: string
   updateKind: UpdateKind
+
+  /* ── ★Vapor for Proteus IR 扩展（方案 §3.2；不破坏原结构）── */
+
+  /**
+   * 更新指令操作码（**编译期确定，运行时无分支**）
+   *
+   * ★号值即线上格式的判别字节，与 `@proteus-vue/slot-runtime` 的 `OpCode` 同源
+   *   （**只允许一处定义**——号值不一致会让 TS 与 Rust 的字节流静默分叉）。
+   *   由 `inferOpCode(updateKind)` 推导，或在 raw 声明里显式给出（如 item 级 `LIST_UPDATE`）。
+   */
+  opCode: OpCode
+  /**
+   * 更新分层（方案 §5）：`L1` 槽位直写 / `L0` VDOM 兜底
+   *
+   * ★缺省必须是 **L0**（保守）：编译期没证明安全的绑定，不许假设它安全——
+   *   误判为 L1 会导致**静默的 UI 不更新**（比慢 10 倍严重，方案 §12 第 3 条）。
+   */
+  tier: UpdateTier
+  /**
+   * 编译期识别到的**响应式依赖标识**（L1 槽位订阅用；方案 §4）
+   *
+   * 空数组 = 尚未做依赖分析（V2 的编译期响应式转换会填充）。
+   * ★不接受「运行时才确定」的标识符——那属于准入条件 C2 未通过，应判 L0。
+   */
+  deps: string[]
 }
 
 /** 编译期诊断（Profile「超出 Profile 即编译期报错，不留到运行时静默降级」） */
@@ -220,4 +245,5 @@ export interface PTree {
     /** 需合成层的节点数（预算监控） */
     compositingCount: number
   }
-}
+}import type { OpCode, UpdateTier } from '@proteus-vue/slot-runtime'
+

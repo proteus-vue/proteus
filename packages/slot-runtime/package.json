@@ -1,7 +1,7 @@
 {
-  "name": "@proteus-vue/component-ir",
+  "name": "@proteus-vue/slot-runtime",
   "version": "0.3.0-beta.11",
-  "description": "G-31 组件与 API 语义化（component-semantics-plan B1）：Component IR（C-IR）schema + 属性约束校验 + semantic 映射——组件=语义、属性=约束、Backend 消费 semantic 而非 tag（零依赖纯逻辑）",
+  "description": "Vapor for Proteus IR（V1）：平台无关的更新指令集（OpCode/OpBuffer）+ 槽位容器（Slot/emit）——把「更新一个节点」从 O(子树规模) 降为 O(1) 槽位写入",
   "type": "module",
   "license": "Apache-2.0",
   "main": "./dist/index.js",
@@ -20,9 +20,5 @@
   ],
   "scripts": {
     "build": "tsc -p tsconfig.build.json --emitDeclarationOnly && esbuild src/index.ts --bundle --format=esm --platform=neutral --outfile=dist/index.js"
-  },
-  "dependencies": {
-    "@proteus-vue/contracts": "0.3.0-beta.11",
-    "@proteus-vue/slot-runtime": "0.3.0-beta.11"
   }
 }

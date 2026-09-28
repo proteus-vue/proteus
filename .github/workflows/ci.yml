@@ -24,6 +24,9 @@ jobs:
       - name: 安装依赖（--ignore-scripts：postinstall 构建移交显式步，避开 fresh 环境 install 期构建时序问题）
         run: pnpm install --frozen-lockfile --ignore-scripts
 
+      - name: 安装 Rust 工具链（排版核心单测 + 更新指令双端对齐需要）
+        uses: dtolnay/rust-toolchain@stable
+
       - name: 构建 workspace 包（cli/component-ir/desktop 等 dist——vue-tsc/tests 子路径解析需要）
         run: node scripts/build-packages.mjs
 
@@ -41,6 +44,9 @@ jobs:
 
       - name: 单元测试（router / router-plan / gen-routes / plugin / runtime / compiler / golden / pinia）
         run: pnpm test
+
+      - name: 排版核心单测 + 更新指令双端对齐（Vapor IR V1：TS 编码 ⇄ Rust 解码的跨语言契约）
+        run: pnpm run test:rust
 
       - name: 依赖声明完整性审计（#422：pnpm 严格解析——import vs package.json 零缺失）
         run: node scripts/check-deps.mjs
