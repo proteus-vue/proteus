@@ -19,7 +19,9 @@ import { createSelfDrawAdapter } from '@proteus-vue/renderer-app/adapters/selfdr
 type Adapter = ReturnType<typeof createSelfDrawAdapter> & {
   takePatches(): Array<{ id: number; style: Record<string, unknown> }> | null
   takeSplice(): unknown
-  toRequest(vp: { width: number; height: number }): { nodes: Array<{ id: number; text?: string }> }
+  toRequest(vp: { width: number; height: number }): {
+    nodes: Array<{ id: number; text?: string; fontSize?: number; textStyleKey?: number }>
+  }
 }
 
 /** 挂一个「容器 + 文本」的应用（与 Vue 对 `h('p-text', {}, 'x')` 的处理路径一致） */
@@ -138,6 +140,67 @@ describe('V7 · 文本更新走补丁（而非全量重发）', () => {
     // 未改的行不应出现（补丁是 delta，不是全量快照）
     const titles = textPatches.map((p) => p.style.text)
     expect(titles).not.toContain('t15')
+    app.unmount()
+  })
+})
+
+describe('V8 · ★文本字号必须传给宿主（此前被静默丢弃 ⇒ 全部按 14pt 度量+绘制）', () => {
+  it('★★① 文本节点的 fontSize 必须进 spec（否则宿主用 `?? 14` 兜底 ⇒ 字号全错）', async () => {
+    // 【为什么这是真缺陷（本仓实测）】适配器 `fillSpec` 的文本分支**提前 return**
+    //   ⇒ 只有**元素**分支会透传 paint 字段 ⇒ 文本节点的 `fontSize` 从未发出。
+    //   而宿主用同一个字段**同时**做两件事：绘制（CATextLayer.fontSize）与**度量**
+    //   （`measureText(text, fontSize ?? 14)`）⇒ 后果：**所有文本按 14pt 度量与绘制**
+    //   （16pt 标题与 13pt 说明长得一样）。两侧口径一致 ⇒ 不报错、几何自洽 ⇒ 长期隐身。
+    const adapter = createSelfDrawAdapter() as Adapter
+    const renderer = createAppRenderer(adapter)
+    const App = { render: () => h('p-view', {}, [h('p-text', { style: { fontSize: 24 } }, 'X')]) }
+    const container = adapter.createElement('p-view')
+    adapter.root.children.push(container)
+    container.parent = adapter.root
+    const app = renderer.createApp(App)
+    app.mount(container)
+    await nextTick()
+    const spec = adapter.toRequest({ width: 390, height: 844 }).nodes.find((n) => n.text !== undefined) as
+      | { fontSize?: number; textStyleKey?: number }
+      | undefined
+    expect(spec, '应有文本节点').toBeTruthy()
+    expect(spec!.fontSize, '★文本的 fontSize 必须透传（否则字全按 14pt 画/量）').toBe(24)
+    app.unmount()
+  })
+
+  it('★★② 文本必须带 textStyleKey（度量缓存"字体维度"——内容寻址安全的前提）', async () => {
+    // 【为什么必须有】缓存键是 `(text_hash, max_w)`，而 hash 里唯一能区分字体的就是 `style_key`。
+    //   若恒为 0 ⇒ 同文本不同字号会**错误共用**缓存项（本仓已实测：字号 16/28 都算 16 高）。
+    //   核心的保守处置是"`style_key == 0` 时回退节点寻址"（正确但失去复用）。
+    //   ⇒ 适配器按 fontSize 算出并下发，复用与正确性才能兼得。
+    const adapter = createSelfDrawAdapter() as Adapter
+    const renderer = createAppRenderer(adapter)
+    const App = {
+      render: () => h('p-view', {}, [
+        h('p-text', { style: { fontSize: 16 } }, '同文本'),
+        h('p-text', { style: { fontSize: 28 } }, '同文本'),
+      ]),
+    }
+    const container = adapter.createElement('p-view')
+    adapter.root.children.push(container)
+    container.parent = adapter.root
+    const app = renderer.createApp(App)
+    app.mount(container)
+    await nextTick()
+    const texts = adapter.toRequest({ width: 390, height: 844 }).nodes.filter((n) => n.text !== undefined) as Array<{
+      id: number
+      fontSize?: number
+      textStyleKey?: number
+    }>
+    expect(texts.length).toBe(2)
+    for (const t of texts) {
+      expect(t.textStyleKey, `节点 ${t.id} 必须有非零 textStyleKey`).toBeGreaterThan(0)
+    }
+    // ★判据：**不同字号 ⇒ 不同 key**（否则内容寻址会把它们合并 ⇒ 静默错几何）
+    expect(texts[0]!.textStyleKey, '字号不同必须 key 不同').not.toBe(texts[1]!.textStyleKey)
+    // ★同字号 ⇒ 同 key（复用的来源）
+    const same = adapter.toRequest({ width: 390, height: 844 }).nodes.filter((n) => n.text !== undefined)
+    expect(same.length).toBe(2)
     app.unmount()
   })
 })

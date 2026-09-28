@@ -77,7 +77,7 @@ const BN = { snapshot: 'bench-final' }
 // ★构建标识：每次构建写入，用于**确凿判定**设备上跑的是哪份代码
 //   （踩坑：靠文件 mtime 判断"报告是否刷新"不可靠——新建目标文件的时间恒为"现在"；
 //    且我看不出设备实际执行的是旧 bundle，白跑一轮。有了这个字段就能一眼判定。）
-const BUILD_ID = '0c64c147-174141'
+const BUILD_ID = '4bf823c8-175352'
 const now = (): number => Date.now()
 /** 宽松解析（宿主返回可能是字符串或已是对象） */
 const safeParseAny = (s: any): any => {
@@ -1890,7 +1890,12 @@ for (const n of [1000, 2000, 4000]) {
         host_ms: tHost - tSer, total_ms: total,
         patch_count: app.adapter.patchCount(), request_bytes: treeJson.length,
         extra: { mem_mb: h?.["mem_mb"], mem_peak_mb: h?.["mem_peak_mb"],
-                 per_node_us: Math.round((total / req.nodes.length) * 1000) / 1000 * 1000 },
+                 per_node_us: Math.round((total / req.nodes.length) * 1000) / 1000 * 1000,
+                 // ★度量缓存读数（跨节点复用的判据：500 行同文案应**只真实度量少数次**）
+                 measure_hits: h?.["measure_cache_hits"], measure_misses: h?.["measure_cache_misses"],
+                 // ★字体维度进键的证据（文本节点带 textStyleKey ⇒ 内容寻址生效且安全）
+                 text_nodes_with_key: req.nodes.filter((n) => typeof (n as { textStyleKey?: number }).textStyleKey === 'number').length,
+                 text_nodes_total: req.nodes.filter((n) => (n as { text?: string }).text !== undefined).length },
       })
       markCeiling('scale', `${n} 项挂载`, total, '整链挂载耗时（含 Vue）')
       app.dispose()          // ★释放（否则内存累积，后续档位的读数不可归因）

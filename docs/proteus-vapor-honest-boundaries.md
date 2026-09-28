@@ -63,6 +63,9 @@
 | 13 | **★结构变更的引擎失效判据不能只看长度** | ✅ **已闭（2026-09-28，测试抓到）**：splice **摘除只断链不删节点** ⇒ `tree.len()` 不变 ⇒ 长度判据抓不到拓扑变化 ⇒ 引擎用"还连着被摘子树"的旧 taffy ⇒ 几何错。⇒ 由知道结构变了的调用方**显式 `invalidate_persistent()`** | `ffi.rs` 的 splice 路径 · 测试 `splice_remove_detaches_subtree` | — |
 | 14 | **★内容寻址把"同文本不同字号"错误合并** | ✅ **已闭（2026-09-28，自查发现）**：缓存键原为 `(text_hash, max_w)`，而 `TableTextMeasurer` 是**按 nodeId 查表**（尺寸可因字号而异）⇒ 同文本 + 同宽约束但不同字号会被合并 ⇒ 其中一个尺寸错（实测：字号 16/28 两节点都算 16 高，差 12dp、**无报错**）。⇒ `style_key == 0`（字体不可区分）时**回退节点寻址**（正确 > 复用）；两条测试锁两个方向 | `taffy_engine.rs` 的 `compute_text_hashes` · 测试 `same_text_different_font_size_must_not_share_cache` + `same_literal_without_style_key_falls_back_to_node_addressing` | ★仍存边界：跨节点复用需宿主把字号编成 `style_key`（当前恒 0 ⇒ 复用关闭，属**保守取值**） |
 
+| 15 | **★★文本的 `fontSize` 从未发给宿主（全部按 14pt 度量+绘制）** | ✅ **已闭（2026-09-28，实测发现）**：适配器 `fillSpec` 的**文本分支提前 `return`** ⇒ 只有元素分支透传 paint 字段。而 `h('p-text', {style:{fontSize:24}}, 'X')` 在 Vue 语义下渲染成 **`p-text` 元素 + 文本子节点** ⇒ 文本叶子拿不到字号 ⇒ 宿主 `?? 14` 兜底 ⇒ **16pt 标题与 13pt 说明长得一样**，且**两侧口径一致 ⇒ 不报错、几何自洽 ⇒ 长期隐身**。⇒ 文本叶子**继承父元素的 `fontSize`/`color`**（CSS 继承语义）。判据：V8 两条用例（fontSize 必须透传 / 不同字号必须不同 key） | `renderer-app/src/adapters/selfdraw.ts` · `tests/selfdraw-text-patch.test.ts` 的 V8 | — |
+| 16 | **★★跨节点度量复用曾被关闭（同文本每行都真实度量）** | ✅ **已闭（2026-09-28）**：因"同文本不同字号被错误合并"（上条 #14）核心曾保守关闭内容寻址。修复方式：适配器按 `fontSize` 算出 **`textStyleKey`** 下发 ⇒ 字体维度**真的进键**后，内容寻址既安全又生效。<br>**真机证据（S1 挂载档）**：<br>· 1000 行：文本 2002，真实度量 **1004** / 命中 998（49.8%）<br>· 2000 行：文本 4002，真实度量 **1001** / 命中 3001（75.0%）<br>· 4000 行：文本 8002，真实度量 **2001** / 命中 6001（**75.0%**）<br>★`misses` 恰为「行数 + 1」⇒ **同文案只真实度量一次**（CoreText 调用量降 4×） | `adapters/selfdraw.ts` · `taffy_engine.rs` · `ffi.rs` 的 `text_style_key_enables_safe_content_addressing` | ★仍存边界：键目前只覆盖 `fontSize`（字重/字族未建模）——扩展时必须**同时**改适配器与宿主度量处 |
+
 ### P1 · 影响覆盖可信度（不影响正确性）
 
 | # | 边界 | 现状 | 建议 |

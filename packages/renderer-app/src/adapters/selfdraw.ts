@@ -62,6 +62,19 @@ export interface SelfDrawNodeSpec {
   color?: string
   /** 绘制用：字号 */
   fontSize?: number
+  /**
+   * ★★**字体维度签名**（进核心的度量缓存键）——由适配器按 `fontSize` 算出
+   *
+   * 【为什么必须有（本仓实测的静默错几何 + 性能双缺口）】
+   *   核心的度量缓存键是 `(text_hash, max_w)`，而 hash 里唯一能区分字体的就是 `style_key`。
+   *   · 恒为 0 ⇒ 同文本不同字号**错误共用**缓存项（实测：字号 16/28 都算 16 高，差 12dp）
+   *   · 核心的保守处置是"`style_key == 0` ⇒ 回退节点寻址"（正确，但**失去跨节点复用**：
+   *     500 行同文案要 500 次度量而不是 1 次）
+   *   ⇒ 适配器把字体维度**算好下发**，两者兼得。
+   *   ★取值约定：与宿主**度量输入同源**（当前 = `fontSize`）——将来若引入字重/字族，
+   *     必须在此与宿主度量处**同时**扩展（否则键不覆盖新维度 ⇒ 又回到静默错几何）。
+   */
+  textStyleKey?: number
   /** 绘制用：圆角 */
   borderRadius?: number
 }
@@ -365,6 +378,35 @@ export function createSelfDrawAdapter(): SelfDrawAdapter {
         : {}
       const ls = foldLength(tStyle.lineHeight ?? props.lineHeight)
       if (ls && 'dp' in ls) spec.height = ls.dp
+      // ★★**fontSize 与 textStyleKey 必须在这里下发**（本仓实测的真缺陷）
+      //
+      // 【故障链】本分支原有 `return` 在 paint 透传**之前** ⇒ 文本节点的 `fontSize`
+      //   从未发出 ⇒ 宿主用 `?? 14` 兜底 ⇒ **所有文本按 14pt 度量与绘制**
+      //   （16pt 标题与 13pt 说明长得一样）。两侧口径一致 ⇒ 不报错、几何自洽 ⇒ 长期隐身。
+      //   ⇒ 见 tests/selfdraw-text-patch.test.ts 的 V8 两条用例。
+      // ★★**从父元素继承** fontSize / color（本仓实测：这是必须的，不是优化）
+      //
+      // 【故障链（真机现象）】`h('p-text', { style: { fontSize: 24 } }, 'X')` 在 Vue 语义下
+      //   渲染成 **`p-text` 元素（带 fontSize）+ 文本子节点（只有字面量）**
+      //   ⇒ 若文本叶子只从**自己的 props** 找 fontSize，永远找不到
+      //   ⇒ 宿主度量处 `fontSize ?? 14` 兜底 ⇒ **所有文本按 14pt 度量与绘制**
+      //     （16pt 标题与 13pt 说明长得一样），且**两侧口径一致 ⇒ 不报错**。
+      //   ⇒ 正解：文本叶子**继承父元素的字体/颜色**（正是 CSS 的继承语义：
+      //     `font-size`/`color` 会从父元素继承到匿名文本节点）。
+      const parent = node.__kind === 'text' ? (parentOf.get(node) ?? null) : null
+      const pStyle = (parent && parent.props.style && typeof parent.props.style === 'object' && !Array.isArray(parent.props.style))
+        ? parent.props.style as Record<string, unknown>
+        : {}
+      const fs = tStyle.fontSize ?? props.fontSize ?? pStyle.fontSize ?? (parent ? parent.props.fontSize : undefined)
+      const fsNum = typeof fs === 'number' ? fs : (typeof fs === 'string' ? Number(fs.replace(/px$/i, '')) : NaN)
+      if (Number.isFinite(fsNum) && fsNum > 0) {
+        spec.fontSize = fsNum
+        // ★字体维度进缓存键（与宿主度量输入同源：当前只有 fontSize 一个维度）
+        spec.textStyleKey = Math.round(fsNum * 100)
+      }
+      // 同理继承颜色（否则文本用宿主的白色兜底 ⇒ 深色主题下说明文字看不见）
+      const col = tStyle.color ?? props.color ?? pStyle.color ?? (parent ? parent.props.color : undefined)
+      if (typeof col === 'string') spec.color = col
       return
     }
     if (node.__kind !== 'element') return
