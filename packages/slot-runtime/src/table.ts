@@ -20,6 +20,38 @@ export interface SlotSubscription {
   kind: SlotKind
   /** 目标属性键（归一化名，进 PropKeyTable） */
   propKey: string
+
+  /* ── ★V4：列表行内槽位（kind='list-item' 时用；方案 §2.3）── */
+
+  /**
+   * 所属列表 id（编译期分配）
+   *
+   * 【为什么需要（本仓实测的功能缺口）】v-for 的行会实例化 N 次 ⇒ 行内绑定**没有单一固定 nodeId**
+   *   ⇒ 必须由运行时按 `(listId, itemKey, itemSlotId)` 解析出**具体那一行**的节点
+   *   （`ListRegistry` 的职责）。缺这三个字段时，行内绑定会被当成普通槽位写到"模板节点"上（错）。
+   */
+  listId?: number
+  /** 行模板内的槽位序号（稳定：按行模板内绑定的出现顺序分配） */
+  itemSlotId?: number
+  /** 解析出节点后按什么语义发指令：样式（SET_STYLE）还是文本（SET_TEXT） */
+  itemKind?: 'style' | 'text'
+  /**
+   * ★行内目标值的**取值路径**（相对行对象，如 `w` / `title`）
+   *
+   * 【为什么需要（本仓实测的接线缺口）】源求值器返回的是**整行数据**（`item` 对象），
+   *   而槽位要写的是**该行的某个字段** ⇒ 运行时必须用本字段从行对象里取出目标值，
+   *   并与 `keyField`（行标识）一起组成 `{key, value}` 交给发射器。
+   *   例：`{{ item.title }}` ⇒ itemKeyField='id'、itemValueField='title'。
+   */
+  itemValueField?: string
+  /**
+   * ★行标识取值路径（相对行对象，如 `id`；来自 `:key="item.id"`）
+   *
+   * 缺省（无 `:key`）⇒ 运行时用**行下标**兜底（方案坑位 #5 警告：index 作 key 在 splice 后会错位）。
+   */
+  itemKeyField?: string
+  /** v-for 别名（行作用域求值用： 需要把「当前行」绑定到 ） */
+  scope?: string
 }
 
 /** 一个响应式源的订阅条目 */
