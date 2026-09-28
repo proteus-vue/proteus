@@ -43,6 +43,12 @@ pub struct TaffyEngine {
     ///   否则会漏掉被平移的兄弟（宿主不更新其位置 ⇒ **画面停在旧位置**）。
     ///   空 = 走常规 scope 语义。
     pub last_changed_roots: Vec<NodeIndex>,
+    /// ★★最近一次平移传播**被拒绝的原因**（`None` = 未被拒绝/未尝试）
+    ///
+    /// 【为什么必须可观测】六条前提是"能证明才激进"的落点；若某条守卫**从未被触发**，
+    ///   就等于**没有被测试覆盖**（本仓实测：首轮破坏"无视 grow 前提"时测试全绿 ⇒ 守卫未被触发）。
+    ///   ⇒ 把它暴露出来，让每条守卫都有对应用例可断言。
+    pub translation_reject: Option<&'static str>,
     /// ★★度量记忆化：**内容寻址**（Profile §5.3 规定的键）——
     ///   `(文本 hash ⊕ 字体签名, 宽度约束位)` → Size
     ///
@@ -78,6 +84,7 @@ impl TaffyEngine {
         Self {
             last_phases: std::collections::BTreeMap::new(),
             last_changed_roots: Vec::new(),
+            translation_reject: None,
             measurer: None,
             measure_cache: HashMap::new(),
             measure_calls: 0,
@@ -248,7 +255,7 @@ impl TaffyEngine {
     /// 执行一轮 taffy 布局（含度量回调）
     fn run_taffy(&mut self, tree: &LayoutTree, taffy: &mut TaffyTree<u32>, roots: &[NodeIndex], constraint: RootConstraint) -> LayoutOutput {
         // ★字段级解构：让 `measurer` 与 `measure_cache` 同时可变借用（互不相交）
-        let TaffyEngine { measurer, measure_cache, measure_calls, measure_hits, taffy_ids, last_root_constraint: _, last_phases: _, last_changed_roots: _ } = self;
+        let TaffyEngine { measurer, measure_cache, measure_calls, measure_hits, taffy_ids, last_root_constraint: _, last_phases: _, last_changed_roots: _, translation_reject: _ } = self;
         *measure_calls = 0;
         *measure_hits = 0;
 
@@ -377,6 +384,7 @@ impl LayoutEngine for TaffyEngine {
     fn layout_incremental(&mut self, tree: &mut LayoutTree, dirty: NodeIndex) -> LayoutOutput {
         // ★每轮清空（否则上一轮的平移痕迹会污染本轮的收集集合）
         self.last_changed_roots.clear();
+        self.translation_reject = None;
         let scope = self.relayout_scope_of(tree, dirty);
 
         // ★★退化保护：重排范围 == 根 ⇒ 直接走全量，别做「拷贝整树再布局」
@@ -524,24 +532,40 @@ impl TaffyEngine {
 
         // ① 主轴对齐
         if p_style.justify_content != "flex-start" {
+            self.translation_reject = Some("justify-content != flex-start");
             return None;
         }
         // ②③④ 逐子项
         for &c in &p_children {
             let cs = &tree.get(c).style;
-            if cs.flex_grow > 0.0 || cs.flex_shrink != 0.0 {
+            if cs.flex_grow > 0.0 {
+                self.translation_reject = Some("child flex-grow > 0");
+                return None;
+            }
+            if cs.flex_shrink != 0.0 {
+                self.translation_reject = Some("child flex-shrink != 0");
                 return None;
             }
             if cs.width_ratio.is_some() || cs.height_ratio.is_some() {
+                self.translation_reject = Some("child has percentage size");
                 return None;
             }
         }
         // ⑤ P 主轴向已声明
         let p_main = if horizontal { p_style.width } else { p_style.height };
-        p_main?;
+        if p_main.is_none() {
+            self.translation_reject = Some("parent main-axis size not declared");
+            return None;
+        }
         // ⑥ D 主轴向已声明
         let d_style = tree.get(dirty).style.clone();
-        let d_main_new = if horizontal { d_style.width } else { d_style.height }?;
+        let d_main_new = match if horizontal { d_style.width } else { d_style.height } {
+            Some(v) => v,
+            None => {
+                self.translation_reject = Some("dirty node main-axis size not declared");
+                return None;
+            }
+        };
         let d_old = tree.get(dirty).rect;
         let d_main_old = if horizontal { d_old.width } else { d_old.height };
 
@@ -594,6 +618,7 @@ impl TaffyEngine {
             }
         }
 
+        self.translation_reject = None;
         self.last_phases.clear();
         self.last_phases.insert("translation_delta".into(), delta as f64);
         self.last_phases.insert("translation_shifted".into(), (changed.len() - 1) as f64);
