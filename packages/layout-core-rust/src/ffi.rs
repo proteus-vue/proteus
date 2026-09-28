@@ -567,6 +567,57 @@ fn registry() -> &'static std::sync::Mutex<std::collections::HashMap<u64, TreeEn
     TREE_REGISTRY.get_or_init(|| std::sync::Mutex::new(std::collections::HashMap::new()))
 }
 
+/// ★★**按句柄的持久布局引擎**（线程局部）
+///
+/// 【为什么不能放进注册表（编译期即拒）】`TaffyEngine` 含 `taffy::Style`，其中的
+///   `CompactLengthInner` 有裸指针 ⇒ **非 `Send`** ⇒ 不能作 `Mutex<HashMap<..>>` 的载荷。
+///
+/// 【为什么必须"持久"（本仓实测的量化依据）】同形状 2001 节点树的基准
+///   （`examples/taffy-floor-bench.rs`）：
+///   · 每轮**新建**引擎（= 重建整棵 taffy 树）后求解：**2.96ms**
+///   · 复用引擎 + 只同步变更节点：**0.065ms**（**45×**）
+///   FFI 三入口（update / apply_ops / splice）此前都 `TaffyEngine::new()`
+///   ⇒ **每帧白付一次整树重建**——这是 S4 真机 `relayout` 9–11ms 的主因。
+///
+/// 【线程约定】本仓 FFI 约定"同一句柄在**同一线程**连续使用"（宿主主线程驱动）；
+///   跨线程同时用同一句柄本就不受支持（与 taffy 的限制无关，是既有约定）。
+thread_local! {
+    static ENGINES: std::cell::RefCell<std::collections::HashMap<u64, TaffyEngine>> =
+        std::cell::RefCell::new(std::collections::HashMap::new());
+}
+
+/// 释放某句柄的引擎（句柄销毁时调用——本仓纪律：句柄销毁必须带走其全部资源）
+fn drop_engine(handle: u64) {
+    ENGINES.with(|m| {
+        m.borrow_mut().remove(&handle);
+    });
+}
+
+/// ★取/建某句柄的引擎并**同步度量器**（结构变化时重建 taffy 树）
+///
+/// 两个不变量：
+///   · `taffy_id_len() == tree_len`（不等 ⇒ 结构变更 ⇒ 重建，否则求解会与树脱节）
+///   · 引擎度量器 == 句柄当前度量表（引擎里的是**快照**；不同步 ⇒ 新文本按旧尺寸算）
+fn with_engine<R>(
+    handle: u64,
+    tree_len: usize,
+    measures: &std::collections::HashMap<u32, Size>,
+    f: impl FnOnce(&mut TaffyEngine) -> R,
+) -> R {
+    ENGINES.with(|cell| {
+        let mut map = cell.borrow_mut();
+        let eng = map.entry(handle).or_insert_with(|| {
+            TaffyEngine::new().with_measurer(Box::new(TableTextMeasurer::new(measures.clone())))
+        });
+        if eng.taffy_id_len() != tree_len {
+            *eng = TaffyEngine::new().with_measurer(Box::new(TableTextMeasurer::new(measures.clone())));
+        } else {
+            eng.set_measurer(Box::new(TableTextMeasurer::new(measures.clone())));
+        }
+        f(eng)
+    })
+}
+
 /// **建树并保留**（返回句柄；0 = 失败）。
 ///
 /// # Safety
@@ -737,7 +788,21 @@ pub unsafe extern "C" fn proteus_layout_update(handle: u64, patches_json: *const
         //   relayout_multi 会去除互相嵌套的范围、逐个重排，并回报**变化根**
         //   （平移传播时它含被平移的兄弟 ⇒ 必须用它收集，否则兄弟不被更新）。
         let t_eng0 = std::time::Instant::now();
-        let multi = crate::ops_apply::relayout_multi_with_measures(tree, &dirty_ids, &measures);
+        // ★★复用**按句柄的持久引擎**（本仓实测：每帧新建 = 重建整棵 taffy 树；
+        //   同形状 2001 节点基准 2.96ms → 复用 0.065ms，**45×**）
+        let multi = ENGINES.with(|cell| {
+            let mut map = cell.borrow_mut();
+            let eng = map.entry(handle).or_insert_with(|| {
+                TaffyEngine::new().with_measurer(Box::new(TableTextMeasurer::new(measures.clone())))
+            });
+            if eng.taffy_id_len() != tree.len() {
+                *eng = TaffyEngine::new()
+                    .with_measurer(Box::new(TableTextMeasurer::new(measures.clone())));
+            } else {
+                eng.set_measurer(Box::new(TableTextMeasurer::new(measures.clone())));
+            }
+            crate::ops_apply::relayout_multi_in(eng, tree, &dirty_ids)
+        });
         let t_engine_new = t_eng0.elapsed().as_secs_f64() * 1000.0;
         let roots: &[u32] = if multi.changed_roots.is_empty() { &multi.scopes } else { &multi.changed_roots };
 
@@ -1542,7 +1607,10 @@ pub unsafe extern "C" fn proteus_layout_splice(handle: u64, splice_json: *const 
         let multi = if dirty_roots.is_empty() {
             crate::ops_apply::MultiRelayout::default()
         } else {
-            crate::ops_apply::relayout_multi_with_measures(&mut entry.tree, &dirty_roots, &entry.measures)
+            let (em, tl) = (entry.measures.clone(), entry.tree.len());
+            with_engine(handle, tl, &em, |eng| {
+                crate::ops_apply::relayout_multi_in(eng, &mut entry.tree, &dirty_roots)
+            })
         };
         let t_rel = t_rel0.elapsed().as_secs_f64() * 1000.0;
         entry.last_scopes = if multi.scopes.is_empty() { dirty_roots.clone() } else { multi.scopes.clone() };
@@ -1611,6 +1679,9 @@ pub unsafe extern "C" fn proteus_layout_set_text_measures(handle: u64, measures_
                 updated += 1;
             }
         }
+        // ★引擎里的度量器是**快照** ⇒ 同步（否则新文本按旧尺寸算：静默错几何）
+        let (ms, tl) = (entry.measures.clone(), entry.tree.len());
+        with_engine(handle, tl, &ms, |_eng| {});
         Ok(serde_json::json!({"ok": true, "updated": updated, "total": entry.measures.len()}).to_string())
     });
     match r {
@@ -1668,8 +1739,12 @@ fn apply_ops_impl(handle: u64, ptr: *const u8, len: u32, with_rects: bool) -> Re
     }
 
     let t_rel0 = std::time::Instant::now();
-    // ★带句柄的度量表（V3 主路径：真实场景含文本，度量丢失 ⇒ 文字塌成 0 高）
-    let multi = crate::ops_apply::relayout_multi_with_measures(&mut entry.tree, &outcome.dirty, &measures);
+    // ★复用**按句柄的持久引擎**（含持久 taffy 树；度量器随 with_engine 同步）
+    let _ = &measures;
+    let (em, tl) = (entry.measures.clone(), entry.tree.len());
+    let multi = with_engine(handle, tl, &em, |eng| {
+        crate::ops_apply::relayout_multi_in(eng, &mut entry.tree, &outcome.dirty)
+    });
     let t_rel = t_rel0.elapsed().as_secs_f64() * 1000.0;
     // ★引擎内部分段（copy/build/solve/writeback）——「先测量再优化」的依据
     let eng_phases = crate::ops_apply::last_relayout_phases();

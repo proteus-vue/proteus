@@ -56,6 +56,9 @@
 | 7 | **★★增量路径不改文本 ⇒ 屏幕文字停留旧值（静默错显示）** | ✅ **已闭（2026-09-28，V6 暴露）**：增量路径此前只改 layer 的 **frame**，而文本内容在 `CATextLayer.string` 上 ⇒ 改文案后**核心几何已变、屏幕还是旧字**，且几何断言全绿（只有肉眼能发现）。全量重建路径不受影响（重建层时带新文本）⇒ 只改样式的用例一直发现不了。⇒ 修法：Rust `ApplyOutcome.text_updates` 回报（仅真的变了才记）+ FFI 序列化 + 宿主 `applyTextUpdates()` 落层 | `layout-core-rust/src/{ops_apply,ffi}.rs` · `selfdraw-scene.swift` · Rust 测试 `apply_ops_reports_text_updates` | — |
 | 5 | **★S5 用例 fixture 失效（从未增删过一行）** | ✅ **已修（2026-09-28）**：`setCount` 只改 `count/size` 两个 ref，而 render 的行集是 `items.slice(0, Math.max(count, items.length))` ⇒ **缩小方向被整条抹平**。实测证据：grow_600 与 shrink_400 两条结果 `nodes` 都是 **3507**、字节都是 **279820** ⇒ 两次"结构变更"其实是**同一棵树的两次全量重发**。⇒ 改为 `setItems` 真正改行集 + 同用例 A/B 对照（同起点同幅度：500↔600 各跑 FULL 与 splice） | `hosts/ios/bridge/entry-bench.ts` 的 `S5_structure_change` | — |
 
+| 10 | **★★relayout：每帧重建整棵 taffy 树（真增量的最大浪费）** | ✅ **已闭（2026-09-28）**：基准探针（`examples/taffy-floor-bench.rs`）证明**纯 taffy 求解同形状 2001 节点只要 0.015ms**，而本仓整树重排 3.15ms（**200×**）；逐层二分定位到：`relayout_multi` **每次调用都 `TaffyEngine::new()`** ⇒ 每帧重建整棵 taffy 树并**丢失其内部缓存**。<br>实测基准（同形状 2001 节点）：每轮新建 **2.96ms** → 复用引擎 + 只同步变更节点 **0.065ms**（**45×**）。<br>⇒ 引擎按**句柄**持久（线程局部 `ENGINES`——taffy 非 `Send`，不能进 `Mutex` 注册表），三入口（update/apply_ops/splice）共用；结构变更按 `taffy_id_len()` 判失效并重建。 | `layout-core-rust/src/ffi.rs` 的 `with_engine` · `taffy_engine.rs` 的 `persistent_taffy` · `ops_apply.rs` 的 `relayout_multi_in` · 基准 `examples/{taffy-floor-bench,relayout-multi-bench}.rs` | ★**仍存边界**：**范围**求解仍走"拷贝子树 + 独立子引擎"（实测比"在大树上解子树"快得多——taffy 的脏标记会向上传播到根，见 `layout_subtree_cached` 注释）⇒ 多范围形态下每范围仍有一次拷贝（`copy_ms` 0.13ms/300 范围，已很小） |
+| 11 | **★测量纪律：性能断言进单测会因并发抖动假红** | ◐ **已标注（2026-09-28）**：`blob_scales_to_real_size_and_decodes_fast` 比较两次墙钟计时，`cargo test` 并行时偶发红（单独跑稳定 4.3×）⇒ 失败信息里已加"并发抖动 vs 实现退化"的判别提示 | `layout-core-rust/src/blob.rs` | 后续性能类断言建议**打上串行标记**（`#[serial]`）或改为"结构性判据"（如调用次数）而非墙钟比较 |
+
 ### P1 · 影响覆盖可信度（不影响正确性）
 
 | # | 边界 | 现状 | 建议 |

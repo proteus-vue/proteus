@@ -258,6 +258,36 @@ diff/patch 随**页面规模**线性、**与"改了多少"无关**。
 
 ---
 
+#### ★★★2026-09-28 relayout 压榨：找到"每帧重建 taffy 树"（45× 空间）
+
+**方法（先测量再优化，本仓纪律）**：写两个基准探针 `examples/relayout-multi-bench.rs`
+（四种形态分段）与 `examples/taffy-floor-bench.rs`（纯 taffy 地板对比），逐层二分：
+
+| 层 | 测得 | 结论 |
+|---|---|---|
+| 纯 taffy 求解同形状 2001 节点 | **0.015ms** | 引擎本身极快 |
+| 本仓整树重排（同形状） | **3.15ms** | **200×** 差距，全在包装层 |
+| 定位：`relayout_multi` 每次 `TaffyEngine::new()` | 每轮**重建** taffy 树 ⇒ **丢失其内部缓存** | 真凶 |
+| 复用引擎 + 只同步变更节点 | **0.065ms** | **45×** |
+
+⇒ 引擎改为**按句柄持久**（线程局部 `ENGINES`——taffy 的 `CompactLengthInner` 含裸指针 ⇒
+非 `Send`，不能放进 `Mutex<HashMap>` 注册表，编译期即拒）；update/apply_ops/splice 三入口共用；
+结构变更（splice 增删）按 `taffy_id_len() != tree.len()` 判失效并重建。
+
+**★途中三次"看起来对"的弯路（都记在代码注释里，防后人重犯）**
+1. **让范围求解走持久大树**（`compute_layout(scope_id, definite)`）⇒ 形态 A 从 1.5ms **恶化到 8.1ms**
+   ——taffy 的脏标记**向上传播到根**，对大树里的小范围求解会重算整条祖先链。
+   ⇒ 范围场景必须**把子树隔离出来解**（拷贝法）；持久树的优势只在**整树重排**。
+2. **`run_taffy` 的整树回读**：多范围下每范围都回读全部 `taffy_ids` ⇒ 60 万次调用；
+   现由范围路径只回读自己的子树（`readback=false`）。
+3. **诊断埋点自身成为热点**：`LAST_PHASES.lock()` + `BTreeMap<String,f64>` 克隆放在**每范围**里
+   ⇒ 300 范围白付 0.32ms（占 20%）；`phase_acc` 的 `key.to_string()` 每范围 5 次堆分配。
+   ⇒ 改用 `&'static str` 键 + 循环外只写一次全局。
+
+**附带修正**：`relayout_multi` 曾对每个脏节点**算两遍** scope、去嵌套 O(范围数²×深度)
+（300 范围实测 0.4ms）⇒ 合并为一遍 + 祖先链 HashSet 判定（O(范围数×深度)）；
+`layout_subtree_and_writeback` 的 `style.clone()`（含 String ⇒ 每范围一次堆分配）改为只取两个标量。
+
 #### ★★★2026-09-28 文本变更增量打通（S4：281KB→15KB · 150ms→71ms）
 
 **链路**（四处协同，缺一处就静默失效）：

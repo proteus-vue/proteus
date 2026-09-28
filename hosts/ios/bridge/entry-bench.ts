@@ -77,7 +77,7 @@ const BN = { snapshot: 'bench-final' }
 // ★构建标识：每次构建写入，用于**确凿判定**设备上跑的是哪份代码
 //   （踩坑：靠文件 mtime 判断"报告是否刷新"不可靠——新建目标文件的时间恒为"现在"；
 //    且我看不出设备实际执行的是旧 bundle，白跑一轮。有了这个字段就能一眼判定。）
-const BUILD_ID = 'a59b4dbf-155432'
+const BUILD_ID = 'bea67986-163105'
 const now = (): number => Date.now()
 /** 宽松解析（宿主返回可能是字符串或已是对象） */
 const safeParseAny = (s: any): any => {
@@ -1605,6 +1605,7 @@ CASES.push({
         extra: {
           mode, text_patches: textPatches,
           relayout: h?.["relayout_count"], scopes: h?.["scopes"],
+          relayout_ms: h?.["relayout_ms"], idmap_ms: h?.["idmap_ms"], collect_ms: h?.["collect_ms"],
           // ★文本落层读数（本轮修的静默错显示缺陷：不落层 = 屏幕文字停留旧值）
           text_updates: h?.["text_updates"], text_layers_applied: h?.["text_layers_applied"],
           measures_injected: h?.["measures_injected"],
@@ -1774,7 +1775,10 @@ CASES.push({
       vue_ms: tVue - t0, to_request_ms: tReq - tVue, serialize_ms: tSer - tReq,
       host_ms: tHost - tSer, total_ms: tHost - t0,
       patch_count: app.adapter.patchCount(), request_bytes: bytes,
-      extra: { relayout: h?.["relayout_count"], patches_sent: patches === null ? 'FULL' : patches.length },
+      extra: { relayout: h?.["relayout_count"], patches_sent: patches === null ? 'FULL' : patches.length,
+               // ★整树重排路径的分段（持久引擎的靶子：relayout_ms 应显著下降）
+               relayout_ms: h?.["relayout_ms"], idmap_ms: h?.["idmap_ms"], collect_ms: h?.["collect_ms"],
+               updated_layers: h?.["updated_layers"], layer_count: h?.["layer_count"] },
     })
     markCeiling('worst_case', '1000 项 reverse', tHost - t0, '整体重排')
     app.dispose()

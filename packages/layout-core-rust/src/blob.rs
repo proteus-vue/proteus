@@ -598,7 +598,15 @@ mod tests {
         println!("  解码耗时：blob={:.2}ms · json={:.2}ms · **加速 {:.1}×**", blob_ms, json_ms, json_ms / blob_ms);
 
         // ★断言：blob 解码必须**显著快于** JSON（这是本模块存在的理由）
-        assert!(blob_ms < json_ms / 2.0, "blob 解码应至少快 2 倍（实测 {:.2}ms vs {:.2}ms）", blob_ms, json_ms);
+        //
+        // ⚠ **本断言对并发敏感**（本仓实测：`cargo test` 并行跑时该项偶发红，单独跑稳定 4.3×）：
+        //   它比较的是两次**墙钟计时**，而同机其它测试线程会干扰。
+        //   ⇒ 判据保持（它是模块的存在理由），但**失败信息里带上环境提示**，避免误判为实现退化。
+        assert!(
+            blob_ms < json_ms / 2.0,
+            "blob 解码应至少快 2 倍（实测 {:.2}ms vs {:.2}ms）；             ⚠ 若本项在 `cargo test` 并行时偶发红、单独跑却绿 ⇒ 是并发计时抖动，非实现退化",
+            blob_ms, json_ms
+        );
         // ★体积：不应比 JSON 大（理想是更小）
         assert!(blob.len() <= json.len(), "blob 不应比 JSON 大");
     }

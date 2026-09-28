@@ -955,6 +955,11 @@ final class SelfDrawBridge: NSObject, SelfDrawExports {
                            "text_updates": textUpdates.count,
                            "text_layers_applied": textApplied,
                            "measures_injected": measures.count,
+                           // ★核心分段（本仓纪律：relayout 是文本补丁的主成本，必须可直读——
+                           //   否则"优化有没有生效"只能靠推理，而推理在本仓已坑过多次）
+                           "relayout_ms": round((((o?["_timing"] as? [String: Any])?["engine_and_relayout_ms"] as? Double) ?? 0) * 100) / 100,
+                           "idmap_ms": round((((o?["_timing"] as? [String: Any])?["idmap_ms"] as? Double) ?? 0) * 100) / 100,
+                           "collect_ms": round((((o?["_timing"] as? [String: Any])?["collect_changed_ms"] as? Double) ?? 0) * 100) / 100,
                            "changed_rects": changed.count, "updated_layers": updated,
                            "update_ms": round(updateMs * 100) / 100,
                            "layers_ms": round(layersMs * 100) / 100,

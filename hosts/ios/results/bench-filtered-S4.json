@@ -31567,20 +31567,20 @@
   },
   "host_node_count" : 3507,
   "host_timing_last" : {
-    "build_layers_ms" : 2.3900000000000001,
-    "host_total_ms" : 30.399999999999999,
-    "layout_ms" : 21.98,
+    "build_layers_ms" : 2.04,
+    "host_total_ms" : 28.649999999999999,
+    "layout_ms" : 20.530000000000001,
     "measure_ms" : 0
   },
   "js_completed" : 1,
   "js_ok" : true,
   "js_report" : {
-    "build_id" : "a59b4dbf-155432",
+    "build_id" : "bea67986-162534",
     "case_filter" : [
       "S4"
     ],
     "case_timings_ms" : {
-      "S4_text_churn" : 399
+      "S4_text_churn" : 390
     },
     "cases" : [
       {
@@ -31592,7 +31592,7 @@
           "text_patches" : 300,
           "updated_layers" : 0
         },
-        "host_ms" : 98,
+        "host_ms" : 96,
         "items" : 500,
         "nodes" : 3507,
         "note" : "改 300 行文案（500 项页面 · FULL-by-design）",
@@ -31600,22 +31600,25 @@
         "request_bytes" : 281617,
         "serialize_ms" : 1,
         "to_request_ms" : 16,
-        "total_ms" : 156,
+        "total_ms" : 154,
         "vue_ms" : 41
       },
       {
         "case" : "S4_text_churn_patch",
         "extra" : {
+          "collect_ms" : 0.71999999999999997,
+          "idmap_ms" : 0,
           "measure_invariant_ok" : true,
           "measures_injected" : 300,
           "mode" : "patch",
           "relayout" : 2102,
+          "relayout_ms" : 4.3700000000000001,
           "text_layers_applied" : 300,
           "text_patches" : 300,
           "text_updates" : 300,
           "updated_layers" : 2102
         },
-        "host_ms" : 32,
+        "host_ms" : 31,
         "items" : 500,
         "nodes" : 0,
         "note" : "改 300 行文案（500 项页面 · patch）",
@@ -31623,21 +31626,21 @@
         "request_bytes" : 15338,
         "serialize_ms" : 0,
         "to_request_ms" : 0,
-        "total_ms" : 75,
-        "vue_ms" : 43
+        "total_ms" : 73,
+        "vue_ms" : 42
       }
     ],
     "ceiling" : [
       {
         "dim" : "text_churn",
         "level" : "改 300 行文案（FULL-by-design）",
-        "ms" : 156,
+        "ms" : 154,
         "note" : "文本变更（缓存未命中）"
       },
       {
         "dim" : "text_churn",
         "level" : "改 300 行文案（patch）",
-        "ms" : 75,
+        "ms" : 73,
         "note" : "文本变更（缓存未命中）"
       }
     ],
@@ -56221,5 +56224,5 @@
       "y" : 0
     }
   },
-  "tree_hash" : "17048e95"
+  "tree_hash" : "3a1d816a"
 }
