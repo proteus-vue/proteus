@@ -2875,6 +2875,51 @@ mod tests {
         unsafe { proteus_layout_destroy(handle) };
     }
 
+    /// ★★**字重不同的同文本必须有不同尺寸**（`textStyleKey` 必须编码字重）
+    ///
+    /// 【为什么必须有（本仓实测的同类缺陷）】度量缓存键是 `(text_hash, max_w)`，而 hash 里
+    ///   区分字体的只有 `style_key`。若 `style_key` **不含字重** ⇒「同文本 + 同字号 +
+    ///   一粗一常规」会被**错误合并**同一缓存项 ⇒ 其中一个尺寸错（如粗体文本被按常规体度量
+    ///   ⇒ 屏幕上字被裁，且几何断言全绿）。本仓已在"字号"维度踩过完全相同的坑。
+    #[test]
+    fn different_font_weight_must_not_share_cache() {
+        // 两个节点：同文本、同字号，但 style_key 不同（模拟"粗细不同"）
+        let tree = serde_json::json!({
+            "viewport": {"width": 375.0, "height": 800.0},
+            "nodes": [
+                {"id": 1, "parentId": null, "flexDirection": "column", "width": 375.0, "height": 800.0},
+                {"id": 10, "parentId": 1, "flexDirection": "row", "alignItems": "flex-start",
+                 "width": 343.0, "height": 100.0, "flexShrink": 0.0},
+                {"id": 11, "parentId": 10, "text": "同文本", "textStyleKey": 160400},
+                {"id": 12, "parentId": 10, "text": "同文本", "textStyleKey": 160700}
+            ],
+            // ★宿主度量的差异：常规体 60×19 · 粗体 72×19（粗体更宽）
+            "textMeasures": {
+                "11": {"width": 60.0, "height": 19.0},
+                "12": {"width": 72.0, "height": 19.0}
+            }
+        });
+        let handle = unsafe {
+            let c = CString::new(tree.to_string()).unwrap();
+            proteus_layout_create(c.as_ptr())
+        };
+        assert_ne!(handle, 0);
+        let full = unsafe {
+            let p = proteus_layout_rects(handle);
+            let s = CStr::from_ptr(p).to_str().unwrap().to_string();
+            proteus_layout_free_string(p);
+            s
+        };
+        let fv: serde_json::Value = serde_json::from_str(&full).unwrap();
+        let w11 = fv["rects"]["11"]["width"].as_f64().unwrap();
+        let w12 = fv["rects"]["12"]["width"].as_f64().unwrap();
+        assert!(
+            (w11 - 60.0).abs() < 0.01 && (w12 - 72.0).abs() < 0.01,
+            "★不同字重必须各自正确（内容寻址不得跨字重合并）：11 宽={w11}（应 60）· 12 宽={w12}（应 72）"
+        );
+        unsafe { proteus_layout_destroy(handle) };
+    }
+
     /// ★★**update 路径的文本更新也要回报**（`text_updates`）+ 度量变化后几何跟着变
     ///
     /// 【与 ops 路径的对应】ops 路径的回报见 `apply_ops_reports_text_updates`；

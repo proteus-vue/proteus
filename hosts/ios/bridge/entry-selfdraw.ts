@@ -40,6 +40,8 @@ interface SelfDrawNative {
   mount(treeJson: string): string
   update(treeJson: string): string
   updatePatches(patchesJson: string): string
+  /** ★V10：绘制补丁（颜色/圆角/字重/字号/透明度）——几何之外的第二条通道（不经核心） */
+  paintPatches(patchesJson: string): string
   snapshot(name: string): string
   report(json: string): void
   done(summaryJson: string): void

@@ -63,6 +63,15 @@ export interface SelfDrawNodeSpec {
   /** 绘制用：字号 */
   fontSize?: number
   /**
+   * 绘制用：字重（CSS 口径的数值：100–900；`normal`=400 · `bold`=700）
+   *
+   * 【为什么必须端到端（本仓实测的功能缺口）】IR 层早已建模（`component-ir/src/pnode.ts`
+   *   的 `fontWeight`），但本适配器的 `PAINT_KEYS` **不含它** ⇒ 不下发（甚至被当"未知键"）；
+   *   宿主又恒用 `UIFont.systemFont` / `CGFont("Helvetica")` ⇒ **粗体按常规体渲染+度量**。
+   *   本仓已有真实用例（`packages/components/p-heading` 用 `fontWeight: 'bold'`）。
+   */
+  fontWeight?: number
+  /**
    * ★★**字体维度签名**（进核心的度量缓存键）——由适配器按 `fontSize` 算出
    *
    * 【为什么必须有（本仓实测的静默错几何 + 性能双缺口）】
@@ -122,6 +131,18 @@ export interface SelfDrawAdapter extends NativeAdapter {
    */
   takePatches(): Array<{ id: number; style: Record<string, unknown> }> | null
   /**
+   * ★★取走本批次的**绘制补丁**（颜色 / 圆角 / 字重 / 字号 / 透明度…）——几何之外的**第二条通道**
+   *
+   * 【与 `takePatches` 的分工（本仓实测的功能缺口）】`takePatches` 只发布**布局**字段
+   *   （它们要经核心重排）；而绘制属性**与几何无关** ⇒ 直接交给宿主改层即可，
+   *   绕核心是纯粹的多余（核心不认识 paint 字段）。
+   *
+   * 【语义】与 `takePatches` 同款：**自上次取走以来**（取走即复位）；无变更 ⇒ `[]`。
+   * 【形态】`[{id, paint}]`，`paint` 是**该节点的完整绘制快照**（缺省键为 `null`）
+   *   ⇒ 宿主可据此**清除**旧值（如移除 `borderRadius` ⇒ cornerRadius 归零）。
+   */
+  takePaintPatches(): Array<{ id: number; paint: Record<string, unknown> }>
+  /**
    * ★★**派发一次语义事件**（宿主命中测试后的唯一入口）
    *
    * - `nodeId`：核心命中的 target
@@ -154,7 +175,7 @@ export interface SelfDrawAdapter extends NativeAdapter {
 }
 
 /** 绘制相关的键（**不进布局核心**——核心只管几何；绘制由宿主的指令流消费） */
-const PAINT_KEYS = new Set(['backgroundColor', 'color', 'fontSize', 'borderRadius', 'borderColor', 'borderWidth', 'opacity'])
+const PAINT_KEYS = new Set(['backgroundColor', 'color', 'fontSize', 'fontWeight', 'borderRadius', 'borderColor', 'borderWidth', 'opacity'])
 
 /** 布局相关的键（进核心；其余键既非布局也非绘制 → 忽略并计数，便于发现「静默丢失」） */
 const LAYOUT_KEYS = new Set([
@@ -260,6 +281,75 @@ function styleSig(v: unknown): string {
 }
 
 /**
+ * ★★字重归一化（CSS 口径 → 数值）
+ *
+ * | 输入 | 输出 |
+ * |---|---|
+ * | `'normal'` | `400` |
+ * | `'bold'` | `700` |
+ * | `'bolder'` / `'lighter'` | `700` / `300`（**相对值**：CSS 里相对父级；本适配器无父上下文 ⇒ 按最常见解释固定） |
+ * | 数字 / 数字串 | 原值（如 `600` / `'600'`） |
+ * | 其他 | `undefined`（调用方按缺省 400 处理，**不静默编造**） |
+ */
+export function normalizeFontWeight(v: unknown): number | undefined {
+  if (typeof v === 'number') return Number.isFinite(v) && v > 0 ? v : undefined
+  if (typeof v === 'string') {
+    const t = v.trim().toLowerCase()
+    if (t === 'normal') return 400
+    if (t === 'bold') return 700
+    if (t === 'bolder') return 700
+    if (t === 'lighter') return 300
+    const n = Number(t)
+    if (Number.isFinite(n) && n > 0) return n
+  }
+  return undefined
+}
+
+/** 缺省字重（CSS 默认 = normal = 400）——宿主也按此兜底，两端同口径 */
+export const DEFAULT_FONT_WEIGHT = 400
+
+/**
+ * 取节点的**绘制属性快照**（`PAINT_KEYS` 全量；缺省键为 **null**）
+ *
+ * 【为什么是"快照"而不是"本批 delta"】宿主需要能**清除**旧值（如移除 borderRadius ⇒
+ *   必须把 cornerRadius 清回 0）。若只发"变了的键"，宿主无从区分"没提"与"要清空"。
+ *   绘制键最多 8 个 ⇒ 全量快照的代价可忽略，换来宿主侧逻辑平凡。
+ */
+export function paintOf(props: Record<string, unknown>): Record<string, unknown> {
+  const flat: Record<string, unknown> = {}
+  for (const [k, v] of Object.entries(props)) {
+    if (k === 'style' && v && typeof v === 'object' && !Array.isArray(v)) {
+      Object.assign(flat, v as Record<string, unknown>)
+    } else {
+      flat[k] = v
+    }
+  }
+  const out: Record<string, unknown> = {}
+  for (const k of PAINT_KEYS) {
+    const v = flat[k]
+    if (v === undefined || v === null) { out[k] = null; continue }
+    if (k === 'backgroundColor' || k === 'color' || k === 'borderColor') {
+      out[k] = typeof v === 'string' ? v : null
+      continue
+    }
+    if (k === 'fontWeight') {
+      const w = normalizeFontWeight(v)
+      out[k] = w === undefined ? null : w
+      continue
+    }
+    out[k] = typeof v === 'number' ? v : (typeof v === 'string' && Number.isFinite(Number(v)) ? Number(v) : null)
+  }
+  return out
+}
+
+/** 绘制子集的**稳定签名**（与 `styleSig` 同款：只比值、排序键——避免"Vue 每次新建对象"造成假变更） */
+function paintSig(v: unknown): string {
+  if (!v || typeof v !== 'object') return ''
+  const paint = paintOf(v as Record<string, unknown>)
+  return Object.keys(paint).sort().map((k) => `${k}:${String(paint[k])}`).join('|')
+}
+
+/**
  * ★★Vue 事件键 → **语义事件名**（与 gesture 层 / MP 端口径一致）
  *
  * | Vue 键 | 归一化 | 说明 |
@@ -360,6 +450,15 @@ export function createSelfDrawAdapter(): SelfDrawAdapter {
    */
   const textDirty = new Map<object, string>()
   /**
+   * ★★**绘制脏集**（本批变了绘制属性的节点）——绘制补丁通道的来源
+   *
+   * 【为什么与 `dirty` 分开（本仓实测的功能缺口）】`dirty` 只收"布局真的变了"的节点
+   *   （`styleSig` 只比布局子集）⇒ 纯绘制变更（颜色/圆角/字重/透明度）**两边都不收**：
+   *   布局补丁为空 + 宿主拿不到任何信息 ⇒ **层上颜色停留旧值**（静默错显示）。
+   *   ⇒ 几何与绘制**两条通道**：几何 → 核心重排；绘制 → 宿主直接改层（不经过核心）。
+   */
+  const paintDirty = new Set<object>()
+  /**
    * ★★**事件处理器表**（`nodeId → { 语义事件名 → 处理器 }`）——自绘管线的**派发依据**
    *
    * 【为什么由适配器持有（本仓设计）】自绘场景**没有 UIKit/原生 View 承载事件**：
@@ -455,10 +554,19 @@ export function createSelfDrawAdapter(): SelfDrawAdapter {
         : {}
       const fs = tStyle.fontSize ?? props.fontSize ?? pStyle.fontSize ?? (parent ? parent.props.fontSize : undefined)
       const fsNum = typeof fs === 'number' ? fs : (typeof fs === 'string' ? Number(fs.replace(/px$/i, '')) : NaN)
+      // ★字重同样**从父元素继承**（与 fontSize 同一理由：`fontWeight` 写在 `p-text` 元素上）
+      const fwRaw = tStyle.fontWeight ?? props.fontWeight ?? pStyle.fontWeight ?? (parent ? parent.props.fontWeight : undefined)
+      const fwNum = normalizeFontWeight(fwRaw) ?? DEFAULT_FONT_WEIGHT
       if (Number.isFinite(fsNum) && fsNum > 0) {
         spec.fontSize = fsNum
-        // ★字体维度进缓存键（与宿主度量输入同源：当前只有 fontSize 一个维度）
-        spec.textStyleKey = Math.round(fsNum * 100)
+        spec.fontWeight = fwNum
+        // ★字体维度进缓存键：**字号 × 字重**（与宿主度量输入同源）
+        //
+        // 【为什么必须含字重（本仓实测的正确性缺口）】度量缓存键是 `(text_hash, max_w)`，
+        //   而 hash 里区分字体的只有本字段。若不含字重 ⇒ 「同文本 + 同字号 + 一粗一常规」
+        //   会被**错误合并**同一缓存项 ⇒ 其中一个尺寸错（本仓已在字号维度踩过同一坑）。
+        //   布局：`round(fs*100) * 10000 + weight`（weight ∈ [100,900] ⇒ 低位不串）。
+        spec.textStyleKey = Math.round(fsNum * 100) * 10000 + Math.round(fwNum)
       }
       // 同理继承颜色（否则文本用宿主的白色兜底 ⇒ 深色主题下说明文字看不见）
       const col = tStyle.color ?? props.color ?? pStyle.color ?? (parent ? parent.props.color : undefined)
@@ -494,6 +602,10 @@ export function createSelfDrawAdapter(): SelfDrawAdapter {
         : props[key]
       if (key === 'backgroundColor' || key === 'color') {
         if (typeof src === 'string') spec[key] = src
+      } else if (key === 'fontWeight') {
+        // ★字重是 `string | number`（'bold' / 700）⇒ 归一化后再落（其它键是纯 number）
+        const w = normalizeFontWeight(src)
+        if (w !== undefined) spec.fontWeight = w
       } else if (typeof src === 'number') {
         spec[key as 'fontSize'] = src
       }
@@ -612,6 +724,7 @@ export function createSelfDrawAdapter(): SelfDrawAdapter {
       //   ② 若不清理，同 id 复用场景会**幽灵派发**到已卸载的处理器）
       const removedId = idOf.get(node)
       if (removedId !== undefined) handlers.delete(removedId)
+      paintDirty.delete(node)   // ★已移除节点不该再发绘制补丁（宿主那边层已没了）
       structuralChange = true
       // ★登记被移除的**子树根**（核心侧会连同其子孙一起摘除——无需逐个列出子孙）
       //   注释节点不在核心树里（无 id）⇒ 不登记（登记会凭空分配一个用不到的 id）
@@ -654,6 +767,12 @@ export function createSelfDrawAdapter(): SelfDrawAdapter {
       } else if (LAYOUT_KEYS.has(key)) {
         // 单键下发（key 就是布局键）：比该键的前后值
         if (JSON.stringify(prev ?? null) !== JSON.stringify(next ?? null)) dirty.add(el)
+      }
+      // ★★绘制标脏（与布局同款"比值不比引用"——Vue 每次重渲染都新建 style 对象）
+      if (key === 'style') {
+        if (paintSig(prev ?? {}) !== paintSig(next ?? {})) paintDirty.add(el)
+      } else if (PAINT_KEYS.has(key)) {
+        if (JSON.stringify(prev ?? null) !== JSON.stringify(next ?? null)) paintDirty.add(el)
       }
       patches++
     },
@@ -849,6 +968,19 @@ export function createSelfDrawAdapter(): SelfDrawAdapter {
       }
       return out
     },
+    takePaintPatches(): Array<{ id: number; paint: Record<string, unknown> }> {
+      // ★与 `takePatches` 同语义：**自上次取走以来**（取走即复位）
+      const batch = Array.from(paintDirty)
+      paintDirty.clear()
+      const out: Array<{ id: number; paint: Record<string, unknown> }> = []
+      for (const node of batch) {
+        const id = idOf.get(node)
+        if (id === undefined) continue   // 游离/已移除节点：无稳定 id ⇒ 跳过（宿主无从应用）
+        out.push({ id, paint: paintOf((node as NativeElementNode).props ?? {}) })
+      }
+      return out
+    },
+
     markFullSync: () => {
       structuralChange = false
       dirty.clear()
@@ -861,6 +993,7 @@ export function createSelfDrawAdapter(): SelfDrawAdapter {
       removedNodeIds.clear()
       movedExisting = false
       textDirty.clear()
+      paintDirty.clear()   // ★全量树已带全部绘制属性 ⇒ 清掉（否则会重复应用一批陈旧 paint）
       // ★**不清 handlers**：全量同步只是"宿主已与我对齐"，节点与处理器都还有效
       //   （清了会导致全量重建后**所有交互失效**——而全量重建在结构变更时很常见）
     },
