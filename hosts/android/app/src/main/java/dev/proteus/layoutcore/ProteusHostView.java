@@ -47,6 +47,59 @@ public class ProteusHostView extends ViewGroup {
     /** 节点 id → Rust 几何（**位置/尺寸的唯一来源**；子 View 的 measure/layout 都用它） */
     private final Map<Integer, RectF> nativeRects = new HashMap<>();
 
+    /* ══════════ ★★字体族（与 iOS `SelfDrawBridge.font(size:weight:family:)` 同契约） ══════════ */
+
+    /**
+     * **语义角色 → Android `Typeface`**（与 iOS 侧**同一套角色词汇表**，见适配器 `normalizeFontFamily`）
+     *
+     * | 角色 | Android 映射 |
+     * |---|---|
+     * | `system` | `Typeface.DEFAULT`（含 bold 变体） |
+     * | `serif` | `Typeface.SERIF` |
+     * | `monospace` | `Typeface.MONOSPACE` |
+     * | `rounded` | `Typeface.create("sans-serif-rounded", …)`（API 21+ 有该族；缺则回退 DEFAULT 并计数） |
+     * | `condensed` | `Typeface.create("sans-serif-condensed", …)`（同上） |
+     *
+     * ★★**为什么这是"映射"而不是"自己发明一套"**：角色字符串由**适配器**产出（`normalizeFontFamily`
+     *   已把 CSS 候选清单归一到 5 个角色）。平台侧只做「角色 → 本平台字体」——这是唯一平台相关的部分。
+     *   iOS 侧已按同一契约实现（`SelfDrawBridge.font`）。**两端共用一份词汇表**，未知角色显式回退 + 计数。
+     *   ★诚实边界：Android 的族名（`sans-serif-rounded` 等）是**系统族（family）**，
+     *     与 iOS 的 `SystemDesign`/具体字体名**不是同一批字体** ⇒ 两端"衬线体"长得不完全一样
+     *     （那是平台字体库的固有差异，能力对齐 ≠ 像素一致）。
+     */
+    public static android.graphics.Typeface typefaceOf(String role, int weight, int[] fallbackCounter) {
+        boolean bold = weight >= 600;
+        String fam;
+        switch (role == null ? "system" : role) {
+            case "serif": fam = "serif"; break;
+            case "monospace": fam = "monospace"; break;
+            case "rounded": fam = "sans-serif-rounded"; break;
+            case "condensed": fam = "sans-serif-condensed"; break;
+            case "system": fam = "sans-serif"; break;
+            default:
+                // ★未知角色：**显式回退 + 计数**（不静默——两端契约不一致时必须可见）
+                if (fallbackCounter != null) fallbackCounter[0]++;
+                fam = "sans-serif";
+                break;
+        }
+        return android.graphics.Typeface.create(fam, bold ? android.graphics.Typeface.BOLD : android.graphics.Typeface.NORMAL);
+    }
+
+    /** 字体族回退计数（诊断：>0 ⇒ 两端词汇表不一致） */
+    public int fontFamilyFallbacks = 0;
+
+    /**
+     * 按角色/字号/字重配置 `textPaint`（**度量与绘制共用同一支 paint** ⇒ 同源）
+     *
+     * ★为什么必须"同源"：iOS 侧已因"度量用一支字体、绘制用另一支"踩过（字被裁而报告全绿）。
+     *   本方法让两者的唯一来源都是 `typefaceOf`。
+     */
+    public void configureText(float sizePx, int weight, String familyRole, int color) {
+        textPaint.setTextSize(sizePx);
+        textPaint.setTypeface(typefaceOf(familyRole, weight, null));
+        textPaint.setColor(color);
+    }
+
     private List<Cmd> cmds = java.util.Collections.emptyList();
     private final Paint bgPaint = new Paint();
     /** 图集重放专用（用 shader 精确定位，避免 drawBitmap 的密度/插值干扰） */
