@@ -40,6 +40,15 @@ interface SelfDrawNative {
   updatePatches(patchesJson: string): string
   /** ★Vapor IR V3：二进制指令流（字节数组 JSON 表示——指令流本身极小） */
   applyOps(opsBytesJson: string): string
+  /**
+   * ★★**高分辨率单调时钟**（微秒，十进制字符串）
+   *
+   * 【为什么必须用宿主时钟（本仓实测的第六个测量装置缺陷）】
+   *   JSC 的 `Date.now()` 在真机上是**粗粒度缓存时钟**——实测**连续 512 次读一次都不前进**
+   *   ⇒ "p50 = 0ms / p95 = 1ms" 全是**分辨率假象**。
+   *   桌面 JSC 有 `performance.now()`，**真机没有** ⇒ 只能由宿主提供。
+   */
+  nowUs?(): string
   snapshot(name: string): string
   report(json: string): void
   done(summaryJson: string): void
@@ -52,7 +61,7 @@ const BN = { snapshot: 'bench-final' }
 // ★构建标识：每次构建写入，用于**确凿判定**设备上跑的是哪份代码
 //   （踩坑：靠文件 mtime 判断"报告是否刷新"不可靠——新建目标文件的时间恒为"现在"；
 //    且我看不出设备实际执行的是旧 bundle，白跑一轮。有了这个字段就能一眼判定。）
-const BUILD_ID = '089d848b-103149'
+const BUILD_ID = 'a675b6c7-105905'
 const now = (): number => Date.now()
 /** 宽松解析（宿主返回可能是字符串或已是对象） */
 const safeParseAny = (s: any): any => {
@@ -736,22 +745,63 @@ CASES.push({
 /* ────────────── V3 探针：二进制指令流 → 真机几何（单节点更新 P95）────────────── */
 
 /**
- * ★★V3 用例（方案 §9 V3 里程碑：「槽位运行时对接 JSI · Rust 侧指令消费 · P95 实测」）
+ * ★★V3 用例（方案 §9 V3 里程碑）
  *
  * 【与前序用例的关系】
  *   · V0 探针证明了「v-memo 等价物能把 Vue 侧 78ms 压到 9ms」——那是**上界**（Vue 原生手段）
  *   · 本用例走**完整 Vapor 链路**：TS 订阅表 → 槽位直写 → 二进制指令 → Swift 宿主 → Rust 应用
- *     ⇒ 给出的是**本实现自己的读数**（V0 的 9ms 不是它——这个区别在 V1/V2 的诚实边界里反复强调过）
+ *     ⇒ 给出的是**本实现自己的读数**
  *
- * 【怎么造树】用最小编译产物形状：一个根 + 一行圆点，绑定挂在该圆点上。
- *   ★nodeId 对齐纪律（V3 实测踩到）：模板里元素的**个数与顺序**必须与建树一致——
- *   本用例的模板是 2 个元素（root + dot），故建树也是 2 个节点。
+ * 【★★测量装置的两个坑（本仓实测，第六次同类；首版读数因此不成立）】
+ *   ① **时钟分辨率**：JSC 的 `Date.now()` 是**粗粒度缓存时钟**——本仓实测连续 2000 次读
+ *      一次都不跳。⇒ 用它的"P50 = 0ms"实际含义是「时钟没走」，**不是零成本**。
+ *      正解：优先用 `performance.now()`（真机 JSC 可用，本用例会**上报用的是哪个时钟**，
+ *      并探测其分辨率），且以**批量摊还**（N 次总耗时 / N）为主读数——摊还天然避开分辨率限制。
+ *   ② **问题规模不对等**：首版只在 **2 节点**的树上测，却与 S2 的 **1000 项（≈4000 节点）**
+ *      基线并列展示 ⇒ 那是**不同一道题**。正解：两个规模都测并分别标注：
+ *        · small（2 节点）：验证通路本身
+ *        · large（≈S2 同规模）：**与 S2/V0 可比的**读数
  */
 CASES.push({
   name: 'V3_vapor_slot_pipeline',
-  note: '★★V3：订阅表 → 槽位直写 → 二进制指令 → 真机 Rust 应用（单节点更新，含 P95）',
+  note: '★★V3：订阅表 → 槽位直写 → 二进制指令 → 真机 Rust 应用（两档规模 × 单节点更新，摊还 + P95）',
   fn: async () => {
-    // ① 编译期产物（由构建期生成器落盘，此处直接读——见 gen-vapor-table.mjs 顶注）
+    // ── ★时钟选择（优先级：宿主高分辨率时钟 > performance.now > Date.now）──
+    //
+    // 【本仓实测（第六个测量装置缺陷）】JSC 的 `Date.now()` 在真机上是粗粒度缓存时钟
+    //   （512 次连续读 0 次前进）⇒ 分位读数完全不可信。宿主 `mach_absolute_time`
+    //   是唯一可靠来源（且**单调**，不受墙钟调整影响）。
+    let clockMs: () => number
+    let clockName: string
+    if (typeof proteusSelfDraw.nowUs === 'function') {
+      // 宿主返回微秒字符串 → 转毫秒（字符串避免 Number 精度在大时间戳上损失亚微秒）
+      clockMs = () => parseFloat(proteusSelfDraw.nowUs!()) / 1000
+      clockName = 'host.mach_absolute_time'
+    } else {
+      const perf = (globalThis as unknown as { performance?: { now?: () => number } }).performance
+      if (typeof perf?.now === 'function') {
+        clockMs = perf.now.bind(perf)
+        clockName = 'performance.now'
+      } else {
+        clockMs = now
+        clockName = 'Date.now（★粗粒度，分位不可信）'
+      }
+    }
+    // 分辨率探测：连续读 512 次，统计有几次前进 + 最小非零 delta
+    let minNonZero = Infinity
+    let ticks = 0
+    let prevR = clockMs()
+    for (let i = 0; i < 512; i++) {
+      const t = clockMs()
+      const d = t - prevR
+      if (d > 0) {
+        ticks++
+        if (d < minNonZero) minNonZero = d
+      }
+      prevR = t
+    }
+    const clock = clockMs
+
     const built = vaporTableJson as unknown as {
       ok: boolean
       table: import('@proteus-vue/slot-runtime').SubscriptionTable
@@ -767,84 +817,221 @@ CASES.push({
       return
     }
 
-    // ② 建真机树（与模板元素序对齐：0=root · 1=dot）
-    const treeReq = {
-      viewport: VP,
-      nodes: [
-        { id: 0, parentId: null, flexDirection: 'column', width: VP.width, height: VP.height },
-        { id: 1, parentId: 0, width: 36, height: 36 },
-      ],
-    }
-    const mountOut = safeParseAny(proteusSelfDraw.mount(JSON.stringify(treeReq)))
-    if (!mountOut?.ok) {
-      results.push({
-        case: 'V3_vapor_slot_pipeline', note: `✗ 建树失败：${JSON.stringify(mountOut)?.slice(0, 120)}`,
-        items: 0, nodes: 0, vue_ms: -1, to_request_ms: -1, serialize_ms: -1, host_ms: -1,
-        total_ms: -1, patch_count: -1, request_bytes: -1,
-      })
-      return
-    }
-
-    // ③ 槽位运行时（订阅表驱动）
-    const keys = new PropKeyTable()
-    const strings = new StringPool()
-    const captured: Uint8Array[] = []
-    const rt = new SlotRuntime(keys, strings, (bytes) => captured.push(bytes))
-    let dotW = 36
-    const ctx = { read: (n: string) => (n === 'dotW' ? dotW : undefined) }
-    const vapor = new VaporRuntime(built.table, rt, VaporRuntime.buildEvaluators(built.table.evaluators))
-    const triggers = new Map<string, () => void>()
-    const loadRes = vapor.load(ctx, (name, cb) => triggers.set(name, cb))
-    vapor.relink(ctx)
-    rt.flush()
-    captured.length = 0   // 丢掉首帧
-
-    // ④ 连续更新：交替取值 ⇒ 每次都是**真实变更**，采样 P95
-    const ITERS = 100
-    const samples: number[] = []
-    let lastOut: Record<string, unknown> | undefined
-    for (let i = 0; i < ITERS; i++) {
-      dotW = i % 2 ? 20 : 40
-      const t0 = now()
-      triggers.get('dotW')?.()
-      rt.flush()
-      const bytes = captured.pop()
-      const tJs = now()
-      if (bytes) {
-        // 字节数组 → JSON（JSExport 对 ArrayBuffer 支持不稳；指令流极小，成本可忽略）
-        lastOut = safeParseAny(proteusSelfDraw.applyOps(JSON.stringify(Array.from(bytes))))
+    /**
+     * 跑一档规模：建树 → 挂载 → 跑 N 次单节点更新（摊还 + 分位）
+     *
+     * @param label   'small' | 'large'
+     * @param nodes   手写树（id 顺序自由，但**绑定目标必须是 id=1**——
+     *                订阅表由构建期生成，其 nodeId 来自模板元素序）
+     */
+    const runScale = async (label: 'small' | 'large', nodes: Array<Record<string, unknown>>, note: string) => {
+      const mountOut = safeParseAny(proteusSelfDraw.mount(JSON.stringify({ viewport: VP, nodes })))
+      if (!mountOut?.ok) {
+        results.push({
+          case: `V3_vapor_${label}`, note: `✗ 建树失败：${JSON.stringify(mountOut)?.slice(0, 120)}`,
+          items: 0, nodes: 0, vue_ms: -1, to_request_ms: -1, serialize_ms: -1, host_ms: -1,
+          total_ms: -1, patch_count: -1, request_bytes: -1,
+        })
+        return
       }
-      samples.push(now() - t0)
-      void tJs
-    }
-    samples.sort((a, b) => a - b)
-    const pick = (p: number) => samples[Math.min(samples.length - 1, Math.floor(samples.length * p))]
 
+      const keys = new PropKeyTable()
+      const strings = new StringPool()
+      const captured: Uint8Array[] = []
+      const rt = new SlotRuntime(keys, strings, (bytes) => captured.push(bytes))
+      let dotW = 36
+      const ctx = { read: (n: string) => (n === 'dotW' ? dotW : undefined) }
+      const vapor = new VaporRuntime(built.table, rt, VaporRuntime.buildEvaluators(built.table.evaluators))
+      const triggers = new Map<string, () => void>()
+      const loadRes = vapor.load(ctx, (name, cb) => triggers.set(name, cb))
+      vapor.relink(ctx)
+      rt.flush()
+      captured.length = 0 // 丢掉首帧
+
+      // ── ① 摊还读数（主读数：天然避开时钟分辨率限制）──
+      const N = 200
+      const tBatch0 = clock()
+      let lastOut: Record<string, unknown> | undefined
+      for (let i = 0; i < N; i++) {
+        dotW = i % 2 ? 20 : 40
+        triggers.get('dotW')?.()
+        rt.flush()
+        const bytes = captured.pop()
+        if (bytes) lastOut = safeParseAny(proteusSelfDraw.applyOps(JSON.stringify(Array.from(bytes))))
+      }
+      const batchMs = clock() - tBatch0
+      const perIterUs = (batchMs / N) * 1000
+
+      // ── ② 单次分位（用同一个时钟；读数受分辨率限制，仅作参考）──
+      const samples: number[] = []
+      for (let i = 0; i < 100; i++) {
+        dotW = i % 2 ? 20 : 40
+        const t0 = clock()
+        triggers.get('dotW')?.()
+        rt.flush()
+        const bytes = captured.pop()
+        if (bytes) lastOut = safeParseAny(proteusSelfDraw.applyOps(JSON.stringify(Array.from(bytes))))
+        samples.push(clock() - t0)
+      }
+      samples.sort((a, b) => a - b)
+      const pick = (p: number) => samples[Math.min(samples.length - 1, Math.floor(samples.length * p))]
+
+      results.push({
+        case: `V3_vapor_${label}`,
+        note: `${note}（${N} 次摊还 + 100 次分位；时钟=${clockName}）`,
+        items: label === 'large' ? 1000 : 2, nodes: (mountOut.node_count as number) ?? nodes.length,
+        vue_ms: perIterUs / 1000, // ★摊还均值（毫秒；p50 见 extra）
+        to_request_ms: 0, serialize_ms: 0,
+        host_ms: (lastOut?.host_total_ms as number) ?? 0,
+        total_ms: batchMs,
+        patch_count: rt.getStats().opsEmitted,
+        request_bytes: (lastOut?.in_bytes as number) ?? 0,
+        extra: {
+          clock: clockName,
+          clock_min_nonzero_ms: minNonZero === Infinity ? 'none' : minNonZero,
+          clock_ticks_in_512_reads: ticks,
+          amortized_us: Math.round(perIterUs * 1000) / 1000,
+          batch_ms: Math.round(batchMs * 100) / 100,
+          iters: N,
+          // 分位（受分辨率限制，标注清楚）
+          p50_ms: pick(0.5), p95_ms: pick(0.95), p99_ms: pick(0.99),
+          min_ms: samples[0], max_ms: samples[samples.length - 1],
+          l1_slots: loadRes.l1Slots, l0_slots: loadRes.l0Slots,
+          unsupported_evaluators: loadRes.unsupportedEvaluators.length,
+          flushes: rt.getStats().flushes,
+          ops_total: rt.getStats().opsEmitted,
+          host_relayout: lastOut?.relayout_count,
+          host_scopes: lastOut?.scopes,
+          host_updated_layers: lastOut?.updated_layers,
+          host_unsupported: lastOut?.unsupported_count,
+          host_apply_ms: lastOut?.apply_ms,
+          host_layers_ms: lastOut?.layers_ms,
+        },
+      })
+      return perIterUs
+    }
+
+    // ── small：2 节点（验证通路本身；**不可**与 S2 比规模）──
+    await runScale(
+      'small',
+      [
+        { id: 0, parentId: null, flexDirection: 'column', width: VP.width, height: VP.height },
+        { id: 2, parentId: 0, flexDirection: 'row', width: VP.width - 32, height: 56 },
+        { id: 1, parentId: 2, width: 36, height: 36 }, // ★绑定目标 = id 1（与订阅表一致）
+      ],
+      'V3 small：2 节点树（通路验证）',
+    )
+
+    // ── large：≈S2 同规模（1000 项 ≈ 4004 节点）——**这一档才与 S2/V0 可比** ──
+    const largeNodes: Array<Record<string, unknown>> = [
+      { id: 0, parentId: null, flexDirection: 'column', width: VP.width, height: VP.height },
+      // 绑定目标所在的行（显式宽高 ⇒ 是布局边界 ⇒ 重排范围止于该行，与 S2 的类A 局部等价）
+      { id: 2, parentId: 0, flexDirection: 'row', width: VP.width - 32, height: 56 },
+      { id: 1, parentId: 2, width: 36, height: 36 },
+    ]
+    const ROWS = 1000
+    for (let i = 0; i < ROWS; i++) {
+      const rid = 100 + i * 4
+      largeNodes.push({ id: rid, parentId: 0, flexDirection: 'row', width: VP.width - 32, height: 56 })
+      largeNodes.push({ id: rid + 1, parentId: rid, width: 36, height: 36 })
+      largeNodes.push({ id: rid + 2, parentId: rid, flexGrow: 1, flexDirection: 'column' })
+      largeNodes.push({ id: rid + 3, parentId: rid + 2, width: 120, height: 16 })
+    }
+    await runScale('large', largeNodes, 'V3 large：1000 项 ≈4004 节点（与 S2 同规模，可比）')
+
+    // ── ★★类B（不利场景）：单条指令但**重排范围 = 根**（与类A 对照）──
+    //
+    // 【为什么必须测它（否则成绩只覆盖了有利情形）】
+    //   类A（上面的 small/large）：改的是**被显式尺寸行罩住**的子节点 ⇒ 重排止于该行
+    //     （`relayout_count = 2`）。这是布局边界发挥作用的**最优**情形。
+    //   类B：改**行自身的高度** ⇒ 兄弟行全部移位 ⇒ 范围上浮到根 ⇒ 整树重排。
+    //   两者都是"一条指令"，但代价差一个数量级——不测就是**选择性汇报**。
+    //   与 S2 的类A/类B 划分同源（S2_B_sibling_margin 就是类B）。
+    {
+      const largeNodes: Array<Record<string, unknown>> = [
+        { id: 0, parentId: null, flexDirection: 'column', width: VP.width, height: VP.height },
+        { id: 2, parentId: 0, flexDirection: 'row', width: VP.width - 32, height: 56 },
+        { id: 1, parentId: 2, width: 36, height: 36 },
+      ]
+      const ROWS = 1000
+      for (let i = 0; i < ROWS; i++) {
+        const rid = 100 + i * 4
+        largeNodes.push({ id: rid, parentId: 0, flexDirection: 'row', width: VP.width - 32, height: 56 })
+        largeNodes.push({ id: rid + 1, parentId: rid, width: 36, height: 36 })
+        largeNodes.push({ id: rid + 2, parentId: rid, flexGrow: 1, flexDirection: 'column' })
+        largeNodes.push({ id: rid + 3, parentId: rid + 2, width: 120, height: 16 })
+      }
+      const mountOut = safeParseAny(proteusSelfDraw.mount(JSON.stringify({ viewport: VP, nodes: largeNodes })))
+      if (mountOut?.ok) {
+        const keys = new PropKeyTable()
+        const strings = new StringPool()
+        const captured: Uint8Array[] = []
+        const rt = new SlotRuntime(keys, strings, (bytes) => captured.push(bytes))
+        const heightKey = keys.intern('layout.height')
+        const N = 100
+        let lastOut: Record<string, unknown> | undefined
+        const t0 = clock()
+        for (let i = 0; i < N; i++) {
+          // ★行高在 56/60 间交替（每次都是真实变更；行高变化会让后续兄弟移位 ⇒ 类B）
+          rt.buffer.push({ op: 0x02 /* SET_STYLE */, nodeId: 2, keyId: heightKey, value: i % 2 ? 60 : 56 })
+          rt.flush()
+          const bytes = captured.pop()
+          if (bytes) lastOut = safeParseAny(proteusSelfDraw.applyOps(JSON.stringify(Array.from(bytes))))
+        }
+        const batchMs = clock() - t0
+
+        // ★分位采样（与本用例其它档一致；单次读数受时钟分辨率影响，摊还是主读数）
+        const classBSamples: number[] = []
+        for (let i = 0; i < 60; i++) {
+          const t1 = clock()
+          rt.buffer.push({ op: 0x02, nodeId: 2, keyId: heightKey, value: i % 2 ? 60 : 56 })
+          rt.flush()
+          const b = captured.pop()
+          if (b) lastOut = safeParseAny(proteusSelfDraw.applyOps(JSON.stringify(Array.from(b))))
+          classBSamples.push(clock() - t1)
+        }
+        classBSamples.sort((a, b) => a - b)
+        const pickB = (pp: number) => classBSamples[Math.min(classBSamples.length - 1, Math.floor(classBSamples.length * pp))]
+
+        results.push({
+          case: 'V3_vapor_large_classB',
+          note: `V3 large · **类B（不利）**：改行高 ⇒ 兄弟移位 ⇒ 范围上浮（${N} 次摊还；时钟=${clockName}）`,
+          items: 1000, nodes: (mountOut.node_count as number) ?? 0,
+          vue_ms: (batchMs / N), to_request_ms: 0, serialize_ms: 0,
+          host_ms: (lastOut?.host_total_ms as number) ?? 0,
+          total_ms: batchMs, patch_count: rt.getStats().opsEmitted,
+          request_bytes: (lastOut?.in_bytes as number) ?? 0,
+          extra: {
+            clock: clockName,
+            amortized_us: Math.round((batchMs / N) * 1000 * 1000) / 1000,
+            batch_ms: Math.round(batchMs * 100) / 100,
+            iters: N,
+            // ★分位（60 次采样；★这是**不利场景**，读数应与类A 并列展示而非只报类A）
+            p50_ms: pickB(0.5), p95_ms: pickB(0.95), p99_ms: pickB(0.99),
+            min_ms: classBSamples[0], max_ms: classBSamples[classBSamples.length - 1],
+            host_rects_parse_ms: lastOut?.rects_parse_ms,
+            host_relayout: lastOut?.relayout_count,
+            host_scopes: lastOut?.scopes,
+            host_updated_layers: lastOut?.updated_layers,
+            host_apply_ms: lastOut?.apply_ms,
+            host_layers_ms: lastOut?.layers_ms,
+            host_unsupported: lastOut?.unsupported_count,
+          },
+        })
+      }
+    }
+
+    // ★计时装置诊断（写进报告，避免下次又误读分位读数）
     results.push({
-      case: 'V3_vapor_slot_pipeline',
-      note: `V3 完整链路：订阅表 → 槽位 → 二进制指令 → 真机 Rust（${ITERS} 次单节点更新）`,
-      items: 2, nodes: (mountOut.node_count as number) ?? 2,
-      vue_ms: pick(0.5), to_request_ms: 0, serialize_ms: 0,
-      host_ms: (lastOut?.host_total_ms as number) ?? 0,
-      total_ms: samples.reduce((a, b) => a + b, 0),
-      patch_count: rt.getStats().opsEmitted, request_bytes: (lastOut?.in_bytes as number) ?? 0,
-      extra: {
-        l1_slots: loadRes.l1Slots,
-        l0_slots: loadRes.l0Slots,
-        unsupported_evaluators: loadRes.unsupportedEvaluators.length,
-        p50_ms: pick(0.5), p95_ms: pick(0.95), p99_ms: pick(0.99),
-        min_ms: samples[0], max_ms: samples[samples.length - 1],
-        flushes: rt.getStats().flushes,
-        ops_total: rt.getStats().opsEmitted,
-        host_relayout: lastOut?.relayout_count,
-        host_scopes: lastOut?.scopes,
-        host_updated_layers: lastOut?.updated_layers,
-        host_unsupported: lastOut?.unsupported_count,
-        host_apply_ms: lastOut?.apply_ms,
-        host_layers_ms: lastOut?.layers_ms,
-      },
+      case: 'V3_clock_diag',
+      note:
+        `计时装置：clock=${clockName} · 512 次连续读中 ${ticks} 次前进` +
+        ` · 最小非零 delta=${minNonZero === Infinity ? '无（该时钟在紧密循环里不前进）' : minNonZero + 'ms'}` +
+        ` ⇒ 若前进次数远小于 512，**分位读数不可信，请以 amortized_us 为准**`,
+      items: 0, nodes: 0, vue_ms: 0, to_request_ms: 0, serialize_ms: 0, host_ms: 0, total_ms: 0,
+      patch_count: 0, request_bytes: 0,
+      extra: { clock: clockName, ticks_in_512: ticks, min_nonzero_ms: minNonZero === Infinity ? null : minNonZero },
     })
-    markCeiling('vapor', `单节点更新 ×${ITERS}`, pick(0.95), 'V3 完整链路 p95')
   },
 })
 
