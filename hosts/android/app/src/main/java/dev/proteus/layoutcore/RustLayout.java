@@ -35,6 +35,17 @@ final class RustLayout {
     private static native int nativeHandleCount();
     private static native String nativeReadRects(long handle);
     private static native String nativeHitTest(long handle, float x, float y);
+    /** ★增量更新（样式补丁 JSON）——此前宿主只能 destroy+create（整树重建） */
+    private static native String nativeUpdate(long handle, String patchesJson);
+    /* ★★列表复用池（§12.6）：核心给**决策**，Java 侧只执行**动作**（与 iOS 同一套核心逻辑） */
+    private static native long nativeRecycleCreate(int itemCount, int leadingRows, int followingRows);
+    private static native String nativeRecycleUpdate(long handle, int firstVisible, int lastVisible);
+    private static native String nativeRecycleStats(long handle);
+    private static native void nativeRecycleDestroy(long handle);
+    /* ★结构变更 / 度量注入 / Vapor 二进制指令流（补齐与 iOS 同等的生产能力） */
+    private static native String nativeSetTextMeasures(long handle, String measuresJson);
+    private static native String nativeSplice(long handle, String spliceJson);
+    private static native String nativeApplyOps(long handle, byte[] opsBytes);
 
     static boolean isLoaded() { return loaded; }
     static String getLoadError() { return loadError; }
@@ -106,8 +117,62 @@ final class RustLayout {
         return loaded ? nativeHitTest(handle, x, y) : "{\"ok\":false,\"error\":\"native 未加载：" + loadError + "\"}";
     }
 
-    /** ★§9.3 长列表复用池跑批（4000 行 / 滚到底再回滚） */
+    /** ★§9.3 长列表复用池跑批（4000 行 / 滚到底再回滚）——纯逻辑跑批（不含平台对象） */
     static String recycleBench(int rows, int frames) {
         return loaded ? nativeRecycleBench(rows, frames) : "{\"ok\":false,\"error\":\"native 未加载：" + loadError + "\"}";
     }
+
+    /* ══════════ ★★增量更新 / 列表复用池 / 结构变更 / Vapor 指令流 ══════════ */
+
+    /** 增量更新：只发改动节点的样式补丁（几何经核心按布局边界局部重排） */
+    static String update(long handle, String patchesJson) {
+        return loaded ? nativeUpdate(handle, patchesJson) : NOT_LOADED;
+    }
+
+    /**
+     * ★★建**复用池窗口**（§12.6）：返回句柄（0 = 失败）。
+     * `leadingRows`/`followingRows` 传 0 ⇒ 用核心默认（8 / 2）。
+     */
+    static long recycleCreate(int itemCount, int leadingRows, int followingRows) {
+        return loaded ? nativeRecycleCreate(itemCount, leadingRows, followingRows) : 0;
+    }
+
+    /**
+     * ★★复用池**本帧决策**：返回 `{acquire:[行号], release:[行号], direction, first_preload, …}`。
+     *
+     * 【为什么必须由核心给决策（本仓实测的设计纠正）】宿主此前**手写**方向敏感预载逻辑
+     *   （`backward ? 8 : 2`）——那是 `recycle.rs` 的第二份副本，漂移是静默的。
+     *   ⇒ 现在两端（iOS/Android）共用同一份决策，平台只执行"取/还对象"。
+     *
+     * ★执行顺序：**先 release 再 acquire**（反了 ⇒ 本帧要建的对象无法复用刚释放的 ⇒ 复用率虚低）。
+     */
+    static String recycleUpdate(long handle, int firstVisible, int lastVisible) {
+        return loaded ? nativeRecycleUpdate(handle, firstVisible, lastVisible) : NOT_LOADED;
+    }
+
+    /** 复用池累计读数（诊断/判据） */
+    static String recycleStats(long handle) {
+        return loaded ? nativeRecycleStats(handle) : NOT_LOADED;
+    }
+
+    static void recycleDestroy(long handle) {
+        if (loaded && handle != 0) nativeRecycleDestroy(handle);
+    }
+
+    /** ★注入文本度量（增量重排会重新度量范围内文本 ⇒ 不注入则文本塌成 0 高） */
+    static String setTextMeasures(long handle, String measuresJson) {
+        return loaded ? nativeSetTextMeasures(handle, measuresJson) : NOT_LOADED;
+    }
+
+    /** ★结构变更（增删行）：`{removes:[id], inserts:[{parentId,nodes,index}], textMeasures:{}}` */
+    static String splice(long handle, String spliceJson) {
+        return loaded ? nativeSplice(handle, spliceJson) : NOT_LOADED;
+    }
+
+    /** ★★Vapor IR 二进制指令流（JNI 原生 byte[] —— 无需 iOS 那层 JSON 数组包装） */
+    static String applyOps(long handle, byte[] opsBytes) {
+        return loaded ? nativeApplyOps(handle, opsBytes) : NOT_LOADED;
+    }
+
+    private static final String NOT_LOADED = "{\"ok\":false,\"error\":\"native 未加载\"}";
 }
