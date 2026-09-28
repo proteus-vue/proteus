@@ -1325,6 +1325,8 @@ fn apply_ops_impl(handle: u64, ptr: *const u8, len: u32, with_rects: bool) -> Re
     let t_rel0 = std::time::Instant::now();
     let multi = crate::ops_apply::relayout_multi(&mut entry.tree, &outcome.dirty);
     let t_rel = t_rel0.elapsed().as_secs_f64() * 1000.0;
+    // ★引擎内部分段（copy/build/solve/writeback）——「先测量再优化」的依据
+    let eng_phases = crate::ops_apply::last_relayout_phases();
 
     // ★记下本次重排范围（供 `proteus_layout_rects_bin` 限定返回范围）
     entry.last_scopes = multi.scopes.clone();
@@ -1337,7 +1339,8 @@ fn apply_ops_impl(handle: u64, ptr: *const u8, len: u32, with_rects: bool) -> Re
         "relayout_count": multi.relayout_count,
         "scopes": multi.scopes,
         "unsupported": unsupported_json,
-        "timing": {"lock_ms": t_lock, "apply_ms": t_apply, "relayout_ms": t_rel, "collect_ms": 0.0},
+        "timing": {"lock_ms": t_lock, "apply_ms": t_apply, "relayout_ms": t_rel, "collect_ms": 0.0,
+                   "engine_phases": eng_phases},
     });
 
     if with_rects {
