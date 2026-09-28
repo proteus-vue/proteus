@@ -95,6 +95,11 @@ func physFootprintMB() -> Double {
     func update(_ treeJson: String) -> String
     /// ★★**增量更新**：只发改动过的节点的样式补丁（跨边界字节数从 280KB 降到几十字节）
     func updatePatches(_ patchesJson: String) -> String
+    /// ★★**绘制补丁**（颜色/圆角/字重/字号/透明度）——**几何之外的第二条通道**
+    ///
+    /// 入参：`[{"id":N,"paint":{...}}]`（`paint` 是**完整快照**，缺省键为 `null` ⇒ 清除）。
+    /// 与 `updatePatches`（布局，经核心重排）**互不干涉**：本入口**不碰核心**。
+    func paintPatches(_ patchesJson: String) -> String
     /// ★★**结构变更（增删行）**：`{removes:[id], inserts:[{parentId,nodes:[...]}], textMeasures:{}}`
     ///
     /// 【为什么必须有（本仓实测的功能缺口）】此前增删行只能**重发整棵树**
@@ -244,8 +249,12 @@ final class SelfDrawView: UIView {
             // 文本叶子 → CATextLayer（GPU 加速；不创建 UIView，也不自栅格化）
             let tl = CATextLayer()
             tl.string = text
-            tl.font = CGFont("Helvetica" as CFString)
-            tl.fontSize = fontSize ?? 14
+            let fs = fontSize ?? 14
+            let fw = (style["fontWeight"] as? CGFloat) ?? 400
+            // ★字体由统一构造器给出（与度量同源——见 `font(size:weight:)` 注释）
+            let ufont = SelfDrawBridge.font(size: fs, weight: fw)
+            tl.font = CGFont(ufont.fontName as CFString)
+            tl.fontSize = fs
             tl.foregroundColor = (style["color"] as? String).flatMap(parseHexColor)?.cgColor ?? UIColor.white.cgColor
             tl.alignmentMode = .left
             tl.truncationMode = .end
@@ -448,6 +457,7 @@ final class SelfDrawView: UIView {
             if let v = n[k] as? String { style[k] = v }
         }
         if let fs = n["fontSize"] as? Double { style["fontSize"] = CGFloat(fs) }
+        if let fw = n["fontWeight"] as? Double { style["fontWeight"] = CGFloat(fw) }   // ★字重（见 font(size:weight:) 注释）
         if let br = n["borderRadius"] as? Double { style["borderRadius"] = CGFloat(br) }
         return style
     }
@@ -826,6 +836,13 @@ final class SelfDrawView: UIView {
         return nil
     }
 
+    /// 取某节点建层时记录的 **fontWeight**（文本度量要用它——与绘制同源）
+    func fontWeightOf(id: Int) -> Double? {
+        if let fw = metaByNodeId[id]?["fontWeight"] as? CGFloat { return Double(fw) }
+        if let fw = metaByNodeId[id]?["fontWeight"] as? Double { return fw }
+        return nil
+    }
+
     /// ★★**层序对账**（⚠ **设计有误，仅作诊断读数——勿当判据**，见下）
     ///
     /// 【为什么要做它】像素判据**证明不了层序**——把 `insertLayers` 退化为"恒追加"后
@@ -880,6 +897,64 @@ final class SelfDrawView: UIView {
         }
         CATransaction.commit()
         return (applied, missing)
+    }
+
+    /// ★★**应用绘制补丁**（颜色 / 圆角 / 字号 / 字重 / 透明度）——**几何之外的第二条通道**
+    ///
+    /// 【为什么单独一条通道（本仓实测的功能缺口）】`takePatches()` 只发布**布局**字段
+    ///   （要经核心重排）；绘制属性与几何无关 ⇒ 直接改层即可，**绕核心是纯粹的多余**
+    ///   （核心不认识 paint 字段，送过去只会白跑一轮）。
+    ///
+    /// 【形态】`{id: {paint...}}`；键值为 `null` ⇒ **清除**（如移除 borderRadius ⇒ 归零）
+    ///   ⇒ 这与"只发改动键"不同：宿主无需维护旧值，逻辑平凡。
+    ///
+    /// - Returns: 实际应用的层数（诊断读数：证明 paint 通道真的生效）
+    func applyPaintPatches(_ patches: [[String: Any]]) -> Int {
+        var applied = 0
+        CATransaction.begin()
+        CATransaction.setDisableActions(true)
+        for p in patches {
+            guard let id = p["id"] as? Int, let paint = p["paint"] as? [String: Any] else { continue }
+            guard let layer = layersById[id] else { continue }
+            // ① 背景色（CALayer）
+            if let bgAny = paint["backgroundColor"] {
+                layer.backgroundColor = (bgAny as? String).flatMap(parseHexColor)?.cgColor
+            }
+            // ② 文本层专有：string / 字号 / 字重 / 前景色
+            if let tl = layer as? CATextLayer {
+                if let colorAny = paint["color"] {
+                    tl.foregroundColor = (colorAny as? String).flatMap(parseHexColor)?.cgColor
+                        ?? UIColor.white.cgColor
+                }
+                let fs = (paint["fontSize"] as? CGFloat) ?? tl.fontSize
+                let fw = (paint["fontWeight"] as? CGFloat) ?? 400
+                if paint["fontSize"] != nil || paint["fontWeight"] != nil {
+                    let ufont = SelfDrawBridge.font(size: fs, weight: fw)
+                    // ★字体变了 ⇒ 必须同时更新 `font` 与 `fontSize`（CATextLayer 两者独立）
+                    tl.font = CGFont(ufont.fontName as CFString)
+                    tl.fontSize = fs
+                }
+            }
+            // ③ 圆角（null ⇒ 归零）
+            if let brAny = paint["borderRadius"] {
+                let r = (brAny as? CGFloat) ?? 0
+                layer.cornerRadius = r
+                layer.masksToBounds = r > 0
+            }
+            // ④ 透明度
+            if let opAny = paint["opacity"] {
+                let op = (opAny as? CGFloat) ?? 1
+                layer.opacity = Float(op)
+            }
+            // ⑤ 更新 meta（后续度量/诊断读它——保持"层 = meta"一致）
+            var m = metaByNodeId[id] ?? [:]
+            for (k, v) in paint where !(v is NSNull) { m[k] = v }
+            for (k, v) in paint where v is NSNull { m.removeValue(forKey: k) }
+            metaByNodeId[id] = m
+            applied += 1
+        }
+        CATransaction.commit()
+        return applied
     }
 
     /// ★★**层序对账（对真实层序）**：把「CALayer 子层顺序」与「核心的 children 顺序」比较
@@ -1008,12 +1083,29 @@ final class SelfDrawBridge: NSObject, SelfDrawExports {
     private static var measureCache: [String: CGSize] = [:]
 
     /// CoreText 度量（★平台注入：核心不自研文本，Profile §L4）
-    static func measureText(_ text: String, fontSize: CGFloat) -> CGSize {
+    /// ★★**字体构造（唯一实现）**——绘制（CATextLayer）与度量必须用**同一支字体**
+    ///
+    /// 【为什么必须同源（本仓实测）】若绘制用粗体、度量用常规体 ⇒ 文本**显示**与实际
+    ///   **占位**不符（字被裁或留白），且几何断言全绿（几何是按度量算的）。
+    ///   本仓已有同族教训（坐标口径、层序）：**同一事实只认一个来源**。
+    ///   ★放在 `SelfDrawBridge`（而非 View）：**度量在这里**（`measureText`）——
+    ///     字体构造与度量同处一类，`makeLayer` 经 `SelfDrawBridge.font` 取同一支字体。
+    ///
+    /// - Parameter weight: CSS 口径字重（400 = normal，700 = bold）
+    static func font(size: CGFloat, weight: CGFloat) -> UIFont {
+        if weight >= 700 { return UIFont.boldSystemFont(ofSize: size) }
+        if weight >= 600 { return UIFont.systemFont(ofSize: size, weight: .semibold) }
+        if weight <= 300 { return UIFont.systemFont(ofSize: size, weight: .light) }
+        return UIFont.systemFont(ofSize: size)
+    }
+
+    static func measureText(_ text: String, fontSize: CGFloat, fontWeight: CGFloat = 400) -> CGSize {
         if text.isEmpty { return .zero }
-        let key = "\(fontSize)\u{1}\(text)"
+        // ★缓存键必须含**字重**（本仓实测的同一类缺陷：键不含某维度 ⇒ 不同字体共用度量 ⇒ 静默错几何）
+        let key = "\(fontSize)\u{1}\(fontWeight)\u{1}\(text)"
         if let hit = measureCache[key] { measureCacheHits += 1; return hit }
         measureCacheMisses += 1
-        let font = UIFont.systemFont(ofSize: fontSize)
+        let font = SelfDrawBridge.font(size: fontSize, weight: fontWeight)
         let attrs: [NSAttributedString.Key: Any] = [.font: font]
         let size = (text as NSString).size(withAttributes: attrs)
         // ★向上取整到整点：真机实测文本宽度常带小数（如 47.33pt），
@@ -1084,9 +1176,10 @@ final class SelfDrawBridge: NSObject, SelfDrawExports {
                 guard let id = p["id"] as? Int,
                       let style = p["style"] as? [String: Any],
                       let text = style["text"] as? String else { continue }
-                // fontSize 取宿主建层时留下的 meta（与全量渲染同源，不猜默认值）
+                // fontSize / fontWeight 取宿主建层时留下的 meta（与全量渲染同源，不猜默认值）
                 let fs = (view.fontSizeOf(id: id)).map { CGFloat($0) } ?? 14
-                let sz = SelfDrawBridge.measureText(text, fontSize: fs)
+                let fw = (view.fontWeightOf(id: id)).map { CGFloat($0) } ?? 400
+                let sz = SelfDrawBridge.measureText(text, fontSize: fs, fontWeight: fw)
                 measures["\(id)"] = ["width": Double(sz.width), "height": Double(sz.height)]
             }
         }
@@ -1169,6 +1262,22 @@ final class SelfDrawBridge: NSObject, SelfDrawExports {
                            "host_total_ms": round(totalMs * 100) / 100])
     }
 
+    /// 见协议声明（`paintPatches`）：**不经核心**，直接改层
+    func paintPatches(_ patchesJson: String) -> String {
+        guard let view = view else { return "{\"ok\":false,\"error\":\"无视图\"}" }
+        guard let d = patchesJson.data(using: .utf8),
+              let arr = (try? JSONSerialization.jsonObject(with: d)) as? [[String: Any]] else {
+            return "{\"ok\":false,\"error\":\"paintPatches 解析失败（需数组）\"}"
+        }
+        let t0 = CFAbsoluteTimeGetCurrent()
+        let applied = view.applyPaintPatches(arr)
+        let ms = (CFAbsoluteTimeGetCurrent() - t0) * 1000
+        return jsonString(["ok": true, "path": "paintPatches", "incremental": true,
+                           "in_bytes": patchesJson.count, "paint_patches": arr.count,
+                           "paint_layers_applied": applied,
+                           "paint_ms": round(ms * 100) / 100])
+    }
+
     /// ★★**结构变更（增删行）**：把 splice 明细交给核心 + **宿主层树增量增删**
     ///
     /// 【与 updatePatches 的关系】同一条层更新通道（`updateLayersIncremental`），
@@ -1202,7 +1311,8 @@ final class SelfDrawBridge: NSObject, SelfDrawExports {
                 for n in nodes {
                     guard let text = n["text"] as? String, !text.isEmpty, let id = n["id"] as? Int else { continue }
                     let fontSize = (n["fontSize"] as? Double).map { CGFloat($0) } ?? 14
-                    let sz = SelfDrawBridge.measureText(text, fontSize: fontSize)
+                    let fw = (n["fontWeight"] as? Double).map { CGFloat($0) } ?? 400
+                    let sz = SelfDrawBridge.measureText(text, fontSize: fontSize, fontWeight: fw)
                     measures["\(id)"] = ["width": Double(sz.width), "height": Double(sz.height)]
                 }
             }
@@ -1603,7 +1713,8 @@ final class SelfDrawBridge: NSObject, SelfDrawExports {
         for n in nodes {
             guard let text = n["text"] as? String, !text.isEmpty, let id = n["id"] as? Int else { continue }
             let fontSize = (n["fontSize"] as? Double).map { CGFloat($0) } ?? 14
-            let sz = SelfDrawBridge.measureText(text, fontSize: fontSize)
+            let fw = (n["fontWeight"] as? Double).map { CGFloat($0) } ?? 400
+            let sz = SelfDrawBridge.measureText(text, fontSize: fontSize, fontWeight: fw)
             textMeasures["\(id)"] = ["width": Double(sz.width), "height": Double(sz.height)]
         }
         let measureMs = (CFAbsoluteTimeGetCurrent() - tMeasure0) * 1000
@@ -1764,6 +1875,7 @@ final class SelfDrawBridge: NSObject, SelfDrawExports {
                 if let v = n[k] as? String { style[k] = v }
             }
             if let fs = n["fontSize"] as? Double { style["fontSize"] = CGFloat(fs) }
+            if let fw = n["fontWeight"] as? Double { style["fontWeight"] = CGFloat(fw) }
             if let br = n["borderRadius"] as? Double { style["borderRadius"] = CGFloat(br) }
             flat.append((id: id, parentId: pid, rect: rect, style: style))
         }

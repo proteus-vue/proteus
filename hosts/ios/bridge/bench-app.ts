@@ -37,6 +37,8 @@ export interface BenchApp {
   setHeaderMargin: (v: number) => void
   /** ★V0 探针：行子组件（comp 策略）的累计渲染次数——验证「更新是否真的止于该行」 */
   rowRenderCount: () => number
+  /** ★V10：改**第 i 行的底色**（纯绘制变更——验证 paint 通道；此前这类变更无通道） */
+  setRowTint: (i: number, tint: string) => void
   /** ★文本变更：改前 k 行的文案（**击穿内容寻址的度量缓存**，逼出文本度量成本） */
   churnText: (k: number, tag: string) => void
   renderCount: () => number
@@ -208,6 +210,10 @@ export function makeApp(initial: number, strategy: BenchStrategy = 'plain'): Ben
     mutateDeep: () => { deep.a.b.c.v = deep.a.b.c.v + 1 },
     setScaleBase: (v) => { scaleBase.value = v },
     setRowMargin: (i, px) => { rowMargins.value = { ...rowMargins.value, [i]: px } },
+    setRowTint: (i, tint) => {
+      // ★改**行对象的 tint** ⇒ buildBenchRow 的 `it.tint ?? '#1b1b21'` 变 ⇒ patchProp('style') 触发
+      items.value = items.value.map((it, idx) => (idx === i ? { ...it, tint } : it))
+    },
     setDotSize: (i, px) => { dotSizes.value = { ...dotSizes.value, [i]: px } },
     setHeaderMargin: (v) => { headerMargin.value = v },
     rowRenderCount: () => v0RowRenders - rowRendersStart,

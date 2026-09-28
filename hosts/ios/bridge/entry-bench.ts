@@ -65,6 +65,8 @@ interface SelfDrawNative {
   pendingStats?(): String
   /** ★★V5：批量像素采样（渲染一次读多点）—— 像素级验证的判据 */
   samplePixels?(json: String): String
+  /** ★V10：绘制补丁（颜色/圆角/字重/字号/透明度）——几何之外的第二条通道（不经核心） */
+  paintPatches?(patchesJson: string): string
   /** ★V9：注入一次 tap（内容坐标）——走与真实触摸同一条链（核心命中 → JS 派发） */
   tapAt?(x: number, y: number): string
   /** ★V9：手势统计（命中/未命中/错误） */
@@ -81,7 +83,7 @@ const BN = { snapshot: 'bench-final' }
 // ★构建标识：每次构建写入，用于**确凿判定**设备上跑的是哪份代码
 //   （踩坑：靠文件 mtime 判断"报告是否刷新"不可靠——新建目标文件的时间恒为"现在"；
 //    且我看不出设备实际执行的是旧 bundle，白跑一轮。有了这个字段就能一眼判定。）
-const BUILD_ID = '7959381a-184659'
+const BUILD_ID = '34559ee9-190533'
 const now = (): number => Date.now()
 /** 宽松解析（宿主返回可能是字符串或已是对象） */
 const safeParseAny = (s: any): any => {
@@ -1971,6 +1973,75 @@ CASES.push({
         //   「UITouch → 内容坐标换算 + tap 时序判定」需人手/XCUITest（见 selfdraw-scene.swift 的 tapAt 注释）
         covered: 'core-hit + shell-dispatch',
         not_covered: 'UITouch->content-coord + tap-timing',
+      },
+    })
+    app.dispose()
+  },
+})
+
+/* V10 · ★★绘制通道 + 字重：颜色/圆角/字重变更 → 层上生效（不经核心） */
+CASES.push({
+  name: 'V10_paint_channel',
+  note: '★★绘制补丁通道（颜色/圆角/字重/字号/透明度）+ 字重端到端（此前这些变更无任何通道）',
+  fn: async () => {
+    const N = 30
+    const app = makeApp(N)
+    mountApp(app, N)
+
+    // ★找一个**已知几何**的靶子：取首行卡片（height:56 的节点）与其背景色
+    const nodes = app.adapter.toRequest(VP).nodes as Array<{ id: number; height?: number }>
+    const rowId = nodes.find((n) => n.height === 56)?.id ?? -1
+
+    // ① 通过**适配器**改绘制属性（颜色/圆角）——走真实 Vue 路径
+    app.setRowTint(0, '#00FF00')   // 见 bench-app 新增
+    await nextTick()
+
+    // ② 取两条通道：布局补丁（应为空——颜色不改几何）与绘制补丁（应有 1 条）
+    const layoutPatches = app.adapter.takePatches()
+    const paintPatches = (app.adapter as unknown as {
+      takePaintPatches(): Array<{ id: number; paint: Record<string, unknown> }>
+    }).takePaintPatches()
+
+    // ③ 发给宿主（paint 通道；不经核心）
+    const out = paintPatches.length > 0
+      ? safeParseAny(proteusSelfDraw.paintPatches?.(JSON.stringify(paintPatches)) ?? '{}')
+      : undefined
+
+    // ④ 像素验证：新行区域应变绿（★这是"屏幕上真的改了"的硬证据）
+    //   首行 y：与 V9 同法——先用 tap 探针确定首行位置，再采样其中心
+    const probe = safeParseAny(proteusSelfDraw.tapAt?.(120, 152) ?? '{}')
+    const firstRowY = (probe?.target as number) >= 0 ? 152 : 88
+    const px = safeParseAny(
+      proteusSelfDraw.samplePixels?.(JSON.stringify([{ x: 120, y: firstRowY }])) ?? '{}',
+    )
+    const got: string = (px?.pixels as string[])?.[0] ?? ''
+
+    const checks = {
+      // ★颜色不改几何 ⇒ 布局补丁必须为空（否则是把绘制送进了核心——多余）
+      layoutEmpty: Array.isArray(layoutPatches) && layoutPatches.length === 0,
+      // ★paint 通道必须有该节点
+      paintHasRow: paintPatches.some((p) => p.id === rowId),
+      // ★宿主应用了
+      hostApplied: ((out?.paint_layers_applied as number) ?? 0) > 0,
+      // ★像素变绿（屏幕上真的改了）
+      pixelGreen: got.toUpperCase() === '#00FF00',
+    }
+    const verdict = Object.values(checks).every(Boolean) ? 'PASS' : 'FAIL'
+    results.push({
+      case: 'V10_paint_channel',
+      note: `绘制通道：改行底色 → paint ${paintPatches.length} 条 · 宿主应用 ${out?.paint_layers_applied ?? 0} 层 · 像素 ${got}`,
+      items: N, nodes: nodes.length,
+      vue_ms: 0, to_request_ms: 0, serialize_ms: 0, host_ms: (out?.paint_ms as number) ?? 0, total_ms: 0,
+      patch_count: app.adapter.patchCount(), request_bytes: JSON.stringify(paintPatches).length,
+      extra: {
+        verdict, checks, row_id: rowId, first_row_y: firstRowY,
+        layout_patches: Array.isArray(layoutPatches) ? layoutPatches.length : 'null',
+        paint_patches: paintPatches.length,
+        host_out: out, pixel: got,
+        // ★诚实边界：本档验证的是"paint 通道能把绘制改动送到层上"；
+        //   字重的**度量**正确性由 Rust/TS 单测覆盖（不同字重不同 textStyleKey）
+        covered: 'adapter→host paint channel + pixel',
+        not_covered: 'fontWeight 度量差异的像素级比对（需两支字体渲染同一文本对照）',
       },
     })
     app.dispose()
