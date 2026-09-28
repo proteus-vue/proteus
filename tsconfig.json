@@ -17,6 +17,10 @@
     "baseUrl": ".",
     "paths": {
       "@/*": ["src/*"],
+      // ★@vue/runtime-core 在仓库根**没有** link（pnpm 只把它 link 进声明它的包）：
+      //   hosts/ios/bridge/bench-app.ts（真机基准与桌面自检共用）从根路径 import 它，
+      //   TS 的 node 解析走不到 ⇒ 指向 pnpm 的**提升别名目录**（与版本号无关，升级 Vue 不需改这里）。
+      "@vue/runtime-core": ["node_modules/.pnpm/node_modules/@vue/runtime-core"],
       "@proteus-vue/compiler": ["packages/compiler/src/index.ts"],
       "@proteus-vue/compiler/style-safety": ["packages/compiler/src/style-safety/index.ts"],
       "@proteus-vue/shared": ["packages/shared/src/index.ts"],

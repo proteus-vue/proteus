@@ -4,7 +4,18 @@
 // e2e 测试（tests/e2e-web.test.ts）需要真实构建产物 + Chromium，由 npm run test:e2e:web 单独运行
 import { defineConfig } from 'vitest/config'
 import { fileURLToPath, URL } from 'node:url'
+import { createRequire } from 'node:module'
+import path from 'node:path'
 import vue from '@vitejs/plugin-vue'
+
+// ★@vue/runtime-core 在仓库根**不可解析**（pnpm 只把它 link 进声明它的包）：
+//   hosts/ios/bridge/bench-app.ts（真机 bundle 与桌面自检共用）从这里 import 它，
+//   node resolution 走不到 ⇒ 与 hosts/ios/bridge/build-*.mjs 同款思路：显式解析，不靠隐式。
+//   （解析起点取 packages/renderer-app —— 它的 package.json 声明了该依赖）
+const runtimeCoreDir = path.dirname(
+  createRequire(path.join(path.dirname(fileURLToPath(import.meta.url)), 'packages/renderer-app/package.json'))
+    .resolve('@vue/runtime-core/package.json'),
+)
 
 export default defineConfig({
   // ★G-22 柔性布局组件测试：启用 vue 插件（SFC 挂载测试；不影响既有非 SFC 测试）
@@ -32,6 +43,9 @@ export default defineConfig({
   },
   resolve: {
     alias: [
+      // ★@vue/runtime-core：hosts/ios/bridge/bench-app.ts（V0 探针与真机基准共用）需要它
+      //   —— 该位置 node resolution 走不到（见顶部说明）。指向**包根**，由 vite 按 package.json 解析入口。
+      { find: '@vue/runtime-core', replacement: runtimeCoreDir },
       // 拆包后 src/runtime、src/router import @proteus-vue/shared/runtime（vitest 不加载 vite.config，需独立别名）
       { find: '@proteus-vue/shared', replacement: fileURLToPath(new URL('./packages/shared/src/index.ts', import.meta.url)) },
       // ★子路径 alias 必须在父路径之前（vite alias 前缀匹配：@proteus-vue/contracts 会吞掉 /style 后缀）

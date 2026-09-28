@@ -23,6 +23,10 @@
 import { h, ref, computed, nextTick, reactive } from '@vue/runtime-core'
 import { createAppRenderer } from '@proteus-vue/renderer-app'
 import { createSelfDrawAdapter } from '@proteus-vue/renderer-app/adapters/selfdraw'
+// ★被测应用工厂 + V0 探针的三种用法：与**桌面自检**共用同一份实现
+//   （见 bench-app.ts 顶部说明；桌面自检 tests/v0-probe-mechanism.test.ts）
+import { makeApp, VP } from './bench-app'
+import type { BenchApp } from './bench-app'
 
 /* ────────────────────────── 宿主桥（与自绘场景同形，复用同一 Swift 宿主） ────────────────────────── */
 
@@ -38,12 +42,11 @@ declare const proteusSelfDraw: SelfDrawNative
 /** 快照名（宿主按模式注入，便于区分场景产物） */
 const BN = { snapshot: 'bench-final' }
 
-const VP = (globalThis as unknown as { __PROTEUS_VIEWPORT__?: { width: number; height: number } })
-  .__PROTEUS_VIEWPORT__ ?? { width: 390, height: 844 }
+// ★VP 定义在 bench-app.ts（与 V0 探针/应用工厂同处，桌面自检也用它）
 // ★构建标识：每次构建写入，用于**确凿判定**设备上跑的是哪份代码
 //   （踩坑：靠文件 mtime 判断"报告是否刷新"不可靠——新建目标文件的时间恒为"现在"；
 //    且我看不出设备实际执行的是旧 bundle，白跑一轮。有了这个字段就能一眼判定。）
-const BUILD_ID = 'fa6203eb-004718'
+const BUILD_ID = '7669a9dd-084555'
 const now = (): number => Date.now()
 /** 宽松解析（宿主返回可能是字符串或已是对象） */
 const safeParseAny = (s: any): any => {
@@ -76,135 +79,6 @@ interface CaseResult {
 }
 
 const results: CaseResult[] = []
-
-/* ────────────────────────── 应用工厂（规模可参数化） ────────────────────────── */
-
-interface BenchApp {
-  adapter: ReturnType<typeof createSelfDrawAdapter>
-  setCount: (n: number) => void
-  reverse: () => void
-  setItems: (items: { id: number; title: string; sub: string }[]) => void
-  mutateDeep: () => void
-  setScaleBase: (n: number) => void
-  /** ★类B 平级变更：改**第 i 行**的 margin（改变主轴占用 ⇒ **兄弟行全部移位** ⇒ 范围=父级） */
-  setRowMargin: (i: number, px: number) => void
-  /** ★类A 局部变更：改**第 i 行内子节点**的尺寸（行高显式 ⇒ 行尺寸不变 ⇒ 兄弟不动 ⇒ 范围应止于该行） */
-  setDotSize: (i: number, px: number) => void
-  /** ★文本变更：改前 k 行的文案（**击穿内容寻址的度量缓存**，逼出文本度量成本） */
-  churnText: (k: number, tag: string) => void
-  renderCount: () => number
-  /**
-   * ★释放该应用（加压用例之间必须调用）
-   *
-   * 【为什么必须（真机实测）】S 组初版每个用例建一个应用且从不释放 ⇒
-   *   到 S1_4000 时进程已达 **1.3GB**，后续用例的读数混进了 GC 风暴与内存压力，
-   *   无法判断"慢是因为算法还是因为内存"。加压测试要给出**可归因**的数字。
-   */
-  dispose: () => void
-  items: () => { id: number; title: string; sub: string }[]
-}
-
-/**
- * 构建被测应用（规模参数化）。
- *
- * ★同时支持「列表项」与「深层嵌套 + computed 链」两种数据形态：
- *   前者用于规模扫描与 diff 类用例；后者用于 B/C 两条响应式形态用例。
- */
-function makeApp(initial: number): BenchApp {
-  const n = ref(initial)
-  const accent = ref('#6f4ae8')
-  // ★深响应式：ref 包裹对象 → Vue 会深度 reactive 化（改叶子应只影响用到它的那部分）
-  const deep = reactive({ a: { b: { c: { v: 1 } } } })
-  // ★computed 链（3 级）：base → mid → top，渲染只读 top
-  const scaleBase = ref(1)
-  const scaleMid = computed(() => scaleBase.value * 2)
-  const scaleTop = computed(() => scaleMid.value + 100)
-  // ★列表数据（keyed diff 用）：独立数组，支持 reverse / 结构变更
-  const items0: { id: number; title: string; sub: string }[] = []
-  for (let i = 0; i < initial; i++) items0.push({ id: i, title: `列表项 ${i + 1}`, sub: i % 3 === 0 ? '分组标题' : '说明文字' })
-  const items = ref(items0)
-  let renders = 0
-
-  const adapter = createSelfDrawAdapter()
-  const renderer = createAppRenderer(adapter)
-  const container = adapter.createElement('p-view')
-  adapter.root.children.push(container)
-  container.parent = adapter.root
-
-  const size = ref(initial)          // 外部直接驱动规模（避免每次改 items 清空）
-  // ★逐行 margin：改**单行**属于「局部布局样式变更」⇒ 走增量路径且**范围应限于该行**
-  //   （踩坑：初版用**共享**的 rowMargin → 所有行的 margin 一起变 → patch=500、
-  //    重排覆盖所有行 ⇒ 看起来像「增量退化」，实际是**用例本身不是局部变更**）
-  const rowMargins = ref<Record<number, number>>({})
-  // ★行内子节点的尺寸（类A 局部变更的靶子）：行高显式 ⇒ 改它不该影响兄弟
-  const dotSizes = ref<Record<number, number>>({})
-  // ★文本版本号（击穿度量缓存用）
-  const textTag = ref(0)
-
-  const App = {
-    name: 'BenchApp',
-    render() {
-      renders++
-      const count = n.value
-      const c = accent.value
-      const rows = items.value.slice(0, Math.max(count, items.value.length)).map((it) =>
-        h('p-view', {
-          key: it.id,
-          style: {
-            flexDirection: 'row', alignItems: 'center',
-            height: 56, flexShrink: 0, margin: { bottom: rowMargins.value[it.id] ?? 8 }, padding: { left: 16, right: 16 },
-            backgroundColor: '#1b1b21', borderRadius: 12,
-          },
-        }, [
-          h('p-view', { style: { width: 36, height: dotSizes.value[it.id] ?? 36, backgroundColor: c, borderRadius: 18 } }),
-          h('p-view', { style: { flexGrow: 1, margin: { left: 12 } } }, [
-            h('p-text', { style: { fontSize: 16, color: '#ffffff' } }, it.title),
-            h('p-text', { style: { fontSize: 13, color: '#9aa3b2' } }, it.sub),
-          ]),
-          // ★深层 + computed 的消费点：只在「第一行」引用，便于观测细粒度更新
-          ...(it.id === items.value[0]?.id
-            ? [h('p-text', { style: { fontSize: 11, color: '#666' } }, `d${deep.a.b.c.v}/s${scaleTop.value}`)]
-            : []),
-        ]),
-      )
-      return h('p-view', {
-        style: {
-          flexDirection: 'column', width: VP.width, height: VP.height,
-          backgroundColor: '#101020', padding: { top: 60, left: 16, right: 16 },
-        },
-      }, [
-        h('p-text', { style: { fontSize: 24, color: '#ffffff', margin: { bottom: 12 } } }, `bench ${size.value}`),
-        ...rows,
-      ])
-    },
-  }
-  const app = renderer.createApp(App)
-  app.mount(container)
-
-  return {
-    adapter,
-    setCount: (v) => { n.value = v; size.value = v },
-    reverse: () => { items.value = [...items.value].reverse() },
-    setItems: (v) => { items.value = v },
-    mutateDeep: () => { deep.a.b.c.v = deep.a.b.c.v + 1 },
-    setScaleBase: (v) => { scaleBase.value = v },
-    setRowMargin: (i, px) => { rowMargins.value = { ...rowMargins.value, [i]: px } },
-    setDotSize: (i, px) => { dotSizes.value = { ...dotSizes.value, [i]: px } },
-    churnText: (k, tag) => {
-      // 改文案前缀 ⇒ 内容寻址缓存**必然未命中**
-      items.value = items.value.map((it, idx) => (idx < k ? { ...it, title: `${tag} ${it.title}` } : it))
-      void textTag.value
-    },
-    renderCount: () => renders,
-    items: () => items.value,
-    dispose: () => {
-      // Vue 侧销毁（解绑响应式、释放组件实例）
-      try { app.unmount() } catch { /* 已卸载或未挂载 */ }
-      // 断开容器与根的联系（让 NativeElementNode 树可回收）
-      adapter.root.children.length = 0
-    },
-  }
-}
 
 /* ────────────────────────── 测量（统一的四段分解） ────────────────────────── */
 
@@ -754,6 +628,102 @@ CASES.push({
     // 类B：改同一行的 margin —— 改变主轴占用 ⇒ 后续兄弟全部移位
     await runOne('B_sibling_margin', () => app.setRowMargin(mid, 20), `类B 平级：改第 ${mid} 行 margin`)
     app.dispose()
+  },
+})
+
+/* ────────────── V0 探针：Vue 原生手段能否抹平「组件级重渲染」的代价 ────────────── */
+
+/**
+ * ★★V0 探针（依据《Vapor for Proteus IR 设计方案》§9 —— 方案自定「**必须先做**」）
+ *
+ * 【要回答的问题】单节点更新的 79ms 里，有多少是「Vue 为**找出**那一个变化而付出的代价」？
+ *   方案 §0.4 的归因是「VNode 创建仍为 O(子树规模)」。本探针用 **Vue 原生手段**测理论上限：
+ *   · 若 v-memo 等价物也拉不到 10ms 量级 ⇒ **归因错误，方案须暂停**（方案自己的判读表）
+ *   · 若能 ⇒ 编译器方向成立，且「目标线」由实测确定
+ *
+ * 【为什么用 `withMemo` 而不是 `v-memo` 指令】本基准是**无编译器的手写 render 树**
+ *   （这正是问题本身：`entry-bench.ts` 不走 SFC 编译器）。`v-memo` 在编译期展开成的
+ *   就是 `withMemo(memo, render, _cache, index)`——**同一实现**，无需为探针引入编译器。
+ *
+ * 【三种用法（同一棵树、同一操作，只换 Vue 用法）】
+ *   · plain 每次整树重建（现状，= S2_A 基线）
+ *   · memo  逐行 `withMemo`（依赖数组 = 该行渲染用到的一切）
+ *   · comp  逐行独立子组件（组件边界 = props 浅比较构成的更新屏障）
+ *
+ * 【两个操作场景（分离"补丁"与"遍历"两种成本）】
+ *   · dot    改第 500 行圆点 = **单节点更新**（方案 §0.4 的场景）
+ *   · header 改标题 margin = **零行变更**（归因"整树重建 + 遍历"本身的固定成本）
+ *
+ * 【★等价性自检（测量装置必须先被验证）】三种用法必须给出**相同的宿主读数**
+ *   （`relayout_count` / `updated_layers`）——否则数字差异可能只来自"树不一样"，
+ *   探针结论作废（与 S2_SELFCHECK_FAIL 同款纪律）。
+ */
+CASES.push({
+  name: 'V0_native_ceiling',
+  note: '★★V0 探针：1000 项 · 单节点更新 vs 零行变更 —— plain / v-memo等价 / 子组件 三用法对照（决定编译器方案是否成立）',
+  fn: async () => {
+    const N = 1000
+    const mid = Math.floor(N / 2)
+    const seen: Record<string, { relayout?: unknown; layers?: unknown }> = {}
+
+    const runOne = async (strat: 'plain' | 'memo' | 'comp', op: 'dot' | 'header') => {
+      const app = makeApp(N, strat)
+      mountApp(app, N)
+      app.adapter.resetStats()
+      const rBefore = app.renderCount()
+      const rowBefore = app.rowRenderCount()
+      const t0 = now()
+      if (op === 'dot') app.setDotSize(mid, 20)
+      else app.setHeaderMargin(20)
+      await nextTick()
+      const tVue = now()
+      const patches = app.adapter.takePatches()
+      const tReq = now()
+      let bytes = 0
+      let hostOut: string
+      if (patches === null) {
+        const tj = JSON.stringify(app.adapter.toRequest(VP))
+        bytes = tj.length
+        hostOut = proteusSelfDraw.update(tj)
+      } else {
+        bytes = JSON.stringify(patches).length
+        hostOut = proteusSelfDraw.updatePatches(JSON.stringify(patches))
+      }
+      const tHost = now()
+      const hr = safeParseAny(hostOut)
+      results.push({
+        case: `V0_${strat}_${op}`,
+        note: op === 'dot'
+          ? `V0/${strat}：改第 ${mid} 行圆点（单节点更新）`
+          : `V0/${strat}：改标题 margin（零行变更）`,
+        items: N, nodes: hr?.["node_count"] ?? 0,
+        vue_ms: tVue - t0, to_request_ms: tReq - tVue, serialize_ms: tHost - tReq,
+        host_ms: tHost - tReq, total_ms: tHost - t0,
+        patch_count: app.adapter.patchCount(), request_bytes: bytes,
+        extra: {
+          strategy: strat,
+          renders: app.renderCount() - rBefore,          // 父组件 render 次数
+          row_renders: app.rowRenderCount() - rowBefore, // 行子组件 render 次数（comp 专用；其余恒 0）
+          patches_sent: patches === null ? 'FULL' : patches.length,
+          relayout: hr?.["relayout_count"], updated_layers: hr?.["updated_layers"],
+        },
+      })
+      seen[`${strat}_${op}`] = { relayout: hr?.["relayout_count"], layers: hr?.["updated_layers"] }
+      app.dispose()
+    }
+
+    for (const op of ['dot', 'header'] as const) {
+      for (const strat of ['plain', 'memo', 'comp'] as const) await runOne(strat, op)
+      const ks = (['plain', 'memo', 'comp'] as const).map((s) => seen[`${s}_${op}`])
+      const same = ks.every((k) => !!k && k.relayout === ks[0].relayout && k.layers === ks[0].layers)
+      if (!same) results.push({
+        case: 'V0_SELFCHECK_FAIL',
+        note: `V0 等价性自检失败（${op}）：三种用法的宿主读数不一致 ⇒ 数字不可比，探针结论作废`,
+        items: 0, nodes: 0, vue_ms: -1, to_request_ms: -1, serialize_ms: -1, host_ms: -1,
+        total_ms: -1, patch_count: -1, request_bytes: -1,
+        extra: { seen },
+      })
+    }
   },
 })
 
