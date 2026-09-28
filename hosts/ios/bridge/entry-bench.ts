@@ -65,12 +65,35 @@ interface SelfDrawNative {
   pendingStats?(): String
   /** ★★V5：批量像素采样（渲染一次读多点）—— 像素级验证的判据 */
   samplePixels?(json: String): String
+  /**
+   * ★★像素格式自检（三色标定）——**像素判据的前置**
+   *
+   * 【为什么必须由用例显式检查（本仓实测的测量装置缺陷）】`samplePixels` 曾经 R/B 互换
+   *   （标定读数正确但结论推反），而此前所有像素判据都用**纯绿** ⇒ 绿在互换下不变 ⇒ 恒绿。
+   *   ⇒ 纪律：**用像素做判据之前，先证明测量装置本身是对的**（"测量装置必须先自测"）。
+   */
+  pixelFormatSelfTest?(): String
   /** ★V10：绘制补丁（颜色/圆角/字重/字号/透明度）——几何之外的第二条通道（不经核心） */
   paintPatches?(patchesJson: string): string
   /** ★V9：注入一次 tap（内容坐标）——走与真实触摸同一条链（核心命中 → JS 派发） */
   tapAt?(x: number, y: number): string
   /** ★V9：手势统计（命中/未命中/错误） */
   gestureStatsJson?(): string
+  /**
+   * ★★V12：**虚拟化挂载**（§12.5 materialize · §12.7 P1）
+   *
+   * 【为什么另开入口】全量挂载的读数（V6/V11）已进历史基线；在同一入口里改语义会让
+   *   旧读数与新读数不可比（本仓纪律：改变已发布读数必须显式）。
+   */
+  mountVirtual?(requestJson: string): string
+  /** ★V12：虚拟化滚动（dx/dy 像素）——宿主换算可见行 → 向核心复用池要决策 → 物化/回收 */
+  scrollRows?(dx: number, dy: number): string
+  /** ★V12：虚拟化读数（层数/建层/复用/池大小/已物化行） */
+  virtualStats?(): string
+  /** ★V12：虚拟化探针（某行的屏幕坐标 rect + 是否已物化）——坐标由宿主推导，不手算 */
+  virtualProbe?(rowIndex: number): string
+  /** ★V12：设置层池容量（0 ⇒ 完全不复用）——**破坏性验证**用 */
+  setPoolCapacity?(n: number): string
   snapshot(name: string): string
   report(json: string): void
   done(summaryJson: string): void
@@ -83,7 +106,7 @@ const BN = { snapshot: 'bench-final' }
 // ★构建标识：每次构建写入，用于**确凿判定**设备上跑的是哪份代码
 //   （踩坑：靠文件 mtime 判断"报告是否刷新"不可靠——新建目标文件的时间恒为"现在"；
 //    且我看不出设备实际执行的是旧 bundle，白跑一轮。有了这个字段就能一眼判定。）
-const BUILD_ID = '0b7ebdc2-192630'
+const BUILD_ID = 'cf6899ae-195312'
 const now = (): number => Date.now()
 /** 宽松解析（宿主返回可能是字符串或已是对象） */
 const safeParseAny = (s: any): any => {
@@ -1314,6 +1337,15 @@ CASES.push({
           expect: ['#FF0000 (纯红)', '#00FF00 (纯绿)', '#0000FF (纯蓝)'],
           got: (calibOut?.pixels as string[]) ?? [],
         }
+        // ★★标定必须**进判据**（本仓实测的判据设计缺陷）
+        //
+        // 【为什么单列一条】初版把标定**只记录、不断言**——而像素通道曾经 R/B 互换
+        //   （实测：纯红读成 `#0000FF`，见 `samplePixels` 注释），却因为①判据用的行色
+        //   `#xx2040` 只在**绿通道**变化（互换下不变）②标定不影响 verdict ⇒ 长期恒绿。
+        //   ⇒ 纪律：**标定是判据的一部分**——标定不过，后面所有像素结论都不成立。
+        const calibExpect = ['#FF0000', '#00FF00', '#0000FF']
+        const calibGot = calibration.got.map((s) => String(s).toUpperCase())
+        const calibOk = calibGot.length === 3 && calibGot.every((v, i) => v === calibExpect[i])
 
         // 滚到能看到**被延后**的那些行（预取半屏 ⇒ 内容 y > 1266 的行被延后）
         const SCROLL = 1540
@@ -1366,9 +1398,11 @@ CASES.push({
             // ★标定：纯红/纯绿/纯蓝三块（各自 y 段中心）
             calib: calibration,
             stageA_ok: stageApix.length === 3 && stageApix.every((v, i) => v.toUpperCase() === stageAexp[i]),
+            calib_ok: calibOk,
             node_count: (m.node_count as number) ?? 0,
-            // ★判据：探针非空 + 补刷确实发生 + 颜色全对
-            verdict: probes.length > 0 && flushed > 0 && mismatches.length === 0 ? 'PASS' : 'FAIL',
+            // ★判据：**测量装置自检过关**（标定）+ 探针非空 + 补刷确实发生 + 颜色全对
+            //   —— 标定不过时后面全绿也无意义（本仓实测：R/B 互换就是靠它才能被发现）
+            verdict: calibOk && probes.length > 0 && flushed > 0 && mismatches.length === 0 ? 'PASS' : 'FAIL',
           },
         })
       }
@@ -2142,9 +2176,209 @@ CASES.push({
         // ★ListRegistry 驱动成功的直接证据（resolveNode 命中数）
         registry_stats: (registry as unknown as { stats?: unknown }).stats,
         // ★诚实边界：本档验证"长列表实例化 + 行内更新只发 1 条"；
-        //   真机**滚动复用池**（recycle.rs）未接（那是另一条线）
+        //   真机**滚动复用池**另见 `V12_scroll_recycle`
         covered: 'long-list instantiate + per-row dispatch',
-        not_covered: 'scroll recycle pool on device',
+        not_covered: 'scroll recycle pool on device（见 V12）',
+      },
+    })
+  },
+})
+
+/* V12 · ★★滚动复用池真机（§12.6 生命周期状态机 + §12.7 P1 layer 复用池） */
+CASES.push({
+  name: 'V12_scroll_recycle',
+  note: '★★虚拟化长列表滚动：1000 行只物化可见+预载行 → 层层复用（层数有界 · 回滚交换预载区）',
+  fn: async () => {
+    const builtTpl = vaporTableJson as unknown as {
+      ok: boolean
+      table: import('@proteus-vue/slot-runtime').SubscriptionTable
+      template: import('@proteus-vue/slot-runtime').LayoutTemplate
+    }
+    if (!builtTpl.ok || !builtTpl.template || !proteusSelfDraw.mountVirtual) {
+      results.push({ case: 'V12_scroll_recycle', note: '✗ 模板产物/宿主入口不可用', items: 0, nodes: 0,
+        vue_ms: -1, to_request_ms: -1, serialize_ms: -1, host_ms: -1, total_ms: -1, patch_count: -1, request_bytes: -1 })
+      return
+    }
+    const tpl = builtTpl.template
+    const table = builtTpl.table
+    const ROWS = 1000
+    const rows = Array.from({ length: ROWS }, (_, i) => ({
+      id: i + 1, dotW: 36, textW: 120, title: `行 ${i + 1}`,
+    }))
+    const data: Record<string, unknown> = { list: rows }
+    const registry = new ListRegistry()
+    const inst = instantiateTemplate(tpl, {
+      viewport: VP, read: (n) => data[n], table, registry,
+    })
+    if (!inst.virtual || inst.virtual.rows.length !== ROWS) {
+      results.push({ case: 'V12_scroll_recycle', note: `✗ 虚拟化描述缺失（rows=${inst.virtual?.rows.length ?? -1}）`,
+        items: 0, nodes: inst.nodes.length, vue_ms: -1, to_request_ms: -1, serialize_ms: -1, host_ms: -1, total_ms: -1,
+        patch_count: -1, request_bytes: -1 })
+      return
+    }
+
+    // ★运行时就绪（容器文本真源也经它——见 `ctx.read` 契约）
+    const keys = new PropKeyTable()
+    const strings = new StringPool()
+    const cap: Uint8Array[] = []
+    const rt = new SlotRuntime(keys, strings, (b) => cap.push(b))
+    const vapor = new VaporRuntime(table, rt, VaporRuntime.buildEvaluators(table.evaluators), registry)
+    const triggers = new Map<string, () => void>()
+    let listRows = rows
+    const ctx = { read: (n: string) => (n === 'list' ? listRows : data[n]) }
+    const loadRes = vapor.load(ctx, (name, cb) => triggers.set(name, cb))
+    vapor.relink(ctx)
+    rt.flush()
+    cap.length = 0
+
+    // ① 虚拟化挂载：整树进核心，**只物化可见+预载行**
+    const t0 = now()
+    const mountOut = safeParseAny(proteusSelfDraw.mountVirtual(JSON.stringify({
+      viewport: VP, nodes: inst.nodes, rows: inst.virtual.rows,
+    })))
+    const mountMs = now() - t0
+    const afterMount = safeParseAny(proteusSelfDraw.virtualStats?.() ?? '{}')
+
+    // ② 滚动轨迹：**向下**滚若干帧 → **回滚**（本仓 §9.3 的核心场景）
+    const STEP = 560            // 10 行/帧（行高 56 × 10）
+    const FRAMES = 30
+    const fwd: Array<{ dir: string; first: number; last: number; acquired: number; released: number }> = []
+    let scrollMs = 0
+    for (let i = 0; i < FRAMES; i++) {
+      const t = now()
+      const o = safeParseAny(proteusSelfDraw.scrollRows(0, STEP) ?? '{}')
+      scrollMs += now() - t
+      fwd.push({
+        dir: String(o.direction ?? '?'), first: (o.first_visible as number) ?? -1,
+        last: (o.last_visible as number) ?? -1,
+        acquired: ((o.acquired as number[]) ?? []).length,
+        released: ((o.released as number[]) ?? []).length,
+      })
+    }
+    const afterDown = safeParseAny(proteusSelfDraw.virtualStats?.() ?? '{}')
+    const back: Array<{ dir: string; first: number; acquired: number; released: number }> = []
+    for (let i = 0; i < FRAMES; i++) {
+      const o = safeParseAny(proteusSelfDraw.scrollRows(0, -STEP) ?? '{}')
+      back.push({
+        dir: String(o.direction ?? '?'), first: (o.first_visible as number) ?? -1,
+        acquired: ((o.acquired as number[]) ?? []).length,
+        released: ((o.released as number[]) ?? []).length,
+      })
+    }
+    const afterUp = safeParseAny(proteusSelfDraw.virtualStats?.() ?? '{}')
+
+    // ③ ★★虚拟化正确性关键项：**屏外改动滚入后必须生效**（复用池最经典的静默错）
+    //
+    // 【为什么这是最重要的一条】行未被物化时若"更新被丢弃"，滚入时会显示**旧内容**
+    //   ——而所有几何/结构断言都对着核心（正确的）⇒ 全绿。
+    //   做法：改**屏外**第 600 行的文本 → 只发指令（不滚动）→ 再滚到它 → 读**层上**的文本。
+    const FAR = 600
+    // 改第 600 行标题（该行此刻**不在视口内** ⇒ 未物化）
+    const mutated = listRows.map((r, i) => (i === FAR ? { ...r, title: `改过 ${i + 1}` } : r))
+    listRows = mutated
+    data.list = mutated
+    triggers.get('list')?.()
+    rt.flush()
+    const farBytes = cap.pop()
+    const farApply = farBytes
+      ? safeParseAny(proteusSelfDraw.applyOps(JSON.stringify(Array.from(farBytes))))
+      : undefined
+    // 滚到第 600 行附近（每帧 560px；行距 64px ⇒ 68 帧 ≈ 第 595 行）
+    for (let i = 0; i < 68; i++) proteusSelfDraw.scrollRows?.(0, 560)
+    const probeFar2 = safeParseAny(proteusSelfDraw.virtualProbe?.(FAR) ?? '{}')
+    const farTexts: string[] = (probeFar2?.child_texts as string[]) ?? []
+    const farRowText = farTexts.find((t) => t.startsWith('改过')) ?? ''
+    // ★同一次探针里取像素坐标（**坐标由宿主从核心几何推导**——本仓纪律）
+    const farChildren: Array<{ cx: number; cy: number }> = (probeFar2?.child_rects as Array<{ cx: number; cy: number }>) ?? []
+    const dotCenter = farChildren[1]                     // 行内第 2 个节点 = 圆点（见 SFC 模板）
+    const px = dotCenter
+      ? safeParseAny(proteusSelfDraw.samplePixels?.(JSON.stringify([{ x: dotCenter.cx, y: dotCenter.cy }])) ?? '{}')
+      : undefined
+    const pixel: string = (px?.pixels as string[])?.[0] ?? ''
+    // 屏外行（此刻视口在 600 附近 ⇒ 第 2 行已滚出并被回收）
+    const probeOff = safeParseAny(proteusSelfDraw.virtualProbe?.(2) ?? '{}')
+
+    // ④ 破坏性验证：把池容量设为 0（**同一条轨迹**再滚一轮）
+    //    ⇒ 复用必须归零、且确实又新建了层（证明"复用率"不是恒真的量）
+    safeParseAny(proteusSelfDraw.setPoolCapacity?.(0) ?? '{}')
+    const killStart = safeParseAny(proteusSelfDraw.virtualStats?.() ?? '{}')
+    const createdBefore = (killStart.layers_created as number) ?? 0
+    const reusedBefore = (killStart.layers_reused as number) ?? 0
+    for (let i = 0; i < 6; i++) proteusSelfDraw.scrollRows?.(0, -560)
+    const killEnd = safeParseAny(proteusSelfDraw.virtualStats?.() ?? '{}')
+    const killReusedDelta = ((killEnd.layers_reused as number) ?? 0) - reusedBefore
+    const killCreatedDelta = ((killEnd.layers_created as number) ?? 0) - createdBefore
+    // 恢复池容量（不影响后续用例）
+    safeParseAny(proteusSelfDraw.setPoolCapacity?.(96) ?? '{}')
+
+    const fwdAcq = fwd.reduce((a, b) => a + b.acquired, 0)
+    const fwdRel = fwd.reduce((a, b) => a + b.released, 0)
+    const backAcq = back.reduce((a, b) => a + b.acquired, 0)
+    const backRel = back.reduce((a, b) => a + b.released, 0)
+    const createdTotal = (afterUp.layers_created as number) ?? 0
+    const reusedTotal = (afterUp.layers_reused as number) ?? 0
+    const matRows = (afterUp.materialized_rows as number) ?? 0
+    const layerCount = (afterUp.layer_count as number) ?? 0
+
+    const checks = {
+      // ★① 只物化了少数行（虚拟化真的生效——全量会是 1000 行 / 3002 层）
+      fewRows: matRows > 0 && matRows < 60,
+      fewLayers: layerCount > 0 && layerCount < 400,
+      // ★② 前 30 帧方向全为 forward，回滚 30 帧全为 backward（方向敏感预载的前提）
+      dirForward: fwd.every((f) => f.dir === 'forward'),
+      dirBackward: back.every((b) => b.dir === 'backward'),
+      // ★③ 每帧的 acquire/release 有界（不随滚动距离增长——长列表的内存天花板）
+      boundedPerFrame: fwd.every((f) => f.acquired <= 40 && f.released <= 40),
+      // ★④ 滚动过程确实发生了 acquire/release（否则"有界"是因为什么都没做——空判据）
+      realChurn: fwdAcq > 0 && fwdRel > 0 && backAcq > 0 && backRel > 0,
+      // ★⑤ **复用率**（层复用池真的在起作用；全新建 ⇒ ~0）
+      reuseWorks: reusedTotal > 0 && createdTotal > 0 && reusedTotal / (reusedTotal + createdTotal) > 0.5,
+      // ★⑥ 建层总数**远小于**"物化行数 × 行子树"（否则等于每帧重建）
+      notRebuiltEachFrame: createdTotal < matRows * 6,
+      // ★⑦ 破坏性：池容量 0 时复用增量为 0、且确实又新建了层（证明⑤的量不是恒真的）
+      killSwitch: killReusedDelta === 0 && killCreatedDelta > 0,
+      // ★⑧ 层数在整个滚动过程中**有界**（回滚后不高于向下滚后）
+      layersBounded: layerCount <= ((afterMount.layer_count as number) ?? 0) + 200,
+      // ★⑨ 像素：行的圆点中心必须是**圆点色**（#6F4AE8）——"屏幕上真的画对了"
+      pixelDot: pixel.toUpperCase() === '#6F4AE8',
+      // ★⑩ 屏外行必须**没有层**（层数有界 + 几何仍在核心 —— 二者同时成立才叫虚拟化）
+      farRowUnmaterialized: probeOff?.materialized === false && probeOff?.ok === true,
+      // ★⑪ 屏内行必须**有层**（与⑩成对：否则"全都没物化"也能骗过⑩）
+      inRowMaterialized: probeFar2?.materialized === true,
+      // ★★⑫ 虚拟化正确性关键项：**屏外被改的内容，滚入后必须真的生效**（读**层上**的文本）
+      offscreenUpdateVisible: farRowText === `改过 ${FAR + 1}`,
+      // ★⑬ 该次 apply 确实作用到了（不是"没改所以没差"的空判据）
+      //   注：指令计数在 `patch_count`，**不是** `applied`（父级字段，本档初版写错 ⇒ 假红）
+      offscreenUpdateApplied: ((farApply?.patch_count as number) ?? 0) >= 1 &&
+        ((farApply?.text_updates as number) ?? 0) >= 1,
+      // ★★⑭ **测量装置自检**：像素采样器三色标定（本轮 R/B 互换就是它抓出来的）
+      pixelDeviceOk: (safeParseAny(proteusSelfDraw.pixelFormatSelfTest?.() ?? '{}'))?.ok === true,
+    }
+    const verdict = Object.values(checks).every(Boolean) ? 'PASS' : 'FAIL'
+    results.push({
+      case: 'V12_scroll_recycle',
+      note: `${ROWS} 行虚拟化：挂载只物化 ${afterMount.materialized_rows ?? -1} 行 / ${afterMount.layer_count ?? -1} 层 · ` +
+        `滚动 ${FRAMES} 帧（↓${fwdAcq}取/${fwdRel}放 · ↑${backAcq}取/${backRel}放）· ` +
+        `建层 ${createdTotal} / 复用 ${reusedTotal}`,
+      items: ROWS, nodes: inst.nodes.length,
+      vue_ms: 0, to_request_ms: 0, serialize_ms: 0,
+      host_ms: mountMs, total_ms: mountMs + scrollMs,
+      patch_count: createdTotal, request_bytes: 0,
+      extra: {
+        verdict, checks,
+        mount_ms: Math.round(mountMs * 100) / 100,
+        scroll_ms_total: Math.round(scrollMs * 100) / 100,
+        node_count: inst.nodes.length,
+        mount_stats: afterMount, down_stats: afterDown, up_stats: afterUp,
+        kill_stats: { reused_delta: killReusedDelta, created_delta: killCreatedDelta, end: killEnd, start: killStart },
+        forward: fwd.slice(0, 3).concat(fwd.slice(-3)),
+        backward: back.slice(0, 3).concat(back.slice(-3)),
+        probe_far_row: probeFar2, probe_offscreen_row: probeOff,
+        pixel_at_dot: pixel, offscreen_far_row: FAR,
+        offscreen_text_seen: farRowText, offscreen_apply: farApply,
+        runtime: { l1_slots: loadRes.l1Slots, l0_slots: loadRes.l0Slots },
+        covered: 'virtualized mount + direction-sensitive recycle + layer pool reuse + rollback',
+        not_covered: '手势/命中在虚拟化下的坐标（tapAt 走内容坐标，未额外验证）；Android 侧同款接线',
       },
     })
   },

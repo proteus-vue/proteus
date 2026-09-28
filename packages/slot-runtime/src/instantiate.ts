@@ -37,6 +37,30 @@ export interface InstantiateResult {
   nodes: InstantiatedNode[]
   /** id 分配读数（供对账："首行用模板 id、新增行从哪起"） */
   stats: { reusedTemplateIds: number; allocatedIds: number; rows: number; valuesFilled: number }
+  /**
+   * ★★**虚拟化描述**（宿主据此按行物化/回收层——方案 §12.6 / §12.7 P1）
+   *
+   * 【为什么必须由本函数给出（宿主自己推不出来）】"哪些节点属于第 i 行"只有**实例化**知道：
+   *   行内子节点不带 `listId`（模板里只有 v-for 那个元素带）⇒ 宿主按 `listId` 分组只能拿到行根，
+   *   无法知道整行有哪些节点 ⇒ 无法整行 acquire/release。
+   *   ⇒ 实例化时顺手把 `idMap` 的像集记下来（零额外成本）。
+   *
+   * 【诚实边界】只覆盖**单层 v-for**（与模板产物的能力一致，见模板诊断）；
+   *   多层列表此处为空 ⇒ 宿主退回全量物化（宁可多建，不可错配）。
+   */
+  virtual?: {
+    /** 各行**按行号升序**（宿主对可见区做二分查找的前提） */
+    rows: Array<{
+      /** 行号（0 基） */
+      index: number
+      /** 行键（订阅表的 itemKeyField 值；无则退化为行号字符串） */
+      key: string
+      /** 行根节点 id（其绝对 rect 即该行的几何范围） */
+      root: number
+      /** 该行**全部**节点 id（含行根；父在前 ⇒ 宿主可顺序建层） */
+      ids: number[]
+    }>
+  }
 }
 
 /**
@@ -95,6 +119,8 @@ export function instantiateTemplate(tpl: LayoutTemplate, opts: InstantiateOption
   /** 已产出的节点（供初始值回填时按 id 定位） */
   const byId = new Map<number, InstantiatedNode>()
   let valuesFilled = 0
+  /** ★虚拟化：行号 → {行键, 行根 id, 整行节点 id}（见 InstantiateResult.virtual 注释） */
+  const virtualRows: NonNullable<InstantiateResult['virtual']>['rows'] = []
 
   const emit = (n: LayoutNode, id: number, parentId: number | null): void => {
     // ★★**样式必须摊平到节点顶层**（本仓实测的接口不匹配缺陷）
@@ -117,7 +143,13 @@ export function instantiateTemplate(tpl: LayoutTemplate, opts: InstantiateOption
   }
 
   // ★行模板的成员映射：`模板 id → 在该行内的角色`（行根 + 子节点，按模板序）
-  const cloneRow = (listId: number, row: Record<string, unknown>, itemKey: string, first: boolean): number => {
+  const cloneRow = (
+    listId: number,
+    row: Record<string, unknown>,
+    itemKey: string,
+    first: boolean,
+    rowIndex: number,
+  ): number => {
     const meta = rowLists.get(listId)!
     const idMap = new Map<number, number>()
     let rowRootId = 0
@@ -138,6 +170,13 @@ export function instantiateTemplate(tpl: LayoutTemplate, opts: InstantiateOption
       emit(tn, engineId, parentId)
     }
     // ③ 回填注册表：行内槽位（itemSlotId）→ 该行节点 id
+    //   ★同时记录**整行节点集合**（虚拟化用——见 InstantiateResult.virtual 注释）
+    virtualRows.push({
+      index: rowIndex,
+      key: itemKey,
+      root: rowRootId,
+      ids: meta.subtreeIds.map((t) => idMap.get(t)!),
+    });
     // ④ **回填初始值**（见 engineFieldOf 注释：不回填 ⇒ 首帧文本为空 / 几何错）
     if (opts.table) {
       const itemSlots = opts.table.sources
@@ -198,7 +237,7 @@ export function instantiateTemplate(tpl: LayoutTemplate, opts: InstantiateOption
             .find((x) => x.kind === 'list-item' && x.listId === meta.listId)?.itemKeyField
           return keyField && row[keyField] !== undefined ? String(row[keyField]) : String(i)
         }
-        cloneRow(meta.listId, row, keyOf(), i === 0)
+        cloneRow(meta.listId, row, keyOf(), i === 0, i)
       }
       continue
     }
@@ -209,5 +248,7 @@ export function instantiateTemplate(tpl: LayoutTemplate, opts: InstantiateOption
     viewport: opts.viewport,
     nodes,
     stats: { reusedTemplateIds: reused, allocatedIds: allocated, rows: nodes.length, valuesFilled },
+    // ★只有**恰好一个**列表时才给虚拟化描述（多个列表 ⇒ 行号空间不同源，宿主按行号二分会错配）
+    virtual: virtualRows.length > 0 && tpl.lists.length === 1 ? { rows: virtualRows } : undefined,
   }
 }

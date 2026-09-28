@@ -485,6 +485,180 @@ pub unsafe extern "C" fn proteus_recycle_bench(rows: u32, frames: u32) -> *mut c
     }
 }
 
+/* ─────────────── ★★列表复用池（§12.6）：窗口 + 状态机 —— 宿主只执行动作 ─────────────── */
+//
+// 【为什么必须有这组 FFI（而不是让平台侧自己写一遍）】
+//   `recycle.rs` 里的「方向敏感预加载区」与「三档生命周期」是**平台无关逻辑**（方案 §1），
+//   且其中「回滚时方向反转要交换前后预加载区」的语义在 Rust 侧已有单测与踩坑记录
+//   （初版两分支写成同一组参数 ⇒ 回滚要重建）。
+//   平台侧（iOS/Android/鸿蒙）若各写一份 ⇒ 必然分叉，且**分叉是静默的**（只是多建几个对象）。
+//   ⇒ 核心只给**决策**（本帧要 acquire 哪些行 / release 哪些行 / 方向是什么），
+//     平台侧执行**动作**（取/还实际的 layer 对象）。这正是方案 §12.6「平台侧只需按状态机执行动作」。
+
+/// 复用池句柄的状态：窗口（方向敏感预加载）+ 状态机（三档生命周期）+ 累计读数
+struct RecycleEntry {
+    window: crate::recycle::ListWindow,
+    sm: crate::recycle::ListStateMachine,
+    /// 累计 acquire/release 行数（**判据用**：滚动的"搬运量"是否与滚动距离无关）
+    acquire_events: usize,
+    release_events: usize,
+    demote_events: usize,
+    updates: usize,
+}
+
+static RECYCLE_REGISTRY: std::sync::OnceLock<
+    std::sync::Mutex<std::collections::HashMap<u64, RecycleEntry>>,
+> = std::sync::OnceLock::new();
+static NEXT_RECYCLE_HANDLE: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(1);
+
+fn recycle_registry() -> &'static std::sync::Mutex<std::collections::HashMap<u64, RecycleEntry>> {
+    RECYCLE_REGISTRY.get_or_init(|| std::sync::Mutex::new(std::collections::HashMap::new()))
+}
+
+/// 创建复用池窗口。`leading_rows`/`following_rows` 传 0 ⇒ 用默认（8 / 2）。
+///
+/// 返回句柄（0 = 失败：`item_count == 0`）。
+#[no_mangle]
+pub unsafe extern "C" fn proteus_recycle_create(
+    item_count: u32,
+    leading_rows: u32,
+    following_rows: u32,
+) -> u64 {
+    if item_count == 0 {
+        return 0;
+    }
+    let mut cfg = crate::recycle::RecycleConfig::default();
+    if leading_rows > 0 {
+        cfg.leading_rows = leading_rows as usize;
+    }
+    if following_rows > 0 {
+        cfg.following_rows = following_rows as usize;
+    }
+    let entry = RecycleEntry {
+        window: crate::recycle::ListWindow::new(cfg, item_count as usize),
+        sm: crate::recycle::ListStateMachine::new(),
+        acquire_events: 0,
+        release_events: 0,
+        demote_events: 0,
+        updates: 0,
+    };
+    let h = NEXT_RECYCLE_HANDLE.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+    recycle_registry()
+        .lock()
+        .map_err(|_| "recycle 注册表锁失败".to_string())
+        .and_then(|mut reg| {
+            reg.insert(h, entry);
+            Ok(h)
+        })
+        .unwrap_or(0)
+}
+
+/// 更新可见区（平台侧每次滚动/布局变化时调用）→ 返回本帧的**动作清单**。
+///
+/// 出参：`{ok, direction, first_visible, last_visible, first_preload, last_preload,
+///        acquire:[行号], release:[行号], demoted, live, acquire_events, release_events}`
+///
+/// ★★宿主执行顺序（本仓纪律）：**先 release 再 acquire**。
+///   反过来的话，本帧要新建的层无法复用**刚释放**的层 ⇒ `created` 虚高、
+///   复用率虚低（池的效果被自己吃掉）。
+///
+/// # Safety
+/// 返回指针须用 `proteus_layout_free_string` 释放。
+#[no_mangle]
+pub unsafe extern "C" fn proteus_recycle_update(
+    handle: u64,
+    first_visible: u32,
+    last_visible: u32,
+) -> *mut c_char {
+    let result = std::panic::catch_unwind(|| -> Result<String, String> {
+        let f = first_visible as usize;
+        let l = (last_visible as usize).max(f);
+        let mut reg = recycle_registry().lock().map_err(|_| "recycle 注册表锁失败".to_string())?;
+        let e = reg.get_mut(&handle).ok_or_else(|| format!("recycle 句柄 {handle} 不存在"))?;
+        e.window.update_visible(f, l);
+        let r = e.window.range();
+        // ★顺序：先降级（离开可见区 ⇒ 释放高质量资源），再 diff（谁去谁留）
+        let demoted = e.sm.demote_outside_visible(&r);
+        let (acquire, release) = e.window.diff(&e.sm.states);
+        for &row in &acquire {
+            e.sm.on_acquire(row);
+        }
+        for row in r.first_visible..=r.last_visible {
+            e.sm.on_visible(row);
+        }
+        for &row in &release {
+            e.sm.on_release(row);
+        }
+        e.acquire_events += acquire.len();
+        e.release_events += release.len();
+        e.demote_events += demoted;
+        e.updates += 1;
+        let dir = match e.window.direction() {
+            crate::recycle::ScrollDirection::Forward => "forward",
+            crate::recycle::ScrollDirection::Backward => "backward",
+            crate::recycle::ScrollDirection::Idle => "idle",
+        };
+        Ok(serde_json::json!({
+            "ok": true,
+            "direction": dir,
+            "first_visible": r.first_visible,
+            "last_visible": r.last_visible,
+            "first_preload": r.first_preload,
+            "last_preload": r.last_preload,
+            "acquire": acquire,
+            "release": release,
+            "demoted": demoted,
+            "live": e.sm.len(),
+            "acquire_events": e.acquire_events,
+            "release_events": e.release_events,
+            "updates": e.updates,
+        })
+        .to_string())
+    });
+    match result {
+        Ok(Ok(s)) => into_c_string(s),
+        Ok(Err(e)) => into_c_string(format!("{{\"ok\":false,\"error\":{}}}", json_str(&e))),
+        Err(_) => into_c_string("{\"ok\":false,\"error\":\"panic（已捕获）\"}".to_string()),
+    }
+}
+
+/// 读复用池累计读数（诊断/判据用，不改变状态）。
+///
+/// # Safety
+/// 返回指针须用 `proteus_layout_free_string` 释放。
+#[no_mangle]
+pub unsafe extern "C" fn proteus_recycle_stats(handle: u64) -> *mut c_char {
+    let result = std::panic::catch_unwind(|| -> Result<String, String> {
+        let reg = recycle_registry().lock().map_err(|_| "recycle 注册表锁失败".to_string())?;
+        let e = reg.get(&handle).ok_or_else(|| format!("recycle 句柄 {handle} 不存在"))?;
+        let r = e.window.range();
+        Ok(serde_json::json!({
+            "ok": true,
+            "live": e.sm.len(),
+            "acquire_events": e.acquire_events,
+            "release_events": e.release_events,
+            "demote_events": e.demote_events,
+            "updates": e.updates,
+            "first_preload": r.first_preload,
+            "last_preload": r.last_preload,
+        })
+        .to_string())
+    });
+    match result {
+        Ok(Ok(s)) => into_c_string(s),
+        Ok(Err(e)) => into_c_string(format!("{{\"ok\":false,\"error\":{}}}", json_str(&e))),
+        Err(_) => into_c_string("{\"ok\":false,\"error\":\"panic（已捕获）\"}".to_string()),
+    }
+}
+
+/// 销毁复用池句柄。
+#[no_mangle]
+pub unsafe extern "C" fn proteus_recycle_destroy(handle: u64) {
+    if let Ok(mut reg) = recycle_registry().lock() {
+        reg.remove(&handle);
+    }
+}
+
 /// **真机性能入口**：构建 `node_count` 个节点的列式列表并重复布局，返回耗时统计 JSON。
 ///
 /// # Safety
@@ -3337,6 +3511,124 @@ mod tests {
             let s = CStr::from_ptr(p).to_str().unwrap().to_string();
             proteus_layout_free_string(p);
             assert!(s.contains("\"ok\":false"), "应报 ok:false：{s}");
+        }
+    }
+
+    /* ─────────────── ★★列表复用池 FFI（§12.6）─────────────── */
+
+    /// 调一次 `proteus_recycle_update` 并把 JSON 解析出来（句柄在调用方持有）
+    unsafe fn recycle_update(handle: u64, first: u32, last: u32) -> serde_json::Value {
+        let p = proteus_recycle_update(handle, first, last);
+        let s = CStr::from_ptr(p).to_str().unwrap().to_string();
+        proteus_layout_free_string(p);
+        serde_json::from_str(&s).unwrap_or_else(|e| panic!("recycle_update 出参不是 JSON：{e}\n{s}"))
+    }
+
+    fn rows_of(v: &serde_json::Value, key: &str) -> Vec<u64> {
+        v[key].as_array().unwrap().iter().map(|x| x.as_u64().unwrap()).collect()
+    }
+
+    /// 首帧：acquire 行数 = 可见行 + 两侧预加载（Idle ⇒ 对称），且 acquire/release 互斥
+    #[test]
+    fn recycle_ffi_first_frame_acquires_visible_plus_preload() {
+        unsafe {
+            let h = proteus_recycle_create(1000, 0, 0);
+            assert!(h > 0, "句柄应有效");
+            let v = recycle_update(h, 0, 11);
+            assert_eq!(v["ok"], true);
+            assert_eq!(v["direction"], "idle", "首帧不是滚动，方向应为 idle");
+            // 默认 leading=8 / following=2；Idle ⇒ 两侧都用 following(2)
+            assert_eq!(v["first_preload"], 0);
+            assert_eq!(v["last_preload"], 13, "首帧预载 = 可见区 + 两侧各 2 行");
+            let acq = rows_of(&v, "acquire");
+            let rel = rows_of(&v, "release");
+            assert_eq!(acq, (0..=13).collect::<Vec<u64>>(), "首帧应 acquire 0..=13");
+            assert!(rel.is_empty(), "首帧无行可释放");
+            assert_eq!(v["live"], 14);
+            proteus_recycle_destroy(h);
+        }
+    }
+
+    /// 向下滚：方向 forward ⇒ 下方多留(8)、上方只留(2) —— **非对称预载的直接读数**
+    ///
+    /// ★差分对照（防"判据是恒真的空判据"）：同一个函数、只改配置（leading=2/following=2）
+    ///   ⇒ 下方预留必须变成 2。若判据只写死 8，则把非对称逻辑删掉它也不会红。
+    #[test]
+    fn recycle_ffi_forward_keeps_more_below_and_less_above() {
+        unsafe {
+            let h = proteus_recycle_create(1000, 8, 2);
+            let _ = recycle_update(h, 0, 11);
+            let v = recycle_update(h, 8, 19);
+            assert_eq!(v["direction"], "forward");
+            assert_eq!(v["first_preload"], 6, "上方（离开方向）只留 2 行");
+            assert_eq!(v["last_preload"], 27, "下方（前进方向）留 8 行");
+            // 滚出上方预载区的行被释放、下方新增的行被 acquire
+            assert_eq!(rows_of(&v, "release"), (0..=5).collect::<Vec<u64>>());
+            assert_eq!(rows_of(&v, "acquire"), (14..=27).collect::<Vec<u64>>());
+            // 不变式：同一次更新里 acquire 与 release 不相交
+            let acq = rows_of(&v, "acquire");
+            let rel = rows_of(&v, "release");
+            assert!(acq.iter().all(|a| !rel.contains(a)), "acquire 与 release 必须互斥");
+            proteus_recycle_destroy(h);
+
+            // 差分：对称配置下，同一轨迹的前方预留必须是 2（而不是 8）
+            let h2 = proteus_recycle_create(1000, 2, 2);
+            let _ = recycle_update(h2, 0, 11);
+            let v2 = recycle_update(h2, 8, 19);
+            assert_eq!(v2["first_preload"], 6);
+            assert_eq!(v2["last_preload"], 21, "对称配置 ⇒ 下方只留 2（与上面的 27 形成差分）");
+            proteus_recycle_destroy(h2);
+        }
+    }
+
+    /// ★★回滚：方向反转后**前后预加载区立刻交换**（上方 8 / 下方 2）
+    ///
+    /// 【这条锁的是 §12.6 的关键细节与本仓踩过的坑】初版把 forward/backward 两分支
+    ///   写成同一组参数（都"下方多留"）⇒ 回滚时前进方向（上方）只剩 2 行
+    ///   ⇒ 刚滚过的行立刻被释放 ⇒ 回滚要重建（现象：回滚阶段 created 暴涨）。
+    #[test]
+    fn recycle_ffi_rollback_swaps_preload_sides() {
+        unsafe {
+            let h = proteus_recycle_create(1000, 8, 2);
+            let _ = recycle_update(h, 0, 11);
+            let _ = recycle_update(h, 8, 19); // 向下
+            let v = recycle_update(h, 4, 15); // 回滚（向上）
+            assert_eq!(v["direction"], "backward");
+            assert_eq!(v["first_preload"], 0, "回滚时**上方**是前进方向 ⇒ 留 8（4-8 夹到 0）");
+            assert_eq!(v["last_preload"], 17, "回滚时下方是离开方向 ⇒ 只留 2");
+            // 前方（上方）的行还在 ⇒ 回滚 4 行只补 6 行（且都是池内复用，不发生新建）
+            assert!(rows_of(&v, "acquire").len() <= 8, "回滚应主要命中已preload的行");
+            // 累计读数可用于判据（宿主侧对账）
+            let p = proteus_recycle_stats(h);
+            let s = CStr::from_ptr(p).to_str().unwrap().to_string();
+            proteus_layout_free_string(p);
+            let st: serde_json::Value = serde_json::from_str(&s).unwrap();
+            assert_eq!(st["updates"], 3);
+            assert!(st["acquire_events"].as_u64().unwrap() >= 14);
+            proteus_recycle_destroy(h);
+        }
+    }
+
+    /// 边界：末行夹取（可见区不得超过 item_count）、非法句柄/参数不 panic
+    #[test]
+    fn recycle_ffi_clamps_and_rejects_bad_input() {
+        unsafe {
+            let h = proteus_recycle_create(5, 0, 0);
+            let v = recycle_update(h, 3, 99);
+            assert_eq!(v["last_visible"], 4, "可见末行应夹到 item_count-1");
+            assert_eq!(v["last_preload"], 4);
+            proteus_recycle_destroy(h);
+
+            assert_eq!(proteus_recycle_create(0, 0, 0), 0, "item_count=0 应返回 0");
+            // 未知句柄：返回 ok:false（不得 panic）
+            let p = proteus_recycle_update(999_999, 0, 1);
+            let s = CStr::from_ptr(p).to_str().unwrap().to_string();
+            proteus_layout_free_string(p);
+            assert!(s.contains("\"ok\":false"), "未知句柄应报错：{s}");
+            let p2 = proteus_recycle_stats(999_999);
+            let s2 = CStr::from_ptr(p2).to_str().unwrap().to_string();
+            proteus_layout_free_string(p2);
+            assert!(s2.contains("\"ok\":false"));
         }
     }
 }
