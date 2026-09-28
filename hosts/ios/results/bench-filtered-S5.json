@@ -34717,20 +34717,20 @@
   },
   "host_node_count" : 3857,
   "host_timing_last" : {
-    "build_layers_ms" : 0.46999999999999997,
-    "host_total_ms" : 35.509999999999998,
-    "layout_ms" : 19.870000000000001,
+    "build_layers_ms" : 0.5,
+    "host_total_ms" : 42.619999999999997,
+    "layout_ms" : 20.98,
     "measure_ms" : 0
   },
   "js_completed" : 1,
   "js_ok" : true,
   "js_report" : {
-    "build_id" : "d9cd9219-180613",
+    "build_id" : "56f62246-181431",
     "case_filter" : [
       "S5"
     ],
     "case_timings_ms" : {
-      "S5_structure_change" : 1045
+      "S5_structure_change" : 3221
     },
     "cases" : [
       {
@@ -34747,11 +34747,11 @@
             ],
             "verdict" : "n\/a"
           },
-          "host_total_ms" : 90.790000000000006,
+          "host_total_ms" : 91.019999999999996,
           "layer_count" : 4207,
-          "layout_ms" : 19.48,
-          "mem_mb" : 33.299999999999997,
-          "mem_peak_mb" : 27.800000000000001,
+          "layout_ms" : 19.699999999999999,
+          "mem_mb" : 33.100000000000001,
+          "mem_peak_mb" : 27.5,
           "mode" : "FULL-by-design",
           "relayout" : 0,
           "updated_layers" : 0
@@ -34762,10 +34762,10 @@
         "note" : "500→600 项（FULL-by-design）",
         "patch_count" : 3703,
         "request_bytes" : 398618,
-        "serialize_ms" : 2,
-        "to_request_ms" : 22,
+        "serialize_ms" : 1,
+        "to_request_ms" : 24,
         "total_ms" : 183,
-        "vue_ms" : 47
+        "vue_ms" : 46
       },
       {
         "case" : "S5_shrink_500_FULL",
@@ -34781,11 +34781,11 @@
             ],
             "verdict" : "n\/a"
           },
-          "host_total_ms" : 72.109999999999999,
+          "host_total_ms" : 72.180000000000007,
           "layer_count" : 3507,
-          "layout_ms" : 16,
-          "mem_mb" : 32.700000000000003,
-          "mem_peak_mb" : 29.899999999999999,
+          "layout_ms" : 15.43,
+          "mem_mb" : 32.5,
+          "mem_peak_mb" : 29.699999999999999,
           "mode" : "FULL-by-design",
           "relayout" : 0,
           "updated_layers" : 0
@@ -34796,10 +34796,10 @@
         "note" : "500→500 项（FULL-by-design）",
         "patch_count" : 2603,
         "request_bytes" : 331918,
-        "serialize_ms" : 0,
-        "to_request_ms" : 17,
-        "total_ms" : 145,
-        "vue_ms" : 38
+        "serialize_ms" : 2,
+        "to_request_ms" : 15,
+        "total_ms" : 149,
+        "vue_ms" : 42
       },
       {
         "case" : "S5_grow_600_splice",
@@ -34815,33 +34815,35 @@
             ],
             "verdict" : "PASS"
           },
-          "host_total_ms" : 41.280000000000001,
+          "compacted" : null,
+          "host_total_ms" : 42.630000000000003,
           "inserted" : 100,
           "inserted_layers" : 700,
           "inserted_text_layers" : 200,
           "inserted_text_missing_geom" : 0,
           "inserted_text_zero_height" : 0,
           "layer_count" : 4207,
-          "mem_mb" : 35.200000000000003,
-          "mem_peak_mb" : 35.200000000000003,
+          "mem_mb" : 35,
+          "mem_peak_mb" : 35,
           "mode" : "splice",
+          "orphans" : 0,
           "relayout" : 4207,
-          "relayout_ms" : 10.470000000000001,
+          "relayout_ms" : 10.890000000000001,
           "removed" : 0,
           "removed_layers" : 0,
-          "splice_ms" : 22.710000000000001,
+          "splice_ms" : 23.690000000000001,
           "updated_layers" : 138
         },
-        "host_ms" : 49,
+        "host_ms" : 50,
         "items" : 600,
         "nodes" : 0,
         "note" : "500→600 项（splice）",
         "patch_count" : 3703,
         "request_bytes" : 66763,
-        "serialize_ms" : 0,
+        "serialize_ms" : 2,
         "to_request_ms" : 2,
-        "total_ms" : 98,
-        "vue_ms" : 47
+        "total_ms" : 99,
+        "vue_ms" : 45
       },
       {
         "case" : "S5_shrink_500_splice",
@@ -34857,21 +34859,26 @@
             ],
             "verdict" : "PASS"
           },
-          "host_total_ms" : 37.460000000000001,
+          "compacted" : [
+            4207,
+            3507
+          ],
+          "host_total_ms" : 38.509999999999998,
           "inserted" : 0,
           "inserted_layers" : 0,
           "inserted_text_layers" : 0,
           "inserted_text_missing_geom" : 0,
           "inserted_text_zero_height" : 0,
           "layer_count" : 3507,
-          "mem_mb" : 35.200000000000003,
-          "mem_peak_mb" : 35.200000000000003,
+          "mem_mb" : 33,
+          "mem_peak_mb" : 35,
           "mode" : "splice",
-          "relayout" : 4207,
-          "relayout_ms" : 8.9299999999999997,
+          "orphans" : 0,
+          "relayout" : 3507,
+          "relayout_ms" : 8.9000000000000004,
           "removed" : 100,
           "removed_layers" : 700,
-          "splice_ms" : 14.16,
+          "splice_ms" : 15.289999999999999,
           "updated_layers" : 138
         },
         "host_ms" : 38,
@@ -34882,8 +34889,8 @@
         "request_bytes" : 526,
         "serialize_ms" : 0,
         "to_request_ms" : 0,
-        "total_ms" : 81,
-        "vue_ms" : 43
+        "total_ms" : 77,
+        "vue_ms" : 39
       },
       {
         "case" : "S5_head_insert_FULL",
@@ -34899,11 +34906,11 @@
             ],
             "verdict" : "n\/a"
           },
-          "host_total_ms" : 79.510000000000005,
+          "host_total_ms" : 79.400000000000006,
           "layer_count" : 3857,
-          "layout_ms" : 17.16,
-          "mem_mb" : 40.399999999999999,
-          "mem_peak_mb" : 35.299999999999997,
+          "layout_ms" : 17.129999999999999,
+          "mem_mb" : 39.5,
+          "mem_peak_mb" : 35,
           "mode" : "FULL-by-design",
           "pixel_check" : {
             "dark" : 0,
@@ -34960,16 +34967,18 @@
             ],
             "verdict" : "PASS"
           },
-          "host_total_ms" : 35.509999999999998,
+          "compacted" : null,
+          "host_total_ms" : 35.299999999999997,
           "inserted" : 50,
           "inserted_layers" : 352,
           "inserted_text_layers" : 101,
           "inserted_text_missing_geom" : 0,
           "inserted_text_zero_height" : 0,
           "layer_count" : 4209,
-          "mem_mb" : 236,
-          "mem_peak_mb" : 236,
+          "mem_mb" : 236.40000000000001,
+          "mem_peak_mb" : 236.40000000000001,
           "mode" : "splice",
+          "orphans" : 0,
           "pixel_check" : {
             "dark" : 0,
             "green" : 15,
@@ -34998,22 +35007,64 @@
             "verdict" : "insert-area-visible"
           },
           "relayout" : 4209,
-          "relayout_ms" : 10.789999999999999,
+          "relayout_ms" : 10.640000000000001,
           "removed" : 0,
           "removed_layers" : 0,
-          "splice_ms" : 19.870000000000001,
+          "splice_ms" : 19.59,
           "updated_layers" : 138
         },
-        "host_ms" : 40,
+        "host_ms" : 39,
         "items" : 600,
         "nodes" : 0,
         "note" : "500→600 项（splice）",
         "patch_count" : 3356,
         "request_bytes" : 33504,
+        "serialize_ms" : 1,
+        "to_request_ms" : 2,
+        "total_ms" : 89,
+        "vue_ms" : 47
+      },
+      {
+        "case" : "S5_churn_cycles",
+        "extra" : {
+          "compacted_events" : [
+            [
+              4909,
+              4209
+            ],
+            [
+              4909,
+              4209
+            ],
+            [
+              4909,
+              4209
+            ],
+            [
+              4909,
+              4209
+            ],
+            [
+              4909,
+              4209
+            ]
+          ],
+          "cycle" : 50,
+          "last_orphans" : 0,
+          "max_node_count" : 4909,
+          "rounds" : 10,
+          "verdict" : "PASS"
+        },
+        "host_ms" : 2124,
+        "items" : 600,
+        "nodes" : 4909,
+        "note" : "10 轮「插 50 行 \/ 删 50 行」（内存回收：孤点压实）",
+        "patch_count" : 72940,
+        "request_bytes" : 0,
         "serialize_ms" : 0,
-        "to_request_ms" : 1,
-        "total_ms" : 90,
-        "vue_ms" : 49
+        "to_request_ms" : 0,
+        "total_ms" : 2124,
+        "vue_ms" : 0
       }
     ],
     "ceiling" : [
@@ -35026,19 +35077,19 @@
       {
         "dim" : "structure",
         "level" : "500→500 项（FULL-by-design）",
-        "ms" : 145,
+        "ms" : 149,
         "note" : "结构变更（FULL-by-design）"
       },
       {
         "dim" : "structure",
         "level" : "500→600 项（splice）",
-        "ms" : 98,
+        "ms" : 99,
         "note" : "结构变更（splice）"
       },
       {
         "dim" : "structure",
         "level" : "500→500 项（splice）",
-        "ms" : 81,
+        "ms" : 77,
         "note" : "结构变更（splice）"
       },
       {
@@ -35050,7 +35101,7 @@
       {
         "dim" : "structure",
         "level" : "500→600 项（splice）",
-        "ms" : 90,
+        "ms" : 89,
         "note" : "结构变更（splice）"
       }
     ],
@@ -35073,7 +35124,7 @@
       "★F 组验证 Vue 的批处理：同 tick 100 次变更应合并为 1 次渲染（extra.renders）",
       "★H 组对比 JSON 与扁平数值编码，直接支撑「是否值得上 JSI\/二进制通道」的决策"
     ],
-    "result_count" : 6,
+    "result_count" : 7,
     "runtime" : "JavaScriptCore（系统自带）",
     "total_cases" : 1,
     "viewport" : {
@@ -62084,5 +62135,5 @@
       "y" : 0
     }
   },
-  "tree_hash" : "9fc44462"
+  "tree_hash" : "cd1f2121"
 }

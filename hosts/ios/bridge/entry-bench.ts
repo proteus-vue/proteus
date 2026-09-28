@@ -77,7 +77,7 @@ const BN = { snapshot: 'bench-final' }
 // ★构建标识：每次构建写入，用于**确凿判定**设备上跑的是哪份代码
 //   （踩坑：靠文件 mtime 判断"报告是否刷新"不可靠——新建目标文件的时间恒为"现在"；
 //    且我看不出设备实际执行的是旧 bundle，白跑一轮。有了这个字段就能一眼判定。）
-const BUILD_ID = 'd9cd9219-180613'
+const BUILD_ID = '56f62246-181431'
 const now = (): number => Date.now()
 /** 宽松解析（宿主返回可能是字符串或已是对象） */
 const safeParseAny = (s: any): any => {
@@ -1788,6 +1788,8 @@ CASES.push({
                  relayout: h?.["relayout_count"], updated_layers: h?.["updated_layers"],
                  removed: h?.["removed"], inserted: h?.["inserted"],
                  removed_layers: h?.["removed_layers"], inserted_layers: h?.["inserted_layers"],
+                 // ★内存回收读数（孤点压实）
+                 compacted: h?.["compacted"], orphans: h?.["orphans"],
                  // ★★**层序判据（对真实 CALayer 子层序）**——以核心 `child_order` 为单一事实来源
                  //   【为什么是判据不是诊断】此前宿主自行按 parentId 归类 ⇒ 与核心分叉
                  //   （实测差异@51）；现已由 `applyChildOrder` 按核心重建层序。
@@ -1830,6 +1832,77 @@ CASES.push({
     //     （插在第 100 行时采样点必然在屏幕外 ⇒ 只能给 INCONCLUSIVE，等于没验）。
     await runOne('head_insert_FULL', 550, false, 0)
     await runOne('head_insert_splice', 600, true, 0)
+
+    // ★★**反复增删（内存回收的真机判据）**：10 轮「插 50 行 / 删 50 行」
+    //
+    // 【为什么单列】孤点压实的**触发条件是"累计"的**（孤点 ≥ 64 且 > 存活一半）
+    //   ⇒ 单轮增删（如 grow/shrink 档）不会触发 ⇒ 必须有**多轮累积**的场景才能观测到。
+    //   本档同时验证两件事：① 节点数**有界**（不随轮数线性增长）② 压实后**几何仍正确**
+    //   （`updated_layers` / 变化集与预期一致，且后续轮次的读数不劣化）。
+    {
+      const baseLen = app.items().length
+      const cycle = 50
+      const rounds = 10
+      let totalCompacted: Array<unknown> = []
+      let lastOrphans: unknown = null
+      let maxNodes = 0
+      const tChurn0 = now()
+      for (let r = 0; r < rounds; r++) {
+        // 插 50 行（插在第 1 位，避开头部像素区域；用独立 id 段避免与既有重复）
+        const fresh = Array.from({ length: cycle }, (_, i) => {
+          const id = 500000 + r * 1000 + i
+          return { id, title: `churn ${r}-${i}`, sub: 'churn' }
+        })
+        const cur = app.items()
+        app.setItems([cur[0]!, ...fresh, ...cur.slice(1)])
+        await nextTick()
+        const spIns = app.adapter.takeSplice()
+        let insOut: Record<string, unknown> | undefined
+        if (spIns && spIns !== 'full-required' && typeof proteusSelfDraw.splice === 'function') {
+          insOut = safeParseAny(proteusSelfDraw.splice(JSON.stringify(spIns)))
+        } else {
+          insOut = safeParseAny(proteusSelfDraw.update(JSON.stringify(app.adapter.toRequest(VP))))
+        }
+        app.adapter.markFullSync()
+        // 删掉刚插的 50 行
+        const after = app.items()
+        app.setItems(after.filter((it) => !fresh.some((f) => f.id === it.id)))
+        await nextTick()
+        const spRm = app.adapter.takeSplice()
+        let rmOut: Record<string, unknown> | undefined
+        if (spRm && spRm !== 'full-required' && typeof proteusSelfDraw.splice === 'function') {
+          rmOut = safeParseAny(proteusSelfDraw.splice(JSON.stringify(spRm)))
+        } else {
+          rmOut = safeParseAny(proteusSelfDraw.update(JSON.stringify(app.adapter.toRequest(VP))))
+        }
+        app.adapter.markFullSync()
+        const n = (rmOut?.["core_node_count"] as number) ?? 0
+        maxNodes = Math.max(maxNodes, (insOut?.["core_node_count"] as number) ?? 0, n)
+        lastOrphans = rmOut?.["orphans"]
+        if (rmOut?.["compacted"] && !(rmOut?.["compacted"] === null)) totalCompacted.push(rmOut["compacted"])
+      }
+      const tChurn = now() - tChurn0
+      app.setItems(app.items().slice(0, baseLen))
+      await nextTick()
+      app.adapter.markFullSync()
+      results.push({
+        case: 'S5_churn_cycles',
+        note: `${rounds} 轮「插 ${cycle} 行 / 删 ${cycle} 行」（内存回收：孤点压实）`,
+        items: baseLen, nodes: maxNodes,
+        vue_ms: 0, to_request_ms: 0, serialize_ms: 0, host_ms: tChurn, total_ms: tChurn,
+        patch_count: app.adapter.patchCount(), request_bytes: 0,
+        extra: {
+          rounds, cycle,
+          // ★判据一：节点数**有界**（累计插 10×50 行 = 3500 孤点；若不回收会线性增长）
+          max_node_count: maxNodes,
+          // ★判据二：压实**真的发生了**（读数非空）
+          compacted_events: totalCompacted,
+          last_orphans: lastOrphans,
+          verdict:
+            totalCompacted.length > 0 && maxNodes < baseLen * 7 + 1500 ? 'PASS' : 'FAIL',
+        },
+      })
+    }
     app.dispose()
   },
 })

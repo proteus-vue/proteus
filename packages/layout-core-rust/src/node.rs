@@ -174,6 +174,62 @@ pub struct LayoutTree {
     pub roots: Vec<NodeIndex>,
 }
 
+/// ★★**压实**：只保留从 `roots` 可达的节点，重建数组并**重映射索引**
+///
+/// 【为什么放在 node.rs（而不是 ffi）】这是**纯结构操作**（只依赖 LayoutTree 的
+///   parent/children 表示），与 FFI 层无关 ⇒ 放在数据结构的归属模块，便于单测。
+///
+/// 【顺序语义】保留节点的**相对数组顺序不变**（按下标升序过滤）⇒
+///   `build_taffy` 现在只信 `children`（不受数组序影响），但保持顺序仍让诊断可比。
+///
+/// - Returns: `(新树, old→new 下标映射)`；不可达节点在新树里没有映射项
+pub fn compact_reachable(tree: &LayoutTree) -> (LayoutTree, std::collections::HashMap<u32, u32>) {
+    // ① 标记可达（从 roots 沿 children DFS）
+    let mut reachable = vec![false; tree.len()];
+    let mut stack: Vec<u32> = tree.roots.clone();
+    while let Some(i) = stack.pop() {
+        let ui = i as usize;
+        if ui >= tree.len() || reachable[ui] {
+            continue;
+        }
+        reachable[ui] = true;
+        for &c in &tree.get(i).children {
+            stack.push(c);
+        }
+    }
+    // ② 按下标升序分配新下标（保持相对顺序）
+    let mut remap: std::collections::HashMap<u32, u32> = std::collections::HashMap::new();
+    let mut out = LayoutTree::new();
+    for (old, keep) in reachable.iter().enumerate() {
+        if !keep {
+            continue;
+        }
+        let mut n = tree.nodes[old].clone();
+        let new_idx = out.push(n.clone());
+        remap.insert(old as u32, new_idx);
+        // 占位（下面统一改 parent/children；此处先取出可变引用方便使用）
+        let _ = &mut n;
+    }
+    // ③ 重写 parent / children（经 remap 翻译）
+    for old in 0..tree.len() {
+        let Some(&new_idx) = remap.get(&(old as u32)) else { continue };
+        let src = &tree.nodes[old];
+        out.nodes[new_idx as usize].parent = if src.parent == NO_PARENT {
+            NO_PARENT
+        } else {
+            *remap.get(&src.parent).unwrap_or(&NO_PARENT)
+        };
+        out.nodes[new_idx as usize].children = src
+            .children
+            .iter()
+            .filter_map(|c| remap.get(c).copied())
+            .collect();
+    }
+    // ④ roots
+    out.roots = tree.roots.iter().filter_map(|r| remap.get(r).copied()).collect();
+    (out, remap)
+}
+
 impl LayoutTree {
     pub fn new() -> Self {
         Self { nodes: Vec::new(), roots: Vec::new() }

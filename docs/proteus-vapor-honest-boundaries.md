@@ -69,6 +69,8 @@
 | 17 | **★★宿主层序自行推导（与核心分叉）** | ✅ **已闭（2026-09-28）**：宿主 `childrenById` 原为**自行**按各节点 `parentId` 归类（`buildLayers`）⇒ 与核心的 `children` 序分叉（实测 `首个差异@51: 宿主 6 vs 核心 5260`）。⇒ 新增 `applyChildOrder()`：**以核心 `child_order` 为单一事实来源**重建簿记 + 按核心顺序依次 `addSublayer` 重排层（`addSublayer` 对已在层的子层是"移到末尾" ⇒ 依次调用即得目标序）。<br>★**判据升级（关键）**：从"对自报簿记"改为**对真实 CALayer 子层序**——对自报簿记比较是**空判据**（刚被写过，必然相等）。<br>**破坏性验证**：关掉 `applyChildOrder` ⇒ 层序 `FAIL` + 精确复现 `差异@51`（证明：① 判据有牙齿 ② 该差异是**真实的层序错误**，此前被掩盖） | `selfdraw-scene.swift` 的 `applyChildOrder`/`reconcileChildOrderLegacy` · 真机 `bench-filtered-S5.json` | — |
 | 18 | **★核心 splice 后缺少内部一致性自检** | ✅ **已补（2026-09-28）**：输入图校验只覆盖 **create 时**的输入；而 splice **改核心内部状态**（children 里 insert / 断链）⇒ 若漏改一侧，后续 build_taffy/收集/命中测试都在不一致的树上工作（无报错）。⇒ 新增 splice 后自检（children↔parent 双向）。**实测结论**：核心内部一致（100 项测试 + 真机三档全过）⇒ 差异@51 确为**宿主侧**问题，已由 #17 收口 | `ffi.rs` 的 splice 自检 | — |
 
+| 19 | **★★删除不做内存回收（孤点在 Rust 数组里积压）** | ✅ **已闭（2026-09-28）**：摘除只断链（孤点留数组，功能正确但占内存）⇒ 新增 `compact_reachable()`（可达性重建 + 索引重映射）+ `TreeEntry::compact()`。<br>★**为什么可以安全重排数组下标**（依赖梳理）：所有外部引用都走**稳定 id**（指令流 `nodeId` / `last_scopes` / `changed_roots`），`id_to_idx` 是映射（重建即可），引擎 `taffy_ids` 按下标对齐 ⇒ 显式失效。<br>★**触发策略（amortized）**：孤点 ≥ 256 **且** > 存活的 1/8。均摊论证：触发时 `orphans > live/8` ⇒ 回收量 ≥ `live/8` ⇒ O(live) 的压实成本由"至少 live/8 次摘除"分摊 ⇒ **均摊 O(1)/次摘除**。<br>**真机判据（`S5_churn_cycles` · 10 轮「插 50 行/删 50 行」）**：压实 **5 次**、末轮**孤点 0**、峰值节点 **4909**（有界 ≈ 基准 3507 + 插入量）。<br>**破坏性验证**：关掉压实 ⇒ 测试红「最终 1701 节点（基线 101）」 | `node.rs` 的 `compact_reachable` · `ffi.rs` 的 `compact`/触发 · 测试 `splice_compacts_orphans_and_keeps_geometry_correct` · 真机 `S5_churn_cycles` | ★阈值按真机读数调过一轮：首版"孤点 > 存活一半"在 10 轮 churn 下**只触发 1 次**（末轮仍积 1050 孤点）⇒ 改为 1/8 |
+
 ### P1 · 影响覆盖可信度（不影响正确性）
 
 | # | 边界 | 现状 | 建议 |
