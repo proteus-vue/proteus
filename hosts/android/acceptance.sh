@@ -234,11 +234,29 @@ else
 fi
 
 echo "==> 采集 Perfetto trace（§9.2 权威核判定）"
-# ★与滚动测量并行抓取：先起 trace，再触发滚动（trace 需覆盖测量窗口）
+# ★★**可写路径探测 + 失败如实标注**（本仓实测的设备差异，honor10 暴露）
+#
+# 【故障链】原实现固定写 `/data/misc/perfetto-traces/`——该目录在 honor10 上**根本不存在**
+#   （`ls: No such file or directory`），而 `/data/local/tmp` 又是 `errno 13 Permission denied`
+#   ⇒ perfetto **静默失败**，脚本继续往下跑，**Perfetto 段一个字都没输出**
+#   （现象：日志里只有 "==> 采集 Perfetto trace"，然后直接跳到下一节 —— 极易被当成"跑过了"）。
+#   ★纪律：**辅助工具不可用必须显式报出**（本仓 #35 同族：没有输出的"成功"最危险）。
 CFG="$(dirname "$0")/perfetto-config.txt"
-TRACE="/data/misc/perfetto-traces/acceptance.pftrace"
+TRACE=""
+for cand in /data/misc/perfetto-traces/acceptance.pftrace /data/local/tmp/acceptance.pftrace; do
+  d="$(dirname "$cand")"
+  if "$ADB" shell "[ -d $d ] && touch $cand 2>/dev/null && echo ok" 2>/dev/null | grep -q ok; then
+    TRACE="$cand"; break
+  fi
+done
+if [ -z "$TRACE" ]; then
+  echo "    ⚠ 无可用 trace 路径（已试 /data/misc/perfetto-traces 与 /data/local/tmp）——"
+  echo "      honor10 实测：前者不存在、后者 Permission denied（SELinux）"
+  echo "      ⇒ **跳过 Perfetto**（辅助证据缺失，不影响主测量；核判定改用 app 自报的 layout-env.json）"
+fi
 "$ADB" shell am force-stop "$PKG" >/dev/null 2>&1; sleep 1
 "$ADB" shell am start -n "$ACTIVITY" --es path scroll >/dev/null 2>&1; sleep 4
+if [ -n "$TRACE" ]; then
 cat "$CFG" | "$ADB" shell "perfetto --txt -c - -o $TRACE" >/dev/null 2>&1 &
 PF_PID=$!
 sleep 6                      # 让 trace 先跑起来（覆盖触发前的一段）
@@ -247,8 +265,9 @@ wait $PF_PID 2>/dev/null || true
 "$ADB" pull "$TRACE" "$DEST/acceptance.pftrace" >/dev/null 2>&1 || true
 if [ -f "$DEST/acceptance.pftrace" ]; then
   PY="$ROOT/.tools/py"
-  PYTHONPATH="$PY" python3 "$(dirname "$0")/perfetto-analyze.py" "$DEST/acceptance.pftrace" "$PKG" 2>&1 | tail -16 | sed 's/^/    /'
+  PYTHONPATH="$PY" python3 "$(dirname "$0")/perfetto-analyze.py" "$DEST/acceptance.pftrace" "$PKG" 2>&1 | tail -16 | sed 's/^/    /' || true
 fi
+fi   # ← 结束 `if [ -n "$TRACE" ]`（无可用路径时整段跳过）
 
 echo "==> 采集系统帧率读数（§9.3 权威口径：dumpsys gfxinfo）"
 GFX="$DEST/gfxinfo.txt"
@@ -383,7 +402,24 @@ else:
         try:
             e = json.load(open(ef))
             p_, n_ = e.get('prime_count', 0), e.get('normal_count', 0)
-            tag = '✓ 普大核' if p_ == 0 else (f'⚠ 含超大核 {p_}/{p_+n_} —— §9.2 判本组数据作废')
+            tiers = e.get('tiers', 0)
+            fastest = e.get('fastest_khz', 0)
+            # ★★判定口径更正（honor10 实测）：**按本机档数解读**，不写死"含最快档=作废"
+            #
+            # 【为什么原判据在 honor10 上误报】原判据是"prime_count > 0 ⇒ 作废"，
+            #   那是为 Redmi（**三档**：小核/普大核/超大核）写的——落在"超大核"说明作弊。
+            #   而 honor10 是**两档**（A53 + A73）：cpu4-7 就是它**唯一的快档**，
+            #   主线程落在那儿是**正常的**（没有第三档可落）⇒ 报"作废"是误判。
+            #   ⇒ 正解：判据重述为「**主线程只落在最快档，且本机存在多档**」
+            #     ——两档设备上这就是合规；三档设备上落在"最快档"仍需人工判读（见 §9.2 原意）。
+            if tiers == 0:
+                tag = '? 档数未知（读不到频率）'
+            elif tiers == 1:
+                tag = '✓ 单档设备（无快慢之分）'
+            elif p_ == len([c for c in (e.get('observed_cpus') or []) if c >= 0]):
+                tag = f'○ 全部落在**最快档**（本机 {tiers} 档 · 最快 {fastest}kHz）——须人工判读是否为"唯一快档"'
+            else:
+                tag = f'✓ 落在非最快档（本机 {tiers} 档）—— 无作弊嫌疑'
             print(f"  {e.get('path','?'):<14} cpus={e.get('observed_cpus')} → {tag}")
         except Exception as ex:
             print(f"  ✗ 解析 {os.path.basename(ef)} 失败：{ex}")

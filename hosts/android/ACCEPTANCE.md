@@ -1,5 +1,8 @@
 # M2 正式验收报告（§9.2）
 
+> ★★**中低端对照另见 `ACCEPTANCE-honor10.md`**（荣耀10 · Kirin 970 · Android 10 · 60Hz）
+> —— 那一档暴露了本档**绘制判据的口径错配**（见下方「★口径更正」）与 **5 处验收装置的设备假设**。
+>
 > 执行日期：2026-09-29 · 设备：**Redmi M098FE · Android 17（API 37）· arm64-v8a · 1200×2608 @480dpi**
 > 被测：`proteus-layout-core 0.1.0 · engine=taffy-0.14`
 > 脚本：`hosts/android/acceptance.sh`（可复跑）· 原始数据：`hosts/android/results/acceptance/<时间戳>/`

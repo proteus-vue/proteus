@@ -1,0 +1,49 @@
+{
+  "ok": true,
+  "path": "scroll-core",
+  "note": "★★复用池决策来自 Rust 核心（宿主不再自己算方向敏感预载）",
+  "rows": 4000,
+  "frames_sampled": 599,
+  "avg_frame_ms": 16.05,
+  "p50_ms": 16,
+  "p95_ms": 16,
+  "acquire_total": 7979,
+  "release_total": 7955,
+  "max_per_frame": 20,
+  "forward_frames": 300,
+  "backward_frames": 299,
+  "idle_frames": 1,
+  "direction_mismatch_frames": 1,
+  "fwd_preload": [
+    11,
+    34
+  ],
+  "back_preload": [
+    3964,
+    3987
+  ],
+  "fwd_kept_above": 2,
+  "fwd_kept_below": 8,
+  "back_kept_above": 8,
+  "back_kept_below": 2,
+  "preload_swapped": true,
+  "rn_created": 24,
+  "rn_reused": 7955,
+  "rn_pooled": 0,
+  "rn_max_active": 24,
+  "rn_reuse_ratio": 0.997,
+  "row_height_from_core": 60,
+  "max_missing_in_visible": 0,
+  "missing_visible_sum": 0,
+  "skipped_in_acquire": 0,
+  "core_stats": {
+    "acquire_events": 7979,
+    "demote_events": 7959,
+    "first_preload": 5,
+    "last_preload": 28,
+    "live": 24,
+    "ok": true,
+    "release_events": 7955,
+    "updates": 600
+  }
+}
