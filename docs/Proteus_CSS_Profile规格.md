@@ -534,15 +534,15 @@ Web 端由浏览器原生渲染，天然支持完整 CSS——但开发者写出
 
 ## 9. 实施顺序
 
-| 阶段 | 内容 | 依赖 |
-|---|---|---|
-| **P1** | Skyline 端 CSS 支持矩阵实测表 | 无（**必须先做**，否则 Profile 无基线） | ✅ **已完成**（2026-09-29，25/25 通过，见 §2） |
-| **P2** | 定义 Profile v1 特性清单（L0–L5） | P1 |
-| **P3** | 编译期折叠算法实现 + Golden 门禁 | P2 |
-| **P4** | 动态 class 预计算（属性维度分解） | P3 |
-| **P5** | Lint 规则（E-CSS / W-CSS） | P2 |
-| **P6** | Web 端 lint 接入（一致性前置） | P5 |
-| **P7** | App 端 ComputedStyle 消费 + conformance 比对 | P3、M1 排版核心 |
+| 阶段 | 内容 | 依赖 | 实际状态（2026-09-28 逐项核实） |
+|---|---|---|---|
+| **P1** | Skyline 端 CSS 支持矩阵实测表 | 无（**必须先做**，否则 Profile 无基线） | ✅ **已完成**（2026-09-29，25/25 通过，见 §2）—— 证据 `showcase/subpackages/capabilities/pages/css-profile-probe.vue` + `tests/e2e-mp-css-profile-grid.test.ts` |
+| **P2** | 定义 Profile v1 特性清单（L0–L5） | P1 | ✅ 本文档 §3（规格即产物） |
+| **P3** | 编译期折叠算法实现 + Golden 门禁 | P2 | ◐ **部分**：单位折叠 ✅（`component-ir/src/pnode-style.ts` 的 `normalizeStyleString`/`resolveLength`）+ Golden ✅（`tests/golden.test.ts`）；**§4 全量折叠算法（选择器/特异性/层叠相位）无独立实现证据** |
+| **P4** | 动态 class 预计算（属性维度分解） | P3 | ❌ **未实现**（全仓无按属性维度分解的预计算实现） |
+| **P5** | Lint 规则（E-CSS / W-CSS） | P2 | ◐ **仅 1 条**：`component-ir/src/pnode-analyze.ts:116` 的 `E-CSS-006`（拍平违规）；其余规则未实现（注：`cli/css-check.ts` 属 **css-compat 通道**，非本规则集） |
+| **P6** | Web 端 lint 接入（一致性前置） | P5 | ❌ **未实现** |
+| **P7** | App 端 ComputedStyle 消费 + conformance 比对 | P3、M1 排版核心 | ◐ ComptonStyle 契约 = `PProps`（`component-ir/src/pnode.ts`）；浏览器基准 conformance ✅（`layout-core-rust/tests/conformance.rs`）；**App 端消费链仅部分** |
 
 > P1 的 Skyline 实测表是**前置项**。Profile 必须是三端交集，缺了 Skyline 基线会导致后续返工。
 

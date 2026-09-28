@@ -5,6 +5,21 @@
 > 依赖：《App 端高性能渲染落地方案》M2、《Playground 设计方案》§4、《App 端路由与动画系统设计方案》
 > 设计参照：Flutter Embedder / Add-to-App 的成熟分层模型
 
+
+> ⚠ **实施状态：规划态 · 零实现（2026-09-28 逐项核实）**
+>
+> 本文档**尚无生产代码**。核实结论（证据见括号）：
+> · ❌ **HA0**（八接口 C ABI / 版本协商 / `proteus_submit_frame`）—— 全仓 `submit_frame`/`host_abi` 仅命中本方案自身
+> · ❌ **HA0.5**（`hosts/`→`platform/` 拆分 + CI 静态检查）—— 无 `platform/` 目录
+> · ◐ **HA2**（度量 trait 注入）—— **TextMeasurer trait 已存在**（`layout-core-rust/src/engine.rs:48`，iOS CoreText / Android StaticLayout 均已注入）；但**无图像解码 trait**，且内核仍有 `target_os` 分支（`jni.rs`/`lib.rs`/`ffi.rs`）
+> · ◐ **HA3**（能力插件）—— `packages/capabilities/src/` + `capabilities:check` + `check:degradation` 已有；**宿主能力注册插件式装载与「未注册能力」运行时报错未见**
+> · ◐ **HA4**（原生组件宿主）—— **仅 Android**（`hosts/android/README.md` M3 WebView 宿主 + `native-host-verify.py` + `scroll-sync-verify.py`，z-order 实测 native-on-top）
+> · ❌ **HA5**（AAR + 嵌入 demo + 预热）/ **HA6**（Playground 统一走 ABI）—— 均无
+> · ❌ **批处理红线**「跨边界调用 = 帧数」**未达标**：实测 `callsPer1000Items=6100`（每项 6 次，非每帧 1 次）
+>
+> ⇒ 本方案的**相邻基座已就绪**（排版 FFI / TextMeasurer / capabilities / Android 原生宿主），
+> 缺的是「把内核与宿主彻底解耦」这一层（`platform/` 拆分 + C ABI）。
+
 ---
 
 ## 0. 决策与前提
