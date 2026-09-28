@@ -239,6 +239,16 @@ export interface TemplateBindingRef {
     listId: number
     /** v-for 别名（`item in list` 的 `item`） */
     scope: string
+    /**
+     * ★列表源表达式的**原始文本**（如 `groups` / `group.items`）
+     *
+     * 【为什么需要（本仓实测的嵌套缺口）】外层是 `group.items` 时，它的根 `group`
+     *   是**外层的行作用域变量**，不是顶层源 ⇒ 只记根名会把内层挂到外层列表上（错）。
+     *   运行时按本字段逐级求值（外层行 → 该行的 items），才能定位真正的行数据。
+     */
+    sourceExpr: string
+    /** ★外层列表的 listId（嵌套时才有；用于运行时按"外层行 → 内层数组"求值） */
+    parentListId?: number
     /** `:key` 的表达式（如 `item.id`）——运行时的**行标识字段**；无 `:key` 时为 undefined */
     keyField?: string
     /** 该 v-for 元素在模板序中的元素序号（供运行时算行内相对偏移） */
@@ -376,6 +386,10 @@ export function collectTemplateBindings(source: string, filename = 'anonymous.vu
             nextListCtx = {
               listId: nextListId++,
               scope: names[0] ?? '',
+              // ★保留完整源表达式（嵌套时 `group.items` 不能只留根名）
+              sourceExpr: (expCode.trim().split(/\s+(?:in|of)\s+/)[1] ?? "").trim(),
+              // ★若外层已有 v-for 上下文 ⇒ 记录父列表 id（运行时按外层行求值内层数组）
+              parentListId: listCtx?.listId,
               keyField: keyFieldOfElement,
               vforElementIndex: myElementIndex,
               isKeyBinding: false,
@@ -384,10 +398,18 @@ export function collectTemplateBindings(source: string, filename = 'anonymous.vu
             //   （v-for 在 props 里可能排在 :key 之后，故不能只靠循环开头的初值）
             activeListCtx = nextListCtx
             // ★别名 → 列表源根名（`item in list` ⇒ item → list）
-            const listRoot = srcExpr.trim().split('.')[0]?.replace(/[^\w$]/g, '') ?? ''
+            // ★列表源的**根名**：若根名是**外层 v-for 的行别名**，则它指向的是
+            //   「外层行的某个字段」而不是顶层源 ⇒ 记录**完整表达式** `sourceExpr`，
+            //   并把顶层源解析为「外层列表所属的顶层源」（供依赖图挂接）。
+            const exprText = srcExpr.trim()
+            const listRoot = exprText.split('.')[0]?.replace(/[^\w$]/g, '') ?? ''
             if (listRoot) {
               nextScopeSources = { ...scopeSources }
-              for (const nm of names) nextScopeSources[nm] = listRoot
+              // 外层别名 → 顶层源（`group` → `groups`）；非别名时就是它自己
+              const topRoot = scopeSources[listRoot] ?? listRoot
+              for (const nm of names) nextScopeSources[nm] = topRoot
+              // ★把内层列表源也映射到顶层源（`group.items` 的根 `group` → `groups`）
+              nextScopeSources[exprText.split('.')[0]] = topRoot
             }
             continue
           }
