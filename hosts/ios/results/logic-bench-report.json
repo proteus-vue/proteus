@@ -252067,41 +252067,41 @@
   },
   "host_node_count" : 28007,
   "host_timing_last" : {
-    "build_layers_ms" : 859.77303981781006,
-    "host_total_ms" : 1442.3949718475342,
-    "layout_ms" : 184.62800979614258,
-    "measure_ms" : 99.496006965637207
+    "build_layers_ms" : 930.71401119232178,
+    "host_total_ms" : 1511.9160413742065,
+    "layout_ms" : 187.37900257110596,
+    "measure_ms" : 94.218015670776367
   },
   "js_completed" : 45,
   "js_ok" : true,
   "js_report" : {
-    "build_id" : "19824536-122725",
+    "build_id" : "c559d567-123950",
     "case_timings_ms" : {
-      "A_scale_mount_12" : 23,
-      "A_scale_mount_50" : 32,
-      "A_scale_mount_200" : 110,
-      "A_scale_mount_500" : 390,
-      "A_scale_mount_1000" : 824,
-      "B_deep_nested" : 29,
-      "C_computed_chain" : 11,
-      "D_list_reverse_200" : 66,
-      "E_insert_head_50" : 120,
-      "E_remove_middle_50" : 82,
-      "F_batch_100_mutations" : 100,
-      "G_high_freq_60" : 1483,
-      "H_boundary_encoding" : 56,
-      "I_style_hoist_ab" : 39,
-      "J_incremental_e2e" : 420,
-      "S1_scale_mount_1000" : 492,
-      "S1_scale_mount_2000" : 1007,
-      "S1_scale_mount_4000" : 2073,
-      "S2_change_locality" : 640,
-      "S3_sustained_burst" : 15746,
-      "S4_text_churn" : 442,
-      "S5_structure_change" : 757,
-      "S6_worst_reverse" : 762,
-      "V0_native_ceiling" : 2153,
-      "V3_vapor_slot_pipeline" : 11404
+      "A_scale_mount_12" : 22,
+      "A_scale_mount_50" : 33,
+      "A_scale_mount_200" : 157,
+      "A_scale_mount_500" : 412,
+      "A_scale_mount_1000" : 913,
+      "B_deep_nested" : 35,
+      "C_computed_chain" : 12,
+      "D_list_reverse_200" : 75,
+      "E_insert_head_50" : 125,
+      "E_remove_middle_50" : 87,
+      "F_batch_100_mutations" : 104,
+      "G_high_freq_60" : 1519,
+      "H_boundary_encoding" : 59,
+      "I_style_hoist_ab" : 40,
+      "J_incremental_e2e" : 430,
+      "S1_scale_mount_1000" : 486,
+      "S1_scale_mount_2000" : 992,
+      "S1_scale_mount_4000" : 2092,
+      "S2_change_locality" : 657,
+      "S3_sustained_burst" : 15623,
+      "S4_text_churn" : 426,
+      "S5_structure_change" : 750,
+      "S6_worst_reverse" : 760,
+      "V0_native_ceiling" : 1986,
+      "V3_vapor_slot_pipeline" : 7913
     },
     "cases" : [
       {
@@ -252109,7 +252109,7 @@
         "extra" : {
           "phase" : "mount"
         },
-        "host_ms" : 9,
+        "host_ms" : 12,
         "items" : 12,
         "nodes" : 91,
         "note" : "规模扫描：挂载 12 项",
@@ -252117,7 +252117,7 @@
         "request_bytes" : 6862,
         "serialize_ms" : 0,
         "to_request_ms" : 0,
-        "total_ms" : 9,
+        "total_ms" : 12,
         "vue_ms" : 0
       },
       {
@@ -252125,31 +252125,31 @@
         "extra" : {
           "renders" : 1
         },
-        "host_ms" : 2,
+        "host_ms" : 3,
         "items" : 91,
         "nodes" : 91,
         "note" : "规模 12 → 22：单次响应式更新（真实增删）",
         "patch_count" : 64,
         "request_bytes" : 6863,
         "serialize_ms" : 0,
-        "to_request_ms" : 2,
-        "total_ms" : 7,
-        "vue_ms" : 3
+        "to_request_ms" : 1,
+        "total_ms" : 6,
+        "vue_ms" : 2
       },
       {
         "case" : "A_scale_mount_50",
         "extra" : {
           "phase" : "mount"
         },
-        "host_ms" : 10,
+        "host_ms" : 9,
         "items" : 50,
         "nodes" : 357,
         "note" : "规模扫描：挂载 50 项",
         "patch_count" : 608,
         "request_bytes" : 27708,
-        "serialize_ms" : 0,
-        "to_request_ms" : 1,
-        "total_ms" : 11,
+        "serialize_ms" : 1,
+        "to_request_ms" : 2,
+        "total_ms" : 12,
         "vue_ms" : 0
       },
       {
@@ -252164,8 +252164,8 @@
         "patch_count" : 254,
         "request_bytes" : 27710,
         "serialize_ms" : 1,
-        "to_request_ms" : 1,
-        "total_ms" : 15,
+        "to_request_ms" : 3,
+        "total_ms" : 17,
         "vue_ms" : 4
       },
       {
@@ -252173,15 +252173,15 @@
         "extra" : {
           "phase" : "mount"
         },
-        "host_ms" : 38,
+        "host_ms" : 59,
         "items" : 200,
         "nodes" : 1407,
         "note" : "规模扫描：挂载 200 项",
         "patch_count" : 2408,
         "request_bytes" : 110917,
         "serialize_ms" : 0,
-        "to_request_ms" : 5,
-        "total_ms" : 43,
+        "to_request_ms" : 6,
+        "total_ms" : 65,
         "vue_ms" : 0
       },
       {
@@ -252189,31 +252189,31 @@
         "extra" : {
           "renders" : 1
         },
-        "host_ms" : 33,
+        "host_ms" : 58,
         "items" : 1407,
         "nodes" : 1407,
         "note" : "规模 200 → 210：单次响应式更新（真实增删）",
         "patch_count" : 1004,
         "request_bytes" : 110920,
         "serialize_ms" : 1,
-        "to_request_ms" : 6,
-        "total_ms" : 54,
-        "vue_ms" : 14
+        "to_request_ms" : 5,
+        "total_ms" : 79,
+        "vue_ms" : 15
       },
       {
         "case" : "A_scale_mount_500",
         "extra" : {
           "phase" : "mount"
         },
-        "host_ms" : 148,
+        "host_ms" : 158,
         "items" : 500,
         "nodes" : 3507,
         "note" : "规模扫描：挂载 500 项",
         "patch_count" : 6008,
         "request_bytes" : 279817,
         "serialize_ms" : 1,
-        "to_request_ms" : 15,
-        "total_ms" : 164,
+        "to_request_ms" : 14,
+        "total_ms" : 173,
         "vue_ms" : 0
       },
       {
@@ -252221,31 +252221,31 @@
         "extra" : {
           "renders" : 1
         },
-        "host_ms" : 143,
+        "host_ms" : 159,
         "items" : 3507,
         "nodes" : 3507,
         "note" : "规模 500 → 510：单次响应式更新（真实增删）",
         "patch_count" : 2504,
         "request_bytes" : 279820,
-        "serialize_ms" : 1,
+        "serialize_ms" : 2,
         "to_request_ms" : 14,
-        "total_ms" : 197,
-        "vue_ms" : 39
+        "total_ms" : 211,
+        "vue_ms" : 36
       },
       {
         "case" : "A_scale_mount_1000",
         "extra" : {
           "phase" : "mount"
         },
-        "host_ms" : 318,
+        "host_ms" : 348,
         "items" : 1000,
         "nodes" : 7007,
         "note" : "规模扫描：挂载 1000 项",
         "patch_count" : 12008,
         "request_bytes" : 561319,
-        "serialize_ms" : 1,
-        "to_request_ms" : 34,
-        "total_ms" : 353,
+        "serialize_ms" : 2,
+        "to_request_ms" : 30,
+        "total_ms" : 380,
         "vue_ms" : 0
       },
       {
@@ -252253,31 +252253,31 @@
         "extra" : {
           "renders" : 1
         },
-        "host_ms" : 307,
+        "host_ms" : 350,
         "items" : 7007,
         "nodes" : 7007,
         "note" : "规模 1000 → 1010：单次响应式更新（真实增删）",
         "patch_count" : 5004,
         "request_bytes" : 561322,
-        "serialize_ms" : 2,
-        "to_request_ms" : 27,
-        "total_ms" : 414,
-        "vue_ms" : 78
+        "serialize_ms" : 1,
+        "to_request_ms" : 33,
+        "total_ms" : 470,
+        "vue_ms" : 86
       },
       {
         "case" : "B_deep_nested",
         "extra" : {
           "renders" : 1
         },
-        "host_ms" : 26,
+        "host_ms" : 29,
         "items" : 147,
         "nodes" : 147,
         "note" : "改 deep.a.b.c.v（深层 reactive 叶子）",
         "patch_count" : 104,
         "request_bytes" : 11239,
         "serialize_ms" : 0,
-        "to_request_ms" : 0,
-        "total_ms" : 28,
+        "to_request_ms" : 1,
+        "total_ms" : 32,
         "vue_ms" : 2
       },
       {
@@ -252293,40 +252293,40 @@
         "request_bytes" : 11239,
         "serialize_ms" : 0,
         "to_request_ms" : 2,
-        "total_ms" : 10,
-        "vue_ms" : 1
+        "total_ms" : 11,
+        "vue_ms" : 2
       },
       {
         "case" : "D_list_reverse_200",
         "extra" : {
           "renders" : 1
         },
-        "host_ms" : 21,
+        "host_ms" : 22,
         "items" : 2802,
         "nodes" : 2802,
         "note" : "200 项 reverse（keyed diff 最坏情形）",
         "patch_count" : 1205,
         "request_bytes" : 220970,
         "serialize_ms" : 1,
-        "to_request_ms" : 13,
-        "total_ms" : 53,
-        "vue_ms" : 18
+        "to_request_ms" : 14,
+        "total_ms" : 58,
+        "vue_ms" : 21
       },
       {
         "case" : "E_insert_head_50",
         "extra" : {
           "renders" : 1
         },
-        "host_ms" : 76,
+        "host_ms" : 79,
         "items" : 1757,
         "nodes" : 1757,
         "note" : "头部插入 50 项到 200 项列表",
         "patch_count" : 1606,
         "request_bytes" : 138817,
         "serialize_ms" : 1,
-        "to_request_ms" : 8,
-        "total_ms" : 106,
-        "vue_ms" : 21
+        "to_request_ms" : 9,
+        "total_ms" : 112,
+        "vue_ms" : 23
       },
       {
         "case" : "E_remove_middle_50",
@@ -252339,10 +252339,10 @@
         "note" : "从中部删除 50 项（200 → 150）",
         "patch_count" : 803,
         "request_bytes" : 83441,
-        "serialize_ms" : 0,
-        "to_request_ms" : 4,
-        "total_ms" : 69,
-        "vue_ms" : 14
+        "serialize_ms" : 1,
+        "to_request_ms" : 5,
+        "total_ms" : 72,
+        "vue_ms" : 15
       },
       {
         "case" : "F_batch_100_mutations",
@@ -252350,23 +252350,23 @@
           "expect_renders" : 1,
           "renders" : 1
         },
-        "host_ms" : 61,
+        "host_ms" : 64,
         "items" : 1407,
         "nodes" : 1407,
         "note" : "同一 tick 内 100 次变更（期望 renders=1）",
         "patch_count" : 1004,
         "request_bytes" : 110920,
-        "serialize_ms" : 0,
+        "serialize_ms" : 1,
         "to_request_ms" : 7,
-        "total_ms" : 85,
-        "vue_ms" : 17
+        "total_ms" : 90,
+        "vue_ms" : 18
       },
       {
         "case" : "G_high_freq_60",
         "extra" : {
-          "avg_ms" : 24.367000000000001,
+          "avg_ms" : 24.983000000000001,
           "iterations" : 60,
-          "max_ms" : 26
+          "max_ms" : 27
         },
         "host_ms" : 0,
         "items" : 200,
@@ -252376,8 +252376,8 @@
         "request_bytes" : 0,
         "serialize_ms" : 0,
         "to_request_ms" : 0,
-        "total_ms" : 1462,
-        "vue_ms" : 24.367000000000001
+        "total_ms" : 1499,
+        "vue_ms" : 24.983000000000001
       },
       {
         "case" : "H_boundary_encoding",
@@ -252387,9 +252387,9 @@
           "flat_bytes" : 347777,
           "flat_encode_ms" : 3,
           "json_bytes" : 279817,
-          "json_parse_ms" : 0,
-          "json_stringify_ms" : 0,
-          "speed_ratio" : 0
+          "json_parse_ms" : 1,
+          "json_stringify_ms" : 1,
+          "speed_ratio" : 0.33000000000000002
         },
         "host_ms" : 0,
         "items" : 500,
@@ -252397,9 +252397,9 @@
         "note" : "边界编码对比（500 项 \/ 2003 节点）：JSON vs 扁平数值",
         "patch_count" : 0,
         "request_bytes" : 279817,
-        "serialize_ms" : 0,
+        "serialize_ms" : 1,
         "to_request_ms" : 0,
-        "total_ms" : 3,
+        "total_ms" : 4,
         "vue_ms" : 0
       },
       {
@@ -252409,16 +252409,16 @@
           "renders" : 1,
           "variant" : "naive"
         },
-        "host_ms" : 22,
+        "host_ms" : 23,
         "items" : 100,
         "nodes" : 303,
         "note" : "naive：100 项，一次重渲染的 patch 流量",
         "patch_count" : 201,
         "request_bytes" : 18075,
-        "serialize_ms" : 1,
+        "serialize_ms" : 0,
         "to_request_ms" : 0,
-        "total_ms" : 26,
-        "vue_ms" : 3
+        "total_ms" : 28,
+        "vue_ms" : 4
       },
       {
         "case" : "I_style_hoist_hoisted",
@@ -252446,7 +252446,7 @@
           "host_incremental" : true,
           "host_patches" : 1,
           "host_relayout" : 355,
-          "host_total_ms" : 3.6800000000000002,
+          "host_total_ms" : 4.1200000000000001,
           "host_updated_layers" : 355,
           "patches_diag" : "len=1"
         },
@@ -252457,8 +252457,8 @@
         "patch_count" : 253,
         "request_bytes" : 149,
         "serialize_ms" : 4,
-        "to_request_ms" : 0,
-        "total_ms" : 8,
+        "to_request_ms" : 1,
+        "total_ms" : 9,
         "vue_ms" : 4
       },
       {
@@ -252469,7 +252469,7 @@
           "host_incremental" : true,
           "host_patches" : 1,
           "host_relayout" : 1405,
-          "host_total_ms" : 14.699999999999999,
+          "host_total_ms" : 14.98,
           "host_updated_layers" : 1405,
           "patches_diag" : "len=1"
         },
@@ -252492,7 +252492,7 @@
           "host_incremental" : true,
           "host_patches" : 1,
           "host_relayout" : 3505,
-          "host_total_ms" : 34.289999999999999,
+          "host_total_ms" : 36.039999999999999,
           "host_updated_layers" : 3505,
           "patches_diag" : "len=1"
         },
@@ -252502,9 +252502,9 @@
         "note" : "规模 500：改 1 行样式（margin）→ 走**补丁**路径",
         "patch_count" : 2503,
         "request_bytes" : 150,
-        "serialize_ms" : 35,
+        "serialize_ms" : 36,
         "to_request_ms" : 0,
-        "total_ms" : 79,
+        "total_ms" : 80,
         "vue_ms" : 44
       },
       {
@@ -252523,8 +252523,8 @@
         "request_bytes" : 46,
         "serialize_ms" : 0,
         "to_request_ms" : 0,
-        "total_ms" : 82,
-        "vue_ms" : 82
+        "total_ms" : 81,
+        "vue_ms" : 81
       },
       {
         "case" : "S2_B_sibling_margin",
@@ -252542,8 +252542,8 @@
         "request_bytes" : 150,
         "serialize_ms" : 74,
         "to_request_ms" : 0,
-        "total_ms" : 158,
-        "vue_ms" : 84
+        "total_ms" : 157,
+        "vue_ms" : 83
       },
       {
         "case" : "V0_plain_dot",
@@ -252555,15 +252555,15 @@
           "strategy" : "plain",
           "updated_layers" : 7
         },
-        "host_ms" : 0,
+        "host_ms" : 1,
         "items" : 1000,
         "nodes" : 0,
         "note" : "V0\/plain：改第 500 行圆点（单节点更新）",
         "patch_count" : 5003,
         "request_bytes" : 46,
-        "serialize_ms" : 0,
+        "serialize_ms" : 1,
         "to_request_ms" : 0,
-        "total_ms" : 84,
+        "total_ms" : 85,
         "vue_ms" : 84
       },
       {
@@ -252584,8 +252584,8 @@
         "request_bytes" : 46,
         "serialize_ms" : 0,
         "to_request_ms" : 0,
-        "total_ms" : 10,
-        "vue_ms" : 10
+        "total_ms" : 11,
+        "vue_ms" : 11
       },
       {
         "case" : "V0_comp_dot",
@@ -252597,15 +252597,15 @@
           "strategy" : "comp",
           "updated_layers" : 7
         },
-        "host_ms" : 1,
+        "host_ms" : 0,
         "items" : 1000,
         "nodes" : 0,
         "note" : "V0\/comp：改第 500 行圆点（单节点更新）",
         "patch_count" : 7,
         "request_bytes" : 46,
-        "serialize_ms" : 1,
+        "serialize_ms" : 0,
         "to_request_ms" : 0,
-        "total_ms" : 13,
+        "total_ms" : 12,
         "vue_ms" : 12
       },
       {
@@ -252618,15 +252618,15 @@
           "strategy" : "plain",
           "updated_layers" : 7005
         },
-        "host_ms" : 62,
+        "host_ms" : 63,
         "items" : 1000,
         "nodes" : 0,
         "note" : "V0\/plain：改标题 margin（零行变更）",
         "patch_count" : 5003,
         "request_bytes" : 43,
-        "serialize_ms" : 62,
+        "serialize_ms" : 63,
         "to_request_ms" : 0,
-        "total_ms" : 141,
+        "total_ms" : 142,
         "vue_ms" : 79
       },
       {
@@ -252647,8 +252647,8 @@
         "request_bytes" : 43,
         "serialize_ms" : 62,
         "to_request_ms" : 0,
-        "total_ms" : 73,
-        "vue_ms" : 11
+        "total_ms" : 71,
+        "vue_ms" : 9
       },
       {
         "case" : "V0_comp_header",
@@ -252660,31 +252660,31 @@
           "strategy" : "comp",
           "updated_layers" : 7005
         },
-        "host_ms" : 59,
+        "host_ms" : 62,
         "items" : 1000,
         "nodes" : 0,
         "note" : "V0\/comp：改标题 margin（零行变更）",
         "patch_count" : 2,
         "request_bytes" : 43,
-        "serialize_ms" : 59,
+        "serialize_ms" : 62,
         "to_request_ms" : 0,
-        "total_ms" : 69,
-        "vue_ms" : 10
+        "total_ms" : 73,
+        "vue_ms" : 11
       },
       {
         "case" : "V3_vapor_small",
         "extra" : {
-          "amortized_us" : 128.96899999999999,
-          "batch_ms" : 25.789999999999999,
+          "amortized_us" : 122.114,
+          "batch_ms" : 24.420000000000002,
           "clock" : "host.mach_absolute_time",
-          "clock_min_nonzero_ms" : 0.0032079219818115234,
+          "clock_min_nonzero_ms" : 0.0031249523162841797,
           "clock_ticks_in_512_reads" : 512,
           "flushes" : 301,
           "host_apply_ms" : 0.02,
           "host_deferred" : 0,
           "host_geom_changed" : 1,
           "host_geom_total" : 2,
-          "host_layers_ms" : 0.01,
+          "host_layers_ms" : 0,
           "host_rects_bin_ms" : 0,
           "host_relayout" : 2,
           "host_scopes" : [
@@ -252695,15 +252695,15 @@
           "iters" : 200,
           "l0_slots" : 0,
           "l1_slots" : 1,
-          "max_ms" : 1.2794580459594727,
-          "min_ms" : 0.094624996185302734,
+          "max_ms" : 0.79275012016296387,
+          "min_ms" : 0.10124993324279785,
           "ops_total" : 301,
-          "p50_ms" : 0.098666906356811523,
-          "p95_ms" : 0.11787509918212891,
-          "p99_ms" : 1.2794580459594727,
+          "p50_ms" : 0.10695791244506836,
+          "p95_ms" : 0.12120819091796875,
+          "p99_ms" : 0.79275012016296387,
           "unsupported_evaluators" : 0
         },
-        "host_ms" : 0.040000000000000001,
+        "host_ms" : 0.050000000000000003,
         "items" : 2,
         "nodes" : 3,
         "note" : "V3 small：2 节点树（通路验证）（200 次摊还 + 100 次分位；时钟=host.mach_absolute_time）",
@@ -252711,23 +252711,23 @@
         "request_bytes" : 45,
         "serialize_ms" : 0,
         "to_request_ms" : 0,
-        "total_ms" : 25.793708086013794,
-        "vue_ms" : 0.12896854043006897
+        "total_ms" : 24.422833919525146,
+        "vue_ms" : 0.12211416959762574
       },
       {
         "case" : "V3_vapor_large",
         "extra" : {
-          "amortized_us" : 173.52500000000001,
-          "batch_ms" : 34.700000000000003,
+          "amortized_us" : 121.104,
+          "batch_ms" : 24.219999999999999,
           "clock" : "host.mach_absolute_time",
-          "clock_min_nonzero_ms" : 0.0032079219818115234,
+          "clock_min_nonzero_ms" : 0.0031249523162841797,
           "clock_ticks_in_512_reads" : 512,
           "flushes" : 301,
-          "host_apply_ms" : 0.029999999999999999,
+          "host_apply_ms" : 0.040000000000000001,
           "host_deferred" : 0,
           "host_geom_changed" : 1,
           "host_geom_total" : 2,
-          "host_layers_ms" : 0.059999999999999998,
+          "host_layers_ms" : 0,
           "host_rects_bin_ms" : 0,
           "host_relayout" : 2,
           "host_scopes" : [
@@ -252738,15 +252738,15 @@
           "iters" : 200,
           "l0_slots" : 0,
           "l1_slots" : 1,
-          "max_ms" : 0.89874982833862305,
-          "min_ms" : 0.16237497329711914,
+          "max_ms" : 0.77291607856750488,
+          "min_ms" : 0.10970807075500488,
           "ops_total" : 301,
-          "p50_ms" : 0.16999983787536621,
-          "p95_ms" : 0.21624994277954102,
-          "p99_ms" : 0.89874982833862305,
+          "p50_ms" : 0.11554217338562012,
+          "p95_ms" : 0.12708377838134766,
+          "p99_ms" : 0.77291607856750488,
           "unsupported_evaluators" : 0
         },
-        "host_ms" : 0.11,
+        "host_ms" : 0.059999999999999998,
         "items" : 1000,
         "nodes" : 4003,
         "note" : "V3 large：1000 项 ≈4004 节点（与 S2 同规模，可比）（200 次摊还 + 100 次分位；时钟=host.mach_absolute_time）",
@@ -252754,37 +252754,37 @@
         "request_bytes" : 45,
         "serialize_ms" : 0,
         "to_request_ms" : 0,
-        "total_ms" : 34.704958915710449,
-        "vue_ms" : 0.17352479457855224
+        "total_ms" : 24.220707893371582,
+        "vue_ms" : 0.12110353946685791
       },
       {
         "case" : "V3_vapor_large_classB",
         "extra" : {
-          "amortized_us" : 6710.8509999999997,
-          "batch_ms" : 671.09000000000003,
+          "amortized_us" : 2481.056,
+          "batch_ms" : 248.11000000000001,
           "clock" : "host.mach_absolute_time",
-          "host_apply_ms" : 4.4299999999999997,
-          "host_deferred" : 3912,
+          "host_apply_ms" : 0.080000000000000002,
+          "host_deferred" : 3864,
           "host_flushed" : 0,
           "host_geom_changed" : 4001,
           "host_geom_total" : 4003,
-          "host_layers_ms" : 0.41999999999999998,
-          "host_rects_bin_ms" : 0.11,
-          "host_rects_parse_ms" : 0.040000000000000001,
-          "host_relayout" : 4003,
+          "host_layers_ms" : 0.31,
+          "host_rects_bin_ms" : 0.070000000000000007,
+          "host_rects_parse_ms" : 0.089999999999999997,
+          "host_relayout" : 2,
           "host_scopes" : [
             0
           ],
           "host_unsupported" : 0,
-          "host_updated_layers" : 91,
+          "host_updated_layers" : 139,
           "iters" : 100,
-          "max_ms" : 6.9540410041809082,
-          "min_ms" : 6.3396251201629639,
-          "p50_ms" : 6.8662087917327881,
-          "p95_ms" : 6.937000036239624,
-          "p99_ms" : 6.9540410041809082
+          "max_ms" : 3.2167501449584961,
+          "min_ms" : 2.3677501678466797,
+          "p50_ms" : 2.4111249446868896,
+          "p95_ms" : 2.6489579677581787,
+          "p99_ms" : 3.2167501449584961
         },
-        "host_ms" : 6.8200000000000003,
+        "host_ms" : 2.3900000000000001,
         "items" : 1000,
         "nodes" : 4003,
         "note" : "V3 large · **类B（不利）**：改行高 ⇒ 兄弟移位 ⇒ 范围上浮（100 次摊还；时钟=host.mach_absolute_time）",
@@ -252792,50 +252792,50 @@
         "request_bytes" : 46,
         "serialize_ms" : 0,
         "to_request_ms" : 0,
-        "total_ms" : 671.08512496948242,
-        "vue_ms" : 6.7108512496948238
+        "total_ms" : 248.10558295249939,
+        "vue_ms" : 2.481055829524994
       },
       {
         "case" : "V4_classB_AB",
         "extra" : {
-          "speedup" : 3.79,
-          "v3_amortized_us" : 26006.704000000002,
-          "v3_apply_ms" : 8.0399999999999991,
+          "speedup" : 8.2899999999999991,
+          "v3_amortized_us" : 21068.714,
+          "v3_apply_ms" : 3.7400000000000002,
           "v3_geom" : 4001,
-          "v3_layers_commit_ms" : 0.34000000000000002,
-          "v3_layers_frames_ms" : 1.49,
-          "v3_layers_sort_ms" : 2.6400000000000001,
-          "v3_rects_bin_ms" : 8.1600000000000001,
-          "v3_relayout_ms" : 4.5199999999999996,
+          "v3_layers_commit_ms" : 0,
+          "v3_layers_frames_ms" : 1.1499999999999999,
+          "v3_layers_sort_ms" : 2.5299999999999998,
+          "v3_rects_bin_ms" : 8.1400000000000006,
+          "v3_relayout_ms" : 0.040000000000000001,
           "v3_rounds_us" : [
-            25500.987000000001,
-            26006.704000000002,
-            26481.224999999999
+            20725.895,
+            21068.714,
+            21368.043000000001
           ],
-          "v4_amortized_us" : 6870.1049999999996,
-          "v4_apply_ms" : 4.4699999999999998,
-          "v4_deferred" : 3912,
+          "v4_amortized_us" : 2540.991,
+          "v4_apply_ms" : 0.080000000000000002,
+          "v4_deferred" : 3864,
           "v4_geom" : 4001,
-          "v4_layers_commit_ms" : 0.089999999999999997,
+          "v4_layers_commit_ms" : 0,
           "v4_layers_frames_ms" : 0.040000000000000001,
           "v4_layers_sort_ms" : 0.22,
-          "v4_rects_bin_ms" : 0.10000000000000001,
-          "v4_relayout_ms" : 4.4400000000000004,
+          "v4_rects_bin_ms" : 0.070000000000000007,
+          "v4_relayout_ms" : 0.029999999999999999,
           "v4_rounds_us" : [
-            6776.5280000000002,
-            6870.1049999999996,
-            6958.9040000000005
+            2485.2719999999999,
+            2540.991,
+            2646.366
           ]
         },
-        "host_ms" : 6.8399999999999999,
+        "host_ms" : 2.5899999999999999,
         "items" : 1000,
         "note" : "★★V4 A\/B（同树同用例）：v3=JSON返回+全量层 · v4=二进制返回+可见层",
         "patch_count" : 100,
         "request_bytes" : 46,
         "serialize_ms" : 0,
         "to_request_ms" : 0,
-        "total_ms" : 687.01045894622803,
-        "vue_ms" : 6.8701045894622803
+        "total_ms" : 254.09912514686584,
+        "vue_ms" : 2.5409912514686583
       },
       {
         "case" : "V4_scroll_flush",
@@ -252863,13 +252863,13 @@
         "case" : "V3_clock_diag",
         "extra" : {
           "clock" : "host.mach_absolute_time",
-          "min_nonzero_ms" : 0.0032079219818115234,
+          "min_nonzero_ms" : 0.0031249523162841797,
           "ticks_in_512" : 512
         },
         "host_ms" : 0,
         "items" : 0,
         "nodes" : 0,
-        "note" : "计时装置：clock=host.mach_absolute_time · 512 次连续读中 512 次前进 · 最小非零 delta=0.0032079219818115234ms ⇒ 若前进次数远小于 512，**分位读数不可信，请以 amortized_us 为准**",
+        "note" : "计时装置：clock=host.mach_absolute_time · 512 次连续读中 512 次前进 · 最小非零 delta=0.0031249523162841797ms ⇒ 若前进次数远小于 512，**分位读数不可信，请以 amortized_us 为准**",
         "patch_count" : 0,
         "request_bytes" : 0,
         "serialize_ms" : 0,
@@ -252882,10 +252882,10 @@
         "extra" : {
           "iters" : 300,
           "max_ms" : 56,
-          "min_ms" : 45,
+          "min_ms" : 46,
           "over_budget" : 300,
           "p50_ms" : 52,
-          "p95_ms" : 55,
+          "p95_ms" : 54,
           "p99_ms" : 55
         },
         "host_ms" : 0,
@@ -252896,7 +252896,7 @@
         "request_bytes" : 0,
         "serialize_ms" : 0,
         "to_request_ms" : 0,
-        "total_ms" : 15528,
+        "total_ms" : 15407,
         "vue_ms" : 0
       },
       {
@@ -252905,183 +252905,183 @@
           "patches_sent" : "FULL",
           "relayout" : 0
         },
-        "host_ms" : 223,
+        "host_ms" : 218,
         "items" : 500,
         "nodes" : 0,
         "note" : "改 300 行文案（500 项页面）",
         "patch_count" : 2803,
         "request_bytes" : 280872,
-        "serialize_ms" : 223,
+        "serialize_ms" : 218,
         "to_request_ms" : 1,
-        "total_ms" : 277,
-        "vue_ms" : 53
+        "total_ms" : 274,
+        "vue_ms" : 55
       },
       {
         "case" : "S5_grow_600",
         "extra" : {
           "mem_mb" : 162.80000000000001,
-          "mem_peak_mb" : 163.59999999999999,
+          "mem_peak_mb" : 163.5,
           "mode" : "FULL"
         },
-        "host_ms" : 205,
+        "host_ms" : 202,
         "items" : 600,
         "nodes" : 3507,
         "note" : "500→600 项（全量重建）",
         "patch_count" : 2504,
         "request_bytes" : 279820,
-        "serialize_ms" : 205,
+        "serialize_ms" : 202,
         "to_request_ms" : 0,
-        "total_ms" : 251,
-        "vue_ms" : 46
+        "total_ms" : 253,
+        "vue_ms" : 51
       },
       {
         "case" : "S5_shrink_400",
         "extra" : {
           "mem_mb" : 162.80000000000001,
-          "mem_peak_mb" : 163.59999999999999,
+          "mem_peak_mb" : 163.5,
           "mode" : "FULL"
         },
-        "host_ms" : 206,
+        "host_ms" : 201,
         "items" : 400,
         "nodes" : 3507,
         "note" : "500→400 项（全量重建）",
         "patch_count" : 2504,
         "request_bytes" : 279820,
-        "serialize_ms" : 206,
+        "serialize_ms" : 201,
         "to_request_ms" : 0,
-        "total_ms" : 255,
-        "vue_ms" : 49
+        "total_ms" : 253,
+        "vue_ms" : 52
       },
       {
         "case" : "S6_worst_reverse",
         "extra" : {
           "patches_sent" : "FULL"
         },
-        "host_ms" : 194,
+        "host_ms" : 193,
         "items" : 1000,
         "nodes" : 0,
         "note" : "1000 项 reverse（最坏情形）",
         "patch_count" : 6005,
         "request_bytes" : 1121773,
-        "serialize_ms" : 194,
+        "serialize_ms" : 193,
         "to_request_ms" : 0,
-        "total_ms" : 287,
-        "vue_ms" : 93
+        "total_ms" : 293,
+        "vue_ms" : 100
       },
       {
         "case" : "S1_scale_mount_1000",
         "extra" : {
-          "mem_mb" : 311.80000000000001,
-          "mem_peak_mb" : 304.80000000000001,
-          "per_node_us" : 70
+          "mem_mb" : 310.89999999999998,
+          "mem_peak_mb" : 304.69999999999999,
+          "per_node_us" : 69
         },
-        "host_ms" : 375,
+        "host_ms" : 368,
         "items" : 1000,
         "nodes" : 7007,
         "note" : "规模 1000 项挂载（7007 节点）",
         "patch_count" : 12008,
         "request_bytes" : 561319,
         "serialize_ms" : 2,
-        "to_request_ms" : 34,
-        "total_ms" : 488,
-        "vue_ms" : 77
+        "to_request_ms" : 35,
+        "total_ms" : 481,
+        "vue_ms" : 76
       },
       {
         "case" : "S1_scale_mount_2000",
         "extra" : {
-          "mem_mb" : 630.79999999999995,
-          "mem_peak_mb" : 312.5,
-          "per_node_us" : 71
+          "mem_mb" : 623,
+          "mem_peak_mb" : 310.89999999999998,
+          "per_node_us" : 70
         },
-        "host_ms" : 785,
+        "host_ms" : 765,
         "items" : 2000,
         "nodes" : 14007,
         "note" : "规模 2000 项挂载（14007 节点）",
         "patch_count" : 24008,
         "request_bytes" : 1132761,
-        "serialize_ms" : 4,
-        "to_request_ms" : 64,
-        "total_ms" : 999,
-        "vue_ms" : 146
+        "serialize_ms" : 3,
+        "to_request_ms" : 68,
+        "total_ms" : 984,
+        "vue_ms" : 148
       },
       {
         "case" : "S1_scale_mount_4000",
         "extra" : {
-          "mem_mb" : 1322.9000000000001,
-          "mem_peak_mb" : 650,
-          "per_node_us" : 73
+          "mem_mb" : 1342.9000000000001,
+          "mem_peak_mb" : 648.70000000000005,
+          "per_node_us" : 74
         },
-        "host_ms" : 1611,
+        "host_ms" : 1634,
         "items" : 4000,
         "nodes" : 28007,
         "note" : "规模 4000 项挂载（28007 节点）",
         "patch_count" : 48008,
         "request_bytes" : 2286761,
         "serialize_ms" : 7,
-        "to_request_ms" : 139,
-        "total_ms" : 2056,
-        "vue_ms" : 299
+        "to_request_ms" : 140,
+        "total_ms" : 2076,
+        "vue_ms" : 295
       }
     ],
     "ceiling" : [
       {
         "dim" : "locality",
         "level" : "A_local_dot",
-        "ms" : 82,
+        "ms" : 81,
         "note" : "类A 局部：改第 500 行内圆点尺寸"
       },
       {
         "dim" : "locality",
         "level" : "B_sibling_margin",
-        "ms" : 158,
+        "ms" : 157,
         "note" : "类B 平级：改第 500 行 margin"
       },
       {
         "dim" : "frequency",
         "level" : "连续 300 次",
-        "ms" : 55,
+        "ms" : 54,
         "note" : "p95 单次更新耗时"
       },
       {
         "dim" : "text_churn",
         "level" : "改 300 行文案",
-        "ms" : 277,
+        "ms" : 274,
         "note" : "文本变更（缓存未命中）"
       },
       {
         "dim" : "structure",
         "level" : "500→600 项",
-        "ms" : 251,
+        "ms" : 253,
         "note" : "结构变更（FULL）"
       },
       {
         "dim" : "structure",
         "level" : "500→400 项",
-        "ms" : 255,
+        "ms" : 253,
         "note" : "结构变更（FULL）"
       },
       {
         "dim" : "worst_case",
         "level" : "1000 项 reverse",
-        "ms" : 287,
+        "ms" : 293,
         "note" : "整体重排"
       },
       {
         "dim" : "scale",
         "level" : "1000 项挂载",
-        "ms" : 488,
+        "ms" : 481,
         "note" : "整链挂载耗时（含 Vue）"
       },
       {
         "dim" : "scale",
         "level" : "2000 项挂载",
-        "ms" : 999,
+        "ms" : 984,
         "note" : "整链挂载耗时（含 Vue）"
       },
       {
         "dim" : "scale",
         "level" : "4000 项挂载",
-        "ms" : 2056,
+        "ms" : 2076,
         "note" : "整链挂载耗时（含 Vue）"
       }
     ],
@@ -449165,5 +449165,5 @@
       "y" : 0
     }
   },
-  "tree_hash" : "1030c20e"
+  "tree_hash" : "4a5d93bc"
 }
