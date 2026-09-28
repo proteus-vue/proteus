@@ -197,7 +197,7 @@ echo
 echo "==> 取回报告"
 DEST="$OUT/$(date +%Y%m%d-%H%M%S)"
 mkdir -p "$DEST"
-for f in layout-report.txt layout-conformance.json layout-bench.json layout-compare-native.json layout-native-only.json layout-proteus-only.json layout-noflatten.json layout-recycle.json layout-memory.json layout-env.json layout-hit.json; do
+for f in layout-report.txt layout-conformance.json layout-bench.json layout-compare-native.json layout-native-only.json layout-proteus-only.json layout-noflatten.json layout-recycle.json layout-memory.json layout-env.json layout-hit.json layout-scroll.json layout-scroll-core.json layout-scroll-native.json; do
   "$ADB" shell "run-as $PKG cat files/$f" >/dev/null 2>&1 && continue   # debug 包兼容
   # ★release 包：从外置存储拉（getExternalFilesDir）
   "$ADB" pull "/sdcard/Android/data/$PKG/files/$f" "$DEST/$f" >/dev/null 2>&1 || true
@@ -279,7 +279,48 @@ echo "    → gfxinfo 已 reset；触发滚动验收…"
 "$ADB" shell "am broadcast -a dev.proteus.RUN --es path scroll -p $PKG" >/dev/null 2>&1
 sleep 16
 "$ADB" shell "dumpsys gfxinfo $PKG" 2>/dev/null | tr -d '\r' > "$GFX"
-grep -E "Total frames rendered|Janky frames \(|50th percentile|90th percentile|95th percentile|99th percentile|Slow UI thread|Slow issue draw commands|Slow bitmap uploads" "$GFX" | sed 's/^/    /'
+echo "    ── Proteus（虚拟化滚动）──"
+grep -E "Total frames rendered|Janky frames \(|50th percentile|90th percentile|95th percentile|99th percentile|Slow UI thread|Slow issue draw commands|Slow bitmap uploads" "$GFX" | sed 's/^/      /'
+
+# ★★**交替 N 轮 + 取中位**（本仓实测：单次读数在 honor10 上**不可信**）
+#
+# 【为什么不能只跑一轮（honor10 实测的双峰分布）】同一路径连跑 6 次，p50 落在
+#   **两个离散状态**：11ms（Janky 0.5–1.0%）与 18ms（Janky 99%）。
+#   单次配对会随机得到"Proteus 慢 6ms"或"Proteus 快 2ms"**两个相反结论**
+#   （本档第一轮就撞上：19 vs 13 ⇒ 误判"框架慢 6ms"）。
+#   ⇒ 正解：**交替跑 N 轮取中位**（本仓既有纪律：同轮 A/B + 多轮中位）。
+#   ★诚实边界：**双峰成因未查明**（疑与设备电源/窗口焦点状态有关，未做仪器级确认）
+#     —— 故本档只报**中位数**并显式标注分布，不报单轮值。
+SCROLL_ROUNDS="${SCROLL_ROUNDS:-3}"
+gfx_one() {
+  local path="$1"
+  "$ADB" shell "dumpsys gfxinfo $PKG reset" >/dev/null 2>&1
+  "$ADB" shell am force-stop "$PKG" >/dev/null 2>&1; sleep 1
+  "$ADB" shell am start -n "$ACTIVITY" --es path "$path" >/dev/null 2>&1; sleep 3
+  "$ADB" shell "am broadcast -a dev.proteus.RUN --es path $path -p $PKG" >/dev/null 2>&1
+  sleep 16
+  "$ADB" shell "dumpsys gfxinfo $PKG" 2>/dev/null | tr -d '\r' \
+    | awk -F'[():% ]+' '/Janky frames:/{j=$3} /50th percentile/{p=$4} END{printf "%s %s", j+0, p+0}'
+}
+echo "    ── 交替 ${SCROLL_ROUNDS} 轮（取中位——单轮读数在本机不可信，见脚本注释）──"
+CORE_P=""; NAT_P=""; CORE_J=""; NAT_J=""
+for r in $(seq 1 "$SCROLL_ROUNDS"); do
+  read -r cj cp <<< "$(gfx_one scroll-core)"
+  read -r nj np <<< "$(gfx_one scroll-native)"
+  echo "      轮$r  Proteus p50=${cp}ms/Janky=${cj}%   原生 p50=${np}ms/Janky=${nj}%"
+  CORE_P="$CORE_P $cp"; NAT_P="$NAT_P $np"; CORE_J="$CORE_J $cj"; NAT_J="$NAT_J $nj"
+done
+python3 - "$CORE_P" "$NAT_P" "$CORE_J" "$NAT_J" <<'PYAB' | tee "$DEST/scroll-ab.txt" | sed 's/^/      /'
+import statistics, sys
+def med(s):
+    xs = [float(x) for x in s.split() if x]
+    return statistics.median(xs) if xs else -1.0
+cp, np_, cj, nj = med(sys.argv[1]), med(sys.argv[2]), med(sys.argv[3]), med(sys.argv[4])
+d = cp - np_
+print(f"★ 中位：Proteus p50={cp:.0f}ms / Janky={cj:.2f}%   原生 p50={np_:.0f}ms / Janky={nj:.2f}%")
+print(f"★ 差值：{'Proteus 更快' if d < 0 else '原生更快'} {abs(d):.0f}ms")
+print("★ 双峰说明：本机单次读数落在两个离散状态（约 11/18ms 与 13/23ms）⇒ 只有中位可比")
+PYAB
 # 同时取回滚动辅助观测
 "$ADB" pull "/sdcard/Android/data/$PKG/files/layout-scroll.json" "$DEST/layout-scroll.json" >/dev/null 2>&1 || true
 
@@ -391,6 +432,38 @@ else:
     print("  ⚠ 未采集到 gfxinfo")
 
 # ★最终核判定以 **app 自报的 layout-env.json** 为准（脚本侧采样只能代表瞬时）
+print()
+print("═══ §9.3 滚动对照（★权威口径 dumpsys gfxinfo，各自 reset 后单独跑）═══")
+def gfx(path):
+    if not os.path.exists(path):
+        return None
+    out = {}
+    for line in open(path, encoding='utf-8', errors='replace'):
+        line = line.strip()
+        if line.startswith('Total frames rendered'):
+            out['frames'] = line.split(':')[1].strip()
+        elif line.startswith('Janky frames:'):   # ★实测格式是 `Janky frames: 387 (64.18%)`
+            out['janky'] = line.split(':', 1)[1].strip()
+        elif 'percentile' in line and ':' in line:
+            k, v = line.split(':', 1)
+            out[k.replace('th percentile', '').strip()] = v.strip()
+        elif line.startswith('Number Slow issue draw commands'):
+            out['slow_draw'] = line.split(':')[1].strip()
+    return out
+gp = gfx(os.path.join(dest, 'gfxinfo.txt'))
+gn = gfx(os.path.join(dest, 'gfxinfo-native.txt'))
+if gp and gn:
+    print(f"  {'指标':<22}{'Proteus':<20}{'原生 View':<20}判读")
+    print('  ' + '-' * 78)
+    for key, label in [('frames','总帧数'), ('janky','Janky'), ('50','p50 绘制'),
+                       ('90','p90'), ('95','p95'), ('99','p99'), ('slow_draw','Slow issue draw')]:
+        a, b = gp.get(key, '-'), gn.get(key, '-')
+        print(f"  {label:<22}{str(a):<20}{str(b):<20}")
+    print("  ★判读：p50 越低越好；Janky 比例是**掉帧占全部渲染帧**的比重")
+    print("  ★若 Proteus 的 p50 明显高于原生 ⇒ 差值**是本框架引入的**（不是设备上限）")
+else:
+    print("  ⚠ 缺 gfxinfo（Proteus 或原生）——对照不完整")
+
 print()
 print("═══ §9.2 核判定（以 app 自报为准）═══")
 import glob

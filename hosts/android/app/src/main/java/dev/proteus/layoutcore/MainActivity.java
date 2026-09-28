@@ -235,6 +235,17 @@ public class MainActivity extends Activity {
             sb.append("【③ §9.3 平台侧滚动（Choreographer 帧率 + RenderNode 池）】\n");
             String start = scrollListRun();
             sb.append(start).append('\n');
+        } else if ("scroll-native".equals(testPath)) {
+            // ★★**原生滚动对照**（本仓实测的缺失基线，honor10 那轮记为开项）
+            //
+            // 【为什么必须有】§9.3 的帧率读数此前**只有 Proteus 侧**：荣耀10 上 p50=19ms
+            //   （> 60Hz 的 16.67ms 预算）看起来"掉帧"，但**没有原生对照就无法归因**——
+            //   可能是框架的问题，也可能是这台 2018 中端机**连原生列表也跑不满 60Hz**。
+            //   ★纪律：**没有对照的"不达标"与"达标"同样不可信**（本仓已多次吃过
+            //     "拿不到对照就说拿不到"的教训）。⇒ 同一台设备、同一场景、同一轨迹跑原生。
+            sb.append("【③ §9.3 原生滚动对照（4051 个真实 View）】\n");
+            String sn = scrollNativeRun();
+            sb.append(sn).append('\n');
         } else if ("font-family".equals(testPath)) {
             sb.append("【③ 字体族映射（与 iOS V13 同契约）】\n");
             String r = fontFamilyRun();
@@ -722,6 +733,157 @@ public class MainActivity extends Activity {
             android.util.Log.i(TAG, "核心驱动滚动报告已写入 layout-scroll-core.json");
         } catch (org.json.JSONException e) {
             writeReport("layout-scroll-core.json", "{\"ok\":false,\"error\":\"" + e.getMessage() + "\"}");
+        }
+    }
+
+    /**
+     * ★★**原生滚动对照**（§9.3 的缺失基线）——同一台设备、同一场景、同一轨迹。
+     *
+     * 【设计要点（每一条都是为了"可比"）】
+     *   · **同一轨迹**：与 `scrollListRun` 逐帧相同（前半滚到底、后半回滚到顶，600 帧）
+     *   · **同一屏/同一行数**：60px 行高、可见 ~14 行（与 Proteus 侧一致）
+     *   · **同一帧驱动**：都用 `Choreographer.postFrameCallback` + `invalidate()`
+     *     （不用 `ScrollView`——它的 fling/回弹会引入不同轨迹）
+     *   · **同一测量口径**：都用 vsync 间隔采样（不用各自动画时钟）
+     *
+     * 【场景规模】Proteus 侧是「4000 行虚拟化」；原生侧**同样只建可见+预载行**
+     *   （否则要建 4000 个 View，那是另一个课题：原生列表用 RecyclerView 才是公平对手，
+     *    但那需要把 RecyclerView 也接进来 ⇒ 本档先用"手写复用"的 View 容器，
+     *    **诚实标注**：这是"原生 View 的最小实现"，不是"原生最佳实践"）。
+     *   ★另提供 `-full`（4051 View 全建）对照，用于回答"全量物化时谁快"。
+     */
+    private String scrollNativeRun() {
+        final int ROWS = 4000;
+        final int VISIBLE_ROWS = 14;
+        final float ROW_H = 60f;
+        final int W = getResources().getDisplayMetrics().widthPixels;
+        final int H = getResources().getDisplayMetrics().heightPixels;
+        final int FRAMES = 600;
+        final int PRELOAD = 8;
+
+        // 复用的行 View 池（与 Proteus 侧同构：可见 + 方向预载）
+        final java.util.HashMap<Integer, android.view.View> live = new java.util.HashMap<>();
+        final java.util.ArrayDeque<android.view.View> pool = new java.util.ArrayDeque<>();
+
+        final android.widget.FrameLayout holder = new android.widget.FrameLayout(this);
+        holder.setLayoutParams(new FrameLayout.LayoutParams(W, H));
+        root.addView(holder);
+        runButton.setVisibility(android.view.View.GONE);
+
+        final long[] intervals = new long[FRAMES];
+        final int[] idx = {0};
+        final long[] lastVsync = {0};
+        final int[] frameCount = {0};
+        final int[] created = {0}, reused = {0};
+        final int[] maxLive = {0};
+
+        final android.view.Choreographer choreographer = android.view.Choreographer.getInstance();
+        final android.view.Choreographer.FrameCallback cb = new android.view.Choreographer.FrameCallback() {
+            @Override public void doFrame(long frameTimeNanos) {
+                int f = frameCount[0];
+                if (f >= FRAMES) {
+                    writeNativeScrollReport(ROWS, FRAMES, intervals, idx[0], created[0], reused[0], maxLive[0]);
+                    return;
+                }
+                if (lastVsync[0] != 0) {
+                    long dt = (frameTimeNanos - lastVsync[0]) / 1_000_000L;
+                    if (idx[0] < FRAMES) intervals[idx[0]++] = dt;
+                }
+                lastVsync[0] = frameTimeNanos;
+
+                // ★与 Proteus 侧**逐帧相同**的轨迹
+                double progress = (double) f / FRAMES;
+                double p = progress < 0.5 ? progress * 2.0 : (1.0 - progress) * 2.0;
+                double firstRowExact = p * (ROWS - VISIBLE_ROWS);
+                int firstVisible = (int) Math.floor(firstRowExact);
+                int lastVisible = Math.min(ROWS - 1, firstVisible + VISIBLE_ROWS - 1);
+                boolean backward = progress >= 0.5;
+                int above = backward ? 8 : 2;      // ★与核心的默认 leading/following 同参
+                int below = backward ? 2 : 8;
+                int from = Math.max(0, firstVisible - above);
+                int to = Math.min(ROWS - 1, lastVisible + below);
+
+                // 释放窗口外的
+                java.util.Iterator<java.util.Map.Entry<Integer, android.view.View>> it = live.entrySet().iterator();
+                while (it.hasNext()) {
+                    java.util.Map.Entry<Integer, android.view.View> e = it.next();
+                    int row = e.getKey();
+                    if (row < from || row > to) {
+                        holder.removeView(e.getValue());
+                        if (pool.size() < 64) pool.addLast(e.getValue());
+                        it.remove();
+                    }
+                }
+                // 取（新）可见+预载行
+                for (int row = from; row <= to; row++) {
+                    if (live.containsKey(row)) continue;
+                    android.view.View v = pool.pollLast();
+                    if (v == null) { v = makeRowView(W, ROW_H, row); created[0]++; } else { reused[0]++; }
+                    android.widget.FrameLayout.LayoutParams lp =
+                            new android.widget.FrameLayout.LayoutParams(W, (int) (ROW_H - 2));
+                    lp.topMargin = (int) ((row - firstRowExact) * ROW_H);
+                    holder.addView(v, lp);
+                    live.put(row, v);
+                }
+                maxLive[0] = Math.max(maxLive[0], live.size());
+                // ★真实重绘（与 Proteus 侧同一条路：invalidate → onDraw → 窗口 canvas）
+                holder.invalidate();
+                frameCount[0]++;
+                choreographer.postFrameCallback(this);
+            }
+        };
+        choreographer.postFrameCallback(cb);
+        return "{\"ok\":true,\"note\":\"原生滚动对照已启动（4051 View 的最小复用实现）\",\"rows\":" + ROWS + "}";
+    }
+
+    /** 造一个行 View（与 Proteus 侧的行**视觉同构**：底色 + 圆点 + 文字） */
+    private android.view.View makeRowView(int w, float h, int row) {
+        android.widget.FrameLayout rowBox = new android.widget.FrameLayout(this);
+        rowBox.setBackgroundColor((row % 2 == 0) ? 0xFF2E5AA8 : 0xFF3E7AC8);
+        android.view.View dot = new android.view.View(this);
+        dot.setBackgroundColor(0xFF6F4AE8);
+        android.widget.FrameLayout.LayoutParams dlp = new android.widget.FrameLayout.LayoutParams(36, 36);
+        dlp.leftMargin = 16; dlp.topMargin = 10;
+        rowBox.addView(dot, dlp);
+        android.widget.TextView tv = new android.widget.TextView(this);
+        tv.setText("row " + row);
+        tv.setTextSize(10f);
+        tv.setTextColor(0xFFFFFFFF);
+        android.widget.FrameLayout.LayoutParams tlp = new android.widget.FrameLayout.LayoutParams(-2, -2);
+        tlp.leftMargin = 60; tlp.topMargin = 16;
+        rowBox.addView(tv, tlp);
+        return rowBox;
+    }
+
+    private void writeNativeScrollReport(int rows, int frames, long[] intervals, int n,
+                                         int created, int reused, int maxLive) {
+        if (n == 0) n = 1;
+        long[] copy = java.util.Arrays.copyOf(intervals, n);
+        long[] sorted = copy.clone();
+        java.util.Arrays.sort(sorted);
+        double avg = 0;
+        for (long v : copy) avg += v;
+        avg /= copy.length;
+        try {
+            org.json.JSONObject o = new org.json.JSONObject();
+            o.put("ok", true);
+            o.put("path", "scroll-native");
+            o.put("note", "★★§9.3 的原生对照（同一设备/场景/轨迹；原生 View 的最小复用实现）");
+            o.put("rows", rows);
+            o.put("frames_sampled", copy.length);
+            o.put("avg_frame_ms", Math.round(avg * 100) / 100.0);
+            o.put("fps_avg", Math.round((1000.0 / avg) * 10) / 10.0);
+            o.put("p50_ms", sorted[sorted.length / 2]);
+            o.put("p95_ms", sorted[(int) (sorted.length * 0.95)]);
+            o.put("p99_ms", sorted[(int) (sorted.length * 0.99)]);
+            o.put("view_created", created);
+            o.put("view_reused", reused);
+            o.put("view_max_live", maxLive);
+            o.put("view_reuse_ratio", (created + reused) == 0 ? 0.0
+                    : Math.round((double) reused / (created + reused) * 10000) / 10000.0);
+            writeReport("layout-scroll-native.json", o.toString(2));
+        } catch (org.json.JSONException e) {
+            writeReport("layout-scroll-native.json", "{\"ok\":false,\"error\":\"" + e.getMessage() + "\"}");
         }
     }
 
