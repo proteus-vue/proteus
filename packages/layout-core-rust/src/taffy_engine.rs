@@ -259,12 +259,21 @@ impl TaffyEngine {
             };
             ids.push(id);
         }
-        // 再连父子（顺序 = children 顺序 = 绘制顺序）
+        // ★★再连父子：**按 `children` 的顺序**（布局顺序 = 绘制顺序 = children 顺序）
+        //
+        // 【为什么不信"数组顺序"（本仓实测的架构限制）】首版按 `tree.nodes` 的**数组序**连父子，
+        //   注释写着"顺序 = children 顺序"但实现是遍历数组 ⇒ **数组序即布局序**
+        //   ⇒ 想插到中间就必须搬数组（O(n)，且 `taffy_ids` 按数组索引对齐会全乱）。
+        //   这正是 splice"只支持追加"的根因（其注释里记录了当时的取舍）。
+        //   ⇒ 正解：**只以 `children` 为单一事实来源**（`add_child`/splice 都维护它），
+        //     数组顺序退化为无关的实现细节 ⇒ 中间插入只需在父的 `children` 里插一项（O(1)）。
+        //   ★前提：`parent` 与 `children` 双向一致——已由输入图校验强制（见 `build_tree` ④）。
         for (idx, node) in tree.nodes.iter().enumerate() {
-            if node.parent == NO_PARENT {
-                continue;
+            for &c in &node.children {
+                taffy
+                    .add_child(ids[idx], ids[c as usize])
+                    .expect("taffy: add_child");
             }
-            taffy.add_child(ids[node.parent as usize], ids[idx]).expect("taffy: add_child");
         }
 
         self.taffy_ids = ids;

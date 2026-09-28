@@ -118,7 +118,7 @@ export interface SelfDrawAdapter extends NativeAdapter {
    *
    * ★语义：**自上次取走以来**（取走即复位）——与 `takePatches` 同款（该坑已踩过两次）。
    */
-  takeSplice(): { removes: number[]; inserts: Array<{ parentId: number; nodes: SelfDrawNodeSpec[] }> } | 'full-required' | null
+  takeSplice(): { removes: number[]; inserts: Array<{ parentId: number; index: number; nodes: SelfDrawNodeSpec[] }> } | 'full-required' | null
 }
 
 /** 绘制相关的键（**不进布局核心**——核心只管几何；绘制由宿主的指令流消费） */
@@ -565,7 +565,7 @@ export function createSelfDrawAdapter(): SelfDrawAdapter {
      *     · 含中间插入 ⇒ 返回 `'full-required'`（调用方走全量——**不静默按末尾插**，
      *       否则行序错且零提示：本仓纪律「宁可拒绝不可静默错」）
      */
-    takeSplice(): { removes: number[]; inserts: Array<{ parentId: number; nodes: SelfDrawNodeSpec[] }> } | 'full-required' | null {
+    takeSplice(): { removes: number[]; inserts: Array<{ parentId: number; index: number; nodes: SelfDrawNodeSpec[] }> } | 'full-required' | null {
       const removed0 = Array.from(removedNodeIds)
       const created0 = Array.from(createdNodes)
       const moved = movedExisting
@@ -597,7 +597,7 @@ export function createSelfDrawAdapter(): SelfDrawAdapter {
       // 判据：对每个「含新建子节点的父」，新建的那些子必须在 `parent.children` 的**尾部连续段**。
       //   （新节点被 append 到 children 末尾——若其后还有既有的、不在新建集里的兄弟，
       //     说明这次是**中间插入** ⇒ 数组序无法表达 ⇒ 走全量。）
-      type Group = { parent: NativeElementNode; kids: NativeNode[] }
+      type Group = { parent: NativeElementNode; kids: NativeNode[]; index: number }
       const createdSet = new Set<NativeNode>(created)
       const byParent = new Map<NativeElementNode, NativeNode[]>()
       for (const n of created) {
@@ -611,24 +611,36 @@ export function createSelfDrawAdapter(): SelfDrawAdapter {
         arr.push(n)
         byParent.set(p, arr)
       }
+      // ★★**算出插到第几位**（2026-09-28 解禁中间插入）
+      //
+      // 【为什么现在可以（本仓实测的架构升级）】核心的 `build_taffy` 已改为**只信
+      //   `children` 顺序**（单一事实来源；`parent`↔`children` 一致性由输入图校验强制）
+      //   ⇒ 插入只需给出**子位序号** `index`，**不必搬数组**（此前按数组序连父子，
+      //     插中间必须搬整棵数组 ⇒ 只好显式拒绝中间插入、退回全量）。
+      //   本函数据此产出 `{parentId, index, nodes}`：`index` = 新建节点在 children 里的
+      //   **连续区段起点**。
+      //   仍返回 `'full-required'` 的两种情形：
+      //     · 新建节点**不连续**（被既有节点隔开）⇒ 一次插入表达不了
+      //     · 新建节点根本不在父的 children 里 ⇒ 树不一致（不该发生，但不静默）
       const groups: Group[] = []
       for (const [parent, kids] of byParent) {
         const kidsSet = new Set<NativeNode>(kids)
-        // 找到末尾的连续新建段：从尾往前扫，遇到非新建即停
-        let tailStart = parent.children.length
-        while (tailStart > 0 && kidsSet.has(parent.children[tailStart - 1])) {
-          tailStart--
+        const idxs: number[] = []
+        for (let i = 0; i < parent.children.length; i++) {
+          if (kidsSet.has(parent.children[i]!)) idxs.push(i)
         }
-        const inTail = parent.children.slice(tailStart)
-        // ★末尾连续段必须恰好等于本次新建的集合；否则被判中间插入
-        if (inTail.length !== kids.length) return 'full-required'
-        groups.push({ parent, kids })
+        if (idxs.length !== kids.length) return 'full-required'
+        const first = idxs[0]!
+        for (let k = 0; k < idxs.length; k++) {
+          if (idxs[k] !== first + k) return 'full-required'
+        }
+        groups.push({ parent, kids, index: first })
       }
       // 有新建但**全无落点**（游离）且无删除 ⇒ 对树无影响（无需发任何结构请求）
       if (groups.length === 0 && removed.length === 0) return null
 
       // 生成 inserts：每组的节点子树平铺（**父在前** ⇒ 核心可一遍链接）
-      const inserts: Array<{ parentId: number; nodes: SelfDrawNodeSpec[] }> = []
+      const inserts: Array<{ parentId: number; index: number; nodes: SelfDrawNodeSpec[] }> = []
       for (const g of groups) {
         const flat: SelfDrawNodeSpec[] = []
         const walkSub = (n: NativeNode, parentId: number | null): void => {
@@ -641,7 +653,7 @@ export function createSelfDrawAdapter(): SelfDrawAdapter {
           if (n.__kind === 'element') for (const c of n.children) walkSub(c, id)
         }
         for (const k of g.kids) walkSub(k, idFor(g.parent))
-        inserts.push({ parentId: idFor(g.parent), nodes: flat })
+        inserts.push({ parentId: idFor(g.parent), index: g.index, nodes: flat })
       }
       return { removes: removed, inserts }
     },

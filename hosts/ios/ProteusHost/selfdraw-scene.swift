@@ -370,18 +370,48 @@ final class SelfDrawView: UIView {
         for ins in inserts {
             guard let parentId = ins["parentId"] as? Int,
                   let nodes = ins["nodes"] as? [[String: Any]] else { continue }
+            // ★★**插入位置**（2026-09-28：splice 支持中间插入）
+            //
+            // 【为什么必须有】CALayer 的 `addSublayer` **恒为追加**（层序 = 绘制顺序）
+            //   ⇒ 中间插入若不按 index 放，**层序与核心的 children 序不一致**
+            //   ⇒ 后续 z-order/重叠绘制与命中测试都会与核心不符（且几何断言发现不了）。
+            //   做法：把块根按 index 依次 `insertSublayer(at:)`，并把 id 插进 `childrenById`
+            //   的同一位置（两份表示保持一致——本仓纪律）。
+            let insertAt = (ins["index"] as? Int) ?? -1
+            // ★块根的落点位（逐块递增：同一块里若有多棵子树，它们**依次**插在 index 之后）
+            var rootSlot = insertAt
             for n in nodes {
                 guard let id = n["id"] as? Int else { continue }
                 // 该节点在块内的父（缺省/非块内 ⇒ 落点父）
                 let rawPid = n["parentId"] as? Int
-                let pid = (rawPid != nil && layersById[rawPid!] != nil) ? rawPid! : parentId
+                let isBlockRoot = !(rawPid != nil && layersById[rawPid!] != nil)
+                let pid = isBlockRoot ? parentId : rawPid!
                 let parentLayer: CALayer = layersById[pid] ?? self.layer
                 let style = spliceStyleOf(n)
                 let layer = makeLayer(style: style)
-                parentLayer.addSublayer(layer)
+                if isBlockRoot && rootSlot >= 0 {
+                    // ★★块根按 `index` 插（层序 = 绘制顺序 = 核心 children 序）
+                    //
+                    // 【为什么不能一律 append（本仓实测）】`addSublayer` 恒为追加
+                    //   ⇒ 中间插入会让**层序与核心的 children 序不一致** ⇒ 重叠绘制/z-order
+                    //     与命中测试与核心不符（几何断言发现不了，属静默错显示）。
+                    //   ⇒ 用 `insertSublayer(at:)` 按落点插，并把 id 插进 `childrenById` 同位（两份表示一致）。
+                    let sibs = childrenById[pid] ?? []
+                    let at = min(max(rootSlot, 0), sibs.count)
+                    let before: CALayer? = at < sibs.count ? layersById[sibs[at]] : nil
+                    if let b = before {
+                        parentLayer.insertSublayer(layer, below: b)
+                    } else {
+                        parentLayer.addSublayer(layer)
+                    }
+                    childrenById[pid, default: []].insert(id, at: at)
+                    rootSlot += 1
+                } else {
+                    parentLayer.addSublayer(layer)
+                    childrenById[pid, default: []].append(id)
+                }
                 layersById[id] = layer
                 parentById[id] = pid
-                childrenById[pid, default: []].append(id)
                 depthById[id] = (depthById[pid] ?? 0) + 1
                 metaByNodeId[id] = style
                 layerNodes.append(layer)
@@ -730,6 +760,55 @@ final class SelfDrawView: UIView {
         return nil
     }
 
+    /// ★★**层序对账**（⚠ **设计有误，仅作诊断读数——勿当判据**，见下）
+    ///
+    /// 【为什么要做它】像素判据**证明不了层序**——把 `insertLayers` 退化为"恒追加"后
+    ///   它仍全绿（行不重叠 ⇒ 层序差异在屏幕上不可见）。而层序错是**真错**
+    ///   （重叠/半透明/z-order/命中测试都会与核心不符）。
+    ///
+    /// 【★为什么当前实现比不了（本仓实测的自我纠错）】两侧的"子序"**来源不同源**：
+    ///   · 核心 `child_order` = 内部 `children` 字段的顺序
+    ///   · 宿主 `childrenById` = 按**每个节点的 parentId 归类**得到的（全量建层路径如此填充）
+    ///   当上游给的 `parentId` 与核心的 `children` 结构不一致时（实测差异@51：
+    ///   宿主在该位是**圆点**、核心是**行根**），两边天然对不上——
+    ///   **这是"两份表示本来就不等价"，不是"层序错了"**。
+    ///   ⇒ 正解（未做）：宿主应**以核心的 `child_order` 为准**重建 `childrenById`
+    ///     （单一事实来源），而不是自行从 parentId 归类。属后续工作。
+    ///   ⇒ 当前：本函数的结果只作**诊断读数**落盘，**不得**用于 PASS/FAIL 断言。
+    ///
+    /// - Parameter coreChildren: 核心返回的 `{parentId: [childId, ...]}` 映射
+    /// - Returns: `(checked, mismatches)`——mismatches 非空即层序与核心不符
+    func reconcileChildOrder(coreChildren: [String: [Int]]) -> (checked: Int, mismatches: [String]) {
+        var checked = 0
+        var mismatches: [String] = []
+        var mismatch_detail: [String] = []
+        for (pidStr, coreKids) in coreChildren {
+            guard let pid = Int(pidStr) else { continue }
+            let mine = childrenById[pid] ?? []
+            checked += 1
+            if mine != coreKids {
+                // ★诊断必须够**定位**（本仓实测：只打印前 6 项时"看起来完全一样"，
+                //   而差异在后面 ⇒ 打印**首个差异位置 + 两侧该位置的值**
+                // ★完整对照（只对**前几个**动过的父做，避免报告爆炸）
+                if let d = coreChildren["__debug_ids"]  { _ = d }
+                let head = min(8, max(mine.count, coreKids.count))
+                mismatch_detail.append("parent \(pid) 前\(head)项：宿主 \(Array(mine.prefix(head))) 核心 \(Array(coreKids.prefix(head)))")
+                let n = min(mine.count, coreKids.count)
+                var firstDiff = -1
+                for i in 0..<n where mine[i] != coreKids[i] { firstDiff = i; break }
+                let hint: String
+                if firstDiff >= 0 {
+                    hint = "首个差异@\(firstDiff): 宿主 \(mine[firstDiff]) vs 核心 \(coreKids[firstDiff])"
+                } else {
+                    hint = "前缀相同但长度不同: 宿主 \(mine.count) vs 核心 \(coreKids.count)"
+                }
+                mismatches.append("parent \(pid): \(hint)")
+            }
+        }
+        // 细节并入 mismatches（报告只带一个数组）
+        return (checked, mismatches + mismatch_detail)
+    }
+
     /// ★实际 CALayer frame 清单（宿主侧读数）——与核心 rects 对照，证明「几何真的被用上了」
     ///
     /// `parentId` 一并导出：三端坐标口径不同（核心 rects = **绝对**；CALayer frame = **父相对**），
@@ -1048,6 +1127,10 @@ final class SelfDrawBridge: NSObject, SelfDrawExports {
                                                     width: r["width"] ?? 0, height: r["height"] ?? 0)))
             }
         }
+        // ★★**层序对账**（见 reconcileChildOrder 注释：像素判据证明不了层序）
+        let coreChildren = (o?["child_order"] as? [String: [Int]]) ?? [:]
+        let recon = view.reconcileChildOrder(coreChildren: coreChildren)
+
         let tL = CFAbsoluteTimeGetCurrent()
         let updated = view.updateLayersIncremental(changed: changed, visibleOnly: SelfDrawBridge.optMode == "v4")
         let layersMs = (CFAbsoluteTimeGetCurrent() - tL) * 1000
@@ -1069,6 +1152,8 @@ final class SelfDrawBridge: NSObject, SelfDrawExports {
                            "removed": removed, "inserted": inserted,
                            "removed_layers": view.lastSpliceRemoved,
                            "inserted_layers": insertedLayers,
+                           "child_order_checked": recon.checked,
+                           "child_order_mismatches": recon.mismatches,
                            "inserted_text_layers": tx.text,
                            "inserted_text_zero_height": tx.zero,
                            "inserted_text_missing_geom": tx.missing,

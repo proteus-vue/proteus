@@ -258,6 +258,31 @@ diff/patch 随**页面规模**线性、**与"改了多少"无关**。
 
 ---
 
+#### ★★★2026-09-28 中间插入解禁（splice 能力补全：追加 + 中间插入）
+
+**架构升级（一处根因）**：`build_taffy` 原按 `tree.nodes` **数组顺序**连父子
+（注释写"顺序 = children 顺序"，实现却遍历数组）⇒ **数组序即布局序** ⇒ 插中间必须搬数组
+（O(n)，且 `taffy_ids` 按数组索引对齐会全乱）⇒ splice 只能追加（其注释记录了当时的取舍）。
+
+**改法**：`build_taffy` **只信 `children` 顺序**（单一事实来源）；`parent`↔`children`
+双向一致性由**输入图校验**强制（新增第 ④ 项——否则"parent 有值但不在 children 里"会被静默漏掉）。
+⇒ 插入 = 在父的 `children` 里 `insert(at, r)`（O(块大小)）。
+
+**链路三处**：
+· 核心：`splice` 支持 `index`（越界显式拒绝；顺带把"child 在父的 children 里"的一致性钉住）
+· 适配器：`takeSplice` 产出 `{parentId, index, nodes}`（`index` = 新建节点在 children 里的**连续区段起点**；
+  不连续 / 既有节点移动 ⇒ 仍 `'full-required'`）
+· 宿主：`insertLayers` 用 `insertSublayer(at:)` 保持**层序 = children 序**
+  （`addSublayer` 恒追加 ⇒ 中间插入会让层序与核心不符：重叠绘制/z-order/命中测试错，**几何断言发现不了**）
+
+**判据**：中间插入后几何 == 从头全量建树（同顺序）**逐节点比对**（行序错会立刻体现在 y 上）。
+**破坏性验证**：退回"按数组序连父子" ⇒ 红「节点 1002 的 y：splice 100 vs 全量 150」；
+适配器 index 改成恒为末尾 ⇒ 红「新行应插到第 0 位: expected 2 to be 0」。
+
+**★两条被更新语义的既有测试**（保护意图搬到新位置，未丢失）：
+· `splice_rejects_bad_input` 的 ④：从"中间插入必须被拒绝"→"**index 越界**必须被拒绝"
+· `selfdraw-structural-diff` 的 ③：从"中间插入 ⇒ full-required"→"中间插入 ⇒ **精确 index**"
+
 #### ★★★2026-09-28 relayout 收口：找到真凶并修复（真机 17.16ms → 1.52ms · 11.3×）
 
 **真凶一行**：`layout()` 里 `let mut taffy = self.build_taffy(tree)` 是**局部变量，方法结束即 drop**

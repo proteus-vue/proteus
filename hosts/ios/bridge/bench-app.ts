@@ -22,7 +22,7 @@ export interface BenchApp {
   adapter: ReturnType<typeof createSelfDrawAdapter>
   setCount: (n: number) => void
   reverse: () => void
-  setItems: (items: { id: number; title: string; sub: string }[]) => void
+  setItems: (items: { id: number; title: string; sub: string; tint?: string }[]) => void
   mutateDeep: () => void
   setScaleBase: (n: number) => void
   /** ★类B 平级变更：改**第 i 行**的 margin（改变主轴占用 ⇒ **兄弟行全部移位** ⇒ 范围=父级） */
@@ -48,7 +48,7 @@ export interface BenchApp {
    *   无法判断"慢是因为算法还是因为内存"。加压测试要给出**可归因**的数字。
    */
   dispose: () => void
-  items: () => { id: number; title: string; sub: string }[]
+  items: () => { id: number; title: string; sub: string; tint?: string }[]
 }
 
 /**
@@ -59,7 +59,7 @@ export interface BenchApp {
  *   共用构造器 + 宿主侧 `relayout/updated_layers` 与基线逐位等价断言，两重保证可比。
  */
 export function buildBenchRow(
-  it: { id: number; title: string; sub: string },
+  it: { id: number; title: string; sub: string; tint?: string },
   dot: number, margin: number, c: string, extra: string | null,
 ): ReturnType<typeof h> {
   return h('p-view', {
@@ -67,7 +67,9 @@ export function buildBenchRow(
     style: {
       flexDirection: 'row', alignItems: 'center',
       height: 56, flexShrink: 0, margin: { bottom: margin }, padding: { left: 16, right: 16 },
-      backgroundColor: '#1b1b21', borderRadius: 12,
+      // ★`tint`：供像素判据用（新插入的行给专用底色 ⇒ 采样序列有区分力——本仓实测的教训：
+      //   若新行与既有行同色，三行采样必然同色 ⇒ 判据无区分力，等于没验）
+      backgroundColor: it.tint ?? '#1b1b21', borderRadius: 12,
     },
   }, [
     h('p-view', { style: { width: 36, height: dot, backgroundColor: c, borderRadius: 18 } }),
@@ -117,7 +119,7 @@ export function makeApp(initial: number, strategy: BenchStrategy = 'plain'): Ben
   const scaleMid = computed(() => scaleBase.value * 2)
   const scaleTop = computed(() => scaleMid.value + 100)
   // ★列表数据（keyed diff 用）：独立数组，支持 reverse / 结构变更
-  const items0: { id: number; title: string; sub: string }[] = []
+  const items0: { id: number; title: string; sub: string; tint?: string }[] = []
   for (let i = 0; i < initial; i++) items0.push({ id: i, title: `列表项 ${i + 1}`, sub: i % 3 === 0 ? '分组标题' : '说明文字' })
   const items = ref(items0)
   let renders = 0

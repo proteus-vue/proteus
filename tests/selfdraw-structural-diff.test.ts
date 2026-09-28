@@ -68,14 +68,35 @@ describe('V7 · 结构 diff：适配器侧', () => {
     app.unmount()
   })
 
-  it('★★③ 中间插入 ⇒ `full-required`（不静默按末尾插）', async () => {
-    // 【为什么必须拒绝而不是"按末尾插"】核心的 `build_taffy` 按数组顺序连父子
-    //   ⇒ 中间插入无法用"追加节点"表达 ⇒ 若强行按末尾插，**行序会错**且零提示。
-    //   本仓纪律：宁可拒绝（调用方走全量），不可静默错。
+  it('★★③ 中间插入 ⇒ **精确 index**（2026-09-28 解禁；此前是 full-required）', async () => {
+    // 【★本用例的语义变过（架构升级）】此前核心的 `build_taffy` 按 `tree.nodes` **数组顺序**
+    //   连父子 ⇒ 数组序即布局序 ⇒ 插中间必须搬数组 ⇒ 适配器只好显式返回 `'full-required'`
+    //   （宁可全量，不可静默错序）。现在核心改为**只信 `children` 顺序** ⇒ 插入只需子位序号。
+    //   ⇒ 判据升级为：**给出正确的 index**（而不是"拒绝"）。
+    //   ★原用例的保护意图（"不能静默按末尾插"）**由 index 承载**：index 错了 → 行序错 → 核心等价性测试红。
     const { adapter, items, app } = await mountList([1, 2])
     items.value = [{ id: 0 }, ...items.value]
     await nextTick()
-    expect(adapter.takeSplice()).toBe('full-required')
+    const sp = adapter.takeSplice() as {
+      removes: number[]
+      inserts: Array<{ parentId: number; index: number; nodes: Array<{ id: number }> }>
+    }
+    expect(typeof sp, `中间插入应产出 splice（实得 ${JSON.stringify(sp)}）`).not.toBe('string')
+    expect(sp.inserts.length).toBe(1)
+    // ★判据：插到第 0 位（新行在最前）
+    expect(sp.inserts[0]!.index, '新行应插到第 0 位').toBe(0)
+    expect(sp.inserts[0]!.nodes.length, '恰好一个新行节点').toBe(1)
+    app.unmount()
+  })
+
+  it('★③b2 追加 ⇒ index = 原长度（与中间插入同一通道，靠 index 区分）', async () => {
+    const { adapter, items, app } = await mountList([1, 2, 3])
+    items.value = [...items.value, { id: 4 }]
+    await nextTick()
+    const sp = adapter.takeSplice() as { inserts: Array<{ index: number }> }
+    expect(typeof sp).not.toBe('string')
+    // 原 3 行 ⇒ 追加的 index 应为 3（末尾）
+    expect(sp.inserts[0]!.index, '追加应给 index=原长度').toBe(3)
     app.unmount()
   })
 

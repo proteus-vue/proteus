@@ -77,7 +77,7 @@ const BN = { snapshot: 'bench-final' }
 // ★构建标识：每次构建写入，用于**确凿判定**设备上跑的是哪份代码
 //   （踩坑：靠文件 mtime 判断"报告是否刷新"不可靠——新建目标文件的时间恒为"现在"；
 //    且我看不出设备实际执行的是旧 bundle，白跑一轮。有了这个字段就能一眼判定。）
-const BUILD_ID = '9f6c813f-170857'
+const BUILD_ID = '0c64c147-174141'
 const now = (): number => Date.now()
 /** 宽松解析（宿主返回可能是字符串或已是对象） */
 const safeParseAny = (s: any): any => {
@@ -1669,10 +1669,26 @@ CASES.push({
         app.setItems(cur.slice(0, to))
       }
     }
-    const runOne = async (label: string, newN: number, useSplice: boolean) => {
+    /**
+     * @param insertAt  仅 grow 且 >0 时生效：插到该位置（0 = 头部）而非追加
+     */
+    const runOne = async (label: string, newN: number, useSplice: boolean, insertAt = -1) => {
       app.adapter.resetStats()
       const t0 = now()
-      grow(newN)
+      if (insertAt >= 0 && newN > app.items().length) {
+        // ★★**中间/头部插入**（2026-09-28 解禁；此前 splice 只能追加 ⇒ 这种形态必然全量）
+        const cur = app.items()
+        const add = newN - cur.length
+        // ★新插入的行给**专用底色**（像素判据的区分力来源——本仓实测：
+        //   若新行与既有行同色，采样点全同色 ⇒ 判据无区分力，等于没验）
+        const fresh = Array.from({ length: add }, (_, i) => {
+          const id = 100000 + i
+          return { id, title: `新插入 ${i + 1}`, sub: '插在行首', tint: '#00FF00' }
+        })
+        app.setItems([...fresh, ...cur.slice(0, Math.max(0, insertAt)), ...cur.slice(Math.max(0, insertAt))])
+      } else {
+        grow(newN)
+      }
       await nextTick()
       const tVue = now()
       // ── ① 适配器侧：取本批次的"该发什么"（不含序列化）──
@@ -1713,6 +1729,55 @@ CASES.push({
       const tHost = now()
       const h = safeParseAny(hostOut)
       app.adapter.markFullSync()
+      // ★★中间插入的**像素判据**（本仓纪律：几何对 ≠ 屏幕对）
+      //   【为什么单列】层序（CALayer 子层顺序 = 绘制顺序）若与核心的 children 序不符，
+      //   **几何断言全绿**而重叠/行序在屏幕上错。
+      //
+      // ★★头部插入的**像素判据**（本仓纪律：几何对 ≠ 屏幕对；层序错只有像素能发现）
+      //
+      // 【为什么用"固定屏幕坐标扫描"而不是"从 rects 推坐标"（本仓实测的三次弯路）】
+      //   ① 手算行 y ⇒ 算出 6524（远超屏高 844）⇒ out-of-bounds；
+      //   ② 从宿主回传的 rects 推 ⇒ `rects_count: 0`（**splice 的返回体没有 rects 字段**）。
+      //   ⇒ 正解：**不依赖任何新增读数**——头部插入后，插入区必然占据首屏的固定屏幕区域
+      //     （标题区之下、第一屏之内）。⇒ 直接扫描那一片的**若干固定点**，判据是
+      //     "这些点的颜色 = 新行底色"（全量与 splice 两次运行**结果必须一致**）。
+      let pixelCheck: Record<string, unknown> | undefined
+      const ex2ChildOrder = (h?.["child_order_checked"] as number) ?? -1
+      const ex2ChildOrderMismatch = (h?.["child_order_mismatches"] as string[]) ?? []
+      if (label.startsWith('head_insert') || label.startsWith('mid_insert')) {
+        // 首屏扫描：x 取行内三点（避开圆点与文字），y 取标题区之下的连续 6 点
+        //   （行高 56 + margin 8 = 64 ⇒ 6 点覆盖约 4 行，足以落在插入区内）
+        const xs = [120, 195, 300]
+        const ys = [200, 220, 264, 284, 328, 348]
+        const pts: Array<{ x: number; y: number }> = []
+        for (const y of ys) for (const x of xs) pts.push({ x, y })
+        const got = safeParseAny(
+          proteusSelfDraw.samplePixels?.(JSON.stringify(pts)) ?? '{}',
+        )
+        const pixels: string[] = (got?.pixels as string[]) ?? []
+        const green = pixels.filter((c) => c.toUpperCase() === '#00FF00').length
+        const dark = pixels.filter((c) => c.toUpperCase() === '#1B1B21').length
+        pixelCheck = {
+          // ★层序对账读数（比像素更直接：像素证明不了层序——本仓实测的判据缺口）
+          // ⚠ **诊断读数，非判据**（本仓实测：两侧"子序"来源不同源——
+          //   核心用 children 字段、宿主按 parentId 归类 ⇒ 天然对不上，不代表层序错）
+          child_order_checked: ex2ChildOrder,
+          child_order_mismatches: ex2ChildOrderMismatch,
+          probes: pts.length,
+          pixels,
+          green, dark,
+          // ★判据：头部插入区在首屏 ⇒ 应看到**新行底色（绿）为主**
+          //   （全量档的 tint 同样生效 ⇒ 两档结果应一致）
+          verdict: green > 0 ? 'insert-area-visible' : 'no-insert-area',
+          // ★★**诚实标注判据强度（本仓实测的破坏性验证结果）**：
+          //   把宿主 `insertLayers` 退化为"恒追加"后，本判据**仍然全绿** ⇒
+          //   它**证明不了"层序正确"**，只证明"**几何位置正确**"（因为位置由核心算，
+          //   宿主只是把层放到父层里；行与行不重叠 ⇒ 层序差异在屏幕上不可见）。
+          //   ⇒ 要验层序需要**重叠/半透明**场景（或直接读 `childrenById` 与核心 children 对账）；
+          //     当前把它如实标注为"几何位置判据"，不冒充层序判据。
+          strength: 'geometry-position-only（层序需重叠场景才能验——见注释）',
+        }
+      }
       results.push({
         case: `S5_${label}`,
         note: `${N}→${newN} 项（${mode}）`,
@@ -1725,6 +1790,7 @@ CASES.push({
                  removed: h?.["removed"], inserted: h?.["inserted"],
                  removed_layers: h?.["removed_layers"], inserted_layers: h?.["inserted_layers"],
                  layer_count: h?.["layer_count"],
+                 pixel_check: pixelCheck,
                  // ★核心分段（splice 的 relayout_ms 决定"省下的到底是搬运还是重排"）
                  relayout_ms: h?.["relayout_ms"], splice_ms: h?.["splice_ms"],
                  layout_ms: h?.["layout_ms"], host_total_ms: h?.["host_total_ms"],
@@ -1741,6 +1807,12 @@ CASES.push({
     await runOne('shrink_500_FULL', 500, false)
     await runOne('grow_600_splice', 600, true)
     await runOne('shrink_500_splice', 500, true)
+    // ★★**头部插入**档（2026-09-28 解禁；此前 splice 只能追加 ⇒ 这形态必然全量）
+    //   ★为什么选头部而**不是**第 100 行：头部既是最常见的真实交互（聊天/信息流"加载新消息"），
+    //     也让插入区**天然落在首屏内** ⇒ 像素判据（验证行序/层序）才能真正执行
+    //     （插在第 100 行时采样点必然在屏幕外 ⇒ 只能给 INCONCLUSIVE，等于没验）。
+    await runOne('head_insert_FULL', 550, false, 0)
+    await runOne('head_insert_splice', 600, true, 0)
     app.dispose()
   },
 })
