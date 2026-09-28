@@ -289,6 +289,9 @@ pub fn apply_style_key(node: &mut LNode, key: &str, value: f32) -> Result<bool, 
 pub struct MultiRelayout {
     /// 实际重排的范围根（去重且互不嵌套后的节点 id）
     pub scopes: Vec<u32>,
+    /// ★★V5 平移传播的变化根（脏子树 + 被平移的兄弟）——非空时**收集层必须用它**
+    ///   （否则被平移的兄弟不会被收集 ⇒ 宿主不更新其位置 ⇒ 画面停在旧位置）
+    pub changed_roots: Vec<u32>,
     /// 重排覆盖的节点总数（各范围求和）
     pub relayout_count: usize,
     /// 文本度量调用次数
@@ -371,6 +374,11 @@ pub fn relayout_multi(tree: &mut LayoutTree, dirty: &[u32]) -> MultiRelayout {
             if let Ok(mut g) = LAST_PHASES.lock() {
                 *g = Some(engine.last_phases.clone());
             }
+        }
+        // ★★平移传播会给出**自己的变化根集合**（脏子树 + 被平移的兄弟）——
+        //   必须用它替代 scope，否则被平移的兄弟不会被收集 ⇒ 宿主不更新其位置（画面停在旧位置）
+        for &x in &engine.last_changed_roots {
+            out.changed_roots.push(x as u32);
         }
         out.relayout_count += r.relayout_count;
         out.measure_calls += r.measure_calls;

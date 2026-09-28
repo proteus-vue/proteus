@@ -28,13 +28,29 @@ fn main() {
             println!("{{\"ok\":false,\"error\":\"建树失败\"}}");
             std::process::exit(1);
         }
-        // 首轮：建立基线（不计入统计）
+        // ★首轮建立基线（不计入统计）；★若提供了第三个 ops 文件，则与它**交替发送**
+        //   ——本仓实测踩到：只发同一个 ops ⇒ 第二轮起 delta=0（尺寸已等于目标）
+        //     ⇒ 读数变成"无事可做"的 0.0055ms，**看起来像 700× 收益，实际什么都没做**。
+            // 参数：<tree.json> <opsA.bin> [opsB.bin] [iters]
+        let alt_bytes: Option<Vec<u8>> = args
+            .get(3)
+            .filter(|a| a.ends_with(".bin"))
+            .map(|a| fs::read(a).expect("读交替 ops"));
+        let iters: usize = args
+            .iter()
+            .skip(3)
+            .find_map(|a| if a.ends_with(".bin") { None } else { a.parse::<usize>().ok() })
+            .or_else(|| args.get(3).filter(|a| !a.ends_with(".bin")).and_then(|a| a.parse().ok()))
+            .unwrap_or(30);
         let warm = proteus_layout_core::ffi::proteus_layout_apply_ops(handle, ops_bytes.as_ptr(), ops_bytes.len() as u32);
         proteus_layout_core::ffi::proteus_layout_free_string(warm);
 
         let mut samples: Vec<serde_json::Value> = Vec::new();
-        for _ in 0..iters {
-            let p = proteus_layout_core::ffi::proteus_layout_apply_ops(handle, ops_bytes.as_ptr(), ops_bytes.len() as u32);
+        for i in 0..iters {
+            // 交替：偶数轮用主 ops，奇数轮用 alt（若提供）
+            let use_alt = alt_bytes.is_some() && i % 2 == 1;
+            let bytes: &[u8] = if use_alt { alt_bytes.as_ref().unwrap() } else { &ops_bytes };
+            let p = proteus_layout_core::ffi::proteus_layout_apply_ops(handle, bytes.as_ptr(), bytes.len() as u32);
             let s = CStr::from_ptr(p).to_str().unwrap().to_string();
             proteus_layout_core::ffi::proteus_layout_free_string(p);
             if let Ok(v) = serde_json::from_str::<serde_json::Value>(&s) {

@@ -1338,6 +1338,7 @@ fn apply_ops_impl(handle: u64, ptr: *const u8, len: u32, with_rects: bool) -> Re
         "dirty": outcome.dirty,
         "relayout_count": multi.relayout_count,
         "scopes": multi.scopes,
+        "changed_roots": multi.changed_roots,
         "unsupported": unsupported_json,
         "timing": {"lock_ms": t_lock, "apply_ms": t_apply, "relayout_ms": t_rel, "collect_ms": 0.0,
                    "engine_phases": eng_phases},
@@ -1346,7 +1347,10 @@ fn apply_ops_impl(handle: u64, ptr: *const u8, len: u32, with_rects: bool) -> Re
     if with_rects {
         let t_col0 = std::time::Instant::now();
         let mut changed = serde_json::Map::new();
-        for &sc in &multi.scopes {
+        // ★★收集用**变化根**：平移传播时它 = 脏子树 + 被平移的兄弟（不能用 scope——
+        //   否则被平移的兄弟不被收集 ⇒ 宿主不更新 ⇒ 画面停在旧位置）
+        let roots: &[u32] = if multi.changed_roots.is_empty() { &multi.scopes } else { &multi.changed_roots };
+        for &sc in roots {
             let (pox, poy) = parent_origin_of(&entry.tree, sc);
             collect_abs_subtree(&entry.tree, sc, pox, poy, &mut changed);
         }
