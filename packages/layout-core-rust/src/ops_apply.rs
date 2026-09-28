@@ -334,11 +334,26 @@ pub fn relayout_multi(tree: &mut LayoutTree, dirty: &[u32]) -> MultiRelayout {
         .filter(|&a| !scopes.iter().any(|&b| b != a && is_ancestor(tree, b, a)))
         .collect();
 
-    // ③ 逐个重排
+    // ③ 逐个重排（★传**脏节点**，而不是已推导出的范围）
+    //
+    // 【本仓实测踩到（代价：增量退化为全量）】`layout_incremental(tree, x)` 的形参是
+    //   **脏节点**，它会**内部再推导一次**范围（见其实现首行 `relayout_scope_of`）。
+    //   若把「已推导出的范围」当脏节点传进去 ⇒ **二次推导、范围再上浮一层** ⇒
+    //   在「行=边界」的矩阵里，第二次推导会从行的父（页面根）起算 ⇒ 范围=根 ⇒ 全量。
+    //   实测读数：relayout 2 → **4003**（4.6ms vs 0.17ms）。
+    //   ⇒ 范围只用于**去嵌套判定**；真正传给 layout_incremental 的是**脏节点**。
+    let mut pairs: Vec<(u32, u32)> = Vec::new(); // (scope, dirty)
+    for &d in dirty {
+        if d as usize >= tree.len() {
+            continue;
+        }
+        pairs.push((eng.relayout_scope_of(tree, d), d));
+    }
     let mut out = MultiRelayout { scopes: kept.clone(), ..Default::default() };
     let mut engine = TaffyEngine::new().with_measurer(Box::new(crate::engine::NullTextMeasurer));
     for sc in kept {
-        let r = engine.layout_incremental(tree, sc);
+        let Some(&(_, d)) = pairs.iter().find(|(s, _)| *s == sc) else { continue };
+        let r = engine.layout_incremental(tree, d);
         out.relayout_count += r.relayout_count;
         out.measure_calls += r.measure_calls;
         out.measure_hits += r.measure_hits;
@@ -402,6 +417,134 @@ mod tests {
 
         let out = relayout_multi(&mut tree, &[1, 2]);
         assert_eq!(out.scopes.len(), 1, "嵌套的脏节点应收敛为一个范围：{:?}", out.scopes);
+    }
+
+    /// ★★决定性回归：改**边界节点自身**的高度 ⇒ 后续兄弟必须移位
+    ///
+    /// 【为什么单列（本仓实测的正确性缺陷）】`relayout_scope_of` 一度从**脏节点自身**起
+    ///   找边界——脏节点自己就是边界（如 `{width, height}` 显式的列表行）时范围止于它自己
+    ///   ⇒ 父级没重排 ⇒ **后续兄弟几何静默停在旧位置**。
+    ///   实测：两行各高 56，改首行高 56→80 ⇒ 次行 y 期望 80，**实际仍 56**（几何错）。
+    ///   修复：从**脏节点的父**起找边界（非边界的脏节点行为不变 ⇒ 类A 读数不受影响）。
+    #[test]
+    fn sibling_reposition_after_boundary_self_resize() {
+        use crate::engine::{LayoutEngine, NullTextMeasurer, RootConstraint};
+        use crate::ops::{DecodedOps, UpdateOp};
+
+        let mut tree = LayoutTree::new();
+        let root_style = LStyle {
+            display: crate::style::Display::Flex,
+            flex_direction: crate::style::FlexDirection::Column,
+            width: Some(300.0),
+            height: Some(300.0),
+            ..Default::default()
+        };
+        let root_idx = tree.push(node(1, crate::node::NO_PARENT, root_style));
+        tree.roots.push(root_idx);
+
+        let row_style = LStyle {
+            display: crate::style::Display::Flex,
+            flex_direction: crate::style::FlexDirection::Row,
+            width: Some(300.0),
+            height: Some(56.0),
+            flex_shrink: 0.0,
+            ..Default::default()
+        };
+        let a_idx = tree.push(node(2, root_idx, row_style.clone()));
+        tree.nodes[root_idx as usize].children.push(a_idx);
+        let b_idx = tree.push(node(4, root_idx, row_style));
+        tree.nodes[root_idx as usize].children.push(b_idx);
+
+        let mut eng = TaffyEngine::new().with_measurer(Box::new(NullTextMeasurer));
+        eng.layout(&mut tree, RootConstraint::definite(300.0, 300.0));
+        let y_b_before = tree.nodes[b_idx as usize].rect.y;
+        assert!(y_b_before > 0.0, "基准几何应已建立");
+
+        // 改 rowA 高度 56 → 80（**边界自身的尺寸变化**）
+        let dec = DecodedOps {
+            version: 1,
+            keys: vec!["layout.height".to_string()],
+            strings: vec![],
+            ops: vec![UpdateOp::SetStyle { node_id: 2, key_id: 0, value: 80.0 }],
+        };
+        let outcome = apply_ops_to_tree(&mut tree, &dec);
+        assert_eq!(outcome.applied, 1);
+        let multi = relayout_multi(&mut tree, &outcome.dirty);
+
+        let y_b_after = tree.nodes[b_idx as usize].rect.y;
+        assert_eq!(
+            y_b_after,
+            y_b_before + 24.0,
+            "★ rowB 应下移 24（rowA 高 56→80）；实际 {} ⇒ 若停在 {} 则是『兄弟移位未传播』的正确性缺陷。范围={:?}",
+            y_b_after, y_b_before, multi.scopes
+        );
+        assert!(
+            multi.scopes.contains(&0),
+            "★ 改**边界自身**高时范围必须上浮到父（root）：{:?}",
+            multi.scopes
+        );
+    }
+
+    /// ★★决定性回归：`relayout_multi` 必须把**脏节点**传给 `layout_incremental`
+    ///
+    /// 【为什么单列（本仓实测的第二个真缺陷，破坏性验证已确认）】`layout_incremental(tree, x)`
+    ///   的形参是**脏节点**，它会内部再推导一次范围。若传「已推导出的范围」⇒ 二次推导上浮 ⇒
+    ///   在「行=边界」矩阵（真实 App 的列表形态）里退化为全量。
+    ///   **实测（4003 节点）**：传脏节点 `relayout=2`（0.020ms）· 传范围 `relayout=4003`（15.17ms）。
+    ///
+    /// ★★为什么必须用**深树**才测得出（本仓教训）：浅树（root 是唯一边界）里两种写法结果相同，
+    ///   测试会假绿——我第一版就是这么写的，破坏性验证时才发现抓不到。
+    ///   ⇒ 本测试刻意构 3 层（root → 行 → 圆点），并断言**重排计数不能接近全树**。
+    #[test]
+    fn relayout_multi_must_pass_dirty_node_not_scope() {
+        use crate::engine::{LayoutEngine, NullTextMeasurer, RootConstraint};
+
+        let mut tree = LayoutTree::new();
+        let root_style = LStyle {
+            display: crate::style::Display::Flex,
+            flex_direction: crate::style::FlexDirection::Column,
+            width: Some(300.0),
+            height: Some(300.0),
+            ..Default::default()
+        };
+        let root_idx = tree.push(node(1, crate::node::NO_PARENT, root_style));
+        tree.roots.push(root_idx);
+
+        // 20 行，每行 `{width, height}` 显式 ⇒ **自己是边界**
+        let row_style = LStyle {
+            display: crate::style::Display::Flex,
+            flex_direction: crate::style::FlexDirection::Row,
+            width: Some(300.0),
+            height: Some(30.0),
+            flex_shrink: 0.0,
+            ..Default::default()
+        };
+        let mut first_dot = 0u32;
+        for i in 0..20u32 {
+            let row = tree.push(node(10 + i * 2, root_idx, row_style.clone()));
+            tree.nodes[root_idx as usize].children.push(row);
+            let dot = tree.push(node(11 + i * 2, row, LStyle { width: Some(20.0), height: Some(20.0), ..Default::default() }));
+            tree.nodes[row as usize].children.push(dot);
+            if i == 0 {
+                first_dot = dot;
+            }
+        }
+
+        let mut eng = TaffyEngine::new().with_measurer(Box::new(NullTextMeasurer));
+        eng.layout(&mut tree, RootConstraint::definite(300.0, 300.0));
+
+        // 改**首行内的圆点**宽（类A：边界内部变化 ⇒ 范围应止于该行）
+        tree.nodes[first_dot as usize].style.width = Some(80.0);
+        tree.nodes[first_dot as usize].dirty = true;
+        let multi = relayout_multi(&mut tree, &[first_dot]);
+
+        // ★判据：范围应止于该行（含行 + 圆点 ≈ 2），**不得**接近全树（41 节点）
+        assert!(
+            multi.relayout_count <= 4,
+            "★ 范围应止于该行（期待 ≤4）；实际 {} ⇒ 说明传了「范围」而非「脏节点」（二次推导致上浮）。scopes={:?}",
+            multi.relayout_count,
+            multi.scopes
+        );
     }
 
     /// ★样式键应用：未知 layout.* 键必须报错（不静默丢值）

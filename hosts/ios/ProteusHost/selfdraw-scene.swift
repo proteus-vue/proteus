@@ -18,6 +18,8 @@
 //   本文件是「真实 Vue 应用 → CALayer」，验证的是**整条 App 链路**（含 Vue 运行时与 diff）。
 import UIKit
 import JavaScriptCore
+// ★mach_absolute_time（高分辨率单调时钟）——测量用，见 SelfDrawBridge.nowUs()
+import Darwin
 
 /* ────────────────────────── Rust C ABI ────────────────────────── */
 
@@ -81,6 +83,16 @@ func physFootprintMB() -> Double {
     ///   入参 `opsJson` 是**字节数组的 JSON 表示**（JSExport 对 ArrayBuffer 支持不稳，
     ///   而指令流本就极小——实测单节点更新 45 字节，base64/数组序列化成本可忽略）。
     func applyOps(_ opsBytesJson: String) -> String
+    /// ★★**高分辨率单调时钟**（微秒，十进制字符串）——供 JS 侧做可靠计时
+    ///
+    /// 【为什么必须由宿主提供（本仓实测的第六个测量装置缺陷）】
+    ///   JSC 的 `Date.now()` 是**粗粒度缓存时钟**：真机实测**连续 512 次读一次都不前进**
+    ///   ⇒ 用它测出的 "p50 = 0ms / p95 = 1ms" 全是**分辨率假象**，不是成本。
+    ///   桌面 JSC 有 `performance.now()`，**真机 JSC 没有**（实测 `typeof performance === 'undefined'`）。
+    ///   ⇒ 唯一可靠的路径：宿主用 `mach_absolute_time`（**单调**，不受墙钟调整影响）计时，
+    ///     以字符串返回微秒值（字符串而非 Double：避免 JS Number 的 53 位精度在
+    ///     大时间戳上损失亚微秒分辨率）。
+    func nowUs() -> String
     /// 截图落盘（验证「屏幕上真的画出来了」）
     func snapshot(_ name: String) -> String
     /// JS 侧自报读数（Vue mount / update 耗时 + patch 次数）
@@ -449,6 +461,24 @@ final class SelfDrawBridge: NSObject, SelfDrawExports {
                            "host_total_ms": round(totalMs * 100) / 100])
     }
 
+    /// ★高分辨率单调时钟（微秒）。用 mach_absolute_time + timebase 换算——
+    ///   比 `CFAbsoluteTimeGetCurrent` 更适合**测量**（不受系统时间调整影响）。
+    private static let timebase: mach_timebase_info_data_t = {
+        var tb = mach_timebase_info_data_t()
+        mach_timebase_info(&tb)
+        return tb
+    }()
+
+    func nowUs() -> String {
+        let tb = Self.timebase
+        let ticks = mach_absolute_time()
+        // 纳秒 = ticks * numer / denom；微秒 = 纳秒 / 1000
+        let nanos = Double(ticks) * Double(tb.numer) / Double(tb.denom)
+        let micros = nanos / 1000.0
+        // %.3f：微秒级分辨率留小数点后 3 位（纳秒级尾数），实测可达
+        return String(format: "%.3f", micros)
+    }
+
     /// ★Vapor IR V3：应用二进制指令流（字节数组 JSON → Rust 侧解码 + 应用 + 多范围重排）
     ///
     /// 【诚实边界】本方法**只做通道**：几何由 Rust 的 `proteus_layout_apply_ops` 算，
@@ -475,6 +505,7 @@ final class SelfDrawBridge: NSObject, SelfDrawExports {
         guard out.contains("\"ok\":true") else {
             return "{\"ok\":false,\"error\":\"applyOps 失败\",\"raw\":\(jsonEscape(String(out.prefix(300))))}"
         }
+        let tParse0 = CFAbsoluteTimeGetCurrent()
         let o = (try? JSONSerialization.jsonObject(with: Data(out.utf8))) as? [String: Any]
         let applied = (o?["applied"] as? Int) ?? 0
         let relayout = (o?["relayout_count"] as? Int) ?? 0
@@ -490,6 +521,8 @@ final class SelfDrawBridge: NSObject, SelfDrawExports {
                                                     width: r["width"] ?? 0, height: r["height"] ?? 0)))
             }
         }
+        // ★矩形解析单独计时（本仓实测：类B 场景 4003 条矩形，这段是真成本而非零头）
+        let rectsParseMs = (CFAbsoluteTimeGetCurrent() - tParse0) * 1000
         let tL = CFAbsoluteTimeGetCurrent()
         let updated = view.updateLayersIncremental(changed: changed)
         let layersMs = (CFAbsoluteTimeGetCurrent() - tL) * 1000
@@ -505,6 +538,7 @@ final class SelfDrawBridge: NSObject, SelfDrawExports {
                            "scopes": scopes, "changed_rects": changed.count, "updated_layers": updated,
                            "unsupported_count": unsupported.count,
                            "apply_ms": round(applyMs * 100) / 100,
+                           "rects_parse_ms": round(rectsParseMs * 100) / 100,
                            "layers_ms": round(layersMs * 100) / 100,
                            "host_total_ms": round(totalMs * 100) / 100])
     }
