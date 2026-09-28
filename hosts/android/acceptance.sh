@@ -6,8 +6,10 @@
 #   ① 必须 release 包            → 调用 build-and-run.sh --release（非 debuggable）
 #   ② 每次测试前杀进程重进        → force-stop 后再 start，每轮独立冷启动
 #   ③ 重复 5 次取均值             → 默认 5 轮（--runs N 可调）
-#   ④ Perfetto 确认跑在普大核     → 采样主线程 CPU（cpu6/7 是 4.6GHz 超大核，
-#                                   cpu0-5 是 3.6GHz 普大核；落在超大核则本组数据作废）
+#   ④ Perfetto 确认跑在普大核     → 采样主线程 CPU，并按**实测核心频率**分档
+#                                   （★不写死核号：不同设备拓扑不同——Redmi 是
+#                                    cpu0-5 普大核 + cpu6/7 超大核；honor10/Kirin970 是
+#                                    cpu0-3 A53 + cpu4-7 A73 两档。落在最快档时按设备档数判定）
 #   ⑤ 监控设备温度避免降频        → 每轮前后读 thermal_zone，温差超阈值即告警
 #   ⑥ 普通包名、不预载、不预触发 JIT → 包名 dev.proteus.layoutcore；测试由**按钮点击**触发
 #                                   （§9.2「起点 = click 事件触发」），不在 onCreate 自动跑
@@ -86,14 +88,37 @@ main_thread_cpu() {
   "$ADB" shell "awk '{print \$39}' /proc/$pid/task/$pid/stat 2>/dev/null" 2>/dev/null | tr -d '\r\n'
 }
 
-# 各核最大频率（分类超大核/普大核）
+# 各核最大频率 —— ★**全部核心**（原来只采 cpu6/cpu0 ⇒ 把设备拓扑写死了）
+#
+# 【为什么必须采全部（本仓实测的设备移植缺陷）】原实现写死 `for c in 6 0`，
+#   而下游 `cpu_class` 又写死 "n >= 6 ⇒ 超大核"——两者合起来 = 假定「8 核、cpu6/7 最快」。
+#   换到 honor10（**Kirin 970：cpu0-3 = A53@1.844GHz · cpu4-7 = A73@2.362GHz**）就错了：
+#   cpu4/5 会被归成"普大核"（它们其实是本机最快档），cpu6/7 被叫"超大核"（本机根本没有第三档）。
+#   ⇒ 正解：采**全部**核心频率，由下游**按频率分档**（几档、哪档最快都是测出来的，不是假设的）。
 core_max_freq() {
-  "$ADB" shell "for c in 6 0; do echo -n \"cpu\$c=\"; cat /sys/devices/system/cpu/cpu\$c/cpufreq/cpuinfo_max_freq 2>/dev/null; done" 2>/dev/null | tr -d '\r'
+  "$ADB" shell 'for d in /sys/devices/system/cpu/cpu[0-9]*; do c=$(basename $d); f=$(cat $d/cpufreq/cpuinfo_max_freq 2>/dev/null); [ -n "$f" ] && echo -n "$c=$f "; done' 2>/dev/null | tr -d '\r'
 }
 
-# 温度（取 CPU 相关 zone 的最大值）
+# 温度（m°C）—— ★**多源回退**（本仓实测的设备差异）
+#
+# 【为什么必须回退（honor10 实测）】原实现只读 /sys/class/thermal/thermal_zone*/temp。
+#   honor10（Android 10 / Kirin 970）上该目录对 **shell 也不可读**（SELinux）⇒ 恒空
+#   ⇒ 脚本侧温度读数**一直是空的**（而调用方不检查，会被读成"温度未变化"）。
+#   ⇒ 回退链：① thermal_zone（多数设备）→ ② dumpsys thermalservice 的 Cached temperatures
+#     （honor10 实测可用：cluster0/cluster1/gpu/battery）→ ③ 空（明确标注，不假装有读数）。
+#   ★从 dumpsys 的浮点摄氏度转成与 ① 一致的 m°C（×1000）。
 max_temp() {
-  "$ADB" shell 'for z in /sys/class/thermal/thermal_zone*/temp; do cat $z 2>/dev/null; done | sort -n | tail -1' 2>/dev/null | tr -d '\r\n'
+  local v
+  v=$("$ADB" shell 'cat /sys/class/thermal/thermal_zone*/temp 2>/dev/null | sort -n | tail -1' 2>/dev/null | tr -d '\r\n')
+  if [ -n "$v" ]; then echo "$v"; return; fi
+  # ② dumpsys thermalservice：取所有 Cached temperatures 的**最大值**（含 cluster0/1、gpu）
+  v=$("$ADB" shell 'dumpsys thermalservice 2>/dev/null | grep -oE "mValue=[0-9]+(\.[0-9]+)?" | cut -d= -f2 | sort -n | tail -1' 2>/dev/null | tr -d '\r\n')
+  if [ -n "$v" ]; then
+    # 浮点 → m°C（整数）
+    awk -v x="$v" 'BEGIN{printf "%d", x*1000}'
+    return
+  fi
+  echo ""    # ③ 取不到：返回空（调用方须能处理）
 }
 
 # 内存（PSS）★注意：Android 的 toybox grep **不支持 `\s`**（本仓实测：含 `\s` 的模式匹配不到，
@@ -140,7 +165,7 @@ run_one() {
 echo
 echo "═══ 正式验收开始（runs=${RUNS}）═══"
 echo "核心频率：$(core_max_freq)"
-echo "（cpu6/7 = 4.6GHz 超大核；cpu0-5 = 3.6GHz 普大核。§9.2：落在超大核则数据作废）"
+echo "（★核心档位**按实测频率分档**，不写死核号——见 core_max_freq 注释。§9.2：主线程落在**最快档且存在更快档**时数据作废）"
 echo
 
 rm -f "$OUT/raw.txt"
@@ -183,11 +208,29 @@ ls -1 "$DEST" | head -10
 
 echo
 echo "==> 跨端命中一致性（M3 事件系统：同一份探针 → 两端逐位相同）"
+# ★★先在本机**采集命中报告**（原来只找文件、从不生成 ⇒ 必然缺失）
+#
+# 【故障链（honor10 实测，本轮抓到）】原实现直接 `cross-device-hit.py $DEST/layout-hit.json ...`，
+#   而**本次验收流程从未跑过 `hit` 通路** ⇒ 该文件必然不存在 ⇒ 脚本报"报告不存在"并非零退出；
+#   配合 `set -o pipefail`（本脚本第 23 行）⇒ **整条验收在此中断**：
+#   Perfetto、gfxinfo、核心驱动滚动、汇总**全都没跑**（首跑日志正好停在这一点，38 行处）。
+#   ★纪律：**辅助检查不得杀掉主流程**——跨端比对是"附加证据"，它的失败不该让主测量消失。
+#   ⇒ 修：① 先跑 `hit` 通路生成报告 ② 比对失败**不中断**（`|| true` + 如实打印）。
+"$ADB" shell "rm -f /sdcard/Android/data/$PKG/files/layout-hit.json" >/dev/null 2>&1 || true
+"$ADB" shell am force-stop "$PKG" >/dev/null 2>&1; sleep 1
+"$ADB" shell am start -n "$ACTIVITY" --es path hit >/dev/null 2>&1; sleep 3
+"$ADB" shell "am broadcast -a dev.proteus.RUN --es path hit -p $PKG" >/dev/null 2>&1
+HT=0
+while [ "$HT" -lt 45 ]; do
+  if "$ADB" shell "test -f /sdcard/Android/data/$PKG/files/layout-hit.json" >/dev/null 2>&1; then break; fi
+  sleep 3; HT=$((HT + 3))
+done
+"$ADB" pull "/sdcard/Android/data/$PKG/files/layout-hit.json" "$DEST/layout-hit.json" >/dev/null 2>&1 || true
 # ★需要 iOS 的报告（hosts/ios/results/layout-core-bench-ios.json）；缺失时脚本会如实说明并跳过比对
-if [ -f "$ROOT/hosts/ios/results/layout-core-bench-ios.json" ]; then
-  python3 "$ROOT/hosts/cross-device-hit.py" "$DEST/layout-hit.json" "$ROOT/hosts/ios/results/layout-core-bench-ios.json" 2>&1 | tail -12 | sed 's/^/    /'
+if [ -f "$DEST/layout-hit.json" ] && [ -f "$ROOT/hosts/ios/results/layout-core-bench-ios.json" ]; then
+  python3 "$ROOT/hosts/cross-device-hit.py" "$DEST/layout-hit.json" "$ROOT/hosts/ios/results/layout-core-bench-ios.json" 2>&1 | tail -12 | sed 's/^/    /' || true
 else
-  echo "    ⚠ 未找到 iOS 报告（先跑 bash hosts/ios/run-layout-bench.sh）——跳过跨端比对"
+  echo "    ⚠ 缺报告（Android：$([ -f "$DEST/layout-hit.json" ] && echo 有 || echo 无)；iOS：$([ -f "$ROOT/hosts/ios/results/layout-core-bench-ios.json" ] && echo 有 || echo 无)）——跳过跨端比对（不影响主流程）"
 fi
 
 echo "==> 采集 Perfetto trace（§9.2 权威核判定）"
