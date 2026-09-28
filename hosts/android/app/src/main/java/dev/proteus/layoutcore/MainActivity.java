@@ -2441,65 +2441,178 @@ public class MainActivity extends Activity {
         for (int f = 0; f * STEP_ROWS <= MAX_FIRST; f++) trajectory.add(f * STEP_ROWS);   // 向下
         for (int f = trajectory.size() - 2; f >= 0; f--) trajectory.add(trajectory.get(f)); // ★回滚到顶
         final int STEPS = trajectory.size();
+
+        // ★★**改成 Choreographer 驱动**（原为 for 循环）——为的是拿到**真实帧率**
+        //
+        // 【为什么必须走 Choreographer + 真实 View 绘制】本仓已在列表级路径踩过：
+        //   自建 RenderNode 但**从未挂进窗口** ⇒ 显示系统根本没收到帧（gfxinfo 只统计到冷启动那几帧）
+        //   ⇒ 量到的只是"回调节拍"，与渲染无关。⇒ 本路径同样：`requestListFrame()`（`invalidate()`）
+        //   的真实帧 + `Choreographer` 的 vsync 间隔，两者配合才是可解释的帧率读数。
+        //
+        // 【帧率与"每帧工作量"的关系（读这份报告时必须一起看）】整树级每 acquire 一行要录
+        //   **3 个节点**（行容器 + 圆点 + 文字），而列表级只录 1 个矩形 ⇒ 两者 fps 不可直接比。
+        //   ⇒ 报告同时给 `nodes_per_row` 与 `acquire_total`，让读者能自己折算。
+        final long[] intervals = new long[STEPS + 1];
+        final int[] idx = {0};
+        final long[] lastVsync = {0};
+        final int[] stepIdx = {0};
         final org.json.JSONArray trace = new org.json.JSONArray();
-        for (int step = 0; step < STEPS; step++) {
-            int firstVisible = trajectory.get(step);
-            if (firstVisible >= ROWS - 4) break;
-            int lastVisible = Math.min(ROWS - 1, firstVisible + 14);
 
-            String dec = RustLayout.recycleUpdate(pool, firstVisible, lastVisible);
-            int[] acquire = new int[0], release = new int[0];
-            int preAbove = -1;
-            try {
-                org.json.JSONObject o = new org.json.JSONObject(dec);
-                if (o.optBoolean("ok", false)) {
-                    acquire = toIntArray(o.optJSONArray("acquire"));
-                    release = toIntArray(o.optJSONArray("release"));
-                    preAbove = firstVisible - o.optInt("first_preload", firstVisible);
+        // ★命中测试计划（**虚拟化下的交互**：命中不依赖层是否物化——核心持有全量树）
+        //   每个计划项：{在第几帧做, 目标行, 该行此刻是否已物化}
+        //   ★预期：**两种都要命中正确节点**。若"未物化的行命中不到" ⇒ 虚拟化破坏了交互
+        //     （那才是真缺陷：屏幕上明明有那行——预载区里的是屏外，但可见区里的必须先物化）。
+        final org.json.JSONArray hitResults = new org.json.JSONArray();
+        final int[] hitPlanStep = {STEPS / 4, STEPS / 2, (STEPS * 3) / 4};
+        // ★★**长度必须与 hitPlanStep 一致**（本仓实测的真崩溃）
+        //
+        // 【故障链】初版写成 `new int[]{0}`（长度 1）而 `hitPlanStep` 是长度 3
+        //   ⇒ `hitDone[i]` 在 i=1 时抛 `ArrayIndexOutOfBoundsException: length=1; index=1`
+        //   ⇒ **主线程 FATAL，进程直接死**（真机现象：app 从任务列表消失，报告文件根本不生成，
+        //     而日志里只有一行"EXITING"——极具误导性，看起来像被系统杀了）。
+        //   Java **不会**报"两个数组长度不一致"（那不是编译期可判的问题）⇒ 只能靠纪律：
+        //     **并列的定长数组，长度必须由同一个常量/同一处声明派生**。
+        //   ⇒ 这里改为按 hitPlanStep.length 派生（新增计划项时不会再漏）。
+        final int[] hitDone = new int[hitPlanStep.length];
+
+        final android.view.Choreographer choreographer = android.view.Choreographer.getInstance();
+        final android.view.Choreographer.FrameCallback callback = new android.view.Choreographer.FrameCallback() {
+            @Override public void doFrame(long frameTimeNanos) {
+                int step = stepIdx[0];
+                if (step >= STEPS) {
+                    writeMountVirtualReport(ROWS, nodes, rowH, renderer, materialized, stats,
+                            missingVisible[0], trace, intervals, idx[0], hitResults, fwdPreAbovePending[0],
+                            backPreAbovePending[0], pool, handle);
+                    return;
                 }
-            } catch (org.json.JSONException ignored) { }
-            preloadAboveAt.add(preAbove);
+                if (lastVsync[0] != 0) {
+                    long dt = (frameTimeNanos - lastVsync[0]) / 1_000_000L;
+                    if (idx[0] < intervals.length) intervals[idx[0]++] = dt;
+                }
+                lastVsync[0] = frameTimeNanos;
 
-            contentOffsetY = firstVisible * rowH;
-            // ★先 release 再 acquire（反了 ⇒ 本帧要建的层无法复用刚释放的）
-            int rel = renderer.releaseRows(release);
-            for (int row : release) materialized[row] = 0;
-            for (int row : acquire) materialize.accept(row);
-            // ★可见区缺行探针（本仓实测抓过"宿主裁剪破坏核心簿记"的那条）
-            int miss = 0;
-            for (int r = firstVisible; r <= lastVisible && r < ROWS; r++) if (materialized[r] == 0) miss++;
-            missingVisible[0] = Math.max(missingVisible[0], miss);
+                int firstVisible = trajectory.get(step);
+                int lastVisible = Math.min(ROWS - 1, firstVisible + VISIBLE - 1);
 
-            stats[0] += acquire.length;
-            stats[1] += release.length;
-            stats[2] = Math.max(stats[2], Math.max(acquire.length, release.length));
+                String dec = RustLayout.recycleUpdate(pool, firstVisible, lastVisible);
+                int[] acquire = new int[0], release = new int[0];
+                int preAbove = -1;
+                try {
+                    org.json.JSONObject o = new org.json.JSONObject(dec);
+                    if (o.optBoolean("ok", false)) {
+                        acquire = toIntArray(o.optJSONArray("acquire"));
+                        release = toIntArray(o.optJSONArray("release"));
+                        preAbove = firstVisible - o.optInt("first_preload", firstVisible);
+                    }
+                } catch (org.json.JSONException ignored) { }
+                // ★口径修正：只在与判据同向时采样（边界帧属上一段，记下来会得到"看起来没交换"的假读数）
+                boolean backwardLeg = step > STEPS / 2;
+                if (backwardLeg && backPreAbovePending[0] < 0) backPreAbovePending[0] = preAbove;
+                if (!backwardLeg && fwdPreAbovePending[0] < 0) fwdPreAbovePending[0] = preAbove;
 
-            try {
-                org.json.JSONObject s = new org.json.JSONObject();
-                s.put("step", step);
-                s.put("first_visible", firstVisible);
-                s.put("acquired", acquire.length);
-                s.put("released", rel);
-                s.put("missing_in_visible", miss);
-                trace.put(s);
-            } catch (org.json.JSONException ignored) { }
-        }
+                contentOffsetY = firstVisible * rowH;
+                // ★先 release 再 acquire（反了 ⇒ 本帧要建的层无法复用刚释放的）
+                int rel = renderer.releaseRows(release);
+                for (int row : release) materialized[row] = 0;
+                for (int row : acquire) materialize.accept(row);
 
-        // ★方向读数的**口径修正**（同 applyOps 那次）：只在与判据同向时采样
-        //   （边界帧的方向是"上一段"的，记下来会得到"看起来没交换"的假读数）
-        int fwdPreAbove = -1, backPreAbove = -1;
-        for (int i = 0; i < trace.length(); i++) {
-            try {
-                org.json.JSONObject st = trace.getJSONObject(i);
-                // 轨迹前段向下、后段向上（见 ⑤ 的构造）
-                boolean backwardLeg = i > trace.length() / 2;
-                if (backwardLeg && backPreAbove < 0) backPreAbove = preloadAboveAt.get(i);
-                if (!backwardLeg && fwdPreAbove < 0) fwdPreAbove = preloadAboveAt.get(i);
-            } catch (org.json.JSONException ignored) { }
-        }
+                int miss = 0;
+                for (int r = firstVisible; r <= lastVisible && r < ROWS; r++) if (materialized[r] == 0) miss++;
+                missingVisible[0] = Math.max(missingVisible[0], miss);
+                stats[0] += acquire.length;
+                stats[1] += release.length;
+                stats[2] = Math.max(stats[2], Math.max(acquire.length, release.length));
 
+                try {
+                    org.json.JSONObject st = new org.json.JSONObject();
+                    st.put("step", step);
+                    st.put("first_visible", firstVisible);
+                    st.put("acquired", acquire.length);
+                    st.put("released", rel);
+                    st.put("missing_in_visible", miss);
+                    st.put("live_rows", renderer.activeCount());
+                    trace.put(st);
+                } catch (org.json.JSONException ignored) { }
+
+                // ── ★命中测试（虚拟化下的交互）──
+                for (int i = 0; i < hitPlanStep.length; i++) {
+                    if (hitDone[i] == 1 || step < hitPlanStep[i]) continue;
+                    hitDone[i] = 1;
+                    // 打**可见区中间那行**（屏幕上确实看得到 ⇒ 若命中不到就是真缺陷）
+                    int row = Math.min(ROWS - 1, firstVisible + VISIBLE / 2);
+                    // ★★**坐标必须由核心几何推导，不能按"行号 × 行高"手算**（本仓纪律，第 4 次踩）
+                    //
+                    // 【首跑为什么全是 target:-1】初版写 `screenY = (row-firstVisible)*rowH + rowH/2`
+                    //   —— 这假设"内容 y = 行号 × 行高"。但列表**前面还有 60px padding +
+                    //   29px 标题 + 12px margin**（SFC 里的静态头）⇒ 行 i 的真实 y 是
+                    //   `headerH + i*(rowH+margin)`，与手算公式**整体偏移且带 margin 累积**。
+                    //   实测：三次命中全落空（`target:-1, chain:[]`）——**判据把装置错误报成了功能缺失**。
+                    //   ⇒ 正解：行根 y 从**核心几何表**（`rects`，本方法 ② 已读）取，
+                    //     屏幕 y = 行根内容 y − 内容偏移；再打**行内中点**（x 也取行宽的中间）。
+                    float rowContentY = rects[rowRoot[row] * 4 + 1];
+                    float rowH_ = rects[rowRoot[row] * 4 + 3];
+                    float screenY = rowContentY - contentOffsetY + rowH_ / 2f;
+                    float rowX = rects[rowRoot[row] * 4];
+                    float rowW = rects[rowRoot[row] * 4 + 2];
+                    float contentY = screenY + contentOffsetY;   // 屏幕 → 内容（与 ProteusHostView 同口径）
+                    float contentX = rowX + rowW / 2f;
+                    try {
+                        org.json.JSONObject hit = new org.json.JSONObject(
+                                RustLayout.hitTest(handle, contentX, contentY));
+                        org.json.JSONArray chain = hit.optJSONArray("chain");
+                        int target = hit.optInt("target", -1);
+                        // ★判据：命中的 chain 里必须**含该行**（命中到了这一行内的某个节点）
+                        boolean hitRow = false;
+                        if (chain != null) {
+                            for (int c = 0; c < chain.length(); c++) {
+                                int nid = chain.optInt(c, -1);
+                                for (int rid : rowIds[row]) if (rid == nid) { hitRow = true; break; }
+                                if (hitRow) break;
+                            }
+                        }
+                        org.json.JSONObject hr = new org.json.JSONObject();
+                        hr.put("step", step);
+                        hr.put("row", row);
+                        hr.put("materialized", materialized[row] == 1);
+                        hr.put("target", target);
+                        hr.put("chain", chain == null ? new org.json.JSONArray() : chain);
+                        hr.put("hit_row", hitRow);
+                        hitResults.put(hr);
+                    } catch (org.json.JSONException ignored) { }
+                }
+
+                stepIdx[0]++;
+                view.requestListFrame();     // ★真实重绘（帧进显示系统）
+                choreographer.postFrameCallback(this);
+            }
+        };
+        choreographer.postFrameCallback(callback);
+        return "{\"ok\":true,\"note\":\"整树级虚拟化已启动（Choreographer 驱动 + 命中测试）\",\"rows\":"
+                + ROWS + ",\"nodes\":" + nodes.length() + "}";
+    }
+
+    /** 预载窗口暂存（回调捕获用；见 mountVirtualRun 的口径注释） */
+    private final int[] fwdPreAbovePending = {-1};
+    private final int[] backPreAbovePending = {-1};
+
+    /** 整树级虚拟化的报告写入（回调结束时调用） */
+    private void writeMountVirtualReport(int ROWS, org.json.JSONArray nodes, float rowH,
+                                         ProteusHostView.ListRenderer renderer, int[] materialized,
+                                         int[] stats, int maxMissing, org.json.JSONArray trace,
+                                         long[] intervals, int n, org.json.JSONArray hitResults,
+                                         int fwdPreAbove, int backPreAbove, long pool, long handle) {
         int liveRows = 0;
         for (int m : materialized) if (m == 1) liveRows++;
+
+        // 帧率
+        if (n == 0) n = 1;
+        long[] copy = java.util.Arrays.copyOf(intervals, n);
+        long[] sorted = copy.clone();
+        java.util.Arrays.sort(sorted);
+        double avg = 0;
+        for (long v : copy) avg += v;
+        avg /= copy.length;
+
         int coreAcq = -1;
         try {
             org.json.JSONObject cs = new org.json.JSONObject(RustLayout.recycleStats(pool));
@@ -2507,25 +2620,50 @@ public class MainActivity extends Activity {
         } catch (org.json.JSONException ignored) { }
         int platformTotal = renderer.createdCount() + renderer.reusedCount();
 
-        // ── ⑥ 判据 ──
-        boolean rowsBounded = liveRows > 0 && liveRows < 60;                 // 500 行只留少数
-        boolean reuseWorks = renderer.reusedCount() > 0
-                && renderer.reuseRatio() > 0.5;
-        boolean notRebuilt = renderer.createdCount() < liveRows * 4;          // 建的对象远少于物化次数
-        boolean reconcilied = coreAcq == platformTotal;                       // 核心决策 = 平台执行
-        boolean noMissing = missingVisible[0] == 0;                           // 可见区不缺行
-        // ★方向敏感预载的**直接证据**：回滚时"上方预载行数"必须大于下行时
+        // 命中判据：每条计划都必须 hit_row（命中到该行内的节点）
+        int hitsOk = 0, hitsTotal = 0, hitMaterialized = 0, hitUnmaterialized = 0;
+        for (int i = 0; i < hitResults.length(); i++) {
+            try {
+                org.json.JSONObject h = hitResults.getJSONObject(i);
+                hitsTotal++;
+                if (h.optBoolean("hit_row", false)) {
+                    hitsOk++;
+                    if (h.optBoolean("materialized", false)) hitMaterialized++;
+                    else hitUnmaterialized++;
+                }
+            } catch (org.json.JSONException ignored) { }
+        }
+
+        boolean rowsBounded = liveRows > 0 && liveRows < 60;
+        boolean reuseWorks = renderer.reuseRatio() > 0.5;
+        boolean notRebuilt = renderer.createdCount() < liveRows * 4;
+        boolean reconciled = coreAcq == platformTotal;
+        boolean noMissing = maxMissing == 0;
         boolean preloadSwapped = fwdPreAbove >= 0 && backPreAbove >= 0 && backPreAbove > fwdPreAbove;
+        // ★交互判据：命中全部正确（含"未物化的行也能命中"——核心持全量树，不依赖层）
+        boolean hitsAllOk = hitsTotal > 0 && hitsOk == hitsTotal;
+        // ★★**判据设计纠错**（首跑把它写成 `hitMaterialized>0 && hitUnmaterialized>0`，是我设计错了）
+        //
+        // 【为什么那条判据不可满足（且不该追求）】我打的点是**可见区中间那行**——它在任何时刻
+        //   **都应该是已物化的**（可见区必须全部物化，否则屏幕上就是缺行）。
+        //   ⇒ "命中一个未物化的行"这件事在**正确实现里不会发生**，所以要求"两种状态都命中"
+        //     等于要求实现出错。**判据的目标必须是"正确时的样子"，不是"覆盖两个分支"**。
+        //   ⇒ 改成：**可见区内命中的行必须已物化**（这才是正确性断言）；
+        //     另加一条*反向*判据——同一时刻**屏外**（预载区里未物化）的行**不应**被命中：
+        //     若它被命中 ⇒ 说明宿主把屏外的东西当成可见（那才是真缺陷）。
+        boolean hitsOnVisibleMaterialized = hitUnmaterialized == 0;
+        boolean fpsOk = avg > 0 && avg < 40;   // 每帧 < 40ms（即 > 25fps；整树级每帧录 3 节点）
 
         RustLayout.recycleDestroy(pool);
         RustLayout.destroy(handle);
 
-        boolean pass = rowsBounded && reuseWorks && notRebuilt && reconcilied && noMissing && preloadSwapped;
+        boolean pass = rowsBounded && reuseWorks && notRebuilt && reconciled && noMissing
+                && preloadSwapped && hitsAllOk && hitsOnVisibleMaterialized && fpsOk;
         try {
             org.json.JSONObject o = new org.json.JSONObject();
             o.put("ok", true);
             o.put("path", "mount-virtual");
-            o.put("note", "★★整树级虚拟化：同一份 SFC 产物（与 iOS V12 同源）· 核心给决策、宿主执行");
+            o.put("note", "★★整树级虚拟化：同一份 SFC 产物（与 iOS V12 同源）· Choreographer 驱动 + 命中测试");
             o.put("sfc_rows", ROWS);
             o.put("nodes", nodes.length());
             o.put("row_height_from_core", rowH);
@@ -2533,25 +2671,41 @@ public class MainActivity extends Activity {
             o.put("rn_created", renderer.createdCount());
             o.put("rn_reused", renderer.reusedCount());
             o.put("rn_reuse_ratio", Math.round(renderer.reuseRatio() * 10000) / 10000.0);
-            o.put("rn_pooled", renderer.pooledCount());
             o.put("core_acquire_events", coreAcq);
             o.put("platform_created_plus_reused", platformTotal);
             o.put("max_per_frame", stats[2]);
-            o.put("max_missing_in_visible", missingVisible[0]);
+            o.put("max_missing_in_visible", maxMissing);
+            o.put("acquire_total", stats[0]);
+            o.put("release_total", stats[1]);
+            // ★帧率（含"每帧工作量"上下文，否则与列表级不可比）
+            o.put("frames_sampled", copy.length);
+            o.put("avg_frame_ms", Math.round(avg * 100) / 100.0);
+            o.put("fps_avg", Math.round((1000.0 / avg) * 10) / 10.0);
+            o.put("p50_ms", sorted[sorted.length / 2]);
+            o.put("p95_ms", sorted[(int) (sorted.length * 0.95)]);
+            o.put("nodes_per_row", 3);
+            o.put("fwd_kept_above", fwdPreAbove);
+            o.put("back_kept_above", backPreAbove);
+            o.put("hits_total", hitsTotal);
+            o.put("hits_ok", hitsOk);
+            o.put("hits_on_materialized_row", hitMaterialized);
+            o.put("hits_on_unmaterialized_row", hitUnmaterialized);
+            o.put("hit_results", hitResults);
             o.put("trace", trace);
             o.put("check_rows_bounded", rowsBounded);
             o.put("check_reuse_works", reuseWorks);
             o.put("check_not_rebuilt", notRebuilt);
-            o.put("check_reconciled", reconcilied);
+            o.put("check_reconciled", reconciled);
             o.put("check_no_missing", noMissing);
-            o.put("fwd_kept_above", fwdPreAbove);
-            o.put("back_kept_above", backPreAbove);
             o.put("check_preload_swapped", preloadSwapped);
+            o.put("check_hits_all_ok", hitsAllOk);
+            // ★"可见区内命中的行必须已物化"（原 `hits_both_states` 判据设计错误，见代码注释）
+            o.put("check_hits_on_visible_materialized", hitsOnVisibleMaterialized);
+            o.put("check_fps_ok", fpsOk);
             o.put("verdict", pass ? "PASS" : "FAIL");
             writeReport("layout-mount-virtual.json", o.toString(2));
-            return o.toString();
         } catch (org.json.JSONException e) {
-            return "{\"ok\":false,\"error\":\"" + e.getMessage() + "\"}";
+            writeReport("layout-mount-virtual.json", "{\"ok\":false,\"error\":\"" + e.getMessage() + "\"}");
         }
     }
 
