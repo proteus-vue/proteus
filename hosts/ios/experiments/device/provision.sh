@@ -10,7 +10,13 @@
 # 用法：bash hosts/ios/experiments/device/provision.sh [bundle-id] [team-id]
 set -euo pipefail
 
-BUNDLE_ID="${1:-dev.proteus.experiments}"
+# ★解析可用的 Xcode（devicectl/xcodebuild 只在完整 Xcode 里；本机 Xcode 在非默认位置）
+#   详见 hosts/ios/lib/xcode-env.sh —— 导出 DEVELOPER_DIR，免去每次手工指定。
+source "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/../../lib/xcode-env.sh"
+
+# ★默认值已更新（2026-09-28）：旧包名/旧团队属 F4R3P3L477，其签名证书私钥已丢且
+#   bundle id 已在 Apple 侧登记（免费团队不可复用）⇒ 改用新团队 XKH568R7A5 的包名。
+BUNDLE_ID="${1:-cn.shxuxi.proteus.experiments}"
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 WORK="$HERE/.provision-work"
 DEVICE="$(xcrun devicectl list devices 2>/dev/null | grep -vE 'simulated' \
@@ -21,14 +27,20 @@ DEVICE="$(xcrun devicectl list devices 2>/dev/null | grep -vE 'simulated' \
 TEAM="${2:-}"
 if [ -z "$TEAM" ]; then
   # 从 Xcode 偏好里取 Personal Team ID（登录后才有）
+  # ★注意：Xcode 里可能登录了**多个** Apple ID（本机有两个 Personal Team）——
+  #   这里取的是**第一个**，未必是你想要的那个 ⇒ 换账号时请显式传第 2 个参数。
   TEAM="$(defaults read com.apple.dt.Xcode IDEProvisioningTeamByIdentifier 2>/dev/null | grep -oE 'teamID = [A-Z0-9]+' | head -1 | awk '{print $3}')"
+  echo "    ⚠ 未显式指定 team，取到 Xcode 偏好里的第一个：$TEAM（多账号时请显式传参）"
 fi
 [ -n "$TEAM" ] || { echo "✗ 取不到 Team ID——请先在 Xcode → Settings → Accounts 登录 Apple ID"; exit 2; }
 
 echo "==> bundle id=$BUNDLE_ID · team=$TEAM · device=$DEVICE"
 rm -rf "$WORK"; mkdir -p "$WORK/App/App.xcodeproj/xcshareddata/xcschemes" "$WORK/App/Sources"
 
-cat > "$WORK/App/Sources/main.swift" <<'SWIFT'
+# ★文件名**不能叫 main.swift**（本机实测）：Swift 把 main.swift 视为「顶层代码」文件，
+#   与 `@main` 属性冲突 ⇒ 报 "'main' attribute cannot be used in a module that contains
+#   top-level code"，构建必失败（描述文件虽已注册成功，但整个流程报 BUILD FAILED）。
+cat > "$WORK/App/Sources/App.swift" <<'SWIFT'
 import UIKit
 @main final class D: UIResponder, UIApplicationDelegate {
   func application(_ a: UIApplication, didFinishLaunchingWithOptions o: [UIApplication.LaunchOptionsKey: Any]? = nil) -> Bool { true }
@@ -39,7 +51,7 @@ cat > "$WORK/App/App.xcodeproj/project.pbxproj" <<PBX
 // !\$*UTF8*\$!
 {
 	archiveVersion = 1; classes = {}; objectVersion = 56; objects = {
-		A1 = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = main.swift; sourceTree = "<group>"; };
+		A1 = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = App.swift; sourceTree = "<group>"; };
 		A2 = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = App.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		A3 = {isa = PBXGroup; children = (A1); path = Sources; sourceTree = "<group>"; };
 		A4 = {isa = PBXGroup; children = (A3, A5); sourceTree = "<group>"; };
