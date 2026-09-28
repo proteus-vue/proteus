@@ -39,9 +39,13 @@ export CARGO_TARGET_DIR="${CARGO_TARGET_DIR:-$ROOT/spike/target}"
 
 MODE="selfdraw"
 UDID=""
+# ★用例过滤（仅 --bench 有效）：`--cases=S5` 只跑 S5* 用例——定向验证不跑全套
+#   （效率纪律：bench 46 用例整套数分钟，验证单改动通常只需 2–4 个）
+CASE_FILTER=""
 for a in "$@"; do
   case "$a" in
     --bench) MODE="bench" ;;
+    --cases=*) CASE_FILTER="${a#--cases=}" ;;
     *) [ -z "$UDID" ] && UDID="$a" ;;
   esac
 done
@@ -188,7 +192,12 @@ bash "$ROOT/.agents/skills/ai-efficiency-rules/scripts/wait_for.sh" \
 #   设置 → 通用 → VPN与设备管理 → 信任该开发者证书；此步骤无法由脚本代做）。
 LAUNCH_LOG="$(mktemp)"
 if [ "$MODE" = "bench" ]; then
-  xcrun devicectl device process launch --device "$UDID" "$BUNDLE_ID" --bench > "$LAUNCH_LOG" 2>&1 || true
+  # ★用例过滤透传（`--cases=S5` ⇒ 宿主注入 __PROTEUS_CASES__）
+  if [ -n "$CASE_FILTER" ]; then
+    xcrun devicectl device process launch --device "$UDID" "$BUNDLE_ID" --bench "--cases=${CASE_FILTER}" > "$LAUNCH_LOG" 2>&1 || true
+  else
+    xcrun devicectl device process launch --device "$UDID" "$BUNDLE_ID" --bench > "$LAUNCH_LOG" 2>&1 || true
+  fi
 else
   xcrun devicectl device process launch --device "$UDID" "$BUNDLE_ID" > "$LAUNCH_LOG" 2>&1 || true
 fi
@@ -207,6 +216,12 @@ mkdir -p "$HERE/results"
 REPORT_FILE="selfdraw-report.json"
 SNAP_FILE="selfdraw-final.png"
 if [ "$MODE" = "bench" ]; then REPORT_FILE="logic-bench-report.json"; SNAP_FILE="bench-final.png"; fi
+# ★过滤跑写独立文件（否则会把全量基准报告覆盖掉——历史读数不可再生）
+if [ -n "$CASE_FILTER" ]; then
+  SLUG="$(printf '%s' "$CASE_FILTER" | tr ',' '_')"
+  REPORT_FILE="bench-filtered-${SLUG}.json"
+  SNAP_FILE="bench-filtered-${SLUG}.png"
+fi
 # ★条件等待：报告必须**比开始时新**才算本次运行完成
 #
 # 【为什么不能用固定 sleep（本仓踩坑）】bench 有 19 个用例、最大 1000 项规模，
@@ -218,6 +233,11 @@ if [ "$MODE" = "bench" ]; then REPORT_FILE="logic-bench-report.json"; SNAP_FILE=
 #   （本仓实测：脚本报「等待 0s」但拿到的其实是上一轮的残留报告）。
 WAITED=0
 TIMEOUT=600
+# ★★等待必须**可见且可归因**（本仓实测：等待循环全程静默 ⇒ 现象是"App 起来了、脚本没输出"，
+#   无从判断在等什么、还要等多久、App 是否还活着）。
+#   同时打印**期望的设备侧文件名**——文件名不匹配是实测踩过的真凶（过滤跑改了取回名、
+#   而 App 仍写旧名 ⇒ 永远取不到 ⇒ 静默等到超时）。
+echo "    等待报告：Documents/${REPORT_FILE}（build_id=${BUILD_ID}）"
 while [ "$WAITED" -lt "$TIMEOUT" ]; do
   xcrun devicectl device copy from --device "$UDID" --domain-type appDataContainer \
     --domain-identifier "$BUNDLE_ID" --source "Documents/$REPORT_FILE" \
@@ -232,15 +252,31 @@ except Exception:
 PYCHK
 )
   if [ "$OK" = "1" ]; then echo "    报告已就绪（build_id=${BUILD_ID}，等待 ${WAITED}s）"; break; fi
+  # 每 30s 报一次进度 + **App 活性**（若 App 已退出而报告仍未出 ⇒ 不是"还在跑"，是出错/闪退）
+  if [ $((WAITED % 30)) -eq 0 ]; then
+    if xcrun devicectl device info processes --device "$UDID" 2>/dev/null | grep -q ProteusSelfDraw; then
+      APP_STATE="App 运行中"
+    else
+      APP_STATE="⚠ App 已不在运行（报告仍未出 ⇒ 查设备日志，不是在跑）"
+    fi
+    echo "      已等待 ${WAITED}s/${TIMEOUT}s · ${APP_STATE}"
+  fi
   sleep 5
   WAITED=$((WAITED + 5))
 done
 if [ "$WAITED" -ge "$TIMEOUT" ]; then echo "    ⚠ 等待超时（${TIMEOUT}s）——报告仍未含本次 build_id"; fi
 
+# ★截图与报告分开处理：报告缺 = 硬失败（要显眼）；截图缺 = 常见且无害
+#   （bench 模式本就不产 PNG ⇒ 原实现对 PNG 也 print `ERROR: error 7000`，
+#    读日志的人会以为整轮失败——**噪声信号与真失败混在一起是本仓明令禁止的**）
 for f in "$REPORT_FILE" "$SNAP_FILE"; do
-  xcrun devicectl device copy from --device "$UDID" --domain-type appDataContainer \
+  LAST=$(xcrun devicectl device copy from --device "$UDID" --domain-type appDataContainer \
     --domain-identifier "$BUNDLE_ID" --source "Documents/$f" \
-    --destination "$HERE/results/$f" 2>&1 | tail -1 || true
+    --destination "$HERE/results/$f" 2>&1 | tail -1 || true)
+  case "$f" in
+    *.png) [ -f "$HERE/results/$f" ] || echo "    （无截图：$f —— bench 模式属正常）" ;;
+    *) [ -f "$HERE/results/$f" ] || echo "    ⚠ 报告未取到：$LAST" ;;
+  esac
 done
 echo "    报告：$HERE/results/$REPORT_FILE"
 [ -f "$HERE/results/$REPORT_FILE" ] && python3 -c "

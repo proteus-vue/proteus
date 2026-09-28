@@ -536,16 +536,26 @@ pub(crate) struct TreeEntry {
     ///   ⇒ 宿主对 4003 条做排序/可见性过滤 ⇒ `layers` 从 0.06ms **涨到 4.38ms**。
     ///   ⇒ 语义必须与 JSON 路径一致：**只返回重排范围内**的矩形。
     pub(crate) last_scopes: Vec<u32>,
+    /// ★★**文本度量表**（节点 id → 尺寸）——由宿主在 `create` 时注入
+    ///
+    /// 【为什么必须随句柄保存（本仓实测的**静默错几何**缺陷）】文本尺寸不在 style 里，
+    ///   而增量重排会**重新度量**范围内的文本叶子（新引擎 ⇒ 度量缓存是空的）。
+    ///   此前增量路径用 `NullTextMeasurer`（恒零尺寸）⇒ **任何范围含文本的增量更新
+    ///   都会把文本塌成 0 高**（现象：文字消失；首帧正确、更新后错，静态用例发现不了）。
+    ///   实测：`增量重排后文本高 0.0（应 19）`。
+    ///   ⇒ 度量表必须**随句柄持久化**，并供所有重排引擎使用（update / splice / apply_ops）。
+    ///   ★注入新文本的度量走 `proteus_layout_set_text_measures`（或 splice 的 textMeasures）。
+    pub(crate) measures: std::collections::HashMap<u32, Size>,
 }
 
 impl TreeEntry {
-    fn new(tree: LayoutTree) -> Self {
+    fn new(tree: LayoutTree, measures: std::collections::HashMap<u32, Size>) -> Self {
         let mut id_to_idx = std::collections::HashMap::with_capacity(tree.len());
         for (i, n) in tree.nodes.iter().enumerate() {
             id_to_idx.insert(n.id, i as u32);
         }
         Self {
-            last_scopes: Vec::new(), tree, id_to_idx }
+            last_scopes: Vec::new(), measures, tree, id_to_idx }
     }
 }
 
@@ -580,7 +590,7 @@ pub unsafe extern "C" fn proteus_layout_create(request_json: *const c_char) -> u
         engine.layout(&mut tree, constraint);
         let handle = NEXT_HANDLE.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
         registry().lock().map_err(|_| "注册表锁失败".to_string())?
-            .insert(handle, TreeEntry::new(tree));
+            .insert(handle, TreeEntry::new(tree, measure_map(&req)));
         Ok(handle)
     });
     match r {
@@ -640,10 +650,13 @@ pub unsafe extern "C" fn proteus_layout_rects(handle: u64) -> *mut c_char {
 /// 【返回】`{ ok, applied, relayout_count, measure_calls, measure_hits }`
 ///   `relayout_count` 是**增量效果的直接读数**（对齐 M1 的 T1/T4 口径）。
 ///
-/// 【★诚实边界（不可当已验证）】本入口**不带文本度量表**（度量用 `NullTextMeasurer`
-///   即零尺寸）⇒ 适用「纯样式变更」场景（改宽高 / 间距 / flex / display）。
-///   若补丁改了**文本字面量或影响换行的宽度约束**，度量应由宿主重新注入——
-///   该扩展（带 `textMeasures` 的 update）尚未实现，需要时再补，**不要假装它已支持**。
+/// 【★度量语义（2026-09-28 修）】本入口的重排引擎**使用句柄持有的度量表**
+///   （建树时注入 + `proteus_layout_set_text_measures` / splice 的 `textMeasures` 追加）。
+///   ⇒ 范围内**既有**文本的尺寸保持正确（此前用 `NullTextMeasurer` ⇒ 文本塌成 0 高，
+///      属**静默错几何**：本仓实测「增量重排后文本高 0.0（应 19）」，见 `TreeEntry::measures`）。
+///   ⚠ 仍存的边界：**改了文本字面量**时，度量表里是该节点**旧文本**的尺寸 ⇒
+///     宿主须在该次 update 前调 `proteus_layout_set_text_measures` 注入新尺寸
+///     （否则用旧尺寸算：不崩、不塌，但几何偏）。这是**显式接口**，不是隐式猜测。
 ///
 /// # Safety
 /// 返回指针须用 `proteus_layout_free_string` 释放。
@@ -660,6 +673,9 @@ pub unsafe extern "C" fn proteus_layout_update(handle: u64, patches_json: *const
         let mut reg = registry().lock().map_err(|_| "注册表锁失败".to_string())?;
         let entry = reg.get_mut(&handle).ok_or_else(|| format!("句柄 {handle} 不存在"))?;
         let t_lock = t_start.elapsed().as_secs_f64() * 1000.0;
+        // ★度量表**先取出来**：下面 `tree` 要可变借用 `entry`，届时不能再借它的字段
+        //   （见 TreeEntry::measures——无它则文本在增量重排后塌成 0 高）
+        let measures = entry.measures.clone();
         let t_idmap0 = std::time::Instant::now();
         // ★直接借用**缓存的** id→索引表（建树时已建好）
         //   初版每次重建（O(n)）—— 实测 20501 节点 3.14ms，而真正重排仅 0.15ms ⇒ 95% 白花
@@ -706,7 +722,9 @@ pub unsafe extern "C" fn proteus_layout_update(handle: u64, patches_json: *const
             e.relayout_scope_of(tree, dirty)
         };
         let t_eng0 = std::time::Instant::now();
-        let mut engine = TaffyEngine::new().with_measurer(Box::new(crate::engine::NullTextMeasurer));
+        // ★用**句柄持有的度量表**（见 TreeEntry::measures：无它则文本在增量后塌成 0 高）
+        let mut engine = TaffyEngine::new()
+            .with_measurer(Box::new(TableTextMeasurer::new(measures)));
         let out = engine.layout_incremental(tree, dirty);
         let t_engine_new = t_eng0.elapsed().as_secs_f64() * 1000.0;
 
@@ -927,7 +945,7 @@ pub unsafe extern "C" fn proteus_layout_create_blob(ptr: *const u8, len: u32) ->
         engine.layout(&mut tree, constraint);
         let handle = NEXT_HANDLE.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
         registry().lock().map_err(|_| "注册表锁失败".to_string())?
-            .insert(handle, TreeEntry::new(tree));
+            .insert(handle, TreeEntry::new(tree, measure_map(&req)));
         Ok(handle)
     });
     match r {
@@ -1189,14 +1207,22 @@ pub(crate) fn run_conformance(raw: &str) -> Result<String, String> {
     serde_json::to_string(&report).map_err(|e| format!("报告序列化失败：{e}"))
 }
 
-fn to_measurer(req: &LayoutRequest) -> TableTextMeasurer {
-    let mut t = TableTextMeasurer::default();
+/// 请求里的 `textMeasures`（字符串 id → 尺寸）→ **id 化的度量表**
+///
+/// ★为什么要有 id 化的那份：度量表要**随句柄持久化**（见 `TreeEntry::measures`），
+///   而 `LayoutRequest` 的形态是字符串键（JSON 天然如此）。
+fn measure_map(req: &LayoutRequest) -> std::collections::HashMap<u32, Size> {
+    let mut m = std::collections::HashMap::with_capacity(req.text_measures.len());
     for (k, v) in &req.text_measures {
         if let Ok(id) = k.parse::<u32>() {
-            t.set(id, Size { width: v.width, height: v.height });
+            m.insert(id, Size { width: v.width, height: v.height });
         }
     }
-    t
+    m
+}
+
+fn to_measurer(req: &LayoutRequest) -> TableTextMeasurer {
+    TableTextMeasurer::new(measure_map(req))
 }
 
 #[derive(serde::Serialize)]
@@ -1329,6 +1355,15 @@ pub(crate) struct SpliceRequest {
     /// 要插入的块（每个块 = 一棵平铺的子树 + 落点）
     #[serde(default)]
     pub(crate) inserts: Vec<SpliceInsert>,
+    /// ★**新增文本的度量**（节点 id → 尺寸）——宿主度量后随请求注入
+    ///
+    /// 【为什么必须在请求里带上（本仓实测的静默错几何缺陷）】插入的行**必然含文本**，
+    ///   而文本尺寸只能由宿主度量（CoreText/StaticLayout）。若不带 ⇒ 新文本无度量。
+    ///   本字段有两件事要同时做：① 供本次重排度量，② **并入句柄的度量表**——
+    ///   之后任何增量重排（update / apply_ops / 再次 splice）才能继续量到它。
+    ///   实测症状（不带时）：新插入行的文本高 0 ⇒ 文字不可见，而几何报告里"结构对了"。
+    #[serde(default)]
+    pub(crate) text_measures: std::collections::HashMap<String, SizeDto>,
 }
 
 #[derive(serde::Deserialize)]
@@ -1384,6 +1419,8 @@ pub unsafe extern "C" fn proteus_layout_splice(handle: u64, splice_json: *const 
             while let Some(i) = stack.pop() {
                 let nid = entry.tree.get(i).id;
                 entry.id_to_idx.remove(&nid);
+                // ★度量条目一并清（节点已不在树上 ⇒ 留着是纯泄漏；且若未来 id 复用会串味）
+                entry.measures.remove(&nid);
                 for &c in &entry.tree.get(i).children.clone() {
                     stack.push(c);
                 }
@@ -1473,11 +1510,20 @@ pub unsafe extern "C" fn proteus_layout_splice(handle: u64, splice_json: *const 
         }
 
         // ── ③ 重排（复用多范围增量；无脏节点则跳过）──
+        //
+        // ★★度量表：① 先并入请求带来的新文本度量（插入的行必然含文本——
+        //   见 SpliceRequest::text_measures 的实测记录），② 再交给重排引擎，
+        //   否则新文本与本范围里的既有文本都会被塌成 0 高。
+        for (k, v) in &req.text_measures {
+            if let Ok(id) = k.parse::<u32>() {
+                entry.measures.insert(id, Size { width: v.width, height: v.height });
+            }
+        }
         let t_rel0 = std::time::Instant::now();
         let multi = if dirty_roots.is_empty() {
             crate::ops_apply::MultiRelayout::default()
         } else {
-            crate::ops_apply::relayout_multi(&mut entry.tree, &dirty_roots)
+            crate::ops_apply::relayout_multi_with_measures(&mut entry.tree, &dirty_roots, &entry.measures)
         };
         let t_rel = t_rel0.elapsed().as_secs_f64() * 1000.0;
         entry.last_scopes = if multi.scopes.is_empty() { dirty_roots.clone() } else { multi.scopes.clone() };
@@ -1514,6 +1560,51 @@ pub unsafe extern "C" fn proteus_layout_splice(handle: u64, splice_json: *const 
     }
 }
 
+/// ★★**注入/更新文本度量**（节点 id → 尺寸）——宿主在文本**内容或字体变化后**调用
+///
+/// 【为什么必须有这个通道（本仓实测的闭环缺口）】文本尺寸只能由宿主度量（CoreText /
+///   StaticLayout），而核心的度量表在建树时注入一次。此后：
+///   · **结构变化**（插入含文本的行）→ splice 的 `textMeasures` 覆盖；
+///   · **文本字面量变化** → 此前**无任何通道** ⇒ 核心要么用旧尺寸（几何偏），
+///     要么（修复前）用零尺寸（文字塌成 0 高）。
+///   ⇒ 本入口补上这一环：宿主度量后推入，**不触发重排**（几何要等随后的
+///     update/apply_ops 标脏才重算——度量与布局解耦，避免双重 reflow）。
+///
+/// 入参：`{"12":{"width":80.5,"height":19},"13":{...}}`（id 字符串键，与 create 的 textMeasures 同形）
+///
+/// # Safety
+/// `measures_json` 须为有效 NUL 结尾 C 字符串；返回指针须用 `proteus_layout_free_string` 释放。
+#[no_mangle]
+pub unsafe extern "C" fn proteus_layout_set_text_measures(handle: u64, measures_json: *const c_char) -> *mut c_char {
+    let r = std::panic::catch_unwind(|| -> Result<String, String> {
+        if measures_json.is_null() {
+            return Err("measures_json 为空指针".into());
+        }
+        let raw = unsafe { CStr::from_ptr(measures_json) }.to_str().map_err(|e| format!("入参非 UTF-8：{e}"))?;
+        let map: std::collections::HashMap<String, SizeDto> =
+            serde_json::from_str(raw).map_err(|e| format!("度量表解析失败：{e}"))?;
+        let mut reg = registry().lock().map_err(|_| "注册表锁失败".to_string())?;
+        let entry = reg.get_mut(&handle).ok_or_else(|| format!("句柄 {handle} 不存在"))?;
+        let mut updated = 0usize;
+        for (k, v) in &map {
+            if let Ok(id) = k.parse::<u32>() {
+                entry.measures.insert(id, Size { width: v.width, height: v.height });
+                updated += 1;
+            }
+        }
+        Ok(serde_json::json!({"ok": true, "updated": updated, "total": entry.measures.len()}).to_string())
+    });
+    match r {
+        Ok(Ok(s)) => CString::new(s).map(|c| c.into_raw()).unwrap_or(std::ptr::null_mut()),
+        Ok(Err(e)) => CString::new(serde_json::json!({"ok": false, "error": e}).to_string())
+            .map(|c| c.into_raw())
+            .unwrap_or(std::ptr::null_mut()),
+        Err(_) => CString::new(serde_json::json!({"ok": false, "error": "内部 panic（已捕获）"}).to_string())
+            .map(|c| c.into_raw())
+            .unwrap_or(std::ptr::null_mut()),
+    }
+}
+
 /// 内部实现：`with_rects=false` 时**不收集也不序列化**矩形（V4 二进制通道下宿主不需要它）
 ///
 /// 【为什么必须能省（本仓实测）】v4 模式下宿主改用二进制取矩形，但 JSON 返回体里若仍带
@@ -1530,6 +1621,8 @@ fn apply_ops_impl(handle: u64, ptr: *const u8, len: u32, with_rects: bool) -> Re
     let mut reg = registry().lock().map_err(|_| "注册表锁失败".to_string())?;
     let entry = reg.get_mut(&handle).ok_or_else(|| format!("句柄 {handle} 不存在"))?;
     let t_lock = t0.elapsed().as_secs_f64() * 1000.0;
+    // ★度量表借用**提前取**（下面 tree 要可变借用 entry；见 TreeEntry::measures）
+    let measures = entry.measures.clone();
 
     let t_apply0 = std::time::Instant::now();
     let outcome = crate::ops_apply::apply_ops_to_tree(&mut entry.tree, &dec);
@@ -1552,7 +1645,8 @@ fn apply_ops_impl(handle: u64, ptr: *const u8, len: u32, with_rects: bool) -> Re
     }
 
     let t_rel0 = std::time::Instant::now();
-    let multi = crate::ops_apply::relayout_multi(&mut entry.tree, &outcome.dirty);
+    // ★带句柄的度量表（V3 主路径：真实场景含文本，度量丢失 ⇒ 文字塌成 0 高）
+    let multi = crate::ops_apply::relayout_multi_with_measures(&mut entry.tree, &outcome.dirty, &measures);
     let t_rel = t_rel0.elapsed().as_secs_f64() * 1000.0;
     // ★引擎内部分段（copy/build/solve/writeback）——「先测量再优化」的依据
     let eng_phases = crate::ops_apply::last_relayout_phases();
@@ -2190,6 +2284,105 @@ mod tests {
             proteus_layout_free_string(p);
             serde_json::from_str(&s).unwrap()
         }
+    }
+
+    /// ★★**度量连续性**：增量重排（update / splice）后，**文本节点的尺寸必须仍来自度量表**
+    ///
+    /// 【为什么必须有这条判据（本仓实测的架构缺口）】文本尺寸**不在 style 里**——它由宿主
+    ///   注入的 `textMeasures` 表在 `create` 时供 `TableTextMeasurer` 使用。
+    ///   而增量路径（`relayout_multi`）**新建引擎时用的是 `NullTextMeasurer`**：
+    ///   若重排范围里含文本叶子，它会**重新度量**（新引擎 ⇒ 缓存是空的）——
+    ///   于是文本塌成 0 高。现象：**几何报告里文本高 0，CATextLayer 的 frame 高 0 ⇒ 文字消失**，
+    ///   且只在"更新后"出现（首帧正确）⇒ 静态用例完全发现不了。
+    ///   ⇒ 本测试用**度量相关的树**（文本无声明尺寸）暴露它：把增量结果与
+    ///     「同一结构 + 同一度量表」的全量结果逐节点比对。
+    #[test]
+    fn incremental_relayout_preserves_text_measure() {
+        // 树：根（column）→ 行（row，height 50）→ 文本（无尺寸，只能靠度量 ⇒ 100×19）
+        let tree = serde_json::json!({
+            "viewport": {"width": 375.0, "height": 800.0},
+            "nodes": [
+                {"id":1,"parentId":null,"flexDirection":"column","width":375.0,"height":800.0},
+                {"id":100,"parentId":1,"flexDirection":"row","alignItems":"flex-start","width":343.0,"height":50.0,"flexShrink":0.0},
+                {"id":101,"parentId":100,"text":"hello"}
+            ],
+            "textMeasures": {"101": {"width": 100.0, "height": 19.0}}
+        });
+        let handle = unsafe {
+            let c = CString::new(tree.to_string()).unwrap();
+            proteus_layout_create(c.as_ptr())
+        };
+        assert_ne!(handle, 0);
+        let before = rects_of(handle);
+        assert_eq!(before["rects"]["101"]["height"].as_f64(), Some(19.0), "首帧：文本高应来自度量表");
+
+        // 改行高（触发增量重排；重排范围 = 行 ⇒ 范围内含文本叶子）
+        let patches = serde_json::json!([{ "id": 100, "style": { "height": 60.0 } }]);
+        let out = unsafe {
+            let c = CString::new(patches.to_string()).unwrap();
+            let p = proteus_layout_update(handle, c.as_ptr());
+            let s = CStr::from_ptr(p).to_str().unwrap().to_string();
+            proteus_layout_free_string(p);
+            serde_json::from_str::<serde_json::Value>(&s).unwrap()
+        };
+        assert_eq!(out["ok"], true, "update 应成功：{out}");
+
+        let after = rects_of(handle);
+        // ★判据：文本高**必须仍是 19**（增量重排不得把度量丢成 0）
+        let h = after["rects"]["101"]["height"].as_f64();
+        assert_eq!(
+            h, Some(19.0),
+            "★增量重排后文本高 {h:?}（应 19）——度量表在增量引擎里丢失（NullTextMeasurer）⇒ 文字会消失"
+        );
+        // 对照：同一结构 + 同一度量表，**全量**建树的文本高
+        let fresh = unsafe {
+            let c = CString::new(tree.to_string()).unwrap();
+            proteus_layout_create(c.as_ptr())
+        };
+        let f = rects_of(fresh);
+        assert_eq!(f["rects"]["101"]["height"].as_f64(), Some(19.0), "对照（全量）应是 19");
+        unsafe { proteus_layout_destroy(handle) };
+        unsafe { proteus_layout_destroy(fresh) };
+    }
+
+    /// ★★**结构变更后的度量连续性**：splice 插入的行**含文本**时，其文本尺寸仍需正确
+    ///
+    /// 【与上一条的关系】上一条覆盖"样式增量"；本条覆盖**增删行的真实形态**——
+    ///   真实列表行**必然含文本**（`列表项 N`），而 splice 的落点判定/重排路径与 update 不同。
+    #[test]
+    fn splice_insert_row_with_text_keeps_measure() {
+        let tree = serde_json::json!({
+            "viewport": {"width": 375.0, "height": 800.0},
+            "nodes": [
+                {"id":1,"parentId":null,"flexDirection":"column","width":375.0,"height":800.0},
+                {"id":100,"parentId":1,"flexDirection":"row","alignItems":"flex-start","width":343.0,"height":50.0,"flexShrink":0.0},
+                {"id":101,"parentId":100,"text":"row0"}
+            ],
+            "textMeasures": {"101": {"width": 60.0, "height": 19.0}}
+        });
+        let handle = unsafe {
+            let c = CString::new(tree.to_string()).unwrap();
+            proteus_layout_create(c.as_ptr())
+        };
+        assert_ne!(handle, 0);
+        // 追加一行（含文本 201，度量 60×19）
+        let out = splice(
+            handle,
+            serde_json::json!({
+                "inserts": [{
+                    "parentId": 1,
+                    "nodes": [
+                        {"id": 200, "parentId": 1, "flexDirection": "row", "alignItems": "flex-start", "width": 343.0, "height": 50.0, "flexShrink": 0.0},
+                        {"id": 201, "parentId": 200, "text": "row1"}
+                    ]
+                }],
+                "textMeasures": {"201": {"width": 60.0, "height": 19.0}}
+            }),
+        );
+        assert_eq!(out["ok"], true, "splice 应成功：{out}");
+        let after = rects_of(handle);
+        assert_eq!(after["rects"]["201"]["height"].as_f64(), Some(19.0), "插入行的文本高应为 19（来自度量）");
+        unsafe { proteus_layout_destroy(handle) };
     }
 
     /// ★★核心判据：**splice 后的几何 == 从头全量建树（含新结构）的几何**

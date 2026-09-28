@@ -326,7 +326,22 @@ pub fn last_relayout_phases() -> serde_json::Value {
         .unwrap_or(serde_json::Value::Null)
 }
 
+/// ★多范围增量重排（**无文本度量**——仅用于无文本场景/测试）
+///
+/// ⚠ 含文本的树**必须**用 `relayout_multi_with_measures`：本入口的引擎度量恒为 0
+///   ⇒ 范围里的文本叶子会被塌成 0 高（静默错几何，见 `TreeEntry::measures` 的实测记录）。
 pub fn relayout_multi(tree: &mut LayoutTree, dirty: &[u32]) -> MultiRelayout {
+    relayout_multi_with_measures(tree, dirty, &std::collections::HashMap::new())
+}
+
+/// ★★多范围增量重排（**带文本度量表**——生产路径的唯一正确姿势）
+///
+/// @param measures 节点 id → 文本尺寸（宿主在 create 时注入并由句柄持有）
+pub fn relayout_multi_with_measures(
+    tree: &mut LayoutTree,
+    dirty: &[u32],
+    measures: &std::collections::HashMap<u32, crate::style::Size>,
+) -> MultiRelayout {
     let eng = TaffyEngine::new();
 
     // ① 每个脏节点 → 它所属的重排范围
@@ -365,7 +380,9 @@ pub fn relayout_multi(tree: &mut LayoutTree, dirty: &[u32]) -> MultiRelayout {
         pairs.push((eng.relayout_scope_of(tree, d), d));
     }
     let mut out = MultiRelayout { scopes: kept.clone(), ..Default::default() };
-    let mut engine = TaffyEngine::new().with_measurer(Box::new(crate::engine::NullTextMeasurer));
+    // ★★引擎必须带**宿主的度量表**（本仓实测的静默错几何缺陷：NullTextMeasurer ⇒ 文本塌成 0）
+    let mut engine = TaffyEngine::new()
+        .with_measurer(Box::new(crate::engine::TableTextMeasurer::new(measures.clone())));
     for sc in kept {
         let Some(&(_, d)) = pairs.iter().find(|(s, _)| *s == sc) else { continue };
         let r = engine.layout_incremental(tree, d);

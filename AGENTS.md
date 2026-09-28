@@ -47,6 +47,20 @@
 - 禁止的三种错误验证法（均实测踩过）：① 轮询 HTML 抓 CSS 哈希（有 CDN 缓存）；
   ② grep 主 bundle 找文档标记（内容在独立 chunk）；③ 资产名已变仍判 old。
 
+### ★★红线：全量测试禁止无目的重复跑（2026-09-28 起有工具级拦截）
+
+- **同代码状态重复跑全量会被拦截**（hook `scripts/hooks/deny-blind-tests.mjs`，配法同 deny-sleep）。
+  触发背景：AI 把 `npx vitest run` 跑了三遍、每遍 ~400s，而**第一遍输出已足够定位**——
+  与 sleep 盲等同源：规则写在 markdown 拦不住，只有工具层门禁是结构性的。
+- **拦**：`npx vitest run`（无文件/名称过滤）与 `pnpm test`（无参数）**且 git 指纹与上次全量相同**。
+- **放行**：① 定向跑（带 `tests/xxx.test.ts` 路径）② `--changed` / `-t <名称>` 等过滤
+  ③ 代码变了（指纹变 ⇒ 自动放行一次并记账）④ 显式表态 `PROTEUS_ALLOW_FULL_SUITE=1 pnpm test`。
+- 自测：`PROTEUS_TEST_HOOK_STATE=/tmp/h.json printf '%s' '{"tool_name":"Bash","tool_input":{"command":"npx vitest run"},"cwd":"'"$PWD"'"}' | node scripts/hooks/deny-blind-tests.mjs`
+  （先跑一次放行并记账，再跑一次应输出 `permissionDecision: deny`）。
+- 另注：`pnpm test` 只跑非 e2e（`--exclude "tests/e2e-*.test.ts"`）；e2e 有专用入口
+  （`test:e2e:web` / `test:e2e:showcase`），**跑它们前必须先建对应产物**——直接裸跑 vitest
+  会环境性红（实测 124 条假失败），白等几百秒。
+
 ## 2. 项目门禁（改代码后按需运行）
 
 ```bash

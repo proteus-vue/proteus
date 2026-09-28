@@ -108,6 +108,17 @@ export interface SelfDrawAdapter extends NativeAdapter {
    *   ⇒ 这是本链路最大的单点优化，且**语义上更正确**（补丁就是"改了什么"，不是"现在是什么"）。
    */
   takePatches(): Array<{ id: number; style: Record<string, unknown> }> | null
+  /**
+   * ★★取走本批次的**结构变更请求**（增删行的增量路径——供 `proteus_layout_splice`）。
+   *
+   * - 返回 `null`      ⇒ 本批无结构变更；
+   * - 返回 `'full-required'` ⇒ 有结构变更但**本通道表达不了**（中间插入 / 既有节点移动）
+   *   ⇒ 调用方**必须走全量**（宁可拒绝，不可静默错序——本仓纪律）。
+   * - 返回 `{removes, inserts}` ⇒ 交给宿主 `splice` 入口（追加/删除的增量路径）。
+   *
+   * ★语义：**自上次取走以来**（取走即复位）——与 `takePatches` 同款（该坑已踩过两次）。
+   */
+  takeSplice(): { removes: number[]; inserts: Array<{ parentId: number; nodes: SelfDrawNodeSpec[] }> } | 'full-required' | null
 }
 
 /** 绘制相关的键（**不进布局核心**——核心只管几何；绘制由宿主的指令流消费） */
@@ -278,26 +289,61 @@ export function createSelfDrawAdapter(): SelfDrawAdapter {
   }
   /** ★本批次内被 patchProp 改过的节点（增量补丁的候选集） */
   const dirty = new Set<object>()
-  /** ★本批次是否发生**结构变化**（增删节点）——结构变化必须走全量（update 入口不收结构） */
+  /** ★本批次是否发生**结构变化**（增删节点）——结构变化必须走全量（update 入口不收样式） */
   let structuralChange = false
+  /**
+   * ★节点 → 当前父（元素另有自带的 `parent` 字段，但**文本节点没有**）
+   *
+   * 【为什么必须有（本仓实测的结构增量前提）】Vue 的 nodeOps 里有两种"移动既有节点"的语义
+   *   （keyed diff 的 `move` 走 `insert`；`setElementText` 整体替换子集）：
+   *   · **移动**：`insert(existingChild, newParent, anchor)` —— 若不先把 child 从**原父**摘掉，
+   *     JS 侧 children 里会**同时出现两份**（本仓实测：reverse 后遍历会发出重复 id）。
+   *   · **替换/删除文本**：`NativeTextNode` **没有 parent 字段** ⇒ 旧实现 `remove(text)` 摘不掉它
+   *     （`parentNodeOf` 只认元素），Rust 侧永远留着旧文本 ⇒ **层与树分叉**。
+   *   ⇒ 用一张弱表记住每个节点当前的父：移动/摘除都能精确摘链，且不挡 GC。
+   */
+  const parentOf = new WeakMap<object, NativeElementNode>()
+  /**
+   * ★本批次是否**移动过既有节点**（keyed diff 的重排）
+   *
+   * 【为什么必须单独记（append-only splice 的表达力边界）】splice 只能表达
+   *   「末尾追加 + 摘除子树」；**既有子节点的顺序变化**表达不了（核心侧数组序 = 布局序）。
+   *   移动在 JS 侧**不新建节点**（createdNodes 为空、removedNodeIds 为空）⇒
+   *   若不单独记，`takeSplice()` 会返回"无结构变更"，而实际顺序已变 ⇒ **静默错序**。
+   *   ⇒ 检测到移动即返回 `'full-required'`（宁可全量，不可静默错序——本仓纪律）。
+   */
+  let movedExisting = false
+  /**
+   * ★★V7：结构变更的**明细**（新建 / 移除的节点）——用于产出 splice 请求
+   *
+   * 【为什么由适配器产出（而不是 SubscriptionTable）】结构指令必须携带**新节点的描述符**
+   *   （tag/style/text）——那是"节点长什么样"的信息，只有**适配器**手里有
+   *   （它持有完整的 NativeElementNode 树）。`SubscriptionTable` 里只有槽位元数据（"哪个槽位对应哪个属性"）
+   *   ⇒ 层次不对。方案 §1.1 的 `LayoutTemplate` 在**编译器**场景下承担此事；
+   *   而运行时（Vue 自定义渲染器）场景下，适配器就是天然的产出点。
+   *
+   * ★含**文本节点**（本仓实测的必须）——Vue 对 `h('p-text', {...}, '文本')` 走
+   *   `hostSetElementText`：**替换**全部子节点。若只记元素不记文本，替换后就是
+   *   "旧文本摘掉、新文本从不插入" ⇒ **文本消失**（几何与结构计数全都正常）。
+   */
+  const createdNodes = new Set<NativeNode>()
+  /** 被移除的节点（其 id 已在树上失效 ⇒ splice 要摘掉它们） */
+  const removedNodeIds = new Set<number>()
   /** ★未知键计数：既不属布局也不属绘制 —— 必须可观测（否则「写了没生效」无从定位） */
   const unknownKeys = new Map<string, number>()
 
   const parentNodeOf = (node: NativeNode): NativeElementNode | null =>
     node.__kind === 'element' ? node.parent : null
 
-  /** 拍平遍历：跳过注释节点（Vue 用注释占位，原生无对应物） */
-  function walk(
-    node: NativeNode,
-    parentId: number | null,
-    viewport: { width: number; height: number },
-    out: SelfDrawNodeSpec[],
-  ): void {
-    if (node.__kind === 'comment') return          // 注释无盒（与 CSS display:none 不同：它压根不产出节点）
-    const id = idFor(node)                         // ★单一分配器（含 root 与未登记节点）
-    const spec: SelfDrawNodeSpec = { id, parentId }
-    const props: Record<string, unknown> =
-      node.__kind === 'element' ? node.props : {}
+  /**
+   * ★★把节点「拍平」成引擎就绪的 `SelfDrawNodeSpec`（**唯一实现**）
+   *
+   * 【为什么要抽出来（本仓实测的动机）】全量（`walk` → `toRequest`）与
+   *   **结构变更增量**（`takeSplice` 的 inserts）都要产出这个规格——两份实现必然分叉
+   *   ⇒ 新插入的行会**样式与全量树不一致**（静默错）。本仓纪律：同一语义一处实现。
+   */
+  function fillSpec(spec: SelfDrawNodeSpec, node: NativeNode): void {
+    const props: Record<string, unknown> = node.__kind === 'element' ? node.props : {}
 
     if (node.__kind === 'text') {
       // ★文本叶子：字面量进 `text`，尺寸由宿主注入度量（核心不自研文本，Profile §L4）
@@ -308,9 +354,9 @@ export function createSelfDrawAdapter(): SelfDrawAdapter {
         : {}
       const ls = foldLength(tStyle.lineHeight ?? props.lineHeight)
       if (ls && 'dp' in ls) spec.height = ls.dp
-      out.push(spec)
       return
     }
+    if (node.__kind !== 'element') return
 
     // ── ★★先展开嵌套的 `style` 对象（本仓既有约定）──
     //
@@ -341,14 +387,23 @@ export function createSelfDrawAdapter(): SelfDrawAdapter {
         if (typeof src === 'string') spec[key] = src
       } else if (typeof src === 'number') {
         spec[key as 'fontSize'] = src
-      } else if (typeof src === 'string') {
-        const f = foldLength(src)
-        if (f && 'dp' in f) spec[key as 'fontSize'] = f.dp
       }
     }
+  }
 
+  /** 拍平遍历：跳过注释节点（Vue 用注释占位，原生无对应物） */
+  function walk(
+    node: NativeNode,
+    parentId: number | null,
+    viewport: { width: number; height: number },
+    out: SelfDrawNodeSpec[],
+  ): void {
+    if (node.__kind === 'comment') return          // 注释无盒（与 CSS display:none 不同：它压根不产出节点）
+    const id = idFor(node)                         // ★单一分配器（含 root 与未登记节点）
+    const spec: SelfDrawNodeSpec = { id, parentId }
+    fillSpec(spec, node)
     out.push(spec)
-    for (const child of node.children) walk(child, id, viewport, out)
+    if (node.__kind === 'element') for (const child of node.children) walk(child, id, viewport, out)
   }
 
   return {
@@ -358,6 +413,7 @@ export function createSelfDrawAdapter(): SelfDrawAdapter {
       const n: NativeElementNode = { __kind: 'element', tag, props: {}, children: [], parent: null }
       idFor(n)
       structuralChange = true      // 新节点 ⇒ 结构变化
+      createdNodes.add(n)          // ★登记（供结构 diff 产出 splice 的 inserts）
       return n
     },
     createText(text: string): NativeTextNode {
@@ -365,6 +421,7 @@ export function createSelfDrawAdapter(): SelfDrawAdapter {
       const n: NativeTextNode = { __kind: 'text', text }
       idFor(n)
       structuralChange = true
+      createdNodes.add(n)          // ★文本也是结构增量的一部分（见 createdNodes 注释）
       return n
     },
     createComment(): NativeCommentNode {
@@ -375,12 +432,35 @@ export function createSelfDrawAdapter(): SelfDrawAdapter {
       patches++
     },
     setElementText(el: NativeElementNode, text: string): void {
+      // ★★被整体替换的既有子节点**必须逐个登记为移除**（本仓实测的静默分叉）
+      //
+      // 【故障链（本仓实测）】Vue 的 `h('p-text', {...}, 'label')` 内容变化走
+      //   `hostSetElementText` ⇒ 本方法把 children 清空换成一个新文本节点。
+      //   而**核心侧的旧子节点仍挂着**（我们没告诉它）⇒ 旧文本层不消失、新文本层叠加
+      //   ⇒ 几何上是"两行字重叠"，而结构计数看起来完全正常。
+      //   ⇒ 纪律：**凡是"从树上拿掉"的动作都必须登记**，无论它是 remove 还是"整体替换"。
+      for (const c of el.children) {
+        if (c.__kind === 'element' || c.__kind === 'text') removedNodeIds.add(idFor(c))
+        parentOf.delete(c)
+      }
       el.children = []
       const t = this.createText(text)
+      parentOf.set(t, el)
       el.children.push(t)
       patches++
     },
     insert(child: NativeNode, parent: NativeElementNode, anchor: NativeNode | null): void {
+      // ★移动检测 + 摘链（见 `movedExisting` / `parentOf` 注释）：
+      //   已挂载过的节点再次 insert = **移动**（append-only splice 表达不了顺序变化）
+      const prevParent = parentOf.get(child) ?? (child.__kind === 'element' ? child.parent : null)
+      if (parentOf.has(child) || (child.__kind === 'element' && child.parent)) {
+        movedExisting = true
+      }
+      if (prevParent) {
+        const pi = prevParent.children.indexOf(child)
+        if (pi >= 0) prevParent.children.splice(pi, 1)
+      }
+      parentOf.set(child, parent)
       if (child.__kind === 'element') child.parent = parent
       if (anchor === null) {
         parent.children.push(child)
@@ -392,15 +472,21 @@ export function createSelfDrawAdapter(): SelfDrawAdapter {
       patches++
     },
     remove(node: NativeNode): void {
-      const parent = parentNodeOf(node)
+      // ★摘链对**所有**节点种类生效（文本节点没有 parent 字段 ⇒ 靠 `parentOf`）
+      const parent = parentOf.get(node) ?? parentNodeOf(node)
       if (parent) {
         const idx = parent.children.indexOf(node)
         if (idx >= 0) parent.children.splice(idx, 1)
       }
+      parentOf.delete(node)
       structuralChange = true
+      // ★登记被移除的**子树根**（核心侧会连同其子孙一起摘除——无需逐个列出子孙）
+      //   注释节点不在核心树里（无 id）⇒ 不登记（登记会凭空分配一个用不到的 id）
+      if (node.__kind === 'element' || node.__kind === 'text') removedNodeIds.add(idFor(node))
       patches++
     },
-    parentNode: parentNodeOf,
+    parentNode: (node: NativeNode): NativeElementNode | null =>
+      parentOf.get(node) ?? parentNodeOf(node),
     patchProp(el: NativeElementNode, key: string, prev: unknown, next: unknown): void {
       // ★事件（onXxx）：自绘管线里事件由**核心命中测试 + 平台手势**承担，
       //   不在本适配器里落树（那需要原始指针几何，见 hit.rs）。这里只计数以便观测。
@@ -436,6 +522,103 @@ export function createSelfDrawAdapter(): SelfDrawAdapter {
       walk(root, null, viewport, nodes)
       return { viewport, nodes }
     },
+    /**
+     * ★★V7：产出**结构变更请求**（供 `proteus_layout_splice`）——增删行的增量路径
+     *
+     * 【为什么值得做（本仓实测的量化依据）】此前结构变化一律**重发整棵树**
+     *   （真机 S5：500→600 项 **230ms**，几乎全是搬运成本）。
+     *   而增删行在长列表里是最常见的交互（加载更多 / 删除一行）。
+     *
+     * 【返回形态】`null` = 无结构变更；否则给出 splice 请求（removes/inserts）。
+     *
+     * 【★只支持**追加**（架构限制的显式暴露）】核心的 `build_taffy` 按 `tree.nodes` 的
+     *   **数组顺序**连父子（忽略 `children` 排列）⇒ 想插到中间必须同时搬数组（O(n)）。
+     *   ⇒ 本函数**检测**新建节点的落点是否都在父的**末尾**：
+     *     · 全是追加 ⇒ 返回 splice 请求（走增量）
+     *     · 含中间插入 ⇒ 返回 `'full-required'`（调用方走全量——**不静默按末尾插**，
+     *       否则行序错且零提示：本仓纪律「宁可拒绝不可静默错」）
+     */
+    takeSplice(): { removes: number[]; inserts: Array<{ parentId: number; nodes: SelfDrawNodeSpec[] }> } | 'full-required' | null {
+      const removed0 = Array.from(removedNodeIds)
+      const created0 = Array.from(createdNodes)
+      const moved = movedExisting
+      removedNodeIds.clear()
+      createdNodes.clear()
+      movedExisting = false
+      structuralChange = false // 结构已由本函数消费
+
+      // ★移动过既有节点 ⇒ append-only 的 splice 表达不了（顺序变化）⇒ 请调用方走全量
+      //   （若本批还有增删，全量同样覆盖它们——不丢信息）
+      if (moved) return 'full-required'
+
+      // ★同批内「既新建又移除」的节点 = 从未上过宿主的树（挂载中就卸掉）⇒ 两边都不提
+      //   （否则 splice 里出现"移除一个核心不认识的 id" ⇒ 报错；或"插入一个马上要删的节点" ⇒ 白建层）
+      const createdSet0 = new Set<NativeNode>(created0)
+      const removedSet0 = new Set<number>(removed0)
+      const created = created0.filter((n) => !removedSet0.has(idFor(n)))
+      const removed = removed0.filter((id) => {
+        const n = created0.find((c) => idFor(c) === id)
+        return n === undefined || !createdSet0.has(n)
+      })
+      if (removed.length === 0 && created.length === 0) return null
+
+      // 无新建 ⇒ 纯删除：可直接走 splice(removes)
+      if (created.length === 0) return { removes: removed, inserts: [] }
+
+      // ★按父分组新建节点，并**校验落点都在末尾**
+      //
+      // 判据：对每个「含新建子节点的父」，新建的那些子必须在 `parent.children` 的**尾部连续段**。
+      //   （新节点被 append 到 children 末尾——若其后还有既有的、不在新建集里的兄弟，
+      //     说明这次是**中间插入** ⇒ 数组序无法表达 ⇒ 走全量。）
+      type Group = { parent: NativeElementNode; kids: NativeNode[] }
+      const createdSet = new Set<NativeNode>(created)
+      const byParent = new Map<NativeElementNode, NativeNode[]>()
+      for (const n of created) {
+        // ★父从**簿记**取（文本节点没有 `parent` 字段——见 parentOf 注释）
+        const p = parentOf.get(n) ?? (n.__kind === 'element' ? n.parent : null)
+        if (!p) continue // 游离节点（新建但未挂载，如 setElementText 之前的中间态）——无落点
+        // ★只取「新建森林」的**根**：祖先也在新建集里的节点由 walkSub 递归带上
+        //   （否则新行里的文本会既被行块带上、又自成一块 ⇒ **重复插入**）
+        if (createdSet.has(p)) continue
+        const arr = byParent.get(p) ?? []
+        arr.push(n)
+        byParent.set(p, arr)
+      }
+      const groups: Group[] = []
+      for (const [parent, kids] of byParent) {
+        const kidsSet = new Set<NativeNode>(kids)
+        // 找到末尾的连续新建段：从尾往前扫，遇到非新建即停
+        let tailStart = parent.children.length
+        while (tailStart > 0 && kidsSet.has(parent.children[tailStart - 1])) {
+          tailStart--
+        }
+        const inTail = parent.children.slice(tailStart)
+        // ★末尾连续段必须恰好等于本次新建的集合；否则被判中间插入
+        if (inTail.length !== kids.length) return 'full-required'
+        groups.push({ parent, kids })
+      }
+      // 有新建但**全无落点**（游离）且无删除 ⇒ 对树无影响（无需发任何结构请求）
+      if (groups.length === 0 && removed.length === 0) return null
+
+      // 生成 inserts：每组的节点子树平铺（**父在前** ⇒ 核心可一遍链接）
+      const inserts: Array<{ parentId: number; nodes: SelfDrawNodeSpec[] }> = []
+      for (const g of groups) {
+        const flat: SelfDrawNodeSpec[] = []
+        const walkSub = (n: NativeNode, parentId: number | null): void => {
+          if (n.__kind === 'comment') return
+          const id = idFor(n)
+          const spec: SelfDrawNodeSpec = { id, parentId }
+          // 复用 toRequest 的字段折叠（**同一实现** ⇒ 全量与增量的节点规格不会分叉）
+          fillSpec(spec, n)
+          flat.push(spec)
+          if (n.__kind === 'element') for (const c of n.children) walkSub(c, id)
+        }
+        for (const k of g.kids) walkSub(k, idFor(g.parent))
+        inserts.push({ parentId: idFor(g.parent), nodes: flat })
+      }
+      return { removes: removed, inserts }
+    },
+
     takePatches(): Array<{ id: number; style: Record<string, unknown> }> | null {
       // ★「结构变化」是**自上次取走以来**的标志（不是累积状态）——取走即复位。
       //
@@ -458,7 +641,18 @@ export function createSelfDrawAdapter(): SelfDrawAdapter {
       }
       return out
     },
-    markFullSync: () => { structuralChange = false; dirty.clear() },
+    markFullSync: () => {
+      structuralChange = false
+      dirty.clear()
+      // ★★全量同步后必须**清空结构追踪**（本仓实测的缺陷）
+      //   【症状】mount 后 `createdNodes` 累积了整棵树 ⇒ 下一次 `takeSplice()` 会把这**整棵树**
+      //     当作"新建"返回（实测：inserts 里出现重复的节点、且多个组互相包含同一批节点）
+      //     ⇒ 若调用方照着发 splice，会**重复插入**（树被撑大 / id 冲突报错）。
+      //   【根因】标志语义与「自上次取走以来」不一致——与 `structuralChange` 同一坑（见 takePatches 注释）。
+      createdNodes.clear()
+      removedNodeIds.clear()
+      movedExisting = false
+    },
     patchCount: () => patches,
     createdCount: () => ({ elements, texts }),
     resetStats: () => {

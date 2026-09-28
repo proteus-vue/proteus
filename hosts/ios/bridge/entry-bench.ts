@@ -41,6 +41,14 @@ interface SelfDrawNative {
   /** ★Vapor IR V3：二进制指令流（字节数组 JSON 表示——指令流本身极小） */
   applyOps(opsBytesJson: string): string
   /**
+   * ★★**结构变更（增删行）**：`{removes:[id], inserts:[{parentId,nodes}]}` → 核心 splice + 层增量增删
+   *
+   * 【为什么必须先探测存在性】宿主二进制可能落后于 JS bundle（两端独立构建）——
+   *   缺它时必须**退回全量**并如实记录（`mode: 'FULL-no-entry'`），
+   *   而不是调用不存在的方法抛异常（那会让整个用例静默丢结果）。
+   */
+  splice?(spliceJson: string): string
+  /**
    * ★★**高分辨率单调时钟**（微秒，十进制字符串）
    *
    * 【为什么必须用宿主时钟（本仓实测的第六个测量装置缺陷）】
@@ -69,7 +77,7 @@ const BN = { snapshot: 'bench-final' }
 // ★构建标识：每次构建写入，用于**确凿判定**设备上跑的是哪份代码
 //   （踩坑：靠文件 mtime 判断"报告是否刷新"不可靠——新建目标文件的时间恒为"现在"；
 //    且我看不出设备实际执行的是旧 bundle，白跑一轮。有了这个字段就能一眼判定。）
-const BUILD_ID = '15541abd-132713'
+const BUILD_ID = 'e7bf2937-150716'
 const now = (): number => Date.now()
 /** 宽松解析（宿主返回可能是字符串或已是对象） */
 const safeParseAny = (s: any): any => {
@@ -1444,51 +1452,108 @@ CASES.push({
   },
 })
 
-/* S5 · 结构变更：增删节点（当前必然全量重建 —— 已知天花板） */
+/* S5 · 结构变更：增删节点（★2026-09-28：走 splice 增量，与全量对照） */
 CASES.push({
   name: 'S5_structure_change',
-  note: '★结构变更：500→600 / 600→400 项（增删节点）——当前 update 入口只收样式补丁 ⇒ 必然全量',
+  note: '★结构变更：500→600 / 600→400 项（增删行）——splice 增量 vs 全量重建（同用例内对照）',
   fn: async () => {
     const N = 500
     const app = makeApp(N)
     mountApp(app, N)                    // ★必须：见 mountApp 注释
-    const runOne = async (label: string, newN: number) => {
+    // ★★fixture 修复（本仓实测：初版此用例**从未增删过一行**）
+    //
+    // 【故障链】`setCount(n)` 只改 `count/size` 两个 ref；而 render 里行集是
+    //   `items.value.slice(0, Math.max(count, items.length))` —— `Math.max` 把 count 的
+    //   **缩小**方向整条抹平（slice 上界永远 ≥ items.length ⇒ 恒定输出全部行）。
+    //   实测证据：grow_600 与 shrink_400 两条结果的 `nodes` 都是 **3507**、字节都是 **279820**
+    //   —— 即两次"结构变更"其实是**同一棵树的两次全量重发**，用例名与实际行为不符。
+    //   ⇒ 正解：增删走 `setItems`（真正改行集），与 E 组（插入/删除）同款。
+    const grow = (to: number) => {
+      const cur = app.items()
+      const add = to - cur.length
+      if (add > 0) {
+        const next = cur.slice()
+        for (let i = 0; i < add; i++) {
+          const id = cur.length + i
+          next.push({ id, title: `列表项 ${id + 1}`, sub: id % 3 === 0 ? '分组标题' : '说明文字' })
+        }
+        app.setItems(next)
+      } else if (add < 0) {
+        app.setItems(cur.slice(0, to))
+      }
+    }
+    const runOne = async (label: string, newN: number, useSplice: boolean) => {
       app.adapter.resetStats()
       const t0 = now()
-      app.setCount(newN)
+      grow(newN)
       await nextTick()
       const tVue = now()
+      // ── ① 适配器侧：取本批次的"该发什么"（不含序列化）──
       const patches = app.adapter.takePatches()
-      const tReq = now()
-      let hostOut: string
-      let bytes = 0
+      let payload: unknown
       let mode = 'patch'
       if (patches === null) {
-        mode = 'FULL'
-        const r = app.adapter.toRequest(VP)
-        const tj = JSON.stringify(r)
-        bytes = tj.length
-        hostOut = proteusSelfDraw.update(tj)
+        const sp = app.adapter.takeSplice()
+        const canSplice = useSplice && sp && sp !== 'full-required' && typeof proteusSelfDraw.splice === 'function'
+        if (canSplice) {
+          mode = 'splice'
+          payload = sp
+        } else {
+          mode = sp === 'full-required'
+            ? 'FULL-required'
+            : (typeof proteusSelfDraw.splice === 'function' ? 'FULL-by-design' : 'FULL-no-entry')
+          payload = app.adapter.toRequest(VP)
+        }
       } else {
-        bytes = JSON.stringify(patches).length
-        hostOut = proteusSelfDraw.updatePatches(JSON.stringify(patches))
+        payload = patches
+      }
+      const tReq = now()
+      // ── ② 序列化（独立打点——本仓实测的测量装置缺陷：初版 serialize_ms 与 host_ms
+      //       是同一个数，导致"搬运成本"无法归因到 JS 侧还是宿主侧）──
+      const payloadJson = JSON.stringify(payload)
+      const tSer = now()
+      const bytes = payloadJson.length
+      // ── ③ 宿主（splice 优先；失败时如实记 mode，不掩盖）──
+      let hostOut: string
+      if (mode === 'splice') {
+        hostOut = proteusSelfDraw.splice!(payloadJson)
+        if (!safeParseAny(hostOut)?.ok) mode = 'FULL-splice-failed'
+      } else if (mode === 'patch') {
+        hostOut = proteusSelfDraw.updatePatches(payloadJson)
+      } else {
+        hostOut = proteusSelfDraw.update(payloadJson)
       }
       const tHost = now()
       const h = safeParseAny(hostOut)
       app.adapter.markFullSync()
       results.push({
         case: `S5_${label}`,
-        note: `${N}→${newN} 项（${mode === 'FULL' ? '全量重建' : '补丁'}）`,
+        note: `${N}→${newN} 项（${mode}）`,
         items: newN, nodes: h?.["node_count"] ?? 0,
-        vue_ms: tVue - t0, to_request_ms: tReq - tVue, serialize_ms: tHost - tReq,
-        host_ms: tHost - tReq, total_ms: tHost - t0,
+        vue_ms: tVue - t0, to_request_ms: tReq - tVue, serialize_ms: tSer - tReq,
+        host_ms: tHost - tSer, total_ms: tHost - t0,
         patch_count: app.adapter.patchCount(), request_bytes: bytes,
-        extra: { mode, mem_mb: h?.["mem_mb"], mem_peak_mb: h?.["mem_peak_mb"] },
+        extra: { mode, mem_mb: h?.["mem_mb"], mem_peak_mb: h?.["mem_peak_mb"],
+                 relayout: h?.["relayout_count"], updated_layers: h?.["updated_layers"],
+                 removed: h?.["removed"], inserted: h?.["inserted"],
+                 removed_layers: h?.["removed_layers"], inserted_layers: h?.["inserted_layers"],
+                 layer_count: h?.["layer_count"],
+                 // ★核心分段（splice 的 relayout_ms 决定"省下的到底是搬运还是重排"）
+                 relayout_ms: h?.["relayout_ms"], splice_ms: h?.["splice_ms"],
+                 layout_ms: h?.["layout_ms"], host_total_ms: h?.["host_total_ms"],
+                 // ★插入文本的度量自检（设备侧不变量：高≈0 的文本层必须为 0 条）
+                 inserted_text_layers: h?.["inserted_text_layers"],
+                 inserted_text_zero_height: h?.["inserted_text_zero_height"],
+                 inserted_text_missing_geom: h?.["inserted_text_missing_geom"] },
       })
-      markCeiling('structure', `${N}→${newN} 项`, tHost - t0, `结构变更（${mode}）`)
+      markCeiling('structure', `${N}→${newN} 项（${mode}）`, tHost - t0, `结构变更（${mode}）`)
     }
-    await runOne('grow_600', 600)
-    await runOne('shrink_400', 400)
+    // ★★A/B 必须**同起点、同幅度**（本仓纪律：优化前后的对照只能差被测变量）
+    //   全量对先跑（把树带回 500）→ splice 对再跑，两边都是 500↔600 的 ±100。
+    await runOne('grow_600_FULL', 600, false)
+    await runOne('shrink_500_FULL', 500, false)
+    await runOne('grow_600_splice', 600, true)
+    await runOne('shrink_500_splice', 500, true)
     app.dispose()
   },
 })
@@ -1507,26 +1572,28 @@ CASES.push({
     await nextTick()
     const tVue = now()
     const patches = app.adapter.takePatches()
-    const tReq = now()
-    let hostOut: string
-    let bytes = 0
+    let payload: unknown
     if (patches === null) {
-      const r = app.adapter.toRequest(VP)
-      const tj = JSON.stringify(r)
-      bytes = tj.length
-      hostOut = proteusSelfDraw.update(tj)
+      payload = app.adapter.toRequest(VP)
     } else {
-      bytes = JSON.stringify(patches).length
-      hostOut = proteusSelfDraw.updatePatches(JSON.stringify(patches))
+      payload = patches
     }
+    const tReq = now()
+    // ★序列化独立打点（与 S5 同修：初版 serialize_ms == host_ms，无法归因搬运成本在哪一侧）
+    const payloadJson = JSON.stringify(payload)
+    const tSer = now()
+    const bytes = payloadJson.length
+    const hostOut = patches === null
+      ? proteusSelfDraw.update(payloadJson)
+      : proteusSelfDraw.updatePatches(payloadJson)
     const tHost = now()
     const h = safeParseAny(hostOut)
     results.push({
       case: 'S6_worst_reverse',
       note: `1000 项 reverse（最坏情形）`,
       items: N, nodes: 0,
-      vue_ms: tVue - t0, to_request_ms: tReq - tVue, serialize_ms: tHost - tReq,
-      host_ms: tHost - tReq, total_ms: tHost - t0,
+      vue_ms: tVue - t0, to_request_ms: tReq - tVue, serialize_ms: tSer - tReq,
+      host_ms: tHost - tSer, total_ms: tHost - t0,
       patch_count: app.adapter.patchCount(), request_bytes: bytes,
       extra: { relayout: h?.["relayout_count"], patches_sent: patches === null ? 'FULL' : patches.length },
     })
@@ -1575,12 +1642,29 @@ INIT_DIAG.stages.push('after-S:' + CASES.length)
 
 /* ────────────────────────── 宿主驱动的用例执行器 ────────────────────────── */
 
+/**
+ * ★★用例过滤（宿主 `--cases=S5,V4` 注入 `__PROTEUS_CASES__`）——定向验证用
+ *
+ * 【为什么需要（效率纪律）】bench 46 个用例全套数分钟；验证单个改动往往只需 2–4 个。
+ *   前缀匹配（`S5` 命中 `S5_structure_change`）——够用且好记。
+ *   未注入 = 跑全部（与既有行为一致）。
+ */
+const CASE_FILTER: string[] = ((globalThis as unknown as { __PROTEUS_CASES__?: string[] }).__PROTEUS_CASES__) ?? []
+const SELECTED = CASE_FILTER.length > 0
+  ? CASES.filter((c) => CASE_FILTER.some((f) => c.name.startsWith(f)))
+  : CASES
+if (CASE_FILTER.length > 0) {
+  // 过滤后为空 ⇒ 过滤词写错了，必须可观测（否则表现为"跑完 0 个用例"，无从归因）
+  ;(globalThis as unknown as { __PROTEUS_CASE_SELECTION__?: unknown }).__PROTEUS_CASE_SELECTION__ =
+    { filter: CASE_FILTER, matched: SELECTED.map((c) => c.name) }
+}
+
 let idx = 0
 let chain: Promise<void> = Promise.resolve()
 
 const api = {
   /** 用例清单（宿主据此知道总数） */
-  cases: (): string => JSON.stringify(CASES.map((c) => ({ name: c.name, note: c.note }))),
+  cases: (): string => JSON.stringify(SELECTED.map((c) => ({ name: c.name, note: c.note }))),
 
   /**
    * ★★**一次性启动整条用例链**（宿主只负责泵微任务，不再逐用例干预）
@@ -1593,10 +1677,10 @@ const api = {
    *   ★这也消除了「打印时序」与「执行时序」两套计时可能不一致的问题。
    */
   step: (): string => {
-    if (idx >= CASES.length) {
-      return JSON.stringify({ done: true, completed: executedCases, total: CASES.length })
+    if (idx >= SELECTED.length) {
+      return JSON.stringify({ done: true, completed: executedCases, total: SELECTED.length })
     }
-    const c = CASES[idx++]
+    const c = SELECTED[idx++]
     chain = chain.then(async () => {
       // ★★用例自己打时间戳（**根治计时窗口重叠**）
       //
@@ -1622,48 +1706,31 @@ const api = {
       void rBefore
       executedCases += 1          // ★用例数（与结果条数严格区分）
     })
-    return JSON.stringify({ started: c.name, index: idx, total: CASES.length,
+    return JSON.stringify({ started: c.name, index: idx, total: SELECTED.length,
                             completed: executedCases, results: results.length })
   },
 
-  /** 收尾：写报告（由宿主在所有用例完成后调用） */
-  finish: (): string => {
-    {
-      const summary = {
-        kind: 'logic-bench',
-        build_id: BUILD_ID,
-        init_diag: INIT_DIAG,
-        runtime: 'JavaScriptCore（系统自带）',
-        viewport: VP,
-        total_cases: CASES.length,
-        completed: executedCases,
-        result_count: results.length,
-        cases: results,
-        ceiling,
-        frame_budget_ms: FRAME_BUDGET_MS,
-        case_timings_ms: caseTimings,
-        notes: [
-          '★四段分解：vue / 适配器 / 序列化 / 宿主',
-          '★★加压测试：逐档增加到越过 16.7ms 帧预算，记录越线档位（ceiling）',
-          '★变更位置区分：类A 边界内（应止于该行） vs 类B 平级（兄弟全动 ⇒ 父级）',
-          '★用例自身打点（case_timings_ms），不依赖宿主泵节奏 ⇒ 计时窗口不重叠',
-        ],
-      }
-      const json = JSON.stringify(summary)
-      proteusSelfDraw.report(json)
-      proteusSelfDraw.done(JSON.stringify({ ok: true, completed: executedCases, total: CASES.length }))
-    }
-    return JSON.stringify({ ok: true, completed: executedCases, total: CASES.length })
-  },
-
-  /** 已完成的读数（宿主每轮读它） */
+  /**
+   * ★★已完成的读数（**宿主驱动器靠它推进**——`driveBench` 的 `waitCase` 读 `completed`/`total`）
+   *
+   * 【删不得（本仓实测的教训）】宿主每轮泵完就调它，`completed` 不增长即"当前用例还在跑"。
+   *   若本方法缺失 ⇒ 返回 null ⇒ `completed` 恒 0 ⇒ 每个用例空转到 `perCaseRoundLimit`
+   *   才被跳过（3000 轮）⇒ 现象是"bench 卡住/被看门狗杀"，极难归因。
+   */
   progress: (): string =>
-    JSON.stringify({ completed: executedCases,        // ★用例数（与 CASES.length 同粒度）
+    JSON.stringify({ completed: executedCases,        // ★用例数（与 SELECTED.length 同粒度）
                      results: results.length,          // 结果条数（可多于用例数）
-                     total: CASES.length, started: idx,
+                     total: SELECTED.length, started: idx,
                      cases: results.map((r) => r.case) }),
 
-  /** 收尾：写出完整报告（宿主最后调用） */
+  /**
+   * 收尾：写出完整报告（宿主最后调用）
+   *
+   * ★★本对象字面量里**只能有一个 `finish`**（本仓实测踩到）：此前存了两份（历史遗留），
+   *   JS 语义是**后者覆盖前者** ⇒ 我改过的前一份**从不执行** ⇒ 现象是
+   *   "字段加了但报告里没有"（与"改了没生效"同源的静默失败）。
+   *   ⇒ 纪律：对象字面量的重复键必须消除；报告字段只维护这一份。
+   */
   finish: (): string => {
     const summary = {
       kind: 'logic-bench',
@@ -1671,7 +1738,8 @@ const api = {
       build_id: BUILD_ID,
       runtime: 'JavaScriptCore（系统自带）',
       viewport: VP,
-      total_cases: CASES.length,
+      total_cases: SELECTED.length,
+      case_filter: CASE_FILTER,        // ★非空 = 本次是**过滤跑**（定向验证，非全量基准）
       completed: executedCases,        // ★已执行**用例**数
       result_count: results.length,    // 结果条数（诊断用：> completed 说明有用例产出多条）
       cases: results,
@@ -1689,8 +1757,8 @@ const api = {
     }
     const json = JSON.stringify(summary)
     proteusSelfDraw.report(json)
-    proteusSelfDraw.done(JSON.stringify({ ok: true, completed: results.length, total: CASES.length }))
-    return JSON.stringify({ ok: true, completed: results.length })
+    proteusSelfDraw.done(JSON.stringify({ ok: true, completed: executedCases, total: SELECTED.length }))
+    return JSON.stringify({ ok: true, completed: executedCases })
   },
 }
 
