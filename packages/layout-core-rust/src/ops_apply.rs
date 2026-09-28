@@ -311,6 +311,18 @@ pub struct MultiRelayout {
  * 【诚实边界】若某脏节点在链上找不到边界 ⇒ 范围 = 树根 ⇒ 退化为全量
  *   （与既有单节点路径同款兜底；不会算错，只是没有收益）。
  */
+/// ★最近一次增量重排的**引擎分段**（copy/build/solve/writeback）——供 FFI 浮出
+static LAST_PHASES: std::sync::Mutex<Option<std::collections::BTreeMap<String, f64>>> = std::sync::Mutex::new(None);
+
+pub fn last_relayout_phases() -> serde_json::Value {
+    LAST_PHASES
+        .lock()
+        .ok()
+        .and_then(|g| g.clone())
+        .map(|m| serde_json::to_value(m).unwrap_or(serde_json::Value::Null))
+        .unwrap_or(serde_json::Value::Null)
+}
+
 pub fn relayout_multi(tree: &mut LayoutTree, dirty: &[u32]) -> MultiRelayout {
     let eng = TaffyEngine::new();
 
@@ -354,6 +366,12 @@ pub fn relayout_multi(tree: &mut LayoutTree, dirty: &[u32]) -> MultiRelayout {
     for sc in kept {
         let Some(&(_, d)) = pairs.iter().find(|(s, _)| *s == sc) else { continue };
         let r = engine.layout_incremental(tree, d);
+        // ★记录最后一次的引擎分段（多范围时保留最后一个非空即可——诊断用）
+        if !engine.last_phases.is_empty() {
+            if let Ok(mut g) = LAST_PHASES.lock() {
+                *g = Some(engine.last_phases.clone());
+            }
+        }
         out.relayout_count += r.relayout_count;
         out.measure_calls += r.measure_calls;
         out.measure_hits += r.measure_hits;

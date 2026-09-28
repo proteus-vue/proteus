@@ -30,6 +30,12 @@ use crate::style::{Display, FlexDirection, LStyle, Overflow, Position, Rect, Siz
 pub struct TaffyEngine {
     /// 文本度量（平台注入；`None` = 全部文本按零尺寸）
     measurer: Option<Box<dyn TextMeasurer>>,
+    /// ★★最近一次**增量**重排的分段耗时（本仓纪律：任何 >5ms 的分段都必须再拆——
+    ///   此前 `layers` 段只报总数，我因此把「不是瓶颈」当瓶颈查了两轮）
+    ///
+    /// 键：`copy_ms`（把范围子树拷进新树）/ `build_ms`（taffy 建树）/ `solve_ms`（compute_layout）
+    ///     / `writeback_ms`（结果回写 + 平移）/ `total_ms`
+    pub last_phases: std::collections::BTreeMap<String, f64>,
     /// ★★度量记忆化：**内容寻址**（Profile §5.3 规定的键）——
     ///   `(文本 hash ⊕ 字体签名, 宽度约束位)` → Size
     ///
@@ -63,6 +69,7 @@ impl Default for TaffyEngine {
 impl TaffyEngine {
     pub fn new() -> Self {
         Self {
+            last_phases: std::collections::BTreeMap::new(),
             measurer: None,
             measure_cache: HashMap::new(),
             measure_calls: 0,
@@ -233,7 +240,7 @@ impl TaffyEngine {
     /// 执行一轮 taffy 布局（含度量回调）
     fn run_taffy(&mut self, tree: &LayoutTree, taffy: &mut TaffyTree<u32>, roots: &[NodeIndex], constraint: RootConstraint) -> LayoutOutput {
         // ★字段级解构：让 `measurer` 与 `measure_cache` 同时可变借用（互不相交）
-        let TaffyEngine { measurer, measure_cache, measure_calls, measure_hits, taffy_ids, last_root_constraint: _ } = self;
+        let TaffyEngine { measurer, measure_cache, measure_calls, measure_hits, taffy_ids, last_root_constraint: _, last_phases: _ } = self;
         *measure_calls = 0;
         *measure_hits = 0;
 
@@ -393,16 +400,23 @@ impl LayoutEngine for TaffyEngine {
         let constraint = RootConstraint::definite(cw, ch);
 
         // 取子树 + 前序索引映射（一次 O(范围)，避免逐节点重扫）
+        let t_phase0 = std::time::Instant::now();
         let order = preorder(tree, scope);
         let mut sub = LayoutTree::new();
         let root_new = copy_subtree(tree, scope, &mut sub, NO_PARENT);
         sub.roots.push(root_new);
+        let t_copy = t_phase0.elapsed().as_secs_f64() * 1000.0;
 
         let mut sub_engine = TaffyEngine::new();
         if let Some(m) = self.measurer.take() {
             sub_engine.set_measurer(m);
         }
+        let t_solve0 = std::time::Instant::now();
         let out = sub_engine.layout(&mut sub, constraint);
+        let t_solve = t_solve0.elapsed().as_secs_f64() * 1000.0;
+        // ★子引擎的分段（建树）要带出来——`layout()` 内部自行记录
+        let sub_build = sub_engine.last_phases.get("build_ms").copied().unwrap_or(0.0);
+        let sub_total = sub_engine.last_phases.get("total_ms").copied().unwrap_or(0.0);
 
         // 结果平移回原树（子树的绝对原点 = 范围节点在原树中的相对位置）
         let origin = tree.get(scope).rect;
@@ -438,6 +452,15 @@ impl LayoutEngine for TaffyEngine {
         }
         // 扁平缓存直接 extend（子树的度量成果不丢）
         self.measure_cache.extend(sub_engine.measure_cache);
+
+        let t_total = t_phase0.elapsed().as_secs_f64() * 1000.0;
+        self.last_phases.clear();
+        self.last_phases.insert("copy_ms".into(), t_copy);
+        self.last_phases.insert("build_ms".into(), sub_build.max(0.0));
+        self.last_phases.insert("solve_ms".into(), (sub_total - sub_build).max(0.0));
+        self.last_phases.insert("writeback_ms".into(), (t_total - t_copy - t_solve).max(0.0));
+        self.last_phases.insert("total_ms".into(), t_total);
+        self.last_phases.insert("scope_node_count".into(), count as f64);
 
         LayoutOutput { rects, measure_calls: out.measure_calls, measure_hits: out.measure_hits, relayout_count: count }
     }
