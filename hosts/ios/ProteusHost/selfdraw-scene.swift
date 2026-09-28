@@ -1826,6 +1826,8 @@ final class SelfDrawBridge: NSObject, SelfDrawExports {
         out["host_node_count"] = lastNodeCount
         out["tree_hash"] = lastTreeHash
         out["layer_count"] = view?.builtLayerCount ?? -1
+        // ★白屏诊断（见 SelfDrawViewController.launchDiag 注释）
+        out["launch_diag"] = SelfDrawViewController.launchDiag
         if let d = summaryJson.data(using: .utf8), let o = try? JSONSerialization.jsonObject(with: d) as? [String: Any] {
             for (k, v) in o { out["js_\(k)"] = v }
         }
@@ -1957,9 +1959,39 @@ final class SelfDrawViewController: UIViewController {
     private let bridge = SelfDrawBridge()
     private var jsContext: JSContext?
 
+    /// ★★**白屏诊断读数**（本仓实测：用户观察到"启动白一下"，需可客观归因）
+    ///
+    /// 【为什么记这三个】启动白屏有三种成因，读数能直接区分：
+    ///   ① `interface_style` = Light + `launch_bg` 未设 ⇒ **启动屏是白**（系统背景色）
+    ///      ⇒ 用户看到 白→黑→内容（"白闪"）。修法：`UIUserInterfaceStyle=Dark`（本仓已加）
+    ///   ② `first_frame_ms` 大 ⇒ 首帧慢（内核初始化/JS 加载），与启动屏无关
+    ///   ③ `mount_ms` 大 ⇒ 内容上屏慢（布局/建层），那是"内容白屏"
+    static var launchDiag: [String: Any] = [:]
+    /// 进程启动时刻（用于算到首帧/挂载的耗时）
+    static var processStart: CFAbsoluteTime = CFAbsoluteTimeGetCurrent()
+
     override func viewDidLoad() {
         super.viewDidLoad()
         view.backgroundColor = .black
+
+        // ★★白屏诊断（见 launchDiag 注释）：
+        //   · `interface_style`：当前外观模式（浅色 ⇒ 若启动屏背景未设，启动瞬间是**白**）
+        //   · `launch_bg`：Info.plist 里 `UILaunchScreen` 是否配了背景色
+        //   · `first_frame_ms`：进程启动 → 本方法（首个 UI 帧建立）的耗时
+        let style: String
+        if #available(iOS 13.0, *) {
+            style = traitCollection.userInterfaceStyle == .dark ? "Dark" : "Light"
+        } else {
+            style = "unknown"
+        }
+        let launchCfg = (Bundle.main.object(forInfoDictionaryKey: "UILaunchScreen") as? [String: Any]) ?? [:]
+        let forcedStyle = (Bundle.main.object(forInfoDictionaryKey: "UIUserInterfaceStyle") as? String) ?? "(未设置)"
+        Self.launchDiag = [
+            "interface_style": style,
+            "forced_style": forcedStyle,
+            "launch_screen_keys": Array(launchCfg.keys).sorted(),
+            "first_frame_ms": round((CFAbsoluteTimeGetCurrent() - Self.processStart) * 1000 * 100) / 100,
+        ]
 
         let w = UIScreen.main.bounds.width
         let h = UIScreen.main.bounds.height

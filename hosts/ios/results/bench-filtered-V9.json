@@ -6367,20 +6367,20 @@
   },
   "host_node_count" : 707,
   "host_timing_last" : {
-    "build_layers_ms" : 5.6369304656982422,
-    "host_total_ms" : 26.35490894317627,
-    "layout_ms" : 4.1750669479370117,
-    "measure_ms" : 9.2880725860595703
+    "build_layers_ms" : 6.4710378646850586,
+    "host_total_ms" : 26.908993721008301,
+    "layout_ms" : 4.1960477828979492,
+    "measure_ms" : 8.7019205093383789
   },
   "js_completed" : 1,
   "js_ok" : true,
   "js_report" : {
-    "build_id" : "62565f34-184057",
+    "build_id" : "7959381a-184659",
     "case_filter" : [
       "V9"
     ],
     "case_timings_ms" : {
-      "V9_event_dispatch" : 51
+      "V9_event_dispatch" : 50
     },
     "cases" : [
       {
@@ -6529,6 +6529,14 @@
     }
   },
   "js_total" : 1,
+  "launch_diag" : {
+    "first_frame_ms" : -0,
+    "forced_style" : "Dark",
+    "interface_style" : "Dark",
+    "launch_screen_keys" : [
+
+    ]
+  },
   "layer_count" : 707,
   "layer_frames" : {
     "1" : {
@@ -11481,5 +11489,5 @@
       "y" : 0
     }
   },
-  "tree_hash" : "abeeae21"
+  "tree_hash" : "4b2e369f"
 }
