@@ -67,7 +67,7 @@ const BN = { snapshot: 'bench-final' }
 // ★构建标识：每次构建写入，用于**确凿判定**设备上跑的是哪份代码
 //   （踩坑：靠文件 mtime 判断"报告是否刷新"不可靠——新建目标文件的时间恒为"现在"；
 //    且我看不出设备实际执行的是旧 bundle，白跑一轮。有了这个字段就能一眼判定。）
-const BUILD_ID = '37be1233-120213'
+const BUILD_ID = 'a714bfff-120821'
 const now = (): number => Date.now()
 /** 宽松解析（宿主返回可能是字符串或已是对象） */
 const safeParseAny = (s: any): any => {
@@ -1174,6 +1174,19 @@ CASES.push({
         const out1 = b ? safeParseAny(proteusSelfDraw.applyOps(JSON.stringify(Array.from(b)))) : undefined
         const deferred = (out1?.deferred as number) ?? 0
 
+        // ★★两阶段故障链验证（本仓实测的静默错几何缺陷）
+        //   ① 更新1：节点不可见 ⇒ 延后记账（旧账 = 旧 rect）
+        //   ② 更新2：**不滚动**，仅因几何变化使该节点转为可见 ⇒ 立即应用
+        //      若不清旧账 ⇒ ③ 再滚动时用旧 rect 覆盖回去（静默回退）
+        //   判据：stale_cleared ≥ 0 且 pending_visible_overlap === 0（不变量）
+        const staleProbe = (() => {
+          // 缩首行高 ⇒ 后续行整体**上移**，下方原本不可见的行可能滚入可见区
+          rt.buffer.push({ op: 0x02, nodeId: 2, keyId: hk, value: 30 })
+          rt.flush()
+          const b2 = cap.pop()
+          return b2 ? safeParseAny(proteusSelfDraw.applyOps(JSON.stringify(Array.from(b2)))) : undefined
+        })()
+
         // ★滚动方向（本仓实测纠正）：`contentOffset.y` 增大 = 内容上移 = **向下滚**，
         //   于是**后面的行**进入视野。首版传 -600（方向反了）⇒ 没有任何行滚入 ⇒ 补刷恒为 0。
         //   滚动量取足够大（跨过预取区），确保确实有行从"不可见"变为"可见"。
@@ -1192,8 +1205,17 @@ CASES.push({
             pending_before_scroll: pendingBefore?.pending,
             pending_after_scroll: pendingAfter?.pending,
             flushed_on_scroll: pendingAfter?.last_flushed,
+            // ★不变量与故障链判据
+            stale_cleared: staleProbe?.stale_cleared,
+            pending_visible_overlap: staleProbe?.pending_visible_overlap,
             // ★判据：延后的应有大量（>0）；滚动后补刷数应 >0（说明滚入的层被刷了）
-            verdict: deferred > 0 && ((pendingAfter?.last_flushed as number) ?? 0) > 0 ? 'PASS' : 'FAIL',
+            verdict:
+              deferred > 0 &&
+              ((pendingAfter?.last_flushed as number) ?? 0) > 0 &&
+              // ★不变量：可见节点不得残留在待补刷表（否则会旧几何回退）
+              (staleProbe?.pending_visible_overlap ?? 1) === 0
+                ? 'PASS'
+                : 'FAIL',
           },
         })
       }

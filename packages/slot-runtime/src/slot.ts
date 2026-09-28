@@ -42,6 +42,14 @@ export interface SlotSpec {
   listId?: number
   /** list-item 用到：该列表项内的槽位下标 */
   listSlotId?: number
+  /**
+   * list-item 用到：该项字段是**样式**还是**文本**
+   *
+   * 【为什么要区分】`{{ item.name }}` 是文本、`{ width: item.w }` 是样式——
+   *   两者在解析成功时发的是**不同指令**（SET_TEXT vs SET_STYLE）。
+   *   缺省 'style'（列表项里样式绑定更常见）。
+   */
+  itemKind?: 'style' | 'text'
 }
 
 /**
@@ -51,7 +59,17 @@ export interface SlotSpec {
  *   构造顺序影响线上字节（golden 逐字节比对会锁定这一点）。
  *   编译器产物应把 intern 结果固化进 SlotSpec（避免运行时首次构造顺序漂移）。
  */
-export function createSlot<T>(spec: SlotSpec, keys: PropKeyTable, strings: StringPool, initial: T): Slot<T> {
+export function createSlot<T>(
+  spec: SlotSpec,
+  keys: PropKeyTable,
+  strings: StringPool,
+  initial: T,
+  /**
+   * ★列表项注册表（可选）：提供它 ⇒ `list-item` 槽位在**发指令前解析出具体 nodeId**，
+   *   从而发出普通 SET_STYLE/SET_TEXT（核心无需懂列表）；不提供或解析不到 ⇒ 回退 LIST_UPDATE。
+   */
+  registry?: import('./list-registry').ListRegistry,
+): Slot<T> {
   const nodeId = spec.nodeId
   const keyId = spec.keyId ?? 0
   const listId = spec.listId ?? 0
@@ -79,8 +97,24 @@ export function createSlot<T>(spec: SlotSpec, keys: PropKeyTable, strings: Strin
           buf.push({ op: OpCode.TOGGLE_VIS, nodeId, visible: Boolean(next) })
           return
         case 'list-item': {
-          // ★item 级更新：一条指令定位到「列表内某一项」的槽位（方案 §2.3）
+          // ★★item 级更新：一条指令定位到「列表内某一项」的槽位（方案 §2.3）
+          //
+          // 【两条路径（本仓实测后定的分工）】
+          //   · **解析成功**（常见）：注册表给出该 itemKey 的 nodeId ⇒ 发普通指令。
+          //     `LIST_SET/SET_STYLE/SET_TEXT` 的核心**完全不需要懂列表语义**——
+          //     这是本设计的要点：列表知识留在 JS 侧（它本来就知道）。
+          //   · 解析不到（宿主自持映射 / 复用池场景）：发 `LIST_UPDATE` 由宿主解析
+          //     （V1 已定义该指令与线上格式，Rust 侧遇它会上报 unsupported 而非静默丢弃）。
           const item = next as unknown as ListItemValue
+          const nodeId = registry?.resolveNode(listId, item.key, listSlotId)
+          if (nodeId !== undefined) {
+            if ((spec.itemKind ?? 'style') === 'text') {
+              buf.push({ op: OpCode.SET_TEXT, nodeId, textRef: strings.intern(String(item.value)) })
+            } else {
+              buf.push({ op: OpCode.SET_STYLE, nodeId, keyId, value: toF32(item.value) })
+            }
+            return
+          }
           buf.push({
             op: OpCode.LIST_UPDATE,
             listId,
