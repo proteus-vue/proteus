@@ -104,19 +104,19 @@
   "host_node_count" : 11,
   "host_timing_last" : {
     "build_layers_ms" : 0.01,
-    "host_total_ms" : 0.25,
-    "layout_ms" : 0.13,
+    "host_total_ms" : 0.23999999999999999,
+    "layout_ms" : 0.14000000000000001,
     "measure_ms" : 0
   },
   "js_completed" : 1,
   "js_ok" : true,
   "js_report" : {
-    "build_id" : "aa7137cf-200614",
+    "build_id" : "d4c099ea-210848",
     "case_filter" : [
       "V6"
     ],
     "case_timings_ms" : {
-      "V6_sfc_full_tree" : 9
+      "V6_sfc_full_tree" : 10
     },
     "cases" : [
       {
@@ -129,7 +129,7 @@
             "rows" : 11,
             "valuesFilled" : 9
           },
-          "instantiate_ms" : 0.64000000000000001,
+          "instantiate_ms" : 0.66000000000000003,
           "instantiated_nodes" : 11,
           "l0_slots" : 0,
           "l1_slots" : 4,
@@ -146,15 +146,15 @@
           "unsupported_count" : 0,
           "verdict" : "PASS"
         },
-        "host_ms" : 0.25,
+        "host_ms" : 0.23999999999999999,
         "items" : 3,
         "nodes" : 11,
         "note" : "★★全量 SFC → 模板实例化 → 挂载 → 行内更新（V4 最后一项遗留：节点树由 SFC 生成）",
         "patch_count" : 11,
         "request_bytes" : 139,
         "serialize_ms" : 0,
-        "to_request_ms" : 0.64220786094665527,
-        "total_ms" : 0.64220786094665527,
+        "to_request_ms" : 0.65783309936523438,
+        "total_ms" : 0.65783309936523438,
         "vue_ms" : 0
       }
     ],
@@ -190,7 +190,9 @@
   },
   "js_total" : 1,
   "launch_diag" : {
-    "first_frame_ms" : -0,
+    "bootstrap_ms" : 51.490000000000002,
+    "first_frame_ms" : 57.600000000000001,
+    "first_frame_source" : "kernel:p_starttime",
     "forced_style" : "Dark",
     "interface_style" : "Dark",
     "launch_screen_keys" : [
@@ -277,5 +279,5 @@
       "y" : 18
     }
   },
-  "tree_hash" : "ac161fbf"
+  "tree_hash" : "30a22659"
 }

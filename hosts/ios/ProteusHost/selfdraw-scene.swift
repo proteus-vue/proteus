@@ -3112,8 +3112,47 @@ final class SelfDrawViewController: UIViewController {
     ///   ② `first_frame_ms` 大 ⇒ 首帧慢（内核初始化/JS 加载），与启动屏无关
     ///   ③ `mount_ms` 大 ⇒ 内容上屏慢（布局/建层），那是"内容白屏"
     static var launchDiag: [String: Any] = [:]
-    /// 进程启动时刻（用于算到首帧/挂载的耗时）
-    static var processStart: CFAbsoluteTime = CFAbsoluteTimeGetCurrent()
+    /// ★★**进程启动时刻**（用于算 `first_frame_ms`）——取自**内核**，不是内存里的任何"第一次"
+    ///
+    /// 【原来的装置为什么是坏的（本仓实测）】原实现是
+    ///     `static var processStart = CFAbsoluteTimeGetCurrent()`
+    ///   Swift 的**静态量是惰性的**：它在**首次访问**时才初始化，而不是进程启动时。
+    ///   本档恰好在 `viewDidLoad` 里首次读它 ⇒ `processStart ≈ now` ⇒ **`first_frame_ms` 恒为 0**。
+    ///   而 0 是一条**看起来完美的假读数**（会被读成"首帧极快"）——比报错更危险。
+    ///   （本条曾被我当"后续项"挂着，实际是"读数恒假"——不该挂。）
+    ///
+    /// 【正解的两级锚点】
+    ///   · ① 进程启动（含 dyld 之前的 exec）：`sysctl(KERN_PROC_PID)` 的 `p_starttime`（**内核给的**）
+    ///   · ② 应用可见的第一个点（`didFinishLaunching`）：两者都记，用来**分解**耗时
+    ///     （①→② 是启动框架，②→首帧是内核初始化/JS 加载）
+    ///   ★诚实边界：`p_starttime` 起点**早于** dyld 加载本镜像，故 `first_frame_ms` 含
+    ///     动态链接耗时（那本来也是启动成本的一部分，用户确实在等）；更早的内核 fork 未计。
+    static var processStartWall: CFAbsoluteTime = {
+        var mib: [Int32] = [CTL_KERN, KERN_PROC, KERN_PROC_PID, getpid()]
+        var info = kinfo_proc()
+        var size = MemoryLayout<kinfo_proc>.stride
+        let rc = sysctl(&mib, 4, &info, &size, nil, 0)
+        guard rc == 0 else { return CFAbsoluteTimeGetCurrent() }   // 取不到 ⇒ 退化为"now"（并在读数里标注）
+        // ★★**纪元必须换算**（本仓实测：首跑读出 -978307199936ms 这种巨大负值）
+        //
+        // 【为什么】`p_starttime` 的 `tv_sec` 是 **Unix 纪元**（1970-01-01 起算），
+        //   而 `CFAbsoluteTime` 是 **2001-01-01 起算**——两者差 **978307200 秒**。
+        //   直接把 Unix 秒当成 CFAbsoluteTime ⇒ 结果偏移 -978307200s（≈ -31 年）。
+        //   ★这条极易漏：读数不是"报错"，而是一个**巨大的负数**（若只做减法不检查符号，
+        //     甚至可能被读成"极快"）。⇒ 报告里带 `first_frame_source` 就是为这类核对。
+        let unixEpochToCFAbsolute = 978_307_200.0
+        let tv = info.kp_proc.p_starttime     // ★必须先取出（此前那次编辑把它删掉了）
+        return CFAbsoluteTime(tv.tv_sec) - unixEpochToCFAbsolute + CFAbsoluteTime(tv.tv_usec) / 1_000_000.0
+    }()
+    /// `p_starttime` 是否真的取到了（false ⇒ `first_frame_ms` 不可信，必须显式标注）
+    static let processStartValid: Bool = {
+        var mib: [Int32] = [CTL_KERN, KERN_PROC, KERN_PROC_PID, getpid()]
+        var info = kinfo_proc()
+        var size = MemoryLayout<kinfo_proc>.stride
+        return sysctl(&mib, 4, &info, &size, nil, 0) == 0
+    }()
+    /// `didFinishLaunching` 时刻（分解用：①→② 是启动框架耗时）
+    static var didLaunchWall: CFAbsoluteTime = 0
 
     override func viewDidLoad() {
         super.viewDidLoad()
@@ -3135,7 +3174,12 @@ final class SelfDrawViewController: UIViewController {
             "interface_style": style,
             "forced_style": forcedStyle,
             "launch_screen_keys": Array(launchCfg.keys).sorted(),
-            "first_frame_ms": round((CFAbsoluteTimeGetCurrent() - Self.processStart) * 1000 * 100) / 100,
+            // ★首帧耗时（**含有效性与分解**——见 processStartWall 注释）
+            "first_frame_ms": round((CFAbsoluteTimeGetCurrent() - Self.processStartWall) * 1000 * 100) / 100,
+            "first_frame_source": Self.processStartValid ? "kernel:p_starttime" : "fallback:now(不可信)",
+            // 启动框架耗时（p_starttime → didFinishLaunching）；0 = 该点未打（旧路径）
+            "bootstrap_ms": Self.didLaunchWall > 0
+                ? round((Self.didLaunchWall - Self.processStartWall) * 1000 * 100) / 100 : -1,
         ]
 
         let w = UIScreen.main.bounds.width
@@ -3375,7 +3419,11 @@ final class SelfDrawSceneDelegate: UIResponder, UIWindowSceneDelegate {
 
 @main
 final class SelfDrawAppDelegate: UIResponder, UIApplicationDelegate {
-    func application(_ a: UIApplication, didFinishLaunchingWithOptions o: [UIApplication.LaunchOptionsKey: Any]? = nil) -> Bool { true }
+    func application(_ a: UIApplication, didFinishLaunchingWithOptions o: [UIApplication.LaunchOptionsKey: Any]? = nil) -> Bool {
+        // ★ ② 号锚点：应用可见的第一个时刻（用于分解"启动框架 vs 首帧渲染"）
+        SelfDrawViewController.didLaunchWall = CFAbsoluteTimeGetCurrent()
+        return true
+    }
     func application(_ a: UIApplication, configurationForConnecting s: UISceneSession,
                      options: UIScene.ConnectionOptions) -> UISceneConfiguration {
         let c = UISceneConfiguration(name: "Default", sessionRole: s.role)
