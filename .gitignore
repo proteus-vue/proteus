@@ -47,3 +47,7 @@ hosts/ios/experiments/device/results/memory-isolated.txt
 
 # ★本地工具链（JDK / NDK 等大体积工具，保持在 data1，不入库）
 .tools/
+
+# V3 端到端测试的临时输入（运行时生成，不入库）
+tests/.tmp-ops.bin
+tests/.tmp-tree.json

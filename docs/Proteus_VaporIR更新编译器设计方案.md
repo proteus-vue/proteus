@@ -632,9 +632,45 @@ Vue 3.6 把 `@vue/reactivity` 基于 alien-signals 重构，**显著提升响应
 ④ L1 覆盖率 77.8% 是**单个演示页面**的读数，不代表全部业务代码；§10 的「≥70%」需在真实
    项目集上持续度量（棘轮门禁属后续工作）。
 
-### V3 · App 端打通（≈2 人周）
+### V3 · App 端打通（≈2 人周）—— ✅ **已完成**（2026-09-28）
 
-- [ ] 槽位运行时对接 JSI
+- [x] 槽位运行时对接 JSI —— Swift 宿主新增 `applyOps(opsBytesJson)`（二进制指令入口）
+- [x] Rust 侧指令消费 —— `ops_apply.rs` + FFI `proteus_layout_apply_ops`
+- [x] 一帧一次 flush 调度 —— 沿用 `SlotRuntime` 的帧调度（真机实测 **101 次 flush / 100 次更新**）
+- [x] **单节点更新 P95 实测** —— 真机见下
+
+#### ★★V3 真机读数（iPhone 12 · iOS 26.3 · 报告 `089d848b-103149` · 25/25 用例）
+
+| 路径 | 端到端 p50 | p95 | 说明 |
+|---|---|---|---|
+| S2 基线（现网 Vue VDOM） | 82ms | — | 改 1 个圆点，整树重渲染 |
+| V0 探针（Vue 原生手段上界） | 10ms | 9ms | `withMemo` 手工替代 `v-memo`——**这是上界，不是本实现** |
+| **V3 完整链路（本实现）** | **0ms** | **1ms** | 订阅表 → 槽位直写 → 二进制指令 → Rust 应用 |
+
+**⇒ 达到 §10 验收标准「单节点更新 P95 ≤ 10ms（合格线）· ≤ 3ms（目标值）」。**
+
+**宿主侧分解（V3，100 次更新）**：`apply_ms` **0.02ms** · `layers_ms` **0.01ms** ·
+`relayout_count=2`（只重排受影响的 2 个节点）· `scopes=[0]` · `unsupported=0`（无指令被丢弃）。
+指令流量：`l1_slots=1 · l0_slots=0 · unsupported_evaluators=0`。
+
+**★V3 补的三个真缺口（都会静默出错）**
+| # | 缺口 | 症状 | 处置 |
+|---|---|---|---|
+| 1 | **Rust 侧只对最后一个脏节点重排** | 批量指令（一帧 N 个槽位）时其余节点几何**静默过期** | 新增 `relayout_multi`：多脏节点 → 去嵌套 → 各自重排（避免重复算同一子树） |
+| 2 | **nodeId 用「绑定序号」而非「元素序号」** | `<p-view><p-view :width="w"/></p-view>` 的绑定拿到 nodeId=0（根）⇒ **指令写到错误的节点**，不报错、几何静默不对 | `TemplateBindingRef.elementIndex`（模板序 DFS 给每个**元素**编号，与 IR builder 同源） |
+| 3 | **`NodeDto` 字段形状**（扁平 vs 嵌套 `style`） | 按自绘适配器形状写测试树 ⇒ 尺寸被**静默忽略**、几何全 0 | 端到端测试层暴露（编译/运行时两侧都绿也照样错）——这正是该层存在的意义 |
+
+**★诚实边界（V3 完成 ≠ 全部指令都能用）**
+① **已支持**：`SET_STYLE` / `SET_PROP`（`layout.*`）/ `SET_TEXT` / `TOGGLE_VIS` / `SET_ATTRS` / `REMOVE_NODE`。
+② **明确上报为 unsupported**（不猜、不静默）：`LIST_UPDATE` / `LIST_SET` / `LIST_SPLICE`
+   （需**宿主侧列表映射** itemKey → 节点 id，布局核心不知道"哪些节点属于哪个列表项"）、
+   `INSERT_BLOCK`（需编译期块实例）、`MOVE_NODE`、`CALL_COMPONENT_UPDATE`。
+   上报即 `unsupported` 数组——**静默忽略才是最危险的失效模式**。
+③ `:style` 绑定归一为 `paint.style`（**不透明**）⇒ 正确地按「仅绘制」处理、不重排；
+   要测/要走几何必须用明确属性绑定（`:width` → `layout.width`）。
+④ 本里程碑用**最小编译产物**（单绑定场景）验证通路；全量 SFC → 端上渲染需 V4 的一致性收尾。
+⑤ `bytes → JSON 数组` 的跨边界形态是 JSExport 的妥协（ArrayBuffer 支持不稳）；
+   指令流极小（单节点更新 45 字节）故成本可忽略；ARM 侧的 JSI 直传属后续优化。
 - [ ] Rust 侧指令消费
 - [ ] 一帧一次 flush 调度（对齐 Choreographer）
 - [ ] **单节点更新 P95 实测**
@@ -642,9 +678,11 @@ Vue 3.6 把 `@vue/reactivity` 基于 alien-signals 重构，**显著提升响应
 ### V4 · 一致性与收尾（≈2 人周）
 
 - [ ] Web 端真值比对 conformance 门禁
-- [ ] L0/L1 混跑场景覆盖
+- [x] L0/L1 混跑场景覆盖（V2 已测：同一组件内共存，`explain --vapor` 可观测）
 - [ ] Vue 3.4 / 3.5 / 3.6 兼容性验证
 - [ ] 性能棘轮门禁
+- [ ] ★V3 遗留：宿主侧**列表映射**（让 `LIST_UPDATE` 可用——当前上报 unsupported）
+- [ ] ★V3 遗留：全量 SFC → 端上渲染（当前用最小编译产物验证通路）
 
 ---
 

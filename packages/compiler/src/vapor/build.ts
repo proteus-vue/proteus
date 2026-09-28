@@ -14,7 +14,16 @@
 //   误判为 L1 会导致**静默的 UI 不更新**，比慢 10 倍严重（方案 §12 第 3 条）。
 import { SlotRuntime } from '@proteus-vue/slot-runtime'
 import { decideTier } from '@proteus-vue/slot-runtime'
-import type { ExplainRow, SlotKind, UpdateTier } from '@proteus-vue/slot-runtime'
+import type {
+  ExplainRow,
+  SlotKind,
+  UpdateTier,
+  SubscriptionTable,
+  // ★本地也要用（不只是 re-export）——订阅表条目的构造引用了它们
+  SlotSubscription,
+  SourceSubscription,
+  EvaluatorSpec,
+} from '@proteus-vue/slot-runtime'
 import { scanReactiveSources } from './sources'
 import type { ReactiveSource } from './sources'
 import { analyzeExprDeps, collectTemplateBindings } from './deps'
@@ -22,77 +31,10 @@ import type { ExprDeps, TemplateBindingRef } from './deps'
 
 /* ────────────────────────── 产物形态（方案 §4.4） ────────────────────────── */
 
-/** 一个槽位的订阅条目 */
-export interface SlotSubscription {
-  /** 槽位 id（编译期连续分配；与 component-ir 的 DynamicBinding.slotId 对齐） */
-  slotId: number
-  /** 目标节点 id（component-ir 分配；本模块透传） */
-  nodeId: number
-  /** 求值函数 id（指向 `evaluators`；运行时按 id 取函数，不做字符串解析） */
-  evaluatorId: number
-  tier: UpdateTier
-  /** 槽位种类（决定发射哪种指令） */
-  kind: SlotKind
-  /** 目标属性键（归一化名，进 PropKeyTable） */
-  propKey: string
-}
-
-/** 一个响应式源的订阅条目 */
-export interface SourceSubscription {
-  sourceId: number
-  sourceName: string
-  sourceKind: ReactiveSource['kind']
-  /** ★该源变化时要直写的槽位（L1）；L0 槽位不出现在这里（它们走 Vue 渲染） */
-  slots: SlotSubscription[]
-}
-
-/**
- * 订阅表（方案 §4.4 的 `SubscriptionTable`）
- *
- * ★为什么是**可序列化的表**而不是 JS 源码字符串：
- *   方案 §4.4 明确「编译期产出的不是 JS 源码字符串，而是可序列化的订阅表」——
- *   源码字符串要在运行时 eval/new Function（跨端受限，小程序端禁 eval），
- *   而表可以被 JSON 序列化随产物下发，运行时按 id 查函数。
- */
-export interface SubscriptionTable {
-  /** 契约版本（与 evaluator 形态同步 bump） */
-  version: 1
-  /** 源表（id 稳定，按声明顺序） */
-  sources: SourceSubscription[]
-  /** 求值函数表（id → 形态声明；运行时据 kind/expr 建函数） */
-  evaluators: EvaluatorSpec[]
-  /** 未走 L1 的槽位（诊断：解释"为什么这个绑定没有加速"） */
-  l0Slots: Array<{ slotId: number; nodeId: number; propKey: string; reason: string }>
-  /** 统计（棘轮 / 覆盖率度量用） */
-  stats: {
-    /** L1 槽位数 */
-    l1: number
-    /** L0 槽位数 */
-    l0: number
-    /** L1 覆盖率 = l1 / (l1 + l0)（§10 验收：≥70% 槽位） */
-    l1Rate: number
-  }
-}
-
-/**
- * 求值函数规格（**可序列化**——不含闭包，运行时可从这份声明重建函数）
- *
- * ★形态只有三种，刻意保持极小：
- *   · `expr`   表达式文本（运行时 `new Function` 或按表达式 VM 求值）
- *   · `const`  常量（源变化不影响它 ⇒ 其实不会出现在订阅里，保留给静态提升）
- *   · `member` 纯成员访问（`item.name` 这类最常见形态，可**免解析**直接取值 —— 热路径优化）
- */
-export interface EvaluatorSpec {
-  evaluatorId: number
-  form: 'expr' | 'const' | 'member'
-  /** form='expr' 时的表达式源码（已剥壳） */
-  expr?: string
-  /** form='member' 时的路径（`a.b.c`）与根名 */
-  path?: string
-  root?: string
-  /** 纯函数注解（来源：`@proteus-pure`）—— 供诊断与 L1 准入 */
-  pure?: boolean
-}
+// ★类型定义在 **@proteus-vue/slot-runtime**（消费端），本模块 re-export——
+//   依赖方向单向：compiler → slot-runtime。反过来会成环；复制一份必然分叉。
+//   （与 V1 的 OpCode 同理：契约定义在消费端，生产端 import。）
+export type { SubscriptionTable, SourceSubscription, SlotSubscription, EvaluatorSpec } from '@proteus-vue/slot-runtime'
 
 /* ────────────────────────── 构建选项与结果 ────────────────────────── */
 
@@ -144,7 +86,6 @@ export function buildVaporSubscriptions(source: string, filename = 'anonymous.vu
   const forceL0 = new Set(opts.forceL0Slots ?? [])
 
   let slotId = opts.startSlotId ?? 0
-  let nodeId = opts.startNodeId ?? 0
   const slotsBySource = new Map<number, SlotSubscription[]>()
   const evaluators: EvaluatorSpec[] = []
   const l0Slots: SubscriptionTable['l0Slots'] = []
@@ -154,9 +95,13 @@ export function buildVaporSubscriptions(source: string, filename = 'anonymous.vu
   for (const ref of bindings) {
     const deps = analyzeExprDeps(ref.code, ref.scopes)
     const kind = slotKindOf(ref.propKey)
-    // 每个绑定 = 一个槽位；nodeId 按出现顺序分配（与 IR builder 的 DFS 一致）
+    // 每个绑定 = 一个槽位；★nodeId 取「该元素在模板序 DFS 中的序号」
+    //
+    // 【本仓实测的真缺陷】首版用「绑定序号」当 nodeId ⇒ `<p-view><p-view :width="w"/></p-view>`
+    //   里那个绑定拿到 nodeId=0（根），而它在树里是第 2 个节点 ⇒ **指令写到错误的节点**，
+    //   且不报错（几何静默不对）。⇒ nodeId 必须与 IR builder 同源（模板序 DFS 给每个元素编号）。
     const mySlot = slotId++
-    const myNode = nodeId++
+    const myNode = ref.elementIndex
 
     // ★Step 6：分层判定（复用 slot-runtime/tier.ts 的七条件实现——同一语义一处实现）
     //

@@ -236,6 +236,15 @@ export interface TemplateBindingRef {
   scopeSources: Record<string, string>
   /** 元素 tag（诊断） */
   tag: string
+  /**
+   * ★该元素在**模板序 DFS** 中的序号（= IR builder 分配的 nodeId）
+   *
+   * 【为什么必须有（本仓实测的真缺陷）】首版用「绑定序号」当 nodeId ⇒
+   *   `<p-view><p-view :width="w"/></p-view>` 里那个绑定拿到 nodeId=0（根），
+   *   而它在树里其实是第 2 个节点 ⇒ **指令写到错误的节点上**（且不报错，几何静默不对）。
+   *   ⇒ 正解：nodeId 必须与 IR builder 同源——两者都是「模板序 DFS 给**每个元素**编号」。
+   */
+  elementIndex: number
   /** 源码行（1-based，诊断定位） */
   line?: number
   /** 是否在运行时才可判定的 v-if 分支内（C5 判定输入） */
@@ -266,7 +275,15 @@ export function collectTemplateBindings(source: string, filename = 'anonymous.vu
     return out
   }
 
-  const walk = (nodes: unknown[], scopes: string[], inBranch: boolean, scopeSources: Record<string, string> = {}): void => {
+  let nextElementIndex = 0
+  const walk = (
+    nodes: unknown[],
+    scopes: string[],
+    inBranch: boolean,
+    scopeSources: Record<string, string> = {},
+    /** ★当前所在元素（插值不是元素，它归属父元素） */
+    parentElementIndex = 0,
+  ): void => {
     for (const raw of nodes) {
       const n = raw as {
         type: number
@@ -295,6 +312,8 @@ export function collectTemplateBindings(source: string, filename = 'anonymous.vu
       let nextScopeSources = scopeSources
 
       if (n.type === 1 /* ELEMENT */) {
+        // ★每个元素（无论是否含绑定）都占一个序号——与 IR builder 的 DFS 编号一致
+        const myElementIndex = nextElementIndex++
         for (const p of n.props ?? []) {
           const EXPR = 7 /* DIRECTIVE */
           const name = p.name
@@ -309,7 +328,7 @@ export function collectTemplateBindings(source: string, filename = 'anonymous.vu
             nextScopes = [...scopes, ...names]
             // v-for 的**源表达式**（`in` 之后那半）也是依赖（用**外层**作用域解析）
             const srcExpr = parts.slice(1).join(' ')
-            if (srcExpr) out.push(binding(srcExpr, 'v-for', 'list.items', tag, expLine, scopes, inBranch, scopeSources))
+            if (srcExpr) out.push(binding(srcExpr, 'v-for', 'list.items', tag, expLine, scopes, inBranch, scopeSources, myElementIndex))
             // ★别名 → 列表源根名（`item in list` ⇒ item → list）
             const listRoot = srcExpr.trim().split('.')[0]?.replace(/[^\w$]/g, '') ?? ''
             if (listRoot) {
@@ -320,13 +339,13 @@ export function collectTemplateBindings(source: string, filename = 'anonymous.vu
           }
           // v-if / v-else-if：条件本身是依赖；★其**内部**属「运行时分支」（C5）
           if (name === 'if' || name === 'else-if') {
-            out.push(binding(String(expCode), `v-${name}`, 'visible', tag, expLine, scopes, inBranch, scopeSources))
+            out.push(binding(String(expCode), `v-${name}`, 'visible', tag, expLine, scopes, inBranch, scopeSources, myElementIndex))
             nextBranch = true
             continue
           }
           // v-show 与 v-if 不同：节点**始终在树内**，只是可见性切换 ⇒ 不算运行时分支
           if (name === 'show') {
-            out.push(binding(String(expCode), 'v-show', 'visible', tag, expLine, scopes, inBranch, scopeSources))
+            out.push(binding(String(expCode), 'v-show', 'visible', tag, expLine, scopes, inBranch, scopeSources, myElementIndex))
             continue
           }
           // 动态绑定（:x / v-bind:x / v-model）——★属性名在 arg 里
@@ -334,22 +353,23 @@ export function collectTemplateBindings(source: string, filename = 'anonymous.vu
             const arg = name === 'model' ? (p.arg?.content ?? 'modelValue') : (p.arg?.content ?? '')
             // 无 arg 的 v-bind="obj"（展开对象）：无法静态定位属性 ⇒ 记为 attrs（C2 交由解析结果判）
             const propKey = arg ? normalizePropKey(arg) : 'attr.spread'
-            out.push(binding(String(expCode), arg ? `:${arg}` : 'v-bind', propKey, tag, expLine, scopes, inBranch, scopeSources))
+            out.push(binding(String(expCode), arg ? `:${arg}` : 'v-bind', propKey, tag, expLine, scopes, inBranch, scopeSources, myElementIndex))
           }
         }
-        walk((n.children ?? []) as unknown[], nextScopes, nextBranch, nextScopeSources)
+        walk((n.children ?? []) as unknown[], nextScopes, nextBranch, nextScopeSources, myElementIndex)
         continue
       }
+      // ★插值（type 5）本身不是元素：它归属**最近遍历到的元素**（INTERPOLATION 只出现在元素子节点里）
       if (n.type === 5 /* INTERPOLATION */) {
         // ★插值的 content 是**对象** `{ content: '表达式', loc }`（与指令的 exp 不同层）
         const c = n.content as { content?: string; loc?: { start?: { line?: number } } } | undefined
         const code = typeof c === 'object' ? c.content : (c as unknown as string)
         if (code) {
-          out.push(binding(String(code), '{{ }}', 'text.content', tag, c?.loc?.start?.line ?? line, scopes, inBranch, scopeSources))
+          out.push(binding(String(code), '{{ }}', 'text.content', tag, c?.loc?.start?.line ?? line, scopes, inBranch, scopeSources, parentElementIndex))
         }
         continue
       }
-      if (Array.isArray(n.children)) walk(n.children, nextScopes, nextBranch, nextScopeSources)
+      if (Array.isArray(n.children)) walk(n.children, nextScopes, nextBranch, nextScopeSources, parentElementIndex)
     }
   }
 
@@ -366,8 +386,9 @@ function binding(
   scopes: string[],
   inRuntimeBranch: boolean,
   scopeSources: Record<string, string> = {},
+  elementIndex = 0,
 ): TemplateBindingRef {
-  return { code: code.trim(), where, propKey, tag, line, scopes: [...scopes], inRuntimeBranch, scopeSources: { ...scopeSources } }
+  return { code: code.trim(), where, propKey, tag, line, scopes: [...scopes], inRuntimeBranch, scopeSources: { ...scopeSources }, elementIndex }
 }
 
 /** 属性名 → IR 归一化 propKey（与 component-ir 约定对齐；未知前缀归 attr） */

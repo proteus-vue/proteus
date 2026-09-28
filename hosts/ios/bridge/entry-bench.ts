@@ -26,6 +26,10 @@ import { createSelfDrawAdapter } from '@proteus-vue/renderer-app/adapters/selfdr
 // ★被测应用工厂 + V0 探针的三种用法：与**桌面自检**共用同一份实现
 //   （见 bench-app.ts 顶部说明；桌面自检 tests/v0-probe-mechanism.test.ts）
 import { makeApp, VP } from './bench-app'
+// ★Vapor IR V3：槽位运行时（指令生成侧）。订阅表由**构建期**生成并随包下发
+//   （编译器不进 app——它依赖 @babel/*，且 app 里没有解析 SFC 的场景；见 gen-vapor-table.mjs）
+import { SlotRuntime, VaporRuntime, PropKeyTable, StringPool } from '@proteus-vue/slot-runtime'
+import vaporTableJson from './dist/vapor-table.json'
 import type { BenchApp } from './bench-app'
 
 /* ────────────────────────── 宿主桥（与自绘场景同形，复用同一 Swift 宿主） ────────────────────────── */
@@ -34,6 +38,8 @@ interface SelfDrawNative {
   mount(treeJson: string): string
   update(treeJson: string): string
   updatePatches(patchesJson: string): string
+  /** ★Vapor IR V3：二进制指令流（字节数组 JSON 表示——指令流本身极小） */
+  applyOps(opsBytesJson: string): string
   snapshot(name: string): string
   report(json: string): void
   done(summaryJson: string): void
@@ -46,7 +52,7 @@ const BN = { snapshot: 'bench-final' }
 // ★构建标识：每次构建写入，用于**确凿判定**设备上跑的是哪份代码
 //   （踩坑：靠文件 mtime 判断"报告是否刷新"不可靠——新建目标文件的时间恒为"现在"；
 //    且我看不出设备实际执行的是旧 bundle，白跑一轮。有了这个字段就能一眼判定。）
-const BUILD_ID = '49c925d2-100302'
+const BUILD_ID = '089d848b-103149'
 const now = (): number => Date.now()
 /** 宽松解析（宿主返回可能是字符串或已是对象） */
 const safeParseAny = (s: any): any => {
@@ -724,6 +730,121 @@ CASES.push({
         extra: { seen },
       })
     }
+  },
+})
+
+/* ────────────── V3 探针：二进制指令流 → 真机几何（单节点更新 P95）────────────── */
+
+/**
+ * ★★V3 用例（方案 §9 V3 里程碑：「槽位运行时对接 JSI · Rust 侧指令消费 · P95 实测」）
+ *
+ * 【与前序用例的关系】
+ *   · V0 探针证明了「v-memo 等价物能把 Vue 侧 78ms 压到 9ms」——那是**上界**（Vue 原生手段）
+ *   · 本用例走**完整 Vapor 链路**：TS 订阅表 → 槽位直写 → 二进制指令 → Swift 宿主 → Rust 应用
+ *     ⇒ 给出的是**本实现自己的读数**（V0 的 9ms 不是它——这个区别在 V1/V2 的诚实边界里反复强调过）
+ *
+ * 【怎么造树】用最小编译产物形状：一个根 + 一行圆点，绑定挂在该圆点上。
+ *   ★nodeId 对齐纪律（V3 实测踩到）：模板里元素的**个数与顺序**必须与建树一致——
+ *   本用例的模板是 2 个元素（root + dot），故建树也是 2 个节点。
+ */
+CASES.push({
+  name: 'V3_vapor_slot_pipeline',
+  note: '★★V3：订阅表 → 槽位直写 → 二进制指令 → 真机 Rust 应用（单节点更新，含 P95）',
+  fn: async () => {
+    // ① 编译期产物（由构建期生成器落盘，此处直接读——见 gen-vapor-table.mjs 顶注）
+    const built = vaporTableJson as unknown as {
+      ok: boolean
+      table: import('@proteus-vue/slot-runtime').SubscriptionTable
+      decisions: unknown[]
+      notes: string[]
+    }
+    if (!built.ok) {
+      results.push({
+        case: 'V3_vapor_slot_pipeline', note: `✗ 编译期产物构建失败：${built.notes.join('; ')}`,
+        items: 0, nodes: 0, vue_ms: -1, to_request_ms: -1, serialize_ms: -1, host_ms: -1,
+        total_ms: -1, patch_count: -1, request_bytes: -1,
+      })
+      return
+    }
+
+    // ② 建真机树（与模板元素序对齐：0=root · 1=dot）
+    const treeReq = {
+      viewport: VP,
+      nodes: [
+        { id: 0, parentId: null, flexDirection: 'column', width: VP.width, height: VP.height },
+        { id: 1, parentId: 0, width: 36, height: 36 },
+      ],
+    }
+    const mountOut = safeParseAny(proteusSelfDraw.mount(JSON.stringify(treeReq)))
+    if (!mountOut?.ok) {
+      results.push({
+        case: 'V3_vapor_slot_pipeline', note: `✗ 建树失败：${JSON.stringify(mountOut)?.slice(0, 120)}`,
+        items: 0, nodes: 0, vue_ms: -1, to_request_ms: -1, serialize_ms: -1, host_ms: -1,
+        total_ms: -1, patch_count: -1, request_bytes: -1,
+      })
+      return
+    }
+
+    // ③ 槽位运行时（订阅表驱动）
+    const keys = new PropKeyTable()
+    const strings = new StringPool()
+    const captured: Uint8Array[] = []
+    const rt = new SlotRuntime(keys, strings, (bytes) => captured.push(bytes))
+    let dotW = 36
+    const ctx = { read: (n: string) => (n === 'dotW' ? dotW : undefined) }
+    const vapor = new VaporRuntime(built.table, rt, VaporRuntime.buildEvaluators(built.table.evaluators))
+    const triggers = new Map<string, () => void>()
+    const loadRes = vapor.load(ctx, (name, cb) => triggers.set(name, cb))
+    vapor.relink(ctx)
+    rt.flush()
+    captured.length = 0   // 丢掉首帧
+
+    // ④ 连续更新：交替取值 ⇒ 每次都是**真实变更**，采样 P95
+    const ITERS = 100
+    const samples: number[] = []
+    let lastOut: Record<string, unknown> | undefined
+    for (let i = 0; i < ITERS; i++) {
+      dotW = i % 2 ? 20 : 40
+      const t0 = now()
+      triggers.get('dotW')?.()
+      rt.flush()
+      const bytes = captured.pop()
+      const tJs = now()
+      if (bytes) {
+        // 字节数组 → JSON（JSExport 对 ArrayBuffer 支持不稳；指令流极小，成本可忽略）
+        lastOut = safeParseAny(proteusSelfDraw.applyOps(JSON.stringify(Array.from(bytes))))
+      }
+      samples.push(now() - t0)
+      void tJs
+    }
+    samples.sort((a, b) => a - b)
+    const pick = (p: number) => samples[Math.min(samples.length - 1, Math.floor(samples.length * p))]
+
+    results.push({
+      case: 'V3_vapor_slot_pipeline',
+      note: `V3 完整链路：订阅表 → 槽位 → 二进制指令 → 真机 Rust（${ITERS} 次单节点更新）`,
+      items: 2, nodes: (mountOut.node_count as number) ?? 2,
+      vue_ms: pick(0.5), to_request_ms: 0, serialize_ms: 0,
+      host_ms: (lastOut?.host_total_ms as number) ?? 0,
+      total_ms: samples.reduce((a, b) => a + b, 0),
+      patch_count: rt.getStats().opsEmitted, request_bytes: (lastOut?.in_bytes as number) ?? 0,
+      extra: {
+        l1_slots: loadRes.l1Slots,
+        l0_slots: loadRes.l0Slots,
+        unsupported_evaluators: loadRes.unsupportedEvaluators.length,
+        p50_ms: pick(0.5), p95_ms: pick(0.95), p99_ms: pick(0.99),
+        min_ms: samples[0], max_ms: samples[samples.length - 1],
+        flushes: rt.getStats().flushes,
+        ops_total: rt.getStats().opsEmitted,
+        host_relayout: lastOut?.relayout_count,
+        host_scopes: lastOut?.scopes,
+        host_updated_layers: lastOut?.updated_layers,
+        host_unsupported: lastOut?.unsupported_count,
+        host_apply_ms: lastOut?.apply_ms,
+        host_layers_ms: lastOut?.layers_ms,
+      },
+    })
+    markCeiling('vapor', `单节点更新 ×${ITERS}`, pick(0.95), 'V3 完整链路 p95')
   },
 })
 

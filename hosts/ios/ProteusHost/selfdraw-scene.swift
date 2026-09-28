@@ -38,6 +38,9 @@ func proteus_layout_free_string(_ ptr: UnsafeMutablePointer<CChar>)
 
 @_silgen_name("proteus_layout_update")
 func proteus_layout_update(_ handle: UInt64, _ patchesJson: UnsafePointer<CChar>) -> UnsafeMutablePointer<CChar>
+/// ★Vapor IR V3：二进制指令流入口（字节指针 + 长度）
+@_silgen_name("proteus_layout_apply_ops")
+func proteus_layout_apply_ops(_ handle: UInt64, _ ptr: UnsafePointer<UInt8>, _ len: UInt32) -> UnsafeMutablePointer<CChar>
 
 func takeCString(_ ptr: UnsafeMutablePointer<CChar>) -> String {
     defer { proteus_layout_free_string(ptr) }
@@ -69,6 +72,15 @@ func physFootprintMB() -> Double {
     func update(_ treeJson: String) -> String
     /// ★★**增量更新**：只发改动过的节点的样式补丁（跨边界字节数从 280KB 降到几十字节）
     func updatePatches(_ patchesJson: String) -> String
+    /// ★★**Vapor IR V3：二进制指令流入口**（V1 编码 → Rust 解码 → 应用 → 多范围增量重排）
+    ///
+    /// 【为什么另开一个入口而不是复用 updatePatches】
+    ///   · `updatePatches` 收 **JSON**（每帧跨边界要文本解析——本仓实测占布局耗时 95%+）
+    ///   · 本入口收 **二进制指令流**（顺序读 + 定长字段，免解析）
+    ///   两条路径并存：JSON 保持兼容，二进制给 Vapor 用。
+    ///   入参 `opsJson` 是**字节数组的 JSON 表示**（JSExport 对 ArrayBuffer 支持不稳，
+    ///   而指令流本就极小——实测单节点更新 45 字节，base64/数组序列化成本可忽略）。
+    func applyOps(_ opsBytesJson: String) -> String
     /// 截图落盘（验证「屏幕上真的画出来了」）
     func snapshot(_ name: String) -> String
     /// JS 侧自报读数（Vue mount / update 耗时 + patch 次数）
@@ -433,6 +445,66 @@ final class SelfDrawBridge: NSObject, SelfDrawExports {
                            "patch_count": applied, "relayout_count": relayout,
                            "changed_rects": changed.count, "updated_layers": updated,
                            "update_ms": round(updateMs * 100) / 100,
+                           "layers_ms": round(layersMs * 100) / 100,
+                           "host_total_ms": round(totalMs * 100) / 100])
+    }
+
+    /// ★Vapor IR V3：应用二进制指令流（字节数组 JSON → Rust 侧解码 + 应用 + 多范围重排）
+    ///
+    /// 【诚实边界】本方法**只做通道**：几何由 Rust 的 `proteus_layout_apply_ops` 算，
+    ///   layer 更新复用既有的 `updateLayersIncremental`（与 updatePatches 同一条路径）。
+    ///   V3 交付的是「二进制指令流能驱动真机几何」这条**通路**，不改既有绘制逻辑。
+    func applyOps(_ opsBytesJson: String) -> String {
+        guard let view = view, handle != 0 else {
+            return "{\"ok\":false,\"error\":\"未建树或未接入核心\"}"
+        }
+        let t0 = CFAbsoluteTimeGetCurrent()
+        // 字节数组 JSON → [UInt8]（如 "[2,0,0,0,1,0,...]"）
+        guard let data = opsBytesJson.data(using: .utf8),
+              let arr = (try? JSONSerialization.jsonObject(with: data)) as? [Int] else {
+            return "{\"ok\":false,\"error\":\"opsBytes 解析失败（需字节数组 JSON）\"}"
+        }
+        var bytes = [UInt8](repeating: 0, count: arr.count)
+        for (i, v) in arr.enumerated() where v >= 0 && v <= 255 { bytes[i] = UInt8(v) }
+
+        let out: String = bytes.withUnsafeBufferPointer { buf in
+            guard let base = buf.baseAddress else { return "{\"ok\":false,\"error\":\"空指令流\"}" }
+            return takeCString(proteus_layout_apply_ops(handle, base, UInt32(buf.count)))
+        }
+        let applyMs = (CFAbsoluteTimeGetCurrent() - t0) * 1000
+        guard out.contains("\"ok\":true") else {
+            return "{\"ok\":false,\"error\":\"applyOps 失败\",\"raw\":\(jsonEscape(String(out.prefix(300))))}"
+        }
+        let o = (try? JSONSerialization.jsonObject(with: Data(out.utf8))) as? [String: Any]
+        let applied = (o?["applied"] as? Int) ?? 0
+        let relayout = (o?["relayout_count"] as? Int) ?? 0
+        let scopes = (o?["scopes"] as? [Int]) ?? []
+        let unsupported = (o?["unsupported"] as? [[String: Any]]) ?? []
+
+        // 变化集 → layer 增量更新（与 updatePatches 同一条路径）
+        var changed: [(id: Int, abs: CGRect)] = []
+        if let rm = o?["rects"] as? [String: [String: Double]] {
+            for (k, r) in rm {
+                guard let nid = Int(k) else { continue }
+                changed.append((id: nid, abs: CGRect(x: r["x"] ?? 0, y: r["y"] ?? 0,
+                                                    width: r["width"] ?? 0, height: r["height"] ?? 0)))
+            }
+        }
+        let tL = CFAbsoluteTimeGetCurrent()
+        let updated = view.updateLayersIncremental(changed: changed)
+        let layersMs = (CFAbsoluteTimeGetCurrent() - tL) * 1000
+        let totalMs = (CFAbsoluteTimeGetCurrent() - t0) * 1000
+        let mem = physFootprintMB()
+        SelfDrawBridge.memPeakMB = max(SelfDrawBridge.memPeakMB, mem)
+        lastTiming = ["measure_ms": 0, "layout_ms": (applyMs * 100).rounded() / 100,
+                      "build_layers_ms": (layersMs * 100).rounded() / 100,
+                      "host_total_ms": (totalMs * 100).rounded() / 100]
+        return jsonString(["ok": true, "path": "applyOps", "incremental": true,
+                           "in_bytes": bytes.count,
+                           "patch_count": applied, "relayout_count": relayout,
+                           "scopes": scopes, "changed_rects": changed.count, "updated_layers": updated,
+                           "unsupported_count": unsupported.count,
+                           "apply_ms": round(applyMs * 100) / 100,
                            "layers_ms": round(layersMs * 100) / 100,
                            "host_total_ms": round(totalMs * 100) / 100])
     }
