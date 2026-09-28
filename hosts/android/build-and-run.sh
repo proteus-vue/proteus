@@ -73,6 +73,21 @@ SO_SRC="$CARGO_TARGET_DIR/aarch64-linux-android/release/libproteus_layout_core.s
 [ -f "$SO_SRC" ] || { echo "✗ 未生成 .so：$SO_SRC"; exit 3; }
 echo "    .so $(du -h "$SO_SRC" | awk '{print $1}')"
 
+echo "==> ①.5 生成跨语言夹具（TS 编码 → 冻结进 Java；见 gen-ops-fixture.mjs）"
+# ★★为什么必须在这里生成（而不是"构建前手工跑一次"）
+#
+# 【故障链（本仓踩过同族）】夹具是**产物**，它由 TS 侧的真实编码器/适配器产出。
+#   若不在构建时刷新：改了适配器（如 `takeSplice` 形状）后构建**照样成功**，
+#   设备却拿着**旧形状**的夹具在跑 ⇒ 用例绿着，而真正的契约早已分叉（= 在测旧产物）。
+#   实测先例：build-bench 曾因 `| tail -1` 静默失败，让设备跑了一轮旧 bundle。
+#   ⇒ 纪律：**生成物必须在构建路径上**，不能依赖"记得手工跑"。
+if ! node "$HERE/gen-ops-fixture.mjs" > "$BUILD/gen-fixture.log" 2>&1; then
+  echo "✗ 夹具生成失败 —— 完整输出见 $BUILD/gen-fixture.log："
+  tail -20 "$BUILD/gen-fixture.log"
+  exit 3
+fi
+tail -3 "$BUILD/gen-fixture.log" | sed 's/^/    /'
+
 echo "==> ② 编译 Java 宿主（javac → .class）"
 CLASSES="$BUILD/classes"; rm -rf "$CLASSES"; mkdir -p "$CLASSES"
 find "$APP/src/main/java" -name '*.java' > "$BUILD/java-sources.txt"

@@ -1,0 +1,25 @@
+{
+  "ok": true,
+  "path": "apply-ops",
+  "note": "★★跨语言 golden：字节由 TS encodeOps 在构建期产出并冻结 → 真机 Rust 解码执行",
+  "fixture_bytes": 45,
+  "fixture_keys": [
+    "layout.width"
+  ],
+  "node_id": 2,
+  "width_before": 50,
+  "width_after": 180,
+  "width_expected": 180,
+  "patch_count": 1,
+  "relayout_count": 2,
+  "unsupported_count": 0,
+  "dirty_count": 1,
+  "changed_rects": 2,
+  "raw": "{\"applied\":1,\"changed_roots\":[],\"dirty\":[2],\"ok\":true,\"paint_only\":0,\"rects\":{\"1\":{\"height\":60.0,\"width\":400.0,\"x\":0.0,\"y\":0.0},\"2\":{\"height\":30.0,\"width\":180.0,\"x\":0.0,\"y\":0.0}},\"relayout_count\":2,\"scopes\":[1],\"text_updates\":{},\"timing\":{\"apply_ms\":0.008698000000000001,\"collect_ms\":0.001302,\"engine_phases\":{\"scope_node_count\":2.0,\"subtree_ms\":0.014063,\"total_ms\":0.014063},\"lock_ms\":0.00020800000000000001,\"relayout_ms\":0.039636},\"unsupported\":[]}",
+  "check_baseline": true,
+  "check_decode_matched": true,
+  "check_width_applied": true,
+  "check_scope_bounded": true,
+  "check_no_unsupported": true,
+  "verdict": "PASS"
+}
