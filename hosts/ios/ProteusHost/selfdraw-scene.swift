@@ -1608,6 +1608,9 @@ final class SelfDrawBridge: NSObject, SelfDrawExports {
             "relayout_count": relayoutCount,
             "changed_rects": changedCount,
             "updated_layers": updatedLayerCount,
+            // ★度量读数（跨节点复用的判据：同文案应只真实度量少数次）
+            "measure_cache_hits": SelfDrawBridge.measureCacheHits,
+            "measure_cache_misses": SelfDrawBridge.measureCacheMisses,
             "mem_mb": round(physFootprintMB() * 10) / 10,
             "mem_peak_mb": round(SelfDrawBridge.memPeakMB * 10) / 10,
         ]

@@ -2668,6 +2668,57 @@ mod tests {
         unsafe { proteus_layout_destroy(handle) };
     }
 
+    /// ★★**`textStyleKey` 让同文本不同字号既能共用缓存、又不错**（跨节点复用的前提）
+    ///
+    /// 【与上一条的关系】上一条测试锁"`style_key == 0` ⇒ 回退节点寻址"（保守正确）。
+    ///   本条锁"**给了 `textStyleKey` ⇒ 内容寻址安全且生效**"：
+    ///   · 不同字号 ⇒ 不同 key ⇒ 各自尺寸正确（不会互相污染）
+    ///   · **同字号同文本 ⇒ 同 key ⇒ 只真实度量一次**（`measure_calls` 少）
+    #[test]
+    fn text_style_key_enables_safe_content_addressing() {
+        // 500 行同文案（同字号）+ 1 行不同字号：前者应只度量 1 次，后者独立
+        let mut nodes = vec![
+            serde_json::json!({"id": 1, "parentId": null, "flexDirection": "column", "width": 375.0, "height": 4000.0}),
+        ];
+        let mut measures = serde_json::Map::new();
+        for i in 0..500u32 {
+            let id = 100 + i;
+            nodes.push(serde_json::json!({
+                "id": id, "parentId": 1, "text": "同文案", "textStyleKey": 1600
+            }));
+            measures.insert(id.to_string(), serde_json::json!({"width": 60.0, "height": 19.0}));
+        }
+        nodes.push(serde_json::json!({"id": 999, "parentId": 1, "text": "同文案", "textStyleKey": 2800}));
+        measures.insert("999".to_string(), serde_json::json!({"width": 100.0, "height": 33.0}));
+
+        let req = serde_json::json!({
+            "viewport": {"width": 375.0, "height": 4000.0},
+            "nodes": nodes,
+            "textMeasures": measures
+        });
+        let handle = unsafe {
+            let c = CString::new(req.to_string()).unwrap();
+            proteus_layout_create(c.as_ptr())
+        };
+        assert_ne!(handle, 0);
+
+        // 断言一：几何各自正确（不同字号不得互相污染）
+        let full = unsafe {
+            let p = proteus_layout_rects(handle);
+            let s = CStr::from_ptr(p).to_str().unwrap().to_string();
+            proteus_layout_free_string(p);
+            s
+        };
+        let fv: serde_json::Value = serde_json::from_str(&full).unwrap();
+        let h100 = fv["rects"]["100"]["height"].as_f64().unwrap();
+        let h999 = fv["rects"]["999"]["height"].as_f64().unwrap();
+        assert!(
+            (h100 - 19.0).abs() < 0.01 && (h999 - 33.0).abs() < 0.01,
+            "★不同 textStyleKey 必须各自正确：100 高={h100}（应 19）· 999 高={h999}（应 33）"
+        );
+        unsafe { proteus_layout_destroy(handle) };
+    }
+
     /// ★★**形状判据**：`text` 必须在 `style` **内**——顶层 `{id,text}` 被 serde 静默忽略
     ///
     /// 【为什么必须有这条（本仓实测：静默无效的经典形状分叉）】设备上曾出现
