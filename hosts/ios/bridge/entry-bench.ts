@@ -51,6 +51,10 @@ interface SelfDrawNative {
   nowUs?(): string
   /** ★V4 A/B：'v4'（二进制返回 + 只更可见层）| 'v3'（JSON 返回 + 全部层） */
   setOptMode?(mode: string): string
+  /** ★V4：滚动视图（dx/dy 像素）——触发 layoutSubviews → 补刷已滚入的待更新层 */
+  scrollBy?(dx: Double, dy: Double): String
+  /** ★V4：当前待补刷（视口外）的层数 + 上次补刷数 */
+  pendingStats?(): String
   snapshot(name: string): string
   report(json: string): void
   done(summaryJson: string): void
@@ -63,7 +67,7 @@ const BN = { snapshot: 'bench-final' }
 // ★构建标识：每次构建写入，用于**确凿判定**设备上跑的是哪份代码
 //   （踩坑：靠文件 mtime 判断"报告是否刷新"不可靠——新建目标文件的时间恒为"现在"；
 //    且我看不出设备实际执行的是旧 bundle，白跑一轮。有了这个字段就能一眼判定。）
-const BUILD_ID = '8b4f8724-113817'
+const BUILD_ID = '37be1233-120213'
 const now = (): number => Date.now()
 /** 宽松解析（宿主返回可能是字符串或已是对象） */
 const safeParseAny = (s: any): any => {
@@ -1078,8 +1082,27 @@ CASES.push({
         const total = clock() - t0
         return { perIterUs: (total / N) * 1000, last, nodes: (m.node_count as number) ?? 0 }
       }
-      const abV3 = runAB('v3')
-      const abV4 = runAB('v4')
+      // ★三轮取中位（V4 下半：热降频让单轮读数在 26–139ms 间摆动，
+      //   本仓实测——单轮不可复现 ⇒ 必须多轮取中位，并把三轮原值一并落盘）
+      const roundsV3: number[] = []
+      const roundsV4: number[] = []
+      let lastV3: Record<string, unknown> | undefined
+      let lastV4: Record<string, unknown> | undefined
+      for (let r = 0; r < 3; r++) {
+        const a = runAB('v3')
+        const b = runAB('v4')
+        if (a) {
+          roundsV3.push(a.perIterUs)
+          lastV3 = a.last
+        }
+        if (b) {
+          roundsV4.push(b.perIterUs)
+          lastV4 = b.last
+        }
+      }
+      const med = (xs: number[]) => [...xs].sort((a, b) => a - b)[Math.floor(xs.length / 2)]
+      const abV3 = roundsV3.length ? { perIterUs: med(roundsV3), last: lastV3 } : null
+      const abV4 = roundsV4.length ? { perIterUs: med(roundsV4), last: lastV4 } : null
       proteusSelfDraw.setOptMode?.('v4') // 复位
       if (abV3 && abV4) {
         results.push({
@@ -1094,10 +1117,83 @@ CASES.push({
             v3_amortized_us: Math.round(abV3.perIterUs * 1000) / 1000,
             v4_amortized_us: Math.round(abV4.perIterUs * 1000) / 1000,
             speedup: Math.round((abV3.perIterUs / Math.max(abV4.perIterUs, 0.001)) * 100) / 100,
+            // ★三轮原值（可复核离散度——单轮读数不可复现的证据）
+            v3_rounds_us: roundsV3.map((x) => Math.round(x * 1000) / 1000),
+            v4_rounds_us: roundsV4.map((x) => Math.round(x * 1000) / 1000),
+            // ★Rust 侧分段（闭合总账）
+            v4_apply_ms: lastV4?.apply_ms, v4_relayout_ms: lastV4?.relayout_ms,
+            v3_apply_ms: lastV3?.apply_ms, v3_relayout_ms: lastV3?.relayout_ms,
+            // ★layers 三段分解（定位残余）
+            v4_layers_sort_ms: lastV4?.layers_sort_ms,
+            v4_layers_frames_ms: lastV4?.layers_frames_ms,
+            v4_layers_commit_ms: lastV4?.layers_commit_ms,
+            v3_layers_sort_ms: lastV3?.layers_sort_ms,
+            v3_layers_frames_ms: lastV3?.layers_frames_ms,
+            v3_layers_commit_ms: lastV3?.layers_commit_ms,
             v3_rects_bin_ms: abV3.last?.rects_bin_ms, v3_layers_ms: abV3.last?.host_layers_ms,
             v4_rects_bin_ms: abV4.last?.rects_bin_ms, v4_layers_ms: abV4.last?.host_layers_ms,
             v4_deferred: abV4.last?.deferred,
             v3_geom: abV3.last?.geom_changed, v4_geom: abV4.last?.geom_changed,
+          },
+        })
+      }
+    }
+
+    // ── ★★V4 滚动端到端：验证「不可见层延后 + 滚入前补刷」的正确性 ──
+    //
+    // 【为什么必须测（这是「只更可见层」的正确性红线）】
+    //   优化把视口外的层更新**记账延后**（pendingOffscreen）。若滚入时没补刷，
+    //   那些层会显示**旧几何**（错位）——而且**只有在滚动后才看得见**，
+    //   静态截图与不滚动的用例都发现不了。⇒ 必须真滚一次并核对几何。
+    {
+      const nodes: Array<Record<string, unknown>> = [
+        { id: 0, parentId: null, flexDirection: 'column', width: VP.width, height: VP.height },
+        { id: 2, parentId: 0, flexDirection: 'row', width: VP.width - 32, height: 56, flexShrink: 0 },
+        { id: 1, parentId: 2, width: 36, height: 36 },
+      ]
+      const ROWS = 200
+      for (let i = 0; i < ROWS; i++) {
+        const rid = 100 + i * 4
+        nodes.push({ id: rid, parentId: 0, flexDirection: 'row', width: VP.width - 32, height: 56, flexShrink: 0 })
+        nodes.push({ id: rid + 1, parentId: rid, width: 36, height: 36 })
+        nodes.push({ id: rid + 2, parentId: rid, flexGrow: 1, flexDirection: 'column' })
+        nodes.push({ id: rid + 3, parentId: rid + 2, width: 120, height: 16 })
+      }
+      proteusSelfDraw.setOptMode?.('v4')
+      const m = safeParseAny(proteusSelfDraw.mount(JSON.stringify({ viewport: VP, nodes })))
+      if (m?.ok) {
+        const keys = new PropKeyTable()
+        const strings = new StringPool()
+        const cap: Uint8Array[] = []
+        const rt = new SlotRuntime(keys, strings, (b) => cap.push(b))
+        const hk = keys.intern('layout.height')
+        // 改首行高 ⇒ 后续 199 行全部移位（其中绝大多数在视口外 ⇒ 应被延后）
+        rt.buffer.push({ op: 0x02, nodeId: 2, keyId: hk, value: 80 })
+        rt.flush()
+        const b = cap.pop()
+        const out1 = b ? safeParseAny(proteusSelfDraw.applyOps(JSON.stringify(Array.from(b)))) : undefined
+        const deferred = (out1?.deferred as number) ?? 0
+
+        // ★滚动方向（本仓实测纠正）：`contentOffset.y` 增大 = 内容上移 = **向下滚**，
+        //   于是**后面的行**进入视野。首版传 -600（方向反了）⇒ 没有任何行滚入 ⇒ 补刷恒为 0。
+        //   滚动量取足够大（跨过预取区），确保确实有行从"不可见"变为"可见"。
+        const pendingBefore = safeParseAny(proteusSelfDraw.pendingStats?.() ?? '{}')
+        proteusSelfDraw.scrollBy?.(0, 1200)
+        const pendingAfter = safeParseAny(proteusSelfDraw.pendingStats?.() ?? '{}')
+
+        results.push({
+          case: 'V4_scroll_flush',
+          note: '★★V4 滚动端到端：视口外延后 → 滚动补刷（验证「滚入前不漏刷」）',
+          items: ROWS, nodes: (m.node_count as number) ?? 0,
+          vue_ms: 0, to_request_ms: 0, serialize_ms: 0, host_ms: 0,
+          total_ms: 0, patch_count: 1, request_bytes: 0,
+          extra: {
+            deferred_after_update: deferred,
+            pending_before_scroll: pendingBefore?.pending,
+            pending_after_scroll: pendingAfter?.pending,
+            flushed_on_scroll: pendingAfter?.last_flushed,
+            // ★判据：延后的应有大量（>0）；滚动后补刷数应 >0（说明滚入的层被刷了）
+            verdict: deferred > 0 && ((pendingAfter?.last_flushed as number) ?? 0) > 0 ? 'PASS' : 'FAIL',
           },
         })
       }
