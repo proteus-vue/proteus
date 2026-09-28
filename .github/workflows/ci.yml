@@ -51,6 +51,9 @@ jobs:
       - name: 构建 V3 端到端驱动（TS「指令 → Rust 应用 → 几何」链路的测试载体）
         run: cargo build --manifest-path packages/layout-core-rust/Cargo.toml --example ops_roundtrip
 
+      - name: Vapor IR 性能棘轮（★只降不升——防平移传播/返回通道优化被静默回退）
+        run: pnpm run check:vapor-perf
+
       - name: 依赖声明完整性审计（#422：pnpm 严格解析——import vs package.json 零缺失）
         run: node scripts/check-deps.mjs
 
