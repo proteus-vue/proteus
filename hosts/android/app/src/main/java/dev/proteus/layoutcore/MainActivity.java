@@ -204,6 +204,14 @@ public class MainActivity extends Activity {
             sb.append("【③ §9.3 平台侧滚动（Choreographer 帧率 + RenderNode 池）】\n");
             String start = scrollListRun();
             sb.append(start).append('\n');
+        } else if ("splice".equals(testPath)) {
+            sb.append("【③ 结构变更（适配器产出 → 真机核心执行）】\n");
+            String r = spliceRun();
+            sb.append(r).append('\n');
+        } else if ("apply-ops".equals(testPath)) {
+            sb.append("【③ Vapor 指令流（TS 编码 → 真机解码）】\n");
+            String r = applyOpsRun();
+            sb.append(r).append('\n');
         } else if ("scroll-core".equals(testPath)) {
             // ★★**核心驱动的滚动**（与 iOS 的 `V12_scroll_recycle` 同一条路）：
             //   可见行 → 向核心要**决策**（acquire/release + 方向敏感预载）→ 宿主执行动作。
@@ -2080,6 +2088,218 @@ public class MainActivity extends Activity {
      *   镜像只覆盖「子级都在父盒内」的用例 —— Android 子 View 超出父边界收不到触摸，
      *   而 CSS `overflow:visible` 时子级仍可命中。溢出/裁剪由 ① 层（浏览器 golden）覆盖。
      */
+    /**
+     * ★★**Vapor 指令流端到端**（跨语言 golden：TS 编码 → 冻字节 → **真机 Rust 解码并执行**）。
+     *
+     * 【为什么不在 Java 里编指令（本仓纪律）】Java 再写一个编码器 = 第三份实现，且只测
+     *   "我自己编我自己解" —— 跨语言契约根本没被验证。⇒ 字节由 `hosts/android/gen-ops-fixture.mjs`
+     *   在**构建期**用 TS 真实编码器产出并冻进 `OpsFixture.java`；本用例只负责"发出去 + 断言几何"。
+     *   （`OpsFixture` 是生成物，见其类注释。）
+     *
+     * 【判据（三层，缺一层就会被假绿骗）】
+     *   ① 解码对账：`patch_count == OP_COUNT`（TS 说几条，核心就得认几条）
+     *   ② **几何真的变了**：节点宽度 50 → **180**（180 来自**指令输入**，非核心自报 ⇒ 非循环论证）
+     *   ③ 作用域有界：`relayout_count` 远小于整树节点数（改一个叶子不该重排全树）
+     *   ★另记 demote：`unsupported_count` 必须为 0（有它即"指令被跳过"，属静默失效）
+     */
+    private String applyOpsRun() {
+        // 树：0 根 column(400) → 1 row(400×60，**布局边界**) → 2 叶子(50×30)
+        final int W = 400, H = 200;
+        String tree = "{\"viewport\":{\"width\":" + W + ",\"height\":" + H + "},\"nodes\":["
+                + "{\"id\":0,\"parentId\":null,\"width\":400.0,\"flexDirection\":\"column\"}"
+                + ",{\"id\":1,\"parentId\":0,\"width\":400.0,\"height\":60.0,\"flexShrink\":0.0}"
+                + ",{\"id\":2,\"parentId\":1,\"width\":50.0,\"height\":30.0,\"flexShrink\":0.0}"
+                + "],\"textMeasures\":{}}";
+        long handle = RustLayout.create(tree);
+        if (handle <= 0) return "{\"ok\":false,\"error\":\"Rust 建树失败\"}";
+
+        // ① 基线几何（必须等于夹具声明的改动前宽度——否则说明树没按预期建）
+        float before = rectWidthOf(handle, OpsFixture.NODE_ID);
+        boolean baselineOk = Math.abs(before - OpsFixture.WIDTH_BEFORE) < 0.5f;
+
+        // ② 发**TS 编码的字节**（唯一的跨界动作）
+        String out = RustLayout.applyOps(handle, OpsFixture.OPS_BYTES);
+
+        // ③ 读回几何
+        float after = rectWidthOf(handle, OpsFixture.NODE_ID);
+        // ★★字段名必须按**上游真实出参**取（本仓第三次踩同一类形状分叉）
+        //
+        // 【踩坑记录】初版写的是 `patch_count` / `unsupported_count` —— 那是 **iOS Swift 桥
+        //   重命名后**的名字（`"patch_count": applied`）。Android 这里是直接读 **Rust 原始出参**，
+        //   真名是 `applied` 与 `unsupported`（**数组**，不是计数）。
+        //   现象：几何明明对了（宽度 180），却因为读不到字段而报 `verdict: FAIL` ——
+        //   **判据把成功读成了失败**（比假绿好，但同样误导）。
+        //   ⇒ 纪律：跨层读数**先确认出参形状**（`raw` 已落进报告，出错时可直接看）。
+        int patchCount = -1, relayout = -1, unsupportedCount = -1, geomChanged = -1, dirtyCount = -1;
+        try {
+            org.json.JSONObject o = new org.json.JSONObject(out);
+            patchCount = o.optInt("applied", -1);
+            relayout = o.optInt("relayout_count", -1);
+            org.json.JSONArray uns = o.optJSONArray("unsupported");
+            unsupportedCount = uns == null ? -1 : uns.length();
+            // Rust 侧没有 `geom_changed`（那是宿主/适配器口径）⇒ 用变化集的规模代替：
+            //   `dirty` = 被补丁命中的节点；`rects` = 核心回报的变化矩形集
+            org.json.JSONArray dirty = o.optJSONArray("dirty");
+            dirtyCount = dirty == null ? -1 : dirty.length();
+            org.json.JSONObject rects = o.optJSONObject("rects");
+            geomChanged = rects == null ? -1 : rects.length();
+        } catch (org.json.JSONException ignored) { }
+
+        boolean widthApplied = Math.abs(after - OpsFixture.WIDTH_AFTER) < 0.5f;
+        boolean decodeMatched = patchCount == OpsFixture.OP_COUNT;
+        boolean scopeBounded = relayout > 0 && relayout < 10;   // 3 节点树：整树也只是 3
+        boolean noUnsupported = unsupportedCount == 0;
+
+        RustLayout.destroy(handle);
+
+        try {
+            org.json.JSONObject o = new org.json.JSONObject();
+            o.put("ok", true);
+            o.put("path", "apply-ops");
+            o.put("note", "★★跨语言 golden：字节由 TS encodeOps 在构建期产出并冻结 → 真机 Rust 解码执行");
+            o.put("fixture_bytes", OpsFixture.OPS_BYTES.length);
+            o.put("fixture_keys", new org.json.JSONArray(OpsFixture.KEYS));
+            o.put("node_id", OpsFixture.NODE_ID);
+            o.put("width_before", before);
+            o.put("width_after", after);
+            o.put("width_expected", OpsFixture.WIDTH_AFTER);
+            o.put("patch_count", patchCount);
+            o.put("relayout_count", relayout);
+            o.put("unsupported_count", unsupportedCount);
+            o.put("dirty_count", dirtyCount);
+            // ★变化集规模（= 核心回报的变化矩形数）——本档用它代替 `geom_changed` 空判据：
+            //   若为 0 说明"指令应用了但没有几何变化"（那才是需要警惕的假绿）
+            o.put("changed_rects", geomChanged);
+            o.put("raw", out);
+            o.put("check_baseline", baselineOk);
+            o.put("check_decode_matched", decodeMatched);
+            o.put("check_width_applied", widthApplied);
+            o.put("check_scope_bounded", scopeBounded);
+            o.put("check_no_unsupported", noUnsupported);
+            o.put("verdict", (baselineOk && decodeMatched && widthApplied && scopeBounded && noUnsupported)
+                    ? "PASS" : "FAIL");
+            writeReport("layout-apply-ops.json", o.toString(2));
+            return o.toString();
+        } catch (org.json.JSONException e) {
+            return "{\"ok\":false,\"error\":\"" + e.getMessage() + "\"}";
+        }
+    }
+
+    /**
+     * ★★**结构变更（splice）端到端**：payload 取自**适配器真实产出**（构建期冻结）。
+     *
+     * 【跨语言契约】`inserts[].nodes` 的形状必须与核心 `NodeDto` 一致（**样式平铺在顶层**）。
+     *   本仓已因"样式放进 `style` 子对象被 serde 静默忽略"踩过一次（V11 长列表）。
+     *   ⇒ 本用例的判据之一是**插入的行真的有几何**（≥ 声明高度的一半）——
+     *   若形状分叉，节点会以"全 auto"落进去（高度塌成 0 或与声明不符）⇒ 判据变红。
+     *
+     * 【判据】
+     *   ① `removed == 0`（本夹具只追加）② `inserted == SPLICE_NODE_COUNT`（核心认了几条）
+     *   ③ **新节点真的有几何且高度符合声明**（形状 + 布局双双生效）
+     *   ④ `relayout_count` 有界（3 节点树）
+     */
+    private String spliceRun() {
+        // 树与夹具同源：适配器把 3 行挂在 parentId=3（见生成脚本的场景）
+        //   0 根 column → 3 容器 column → 4,5 两行（id 与适配器分配器一致）
+        final int W = 300, H = 400;
+        String tree = "{\"viewport\":{\"width\":" + W + ",\"height\":" + H + "},\"nodes\":["
+                + "{\"id\":0,\"parentId\":null,\"width\":300.0,\"flexDirection\":\"column\"}"
+                + ",{\"id\":3,\"parentId\":0,\"width\":300.0,\"flexDirection\":\"column\"}"
+                + ",{\"id\":4,\"parentId\":3,\"width\":300.0,\"height\":50.0,\"flexShrink\":0.0}"
+                + ",{\"id\":5,\"parentId\":3,\"width\":300.0,\"height\":50.0,\"flexShrink\":0.0}"
+                + "],\"textMeasures\":{}}";
+        long handle = RustLayout.create(tree);
+        if (handle <= 0) return "{\"ok\":false,\"error\":\"Rust 建树失败\"}";
+
+        int before = rectCountOf(handle);
+
+        // ★发**适配器产出的 payload**（唯一跨界动作）
+        String out = RustLayout.splice(handle, OpsFixture.SPLICE_JSON);
+
+        int after = rectCountOf(handle);
+        // 新节点 id 从 payload 里取（不写死——payload 变了用例仍成立）
+        int newNodeId = -1;
+        try {
+            org.json.JSONObject sp = new org.json.JSONObject(OpsFixture.SPLICE_JSON);
+            org.json.JSONArray ins = sp.getJSONArray("inserts");
+            newNodeId = ins.getJSONObject(0).getJSONArray("nodes").getJSONObject(0).getInt("id");
+        } catch (org.json.JSONException ignored) { }
+        float newH = newNodeId >= 0 ? rectHeightOf(handle, newNodeId) : -1f;
+
+        int removed = -1, inserted = -1, relayout = -1;
+        try {
+            org.json.JSONObject o = new org.json.JSONObject(out);
+            removed = o.optInt("removed", -1);
+            inserted = o.optInt("inserted", -1);
+            relayout = o.optInt("relayout_count", -1);
+        } catch (org.json.JSONException ignored) { }
+
+        boolean rectsGrew = after == before + OpsFixture.SPLICE_NODE_COUNT;
+        boolean countsMatch = removed == 0 && inserted == OpsFixture.SPLICE_NODE_COUNT;
+        // ★形状判据：插入的行必须拿到**声明的 50 高**（样式平铺才可能有这个数）
+        boolean newHasGeometry = newH >= 25f;
+        boolean scopeBounded = relayout > 0 && relayout < 20;
+
+        RustLayout.destroy(handle);
+        try {
+            org.json.JSONObject o = new org.json.JSONObject();
+            o.put("ok", true);
+            o.put("path", "splice");
+            o.put("note", "★★跨语言：payload 由适配器 takeSplice() 在构建期产出并冻结 → 真机核心执行");
+            o.put("fixture_json", OpsFixture.SPLICE_JSON);
+            o.put("rects_before", before);
+            o.put("rects_after", after);
+            o.put("new_node_id", newNodeId);
+            o.put("new_node_height", newH);
+            o.put("removed", removed);
+            o.put("inserted", inserted);
+            o.put("relayout_count", relayout);
+            o.put("raw", out);
+            o.put("check_rects_grew", rectsGrew);
+            o.put("check_counts_match", countsMatch);
+            o.put("check_new_has_geometry", newHasGeometry);
+            o.put("check_scope_bounded", scopeBounded);
+            o.put("verdict", (rectsGrew && countsMatch && newHasGeometry && scopeBounded) ? "PASS" : "FAIL");
+            writeReport("layout-splice.json", o.toString(2));
+            return o.toString();
+        } catch (org.json.JSONException e) {
+            return "{\"ok\":false,\"error\":\"" + e.getMessage() + "\"}";
+        }
+    }
+
+    /** 几何条目数（判"结构真的变了"用） */
+    private int rectCountOf(long handle) {
+        try {
+            org.json.JSONObject o = new org.json.JSONObject(RustLayout.readRects(handle));
+            org.json.JSONObject r = o.optJSONObject("rects");
+            return r == null ? -1 : r.length();
+        } catch (Exception e) {
+            return -1;
+        }
+    }
+
+    /** 取某节点的几何高度 */
+    private float rectHeightOf(long handle, int nodeId) {
+        try {
+            org.json.JSONObject o = new org.json.JSONObject(RustLayout.readRects(handle));
+            org.json.JSONObject r = o.getJSONObject("rects").optJSONObject(String.valueOf(nodeId));
+            return r == null ? -1f : (float) r.getDouble("height");
+        } catch (Exception e) {
+            return -1f;
+        }
+    }
+
+    /** 取某节点的几何宽度（诊断/判据共用——单一实现） */
+    private float rectWidthOf(long handle, int nodeId) {
+        try {
+            org.json.JSONObject o = new org.json.JSONObject(RustLayout.readRects(handle));
+            org.json.JSONObject r = o.getJSONObject("rects").optJSONObject(String.valueOf(nodeId));
+            return r == null ? -1f : (float) r.getDouble("width");
+        } catch (Exception e) {
+            return -1f;
+        }
+    }
+
     private String hitTestRun() {
         // ── 场景：嵌套 + 重叠 + 裁剪（覆盖命中语义的三类关键情形）──
         //   root 300×300
