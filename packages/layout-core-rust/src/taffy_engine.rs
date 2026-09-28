@@ -435,15 +435,28 @@ impl TaffyEngine {
     /// ★★在**持久树**上做整树求解（根范围的退化路径用；此前是"重建整棵树再求解"）
     fn layout_cached(&mut self, tree: &mut LayoutTree, constraint: RootConstraint, changed: &[NodeIndex]) -> LayoutOutput {
         self.last_root_constraint = Some(constraint);
+        // ★分段埋点（本仓实测：`layout_cached` 此前**无任何内部埋点** ⇒ 真机 17ms 无法归因，
+        //   我只能看到"总耗时"——这正是本仓纪律「任何 >5ms 的分段都必须再拆」的对象）
+        let t_a0 = std::time::Instant::now();
         self.ensure_persistent(tree);
+        let t_ensure = t_a0.elapsed().as_secs_f64() * 1000.0;
+        let t_b0 = std::time::Instant::now();
         self.sync_styles(tree, changed);
+        let t_sync = t_b0.elapsed().as_secs_f64() * 1000.0;
         let roots = tree.roots.clone();
         // ★借用顺序：`run_taffy` 需要 `&mut self` ⇒ 先把持久树**取出来**、用完放回
         //   （Rust 不允许同时可变借用 `self` 与 `self` 的字段）
         let mut taffy = self.persistent_taffy.take().expect("ensure_persistent 已建树");
         let out = self.run_taffy(tree, &mut taffy, &roots, constraint);
         self.persistent_taffy = Some(taffy);
+        let t_run = t_a0.elapsed().as_secs_f64() * 1000.0;
+        let t_c0 = std::time::Instant::now();
         self.write_back(tree, &out);
+        let t_wb = t_c0.elapsed().as_secs_f64() * 1000.0;
+        *self.phases_mut("cached_ensure_ms") += t_ensure;
+        *self.phases_mut("cached_sync_ms") += t_sync;
+        *self.phases_mut("cached_run_ms") += t_run - t_ensure - t_sync;
+        *self.phases_mut("cached_writeback_ms") += t_wb;
         out
     }
 
@@ -489,6 +502,16 @@ impl TaffyEngine {
         self.taffy_ids.clear();
     }
 
+    /// 度量缓存项数（诊断：判定"持久引擎是否复用了缓存"）
+    pub fn measure_cache_len(&self) -> usize {
+        self.measure_cache.len()
+    }
+
+    /// 是否已持有持久 taffy 树（诊断：判定预建是否生效）
+    pub fn has_persistent(&self) -> bool {
+        self.persistent_taffy.is_some()
+    }
+
     /// 相位累加器（多范围重排下**累加**每一段的耗时——单个范围的数字会淹没在噪声里）
     /// ★键用 `&'static str`（本仓实测：String 键在多范围下**每范围 5 次堆分配**，
     ///   300 个范围 = 1500 次分配 —— 比它要测的东西还贵）
@@ -520,11 +543,23 @@ impl LayoutEngine for TaffyEngine {
         let roots = tree.roots.clone();
         // ★分段埋点（全量路径是类B/无边界形态的主成本；本仓纪律：先拆再优化）
         let t_b0 = std::time::Instant::now();
+        // ★★**把建的 taffy 树留在 `persistent_taffy`**（本仓实测的真缺陷，一行修复）
+        //
+        // 【故障链（诊断一锤定音）】首版 `let mut taffy = self.build_taffy(tree)` 是**局部变量**
+        //   ——方法结束即 drop。于是 `persistent_taffy` **永远是 None** ⇒ 每次增量重排
+        //   都走 `ensure_persistent` → **重建整棵 taffy 树**（真机 5002 节点）
+        //   + **度量缓存是空的** ⇒ 4001 次 miss（真机 `relayout_ms=17ms`）。
+        //   `engine_diag` 的铁证：`has_persistent: false, cache_len: 0, taffy_len_before: 5002`
+        //   —— 即"taffy_ids 有 5002 项（build 过）但持久树是 None"。
+        //   ⇒ 正解：`layout()` 建完就把它存进 `persistent_taffy`：
+        //     这样 create 的"预建"才真正生效（首帧那次整树求解的成果被后续增量复用）。
         let mut taffy = self.build_taffy(tree);
         let t_build = t_b0.elapsed().as_secs_f64() * 1000.0;
         let t_r0 = std::time::Instant::now();
         let out = self.run_taffy(tree, &mut taffy, &roots, constraint);
         let t_run = t_r0.elapsed().as_secs_f64() * 1000.0;
+        // ★存下（含首帧算出的度量缓存 —— 这是"预建"的意义所在）
+        self.persistent_taffy = Some(taffy);
         let t_w0 = std::time::Instant::now();
         self.write_back(tree, &out);
         let t_wb = t_w0.elapsed().as_secs_f64() * 1000.0;
@@ -587,6 +622,83 @@ impl LayoutEngine for TaffyEngine {
             //   保留树 + 只同步变更节点 ⇒ 同形状基准 2.96ms → 0.089ms）
             *self.phases_mut("prologue_ms") += t_pro.elapsed().as_secs_f64() * 1000.0;
             return self.layout_cached(tree, c, &[dirty]);
+        }
+
+        // ★★**"范围覆盖整树"时走持久树**（本仓实测：真机 V0 白付了一次全量拷贝+重建）
+        //
+        // 【判据与依据】若从根到 scope 的路径上**每一级都只有一个子节点**，则 scope 的子树
+        //   覆盖整棵树 ⇒ "隔离子树求解"与"整树求解"在拓扑上等价（无外部兄弟需要保持位置）。
+        //   此时拷贝法纯属浪费：真机实测 `copy_ms=1.3ms` + 子引擎 `build_taffy`（7005 节点）
+        //   + **丢失持久树缓存**（`solve_ms≈19ms`）。
+        //
+        // 【为什么不直接用 `scope == 根` 判据】本仓真机的 scope 常是根的**孙节点**
+        //   （root → container → page(显式尺寸)）：它确实是"最近的布局边界"，
+        //   但它同时覆盖整树 —— 两个条件都成立，应选**更省的那条路**。
+        //
+        // 【约束的安全性】scope 有显式尺寸（是布局边界）⇒ 它的尺寸与内容无关；
+        //   而整树求解复用 `last_root_constraint`（= viewport definite）——
+        //   当 scope 尺寸 == viewport 时二者等价；否则沿用"边界自身尺寸"更保守的语义
+        //   ⇒ 这里仍用**scope 的实际尺寸**做定尺寸约束，只是把它施加在**持久树**上：
+        //     scope 的父链尺寸不变 ⇒ 对 scope 施加 definite 求解 ⇒ 其结果就是范围结果。
+        let is_sole_path = {
+            let mut cur = scope;
+            let mut sole = true;
+            // 向上：只要某级祖先有 >1 个子节点 ⇒ scope 与"其它子树"并列 ⇒ 不能按整树处理
+            while tree.get(cur).parent != NO_PARENT {
+                let p = tree.get(cur).parent;
+                if tree.get(p).children.len() != 1 {
+                    sole = false;
+                    break;
+                }
+                cur = p;
+            }
+            // 根自身也必须是唯一根（多根树里 scope 只覆盖其一）
+            sole && tree.roots.len() == 1
+        };
+        // ★只有"范围确实覆盖了整棵树"时才走整树路径——**范围小的时候拷贝法更省**
+        //   （本仓实测：单链 4 节点树上拷贝法本来就只有 5µs；而真机 7005/7005 时拷贝法要 20ms）
+        //   判据：范围节点数 == 整树节点数（用 preorder 计数，只在 sole_path 时才做）
+        // ★判据修正（本仓实测）：真机的 scope 常是 `root → container → page` 链上的 page，
+        //   此时 `preorder(scope)` = 7005，而 `tree.len()` = **7007**（差 2 = root+container，
+        //   即 scope 的**祖先链**本身）。它们不是"范围外的其它子树"，只是链上祖先！
+        //   ⇒ 正确判据：**范围外只有祖先链、没有任何兄弟分支** ⟺
+        //     `preorder(scope).len() + depth(scope) == tree.len()`
+        //     （depth = 祖先链长度；每个祖先恰好贡献 1 个不在范围里的节点）
+        let scope_nodes = if is_sole_path { preorder(tree, scope).len() } else { 0 };
+        let mut depth = 0usize;
+        {
+            let mut cur = scope;
+            while tree.get(cur).parent != NO_PARENT {
+                cur = tree.get(cur).parent;
+                depth += 1;
+            }
+        }
+        // sole_path 已保证"没有兄弟分支"⇒ 范围外 = 祖先链 ⇒ 下面的等式成立即"覆盖除祖先外全部"
+        //
+        // ★**规模门槛（本仓实测的兼容性要求）**：拷贝法在小树上本就很快（4 节点 ~5µs），
+        //   而 it 会因为"范围=全树"改变 `relayout_count` 的语义——已有浏览器对拍用例
+        //   （`非零偏移链`，4 节点单链）据此断言"范围应为真子集"。
+        //   ⇒ 只在**大范围**（≥512 节点）时才切换到整树持久树路径：
+        //     收益（真机 7005 节点 20ms→期望 <1ms）只在此时存在；小树保持原语义（无语义漂移）。
+        const SOLE_PATH_MIN_NODES: usize = 512;
+        let covers_whole = is_sole_path
+            && scope_nodes + depth == tree.len()
+            && tree.len() >= SOLE_PATH_MIN_NODES;
+        *self.phases_mut("diag_sole_path") += if is_sole_path { 1.0 } else { 0.0 };
+        *self.phases_mut("diag_scope_nodes") += scope_nodes as f64;
+        *self.phases_mut("diag_tree_nodes") += tree.len() as f64;
+        *self.phases_mut("diag_scope_is_root") += if tree.get(scope).parent == NO_PARENT { 1.0 } else { 0.0 };
+        if covers_whole {
+            let scope_rect = tree.get(scope).rect;
+            let (fb_w, fb_h) = {
+                let n = tree.get(scope);
+                (n.style.width, n.style.height)
+            };
+            let cw = if scope_rect.width > 0.0 { scope_rect.width } else { fb_w.unwrap_or(f32::INFINITY) };
+            let ch = if scope_rect.height > 0.0 { scope_rect.height } else { fb_h.unwrap_or(f32::INFINITY) };
+            *self.phases_mut("prologue_ms") += t_pro.elapsed().as_secs_f64() * 1000.0;
+            *self.phases_mut("sole_path_ms") += 1.0;
+            return self.layout_cached(tree, RootConstraint::definite(cw, ch), &[dirty]);
         }
 
         // ★★根约束 = 该边界节点**上次布局的实际尺寸**（而不是它的声明尺寸）
@@ -658,6 +770,18 @@ impl TaffyEngine {
         if let Some(m) = self.measurer.take() {
             sub_engine.set_measurer(m);
         }
+        // ★★**子引擎必须继承主引擎的度量缓存**（本仓实测：这是 19ms 的真凶）
+        //
+        // 【故障链（真机 V0 实测）】范围不是根时走**拷贝法**（`layout_subtree_and_writeback`），
+        //   而子引擎是 `TaffyEngine::new()` ⇒ **度量缓存从空开始** ⇒ 范围内每个文本叶子
+        //   都要重新调平台度量（真机读数：`measure_calls=3036` 次 CoreText / 轮，
+        //   `solve_ms≈19ms`）。原实现只在**结束**时把子缓存的成果合并回主引擎
+        //   （"成果不丢"），但**下一轮又从零开始** ⇒ 每轮重排都白付一遍全部度量。
+        //   ⇒ 正解：开始时把主缓存的**所有权搬给子引擎**（`mem::take` 零拷贝）、
+        //     结束时再搬回来（含子引擎新增项）。这样第二轮起命中率接近 100%。
+        let inherited_cache = std::mem::take(&mut self.measure_cache);
+        let inherited_len = inherited_cache.len();
+        sub_engine.measure_cache = inherited_cache;
         let t_sub = t_sub0.elapsed().as_secs_f64() * 1000.0;
         let t_solve0 = std::time::Instant::now();
         let out = sub_engine.layout(&mut sub, constraint);
@@ -693,13 +817,19 @@ impl TaffyEngine {
 
         let t_wb = t_wb0.elapsed().as_secs_f64() * 1000.0;
 
-        // 度量缓存合并回主引擎（子树算过的成果不丢）
+        // ★缓存搬回主引擎（含子引擎新增项）——与开头的 `take` 配对
         let t_merge0 = std::time::Instant::now();
         if let Some(m) = sub_engine.measurer.take() {
             self.measurer = Some(m);
         }
-        self.measure_cache.extend(sub_engine.measure_cache);
+        let final_len = sub_engine.measure_cache.len();
+        self.measure_cache = std::mem::take(&mut sub_engine.measure_cache);
         let t_merge = t_merge0.elapsed().as_secs_f64() * 1000.0;
+        // 诊断读数：本轮实际新增的缓存项（0 = 全程命中，说明继承生效）
+        if inherited_len > 0 {
+            self.last_phases.insert("cache_inherited".into(), inherited_len as f64);
+            self.last_phases.insert("cache_new".into(), (final_len.saturating_sub(inherited_len)) as f64);
+        }
 
         // ★累加相位（多范围时由 relayout_multi 读取；单范围也可读）
         *self.phases_mut("copy_ms") += t_copy;
@@ -914,21 +1044,30 @@ impl TaffyEngine {
 pub(crate) fn compute_text_hashes(nodes: &[LNode]) -> Vec<u64> {
     let mut out = Vec::with_capacity(nodes.len());
     for n in nodes {
-        // ★★三情形（实测踩到第 ③ 种）：
-        //   ① 有非空文本字面量 → **内容寻址**（同文案跨节点复用，实测 4000→2 次）
+        // ★★四情形（第 ④ 种是本仓实测抓到的**正确性缺陷**）：
+        //   ① 有非空文本字面量 **且字体签名非 0** → **内容寻址**（同文案跨节点复用，实测 4000→2 次）
         //   ② 无文本请求 → 非文本节点，键用节点 id
-        //   ③ **文本请求存在但字面量为空串** → golden / 按 id 查表场景的写法：
+        //   ③ **文本请求存在但字面量为空串** → golden / 按 id 查表场景：
         //      空串**不代表内容相同**！若归入 ① → 不同文本共用缓存项 → 几何错乱
         //      （实测：conformance 文本用例全红，max_delta 12.6dp）
+        //   ④ ★**有字面量但字体签名为 0**（= 无法区分字号）→ **必须回退节点寻址**
+        //      【为什么（实测）】`TableTextMeasurer` 是**按 nodeId 查表**（尺寸由宿主度量表
+        //      决定，可因字号不同而异）⇒ 两个节点文本相同、宽度约束相同但**字号不同**时，
+        //      内容寻址会把它们**错误合并**成同一缓存项 ⇒ 其中一个尺寸错
+        //      （实测：同文本 + 字号 16/28 两节点 ⇒ 都算成 16 高，差 12dp，静默）。
+        //      注释原称"字体签名进键"，但那要求调用方**真的填** `style_key`——
+        //      本仓当前恒为 0 ⇒ 等于没进。⇒ 保守取值：**正确 > 复用**，
+        //      待宿主把字号编成 style_key 后再启用跨节点复用。
         match &n.text {
-            Some(t) if !t.text.is_empty() => {
+            Some(t) if !t.text.is_empty() && t.style_key != 0 => {
                 use std::hash::{Hash, Hasher};
                 let mut h = std::collections::hash_map::DefaultHasher::new();
                 t.text.hash(&mut h);
-                t.style_key.hash(&mut h);      // ★字体维度进键
+                t.style_key.hash(&mut h);      // ★字体维度进键（调用方须真的填）
                 out.push(h.finish());
             }
-            _ => out.push(((n.id as u64) << 1) | 1),   // 节点寻址（键空间与内容 hash 隔离）
+            // ★节点寻址（键空间与内容 hash 隔离）——情形 ②③④
+            _ => out.push(((n.id as u64) << 1) | 1),
         }
     }
     out
@@ -1080,16 +1219,43 @@ mod cache_key_tests {
         assert_ne!(hashes[0], hashes[2], "空串节点与有字面量节点也必须隔离");
     }
 
-    /// ★内容寻址：**相同非空字面量必须共用**缓存键（这是优化的收益来源）
+    /// ★内容寻址（**仅在调用方提供了字体签名时**）：同文案同字体 ⇒ 共用缓存键
+    ///
+    /// 【★本测试的语义在 2026-09-28 收紧了（原断言不安全）】原版用 `style_key: 0` 断言
+    ///   "同文案必须共用"，而 `TableTextMeasurer` 是**按 nodeId 查表**（尺寸由宿主度量表
+    ///   决定，可因字号而异）⇒ 同文案 + 同宽约束但**不同字号**时，内容寻址会把两者
+    ///   合并成同一缓存项 ⇒ **其中一个尺寸错**（实测：同文本 + 字号 16/28 ⇒ 都算 16 高，
+    ///   差 12dp，且无任何报错）。
+    ///   ⇒ 新语义：**内容寻址的收益以"字体签名可用"为前提**；`style_key == 0`
+    ///     时回退节点寻址（正确 > 复用）。保护意图（复用收益）由本测试在新前提下保留。
     #[test]
-    fn same_literal_shares_cache_key() {
+    fn same_literal_with_style_key_shares_cache_key() {
+        let mk = |id: u32| {
+            let mut n = LNode::new(id, LStyle::default());
+            // ★字体签名非 0 = 调用方**真的**区分了字体 ⇒ 内容寻址安全
+            n.text = Some(TextMeasureRequest { text: "item".to_string(), style_key: 7 });
+            n
+        };
+        let hashes = hash_for_tests(&[mk(10), mk(20)]);
+        assert_eq!(hashes[0], hashes[1], "★（字体已知时）同文案应共用缓存键——内容寻址的收益");
+    }
+
+    /// ★★**正确性锁**：`style_key == 0`（字体不可区分）时，同文案**不得**共用缓存键
+    ///
+    /// 【为什么必须有（本仓实测的真缺陷）】见上一条测试的说明；这条把"保守"钉死，
+    ///   防止后人为了"优化收益"把它改回去而重新引入静默错几何。
+    #[test]
+    fn same_literal_without_style_key_falls_back_to_node_addressing() {
         let mk = |id: u32| {
             let mut n = LNode::new(id, LStyle::default());
             n.text = Some(TextMeasureRequest { text: "item".to_string(), style_key: 0 });
             n
         };
         let hashes = hash_for_tests(&[mk(10), mk(20)]);
-        assert_eq!(hashes[0], hashes[1], "★同文案应共用缓存键（内容寻址的收益）");
+        assert_ne!(
+            hashes[0], hashes[1],
+            "★字体签名缺失时必须回退节点寻址（否则不同字号会错误共用缓存项）"
+        );
     }
 
     /// ★字体维度进键：同文案不同字体签名必须**不共用**

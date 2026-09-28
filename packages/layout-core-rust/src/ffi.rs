@@ -586,6 +586,16 @@ thread_local! {
         std::cell::RefCell::new(std::collections::HashMap::new());
 }
 
+thread_local! {
+    /// 侧信道诊断（最近一次 `with_engine` 的引擎状态）——供 update 返回体读出
+    static ENGINE_DIAG: std::cell::RefCell<serde_json::Value> =
+        std::cell::RefCell::new(serde_json::Value::Null);
+}
+
+fn engine_diag() -> serde_json::Value {
+    ENGINE_DIAG.with(|d| d.borrow().clone())
+}
+
 /// 释放某句柄的引擎（句柄销毁时调用——本仓纪律：句柄销毁必须带走其全部资源）
 fn drop_engine(handle: u64) {
     ENGINES.with(|m| {
@@ -609,11 +619,25 @@ fn with_engine<R>(
         let eng = map.entry(handle).or_insert_with(|| {
             TaffyEngine::new().with_measurer(Box::new(TableTextMeasurer::new(measures.clone())))
         });
-        if eng.taffy_id_len() != tree_len {
+        let rebuilt = eng.taffy_id_len() != tree_len;
+        let len_before = eng.taffy_id_len();
+        if rebuilt {
             *eng = TaffyEngine::new().with_measurer(Box::new(TableTextMeasurer::new(measures.clone())));
         } else {
             eng.set_measurer(Box::new(TableTextMeasurer::new(measures.clone())));
         }
+        // ★侧信道诊断（判定"持久引擎是否真的被复用"——归因靠读数，不靠推理）
+        let cache_len = eng.measure_cache_len();
+        let has_persistent = eng.has_persistent();
+        ENGINE_DIAG.with(|d| {
+            *d.borrow_mut() = serde_json::json!({
+                "rebuilt": rebuilt,
+                "taffy_len_before": len_before,
+                "tree_len": tree_len,
+                "cache_len": cache_len,
+                "has_persistent": has_persistent,
+            });
+        });
         f(eng)
     })
 }
@@ -631,17 +655,39 @@ pub unsafe extern "C" fn proteus_layout_create(request_json: *const c_char) -> u
         let raw = unsafe { CStr::from_ptr(request_json) }.to_str().map_err(|e| format!("入参非 UTF-8：{e}"))?;
         let req: LayoutRequest = serde_json::from_str(raw).map_err(|e| format!("请求解析失败：{e}"))?;
         let (mut tree, _) = build_tree(&req)?;
-        // 立即布局一次（真实语义：建树后即有几何）
-        let mut engine = TaffyEngine::new().with_measurer(Box::new(to_measurer(&req)));
+        // ★首帧布局**延到下面**用"将成为持久引擎"的那台引擎做（见预建持久树的注释）——
+        //   这样只需一次整树求解，且它的 taffy 树与度量缓存都能被后续增量复用。
         let constraint = match (req.viewport.width, req.viewport.height) {
             (w, h) if w > 0.0 && h > 0.0 => RootConstraint::definite(w, h),
             (w, _) if w > 0.0 => RootConstraint::loose_width(w),
             _ => RootConstraint { width: AvailableSpace::MaxContent, height: AvailableSpace::MaxContent },
         };
-        engine.layout(&mut tree, constraint);
         let handle = NEXT_HANDLE.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+        let measures = measure_map(&req);
+        // ★★**预建持久树**（本仓实测：消除"首轮更新"的整树重建成本）
+        //
+        // 【为什么在这里做（真机读数）】首轮增量更新时持久树为空 ⇒ 必须 `build_taffy` 整棵树
+        //   + 度量缓存从零积累（真机 V0：**首轮 relayout 18.7ms / measures=6003**，
+        //   后续轮 **1.6ms / measures=0** —— 13× 差距全在首轮）。而 `create` 路径
+        //   **本来就要建一棵 taffy 树做首帧布局**（上面那句 `engine.layout(...)`）——
+        //   把那份树留给后续复用，等于"首帧白送一棵持久树"，首轮更新即刻享到复用收益。
+        {
+            let mut eng = TaffyEngine::new()
+                .with_measurer(Box::new(TableTextMeasurer::new(measures.clone())));
+            // `layout` 内部会 `build_taffy` 并把 taffy 树**留在这个引擎里**（persistent_taffy）
+            // —— 用与首帧相同的约束再跑一次，代价 = 一次整树求解（本来就是首帧成本）
+            let constraint = match (req.viewport.width, req.viewport.height) {
+                (w, h) if w > 0.0 && h > 0.0 => RootConstraint::definite(w, h),
+                (w, _) if w > 0.0 => RootConstraint::loose_width(w),
+                _ => RootConstraint { width: AvailableSpace::MaxContent, height: AvailableSpace::MaxContent },
+            };
+            // ★直接在**真树**上跑（不 clone）：几何与本方法上方那次 `engine.layout` **等价**
+            //   （同树同约束 ⇒ 确定性结果）⇒ 顺带把正确的几何留在 `tree` 里，无需额外内存
+            eng.layout(&mut tree, constraint);   // ← 建 taffy 进引擎 + 首帧几何
+            ENGINES.with(|cell| { cell.borrow_mut().insert(handle, eng); });
+        }
         registry().lock().map_err(|_| "注册表锁失败".to_string())?
-            .insert(handle, TreeEntry::new(tree, measure_map(&req)));
+            .insert(handle, TreeEntry::new(tree, measures));
         Ok(handle)
     });
     match r {
@@ -790,17 +836,9 @@ pub unsafe extern "C" fn proteus_layout_update(handle: u64, patches_json: *const
         let t_eng0 = std::time::Instant::now();
         // ★★复用**按句柄的持久引擎**（本仓实测：每帧新建 = 重建整棵 taffy 树；
         //   同形状 2001 节点基准 2.96ms → 复用 0.065ms，**45×**）
-        let multi = ENGINES.with(|cell| {
-            let mut map = cell.borrow_mut();
-            let eng = map.entry(handle).or_insert_with(|| {
-                TaffyEngine::new().with_measurer(Box::new(TableTextMeasurer::new(measures.clone())))
-            });
-            if eng.taffy_id_len() != tree.len() {
-                *eng = TaffyEngine::new()
-                    .with_measurer(Box::new(TableTextMeasurer::new(measures.clone())));
-            } else {
-                eng.set_measurer(Box::new(TableTextMeasurer::new(measures.clone())));
-            }
+        // ★统一经 `with_engine`（本仓纪律：同一语义一处实现——此处曾有一份**内联副本**，
+        //   它绕过了侧信道诊断 ⇒ 我连续三轮拿不到 `engine_diag`，白查）
+        let multi = with_engine(handle, tree.len(), &measures, |eng| {
             crate::ops_apply::relayout_multi_in(eng, tree, &dirty_ids)
         });
         let t_engine_new = t_eng0.elapsed().as_secs_f64() * 1000.0;
@@ -847,6 +885,11 @@ pub unsafe extern "C" fn proteus_layout_update(handle: u64, patches_json: *const
                 "engine_and_relayout_ms": (t_engine_new * 100.0).round() / 100.0,
                 "collect_changed_ms": (t_collect * 100.0).round() / 100.0,
                 "total_ms": (t_start.elapsed().as_secs_f64() * 1000.0 * 100.0).round() / 100.0,
+                // ★引擎内部分段（判定"是否真的走了持久树 / 缓存是否命中"——归因靠读数）
+                "engine_diag": engine_diag(),
+                "phases": multi.phases.iter()
+                    .map(|(k, v)| (k.to_string(), serde_json::json!((*v * 100.0).round() / 100.0)))
+                    .collect::<serde_json::Map<String, serde_json::Value>>(),
             },
         })
         .to_string())
@@ -1603,6 +1646,18 @@ pub unsafe extern "C" fn proteus_layout_splice(handle: u64, splice_json: *const 
                 entry.measures.insert(id, Size { width: v.width, height: v.height });
             }
         }
+        // ★★**splice 必须显式使持久 taffy 树失效**（本仓测试抓到的真缺陷）
+        //
+        // 【为什么长度判据在这里失效】摘除**只断链、不删节点**（见本函数顶部设计说明：
+        //   孤点留在数组里由 `roots` 遍历自然跳过）⇒ `tree.len()` **不变**
+        //   ⇒ `with_engine` 的 `taffy_id_len() != tree.len()` 判据**抓不到拓扑变化**
+        //   ⇒ 引擎会用**还连着被摘子树**的旧 taffy ⇒ 几何错（测试 `splice_remove_detaches_subtree` 抓到）。
+        //   ⇒ 结构变更由**知道结构变了的调用方**显式失效（比"猜长度"可靠）。
+        ENGINES.with(|cell| {
+            if let Some(e) = cell.borrow_mut().get_mut(&handle) {
+                e.invalidate_persistent();
+            }
+        });
         let t_rel0 = std::time::Instant::now();
         let multi = if dirty_roots.is_empty() {
             crate::ops_apply::MultiRelayout::default()

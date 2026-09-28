@@ -77,7 +77,7 @@ const BN = { snapshot: 'bench-final' }
 // ★构建标识：每次构建写入，用于**确凿判定**设备上跑的是哪份代码
 //   （踩坑：靠文件 mtime 判断"报告是否刷新"不可靠——新建目标文件的时间恒为"现在"；
 //    且我看不出设备实际执行的是旧 bundle，白跑一轮。有了这个字段就能一眼判定。）
-const BUILD_ID = 'bea67986-163105'
+const BUILD_ID = '9f6c813f-170857'
 const now = (): number => Date.now()
 /** 宽松解析（宿主返回可能是字符串或已是对象） */
 const safeParseAny = (s: any): any => {
@@ -737,6 +737,13 @@ CASES.push({
           row_renders: app.rowRenderCount() - rowBefore, // 行子组件 render 次数（comp 专用；其余恒 0）
           patches_sent: patches === null ? 'FULL' : patches.length,
           relayout: hr?.["relayout_count"], updated_layers: hr?.["updated_layers"],
+          // ★整树重排路径的分段（持久引擎的靶子：root scope ⇒ layout_cached）
+          relayout_ms: hr?.["relayout_ms"], idmap_ms: hr?.["idmap_ms"],
+          collect_ms: hr?.["collect_ms"], engine_phases: hr?.["engine_phases"],
+          measure_calls: hr?.["measure_calls"], measure_hits: hr?.["measure_hits"],
+          // ★引擎状态诊断（判定"持久树/缓存是否真的被复用"——归因靠读数）
+          engine_diag: (hr?.["_timing"] as Record<string, unknown>)?.["engine_diag"],
+          timing_raw: hr?.["_timing"],   // ★整块（同上：避免字段搬运漏项）
         },
       })
       seen[`${strat}_${op}`] = { relayout: hr?.["relayout_count"], layers: hr?.["updated_layers"] }

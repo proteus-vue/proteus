@@ -958,6 +958,14 @@ final class SelfDrawBridge: NSObject, SelfDrawExports {
                            // ★核心分段（本仓纪律：relayout 是文本补丁的主成本，必须可直读——
                            //   否则"优化有没有生效"只能靠推理，而推理在本仓已坑过多次）
                            "relayout_ms": round((((o?["_timing"] as? [String: Any])?["engine_and_relayout_ms"] as? Double) ?? 0) * 100) / 100,
+                           // ★引擎内部相位（判定是否真走持久树；键名与 Rust 侧一致）
+                           "engine_phases": (o?["_timing"] as? [String: Any])?["phases"] as? [String: Any] ?? [:],
+                           // ★度量回调读数（判定"整树重排 19ms 是否花在度量上"的唯一途径）
+                           "measure_calls": (o?["measure_calls"] as? Int) ?? 0,
+                           "measure_hits": (o?["measure_hits"] as? Int) ?? 0,
+                           "engine_diag": (o?["_timing"] as? [String: Any])?["engine_diag"] ?? [:],
+                           // ★**整块透传**核心分段（不再逐个字段搬运——本仓实测已漏 3 次）
+                           "_timing": o?["_timing"] as? [String: Any] ?? [:],
                            "idmap_ms": round((((o?["_timing"] as? [String: Any])?["idmap_ms"] as? Double) ?? 0) * 100) / 100,
                            "collect_ms": round((((o?["_timing"] as? [String: Any])?["collect_changed_ms"] as? Double) ?? 0) * 100) / 100,
                            "changed_rects": changed.count, "updated_layers": updated,

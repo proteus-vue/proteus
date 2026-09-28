@@ -11,7 +11,8 @@ use std::time::Instant;
 use taffy::prelude::*;
 
 fn main() {
-    const N: usize = 500;
+    // ★规模可调（真机 V0 是 7005 节点 ⇒ `FLOOR_N=1750` 复现同一规模做对照）
+    let N: usize = std::env::var("FLOOR_N").ok().and_then(|v| v.parse().ok()).unwrap_or(500);
     const ITERS: usize = 50;
 
     // 与 relayout-multi-bench 的形态 D 同形状：根 column(375×844)

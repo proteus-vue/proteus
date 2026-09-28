@@ -114,7 +114,8 @@ fn median(mut xs: Vec<f64>) -> f64 {
 }
 
 fn main() {
-    const N: usize = 500;
+    // ★规模可调（真机 V0 是 1000 行 ≈ 7005 节点 ⇒ `BENCH_N=1000` 对齐）
+    let N: usize = std::env::var("BENCH_N").ok().and_then(|v| v.parse().ok()).unwrap_or(500);
     const ITERS: usize = 30;
 
     println!("== relayout 基线探针（N={N} 行 × 4 节点 = {} 节点）==", N * 4 + 1);
@@ -197,6 +198,109 @@ fn main() {
             }
         }
         println!("[C 类B（改行高）] 中位 {:.4}ms", median(samples));
+    }
+
+    // ── 形态 G：★**真机 V0 的实际路径**（root scope + layout_cached 走持久树）──
+    //
+    // 【为什么要它】真机 V0_header 报 relayout=7005 / phases 显示 `subengine=0`、
+    //   `copy=1.47ms`、`solve=19ms` ⇒ 走的是**拷贝法**（不是 layout_cached）。
+    //   本形态直接对齐"根范围 + 持久树"这条路径，量出它到底多快。
+    {
+        let (mut t, rows, texts) = build(N);
+        let m = measures(N, "");
+        full_layout(&mut t, &m);
+        // 去掉行高（行不再有边界）⇒ 范围上浮到根 ⇒ layout_cached
+        for &r in &rows { t.get_mut(r).style.height = None; }
+        full_layout(&mut t, &m);
+        let _ = &texts;
+        let mut eng = TaffyEngine::new()
+            .with_measurer(Box::new(proteus_layout_core::engine::TableTextMeasurer::new(m.clone())));
+        let mut samples = Vec::new();
+        let mut phases = std::collections::BTreeMap::new();
+        for it in 0..ITERS {
+            let idx = rows[250];
+            t.get_mut(idx).style.margin.bottom = if it % 2 == 0 { 12.0 } else { 8.0 };
+            t.get_mut(idx).dirty = true;
+            let t0 = Instant::now();
+            let out = relayout_multi_in(&mut eng, &mut t, &[idx as u32]);
+            samples.push(t0.elapsed().as_secs_f64() * 1000.0);
+            phases = out.phases.clone();
+        }
+        let med = median(samples);
+        println!("[G 根范围 + 持久树（真机 V0 路径）] 中位 {:.4}ms  changed_roots={}", med, 0);
+        let mut keys: Vec<(&&str, &f64)> = phases.iter().collect();
+        keys.sort_by(|a, b| b.1.partial_cmp(a.1).unwrap());
+        print!("   相位：");
+        for (k, v) in keys.iter().take(6) { print!("{}={:.3}ms ", k, v); }
+        println!();
+    }
+
+    // ── 形态 H：★★**完整复现真机 V0_header**（FFI create → 改标题 margin → 单次 update）──
+    //   【为什么必须复现】真机读数出现"**同操作**、同树形状，plain 17ms/6003 度量 vs
+    //   memo 1.5ms/0 度量"的分裂。纯推理三轮无果 ⇒ 直接在探针里复现整条 FFI 链路，
+    //   用 `measure_calls` 判定到底是"重建了 taffy"还是"缓存没命中"。
+    {
+        use std::ffi::CString;
+        // 构造树 JSON（1000 行 + 头部标题，与真机同形）
+        let mut nodes = vec![serde_json::json!({
+            "id": 0, "parentId": null, "flexDirection": "column",
+            "width": 375.0, "height": 844.0
+        })];
+        nodes.push(serde_json::json!({
+            "id": 9000, "parentId": 0, "text": "标题", "fontSize": 24.0,
+            "margin": {"bottom": 12.0}
+        }));
+        let mut next_id = 1u32;
+        let mut text_ids = Vec::new();
+        for i in 0..1000 {
+            let rid = next_id; next_id += 1;
+            nodes.push(serde_json::json!({
+                "id": rid, "parentId": 0, "flexDirection": "row", "alignItems": "center",
+                "width": 343.0, "height": 56.0, "flexShrink": 0.0,
+                "margin": {"bottom": 8.0}, "padding": {"left": 16.0, "right": 16.0}
+            }));
+            let dot = next_id; next_id += 1;
+            nodes.push(serde_json::json!({ "id": dot, "parentId": rid, "width": 36.0, "height": 36.0 }));
+            let inner = next_id; next_id += 1;
+            nodes.push(serde_json::json!({ "id": inner, "parentId": rid, "flexDirection": "column", "flexGrow": 1.0 }));
+            let t1 = next_id; next_id += 1;
+            nodes.push(serde_json::json!({ "id": t1, "parentId": inner, "text": format!("列表项 {}", i + 1) }));
+            text_ids.push(t1);
+            let t2 = next_id; next_id += 1;
+            nodes.push(serde_json::json!({ "id": t2, "parentId": inner, "text": "说明文字" }));
+            text_ids.push(t2);
+        }
+        let mut measures_map = serde_json::Map::new();
+        for &t in &text_ids {
+            measures_map.insert(t.to_string(), serde_json::json!({"width": 80.0, "height": 19.0}));
+        }
+        let req = serde_json::json!({
+            "viewport": {"width": 375.0, "height": 844.0},
+            "nodes": nodes,
+            "textMeasures": measures_map
+        });
+        let c = CString::new(req.to_string()).unwrap();
+        let h = unsafe { proteus_layout_core::ffi::proteus_layout_create(c.as_ptr()) };
+        if h == 0 {
+            println!("[H] ✗ create 失败");
+        } else {
+            // 改标题 margin（与真机 V0_header 同操作）
+            let patch = r#"[{"id":9000,"style":{"margin":{"bottom":20.0}}}]"#;
+            let pc = CString::new(patch).unwrap();
+            let out = unsafe {
+                let p = proteus_layout_core::ffi::proteus_layout_update(h, pc.as_ptr());
+                let s2 = std::ffi::CStr::from_ptr(p).to_str().unwrap().to_string();
+                proteus_layout_core::ffi::proteus_layout_free_string(p);
+                s2
+            };
+            let v: serde_json::Value = serde_json::from_str(&out).unwrap();
+            println!(
+                "[H 复现 V0_header] relayout={} measure_calls={} hits={} relayout_ms={} diag={}",
+                v["relayout_count"], v["measure_calls"], v["measure_hits"],
+                v["_timing"]["engine_and_relayout_ms"], v["_timing"]["engine_diag"]
+            );
+            unsafe { proteus_layout_core::ffi::proteus_layout_destroy(h) };
+        }
     }
 
     // ── 形态 F：**build_taffy 单独计时**（整树重排 79% 在 run_compute，但先确认包装层）──
