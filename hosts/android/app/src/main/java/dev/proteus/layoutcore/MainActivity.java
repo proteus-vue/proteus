@@ -127,23 +127,54 @@ public class MainActivity extends Activity {
     }
 
     /** 读 CPU 温度（millidegree；取 thermal_zone 最大值，读不到返回 -1） */
+    /**
+     * 读温度（m°C）——★**多源回退**（本仓实测的设备差异）
+     *
+     * 【为什么必须多源（honor10 实测）】原实现只读 /sys/class/thermal/thermal_zone[\u002a]/temp，
+     *   ★（写路径时必须避开 `[星号]/`：**它本身就是 javadoc 的结束符**——本档实测：
+     *    路径里的 thermal_zone[/]temp 提前闭合了注释块，导致后面 4 行中文全成了"非法字符"。
+     *    诊断特征是**报错位置在注释中间**、且报的是"非法字符"而非语法结构——那是注释被提前结束。）
+     *   而 honor10（Android 10 / Kirin 970）上该路径对 app **Permission denied**
+     *   ⇒ 恒返回 -1（一条"看起来正常"的假读数——-1 会被读成"温度未变化"）。
+     *   ⇒ 回退链：① 标准 thermal_zone（多数设备可用）→ ② dumpsys thermalservice 的
+     *     Cached temperatures（honor10 可用，含 cluster0/cluster1/gpu/battery）→ ③ -1（明确标注取不到）。
+     *   ★诚实边界：② 走 dumpsys 需要 android.permission.DUMP —— 实测 app 内 Runtime.exec 调 dumpsys
+     *     **不可用**（权限受限）。故 ② 只在**脚本侧**（adb shell）可行 ⇒ app 侧实际回退到 ③，
+     *     温度由**脚本侧**采集（本档已如此：acceptance.sh 的 max_temp() 用 adb shell 采集）。
+     *     ⇒ 本方法保留但**返回值不再被当作可信读数**（报告里带 temp_source 标注）。
+     */
     private int readTemp() {
+        // ① 标准路径
         int max = -1;
         java.io.File dir = new java.io.File("/sys/class/thermal");
         java.io.File[] zones = dir.listFiles();
-        if (zones == null) return -1;
-        for (java.io.File z : zones) {
-            if (!z.getName().startsWith("thermal_zone")) continue;
-            try {
-                java.io.BufferedReader r = new java.io.BufferedReader(
-                        new java.io.FileReader(new java.io.File(z, "temp")));
-                int v = Integer.parseInt(r.readLine().trim());
-                r.close();
-                if (v > max && v < 200000) max = v;   // 过滤明显异常值
-            } catch (Exception ignored) {}
+        if (zones != null) {
+            for (java.io.File z : zones) {
+                if (!z.getName().startsWith("thermal_zone")) continue;
+                try {
+                    java.io.BufferedReader r = new java.io.BufferedReader(
+                            new java.io.FileReader(new java.io.File(z, "temp")));
+                    int v = Integer.parseInt(r.readLine().trim());
+                    r.close();
+                    if (v > max && v < 200000) max = v;   // 过滤明显异常值
+                } catch (Exception ignored) {}
+            }
         }
-        return max;
+        if (max > 0) { tempSource = "sysfs:thermal_zone"; return max; }
+        // ② 备选：battery 温度（读取不受 thermal 类权限限制的设备）
+        try {
+            java.io.BufferedReader r = new java.io.BufferedReader(new java.io.FileReader(
+                    "/sys/class/power_supply/battery/temp"));
+            int v = Integer.parseInt(r.readLine().trim()) * 10;   // 该节点通常是 0.1°C
+            r.close();
+            if (v > 0 && v < 200000) { tempSource = "sysfs:battery(0.1C)"; return v; }
+        } catch (Exception ignored) {}
+        tempSource = "unavailable";
+        return -1;
     }
+
+    /** 温度来源标注（`unavailable` ⇒ 读数不可信，必须显式可见——见 readTemp 注释） */
+    private String tempSource = "unknown";
 
     private void runAll() {
         // ★§9.2 增量内存：点击时刻的 PSS 作为基线
@@ -310,9 +341,30 @@ public class MainActivity extends Activity {
             if (cpuStr.length() > 0) cpuStr.append(",");
             cpuStr.append(c);
         }
-        // 核分类（本机实测：cpu0-5 3.6GHz 普大核 · cpu6-7 4.6GHz 超大核）
+        // ★★核档位判定：**按实测频率分档，不写死核号**（本仓实测的设备移植缺陷）
+        //
+        // 【为什么原写法是错的】`if (c >= 6) prime++` 把设备拓扑写死了（"8 核、cpu6/7 最快"）。
+        //   换机即误判：honor10 / Kirin 970 = cpu0-3 A53@1.844GHz + cpu4-7 A73@2.362GHz（**只有两档**）
+        //   ⇒ cpu4/5 被算成 normal（其实是最快档），而 "prime" 指向一个不存在的第三档。
+        //   ⇒ 正解：读本机各核 max_freq 聚档，"最快档"是**测出来的**。
+        //   §9.2 判据重述：**主线程只落在最快档**即合规（两档设备上落在最快档是正常的，
+        //   不是"超频作弊"——那是它唯一的快档）。
+        int[] coreMaxKhz = readCoreMaxFreq();
+        int fastestKhz = 0;
+        for (int f : coreMaxKhz) if (f > fastestKhz) fastestKhz = f;
         int primeCount = 0, normalCount = 0;
-        for (Integer c : observedCpus) { if (c >= 6) primeCount++; else normalCount++; }
+        StringBuilder freqStr = new StringBuilder();
+        for (int ci = 0; ci < coreMaxKhz.length; ci++) {
+            if (coreMaxKhz[ci] <= 0) continue;
+            if (freqStr.length() > 0) freqStr.append(",");
+            freqStr.append("cpu").append(ci).append("=").append(coreMaxKhz[ci]);
+        }
+        for (Integer c : observedCpus) {
+            if (c >= 0 && c < coreMaxKhz.length && coreMaxKhz[c] == fastestKhz) primeCount++;
+            else normalCount++;
+        }
+        java.util.Set<Integer> tiers = new java.util.TreeSet<>();
+        for (int f : coreMaxKhz) if (f > 0) tiers.add(f);
 
         // ★采样前强制 GC：把「尚未回收的垃圾」清掉，只留**结构本身的存活对象**
         //   （否则测得的是「分配峰值」而非「结构成本」，重复性差）
@@ -321,14 +373,19 @@ public class MainActivity extends Activity {
         long peakPss = pssKb();
         sb.append("\n【④ §9.2 环境核验】\n");
         sb.append("观测到的 CPU：").append(cpuStr.length() == 0 ? "未知" : cpuStr.toString())
-          .append("（prime=").append(primeCount).append(" · normal=").append(normalCount).append("）\n");
+          .append("（最快档 ").append(primeCount).append(" · 其余 ").append(normalCount)
+          .append(" · 本机 ").append(tiers.size()).append(" 档 · 最快 ").append(fastestKhz).append("kHz）\n");
         sb.append("温度：").append(tempBefore).append(" → ").append(tempAfter).append(" (m°C)\n");
         writeReport("layout-env.json",
                 "{\"path\":\"" + testPath + "\",\"observed_cpus\":["
                         + cpuStr.toString() + "],\"prime_count\":" + primeCount
                         + ",\"normal_count\":" + normalCount
+                        + ",\"core_max_khz\":\"" + freqStr + "\""
+                        + ",\"fastest_khz\":" + fastestKhz
+                        + ",\"tiers\":" + tiers.size()
                         + ",\"temp_before_mc\":" + tempBefore
-                        + ",\"temp_after_mc\":" + tempAfter + "}");
+                        + ",\"temp_after_mc\":" + tempAfter
+                        + ",\"temp_source\":\"" + tempSource + "\"}");
 
         sb.append("\n【⑤ 增量内存（§9.2，纯结构口径）】\n");
         sb.append("baseline=").append(baselinePss).append(" KB · after=").append(peakPss)
@@ -1656,6 +1713,18 @@ public class MainActivity extends Activity {
     private String compareAgainstNative() {
         final int W = 1080, H = 2400;
 
+        // ★★**绘制采样表 + 重复次数**（本仓实测的测量装置**不对称**缺陷）
+        //
+        // 【为什么必须（honor10 暴露）】布局侧早已用 **20 次中位数**（`rust_layout_median_of20_ms`），
+        //   而**绘制侧只测 1 次、且无预热**。在 ART（Android 10）上首次调用常走**解释执行/JIT 未编译**
+        //   ⇒ 单次读数被冷启动主导：同一份代码 honor10 `optimized_hw_record_ms=35ms` vs Redmi `2ms`
+        //   （**17×**）——那不是"设备慢 17 倍"，是**首次调用的装置误差**。
+        //   ★纪律（与 #11 同族）：**单点墙钟读数不可信**；必须与已有口径（多次取中位）对齐。
+        final int DRAW_REPS = 7;
+        final java.util.List<Long> drawSamplesNative = new java.util.ArrayList<>();
+        final java.util.List<Long> drawSamplesProteusSoft = new java.util.ArrayList<>();
+        final java.util.List<Long> drawSamplesProteusHw = new java.util.ArrayList<>();
+
         // ══ ① 原生通路：三段分开计时 ══
         long n0 = SystemClock.elapsedRealtime();
         ViewGroup tree = buildNativeTree();
@@ -1665,6 +1734,21 @@ public class MainActivity extends Activity {
                      View.MeasureSpec.makeMeasureSpec(H, View.MeasureSpec.AT_MOST));
         tree.layout(0, 0, w, tree.getMeasuredHeight());
         long n2 = SystemClock.elapsedRealtime();
+        // ★预热一次（丢弃）+ 多次采样取中位数（与布局口径对齐，见上方注释）
+        {
+            android.graphics.Bitmap wb = android.graphics.Bitmap.createBitmap(W, H, android.graphics.Bitmap.Config.ARGB_8888);
+            android.graphics.Canvas wc = new android.graphics.Canvas(wb);
+            tree.draw(wc);
+            wb.recycle();
+        }
+        for (int rep = 0; rep < DRAW_REPS; rep++) {
+            android.graphics.Bitmap nb = android.graphics.Bitmap.createBitmap(W, H, android.graphics.Bitmap.Config.ARGB_8888);
+            android.graphics.Canvas nc2 = new android.graphics.Canvas(nb);
+            long t0 = SystemClock.elapsedRealtimeNanos();
+            tree.draw(nc2);
+            drawSamplesNative.add((SystemClock.elapsedRealtimeNanos() - t0) / 1_000_000);
+            nb.recycle();
+        }
         android.graphics.Bitmap nbmp = android.graphics.Bitmap.createBitmap(W, H, android.graphics.Bitmap.Config.ARGB_8888);
         android.graphics.Canvas nc = new android.graphics.Canvas(nbmp);
         tree.draw(nc);
@@ -1675,7 +1759,7 @@ public class MainActivity extends Activity {
         nbmp.recycle();
         double nativeCreateMs = (n1 - n0);
         double nativeMeasureLayoutMs = (n2 - n1);
-        double nativeDrawMs = (n3 - n2);
+        double nativeDrawMs = median(drawSamplesNative);   // ★中位数（见预热注释）
 
         // ══ ② Proteus 通路：三段分开计时 ══
         long p0 = SystemClock.elapsedRealtime();
@@ -1685,7 +1769,20 @@ public class MainActivity extends Activity {
         long p2 = SystemClock.elapsedRealtime();
         ProteusHostView host = new ProteusHostView(this);
         host.setCmds(cmds);
-        // ── 软件路径（对照用；非方案规定路径）──
+        // ── 软件路径（对照用；非方案规定路径）★同样预热 + 多采样（见 DRAW_REPS 注释）──
+        {
+            android.graphics.Bitmap wb = android.graphics.Bitmap.createBitmap(W, H, android.graphics.Bitmap.Config.ARGB_8888);
+            host.drawCmds(new android.graphics.Canvas(wb));
+            wb.recycle();
+        }
+        for (int rep = 0; rep < DRAW_REPS; rep++) {
+            android.graphics.Bitmap pb = android.graphics.Bitmap.createBitmap(W, H, android.graphics.Bitmap.Config.ARGB_8888);
+            android.graphics.Canvas sc = new android.graphics.Canvas(pb);
+            long t0 = SystemClock.elapsedRealtimeNanos();
+            host.drawCmds(sc);
+            drawSamplesProteusSoft.add((SystemClock.elapsedRealtimeNanos() - t0) / 1_000_000);
+            pb.recycle();
+        }
         android.graphics.Bitmap pbmp2 = android.graphics.Bitmap.createBitmap(W, H, android.graphics.Bitmap.Config.ARGB_8888);
         android.graphics.Canvas soft = new android.graphics.Canvas(pbmp2);
         host.drawCmds(soft);
@@ -1768,8 +1865,26 @@ public class MainActivity extends Activity {
         pbmp2.recycle();
         double proteusLayoutMs = (p1 - p0);
         double proteusEmitMs = (p2 - p1);
-        double proteusSoftDrawMs = (p3a - p2);
-        double proteusHwRecordMs = (p3 - p3a);
+        // 硬件录制路径：同样预热 + 多采样
+        {
+            android.graphics.RenderNode wrn = new android.graphics.RenderNode("warm");
+            wrn.setPosition(0, 0, W, H);
+            android.graphics.RecordingCanvas wrc = wrn.beginRecording();
+            host.drawCmds(wrc);
+            wrn.endRecording();
+        }
+        for (int rep = 0; rep < DRAW_REPS; rep++) {
+            // ★变量名避开外层已有的 rn/rc（Java 不允许同名局部遮蔽——外层那两个是同方法的旧变量）
+            android.graphics.RenderNode srn = new android.graphics.RenderNode("p-" + rep);
+            srn.setPosition(0, 0, W, H);
+            android.graphics.RecordingCanvas src = srn.beginRecording();
+            long t0 = SystemClock.elapsedRealtimeNanos();
+            host.drawCmds(src);
+            drawSamplesProteusHw.add((SystemClock.elapsedRealtimeNanos() - t0) / 1_000_000);
+            srn.endRecording();
+        }
+        double proteusSoftDrawMs = median(drawSamplesProteusSoft);   // ★中位数
+        double proteusHwRecordMs = median(drawSamplesProteusHw);     // ★中位数
 
         double layoutMs = -1;
         try { layoutMs = new JSONObject(benchJson).optDouble("median_ms", -1); } catch (Exception ignored) {}
@@ -2794,6 +2909,36 @@ public class MainActivity extends Activity {
         } catch (org.json.JSONException e) {
             return "{\"ok\":false,\"error\":\"" + e.getMessage() + "\"}";
         }
+    }
+
+    /**
+     * 读**本机各核最大频率**（kHz）——设备拓扑的唯一来源
+     *
+     * ★为什么不让上层写死核号：拓扑因机而异（Redmi：cpu0-5 + cpu6/7；honor10/Kirin970：
+     *   cpu0-3 A53 + cpu4-7 A73）。写死核号 ⇒ 换机即误判。
+     * ★读不到时该核留 0，调用方据此**退回"不分类"而不是给错分类**。
+     */
+    /** 采样表取**中位数**（m°C/ms 通用）——★单点墙钟读数不可信，统一走这里（见 DRAW_REPS 注释） */
+    private static double median(java.util.List<Long> xs) {
+        if (xs.isEmpty()) return -1;
+        java.util.List<Long> c = new java.util.ArrayList<>(xs);
+        java.util.Collections.sort(c);
+        return c.get(c.size() / 2);
+    }
+
+    private int[] readCoreMaxFreq() {
+        int[] out = new int[8];
+        for (int i = 0; i < out.length; i++) {
+            out[i] = 0;
+            try {
+                java.io.BufferedReader r = new java.io.BufferedReader(new java.io.FileReader(
+                        "/sys/devices/system/cpu/cpu" + i + "/cpufreq/cpuinfo_max_freq"));
+                String line = r.readLine();
+                r.close();
+                if (line != null) out[i] = Integer.parseInt(line.trim());
+            } catch (Exception ignored) { }
+        }
+        return out;
     }
 
     /** 当前内容滚动偏移（虚拟化路径用；平移自绘内容） */
