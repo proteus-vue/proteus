@@ -196,3 +196,71 @@ describe('V4 · ★★端到端：行内更新写到**正确的行节点**', () 
     expect(targets).not.toContain(1002) // ★不串到第 2 行
   })
 })
+
+describe('V4 · ★嵌套 v-for（本仓实测补的未验证项）', () => {
+  const nestedSfc = sfc(
+    `const groups = ref([{ id: 1, items: [{ id: 10, name: 'a' }] }])\n`,
+    `<p-view v-for="group in groups" :key="group.id">\n  <p-text v-for="item in group.items" :key="item.id">{{ item.name }}</p-text>\n</p-view>`,
+  )
+
+  it('★编译器：内层槽位带 parentListId 与 sourceExpr（区分内外两层列表）', () => {
+    const { table } = buildVaporSubscriptions(nestedSfc, 'n.vue')
+    const items = table.sources.flatMap((s) => s.slots).filter((x) => x.kind === 'list-item')
+    expect(items.length).toBeGreaterThanOrEqual(1)
+    const inner = items[items.length - 1]
+    expect(inner.scope).toBe('item')          // 内层别名
+    expect(inner.sourceExpr).toBe('group.items') // ★内层源（不是顶层源）
+    expect(inner.parentListId).toBeDefined()  // ★有外层
+    expect(inner.itemKeyField).toBe('id')     // 内层 :key="item.id"
+    expect(inner.itemValueField).toBe('name')
+  })
+
+  it('★★端到端：改**内层某一行** ⇒ 指令打到该行节点（嵌套行集解析正确）', () => {
+    const { table } = buildVaporSubscriptions(nestedSfc, 'n.vue')
+    const inner = table.sources.flatMap((s) => s.slots).filter((x) => x.kind === 'list-item').pop()!
+    const reg = new ListRegistry()
+    // 内层两行（跨两个外层组）：id 10 → 2010，id 20 → 2020
+    reg.registerItems(inner.listId!, [
+      { itemKey: '10', slotNodes: { [inner.itemSlotId!]: 2010 } },
+      { itemKey: '20', slotNodes: { [inner.itemSlotId!]: 2020 } },
+    ])
+    const { ops, sink } = collector()
+    const rt = new SlotRuntime(new PropKeyTable(), new StringPool(), sink)
+    const vapor = new VaporRuntime(table, rt, VaporRuntime.buildEvaluators(table.evaluators), reg)
+
+    // 两个外层组，各含一行内层
+    const groups = [
+      { id: 1, items: [{ id: 10, name: 'a' }] },
+      { id: 2, items: [{ id: 20, name: 'b' }] },
+    ]
+    let currentItem = groups[0].items[0]
+    const ctx: EvalContext = {
+      read: (n) => (n === 'groups' ? groups : n === 'item' ? currentItem : undefined),
+    }
+    const triggers = new Map<string, () => void>()
+    vapor.load(ctx, (n, cb) => triggers.set(n, cb))
+    vapor.relink(ctx)
+    rt.flush()
+    ops.length = 0
+
+    // 改**第二个外层组里的内层行**（id 20）
+    currentItem = groups[1].items[0]
+    groups[1].items[0].name = 'changed'
+    triggers.get('groups')!()
+    rt.flush()
+
+    const textOps = ops.filter((o) => o.op === OpCode.SET_TEXT) as Array<{ nodeId: number }>
+    expect(textOps.length).toBe(1)
+    expect(textOps[0].nodeId).toBe(2020) // ★内层第 2 组那行（不是 2010）
+  })
+
+  it('★单层列表不受影响（回归）', () => {
+    const { table } = buildVaporSubscriptions(
+      sfc(`const list = ref([{ id: 1, w: 5 }])\n`, `<p-view v-for="item in list" :key="item.id"><p-text :width="item.w" /></p-view>`),
+      'l.vue',
+    )
+    const it0 = table.sources.flatMap((s) => s.slots).find((x) => x.kind === 'list-item')!
+    expect(it0.parentListId).toBeUndefined()   // ★单层没有外层
+    expect(it0.sourceExpr).toBe('list')
+  })
+})

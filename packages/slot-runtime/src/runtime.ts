@@ -246,23 +246,64 @@ export class VaporRuntime {
   private writeListItems(src: SubscriptionTable['sources'][number], ctx: EvalContext): void {
     const itemSlots = src.slots.filter((x) => x.kind === 'list-item')
     if (itemSlots.length === 0) return
-    const rows = ctx.read(src.sourceName)
-    if (!Array.isArray(rows)) return
+
+    // ★★行集解析（支持嵌套 v-for）——本仓实测：内层列表的源是**外层行的一个字段**
+    //
+    // 【两种形态】
+    //   · 顶层列表（sourceExpr = `groups`，无 parentListId）⇒ 直接读源
+    //   · 嵌套列表（sourceExpr = `group.items`，parentListId = 外层 listId）
+    //     ⇒ 先枚举**外层每一行**，再在该行上按路径求内层数组（外层行数 × 内层行数）
+    //
+    // 【诚实边界】嵌套只支持**两层**（本仓实测的范围）；三层及以上会退化为"只取第一层"。
+    type RowRef = { key: string; row: Record<string, unknown> }
+    const collectRows = (slots: typeof itemSlots): RowRef[] => {
+      const spec0 = slots[0]
+      const out: RowRef[] = []
+      if (spec0.parentListId === undefined) {
+        // 顶层：直接读源
+        const rows = ctx.read(src.sourceName)
+        if (!Array.isArray(rows)) return out
+        for (let i = 0; i < rows.length; i++) {
+          const row = rows[i] as Record<string, unknown>
+          const key = spec0.itemKeyField && row && row[spec0.itemKeyField] !== undefined ? String(row[spec0.itemKeyField]) : String(i)
+          out.push({ key, row })
+        }
+        return out
+      }
+      // 嵌套：先取外层行，再按 sourceExpr 的**第二段**在外层行上取内层数组
+      const outerRows = ctx.read(src.sourceName)
+      if (!Array.isArray(outerRows)) return out
+      // sourceExpr 形如 `group.items` ⇒ 取 `items` 段
+      const segs = (spec0.sourceExpr ?? '').split('.').filter(Boolean)
+      const innerField = segs.length > 1 ? segs[segs.length - 1] : undefined
+      if (!innerField) return out
+      for (const or_ of outerRows) {
+        const outerRow = or_ as Record<string, unknown>
+        const innerArr = outerRow?.[innerField]
+        if (!Array.isArray(innerArr)) continue
+        for (let i = 0; i < innerArr.length; i++) {
+          const row = innerArr[i] as Record<string, unknown>
+          const key = spec0.itemKeyField && row && row[spec0.itemKeyField] !== undefined ? String(row[spec0.itemKeyField]) : String(i)
+          void outerRow
+          out.push({ key, row })
+        }
+      }
+      return out
+    }
 
     for (const spec of itemSlots) {
       const impl = this.evaluators.get(spec.evaluatorId)
       if (!impl) continue
       const scope = spec.scope ?? ''
-      for (let i = 0; i < rows.length; i++) {
-        const row = rows[i] as Record<string, unknown>
-        // ★行作用域上下文：v-for 别名 → 当前行
-        const rowCtx: EvalContext = scope
-          ? { read: (n) => (n === scope ? row : ctx.read(n)) }
-          : ctx
+      const rows = collectRows([spec])
+      for (const { key, row } of rows) {
+        // ★行作用域上下文：把 v-for 别名绑到**当前行**（内层行在内层列表场景下就是 row）
+        //
+        // 【诚实边界】本实现只保证「当前行的别名」可见；**外层别名**（`group`）在
+        //   内层表达式里被引用时（如 `{{ group.title + item.name }}`）尚未支持——
+        //   那需要把外层行也注入上下文，属后续工作（当前不静默出错：会读到 undefined）。
+        const rowCtx: EvalContext = scope ? { read: (n) => (n === scope ? row : ctx.read(n)) } : ctx
         const value = impl(rowCtx)
-        // ★行标识：优先 `:key` 字段；无 `:key` 用下标（不稳定——构表时已产出诊断）
-        const key = spec.itemKeyField && row && row[spec.itemKeyField] !== undefined ? String(row[spec.itemKeyField]) : String(i)
-        // ★按键 diff：只发**真的变了**的行（保住「改 1 行 = 1 条指令」）
         const cacheKey = `${spec.slotId}:${key}`
         if (this.itemValueCache.get(cacheKey) === value) continue
         this.itemValueCache.set(cacheKey, value)

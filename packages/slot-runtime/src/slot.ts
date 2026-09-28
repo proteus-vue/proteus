@@ -56,6 +56,10 @@ export interface SlotSpec {
   itemKeyField?: string
   /** v-for 别名（行作用域求值用） */
   scope?: string
+  /** 列表源表达式（嵌套时如 `group.items`） */
+  sourceExpr?: string
+  /** 外层列表 id（嵌套时才有） */
+  parentListId?: number
 }
 
 /**

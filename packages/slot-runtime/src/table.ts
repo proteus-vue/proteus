@@ -50,8 +50,17 @@ export interface SlotSubscription {
    * 缺省（无 `:key`）⇒ 运行时用**行下标**兜底（方案坑位 #5 警告：index 作 key 在 splice 后会错位）。
    */
   itemKeyField?: string
-  /** v-for 别名（行作用域求值用： 需要把「当前行」绑定到 ） */
+  /** v-for 别名（行作用域求值用：把「当前行」绑定到该别名） */
   scope?: string
+  /**
+   * 列表源表达式（`groups` / `group.items`）
+   *
+   * 【为什么需要（嵌套 v-for）】内层列表的源是**外层行的一个字段**（`group.items`），
+   *   其根 `group` 是外层行别名、不是顶层源 ⇒ 运行时须按本表达式逐级求值。
+   */
+  sourceExpr?: string
+  /** 外层列表的 listId（嵌套时才有；运行时先取外层行，再在行上求内层数组） */
+  parentListId?: number
 }
 
 /** 一个响应式源的订阅条目 */

@@ -163,6 +163,8 @@ export function buildVaporSubscriptions(source: string, filename = 'anonymous.vu
         itemValueField,
         itemKeyField,
         scope, // ★v-for 别名（运行时行作用域求值用）
+        sourceExpr: ref.listContext!.sourceExpr,     // ★列表源表达式（嵌套如 group.items）
+        parentListId: ref.listContext!.parentListId, // ★外层列表 id（嵌套时才有）
       }
       slotRecords.push({ slot: itemSlot, deps, ref })
       decisions.push({
