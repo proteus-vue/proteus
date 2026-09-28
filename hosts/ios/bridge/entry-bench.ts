@@ -122,7 +122,7 @@ const BN = { snapshot: 'bench-final' }
 // ★构建标识：每次构建写入，用于**确凿判定**设备上跑的是哪份代码
 //   （踩坑：靠文件 mtime 判断"报告是否刷新"不可靠——新建目标文件的时间恒为"现在"；
 //    且我看不出设备实际执行的是旧 bundle，白跑一轮。有了这个字段就能一眼判定。）
-const BUILD_ID = 'd4c099ea-210848'
+const BUILD_ID = '9fd5f96a-211151'
 const now = (): number => Date.now()
 /** 宽松解析（宿主返回可能是字符串或已是对象） */
 const safeParseAny = (s: any): any => {
@@ -2314,6 +2314,43 @@ CASES.push({
     // 屏外行（此刻视口在 600 附近 ⇒ 第 2 行已滚出并被回收）
     const probeOff = safeParseAny(proteusSelfDraw.virtualProbe?.(2) ?? '{}')
 
+    // ⑤+ ★★**虚拟化下的命中测试**（本档此前标为未覆盖项）
+    //
+    // 【为什么它必须单独验（不能从"几何对"推出来）】虚拟化只物化了少数行；
+    //   而命中走的是**核心的全量树** ⇒ 理论上不依赖层是否物化。
+    //   但"理论"不算数：本仓已多次证明"看起来必然成立"的事需要实测（如宿主裁剪破坏核心簿记）。
+    //   两条判据：
+    //     · 打**已物化**的行（可见区）⇒ 必须命中该行内节点
+    //     · 打**未物化**的行（屏外）⇒ 从"核心持全量树"的角度它**也应该**命中
+    //       （那是核心的正确性，与层无关）；若命中不到 ⇒ 说明命中路径被层状态影响了（真缺陷）
+    const hitProbe = (rowIndex: number): { hit: any; expectedIds: number[]; rowY: number; usedXY: [number, number] } => {
+      const pr = safeParseAny(proteusSelfDraw.virtualProbe?.(rowIndex) ?? '{}')
+      // ★★**命中必须用「内容坐标」**（本仓实测的坐标系口径分叉，第 5 次同类）
+      //
+      // 【两次踩坑都记下来】
+      //   ① 首版手算 `x=8` ⇒ 命中 `target:0`（列表根）。因为 SFC 里列表根有 `padding-left:16px`，
+      //      行容器从 x=16 起 —— x=8 落在根上（合法命中，但不是我要的行内节点）。
+      //   ② 改用探针的 `child_rects`（**屏幕坐标**）⇒ 命中 `target:18`（**第 1 行**的圆点）。
+      //      因为 `tapAt` 吃**内容坐标**（与核心 `rects` 同口径），而我传的是"减掉 contentOffset
+      //      之后的屏幕坐标" ⇒ 600 行在内容坐标里 y≈37000，我传的 ~449 正好是第 1 行的位置。
+      //   ⇒ 纪律：**跨接口传坐标前先确认两端口径**；"数字看着合理"恰恰是最危险的（449 确实
+      //     是某一行的 y —— 只不过是另一行）。
+      //   ⇒ 探针现已同时给屏幕坐标与内容坐标（`child_content_centers`），本处取后者。
+      const kids: Array<{ cx: number; cy: number }> = (pr?.child_content_centers as Array<{ cx: number; cy: number }>) ?? []
+      const expected = ((inst.virtual!.rows.find((r) => r.index === rowIndex)?.ids) ?? [])
+      const dot = kids[1] ?? kids[0]
+      const x = dot ? dot.cx : 8
+      const y = dot ? dot.cy : 0
+      const hit = safeParseAny(proteusSelfDraw.tapAt?.(x, y) ?? '{}')
+      return { hit, expectedIds: expected, rowY: y, usedXY: [x, y] }
+    }
+    const hitInRow = hitProbe(FAR)          // 已物化（视口中心）
+    const hitOffRow = hitProbe(20)          // 屏外（早已被回收）
+    const hitOk = (h: { hit: any; expectedIds: number[] }): boolean => {
+      const t = h.hit?.target as number | undefined
+      return typeof t === 'number' && t >= 0 && h.expectedIds.includes(t)
+    }
+
     // ④ 破坏性验证：把池容量设为 0（**同一条轨迹**再滚一轮）
     //    ⇒ 复用必须归零、且确实又新建了层（证明"复用率"不是恒真的量）
     safeParseAny(proteusSelfDraw.setPoolCapacity?.(0) ?? '{}')
@@ -2369,6 +2406,10 @@ CASES.push({
         ((farApply?.text_updates as number) ?? 0) >= 1,
       // ★★⑭ **测量装置自检**：像素采样器三色标定（本轮 R/B 互换就是它抓出来的）
       pixelDeviceOk: (safeParseAny(proteusSelfDraw.pixelFormatSelfTest?.() ?? '{}'))?.ok === true,
+      // ★★⑮ 虚拟化下的命中：**已物化行**必须命中该行内节点
+      hitOnMaterializedRow: hitOk(hitInRow),
+      // ★★⑯ 虚拟化下的命中：**未物化行**也应命中（核心持全量树 ⇒ 命中与层无关）
+      hitOnUnmaterializedRow: hitOk(hitOffRow),
     }
     const verdict = Object.values(checks).every(Boolean) ? 'PASS' : 'FAIL'
     results.push({
@@ -2392,9 +2433,14 @@ CASES.push({
         probe_far_row: probeFar2, probe_offscreen_row: probeOff,
         pixel_at_dot: pixel, offscreen_far_row: FAR,
         offscreen_text_seen: farRowText, offscreen_apply: farApply,
+        // ★虚拟化下的命中读数（坐标由宿主几何推导）
+        hit_on_materialized: hitInRow,
+        hit_on_unmaterialized: hitOffRow,
+        pixel_at_dot: pixel, offscreen_far_row: FAR,
+        offscreen_text_seen: farRowText, offscreen_apply: farApply,
         runtime: { l1_slots: loadRes.l1Slots, l0_slots: loadRes.l0Slots },
         covered: 'virtualized mount + direction-sensitive recycle + layer pool reuse + rollback',
-        not_covered: '手势/命中在虚拟化下的坐标（tapAt 走内容坐标，未额外验证）；Android 侧同款接线',
+        not_covered: '真实 UITouch（tapAt 绕过 UITouch，只覆盖「命中→派发」）；Android 侧同款',
       },
     })
   },

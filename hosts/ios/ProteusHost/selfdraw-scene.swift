@@ -1446,6 +1446,19 @@ final class SelfDrawView: UIView {
         return abs.offsetBy(dx: -contentOffset.x, dy: -contentOffset.y)
     }
 
+    /// 该行根在**内容坐标**下的 rect（供命中测试——与核心 rects 同口径）
+    func contentRect(of rowIndex: Int) -> CGRect? {
+        guard let row = virtualRows.first(where: { $0.index == rowIndex }) else { return nil }
+        return nodeRects[row.root]
+    }
+
+    /// 该行内某节点在**内容坐标**下的 rect（供命中测试）
+    func rowChildContentRect(_ rowIndex: Int, childAt: Int) -> CGRect? {
+        guard let row = virtualRows.first(where: { $0.index == rowIndex }),
+              childAt >= 0, childAt < row.ids.count else { return nil }
+        return nodeRects[row.ids[childAt]]
+    }
+
     /// 该行是否已物化（像素判据的前置：未物化的行采样必然是空白）
     func isRowMaterialized(_ rowIndex: Int) -> Bool { materializedRows.contains(rowIndex) }
 
@@ -2042,6 +2055,21 @@ final class SelfDrawBridge: NSObject, SelfDrawExports {
                                    "cx": Double(r.midX), "cy": Double(r.midY)])
             }
         }
+        // ★★**同时给出屏幕坐标与内容坐标**（本仓实测的坐标系口径分叉）
+        //
+        // 【为什么必须要两套】本探针历史上只给**屏幕坐标**（`abs - contentOffset`），
+        //   供**像素采样**用（`samplePixels` 吃屏幕坐标）；而 `tapAt` 吃**内容坐标**
+        //   （核心的命中测试与 rects 同口径）。
+        //   实测踩到：拿 `child_rects.cy` 去 `tapAt` ⇒ 命中到**第 1 行**（因为内容坐标里
+        //   600 行的 y≈37000，而我传的是它减掉偏移后的 ~449 ⇒ 那是第 1 行的位置）。
+        //   ⇒ 纪律：**跨接口传坐标前先确认两端口径**；探针一次给全两套，调用方各取所需。
+        let rowContent = view.contentRect(of: ri)
+        var contentCenters: [[String: Double]] = []
+        for i in 0..<n {
+            if let c = view.rowChildContentRect(ri, childAt: i) {
+                contentCenters.append(["cx": Double(c.midX), "cy": Double(c.midY)])
+            }
+        }
         return jsonString([
             "ok": true,
             "row_index": ri,
@@ -2049,6 +2077,12 @@ final class SelfDrawBridge: NSObject, SelfDrawExports {
             "row_rect": ["x": Double(rowRect.minX), "y": Double(rowRect.minY),
                          "w": Double(rowRect.width), "h": Double(rowRect.height),
                          "cx": Double(rowRect.midX), "cy": Double(rowRect.midY)],
+            // ★**内容坐标**（供 `tapAt`/命中测试用；与核心 rects 同口径）
+            "row_content": rowContent == nil ? [:] : [
+                "x": Double(rowContent!.minX), "y": Double(rowContent!.minY),
+                "w": Double(rowContent!.width), "h": Double(rowContent!.height),
+                "cy": Double(rowContent!.midY)],
+            "child_content_centers": contentCenters,
             "child_rects": childRects,
             // ★行内各节点的**当前文本**（来自真源/层的实际呈现）——用于验证
             //   "屏外更新滚入后是否生效"（复用池最经典的静默错：显示上一行的内容）
