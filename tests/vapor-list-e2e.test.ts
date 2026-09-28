@@ -363,6 +363,26 @@ describe('V4 · ★嵌套 v-for（本仓实测补的未验证项）', () => {
     expect(styleOps.some((o) => o.nodeId === 1001)).toBe(false)                  // ★不串外层
   })
 
+  it('★★求值器未实例化必须**上报**（不许静默跳过）', () => {
+    // 【本仓实测的静默失效路径】表达式引用**外层别名**或含运算
+    //   （如 `{{ group.title + item.name }}`）⇒ 编译器给 `expr` 形态；
+    //   而 `expr` 参考实现只支持纯路径 ⇒ `impl` 为 undefined。
+    //   首版此处**直接 continue** ⇒ 该槽位**永不写、且零提示**（静默不更新的典型）。
+    //   ⇒ 修复：`load()` 里做**实例化检查**并上报 `uninstantiatedSlots`。
+    //   ★注意时序：检查必须在 `load()` 内（**不求值也要能报**）——
+    //     求值发生在 `relink()`/源变化时，若把检查放进求值路径，`load()` 返回值恒为空。
+    const src = sfc(
+      `const groups = ref([{ id: 1, title: 'T', items: [{ id: 2, name: 'x' }] }])\n`,
+      `<p-view v-for="group in groups" :key="group.id"><p-text v-for="item in group.items" :key="item.id">{{ group.title + item.name }}</p-text></p-view>`,
+    )
+    const { table } = buildVaporSubscriptions(src, 'outer.vue')
+    const rt = new SlotRuntime(new PropKeyTable(), new StringPool(), () => {})
+    const vapor = new VaporRuntime(table, rt, VaporRuntime.buildEvaluators(table.evaluators), new ListRegistry())
+    const res = vapor.load({ read: () => undefined }, () => {})
+    expect(res.uninstantiatedSlots.length).toBeGreaterThan(0) // ★首版这里恒为空（静默）
+    expect(res.uninstantiatedSlots[0].propKey).toBe('text.content')
+  })
+
   it('★单层列表不受影响（回归）', () => {
     const { table } = buildVaporSubscriptions(
       sfc(`const list = ref([{ id: 1, w: 5 }])\n`, `<p-view v-for="item in list" :key="item.id"><p-text :width="item.w" /></p-view>`),
