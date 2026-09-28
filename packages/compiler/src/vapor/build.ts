@@ -47,6 +47,40 @@ export interface VaporBuildOptions {
   pureSymbols?: string[]
   /** 人工强制降级的槽位 id（等价 `<!-- @proteus-tier=L0 -->`） */
   forceL0Slots?: number[]
+  /**
+   * ★★逃生通道：允许 v-for 不带 `:key`（此时运行时用**行下标**）
+   *
+   * 【为什么需要它】无 `:key` 会被判为 **error**（方案坑位 #5：splice 后命中错行，
+   *   静默错内容）。但存在**确实安全**的情形——例如列表只追加不删改、
+   *   或开发者明确接受下标语义。⇒ 提供**显式**放行，而非把判据放宽（默认从严）。
+   *
+   * `true` = 全部放行；`number[]` = 只放行指定 listId（推荐，粒度细）。
+   */
+  allowIndexKey?: boolean | number[]
+}
+
+/**
+ * ★★结构化诊断（**带严重级**——区别于 `notes` 的自由文本）
+ *
+ * 【为什么需要（本仓实测的动机）】`notes` 是给人看的字符串，**无法被门禁消费**——
+ *   于是「无 `:key`」这类会导致**静默错行**（方案坑位 #5）的问题只能是"提示"，
+ *   永远拦不住。⇒ 引入带 `severity` / `code` 的结构化通道：
+ *   · `error`  ⇒ 调用方（构建流水线 / 门禁）**应当阻断**
+ *   · `warn`   ⇒ 提示，可继续
+ *   · `info`   ⇒ 追溯用（如"`:key` 不建槽位"这类正常行为）
+ */
+export interface VaporDiagnostic {
+  severity: 'error' | 'warn' | 'info'
+  /** 机器可判别的稳定代号（门禁与测试按它断言，不依赖文案） */
+  code: string
+  message: string
+  /** 修复建议（面向开发者/LLM 的可执行指引） */
+  hint?: string
+  /** 涉及的槽位 / 列表（可用时给出） */
+  slotId?: number
+  listId?: number
+  /** 源码行号（1-based；可用时给出） */
+  line?: number
 }
 
 export interface VaporBuildResult {
@@ -54,10 +88,20 @@ export interface VaporBuildResult {
   sources: ReactiveSource[]
   /** 分层判定明细（`proteus explain` 消费；方案 §5.5 硬性要求） */
   decisions: ExplainRow[]
-  /** 诊断（不阻断编译；说明为何降级） */
+  /** 诊断（不阻断编译；说明为何降级）——自由文本，供人读 */
   notes: string[]
+  /** ★★结构化诊断（**带严重级**，供门禁与工具消费） */
+  diagnostics: VaporDiagnostic[]
   /** 整体是否可信（false = 源扫描失败 ⇒ 全部 L0；调用方应提示用户） */
   ok: boolean
+  /**
+   * ★★是否存在 `error` 级诊断（**调用方应据此阻断**）
+   *
+   * 【为什么单列】`ok` 的语义是"产物结构上可用"（源扫描成功）；
+   *   而 `hasErrors` 表达"存在会静默出错的问题（如无 :key）"——
+   *   两者**不可合并**：源扫描失败时全部降 L0（安全）；无 :key 时产物可用但**会错**。
+   */
+  hasErrors: boolean
 }
 
 /**
@@ -69,6 +113,7 @@ export interface VaporBuildResult {
  */
 export function buildVaporSubscriptions(source: string, filename = 'anonymous.vue', opts: VaporBuildOptions = {}): VaporBuildResult {
   const notes: string[] = []
+  const diagnostics: VaporDiagnostic[] = []
   const srcScan = scanReactiveSources(source, filename)
   if (!srcScan.ok) {
     // ★整体降级：源不可信 ⇒ 全部 L0（不猜）
@@ -77,7 +122,16 @@ export function buildVaporSubscriptions(source: string, filename = 'anonymous.vu
       sources: [],
       decisions: [],
       notes: [`源扫描失败，全部降级 L0：${srcScan.error ?? '未知原因'}`],
+      diagnostics: [
+        {
+          severity: 'error',
+          code: 'VAPOR_SOURCE_SCAN_FAILED',
+          message: `响应式源扫描失败：${srcScan.error ?? '未知原因'}`,
+          hint: '全部槽位已降级 L0（标准 Vue 渲染路径）——行为正确但无加速；请检查 SFC 语法',
+        },
+      ],
       ok: false,
+      hasErrors: true,
     }
   }
 
@@ -187,13 +241,41 @@ export function buildVaporSubscriptions(source: string, filename = 'anonymous.vu
         if (!list.some((x) => x.slotId === mySlot)) list.push(itemSlot)
         slotsBySource.set(src.sourceId, list)
       }
-      const keyWarn = ref.listContext!.keyField ? '' : '（★该 v-for 无 :key ⇒ 行标识不稳定，运行时须用下标兜底——方案坑位 #5）'
-      notes.push(`slot_${mySlot} 行内槽位：${ref.code} → listId=${listId} itemSlotId=${itemSlotId}${keyWarn}`)
+      // ★★无 `:key` ⇒ **error 级诊断**（本仓实测：这是"静默错行"的来源）
+      //
+      // 【为什么是 error 而不是 warn（依据）】没有 `:key` 时运行时用**行下标**兜底；
+      //   而 `splice` 之后下标会指向**另一行** ⇒ `LIST_UPDATE` 写到错误的行
+      //   ⇒ **静默错内容**（方案坑位 #5 明列）。这类失效没有报错、没有崩，
+      //   只有肉眼在滚动/增删后才可能发现——属最该被拦下的一类。
+      //   ⇒ 定为 error；真需要下标语义时用**显式逃生通道** `allowIndexKey`
+      //     （显式 = 开发者已确认该列表不会被 splice / 或接受下标语义）。
+      const hasKey = Boolean(ref.listContext!.keyField)
+      const allowIndex = opts.allowIndexKey === true || (Array.isArray(opts.allowIndexKey) && opts.allowIndexKey.includes(listId))
+      if (!hasKey && !allowIndex) {
+        diagnostics.push({
+          severity: 'error',
+          code: 'VAPOR_VFOR_WITHOUT_KEY',
+          message: `v-for 缺少 :key（listId=${listId}）：行标识不稳定，splice 后会命中错误的行（静默错内容）`,
+          hint:
+            '给该 v-for 加稳定 :key（如 `:key="item.id"`，不要用下标）；' +
+            '若该列表确实不会被 splice / 你接受下标语义，可显式传入 opts.allowIndexKey',
+          slotId: mySlot,
+          listId,
+          line: ref.line,
+        })
+      }
+      const keyNote = hasKey ? '' : allowIndex ? '（无 :key，已由 allowIndexKey 显式放行 ⇒ 用下标）' : ''
+      notes.push(`slot_${mySlot} 行内槽位：${ref.code} → listId=${listId} itemSlotId=${itemSlotId}${keyNote}`)
       continue
     }
     if (ref.listContext?.isKeyBinding) {
       // :key 不建槽位（非渲染属性）——跳过但要留痕，便于 explain 追查
       notes.push(`:key="${ref.code}" 不建槽位（行标识字段，非可更新渲染属性）`)
+      diagnostics.push({
+        severity: 'info',
+        code: 'VAPOR_KEY_IS_ROW_IDENTITY',
+        message: `:key="${ref.code}" 用作行标识字段（非可更新渲染属性）`,
+      })
       continue
     }
 
@@ -236,6 +318,13 @@ export function buildVaporSubscriptions(source: string, filename = 'anonymous.vu
       }
       if (hooked === 0) {
         notes.push(`★slot_${mySlot} 依赖列表相对路径 ${deps.listRelative.map((r) => r.path).join(', ')} 但**未挂到任何列表源**（scopeSources=${JSON.stringify(ref.scopeSources)}）——请检查 v-for 形态`)
+        diagnostics.push({
+          severity: 'warn',
+          code: 'VAPOR_LIST_BINDING_NOT_HOOKED',
+          message: `slot_${mySlot} 的列表相对路径未挂到任何列表源`,
+          hint: '该槽位不会被任何源驱动 ⇒ 可能静默不更新；请检查 v-for 形态（如 v-for 是否写在正确的元素上）',
+          slotId: mySlot,
+        })
       } else {
         notes.push(`slot_${mySlot} 依赖列表相对路径 ${deps.listRelative.map((r) => r.path).join(', ')} ⇒ 归属列表源 ${listRoots.join('/')}，由 LIST_UPDATE 承接（item 级）`)
       }
@@ -255,6 +344,8 @@ export function buildVaporSubscriptions(source: string, filename = 'anonymous.vu
   void SlotRuntime // 类型引用（产物与运行时同源）
 
   return {
+    diagnostics,
+    hasErrors: diagnostics.some((d) => d.severity === 'error'),
     table: {
       version: 1,
       sources,

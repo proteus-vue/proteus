@@ -91,6 +91,7 @@ export type {
   EvaluatorSpec,
   VaporBuildOptions,
   VaporBuildResult,
+  VaporDiagnostic,
 } from './vapor'
 export type { SfcMacros, MacroModelRef } from './sfc-macros'
 

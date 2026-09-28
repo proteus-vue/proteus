@@ -70,10 +70,35 @@ describe('V4 · ★编译器为 v-for 产出 list-item 槽位', () => {
     expect(notes.some((n) => n.includes(':key=') && n.includes('不建槽位'))).toBe(true)
   })
 
-  it('★无 :key 的 v-for 会留下诊断（行标识不稳定 ⇒ 运行时须用下标兜底）', () => {
+  it('★★无 :key 的 v-for ⇒ **error 级诊断**（不再是"提示"）', () => {
+    // 【为什么升级成 error（本仓实测的判据）】无 `:key` 时运行时用**行下标**兜底，
+    //   而 splice 之后下标会指向**另一行** ⇒ `LIST_UPDATE` 写到错误的行
+    //   ⇒ **静默错内容**（方案坑位 #5）。这类失效无报错、无崩溃，只有肉眼可能发现
+    //   ——属于最该被拦下的一类。首版只产一条 `notes` 字符串（无法被门禁消费）。
     const src = sfc(`const list = ref([{ w: 1 }])\n`, `<p-view v-for="item in list"><p-text :width="item.w" /></p-view>`)
-    const { notes } = buildVaporSubscriptions(src, 'l.vue')
-    expect(notes.some((n) => n.includes('无 :key'))).toBe(true)
+    const res = buildVaporSubscriptions(src, 'l.vue')
+    expect(res.hasErrors).toBe(true)
+    const d = res.diagnostics.find((x) => x.code === 'VAPOR_VFOR_WITHOUT_KEY')
+    expect(d, '★必须产出结构化的 VAPOR_VFOR_WITHOUT_KEY 诊断').toBeTruthy()
+    expect(d!.severity).toBe('error')
+    expect(d!.hint, 'error 必须带可执行修复建议').toBeTruthy()
+  })
+
+  it('★★逃生通道：allowIndexKey 显式放行（true / 按 listId）', () => {
+    const src = sfc(`const list = ref([{ w: 1 }])\n`, `<p-view v-for="item in list"><p-text :width="item.w" /></p-view>`)
+    // 全放行
+    expect(buildVaporSubscriptions(src, 'a.vue', { allowIndexKey: true }).hasErrors).toBe(false)
+    // 按 listId 放行（粒度细，推荐）
+    expect(buildVaporSubscriptions(src, 'b.vue', { allowIndexKey: [0] }).hasErrors).toBe(false)
+    // 不匹配的 listId 不放行（防"放行了不该放的"）
+    expect(buildVaporSubscriptions(src, 'c.vue', { allowIndexKey: [99] }).hasErrors).toBe(true)
+  })
+
+  it('★有 :key ⇒ 无 error（只有 info 级追溯）', () => {
+    const src = sfc(`const list = ref([{ id: 1, w: 1 }])\n`, `<p-view v-for="item in list" :key="item.id"><p-text :width="item.w" /></p-view>`)
+    const res = buildVaporSubscriptions(src, 'k.vue')
+    expect(res.hasErrors).toBe(false)
+    expect(res.diagnostics.some((d) => d.code === 'VAPOR_KEY_IS_ROW_IDENTITY' && d.severity === 'info')).toBe(true)
   })
 })
 
