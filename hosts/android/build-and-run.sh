@@ -79,9 +79,24 @@ find "$APP/src/main/java" -name '*.java' > "$BUILD/java-sources.txt"
 [ -s "$BUILD/java-sources.txt" ] || { echo "✗ 没找到 Java 源文件"; exit 3; }
 # ★JDK 17 起 `-bootclasspath` 只允许配合 `--release`（实测报「目标 17 不允许选项 --boot-class-path」）
 #   → 用 `--release 17` 并只给 `-classpath`；android.jar 提供 android.*/org.json.* 等符号
-javac --release 17 -classpath "$PLATFORM" \
-  -d "$CLASSES" @"$BUILD/java-sources.txt" 2>&1 | grep -v "^Note:" | head -20 || true
-[ -d "$CLASSES/dev" ] || { echo "✗ javac 未产出 class（完整输出见上）"; exit 3; }
+#
+# ★★**必须直接取 javac 的退出码**（本仓第二次踩同一类坑：iOS 那次是 `| tail -1`）
+#
+# 【故障链（2026-09-29 实测）】原写法
+#       javac ... 2>&1 | grep -v "^Note:" | head -20 || true
+#   三个缺陷叠加：① 管道退出码是 **head** 的（恒 0）② `|| true` 再把结果丢掉
+#   ③ 兜底判据 `[ -d "$CLASSES/dev" ]` 只查**目录存在**——而 javac **部分成功**时
+#      仍会建出 `dev/` 目录 ⇒ 判据通过 ⇒ **编译失败照样打包 APK**。
+#   实测现象：报「找不到符号」却继续走完 ③④⑤⑥⑦ 打出 APK —— 等于在测旧产物（白跑一轮）。
+#   ⇒ 正解：输出落盘 + `if ! javac …`（`set -e` 下唯一可靠的形态）。
+if ! javac --release 17 -classpath "$PLATFORM" \
+     -d "$CLASSES" @"$BUILD/java-sources.txt" > "$BUILD/javac.log" 2>&1; then
+  echo "✗ javac 失败 —— 完整输出见 $BUILD/javac.log（末尾 20 行如下）："
+  grep -v "^注:" "$BUILD/javac.log" | tail -20
+  exit 3
+fi
+grep -v "^注:" "$BUILD/javac.log" | head -5 || true
+[ -d "$CLASSES/dev" ] || { echo "✗ javac 退出码 0 但未产出 class（配置异常？）"; exit 3; }
 echo "    class 文件 $(find "$CLASSES" -name '*.class' | wc -l | tr -d ' ') 个"
 
 echo "==> ③ 打包资源与清单（aapt2）"

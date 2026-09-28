@@ -964,7 +964,28 @@ public class ProteusHostView extends ViewGroup {
 
         public boolean hasRow(int row) { return active.containsKey(row); }
 
-        /** 释放窗口外的行（★滚动时的主要回收动作——不释放则内存随滚动累积） */
+        /**
+         * ★★**按核心决策释放**（recycle 窗口给的 `release` 行号列表）。
+         *
+         * 【为什么不再按 from/to 区间扫（本仓实测的设计纠正）】`releaseOutside(from,to)`
+         *   要求**调用方自己算**窗口边界——而方向敏感预载（前进方向多留、离开方向少留）
+         *   正是 `recycle.rs` 已经实现并有单测的逻辑。宿主再写一份 ⇒ **同一语义两份实现**，
+         *   漂移是静默的（只是多建/少建几行对象，任何几何断言都发现不了）。
+         *   ⇒ 现在直接把核心给的行号列表执行掉（与 iOS 的 `scrollRows` 同一条路）。
+         */
+        public int releaseRows(int[] rows) {
+            int released = 0;
+            for (int row : rows) {
+                android.graphics.RenderNode n = active.remove(row);
+                if (n != null) {
+                    if (pool.size() < poolCap) pool.addLast(n);
+                    released++;
+                }
+            }
+            return released;
+        }
+
+        /** 释放窗口外的行（★保留：早期用例/对照仍用它——语义清晰，但**不再用于新路径**） */
         public int releaseOutside(int from, int to) {
             int released = 0;
             java.util.Iterator<java.util.Map.Entry<Integer, android.graphics.RenderNode>> it = active.entrySet().iterator();
@@ -980,6 +1001,15 @@ public class ProteusHostView extends ViewGroup {
                 }
             }
             return released;
+        }
+
+        /** 当前已物化的行号（升序）——诊断："哪些行真的活着" */
+        public int[] activeRows() {
+            int[] a = new int[active.size()];
+            int i = 0;
+            for (int r : active.keySet()) a[i++] = r;
+            java.util.Arrays.sort(a);
+            return a;
         }
 
         public int activeCount() { return active.size(); }

@@ -204,6 +204,14 @@ public class MainActivity extends Activity {
             sb.append("【③ §9.3 平台侧滚动（Choreographer 帧率 + RenderNode 池）】\n");
             String start = scrollListRun();
             sb.append(start).append('\n');
+        } else if ("scroll-core".equals(testPath)) {
+            // ★★**核心驱动的滚动**（与 iOS 的 `V12_scroll_recycle` 同一条路）：
+            //   可见行 → 向核心要**决策**（acquire/release + 方向敏感预载）→ 宿主执行动作。
+            //   ★与 "scroll" 路径的差别：那一版宿主**自己算** above/below（recycle.rs 的第二份副本），
+            //     本版删掉那份副本，两端共用同一份核心逻辑。
+            sb.append("【③ 核心驱动的滚动（复用池决策来自 Rust）】\n");
+            String start = scrollCoreRun();
+            sb.append(start).append('\n');
         } else if ("shot-scroll-native".equals(testPath)) {
             // ★★z-order 约束下的**滚动同步**验证（方案坑位 #4）
             //   场景：20 行列表，**第 5 行是 native-host（WebView）**；程序驱动滚动到若干位置，
@@ -356,6 +364,294 @@ public class MainActivity extends Activity {
      *
      * ★它同时满足 §9.3 原文「回滚到顶部的过程中统计帧率」——滚动轨迹与 Rust 侧一致（下→上）。
      */
+    /**
+     * ★★**核心驱动的滚动列表**（§12.6 / §12.7 P1）——与 iOS `V12_scroll_recycle` 同一条路。
+     *
+     * 【与 `scrollListRun()` 的本质差别（本仓实测的设计纠正）】
+     *   `scrollListRun()` 里宿主**自己算**窗口边界与方向敏感预载：
+     *
+     *       boolean backward = progress >= 0.5;
+     *       int above = backward ? 8 : 2;
+     *       int below = backward ? 2 : 8;
+     *
+     *   ——这正是 `recycle.rs`（已有单测与踩坑记录）的**第二份手写副本**。
+     *   两份副本的漂移是**静默的**（只是多建或少建几行对象，几何断言一律发现不了）。
+     *   ⇒ 本方法：宿主只做三件事——① 由滚动位置算**可见行**（几何已由核心给出）
+     *     ② 把可见行喂给核心的复用池窗口 ③ 执行核心返回的 acquire/release 行号列表。
+     *
+     * 【判据（与 iOS 对齐）】
+     *   · 每帧 acquire/release **有界**（不随滚动距离增长）
+     *   · 前 30 帧方向 = forward、回滚 30 帧 = backward（方向敏感的前提）
+     *   · **回滚时预载区交换**（上方多留）—— 核心决策的直接读数
+     *   · 建对象总数 ≪ 物化次数 × 行数（否则等于每帧重建）
+     *   · 对象池复用率 > 0.5
+     */
+    private String scrollCoreRun() {
+        final int ROWS = 4000;
+        final int VISIBLE_ROWS = 14;      // 一屏可见行数（60px 行高 × 14 ≈ 840）
+        final float ROW_H = 60f;
+        final int W = getResources().getDisplayMetrics().widthPixels;
+        final int H = getResources().getDisplayMetrics().heightPixels;
+        final int FRAMES = 600;
+
+        // ── ① 一次 Rust 布局：给出每行的**真实几何**（行高不写死，由核心算） ──
+        org.json.JSONArray nodes = new org.json.JSONArray();
+        try {
+            org.json.JSONObject root = new org.json.JSONObject();
+            root.put("id", 0); root.put("parentId", org.json.JSONObject.NULL);
+            root.put("flexDirection", "column");
+            root.put("width", W); root.put("height", ROWS * ROW_H);
+            nodes.put(root);
+            for (int i = 0; i < ROWS; i++) {
+                org.json.JSONObject r = new org.json.JSONObject();
+                r.put("id", i + 1); r.put("parentId", 0);
+                r.put("width", W); r.put("height", ROW_H);
+                r.put("flexShrink", 0);
+                nodes.put(r);
+            }
+        } catch (org.json.JSONException e) {
+            return "{\"ok\":false,\"error\":\"构造节点失败：" + e.getMessage() + "\"}";
+        }
+        long tree = RustLayout.create("{\"viewport\":{\"width\":" + W + ",\"height\":" + H + "},\"nodes\":" + nodes + "}");
+        if (tree <= 0) return "{\"ok\":false,\"error\":\"RustLayout.create 失败（节点数 " + nodes.length() + "）\"}";
+
+        // 行高从核心几何读回来（★不假设 ROW_H——核心才是几何的唯一来源）
+        float rowHProbe = ROW_H;
+        try {
+            org.json.JSONObject rects = new org.json.JSONObject(RustLayout.readRects(tree));
+            org.json.JSONObject r1 = rects.optJSONObject("rects") == null ? null : rects.getJSONObject("rects").optJSONObject("2");
+            if (r1 != null) rowHProbe = (float) r1.optDouble("height", ROW_H);
+        } catch (Exception ignored) { }
+        // ★必须 final：下面被匿名 Choreographer 回调捕获（Java 只允许捕获 final/实际 final）
+        final float measuredRowH = rowHProbe;
+
+        // ── ② 复用池句柄（核心侧窗口 + 状态机；0/0 ⇒ 核心默认 leading=8/following=2） ──
+        final long pool = RustLayout.recycleCreate(ROWS, 0, 0);
+        if (pool <= 0) { RustLayout.destroy(tree); return "{\"ok\":false,\"error\":\"recycleCreate 失败\"}"; }
+
+        final ProteusHostView.ListRenderer renderer = new ProteusHostView.ListRenderer(VISIBLE_ROWS + 16);
+        final ProteusHostView listView = new ProteusHostView(this);
+        listView.enableListMode(renderer);
+        FrameLayout.LayoutParams lp = new FrameLayout.LayoutParams(W, H);
+        root.addView(listView, lp);
+
+        final long[] intervals = new long[FRAMES];
+        final int[] idx = {0};
+        final long[] lastVsync = {0};
+        final int[] frameCount = {0};
+        final int[] maxActive = {0};
+        final int[] acqTotal = {0};
+        final int[] relTotal = {0};
+        final int[] maxPerFrame = {0};
+        final int[] fwdFrames = {0};
+        final int[] backFrames = {0};
+        final int[] dirWrong = {0};
+        final int[] idleFrames = {0};
+        final int[] maxMissingVisible = {0};
+        final int[] missingVisibleSum = {0};
+        final int[] skippedInAcquire = {0};
+        final int[] skippedTotal = {0};
+        // 前/后各记一次预载区（判据：回滚时交换）
+        // [fwdFirst, fwdLast, backFirst, backLast, fwdVisFirst, fwdVisLast, backVisFirst, backVisLast]
+        final int[] fwdPreload = {-1, -1, -1, -1, -1, -1, -1, -1};
+
+        final android.view.Choreographer choreographer = android.view.Choreographer.getInstance();
+        final android.view.Choreographer.FrameCallback callback = new android.view.Choreographer.FrameCallback() {
+            @Override public void doFrame(long frameTimeNanos) {
+                int f = frameCount[0];
+                if (f >= FRAMES) {
+                    maxActive[0] = Math.max(maxActive[0], renderer.activeCount());
+                    writeScrollCoreReport(ROWS, FRAMES, renderer, intervals, idx[0], maxActive[0],
+                            acqTotal[0], relTotal[0], maxPerFrame[0], fwdFrames[0], backFrames[0], dirWrong[0],
+                            idleFrames[0], fwdPreload, measuredRowH, pool,
+                            maxMissingVisible[0], missingVisibleSum[0], skippedTotal[0]);
+                    RustLayout.recycleDestroy(pool);
+                    RustLayout.destroy(tree);
+                    return;
+                }
+                if (lastVsync[0] != 0) {
+                    long dt = (frameTimeNanos - lastVsync[0]) / 1_000_000L;
+                    if (idx[0] < FRAMES) intervals[idx[0]++] = dt;
+                }
+                lastVsync[0] = frameTimeNanos;
+
+                // 轨迹：前半滚到底、后半回滚到顶（§9.3「回滚到顶部」）
+                double progress = (double) f / FRAMES;
+                double p = progress < 0.5 ? progress * 2.0 : (1.0 - progress) * 2.0;
+                boolean backward = progress >= 0.5;
+                double firstRowExact = p * (ROWS - VISIBLE_ROWS);
+
+                // 可见行：由滚动位置 + 行高推出（行高来自核心几何）
+                int firstVisible = (int) Math.floor(firstRowExact);
+                int lastVisible = Math.min(ROWS - 1, firstVisible + VISIBLE_ROWS - 1);
+
+                // ── ③ 向**核心**要决策（方向敏感预载在核心内，宿主不自己算） ──
+                String dec = RustLayout.recycleUpdate(pool, firstVisible, lastVisible);
+                int[] acquire = new int[0];
+                int[] release = new int[0];
+                int firstPre = -1, lastPre = -1;
+                try {
+                    org.json.JSONObject o = new org.json.JSONObject(dec);
+                    if (o.optBoolean("ok", false)) {
+                        acquire = toIntArray(o.optJSONArray("acquire"));
+                        release = toIntArray(o.optJSONArray("release"));
+                        firstPre = o.optInt("first_preload", -1);
+                        lastPre = o.optInt("last_preload", -1);
+                        String dir = o.optString("direction", "?");
+                        // ★记录预载窗口必须按**核心给出的方向**，不能按"我期望的方向"
+                        //
+                        // 【本仓实测的记录口径缺陷（首跑就踩到）】初版把 back_preload 记在
+                        //   `backward==true` 的第一个帧——而那一帧恰是**边界帧**（f=300 时
+                        //   首行仍在**增大**，核心正确地判 forward）⇒ 记下来的是 forward 窗口
+                        //   [3984,3999]（above=2），**看起来像"没有交换"**，差点被读成
+                        //   "Android 侧预载区没生效"。⇒ 正解：只在与判据同向时采样。
+                        //   [firstPreload, lastPreload, firstVisible, lastVisible] —— 四元组
+                        //   （只记预载区间不够：判"上方留了几行"必须同时知道可见区首行）
+                        int fv = o.optInt("first_visible", -1);
+                        int lv = o.optInt("last_visible", -1);
+                        if ("backward".equals(dir)) {
+                            backFrames[0]++;
+                            if (fwdPreload[2] < 0) { fwdPreload[2] = firstPre; fwdPreload[3] = lastPre; }
+                            if (fwdPreload[6] < 0) { fwdPreload[6] = fv; fwdPreload[7] = lv; }
+                        } else if ("forward".equals(dir)) {
+                            fwdFrames[0]++;
+                            if (fwdPreload[0] < 0) { fwdPreload[0] = firstPre; fwdPreload[1] = lastPre; }
+                            if (fwdPreload[4] < 0) { fwdPreload[4] = fv; fwdPreload[5] = lv; }
+                        } else {
+                            idleFrames[0]++;
+                        }
+                        if (backward && !"backward".equals(dir)) dirWrong[0]++;
+                        if (!backward && !"forward".equals(dir) && !"idle".equals(dir)) dirWrong[0]++;
+                    }
+                } catch (org.json.JSONException ignored) { }
+
+                acqTotal[0] += acquire.length;
+                relTotal[0] += release.length;
+                maxPerFrame[0] = Math.max(maxPerFrame[0], Math.max(acquire.length, release.length));
+
+                // ── ④ 执行动作：**先 release 再 acquire**（反了 ⇒ 新建的对象无法复用刚释放的） ──
+                renderer.releaseRows(release);
+                // ★★**核心说 acquire 的每一行都必须建**（本仓实测的真缺陷，被上面的诊断抓到）
+                //
+                // 【故障链】初版在此加了"屏幕外不建"的裁剪（看起来是合理的可见性优化）：
+                //      if (y + ROW_H < 0 || y > H) { skipped++; continue; }
+                //   但核心的复用池**已经把这行记为 acquired** ⇒ 下一帧不再下发它
+                //   ⇒ 该行滚进可见区时**永远不会被建** ⇒ 屏幕上真的缺行。
+                //   实测读数：`max_missing_in_visible: 8`（可见区内最多缺 8 行！
+                //   因为预载区有 8 行在屏外被跳过，滚一帧 9.33 行即暴露）。
+                //
+                // 【为什么"裁剪"是错的（语义层）】核心给的 acquire 列表**已经包含**可见性策略
+                //   （§12.6：可见区 + 方向敏感预载区），宿主再做一次裁剪 = **第二份窗口逻辑**
+                //   ——正是本档要消除的那个东西，只是换了层皮。
+                //   ⇒ 纪律：**平台侧只执行、不重判**；要省对象就改核心的预载参数（一处生效）。
+                for (int row : acquire) {
+                    if (row < 0 || row >= ROWS) continue;
+                    float y = (float) ((row - firstRowExact) * measuredRowH);
+                    renderer.acquireRow(row, 0, y, W, measuredRowH - 2f,
+                            (row % 2 == 0) ? 0xFF2E5AA8 : 0xFF3E7AC8, "row " + row);
+                }
+                maxActive[0] = Math.max(maxActive[0], renderer.activeCount());
+                // ★★**关键诊断（本档最重要的一条）**：可见区内是否有"核心认为存在、宿主却没建"的行
+                //   ⇒ "宿主自作主张裁剪"会破坏核心簿记：核心以为该行已 acquire，
+                //     下一帧不再下发 acquire ⇒ **该行滚进可见区也不会被建**（屏幕真的少行）。
+                int missing = 0;
+                for (int r = firstVisible; r <= lastVisible; r++) if (!renderer.hasRow(r)) missing++;
+                if (missing > maxMissingVisible[0]) maxMissingVisible[0] = missing;
+                missingVisibleSum[0] += missing;
+                // ★★读数量纲修正（本仓实测）：`skippedInAcquire` 是**累计值**，
+                //   而这里逐帧把它加进 `skippedTotal` ⇒ **O(n²) 累加**（实测 358650 次
+                //   而实际跳过只有几百次）——一个"看起来极其严重"的假读数。
+                //   教训：**累计量不得进入逐帧累加**；要么记增量、要么在末尾直接取累计值。
+                //   （本档已删掉裁剪，此计数器保留为 0 作为"没有宿主侧重判"的证明。）
+
+                listView.requestListFrame();
+                frameCount[0]++;
+                choreographer.postFrameCallback(this);
+            }
+        };
+        choreographer.postFrameCallback(callback);
+        return "{\"ok\":true,\"note\":\"核心驱动的滚动已启动（复用池决策来自 Rust）\",\"pool\":" + pool + ",\"tree\":" + tree + "}";
+    }
+
+    /** JSON 数组 → int[]（核心返回的行号列表） */
+    private static int[] toIntArray(org.json.JSONArray a) {
+        if (a == null) return new int[0];
+        int[] out = new int[a.length()];
+        for (int i = 0; i < a.length(); i++) out[i] = a.optInt(i, -1);
+        return out;
+    }
+
+    /** 核心驱动滚动的报告（判据读数：每帧有界 / 方向 / 预载区交换 / 池化） */
+    private void writeScrollCoreReport(int rows, int frames, ProteusHostView.ListRenderer renderer,
+                                       long[] intervals, int n, int maxActive,
+                                       int acqTotal, int relTotal, int maxPerFrame,
+                                       int fwdFrames, int backFrames, int dirWrong, int idleFrames,
+                                       int[] preload, float rowH, long pool,
+                                       int maxMissingVisible, int missingVisibleSum, int skippedInAcquire) {
+        if (n == 0) n = 1;
+        long[] copy = java.util.Arrays.copyOf(intervals, n);
+        long[] sorted = copy.clone();
+        java.util.Arrays.sort(sorted);
+        double avg = 0;
+        for (long v : copy) avg += v;
+        avg /= copy.length;
+        try {
+            JSONObject o = new JSONObject();
+            o.put("ok", true);
+            o.put("path", "scroll-core");
+            o.put("note", "★★复用池决策来自 Rust 核心（宿主不再自己算方向敏感预载）");
+            o.put("rows", rows);
+            o.put("frames_sampled", copy.length);
+            o.put("avg_frame_ms", Math.round(avg * 100) / 100.0);
+            o.put("p50_ms", sorted[sorted.length / 2]);
+            o.put("p95_ms", sorted[(int) (sorted.length * 0.95)]);
+            // ★核心决策读数
+            o.put("acquire_total", acqTotal);
+            o.put("release_total", relTotal);
+            o.put("max_per_frame", maxPerFrame);
+            o.put("forward_frames", fwdFrames);
+            o.put("backward_frames", backFrames);
+            o.put("idle_frames", idleFrames);
+            o.put("direction_mismatch_frames", dirWrong);
+            // ★预载窗口（**按核心给出的方向采样**——见 scrollCoreRun 里的口径注释）
+            o.put("fwd_preload", new org.json.JSONArray(new int[]{preload[0], preload[1]}));
+            o.put("back_preload", new org.json.JSONArray(new int[]{preload[2], preload[3]}));
+            // ★★方向敏感预载的**直接证据**（本档最有价值的一条）：
+            //   算「可见区上方留了几行 / 下方留了几行」，两个方向必须**相反**。
+            //     forward ：前进方向=下方 ⇒ 上少下多
+            //     backward：前进方向=上方 ⇒ 上多下少
+            //   ⇒ 若两侧同参（本仓曾踩过的错误实现），这条会**直接变红**。
+            int fwdAbove = (preload[0] >= 0 && preload[4] >= 0) ? (preload[4] - preload[0]) : -1;
+            int fwdBelow = (preload[1] >= 0 && preload[5] >= 0) ? (preload[1] - preload[5]) : -1;
+            int backAbove = (preload[2] >= 0 && preload[6] >= 0) ? (preload[6] - preload[2]) : -1;
+            int backBelow = (preload[3] >= 0 && preload[7] >= 0) ? (preload[3] - preload[7]) : -1;
+            o.put("fwd_kept_above", fwdAbove);
+            o.put("fwd_kept_below", fwdBelow);
+            o.put("back_kept_above", backAbove);
+            o.put("back_kept_below", backBelow);
+            o.put("preload_swapped", fwdAbove >= 0 && backAbove >= 0
+                    && fwdAbove < backAbove && fwdBelow > backBelow);
+            // ★平台侧对象池读数（与 iOS 的 layers_created/layers_reused 同口径）
+            o.put("rn_created", renderer.createdCount());
+            o.put("rn_reused", renderer.reusedCount());
+            o.put("rn_pooled", renderer.pooledCount());
+            o.put("rn_max_active", maxActive);
+            o.put("rn_reuse_ratio", Math.round(renderer.reuseRatio() * 10000) / 10000.0);
+            o.put("row_height_from_core", Math.round(rowH * 100) / 100.0);
+            // ★★宿主裁剪 vs 核心簿记（>0 ⇒ 核心认为存在的行，宿主没建 ⇒ 屏幕可能少行）
+            o.put("max_missing_in_visible", maxMissingVisible);
+            o.put("missing_visible_sum", missingVisibleSum);
+            o.put("skipped_in_acquire", skippedInAcquire);
+            // ★核心侧累计读数（与平台侧对账：两边行数应一致）
+            String stats = RustLayout.recycleStats(pool);
+            try { o.put("core_stats", new JSONObject(stats)); } catch (Exception e) { o.put("core_stats_raw", stats); }
+            writeReport("layout-scroll-core.json", o.toString(2));
+            android.util.Log.i(TAG, "核心驱动滚动报告已写入 layout-scroll-core.json");
+        } catch (org.json.JSONException e) {
+            writeReport("layout-scroll-core.json", "{\"ok\":false,\"error\":\"" + e.getMessage() + "\"}");
+        }
+    }
+
     private String scrollListRun() {
         final int ROWS = 4000;
         final int VISIBLE_ROWS = 14;
@@ -365,6 +661,9 @@ public class MainActivity extends Activity {
         final int FRAMES = 600;
 
         final ProteusHostView.ListRenderer renderer = new ProteusHostView.ListRenderer(VISIBLE_ROWS + 16);
+
+        // ★★复用池句柄（核心侧窗口 + 状态机）——本路径的窗口/方向逻辑已**收敛到核心**
+        final long pool = RustLayout.recycleCreate(ROWS, 0, 0);
 
         // ★把宿主 View 挂进窗口（这样 onDraw 的 canvas 来自**窗口**，帧会被显示系统统计）
         final ProteusHostView listView = new ProteusHostView(this);
@@ -380,6 +679,15 @@ public class MainActivity extends Activity {
         final int[] frameCount = {0};
         final int[] maxActive = {0};
         final double[] firstRowTrace = new double[FRAMES];
+        // ★方向/行数读数（判据：与"核心驱动"路径同源 ⇒ 两份报告应一致）
+        final int[] fwdFrames = {0};
+        final int[] backFrames = {0};
+        final int[] idleFrames = {0};
+        final int[] dirWrong = {0};
+        final int[] maxMissingVisible = {0};
+        final int[] missingVisibleSum = {0};
+        final int[] skippedInAcquire = {0};
+        final int[] skippedTotal = {0};
 
         final android.view.Choreographer choreographer = android.view.Choreographer.getInstance();
         final android.view.Choreographer.FrameCallback callback = new android.view.Choreographer.FrameCallback() {
@@ -387,7 +695,9 @@ public class MainActivity extends Activity {
                 int f = frameCount[0];
                 if (f >= FRAMES) {
                     maxActive[0] = Math.max(maxActive[0], renderer.activeCount());
-                    writeScrollReport(ROWS, FRAMES, renderer, intervals, idx[0], firstRowTrace, maxActive[0]);
+                    writeScrollReport(ROWS, FRAMES, renderer, intervals, idx[0], firstRowTrace, maxActive[0],
+                            maxMissingVisible[0], missingVisibleSum[0], skippedTotal[0]);
+                    if (pool > 0) RustLayout.recycleDestroy(pool);
                     return;
                 }
                 if (lastVsync[0] != 0) {
@@ -403,18 +713,46 @@ public class MainActivity extends Activity {
                 int firstRow = (int) firstRowExact;
                 firstRowTrace[f] = firstRowExact;
 
+                // ★★窗口与方向敏感预载**不再在此手算**（本仓实测的设计纠正）
+                //
+                // 【原来是什么样（本文件的旧实现，已删除）】
+                //     boolean backward = progress >= 0.5;
+                //     int above = backward ? 8 : 2;
+                //     int below = backward ? 2 : 8;
+                //     int from = Math.max(0, firstRow - above);
+                //     int to   = Math.min(ROWS-1, firstRow + VISIBLE_ROWS - 1 + below);
+                //   ——这是 `recycle.rs`（已有单测 + 踩坑记录）的**第二份手写副本**。
+                //   两份副本漂移是**静默的**（只是多建/少建几行对象，几何断言一律发现不了）。
+                //   ⇒ 现存唯一实现：核心给 acquire/release 行号，宿主逐个执行。
+                // 判据对照用（**不参与窗口计算**——窗口来自核心）：
+                //   「这一帧按轨迹应该往下还是往上」是**轨迹的性质**，与核心的决策分开。
+                //   两者不一致即 dirWrong > 0（核心判错方向或轨迹与期望不符）。
                 boolean backward = progress >= 0.5;
-                int above = backward ? 8 : 2;
-                int below = backward ? 2 : 8;
-                int from = Math.max(0, firstRow - above);
-                int to = Math.min(ROWS - 1, firstRow + VISIBLE_ROWS - 1 + below);
+                int firstVisible = firstRow;
+                int lastVisible = Math.min(ROWS - 1, firstRow + VISIBLE_ROWS - 1);
+                String dec = RustLayout.recycleUpdate(pool, firstVisible, lastVisible);
+                int[] acquire = new int[0];
+                int[] release = new int[0];
+                try {
+                    org.json.JSONObject o = new org.json.JSONObject(dec);
+                    if (o.optBoolean("ok", false)) {
+                        acquire = toIntArray(o.optJSONArray("acquire"));
+                        release = toIntArray(o.optJSONArray("release"));
+                        String dir = o.optString("direction", "?");
+                        if ("backward".equals(dir)) backFrames[0]++;
+                        else if ("forward".equals(dir)) fwdFrames[0]++;
+                        else idleFrames[0]++;
+                        if (backward && !"backward".equals(dir)) dirWrong[0]++;
+                        if (!backward && !"forward".equals(dir) && !"idle".equals(dir)) dirWrong[0]++;
+                    }
+                } catch (org.json.JSONException ignored) { }
 
-                renderer.releaseOutside(from, to);
-                for (int row = from; row <= to; row++) {
+                // ★执行顺序：**先 release 再 acquire**（反了 ⇒ 本帧要建的对象无法复用刚释放的）
+                renderer.releaseRows(release);
+                for (int row : acquire) {
                     if (renderer.hasRow(row)) continue;
                     float y = (float) ((row - firstRowExact) * ROW_H);
-                    // 仅建屏幕范围内的行（真实可见性裁剪）
-                    if (y + ROW_H < 0 || y > H) continue;
+                    // ★不做屏幕外裁剪——核心已经给了可见性策略（见 scrollCoreRun 里的故障链记录）
                     renderer.acquireRow(row, 0, y, W, ROW_H - 2f,
                             (row % 2 == 0) ? 0xFF2E5AA8 : 0xFF3E7AC8, "row " + row);
                 }
@@ -1029,7 +1367,8 @@ public class MainActivity extends Activity {
 
     /** 滚动验收报告（帧率统计） */
     private void writeScrollReport(int rows, int frames, ProteusHostView.ListRenderer renderer,
-                                   long[] intervals, int n, double[] trace, int maxActive) {
+                                   long[] intervals, int n, double[] trace, int maxActive,
+                                   int maxMissingVisible, int missingVisibleSum, int skippedInAcquire) {
         if (n == 0) n = 1;
         long[] copy = java.util.Arrays.copyOf(intervals, n);
         long[] sorted = copy.clone();
@@ -1082,6 +1421,12 @@ public class MainActivity extends Activity {
             o.put("rn_pooled", renderer.pooledCount());
             o.put("rn_reuse_ratio", Math.round(renderer.reuseRatio() * 10000) / 10000.0);
             o.put("rn_max_active", maxActive);
+            // ★★宿主裁剪 vs 核心簿记的冲突读数（>0 ⇒ 核心认为存在的行，宿主没建）
+            //   · max_missing_in_visible：可见区内最多缺几行（>0 就是**屏幕上真的少行**）
+            //   · skipped_in_acquire：因"屏幕外"被跳过的 acquire 次数（核心仍记账）
+            o.put("max_missing_in_visible", maxMissingVisible);
+            o.put("missing_visible_sum", missingVisibleSum);
+            o.put("skipped_in_acquire", skippedInAcquire);
             o.put("device_refresh_hz", Math.round(refreshHz * 10) / 10.0);
             o.put("frame_budget_ms", Math.round(budgetMs * 100) / 100.0);
             o.put("p50_hz", p50 > 0 ? Math.round(1000.0 / p50 * 10) / 10.0 : 0);

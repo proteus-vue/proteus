@@ -220,3 +220,198 @@ pub extern "system" fn Java_dev_proteus_layoutcore_RustLayout_nativeUpdate<'loca
     .unwrap_or_else(|_| "{\"ok\":false,\"error\":\"panic（已捕获）\"}".to_string());
     into_java_string(&mut env, out)
 }
+
+/* ══════════ ★★列表复用池（§12.6）：与 iOS 同一套核心决策，Android 只执行动作 ══════════ */
+//
+// 【为什么必须由核心给决策（本仓实测的设计纠正）】Android 侧此前在 `MainActivity` 里
+//   **手写**了一份方向敏感预载逻辑（`backward ? 8 : 2` 的 above/below 三元式）——
+//   那是 `recycle.rs` 的**第二份副本**，而 iOS 侧走的是核心决策。
+//   两份副本的漂移是**静默的**（只是多建或少建几行对象），且正是本仓反复记下的
+//   "各端各写必然分叉"风险。⇒ 本组出口让 Android 与 iOS 共用同一份决策。
+
+/// `RustLayout.nativeRecycleCreate(itemCount: Int, leadingRows: Int, followingRows: Int): Long`
+///
+/// 传 0 表示用核心默认（leading=8 / following=2）。
+#[no_mangle]
+pub extern "system" fn Java_dev_proteus_layoutcore_RustLayout_nativeRecycleCreate<'local>(
+    _env: JNIEnv<'local>,
+    _class: JClass<'local>,
+    item_count: jni::sys::jint,
+    leading_rows: jni::sys::jint,
+    following_rows: jni::sys::jint,
+) -> jni::sys::jlong {
+    std::panic::catch_unwind(|| unsafe {
+        crate::ffi::proteus_recycle_create(
+            item_count.max(0) as u32,
+            leading_rows.max(0) as u32,
+            following_rows.max(0) as u32,
+        ) as i64
+    })
+    .unwrap_or(0)
+}
+
+/// `RustLayout.nativeRecycleUpdate(handle: Long, firstVisible: Int, lastVisible: Int): String`
+///
+/// 出参：`{ok, direction, first_visible, last_visible, first_preload, last_preload,
+///        acquire:[行号], release:[行号], demoted, live, acquire_events, release_events, updates}`
+///
+/// ★宿主执行顺序：**先 release 再 acquire**（反了 ⇒ 本帧要建的对象无法复用刚释放的）。
+#[no_mangle]
+pub extern "system" fn Java_dev_proteus_layoutcore_RustLayout_nativeRecycleUpdate<'local>(
+    mut env: JNIEnv<'local>,
+    _class: JClass<'local>,
+    handle: jni::sys::jlong,
+    first_visible: jni::sys::jint,
+    last_visible: jni::sys::jint,
+) -> jstring {
+    let out = std::panic::catch_unwind(|| -> String {
+        let p = unsafe {
+            crate::ffi::proteus_recycle_update(
+                handle as u64,
+                first_visible.max(0) as u32,
+                last_visible.max(0) as u32,
+            )
+        };
+        if p.is_null() {
+            return "{\"ok\":false,\"error\":\"null\"}".to_string();
+        }
+        let s = unsafe { std::ffi::CStr::from_ptr(p) }.to_string_lossy().into_owned();
+        unsafe { crate::ffi::proteus_layout_free_string(p) };
+        s
+    })
+    .unwrap_or_else(|_| "{\"ok\":false,\"error\":\"panic（已捕获）\"}".to_string());
+    into_java_string(&mut env, out)
+}
+
+/// `RustLayout.nativeRecycleStats(handle: Long): String`
+#[no_mangle]
+pub extern "system" fn Java_dev_proteus_layoutcore_RustLayout_nativeRecycleStats<'local>(
+    mut env: JNIEnv<'local>,
+    _class: JClass<'local>,
+    handle: jni::sys::jlong,
+) -> jstring {
+    let out = std::panic::catch_unwind(|| -> String {
+        let p = unsafe { crate::ffi::proteus_recycle_stats(handle as u64) };
+        if p.is_null() {
+            return "{\"ok\":false,\"error\":\"null\"}".to_string();
+        }
+        let s = unsafe { std::ffi::CStr::from_ptr(p) }.to_string_lossy().into_owned();
+        unsafe { crate::ffi::proteus_layout_free_string(p) };
+        s
+    })
+    .unwrap_or_else(|_| "{\"ok\":false,\"error\":\"panic（已捕获）\"}".to_string());
+    into_java_string(&mut env, out)
+}
+
+/// `RustLayout.nativeRecycleDestroy(handle: Long): Boolean`
+#[no_mangle]
+pub extern "system" fn Java_dev_proteus_layoutcore_RustLayout_nativeRecycleDestroy<'local>(
+    _env: JNIEnv<'local>,
+    _class: JClass<'local>,
+    handle: jni::sys::jlong,
+) -> jni::sys::jboolean {
+    std::panic::catch_unwind(|| unsafe { crate::ffi::proteus_recycle_destroy(handle as u64) })
+        .map(|_| 1)
+        .unwrap_or(0)
+}
+
+/* ══════════ ★结构变更（splice）+ 度量注入 + Vapor 指令流：补齐与 iOS 同等的生产能力 ══════════ */
+
+/// `RustLayout.nativeSetTextMeasures(handle: Long, measuresJson: String): String`
+///
+/// 【为什么必须有】文本尺寸只能由平台度量，而增量重排会**重新度量**范围内的文本叶子。
+///   不注入 ⇒ 核心按零尺寸算 ⇒ **文本塌成 0 高**（首帧对、更新后错——静态用例发现不了）。
+///   详情见 `ffi.rs` 的 `TreeEntry::measures` 注释。
+#[no_mangle]
+pub extern "system" fn Java_dev_proteus_layoutcore_RustLayout_nativeSetTextMeasures<'local>(
+    mut env: JNIEnv<'local>,
+    _class: JClass<'local>,
+    handle: jni::sys::jlong,
+    measures: JString<'local>,
+) -> jstring {
+    let raw: String = match env.get_string(&measures) {
+        Ok(s) => s.into(),
+        Err(e) => return into_java_string(&mut env, format!("{{\"ok\":false,\"error\":\"measures 读取失败：{e}\"}}")),
+    };
+    let out = std::panic::catch_unwind(|| -> String {
+        let c = match std::ffi::CString::new(raw) {
+            Ok(c) => c,
+            Err(_) => return "{\"ok\":false,\"error\":\"measures 含 NUL\"}".to_string(),
+        };
+        let p = unsafe { crate::ffi::proteus_layout_set_text_measures(handle as u64, c.as_ptr()) };
+        if p.is_null() {
+            return "{\"ok\":false,\"error\":\"null\"}".to_string();
+        }
+        let s = unsafe { std::ffi::CStr::from_ptr(p) }.to_string_lossy().into_owned();
+        unsafe { crate::ffi::proteus_layout_free_string(p) };
+        s
+    })
+    .unwrap_or_else(|_| "{\"ok\":false,\"error\":\"panic（已捕获）\"}".to_string());
+    into_java_string(&mut env, out)
+}
+
+/// `RustLayout.nativeSplice(handle: Long, spliceJson: String): String`
+///
+/// 结构变更（增删行）：`{removes:[id], inserts:[{parentId, nodes:[…], index}], textMeasures:{}}`
+#[no_mangle]
+pub extern "system" fn Java_dev_proteus_layoutcore_RustLayout_nativeSplice<'local>(
+    mut env: JNIEnv<'local>,
+    _class: JClass<'local>,
+    handle: jni::sys::jlong,
+    splice: JString<'local>,
+) -> jstring {
+    let raw: String = match env.get_string(&splice) {
+        Ok(s) => s.into(),
+        Err(e) => return into_java_string(&mut env, format!("{{\"ok\":false,\"error\":\"splice 读取失败：{e}\"}}")),
+    };
+    let out = std::panic::catch_unwind(|| -> String {
+        let c = match std::ffi::CString::new(raw) {
+            Ok(c) => c,
+            Err(_) => return "{\"ok\":false,\"error\":\"splice 含 NUL\"}".to_string(),
+        };
+        let p = unsafe { crate::ffi::proteus_layout_splice(handle as u64, c.as_ptr()) };
+        if p.is_null() {
+            return "{\"ok\":false,\"error\":\"null\"}".to_string();
+        }
+        let s = unsafe { std::ffi::CStr::from_ptr(p) }.to_string_lossy().into_owned();
+        unsafe { crate::ffi::proteus_layout_free_string(p) };
+        s
+    })
+    .unwrap_or_else(|_| "{\"ok\":false,\"error\":\"panic（已捕获）\"}".to_string());
+    into_java_string(&mut env, out)
+}
+
+/// `RustLayout.nativeApplyOps(handle: Long, opsBytes: ByteArray): String`
+///
+/// ★★Vapor IR 的二进制指令流入口（与 iOS 的 `applyOps` 同一路径）——
+///   JSON 补丁每帧要文本解析（实测占布局耗时 95%+）；二进制是顺序读 + 定长字段。
+///   ★JNI 原生支持 `jbyteArray` ⇒ **无需**像 iOS（JSExport 不支持 ArrayBuffer）那样套 JSON 数组。
+#[no_mangle]
+pub extern "system" fn Java_dev_proteus_layoutcore_RustLayout_nativeApplyOps<'local>(
+    mut env: JNIEnv<'local>,
+    _class: JClass<'local>,
+    handle: jni::sys::jlong,
+    ops: jni::objects::JByteArray<'local>,
+) -> jstring {
+    // ★先在闭包外把字节取出来（JNIEnv 非 UnwindSafe —— 与 nativeUpdate 同一纪律）
+    let bytes: Vec<u8> = match env.convert_byte_array(&ops) {
+        Ok(v) => v,
+        Err(e) => return into_java_string(&mut env, format!("{{\"ok\":false,\"error\":\"ops 读取失败：{e}\"}}")),
+    };
+    let out = std::panic::catch_unwind(|| -> String {
+        if bytes.is_empty() {
+            return "{\"ok\":false,\"error\":\"空指令流\"}".to_string();
+        }
+        let p = unsafe {
+            crate::ffi::proteus_layout_apply_ops(handle as u64, bytes.as_ptr(), bytes.len() as u32)
+        };
+        if p.is_null() {
+            return "{\"ok\":false,\"error\":\"null\"}".to_string();
+        }
+        let s = unsafe { std::ffi::CStr::from_ptr(p) }.to_string_lossy().into_owned();
+        unsafe { crate::ffi::proteus_layout_free_string(p) };
+        s
+    })
+    .unwrap_or_else(|_| "{\"ok\":false,\"error\":\"panic（已捕获）\"}".to_string());
+    into_java_string(&mut env, out)
+}
