@@ -16,7 +16,7 @@
 use std::ffi::{c_char, CStr, CString};
 
 use crate::engine::{AvailableSpace, LayoutEngine, RootConstraint, TableTextMeasurer};
-use crate::node::{LNode, LayoutTree};
+use crate::node::{LNode, LayoutTree, NodeIndex, NO_PARENT};
 use crate::style::{Edges, FlexDirection, LStyle, Overflow, Position, Size};
 use crate::taffy_engine::TaffyEngine;
 
@@ -230,80 +230,106 @@ pub(crate) struct SizeDto {
 }
 
 /// 把 DTO 转成引擎就绪的扁平树
+/// ★★`NodeDto → LStyle` 的**唯一实现**（本仓纪律：同一语义一处实现）
+///
+/// 【为什么抽出来（本仓实测的动机）】`build_tree`（建树）与 `proteus_layout_splice`
+///   （结构变更插子树）都要做这件事；两份实现必然分叉——**样式字段漏一个 = 静默丢样式**。
+pub(crate) fn style_from_dto(dto: &NodeDto) -> Result<LStyle, String> {
+    let mut style = LStyle::default();
+    style.width = dto.width;
+    style.height = dto.height;
+    style.width_ratio = dto.width_ratio;
+    style.height_ratio = dto.height_ratio;
+    style.min_width = dto.min_width;
+    style.max_width = dto.max_width;
+    style.min_height = dto.min_height;
+    style.max_height = dto.max_height;
+    if let Some(m) = dto.margin {
+        style.margin = m.into();
+    }
+    if let Some(p) = dto.padding {
+        style.padding = p.into();
+    }
+    if let Some(fd) = dto.flex_direction.as_deref() {
+        style.flex_direction = match fd {
+            "row" => FlexDirection::Row,
+            "column" => FlexDirection::Column,
+            "row-reverse" => FlexDirection::RowReverse,
+            "column-reverse" => FlexDirection::ColumnReverse,
+            other => return Err(format!("未知 flexDirection：{other}")),
+        };
+    }
+    if let Some(j) = dto.justify_content.clone() {
+        style.justify_content = j;
+    }
+    if let Some(a) = dto.align_items.clone() {
+        style.align_items = a;
+    }
+    style.align_self = dto.align_self.clone();
+    if let Some(g) = dto.flex_grow {
+        style.flex_grow = g;
+    }
+    if let Some(s) = dto.flex_shrink {
+        style.flex_shrink = s;
+    }
+    style.flex_basis = dto.flex_basis;
+    if let Some(gap) = dto.gap {
+        style.gap = gap;
+    }
+    if let Some(d) = dto.display.as_deref() {
+        style.display = match d {
+            "flex" => crate::style::Display::Flex,
+            "none" => crate::style::Display::None,
+            other => return Err(format!("未知 display：{other}")),
+        };
+    }
+    if let Some(p) = dto.position.as_deref() {
+        style.position = match p {
+            "static" => Position::Static,
+            "relative" => Position::Relative,
+            "absolute" => Position::Absolute,
+            other => return Err(format!("未知 position：{other}")),
+        };
+    }
+    style.top = dto.top;
+    style.left = dto.left;
+    if let Some(o) = dto.overflow.as_deref() {
+        style.overflow = match o {
+            "visible" => Overflow::Visible,
+            "hidden" => Overflow::Hidden,
+            "scroll" => Overflow::Scroll,
+            "auto" => Overflow::Auto,
+            other => return Err(format!("未知 overflow：{other}")),
+        };
+    }
+    Ok(style)
+}
+
+/// ★★从 `NodeDto` 造节点（建树与结构变更共用——同上理由）
+pub(crate) fn node_from_dto(dto: &NodeDto) -> Result<LNode, String> {
+    let style = style_from_dto(dto)?;
+    let mut node = LNode::new(dto.id, style);
+    // 文本叶子：金标用 `isText`，宿主可直传 `text`；两者都视为「需要度量」
+    if dto.is_text || dto.text.is_some() {
+        node.text = Some(crate::node::TextMeasureRequest {
+            text: dto.text.clone().unwrap_or_default(),
+            style_key: dto.text_style_key.unwrap_or(0),
+        });
+    }
+    // ★原生宿主标记（L3）：布局无影响，但会**回传**给宿主，供其创建原生 View
+    node.native_host = dto.native_host;
+    if let Some(sem) = &dto.semantic {
+        node.tag = sem.clone();
+    }
+    Ok(node)
+}
+
 fn build_tree(req: &LayoutRequest) -> Result<(LayoutTree, Vec<u32>), String> {
     let mut tree = LayoutTree::new();
     let mut index_of: std::collections::HashMap<u32, u32> = std::collections::HashMap::new();
 
     for dto in &req.nodes {
-        let mut style = LStyle::default();
-        style.width = dto.width;
-        style.height = dto.height;
-        style.width_ratio = dto.width_ratio;
-        style.height_ratio = dto.height_ratio;
-        style.min_width = dto.min_width;
-        style.max_width = dto.max_width;
-        style.min_height = dto.min_height;
-        style.max_height = dto.max_height;
-        if let Some(m) = dto.margin {
-            style.margin = m.into();
-        }
-        if let Some(p) = dto.padding {
-            style.padding = p.into();
-        }
-        if let Some(fd) = dto.flex_direction.as_deref() {
-            style.flex_direction = match fd {
-                "row" => FlexDirection::Row,
-                "column" => FlexDirection::Column,
-                "row-reverse" => FlexDirection::RowReverse,
-                "column-reverse" => FlexDirection::ColumnReverse,
-                other => return Err(format!("未知 flexDirection：{other}")),
-            };
-        }
-        if let Some(j) = dto.justify_content.clone() {
-            style.justify_content = j;
-        }
-        if let Some(a) = dto.align_items.clone() {
-            style.align_items = a;
-        }
-        style.align_self = dto.align_self.clone();
-        if let Some(g) = dto.flex_grow {
-            style.flex_grow = g;
-        }
-        if let Some(s) = dto.flex_shrink {
-            style.flex_shrink = s;
-        }
-        style.flex_basis = dto.flex_basis;
-        if let Some(gap) = dto.gap {
-            style.gap = gap;
-        }
-        if let Some(d) = dto.display.as_deref() {
-            style.display = match d {
-                "flex" => crate::style::Display::Flex,
-                "none" => crate::style::Display::None,
-                other => return Err(format!("未知 display：{other}")),
-            };
-        }
-        if let Some(p) = dto.position.as_deref() {
-            style.position = match p {
-                "static" => Position::Static,
-                "relative" => Position::Relative,
-                "absolute" => Position::Absolute,
-                other => return Err(format!("未知 position：{other}")),
-            };
-        }
-        style.top = dto.top;
-        style.left = dto.left;
-        if let Some(o) = dto.overflow.as_deref() {
-            style.overflow = match o {
-                "visible" => Overflow::Visible,
-                "hidden" => Overflow::Hidden,
-                "scroll" => Overflow::Scroll,
-                "auto" => Overflow::Auto,
-                other => return Err(format!("未知 overflow：{other}")),
-            };
-        }
-
-        let mut node = LNode::new(dto.id, style);
+        let mut node = node_from_dto(dto)?;
         // 文本叶子：金标用 `isText`，宿主可直传 `text`；两者都视为「需要度量」
         if dto.is_text || dto.text.is_some() {
             node.text = Some(crate::node::TextMeasureRequest {
@@ -1285,6 +1311,209 @@ pub(crate) fn json_str(s: &str) -> String {
 /// # Safety
 /// `ptr` 须指向 `len` 字节的有效 buffer（由 TS 侧 `encodeOps` 产出）。
 /// 返回指针须用 `proteus_layout_free_string` 释放。
+/* ────────────────────── ★★V7：结构性变更（插/删子树） ────────────────────── */
+
+/// 结构变更请求（**JSON**——与热路径的二进制指令流**刻意分开**）
+///
+/// 【为什么结构变更走 JSON 而不复用二进制指令流（本仓的取舍）】
+///   指令流的格式是**定长字段**（为免每帧文本解析而设计）；而结构变更要携带
+///   **节点描述符**（tag/style/text 等变长内容）⇒ 塞进定长流会破坏其设计目标。
+///   而结构变更本身是**偶发**的（用户增删行），不是每帧 ⇒ JSON 的解析成本可接受。
+///   ⇒ 热路径（样式/文本更新）用二进制，结构变更用 JSON——**按频率选通道**。
+#[derive(serde::Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub(crate) struct SpliceRequest {
+    /// 要摘除的**子树根** id（其子孙随之不可达；★不需要逐个列出子孙）
+    #[serde(default)]
+    pub(crate) removes: Vec<u32>,
+    /// 要插入的块（每个块 = 一棵平铺的子树 + 落点）
+    #[serde(default)]
+    pub(crate) inserts: Vec<SpliceInsert>,
+}
+
+#[derive(serde::Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub(crate) struct SpliceInsert {
+    /// 落点父节点 id（`null` ⇒ 作为新根）
+    pub(crate) parent_id: Option<u32>,
+    /// 插入到父的**第几个子位**（缺省 = 追加到末尾）
+    pub(crate) index: Option<usize>,
+    /// 子树节点（平铺，**父在前**；块内 parentId 指向块内父节点或 `parent_id`）
+    pub(crate) nodes: Vec<NodeDto>,
+}
+
+/// ★★**结构变更**：插入/摘除子树（App 端自绘路径的「增删行」）
+///
+/// 【为什么必须有它（本仓实测的功能缺口）】此前核心**完全没有**结构变更入口——
+///   增删行只能靠**重发整棵树**（真机实测 S5：500→600 项 **230ms**，几乎全是搬运成本）。
+///   而增删行在长列表里是**最常见**的交互（加载更多 / 删除一行）。
+///
+/// 【设计要点】
+///   · **摘除**只断开父子链（不搬数组）——布局引擎从 `tree.roots` 遍历 ⇒ 孤点自然被跳过；
+///     节点留在数组里是安全的（若未来要复用其内存，届时再加回收）。
+///   · **插入**复用 `node_from_dto`（与建树**同一实现**，避免样式字段漏项）。
+///   · 落点用 `(parentId, index)`——与 DOM/`insertBefore` 语义一致，宿主无需算锚点。
+///
+/// # Safety
+/// `splice_json` 须为有效 NUL 结尾 C 字符串；返回指针须用 `proteus_layout_free_string` 释放。
+#[no_mangle]
+pub unsafe extern "C" fn proteus_layout_splice(handle: u64, splice_json: *const c_char) -> *mut c_char {
+    let r = std::panic::catch_unwind(|| -> Result<String, String> {
+        if splice_json.is_null() {
+            return Err("splice_json 为空指针".into());
+        }
+        let raw = unsafe { CStr::from_ptr(splice_json) }.to_str().map_err(|e| format!("入参非 UTF-8：{e}"))?;
+        let req: SpliceRequest = serde_json::from_str(raw).map_err(|e| format!("splice 解析失败：{e}"))?;
+
+        let t0 = std::time::Instant::now();
+        let mut reg = registry().lock().map_err(|_| "注册表锁失败".to_string())?;
+        let entry = reg.get_mut(&handle).ok_or_else(|| format!("句柄 {handle} 不存在"))?;
+        let t_lock = t0.elapsed().as_secs_f64() * 1000.0;
+
+        let mut dirty_roots: Vec<u32> = Vec::new();
+
+        // ── ① 摘除（只断链；孤点由 roots 遍历自然跳过）──
+        let mut removed = 0usize;
+        for &rid in &req.removes {
+            let Some(&idx) = entry.id_to_idx.get(&rid) else {
+                return Err(format!("removes 里的 id {rid} 不在树上"));
+            };
+            let parent = entry.tree.get(idx).parent;
+            // 从映射里摘掉**整棵子树**（否则后续指令/结构变更还能打到它们）
+            let mut stack = vec![idx];
+            while let Some(i) = stack.pop() {
+                let nid = entry.tree.get(i).id;
+                entry.id_to_idx.remove(&nid);
+                for &c in &entry.tree.get(i).children.clone() {
+                    stack.push(c);
+                }
+            }
+            if parent != NO_PARENT {
+                entry.tree.nodes[parent as usize].children.retain(|&c| c != idx);
+                entry.tree.nodes[parent as usize].dirty = true;
+                dirty_roots.push(parent);
+            } else {
+                entry.tree.roots.retain(|&x| x != idx);
+            }
+            entry.tree.nodes[idx as usize].parent = NO_PARENT;
+            removed += 1;
+        }
+
+        // ── ② 插入（复用建树同一转换 ⇒ 字段不漏）──
+        let mut inserted = 0usize;
+        for ins in &req.inserts {
+            if ins.nodes.is_empty() {
+                continue;
+            }
+            // 建块内索引（父在前 ⇒ 一遍即可链接）
+            let mut local: Vec<NodeIndex> = Vec::with_capacity(ins.nodes.len());
+            let mut by_id: std::collections::HashMap<u32, NodeIndex> = std::collections::HashMap::new();
+            for dto in &ins.nodes {
+                if entry.id_to_idx.contains_key(&dto.id) || by_id.contains_key(&dto.id) {
+                    return Err(format!("插入的 id {} 与树上已有节点冲突", dto.id));
+                }
+                let node = node_from_dto(dto)?;
+                let i = entry.tree.push(node);
+                entry.id_to_idx.insert(dto.id, i);
+                by_id.insert(dto.id, i);
+                local.push(i);
+            }
+            // 链接：块内父优先；parentId 不在块内 ⇒ 视为挂到落点（块根）
+            let mut block_roots: Vec<NodeIndex> = Vec::new();
+            for &i in &local {
+                let dto_pid = ins.nodes.iter().find(|d| by_id.get(&d.id) == Some(&i)).and_then(|d| d.parent_id);
+                match dto_pid {
+                    Some(pid) if by_id.contains_key(&pid) => {
+                        let p = by_id[&pid];
+                        entry.tree.add_child(p, i);
+                    }
+                    _ => block_roots.push(i),
+                }
+            }
+            // 挂到落点
+            match ins.parent_id {
+                Some(pid) => {
+                    let Some(&p) = entry.id_to_idx.get(&pid) else {
+                        return Err(format!("落点 parentId {pid} 不在树上"));
+                    };
+                    // ★★落点 `index` 的**当前不可用**（本仓实测的架构限制）
+                    //
+                    // 【为什么】`build_taffy`（重建 taffy 树时）**按 `tree.nodes` 的数组顺序**
+                    //   连父子——它**完全忽略 `node.children` 的排列**（注释写着"顺序 = children 顺序"，
+                    //   但实现是遍历数组）。而 splice 插入的节点在数组里**只能追加到末尾**
+                    //   ⇒ 想插到中间，就必须**同时**改 children **和数组顺序**。
+                    //
+                    // 【本轮的处置（诚实标注）】不动数组（搬数组 = O(n)，且会打乱 taffy_ids 的
+                    //   索引对应），而是**显式拒绝** `index` 非末尾的请求 ⇒ 调用方改走
+                    //   「重发整棵树」（那条路已支持任意顺序）。
+                    //   ★这比"接受参数但静默按末尾插"好——后者会让**行序错**且无提示。
+                    //   ⇒ 要支持中间插入，需给节点加**顺序键**并让 build_taffy 依 children 建树——
+                    //     属独立改造（见盘点表 P0-3 的余项）。
+                    let cur_len = entry.tree.get(p).children.len();
+                    let at = ins.index.unwrap_or(cur_len);
+                    if at != cur_len {
+                        return Err(format!(
+                            "index={at} 非末尾（当前 {cur_len}）——本版 splice 仅支持**追加**；中间插入请重发整棵树（见代码注释的架构限制）"
+                        ));
+                    }
+                    for &r in &block_roots {
+                        entry.tree.nodes[r as usize].parent = p;
+                        entry.tree.nodes[p as usize].children.push(r);
+                    }
+                    entry.tree.nodes[p as usize].dirty = true;
+                    dirty_roots.push(p);
+                }
+                None => {
+                    for &r in &block_roots {
+                        entry.tree.roots.push(r);
+                    }
+                }
+            }
+            inserted += block_roots.len();
+        }
+
+        // ── ③ 重排（复用多范围增量；无脏节点则跳过）──
+        let t_rel0 = std::time::Instant::now();
+        let multi = if dirty_roots.is_empty() {
+            crate::ops_apply::MultiRelayout::default()
+        } else {
+            crate::ops_apply::relayout_multi(&mut entry.tree, &dirty_roots)
+        };
+        let t_rel = t_rel0.elapsed().as_secs_f64() * 1000.0;
+        entry.last_scopes = if multi.scopes.is_empty() { dirty_roots.clone() } else { multi.scopes.clone() };
+
+        // ── ④ 变化集（宿主据此更新层；与 update 路径同口径）──
+        let t_col0 = std::time::Instant::now();
+        let mut changed = serde_json::Map::new();
+        for &sc in &entry.last_scopes {
+            let (pox, poy) = parent_origin_of(&entry.tree, sc);
+            collect_abs_subtree(&entry.tree, sc, pox, poy, &mut changed);
+        }
+        let t_col = t_col0.elapsed().as_secs_f64() * 1000.0;
+
+        Ok(serde_json::json!({
+            "ok": true,
+            "removed": removed,
+            "inserted": inserted,
+            "relayout_count": multi.relayout_count,
+            "scopes": entry.last_scopes,
+            "rects": changed,
+            "node_count": entry.tree.len(),
+            "timing": {"lock_ms": t_lock, "relayout_ms": t_rel, "collect_ms": t_col},
+        })
+        .to_string())
+    });
+    match r {
+        Ok(Ok(s)) => CString::new(s).map(|c| c.into_raw()).unwrap_or(std::ptr::null_mut()),
+        Ok(Err(e)) => CString::new(serde_json::json!({"ok": false, "error": e}).to_string())
+            .map(|c| c.into_raw())
+            .unwrap_or(std::ptr::null_mut()),
+        Err(_) => CString::new(serde_json::json!({"ok": false, "error": "内部 panic（已捕获）"}).to_string())
+            .map(|c| c.into_raw())
+            .unwrap_or(std::ptr::null_mut()),
+    }
+}
+
 /// 内部实现：`with_rects=false` 时**不收集也不序列化**矩形（V4 二进制通道下宿主不需要它）
 ///
 /// 【为什么必须能省（本仓实测）】v4 模式下宿主改用二进制取矩形，但 JSON 返回体里若仍带
@@ -1927,6 +2156,197 @@ mod tests {
         assert!(v["unsupported"].as_array().map(|a| !a.is_empty()).unwrap_or(false),
                 "★必须上报 unsupported（否则是静默不更新）：{out}");
         assert!(unsafe { proteus_layout_destroy(handle) });
+    }
+
+    /* ────────────────────── ★★V7：结构变更（splice）────────────────────── */
+
+    /// 列表树 JSON（`rows` 行，每行含一个圆点）
+    fn list_tree_json(rows: u32) -> String {
+        let mut nodes = vec![
+            serde_json::json!({"id":1,"parentId":null,"flexDirection":"column","width":375.0,"height":800.0}),
+        ];
+        for i in 0..rows {
+            let rid = 100 + i;
+            nodes.push(serde_json::json!({"id":rid,"parentId":1,"flexDirection":"row","width":343.0,"height":50.0,"flexShrink":0.0}));
+            nodes.push(serde_json::json!({"id":1000 + i,"parentId":rid,"width":30.0,"height":30.0}));
+        }
+        serde_json::json!({"viewport":{"width":375.0,"height":800.0},"nodes":nodes}).to_string()
+    }
+
+    fn rects_of(handle: u64) -> serde_json::Value {
+        unsafe {
+            let p = proteus_layout_rects(handle);
+            let s = CStr::from_ptr(p).to_str().unwrap().to_string();
+            proteus_layout_free_string(p);
+            serde_json::from_str(&s).unwrap()
+        }
+    }
+
+    fn splice(handle: u64, req: serde_json::Value) -> serde_json::Value {
+        unsafe {
+            let c = CString::new(req.to_string()).unwrap();
+            let p = proteus_layout_splice(handle, c.as_ptr());
+            let s = CStr::from_ptr(p).to_str().unwrap().to_string();
+            proteus_layout_free_string(p);
+            serde_json::from_str(&s).unwrap()
+        }
+    }
+
+    /// ★★核心判据：**splice 后的几何 == 从头全量建树（含新结构）的几何**
+    ///
+    /// 【为什么这是最关键的判据（本仓实测的教训）】结构变更极易"看起来对了但几何错"
+    ///   （如新节点建了但没参与布局、摘除的节点仍在占位）。
+    ///   与「从头建一棵等价树」逐节点比对绝对矩形，才能证明**结构确实变了**。
+    #[test]
+    fn splice_insert_equals_fresh_full_build() {
+        // ① 5 行 → splice 插入 1 行（落在第 1 个位置）
+        let handle = unsafe {
+            let c = CString::new(list_tree_json(5)).unwrap();
+            proteus_layout_create(c.as_ptr())
+        };
+        assert_ne!(handle, 0);
+        let out = splice(
+            handle,
+            serde_json::json!({
+                "inserts": [{
+                    "parentId": 1,
+                    "nodes": [
+                        {"id": 900, "parentId": 1, "flexDirection": "row", "width": 343.0, "height": 50.0, "flexShrink": 0.0},
+                        {"id": 901, "parentId": 900, "width": 30.0, "height": 30.0}
+                    ]
+                }]
+            }),
+        );
+        assert_eq!(out["ok"], true, "splice 应成功：{out}");
+        assert_eq!(out["inserted"], 1);
+        let after = rects_of(handle);
+
+        // ② 对照：从头建「6 行、新行**追加在末尾**」的树
+        //    ★对照树的**行序必须与 splice 的语义一致**（本仓实测：我首版把新行放在
+        //      "第 1 位"，而 splice 实际是追加 ⇒ 两棵树行序不同 ⇒ 断言必然红，
+        //      且看起来像"splice 几何没跟着变"——**误报为实现的错**。
+        //      ⇒ 纪律：结构变更的对照树，必须按**该实现的实际插入语义**构造。）
+        let mut nodes = vec![serde_json::json!({"id":1,"parentId":null,"flexDirection":"column","width":375.0,"height":800.0})];
+        for i in 0..5 {
+            let rid = 100 + i;
+            nodes.push(serde_json::json!({"id":rid,"parentId":1,"flexDirection":"row","width":343.0,"height":50.0,"flexShrink":0.0}));
+            nodes.push(serde_json::json!({"id":1000 + i,"parentId":rid,"width":30.0,"height":30.0}));
+        }
+        // 追加的新行在末尾
+        nodes.push(serde_json::json!({"id":900,"parentId":1,"flexDirection":"row","width":343.0,"height":50.0,"flexShrink":0.0}));
+        nodes.push(serde_json::json!({"id":901,"parentId":900,"width":30.0,"height":30.0}));
+        let handle2 = unsafe {
+            let c = CString::new(serde_json::json!({"viewport":{"width":375.0,"height":800.0},"nodes":nodes}).to_string()).unwrap();
+            proteus_layout_create(c.as_ptr())
+        };
+        let fresh = rects_of(handle2);
+
+        // ③ 逐节点比对**绝对矩形**
+        let a = after["rects"].as_object().expect("splice 应返回变化集");
+        let f = fresh["rects"].as_object().expect("全量树应有矩形");
+        // 变化集只含受影响子树的矩形；对其中每个节点，与全量结果比几何
+        let mut compared = 0;
+        for (id, r) in a {
+            if let Some(fr) = f.get(id) {
+                for k in ["x", "y", "width", "height"] {
+                    let av = r[k].as_f64().unwrap_or(f64::NAN);
+                    let fv = fr[k].as_f64().unwrap_or(f64::NAN);
+                    assert!(
+                        (av - fv).abs() < 0.01,
+                        "★ 节点 {id} 的 {k} 不一致：splice {av} vs 全量 {fv}（结构变了但几何没跟着变？）"
+                    );
+                }
+                compared += 1;
+            }
+        }
+        assert!(compared > 0, "至少应有节点参与比对（否则判据空心）");
+        unsafe { proteus_layout_destroy(handle) };
+        unsafe { proteus_layout_destroy(handle2) };
+    }
+
+    /// ★★摘除：被摘的整棵子树**不再出现**在变化集里；兄弟上移（几何与全量一致）
+    #[test]
+    fn splice_remove_detaches_subtree() {
+        let handle = unsafe {
+            let c = CString::new(list_tree_json(5)).unwrap();
+            proteus_layout_create(c.as_ptr())
+        };
+        let out = splice(handle, serde_json::json!({ "removes": [100] })); // 摘第 0 行（含其圆点 1000）
+        assert_eq!(out["ok"], true, "remove 应成功：{out}");
+        assert_eq!(out["removed"], 1);
+        let after = rects_of(handle);
+        assert!(after["rects"].get("100").is_none(), "★被摘的行不应出现在变化集里");
+        assert!(after["rects"].get("1000").is_none(), "★被摘行的**子孙**也应不在（整棵子树失效）");
+
+        // 对照：从头建 4 行（原第 1..4 行）—— 第 1 行（id=101）应上移到 y=0
+        let mut nodes = vec![serde_json::json!({"id":1,"parentId":null,"flexDirection":"column","width":375.0,"height":800.0})];
+        for i in 1..5 {
+            let rid = 100 + i;
+            nodes.push(serde_json::json!({"id":rid,"parentId":1,"flexDirection":"row","width":343.0,"height":50.0,"flexShrink":0.0}));
+            nodes.push(serde_json::json!({"id":1000 + i,"parentId":rid,"width":30.0,"height":30.0}));
+        }
+        let handle2 = unsafe {
+            let c = CString::new(serde_json::json!({"viewport":{"width":375.0,"height":800.0},"nodes":nodes}).to_string()).unwrap();
+            proteus_layout_create(c.as_ptr())
+        };
+        let fresh = rects_of(handle2);
+        let row101 = after["rects"].get("101").expect("第 1 行应在变化集里");
+        assert!(
+            (row101["y"].as_f64().unwrap_or(-1.0) - 0.0).abs() < 0.01,
+            "★摘除首行后，原第 1 行应上移到 y=0；实际 {}",
+            row101["y"]
+        );
+        assert_eq!(row101["y"], fresh["rects"]["101"]["y"], "应与全量结果一致");
+        unsafe { proteus_layout_destroy(handle) };
+        unsafe { proteus_layout_destroy(handle2) };
+    }
+
+    /// ★坏输入必须被拒（不 panic、不静默改错树）
+    #[test]
+    fn splice_rejects_bad_input() {
+        let handle = unsafe {
+            let c = CString::new(list_tree_json(3)).unwrap();
+            proteus_layout_create(c.as_ptr())
+        };
+        // ① 摘不存在的 id
+        let bad1 = splice(handle, serde_json::json!({ "removes": [99999] }));
+        assert_eq!(bad1["ok"], false, "摘不存在的 id 应报错");
+        // ② 插入 id 与树上冲突
+        let bad2 = splice(
+            handle,
+            serde_json::json!({ "inserts": [{ "parentId": 1, "nodes": [{"id": 100, "parentId": 1, "width": 10.0}] }] }),
+        );
+        assert_eq!(bad2["ok"], false, "id 冲突应报错：{bad2}");
+        // ③ 落点不存在
+        let bad3 = splice(
+            handle,
+            serde_json::json!({ "inserts": [{ "parentId": 99999, "nodes": [{"id": 700, "parentId": 99999, "width": 10.0}] }] }),
+        );
+        assert_eq!(bad3["ok"], false, "落点不存在应报错");
+        // ④ ★中间插入被**显式拒绝**（架构限制：见 splice 内注释——数组序=布局序，
+        //    而 splice 只能追加到数组末尾 ⇒ 中间插入必须走"重发整棵树"）
+        //    ★为什么必须拒绝而不是"静默按末尾插"：后者会让**行序错**且零提示。
+        let bad4 = splice(
+            handle,
+            serde_json::json!({ "inserts": [{ "parentId": 1, "index": 1, "nodes": [{"id": 800, "parentId": 1, "width": 10.0}] }] }),
+        );
+        assert_eq!(bad4["ok"], false, "中间插入应被拒绝：{bad4}");
+        assert!(
+            bad4["error"].as_str().unwrap_or("").contains("非末尾"),
+            "拒绝理由应指明是 index 问题：{bad4}"
+        );
+
+        // ⑤ 空指针
+        unsafe {
+            let p = proteus_layout_splice(handle, std::ptr::null());
+            let s = CStr::from_ptr(p).to_str().unwrap().to_string();
+            proteus_layout_free_string(p);
+            assert!(s.contains("\"ok\":false"));
+        }
+        // ★三次坏输入后，原树仍可用（不因坏输入而崩/损坏）
+        let after = rects_of(handle);
+        assert!(after["rects"].get("100").is_some(), "坏输入不应破坏原树");
+        unsafe { proteus_layout_destroy(handle) };
     }
 
     /// FFI 边界：空指针 / 非法 UTF-8 不得 panic
