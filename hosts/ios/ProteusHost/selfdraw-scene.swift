@@ -778,13 +778,62 @@ final class SelfDrawView: UIView {
     ///
     /// - Parameter coreChildren: 核心返回的 `{parentId: [childId, ...]}` 映射
     /// - Returns: `(checked, mismatches)`——mismatches 非空即层序与核心不符
-    func reconcileChildOrder(coreChildren: [String: [Int]]) -> (checked: Int, mismatches: [String]) {
+    /// ★★**以核心的 `child_order` 为准**，重建 `childrenById` 并重排 CALayer 子层
+    ///
+    /// 【为什么必须有（本仓实测的设计纠正）】此前 `childrenById` 是宿主**自行**按每个节点的
+    ///   `parentId` 归类出来的（见 `buildLayers`），而**层序**（= 绘制顺序）应以核心的
+    ///   `children` 为准——两者是**同一事实的两份表示**，自行推导就会分叉
+    ///   （实测：对账报 `首个差异@51: 宿主 6 vs 核心 5260`）。
+    ///   ⇒ 正解：**核心说什么就是什么**——按 `child_order` 重建簿记 + 重排层。
+    ///
+    /// 【重排手法】`addSublayer` 对**已在层的子层**是**移到末尾**（subarrays[0] 先绘制=底层）
+    ///   ⇒ 按核心顺序**依次** `addSublayer` 即得目标顺序（无需 remove 再 add）。
+    ///   ★前提：核心给的 `kids` 是该父的**全部**子节点（Core 侧如此产出）。
+    ///
+    /// - Returns: `(applied, missing)`——missing 非空即"核心提到了但宿主没有该层"（层树缺节点）
+    func applyChildOrder(_ coreChildren: [String: [Int]]) -> (applied: Int, missing: [String]) {
+        var applied = 0
+        var missing: [String] = []
+        CATransaction.begin()
+        CATransaction.setDisableActions(true)
+        for (pidStr, kids) in coreChildren {
+            guard let pid = Int(pidStr) else { continue }
+            let absent = kids.filter { layersById[$0] == nil }
+            if !absent.isEmpty {
+                // ★不静默：核心提到了、宿主没有 ⇒ 层树缺节点（必须可观测——否则后续所有
+                //   顺序/几何操作都在不完整的基础上做）
+                missing.append("parent \(pid): 缺 \(Array(absent.prefix(4)))")
+                continue
+            }
+            let parentLayer: CALayer = layersById[pid] ?? self.layer
+            childrenById[pid] = kids
+            for k in kids {
+                if let l = layersById[k] { parentLayer.addSublayer(l) }
+            }
+            applied += 1
+        }
+        CATransaction.commit()
+        return (applied, missing)
+    }
+
+    /// ★★**层序对账（对真实层序）**：把「CALayer 子层顺序」与「核心的 children 顺序」比较
+    ///
+    /// 【为什么对"真实层序"而不是对 `childrenById`（本仓实测的判据强度教训）】若拿
+    ///   `childrenById`（宿主自己的簿记）去比，`applyChildOrder` 刚按核心写过它 ⇒ **必然相等**
+    ///   ⇒ 判据恒绿、毫无信息量。而对**真实 `sublayers`** 比较才验证了
+    ///   "层树真的按核心顺序排好了"——这正是 z-order/重叠绘制/命中测试所依赖的那份事实。
+    func reconcileChildOrderLegacy(coreChildren: [String: [Int]]) -> (checked: Int, mismatches: [String]) {
+        // 层身份 → 节点 id 的反查表（用对象身份，避免依赖 layersById 的遍历顺序）
+        var idByLayer: [ObjectIdentifier: Int] = [:]
+        for (i, l) in layersById { idByLayer[ObjectIdentifier(l)] = i }
         var checked = 0
         var mismatches: [String] = []
         var mismatch_detail: [String] = []
         for (pidStr, coreKids) in coreChildren {
             guard let pid = Int(pidStr) else { continue }
-            let mine = childrenById[pid] ?? []
+            // ★真实层序（本判据的核心：不是宿主自报的簿记）
+            let parentLayer: CALayer = layersById[pid] ?? self.layer
+            let mine: [Int] = (parentLayer.sublayers ?? []).compactMap { idByLayer[ObjectIdentifier($0)] }
             checked += 1
             if mine != coreKids {
                 // ★诊断必须够**定位**（本仓实测：只打印前 6 项时"看起来完全一样"，
@@ -1127,9 +1176,11 @@ final class SelfDrawBridge: NSObject, SelfDrawExports {
                                                     width: r["width"] ?? 0, height: r["height"] ?? 0)))
             }
         }
-        // ★★**层序对账**（见 reconcileChildOrder 注释：像素判据证明不了层序）
+        // ★★**以核心为准收口层序**（见 applyChildOrder 注释：自行推导会分叉）
         let coreChildren = (o?["child_order"] as? [String: [Int]]) ?? [:]
-        let recon = view.reconcileChildOrder(coreChildren: coreChildren)
+        let co = view.applyChildOrder(coreChildren)
+        // ★对**真实层序**对账（不是对宿主自报的簿记——后者刚被写过，必然相等 = 空判据）
+        let recon = view.reconcileChildOrderLegacy(coreChildren: coreChildren)
 
         let tL = CFAbsoluteTimeGetCurrent()
         let updated = view.updateLayersIncremental(changed: changed, visibleOnly: SelfDrawBridge.optMode == "v4")
@@ -1152,6 +1203,8 @@ final class SelfDrawBridge: NSObject, SelfDrawExports {
                            "removed": removed, "inserted": inserted,
                            "removed_layers": view.lastSpliceRemoved,
                            "inserted_layers": insertedLayers,
+                           "child_order_applied": co.applied,
+                           "child_order_missing": co.missing,
                            "child_order_checked": recon.checked,
                            "child_order_mismatches": recon.mismatches,
                            "inserted_text_layers": tx.text,

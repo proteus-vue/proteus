@@ -77,7 +77,7 @@ const BN = { snapshot: 'bench-final' }
 // ★构建标识：每次构建写入，用于**确凿判定**设备上跑的是哪份代码
 //   （踩坑：靠文件 mtime 判断"报告是否刷新"不可靠——新建目标文件的时间恒为"现在"；
 //    且我看不出设备实际执行的是旧 bundle，白跑一轮。有了这个字段就能一眼判定。）
-const BUILD_ID = '4bf823c8-175352'
+const BUILD_ID = 'd9cd9219-180613'
 const now = (): number => Date.now()
 /** 宽松解析（宿主返回可能是字符串或已是对象） */
 const safeParseAny = (s: any): any => {
@@ -1744,6 +1744,8 @@ CASES.push({
       let pixelCheck: Record<string, unknown> | undefined
       const ex2ChildOrder = (h?.["child_order_checked"] as number) ?? -1
       const ex2ChildOrderMismatch = (h?.["child_order_mismatches"] as string[]) ?? []
+      const ex2ChildOrderApplied = (h?.["child_order_applied"] as number) ?? -1
+      const ex2ChildOrderMissing = (h?.["child_order_missing"] as string[]) ?? []
       if (label.startsWith('head_insert') || label.startsWith('mid_insert')) {
         // 首屏扫描：x 取行内三点（避开圆点与文字），y 取标题区之下的连续 6 点
         //   （行高 56 + margin 8 = 64 ⇒ 6 点覆盖约 4 行，足以落在插入区内）
@@ -1759,10 +1761,7 @@ CASES.push({
         const dark = pixels.filter((c) => c.toUpperCase() === '#1B1B21').length
         pixelCheck = {
           // ★层序对账读数（比像素更直接：像素证明不了层序——本仓实测的判据缺口）
-          // ⚠ **诊断读数，非判据**（本仓实测：两侧"子序"来源不同源——
-          //   核心用 children 字段、宿主按 parentId 归类 ⇒ 天然对不上，不代表层序错）
-          child_order_checked: ex2ChildOrder,
-          child_order_mismatches: ex2ChildOrderMismatch,
+
           probes: pts.length,
           pixels,
           green, dark,
@@ -1789,6 +1788,24 @@ CASES.push({
                  relayout: h?.["relayout_count"], updated_layers: h?.["updated_layers"],
                  removed: h?.["removed"], inserted: h?.["inserted"],
                  removed_layers: h?.["removed_layers"], inserted_layers: h?.["inserted_layers"],
+                 // ★★**层序判据（对真实 CALayer 子层序）**——以核心 `child_order` 为单一事实来源
+                 //   【为什么是判据不是诊断】此前宿主自行按 parentId 归类 ⇒ 与核心分叉
+                 //   （实测差异@51）；现已由 `applyChildOrder` 按核心重建层序。
+                 //   判据 = 有对账 + 无缺层 + 无差异。
+                 child_order: {
+                   applied: h?.["child_order_applied"] ?? -1,
+                   checked: h?.["child_order_checked"] ?? -1,
+                   missing: h?.["child_order_missing"] ?? [],
+                   mismatches: h?.["child_order_mismatches"] ?? [],
+                   verdict: (() => {
+                     const ap = h?.["child_order_applied"] as number | undefined
+                     const ck = h?.["child_order_checked"] as number | undefined
+                     const mi = (h?.["child_order_missing"] as unknown[] | undefined) ?? []
+                     const mm = (h?.["child_order_mismatches"] as unknown[] | undefined) ?? []
+                     if (ap === undefined) return 'n/a'   // 非 splice 档
+                     return ap > 0 && (ck ?? 0) > 0 && mi.length === 0 && mm.length === 0 ? 'PASS' : 'FAIL'
+                   })(),
+                 },
                  layer_count: h?.["layer_count"],
                  pixel_check: pixelCheck,
                  // ★核心分段（splice 的 relayout_ms 决定"省下的到底是搬运还是重排"）
