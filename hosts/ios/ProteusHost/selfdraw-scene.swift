@@ -299,6 +299,10 @@ final class SelfDrawView: UIView {
     private(set) var lastFlushedCount = 0
     /// 当前待补刷（视口外延后）的层数
     var pendingCount: Int { pendingOffscreen.count }
+    /// 本次更新里「因节点转为可见而作废的旧账」数（>0 说明确实发生过这条故障链的修复）
+    private(set) var lastStalePendingCleared = 0
+    /// 不变量自检：可见节点与待补刷表的重叠数（**必须恒为 0**）
+    private(set) var lastPendingVisibleOverlap = 0
 
     /// ★★滚动/几何变化钩子：视图 bounds 变化时补刷「已滚入视野」的待更新层
     ///
@@ -445,10 +449,29 @@ final class SelfDrawView: UIView {
         CATransaction.begin()
         CATransaction.setDisableActions(true)
         var updated = 0
+        var staleCleared = 0
         for c in visible {
+            // ★★必须先清**该节点的待补刷旧账**（本仓实测的静默错几何缺陷）
+            //
+            // 【故障链】① 更新1：节点不可见 ⇒ 记账 `pendingOffscreen[X] = rect1`
+            //          ② 更新2：用户已滚动、节点变可见 ⇒ 立即应用 rect2（正确）
+            //             但旧账未清 ⇒ ③ 再滚动时 `flushPendingIfVisible` 用 **rect1 覆盖回退**！
+            //   ⇒ 格子**回到旧位置**，且只在滚动后可见 ⇒ 静态用例完全发现不了。
+            // ⇒ 纪律：**「立即应用」与「延后记账」对同一节点互斥**——应用即作废旧账。
+            if pendingOffscreen.removeValue(forKey: c.id) != nil {
+                staleCleared += 1
+            }
             applyOneLayer(id: c.id, abs: c.abs)
             updated += 1
         }
+        lastStalePendingCleared = staleCleared
+        // ★不变量自检：**已应用的可见节点不得仍在待补刷表里**（重叠 = 会出现旧几何回退）
+        //   正常应恒为 0；非 0 即说明「应用」与「记账」的互斥被破坏（静默错几何的前兆）。
+        var overlap = 0
+        for c in visible where pendingOffscreen[c.id] != nil {
+            overlap += 1
+        }
+        lastPendingVisibleOverlap = overlap
         let tFramesDone = CFAbsoluteTimeGetCurrent()
         lastLayerTiming["frames_ms"] = (tFramesDone - tSortDone) * 1000
         for c in offscreen {
@@ -835,6 +858,8 @@ final class SelfDrawBridge: NSObject, SelfDrawExports {
                            "geom_total": changed.count,
                            "deferred": view.lastDeferredCount,
                            "flushed": view.lastFlushedCount,
+                           "stale_cleared": view.lastStalePendingCleared,
+                           "pending_visible_overlap": view.lastPendingVisibleOverlap,
                            "layers_ms": round(layersMs * 100) / 100,
                            "host_total_ms": round(totalMs * 100) / 100])
     }
