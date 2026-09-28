@@ -47,6 +47,7 @@
     "vue-tsc": "^2.0.0",
     "@proteus-vue/cli": "0.3.0-beta.19",
     "@proteus-vue/plugin-vite": "0.3.0-beta.19",
-    "esbuild": "^0.28.2"
+    "esbuild": "^0.28.2",
+    "@proteus-vue/worklet": "workspace:*"
   }
 }
