@@ -79,14 +79,16 @@
 | 23 | **★★fontWeight 端到端缺失（粗体按常规体渲染+度量）** | ✅ **已闭（2026-09-28）**：IR 层早已建模（`component-ir/pnode.ts` 的 `fontWeight`）但适配器 `PAINT_KEYS` **不含它** ⇒ 不下发；宿主又恒用 `UIFont.systemFont` / `CGFont("Helvetica")`。本仓已有真实用例（`packages/components/p-heading` 用 `fontWeight: 'bold'`）。<br>⇒ ① 适配器 `normalizeFontWeight`（`'normal'→400` · `'bold'→700` · 数字直传）+ **从父元素继承** + `textStyleKey` 改含字重（`fs*100*10000 + weight`）；② 宿主 `SelfDrawBridge.font(size:weight:)` **唯一字体构造**（绘制与度量同源）+ `measureText` 缓存键含字重。<br>**判据**：TS 2 条（透传 / 不同字重不同 key）+ Rust `different_font_weight_must_not_share_cache`（粗体 72 宽 vs 常规 60 宽不得共用缓存） | `adapters/selfdraw.ts` · `selfdraw-scene.swift` · `tests/selfdraw-paint-patch.test.ts` · `ffi.rs` | ★**仍存边界**：`fontFamily` 仍是 `L4_PASSTHROUGH`（仅 IR 透传，未接字体选择——需平台字体库映射，属后续）；字重的**像素级**对照（两支字体渲染同一文本）未做 |
 
 | 24 | **★★`instantiateTemplate` 产出形态与核心 DTO 不匹配（样式全丢）** | ✅ **已闭（2026-09-28，真机长列表暴露）**：`instantiateTemplate` 把样式放在 **`style: {...}` 子对象**里，而核心 `NodeDto` 只认**平铺在节点顶层**的字段 ⇒ serde 静默忽略 ⇒ **height/flexDirection/alignItems 全丢** ⇒ 布局按"全 auto"算 ⇒ **行不是布局边界 ⇒ 增量退化为整树重排**（真机 V11：1000 行改 1 行 `relayout=3002`）。<br>⇒ 修：`emit` 把样式**摊平到顶层**（与 `SelfDrawNodeSpec` 逐字段同形——那条链已真机验证）；`InstantiatedNode` 类型改为索引签名；回填初始值也写顶层。<br>**判据**：形态锁（`style` 子对象必须为 `undefined`）+ **真机 `V11_long_list` PASS**（`relayout` **3002→3**）<br>★**教训（比缺陷本身更重要）**：`mount` 仍会成功、层也会建（几何是"某种"结果）⇒ **V6 判据全过 = 假绿**（它只查 ops/geom_changed/layer_count，**没有一个判据要求"样式真的进了核心"**）⇒ 已补长列表规模 + `relayout` 范围判据 | `slot-runtime/src/{instantiate,layout-template}.ts` · `tests/vapor-sfc-to-tree.test.ts`（形态锁）· 真机 `bench-filtered-V11.json` | — |
-| 25 | **★★长列表未验证（V6 只有 3 行 / 11 节点）** | ✅ **已闭（2026-09-28）**：新增 `tests/vapor-long-list-instantiate.test.ts`（1000/4000 行：id 唯一 · 跨行不串 · **线性复杂度** ≤12× · 父子链完整）+ 真机 `V11_long_list`（**1000 行 → 3002 节点** · 实例化 18ms · 挂载 130ms/3002 层 · `ListRegistry` hits **3001/misses 0** · 改 1 行发 **1 条**指令 · `relayout=3`） | 同上 + `entry-bench.ts` 的 `V11_long_list` | ★**仍存边界**：滚动**复用池**（`recycle.rs`）未接真机（那是独立一条线）；本档验证的是"长列表实例化 + 行内分发" |
+| 25 | **★★长列表未验证（V6 只有 3 行 / 11 节点）** | ✅ **已闭（2026-09-28）**：新增 `tests/vapor-long-list-instantiate.test.ts`（1000/4000 行：id 唯一 · 跨行不串 · **线性复杂度** ≤12× · 父子链完整）+ 真机 `V11_long_list`（**1000 行 → 3002 节点** · 实例化 18ms · 挂载 130ms/3002 层 · `ListRegistry` hits **3001/misses 0** · 改 1 行发 **1 条**指令 · `relayout=3`） | 同上 + `entry-bench.ts` 的 `V11_long_list` | ★**仍存边界**：**滚动复用池**（`recycle.rs`）未接真机 ⇒ **已由 #26 闭合** |
+| 26 | **★★滚动复用池（`recycle.rs`）未接真机——长列表全量物化层** | ✅ **已闭（2026-09-28）**：把已实现且有单测的 `recycle.rs`（方向敏感预载 + 三档生命周期 + 对象池）**接进 iOS 自绘宿主**。<br>① **核心侧**新增 `proteus_recycle_create/update/stats/destroy`（**核心只给决策**：本帧 acquire/release 哪些行 + 方向；**平台只执行动作**——方向交换规则属平台无关逻辑，各端各写必然分叉且分叉是静默的）；<br>② **TS 侧** `instantiateTemplate` 增出 `virtual.rows`（行号/行键/行根/**整行节点 id**）——宿主**推不出来**：行内子节点不带 `listId` ⇒ 按 listId 分组只能拿到行根；<br>③ **宿主侧** `mountVirtual`/`scrollRows`/`virtualProbe`/`setPoolCapacity`：可见行由**核心几何 + 内容偏移**推导（不假设行高）→ 向核心要决策 → **先 release 再 acquire**（反了 ⇒ 本帧要建的层无法复用刚释放的）→ 层池同类型复用 + **复用即完全重配**（缺省键清零，否则带上一节点痕迹）+ 行层按**行号序**插入（`addSublayer` 恒追加 ⇒ 乱序会让层序与核心 children 不符）+ 静态节点全量物化（否则行层挂根层：几何对、层序错）+ `applyVirtualUpdate` 变化先落**真源**（屏外行更新不被丢弃）+ 虚拟化下 `splice` **显式拒绝**（层未全量物化，对不存在的层增删会静默分叉）。<br>**判据（16 条全绿 · 真机 `V12_scroll_recycle` PASS）**：3002 节点 → **只物化 14 行/44 层**（全量是 3002 层）· 60 帧滚动每帧 acquire/release **有界**（≤15）· 方向全对 · **建层 74 / 复用 1554**（95.5%）· 层数恒定 74 · **破坏性**（池容量置 0 ⇒ 复用增量 0、建层增量 174；Rust 侧亦做同类破坏：把 `Backward` 分支改成与 `Forward` 同参 ⇒ 回滚单测精确变红）· **屏外改动滚入后生效**（改第 600 行文本，滚入后**层上**读到新值——复用池最经典的静默错是"显示上一行内容"，几何断言对此完全无感）· 像素 `#6F4AE8` | `layout-core-rust/src/ffi.rs` · `slot-runtime/src/instantiate.ts` · `selfdraw-scene.swift` · `entry-bench.ts` 的 `V12_scroll_recycle` · `tests/vapor-long-list-instantiate.test.ts` | ★**仍存边界**：虚拟化下 `splice`（行数变化需重新 `mountVirtual`）· 手势/命中在虚拟化下的坐标未额外验证 · **Android 侧同款接线未做** |
+| 27 | **★★★像素采样装置本身是错的（R/B 互换 + 未翻转）——此前所有像素判据都建在它之上** | ✅ **已闭（2026-09-28，被 V12 的紫色圆点暴露）**：<br>① **R/B 互换**：`samplePixels` 把系统给的 CGImage 按 `(ptr[0],ptr[1],ptr[2])` 当 RGB 读，实际是 **BGRA**。作者**做过三色标定、读数也正确**（纯红→`#0000FF`），但**结论推反了**（注释写成"本机是 RGBA"）。<br> ★**为什么长期未暴露**：此前所有像素判据都用**纯绿**（`#00FF00`），而绿在 R/B 互换下**不变** ⇒ 判据恒绿。<br>② **自建上下文未翻转**（本轮引入、本轮修）：改为显式 `CGContext` 以固定字节序后，忘了 CoreGraphics 原点在**左下** ⇒ 渲染**上下颠倒**（实测：期望行 24/28/32 读到 30/26/22，按 `raster_y ↦ H−y` 可逐点复现）。<br>⇒ 修：`samplePixels` 自建上下文 + 显式 `byteOrder32Big\|premultipliedLast`（内存序恒为 RGBA，不再猜系统格式）+ `translateBy/scaleBy` 翻转 CTM。**新增 `pixelFormatSelfTest()`**（三色 + **方向**自检：上红下蓝——色标定测不出翻转，因为"通道全对、位置全错"）。**V5 与 V12 把自检进判据**。<br>**判据**：V12 `pixelDeviceOk` + `pixelDot`（`#6F4AE8` 精确匹配）· V5 `calib_ok`（三色全对：修正前 `#382040` 等错值，修正后 `#FF0000/#00FF00/#0000FF`）+ 逐点行色全对<br>★**教训**：① **标定必须进判据**——只记录不断言 = 判据缺陷，正是互换得以长期隐藏的原因；② **测通道不够，还要测方向**；③ 样本色要**跨通道**（只用单色会让某类变换完全免疫） | `selfdraw-scene.swift` 的 `samplePixels`/`pixelFormatSelfTest` · `entry-bench.ts` 的 `V5_pixel_after_scroll`/`V12_scroll_recycle` | — |
 
 ### P1 · 影响覆盖可信度（不影响正确性）
 
 | # | 边界 | 现状 | 建议 |
 |---|---|---|---|
 | 4 | ~~**Vue 版本兼容只测了 3.5.42**~~ | ✅ **已闭（2026-09-28）**：解析器做成**可注入** + 新增 `tests/vapor-vue-compat.test.ts`（5 个 SFC 样本 × 3 版 = 12 用例）⇒ **3.4.38 / 3.5.42 / 3.6.0-rc.9 产物逐字节相同**；并断言诊断（如无 `:key`）不因版本而异。★3.6 目前是 **RC**（非最终稳定版） | — |
-| 5 | **宿主侧列表映射未接**（真实滚动列表） | `ListRegistry` 已就绪，但**演示里没有真实长列表**驱动它 | 用真实列表场景验证（也顺带验证复用池） |
+| 5 | ~~**宿主侧列表映射未接**（真实滚动列表）~~ | ✅ **已闭（2026-09-28）**：V11（长列表实例化 + 行内分发）+ V12（虚拟化 + 复用池）两条链均真机 PASS，见 #25/#26 | — |
 | 6 | **`layers` 段在类A 极小场景仍有常数开销** | 类A `layers` 0.02–0.5ms（可见层少）⇒ 属固定成本，非瓶颈 | 观察即可；如需再优化需 profile |
 
 ### P2 · 已知限制（接受为边界，不打算补）
@@ -113,7 +115,7 @@
 | 6 | **树 id 必须等于模板序元素序号** | 指令写到错误节点，且症状伪装成坐标错 |
 | 7 | **绝对/相对坐标在断言里必须标明口径** | `rects`=绝对 · `node.rect`=相对父 · 重排后子节点=相对范围根 |
 | 8 | **连续两次猜测未果 ⇒ 转确定性诊断** | 三层嵌套试错四轮，打印内部状态一次定位 |
-| 9 | **标定实验优先于推断** | 字节序我猜 BGRA，纯色标定一次测出是 RGBA |
+| 9 | **标定实验优先于推断** —— ★★**但标定的结论也会推反**（见 #17） | 字节序我猜 BGRA ⇒ 标定读数正确（纯红→`#0000FF`），**结论却写成了"是 RGBA"**，错了半年 |
 | 10 | **跨用例共享的视图状态必须在新树建立时归零** | `contentOffset` 泄漏 ⇒ "几何对但屏幕错" |
 | 11 | **守卫必须可观测**（记下"被哪条拒绝"） | 否则"有守卫"与"守卫生效"无法区分 |
 | 12 | **同一语义一处实现** | `apply_ops` 重复实现被收敛为 `apply_ops_impl` |
@@ -121,10 +123,14 @@
 | 14 | **★★"建了但没存"是静默的**（跨调用复用点必须验证状态真的留下） | `build_taffy` 产物未存 ⇒ 无报错，只表现为"优化没效果"（与度量表/文本回报同族） |
 | 15 | **结构变更的失效判据不能只看长度**（splice 只断链不删节点） | `splice_remove_detaches_subtree` 抓到引擎用了旧树 |
 | 16 | **跨语言/跨层形状契约两端各留判据** | `text` 顶层 vs `style` 内：单端测试只能证明自己那一半 |
+| 17 | **★★标定（自检）必须进判据——"只记录、不断言"等于没测** | 三色标定的读数一直是对的，但从未进 verdict ⇒ R/B 互换长期恒绿（见 #27） |
+| 18 | **★★测"通道"还要测"方向"** | 色标定无法发现**翻转**——现象是"通道全对、位置全错"（每个点取到另一个位置的合法颜色）。⇒ 自检必须含**空间**维度（上红下蓝） |
+| 19 | **★★判据的样本色要跨通道** | 此前像素判据只用**纯绿** ⇒ 绿在 R/B 互换下**不变** ⇒ 该判据对这类变换完全免疫。加上紫色圆点（`#6F4AE8`）才暴露 swap |
+| 20 | **★★"更新与物化解耦"：被跳过的东西必须落到真源** | 虚拟化下行未物化 ⇒ 若更新被丢弃，滚入时显示**旧内容**而所有几何断言全绿（V12 的 `offscreenUpdateVisible` 就是为它设的） |
 
 ---
 
-## 四、验证体系现状（四层独立证据）
+## 四、验证体系现状（五层独立证据）
 
 | 层 | 判据 | 位置 |
 |---|---|---|
@@ -134,4 +140,4 @@
 | **像素级** | 屏幕颜色序列 = 应显示内容（含滚动补刷） | `entry-bench.ts` 的 `V5_pixel_after_scroll` |
 | 性能 | 棘轮（只降不升 + **路径生效反向判据**） | `scripts/check-vapor-perf.mjs` |
 
-**当前规模**：Rust **88 项** · TS vapor 六套 **98+ 项** · CI 覆盖 **25 个门禁**。
+**当前规模**（2026-09-28 实测复核）：Rust **107 项** · TS vapor/selfdraw **13 套 171 项** · CI 覆盖 **25 个门禁**。
