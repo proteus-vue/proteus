@@ -209,7 +209,9 @@ describe('V4 · ★嵌套 v-for（本仓实测补的未验证项）', () => {
     expect(items.length).toBeGreaterThanOrEqual(1)
     const inner = items[items.length - 1]
     expect(inner.scope).toBe('item')          // 内层别名
-    expect(inner.sourceExpr).toBe('group.items') // ★内层源（不是顶层源）
+    // ★sourceExpr 是**纯字段路径**（本仓实测修正：原为含别名的 `group.items`，
+    //   而运行时要沿「顶层行 → 字段」下钻 ⇒ 需要字段名。首版含别名导致三层嵌套取不到行。）
+    expect(inner.sourceExpr).toBe('items')
     expect(inner.parentListId).toBeDefined()  // ★有外层
     expect(inner.itemKeyField).toBe('id')     // 内层 :key="item.id"
     expect(inner.itemValueField).toBe('name')
@@ -252,6 +254,49 @@ describe('V4 · ★嵌套 v-for（本仓实测补的未验证项）', () => {
     const textOps = ops.filter((o) => o.op === OpCode.SET_TEXT) as Array<{ nodeId: number }>
     expect(textOps.length).toBe(1)
     expect(textOps[0].nodeId).toBe(2020) // ★内层第 2 组那行（不是 2010）
+  })
+
+  it('★★三层嵌套：sourceExpr 必须是**纯字段路径**（本仓实测：含别名时静默不发指令）', () => {
+    // 【本轮实测的教训】`v-for="c in b.l3"` 的源表达式含**别名** `b`；
+    //   而运行时要沿「顶层行 → 字段 → 字段」下钻 ⇒ 需要**字段名路径**（`l2.l3`）。
+    //   首版存含别名表达式（`b.l3`）⇒ 运行时在顶层行找字段 `b` ⇒ 找不到 ⇒
+    //   **行集为空、静默不发指令**（实测三层嵌套 0 条指令）。
+    //   ★我在这个问题上试错四轮，最后靠**打印内部状态**一次定位——
+    //     教训：连续两次猜测未果时，应立刻转为确定性诊断。
+    const sfc3 = sfc(
+      `const l1 = ref([{ id: 1, l2: [{ id: 2, l3: [{ id: 3, name: 'x' }] }] }])\n`,
+      `<p-view v-for="a in l1" :key="a.id"><p-view v-for="b in a.l2" :key="b.id"><p-text v-for="c in b.l3" :key="c.id">{{ c.name }}</p-text></p-view></p-view>`,
+    )
+    const { table } = buildVaporSubscriptions(sfc3, 'd3.vue')
+    const deep = table.sources.flatMap((s) => s.slots).find((x) => x.kind === 'list-item')!
+    expect(deep.sourceExpr).toBe('l2.l3') // ★纯字段路径（别名已剥）
+    expect(deep.itemValueField).toBe('name')
+    expect(deep.itemKeyField).toBe('id')
+  })
+
+  it('★★三层嵌套端到端：最内层行更新 ⇒ 指令打到该行节点', () => {
+    const sfc3 = sfc(
+      `const l1 = ref([{ id: 1, l2: [{ id: 2, l3: [{ id: 3, name: 'x' }] }] }])\n`,
+      `<p-view v-for="a in l1" :key="a.id"><p-view v-for="b in a.l2" :key="b.id"><p-text v-for="c in b.l3" :key="c.id">{{ c.name }}</p-text></p-view></p-view>`,
+    )
+    const { table } = buildVaporSubscriptions(sfc3, 'd3.vue')
+    const deep = table.sources.flatMap((s) => s.slots).find((x) => x.kind === 'list-item')!
+    const reg = new ListRegistry()
+    reg.registerItems(deep.listId!, [{ itemKey: '3', slotNodes: { [deep.itemSlotId!]: 3003 } }])
+    const { ops, sink } = collector()
+    const rt = new SlotRuntime(new PropKeyTable(), new StringPool(), sink)
+    const vapor = new VaporRuntime(table, rt, VaporRuntime.buildEvaluators(table.evaluators), reg)
+    const data = [{ id: 1, l2: [{ id: 2, l3: [{ id: 3, name: 'x' }] }] }]
+    const ctx: EvalContext = {
+      read: (n) => (n === 'l1' ? data : n === 'c' ? data[0].l2[0].l3[0] : undefined),
+    }
+    const triggers = new Map<string, () => void>()
+    vapor.load(ctx, (n, cb) => triggers.set(n, cb))
+    vapor.relink(ctx)
+    rt.flush()
+    const textOps = ops.filter((o) => o.op === OpCode.SET_TEXT) as Array<{ nodeId: number }>
+    expect(textOps.length).toBeGreaterThan(0) // ★首版这里是 0（静默不发）
+    expect(textOps[0].nodeId).toBe(3003)
   })
 
   it('★单层列表不受影响（回归）', () => {

@@ -247,47 +247,59 @@ export class VaporRuntime {
     const itemSlots = src.slots.filter((x) => x.kind === 'list-item')
     if (itemSlots.length === 0) return
 
-    // ★★行集解析（支持嵌套 v-for）——本仓实测：内层列表的源是**外层行的一个字段**
+    // ★★行集解析（**递归支持任意层嵌套**）——本仓实测：三层嵌套时旧实现取不到行、静默不发指令
     //
-    // 【两种形态】
-    //   · 顶层列表（sourceExpr = `groups`，无 parentListId）⇒ 直接读源
-    //   · 嵌套列表（sourceExpr = `group.items`，parentListId = 外层 listId）
-    //     ⇒ 先枚举**外层每一行**，再在该行上按路径求内层数组（外层行数 × 内层行数）
-    //
-    // 【诚实边界】嵌套只支持**两层**（本仓实测的范围）；三层及以上会退化为"只取第一层"。
+    // 【模型】每个列表（listId）的「行」= 其源表达式逐级求值的结果：
+    //   · 顶层（parentListId 未定义）⇒ 直接读源
+    //   · 嵌套 ⇒ 先算出**父列表的行集**，再在每一行上按 sourceExpr 末段取本层数组
+    //   ⇒ 递归 ⇒ 任意层数都成立（旧实现只回溯一层，第三层起取不到）
     type RowRef = { key: string; row: Record<string, unknown> }
-    const collectRows = (slots: typeof itemSlots): RowRef[] => {
-      const spec0 = slots[0]
+    const rowsCache = new Map<number, RowRef[]>()
+
+    const rowsOfList = (listId: number, spec: typeof itemSlots[number]): RowRef[] => {
+      const cached = rowsCache.get(listId)
+      if (cached) return cached
       const out: RowRef[] = []
-      if (spec0.parentListId === undefined) {
-        // 顶层：直接读源
-        const rows = ctx.read(src.sourceName)
-        if (!Array.isArray(rows)) return out
-        for (let i = 0; i < rows.length; i++) {
-          const row = rows[i] as Record<string, unknown>
-          const key = spec0.itemKeyField && row && row[spec0.itemKeyField] !== undefined ? String(row[spec0.itemKeyField]) : String(i)
-          out.push({ key, row })
+      const keyOf = (r: Record<string, unknown>, i: number): string =>
+        spec.itemKeyField && r && r[spec.itemKeyField] !== undefined ? String(r[spec.itemKeyField]) : String(i)
+
+      // ★★纯按 **sourceExpr 逐级求值**（本仓实测的修正）
+      //
+      // 【原实现错在哪】它靠「父列表的 list-item 槽位」递归找父行——
+      //   而中间层列表（如 `b in a.l2`）**可能没有 list-item 槽位**
+      //   （`:key` 不建槽位、中间层若也不含可更新属性就无槽位）⇒ 递归找不到父 ⇒ **中断**。
+      //   实测三层嵌套生成 **0 条指令**（第三层取不到行，静默不更新）。
+      //
+      // 【正解】不依赖槽位存在性：按 `sourceExpr`（如 `b.l3`）逐段向下走——
+      //   顶层段（`l1`）从视图源读，其余段（`l2`/`l3`）在**上一级行**上取数组。
+      //   ⇒ 任意层数都成立，且中间层无需有任何槽位。
+      // ★★首段可能**不是顶层源名**（本仓实测的关键纠正）
+      //
+      // 【为什么】`sourceExpr='b.l3'` 的首段 `b` 是**外层 v-for 别名**；
+      //   只有最外层 v-for 的 sourceExpr（如 `l1`）首段才是真正的顶层源名。
+      //   而槽位挂在哪个源上是由依赖图决定的（本例挂 `l1`）⇒ **顶层源名应从
+      //   `src.sourceName` 取，而不是从 sourceExpr 首段取**。
+      //   （首段若是别名，则它前面的层级已经包含在 sourceExpr 里了——见下方段序处理。）
+      const segs = (spec.sourceExpr ?? '').split('.').filter(Boolean)
+      const topRows = ctx.read(src.sourceName)
+      if (!Array.isArray(topRows)) { console.error('[DIAG] topRows 非数组, src.sourceName=', src.sourceName, 'val=', typeof topRows); return out }
+      // 段序：sourceExpr 的每一段都是「沿当前行集向下取一层」的字段名；
+      // 若首段恰好等于顶层源名（最外层），跳过它（已由 topRows 提供）。
+      const walkSegs = segs[0] === src.sourceName ? segs.slice(1) : segs
+      // 逐段展开：从顶层行集开始，每段把「每行的该字段」展开成新行集
+      let currentRows: Record<string, unknown>[] = topRows as Record<string, unknown>[]
+      for (let seg = 0; seg < walkSegs.length; seg++) {
+        const field = walkSegs[seg]
+        const next: Record<string, unknown>[] = []
+        for (const r of currentRows) {
+          const arr = r?.[field]
+          if (Array.isArray(arr)) for (const x of arr) next.push(x as Record<string, unknown>)
         }
-        return out
+        currentRows = next
       }
-      // 嵌套：先取外层行，再按 sourceExpr 的**第二段**在外层行上取内层数组
-      const outerRows = ctx.read(src.sourceName)
-      if (!Array.isArray(outerRows)) return out
-      // sourceExpr 形如 `group.items` ⇒ 取 `items` 段
-      const segs = (spec0.sourceExpr ?? '').split('.').filter(Boolean)
-      const innerField = segs.length > 1 ? segs[segs.length - 1] : undefined
-      if (!innerField) return out
-      for (const or_ of outerRows) {
-        const outerRow = or_ as Record<string, unknown>
-        const innerArr = outerRow?.[innerField]
-        if (!Array.isArray(innerArr)) continue
-        for (let i = 0; i < innerArr.length; i++) {
-          const row = innerArr[i] as Record<string, unknown>
-          const key = spec0.itemKeyField && row && row[spec0.itemKeyField] !== undefined ? String(row[spec0.itemKeyField]) : String(i)
-          void outerRow
-          out.push({ key, row })
-        }
-      }
+      for (let i = 0; i < currentRows.length; i++) out.push({ key: keyOf(currentRows[i], i), row: currentRows[i] })
+      console.error('[DIAG] listId=', listId, 'src=', src.sourceName, 'srcExpr=', spec.sourceExpr, 'segs=', JSON.stringify(segs), 'walkSegs=', JSON.stringify(walkSegs), 'rows=', out.length)
+      rowsCache.set(listId, out)
       return out
     }
 
@@ -295,7 +307,7 @@ export class VaporRuntime {
       const impl = this.evaluators.get(spec.evaluatorId)
       if (!impl) continue
       const scope = spec.scope ?? ''
-      const rows = collectRows([spec])
+      const rows = rowsOfList(spec.listId ?? -1, spec)
       for (const { key, row } of rows) {
         // ★行作用域上下文：把 v-for 别名绑到**当前行**（内层行在内层列表场景下就是 row）
         //

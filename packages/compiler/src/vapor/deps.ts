@@ -387,7 +387,12 @@ export function collectTemplateBindings(source: string, filename = 'anonymous.vu
               listId: nextListId++,
               scope: names[0] ?? '',
               // ★保留完整源表达式（嵌套时 `group.items` 不能只留根名）
-              sourceExpr: (expCode.trim().split(/\s+(?:in|of)\s+/)[1] ?? "").trim(),
+              // ★★纯字段路径（别名已翻译为字段名）——本仓实测的关键纠正：
+              //   `v-for="b in a.l2"` 的表达式含**别名** `a`，而运行时要在
+              //   「顶层行 → 字段 → 字段」上逐级下钻 ⇒ 需要**字段名**（`l2`）而非别名。
+              //   首版存含别名表达式 ⇒ 运行时在顶层行找字段 `b` ⇒ 找不到 ⇒ 行集空 ⇒
+              //   **静默不发指令**（实测三层嵌套 0 条指令）。
+              sourceExpr: aliasToFieldPath((expCode.trim().split(/\s+(?:in|of)\s+/)[1] ?? "").trim(), scopeSources),
               // ★若外层已有 v-for 上下文 ⇒ 记录父列表 id（运行时按外层行求值内层数组）
               parentListId: listCtx?.listId,
               keyField: keyFieldOfElement,
@@ -408,6 +413,14 @@ export function collectTemplateBindings(source: string, filename = 'anonymous.vu
               // 外层别名 → 顶层源（`group` → `groups`）；非别名时就是它自己
               const topRoot = scopeSources[listRoot] ?? listRoot
               for (const nm of names) nextScopeSources[nm] = topRoot
+              // ★记「别名 → 该别名所在行的字段名」（供下一层 v-for 翻译 sourceExpr）：
+              //   `b in a.l2` ⇒ b 行是 `a` 行的 `l2` 字段 ⇒ __field__b = 'l2'
+              //   顶层（`a in groups`）⇒ 别名对应顶层源名本身 ⇒ __field__a = 'groups'
+              for (const nm of names) nextScopeSources[`__field__${nm}`] = exprText.split('.').filter(Boolean).pop() ?? topRoot
+              // ★记该别名是否**直接来自顶层源**（`a in l1` ⇒ top；`b in a.l2` ⇒ nested）
+              //   供 aliasToFieldPath 决定是否剥首段（本仓实测：用"是否映射到顶层源"判会误剥）
+              const isTopLevel = exprText.split('.').filter(Boolean).length === 1
+              for (const nm of names) nextScopeSources[`__kind__${nm}`] = isTopLevel ? 'top' : 'nested'
               // ★把内层列表源也映射到顶层源（`group.items` 的根 `group` → `groups`）
               nextScopeSources[exprText.split('.')[0]] = topRoot
             }
@@ -469,6 +482,40 @@ export function collectTemplateBindings(source: string, filename = 'anonymous.vu
 
   walk((ast as unknown as { children: unknown[] }).children ?? [], [], false)
   return out
+}
+
+/**
+ * ★★别名 → 字段名的路径翻译（本仓实测的关键纠正）
+ *
+ * 【为什么需要】`v-for="b in a.l2"` 的源表达式含**别名** `a`（外层行），
+ *   而运行时要沿「顶层行 → 字段 → 字段」逐级下钻 ⇒ 需要的是**字段名路径**。
+ *   映射关系在编译期已知：别名 `a` 对应的行是其父的哪个字段（`a in groups` ⇒ 顶层源名；
+ *   `b in a.l2` ⇒ 字段 `l2`）。
+ *
+ * 【本仓实测的后果】首版存含别名的表达式（`b.l3`）⇒ 运行时在顶层行上找字段 `b`
+ *   ⇒ 找不到 ⇒ 行集为空 ⇒ **静默不发指令**（三层嵌套实测 0 条）。
+ */
+function aliasToFieldPath(expr: string, scopeSources: Record<string, string>): string {
+  const segs = expr
+    .split('.')
+    .map((seg) => seg.trim())
+    .filter(Boolean)
+    .map((seg) => scopeSources[`__field__${seg}`] ?? seg)
+  // ★★首段若是**顶层源名** ⇒ 去掉（本仓实测修正）
+  //
+  // 【为什么】运行时的行集起点就是「顶层源的行集」（`ctx.read(src.sourceName)`），
+  //   故路径只需「从一行如何下钻到下一层」的字段序列。
+  //   首版把顶层源名留在路径里（`groups.items`）⇒ 运行时在顶层行上找字段 `groups`
+  //   ⇒ 找不到 ⇒ 行集空 ⇒ **静默不发指令**。
+  //   （最外层 v-for 的路径会因此变成空串——那是正确的：它的行集就是顶层源本身。）
+  // ★判据必须是「**首段是顶层源名**」——而不是"映射到了某个顶层源"（本仓实测：
+  //   首版用 `Object.values(scopeSources)` 判 ⇒ 所有别名都映射到同一顶层源 ⇒
+  //   **中间段也被剥掉**（`l2.l3` → `l3`）⇒ 路径错误）。
+  //   正解：`__field__` 映射的**值等于顶层源名**才说明该别名直接来自顶层源。
+  if (segs.length > 1 && scopeSources[`__kind__${expr.split('.')[0]?.trim()}`] === 'top') {
+    return segs.slice(1).join('.')
+  }
+  return segs.join('.')
 }
 
 /** v-for 上下文的「非 null」形态（供 binding() 的参数类型用） */
