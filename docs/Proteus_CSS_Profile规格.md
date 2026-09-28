@@ -81,7 +81,7 @@ Web 端是**零转换直跑标准 SPA**，用的就是浏览器原生 CSS。因�
 | 样式实现 | 浏览器原生 CSS | 微信容器 CSS | **自研渲染引擎（UCSS Profile）** |
 | 选择器能力 | 完整 CSS | 需实测确认，**不支持复杂组合选择器** | 编译期折叠，运行时仅查表 |
 | 层叠/继承 | 浏览器运行时计算 | 容器实现 | **编译期计算，运行时零成本** |
-| 布局 | 完整（block/inline/grid/flex） | flex 为主 | flex（M3+ 评估 grid） |
+| 布局 | 完整（block/inline/grid/flex） | flex 为主 | **flex + grid**（★DCP-2 已定案：Grid 开放为 **L2**；Skyline 端实测退化为 block，故属「有条件可用」） |
 | 单位 | px/em/rem/%/vw/vh/… | px/rpx/%，**vw/vh 通常被忽略或解析为 0** | 编译期折叠为逻辑像素或比例系数 |
 
 > ⚠️ Skyline 端的具体支持矩阵需以真机实测为准，本文不预设细节。Profile 落地前必须补齐 Skyline 实测表。
@@ -123,11 +123,11 @@ Web 端是**零转换直跑标准 SPA**，用的就是浏览器原生 CSS。因�
 
 | 特性 | 说明 | 状态 |
 |---|---|---|
-| flex / flex-direction / justify-content / align-items | Yoga 起步 | ✅ M1 起 |
+| flex / flex-direction / justify-content / align-items | Flexbox 基础 | ✅ M1 起 |
 | gap / row-gap / column-gap | — | ✅ |
 | position: relative / absolute | 需 containing block 判定 | 🟡 M3 |
 | overflow: hidden / scroll | — | 🟡 M3 |
-| **grid** | 可评估现成实现或降级为嵌套 flex | 🟡 待定 |
+| **grid** | ★**DCP-2 已定案：开放为 L2**（Taffy 已有完整 Grid）；⚠ 但 **Skyline 端实测退化为 block** ⇒ **有条件可用**：App 端可用，Skyline 端需降级为嵌套 flex | ✅ App / 降级 Skyline |
 | text-overflow / max-lines 截断 | 依赖平台文本度量 | 🟡 M3 |
 
 ### L3 · 高成本（默认关闭，编译期标记，按需启用）
@@ -231,7 +231,7 @@ Step 7  输出 ComputedStyle + PaintHint
 ```ts
 interface ComputedStyle {
   // 布局
-  display: 'flex' | 'none'          // L2，grid 待定
+  display: 'flex' | 'none'          // L2；grid 见 DCP-2（App 开放 L2 / Skyline 降级）
   flexDirection: 'row' | 'column' | 'row-reverse' | 'column-reverse'
   justifyContent: JustifyValue
   alignItems: AlignValue
@@ -364,7 +364,7 @@ interface PaintHint {
 | W-CSS-102 | 使用了 `!important` | 建议改用 @layer |
 | W-CSS-103 | 使用了 ID 选择器 | 特异性过高，后续覆盖困难 |
 | W-CSS-104 | 单节点动态属性数接近阈值 | — |
-| W-CSS-105 | 使用了 grid（若 Profile 未开放） | 提供嵌套 flex 改写建议 |
+| W-CSS-105 | 在**不支持 grid 的端**（Skyline）使用了 grid | 提供嵌套 flex 改写建议（App 端 DCP-2 已开放，不告警） |
 
 ### 7.3 lint 与 Web 端的关系（关键）
 
@@ -415,15 +415,17 @@ Web 端由浏览器原生渲染，天然支持完整 CSS——但开发者写出
 
 ## 9. 实施顺序
 
-| 阶段 | 内容 | 依赖 |
-|---|---|---|
-| **P1** | Skyline 端 CSS 支持矩阵实测表 | 无（**必须先做**，否则 Profile 无基线） |
-| **P2** | 定义 Profile v1 特性清单（L0–L5） | P1 |
-| **P3** | 编译期折叠算法实现 + Golden 门禁 | P2 |
-| **P4** | 动态 class 预计算（属性维度分解） | P3 |
-| **P5** | Lint 规则（E-CSS / W-CSS） | P2 |
-| **P6** | Web 端 lint 接入（一致性前置） | P5 |
-| **P7** | App 端 ComputedStyle 消费 + conformance 比对 | P3、M1 排版核心 |
+| 阶段 | 内容 | 依赖 | 实际状态（2026-09-28 逐项核实） |
+|---|---|---|---|
+| **P1** | Skyline 端 CSS 支持矩阵实测表 | 无（**必须先做**，否则 Profile 无基线） | ✅ **已完成**（2026-09-29 · **25/25 通过**）—— 证据 `showcase/subpackages/capabilities/pages/css-profile-probe.vue` + `tests/e2e-mp-css-profile-grid.test.ts` |
+| **P2** | 定义 Profile v1 特性清单（L0–L5） | P1 | ✅ 本文档 §3 |
+| **P3** | 编译期折叠算法实现 + Golden 门禁 | P2 | ◐ 单位折叠 ✅（`component-ir/src/pnode-style.ts`）+ Golden ✅（`tests/golden.test.ts`）；**§4 全量折叠（选择器/特异性/层叠相位）无独立实现** |
+| **P4** | 动态 class 预计算（属性维度分解） | P3 | ❌ **未实现** |
+| **P5** | Lint 规则（E-CSS / W-CSS） | P2 | ◐ **仅 1 条**（`pnode-analyze.ts` 的 E-CSS-006 拍平违规） |
+| **P6** | Web 端 lint 接入（一致性前置） | P5 | ❌ **未实现** |
+| **P7** | App 端 ComputedStyle 消费 + conformance 比对 | P3、M1 排版核心 | ◐ 契约 = `PProps`；浏览器 conformance ✅；App 消费链**部分** |
+
+> ★**状态标注原则**（本仓纪律）：`✅ 已完成` 必须能 grep 到证据；`❌ 未实现` 不得被读成"已有设计"。
 
 > P1 的 Skyline 实测表是**前置项**。Profile 必须是三端交集，缺了 Skyline 基线会导致后续返工。
 
