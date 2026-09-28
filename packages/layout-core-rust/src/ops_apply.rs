@@ -557,6 +557,77 @@ mod tests {
         assert!(apply_style_key(&mut n, "layout.nonexistentThing", 1.0).is_err());
     }
 
+    /// ★★范围**非根**时的坐标正确性（本仓实测修正的潜伏缺陷）
+    ///
+    /// 树：root(0) → row(2, margin-top 50) → dot(1, margin-top 10)
+    /// 期望：改 dot 宽度后，dot 的**绝对** y = 50 + 10 = **60**
+    /// （修复前报 **110** —— 回写公式 `origin + r` 把范围自身位置叠加了两次）
+    ///
+    /// ★为何长期隐身：此前所有测试与设备基准的目标都在**偏移 0** 的位置（首行 / 根范围）
+    ///   ⇒ 错误被"恰好为 0"掩盖。**测试必须用非零偏移的中间节点**。
+    #[test]
+    fn non_root_scope_absolute_coords_are_correct() {
+        use crate::engine::{LayoutEngine, NullTextMeasurer, RootConstraint};
+
+        let mut tree = LayoutTree::new();
+        let root_style = LStyle {
+            display: crate::style::Display::Flex,
+            flex_direction: crate::style::FlexDirection::Column,
+            width: Some(300.0),
+            height: Some(300.0),
+            ..Default::default()
+        };
+        let root_idx = tree.push(node(0, crate::node::NO_PARENT, root_style));
+        tree.roots.push(root_idx);
+        let row_style = LStyle {
+            display: crate::style::Display::Flex,
+            flex_direction: crate::style::FlexDirection::Column,
+            width: Some(300.0),
+            height: Some(100.0),
+            margin: crate::style::Edges { top: 50.0, right: 0.0, bottom: 0.0, left: 0.0 },
+            ..Default::default()
+        };
+        let row_idx = tree.push(node(2, root_idx, row_style));
+        tree.nodes[root_idx as usize].children.push(row_idx);
+        let dot_style = LStyle {
+            width: Some(20.0),
+            height: Some(20.0),
+            margin: crate::style::Edges { top: 10.0, right: 0.0, bottom: 0.0, left: 0.0 },
+            ..Default::default()
+        };
+        let dot_idx = tree.push(node(1, row_idx, dot_style));
+        tree.nodes[row_idx as usize].children.push(dot_idx);
+
+        let mut eng = TaffyEngine::new().with_measurer(Box::new(NullTextMeasurer));
+        eng.layout(&mut tree, RootConstraint::definite(300.0, 300.0));
+
+        tree.nodes[dot_idx as usize].style.width = Some(70.0);
+        tree.nodes[dot_idx as usize].dirty = true;
+        let scope = eng.relayout_scope_of(&tree, dot_idx);
+        assert_eq!(scope, row_idx, "范围应为 row（非根）——这正是暴露缺陷的场景");
+        eng.layout_incremental(&mut tree, dot_idx);
+
+        // 绝对坐标 = 沿父链累加（与 `parent_origin_of` 同款算法）
+        let mut oy = 0.0f32;
+        let mut chain = vec![];
+        let mut cur = tree.nodes[dot_idx as usize].parent;
+        while cur != crate::node::NO_PARENT {
+            chain.push(cur);
+            cur = tree.nodes[cur as usize].parent;
+        }
+        for &n in chain.iter().rev() {
+            oy += tree.nodes[n as usize].rect.y;
+        }
+        let dot = tree.nodes[dot_idx as usize].rect;
+        assert_eq!(
+            oy + dot.y,
+            60.0,
+            "★ dot 绝对 y 应为 60（row 50 + dot 10）；实际 {} ⇒ 范围自身位置被多叠加了一次",
+            oy + dot.y
+        );
+        assert_eq!(dot.width, 70.0, "宽度应已更新");
+    }
+
     fn void<T>(_: T) {}
 }
 

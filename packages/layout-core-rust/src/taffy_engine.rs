@@ -411,7 +411,21 @@ impl LayoutEngine for TaffyEngine {
         for (sub_idx, r) in out.rects.iter().enumerate() {
             let Some(r) = r else { continue };
             let Some(&orig) = order.get(sub_idx) else { continue };
-            let shifted = Rect { x: origin.x + r.x, y: origin.y + r.y, width: r.width, height: r.height };
+            // ★★本仓实测修正的坐标缺陷：范围**非根**时多叠加了一次范围自身的位置
+                //
+                // 【坐标约定】`rect` 是**相对父内容盒**（见 `layout()` 内的注释与
+                //   `parent_origin_of()` 的父链累加），而 taffy 给的 `r` **已是相对范围根**
+                //   ⇒ 再加 `origin` 会叠加两次范围偏移。
+                //   · 范围 == 根 ⇒ origin = (0,0) ⇒ 恰好正确（**此前所有测试都在此前提下**）
+                //   · 范围 ≠ 根 ⇒ 子节点坐标偏移了范围自身的位置
+                //     实测 root→row(margin-top 50)→dot(margin-top 10)：dot 绝对 y 报 **110**（应为 60）
+                // 【为何长期隐身】设备基准的绑定目标恰在**首行**（偏移 0）⇒ 错误被 0 掩盖。
+                //   ⇒ 教训：**「恰好为 0 的偏移」会让坐标类错误隐身**，测试须用非零偏移的中间节点。
+                let shifted = if orig == scope {
+                    origin // 范围根：位置由父决定，本次重排不改它
+                } else {
+                    Rect { x: r.x, y: r.y, width: r.width, height: r.height } // `r` 已相对范围根
+                };
             tree.nodes[orig as usize].rect = shifted;
             tree.nodes[orig as usize].dirty = false;
             rects[orig as usize] = Some(shifted);
