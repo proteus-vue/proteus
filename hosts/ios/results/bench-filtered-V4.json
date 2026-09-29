@@ -1,0 +1,69 @@
+{
+  "engine" : "proteus-layout-core 0.1.0 · engine=taffy-0.14 · taffy 锁定 0.14（0.13 有 measure 指数退化）",
+  "geometry_all" : {
+
+  },
+  "host_node_count" : 0,
+  "host_timing_last" : {
+
+  },
+  "js_completed" : 0,
+  "js_ok" : true,
+  "js_report" : {
+    "build_id" : "b8fab899-114625",
+    "case_filter" : [
+      "V4"
+    ],
+    "case_timings_ms" : {
+
+    },
+    "cases" : [
+
+    ],
+    "ceiling" : [
+
+    ],
+    "completed" : 0,
+    "frame_budget_ms" : 16.699999999999999,
+    "init_diag" : {
+      "errors" : [
+
+      ],
+      "stages" : [
+        "before-S2:15",
+        "after-S:33"
+      ]
+    },
+    "kind" : "logic-bench",
+    "notes" : [
+      "★四段分解：vue（响应式→重渲染→diff\/patch）\/ 适配器（拍平+折叠）\/ 序列化（JSON，即跨界成本）\/ 宿主（度量+布局+建层）",
+      "★★必须逐用例由宿主驱动：JSC 的 evaluateScript 不排空微任务，而 Vue 更新调度正是微任务",
+      "★A 组是规模扫描（12→1000 项），用于回答「边界成本随规模如何增长」",
+      "★F 组验证 Vue 的批处理：同 tick 100 次变更应合并为 1 次渲染（extra.renders）",
+      "★H 组对比 JSON 与扁平数值编码，直接支撑「是否值得上 JSI\/二进制通道」的决策"
+    ],
+    "result_count" : 0,
+    "runtime" : "JavaScriptCore（系统自带）",
+    "total_cases" : 0,
+    "viewport" : {
+      "height" : 844,
+      "width" : 390
+    }
+  },
+  "js_total" : 0,
+  "launch_diag" : {
+    "bootstrap_ms" : 110.79000000000001,
+    "first_frame_ms" : 123.98999999999999,
+    "first_frame_source" : "kernel:p_starttime",
+    "forced_style" : "Dark",
+    "interface_style" : "Dark",
+    "launch_screen_keys" : [
+
+    ]
+  },
+  "layer_count" : 0,
+  "layer_frames" : {
+
+  },
+  "tree_hash" : ""
+}
