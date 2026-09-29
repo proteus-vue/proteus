@@ -60,7 +60,11 @@ const CI_TEXT = workflowText()
 
 /** 从一条 npm script 命令里提取它调用的脚本文件 + 内联 check: 引用 */
 function refsOf(cmd) {
-  const files = cmd.match(/(?:^|\s)(?:npx\s+tsx\s+)?(?:scripts|website\/scripts)\/[\w./-]+\.(?:mjs|ts|js)/g) ?? []
+  // ★2026-09-29 扩面：原正则只认 `scripts/` 与 `website/scripts/` 前缀 ⇒
+  //   `hosts/**/*.mjs` 这类脚本**结构性无法被识别为"已接线"**（实测：新增
+  //   `check:acceptance-stub`（`node hosts/android/acceptance-stub.mjs`）明明写进了 ci.yml，
+  //   本门禁仍报"未接线"）。⇒ 改为匹配**任意相对路径**下的 .mjs/.ts/.js 脚本。
+  const files = cmd.match(/(?:^|\s)(?:npx\s+tsx\s+)?(?:[\w.-]+\/)+[\w.-]+\.(?:mjs|ts|js)/g) ?? []
   const sub = cmd.match(/pnpm run (check:[\w-]+)/g)?.map((m) => m.replace('pnpm run ', '')) ?? []
   return { files: files.map((f) => f.trim()), sub }
 }

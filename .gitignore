@@ -51,3 +51,6 @@ hosts/ios/experiments/device/results/memory-isolated.txt
 # V3 端到端测试的临时输入（运行时生成，不入库）
 tests/.tmp-ops.bin
 tests/.tmp-tree.json
+
+# 桩测指纹标记（本地状态：表示"当前源码指纹已通过桩测"；随源码变，不该入库）
+hosts/android/.acceptance-stub-ok
