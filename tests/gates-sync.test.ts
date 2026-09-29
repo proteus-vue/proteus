@@ -25,7 +25,12 @@ const CI_TEXT = fs
 function coveredByCi(name: string): boolean {
   if (CI_TEXT.includes(name)) return true
   const cmd = scripts[name] ?? ''
-  const files = cmd.match(/(?:^|\s)(?:npx\s+tsx\s+)?(?:scripts|website\/scripts)\/[\w./-]+\.(?:mjs|ts|js)/g) ?? []
+  // ★2026-09-29 扩面（与 `scripts/check-gates-sync.mjs` 的 `refsOf` **同步**——
+  //   两者是同一判据的两份实现，此前只改了 .mjs ⇒ 本测试对 `hosts/**` 形态**结构性失明**：
+  //   实测 `check:acceptance-stub`（`node hosts/android/acceptance-stub.mjs`，CI 里明明有那一步）
+  //   被本测试判为"未接入任何 workflow"。⇒ 记住：**改判据时必须同时改它的镜像**，
+  //   否则一处放宽另一处仍窄 ⇒ 假红（此处）或更糟的假绿。）
+  const files = cmd.match(/(?:^|\s)(?:npx\s+tsx\s+)?(?:[\w.-]+\/)+[\w.-]+\.(?:mjs|ts|js)/g) ?? []
   if (files.some((f) => CI_TEXT.includes(f.trim()))) return true
   const subs = cmd.match(/pnpm run (check:[\w-]+)/g)?.map((m) => m.replace('pnpm run ', '')) ?? []
   return subs.some((s) => scripts[s] && coveredByCi(s))
