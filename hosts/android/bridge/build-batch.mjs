@@ -31,6 +31,32 @@ if (!fs.existsSync(path.join(RB_DIST, 'index.js'))) {
 
 fs.mkdirSync(path.dirname(OUT), { recursive: true })
 
+// ★★类型检查（**esbuild 不做类型检查**——本仓实测踩到，2026-09-29）
+//
+// 【为什么必须放在构建路径上（一次真实的漏网）】esbuild 只**擦除**类型，不校验：
+//   本入口曾有一个 `Expected 2 arguments, but got 0` 的错误，esbuild 一路绿灯出了 bundle，
+//   直到真机跑到那一行才炸。而 `hosts/**` **不在根 tsconfig 的 include 里**
+//   ⇒ 全仓没有任何门禁覆盖它（`npx vue-tsc --noEmit` 看不到这些文件）。
+//   ⇒ 把类型检查**接进构建路径**——否则 clone 后这一步静默缺失（本仓纪律：
+//     「生成物/检查必须在构建路径上」）。
+//   ★本门禁已声明为 LOCAL_ONLY（需完整 node_modules 才能解析 workspace 路径，CI 不装）。
+// 跳过方式（仅在明知故犯时用）：PROTEUS_SKIP_BRIDGE_TSC=1 node hosts/android/bridge/build-batch.mjs
+if (process.env.PROTEUS_SKIP_BRIDGE_TSC !== '1') {
+  const { spawnSync } = await import('node:child_process')
+  const tsc = spawnSync('npx', ['tsc', '--noEmit', '-p', path.join(HERE, 'tsconfig.bridge.json')], {
+    cwd: ROOT,
+    encoding: 'utf8',
+    shell: process.platform === 'win32',
+  })
+  const out = `${tsc.stdout ?? ''}${tsc.stderr ?? ''}`
+  if (tsc.status !== 0) {
+    console.error('✗ 桥接入口**类型检查**失败（esbuild 不会替你做这件事）：')
+    console.error(out.trim().split('\n').slice(0, 20).join('\n'))
+    process.exit(3)
+  }
+  console.log('[android-bundle] ✅ 类型检查通过（tsconfig.bridge.json）')
+}
+
 const result = await build({
   entryPoints: [path.join(HERE, 'entry-batch.ts')],
   outfile: OUT,

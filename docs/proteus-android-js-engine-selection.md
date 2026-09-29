@@ -114,7 +114,8 @@ Hermes 的字节码预编译有结构性优势——**届时应重新评估**（
 | **S3** | 在 `hosts/android` 跑通**最小闭环**（建 1 个节点 + commit 一次） | 宿主侧收到 1 次 `mount` 调用、批次内容正确 | ✅ **已完成（真机）** |
 | **S3b** | 把**真实 render-backend bundle** 打进 Android 并执行（不只手写等价 JS） | 真实适配器跑通：三相位各走对入口 + hostCalls=3 | ✅ **已完成（真机）** |
 | **S4** | 接 HA0 八接口（Host ABI）——把 JNI 桥规范化到 C ABI | `proteus_submit_frame` 等接口可被 Android 调用 | ⏳ 待做（依赖 HA0） |
-| **S5** | 三项复测（4050 / 长列表 / 内存）+ C1/C2 剩余验收 | 按卡内口径 | ⏳ 待做（需真机） |
+| **S5-①** | **Java 侧真正消费批次**（JS → 适配器 → 宿主 → Rust 几何 → 自绘） | `host_mode=java` + 15 条判据（含**屏幕像素**） | ✅ **已完成（真机，2026-09-29）** |
+| **S5-②** | 三项复测（4050 / 长列表 / 内存）+ C2 宿主侧耗时 | 按卡内口径 | ⏳ 待做 |
 
 ### 5.1 S1/S2 落地记录（2026-09-29）
 
@@ -168,6 +169,71 @@ Hermes 的字节码预编译有结构性优势——**届时应重新评估**（
 **★边界（写进脚本输出）**：宿主桥在本链路是"上报给 Java"（`proteusHost.post`）
 ⇒ 证明 **适配器 → 宿主入口** 这段真实；**Java 侧真正消费批次去渲染**属 C1 后续
 （三项真机复测时接）。本步**不**声称"端上已经会画了"。
+
+### 5.4 S5-① Java 侧真正消费批次（端上真的会画）· 2026-09-29
+
+**跑法**：`bash hosts/android/run-js-render.sh`（可复跑 · 15 条判据 · 含截图留证）
+
+**这条链路（与 S3b 的本质差别）**：S3b 的宿主是 **JS 本地桩**（只证"调用发生了"）；
+S5 的宿主是 **`JsRenderHost`（Java，实现 mount/update/updatePatches）** ⇒ 批次被**真正消费**：
+解析 spec → 注入文本度量 → 调 Rust 核心算几何 → 指令 → `ProteusHostView` 自绘。
+
+**实测报告**（真机 `d67e31a3` · 4050 夹具全部 4051 节点）：
+```json
+{ "host_mode": "java", "nodes": 4051, "text_nodes": 2000,
+  "mount_calls": 1, "patch_calls": 1, "host_calls": 2, "patch_call_kind": "updatePatches",
+  "host_cmds": 4000, "expect_cmds": 4000,
+  "host_painted_samples": 3640, "host_painted_colors": 59, "host_view_on_draw": 2,
+  "host_layout_ms": 25.7, "host_measure_ms": 11.9, "host_emit_ms": 40.0,
+  "host_tree_shape": "4051/2000/1", "host_error": "", "ok": true }
+```
+★**屏幕像素**（截图判据）：非背景色种类 **162**（截图入库 `hosts/android/results/js-render/<时间戳>/screen.png`）
+
+**判据 15 条**：host_mode=java · 批处理红线（3 个调用数）· 增量不重发整树 · 指令数 = JS 侧独立算的期望值 ·
+离屏像素 · **真实分发走了 onDraw** · 颜色多样性 · **屏幕像素** · 两侧树一致 · 宿主无错。
+
+---
+
+**★★过程中挖出的 5 个真实缺陷（每个都"读数全绿却看不见"，值得逐条记住）**
+
+1. **`createText` 在批量模式丢文本**（库缺陷，`packages/render-backend/src/native.ts`）——
+   它入队的 create op 只带 `props:{}`、**不带 text** ⇒ 宿主收到的首帧树种里文本节点是空的。
+   而"节点数"读数照样正确 ⇒ **部分读数掩盖整块数据丢失**。已修（补一条 text op）+ 加 2 条单测。
+2. **夹具形态不是 IR 形态**——`app-4050-tree.json` 是**核心请求**形状（样式平铺在节点上），
+   而 `createElement({props})` 期待样式装在 `props` 桶里 ⇒ 直传则**整棵树样式全丢**。
+   已修（`flattenCoreNodes` 显式归一）。
+3. **`ViewGroup` 默认 `WILL_NOT_DRAW`** ⇒ 真实分发**跳过 `onDraw`**，屏幕上什么都没画。
+   既有场景靠 `setBackgroundColor(...)` 的副作用侥幸能画（那会清掉该标志）；
+   而**离屏路径 `view.drawCmds(canvas)` 绕过分发** ⇒ 离屏检查全绿、屏幕一片空白。
+   实测：离屏 3640 采样点有像素 vs 设备截图整屏背景色、`onDrawCount()==0`。
+   ⇒ 两处修复：`setWillNotDraw(false)` + **离屏检查改走 `view.draw()` 真实分发**。
+4. **度量必须随建树请求一起给**（顺序缺陷）——`setTextMeasures` 只换表**不重排**，
+   故"先 create（空度量）→ 再注入"的几何是按零尺寸算的（屏幕上没有字）。
+   已修（度量 → 请求 → create，与 iOS 同顺序）。
+5. **构建路径上两个静默陷阱**（`build-and-run.sh` + `build-batch.mjs`）：
+  ① `node build-batch.mjs || true` **吞掉**构建失败（本仓明令禁止的形态）；
+  ② `if [ ! -f "$BUNDLE" ]` 只在**缺失**时重建 ⇒ 改了入口却装**旧 bundle**（stale 陷阱）。
+  已修：失败即 `exit 3`；重建条件加"入口比产物新"。
+
+**★新增的可观测性（本次教训的直接产物）**
+- `ProteusHostView.onDrawCount()` —— **真实帧计数**：0 = 屏幕一帧都没画（缺它就分不清"没走到"与"画在屏外"）
+- `host_painted_colors` —— 离屏重放的**颜色多样性**（只有 3 个采样点那次，单看"非透明>0"会放过）
+- `screen_colors` —— **屏幕像素**里非背景色的种类（判据落在屏幕上，不落在"我发出了指令"上）
+- `expect_cmds` —— JS 侧**独立算**的期望指令数（两侧各算一次 ⇒ props 丢失当场暴露）
+
+**★门禁补强**：`build-batch.mjs` 现在**先做类型检查**（`tsconfig.bridge.json`）。
+理由：esbuild 只擦除类型不校验，而 `hosts/**` 不在根 tsconfig 的 include 里
+⇒ 本入口曾有一个 `Expected 2 arguments, but got 0` 一路绿灯出 bundle，直到真机才炸。
+（已破坏性验证：注入类型错误 ⇒ 退出码 3。）
+
+**★同时修掉的一处潜伏缺陷**：`scripts/setup-android-js-engine.sh:149` 的 `/** … */`
+（**JSDoc 风格注释写在 bash 里**）每次运行都被当命令执行（`/**` glob 展开成 `/Applications`）。
+⇒ 已修为 `#`，并把该类纳入门禁 `check:shell-i18n-vars`（新增"非 bash 注释语法"判据 + heredoc 跳过 + 破坏性验证）。
+
+**★边界（如实标注）**：字号按**布局单位**（与 `app-4050` 对照通路的 px 口径不同 ⇒ 不与它比耗时）；
+`update`（结构变化）走整树重建（适配器策略），本步只验增量补丁那条。
+
+---
 
 ### 5.2 S3 真机最小闭环（2026-09-29 · 真机 `d67e31a3`）
 

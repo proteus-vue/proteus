@@ -424,6 +424,12 @@ export function createNativeBackend(
       queueOrCall({ op: 'create', id: descriptor.id, type: 'text', props: {} }, () => {
         /* 逐节点模式：文本节点由 insert+setText 表达，无独立 createView 调用（与既有行为一致） */
       })
+      // ★★批量模式：**文本内容必须随创建一起进批次**——否则首帧 mount 的树种里
+      //   文本节点只有空 props 与无 text ⇒ 宿主画不出任何字（而"节点数"读数照样正确，
+      //   **部分读数掩盖整块丢失**）。本仓实测：S5 端到端首次跑，4051 节点的树里
+      //   由 `createText` 建的文本节点全部无色无字。⇒ 补一条 text op（与 setText 同码路）。
+      //   （逐节点模式不需要：那条路文本由 `insert` + `setText` 表达，行为不变。）
+      if (batchAdapter) pending.push({ op: 'text', id: descriptor.id, text })
       return descriptor as never as NodeHandle
     },
 

@@ -12,8 +12,17 @@
 //     含 acceptance.sh / run-selfdraw.sh / publish-all.sh 等**既有脚本**——长期潜伏）。
 //   ★与"固定 sleep 盲等"同源：**规则写在 markdown 里拦不住，只有工具层门禁是结构性的**。
 //
-// 【判据】扫描全部 `*.sh`：出现 `$VAR` 紧跟**非 ASCII 字符**即红（应写 `${VAR}<全角>`）。
-//   ★白名单：`${VAR}` 形式不受影响（花括号已界定边界）；注释行也扫（注释里的示例照样会被抄）。
+// 【判据】扫描全部 `*.sh`：
+//   ① 出现 `$VAR` 紧跟**非 ASCII 字符**即红（应写 `${VAR}<全角>`）。
+//      ★白名单：`${VAR}` 形式不受影响（花括号已界定边界）；注释行也扫（注释里的示例照样会被抄）。
+//   ② 出现**别的语言的注释语法**（`/* … */` JSDoc / 行首 `//` C 风格）即红——bash 只认 `#`。
+//      ★实测（2026-09-29 · S5 途中）：`scripts/setup-android-js-engine.sh:149` 的
+//        `/** ★判据（S2）… */` 每次运行都被 bash **当命令执行**（`/**` 被 glob 展开成 `/Applications`）
+//        ⇒ 输出 `is a directory` 后**继续跑**。危害不在"跑不下去"，而在：
+//        ① 报错噪声淹没真问题 ② 将来加 `set -e` 即变硬失败 ③ 它就贴在「JNI 导出断言」函数上方，
+//        读代码的人会以为那是有效注释。
+//      ★与 ① 同源：**语言边界的隐式规则靠工具兜住，不靠肉眼**。
+//      ★heredoc（`<<'EOF'` 等）内的内容是**别的语言**（Python/JS/JSON），其中的 `//`、`/*` 是正文 ⇒ 必须跳过。
 //
 // 用法：node scripts/check-shell-i18n-vars.mjs
 // 退出码：0 通过 / 1 命中
@@ -37,13 +46,55 @@ function walk(dir, out = []) {
 const files = [...walk(path.join(ROOT, 'scripts')), ...walk(path.join(ROOT, 'hosts')), ...walk(path.join(ROOT, '.agents'))]
 // ★正则：`$NAME` 后紧跟非 ASCII（不含 `${...}` 形式）
 const RISKY = /\$[A-Za-z_][A-Za-z0-9_]*[^\x00-\x7F]/
+// ★判据 ②：别的语言的注释语法（`/*` 开头 或 行首 `//`）——bash 只认 `#`
+const FOREIGN_COMMENT = /^\s*(\/\*|\*\/|\/\/)/
+// ★heredoc 开始：`<<` 可选 `-`，引号可有可无，结束词为字母/下划线串
+const HEREDOC_START = /<<(-?)\s*(['"]?)([A-Za-z_][A-Za-z0-9_]*)\2/
+
+/**
+ * 逐行标注"是否在 heredoc 内"（浅解析：够用即可）。
+ *
+ * ★为什么必须做：本仓脚本用 heredoc 内嵌 Python/JS（如 acceptance.sh 的聚合段），
+ *   那些语言里的 C 风格行注释与块注释是**正文**——不跳过就会误报一片。
+ *   ⇒ 只在**真的会被 bash 解释的行**上判 ②（这也正是 ① 之外的"语言边界"判据的语义）。
+ *
+ * ★踩坑记录（本文件自身）：块注释里**不能出现块注释的结束符**——
+ *   初版在下面这行注释里写了 C 风格块注释的字面示例 ⇒ 块注释被**提前终止**，
+ *   其后文字被当作代码 ⇒ `SyntaxError`。（与门禁要抓的坑同族：语言边界。）
+ */
+function heredocLines(lines) {
+  const inside = new Array(lines.length).fill(false)
+  let end = null // 当前 heredoc 的结束词（null = 不在 heredoc 内）
+  for (let i = 0; i < lines.length; i++) {
+    const line = lines[i]
+    if (end !== null) {
+      inside[i] = true
+      if (line.trim() === end) end = null
+      continue
+    }
+    const m = HEREDOC_START.exec(line)
+    if (m) {
+      // ★同一行可能有多个 heredoc（罕见）；此处取**最后一个**（与 bash 的读取顺序一致）
+      const starts = [...line.matchAll(new RegExp(HEREDOC_START.source, 'g'))]
+      end = starts[starts.length - 1][3]
+      // 若本行的结束词就是自身（`<<EOF` 后紧跟 EOF），交给下一轮
+    }
+  }
+  return inside
+}
 
 const hits = []
+const foreignHits = []
 for (const f of files) {
+  const rel = path.relative(ROOT, f)
   const lines = fs.readFileSync(f, 'utf-8').split('\n')
+  const inHeredoc = heredocLines(lines)
   lines.forEach((line, i) => {
     const m = RISKY.exec(line)
-    if (m) hits.push({ file: path.relative(ROOT, f), line: i + 1, text: m[0], src: line.trim().slice(0, 100) })
+    if (m) hits.push({ file: rel, line: i + 1, text: m[0], src: line.trim().slice(0, 100) })
+    if (!inHeredoc[i] && FOREIGN_COMMENT.test(line)) {
+      foreignHits.push({ file: rel, line: i + 1, src: line.trim().slice(0, 100) })
+    }
   })
 }
 
@@ -52,6 +103,11 @@ if (hits.length) {
   console.error(`\n❌ 发现 ${hits.length} 处 \`$VAR<全角字符>\`（bash 会把全角标点当变量名的一部分 ⇒ set -u 下 unbound variable）：\n`)
   for (const h of hits) console.error(`  ${h.file}:${h.line}  「${h.text}」\n      ${h.src}`)
   console.error('\n  修法：写成 `${VAR}<全角>`（花括号界定变量边界，与语言无关）')
-  process.exit(1)
 }
-console.log('✅ 无 `$VAR<全角>` 写法（全部脚本的变量边界都明确）')
+if (foreignHits.length) {
+  console.error(`\n❌ 发现 ${foreignHits.length} 处**非 bash 注释语法**（bash 只认 \`#\`；\`/*…*/\` 与 \`//\` 会被当命令执行）：\n`)
+  for (const h of foreignHits) console.error(`  ${h.file}:${h.line}\n      ${h.src}`)
+  console.error('\n  修法：改成 `# …`（实测：\`/** … */\` 被 glob 展开成 /Applications 后打印 "is a directory" 并继续执行）')
+}
+if (hits.length || foreignHits.length) process.exit(1)
+console.log('✅ 无 `$VAR<全角>` 写法 · 无非 bash 注释语法（两种语言边界都明确）')
