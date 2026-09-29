@@ -217,6 +217,21 @@ esac
 fs.writeFileSync(path.join(sdk, 'platform-tools', 'adb'), STUB, { mode: 0o755 })
 
 // ── ③ 跑脚本（--quick：覆盖全部控制流分支，但只需 1 轮）──────────────────────
+// ★★APK 占位（2026-09-29 实测：桩测此前**依赖本机残留的真机 APK** ⇒ 假绿 + CI 红）
+//
+// 【故障链】`acceptance.sh` 在 `--skip-build` 下仍要求 `build/proteus-layoutcore.apk` 存在
+//   （它要用 `adb install` 装它）。桩测传了 `--skip-build` 却**没提供 APK** ⇒
+//      · 开发机：本机跑过真机验收 ⇒ 残留 APK 在 ⇒ 桩测绿（**假绿**：掩盖了这条依赖）
+//      · CI/干净克隆：没有 APK ⇒ 脚本 exit 2 ⇒ 桩测红（真红，本次 CI 实测抓到）
+//   ⇒ 正解：桩测**自己放一个占位 APK**（假 adb 不校验内容，只走命令面）——
+//     这才是真正的"设备无关"；开发机上也**强制覆盖**（确保走的是桩测自己的装置）。
+//   ★并发安全：桩测可能与本机真机验收并行（会覆盖同一个文件）⇒ 结束时不删，
+//     保持为桩测占位（内容等价于空文件，真机验收**必然**先 `build-and-run.sh` 重建它）。
+const apkDir = path.join(HERE, 'build')
+const apkPath = path.join(apkDir, 'proteus-layoutcore.apk')
+fs.mkdirSync(apkDir, { recursive: true })
+fs.writeFileSync(apkPath, 'STUB-APK（桩测占位——非真机包）\n')
+
 const runDirBefore = new Set(fs.existsSync(RESULTS) ? fs.readdirSync(RESULTS) : [])
 const rawPath = path.join(RESULTS, 'raw.txt')
 const rawBackup = fs.existsSync(rawPath) ? fs.readFileSync(rawPath) : null
@@ -240,6 +255,13 @@ for (const pat of ['unbound variable', 'command not found', 'syntax error']) {
   if (out.includes(pat)) fails.push(`E-shell 输出含 shell 级错误「${pat}」`)
 }
 if (/自检发现硬伤/.test(out)) fails.push('E-selfcheck 跑后自检判定本次不可信')
+// ★装置自证：本次跑的必须是**桩测自己写的占位 APK**（防"本机残留 APK 掩盖依赖"再次发生）
+{
+  const apkNow = fs.readFileSync(apkPath, 'utf8')
+  if (!apkNow.startsWith('STUB-APK')) {
+    fails.push('E-device 桩测用的 APK 不是本次写入的占位（说明脚本读了别的装置——"设备无关"被破坏）')
+  }
+}
 
 {
   const log = fs.readFileSync(LOG, 'utf8').split('\n').filter(Boolean)
