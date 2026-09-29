@@ -27030,12 +27030,12 @@
   "js_completed" : 1,
   "js_ok" : true,
   "js_report" : {
-    "build_id" : "cd86244d-121537",
+    "build_id" : "475143d7-122223",
     "case_filter" : [
       "V11"
     ],
     "case_timings_ms" : {
-      "V11_long_list" : 1894
+      "V11_long_list" : 2492
     },
     "cases" : [
       {
@@ -27052,62 +27052,92 @@
             "oneOp" : true,
             "smallScope" : true
           },
+          "clock_call_ms" : 0.0030000000000000001,
           "covered" : "long-list instantiate + per-row dispatch + ★单节点更新延迟分位（§10 核心指标）",
+          "fine_diag" : [
+            {
+              "buffers" : 1,
+              "bytes" : 8964,
+              "patch_count" : 1,
+              "round" : 0
+            },
+            {
+              "buffers" : 1,
+              "bytes" : 8964,
+              "patch_count" : 1,
+              "round" : 1
+            },
+            {
+              "buffers" : 1,
+              "bytes" : 8964,
+              "patch_count" : 1,
+              "round" : 2
+            },
+            {
+              "buffers" : 1,
+              "bytes" : 8964,
+              "patch_count" : 1,
+              "round" : 3
+            }
+          ],
           "geom_changed" : 3,
-          "instantiate_ms" : 18,
+          "instantiate_ms" : 19,
           "l0_slots" : 0,
           "l1_slots" : 4,
           "latency_iters" : 100,
           "layer_count" : 3002,
-          "mount_ms" : 315,
+          "mount_ms" : 314,
           "not_covered" : "scroll recycle pool on device（见 V12）",
           "op_count" : 1,
           "registry_stats" : {
-            "hits" : 3201,
+            "hits" : 3301,
             "items" : 1000,
             "misses" : 0
           },
           "relayout" : 3,
           "single_node_update" : {
-            "amortized_ms" : 9.2910000000000004,
+            "amortized_ms" : 9.3819999999999997,
             "attribution" : "cost is in whole-source trigger (row scan + key diff over all rows), not in the incremental payload (1 op \/ relayout 3)",
             "clock" : "host.mach_absolute_time",
             "clock_trustworthy" : true,
-            "data_p50_ms" : 0.053999999999999999,
+            "data_p50_ms" : 0.052999999999999999,
             "flush_check" : {
               "expected" : 100,
               "flushes_delta" : 100,
               "ok" : true,
               "reason" : ""
             },
-            "host_p50_ms" : 4.1120000000000001,
-            "js_p50_ms" : 5.3109999999999999,
+            "host_p50_ms" : 4.077,
+            "js_p50_ms" : 5.4199999999999999,
             "ops_total" : 100,
-            "p50_ms" : 9.2200000000000006,
-            "p95_ms" : 9.8019999999999996,
-            "p99_ms" : 10.284000000000001
+            "p50_ms" : 9.282,
+            "p95_ms" : 9.8599999999999994,
+            "p99_ms" : 10.651999999999999
           },
           "single_node_update_row_level" : {
-            "flush_delta" : 100,
-            "host_p50_ms" : 4.0590000000000002,
-            "js_p50_ms" : 2.105,
-            "ops_ok" : true,
-            "p50_ms" : 6.1289999999999996,
-            "p95_ms" : 6.3739999999999997,
-            "speedup_vs_coarse" : 1.5
+            "amortized_ms" : 6.016,
+            "flush_delta" : 200,
+            "host_p50_ms" : 1.6850000000000001,
+            "js_p50_ms" : 1.9099999999999999,
+            "marshal_p50_ms" : 2.4169999999999998,
+            "ops_ok" : false,
+            "p50_ms" : 5.9980000000000002,
+            "p95_ms" : 6.3410000000000002,
+            "payload_bytes" : 8964,
+            "speedup_vs_coarse" : 1.55
           },
           "uninstantiated" : 0,
           "unsupported" : 0,
           "verdict" : "FAIL"
         },
-        "host_ms" : 315,
+        "host_ms" : 314,
         "items" : 1000,
         "nodes" : 3002,
-        "note" : "1000 行 SFC 产物：实例化 3002 节点 · 挂载 3002 层 · 改 1 行发 1 条指令 · 单节点更新 p95 9.802ms（JS 5.311 + 宿主 4.112）",
-        "patch_count" : 3201,
+        "note" : "1000 行 SFC 产物：实例化 3002 节点 · 挂载 3002 层 · 改 1 行发 1 条指令 · 单节点更新 p95 9.86ms（JS 5.42 + 宿主 4.077）",
+        "patch_count" : 3301,
         "request_bytes" : 8964,
         "serialize_ms" : 0,
-        "to_request_ms" : 18,
+        "to_request_ms" : 19,
         "total_ms" : 333,
         "vue_ms" : 0
       }
@@ -27144,8 +27174,8 @@
   },
   "js_total" : 1,
   "launch_diag" : {
-    "bootstrap_ms" : 54.960000000000001,
-    "first_frame_ms" : 62.340000000000003,
+    "bootstrap_ms" : 69.140000000000001,
+    "first_frame_ms" : 75.230000000000004,
     "first_frame_source" : "kernel:p_starttime",
     "forced_style" : "Dark",
     "interface_style" : "Dark",
@@ -48170,5 +48200,5 @@
       "y" : 18
     }
   },
-  "tree_hash" : "b7288250"
+  "tree_hash" : "277e8dd9"
 }

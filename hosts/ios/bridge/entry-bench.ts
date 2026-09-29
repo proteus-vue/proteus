@@ -122,7 +122,7 @@ const BN = { snapshot: 'bench-final' }
 // ★构建标识：每次构建写入，用于**确凿判定**设备上跑的是哪份代码
 //   （踩坑：靠文件 mtime 判断"报告是否刷新"不可靠——新建目标文件的时间恒为"现在"；
 //    且我看不出设备实际执行的是旧 bundle，白跑一轮。有了这个字段就能一眼判定。）
-const BUILD_ID = 'cd86244d-121537'
+const BUILD_ID = '475143d7-122223'
 const now = (): number => Date.now()
 /** 宽松解析（宿主返回可能是字符串或已是对象） */
 const safeParseAny = (s: any): any => {
@@ -2301,6 +2301,14 @@ CASES.push({
     //   ③ 每次都是**真实变更**（dotW 在 36/60 间交替；否则 `Object.is` 短路而不发指令）；
     //   ④ 配 flush 判据（N 次更新 ⇒ flushes 增量 = N）——防"空跑也报快"。
     const { clock: latClock, name: latClockName, trustworthy: latClockOk } = pickClock()
+    // ★★测量装置自检（本仓纪律 #1：**装置本身必须先被验证**）——
+    //   宿主时钟 `nowUs()` 是一次 **JSExport 跨边界调用**；若它本身耗时可观，
+    //   那么"每轮读 4 次时钟"的分段计时就把**装置开销**算进了被测代码。
+    //   ⇒ 先量一次时钟调用成本，并据此决定：分段计时可信否 / 是否改用摊还。
+    const CLOCK_PROBE_N = 200
+    const ck0 = latClock()
+    for (let i = 0; i < CLOCK_PROBE_N; i++) void latClock()
+    const clockCallMs = (latClock() - ck0) / CLOCK_PROBE_N
     const LAT_N = 100
     const latTotal: number[] = []
     const latJs: number[] = []
@@ -2369,38 +2377,85 @@ CASES.push({
     const fineListId = itemSpec?.listId ?? 0
     const fineKeyField = itemSpec?.itemKeyField ?? 'id'
     const fine: {
-      p50_ms: number; p95_ms: number; js_p50_ms: number; host_p50_ms: number
+      p50_ms: number; p95_ms: number; js_p50_ms: number; marshal_p50_ms: number; host_p50_ms: number
+      amortized_ms: number; payload_bytes: number
       flush_delta: number; speedup_vs_coarse: number; ops_ok: boolean
-    } = { p50_ms: -1, p95_ms: -1, js_p50_ms: -1, host_p50_ms: -1, flush_delta: -1, speedup_vs_coarse: -1, ops_ok: false }
+    } = { p50_ms: -1, p95_ms: -1, js_p50_ms: -1, marshal_p50_ms: -1, host_p50_ms: -1, amortized_ms: -1, payload_bytes: 0, flush_delta: -1, speedup_vs_coarse: -1, ops_ok: false }
+    // ★诊断采样（**声明在块外**——本仓实测：声明在块内会被 esbuild 重命名 `fineDiag2`
+    //   而块外报告仍引用原名 ⇒ 运行时报 `Can't find variable: fineDiag`，且**只在真机暴露**）
+    const fineDiag: Array<Record<string, number>> = []
+    let finePayloadMax = 0
     {
       const fineTotal: number[] = []
       const fineJs: number[] = []
+      const fineMarshal: number[] = []
       const fineHost: number[] = []
       const fineFlushBefore = rt.getStats().flushes
       let fineOps = 0
+      fine.payload_bytes = 0
       for (let i = 0; i < LAT_N; i++) {
         const t0 = latClock()
         const target = (listRows[499] ?? {}) as Record<string, unknown>
         target.dotW = i % 2 ? 60 : 36
         const t1 = latClock()
         vapor.relinkRow(fineListId, String(target[fineKeyField]), target, [], { read: (n: string) => (n === 'list' ? listRows : undefined) })
+        // ★★本轮缓冲区的**精确归属**（本仓实测的测量装置缺陷）：
+        //   `flush()` 在 buffer 为空时 **early-return、不 push** ⇒ 若沿用 `cap.pop()`，
+        //   会**取到上一轮（或更早）的残留大 buffer**——实测拿到的载荷是 **8964 字节**
+        //   （那是全量 relink 的），而本轮真实载荷只有 ~20 字节 ⇒ 编组耗时被虚报 ~2.4ms。
+        //   ⇒ 用"标记位 + 本轮新增"取本轮产物（不依赖 push/pop 配对）。
+        const capLen0 = cap.length
         rt.flush()
+        const fresh = cap.splice(capLen0)   // 本轮新增的 buffer（并移除，防残留）
         const t2 = latClock()
-        const fb = cap.pop()
-        if (fb) {
-          const out = safeParseAny(proteusSelfDraw.applyOps(JSON.stringify(Array.from(fb))))
-          fineOps += (out?.patch_count as number) ?? 0
+        let marshalMs = 0
+        if (fresh.length > 0) {
+          const totalBytes = fresh.reduce((n, b) => n + b.length, 0)
+          finePayloadMax = Math.max(finePayloadMax, totalBytes)
+          const tm0 = latClock()
+          let payload = ''
+          for (const b of fresh) payload += JSON.stringify(Array.from(b))
+          const tm1 = latClock()
+          marshalMs = tm1 - tm0
+          if (payload) {
+            const out = safeParseAny(proteusSelfDraw.applyOps(payload))
+            const pc = (out?.patch_count as number) ?? 0
+            fineOps += pc
+            if (fineDiag.length < 4) fineDiag.push({ round: i, buffers: fresh.length, bytes: totalBytes, patch_count: pc })
+          }
         }
         const t3 = latClock()
         fineJs.push(t2 - t1)
-        fineHost.push(t3 - t2)
+        fineMarshal.push(marshalMs)
+        fineHost.push(t3 - t2 - marshalMs)     // 纯宿主（含 JSExport 编组 + Swift 解析 + JNI + 应用）
         fineTotal.push(t3 - t0)
+      }
+      // ★★★摊还测量（**避开时钟开销**）：整段循环只读 2 次时钟 ⇒ 装置开销 / LAT_N
+      //   本仓纪律：摊还天然避开分辨率与装置开销问题（V3 用例早已确立此做法）
+      {
+        const am0 = latClock()
+        for (let i = 0; i < LAT_N; i++) {
+          const target = (listRows[499] ?? {}) as Record<string, unknown>
+          target.dotW = i % 2 ? 60 : 36
+          vapor.relinkRow(fineListId, String(target[fineKeyField]), target, [], { read: (n: string) => (n === 'list' ? listRows : undefined) })
+          const cl0 = cap.length
+          rt.flush()
+          const fr2 = cap.splice(cl0)
+          for (const b of fr2) {
+            const out2 = safeParseAny(proteusSelfDraw.applyOps(JSON.stringify(Array.from(b))))
+            void out2
+          }
+        }
+        const am1 = latClock()
+        fine.amortized_ms = Math.round(((am1 - am0) / LAT_N) * 1000) / 1000
       }
       fine.flush_delta = rt.getStats().flushes - fineFlushBefore
       fine.ops_ok = fine.flush_delta === LAT_N && fineOps >= LAT_N - 2
       fine.p50_ms = Math.round(pct(fineTotal, 0.5) * 1000) / 1000
       fine.p95_ms = Math.round(pct(fineTotal, 0.95) * 1000) / 1000
       fine.js_p50_ms = Math.round(pct(fineJs, 0.5) * 1000) / 1000
+      fine.marshal_p50_ms = Math.round(pct(fineMarshal, 0.5) * 1000) / 1000
+      fine.payload_bytes = finePayloadMax
       fine.host_p50_ms = Math.round(pct(fineHost, 0.5) * 1000) / 1000
       fine.speedup_vs_coarse = latStats.p50_ms > 0 ? Math.round((latStats.p50_ms / fine.p50_ms) * 100) / 100 : -1
     }
@@ -2453,6 +2508,9 @@ CASES.push({
         single_node_update: latStats,
         // ★★行级失效对照（`relinkRow`）——与粗粒度同一棵树/同一改动
         single_node_update_row_level: fine,
+        fine_diag: fineDiag,
+        // ★测量装置开销（每次时钟调用 ms）——若它与分段读数同量级，则分段计时**不可用**
+        clock_call_ms: Math.round(clockCallMs * 1000) / 1000,
         latency_iters: LAT_N,
       },
     })
