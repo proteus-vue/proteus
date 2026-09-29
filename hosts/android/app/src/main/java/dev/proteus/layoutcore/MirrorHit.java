@@ -96,8 +96,9 @@ final class MirrorHit {
             float[] r = rects.get(id);
             if (r == null) continue;
             // rects 是**绝对**坐标 → 子级布置在父的局部坐标里
-            child.layout(Math.round(r[0] - ox), Math.round(r[1] - oy),
-                         Math.round(r[0] - ox + r[2]), Math.round(r[1] - oy + r[3]));
+            // ★卡 I2：内核已吸附为整数 ⇒ 减法仍整数，转换**无损**（平台层不得再舍入）
+            child.layout((int) (r[0] - ox), (int) (r[1] - oy),
+                         (int) (r[0] - ox + r[2]), (int) (r[1] - oy + r[3]));
             if (child instanceof ViewGroup) {
                 layoutRec((ViewGroup) child, r[0], r[1], rects, parents);
             }

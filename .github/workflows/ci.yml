@@ -54,6 +54,9 @@ jobs:
       - name: Vapor IR 性能棘轮（★只降不升——防平移传播/返回通道优化被静默回退）
         run: pnpm run check:vapor-perf
 
+      - name: 坐标吸附跨语言 golden（卡 I2：TS ⇄ Rust 同输入同输出——三端差 1px 的机器判据）
+        run: pnpm run check:pixel-snap
+
       - name: 依赖声明完整性审计（#422：pnpm 严格解析——import vs package.json 零缺失）
         run: node scripts/check-deps.mjs
 

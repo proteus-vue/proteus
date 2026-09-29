@@ -110,6 +110,7 @@ final class LayerHostView: UIView {
 
             expected.append([
                 "row": i,
+                // I2-ALLOW: 核验**期望值报告**（层几何用未取整的 CGFloat；报告取整便于整数比对）
                 "x": Int(x.rounded()), "y": Int(y.rounded()),
                 "w": Int(w.rounded()), "h": Int(h.rounded()),
                 "color": String(format: "#%06X", SceneSpec.rowColor(i) & 0xFFFFFF),
@@ -141,6 +142,7 @@ final class LayerHostView: UIView {
             "offset_top": SceneSpec.top,
             "expected": expected,
             // ★坐标对齐：layer 的 frame 是**相对宿主 layer**的 → 核验需加宿主在屏幕上的原点
+            // I2-ALLOW: 以下四项为**核验报告**（视图/窗口几何读数，供 Python 核验脚本比对）
             "view_origin_x": Int(originInWindow.x.rounded()),
             "view_origin_y": Int(originInWindow.y.rounded()),
             "view_width": Int(bounds.width.rounded()),

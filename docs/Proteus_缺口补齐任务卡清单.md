@@ -16,7 +16,7 @@
 |---|---|---|
 | **V1** Vapor 产品化 | ✅ **5/5 全达标（2026-09-29）** | ✅ 模块可独立引用（`packages/compiler/src/vapor/` 已导出）· ✅ **4001 重排 ≤0.08ms 可复现**（`pnpm check:vapor-perf`，已接 CI）· ✅ 三层嵌套在单测（`tests/vapor-list-e2e.test.ts` 4 处）· ❌ **README 无独立章节**（`grep -c vapor README.md` = 0）· ✅ 单测全绿（**3881**，非 3441） |
 | **I1** 指令集规格化 | ✅ **4/4 达标（2026-09-29）** | ✅ 规格表 `docs/generated/instruction-spec.md`（**从代码生成**：12 opcode + 字节数 + Draw 6 kind；`--check` 接 CI）· ✅ `checkHostVersion()` 版本协商（Host ABI §6 三件套 + 可操作 upgradeHint）· ✅ major/minor 流程（含两次真实变更实例）· ★Anim 类未实现（归卡 V6），规格表如实标注 |
-| **I2** 舍入时机统一 | ❌ **未达标** | 主方案 §5.5 仍为"**待 M2 真机数据**"（`04-batches.md` 检查项未勾）；无三端一致的舍入实现 |
+| **I2** 舍入时机统一 | ✅ **2/3 达标（2026-09-29）** | ✅ **舍入仅在内核 + 平台零舍入（静态门禁）**：策略 = 边缘吸附 `snap(v)=floor(v+0.5)`，实现 `packages/layout-core/src/pixel-snap.ts` + `packages/layout-core-rust/src/snap.rs`（唯一实现）；宿主侧去除 `Math.round` 几何舍入（`ProteusHostView` / `MirrorHit`）并加静态门禁 `pnpm check:host-rounding`（破坏性验证过）· ✅ **两端（TS ⇄ Rust）同输入逐字节一致**：golden `packages/layout-core-rust/tests/golden/pixel-snap.json` + 两侧测试各自比对（含 f32 精度边界台账）· ❌ **鸿蒙三列错位无法验证——仓库无鸿蒙宿主**（`hosts/` 只有 android/ios）；内核级三列场景已证（33/34/33 守恒、无 1px 缝），但"ArkUI 上不错位"不能声称 |
 | **I3** paint-hint 编码进指令 | 🟡 **部分达标（2/3）** | ✅ 指令携带 hint（`RenderCmd.hint`，`layout-core/src/render-cmd.ts:58`）· ✅ 编译期推导、运行时零判断（`component-ir/src/pnode-style.ts:496`：`isMonochrome`/`isPureBackground`/`shareableContent`）· ❌ **iOS 内存增量复测未做**（该卡的风险正指向"平台层运行时猜 ⇒ +78% 内存复发"，而复测是验证 hint 真的被平台用于 backing store 策略的**唯一判据**） |
 | **I4** 文本在指令流的表达 | 🟡 **部分达标（2/4）** | ✅ 指令含度量结果（`SET_TEXT` 9B + `textMeasures` 注入协议：建树注入 + `set_text_measures` + splice 追加）· ✅ 平台层不参与排版（只度量并注入，核心算几何）· ❌ **方案选定无显式决策记录**（设计在落地方案 §5.2，但"方案 A vs B"的选择未作为决策留痕）· ❌ **文本一致性未真正进 conformance**（`browser-layout.json` 21 用例里 **`textMeasures` 全为空表**⇒ 文本度量这条通道**没被真值对拍覆盖**） |
 | **V2** 槽位 O(1) 覆盖 | 🟡 **部分达标** | 绑定类型：属性/文本/样式/列表 ✅ 走槽位；**事件**走命中测试 + 派发（`V9` PASS）、**条件**走 L0（设计如此）⇒ 清单存在但**未单列成表**（该卡的交付物是"清单 + 逐类标注"，此项未产出） |
@@ -51,7 +51,7 @@ I8 卡写着「**先做 I6 评估，明确指令流体积是否构成瓶颈，�
 
 - [x] **V1** Vapor 成果产品化 — ★ 最高性价比 ✅ **5/5 全达标（2026-09-29）**
 - [x] **I1** 指令集规格化与版本化 ✅ **4/4 达标**（生成式规格表 + 版本协商 + CI 门禁）
-- [ ] **I2** 舍入时机统一 ❌ **未达标**（主方案仍"待真机数据"）
+- [x] **I2** 舍入时机统一 ✅ **2/3 达标**（内核唯一实现 + 平台零舍入门禁 + 两端 golden；鸿蒙无宿主 ⇒ 第三项无法验证）
 - [x] **I3** paint-hint 编码进指令 ✅ **2/3**（指令带 hint ✓ / 编译期推导 ✓ / iOS 内存复测 ❌）
 
 ### 第二批 · P0（依赖第一批）
@@ -174,10 +174,29 @@ RenderCmd 用绝对坐标。鸿蒙**强制整数像素**
 2. **平台层移除所有舍入逻辑**
 3. 加跨端像素一致性 conformance
 
-### 验收
-- [ ] 舍入仅发生在内核，平台层零舍入（**静态检查**）
-- [ ] 三端同输入产出完全一致坐标（逐字节比对）
-- [ ] 鸿蒙三列布局无错位
+### 验收（★2026-09-29 实现：**2/3 达标**）
+- [x] 舍入仅发生在内核，平台层零舍入（**静态检查**）—— ✅ 新增 `pnpm check:host-rounding`
+  （扫描 `hosts/`；**首个真实命中**：`ProteusHostView.onMeasure/onLayout` 与 `MirrorHit.layoutRec`
+  对内核几何**再舍入一次** ⇒ 已改为无损转换 `(int) v`；其余例外逐条登记 `I2-ALLOW:` 理由
+  ——**不写死例外条数**（宿主每次改动都会增删，写死即下一个"过时数字"；实时值跑门禁看））。
+  ★策略 = **边缘吸附** `snap(v) = floor(v + 0.5)`（不用原生 round：负半值上两语言语义相反），
+  实现 = `packages/layout-core/src/pixel-snap.ts` + `packages/layout-core-rust/src/snap.rs`（唯一实现）。
+- [x] 三端同输入产出完全一致坐标（逐字节比对）🟡 **两端已逐字节比对** —— ✅ 跨语言 golden
+  `packages/layout-core-rust/tests/golden/pixel-snap.json`（TS ⇄ Rust 两侧各自求值比对；
+  含 **f32 精度边界台账**：距 .5 边界 < ulp/2 的输入两侧确实差 1，已分析并锁定而非掩盖）。
+  ★鸿蒙端**无宿主实现**（`hosts/` 只有 android/ios）⇒ "三端"目前是**两端 + 鸿蒙待接入**。
+- [ ] 鸿蒙三列布局无错位 —— ❌ **无法验证（无鸿蒙宿主）**；
+  内核级场景已证：真实 PNode 树三列 `flexGrow:1` 均分 → 指令 `33@0 | 34@33 | 33@67`
+  （总宽守恒 100、首尾相接无 1px 缝；逐字段 round 的错法会得 99）。
+  ⇒ **待鸿蒙宿主落地后补真机验收**（本卡不做无宿主声称）。
+
+★**为什么 edge snapping 而不是逐字段 round**（卡的反例即为此）：
+  宽 100 均分三列时，逐字段四舍五入 = 33+33+33 = **99**（末尾 1px 缝/错位）；
+  边缘吸附 = 边 `[0, 33.333, 66.666, 100]` → `[0, 33, 67, 100]` ⇒ 宽 `33/34/33`，**和 = 100**。
+
+★**吸附发生在导出边界**（`emitRenderCmds` 发射时 / Rust FFI 导出时）——
+  求解器内部保持**亚像素**（既有 browser-layout conformance 容差 0.5dp 口径不变）；
+  命中测试走**吸附几何**（否则视觉边界与可点边界差 ≤0.5px，是同一类缺陷在事件侧的新形态）。
 
 ---
 
