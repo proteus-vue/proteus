@@ -361,6 +361,8 @@ report_of() {
     proteus-mem)       echo "layout-proteus-only.json" ;;
     proteus-noflatten) echo "layout-noflatten.json" ;;
     flat-redraw)       echo "layout-flat-redraw.json" ;;
+    app-4050)          echo "layout-app-4050.json" ;;
+    app-4050-native)   echo "layout-app-4050-native.json" ;;
     recycle)           echo "layout-recycle.json" ;;
     *)                 echo "" ;;
   esac
@@ -419,6 +421,11 @@ echo
 
 rm -f "$OUT/raw.txt"
 
+# ★★本次运行的产物目录——**必须在最前面建**：多条通路（app-4050 多轮）在取回报告段之前
+#   就要往里写逐轮读数（本仓实测踩到：原定义在"取回报告"段，其前的 `$DEST` 是 unbound variable）
+DEST="$OUT/$(date +%Y%m%d-%H%M%S)"
+mkdir -p "$DEST"
+
 # ★§9.2 的两类指标用**不同通路**测量，避免测量装置互相污染：
 #   · 性能/一致性 → proteus：含完整归因测量（会分配测量位图）
 #   · 增量内存     → proteus-mem / native：**只建结构**（同口径，不含测量位图）
@@ -434,8 +441,47 @@ done
 echo "── 通路：proteus（性能与一致性，单轮）──"
 run_one "proteus" "proteus-perf" 1
 
+# ★★对标 uni-app x「创建元素」场景（应用级口径）——**对标主指标**，--quick 也跑它
+#   两侧分两次冷启动（同进程会互相污染内存）
+# ★★对标基准：**每组 N 轮 + 逐轮原始值**（基准 §1.3.3 明确要求"同时报平均值与 5 个原始值"，
+#   只报平均会被质疑"挑了最好的一次"）。默认 N = RUNS（正规验收 5 轮；--quick 为 1 轮）。
+APP4050_ROUNDS="$RUNS"
+echo "── 对标基准 · 创建元素 4050（应用级口径）· 两侧各 ${APP4050_ROUNDS} 轮 ──"
+# ★逐轮读数**每轮单独落盘**（基准要求给原始值；本仓纪律：证据必须可复算）
+APP4050_P=""; APP4050_N=""
+for i in $(seq 1 "$APP4050_ROUNDS"); do
+  run_one "app-4050" "app-4050" "$i"
+  "$ADB" pull "/sdcard/Android/data/$PKG/files/layout-app-4050.json" "$DEST/app-4050-r$i.json" >/dev/null 2>&1 || true
+done
+for i in $(seq 1 "$APP4050_ROUNDS"); do
+  run_one "app-4050-native" "app-4050-native" "$i"
+  "$ADB" pull "/sdcard/Android/data/$PKG/files/layout-app-4050-native.json" "$DEST/app-4050-native-r$i.json" >/dev/null 2>&1 || true
+done
+# ★两侧对照汇总（均值 + 逐轮原始值 + 倍率）——基准 §5.1 要求"只比基于各自原生基线的倍率"
+python3 - "$DEST" <<'PYAGG' | tee "$DEST/app-4050-ab.txt" | sed 's/^/  /'
+import json, os, sys, statistics
+dest = sys.argv[1]
+def rounds(pat, key='scope_ms'):
+    xs = []
+    for i in range(1, 50):
+        f = os.path.join(dest, pat.format(i))
+        if not os.path.exists(f): break
+        try: xs.append(float(json.load(open(f))[key]))
+        except Exception: pass
+    return xs
+p_ms = rounds('app-4050-r{}.json')
+n_ms = rounds('app-4050-native-r{}.json')
+if not p_ms or not n_ms:
+    print(f'⚠ 对照不完整（Proteus {len(p_ms)} 轮 / 原生 {len(n_ms)} 轮）——无法出倍率'); raise SystemExit(0)
+pm, nm = statistics.mean(p_ms), statistics.mean(n_ms)
+print(f'Proteus（应用级·4050 元素）  逐轮 {[round(x,1) for x in p_ms]} ms · 均值 {pm:.1f} ms')
+print(f'原生 View（同规格同口径）     逐轮 {[round(x,1) for x in n_ms]} ms · 均值 {nm:.1f} ms')
+print(f'★倍率 Proteus/原生 = {pm/nm:.3f}（<1 = 更快；基准侧 uni-app x 自报约 2.0）')
+print(f'★判定口径：基准比的是「vs 各自设备原生基线」的倍率（§5.1），不跨设备比绝对值')
+PYAGG
+
 if [ -n "${QUICK:-}" ]; then
-  # ★--quick：只跑这一条通路就跳到滚动对照（1 轮 A/B），用于快速确认装置可用
+  # ★--quick：只跑这两条通路就跳到滚动对照（1 轮 A/B），用于快速确认装置可用
   echo
   echo "══ --quick 模式：跳过 noflatten / flat-redraw / recycle 三条通路 ══"
   echo "   （它们是能力覆盖项；装置可用性由 proteus 通路 + 1 轮 A/B 已足以确认）"
@@ -459,9 +505,8 @@ fi   # ← 结束「非 --quick」的通路块
 echo
 phase "安装 + 通路 run_one"
 echo "==> 取回报告"
-DEST="$OUT/$(date +%Y%m%d-%H%M%S)"
-mkdir -p "$DEST"
-for f in layout-report.txt layout-conformance.json layout-bench.json layout-compare-native.json layout-native-only.json layout-proteus-only.json layout-noflatten.json layout-flat-redraw.json layout-recycle.json layout-memory.json layout-env.json layout-hit.json layout-scroll.json layout-scroll-core.json layout-scroll-native.json; do
+# （DEST 已在本次验收开始时定义——见上方注释）
+for f in layout-report.txt layout-conformance.json layout-bench.json layout-compare-native.json layout-native-only.json layout-proteus-only.json layout-noflatten.json layout-flat-redraw.json layout-app-4050.json layout-app-4050-native.json layout-recycle.json layout-memory.json layout-env.json layout-hit.json layout-scroll.json layout-scroll-core.json layout-scroll-native.json; do
   "$ADB" shell "run-as $PKG cat files/$f" >/dev/null 2>&1 && continue   # debug 包兼容
   # ★release 包：从外置存储拉（getExternalFilesDir）
   "$ADB" pull "/sdcard/Android/data/$PKG/files/$f" "$DEST/$f" >/dev/null 2>&1 || true

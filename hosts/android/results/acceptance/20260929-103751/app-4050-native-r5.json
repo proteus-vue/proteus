@@ -1,0 +1,9 @@
+{
+  "ok": true,
+  "path": "app-4050-native",
+  "view_count": 4051,
+  "scope_ms": 94.379,
+  "layout_ms": 88.578,
+  "record_displaylist_ms": 5.801,
+  "scope": "应用级：触发 → 建 View 树 → measure\/layout → draw 进 DisplayList（与 app-4050 同口径）"
+}
