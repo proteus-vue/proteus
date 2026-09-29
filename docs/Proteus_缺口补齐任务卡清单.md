@@ -24,7 +24,7 @@
 | **V4** L0/L1 安全判定 | ✅ **已达标** | 七条件实现于 `slot-runtime/src/tier.ts`（`build.ts` Step 6 复用，**同一语义一处实现**）· 反例测试在 `tests/`（含 `forcePure` 路径）· 误判为 L1 的**静默不更新**风险由 flush 判据 + `unsupported` 上报兜底 |
 | **I5** overdraw culling | ✅ **3/3 全部达标（2026-09-29）** | ✅ **视口裁剪**：`cullToViewport`（默认关）+ 读数；长列表指令 ↓90.1%（16001→1592）· 4050 ↓20.4% · 15 条测试 · ✅ **遮挡剔除**：`cullOccluded`（默认关）+ 读数 `occludedCount`；**1000 行 + 全屏不透明遮罩 → 1002 → 1 条（↓99.9%）**；遮挡物须无渐变/圆角/描边且**颜色确实不透明**（只认 #rgb/#rrggbb/#rrggbbff/rgb()，其余保守不算）；**裁剪感知**（用「矩形 ∩ 生效裁剪区」判定，溢出的遮挡物不越界误裁）；8 条测试 · ✅ **同色相邻背景合并**：`mergeSameColorBg`（默认关）+ 读数 `mergedBgCount`/`mergedBgFrom`；**等色长列表 1001→2（↓99.8%）** · 斑马纹对照 0 合并 · 6 条测试 ·**三条判据全部破坏性验证过**（去掉严丝合缝/同色判断/裁剪感知 ⇒ 各自用例当场红） |
 | **C1** NativeBackend | 🟡 **2/4 达标（2026-09-29）** | ★路径按 I6 修正（把已有真机链路接进 SPI，非从零实现）· ✅ **纳入 conformance**（批量后端全绿）· ✅ **既有五后端未破坏**（全量 3955）· ✅ **批量协议**（`NativeBatchAdapter` + `NativeHostOp`）：50 子节点 **批量 1 次 vs 逐节点 101 次**· ✅ **selfdraw 批量宿主桥**（`createSelfDrawBatchAdapter`：`commit(ops)` → 真机 `mount`/`update`/`updatePatches` **一次调用**；**2200+ op 只 1 次跨边界调用**；批次翻译 6 项判据 + 破坏性验证）· ✅ **两条路径等价判据**（SPI ⟷ selfdraw）· ❌ **「有可运行的 Android 实现」未达**（桥已就绪，**尚未在真机接线**）· ❌ **三项复测未做**（需真机） |
-| **C2** Host Runtime | 🟡 **部分** | `web-host.ts` + `host-conformance.ts`（32 项）· `host-matrix.ts`（6×6 组合矩阵）在；**Native 侧 Host Runtime 未接真机** |
+| **C2** Host Runtime | 🟡 **1/3 达标（2026-09-29）** | ✅ **跨边界调用 = 帧数（profile 验证）**：滚动 **120 帧 ⇒ 恰好 121 次调用**（含首帧）；**每帧 JS 侧批次成本 0.047ms**（50 属性变更/帧，一帧预算 16.7ms）；不同帧负载下调用数恒定（改 1 个 vs 50 个节点同为一帧一次）· **破坏性验证过**（逐 op 计调用 ⇒ 2821 vs 121）· ★**核实的路径现状**：**真机自绘链路已达标**（`mount`/`update`/`updatePatches` 各一次）；Host ABI 文档的 `6100` 描述的是**另一条路径**（`bench-bridge` 模拟的逐项设置 + SPI 逐节点形态，后者 C1 已修）· ❌ **JSI 通路未达**（Host ABI **HA0 八接口 C ABI 全仓零实现**——卡片依赖项）· ★且 **Android 宿主无 JS 引擎**（Java + Rust `.so` 直连 JNI，只有 WebView 作 native-host 演示）⇒ JSI 通路需先落 HA0 + 载体 · ❌ **宿主侧耗时 1ms 量级未验**（需真机） |
 | **V5** 与 Web VDOM 一致性 | ✅ **已达标** | 浏览器真值基准对拍：`packages/layout-core-rust/tests/golden/browser-layout.json`（21 用例）+ **`browser-mutation.json`**（增量对拍）→ 真机 `V6`/`conformance 0.375dp` |
 | **C3** 超级应用规模编译期性能 | ✅ **4/4 达标（2026-09-29）** | 基线载体 = **showcase 真项目**（128 SFC / 599.2 KB）· 工具 `scripts/bench-compile.mjs`（零设备秒级）· 报告 `docs/proteus-performance-plan/13-c3-compile-baseline.md` · ✅ 全量：冷 645.8ms / **热 346.4ms**（2.71 ms/文件 · 1730 KB/s）· ✅ 增量：单文件改一处重编译中位 **5.06ms** · ✅ 体积：890.3 KB / 599.2 KB = **1.486x** · ✅ 瓶颈识别：**模板阶段占 72% 事件**（6154/8518）· 最热规则 `tag/unknown-kebab`（1727 次）· 最慢文件 p-scroll-view 9.2ms/12.5KB · ★异常 `pages/backends.vue` 4.1KB 却 7.1ms（成本/字节异常）· ★门禁 `pnpm check:compile-baseline`（比值为主判据 + 破坏性验证过） |
 | **C4** 184 原语完备性验证 | ✅ **3/3 达标（2026-09-29）** | 计数器 `packages/compiler/src/gap-counter.ts`（**归纳既有诊断，不新增判断**——避免第 N 份手写副本）+ 编译产物新增 `gaps` 字段（**记录不阻断**，埋点清单 §2.1）+ 报告脚本 `scripts/report-gaps.mjs` · ✅ 三类分列（真项目实测：**degraded 253 / fallback 57 / unsupported 0 = 310 处**）· ✅ **degraded 单独高亮**（报告里独立小节且排最前——§2.5 硬要求）· ✅ **表达不了清单**（分类计数 + 按文件定位 + 每条给建议）· ★新增棘轮门禁 `check:gap-report`（degraded/unsupported **只降不升**，破坏性验证过）· ★**未归类显式列出**（防「0 漏点」实为「分类表没覆盖」） |
@@ -58,7 +58,7 @@ I8 卡写着「**先做 I6 评估，明确指令流体积是否构成瓶颈，�
 
 - [x] **I4** 文本在指令流中的表达定案 ✅ **4/4 达标**（方案 A 决策留痕 + 文本进 conformance 6/25，且抓出并修复一个引擎真缺陷）
 - [ ] **C1** NativeBackend（G-28）实现 🟡 **2/4**（批量协议 + 宿主桥 + 判据齐备；真机接线与三项复测待做）
-- [ ] **C2** Host Runtime（G-39/G-40）实现 🟡 **部分**（Web 侧齐备；Native 未接真机）
+- [ ] **C2** Host Runtime（G-39/G-40）实现 🟡 **1/3**（跨边界调用=帧数已 profile 验证；JSI 通路受阻于 HA0 未实现 + Android 无 JS 引擎）
 
 ### 第三批 · P1（规模化）
 
@@ -379,10 +379,28 @@ ExecutionCarrier（JSI / AOT）是"宿主侧 1ms"的载体。
 2. 与 Host ABI 八个接口对齐
 3. **保持批处理**（跨边界调用次数 = 帧数）
 
-### 验收
-- [ ] JSI 通路可用
-- [ ] 跨边界调用次数 = 帧数（**profile 验证**）
-- [ ] 宿主侧耗时仍为 1ms 量级
+### 验收（★2026-09-29：**1/3 达标**，且核实了受阻项的真实依赖）
+- [ ] JSI 通路可用 —— ❌ **未达，且受阻于上游**：Host ABI 方案的 **HA0（八接口 C ABI /
+  `proteus_submit_frame` / 版本协商）全仓零实现**（文档自标"实施状态：规划态"）——JSI 通路建在它上面。
+  ★**另核实一个硬约束**：**Android 宿主当前无 JS 引擎**
+  （`hosts/android` 是 Java + Rust `.so` 直连 JNI；WebView 仅作 native-host 演示）
+  ⇒ "JSI 直连"在 Android 上**先要有 JS 引擎载体**（QuickJS/Hermes/JSC-Android）——
+  这是本卡估时 3–4 人周之外的**前置**。
+- [x] 跨边界调用次数 = 帧数（**profile 验证**）—— ✅ **已 profile 验证**（`tests/render-backend.test.ts`）：
+  · **滚动 120 帧 ⇒ 恰好 121 次跨边界调用**（含首帧 mount）；该场景**操作数 2400**（远大于帧数
+    ⇒ 不是"没事可做"才达标）
+  · **不同帧负载下调用数恒定**：改 1 个节点 vs 改 50 个节点 ⇒ 同为**一帧一次**
+  · **每帧 JS 侧批次成本 0.047ms**（50 属性变更/帧，含 JSON 编码；一帧预算 16.7ms 的 0.3%）
+  · ★**破坏性验证**：逐 op 计调用（取消批量语义）⇒ 报 **2821 vs 121** 并红（4 条判据同时红）
+  ★**本仓核实的路径现状（避免误读）**：
+    · **真机自绘链路已达标**（`hosts/ios/bridge/entry-selfdraw.ts` 的 `mount`/`update`/`updatePatches`
+      **各一次调用**）——即该红线**在真机链路上本来就满足**；
+    · Host ABI 文档里的 `callsPer1000Items=6100` 描述的是**另一条路径**
+      （`bench-bridge.swift` 模拟的逐项属性设置 + SPI 逐节点形态）；
+    · SPI **逐节点形态**此前确实违例（50 子节点 101 次）⇒ **C1 已补批量形态**（`NativeBatchAdapter` +
+      `createSelfDrawBatchAdapter`），本卡的 profile 判据即锁这条。
+- [ ] 宿主侧耗时仍为 1ms 量级 —— ❌ **未验**（需真机；零设备只能测 JS 侧批次成本 0.047ms，
+  宿主侧（CALayer/Canvas 应用）耗时需真机读数）。
 
 ---
 
