@@ -84,6 +84,18 @@ public class ProteusHostView extends ViewGroup {
      */
     public static android.graphics.Typeface typefaceOf(String role, int weight, int[] fallbackCounter) {
         boolean bold = weight >= 600;
+        // ★★自定义字体（`custom:<族名>`）——**先查注册表**（2026-09-29）
+        //   契约见适配器 `CUSTOM_FONT_PREFIX`。未注册 ⇒ **回退 system + 计数**（不静默：
+        //   "未识别"与"识别为默认"必须可区分）。
+        if (role != null && role.startsWith(CUSTOM_FONT_PREFIX)) {
+            String name = role.substring(CUSTOM_FONT_PREFIX.length());
+            android.graphics.Typeface tf = customFonts.get(name);
+            if (tf != null) return tf;
+            customFontMisses++;
+            lastMissingCustomFont = name;
+            return android.graphics.Typeface.create("sans-serif",
+                    bold ? android.graphics.Typeface.BOLD : android.graphics.Typeface.NORMAL);
+        }
         String fam;
         switch (role == null ? "system" : role) {
             case "serif": fam = "serif"; break;
@@ -98,6 +110,48 @@ public class ProteusHostView extends ViewGroup {
                 break;
         }
         return android.graphics.Typeface.create(fam, bold ? android.graphics.Typeface.BOLD : android.graphics.Typeface.NORMAL);
+    }
+
+    /* ══════════ ★★自定义字体注册通道（@font-face / 打包字体）══════════════ */
+
+    /** 与适配器 `CUSTOM_FONT_PREFIX` **同一常量**（两端契约；不一致则自定义族永远命中不了） */
+    public static final String CUSTOM_FONT_PREFIX = "custom:";
+
+    /** 族名 → 字体（注册表） */
+    private static final java.util.Map<String, android.graphics.Typeface> customFonts = new java.util.HashMap<>();
+
+    /** 未注册的自定义族名命中次数（诊断：>0 ⇒ 宿主缺字体资源，**不是**静默回退） */
+    public static int customFontMisses = 0;
+    /** 最近一个未注册的族名（诊断用：报告里可读出到底缺哪个字体） */
+    public static String lastMissingCustomFont = null;
+
+    /**
+     * 注册自定义字体（**族名 → 字体文件路径**）。
+     *
+     * 【为什么需要显式注册】平台无法从族名"猜"出字体文件：`Typeface.create(name,…)` 只在
+     *   **系统已安装字体**里查找，打包进 assets 或外部路径的字体必须先 `createFromFile` 加载。
+     *   ⇒ 注册是应用（宿主）的责任；框架提供通道 + 未注册时的**显式可见降级**。
+     *
+     * @return true = 注册成功（字体文件可解析）；false = 失败（调用方应记日志，**不静默**）
+     */
+    public static boolean registerFont(String family, String filePath) {
+        try {
+            android.graphics.Typeface tf = android.graphics.Typeface.createFromFile(filePath);
+            customFonts.put(family, tf);
+            return true;
+        } catch (Exception e) {
+            return false;
+        }
+    }
+
+    /** 注册表规模（验收判据用） */
+    public static int registeredFontCount() { return customFonts.size(); }
+
+    /** 清空注册表（测试隔离用——跨用例共享状态必须可归零，本仓纪律 #10） */
+    public static void clearFonts() {
+        customFonts.clear();
+        customFontMisses = 0;
+        lastMissingCustomFont = null;
     }
 
     /** 字体族回退计数（诊断：>0 ⇒ 两端词汇表不一致） */

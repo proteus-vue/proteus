@@ -17,7 +17,7 @@
 import { describe, it, expect } from 'vitest'
 import { h, ref, nextTick } from '@vue/runtime-core'
 import { createAppRenderer } from '@proteus-vue/renderer-app'
-import { createSelfDrawAdapter, normalizeFontWeight, normalizeFontFamily, fontSignature } from '@proteus-vue/renderer-app/adapters/selfdraw'
+import { createSelfDrawAdapter, normalizeFontWeight, normalizeFontFamily, fontSignature, CUSTOM_FONT_PREFIX, isCustomFontFamily, customFontName } from '@proteus-vue/renderer-app/adapters/selfdraw'
 
 type PaintPatch = { id: number; paint: Record<string, unknown> }
 type NodeLite = { id: number; text?: string; fontSize?: number; fontWeight?: number; fontFamily?: string; textStyleKey?: number; backgroundColor?: string }
@@ -130,10 +130,27 @@ describe('V10 · fontWeight 归一化与端到端', () => {
     expect(normalizeFontFamily('Georgia, serif')).toBe('serif')
     expect(normalizeFontFamily('serif')).toBe('serif')
     expect(normalizeFontFamily('"Arial Rounded MT Bold", sans-serif')).toBe('rounded')
-    // ★"未识别"必须与"识别为 system"区分开（前者宿主回退、后者是明确选择）
-    expect(normalizeFontFamily('MyCustomFont')).toBeUndefined()
+    // ★★未识别 ⇒ **自定义族透传**（`custom:<族名>`，2026-09-29 起；此前是丢弃 ⇒ undefined）
+    //   "未识别"与"识别为默认"仍可区分：前者带 `custom:` 前缀（宿主查找/回退+计数），
+    //   后者是明确的 `system`（宿主直接用默认字体，不计回退）。
+    expect(normalizeFontFamily('MyCustomFont')).toBe('custom:MyCustomFont')
+    expect(normalizeFontFamily('Dancing Script')).toBe('custom:Dancing Script')
+    // ★保留原始大小写（平台字体 API 按名查找大小写敏感）
+    expect(normalizeFontFamily('"MyApp Font"')).toBe('custom:MyApp Font')
+    // 非字符串仍为 undefined（无族名可言）
     expect(normalizeFontFamily(123)).toBeUndefined()
     expect(normalizeFontFamily(undefined)).toBeUndefined()
+  })
+
+  it('★★⑨b 自定义字体：前缀判定是**唯一实现**（两端不各写一份）', () => {
+    expect(isCustomFontFamily('custom:MyFont')).toBe(true)
+    expect(isCustomFontFamily('system')).toBe(false)
+    expect(isCustomFontFamily(undefined)).toBe(false)
+    expect(customFontName('custom:MyFont')).toBe('MyFont')
+    expect(customFontName('system')).toBeUndefined()
+    // ★前缀常量必须与宿主一致（Android `ProteusHostView.CUSTOM_FONT_PREFIX` 同值）——
+    //   不一致 ⇒ 自定义族**永远命中不了注册表**且**静默落回退**
+    expect(CUSTOM_FONT_PREFIX).toBe('custom:')
   })
 
   it('★★⑩ 字体族透传：**两种键形**都要认（模板静态 style 是 kebab、`:style` 是 camel）', async () => {
@@ -219,6 +236,9 @@ describe('V10 · fontWeight 归一化与端到端', () => {
     expect(fontSignature(16, 400, 'serif')).not.toBe(fontSignature(16, 700, 'serif'))
     // ★非零（核心用 0 表示"无字体签名"）
     expect(fontSignature(14, 400, 'system')).toBeGreaterThan(0)
+    // ★★自定义族也必须进键（否则"同文本 + 同字号 + 不同自定义字体"共用度量 ⇒ 一个尺寸错）
+    expect(fontSignature(16, 400, 'custom:FontA')).not.toBe(fontSignature(16, 400, 'custom:FontB'))
+    expect(fontSignature(16, 400, 'custom:FontA')).not.toBe(fontSignature(16, 400, 'system'))
   })
 
   it('★★⑬ paint 快照带上字族（宿主据此改字体，且能清除旧值）', async () => {

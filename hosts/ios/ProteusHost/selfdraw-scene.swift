@@ -1686,11 +1686,67 @@ final class SelfDrawBridge: NSObject, SelfDrawExports {
             }
             return UIFont(descriptor: d, size: size)
         default:
+            // ★★自定义字体（`custom:<族名>`，2026-09-29）——**先查注册表**
+            //   契约见适配器 `CUSTOM_FONT_PREFIX`（与 Android `ProteusHostView` 同值）。
+            //   已注册 ⇒ 用注册的字体（叠字重）；未注册 ⇒ **回退 system + 计数**（不静默：
+            //   "缺字体资源"与"识别为默认"必须可区分）。
+            if family.hasPrefix(SelfDrawBridge.customFontPrefix) {
+                let name = String(family.dropFirst(SelfDrawBridge.customFontPrefix.count))
+                if let f = customFonts[name] {
+                    return adjustWeight(f, weight) ?? f
+                }
+                customFontMisses += 1
+                lastMissingCustomFont = name
+                return base
+            }
             // ★未知角色：**显式回退 + 计数**（不静默）——两端契约不一致时必须可见
             fontFamilyFallbackCount += 1
             lastUnknownFontFamily = family
             return base
         }
+    }
+
+    /* ══════════ ★★自定义字体注册通道（@font-face / 打包字体，2026-09-29）══════════ */
+
+    /// 与适配器 `CUSTOM_FONT_PREFIX` **同一常量**（两端不一致 ⇒ 自定义族永远命中不了）
+    static let customFontPrefix = "custom:"
+
+    /// 族名 → 字体（注册表）
+    private static var customFonts: [String: UIFont] = [:]
+
+    /// 未注册的自定义族名命中次数（>0 ⇒ 宿主缺字体资源，**不是**静默回退）
+    private(set) static var customFontMisses = 0
+    /// 最近一个未注册的族名（诊断用）
+    private(set) static var lastMissingCustomFont = ""
+
+    /// 注册自定义字体（族名 → 字体文件路径）。
+    /// - Returns: true = 注册成功；false = 文件无法解析（调用方应记日志，**不静默**）
+    @discardableResult
+    static func registerFont(family: String, path: String) -> Bool {
+        guard let data = NSData(contentsOfFile: path),
+              let provider = CGDataProvider(data: data),
+              let cg = CGFont(provider) else {
+            return false
+        }
+        // 用 CTFont 从 CGFont 构造（与 cgFont(of:) 同一路子——本仓实测：CGFont(name:) 对
+        // 私有字体名会返 nil，走 provider 才是可靠路径）
+        var attributes: [CFString: Any] = [kCTFontSizeAttribute: 16.0]
+        attributes[kCTFontNameAttribute] = cg.postScriptName as String? ?? family
+        guard let ct = CTFontCreateWithGraphicsFont(cg, 16.0, nil, nil) as CTFont? else {
+            return false
+        }
+        customFonts[family] = ct as UIFont
+        return true
+    }
+
+    /// 注册表规模（验收判据用）
+    static var registeredFontCount: Int { customFonts.count }
+
+    /// 清空注册表（测试隔离用——跨用例共享状态必须可归零，本仓纪律 #10）
+    static func clearCustomFonts() {
+        customFonts.removeAll()
+        customFontMisses = 0
+        lastMissingCustomFont = ""
     }
 
     /// CSS 字重 → `UIFont.Weight`（与 `systemFont(size:weight:)` 同口径——单一映射表）

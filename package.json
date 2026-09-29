@@ -50,6 +50,7 @@
     "check:docs": "tsx scripts/gen-docs.ts --check",
     "check:docs-stats": "node scripts/check-docs-stats.mjs",
     "check:acceptance-stub": "node hosts/android/acceptance-stub.mjs",
+    "check:ios-selfdraw-compile": "bash hosts/ios/check-selfdraw-compile.sh",
     "check:gates-sync": "node scripts/check-gates-sync.mjs",
     "check:pushed": "node scripts/check-pushed.mjs",
     "check:pushed:strict": "node scripts/check-pushed.mjs --require",

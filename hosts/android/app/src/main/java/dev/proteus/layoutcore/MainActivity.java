@@ -3629,9 +3629,87 @@ public class MainActivity extends Activity {
             p.setTextSize(size);
             same[i] = p.measureText(sample);
         }
-        // 未知角色回退计数
+        // 未知角色回退计数（**无前缀**的裸名 ⇒ 契约违规，宿主必须回退并计数）
         int[] fb = {0};
         ProteusHostView.typefaceOf("MyCustomFont", 400, fb);
+
+        // ══ ★★自定义字体（`custom:<族名>`）三段判据（2026-09-29）══
+        //   ① 未注册 ⇒ 回退 system + 计数（"缺字体"必须可见，不静默）
+        //   ② 注册真实字体文件后 ⇒ **渲染宽度变化** + Typeface 身份变化（不是"参数传到了"）
+        //   ③ 反例对照：注册前后同族名 —— 宽度必须不同（否则"注册"是空操作）
+        ProteusHostView.clearFonts();
+        int missesBefore = ProteusHostView.customFontMisses;
+        android.graphics.Typeface missFace = ProteusHostView.typefaceOf("custom:NoSuchFontXyz", 400, null);
+        boolean unregisteredFallsBack = ProteusHostView.customFontMisses == missesBefore + 1
+                && "NoSuchFontXyz".equals(ProteusHostView.lastMissingCustomFont);
+        android.graphics.Paint missPaint = new android.graphics.Paint(android.graphics.Paint.ANTI_ALIAS_FLAG);
+        missPaint.setTypeface(missFace);
+        missPaint.setTextSize(size);
+
+        // 选一个**显著不同**的系统字体文件（本机实测存在；缺失则如实记为 skip，不假装通过）
+        final String[] fontPathCandidates = {
+                "/system/fonts/DancingScript-Regular.ttf",
+                "/system/fonts/CutiveMono.ttf",
+                "/system/fonts/CarroisGothicSC-Regular.ttf",
+        };
+        String pickedPath = null;
+        for (String c : fontPathCandidates) {
+            if (new java.io.File(c).exists()) { pickedPath = c; break; }
+        }
+        boolean customFontRegistered = false;
+        float customWidth = -1f, systemWidth = -1f;
+        boolean customTypefaceDiffers = false;
+        if (pickedPath != null) {
+            customFontRegistered = ProteusHostView.registerFont("MyAppFont", pickedPath);
+            if (customFontRegistered) {
+                android.graphics.Typeface customFace = ProteusHostView.typefaceOf("custom:MyAppFont", 400, null);
+                android.graphics.Paint cp = new android.graphics.Paint(android.graphics.Paint.ANTI_ALIAS_FLAG);
+                cp.setTypeface(customFace);
+                cp.setTextSize(size);
+                customWidth = cp.measureText(sample);
+                android.graphics.Paint sp2 = new android.graphics.Paint(android.graphics.Paint.ANTI_ALIAS_FLAG);
+                sp2.setTypeface(ProteusHostView.typefaceOf("system", 400, null));
+                sp2.setTextSize(size);
+                systemWidth = sp2.measureText(sample);
+                customTypefaceDiffers = System.identityHashCode(customFace)
+                        != System.identityHashCode(ProteusHostView.typefaceOf("system", 400, null));
+            }
+        }
+        // 反例对照：**未注册该族名时**的宽度（必须与注册后不同 ⇒ 证明注册真的生效）
+        ProteusHostView.clearFonts();
+        android.graphics.Paint prePaint = new android.graphics.Paint(android.graphics.Paint.ANTI_ALIAS_FLAG);
+        prePaint.setTypeface(ProteusHostView.typefaceOf("custom:MyAppFont", 400, null));   // 已清空 ⇒ 落 system
+        prePaint.setTextSize(size);
+        float widthBeforeRegister = prePaint.measureText(sample);
+        boolean registerChangesWidth = pickedPath != null && customFontRegistered
+                && Math.abs(customWidth - widthBeforeRegister) > 0.01f;
+
+        // ★★加强判据：**两个不同字体文件 → 两个不同宽度**
+        //   【为什么必须（本仓纪律"标定必须进判据"）】上面"注册后宽度变了"只能证明
+        //   "注册表起作用"，**不能**证明"加载的是那个文件"——`Typeface.createFromFile`
+        //   对任意坏文件都可能返回同一支兜底字体，那种情况下换文件宽度也不变。
+        //   ⇒ 再注册**第二支**明显不同的字体，要求：三宽度（system / A / B）**两两不同**。
+        float secondWidth = -1f;
+        boolean secondFontRegisters = false;
+        boolean twoFontsDiffer = false;
+        for (String c : fontPathCandidates) {
+            if (c.equals(pickedPath)) continue;
+            if (!new java.io.File(c).exists()) continue;
+            if (!ProteusHostView.registerFont("MyAppFontB", c)) continue;
+            secondFontRegisters = true;
+            android.graphics.Typeface faceB = ProteusHostView.typefaceOf("custom:MyAppFontB", 400, null);
+            android.graphics.Paint bp = new android.graphics.Paint(android.graphics.Paint.ANTI_ALIAS_FLAG);
+            bp.setTypeface(faceB);
+            bp.setTextSize(size);
+            secondWidth = bp.measureText(sample);
+            // ★宽度不同**且** Typeface 身份不同（宽度可能巧合接近——实测 378 vs 377；
+            //   身份不同才证明"两个文件真的加载成了两支字体"，而非"都落到同一兜底"）
+            twoFontsDiffer = Math.abs(secondWidth - customWidth) > 0.01f
+                    && Math.abs(secondWidth - systemWidth) > 0.01f
+                    && System.identityHashCode(faceB)
+                       != System.identityHashCode(ProteusHostView.typefaceOf("custom:MyAppFont", 400, null));
+            break;
+        }
 
         java.util.Set<Float> distinct = new java.util.HashSet<>();
         for (float w : widths) distinct.add(Math.round(w * 100) / 100f);
@@ -3647,7 +3725,12 @@ public class MainActivity extends Activity {
         boolean unknownFallsBack = fb[0] == 1;
 
         boolean pass = familyAffectsMeasure && sameFamilySameWidth && familyChangesMeasure
-                && typefaceDiffers && unknownFallsBack;
+                && typefaceDiffers && unknownFallsBack
+                // ★自定义字体三段判据（未注册回退可见 + 注册生效 + 反例对照）
+                && unregisteredFallsBack && customFontRegistered && customTypefaceDiffers
+                && registerChangesWidth
+                // ★★两个不同字体文件 ⇒ 两个不同宽度（排除"任何文件都返回同一兜底字体"）
+                && secondFontRegisters && twoFontsDiffer;
         try {
             org.json.JSONObject o = new org.json.JSONObject();
             o.put("ok", true);
@@ -3663,6 +3746,18 @@ public class MainActivity extends Activity {
             o.put("distinct_widths", distinct.size());
             o.put("distinct_typefaces", faceIds.size());
             o.put("unknown_role_fallbacks", fb[0]);
+            // ★自定义字体判据（2026-09-29）
+            o.put("custom_font_path", pickedPath == null ? "" : pickedPath);
+            o.put("custom_font_registered", customFontRegistered);
+            o.put("custom_font_width", Math.round(customWidth * 100) / 100f);
+            o.put("custom_font_width_before_register", Math.round(widthBeforeRegister * 100) / 100f);
+            o.put("system_width", Math.round(systemWidth * 100) / 100f);
+            o.put("custom_font_typeface_differs", customTypefaceDiffers);
+            o.put("custom_font_register_changes_width", registerChangesWidth);
+            o.put("unregistered_custom_falls_back", unregisteredFallsBack);
+            o.put("custom_font_misses", ProteusHostView.customFontMisses);
+            o.put("second_font_width", Math.round(secondWidth * 100) / 100f);
+            o.put("two_fonts_differ", twoFontsDiffer);
             o.put("check_family_affects_measure", familyAffectsMeasure);
             o.put("check_same_family_same_width", sameFamilySameWidth);
             o.put("check_family_changes_measure", familyChangesMeasure);
