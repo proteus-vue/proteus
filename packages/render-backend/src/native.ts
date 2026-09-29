@@ -38,6 +38,53 @@ export interface MockNativeAdapter extends NativeViewAdapter {
   ops: string[]
 }
 
+/**
+ * ★★C1：**宿主操作批次**（批量协议的元素）——一次跨边界调用携带整批变更。
+ *
+ * 【为什么必须有（Host ABI 的批处理红线）】`docs/Proteus_HostABI宿主抽象层设计方案.md` §3 原文：
+ *   「**所有跨边界调用必须是批处理的**」+ 红线「跨边界调用 = 帧数」。
+ *   而逐节点命令式适配器（`NativeViewAdapter`）在 4050 节点树上会产生
+ *   **数千次跨边界调用**（每节点 create + insert + ...）⇒ 直接违反该红线。
+ *
+ * 【真机链路本来就是这样做的（I6 评估的实测证据）】真机宿主协议是**批量**的：
+ *   `mount(treeJson)` / `updatePatches(patchesJson)` / `applyOps(bytesJson)` —— 每帧**一次**调用。
+ *   ⇒ 本类型把"真机已用的批量形态"**显式建模进 SPI**，让 NativeBackend 能表达它。
+ */
+export type NativeHostOp =
+  /** 建视图（宿主侧创建 UIView/View/ArkUI Node） */
+  | { op: 'create'; id: number; type: string; props: Record<string, unknown> }
+  /** 插入子视图（anchor 可选——同批次内按序应用） */
+  | { op: 'insert'; id: number; parentId: number | null; anchorId?: number }
+  /** 移除视图 */
+  | { op: 'remove'; id: number }
+  /** 属性/样式变更 */
+  | { op: 'patch'; id: number; key: string; prev: unknown; next: unknown }
+  /** 文本同步 */
+  | { op: 'text'; id: number; text: string }
+
+/**
+ * ★★C1：**批量宿主适配器**（与逐节点 `NativeViewAdapter` 并列的第二形态）。
+ *
+ * 【两者的分工（本评估的结论，勿混用）】
+ *   · `NativeViewAdapter`（逐节点）＝ **原型形态**：接口直观，适合简单宿主/测试；
+ *     但**不满足批处理红线** ⇒ 不能作为生产形态。
+ *   · `NativeBatchAdapter`（批量）＝ **生产形态**：一次 `commit` 携带整批 ⇒ 跨边界调用数 = flush 次数。
+ *
+ * 【与真机链路的对应】`commit(ops)` 即真机 `mount`/`updatePatches`/`applyOps` 的统一抽象：
+ *   宿主侧把批次翻译成自己的渲染调用（iOS CALayer / Android Canvas / ArkUI）。
+ */
+export interface NativeBatchAdapter {
+  /** 提交一批变更（★**一次跨边界调用**——调用方保证一批 = 一帧的变更） */
+  commit(ops: readonly NativeHostOp[]): void
+  /** 已提交批次数（诊断/判据用——跨边界调用计数） */
+  commitCount?(): number
+}
+
+/** 判断适配器是否为批量形态（有 `commit` 即批量） */
+function isBatchAdapter(a: NativeViewAdapter | NativeBatchAdapter): a is NativeBatchAdapter {
+  return typeof (a as NativeBatchAdapter).commit === 'function'
+}
+
 /** 内置 mock 适配器（无宿主环境验证接线；真实平台 B4 后接 SDK 实现替换） */
 export function createMockNativeAdapter(): MockNativeAdapter {
   const ops: string[] = []
@@ -297,12 +344,35 @@ const SEMANTIC_NATIVE_MAPS: Record<NativePlatform, Record<string, string>> = {
  * - adapter 缺省 mock（ops 日志）；真实平台注入 SDK 桥
  * - platform：ios（UIKit 基准）/ android（Jetpack）/ harmony（ArkUI）——决定 id + semantic 映射表
  */
-export function createNativeBackend(adapter?: NativeViewAdapter, platform: NativePlatform = 'ios'): ProteusRenderBackend {
-  const viewAdapter: NativeViewAdapter = adapter ?? createMockNativeAdapter()
+export function createNativeBackend(
+  adapter?: NativeViewAdapter | NativeBatchAdapter,
+  platform: NativePlatform = 'ios',
+): ProteusRenderBackend & { flush(): void; hostCalls(): number } {
+  const rawAdapter: NativeViewAdapter | NativeBatchAdapter = adapter ?? createMockNativeAdapter()
+  const viewAdapter: NativeViewAdapter = rawAdapter as NativeViewAdapter
+  const batchAdapter: NativeBatchAdapter | null = isBatchAdapter(rawAdapter) ? rawAdapter : null
   const semanticMap = SEMANTIC_NATIVE_MAPS[platform]
   const id = platform === 'ios' ? 'native-ios' : platform === 'android' ? 'native-android' : 'native-harmony'
   let nextId = 1
   const nodes = new Map<number, NativeViewDescriptor>()
+
+  /**
+   * ★★C1 批量模式：待提交操作队列（**逐节点适配器模式下恒为空**）。
+   *
+   * 【为什么不直接调用】批量适配器的语义是"一次跨边界 = 一帧变更"⇒ nodeOps 期间只**入队**，
+   *   由 `flush()`（或调用方的帧边界）一次性 `commit`。
+   */
+  const pending: NativeHostOp[] = []
+  /** 已发生的宿主调用数（★批处理红线的判据读数：逐节点模式 = 每操作 1 次；批量模式 = flush 次数） */
+  let hostCalls = 0
+  const queueOrCall = (op: NativeHostOp, imperative: () => void): void => {
+    if (batchAdapter) {
+      pending.push(op)
+      return
+    }
+    hostCalls++
+    imperative()
+  }
 
   function ensureNode(handle: NodeHandle): NativeViewDescriptor {
     const n = handle as NativeViewDescriptor
@@ -327,7 +397,11 @@ export function createNativeBackend(adapter?: NativeViewAdapter, platform: Nativ
         text: '',
         handle: null,
       }
-      descriptor.handle = viewAdapter.createView(descriptor)
+      // ★C1：批量模式只入队（create 的宿主句柄在批量语义下由宿主自己管理）
+      queueOrCall({ op: 'create', id: descriptor.id, type: viewType, props: descriptor.props }, () => {
+        descriptor.handle = viewAdapter.createView(descriptor)
+      })
+      if (!batchAdapter) descriptor.handle = descriptor.handle ?? descriptor
       nodes.set(descriptor.id, descriptor)
       return descriptor
     },
@@ -346,6 +420,10 @@ export function createNativeBackend(adapter?: NativeViewAdapter, platform: Nativ
       }
       // ★mock 适配器约定「句柄 = 描述符自身」（createView 同款）——insert 时 insertView(child.handle)
       descriptor.handle = descriptor as never
+      // ★C1：批量模式也入队（否则宿主看不到文本节点创建 ⇒ 批次不自包含）
+      queueOrCall({ op: 'create', id: descriptor.id, type: 'text', props: {} }, () => {
+        /* 逐节点模式：文本节点由 insert+setText 表达，无独立 createView 调用（与既有行为一致） */
+      })
       return descriptor as never as NodeHandle
     },
 
@@ -364,7 +442,9 @@ export function createNativeBackend(adapter?: NativeViewAdapter, platform: Nativ
         p.children.push(c)
       }
       c.parent = p
-      viewAdapter.insertView(c.handle, p.handle, anchor ? ensureNode(anchor).handle : undefined)
+      queueOrCall({ op: 'insert', id: c.id, parentId: p.id, anchorId: anchor ? ensureNode(anchor).id : undefined }, () => {
+        viewAdapter.insertView(c.handle, p.handle, anchor ? ensureNode(anchor).handle : undefined)
+      })
     },
 
     remove(child) {
@@ -375,7 +455,7 @@ export function createNativeBackend(adapter?: NativeViewAdapter, platform: Nativ
         c.parent = null
       }
       nodes.delete(c.id)
-      viewAdapter.removeView(c.handle)
+      queueOrCall({ op: 'remove', id: c.id }, () => viewAdapter.removeView(c.handle))
     },
 
     patchProp(el, key, prev, next) {
@@ -385,17 +465,31 @@ export function createNativeBackend(adapter?: NativeViewAdapter, platform: Nativ
       } else {
         n.props[key] = next
       }
-      viewAdapter.updateView(n.handle, key, prev, next)
+      queueOrCall({ op: 'patch', id: n.id, key, prev, next }, () => viewAdapter.updateView(n.handle, key, prev, next))
     },
 
     setText(el, text) {
       const n = ensureNode(el)
       n.text = text
-      viewAdapter.setViewText(n.handle, text)
+      queueOrCall({ op: 'text', id: n.id, text }, () => viewAdapter.setViewText(n.handle, text))
     },
 
     measure() {
       return { width: 0, height: 0 }
+    },
+
+    // ★★C1 批量模式的两个接口（逐节点模式下：flush 为空操作、hostCalls 反映真实调用数）
+    /** 提交本帧累积的操作（**一次跨边界调用**——批处理红线的落点） */
+    flush(): void {
+      if (!batchAdapter) return
+      if (pending.length === 0) return
+      hostCalls++
+      const batch = pending.splice(0, pending.length)
+      batchAdapter.commit(batch)
+    },
+    /** 已发生的宿主调用数（判据：批量模式下应 == flush 次数，不随节点数增长） */
+    hostCalls(): number {
+      return hostCalls
     },
   }
 }
