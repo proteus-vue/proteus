@@ -290,6 +290,13 @@ public class MainActivity extends Activity {
             sb.append("【③ 核心驱动的滚动（复用池决策来自 Rust）】\n");
             String start = scrollCoreRun();
             sb.append(start).append('\n');
+        } else if ("js-engine".equals(testPath)) {
+            // ★★S3：**Android JS 引擎最小闭环**（QuickJS）——卡 C1/C2 的共同前置
+            //   此前 Android 宿主无 JS 引擎（Java + Rust .so 直连 JNI）
+            sb.append("【S3 Android JS 引擎（QuickJS）最小闭环】\n");
+            String js = jsEngineRun();
+            sb.append(js).append('\n');
+            writeReport("js-engine.json", js);
         } else if ("shot-scroll-native".equals(testPath)) {
             // ★★z-order 约束下的**滚动同步**验证（方案坑位 #4）
             //   场景：20 行列表，**第 5 行是 native-host（WebView）**；程序驱动滚动到若干位置，
@@ -494,6 +501,103 @@ public class MainActivity extends Activity {
      *   · 建对象总数 ≪ 物化次数 × 行数（否则等于每帧重建）
      *   · 对象池复用率 > 0.5
      */
+    /**
+     * ★★S3：**Android JS 引擎（QuickJS）最小闭环**。
+     *
+     * 【判据（三条，都可机器判定）】
+     *   ① 引擎加载：`QuickJsEngine.isAvailable()`（否则报 loadError——不静默）
+     *   ② **JS 真的执行了**：一段含副作用的自检脚本，回读结果（不是"没抛错"就算过）
+     *   ③ **批量桥最小闭环**：跑一段**从 `selfdraw-batch` 编译的等价逻辑**——
+     *      建 1 个节点 + 一次 commit，宿主回调收到 **1 次** `mount` 且**批次内容正确**
+     *      （节点数 / 类型 / 文本）
+     *
+     * 【为什么用"等价逻辑"而不是直接跑 TS bundle】当前 APK 只打进 QuickJS 引擎 + 本类的
+     *   JNI 桥，**没有打进 esbuild 产物**（那需要把 `render-backend` 打包成 IIFE 并入库/入 APK
+     *   —— 属 S3 的下一步）。本方法先用**手写的最小等价 JS** 验证「引擎 → JNI → 宿主回调」这条链路
+     *   是通的；把真实 bundle 接进来是同一接口的下一次调用（`nativeEval` 换成 bundle 源码）。
+     *   ★诚实标注：本闭环证明**链路通**，不证明"真实 bundle 在 Android 上跑通"（后者待 S3b）。
+     */
+    private String jsEngineRun() {
+        org.json.JSONObject out = new org.json.JSONObject();
+        try {
+            out.put("engine_available", QuickJsEngine.isAvailable());
+            if (!QuickJsEngine.isAvailable()) {
+                out.put("ok", false);
+                out.put("error", "引擎未加载：" + QuickJsEngine.getLoadError());
+                return out.toString(2);
+            }
+            out.put("engine_version", QuickJsEngine.nativeVersion());
+
+            // ── 判据②：JS 真的执行了（含副作用 + 回读）──
+            final StringBuilder hostPosts = new StringBuilder();
+            Object host = new Object() {
+                @SuppressWarnings("unused")
+                public void post(String json) {
+                    if (hostPosts.length() > 0) hostPosts.append('|');
+                    hostPosts.append(json);
+                }
+            };
+            // ★这段 JS 模拟 `createSelfDrawBatchAdapter` 的核心语义：
+            //   累积操作 → commit 一次 → 通过 proteusHost.post 上报批次
+            String script =
+                "var ops = [];" +
+                "function createElement(id, type) { ops.push({op:'create', id:id, type:type}); }" +
+                "function insert(id, parentId) { ops.push({op:'insert', id:id, parentId:parentId}); }" +
+                "function setText(id, text) { ops.push({op:'text', id:id, text:text}); }" +
+                "function commit() {" +
+                "  proteusHost.post(JSON.stringify({ callKind: 'mount', ops: ops, count: ops.length }));" +
+                "  return ops.length;" +
+                "}" +
+                "createElement(1, 'view');" +
+                "createElement(2, 'text');" +
+                "insert(2, 1);" +
+                "setText(2, 'Hello from QuickJS');" +
+                "var committed = commit();" +
+                "committed;";
+
+            long t0 = System.nanoTime();
+            QuickJsEngine.EvalResult r = QuickJsEngine.evalWithHost(script, host);
+            long ms = (System.nanoTime() - t0) / 1000000;
+            out.put("eval_ms", ms);
+            out.put("eval_ok", r.ok);
+            out.put("eval_value", r.value);
+            if (!r.ok) {
+                out.put("ok", false);
+                out.put("error", "JS 执行失败：" + r.error);
+                return out.toString(2);
+            }
+
+            // ── 判据③：批量桥最小闭环（宿主回调收到 1 次且批次内容正确）──
+            String batch = hostPosts.toString();
+            out.put("host_post_count", batch.isEmpty() ? 0 : batch.split("\\|").length);
+            out.put("host_payload", batch);
+            boolean postOk = false;
+            int opCount = 0;
+            String callKind = null;
+            if (!batch.isEmpty()) {
+                org.json.JSONObject b = new org.json.JSONObject(batch.split("\\|")[0]);
+                callKind = b.optString("callKind");
+                opCount = b.optInt("count");
+                postOk = "mount".equals(callKind) && opCount == 4
+                    && batch.contains("Hello from QuickJS");
+            }
+            out.put("batch_call_kind", callKind);
+            out.put("batch_op_count", opCount);
+            out.put("batch_ok", postOk);
+            out.put("ok", postOk);
+        } catch (Throwable t) {
+            try {
+                out.put("ok", false);
+                out.put("error", t.getClass().getSimpleName() + ": " + t.getMessage());
+            } catch (Exception ignored) { /* JSONObject 不会失败 */ }
+        }
+        try {
+            return out.toString(2);
+        } catch (Exception e) {
+            return "{\"ok\":false,\"error\":\"报告序列化失败\"}";
+        }
+    }
+
     private String scrollCoreRun() {
         final int ROWS = 4000;
         final int VISIBLE_ROWS = 14;      // 一屏可见行数（60px 行高 × 14 ≈ 840）
