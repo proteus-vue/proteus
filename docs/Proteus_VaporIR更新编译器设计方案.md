@@ -703,7 +703,7 @@ Vue 3.6 把 `@vue/reactivity` 基于 alien-signals 重构，**显著提升响应
 
 **★V4 之后的追加批次（2026-09-28，超出原方案范围）**——详见 `docs/proteus-vapor-honest-boundaries.md`：
 - 结构变更增量：`proteus_layout_splice`（追加 / **中间插入** / 删除）+ 适配器 `takeSplice` + 宿主 `splice()`
-  ⇒ 真机 A/B：增 336KB→56KB · 删 280KB→**526B** · 头部插入 308KB→**28KB**
+  ⇒ 真机 A/B：增 336KB→56KB · 删 280KB→**526B** · 头部插入 308KB→**28KB**（★2026-09-28 读数；S5 报告后续被重跑覆盖，**当前产物值为 399KB→67KB**——两侧同比增大因场景规格变更，见 `proteus-vapor-honest-boundaries.md` #3）
 - 文本变更增量：适配器复用文本节点 + 核心多范围重排 + 宿主度量注入 ⇒ 真机 **281KB→15KB**
 - relayout 真凶：持久 taffy 树（**真机 17.16ms→1.52ms**，度量调用 6003→0）
 - 内存回收：孤点压实（真机 10 轮 churn **末轮孤点 0**）
