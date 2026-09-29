@@ -93,12 +93,21 @@ const STALE = [
   },
   {
     id: 'draw-0667',
-    re: /绘制\s*(?:耗时)?\s*(?:为)?\s*(?:\*\*)?0\.667(?:\*\*)?(?![0-9])/g,
-    truth: '2.0（或不达标）',
+    // ★2026-09-29 收紧：首版只匹配「绘制…0.667」一种写法，漏掉了
+    //   `（0.063 / 0.667）` 这类**不带"绘制"字样的并列写法**（实测漏过两次——
+    //   新入库的两份对标文档就是这么写的）。现改为**任何 0.667 都拦**，
+    //   除非同一句里显式标明它是历史/已更正值（见下方 isHistoricQuote）。
+    re: /0\.667/g,
+    truth: '2.0（不达标）',
+    historic: true,   // 允许"引述已证伪的旧值"（须带标记词，见 HISTORIC_MARKERS）
     why:
-      '0.667 系 `draw_attribution_rects_only_ms`（只画色块）子项，整体 `canvas_draw_software_ms`=6ms vs 原生 3ms ⇒ **2.0 不达标**；2026-09-29 已在 `hosts/android/ACCEPTANCE.md` 更正',
+      '0.667 系 `draw_attribution_rects_only_ms`（只画色块）子项，整体 `canvas_draw_software_ms`=6ms vs 原生 3ms ⇒ **2.0 不达标**；2026-09-29 已在 `hosts/android/ACCEPTANCE.md` 更正。' +
+      '★注意「不拍平 0.275」是另一条路径的**正确**值——两者不可混用（曾出现把两条路径的达标结论写反）',
   },
 ]
+
+/** 引述历史值（已证伪的旧口径）时允许的标记词——用于 `historic: true` 的规则 */
+const HISTORIC_MARKERS = ['原', '系', '更正', '已证伪', '证伪', '历史', '旧值']
 
 // ── 扫描范围：docs 根目录的直接文档（当前态载体）+ 显式白名单 ──────────────────
 // 前缀匹配——允许 `<!-- stats-ok -->` 与 `<!-- stats-ok: 理由 -->` 两种写法
@@ -128,6 +137,9 @@ for (const name of docsRoot()) {
       s.re.lastIndex = 0
       let m
       while ((m = s.re.exec(line)) !== null) {
+        // ★historic 规则：仅当**同一句**里出现标记词（「原…系…」「已更正」等）才放行
+        //   ——用于"引述已证伪的旧值并说明"的正当写法；否则一律拦（防新文档悄悄再用旧值）
+        if (s.historic && HISTORIC_MARKERS.some((k) => line.includes(k))) continue
         failures.push({
           file: `docs/${name}`,
           line: i + 1,
