@@ -42,14 +42,19 @@ jobs:
       - name: 全量 script 编译门禁（#497：examples+组件全部 .vue 一次整包编译 + js 语法校验——防 demo 逐个暴露编译器形态缺口）
         run: node scripts/check-script-compile.mjs
 
+      # ★★2026-09-29 修正**步骤顺序**（此前必然红）：`tests/vapor-v3-e2e.test.ts` 需要
+      #   `target/debug/examples/ops_roundtrip`，而构建它的步骤排在 `pnpm test` **之后**
+      #   ⇒ CI 上四条端到端用例报 `ENOENT`（看起来像链路坏了，实际是装置没建）。
+      #   本仓已实测：该红在本地被"上一次构建残留的二进制"掩盖 —— 干净克隆/CI 才暴露。
+      #   ⇒ 装置构建**前置**到测试之前（与 `test:rust` 一起；两者都只需 cargo）。
+      - name: 构建 V3 端到端驱动（★必须在 pnpm test 之前：vapor-v3-e2e 需要该二进制）
+        run: cargo build --manifest-path packages/layout-core-rust/Cargo.toml --example ops_roundtrip
+
       - name: 单元测试（router / router-plan / gen-routes / plugin / runtime / compiler / golden / pinia）
         run: pnpm test
 
       - name: 排版核心单测 + 更新指令双端对齐（Vapor IR V1：TS 编码 ⇄ Rust 解码的跨语言契约）
         run: pnpm run test:rust
-
-      - name: 构建 V3 端到端驱动（TS「指令 → Rust 应用 → 几何」链路的测试载体）
-        run: cargo build --manifest-path packages/layout-core-rust/Cargo.toml --example ops_roundtrip
 
       - name: Vapor IR 性能棘轮（★只降不升——防平移传播/返回通道优化被静默回退）
         run: pnpm run check:vapor-perf

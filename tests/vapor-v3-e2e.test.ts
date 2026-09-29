@@ -9,6 +9,7 @@
 // 【本文件的判据是**几何**（而不是"没报错"）】——与 V0 探针同款纪律：
 //   改宽度后节点的实际矩形必须变，且**未受影响的兄弟保持不变**。
 import { describe, it, expect } from 'vitest'
+import fs from 'node:fs'
 import { execFileSync } from 'node:child_process'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
@@ -34,6 +35,16 @@ function rustRoundTrip(treeJson: string, opsBytes: Uint8Array): { rects: Record<
   // eslint-disable-next-line @typescript-eslint/no-var-requires
   require('node:fs').writeFileSync(opsPath, opsBytes)
   require('node:fs').writeFileSync(treePath, treeJson)
+  // ★缺二进制时给**可操作的错误**，而不是裸 `ENOENT`（2026-09-29 实测：CI 上 pnpm test 跑在
+  //   构建该 example **之前** ⇒ 四条用例报 `spawnSync ... ops_roundtrip ENOENT`，
+  //   看起来像"端到端链路坏了"，实际只是**装置没建**。装置缺失必须报装置缺失。）
+  if (!fs.existsSync(binPath)) {
+    throw new Error(
+      `V3 端到端装置缺失：${binPath}\n` +
+        '  ⇒ 先构建：cargo build --manifest-path packages/layout-core-rust/Cargo.toml --example ops_roundtrip\n' +
+        '  （CI：该构建步必须排在 `pnpm test` **之前**——见 .github/workflows/ci.yml）',
+    )
+  }
   const out = execFileSync(binPath, [treePath, opsPath], { encoding: 'utf-8', cwd: CRATE })
   return JSON.parse(out)
 }
