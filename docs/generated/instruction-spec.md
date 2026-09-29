@@ -83,11 +83,16 @@ Ops:            opCount 条（判别字节 + 定长字段）
 
 **关键设计（三条，均为架构不变量）**：
 
-1. **绝对坐标**：每条指令自带绝对位置（父链偏移已累加）⇒ 平台层**零换算**；
+1. **绝对坐标 + 整数逻辑像素**：每条指令自带绝对位置（父链偏移已累加）⇒ 平台层**零换算**；
    让裁剪（overdraw culling）成为一次坐标比较，无需维护变换栈；
-2. **拍平不产生独立指令**：被拍平节点的绘制**并入父级指令**（`mergedFrom` 记录可验证），
+2. **坐标在内核吸附为整数**（卡 I2）：策略 = **边缘吸附** `snap(v) = floor(v + 0.5)`；
+   盒 → `L=snap(x), T=snap(y), R=snap(x+w), B=snap(y+h)`；宽度取边缘差 `max(0, R-L)`。
+   ★**平台层不得再舍入**（静态门禁 `pnpm check:host-rounding`）；
+   边缘吸附（而非逐字段 round）保证**相邻元素共用边吸到同一整数** —— flex 均分不丢 1px。
+   跨语言一致性由 golden 锁定：`packages/layout-core-rust/tests/golden/pixel-snap.json`（TS ⇄ Rust）。
+3. **拍平不产生独立指令**：被拍平节点的绘制**并入父级指令**（`mergedFrom` 记录可验证），
    **不新建合成位图**——一旦破坏，iOS 上曾出现的 +78% 内存会以更难查的形式复发；
-3. **paint-hint 编译期推导**：`isMonochrome` / `isPureBackground` / `shareableContent`
+4. **paint-hint 编译期推导**：`isMonochrome` / `isPureBackground` / `shareableContent`
    随指令携带，平台据此决定 backing store 策略（**禁止运行时猜**）。
 
 ## 4. 版本化与协商
@@ -136,3 +141,5 @@ typedef struct {
 | `cargo test --test ops_conformance` | **跨语言 golden**：TS 编码 → Rust 解码，逐字节 + 语义比对 |
 | `tests/update-ops-golden.test.ts` | golden 与当前编码一致（改了格式必须显式重新生成） |
 | `tests/layout-core-render-cmd.test.ts` | Draw 类：绝对坐标 / 拍平 / 裁剪 三条架构不变量 |
+| `node scripts/gen-pixel-snap-golden.mjs --check` · `tests/pixel-snap-golden.test.ts` | **坐标吸附跨语言 golden**（TS ⇄ Rust 逐字段；含精度边界台账）——改策略必须显式重生成 |
+| `node scripts/check-host-rounding.mjs` | **平台层零舍入**（hosts/ 静态扫描；每个例外必须写 `I2-ALLOW:` 理由） |

@@ -24,6 +24,7 @@
 //   · `ops`             → **更新指令流解码**（Vapor IR V1：与 TS 侧 slot-runtime 逐字节对齐）
 //   · `ops_apply`       → **指令的布局应用**（Vapor IR V3：指令 → 树变更 → 多范围增量重排）
 //   · `rects_bin`       → **变化集二进制返回通道**（V4：回程免 JSON 解析——V3 类B 的最大单项）
+//   · `snap`            → **坐标吸附**（卡 I2：舍入时机统一——内核唯一实现，平台层零舍入）
 //
 // ★尚未落地（诚实边界，后续里程碑）：`flatten/` `materialize/` `paint-hint/` `recycle/` `render/`
 pub mod blob;
@@ -33,6 +34,7 @@ pub mod hit;
 pub mod ops;
 pub mod ops_apply;
 pub mod rects_bin;
+pub mod snap;
 #[cfg(target_os = "android")]
 pub mod jni;
 pub mod node;
@@ -48,7 +50,13 @@ pub use style::{Display, Edges, FlexDirection, LStyle, Overflow, Position, Rect,
 pub use taffy_engine::TaffyEngine;
 
 // ★M3 `hit/`：命中测试（逆绘制序 + 裁剪感知——事件系统的几何地基）
-pub use hit::{bubble_chain, geometry, hit_path, hit_result, hit_test, paint_order, rect_contains, HitResult, NodeGeometry};
+pub use hit::{
+    bubble_chain, geometry, geometry_snapped, hit_path, hit_path_with, hit_result, hit_result_with, hit_test,
+    paint_order, rect_contains, HitResult, NodeGeometry,
+};
+
+// ★卡 I2 `snap/`：坐标吸附（内核唯一实现——平台层不得再舍入）
+pub use snap::{snap_coord, snap_rect};
 
 // ★M3 `recycle/`：列表复用池 + 生命周期状态机（§5.1 / §12.6）
 pub use recycle::{Lifecycle, ListStateMachine, ListWindow, RecycleConfig, RecyclePool, ScrollDirection, VisibleRange};

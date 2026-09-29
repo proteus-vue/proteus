@@ -209,7 +209,30 @@ pub fn hit_test(tree: &LayoutTree, x: f32, y: f32) -> Option<NodeIndex> {
 /// 等价语义：`document.elementsFromPoint(x, y)` 的**逐位对应**（浏览器亦自上层到下层）。
 /// ★实现 = 绘制序的逆序过滤 —— 与绘制共享同一份顺序逻辑，二者不可能漂移。
 pub fn hit_path(tree: &LayoutTree, x: f32, y: f32) -> Vec<NodeIndex> {
-    let geo = geometry(tree);
+    hit_path_with(tree, x, y, &geometry(tree))
+}
+
+/// ★★卡 I2（舍入时机统一）：**吸附几何**快照 —— 宿主可见几何 = 吸附几何。
+///
+/// 【为什么命中也要吸附（一处几何，而不是两份）】绘制坐标已在内核吸附为整数逻辑像素
+///   （`crate::snap`）；若命中仍用亚像素几何，则**视觉边界与可点边界差 ≤0.5px** ——
+///   这是本卡要防的同一类缺陷（"看起来在这里，点下去是那里"）在事件侧的新形态。
+///   ⇒ 宿主路径统一走本函数；内核内部（单测 / conformance golden 对浏览器）沿用原始几何。
+pub fn geometry_snapped(tree: &LayoutTree) -> Vec<NodeGeometry> {
+    let mut g = geometry(tree);
+    for e in g.iter_mut() {
+        if let Some(r) = e.rect {
+            e.rect = Some(crate::snap::snap_rect(r));
+        }
+        if let Some(c) = e.clip {
+            e.clip = Some(crate::snap::snap_rect(c));
+        }
+    }
+    g
+}
+
+/// 用**给定几何快照**做命中（供宿主路径注入吸附几何；默认入口见 `hit_path`）
+pub fn hit_path_with(tree: &LayoutTree, x: f32, y: f32, geo: &[NodeGeometry]) -> Vec<NodeIndex> {
     let visible = |i: NodeIndex| -> bool {
         let g = geo[i as usize];
         match g.rect {
@@ -255,7 +278,12 @@ pub struct HitResult {
 
 /// 一次调用同时取回 target / path / chain（宿主派发的唯一入口）
 pub fn hit_result(tree: &LayoutTree, x: f32, y: f32) -> HitResult {
-    let path = hit_path(tree, x, y);
+    hit_result_with(tree, x, y, &geometry(tree))
+}
+
+/// 同上，但用**给定几何快照**（宿主路径注入 `geometry_snapped` —— 见其注释）
+pub fn hit_result_with(tree: &LayoutTree, x: f32, y: f32, geo: &[NodeGeometry]) -> HitResult {
+    let path = hit_path_with(tree, x, y, geo);
     let target = path.first().copied();
     let chain = match target {
         Some(t) => bubble_chain(tree, t),

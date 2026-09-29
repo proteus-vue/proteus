@@ -62,9 +62,12 @@ pub fn collect_abs_pairs(
     let r = node.rect;
     let abs_x = parent_ox + r.x;
     let abs_y = parent_oy + r.y;
+    // ★卡 I2：二进制返回通道与 JSON 通道**同一把尺子**（导出边界吸附）
+    //   —— 两条通道喂同一个宿主绘制路径，若只吸附一条，iOS V4 路径会出现 1px 抖动
+    //   ★下钻仍用未吸附的 abs_x/abs_y（吸附只作用于导出值）
     out.push((
         node.id,
-        crate::style::Rect { x: abs_x, y: abs_y, width: r.width, height: r.height },
+        crate::snap::snap_rect(crate::style::Rect { x: abs_x, y: abs_y, width: r.width, height: r.height }),
     ));
     for &c in &node.children {
         collect_abs_pairs(tree, c, abs_x, abs_y, out);
