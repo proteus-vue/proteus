@@ -21,6 +21,47 @@ import json
 
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', '..', '.tools', 'py'))
 
+
+def _prebuilt_ready() -> bool:
+    """★trace_processor 二进制**可用性探测**（零网络）。
+
+    【为什么必须有（2026-09-29 实测，本仓最大的一处时间浪费）】
+      `TraceProcessor(trace=...)` 在二进制缺失时会**去下载** —— 本机网络到
+      `commondatastorage.googleapis.com` 不通 ⇒ `curl` 重试到超时，**单次 75 秒**，
+      而整条验收里 Perfetto 段共 **106 秒**，产出**零**（历史 `*.analysis.json` 一个都没有）。
+      用户反馈"测试时间太长"，这是最大的一项——却发现得晚。
+    ⇒ 探测：缓存目录里是否已有对应 sha 的二进制（`~/.local/share/perfetto/prebuilts/`）。
+      有 → 正常分析；没有 → **秒级退出并说明**（不下载、不阻塞主流程）。
+      ★纪律：**不可用的辅助工具必须快速失败并显式报出**，不能"静默等 75 秒"。
+    """
+    cache = os.path.join(os.path.expanduser('~'), '.local', 'share', 'perfetto', 'prebuilts')
+    if not os.path.isdir(cache):
+        return False
+    try:
+        return any(
+            n.startswith('trace_processor_shell') and os.access(os.path.join(cache, n), os.X_OK)
+            for n in os.listdir(cache)
+        )
+    except OSError:
+        return False
+
+
+_PREBUILT_OK = _prebuilt_ready()
+
+if not _PREBUILT_OK and '--check-available' in sys.argv:
+    print('trace_processor 不可用：本机未缓存 perfetto prebuilt，且下载路径不通')
+    print('  ⇒ 跳过 Perfetto 分析（核判定改用 app 自报的 layout-env.json）')
+    print('  ⇒ 如需启用：联网后跑一次 `python3 -c "from perfetto.trace_processor import TraceProcessor; TraceProcessor()"` 下载缓存，或手动放置二进制到 ~/.local/share/perfetto/prebuilts/')
+    sys.exit(3)
+
+if not _PREBUILT_OK:
+    print('═══ Perfetto 核归属分析（§9.2）═══')
+    print('  ⚠ trace_processor 不可用（本机未缓存 prebuilt 且下载不通）——**跳过分析**')
+    print('     · 避免 75 秒下载超时（本仓实测：该段白花 106 秒、产出零）')
+    print('     · 核判定改用 app 自报的 layout-env.json（`acceptance.sh` 汇总里已有）')
+    print('     · 启用方式见脚本头部注释；trace 文件仍已保存，可事后离线分析')
+    sys.exit(3)
+
 from perfetto.trace_processor import TraceProcessor  # noqa: E402
 
 
@@ -55,35 +96,51 @@ def main() -> int:
     #   实测：进程 `dev.proteus.layoutcore` 在 trace 里是 `teus.layoutcore`（前 4 字符没了）。
     #   故匹配名取**进程名的尾部 15 字符**，而不是头部（头部在长包名下必然丢）。
     short = proc_name[-15:]
+    # ★★2026-09-29 性能修正（本段此前占**单次验收 75 秒**，是最大的单项开销）：
+    #   【原写法】`pct_of_app` 用**关联子查询**算分母 —— 该子查询在 SELECT 里被**逐行重算**，
+    #     而它自身要扫全表 thread_state 并 JOIN 两表 ⇒ 实测 75s（trace 1.1MB 时）。
+    #   【现写法】分母只需算**一次**，故拆成两步：① 算应用总时长 ② 算各 CPU 分组时长，
+    #     百分比在 Python 侧做除法（纯算术，O(1)）。
+    #   ★纪律：SQL 里出现「对每行重算的聚合子查询」= O(n²) 的典型来源；先量（phase 计时）再优化。
+    total_sql = """
+    SELECT SUM(ts2.dur) AS total_ns
+    FROM thread_state ts2
+    JOIN thread th2 ON ts2.utid = th2.utid
+    JOIN process p2 ON th2.upid = p2.upid
+    WHERE p2.name LIKE '%__P__%' AND ts2.state = 'Running'
+    """
     sql = """
     SELECT
       ts.cpu AS cpu,
       COUNT(*) AS slices,
-      SUM(ts.dur) / 1e6 AS total_ms,
-      ROUND(100.0 * SUM(ts.dur) / (
-        SELECT SUM(ts2.dur) FROM thread_state ts2
-        JOIN thread th2 ON ts2.utid = th2.utid
-        JOIN process p2 ON th2.upid = p2.upid
-        WHERE p2.name LIKE ? AND ts2.state = 'Running'
-      ), 2) AS pct_of_app
+      SUM(ts.dur) / 1e6 AS total_ms
     FROM thread_state ts
     JOIN thread th ON ts.utid = th.utid
     JOIN process p ON th.upid = p.upid
-    WHERE p.name LIKE ?
+    WHERE p.name LIKE '%__P__%'
       AND ts.state = 'Running'
-      AND th.name LIKE ?
+      AND th.name LIKE '%__S__%'
     GROUP BY ts.cpu
     ORDER BY total_ms DESC
     """
-    # ★只统计**主线程**（Android 上主线程名 = 进程名，截断到 15 字符）
-    sql = sql.replace('?', "'%__P__%'", 1).replace('?', "'%__P__%'", 1).replace('?', "'%__S__%'", 1)
     sql = sql.replace('__P__', proc_name).replace('__S__', short)
+    total_sql = total_sql.replace('__P__', proc_name)
+    # 应用总时长（分母）——一次聚合即可；失败时退化为 0（下方按 0 处理，不阻断主结论）
+    app_total_ns = 0.0
+    try:
+        df_total = tp.query(total_sql).as_pandas_dataframe()
+        if not df_total.empty and df_total.iloc[0]['total_ns'] is not None:
+            app_total_ns = float(df_total.iloc[0]['total_ns'])
+    except Exception:
+        pass
     try:
         df = tp.query(sql).as_pandas_dataframe()
     except Exception as e:
         print(f'  ✗ SQL 执行失败：{e}')
         tp.close()
         return 1
+    # 百分比在 Python 侧算（分母已一次算好；**不再**在 SQL 里逐行重算）
+    df = df.assign(pct_of_app=(100.0 * df['total_ms'] * 1e6 / app_total_ns) if app_total_ns > 0 else 0.0)
 
     if df.empty:
         print(f'  ⚠ trace 里没有 {proc_name}（匹配名 "{short}"）的运行记录')
