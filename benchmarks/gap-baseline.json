@@ -1,0 +1,25 @@
+{
+  "updatedAt": "2026-09-29T08:42:45.548Z",
+  "result": {
+    "fileCount": 128,
+    "summary": {
+      "fallback": 57,
+      "degraded": 253,
+      "unsupported": 0,
+      "total": 310
+    },
+    "byCategory": {
+      "跨模块 import 失效（产物 undefined）": 242,
+      "模板函数调用（真机抛错）": 4,
+      "script 提升（computed→data）": 3,
+      "初始值函数调用（转运行时初始化）": 31,
+      "路径退化": 9,
+      "key 绑定简化": 1,
+      "语义偏差": 7,
+      "script 提升（const→data）": 9,
+      "未归类（待补分类规则）": 2,
+      "样式通道退化": 2
+    },
+    "fatalCount": 0
+  }
+}

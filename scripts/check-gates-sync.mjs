@@ -65,6 +65,10 @@ const LOCAL_ONLY = {
   //   实测 --check 也需重跑编译（约 3 秒）⇒ 可以接 CI。★但为与 compile-baseline 一致（同一族基线类门禁），
   //   暂归开发机：避免"改编译器后 CI 与本地各红一次"的低效流程。
   'check:binding-matrix': '与 check:compile-baseline 同族（生成物基线类）；改编译器后本地跑一次即可，避免 CI/本地各红一次',
+  // ★C4 漏点报告：与上两者同族（生成物基线类，依赖 showcase 全量编译 ~40s）。
+  //   ★且它是**棘轮**（degraded/unsupported 只降不升）——新写法引入 degraded 时本地立刻可见，
+  //   不必等 CI；改编译器诊断文案后需 --update（人工确认）。
+  'check:gap-report': '与 check:binding-matrix 同族（生成物基线棘轮）；依赖 showcase 全量编译，开发机跑',
   // ★Android 宿主编译检查（2026-09-29，与 check:ios-selfdraw-compile 同源盲区）：
   //   编译宿主需 Android SDK（android.jar）+ JDK；CI 为 ubuntu-latest，不装 Android SDK ⇒ 跑不了。
   'check:android-host-compile': '需 Android SDK（android.jar）+ JDK 17；CI 为 ubuntu-latest，未装 Android SDK',

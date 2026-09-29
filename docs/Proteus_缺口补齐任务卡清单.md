@@ -27,7 +27,7 @@
 | **C2** Host Runtime | 🟡 **部分** | `web-host.ts` + `host-conformance.ts`（32 项）· `host-matrix.ts`（6×6 组合矩阵）在；**Native 侧 Host Runtime 未接真机** |
 | **V5** 与 Web VDOM 一致性 | ✅ **已达标** | 浏览器真值基准对拍：`packages/layout-core-rust/tests/golden/browser-layout.json`（21 用例）+ **`browser-mutation.json`**（增量对拍）→ 真机 `V6`/`conformance 0.375dp` |
 | **C3** 超级应用规模编译期性能 | ✅ **4/4 达标（2026-09-29）** | 基线载体 = **showcase 真项目**（128 SFC / 599.2 KB）· 工具 `scripts/bench-compile.mjs`（零设备秒级）· 报告 `docs/proteus-performance-plan/13-c3-compile-baseline.md` · ✅ 全量：冷 645.8ms / **热 346.4ms**（2.71 ms/文件 · 1730 KB/s）· ✅ 增量：单文件改一处重编译中位 **5.06ms** · ✅ 体积：890.3 KB / 599.2 KB = **1.486x** · ✅ 瓶颈识别：**模板阶段占 72% 事件**（6154/8518）· 最热规则 `tag/unknown-kebab`（1727 次）· 最慢文件 p-scroll-view 9.2ms/12.5KB · ★异常 `pages/backends.vue` 4.1KB 却 7.1ms（成本/字节异常）· ★门禁 `pnpm check:compile-baseline`（比值为主判据 + 破坏性验证过） |
-| **C4** 184 原语完备性验证 | 🟡 **工具就绪，数据未采集** | `check:degradation`（属性三级降级 + 反黑盒）· `proteus audit coverage`（官方 382 项归类）· `uninstantiatedSlots` 上报仍在 ⇒ **但"真实项目集上的漏点统计"未做**（本仓 `实战采集埋点清单` §2 的 A 类采集，T0 未启动） |
+| **C4** 184 原语完备性验证 | ✅ **3/3 达标（2026-09-29）** | 计数器 `packages/compiler/src/gap-counter.ts`（**归纳既有诊断，不新增判断**——避免第 N 份手写副本）+ 编译产物新增 `gaps` 字段（**记录不阻断**，埋点清单 §2.1）+ 报告脚本 `scripts/report-gaps.mjs` · ✅ 三类分列（真项目实测：**degraded 253 / fallback 57 / unsupported 0 = 310 处**）· ✅ **degraded 单独高亮**（报告里独立小节且排最前——§2.5 硬要求）· ✅ **表达不了清单**（分类计数 + 按文件定位 + 每条给建议）· ★新增棘轮门禁 `check:gap-report`（degraded/unsupported **只降不升**，破坏性验证过）· ★**未归类显式列出**（防「0 漏点」实为「分类表没覆盖」） |
 | **I6** 后端生产就绪度评估 | 🟡 **部分**（缺 Native 侧证据） | Web 侧齐备（`web-host.ts` + 32 项 host-conformance）· **Native 后端无生产就绪证据**（`native.ts` 有映射表，无真机嵌入 + 性能读数） |
 | **I7** 指令级 conformance | ✅ **已达标** | `packages/layout-core-rust/tests/golden/`：`update-ops.json` + **`update-ops.bin`**（跨语言 golden：TS 编码 → Rust 解码）· `browser-layout.json`（21 用例）+ `browser-mutation.json`（增量对拍）· **已接 CI**（`ci.yml` 引用 golden） |
 | **V5** Vapor 与 Web VDOM 一致性 | ✅ **已达标** | 见 `browser-layout.json`（全量）+ `browser-mutation.json`（增量）⇒ 真机 `V6_sfc_full_tree` PASS · conformance **0.375dp**（合格线 0.5） |
@@ -67,7 +67,7 @@ I8 卡写着「**先做 I6 评估，明确指令流体积是否构成瓶颈，�
 - [x] **V4** L0/L1 安全判定 ✅ **已达标**（七条件 + 反例 + flush 兜底判据）
 - [x] **I5** overdraw culling ✅ **3/3 全部达标**（视口裁剪 ↓90.1% · 遮挡剔除 ↓99.9% · 同色合并 ↓99.8%）
 - [x] **C3** 超级应用规模编译期性能 ✅ **4/4 达标**（基线 + 增量 + 体积 + 瓶颈清单，真项目载体 + 回归门禁）
-- [ ] **C4** 184 原语完备性验证 🟡 **工具就绪，数据未采集**
+- [x] **C4** 184 原语完备性验证 ✅ **3/3 达标**（真项目 310 漏点三类分列 + degraded 高亮 + 棘轮门禁）
 
 ### 第四批 · P1/P2
 
@@ -544,10 +544,35 @@ ExecutionCarrier（JSI / AOT）是"宿主侧 1ms"的载体。
 ### 执行
 按《实战采集埋点清单》§2：编译流水线加**漏点计数器**（记录不阻断）。
 
-### 验收
-- [ ] 计数器上线，三类（fallback / degraded / unsupported）分别统计
-- [ ] **degraded 类单独高亮**（行为可能不一致，不报错，最难查）
-- [ ] 产出"表达不了"清单
+### 验收（★2026-09-29 实现：**3/3 达标**）
+> 计数器：`packages/compiler/src/gap-counter.ts`（编译产物新增 `gaps` 字段）
+> 报告：`npx tsx scripts/report-gaps.mjs`（人读 / `--json` / `--check` 棘轮）
+> 门禁：`pnpm check:gap-report`（已接 verify 链）· 测试：`tests/gap-counter.test.ts`（5 项）
+
+- [x] 计数器上线，三类（fallback / degraded / unsupported）分别统计 —— ✅
+  **真项目实测（showcase 128 SFC）**：总计 **310 处** · degraded **253** · fallback **57** · unsupported **0**。
+  ★**设计要点（避免第 N 份手写副本）**：计数器**不判断"什么算漏点"**——那由既有诊断（50 处
+  `warnings.push`）与结构化规则 ID（64 条 `trace.add`）决定；计数器只做**归类 + 计数**。
+  ⇒ 编译器新增诊断时自动纳入（分类表未覆盖的会显式进"未归类"，**不静默丢**）。
+  ★**记录不阻断**（埋点清单 §2.1 明确要求）：只收集，从不抛错、从不改产物（测试 ⑤ 断言）。
+- [x] **degraded 类单独高亮** —— ✅ 报告里 degraded 有**独立小节且排在 fallback 之前**
+  （§2.5 硬要求：它不报错、最难查，最容易被淹没）。测试 ② 断言小节存在 + 顺序。
+  ★真项目 top degraded：**242× 跨模块 import 失效**（产物 undefined —— showcase 大量 import 框架包，
+    该路径会静默失效）/ 7× 语义偏差 / 4× **模板函数调用**（WXML 不支持，**真机抛错**）。
+- [x] 产出"表达不了"清单 —— ✅ 报告含：三类分列 + 按**分类**计数 + 按**文件**定位（top 5）+ 每条给**建议原语**。
+  ★**第四类判据（本卡自加，防假绿）**：**未归类必须显式列出**——
+    否则"0 漏点"可能只是"分类表没覆盖"。初始版本实测未归类 **292 处**（分类表远不够），
+    按**真实诊断文本**补齐后降到 **2 处**。
+
+★**新增棘轮门禁 `check:gap-report`**：`degraded` / `unsupported` **只降不升**
+（它们是端对齐问题来源）；编译失败文件数变化也报。**破坏性验证过**（篡改基线 degraded=10 ⇒ 立刻红并准确报出）。
+
+★**诚实边界**：
+- 计数覆盖 showcase（本仓最真项目）；换项目数字会变，**分类规则**（gap-counter 的 RULES）不变。
+- 「未归类」的存在说明分类表**必然滞后于诊断演进**——这是**有意的可见性**（而非缺陷）：
+  报告里显式列出，比"静默归入 fallback"诚实。
+- `unsupported` 为 0 是**真实现状**（本仓 `failFast` 默认关：诊断走 warning 不阻断）——
+  开启 `rules.failFast` 时同一批会转为编译期阻断。
 
 ---
 
