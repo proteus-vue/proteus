@@ -122,7 +122,7 @@ const BN = { snapshot: 'bench-final' }
 // ★构建标识：每次构建写入，用于**确凿判定**设备上跑的是哪份代码
 //   （踩坑：靠文件 mtime 判断"报告是否刷新"不可靠——新建目标文件的时间恒为"现在"；
 //    且我看不出设备实际执行的是旧 bundle，白跑一轮。有了这个字段就能一眼判定。）
-const BUILD_ID = 'b8fab899-114757'
+const BUILD_ID = '0cbcd16d-120053'
 const now = (): number => Date.now()
 /** 宽松解析（宿主返回可能是字符串或已是对象） */
 const safeParseAny = (s: any): any => {
@@ -204,6 +204,33 @@ async function measure(
     request_bytes: bytes,
     extra: { ...(extra ?? {}), renders: app.renderCount() - r0 },
   })
+}
+
+/* ────────────────────────── ★flush 判据（§10「每帧 flush 次数 = 1」）────────────────────────── */
+//
+// 【为什么补它（2026-09-29）】`flushes` 此前**只上报、从不断言**——本仓纪律明说
+//   「**只记录不断言 = 没测**」（纪律 #17 的同族：三色标定读数一直对，但从未进 verdict
+//   ⇒ R/B 互换长期恒绿）。§10 的「每帧 flush 次数 = 1」因此在文档里只能标"未验证"。
+//
+// 【判据语义】`SlotRuntime.flush()` **只在 buffer 非空时**才 `stats.flushes++`（空 flush 早退）
+//   ⇒ "一次更新周期恰好一次提交"等价于「**N 次更新 ⇒ flushes 增量恰为 N**」。
+//   两侧都抓得住：
+//     · 增量 < N ⇒ 有更新**没发指令**（静默 no-op，最危险的失效模式）；
+//     · 增量 > N ⇒ 一次更新被**拆成多次提交**（调度有问题，§10 明确点名）。
+//   ★这是**唯一实现**：三处 flush 循环（runScale 批量/分位 + 类B 两段）共用本函数。
+//   ★★**前提（判据与被测口径必须对齐）**：每次迭代都必须是**真实变更**。`setSlot` 用
+//     `Object.is` 短路（值相等不发指令）⇒ 若用例把值设成与初值相同，flushes 会**少 1**
+//     而那不是缺陷。本仓实测首版就踩了：初值 40、循环首次也设 40 ⇒ 199/200 假红。
+//     ⇒ 用例必须**错开初值与首次取值**（见 `mkRows` 注释）。
+function flushCheck(rt: { getStats: () => { flushes: number } }, before: number, iterations: number) {
+  const delta = rt.getStats().flushes - before
+  return {
+    ok: delta === iterations,
+    flushes_delta: delta,
+    expected: iterations,
+    // 失败原因**可区分**（不只说"不对"——本仓纪律：守卫必须可观测）
+    reason: delta === iterations ? '' : (delta < iterations ? 'under-emit（有更新未发指令）' : 'over-emit（一次更新被拆成多次提交）'),
+  }
 }
 
 /* ────────────────────────── ★用例集 ────────────────────────── */
@@ -894,7 +921,49 @@ CASES.push({
      * @param nodes   手写树（id 顺序自由，但**绑定目标必须是 id=1**——
      *                订阅表由构建期生成，其 nodeId 来自模板元素序）
      */
-    const runScale = async (label: 'small' | 'large', nodes: Array<Record<string, unknown>>, note: string) => {
+    // ★★2026-09-29 修：改用 **SFC 模板实例化**建树（而不再手搓静态树）
+    //
+    // 【为什么（flush 判据抓出来的真缺陷）】新加的「每帧 flush 次数 = 1」判据首跑即报
+    //   `flushes_delta = 0`（**有更新却一条指令都没发**）。诊断（`ops_emitted_total=0` /
+    //   `short_circuits=0` / `buffers_captured=0`）指向：订阅表与树**结构不匹配**——
+    //   该表由 `gen-vapor-table.mjs` 的 SFC 生成（**含 v-for 列表**，`dotW` 在 list-item 槽位上），
+    //   而 runScale 手搓的是**静态无 v-for 树**（`dotW` 绑在裸 id 1）⇒ 触发器触发了，
+    //   但没有任何槽位与之对应 ⇒ 零指令（**用例在测一棵"没接上订阅"的树**）。
+    //   ★这正是"只记录不断言"的代价：`flushes` 一直在上报，但从没人断言它 —— 若早断言，
+    //     这个失配在 V3 落地当天就会发现，而不是等到今天。
+    //   修法：与 V6/V11/V14 同一路子——**同一份模板产物**（`builtTpl.template` + `table`）
+    //     经 `instantiateTemplate` 产出树 ⇒ 树与订阅天然同源（结构漂移在构造上不可能）。
+    const mkRows = (n: number) => Array.from({ length: n }, (_, i) => ({
+      // ★第 1 行初值 36（与模板 ref 初值一致）⇒ 循环首次设 20 必然是**真实变更**
+      //   【为什么必须错开（本仓实测）】首版初值取 `i%2?20:40` ⇒ 第 0 行初值 40，
+      //   而循环 `i=0` 也设 40 ⇒ `setSlot` 的 `Object.is` **短路** ⇒ flushes 少 1（199/200）。
+      //   那不是缺陷（值没变本就不该发指令），但会让判据**误报**——判据与被测口径必须对齐。
+      id: i + 1, dotW: i === 0 ? 36 : (i % 2 ? 20 : 40), textW: 120, title: `行 ${i + 1}`,
+    }))
+    const builtTplForScale = vaporTableJson as unknown as {
+      ok: boolean
+      table: import('@proteus-vue/slot-runtime').SubscriptionTable
+      template: import('@proteus-vue/slot-runtime').LayoutTemplate
+    }
+    const runScale = async (label: 'small' | 'large', items: number, note: string) => {
+      if (!builtTplForScale.ok || !builtTplForScale.template) {
+        results.push({
+          case: `V3_vapor_${label}`, note: '✗ 模板产物不可用（vapor-table.json 缺 template）',
+          items: 0, nodes: 0, vue_ms: -1, to_request_ms: -1, serialize_ms: -1, host_ms: -1,
+          total_ms: -1, patch_count: -1, request_bytes: -1,
+        })
+        return
+      }
+      // ★模板实例化（与订阅表同源；ListRegistry 登记行内槽位 → 实际行节点）
+      const registry = new ListRegistry()
+      const scaleRows = mkRows(items)
+      const inst = instantiateTemplate(builtTplForScale.template, {
+        viewport: VP,
+        read: (n: string) => (n === 'list' ? scaleRows : undefined),
+        table: builtTplForScale.table,
+        registry,
+      })
+      const nodes = inst.nodes as unknown as Array<Record<string, unknown>>
       const mountOut = safeParseAny(proteusSelfDraw.mount(JSON.stringify({ viewport: VP, nodes })))
       if (!mountOut?.ok) {
         results.push({
@@ -909,9 +978,13 @@ CASES.push({
       const strings = new StringPool()
       const captured: Uint8Array[] = []
       const rt = new SlotRuntime(keys, strings, (bytes) => captured.push(bytes))
-      let dotW = 36
-      const ctx = { read: (n: string) => (n === 'dotW' ? dotW : undefined) }
-      const vapor = new VaporRuntime(built.table, rt, VaporRuntime.buildEvaluators(built.table.evaluators))
+      // ★触发源与表一致：表订阅的是 `list` 源下的 list-item 槽位（dotW 是**行字段**）
+      const ctx = { read: (n: string) => (n === 'list' ? scaleRows : undefined) }
+      // ★★必须传 `registry`（第 4 参）——本仓实测：漏了它 ⇒ `list-item` 槽位解析不到
+      //   「具体行的节点」⇒ 指令要么不发、要么发到模板节点 ⇒ `geom_changed=0`
+      //   （现象：几何根本没变，用例却照跑照报耗时——**这个失配正是 flush 判据抓出来的**）。
+      //   对照：同文件另三处（V6/V11/V14）都传了 registry。
+      const vapor = new VaporRuntime(built.table, rt, VaporRuntime.buildEvaluators(built.table.evaluators), registry)
       const triggers = new Map<string, () => void>()
       const loadRes = vapor.load(ctx, (name, cb) => triggers.set(name, cb))
       vapor.relink(ctx)
@@ -920,29 +993,55 @@ CASES.push({
 
       // ── ① 摊还读数（主读数：天然避开时钟分辨率限制）──
       const N = 200
+      // ★§10「每帧 flush 次数 = 1」判据：批量段
+      const flushBeforeBatch = rt.getStats().flushes
       const tBatch0 = clock()
       let lastOut: Record<string, unknown> | undefined
+      // ★JS 侧 vs 宿主侧**分离计时**（2026-09-29）——本仓纪律「任何 >5ms 的分段都必须再拆」：
+      //   11.9ms/次的读数若不拆，会把"JS 扫行成本"误当成"宿主慢"。
+      let jsMsTotal = 0
+      let hostMsTotal = 0
+      let payloadMax = 0
       for (let i = 0; i < N; i++) {
-        dotW = i % 2 ? 20 : 40
-        triggers.get('dotW')?.()
+        const tj0 = clock()
+        scaleRows[0]!.dotW = i % 2 ? 20 : 40
+        triggers.get('list')?.()      // ★JS：源级触发 → 行集扫描 → 逐行 diff → 发指令
         rt.flush()
         const bytes = captured.pop()
-        if (bytes) lastOut = safeParseAny(proteusSelfDraw.applyOps(JSON.stringify(Array.from(bytes))))
+        const tj1 = clock()
+        jsMsTotal += tj1 - tj0
+        if (bytes) {
+          lastOut = safeParseAny(proteusSelfDraw.applyOps(JSON.stringify(Array.from(bytes))))
+          payloadMax = Math.max(payloadMax, bytes.length)
+        }
+        hostMsTotal += clock() - tj1
       }
       const batchMs = clock() - tBatch0
+      const jsMsPerIter = jsMsTotal / N
+      const hostMsPerIter = hostMsTotal / N
       const perIterUs = (batchMs / N) * 1000
+      const flushBatchCheck = flushCheck(rt, flushBeforeBatch, N)
+      // ★诊断（判据失败时必须能归因——本仓纪律"守卫必须可观测"）：
+      //   区分三种可能：① 触发器没被调 ② 被调但值相等短路 ③ 标脏了但 flush 没发指令
+      const flushDiag = {
+        short_circuits: rt.getStats().shortCircuits,
+        ops_emitted_total: rt.getStats().opsEmitted,
+        buffers_captured: captured.length,
+      }
 
       // ── ② 单次分位（用同一个时钟；读数受分辨率限制，仅作参考）──
+      const flushBeforeSamples = rt.getStats().flushes
       const samples: number[] = []
       for (let i = 0; i < 100; i++) {
-        dotW = i % 2 ? 20 : 40
+        scaleRows[0]!.dotW = i % 2 ? 20 : 40
         const t0 = clock()
-        triggers.get('dotW')?.()
+        triggers.get('list')?.()
         rt.flush()
         const bytes = captured.pop()
         if (bytes) lastOut = safeParseAny(proteusSelfDraw.applyOps(JSON.stringify(Array.from(bytes))))
         samples.push(clock() - t0)
       }
+      const flushSamplesCheck = flushCheck(rt, flushBeforeSamples, 100)
       samples.sort((a, b) => a - b)
       const pick = (p: number) => samples[Math.min(samples.length - 1, Math.floor(samples.length * p))]
 
@@ -968,6 +1067,18 @@ CASES.push({
           min_ms: samples[0], max_ms: samples[samples.length - 1],
           l1_slots: loadRes.l1Slots, l0_slots: loadRes.l0Slots,
           unsupported_evaluators: loadRes.unsupportedEvaluators.length,
+          // ★§10 flush 判据（两项都必须 ok；不 ok ⇒ 本用例 verdict 为 FAIL）
+          flush_check_batch: flushBatchCheck,
+          flush_check_samples: flushSamplesCheck,
+          flush_one_per_update: flushBatchCheck.ok && flushSamplesCheck.ok,
+          flush_diag: flushDiag,
+          // ★JS / 宿主分离（摊还均值 ms）——回答"这段时间是谁花的"
+          js_ms_per_iter: Math.round(jsMsPerIter * 1000) / 1000,
+          host_ms_per_iter: Math.round(hostMsPerIter * 1000) / 1000,
+          js_share: Math.round((jsMsPerIter / Math.max(1e-9, jsMsPerIter + hostMsPerIter)) * 1000) / 1000,
+          payload_bytes: payloadMax,
+          // ★口径（必须随读数一起读）：本档是**列表级**更新（改行字段 ⇒ 全表扫 + 全量载荷）
+          scope_note: 'list-level update (whole-source trigger): JS scans all rows + full payload; NOT the single-node P95 metric',
           host_geom_changed: lastOut?.geom_changed,
           host_geom_total: lastOut?.geom_total,
           host_deferred: lastOut?.deferred,
@@ -980,38 +1091,29 @@ CASES.push({
           host_unsupported: lastOut?.unsupported_count,
           host_apply_ms: lastOut?.apply_ms,
           host_layers_ms: lastOut?.layers_ms,
+          // ★判据进 verdict（本仓纪律：不进 verdict 的读数等于没测）
+          verdict: (flushBatchCheck.ok && flushSamplesCheck.ok) ? 'PASS' : 'FAIL',
         },
       })
       return perIterUs
     }
 
-    // ── small：2 节点（验证通路本身；**不可**与 S2 比规模）──
-    await runScale(
-      'small',
-      [
-        { id: 0, parentId: null, flexDirection: 'column', width: VP.width, height: VP.height },
-        { id: 2, parentId: 0, flexDirection: 'row', width: VP.width - 32, height: 56 },
-        { id: 1, parentId: 2, width: 36, height: 36 }, // ★绑定目标 = id 1（与订阅表一致）
-      ],
-      'V3 small：2 节点树（通路验证）',
-    )
+    // ── small：1 行（验证通路本身；**不可**与 S2 比规模）──
+    await runScale('small', 1, 'V3 small：1 行（通路验证；改行字段 ⇒ 整表触发，成本随行数增长）')
 
-    // ── large：≈S2 同规模（1000 项 ≈ 4004 节点）——**这一档才与 S2/V0 可比** ──
-    const largeNodes: Array<Record<string, unknown>> = [
-      { id: 0, parentId: null, flexDirection: 'column', width: VP.width, height: VP.height },
-      // 绑定目标所在的行（显式宽高 ⇒ 是布局边界 ⇒ 重排范围止于该行，与 S2 的类A 局部等价）
-      { id: 2, parentId: 0, flexDirection: 'row', width: VP.width - 32, height: 56 },
-      { id: 1, parentId: 2, width: 36, height: 36 },
-    ]
-    const ROWS = 1000
-    for (let i = 0; i < ROWS; i++) {
-      const rid = 100 + i * 4
-      largeNodes.push({ id: rid, parentId: 0, flexDirection: 'row', width: VP.width - 32, height: 56 })
-      largeNodes.push({ id: rid + 1, parentId: rid, width: 36, height: 36 })
-      largeNodes.push({ id: rid + 2, parentId: rid, flexGrow: 1, flexDirection: 'column' })
-      largeNodes.push({ id: rid + 3, parentId: rid + 2, width: 120, height: 16 })
-    }
-    await runScale('large', largeNodes, 'V3 large：1000 项 ≈4004 节点（与 S2 同规模，可比）')
+    // ── large：≈S2 同规模（1000 行 ≈ 4004 节点）——**这一档才与 S2/V0 可比** ──
+    // ★树由 `runScale` 内的 `instantiateTemplate` 产出（与订阅表同源）——此处只给行数。
+    //   ★2026-09-29 修正：改模板实例化时漏删了旧的"手搓 1000 项数组"循环，
+    //     而它仍往**已改名的**变量里 push ⇒ ReferenceError ⇒ 本用例在此中断
+    //     （现象：small 有结果、large 与类B 都没有、`js_completed` 仍算完成）。
+    //     ⇒ 这类"改一半"的残留靠**看结果条数**发现：期望 3 条（small/large/classB），实得 1 条。
+    // ★★口径澄清（2026-09-29 实测）：本档改的是**行字段**（`item.dotW`）⇒ 触发的是
+    //   **整个列表源**（`list`）⇒ 运行时按行扫全表 + 逐行 diff ⇒ 载荷随行数增长
+    //   （1000 行 ⇒ **8964B / 3300 条指令**，而几何只变 2 个节点）。
+    //   ⇒ 它测的是「**列表级更新的全表成本**」，**不是**「单节点更新」——
+    //     §10 的「单节点更新 P95」应以 **类B 档（2.16ms）** 与 **V11（改 1 行只发 1 条）** 为准。
+    //   ★诚实标注：本档读数（p95 ≈12ms）**不构成 §10 的达标证据**，它是**列表级更新的成本读数**。
+    await runScale('large', 1000, 'V3 large：1000 行 ≈4004 节点 · **列表级更新**（改行字段 ⇒ 全表扫描 + 全量载荷；非单节点口径）')
 
     // ── ★★类B（不利场景）：单条指令但**重排范围 = 根**（与类A 对照）──
     //
@@ -1047,6 +1149,7 @@ CASES.push({
         const rt = new SlotRuntime(keys, strings, (bytes) => captured.push(bytes))
         const heightKey = keys.intern('layout.height')
         const N = 100
+        const flushBeforeB = rt.getStats().flushes
         let lastOut: Record<string, unknown> | undefined
         const t0 = clock()
         for (let i = 0; i < N; i++) {
@@ -1057,8 +1160,10 @@ CASES.push({
           if (bytes) lastOut = safeParseAny(proteusSelfDraw.applyOps(JSON.stringify(Array.from(bytes))))
         }
         const batchMs = clock() - t0
+        const flushBCheck1 = flushCheck(rt, flushBeforeB, N)
 
         // ★分位采样（与本用例其它档一致；单次读数受时钟分辨率影响，摊还是主读数）
+        const flushBeforeB2 = rt.getStats().flushes
         const classBSamples: number[] = []
         for (let i = 0; i < 60; i++) {
           const t1 = clock()
@@ -1068,6 +1173,7 @@ CASES.push({
           if (b) lastOut = safeParseAny(proteusSelfDraw.applyOps(JSON.stringify(Array.from(b))))
           classBSamples.push(clock() - t1)
         }
+        const flushBCheck2 = flushCheck(rt, flushBeforeB2, 60)
         classBSamples.sort((a, b) => a - b)
         const pickB = (pp: number) => classBSamples[Math.min(classBSamples.length - 1, Math.floor(classBSamples.length * pp))]
 
@@ -1100,6 +1206,11 @@ CASES.push({
             host_apply_ms: lastOut?.apply_ms,
             host_layers_ms: lastOut?.layers_ms,
             host_unsupported: lastOut?.unsupported_count,
+            // ★flush 判据（与 runScale 同一 helper ⇒ 同一语义，避免"第 N 份副本"）
+            flush_check_batch: flushBCheck1,
+            flush_check_samples: flushBCheck2,
+            flush_one_per_update: flushBCheck1.ok && flushBCheck2.ok,
+            verdict: (flushBCheck1.ok && flushBCheck2.ok) ? 'PASS' : 'FAIL',
           },
         })
       }

@@ -401,95 +401,180 @@
   "host_node_count" : 44,
   "host_timing_last" : {
     "build_layers_ms" : 0.01,
-    "host_total_ms" : 0.070000000000000007,
+    "host_total_ms" : 0.080000000000000002,
     "layout_ms" : 0.029999999999999999,
     "measure_ms" : 0
   },
   "js_completed" : 1,
   "js_ok" : true,
   "js_report" : {
-    "build_id" : "b8fab899-114757",
+    "build_id" : "0cbcd16d-120053",
     "case_filter" : [
       "V3"
     ],
     "case_timings_ms" : {
-      "V3_vapor_slot_pipeline" : 6337
+      "V3_vapor_slot_pipeline" : 10719
     },
     "cases" : [
       {
         "case" : "V3_vapor_small",
         "extra" : {
-          "amortized_us" : 0.309,
-          "batch_ms" : 0.059999999999999998,
+          "amortized_us" : 137.89500000000001,
+          "batch_ms" : 27.579999999999998,
           "clock" : "host.mach_absolute_time",
-          "clock_min_nonzero_ms" : 0.002499997615814209,
+          "clock_min_nonzero_ms" : 0.0024159997701644897,
           "clock_ticks_in_512_reads" : 512,
-          "flushes" : 0,
+          "flush_check_batch" : {
+            "expected" : 200,
+            "flushes_delta" : 200,
+            "ok" : true,
+            "reason" : ""
+          },
+          "flush_check_samples" : {
+            "expected" : 100,
+            "flushes_delta" : 100,
+            "ok" : true,
+            "reason" : ""
+          },
+          "flush_diag" : {
+            "buffers_captured" : 0,
+            "ops_emitted_total" : 203,
+            "short_circuits" : 0
+          },
+          "flush_one_per_update" : true,
+          "flushes" : 301,
+          "host_apply_ms" : 0.029999999999999999,
+          "host_deferred" : 0,
+          "host_geom_changed" : 2,
+          "host_geom_total" : 3,
+          "host_layers_ms" : 0,
+          "host_ms_per_iter" : 0.096000000000000002,
+          "host_rects_bin_ms" : 0,
+          "host_relayout" : 3,
+          "host_scopes" : [
+            2
+          ],
+          "host_unsupported" : 0,
+          "host_updated_layers" : 3,
           "iters" : 200,
+          "js_ms_per_iter" : 0.037999999999999999,
+          "js_share" : 0.28100000000000003,
           "l0_slots" : 0,
           "l1_slots" : 4,
-          "max_ms" : 0.004833001643419266,
-          "min_ms" : 0.0028749965131282806,
-          "ops_total" : 0,
-          "p50_ms" : 0.003208000212907791,
-          "p95_ms" : 0.0034999996423721313,
-          "p99_ms" : 0.004833001643419266,
-          "unsupported_evaluators" : 0
+          "max_ms" : 0.52354099974036217,
+          "min_ms" : 0.10595899820327759,
+          "ops_total" : 303,
+          "p50_ms" : 0.11179200187325478,
+          "p95_ms" : 0.1271670013666153,
+          "p99_ms" : 0.52354099974036217,
+          "payload_bytes" : 78,
+          "scope_note" : "list-level update (whole-source trigger): JS scans all rows + full payload; NOT the single-node P95 metric",
+          "unsupported_evaluators" : 0,
+          "verdict" : "PASS"
         },
-        "host_ms" : 0,
+        "host_ms" : 0.040000000000000001,
         "items" : 2,
-        "nodes" : 3,
-        "note" : "V3 small：2 节点树（通路验证）（200 次摊还 + 100 次分位；时钟=host.mach_absolute_time）",
-        "patch_count" : 0,
-        "request_bytes" : 0,
+        "nodes" : 5,
+        "note" : "V3 small：1 行（通路验证；改行字段 ⇒ 整表触发，成本随行数增长）（200 次摊还 + 100 次分位；时钟=host.mach_absolute_time）",
+        "patch_count" : 303,
+        "request_bytes" : 78,
         "serialize_ms" : 0,
         "to_request_ms" : 0,
-        "total_ms" : 0.061750002205371857,
-        "vue_ms" : 0.00030875001102685927
+        "total_ms" : 27.579083003103733,
+        "vue_ms" : 0.13789541501551866
       },
       {
         "case" : "V3_vapor_large",
         "extra" : {
-          "amortized_us" : 0.29399999999999998,
-          "batch_ms" : 0.059999999999999998,
+          "amortized_us" : 11341.808999999999,
+          "batch_ms" : 2268.3600000000001,
           "clock" : "host.mach_absolute_time",
-          "clock_min_nonzero_ms" : 0.002499997615814209,
+          "clock_min_nonzero_ms" : 0.0024159997701644897,
           "clock_ticks_in_512_reads" : 512,
-          "flushes" : 0,
+          "flush_check_batch" : {
+            "expected" : 200,
+            "flushes_delta" : 200,
+            "ok" : true,
+            "reason" : ""
+          },
+          "flush_check_samples" : {
+            "expected" : 100,
+            "flushes_delta" : 100,
+            "ok" : true,
+            "reason" : ""
+          },
+          "flush_diag" : {
+            "buffers_captured" : 0,
+            "ops_emitted_total" : 3200,
+            "short_circuits" : 0
+          },
+          "flush_one_per_update" : true,
+          "flushes" : 301,
+          "host_apply_ms" : 1.8700000000000001,
+          "host_deferred" : 0,
+          "host_geom_changed" : 2,
+          "host_geom_total" : 3,
+          "host_layers_ms" : 0.01,
+          "host_ms_per_iter" : 4.3860000000000001,
+          "host_rects_bin_ms" : 0,
+          "host_relayout" : 3,
+          "host_scopes" : [
+            2
+          ],
+          "host_unsupported" : 0,
+          "host_updated_layers" : 3,
           "iters" : 200,
+          "js_ms_per_iter" : 6.9489999999999998,
+          "js_share" : 0.61299999999999999,
           "l0_slots" : 0,
           "l1_slots" : 4,
-          "max_ms" : 0.0037919990718364716,
-          "min_ms" : 0.002666998654603958,
-          "ops_total" : 0,
-          "p50_ms" : 0.0029169991612434387,
-          "p95_ms" : 0.003374997526407242,
-          "p99_ms" : 0.0037919990718364716,
-          "unsupported_evaluators" : 0
+          "max_ms" : 12.546333000063896,
+          "min_ms" : 11.134999997913837,
+          "ops_total" : 3300,
+          "p50_ms" : 11.84375,
+          "p95_ms" : 12.374334000051022,
+          "p99_ms" : 12.546333000063896,
+          "payload_bytes" : 8964,
+          "scope_note" : "list-level update (whole-source trigger): JS scans all rows + full payload; NOT the single-node P95 metric",
+          "unsupported_evaluators" : 0,
+          "verdict" : "PASS"
         },
-        "host_ms" : 0,
+        "host_ms" : 1.9099999999999999,
         "items" : 1000,
-        "nodes" : 4003,
-        "note" : "V3 large：1000 项 ≈4004 节点（与 S2 同规模，可比）（200 次摊还 + 100 次分位；时钟=host.mach_absolute_time）",
-        "patch_count" : 0,
-        "request_bytes" : 0,
+        "nodes" : 3002,
+        "note" : "V3 large：1000 行 ≈4004 节点 · **列表级更新**（改行字段 ⇒ 全表扫描 + 全量载荷；非单节点口径）（200 次摊还 + 100 次分位；时钟=host.mach_absolute_time）",
+        "patch_count" : 3300,
+        "request_bytes" : 8964,
         "serialize_ms" : 0,
         "to_request_ms" : 0,
-        "total_ms" : 0.05870799720287323,
-        "vue_ms" : 0.0002935399860143661
+        "total_ms" : 2268.3617080003023,
+        "vue_ms" : 11.341808540001512
       },
       {
         "case" : "V3_vapor_large_classB",
         "extra" : {
-          "amortized_us" : 1948.095,
-          "batch_ms" : 194.81,
+          "amortized_us" : 2201.8679999999999,
+          "batch_ms" : 220.19,
           "clock" : "host.mach_absolute_time",
-          "host_apply_ms" : 0.050000000000000003,
-          "host_deferred" : 3864,
+          "flush_check_batch" : {
+            "expected" : 100,
+            "flushes_delta" : 100,
+            "ok" : true,
+            "reason" : ""
+          },
+          "flush_check_samples" : {
+            "expected" : 60,
+            "flushes_delta" : 60,
+            "ok" : true,
+            "reason" : ""
+          },
+          "flush_one_per_update" : true,
+          "host_apply_ms" : 0.059999999999999998,
+          "host_deferred" : 3912,
           "host_flushed" : 0,
           "host_geom_changed" : 4001,
           "host_geom_total" : 4003,
-          "host_layers_ms" : 0.27000000000000002,
+          "host_layers_ms" : 0.29999999999999999,
           "host_rects_bin_ms" : 0.070000000000000007,
           "host_rects_parse_ms" : 0.070000000000000007,
           "host_relayout" : 2,
@@ -497,15 +582,16 @@
             0
           ],
           "host_unsupported" : 0,
-          "host_updated_layers" : 139,
+          "host_updated_layers" : 91,
           "iters" : 100,
-          "max_ms" : 2.4140419997274876,
-          "min_ms" : 1.8752500005066395,
-          "p50_ms" : 1.9292920008301735,
-          "p95_ms" : 1.969624999910593,
-          "p99_ms" : 2.4140419997274876
+          "max_ms" : 2.7407919988036156,
+          "min_ms" : 1.9400829970836639,
+          "p50_ms" : 2.0916249975562096,
+          "p95_ms" : 2.2866249978542328,
+          "p99_ms" : 2.7407919988036156,
+          "verdict" : "PASS"
         },
-        "host_ms" : 1.8799999999999999,
+        "host_ms" : 2.0299999999999998,
         "items" : 1000,
         "nodes" : 4003,
         "note" : "V3 large · **类B（不利）**：改行高 ⇒ 兄弟移位 ⇒ 范围上浮（100 次摊还；时钟=host.mach_absolute_time）",
@@ -513,50 +599,50 @@
         "request_bytes" : 46,
         "serialize_ms" : 0,
         "to_request_ms" : 0,
-        "total_ms" : 194.80954200029373,
-        "vue_ms" : 1.9480954200029372
+        "total_ms" : 220.1867920011282,
+        "vue_ms" : 2.2018679200112818
       },
       {
         "case" : "V4_classB_AB",
         "extra" : {
-          "speedup" : 8.3200000000000003,
-          "v3_amortized_us" : 17081.468000000001,
-          "v3_apply_ms" : 3.2200000000000002,
+          "speedup" : 8.8000000000000007,
+          "v3_amortized_us" : 18705.367999999999,
+          "v3_apply_ms" : 3.6299999999999999,
           "v3_geom" : 4001,
           "v3_layers_commit_ms" : 0,
-          "v3_layers_frames_ms" : 1.02,
-          "v3_layers_sort_ms" : 2.27,
-          "v3_rects_bin_ms" : 5.9299999999999997,
+          "v3_layers_frames_ms" : 1.1499999999999999,
+          "v3_layers_sort_ms" : 2.6699999999999999,
+          "v3_rects_bin_ms" : 6.6799999999999997,
           "v3_relayout_ms" : 0.029999999999999999,
           "v3_rounds_us" : [
-            16669.171999999999,
-            17081.468000000001,
-            17653.599999999999
+            18705.367999999999,
+            18672.373,
+            18949.874
           ],
-          "v4_amortized_us" : 2054.2890000000002,
-          "v4_apply_ms" : 0.050000000000000003,
-          "v4_deferred" : 3864,
+          "v4_amortized_us" : 2126.6370000000002,
+          "v4_apply_ms" : 0.059999999999999998,
+          "v4_deferred" : 3912,
           "v4_geom" : 4001,
           "v4_layers_commit_ms" : 0,
-          "v4_layers_frames_ms" : 0.040000000000000001,
-          "v4_layers_sort_ms" : 0.16,
-          "v4_rects_bin_ms" : 0.070000000000000007,
+          "v4_layers_frames_ms" : 0.029999999999999999,
+          "v4_layers_sort_ms" : 0.20000000000000001,
+          "v4_rects_bin_ms" : 0.080000000000000002,
           "v4_relayout_ms" : 0.01,
           "v4_rounds_us" : [
-            1950.6199999999999,
-            2060.1210000000001,
-            2054.2890000000002
+            2103.7220000000002,
+            2126.6370000000002,
+            2231.4549999999999
           ]
         },
-        "host_ms" : 1.8200000000000001,
+        "host_ms" : 2.2000000000000002,
         "items" : 1000,
         "note" : "★★V4 A\/B（同树同用例）：v3=JSON返回+全量层 · v4=二进制返回+可见层",
         "patch_count" : 100,
         "request_bytes" : 46,
         "serialize_ms" : 0,
         "to_request_ms" : 0,
-        "total_ms" : 205.42891700193286,
-        "vue_ms" : 2.0542891700193286
+        "total_ms" : 212.66374999657273,
+        "vue_ms" : 2.1266374999657272
       },
       {
         "case" : "V4_scroll_flush",
@@ -644,13 +730,13 @@
         "case" : "V3_clock_diag",
         "extra" : {
           "clock" : "host.mach_absolute_time",
-          "min_nonzero_ms" : 0.002499997615814209,
+          "min_nonzero_ms" : 0.0024159997701644897,
           "ticks_in_512" : 512
         },
         "host_ms" : 0,
         "items" : 0,
         "nodes" : 0,
-        "note" : "计时装置：clock=host.mach_absolute_time · 512 次连续读中 512 次前进 · 最小非零 delta=0.002499997615814209ms ⇒ 若前进次数远小于 512，**分位读数不可信，请以 amortized_us 为准**",
+        "note" : "计时装置：clock=host.mach_absolute_time · 512 次连续读中 512 次前进 · 最小非零 delta=0.0024159997701644897ms ⇒ 若前进次数远小于 512，**分位读数不可信，请以 amortized_us 为准**",
         "patch_count" : 0,
         "request_bytes" : 0,
         "serialize_ms" : 0,
@@ -691,8 +777,8 @@
   },
   "js_total" : 1,
   "launch_diag" : {
-    "bootstrap_ms" : 55.210000000000001,
-    "first_frame_ms" : 61.659999999999997,
+    "bootstrap_ms" : 87.510000000000005,
+    "first_frame_ms" : 99.180000000000007,
     "first_frame_source" : "kernel:p_starttime",
     "forced_style" : "Dark",
     "interface_style" : "Dark",
@@ -1011,5 +1097,5 @@
       "y" : 120
     }
   },
-  "tree_hash" : "21146ab8"
+  "tree_hash" : "d7741268"
 }
