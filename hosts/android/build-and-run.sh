@@ -88,6 +88,15 @@ if ! node "$HERE/gen-ops-fixture.mjs" > "$BUILD/gen-fixture.log" 2>&1; then
 fi
 tail -3 "$BUILD/gen-fixture.log" | sed 's/^/    /'
 
+# ★同一纪律适用于 app-4050 夹具（对标基准的场景，真 SFC 编译产物）——
+#   它也必须**在构建路径上**刷新，否则改了 SFC/编译器后设备仍跑旧树（"用例绿着、契约已分叉"）。
+if ! node "$HERE/gen-app4050-fixture.mjs" > "$BUILD/gen-app4050.log" 2>&1; then
+  echo "✗ app-4050 夹具生成失败 —— 完整输出见 $BUILD/gen-app4050.log："
+  tail -20 "$BUILD/gen-app4050.log"
+  exit 3
+fi
+tail -2 "$BUILD/gen-app4050.log" | sed 's/^/    /'
+
 echo "==> ② 编译 Java 宿主（javac → .class）"
 CLASSES="$BUILD/classes"; rm -rf "$CLASSES"; mkdir -p "$CLASSES"
 find "$APP/src/main/java" -name '*.java' > "$BUILD/java-sources.txt"
