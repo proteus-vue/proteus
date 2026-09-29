@@ -107,12 +107,28 @@ describe('V11 · 长列表实例化（规模上去后的正确性与复杂度）
 
   it('★★③ 行集解析必须是**线性**的（4000 行不得退化——本仓对 O(n²) 有实测教训）', () => {
     const { tpl, table } = build()
-    const measure = (n: number): number => {
+    const measureOnce = (n: number): number => {
       const rows = makeRows(n)
       const data: Record<string, unknown> = { list: rows }
       const t0 = performance.now()
       instantiateTemplate(tpl, { viewport: { width: 390, height: 844 }, read: (k) => data[k], table })
       return performance.now() - t0
+    }
+    /**
+     * ★取 **min-of-N**（同 T4 的判据纪律：干扰是加性的，min 估计"无干扰成本"）。
+     *
+     * 【为什么必须改（2026-09-29 全量套件实测）】原实现单次取样：
+     *   单独跑 **5/5 绿**，而全量套件并行执行时报 **15.4~17.1×**（阈值 12×）——
+     *   同一份 slot-runtime 代码（本次改动 diff 为空）在 40 分钟前还是绿的 ⇒ **并行争用导致的抖动**，
+     *   不是复杂度回归。根因与 T4 同族：t1k 只有几毫秒，单个样本被调度/GC 砸中即失真，
+     *   而**两个样本取自不同时刻** ⇒ 比值被噪声支配。
+     *   ⇒ min-of-3 让每次测量都趋向"无干扰成本"，比值才真正反映算法复杂度
+     *     （O(n²) 的 16× 不会被 min 抹掉——它是**系统性**的，不是加性噪声）。
+     */
+    const measure = (n: number): number => {
+      let best = Infinity
+      for (let i = 0; i < 3; i++) best = Math.min(best, measureOnce(n))
+      return best
     }
     // 预热（JIT）
     measure(200)
@@ -120,7 +136,7 @@ describe('V11 · 长列表实例化（规模上去后的正确性与复杂度）
     const t4k = measure(4000)
     // 线性 ⇒ 4× 规模约 4× 耗时；给 12× 余量避开抖动（O(n²) 会是 16×）
     const ratio = t4k / Math.max(t1k, 0.01)
-    expect(ratio, `4000/1000 耗时比 ${ratio.toFixed(2)}×（线性≈4× · O(n²)≈16×）`).toBeLessThan(12)
+    expect(ratio, `4000/1000 耗时比 ${ratio.toFixed(2)}×（线性≈4× · O(n²)≈16×；两侧均取 min-of-3）`).toBeLessThan(12)
   })
 
   it('★④ 空列表 ⇒ 只出静态部分（不崩、不留悬空行）', () => {
