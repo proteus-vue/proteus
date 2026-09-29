@@ -16,9 +16,12 @@
 //   但绘制并入最近**未被拍平**的祖先。若该祖先不存在（整棵树都可拍平），退化为正常发指令。
 //
 // ★坐标系：指令携带**绝对坐标**（布局结果已是绝对值）——平台层零换算。
+// ★★卡 I2（舍入时机统一）：坐标在**发射边界吸附为整数逻辑像素**（`snapRect`），
+//   平台层不得再舍入。求解器内部保持亚像素（求解精度与吸附解耦）。
 import type { LayoutNode } from './types'
 import type { PaintInfo } from './from-pnode'
 import { paintInfoOf } from './from-pnode'
+import { snapRect } from './pixel-snap'
 
 /** 绘制指令种类（M1 三种：够 M2 的 view/text/image 最小闭环） */
 export type RenderCmdKind =
@@ -34,7 +37,11 @@ export interface RenderCmd {
   kind: RenderCmdKind
   /** 源节点 id（回溯用；拍平节点为被并入的祖先 id） */
   nodeId: number
-  /** **绝对坐标**（父链偏移已累加） */
+  /**
+   * **绝对坐标**（父链偏移已累加）· **整数逻辑像素**
+   * ★卡 I2：坐标已在**内核**吸附（`snapRect`，边缘吸附）——**平台层不得再舍入**
+   *   （平台侧任何 round/floor/ceil 都会被 `pnpm check:host-rounding` 拦下）。
+   */
   x: number
   y: number
   width: number
@@ -84,6 +91,12 @@ export interface RenderCmdList {
     culledCount?: number
     /** ★视口裁剪：整棵子树在视口外而提前返回的次数 */
     culledSubtrees?: number
+    /**
+     * ★卡 I2：发射坐标**因吸附而改变**的指令数。
+     * `0` = 本树几何恰好全整数（吸附未介入，不是"没实现"——判据见
+     * `tests/layout-core-pixel-snap.test.ts`：非整数几何树必须 > 0）。
+     */
+    snappedCount?: number
   }
 }
 
@@ -128,6 +141,8 @@ export function emitRenderCmds(roots: LayoutNode[], opts: EmitOptions = {}): Ren
   //   culledSubtrees = 因整棵子树在视口外而**提前返回**的次数（诊断"裁到了什么"）
   let culledCount = 0
   let culledSubtrees = 0
+  // ★卡 I2 读数：发射坐标**因吸附而改变**的指令数（0 = 本树几何恰好全整数，吸附未介入）
+  let snappedCount = 0
   /** 被拍平节点归属的指令下标 → 该指令的并入清单 */
   const mergedInto = new Map<number, number[]>()
 
@@ -199,7 +214,11 @@ export function emitRenderCmds(roots: LayoutNode[], opts: EmitOptions = {}): Ren
       }
       self = parent
     } else if (paintable) {
-      const cmd = buildCmd(node, info, abs, seq++)
+      // ★★卡 I2：**发射边界吸附** —— 指令携带整数逻辑像素；子级遍历/裁剪判定仍用亚像素 abs
+      //   （吸附只作用于「对平台可见」的指令坐标，不影响布局语义）
+      const snapped = snapRect(abs.x, abs.y, abs.width, abs.height)
+      if (snapped.x !== abs.x || snapped.y !== abs.y || snapped.width !== abs.width || snapped.height !== abs.height) snappedCount++
+      const cmd = buildCmd(node, info, snapped, seq++)
       if (cmd) {
         cmds.push(cmd)
         self = { cmdIndex: cmds.length - 1 }
@@ -211,9 +230,12 @@ export function emitRenderCmds(roots: LayoutNode[], opts: EmitOptions = {}): Ren
     }
 
     // ── 裁剪：overflow 非 visible 产生 push/popClip（M3 生效；M1 如实产出以便对拍）
+    //   ★卡 I2：裁剪矩形同样吸附——**与内容同一条边值经同一纯函数吸附 ⇒ 裁剪区与内容对齐**
+    //     （若只吸附内容而裁剪区保持亚像素，边缘内容会被切掉半个像素）
     const clipped = node.overflow === 'hidden' || node.overflow === 'scroll' || node.overflow === 'auto'
+    const clipBox = clipped ? snapRect(abs.x, abs.y, abs.width, abs.height) : undefined
     if (clipped) {
-      cmds.push({ ...frame(node, abs, seq++), kind: 'pushClip', hint: emptyHint() })
+      cmds.push({ ...frame(node, clipBox!, seq++), kind: 'pushClip', hint: emptyHint() })
       self = { cmdIndex: undefined } // 裁剪内不允许并入外部指令（否则绘制会落到裁剪区外）
     }
 
@@ -224,7 +246,7 @@ export function emitRenderCmds(roots: LayoutNode[], opts: EmitOptions = {}): Ren
       walk(child, isAbs ? abs.x : abs.x + node.padding.left, isAbs ? abs.y : abs.y + node.padding.top, self)
     }
 
-    if (clipped) cmds.push({ ...frame(node, abs, seq++), kind: 'popClip', hint: emptyHint() })
+    if (clipped) cmds.push({ ...frame(node, clipBox!, seq++), kind: 'popClip', hint: emptyHint() })
   }
 
   for (const root of roots) walk(root, 0, 0, { cmdIndex: undefined })
@@ -245,6 +267,8 @@ export function emitRenderCmds(roots: LayoutNode[], opts: EmitOptions = {}): Ren
       // ★裁剪读数（判据用：0 表示没裁掉任何东西 ⇒ 要么视口覆盖全树、要么开关没生效）
       culledCount,
       culledSubtrees,
+      // ★卡 I2 吸附读数（同上：0 表示几何恰好全整数，而非吸附未实现）
+      snappedCount,
     },
   }
 }

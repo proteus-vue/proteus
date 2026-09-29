@@ -40,3 +40,7 @@ export type { LengthContext, TextMeasurer, FromPNodeOptions, PaintInfo } from '.
 export { resolveLength, layoutTreeFromPNode, paintInfoOf } from './from-pnode'
 export type { RenderCmd, RenderCmdKind, RenderCmdList, EmitOptions } from './render-cmd'
 export { emitRenderCmds, formatRenderCmds } from './render-cmd'
+
+// ★卡 I2：**坐标吸附**（舍入时机统一）——内核唯一实现；平台层不得再舍入
+export type { SnappedRect } from './pixel-snap'
+export { snapCoord, snapRect } from './pixel-snap'

@@ -696,9 +696,11 @@ pub unsafe extern "C" fn proteus_layout_run(request_json: *const c_char) -> *mut
         for (i, r) in abs.iter().enumerate() {
             if let Some(r) = r {
                 let id = req.nodes[i].id;
+                // ★卡 I2：导出边界吸附（宿主可见几何 = 整数逻辑像素；内部保持亚像素）
+                let s = crate::snap::snap_rect(*r);
                 rects.insert(
                     id.to_string(),
-                    serde_json::json!({"x": r.x, "y": r.y, "width": r.width, "height": r.height}),
+                    serde_json::json!({"x": s.x, "y": s.y, "width": s.width, "height": s.height}),
                 );
             }
         }
@@ -1183,9 +1185,13 @@ pub(crate) fn collect_abs_subtree(
     let r = node.rect;
     let abs_x = parent_ox + r.x;
     let abs_y = parent_oy + r.y;
+    // ★卡 I2：导出边界吸附 —— 与 `proteus_layout_rects` **同一把尺子**
+    //   （否则「变化集」与「全量集」会在同一条边上差 ≤0.5px ⇒ 宿主更新出 1px 抖）
+    //   ★下钻仍用**未吸附**的 abs_x/abs_y 累加：吸附只作用于导出值，不改变遍历语义
+    let s = crate::snap::snap_rect(crate::style::Rect { x: abs_x, y: abs_y, width: r.width, height: r.height });
     out.insert(
         node.id.to_string(),
-        serde_json::json!({"x": abs_x, "y": abs_y, "width": r.width, "height": r.height}),
+        serde_json::json!({"x": s.x, "y": s.y, "width": s.width, "height": s.height}),
     );
     for &c in &node.children {
         collect_abs_subtree(tree, c, abs_x, abs_y, out);
@@ -1272,7 +1278,12 @@ pub unsafe extern "C" fn proteus_layout_hit_test(handle: u64, x: f32, y: f32) ->
     let r = std::panic::catch_unwind(|| -> Result<String, String> {
         let reg = registry().lock().map_err(|_| "注册表锁失败".to_string())?;
         let tree = &reg.get(&handle).ok_or_else(|| format!("句柄 {handle} 不存在"))?.tree;
-        let res = crate::hit::hit_result(tree, x, y);
+        // ★★卡 I2：宿主路径用**吸附几何**做命中 —— 与绘制坐标（导出的整数逻辑像素）同源。
+        //   若这里用亚像素几何，视觉边界与可点边界会差 ≤0.5px（"看着在这、点下去在那"）。
+        //   ★内核测试/conformance（对浏览器 golden）仍直接用 `hit_path`（未吸附）——
+        //     那是"与浏览器浮点语义对齐"的判据，与宿主可见几何是两回事（见 hit.rs 注释）。
+        let geo = crate::hit::geometry_snapped(tree);
+        let res = crate::hit::hit_result_with(tree, x, y, &geo);
         let ids = |v: &Vec<crate::node::NodeIndex>| -> Vec<u32> { v.iter().map(|&i| tree.get(i).id).collect() };
         Ok(serde_json::json!({
             "ok": true,
