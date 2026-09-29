@@ -153,6 +153,19 @@ mkdir -p "$BUILD/lib/arm64-v8a"
 cp "$SO_SRC" "$BUILD/lib/arm64-v8a/libproteus_layout_core.so"
 (cd "$BUILD" && zip -q "$APK" lib/arm64-v8a/libproteus_layout_core.so)
 
+# ★S2：JS 引擎（QuickJS JNI 桥）——由 scripts/setup-android-js-engine.sh 产出
+#   【为什么可选】引擎缺失时 QuickJsEngine.isAvailable()=false，宿主给出明确提示（不崩）
+#   —— 与 Rust .so 不同：JS 引擎是**新增能力**（此前 Android 无 JS），缺它不影响既有测试路径
+JS_SO="$HERE/build/js-engine/libquickjs_jni.so"
+if [ -f "$JS_SO" ]; then
+  cp "$JS_SO" "$BUILD/lib/arm64-v8a/libquickjs_jni.so"
+  (cd "$BUILD" && zip -q "$APK" lib/arm64-v8a/libquickjs_jni.so)
+  echo "    JS 引擎 .so 已打入（$(du -h "$JS_SO" | awk '{print $1}')）"
+else
+  echo "    ⚠ 未找到 JS 引擎 .so（$JS_SO）——先跑：bash scripts/setup-android-js-engine.sh"
+  echo "      （不阻断构建：缺它只影响 js-engine 测试路径，既有路径不受影响）"
+fi
+
 echo "==> ⑥ 签名（apksigner + debug keystore）"
 KS="$BUILD/debug.keystore"
 if [ ! -f "$KS" ]; then

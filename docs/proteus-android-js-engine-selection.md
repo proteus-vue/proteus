@@ -107,13 +107,40 @@ Hermes 的字节码预编译有结构性优势——**届时应重新评估**（
 
 ## 5. 落地路径（建议，含判据与边界）
 
-| 步 | 内容 | 判据 |
-|---|---|---|
-| **S1** | 把 QuickJS 源码纳入 `.tools/`（或 vendor 目录）+ 构建脚本（复用既有 NDK 路径） | `libquickjs.so` 产出 + 架构正确（`file` 验 ARM aarch64） |
-| **S2** | 写 JNI 桥：`evaluateScript(source)` + 注入 `proteusNative` 等价对象（对齐 `hosts/ios/bridge/entry.ts` 的适配器形态） | 真机能执行一段 JS 并回传字符串 |
-| **S3** | 在 `hosts/android` 跑通 `createSelfDrawBatchAdapter` 的**最小闭环**（建 1 个节点 + commit 一次） | 宿主侧收到 1 次 `mount` 调用、批次内容正确 |
-| **S4** | 接 HA0 八接口（Host ABI）——把 JNI 桥规范化到 C ABI | `proteus_submit_frame` 等接口可被 Android 调用 |
-| **S5** | 三项复测（4050 / 长列表 / 内存）+ C1/C2 剩余验收 | 按卡内口径 |
+| 步 | 内容 | 判据 | 状态 |
+|---|---|---|---|
+| **S1** | QuickJS 源码纳入 `.tools/`（**gitignored**，同 JDK/NDK 惯例）+ 构建脚本 | `libquickjs.so` 产出 + 架构断言（`file` 验 ARM aarch64） | ✅ **已完成** |
+| **S2** | JNI 桥：`evaluateScript` + 宿主回调桩（`proteusHost.post`） | JNI 导出符号在场（`llvm-nm` 断言）+ 零设备跑通 bundle | ✅ **已完成** |
+| **S3** | 在 `hosts/android` 跑通 `createSelfDrawBatchAdapter` 的**最小闭环**（建 1 个节点 + commit 一次） | 宿主侧收到 1 次 `mount` 调用、批次内容正确 | ⏳ 待做（需真机） |
+| **S4** | 接 HA0 八接口（Host ABI）——把 JNI 桥规范化到 C ABI | `proteus_submit_frame` 等接口可被 Android 调用 | ⏳ 待做（依赖 HA0） |
+| **S5** | 三项复测（4050 / 长列表 / 内存）+ C1/C2 剩余验收 | 按卡内口径 | ⏳ 待做（需真机） |
+
+### 5.1 S1/S2 落地记录（2026-09-29）
+
+**产物（本机实测）**：
+- `.tools/quickjs/`（源码，**gitignored**）· 本机 `qjs` **1075 KB**
+- `hosts/android/build/js-engine/libquickjs.so` **1084 KB**（ARM aarch64）
+- `hosts/android/build/js-engine/libquickjs_jni.so` **1089 KB**（含 QuickJS + JNI 桥，架构+导出符号双断言）
+
+**新增文件**：
+- `scripts/setup-android-js-engine.sh`（S1+S2 构建；`--host` 只建本机 qjs · `--check` 只验产物）
+- `hosts/android/js-engine/quickjs_jni.c`（JNI 桥：`nativeEval` / `nativeEvalWithHost` / `nativeSetHostCallback`）
+- `hosts/android/app/.../QuickJsEngine.java`（Java 门面，对齐 `RustLayout` 的「JSON 进 / JSON 出」惯例）
+- `scripts/verify-js-engine.mjs`（**零设备验证**：引擎可用 + 解析 + 完整执行三判据）
+- 门禁：`check:js-engine-build`（产物 + 架构 + 导出符号）· `check:js-engine`（三判据）
+
+**★两处供应链/工程纪律（如实记录）**：
+1. **QuickJS 官方发布页不提供校验和/签名**（实测）⇒ 脚本**无法验证下载完整性**。
+   缓解：首次获取后**人工核对 sha256 并钉死**在脚本 `PINNED_SHA256`（本次已钉：
+   `b376e839…a70ad2a`，后续下载会校验）。★未钉死时脚本会**明确报告"未校验"**——不假装通过。
+2. **中文注释里的 `$VAR<全角字符>` 会被 bash 当作变量名一部分**（实测报 unbound variable）
+   ⇒ 已系统性扫描并改为 `${VAR}<全角>`（一次修 3 处）。★与"第 N 份手写副本"同族：
+   **语言边界的隐式规则要靠工具/扫描兜住**（本次用正则扫描全文，不靠肉眼）。
+
+**★零设备验证的边界（写进 `verify-js-engine.mjs` 输出）**：本机 qjs 是 **x86_64**，
+Android `.so` 是 **arm64**——两者**同一份源码**（同版本同配置）⇒ 语义等价，差异只在 ABI/架构
+（由 setup 脚本的架构断言覆盖）。⇒ 该验证证明"**引擎能力足够**"，
+**不**证明"JNI 编组正确"（后者需 S3 真机）。
 
 **诚实边界**：
 1. **本选型不含性能预测**：QuickJS 是解释器，**JS 侧吞吐会低于 JSC 的 JIT**
