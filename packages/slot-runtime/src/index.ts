@@ -30,6 +30,13 @@ export { SlotRuntime, createSlot, attrsValue, opcodeFor, microtaskScheduler } fr
 export type { Slot, SlotSpec, SlotRuntimeStats, FrameScheduler, ListItemValue, AttrsValue } from './slot'
 
 export { createList, emitItemUpdate, emitItemUpdates, emitSplice, emitListSet } from './list'
+
+// ★卡 I1：版本协商（Host ABI §6 三件套；`OPS_WIRE_VERSION` 与 `OPS_VERSION` **同源**）
+export {
+  ABI_VERSION, IR_VERSION, OPS_WIRE_VERSION, MIN_SHELL_VERSION,
+  versionInfo, checkHostVersion,
+} from './version'
+export type { ProteusVersionInfo, VersionCheckResult } from './version'
 export type { ListHandle, ListItem } from './list'
 
 export { L1_CONDITIONS, decideTier, explainDecision, decisionsToRows } from './tier'

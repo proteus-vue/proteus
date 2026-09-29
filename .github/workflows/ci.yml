@@ -213,6 +213,11 @@ jobs:
       - name: 验收脚本桩测（设备无关：假 adb 跑完整流程——防「改脚本后直接上真机」）
         run: node hosts/android/acceptance-stub.mjs
 
+      # ★2026-09-29 新增：指令集规格门禁（卡 I1）——规格表从**代码生成**（求值真实 opSize），
+      #   `--check` 比对 ⇒ 表与代码不可能漂移（手写规格 = 第 5 份副本，漂移静默）。
+      - name: 指令集规格门禁（生成物 ↔ 代码一致——防「规格表与实现漂移」）
+        run: node scripts/gen-instruction-spec.mjs --check
+
       # ★2026-09-29 新增：柔性系统对外口径门禁——形态数量（与 FORM_PROFILES 键数机器对账）/
       #   弃用术语（Flex System → Fluid System）/ 命名纪律（书本式半开不得写作「半折」）。
       #   背景：收口评审时发现站内写「六种/七种设备形态」而实际已是 8 个（fold/flip 拆类后未同步）。

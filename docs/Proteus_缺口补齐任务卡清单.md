@@ -15,7 +15,7 @@
 | 卡 | 核对结论 | 逐条依据（可点开验证） |
 |---|---|---|
 | **V1** Vapor 产品化 | ✅ **5/5 全达标（2026-09-29）** | ✅ 模块可独立引用（`packages/compiler/src/vapor/` 已导出）· ✅ **4001 重排 ≤0.08ms 可复现**（`pnpm check:vapor-perf`，已接 CI）· ✅ 三层嵌套在单测（`tests/vapor-list-e2e.test.ts` 4 处）· ❌ **README 无独立章节**（`grep -c vapor README.md` = 0）· ✅ 单测全绿（**3881**，非 3441） |
-| **I1** 指令集规格化 | ❌ **未达标** | 无公开规格表（`docs/` 内无 opcode 规格文档）· `ir_version` 有机制但**未用于指令集协商** |
+| **I1** 指令集规格化 | ✅ **4/4 达标（2026-09-29）** | ✅ 规格表 `docs/generated/instruction-spec.md`（**从代码生成**：12 opcode + 字节数 + Draw 6 kind；`--check` 接 CI）· ✅ `checkHostVersion()` 版本协商（Host ABI §6 三件套 + 可操作 upgradeHint）· ✅ major/minor 流程（含两次真实变更实例）· ★Anim 类未实现（归卡 V6），规格表如实标注 |
 | **I2** 舍入时机统一 | ❌ **未达标** | 主方案 §5.5 仍为"**待 M2 真机数据**"（`04-batches.md` 检查项未勾）；无三端一致的舍入实现 |
 | **I3** paint-hint 编码进指令 | 🟡 **部分达标（2/3）** | ✅ 指令携带 hint（`RenderCmd.hint`，`layout-core/src/render-cmd.ts:58`）· ✅ 编译期推导、运行时零判断（`component-ir/src/pnode-style.ts:496`：`isMonochrome`/`isPureBackground`/`shareableContent`）· ❌ **iOS 内存增量复测未做**（该卡的风险正指向"平台层运行时猜 ⇒ +78% 内存复发"，而复测是验证 hint 真的被平台用于 backing store 策略的**唯一判据**） |
 | **I4** 文本在指令流的表达 | 🟡 **部分达标（2/4）** | ✅ 指令含度量结果（`SET_TEXT` 9B + `textMeasures` 注入协议：建树注入 + `set_text_measures` + splice 追加）· ✅ 平台层不参与排版（只度量并注入，核心算几何）· ❌ **方案选定无显式决策记录**（设计在落地方案 §5.2，但"方案 A vs B"的选择未作为决策留痕）· ❌ **文本一致性未真正进 conformance**（`browser-layout.json` 21 用例里 **`textMeasures` 全为空表**⇒ 文本度量这条通道**没被真值对拍覆盖**） |
@@ -50,7 +50,7 @@ I8 卡写着「**先做 I6 评估，明确指令流体积是否构成瓶颈，�
 ### 第一批 · P0（并行启动）
 
 - [x] **V1** Vapor 成果产品化 — ★ 最高性价比 ✅ **5/5 全达标（2026-09-29）**
-- [ ] **I1** 指令集规格化与版本化 ❌ **未达标**（无规格表）
+- [x] **I1** 指令集规格化与版本化 ✅ **4/4 达标**（生成式规格表 + 版本协商 + CI 门禁）
 - [ ] **I2** 舍入时机统一 ❌ **未达标**（主方案仍"待真机数据"）
 - [x] **I3** paint-hint 编码进指令 ✅ **2/3**（指令带 hint ✓ / 编译期推导 ✓ / iOS 内存复测 ❌）
 
@@ -140,11 +140,14 @@ I8 卡写着「**先做 I6 评估，明确指令流体积是否构成瓶颈，�
 2. 指令集版本化（复用既有 `ir_version` 机制）
 3. 变更走语义化版本，纳入 conformance
 
-### 验收（★2026-09-29 核对：**未达标**）
-- [ ] 完整 opcode 清单（Draw / Anim 两大类）—— ❌ 无公开规格表；opcode 散在 `slot-runtime/src/opcode.ts` 与 `layout-core-rust/src/ops.rs`
-- [ ] 每条指令有参数定义与语义说明 —— 🟡 代码注释有（含字节尺寸：SET_TEXT 9B / SET_STYLE 11B 等），**未成规格文档**
-- [ ] 版本号纳入 Host ABI 协商 —— ❌ `OPS_VERSION` 常量在，**未用于协商**
-- [ ] 变更走 major/minor 流程 —— ❌ 无流程
+### 验收（★2026-09-29 已实现：**4/4 达标**）
+- [x] 完整 opcode 清单（Draw / Anim 两大类）—— ✅ **`docs/generated/instruction-spec.md`**（生成物，勿手改）：**Update 12 条 opcode**（`0x01`–`0x30`，含字节数与参数字段）+ **Draw 6 种 kind** + 线上格式头 + 实现状态
+- [x] 每条指令有参数定义与语义说明 —— ✅ 同上（opcode 值 / 名称 / **字节数** / 参数；尺寸来自**求值真实 `opSize()`**，非手抄）
+- [x] 版本号纳入 Host ABI 协商 —— ✅ **`packages/slot-runtime/src/version.ts`**：`versionInfo()`（`abi_version` / `ir_version` / `ops_wire_version` / `min_shell_version`）+ **`checkHostVersion()`**（唯一实现，两端共用）；★不兼容时**必给可操作的 `upgradeHint`**（Host ABI §6 强制要求②：不得静默、不得只报"版本不符"）
+- [x] 变更走 major/minor 流程 —— ✅ 规格表 §4.3（新增 opcode ⇒ minor；改语义/布局/移除 ⇒ major）+ **两次真实变更实例**（v1 全量池 → v2 池按需 + ref 重映射 = major，靠 `ops_conformance` golden 抓未同步端）
+- [x] ★**门禁**：`pnpm check:instr-spec`（规格表 ↔ 代码一致，已接 CI + verify；破坏性验证过）
+
+★**Anim（动画）类指令**：本卡标题写"Draw / Anim 两大类"，而**动画指令尚未实现**（`AnimOpCode` 仅存在于设计文档，见卡 V6）⇒ 规格表**如实标注 Draw（已实现）与 Update（已实现）两大类**，Anim 归 V6。
 
 ---
 
