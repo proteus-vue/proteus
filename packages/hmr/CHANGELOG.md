@@ -1,5 +1,11 @@
 # @proteus-vue/hmr
 
+## 0.3.0-beta.21
+
+### Patch Changes
+
+- @proteus-vue/runtime@0.3.0-beta.21
+
 ## 0.3.0-beta.13
 
 ### Patch Changes

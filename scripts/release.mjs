@@ -18,6 +18,8 @@
 // 用法：
 //   pnpm release           # 一条命令全自动：凭据预检 → 版本提升 → 发布 → 核验 → tag 归一
 //   pnpm release --dry-run # 只体检，不改动、不发布
+//   pnpm release --bump-only # ★只提升版本（不发 registry → 不需要 npm 凭据）；
+//                          #   本仓已迁 OIDC 发布，正确姿势是：本地 bump+提交推送 → CI 触发 publish.yml
 //   pnpm release --all     # ★全部包补 patch 版本并重发——用于把 41 个包的 `latest` 一次性归位
 //                          #   （npm 强制每包须有 latest，而事后改 tag 需交互式 2FA；
 //                          #    发布时设置 tag 不受限，故重发是零手工的归位路径）
@@ -43,6 +45,17 @@ const DRY_RUN = argv.includes('--dry-run')
  *   唯一「零手工」路径。仅在 tag 需要整体收口时用，日常发布不要加。
  */
 const REPUBLISH_ALL = argv.includes('--all')
+/**
+ * `--bump-only`：**只做版本提升，不发 registry**（因此**不需要 npm 凭据**）。
+ * ★为什么需要（2026-09-29 实测的发布链缺口）：
+ *   本仓发布已迁到 **OIDC trusted publishing**（`.github/workflows/publish.yml`，
+ *   `workflow_dispatch` + `id-token: write`），本地不再持有 token；
+ *   而本脚本的「① 凭据预检」在**版本提升之前**执行 ⇒ 本地 `pnpm release` 直接中止，
+ *   于是「改了源码但未 bump 的 16 个包」永远等不到版本前进。
+ *   OIDC 路径的真实需求是：**版本提升在本地做（提交推送）→ 发布在 CI 做**。
+ *   本开关让前一半可独立完成，凭据只在第 ③ 步（真发布）才需要。
+ */
+const BUMP_ONLY = argv.includes('--bump-only')
 
 const step = (n, title) => console.log(`\n── ${n} ${title} ──`)
 const die = (msg) => {
@@ -110,11 +123,16 @@ const PRE = preTag()
 console.log(PRE ? `  模式：pre-release（changesets tag = ${PRE}）` : '  模式：正式版')
 
 // ── ① 凭据预检 ──
+// ★--bump-only 跳过：那一步只提升版本号、不碰 registry（OIDC 发布不需要本地凭据）。
 step('①', '凭据预检')
-try {
-  run('node', ['scripts/check-publish-auth.mjs'], { capture: false })
-} catch {
-  die('npm 凭据不可用——请先修复认证（见上方提示），再重跑 pnpm release')
+if (BUMP_ONLY) {
+  console.log('  （--bump-only：跳过——本步骤只提升版本，不需要 npm 凭据）')
+} else {
+  try {
+    run('node', ['scripts/check-publish-auth.mjs'], { capture: false })
+  } catch {
+    die('npm 凭据不可用——请先修复认证（见上方提示），再重跑 pnpm release')
+  }
 }
 
 // ── ② 自动版本提升 ──
@@ -278,6 +296,17 @@ if (DRY_RUN) {
   } catch {
     die('发布命令演练失败（见上方 FAIL 项）——修好后再真实发布，避免又白跑一趟')
   }
+  process.exit(0)
+}
+
+// ── ★--bump-only 出口：版本提升 + 内部对齐已完成，到此为止 ──
+// ★为什么在**提升之后**才退出（而不是更早）：提升后置同步（②b）会改模板/examples 的 pin
+//   与 lockfile——那正是要提交的内容；早退会留下「版本 bump 了但 pin 没跟」的半成品。
+// ★发布动作由 CI 承担：`.github/workflows/publish.yml`（workflow_dispatch，OIDC，无需本地 token）。
+if (BUMP_ONLY) {
+  console.log('\n[release] --bump-only 结束：版本已提升、内部 pin 已对齐、lockfile 已更新。')
+  console.log('  下一步：提交推送 → 在 Actions 页手动触发 publish.yml（OIDC trusted publishing）。')
+  console.log('  ★切勿在本地直接发布：本仓发布链已收敛到 CI（provenance 与凭据都不落在开发机）。')
   process.exit(0)
 }
 

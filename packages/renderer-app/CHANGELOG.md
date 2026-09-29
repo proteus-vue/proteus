@@ -1,5 +1,29 @@
 # @proteus-vue/renderer-app
 
+## 0.3.0-beta.21
+
+### Patch Changes
+
+- 自动补 bump（scripts/release.mjs）：以下包有本地源码变更但版本号未提升，
+  不 bump 会被 npm 静默跳过——依赖方声明的旧版本号拿到的仍是旧内容。
+
+  - `@proteus-vue/agent`
+  - `@proteus-vue/api`
+  - `@proteus-vue/built-in-components`
+  - `@proteus-vue/capabilities`
+  - `@proteus-vue/compiler-backend`
+  - `@proteus-vue/compiler-backend-rust`
+  - `@proteus-vue/component-ir`
+  - `@proteus-vue/components`
+  - `@proteus-vue/devtools`
+  - `@proteus-vue/fluid`
+  - `@proteus-vue/mcp`
+  - `@proteus-vue/render-backend`
+  - `@proteus-vue/renderer-app`
+  - `@proteus-vue/shared`
+  - `@proteus-vue/web`
+  - `@proteus-vue/worklet`
+
 ## 0.3.0-beta.11
 
 ## 0.3.0-beta.10

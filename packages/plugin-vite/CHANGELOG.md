@@ -1,5 +1,14 @@
 # @proteus-vue/plugin-vite
 
+## 0.3.0-beta.21
+
+### Patch Changes
+
+- Updated dependencies
+  - @proteus-vue/compiler-backend@0.3.0-beta.21
+  - @proteus-vue/compiler@0.3.0-beta.21
+  - @proteus-vue/router@0.3.0-beta.21
+
 ## 0.3.0-beta.19
 
 ### Patch Changes

@@ -45,10 +45,12 @@
     "@proteus-vue/worklet": "0.1.0",
     "proteus-showcase": "0.1.0",
     "@proteus-vue/website": "0.1.0",
-    "@proteus-vue/components": "0.1.0"
+    "@proteus-vue/components": "0.1.0",
+    "@proteus-vue/layout-core": "0.3.0-beta.11",
+    "@proteus-vue/slot-runtime": "0.3.0-beta.11"
   },
   "changesets": [
-    "auto-release-bump-1789904999895-9z53k",
+    "auto-release-bump-1790642297821-dggmr",
     "batch3-host-capabilities",
     "compiler-silent-traps",
     "fix-template-deps-and-smoke",

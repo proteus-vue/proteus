@@ -1,5 +1,11 @@
 # @proteus-vue/test-core
 
+## 0.3.0-beta.21
+
+### Patch Changes
+
+- @proteus-vue/compiler@0.3.0-beta.21
+
 ## 0.3.0-beta.19
 
 ### Patch Changes
