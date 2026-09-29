@@ -18,7 +18,7 @@
 | **I1** 指令集规格化 | ✅ **4/4 达标（2026-09-29）** | ✅ 规格表 `docs/generated/instruction-spec.md`（**从代码生成**：12 opcode + 字节数 + Draw 6 kind；`--check` 接 CI）· ✅ `checkHostVersion()` 版本协商（Host ABI §6 三件套 + 可操作 upgradeHint）· ✅ major/minor 流程（含两次真实变更实例）· ★Anim 类未实现（归卡 V6），规格表如实标注 |
 | **I2** 舍入时机统一 | ✅ **2/3 达标（2026-09-29）** | ✅ **舍入仅在内核 + 平台零舍入（静态门禁）**：策略 = 边缘吸附 `snap(v)=floor(v+0.5)`，实现 `packages/layout-core/src/pixel-snap.ts` + `packages/layout-core-rust/src/snap.rs`（唯一实现）；宿主侧去除 `Math.round` 几何舍入（`ProteusHostView` / `MirrorHit`）并加静态门禁 `pnpm check:host-rounding`（破坏性验证过）· ✅ **两端（TS ⇄ Rust）同输入逐字节一致**：golden `packages/layout-core-rust/tests/golden/pixel-snap.json` + 两侧测试各自比对（含 f32 精度边界台账）· ❌ **鸿蒙三列错位无法验证——仓库无鸿蒙宿主**（`hosts/` 只有 android/ios）；内核级三列场景已证（33/34/33 守恒、无 1px 缝），但"ArkUI 上不错位"不能声称 |
 | **I3** paint-hint 编码进指令 | 🟡 **部分达标（2/3）** | ✅ 指令携带 hint（`RenderCmd.hint`，`layout-core/src/render-cmd.ts:58`）· ✅ 编译期推导、运行时零判断（`component-ir/src/pnode-style.ts:496`：`isMonochrome`/`isPureBackground`/`shareableContent`）· ❌ **iOS 内存增量复测未做**（该卡的风险正指向"平台层运行时猜 ⇒ +78% 内存复发"，而复测是验证 hint 真的被平台用于 backing store 策略的**唯一判据**） |
-| **I4** 文本在指令流的表达 | 🟡 **部分达标（2/4）** | ✅ 指令含度量结果（`SET_TEXT` 9B + `textMeasures` 注入协议：建树注入 + `set_text_measures` + splice 追加）· ✅ 平台层不参与排版（只度量并注入，核心算几何）· ❌ **方案选定无显式决策记录**（设计在落地方案 §5.2，但"方案 A vs B"的选择未作为决策留痕）· ❌ **文本一致性未真正进 conformance**（`browser-layout.json` 21 用例里 **`textMeasures` 全为空表**⇒ 文本度量这条通道**没被真值对拍覆盖**） |
+| **I4** 文本在指令流的表达 | ✅ **4/4 达标（2026-09-29）** | ✅ 指令含度量结果（`SET_TEXT` 9B + **三通道**注入协议）· ✅ 平台层不参与排版（只度量并注入，内核算几何）· ✅ **方案 A 决策留痕**：`docs/proteus-performance-plan/12-dcp-i4-text-expression.md`（三条否决 B 的理由 + 代价 + **四条诚实边界**）· ✅ **文本进 conformance**：**2/21 → 6/25**（真实 Chromium 重生成），新用例**当场抓到一个真缺陷**（引擎把"未指定 min"映射成 `auto` ⇒ CSS `min-width:auto` 生效 ⇒ 文本不可收缩，差 **24.53dp**；已修为 `length(0.0)`，96 节点全过）★**更正卡的过时信息**：并非"textMeasures 全为空表"——原 2 条含真实浏览器度量，且 `conformance_browser_layout` 对每个用例都注入 measurer ⇒ 那两条几何**确实被对拍** |
 | **V2** 槽位 O(1) 覆盖 | 🟡 **部分达标** | 绑定类型：属性/文本/样式/列表 ✅ 走槽位；**事件**走命中测试 + 派发（`V9` PASS）、**条件**走 L0（设计如此）⇒ 清单存在但**未单列成表**（该卡的交付物是"清单 + 逐类标注"，此项未产出） |
 | **V3** LIST_UPDATE | ✅ **已达标**（判据已量化） | 指令**可用**（`OpCode.LIST_UPDATE 0x22` + `ListRegistry` 解析为普通 SET_STYLE/SET_TEXT）· 单行更新**不随行数线性增长**——★**2026-09-29 实测**：行级失效 `relinkRow` 后 JS 段 **5.42 → 1.91ms**；但**端到端仍 6.0ms**（瓶颈在协议层键池重发，见 I8 条目）· 长列表无回退（`V12`/`V14` PASS） |
 | **V4** L0/L1 安全判定 | ✅ **已达标** | 七条件实现于 `slot-runtime/src/tier.ts`（`build.ts` Step 6 复用，**同一语义一处实现**）· 反例测试在 `tests/`（含 `forcePure` 路径）· 误判为 L1 的**静默不更新**风险由 flush 判据 + `unsupported` 上报兜底 |
@@ -56,7 +56,7 @@ I8 卡写着「**先做 I6 评估，明确指令流体积是否构成瓶颈，�
 
 ### 第二批 · P0（依赖第一批）
 
-- [ ] **I4** 文本在指令流中的表达定案 🟡 **2/4**（缺：方案决策留痕 / 文本度量进 conformance）
+- [x] **I4** 文本在指令流中的表达定案 ✅ **4/4 达标**（方案 A 决策留痕 + 文本进 conformance 6/25，且抓出并修复一个引擎真缺陷）
 - [ ] **C1** NativeBackend（G-28）实现 — ★ 最长 🟡 **原型在，生产未就绪**
 - [ ] **C2** Host Runtime（G-39/G-40）实现 🟡 **部分**（Web 侧齐备；Native 未接真机）
 
@@ -255,11 +255,37 @@ RenderCmd 设计已定，但文本如何表达未明确：
 2. 指令流携带**已度量完成的几何 + 文本内容**
 3. 平台层只负责绘制
 
-### 验收（★2026-09-29 核对：**2/4 达标**）
-- [ ] 方案已选定并写入规格 —— 🟡 设计已写入落地方案 §5.2（`text_measure` 平台注入 = 本卡的"方案 A"），但**"方案 A vs B"的选择未作为决策留痕**（`PROJECT_MEMORY` 无对应决策号）
-- [x] 指令含文本度量结果 —— ✅ `SET_TEXT`（`OpCode 0x03`，9 字节）+ **`textMeasures` 注入协议**（建树注入 / `proteus_layout_set_text_measures` / splice 追加三通道）
-- [x] 平台层不参与文本排版 —— ✅ 平台只**度量 + 注入**（CoreText / StaticLayout），几何由核心算（`ffi.rs` 注释："宿主度量后推入；不触发重排"）
-- [ ] 文本跨端一致性纳入 conformance —— ❌ **未覆盖**：`packages/layout-core-rust/tests/golden/browser-layout.json` 的 21 用例里 **`textMeasures` 全为 `{}`** ⇒ 文本度量通道**没有被浏览器真值对拍**（几何一致性 0.375dp 是不含文本度量的读数）
+### 验收（★2026-09-29 实现：**4/4 达标**）
+- [x] 方案已选定并写入规格 —— ✅ **决策留痕**：`docs/proteus-performance-plan/12-dcp-i4-text-expression.md`
+  （**选方案 A**：内核持平台注入的度量 → 内核算几何 → 指令流携带已定几何；平台只光栅化）。
+  含**三条否决 B 的理由**（指令流失去自包含 / 三端几何天然分叉 / golden 通道结构上不可用）、
+  A 的代价（平台必须能"只度量"）、**四条诚实边界**（内核不自研文本 / `min-*: auto` 有意不建模 /
+  断行未建模 / 平台字体差异不消除）。
+- [x] 指令含文本度量结果 —— ✅ `SET_TEXT`（`OpCode 0x03`，9 字节）+ **三通道注入协议**
+  （① 建树 `textMeasures` ② `proteus_layout_set_text_measures` ③ splice 随行）——**三通道各有判据**。
+- [x] 平台层不参与文本排版 —— ✅ 平台只**度量 + 注入**（CoreText / StaticLayout），几何由内核算
+  （`ffi.rs` 注释："宿主度量后推入；不触发重排"）。
+- [x] 文本跨端一致性纳入 conformance —— ✅ 文本用例 **2/21 → 6/25**（真实 Chromium 重生成 golden，
+  96 节点最大偏差 ≤ 0.5dp）。新增 4 条：超宽收缩 / **flexShrink 参与** / 多级撑开 / 度量与绘制共存。
+  ★**更正卡的过时信息**：并非"全为空表"——原 2 条含真实浏览器度量，且
+  `conformance_browser_layout` 对**每个用例**都注入 measurer ⇒ 那两条几何**确实被对拍**。
+
+★★**补覆盖当场抓到一个真缺陷（本卡最有价值的产出）**：
+  「文本与定宽兄弟同行」**首次运行即失败**，且是引擎侧 —— 容器 260 装 [60, 文本(内容 182), 40]：
+  浏览器按 `flex-basis × flex-shrink` 加权收缩（51.9 / 157.5 / 34.6），
+  引擎把文本**当成不可收缩**（182 不动，只压另两个），**差 24.53dp**。
+  **根因**：`taffy_engine.rs` 把"未指定 min"映射为 `auto()` ⇒ taffy 应用了 CSS 的 `min-width: auto`
+  （flex 项不得收缩到内容以下）；而本仓**声明**的模型是"与 RN 一致地**不建模**该规则、显式清零"
+  （见 `e2e-layout-core-pixel` 文件头 + 浏览器侧翻译**显式注入 `min-width:0; min-height:0`**）
+  ⇒ **实现与声明的模型相反**，是一处静默分歧。
+  **修**：min 未指定 ⇒ `length(0.0)`；**max 仍为 `auto()`**（语义相反，故拆成 `opt_lpa` / `opt_max_lpa`
+  两个函数，并在注释里写明白）。改后 **96 节点全过**（原本最大偏差 24.53dp）。
+  ★**为什么改引擎而非改用例**：golden 是**浏览器实测真值**（独立事实源），用它迁就引擎 = 把真值改坏；
+  且 TS 参考实现 `clampSize`（min undefined ⇒ 不夹取）本就等于"min 默认 0" ⇒ 改引擎让**三份口径统一**。
+  ★连带修正一处 fixture：`text_style_key_enables_safe_content_addressing` 把 500 行文本塞进 4000 高，
+  此前靠 `min: auto` 撑着不被压缩；清零后按模型**应当**压缩（500×19 > 4000）⇒ 给行加 `flexShrink: 0`
+  （本仓**列表行标准写法**，见 `check-vapor-perf` 基准树注释「flexShrink:0 必填」）。
+  该用例目的是 **textStyleKey 内容寻址**，与"行是否可收缩"无关。
 
 ---
 

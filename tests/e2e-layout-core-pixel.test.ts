@@ -193,6 +193,54 @@ const CASES: Case[] = [
     ),
   },
   {
+    // ★I4（2026-09-29）：文本度量的**收缩**路径 —— 文本宽于容器时必须按容器宽收缩
+    //   （本仓已知的经典失败形态：内核忘了用注入的 maxWidth，于是文本撑破容器）
+    name: '文本超宽收缩（度量须按 maxWidth 夹取）',
+    root: withChildren(
+      pn(1, { flexDirection: 'column', width: N(120), padding: { left: 10, right: 10 } }),
+      [pn(2, {}, { text: '这是一句明显超过容器宽度的长文本内容', fontSize: 16, kind: 'text' })],
+    ),
+  },
+  {
+    // ★I4：文本 + flexShrink 混合（文本节点作为可收缩项参与行内分配）
+    name: '文本与定宽兄弟同行（flexShrink 参与）',
+    root: withChildren(
+      pn(1, { flexDirection: 'row', width: N(260), gap: N(8), alignItems: 'center' }),
+      [
+        pn(2, { width: N(60), height: N(24) }),
+        pn(3, {}, { text: '较长的说明文字内容需要收缩', fontSize: 14, kind: 'text' }),
+        pn(4, { width: N(40), height: N(24) }),
+      ],
+    ),
+  },
+  {
+    // ★I4：多层嵌套里的文本撑开（祖父高度由孙辈文本决定 —— 联动两条链）
+    name: '嵌套容器的文本撑开（高度向两级祖先传播）',
+    root: withChildren(
+      pn(1, { flexDirection: 'column', width: N(280) }),
+      [
+        withChildren(pn(2, { flexDirection: 'column', padding: { top: 6, bottom: 6 } }), [
+          pn(3, {}, { text: '第一行标题', fontSize: 18, kind: 'text' }),
+          withChildren(pn(4, { flexDirection: 'column' }), [pn(5, {}, { text: '第二段说明文字', fontSize: 13, kind: 'text' })]),
+        ]),
+      ],
+    ),
+  },
+  {
+    // ★I4：文本被**四边 padding 包裹**（文本盒 = 父内容盒内缩；撑开时高度含 padding）
+    //   —— 覆盖"度量 → 盒 → 父尺寸"这条带内缩的链路（比裸文本更容易错）
+    name: '带内边距的文本卡片（高度含 padding）',
+    root: withChildren(
+      pn(1, { flexDirection: 'column', width: N(200) }),
+      [
+        withChildren(
+          pn(2, { flexDirection: 'column', padding: { top: 8, bottom: 8, left: 12, right: 12 } }),
+          [pn(3, {}, { text: '带内边距的文本卡片', fontSize: 15, kind: 'text' })],
+        ),
+      ],
+    ),
+  },
+  {
     name: 'absolute 定位（脱离流 + top/left）',
     root: withChildren(
       pn(1, { flexDirection: 'column', width: N(300), height: N(150), padding: { top: 20, left: 30 } }),
