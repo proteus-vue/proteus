@@ -658,6 +658,44 @@ slot 嵌套、scss 变量、长模板、分包引用）带来的编译成本。
 （binding-matrix / instr-spec / content / stats / docs / vapor-perf / compile-baseline）·
 新增门禁 \`check:binding-matrix\` 已接 verify 链。
 
+### ★★★卡 C4 原语完备性验证 **3/3**（2026-09-29）—— 编译期漏点计数器 + 棘轮门禁
+
+**① ★设计要点（避免第 N 份手写副本）**：计数器**不判断"什么算漏点"**——
+那由既有诊断（编译器已有 **50 处** \`warnings.push\`）与结构化规则 ID（**64 条** \`trace.add\`）决定；
+计数器只做**归类 + 计数**（\`packages/compiler/src/gap-counter.ts\`）。
+⇒ 编译器新增诊断时自动纳入；分类表未覆盖的**显式进「未归类」**，**不静默丢**
+（这是防「0 漏点」实为「分类表没覆盖」的假绿——本仓"判据必须能变红"的同族要求）。
+
+**② 真项目实测（showcase 128 SFC）**：总计 **310 处** · **degraded 253** / fallback 57 / unsupported 0
+- degraded top：**242× 跨模块 import 失效**（产物 \`undefined\` ⇒ 引用它的模板/computed **运行期静默失效**
+  ——showcase 大量 import 框架包，这是**真实的项目问题**，计数器如实报告）
+- 7× 语义偏差 · 4× **模板函数调用**（WXML 不支持 ⇒ **真机抛错**）
+- fallback top：31× 初始值函数调用转运行时初始化 · 9× script 提升 · 9× 路径退化
+
+**③ degraded 单独高亮**（埋点清单 §2.5 硬要求：不报错、最难查、最易淹没）
+⇒ 报告里 degraded 有**独立小节且排在 fallback 之前**（测试断言小节存在 + 顺序）。
+
+**④ 「表达不了」清单**：三类分列 + 按分类计数 + 按文件定位（top 5）+ 每条给**建议原语**。
+★分类规则按**真实诊断文本**补齐后，未归类 **292 → 2 处**（依据是实测文本，不是猜）。
+
+**⑤ 新增棘轮门禁 \`check:gap-report\`**：degraded / unsupported **只降不升**（端对齐问题来源）；
+**破坏性验证过**（篡改基线 degraded=10 ⇒ 立刻红并准确报出 \`253 > 10\`）。
+
+**⑥ 诚实边界**：
+- \`unsupported\` 为 0 是**真实现状**（\`rules.failFast\` 默认关 ⇒ 诊断走 warning 不阻断）；
+  开启 failFast 时同一批会转为编译期阻断。
+- 「未归类」的存在说明分类表**必然滞后于**诊断演进 —— 这是**有意的可见性**，
+  比静默归入 fallback 诚实（也让"该补规则了"变成可观测信号）。
+- 计数覆盖 showcase；换项目数字会变，**分类规则**不变。
+
+**⑦ 落点**：\`packages/compiler/src/gap-counter.ts\`（新）+ 编译器产物新增 \`gaps\` 字段
+（**记录不阻断**——埋点清单 §2.1 明确要求，测试 ⑤ 断言产物照常产出）+
+\`packages/types/src/compiler-types.ts\` 的 \`CompileResult.gaps\`（结构性类型，types 包不依赖 compiler）+
+\`scripts/report-gaps.mjs\`（人读 / \`--json\` / \`--check\` / \`--update\`）+ \`tests/gap-counter.test.ts\`（5 项）。
+
+**⑧ 验证**：全量 **3942/3942**（329 文件，+5）· vue-tsc 0 错 · 门禁全绿
+（gap-report / docs / docs-stats / instr-spec / content / stats / binding-matrix / compile-baseline / gates-sync）。
+
 ### ★★M3 手势落地：平台识别器 + 核心命中标注 target（2026-09-29，提交 `44962ade`）
 
 **方案依据**（06-gesture-animation.md 映射表）：「tap→`GestureDetector` / longPress→`LongPressGesture` /
