@@ -56,6 +56,10 @@ const LOCAL_ONLY = {
   //   那部分不参与 CI 的 TS 构建（真机宿主需 NDK/Xcode），CI 上跑它只会扫到空集 ⇒ 假门禁。
   //   它的作用域是**开发机**：改宿主代码后立刻拦下"平台侧再舍入一次"。
   'check:host-rounding': '扫描 hosts/（Android/iOS 宿主源码）——CI 不构建宿主，扫不到任何文件 ⇒ 假门禁',
+  // ★C3 编译期基线：绝对毫秒跨机不可比（本仓既有认识：异构 CI 同机可达 1.6×），
+  //   判据虽以比值为主（体积膨胀比），但全量/增量仍带宽松绝对上界 ⇒
+  //   在 CI 共享 runner 上会因机器差异产生噪声红。⇒ 归**开发机**：改编译器后本地跑。
+  'check:compile-baseline': '绝对耗时跨机不可比（阈值含 3× 宽松上界）；CI 共享 runner 波动会产生噪声红 ⇒ 开发机跑',
   // ★Android 宿主编译检查（2026-09-29，与 check:ios-selfdraw-compile 同源盲区）：
   //   编译宿主需 Android SDK（android.jar）+ JDK；CI 为 ubuntu-latest，不装 Android SDK ⇒ 跑不了。
   'check:android-host-compile': '需 Android SDK（android.jar）+ JDK 17；CI 为 ubuntu-latest，未装 Android SDK',
