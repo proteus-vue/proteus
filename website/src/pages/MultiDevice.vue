@@ -246,7 +246,11 @@ const bizNote = ref('耳机')
 const bizBefore = ref('')
 const bizAfter = ref('')
 function readBiz(): string {
-  const el = document.querySelector('.frame .p-formfactor') as HTMLElement | null
+  // ★D-2 合规（2026-09-29）：原为 document.querySelector（全局裸平台 API ⇒ audit d2 红）。
+  //   改为**组件自身作用域的 ref 查询**（stageEl = ".frame-host"）——语义等价（同一子树、
+  //   同一选择器），但不再触碰全局对象；且顺带修掉一个潜在缺陷：多实例同页时
+  //   document.querySelector 会取到**文档里第一个**匹配元素（可能不是本实例的）。
+  const el = (stageEl.value?.querySelector('.frame .p-formfactor') ?? null) as HTMLElement | null
   if (!el) return ''
   return [el.dataset.bizSku ?? '', el.dataset.bizCount ?? '', el.dataset.bizNote ?? ''].join('|')
 }
