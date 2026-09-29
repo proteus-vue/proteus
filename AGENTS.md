@@ -122,3 +122,33 @@ npx tsx packages/cli/src/index.ts test e2e:mp showcase
 截图/元素/几何查询：`wechatide simulator_screenshot` / `automation_element_action` /
 `automation_evaluate`（`wx.createSelectorQuery` 只达**页面级原生节点**，组件内部 DOM 隔离查不到）。
 
+## 4. Android 真机验收：**先预检，再跑；跑完自检**（★2026-09-29 用户反馈后固化）
+
+```bash
+# ① 快速冒烟（≈1.7 分钟）——**改装置后先跑这个**，确认整条链路可用
+bash hosts/android/acceptance.sh --quick --skip-build
+# ② 正式验收（≈4.5 分钟）——预检自动先跑（零成本，≈5 秒）
+bash hosts/android/acceptance.sh --runs 3 --skip-build
+# 单独跑预检 / 解析自测
+bash hosts/android/acceptance.sh --preflight
+bash hosts/android/acceptance.sh --selftest
+```
+
+**为什么要这样**（真实教训，别再踩）：
+- 用户原话：「**测试时间太长了**，手机屏幕刚才锁屏了」「**每次都是测试完才发现自己的测试装置有问题**，
+  时间全浪费在测试装置的反复修改上」。⇒ 同一个脚本迭代一天，白跑 6 次全流程（每次 ~5 分钟）。
+- **装置缺陷必须在跑之前发现**，所以有三道机器判据（都不是"靠人翻产物"）：
+  | 判据 | 时机 | 抓什么 |
+  |---|---|---|
+  | `--preflight` ① 产物契约 | 跑前 5 秒 | 谁写/谁读/谁拉不自洽（例：汇总在读一个**从来没人写**的文件；**两个场景写同一个文件名**⇒run 目录里拿到另一种数据） |
+  | `--preflight` ② 解析自测 | 跑前 5 秒 | gfxinfo 字段错位（例：p50 取成 `$4` ⇒ **恒为 0**，中位永远是 0） |
+  | `--preflight` ③ 设备状态 | 跑前 5 秒 | **屏幕是否点亮**（灭屏时 app 只渲染个位数帧，读数全废）；USB 供电（否则 stayon 不生效） |
+  | `check-run-artifacts.mjs` | 跑完自动 | 本次数据可不可信（帧数 0/个位数、p50=0 但帧>0、A/B 两侧不齐、对照没真跑） |
+- **耗时归因**：脚本每阶段打印本段/累计耗时，跑完给**按耗时排序**的表（`═══ 耗时归因 ═══`）。
+  ★没有归因就别谈优化——实测"感觉 sleep 太多"是**错的**：静态 sleep 仅 71 秒，
+  真正的大头是 **Perfetto 分析 106 秒**（二进制未缓存 → 下载超时 → 产出零，历史产物 0 个）。
+- 已知可省项与代价：`--quick` 把内存对照降为 1 轮（默认 5 轮 × 2 通路 ≈ 124 秒，是单项最大）；
+  Perfetto 在 `trace_processor` 未缓存时**跳过采集与分析**（自动探测，省 ~106 秒）。
+
+**红线**：`--quick` 只用于"确认装置可用"，**不可作为验收结论**（§9.2 要求 5 轮取均值）。
+

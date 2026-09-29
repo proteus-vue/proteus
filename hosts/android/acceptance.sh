@@ -19,6 +19,11 @@
 # 【两条通路分两次冷启动】`--es path proteus|native` —— 隔离内存（同进程先后建树会互相污染）
 #
 # 用法：bash hosts/android/acceptance.sh [--runs 5] [--skip-build] [--fresh-install]
+#   --quick      ★快速冒烟（≈90 秒）：只跑 1 条通路 + 1 轮 A/B，用于**确认装置可用**。
+#                跑全量（~4 分钟）前先跑它 —— 装置有问题就在 90 秒内暴露，而不是 4 分钟后。
+#   --preflight  ★跑前预检（零成本，≈5 秒）：产物契约 + 解析装置自测 + 屏幕/电源状态。
+#                **验收会先自动跑它**——把「5 分钟后才发现装置错」变成「开跑前就发现」
+#                （2026-09-29 实测：同一天因装置缺陷白跑 3 次全流程，每次 ~5 分钟）
 #   --fresh-install  ★破坏性：卸载后重装（仅用于「初次安装 vs 闲时优化」对照；默认增量安装）
 set -euo pipefail
 
@@ -45,12 +50,61 @@ gfx_parse() {
     END{printf "%s %s %s", j+0, p+0, t+0}'
 }
 
+# ★★阶段计时（2026-09-29）：本脚本单次 ~5 分钟，此前**没有任何耗时归因**——
+#   用户反馈「测试时间太长」时只能靠猜（"大概是 sleep 太多"）。实测证明那个猜测**是错的**：
+#   固定 sleep 静态合计仅 71 秒，而单次总耗时 ~300 秒 ⇒ 大头在别处。
+#   ⇒ 先量再优化：每阶段结束时打印本段耗时与累计，跑完给出**按耗时排序**的表。
+PHASE_T0=$SECONDS
+PHASE_LAST=$SECONDS
+declare -a PHASE_LOG=()
+phase() {
+  local now=$SECONDS
+  local dur=$((now - PHASE_LAST))
+  PHASE_LOG+=("$dur|$1")
+  printf '    ⏱ %-32s 本段 %3ds · 累计 %3ds\n' "$1" "$dur" "$((now - PHASE_T0))"
+  PHASE_LAST=$now
+}
+phase_summary() {
+  echo
+  echo "═══ 耗时归因（本次运行）═══"
+  printf '%s\n' "${PHASE_LOG[@]}" | sort -t'|' -k1 -nr | head -8 | while IFS='|' read -r d n; do
+    printf '  %4ds  %s\n' "$d" "$n"
+  done
+  printf '  ----\n  %4ds  合计（含未标注段）\n' "$((SECONDS - PHASE_T0))"
+}
+
+# ★★等「完成信号」代替固定盲等（本仓纪律：等待必须有条件）
+#
+# 【为什么改】2026-09-29 实测：单次全流程 ~5 分钟，其中**固定 sleep 静态合计 71 秒**；
+#   A/B 对照段最重（3 轮 × 2 通路 × sleep 16 = **96 秒**盲等）。
+#   而 app 在每条通路跑完时会**写报告文件**——那就是天然的完成信号。
+#   ⇒ 改为「轮询该文件出现」：正常 ~11 秒完成（比 16 秒少 5 秒），
+#     且**异常时不会静默**（超时才继续，并报出等待了多久）。
+#
+# 【与「禁止固定 sleep 盲等」的关系】本 helper 是**条件探测 + 总超时上限**（不是盲等），
+#   符合 AGENTS.md 红线；超时值是该通路的**观测上限**（不是预期耗时）。
+# 用法：wait_report <文件名> <超时秒>；成功回 0 并打印实际耗时，超时回 1
+wait_report() {
+  local f="$1" timeout="${2:-30}" t=0
+  while [ "$t" -lt "$timeout" ]; do
+    if "$ADB" shell "test -f /sdcard/Android/data/$PKG/files/$f" >/dev/null 2>&1; then
+      echo "      （完成信号：$f 已写出，用时 ${t}s）"
+      return 0
+    fi
+    sleep 1; t=$((t + 1))
+  done
+  echo "      ⚠ 等待 $f 超时（${timeout}s）——该通路可能未完成，读数可能不全"
+  return 1
+}
+
 while [ $# -gt 0 ]; do
   case "$1" in
-    --runs) RUNS="$2"; shift 2 ;;
+    --runs) RUNS="$2"; RUNS_EXPLICIT=1; shift 2 ;;
     --skip-build) SKIP_BUILD=1; shift ;;
     --fresh-install) FRESH_INSTALL=1; shift ;;
     --selftest) SELFTEST=1; shift ;;
+    --preflight) PREFLIGHT=1; shift ;;
+    --quick) QUICK=1; shift ;;
     *) echo "未知参数：$1"; exit 2 ;;
   esac
 done
@@ -88,8 +142,88 @@ Janky frames (legacy): 400 (66.33%)
     echo "  ❌ 零值样本解析异常：${bad}"
     exit 1
   fi
+  if [ -z "${PREFLIGHT:-}" ]; then exit 0; fi   # 不带 --preflight 时，--selftest 到此为止
+fi
+
+# ★★跑前预检（--preflight）：把装置问题挡在 5 分钟的全流程之前 ────────────────
+#   三类检查（都是本次实测踩过的）：
+#     ① 产物契约（静态）：谁写/谁读/谁拉是否自洽 —— 曾出现「汇总在读一个从来没人生成的文件」
+#        与「两个场景写同一个文件名」（后者让 run 目录里拿到另一种数据，静默）
+#     ② 解析装置自测：gfxinfo 字段位置（曾把 p50 取成 $4 ⇒ 恒 0，中位永远是 0）
+#     ③ 设备状态：屏幕必须亮着 —— 灭屏时 app 只渲染个位数帧（实测 3 帧），
+#        跑完会得到一堆无意义的「低帧数」读数（本次用户锁屏就是这个坑）
+preflight() {
+  local bad=0
+  echo "══ 跑前预检（零成本）══"
+
+  echo "── ① 产物契约（静态·零设备）──"
+  if node "$HERE/check-artifact-contract.mjs"; then
+    echo "  ✅ 契约成立"
+  else
+    echo "  ❌ 产物契约不成立 —— 先修再跑（否则跑完才发现拿不到证据）"
+    bad=1
+  fi
+
+  echo "── ② 解析装置自测 ──"
+  local sample='Total frames rendered: 603
+Janky frames: 387 (64.18%)
+50th percentile: 17ms'
+  local got; got="$(printf '%s\n' "$sample" | gfx_parse)"
+  if [ "$got" = "387 17 603" ]; then
+    echo "  ✅ gfxinfo 解析正确（${got}）"
+  else
+    echo "  ❌ gfxinfo 解析错误（得到 ${got}，期望 387 17 603）"
+    bad=1
+  fi
+
+  echo "── ③ 设备状态 ──"
+  if ! "$ADB" get-state >/dev/null 2>&1; then
+    echo "  ❌ 设备未连接（adb get-state 失败）"; bad=1
+  else
+    local model; model="$("$ADB" shell getprop ro.product.model | tr -d '\r')"
+    # ★屏幕：灭屏时 onDraw 不跑 ⇒ 帧数会掉到个位数（实测 3 帧），读数全部无意义
+    "$ADB" shell svc power stayon true >/dev/null 2>&1 || true
+    "$ADB" shell input keyevent KEYCODE_WAKEUP >/dev/null 2>&1 || true
+    "$ADB" shell wm dismiss-keyguard >/dev/null 2>&1 || true
+    sleep 2
+    local wake; wake="$("$ADB" shell dumpsys power 2>/dev/null | tr -d '\r' | grep -m1 -o 'mWakefulness=[A-Za-z]*' | cut -d= -f2)"
+    local usb; usb="$("$ADB" shell dumpsys battery 2>/dev/null | tr -d '\r' | grep -m1 -o 'USB powered: [a-z]*' | awk '{print $3}')"
+    local batt; batt="$("$ADB" shell dumpsys battery 2>/dev/null | tr -d '\r' | grep -m1 -o 'level: [0-9]*' | awk '{print $2}')"
+    echo "  设备：${model} · 屏幕：${wake} · USB：${usb} · 电量：${batt}%"
+    if [ "$wake" != "Awake" ]; then
+      echo "  ❌ 屏幕未点亮（mWakefulness=${wake}）——灭屏时 app 只渲染个位数帧，读数无意义"
+      bad=1
+    else
+      echo "  ✅ 屏幕已点亮"
+    fi
+    if [ "$usb" != "true" ]; then
+      echo "  ⚠ 未接 USB 供电：\`svc power stayon true\` 只在插电时生效 —— 长跑可能中途锁屏"
+    fi
+    if [ -n "$batt" ] && [ "$batt" -lt 50 ] 2>/dev/null; then
+      echo "  ⚠ 电量 ${batt}% 偏低（§9.2 要求 ≥90%）"
+    fi
+    if ! "$ADB" shell pm list packages 2>/dev/null | grep -q "$PKG"; then
+      echo "  ⚠ 设备上未安装 $PKG（首次安装会自动装）"
+    fi
+  fi
+
+  echo
+  if [ "$bad" = "1" ]; then
+    echo "✗ 预检未通过 —— 先修上面❌项再跑验收"
+    return 1
+  fi
+  echo "✅ 预检通过 —— 可以跑验收"
+  return 0
+}
+
+if [ -n "${PREFLIGHT:-}" ]; then
+  preflight || exit 1
   exit 0
 fi
+
+# ★--quick：内存对照轮数降为 1（默认 5 轮 × 2 通路 ≈ **124 秒**，单次验收最大的一项）。
+#   用途是"确认装置可用"，不需要统计样本；真正验收按 §9.2 跑 5 轮。
+if [ -n "${QUICK:-}" ] && [ "${RUNS_EXPLICIT:-0}" = "0" ]; then RUNS=1; fi
 
 mkdir -p "$OUT"
 
@@ -100,6 +234,14 @@ fi
 APK="$HERE/build/proteus-layoutcore.apk"
 [ -f "$APK" ] || { echo "✗ APK 不存在：$APK"; exit 2; }
 
+# ★★验收**自动先跑预检**（可 SKIP_PREFLIGHT=1 跳过）：装置问题在 5 秒内暴露，
+#   而不是等 5 分钟全流程跑完后才发现（2026-09-29 实测教训）
+if [ -z "${SKIP_PREFLIGHT:-}" ]; then
+  preflight || { echo "✗ 预检未通过 —— 已中止（设 SKIP_PREFLIGHT=1 可强制继续）"; exit 1; }
+  echo
+fi
+
+phase "构建 + 跑前预检"
 echo "==> 安装 release 包"
 "$ADB" wait-for-device
 
@@ -181,8 +323,24 @@ pss_of() {
 }
 
 # 跑一轮（给定通路），返回：采集的 PSS / CPU / 温度，报告落盘
+# 通路 → 完成信号（该通路独有的报告文件）：run_one 用它判断"这一条跑完了"
+# ★用 case 而不是关联数组：macOS 自带 bash 3.2 **不支持 `declare -A`**，
+#   而 `set -u` 会把未定义变量当错误 ⇒ 直接 `unbound variable` 中断（实测踩到）。
+report_of() {
+  case "$1" in
+    proteus)           echo "layout-compare-native.json" ;;
+    native)            echo "layout-native-only.json" ;;
+    proteus-mem)       echo "layout-proteus-only.json" ;;
+    proteus-noflatten) echo "layout-noflatten.json" ;;
+    flat-redraw)       echo "layout-flat-redraw.json" ;;
+    recycle)           echo "layout-recycle.json" ;;
+    *)                 echo "" ;;
+  esac
+}
+
 run_one() {
   local path="$1" label="$2" idx="$3"
+  local _t0=$SECONDS
   "$ADB" shell am force-stop "$PKG" || true
   sleep 1                       # 让进程完全退出（§9.2「杀进程重进」）
   "$ADB" shell am start -n "$ACTIVITY" --es path "$path" >/dev/null 2>&1
@@ -196,6 +354,11 @@ run_one() {
 
   # ★§9.2「起点 = click 事件触发」：用广播触发（语义等同外部点击；`input tap` 在
   #   Android 新版本需 INJECT_EVENTS 权限，本仓实测被拒）
+  # ★★删除**本次**通路的旧报告必须在**广播之前**（否则会误删本次产物）
+  local _rep; _rep="$(report_of "$path")"
+  if [ -n "$_rep" ]; then
+    "$ADB" shell "rm -f /sdcard/Android/data/$PKG/files/$_rep" >/dev/null 2>&1 || true
+  fi
   "$ADB" shell am broadcast -a dev.proteus.RUN --es path "$path" -p "$PKG" >/dev/null 2>&1
   # ★核判定以 **app 自报**为准（脚本侧读别的进程 /proc 受限，本仓实测恒得同一值）；
   #   脚本侧仅作粗采样参考
@@ -204,13 +367,20 @@ run_one() {
     cpus="$cpus $(main_thread_cpu "$pid")"
     sleep 0.3
   done
-  sleep 2
+  # ★等「该通路的报告写出」代替固定 sleep 2（本仓纪律：等待必须有条件）——
+  #   app 在通路跑完时写报告，那是天然完成信号；固定等待既可能偏早（读数不全）也可能白等。
+  if [ -n "$_rep" ]; then
+    wait_report "$_rep" 30 >/dev/null 2>&1 || true
+  else
+    sleep 2
+  fi
   local pss_after; pss_after="$(pss_of "$pid")"
   local t_after; t_after="$(max_temp)"
 
   echo "  轮次 ${idx}（${label}）：PSS ${pss_before}→${pss_after} KB · CPU采样:${cpus} · 温度 ${t_before}→${t_after}"
   # 记录原始数据（供汇总）
   echo "$idx|$label|$pss_before|$pss_after|$(echo $cpus | tr ' ' ',')|$t_before|$t_after" >> "$OUT/raw.txt"
+  echo "      ⏱ 通路 $path 用时 $((SECONDS - _t0))s"
 }
 
 echo
@@ -236,6 +406,14 @@ done
 echo "── 通路：proteus（性能与一致性，单轮）──"
 run_one "proteus" "proteus-perf" 1
 
+if [ -n "${QUICK:-}" ]; then
+  # ★--quick：只跑这一条通路就跳到滚动对照（1 轮 A/B），用于快速确认装置可用
+  echo
+  echo "══ --quick 模式：跳过 noflatten / flat-redraw / recycle 三条通路 ══"
+  echo "   （它们是能力覆盖项；装置可用性由 proteus 通路 + 1 轮 A/B 已足以确认）"
+fi
+
+if [ -z "${QUICK:-}" ]; then
 # ★§9.2 第二行指标：不拍平时的耗时（拍平只对静态子树生效，动态内容走这条路径）
 echo "── 通路：proteus-noflatten（§9.2「不拍平」指标）──"
 run_one "proteus-noflatten" "proteus-noflatten" 1
@@ -248,8 +426,10 @@ run_one "flat-redraw" "flat-redraw" 1
 # ★§9.3 长列表验收：4000 行滚到底再回滚（复用池 + 内存收敛）
 echo "── 通路：recycle（§9.3 长列表）──"
 run_one "recycle" "recycle" 1
+fi   # ← 结束「非 --quick」的通路块
 
 echo
+phase "安装 + 通路 run_one"
 echo "==> 取回报告"
 DEST="$OUT/$(date +%Y%m%d-%H%M%S)"
 mkdir -p "$DEST"
@@ -263,6 +443,7 @@ echo "    报告目录：$DEST"
 ls -1 "$DEST" | head -10
 
 echo
+phase "取回报告"
 echo "==> 跨端命中一致性（M3 事件系统：同一份探针 → 两端逐位相同）"
 # ★★先在本机**采集命中报告**（原来只找文件、从不生成 ⇒ 必然缺失）
 #
@@ -289,6 +470,7 @@ else
   echo "    ⚠ 缺报告（Android：$([ -f "$DEST/layout-hit.json" ] && echo 有 || echo 无)；iOS：$([ -f "$ROOT/hosts/ios/results/layout-core-bench-ios.json" ] && echo 有 || echo 无)）——跳过跨端比对（不影响主流程）"
 fi
 
+phase "跨端命中一致性"
 echo "==> 采集 Perfetto trace（§9.2 权威核判定）"
 # ★★**可写路径探测 + 失败如实标注**（本仓实测的设备差异，honor10 暴露）
 #
@@ -312,7 +494,20 @@ if [ -z "$TRACE" ]; then
 fi
 "$ADB" shell am force-stop "$PKG" >/dev/null 2>&1; sleep 1
 "$ADB" shell am start -n "$ACTIVITY" --es path scroll >/dev/null 2>&1; sleep 4
-if [ -n "$TRACE" ]; then
+# ★★Perfetto 按需启用（2026-09-29）：**分析器不可用时不再采集**
+#   实测：本机 trace_processor prebuilt 未缓存 ⇒ 分析段 106s 全白费（含 75s 下载超时）。
+#   采集本身也要 25s（duration_ms=25000）⇒ 分析不可能成功时，采集同样应跳过。
+#   探测方式：分析器的 `--check-available`（零网络、秒级）。可用时行为与原先完全一致。
+PERFETTO_OK=0
+if python3 "$(dirname "$0")/perfetto-analyze.py" --check-available >/dev/null 2>&1; then PERFETTO_OK=1; fi
+if [ -z "$TRACE" ] || [ "$PERFETTO_OK" = "0" ]; then
+  if [ "$PERFETTO_OK" = "0" ]; then
+    echo "    ⚠ 跳过 Perfetto **采集**：分析器不可用（trace_processor 未缓存）——采集了也分析不了"
+    echo "      · 本仓实测：该段曾白花 106 秒（含 75s 下载超时）、历史产物 0 个"
+    echo "      · 核判定改用 app 自报的 layout-env.json（汇总段已有，判据等效）"
+  fi
+fi
+if [ -n "$TRACE" ] && [ "$PERFETTO_OK" = "1" ]; then
 cat "$CFG" | "$ADB" shell "perfetto --txt -c - -o $TRACE" >/dev/null 2>&1 &
 PF_PID=$!
 sleep 6                      # 让 trace 先跑起来（覆盖触发前的一段）
@@ -323,8 +518,9 @@ if [ -f "$DEST/acceptance.pftrace" ]; then
   PY="$ROOT/.tools/py"
   PYTHONPATH="$PY" python3 "$(dirname "$0")/perfetto-analyze.py" "$DEST/acceptance.pftrace" "$PKG" 2>&1 | tail -16 | sed 's/^/    /' || true
 fi
-fi   # ← 结束 `if [ -n "$TRACE" ]`（无可用路径时整段跳过）
+fi   # ← 结束 `if [ -n "$TRACE" ] && [ "$PERFETTO_OK" = "1" ]`（路径不可用或分析器不可用时整段跳过）
 
+phase "Perfetto"
 echo "==> 采集系统帧率读数（§9.3 权威口径：dumpsys gfxinfo）"
 GFX="$DEST/gfxinfo.txt"
 # ★必须先 reset，否则 gfxinfo 是**进程生命周期累计**（含冷启动画面），与滚动无关
@@ -332,8 +528,11 @@ GFX="$DEST/gfxinfo.txt"
 echo "    → gfxinfo 已 reset；触发滚动验收…"
 "$ADB" shell am force-stop "$PKG" >/dev/null 2>&1; sleep 1
 "$ADB" shell am start -n "$ACTIVITY" --es path scroll >/dev/null 2>&1; sleep 3
+"$ADB" shell "rm -f /sdcard/Android/data/$PKG/files/layout-scroll.json" >/dev/null 2>&1 || true
 "$ADB" shell "am broadcast -a dev.proteus.RUN --es path scroll -p $PKG" >/dev/null 2>&1
-sleep 16
+# ★条件等待（完成信号 = layout-scroll.json 写出）代替固定 sleep 16
+wait_report "layout-scroll.json" 40 >/dev/null 2>&1 || true
+sleep 1
 "$ADB" shell "dumpsys gfxinfo $PKG" 2>/dev/null | tr -d '\r' > "$GFX"
 echo "    ── Proteus（虚拟化滚动）──"
 grep -E "Total frames rendered|Janky frames \(|50th percentile|90th percentile|95th percentile|99th percentile|Slow UI thread|Slow issue draw commands|Slow bitmap uploads" "$GFX" | sed 's/^/      /'
@@ -347,14 +546,20 @@ grep -E "Total frames rendered|Janky frames \(|50th percentile|90th percentile|9
 #   ⇒ 正解：**交替跑 N 轮取中位**（本仓既有纪律：同轮 A/B + 多轮中位）。
 #   ★诚实边界：**双峰成因未查明**（疑与设备电源/窗口焦点状态有关，未做仪器级确认）
 #     —— 故本档只报**中位数**并显式标注分布，不报单轮值。
+SCROLL_ROUNDS="${SCROLL_ROUNDS:-${QUICK:+1}}"
 SCROLL_ROUNDS="${SCROLL_ROUNDS:-3}"
 gfx_one() {
   local path="$1" round="${2:-1}"
   "$ADB" shell "dumpsys gfxinfo $PKG reset" >/dev/null 2>&1
   "$ADB" shell am force-stop "$PKG" >/dev/null 2>&1; sleep 1
   "$ADB" shell am start -n "$ACTIVITY" --es path "$path" >/dev/null 2>&1; sleep 3
+  # ★先删旧报告，使「文件出现」成为**本次**的完成信号（否则读到上一轮残留）
+  "$ADB" shell "rm -f /sdcard/Android/data/$PKG/files/layout-scroll-core.json" >/dev/null 2>&1 || true
+  "$ADB" shell "rm -f /sdcard/Android/data/$PKG/files/layout-scroll-native.json" >/dev/null 2>&1 || true
   "$ADB" shell "am broadcast -a dev.proteus.RUN --es path $path -p $PKG" >/dev/null 2>&1
-  sleep 16
+  # ★条件等待（完成信号 = 报告文件写出）代替原来的固定 `sleep 16`
+  wait_report "layout-scroll-$([ "$path" = scroll-core ] && echo core || echo native).json" 40 >/dev/null 2>&1 || true
+  sleep 1                      # 让 gfxinfo 的最后一帧落账（帧计数在同帧末更新）
   # ★解析走唯一实现 gfx_parse（与 --selftest 共用）——不在此处再写一份 awk
   local raw; raw="$("$ADB" shell "dumpsys gfxinfo $PKG" 2>/dev/null | tr -d '\r')"
   # ★★逐轮原始 dump 落盘（2026-09-29 补）：此前**只有中位值**进 scroll-ab.txt，
@@ -400,6 +605,7 @@ for f in layout-scroll.json layout-scroll-core.json layout-scroll-native.json; d
   "$ADB" pull "/sdcard/Android/data/$PKG/files/$f" "$DEST/$f" >/dev/null 2>&1 || true
 done
 
+phase "gfxinfo 主滚动 + A/B 对照"
 echo "==> 采集「核心驱动滚动」读数（复用池决策来自 Rust；与 iOS V12 同一条路）"
 # ★与上面那条路径的差别：上面宿主自己算窗口（已收敛到核心，但报告字段是 §9.3 口径）；
 #   本条是 scroll-core 专用路径，直接输出**核心决策 ↔ 平台执行**的对账读数。
@@ -431,6 +637,7 @@ else
   echo "    ⚠ 未取回 layout-scroll-core.json（滚动未跑完？）"
 fi
 
+phase "scroll-core 通路"
 echo "==> 汇总"
 python3 - "$DEST" <<'PY'
 import json, sys, glob, os, statistics
@@ -576,3 +783,13 @@ else:
         except Exception as ex:
             print(f"  ✗ 解析 {os.path.basename(ef)} 失败：{ex}")
 PY
+phase "汇总与报告"
+
+# ★★跑后产物自检（2026-09-29，用户反馈「每次跑完才发现装置有问题」）：
+#   把「人工翻产物判断这次能不能用」变成**机器断言**——帧数是否为 0、p50 是否可疑、
+#   A/B 两侧是否齐备、对照是否真跑了…当场给出「本次运行可不可信」。
+echo
+node "$HERE/check-run-artifacts.mjs" "$DEST" || {
+  echo "  ⚠ 自检发现硬伤（见上 ❌）——**这份数据不要当结论**，修掉后重跑"
+}
+phase_summary
