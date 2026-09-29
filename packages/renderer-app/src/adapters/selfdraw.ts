@@ -333,12 +333,35 @@ export const DEFAULT_FONT_WEIGHT = 400
  *   CSS 的 font-family 是**候选清单**，且平台可用字体名不同 ⇒ 原始串跨端必然分叉。
  *   角色是平台无关的语义（"衬线体"/"等宽体"…），宿主各自映射到可用的平台字体。
  *
- * 【诚实边界】当前是可枚举的 5 个角色（覆盖 CSS 通用族 + 最常见的具体族）；
- *   自定义字体（`@font-face` / 打包字体）**未支持**——需要字体资源注册通道，属后续。
- *   ⇒ 未知族名**显式回退 `system`**，并计入 `fontFamilyStats`（不静默丢弃）。
+ * 【★自定义字体（2026-09-29 支持）】5 个角色之外的具体族名**不再丢弃**，而是以
+ *   **自描述前缀** `custom:<族名>` 透传（见 `CUSTOM_FONT_PREFIX`）：
+ *   · 为什么用前缀而不是"原样透传"：宿主必须能**区分**"这是角色"与"这是自定义族名"——
+ *     否则两端契约不一致时无法判断该回退还是该查找（本仓纪律 #21：自描述载荷）；
+ *   · 宿主**必须显式注册**该族名（字体文件路径/字节）；未注册 ⇒ **回退 system + 计数**
+ *     （`customFontMisses`）——不静默（"未识别"与"识别为默认"始终可区分）。
+ *   ★诚实边界：**不实现 CSS 候选链的后续回退** —— `"MyFont", serif` 在 MyFont 未注册时
+ *     落到 `system`（并计数），**不会**落到清单后面的 `serif`。
  */
 export const FONT_FAMILY_ROLES = ['system', 'serif', 'monospace', 'rounded', 'condensed'] as const
 export type FontFamilyRole = (typeof FONT_FAMILY_ROLES)[number]
+
+/**
+ * ★★自定义字体族名的**自描述前缀**（适配器 ↔ 宿主契约）
+ *
+ * 形如 `custom:DancingScript`。宿主见此前缀 ⇒ 去注册表按名查找；
+ * 查不到 ⇒ 回退 system 并**计数**（两侧都可见，不静默）。
+ */
+export const CUSTOM_FONT_PREFIX = 'custom:'
+
+/** 该族名是否为自定义族（宿主/适配器共用的判定——**唯一实现**，两端不各写一份） */
+export function isCustomFontFamily(v: string | undefined): boolean {
+  return typeof v === 'string' && v.startsWith(CUSTOM_FONT_PREFIX)
+}
+
+/** 取自定义族名（去掉前缀）；非自定义 ⇒ undefined */
+export function customFontName(v: string | undefined): string | undefined {
+  return isCustomFontFamily(v) ? (v as string).slice(CUSTOM_FONT_PREFIX.length) : undefined
+}
 
 /** 缺省角色（= 平台默认字体）——宿主也按此兜底，两端同口径 */
 export const DEFAULT_FONT_FAMILY: FontFamilyRole = 'system'
@@ -357,11 +380,14 @@ export const DEFAULT_FONT_FAMILY: FontFamilyRole = 'system'
  * ★只取**清单里的第一个可识别项**（正是浏览器的实际语义：按序回退）。
  *   清单全不可识别 ⇒ `undefined`（调用方用 `system`，并计入诊断）。
  */
-export function normalizeFontFamily(v: unknown): FontFamilyRole | undefined {
+export function normalizeFontFamily(v: unknown): string | undefined {
   if (typeof v !== 'string') return undefined
   // 逗号分隔的候选清单；逐项 trim + 去引号（`"PingFang SC", serif`）
-  const candidates = v.split(',').map((s) => s.trim().replace(/^["']|["']$/g, '').toLowerCase())
-  for (const c of candidates) {
+  // ★保留**原始大小写**（自定义族名在平台侧大小写敏感；角色匹配用 lower 副本）
+  const rawList = v.split(',').map((s) => s.trim().replace(/^["']|["']$/g, '')).filter(Boolean)
+  const candidates = rawList.map((s) => s.toLowerCase())
+  for (let i = 0; i < candidates.length; i++) {
+    const c = candidates[i]!
     if (!c) continue
     if (c === 'system' || c === 'system-ui' || c === '-apple-system' || c === 'sans-serif' || c === 'sans') return 'system'
     if (c === 'serif' || c.includes('serif') && !c.includes('sans')) return 'serif'
@@ -373,7 +399,12 @@ export function normalizeFontFamily(v: unknown): FontFamilyRole | undefined {
     if (c.includes('menlo') || c.includes('consolas') || c.includes('courier') || c.includes('mono')) return 'monospace'
     if (c === 'helvetica' || c === 'roboto' || c === 'arial' || c === 'pingfang' || c.includes('pingfang')) return 'system'
   }
-  return undefined
+  // ★★未识别 ⇒ **自定义族透传**（不丢弃）。
+  //   取清单里**第一个具体族名**（跳过 CSS 通用族关键字——它们已在上面处理过；
+  //   走到这里说明全清单都不在角色表里，故取首项作自定义名）。
+  //   ★保留原始大小写：平台字体 API 按名查找是大小写敏感的（`DancingScript` ≠ `dancingscript`）。
+  const first = rawList[0]
+  return first ? CUSTOM_FONT_PREFIX + first : undefined
 }
 
 /**
@@ -395,7 +426,9 @@ export function normalizeFontFamily(v: unknown): FontFamilyRole | undefined {
  * 【★新增字体维度时的纪律】本函数与宿主 `SelfDrawBridge.font(...)` 的输入必须**同时**扩展，
  *   否则键不覆盖新维度 ⇒ 又回到"不同字体共用度量 ⇒ 一个尺寸错（静默）"。
  */
-export function fontSignature(fontSize: number, fontWeight: number, fontFamily: FontFamilyRole): number {
+// ★入参类型放宽为 `string`：角色（5 个）与自定义族（`custom:<名>`）共用同一通道，
+//   混算对两者一视同仁（新增族名维度**不必改本函数**——这正是当初换 FNV-1a 的理由）。
+export function fontSignature(fontSize: number, fontWeight: number, fontFamily: string): number {
   // FNV-1a（32 位）：实现短、分布好、跨 JS 引擎确定（不需要密码学强度）
   let h = 0x811c9dc5
   const mix = (s: string): void => {
