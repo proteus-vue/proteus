@@ -196,7 +196,7 @@ interface DynamicBinding {
 
 ### 4.3 与既有编译器能力的衔接
 
-- 复用 69 条转换规则注册表，新增规则需自带 AI 说明书（与既有约定一致）
+- 复用 111 条转换规则注册表，新增规则需自带 AI 说明书（与既有约定一致）
 - `proteus explain` 需能 trace 拍平判定、静态提升判定
 - **Node/Rust 双后端语义等价 Golden 门禁必须继续通过**（既有 81 用例 + 新增用例）
 
@@ -679,7 +679,7 @@ export default defineConfig({
 - [x] 宿主 View + Canvas 下发 —— 同上
 - [x] Java/Kotlin ↔ C++ 绑定 —— **实际走 Rust**：`packages/layout-core-rust/src/jni.rs`（JNI 入口）
 - [x] **跑 4050 元素测试与原生 View 体系对打** —— `hosts/android/ACCEPTANCE.md`：**三项全部达标**
-      （布局 **0.063×** · 绘制 **0.667×** · 内存 **0.331×**，即均**优于**原生）+ 10+ 次运行记录在 `hosts/android/results/acceptance/`
+      （布局 **0.063×** · 绘制 **2.0**（★口径已更正，原 0.667 系子项）· 内存 **0.331×**——绘制未达标，见 `ACCEPTANCE.md`）+ 10+ 次运行记录在 `hosts/android/results/acceptance/`
 
 **出口条件**：见 §9.2 —— ✅ **本关已过**（路线无需重估）；★决定后端语言为 Rust（M0.5 DCP-1）
 
@@ -799,7 +799,7 @@ export default defineConfig({
 1. **严格按 M0 → M0.5 → M1 → M5 顺序推进**，禁止跳阶段。M2 是唯一的生死关，未通过 §9.2 验收前不得开始 M3。
 2. **每个阶段结束必须通过对应门禁**（conformance / Golden / perf-ratchet），再进入下一阶段。
 3. **IR 扩展不得破坏既有五后端**：Headless / VueDom / Skyline 后端的既有测试必须全绿。
-4. **新增转换规则必须自带 AI 说明书**，与既有 69 条规则的约定一致。
+4. **新增转换规则必须自带 AI 说明书**，与既有 111 条规则的约定一致。
 5. **`proteus explain` 必须能 trace 每一项编译期决策**（静态提升、拍平、布局边界判定），否则无法定位问题。
 6. **不实现自绘**：任何引入 Surface / TextureView / XComponent 作为渲染画布的实现都视为违反架构约束，应被拒绝。
 7. **遇到 §10 的坑位时**，优先选择"映射原生组件"而非"自研"，除非该组件已在 §9 验收中确认为瓶颈。
