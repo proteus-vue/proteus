@@ -23,6 +23,49 @@
 //   本模块 + 推导修复是"接线前先把判据弄对"。
 
 /** 颜色是否**确实不透明**（保守：拿不准 ⇒ false） */
+/**
+ * 解析颜色为 RGB（仅用于"是否中性色"判定；**不做色彩管理**——只比较三个通道是否相等）。
+ * 拿不准（具名色/hsl/var 等）⇒ null（调用方按"不是中性色"保守处理）。
+ */
+export function rgbOfColor(color: string | undefined | null): [number, number, number] | null {
+  if (color === undefined || color === null) return null
+  const c = color.trim().toLowerCase()
+  // #rgb / #rgba
+  const h3 = /^#([0-9a-f])([0-9a-f])([0-9a-f])[0-9a-f]?$/.exec(c)
+  if (h3 !== null) {
+    return [parseInt(h3[1]! + h3[1]!, 16), parseInt(h3[2]! + h3[2]!, 16), parseInt(h3[3]! + h3[3]!, 16)]
+  }
+  // #rrggbb / #rrggbbaa
+  const h6 = /^#([0-9a-f]{2})([0-9a-f]{2})([0-9a-f]{2})([0-9a-f]{2})?$/.exec(c)
+  if (h6 !== null) {
+    return [parseInt(h6[1]!, 16), parseInt(h6[2]!, 16), parseInt(h6[3]!, 16)]
+  }
+  const m = /^rgba?\(([^)]*)\)$/.exec(c)
+  if (m !== null) {
+    const parts = m[1]!.split(',').map((t) => Number(t.trim()))
+    if (parts.length >= 3 && parts.slice(0, 3).every((n) => Number.isFinite(n))) {
+      return [parts[0]!, parts[1]!, parts[2]!]
+    }
+  }
+  return null
+}
+
+/**
+ * 颜色是否为**中性色**（R=G=B ⇒ 8 位灰度格式能够无损表达）。
+ *
+ * 【为什么需要它（格式的硬约束，不是保守选择）】紧凑单通道存储（iOS `gray8Uint`）
+ *   **只有亮度、没有色相**——红字写进去会变成灰字。
+ *   ⇒ "可用紧凑格式"的前提必须包含"颜色本来就是灰阶的"。
+ *   ★本仓实测教训：−39% 的实验用的是**白字**（恰好是中性色）⇒ 该约束在实验里成立、
+ *     却从未被写进判据；若不补，彩色文本会被**静默去色**（画面错，无任何报错）。
+ */
+export function isNeutralColor(color: string | undefined | null): boolean {
+  const rgb = rgbOfColor(color)
+  if (rgb === null) return false   // 拿不准 ⇒ 保守（不当中性色）
+  return rgb[0] === rgb[1] && rgb[1] === rgb[2]
+}
+
+/** 颜色是否**确实不透明**（保守：拿不准 ⇒ false） */
 export function isOpaqueColor(color: string | undefined | null): boolean {
   if (color === undefined || color === null) return false
   const c = color.trim().toLowerCase()

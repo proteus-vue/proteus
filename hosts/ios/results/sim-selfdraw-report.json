@@ -823,12 +823,12 @@
   },
   "host_node_count" : 91,
   "host_timing_last" : {
-    "build_layers_ms" : 23.218989372253418,
-    "host_total_ms" : 24.731040000915527,
-    "layout_ms" : 0.42796134948730469,
-    "measure_ms" : 0.070095062255859375
+    "build_layers_ms" : 19.098997116088867,
+    "host_total_ms" : 20.78700065612793,
+    "layout_ms" : 0.46193599700927734,
+    "measure_ms" : 0.095009803771972656
   },
-  "js_js_avg_ms" : 4.5,
+  "js_js_avg_ms" : 2.125,
   "js_ok" : true,
   "js_phases" : 3,
   "js_report" : {
@@ -841,25 +841,22 @@
       "texts" : 26
     },
     "host_final_raw" : {
-      "build_layers_ms" : 23.219999999999999,
+      "build_layers_ms" : 19.100000000000001,
       "cgfont_failure" : "",
       "cgfont_fallbacks" : 0,
       "changed_rects" : 0,
       "font_family_fallbacks" : 0,
-      "host_total_ms" : 24.73,
+      "host_total_ms" : 20.789999999999999,
       "incremental" : false,
       "layer_count" : 91,
-      "layout_ms" : 0.42999999999999999,
+      "layout_ms" : 0.46000000000000002,
       "measure_cache_hits" : 26,
       "measure_cache_misses" : 0,
-      "measure_ms" : 0.070000000000000007,
-      "mem_mb" : 20.399999999999999,
-      "mem_peak_mb" : 29.199999999999999,
+      "measure_ms" : 0.10000000000000001,
+      "mem_mb" : 48.5,
+      "mem_peak_mb" : 61.399999999999999,
       "node_count" : 91,
       "ok" : true,
-      "paint_hint_compact" : 57,
-      "paint_hint_disabled" : false,
-      "paint_hint_generic" : 57,
       "patch_count" : 0,
       "phase" : "update",
       "relayout_count" : 0,
@@ -869,25 +866,22 @@
     },
     "host_raw_by_phase" : {
       "update_grow" : {
-        "build_layers_ms" : 15.699999999999999,
+        "build_layers_ms" : 3.1899999999999999,
         "cgfont_failure" : "",
         "cgfont_fallbacks" : 0,
         "changed_rects" : 0,
         "font_family_fallbacks" : 0,
-        "host_total_ms" : 19.510000000000002,
+        "host_total_ms" : 14.4,
         "incremental" : false,
         "layer_count" : 217,
-        "layout_ms" : 0.87,
+        "layout_ms" : 0.93000000000000005,
         "measure_cache_hits" : 43,
         "measure_cache_misses" : 19,
-        "measure_ms" : 0.88,
-        "mem_mb" : 18.600000000000001,
-        "mem_peak_mb" : 17.699999999999999,
+        "measure_ms" : 7.6399999999999997,
+        "mem_mb" : 39.899999999999999,
+        "mem_peak_mb" : 38.5,
         "node_count" : 217,
         "ok" : true,
-        "paint_hint_compact" : 44,
-        "paint_hint_disabled" : false,
-        "paint_hint_generic" : 44,
         "patch_count" : 0,
         "phase" : "update",
         "relayout_count" : 0,
@@ -897,32 +891,31 @@
       },
       "update_style" : {
         "_host_timing" : {
-          "diff_ms" : 0.59999999999999998,
+          "diff_ms" : 0.96999999999999997,
           "layers_ms" : 0,
-          "measure_ms" : 0.14000000000000001,
-          "update_ffi_ms" : 0.029999999999999999
+          "measure_ms" : 0.16,
+          "update_ffi_ms" : 0.050000000000000003
         },
         "build_layers_ms" : 0,
         "cgfont_failure" : "",
         "cgfont_fallbacks" : 0,
         "changed_rects" : 0,
         "font_family_fallbacks" : 0,
-        "host_total_ms" : 0.72999999999999998,
+        "host_total_ms" : 1.3600000000000001,
         "in_bytes" : 35794,
         "incremental" : true,
         "layer_count" : 217,
-        "layout_ms" : 0.68000000000000005,
+        "layout_ms" : 1.22,
         "measure_cache_hits" : 62,
         "measure_cache_misses" : 0,
-        "measure_ms" : 0.14000000000000001,
-        "mem_mb" : 29.199999999999999,
-        "mem_peak_mb" : 29.199999999999999,
+        "measure_ms" : 0.16,
+        "mem_mb" : 49.600000000000001,
+        "mem_peak_mb" : 53.600000000000001,
         "node_count" : 217,
         "ok" : true,
         "paint_hint_compact" : 44,
-        "paint_hint_disabled" : false,
         "paint_hint_generic" : 44,
-        "parse_ms" : 0.73999999999999999,
+        "parse_ms" : 0.84999999999999998,
         "patch_count" : 0,
         "path" : "update",
         "relayout_count" : 0,
@@ -932,7 +925,7 @@
       }
     },
     "js_only_throughput" : {
-      "avg_ms" : 4.5,
+      "avg_ms" : 2.125,
       "iterations" : 40,
       "max_ms" : 7,
       "note" : "★每次 = Vue 响应式变更 → 重渲染 → diff\/patch → 树拍平 → 数值折叠（**不含**宿主调用与 JSON 序列化）"
@@ -949,37 +942,37 @@
     },
     "phases" : {
       "mount" : {
-        "host_ms" : 18,
+        "host_ms" : 92,
         "node_count" : 91,
         "patch_count" : 152,
-        "serialize_ms" : 1,
-        "to_request_ms" : 1,
-        "total_ms" : 25,
-        "vue_ms" : 5
+        "serialize_ms" : 0,
+        "to_request_ms" : 8,
+        "total_ms" : 119,
+        "vue_ms" : 19
       },
       "update_grow" : {
-        "host_ms" : 21,
+        "host_ms" : 20,
         "node_count" : 217,
         "patch_count" : 280,
-        "serialize_ms" : 0,
-        "to_request_ms" : 3,
-        "total_ms" : 30,
-        "vue_ms" : 6
+        "serialize_ms" : 1,
+        "to_request_ms" : 1,
+        "total_ms" : 34,
+        "vue_ms" : 12
       },
       "update_style" : {
-        "host_ms" : 7,
+        "host_ms" : 8,
         "node_count" : 217,
         "patch_count" : 153,
         "serialize_ms" : 0,
         "to_request_ms" : 3,
-        "total_ms" : 14,
-        "vue_ms" : 4
+        "total_ms" : 13,
+        "vue_ms" : 2
       }
     },
     "runtime" : "JavaScriptCore（系统自带，与 iOS 竖切同一运行时）",
     "snapshot" : {
       "ok" : true,
-      "path" : "\/var\/mobile\/Containers\/Data\/Application\/6AAA2F31-525D-4D6C-AD2C-7904A6D6679E\/Documents\/selfdraw-final.png"
+      "path" : "\/Users\/kags\/Library\/Developer\/CoreSimulator\/Devices\/C7A5C8C2-EE13-4CFC-8EFD-6A9D538F875C\/data\/Containers\/Data\/Application\/FEB2CDEA-A204-48D1-BC3C-96E03F2B91A1\/Documents\/selfdraw-final.png"
     },
     "unknown_keys" : {
 
@@ -990,8 +983,8 @@
     }
   },
   "launch_diag" : {
-    "bootstrap_ms" : 54.100000000000001,
-    "first_frame_ms" : 60.509999999999998,
+    "bootstrap_ms" : 431.72000000000003,
+    "first_frame_ms" : 497.92000000000002,
     "first_frame_source" : "kernel:p_starttime",
     "forced_style" : "Dark",
     "interface_style" : "Dark",
@@ -1639,5 +1632,5 @@
       "y" : 0
     }
   },
-  "tree_hash" : "67f07e53"
+  "tree_hash" : "84c0b251"
 }

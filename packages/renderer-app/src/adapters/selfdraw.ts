@@ -104,6 +104,27 @@ export interface SelfDrawNodeSpec {
   textStyleKey?: number
   /** 绘制用：圆角 */
   borderRadius?: number
+  /**
+   * ★★**绘制提示（编译期推导，平台据此选存储策略）** —— 卡 I3 的接线点。
+   *
+   * 【为什么由适配器算而不是宿主算（Profile §12.4「禁止运行时判断」）】
+   *   宿主的运行时"猜"正是 iOS 曾出现 **+78% 内存**的根因（backing store 按最贵格式分配）。
+   *   ⇒ 判定必须在**编译/构建期**完成，宿主只做"照做"。
+   *
+   * 【★判据在哪（诚实标注，避免读者以为只有一份）】完整的判据实现在
+   *   `component-ir/src/paint-hint.ts` 的 `derivePaintHint`（唯一实现，含每条条件的理由）。
+   *   ★**本文件不能 import 它**：`renderer-app` 包**没有 dependencies**
+   *     （只有 peer/dev，见 package.json）——引入跨包依赖会改变本包的依赖形态，
+   *     而那属于打包/发布决策，不在本次改动范围内。
+   *   ⇒ 本文件的 `deriveSpecPaintHint` 是**按同一判据的派生实现**（只覆盖适配器手里有的输入），
+   *     并由 `tests/selfdraw-paint-hint.test.ts` 与 IR 路径**逐形态对拍**（两边结论必须一致）——
+   *     这是在没有共享模块的前提下，能给出的最强一致性保证。
+   *
+   * 【只发**需要平台动作**的字段】`isMonochrome` → iOS 设 `contentsFormat`（实测 −39%）；
+   *   `isPureBackground` → CALayer 的底线**天然不分配存储**（实测仅色块 4.9MB）
+   *   ⇒ 该字段发出来供**诊断/对账**，不需要平台动手（诚实标注，不假装它有动作）。
+   */
+  paintHint?: { isMonochrome: boolean; isPureBackground: boolean }
 }
 
 export interface SelfDrawRequest {
@@ -501,6 +522,79 @@ export function paintOf(props: Record<string, unknown>): Record<string, unknown>
   return out
 }
 
+/**
+ * ★★适配器侧的 paint-hint 派生实现（判据与 `component-ir/src/paint-hint.ts` 的
+ *   `derivePaintHint` **同源**；对拍测试见 `tests/selfdraw-paint-hint.test.ts`）。
+ *
+ * 【为什么不 import 那个"唯一实现"】`renderer-app` **没有任何 dependencies**
+ *   （只有 peer/dev；见其 package.json）——这是它"可嵌入任意宿主"的设计属性。
+ *   引入跨包依赖会改变本包的依赖形态，属打包/发布决策，不在本次改动范围。
+ *   ⇒ 退而求其次：**派生实现 + 逐形态对拍**（两边对同一组输入必须给出一致结论，
+ *     漂移则由测试变红兜住——比"人读注释确保一致"强得多）。
+ *
+ * 【判据（与 IR 侧逐条相同，理由见 `paint-hint.ts`）】
+ *   isMonochrome：有文本 + 文本色**确定不透明** + **中性色**（灰度格式无色相）
+ *     + 无底色/背景图 + 无圆角 + 不透明 + 非合成层
+ *   isPureBackground：底色确定不透明 + 无背景图/边框/圆角 + 非合成/无变换 + 不透明
+ *     + **无文本**（有字形就要存储）
+ * ★拿不准一律 false（格式类优化宁可保守，不可画错）。
+ */
+export function deriveSpecPaintHint(spec: {
+  text?: string
+  color?: string
+  backgroundColor?: string
+  borderRadius?: number
+  borderWidth?: number
+  opacity?: number
+}): { isMonochrome: boolean; isPureBackground: boolean } {
+  const opaque = (c?: string): boolean => {
+    if (c === undefined || c === null) return false
+    const t = c.trim().toLowerCase()
+    if (t === '' || t === 'transparent') return false
+    if (/^#[0-9a-f]{3}$/.test(t) || /^#[0-9a-f]{6}$/.test(t)) return true
+    if (/^#[0-9a-f]{4}$/.test(t)) return t[4] === 'f'
+    if (/^#[0-9a-f]{8}$/.test(t)) return t.slice(7) === 'ff'
+    const m = /^rgba?\(([^)]*)\)$/.exec(t)
+    if (m !== null) {
+      const p = m[1]!.split(',').map((x) => x.trim())
+      if (p.length === 3) return true
+      if (p.length === 4) { const a = Number(p[3]); return Number.isFinite(a) && a >= 1 }
+    }
+    return false
+  }
+  const neutral = (c?: string): boolean => {
+    if (c === undefined || c === null) return false
+    const t = c.trim().toLowerCase()
+    let r: number, g: number, b: number
+    const h3 = /^#([0-9a-f])([0-9a-f])([0-9a-f])[0-9a-f]?$/.exec(t)
+    const h6 = /^#([0-9a-f]{2})([0-9a-f]{2})([0-9a-f]{2})([0-9a-f]{2})?$/.exec(t)
+    if (h3 !== null) { r = parseInt(h3[1]! + h3[1]!, 16); g = parseInt(h3[2]! + h3[2]!, 16); b = parseInt(h3[3]! + h3[3]!, 16) }
+    else if (h6 !== null) { r = parseInt(h6[1]!, 16); g = parseInt(h6[2]!, 16); b = parseInt(h6[3]!, 16) }
+    else {
+      const m = /^rgba?\(([^)]*)\)$/.exec(t)
+      if (m === null) return false
+      const p = m[1]!.split(',').map((x) => Number(x.trim()))
+      if (p.length < 3 || !p.slice(0, 3).every((n) => Number.isFinite(n))) return false
+      r = p[0]!; g = p[1]!; b = p[2]!
+    }
+    return r === g && g === b
+  }
+
+  const hasText = typeof spec.text === 'string' && spec.text.length > 0
+  const opacityIsOne = spec.opacity === undefined || spec.opacity === 1
+  const hasRadius = spec.borderRadius !== undefined && spec.borderRadius !== 0
+  const hasBorder = spec.borderWidth !== undefined && spec.borderWidth !== 0
+  return {
+    isMonochrome: !!(
+      hasText && opaque(spec.color) && neutral(spec.color) &&
+      spec.backgroundColor === undefined && !hasRadius && opacityIsOne
+    ),
+    isPureBackground: !!(
+      opaque(spec.backgroundColor) && !hasBorder && !hasRadius && !hasText && opacityIsOne
+    ),
+  }
+}
+
 /** 绘制子集的**稳定签名**（与 `styleSig` 同款：只比值、排序键——避免"Vue 每次新建对象"造成假变更） */
 function paintSig(v: unknown): string {
   if (!v || typeof v !== 'object') return ''
@@ -743,6 +837,19 @@ export function createSelfDrawAdapter(): SelfDrawAdapter {
       const col = styleValue(tStyle, 'color') ?? props.color
         ?? styleValue(pStyle, 'color') ?? (parent ? parent.props.color : undefined)
       if (typeof col === 'string') spec.color = col
+      // ★★文本叶子**必须也有 paintHint**（2026-09-29 实测踩到）：
+      //   宿主建层时**文本叶子才是 CATextLayer**（`makeLayer` 按 `text` 分支），
+      //   而本分支的 `return` 早于元素分支的赋值 ⇒ 最初文本层**一个 hint 都没有**，
+      //   表现为 `paint_hint_compact = 0`（接线看似通了、收益为零）。
+      //   ⇒ 在这里（拿齐 fontSize/color 之后）单独推导一次。判据与元素分支同源。
+      spec.paintHint = deriveSpecPaintHint({
+        text: spec.text,
+        color: spec.color,
+        backgroundColor: (spec as { backgroundColor?: string }).backgroundColor,
+        borderRadius: (spec as { borderRadius?: number }).borderRadius,
+        borderWidth: (spec as { borderWidth?: number }).borderWidth,
+        opacity: (spec as { opacity?: number }).opacity,
+      })
       return
     }
     if (node.__kind !== 'element') return
@@ -792,6 +899,17 @@ export function createSelfDrawAdapter(): SelfDrawAdapter {
         if (Number.isFinite(n)) spec[key as 'fontSize'] = n
       }
     }
+
+    // ★★绘制提示：**全部绘制字段落完之后**再算（顺序敏感——早算会漏掉后落的字段）
+    //   宿主据此选存储策略（iOS `contentsFormat`），Profile §12.4「禁止运行时判断」。
+    spec.paintHint = deriveSpecPaintHint({
+      text: spec.text,
+      color: spec.color,
+      backgroundColor: spec.backgroundColor,
+      borderRadius: spec.borderRadius,
+      borderWidth: (spec as { borderWidth?: number }).borderWidth,
+      opacity: (spec as { opacity?: number }).opacity,
+    })
   }
 
   /** 拍平遍历：跳过注释节点（Vue 用注释占位，原生无对应物） */
