@@ -396,6 +396,61 @@ emoji 前缀（降级条/驾驶提醒），文案入口保持宿主注入；`↕
   "装置缺失"伪装成"链路正常"。⇒ 凡是依赖构建产物的测试，都要问一句：
   **这个产物是谁生成的？干净环境里它存在吗？**（答案不确定就去干净克隆跑一次。）
 
+### ★★新增能力原语 C82 useWebAssembly —— WebAssembly 跨平台（2026-09-29）
+
+**用户需求**：「增加新的能力原语 webassembly 的跨平台实现」。
+按本仓新增能力的既定形态（对齐批 G 的 C76-C81 七处改动面）落地，原语 **184→185**（capability 81→82）。
+
+**① ★★跨端形态：双源取证（不是按 Web 标准假设）**
+| 端 | 入口 | 首参 | compile/validate | 证据 |
+|---|---|---|---|---|
+| **MP（微信）** | \`WXWebAssembly.instantiate(path, imports)\` | **代码包路径**（.wasm/.wasm.br） | ❌ **无** | 官方文档 \`/framework/performance/wasm.html\`（HTTP 200 正文含原文）+ 官方类型包 \`miniprogram-api-typings/types/wx/lib.wx.wasm.d.ts\`（**只有 instantiate 一个方法**） |
+| **Web** | 标准 \`WebAssembly\` | BufferSource | ✅ | 平台标准 |
+| **App-iOS** | JSC 内建 \`WebAssembly\`（与 Web 同形） | BufferSource | ✅ | **本机实测**：8 API 齐备 + \`validate(最小模块)===true\` |
+| **App-Android** | — | — | — | 宿主**无 JS 引擎** ⇒ 不可用（诚实边界） |
+
+补充事实（官方原文）：MP 基础库 **v2.13.0+** 全局可用 · **v2.15.0+** Worker 内可用 ·
+**iOS 平台暂不支持 export Global**（函数/Memory/Table 支持）。
+
+★取证路径记录（下次同类需求可直接复用）：微信文档站对 \`?\`-less 爬虫返回 404，
+但 **\`curl -A 'Mozilla/...'\` 带 UA 后 HTTP 200**；且官方类型包在 **jsdelivr 镜像**可取
+（\`cdn.jsdelivr.net/npm/miniprogram-api-typings@latest/types/wx/...\`）。
+**双源（文档正文 + 类型声明）互相印证**才算取证完成——单一来源可能过期。
+
+**② 设计取舍：差异如实表达，不强行走归一到"看起来同形"**
+- 入口归一为 \`instantiate(source)\`，\`source\` 是**判别联合** \`{ bytes } | { path }\`
+  —— 三端**没有**共同首参类型；若只暴露字节，MP 端会**结构性不可用**（路径无法变字节）。
+  传错形态 → \`Err('webassembly.unsupported')\` 且**报文指名正确形态**（不静默失败）。
+- \`compile\` / \`validate\` 声明为**可选** —— MP 端客观没有 ⇒ 属性 undefined，
+  调用方 \`if (wasm.compile)\` 探测即得 false（**诚实不实现**，而非"存在但抛错"）。
+- 能力位 \`supportsStreaming\` / \`supportsPathLoad\` 把差异变成**可查询数据**，
+  避免调用方按平台名分支（本仓 stores 铁律禁止平台名分支）。
+
+**③ 归类口径（★一个容易做错的地方）**：wasm **不在官方 301 API 清单内**
+（\`WXWebAssembly\` 属「小程序运行时」文档章节，非「API」章节）⇒
+- **不进** \`SPEC_COVERED\`：那会让 covered **分子虚增而分母不变** ⇒ 覆盖率虚高；
+- **不进** \`SPEC_PRIVATE\`（它是**公开能力**，非微信私有）；
+- ⇒ 归为「超清单能力」，由 primitives C82 直接承载 + audit 矩阵按 mpEquiv 如实登记。
+（这是本仓"数字必须与证据同源"的又一实例：分类错一处，覆盖率就失真。）
+
+**④ 落地面（7 处，与批 G 同形）**：capability.ts（契约 + wx/web 双桥 + 钩子 + probe + WxLike）
+· primitives.ts（C82 登记）· audit.ts（矩阵行）· mp-spec-coverage.ts（归类口径说明）
+· 测试（+8）· 官网双语能力页 + 目录快照 · 数字对账。
+
+**⑤ 验证**：capability-granularity **103 项**（含 Web 端**真** WASM 往返：
+Node 全局 WebAssembly 即标准实现 ⇒ 不 mock，\`validate\` 合法模块 true / 非法 false，
+\`compile\` + \`instantiate\` 真编译）· 全量 **3919/3919**（327 文件）·
+**干净克隆**（CI 等价环境）同数全绿 · vue-tsc 0 错 · 十个门禁全绿
+（stats / docs-stats / content / en-drift / mp-spec / degradation / consistency /
+showcase-catalog / capability-demo / mp-attrs）· website build ✓（新页入产物）。
+
+**★过程中的两个自纠（记录以便复用）**：
+1. 用 Edit 改 \`getCalendar\` 锚点时**误删了 \`new Promise\` 那一行**（锚点跨行选择不当）⇒
+   立即用 grep 定位 + 精确回填修复。**教训：多行锚点要连"结构骨架"一起选，别只选首末行。**
+2. 我写的测试里 \`(await validate(bad)).ok && (...).data\` 有 TS 收窄错误
+   ⇒ 改为先取结果再收窄（\`if (v.ok) expect(v.data)\`），并把"判据能变红"写进断言
+   （合法模块断 true / 非法断 false —— 两侧都钉住）。
+
 ### ★★M3 手势落地：平台识别器 + 核心命中标注 target（2026-09-29，提交 `44962ade`）
 
 **方案依据**（06-gesture-animation.md 映射表）：「tap→`GestureDetector` / longPress→`LongPressGesture` /
