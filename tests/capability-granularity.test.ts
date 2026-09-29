@@ -1771,3 +1771,155 @@ describe('★权威标尺缺口补齐批 G（2026-09-12）· C76-C81 AR/iBeacon/
     expect(p.deviceCapability).toBe(true)
   })
 })
+
+// ══════════════════════════════════════════════════════════════════════════════
+// ★C82 useWebAssembly —— 跨平台 WASM（MP: WXWebAssembly(path) / Web & App-JSC: 标准 WebAssembly）
+//
+// 三端形态**有实质差异**（已双源取证：微信官方文档 + miniprogram-api-typings/lib.wx.wasm.d.ts）：
+//   MP 只收**代码包路径**、**无** compile/validate；Web/App-JSC 收字节、compile/validate 齐备。
+// ⇒ 这些用例锁的就是"差异被如实表达"（而不是"三端假装同形"）。
+// ══════════════════════════════════════════════════════════════════════════════
+
+/** 最小合法 WASM 模块字节（`(module)` 空模块的魔数+版本）——用于 Web 端真实往返 */
+const MINIMAL_WASM = new Uint8Array([0x00, 0x61, 0x73, 0x6d, 0x01, 0x00, 0x00, 0x00])
+
+describe('★C82 useWebAssembly（跨平台 WASM）', () => {
+  it('MP 端：WXWebAssembly.instantiate 收到**代码包路径**，返回实例（fromPath=true）', async () => {
+    const calls: string[] = []
+    vi.stubGlobal('window', undefined)
+    vi.stubGlobal('wx', {
+      getSystemInfoSync: () => ({ renderer: 'skyline' }),
+      WXWebAssembly: {
+        instantiate: (path: string, imports?: Record<string, unknown>) => {
+          calls.push(`instantiate:${path}`)
+          return Promise.resolve({ exports: { add: (a: number, b: number) => a + b, _imports: imports } })
+        },
+      },
+    })
+    const r = createCapabilityHooks(createCapabilityBridge()).useWebAssembly()
+    expect(r.ok, 'MP 端应可用（WXWebAssembly 存在）').toBe(true)
+    if (!r.ok) return
+    const wasm = r.data
+    // ★能力位：MP 收路径、不收字节
+    expect(wasm.supportsPathLoad).toBe(true)
+    expect(wasm.supportsStreaming).toBe(false)
+    // ★compile/validate 在 MP 端**客观不存在** ⇒ 应为 undefined（不是"存在但抛错"）
+    expect(wasm.compile, 'MP 端无 compile（官方无此方法 —— 诚实不实现）').toBeUndefined()
+    expect(wasm.validate, 'MP 端无 validate').toBeUndefined()
+
+    const inst = await wasm.instantiate({ path: 'wasm/calc.wasm.br' }, { imports: { env: { mul: (a: number, b: number) => a * b } } })
+    expect(inst.ok).toBe(true)
+    expect(calls).toEqual(['instantiate:wasm/calc.wasm.br'])
+    if (inst.ok) {
+      expect(inst.data.fromPath).toBe(true)
+      const add = inst.data.exports.add as (a: number, b: number) => number
+      expect(add(2, 3), '★实例导出真的可调用（不是"拿到壳就算过"）').toBe(5)
+    }
+  })
+
+  it('MP 端传字节 → Err 指明"只收路径"（不静默失败、不假装支持）', async () => {
+    vi.stubGlobal('window', undefined)
+    vi.stubGlobal('wx', {
+      getSystemInfoSync: () => ({ renderer: 'skyline' }),
+      WXWebAssembly: { instantiate: () => Promise.resolve({ exports: {} }) },
+    })
+    const r = createCapabilityHooks(createCapabilityBridge()).useWebAssembly()
+    expect(r.ok).toBe(true)
+    if (!r.ok) return
+    const res = await r.data.instantiate({ bytes: MINIMAL_WASM })
+    expect(res.ok).toBe(false)
+    if (!res.ok) {
+      expect(res.error.code).toBe('webassembly.unsupported')
+      expect(res.error.message).toContain('代码包路径')
+    }
+  })
+
+  it('MP 缺 WXWebAssembly（基础库 < v2.13.0）→ Err 提示版本（可操作）', async () => {
+    vi.stubGlobal('window', undefined)
+    vi.stubGlobal('wx', { getSystemInfoSync: () => ({ renderer: 'skyline' }) }) // 无 WXWebAssembly
+    const r = createCapabilityHooks(createCapabilityBridge()).useWebAssembly()
+    expect(r.ok, '桥存在（能力位可查）').toBe(true)
+    if (!r.ok) return
+    expect(r.data.supportsPathLoad, 'MP 能力位仍如实为 true（形态由平台决定）').toBe(true)
+    const res = await r.data.instantiate({ path: 'a.wasm' })
+    expect(res.ok).toBe(false)
+    if (!res.ok) expect(res.error.message).toContain('v2.13.0')
+  })
+
+  it('Web 端：标准 WebAssembly——真编译 + 真实例化 + validate（能力位对调）', async () => {
+    vi.stubGlobal('wx', undefined)
+    vi.stubGlobal('window', {})
+    const r = createCapabilityHooks(createCapabilityBridge()).useWebAssembly()
+    expect(r.ok).toBe(true)
+    if (!r.ok) return
+    const wasm = r.data
+    expect(wasm.supportsStreaming).toBe(true)
+    expect(wasm.supportsPathLoad).toBe(false)
+    expect(typeof wasm.compile, 'Web 端 compile 存在').toBe('function')
+    expect(typeof wasm.validate).toBe('function')
+
+    // ★真往返：Node 的全局 WebAssembly 即标准实现——不 mock，直接吃真实字节
+    const v = await wasm.validate!(MINIMAL_WASM)
+    expect(v.ok && v.data, '★最小合法模块应通过 validate（真标准实现）').toBe(true)
+    const c = await wasm.compile!(MINIMAL_WASM)
+    expect(c.ok, '★真编译应成功').toBe(true)
+    const inst = await wasm.instantiate({ bytes: MINIMAL_WASM })
+    expect(inst.ok).toBe(true)
+    if (inst.ok) expect(inst.data.fromPath).toBe(false)
+  })
+
+  it('Web 端传路径 → Err 指明"代码包路径是 MP 独有形态"', async () => {
+    vi.stubGlobal('wx', undefined)
+    vi.stubGlobal('window', {})
+    const r = createCapabilityHooks(createCapabilityBridge()).useWebAssembly()
+    expect(r.ok).toBe(true)
+    if (!r.ok) return
+    const res = await r.data.instantiate({ path: 'wasm/a.wasm' })
+    expect(res.ok).toBe(false)
+    if (!res.ok) {
+      expect(res.error.code).toBe('webassembly.unsupported')
+      expect(res.error.message).toContain('MP')
+    }
+  })
+
+  it('Web 端非法字节 → Err（不抛出，保持 Result 契约）', async () => {
+    vi.stubGlobal('wx', undefined)
+    vi.stubGlobal('window', {})
+    const r = createCapabilityHooks(createCapabilityBridge()).useWebAssembly()
+    expect(r.ok).toBe(true)
+    if (!r.ok) return
+    const bad = new Uint8Array([1, 2, 3, 4])
+    const v = await r.data.validate!(bad)
+    expect(v.ok, 'validate 走 Result 契约（不抛）').toBe(true)
+    if (v.ok) expect(v.data, '★非法字节必须被判 false（判据能变红——合法模块那条已断 true）').toBe(false)
+    const inst = await r.data.instantiate({ bytes: bad })
+    expect(inst.ok, '非法字节应返回 Err 而非抛异常').toBe(false)
+    if (!inst.ok) expect(inst.error.code).toBe('webassembly.failed')
+  })
+
+  it('无 WebAssembly 的环境（如 App-Android 无 JS 引擎/老宿主）→ 能力位 false + 调用即 Err', async () => {
+    vi.stubGlobal('wx', undefined)
+    vi.stubGlobal('window', {})
+    const saved = (globalThis as { WebAssembly?: unknown }).WebAssembly
+    vi.stubGlobal('WebAssembly', undefined)
+    try {
+      const r = createCapabilityHooks(createCapabilityBridge()).useWebAssembly()
+      expect(r.ok, '桥仍在（句柄可取）').toBe(true)
+      if (!r.ok) return
+      expect(r.data.supportsStreaming).toBe(false)
+      expect(r.data.supportsPathLoad).toBe(false)
+      const res = await r.data.instantiate({ bytes: MINIMAL_WASM })
+      expect(res.ok).toBe(false)
+      if (!res.ok) expect(res.error.message).toContain('WebAssembly')
+    } finally {
+      if (saved !== undefined) vi.stubGlobal('WebAssembly', saved)
+    }
+  })
+
+  it('probe：webAssembly 维度', async () => {
+    vi.stubGlobal('window', undefined)
+    vi.stubGlobal('wx', { getSystemInfoSync: () => ({ renderer: 'skyline' }) })
+    const p = await createCapabilityHooks(createCapabilityBridge()).probe()
+    expect(p.webAssembly).toBe(true)
+  })
+})

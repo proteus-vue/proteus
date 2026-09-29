@@ -212,6 +212,10 @@ export const SPEC_PLANNED: Record<string, string> = {
   // 缓存管理 / 窗口 / 卸载拦截（已由 C72/C74/C75 覆盖——见 SPEC_COVERED）
   // 调度（已由 C73 useIdle 覆盖——见 SPEC_COVERED）
   // 设备能力探测（已由 C81 useDeviceCapability 覆盖——见 SPEC_COVERED）
+  // ★C82 WebAssembly：**不在官方 301 API 清单内**（`WXWebAssembly` 属「小程序运行时」文档章节，
+  //   非「API」章节）⇒ **不进 SPEC_COVERED**：那会让 covered 分子虚增而分母不变 ⇒ 覆盖率虚高。
+  //   也不进 SPEC_PRIVATE（它是**公开能力**，不是微信私有 API）
+  //   ⇒ 归类为「超清单能力」，由 primitives C82 直接承载（矩阵见 audit.ts）
 }
 
 // —— ④ 事件对 → 承接（status 区分：映射既有 Hook = covered，映射新 Hook = planned） ——

@@ -252,6 +252,14 @@ const CAPABILITY: PrimitiveDef[] = [
   { id: 'C79', kind: 'capability', semantic: 'capability.translation', api: 'useTranslation()', props: ['TranslationAPI'], mpEquiv: 'wx.onUserTriggerTranslation/onUserOffTranslation', tier: 'L1', status: 'planned' },
   { id: 'C80', kind: 'capability', semantic: 'capability.poster', api: 'usePoster()', props: ['PosterAPI'], mpEquiv: 'wx.onGeneratePoster', tier: 'L1', status: 'planned' },
   { id: 'C81', kind: 'capability', semantic: 'capability.device-capability', api: 'useDeviceCapability()', props: ['DeviceCapabilityAPI'], mpEquiv: 'wx.checkDeviceSupportHevc', tier: 'L1', status: 'planned' },
+  // ★C82（2026-09-29）：WebAssembly 跨平台实现——**超官方清单**能力（官方 301 API 里无 wasm）。
+  //   三端形态有实质差异（双源取证：微信官方文档 /framework/performance/wasm.html +
+  //   miniprogram-api-typings/lib.wx.wasm.d.ts）：
+  //   MP `WXWebAssembly.instantiate(path)` 只收**代码包路径**（.wasm/.wasm.br）· 无 compile/validate ·
+  //   v2.13.0+ 全局 / v2.15.0+ Worker；Web 与 App-iOS(JSC) 走标准 `WebAssembly`（收字节 · 有 compile/validate）；
+  //   App-Android 当前宿主无 JS 引擎 ⇒ 不可用（诚实边界）。
+  //   ⇒ 归一入口 `instantiate({bytes}|{path})` + 能力位 `supportsStreaming`/`supportsPathLoad`。
+  { id: 'C82', kind: 'capability', semantic: 'capability.webassembly', api: 'useWebAssembly()', props: ['WebAssemblyAPI'], mpEquiv: 'WXWebAssembly.instantiate（官方文档 performance/wasm）', tier: 'L1', status: 'planned' },
 ]
 
 /** G-32 §8 ⑥ 工程原语 Engineering（28）——状态/生命周期 + 路由/导航 + 动画/过渡 + 调试/工程化 */

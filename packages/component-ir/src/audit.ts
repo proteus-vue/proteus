@@ -128,6 +128,10 @@ const MP_API_GROUPS: MpMatrixItem[] = [
   { mp: 'wx.onUserTriggerTranslation/onUserOffTranslation（翻译）', proteus: 'useTranslation', status: 'ok', group: 'api' },
   { mp: 'wx.onGeneratePoster（分享海报）', proteus: 'usePoster', status: 'ok', group: 'api' },
   { mp: 'wx.checkDeviceSupportHevc（设备能力探测）', proteus: 'useDeviceCapability', status: 'ok', group: 'api' },
+  // ★C82：**超官方清单**能力（官方 301 API 列表里无 wasm）——`WXWebAssembly` 属官方「小程序运行时」
+  //   文档（performance/wasm）确认的运行时能力 ⇒ 矩阵按 mpEquiv 如实登记；
+  //   不进 spec 覆盖度分母（否则分母不变而 covered 虚增，覆盖率失真——见 mp-spec-coverage 注释）
+  { mp: 'WXWebAssembly.instantiate（WebAssembly 跨平台，官方文档 performance/wasm）', proteus: 'useWebAssembly', status: 'ok', group: 'api' },
   { mp: 'wx.getFileSystemManager/*（文件 30+）', proteus: 'useFileSystem', status: 'ok', group: 'api' },
   { mp: 'wx.compressFile/unzip', proteus: 'useArchive', status: 'ok', group: 'api' },
   { mp: 'wx.set/get/remove/clearStorage(+Sync)', proteus: 'useStorage', status: 'ok', group: 'api' },
