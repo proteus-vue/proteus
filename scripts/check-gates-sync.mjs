@@ -83,6 +83,9 @@ const LOCAL_ONLY = {
   // ★shell 变量边界门禁（$VAR<全角> 会被 bash 当变量名一部分）：纯静态扫描、**不依赖构建**。
   //   ★本可接 CI，但它扫的是 hosts/**/*.sh（CI 不怎么跑那些）——归开发机与 16kb 一并跑即可。
   'check:shell-i18n-vars': '扫 hosts/**/*.sh 的静态门禁；与 check:16kb-align 同批在开发机跑（改脚本后）',
+  // ★S3b bundle 构建门禁：需 build-packages dist（render-backend）+ 产物断言。
+  //   与 check:js-engine 同族（Android JS 链路的零设备判据）。
+  'check:android-bundle': '构建 Android 侧 IIFE bundle（需 render-backend dist）；与 check:js-engine 同族，开发机跑',
   // ★Android 宿主编译检查（2026-09-29，与 check:ios-selfdraw-compile 同源盲区）：
   //   编译宿主需 Android SDK（android.jar）+ JDK；CI 为 ubuntu-latest，不装 Android SDK ⇒ 跑不了。
   'check:android-host-compile': '需 Android SDK（android.jar）+ JDK 17；CI 为 ubuntu-latest，未装 Android SDK',

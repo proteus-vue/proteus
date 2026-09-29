@@ -30,6 +30,9 @@ popover-open.png
 # 本地工具缓存（scripts/check-publish-drift.mjs 的 pack/判定缓存）
 .cache/
 # hosts：原生宿主构建产物（bundle.js 已被 dist/ 规则覆盖）
+# ★Android 侧 IIFE bundle 的**拷贝**（源在 hosts/android/bridge/dist/，已被 dist/ 覆盖）
+#   ⇒ 由 build-and-run.sh 在构建时自动生成（见其步骤 ②.5），**不入库**（避免"两份副本漂移"）
+hosts/android/app/src/main/assets/bundle-batch.js
 hosts/**/build/
 hosts/**/*.app/
 hosts/**/verify-jsc

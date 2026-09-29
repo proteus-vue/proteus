@@ -393,6 +393,11 @@ ExecutionCarrier（JSI / AOT）是"宿主侧 1ms"的载体。
   ——**Android 首次有 JS 执行环境**（QuickJS 0.94MB `.so` + JNI 桥）；**S3 真机最小闭环已通过**
   （`bash hosts/android/run-js-engine.sh`：引擎加载 / JS 真的执行 / 宿主收到 1 次 mount 且批次 4 op 正确，
   6 条判据全绿）。⇒ 本卡的「JSI 通路」**已具备引擎侧基础**；剩余是**接 HA0 八接口**（HA0 仍未实现）。
+  ★★**S3b 真实 bundle 已通过**（`bash hosts/android/run-js-batch.sh`）：**真实的
+  `createSelfDrawBatchAdapter` + `createNativeBackend`（esbuild IIFE，118.4KB）**在 Android QuickJS 上
+  跑通——三相位各走对宿主入口（mount → updatePatches → update）· **hostCalls=3** · 结构 4→5 · 执行 6ms，
+  9 条判据全绿。⇒ 本卡的「JSI 通路」**已具备引擎侧 + 真实适配器双重基础**；
+  剩余是**接 HA0 八接口**（HA0 仍未实现）+ Java 侧真正消费批次渲染。
   ★原选型记录：`docs/proteus-android-js-engine-selection.md`
   （**建议 QuickJS**：ES2025 + Proxy/Reflect/WeakMap/async 本机实测全通过 ·
   真实 368KB bundle 解析+执行通过 · 8MB 内存可跑 · Android `.so` **0.94MB** · **MIT 许可**；
