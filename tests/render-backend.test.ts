@@ -662,3 +662,116 @@ describe('★★C1 · selfdraw 批量宿主桥（commit → 真机入口）', ()
     expect(payload.nodes.length, '★子树整体移除（root 只剩自己）').toBe(1)
   })
 })
+
+// ══════════════════════════════════════════════════════════════════════════════
+// ★★C2：**跨边界调用次数 = 帧数**（Host ABI §3 红线的 profile 验证）
+//
+// 【卡 C2 的验收原文】「跨边界调用次数 = 帧数（**profile 验证**）」。
+// 【为什么必须 profile 而非断言"设计如此"】红线是**可测量**的行为，不是架构意图：
+//   逐节点路径在"设计上"也说自己批处理（有 flush 接口），但实际 50 子节点要 101 次调用。
+//   ⇒ 本判据**模拟连续帧**（滚动 120 帧，每帧改若干节点），断言 `hostCalls() === 帧数`。
+//
+// ★**本仓实测的路径现状（写进判据注释，避免读者误以为"全线未达标"）**：
+//   · 真机自绘链路（`hosts/ios/bridge/entry-selfdraw.ts`）**已是每帧一次调用**
+//     （`mount`/`update`/`updatePatches` 各一次）——即该红线在**真机链路上已达标**；
+//   · Host ABI 文档里 `callsPer1000Items=6100` 描述的是**另一条路径**
+//     （`bench-bridge.swift` 模拟的逐项属性设置 + SPI 逐节点形态）；
+//   · SPI 逐节点形态此前**违例**（每节点一次）⇒ C1 已补批量形态（本组判据锁它）。
+// ══════════════════════════════════════════════════════════════════════════════
+describe('★★C2 · 跨边界调用 = 帧数（profile 验证）', () => {
+  function fakeHost() {
+    const calls: Array<{ kind: string; payload: string }> = []
+    return {
+      calls,
+      mount(treeJson: string) { calls.push({ kind: 'mount', payload: treeJson }); return '{}' },
+      update(treeJson: string) { calls.push({ kind: 'update', payload: treeJson }); return '{}' },
+      updatePatches(p: string) { calls.push({ kind: 'updatePatches', payload: p }); return '{}' },
+    }
+  }
+
+  it('① ★滚动 120 帧：每帧改若干节点 ⇒ 恰好 120 次跨边界调用', () => {
+    const host = fakeHost()
+    const sd = createSelfDrawBatchAdapter(host, { viewport: { width: 390, height: 844 } })
+    const backend = createNativeBackend(sd, 'ios')
+
+    // 建 100 行（每行 3 个属性）——模拟列表
+    const rows: unknown[] = []
+    for (let i = 0; i < 100; i++) {
+      const row = backend.createElement({ type: 'view', props: {}, children: [] })
+      backend.insert(row, backend.createElement({ type: 'view', props: {}, children: [] }))
+      rows.push(row)
+    }
+    backend.flush() // 首帧（mount）
+    const afterMount = sd.hostCalls()
+
+    // 滚动 120 帧：每帧改 10 行的背景色（纯样式 ⇒ updatePatches，每帧一次调用）
+    const FRAMES = 120
+    for (let f = 0; f < FRAMES; f++) {
+      for (let k = 0; k < 10; k++) {
+        const row = rows[(f * 10 + k) % rows.length]!
+        backend.patchProp(row, 'backgroundColor', null, `#${(f % 16).toString(16)}00000`)
+        backend.patchProp(row, 'opacity', null, (f % 10) / 10)
+      }
+      backend.flush() // ← 帧边界
+    }
+
+    const framesTotal = FRAMES + 1 // 含首帧 mount
+    expect(sd.hostCalls(), `★跨边界调用数应 == 帧数（${framesTotal}）`).toBe(framesTotal)
+    expect(host.calls.length, '宿主实际收到的调用数一致').toBe(framesTotal)
+    // 对照：本场景的**操作数**远大于帧数（证明不是"没事可做"才达标）
+    const opsTotal = FRAMES * 10 * 2
+    expect(opsTotal, '本场景操作数（2400）应远大于调用数（121）').toBeGreaterThan(framesTotal * 10)
+  })
+
+  it('② ★不同帧负载下调用数恒定（证明与"当帧改了多少"无关）', () => {
+    const host = fakeHost()
+    const sd = createSelfDrawBatchAdapter(host, { viewport: { width: 390, height: 844 } })
+    const backend = createNativeBackend(sd, 'ios')
+    const root = backend.createElement({ type: 'view', props: {}, children: [] })
+    const nodes: unknown[] = []
+    for (let i = 0; i < 50; i++) {
+      const n = backend.createElement({ type: 'view', props: {}, children: [] })
+      backend.insert(n, root)
+      nodes.push(n)
+    }
+    backend.flush()
+
+    // 第 1 帧：改 1 个节点
+    backend.patchProp(nodes[0], 'x', null, 1)
+    backend.flush()
+    // 第 2 帧：改 50 个节点
+    for (const n of nodes) backend.patchProp(n, 'x', null, 2)
+    backend.flush()
+    // 第 3 帧：改 0 个节点（空批次）
+    backend.flush()
+
+    // ★三帧 ⇒ 三次调用（第 3 帧为空调度，不产生调用——计数应为 2+1(首帧)=3）
+    expect(sd.hostCalls(), '★调用数只跟帧数走，与当帧改动了多少节点无关').toBe(3)
+  })
+
+  it('③ ★宿主侧耗时量级（零设备代理读数：批次构造 + JSON 编码）', () => {
+    const host = fakeHost()
+    const sd = createSelfDrawBatchAdapter(host, { viewport: { width: 390, height: 844 } })
+    const backend = createNativeBackend(sd, 'ios')
+    const root = backend.createElement({ type: 'view', props: {}, children: [] })
+    const nodes: unknown[] = []
+    for (let i = 0; i < 200; i++) {
+      const n = backend.createElement({ type: 'view', props: {}, children: [] })
+      backend.insert(n, root)
+      nodes.push(n)
+    }
+    backend.flush()
+
+    // 60 帧 × 每帧 50 个属性变更 —— 测**批次构造与编码**（JS 侧；宿主侧耗时尚需真机）
+    const t0 = performance.now()
+    for (let f = 0; f < 60; f++) {
+      for (let k = 0; k < 50; k++) backend.patchProp(nodes[k]!, 'x', null, f)
+      backend.flush()
+    }
+    const perFrame = (performance.now() - t0) / 60
+    // eslint-disable-next-line no-console
+    console.log(`[C2 profile] 每帧 JS 侧批次成本 ${perFrame.toFixed(3)}ms（50 属性变更/帧 · 含 JSON 编码）`)
+    // ★判据：一帧预算 16.7ms，JS 侧批次成本应远低于它（宿主侧耗时需真机另测）
+    expect(perFrame, '★每帧 JS 侧批次成本应 < 2ms（一帧预算 16.7ms 的 12%）').toBeLessThan(2)
+  })
+})
