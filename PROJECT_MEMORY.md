@@ -224,6 +224,43 @@ emoji 前缀（降级条/驾驶提醒），文案入口保持宿主注入；`↕
 
 ---
 
+### ★★官网补录三批（Vapor / Rust 排版 / Vue 兼容性）+ ★官网部署门禁（2026-09-29）
+
+**① 官网内容补录（用户逐项决策后落地）**
+- **framework/43-vapor-update-path**（+en）：Vapor 更新路径三层机制 · 「为何自研」段
+  （★代码级证据：`npm pack @vue/runtime-vapor@3.6.0-rc.9` 实证 `src/dom/node.ts` 直接
+  `document.createElement/createTextNode`、公开 API 绑定 `HTMLElement/Text/ParentNode`、
+  `grep -c createRenderer → 0`；vuejs.org 的 `/guide/extras/vapor` **404**、
+  vuejs/docs **无 vapor 文件**、vuejs/blog **无 3.6 帖** ⇒ 原稿「官方不支持列表」的
+  **外部出处不存在**，改用可复现的代码级证据）· 实测数据表（标来源）· 诚实分级（📋 未接默认构建）
+- **framework/28-rust-layout-and-render-cmd**（+en）：Rust 排版核心（taffy 0.14，0.13 有指数级
+  度量退化）+ Draw 指令流 · 三条架构不变式 · 裁剪表（400×40：16001→**1592** 条，↓90.1%）·
+  诚实分级（🟡 实验宿主）
+- **guides/37-vue-compatibility**（+en，**从 SSOT 生成**）：`scripts/gen-vue-compat-doc.mjs` 消费
+  `VUE_COMPAT_MATRIX` ⇒ 只列 **71 项**未对齐（55 不支持 + 16 部分）；矩阵补 `noteEn`（71 条英译）
+  ⇒ EN 页零中文（矩阵测试断言强制）
+- 配套门禁：`check:vapor-docs`（9 条事实，7 条来自真机报告 + 2 条用 tsx 子进程重算）·
+  `check:vue-compat-doc` · `check:docs-stats`（扩面到 README + hosts 验收报告）
+
+**② ★★红线：官网内容改动必须触发部署（★本轮用户指出，已工具化）**
+- **机制**：`pages.yml` 触发门——push 到 main 时**只有 HEAD 提交消息含 `[deploy]` 才真部署**；
+  否则整条 run 显示 success 但**所有 step 全 skipped**（易误判为"已部署"）。
+- **现象**：上次真部署 `e6c5c565`（2026-09-27）之后改动 `website/**` 的 **9 个提交**
+  （含上述三页）**全部无标记** ⇒ 线上停在旧版；本地门禁全绿、git status 无提示
+  —— 与「提交 ≠ 交付」**同源**，只有工具层能兜住。
+- **工具化**：`scripts/check-deploy-pending.mjs`（默认提醒，已接进 `pnpm verify` 第 41 步 ·
+  `--require` 强制供发布收尾；两门禁列入 `check-gates-sync` 的 LOCAL_ONLY，
+  理由：CI 视角天然自洽 ⇒ 假门禁）+ AGENTS.md 红线段（含「部署提交后**不要再 push**」顺序纪律：
+  同 concurrency group 的 run 会被后续 push 取消，判别真假**看 steps 是否真 ran**）。
+- **本轮部署**：`edd29fdc`（空提交带标记）→ run **36526586898** · **19 步全真跑** ·
+  含「部署后核验（verify-live）」（非假 success）；本机独立核验 `pnpm check:live` ✅
+  线上 main = `main-CPO-zZHj.js`（与本地构建一致）；线上 bundle 实证含
+  `43-vapor-update-path`(8) / `28-rust-layout-and-render-cmd`(2) / `37-vue-compatibility`(2)。
+- **★本地预检拦下的坑**：本 shell `node` 是 **v18.16.1**，`website build` 报
+  `require() of ES Module ... packages/docs/dist/vite.js` —— 系 **Node 18 对 ESM 依赖的已知误报**
+  （CI 用 node 22）；换 nvm **v22.22.0** 复跑完整链（build-packages → gen:content → website →
+  showcase）**全绿**。⇒ 官网构建预检**必须用 Node ≥ 22**。
+
 ### ★★M3 手势落地：平台识别器 + 核心命中标注 target（2026-09-29，提交 `44962ade`）
 
 **方案依据**（06-gesture-animation.md 映射表）：「tap→`GestureDetector` / longPress→`LongPressGesture` /
