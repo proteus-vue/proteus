@@ -23,10 +23,21 @@
 //        读代码的人会以为那是有效注释。
 //      ★与 ① 同源：**语言边界的隐式规则靠工具兜住，不靠肉眼**。
 //      ★heredoc（`<<'EOF'` 等）内的内容是**别的语言**（Python/JS/JSON），其中的 `//`、`/*` 是正文 ⇒ 必须跳过。
+//   ③ **每个 `.sh` 必须通过 `bash -n`**（纯语法检查）。
+//      ★实测（2026-09-29 收尾）：本仓**没有任何门禁**对 shell 脚本做语法检查
+//        （`check:script-compile` 只管 JS/TS/Vue）⇒ 我改 `measure-paint-hint.sh` 时
+//        **手工跑了 5 轮 `bash -n`** 才发现问题。两个真实成因（都不是"粗心"，是 shell 的隐式规则）：
+//        · `\` 续行后跟**空行** ⇒ 命令在此结束，下一行若以 `||`/`&&` 开头即语法错误
+//          （实测：`echo "a" \` + 空行 + `|| echo b` ⇒ `syntax error near unexpected token ||`）；
+//        · 别的语言（Python/JS）**内联**进 shell（heredoc / `python3 -c "…"`）时与 shell 引号规则冲突。
+//        ★★**顺带纠正一条我先前写错的经验**：注释里的反引号（\`cmd\`）**不会**被 bash 执行
+//          （实测：`# 注释 \`echo x\`` 无任何输出）——我曾在记忆里把它写成"会触发命令替换"，
+//          属**未经验证的推断**。⇒ 本条判据覆盖的是**真语法错误**，不是那条假规则。
 //
 // 用法：node scripts/check-shell-i18n-vars.mjs
 // 退出码：0 通过 / 1 命中
 import fs from 'node:fs'
+import { spawnSync } from 'node:child_process'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 
@@ -109,5 +120,24 @@ if (foreignHits.length) {
   for (const h of foreignHits) console.error(`  ${h.file}:${h.line}\n      ${h.src}`)
   console.error('\n  修法：改成 `# …`（实测：\`/** … */\` 被 glob 展开成 /Applications 后打印 "is a directory" 并继续执行）')
 }
-if (hits.length || foreignHits.length) process.exit(1)
-console.log('✅ 无 `$VAR<全角>` 写法 · 无非 bash 注释语法（两种语言边界都明确）')
+// ── 判据 ③：`bash -n` 语法检查（真实语法错误；见文件头对"注释反引号无害"的纠正）──
+const syntaxHits = []
+for (const f of files) {
+  const r = spawnSync('bash', ['-n', f], { encoding: 'utf8' })
+  if (r.status !== 0) {
+    const msg = `${r.stderr ?? ''}`.split('\n').filter((l) => l.trim() && !/^\s*\^/.test(l)).slice(0, 2).join(' / ')
+    syntaxHits.push({ file: path.relative(ROOT, f), msg })
+  }
+}
+
+if (hits.length || foreignHits.length || syntaxHits.length) {
+  if (syntaxHits.length) {
+    console.error(`\n❌ 发现 ${syntaxHits.length} 个**语法错误**（bash -n 未通过）：\n`)
+    for (const h of syntaxHits) console.error(`  ${h.file}\n      ${h.msg}`)
+    console.error('\n  常见成因（都实测过）：')
+    console.error('   · `\\` 续行后跟**空行** ⇒ 命令在此结束，下一行的 `||`/`&&` 成语法错误')
+    console.error('   · 把别的语言（Python/JS）内联进 shell ⇒ 引号规则冲突；应**独立成文件**')
+  }
+  process.exit(1)
+}
+console.log('✅ 三类检查全过：变量边界 · 注释语言 · bash -n 语法')
