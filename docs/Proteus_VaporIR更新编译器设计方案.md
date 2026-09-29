@@ -11,13 +11,32 @@
 
 ### 0.1 为什么不能用 Vue 官方 Vapor
 
-Vue 3.6 Vapor Mode 的官方不支持清单中明确包含：
+~~Vue 3.6 Vapor Mode 的官方不支持清单中明确包含「渲染 · 自定义渲染器 · 不支持」~~
+（★**2026-09-29 修正**：原表述引用"官方不支持清单"而**无出处**，属未取证断言。经实地核查，
+**该清单文本在公开渠道找不到**——但这不影响结论，因为**代码本身给出了更强、可复验的证据**：）
 
-> **渲染 · 自定义渲染器 · 不支持**
+**★★代码级证据（`npm pack @vue/runtime-vapor@3.6.0-rc.9` 实测，可复现）**：
 
-原因：Vapor 编译产物是**直接调用 DOM API** 的代码（`document.createElement` / `appendChild`），它绕过了 `createRenderer` 这套 Host API 抽象。而 Vue 的跨平台能力恰恰来自渲染器抽象——Vue 官方自己的表述是「跨平台靠 renderer 抽象，不是靠 VDOM」。
+```
+@vue/runtime-vapor 源码路径: src/dom/node.ts        ← 路径本身即 DOM 专用
+  createElement(...)  → document.createElementNS / document.createElement
+  createTextNode(...) → document.createTextNode
+  createComment(...)  → document.createComment
+公开 API 签名绑死 DOM 类型:
+  createVaporApp: CreateAppFunction<ParentNode, …> · createPlainElement(…): HTMLElement
+  createTextNode(value?): Text
+grep -c createRenderer  →  0                        ← 无自定义渲染器入口
+```
 
-**结论：Proteus 使用自定义渲染器，因此无法使用 Vue 官方 Vapor。自研是唯一路径。**
+⇒ **它把"宿主是什么"编译死成 DOM，没有可替换的宿主抽象**。而 Proteus 的 App 端建立在
+自定义渲染器上（`createRenderer` + 指令流/原生视图映射）⇒ **不兼容，自研是唯一路径**。
+
+★**发布状态（2026-09-29 核）**：Vue 3.6 与 `@vue/compiler-vapor` / `@vue/runtime-vapor`
+均**只有 alpha/beta/rc 标签、无 `latest`**（= 未正式发布）；`vuejs/core` main 分支的
+`packages/` **不含 vapor**（tree 未截断，800 文件）。
+
+★**适用范围（避免误读）**：本条限定 **App / 小程序端**（自定义渲染器路线）。
+**Web 端目标是 DOM**，官方 Vapor 可作后续兼容目标（见 `roadmap.md` v0.6）——两者是不同通道。
 
 ### 0.2 自研反而更优的三个理由
 

@@ -26,10 +26,19 @@ In one sentence: plain DSL mapping means "writing native code in a different syn
 
 ## What is the difference between Proteus and Flutter?
 
-Flutter takes the **self-drawn engine** route: it computes layout itself (Skia draws the pixels itself), pursuing pixel-level consistency. Proteus picks a third route: **unified semantics + native implementation** — the framework only defines the semantic contract, and each target maps onto its strongest native implementation (iOS follows HIG, HarmonyOS follows the HarmonyOS guidelines, Android follows Material). Key differences between the two:
+Flutter takes the **self-drawn engine** route: it computes layout itself (Skia draws the pixels itself), pursuing pixel-level consistency. Proteus picks a third route: **unified semantics + native implementation** — the framework only defines the semantic contract, and each target maps onto its strongest native implementation (iOS follows HIG, HarmonyOS follows the HarmonyOS guidelines, Android follows Material).
+
+**"Self-drawn" has two meanings — do not conflate them.** Proteus **rejects the first** (architectural principle #1 is literally "**no self-rasterization**") and only does the second, on the **high-performance path**:
+
+| Meaning | Who does it | Notes |
+|---|---|---|
+| Building your own **rasterizer** (drawing pixels, not using system controls) | Flutter (Skia) | Owns the whole rendering pipeline ⇒ decoupled from the OS look, at the cost of **catching up with the OS yourself** |
+| Computing your own **layout** (geometry solved in-house, drawing still delegated) | Proteus App high-performance path | Rust solves geometry → **dispatches draw commands to CALayer / Canvas** (**reuses the system rendering pipeline**; no rasterizer of its own) |
+
+Key differences between the two:
 
 - **Pixel consistency vs. semantic consistency**: Flutter demands pixel-identical output across five targets; Proteus demands an identical understanding of the semantics, with the visual result following that platform's specification
-- **New OS features**: the self-drawn route lags behind the OS; the semantic-mapping route is usable immediately (e.g. system-level glass maps directly to UIGlassEffect)
+- **New OS features**: the semantic-mapping route is usable immediately (e.g. system-level glass maps directly to UIGlassEffect). ★**Honest boundary**: Proteus's **high-performance path lags too** — it computes layout itself and reuses system draw primitives, but system-level *control* features still need `native-host` to embed a native view; hence the two paths are **chosen per page** (system-feature-heavy pages → native control mapping; high-frequency lists/animations → the high-performance path, see [render backends](/docs/framework/23-render-backend))
 - **The relationship is not mutually exclusive**: Flutter itself can become one of Proteus's render backends (a Flutter widget-mapping backend has already landed as a prototype) — Flutter locks in Skia; Proteus locks in no engine
 
 ## Why use p-* semantic components instead of writing HTML / wx tags directly?

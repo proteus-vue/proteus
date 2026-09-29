@@ -16,6 +16,44 @@ Its difference from the other compile-time capabilities in this section is **sco
 | What ships | Diff result of a whole new tree | Instructions for changed slots (fixed-width fields) |
 | Affected scope | Whatever the diff finds | Layout boundaries + slot dependencies together |
 
+## Why not simply use Vue's official Vapor
+
+Vue 3.6 is building Vapor Mode too (compile-time updates); the idea is the same. But **it cannot be used here** — that, not preference, is why Proteus builds its own.
+
+**Evidence (not hearsay — you can re-verify it)**: the `@vue/runtime-vapor` runtime **calls DOM APIs directly** and offers **no replaceable host abstraction**:
+
+```
+@vue/runtime-vapor source path: src/dom/node.ts     ← the path itself is DOM-specific
+  createElement(tagName, ns)  → document.createElementNS / document.createElement
+  createTextNode(value)       → document.createTextNode
+  createComment(data)         → document.createComment
+Public API signatures hard-bound to DOM types:
+  createVaporApp: CreateAppFunction<ParentNode, …> · createPlainElement(…): HTMLElement
+  createTextNode(value?): Text
+grep -c createRenderer  →  0                        ← no custom-renderer entry point
+```
+
+Proteus's App side, by contrast, **is built on a custom renderer** (`createRenderer` + a self-dispatched
+instruction stream / native view mapping). ⇒ The two are **incompatible**: official Vapor compiles
+"what the host is" into DOM, while Proteus needs the host to stay pluggable.
+
+**Three structural advantages of building our own**:
+
+| Aspect | Vue official Vapor | Proteus (own) |
+|---|---|---|
+| Render target | DOM (a concrete platform) | **Platform-independent IR** — a cleaner codegen target |
+| Vue version dependency | Tied to 3.6 (**still rc, not officially released**) | **Compiler independent of Vue version** (byte-identical output across Vue 3.4–3.6) |
+| Reactivity transform | Keeps Proxy-based dependency tracking | **Compile-time conversion to direct slot writes** |
+
+The third point is the core one: Vue must support **arbitrary** JS runtime behaviour and cannot assume
+"the set of dynamic bindings is enumerable at compile time"; Proteus faces a restricted subset and can
+transform more aggressively.
+
+★**Scope (to prevent misreading)** "Official Vapor is unusable" applies to the **App / mini-program**
+sides (the custom-renderer route). The **Web side targets the DOM**, where official Vapor is
+philosophically aligned with Proteus (both reject the virtual DOM) and can be a future compatibility
+target — the two are different channels, not two answers to one question.
+
 ## The three layers
 
 ### ① Compile time: source → slot
