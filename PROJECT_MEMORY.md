@@ -990,6 +990,45 @@ C1 的「可运行 Android 实现」也扫清了 JS 侧前置。
 **⑥ 验证**：全量 **3958/3958** · vue-tsc 0 错 · 门禁全绿（新增两个）· 桩测通过且**无副作用**
 （md5 前后一致）· 真机安装**无 16 KB 警告** · JS 引擎冒烟仍正常（\`batch_ok: true\`）。
 
+### ★★★S3b 真实 bundle 在 Android 跑通（2026-09-29）—— render-backend 适配器 · 9 条判据全绿
+
+**为什么还要 S3b**：S3 用**手写的等价 JS**（20 行）验「QuickJS → JNI → 宿主回调」链路通，
+但那**不是仓库里真正会被产品使用的代码**。S3b 打进的是
+\`createSelfDrawBatchAdapter\` + \`createNativeBackend\` 的**真实 esbuild 产物**（118.4KB）。
+
+**真机实测**（\`bash hosts/android/run-js-batch.sh\`，可复跑）：
+\`\`\`
+bundle_chars=116718 · bundle_load_ok=true · run_ms=6
+phase1_mount=true · phase2_updates=true · phase3_update=true   ← 三相位各走对宿主入口
+host_calls=3                                                     ← 批处理红线
+mount_nodes=4 · update_nodes=5 · ok=true
+\`\`\`
+⇒ 首帧 \`mount\` → 纯样式 \`updatePatches\` → 结构变化整树 \`update\`；**调用数 = flush 次数**。
+
+**新增**：\`hosts/android/bridge/{entry-batch.ts,build-batch.mjs}\`（镜像 iOS \`build-selfdraw.mjs\`：
+显式 alias 到 render-backend dist，不靠隐式解析）· \`hosts/android/run-js-batch.sh\` ·
+\`MainActivity#jsBatchRun\`（读 assets → eval → 调用入口 → 断言）· 门禁 \`check:android-bundle\`。
+
+**★产物策略**：\`bundle-batch.js\` **不入库**（与 iOS \`dist/\` 同款，已被 gitignore）
+⇒ \`build-and-run.sh\` **构建时自动生成**（若缺）——本仓纪律「**生成物必须在构建路径上**」：
+不自动生成的话，clone 后这一步静默跳过 ⇒ 测试路径不可用。
+
+**★边界（写进脚本输出）**：宿主桥在本链路是"上报给 Java"（\`proteusHost.post\`）
+⇒ 证明 **适配器 → 宿主入口** 这段真实；**Java 侧真正消费批次去渲染**属 C1 后续。
+本步**不**声称"端上已经会画了"。
+
+**★过程中两处自纠**
+1. **读数名与含义不符**——首版把 \`mountNodes\` 与 \`updateNodes\` 写成同一字段，
+   update **覆盖**了 mount 的值 ⇒ 报的是"最后一次整树重发的节点数"而名字却叫 mounted。
+   ⇒ 拆成两个字段。**纪律：读数名与含义必须一致**，否则读的人会误判。
+2. **pipefail + \`grep -q\` 陷阱（★第二次踩）**——\`unzip -l "$APK" | grep -q\` 在 \`set -o pipefail\`
+   下**恒失败**（grep 找到即退 ⇒ unzip 收 SIGPIPE）⇒ 前置检查误报"APK 内无 bundle"
+   （实际有条目，我差点又去查构建）。⇒ 改"先落变量再匹配"。
+   ★本仓已在 \`build-and-run.sh\` 修过一次，**新脚本又犯** ⇒ 已把教训写进脚本注释。
+   **规律：老坑会在新代码里原样复活——所以修复必须"写到下一个会写代码的人看得见的地方"。**
+
+**验证**：全量 **3958/3958** · tsc 0 错 · 桩测通过 · 门禁全绿（含新增 \`check:android-bundle\`）。
+
 ### ★★M3 手势落地：平台识别器 + 核心命中标注 target（2026-09-29，提交 `44962ade`）
 
 **方案依据**（06-gesture-animation.md 映射表）：「tap→`GestureDetector` / longPress→`LongPressGesture` /
