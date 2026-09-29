@@ -1,0 +1,12 @@
+{
+  "ok": true,
+  "path": "proteus-noflatten",
+  "elements": 4051,
+  "rust_layout_ms": 5,
+  "emit_cmds_ms": 0,
+  "build_render_nodes_ms": 9,
+  "draw_all_nodes_ms": 1,
+  "total_ms": 15,
+  "render_node_count": 2000,
+  "note": "★不拍平形态：每元素一个 RenderNode（独立绘制对象）——§9.2 要求其耗时仍 ≤ 原生"
+}
