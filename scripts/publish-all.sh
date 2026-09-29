@@ -144,7 +144,7 @@ for dir in packages/*/; do
   # ── 打包（pnpm——本仓唯一打包器；输出 tarball 路径 + integrity）──
   pkdir=$(mktemp -d)
   if ! pkjson=$(node "$ROOT/scripts/lib/pack-package.mjs" "$ROOT/$dir" "$pkdir" 2>&1); then
-    echo "FAIL $name@$version（pnpm 打包失败）："
+    echo "FAIL $name@${version}（pnpm 打包失败）："
     echo "$pkjson" | head -3 | sed 's/^/    /'
     FAIL=$((FAIL + 1))
     rm -rf "$pkdir"
@@ -160,7 +160,7 @@ for dir in packages/*/; do
       echo "dry-ok $name@$version → ${TAG}（${nfiles} 个文件）"
       PUB=$((PUB + 1))
     else
-      echo "FAIL $name@$version（npm publish 拒绝了该命令）："
+      echo "FAIL $name@${version}（npm publish 拒绝了该命令）："
       echo "$out" | grep -iE "error|not allowed" | head -3 | sed 's/^/    /'
       FAIL=$((FAIL + 1))
     fi
