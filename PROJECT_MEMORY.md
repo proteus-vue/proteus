@@ -868,6 +868,41 @@ WebView 仅作 native-host 演示）；且 Host ABI 的 HA0（八接口 C ABI）
 
 **⑥ 验证**：门禁全绿（docs / docs-stats）。
 
+### ★★★Android JS 引擎 S1+S2 落地（2026-09-29）—— QuickJS 构建 + JNI 桥 + 零设备验证
+
+落地选型文档的 S1/S2（卡 C1「可运行 Android 实现」与 C2「JSI 通路」的**共同前置**）。
+
+**① S1：获取 + 构建**（\`scripts/setup-android-js-engine.sh\`）
+- QuickJS 源码走 \`.tools/\`（**gitignored**，同 JDK/NDK 惯例——**第三方源码不入库**）
+- 本机 \`qjs\` **1075 KB** · Android \`libquickjs.so\` **1084 KB**（ARM aarch64 断言）
+- ★两个移植点固化进脚本：**Bionic 无独立 \`-lpthread\`** · **共享库需 \`-fPIC\`**
+
+**② S2：JNI 桥**（\`hosts/android/js-engine/quickjs_jni.c\` + \`QuickJsEngine.java\`）
+- \`nativeEval\` / \`nativeEvalWithHost\` / \`nativeSetHostCallback\` + \`proteusHost.post\` 回调桩
+- 门面形态对齐本仓惯例（\`RustLayout\` 的「JSON 进 / JSON 出」）
+- 产物 \`libquickjs_jni.so\` **1089 KB**，**架构 + JNI 导出符号双断言**（\`llvm-nm\` 验符号）
+- ★**为什么用 C 而非 Rust**（本仓惯例的例外，理由写进文件头）：QuickJS 是 **C 库**，
+  此处是「调 C 库」而非「Rust 调 Rust」（后者才用 \`jni.rs\` 的 jni crate）
+
+**③ 零设备验证**（\`scripts/verify-js-engine.mjs\` + 门禁 \`check:js-engine\`）
+- 三判据：引擎可用 / **真实 375691 字符 bundle 解析通过** / **含 Vue 3 初始化完整执行**
+- ★**破坏性验证**：语法坏 bundle ⇒ 报"解析失败"；运行时 \`throw\` ⇒ 报"执行失败"（独立拦截）
+- ★**边界写进输出**：本机 qjs x86_64 vs Android .so arm64，**同一份源码** ⇒ 语义等价；
+  证明"引擎能力足够"，**不**证明"JNI 编组正确"（后者需 S3 真机）
+
+**④ 接线**：\`build-and-run.sh\` 把 .so 打入 APK（\`lib/arm64-v8a/\`，**缺它不阻断构建**）；
+两门禁入 verify 链 + \`LOCAL_ONLY\`（CI 无 \`.tools/quickjs\`/NDK）。★**改过宿主脚本 ⇒ 已过桩测**（本仓红线）。
+
+**⑤ ★两处纪律（如实记录）**
+1. **QuickJS 官方发布页不提供校验和/签名**（实测）⇒ 脚本无法验证下载完整性。
+   缓解：**人工核对后钉死** sha256（本次已钉 \`b376e839…\`）；**未钉死时脚本明确报告"未校验"
+   ——不假装通过**（本仓"判据必须能变红"的同族：**无法验证就要说出来**）。
+2. **中文注释里 \`$VAR<全角字符>\` 会被 bash 当作变量名一部分**（实测 unbound variable）
+   ⇒ 用**正则全文扫描**修 3 处并复查为 0。★与"第 N 份手写副本"同族：
+   **语言边界的隐式规则要靠工具兜住，不靠肉眼**。
+
+**⑥ 验证**：全量 **3958/3958** · vue-tsc 0 错 · 九门禁全绿（含新增两个）· 桩测通过。
+
 ### ★★M3 手势落地：平台识别器 + 核心命中标注 target（2026-09-29，提交 `44962ade`）
 
 **方案依据**（06-gesture-animation.md 映射表）：「tap→`GestureDetector` / longPress→`LongPressGesture` /
