@@ -339,6 +339,63 @@ emoji 前缀（降级条/驾驶提醒），文案入口保持宿主注入；`↕
 \`hosts/android/check-host-compile.sh\` · \`tests/{pixel-snap-golden,i2-snap-e2e,gates-sync}.test.ts\` ·
 \`docs/generated/instruction-spec.md\` · AGENTS.md · 任务卡清单 · website/scripts/gen-primitives.mjs
 
+### ★★★CI 连续红排查（5 个先存在缺陷，全部修完）+ ★干净克隆复现法（2026-09-29）
+
+**背景**：本轮推送后发现 **CI 从今早起连续 12 次 run 全红**（不是本轮引入）。用户此前
+多次强调「测试装置问题必须在被测对象之前暴露」——本轮把这条纪律用在了 CI 自身。
+
+**★★方法：干净克隆复现（本轮最有价值的一条）**
+  本地「全绿」在本轮出现**三次假绿**，每次都因为**本机残留状态**：
+  · 桩测绿 ← 本机跑过真机验收，残留 `build/proteus-layoutcore.apk`
+  · vapor-v3-e2e 绿 ← 本机 target/ 里残留上次构建的 `ops_roundtrip`
+  · （T4/D-2 则是本机快、CI 慢/CI 严格）
+  ⇒ 复现命令：`git clone --depth 3 file://$PWD /tmp/ci-sim` → `pnpm install --frozen-lockfile
+    --ignore-scripts` → `node scripts/build-packages.mjs` → 跑目标命令。
+    **这是"CI 等价环境"的最便宜实现**（无需 Docker/act），且当场复现了两个真红。
+
+**① 桩测依赖本机残留 APK**（CI 红 / 本地假绿）
+  `acceptance.sh` 在 `--skip-build` 下仍要求 APK 存在（供 `adb install`），桩测没提供
+  ⇒ CI exit 2。修：桩测**自己写占位 APK**（假 adb 不校验内容）+ **装置自证断言**
+  （跑完必须仍是桩测写的那份——防再度退化为依赖本机状态）。
+
+**② CI 步骤顺序倒置**（CI 红 / 本地假绿）
+  `vapor-v3-e2e` 需要 `target/debug/examples/ops_roundtrip`，而构建它的步骤排在
+  `pnpm test` **之后** ⇒ CI 必然 ENOENT（表现为"端到端链路坏了"，实为装置没建）。
+  修：构建**前置**；并把缺装置错误改为**可操作提示**（指名构建命令 + 顺序要求）。
+
+**③ vapor-perf 门禁的装置过期**（真红，会误导排查方向）
+  gate **手写** ops 字节并硬编码 `version = 1`，协议 V2 改 `OPS_VERSION = 2` 后
+  这份副本静默过期 ⇒ Rust 拒收 ⇒ 门禁报「平移未产生位移」（像平移传播坏了）。
+  修：改**调真实 TS 编码器**（tsx 子进程）+ 新增装置自检 `assertProbeApplied`
+  （装置失效报装置错 exit 2，不伪装成性能回归）。
+
+**④ 三包未登记官网覆盖**：`layout-core` / `layout-core-rust` / `slot-runtime`
+  （Vapor 线新增包从落地起就没登记——worklet / E30 useMCP 同类缺口的**第三次**复发）
+  ⇒ `COVERED_PACKAGES` 声明专页归属（framework/28 与 43）。
+
+**⑤ gates-sync 判据有两份实现、只改了一份**：`.mjs` 已放宽到任意相对路径（修 hosts/ 失明），
+  `tests/gates-sync.test.ts` 的镜像仍是窄版 ⇒ `check:acceptance-stub` 被误判"未接线"。
+  ⇒ 同步扩面。**纪律：改判据必须同时改它的镜像**。
+
+**⑤' T4 绝对墙钟阈值**（CI 红）：`p95 ≤ 3ms` 在本机 0.239ms、CI 共享 runner 3.40ms（**14×**），
+  而该轮求解器**零改动** ⇒ 该数字量的是"runner 多忙"。修：主判据改**结构量**
+  （单轮最大重排 << 叶子数——边界塌陷才是要防的退化）+ **同机比值**（增量 p95/全量中位 ≤ 0.7）
+  + 绝对墙钟仅作宽松上界（20ms）。★破坏性验证：关边界 ⇒ 比值 **1.98**、重排 14（vs 4）⇒ 能变红。
+
+**⑤'' 官网 D-2 裸平台 API**（CI 红）：`MultiDevice.vue` 的 `readBiz()` 用 `document.querySelector`
+  读自己渲染的 `data-biz-*`。修：改**组件作用域**的 `stageEl.value?.querySelector(...)`
+  ——语义等价但零全局对象，且顺带修掉"多实例同页会取到文档第一个匹配元素"的潜在缺陷。
+  （真修不是豁免：`audit d2 website/src` 现 PASS 零 error。）
+
+**验证**：干净克隆上 `pnpm test` = **327 文件 / 3911 项全绿**；桩测 exit 0（此前 exit 2）；
+  `check:vapor-perf` ✅（类A 0.004ms / 类B 0.058ms · delta=24 兄弟=1000）；
+  `check:primitives` ✅（34 页）；`audit d2` ✅；`check:gates-sync` ✅；根 + website `vue-tsc` 0 错。
+
+**★教训（本轮新增，与"测量装置必须先自测"同族）**：
+  **"本地绿"在装置依赖本机残留时是最危险的假信号**——残留的 APK/二进制/缓存会让
+  "装置缺失"伪装成"链路正常"。⇒ 凡是依赖构建产物的测试，都要问一句：
+  **这个产物是谁生成的？干净环境里它存在吗？**（答案不确定就去干净克隆跑一次。）
+
 ### ★★M3 手势落地：平台识别器 + 核心命中标注 target（2026-09-29，提交 `44962ade`）
 
 **方案依据**（06-gesture-animation.md 映射表）：「tap→`GestureDetector` / longPress→`LongPressGesture` /
