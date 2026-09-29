@@ -303,6 +303,19 @@ public class ProteusHostView extends ViewGroup {
 
     /* ── ViewGroup 生命周期：用 Rust 几何驱动 ── */
 
+    /**
+     * ★卡 I2（舍入时机统一）：内核已把几何吸附为**整数逻辑像素** ⇒ 本转换**无损**。
+     *
+     * 为什么保留下转换而不是沿用 `Math.round`：平台层**不得再做舍入决策**
+     * （否则又与内核的策略分叉——那正是"三端差 1px"的成因）。
+     * 转换只为满足 View API 的 int 签名；若内核不变式被破坏，本转换是**直接截断**，
+     * 会立刻在像素核验里暴露，而不是被"再舍入一次"悄悄掩盖。
+     * （静态门禁：`pnpm check:host-rounding`）
+     */
+    private static int exactPx(float v) {
+        return (int) v;
+    }
+
     @Override
     protected void onMeasure(int widthSpec, int heightSpec) {
         // 宿主自身：接受 parent 给的尺寸（它由外部布局决定）
@@ -311,8 +324,8 @@ public class ProteusHostView extends ViewGroup {
         // ★子 View（native-host）：**尺寸来自 Rust 几何**（EXACTLY）——不退化为 View 体系测量
         for (Map.Entry<Integer, View> e : nativeHosts.entrySet()) {
             RectF rect = nativeRects.get(e.getKey());
-            int nw = rect != null ? Math.round(rect.width()) : 0;
-            int nh = rect != null ? Math.round(rect.height()) : 0;
+            int nw = rect != null ? exactPx(rect.width()) : 0;
+            int nh = rect != null ? exactPx(rect.height()) : 0;
             e.getValue().measure(
                     MeasureSpec.makeMeasureSpec(nw, MeasureSpec.EXACTLY),
                     MeasureSpec.makeMeasureSpec(nh, MeasureSpec.EXACTLY));
@@ -327,8 +340,8 @@ public class ProteusHostView extends ViewGroup {
             RectF rect = nativeRects.get(e.getKey());
             if (rect == null) continue;
             View v = e.getValue();
-            v.layout(Math.round(rect.left), Math.round(rect.top),
-                     Math.round(rect.right), Math.round(rect.bottom));
+            v.layout(exactPx(rect.left), exactPx(rect.top),
+                     exactPx(rect.right), exactPx(rect.bottom));
         }
         ensureViewport();
         applyScrollToNativeHosts();
@@ -762,6 +775,7 @@ public class ProteusHostView extends ViewGroup {
         if (seen + 1 < ATLAS_MIN_REPEAT) return null;   // 未达重复阈值：仍不建
 
         android.graphics.Paint.FontMetrics fm = textPaint.getFontMetrics();
+        // I2-ALLOW: 文本栅格化位图尺寸（测量子系统，非布局几何——位图必须整数像素）
         int w = Math.max(1, (int) Math.ceil(textPaint.measureText(text)));
         int h = Math.max(1, (int) Math.ceil(fm.descent - fm.ascent));
         // ★ALPHA_8：只存覆盖率（文字单色）→ 内存为 ARGB_8888 的 1/4
@@ -898,6 +912,7 @@ public class ProteusHostView extends ViewGroup {
     private android.text.StaticLayout layoutFor(String text, float maxWidth) {
         android.text.StaticLayout cached = layoutCache.get(text);
         if (cached != null) return cached;
+        // I2-ALLOW: 文本排版宽度参数（测量子系统——平台度量文本；`maxWidth` 来自内核整数 c.w ⇒ 本身无损）
         int w = Math.max(1, (int) Math.ceil(maxWidth));
         android.text.StaticLayout layout = android.text.StaticLayout.Builder
                 .obtain(text, 0, text.length(), textPaint, w)

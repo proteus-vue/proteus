@@ -1865,6 +1865,8 @@ final class SelfDrawBridge: NSObject, SelfDrawExports {
         let size = (text as NSString).size(withAttributes: attrs)
         // ★向上取整到整点：真机实测文本宽度常带小数（如 47.33pt），
         //   而宿主按整点布置 CALayer 更稳定；同时避免「同一文本两次测量差 0.001」导致布局抖动
+        // I2-ALLOW: 文本**测量**结果的取整（测量子系统，非几何换算——度量值由内核消费后
+        //   再经 `snap` 统一吸附；平台层对**几何**（层 frame）零舍入，见 check:host-rounding）
         let rounded = CGSize(width: ceil(size.width), height: ceil(size.height))
         measureCache[key] = rounded
         return rounded
@@ -2555,6 +2557,7 @@ final class SelfDrawBridge: NSObject, SelfDrawExports {
         //   **不变** ⇒ 判据恒绿。本轮的紫色圆点（`#6F4AE8`）第一次让互换暴露为 `#E84A6F`。
         //   ⇒ 正解：不猜系统格式，`CGBitmapInfo` 显式声明 `byteOrder32Big | premultipliedLast`
         //     （= 内存里恒为 R,G,B,A），与设备/系统无关。
+        // I2-ALLOW: 像素缓冲尺寸（测量装置自身的位图；非布局几何）
         let w = Int(size.width.rounded())
         let h = Int(size.height.rounded())
         guard w > 0, h > 0 else { return "{\"ok\":false,\"error\":\"视图尺寸为 0\"}" }
@@ -3327,6 +3330,7 @@ final class SelfDrawViewController: UIViewController {
             "first_frame_ms": round((CFAbsoluteTimeGetCurrent() - Self.processStartWall) * 1000 * 100) / 100,
             "first_frame_source": Self.processStartValid ? "kernel:p_starttime" : "fallback:now(不可信)",
             // 启动框架耗时（p_starttime → didFinishLaunching）；0 = 该点未打（旧路径）
+            // I2-ALLOW: 启动耗时报告（毫秒读数，非几何）
             "bootstrap_ms": Self.didLaunchWall > 0
                 ? round((Self.didLaunchWall - Self.processStartWall) * 1000 * 100) / 100 : -1,
         ]

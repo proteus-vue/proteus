@@ -590,6 +590,7 @@ public class MainActivity extends Activity {
                 double firstRowExact = p * (ROWS - VISIBLE_ROWS);
 
                 // 可见行：由滚动位置 + 行高推出（行高来自核心几何）
+                // I2-ALLOW: 滚动**行索引**候选（非渲染坐标——渲染几何来自内核 rects，宿主不产几何）
                 int firstVisible = (int) Math.floor(firstRowExact);
                 int lastVisible = Math.min(ROWS - 1, firstVisible + VISIBLE_ROWS - 1);
 
@@ -819,6 +820,7 @@ public class MainActivity extends Activity {
                 double progress = (double) f / FRAMES;
                 double p = progress < 0.5 ? progress * 2.0 : (1.0 - progress) * 2.0;
                 double firstRowExact = p * (ROWS - VISIBLE_ROWS);
+                // I2-ALLOW: 同上一处——行索引候选，非渲染几何
                 int firstVisible = (int) Math.floor(firstRowExact);
                 int lastVisible = Math.min(ROWS - 1, firstVisible + VISIBLE_ROWS - 1);
                 boolean backward = progress >= 0.5;
@@ -904,6 +906,7 @@ public class MainActivity extends Activity {
             o.put("view_reused", reused);
             o.put("view_max_live", maxLive);
             o.put("view_reuse_ratio", (created + reused) == 0 ? 0.0
+                    // I2-ALLOW: 复用率报告（统计读数，非几何）
                     : Math.round((double) reused / (created + reused) * 10000) / 10000.0);
             writeReport("layout-scroll-native.json", o.toString(2));
         } catch (org.json.JSONException e) {
@@ -1076,6 +1079,7 @@ public class MainActivity extends Activity {
                 cmds.add(new ProteusHostView.Cmd(x, y, w, h, color, null));
                 org.json.JSONObject e = new org.json.JSONObject();
                 e.put("row", i);
+                // I2-ALLOW: 核验**期望值报告**（供 Python 核验脚本比对；屏幕几何用的是未取整的 x/y）
                 e.put("x", Math.round(x));
                 e.put("y", Math.round(y));
                 e.put("w", Math.round(w));
@@ -1252,6 +1256,7 @@ public class MainActivity extends Activity {
                 e.put("seq", rowNo);
                 e.put("nodeId", idx);
                 e.put("kind", isNative ? "native-host" : (row[1] == 2 ? "overlap-selfdraw" : "self-draw"));
+                // I2-ALLOW: 核验**期望值报告**（同上）
                 e.put("x", Math.round(x));
                 e.put("y", Math.round(y));
                 e.put("w", Math.round(w));
@@ -1402,6 +1407,7 @@ public class MainActivity extends Activity {
                 e.put("seq", i);
                 e.put("nodeId", nodeId);
                 e.put("kind", isNative ? "native-host" : "self-draw");
+                // I2-ALLOW: 核验**期望值报告**（内容坐标系的报告值；屏幕几何用未取整的 y）
                 e.put("contentY", Math.round(y));       // 内容坐标系（不含滚动）
                 e.put("h", Math.round(h));
                 e.put("w", Math.round(w));
@@ -2125,6 +2131,7 @@ public class MainActivity extends Activity {
             android.graphics.Canvas cP = new android.graphics.Canvas(bP);
             for (int r = 0; r < ROWS; r++) {
                 android.graphics.Picture pic = new android.graphics.Picture();
+                // I2-ALLOW: Picture 录制画布尺寸（位图/纹理类——必须整数像素）
                 android.graphics.Canvas pc = pic.beginRecording(W, (int) Math.ceil(ROW_H));
                 ProteusHostView rowHost = new ProteusHostView(this);
                 rowHost.setCmds(rowCmdsOf.apply(r));               // ← 相对坐标录制（Picture 无位置属性）
@@ -4060,7 +4067,8 @@ public class MainActivity extends Activity {
                                             android.os.Bundle extra) {
                 log.add(type + "|target=" + targetId + "|chain=" + java.util.Arrays.toString(chain)
                         + "|dir=" + extra.getString("direction", "-")
-                        + "|dx=" + Math.round(extra.getFloat("dx_total", 0) * 10) / 10.0);
+                        // I2-ALLOW: 核验报告小数位（非几何——几何由内核给定）
+                + "|dx=" + Math.round(extra.getFloat("dx_total", 0) * 10) / 10.0);
             }
         });
         root.addView(host, new FrameLayout.LayoutParams(W, H));

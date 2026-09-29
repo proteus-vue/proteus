@@ -556,6 +556,7 @@ final class ScrollBench: NSObject {
         return [
             "fps": (1000 / avg * 10).rounded() / 10,
             "p95ms": (p95 * 100).rounded() / 100,
+            // I2-ALLOW: 掉帧率报告（统计读数，非几何）
             "dropRate": (Double(drops) / Double(f.count) * 1000).rounded() / 10,
             "frames": Double(f.count),
         ]
@@ -897,7 +898,8 @@ func exp8() -> [String: Any] {
             CATransaction.flush()
             for _ in 0..<3 { RunLoop.current.run(mode: .default, before: Date().addingTimeInterval(0.03)) }
             let after = residentMB()
-            rows.append(((after - before) * 10).rounded() / 10)
+            // I2-ALLOW: 内存增量报告（MB 读数，非几何）
+        rows.append(((after - before) * 10).rounded() / 10)
             cleanAndSettle()
         }
         return rows

@@ -101,6 +101,20 @@
   `pnpm check:deploy-pending:strict`（有未上线内容则 exit 1，供发布收尾）。
   **上线证据** = pages.yml 的「部署后核验」（verify-live 产物 hash）+ 本机 `pnpm check:live`。
 
+### ★红线：坐标舍入只在**内核**发生（卡 I2，2026-09-29 起有静态门禁）
+
+- **规则**：几何坐标的吸附**只在** `packages/layout-core/src/pixel-snap.ts` 与
+  `packages/layout-core-rust/src/snap.rs`（唯一实现，策略 = 边缘吸附 `floor(v+0.5)`）；
+  **平台层（`hosts/**`）不得再做任何几何舍入**——各端各自舍入 = 三端差 1px（golden 全绿也照样差）。
+- **落点**：吸附在**导出边界**（TS `emitRenderCmds` / Rust FFI 导出）；求解器内部保持亚像素。
+  命中测试走吸附几何（视觉边界 = 可点边界）。
+- **工具化**：`pnpm check:host-rounding`（静态扫描 `hosts/`；合法例外必须写 `// I2-ALLOW: 理由`，
+  且**理由要具体**——`I2-ALLOW` 是给"测量/位图/报告"三类用的，不是让几何舍入蒙混过关的开关）。
+  `pnpm check:pixel-snap`（TS ⇄ Rust golden 一致，改策略必须显式重生成）。
+- **★改宿主代码（`hosts/**`）必须先过零设备编译检查**，别把编译错留到真机：
+  `pnpm check:android-host-compile`（javac + android.jar）· `bash hosts/ios/check-selfdraw-compile.sh`
+  （swiftc -typecheck）。二者都在 `pnpm verify` 链上，但**改完立刻单跑**比等全量快得多。
+
 ## 2. 项目门禁（改代码后按需运行）
 
 ```bash

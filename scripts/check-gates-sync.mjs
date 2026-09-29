@@ -52,6 +52,13 @@ const LOCAL_ONLY = {
   //   它的作用域是**开发机收尾**：`pnpm verify` 末尾提醒；发布收尾用 strict 强制。
   'check:deploy-pending': '面向开发机收尾（本地 git 历史中 [deploy] 之后 website/** 是否仍有改动）；CI 视角天然自洽 ⇒ 假门禁',
   'check:deploy-pending:strict': '同上（strict 只是把提醒改为 exit 1，供发布收尾显式调用）',
+  // ★卡 I2「平台层零舍入」静态门禁（2026-09-29 新增）。扫描面是 **hosts/**（Android/iOS 宿主源码）——
+  //   那部分不参与 CI 的 TS 构建（真机宿主需 NDK/Xcode），CI 上跑它只会扫到空集 ⇒ 假门禁。
+  //   它的作用域是**开发机**：改宿主代码后立刻拦下"平台侧再舍入一次"。
+  'check:host-rounding': '扫描 hosts/（Android/iOS 宿主源码）——CI 不构建宿主，扫不到任何文件 ⇒ 假门禁',
+  // ★Android 宿主编译检查（2026-09-29，与 check:ios-selfdraw-compile 同源盲区）：
+  //   编译宿主需 Android SDK（android.jar）+ JDK；CI 为 ubuntu-latest，不装 Android SDK ⇒ 跑不了。
+  'check:android-host-compile': '需 Android SDK（android.jar）+ JDK 17；CI 为 ubuntu-latest，未装 Android SDK',
 }
 
 const pkg = JSON.parse(fs.readFileSync(path.join(ROOT, 'package.json'), 'utf8'))
