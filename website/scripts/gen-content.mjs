@@ -1497,6 +1497,24 @@ function genCapabilities(ir, ends) {
       '  // 平台无法探测 → 降级路径（按不支持处理）',
       '}',
     ],
+    useWebAssembly: [
+      'const wasm = useWebAssembly() // 同步句柄——无 await、无 res.ok',
+      '',
+      'if (wasm.ok) {',
+      '  // ★用能力位判断形态，不要按平台名分支：',
+      '  //   MP 只收代码包路径（supportsPathLoad）；Web / App-iOS 收字节（supportsStreaming）',
+      '  const source = wasm.data.supportsPathLoad',
+      "    ? { path: 'wasm/image-filter.wasm.br' }   // 小程序：包内路径（支持 brotli）",
+      '    : { bytes: await fetch(url).then((r) => r.arrayBuffer()) } // Web / App-JSC：字节',
+      '  const inst = await wasm.data.instantiate(source)',
+      '  if (inst.ok) inst.data.exports.sharpen(width, height, amount)',
+      '',
+      '  // compile / validate 是**可选**能力（MP 端无此二者）——先探测再调用：',
+      '  if (wasm.data.validate && (await wasm.data.validate(bytes)).ok) { /* ... */ }',
+      "} else if (wasm.error.code === 'webassembly.unsupported') {",
+      '  // 当前宿主无 WASM 引擎（如 App-Android 无 JS 引擎）→ 走 JS 降级实现',
+      '}',
+    ],
   }
   // 纯数据/void 型 hook 的参数典型值（SSOT = 签名；句柄型走 USAGE_EXAMPLES 不经此表）
   const CAP_ARGS = {

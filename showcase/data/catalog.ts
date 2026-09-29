@@ -133,7 +133,7 @@ export const COMPONENT_GROUPS: CatalogGroup[] = [
   },
 ]
 
-/** 能力：10 域 / 81 个（已备详情页 29） */
+/** 能力：10 域 / 82 个（已备详情页 29） */
 export const CAPABILITY_GROUPS: CatalogGroup[] = [
   {
     name: "网络与通信",
@@ -274,6 +274,7 @@ export const CAPABILITY_GROUPS: CatalogGroup[] = [
       { name: "useAddress", id: "capability.address", desc: "收货地址", route: "" },
       { name: "useWifi", id: "capability.wifi", desc: "WiFi 句柄", route: "" },
       { name: "useWeRun", id: "capability.we-run", desc: "微信运动数据", route: "" },
+      { name: "useWebAssembly", id: "capability.webassembly", desc: "WASM 编译/实例化/校验", route: "" },
     ],
   },
 ]
@@ -283,6 +284,6 @@ export const CATALOG_STATS = {
   componentTotal: 74,
   componentReady: 73,
   capabilityGroups: 10,
-  capabilityTotal: 81,
+  capabilityTotal: 82,
   capabilityReady: 29,
 }
