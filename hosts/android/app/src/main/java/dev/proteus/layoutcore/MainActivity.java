@@ -1824,34 +1824,20 @@ public class MainActivity extends Activity {
      */
     private static final float APP4050_TEXT_PX = 24f;
 
-    private String app4050Run() {
-        final int W = 1080, H = 2400;
+    /** 最近一次 app-4050 Proteus 侧的产出（审计/后续校验用） */
+    private java.util.List<ProteusHostView.Cmd> app4050LastCmds = null;
+    private ProteusHostView app4050LastHost = null;
 
-        // ── 夹具（构建期产出：真 SFC 编译 + 实例化）──
-        String json = readAsset("app-4050-tree.json");
-        if (json == null) return "{\"ok\":false,\"error\":\"缺 assets/app-4050-tree.json（跑 node hosts/android/gen-app4050-fixture.mjs）\"}";
-        org.json.JSONObject rootJson;
-        org.json.JSONArray nodes;
-        org.json.JSONObject spec;
-        try {
-            rootJson = new org.json.JSONObject(json);
-            nodes = rootJson.getJSONArray("nodes");
-            spec = rootJson.optJSONObject("spec");
-        } catch (org.json.JSONException e) {
-            return "{\"ok\":false,\"error\":\"夹具解析失败：" + e.getMessage() + "\"}";
-        }
-        final int nodeCount = nodes.length();
-
-        // ── ① 应用级计时：起点（触发）──
-        final long tStart = SystemClock.elapsedRealtimeNanos();
-
-        // ── ② 建树 + 排版（核心）──
+    /**
+     * Proteus 侧的**单次完整测量**：建树 → 排版 → 几何+样式 → 指令 → 录制 DisplayList。
+     * @return {总耗时, 建树+排版, 指令生成, 录制DisplayList}（毫秒）；失败回 null
+     */
+    private double[] app4050Once(org.json.JSONArray nodes, int nodeCount, int W, int H) {
+        final long t0 = SystemClock.elapsedRealtimeNanos();
         long handle = RustLayout.create("{\"viewport\":{\"width\":" + W + ",\"height\":" + H
                 + "},\"nodes\":" + nodes + ",\"textMeasures\":{}}");
-        if (handle <= 0) return "{\"ok\":false,\"error\":\"Rust 建树失败（节点 " + nodeCount + "）\"}";
-        final long tAfterLayout = SystemClock.elapsedRealtimeNanos();
-
-        // ── ③ 几何 → 绘制指令（与既有路径同一实现：由核心几何 + 节点样式生成）──
+        if (handle <= 0) return null;
+        final long t1 = SystemClock.elapsedRealtimeNanos();
         java.util.List<ProteusHostView.Cmd> cmds = new java.util.ArrayList<>(nodeCount);
         try {
             org.json.JSONObject o = new org.json.JSONObject(RustLayout.readRects(handle));
@@ -1872,28 +1858,48 @@ public class MainActivity extends Activity {
             }
         } catch (Exception e) {
             RustLayout.destroy(handle);
-            return "{\"ok\":false,\"error\":\"几何/指令生成失败：" + e.getMessage() + "\"}";
+            return null;
         }
-        final long tAfterCmd = SystemClock.elapsedRealtimeNanos();
-
-        // ── ④ 录制 DisplayList（**终点**：指令送达 OS 渲染进程侧）──
+        final long t2 = SystemClock.elapsedRealtimeNanos();
         ProteusHostView host = new ProteusHostView(this);
         host.setCmds(cmds);
         android.graphics.RenderNode rn = new android.graphics.RenderNode("app-4050");
         rn.setPosition(0, 0, W, H);
-        // 预热一次（与既有绘制路径同口径：首帧走解释执行，本仓实测差 200×）
-        {
-            android.graphics.RecordingCanvas warm = rn.beginRecording();
-            host.drawCmds(warm);
-            rn.endRecording();
-        }
         android.graphics.RecordingCanvas rc = rn.beginRecording();
         host.drawCmds(rc);
         rn.endRecording();
-        final long tEnd = SystemClock.elapsedRealtimeNanos();
-
+        final long t3 = SystemClock.elapsedRealtimeNanos();
         keepAlive = new Object[]{cmds, host, rn};
-        if (handle > 0) RustLayout.destroy(handle);
+        app4050LastCmds = cmds;
+        app4050LastHost = host;
+        RustLayout.destroy(handle);
+        return new double[]{(t3 - t0) / 1e6, (t1 - t0) / 1e6, (t2 - t1) / 1e6, (t3 - t2) / 1e6};
+    }
+
+    private String app4050Run() {
+        final int W = 1080, H = 2400;
+
+        // ── 夹具（构建期产出：真 SFC 编译 + 实例化）──
+        String json = readAsset("app-4050-tree.json");
+        if (json == null) return "{\"ok\":false,\"error\":\"缺 assets/app-4050-tree.json（跑 node hosts/android/gen-app4050-fixture.mjs）\"}";
+        org.json.JSONObject rootJson;
+        org.json.JSONArray nodes;
+        org.json.JSONObject spec;
+        try {
+            rootJson = new org.json.JSONObject(json);
+            nodes = rootJson.getJSONArray("nodes");
+            spec = rootJson.optJSONObject("spec");
+        } catch (org.json.JSONException e) {
+            return "{\"ok\":false,\"error\":\"夹具解析失败：" + e.getMessage() + "\"}";
+        }
+        final int nodeCount = nodes.length();
+
+        // ★★冷 / 稳态**双读数**（与原生侧同口径；见 app4050NativeRun 的假设说明）
+        final double[] cold = app4050Once(nodes, nodeCount, W, H);
+        final double[] warm = app4050Once(nodes, nodeCount, W, H);
+        if (cold == null || warm == null) return "{\"ok\":false,\"error\":\"核心建树失败（节点 " + nodeCount + "）\"}";
+        java.util.List<ProteusHostView.Cmd> cmds = app4050LastCmds;
+        ProteusHostView host = app4050LastHost;
 
         // ── ⑤ 正确性自检：必须真的画出了东西（否则"快"是假象）──
         android.graphics.Bitmap bmp = android.graphics.Bitmap.createBitmap(W, H, android.graphics.Bitmap.Config.ARGB_8888);
@@ -1912,10 +1918,12 @@ public class MainActivity extends Activity {
             o.put("node_count", nodeCount);
             o.put("cmd_count", cmds.size());
             o.put("painted_pixels_sampled", painted);
-            o.put("scope_ms", round3((tEnd - tStart) / 1e6));
-            o.put("layout_ms", round3((tAfterLayout - tStart) / 1e6));
-            o.put("emit_cmds_ms", round3((tAfterCmd - tAfterLayout) / 1e6));
-            o.put("record_displaylist_ms", round3((tEnd - tAfterCmd) / 1e6));
+            o.put("scope_ms", round3(warm[0]));
+            o.put("scope_cold_ms", round3(cold[0]));
+            o.put("cold_warm_ratio", warm[0] > 0 ? round3(cold[0] / warm[0]) : -1);
+            o.put("layout_ms", round3(warm[1]));
+            o.put("emit_cmds_ms", round3(warm[2]));
+            o.put("record_displaylist_ms", round3(warm[3]));
             o.put("text_px_requested", APP4050_TEXT_PX);
             o.put("text_px_effective", host.currentTextSizePx());
             o.put("scope", "应用级：触发 → 建树 → 排版 → 指令 → 录制 DisplayList（送达 OS 渲染进程侧）");
@@ -1942,24 +1950,22 @@ public class MainActivity extends Activity {
      *   本仓纪律：两边必须画**同样的东西**（既有注释已记：不加背景色时两边绘制面积差 6 倍，
      *   像素自检 14803 vs 2479 直接暴露）。
      */
-    private String app4050NativeRun() {
-        final int W = 1080, H = 2400;
-        String json = readAsset("app-4050-tree.json");
-        if (json == null) return "{\"ok\":false,\"error\":\"缺 assets/app-4050-tree.json\"}";
+    /** 最近一次 app-4050 建出的树根（审计用：算 viewCount） */
+    private Object keepAliveLastTree = null;
 
-        org.json.JSONObject spec;
-        int rows, cols;
-        try {
-            org.json.JSONObject rootJson = new org.json.JSONObject(json);
-            spec = rootJson.optJSONObject("spec");
-            rows = spec != null ? spec.optInt("rows", 50) : 50;
-            cols = spec != null ? spec.optInt("cols", 40) : 40;
-        } catch (org.json.JSONException e) {
-            return "{\"ok\":false,\"error\":\"夹具解析失败：" + e.getMessage() + "\"}";
-        }
+    /** 原生侧实际生效字号（px）——与 Proteus 侧同字段可比对 */
+    private double app4050NativeTextPx() {
+        TextView probe = new TextView(this);
+        probe.setTextSize(TypedValue.COMPLEX_UNIT_SP, 8f);
+        return probe.getTextSize();
+    }
 
-        final long tStart = SystemClock.elapsedRealtimeNanos();
-        // ① 建 View 树（每个格一个 LinearLayout + TextView，与夹具 1:1）
+    /**
+     * 原生对照的**单次完整测量**：建树 → measure/layout → draw 进 DisplayList。
+     * @return {总耗时, 建树+layout, 录制DisplayList}（毫秒）
+     */
+    private double[] app4050NativeOnce(int rows, int cols, int W, int H) {
+        final long t0 = SystemClock.elapsedRealtimeNanos();
         LinearLayout column = new LinearLayout(this);
         column.setOrientation(LinearLayout.VERTICAL);
         for (int r = 0; r < rows; r++) {
@@ -1979,32 +1985,50 @@ public class MainActivity extends Activity {
             }
             column.addView(row);
         }
-        // ② measure + layout（本口径要求的"排版"段）
         column.measure(View.MeasureSpec.makeMeasureSpec(W, View.MeasureSpec.EXACTLY),
                        View.MeasureSpec.makeMeasureSpec(H, View.MeasureSpec.AT_MOST));
         column.layout(0, 0, W, column.getMeasuredHeight());
-        final long tAfterLayout = SystemClock.elapsedRealtimeNanos();
-        // ③ 绘制 → DisplayList（**终点**，与 Proteus 侧同为"指令送达"）
+        final long t1 = SystemClock.elapsedRealtimeNanos();
         android.graphics.RenderNode rn = new android.graphics.RenderNode("app-4050-native");
         rn.setPosition(0, 0, W, H);
-        {   // 预热一次（与 Proteus 侧同口径）
-            android.graphics.RecordingCanvas warm = rn.beginRecording();
-            column.draw(warm);
-            rn.endRecording();
-        }
         android.graphics.RecordingCanvas rc = rn.beginRecording();
         column.draw(rc);
         rn.endRecording();
-        final long tEnd = SystemClock.elapsedRealtimeNanos();
-
+        final long t2 = SystemClock.elapsedRealtimeNanos();
         keepAlive = new Object[]{column, rn};
-        // ★审计：原生侧**实际生效**的字号（px）——与 Proteus 侧同字段可比对
-        float nativeTextPx = 0f;
-        {
-            TextView probe = new TextView(this);
-            probe.setTextSize(TypedValue.COMPLEX_UNIT_SP, 8f);
-            nativeTextPx = probe.getTextSize();
+        keepAliveLastTree = column;
+        return new double[]{(t2 - t0) / 1e6, (t1 - t0) / 1e6, (t2 - t1) / 1e6};
+    }
+
+    private String app4050NativeRun() {
+        final int W = 1080, H = 2400;
+        String json = readAsset("app-4050-tree.json");
+        if (json == null) return "{\"ok\":false,\"error\":\"缺 assets/app-4050-tree.json\"}";
+
+        org.json.JSONObject spec;
+        int rows, cols;
+        try {
+            org.json.JSONObject rootJson = new org.json.JSONObject(json);
+            spec = rootJson.optJSONObject("spec");
+            rows = spec != null ? spec.optInt("rows", 50) : 50;
+            cols = spec != null ? spec.optInt("cols", 40) : 40;
+        } catch (org.json.JSONException e) {
+            return "{\"ok\":false,\"error\":\"夹具解析失败：" + e.getMessage() + "\"}";
         }
+
+        // ★★冷 / 稳态**双读数**（2026-09-29 追查「基准倍率 5× 差异」的核心假设）
+        //
+        // 【假设】本仓自己实测过：**首次调用 vs 稳态差 17×**（honor10：`optimized_hw_record_ms`
+        //   35ms 冷读 vs 2ms 稳态）。若基准侧报的是**冷读**（无预热、进程内第一次），
+        //   而本仓报的是稳态，则两边存在**系统性放大**，倍率对比就会失真。
+        // 【做法】完整跑两遍：第①遍 = 冷（进程内首次，含类加载/JIT/解释执行），
+        //   第②遍 = 稳态。两遍**同代码同负载**，差值即冷启动开销。
+        //   ★报告以**稳态**为主（可复现），冷读单独列出（用于与"未预热"的外部数字对照）。
+        final double[] cold = app4050NativeOnce(rows, cols, W, H);
+        final double[] warm = app4050NativeOnce(rows, cols, W, H);
+        double nativeTextPx = app4050NativeTextPx();
+
+        LinearLayout column = (LinearLayout) keepAliveLastTree;
         int viewCount = 0;
         java.util.ArrayDeque<View> q = new java.util.ArrayDeque<>();
         q.add(column);
@@ -2022,9 +2046,11 @@ public class MainActivity extends Activity {
             o.put("ok", true);
             o.put("path", "app-4050-native");
             o.put("view_count", viewCount);
-            o.put("scope_ms", round3((tEnd - tStart) / 1e6));
-            o.put("layout_ms", round3((tAfterLayout - tStart) / 1e6));
-            o.put("record_displaylist_ms", round3((tEnd - tAfterLayout) / 1e6));
+            o.put("scope_ms", round3(warm[0]));
+            o.put("scope_cold_ms", round3(cold[0]));
+            o.put("cold_warm_ratio", warm[0] > 0 ? round3(cold[0] / warm[0]) : -1);
+            o.put("layout_ms", round3(warm[1]));
+            o.put("record_displaylist_ms", round3(warm[2]));
             o.put("text_px_effective", nativeTextPx);
             o.put("scope", "应用级：触发 → 建 View 树 → measure/layout → draw 进 DisplayList（与 app-4050 同口径）");
             return o.toString(2);

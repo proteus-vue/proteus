@@ -461,7 +461,7 @@ done
 python3 - "$DEST" <<'PYAGG' | tee "$DEST/app-4050-ab.txt" | sed 's/^/  /'
 import json, os, sys, statistics
 dest = sys.argv[1]
-def rounds(pat, key='scope_ms'):
+def rounds(pat, key):
     xs = []
     for i in range(1, 50):
         f = os.path.join(dest, pat.format(i))
@@ -469,15 +469,28 @@ def rounds(pat, key='scope_ms'):
         try: xs.append(float(json.load(open(f))[key]))
         except Exception: pass
     return xs
-p_ms = rounds('app-4050-r{}.json')
-n_ms = rounds('app-4050-native-r{}.json')
-if not p_ms or not n_ms:
-    print(f'⚠ 对照不完整（Proteus {len(p_ms)} 轮 / 原生 {len(n_ms)} 轮）——无法出倍率'); raise SystemExit(0)
-pm, nm = statistics.mean(p_ms), statistics.mean(n_ms)
-print(f'Proteus（应用级·4050 元素）  逐轮 {[round(x,1) for x in p_ms]} ms · 均值 {pm:.1f} ms')
-print(f'原生 View（同规格同口径）     逐轮 {[round(x,1) for x in n_ms]} ms · 均值 {nm:.1f} ms')
-print(f'★倍率 Proteus/原生 = {pm/nm:.3f}（<1 = 更快；基准侧 uni-app x 自报约 2.0）')
-print(f'★判定口径：基准比的是「vs 各自设备原生基线」的倍率（§5.1），不跨设备比绝对值')
+# ★★两侧都给**冷 / 稳态**两组（2026-09-29：实测冷读效应，见报告"为什么倍率差这么多"）
+#   稳态 = 进程内第 2 次完整运行（类加载/JIT 已就绪）；冷读 = 第 1 次（更接近"用户刚开 app 就点"）
+#   判定以**冷/冷**为主口径（保守：与"新进程里的首次交互"一致），稳态作次口径一并列出。
+p_warm = rounds('app-4050-r{}.json', 'scope_ms')
+n_warm = rounds('app-4050-native-r{}.json', 'scope_ms')
+p_cold = rounds('app-4050-r{}.json', 'scope_cold_ms')
+n_cold = rounds('app-4050-native-r{}.json', 'scope_cold_ms')
+if not p_warm or not n_warm:
+    print(f'⚠ 对照不完整（Proteus {len(p_warm)} 轮 / 原生 {len(n_warm)} 轮）——无法出倍率'); raise SystemExit(0)
+def line(name, ps, ns):
+    if not ps or not ns: return
+    pm, nm = statistics.mean(ps), statistics.mean(ns)
+    print(f'{name}')
+    print(f'   Proteus 逐轮 {[round(x,1) for x in ps]} ms · 均值 {pm:.1f} ms')
+    print(f'   原生    逐轮 {[round(x,1) for x in ns]} ms · 均值 {nm:.1f} ms')
+    print(f'   ★倍率 = {pm/nm:.3f}（<1 = 更快）')
+line('【冷读】进程内首次完整运行（= 新进程里用户第一次点）', p_cold, n_cold)
+print()
+line('【稳态】进程内第二次完整运行（类加载/JIT 已就绪）', p_warm, n_warm)
+print()
+print('★判定口径：基准比的是「vs 各自设备原生基线」的倍率（§5.1），不跨设备比绝对值')
+print('★基准侧 5 轮取平均（§1.3.3）——本表已给逐轮值，可自行复算')
 PYAGG
 
 if [ -n "${QUICK:-}" ]; then

@@ -1,0 +1,20 @@
+{
+  "ok": true,
+  "path": "app-4050",
+  "elements": 4050,
+  "views": 2050,
+  "texts": 2000,
+  "node_count": 4051,
+  "cmd_count": 4051,
+  "painted_pixels_sampled": 3910,
+  "scope_ms": 40.841,
+  "scope_cold_ms": 47.347,
+  "cold_warm_ratio": 1.159,
+  "layout_ms": 17.016,
+  "emit_cmds_ms": 18.208,
+  "record_displaylist_ms": 5.617,
+  "text_px_requested": 24,
+  "text_px_effective": 24,
+  "scope": "应用级：触发 → 建树 → 排版 → 指令 → 录制 DisplayList（送达 OS 渲染进程侧）",
+  "boundary": "① 本宿主无 JS 引擎 ⇒ 编译+模板实例化在构建期完成，设备端测的是 SFC 产物之后的一段（iOS 由 JSC 现场编码，不在本对比内）；② 未含 Vue 响应式开销（Vapor 线单独给）；③ 预热一次后取单次（与既有绘制路径同口径）"
+}
