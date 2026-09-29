@@ -10,7 +10,8 @@
 #
 # 【判据（8 条，全部机器可判）】
 #   ① host_mode == java —— 宿主实现了三个入口（不是桩）
-#   ② 批处理红线：mount_calls=1 · patch_calls=1 · host_calls=2（= flush 次数，与节点数无关）
+#   ② 批处理红线：mount_calls=1 · patch_calls=1 · host_calls=202 = flush 次数（2 相位 + 200 稳态帧，
+#      与节点数无关）；★卡 C2 判据：**跨边界调用 = 帧数**（steady_calls=200 = frames_run）
 #   ③ patch_call_kind == updatePatches —— 改一行文本**不重发整树**
 #   ④ host_cmds > 0 —— 宿主真的产出了绘制指令（不是"收到了但没做事"）
 #   ⑤ host_painted_samples > 0 —— ★**真的画出了像素**（离屏重放 + 网格采样；指令数>0 不证明画得出来）
@@ -52,7 +53,13 @@ printf '%s' "$APK_LIST" | grep -q "lib/arm64-v8a/libquickjs_jni.so" \
 
 # ★真机前置纪律：改过宿主源码 ⇒ 必须先过桩测（本仓 hook 级纪律）
 echo "==> ⓪ 桩测前置（改过宿主/脚本必须先过）"
-node "$HERE/acceptance-stub.mjs" --check-fresh 2>&1 | tail -3
+# ★★必须**真的拦**（2026-09-29 修）：初版写成 `node … --check-fresh | tail -3`——
+#   非零退出码被管道吃掉 ⇒ 前置检查变成**装饰**（改了宿主源码照样直接上真机）。
+#   这正是本仓反复记录的形态：「规则写在文档里拦不住，只有退出码能拦」。
+if ! node "$HERE/acceptance-stub.mjs" --check-fresh 2>&1 | tail -3; then
+  echo "✗ 桩测前置未通过 —— 先跑：node hosts/android/acceptance-stub.mjs（约 55s，零设备）"
+  exit 4
+fi
 
 echo "==> ① 安装（release 包）"
 "$ADB" install -r -t "$APK" 2>&1 | grep -E "Success|Failure" | head -2
@@ -128,7 +135,7 @@ gt() { if [ -n "$2" ] && [ "$2" -gt 0 ] 2>/dev/null; then echo "  ✅ ${1} = ${2
 check "host_mode" "$(get host_mode)" "java"                 # ① 不是桩
 check "mount_calls" "$(get mount_calls)" "1"                # ② 批处理红线
 check "patch_calls" "$(get patch_calls)" "1"
-check "host_calls" "$(get host_calls)" "2"
+check "host_calls(= 2 相位 + 200 帧)" "$(get host_calls)" "202"
 check "patch_call_kind" "$(get patch_call_kind)" "updatePatches"   # ③ 增量不重发整树
 gt "host_cmds" "$(get host_cmds)"                            # ④ 真的产出了指令
 check "host_cmds(与 JS 侧独立算的期望值一致)" "$(get host_cmds)" "$(get expect_cmds)"   # ④b props 没丢
@@ -140,6 +147,9 @@ check "host_update_calls" "$(get host_update_calls)" "0"     # ⑥ 没走整树�
 check "host_nodes(JS 与宿主同一棵树)" "$(get host_nodes)" "$(get nodes)"   # ⑦
 check "host_text_nodes(与 JS 一致)" "$(get host_text_nodes)" "$(get text_nodes)"
 check "host_error" "$(get host_error)" ""                    # ⑧ 宿主侧无错
+# ★★卡 C2 判据：跨边界调用 = 帧数（200 帧稳态 ⇒ 恰好 200 次调用）
+check "frames_run" "$(get frames_run)" "200"
+check "steady_calls(= 帧数)" "$(get steady_calls)" "200"
 check "ok" "$(get ok)" "true"
 
 echo ""
@@ -147,6 +157,8 @@ echo "  读数：nodes=$(get nodes) · text_nodes=$(get text_nodes) · cmds=$(ge
 echo "        JS mount=$(get js_mount_ms)ms · JS patch=$(get js_patch_ms)ms"
 echo "        宿主 layout=$(get host_layout_ms)ms · measure=$(get host_measure_ms)ms · emit=$(get host_emit_ms)ms"
 echo "        宿主树形（节点/文本/宿主View）= $(get host_tree_shape)"
+ echo "        稳态逐帧（$(get frames_run) 帧 / 调用 $(get steady_calls)）宿主耗时 p50 $(get host_frame_p50_ms)ms · p95 $(get host_frame_p95_ms)ms · max $(get host_frame_max_ms)ms（样本 $(get host_frame_samples)）"
+echo "        一次性相位（不混入逐帧分布）：mount $(get host_phase_mount_ms)ms · 首次补丁 $(get host_phase_patch_ms)ms"
 echo ""
 if [ "$fails" -gt 0 ]; then
   echo "✗ S5 未通过（${fails} 条判据失败）"

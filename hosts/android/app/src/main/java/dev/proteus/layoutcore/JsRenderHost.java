@@ -50,6 +50,21 @@ final class JsRenderHost {
     private final List<JSONObject> specs = new ArrayList<>();
     /** id → specs 下标（补丁要按 id 找节点） */
     private final Map<Integer, Integer> indexById = new HashMap<>();
+    /**
+     * ★★当前绘制指令表 + 节点 id → 指令下标（**增量补丁**用）。
+     *
+     * 【为什么需要（本仓实测的进度瓶颈）】初版补丁路径每帧**全量重建**指令：
+     *   `readRects` 重新解析全部 4051 个矩形 + 重建 4000 个 `Cmd` 对象
+     *   ⇒ 实测每帧 **31.9ms**（p50）。而改一行文本**只影响一行**。
+     *   核心的 `update` 本来就**只回变化集**（`{"rects": {id: …}}`，见 ffi.rs 注释
+     *   「整树矩形仍可经 proteus_layout_rects 取（兼容）；此处只给变化集」）
+     *   ⇒ 用它做**增量更新**：只替换受影响的那几条指令。
+     *   ★这正是"绘制粒度 O(全部) vs O(变化的部分)"那条既有结论在**宿主侧**的重演。
+     */
+    private final List<ProteusHostView.Cmd> cmds = new ArrayList<>();
+    private final Map<Integer, Integer> cmdIndexById = new HashMap<>();
+    /** 全量重建时的临时索引（`emitCmds` → 字段，避免第二份副本） */
+    private final Map<Integer, Integer> cmdIndexOf = new HashMap<>();
 
     private ProteusHostView view;
     private long handle = 0L;
@@ -76,6 +91,51 @@ final class JsRenderHost {
     String lastTreeShape = null;
     /** 真实帧读数（宿主 View 的 `onDraw` 次数——"屏幕真的画了"的证据，见 ProteusHostView） */
     int onDrawCount() { return view == null ? -1 : view.onDrawCount(); }
+
+    /**
+     * ★★**宿主侧逐帧耗时**（卡 C2 的判据「宿主侧耗时仍为 1ms 量级」）。
+     *
+     * 【为什么单列一份】`lastTotalMs` 只记"最后一次"——那可能落在预热帧上。
+     *   1ms 量级的判据需要**分布**（p50/p95/max），否则单点读数无法区分
+     *   "稳定 1ms" 与 "偶尔 40ms + 其余 0.1ms"。⇒ 记录每次宿主调用的耗时，出分布。
+     */
+    private final java.util.List<Double> hostCallMs = new java.util.ArrayList<>();
+
+    /** 清空逐帧读数（新一轮测量前调用） */
+    void resetFrameTiming() { hostCallMs.clear(); }
+
+    /**
+     * 宿主侧**逐帧**耗时分布（毫秒，p50/p95/max）；空数组 = 未测。
+     *
+     * ★★为什么**排除前 2 个样本**（本仓实测踩到）：样本表的前两项是**一次性相位成本**
+     *   （① `mount` 全流程：度量+建树+全量指令；② 首次补丁），它们的量级（10² ms）
+     *   与逐帧成本（10⁻¹ ms）差两个数量级 ⇒ 混在一起时 `max` **恒为首帧**、p95 也被抬。
+     *   而卡 C2 判据问的是"**每帧**宿主侧开销"，故分布只在稳态帧上算；
+     *   两个相位样本单独经 `phaseSampleMs()` 报出（**不隐藏数据，只是分开表述**）。
+     */
+    private static final int PHASE_SAMPLES = 2;
+
+    double[] frameTimingPercentiles() {
+        if (hostCallMs.size() <= PHASE_SAMPLES) return new double[0];
+        java.util.List<Double> xs = new java.util.ArrayList<>(hostCallMs.subList(PHASE_SAMPLES, hostCallMs.size()));
+        java.util.Collections.sort(xs);
+        return new double[]{
+                xs.get(xs.size() / 2),
+                xs.get(Math.min(xs.size() - 1, xs.size() * 95 / 100)),   // 整数下标算术（非几何舍入）
+                xs.get(xs.size() - 1),
+        };
+    }
+
+    /** 稳态帧样本数（判据：太少则分布无意义——报告里带出来，避免"用 3 个样本谈 p95"） */
+    int frameSampleCount() { return Math.max(0, hostCallMs.size() - PHASE_SAMPLES); }
+
+    /** 一次性相位样本（[mount, 首次补丁]；未测时长度 < 2）——见 `frameTimingPercentiles` 的说明 */
+    double[] phaseSampleMs() {
+        int n = Math.min(PHASE_SAMPLES, hostCallMs.size());
+        double[] out = new double[n];
+        for (int i = 0; i < n; i++) out[i] = hostCallMs.get(i);
+        return out;
+    }
 
     JsRenderHost(Context ctx, ViewGroup root, float density) {
         this.ctx = ctx;
@@ -118,6 +178,24 @@ final class JsRenderHost {
      *   `style.text` 时重度量并注入）——文本变更在这条协议里是**样式的一个键**。
      */
     public String updatePatches(String patchesJson) {
+        // ★★为什么只有**第一次**补丁跑离屏像素自检（本仓实测踩到）
+        //
+        // 自检要建 1080×2400 位图 + 采样 1.5 万个点 ⇒ 实测 **40ms+**，比产品路径本身贵一个量级。
+        // 而它的语义是"**画出来了没**"的判据——**每个相位验一次就够**，不需要每帧验。
+        // 初版每帧都跑 ⇒ 逐帧读数 p50 = **43.9ms**，那几乎全是**仪器开销**
+        // （本仓纪律：**测量装置不得污染被测读数**，此处是第三次踩到同族）。
+        boolean withSample = patchSamplesDone == 0;
+        if (withSample) patchSamplesDone++;
+        return updatePatches(patchesJson, withSample);
+    }
+
+    /** 已跑过像素自检的补丁次数（见 `updatePatches` 的说明：自检每相位一次即可） */
+    private int patchSamplesDone = 0;
+
+    /**
+     * @param withSample 是否跑离屏像素自检（★稳态逐帧传 false——见 emitCmds 的说明）
+     */
+    public String updatePatches(String patchesJson, boolean withSample) {
         patchCalls++;
         long t0 = System.nanoTime();
         JSONObject out = new JSONObject();
@@ -126,6 +204,8 @@ final class JsRenderHost {
             JSONArray patches = new JSONArray(patchesJson);
             JSONArray corePatches = new JSONArray();
             List<Integer> remeasure = new ArrayList<>();
+            /** 本批次**所有**被改的 id（含只改绘制属性的）——增量指令更新用 */
+            List<Integer> patchedIds = new ArrayList<>();
             int applied = 0;
             for (int i = 0; i < patches.length(); i++) {
                 JSONObject p = patches.getJSONObject(i);
@@ -134,6 +214,7 @@ final class JsRenderHost {
                 if (style == null) continue;
                 Integer at = indexById.get(id);
                 if (at == null) continue;
+                patchedIds.add(id);
                 JSONObject spec = specs.get(at);
                 // ① 合并进 spec（★几何无关的绘制属性也留在 spec 里：重绘要用）
                 JSONObject coreStyle = new JSONObject();
@@ -170,21 +251,29 @@ final class JsRenderHost {
             // ② 度量先注入（★顺序不可反：核心的度量器是快照 ⇒ 先给尺寸再重排）
             double measureMs = measureTexts(remeasure);
             // ③ 核心增量重排（只发改动节点的补丁——不重发整树）
+            //   ★它的返回值**只含变化集**（`{"rects": {id: {x,y,w,h}}}`）——正好用于增量指令更新
             double layoutMs = 0;
+            JSONObject changedRects = null;
             if (corePatches.length() > 0) {
                 long tl = System.nanoTime();
-                RustLayout.update(handle, corePatches.toString());
+                String upd = RustLayout.update(handle, corePatches.toString());
                 layoutMs = (System.nanoTime() - tl) / 1e6;
+                try {
+                    JSONObject uo = new JSONObject(upd);
+                    if (uo.optBoolean("ok")) changedRects = uo.optJSONObject("rects");
+                } catch (Exception ignored) { /* 解析失败 ⇒ changedRects 保持 null ⇒ 退化为整表更新 */ }
             }
-            // ④ 全量几何 → 指令（`update` 只回变化集，重绘需要完整几何）
-            double emitMs = emitCmds();
+            // ④ **增量**更新指令（只动受影响的那几条——见 `cmds` 字段的说明）
+            double emitMs = patchCmdsFor(patchedIds, changedRects, withSample);
 
             out.put("ok", true);
             out.put("patched", applied);
             out.put("measure_ms", measureMs);
             out.put("layout_ms", layoutMs);
             out.put("emit_cmds_ms", emitMs);
-            out.put("total_ms", (System.nanoTime() - t0) / 1e6);
+            double totalMs = (System.nanoTime() - t0) / 1e6;
+            hostCallMs.add(totalMs);
+            out.put("total_ms", totalMs);
             return out.toString();
         } catch (Throwable t) {
             return err(out, t.getClass().getSimpleName() + ": " + t.getMessage()).toString();
@@ -255,7 +344,10 @@ final class JsRenderHost {
             out.put("layout_ms", round3(layoutMs));
             out.put("measure_ms", round3(measureMs));
             out.put("emit_cmds_ms", round3(emitMs));
-            out.put("total_ms", round3((System.nanoTime() - t0) / 1e6));
+            double totalMs = (System.nanoTime() - t0) / 1e6;
+            // ★逐帧耗时样本（卡 C2 的「宿主侧 1ms 量级」判据需要**分布**，不是单点）
+            hostCallMs.add(totalMs);
+            out.put("total_ms", round3(totalMs));
             out.put("painted_samples", lastPaintedSamples);
             out.put("viewport", vw + "x" + vh);
             out.put("path", isMount ? "mount" : "update");
@@ -361,26 +453,38 @@ final class JsRenderHost {
     }
 
     /** 全量几何 → 绘制指令（★几何只来自核心：本方法不含任何布局计算）*/
-    private double emitCmds() throws Exception {
+    private double emitCmds() throws Exception { return emitCmds(true); }
+
+    /**
+     * @param withSample 是否跑像素自检（★稳态逐帧传 false——见 `hostCallMs` 的说明）
+     */
+    private double emitCmds(boolean withSample) throws Exception {
         long t0 = System.nanoTime();
         JSONObject rects = new JSONObject(RustLayout.readRects(handle)).getJSONObject("rects");
         List<ProteusHostView.Cmd> cmds = new ArrayList<>(specs.size());
+        cmdIndexOf.clear();
         for (JSONObject spec : specs) {
             int id = spec.getInt("id");
             JSONObject r = rects.optJSONObject(String.valueOf(id));
             if (r == null) continue;   // 未参与布局（display:none）
-            String bg = spec.optString("backgroundColor", null);
-            String text = spec.optString("text", null);
-            boolean isText = text != null && !text.isEmpty();
-            int color = bg == null || bg.isEmpty() ? 0 : MainActivity.parseHex(bg);
-            if (!isText && color == 0) continue;   // 无色无文本 ⇒ 无绘制内容（不产空指令）
-            float fs = isText ? (float) spec.optDouble("fontSize", DEFAULT_FONT_UNITS) : 0f;
-            cmds.add(new ProteusHostView.Cmd(
-                    (float) r.getDouble("x"), (float) r.getDouble("y"),
-                    (float) r.getDouble("width"), (float) r.getDouble("height"),
-                    color, isText ? text : null, fs));
+            // ★与增量路径**共用** buildCmdOf（同一份"该不该画"的判定——避免两条路径漂移）
+            ProteusHostView.Cmd c = buildCmdOf(spec, r);
+            if (c == null) continue;   // 无色无文本 ⇒ 无绘制内容（不产空指令）
+            cmdIndexOf.put(id, cmds.size());
+            cmds.add(c);
         }
         lastCmdCount = cmds.size();
+        // ★存入增量更新用的表（供后续补丁只改受影响项）
+        this.cmds.clear();
+        this.cmds.addAll(cmds);
+        this.cmdIds.clear();
+        for (JSONObject spec : specs) {
+            int id = spec.getInt("id");
+            Integer at = cmdIndexOf.get(id);
+            if (at != null) this.cmdIds.add(id);
+        }
+        this.cmdIndexById.clear();
+        this.cmdIndexById.putAll(cmdIndexOf);
         if (view == null) {
             view = new ProteusHostView(ctx);
             // ★与既有场景同款：绝对定位（X=0,Y=0 ⇒ 屏幕坐标 = 几何坐标，截图核验可直接对位）
@@ -395,12 +499,114 @@ final class JsRenderHost {
         view.invalidate();
         // ★像素自检**单独计时**（它要建 1080×2400 位图 + 采样 1.5 万点，
         //   混进 emit 会污染"几何→指令"这一段的可读性——读数名要与含义一致）
+        // ★★稳态逐帧**跳过它**（本仓纪律：测量装置不得污染被测读数）——
+        //   实测教训：逐帧 200 帧的宿主耗时 p50 曾达 **43.9ms**，而那几乎全是被这个
+        //   离屏位图 + 1.5 万次 getPixel 撑起来的**仪器开销**，不是产品路径成本。
+        //   自检在 mount / 补丁相位各跑一次已足够（那是"画出来了没"的判据）。
+        if (!withSample) return (System.nanoTime() - t0) / 1e6;
         long t1 = System.nanoTime();
         int[] sampled = samplePainted(cmds);
         lastPaintedSamples = sampled[0];
         lastPaintedColors = sampled[1];
         lastSampleMs = (System.nanoTime() - t1) / 1e6;
         return (System.nanoTime() - t0) / 1e6 - lastSampleMs;
+    }
+
+    /**
+     * ★★**增量**更新指令表：只替换受影响的那几条（补丁路径的性能落点）。
+     *
+     * 【为什么必须有（本仓实测的瓶颈）】全量重建每帧要重解析 4051 个矩形 + 建 4000 个 Cmd
+     *   ⇒ 改一行文本的宿主耗时 p50 曾达 **31.9ms**（一帧预算 16.7ms 的 1.9 倍）。
+     *   而"改一行"在几何上只影响那一行（以及它的祖先链）——`changedRects` 正是核心给出的**变化集**。
+     *   ⇒ 只对变化集里的 id 重建指令；其余原样保留。
+     *
+     * 【退化路径】`changedRects == null`（解析失败/无变化）⇒ 退回全量重建。
+     *   ★宁可慢，不可错：几何与指令不一致会画错，而慢只是性能问题。
+     *
+     * @param patchedIds 本批次被改的 id（含只改绘制属性、几何未变的）
+     */
+    private double patchCmdsFor(List<Integer> patchedIds, JSONObject changedRects, boolean withSample) throws Exception {
+        long t0 = System.nanoTime();
+        if (changedRects == null) {
+            // 退化：全量重建（含像素自检开关的传递）
+            double ms = emitCmds(withSample);
+            return (System.nanoTime() - t0) / 1e6;
+        }
+        int touched = 0;
+        for (Integer id : patchedIds) {
+            Integer at = indexById.get(id);
+            if (at == null) continue;
+            JSONObject spec = specs.get(at);
+            Integer cAt = cmdIndexById.get(id);
+            // 几何：优先取变化集；没变则沿用旧指令的矩形（保持原值 ⇒ 不漂移）
+            JSONObject r = changedRects.optJSONObject(String.valueOf(id));
+            if (r == null) {
+                // 几何未变（只改绘制属性）⇒ 复用旧矩形
+                if (cAt == null) continue;
+                ProteusHostView.Cmd old = cmds.get(cAt);
+                r = new JSONObject().put("x", old.x).put("y", old.y)
+                        .put("width", old.w).put("height", old.h);
+            }
+            ProteusHostView.Cmd nc = buildCmdOf(spec, r);
+            if (nc == null) {
+                // 该节点已无绘制内容 ⇒ 摘掉（位置语义：从两张表一起移除并重建索引）
+                if (cAt != null) { cmds.remove((int) cAt); cmdIds.remove((int) cAt); rebuildCmdIndex(); }
+                continue;
+            }
+            if (cAt == null) {
+                cmds.add(nc);
+                cmdIds.add(id);
+                cmdIndexById.put(id, cmds.size() - 1);
+            } else {
+                cmds.set(cAt, nc);
+            }
+            touched++;
+        }
+        lastCmdCount = cmds.size();
+        view.setCmds(new ArrayList<>(cmds));
+        view.invalidate();
+        if (withSample) {
+            long t1 = System.nanoTime();
+            int[] sampled = samplePainted(cmds);
+            lastPaintedSamples = sampled[0];
+            lastPaintedColors = sampled[1];
+            lastSampleMs = (System.nanoTime() - t1) / 1e6;
+            return (System.nanoTime() - t0) / 1e6 - lastSampleMs;
+        }
+        lastTouchedCmds = touched;
+        return (System.nanoTime() - t0) / 1e6;
+    }
+
+    /** 最近一次增量更新动了几条指令（判据：应远小于总指令数） */
+    int lastTouchedCmds = -1;
+
+    /**
+     * 指令表的**节点 id 顺序**（与 `cmds` 一一对应）——移除/追加时用它重建 id→下标。
+     *
+     * 【为什么用一张并行表而不是给 `Cmd` 加 id 字段】`Cmd` 是**绘制指令**（宿主消费的形状，
+     *   与 iOS/Android 既有场景共用）；给它塞 node id 会把"宿主协议"和"本宿主的簿记"耦合。
+     *   ⇒ 簿记留在本类（并行表），`Cmd` 保持纯净。
+     */
+    private final List<Integer> cmdIds = new ArrayList<>();
+
+    /** 移除/追加后重建 id→下标（O(n)；只在"节点失去/获得绘制内容"时发生，罕见） */
+    private void rebuildCmdIndex() {
+        cmdIndexById.clear();
+        for (int i = 0; i < cmdIds.size(); i++) cmdIndexById.put(cmdIds.get(i), i);
+    }
+
+    /** 单条指令构造（★全量与增量**共用一份**——避免两条路径的判定规则漂移） */
+    private ProteusHostView.Cmd buildCmdOf(JSONObject spec, JSONObject r) throws Exception {
+        String bg = spec.optString("backgroundColor", null);
+        String text = spec.optString("text", null);
+        boolean isText = text != null && !text.isEmpty();
+        int color = bg == null || bg.isEmpty() ? 0 : MainActivity.parseHex(bg);
+        if (!isText && color == 0) return null;   // 无色无文本 ⇒ 无绘制内容
+        float fs = isText ? (float) spec.optDouble("fontSize", DEFAULT_FONT_UNITS) : 0f;
+        return new ProteusHostView.Cmd(
+                (float) r.getDouble("x"), (float) r.getDouble("y"),
+                (float) r.getDouble("width"), (float) r.getDouble("height"),
+                color, isText ? text : null, fs);
     }
 
     /**

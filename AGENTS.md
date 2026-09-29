@@ -35,8 +35,15 @@
     { "hooks": { "enabled": true, "events": { "PreToolUse": [
       { "matcher": "Bash", "hooks": [
         { "type": "process", "command": "node",
-          "args": ["${ZCODE_PROJECT_DIR}/scripts/hooks/deny-sleep.mjs"], "timeoutMs": 5000 } ] } ] } } }
+          "args": ["${ZCODE_PROJECT_DIR}/scripts/hooks/deny-sleep.mjs"], "timeoutMs": 5000 },
+        { "type": "process", "command": "node",
+          "args": ["${ZCODE_PROJECT_DIR}/scripts/hooks/deny-blind-tests.mjs"], "timeoutMs": 8000 },
+        { "type": "process", "command": "node",
+          "args": ["${ZCODE_PROJECT_DIR}/scripts/hooks/deny-blind-verify.mjs"], "timeoutMs": 9000 } ] } ] } } }
     ```
+    ★**三个 hook 是一个整体**（sleep 盲等 / 全量测试重复跑 / 全量门禁链重复跑）——
+      只装第一个等于三条红线只落实一条（本仓实测过：`deny-blind-tests` 在别人的机器上缺失时，
+      「全量跑三遍」那类浪费照样发生）。
   · 自测：`printf '%s' '{"tool_name":"Bash","tool_input":{"command":"sleep 100"}}' | node scripts/hooks/deny-sleep.mjs`
     → 应输出 `permissionDecision: deny`。
 - **部署/线上核验**：跑一次 `pnpm check:live`（仓库自带 `website/scripts/verify-live.mjs`，带 CDN 传播重试）。
@@ -60,6 +67,57 @@
 - 另注：`pnpm test` 只跑非 e2e（`--exclude "tests/e2e-*.test.ts"`）；e2e 有专用入口
   （`test:e2e:web` / `test:e2e:showcase`），**跑它们前必须先建对应产物**——直接裸跑 vitest
   会环境性红（实测 124 条假失败），白等几百秒。
+
+### ★★红线：全量门禁链（`pnpm verify`）禁止无目的重复跑（2026-09-29 起有工具级拦截）
+
+- **同代码状态重复跑整链会被拦截**（hook `scripts/hooks/deny-blind-verify.mjs`，配法同 deny-sleep）。
+  · **触发背景（用户原话：「我发现我提了很多次的低效率问题一直都没有贯彻下去」）**：
+    AI 在**没有任何新改动**时把 `pnpm verify` 连跑 **4 次**（每次 ≈10 分钟 = **40 分钟**）——
+    ① 第 1 次在 Node 18 下**必然**假红（本仓记忆写着要用 Node ≥22）；② 第 2 次与真机构建
+    **并行**（两者写同一个 APK ⇒ 桩测假红 ⇒ 又查又重跑）；③ 第 4 次只改了一句错误提示
+    （影响 1 条门禁、55 秒）却整链重跑。用户看到的是「**跑了一个小时还没任何结果**」。
+  · **为什么既有门禁漏了它**：`deny-blind-tests.mjs` 只认字面 `vitest` / `pnpm test`——
+    而 `pnpm verify` **内部再调** test ⇒ 从外侧看那条命令**不在**判据里。
+    ★**门禁的覆盖面必须跟着"实际形态"走**：形态变了（套了一层壳），旧门禁就失效。
+- **拦**：`pnpm verify` / `pnpm run verify`（含 `npm`/`yarn`/`bun` 同族）**且 git 指纹与上次整链相同**。
+- **放行**：① 代码变了（指纹变 ⇒ 自动放行一次并记账）② 显式表态 `PROTEUS_ALLOW_VERIFY=1 pnpm verify`。
+- **★被拒时会给出"按改动文件推导的定向门禁"**——设计意图：让"正确的做法"变顺手，
+  否则被拦的人会加 `PROTEUS_ALLOW_VERIFY=1` 硬跑，门禁等于没做。
+- 自测（六条用例，改 hook 后必跑）：
+  ```bash
+  S=/tmp/vh.json; rm -f $S
+  P() { printf '%s' "$1" | PROTEUS_VERIFY_HOOK_STATE=$S node scripts/hooks/deny-blind-verify.mjs; }
+  P '{"tool_name":"Bash","tool_input":{"command":"pnpm verify"},"cwd":"'"$PWD"'"}'   # ① 首次 → 放行
+  P '{"tool_name":"Bash","tool_input":{"command":"pnpm verify"},"cwd":"'"$PWD"'"}'   # ② 同状态 → deny
+  P '{"tool_name":"Bash","tool_input":{"command":"pnpm run verify"},"cwd":"'"$PWD"'"}' # ③ 别名 → deny
+  P '{"tool_name":"Bash","tool_input":{"command":"PROTEUS_ALLOW_VERIFY=1 pnpm verify"},"cwd":"'"$PWD"'"}' # ④ 表态 → 放行
+  P '{"tool_name":"Bash","tool_input":{"command":"pnpm run check:gates-sync"},"cwd":"'"$PWD"'"}'  # ⑤ 无关 → 放行
+  ```
+- **★纪律（比拦截更重要）**：
+  1. **改了哪块就跑哪块的门禁**（`pnpm check:<对应的>` / 定向 vitest）——全链只在**一轮工作收尾**跑一次；
+  2. **跑整链前先报预计耗时**（≈10 分钟），让用户知道要等多久；
+  3. **一条命令内部别并行跑两件会写同一产物的事**（实测：verify 与真机构建都写
+     `build/proteus-layoutcore.apk` ⇒ 互相破坏）；
+  4. **本仓所有门禁命令都要求 Node ≥ 22**（Node 18 下 jsdom 27 会假红——已实测多次）。
+
+### ★★纪律：测试装置与生产产物**文件系统级隔离**（2026-09-29 两次故障链的总结）
+
+- **两次同源故障（都是"跑完记得还原/清理"被中断击穿）**：
+  1. 桩测用**占位 APK** 走流程，写的是**生产路径** ⇒ `pnpm verify`（内含桩测）被中断 ⇒
+     生产路径留下 45 字节占位；**下一次桩测把占位当"真包"备份回去** ⇒ 真包**永久毁掉**。
+  2. 桩测的 run 目录落在**生产结果目录** ⇒ 同样被中断 ⇒ 留下 `results/acceptance/<时间戳>/`
+     ——**比残留 APK 更危险**：它长得像验收证据，**可能被当成真数据引用**。
+- **根治方式（不是"下次记得清理"）**：把路径做成**可注入**，
+  桩测只写自己的临时目录，**生产路径零接触**：
+  · `PROTEUS_APK=<path>`（`hosts/android/acceptance.sh`）
+  · `PROTEUS_RESULTS_DIR=<dir>`（同上）
+- **破坏性验证**（改这两处后必跑）：跑完桩测后 ——
+  ① 生产 APK 仍在且是 ZIP（`file` 显示 Zip archive）；② 结果目录项数**零新增**；
+  ③ 拆掉注入（让脚本忽略 `PROTEUS_APK`）⇒ 桩测必须**当场红**（`E-device` 那条）。
+- ★**通用原则**：**能靠隔离消除的副作用，不要靠"记得还原"来管理**——
+  中断、超时、被取消都会让"还原"这一步不执行，而隔离让副作用**根本不存在**。
+- ★**同理：一条命令内部别并行跑两件会写同一产物的事**（实测：`pnpm verify` 与真机构建
+  都写 `build/proteus-layoutcore.apk` ⇒ 互相破坏，排查一轮）。
 
 ### ★★红线：**提交 ≠ 交付**——每轮收尾必须推送（2026-09-28 用户指出）
 
