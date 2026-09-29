@@ -71,6 +71,11 @@ export interface RenderCmd {
   }
   /** 该指令并入的节点（拍平结果：非空表示来自被拍平子树） */
   mergedFrom?: number[]
+  /**
+   * ★卡 I5-3：本条**吸收了哪些同色背景指令**（被合并者的 nodeId；非空 = 本条是多块并集）。
+   * 与 `mergedFrom` 分开：那个是"拍平并入"（子树绘制并入祖先），这个是"相邻同色矩形拼接"。
+   */
+  mergedBgFrom?: number[]
   /** 次序（同 z 平面内的绘制顺序 = 树形顺序；平台按序消费） */
   seq: number
 }
@@ -97,6 +102,13 @@ export interface RenderCmdList {
      * `tests/layout-core-pixel-snap.test.ts`：非整数几何树必须 > 0）。
      */
     snappedCount?: number
+    /**
+     * ★卡 I5-3：被**同色相邻背景合并**吸收掉的指令条数（`mergedBgCount`）。
+     * `0` = 没有满足"相邻 + 同色 + 严丝合缝"的背景对（异色 / 有缝 / 中间夹了其它绘制）
+     * —— 不是"开关没生效"（判据见 `tests/layout-core-render-cmd.test.ts`：
+     * 严丝合缝的等色行必须 > 0，且破坏性验证过）。
+     */
+    mergedBgCount?: number
   }
 }
 
@@ -125,6 +137,24 @@ export interface EmitOptions {
    */
   viewportOffsetX?: number
   viewportOffsetY?: number
+  /**
+   * ★★**同色相邻背景合并开关**（2026-09-29，卡 I5 执行项 3/3）。
+   *
+   * 【默认关闭——与 `cullToViewport` 同一理由】既有读数（真机指令条数 / conformance golden）
+   *   都建立在"一条背景一条指令"上；默认开启会**静默改变**这些数字。⇒ 显式 opt-in。
+   *
+   * 【合并的是什么】相邻（指令流中**紧挨着**、无其它绘制夹在中间）的纯背景指令，
+   *   在**同色**且**几何上严丝合缝拼成一个矩形**时合并为一条。
+   *   典型收益：等色列表行（每行一个背景）⇒ 一整块；网格中同色相邻单元 ⇒ 一整行。
+   *
+   * 【为什么只在"紧挨着 + 严丝合缝"时合并（正确性优先）】
+   *   · 紧挨着 ⇒ 两者之间**没有任何绘制** ⇒ 合并后覆盖区域与原来完全一致（画家算法下等价）；
+   *   · 严丝合缝 ⇒ 合并结果**恰好**等于两者并集，不引入新的覆盖面积（不多画也不漏画）；
+   *   · 只要有一个像素的差（不同色 / 错位 / 中间夹了别的指令）就不合并——宁可少省，不可画错。
+   *   ★被排除的情形（有意）：带圆角/描边（圆角外的角是透明的，并集不等于矩形）、
+   *     渐变（同色判断不适用）、拍平并入的指令（`mergedFrom` 非空——语义已不同）。
+   */
+  mergeSameColorBg?: boolean
 }
 
 /**
@@ -252,15 +282,27 @@ export function emitRenderCmds(roots: LayoutNode[], opts: EmitOptions = {}): Ren
   for (const root of roots) walk(root, 0, 0, { cmdIndex: undefined })
 
   // 并入清单回填（拍平结果的**可验证读数**：M1 内存专项据此确认「真拍平」）
+  // ★必须在合并**之前**按下标回填——合并会改变下标。
   for (const [idx, ids] of mergedInto) {
     const cmd = cmds[idx]
     if (cmd) cmd.mergedFrom = ids
   }
 
+  // ── ★卡 I5 执行项 3/3：同色相邻背景合并（opt-in）──────────────────────────
+  //
+  // 【为什么放在 walk 之后】合并是**指令流上的局部重写**：只看相邻两条，与树结构无关
+  //   （父子/兄弟都无所谓，只要指令挨着且几何拼得上）⇒ 不干扰遍历与拍平簿记。
+  let outCmds = cmds
+  let mergedBgCount = 0
+  if (opts.mergeSameColorBg === true) {
+    outCmds = mergeAdjacentSameColorBg(cmds)
+    mergedBgCount = cmds.length - outCmds.length
+  }
+
   return {
-    cmds,
+    cmds: outCmds,
     stats: {
-      cmdCount: cmds.length,
+      cmdCount: outCmds.length,
       flattenedCount,
       mergedCount,
       elapsedMs: Date.now() - t0,
@@ -269,8 +311,86 @@ export function emitRenderCmds(roots: LayoutNode[], opts: EmitOptions = {}): Ren
       culledSubtrees,
       // ★卡 I2 吸附读数（同上：0 表示几何恰好全整数，而非吸附未实现）
       snappedCount,
+      /**
+       * ★卡 I5-3 合并读数：被合并掉的背景**指令条数**。
+       * `0` = 没有可合并的相邻同色背景（几何恰好拼不上 / 异色 / 中间夹了别的绘制）
+       * —— 不是"开关没生效"（判据见 tests：构造严丝合缝的等色行必须 > 0）。
+       */
+      mergedBgCount,
     },
   }
+}
+
+/**
+ * ★卡 I5 执行项 3/3：**同色相邻背景合并**（纯函数——指令流 → 指令流）。
+ *
+ * 【合并规则（三条，全部满足才合）】
+ *   ① 两条都是**纯背景**指令（`kind === 'background'`，只有 color、无渐变/圆角/描边、
+ *      无文本/图片、`mergedFrom` 为空——拍平并入的指令语义已不同，不参与）
+ *   ② **同色**（字符串严格相等——本仓色值在编译期已归一化，无需再做等价解析）
+ *   ③ 几何上**严丝合缝拼成一个矩形**（共享整条边、另一维完全对齐）
+ *
+ * 【为什么必须"严丝合缝"（正确性论证）】
+ *   合并后覆盖区域 = 两者并集，当且仅当它们是同一矩形的两个互补部分时成立。
+ *   只要有一个像素的差（错位 / 尺寸不齐）⇒ 并集不是矩形 ⇒ 合并会**多画**那块缝隙
+ *   （原本透出的底色被盖住）⇒ 画家算法下与逐条绘制**不等价**。⇒ 宁可少省，不可画错。
+ *
+ * 【只合并"相邻且中间无其它绘制"的两条】`out` 的末位就是"紧挨着的上一条"——
+ *   若中间夹了文本/裁剪等任何指令，末位不是可合并背景 ⇒ 自然断开（无需额外记录）。
+ *
+ * 【幂等】合并后的结果再跑一次不变（合并出的矩形仍满足规则，但与邻居合并需再次严丝合缝；
+ *   若满足则会继续合并——这是**有意的**：三行等色最终并成一块）。
+ */
+function mergeAdjacentSameColorBg(cmds: RenderCmd[]): RenderCmd[] {
+  /** 该指令是否是"可参与的纯背景"（见规则①②） */
+  const pureBg = (c: RenderCmd): boolean =>
+    c.kind === 'background'
+    && c.color !== undefined
+    && c.gradient === undefined
+    && c.text === undefined
+    && c.borderWidth === undefined
+    && c.borderColor === undefined
+    && c.borderRadius === undefined
+    && (c.mergedFrom === undefined || c.mergedFrom.length === 0)
+
+  /** 两条能拼成一个矩形吗（同色由调用方先判）——返回合并后的盒，不能则 null */
+  const weld = (a: RenderCmd, b: RenderCmd): { x: number; y: number; width: number; height: number } | null => {
+    // 竖直相邻：x 与 width 完全一致，且 a 底边 == b 顶边
+    if (a.x === b.x && a.width === b.width && a.y + a.height === b.y) {
+      return { x: a.x, y: a.y, width: a.width, height: a.height + b.height }
+    }
+    // 竖直相邻（b 在 a 上方）
+    if (a.x === b.x && a.width === b.width && b.y + b.height === a.y) {
+      return { x: b.x, y: b.y, width: a.width, height: a.height + b.height }
+    }
+    // 水平相邻：y 与 height 完全一致，且 a 右边 == b 左边
+    if (a.y === b.y && a.height === b.height && a.x + a.width === b.x) {
+      return { x: a.x, y: a.y, width: a.width + b.width, height: a.height }
+    }
+    // 水平相邻（b 在 a 左侧）
+    if (a.y === b.y && a.height === b.height && b.x + b.width === a.x) {
+      return { x: b.x, y: b.y, width: a.width + b.width, height: a.height }
+    }
+    return null
+  }
+
+  const out: RenderCmd[] = []
+  for (const c of cmds) {
+    const last = out.length > 0 ? out[out.length - 1]! : undefined
+    if (last !== undefined && pureBg(c) && pureBg(last) && last.color === c.color) {
+      const box = weld(last, c)
+      if (box !== null) {
+        // ★保留 last 的身份（nodeId/seq 用首个）——被合并者不再单独出现；
+        //   但把被合并者的 id 记进 `mergedBgFrom`，使"省了几条、省了谁"可验证
+        const absorbed = last.mergedBgFrom ?? []
+        absorbed.push(c.nodeId)
+        out[out.length - 1] = { ...last, ...box, mergedBgFrom: absorbed }
+        continue
+      }
+    }
+    out.push(c)
+  }
+  return out
 }
 
 /** 是否有可绘制内容（无内容 → 不产出指令，避免平台空转） */

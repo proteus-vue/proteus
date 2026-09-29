@@ -414,3 +414,141 @@ describe('★I5 · overdraw culling（视口裁剪）', () => {
     expect(culled.stats.cmdCount).toBe(emitRenderCmds(roots).stats.cmdCount)
   })
 })
+
+// ══════════════════════════════════════════════════════════════════════════════
+// ★卡 I5 执行项 3/3：**同色相邻背景合并**（opt-in —— `mergeSameColorBg`）
+//
+// 判据分两层（本仓纪律：既要"省了多少"，也要"没画错"）：
+//   ① 省：`stats.mergedBgCount`（0 在本测试里必须被"严丝合缝场景 > 0"证伪，防空转）
+//   ② 对：合并前后**覆盖面积逐像素等价**（用矩形并集面积比对——不靠"看起来对"）
+// ══════════════════════════════════════════════════════════════════════════════
+describe('★卡 I5-3 · 同色相邻背景合并', () => {
+  /** 铺 N 个等色竖条（严丝合缝：同 x/同宽/首尾相接） */
+  function stripRows(ids: number[], color: string, opts: { w?: number; h?: number; gap?: number } = {}) {
+    const w = opts.w ?? 100
+    const h = opts.h ?? 20
+    const gap = opts.gap ?? 0
+    const rows = ids.map((id, i) =>
+      pnode({
+        id,
+        props: {
+          layout: {
+            flexDirection: 'column',
+            width: { kind: 'absolute', dp: w },
+            height: { kind: 'absolute', dp: h },
+            // ★gap 用于构造"错位/有缝"的场景（不严丝合缝 ⇒ 不得合并）
+            margin: gap ? { top: { kind: 'absolute', dp: i === 0 ? 0 : gap } } : undefined,
+          },
+          paint: { backgroundColor: color },
+          paintHint: { isMonochrome: false, isPureBackground: true, staticSubtree: false, needsCompositingLayer: false },
+        },
+      }),
+    )
+    return pnode({
+      id: 1,
+      props: {
+        layout: { flexDirection: 'column', width: { kind: 'absolute', dp: w }, height: { kind: 'absolute', dp: ids.length * (h + gap) } },
+        paint: { backgroundColor: '#ffffff' },
+        paintHint: { isMonochrome: false, isPureBackground: true, staticSubtree: true, needsCompositingLayer: false },
+      },
+      children: rows,
+    })
+  }
+
+  const solve = (root: PNode) => {
+    const tree = layoutTreeFromPNode([root], { lengthContext: V })
+    solveLayout(tree[0]!, loose(400, UNBOUNDED))
+    return tree
+  }
+
+  /** 覆盖面积等价性判据：把指令矩形"涂"到网格上比面积（避免依赖浮点并集算法） */
+  function coverageFingerprint(list: { cmds: Array<{ x: number; y: number; width: number; height: number }> }): number {
+    let sum = 0
+    for (const c of list.cmds) sum += Math.max(0, c.width) * Math.max(0, c.height)
+    return sum
+  }
+
+  it('① ★严丝合缝的等色竖条 ⇒ 合并成一条（且覆盖面积不变）', () => {
+    const tree = solve(stripRows([2, 3, 4, 5], '#285ac8'))
+    const full = emitRenderCmds(tree)
+    const merged = emitRenderCmds(tree, { mergeSameColorBg: true })
+
+    // 基线：根(白) + 4 条等色 = 5 条；合并后应为 根(白) + 1 条 = 2 条
+    expect(full.cmds.length, '未合并时 5 条').toBe(5)
+    expect(merged.stats.mergedBgCount, '★合并读数必须 > 0（0 = 开关没生效或判据失效）').toBe(3)
+    expect(merged.cmds.length, '合并后 2 条').toBe(2)
+
+    // ★正确性：颜色没变、位置是第一条的、高度是四条之和
+    const block = merged.cmds.find((c) => c.color === '#285ac8')!
+    expect(block.x).toBe(0)
+    expect(block.width).toBe(100)
+    expect(block.height, '4 × 20 = 80').toBe(80)
+    // ★可验证读数：吸收清单记录了被并入的 nodeId
+    expect(block.mergedBgFrom, '★并入清单（省了谁，可回溯）').toEqual([3, 4, 5])
+    // ★覆盖面积等价（同色同面积 ⇒ 视觉等价）
+    const area = (l: { cmds: Array<{ width: number; height: number }> }) => coverageFingerprint(l as never)
+    expect(area(merged), '★合并前后覆盖面积必须完全相等（多画/少画都会被这条抓到）').toBe(area(full))
+  })
+
+  it('② ★异色不得合并（相邻但不同色）', () => {
+    const root = stripRows([2, 3], '#285ac8')
+    root.children = [
+      pnode({ id: 2, props: { layout: { flexDirection: 'column', width: { kind: 'absolute', dp: 100 }, height: { kind: 'absolute', dp: 20 } }, paint: { backgroundColor: '#ff0000' }, paintHint: { isMonochrome: false, isPureBackground: true, staticSubtree: false, needsCompositingLayer: false } } }),
+      pnode({ id: 3, props: { layout: { flexDirection: 'column', width: { kind: 'absolute', dp: 100 }, height: { kind: 'absolute', dp: 20 } }, paint: { backgroundColor: '#00ff00' }, paintHint: { isMonochrome: false, isPureBackground: true, staticSubtree: false, needsCompositingLayer: false } } }),
+    ]
+    const tree = solve(root)
+    const merged = emitRenderCmds(tree, { mergeSameColorBg: true })
+    expect(merged.stats.mergedBgCount, '异色 ⇒ 一条都不该合并').toBe(0)
+  })
+
+  it('③ ★有缝隙（不严丝合缝）不得合并——合并会多画那条缝', () => {
+    const tree = solve(stripRows([2, 3, 4], '#285ac8', { gap: 4 }))
+    const merged = emitRenderCmds(tree, { mergeSameColorBg: true })
+    expect(merged.stats.mergedBgCount, '★有缝 ⇒ 合并会盖住缝隙 ⇒ 必须拒绝').toBe(0)
+  })
+
+  it('④ ★带圆角/描边/渐变/文本的背景不参与合并（并集不再是矩形）', () => {
+    const mk = (id: number, over: Partial<PNode['props']>): PNode =>
+      pnode({
+        id,
+        props: {
+          layout: { flexDirection: 'column', width: { kind: 'absolute', dp: 100 }, height: { kind: 'absolute', dp: 20 } },
+          paint: { backgroundColor: '#285ac8' },
+          paintHint: { isMonochrome: false, isPureBackground: true, staticSubtree: false, needsCompositingLayer: false },
+          ...over,
+        },
+      })
+    // 圆角（圆角外是透明角 ⇒ 并集不是矩形）
+    const rounded = mk(2, { paint: { backgroundColor: '#285ac8', borderRadius: { top: { kind: 'absolute', dp: 8 }, right: { kind: 'absolute', dp: 8 }, bottom: { kind: 'absolute', dp: 8 }, left: { kind: 'absolute', dp: 8 } } } })
+    const plain = mk(3, {})
+    const root = pnode({
+      id: 1,
+      props: { layout: { flexDirection: 'column', width: { kind: 'absolute', dp: 100 }, height: { kind: 'absolute', dp: 40 } }, paint: { backgroundColor: '#ffffff' }, paintHint: { isMonochrome: false, isPureBackground: true, staticSubtree: true, needsCompositingLayer: false } },
+      children: [rounded, plain],
+    })
+    const tree = solve(root)
+    const merged = emitRenderCmds(tree, { mergeSameColorBg: true })
+    expect(merged.stats.mergedBgCount, '★圆角参与 ⇒ 不得合并（透明角会露出）').toBe(0)
+  })
+
+  it('⑤ 中间夹了其它绘制 ⇒ 自然断开（不相邻不合并）', () => {
+    const mk = (id: number, bg: string): PNode =>
+      pnode({ id, props: { layout: { flexDirection: 'column', width: { kind: 'absolute', dp: 100 }, height: { kind: 'absolute', dp: 20 } }, paint: { backgroundColor: bg }, paintHint: { isMonochrome: false, isPureBackground: true, staticSubtree: false, needsCompositingLayer: false } } })
+    const text = pnode({ id: 3, kind: 'text', text: 'X', props: { layout: { flexDirection: 'column', width: { kind: 'absolute', dp: 100 }, height: { kind: 'absolute', dp: 20 } }, paint: {}, paintHint: { isMonochrome: true, isPureBackground: false, staticSubtree: false, needsCompositingLayer: false } } })
+    const root = pnode({
+      id: 1,
+      props: { layout: { flexDirection: 'column', width: { kind: 'absolute', dp: 100 }, height: { kind: 'absolute', dp: 60 } }, paint: {}, paintHint: { isMonochrome: false, isPureBackground: false, staticSubtree: false, needsCompositingLayer: false } },
+      children: [mk(2, '#285ac8'), text, mk(4, '#285ac8')],
+    })
+    const tree = solve(root)
+    const merged = emitRenderCmds(tree, { mergeSameColorBg: true })
+    expect(merged.stats.mergedBgCount, '★中间夹文本 ⇒ 两条被隔开，不得跨过它合并').toBe(0)
+  })
+
+  it('⑥ ★默认关闭（不传选项 ⇒ 行为与既有一致，读数不变）', () => {
+    const tree = solve(stripRows([2, 3, 4], '#285ac8'))
+    const off = emitRenderCmds(tree)
+    expect(off.stats.mergedBgCount, '默认关闭 ⇒ 读数为 0').toBe(0)
+    expect(off.cmds.length, '默认关闭 ⇒ 指令数与历史口径一致').toBe(4)
+  })
+})
