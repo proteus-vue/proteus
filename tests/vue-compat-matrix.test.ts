@@ -23,6 +23,10 @@ describe('Vue 全能力基准线 SSOT（proteus-compiler-vue-align-plan）', () 
     for (const e of VUE_COMPAT_MATRIX) {
       if (e.status !== 'aligned') {
         expect(e.note, `${e.name}（${e.status}）缺 note`).toBeTruthy()
+        // ★★2026-09-29：非 aligned 项还必须带 `noteEn`——英文页由 SSOT 生成，
+        //   缺了它英文读者会看到中文说明（双语站惯例是内容全译）。
+        //   为什么放 SSOT 而不是在生成器里翻译：note 是**技术判定**，翻译会引入偏差。
+        expect(e.noteEn, `${e.name}（${e.status}）缺 noteEn（英文页会漏内容）`).toBeTruthy()
       }
       expect(e.source, `${e.name} 缺 source`).toBeTruthy()
     }
