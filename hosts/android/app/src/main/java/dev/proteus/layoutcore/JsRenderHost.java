@@ -293,6 +293,8 @@ final class JsRenderHost {
             if (t != null && !t.isEmpty()) {
                 n.put("text", t);
                 // ★字号进 `textStyleKey`：核心用它区分"同文案不同字号"（否则度量缓存会错误命中）
+                // I2-ALLOW: **非几何**——把 fontSize 编码成整数缓存键（×100 定点表示），
+                //   不是坐标/尺寸换算（几何一律由内核产出并经 snap 吸附，平台层零舍入）
                 n.put("textStyleKey", (int) Math.round(spec.optDouble("fontSize", DEFAULT_FONT_UNITS) * 100));
             }
             arr.put(n);
@@ -327,6 +329,8 @@ final class JsRenderHost {
             if (onlyIds != null && !onlyIds.contains(id)) continue;
             double fs = spec.optDouble("fontSize", DEFAULT_FONT_UNITS);
             paint.setTextSize((float) fs);
+            // I2-ALLOW: 文本**测量**结果的取整（测量子系统，非几何换算——度量值交给内核后
+            //   由内核统一 `snap` 吸附；平台层对**几何**零舍入，与 iOS `measureText` 同款）
             int w = (int) Math.ceil(paint.measureText(text));
             Paint.FontMetrics fm = paint.getFontMetrics();
             int h = (int) Math.ceil(fm.descent - fm.ascent);
