@@ -33,7 +33,13 @@ SDK="${ANDROID_HOME:-$HOME/Library/Android/sdk}"
 ADB="$SDK/platform-tools/adb"
 PKG="dev.proteus.layoutcore"
 ACTIVITY="$PKG/.MainActivity"
-OUT="$HERE/results/acceptance"
+# ★★可注入（2026-09-29，与 `PROTEUS_APK` 同一根因的第二次修复）：
+#   桩测用假 adb 跑真流程 ⇒ 它会在**生产结果目录**里造出 run 目录；旧实现靠"跑完删掉"清理，
+#   而**被中断时清理不执行**（实测：verify 被取消 ⇒ 留下 `results/acceptance/20260929-190222/`
+#   这种"看起来像验收证据"的垃圾目录——比 APK 残留更危险：**它可能被当作真数据引用**）。
+#   ⇒ 正解：结果目录也可注入 —— 桩测让它写进临时目录，**生产目录零接触**。
+#   纪律与 `PROTEUS_APK` 同款：**能靠隔离消除的副作用，不要靠"记得清理"来管理**。
+OUT="${PROTEUS_RESULTS_DIR:-$HERE/results/acceptance}"
 RUNS=5
 
 # ★★gfxinfo 文本 → "Janky p50 frames"（**唯一解析实现**：自测与实测共用同一份，
@@ -259,7 +265,13 @@ if [ -z "${SKIP_BUILD:-}" ]; then
   echo "==> 构建 release 包（§9.2 要求）"
   bash "$HERE/build-and-run.sh" --no-install --release 2>&1 | grep -E "构建模式|class 文件|✗" | head -5
 fi
-APK="$HERE/build/proteus-layoutcore.apk"
+# ★★可注入（2026-09-29，S5 途中实测的产物污染缺陷）：桩测（acceptance-stub.mjs）
+#   要用一个**占位 APK** 走完整控制流，但它当时只能覆盖这个生产路径
+#   ⇒ 一旦桩测被中断（实测：`pnpm verify` 被我取消），占位就**留在生产路径上**，
+#   而后续桩测又把占位当"真实包"备份回去 ⇒ 真包被永久毁掉（排查了一轮）。
+#   ⇒ 正解：路径可注入 —— 桩测传 `PROTEUS_APK=<自己的独立目录>`，**生产产物零接触**。
+#   纪律：**测试装置与被测产物在文件系统上也要隔离**，不能靠"跑完记得还原"。
+APK="${PROTEUS_APK:-$HERE/build/proteus-layoutcore.apk}"
 [ -f "$APK" ] || { echo "✗ APK 不存在：$APK"; exit 2; }
 
 # ★★验收**自动先跑预检**（可 SKIP_PREFLIGHT=1 跳过）：装置问题在 5 秒内暴露，

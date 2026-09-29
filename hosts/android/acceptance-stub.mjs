@@ -232,38 +232,63 @@ fs.writeFileSync(path.join(sdk, 'platform-tools', 'adb'), STUB, { mode: 0o755 })
 //      排查了一轮才发现是桩测把它覆盖了）。
 //     ⇒ 正解：占位写到**独立目录**（`build/stub/`），并在跑完后**恢复**真实 APK（若原先有）。
 //     ★纪律：**测试装置不得修改被测对象的产物**（与"标定必须进判据"同族）。
+/** 真机 APK 的判定：ZIP 魔数 `PK` + 合理体积（构建脚本自身断言 ≥100KB）——用来识破占位残留 */
+function isRealApk(buf) {
+  return buf !== null && buf.length > 100_000 && buf.length > 2 && buf[0] === 0x50 && buf[1] === 0x4b
+}
+
 const apkDir = path.join(HERE, 'build')
 const realApkPath = path.join(apkDir, 'proteus-layoutcore.apk')
 const stubDir = path.join(apkDir, 'stub')
 const apkPath = path.join(stubDir, 'proteus-layoutcore.apk')
 
-// 备份真实 APK（若存在）→ 用占位跑 → 跑完恢复
-const realApkBackup = fs.existsSync(realApkPath) ? fs.readFileSync(realApkPath) : null
+// ★★★**隔离路径**（2026-09-29 二次修复 —— 上一版"备份+还原"仍会毁产物）
+//
+// 【为什么放弃"备份并还原"（实测故障链）】旧实现：把真机 APK 挪到 `stub/real.bak`
+//   → 写真占位到**生产路径** → 跑完从内存备份写回。
+//   实测（S5 收尾时）：`pnpm verify` 跑到桩测那一环**被我取消** ⇒ 进程被杀，
+//   **还原那一步没执行** ⇒ 生产路径上留下 45 字节占位。
+//   更糟的是**下一次**桩测把它当"真实包"读进内存备份 ⇒ 还原时又把占位写回
+//   ⇒ 真包**被永久毁掉**（`real.bak` 也只剩占位，只能重建）。
+//   ★根因：**"跑完记得还原"是流程约定，不是结构性保证**——任何中断都会击穿它
+//     （与「规则写在 markdown 拦不住」同源）。
+//   ⇒ 正解：**路径隔离** —— `acceptance.sh` 支持 `PROTEUS_APK` 注入，桩测只写自己的目录，
+//     **生产路径一个字节都不碰** ⇒ 中断也无害。
 fs.mkdirSync(stubDir, { recursive: true })
 fs.writeFileSync(apkPath, 'STUB-APK（桩测占位——非真机包）\n')
-// ★同时把占位放到"被检查的路径"上——但 acceptance.sh 读的是 build/ 下那个
-//   ⇒ 用 SKIP_BUILD 时它只检查存在性；为不污染，桩测改为**临时移走**真实 APK 并放占位，
-//     跑完**原样恢复**（字节级）。这是"不破坏产物"与"必须存在"的折中。
-if (realApkBackup !== null) fs.renameSync(realApkPath, path.join(stubDir, 'real.bak'))
-else fs.mkdirSync(apkDir, { recursive: true })
-fs.writeFileSync(realApkPath, 'STUB-APK（桩测占位——非真机包）\n')
+// ★残留检测（只报警，不触碰）：若生产路径上已是非 ZIP 的小文件 ⇒ 那是历史残留
+if (fs.existsSync(realApkPath) && !isRealApk(fs.readFileSync(realApkPath))) {
+  notes.push('⚠ 生产路径上是**非 ZIP 的残留文件**（历史中断留下？）——本次不触碰它；'
+    + '真机前请重建：bash hosts/android/build-and-run.sh --no-install')
+}
 
-const runDirBefore = new Set(fs.existsSync(RESULTS) ? fs.readdirSync(RESULTS) : [])
-const rawPath = path.join(RESULTS, 'raw.txt')
-const rawBackup = fs.existsSync(rawPath) ? fs.readFileSync(rawPath) : null
+// ★★结果目录也隔离（见上方故障链）：桩测的 run 目录落在临时目录 ⇒ 中断也无害
+const stubResults = path.join(tmp, 'results')
+fs.mkdirSync(stubResults, { recursive: true })
+const rawPath = path.join(stubResults, 'raw.txt')
 
 const res = spawnSync('bash', [path.join(HERE, 'acceptance.sh'), '--quick', '--skip-build'], {
   cwd: ROOT,
   encoding: 'utf8',
   // ★桩测自身必须跳过指纹门禁（否则它会被自己挡住：脚本刚改过 ⇒ 指纹必然过期 —— 实测踩到）
-  env: { ...process.env, ANDROID_HOME: sdk, SKIP_PREFLIGHT: '1', SKIP_BUILD: '1', SKIP_STUB_GATE: '1' },
+  env: {
+    ...process.env,
+    ANDROID_HOME: sdk,
+    SKIP_PREFLIGHT: '1',
+    SKIP_BUILD: '1',
+    SKIP_STUB_GATE: '1',
+    // ★★路径隔离（两处，同一根因）：脚本据此使用桩测自己的占位包 + 自己的结果目录，
+    //   **生产路径零接触**（见上方两条故障链记录：APK 残留 / run 目录残留）
+    PROTEUS_APK: apkPath,
+    PROTEUS_RESULTS_DIR: stubResults,
+  },
   timeout: 300_000,
   maxBuffer: 32 * 1024 * 1024,
 })
 const out = `${res.stdout ?? ''}\n${res.stderr ?? ''}`
 
-const created = fs.readdirSync(RESULTS).filter((d) => !runDirBefore.has(d))
-const newRun = created.find((d) => /^\d{8}-\d{6}$/.test(d))
+const created = fs.readdirSync(stubResults).filter((d) => /^\d{8}-\d{6}$/.test(d))
+const newRun = created[0]
 
 // ── ④ 断言 ─────────────────────────────────────────────────────────────────
 if (res.status !== 0) fails.push(`E-exit 脚本退出码 ${res.status}（期望 0）`)
@@ -272,19 +297,30 @@ for (const pat of ['unbound variable', 'command not found', 'syntax error']) {
 }
 if (/自检发现硬伤/.test(out)) fails.push('E-selfcheck 跑后自检判定本次不可信')
 // ★装置自证：本次跑的必须是**桩测自己写的占位 APK**（防"本机残留 APK 掩盖依赖"再次发生）
+//   ★★2026-09-29 改判据落点：改为断言 **脚本日志里 install 用的是注入路径**——
+//     旧版检查"生产路径上是占位"，那恰恰**要求桩测去写生产路径**（污染之源，已废）。
+//     新版从日志自证：脚本确实用了我们给它的路径 ⇒ 隔离生效 + 更贴近真实意图。
 {
-  const apkNow = fs.readFileSync(realApkPath, 'utf8')
+  const logAll = fs.readFileSync(LOG, 'utf8')
+  if (!logAll.includes(apkPath)) {
+    fails.push('E-device 脚本未使用注入的 APK 路径（PROTEUS_APK 未生效 ⇒ 可能读了别的产物）')
+  }
+  const apkNow = fs.readFileSync(apkPath, 'utf8')
   if (!apkNow.startsWith('STUB-APK')) {
-    fails.push('E-device 桩测用的 APK 不是本次写入的占位（说明脚本读了别的装置——"设备无关"被破坏）')
+    // ★★两种成因要分开说（本仓实测踩到，2026-09-29 · S5）：
+    //   ① **有人并发跑了真机构建**（`build-and-run.sh` 会把真 APK 写回同一路径）
+    //      ——实测：`pnpm verify`（内含本桩测）与设备构建**并行**跑 ⇒ 占位被真 APK 覆盖 ⇒ 本判据红。
+    //      ★这不是脚本缺陷，而是**同一产物的两个使用方**（与既有教训「构建与安装必须串行」同族）。
+    //   ② 真的读了别的装置（那才是本判据原本要抓的**真缺陷**）。
+    //   ⇒ 报错必须同时给出两种可能，否则下一个人会去查装置而白花时间。
+    fails.push('E-device 桩测用的 APK 不是本次写入的占位（两种可能：① 同时跑了真机构建 '
+      + 'build-and-run.sh ⇒ 同一 APK 被覆盖，等它跑完再跑本桩测；② 脚本读了别的装置 ⇒ 真缺陷）')
   }
 }
 
-// ★★恢复真实 APK（字节级）——桩测**不得留下副作用**（见上方注释的实测缺陷）
-if (realApkBackup !== null) {
-  fs.writeFileSync(realApkPath, realApkBackup)
-} else {
-  fs.rmSync(realApkPath, { force: true })  // 原本就没有 ⇒ 不留占位残留
-}
+// ★★不再需要"还原生产 APK"（2026-09-29）：路径已隔离（PROTEUS_APK），
+//   生产产物从未被写过 ⇒ 无副作用可言；中断也无害（见上方故障链记录）。
+//   ★纪律：**能靠隔离消除的副作用，不要靠"记得还原"来管理**。
 
 {
   const log = fs.readFileSync(LOG, 'utf8').split('\n').filter(Boolean)
@@ -300,7 +336,7 @@ if (realApkBackup !== null) {
 if (!newRun) {
   fails.push('E-artifact 没有产生 run 目录')
 } else {
-  const dir = path.join(RESULTS, newRun)
+  const dir = path.join(stubResults, newRun)
   const must = ['layout-report.txt', 'layout-bench.json', 'layout-compare-native.json', 'layout-conformance.json', 'raw.txt',
     'layout-app-4050.json', 'layout-app-4050-native.json',
     'layout-scroll-core.json', 'layout-scroll-native.json', 'scroll-ab.txt',
@@ -315,12 +351,14 @@ if (!newRun) {
 }
 
 // ── ⑤ 还原现场（★必须在断言**之后**：首版在断言前删了 run 目录 ⇒ 全部产物断言误报"缺文件"）──
+//
+// ★★2026-09-29：本函数已**没有副作用要还原**——APK 与结果目录都已改成**路径隔离**
+//   （`PROTEUS_APK` / `PROTEUS_RESULTS_DIR`），桩测从未写过生产路径。
+//   保留它是为了：① 清理桩测自己的临时产物；② 将来若又有人加"临时改动"，有个显式去处
+//   （★但首选永远是**隔离**，不是"记得还原"——本会话两次故障链都是"还原没执行"造成的）。
 function restore() {
-  if (rawBackup) fs.writeFileSync(rawPath, rawBackup)
-  else if (fs.existsSync(rawPath)) fs.unlinkSync(rawPath)
-  for (const d of created) {
-    if (/^\d{8}-\d{6}$/.test(d)) fs.rmSync(path.join(RESULTS, d), { recursive: true, force: true })
-  }
+  try { fs.rmSync(stubResults, { recursive: true, force: true }) } catch { /* 临时目录 */ }
+  try { if (fs.existsSync(rawPath)) fs.unlinkSync(rawPath) } catch { /* 同左 */ }
 }
 
 // ── ⑥ 产出 ─────────────────────────────────────────────────────────────────

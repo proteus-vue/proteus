@@ -225,6 +225,8 @@ interface RenderArgs {
   viewport: { width: number; height: number }
   /** 4050 场景的节点表 JSON（`{nodes:[...], spec:{...}}`；Java 侧从 assets 读出传进来） */
   treeJson?: string
+  /** ★稳态逐帧的帧数（>0 时跑相位③；卡 C2「宿主侧耗时 1ms 量级」的判据载体） */
+  frames?: number
 }
 
 /**
@@ -307,6 +309,30 @@ export function __proteusRenderRun(argsJson: string): string {
   }
   const afterPatch = adapter.hostCalls()
 
+  // ── 相位 ③：**稳态逐帧**（卡 C2「宿主侧耗时仍为 1ms 量级」的判据载体）──
+  //
+  // 【为什么需要这一段（判据要的是分布，不是单点）】卡 C2 原判据写的是"宿主侧耗时 1ms 量级"——
+  //   单点读数无法区分"稳定 1ms"与"偶尔 40ms + 其余 0.1ms"。
+  //   ⇒ 用与真实使用相同的形态打 N 帧**纯样式增量**（每帧改一行文本 ⇒ 走 updatePatches 增量路径），
+  //     每帧的宿主耗时由 Java 侧记录（`JsRenderHost.hostCallMs`），出 p50/p95/max 分布。
+  //   ★为什么用"改一行文本"当负载：那是列表滚动/计数的真实形态（局部更新），
+  //     也正是"跨边界调用=帧数"红线所约束的负载。
+  const frameEdits = args.frames ?? 0
+  let framesRun = 0
+  if (frameEdits > 0 && textNode) {
+    const textHandles = nodes.filter((n) => typeof n.text === 'string' && n.text.length > 0)
+    for (let i = 0; i < frameEdits; i++) {
+      const target = textHandles[i % textHandles.length]
+      if (!target) break
+      const h = handles.get(target.id)
+      if (h === undefined) continue
+      backend.setText(h, `frame ${i}`)
+      backend.flush()   // ← 一帧一次跨边界调用
+      framesRun++
+    }
+  }
+  const afterFrames = adapter.hostCalls()
+
   // ★期望绘制指令数（**两侧对"该画什么"的理解是否一致**的独立判据）：
   //   有背景色 或 有文本 ⇒ 有绘制内容（与宿主 `emitCmds` 的同一规则，各自独立算）
   //   若 props 在适配器里丢了，本数与宿主侧的 `host_cmds` 会**不一致**——
@@ -329,9 +355,12 @@ export function __proteusRenderRun(argsJson: string): string {
     patch_ms: patchMs,
     mount_call_kind: mountKind,
     patch_call_kind: adapter.lastCallKind(),
-    host_calls: afterPatch,
+    host_calls: afterFrames,
     mount_calls: afterMount,
     patch_calls: afterPatch - afterMount,
+    // ★稳态逐帧读数（判据：帧数 = 跨边界调用数，且每帧宿主耗时 1ms 量级）
+    frames_run: framesRun,
+    steady_calls: afterFrames - afterPatch,
     mount_nodes: adapter.nodeSpecs().length,
     patched_id: patchedId,
     total_ms: Date.now() - t0,

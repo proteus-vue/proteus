@@ -765,6 +765,8 @@ public class MainActivity extends Activity {
             // ④ 调渲染入口（真机口径：视口 = 设备屏幕；与既有场景同坐标系）
             org.json.JSONObject args = new org.json.JSONObject();
             args.put("scene", "4050");
+            // ★稳态逐帧（卡 C2 判据载体）：200 帧纯样式增量 ⇒ 每帧宿主耗时出分布
+            args.put("frames", 200);
             args.put("viewport", new org.json.JSONObject()
                     .put("width", 1080).put("height", 2400));
             // ★4050 用**既有夹具**（与 `app-4050` 通路同一棵树 ⇒ 两条路径的结果可比对）
@@ -811,18 +813,37 @@ public class MainActivity extends Activity {
             out.put("host_sample_ms", round3(host.lastSampleMs));
             out.put("host_total_ms", round3(host.lastTotalMs));
             out.put("expect_cmds", r.optInt("expect_cmds"));
+            // ★★稳态逐帧（卡 C2）：调用数 = 帧数，且宿主侧耗时分布（p50/p95/max）
+            out.put("frames_run", r.optInt("frames_run"));
+            out.put("steady_calls", r.optInt("steady_calls"));
+            double[] fp = host.frameTimingPercentiles();
+            double[] ph = host.phaseSampleMs();
+            out.put("host_frame_samples", host.frameSampleCount());
+            out.put("host_frame_p50_ms", fp.length > 0 ? round3(fp[0]) : -1);
+            out.put("host_frame_p95_ms", fp.length > 1 ? round3(fp[1]) : -1);
+            out.put("host_frame_max_ms", fp.length > 2 ? round3(fp[2]) : -1);
+            // ★一次性相位样本单独报（不混进逐帧分布——见 JsRenderHost 的说明）
+            out.put("host_phase_mount_ms", ph.length > 0 ? round3(ph[0]) : -1);
+            out.put("host_phase_patch_ms", ph.length > 1 ? round3(ph[1]) : -1);
             out.put("host_tree_shape", host.lastTreeShape);
             out.put("host_error", host.lastError == null ? "" : host.lastError);
             out.put("font_units", "layout");   // ★字号按布局单位（与 4050 对照通路的 px 口径不同，见 JsRenderHost 注释）
 
             boolean ok = "java".equals(r.optString("host_mode"))
                     && r.optInt("mount_calls") == 1 && r.optInt("patch_calls") == 1
-                    && r.optInt("host_calls") == 2
+                    // ★调用数 = 2 相位 + N 稳态帧（帧数在 args 里配；此处按同式校验）
+                    && r.optInt("host_calls") == 2 + r.optInt("frames_run")
                     && "updatePatches".equals(r.optString("patch_call_kind"))
                     && host.lastCmdCount > 0 && host.lastPaintedSamples > 0
                     && host.lastPaintedColors > 1   // ★单色 = "只有底/只有一块" ⇒ 内容没画出来
                     && host.onDrawCount() > 0       // ★真实绘制分发**真的走到了 onDraw**
-                    && host.mountCalls == 1 && host.patchCalls == 1 && host.updateCalls == 0
+                    // ★★卡 C2 判据：跨边界调用 = 帧数（200 帧稳态 ⇒ 恰好 200 次调用）
+                    && r.optInt("frames_run") == 200 && r.optInt("steady_calls") == 200
+                    // ★宿主侧计数与 JS 侧一致：mount 恰 1 次；补丁 = 1 相位 + N 稳态帧；
+                    //   整树 update **0 次**（增量路径确实被用了，没走整树重发）
+                    && host.mountCalls == 1
+                    && host.patchCalls == 1 + r.optInt("frames_run")
+                    && host.updateCalls == 0
                     && host.lastNodeCount == r.optInt("nodes")
                     && host.lastError == null;   // ★宿主侧有错 ⇒ 就算 JS 侧读数全绿也不放行（静默失败防线）
             out.put("ok", ok);
