@@ -261,6 +261,84 @@ emoji 前缀（降级条/驾驶提醒），文案入口保持宿主注入；`↕
   （CI 用 node 22）；换 nvm **v22.22.0** 复跑完整链（build-packages → gen:content → website →
   showcase）**全绿**。⇒ 官网构建预检**必须用 Node ≥ 22**。
 
+### ★★★卡 I2 坐标吸附落地（舍入时机统一）+ 三个先存在的 CI 红（2026-09-29）
+
+**背景**：任务卡 18 张里 I2 与 I3 被列为**硬约束非优化项**（前者防跨端 1px 误差）。
+现状是**内核零舍入、各端宿主各自 \`Math.round\`** ⇒ 三端策略可分化
+（卡的反例：鸿蒙 flex:1/3 三列 0.333 被舍成 0.33 → 第三列错位；逐字段 round 得 33+33+33=99 丢 1px）。
+
+**① 策略定案：边缘吸附（edge snapping）** \`snap(v) = floor(v + 0.5)\`
+- 盒 → L/T/R/B 各自吸附，宽高取**边缘差** ⇒ 相邻元素共用边吸到**同一整数**
+  （无 1px 缝/重叠；宽 100 均分三列 → **33/34/33 和守恒 100**）
+- ★**不用原生 round**：Rust \`f32::round\` 半值远离零（-1.5→-2）、JS \`Math.round\` 半值向正
+  ⇒ 两语言原生舍入在**负半值上语义相反**（负 margin / 视口外元素会差 1px）；
+  \`floor(v+0.5)\` 两语言同式 ⇒ 逐位可对齐。golden 含 -0.5/-1.5 显式锚点。
+
+**② 唯一实现 + 导出边界落点**
+- TS \`packages/layout-core/src/pixel-snap.ts\` → \`emitRenderCmds\` 发射时（含裁剪框同步吸附）
+- Rust \`packages/layout-core-rust/src/snap.rs\` → FFI 四处导出（layout_run / layout_rects /
+  collect_abs_subtree / collect_abs_pairs 二进制通道——两条通道必须同一把尺子，
+  否则 iOS V4 路径会抖）
+- **命中测试走吸附几何**（新增 \`geometry_snapped\` + \`hit_result_with\`，FFI hit_test 用它）
+  —— 否则视觉边界与可点边界差 ≤0.5px（同一类缺陷在事件侧的新形态）
+- 求解器内部**保持亚像素**（browser-layout conformance 0.5dp 口径不变）；新增读数
+  \`stats.snappedCount\`（0 = 几何恰好全整数，非"未实现"）
+
+**③ 跨语言 golden + ★精度边界台账（首次生成时当场打红，查清后锁定而非绕过）**
+- \`packages/layout-core-rust/tests/golden/pixel-snap.json\` 由 TS 侧求值生成、Rust 侧读同一份
+  **重新求值**比对（严格段 11 标量 + 13 盒逐字段一致）
+- ★**实测挖出的表示精度差异**：输入距 \`.5\` 边界小于 f32 的 ulp/2 时（如 3.4999999，
+  f32 下**就是** 3.5），TS(f64)→3 而 Rust(f32)→4；盒用例同理（f32 加法把
+  1.4999999+3.9999999 舍成 5.5 ⇒ 右缘吸到 6）。**是表示精度不是算法差异** ⇒ 不修
+  （改 f64/定点代价远超收益），改为**锁定**：生成器按 f64/f32 **双路径自动分类**，
+  不一致的进 \`precisionDivergence\` 段（两侧读数都被断言，任一环变化即红）。
+  新增用例无需人工判断归哪段。
+
+**④ 平台层零舍入（卡的第一条验收 = 静态检查）——写门禁时当场抓到三处真缺陷**
+- \`ProteusHostView.onMeasure/onLayout\` 与 \`MirrorHit.layoutRec\` 对**内核几何**再舍入
+  ⇒ 改**无损转换** \`(int) v\`（内核已保证整数；破坏不变式会直接截断并在像素核验暴露，
+  而不是被"再舍入一次"掩盖）
+- 新增 \`pnpm check:host-rounding\`（扫 hosts/**；区分「几何换算」与「测量/位图/报告」三类
+  合法例外——例外必须写 \`// I2-ALLOW: 理由\`）；**破坏性验证过**（注入即红/还原即绿）
+- 教训（门禁自身的迭代）：ALLOW 注释的**生效窗口**从 1 行 → 3 行 → **5 行**
+  （一条注释覆盖的语句组最长 4 行，实测漏过两次）；报告取整惯用式
+  \`round(v*10^n)/10^n\` 按**模式**判而非按词判（词表会漏 8 处也会误伤）
+
+**⑤ 新增零设备编译检查（补覆盖盲区）**：\`pnpm check:android-host-compile\`
+（javac + android.jar 编译 layoutcore/*.java）——此前 \`build-and-run.sh\` 是唯一编译入口
+且需真机 ⇒ 改宿主 Java 后本地无任何判据（与 iOS \`check-selfdraw-compile\` 同源）。
+破坏性验证过（注入语法错 → exit 1）。
+
+**⑥ 任务卡 I2 回填：2/3 达标**
+✅ 内核唯一舍入 + 平台零舍入（静态门禁）· ✅ 两端逐字节一致（golden）·
+❌ **鸿蒙三列「无错位」无法验证——仓库无鸿蒙宿主**（\`hosts/\` 只有 android/ios）。
+内核级三列场景已证（33/34/33 守恒、首尾相接），但**不做无宿主声称**；待鸿蒙宿主落地补验收。
+
+**⑦ ★三个先存在的 CI 红（与本卡无关但阻塞交付）——归因方法：\`git stash\` 后同 HEAD 复跑**
+1. **vapor-perf 装置过期（会误导排查方向）**：gate 脚本**手写** ops 字节并硬编码
+   \`version = 1\`，协议 V2 改 \`OPS_VERSION = 2\` 后没人知道要跟着改 ⇒ Rust 拒绝 ⇒
+   门禁报「平移未产生位移」（看起来像平移传播坏了）。⇒ 改**调真实 TS 编码器**
+   （tsx 子进程，跨端格式只能有一个实现）+ 新增**装置自检** \`assertProbeApplied\`
+   （装置失效报装置错 exit 2 并指名"先查线格式版本"，不伪装成性能回归）。
+   恢复后：类A 0.004ms / 类B 0.058ms · delta=24 兄弟=1000。
+2. **三包未登记官网覆盖**：\`layout-core\` / \`layout-core-rust\` / \`slot-runtime\`
+   （Vapor 线新增包从落地起就没登记——worklet / E30 useMCP 同类缺口的第三次复发，
+   这次一次漏三个）⇒ 在 \`COVERED_PACKAGES\` 声明专页归属（framework/28 与 43）。
+3. **gates-sync 判据有两份实现、只改了一份**：\`.mjs\` 已放宽到任意相对路径
+  （修 hosts/ 失明），\`tests/gates-sync.test.ts\` 的镜像仍是窄版 ⇒
+   \`check:acceptance-stub\` 被误判"未接线"。⇒ 同步扩面；
+   **纪律：改判据必须同时改它的镜像**（否则假红/假绿二选一）。
+
+**验证**：全量 **3911/3911**（327 文件，★Node 22——Node 18 下有两个 jsdom/ESM 误报，
+属 AGENTS.md 已记情形）· Rust **115** 项 · 三个新门禁绿 · \`check:gates-sync\` ✅ ·
+\`check:vapor-perf\` ✅ · 指令集规格表补吸附契约（生成式，\`--check\` 绿）。
+
+**新增/改动文件**：\`packages/layout-core/src/{pixel-snap.ts,render-cmd.ts,index.ts}\` ·
+\`packages/layout-core-rust/src/{snap.rs,ffi.rs,hit.rs,rects_bin.rs,lib.rs}\` ·
+\`scripts/{check-host-rounding.mjs,gen-pixel-snap-golden.mjs,gen-instruction-spec.mjs,check-vapor-perf.mjs}\` ·
+\`hosts/android/check-host-compile.sh\` · \`tests/{pixel-snap-golden,i2-snap-e2e,gates-sync}.test.ts\` ·
+\`docs/generated/instruction-spec.md\` · AGENTS.md · 任务卡清单 · website/scripts/gen-primitives.mjs
+
 ### ★★M3 手势落地：平台识别器 + 核心命中标注 target（2026-09-29，提交 `44962ade`）
 
 **方案依据**（06-gesture-animation.md 映射表）：「tap→`GestureDetector` / longPress→`LongPressGesture` /
