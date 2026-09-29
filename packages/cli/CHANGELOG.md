@@ -1,5 +1,20 @@
 # @proteus-vue/cli
 
+## 0.3.0-beta.21
+
+### Patch Changes
+
+- Updated dependencies
+  - @proteus-vue/capabilities@0.3.0-beta.21
+  - @proteus-vue/compiler-backend@0.3.0-beta.21
+  - @proteus-vue/component-ir@0.3.0-beta.21
+  - @proteus-vue/fluid@0.3.0-beta.21
+  - @proteus-vue/render-backend@0.3.0-beta.21
+  - @proteus-vue/plugin-vite@0.3.0-beta.21
+  - @proteus-vue/compiler@0.3.0-beta.21
+  - @proteus-vue/router@0.3.0-beta.21
+  - @proteus-vue/runtime@0.3.0-beta.21
+
 ## 0.3.0-beta.19
 
 ### Patch Changes

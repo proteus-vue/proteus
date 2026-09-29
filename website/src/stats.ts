@@ -33,12 +33,12 @@ export const STATS: StatItem[] = [
   },
   {
     id: 'tests',
-    value: '3447',
+    value: '3881',
     label: '单测全绿',
     labelEn: 'unit tests green',
     // ★唯一「需跑全量」的项：门禁不重跑（代价高），由发布前手动核对——其余项均机器重算
-    source: 'pnpm test（官方门禁，排除 e2e；291 文件 / 3447 用例）',
-    sourceEn: 'pnpm test (official gate, e2e excluded; 291 files / 3447 cases)',
+    source: 'pnpm test（官方门禁，排除 e2e；324 文件 / 3881 用例）',
+    sourceEn: 'pnpm test (official gate, e2e excluded; 324 files / 3881 cases)',
   },
   {
     id: 'primitives',

@@ -1,7 +1,7 @@
 {
   "name": "@proteus-vue/renderer-app",
-  "version": "0.3.0-beta.11",
-  "description": "Proteus App \u6e32\u67d3\u5668\uff08app-plan B1\uff09\uff1aVue createRenderer \u81ea\u5b9a\u4e49 host config\uff08NativeAdapter \u62bd\u8c61\uff09\u2014\u2014\u6807\u51c6 Vue SFC \u7684 App \u539f\u751f\u8fd0\u884c\u65f6\u901a\u9053",
+  "version": "0.3.0-beta.21",
+  "description": "Proteus App 渲染器（app-plan B1）：Vue createRenderer 自定义 host config（NativeAdapter 抽象）——标准 Vue SFC 的 App 原生运行时通道",
   "type": "module",
   "license": "Apache-2.0",
   "main": "./dist/index.js",
