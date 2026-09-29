@@ -329,6 +329,10 @@ README 明确："**规划已入库、尚未有可运行实现：G-28 NativeBacke
   ★**实测**：**2200+ 个 op 只产生 1 次跨边界调用**（批处理红线）
   ❌ **待做**：① 在 `hosts/android` 的宿主里接线（Java 侧三个入口已存在，JS 侧换用本桥）
     ② 真机跑通后**三项复测**（4050 / 长列表 / 内存）
+  ★★**受阻于共同前置（2026-09-29 核实）**：本桥是 **TS 代码** ⇒ Android 要跑它**先要有 JS 执行载体**；
+    而 `hosts/android` 是 **Java + Rust `.so` 直连 JNI**（WebView 仅作 native-host 演示）**无 JS 引擎**。
+    ⇒ 前置选型已完成：**`docs/proteus-android-js-engine-selection.md`**（建议 QuickJS，本机实测
+    **8MB 内存即可跑通 368KB bundle** + **Android `.so` 0.94MB** 交叉编译通过）
   ★**为什么这不算"已完成"**：桥是**零设备可验证的部分**（已验收）；
     但"可运行的 Android 实现"按卡的口径要求**真机跑通**——按本仓纪律不虚报。
 - [ ] 4050 / 长列表 / 内存三项复测达标 —— ❌ **本轮未做**（需真机验收）。
@@ -384,8 +388,12 @@ ExecutionCarrier（JSI / AOT）是"宿主侧 1ms"的载体。
   `proteus_submit_frame` / 版本协商）全仓零实现**（文档自标"实施状态：规划态"）——JSI 通路建在它上面。
   ★**另核实一个硬约束**：**Android 宿主当前无 JS 引擎**
   （`hosts/android` 是 Java + Rust `.so` 直连 JNI；WebView 仅作 native-host 演示）
-  ⇒ "JSI 直连"在 Android 上**先要有 JS 引擎载体**（QuickJS/Hermes/JSC-Android）——
-  这是本卡估时 3–4 人周之外的**前置**。
+  ⇒ "JSI 直连"在 Android 上**先要有 JS 引擎载体**——这是本卡估时 3–4 人周之外的**前置**。
+  ★★**前置已完成选型（2026-09-29）**：`docs/proteus-android-js-engine-selection.md`
+  （**建议 QuickJS**：ES2025 + Proxy/Reflect/WeakMap/async 本机实测全通过 ·
+  真实 368KB bundle 解析+执行通过 · 8MB 内存可跑 · Android `.so` **0.94MB** · **MIT 许可**；
+  ★不选 Hermes 的硬理由：官方 Features.md 列 `async`/ES modules **仍在 In Progress**；
+  ★不选 JSC-Android：WebKit 体积数十 MB + Android W^X 限制下 JIT 优势消失）。
 - [x] 跨边界调用次数 = 帧数（**profile 验证**）—— ✅ **已 profile 验证**（`tests/render-backend.test.ts`）：
   · **滚动 120 帧 ⇒ 恰好 121 次跨边界调用**（含首帧 mount）；该场景**操作数 2400**（远大于帧数
     ⇒ 不是"没事可做"才达标）
