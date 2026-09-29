@@ -28,11 +28,11 @@
 | **V5** 与 Web VDOM 一致性 | ✅ **已达标** | 浏览器真值基准对拍：`packages/layout-core-rust/tests/golden/browser-layout.json`（21 用例）+ **`browser-mutation.json`**（增量对拍）→ 真机 `V6`/`conformance 0.375dp` |
 | **C3** 超级应用规模编译期性能 | ✅ **4/4 达标（2026-09-29）** | 基线载体 = **showcase 真项目**（128 SFC / 599.2 KB）· 工具 `scripts/bench-compile.mjs`（零设备秒级）· 报告 `docs/proteus-performance-plan/13-c3-compile-baseline.md` · ✅ 全量：冷 645.8ms / **热 346.4ms**（2.71 ms/文件 · 1730 KB/s）· ✅ 增量：单文件改一处重编译中位 **5.06ms** · ✅ 体积：890.3 KB / 599.2 KB = **1.486x** · ✅ 瓶颈识别：**模板阶段占 72% 事件**（6154/8518）· 最热规则 `tag/unknown-kebab`（1727 次）· 最慢文件 p-scroll-view 9.2ms/12.5KB · ★异常 `pages/backends.vue` 4.1KB 却 7.1ms（成本/字节异常）· ★门禁 `pnpm check:compile-baseline`（比值为主判据 + 破坏性验证过） |
 | **C4** 184 原语完备性验证 | ✅ **3/3 达标（2026-09-29）** | 计数器 `packages/compiler/src/gap-counter.ts`（**归纳既有诊断，不新增判断**——避免第 N 份手写副本）+ 编译产物新增 `gaps` 字段（**记录不阻断**，埋点清单 §2.1）+ 报告脚本 `scripts/report-gaps.mjs` · ✅ 三类分列（真项目实测：**degraded 253 / fallback 57 / unsupported 0 = 310 处**）· ✅ **degraded 单独高亮**（报告里独立小节且排最前——§2.5 硬要求）· ✅ **表达不了清单**（分类计数 + 按文件定位 + 每条给建议）· ★新增棘轮门禁 `check:gap-report`（degraded/unsupported **只降不升**，破坏性验证过）· ★**未归类显式列出**（防「0 漏点」实为「分类表没覆盖」） |
-| **I6** 后端生产就绪度评估 | 🟡 **部分**（缺 Native 侧证据） | Web 侧齐备（`web-host.ts` + 32 项 host-conformance）· **Native 后端无生产就绪证据**（`native.ts` 有映射表，无真机嵌入 + 性能读数） |
+| **I6** 后端生产就绪度评估 | ✅ **3/3 达标（2026-09-29）** | 报告 `docs/proteus-render-backend-readiness-i6.md`（**证据驱动**：跑真实 conformance + 读能力位 + 盘宿主）· ✅ 五后端能力矩阵（实际读数，非文档抄录）· ✅ 各有风险清单与补齐建议 · ✅ 明确原型 vs 生产：**Headless/VueDom 🟢 生产就绪**（13/13 + 宿主天然）· **Flutter/Hybrid 🟡 原型**（映射层就绪，无真机）· **Native×3 🟡 双轨**（★关键发现：SPI 层用 **mock 适配器** 13/13；真机实际走 `renderer-app/adapters/selfdraw`——22 份 iOS 报告 + 30 个 Android 验收目录）· ★给 C1 的关键输入：**C1 不是从零实现，而是把已有真机链路接到 SPI 层** |
 | **I7** 指令级 conformance | ✅ **已达标** | `packages/layout-core-rust/tests/golden/`：`update-ops.json` + **`update-ops.bin`**（跨语言 golden：TS 编码 → Rust 解码）· `browser-layout.json`（21 用例）+ `browser-mutation.json`（增量对拍）· **已接 CI**（`ci.yml` 引用 golden） |
 | **V5** Vapor 与 Web VDOM 一致性 | ✅ **已达标** | 见 `browser-layout.json`（全量）+ `browser-mutation.json`（增量）⇒ 真机 `V6_sfc_full_tree` PASS · conformance **0.375dp**（合格线 0.5） |
 | **V6** 动画指令 AnimOp（P2） | ❌ **未达标** | `AnimOpCode` **仅存在于设计文档**（本仓 grep 无实现）——与 `Proteus_App端路由与动画系统设计方案` 的 RT0/RT2/RT4 未实现状态一致 |
-| **I8** 指令流体积优化（P2） | 🟢 **前提已满足，待立项** | 本日实测证明体积**确已构成瓶颈**（单条 8935B / 膨胀 78× / 占端到端 2.42ms）⇒ 满足该卡"先做 I6 评估再投入"的前提，可进方案设计 |
+| **I8** 指令流体积优化（P2） | ✅ **已达标（2026-09-29）** | ✅ 核心优化**已落地**（协议 V1→V2「池按需 + ref 重映射」）：单条 LIST_UPDATE 消息 **8935 → 48 字节（194×）** · 编码 **0.258 → 0.017ms** · 端到端单节点更新 **6.00 → 0.121ms**（§10 目标 3ms，**25× 余量**）· ✅ **规模效应已消除**（实测池 0/1000/3000/8000 键下消息**恒 48 字节**——V1 时 3000 键达 28935B）· ★**新增体积棘轮**（补上结构缺口：此前只有文档侧间接保护，代码回退不会当场红）· **破坏性验证过**（改回全量池 ⇒ 两条判据同时红：78828B > 256B + 规模依赖 2328 vs 78828） |
 
 ### ★给 I6/I8 的实测输入（2026-09-29）
 
@@ -71,11 +71,11 @@ I8 卡写着「**先做 I6 评估，明确指令流体积是否构成瓶颈，�
 
 ### 第四批 · P1/P2
 
-- [ ] **I6** 后端生产就绪度评估 🟡 **部分**（Web 侧齐备；Native 无就绪证据）
+- [x] **I6** 后端生产就绪度评估 ✅ **3/3 达标**（五后端矩阵 + 风险清单 + 原型/生产判定；★发现 Native 双轨）
 - [x] **I7** 指令级 conformance ✅ **已达标**（跨语言 golden `update-ops.{json,bin}` + 浏览器对拍 + 已接 CI）
 - [x] **V5** Vapor 与 Web VDOM 一致性验证 ✅ **已达标**（`browser-layout.json` 全量 + `browser-mutation.json` 增量；真机 `V6` PASS）
 - [ ] **V6** 动画指令 AnimOp（P2） ❌ **未实现**（`AnimOpCode` 仅存在于设计文档）
-- [ ] **I8** 指令流体积与带宽优化（P2）🟢 **前提已满足**（本日实测证明体积构成瓶颈，可进方案设计）
+- [x] **I8** 指令流体积与带宽优化（P2）✅ **已达标**（池按需 8935→48B + 规模无关性棘轮）
 
 ---
 
@@ -592,10 +592,35 @@ ExecutionCarrier（JSI / AOT）是"宿主侧 1ms"的载体。
 五后端逐个做"原型 vs 生产"差距评估，输出能力矩阵与风险清单。
 **尤其 Native×3 与 Flutter 映射。**
 
-### 验收
-- [ ] 五后端各有能力矩阵
-- [ ] 各有风险清单与补齐建议
-- [ ] 明确哪些是"原型"、哪些已达生产
+### 验收（★2026-09-29 实现：**3/3 达标**）
+> 报告：`docs/proteus-render-backend-readiness-i6.md`（**证据驱动**：跑真实 conformance + 读能力位 + 盘宿主证据）
+
+- [x] 五后端各有能力矩阵 —— ✅ 矩阵含 8 个维度（layout/glass/blur/animation/textureSharing/
+  remoteRendering/ssr/input），**全部实际读取**（非文档抄录）。★共同缺口：`remoteRendering: false`
+  全后端一致（远程渲染未实现）。
+- [x] 各有风险清单与补齐建议 —— ✅ 逐后端列风险 + 建议 + 优先级（§5）：
+  **Native×3（P0）**：SPI 层与真机链路分叉 / harmony 无证据 ⇒ 接 adapter + 建等价判据；
+  **Flutter（P1）**：仅映射层无宿主；**Hybrid（P2）**：纹理共享成本未量化。
+- [x] 明确哪些是"原型"、哪些已达生产 —— ✅ **三档判定**：
+  · 🟢 **Headless / VueDom 生产就绪**（conformance 13/13 + 宿主天然：纯内存 / 浏览器）
+  · 🟡 **Flutter / Hybrid 原型**（映射层就绪，**无真机嵌入**）
+  · 🟡 **Native×3 双轨**（见下）
+
+★★**本评估最关键的一条（卡里没有、评估才发现的）**：**Native 有两条路径**，必须分开看
+| | SPI 层 `render-backend/native.ts` | 真机链路 `renderer-app/adapters/selfdraw.ts` |
+|---|---|---|
+| 适配器 | **`createMockNativeAdapter()`（缺省 mock）** | 宿主原生实现（Swift / Java） |
+| 证据 | conformance **13/13**（接口对，但跑 mock） | iOS **22 份**报告 · Android **30 个**验收目录 |
+
+⇒ **"Native 生产就绪"要分两句讲**：① **SPI 层尚未就绪**（C1 说的就是这个——真实 SDK 桥未接）；
+② **App 端渲染链路已真机验证**（但走 selfdraw，与 SPI 层**未统一**）。
+★**给 C1 的关键输入**：C1 不是"从零实现 Android 后端"，而是**把已有真机链路接到 SPI 接口上**
+（或论证 selfdraw 即为 NativeBackend 的生产实现）——这能把 C1 的 4–6 人周估算大幅下修。
+
+★**评估过程中的一处自纠**：首轮探针报 Native×3 未过 `createElement.unique`，看似真缺陷；
+查明是**我的调用错误**（`createNativeBackend(adapter?, platform?)` 第一参是适配器，
+我传了 `{ platform: 'ios' }`）⇒ 对象被当 adapter ⇒ 抛错 ⇒ 判据失败。
+**教训：跨包调用先读签名（或抄既有测试用法），别按参数名猜。**
 
 ---
 
