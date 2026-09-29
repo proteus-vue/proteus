@@ -1,0 +1,16 @@
+{
+  "ok": true,
+  "path": "proteus",
+  "pss_before_kb": 80725,
+  "pss_after_kb": 85087,
+  "pss_delta_kb": 4362,
+  "tree_handle": 1,
+  "live_tree_count": 1,
+  "elements": 4051,
+  "rust_layout_ms": 4,
+  "emit_cmds_ms": 1,
+  "total_ms": 5,
+  "cmd_count": 2000,
+  "view_count": 1,
+  "note": "内存专用路径：只建结构（Rust 树 + 指令表），不分配测量位图"
+}

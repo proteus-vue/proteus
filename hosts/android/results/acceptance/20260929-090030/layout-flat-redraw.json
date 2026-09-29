@@ -1,0 +1,20 @@
+{
+  "ok": true,
+  "path": "flat-redraw",
+  "elements": 2000,
+  "rows": 50,
+  "cols": 40,
+  "frames_per_sample": 60,
+  "reps": 5,
+  "correctness_diff_translate_pixels": 0,
+  "correctness_diff_picture_pixels": 0,
+  "correctness_picture_diag": "first_diff=(-1,-1) paintedA=59212 paintedB=59212 onlyBase=0 onlyOptimized=0",
+  "correctness_note": "①translate 等价（纯坐标变换，期望 0）②Picture 路径一致（含录制\/回放，差异须可解释）",
+  "row_nodes_built_ms": 3,
+  "baseline_replay_cold_ms": 8.302083,
+  "baseline_replay_per_frame_ms": 0.044993516666666664,
+  "cached_replay_per_frame_ms": 7.482666666666667E-4,
+  "speedup": 60.13032341411261,
+  "note": "★每帧「改一格」的局部更新负载：基线=重录全部 2000 条；复用=只重录该行 40 条 + 外层 50 次 drawRenderNode",
+  "boundary": "① 只测 UI 线程录制成本（常数开销所在），不含 RenderThread 重放\/GPU；② 正确性由 Picture 路径逐像素比对（验证分组+相对坐标，不直接证明 RenderNode 类本身）；③ 脏行按索引算出，真实脏区判定需 IR 层提供——本对照只证明机制收益"
+}
