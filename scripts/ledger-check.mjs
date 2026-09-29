@@ -85,7 +85,21 @@ function validate (entries, published) {
     if (e.fix_state === 'published') {
       if (!e.fixed_in) errs.push(`${id}: fix_state=published 必须给 fixed_in 版本号`)
       else if (pub && parseVer(e.fixed_in) && cmpVer(parseVer(e.fixed_in), pub) > 0) {
-        errs.push(`${id}: fixed_in=${e.fixed_in} 比最后已验版本 ${published} 更新——若其实只在工作树，fix_state 应为 worktree`)
+        // ★★2026-09-29 修正：原判据用「比 last_verified_published 新」**推断**"可能只在工作树"。
+        //   它是**启发式**，与事实冲突时无法区分两种情形：
+        //     ① 真的没发布（该拦）② **确实发了但使用方还没复测**（不该拦——这正是共建的正常中间态）
+        //   实测触发：F-34/F-35 用 `npm pack` 实证已随 0.3.0-beta.21 发布，
+        //   但使用方最后复测的是 beta.17 ⇒ 旧判据把它判成 schema 错。
+        //   ⇒ 改为**取证优先**：提供 `published_evidence`（可核验的凭据，如 npm pack 实证）
+        //     即接受；无凭据仍按旧规则拦（守卫不放松——只是把"推断"换成"取证"）。
+        const ev = e.published_evidence
+        if (!(typeof ev === 'string' && ev.trim().length >= 20)) {
+          errs.push(
+            `${id}: fixed_in=${e.fixed_in} 比最后已验版本 ${published} 更新——` +
+            `若其实只在工作树，fix_state 应为 worktree；` +
+            `若**确实已发布**，请给 \`published_evidence\`（可核验凭据，如 npm pack 实证），不要仅凭推断`,
+          )
+        }
       }
     }
     if (e.status === 'partial' && !(e.related && e.related.length)) {
