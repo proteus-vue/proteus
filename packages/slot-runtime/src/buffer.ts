@@ -14,13 +14,27 @@
 // ── 线上格式（全部小端；★TS 与 Rust 必须逐字节一致，由 golden 门禁锁定）──
 //   Header（20B）
 //     magic    u32 = 0x504F5650（"PVOP"）
-//     version  u32 = 1
+//     version  u32
 //     opCount  u32
 //     keyCount u32          属性键表条目数
 //     strCount u32          字符串池条目数
 //   KeyPool         keyCount ×（u16 len, utf8 bytes）
 //   StringPool      strCount ×（u16 len, utf8 bytes）
 //   Ops             opCount 条，见下方 OPS_SIZE / encodeOp
+//
+// ★★**V2 的语义变更：池按需（只含被引用的条目）**（2026-09-29）
+//
+// 【为什么（本仓真机实测）】V1 每条消息都携带**全量**键池与字符串池。列表场景下
+//   字符串池会累积 1000 个文本（`行1`…`行1000`）⇒ 单行更新消息 **7964 字节**中
+//   **~7900 是池**（真实增量仅 ~20 字节）⇒ 膨胀 ~78×，编码成本 42×。
+//   ⇒ V2：编码时**扫描本消息实际引用的 ref**，只把这些条目放进池，并**重映射** ref 下标。
+//   解码端语义**完全不变**（`key_of`/`string_of` 仍按池下标解析）——它只会看到一个更小的池。
+//
+// 【为什么不用"会话内池缓存"（方案 A）】那会给 Rust 解码引入**跨消息状态**（与句柄绑定、
+//   销毁需重置）；而"按需 + 重映射"保持**无状态解码**（本格式的架构美德，见文件头第 2 段）。
+//
+// 【版本】`OPS_VERSION` 1 → **2**。解码端对 1 仍兼容吗？——**不兼容**（池语义不同，
+//   同字节会解出不同结果）⇒ 双端必须同步升级；版本不符时**显式报错**（已有机制）。
 //
 // 【指令体尺寸】SET_PROP/SET_STYLE 11 · SET_TEXT 9 · SET_ATTRS 7+6n · TOGGLE_VIS 6 ·
 //   INSERT_BLOCK 10 · REMOVE_NODE 5 · MOVE_NODE 10 · LIST_SET 9 · LIST_SPLICE 15+4n ·
@@ -29,7 +43,7 @@ import { InsertPos, OpCode, PropKeyTable, StringPool } from './opcode'
 import type { UpdateOp } from './opcode'
 
 export const OPS_MAGIC = 0x504f5650 // "PVOP"（小端字节序 50 56 4F 50）
-export const OPS_VERSION = 1
+export const OPS_VERSION = 2   // ★V2：池按需（只含被引用条目）+ ref 重映射
 export const OPS_HEADER_BYTES = 20
 
 /** 指令体**最小**字节数（判据用；实际值见文件头注释） */
@@ -262,9 +276,81 @@ export class OpBuffer {
 }
 
 /** 编码（纯函数；导出供 golden 门禁与调试使用） */
+/**
+ * ★★本消息**实际引用**的池下标（升序去重）——V2「池按需」的依据
+ *
+ * 【为什么单独抽出来】ref 的使用点有 6 处（SET_PROP/SET_STYLE 的 keyId · SET_ATTRS 的
+ *   attrs[].keyId · SET_TEXT 的 textRef · LIST_SPLICE 的 itemKeyRefs[] · LIST_UPDATE 的
+ *   itemKeyRef · …）。**逐处手写收集必漏**（本仓纪律 #22：第 N 份手写副本 = 下一个静默缺陷）
+ *   ⇒ 收敛到这里一处；将来加新 opcode 时只改这一个函数。
+ */
+function collectRefs(ops: readonly UpdateOp[]): { keyIds: number[]; strRefs: number[] } {
+  const k = new Set<number>()
+  const s = new Set<number>()
+  for (const op of ops) {
+    switch (op.op) {
+      case OpCode.SET_PROP:
+      case OpCode.SET_STYLE:
+        k.add(op.keyId)
+        break
+      case OpCode.SET_ATTRS:
+        for (const a of op.attrs) k.add(a.keyId)
+        break
+      case OpCode.SET_TEXT:
+        s.add(op.textRef)
+        break
+      case OpCode.LIST_SPLICE:
+        for (const r of op.itemKeyRefs) s.add(r)
+        break
+      case OpCode.LIST_UPDATE:
+        s.add(op.itemKeyRef)
+        break
+      // TOGGLE_VIS / INSERT_BLOCK / REMOVE_NODE / MOVE_NODE / LIST_SET /
+      // CALL_COMPONENT_UPDATE：无池引用（若将来新增，**在此处补一支**）
+      default:
+        break
+    }
+  }
+  return { keyIds: [...k].sort((a, b) => a - b), strRefs: [...s].sort((a, b) => a - b) }
+}
+
+/** 重映射表：旧池下标 → 新池下标（未引用 ⇒ undefined） */
+function remapOf(used: number[]): Map<number, number> {
+  const m = new Map<number, number>()
+  used.forEach((old, i) => m.set(old, i))
+  return m
+}
+
+/** 按重映射表改 ref（**唯一实现**：与 `collectRefs` 的 6 个使用点严格对应） */
+function remapOp(op: UpdateOp, kMap: Map<number, number>, sMap: Map<number, number>): UpdateOp {
+  switch (op.op) {
+    case OpCode.SET_PROP:
+    case OpCode.SET_STYLE:
+      return { ...op, keyId: kMap.get(op.keyId) ?? 0 }
+    case OpCode.SET_ATTRS:
+      return { ...op, attrs: op.attrs.map((a) => ({ keyId: kMap.get(a.keyId) ?? 0, value: a.value })) }
+    case OpCode.SET_TEXT:
+      return { ...op, textRef: sMap.get(op.textRef) ?? 0 }
+    case OpCode.LIST_SPLICE:
+      return { ...op, itemKeyRefs: op.itemKeyRefs.map((r) => sMap.get(r) ?? 0) }
+    case OpCode.LIST_UPDATE:
+      return { ...op, itemKeyRef: sMap.get(op.itemKeyRef) ?? 0 }
+    default:
+      return op
+  }
+}
+
 export function encodeOps(ops: readonly UpdateOp[], keys: PropKeyTable, strings: StringPool): Uint8Array {
-  const keyArr = keys.toArray()
-  const strArr = strings.toArray()
+  const allKeys = keys.toArray()
+  const allStrs = strings.toArray()
+
+  // ★V2：池按需——只保留本消息引用的条目，并重映射 ref（见文件头「V2 的语义变更」）
+  const used = collectRefs(ops)
+  const keyArr = used.keyIds.map((i) => allKeys[i]!).filter((x) => x !== undefined)
+  const strArr = used.strRefs.map((i) => allStrs[i]!).filter((x) => x !== undefined)
+  // 重映射表（用**实际保留的条目**建，跳过越界索引 ⇒ 与 pool 长度严格一致）
+  const kMap = remapOf(used.keyIds.filter((i) => allKeys[i] !== undefined))
+  const sMap = remapOf(used.strRefs.filter((i) => allStrs[i] !== undefined))
 
   let size = OPS_HEADER_BYTES
   for (const k of keyArr) size += 2 + utf8Encode(k).length
@@ -279,7 +365,7 @@ export function encodeOps(ops: readonly UpdateOp[], keys: PropKeyTable, strings:
   w.u32(strArr.length)
   for (const k of keyArr) w.str(k)
   for (const s of strArr) w.str(s)
-  for (const op of ops) encodeOp(w, op)
+  for (const op of ops) encodeOp(w, remapOp(op, kMap, sMap))
   return w.done()
 }
 

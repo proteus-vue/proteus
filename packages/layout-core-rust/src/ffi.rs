@@ -2920,7 +2920,9 @@ mod tests {
         let strings = vec!["new".to_string()];
         let mut buf: Vec<u8> = Vec::new();
         buf.extend_from_slice(&0x504F5650u32.to_le_bytes()); // magic "PVOP"
-        buf.extend_from_slice(&1u32.to_le_bytes());          // version
+        // ★引用常量而非手写 1（本仓实测：手写版本号在协议升级时**必然过期**，
+        //   而且症状是"测试报版本不符"——看似环境问题，实则测试自己写死了旧协议）
+        buf.extend_from_slice(&crate::ops::OPS_VERSION.to_le_bytes()); // version
         buf.extend_from_slice(&1u32.to_le_bytes());          // opCount
         buf.extend_from_slice(&(keys.len() as u32).to_le_bytes());
         buf.extend_from_slice(&(strings.len() as u32).to_le_bytes());
