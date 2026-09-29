@@ -240,6 +240,11 @@ run_one "proteus" "proteus-perf" 1
 echo "── 通路：proteus-noflatten（§9.2「不拍平」指标）──"
 run_one "proteus-noflatten" "proteus-noflatten" 1
 
+# ★★绘制常数开销对照（2026-09-29）：行级显示列表复用 vs 全量重放
+#   回答开项「绘制常数开销的根因 = 每次全量重放 2000 条指令」是否成立、机制收益多大
+echo "── 通路：flat-redraw（绘制常数开销：行级显示列表复用）──"
+run_one "flat-redraw" "flat-redraw" 1
+
 # ★§9.3 长列表验收：4000 行滚到底再回滚（复用池 + 内存收敛）
 echo "── 通路：recycle（§9.3 长列表）──"
 run_one "recycle" "recycle" 1
@@ -248,7 +253,7 @@ echo
 echo "==> 取回报告"
 DEST="$OUT/$(date +%Y%m%d-%H%M%S)"
 mkdir -p "$DEST"
-for f in layout-report.txt layout-conformance.json layout-bench.json layout-compare-native.json layout-native-only.json layout-proteus-only.json layout-noflatten.json layout-recycle.json layout-memory.json layout-env.json layout-hit.json layout-scroll.json layout-scroll-core.json layout-scroll-native.json; do
+for f in layout-report.txt layout-conformance.json layout-bench.json layout-compare-native.json layout-native-only.json layout-proteus-only.json layout-noflatten.json layout-flat-redraw.json layout-recycle.json layout-memory.json layout-env.json layout-hit.json layout-scroll.json layout-scroll-core.json layout-scroll-native.json; do
   "$ADB" shell "run-as $PKG cat files/$f" >/dev/null 2>&1 && continue   # debug 包兼容
   # ★release 包：从外置存储拉（getExternalFilesDir）
   "$ADB" pull "/sdcard/Android/data/$PKG/files/$f" "$DEST/$f" >/dev/null 2>&1 || true
@@ -344,7 +349,7 @@ grep -E "Total frames rendered|Janky frames \(|50th percentile|90th percentile|9
 #     —— 故本档只报**中位数**并显式标注分布，不报单轮值。
 SCROLL_ROUNDS="${SCROLL_ROUNDS:-3}"
 gfx_one() {
-  local path="$1"
+  local path="$1" round="${2:-1}"
   "$ADB" shell "dumpsys gfxinfo $PKG reset" >/dev/null 2>&1
   "$ADB" shell am force-stop "$PKG" >/dev/null 2>&1; sleep 1
   "$ADB" shell am start -n "$ACTIVITY" --es path "$path" >/dev/null 2>&1; sleep 3
@@ -352,6 +357,10 @@ gfx_one() {
   sleep 16
   # ★解析走唯一实现 gfx_parse（与 --selftest 共用）——不在此处再写一份 awk
   local raw; raw="$("$ADB" shell "dumpsys gfxinfo $PKG" 2>/dev/null | tr -d '\r')"
+  # ★★逐轮原始 dump 落盘（2026-09-29 补）：此前**只有中位值**进 scroll-ab.txt，
+  #   逐轮读数一份都不留 ⇒ 报告里的「6 轮中位表」**无法被第三方从产物复算**
+  #   （本仓纪律：证据必须可复算）。现在每轮每通路各存一份，与中位并列。
+  printf '%s\n' "$raw" > "$DEST/gfxinfo-$path-r$round.txt" 2>/dev/null || true
   local parsed; parsed="$(printf '%s\n' "$raw" | gfx_parse)"
   # ★装置自检（每次调用都断言）：p50 与 frames 同时为 0 只可能是解析失败或 app 未渲染
   #   ——绝不能静默进入中位计算（恒 0 的中位会让 A/B 差值方向失真）
@@ -366,8 +375,8 @@ gfx_one() {
 echo "    ── 交替 ${SCROLL_ROUNDS} 轮（取中位——单轮读数在本机不可信，见脚本注释）──"
 CORE_P=""; NAT_P=""; CORE_J=""; NAT_J=""
 for r in $(seq 1 "$SCROLL_ROUNDS"); do
-  read -r cj cp <<< "$(gfx_one scroll-core)"
-  read -r nj np <<< "$(gfx_one scroll-native)"
+  read -r cj cp <<< "$(gfx_one scroll-core "$r")"
+  read -r nj np <<< "$(gfx_one scroll-native "$r")"
   echo "      轮$r  Proteus p50=${cp}ms/Janky=${cj}%   原生 p50=${np}ms/Janky=${nj}%"
   CORE_P="$CORE_P $cp"; NAT_P="$NAT_P $np"; CORE_J="$CORE_J $cj"; NAT_J="$NAT_J $nj"
 done
@@ -382,8 +391,14 @@ print(f"★ 中位：Proteus p50={cp:.0f}ms / Janky={cj:.2f}%   原生 p50={np_:
 print(f"★ 差值：{'Proteus 更快' if d < 0 else '原生更快'} {abs(d):.0f}ms")
 print("★ 双峰说明：本机单次读数落在两个离散状态（约 11/18ms 与 13/23ms）⇒ 只有中位可比")
 PYAB
-# 同时取回滚动辅助观测
-"$ADB" pull "/sdcard/Android/data/$PKG/files/layout-scroll.json" "$DEST/layout-scroll.json" >/dev/null 2>&1 || true
+# ★★A/B 之后**必须再拉一次**按通路命名的产物（2026-09-29 修）：
+#   取回报告的循环在第 253 行（run_one 段之后），而原生滚动对照（scroll-native）在**本段之后**才跑
+#   ⇒ 原实现下 run 目录里的 layout-scroll-native.json 是**上一次运行**的残留
+#     （本仓实测：拉到的是更早一次手动 shot-scroll-native 的数据——两者内容完全不同）。
+#   同时取回滚动辅助观测。
+for f in layout-scroll.json layout-scroll-core.json layout-scroll-native.json; do
+  "$ADB" pull "/sdcard/Android/data/$PKG/files/$f" "$DEST/$f" >/dev/null 2>&1 || true
+done
 
 echo "==> 采集「核心驱动滚动」读数（复用池决策来自 Rust；与 iOS V12 同一条路）"
 # ★与上面那条路径的差别：上面宿主自己算窗口（已收敛到核心，但报告字段是 §9.3 口径）；
@@ -512,7 +527,10 @@ def gfx(path):
             out['slow_draw'] = line.split(':')[1].strip()
     return out
 gp = gfx(os.path.join(dest, 'gfxinfo.txt'))
-gn = gfx(os.path.join(dest, 'gfxinfo-native.txt'))
+# ★原生 gfxinfo：以前这里读 `gfxinfo-native.txt`——**该文件从来没有任何代码写它**
+#   ⇒ 对照永远走 else 分支报「缺 gfxinfo」。现从 A/B 逐轮产物取最后一轮的真实 dump。
+nat_cands = sorted(glob.glob(os.path.join(dest, 'gfxinfo-scroll-native-r*.txt')))
+gn = gfx(nat_cands[-1]) if nat_cands else None
 if gp and gn:
     print(f"  {'指标':<22}{'Proteus':<20}{'原生 View':<20}判读")
     print('  ' + '-' * 78)
