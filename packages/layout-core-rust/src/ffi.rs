@@ -2973,12 +2973,17 @@ mod tests {
         let mut measures = serde_json::Map::new();
         for i in 0..500u32 {
             let id = 100 + i;
+            // ★flexShrink:0 —— 本仓列表行的标准写法（见 check-vapor-perf 的基准树注释：
+            //   「flexShrink:0 必填，否则行被压缩（本仓实测的基准树缺陷）」）。
+            //   本测试的目的是 **textStyleKey 内容寻址**（不同字号各自正确 + 同字号只量一次），
+            //   与"行是否可收缩"无关；不写 flexShrink 会让 500 行挤进 4000 高而各自被压扁，
+            //   把断言从"度量是否正确"偷换成"收缩分配是否恰好"——那是另一个课题。
             nodes.push(serde_json::json!({
-                "id": id, "parentId": 1, "text": "同文案", "textStyleKey": 1600
+                "id": id, "parentId": 1, "text": "同文案", "textStyleKey": 1600, "flexShrink": 0
             }));
             measures.insert(id.to_string(), serde_json::json!({"width": 60.0, "height": 19.0}));
         }
-        nodes.push(serde_json::json!({"id": 999, "parentId": 1, "text": "同文案", "textStyleKey": 2800}));
+        nodes.push(serde_json::json!({"id": 999, "parentId": 1, "text": "同文案", "textStyleKey": 2800, "flexShrink": 0}));
         measures.insert("999".to_string(), serde_json::json!({"width": 100.0, "height": 33.0}));
 
         let req = serde_json::json!({

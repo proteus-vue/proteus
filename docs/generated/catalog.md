@@ -1,7 +1,7 @@
 # G-32 原语清单（自动生成——SSOT = packages/component-ir/src/primitives.ts）
 
 > ★由 `npm run gen:docs` 生成，勿手改。手工维护的叙述性规划见各 plan 文档。
-> 总计 **184** 原语 · implemented **65**。
+> 总计 **185** 原语 · implemented **65**。
 
 ## layout — 布局（12）
 
@@ -181,6 +181,7 @@
 | C79 | `capability.translation` | api:useTranslation() | `useTranslation()` | wx.onUserTriggerTranslation/onUserOffTranslation | planned |
 | C80 | `capability.poster` | api:usePoster() | `usePoster()` | wx.onGeneratePoster | planned |
 | C81 | `capability.device-capability` | api:useDeviceCapability() | `useDeviceCapability()` | wx.checkDeviceSupportHevc | planned |
+| C82 | `capability.webassembly` | api:useWebAssembly() | `useWebAssembly()` | WXWebAssembly.instantiate（官方文档 performance/wasm） | planned |
 
 ## engineering — 工程（28）
 

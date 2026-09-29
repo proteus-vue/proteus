@@ -196,7 +196,9 @@ impl TaffyEngine {
         // ★注意类型差异：`size` 用 `Dimension`，而 `min_size`/`max_size` 用 `LengthPercentageAuto`
         //   （后者额外允许 `auto` 关键字）——两者不可混用，这里分别映射。
         out.min_size = taffy::Size { width: opt_lpa(style.min_width), height: opt_lpa(style.min_height) };
-        out.max_size = taffy::Size { width: opt_lpa(style.max_width), height: opt_lpa(style.max_height) };
+        // ★max 未指定**必须**是 `auto`（= 无上限）——与 min 相反：清零会让所有节点被压成 0。
+        //   ⇒ max 用各自独立的映射（`None → auto()`），**不可**复用上面的 `opt_lpa`。
+        out.max_size = taffy::Size { width: opt_max_lpa(style.max_width), height: opt_max_lpa(style.max_height) };
 
         // ⑤ 盒模型
         out.padding = taffy::Rect {
@@ -1160,7 +1162,33 @@ fn dim(v: Option<f32>, ratio: Option<f32>) -> Dimension {
 }
 
 /// `min_size`/`max_size` 的映射（`LengthPercentageAuto` 而非 `Dimension`）
+/// `Option<f32>` → `min_size` / `max_size` 的 `LengthPercentageAuto`。
+///
+/// ★★**未指定 ≠ auto**（2026-09-29 修，卡 I4 的文本 conformance 逼出来的缺陷）
+///
+/// 【缺陷现象】文本节点作为 flex 项参与收缩时，引擎与浏览器差 **24.5dp**：
+///   容器 260 装 [60, 文本(内容宽 182), 40] ⇒ 浏览器按 `flex-basis × flex-shrink` 加权收缩
+///   （60:182:40 ⇒ 51.9 / 157.5 / 34.6），引擎却把文本**当成不可收缩**（182 不动，只压另两个）。
+///
+/// 【根因】此前把「未显式指定 min-width」映射为 `auto()` ⇒ taffy 应用 CSS 的
+///   **`min-width: auto` 规则**（flex 项的最小主轴尺寸 = 内容尺寸 ⇒ 不允许收缩到内容以下）。
+///   而本仓的**既定模型**是「与 RN 一致地**不建模**该规则」（见
+///   `tests/e2e-layout-core-pixel.test.ts` 文件头「已对齐的两处模型差异」之②，
+///   Python/TS 参考实现同样显式清零）⇒ **实现与声明的模型不一致**，是一处静默分歧。
+///
+/// 【修法】未指定 ⇒ **`length(0.0)`**（= 可自由收缩到 0），与参考实现与浏览器 golden 口径对齐；
+///   显式给了值才用该值。★注意：显式 `min-width: auto` 的语义仍不支持（本仓模型不含它）——
+///   那是**有意的诚实边界**，不是遗漏。
+///
+/// 【为什么改引擎而不是改测试（本仓纪律）】golden 是**浏览器实测真值**（它是独立事实源），
+///   用它去迁就引擎就是把真值改坏；且参考实现（Node/Rust 双份）早已是"不建模"，
+///   改这里让**三份实现口径统一**。
 fn opt_lpa(v: Option<f32>) -> LengthPercentageAuto {
+    v.map(length).unwrap_or(length(0.0))
+}
+
+/** `max_size` 专用：未指定 = `auto`（无上限）。★与 `opt_lpa`（min 用，未指定 = 0）语义相反，勿混用。 */
+fn opt_max_lpa(v: Option<f32>) -> LengthPercentageAuto {
     v.map(length).unwrap_or(auto())
 }
 

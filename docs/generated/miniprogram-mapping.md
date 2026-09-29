@@ -1,7 +1,7 @@
 # 小程序全量能力对照矩阵（自动生成——SSOT = packages/component-ir/src/audit.ts MP_MAPPING_MATRIX）
 
 > ★由 `npm run gen:docs` 生成，勿手改。这是机器事实（catalog 与矩阵实时同步）；手工规划叙述见 `proteus-semantic-primitives-plus-plan/miniprogram-mapping.md`。
-> 总计 115 项（组件 57 + API 58）；✅ 104 · 🔄 4 · ⬛ 7 · ❌ 0
+> 总计 116 项（组件 57 + API 59）；✅ 105 · 🔄 4 · ⬛ 7 · ❌ 0
 
 ## 组件对照表
 
@@ -105,6 +105,7 @@
 | `wx.onUserTriggerTranslation/onUserOffTranslation（翻译）` | useTranslation | ok |
 | `wx.onGeneratePoster（分享海报）` | usePoster | ok |
 | `wx.checkDeviceSupportHevc（设备能力探测）` | useDeviceCapability | ok |
+| `WXWebAssembly.instantiate（WebAssembly 跨平台，官方文档 performance/wasm）` | useWebAssembly | ok |
 | `wx.getFileSystemManager/*（文件 30+）` | useFileSystem | ok |
 | `wx.compressFile/unzip` | useArchive | ok |
 | `wx.set/get/remove/clearStorage(+Sync)` | useStorage | ok |
