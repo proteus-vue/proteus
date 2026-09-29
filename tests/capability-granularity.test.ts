@@ -1787,13 +1787,15 @@ describe('★C82 useWebAssembly（跨平台 WASM）', () => {
   it('MP 端：WXWebAssembly.instantiate 收到**代码包路径**，返回实例（fromPath=true）', async () => {
     const calls: string[] = []
     vi.stubGlobal('window', undefined)
-    vi.stubGlobal('wx', {
-      getSystemInfoSync: () => ({ renderer: 'skyline' }),
-      WXWebAssembly: {
-        instantiate: (path: string, imports?: Record<string, unknown>) => {
-          calls.push(`instantiate:${path}`)
-          return Promise.resolve({ exports: { add: (a: number, b: number) => a + b, _imports: imports } })
-        },
+    // ★★真机形态：`WXWebAssembly` 是**全局对象**（官方文档：「可以在全局访问并使用 WXWebAssembly 对象」）。
+    //   本仓实测教训：首版实现只查 `wx.WXWebAssembly`，而取证结论是"全局" ⇒ 真机必错、单测却绿
+    //   （因为测试也把字段挂在 wx 上——**测试与实现同错**）。
+    //   ⇒ 本条用例用真实全局形态，且下一条专门锁"wx 成员形态也兼容"。
+    vi.stubGlobal('wx', { getSystemInfoSync: () => ({ renderer: 'skyline' }) })
+    vi.stubGlobal('WXWebAssembly', {
+      instantiate: (path: string, imports?: Record<string, unknown>) => {
+        calls.push(`instantiate:${path}`)
+        return Promise.resolve({ exports: { add: (a: number, b: number) => a + b, _imports: imports } })
       },
     })
     const r = createCapabilityHooks(createCapabilityBridge()).useWebAssembly()
@@ -1819,10 +1821,8 @@ describe('★C82 useWebAssembly（跨平台 WASM）', () => {
 
   it('MP 端传字节 → Err 指明"只收路径"（不静默失败、不假装支持）', async () => {
     vi.stubGlobal('window', undefined)
-    vi.stubGlobal('wx', {
-      getSystemInfoSync: () => ({ renderer: 'skyline' }),
-      WXWebAssembly: { instantiate: () => Promise.resolve({ exports: {} }) },
-    })
+    vi.stubGlobal('wx', { getSystemInfoSync: () => ({ renderer: 'skyline' }) })
+    vi.stubGlobal('WXWebAssembly', { instantiate: () => Promise.resolve({ exports: {} }) })
     const r = createCapabilityHooks(createCapabilityBridge()).useWebAssembly()
     expect(r.ok).toBe(true)
     if (!r.ok) return
@@ -1834,9 +1834,24 @@ describe('★C82 useWebAssembly（跨平台 WASM）', () => {
     }
   })
 
+  it('★兼容锁：WXWebAssembly 挂在 wx 成员上时也能用（两种形态都认）', async () => {
+    vi.stubGlobal('window', undefined)
+    vi.stubGlobal('WXWebAssembly', undefined) // 全局没有
+    vi.stubGlobal('wx', {
+      getSystemInfoSync: () => ({ renderer: 'skyline' }),
+      WXWebAssembly: { instantiate: () => Promise.resolve({ exports: { v: 1 } }) },
+    })
+    const r = createCapabilityHooks(createCapabilityBridge()).useWebAssembly()
+    expect(r.ok).toBe(true)
+    if (!r.ok) return
+    const inst = await r.data.instantiate({ path: 'a.wasm' })
+    expect(inst.ok, 'wx 成员形态应回落可用（兼容注入式宿主）').toBe(true)
+  })
+
   it('MP 缺 WXWebAssembly（基础库 < v2.13.0）→ Err 提示版本（可操作）', async () => {
     vi.stubGlobal('window', undefined)
-    vi.stubGlobal('wx', { getSystemInfoSync: () => ({ renderer: 'skyline' }) }) // 无 WXWebAssembly
+    vi.stubGlobal('WXWebAssembly', undefined)
+    vi.stubGlobal('wx', { getSystemInfoSync: () => ({ renderer: 'skyline' }) }) // 全局与成员都没有
     const r = createCapabilityHooks(createCapabilityBridge()).useWebAssembly()
     expect(r.ok, '桥存在（能力位可查）').toBe(true)
     if (!r.ok) return

@@ -3506,7 +3506,9 @@ interface WxLike {
   //   证据：官方文档 `/framework/performance/wasm.html` + `miniprogram-api-typings/lib.wx.wasm.d.ts`
   //   · instantiate 首参是**代码包路径**（.wasm / .wasm.br），**不是** BufferSource
   //   · **无** compile / validate（类型包里不存在这两个声明）
-  //   · 基础库 v2.13.0+ 全局可用；v2.15.0+ Worker 内可用
+  //   · 基础库 v2.13.0+ 可用；v2.15.0+ Worker 内可用
+  //   ★**真实形态是全局对象 `WXWebAssembly`**（官方原文「可以在全局访问并使用 WXWebAssembly 对象」）；
+  //     本字段仅为**兼容注入式宿主**（把能力挂在 wx 上的形态）——桥实现两处都查（全局优先）。
   WXWebAssembly?: {
     instantiate: (path: string, imports?: Record<string, Record<string, unknown>>) => Promise<{ exports: Record<string, unknown> }>
   }
@@ -6111,10 +6113,20 @@ function wxBridge(wx: WxLike): CapabilityBridge {
             ),
           )
         }
-        const W = wx.WXWebAssembly
+        // ★★官方形态：`WXWebAssembly` 是**全局对象**，不是 `wx` 的成员。
+        //   官方文档原文：「从基础库 v2.13.0 开始，小程序可以在**全局访问并使用 WXWebAssembly 对象**」。
+        //   【本仓实测教训（2026-09-29）】首版只查 `wx.WXWebAssembly` —— 取证时读到的是"全局"，
+        //     实现却按"wx 成员"写 ⇒ **真机上能力会不可用**（单测里我同时 stub 了 wx 上有该字段，
+        //     所以单测全绿而真机必错 —— 典型的"取证了但没把结论用上"）。
+        //   ⇒ 两个位置都查（全局优先，回落 wx 成员以兼容可能的注入形态）。
+        const gAny = globalThis as { WXWebAssembly?: { instantiate?: (p: string, i?: Record<string, Record<string, unknown>>) => Promise<{ exports: Record<string, unknown> }> } }
+        const W = gAny.WXWebAssembly ?? wx.WXWebAssembly
         if (!W || typeof W.instantiate !== 'function') {
           return Promise.resolve(
-            capErr<WasmModuleHandle>('webassembly.unsupported', 'wx.WXWebAssembly.instantiate 缺失（需基础库 v2.13.0+）'),
+            capErr<WasmModuleHandle>(
+              'webassembly.unsupported',
+              '全局 WXWebAssembly.instantiate 缺失（需基础库 v2.13.0+）',
+            ),
           )
         }
         return W.instantiate(source.path, options?.imports)
