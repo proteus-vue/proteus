@@ -3,7 +3,7 @@
 > 执行日期：2026-09-29 · 设备：**HONOR COL-AL10（荣耀10）· Kirin 970 · Android 10（API 29）· 1080×2280 @480dpi · 60Hz**
 > 对比基线：**Redmi M098FE · Android 17（API 37）· 1200×2608 @480dpi · 120Hz**（见 `ACCEPTANCE.md`）
 > 被测：`proteus-layout-core 0.1.0 · engine=taffy-0.14`
-> 脚本：`bash hosts/android/acceptance.sh --runs 3` · 原始数据：`hosts/android/results/acceptance/20260928-213322/`
+> 脚本：`bash hosts/android/acceptance.sh --runs 3` · 原始数据：`hosts/android/results/acceptance/20260928-213322/`（三轮内存/布局读数） + `hosts/android/results/acceptance/20260928-214210/`（★原生滚动对照：`layout-scroll-native.json` / `gfxinfo-native.txt`）
 
 ---
 
@@ -93,6 +93,16 @@
 | 原生 View（手写复用） | 13ms | 15.18% |
 
 ⇒ **中位口径下 Proteus 比原生快 2ms、掉帧低一个量级**。
+
+> ★★**上表的证据链缺口（如实记录）**：这 6 轮是**手动 adb 逐轮采集**，**每轮读数没有落盘**。
+> 逐份核对 `results/`：两次脚本运行目录里只有 **3 份** gfxinfo
+> （`20260928-213322/gfxinfo.txt` Janky 98.68% · `20260928-214210/gfxinfo.txt` 64.18% ·
+> `20260928-214210/gfxinfo-native.txt` 99.83%），其中只有 **原生第 6 轮（99.83%）** 能对上产物，
+> **低态读数（11ms / 13ms —— 也就是结论所依赖的那一半）一份都没有**。
+> ⇒ 这张表**目前无法被第三方从产物复算**，只能凭报告叙述。
+> **处置**：`acceptance.sh` 已改为**交替 N 轮取中位**并在每轮 `echo` 的同时
+> `tee` 到 `$DEST/scroll-ab.txt`（含逐轮读数 + 中位）——**重跑一次即产生可复算的产物**。
+> 本表保留为「装置缺陷的发现过程记录」，**不作为最终判定依据**。
 
 ★**诚实边界**：**双峰成因未查明**——怀疑与设备电源/窗口焦点状态有关
 （荣耀10 是 Android 10 的 MIUI-like 电源管理，`screen_off_timeout=15s` 而测量窗口 ~19s），

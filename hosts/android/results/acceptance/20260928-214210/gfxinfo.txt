@@ -1,0 +1,52 @@
+Applications Graphics Acceleration Info:
+Uptime: 17377503 Realtime: 45641258
+
+** Graphics info for pid 22987 [dev.proteus.layoutcore] **
+
+Stats since: 17353968517141ns
+Total frames rendered: 603
+Janky frames: 387 (64.18%)
+50th percentile: 17ms
+90th percentile: 20ms
+95th percentile: 21ms
+99th percentile: 23ms
+Number Missed Vsync: 1
+Number High input latency: 443
+Number Slow UI thread: 2
+Number Slow bitmap uploads: 0
+Number Slow issue draw commands: 28
+Number Frame deadline missed: 29
+HISTOGRAM: 5ms=1 6ms=1 7ms=1 8ms=25 9ms=38 10ms=28 11ms=69 12ms=43 13ms=7 14ms=2 15ms=0 16ms=4 17ms=100 18ms=171 19ms=43 20ms=35 21ms=25 22ms=3 23ms=1 24ms=0 25ms=0 26ms=0 27ms=1 28ms=0 29ms=0 30ms=1 31ms=0 32ms=0 34ms=0 36ms=0 38ms=1 40ms=0 42ms=0 44ms=0 46ms=0 48ms=0 53ms=0 57ms=1 61ms=1 65ms=0 69ms=0 73ms=0 77ms=0 81ms=0 85ms=0 89ms=0 93ms=0 97ms=0 101ms=0 105ms=0 109ms=0 113ms=0 117ms=0 121ms=0 125ms=0 129ms=0 133ms=0 150ms=0 200ms=0 250ms=0 300ms=0 350ms=0 400ms=0 450ms=0 500ms=0 550ms=0 600ms=0 650ms=0 700ms=0 750ms=0 800ms=0 850ms=0 900ms=0 950ms=0 1000ms=0 1050ms=0 1100ms=0 1150ms=0 1200ms=0 1250ms=0 1300ms=0 1350ms=0 1400ms=0 1450ms=0 1500ms=0 1550ms=0 1600ms=0 1650ms=0 1700ms=0 1750ms=0 1800ms=0 1850ms=0 1900ms=0 1950ms=0 2000ms=0 2050ms=0 2100ms=0 2150ms=0 2200ms=0 2250ms=0 2300ms=0 2350ms=0 2400ms=0 2450ms=0 2500ms=0 2550ms=0 2600ms=0 2650ms=0 2700ms=0 2750ms=0 2800ms=0 2850ms=0 2900ms=0 2950ms=0 3000ms=0 3050ms=0 3100ms=0 3150ms=0 3200ms=0 3250ms=0 3300ms=0 3350ms=0 3400ms=0 3450ms=0 3500ms=0 3550ms=0 3600ms=0 3650ms=0 3700ms=0 3750ms=0 3800ms=0 3850ms=0 3900ms=1 3950ms=0 4000ms=0 4050ms=0 4100ms=0 4150ms=0 4200ms=0 4250ms=0 4300ms=0 4350ms=0 4400ms=0 4450ms=0 4500ms=0 4550ms=0 4600ms=0 4650ms=0 4700ms=0 4750ms=0 4800ms=0 4850ms=0 4900ms=0 4950ms=0
+Font Cache (CPU):
+  Size: 141.08 kB 
+  Glyph Count: 10 
+CPU Caches:
+GPU Caches:
+  Other:
+    Other: 211.16 KB (1 entry)
+    Buffer Object: 2.05 KB (2 entries)
+  Scratch:
+    Texture: 2.00 MB (1 entry)
+    Buffer Object: 48.00 KB (1 entry)
+Other Caches:
+                         Current / Maximum
+  VectorDrawableAtlas    0.00 kB /   0.00 KB (entries = 0)
+  Layers Total           0.00 KB (numLayers = 0)
+Total GPU memory usage:
+  2364636 bytes, 2.26 MB (2.05 KB is purgeable)
+
+
+Pipeline=Skia (OpenGL)
+Profile data in ms:
+
+	dev.proteus.layoutcore/dev.proteus.layoutcore.MainActivity/android.view.ViewRootImpl@948a62 (visibility=0)
+View hierarchy:
+
+  dev.proteus.layoutcore/dev.proteus.layoutcore.MainActivity/android.view.ViewRootImpl@948a62
+  14 views, 34.58 kB of display lists
+
+
+Total ViewRootImpl: 1
+Total Views:        14
+Total DisplayList:  34.58 kB
+
