@@ -122,7 +122,7 @@ const BN = { snapshot: 'bench-final' }
 // ★构建标识：每次构建写入，用于**确凿判定**设备上跑的是哪份代码
 //   （踩坑：靠文件 mtime 判断"报告是否刷新"不可靠——新建目标文件的时间恒为"现在"；
 //    且我看不出设备实际执行的是旧 bundle，白跑一轮。有了这个字段就能一眼判定。）
-const BUILD_ID = '0cbcd16d-120053'
+const BUILD_ID = '7140cbd0-120806'
 const now = (): number => Date.now()
 /** 宽松解析（宿主返回可能是字符串或已是对象） */
 const safeParseAny = (s: any): any => {
@@ -204,6 +204,26 @@ async function measure(
     request_bytes: bytes,
     extra: { ...(extra ?? {}), renders: app.renderCount() - r0 },
   })
+}
+
+/* ────────────────────────── ★时钟选择（唯一实现）────────────────────────── */
+//
+// 【为什么必须唯一实现（本仓纪律 #22）】时钟选择散在多处 ⇒ "某处用了粗粒度 `Date.now()`"
+//   这类缺陷只在读数异常时才被发现（本仓实测：JSC 的 `Date.now()` 是**粗粒度缓存时钟**，
+//   512 次连续读 0 次前进 ⇒ 分位读数完全不可信）。收敛到一处 ⇒ 改一次全受益。
+//
+// 优先级：宿主 `mach_absolute_time`（微秒字符串）> `performance.now` > `Date.now`（并标注不可信）。
+function pickClock(): { clock: () => number; name: string; trustworthy: boolean } {
+  const host = proteusSelfDraw as unknown as { nowUs?: () => string }
+  if (typeof host.nowUs === 'function') {
+    // 宿主返回微秒字符串 → 转毫秒（字符串避免 Number 精度在大时间戳上损失亚微秒）
+    return { clock: () => parseFloat(host.nowUs!()) / 1000, name: 'host.mach_absolute_time', trustworthy: true }
+  }
+  const perf = (globalThis as unknown as { performance?: { now?: () => number } }).performance
+  if (typeof perf?.now === 'function') {
+    return { clock: perf.now.bind(perf), name: 'performance.now', trustworthy: true }
+  }
+  return { clock: () => Date.now(), name: 'Date.now（★粗粒度，分位不可信）', trustworthy: false }
 }
 
 /* ────────────────────────── ★flush 判据（§10「每帧 flush 次数 = 1」）────────────────────────── */
@@ -2267,6 +2287,74 @@ CASES.push({
     const bytes = cap.pop()
     const applyOut = bytes ? safeParseAny(proteusSelfDraw.applyOps(JSON.stringify(Array.from(bytes)))) : undefined
 
+    // ══ ★★④ 单节点更新**延迟**测量（2026-09-29 补）════════════════════════════
+    //
+    // 【为什么必须补（本仓实测的用例失效）】§10 的核心指标是「单节点更新 P95 ≤ 3ms」，
+    //   而它长期引用的 `类A 0.36ms` 出自 **V3 runScale** —— 该用例**自 V4 起一直在测空循环**
+    //   （订阅表升级后树未同步 ⇒ 触发器失配 ⇒ 零指令；见 flush 判据那次发现）。
+    //   ⇒ §10 的核心指标**失去了有效证据**。本档（V11）是**真实**的单行更新路径
+    //     （1000 行实例化树 + ListRegistry 行内解析 + 改 1 行发 1 条指令），
+    //     故在此补**延迟分位**，把 §10 的核心指标重新建立在有效用例上。
+    //
+    // 【判据设计】① 用**宿主高分辨率时钟**（`Date.now()` 在本平台是粗粒度缓存时钟，不可信）；
+    //   ② 分离 **JS vs 宿主**（否则会把"JS 扫行"误读成"宿主慢"——本仓纪律：>5ms 必拆）；
+    //   ③ 每次都是**真实变更**（dotW 在 36/60 间交替；否则 `Object.is` 短路而不发指令）；
+    //   ④ 配 flush 判据（N 次更新 ⇒ flushes 增量 = N）——防"空跑也报快"。
+    const { clock: latClock, name: latClockName, trustworthy: latClockOk } = pickClock()
+    const LAT_N = 100
+    const latTotal: number[] = []
+    const latJs: number[] = []
+    const latHost: number[] = []
+    const latData: number[] = []
+    const latFlushBefore = rt.getStats().flushes
+    let latOpCount = 0
+    for (let i = 0; i < LAT_N; i++) {
+      // ★★三段分离（2026-09-29 诊断）——本仓纪律「>5ms 必拆」：
+      //   首版把 ①造数据 ②扫描 ③宿主 全算进"JS"，导致针对性优化看不出效果（优化前后都 ~10.8ms）。
+      const t0 = latClock()
+      // 真实变更：第 500 行 dotW 交替（首次与当前值不同 ⇒ 不会 `Object.is` 短路）
+      const next = listRows.map((r, idx) => (idx === 499 ? { ...r, dotW: i % 2 ? 60 : 36 } : r))
+      listRows = next
+      data.list = next
+      const t1 = latClock()                 // ① 造数据（1000 行 map + 对象展开）
+      triggers.get('list')?.()
+      rt.flush()
+      const t2 = latClock()                 // ② 源触发 + 全行扫描 + diff + 二进制编码
+      const b = cap.pop()
+      if (b) {
+        const out = safeParseAny(proteusSelfDraw.applyOps(JSON.stringify(Array.from(b))))
+        latOpCount += (out?.patch_count as number) ?? 0
+      }
+      const t3 = latClock()                 // ③ 宿主（JSON 数组编组 + JNI + 核心应用）
+      latData.push(t1 - t0)
+      latJs.push(t2 - t1)
+      latHost.push(t3 - t2)
+      latTotal.push(t3 - t0)
+    }
+    const latCheck = flushCheck(rt, latFlushBefore, LAT_N)
+    const pct = (arr: number[], p: number) => {
+      const a = [...arr].sort((x, y) => x - y)
+      return a[Math.min(a.length - 1, Math.floor(a.length * p))] ?? -1
+    }
+    const latStats = {
+      p50_ms: Math.round(pct(latTotal, 0.5) * 1000) / 1000,
+      p95_ms: Math.round(pct(latTotal, 0.95) * 1000) / 1000,
+      p99_ms: Math.round(pct(latTotal, 0.99) * 1000) / 1000,
+      // 摊还（N 次总耗时 / N）——**主读数**：天然避开时钟分辨率限制（本仓纪律）
+      amortized_ms: Math.round((latTotal.reduce((a, b) => a + b, 0) / LAT_N) * 1000) / 1000,
+      data_p50_ms: Math.round(pct(latData, 0.5) * 1000) / 1000,
+      js_p50_ms: Math.round(pct(latJs, 0.5) * 1000) / 1000,
+      host_p50_ms: Math.round(pct(latHost, 0.5) * 1000) / 1000,
+      // ★归因（本仓纪律：>5ms 必拆）：单节点更新的成本**不在增量**（每次只发 1 条、重排 3 节点），
+      //   而在**源级触发时的全表扫描**（`triggers.get('list')` ⇒ 按 key 扫所有行做 diff）。
+      //   ⇒ 优化方向是"行级订阅/脏行标记"，不是"减少指令数"（指令已经是 1 条）。
+      attribution: 'cost is in whole-source trigger (row scan + key diff over all rows), not in the incremental payload (1 op / relayout 3)',
+      clock: latClockName,
+      clock_trustworthy: latClockOk,
+      ops_total: latOpCount,
+      flush_check: latCheck,
+    }
+
     const checks = {
       // ★实例化产物规模正确（静态 + 1000×行子树）
       instOk: inst.nodes.length > 3000,
@@ -2280,11 +2368,16 @@ CASES.push({
       geomChanged: ((applyOut?.geom_changed as number) ?? 0) >= 1,
       // ★重排范围小（行是边界 ⇒ 不该整树重排）
       smallScope: ((applyOut?.relayout_count as number) ?? 1e9) < 100,
+      // ★★单节点更新延迟：§10 核心指标（合格线 10ms / 目标 3ms）
+      latencyTarget: latStats.p95_ms <= 3,
+      latencyPass: latStats.p95_ms <= 10,
+      // ★每次更新都真的发了指令（防"空跑也报快"）
+      flushOnePerUpdate: latCheck.ok,
     }
     const verdict = Object.values(checks).every(Boolean) ? 'PASS' : 'FAIL'
     results.push({
       case: 'V11_long_list',
-      note: `${ROWS} 行 SFC 产物：实例化 ${inst.nodes.length} 节点 · 挂载 ${mountOut?.layer_count ?? 0} 层 · 改 1 行发 ${applyOut?.patch_count ?? -1} 条指令`,
+      note: `${ROWS} 行 SFC 产物：实例化 ${inst.nodes.length} 节点 · 挂载 ${mountOut?.layer_count ?? 0} 层 · 改 1 行发 ${applyOut?.patch_count ?? -1} 条指令 · 单节点更新 p95 ${latStats.p95_ms}ms（JS ${latStats.js_p50_ms} + 宿主 ${latStats.host_p50_ms}）`,
       items: ROWS, nodes: inst.nodes.length,
       vue_ms: 0, to_request_ms: instantiateMs, serialize_ms: 0,
       host_ms: mountMs, total_ms: instantiateMs + mountMs,
@@ -2304,8 +2397,11 @@ CASES.push({
         registry_stats: (registry as unknown as { stats?: unknown }).stats,
         // ★诚实边界：本档验证"长列表实例化 + 行内更新只发 1 条"；
         //   真机**滚动复用池**另见 `V12_scroll_recycle`
-        covered: 'long-list instantiate + per-row dispatch',
+        covered: 'long-list instantiate + per-row dispatch + ★单节点更新延迟分位（§10 核心指标）',
         not_covered: 'scroll recycle pool on device（见 V12）',
+        // ★★§10 核心指标的有效证据（本档；替代已失效的 V3 runScale 类A 档）
+        single_node_update: latStats,
+        latency_iters: LAT_N,
       },
     })
   },

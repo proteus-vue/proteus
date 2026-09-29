@@ -27022,61 +27022,84 @@
   },
   "host_node_count" : 3002,
   "host_timing_last" : {
-    "build_layers_ms" : 0.01,
-    "host_total_ms" : 2.3399999999999999,
-    "layout_ms" : 2.23,
+    "build_layers_ms" : 0,
+    "host_total_ms" : 1.5900000000000001,
+    "layout_ms" : 1.5600000000000001,
     "measure_ms" : 0
   },
   "js_completed" : 1,
   "js_ok" : true,
   "js_report" : {
-    "build_id" : "aa7137cf-200754",
+    "build_id" : "7140cbd0-120806",
     "case_filter" : [
       "V11"
     ],
     "case_timings_ms" : {
-      "V11_long_list" : 178
+      "V11_long_list" : 1466
     },
     "cases" : [
       {
         "case" : "V11_long_list",
         "extra" : {
           "checks" : {
+            "flushOnePerUpdate" : true,
             "geomChanged" : true,
             "instOk" : true,
+            "latencyPass" : false,
+            "latencyTarget" : false,
             "mountOk" : true,
             "noUnsupported" : true,
             "oneOp" : true,
             "smallScope" : true
           },
-          "covered" : "long-list instantiate + per-row dispatch",
+          "covered" : "long-list instantiate + per-row dispatch + ★单节点更新延迟分位（§10 核心指标）",
           "geom_changed" : 3,
-          "instantiate_ms" : 19,
+          "instantiate_ms" : 18,
           "l0_slots" : 0,
           "l1_slots" : 4,
+          "latency_iters" : 100,
           "layer_count" : 3002,
-          "mount_ms" : 134,
+          "mount_ms" : 318,
           "not_covered" : "scroll recycle pool on device（见 V12）",
           "op_count" : 1,
           "registry_stats" : {
-            "hits" : 3001,
+            "hits" : 3101,
             "items" : 1000,
             "misses" : 0
           },
           "relayout" : 3,
+          "single_node_update" : {
+            "amortized_ms" : 11.065,
+            "attribution" : "cost is in whole-source trigger (row scan + key diff over all rows), not in the incremental payload (1 op \/ relayout 3)",
+            "clock" : "host.mach_absolute_time",
+            "clock_trustworthy" : true,
+            "data_p50_ms" : 0.052999999999999999,
+            "flush_check" : {
+              "expected" : 100,
+              "flushes_delta" : 100,
+              "ok" : true,
+              "reason" : ""
+            },
+            "host_p50_ms" : 4.0780000000000003,
+            "js_p50_ms" : 7.0330000000000004,
+            "ops_total" : 100,
+            "p50_ms" : 11.021000000000001,
+            "p95_ms" : 11.715,
+            "p99_ms" : 12.038
+          },
           "uninstantiated" : 0,
           "unsupported" : 0,
-          "verdict" : "PASS"
+          "verdict" : "FAIL"
         },
-        "host_ms" : 134,
+        "host_ms" : 318,
         "items" : 1000,
         "nodes" : 3002,
-        "note" : "1000 行 SFC 产物：实例化 3002 节点 · 挂载 3002 层 · 改 1 行发 1 条指令",
-        "patch_count" : 3001,
+        "note" : "1000 行 SFC 产物：实例化 3002 节点 · 挂载 3002 层 · 改 1 行发 1 条指令 · 单节点更新 p95 11.715ms（JS 7.033 + 宿主 4.078）",
+        "patch_count" : 3101,
         "request_bytes" : 8964,
         "serialize_ms" : 0,
-        "to_request_ms" : 19,
-        "total_ms" : 153,
+        "to_request_ms" : 18,
+        "total_ms" : 336,
         "vue_ms" : 0
       }
     ],
@@ -27091,7 +27114,7 @@
       ],
       "stages" : [
         "before-S2:15",
-        "after-S:31"
+        "after-S:33"
       ]
     },
     "kind" : "logic-bench",
@@ -27112,7 +27135,9 @@
   },
   "js_total" : 1,
   "launch_diag" : {
-    "first_frame_ms" : 0,
+    "bootstrap_ms" : 58.560000000000002,
+    "first_frame_ms" : 64.540000000000006,
+    "first_frame_source" : "kernel:p_starttime",
     "forced_style" : "Dark",
     "interface_style" : "Dark",
     "launch_screen_keys" : [
@@ -48136,5 +48161,5 @@
       "y" : 18
     }
   },
-  "tree_hash" : "163a33c1"
+  "tree_hash" : "22e48b3a"
 }
