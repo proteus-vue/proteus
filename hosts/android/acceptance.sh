@@ -31,14 +31,65 @@ ACTIVITY="$PKG/.MainActivity"
 OUT="$HERE/results/acceptance"
 RUNS=5
 
+# ★★gfxinfo 文本 → "Janky p50 frames"（**唯一解析实现**：自测与实测共用同一份，
+#   避免"自测验的是另一段代码"——本仓「验证了但验的是别的」纪律）。
+#   ★字段位置是按 `dumpsys gfxinfo` 实际输出核定的（不是猜的）：
+#     `Total frames rendered: 603` → Total|frames|rendered|603 ⇒ $4
+#     `Janky frames: 387 (64.18%)` → Janky|frames|387|64.18  ⇒ $3
+#     `50th percentile: 17ms`      → 50th|percentile|17ms     ⇒ **$3**（曾是 $4 ⇒ 恒 0）
+gfx_parse() {
+  awk -F'[():% ]+' '
+    /Total frames rendered/{t=$4}
+    /Janky frames:/{j=$3}
+    /50th percentile:/{p=$3+0}
+    END{printf "%s %s %s", j+0, p+0, t+0}'
+}
+
 while [ $# -gt 0 ]; do
   case "$1" in
     --runs) RUNS="$2"; shift 2 ;;
     --skip-build) SKIP_BUILD=1; shift ;;
     --fresh-install) FRESH_INSTALL=1; shift ;;
+    --selftest) SELFTEST=1; shift ;;
     *) echo "未知参数：$1"; exit 2 ;;
   esac
 done
+
+# ── ★★测量装置自测（本仓纪律：**装置必须先自测**，否则读数错得静默）──────────────
+# 【为什么需要】2026-09-29 实测发现 gfxinfo 解析取错字段：`50th percentile: 5ms` 按
+#   `[():% ]+` 切分后字段是 `50th|percentile|5ms`（**$3**），而代码取的是 `$4`
+#   ⇒ **p50 恒为 0**。它不会报错、不会变红，只会让「交替 N 轮取中位」这条通路
+#   静默产出 0ms，进而让 A/B 判定（差值方向）完全失真。
+#   ⇒ 同「像素采样器 R/B 互换」同源：**读数恒为 0 不是"还没做"，而是"读数恒假"**。
+#   本自测用**固定样本**断言解析结果——装置自身可被证伪，不依赖设备。
+if [ -n "${SELFTEST:-}" ]; then
+  echo "== 测量装置自测（gfxinfo 解析）=="
+  SAMPLE='Total frames rendered: 603
+Janky frames: 387 (64.18%)
+Janky frames (legacy): 400 (66.33%)
+50th percentile: 17ms
+90th percentile: 20ms
+95th percentile: 21ms
+99th percentile: 23ms'
+  got="$(printf '%s\n' "$SAMPLE" | gfx_parse)"
+  want="387 17 603"
+  echo "  样本解析：${got}（期望：${want}）"
+  if [ "$got" = "$want" ]; then
+    echo "  ✅ 解析正确（Janky / p50 / frames 三项）"
+  else
+    echo "  ❌ 解析错误——装置不可用，先修 gfx_parse 再跑验收"
+    exit 1
+  fi
+  # 反向断言：坏样本必须能被识破（防「恒返回期望值」的假自测）
+  bad="$(printf 'Janky frames: 0 (0.00%%)\n50th percentile: 0ms\nTotal frames rendered: 0\n' | gfx_parse)"
+  if [ "$bad" = "0 0 0" ]; then
+    echo "  ✅ 零值样本可区分（${bad}）——自测非恒真"
+  else
+    echo "  ❌ 零值样本解析异常：${bad}"
+    exit 1
+  fi
+  exit 0
+fi
 
 mkdir -p "$OUT"
 
@@ -299,8 +350,18 @@ gfx_one() {
   "$ADB" shell am start -n "$ACTIVITY" --es path "$path" >/dev/null 2>&1; sleep 3
   "$ADB" shell "am broadcast -a dev.proteus.RUN --es path $path -p $PKG" >/dev/null 2>&1
   sleep 16
-  "$ADB" shell "dumpsys gfxinfo $PKG" 2>/dev/null | tr -d '\r' \
-    | awk -F'[():% ]+' '/Janky frames:/{j=$3} /50th percentile/{p=$4} END{printf "%s %s", j+0, p+0}'
+  # ★解析走唯一实现 gfx_parse（与 --selftest 共用）——不在此处再写一份 awk
+  local raw; raw="$("$ADB" shell "dumpsys gfxinfo $PKG" 2>/dev/null | tr -d '\r')"
+  local parsed; parsed="$(printf '%s\n' "$raw" | gfx_parse)"
+  # ★装置自检（每次调用都断言）：p50 与 frames 同时为 0 只可能是解析失败或 app 未渲染
+  #   ——绝不能静默进入中位计算（恒 0 的中位会让 A/B 差值方向失真）
+  local j p t; j="${parsed%% *}"; t="${parsed##* }"; p="$(echo "$parsed" | cut -d' ' -f2)"
+  if [ "${t:-0}" -eq 0 ]; then
+    echo "    ⚠ gfx_one(${path})：frames=0（app 未渲染或解析失败）——该轮作废" >&2
+  elif [ "${p:-0}" -eq 0 ]; then
+    echo "    ⚠ gfx_one(${path})：p50=0 但 frames=${t}——解析可疑，请跑 --selftest" >&2
+  fi
+  printf '%s %s' "$j" "$p"
 }
 echo "    ── 交替 ${SCROLL_ROUNDS} 轮（取中位——单轮读数在本机不可信，见脚本注释）──"
 CORE_P=""; NAT_P=""; CORE_J=""; NAT_J=""
