@@ -221,13 +221,32 @@ layer 数：`______________` → `______________`
 
 ### 5.3 IR 层 paint-hint 校验
 
-- [ ] `isMonochrome` 是否正确推导（纯色内容 → 紧凑格式）
-- [ ] `isPureBackground` 是否正确推导（纯色背景 → 不分配 backing store）
-- [ ] `shareableContent` 是否正确推导（可共享图形 → contents 共享）
-- [ ] `staticSubtree` 是否正确推导（完全静态 → 允许拍平）
+> ★★**2026-09-29 复核结论（本节此前是空的勾选框，现已按实测填）**
+>
+> **推导本身有两个"条件不充分"缺陷 —— 已修 + 4 条回归锁定 + 破坏性验证**：
+> | hint | 原条件 | 为什么错 | 后果（一旦接线） |
+> |---|---|---|---|
+> | `isMonochrome` | `hasText && text.color && !backgroundImage && !needsCompositing` | **不看底色**：白字 + 蓝底（**4050 夹具的真实形状**）判 `true`；也未排除圆角/透明度（紧凑格式**无 alpha 通道**） | 平台按单通道格式分配 ⇒ **双色内容压成单色**（画面错） |
+> | `isPureBackground` | `backgroundColor && !渐变 && !边框 && !圆角 && !合成 && !transform && !透明` | **没排除带文本的节点**：`color:#fff;background-color:#285ac8` 同时判 `true` | 平台据此跳过存储分配 ⇒ **文字消失** |
+>
+> ⇒ 修法：判据 = "该策略成立的**全部**条件"，拿不准一律 false；颜色判定抽成
+> `packages/component-ir/src/color.ts` 的 `isOpaqueColor`（**唯一实现**——
+> 与 `layout-core` 遮挡剔除原先的第二份副本合并，两处同问题一处实现）。
+>
+> **★但注意：两个 hint 目前全平台无消费者**（全仓 grep 零命中：适配器 / iOS 宿主 / Android 宿主）。
+> 也就是说**修好推导是"接线的前置"**，而不是"已经省了内存"。真正的 iOS 收益需要：
+> ① 在产品建层路径（`selfdraw-scene.swift` 的 `makeLayer`）按 hint 设 `contentsFormat`；
+> ② 然后才是内存复测。当前**本机无 Xcode / `iphoneos` SDK / iOS 设备** ⇒ 该项待具备环境的机器。
 
-**验证方法**：随机抽查 20 个节点的 paint-hint 推导结果与人工判断的一致性。
-一致率：`______________ %`
+- [x] `isMonochrome` 推导**正确性**（含"有底色/圆角/透明度 ⇒ 不得判 true"）—— ✅ 已修 + 回归
+  （`tests/pnode-m0.test.ts` 四条；破坏性验证：退回旧条件 ⇒ 用例当场红）
+- [x] `isPureBackground` 推导**正确性**（含"带文本 ⇒ 不得判 true"）—— ✅ 同上
+- [ ] `shareableContent` 是否正确推导（可共享图形 → contents 共享）—— ❌ 未验（仍无图片/共享场景）
+- [ ] `staticSubtree` 是否正确推导（完全静态 → 允许拍平）—— ✅ 已有实现与判据（见 M0 拍平那组测试）
+
+**验证方法**（原定"随机抽查 20 个节点与人工判断一致性"）—— ★**本轮改为更强的判据**：
+不抽查一致性（人眼判断也会漏，且抽查不覆盖边界形态），改为**逐条边界形态的机器用例**
+（有底色的文本 / 圆角 / 透明度 / 具名色 / 半透明 hex / 带文本的纯背背景…每一条都是"会画错"的形态）。
 
 ### 5.4 生命周期状态机（复用与回收）
 

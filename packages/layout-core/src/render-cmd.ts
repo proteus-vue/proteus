@@ -20,6 +20,7 @@
 //   平台层不得再舍入。求解器内部保持亚像素（求解精度与吸附解耦）。
 import type { LayoutNode } from './types'
 import type { PaintInfo } from './from-pnode'
+import { isOpaqueColor } from '@proteus-vue/component-ir'
 import { paintInfoOf } from './from-pnode'
 import { snapRect } from './pixel-snap'
 
@@ -358,34 +359,11 @@ export function emitRenderCmds(roots: LayoutNode[], opts: EmitOptions = {}): Ren
 /** 区间（绝对坐标矩形）——遮挡判定用 */
 interface AbsBox { x: number; y: number; width: number; height: number }
 
-/**
- * 颜色是否**确实不透明**（保守判定：拿不准一律 false）。
- *
- * 【为什么保守】本函数决定"这个矩形能不能当遮挡物"——误判为不透明 ⇒ 把下面真实可见的内容裁掉
- *   ⇒ **内容消失**（本仓最忌讳的静默缺陷）。故只认最明确的几种写法，其余（具名色 / hsl /
- *   带 alpha 的 8 位 hex / rgba α<1 / 未知函数式）**一律不算**。
- */
-function isOpaqueColor(color: string | undefined): boolean {
-  if (color === undefined) return false
-  const c = color.trim().toLowerCase()
-  if (c === 'transparent') return false
-  // #rgb / #rrggbb（无 alpha 通道 ⇒ 不透明）
-  if (/^#[0-9a-f]{3}$/.test(c) || /^#[0-9a-f]{6}$/.test(c)) return true
-  // #rgba / #rrggbbaa——仅当 alpha 为 ff/f 时才算不透明
-  if (/^#[0-9a-f]{4}$/.test(c)) return c[4] === 'f'
-  if (/^#[0-9a-f]{8}$/.test(c)) return c.slice(7) === 'ff'
-  // rgb(r,g,b)（三参无 alpha ⇒ 不透明）；rgba(...) α 必须 >= 1
-  const m = /^rgba?\(([^)]*)\)$/.exec(c)
-  if (m !== null) {
-    const parts = m[1]!.split(',').map((t) => t.trim())
-    if (parts.length === 3) return true
-    if (parts.length === 4) {
-      const a = Number(parts[3])
-      return Number.isFinite(a) && a >= 1
-    }
-  }
-  return false // 具名色 / hsl / 其它：拿不准 ⇒ 不当遮挡物
-}
+// ★★颜色判定**不再在本文件实现**（2026-09-29）：与编译期 paint-hint 推导共用
+//   `@proteus-vue/component-ir` 的 `isOpaqueColor`（**同一语义一处实现**）。
+//   此前这里是**第二份副本**——同一问题（"这个颜色确实不透明吗"）两处各自实现，
+//   一旦漂移就会出现"hint 说不透明、遮挡剔除说不透明"的不一致结论。
+//   依赖方向合法：layout-core 已依赖 component-ir（见 package.json）。
 
 /**
  * ★卡 I5 执行项 2/3：**遮挡剔除**（纯函数——指令流 → 指令流）。
