@@ -21,8 +21,12 @@ export interface VueCompatEntry {
   status: VueCompatStatus
   /** unsupported/partial 时：有降级策略 → true（编译期 warning）；无 → false/undefined（编译期 error） */
   degrade?: boolean
-  /** 说明 / 替代建议（unsupported/partial 必填） */
+  /** 说明 / 替代建议（unsupported/partial 必填；**中文**） */
   note?: string
+  /** ★English note for the bilingual site（`noteEn`）——与 `note` 同源同义，供 en 页生成使用。
+   *  为什么不放在生成器里翻译：note 是**技术判定**，翻译会引入偏差；且双语站惯例是内容全译，
+   *  故把英文并入 SSOT 并由门禁强制齐备（见 `check:vue-compat-doc`）。 */
+  noteEn?: string
   /** 状态来源（vue-compat §1 / advance batch / roadmap / 实测评估） */
   source: string
 }
@@ -50,9 +54,9 @@ export const VUE_COMPAT_MATRIX: VueCompatEntry[] = [
   { name: 'toRefs', group: 'reactivity', status: 'aligned', note: 'toRefs(obj) → runtime-init @vue/reactivity ref 映射（每键一 ref，.value 读 obj 对应字段）；解构 const { a } = toRefs(obj) 暂未接（声明为 ObjectPattern 跳过）——请用 const r = toRefs(obj); r.a.value', source: 'reactivity-runtime（运行时 @vue/reactivity）' },
   { name: 'toValue', group: 'reactivity', status: 'aligned', note: 'toValue(x) 编译期内联：同 unref——x 为 ref → this.data.x；非 ref → x 本身；MP 无运行时 toValue', source: '增强（编译期内联改写）' },
   { name: 'proxyRefs', group: 'reactivity', status: 'aligned', note: 'proxyRefs(x) → runtime-init @vue/reactivity 代理（成员 ref 访问自动解包 .value）；逻辑层可用，模板直接 {{ proxy }.[key] } 读解包值需 .value 约定', source: 'reactivity-runtime（运行时 @vue/reactivity）' },
-  { name: 'effect', group: 'reactivity', status: 'unsupported', note: '裸 effect 无对等——请用 watchEffect/computed', source: '评估' },
-  { name: 'stop', group: 'reactivity', status: 'unsupported', note: 'effect 关闭，MP 无对等', source: '评估' },
-  { name: 'triggerRef', group: 'reactivity', status: 'partial', degrade: true, note: 'triggerRef(ref) 需 shallowRef 为运行时 ref 对象——当前 shallowRef 编译期内联（this.data.x 为值）无 ref 可传；仅对 toRef/toRefs/factory 等运行时 ref 有效', source: 'reactivity-runtime（运行时 @vue/reactivity，局限）' },
+  { name: 'effect', group: 'reactivity', status: 'unsupported', note: '裸 effect 无对等——请用 watchEffect/computed', noteEn: 'Bare effect has no equivalent — use watchEffect/computed', source: '评估' },
+  { name: 'stop', group: 'reactivity', status: 'unsupported', note: 'effect 关闭，MP 无对等', noteEn: 'Stopping an effect has no mini-program equivalent', source: '评估' },
+  { name: 'triggerRef', group: 'reactivity', status: 'partial', degrade: true, note: 'triggerRef(ref) 需 shallowRef 为运行时 ref 对象——当前 shallowRef 编译期内联（this.data.x 为值）无 ref 可传；仅对 toRef/toRefs/factory 等运行时 ref 有效', noteEn: 'triggerRef(ref) needs shallowRef to be a runtime ref object — shallowRef is currently inlined at compile time (this.data.x holds a value), so there is no ref to pass; only works for runtime refs from toRef/toRefs/factory', source: 'reactivity-runtime（运行时 @vue/reactivity，局限）' },
   { name: 'markRaw', group: 'reactivity', status: 'aligned', note: 'markRaw(x) → runtime-init @vue/reactivity（返回原对象标记跳过代理；isReactive(markRaw(x))=false）', source: 'reactivity-runtime（运行时 @vue/reactivity）' },
   // ★2026-09-08 增强：unref(x)/toValue(x) 编译期内联为 x.value（x 为已知 ref → this.data.x；非 ref → x 本身）——MP 无运行时 unref，编译期取值等价
   { name: 'unref', group: 'reactivity', status: 'aligned', note: 'unref(x) 编译期内联：x 为 ref → this.data.x；非 ref → x 本身（unref 恒等）；MP 无运行时 unref，编译期取值', source: '增强（编译期内联改写）' },
@@ -66,11 +70,11 @@ export const VUE_COMPAT_MATRIX: VueCompatEntry[] = [
   { name: 'isProxy', group: 'reactivity', status: 'aligned', note: 'isProxy(x) → runtime @vue/reactivity 守卫（reactive/readonly proxy 为真）', source: 'reactivity-runtime（运行时 @vue/reactivity）' },
   { name: 'isShallow', group: 'reactivity', status: 'aligned', note: 'isShallow(x) → runtime @vue/reactivity 守卫（读 reactive/shallow 标记）', source: 'reactivity-runtime（运行时 @vue/reactivity）' },
   { name: 'toRaw', group: 'reactivity', status: 'aligned', note: 'toRaw(x) → runtime @vue/reactivity（去 proxy 返回原始对象）', source: 'reactivity-runtime（运行时 @vue/reactivity）' },
-  { name: 'getCurrentScope', group: 'reactivity', status: 'unsupported', note: 'effectScope 运行时，MP 无对等', source: '评估' },
-  { name: 'effectScope', group: 'reactivity', status: 'unsupported', note: '作用域，MP 无对等', source: '评估' },
-  { name: 'onScopeDispose', group: 'reactivity', status: 'unsupported', note: '作用域清理，MP 无对等——用 onUnmounted', source: '评估' },
-  { name: 'onWatcherCleanup', group: 'reactivity', status: 'unsupported', note: 'watch 清理，MP 无对等', source: '评估' },
-  { name: 'getCurrentWatcher', group: 'reactivity', status: 'unsupported', note: '当前 watcher，MP 无对等', source: '评估' },
+  { name: 'getCurrentScope', group: 'reactivity', status: 'unsupported', note: 'effectScope 运行时，MP 无对等', noteEn: 'effectScope is runtime-only; no mini-program equivalent', source: '评估' },
+  { name: 'effectScope', group: 'reactivity', status: 'unsupported', note: '作用域，MP 无对等', noteEn: 'Scope has no mini-program equivalent', source: '评估' },
+  { name: 'onScopeDispose', group: 'reactivity', status: 'unsupported', note: '作用域清理，MP 无对等——用 onUnmounted', noteEn: 'Scope cleanup has no mini-program equivalent — use onUnmounted', source: '评估' },
+  { name: 'onWatcherCleanup', group: 'reactivity', status: 'unsupported', note: 'watch 清理，MP 无对等', noteEn: 'watch cleanup has no mini-program equivalent', source: '评估' },
+  { name: 'getCurrentWatcher', group: 'reactivity', status: 'unsupported', note: '当前 watcher，MP 无对等', noteEn: 'Current watcher has no mini-program equivalent', source: '评估' },
   // watch 族
   { name: 'watch', group: 'reactivity', status: 'aligned', source: 'vue-compat §1 主路径（ref/数组/函数/props 源）' },
   // ★2026-09-08 增强：watchEffect 族改写为 watch(deps, cb, {immediate:true})（deps 从 cb 提取 x.value 的 ref）——MP 无 watchEffect，watch immediate 等价
@@ -80,52 +84,52 @@ export const VUE_COMPAT_MATRIX: VueCompatEntry[] = [
 
   // ===== component API =====
   // ★2026-09-08 P1 校准：defineComponent 在 <script setup> 为冗余包装（SFC 已自动组件化）——编译器识别并剥离为 no-op（不落 data/不裸注入 onLoad），矩阵 partial（警告：包装 options 未编译，请用 <script setup>）；对内 setup 逻辑不翻译（非 SFC 范式）
-  { name: 'defineComponent', group: 'component', status: 'partial', degrade: true, note: 'SFC 已自动组件化，defineComponent(...) 包装剥离（no-op）；包装内 options/setup 不编译——请直接用 <script setup> 或模板', source: 'P1 校准（no-op 剥离）' },
+  { name: 'defineComponent', group: 'component', status: 'partial', degrade: true, note: 'SFC 已自动组件化，defineComponent(...) 包装剥离（no-op）；包装内 options/setup 不编译——请直接用 <script setup> 或模板', noteEn: 'SFCs are already components; the defineComponent(...) wrapper is stripped (no-op). Options/setup inside the wrapper are not compiled — use <script setup> or the template directly', source: 'P1 校准（no-op 剥离）' },
   { name: 'defineProps', group: 'component', status: 'aligned', source: 'vue-compat §1（define-props）' },
   { name: 'defineEmits', group: 'component', status: 'aligned', source: 'vue-compat §1（define-emits）' },
   { name: 'defineExpose', group: 'component', status: 'aligned', source: 'define-expose（no-op+校验）' },
   // ★2026-09-08 defineOptions 对齐：compileScript 权威语义（name/inheritAttrs）——剥离 no-op（不裸注入 onLoad→not defined），
   //   name/inheritAttrs 在 MP 无组件级对等（微信 Component 无组件级 name/inheritAttrs 字段）→ partial（诚实说明不生效）
-  { name: 'defineOptions', group: 'component', status: 'partial', degrade: true, note: '宏剥离 no-op（compileScript 权威源）；name/inheritAttrs MP 无组件级对等不生效——组件属性请走 properties/attrs 通道', source: 'defineOptions 对齐（compileScript 权威源）' },
-  { name: 'defineSlots', group: 'component', status: 'partial', degrade: true, note: '类型声明按 slot 透传处理（宏剥离，无产物副作用）', source: '评估' },
+  { name: 'defineOptions', group: 'component', status: 'partial', degrade: true, note: '宏剥离 no-op（compileScript 权威源）；name/inheritAttrs MP 无组件级对等不生效——组件属性请走 properties/attrs 通道', noteEn: 'Macro stripped as a no-op (compileScript is authoritative); name/inheritAttrs have no component-level mini-program equivalent and do not take effect — pass component attributes through the properties/attrs channel', source: 'defineOptions 对齐（compileScript 权威源）' },
+  { name: 'defineSlots', group: 'component', status: 'partial', degrade: true, note: '类型声明按 slot 透传处理（宏剥离，无产物副作用）', noteEn: 'Type-only declaration, handled as slot passthrough (macro stripped; no artifact side effects)', source: '评估' },
   // ★2026-09-08 P1（地基）：defineModel 经 @vue/compiler-sfc 权威展开（_useModel）→ 注册 prop + .value 读写重写 + 模板改名；useModel 同（运行时态，_useModel 产物）
-  { name: 'defineModel', group: 'component', status: 'partial', degrade: true, note: 'compileScript 展开为 _useModel(__props, name)：注册 prop + m.value 读写重写（读→data.prop / 写→triggerEvent update-prop）；模型修饰符/嵌套未全接——用 props+emit 显式可兼得', source: 'P1 地基（compileScript 权威源）' },
-  { name: 'useModel', group: 'component', status: 'partial', degrade: true, note: '同 defineModel（运行时模型态，_useModel 展开；模型修饰符/嵌套未全接）——用 props+emit 显式可兼得', source: 'P1 地基（compileScript 权威源）' },
+  { name: 'defineModel', group: 'component', status: 'partial', degrade: true, note: 'compileScript 展开为 _useModel(__props, name)：注册 prop + m.value 读写重写（读→data.prop / 写→triggerEvent update-prop）；模型修饰符/嵌套未全接——用 props+emit 显式可兼得', noteEn: 'compileScript expands it to _useModel(__props, name): registers the prop and rewrites m.value access (read → data.prop / write → triggerEvent update-prop); model modifiers and nesting are not fully wired — explicit props+emit gives you both', source: 'P1 地基（compileScript 权威源）' },
+  { name: 'useModel', group: 'component', status: 'partial', degrade: true, note: '同 defineModel（运行时模型态，_useModel 展开；模型修饰符/嵌套未全接）——用 props+emit 显式可兼得', noteEn: 'Same as defineModel (runtime model state via _useModel expansion; modifiers/nesting not fully wired) — explicit props+emit gives you both', source: 'P1 地基（compileScript 权威源）' },
   // ★2026-09-08 P1 对齐：withDefaults(defineProps<T>(), D) 已识别为宏（早退不落 data）+ extractProps 合并默认值 D（字面量）
   { name: 'withDefaults', group: 'component', status: 'aligned', note: 'withDefaults(defineProps<T>(), D) 宏剥离 + 默认值 D 合并到 properties.value（函数默认值仍忽略/警告）', source: 'P1 对齐（宏识别+默认值合并）' },
   // ★2026-09-08 P1 对齐：nextTick 已翻译——nextTick(cb)→wx.nextTick(cb)；nextTick()/await nextTick()→new Promise(r=>wx.nextTick(r))
   { name: 'nextTick', group: 'component', status: 'aligned', note: 'nextTick(cb)→wx.nextTick(cb)；nextTick()/await nextTick()→new Promise(r=>wx.nextTick(r))（wx.nextTick 返回 undefined，await 需 Promise 包装）', source: 'P1 对齐（脚本体翻译）' },
-  { name: 'queuePostFlushCb', group: 'component', status: 'unsupported', note: '内部调度，MP 无对等', source: '评估' },
-  { name: 'h', group: 'component', status: 'unsupported', note: '运行时渲染（框架非目标 §0.4）——用模板 DSL', source: 'L0 非目标' },
-  { name: 'createVNode', group: 'component', status: 'unsupported', note: '同上——用模板 DSL', source: 'L0 非目标' },
-  { name: 'cloneVNode', group: 'component', status: 'unsupported', note: '同上', source: 'L0 非目标' },
-  { name: 'isVNode', group: 'component', status: 'unsupported', note: '运行时节点判断，MP 无对等', source: '评估' },
-  { name: 'createApp', group: 'component', status: 'unsupported', note: '运行时渲染（框架非目标）——用 proteus.build / 路由表', source: 'L0 非目标' },
+  { name: 'queuePostFlushCb', group: 'component', status: 'unsupported', note: '内部调度，MP 无对等', noteEn: 'Internal scheduler; no mini-program equivalent', source: '评估' },
+  { name: 'h', group: 'component', status: 'unsupported', note: '运行时渲染（框架非目标 §0.4）——用模板 DSL', noteEn: 'Runtime rendering (explicitly out of scope, §0.4) — use the template DSL', source: 'L0 非目标' },
+  { name: 'createVNode', group: 'component', status: 'unsupported', note: '同上——用模板 DSL', noteEn: 'Same as h — use the template DSL', source: 'L0 非目标' },
+  { name: 'cloneVNode', group: 'component', status: 'unsupported', note: '同上', noteEn: 'Same as h', source: 'L0 非目标' },
+  { name: 'isVNode', group: 'component', status: 'unsupported', note: '运行时节点判断，MP 无对等', noteEn: 'Runtime node predicate; no mini-program equivalent', source: '评估' },
+  { name: 'createApp', group: 'component', status: 'unsupported', note: '运行时渲染（框架非目标）——用 proteus.build / 路由表', noteEn: 'Runtime rendering (out of scope) — use proteus.build / the route table', source: 'L0 非目标' },
   // ★运行时对内 API（用户决策 1：走 b——单独立项框架语义 API，不翻译 Vue 运行时 API；此处 unsupported 反黑盒）
-  { name: 'getCurrentInstance', group: 'component', status: 'unsupported', note: '运行时对内 API——单独立项框架语义 API（如 useMpInstance/adapter.selectorQuery）承接；MP 下勿直接用', source: '用户决策 1（b）' },
-  { name: 'useSlots', group: 'component', status: 'unsupported', note: '运行时对内 API——组件内用 <slot> 透传 + slots prop', source: '用户决策 1（b）' },
-  { name: 'useAttrs', group: 'component', status: 'unsupported', note: '运行时对内 API——attrs 走 $attrs 产物面', source: '用户决策 1（b）' },
-  { name: 'useTemplateRef', group: 'component', status: 'partial', degrade: true, note: 'useTemplateRef(name) → this.<var> = this.selectComponent(\'#name\')（组件实例引用）+ 方法体 .value 剥除；onLoad 时子组件可能未挂载（null）——onReady 后可取（诚实时序边界）', source: 'useTemplateRef 对齐（selectComponent 承接）' },
-  { name: 'useId', group: 'component', status: 'unsupported', note: '运行时 id，MP 无对等', source: '评估' },
-  { name: 'useSSRContext', group: 'component', status: 'unsupported', note: 'SSR，MP 无对等', source: '评估' },
-  { name: 'hasInjectionContext', group: 'component', status: 'unsupported', note: 'SSR 注入判断，MP 无对等', source: '评估' },
+  { name: 'getCurrentInstance', group: 'component', status: 'unsupported', note: '运行时对内 API——单独立项框架语义 API（如 useMpInstance/adapter.selectorQuery）承接；MP 下勿直接用', noteEn: 'Internal runtime API — a dedicated framework semantic API (e.g. useMpInstance/adapter.selectorQuery) will cover it; do not use it directly on mini-program', source: '用户决策 1（b）' },
+  { name: 'useSlots', group: 'component', status: 'unsupported', note: '运行时对内 API——组件内用 <slot> 透传 + slots prop', noteEn: 'Internal runtime API — inside a component use <slot> passthrough + the slots prop', source: '用户决策 1（b）' },
+  { name: 'useAttrs', group: 'component', status: 'unsupported', note: '运行时对内 API——attrs 走 $attrs 产物面', noteEn: 'Internal runtime API — attrs flow through the $attrs artifact surface', source: '用户决策 1（b）' },
+  { name: 'useTemplateRef', group: 'component', status: 'partial', degrade: true, note: 'useTemplateRef(name) → this.<var> = this.selectComponent(\'#name\')（组件实例引用）+ 方法体 .value 剥除；onLoad 时子组件可能未挂载（null）——onReady 后可取（诚实时序边界）', noteEn: 'useTemplateRef(name) → this.<var> = this.selectComponent(\'#name\') (component instance ref) with .value stripped in method bodies; at onLoad the child may not be mounted yet (null) — available after onReady (honest timing boundary)', source: 'useTemplateRef 对齐（selectComponent 承接）' },
+  { name: 'useId', group: 'component', status: 'unsupported', note: '运行时 id，MP 无对等', noteEn: 'Runtime id; no mini-program equivalent', source: '评估' },
+  { name: 'useSSRContext', group: 'component', status: 'unsupported', note: 'SSR，MP 无对等', noteEn: 'SSR; no mini-program equivalent', source: '评估' },
+  { name: 'hasInjectionContext', group: 'component', status: 'unsupported', note: 'SSR 注入判断，MP 无对等', noteEn: 'SSR injection check; no mini-program equivalent', source: '评估' },
   { name: 'provide', group: 'component', status: 'aligned', source: 'vue-compat-advance Batch 3/4/6' },
   { name: 'inject', group: 'component', status: 'aligned', source: 'vue-compat-advance Batch 3/4/6' },
   // 渲染工具（编译期处理）
   // ★Step2 校准：resolveComponent/renderSlot/mergeProps/toHandlers/withCtx/withScopeId 为 Vue 内部渲染助手，
   //   用户不应在 <script setup> 手动 import——实测译为裸标识符调用 → not defined；相关能力由模板编译/静态解析承接，标 aligned 是假
-  { name: 'resolveComponent', group: 'component', status: 'unsupported', note: 'Vue 内部渲染助手，用户不应手动 import——组件用 usingComponents 静态解析；当前译为裸调用 → not defined', source: '评估（Step2 实测校准）' },
-  { name: 'resolveDirective', group: 'component', status: 'unsupported', note: '自定义指令无对等（Batch A）——用方法调用', source: 'vue-compat Batch A' },
-  { name: 'resolveDynamicComponent', group: 'component', status: 'unsupported', note: '<component :is> 无对等——用 v-if 条件渲染', source: 'vue-compat Batch A' },
-  { name: 'renderSlot', group: 'component', status: 'unsupported', note: 'Vue 内部渲染助手——<slot> 由模板编译透传，勿手动调用；当前译为裸调用 → not defined', source: '评估（Step2 实测校准）' },
-  { name: 'mergeProps', group: 'component', status: 'unsupported', note: 'Vue 内部渲染助手——props 归一由编译期完成；当前译为裸调用 → not defined', source: '评估（Step2 实测校准）' },
-  { name: 'toHandlers', group: 'component', status: 'unsupported', note: 'Vue 内部渲染助手——事件归一由编译期完成；当前译为裸调用 → not defined', source: '评估（Step2 实测校准）' },
-  { name: 'withCtx', group: 'component', status: 'unsupported', note: 'Vue 内部渲染助手——作用域插槽由模板编译生成（advance Batch 7）；勿手动调用；当前译为裸调用 → not defined', source: '评估（Step2 实测校准）' },
-  { name: 'withDirectives', group: 'component', status: 'unsupported', note: '自定义指令无对等（Batch A）', source: 'vue-compat Batch A' },
-  { name: 'withScopeId', group: 'component', status: 'unsupported', note: 'Vue 内部渲染助手——scoped CSS 由编译器注入 scope-attr；勿手动调用；当前译为裸调用 → not defined', source: '评估（Step2 实测校准）' },
+  { name: 'resolveComponent', group: 'component', status: 'unsupported', note: 'Vue 内部渲染助手，用户不应手动 import——组件用 usingComponents 静态解析；当前译为裸调用 → not defined', noteEn: 'Vue internal render helper — users should not import it; components resolve statically via usingComponents. Currently emitted as a bare call → not defined', source: '评估（Step2 实测校准）' },
+  { name: 'resolveDirective', group: 'component', status: 'unsupported', note: '自定义指令无对等（Batch A）——用方法调用', noteEn: 'Custom directives have no equivalent (Batch A) — use a method call', source: 'vue-compat Batch A' },
+  { name: 'resolveDynamicComponent', group: 'component', status: 'unsupported', note: '<component :is> 无对等——用 v-if 条件渲染', noteEn: '<component :is> has no equivalent — use v-if', source: 'vue-compat Batch A' },
+  { name: 'renderSlot', group: 'component', status: 'unsupported', note: 'Vue 内部渲染助手——<slot> 由模板编译透传，勿手动调用；当前译为裸调用 → not defined', noteEn: 'Vue internal render helper — <slot> is compiled by the template compiler; do not call it manually. Currently emitted as a bare call → not defined', source: '评估（Step2 实测校准）' },
+  { name: 'mergeProps', group: 'component', status: 'unsupported', note: 'Vue 内部渲染助手——props 归一由编译期完成；当前译为裸调用 → not defined', noteEn: 'Vue internal render helper — props are normalised at compile time; do not call it manually. Currently emitted as a bare call → not defined', source: '评估（Step2 实测校准）' },
+  { name: 'toHandlers', group: 'component', status: 'unsupported', note: 'Vue 内部渲染助手——事件归一由编译期完成；当前译为裸调用 → not defined', noteEn: 'Vue internal render helper — events are normalised at compile time; do not call it manually. Currently emitted as a bare call → not defined', source: '评估（Step2 实测校准）' },
+  { name: 'withCtx', group: 'component', status: 'unsupported', note: 'Vue 内部渲染助手——作用域插槽由模板编译生成（advance Batch 7）；勿手动调用；当前译为裸调用 → not defined', noteEn: 'Vue internal render helper — scoped slots are generated by the template compiler (advance Batch 7); do not call it manually. Currently emitted as a bare call → not defined', source: '评估（Step2 实测校准）' },
+  { name: 'withDirectives', group: 'component', status: 'unsupported', note: '自定义指令无对等（Batch A）', noteEn: 'Custom directives have no equivalent (Batch A)', source: 'vue-compat Batch A' },
+  { name: 'withScopeId', group: 'component', status: 'unsupported', note: 'Vue 内部渲染助手——scoped CSS 由编译器注入 scope-attr；勿手动调用；当前译为裸调用 → not defined', noteEn: 'Vue internal render helper — scoped CSS is injected by the compiler via scope attributes; do not call it manually. Currently emitted as a bare call → not defined', source: '评估（Step2 实测校准）' },
   // 调试/内部
-  { name: 'warn', group: 'component', status: 'unsupported', note: 'Vue 内部 warn，MP 无对等——用 console.warn', source: '评估' },
-  { name: 'devtools', group: 'component', status: 'unsupported', note: 'Vue devtools API，MP 走 @proteus-vue/devtools', source: '评估' },
+  { name: 'warn', group: 'component', status: 'unsupported', note: 'Vue 内部 warn，MP 无对等——用 console.warn', noteEn: 'Vue internal warn; no mini-program equivalent — use console.warn', source: '评估' },
+  { name: 'devtools', group: 'component', status: 'unsupported', note: 'Vue devtools API，MP 走 @proteus-vue/devtools', noteEn: 'Vue devtools API — on mini-program use @proteus-vue/devtools', source: '评估' },
   // ★2026-09-08 P1 对齐：version 已内联——const v = version → data.v = '3.5.42'（VUE_PUBLIC_CONSTS，与 Vue 全集基线 SSOT @vue/runtime-core@3.5.42 对齐）
   { name: 'version', group: 'component', status: 'aligned', note: 'const v = version 内联为版本号字符串（VUE_PUBLIC_CONSTS，随 Vue 演进同步）；产物 data.v=版本号而非 undefined', source: 'P1 对齐（VUE_PUBLIC_CONSTS 内联）' },
 
@@ -133,36 +137,36 @@ export const VUE_COMPAT_MATRIX: VueCompatEntry[] = [
   // 背景（真机复测发现）：对比 Vue 运行时导出 171 项，矩阵原 112 项漏登以下用户可见 API——
   //   未登记落 VUE_COMPAT_UNKNOWN（error 但无替代建议），违反「基准线是全集 + 每个能力给替代建议」。
   //   以下显式登记；纯内部/编译期导出由 VUE_INTERNAL_EXPORTS 集合统一归类（见下）。
-  { name: 'defineAsyncComponent', group: 'component', status: 'unsupported', degrade: true, note: '异步组件无对等（MP 无运行时组件加载）——请改静态 usingComponents 声明 + 分包按需加载', source: '评估（MP 无异步组件加载）' },
-  { name: 'useCssVars', group: 'component', status: 'unsupported', degrade: true, note: '运行时 CSS 变量注入无对等（Skyline/WebView 均不支持运行时写 CSS var）——请改 :style 绑定或静态 class', source: '评估（无运行时 CSS 变量通道）' },
-  { name: 'useCssModule', group: 'component', status: 'unsupported', note: 'CSS Modules 无对等——请用 scoped class（Proteus 默认 scoped）', source: '评估（无 CSS Modules）' },
-  { name: 'createSSRApp', group: 'component', status: 'unsupported', note: 'SSR 应用工厂，MP 无对等——页面由 app.json 声明 + 路由表生成', source: '评估（SSR）' },
-  { name: 'render', group: 'component', status: 'unsupported', note: '运行时渲染入口（框架非目标 §0.4）——请用模板 DSL', source: '评估（框架非目标）' },
-  { name: 'hydrate', group: 'component', status: 'unsupported', note: 'SSR 水合，MP 无对等', source: '评估（SSR）' },
-  { name: 'compile', group: 'component', status: 'unsupported', note: '运行时模板编译（体积代价），Proteus 为编译期转换——请用 SFC', source: '评估（编译期已转换）' },
-  { name: 'defineCustomElement', group: 'component', status: 'unsupported', note: 'Web Components 自定义元素无对等——请用 .vue 组件（usingComponents 静态注册）', source: '评估（无 Custom Elements）' },
-  { name: 'defineSSRCustomElement', group: 'component', status: 'unsupported', note: 'SSR + Custom Elements，MP 无对等', source: '评估（SSR）' },
-  { name: 'useHost', group: 'component', status: 'unsupported', note: 'Custom Elements 宿主，MP 无对等', source: '评估（无 Custom Elements）' },
-  { name: 'useShadowRoot', group: 'component', status: 'unsupported', note: 'Shadow DOM，MP 无对等', source: '评估（无 Shadow DOM）' },
-  { name: 'VueElement', group: 'component', status: 'unsupported', note: 'Custom Elements 基类，MP 无对等', source: '评估（无 Custom Elements）' },
-  { name: 'createRenderer', group: 'component', status: 'unsupported', note: '自定义渲染器入口——Proteus 走 @proteus-vue/renderer-app（G-41 宿主运行时 SPI）', source: '评估（走框架 SPI）' },
-  { name: 'nodeOps', group: 'component', status: 'unsupported', note: 'Vue 内部 DOM 操作集——Proteus 走 @proteus-vue/render-backend（G-37 SPI）', source: '评估（走框架 SPI）' },
-  { name: 'patchProp', group: 'component', status: 'unsupported', note: 'Vue 内部属性补丁——Proteus 走 render-backend', source: '评估（走框架 SPI）' },
-  { name: 'EffectScope', group: 'reactivity', status: 'unsupported', note: 'effectScope 类（运行时作用域），MP 无对等——用 onUnmounted 清理', source: '评估（无 effectScope）' },
+  { name: 'defineAsyncComponent', group: 'component', status: 'unsupported', degrade: true, note: '异步组件无对等（MP 无运行时组件加载）——请改静态 usingComponents 声明 + 分包按需加载', noteEn: 'Async components have no equivalent (no runtime component loading on mini-program) — declare them statically in usingComponents and load them via subpackage lazy loading', source: '评估（MP 无异步组件加载）' },
+  { name: 'useCssVars', group: 'component', status: 'unsupported', degrade: true, note: '运行时 CSS 变量注入无对等（Skyline/WebView 均不支持运行时写 CSS var）——请改 :style 绑定或静态 class', noteEn: 'Runtime CSS-variable injection has no equivalent (neither Skyline nor WebView supports writing CSS vars at runtime) — use :style bindings or a static class', source: '评估（无运行时 CSS 变量通道）' },
+  { name: 'useCssModule', group: 'component', status: 'unsupported', note: 'CSS Modules 无对等——请用 scoped class（Proteus 默认 scoped）', noteEn: 'CSS Modules have no equivalent — use scoped classes (Proteus is scoped by default)', source: '评估（无 CSS Modules）' },
+  { name: 'createSSRApp', group: 'component', status: 'unsupported', note: 'SSR 应用工厂，MP 无对等——页面由 app.json 声明 + 路由表生成', noteEn: 'SSR app factory; no mini-program equivalent — pages are declared in app.json and generated from the route table', source: '评估（SSR）' },
+  { name: 'render', group: 'component', status: 'unsupported', note: '运行时渲染入口（框架非目标 §0.4）——请用模板 DSL', noteEn: 'Runtime render entry (explicitly out of scope, §0.4) — use the template DSL', source: '评估（框架非目标）' },
+  { name: 'hydrate', group: 'component', status: 'unsupported', note: 'SSR 水合，MP 无对等', noteEn: 'SSR hydration; no mini-program equivalent', source: '评估（SSR）' },
+  { name: 'compile', group: 'component', status: 'unsupported', note: '运行时模板编译（体积代价），Proteus 为编译期转换——请用 SFC', noteEn: 'Runtime template compilation (a bundle-size cost); Proteus compiles ahead of time — use SFCs', source: '评估（编译期已转换）' },
+  { name: 'defineCustomElement', group: 'component', status: 'unsupported', note: 'Web Components 自定义元素无对等——请用 .vue 组件（usingComponents 静态注册）', noteEn: 'Web Components custom elements have no equivalent — use a .vue component (statically registered via usingComponents)', source: '评估（无 Custom Elements）' },
+  { name: 'defineSSRCustomElement', group: 'component', status: 'unsupported', note: 'SSR + Custom Elements，MP 无对等', noteEn: 'SSR + Custom Elements; no mini-program equivalent', source: '评估（SSR）' },
+  { name: 'useHost', group: 'component', status: 'unsupported', note: 'Custom Elements 宿主，MP 无对等', noteEn: 'Custom Elements host; no mini-program equivalent', source: '评估（无 Custom Elements）' },
+  { name: 'useShadowRoot', group: 'component', status: 'unsupported', note: 'Shadow DOM，MP 无对等', noteEn: 'Shadow DOM; no mini-program equivalent', source: '评估（无 Shadow DOM）' },
+  { name: 'VueElement', group: 'component', status: 'unsupported', note: 'Custom Elements 基类，MP 无对等', noteEn: 'Custom Elements base class; no mini-program equivalent', source: '评估（无 Custom Elements）' },
+  { name: 'createRenderer', group: 'component', status: 'unsupported', note: '自定义渲染器入口——Proteus 走 @proteus-vue/renderer-app（G-41 宿主运行时 SPI）', noteEn: 'Custom renderer entry — Proteus uses @proteus-vue/renderer-app (G-41 host runtime SPI)', source: '评估（走框架 SPI）' },
+  { name: 'nodeOps', group: 'component', status: 'unsupported', note: 'Vue 内部 DOM 操作集——Proteus 走 @proteus-vue/render-backend（G-37 SPI）', noteEn: 'Vue internal DOM ops — Proteus uses @proteus-vue/render-backend (G-37 SPI)', source: '评估（走框架 SPI）' },
+  { name: 'patchProp', group: 'component', status: 'unsupported', note: 'Vue 内部属性补丁——Proteus 走 render-backend', noteEn: 'Vue internal prop patching — Proteus uses render-backend', source: '评估（走框架 SPI）' },
+  { name: 'EffectScope', group: 'reactivity', status: 'unsupported', note: 'effectScope 类（运行时作用域），MP 无对等——用 onUnmounted 清理', noteEn: 'effectScope class (runtime scope) has no mini-program equivalent — clean up with onUnmounted', source: '评估（无 effectScope）' },
 
   // ===== lifecycle =====
   { name: 'onMounted', group: 'lifecycle', status: 'aligned', source: 'vue-compat §1（onReady）' },
   { name: 'onUnmounted', group: 'lifecycle', status: 'aligned', source: 'vue-compat §1（onUnload）' },
-  { name: 'onBeforeMount', group: 'lifecycle', status: 'partial', degrade: true, note: '映射 attached 前（无对等 beforeMount）——用 onMounted 前置', source: '评估' },
-  { name: 'onBeforeUnmount', group: 'lifecycle', status: 'partial', degrade: true, note: '映射 detached 前——用 onUnmounted 前置', source: '评估' },
-  { name: 'onUpdated', group: 'lifecycle', status: 'partial', degrade: true, note: 'MP 无对等——用 watch/setData 后', source: '评估' },
-  { name: 'onBeforeUpdate', group: 'lifecycle', status: 'partial', degrade: true, note: 'MP 无对等——用 watch 前置', source: '评估' },
-  { name: 'onActivated', group: 'lifecycle', status: 'unsupported', note: 'keep-alive 无对等——用 onShow', source: '评估' },
-  { name: 'onDeactivated', group: 'lifecycle', status: 'unsupported', note: 'keep-alive 无对等——用 onHide', source: '评估' },
-  { name: 'onErrorCaptured', group: 'lifecycle', status: 'partial', degrade: true, note: '无对等钩子，Web 保留原生语义（已剥离+警告）', source: 'p-error-boundary' },
-  { name: 'onRenderTracked', group: 'lifecycle', status: 'unsupported', note: 'devtools 调试钩子，MP 无对等', source: '评估' },
-  { name: 'onRenderTriggered', group: 'lifecycle', status: 'unsupported', note: '同上', source: '评估' },
-  { name: 'onServerPrefetch', group: 'lifecycle', status: 'unsupported', note: 'SSR，MP 无对等', source: '评估' },
+  { name: 'onBeforeMount', group: 'lifecycle', status: 'partial', degrade: true, note: '映射 attached 前（无对等 beforeMount）——用 onMounted 前置', noteEn: 'Maps to before attached (no beforeMount equivalent) — use the pre-onMounted slot', source: '评估' },
+  { name: 'onBeforeUnmount', group: 'lifecycle', status: 'partial', degrade: true, note: '映射 detached 前——用 onUnmounted 前置', noteEn: 'Maps to before detached — use the pre-onUnmounted slot', source: '评估' },
+  { name: 'onUpdated', group: 'lifecycle', status: 'partial', degrade: true, note: 'MP 无对等——用 watch/setData 后', noteEn: 'No mini-program equivalent — use watch / after setData', source: '评估' },
+  { name: 'onBeforeUpdate', group: 'lifecycle', status: 'partial', degrade: true, note: 'MP 无对等——用 watch 前置', noteEn: 'No mini-program equivalent — use watch before', source: '评估' },
+  { name: 'onActivated', group: 'lifecycle', status: 'unsupported', note: 'keep-alive 无对等——用 onShow', noteEn: 'keep-alive has no equivalent — use onShow', source: '评估' },
+  { name: 'onDeactivated', group: 'lifecycle', status: 'unsupported', note: 'keep-alive 无对等——用 onHide', noteEn: 'keep-alive has no equivalent — use onHide', source: '评估' },
+  { name: 'onErrorCaptured', group: 'lifecycle', status: 'partial', degrade: true, note: '无对等钩子，Web 保留原生语义（已剥离+警告）', noteEn: 'No equivalent hook; Web keeps native semantics (stripped + warned)', source: 'p-error-boundary' },
+  { name: 'onRenderTracked', group: 'lifecycle', status: 'unsupported', note: 'devtools 调试钩子，MP 无对等', noteEn: 'devtools debug hook; no mini-program equivalent', source: '评估' },
+  { name: 'onRenderTriggered', group: 'lifecycle', status: 'unsupported', note: '同上', noteEn: 'Same as onRenderTracked', source: '评估' },
+  { name: 'onServerPrefetch', group: 'lifecycle', status: 'unsupported', note: 'SSR，MP 无对等', noteEn: 'SSR; no mini-program equivalent', source: '评估' },
 
   // ===== 模板指令 / 内置组件（约定由 template.ts 处理，这里登记对齐状态） =====
   { name: 'v-if', group: 'template', status: 'aligned', source: 'vue-compat §1' },
@@ -176,20 +180,20 @@ export const VUE_COMPAT_MATRIX: VueCompatEntry[] = [
   { name: 'v-html', group: 'template', status: 'aligned', source: 'vue-compat §1（rich-text）' },
   // ★2026-09-08 v-text 对齐：v-text="expr" → 元素内容覆盖为文本插值 {{ expr }}（Vue 语义：覆盖子节点输出文本）——消除「剥离导致文本丢失」真 bug
   { name: 'v-text', group: 'template', status: 'aligned', note: 'v-text="expr" → <tag>{{ expr }}</tag>（元素内容覆盖为文本插值；v-text 覆盖子节点——Vue 语义）', source: 'v-text 对齐（模板指令→文本插值）' },
-  { name: 'v-pre', group: 'template', status: 'partial', degrade: true, note: '纯静态内容剥离等价；含 {{ }} 插值时 WXML 无 raw 模式仍会插值（v-pre 跳过编译无法实现）——诚实警告', source: 'v-pre 诚实对齐（静态等价/响应式警告）' },
-  { name: 'v-once', group: 'template', status: 'partial', degrade: true, note: '纯静态内容剥离等价（静态天然只渲染一次）；含 {{ }} 插值时 MP 数据驱动无「渲染一次」惰性——诚实警告', source: 'v-once 诚实对齐（静态等价/响应式警告）' },
+  { name: 'v-pre', group: 'template', status: 'partial', degrade: true, note: '纯静态内容剥离等价；含 {{ }} 插值时 WXML 无 raw 模式仍会插值（v-pre 跳过编译无法实现）——诚实警告', noteEn: 'Stripping pure static content is equivalent; with {{ }} interpolation WXML has no raw mode and still interpolates (skipping compilation for v-pre is not implementable) — honest warning', source: 'v-pre 诚实对齐（静态等价/响应式警告）' },
+  { name: 'v-once', group: 'template', status: 'partial', degrade: true, note: '纯静态内容剥离等价（静态天然只渲染一次）；含 {{ }} 插值时 MP 数据驱动无「渲染一次」惰性——诚实警告', noteEn: 'Stripping pure static content is equivalent (static content renders once anyway); with {{ }} interpolation the mini-program data flow has no "render once" laziness — honest warning', source: 'v-once 诚实对齐（静态等价/响应式警告）' },
   { name: 'v-cloak', group: 'template', status: 'aligned', source: 'vue-compat §1（MP 无首帧未编译闪烁——剥离保留正常插值，语义等价 noop）' },
   { name: 'v-slot', group: 'template', status: 'aligned', source: 'vue-compat §1（具名）' },
   { name: ':class', group: 'template', status: 'aligned', source: 'vue-compat §1（数组+对象简写）' },
   { name: ':style', group: 'template', status: 'aligned', source: 'v-bind-style 派生序列化（#500）' },
   { name: '<transition>', group: 'template', status: 'aligned', source: 'advance Batch 2/5（进入+离开动画）' },
-  { name: '<transition-group>', group: 'template', status: 'partial', degrade: true, note: '列表过渡无对等——用组件级 transition', source: 'advance Batch 2' },
-  { name: '<keep-alive>', group: 'template', status: 'unsupported', note: '无对等——用 v-if + 显式缓存，或分包', source: '评估' },
+  { name: '<transition-group>', group: 'template', status: 'partial', degrade: true, note: '列表过渡无对等——用组件级 transition', noteEn: 'List transitions have no equivalent — use a component-level transition', source: 'advance Batch 2' },
+  { name: '<keep-alive>', group: 'template', status: 'unsupported', note: '无对等——用 v-if + 显式缓存，或分包', noteEn: 'No equivalent — use v-if with explicit caching, or a subpackage', source: '评估' },
   { name: '<teleport>', group: 'template', status: 'aligned', note: '<teleport> → <root-portal>（Skyline 官方：子树脱离页面类似 fixed，用于弹窗/弹出层——弹层层叠正解）；to 目标 MP 无对等（root-portal 恒脱离页面）已忽略', source: 'teleport→root-portal 对齐（Skyline 官方组件）' },
-  { name: '<suspense>', group: 'template', status: 'unsupported', note: '无对等', source: '评估' },
-  { name: '<component :is>', group: 'template', status: 'unsupported', note: '动态组件无对等——用 v-if 条件渲染', source: 'vue-compat Batch A' },
+  { name: '<suspense>', group: 'template', status: 'unsupported', note: '无对等', noteEn: 'No equivalent', source: '评估' },
+  { name: '<component :is>', group: 'template', status: 'unsupported', note: '动态组件无对等——用 v-if 条件渲染', noteEn: 'Dynamic components have no equivalent — use v-if', source: 'vue-compat Batch A' },
   { name: '<slot>', group: 'template', status: 'aligned', source: 'vue-compat §1（默认/具名）' },
-  { name: '自定义指令', group: 'template', status: 'unsupported', note: '无对等（Batch A 已警告 v-）——用方法调用', source: 'vue-compat Batch A' },
+  { name: '自定义指令', group: 'template', status: 'unsupported', note: '无对等（Batch A 已警告 v-）——用方法调用', noteEn: 'Custom directives have no equivalent (Batch A already warns on v-) — use a method call', source: 'vue-compat Batch A' },
 
   // ===== SFC 特性 =====
   { name: '<script setup>', group: 'sfc', status: 'aligned', source: '主线（script.ts 转换）' },
@@ -197,7 +201,7 @@ export const VUE_COMPAT_MATRIX: VueCompatEntry[] = [
   { name: ':deep()', group: 'sfc', status: 'aligned', source: 'vue-compat §1' },
   { name: '<style lang=scss>', group: 'sfc', status: 'aligned', source: 'vue-compat §1（scss 预处理器）' },
   { name: '<template #slot>', group: 'sfc', status: 'aligned', source: 'vue-compat §1（具名）' },
-  { name: '模板 ref="x"', group: 'sfc', status: 'partial', degrade: true, note: 'ref="x" → 注入 id="x" + 收集（useTemplateRef(name) → this.selectComponent(\'#name\') 组件实例引用；onLoad 可能 null）', source: 'useTemplateRef 对齐（ref id 注入 + 收集）' },
+  { name: '模板 ref="x"', group: 'sfc', status: 'partial', degrade: true, note: 'ref="x" → 注入 id="x" + 收集（useTemplateRef(name) → this.selectComponent(\'#name\') 组件实例引用；onLoad 可能 null）', noteEn: 'ref="x" → injects id="x" and collects it (useTemplateRef(name) → this.selectComponent(\'#name\') for a component instance; may be null at onLoad)', source: 'useTemplateRef 对齐（ref id 注入 + 收集）' },
   { name: 'TS 类型注解', group: 'sfc', status: 'aligned', source: 'vue-compat §1（TS 剥除）' },
 ]
 

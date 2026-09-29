@@ -225,6 +225,12 @@ jobs:
       - name: 指令集规格门禁（生成物 ↔ 代码一致——防「规格表与实现漂移」）
         run: node scripts/gen-instruction-spec.mjs --check
 
+      # ★2026-09-29 新增：Vue 兼容性页门禁（卡：Vue 兼容对外出口）——页面从 SSOT
+      #   `VUE_COMPAT_MATRIX`（128 项）生成；矩阵随 Vue 版本演进 ⇒ 手抄必然漂移，
+      #   而漂移的后果是**用户按过期文档写代码、撞上编译期报错**（53 项是 error）。
+      - name: Vue 兼容性页门禁（页面 ↔ SSOT 矩阵一致——防「矩阵变了文档没变」）
+        run: node scripts/gen-vue-compat-doc.mjs --check
+
       # ★2026-09-29 新增：柔性系统对外口径门禁——形态数量（与 FORM_PROFILES 键数机器对账）/
       #   弃用术语（Flex System → Fluid System）/ 命名纪律（书本式半开不得写作「半折」）。
       #   背景：收口评审时发现站内写「六种/七种设备形态」而实际已是 8 个（fold/flip 拆类后未同步）。
