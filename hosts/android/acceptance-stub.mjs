@@ -224,13 +224,29 @@ fs.writeFileSync(path.join(sdk, 'platform-tools', 'adb'), STUB, { mode: 0o755 })
 //      · 开发机：本机跑过真机验收 ⇒ 残留 APK 在 ⇒ 桩测绿（**假绿**：掩盖了这条依赖）
 //      · CI/干净克隆：没有 APK ⇒ 脚本 exit 2 ⇒ 桩测红（真红，本次 CI 实测抓到）
 //   ⇒ 正解：桩测**自己放一个占位 APK**（假 adb 不校验内容，只走命令面）——
-//     这才是真正的"设备无关"；开发机上也**强制覆盖**（确保走的是桩测自己的装置）。
-//   ★并发安全：桩测可能与本机真机验收并行（会覆盖同一个文件）⇒ 结束时不删，
-//     保持为桩测占位（内容等价于空文件，真机验收**必然**先 `build-and-run.sh` 重建它）。
+//     这才是真正的"设备无关"。
+//   ★★**但绝不可污染真实构建产物**（2026-09-29 实测的真缺陷）：
+//     首版把占位写进 `build/proteus-layoutcore.apk`（真机验收用的那个路径）⇒
+//     **桩测跑完后，真机验收/16 KB 对齐门禁拿到的是 45 字节假包**
+//     （实测：`check:16kb-align` 报 "File is not a zip file"、`adb install` 报证书错误——
+//      排查了一轮才发现是桩测把它覆盖了）。
+//     ⇒ 正解：占位写到**独立目录**（`build/stub/`），并在跑完后**恢复**真实 APK（若原先有）。
+//     ★纪律：**测试装置不得修改被测对象的产物**（与"标定必须进判据"同族）。
 const apkDir = path.join(HERE, 'build')
-const apkPath = path.join(apkDir, 'proteus-layoutcore.apk')
-fs.mkdirSync(apkDir, { recursive: true })
+const realApkPath = path.join(apkDir, 'proteus-layoutcore.apk')
+const stubDir = path.join(apkDir, 'stub')
+const apkPath = path.join(stubDir, 'proteus-layoutcore.apk')
+
+// 备份真实 APK（若存在）→ 用占位跑 → 跑完恢复
+const realApkBackup = fs.existsSync(realApkPath) ? fs.readFileSync(realApkPath) : null
+fs.mkdirSync(stubDir, { recursive: true })
 fs.writeFileSync(apkPath, 'STUB-APK（桩测占位——非真机包）\n')
+// ★同时把占位放到"被检查的路径"上——但 acceptance.sh 读的是 build/ 下那个
+//   ⇒ 用 SKIP_BUILD 时它只检查存在性；为不污染，桩测改为**临时移走**真实 APK 并放占位，
+//     跑完**原样恢复**（字节级）。这是"不破坏产物"与"必须存在"的折中。
+if (realApkBackup !== null) fs.renameSync(realApkPath, path.join(stubDir, 'real.bak'))
+else fs.mkdirSync(apkDir, { recursive: true })
+fs.writeFileSync(realApkPath, 'STUB-APK（桩测占位——非真机包）\n')
 
 const runDirBefore = new Set(fs.existsSync(RESULTS) ? fs.readdirSync(RESULTS) : [])
 const rawPath = path.join(RESULTS, 'raw.txt')
@@ -257,10 +273,17 @@ for (const pat of ['unbound variable', 'command not found', 'syntax error']) {
 if (/自检发现硬伤/.test(out)) fails.push('E-selfcheck 跑后自检判定本次不可信')
 // ★装置自证：本次跑的必须是**桩测自己写的占位 APK**（防"本机残留 APK 掩盖依赖"再次发生）
 {
-  const apkNow = fs.readFileSync(apkPath, 'utf8')
+  const apkNow = fs.readFileSync(realApkPath, 'utf8')
   if (!apkNow.startsWith('STUB-APK')) {
     fails.push('E-device 桩测用的 APK 不是本次写入的占位（说明脚本读了别的装置——"设备无关"被破坏）')
   }
+}
+
+// ★★恢复真实 APK（字节级）——桩测**不得留下副作用**（见上方注释的实测缺陷）
+if (realApkBackup !== null) {
+  fs.writeFileSync(realApkPath, realApkBackup)
+} else {
+  fs.rmSync(realApkPath, { force: true })  // 原本就没有 ⇒ 不留占位残留
 }
 
 {

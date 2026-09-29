@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # hosts/ios/run-selfdraw.sh —— ★★跑通「标准 Vue 应用 → 自绘管线」（真机）
 #
-# ★★纪律（本机踩坑）：**`$VAR` 不得直接接全角字符**（如 `（$VAR）`）——
+# ★★纪律（本机踩坑）：**`$VAR` 不得直接接全角字符**（如 `（${VAR}）`）——
 #   macOS 自带 bash 3.2 在**非 UTF-8 locale** 下会把全角字符的首字节吞进变量名
 #   （现象：`PROFILE_DIR\xEF: unbound variable` + `set -u` 直接中断）。
 #   ⇒ 一律写成 `${VAR}`。终端里跑没事（locale 是 UTF-8），但被工具/CI 以 C locale 调用时必炸。
@@ -202,7 +202,7 @@ xcrun devicectl device process terminate --device "$UDID" "$BUNDLE_ID" >/dev/nul
 # ★terminate 是**异步**的，但不能固定 sleep 盲等（本仓效率纪律）：
 #   复用仓库自带的**条件等待**脚本，探测「该可执行文件已不在设备进程列表」。
 #   ★注意匹配的锚点：`device info processes` 列的是**可执行路径**
-#   （我们的 = `ProteusSelfDraw`），不含 bundle id——故用可执行名而非 $BUNDLE_ID。
+#   （我们的 = `ProteusSelfDraw`），不含 bundle id——故用可执行名而非 ${BUNDLE_ID}。
 #   探测不到 = 就绪（含"本来就没在跑"，故用 `! grep`）。
 bash "$ROOT/.agents/skills/ai-efficiency-rules/scripts/wait_for.sh" \
   --cmd "! xcrun devicectl device info processes --device $UDID 2>/dev/null | grep -q ProteusSelfDraw" \

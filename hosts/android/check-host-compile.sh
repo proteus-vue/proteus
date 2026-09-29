@@ -40,7 +40,7 @@ ANDROID_JAR=""
 if [ -d "$PLATFORMS" ]; then
   ANDROID_JAR="$(ls -d "$PLATFORMS"/android-* 2>/dev/null | sort -V | tail -1)/android.jar"
 fi
-[ -f "$ANDROID_JAR" ] || { echo "✗ 找不到 android.jar（SDK platforms 未装？looked: $PLATFORMS）"; exit 2; }
+[ -f "$ANDROID_JAR" ] || { echo "✗ 找不到 android.jar（SDK platforms 未装？looked: ${PLATFORMS}）"; exit 2; }
 
 echo "==> 编译检查 Android 宿主（javac · 零设备）"
 echo "    JDK: $JDK"

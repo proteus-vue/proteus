@@ -1,0 +1,32 @@
+# .cargo/config.toml —— ★16 KB page size 对齐（Android 15+ 要求）
+#
+# 【为什么需要（本会话真机实测的缺陷）】真机安装/运行时提示 so 库未做 16 KB 对齐。
+#   实测（`llvm-readelf -l`）：本仓产物所有 LOAD 段的 `Align` 都是 **0x1000（4 KB）**，
+#   而 **Android 15+ 在 16 KB page size 的设备上要求 ELF LOAD 段按 `0x4000`（16 KB）对齐**
+#   ——否则 `mmap` 该段会失败 ⇒ 加载 .so 失败。
+#
+# 【为什么是"对齐 ELF 段"而不是"p_align 字段好看"】动态链接器按 `p_align` **做 mmap 的页对齐**
+#   （`mmap(addr & ~(align-1), ...)`）。设备页大小 16 KB 时，按 4 KB 对齐的段无法直接映射
+#   ⇒ 必须让链接器把段偏移/VMA 都按 16 KB 排布（`-z max-page-size=16384` 就是这个作用）。
+#
+# 【为什么用 `.cargo/config.toml` 而不是 RUSTFLAGS 环境变量】
+#   cargo 的行为是：**若设置了 `RUSTFLAGS` 环境变量，则 `[target.*] rustflags` 被忽略**
+#   （cargo 文档明确：二者取一）。用配置文件更稳（不依赖每条构建命令都记得导出变量），
+#   且能**只对 Android target 生效**（不影响 macOS/iOS/Windows 的构建产物）。
+#
+# 【★怎么验证（判据，别只看"构建成功"）】
+#   ```bash
+#   llvm-readelf -l <lib>.so | grep LOAD        # 每行最后一列应全为 0x4000
+#   ```
+#   本仓已加门禁：`bash hosts/android/check-16kb-align.sh`（扫全部 .so，任一不是 0x4000 即红）。
+#
+# 【诚实边界】本文件只解决 **ELF 段对齐**。APK 内的**存储**对齐（zipalign -P 16，让未压缩的
+#   .so 落在 16 KB 边界）是另一件事，见 `hosts/android/build-and-run.sh` 的 zipalign 步骤。
+
+# ★只对 Android arm64 生效（本仓 Android 目标唯一 ABI）
+[target.aarch64-linux-android]
+rustflags = ["-C", "link-arg=-Wl,-z,max-page-size=16384"]
+
+# ★armv7 也加上：本仓 rustup 装了 armv7-linux-androideabi（32 位设备同样有 16 KB 趋势）
+[target.armv7-linux-androideabi]
+rustflags = ["-C", "link-arg=-Wl,-z,max-page-size=16384"]

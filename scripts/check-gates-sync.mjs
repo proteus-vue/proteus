@@ -77,6 +77,12 @@ const LOCAL_ONLY = {
   //   ★且它在 `build-and-run.sh` 里**每次构建都会重生成** ⇒ 真机测试抓不到漂移（只有"克隆后不构建"才踩到）。
   //   归开发机：改协议/编码器后本地跑一次即可（CI 上跑需完整 dist 链，成本高于收益）。
   'check:ops-fixture': '生成器依赖 TS 编码器 + 适配器（需 build-packages dist）；且漂移只在"克隆后不构建"时踩到 ⇒ 开发机跑',
+  // ★16 KB 对齐门禁（2026-09-29，用户真机反馈触发）：需 NDK（llvm-readelf）+ Android 构建产物。
+  //   CI（ubuntu）无 NDK 与 hosts/android 产物 ⇒ 跑不了；开发机在"改宿主/链接参数后"跑。
+  'check:16kb-align': '需 NDK（llvm-readelf 读 ELF 段对齐）+ hosts/android 构建产物；CI 无该环境',
+  // ★shell 变量边界门禁（$VAR<全角> 会被 bash 当变量名一部分）：纯静态扫描、**不依赖构建**。
+  //   ★本可接 CI，但它扫的是 hosts/**/*.sh（CI 不怎么跑那些）——归开发机与 16kb 一并跑即可。
+  'check:shell-i18n-vars': '扫 hosts/**/*.sh 的静态门禁；与 check:16kb-align 同批在开发机跑（改脚本后）',
   // ★Android 宿主编译检查（2026-09-29，与 check:ios-selfdraw-compile 同源盲区）：
   //   编译宿主需 Android SDK（android.jar）+ JDK；CI 为 ubuntu-latest，不装 Android SDK ⇒ 跑不了。
   'check:android-host-compile': '需 Android SDK（android.jar）+ JDK 17；CI 为 ubuntu-latest，未装 Android SDK',
