@@ -6,7 +6,7 @@ order: 0
 
 # Capabilities overview
 
-> 81 capability primitives — SSOT = `PRIMITIVE_CATALOG` (capability kind) + `CapabilityHooks` interface. **All hooks implemented** (API ready — target bridges/degradation in each page's compat table).
+> 82 capability primitives — SSOT = `PRIMITIVE_CATALOG` (capability kind) + `CapabilityHooks` interface. **All hooks implemented** (API ready — target bridges/degradation in each page's compat table).
 
 ## Network & Communication (10)
 
@@ -128,7 +128,7 @@ order: 0
 | C35 | [capability.log](/docs/capability/log) | `useLog()` | `Logger` | — |
 | C66 | [capability.performance](/docs/capability/performance) | `usePerformance()` | `PerformanceAPI` | wx.getPerformance/reportPerformance |
 
-## Other (6)
+## Other (7)
 
 | # | Capability | API | Returns | Mini Program equivalent |
 |---|---|---|---|---|
@@ -138,3 +138,4 @@ order: 0
 | C54 | [capability.address](/docs/capability/address) | `useAddress()` | `ShippingAddress` | wx.chooseAddress |
 | C55 | [capability.wifi](/docs/capability/wifi) | `useWifi()` | `WifiAPI` | wx.getConnectedWifi/getWifiList/connectWifi |
 | C56 | [capability.we-run](/docs/capability/we-run) | `useWeRun()` | `WeRunData` | wx.getWeRunData |
+| C82 | [capability.webassembly](/docs/capability/webassembly) | `useWebAssembly()` | `WebAssemblyAPI` | — |

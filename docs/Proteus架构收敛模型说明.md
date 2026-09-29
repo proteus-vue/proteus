@@ -17,7 +17,7 @@
 | 这个差别是优化吗 | **不是。是复杂度模型换了，量级差异** |
 | 真正的机制 | **从"无限输入空间"收敛到"有限封闭集"** |
 | 是否完全没有洞 | ❌ **不是。洞被前置到编译期，变成确定的、可枚举的失败** |
-| 最大风险 | **收敛点（184 原语）选错时，纠错成本高于不收敛** |
+| 最大风险 | **收敛点（185 原语）选错时，纠错成本高于不收敛** |
 
 ---
 
@@ -54,7 +54,7 @@
 
 | 层 | 收敛什么 | 后端面对的复杂度 |
 |---|---|---|
-| **① 184 语义原语** | Vue 语义 → 有限语义集（`PRIMITIVE_CATALOG` 为 SSOT） | 184 个概念 |
+| **① 185 语义原语** | Vue 语义 → 有限语义集（`PRIMITIVE_CATALOG` 为 SSOT） | 185 个概念 |
 | **② RenderCmd 线性指令流** | 语义 → 绘制指令 | **一组指令，不需要理解语义** |
 | **③ 拍平不产生独立指令** | 节点数 → 指令数解耦 | 2 万节点 → 24 个节点级开销 |
 
@@ -62,7 +62,7 @@
 
 传统框架遍历的是 **AST**——AST 是**语法层**，语法是开放集。
 
-Proteus **遍历 AST 只有一次**，产出**语义 IR**——语义 IR 是**封闭集**（184 个原语）。
+Proteus **遍历 AST 只有一次**，产出**语义 IR**——语义 IR 是**封闭集**（185 个原语）。
 之后所有后端面对的都是"有限 → 有限"。
 
 > **从无限到有限的这一步，才是规避无底洞的真正机制。**
@@ -71,7 +71,7 @@ Proteus **遍历 AST 只有一次**，产出**语义 IR**——语义 IR 是**�
 
 ### 2.2 第 ② 层是 App 端能快速做出来的直接原因
 
-App 端实现的是一个**指令解释器**，它**完全不需要理解 184 个原语的语义**。
+App 端实现的是一个**指令解释器**，它**完全不需要理解 185 个原语的语义**。
 
 这也解释了为什么 **Flutter widget 映射后端（传统路径）** 与 **Native 后端（指令路径）** 能共存：
 前者是兜底，后者才是真正的路线。
@@ -187,7 +187,7 @@ App 端实现的是一个**指令解释器**，它**完全不需要理解 184 �
 **监控指标**：**扩原语的频率**。
 若该数字持续不为零，说明收敛集尚未稳定。
 
-### 6.2 风险二：184 原语 vs 77 个组件（65 个已实现语义）
+### 6.2 风险二：185 原语 vs 77 个组件（65 个已实现语义）
 
 这个落差需要确认（口径：`check:stats` 的 components = 77 个组件目录 ·
 implemented = 65 个已实现语义——后者指在 **≥3 端**有映射的原语）：
@@ -204,7 +204,7 @@ Hook 是**原语层无法覆盖时的逃逸口**。
 
 > **Hook 越多，说明收敛模型的漏点越多。**
 
-它不是缺陷，但它是"184 原语覆盖得够不够"的**体温计**——
+它不是缺陷，但它是"185 原语覆盖得够不够"的**体温计**——
 建议作为**持续监控项**，而非静态配置。
 
 ---
@@ -245,7 +245,7 @@ Web 端由浏览器自然支持全部 CSS。若不拦，
 Proteus
   Vue 源码
      ↓ 遍历一次 AST
-  184 语义原语（封闭集，SSOT）
+  185 语义原语（封闭集，SSOT）
      ↓ 编译期收敛
   RenderCmd 线性指令流（绝对坐标、平台无关）
      ↓ 拍平：不产生独立指令
@@ -268,7 +268,7 @@ Proteus
 - 仓库结构：43 个 `@proteus-vue/*` workspace 包；`compiler`（111 条规则 + apply 分派层）、`compiler-backend`（CompilerIR 契约 + NodeBackend + 双端等价 Golden）、`compiler-backend-rust`（cargo crate `proteus-cc-rust` → 同一 CompilerIR）、`render-backend`（渲染 SPI + 五后端 + 混合渲染 + 宿主层）
 - CompilerBackend SPI：parse / transform / emit 三阶段 + `IncrementalSession` 增量 + `FallbackBackend` 自动降级；conformance 42 项
 - RenderBackend SPI + conformance 门禁；五官方后端：Headless / VueDom / Native×3 / Flutter widget 映射
-- 184 语义原语清单（`PRIMITIVE_CATALOG` 单一事实源）→ 77 个组件目录（`check:stats` 口径）· 65 个已实现语义（`implementedPrimitives()`）；81 个 Capability Hook；编译期门禁
+- 185 语义原语清单（`PRIMITIVE_CATALOG` 单一事实源）→ 77 个组件目录（`check:stats` 口径）· 65 个已实现语义（`implementedPrimitives()`）；81 个 Capability Hook；编译期门禁
 - 宿主层：`hostRoot` Host Runtime（bootstrap / worker / engine / native 桥）、六容器策略可插拔、所有权/借用检查、`ExecutionCarrier`（JSI / AOT）
 - 验证先于运行：Render / Compiler / Host / Container / Ownership / Test 各层 conformance 32–42 项，CI 自动校验
 - 转场预设：`halfScreen` / `slideUp` / `scaleDown`，配置于 `proteus.config.ts`，可用微信预设 `routeType: 'wx://bottom-sheet'`

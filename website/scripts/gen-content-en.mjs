@@ -2024,4 +2024,16 @@ export const CAP_EN = {
       'device-capability.failed': 'Querying HEVC support failed',
     },
   },
+  webassembly: {
+    desc: 'useWebAssembly: cross-platform WebAssembly — compile / instantiate / validate. ★Three runtime shapes differ substantively (dual-source evidence): mini program uses WXWebAssembly.instantiate(**package path**, .wasm/.wasm.br, base library v2.13.0+, no compile/validate); Web and App-iOS (JavaScriptCore) use the standard WebAssembly (bytes, compile/validate available); App-Android currently has no JS engine → unavailable. Branch on the capability flags (supportsStreaming / supportsPathLoad), never on platform name.',
+    params: {
+      source: 'Module source — a discriminated union: { bytes } (Web / App-JSC) or { path } (mini program package path). Passing the wrong shape for the runtime returns Err(webassembly.unsupported) instead of failing silently.',
+      options: 'Instantiation options',
+      'options.imports': 'Import object ({ module: { name: value } })',
+    },
+    errors: {
+      'webassembly.unsupported': 'WASM is unavailable, or the source shape does not match the current runtime (mini program only accepts a package path; Web/App only accept bytes)',
+      'webassembly.failed': 'Compilation or instantiation failed (invalid bytecode, missing import, trap) — returned as Err, never thrown',
+    },
+  },
 }

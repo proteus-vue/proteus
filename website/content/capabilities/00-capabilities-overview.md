@@ -6,7 +6,7 @@ order: 0
 
 # 能力总览
 
-> 81 个能力原语——SSOT = `PRIMITIVE_CATALOG`（capability kind）+ `CapabilityHooks` 接口。**Hook 全部已实现**（API 就绪，双端桥/降级见各页兼容进度表）
+> 82 个能力原语——SSOT = `PRIMITIVE_CATALOG`（capability kind）+ `CapabilityHooks` 接口。**Hook 全部已实现**（API 就绪，双端桥/降级见各页兼容进度表）
 
 ## 网络与通信（10）
 
@@ -128,7 +128,7 @@ order: 0
 | C35 | [capability.log](/docs/capability/log) | `useLog()` | `Logger` | console + 上报 |
 | C66 | [capability.performance](/docs/capability/performance) | `usePerformance()` | `PerformanceAPI` | wx.getPerformance/reportPerformance |
 
-## 其他（6）
+## 其他（7）
 
 | # | 能力 | API | 返回 | 小程序等价 |
 |---|---|---|---|---|
@@ -138,3 +138,4 @@ order: 0
 | C54 | [capability.address](/docs/capability/address) | `useAddress()` | `ShippingAddress` | wx.chooseAddress |
 | C55 | [capability.wifi](/docs/capability/wifi) | `useWifi()` | `WifiAPI` | wx.getConnectedWifi/getWifiList/connectWifi |
 | C56 | [capability.we-run](/docs/capability/we-run) | `useWeRun()` | `WeRunData` | wx.getWeRunData |
+| C82 | [capability.webassembly](/docs/capability/webassembly) | `useWebAssembly()` | `WebAssemblyAPI` | WXWebAssembly.instantiate（官方文档 performance/wasm） |
