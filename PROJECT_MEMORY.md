@@ -833,6 +833,41 @@ C1 保持 **2/4**（桥已就绪，真机接线受阻于同一前置）。
 
 **⑥ 验证**：全量 **3958/3958**（329 文件，+3）· vue-tsc 0 错 · 门禁全绿。
 
+### ★★★Android JS 执行载体选型（2026-09-29）—— 建议 QuickJS，★本机实测支撑
+
+**① 为什么做（C1/C2 的共同前置）**：C1 剩「可运行 Android 实现」与 C2 剩「JSI 通路」
+**受阻于同一事实**——Android 宿主**无 JS 引擎**（\`hosts/android\` = Java + Rust \`.so\` 直连 JNI；
+WebView 仅作 native-host 演示）；且 Host ABI 的 HA0（八接口 C ABI）零实现。
+
+**② ★本文核心价值：关键结论都有本机实测（不是读文档推断）**
+\`\`\`
+① ES 探测：Proxy/Reflect/Symbol/WeakMap/Promise/Symbol.asyncIterator 全通过
+   · class 私有字段 ✅ · Proxy trap 生效 ✅ · async 返回 Promise ✅
+② 真实 bundle（368.5KB / 375691 字符）：语法解析 ✅（0.03s）· 完整执行 ✅ 无错（含 Vue 3 初始化）
+③ 内存上限：--memory-limit 8MB ⇒ 仍可解析 + 初始化
+④ Vue 响应式原语（Proxy 深层追踪 + WeakMap 依赖表）：行为正确
+⑤ 交叉编译 Android arm64（本仓 NDK）：libquickjs.so = 0.94MB（ELF ARM aarch64）
+\`\`\`
+★途中两个可复现的移植点（已文档化）：**Bionic 无独立 \`-lpthread\`**（并入 libc）·
+**共享库需 \`-fPIC\`**（默认 build 不带）。
+
+**③ 决策：建议 QuickJS**（MIT · ES2025 · 0.94MB · **8MB 内存可跑**）
+· **不选 Hermes** 的硬理由：官方 \`doc/Features.md\` 列 **\`async\`/ES modules 仍在 In Progress**
+  ——而本仓 bundle 用了 async（3 处）+ Vue 内部大量 Promise；
+  ★**保留意见写进文档**：若**启动时间**成为主瓶颈（iOS 实测解析编译占启动 74%），
+    Hermes 的字节码预编译有结构性优势 ⇒ **届时应重评**（不等于永久排除）。
+· **不选 JSC-Android**：WebKit 体积数十 MB + **Android W^X 限制下 JIT 优势消失**（只剩体积负担）
+  + LGPL/BSD 混合许可需法务评估。
+
+**④ 诚实边界（文档 §5）**：① **不含性能预测**（QuickJS 是解释器，JS 吞吐会低于 JSC 的 JIT，需实测）；
+② Hermes/JSC-Android **未实测**（本机无环境）——"不选"依据是**官方文档硬事实 + 结构性成本**；
+③ QuickJS 长期维护依赖作者个人节奏；④ JNI 桥形态未定（取决于尚未实现的 HA0 接口设计）。
+
+**⑤ C1/C2 两卡均已补前置指针**（避免下次重新调研）：选型文档 + 落地路径 S1~S5 + 每步判据
+（如 S1 判 \`file\` 验 ARM aarch64、S3 判"宿主收到 1 次 mount 且批次内容正确"）。
+
+**⑥ 验证**：门禁全绿（docs / docs-stats）。
+
 ### ★★M3 手势落地：平台识别器 + 核心命中标注 target（2026-09-29，提交 `44962ade`）
 
 **方案依据**（06-gesture-animation.md 映射表）：「tap→`GestureDetector` / longPress→`LongPressGesture` /
