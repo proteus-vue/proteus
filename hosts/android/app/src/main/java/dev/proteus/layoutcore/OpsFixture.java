@@ -20,7 +20,7 @@ public final class OpsFixture {
 
     /** TS 编码器产出的指令流（45 字节：20B 头 + 键池 + 串池 + 指令体） */
     public static final byte[] OPS_BYTES = new byte[] {
-        (byte) 80, (byte) 86, (byte) 79, (byte) 80, (byte) 1, (byte) 0, (byte) 0, (byte) 0, (byte) 1, (byte) 0, (byte) 0, (byte) 0, (byte) 1, (byte) 0, (byte) 0, (byte) 0,
+        (byte) 80, (byte) 86, (byte) 79, (byte) 80, (byte) 2, (byte) 0, (byte) 0, (byte) 0, (byte) 1, (byte) 0, (byte) 0, (byte) 0, (byte) 1, (byte) 0, (byte) 0, (byte) 0,
         (byte) 0, (byte) 0, (byte) 0, (byte) 0, (byte) 12, (byte) 0, (byte) 108, (byte) 97, (byte) 121, (byte) 111, (byte) 117, (byte) 116, (byte) 46, (byte) 119, (byte) 105, (byte) 100,
         (byte) 116, (byte) 104, (byte) 2, (byte) 2, (byte) 0, (byte) 0, (byte) 0, (byte) 0, (byte) 0, (byte) 0, (byte) 0, (byte) 52, (byte) 67
     };

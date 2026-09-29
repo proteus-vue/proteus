@@ -259,6 +259,28 @@ ${byteLiteral}
     public static final String SPLICE_MEASURES = ${JSON.stringify(JSON.stringify(sp.textMeasures))};
 }
 `
+// ── ★★`--check` 模式（2026-09-29 新增）──────────────────────────────────────
+//
+// 【为什么必须有（本会话实测的隐患）】本生成器此前**没有校验模式**，而产物**已入库**
+//   （`OpsFixture.java` 是生成物但刻意入库供宿主编译）。实测发现：
+//   入库的夹具版本是 **v1**，而协议早已是 **v2** ⇒ **生成物与源不同步**。
+//   ★为什么没被发现：`build-and-run.sh` 步骤 ①.5 **每次构建都会重新生成**夹具
+//     ⇒ 真机上跑的永远是新版 ⇒ **真机测试抓不到这个漂移**（只有"克隆后不构建就编译"才踩到）。
+//   ⇒ 与 `gen:docs` / `gen:content` 同款处置：**生成物必须有 `--check` 门禁**，防静默漂移。
+const CHECK = process.argv.includes('--check')
+if (CHECK) {
+  const existing = fs.existsSync(OUT) ? fs.readFileSync(OUT, 'utf-8') : ''
+  if (existing.trim() !== java.trim()) {
+    console.error(`✗ 指令流夹具漂移：${path.relative(ROOT, OUT)}`)
+    console.error('  ⇒ 跑 `node hosts/android/gen-ops-fixture.mjs` 重新生成（改了协议/编码器/适配器后必须重生成）')
+    console.error('  ★症状提示：若这是协议版本漂移（v1 vs v2），真机测试**不会红**（构建期会自动重生成）')
+    console.error('    —— 只有本门禁能拦住它。')
+    process.exit(1)
+  }
+  console.log(`✅ 指令流夹具与源一致（${fx.bytes.length} 字节 · ${fx.opCount} 条指令 · 版本在字节内）`)
+  process.exit(0)
+}
+
 fs.writeFileSync(OUT, java)
 console.log(`[android-ops-fixture] ✅ 生成 ${path.relative(ROOT, OUT)}`)
 console.log(`    ${fx.bytes.length} 字节 · ${fx.opCount} 条指令 · 键池 [${fx.keys.join(', ')}]`)

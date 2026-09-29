@@ -73,6 +73,10 @@ const LOCAL_ONLY = {
   //   CI（ubuntu）没有这两者；且该引擎是 **Android 宿主专用**，CI 上跑无意义。
   'check:js-engine-build': '需 .tools/quickjs（下载获取）+ NDK 交叉编译产物；CI 为 ubuntu-latest ⇒ 跑不了',
   'check:js-engine': '需 .tools/quickjs/qjs（本机引擎）；CI 无该环境 ⇒ 归开发机（真机前先过它，再上 S3）',
+  // ★指令流夹具漂移门禁：生成器需跑真实 TS 编码器 + 适配器（依赖 build-packages dist）。
+  //   ★且它在 `build-and-run.sh` 里**每次构建都会重生成** ⇒ 真机测试抓不到漂移（只有"克隆后不构建"才踩到）。
+  //   归开发机：改协议/编码器后本地跑一次即可（CI 上跑需完整 dist 链，成本高于收益）。
+  'check:ops-fixture': '生成器依赖 TS 编码器 + 适配器（需 build-packages dist）；且漂移只在"克隆后不构建"时踩到 ⇒ 开发机跑',
   // ★Android 宿主编译检查（2026-09-29，与 check:ios-selfdraw-compile 同源盲区）：
   //   编译宿主需 Android SDK（android.jar）+ JDK；CI 为 ubuntu-latest，不装 Android SDK ⇒ 跑不了。
   'check:android-host-compile': '需 Android SDK（android.jar）+ JDK 17；CI 为 ubuntu-latest，未装 Android SDK',
