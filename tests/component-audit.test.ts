@@ -47,7 +47,8 @@ describe('G-32 B1 清单冻结（SSOT 规模快照）', () => {
     expect(count('ui')).toBe(29)
     expect(count('shell')).toBe(17)
     expect(count('gesture')).toBe(10)
-    expect(count('capability')).toBe(81)
+    //   + ★2026-09-29 C82 WebAssembly 跨平台：capability+1（81→82）
+    expect(count('capability')).toBe(82)
     expect(count('engineering')).toBe(30)
   })
 

@@ -2570,6 +2570,77 @@ export interface DeviceCapabilityAPI {
   supportsHevc(): Promise<CapResult<boolean>>
 }
 
+/**
+ * ★C82 WebAssembly：跨平台 WASM 模块编译/实例化/校验。
+ *
+ * 【为什么有它】WASM 是"一次编译、三端执行"的计算载体（图像处理 / 编解码 / 加解密 /
+ *   物理引擎等 CPU 密集逻辑），与 Proteus 的「一份源码多端」定位同源。
+ *
+ * ★★**平台真实能力（已取证，非按标准 Web API 假设）**——三端形态**有实质差异**：
+ *
+ * | 端 | 入口 | 首参 | compile/validate | 证据 |
+ * |---|---|---|---|---|
+ * | MP（微信） | `WXWebAssembly.instantiate(path, imports)` | **代码包路径**（.wasm / .wasm.br） | ❌ **无** | 官方文档 + `miniprogram-api-typings/lib.wx.wasm.d.ts` |
+ * | Web | 标准 `WebAssembly` | `BufferSource \| Response \| URL` | ✅ 有 | 平台标准 |
+ * | App-iOS | JSC 内建 `WebAssembly`（与 Web 同形） | 同上 | ✅ 有 | **本机实测**：`validate(minimalModule)===true`，8 个 API 齐备 |
+ * | App-Android | **当前宿主无 JS 引擎** ⇒ 不可用 | — | — | `hosts/android` 内零 JS 引擎（诚实边界） |
+ *
+ * 【因此本原语的设计取舍（★不是"照抄 Web 标准"）】
+ *   · **入口归一为 `instantiate(source)`**，`source` 是**判别联合**（`{ bytes }` / `{ path }`）——
+ *     因为 MP 只收路径、Web/App-JSC 只收字节，**没有**一个共同的首参类型可表达；
+ *     若强行只暴露字节，MP 端会**结构性不可用**（无法把路径变成字节，见下）。
+ *   · **`compile` / `validate` 声明为可选**（`?`）：MP 端**客观没有**这两个方法；
+ *     声明为必需会让 MP 端实现要么撒谎、要么抛错。诚实做法 = 调用方 `if (wasm.compile)` 探测。
+ *   · **`supportsStreaming` / `supportsPathLoad` 两个能力位**把这个差异变成**可查询的数据**，
+ *     而不是让调用方按平台名分支（平台名分支是本仓 stores 铁律禁止的形态）。
+ *
+ * 【诚实边界（明确不支持的）】
+ *   · MP 端**无法**从网络/字节流加载：官方只接受代码包内路径 ⇒ 动态下载 wasm 需先落包
+ *     （`useFileSystem` + 重新分包），本原语**不假装**能做。
+ *   · MP 端 export 支持 函数 / Memory / Table，**iOS 平台暂不支持 Global**（官方原文）。
+ *   · 本原语**不做** WASM↔JS 的自动编组（那需要 IDL）；只负责"拿到 instance"，调用面归调用方。
+ */
+export interface WasmModuleHandle {
+  /** 模块导出的符号（函数 / Memory / Table；Global 依平台而定——见接口头） */
+  exports: Record<string, unknown>
+  /** 该实例是否由**路径**加载（MP 端恒 true；Web/App 端恒 false） */
+  fromPath: boolean
+  /** 释放（暂无资源需释放——预留：WASM 实例由 GC 回收，本方法供未来池化实现统一出口） */
+  dispose(): void
+}
+
+/** WASM 来源（判别联合——见 `WebAssemblyAPI` 头的跨端差异说明） */
+export type WasmSource =
+  /** 字节码（Web / App-JSC 用；MP 端传它 → Err('webassembly.unsupported')） */
+  | { bytes: ArrayBuffer | Uint8Array }
+  /** 代码包内路径（MP 用，支持 .wasm / .wasm.br；Web/App 端传它 → Err） */
+  | { path: string }
+
+export interface WasmInstantiateOptions {
+  /** 导入对象（`{ module: { name: value } }`）；缺省无导入 */
+  imports?: Record<string, Record<string, unknown>>
+}
+
+export interface WebAssemblyAPI {
+  /**
+   * 实例化 WASM 模块（**跨端归一的唯一入口**）。
+   * 不可用平台 / 来源形态不匹配 → `Err('webassembly.unsupported')`（不抛异常）。
+   */
+  instantiate(source: WasmSource, options?: WasmInstantiateOptions): Promise<CapResult<WasmModuleHandle>>
+  /**
+   * 编译但不实例化（**可选**：MP 端无此能力 ⇒ `undefined`；调用方用 `if (wasm.compile)` 探测）。
+   */
+  compile?(bytes: ArrayBuffer | Uint8Array): Promise<CapResult<unknown>>
+  /**
+   * 校验字节码是否为合法模块（**可选**：MP 端无此能力 ⇒ `undefined`）。
+   */
+  validate?(bytes: ArrayBuffer | Uint8Array): Promise<CapResult<boolean>>
+  /** 能力位：是否支持流式/字节编译（Web/App-JSC true；MP **false**——只收路径） */
+  supportsStreaming: boolean
+  /** 能力位：是否支持从代码包路径加载（MP true；Web/App **false**） */
+  supportsPathLoad: boolean
+}
+
 
 /**
  * ★颗粒度对齐 C3：C52 相册（wx.chooseMedia / saveImageToPhotosAlbum / previewImage）
@@ -2777,6 +2848,8 @@ export interface CapabilityBridge {
   getPoster?(): PosterAPI
   /** ★权威标尺缺口 C81 设备能力探测（wx.checkDeviceSupportHevc / web MediaSource） */
   getDeviceCapability?(): DeviceCapabilityAPI
+  /** ★C82 WASM（MP: WXWebAssembly.instantiate(path) / Web & App-JSC: 标准 WebAssembly） */
+  getWebAssembly?(): WebAssemblyAPI
   /** ★能力颗粒度对齐：C20 日历 API（增删查）——优先于 addCalendarEvent */
   getCalendar?(): CalendarAPI
   /** C23 应用生命周期订阅（wx App 钩子 / web visibilitychange+load） */
@@ -3066,6 +3139,8 @@ export interface CapabilityProbe {
   poster: boolean
   /** ★权威标尺缺口：设备能力探测（checkDeviceSupportHevc） */
   deviceCapability: boolean
+  /** ★C82 WASM 可用性（MP 需 WXWebAssembly；Web/App 需全局 WebAssembly） */
+  webAssembly: boolean
 }
 
 // —— 平台桥实现（双端 + mock） ——
@@ -3427,6 +3502,14 @@ interface WxLike {
   onGeneratePoster?: (cb: (res: { src: string; promise?: unknown }) => void) => void
   offGeneratePoster?: (cb?: (...a: never[]) => void) => void
   checkDeviceSupportHevc?: (opt?: { success?: (r: { supportHevc: boolean }) => void; fail?: (e: unknown) => void }) => void
+  // ★C82 WASM：微信的 WXWebAssembly（**形态与 Web 标准有实质差异**——见 WebAssemblyAPI 头图）
+  //   证据：官方文档 `/framework/performance/wasm.html` + `miniprogram-api-typings/lib.wx.wasm.d.ts`
+  //   · instantiate 首参是**代码包路径**（.wasm / .wasm.br），**不是** BufferSource
+  //   · **无** compile / validate（类型包里不存在这两个声明）
+  //   · 基础库 v2.13.0+ 全局可用；v2.15.0+ Worker 内可用
+  WXWebAssembly?: {
+    instantiate: (path: string, imports?: Record<string, Record<string, unknown>>) => Promise<{ exports: Record<string, unknown> }>
+  }
 }
 
 /** wx MapContext（wx.createMapContext 返回——C4 子集） */
@@ -6014,6 +6097,41 @@ function wxBridge(wx: WxLike): CapabilityBridge {
           wx.checkDeviceSupportHevc({ success: (r: { supportHevc: boolean }) => resolve(capOk(!!r.supportHevc)), fail: (e: unknown) => resolve(capErr('device-capability.failed', '查询 HEVC 支持失败', e)) })
         }),
     }),
+    // ★C82 WASM（MP 端）：微信 `WXWebAssembly.instantiate(path, imports)`——**只收代码包路径**。
+    //   与 Web 标准的差异（见 WebAssemblyAPI 头）：无 compile/validate；不支持字节加载。
+    getWebAssembly: () => ({
+      supportsStreaming: false, // MP 只收路径，不支持字节/流式编译（能力位，供调用方免于按平台名分支）
+      supportsPathLoad: true,
+      instantiate: (source, options) => {
+        if (!('path' in source)) {
+          return Promise.resolve(
+            capErr<WasmModuleHandle>(
+              'webassembly.unsupported',
+              'MP 端 WXWebAssembly 只接受代码包路径（.wasm / .wasm.br）——请传 { path }；字节加载请用 Web/App 端',
+            ),
+          )
+        }
+        const W = wx.WXWebAssembly
+        if (!W || typeof W.instantiate !== 'function') {
+          return Promise.resolve(
+            capErr<WasmModuleHandle>('webassembly.unsupported', 'wx.WXWebAssembly.instantiate 缺失（需基础库 v2.13.0+）'),
+          )
+        }
+        return W.instantiate(source.path, options?.imports)
+          .then((inst): CapResult<WasmModuleHandle> =>
+            capOk({
+              exports: (inst?.exports ?? {}) as Record<string, unknown>,
+              fromPath: true,
+              dispose: () => {
+                /* WASM 实例由 GC 回收（MP 侧无显式释放 API）——保留统一出口供未来池化 */
+              },
+            }),
+          )
+          .catch((e: unknown): CapResult<WasmModuleHandle> => capErr('webassembly.failed', 'WXWebAssembly.instantiate 失败', e))
+      },
+      // ★compile / validate **有意不实现**：MP 端无此二能力。
+      //   不实现 = 属性为 undefined ⇒ 调用方 `if (wasm.compile)` 探测即得 false（诚实，不撒谎）。
+    }),
     getCalendar: () => ({
       add: (event) =>
         new Promise<CapResult<void>>((resolve) => {
@@ -7623,6 +7741,60 @@ function webBridge(g: typeof globalThis & { navigator?: Navigator & { getBattery
           return capErr<boolean>('device-capability.unsupported', 'web 无 MediaSource.isTypeSupported')
         }),
     }),
+    // ★C82 WASM（Web 端 / App-iOS JSC 同形）：标准 `WebAssembly`——收字节，compile/validate 齐备。
+    //   ★App-iOS 走本分支的依据：JSC 内建标准 WebAssembly（本机实测 validate(true) + 8 API 齐备）；
+    //     App-Android 当前宿主无 JS 引擎 ⇒ 本原语在该端结构性不可用（诚实边界，不假装支持）。
+    getWebAssembly: () => {
+      const WASM = (g as { WebAssembly?: typeof WebAssembly }).WebAssembly
+      if (!WASM) {
+        // 环境无 WebAssembly（老浏览器 / 无 JS 引擎宿主）→ 能力位全 false，调用即 Err
+        return {
+          supportsStreaming: false,
+          supportsPathLoad: false,
+          instantiate: () =>
+            Promise.resolve(capErr<WasmModuleHandle>('webassembly.unsupported', '当前环境无全局 WebAssembly')),
+        }
+      }
+      return {
+        supportsStreaming: true, // 标准 WebAssembly 接受 BufferSource（`instantiate(bytes)`）
+        supportsPathLoad: false, // 标准入口不收代码包路径（MP 独有形态）
+        instantiate: (source, options) => {
+          if (!('bytes' in source)) {
+            return Promise.resolve(
+              capErr<WasmModuleHandle>(
+                'webassembly.unsupported',
+                'Web/App 端接受字节码（请传 { bytes }）；代码包路径是 MP 独有形态（WXWebAssembly）',
+              ),
+            )
+          }
+          const buf = source.bytes instanceof Uint8Array ? source.bytes : new Uint8Array(source.bytes)
+          return WASM.instantiate(buf as unknown as BufferSource, options?.imports as WebAssembly.Imports | undefined)
+            .then((res): CapResult<WasmModuleHandle> =>
+              capOk({
+                // instantiate(bytes) 返回 { module, instance }；这里统一取 instance.exports
+                exports: ((res as { instance?: { exports: Record<string, unknown> } }).instance?.exports ?? {}) as Record<string, unknown>,
+                fromPath: false,
+                dispose: () => {
+                  /* WASM 实例由 GC 回收——保留统一出口供未来池化 */
+                },
+              }),
+            )
+            .catch((e: unknown): CapResult<WasmModuleHandle> => capErr('webassembly.failed', 'WebAssembly.instantiate 失败', e))
+        },
+        compile: (bytes) =>
+          Promise.resolve()
+            .then(() => WASM.compile(bytes as unknown as BufferSource))
+            .then((m): CapResult<unknown> => capOk(m))
+            .catch((e: unknown): CapResult<unknown> => capErr('webassembly.failed', 'WebAssembly.compile 失败', e)),
+        validate: (bytes) =>
+          Promise.resolve()
+            .then(() => {
+              const buf = bytes instanceof Uint8Array ? bytes : new Uint8Array(bytes)
+              return capOk(WASM.validate(buf as unknown as BufferSource))
+            })
+            .catch((e: unknown): CapResult<boolean> => capErr('webassembly.failed', 'WebAssembly.validate 失败', e)),
+      }
+    },
   }
 }
 
@@ -7848,6 +8020,15 @@ export interface CapabilityHooks {
   usePoster(): CapResult<PosterAPI>
   /** ★C81 useDeviceCapability：设备能力探测（wx.checkDeviceSupportHevc / web MediaSource） */
   useDeviceCapability(): CapResult<DeviceCapabilityAPI>
+  /**
+   * ★C82 WebAssembly：WASM 编译/实例化/校验（跨端归一，平台差异见 `WebAssemblyAPI` 头）。
+   *
+   * 【三端真实形态（已取证）】MP 走 `WXWebAssembly.instantiate(path)`（基础库 v2.13.0+ ·
+   *   只收**代码包路径** · 无 compile/validate）· Web 与 App-iOS(JSC) 走标准 `WebAssembly`
+   *   （收字节 · compile/validate 齐备）· App-Android 当前宿主无 JS 引擎 ⇒ 不可用。
+   *   ⇒ 用 `supportsStreaming` / `supportsPathLoad` 两个能力位判断，**不要按平台名分支**。
+   */
+  useWebAssembly(): CapResult<WebAssemblyAPI>
   /** 能力探测面（降级查询） */
   probe(): Promise<CapabilityProbe>
 }
@@ -8561,6 +8742,10 @@ export function createCapabilityHooks(bridge: CapabilityBridge = createCapabilit
       if (!bridge.getDeviceCapability) throw new CapError('device-capability.unsupported', '桥未提供 getDeviceCapability（useDeviceCapability 不可用）')
       return bridge.getDeviceCapability()
     }),
+    useWebAssembly: () => handleResult<WebAssemblyAPI>(() => {
+      if (!bridge.getWebAssembly) throw new CapError('webassembly.unsupported', '桥未提供 getWebAssembly（useWebAssembly 不可用）')
+      return bridge.getWebAssembly()
+    }),
     probe: async () => ({
       location: bridge.getLocation !== undefined,
       vibrate: bridge.vibrate !== undefined,
@@ -8643,6 +8828,7 @@ export function createCapabilityHooks(bridge: CapabilityBridge = createCapabilit
       translation: bridge.getTranslation !== undefined,
       poster: bridge.getPoster !== undefined,
       deviceCapability: bridge.getDeviceCapability !== undefined,
+      webAssembly: bridge.getWebAssembly !== undefined,
     }),
   }
 }
