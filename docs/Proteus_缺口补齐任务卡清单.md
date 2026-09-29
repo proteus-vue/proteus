@@ -26,7 +26,7 @@
 | **C1** NativeBackend | 🟡 **原型在，生产未就绪** | `render-backend/src/native.ts` 有 `createNativeBackend`（ios/android/harmony 三平台映射表）· 但**真机嵌入与性能证据未建**（Android 侧有 `layout-core` 真机链路，非此 Backend 形态） |
 | **C2** Host Runtime | 🟡 **部分** | `web-host.ts` + `host-conformance.ts`（32 项）· `host-matrix.ts`（6×6 组合矩阵）在；**Native 侧 Host Runtime 未接真机** |
 | **V5** 与 Web VDOM 一致性 | ✅ **已达标** | 浏览器真值基准对拍：`packages/layout-core-rust/tests/golden/browser-layout.json`（21 用例）+ **`browser-mutation.json`**（增量对拍）→ 真机 `V6`/`conformance 0.375dp` |
-| **C3** 超级应用规模编译期性能 | ❌ **未达标** | 无编译耗时基线数据（`docs/proteus-performance-plan/00-baseline-and-roadmap.md:130` 只提"解析编译耗时/bundle 体积"**目标**，无实测基线）· 瓶颈未识别 |
+| **C3** 超级应用规模编译期性能 | ✅ **4/4 达标（2026-09-29）** | 基线载体 = **showcase 真项目**（128 SFC / 599.2 KB）· 工具 `scripts/bench-compile.mjs`（零设备秒级）· 报告 `docs/proteus-performance-plan/13-c3-compile-baseline.md` · ✅ 全量：冷 645.8ms / **热 346.4ms**（2.71 ms/文件 · 1730 KB/s）· ✅ 增量：单文件改一处重编译中位 **5.06ms** · ✅ 体积：890.3 KB / 599.2 KB = **1.486x** · ✅ 瓶颈识别：**模板阶段占 72% 事件**（6154/8518）· 最热规则 `tag/unknown-kebab`（1727 次）· 最慢文件 p-scroll-view 9.2ms/12.5KB · ★异常 `pages/backends.vue` 4.1KB 却 7.1ms（成本/字节异常）· ★门禁 `pnpm check:compile-baseline`（比值为主判据 + 破坏性验证过） |
 | **C4** 184 原语完备性验证 | 🟡 **工具就绪，数据未采集** | `check:degradation`（属性三级降级 + 反黑盒）· `proteus audit coverage`（官方 382 项归类）· `uninstantiatedSlots` 上报仍在 ⇒ **但"真实项目集上的漏点统计"未做**（本仓 `实战采集埋点清单` §2 的 A 类采集，T0 未启动） |
 | **I6** 后端生产就绪度评估 | 🟡 **部分**（缺 Native 侧证据） | Web 侧齐备（`web-host.ts` + 32 项 host-conformance）· **Native 后端无生产就绪证据**（`native.ts` 有映射表，无真机嵌入 + 性能读数） |
 | **I7** 指令级 conformance | ✅ **已达标** | `packages/layout-core-rust/tests/golden/`：`update-ops.json` + **`update-ops.bin`**（跨语言 golden：TS 编码 → Rust 解码）· `browser-layout.json`（21 用例）+ `browser-mutation.json`（增量对拍）· **已接 CI**（`ci.yml` 引用 golden） |
@@ -66,7 +66,7 @@ I8 卡写着「**先做 I6 评估，明确指令流体积是否构成瓶颈，�
 - [x] **V3** LIST_UPDATE 列表更新指令 ✅ **已达标**（含 `relinkRow` 真机量化）
 - [x] **V4** L0/L1 安全判定 ✅ **已达标**（七条件 + 反例 + flush 兜底判据）
 - [x] **I5** overdraw culling ✅ **3/3 全部达标**（视口裁剪 ↓90.1% · 遮挡剔除 ↓99.9% · 同色合并 ↓99.8%）
-- [ ] **C3** 超级应用规模编译期性能 ❌ **未达标**（无基线数据）
+- [x] **C3** 超级应用规模编译期性能 ✅ **4/4 达标**（基线 + 增量 + 体积 + 瓶颈清单，真项目载体 + 回归门禁）
 - [ ] **C4** 184 原语完备性验证 🟡 **工具就绪，数据未采集**
 
 ### 第四批 · P1/P2
@@ -473,11 +473,36 @@ ExecutionCarrier（JSI / AOT）是"宿主侧 1ms"的载体。
 ### 执行
 上百页面级项目的**编译耗时、产物体积、增量编译**实测。
 
-### 验收
-- [ ] 全量编译耗时有基线数据
-- [ ] 增量编译耗时有基线数据
-- [ ] 产物体积有基线数据
-- [ ] 识别并列出编译性能瓶颈
+### 验收（★2026-09-29 实现：**4/4 达标**）
+> 载体：**showcase 真项目**（128 个 SFC / 599.2 KB / 121 页面级 + 分包）——本仓纪律"别用假数据自证"。
+> 工具：`npx tsx scripts/bench-compile.mjs`（零设备 · 零网络 · 秒级）· 基线：`benchmarks/compile-baseline.json`
+> 报告：`docs/proteus-performance-plan/13-c3-compile-baseline.md`
+
+- [x] 全量编译耗时有基线数据 —— ✅ 冷 **645.8ms** / 热 **346.4ms**（2.71 ms/文件 · **1730 KB/s**）。
+  ★冷热差 **1.86×** ⇒ V8 JIT 预热是真实成本项（一次构建 = 一次冷启动 ⇒ 付 5.01 ms/文件）。
+- [x] 增量编译耗时有基线数据 —— ✅ 单文件"改一处→重编译"中位 **5.06ms**（取真项目最大文件 12.5KB）。
+  诚实边界：编译器**无跨文件缓存**（每次调用是独立 SFC → 产物）；真实增量在 **Vite 层**
+  （模块失效 + 该文件重编译）⇒ 本读数测的是"单文件重编译"，不含 Vite 模块图扫描。
+- [x] 产物体积有基线数据 —— ✅ 产物 890.3 KB / 源码 599.2 KB = **1.486x**（wxml+js+wxss）。
+  ★膨胀比**机器无关** ⇒ 被选为门禁**主判据**。
+- [x] 识别并列出编译性能瓶颈 —— ✅ 五项清单（详见报告 §3）：
+  **B1 冷启动 JIT（1.86×）** · **B2 模板阶段占 72% 事件**（6154/8518）·
+  **B3 `tag/unknown-kebab` 1727 次**（真项目 `<p-*>` 标签密度大——纯查表语义，可缓存/短路）·
+  **B4 `pages/backends.vue` 成本/字节异常**（4.1KB 却 7.1ms，而 12.5KB 才 9.2ms，需先归因）·
+  **B5 体积膨胀比 1.486x**（需与其它框架对标才有意义）。
+  ★**本卡只做识别，不含优化实施**（避免"边测边改"污染基线）。
+
+★**门禁**：`pnpm check:compile-baseline`（已接 `pnpm verify` 链）——判据以**比值**为主
+（体积膨胀比 > 基线×1.15 即红；机器无关），绝对耗时只作 3× 宽松上界
+（本仓既有认识：绝对耗时跨机不可比，异构 CI 同机实测可达 1.6×）。
+**破坏性验证**：篡改基线 `sizeRatio=0.5` ⇒ `--check` 立刻红并准确报出比值（exit 1）；还原后绿。
+归 **LOCAL_ONLY**（CI 共享 runner 波动会产生噪声红——本仓已有 T4/V11 两次实测教训），
+`check:gates-sync` 已登记理由。
+
+★**对 C1 的决策输入**：128 文件全量热编译 346ms ⇒ 线性外推 **1000 页面级文件约 2.7 秒**，
+小于典型 CI 构建预算（本仓完整构建含 Vite 打包在 10 秒级以上）⇒
+**C1（NativeBackend）不必先做编译期优化**，可先落地基；编译期优化作独立课题，
+用本基线做前后对比。
 
 ---
 

@@ -1,0 +1,108 @@
+{
+  "updatedAt": "2026-09-29T08:21:10.325Z",
+  "result": {
+    "target": "showcase（真项目）",
+    "fileCount": 128,
+    "srcKB": 599.2,
+    "coldTotalMs": 645.8,
+    "hotTotalMs": 352.4,
+    "hotMsPerFile": 2.753,
+    "hotThroughputKBs": 1700,
+    "incrementalMedianMs": 5.15,
+    "incrementalFile": "showcase/subpackages/components/pages/p-button.vue",
+    "outKB": 890.3,
+    "sizeRatio": 1.486,
+    "phases": {
+      "script": 1628,
+      "style": 736,
+      "template": 6154
+    },
+    "topRules": [
+      {
+        "ruleId": "tag/unknown-kebab",
+        "count": 1727
+      },
+      {
+        "ruleId": "template/scope-attr",
+        "count": 1623
+      },
+      {
+        "ruleId": "directive/v-bind",
+        "count": 1385
+      },
+      {
+        "ruleId": "script/const-to-data",
+        "count": 681
+      },
+      {
+        "ruleId": "component/root-class",
+        "count": 526
+      },
+      {
+        "ruleId": "slot/named-template",
+        "count": 354
+      },
+      {
+        "ruleId": "style/semantic-base-wxss",
+        "count": 256
+      },
+      {
+        "ruleId": "style/px-to-rpx",
+        "count": 256
+      },
+      {
+        "ruleId": "node/interpolation",
+        "count": 204
+      },
+      {
+        "ruleId": "event/click-to-tap",
+        "count": 175
+      }
+    ],
+    "slowest": [
+      {
+        "file": "showcase/subpackages/components/pages/p-scroll-view.vue",
+        "ms": 10.3,
+        "srcKB": 12.5
+      },
+      {
+        "file": "showcase/subpackages/components/pages/p-checkbox.vue",
+        "ms": 8.7,
+        "srcKB": 8.5
+      },
+      {
+        "file": "showcase/subpackages/components/pages/p-textarea.vue",
+        "ms": 7.4,
+        "srcKB": 9.2
+      },
+      {
+        "file": "showcase/subpackages/components/pages/p-picker.vue",
+        "ms": 7.4,
+        "srcKB": 9.5
+      },
+      {
+        "file": "showcase/subpackages/components/pages/p-input.vue",
+        "ms": 7.2,
+        "srcKB": 10
+      },
+      {
+        "file": "showcase/subpackages/components/pages/p-slider.vue",
+        "ms": 5.9,
+        "srcKB": 7.6
+      },
+      {
+        "file": "showcase/subpackages/components/pages/p-switch.vue",
+        "ms": 5.8,
+        "srcKB": 6.5
+      },
+      {
+        "file": "showcase/subpackages/capabilities/pages/css-profile-probe.vue",
+        "ms": 5.8,
+        "srcKB": 13.6
+      }
+    ],
+    "skipped": [
+      "showcase/router/RouterView.vue：产物含 `import.meta` —— 纯编译模式下 `assertValidResult` 的语法校验会拒（真构建里由 Vite 处理该语法）⇒ 本基线不含它"
+    ]
+  }
+}
