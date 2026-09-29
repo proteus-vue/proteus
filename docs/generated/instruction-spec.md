@@ -92,7 +92,11 @@ Ops:            opCount 条（判别字节 + 定长字段）
    跨语言一致性由 golden 锁定：`packages/layout-core-rust/tests/golden/pixel-snap.json`（TS ⇄ Rust）。
 3. **拍平不产生独立指令**：被拍平节点的绘制**并入父级指令**（`mergedFrom` 记录可验证），
    **不新建合成位图**——一旦破坏，iOS 上曾出现的 +78% 内存会以更难查的形式复发；
-4. **paint-hint 编译期推导**：`isMonochrome` / `isPureBackground` / `shareableContent`
+4. **同色相邻背景可合并**（卡 I5-3，`EmitOptions.mergeSameColorBg` 显式开启）：
+   相邻（指令流中紧挨着）+ 同色 + **严丝合缝拼成矩形**的纯背景合并为一条（`mergedBgFrom` 记并入清单）；
+   任一条件不满足即不合并——错位/有缝/异色/圆角/渐变/夹其它绘制都会多画或少画（画家算法下不等价）。
+   ★收益实测：等色长列表 1000 行 **1001 → 2 条**（↓99.8%）；斑马纹对照 **0 合并**（正确拒绝）。
+5. **paint-hint 编译期推导**：`isMonochrome` / `isPureBackground` / `shareableContent`
    随指令携带，平台据此决定 backing store 策略（**禁止运行时猜**）。
 
 ## 4. 版本化与协商
