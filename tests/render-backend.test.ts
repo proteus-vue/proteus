@@ -13,6 +13,7 @@ import {
   mapWidgetType,
   toWidgetTree,
   runBackendConformance,
+  createSelfDrawBatchAdapter,
   toPlainTree,
 } from '@proteus-vue/render-backend'
 import type { ProteusRenderBackend, NativeViewDescriptor, FlutterWidgetDescriptor, HeadlessNode } from '@proteus-vue/render-backend'
@@ -527,5 +528,137 @@ describe('★★C1 · 两条路径等价（SPI NativeBackend ⟷ 真机 selfdraw
     expect(caps.glass, 'SPI 声明 glass 档位').toBe('L3')
     expect(caps.animation, 'SPI 声明原生动画').toBe('native')
     expect(caps.textureSharing, 'SPI 声明纹理共享').toBe(true)
+  })
+})
+
+// ══════════════════════════════════════════════════════════════════════════════
+// ★★C1：**selfdraw 批量宿主桥**（把真机协议接进 SPI —— 卡 C1 的实质产出）
+//
+// 【为什么单列】SPI 层的批量语义（`commit(ops)`）此前**没有生产实现**（只有 mock）。
+//   本组判据锁：批次**正确翻译**为真机宿主的三个入口（mount / update / updatePatches），
+//   且**一次批次 = 一次宿主调用**（Host ABI §3「跨边界调用 = 帧数」）。
+// ══════════════════════════════════════════════════════════════════════════════
+describe('★★C1 · selfdraw 批量宿主桥（commit → 真机入口）', () => {
+  /** 假宿主：记录三个入口的调用与入参（不依赖真机） */
+  function fakeHost() {
+    const calls: Array<{ kind: string; payload: string }> = []
+    return {
+      calls,
+      mount(treeJson: string) { calls.push({ kind: 'mount', payload: treeJson }); return '{"ok":true}' },
+      update(treeJson: string) { calls.push({ kind: 'update', payload: treeJson }); return '{"ok":true}' },
+      updatePatches(patchesJson: string) { calls.push({ kind: 'updatePatches', payload: patchesJson }); return '{"ok":true}' },
+    }
+  }
+
+  const VP = { width: 390, height: 844 }
+
+  it('① 首帧 → mount（一次批次 = 一次宿主调用）', () => {
+    const host = fakeHost()
+    const sd = createSelfDrawBatchAdapter(host, { viewport: VP })
+    const backend = createNativeBackend(sd, 'ios')
+    const root = backend.createElement({ type: 'view', props: {}, children: [] })
+    const child = backend.createText('你好')
+    backend.insert(child, root)
+    backend.flush()
+
+    expect(host.calls.length, '★一次 flush = 一次宿主调用').toBe(1)
+    expect(host.calls[0]!.kind, '首帧走 mount').toBe('mount')
+    expect(sd.hostCalls()).toBe(1)
+    expect(sd.lastCallKind()).toBe('mount')
+    // 入参形态：{viewport, nodes}
+    const payload = JSON.parse(host.calls[0]!.payload) as { viewport: unknown; nodes: unknown[] }
+    expect(payload.viewport).toEqual(VP)
+    expect(payload.nodes.length, '镜像树含 2 节点').toBe(2)
+  })
+
+  it('② ★纯样式批次 → updatePatches（形状 [{id, style}]，且同节点多条 op 合并）', () => {
+    const host = fakeHost()
+    const sd = createSelfDrawBatchAdapter(host, { viewport: VP })
+    const backend = createNativeBackend(sd, 'ios')
+    const root = backend.createElement({ type: 'view', props: {}, children: [] })
+    backend.flush()
+    host.calls.length = 0
+
+    // 同一节点两个属性（应合并成一条 patch 项）
+    backend.patchProp(root, 'backgroundColor', null, '#ff0000')
+    backend.patchProp(root, 'borderRadius', null, 8)
+    backend.flush()
+
+    expect(host.calls.length, '第二次 flush 仍是 1 次调用').toBe(1)
+    expect(host.calls[0]!.kind, '★无结构变化 ⇒ 走 updatePatches（不重发整树）').toBe('updatePatches')
+    const arr = JSON.parse(host.calls[0]!.payload) as Array<{ id: number; style: Record<string, unknown> }>
+    expect(arr.length, '★同节点两条 op 合并为一条 patch 项').toBe(1)
+    expect(arr[0]!.style.backgroundColor).toBe('#ff0000')
+    expect(arr[0]!.style.borderRadius).toBe(8)
+  })
+
+  it('③ 结构变化 → update（整树重发，与真机既有策略一致）', () => {
+    const host = fakeHost()
+    const sd = createSelfDrawBatchAdapter(host, { viewport: VP })
+    const backend = createNativeBackend(sd, 'ios')
+    const root = backend.createElement({ type: 'view', props: {}, children: [] })
+    backend.flush()
+    host.calls.length = 0
+
+    const row = backend.createElement({ type: 'view', props: {}, children: [] })
+    backend.insert(row, root)
+    backend.flush()
+
+    expect(host.calls[0]!.kind, '★结构变化 ⇒ 整树 update').toBe('update')
+    const payload = JSON.parse(host.calls[0]!.payload) as { nodes: Array<{ parentId: number | null }> }
+    expect(payload.nodes.length, '整树含 2 节点').toBe(2)
+    expect(payload.nodes.filter((n) => n.parentId === null).length, '仅 root 无父').toBe(1)
+  })
+
+  it('④ ★文本走样式同通道（宿主 updatePatches 支持 style.text）', () => {
+    const host = fakeHost()
+    const sd = createSelfDrawBatchAdapter(host, { viewport: VP })
+    const backend = createNativeBackend(sd, 'ios')
+    const root = backend.createElement({ type: 'view', props: {}, children: [] })
+    const t = backend.createText('初始')
+    backend.insert(t, root)
+    backend.flush()
+    host.calls.length = 0
+
+    backend.setText(t, '改后')
+    backend.flush()
+    expect(host.calls[0]!.kind).toBe('updatePatches')
+    const arr = JSON.parse(host.calls[0]!.payload) as Array<{ style: Record<string, unknown> }>
+    expect(arr[0]!.style.text, '★文本经 style.text 下发（宿主同通道重度量）').toBe('改后')
+  })
+
+  it('⑤ ★跨边界调用数 = flush 次数（不随节点/操作数增长）——批处理红线', () => {
+    const host = fakeHost()
+    const sd = createSelfDrawBatchAdapter(host, { viewport: VP })
+    const backend = createNativeBackend(sd, 'ios')
+    const root = backend.createElement({ type: 'view', props: {}, children: [] })
+    // 造 200 个节点 + 2000 个属性（远多于调用数）
+    for (let i = 0; i < 200; i++) {
+      const row = backend.createElement({ type: 'view', props: {}, children: [] })
+      backend.insert(row, root)
+      for (let k = 0; k < 10; k++) backend.patchProp(row, `data-k${k}`, null, k)
+    }
+    backend.flush()
+    expect(sd.hostCalls(), '★2200+ 个 op 只产生 1 次跨边界调用').toBe(1)
+    expect(host.calls.length).toBe(1)
+  })
+
+  it('⑥ 移除节点：镜像一致（子树整体消失）', () => {
+    const host = fakeHost()
+    const sd = createSelfDrawBatchAdapter(host, { viewport: VP })
+    const backend = createNativeBackend(sd, 'ios')
+    const root = backend.createElement({ type: 'view', props: {}, children: [] })
+    const mid = backend.createElement({ type: 'view', props: {}, children: [] })
+    const leaf = backend.createText('叶')
+    backend.insert(mid, root)
+    backend.insert(leaf, mid)
+    backend.flush()
+    host.calls.length = 0
+
+    backend.remove(mid)
+    backend.flush()
+    expect(host.calls[0]!.kind, '移除属结构变化 ⇒ update').toBe('update')
+    const payload = JSON.parse(host.calls[0]!.payload) as { nodes: unknown[] }
+    expect(payload.nodes.length, '★子树整体移除（root 只剩自己）').toBe(1)
   })
 })
