@@ -46,6 +46,12 @@ const LOCAL_ONLY = {
   //   ⇒ 归入 LOCAL_ONLY 而非接 CI（接了反而给人"CI 在管这件事"的错觉）。
   'check:pushed': '面向开发机收尾；CI 的 detached HEAD 下恒为 0 ⇒ 接 CI 是假门禁',
   'check:pushed:strict': '同上（strict 只是把提醒改为 exit 1，供收尾显式调用）',
+  // ★★「含官网改动 ≠ 官网已上线」门禁（2026-09-29 新增，背景：9 个 website 提交无 [deploy] 标记，
+  //   线上停在 2026-09-27 —— 用户指出）。CI 里跑它**没有意义**：CI 的 checkout 正是"被部署的那棵树"，
+  //   "[deploy] 之后有无 website 改动"在 CI 视角天然自洽（且 dev 分支形态下结论失真）⇒ 假门禁。
+  //   它的作用域是**开发机收尾**：`pnpm verify` 末尾提醒；发布收尾用 strict 强制。
+  'check:deploy-pending': '面向开发机收尾（本地 git 历史中 [deploy] 之后 website/** 是否仍有改动）；CI 视角天然自洽 ⇒ 假门禁',
+  'check:deploy-pending:strict': '同上（strict 只是把提醒改为 exit 1，供发布收尾显式调用）',
 }
 
 const pkg = JSON.parse(fs.readFileSync(path.join(ROOT, 'package.json'), 'utf8'))

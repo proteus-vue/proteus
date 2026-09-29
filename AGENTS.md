@@ -84,6 +84,23 @@
   （behind>0 直接推会被拒或产生意外合并）。★新增门禁会被 `check:gates-sync` 盯着
   （未接线且未在 `LOCAL_ONLY` 写明理由 ⇒ 当场红）——**接线不靠记忆**。
 
+### ★★红线：官网内容改动必须触发部署（`[deploy]` 标记，2026-09-29 用户指出）
+
+- **机制**：`.github/workflows/pages.yml` 的**触发门**——push 到 main 时，**只有 HEAD 提交消息含
+  `[deploy]` 才真部署**；否则整条 run 只显示 success、**所有 step 全 skipped**（极易误判为"已部署"）。
+- **现象（用户原话：「我注意到官网没有做发布推送」）**：上次真部署 `e6c5c565`（2026-09-27）之后
+  改动 `website/**` 的 **9 个提交**（含 Vapor 更新路径 / Rust 排版核心 / Vue 兼容性三页）**全部无标记**
+  ⇒ 线上仍是旧版。与「提交 ≠ 交付」**同源**：本地门禁全绿、`git status` 也不报错，没有任何提醒。
+- **纪律**：凡改动 `website/**` 的轮次，收尾时最后推一个**带 `[deploy]` 的提交**（可空提交：
+  `git commit --allow-empty -m "chore(deploy): 触发官网部署 [deploy]"`），或把 `[deploy]` 写进本轮
+  **最后一个**提交的消息里；亦可在 Actions 手动 `workflow_dispatch`（等效）。
+- **★顺序禁止**：部署提交推上去后**不要再 push**——`concurrency: pages` 的 run 会被后续普通 push
+  **取消**（那次普通 run 仍显示 success 但步骤全 skipped）。判别部署真假**看 job steps 是否真 ran**，
+  不看 run conclusion。
+- **工具化**：`pnpm check:deploy-pending`（提醒，已接进 `pnpm verify` 末尾）·
+  `pnpm check:deploy-pending:strict`（有未上线内容则 exit 1，供发布收尾）。
+  **上线证据** = pages.yml 的「部署后核验」（verify-live 产物 hash）+ 本机 `pnpm check:live`。
+
 ## 2. 项目门禁（改代码后按需运行）
 
 ```bash
