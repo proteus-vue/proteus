@@ -109,6 +109,13 @@ export interface RenderCmdList {
      * 严丝合缝的等色行必须 > 0，且破坏性验证过）。
      */
     mergedBgCount?: number
+    /**
+     * ★卡 I5-2：**不可见而丢弃**的绘制指令条数（`occludedCount`）。二类同源情形：
+     *   ① 被后画的不透明实心矩形**完整覆盖**（遮挡剔除——本项主体）
+     *   ② 完全落在自己的**裁剪区外**（顺带的一致处理；与视口裁剪同源的正确性）
+     * `0` = 一条都没丢（不是"开关没生效"；判据见 tests：全屏不透明覆盖层必须 > 0）。
+     */
+    occludedCount?: number
   }
 }
 
@@ -155,6 +162,25 @@ export interface EmitOptions {
    *     渐变（同色判断不适用）、拍平并入的指令（`mergedFrom` 非空——语义已不同）。
    */
   mergeSameColorBg?: boolean
+  /**
+   * ★★**遮挡剔除开关**（2026-09-29，卡 I5 执行项 2/3）。
+   *
+   * 【默认关闭——同上】既有读数与 golden 都建立在"全量 emit"上；且遮挡剔除**风险最高**
+   *   （误裁 ⇒ 内容消失，本仓历史上最忌讳的静默缺陷）⇒ 必须显式开启。
+   *
+   * 【判据（三条全满足才丢，全部**保守**取向——宁可少省，不可少画）】
+   *   ① 遮挡物是**不透明实心矩形**：`kind==='background'` + 有 `color` + **无**渐变/圆角
+   *      + 颜色**确实不透明**（只认 `#rgb` / `#rrggbb` / `#rrggbb(ff)` / `rgb(...)`；
+   *        `rgba(...)` α<1、8 位 hex 带 alpha、具名色、未知格式**一律不算**遮挡物）
+   *   ② 遮挡物的**实际绘制区**（自身矩形 ∩ 其生效裁剪区）**完整包含**被遮挡指令的实际绘制区
+   *   ③ 遮挡物排在**绘制序之后**（后画者在上——画家算法）
+   *
+   * 【为什么不裁被遮挡者的子树（诚实边界）】本实现只丢**单条指令**，不做子树级剔除：
+   *   子树里可能有 absolute 后代溢出父盒、或被更后面的其它指令重新盖回来。
+   *   单条指令的"被完整覆盖"是**可直接判定的局部事实**，无需推断全局层叠；
+   *   子树级需要真实层叠分析（z-index / 新层叠上下文）——属后续课题，不在本项内。
+   */
+  cullOccluded?: boolean
 }
 
 /**
@@ -298,6 +324,13 @@ export function emitRenderCmds(roots: LayoutNode[], opts: EmitOptions = {}): Ren
     outCmds = mergeAdjacentSameColorBg(cmds)
     mergedBgCount = cmds.length - outCmds.length
   }
+  // ★卡 I5-2：遮挡剔除（在合并**之后**跑——合并出的更大矩形是更好的遮挡物）
+  let occludedCount = 0
+  if (opts.cullOccluded === true) {
+    const before = outCmds.length
+    outCmds = cullOccludedCmds(outCmds)
+    occludedCount = before - outCmds.length
+  }
 
   return {
     cmds: outCmds,
@@ -317,8 +350,157 @@ export function emitRenderCmds(roots: LayoutNode[], opts: EmitOptions = {}): Ren
        * —— 不是"开关没生效"（判据见 tests：构造严丝合缝的等色行必须 > 0）。
        */
       mergedBgCount,
+      occludedCount,
     },
   }
+}
+
+/** 区间（绝对坐标矩形）——遮挡判定用 */
+interface AbsBox { x: number; y: number; width: number; height: number }
+
+/**
+ * 颜色是否**确实不透明**（保守判定：拿不准一律 false）。
+ *
+ * 【为什么保守】本函数决定"这个矩形能不能当遮挡物"——误判为不透明 ⇒ 把下面真实可见的内容裁掉
+ *   ⇒ **内容消失**（本仓最忌讳的静默缺陷）。故只认最明确的几种写法，其余（具名色 / hsl /
+ *   带 alpha 的 8 位 hex / rgba α<1 / 未知函数式）**一律不算**。
+ */
+function isOpaqueColor(color: string | undefined): boolean {
+  if (color === undefined) return false
+  const c = color.trim().toLowerCase()
+  if (c === 'transparent') return false
+  // #rgb / #rrggbb（无 alpha 通道 ⇒ 不透明）
+  if (/^#[0-9a-f]{3}$/.test(c) || /^#[0-9a-f]{6}$/.test(c)) return true
+  // #rgba / #rrggbbaa——仅当 alpha 为 ff/f 时才算不透明
+  if (/^#[0-9a-f]{4}$/.test(c)) return c[4] === 'f'
+  if (/^#[0-9a-f]{8}$/.test(c)) return c.slice(7) === 'ff'
+  // rgb(r,g,b)（三参无 alpha ⇒ 不透明）；rgba(...) α 必须 >= 1
+  const m = /^rgba?\(([^)]*)\)$/.exec(c)
+  if (m !== null) {
+    const parts = m[1]!.split(',').map((t) => t.trim())
+    if (parts.length === 3) return true
+    if (parts.length === 4) {
+      const a = Number(parts[3])
+      return Number.isFinite(a) && a >= 1
+    }
+  }
+  return false // 具名色 / hsl / 其它：拿不准 ⇒ 不当遮挡物
+}
+
+/**
+ * ★卡 I5 执行项 2/3：**遮挡剔除**（纯函数——指令流 → 指令流）。
+ *
+ * 【规则】一条绘制指令若被**排在它之后**的某条指令（画家算法：后画者在上）
+ *   在其**实际绘制区内完整覆盖**，则该指令不可见 ⇒ 丢弃。
+ *
+ * 【"实际绘制区" = 自身矩形 ∩ 生效裁剪区】裁剪区由 `pushClip`/`popClip` 配对给出；
+ *   **被裁剪的遮挡物只在其裁剪区内有效**（否则会把裁剪区外的内容误裁——本仓实测过
+ *   这类"裁剪未配对/未感知"的缺陷形态）。
+ *
+ * 【遮挡物必须是"不透明实心矩形"】（见 `isOpaqueColor` + 以下条件）：
+ *   有 color、无渐变、无圆角、无描边。
+ *   ★圆角必排除：圆角外是透明的角 ⇒ 覆盖区不是矩形（与同色合并同一条正确性理由）；
+ *   ★渐变必排除：渐变透明度未知；
+ *   ★描边：描边本身不减小覆盖，但**它的存在提示这是一条"有额外绘制语义"的指令**，
+ *     为保守起见排除（少省一点，绝不少画）。
+ *
+ * 【诚实边界（本项不做什么）】只丢**单条**被完整覆盖的指令，**不**做子树级剔除：
+ *   子树可能有 absolute 后代溢出父盒、或被更后面的指令重新盖回；单条覆盖是**可直接判定的
+ *   局部事实**，子树级需要真实层叠分析（z-index / 层叠上下文）——属后续课题。
+ *
+ * 【复杂度】O(n·k)：从**后往前**扫描并维护"已见过的遮挡矩形集"（k = 覆盖矩形数，
+ *   通常很小且会做包含去重），每条指令只需与 k 个矩形做包含比较。
+ */
+function cullOccludedCmds(cmds: RenderCmd[]): RenderCmd[] {
+  /** 能否作为遮挡物（见上方说明） */
+  const opaqueRect = (c: RenderCmd): boolean =>
+    c.kind === 'background'
+    && c.gradient === undefined
+    && c.borderRadius === undefined
+    && c.borderWidth === undefined
+    && c.text === undefined
+    && isOpaqueColor(c.color)
+
+  /** a 是否完整包含 b（含边界相等） */
+  const covers = (a: AbsBox, b: AbsBox): boolean =>
+    a.x <= b.x && a.y <= b.y
+    && a.x + a.width >= b.x + b.width
+    && a.y + a.height >= b.y + b.height
+
+  /** 矩形求交（无交集返回 null） */
+  const intersect = (a: AbsBox, b: AbsBox): AbsBox | null => {
+    const x = Math.max(a.x, b.x)
+    const y = Math.max(a.y, b.y)
+    const r = Math.min(a.x + a.width, b.x + b.width)
+    const bt = Math.min(a.y + a.height, b.y + b.height)
+    if (r <= x || bt <= y) return null
+    return { x, y, width: r - x, height: bt - y }
+  }
+
+  // ── 第一遍（正向）：算出每条指令的**生效裁剪区** ──
+  //   ★三态：`undefined` = 无裁剪 · `null` = 空交集（该区内**完全不可见**）· `AbsBox` = 裁剪框
+  //     空交集必须是**独立状态**而不是"并入最内框"：若并入，该区内的不透明矩形会被当成
+  //     有效遮挡物去遮挡区外内容 ⇒ **误裁**（本仓纪律：宁可少省，不可少画）
+  const clipOf: Array<AbsBox | null | undefined> = new Array<AbsBox | null | undefined>(cmds.length)
+  const stack: Array<AbsBox | null> = []
+  let cur: AbsBox | null | undefined = undefined
+  for (let i = 0; i < cmds.length; i++) {
+    const c = cmds[i]!
+    if (c.kind === 'popClip') {
+      stack.pop()
+      cur = stack.length === 0 ? undefined : stack[stack.length - 1]
+    } else if (c.kind === 'pushClip') {
+      const box: AbsBox = { x: c.x, y: c.y, width: c.width, height: c.height }
+      // 上一态为 null（空）时结果必为空；undefined 时结果就是 box
+      const next: AbsBox | null = cur === null ? null : (cur === undefined ? box : intersect(cur, box))
+      stack.push(next)
+      cur = next
+      clipOf[i] = cur
+      continue
+    }
+    clipOf[i] = cur
+  }
+
+  // ── 第二遍（逆向）：维护"已见过的遮挡矩形"，判定每条是否被完整覆盖 ──
+  const out: RenderCmd[] = []
+  /** 已见过的遮挡矩形（含其生效裁剪后的实际覆盖区）——越靠后的越在上 */
+  const occluders: AbsBox[] = []
+  let culled = 0
+  for (let i = cmds.length - 1; i >= 0; i--) {
+    const c = cmds[i]!
+    if (c.kind === 'pushClip' || c.kind === 'popClip') {
+      out.push(c)
+      continue
+    }
+    const clip = clipOf[i]
+    if (clip === null) { culled++; continue } // 空裁剪区 ⇒ 该区内不可能有任何可见内容
+    const rect: AbsBox = { x: c.x, y: c.y, width: c.width, height: c.height }
+    const visible = clip === undefined ? rect : intersect(rect, clip)
+    if (visible === null) { culled++; continue } // 完全在裁剪区外 ⇒ 不可见（与视口裁剪同源的正确性）
+
+    // 被更上层的遮挡物完整覆盖？
+    let covered = false
+    for (const o of occluders) {
+      if (covers(o, visible)) { covered = true; break }
+    }
+    if (covered) { culled++; continue }
+
+    // 本指令能否成为遮挡物（记其**实际覆盖区**——裁剪后的部分）
+    if (opaqueRect(c)) {
+      // 包含去重：已被更上层覆盖的遮挡物冗余；被新矩形包含的旧矩形也可移除（保持集合小）
+      let redundant = false
+      for (const o of occluders) if (covers(o, visible)) { redundant = true; break }
+      if (!redundant) {
+        for (let k = occluders.length - 1; k >= 0; k--) {
+          if (covers(visible, occluders[k]!)) occluders.splice(k, 1)
+        }
+        occluders.push(visible)
+      }
+    }
+    out.push(c)
+  }
+  out.reverse()
+  return out
 }
 
 /**

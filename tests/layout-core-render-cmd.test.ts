@@ -552,3 +552,173 @@ describe('★卡 I5-3 · 同色相邻背景合并', () => {
     expect(off.cmds.length, '默认关闭 ⇒ 指令数与历史口径一致').toBe(4)
   })
 })
+
+// ══════════════════════════════════════════════════════════════════════════════
+// ★卡 I5 执行项 2/3：**遮挡剔除**（opt-in —— `cullOccluded`）
+//
+// 风险等级：**最高**（误裁 = 内容消失，本仓最忌讳的静默缺陷）⇒ 判据必须能逐条变红：
+//   ① 生效：全屏不透明覆盖层 ⇒ 其下的指令全丢
+//   ② 不该裁的六种情形（半透明 / 圆角 / 渐变 / 描边 / 仅部分覆盖 / 覆盖者在**先**画）
+//   ③ 裁剪交互：被裁剪的遮挡物只在其裁剪区内有效（区外内容不得被误裁）
+//   ④ 默认关闭
+// ══════════════════════════════════════════════════════════════════════════════
+describe('★卡 I5-2 · 遮挡剔除', () => {
+  /** 造一个"底层内容 + 覆盖层"的两兄弟场景（覆盖层在**后** ⇒ 画家算法下在上） */
+  function overlay(bg: { color: string; radius?: boolean; gradient?: boolean; border?: boolean }, cover = { x: 0, y: 0, w: 200, h: 100 }) {
+    const paint: Record<string, unknown> = { backgroundColor: bg.color }
+    if (bg.radius) paint.borderRadius = { top: { kind: 'absolute', dp: 8 }, right: { kind: 'absolute', dp: 8 }, bottom: { kind: 'absolute', dp: 8 }, left: { kind: 'absolute', dp: 8 } }
+    if (bg.gradient) paint.backgroundImage = 'linear-gradient(#000,#fff)'
+    if (bg.border) paint.borderWidth = { top: { kind: 'absolute', dp: 2 }, right: { kind: 'absolute', dp: 2 }, bottom: { kind: 'absolute', dp: 2 }, left: { kind: 'absolute', dp: 2 } }
+    const root = pnode({
+      id: 1,
+      props: {
+        layout: { flexDirection: 'column', width: { kind: 'absolute', dp: 200 }, height: { kind: 'absolute', dp: 100 } },
+        paint: {},
+        paintHint: { isMonochrome: false, isPureBackground: false, staticSubtree: false, needsCompositingLayer: false },
+      },
+      children: [
+        // 底层：有绘制的一整块（会被覆盖）
+        pnode({
+          id: 2,
+          props: {
+            layout: { flexDirection: 'column', position: 'absolute', top: { kind: 'absolute', dp: 0 }, left: { kind: 'absolute', dp: 0 }, width: { kind: 'absolute', dp: 200 }, height: { kind: 'absolute', dp: 100 } },
+            paint: { backgroundColor: '#123456' },
+            paintHint: { isMonochrome: false, isPureBackground: true, staticSubtree: false, needsCompositingLayer: false },
+          },
+        }),
+        // 覆盖层（后画 ⇒ 在上）
+        pnode({
+          id: 3,
+          props: {
+            layout: { flexDirection: 'column', position: 'absolute', top: { kind: 'absolute', dp: cover.y }, left: { kind: 'absolute', dp: cover.x }, width: { kind: 'absolute', dp: cover.w }, height: { kind: 'absolute', dp: cover.h } },
+            paint,
+            paintHint: { isMonochrome: false, isPureBackground: true, staticSubtree: false, needsCompositingLayer: false },
+          },
+        }),
+      ],
+    })
+    const tree = layoutTreeFromPNode([root], { lengthContext: V })
+    solveLayout(tree[0]!, loose(400, UNBOUNDED))
+    return tree
+  }
+
+  it('① ★全屏不透明覆盖层 ⇒ 其下的指令被丢弃（读数 > 0）', () => {
+    const tree = overlay({ color: '#ffffff' })
+    const base = emitRenderCmds(tree)
+    const culled = emitRenderCmds(tree, { cullOccluded: true })
+    expect(base.cmds.length, '基线：底层 + 覆盖层').toBe(2)
+    expect(culled.stats.occludedCount, '★必须真的剔除了（0 = 开关没生效或判据失效）').toBe(1)
+    expect(culled.cmds.map((c) => c.nodeId), '被覆盖的 #2 应消失，覆盖层 #3 保留').toEqual([3])
+  })
+
+  it('② ★半透明覆盖层不得剔除（rgba α<1 / 8 位 hex 带 alpha 都测）', () => {
+    for (const color of ['rgba(255,255,255,0.5)', '#ffffff80']) {
+      const tree = overlay({ color })
+      const culled = emitRenderCmds(tree, { cullOccluded: true })
+      expect(culled.stats.occludedCount, `★半透明 ${color} ⇒ 下层仍可见 ⇒ 不得剔除`).toBe(0)
+      expect(culled.cmds.length).toBe(2)
+    }
+  })
+
+  it('③ ★圆角 / 渐变 / 描边覆盖层不得剔除（覆盖区不是纯矩形）', () => {
+    for (const [name, bg] of [['圆角', { color: '#ffffff', radius: true }], ['渐变', { color: '#ffffff', gradient: true }], ['描边', { color: '#ffffff', border: true }]] as const) {
+      const tree = overlay(bg)
+      const culled = emitRenderCmds(tree, { cullOccluded: true })
+      expect(culled.stats.occludedCount, `★${name}覆盖层 ⇒ 角/边可能透出 ⇒ 不得剔除`).toBe(0)
+    }
+  })
+
+  it('④ ★仅部分覆盖不得剔除', () => {
+    const tree = overlay({ color: '#ffffff' }, { x: 0, y: 0, w: 100, h: 100 }) // 只盖左半
+    const culled = emitRenderCmds(tree, { cullOccluded: true })
+    expect(culled.stats.occludedCount, '★只盖一半 ⇒ 另一半仍可见 ⇒ 不得剔除').toBe(0)
+  })
+
+  it('⑤ ★覆盖者在**先**画（被后画者盖住）⇒ 不得剔除后画的', () => {
+    // 交换顺序：先画白底（大），后画深色（小）——小的在上，不能被下面的裁掉
+    const root = pnode({
+      id: 1,
+      props: { layout: { flexDirection: 'column', width: { kind: 'absolute', dp: 200 }, height: { kind: 'absolute', dp: 100 } }, paint: {}, paintHint: { isMonochrome: false, isPureBackground: false, staticSubtree: false, needsCompositingLayer: false } },
+      children: [
+        pnode({ id: 2, props: { layout: { flexDirection: 'column', width: { kind: 'absolute', dp: 200 }, height: { kind: 'absolute', dp: 100 } }, paint: { backgroundColor: '#ffffff' }, paintHint: { isMonochrome: false, isPureBackground: true, staticSubtree: false, needsCompositingLayer: false } } }),
+        pnode({ id: 3, props: { layout: { flexDirection: 'column', width: { kind: 'absolute', dp: 50 }, height: { kind: 'absolute', dp: 50 } }, paint: { backgroundColor: '#111111' }, paintHint: { isMonochrome: false, isPureBackground: true, staticSubtree: false, needsCompositingLayer: false } } }),
+      ],
+    })
+    const tree = layoutTreeFromPNode([root], { lengthContext: V })
+    solveLayout(tree[0]!, loose(400, UNBOUNDED))
+    const culled = emitRenderCmds(tree, { cullOccluded: true })
+    expect(culled.stats.occludedCount, '小方块在上（后画）⇒ 不能被大底面裁掉').toBe(0)
+    expect(culled.cmds.length).toBe(2)
+  })
+
+  it('⑥ ★裁剪感知：**溢出自裁剪区的**遮挡物只在裁剪区内有效（区外不得误裁）', () => {
+    // 【为什么必须是"溢出"场景（本仓实测的测试覆盖缺口）】首版用"白块恰好等于裁剪区"——
+    //   那种情形下 `visible === rect`，**忽略裁剪的实现也能通过**（破坏性验证当场暴露：
+    //   把遮挡物从 `visible` 换成 `rect`，测试仍全绿）。⇒ 必须让矩形**溢出自裁剪区**，
+    //   才真正检验"用裁剪后的实际覆盖区当遮挡物"。
+    const root = pnode({
+      id: 1,
+      props: { layout: { flexDirection: 'column', width: { kind: 'absolute', dp: 400 }, height: { kind: 'absolute', dp: 300 } }, paint: {}, paintHint: { isMonochrome: false, isPureBackground: false, staticSubtree: false, needsCompositingLayer: false } },
+      children: [
+        // #2 区外内容：落在溢出白块的**原始矩形内**、但**裁剪区外** ⇒ 必须保留
+        pnode({ id: 2, props: { layout: { flexDirection: 'column', position: 'absolute', top: { kind: 'absolute', dp: 150 }, left: { kind: 'absolute', dp: 250 }, width: { kind: 'absolute', dp: 30 }, height: { kind: 'absolute', dp: 30 } }, paint: { backgroundColor: '#123456' }, paintHint: { isMonochrome: false, isPureBackground: true, staticSubtree: false, needsCompositingLayer: false } } }),
+        // #3 裁剪容器（100×60，hidden），内含 #4 白块 **200×200（溢出容器）**
+        pnode({
+          id: 3,
+          props: {
+            layout: { flexDirection: 'column', position: 'absolute', top: { kind: 'absolute', dp: 40 }, left: { kind: 'absolute', dp: 100 }, width: { kind: 'absolute', dp: 100 }, height: { kind: 'absolute', dp: 60 }, overflow: 'hidden' },
+            paint: {},
+            paintHint: { isMonochrome: false, isPureBackground: false, staticSubtree: false, needsCompositingLayer: false },
+          },
+          children: [
+            // ★flexShrink:0 —— 否则 200 高会被 60 高的父压缩到 60（本仓实测：前提自检当场抓出，
+            //   压缩后它就没溢出容器，本用例就测不到"裁剪后的覆盖区"这条路径）
+            pnode({ id: 4, props: { layout: { flexDirection: 'column', width: { kind: 'absolute', dp: 200 }, height: { kind: 'absolute', dp: 200 }, flexShrink: 0 }, paint: { backgroundColor: '#ffffff' }, paintHint: { isMonochrome: false, isPureBackground: true, staticSubtree: false, needsCompositingLayer: false } } }),
+          ],
+        }),
+      ],
+    })
+    const tree = layoutTreeFromPNode([root], { lengthContext: V })
+    solveLayout(tree[0]!, loose(400, UNBOUNDED))
+    const base = emitRenderCmds(tree)
+    const culled = emitRenderCmds(tree, { cullOccluded: true })
+    // 前提自检：#4 的原始矩形确实**覆盖** #2（否则本用例测不到裁剪路径，等于假绿）
+    const c4 = base.cmds.find((c) => c.nodeId === 4)!
+    const c2 = base.cmds.find((c) => c.nodeId === 2)!
+    const rawCovers = c4.x <= c2.x && c4.y <= c2.y && c4.x + c4.width >= c2.x + c2.width && c4.y + c4.height >= c2.y + c2.height
+    expect(rawCovers, '★用例前提：#4 原始矩形应覆盖 #2（否则本用例没测到裁剪）').toBe(true)
+    expect(culled.cmds.some((c) => c.nodeId === 2), '★区外内容必须保留（裁剪区内的白块不能越界裁它）').toBe(true)
+    expect(culled.stats.occludedCount, '本场景无真实遮挡 ⇒ 应为 0').toBe(0)
+  })
+
+  it('⑦ 默认关闭（不传选项 ⇒ 读数 0，指令数与历史口径一致）', () => {
+    const tree = overlay({ color: '#ffffff' })
+    const off = emitRenderCmds(tree)
+    expect(off.stats.occludedCount).toBe(0)
+    expect(off.cmds.length).toBe(2)
+  })
+
+  it('⑧ ★协同：合并出的**大矩形是更强的遮挡物**（单块盖不全、并起来才盖得住）', () => {
+    const mk = (id: number, y: number, color: string, w = 200, h = 50): PNode =>
+      pnode({ id, props: { layout: { flexDirection: 'column', position: 'absolute', top: { kind: 'absolute', dp: y }, left: { kind: 'absolute', dp: 0 }, width: { kind: 'absolute', dp: w }, height: { kind: 'absolute', dp: h } }, paint: { backgroundColor: color }, paintHint: { isMonochrome: false, isPureBackground: true, staticSubtree: false, needsCompositingLayer: false } } })
+    const root = pnode({
+      id: 1,
+      props: { layout: { flexDirection: 'column', width: { kind: 'absolute', dp: 200 }, height: { kind: 'absolute', dp: 100 } }, paint: {}, paintHint: { isMonochrome: false, isPureBackground: false, staticSubtree: false, needsCompositingLayer: false } },
+      // #2 底层（被覆盖目标，200×100）+ 后画的两条**等色上半/下半**（各 200×50）
+      //   单块只盖一半（盖不住）⇒ 只有**合并成 200×100** 才能盖住 #2
+      children: [mk(2, 0, '#123456', 200, 100), mk(3, 0, '#ffffff'), mk(4, 50, '#ffffff')],
+    })
+    const tree = layoutTreeFromPNode([root], { lengthContext: V })
+    solveLayout(tree[0]!, loose(400, UNBOUNDED))
+
+    // 对照：只开遮挡剔除（不合并）⇒ 两块各盖一半 ⇒ 盖不住 #2
+    const cullOnly = emitRenderCmds(tree, { cullOccluded: true })
+    expect(cullOnly.stats.occludedCount, '★单块盖不全 ⇒ 不得剔除（对照组的"不该裁"）').toBe(0)
+
+    // 协同：先合并成 200×100 ⇒ 完整覆盖 #2 ⇒ 剔除
+    const both = emitRenderCmds(tree, { mergeSameColorBg: true, cullOccluded: true })
+    expect(both.stats.mergedBgCount, '两块等色白 ⇒ 合并成 1 条').toBe(1)
+    expect(both.stats.occludedCount, '★合并后完整覆盖 ⇒ 剔除 #2').toBe(1)
+    expect(both.cmds.map((c) => c.nodeId), '只剩合并后的白块（nodeId = 首块 #3）').toEqual([3])
+  })
+})
