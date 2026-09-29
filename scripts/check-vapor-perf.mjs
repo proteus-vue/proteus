@@ -34,6 +34,20 @@ const RATCHET = {
   classBMinShifted: 900, // 1000 行里除脏行外约 999
   /** 类A（边界内变化）：重排节点数上限（应止于该行 ⇒ 个位数） */
   classAMaxRelayoutNodes: 8, // 实测 2
+  /**
+   * ★I8 指令流体积棘轮（2026-09-29 补）。
+   *
+   * 【为什么需要（结构缺口）】协议 V2「池按需」把单条消息从 **8935B → 48B**（194×），
+   *   但此前**没有专门门禁锁它**——只在文档侧（`check:vapor-docs` 比对一个来自报告的读数）
+   *   间接保护 ⇒ 谁若改回"全量池重发"，文档门禁**不会当场红**（报告是外部读数）。
+   *   ⇒ 本棘轮直接在**代码侧**锁两个判据（见下）。
+   */
+  payload: {
+    /** 单条 LIST_UPDATE 消息体积上限（实测 48B；全量池实现 8935B ⇒ 该上限能明确区分） */
+    maxSingleOpBytes: 256,
+    /** 规模无关性探针：这两个池大小下的消息体积必须**相等**（全量池实现会差 ~2900B） */
+    scaleProbeKeys: [100, 3000],
+  },
 }
 
 const TMP = fs.mkdtempSync(path.join(os.tmpdir(), 'vapor-perf-'))
@@ -99,6 +113,30 @@ function runProbe(treePath, opsA, opsB, iters) {
 }
 
 /**
+ * ★I8：指令流体积探针（JS 侧——与 Rust 侧 relayout 探针互补）。
+ *
+ * 【测什么】单条 `LIST_UPDATE` 在"池里已有 N 个键"时的**消息体积**。
+ *   V2 的「池按需」语义 = 只发**被引用的**池条目 ⇒ 体积应与池规模**无关**。
+ *   全量池实现（V1）则线性增长（1000 键 ⇒ 8935B；3000 键 ⇒ 28935B）。
+ */
+function probePayloadSize() {
+  const probe = `
+import { OpCode, PropKeyTable, StringPool, encodeOps } from ${JSON.stringify(path.join(ROOT, 'packages/slot-runtime/src/index.ts'))}
+const out = {}
+for (const n of ${JSON.stringify(RATCHET.payload.scaleProbeKeys)}) {
+  const keys = new PropKeyTable()
+  const pool = new StringPool()
+  for (let i = 0; i < n; i++) { keys.intern('layout.field' + i); pool.intern('id-' + i) }
+  const op = [{ op: OpCode.LIST_UPDATE, listId: 3, itemKeyRef: pool.intern('id-target'), slotId: 7, value: 1 / 3 }]
+  out[n] = encodeOps(op, keys, pool).length
+}
+process.stdout.write(JSON.stringify(out))
+`
+  const raw = execFileSync('npx', ['tsx', '-e', probe], { cwd: ROOT, encoding: 'utf-8', timeout: 120000 })
+  return JSON.parse(raw.trim().split('\n').pop())
+}
+
+/**
  * ★装置自检：探针必须真的应用了指令（`applied`/`relayout_count` 是数，不是 null）。
  *
  * 【为什么必须前置于性能断言（本门禁 2026-09-29 实测的误导）】装置过期时（例如线格式版本
@@ -154,6 +192,29 @@ function main() {
   assertProbeApplied(classA, '类A')
 
   const failures = []
+  // ── ★I8：指令流体积（与 Rust 侧 relayout 互补的 JS 侧棘轮）──
+  let payload = {}
+  try {
+    payload = probePayloadSize()
+  } catch (e) {
+    console.error(`[vapor-perf] ✗ I8 体积探针失败：${e.message}`)
+    process.exit(2)
+  }
+  const payloadSizes = Object.values(payload)
+  const maxPayload = Math.max(...payloadSizes)
+  if (!(maxPayload <= RATCHET.payload.maxSingleOpBytes)) {
+    failures.push(
+      `★指令流体积 ${maxPayload}B > 上限 ${RATCHET.payload.maxSingleOpBytes}B —— **池按需（协议 V2）可能已失效**（全量池实现约 8935B）`,
+    )
+  }
+  // ★规模无关性（比绝对上限更强：全量池在 100 vs 3000 键上必然不等）
+  const distinct = new Set(payloadSizes)
+  if (distinct.size !== 1) {
+    failures.push(
+      `★消息体积随池规模变化（${JSON.stringify(payload)}）—— 池按需语义被破坏（应为规模无关：只发被引用的池条目）`,
+    )
+  }
+
   // ① 性能上限
   if (!(classB.median_relayout_ms <= RATCHET.classBTranslationMs)) {
     failures.push(
@@ -174,6 +235,7 @@ function main() {
   const report = {
     classA: { relayout_ms: classA.median_relayout_ms, nodes: classA.relayout_count },
     classB: { relayout_ms: classB.median_relayout_ms, nodes: classB.relayout_count, delta, shifted },
+    payloadBytes: payload,
   }
 
   if (failures.length === 0) {
@@ -183,6 +245,7 @@ function main() {
       `  类B（边界自身）：${report.classB.relayout_ms.toFixed(3)}ms · 重排 ${report.classB.nodes} 节点 · ` +
         `平移 delta=${report.classB.delta} 兄弟=${report.classB.shifted}（★生效证据）`,
     )
+    console.log(`  ★I8 指令流体积：${maxPayload}B（池规模 ${RATCHET.payload.scaleProbeKeys.join('/')} 键下**恒定**——池按需生效）`)
     fs.rmSync(TMP, { recursive: true, force: true })
     return
   }
