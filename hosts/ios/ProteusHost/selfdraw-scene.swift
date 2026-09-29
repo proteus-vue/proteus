@@ -194,6 +194,14 @@ func physFootprintMB() -> Double {
     ///   ——两组读数完全相同，差点被读成"字族不影响度量"。
     ///   ⇒ 需要真正重建时（对照实验、换主题）必须**显式拆树**：语义明确，不让调用方猜。
     func clearTree() -> String
+    /// ★★**注册自定义字体**（`custom:<族名>` 契约，2026-09-29）——入参 JSON `{family, path}`。
+    ///
+    /// 与 Android `ProteusHostView.registerFont(family, path)` **同契约**；未注册的族名
+    /// 在 `font(size:weight:family:)` 里**显式回退 system + 计数**（不静默）。
+    /// - Returns: `{ok, registered, registered_fonts}`；路径无法解析 ⇒ `ok:false`（**不静默**）
+    func registerFont(_ json: String) -> String
+    /// 自定义字体诊断（未注册命中次数 + 最近缺失的族名 + 注册表规模）
+    func customFontStats() -> String
     /// ★V4：待补刷统计（诊断 + 滚动用例的判据）
     func pendingStats() -> String
     /// ★★V5：**批量像素采样**（渲染一次读多点）——像素级验证的判据
@@ -1719,23 +1727,39 @@ final class SelfDrawBridge: NSObject, SelfDrawExports {
     /// 最近一个未注册的族名（诊断用）
     private(set) static var lastMissingCustomFont = ""
 
-    /// 注册自定义字体（族名 → 字体文件路径）。
-    /// - Returns: true = 注册成功；false = 文件无法解析（调用方应记日志，**不静默**）
+    /// 注册自定义字体。**两种来源**（各对应一类真实用法）：
+    ///   1. **打包字体文件**（@font-face 最常见）⇒ 传 `path`（`CGDataProvider` 加载）；
+    ///   2. **系统已安装字体**（按 PostScript/族名）⇒ 传 `systemName`（`UIFont(name:)` 查找）
+    ///      ——iOS 生态里大量"自定义字体"其实是系统字体按名引用（不需打包文件）。
+    ///
+    /// 【为什么两者都要（本仓真机实测）】首版只支持 `path`，而 V15 用例列的
+    ///   `/System/Library/Fonts/Supplemental/Georgia.ttf` 在 **iOS 上不存在**
+    ///   （那是 macOS 的路径）⇒ 注册全失败、判据 FAIL。平台字体布局不同 ⇒ 不能照搬。
+    /// - Returns: true = 注册成功；false = 无法解析（调用方应记日志，**不静默**）
     @discardableResult
     static func registerFont(family: String, path: String) -> Bool {
-        guard let data = NSData(contentsOfFile: path),
-              let provider = CGDataProvider(data: data),
-              let cg = CGFont(provider) else {
-            return false
+        if !path.isEmpty {
+            guard let data = NSData(contentsOfFile: path),
+                  let provider = CGDataProvider(data: data),
+                  let cg = CGFont(provider) else {
+                return false
+            }
+            // 用 CTFont 从 CGFont 构造（与 cgFont(of:) 同一路子——本仓实测：CGFont(name:) 对
+            // 私有字体名会返 nil，走 provider 才是可靠路径）
+            guard let ct = CTFontCreateWithGraphicsFont(cg, 16.0, nil, nil) as CTFont? else {
+                return false
+            }
+            customFonts[family] = ct as UIFont
+            return true
         }
-        // 用 CTFont 从 CGFont 构造（与 cgFont(of:) 同一路子——本仓实测：CGFont(name:) 对
-        // 私有字体名会返 nil，走 provider 才是可靠路径）
-        var attributes: [CFString: Any] = [kCTFontSizeAttribute: 16.0]
-        attributes[kCTFontNameAttribute] = cg.postScriptName as String? ?? family
-        guard let ct = CTFontCreateWithGraphicsFont(cg, 16.0, nil, nil) as CTFont? else {
-            return false
-        }
-        customFonts[family] = ct as UIFont
+        return false
+    }
+
+    /// 按**系统字体名**注册（`UIFont(name:)` 查找；找不到 ⇒ false，不静默）
+    @discardableResult
+    static func registerSystemFont(family: String, systemName: String) -> Bool {
+        guard let f = UIFont(name: systemName, size: 16) else { return false }
+        customFonts[family] = f
         return true
     }
 
@@ -2642,6 +2666,34 @@ final class SelfDrawBridge: NSObject, SelfDrawExports {
         lastNodes = []
         lastGeom.removeAll(keepingCapacity: true)
         return "{\"ok\":true,\"cleared\":true}"
+    }
+
+    /// 见协议声明（`registerFont`）——支持 `path`（打包字体）或 `systemName`（系统字体名）
+    func registerFont(_ json: String) -> String {
+        guard let d = json.data(using: .utf8),
+              let o = (try? JSONSerialization.jsonObject(with: d)) as? [String: Any],
+              let family = o["family"] as? String else {
+            return "{\"ok\":false,\"error\":\"入参需 {family, path|systemName}\"}"
+        }
+        let path = o["path"] as? String ?? ""
+        let systemName = o["systemName"] as? String ?? ""
+        var ok = false
+        if !path.isEmpty { ok = SelfDrawBridge.registerFont(family: family, path: path) }
+        if !ok && !systemName.isEmpty { ok = SelfDrawBridge.registerSystemFont(family: family, systemName: systemName) }
+        return jsonString(["ok": ok, "registered": ok,
+                           "registered_fonts": SelfDrawBridge.registeredFontCount,
+                           "family": family, "path": path, "system_name": systemName])
+    }
+
+    /// 见协议声明（`customFontStats`）
+    func customFontStats() -> String {
+        jsonString([
+            "ok": true,
+            "registered_fonts": SelfDrawBridge.registeredFontCount,
+            "custom_font_misses": SelfDrawBridge.customFontMisses,
+            "last_missing_custom_font": SelfDrawBridge.lastMissingCustomFont,
+            "font_family_fallbacks": SelfDrawBridge.fontFamilyFallbackCount,
+        ])
     }
 
     func pendingStats() -> String {
