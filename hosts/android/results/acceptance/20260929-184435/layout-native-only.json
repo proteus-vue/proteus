@@ -1,0 +1,12 @@
+{
+  "ok": true,
+  "path": "native",
+  "pss_before_kb": 81540,
+  "pss_after_kb": 110616,
+  "pss_delta_kb": 29076,
+  "elements": 4051,
+  "create_views_ms": 61,
+  "measure_layout_ms": 17,
+  "total_ms": 78,
+  "view_count": 4051
+}
