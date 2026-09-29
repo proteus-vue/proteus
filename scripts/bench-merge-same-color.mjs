@@ -53,3 +53,25 @@ function run(name, root, solveOpts) {
   })
   run('4050 网格 50×40 同色（★有 1px 间隔 ⇒ 不应合并）', root, { maxWidth: 1080, maxHeight: Infinity })
 }
+
+// ④ 遮挡剔除：长列表上盖一个不透明全屏层（典型：弹层/模态遮罩 —— 底下整列表不可见）
+{
+  const ROWS = 1000, H = 56, W = 390
+  let id = 100
+  const root = pn({ id: 1, props: { layout: { flexDirection: 'column', width: L(W), height: L(ROWS * H) }, paint: { backgroundColor: '#ffffff' }, paintHint: { isMonochrome: false, isPureBackground: true, staticSubtree: false, needsCompositingLayer: false } } })
+  root.children = Array.from({ length: ROWS }, (_, i) => bg(id++, W, H, i % 2 ? '#fafafa' : '#f0f0f0'))
+  // 遮罩：全屏不透明（后画 ⇒ 在上）
+  root.children.push(pn({ id: 9000, props: { layout: { flexDirection: 'column', position: 'absolute', top: L(0), left: L(0), width: L(W), height: L(ROWS * H) }, paint: { backgroundColor: '#000000' }, paintHint: { isMonochrome: false, isPureBackground: true, staticSubtree: false, needsCompositingLayer: false } } }))
+  const tree = layoutTreeFromPNode([root], { lengthContext: V })
+  solveLayout(tree[0], { maxWidth: 1080, maxHeight: Infinity })
+  attachParents(tree[0])
+  const full = emitRenderCmds(tree)
+  const withMerge = emitRenderCmds(tree, { mergeSameColorBg: true })
+  const withOcclusion = emitRenderCmds(tree, { cullOccluded: true })
+  const both = emitRenderCmds(tree, { mergeSameColorBg: true, cullOccluded: true })
+  const pct = (a, b) => `${(((a - b) / a) * 100).toFixed(1)}%`
+  console.log('遮罩场景（1000 行 + 全屏不透明遮罩）:')
+  console.log(`  仅遮挡剔除:        ${full.cmds.length} → ${withOcclusion.cmds.length}（↓${pct(full.cmds.length, withOcclusion.cmds.length)}）· 剔除读数 ${withOcclusion.stats.occludedCount}`)
+  console.log(`  仅同色合并:        ${full.cmds.length} → ${withMerge.cmds.length}（↓${pct(full.cmds.length, withMerge.cmds.length)}）· 合并读数 ${withMerge.stats.mergedBgCount}`)
+  console.log(`  ★两者协同:         ${full.cmds.length} → ${both.cmds.length}（↓${pct(full.cmds.length, both.cmds.length)}）· 合并 ${both.stats.mergedBgCount} + 剔除 ${both.stats.occludedCount}`)
+}
