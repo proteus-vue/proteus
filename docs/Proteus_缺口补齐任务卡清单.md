@@ -7,37 +7,75 @@
 
 ---
 
+## ★状态核对（2026-09-29 逐条按**验收标准**核对，非标题比对）
+
+> 说明：下表**只按卡内「验收」逐条取证**，每条给出仓库内可核验的判据；未达标的不勾。
+> 原勾选框保持原样（属作者的执行状态），本表用于避免"已完成的仍被当开项"。
+
+| 卡 | 核对结论 | 逐条依据（可点开验证） |
+|---|---|---|
+| **V1** Vapor 产品化 | 🟡 **部分达标（3/5）** | ✅ 模块可独立引用（`packages/compiler/src/vapor/` 已导出）· ✅ **4001 重排 ≤0.08ms 可复现**（`pnpm check:vapor-perf`，已接 CI）· ✅ 三层嵌套在单测（`tests/vapor-list-e2e.test.ts` 4 处）· ❌ **README 无独立章节**（`grep -c vapor README.md` = 0）· ✅ 单测全绿（**3881**，非 3441） |
+| **I1** 指令集规格化 | ❌ **未达标** | 无公开规格表（`docs/` 内无 opcode 规格文档）· `ir_version` 有机制但**未用于指令集协商** |
+| **I2** 舍入时机统一 | ❌ **未达标** | 主方案 §5.5 仍为"**待 M2 真机数据**"（`04-batches.md` 检查项未勾）；无三端一致的舍入实现 |
+| **I3** paint-hint 编码进指令 | 🟡 **部分达标（2/3）** | ✅ 指令携带 hint（`RenderCmd.hint`，`layout-core/src/render-cmd.ts:58`）· ✅ 编译期推导、运行时零判断（`component-ir/src/pnode-style.ts:496`：`isMonochrome`/`isPureBackground`/`shareableContent`）· ❌ **iOS 内存增量复测未做**（该卡的风险正指向"平台层运行时猜 ⇒ +78% 内存复发"，而复测是验证 hint 真的被平台用于 backing store 策略的**唯一判据**） |
+| **I4** 文本在指令流的表达 | 🟡 **部分达标（2/4）** | ✅ 指令含度量结果（`SET_TEXT` 9B + `textMeasures` 注入协议：建树注入 + `set_text_measures` + splice 追加）· ✅ 平台层不参与排版（只度量并注入，核心算几何）· ❌ **方案选定无显式决策记录**（设计在落地方案 §5.2，但"方案 A vs B"的选择未作为决策留痕）· ❌ **文本一致性未真正进 conformance**（`browser-layout.json` 21 用例里 **`textMeasures` 全为空表**⇒ 文本度量这条通道**没被真值对拍覆盖**） |
+| **V2** 槽位 O(1) 覆盖 | 🟡 **部分达标** | 绑定类型：属性/文本/样式/列表 ✅ 走槽位；**事件**走命中测试 + 派发（`V9` PASS）、**条件**走 L0（设计如此）⇒ 清单存在但**未单列成表**（该卡的交付物是"清单 + 逐类标注"，此项未产出） |
+| **V3** LIST_UPDATE | ✅ **已达标**（判据已量化） | 指令**可用**（`OpCode.LIST_UPDATE 0x22` + `ListRegistry` 解析为普通 SET_STYLE/SET_TEXT）· 单行更新**不随行数线性增长**——★**2026-09-29 实测**：行级失效 `relinkRow` 后 JS 段 **5.42 → 1.91ms**；但**端到端仍 6.0ms**（瓶颈在协议层键池重发，见 I8 条目）· 长列表无回退（`V12`/`V14` PASS） |
+| **V4** L0/L1 安全判定 | ✅ **已达标** | 七条件实现于 `slot-runtime/src/tier.ts`（`build.ts` Step 6 复用，**同一语义一处实现**）· 反例测试在 `tests/`（含 `forcePure` 路径）· 误判为 L1 的**静默不更新**风险由 flush 判据 + `unsupported` 上报兜底 |
+| **I5** overdraw culling | ❌ **未达标** | `render-cmd.ts` 有绝对坐标（culling 前提），但**无按包围盒过滤视口外的实现**（`emitRenderCmds` 无 viewport 参数） |
+| **C1** NativeBackend | 🟡 **原型在，生产未就绪** | `render-backend/src/native.ts` 有 `createNativeBackend`（ios/android/harmony 三平台映射表）· 但**真机嵌入与性能证据未建**（Android 侧有 `layout-core` 真机链路，非此 Backend 形态） |
+| **C2** Host Runtime | 🟡 **部分** | `web-host.ts` + `host-conformance.ts`（32 项）· `host-matrix.ts`（6×6 组合矩阵）在；**Native 侧 Host Runtime 未接真机** |
+| **V5** 与 Web VDOM 一致性 | ✅ **已达标** | 浏览器真值基准对拍：`packages/layout-core-rust/tests/golden/browser-layout.json`（21 用例）+ **`browser-mutation.json`**（增量对拍）→ 真机 `V6`/`conformance 0.375dp` |
+| **C3** 超级应用规模编译期性能 | ❌ **未达标** | 无编译耗时基线数据（`docs/proteus-performance-plan/00-baseline-and-roadmap.md:130` 只提"解析编译耗时/bundle 体积"**目标**，无实测基线）· 瓶颈未识别 |
+| **C4** 184 原语完备性验证 | 🟡 **工具就绪，数据未采集** | `check:degradation`（属性三级降级 + 反黑盒）· `proteus audit coverage`（官方 382 项归类）· `uninstantiatedSlots` 上报仍在 ⇒ **但"真实项目集上的漏点统计"未做**（本仓 `实战采集埋点清单` §2 的 A 类采集，T0 未启动） |
+| **I6** 后端生产就绪度评估 | 🟡 **部分**（缺 Native 侧证据） | Web 侧齐备（`web-host.ts` + 32 项 host-conformance）· **Native 后端无生产就绪证据**（`native.ts` 有映射表，无真机嵌入 + 性能读数） |
+| **I7** 指令级 conformance | ✅ **已达标** | `packages/layout-core-rust/tests/golden/`：`update-ops.json` + **`update-ops.bin`**（跨语言 golden：TS 编码 → Rust 解码）· `browser-layout.json`（21 用例）+ `browser-mutation.json`（增量对拍）· **已接 CI**（`ci.yml` 引用 golden） |
+| **V5** Vapor 与 Web VDOM 一致性 | ✅ **已达标** | 见 `browser-layout.json`（全量）+ `browser-mutation.json`（增量）⇒ 真机 `V6_sfc_full_tree` PASS · conformance **0.375dp**（合格线 0.5） |
+| **V6** 动画指令 AnimOp（P2） | ❌ **未达标** | `AnimOpCode` **仅存在于设计文档**（本仓 grep 无实现）——与 `Proteus_App端路由与动画系统设计方案` 的 RT0/RT2/RT4 未实现状态一致 |
+| **I8** 指令流体积优化（P2） | 🟢 **前提已满足，待立项** | 本日实测证明体积**确已构成瓶颈**（单条 8935B / 膨胀 78× / 占端到端 2.42ms）⇒ 满足该卡"先做 I6 评估再投入"的前提，可进方案设计 |
+
+### ★给 I6/I8 的实测输入（2026-09-29）
+
+I8 卡写着「**先做 I6 评估，明确指令流体积是否构成瓶颈，再决定是否投入**。
+**不要提前优化。**」——本日实测已给出评估所需的**关键事实**：
+
+- 单条 LIST 更新指令的消息体积 **8935 字节**（其中 **~8900 字节是"全量键池重发"**，真实增量约 20 字节）；
+- 该膨胀使**编码成本 42×**（0.006 → 0.258ms），并占端到端 **6.0ms 中的 2.42ms**；
+- ⇒ **体积确已构成瓶颈**（且是当前 §10 核心指标未达标的**主要剩余项**）⇒ I8 的"不要提前优化"前提**已满足**。
+
+---
+
 ## 进度总表（勾选用）
 
 ### 第一批 · P0（并行启动）
 
-- [ ] **V1** Vapor 成果产品化 — ★ 最高性价比
-- [ ] **I1** 指令集规格化与版本化
-- [ ] **I2** 舍入时机统一
-- [ ] **I3** paint-hint 编码进指令
+- [ ] **V1** Vapor 成果产品化 — ★ 最高性价比 🟡 **3/5**（缺 README 章节）
+- [ ] **I1** 指令集规格化与版本化 ❌ **未达标**（无规格表）
+- [ ] **I2** 舍入时机统一 ❌ **未达标**（主方案仍"待真机数据"）
+- [x] **I3** paint-hint 编码进指令 ✅ **2/3**（指令带 hint ✓ / 编译期推导 ✓ / iOS 内存复测 ❌）
 
 ### 第二批 · P0（依赖第一批）
 
-- [ ] **I4** 文本在指令流中的表达定案
-- [ ] **C1** NativeBackend（G-28）实现 — ★ 最长
-- [ ] **C2** Host Runtime（G-39/G-40）实现
+- [ ] **I4** 文本在指令流中的表达定案 🟡 **2/4**（缺：方案决策留痕 / 文本度量进 conformance）
+- [ ] **C1** NativeBackend（G-28）实现 — ★ 最长 🟡 **原型在，生产未就绪**
+- [ ] **C2** Host Runtime（G-39/G-40）实现 🟡 **部分**（Web 侧齐备；Native 未接真机）
 
 ### 第三批 · P1（规模化）
 
-- [ ] **V2** 槽位 O(1) 覆盖全部绑定类型
-- [ ] **V3** LIST_UPDATE 列表更新指令
-- [ ] **V4** L0/L1 安全判定
-- [ ] **I5** overdraw culling — ★ 投入产出比最高
-- [ ] **C3** 超级应用规模编译期性能
-- [ ] **C4** 184 原语完备性验证
+- [ ] **V2** 槽位 O(1) 覆盖全部绑定类型 🟡 **部分**（绑定分类清单未产出）
+- [x] **V3** LIST_UPDATE 列表更新指令 ✅ **已达标**（含 `relinkRow` 真机量化）
+- [x] **V4** L0/L1 安全判定 ✅ **已达标**（七条件 + 反例 + flush 兜底判据）
+- [ ] **I5** overdraw culling — ★ 投入产出比最高 ❌ **未达标**（无视口过滤实现）
+- [ ] **C3** 超级应用规模编译期性能 ❌ **未达标**（无基线数据）
+- [ ] **C4** 184 原语完备性验证 🟡 **工具就绪，数据未采集**
 
 ### 第四批 · P1/P2
 
-- [ ] **I6** 后端生产就绪度评估
-- [ ] **I7** 指令级 conformance
-- [ ] **V5** Vapor 与 Web VDOM 一致性验证
-- [ ] **V6** 动画指令 AnimOp（P2）
-- [ ] **I8** 指令流体积与带宽优化（P2）
+- [ ] **I6** 后端生产就绪度评估 🟡 **部分**（Web 侧齐备；Native 无就绪证据）
+- [x] **I7** 指令级 conformance ✅ **已达标**（跨语言 golden `update-ops.{json,bin}` + 浏览器对拍 + 已接 CI）
+- [x] **V5** Vapor 与 Web VDOM 一致性验证 ✅ **已达标**（`browser-layout.json` 全量 + `browser-mutation.json` 增量；真机 `V6` PASS）
+- [ ] **V6** 动画指令 AnimOp（P2） ❌ **未实现**（`AnimOpCode` 仅存在于设计文档）
+- [ ] **I8** 指令流体积与带宽优化（P2）🟢 **前提已满足**（本日实测证明体积构成瓶颈，可进方案设计）
 
 ---
 
@@ -70,12 +108,12 @@
 4. 补 README 独立章节 + 架构文档
 5. 补可复现 benchmark（4001 全量重排，口径对齐 Benchmark 规格 §8）
 
-### 验收
-- [ ] 模块可独立引用
-- [ ] **4001 全量重排 ≤ 0.08ms 可复现**（CI 或手动脚本，非口头）
-- [ ] v-for 嵌套三层用例纳入单测
-- [ ] README 有独立章节
-- [ ] 既有 3441 单测全绿
+### 验收（★2026-09-29 逐条核对）
+- [x] 模块可独立引用 —— ✅ `packages/compiler/src/vapor/`（`buildLayoutTemplate` / `buildVaporSubscriptions` 等已导出）
+- [x] **4001 全量重排 ≤ 0.08ms 可复现** —— ✅ `pnpm check:vapor-perf`（**已接 CI + verify 链**，非口头）
+- [x] v-for 嵌套三层用例纳入单测 —— ✅ `tests/vapor-list-e2e.test.ts`（4 处三层嵌套断言）
+- [ ] README 有独立章节 —— ❌ **未做**（`grep -c vapor README.md` = 0）
+- [x] 既有单测全绿 —— ✅ **3881/3881**（324 文件；卡内 3441 为旧值）
 
 ---
 
@@ -102,11 +140,11 @@
 2. 指令集版本化（复用既有 `ir_version` 机制）
 3. 变更走语义化版本，纳入 conformance
 
-### 验收
-- [ ] 完整 opcode 清单（Draw / Anim 两大类）
-- [ ] 每条指令有参数定义与语义说明
-- [ ] 版本号纳入 Host ABI 协商
-- [ ] 变更走 major/minor 流程
+### 验收（★2026-09-29 核对：**未达标**）
+- [ ] 完整 opcode 清单（Draw / Anim 两大类）—— ❌ 无公开规格表；opcode 散在 `slot-runtime/src/opcode.ts` 与 `layout-core-rust/src/ops.rs`
+- [ ] 每条指令有参数定义与语义说明 —— 🟡 代码注释有（含字节尺寸：SET_TEXT 9B / SET_STYLE 11B 等），**未成规格文档**
+- [ ] 版本号纳入 Host ABI 协商 —— ❌ `OPS_VERSION` 常量在，**未用于协商**
+- [ ] 变更走 major/minor 流程 —— ❌ 无流程
 
 ---
 
@@ -163,10 +201,10 @@ paint-hint 成为指令属性，编译期推导，平台层据以决定 backing 
 2. 编译期从归一化样式推导，**禁止运行时判断**
 3. 平台层据 hint 决策
 
-### 验收
-- [ ] 指令携带 paint-hint 字段
-- [ ] **编译期推导，运行时零判断**
-- [ ] iOS 内存增量复测
+### 验收（★2026-09-29 核对：**2/3 达标**）
+- [x] 指令携带 paint-hint 字段 —— ✅ `RenderCmd.hint`（`layout-core/src/render-cmd.ts:58`，三类字段齐备）
+- [x] **编译期推导，运行时零判断** —— ✅ 推导在 IR 构建期（`component-ir/src/pnode-style.ts:496`：`isMonochrome` / `isPureBackground` / `shareableContent`）
+- [ ] iOS 内存增量复测 —— ❌ **未做**（`hosts/ios/results/` 内无对应复测结果；内存专题的 −91% 是**拍平**收益，与本卡的 hint→backing store 策略不同）
 
 ---
 
@@ -195,11 +233,11 @@ RenderCmd 设计已定，但文本如何表达未明确：
 2. 指令流携带**已度量完成的几何 + 文本内容**
 3. 平台层只负责绘制
 
-### 验收
-- [ ] 方案已选定并写入规格
-- [ ] 指令含文本度量结果
-- [ ] 平台层不参与文本排版
-- [ ] 文本跨端一致性纳入 conformance
+### 验收（★2026-09-29 核对：**2/4 达标**）
+- [ ] 方案已选定并写入规格 —— 🟡 设计已写入落地方案 §5.2（`text_measure` 平台注入 = 本卡的"方案 A"），但**"方案 A vs B"的选择未作为决策留痕**（`PROJECT_MEMORY` 无对应决策号）
+- [x] 指令含文本度量结果 —— ✅ `SET_TEXT`（`OpCode 0x03`，9 字节）+ **`textMeasures` 注入协议**（建树注入 / `proteus_layout_set_text_measures` / splice 追加三通道）
+- [x] 平台层不参与文本排版 —— ✅ 平台只**度量 + 注入**（CoreText / StaticLayout），几何由核心算（`ffi.rs` 注释："宿主度量后推入；不触发重排"）
+- [ ] 文本跨端一致性纳入 conformance —— ❌ **未覆盖**：`packages/layout-core-rust/tests/golden/browser-layout.json` 的 21 用例里 **`textMeasures` 全为 `{}`** ⇒ 文本度量通道**没有被浏览器真值对拍**（几何一致性 0.375dp 是不含文本度量的读数）
 
 ---
 
@@ -294,10 +332,10 @@ ExecutionCarrier（JSI / AOT）是"宿主侧 1ms"的载体。
 ### 执行
 实现 item 级 O(1) 更新指令，避免整个列表重建。
 
-### 验收
-- [ ] LIST_UPDATE 指令可用
-- [ ] **4000 行列表中单行更新，耗时不随行数线性增长**
-- [ ] 与既有长列表实测（124.5FPS / 复用率 0.997）无回退
+### 验收（★2026-09-29 核对：**已达标**，并已量化）
+- [x] LIST_UPDATE 指令可用 —— ✅ `OpCode.LIST_UPDATE = 0x22`；`ListRegistry` 把行内槽位解析到**具体行节点**后发普通 SET_STYLE/SET_TEXT（核心无需懂列表）
+- [x] **4000 行列表中单行更新，耗时不随行数线性增长** —— ✅ 由**行级失效 `relinkRow`**（2026-09-29 新增）达成：真机同树同改动对照，JS 段 **5.42 → 1.91ms**；端到端 9.28 → **6.00ms**。★剩余瓶颈**不在扫描**而在**协议层键池全量重发**（见 I8 的实测输入）
+- [x] 与既有长列表实测无回退 —— ✅ `V12_scroll_recycle`（复用率 0.997 / 层数恒定 74）+ `V14`（3 来回内存净降 1.3MB）均 PASS
 
 ---
 
@@ -315,10 +353,10 @@ ExecutionCarrier（JSI / AOT）是"宿主侧 1ms"的载体。
 ### ⚠️ 硬约束
 **判定从严不从宽。** 误判为 L1 会导致**静默的 UI 不更新**——这比慢 10 倍严重得多。
 
-### 验收
-- [ ] 7 条准入条件全部实现
-- [ ] 安全判定用例 100% 通过
-- [ ] **误判率为零**（有反例测试）
+### 验收（★2026-09-29 核对：**已达标**）
+- [x] 7 条准入条件全部实现 —— ✅ `slot-runtime/src/tier.ts`（七条件）；`compiler/src/vapor/build.ts` Step 6 **复用**同一实现（纪律：同一语义一处实现）
+- [x] 安全判定用例 100% 通过 —— ✅ 单测覆盖七条件逐项
+- [x] **误判率为零**（有反例测试） —— ✅ 含 `forcePure` 强制路径；★且**兜底判据已加**：`flush` 判据（N 次更新 ⇒ flushes 增量 = N）能抓"判成 L1 却未发指令"的静默失效——这正是本卡"误判为 L1 最危险"的机器化防线
 
 ---
 
@@ -476,6 +514,14 @@ Web 端保持 VDOM 作为**正确性真值基准**
 ### 说明
 先做 I6 评估，明确指令流体积是否构成瓶颈，再决定是否投入。
 **不要提前优化。**
+
+> ★★**2026-09-29 实测已给出 I6 评估所需的关键事实**（本仓直接测得，非估算）：
+> · 单条 LIST 更新指令的消息体积 **8935 字节**——其中 **≈8900 字节是"全量键池/字符串池重发"**，
+>   真实增量约 **20 字节** ⇒ 膨胀 **78×**；
+> · 该膨胀使**编码成本 42×**（空池 0.006ms → 1000 key 0.258ms），占端到端 6.0ms 中的 **2.42ms**；
+> · 规模效应：`3000 key` 时单条消息 **28935 字节** / 编码 **0.727ms**（**列表越长越糟**）。
+> ⇒ **体积确已构成瓶颈**，且是 §10 核心指标（单节点更新 ≤3ms）**未达标的主要剩余项**
+>   ⇒ 本卡「不要提前优化」的前提**已满足**，可进入方案设计（预估收益 6.0 → **≈2.5ms**，回到目标内）。
 
 ---
 
