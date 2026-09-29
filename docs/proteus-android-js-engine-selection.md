@@ -112,6 +112,7 @@ Hermes 的字节码预编译有结构性优势——**届时应重新评估**（
 | **S1** | QuickJS 源码纳入 `.tools/`（**gitignored**，同 JDK/NDK 惯例）+ 构建脚本 | `libquickjs.so` 产出 + 架构断言（`file` 验 ARM aarch64） | ✅ **已完成** |
 | **S2** | JNI 桥：`evaluateScript` + 宿主回调桩（`proteusHost.post`） | JNI 导出符号在场（`llvm-nm` 断言）+ 零设备跑通 bundle | ✅ **已完成** |
 | **S3** | 在 `hosts/android` 跑通**最小闭环**（建 1 个节点 + commit 一次） | 宿主侧收到 1 次 `mount` 调用、批次内容正确 | ✅ **已完成（真机）** |
+| **S3b** | 把**真实 render-backend bundle** 打进 Android 并执行（不只手写等价 JS） | 真实适配器跑通：三相位各走对入口 + hostCalls=3 | ✅ **已完成（真机）** |
 | **S4** | 接 HA0 八接口（Host ABI）——把 JNI 桥规范化到 C ABI | `proteus_submit_frame` 等接口可被 Android 调用 | ⏳ 待做（依赖 HA0） |
 | **S5** | 三项复测（4050 / 长列表 / 内存）+ C1/C2 剩余验收 | 按卡内口径 | ⏳ 待做（需真机） |
 
@@ -136,6 +137,37 @@ Hermes 的字节码预编译有结构性优势——**届时应重新评估**（
 2. **中文注释里的 `$VAR<全角字符>` 会被 bash 当作变量名一部分**（实测报 unbound variable）
    ⇒ 已系统性扫描并改为 `${VAR}<全角>`（一次修 3 处）。★与"第 N 份手写副本"同族：
    **语言边界的隐式规则要靠工具/扫描兜住**（本次用正则扫描全文，不靠肉眼）。
+
+### 5.3 S3b：真实 bundle 在 Android 上跑（2026-09-29）
+
+**为什么还要 S3b**：S3 用**手写的等价 JS** 验「QuickJS → JNI → 宿主回调」链路通；
+但那是 20 行脚本，**不是仓库里真正会被产品使用的代码**。S3b 打进的是
+`createSelfDrawBatchAdapter` + `createNativeBackend` 的**真实 esbuild 产物**。
+
+**跑法**：`bash hosts/android/run-js-batch.sh`（可复跑 · 9 条判据）
+
+**实测报告**（`js-batch.json`）：
+```json
+{ "engine_available": true, "bundle_chars": 116718, "bundle_load_ok": true,
+  "run_ok": true, "run_ms": 6, "host_post_count": 1,
+  "phase1_mount": true, "phase2_updates": true, "phase3_update": true,
+  "host_calls": 3, "mount_nodes": 4, "update_nodes": 5, "ok": true }
+```
+
+**判据全绿**：bundle 加载 ✅ · 三相位各走对宿主入口（首帧 mount → 纯样式 updatePatches →
+结构变化 update）✅ · **hostCalls=3**（批处理红线）✅ · 结构规模 4→5 ✅ · 执行 **6ms**
+
+**新增文件**：`hosts/android/bridge/{entry-batch.ts,build-batch.mjs}`（bundle 构建，镜像 iOS 做法）·
+`hosts/android/run-js-batch.sh`（可复跑验收）· `MainActivity#jsBatchRun`（读 assets → eval → 断言）·
+门禁 `check:android-bundle`
+
+**★产物策略**：`bundle-batch.js` **不入库**（与 iOS `dist/` 同款——已被 gitignore）；
+⇒ `build-and-run.sh` **构建时自动生成**（本仓纪律「生成物必须在构建路径上」，
+否则 clone 后静默跳过 ⇒ 测试路径不可用）。
+
+**★边界（写进脚本输出）**：宿主桥在本链路是"上报给 Java"（`proteusHost.post`）
+⇒ 证明 **适配器 → 宿主入口** 这段真实；**Java 侧真正消费批次去渲染**属 C1 后续
+（三项真机复测时接）。本步**不**声称"端上已经会画了"。
 
 ### 5.2 S3 真机最小闭环（2026-09-29 · 真机 `d67e31a3`）
 

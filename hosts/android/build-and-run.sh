@@ -123,6 +123,25 @@ grep -v "^注:" "$BUILD/javac.log" | head -5 || true
 [ -d "$CLASSES/dev" ] || { echo "✗ javac 退出码 0 但未产出 class（配置异常？）"; exit 3; }
 echo "    class 文件 $(find "$CLASSES" -name '*.class' | wc -l | tr -d ' ') 个"
 
+echo "==> ②.5 构建并准备 JS bundle（S3b：真实适配器）"
+# ★bundle 进 **assets**（aapt2 用 `-A <assets dir>` 打进 APK）——Java 侧经 AssetManager 读源码字符串
+#   交给 QuickJS eval。为什么不用 raw 资源：assets 不参与资源 ID 编译，读取路径最直接。
+BUNDLE="$HERE/bridge/dist/bundle-batch.js"
+# ★自动构建（若缺）——本仓纪律「生成物必须在**构建路径**上」：
+#   不入库 ⇒ 必须有自动生成路径，否则 clone 后这一步静默跳过（bundle 缺失 ⇒ 测试路径不可用）
+if [ ! -f "$BUNDLE" ]; then
+  echo "    未找到 bundle ⇒ 自动构建 …"
+  node "$HERE/bridge/build-batch.mjs" 2>&1 | sed 's/^/    /' || true
+fi
+if [ -f "$BUNDLE" ]; then
+  mkdir -p "$APP/src/main/assets"
+  cp "$BUNDLE" "$APP/src/main/assets/bundle-batch.js"
+  echo "    bundle-batch.js 已入 assets（$(du -h "$BUNDLE" | awk '{print $1}')）"
+else
+  echo "    ⚠ 未见 $BUNDLE —— 先跑：node hosts/android/bridge/build-batch.mjs"
+  echo "      （不阻断构建：缺它只影响 js-batch 测试路径）"
+fi
+
 echo "==> ③ 打包资源与清单（aapt2）"
 MANIFEST="$APP/src/main/AndroidManifest.xml"
 if [ "$MODE" = "release" ]; then

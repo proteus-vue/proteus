@@ -297,6 +297,12 @@ public class MainActivity extends Activity {
             String js = jsEngineRun();
             sb.append(js).append('\n');
             writeReport("js-engine.json", js);
+        } else if ("js-batch".equals(testPath)) {
+            // ★★S3b：**真实适配器**在 Android QuickJS 上跑（不是手写等价 JS——S3 才是）
+            sb.append("【S3b 真实 render-backend 适配器（bundle）】\n");
+            String jsb = jsBatchRun();
+            sb.append(jsb).append('\n');
+            writeReport("js-batch.json", jsb);
         } else if ("shot-scroll-native".equals(testPath)) {
             // ★★z-order 约束下的**滚动同步**验证（方案坑位 #4）
             //   场景：20 行列表，**第 5 行是 native-host（WebView）**；程序驱动滚动到若干位置，
@@ -585,6 +591,102 @@ public class MainActivity extends Activity {
             out.put("batch_op_count", opCount);
             out.put("batch_ok", postOk);
             out.put("ok", postOk);
+        } catch (Throwable t) {
+            try {
+                out.put("ok", false);
+                out.put("error", t.getClass().getSimpleName() + ": " + t.getMessage());
+            } catch (Exception ignored) { /* JSONObject 不会失败 */ }
+        }
+        try {
+            return out.toString(2);
+        } catch (Exception e) {
+            return "{\"ok\":false,\"error\":\"报告序列化失败\"}";
+        }
+    }
+
+    /**
+     * ★★S3b：在 Android 上跑**真实的 render-backend bundle**（`bridge/dist/bundle-batch.js`）。
+     *
+     * 【与 S3（`jsEngineRun`）的差别】S3 用手写的等价 JS 验「链路通」；
+     *   本方法把**仓库里真正会被产品使用的 TS 代码**（`createSelfDrawBatchAdapter` +
+     *   `createNativeBackend`，经 esbuild 打成 IIFE）读进引擎并执行
+     *   ⇒ 证明「**真实适配器能在 Android 的 QuickJS 上跑**」。
+     *
+     * 【判据（三条 + 两个读数）】
+     *   ① bundle 从 assets 读出并 eval 成功（含"入口函数挂到全局"的检查）
+     *   ② 三个相位各自走对的宿主入口：首帧 mount · 纯样式 updatePatches · 结构变化 update
+     *   ③ **hostCalls == 3**（批处理红线：调用数 = flush 次数，与节点/操作数无关）
+     *   ★读数：mountNodes=4（首帧结构）/ updateNodes=5（加一节点后）/ lastPatch 内容
+     *
+     * 【★诚实边界】宿主桥在本链路里是"上报给 Java"（`proteusHost.post`）——
+     *   即证明**适配器 → 宿主入口**这段真实；**Java 侧真正消费批次去渲染**属 C1 的后续
+     *   （三项真机复测时接）。本方法**不**声称"端上已经会画了"。
+     */
+    private String jsBatchRun() {
+        org.json.JSONObject out = new org.json.JSONObject();
+        try {
+            out.put("engine_available", QuickJsEngine.isAvailable());
+            if (!QuickJsEngine.isAvailable()) {
+                out.put("ok", false);
+                out.put("error", "引擎未加载：" + QuickJsEngine.getLoadError());
+                return out.toString(2);
+            }
+            // ① 读 bundle（assets）
+            String bundle;
+            try (java.io.InputStream is = getAssets().open("bundle-batch.js")) {
+                java.io.ByteArrayOutputStream bos = new java.io.ByteArrayOutputStream();
+                byte[] buf = new byte[8192];
+                int n;
+                while ((n = is.read(buf)) > 0) bos.write(buf, 0, n);
+                bundle = new String(bos.toByteArray(), "UTF-8");
+            }
+            out.put("bundle_chars", bundle.length());
+
+            final StringBuilder posts = new StringBuilder();
+            Object host = new Object() {
+                @SuppressWarnings("unused")
+                public void post(String json) {
+                    if (posts.length() > 0) posts.append('\n');
+                    posts.append(json);
+                }
+            };
+
+            // ② eval bundle（定义 globalThis.__proteusBatchRun）；失败即报（不静默）
+            long t0 = System.nanoTime();
+            QuickJsEngine.EvalResult load = QuickJsEngine.evalWithHost(bundle, host);
+            out.put("bundle_load_ok", load.ok);
+            if (!load.ok) {
+                out.put("ok", false);
+                out.put("error", "bundle eval 失败：" + load.error);
+                return out.toString(2);
+            }
+            // ③ 调用入口（★这一步才真正跑适配器）
+            QuickJsEngine.EvalResult run = QuickJsEngine.eval("__proteusBatchRun()");
+            long ms = (System.nanoTime() - t0) / 1000000;
+            out.put("run_ok", run.ok);
+            out.put("run_ms", ms);
+            if (!run.ok) {
+                out.put("ok", false);
+                out.put("error", "入口调用失败：" + run.error);
+                return out.toString(2);
+            }
+            org.json.JSONObject r = new org.json.JSONObject(run.value);
+
+            // ④ 判据
+            out.put("host_post_count", posts.length() == 0 ? 0 : posts.toString().split("\n").length);
+            out.put("phase1_mount", r.optBoolean("phase1_mount"));
+            out.put("phase2_updates", r.optBoolean("phase2_updates"));
+            out.put("phase3_update", r.optBoolean("phase3_update"));
+            out.put("host_calls", r.optInt("hostCalls"));
+            out.put("mount_nodes", r.optInt("mountedNodes"));
+            out.put("update_nodes", r.optInt("updatedNodes"));
+            out.put("last_call_kind", r.optString("lastCallKind"));
+            out.put("node_specs", r.optInt("nodeSpecs"));
+            boolean ok = r.optBoolean("phase1_mount") && r.optBoolean("phase2_updates")
+                && r.optBoolean("phase3_update") && r.optInt("hostCalls") == 3
+                && r.optInt("mountedNodes") == 4 && r.optInt("updatedNodes") == 5
+                && !posts.toString().isEmpty();
+            out.put("ok", ok);
         } catch (Throwable t) {
             try {
                 out.put("ok", false);
