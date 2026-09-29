@@ -134,8 +134,8 @@ const REPORTS = {
   'proteus-noflatten': { 'layout-noflatten.json': { ok: true, path: 'proteus-noflatten', render_node_count: 2000, total_ms: 78 } },
   'flat-redraw': { 'layout-flat-redraw.json': { ok: true, path: 'flat-redraw', elements: 2000, correctness_diff_translate_pixels: 0, correctness_diff_picture_pixels: 0, baseline_replay_per_frame_ms: 2.67, cached_replay_per_frame_ms: 0.045, speedup: 59.4 } },
   // ★对标基准的创建元素场景（应用级）——侧写两条：Proteus 侧 + 原生对照
-  'app-4050': { 'layout-app-4050.json': { ok: true, path: 'app-4050', elements: 4050, views: 2050, texts: 2000, node_count: 4051, cmd_count: 4051, painted_pixels_sampled: 12345, scope_ms: 42.5, layout_ms: 25.2, emit_cmds_ms: 3.1, record_displaylist_ms: 14.2 } },
-  'app-4050-native': { 'layout-app-4050-native.json': { ok: true, path: 'app-4050-native', view_count: 4051, scope_ms: 270.4, layout_ms: 250.1, record_displaylist_ms: 20.3 } },
+  'app-4050': { 'layout-app-4050.json': { ok: true, path: 'app-4050', elements: 4050, views: 2050, texts: 2000, node_count: 4051, cmd_count: 4051, painted_pixels_sampled: 12345, text_px_requested: 24, text_px_effective: 24, scope_ms: 42.5, layout_ms: 25.2, emit_cmds_ms: 3.1, record_displaylist_ms: 14.2 } },
+  'app-4050-native': { 'layout-app-4050-native.json': { ok: true, path: 'app-4050-native', view_count: 4051, text_px_effective: 24, scope_ms: 270.4, layout_ms: 250.1, record_displaylist_ms: 20.3 } },
   recycle: {
     'layout-recycle.json': { ok: true, path: 'recycle', rows: 4000, created: 42, reused: 7926, reuse_ratio: 0.9947 },
     'layout-env.json': { ok: true, path: 'recycle', prime_count: 0, normal_count: 6, tiers: 2, fastest_khz: 2362000, observed_cpus: [0, 1, 4, 5] },

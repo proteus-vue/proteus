@@ -1,0 +1,1 @@
+{"path":"app-4050-native","observed_cpus":[0,1,4,5],"prime_count":0,"normal_count":4,"core_max_khz":"cpu0=3628800,cpu1=3628800,cpu2=3628800,cpu3=3628800,cpu4=3628800,cpu5=3628800,cpu6=4608000,cpu7=4608000","fastest_khz":4608000,"tiers":2,"temp_before_mc":95000,"temp_after_mc":95000,"temp_source":"sysfs:thermal_zone"}

@@ -120,6 +120,29 @@ if (cmp) {
   } catch { warn.push('W layout-compare-native.json 解析失败') }
 }
 
+// ── ★★对标公平性门禁（2026-09-29：实测发现"两边画的东西不同"就在眼前）──────────
+//   背景：`Cmd` 曾没有字号字段 ⇒ Proteus 用 textPaint 默认 12px，而原生 8sp = 24px（本机 480dpi）
+//   ⇒ 字形面积差 4×，且**对我们有利**。此类缺陷不会报错、不会变红，只会让对比失真。
+//   ⇒ 判据：两侧实际生效字号必须一致（容差 1px）；不一致 ⇒ **硬伤**（本次数据不可用于对标）。
+{
+  const pj = readIf('layout-app-4050.json')
+  const nj = readIf('layout-app-4050-native.json')
+  if (pj && nj) {
+    try {
+      const p = JSON.parse(pj), n = JSON.parse(nj)
+      const pt = p.text_px_effective, nt = n.text_px_effective
+      if (pt === undefined || nt === undefined) {
+        warn.push('W 对标缺 text_px_effective 审计字段（无法机器核验"两侧字号一致"）')
+      } else if (Math.abs(pt - nt) > 1) {
+        hard.push(`H5 对标不公平：两侧绘制字号不一致（Proteus ${pt}px vs 原生 ${nt}px）` +
+          '——字形面积比 ' + ((nt / pt) ** 2).toFixed(2) + '×，对比失真（此类缺陷静默且可能对我们有利）')
+      } else {
+        console.log(`  ℹ 对标公平性：两侧字号一致（${pt}px vs ${nt}px）`)
+      }
+    } catch { warn.push('W 对标报告解析失败（公平性无法核验）') }
+  }
+}
+
 const out = { dir, hard, warn, ok: hard.length === 0 }
 if (asJson) console.log(JSON.stringify(out, null, 2))
 else {

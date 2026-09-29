@@ -35,8 +35,23 @@ public class ProteusHostView extends ViewGroup {
         final float x, y, w, h;
         final int color;
         final String text;
+        /**
+         * ★★文本字号（**设备像素**；0 = 沿用 paint 当前字号）。
+         *
+         * 【为什么必须带上（2026-09-29 实测的公平性缺陷）】此前 Cmd **没有字号字段**，
+         *   所有文本都用 `textPaint` 的默认值 **12px** 画；而原生对照用 **8sp**——
+         *   本机 480dpi（density 3.0）⇒ 8sp = **24px** ⇒ 原生字形线性尺寸是本侧的 **2×**
+         *   （面积 4×）⇒ **我们画的字更小、更省**，对比对我们有利（不公平）。
+         *   ★纪律：**两边必须画同样的东西**（既有注释已记：不加背景色时两边绘制面积差 6 倍，
+         *     像素自检 14803 vs 2479 直接暴露）——字号同属"同样的东西"。
+         */
+        final float fontSize;
         Cmd(float x, float y, float w, float h, int color, String text) {
+            this(x, y, w, h, color, text, 0f);
+        }
+        Cmd(float x, float y, float w, float h, int color, String text, float fontSize) {
             this.x = x; this.y = y; this.w = w; this.h = h; this.color = color; this.text = text;
+            this.fontSize = fontSize;
         }
     }
 
@@ -567,13 +582,24 @@ public class ProteusHostView extends ViewGroup {
     public void drawCmds(Canvas canvas) {
         // ★单次遍历下发全部指令（无 View 树、无递归 measure/layout）
         final List<Cmd> list = cmds;
+        // ★字号只在**变化时**设置（同字号连排时零开销；见 Cmd.fontSize 注释）
+        float lastSize = textPaint.getTextSize();
         for (int i = 0; i < list.size(); i++) {
             final Cmd c = list.get(i);
             bgPaint.setColor(c.color);
             canvas.drawRect(c.x, c.y, c.x + c.w, c.y + c.h, bgPaint);
-            if (c.text != null) canvas.drawText(c.text, c.x + 1f, c.y + c.h * 0.8f, textPaint);
+            if (c.text != null) {
+                if (c.fontSize > 0 && c.fontSize != lastSize) {
+                    textPaint.setTextSize(c.fontSize);
+                    lastSize = c.fontSize;
+                }
+                canvas.drawText(c.text, c.x + 1f, c.y + c.h * 0.8f, textPaint);
+            }
         }
     }
+
+    /** 当前文本字号（**审计用**：报告里记录两侧实际绘制字号，防"不公平"静默复发） */
+    public float currentTextSizePx() { return textPaint.getTextSize(); }
 
     /** 只画色块（**归因用**：拆出「色块 vs 文本」各占多少绘制时间） */
     public void drawRectsOnly(Canvas canvas) {
