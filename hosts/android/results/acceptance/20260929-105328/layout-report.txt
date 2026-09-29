@@ -1,0 +1,57 @@
+=== Rust 排版核心 · Android 真机验证 ===
+设备：Xiaomi M098FE · Android 17（API 37）
+ABI：arm64-v8a
+引擎：proteus-layout-core 0.1.0 · engine=taffy-0.14 · taffy 锁定 0.14（0.13 有 measure 指数退化）
+JNI 符号自检：✓ 通过
+测试通路：app-4050-native（脚本以 --es path 注入，两次冷启动隔离内存）
+起始 PSS：61099 KB
+
+【① 与浏览器基准的一致性】
+{"ok":true,"cases":17,"compared_nodes":67,"max_delta_dp":0.375,"tolerance_dp":0.5,"failures":[]}
+
+【② 4050 元素布局性能（纯排版）】
+{"ok":true,"node_count":4051,"iterations":20,"median_ms":2.099,"min_ms":1.924,"max_ms":10.261,"measure_calls_first":0}
+
+【③ 对标基准：创建元素 4050（应用级口径 · 原生 View 对照）】
+{
+  "ok": true,
+  "path": "app-4050-native",
+  "view_count": 4051,
+  "scope_ms": 93.888,
+  "layout_ms": 88.483,
+  "record_displaylist_ms": 5.405,
+  "text_px_effective": 24,
+  "scope": "应用级：触发 → 建 View 树 → measure\/layout → draw 进 DisplayList（与 app-4050 同口径）"
+}
+
+【④ §9.2 环境核验】
+观测到的 CPU：0,1,4,5（最快档 0 · 其余 4 · 本机 2 档 · 最快 4608000kHz）
+温度：95000 → 95000 (m°C)
+
+【⑤ 增量内存（§9.2，纯结构口径）】
+baseline=61099 KB · after=109046 KB · delta=47947 KB
+
+【⑥ 文本通道对比（§6.1）】
+{
+  "ok": true,
+  "repeated_text": {
+    "baseline_drawText_ms": 7.94,
+    "bitmap_atlas_ms": 5.52,
+    "static_layout_ms": 5.47,
+    "atlas_entries": 0,
+    "layout_builds": 1
+  },
+  "varied_text": {
+    "baseline_drawText_ms": 6.32,
+    "bitmap_atlas_ms": 5.99,
+    "static_layout_ms": 10.41,
+    "atlas_entries": 0,
+    "layout_builds": 2025
+  },
+  "prewarm_effect": {
+    "prewarmed_entries": 120,
+    "layout_builds_after_prewarm": 120,
+    "static_layout_with_prewarm_ms": 10.24
+  },
+  "note": "三路径同机对比：baseline=每次 drawText；bitmap_atlas=按串缓存位图（M3）；static_layout=**方案 §6.1 规定**（缓存布局 + 重放，不建位图）"
+}

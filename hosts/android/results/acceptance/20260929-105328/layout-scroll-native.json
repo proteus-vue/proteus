@@ -1,0 +1,16 @@
+{
+  "ok": true,
+  "path": "scroll-native",
+  "note": "★★§9.3 的原生对照（同一设备\/场景\/轨迹；原生 View 的最小复用实现）",
+  "rows": 4000,
+  "frames_sampled": 599,
+  "avg_frame_ms": 8.01,
+  "fps_avg": 124.8,
+  "p50_ms": 8,
+  "p95_ms": 8,
+  "p99_ms": 8,
+  "view_created": 24,
+  "view_reused": 7949,
+  "view_max_live": 24,
+  "view_reuse_ratio": 0.997
+}

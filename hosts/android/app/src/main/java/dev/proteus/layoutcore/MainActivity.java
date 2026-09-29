@@ -1814,6 +1814,16 @@ public class MainActivity extends Activity {
      *   ② 「图片/视频」元素未纳入（基准长列表才要求；本场景基准定义为 view+text）；
      *   ③ 未包含 Vue 运行时响应式开销（那部分由 Vapor 线的应用级读数单独给）。
      */
+    /**
+     * ★★对标场景的**文本字号（设备像素）**——两侧共用同一常量，防"画的东西不同"。
+     *
+     * 【为什么是这个值（2026-09-29 实测）】原生对照用 `setTextSize(SP, 8f)`，
+     *   本机 480dpi（density 3.0）⇒ **8sp = 24px**。此前 Proteus 侧因 `Cmd` 无字号字段，
+     *   实际用 `textPaint` 默认 **12px** 绘制 ⇒ 字形线性尺寸只有原生的 1/2（面积 1/4）
+     *   ⇒ **对我们有利的不公平**。现两侧统一为 24px，并在报告里记录实际值以供审计。
+     */
+    private static final float APP4050_TEXT_PX = 24f;
+
     private String app4050Run() {
         final int W = 1080, H = 2400;
 
@@ -1857,7 +1867,8 @@ public class MainActivity extends Activity {
                         (float) r.getDouble("x"), (float) r.getDouble("y"),
                         (float) r.getDouble("width"), (float) r.getDouble("height"),
                         bg == null ? 0 : parseHex(bg),
-                        (txt == null || txt.isEmpty()) ? null : txt));
+                        (txt == null || txt.isEmpty()) ? null : txt,
+                        APP4050_TEXT_PX));   // ★与原生侧**同一物理字号**（见常量注释）
             }
         } catch (Exception e) {
             RustLayout.destroy(handle);
@@ -1905,6 +1916,8 @@ public class MainActivity extends Activity {
             o.put("layout_ms", round3((tAfterLayout - tStart) / 1e6));
             o.put("emit_cmds_ms", round3((tAfterCmd - tAfterLayout) / 1e6));
             o.put("record_displaylist_ms", round3((tEnd - tAfterCmd) / 1e6));
+            o.put("text_px_requested", APP4050_TEXT_PX);
+            o.put("text_px_effective", host.currentTextSizePx());
             o.put("scope", "应用级：触发 → 建树 → 排版 → 指令 → 录制 DisplayList（送达 OS 渲染进程侧）");
             o.put("boundary", "① 本宿主无 JS 引擎 ⇒ 编译+模板实例化在构建期完成，"
                     + "设备端测的是 SFC 产物之后的一段（iOS 由 JSC 现场编码，不在本对比内）；"
@@ -1985,6 +1998,13 @@ public class MainActivity extends Activity {
         final long tEnd = SystemClock.elapsedRealtimeNanos();
 
         keepAlive = new Object[]{column, rn};
+        // ★审计：原生侧**实际生效**的字号（px）——与 Proteus 侧同字段可比对
+        float nativeTextPx = 0f;
+        {
+            TextView probe = new TextView(this);
+            probe.setTextSize(TypedValue.COMPLEX_UNIT_SP, 8f);
+            nativeTextPx = probe.getTextSize();
+        }
         int viewCount = 0;
         java.util.ArrayDeque<View> q = new java.util.ArrayDeque<>();
         q.add(column);
@@ -2005,6 +2025,7 @@ public class MainActivity extends Activity {
             o.put("scope_ms", round3((tEnd - tStart) / 1e6));
             o.put("layout_ms", round3((tAfterLayout - tStart) / 1e6));
             o.put("record_displaylist_ms", round3((tEnd - tAfterLayout) / 1e6));
+            o.put("text_px_effective", nativeTextPx);
             o.put("scope", "应用级：触发 → 建 View 树 → measure/layout → draw 进 DisplayList（与 app-4050 同口径）");
             return o.toString(2);
         } catch (Exception e) {
