@@ -945,6 +945,51 @@ C1 的「可运行 Android 实现」也扫清了 JS 侧前置。
 
 **⑥ 验证**：全量 **3958/3958** · 门禁全绿（含新增 \`check:ops-fixture\`）· 桩测通过。
 
+### ★★★16 KB page size 对齐（2026-09-29，★用户真机反馈触发）—— 双层修复 + 两个门禁 + 三个附带缺陷
+
+**用户反馈**：「真机总是提示我们的 so 库都没做 16 KB 对齐」。核实属实并修复。
+
+**① 根因（实测，非推断）**：\`targetSdk=34\` ⇒ \`extractNativeLibs\` 默认 **false**
+⇒ loader **直接从 APK mmap** \`.so\` ⇒ 两条硬性要求，此前**都不满足**：
+· \`llvm-readelf -l\` 实测：所有 LOAD 段 \`Align\` 是 **0x1000（4 KB）**（需 0x4000）
+· APK 内 \`.so\` 是 **DEFLATE 压缩**（需 Stored）
+
+**② 修复（两层）**
+- **ELF 段对齐**：新建 \`packages/layout-core-rust/.cargo/config.toml\`（\`[target.*] rustflags\`
+  加 \`-C link-arg=-Wl,-z,max-page-size=16384\`，**只对 Android target 生效**）·
+  QuickJS 侧加 \`ALIGN_FLAG\`。实测：**4 个 LOAD 段全 0x4000**。
+- **APK 存储**：\`.so\` 用 \`zip -0\`（Stored）+ **官方 \`zipalign 16384\`**
+  → 实测数据起始 131072 / 1556480（均 16 KB 倍数）+ 真机安装**无 16 KB 警告**。
+
+**③ 门禁（两层判据，都能变红）**
+- \`check:16kb-align\`（+ \`hosts/android/check-apk-align16.py\`）：ELF 段 + APK 存储
+- \`check:shell-i18n-vars\`：禁 \`$VAR<全角>\`
+
+**④ ★★三个附带缺陷（都是本轮实测抓到并修复）**
+1. **桩测污染真实构建产物**（真缺陷）：占位 APK 写进 \`build/proteus-layoutcore.apk\`
+   ⇒ 桩测跑完后**真机验收与 16 KB 门禁拿到 45 字节假包**
+   （症状：\`File is not a zip file\` / \`adb install\` 证书错误，排查一轮才定位）。
+   ⇒ 改：备份真实 APK → 占位 → 跑完**字节级恢复**（实测 \`md5\` 前后一致）。
+   ★**纪律：测试装置不得修改被测对象的产物**。
+2. **\`set -o pipefail\` + \`grep -q\` 的 SIGPIPE 陷阱**：\`unzip -l | grep -q\` 在 pipefail 下
+   **恒为失败**（grep 找到即退 ⇒ unzip 收 SIGPIPE）⇒ **APK 有条目却报缺失**
+   （症状：手动同命令成功、脚本内失败——差异就是 pipefail）。⇒ 改"先落变量再匹配"。
+3. **shell 变量边界（第 3 次踩）**：\`$VAR<全角字符>\` 被 bash 当变量名一部分 ⇒ unbound variable。
+   全仓扫描**另发现 13 处**（跨 9 个脚本，含 acceptance.sh / run-selfdraw.sh / publish-all.sh
+   等**既有脚本**——长期潜伏）⇒ 全修 + 门禁。
+   ★**与"固定 sleep 盲等"同源：规则写在 markdown 里拦不住，只有工具层门禁是结构性的**。
+
+**⑤ 过程中两处自纠**
+① 首版自研 \`zipalign16.py\` **整包重写** ⇒ 破坏 aapt2 的 \`resources.arsc\` 4 字节对齐
+   ⇒ 真机 \`INSTALL_PARSE_FAILED\`（R+ 要求 arsc Stored + 4 字节对齐）。
+   ⇒ 弃自研、改用**官方 \`zipalign\`**（★关键发现：\`-P 16\` 需 build-tools 35+，但
+   **对齐值是位置参数**，34.0.0 直接支持 \`16384\`）——**能用官方工具就别自研**。
+② 构建与 \`adb install\` **并发** ⇒ install 抢在签名前（\`NO_CERTIFICATES\`），一度误判签名缺陷。
+   ⇒ **构建与安装必须串行**。
+
+**⑥ 验证**：全量 **3958/3958** · vue-tsc 0 错 · 门禁全绿（新增两个）· 桩测通过且**无副作用**
+（md5 前后一致）· 真机安装**无 16 KB 警告** · JS 引擎冒烟仍正常（\`batch_ok: true\`）。
+
 ### ★★M3 手势落地：平台识别器 + 核心命中标注 target（2026-09-29，提交 `44962ade`）
 
 **方案依据**（06-gesture-animation.md 映射表）：「tap→`GestureDetector` / longPress→`LongPressGesture` /
