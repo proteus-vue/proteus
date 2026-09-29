@@ -767,6 +767,42 @@ App 端渲染链路**已真机验证**（但走 selfdraw，与 SPI 层**未统�
 
 **⑤ 验证**：全量 **3949/3949**（329 文件，+7）· vue-tsc 0 错 · 门禁全绿。
 
+### ★★C1 续：selfdraw 批量宿主桥（2026-09-29）—— 真机协议接进 SPI（**2/4** 如实）
+
+**本轮产出**：新增 \`createSelfDrawBatchAdapter\`（\`packages/render-backend/src/selfdraw-batch.ts\`）
+—— 把 SPI 的 \`commit(ops)\` 翻译为真机宿主三个入口的**一次调用**。
+
+**① 三入口选择（与真机既有策略一致——不是新发明）**
+· 首帧 → \`mount(treeJson)\`（\`{viewport, nodes}\`）
+· **结构变化** → \`update(treeJson)\`（整树重发；真机自绘路径在 \`takePatches() === null\` 时同样整树）
+· **纯样式/文本** → \`updatePatches([{id, style}])\`——★文本走 \`style.text\` **同通道**
+  （宿主解析该形状时重度量并注入；见 \`selfdraw-scene.swift\` 的 patch 解析）
+· **同节点多条 op 合并**为一条 patch 项（这正是"批量"的语义）
+
+**② 批处理红线落点实测**：**2200+ 个 op 只产生 1 次跨边界调用**
+（Host ABI §3「跨边界调用 = 帧数」；对照逐节点模式：50 子节点就 101 次）。
+
+**③ 判据**：6 项测试（三入口选择 / patch 合并 / 文本通道 / 镜像子树移除 / 调用数恒定 / 首帧形状）
++ **破坏性验证**（强制每次 commit 都 mount ⇒ 4 条同时红）。
+
+**④ 诚实边界（文件头写明）**：
+① **props 归一化不在本层**（SPI props 是 IR 形态 \`'56px'\`/\`{kind:'absolute',dp}\`，宿主 spec 期望数值字段）
+   ⇒ 提供 \`normalizeProps\` **注入钩子**（缺省原样透传），**不复制** renderer-app 的归一化
+   （复制 = 第 N 份手写副本，必漂移——本仓纪律 #22）；
+② **不做 diff 决策**（结构变化即整树；行级增量属 Vapor 槽位路径，另一条）；
+③ **不实现 \`applyOps\`**（Vapor 二进制增量通道，与"全量语义树渲染"不同族）。
+
+**⑤ 验收如实标 2/4**：桥（**零设备可验证部分**）已验收；
+❌「有可运行的 Android 实现」按卡口径要求**真机跑通** ⇒ 待做：
+① 在 \`hosts/android\` 接线（Java 侧三入口已存在，JS 侧换用本桥）② 三项复测（4050/长列表/内存）。
+★**为什么不虚报**：本仓纪律「每项必须有可复现的验收脚本」——桥有判据，真机没有就是没有。
+
+**⑥ 又一次 tsc 抓错**：新写的 6 项测试里 \`createElement({type,props})\` **缺 \`children\` 字段**
+（\`IRNode\` 必填）⇒ 补齐 9 处。★这已是本会话第 3 次由 tsc 抓到"vitest 跑了不报但类型不合法"的问题
+——**两道防线的价值**（vitest 不做类型检查，只跑运行时）。
+
+**⑦ 验证**：全量 **3955/3955**（329 文件，+6）· vue-tsc 0 错 · 门禁全绿。
+
 ### ★★M3 手势落地：平台识别器 + 核心命中标注 target（2026-09-29，提交 `44962ade`）
 
 **方案依据**（06-gesture-animation.md 映射表）：「tap→`GestureDetector` / longPress→`LongPressGesture` /
