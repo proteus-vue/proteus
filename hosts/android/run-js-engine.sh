@@ -28,7 +28,7 @@ APK="$HERE/build/proteus-layoutcore.apk"
 JS_SO="$HERE/build/js-engine/libquickjs_jni.so"
 REPORT="/sdcard/Android/data/$PKG/files/js-engine.json"
 
-[ -x "$ADB" ] || { echo "✗ 缺 adb（$ADB）"; exit 2; }
+[ -x "$ADB" ] || { echo "✗ 缺 adb（${ADB}）"; exit 2; }
 [ -f "$APK" ] || { echo "✗ 缺 APK——先跑：bash hosts/android/build-and-run.sh --no-install"; exit 2; }
 [ -f "$JS_SO" ] || { echo "✗ 缺 JS 引擎 .so——先跑：bash scripts/setup-android-js-engine.sh"; exit 2; }
 "$ADB" shell true >/dev/null 2>&1 || { echo "✗ 无设备（adb devices）"; exit 2; }
@@ -52,7 +52,7 @@ else
 fi
 
 if ! "$ADB" shell "test -f $REPORT" >/dev/null 2>&1; then
-  echo "✗ 报告未生成（$REPORT）——app 未收到广播或执行崩溃；看 adb logcat --pid=\$(pidof $PKG)"
+  echo "✗ 报告未生成（${REPORT}）——app 未收到广播或执行崩溃；看 adb logcat --pid=\$(pidof $PKG)"
   exit 1
 fi
 

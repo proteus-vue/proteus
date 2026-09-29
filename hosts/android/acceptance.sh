@@ -231,7 +231,7 @@ Janky frames: 387 (64.18%)
       echo "  ⚠ 电量 ${batt}% 偏低（§9.2 要求 ≥90%）"
     fi
     if ! "$ADB" shell pm list packages 2>/dev/null | grep -q "$PKG"; then
-      echo "  ⚠ 设备上未安装 $PKG（首次安装会自动装）"
+      echo "  ⚠ 设备上未安装 ${PKG}（首次安装会自动装）"
     fi
   fi
 

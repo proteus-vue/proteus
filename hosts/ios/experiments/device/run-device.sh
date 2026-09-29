@@ -141,7 +141,7 @@ done
 
 if [ -z "$PROFILE" ]; then
   cat <<MSG
-✗ 未找到匹配 bundle id（$BUNDLE_ID）的描述文件。
+✗ 未找到匹配 bundle id（${BUNDLE_ID}）的描述文件。
 
   Xcode 只在**实际构建某个工程**时才会为该 bundle id 生成描述文件。
   请任选其一：

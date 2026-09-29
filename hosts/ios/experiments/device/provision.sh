@@ -30,7 +30,7 @@ if [ -z "$TEAM" ]; then
   # ★注意：Xcode 里可能登录了**多个** Apple ID（本机有两个 Personal Team）——
   #   这里取的是**第一个**，未必是你想要的那个 ⇒ 换账号时请显式传第 2 个参数。
   TEAM="$(defaults read com.apple.dt.Xcode IDEProvisioningTeamByIdentifier 2>/dev/null | grep -oE 'teamID = [A-Z0-9]+' | head -1 | awk '{print $3}')"
-  echo "    ⚠ 未显式指定 team，取到 Xcode 偏好里的第一个：$TEAM（多账号时请显式传参）"
+  echo "    ⚠ 未显式指定 team，取到 Xcode 偏好里的第一个：${TEAM}（多账号时请显式传参）"
 fi
 [ -n "$TEAM" ] || { echo "✗ 取不到 Team ID——请先在 Xcode → Settings → Accounts 登录 Apple ID"; exit 2; }
 

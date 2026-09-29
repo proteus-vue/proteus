@@ -38,6 +38,12 @@ PINNED_SHA256="b376e839b322978313d929fd20663b11ba58b75df5a46c126dd19ea2fa70ad2a"
 ANDROID_API=24
 ABI="aarch64-linux-android${ANDROID_API}"
 
+# ★★16 KB page size 对齐（Android 15+ 要求；真机实测提示 so 未对齐）
+#   `-z max-page-size=16384` 让链接器把 **LOAD 段的偏移/VMA 都按 16 KB 排布**
+#   （动态链接器按 p_align 做 mmap 的页对齐；设备页 16 KB 时 4 KB 对齐的段无法直接映射）。
+#   验证：`llvm-readelf -l <so> | grep LOAD` 最后一列应全为 0x4000（见 check-16kb-align.sh）。
+ALIGN_FLAG="-Wl,-z,max-page-size=16384"
+
 say() { printf '%s\n' "$*"; }
 die() { printf '✗ %s\n' "$*" >&2; exit 1; }
 
@@ -106,7 +112,7 @@ build_android() {
     objs+=("$OUT_DIR/${f}.o")
   done
   # ★静态库（供 JNI 桥链接——JNI .so 需要 QuickJS 的符号）
-  "$cc" -shared -o "$OUT_DIR/libquickjs.so" "${objs[@]}" -lm 2>&1 | head -3
+  "$cc" -shared "$ALIGN_FLAG" -o "$OUT_DIR/libquickjs.so" "${objs[@]}" -lm 2>&1 | head -3
   [ -f "$OUT_DIR/libquickjs.so" ] || die "链接 libquickjs.so 失败"
   local kb
   kb=$(( $(stat -f%z "$OUT_DIR/libquickjs.so") / 1024 ))
@@ -118,7 +124,7 @@ build_android() {
   local jni_src="$ROOT/hosts/android/js-engine/quickjs_jni.c"
   [ -f "$jni_src" ] || die "缺 JNI 桥源码：$jni_src"
   local jni_inc="$ROOT/.tools/jdk17/include"
-  [ -d "$jni_inc" ] || die "缺 JDK 头（$jni_inc）—— .tools/jdk17 未就绪"
+  [ -d "$jni_inc" ] || die "缺 JDK 头（${jni_inc}）—— .tools/jdk17 未就绪"
   say "==> 交叉编译 JNI 桥（libquickjs_jni.so）"
   # ★QuickJS 编译为「一次性打进 JNI 桥」：直接编源 + jni 头一起链接
   local jni_objs=()
@@ -131,7 +137,7 @@ build_android() {
     -I"$jni_inc" -I"$jni_inc/darwin" \
     -c -o "$OUT_DIR/quickjs_jni.o" "$jni_src" 2>&1 | head -5
   [ -f "$OUT_DIR/quickjs_jni.o" ] || die "JNI 桥编译失败（见上方错误）"
-  "$cc" -shared -o "$OUT_DIR/libquickjs_jni.so" "$OUT_DIR/quickjs_jni.o" "${jni_objs[@]}" -lm -llog 2>&1 | head -3
+  "$cc" -shared "$ALIGN_FLAG" -o "$OUT_DIR/libquickjs_jni.so" "$OUT_DIR/quickjs_jni.o" "${jni_objs[@]}" -lm -llog 2>&1 | head -3
   [ -f "$OUT_DIR/libquickjs_jni.so" ] || die "链接 libquickjs_jni.so 失败"
   rm -f "${jni_objs[@]}" "$OUT_DIR/quickjs_jni.o"
   kb=$(( $(stat -f%z "$OUT_DIR/libquickjs_jni.so") / 1024 ))
@@ -164,8 +170,33 @@ assert_android_so() {
   desc="$(file "$so")"
   case "$desc" in
     *"ARM aarch64"*) say "  ✅ 架构断言通过：ARM aarch64（${desc}）" ;;
-    *) die "架构不符（期望 ARM aarch64）：$desc" ;;
+    *) die "架构不符（期望 ARM aarch64）：${desc}" ;;
   esac
+  assert_16kb_align "$so"
+}
+
+# ★判据：16 KB page size 对齐（Android 15+）——**每个 LOAD 段的 Align 必须是 0x4000**
+assert_16kb_align() {
+  local so="$1"
+  local re_bin
+  re_bin="$(find_ndk_cc 2>/dev/null | sed 's|/bin/[^/]*$|/bin/llvm-readelf|')"
+  if [ ! -x "$re_bin" ]; then
+    say "  ⚠ 找不到 llvm-readelf，跳过 16 KB 对齐断言（未验证）"
+    return 0
+  fi
+  # 取 LOAD 段行的最后一列（Align）
+  local bad
+  bad="$("$re_bin" -l "$so" 2>/dev/null | awk '/^  LOAD/ { print $NF }' | grep -v '^0x4000$' | head -3)"
+  if [ -n "$bad" ]; then
+    die "★16 KB 对齐断言失败（$(basename "$so")）：存在非 0x4000 的 LOAD 段 Align：
+${bad}
+    ⇒ Android 15+ 的 16 KB page size 设备上 mmap 该段会失败（so 加载不了）。
+    ⇒ Rust 侧：packages/layout-core-rust/.cargo/config.toml 的 [target.*] rustflags
+       QuickJS 侧：本脚本的 ALIGN_FLAG（-Wl,-z,max-page-size=16384）"
+  fi
+  local n
+  n="$("$re_bin" -l "$so" 2>/dev/null | grep -c '^  LOAD')"
+  say "  ✅ 16 KB 对齐断言通过（${n} 个 LOAD 段全为 0x4000）"
 }
 
 # ── 主流程 ──

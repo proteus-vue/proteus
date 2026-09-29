@@ -151,7 +151,8 @@ echo "==> ⑤ 组装 APK（加入 dex 与 native 库）"
 (cd "$BUILD" && zip -q -j "$APK" dex/classes.dex)
 mkdir -p "$BUILD/lib/arm64-v8a"
 cp "$SO_SRC" "$BUILD/lib/arm64-v8a/libproteus_layout_core.so"
-(cd "$BUILD" && zip -q "$APK" lib/arm64-v8a/libproteus_layout_core.so)
+# ★`-0` = Stored（不压缩）：16 KB page size 要求 .so 可直接 mmap（压缩的必须先解压到磁盘）
+(cd "$BUILD" && zip -q -0 "$APK" lib/arm64-v8a/libproteus_layout_core.so)
 
 # ★S2：JS 引擎（QuickJS JNI 桥）——由 scripts/setup-android-js-engine.sh 产出
 #   【为什么可选】引擎缺失时 QuickJsEngine.isAvailable()=false，宿主给出明确提示（不崩）
@@ -159,10 +160,10 @@ cp "$SO_SRC" "$BUILD/lib/arm64-v8a/libproteus_layout_core.so"
 JS_SO="$HERE/build/js-engine/libquickjs_jni.so"
 if [ -f "$JS_SO" ]; then
   cp "$JS_SO" "$BUILD/lib/arm64-v8a/libquickjs_jni.so"
-  (cd "$BUILD" && zip -q "$APK" lib/arm64-v8a/libquickjs_jni.so)
+  (cd "$BUILD" && zip -q -0 "$APK" lib/arm64-v8a/libquickjs_jni.so)
   echo "    JS 引擎 .so 已打入（$(du -h "$JS_SO" | awk '{print $1}')）"
 else
-  echo "    ⚠ 未找到 JS 引擎 .so（$JS_SO）——先跑：bash scripts/setup-android-js-engine.sh"
+  echo "    ⚠ 未找到 JS 引擎 .so（${JS_SO}）——先跑：bash scripts/setup-android-js-engine.sh"
   echo "      （不阻断构建：缺它只影响 js-engine 测试路径，既有路径不受影响）"
 fi
 
@@ -177,13 +178,52 @@ if [ "$APK_BYTES" -lt 100000 ]; then
   echo "✗ APK 产物异常：仅 ${APK_BYTES} 字节（预期 ≥100KB）——组装失败（见上方 aapt2/zip 输出）"
   exit 3
 fi
+# ★★判据写成"先取输出再匹配"（**不能用 `unzip … | grep -q`**）——本仓实测的 shell 陷阱：
+#   `set -o pipefail` 下，`grep -q` **找到即退出** ⇒ 上游 `unzip` 收 SIGPIPE ⇒ 管道整体非 0
+#   ⇒ `if !` 判为"失败" ⇒ **明明有条目却报缺失**（本轮实测：手动执行同命令成功、脚本内失败，
+#   差异就在 pipefail）。⇒ 正解：把输出**先落变量**，再对变量做匹配（无管道、无信号竞争）。
+APK_LISTING="$(unzip -l "$APK" 2>/dev/null)"
 for entry in "classes.dex" "lib/arm64-v8a/libproteus_layout_core.so"; do
-  if ! unzip -l "$APK" 2>/dev/null | grep -q "$entry"; then
-    echo "✗ APK 缺条目：$entry（产物不完整，装到设备会 UnsatisfiedLinkError / 类缺失）"
+  if ! printf '%s' "$APK_LISTING" | grep -q "$entry"; then
+    echo "✗ APK 缺条目：${entry}（产物不完整，装到设备会 UnsatisfiedLinkError / 类缺失）"
     exit 3
   fi
 done
 echo "    产物断言通过：${APK_BYTES} 字节 · classes.dex ✓ · Rust 核心 .so ✓"
+
+# ★★16 KB page size 对齐（2026-09-29 新增：用户真机实测反馈「so 库都没做 16 KB 对齐」）
+#
+# 【为什么必须在签名**之前**】zipalign 会重写 zip（改偏移/压缩方式）
+#   ⇒ 任何字节改动都让签名失效 ⇒ **顺序必须是 对齐 → 签名**（与 Android 官方推荐一致）。
+#
+# 【判据】`.so` 必须 ① 不压缩（Stored，否则 loader 无法直接 mmap）
+#   ② 数据起始偏移 16 KB 对齐。
+#   官方工具 `zipalign -P 16` 需 **build-tools 35+**（本机实测只有 34.0.0，`-P` 不存在）
+#   ⇒ 用本仓等价实现 `hosts/android/zipalign16.py`（纯标准库，见其文件头）。
+echo "==> ⑤.5 16 KB 对齐（Android 15+ 要求）"
+# ★用官方 `zipalign`：**对齐值是参数**（`zipalign <align>`）⇒ 可直接传 16384
+#   （本仓实测：`zipalign -P 16` 需 build-tools 35+，但 `<align>` 形式在 34 上就能用 16384）
+#   ⇒ 无需手写 zip 重写（首版自研实现曾破坏 aapt2 的 resources.arsc 4 字节对齐 ⇒ 装不上）
+ZIPALIGN=""
+for d in "$SDK"/build-tools/*/; do [ -x "${d}zipalign" ] && ZIPALIGN="${d}zipalign" && break; done
+if [ -z "$ZIPALIGN" ]; then
+  echo "✗ 找不到 zipalign（$SDK/build-tools/*）——无法做 16 KB 对齐"
+  exit 3
+fi
+ALIGNED="$BUILD/proteus-layoutcore-aligned.apk"
+if "$ZIPALIGN" -f 16384 "$APK" "$ALIGNED" >/dev/null 2>&1; then
+  mv "$ALIGNED" "$APK"
+  # ★自校验（对齐是"能变红"的判据：用 python 读真实 local header 算数据起始）
+  if python3 "$HERE/check-apk-align16.py" "$APK" >/dev/null 2>&1; then
+    echo "    16 KB 对齐完成（$(basename "$ZIPALIGN") · 自校验通过）"
+  else
+    echo "✗ 16 KB 对齐自校验失败——见 python3 hosts/android/check-apk-align16.py \"$APK\""
+    exit 3
+  fi
+else
+  echo "✗ zipalign 失败（$ZIPALIGN 16384）"
+  exit 3
+fi
 
 echo "==> ⑥ 签名（apksigner + debug keystore）"
 KS="$BUILD/debug.keystore"
