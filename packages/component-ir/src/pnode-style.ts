@@ -23,7 +23,7 @@ import type {
   Transform2D,
 } from './pnode'
 
-import { isOpaqueColor } from './color'
+import { derivePaintHint } from './paint-hint'
 
 /** 长度解析上下文（基准语义） */
 export interface LengthContext {
@@ -500,46 +500,20 @@ export function normalizeStyleDecls(decls: Record<string, string>, opts: Normali
   //   两个字段此前都只检查了**一半**条件，而它们的下游动作是"**换存储格式** / 不分配存储"
   //   ⇒ 条件不充分就**直接画错**（不是慢）。修法：判据写成"该策略成立所需的**全部**条件"，
   //     拿不准一律 false（宁可保守走通用路径，不可优化出错误画面）。
-  const bgIsPureColor = isOpaqueColor(paint.backgroundColor)
-  const fgIsPureColor = isOpaqueColor(text.color)
-  const paintHint: PaintHint = {
-    // 单色文本 → 紧凑 backing store 格式（实测 −39% 内存）
-    //
-    // 【为什么要求这么严（三条，逐条对应一种"会画错"的形态）】
-    //   ① **看底色**：紧凑单通道格式**只能表达一种颜色**——白字 + 蓝底放进去会丢一个颜色。
-    //      实测（修复前）：`color:#ffffff;background-color:#285ac8`（**4050 夹具的真实形状**）
-    //      判 true ⇒ 一旦接线即画面错。
-    //   ② **看圆角**：圆角要保留 alpha 边缘（单通道紧凑格式**没有 alpha 通道**）⇒ 边缘会变硬/出错。
-    //   ③ **看透明度**：半透明层的合成依赖 alpha（同上）。
-    //   ★后两条是**未验证配置**（−39% 实验用的是"纯色白字、无圆角、无透明度"）——
-    //     不在已验证配置内就**不放行**（本仓纪律：只声称有依据的东西）。
-    //   ★与 `isPureBackground` 用**同一套条件**（该字段既有测试已排除圆角/透明度，标准一致）。
-    isMonochrome: !!(
-      hasText &&
-      fgIsPureColor &&
-      !paint.backgroundColor &&
-      !paint.backgroundImage &&
-      !paint.borderRadius &&
-      (paint.opacity === undefined || paint.opacity === 1) &&
-      !needsCompositing
-    ),
-    // 纯色背景 → 走 backgroundColor 通道、**不分配 backing store**（实测：仅色块 4.9MB vs 带文本 186.7MB）
-    // 【为什么必须排除"带文本"】本字段的语义是"**这一层只有一块底色要画**"——
-    //   有文本就有字形要栅格化，必须有存储。实测（修复前）：`color:#fff;background-color:#285ac8`
-    //   同时被判 isPureBackground=true ⇒ 一旦平台据此跳过分配，**文字就不见了**。
-    isPureBackground:
-      bgIsPureColor &&
-      !paint.backgroundImage &&
-      !paint.borderWidth &&
-      !paint.borderRadius &&
-      !needsCompositing &&
-      !hasTransform &&
-      !hasText &&
-      (paint.opacity === undefined || paint.opacity === 1),
-    // 由树级分析填充（本函数只管单节点）
-    staticSubtree: false,
-    needsCompositingLayer: needsCompositing,
-  }
+  // ★推导委托给**唯一实现**（`paint-hint.ts`）——两条调用方（本文件 / 自绘适配器）
+  //   共用一份判据，避免"一类节点在一条路上用紧凑格式、另一条不用"的静默漂移。
+  //   本处只做**字段提取**（把归一化后的 PaintProps/TextProps 映射成推导输入）。
+  const paintHint: PaintHint = derivePaintHint({
+    hasText,
+    textColor: text.color,
+    backgroundColor: paint.backgroundColor,
+    hasBackgroundImage: paint.backgroundImage !== undefined,
+    hasBorderRadius: paint.borderRadius !== undefined,
+    hasBorderWidth: paint.borderWidth !== undefined,
+    opacity: paint.opacity,
+    needsCompositing,
+    hasTransform,
+  })
 
   return {
     props: {

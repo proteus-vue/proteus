@@ -335,6 +335,7 @@ final class SelfDrawView: UIView {
             // ★contentsScale 必须显式设置：否则 Retina 上文本模糊（CATextLayer 不继承自动缩放）
             tl.contentsScale = UIScreen.main.scale
             tl.isWrapped = false
+            SelfDrawBridge.applyPaintHint(tl, style: style)
             return tl
         }
         let layer = CALayer()
@@ -1360,6 +1361,9 @@ final class SelfDrawView: UIView {
         for k in ["backgroundColor", "color", "text", "fontFamily"] {
             if let v = n[k] as? String { style[k] = v }
         }
+        // ★★I3：绘制提示必须**透传**——本函数是 `acquireLayer`/`buildLayers` 的必经之路，
+        //   不透传则 `applyPaintHint` 永远读不到 hint（接线断在这里，且**无任何报错**）。
+        if let h = n["paintHint"] as? [String: Any] { style["paintHint"] = h }
         if let fs = n["fontSize"] as? Double { style["fontSize"] = CGFloat(fs) }
         if let fs = n["fontSize"] as? CGFloat { style["fontSize"] = fs }
         if let fw = n["fontWeight"] as? Double { style["fontWeight"] = CGFloat(fw) }
@@ -1411,6 +1415,9 @@ final class SelfDrawView: UIView {
                 tl.isWrapped = false
                 tl.contentsScale = UIScreen.main.scale
             }
+            // ★★复用路径**必须同样重配**（纪律：复用 = 完全重配）——否则池里取出的层会
+            //   保留**上一个节点**的存储格式（紧凑 ⇄ 通用不一致，且只在复用率高的滚动场景显形）
+            SelfDrawBridge.applyPaintHint(tl, style: style)
         }
         // 非文本属性：**缺省即清零**（不留上一个节点的痕迹）
         layer.backgroundColor = (style["backgroundColor"] as? String).flatMap(parseHexColor)?.cgColor
@@ -1667,6 +1674,75 @@ final class SelfDrawBridge: NSObject, SelfDrawExports {
     ///   ⚠ 设计族（serif/rounded/condensed）经 descriptor 拿到的字体**可能不带 weight 变体**
     ///     ⇒ 实现里**先试设计族、再用 `withSymbolicTraits` 叠字重**，失败则按角色回退系统族
     ///     ——不静默混用（混用 = 度量与绘制看着都对但字长得不对，属像素级差异）。
+    /// ★★I3：把**编译期推导的绘制提示**落到层的存储格式上（`contentsFormat`）。
+    ///
+    /// 【为什么这是"内存优化接线"而非可选项】
+    ///   自绘路径下每个文本层默认按 **sRGB 全通道**分配 backing store，而系统 `UILabel`
+    ///   对单色字符串做了单通道优化 ⇒ 实测每个文本层多耗约 4 倍内存
+    ///   （内存诊断：2000 层 186.9MB vs 紧凑格式 114.9MB = **−39%**）。
+    ///   ⇒ 对**确实单色**的文本层设 `gray8Uint`，是把那 39% 拿回来的唯一手段。
+    ///
+    /// 【为什么判据在编译期、这里只"照做"（Profile §12.4）】
+    ///   平台层运行时"猜"正是 iOS 曾出现 **+78% 内存**的根因（按最贵格式分配）。
+    ///   ⇒ hint 由推导器给出（判据见 `component-ir/src/paint-hint.ts`；适配器侧派生实现
+    ///     与其逐形态对拍，见 `tests/selfdraw-paint-hint.test.ts`），本函数只读 hint 照做。
+    ///
+    /// 【为什么必须保守（拿不准 = 保持系统默认）】
+    ///   紧凑格式**只有亮度、没有色相**，且**没有 alpha 通道**：
+    ///   · 彩色文字写进 gray8Uint ⇒ **变灰字**（画面错、无报错）
+    ///   · 半透明内容 ⇒ alpha 丢失
+    ///   ⇒ 判据侧已排除这两类；本函数再兜一道：只认显式 `isMonochrome == true`。
+    ///
+    /// 【★诚实边界】`isPureBackground` **不需要这里动手**：CALayer 的纯底色走
+    ///   `backgroundColor` 属性、**天然不进 backing store**（实测仅色块 4.9MB）。
+    ///   故本函数只处理 `isMonochrome`；该字段的价值在诊断/对账（证明推导链路通了）。
+    static func applyPaintHint(_ layer: CALayer, style: [String: Any]) {
+        guard let tl = layer as? CATextLayer else { return }
+        // ★★A/B 开关（**仅用于内存复测**）：`PROTEUS_PAINT_HINT=off` ⇒ 完全不设 contentsFormat。
+        //
+        // 【为什么必须有】I3 的验收是「iOS 内存增量复测」——那要求**同一场景、同一设备的两个变体**，
+        //   而不是"设了 hint 之后的绝对值"（绝对值里混着场景/设备的固有占用，隔离不出 hint 的贡献）。
+        //   关闭态（系统默认格式）与开启态（判据生效）配对，差值才是 I3 的净收益。
+        //   ★默认**开启**（生产行为）；只有显式 `off` 才关——避免"忘了设环境变量导致优化静默失效"。
+        if ProcessInfo.processInfo.environment["PROTEUS_PAINT_HINT"] == "off" {
+            paintHintDisabled = true
+            return
+        }
+        let hint = style["paintHint"] as? [String: Any]
+        let mono = (hint?["isMonochrome"] as? Bool) ?? (hint?["isMonochrome"] as? NSNumber)?.boolValue ?? false
+        if #available(iOS 13.0, *) {
+            if mono {
+                tl.contentsFormat = .gray8Uint
+                paintHintCompact += 1
+            } else {
+                // ★非单色**必须显式复位**为默认格式——层会被池复用，
+                //   否则它带着上一个节点的紧凑格式继续用（复用 = 完全重配，不是"覆盖部分字段"）
+                tl.contentsFormat = .RGBA8Uint
+                paintHintGeneric += 1
+            }
+        }
+    }
+
+    /// ★I3 读数：应用了紧凑格式 / 通用格式的文本层数。
+    ///   【为什么要有读数】"设了没设"必须可观测——内存差 39% 只在这两个计数上体现；
+    ///   无读数时只能靠"看起来生效了"（本仓纪律：判据落在结果上）。
+    private(set) static var paintHintCompact = 0
+    private(set) static var paintHintGeneric = 0
+    /// ★A/B 开关状态（`PROTEUS_PAINT_HINT=off` 时置位）——报告里必须可读，
+    ///   否则"关了 hint 测出来的数字"与"开了 hint"分不清（本仓纪律：读数名与含义一致）
+    private(set) static var paintHintDisabled = false
+    /// ★诊断：宿主**实际看到**的 PROTEUS_PAINT_HINT 值（空 = 未注入）。
+    ///   【为什么要有它】A/B 复测时"关闭态没关掉"会表现为差值恒 0，而**看不出是注入失败**
+    ///     （本仓实测：装置自证抓到 disabled 不为 true，但说不出是"没注入"还是"读了没用"）。
+    ///     ⇒ 把原始值原样带进报告，问题一眼可归因。
+    static var paintHintEnvRaw: String {
+        ProcessInfo.processInfo.environment["PROTEUS_PAINT_HINT"] ?? ""
+    }
+    static func paintHintStats() -> String {
+        "{\"compact\":\(paintHintCompact),\"generic\":\(paintHintGeneric)}"
+    }
+    static func resetPaintHintStats() { paintHintCompact = 0; paintHintGeneric = 0 }
+
     static func font(size: CGFloat, weight: CGFloat, family: String = "system") -> UIFont {
         let base = systemFont(size: size, weight: weight)
         switch family {
@@ -2839,34 +2915,51 @@ final class SelfDrawBridge: NSObject, SelfDrawExports {
         lastTiming = ["measure_ms": 0, "layout_ms": (applyMs * 100).rounded() / 100,
                       "build_layers_ms": (layersMs * 100).rounded() / 100,
                       "host_total_ms": (totalMs * 100).rounded() / 100]
-        return jsonString(["ok": true, "path": "applyOps", "incremental": true,
-                           "in_bytes": bytes.count,
-                           "patch_count": applied, "relayout_count": relayout,
-                           "scopes": scopes, "changed_rects": changed.count, "updated_layers": updated,
-                           "unsupported_count": unsupported.count,
-                           "text_updates": textUpdates.count,
-                           "text_layers_applied": textApplied,
-                           "apply_ms": round(applyMs * 100) / 100,
-                           // ★Rust 侧分段（本仓实测：总账 72ms 里约 40ms 曾"去向不明"——
-                           //   因为 apply_ms 只覆盖「指令应用」，**不含重排**（relayout_ms 在 timing 里没被浮出）
-                           "relayout_ms": round((((o?["timing"] as? [String: Any])?["relayout_ms"] as? Double) ?? 0) * 100) / 100,
-                           "collect_ms": round((((o?["timing"] as? [String: Any])?["collect_ms"] as? Double) ?? 0) * 100) / 100,
-                           "rects_parse_ms": round(rectsParseMs * 100) / 100,
-                           "rects_bin_ms": round(rectsBinMs * 100) / 100,
-                           "opt_mode": SelfDrawBridge.optMode,
-                           // ★layers 三段分解（V4 下半：定位残余的唯一依据）
-                           "layers_sort_ms": round((layerTiming["sort_ms"] ?? 0) * 100) / 100,
-                           "layers_frames_ms": round((layerTiming["frames_ms"] ?? 0) * 100) / 100,
-                           "layers_commit_ms": round((layerTiming["commit_ms"] ?? 0) * 100) / 100,
-                           "geom_changed": geomChanged,
-                           "geom_total": changed.count,
-                           "deferred": view.lastDeferredCount,
-                           "flushed": view.lastFlushedCount,
-                           "stale_cleared": view.lastStalePendingCleared,
-                           "pending_visible_overlap": view.lastPendingVisibleOverlap,
-                           "layers_ms": round(layersMs * 100) / 100,
-                           "host_total_ms": round(totalMs * 100) / 100]
-                           .merging(virtualOut) { a, _ in a })
+        // ★★拆成分步赋值（2026-09-29 修：整块字典字面量让 Swift 类型检查器超时）
+        //
+        // 【现象】`swiftc -typecheck` 报 `unable to type-check this expression in reasonable time`
+        //   ⇒ **整个 iOS 宿主编译不过**——而 `check:ios-selfdraw-compile` 是"改 Swift 后本地
+        //   唯一的判据"（该脚本自述的覆盖盲区修补），它长期红着 = 门禁等于不存在。
+        // 【成因】单表达式内 25+ 键 × 混合数值类型（Int/Double/Any）× 两层 `as?` 动态转换
+        //   ⇒ 类型推断组合爆炸。
+        // 【修法】编译器自己给的建议（break up into distinct sub-expressions）：
+        //   先建字典，再逐组赋值（每组类型清晰、可独立推断）。
+        var res: [String: Any] = [:]
+        res["ok"] = true
+        res["path"] = "applyOps"
+        res["incremental"] = true
+        res["in_bytes"] = bytes.count
+        res["patch_count"] = applied
+        res["relayout_count"] = relayout
+        res["scopes"] = scopes
+        res["changed_rects"] = changed.count
+        res["updated_layers"] = updated
+        res["unsupported_count"] = unsupported.count
+        res["text_updates"] = textUpdates.count
+        res["text_layers_applied"] = textApplied
+        res["apply_ms"] = round(applyMs * 100) / 100
+        // ★Rust 侧分段（本仓实测：总账 72ms 里约 40ms 曾"去向不明"——
+        //   因为 apply_ms 只覆盖「指令应用」，**不含重排**（relayout_ms 在 timing 里没被浮出）
+        let timing = o?["timing"] as? [String: Any]
+        res["relayout_ms"] = round(((timing?["relayout_ms"] as? Double) ?? 0) * 100) / 100
+        res["collect_ms"] = round(((timing?["collect_ms"] as? Double) ?? 0) * 100) / 100
+        res["rects_parse_ms"] = round(rectsParseMs * 100) / 100
+        res["rects_bin_ms"] = round(rectsBinMs * 100) / 100
+        res["opt_mode"] = SelfDrawBridge.optMode
+        // ★layers 三段分解（V4 下半：定位残余的唯一依据）
+        res["layers_sort_ms"] = round((layerTiming["sort_ms"] ?? 0) * 100) / 100
+        res["layers_frames_ms"] = round((layerTiming["frames_ms"] ?? 0) * 100) / 100
+        res["layers_commit_ms"] = round((layerTiming["commit_ms"] ?? 0) * 100) / 100
+        res["geom_changed"] = geomChanged
+        res["geom_total"] = changed.count
+        res["deferred"] = view.lastDeferredCount
+        res["flushed"] = view.lastFlushedCount
+        res["stale_cleared"] = view.lastStalePendingCleared
+        res["pending_visible_overlap"] = view.lastPendingVisibleOverlap
+        res["layers_ms"] = round(layersMs * 100) / 100
+        res["host_total_ms"] = round(totalMs * 100) / 100
+        res.merge(virtualOut) { _, new in new }
+        return jsonString(res)
     }
 
     /// 核心：渲染树 → (CoreText 度量) → Rust 核心 → CALayer 树
@@ -3005,6 +3098,16 @@ final class SelfDrawBridge: NSObject, SelfDrawExports {
                         "in_bytes": treeJson.count,
                         "measure_cache_hits": SelfDrawBridge.measureCacheHits,
                         "measure_cache_misses": SelfDrawBridge.measureCacheMisses,
+                        // ★★I3 读数：绘制提示实际落到了多少层（"设了没设"必须可观测——
+                        //   内存差 39% 只体现在这里；无读数就只能靠"看起来生效了"）
+                        //   ★★重复键会让 Swift **运行时崩溃**（实测：本行曾被插两次，
+                        //     模拟器闪退 `EXC_BREAKPOINT in Dictionary.init(dictionaryLiteral:)`
+                        //     ——字典字面量重复键是 fatalError，不是"后者覆盖前者"）。
+                        "paint_hint_compact": SelfDrawBridge.paintHintCompact,
+                        "paint_hint_generic": SelfDrawBridge.paintHintGeneric,
+                        "paint_hint_disabled": SelfDrawBridge.paintHintDisabled,
+            "paint_hint_env": SelfDrawBridge.paintHintEnvRaw,
+                        "paint_hint_env": SelfDrawBridge.paintHintEnvRaw,
                         // ★字体族契约读数（两端词汇表是否一致：非零即为契约分叉）
                         "font_family_fallbacks": SelfDrawBridge.fontFamilyFallbackCount,
                         "unknown_font_family": SelfDrawBridge.lastUnknownFontFamily,
@@ -3088,6 +3191,13 @@ final class SelfDrawBridge: NSObject, SelfDrawExports {
             // ★度量读数（跨节点复用的判据：同文案应只真实度量少数次）
             "measure_cache_hits": SelfDrawBridge.measureCacheHits,
             "measure_cache_misses": SelfDrawBridge.measureCacheMisses,
+            // ★★I3 读数（**全量路径也要**——首帧 mount 走的就是这条路；
+            //   只给增量路径加 ⇒ 最该被验证的首帧反而看不见，本仓实测踩到）
+            "paint_hint_compact": SelfDrawBridge.paintHintCompact,
+            "paint_hint_generic": SelfDrawBridge.paintHintGeneric,
+            "paint_hint_disabled": SelfDrawBridge.paintHintDisabled,
+            "paint_hint_env": SelfDrawBridge.paintHintEnvRaw,
+                        "paint_hint_env": SelfDrawBridge.paintHintEnvRaw,
             "font_family_fallbacks": SelfDrawBridge.fontFamilyFallbackCount,
             "unknown_font_family": SelfDrawBridge.lastUnknownFontFamily,
             "cgfont_fallbacks": SelfDrawBridge.cgFontFallbackCount,

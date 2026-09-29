@@ -990,6 +990,39 @@ C1 的「可运行 Android 实现」也扫清了 JS 侧前置。
 **⑥ 验证**：全量 **3958/3958** · vue-tsc 0 错 · 门禁全绿（新增两个）· 桩测通过且**无副作用**
 （md5 前后一致）· 真机安装**无 16 KB 警告** · JS 引擎冒烟仍正常（\`batch_ok: true\`）。
 
+### ★★★I3 续：iOS 接线完成 + 真机验证（2026-09-29 深夜）
+
+**用户纠正了我的两个错误判断**（原文：「xcode在/Volumes/data1/work/office-applications也有啊，
+而且真机现在一直连着的啊，而且你现在模拟器两次都是闪退」）——三条都对：
+1. **Xcode 26.5 在 `/Volumes/data1/work/office-applications/`（带 devicectl）**，
+   而我只查了 `/Applications` 与 `mdfind` 的**首个**结果（14.2，无 devicectl）
+   ⇒ 误判"本机无可用 Xcode"。
+2. **iPhone 12 一直连着**（`devicectl list devices` 可见）——我却没查设备就下了结论。
+3. **模拟器两次闪退是我自己造成的**：同一个字典字面量里插了**两组相同键**
+   （`paint_hint_compact` / `paint_hint_generic`）⇒ Swift 字典字面量重复键是
+   **运行时 fatalError**（不是"后者覆盖前者"）。崩溃栈 `Dictionary.init(dictionaryLiteral:)`
+   正是它。★教训：**同名键插入前必须确认该字典里是否已有**——两次编辑都插进了同一处。
+
+**★修掉的三处（都写进注释以免重犯）**
+· 重复键（崩溃根因）；· `xcode-env.sh` 改为**两级偏好**（优先"能给 SDK **且有 devicectl**"的 Xcode，
+  其次"只要能给 SDK"）——多候选环境要按**能力完备度**排序，不是按枚举顺序；
+· `check-selfdraw-compile` 的**既有编译错误**（applyOps 里 25+ 键的巨型字典让 Swift 类型检查器超时
+  ⇒ 该门禁长期红着 = "改 Swift 后本地唯一的判据"其实不存在）。拆成分步赋值后通过。
+
+**★I3 接线（真机已验证）**
+· `selfdraw-scene.swift`：`makeLayer`（新建层）+ `configureLayer`（**复用层**——必须同样重配，
+  否则池里取出的层保留上一个节点的格式）+ `styleOf` 透传 hint；新增 `applyPaintHint`（只照做，不判断）。
+· **真机 iPhone 12 读数**（`results/selfdraw-report-i3-paint-hint.json`）：
+  **`paint_hint_compact = 44` · `paint_hint_generic = 44`** —— 88 个文本层里白字走紧凑格式、
+  灰蓝 `#9aa3b2`（非中性色）正确保持通用 ⇒ **判据在真实数据上有区分力**（不是全放行/全拒绝）。
+· 判定脚本 `hosts/ios/check-paint-hint.py`（三判据 · 破坏性验证过三种失败形态）。
+· 模拟器旁路 `hosts/ios/run-selfdraw-sim.sh`（免签名/免设备，"接线正确"秒级可验）。
+
+**🟡 未取得：A/B 净收益数值**——装置自证（关闭态 `disabled` 必须为 true）拦下两轮无效数据，
+根因是**环境变量未生效**（`devicectl -e` 传了但宿主读到空）。已把 `paint_hint_env`
+（宿主实际读到的值）加进报告以便归因。★诚实边界：本场景 91 节点/88 文本层，
+与历史 −39%（2000 层）规模不同 ⇒ 百分比不可直接对比。
+
 ### ★★★I3 结论线：hint 推导修好（接线前置），iOS 战场待环境（2026-09-29 晚）
 
 **用户点名「继续第一大项」= 处理 I3（paint-hint 未被平台消费）。本轮把它查到了底，并修掉一个真缺陷。**

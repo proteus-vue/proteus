@@ -67,7 +67,9 @@ export type {
   UpdateKind,
   PDiagnostic,
 } from './pnode'
-export { isOpaqueColor } from './color'
+export { isOpaqueColor, isNeutralColor, rgbOfColor } from './color'
+export { derivePaintHint } from './paint-hint'
+export type { PaintHintInput } from './paint-hint'
 export { resolveLength, parseStyleString, normalizeStyleDecls, normalizeStyleString, expandEdges, parseTransform, camel, splitTopLevel } from './pnode-style'
 export type { LengthContext, NormalizeOptions, NormalizeResult } from './pnode-style'
 export { analyzePTree, flattenRate, groupBindingsByNode } from './pnode-analyze'

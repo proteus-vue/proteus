@@ -147,6 +147,18 @@ describe('★★M0 · PaintHint 编译期推导（承载两条已实测的内存
     expect(normalizeStyleString('background-color:#285ac8').props.paintHint.isPureBackground).toBe(true)
   })
 
+  it('★★修复锁定：**彩色**文本不得判 isMonochrome（8 位灰度格式表达不了色相）', () => {
+    // 【为什么这条是硬约束而非保守选择】紧凑格式（iOS gray8Uint）只有亮度、没有色相
+    //   ⇒ 红字写进灰度格式 = **静默变成灰字**。
+    //   ★−39% 的实验用的是**白字**（恰好中性色）⇒ 该约束在实验里成立却从未写进判据。
+    const red = normalizeStyleString('color:#ff0000;font-size:14px')
+    expect(red.props.paintHint.isMonochrome, '红字不可用灰度格式').toBe(false)
+    const gray = normalizeStyleString('color:rgb(128,128,128);font-size:14px')
+    expect(gray.props.paintHint.isMonochrome, '中性灰可以（R=G=B）').toBe(true)
+    const white = normalizeStyleString('color:#ffffff;font-size:14px')
+    expect(white.props.paintHint.isMonochrome, '白色可以（−39% 实验的形态）').toBe(true)
+  })
+
   it('★★颜色判定保守：拿不准的写法（具名色/hsl/半透明）一律不判"可用紧凑格式"', () => {
     // 具名色：本仓不解析 CSS 具名色 ⇒ 拿不准 ⇒ 不能用紧凑格式（保守，宁可走通用路径）
     expect(normalizeStyleString('color:red;font-size:14px').props.paintHint.isMonochrome).toBe(false)
