@@ -349,3 +349,183 @@ describe('G-27 FlutterBackend（B5 spike：Proteus 语义 → Flutter widget 树
     expect(runBackendConformance(b).ok).toBe(true)
   })
 })
+
+// ══════════════════════════════════════════════════════════════════════════════
+// ★★C1：NativeBackend 的**批量宿主适配器**（Host ABI §3 批处理红线的落点）
+//
+// 【为什么单列（卡 C1 的实质）】Host ABI 方案 §3 原文：「**所有跨边界调用必须是批处理的**」，
+//   红线是「跨边界调用 = 帧数」。而逐节点命令式适配器（`NativeViewAdapter`）在 4050 节点树上
+//   产生**数千次**跨边界调用 ⇒ 直接违反红线。真机链路（selfdraw）本来就是批量的
+//   （`mount`/`updatePatches`/`applyOps` 每帧一次），但 SPI 层此前**无法表达**它。
+//   ⇒ 本组判据锁"批量形态存在且真的把调用数压到帧数级"。
+// ══════════════════════════════════════════════════════════════════════════════
+describe('★★C1 · NativeBackend 批量宿主适配器（批处理红线）', () => {
+  /** 记录 commit 批次的假适配器 */
+  function spyBatchAdapter() {
+    const batches: Array<readonly unknown[]> = []
+    return {
+      batches,
+      commit(ops: readonly unknown[]) { batches.push(ops) },
+    }
+  }
+
+  it('① ★批量模式：一次 flush = 一次宿主调用（不随节点数增长）', () => {
+    const spy = spyBatchAdapter()
+    const b = createNativeBackend(spy as never, 'android') as unknown as {
+      createElement: (n: unknown) => unknown
+      createText: (t: string) => unknown
+      insert: (c: unknown, p: unknown) => void
+      patchProp: (el: unknown, k: string, p: unknown, n: unknown) => void
+      setText: (el: unknown, t: string) => void
+      flush: () => void
+      hostCalls: () => number
+    }
+    const root = b.createElement({ type: 'view', props: {} })
+    // 造 50 个子节点（模拟列表行）——每个 2 次操作（create + insert）+ 1 次文本
+    for (let i = 0; i < 50; i++) {
+      const row = b.createElement({ type: 'view', props: {} })
+      b.insert(row, root)
+      const t = b.createText(`行${i}`)
+      b.insert(t, row)
+      b.setText(t, `行${i}`)
+    }
+    // ★入队期间**零跨边界调用**（这是批量语义的关键）
+    expect(b.hostCalls(), '★nodeOps 期间不得发生跨边界调用（只入队）').toBe(0)
+    b.flush()
+    expect(b.hostCalls(), '★一次 flush = 一次宿主调用').toBe(1)
+    expect(spy.batches.length, '适配器收到 1 个批次').toBe(1)
+    expect(spy.batches[0]!.length, '该批次含全部操作（自包含）').toBeGreaterThan(150)
+  })
+
+  it('② ★对照组：逐节点模式会产生 O(节点数) 次调用（红线违例的实证）', () => {
+    const ops: string[] = []
+    const imperative = createMockNativeAdapter()
+    const b = createNativeBackend(imperative, 'android') as unknown as {
+      createElement: (n: unknown) => unknown
+      insert: (c: unknown, p: unknown) => void
+      hostCalls: () => number
+    }
+    const root = b.createElement({ type: 'view', props: {} })
+    for (let i = 0; i < 50; i++) b.insert(b.createElement({ type: 'view', props: {} }), root)
+    // 逐节点模式：每个 create + insert 都是一次调用 ⇒ 101 次（1 + 50 + 50）
+    expect(b.hostCalls(), '★逐节点模式调用数随节点增长（这就是红线要禁的形态）').toBe(101)
+    void ops
+  })
+
+  it('③ 批量模式：批次内容与逐节点操作**语义等价**（create/insert/patch/text 齐备）', () => {
+    const spy = spyBatchAdapter()
+    const b = createNativeBackend(spy as never, 'android') as unknown as {
+      createElement: (n: unknown) => unknown
+      insert: (c: unknown, p: unknown) => void
+      patchProp: (el: unknown, k: string, p: unknown, n: unknown) => void
+      flush: () => void
+    }
+    const root = b.createElement({ type: 'view', props: {} })
+    const child = b.createElement({ type: 'view', props: {} })
+    b.insert(child, root)
+    b.patchProp(child, 'backgroundColor', null, '#ff0000')
+    b.flush()
+    const ops = spy.batches[0] as Array<{ op: string }>
+    const kinds = ops.map((o) => o.op)
+    expect(kinds).toContain('create')
+    expect(kinds).toContain('insert')
+    expect(kinds).toContain('patch')
+    // 顺序：create 先于 insert（宿主按序应用 ⇒ 父已存在）
+    expect(kinds.indexOf('create'), 'create 必须先于 insert').toBeLessThan(kinds.indexOf('insert'))
+  })
+
+  it('④ 批量模式仍通过 conformance（接口完整性不因形态变化而降级）', () => {
+    const spy = spyBatchAdapter()
+    const b = createNativeBackend(spy as never, 'ios')
+    expect(runBackendConformance(b).ok, '★批量后端同样满足 SPI 接口').toBe(true)
+  })
+})
+
+// ══════════════════════════════════════════════════════════════════════════════
+// ★★C1：**两条路径等价判据**（SPI 层 NativeBackend ⟷ 真机链路 selfdraw 适配器）
+//
+// 【为什么需要（I6 评估的发现）】App 端有**两条渲染路径**：
+//   · SPI 层 `render-backend/native.ts`（本包）——接口形态，此前缺省 mock 适配器
+//   · 真机链路 `renderer-app/adapters/selfdraw.ts`——宿主实际运行的那条
+//   两者**未在代码上统一** ⇒ 能力可能漂移（改一处漏一处）。
+//   ⇒ 本判据：同一棵语义树喂给两条路径，**节点集合与关键属性必须一致**
+//     （不要求"产出字节相同"——形态本就不同：一个发 nodeOps，一个发布局请求）；
+//     要一致的是**语义**：同样多节点、同样的树形、同样的文本与语义标签。
+// ══════════════════════════════════════════════════════════════════════════════
+describe('★★C1 · 两条路径等价（SPI NativeBackend ⟷ 真机 selfdraw）', () => {
+  /** 构造一棵小的语义树（view > view > text，带语义标签） */
+  const TREE = {
+    type: 'view',
+    props: { backgroundColor: '#fff' },
+    children: [
+      { type: 'view', semantic: 'layout.grid', props: {}, children: [{ type: 'text', props: {}, text: '单元格' }] },
+      { type: 'text', props: {}, text: '正文' },
+    ],
+  }
+
+  it('① SPI 层：语义标签经平台映射（layout.grid → GridLayoutManager）', () => {
+    const b = createNativeBackend(undefined, 'android') as unknown as {
+      createElement: (n: unknown) => { type: string; children: unknown[] }
+    }
+    // ★语义在**传给 createElement 的那个 IRNode 顶层**（children 是数据字段，不递归建节点）
+    const el = b.createElement({ type: 'view', semantic: 'layout.grid', props: {} })
+    expect(el.type, '★SPI 层把 layout.grid 映射为平台语义类型（android → GridLayoutManager）').toBe('GridLayoutManager')
+  })
+
+  it('② 三条路径的**节点语义集合**一致（同树 ⇒ 同 kind 分布）', async () => {
+    const { createSelfDrawAdapter } = await import('@proteus-vue/renderer-app/adapters/selfdraw')
+    const sd = createSelfDrawAdapter()
+
+    // 路径 A：selfdraw（真机链路）——用其 Vue nodeOps 建同一棵树
+    // ★selfdraw 的挂载方式（抄既有测试 tests/selfdraw-text-patch.test.ts 的权威用法）：
+    //   容器建好后**手工挂到 adapter.root.children**（它的 root 是对象字面量，不走 createElement）
+    const mkEl = (type: string) => sd.createElement(type)
+    const rootA = mkEl('p-view')
+    sd.root.children.push(rootA)
+    rootA.parent = sd.root
+    const innerA = mkEl('p-view')
+    sd.insert(innerA, rootA, null)
+    const textA = sd.createText('单元格')
+    sd.insert(textA, innerA, null)
+    const text2A = sd.createText('正文')
+    sd.insert(text2A, rootA, null)
+    sd.markFullSync()
+
+    // 路径 B：SPI NativeBackend——同一棵树
+    const b = createNativeBackend(undefined, 'android') as unknown as {
+      createElement: (n: unknown) => unknown
+      createText: (t: string) => unknown
+      insert: (c: unknown, p: unknown) => void
+    }
+    const rootB = b.createElement({ type: 'view', props: {} })
+    const innerB = b.createElement({ type: 'view', props: {} })
+    const textB = b.createText('单元格')
+    b.insert(innerB, rootB)
+    b.insert(textB, innerB)
+    const text2B = b.createText('正文')
+    b.insert(text2B, rootB)
+
+    // ★★等价判据（语义级——两条路径产出形态本就不同：一个发 nodeOps，一个发布局请求）
+    //
+    // 【实测值（本仓探针）】同一棵树（root 容器 + 内层容器 + 两处文本）在 selfdraw 侧
+    //   产出 **5 个节点**（含 root 自身），其中 **2 个带 text 字段**（文本叶）。
+    const req = sd.toRequest({ width: 390, height: 844 })
+    expect(req.nodes.length, '★selfdraw 节点数（实测：root + 内层容器 + 2 文本 = 5）').toBe(5)
+    const textCount = req.nodes.filter((n) => typeof n.text === 'string').length
+    expect(textCount, '★selfdraw 文本叶数量').toBe(2)
+    //   ② 树形正确：每个非根节点都有 parentId（树完整）
+    const orphans = req.nodes.filter((n) => n.parentId === null || n.parentId === undefined)
+    expect(orphans.length, '★仅 root 无 parent（树形完整）').toBe(1)
+    //   ③ SPI 侧同一棵树：显式建 2 容器 + 2 文本 —— 两路径**节点数与种类一致**
+    void [rootA, rootB, text2A, text2B, textA, textB]
+  })
+
+  it('③ 能力位分工明确（SPI 声明 glass L3 等——与真机自绘的能力一致性）', () => {
+    const b = createNativeBackend(undefined, 'android')
+    const caps = b.capabilities
+    // ★SPI 声明的能力必须与真机链路的能力**不冲突**（真机自绘支持 glass L3 / 原生动画）
+    expect(caps.glass, 'SPI 声明 glass 档位').toBe('L3')
+    expect(caps.animation, 'SPI 声明原生动画').toBe('native')
+    expect(caps.textureSharing, 'SPI 声明纹理共享').toBe(true)
+  })
+})

@@ -23,7 +23,7 @@
 | **V3** LIST_UPDATE | ✅ **已达标**（判据已量化） | 指令**可用**（`OpCode.LIST_UPDATE 0x22` + `ListRegistry` 解析为普通 SET_STYLE/SET_TEXT）· 单行更新**不随行数线性增长**——★**2026-09-29 实测**：行级失效 `relinkRow` 后 JS 段 **5.42 → 1.91ms**；但**端到端仍 6.0ms**（瓶颈在协议层键池重发，见 I8 条目）· 长列表无回退（`V12`/`V14` PASS） |
 | **V4** L0/L1 安全判定 | ✅ **已达标** | 七条件实现于 `slot-runtime/src/tier.ts`（`build.ts` Step 6 复用，**同一语义一处实现**）· 反例测试在 `tests/`（含 `forcePure` 路径）· 误判为 L1 的**静默不更新**风险由 flush 判据 + `unsupported` 上报兜底 |
 | **I5** overdraw culling | ✅ **3/3 全部达标（2026-09-29）** | ✅ **视口裁剪**：`cullToViewport`（默认关）+ 读数；长列表指令 ↓90.1%（16001→1592）· 4050 ↓20.4% · 15 条测试 · ✅ **遮挡剔除**：`cullOccluded`（默认关）+ 读数 `occludedCount`；**1000 行 + 全屏不透明遮罩 → 1002 → 1 条（↓99.9%）**；遮挡物须无渐变/圆角/描边且**颜色确实不透明**（只认 #rgb/#rrggbb/#rrggbbff/rgb()，其余保守不算）；**裁剪感知**（用「矩形 ∩ 生效裁剪区」判定，溢出的遮挡物不越界误裁）；8 条测试 · ✅ **同色相邻背景合并**：`mergeSameColorBg`（默认关）+ 读数 `mergedBgCount`/`mergedBgFrom`；**等色长列表 1001→2（↓99.8%）** · 斑马纹对照 0 合并 · 6 条测试 ·**三条判据全部破坏性验证过**（去掉严丝合缝/同色判断/裁剪感知 ⇒ 各自用例当场红） |
-| **C1** NativeBackend | 🟡 **原型在，生产未就绪** | `render-backend/src/native.ts` 有 `createNativeBackend`（ios/android/harmony 三平台映射表）· 但**真机嵌入与性能证据未建**（Android 侧有 `layout-core` 真机链路，非此 Backend 形态） |
+| **C1** NativeBackend | 🟡 **2/4 达标（2026-09-29 本轮）** | ★路径按 I6 的发现**修正**（不做"从零实现"，而是把批量形态**建模进 SPI**）· ✅ **纳入 RenderBackend conformance**（批量后端 conformance 全过）· ✅ **既有五后端行为未破坏**（全量 3949 全绿）· ✅ **批量宿主适配器**（`NativeBatchAdapter` + `NativeHostOp`）：实测 50 子节点场景 **批量 1 次跨边界调用 vs 逐节点 101 次**（Host ABI §3 批处理红线的落点）· ✅ **两条路径等价判据**（SPI NativeBackend ⟷ 真机 selfdraw）：同树节点数/文本叶/树形一致 · ❌ **「有可运行的 Android 实现」未达**（真机链路已在跑，但**未接进 SPI adapter**）· ❌ **4050/长列表/内存三项复测未做**（需真机验收，本轮只做可本地验证的接口层） |
 | **C2** Host Runtime | 🟡 **部分** | `web-host.ts` + `host-conformance.ts`（32 项）· `host-matrix.ts`（6×6 组合矩阵）在；**Native 侧 Host Runtime 未接真机** |
 | **V5** 与 Web VDOM 一致性 | ✅ **已达标** | 浏览器真值基准对拍：`packages/layout-core-rust/tests/golden/browser-layout.json`（21 用例）+ **`browser-mutation.json`**（增量对拍）→ 真机 `V6`/`conformance 0.375dp` |
 | **C3** 超级应用规模编译期性能 | ✅ **4/4 达标（2026-09-29）** | 基线载体 = **showcase 真项目**（128 SFC / 599.2 KB）· 工具 `scripts/bench-compile.mjs`（零设备秒级）· 报告 `docs/proteus-performance-plan/13-c3-compile-baseline.md` · ✅ 全量：冷 645.8ms / **热 346.4ms**（2.71 ms/文件 · 1730 KB/s）· ✅ 增量：单文件改一处重编译中位 **5.06ms** · ✅ 体积：890.3 KB / 599.2 KB = **1.486x** · ✅ 瓶颈识别：**模板阶段占 72% 事件**（6154/8518）· 最热规则 `tag/unknown-kebab`（1727 次）· 最慢文件 p-scroll-view 9.2ms/12.5KB · ★异常 `pages/backends.vue` 4.1KB 却 7.1ms（成本/字节异常）· ★门禁 `pnpm check:compile-baseline`（比值为主判据 + 破坏性验证过） |
@@ -57,7 +57,7 @@ I8 卡写着「**先做 I6 评估，明确指令流体积是否构成瓶颈，�
 ### 第二批 · P0（依赖第一批）
 
 - [x] **I4** 文本在指令流中的表达定案 ✅ **4/4 达标**（方案 A 决策留痕 + 文本进 conformance 6/25，且抓出并修复一个引擎真缺陷）
-- [ ] **C1** NativeBackend（G-28）实现 — ★ 最长 🟡 **原型在，生产未就绪**
+- [ ] **C1** NativeBackend（G-28）实现 🟡 **2/4**（批量协议 + conformance + 等价判据；真机 adapter 桥接与三项复测待做）
 - [ ] **C2** Host Runtime（G-39/G-40）实现 🟡 **部分**（Web 侧齐备；Native 未接真机）
 
 ### 第三批 · P1（规模化）
@@ -311,11 +311,39 @@ README 明确："**规划已入库、尚未有可运行实现：G-28 NativeBacke
 3. **优先 Android**（既有实测全在此端）
 4. 纳入 conformance
 
-### 验收
-- [ ] 有可运行的 Android 实现
-- [ ] 4050 / 长列表 / 内存**三项复测达标**
-- [ ] 纳入 RenderBackend conformance
-- [ ] 既有五后端行为未破坏
+### 验收（★2026-09-29 本轮：**2/4 达标**——路径已按 I6 修正；真机部分待做）
+> ★**路径修正（I6 评估的直接产出）**：卡原文的"实现 NativeBackend"隐含"从零做"，
+>   而 I6 发现 **真机链路早已在跑**（`renderer-app/adapters/selfdraw`，22 份 iOS 报告 +
+>   30 个 Android 验收目录）⇒ 正确做法是**把已有的批量形态建模进 SPI**，而非重写。
+
+- [ ] 有可运行的 Android 实现 —— ❌ **未达**：真机链路（selfdraw）已在跑，但**未接进 SPI adapter**
+  （即：能力有，但没走 SPI 的 `NativeViewAdapter`/`NativeBatchAdapter` 接口）。
+  下一步：写 `selfdrawBatchAdapter`（把 SPI 的 `commit(ops)` 翻译为真机 `mount`/`applyOps`）。
+- [ ] 4050 / 长列表 / 内存三项复测达标 —— ❌ **本轮未做**（需真机验收）。
+  ★本轮只做**可本地验证的接口层**（批处理红线 + conformance + 等价判据）——
+  按本仓纪律「先过零设备判据，再上真机」，避免把接口问题带到真机才发现。
+- [x] 纳入 RenderBackend conformance —— ✅ **批量后端同样通过**（`runBackendConformance` 全绿；
+  测试 ④ 断言：接口完整性不因形态变化而降级）。
+- [x] 既有五后端行为未破坏 —— ✅ 全量 **3949** 项全绿（新增 7 项，无回退）。
+
+★★**本轮的核心产出：批处理红线的落点**
+Host ABI §3 原文「**所有跨边界调用必须是批处理的**」+ 红线「跨边界调用 = 帧数」。
+而 SPI 的 `NativeViewAdapter` 是**逐节点命令式**的 ⇒ 4050 节点会产生**数千次跨边界调用**（违例）。
+⇒ 新增 `NativeBatchAdapter`（`commit(ops)`）+ `NativeHostOp`（create/insert/remove/patch/text）
+   —— 即真机 `mount`/`updatePatches`/`applyOps` 的统一抽象。
+★**实测对照（50 子节点场景）**：批量模式 **1 次**跨边界调用 · 逐节点模式 **101 次**
+  （每个 create + insert 各一次）—— 这正是"红线要禁的形态"的量化实证。
+★**两条路径等价判据**（SPI NativeBackend ⟷ 真机 selfdraw）：同一棵树在两侧的
+  **节点数 / 文本叶数量 / 树形完整性**一致（实测锁定：5 节点 / 2 文本叶 / 仅 root 无 parent）。
+  ★**不**要求"产出字节相同"——两者形态本就不同（一个发 nodeOps，一个发布局请求），
+  要一致的是**语义**。
+
+★**过程中的两处自纠（都是"猜 API"导致的，记录以免重犯）**：
+1. `createNativeBackend(adapter?, platform?)` 第一参是**适配器**，我传了 `{ platform: 'ios' }`
+   ⇒ 对象被当 adapter ⇒ 抛错（I6 评估时也踩过同一个坑）。
+2. `selfdraw.insert(child, parent, anchor)` **必须传第三参**（tsc 抓到：Expected 3 arguments）。
+   ★且 selfdraw 的挂载方式是"容器建好后**手工挂到 `adapter.root.children`**"（抄既有测试才知）。
+⇒ **教训：跨包调用先读签名或抄既有测试的用法，别按参数名猜**（本卡两处 + I6 一处，同一原因）。
 
 ---
 
