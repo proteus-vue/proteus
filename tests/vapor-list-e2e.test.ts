@@ -471,7 +471,7 @@ describe('★行级失效 relinkRow（2026-09-29：把"全表重扫"降为 O(改
     vapor.relinkRow(listId, '2', rows[1]!, [], ctx)
     rt.flush()
     expect(ops.length).toBe(1)
-    expect(ops[0]!.nodeId).toBe(1002)          // ★第 2 行的节点（不是第 1 行、也不是模板节点）
+    expect((ops[0] as { nodeId: number }).nodeId).toBe(1002)   // ★第 2 行的节点（非第 1 行 / 非模板节点）
     expect(ops[0]!.op).toBe(OpCode.SET_STYLE)
   })
 
@@ -481,14 +481,14 @@ describe('★行级失效 relinkRow（2026-09-29：把"全表重扫"降为 O(改
     a.rows[1]!.w = 77
     a.vapor.relinkRow(a.listId, '2', a.rows[1]!, [], a.ctx)
     a.rt.flush()
-    const opsA = a.ops.map((o) => ({ op: o.op, nodeId: o.nodeId, value: (o as { value?: unknown }).value }))
+    const opsA = a.ops.map((o) => ({ op: o.op, nodeId: (o as { nodeId?: number }).nodeId, value: (o as { value?: unknown }).value }))
 
     // B：全扫（同一改动）
     const b = setup()
     b.rows[1]!.w = 77
     b.triggers.get('list')?.()      // 粗粒度触发 ⇒ relink 全表
     b.rt.flush()
-    const opsB = b.ops.map((o) => ({ op: o.op, nodeId: o.nodeId, value: (o as { value?: unknown }).value }))
+    const opsB = b.ops.map((o) => ({ op: o.op, nodeId: (o as { nodeId?: number }).nodeId, value: (o as { value?: unknown }).value }))
     b.rt.flush()
 
     expect(opsA).toEqual(opsB)     // ★两条路径必须**逐条相同**（否则行级失效会静默分叉）

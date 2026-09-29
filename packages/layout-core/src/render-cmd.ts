@@ -80,6 +80,10 @@ export interface RenderCmdList {
     mergedCount: number
     /** 生成耗时（ms） */
     elapsedMs: number
+    /** ★视口裁剪：跳过的绘制指令数（0 = 没裁到东西；见 `EmitOptions.cullToViewport`） */
+    culledCount?: number
+    /** ★视口裁剪：整棵子树在视口外而提前返回的次数 */
+    culledSubtrees?: number
   }
 }
 
@@ -87,6 +91,27 @@ export interface EmitOptions {
   /** 视口尺寸（pushClip 与平台根容器用——不影响指令坐标：坐标已是绝对） */
   viewportWidth?: number
   viewportHeight?: number
+  /**
+   * ★★**视口裁剪（overdraw culling）开关**（2026-09-29，卡 I5）
+   *
+   * 【默认关闭——为什么】既有路径（`V6`/`V11`/真机验收）都建立在"全量 emit"上；
+   *   默认开启会**静默改变**这些读数的语义。⇒ 显式 opt-in，便于 A/B 对照。
+   *
+   * 【为什么能裁剪（架构红利）】指令携带**绝对坐标**（见文件头）⇒ 判定"是否在视口内"
+   *   就是一次坐标比较，**无需维护变换栈**、无需回溯祖先。
+   *
+   * 【语义（必须与"拍平"一致）】视口外节点：**几何仍参与布局**（父级排布需要它），
+   *   但**不 emit 绘制指令**；其子节点同样跳过（整体在视口外 ⇒ 子树必在视口外）。
+   *   ★边界：`pushClip`/`popClip` 也一并跳过（否则会留下**未配对的裁剪栈**——
+   *   平台侧按 push/pop 配对消费，不配对会破坏后续绘制）。
+   */
+  cullToViewport?: boolean
+  /**
+   * 视口在**内容坐标系**里的原点（滚动场景：滚到 `scrollY` 时传 `-scrollY`）。
+   * 仅 `cullToViewport` 为真时生效。
+   */
+  viewportOffsetX?: number
+  viewportOffsetY?: number
 }
 
 /**
@@ -99,6 +124,10 @@ export function emitRenderCmds(roots: LayoutNode[], opts: EmitOptions = {}): Ren
   let flattenedCount = 0
   let mergedCount = 0
   let seq = 0
+  // ★视口裁剪读数（见 EmitOptions.cullToViewport）：culledCount = 跳过的**绘制指令**数，
+  //   culledSubtrees = 因整棵子树在视口外而**提前返回**的次数（诊断"裁到了什么"）
+  let culledCount = 0
+  let culledSubtrees = 0
   /** 被拍平节点归属的指令下标 → 该指令的并入清单 */
   const mergedInto = new Map<number, number[]>()
 
@@ -117,6 +146,45 @@ export function emitRenderCmds(roots: LayoutNode[], opts: EmitOptions = {}): Ren
     const r = node.rect ?? { x: 0, y: 0, width: 0, height: 0 }
     // ★rect 是**父内容盒相对坐标**；绝对坐标 = 父绝对原点 + 自身相对坐标
     const abs = { x: ox + r.x, y: oy + r.y, width: r.width, height: r.height }
+
+    // ★★视口裁剪（卡 I5）：整棵子树都在视口外 ⇒ **不 emit 任何指令**（含 push/popClip）
+    //
+    // 【为什么能提前返回（正确性）】子节点坐标是父的**相对偏移**（`abs.x + padding.left`
+    //   或 absolute 用 `abs.x`）⇒ 子节点的绝对包围盒**必然落在父包围盒的扩展内**吗？
+    //   ⚠ **不必然**：`position: absolute` 子级可溢出父盒（甚至为负）。故提前返回的判据
+    //   必须用**父盒与视口不相交**——溢出子级在父盒外，但那时父盒若在视口外，
+    //   溢出部分也**可能**在视口内（如父在视口下方 100px、absolute 子 -200px 上移）。
+    //   ⇒ 为**不误裁**，提前返回只在 `node.position !== 'absolute'` 的**普通流**子树上做；
+    //     absolute 子级仍逐个判定（代价小、正确性优先——本仓纪律：宁可少裁不可误裁）。
+    const cull = opts.cullToViewport === true
+    const vx0 = (opts.viewportOffsetX ?? 0)
+    const vy0 = (opts.viewportOffsetY ?? 0)
+    const vw = opts.viewportWidth ?? Infinity
+    const vh = opts.viewportHeight ?? Infinity
+    if (cull) {
+      // ★★★边界口径：用**严格不重叠**判定（`<` / `>`），**不用 `<=` / `>=`**
+      //
+      // 【为什么（本仓实测抓到的真 bug）】用 `<=` 时，"盒子底边正好等于视口顶边"
+      //   （如 y=-50, h=50 ⇒ 底边 0，视口从 0 开始）会被判成"在视口外"而**裁掉**——
+      //   几何上它是**贴着视口边界**的元素（可能是 1px 描边、分隔线、阴影），
+      //   裁掉就是**可见内容消失**。浮点布局下"恰好贴边"很常见（对齐/负 margin/absolute 定位）。
+      //   ⇒ 保守取严格不等式：**宁可多留一条指令，不可误裁可见内容**
+      //     （与卡 I5"省"的目标不冲突：真正在视口外的元素仍被裁）。
+      const outside = abs.x + abs.width < vx0 || abs.y + abs.height < vy0
+        || abs.x > vx0 + vw || abs.y > vy0 + vh
+      if (outside) {
+        // 整个节点（含其普通流子树）在视口外。
+        // ★absolute 后代必须继续走（它们相对**祖先**定位，可能移回视口内）——
+        //   所以这里**不直接 return**，而是标记 `culled`：自身不绘制、也不下钻普通流子节点，
+        //   但仍遍历 absolute 子级。为简洁与正确性，实现为「跳过自身绘制 + 只下钻 absolute 子级」。
+        culledSubtrees++
+        culledCount += 1
+        for (const child of node.children) {
+          if (child.position === 'absolute') walk(child, abs.x, abs.y, parent)
+        }
+        return
+      }
+    }
     const paintable = info !== undefined && hasPaint(info)
 
     let self: Ctx
@@ -174,6 +242,9 @@ export function emitRenderCmds(roots: LayoutNode[], opts: EmitOptions = {}): Ren
       flattenedCount,
       mergedCount,
       elapsedMs: Date.now() - t0,
+      // ★裁剪读数（判据用：0 表示没裁掉任何东西 ⇒ 要么视口覆盖全树、要么开关没生效）
+      culledCount,
+      culledSubtrees,
     },
   }
 }
