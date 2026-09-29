@@ -14,7 +14,7 @@ import { describe, it, expect } from 'vitest'
 import fs from 'node:fs'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
-import { OpCode, InsertPos, PropKeyTable, StringPool, encodeOps } from '@proteus-vue/slot-runtime'
+import { OpCode, InsertPos, PropKeyTable, StringPool, encodeOps, decodeOps } from '@proteus-vue/slot-runtime'
 import type { UpdateOp } from '@proteus-vue/slot-runtime'
 
 const HERE = path.dirname(fileURLToPath(import.meta.url))
@@ -60,12 +60,21 @@ function buildFixtures(): { keys: PropKeyTable; pool: StringPool; ops: UpdateOp[
 function canonical(): { bytes: Uint8Array; json: string } {
   const { keys, pool, ops } = buildFixtures()
   const bytes = encodeOps(ops, keys, pool)
+  // ★★canonical 必须是「**解码后**的语义」（2026-09-29 随协议 V2 修正）
+  //
+  // 【为什么必须改】V1 时池是**全量**的 ⇒ 直接把 `keys.toArray()` / `pool.toArray()` 写进
+  //   canonical 就等于解码结果。V2 起池**按需**（只含被引用的条目）且 ref 被**重映射**
+  //   ⇒ 再拿"编码输入"当 canonical 会与"解码结果"不一致（本仓实测：版本号与 ref 双双对不上）。
+  //   ⇒ 正解：canonical = `decodeOps(bytes)` 的结果——**它才是契约的真实内容**
+  //     （即"对端解出来的东西"），与 TS/Rust 两侧的解码器同源。
+  const dec = decodeOps(bytes)
+  // ★注意 `decodeOps` 返回的是 **PropKeyTable / StringPool 对象**（不是数组）⇒ 取 `.toArray()`
   const json = JSON.stringify(
     {
-      version: 1,
-      keys: keys.toArray(),
-      strings: pool.toArray(),
-      ops: ops.map(f32Normalize),
+      version: dec.version,
+      keys: dec.keys.toArray(),
+      strings: dec.strings.toArray(),
+      ops: dec.ops.map(f32Normalize),
     },
     null,
     2,

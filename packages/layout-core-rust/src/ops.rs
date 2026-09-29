@@ -7,7 +7,7 @@
 //   本文件 + `tests/ops_conformance.rs` 让这条契约变成**可回归的机器判据**。
 //
 // 【格式（与 packages/slot-runtime/src/buffer.ts 逐字节一致；★改动必须双端同步）】
-//   Header（20B）: magic u32 = 0x504F5650("PVOP") · version u32 = 1
+//   Header（20B）: magic u32 = 0x504F5650("PVOP") · version u32 = 2
 //                  · opCount u32 · keyCount u32 · strCount u32
 //   KeyPool:      keyCount ×（u16 len, utf8 bytes）
 //   StringPool:   strCount ×（u16 len, utf8 bytes）
@@ -18,7 +18,14 @@
 use std::collections::HashMap;
 
 pub const OPS_MAGIC: u32 = 0x504F_5650; // "PVOP"（小端 50 56 4F 50）
-pub const OPS_VERSION: u32 = 1;
+/// ★★**V2 语义变更（2026-09-29）：池按需**——TS 侧编码时只把**本消息实际引用的**键/字符串
+/// 放进池，并**重映射 ref 下标**（V1 是每条消息携带全量池 ⇒ 列表场景单条更新膨胀 ~78×）。
+///
+/// 【为什么解码端**无需改动**】本格式的池是"自包含声明"：池里有几项由 Header 的
+///   `key_count`/`str_count` 声明，`key_of`/`string_of` 按**池内下标**解析。V2 只是让那个
+///   池**更小**——解码路径（游标推进 + 下标查表）逐字节不变。故 Rust 侧仅版本号需要跟上，
+///   这正是"TS 改协议 ⇒ Rust 必须同步"的**跨语言契约**在此处的体现（golden 门禁当场抓出）。
+pub const OPS_VERSION: u32 = 2;
 pub const OPS_HEADER_BYTES: usize = 20;
 
 /* ────────────────────────── 指令与操作码 ────────────────────────── */

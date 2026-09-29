@@ -27023,19 +27023,19 @@
   "host_node_count" : 3002,
   "host_timing_last" : {
     "build_layers_ms" : 0,
-    "host_total_ms" : 1.6000000000000001,
-    "layout_ms" : 1.5700000000000001,
+    "host_total_ms" : 0.050000000000000003,
+    "layout_ms" : 0.029999999999999999,
     "measure_ms" : 0
   },
   "js_completed" : 1,
   "js_ok" : true,
   "js_report" : {
-    "build_id" : "475143d7-122223",
+    "build_id" : "879b97d3-123206",
     "case_filter" : [
       "V11"
     ],
     "case_timings_ms" : {
-      "V11_long_list" : 2492
+      "V11_long_list" : 739
     },
     "cases" : [
       {
@@ -27057,36 +27057,36 @@
           "fine_diag" : [
             {
               "buffers" : 1,
-              "bytes" : 8964,
+              "bytes" : 45,
               "patch_count" : 1,
               "round" : 0
             },
             {
               "buffers" : 1,
-              "bytes" : 8964,
+              "bytes" : 45,
               "patch_count" : 1,
               "round" : 1
             },
             {
               "buffers" : 1,
-              "bytes" : 8964,
+              "bytes" : 45,
               "patch_count" : 1,
               "round" : 2
             },
             {
               "buffers" : 1,
-              "bytes" : 8964,
+              "bytes" : 45,
               "patch_count" : 1,
               "round" : 3
             }
           ],
           "geom_changed" : 3,
-          "instantiate_ms" : 19,
+          "instantiate_ms" : 17,
           "l0_slots" : 0,
           "l1_slots" : 4,
           "latency_iters" : 100,
           "layer_count" : 3002,
-          "mount_ms" : 314,
+          "mount_ms" : 326,
           "not_covered" : "scroll recycle pool on device（见 V12）",
           "op_count" : 1,
           "registry_stats" : {
@@ -27096,49 +27096,49 @@
           },
           "relayout" : 3,
           "single_node_update" : {
-            "amortized_ms" : 9.3819999999999997,
+            "amortized_ms" : 3.5030000000000001,
             "attribution" : "cost is in whole-source trigger (row scan + key diff over all rows), not in the incremental payload (1 op \/ relayout 3)",
             "clock" : "host.mach_absolute_time",
             "clock_trustworthy" : true,
-            "data_p50_ms" : 0.052999999999999999,
+            "data_p50_ms" : 0.048000000000000001,
             "flush_check" : {
               "expected" : 100,
               "flushes_delta" : 100,
               "ok" : true,
               "reason" : ""
             },
-            "host_p50_ms" : 4.077,
-            "js_p50_ms" : 5.4199999999999999,
+            "host_p50_ms" : 0.14999999999999999,
+            "js_p50_ms" : 3.4169999999999998,
             "ops_total" : 100,
-            "p50_ms" : 9.282,
-            "p95_ms" : 9.8599999999999994,
-            "p99_ms" : 10.651999999999999
+            "p50_ms" : 3.6200000000000001,
+            "p95_ms" : 3.8780000000000001,
+            "p99_ms" : 4.1630000000000003
           },
           "single_node_update_row_level" : {
-            "amortized_ms" : 6.016,
+            "amortized_ms" : 0.122,
             "flush_delta" : 200,
-            "host_p50_ms" : 1.6850000000000001,
-            "js_p50_ms" : 1.9099999999999999,
-            "marshal_p50_ms" : 2.4169999999999998,
+            "host_p50_ms" : 0.083000000000000004,
+            "js_p50_ms" : 0.021000000000000001,
+            "marshal_p50_ms" : 0.012999999999999999,
             "ops_ok" : false,
-            "p50_ms" : 5.9980000000000002,
-            "p95_ms" : 6.3410000000000002,
-            "payload_bytes" : 8964,
-            "speedup_vs_coarse" : 1.55
+            "p50_ms" : 0.121,
+            "p95_ms" : 0.161,
+            "payload_bytes" : 45,
+            "speedup_vs_coarse" : 29.920000000000002
           },
           "uninstantiated" : 0,
           "unsupported" : 0,
           "verdict" : "FAIL"
         },
-        "host_ms" : 314,
+        "host_ms" : 326,
         "items" : 1000,
         "nodes" : 3002,
-        "note" : "1000 行 SFC 产物：实例化 3002 节点 · 挂载 3002 层 · 改 1 行发 1 条指令 · 单节点更新 p95 9.86ms（JS 5.42 + 宿主 4.077）",
+        "note" : "1000 行 SFC 产物：实例化 3002 节点 · 挂载 3002 层 · 改 1 行发 1 条指令 · 单节点更新 p95 3.878ms（JS 3.417 + 宿主 0.15）",
         "patch_count" : 3301,
-        "request_bytes" : 8964,
+        "request_bytes" : 45,
         "serialize_ms" : 0,
-        "to_request_ms" : 19,
-        "total_ms" : 333,
+        "to_request_ms" : 17,
+        "total_ms" : 343,
         "vue_ms" : 0
       }
     ],
@@ -27174,8 +27174,8 @@
   },
   "js_total" : 1,
   "launch_diag" : {
-    "bootstrap_ms" : 69.140000000000001,
-    "first_frame_ms" : 75.230000000000004,
+    "bootstrap_ms" : 92.659999999999997,
+    "first_frame_ms" : 104.59,
     "first_frame_source" : "kernel:p_starttime",
     "forced_style" : "Dark",
     "interface_style" : "Dark",
@@ -48200,5 +48200,5 @@
       "y" : 18
     }
   },
-  "tree_hash" : "277e8dd9"
+  "tree_hash" : "5a50b259"
 }
