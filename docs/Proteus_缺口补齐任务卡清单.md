@@ -23,7 +23,7 @@
 | **V3** LIST_UPDATE | ✅ **已达标**（判据已量化） | 指令**可用**（`OpCode.LIST_UPDATE 0x22` + `ListRegistry` 解析为普通 SET_STYLE/SET_TEXT）· 单行更新**不随行数线性增长**——★**2026-09-29 实测**：行级失效 `relinkRow` 后 JS 段 **5.42 → 1.91ms**；但**端到端仍 6.0ms**（瓶颈在协议层键池重发，见 I8 条目）· 长列表无回退（`V12`/`V14` PASS） |
 | **V4** L0/L1 安全判定 | ✅ **已达标** | 七条件实现于 `slot-runtime/src/tier.ts`（`build.ts` Step 6 复用，**同一语义一处实现**）· 反例测试在 `tests/`（含 `forcePure` 路径）· 误判为 L1 的**静默不更新**风险由 flush 判据 + `unsupported` 上报兜底 |
 | **I5** overdraw culling | ✅ **3/3 全部达标（2026-09-29）** | ✅ **视口裁剪**：`cullToViewport`（默认关）+ 读数；长列表指令 ↓90.1%（16001→1592）· 4050 ↓20.4% · 15 条测试 · ✅ **遮挡剔除**：`cullOccluded`（默认关）+ 读数 `occludedCount`；**1000 行 + 全屏不透明遮罩 → 1002 → 1 条（↓99.9%）**；遮挡物须无渐变/圆角/描边且**颜色确实不透明**（只认 #rgb/#rrggbb/#rrggbbff/rgb()，其余保守不算）；**裁剪感知**（用「矩形 ∩ 生效裁剪区」判定，溢出的遮挡物不越界误裁）；8 条测试 · ✅ **同色相邻背景合并**：`mergeSameColorBg`（默认关）+ 读数 `mergedBgCount`/`mergedBgFrom`；**等色长列表 1001→2（↓99.8%）** · 斑马纹对照 0 合并 · 6 条测试 ·**三条判据全部破坏性验证过**（去掉严丝合缝/同色判断/裁剪感知 ⇒ 各自用例当场红） |
-| **C1** NativeBackend | 🟡 **2/4 达标（2026-09-29 本轮）** | ★路径按 I6 的发现**修正**（不做"从零实现"，而是把批量形态**建模进 SPI**）· ✅ **纳入 RenderBackend conformance**（批量后端 conformance 全过）· ✅ **既有五后端行为未破坏**（全量 3949 全绿）· ✅ **批量宿主适配器**（`NativeBatchAdapter` + `NativeHostOp`）：实测 50 子节点场景 **批量 1 次跨边界调用 vs 逐节点 101 次**（Host ABI §3 批处理红线的落点）· ✅ **两条路径等价判据**（SPI NativeBackend ⟷ 真机 selfdraw）：同树节点数/文本叶/树形一致 · ❌ **「有可运行的 Android 实现」未达**（真机链路已在跑，但**未接进 SPI adapter**）· ❌ **4050/长列表/内存三项复测未做**（需真机验收，本轮只做可本地验证的接口层） |
+| **C1** NativeBackend | 🟡 **2/4 达标（2026-09-29）** | ★路径按 I6 修正（把已有真机链路接进 SPI，非从零实现）· ✅ **纳入 conformance**（批量后端全绿）· ✅ **既有五后端未破坏**（全量 3955）· ✅ **批量协议**（`NativeBatchAdapter` + `NativeHostOp`）：50 子节点 **批量 1 次 vs 逐节点 101 次**· ✅ **selfdraw 批量宿主桥**（`createSelfDrawBatchAdapter`：`commit(ops)` → 真机 `mount`/`update`/`updatePatches` **一次调用**；**2200+ op 只 1 次跨边界调用**；批次翻译 6 项判据 + 破坏性验证）· ✅ **两条路径等价判据**（SPI ⟷ selfdraw）· ❌ **「有可运行的 Android 实现」未达**（桥已就绪，**尚未在真机接线**）· ❌ **三项复测未做**（需真机） |
 | **C2** Host Runtime | 🟡 **部分** | `web-host.ts` + `host-conformance.ts`（32 项）· `host-matrix.ts`（6×6 组合矩阵）在；**Native 侧 Host Runtime 未接真机** |
 | **V5** 与 Web VDOM 一致性 | ✅ **已达标** | 浏览器真值基准对拍：`packages/layout-core-rust/tests/golden/browser-layout.json`（21 用例）+ **`browser-mutation.json`**（增量对拍）→ 真机 `V6`/`conformance 0.375dp` |
 | **C3** 超级应用规模编译期性能 | ✅ **4/4 达标（2026-09-29）** | 基线载体 = **showcase 真项目**（128 SFC / 599.2 KB）· 工具 `scripts/bench-compile.mjs`（零设备秒级）· 报告 `docs/proteus-performance-plan/13-c3-compile-baseline.md` · ✅ 全量：冷 645.8ms / **热 346.4ms**（2.71 ms/文件 · 1730 KB/s）· ✅ 增量：单文件改一处重编译中位 **5.06ms** · ✅ 体积：890.3 KB / 599.2 KB = **1.486x** · ✅ 瓶颈识别：**模板阶段占 72% 事件**（6154/8518）· 最热规则 `tag/unknown-kebab`（1727 次）· 最慢文件 p-scroll-view 9.2ms/12.5KB · ★异常 `pages/backends.vue` 4.1KB 却 7.1ms（成本/字节异常）· ★门禁 `pnpm check:compile-baseline`（比值为主判据 + 破坏性验证过） |
@@ -57,7 +57,7 @@ I8 卡写着「**先做 I6 评估，明确指令流体积是否构成瓶颈，�
 ### 第二批 · P0（依赖第一批）
 
 - [x] **I4** 文本在指令流中的表达定案 ✅ **4/4 达标**（方案 A 决策留痕 + 文本进 conformance 6/25，且抓出并修复一个引擎真缺陷）
-- [ ] **C1** NativeBackend（G-28）实现 🟡 **2/4**（批量协议 + conformance + 等价判据；真机 adapter 桥接与三项复测待做）
+- [ ] **C1** NativeBackend（G-28）实现 🟡 **2/4**（批量协议 + 宿主桥 + 判据齐备；真机接线与三项复测待做）
 - [ ] **C2** Host Runtime（G-39/G-40）实现 🟡 **部分**（Web 侧齐备；Native 未接真机）
 
 ### 第三批 · P1（规模化）
@@ -316,9 +316,21 @@ README 明确："**规划已入库、尚未有可运行实现：G-28 NativeBacke
 >   而 I6 发现 **真机链路早已在跑**（`renderer-app/adapters/selfdraw`，22 份 iOS 报告 +
 >   30 个 Android 验收目录）⇒ 正确做法是**把已有的批量形态建模进 SPI**，而非重写。
 
-- [ ] 有可运行的 Android 实现 —— ❌ **未达**：真机链路（selfdraw）已在跑，但**未接进 SPI adapter**
-  （即：能力有，但没走 SPI 的 `NativeViewAdapter`/`NativeBatchAdapter` 接口）。
-  下一步：写 `selfdrawBatchAdapter`（把 SPI 的 `commit(ops)` 翻译为真机 `mount`/`applyOps`）。
+- [ ] 有可运行的 Android 实现 —— 🟡 **桥已就绪，真机接线待做**
+  ✅ **已完成**：`createSelfDrawBatchAdapter`（`packages/render-backend/src/selfdraw-batch.ts`）
+    —— 把 SPI 的 `commit(ops)` 翻译为真机三个入口的**一次调用**：
+    · 首帧 → `mount(treeJson)`（`{viewport, nodes}`）
+    · 结构变化 → `update(treeJson)`（整树重发，与真机既有自绘策略一致）
+    · 纯样式/文本 → `updatePatches([{id, style}])`（★文本走 `style.text` 同通道）
+    · **同节点多条 op 合并**为一条 patch 项（这正是"批量"的语义）
+    · `hostCalls()` / `lastCallKind()` 诊断面（判据用）
+  ★**判据**：6 项测试（三入口选择 / patch 合并 / 文本通道 / 镜像子树移除 / 调用数）
+    + **破坏性验证**（强制每次都 mount ⇒ 4 条同时红）
+  ★**实测**：**2200+ 个 op 只产生 1 次跨边界调用**（批处理红线）
+  ❌ **待做**：① 在 `hosts/android` 的宿主里接线（Java 侧三个入口已存在，JS 侧换用本桥）
+    ② 真机跑通后**三项复测**（4050 / 长列表 / 内存）
+  ★**为什么这不算"已完成"**：桥是**零设备可验证的部分**（已验收）；
+    但"可运行的 Android 实现"按卡的口径要求**真机跑通**——按本仓纪律不虚报。
 - [ ] 4050 / 长列表 / 内存三项复测达标 —— ❌ **本轮未做**（需真机验收）。
   ★本轮只做**可本地验证的接口层**（批处理红线 + conformance + 等价判据）——
   按本仓纪律「先过零设备判据，再上真机」，避免把接口问题带到真机才发现。

@@ -25,6 +25,9 @@ export { createNativeBackend, createMockNativeAdapter } from './native'
 export type { NativeViewDescriptor, NativeViewAdapter, MockNativeAdapter, NativePlatform } from './native'
 // ★C1：批量宿主协议（Host ABI §3 批处理红线的落点——生产形态）
 export type { NativeBatchAdapter, NativeHostOp } from './native'
+// ★C1：selfdraw 批量宿主桥（把真机 mount/update/updatePatches 接进 SPI）
+export { createSelfDrawBatchAdapter } from './selfdraw-batch'
+export type { SelfDrawHostBridge, SelfDrawBatchAdapter, SelfDrawBatchOptions } from './selfdraw-batch'
 // ★G-27 B5：FlutterBackend spike（Proteus 语义 → Flutter widget 树映射层）
 export { createFlutterBackend, mapWidgetType, toWidgetTree } from './flutter'
 export type { FlutterWidgetDescriptor } from './flutter'
