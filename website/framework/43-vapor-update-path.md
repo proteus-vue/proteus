@@ -16,6 +16,39 @@ group: 编译期
 | 下发内容 | 整棵新树的 diff 结果 | 变化的槽位指令（定长字段） |
 | 受影响范围 | 由 diff 结果决定 | 由布局边界 + 槽位依赖共同决定 |
 
+## 为什么不直接用 Vue 官方的 Vapor
+
+Vue 3.6 也在做 Vapor Mode（编译期更新），思路同源。但**它用不了**——这是 Proteus 自研的原因，不是偏好问题。
+
+**证据（不是传闻，可直接复验）**：`@vue/runtime-vapor` 的运行时**直接调用 DOM API**，且**没有可替换的宿主抽象**：
+
+```
+@vue/runtime-vapor 源码路径: src/dom/node.ts        ← 路径本身就是 DOM 专用
+  createElement(tagName, ns)  → document.createElementNS / document.createElement
+  createTextNode(value)       → document.createTextNode
+  createComment(data)         → document.createComment
+公开 API 签名绑死 DOM 类型: createVaporApp: CreateAppFunction<ParentNode, …>
+                            createPlainElement(…): HTMLElement
+                            createTextNode(value?): Text
+grep -c createRenderer  →  0                       ← 没有自定义渲染器入口
+```
+
+而 Proteus 的 App 端恰恰**建立在自定义渲染器上**（`createRenderer` + 自绘指令流 / 原生视图映射）。
+⇒ 两者**不兼容**：官方 Vapor 把"宿主是什么"编译死成 DOM，Proteus 需要它是可插拔的。
+
+**自研的三点结构性优势**：
+
+| 维度 | Vue 官方 Vapor | Proteus 自研 |
+|---|---|---|
+| 渲染目标 | DOM（具体平台） | **平台无关 IR** —— 更干净的 codegen 目标 |
+| Vue 版本依赖 | 绑 3.6（**当前仍是 rc，未正式发布**） | **编译器独立于 Vue 版本**（Vue 3.4–3.6 产物逐字节相同） |
+| 响应式转换 | 保留 Proxy 依赖收集 | **编译期换成槽位直写** |
+
+第三条是核心：Vue 要兼容**任意** JS 运行时行为，不敢假设「动态绑定集合编译期可枚举」；Proteus 面对受限子集，可做更激进的转换。
+
+★**适用范围（避免误读）**：「用不了官方 Vapor」限定在 **App / 小程序端**（自定义渲染器路线）。
+**Web 端目标是 DOM**，官方 Vapor 与 Proteus 哲学同构（都拒绝虚拟 DOM），可作后续兼容目标——两者是不同通道，不是同一问题的两种答案。
+
 ## 三层机制
 
 ### ① 编译期：源 → 槽位
