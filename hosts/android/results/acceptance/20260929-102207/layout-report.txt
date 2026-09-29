@@ -1,0 +1,98 @@
+=== Rust 排版核心 · Android 真机验证 ===
+设备：Xiaomi M098FE · Android 17（API 37）
+ABI：arm64-v8a
+引擎：proteus-layout-core 0.1.0 · engine=taffy-0.14 · taffy 锁定 0.14（0.13 有 measure 指数退化）
+JNI 符号自检：✓ 通过
+测试通路：proteus（脚本以 --es path 注入，两次冷启动隔离内存）
+起始 PSS：61035 KB
+
+【① 与浏览器基准的一致性】
+{"ok":true,"cases":17,"compared_nodes":67,"max_delta_dp":0.375,"tolerance_dp":0.5,"failures":[]}
+
+【② 4050 元素布局性能（纯排版）】
+{"ok":true,"node_count":4051,"iterations":20,"median_ms":1.997,"min_ms":1.935,"max_ms":10.354,"measure_calls_first":0}
+
+【③ 4050 元素：Proteus(Rust+Canvas) vs 原生 View 体系】
+{
+  "ok": true,
+  "elements": 4051,
+  "rows": 50,
+  "cols": 40,
+  "proteus": {
+    "rust_layout_ms": 6,
+    "rust_layout_median_of20_ms": 2.254,
+    "emit_cmds_ms": 0,
+    "canvas_draw_software_ms": 5,
+    "canvas_record_displaylist_ms": 3,
+    "total_ms": 9,
+    "cmd_count": 2000,
+    "view_count": 1,
+    "painted_pixels_sampled": 14803,
+    "draw_attribution_rects_only_ms": 2,
+    "draw_attribution_text_only_ms": 6,
+    "optimized_software_ms": 6,
+    "optimized_hw_record_ms": 3,
+    "text_atlas_entries": 0,
+    "correctness_diff_pixels": 0,
+    "correctness_painted_base": 14803,
+    "correctness_painted_optimized": 14803,
+    "correctness_diff_diag": "first_diff=(-1,-1) paintedA=59212 paintedB=59212 onlyBase=0 onlyOptimized=0",
+    "correctness_judgement": "{\"geometry_ok\":true,\"sampled\":648000,\"position_mismatch\":0,\"position_mismatch_ratio\":0.0,\"criterion\":\"覆盖位置一致（位置敏感）；不比两条光栅化路径的像素值\"}",
+    "atlas_validation": "{\"atlas_painted_pixels\":3819,\"atlas_content_ok\":true}",
+    "varied_text_optimized_ms": 31,
+    "varied_text_atlas_entries": 0
+  },
+  "native": {
+    "create_views_ms": 65,
+    "measure_layout_ms": 16,
+    "draw_ms": 2,
+    "total_ms": 83,
+    "view_count": 4051,
+    "measured_height": 2400,
+    "painted_pixels_sampled": 11340
+  },
+  "same_scope_compare": {
+    "phase_layout_proteus_ms": 6,
+    "phase_layout_native_ms": 81,
+    "phase_layout_ratio": 0.074,
+    "phase_draw_proteus_hw_record_ms": 3,
+    "phase_draw_proteus_optimized_ms": 3,
+    "phase_draw_proteus_software_ms": 5,
+    "phase_draw_native_ms": 2,
+    "phase_draw_ratio_hw": 1.5,
+    "phase_draw_ratio_optimized": 1.5
+  },
+  "caveat": "★§9.2 口径：本包由 acceptance.sh 以 --release 构建（非 debuggable）；轮次间 force-stop 冷启动；CPU 核判定见 layout-env.json（落在 cpu6\/7 超大核则本组作废）。温度见 layout-report.txt 的「环境核验」段。"
+}
+
+【④ §9.2 环境核验】
+观测到的 CPU：0,1,4,5（最快档 0 · 其余 4 · 本机 2 档 · 最快 4608000kHz）
+温度：95000 → 95000 (m°C)
+
+【⑤ 增量内存（§9.2，纯结构口径）】
+baseline=61035 KB · after=167336 KB · delta=106301 KB
+
+【⑥ 文本通道对比（§6.1）】
+{
+  "ok": true,
+  "repeated_text": {
+    "baseline_drawText_ms": 4.65,
+    "bitmap_atlas_ms": 5,
+    "static_layout_ms": 5.55,
+    "atlas_entries": 0,
+    "layout_builds": 1
+  },
+  "varied_text": {
+    "baseline_drawText_ms": 6.26,
+    "bitmap_atlas_ms": 6.01,
+    "static_layout_ms": 12.02,
+    "atlas_entries": 0,
+    "layout_builds": 2025
+  },
+  "prewarm_effect": {
+    "prewarmed_entries": 120,
+    "layout_builds_after_prewarm": 120,
+    "static_layout_with_prewarm_ms": 10.48
+  },
+  "note": "三路径同机对比：baseline=每次 drawText；bitmap_atlas=按串缓存位图（M3）；static_layout=**方案 §6.1 规定**（缓存布局 + 重放，不建位图）"
+}
