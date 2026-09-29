@@ -122,7 +122,7 @@ const BN = { snapshot: 'bench-final' }
 // ★构建标识：每次构建写入，用于**确凿判定**设备上跑的是哪份代码
 //   （踩坑：靠文件 mtime 判断"报告是否刷新"不可靠——新建目标文件的时间恒为"现在"；
 //    且我看不出设备实际执行的是旧 bundle，白跑一轮。有了这个字段就能一眼判定。）
-const BUILD_ID = 'df61c1ac-211343'
+const BUILD_ID = 'c049f19d-114237'
 const now = (): number => Date.now()
 /** 宽松解析（宿主返回可能是字符串或已是对象） */
 const safeParseAny = (s: any): any => {
@@ -2638,6 +2638,122 @@ CASES.push({
         // ★诚实边界：证明的是"字族改变了度量/绘制用的字体"（宽度 + 字体名）；
         //   **字形级**比对（衬线真的画出衬线）需与已知渲染对照，未做；自定义字体（@font-face）未支持
         not_covered: '字形级墨迹比对；自定义字体（@font-face / 打包字体）',
+      },
+    })
+  },
+})
+
+/* V15 · ★★自定义字体（`custom:<族名>` 契约 + 注册通道）—— 2026-09-29 */
+//
+// 【与 V13 的差别】V13 测的是**语义角色**（system/serif/monospace → 平台系统字体）；
+//   本档测**自定义字体**（@font-face / 打包字体）：族名以 `custom:<名>` 透传 → 宿主查注册表。
+// 【判据设计（三条，缺一不可）】
+//   ① 未注册 ⇒ **显式回退 system + 计数**（"缺字体资源"必须可见，不能静默）
+//   ② 注册真实字体文件后 ⇒ **层上字体名变化**（不是"参数传到了"——V13 已确立这条纪律：
+//      度量对而绘制没换 = 字被裁且报告全绿）
+//   ③ 反例对照：同族名**注册前 vs 注册后** ⇒ 层上字体名必须不同（否则"注册"是空操作）
+//   ★为什么用 `/System/Library/Fonts/Supplemental/` 下的字体：系统路径无需打包资源，
+//     且这些字体（Georgia/Courier 等）与 SF 差异显著 ⇒ 判据不会因"字形太像"而假绿。
+CASES.push({
+  name: 'V15_custom_font',
+  note: '★★自定义字体：custom:<族名> 契约 —— 未注册回退可见 + 注册后层上字体名变化 + 注册前后对照',
+  fn: async () => {
+    const TEXT = 'MMMM iii WWWW'
+    const bridge = proteusSelfDraw as unknown as {
+      mount: (j: string) => string
+      clearTree?: () => string
+      measureProbe?: (j: string) => string
+      registerFont?: (j: string) => string
+      customFontStats?: () => string
+    }
+    if (!bridge.mount || !bridge.clearTree || !bridge.measureProbe || !bridge.registerFont) {
+      results.push({ case: 'V15_custom_font', note: '✗ 宿主入口不可用（缺 registerFont/measureProbe）',
+        items: 0, nodes: 0, vue_ms: -1, to_request_ms: -1, serialize_ms: -1, host_ms: -1,
+        total_ms: -1, patch_count: -1, request_bytes: -1 })
+      return
+    }
+
+    // 候选**系统字体名**（`UIFont(name:)` 查找）——iOS 上按名引用是最常见形式，
+    //   且不依赖打包资源。★首版用 macOS 的文件路径（`/System/Library/Fonts/Supplemental/…`），
+    //   真机全失败——iOS 字体布局与 macOS 不同（本仓实测：不能照搬路径）。
+    //   这些名字是 iOS 长期稳定的系统字体（与 SF 差异显著 ⇒ 判据不会因字形太像而假绿）。
+    const SYSTEM_NAME_CANDIDATES = ['Georgia', 'Courier New', 'Times New Roman', 'Menlo']
+
+    const build = (family: string): string => JSON.stringify({
+      viewport: VP,
+      nodes: [
+        { id: 0, parentId: null, flexDirection: 'column', width: VP.width, height: VP.height },
+        { id: 100, parentId: 0, flexDirection: 'row', alignItems: 'center',
+          width: VP.width, height: 60, flexShrink: 0 },
+        { id: 200, parentId: 100, text: TEXT, fontSize: 24, fontWeight: 400,
+          fontFamily: family, flexShrink: 0 },
+      ],
+    })
+    const probeLayerFont = (family: string): { w: number; font: string; mount: any } => {
+      bridge.clearTree!()
+      const m = safeParseAny(bridge.mount(build(family)))
+      const p = safeParseAny(bridge.measureProbe!(JSON.stringify({ nodes: [200] })) ?? '{}')
+      const e = ((p?.nodes ?? {}) as Record<string, { layer_w?: number; font_name?: string }>)['200'] ?? {}
+      return { w: e.layer_w ?? -1, font: e.font_name ?? '', mount: m }
+    }
+
+    // ① 未注册：`custom:NoSuchFontAbc` ⇒ 回退 + 计数
+    const missBefore = safeParseAny(bridge.customFontStats?.() ?? '{}')?.custom_font_misses ?? 0
+    const unregistered = probeLayerFont('custom:NoSuchFontAbc')
+    const missAfter = safeParseAny(bridge.customFontStats?.() ?? '{}')?.custom_font_misses ?? 0
+    const unregisteredCounted = (missAfter as number) > (missBefore as number)
+
+    // ② 注册真实字体 ⇒ 层上字体名变化 + 宽度
+    let registeredName = ''
+    let registeredOk = false
+    let after: { w: number; font: string; mount: any } | null = null
+    for (const name of SYSTEM_NAME_CANDIDATES) {
+      const r = safeParseAny(bridge.registerFont(JSON.stringify({ family: 'MyAppFontV15', systemName: name })) ?? '{}')
+      if (r?.registered) {
+        registeredOk = true
+        registeredName = name
+        after = probeLayerFont('custom:MyAppFontV15')
+        break
+      }
+    }
+
+    // ③ 反例对照：注册前同族名（清注册表后）——必须与注册后不同
+    //   （`clearCustomFonts` 未导出，故用"另一个未注册族名"作等效对照：两者都落 system）
+    const before = probeLayerFont('custom:MyAppFontV15Never')   // 未注册 ⇒ system
+    const fontNames = new Set([unregistered.font, after?.font ?? '', before.font].filter(Boolean))
+
+    const checks = {
+      // ① 未注册必须计数（否则"缺字体"静默）
+      unregisteredCounted,
+      // ② 注册成功（系统字体文件可解析）
+      registeredOk: registeredOk && !!after,
+      // ③ 注册后**层上字体名**与未注册时不同（证明注册真的换掉了绘制字体）
+      layerFontChanged: !!after && after.font !== before.font && after.font.length > 0,
+      // ④ 至少见到两种不同层上字体（未注册=system vs 注册=custom）
+      distinctLayerFonts: fontNames.size >= 2,
+      // ⑤ 注册后宽度可比（未注册时也应有宽度——防"层没建出来"的假绿）
+      bothHaveWidth: before.w > 0 && (after?.w ?? -1) > 0,
+    }
+    const verdict = Object.values(checks).every(Boolean) ? 'PASS' : 'FAIL'
+    results.push({
+      case: 'V15_custom_font',
+      note: `自定义字体：未注册→回退计数 ✓ · 注册 ${registeredName || '?'} → 层上字体 `
+        + `${before.font.split(':').pop()?.slice(0, 16) ?? '?'} → ${after?.font.split(':').pop()?.slice(0, 16) ?? '?'}`,
+      items: 1, nodes: 3,
+      vue_ms: 0, to_request_ms: 0, serialize_ms: 0, host_ms: 0, total_ms: 0,
+      patch_count: 0, request_bytes: 0,
+      extra: {
+        verdict, checks,
+        font_source: registeredName,
+        width_unregistered: unregistered.w,
+        width_before_register: before.w,
+        width_after_register: after?.w ?? -1,
+        layer_font_unregistered: unregistered.font,
+        layer_font_before: before.font,
+        layer_font_after: after?.font ?? '',
+        misses_delta: (missAfter as number) - (missBefore as number),
+        covered: 'custom:<族名> 契约透传 → 宿主注册表 → 层上实际字体（度量与绘制同源）+ 未注册显式降级',
+        not_covered: 'CSS 候选链的后续回退（"MyFont", serif 在 MyFont 未注册时落 system，不落到 serif）',
       },
     })
   },

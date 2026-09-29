@@ -1,0 +1,150 @@
+{
+  "engine" : "proteus-layout-core 0.1.0 · engine=taffy-0.14 · taffy 锁定 0.14（0.13 有 measure 指数退化）",
+  "geometry_all" : {
+    "0" : {
+      "bg" : "",
+      "color" : "",
+      "h" : 844,
+      "text" : "",
+      "w" : 390,
+      "x" : 0,
+      "y" : 0
+    },
+    "100" : {
+      "bg" : "",
+      "color" : "",
+      "h" : 60,
+      "text" : "",
+      "w" : 390,
+      "x" : 0,
+      "y" : 0
+    },
+    "200" : {
+      "bg" : "",
+      "color" : "",
+      "h" : 29,
+      "text" : "MMMM iii WWWW",
+      "w" : 197,
+      "x" : 0,
+      "y" : 16
+    }
+  },
+  "host_node_count" : 3,
+  "host_timing_last" : {
+    "build_layers_ms" : 0.27596950531005859,
+    "host_total_ms" : 0.42998790740966797,
+    "layout_ms" : 0.02002716064453125,
+    "measure_ms" : 0.072956085205078125
+  },
+  "js_completed" : 1,
+  "js_ok" : true,
+  "js_report" : {
+    "build_id" : "c049f19d-114237",
+    "case_filter" : [
+      "V15"
+    ],
+    "case_timings_ms" : {
+      "V15_custom_font" : 15
+    },
+    "cases" : [
+      {
+        "case" : "V15_custom_font",
+        "extra" : {
+          "checks" : {
+            "bothHaveWidth" : true,
+            "distinctLayerFonts" : true,
+            "layerFontChanged" : true,
+            "registeredOk" : true,
+            "unregisteredCounted" : true
+          },
+          "covered" : "custom:<族名> 契约透传 → 宿主注册表 → 层上实际字体（度量与绘制同源）+ 未注册显式降级",
+          "font_source" : "Georgia",
+          "layer_font_after" : "<CGFont (0x11003dc80): Georgia>",
+          "layer_font_before" : "<CGFont (0x11003dd00): .SFUI-Regular>",
+          "layer_font_unregistered" : "<CGFont (0x11003d900): .SFUI-Regular>",
+          "misses_delta" : 2,
+          "not_covered" : "CSS 候选链的后续回退（\"MyFont\", serif 在 MyFont 未注册时落 system，不落到 serif）",
+          "verdict" : "PASS",
+          "width_after_register" : 144,
+          "width_before_register" : 197,
+          "width_unregistered" : 197
+        },
+        "host_ms" : 0,
+        "items" : 1,
+        "nodes" : 3,
+        "note" : "自定义字体：未注册→回退计数 ✓ · 注册 Georgia → 层上字体  .SFUI-Regular> →  Georgia>",
+        "patch_count" : 0,
+        "request_bytes" : 0,
+        "serialize_ms" : 0,
+        "to_request_ms" : 0,
+        "total_ms" : 0,
+        "vue_ms" : 0
+      }
+    ],
+    "ceiling" : [
+
+    ],
+    "completed" : 1,
+    "frame_budget_ms" : 16.699999999999999,
+    "init_diag" : {
+      "errors" : [
+
+      ],
+      "stages" : [
+        "before-S2:15",
+        "after-S:33"
+      ]
+    },
+    "kind" : "logic-bench",
+    "notes" : [
+      "★四段分解：vue（响应式→重渲染→diff\/patch）\/ 适配器（拍平+折叠）\/ 序列化（JSON，即跨界成本）\/ 宿主（度量+布局+建层）",
+      "★★必须逐用例由宿主驱动：JSC 的 evaluateScript 不排空微任务，而 Vue 更新调度正是微任务",
+      "★A 组是规模扫描（12→1000 项），用于回答「边界成本随规模如何增长」",
+      "★F 组验证 Vue 的批处理：同 tick 100 次变更应合并为 1 次渲染（extra.renders）",
+      "★H 组对比 JSON 与扁平数值编码，直接支撑「是否值得上 JSI\/二进制通道」的决策"
+    ],
+    "result_count" : 1,
+    "runtime" : "JavaScriptCore（系统自带）",
+    "total_cases" : 1,
+    "viewport" : {
+      "height" : 844,
+      "width" : 390
+    }
+  },
+  "js_total" : 1,
+  "launch_diag" : {
+    "bootstrap_ms" : 82.549999999999997,
+    "first_frame_ms" : 95.609999999999999,
+    "first_frame_source" : "kernel:p_starttime",
+    "forced_style" : "Dark",
+    "interface_style" : "Dark",
+    "launch_screen_keys" : [
+
+    ]
+  },
+  "layer_count" : 3,
+  "layer_frames" : {
+    "0" : {
+      "h" : 844,
+      "parentId" : -1,
+      "w" : 390,
+      "x" : 0,
+      "y" : 0
+    },
+    "100" : {
+      "h" : 60,
+      "parentId" : 0,
+      "w" : 390,
+      "x" : 0,
+      "y" : 0
+    },
+    "200" : {
+      "h" : 29,
+      "parentId" : 100,
+      "w" : 197,
+      "x" : 0,
+      "y" : 16
+    }
+  },
+  "tree_hash" : "5feaecec"
+}
