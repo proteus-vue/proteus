@@ -118,17 +118,25 @@ export function scanReactiveSources(
   for (let i = 0; i < lines.length; i++) {
     const line = lines[i]
     for (const { re, kind: kindOfPattern, group } of patterns) {
-      const m = re.exec(line)
-      if (!m) continue
-      const raw = m[group]
-      // 解构形态：逗号分隔（含重命名 `title: t` 取 t；带默认值 `a = 1` 取 a）
-      const names = raw.includes(',') || raw.includes('{') || raw.includes(':') || raw.includes('=')
-        ? raw.split(',').map((seg) => {
-            const s = seg.trim().split(/[=:]/)[0].trim()
-            return s.replace(/[^\w$]/g, '')
-          }).filter(Boolean)
-        : [raw.replace(/[^\w$]/g, '')]
-      for (const name of names) {
+      // ★★一行可有**多个**声明（本仓实测的真缺陷）：`const c0 = ref('a'); const v0 = ref(0)`
+      //   ——首版只 `re.exec(line)` 取**第一个**匹配 ⇒ 同一行第二个声明被**静默丢弃**
+      //   ⇒ 该源不进订阅表 ⇒ 它的绑定**永不更新**（真机上表现为"改这个字段页面不动"）。
+      //   ★为什么必须修：单行多声明在真实代码里很常见（紧凑写法、格式化压缩产物、多变量初始化）。
+      //   修法：用**全局标志逐次 exec** 取该行全部匹配（而不是只看第一个）。
+      //   【实现注】patterns 里的正则**不带 g 标志**，故这里用 `new RegExp(re.source, 'g')`
+      //   临时构造全局版（不动原表，避免共享 lastIndex 的经典陷阱）。
+      const reGlobal = new RegExp(re.source, 'g')
+      let m: RegExpExecArray | null
+      while ((m = reGlobal.exec(line)) !== null) {
+        const raw = m[group]
+        // 解构形态：逗号分隔（含重命名 `title: t` 取 t；带默认值 `a = 1` 取 a）
+        const names = raw.includes(',') || raw.includes('{') || raw.includes(':') || raw.includes('=')
+          ? raw.split(',').map((seg) => {
+              const s = seg.trim().split(/[=:]/)[0].trim()
+              return s.replace(/[^\w$]/g, '')
+            }).filter(Boolean)
+          : [raw.replace(/[^\w$]/g, '')]
+        for (const name of names) {
         if (!name || byName.has(name)) continue
         // ★★用官方 `bindings` **校正** kind（本仓实测发现的注释/实现不符）
         //
@@ -207,8 +215,9 @@ export function scanReactiveSources(
           vueBinding: vb,
           line: scriptOffset + i,
         }
-        sources.push(src)
-        byName.set(name, src)
+          sources.push(src)
+          byName.set(name, src)
+        }
       }
     }
   }

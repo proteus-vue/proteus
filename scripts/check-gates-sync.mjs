@@ -60,6 +60,11 @@ const LOCAL_ONLY = {
   //   判据虽以比值为主（体积膨胀比），但全量/增量仍带宽松绝对上界 ⇒
   //   在 CI 共享 runner 上会因机器差异产生噪声红。⇒ 归**开发机**：改编译器后本地跑。
   'check:compile-baseline': '绝对耗时跨机不可比（阈值含 3× 宽松上界）；CI 共享 runner 波动会产生噪声红 ⇒ 开发机跑',
+  // ★V2 绑定矩阵：生成物依赖 **showcase 全量编译**（128 文件，约 3 秒）+ 依赖 compiler dist。
+  //   CI 上需先 build-packages（本仓已有该步），但生成物本身入库 ⇒ CI 只需 --check（比对），
+  //   实测 --check 也需重跑编译（约 3 秒）⇒ 可以接 CI。★但为与 compile-baseline 一致（同一族基线类门禁），
+  //   暂归开发机：避免"改编译器后 CI 与本地各红一次"的低效流程。
+  'check:binding-matrix': '与 check:compile-baseline 同族（生成物基线类）；改编译器后本地跑一次即可，避免 CI/本地各红一次',
   // ★Android 宿主编译检查（2026-09-29，与 check:ios-selfdraw-compile 同源盲区）：
   //   编译宿主需 Android SDK（android.jar）+ JDK；CI 为 ubuntu-latest，不装 Android SDK ⇒ 跑不了。
   'check:android-host-compile': '需 Android SDK（android.jar）+ JDK 17；CI 为 ubuntu-latest，未装 Android SDK',
