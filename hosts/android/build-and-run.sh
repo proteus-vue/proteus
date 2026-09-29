@@ -166,6 +166,25 @@ else
   echo "      （不阻断构建：缺它只影响 js-engine 测试路径，既有路径不受影响）"
 fi
 
+# ★★APK 产物断言（2026-09-29 新增：本会话实测到"45 字节 APK 报成功"的静默失败）
+#
+# 【为什么必须有】此前组装完 APK **不看产物**就进签名/安装 ⇒ 空包（aapt2 失败/残留）
+#   也能"构建成功"，直到真机上发现"代码没生效"才暴露——那是最贵的一类返工。
+#   判据（三条，任一不满足即中止）：① 文件非空且 ≥ 100KB（含 dex + .so 的下限）
+#   ② 含 classes.dex  ③ 含 Rust 核心 .so（JS 引擎 .so 可选——它是新增能力）
+APK_BYTES=$(stat -f%z "$APK" 2>/dev/null || echo 0)
+if [ "$APK_BYTES" -lt 100000 ]; then
+  echo "✗ APK 产物异常：仅 ${APK_BYTES} 字节（预期 ≥100KB）——组装失败（见上方 aapt2/zip 输出）"
+  exit 3
+fi
+for entry in "classes.dex" "lib/arm64-v8a/libproteus_layout_core.so"; do
+  if ! unzip -l "$APK" 2>/dev/null | grep -q "$entry"; then
+    echo "✗ APK 缺条目：$entry（产物不完整，装到设备会 UnsatisfiedLinkError / 类缺失）"
+    exit 3
+  fi
+done
+echo "    产物断言通过：${APK_BYTES} 字节 · classes.dex ✓ · Rust 核心 .so ✓"
+
 echo "==> ⑥ 签名（apksigner + debug keystore）"
 KS="$BUILD/debug.keystore"
 if [ ! -f "$KS" ]; then

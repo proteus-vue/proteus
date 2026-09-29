@@ -389,7 +389,11 @@ ExecutionCarrier（JSI / AOT）是"宿主侧 1ms"的载体。
   ★**另核实一个硬约束**：**Android 宿主当前无 JS 引擎**
   （`hosts/android` 是 Java + Rust `.so` 直连 JNI；WebView 仅作 native-host 演示）
   ⇒ "JSI 直连"在 Android 上**先要有 JS 引擎载体**——这是本卡估时 3–4 人周之外的**前置**。
-  ★★**前置已完成选型（2026-09-29）**：`docs/proteus-android-js-engine-selection.md`
+  ★★**前置已完成选型 + S1/S2/S3（2026-09-29）**：`docs/proteus-android-js-engine-selection.md`
+  ——**Android 首次有 JS 执行环境**（QuickJS 0.94MB `.so` + JNI 桥）；**S3 真机最小闭环已通过**
+  （`bash hosts/android/run-js-engine.sh`：引擎加载 / JS 真的执行 / 宿主收到 1 次 mount 且批次 4 op 正确，
+  6 条判据全绿）。⇒ 本卡的「JSI 通路」**已具备引擎侧基础**；剩余是**接 HA0 八接口**（HA0 仍未实现）。
+  ★原选型记录：`docs/proteus-android-js-engine-selection.md`
   （**建议 QuickJS**：ES2025 + Proxy/Reflect/WeakMap/async 本机实测全通过 ·
   真实 368KB bundle 解析+执行通过 · 8MB 内存可跑 · Android `.so` **0.94MB** · **MIT 许可**；
   ★不选 Hermes 的硬理由：官方 Features.md 列 `async`/ES modules **仍在 In Progress**；

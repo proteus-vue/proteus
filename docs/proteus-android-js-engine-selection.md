@@ -111,7 +111,7 @@ Hermes 的字节码预编译有结构性优势——**届时应重新评估**（
 |---|---|---|---|
 | **S1** | QuickJS 源码纳入 `.tools/`（**gitignored**，同 JDK/NDK 惯例）+ 构建脚本 | `libquickjs.so` 产出 + 架构断言（`file` 验 ARM aarch64） | ✅ **已完成** |
 | **S2** | JNI 桥：`evaluateScript` + 宿主回调桩（`proteusHost.post`） | JNI 导出符号在场（`llvm-nm` 断言）+ 零设备跑通 bundle | ✅ **已完成** |
-| **S3** | 在 `hosts/android` 跑通 `createSelfDrawBatchAdapter` 的**最小闭环**（建 1 个节点 + commit 一次） | 宿主侧收到 1 次 `mount` 调用、批次内容正确 | ⏳ 待做（需真机） |
+| **S3** | 在 `hosts/android` 跑通**最小闭环**（建 1 个节点 + commit 一次） | 宿主侧收到 1 次 `mount` 调用、批次内容正确 | ✅ **已完成（真机）** |
 | **S4** | 接 HA0 八接口（Host ABI）——把 JNI 桥规范化到 C ABI | `proteus_submit_frame` 等接口可被 Android 调用 | ⏳ 待做（依赖 HA0） |
 | **S5** | 三项复测（4050 / 长列表 / 内存）+ C1/C2 剩余验收 | 按卡内口径 | ⏳ 待做（需真机） |
 
@@ -136,6 +136,37 @@ Hermes 的字节码预编译有结构性优势——**届时应重新评估**（
 2. **中文注释里的 `$VAR<全角字符>` 会被 bash 当作变量名一部分**（实测报 unbound variable）
    ⇒ 已系统性扫描并改为 `${VAR}<全角>`（一次修 3 处）。★与"第 N 份手写副本"同族：
    **语言边界的隐式规则要靠工具/扫描兜住**（本次用正则扫描全文，不靠肉眼）。
+
+### 5.2 S3 真机最小闭环（2026-09-29 · 真机 `d67e31a3`）
+
+**跑法**：`bash hosts/android/run-js-engine.sh`（可复跑；安装 → 触发 → 取报告 → 6 条判据）
+
+**实测报告**（`js-engine.json`）：
+```json
+{ "engine_available": true, "engine_version": "quickjs:2026-06-04",
+  "eval_ok": true, "eval_value": "4",
+  "host_post_count": 1, "batch_call_kind": "mount", "batch_op_count": 4,
+  "batch_ok": true, "ok": true }
+```
+
+**判据（6 条全绿）**：引擎加载 ✅ · JS **真的执行**（回读 `eval_value=4`）✅ ·
+宿主回调**收到 1 次** `mount` ✅ · 批次 **4 个 op** 内容正确（create×2 + insert + text，
+含 `"Hello from QuickJS"`）✅
+
+★**链路已通**：QuickJS → JNI 桥 → 宿主回调 → 报告落盘（**Android 首次有 JS 执行环境**）。
+
+★**S3 过程中抓到的两个真缺陷（都已修 + 断言化）**：
+1. **"45 字节 APK 报构建成功"**（静默失败）——`build-and-run.sh` 组装完 APK **不看产物**
+   就进签名 ⇒ 空包（aapt2 失败/残留）也能"成功"，直到真机发现"代码没生效"才暴露。
+   ⇒ 新增 **APK 产物断言**（≥100KB + 含 `classes.dex` + 含 Rust 核心 `.so`）；
+   **破坏性验证**：注入空包 ⇒ `exit 3` 并准确报"仅 0 字节"。
+2. **脚本判据的解析器假红**——首版 `get()` 用 `grep -o` 多层转义，在嵌套引号下失配
+   ⇒ 报告内容明明正确却报 **6 条全红**。改为 `sed -n` 解析。
+   ★**教训**：判据红了先怀疑**装置**（本仓纪律），别先怀疑被测对象。
+
+**★边界（写进脚本输出）**：本闭环证明**链路通**；把真实 esbuild bundle
+（`render-backend` 的 IIFE 产物）接进来是**同一接口的下一次调用**（S3b）——
+当前 APK 只打进引擎 + JNI 桥，未打进 TS bundle。
 
 **★零设备验证的边界（写进 `verify-js-engine.mjs` 输出）**：本机 qjs 是 **x86_64**，
 Android `.so` 是 **arm64**——两者**同一份源码**（同版本同配置）⇒ 语义等价，差异只在 ABI/架构
