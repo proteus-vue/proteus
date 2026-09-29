@@ -122,7 +122,7 @@ const BN = { snapshot: 'bench-final' }
 // ★构建标识：每次构建写入，用于**确凿判定**设备上跑的是哪份代码
 //   （踩坑：靠文件 mtime 判断"报告是否刷新"不可靠——新建目标文件的时间恒为"现在"；
 //    且我看不出设备实际执行的是旧 bundle，白跑一轮。有了这个字段就能一眼判定。）
-const BUILD_ID = '7140cbd0-120806'
+const BUILD_ID = 'cd86244d-121537'
 const now = (): number => Date.now()
 /** 宽松解析（宿主返回可能是字符串或已是对象） */
 const safeParseAny = (s: any): any => {
@@ -2306,6 +2306,12 @@ CASES.push({
     const latJs: number[] = []
     const latHost: number[] = []
     const latData: number[] = []
+    // ★分位助手**提前定义**（本仓实测：定义在下面而上面引用 ⇒ TDZ 错
+    //   `Cannot access 'pct' before initialization`，用例整体异常）
+    const pct = (arr: number[], p: number) => {
+      const a = [...arr].sort((x, y) => x - y)
+      return a[Math.min(a.length - 1, Math.floor(a.length * p))] ?? -1
+    }
     const latFlushBefore = rt.getStats().flushes
     let latOpCount = 0
     for (let i = 0; i < LAT_N; i++) {
@@ -2332,10 +2338,7 @@ CASES.push({
       latTotal.push(t3 - t0)
     }
     const latCheck = flushCheck(rt, latFlushBefore, LAT_N)
-    const pct = (arr: number[], p: number) => {
-      const a = [...arr].sort((x, y) => x - y)
-      return a[Math.min(a.length - 1, Math.floor(a.length * p))] ?? -1
-    }
+
     const latStats = {
       p50_ms: Math.round(pct(latTotal, 0.5) * 1000) / 1000,
       p95_ms: Math.round(pct(latTotal, 0.95) * 1000) / 1000,
@@ -2353,6 +2356,53 @@ CASES.push({
       clock_trustworthy: latClockOk,
       ops_total: latOpCount,
       flush_check: latCheck,
+    }
+
+    // ══ ★★⑤ 行级失效对照（`relinkRow`：只算改动的那一行，2026-09-29）════════════════
+    //
+    // 【为什么要测】粗粒度触发（`triggers.get('list')`）只知道"源变了" ⇒ **全表重扫**
+    //   （1000 行 × 3 槽位）——真机实测该段 7.03ms。Vapor 的设计本意是 **O(1) 槽位直写**。
+    //   `relinkRow(listId, key, row, ancestors, ctx)` 就是那个入口。
+    // 【判据】① 端到端更快（同树同改动）；② **指令与全扫一致**（等价性，TS 侧已断言，真机再验次数）；
+    //   ③ flush 判据同样成立（防"没做事所以快"）。
+    const itemSpec = table.sources.flatMap((src2) => src2.slots).find((x) => x.kind === 'list-item')
+    const fineListId = itemSpec?.listId ?? 0
+    const fineKeyField = itemSpec?.itemKeyField ?? 'id'
+    const fine: {
+      p50_ms: number; p95_ms: number; js_p50_ms: number; host_p50_ms: number
+      flush_delta: number; speedup_vs_coarse: number; ops_ok: boolean
+    } = { p50_ms: -1, p95_ms: -1, js_p50_ms: -1, host_p50_ms: -1, flush_delta: -1, speedup_vs_coarse: -1, ops_ok: false }
+    {
+      const fineTotal: number[] = []
+      const fineJs: number[] = []
+      const fineHost: number[] = []
+      const fineFlushBefore = rt.getStats().flushes
+      let fineOps = 0
+      for (let i = 0; i < LAT_N; i++) {
+        const t0 = latClock()
+        const target = (listRows[499] ?? {}) as Record<string, unknown>
+        target.dotW = i % 2 ? 60 : 36
+        const t1 = latClock()
+        vapor.relinkRow(fineListId, String(target[fineKeyField]), target, [], { read: (n: string) => (n === 'list' ? listRows : undefined) })
+        rt.flush()
+        const t2 = latClock()
+        const fb = cap.pop()
+        if (fb) {
+          const out = safeParseAny(proteusSelfDraw.applyOps(JSON.stringify(Array.from(fb))))
+          fineOps += (out?.patch_count as number) ?? 0
+        }
+        const t3 = latClock()
+        fineJs.push(t2 - t1)
+        fineHost.push(t3 - t2)
+        fineTotal.push(t3 - t0)
+      }
+      fine.flush_delta = rt.getStats().flushes - fineFlushBefore
+      fine.ops_ok = fine.flush_delta === LAT_N && fineOps >= LAT_N - 2
+      fine.p50_ms = Math.round(pct(fineTotal, 0.5) * 1000) / 1000
+      fine.p95_ms = Math.round(pct(fineTotal, 0.95) * 1000) / 1000
+      fine.js_p50_ms = Math.round(pct(fineJs, 0.5) * 1000) / 1000
+      fine.host_p50_ms = Math.round(pct(fineHost, 0.5) * 1000) / 1000
+      fine.speedup_vs_coarse = latStats.p50_ms > 0 ? Math.round((latStats.p50_ms / fine.p50_ms) * 100) / 100 : -1
     }
 
     const checks = {
@@ -2401,6 +2451,8 @@ CASES.push({
         not_covered: 'scroll recycle pool on device（见 V12）',
         // ★★§10 核心指标的有效证据（本档；替代已失效的 V3 runScale 类A 档）
         single_node_update: latStats,
+        // ★★行级失效对照（`relinkRow`）——与粗粒度同一棵树/同一改动
+        single_node_update_row_level: fine,
         latency_iters: LAT_N,
       },
     })

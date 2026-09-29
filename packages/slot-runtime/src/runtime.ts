@@ -86,6 +86,9 @@ export class VaporRuntime {
    *   ★正确性不变（同一 (listId, slotId, key) 三元组仍是唯一键）。
    */
   private readonly itemValueCache = new Map<number, Map<number, Map<string, unknown>>>()
+
+  /** 最近一次 `relink` 的求值上下文（供 `relinkRow` 复用；见其注释） */
+  private lastCtx: EvalContext | undefined
   private loaded = false
 
   constructor(
@@ -409,37 +412,110 @@ export class VaporRuntime {
         // 【别名从哪来】产物里每层列表的 `scope` 就是该层别名；祖先行链与别名链**一一对应**
         //   由「自外向内」顺序对齐（`rowsOfList` 累积 ancestors 时的顺序与之相同）。
         //   故：`ancestorScopes` 数组 = 本列表及其各父列表的 scope。
-        const ancestorScopes = this.ancestorScopesOf(spec.listId ?? -1)
         // ★注意：祖先在 **rowRef** 上（不是 row 上）——`row` 是纯数据对象
         const ancestors: Array<Record<string, unknown>> = rowRef.ancestors
-        // ★★rowCtx 复用（2026-09-29 优化）：同一行的 ctx 对所有槽位**等价**
-        //   （`scope`/`ancestors` 只与行有关）⇒ 按 RowRef 缓存，scope 不同则重建（防御性）。
-        //   原实现建在「槽位 × 行」内层 ⇒ 1000 行 × 3 槽位 = **3000 个闭包**（实测为主要成本之一）。
+        // ★★rowCtx 复用（2026-09-29）：同一行的 ctx 对所有槽位**等价**（scope/ancestors 只与行有关）
+        //   ⇒ 按 RowRef 缓存；构造走**共享 helper** `makeRowCtx`（与 `relinkRow` 同一实现，
+        //     避免"行作用域语义"出现第二份副本——本仓纪律 #22）
         const cached = rowCtxCache.get(rowRef)
-        const rowCtx: EvalContext = cached && cached.scope === scope ? cached.ctx : scope
-          ? {
-              read: (n) => {
-                if (n === scope) return row
-                // 祖先别名：别名链与祖先链**同为「自外向内」** ⇒ 按同一位置取
-                const idx = ancestorScopes.indexOf(n)
-                if (idx >= 0 && idx < ancestors.length) return ancestors[idx]
-                return ctx.read(n)
-              },
-            }
-          : ctx
+        const rowCtx: EvalContext = cached && cached.scope === scope
+          ? cached.ctx
+          : this.makeRowCtx(scope, row, ancestors, ctx)
         if (!(cached && cached.scope === scope)) rowCtxCache.set(rowRef, { scope, ctx: rowCtx })
         const value = impl(rowCtx)
-        // 嵌套 Map（免拼接）；listId/slotId 均为数字键 ⇒ 无临时字符串
-        const listId = spec.listId ?? -1
-        let bySlot = this.itemValueCache.get(listId)
-        if (!bySlot) { bySlot = new Map(); this.itemValueCache.set(listId, bySlot) }
-        let byKey = bySlot.get(spec.slotId)
-        if (!byKey) { byKey = new Map(); bySlot.set(spec.slotId, byKey) }
-        if (byKey.get(key) === value) continue
-        byKey.set(key, value)
-        this.emitListItem(spec, key, value)
+        this.diffAndEmit(spec, key, value)
       }
     }
+  }
+
+  /**
+   * ★★行级失效：**只重算指定行**的 list-item 槽位（2026-09-29 新增）
+   *
+   * 【为什么需要（本仓真机实测的瓶颈）】粗粒度触发（`triggers.get('list')` ⇒ `relink`）只知道
+   *   "源变了"、不知道"哪一行变了" ⇒ 只能**全表重扫**：1000 行 × 3 槽位 = 3000 次求值 + diff。
+   *   真机 `V11` 实测该段 **7.03ms**（列表更新总 11ms）——而 Vapor 的设计本意是
+   *   **O(1) 槽位直写**（改哪行算哪行）。本方法就是那个 O(1) 入口。
+   *
+   * 【调用方责任】提供**变更行的身份**（`key` + 行对象 + 祖先链）——它天然知道（编译器产出的
+   *   行作用域效应 / 应用层的不可变更新都携带这些）。**不知道时不要调用**，走 `relink` 全扫（正确但慢）。
+   *
+   * 【正确性】与全扫路径**共用** `makeRowCtx` / `diffAndEmit` / `itemValueCache`（唯一实现
+   *   ⇒ 两条路径不会漂移）；缓存是实例级的 ⇒ 全扫与行级失效交替调用也保持一致。
+   *
+   * @param listId 目标列表 id（订阅表里的 `listId`）
+   * @param key    行标识（= `itemKeyField` 对应的值，与 `emitListItem` 的键一致）
+   * @param row    该行的**数据对象**
+   * @param ancestors 该行的祖先行链（顶层列表传空数组；嵌套列表按「自外向内」）
+   */
+  relinkRow(
+    listId: number,
+    key: string,
+    row: Record<string, unknown>,
+    ancestors: Array<Record<string, unknown>> = [],
+    ctx?: EvalContext,
+  ): void {
+    const evalCtx: EvalContext = ctx ?? this.lastCtx ?? { read: () => undefined }
+    for (const spec of this.listSpecsOf(listId)) {
+      const impl = this.evaluators.get(spec.evaluatorId)
+      if (!impl) continue   // ★调用方已登记（见 writeListItems 的 uninstantiatedSlots）
+      const rowCtx = this.makeRowCtx(spec.scope ?? '', row, ancestors, evalCtx)
+      this.diffAndEmit(spec, key, impl(rowCtx))
+    }
+  }
+
+  /** scope（v-for 别名）→ listId 反查（`relinkRow` 用；作用域由订阅表声明，不猜） */
+  private listIdOfScope(scope: string): number | undefined {
+    for (const src of this.table.sources) {
+      for (const sl of src.slots) if (sl.kind === 'list-item' && (sl.scope ?? '') === scope) return sl.listId ?? -1
+    }
+    return undefined
+  }
+
+  /** 该列表的全部 list-item 槽位（`relinkRow` 用；与 `writeListItems` 同一数据源） */
+  private listSpecsOf(listId: number): Array<SubscriptionTable['sources'][number]['slots'][number]> {
+    const out: Array<SubscriptionTable['sources'][number]['slots'][number]> = []
+    for (const src of this.table.sources) {
+      for (const sl of src.slots) if (sl.kind === 'list-item' && (sl.listId ?? -1) === listId) out.push(sl)
+    }
+    return out
+  }
+
+  /** ★行作用域上下文（**唯一实现**）：当前行别名 + 各层祖先别名 —— `writeListItems` 与 `relinkRow` 共用 */
+  private makeRowCtx(
+    scope: string,
+    row: Record<string, unknown>,
+    ancestors: Array<Record<string, unknown>>,
+    ctx: EvalContext,
+  ): EvalContext {
+    if (!scope) return ctx
+    // ★复用已有的 `ancestorScopesOf`（按 listId 查）；scope → listId 反查（首个匹配）
+    const lid = this.listIdOfScope(scope)
+    const ancestorScopes = lid === undefined ? [] : this.ancestorScopesOf(lid)
+    return {
+      read: (n) => {
+        if (n === scope) return row
+        // 祖先别名：别名链与祖先链**同为「自外向内」** ⇒ 按同一位置取
+        const idx = ancestorScopes.indexOf(n)
+        if (idx >= 0 && idx < ancestors.length) return ancestors[idx]
+        return ctx.read(n)
+      },
+    }
+  }
+
+  /** ★值 diff + 发射（**唯一实现**）：嵌套 Map 免拼接：listId/slotId 均为数字键 */
+  private diffAndEmit(
+    spec: SubscriptionTable['sources'][number]['slots'][number],
+    key: string,
+    value: unknown,
+  ): void {
+    const listId = spec.listId ?? -1
+    let bySlot = this.itemValueCache.get(listId)
+    if (!bySlot) { bySlot = new Map(); this.itemValueCache.set(listId, bySlot) }
+    let byKey = bySlot.get(spec.slotId)
+    if (!byKey) { byKey = new Map(); bySlot.set(spec.slotId, byKey) }
+    if (byKey.get(key) === value) return
+    byKey.set(key, value)
+    this.emitListItem(spec, key, value)
   }
 
   /** 发一条行内更新指令：解析得到 nodeId 就发普通指令，否则回退 LIST_UPDATE */
@@ -469,6 +545,8 @@ export class VaporRuntime {
 
   /** ★首帧同步：把所有 L1 槽位按当前源值写一遍（否则首屏不会出现这些值） */
   relink(ctx: EvalContext): void {
+    // ★记住最近一次上下文（`relinkRow` 未显式传 ctx 时复用——省调用方一次传参）
+    this.lastCtx = ctx
     for (const src of this.table.sources) {
       this.writeSlotsOfSource(src.sourceName, ctx)
     }
