@@ -178,6 +178,18 @@ public class ProteusHostView extends ViewGroup {
 
     public ProteusHostView(Context context) {
         super(context);
+        // ★★**必须显式开自绘**（本仓实测踩到，2026-09-29 · S5 端到端）：
+        //   `ViewGroup` 的构造函数会置 `WILL_NOT_DRAW`（= `PFLAG_SKIP_DRAW`）
+        //   ⇒ `View.draw()` 直接跳过 background + `onDraw`，**只画子 View**。
+        //   本类是自绘宿主（内容全在 `onDraw` 的指令里）⇒ 不开这个开关，
+        //   `onDraw` **一次都不会被调用**，屏幕上什么都看不到。
+        //   ★为什么此前没暴露：既有场景都先 `setBackgroundColor(...)`（"白底便于区分未绘制区"），
+        //     而 `setBackground(非 null)` 会**顺带清掉**这个标志 ⇒ 靠副作用侥幸能画。
+        //     离屏路径（`view.drawCmds(canvas)` 直接调用）**看不到这个缺陷**——
+        //     它绕过了 `View.draw()` 的分发。实测对照：同一棵树离屏重放 3640 个采样点有像素，
+        //     而屏幕截图整屏背景色、`onDrawCount() == 0`。
+        //   ★纪律：**离屏判据不能替代上屏判据**——"我发出的指令"与"屏幕真的画了一帧"是两件事。
+        setWillNotDraw(false);
         textPaint.setColor(Color.BLACK);
         textPaint.setTextSize(12f);
     }
@@ -606,8 +618,21 @@ public class ProteusHostView extends ViewGroup {
 
     public int cmdCount() { return cmds.size(); }
 
+    /**
+     * ★★真实帧计数（**可观测性**：区分"我发出了指令"与"屏幕真的画了一帧"）。
+     *
+     * 【为什么需要（本仓实测）】S5 端到端首次跑：离屏重放有 3640 个采样点有像素，
+     *   而设备截图**整屏是背景色**。⇒ 缺的正是这个读数——没有它无法区分
+     *   ① onDraw 未被调用（视图/标志问题）② onDraw 调用了但画的内容在屏外/被裁。
+     */
+    private int onDrawCount = 0;
+
+    /** 真实帧数（`onDraw` 调用次数；0 ⇒ 屏幕上一帧都没画过） */
+    public int onDrawCount() { return onDrawCount; }
+
     @Override
     protected void onDraw(Canvas canvas) {
+        onDrawCount++;
         super.onDraw(canvas);
         // ★滚动：自绘内容随 scrollY 平移，并**裁剪到滚动视口**
         //   （native-host 的裁剪在 applyScrollToNativeHosts 里单独做——

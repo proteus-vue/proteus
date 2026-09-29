@@ -643,6 +643,44 @@ describe('★★C1 · selfdraw 批量宿主桥（commit → 真机入口）', ()
     expect(host.calls.length).toBe(1)
   })
 
+  it('⑦ ★createText 在批量模式下**必须把文本带进批次**（否则首帧树种里的文本是空的）', () => {
+    // 【本仓实测的来源（2026-09-29 · S5 端到端首次跑）】`createText` 的 descriptor `props` 恒为 `{}`，
+    //   而它入队的 create op 也只带 `props:{}`、**不带 text** ⇒ 宿主收到的首帧树种里
+    //   那些文本节点既无字也无色。真机上表现为"画出了 2000 条指令但只有 3 个采样点有像素"，
+    //   而**节点数读数照样正确**（部分读数掩盖整块数据丢失）。
+    //   ⇒ 本用例锁：createText 之后 flush，宿主的 mount 树种里**必须能看到文本**。
+    const host = fakeHost()
+    const sd = createSelfDrawBatchAdapter(host, { viewport: VP })
+    const backend = createNativeBackend(sd, 'ios')
+    const root = backend.createElement({ type: 'view', props: { backgroundColor: '#101020' }, children: [] })
+    const t = backend.createText('你好')
+    backend.insert(t, root)
+    backend.flush()
+
+    const payload = JSON.parse(host.calls[0]!.payload) as { nodes: Array<Record<string, unknown>> }
+    const textNode = payload.nodes.find((n) => n.text !== undefined)
+    expect(textNode, '★首帧批次里必须有一个带 text 的节点').toBeDefined()
+    expect(textNode!.text, '★文本内容必须随批次下发（不是空）。').toBe('你好')
+  })
+
+  it('⑧ createElement({type:"text"}) 不因 props 缺省而丢样式桶（与 createText 的差别锁死）', () => {
+    // ★与 ⑦ 成对：显式带 props 的文本节点路径是 S5 实际使用的那条（能带底色），
+    //   而 createText 只有内容。两者语义不同，**都必须**在批次里自包含。
+    const host = fakeHost()
+    const sd = createSelfDrawBatchAdapter(host, { viewport: VP })
+    const backend = createNativeBackend(sd, 'ios')
+    const root = backend.createElement({ type: 'view', props: {}, children: [] })
+    const cell = backend.createElement({ type: 'text', props: { backgroundColor: '#285ac8' }, children: [] })
+    backend.insert(cell, root)
+    backend.setText(cell, '格子')
+    backend.flush()
+
+    const payload = JSON.parse(host.calls[0]!.payload) as { nodes: Array<Record<string, unknown>> }
+    const node = payload.nodes.find((n) => n.text === '格子')
+    expect(node, '文本节点在场').toBeDefined()
+    expect(node!.backgroundColor, '★样式桶随节点下发（props 不是空桶）').toBe('#285ac8')
+  })
+
   it('⑥ 移除节点：镜像一致（子树整体消失）', () => {
     const host = fakeHost()
     const sd = createSelfDrawBatchAdapter(host, { viewport: VP })

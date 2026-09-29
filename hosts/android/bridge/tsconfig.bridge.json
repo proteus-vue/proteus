@@ -1,0 +1,17 @@
+{
+  "//": "hosts/android/bridge 的类型检查配置——为什么需要单独一份（2026-09-29）",
+  "//why": [
+    "根 tsconfig.json 的 include **不含 hosts/** ⇒ 本目录的 .ts 全仓无类型检查覆盖，",
+    "而 esbuild 只擦除类型不校验 ⇒ 本入口曾有 `Expected 2 arguments, but got 0` 一路绿灯出 bundle，",
+    "直到真机才炸。本文件把它接入 `build-batch.mjs`（构建路径上的门禁）。",
+    "★只 include 本目录：iOS 的 entry-bench.ts 有历史类型错误（不属于本次改动范围，",
+    "  不在这里一起判红——那会把门禁变成噪声；将来收拢时逐个处理）。",
+    "★types 必须显式覆盖：根配置里的相对路径是**相对声明它的 tsconfig** 解析的，",
+    "  继承过来会指向 hosts/android/bridge/packages/... ⇒ TS2688（实测）。"
+  ],
+  "extends": "../../../tsconfig.json",
+  "compilerOptions": {
+    "types": []
+  },
+  "include": ["./*.ts"]
+}

@@ -303,6 +303,13 @@ public class MainActivity extends Activity {
             String jsb = jsBatchRun();
             sb.append(jsb).append('\n');
             writeReport("js-batch.json", jsb);
+        } else if ("js-render".equals(testPath)) {
+            // ★★S5：**端上真正会画**——JS 产语义树 → 真实适配器 → **Java 消费批次** → Rust 几何 → 自绘
+            //   与 js-batch 的差别：那一条的宿主是 JS 本地桩（只证调用发生），本条的宿主是真渲染宿主。
+            sb.append("【S5 端到端渲染（JS → 适配器 → 宿主消费 → 核心几何 → 自绘）】\n");
+            String jsr = jsRenderRun();
+            sb.append(jsr).append('\n');
+            writeReport("js-render.json", jsr);
         } else if ("shot-scroll-native".equals(testPath)) {
             // ★★z-order 约束下的**滚动同步**验证（方案坑位 #4）
             //   场景：20 行列表，**第 5 行是 native-host（WebView）**；程序驱动滚动到若干位置，
@@ -460,10 +467,12 @@ public class MainActivity extends Activity {
         //   报告 TextView 是后加的子 View → **盖在场景之上** → 其文本行被截进截图，
         //   在场景里表现为「行内部出现灰色横条」（实测 y=732/760-772 正是文字行）。
         //   截图核验要求屏幕上只有被测场景；报告已写文件，不需要上屏。
-        // ★截图类场景（shot / shot-native）都不上屏报告：
+        // ★截图类场景（shot / shot-native / js-render）都不上屏报告：
         //   否则报告 TextView 盖在场景上，其文字像素会污染采样
         //   （实测：overlap 行采到 #787A84 —— 那是文字抗锯齿像素，不是场景内容）
-        if (!testPath.startsWith("shot")) {
+        //   ★`js-render` 同理：它的证据就是"屏幕上真的画出来了"；
+        //    报告从 JSON 文件读（不上屏不影响任何判据）。
+        if (!testPath.startsWith("shot") && !"js-render".equals(testPath)) {
             TextView tv = new TextView(this);
             tv.setText(text);
             tv.setTextSize(9f);
@@ -698,6 +707,157 @@ public class MainActivity extends Activity {
         } catch (Exception e) {
             return "{\"ok\":false,\"error\":\"报告序列化失败\"}";
         }
+    }
+
+    /**
+     * ★★★S5：**端到端渲染**——JS 产语义树 → 真实适配器 → **Java 消费批次** → Rust 几何 → 自绘。
+     *
+     * 【与 S3b（`jsBatchRun`）的差别（★这条差别是本方法存在的理由）】
+     *   · S3b 的宿主是 JS 本地桩 ⇒ 结论只有「适配器 → 宿主入口」被调用；
+     *   · 本方法的宿主是 `JsRenderHost`（**实现三个渲染入口**）⇒ 批次被真正消费：
+     *     解析 spec → 注入文本度量 → 调 Rust 核心算几何 → 指令 → `ProteusHostView` 自绘。
+     *   ⇒ JS 侧据此把 `host_mode` 报为 `java`（见 `entry-batch.ts` 的 `pickHost`），
+     *     **判据要求 `host_mode === "java"`**——不允许拿桩路径的绿当成渲染的绿。
+     *
+     * 【判据（六条，全部机器可判）】
+     *   ① `host_mode == "java"` —— 宿主真的实现了三个入口（不是桩）
+     *   ② `mount_calls == 1` / `patch_calls == 1` —— 两次 flush 各一次跨边界调用（批处理红线）
+     *   ③ `host_calls == 2`（= flush 次数，与节点数无关）
+     *   ④ `patch_call_kind == "updatePatches"` —— 改一行文本**不重发整树**
+     *   ⑤ 宿主侧 `cmds > 0` 且 `painted_samples > 0` —— ★**真的画出了像素**（不是"我发了指令"）
+     *   ⑥ `tree_shape` 与 JS 侧节点数一致 —— 两侧对同一棵树的理解一致
+     */
+    private String jsRenderRun() {
+        org.json.JSONObject out = new org.json.JSONObject();
+        try {
+            out.put("engine_available", QuickJsEngine.isAvailable());
+            if (!QuickJsEngine.isAvailable()) {
+                out.put("ok", false);
+                out.put("error", "引擎未加载：" + QuickJsEngine.getLoadError());
+                return out.toString(2);
+            }
+            // ① 清场：本用例要独占视图树（否则与 4050 场景的宿主 View 叠加，像素自检读到别人的像素）
+            clearSceneViews();
+
+            // ② 宿主（实现 mount/update/updatePatches ⇒ JNI 桥按**实际实现**注入这三个函数）
+            final android.util.DisplayMetrics dm = getResources().getDisplayMetrics();
+            JsRenderHost host = new JsRenderHost(this, root, dm.density);
+
+            // ③ 读 bundle（assets；与 S3b 同一份产物）
+            String bundle;
+            try (java.io.InputStream is = getAssets().open("bundle-batch.js")) {
+                java.io.ByteArrayOutputStream bos = new java.io.ByteArrayOutputStream();
+                byte[] buf = new byte[8192];
+                int n;
+                while ((n = is.read(buf)) > 0) bos.write(buf, 0, n);
+                bundle = new String(bos.toByteArray(), "UTF-8");
+            }
+            out.put("bundle_chars", bundle.length());
+
+            QuickJsEngine.EvalResult load = QuickJsEngine.evalWithHost(bundle, host);
+            out.put("bundle_load_ok", load.ok);
+            if (!load.ok) {
+                out.put("ok", false);
+                out.put("error", "bundle eval 失败：" + load.error);
+                return out.toString(2);
+            }
+
+            // ④ 调渲染入口（真机口径：视口 = 设备屏幕；与既有场景同坐标系）
+            org.json.JSONObject args = new org.json.JSONObject();
+            args.put("scene", "4050");
+            args.put("viewport", new org.json.JSONObject()
+                    .put("width", 1080).put("height", 2400));
+            // ★4050 用**既有夹具**（与 `app-4050` 通路同一棵树 ⇒ 两条路径的结果可比对）
+            String fixture = readAsset("app-4050-tree.json");
+            if (fixture != null) args.put("treeJson", fixture);
+            out.put("fixture", fixture != null ? "app-4050-tree.json" : "内置小树");
+
+            long t0 = System.nanoTime();
+            QuickJsEngine.EvalResult run = QuickJsEngine.eval(
+                    "__proteusRenderRun(" + org.json.JSONObject.quote(args.toString()) + ")");
+            out.put("run_ms", (System.nanoTime() - t0) / 1000000);
+            out.put("run_ok", run.ok);
+            if (!run.ok) {
+                out.put("ok", false);
+                out.put("error", "渲染入口调用失败：" + run.error);
+                return out.toString(2);
+            }
+            org.json.JSONObject r = new org.json.JSONObject(run.value);
+
+            // ⑤ 判据
+            out.put("host_mode", r.optString("host_mode"));
+            out.put("nodes", r.optInt("nodes"));
+            out.put("text_nodes", r.optInt("text_nodes"));
+            out.put("js_mount_ms", r.optDouble("mount_ms"));
+            out.put("js_patch_ms", r.optDouble("patch_ms"));
+            out.put("mount_calls", r.optInt("mount_calls"));
+            out.put("patch_calls", r.optInt("patch_calls"));
+            out.put("host_calls", r.optInt("host_calls"));
+            out.put("mount_call_kind", r.optString("mount_call_kind"));
+            out.put("patch_call_kind", r.optString("patch_call_kind"));
+            // 宿主侧读数（★真实消费的证据）
+            out.put("host_mount_calls", host.mountCalls);
+            out.put("host_update_patch_calls", host.patchCalls);
+            out.put("host_update_calls", host.updateCalls);
+            out.put("host_nodes", host.lastNodeCount);
+            out.put("host_text_nodes", host.lastTextCount);
+            out.put("host_cmds", host.lastCmdCount);
+            out.put("host_painted_samples", host.lastPaintedSamples);
+            out.put("host_view_on_draw", host.onDrawCount());
+            out.put("host_painted_colors", host.lastPaintedColors);
+            out.put("host_layout_ms", round3(host.lastLayoutMs));
+            out.put("host_measure_ms", round3(host.lastMeasureMs));
+            out.put("host_emit_ms", round3(host.lastEmitMs));
+            out.put("host_sample_ms", round3(host.lastSampleMs));
+            out.put("host_total_ms", round3(host.lastTotalMs));
+            out.put("expect_cmds", r.optInt("expect_cmds"));
+            out.put("host_tree_shape", host.lastTreeShape);
+            out.put("host_error", host.lastError == null ? "" : host.lastError);
+            out.put("font_units", "layout");   // ★字号按布局单位（与 4050 对照通路的 px 口径不同，见 JsRenderHost 注释）
+
+            boolean ok = "java".equals(r.optString("host_mode"))
+                    && r.optInt("mount_calls") == 1 && r.optInt("patch_calls") == 1
+                    && r.optInt("host_calls") == 2
+                    && "updatePatches".equals(r.optString("patch_call_kind"))
+                    && host.lastCmdCount > 0 && host.lastPaintedSamples > 0
+                    && host.lastPaintedColors > 1   // ★单色 = "只有底/只有一块" ⇒ 内容没画出来
+                    && host.onDrawCount() > 0       // ★真实绘制分发**真的走到了 onDraw**
+                    && host.mountCalls == 1 && host.patchCalls == 1 && host.updateCalls == 0
+                    && host.lastNodeCount == r.optInt("nodes")
+                    && host.lastError == null;   // ★宿主侧有错 ⇒ 就算 JS 侧读数全绿也不放行（静默失败防线）
+            out.put("ok", ok);
+        } catch (Throwable t) {
+            try {
+                out.put("ok", false);
+                out.put("error", t.getClass().getSimpleName() + ": " + t.getMessage());
+            } catch (Exception ignored) { /* JSONObject 不会失败 */ }
+        }
+        try {
+            return out.toString(2);
+        } catch (Exception e) {
+            return "{\"ok\":false,\"error\":\"报告序列化失败\"}";
+        }
+    }
+
+    /**
+     * 摘掉上一次场景挂在 root 上的**场景 View**（保留按钮并隐藏它）。
+     *
+     * 【为什么需要（本仓实测）】`runAll` 的每次触发都在**同一个 Activity 实例**上跑
+     *   ⇒ 上一场景的宿主 View 仍挂在 root 上，会与本次场景**叠加**：
+     *   ① 屏幕截图核验会读到别人的像素；② 几何对位假设被破坏。
+     *   既有场景之所以没暴露该问题，是因为它们各自做了"隐藏按钮 + 绝对定位"，
+     *   但**先前场景的 View 仍在**（多次触发就会叠）。本方法把它显式清掉。
+     */
+    private void clearSceneViews() {
+        int n = root.getChildCount();
+        List<android.view.View> keep = new java.util.ArrayList<>();
+        for (int i = 0; i < n; i++) {
+            android.view.View v = root.getChildAt(i);
+            if (v == runButton) keep.add(v);
+        }
+        root.removeAllViews();
+        for (android.view.View v : keep) root.addView(v);
+        if (runButton != null) runButton.setVisibility(android.view.View.GONE);
     }
 
     private String scrollCoreRun() {
@@ -4017,8 +4177,9 @@ public class MainActivity extends Activity {
     /** 当前内容滚动偏移（虚拟化路径用；平移自绘内容） */
     private float contentOffsetY = 0f;
 
-    /** `#RRGGBB` / `#AARRGGBB` → ARGB int（与 ProteusHostView 的配色口径一致） */
-    private static int parseHex(String s) {
+    /** `#RRGGBB` / `#AARRGGBB` → ARGB int（与 ProteusHostView 的配色口径一致）
+     *  ★包内可见（`JsRenderHost` 也用）——**同一份实现**，避免第二份副本漂移 */
+    static int parseHex(String s) {
         if (s == null || s.isEmpty()) return 0;
         String h = s.startsWith("#") ? s.substring(1) : s;
         try {

@@ -23,7 +23,7 @@
 | **V3** LIST_UPDATE | ✅ **已达标**（判据已量化） | 指令**可用**（`OpCode.LIST_UPDATE 0x22` + `ListRegistry` 解析为普通 SET_STYLE/SET_TEXT）· 单行更新**不随行数线性增长**——★**2026-09-29 实测**：行级失效 `relinkRow` 后 JS 段 **5.42 → 1.91ms**；但**端到端仍 6.0ms**（瓶颈在协议层键池重发，见 I8 条目）· 长列表无回退（`V12`/`V14` PASS） |
 | **V4** L0/L1 安全判定 | ✅ **已达标** | 七条件实现于 `slot-runtime/src/tier.ts`（`build.ts` Step 6 复用，**同一语义一处实现**）· 反例测试在 `tests/`（含 `forcePure` 路径）· 误判为 L1 的**静默不更新**风险由 flush 判据 + `unsupported` 上报兜底 |
 | **I5** overdraw culling | ✅ **3/3 全部达标（2026-09-29）** | ✅ **视口裁剪**：`cullToViewport`（默认关）+ 读数；长列表指令 ↓90.1%（16001→1592）· 4050 ↓20.4% · 15 条测试 · ✅ **遮挡剔除**：`cullOccluded`（默认关）+ 读数 `occludedCount`；**1000 行 + 全屏不透明遮罩 → 1002 → 1 条（↓99.9%）**；遮挡物须无渐变/圆角/描边且**颜色确实不透明**（只认 #rgb/#rrggbb/#rrggbbff/rgb()，其余保守不算）；**裁剪感知**（用「矩形 ∩ 生效裁剪区」判定，溢出的遮挡物不越界误裁）；8 条测试 · ✅ **同色相邻背景合并**：`mergeSameColorBg`（默认关）+ 读数 `mergedBgCount`/`mergedBgFrom`；**等色长列表 1001→2（↓99.8%）** · 斑马纹对照 0 合并 · 6 条测试 ·**三条判据全部破坏性验证过**（去掉严丝合缝/同色判断/裁剪感知 ⇒ 各自用例当场红） |
-| **C1** NativeBackend | 🟡 **2/4 达标（2026-09-29）** | ★路径按 I6 修正（把已有真机链路接进 SPI，非从零实现）· ✅ **纳入 conformance**（批量后端全绿）· ✅ **既有五后端未破坏**（全量 3955）· ✅ **批量协议**（`NativeBatchAdapter` + `NativeHostOp`）：50 子节点 **批量 1 次 vs 逐节点 101 次**· ✅ **selfdraw 批量宿主桥**（`createSelfDrawBatchAdapter`：`commit(ops)` → 真机 `mount`/`update`/`updatePatches` **一次调用**；**2200+ op 只 1 次跨边界调用**；批次翻译 6 项判据 + 破坏性验证）· ✅ **两条路径等价判据**（SPI ⟷ selfdraw）· ❌ **「有可运行的 Android 实现」未达**（桥已就绪，**尚未在真机接线**）· ❌ **三项复测未做**（需真机） |
+| **C1** NativeBackend | 🟡 **3/4 达标（2026-09-29 晚）** | ★路径按 I6 修正（把已有真机链路接进 SPI，非从零实现）· ✅ **纳入 conformance**（批量后端全绿）· ✅ **既有五后端未破坏**（全量 3955）· ✅ **批量协议**（`NativeBatchAdapter` + `NativeHostOp`）：50 子节点 **批量 1 次 vs 逐节点 101 次**· ✅ **selfdraw 批量宿主桥**（`createSelfDrawBatchAdapter`：`commit(ops)` → 真机 `mount`/`update`/`updatePatches` **一次调用**；**2200+ op 只 1 次跨边界调用**；批次翻译 6 项判据 + 破坏性验证）· ✅ **两条路径等价判据**（SPI ⟷ selfdraw）· ✅ **「有可运行的 Android 实现」已达**：**真机端到端**（JS 语义树 → 真实适配器 → **Java 消费批次** → Rust 几何 → 自绘），屏幕截图留证（非背景色 162 种）· 🟡 **三项复测未跑**（判定链路已就位，见下方条目） |
 | **C2** Host Runtime | 🟡 **1/3 达标（2026-09-29）** | ✅ **跨边界调用 = 帧数（profile 验证）**：滚动 **120 帧 ⇒ 恰好 121 次调用**（含首帧）；**每帧 JS 侧批次成本 0.047ms**（50 属性变更/帧，一帧预算 16.7ms）；不同帧负载下调用数恒定（改 1 个 vs 50 个节点同为一帧一次）· **破坏性验证过**（逐 op 计调用 ⇒ 2821 vs 121）· ★**核实的路径现状**：**真机自绘链路已达标**（`mount`/`update`/`updatePatches` 各一次）；Host ABI 文档的 `6100` 描述的是**另一条路径**（`bench-bridge` 模拟的逐项设置 + SPI 逐节点形态，后者 C1 已修）· ❌ **JSI 通路未达**（Host ABI **HA0 八接口 C ABI 全仓零实现**——卡片依赖项）· ★且 **Android 宿主无 JS 引擎**（Java + Rust `.so` 直连 JNI，只有 WebView 作 native-host 演示）⇒ JSI 通路需先落 HA0 + 载体 · ❌ **宿主侧耗时 1ms 量级未验**（需真机） |
 | **V5** 与 Web VDOM 一致性 | ✅ **已达标** | 浏览器真值基准对拍：`packages/layout-core-rust/tests/golden/browser-layout.json`（21 用例）+ **`browser-mutation.json`**（增量对拍）→ 真机 `V6`/`conformance 0.375dp` |
 | **C3** 超级应用规模编译期性能 | ✅ **4/4 达标（2026-09-29）** | 基线载体 = **showcase 真项目**（128 SFC / 599.2 KB）· 工具 `scripts/bench-compile.mjs`（零设备秒级）· 报告 `docs/proteus-performance-plan/13-c3-compile-baseline.md` · ✅ 全量：冷 645.8ms / **热 346.4ms**（2.71 ms/文件 · 1730 KB/s）· ✅ 增量：单文件改一处重编译中位 **5.06ms** · ✅ 体积：890.3 KB / 599.2 KB = **1.486x** · ✅ 瓶颈识别：**模板阶段占 72% 事件**（6154/8518）· 最热规则 `tag/unknown-kebab`（1727 次）· 最慢文件 p-scroll-view 9.2ms/12.5KB · ★异常 `pages/backends.vue` 4.1KB 却 7.1ms（成本/字节异常）· ★门禁 `pnpm check:compile-baseline`（比值为主判据 + 破坏性验证过） |
@@ -57,7 +57,7 @@ I8 卡写着「**先做 I6 评估，明确指令流体积是否构成瓶颈，�
 ### 第二批 · P0（依赖第一批）
 
 - [x] **I4** 文本在指令流中的表达定案 ✅ **4/4 达标**（方案 A 决策留痕 + 文本进 conformance 6/25，且抓出并修复一个引擎真缺陷）
-- [ ] **C1** NativeBackend（G-28）实现 🟡 **2/4**（批量协议 + 宿主桥 + 判据齐备；真机接线与三项复测待做）
+- [ ] **C1** NativeBackend（G-28）实现 🟡 **3/4**（批量协议 + 宿主桥 + 判据齐备 + **真机端到端已跑通**；三项复测待做）
 - [ ] **C2** Host Runtime（G-39/G-40）实现 🟡 **1/3**（跨边界调用=帧数已 profile 验证；JSI 通路受阻于 HA0 未实现 + Android 无 JS 引擎）
 
 ### 第三批 · P1（规模化）
@@ -316,7 +316,20 @@ README 明确："**规划已入库、尚未有可运行实现：G-28 NativeBacke
 >   而 I6 发现 **真机链路早已在跑**（`renderer-app/adapters/selfdraw`，22 份 iOS 报告 +
 >   30 个 Android 验收目录）⇒ 正确做法是**把已有的批量形态建模进 SPI**，而非重写。
 
-- [ ] 有可运行的 Android 实现 —— 🟡 **桥已就绪，真机接线待做**
+- [x] 有可运行的 Android 实现 —— ✅ **2026-09-29 真机跑通（端上真的会画）**
+  ★**这条链路的落点**：JS 产语义树（**不含几何**）→ 真实 `createSelfDrawBatchAdapter`
+    → **Java `JsRenderHost` 真正消费批次**（解析 spec → 注入度量 → 调 Rust 核心算几何
+    → 指令 → `ProteusHostView` 自绘）⇒ 设备屏幕上真的出现 4050 网格（截图入库留证）。
+  **实测**（`bash hosts/android/run-js-render.sh` · 15 条判据 · 真机 `d67e31a3`）：
+    4051 节点（2000 文本）· `mount_calls=1`/`patch_calls=1`/`host_calls=2`（**批处理红线**）
+    · `patch_call_kind=updatePatches`（增量不重发整树）· `host_cmds=4000` **= JS 侧独立算的期望值**
+    · 屏幕像素：非背景色 **162 种**（截图 `results/js-render/<stamp>/screen.png`）
+  ★**过程中挖出 5 个"读数全绿却看不见"的真实缺陷**（详见 `proteus-android-js-engine-selection.md` §5.4）：
+    ① `createText` 批量模式丢文本（库缺陷，已修+2 条单测）② 夹具是核心形态≠IR 形态（样式全丢）
+    ③ **`ViewGroup` 默认 `WILL_NOT_DRAW`** ⇒ 真实分发跳过 `onDraw`（离屏检查因**绕过分发**而全绿）
+    ④ 度量必须先随建树请求给（`setTextMeasures` 只换表不重排）⑤ 构建路径吞失败 + 陈旧 bundle
+  ★**新增可观测性**：`onDrawCount`（真实帧）· `host_painted_colors` · `screen_colors` · `expect_cmds`
+  ★**门禁补强**：`build-batch.mjs` 先做类型检查（esbuild 不校验 + `hosts/**` 不在根 tsconfig 里，实测漏网）
   ✅ **已完成**：`createSelfDrawBatchAdapter`（`packages/render-backend/src/selfdraw-batch.ts`）
     —— 把 SPI 的 `commit(ops)` 翻译为真机三个入口的**一次调用**：
     · 首帧 → `mount(treeJson)`（`{viewport, nodes}`）
@@ -335,7 +348,10 @@ README 明确："**规划已入库、尚未有可运行实现：G-28 NativeBacke
     **8MB 内存即可跑通 368KB bundle** + **Android `.so` 0.94MB** 交叉编译通过）
   ★**为什么这不算"已完成"**：桥是**零设备可验证的部分**（已验收）；
     但"可运行的 Android 实现"按卡的口径要求**真机跑通**——按本仓纪律不虚报。
-- [ ] 4050 / 长列表 / 内存三项复测达标 —— ❌ **本轮未做**（需真机验收）。
+- [ ] 4050 / 长列表 / 内存三项复测达标 —— 🟡 **判定链路已就位，dev 机复测未跑**
+  ★已具备：`hosts/android/run-js-render.sh`（4050 端到端 + 屏幕像素判据）与既有 `acceptance.sh`
+    （4050 A/B 中位 · 长列表回收 · 内存 PSS）。★**未跑**：三项按卡内口径的正式复测
+    （honor10 中低端口径见 `ACCEPTANCE-honor10.md`；本机为 M2101K9C 顶配，口径不同）。
   ★本轮只做**可本地验证的接口层**（批处理红线 + conformance + 等价判据）——
   按本仓纪律「先过零设备判据，再上真机」，避免把接口问题带到真机才发现。
 - [x] 纳入 RenderBackend conformance —— ✅ **批量后端同样通过**（`runBackendConformance` 全绿；

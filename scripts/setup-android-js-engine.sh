@@ -146,7 +146,7 @@ build_android() {
   assert_jni_export
 }
 
-/** ★判据（S2）：JNI 导出符号必须在产物里（否则运行期 UnsatisfiedLinkError） */
+# ★判据（S2）：JNI 导出符号必须在产物里（否则运行期 UnsatisfiedLinkError）
 assert_jni_export() {
   local so="$OUT_DIR/libquickjs_jni.so"
   local nm_bin

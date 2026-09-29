@@ -990,6 +990,54 @@ C1 的「可运行 Android 实现」也扫清了 JS 侧前置。
 **⑥ 验证**：全量 **3958/3958** · vue-tsc 0 错 · 门禁全绿（新增两个）· 桩测通过且**无副作用**
 （md5 前后一致）· 真机安装**无 16 KB 警告** · JS 引擎冒烟仍正常（\`batch_ok: true\`）。
 
+### ★★★S5-① 端上真正会画 —— Java 侧消费批次（2026-09-29 晚）· C1 从 2/4 → 3/4
+
+**一句话**：此前 S3b 只证明「适配器 → 宿主入口被调用」（宿主是 JS 本地桩）；
+本步补上**真消费**——`JsRenderHost`（Java）解析批次 → 注入度量 → **调 Rust 核心算几何**
+→ 指令 → `ProteusHostView` 自绘。**设备屏幕上真的出现 4050 网格**（截图入库）。
+
+**跑法**：`bash hosts/android/run-js-render.sh`（可复跑 · **15 条判据** · 含截图留证）
+
+**实测**（真机 `d67e31a3` · 4051 节点 / 2000 文本）：
+`host_mode=java` · `mount_calls=1` · `patch_calls=1` · `host_calls=2`（**批处理红线**）·
+`patch_call_kind=updatePatches`（增量不重发整树）· `host_cmds=4000` **= JS 侧独立算的期望值** ·
+离屏 3640 采样点 / 59 色 · **屏幕非背景色 162 种** · 宿主 layout 25.7ms / measure 11.9ms / emit 40.0ms
+
+---
+
+**★★五个真实缺陷（本步的最大价值——每个都"读数全绿却看不见"）**
+
+1. **`createText` 在批量模式丢文本**（**库缺陷**·`render-backend/src/native.ts`）：
+   入队的 create op 只带 `props:{}`、**不带 text** ⇒ 首帧树种里文本节点是空的。
+   而**节点数读数照样正确** ⇒ 部分读数掩盖整块丢失。⇒ 已修 + 2 条单测 + 破坏性验证。
+2. **夹具形态 ≠ IR 形态**：`app-4050-tree.json` 是**核心请求**形状（样式平铺），
+   `createElement({props})` 要的是 `props` 桶 ⇒ 直传则**整棵树样式全丢**。⇒ `flattenCoreNodes` 归一。
+3. **`ViewGroup` 默认 `WILL_NOT_DRAW`** ⇒ 真实分发**跳过 `onDraw`**，屏幕上什么都不画。
+   既有场景靠 `setBackgroundColor(...)` 的副作用侥幸能画；而**离屏 `drawCmds(canvas)` 绕过分发**
+   ⇒ 离屏判据全绿、屏幕全白。实测：离屏 3640 点 vs 截图整屏背景色 + `onDrawCount()==0`。
+   ⇒ 修两处：`setWillNotDraw(false)` + **离屏检查改走 `view.draw()` 真实分发**。
+4. **度量必须随建树请求给**（顺序）：`setTextMeasures` 只换表**不重排** ⇒
+   "先 create（空度量）→ 再注入"的几何是按零尺寸算的（屏幕上没有字）。⇒ 与 iOS 同顺序：度量→请求→create。
+5. **构建路径两个静默陷阱**：① `node build-batch.mjs || true` **吞掉失败**（本仓明令禁止的形态）
+   ② `if [ ! -f "$BUNDLE" ]` 只在缺失时重建 ⇒ 改了入口却装**旧 bundle**。⇒ 失败 `exit 3`；重建条件加"入口比产物新"。
+
+**★新增可观测性（教训的直接产物）**：`onDrawCount`（真实帧）· `host_painted_colors`（颜色多样性）·
+`screen_colors`（**屏幕像素**）· `expect_cmds`（两侧独立算 ⇒ props 丢失当场暴露）。
+
+**★门禁补强**：`build-batch.mjs` **先做类型检查**（`tsconfig.bridge.json`）——
+esbuild 只擦除类型不校验，而 `hosts/**` **不在根 tsconfig 的 include 里**
+⇒ 本入口曾有 `Expected 2 arguments, but got 0` 一路绿灯出 bundle、真机才炸。已破坏性验证（注入错误 ⇒ 退出码 3）。
+
+**★顺带修掉的潜伏缺陷**：`scripts/setup-android-js-engine.sh:149` 的 `/** … */`
+（**JSDoc 风格注释写进 bash**）每次运行都被当命令执行（`/**` glob 展开成 `/Applications`）。
+⇒ 修为 `#`；并把"非 bash 注释语法"纳入门禁 `check:shell-i18n-vars`（含 heredoc 跳过 + 破坏性验证）。
+
+**验证**：全量 **3960/3960** · `vue-tsc` 0 错 · 桩测通过（指纹 `8f3730b1`）· 门禁全绿
+（含 `check:android-bundle` 新增类型检查、`check:shell-i18n-vars` 新增判据）。
+
+**★边界（如实标注）**：字号按**布局单位**（与 `app-4050` 对照通路的 px 口径不同 ⇒ 不与它比耗时）；
+`update`（结构变化）走整树重建（适配器策略），本步只验增量补丁那条；**三项复测（4050/长列表/内存）仍未跑**。
+
 ### ★★★S3b 真实 bundle 在 Android 跑通（2026-09-29）—— render-backend 适配器 · 9 条判据全绿
 
 **为什么还要 S3b**：S3 用**手写的等价 JS**（20 行）验「QuickJS → JNI → 宿主回调」链路通，

@@ -39,10 +39,26 @@
 /** 进程级单运行时（见文件头边界③） */
 static JSRuntime *g_rt = NULL;
 static JSContext *g_ctx = NULL;
-/** Java 侧宿主回调（全局引用——跨调用存活；`proteusHost.post` 调用它） */
+/** Java 侧宿主回调（全局引用——跨调用存活；`proteusHost.*` 调用它） */
 static jobject g_host_obj = NULL;
-static jmethodID g_host_method = NULL;
 static JavaVM *g_vm = NULL;
+
+/**
+ * ★★宿主方法表（S5：**按 Java 侧实际实现条件注入**）。
+ *
+ * 【为什么不无条件注入三个入口（本文件的设计要点）】JS 侧的批量桥用
+ *   `typeof proteusHost.mount === 'function'` 判定"宿主是否能真正消费批次"：
+ *   · 能 ⇒ 走真机消费（S5 的 js-render 路径：Java → Rust 排版 → 自绘）；
+ *   · 不能 ⇒ 退化到本地桩（S3b 的 js-batch 路径：只证明「适配器 → 宿主入口」）。
+ *   若 C 侧**无条件**注入这三个函数，判定恒为真 ⇒ 宿主会收到它没实现的调用。
+ *   ⇒ 一律以 Java 对象的**真实方法**为准（`GetMethodID` 失败 = 没实现 = 不注入）。
+ */
+static struct {
+  jmethodID post;
+  jmethodID mount;
+  jmethodID update;
+  jmethodID update_patches;
+} g_host_methods = { NULL, NULL, NULL, NULL };
 
 /** 惰性初始化运行时 + 上下文 */
 static int ensure_ctx(void) {
@@ -63,32 +79,86 @@ static const char *js_to_utf8(JSContext *ctx, JSValueConst v) {
   return JS_ToCString(ctx, v);
 }
 
-/** `proteusHost.post(json)` 的 C 实现——转调 Java 侧回调 */
-static JSValue js_host_post(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv) {
+/**
+ * 宿主调用的**公共实现**——取 `env`（必要时 attach）、调 Java、取回字符串结果。
+ *
+ * 【为什么统一成一处（本仓纪律：同一语义一处实现）】四个入口（post / mount / update /
+ *   updatePatches）的 JNI 样板完全相同，差别只在方法 id 与「有无返回值」。
+ *   第二份副本必然漂移——本仓已多次吃过（见 ffi.rs 的 with_engine 注释同款教训）。
+ */
+static JSValue host_call_impl(JSContext *ctx, jmethodID mid, int has_ret,
+                              JSValueConst this_val, int argc, JSValueConst *argv) {
+  (void)this_val;
+  if (mid == NULL || g_host_obj == NULL || g_vm == NULL) return JS_UNDEFINED;
   if (argc < 1) return JS_UNDEFINED;
   const char *payload = JS_ToCString(ctx, argv[0]);
   if (payload == NULL) return JS_UNDEFINED;
-  if (g_host_obj != NULL && g_host_method != NULL && g_vm != NULL) {
-    JNIEnv *env = NULL;
-    int attached = 0;
-    if ((*g_vm)->GetEnv(g_vm, (void **)&env, JNI_VERSION_1_6) != JNI_OK) {
-      if ((*g_vm)->AttachCurrentThread(g_vm, (void **)&env, NULL) == JNI_OK) attached = 1;
-    }
-    if (env != NULL) {
-      jstring js = (*env)->NewStringUTF(env, payload);
-      if (js != NULL) {
-        (*env)->CallVoidMethod(env, g_host_obj, g_host_method, js);
-        if ((*env)->ExceptionCheck(env)) (*env)->ExceptionDescribe(env), (*env)->ExceptionClear(env);
-        (*env)->DeleteLocalRef(env, js);
-      }
-    }
-    if (attached) (*g_vm)->DetachCurrentThread(g_vm);
-  } else {
-    // ★无宿主回调时不静默丢弃：打到 log（可观测——本仓纪律「静默失败最致命」）
-    LOGI("proteusHost.post（无回调，仅记录）: %.200s", payload);
+
+  JSValue out = JS_UNDEFINED;
+  JNIEnv *env = NULL;
+  int attached = 0;
+  if ((*g_vm)->GetEnv(g_vm, (void **)&env, JNI_VERSION_1_6) != JNI_OK) {
+    if ((*g_vm)->AttachCurrentThread(g_vm, (void **)&env, NULL) == JNI_OK) attached = 1;
   }
+  if (env != NULL) {
+    jstring js = (*env)->NewStringUTF(env, payload);
+    if (js != NULL) {
+      if (has_ret) {
+        jstring ret = (jstring)(*env)->CallObjectMethod(env, g_host_obj, mid, js);
+        if ((*env)->ExceptionCheck(env)) {
+          // ★异常不吞：转成 JS 异常抛出（否则 JS 侧拿到 undefined 而**以为宿主没实现**，
+          //   真因被掩盖——本仓纪律「静默失败最致命」）
+          (*env)->ExceptionDescribe(env);
+          (*env)->ExceptionClear(env);
+          JS_FreeCString(ctx, payload);
+          (*env)->DeleteLocalRef(env, js);
+          if (attached) (*g_vm)->DetachCurrentThread(g_vm);
+          return JS_ThrowInternalError(ctx, "宿主回调抛出异常（见 logcat: %s）", "ProteusJS");
+        }
+        if (ret != NULL) {
+          const char *rs = (*env)->GetStringUTFChars(env, ret, NULL);
+          out = JS_NewString(ctx, rs != NULL ? rs : "");
+          if (rs != NULL) (*env)->ReleaseStringUTFChars(env, ret, rs);
+          (*env)->DeleteLocalRef(env, ret);
+        }
+      } else {
+        (*env)->CallVoidMethod(env, g_host_obj, mid, js);
+        if ((*env)->ExceptionCheck(env)) (*env)->ExceptionDescribe(env), (*env)->ExceptionClear(env);
+      }
+      (*env)->DeleteLocalRef(env, js);
+    }
+  }
+  if (attached) (*g_vm)->DetachCurrentThread(g_vm);
   JS_FreeCString(ctx, payload);
-  return JS_UNDEFINED;
+  return out;
+}
+
+/** `proteusHost.post(json)` 的 C 实现——转调 Java 侧回调（无返回值） */
+static JSValue js_host_post(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv) {
+  if (g_host_methods.post == NULL) {
+    // ★无宿主回调时不静默丢弃：打到 log（可观测——本仓纪律「静默失败最致命」）
+    if (argc >= 1) {
+      const char *p = JS_ToCString(ctx, argv[0]);
+      if (p != NULL) { LOGI("proteusHost.post（无回调，仅记录）: %.200s", p); JS_FreeCString(ctx, p); }
+    }
+    return JS_UNDEFINED;
+  }
+  return host_call_impl(ctx, g_host_methods.post, 0, this_val, argc, argv);
+}
+
+/** `proteusHost.mount(treeJson)` —— 首帧建树（**有返回**：Java 侧回执 JSON） */
+static JSValue js_host_mount(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv) {
+  return host_call_impl(ctx, g_host_methods.mount, 1, this_val, argc, argv);
+}
+
+/** `proteusHost.update(treeJson)` —— 结构变化整树重发（有返回） */
+static JSValue js_host_update(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv) {
+  return host_call_impl(ctx, g_host_methods.update, 1, this_val, argc, argv);
+}
+
+/** `proteusHost.updatePatches(patchesJson)` —— 样式/文本增量（有返回） */
+static JSValue js_host_update_patches(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv) {
+  return host_call_impl(ctx, g_host_methods.update_patches, 1, this_val, argc, argv);
 }
 
 /** 组装 JSON 字符串结果（转义 `"` `\` 与换行；最小实现，不引第三方） */
@@ -133,10 +203,21 @@ static jstring eval_impl(JNIEnv *env, jstring source, jboolean with_host) {
   }
 
   // ★注入宿主桩（仅 with_host 时）——`proteusHost.post(json)` → Java 回调
+  //   ★★S5：`mount`/`update`/`updatePatches` **按 Java 侧是否实现条件注入**
+  //   （见 g_host_methods 注释：无条件注入会让 JS 侧的"宿主能否消费批次"判定失效）
   if (with_host) {
     JSValue global = JS_GetGlobalObject(g_ctx);
     JSValue host = JS_NewObject(g_ctx);
     JS_SetPropertyStr(g_ctx, host, "post", JS_NewCFunction(g_ctx, js_host_post, "post", 1));
+    if (g_host_methods.mount != NULL) {
+      JS_SetPropertyStr(g_ctx, host, "mount", JS_NewCFunction(g_ctx, js_host_mount, "mount", 1));
+      JS_SetPropertyStr(g_ctx, host, "update", JS_NewCFunction(g_ctx, js_host_update, "update", 1));
+      JS_SetPropertyStr(g_ctx, host, "updatePatches",
+                        JS_NewCFunction(g_ctx, js_host_update_patches, "updatePatches", 1));
+      LOGI("宿主已实现 mount/update/updatePatches ⇒ JS 侧走**真机消费**路径");
+    } else {
+      LOGI("宿主仅实现 post ⇒ JS 侧走本地桩（适配器→宿主入口 链路验证）");
+    }
     JS_SetPropertyStr(g_ctx, global, "proteusHost", host);
     JS_FreeValue(g_ctx, global);
   }
@@ -200,13 +281,21 @@ Java_dev_proteus_layoutcore_QuickJsEngine_nativeSetHostCallback(JNIEnv *env, jcl
     (*env)->DeleteGlobalRef(env, g_host_obj);
     g_host_obj = NULL;
   }
+  g_host_methods.post = g_host_methods.mount = g_host_methods.update = g_host_methods.update_patches = NULL;
   if (obj != NULL) {
     g_host_obj = (*env)->NewGlobalRef(env, obj);
     jclass c = (*env)->GetObjectClass(env, obj);
-    g_host_method = (*env)->GetMethodID(env, c, "post", "(Ljava/lang/String;)V");
-    if (g_host_method == NULL) {
-      LOGE("宿主回调缺少 post(String) 方法");
-      (*env)->ExceptionClear(env);
+    // ★逐一探测（查不到 = 该入口未实现 ⇒ 保持 NULL ⇒ 不注入；并清掉查找抛的异常）
+    g_host_methods.post = (*env)->GetMethodID(env, c, "post", "(Ljava/lang/String;)V");
+    if ((*env)->ExceptionCheck(env)) (*env)->ExceptionClear(env);
+    g_host_methods.mount = (*env)->GetMethodID(env, c, "mount", "(Ljava/lang/String;)Ljava/lang/String;");
+    if ((*env)->ExceptionCheck(env)) (*env)->ExceptionClear(env);
+    g_host_methods.update = (*env)->GetMethodID(env, c, "update", "(Ljava/lang/String;)Ljava/lang/String;");
+    if ((*env)->ExceptionCheck(env)) (*env)->ExceptionClear(env);
+    g_host_methods.update_patches = (*env)->GetMethodID(env, c, "updatePatches", "(Ljava/lang/String;)Ljava/lang/String;");
+    if ((*env)->ExceptionCheck(env)) (*env)->ExceptionClear(env);
+    if (g_host_methods.post == NULL) {
+      LOGE("宿主回调缺少 post(String) 方法（其余入口仍按各自实现条件注入）");
     }
   }
 }

@@ -127,11 +127,25 @@ echo "==> ②.5 构建并准备 JS bundle（S3b：真实适配器）"
 # ★bundle 进 **assets**（aapt2 用 `-A <assets dir>` 打进 APK）——Java 侧经 AssetManager 读源码字符串
 #   交给 QuickJS eval。为什么不用 raw 资源：assets 不参与资源 ID 编译，读取路径最直接。
 BUNDLE="$HERE/bridge/dist/bundle-batch.js"
-# ★自动构建（若缺）——本仓纪律「生成物必须在**构建路径**上」：
-#   不入库 ⇒ 必须有自动生成路径，否则 clone 后这一步静默跳过（bundle 缺失 ⇒ 测试路径不可用）
-if [ ! -f "$BUNDLE" ]; then
-  echo "    未找到 bundle ⇒ 自动构建 …"
-  node "$HERE/bridge/build-batch.mjs" 2>&1 | sed 's/^/    /' || true
+ENTRY="$HERE/bridge/entry-batch.ts"
+# ★★重建条件 = "缺" **或** "入口比产物新"（本仓实测的陈旧产物陷阱）
+#
+# 【为什么不能只在缺失时构建】初版写的是 `if [ ! -f "$BUNDLE" ]` ⇒ 改了 `entry-batch.ts`
+#   之后跑构建，产物**不重建** ⇒ APK 里装的是**上一次的 bundle**
+#   ⇒ "代码改了但测试测的是旧的"（本仓已踩过同族：stale APK 排查一轮）。
+#   ★纪律：**生成物不仅要在构建路径上，还要在源变更时真的重新生成**——
+#     "有产物" ≠ "产物是新的"。
+# ★★失败**不能吞**（`|| true` 是本仓明令禁止的静默失败形态）：
+#   类型检查失败 ⇒ 产物是坏的 ⇒ 测试路径必然在真机上炸，而构建却报成功。
+NEED_BUILD=0
+if [ ! -f "$BUNDLE" ]; then NEED_BUILD=1; fi
+if [ -f "$ENTRY" ] && [ -f "$BUNDLE" ] && [ "$ENTRY" -nt "$BUNDLE" ]; then NEED_BUILD=1; fi
+if [ "$NEED_BUILD" = "1" ]; then
+  echo "    构建 bundle（缺产物 或 入口更新）…"
+  if ! node "$HERE/bridge/build-batch.mjs" 2>&1 | sed 's/^/    /'; then
+    echo "✗ bundle 构建失败（含类型检查）—— 修掉再构建；本步**不静默跳过**"
+    exit 3
+  fi
 fi
 if [ -f "$BUNDLE" ]; then
   mkdir -p "$APP/src/main/assets"
