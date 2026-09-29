@@ -1502,6 +1502,7 @@ function genCapabilities(ir, ends) {
       '',
       'if (wasm.ok) {',
       '  // ★用能力位判断形态，不要按平台名分支：',
+      '  //   （小程序侧 WXWebAssembly 是**全局对象**——基础库 v2.13.0+ 起可用）',
       '  //   MP 只收代码包路径（supportsPathLoad）；Web / App-iOS 收字节（supportsStreaming）',
       '  const source = wasm.data.supportsPathLoad',
       "    ? { path: 'wasm/image-filter.wasm.br' }   // 小程序：包内路径（支持 brotli）",
