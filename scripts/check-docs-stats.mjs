@@ -11,10 +11,14 @@
 //   根因与官网数字事故**同形**：只检查「我声明的」，不核对「实际是什么」。
 //
 // 判据设计（避免成为噪音源——误报会被关掉，见《实战采集埋点清单》§2.1 同源教训）：
-//   ① 只扫**当前态文档**（CURRENT_DOCS 白名单 + docs 根目录的直接文档），
+//   ① 扫描范围 = docs 根目录的直接文档（当前态载体）+ **真机验收报告**（`hosts/android/ACCEPTANCE*.md`）
+//      ——★扩面理由（2026-09-29 实测）：口径漂移的**源头就在那两份报告里**。0.667 被推翻后，
+//      更正只落在 `ACCEPTANCE.md` 顶部，而**同文件下方的「诚实边界」表仍写着"达标"**（自相矛盾），
+//      且被 4 份下游文档继续引用。只扫 docs/ 时这类"报告内部残留"完全在覆盖之外。
 //      不扫 plan 子目录：那里的数字多为**撰写时快照**（历史语境，改动即失真）；
 //   ② 黑名单是**过期的确切写法**（不是"所有数字"），每条都能指向已证伪的事实；
-//   ③ 需要引述历史时，行内加 `<!-- stats-ok -->` 豁免并写明原因。
+//   ③ 需要引述历史时，行内加 `<!-- stats-ok -->`（可附理由）豁免；
+//      仅 `historic` 规则可用"同一句带标记词"放行（如「原…系…子项」）——两条豁免路径都不静默。
 //
 // 用法：node scripts/check-docs-stats.mjs
 // 退出码：0 通过 / 1 存在过期数字
@@ -127,10 +131,12 @@ function docsRoot() {
 
 const failures = []
 const scanned = []
-for (const name of docsRoot()) {
-  const file = path.join(ROOT, 'docs', name)
+
+/** 扫描一份文件；label 用于报告路径（相对仓库根） */
+function scanFile(relPath) {
+  const file = path.join(ROOT, relPath)
   const lines = fs.readFileSync(file, 'utf8').split('\n')
-  scanned.push(name)
+  scanned.push(relPath)
   lines.forEach((line, i) => {
     if (line.includes(EXEMPT_MARK)) return
     for (const s of STALE) {
@@ -140,17 +146,21 @@ for (const name of docsRoot()) {
         // ★historic 规则：仅当**同一句**里出现标记词（「原…系…」「已更正」等）才放行
         //   ——用于"引述已证伪的旧值并说明"的正当写法；否则一律拦（防新文档悄悄再用旧值）
         if (s.historic && HISTORIC_MARKERS.some((k) => line.includes(k))) continue
-        failures.push({
-          file: `docs/${name}`,
-          line: i + 1,
-          id: s.id,
-          text: m[0],
-          truth: s.truth,
-          why: s.why,
-        })
+        failures.push({ file: relPath, line: i + 1, id: s.id, text: m[0], truth: s.truth, why: s.why })
       }
     }
   })
+}
+
+for (const name of docsRoot()) scanFile(`docs/${name}`)
+
+// ── ★真机验收报告（2026-09-29 扩面）─────────────────────────────────────────
+// 【为什么必须扩】本项目实测：**口径漂移的源头就在这两份报告里**——
+//   「绘制 0.667」被证伪后，改正只落在 `ACCEPTANCE.md` 顶部，而**同文件下方的「诚实边界」表
+//   仍写着"达标"**（自相矛盾），并且被 4 份下游文档继续引用。
+//   文档门禁只扫 docs/ 时，这类"报告内部残留"完全在覆盖之外。
+for (const rel of ['hosts/android/ACCEPTANCE.md', 'hosts/android/ACCEPTANCE-honor10.md']) {
+  if (fs.existsSync(path.join(ROOT, rel))) scanFile(rel)
 }
 
 // ── 正向断言：SSOT 载体文档必须写出当前值（防"删掉就绿"）──────────────────────

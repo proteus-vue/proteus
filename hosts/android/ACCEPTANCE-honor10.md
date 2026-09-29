@@ -198,14 +198,14 @@ honor10 的双峰假设是"测量窗口内屏幕状态变化"（`screen_off_time
 
 ## 4. ★★顺带挖出：**上一份验收报告的"绘制合格"不成立**（口径错配）
 
-跑本档时核对字段才发现：`ACCEPTANCE.md` 里的「绘制 **2ms** → 0.667」取的是
+跑本档时核对字段才发现：`ACCEPTANCE.md` 里的「绘制 **2ms** → 0.667」<!-- stats-ok: 引述已被推翻的旧口径（本条正是推翻它的记录） --> 取的是
 **`draw_attribution_rects_only_ms`** —— 那是**只画色块、不画文字**的**归因拆分子项**
 （用于回答"绘制时间花在色块还是文字上"），**不是整体绘制耗时**。
 
 | 口径 | Redmi 实测 | vs 原生 draw 3ms |
 |---|---|---|
 | 整体绘制（色块 + 文字）= `canvas_draw_software_ms` | **6ms** | **2.0（不达标）** |
-| 归因拆分：只色块 = `draw_attribution_rects_only_ms` | 2ms | 0.667 |
+| 归因拆分：只色块 = `draw_attribution_rects_only_ms` | 2ms | 0.667 |<!-- stats-ok: 该子项自身的正确比值（2/3），非整体口径 -->
 | 归因拆分：只文字 = `draw_attribution_text_only_ms` | 5ms | — |
 
 ⇒ **原判定"绘制合格"不成立**；已在 `ACCEPTANCE.md` 顶部加「★口径更正」并改正表内数值与判定。
