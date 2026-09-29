@@ -734,6 +734,39 @@ App 端渲染链路**已真机验证**（但走 selfdraw，与 SPI 层**未统�
 **⑤ 验证**：全量 **3942/3942**（329 文件）· vue-tsc 0 错 · 门禁全绿
 （vapor-perf 含新体积棘轮 / binding-matrix / compile-baseline / gap-report / docs / content / stats）。
 
+### ★★卡 C1 起步（2026-09-29）—— 批处理红线落点 + 两条路径等价判据（**2/4**）
+
+**路径按 I6 修正**：卡原文隐含"从零实现 NativeBackend"，而 I6 查明**真机链路早已在跑**
+（\`renderer-app/adapters/selfdraw\`）⇒ 正确做法是把**已有的批量形态建模进 SPI**，而非重写。
+本轮做**可本地验证的接口层**（按本仓纪律：先过零设备判据再上真机）。
+
+**① ★核心产出：Host ABI §3 批处理红线的落点**
+方案原文「**所有跨边界调用必须是批处理的**」+ 红线「跨边界调用 = 帧数」。
+而 SPI 的 \`NativeViewAdapter\` 是**逐节点命令式** ⇒ 4050 节点产生数千次调用（违例）。
+⇒ 新增 \`NativeBatchAdapter\`（\`commit(ops)\`）+ \`NativeHostOp\`（create/insert/remove/patch/text）
+—— 即真机 \`mount\`/\`updatePatches\`/\`applyOps\` 的**统一抽象**（**生产形态**）。
+★**实测对照（50 子节点）**：批量 **1 次**调用 · 逐节点 **101 次** ⇒ 红线的量化实证。
+★**两形态分工**（勿混用）：逐节点 = **原型形态**（直观、适合测试/简单宿主）；
+批量 = **生产形态**（跨边界调用数 == flush 次数）。
+
+**② 两条路径等价判据**（SPI NativeBackend ⟷ 真机 selfdraw）
+同一棵树在两侧的**节点数 / 文本叶数 / 树形完整性**一致（实测锁定：5 节点 / 2 文本叶 / 仅 root 无 parent）。
+★**不**要求"产出字节相同"——两者形态本就不同（一个发 nodeOps，一个发布局请求），要一致的是**语义**；
+这条判据防的是"改一条路径漏另一条"的能力漂移（I6 指出的核心风险）。
+
+**③ 验收如实标 2/4**：✅ 纳入 conformance（批量后端同样全绿）· ✅ 既有五后端未破坏（全量 3949）
+· ❌「有可运行的 Android 实现」——真机在跑但**未接进 SPI adapter**
+（下一步：写 \`selfdrawBatchAdapter\` 把 \`commit(ops)\` 翻译为真机 \`mount\`/\`applyOps\`）
+· ❌「4050/长列表/内存三项复测」——需真机验收。
+
+**④ ★三处"猜 API"自纠（同一原因，记录以免重犯）**
+① \`createNativeBackend(adapter?, platform?)\` 第一参是**适配器**，我传 \`{platform:'ios'}\` ⇒ 抛错（I6 也踩过）
+② \`selfdraw.insert(child, parent, anchor)\` **必须传第三参**（tsc 抓到："Expected 3 arguments"）
+③ selfdraw 的挂载是"容器建好后**手工挂到 \`adapter.root.children\`**"（抄既有测试才知）
+⇒ **跨包调用先读签名或抄既有测试用法，别按参数名猜**（本卡 2 处 + I6 1 处，同一原因）。
+
+**⑤ 验证**：全量 **3949/3949**（329 文件，+7）· vue-tsc 0 错 · 门禁全绿。
+
 ### ★★M3 手势落地：平台识别器 + 核心命中标注 target（2026-09-29，提交 `44962ade`）
 
 **方案依据**（06-gesture-animation.md 映射表）：「tap→`GestureDetector` / longPress→`LongPressGesture` /
