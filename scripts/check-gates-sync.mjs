@@ -89,6 +89,10 @@ const LOCAL_ONLY = {
   // ★Android 宿主编译检查（2026-09-29，与 check:ios-selfdraw-compile 同源盲区）：
   //   编译宿主需 Android SDK（android.jar）+ JDK；CI 为 ubuntu-latest，不装 Android SDK ⇒ 跑不了。
   'check:android-host-compile': '需 Android SDK（android.jar）+ JDK 17；CI 为 ubuntu-latest，未装 Android SDK',
+  // ★hook 接线检查（2026-09-29）：CI 上 `.zcode/config.json` 不存在（gitignored）⇒ 该门禁
+  //   走"未安装但给出指引"分支并**返回 0**（不判红是刻意的：CI 本来就不需要本地 hook）。
+  //   ⇒ 归入"仅本地"是因为**它的判据只在本地才有意义**（CI 恒为"未安装"）。
+  'check:hook-wiring': '检查本地 .zcode/config.json 的三条红线 hook 接线；CI 无该文件（走"给出安装指引"分支，恒通过）',
 }
 
 const pkg = JSON.parse(fs.readFileSync(path.join(ROOT, 'package.json'), 'utf8'))
