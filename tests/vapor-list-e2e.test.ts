@@ -437,3 +437,86 @@ describe('V4 · ★嵌套 v-for（本仓实测补的未验证项）', () => {
     expect(it0.sourceExpr).toBe('list')
   })
 })
+
+describe('★行级失效 relinkRow（2026-09-29：把"全表重扫"降为 O(改动的行)）', () => {
+  /** 建一个两行列表的运行时；返回操作采集与新值写入器 */
+  const setup = () => {
+    const src = sfc(
+      `const list = ref([{ id: 1, w: 10 }, { id: 2, w: 20 }])\n`,
+      `<p-view v-for="item in list" :key="item.id">\n  <p-text :width="item.w" />\n</p-view>`,
+    )
+    const { table } = buildVaporSubscriptions(src, 'l.vue')
+    const listSlot = table.sources.flatMap((s) => s.slots).find((x) => x.kind === 'list-item')!
+    const reg = new ListRegistry()
+    reg.registerItems(listSlot.listId!, [
+      { itemKey: '1', slotNodes: { [listSlot.itemSlotId!]: 1001 } },
+      { itemKey: '2', slotNodes: { [listSlot.itemSlotId!]: 1002 } },
+    ])
+    const { ops, sink } = collector()
+    const rt = new SlotRuntime(new PropKeyTable(), new StringPool(), sink)
+    const vapor = new VaporRuntime(table, rt, VaporRuntime.buildEvaluators(table.evaluators), reg)
+    const rows = [{ id: 1, w: 10 }, { id: 2, w: 20 }]
+    const ctx: EvalContext = { read: (n) => (n === 'list' ? rows : undefined) }
+    const triggers = new Map<string, () => void>()
+    vapor.load(ctx, (n, cb) => triggers.set(n, cb))
+    vapor.relink(ctx)
+    rt.flush()
+    ops.length = 0
+    return { vapor, rt, ops, rows, ctx, triggers, listId: listSlot.listId! }
+  }
+
+  it('★改 1 行 ⇒ 只发 1 条指令且打到该行（与全扫等价）', () => {
+    const { vapor, rt, ops, rows, ctx, listId } = setup()
+    rows[1]!.w = 99
+    vapor.relinkRow(listId, '2', rows[1]!, [], ctx)
+    rt.flush()
+    expect(ops.length).toBe(1)
+    expect(ops[0]!.nodeId).toBe(1002)          // ★第 2 行的节点（不是第 1 行、也不是模板节点）
+    expect(ops[0]!.op).toBe(OpCode.SET_STYLE)
+  })
+
+  it('★★等价性：relinkRow 与全扫（relink）产出**完全相同**的指令', () => {
+    // A：行级失效
+    const a = setup()
+    a.rows[1]!.w = 77
+    a.vapor.relinkRow(a.listId, '2', a.rows[1]!, [], a.ctx)
+    a.rt.flush()
+    const opsA = a.ops.map((o) => ({ op: o.op, nodeId: o.nodeId, value: (o as { value?: unknown }).value }))
+
+    // B：全扫（同一改动）
+    const b = setup()
+    b.rows[1]!.w = 77
+    b.triggers.get('list')?.()      // 粗粒度触发 ⇒ relink 全表
+    b.rt.flush()
+    const opsB = b.ops.map((o) => ({ op: o.op, nodeId: o.nodeId, value: (o as { value?: unknown }).value }))
+    b.rt.flush()
+
+    expect(opsA).toEqual(opsB)     // ★两条路径必须**逐条相同**（否则行级失效会静默分叉）
+  })
+
+  it('★两行都改 ⇒ 两次 relinkRow；改同一行两次（值相同）⇒ 第二次短路不发', () => {
+    const { vapor, rt, ops, rows, ctx, listId } = setup()
+    rows[0]!.w = 11; rows[1]!.w = 22
+    vapor.relinkRow(listId, '1', rows[0]!, [], ctx)
+    vapor.relinkRow(listId, '2', rows[1]!, [], ctx)
+    rt.flush()
+    expect(ops.length).toBe(2)
+
+    ops.length = 0
+    vapor.relinkRow(listId, '1', rows[0]!, [], ctx)   // 值未变 ⇒ `diffAndEmit` 短路
+    rt.flush()
+    expect(ops.length).toBe(0)
+  })
+
+  it('★flushes 判据：N 次 relinkRow + flush ⇒ flush 增量 = N（与全扫同一语义）', () => {
+    const { vapor, rt, rows, ctx, listId } = setup()
+    const before = rt.getStats().flushes
+    const N = 5
+    for (let i = 0; i < N; i++) {
+      rows[1]!.w = 100 + i
+      vapor.relinkRow(listId, '2', rows[1]!, [], ctx)
+      rt.flush()
+    }
+    expect(rt.getStats().flushes - before).toBe(N)
+  })
+})
