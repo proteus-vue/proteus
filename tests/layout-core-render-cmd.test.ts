@@ -295,3 +295,122 @@ function solveAndAdapt(roots: PNode[]): LayoutNode[] {
   for (const t of tree) solveLayout(t, loose(375, UNBOUNDED))
   return tree
 }
+
+// ══════════════════════════════════════════════════════════════════════════════
+// ★★卡 I5 · overdraw culling（视口裁剪）—— 2026-09-29
+//
+// 【判据设计（三条，缺一不可）】
+//   ① **省**：视口外的节点不 emit 指令（读 `stats.culledCount`）
+//   ② **不误裁**：视口**内**的指令与"不裁剪"时**逐条相同**（等价性——裁剪只该少、不该变）
+//   ③ **absolute 不误裁**：`position: absolute` 子级可溢出父盒回到视口内 ⇒
+//      即使父盒在视口外，也不能连带裁掉它（本仓已有"溢出定位"的语义在前）
+// ══════════════════════════════════════════════════════════════════════════════
+describe('★I5 · overdraw culling（视口裁剪）', () => {
+  /** 造一棵纵向 5 行（每行高 100）的树：id 100+i 为行，行内 id 200+i 为文本 */
+  /** 造一个「有绘制内容」的节点（背景色 ⇒ 必产出一条 background 指令） */
+  const painted = (over: { id: number; w: number; h: number; bg?: string }): PNode =>
+    pnode({
+      id: over.id,
+      props: {
+        layout: { flexDirection: 'column', width: { kind: 'absolute', dp: over.w }, height: { kind: 'absolute', dp: over.h }, flexShrink: 0 },
+        paint: { backgroundColor: over.bg ?? '#112233' },
+        paintHint: { isMonochrome: false, isPureBackground: true, staticSubtree: false, needsCompositingLayer: false },
+      },
+    } as Partial<PNode> & { id: number })
+
+  const columnTree = (): LayoutNode[] => {
+    const root = pnode({
+      id: 1,
+      props: {
+        layout: { flexDirection: 'column', width: { kind: 'absolute', dp: 300 }, height: { kind: 'absolute', dp: 500 } },
+        paint: { backgroundColor: '#000000' },
+        paintHint: { isMonochrome: false, isPureBackground: true, staticSubtree: false, needsCompositingLayer: false },
+      },
+    } as Partial<PNode> & { id: number })
+    root.children = [0, 1, 2, 3, 4].map((i) => painted({ id: 100 + i, w: 300, h: 100 }))
+    // ★与既有测试同法：`layoutTreeFromPNode([node], { lengthContext })` → 再 solveLayout
+    const tree = layoutTreeFromPNode([root], { lengthContext: V }) as LayoutNode[]
+    solveLayout(tree[0]!, loose(300, 500))
+    attachParents(tree[0]!)
+    return tree
+  }
+
+  it('① 省：视口只覆盖前 2 行 ⇒ 后面的行不 emit', () => {
+    const roots = columnTree()
+    const full = emitRenderCmds(roots)
+    const culled = emitRenderCmds(roots, { cullToViewport: true, viewportWidth: 300, viewportHeight: 200 })
+    expect(full.stats.cmdCount).toBeGreaterThan(culled.stats.cmdCount)   // 确实省了
+    expect(culled.stats.culledCount).toBeGreaterThan(0)
+    // 视口高 200（y 覆盖 0..200）；行高 100 ⇒ 期望保留 y=0、y=100、y=200 三行
+    // ★★边界口径（**保守**，2026-09-29 实测确立）：用**严格不等式**判"在视口外"
+    //   （`abs.y > vy0+vh`）⇒ **正好贴视口边界**的元素（y=200 那行）**保留**。
+    //   为什么保守：贴边元素可能有可见像素（1px 描边 / 分隔线 / 阴影），
+    //   裁掉即"可见内容消失"；而多留一条指令的代价远小于误裁。
+    //   ⇒ 本仓实测曾用 `>=`（把贴边判为视口外）**误裁了 y=-50 的 absolute 子级**，故改严格不等式。
+    // ★根节点自身跨越视口（y=0..500 vs 视口 0..200）⇒ 按语义不被裁（"整个盒在视口外"才裁）
+    const childRows = culled.cmds.filter((c) => c.nodeId >= 100)
+    expect(childRows.length).toBe(3)              // y=0 / y=100 / y=200（贴边保留）
+    expect(childRows.map((c) => c.y)).toEqual([0, 100, 200])
+    // 真正离开视口的行（y=300、y=400）必须被裁掉
+    expect(culled.cmds.some((c) => c.y >= 300)).toBe(false)
+  })
+
+  it('★★② 不误裁：视口内的指令与不裁剪时**逐条相同**（等价性）', () => {
+    const roots = columnTree()
+    const full = emitRenderCmds(roots)
+    const culled = emitRenderCmds(roots, { cullToViewport: true, viewportWidth: 300, viewportHeight: 150 })
+    // 取"在视口内"的指令（按 y 判），两侧必须一致（顺序与内容都不变）
+    const visible = (c: { y: number; height: number }) => c.y + c.height > 0 && c.y < 150
+    const fullVisible = full.cmds.filter(visible).map((c) => `${c.kind}:${c.x},${c.y},${c.width},${c.height}`)
+    const culledVisible = culled.cmds.filter(visible).map((c) => `${c.kind}:${c.x},${c.y},${c.width},${c.height}`)
+    expect(culledVisible).toEqual(fullVisible)
+  })
+
+  it('★★③ absolute 子级不误裁：父盒在视口外，溢出子级回到视口内仍 emit', () => {
+    // ★场景：父（id 10）**在视口下方**（margin-top 300 ⇒ y=300，视口高 200 ⇒ 父整体在视口外），
+    //   其 absolute 子（id 11）用 `top:-350` 上移到 y=-50（**回到视口内**）
+    //   ⇒ 若实现"父在视口外就整棵跳过"，会**误裁**这个可见子级。
+    //   （本仓实测校正：absolute 的 top 是相对父的**未偏移**位置，故用 -350 才落到视口内）
+    const rootNode = pnode({
+      id: 1,
+      props: {
+        layout: { flexDirection: 'column', width: { kind: 'absolute', dp: 300 }, height: { kind: 'absolute', dp: 600 } },
+        paint: { backgroundColor: '#000000' },
+        paintHint: { isMonochrome: false, isPureBackground: true, staticSubtree: false, needsCompositingLayer: false },
+      },
+    } as Partial<PNode> & { id: number })
+    const parentNode = painted({ id: 10, w: 300, h: 100 })
+    parentNode.props.layout.margin = { top: { kind: 'absolute', dp: 300 } }   // 父下移到 y=300（视口外）
+    parentNode.children = [pnode({
+      id: 11,
+      props: {
+        layout: { position: 'absolute', width: { kind: 'absolute', dp: 50 }, height: { kind: 'absolute', dp: 50 }, top: { kind: 'absolute', dp: -350 }, left: { kind: 'absolute', dp: 0 } },
+        paint: { backgroundColor: '#ff0000' },
+        paintHint: { isMonochrome: false, isPureBackground: true, staticSubtree: false, needsCompositingLayer: false },
+      },
+    } as Partial<PNode> & { id: number })]
+    rootNode.children = [parentNode]
+    const tree = layoutTreeFromPNode([rootNode], { lengthContext: V }) as LayoutNode[]
+    solveLayout(tree[0]!, loose(300, 600))
+    attachParents(tree[0]!)
+
+    const culled = emitRenderCmds(tree, { cullToViewport: true, viewportWidth: 300, viewportHeight: 200 })
+    // absolute 子（id 11）在视口内 ⇒ 必须出现
+    const has11 = culled.cmds.some((c) => c.nodeId === 11)
+    expect(has11).toBe(true)
+  })
+
+  it('① 无裁剪开关 ⇒ 行为与既有一致（默认不变——不静默改变历史读数语义）', () => {
+    const roots = columnTree()
+    const a = emitRenderCmds(roots)
+    const b = emitRenderCmds(roots, { viewportWidth: 300, viewportHeight: 200 })   // 只给视口、不开开关
+    expect(b.stats.cmdCount).toBe(a.stats.cmdCount)
+  })
+
+  it('① 视口覆盖全树 ⇒ 不裁任何东西（culledCount = 0）', () => {
+    const roots = columnTree()
+    const culled = emitRenderCmds(roots, { cullToViewport: true, viewportWidth: 300, viewportHeight: 9999 })
+    expect(culled.stats.culledCount).toBe(0)
+    expect(culled.stats.cmdCount).toBe(emitRenderCmds(roots).stats.cmdCount)
+  })
+})

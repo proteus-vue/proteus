@@ -22,7 +22,7 @@
 | **V2** 槽位 O(1) 覆盖 | 🟡 **部分达标** | 绑定类型：属性/文本/样式/列表 ✅ 走槽位；**事件**走命中测试 + 派发（`V9` PASS）、**条件**走 L0（设计如此）⇒ 清单存在但**未单列成表**（该卡的交付物是"清单 + 逐类标注"，此项未产出） |
 | **V3** LIST_UPDATE | ✅ **已达标**（判据已量化） | 指令**可用**（`OpCode.LIST_UPDATE 0x22` + `ListRegistry` 解析为普通 SET_STYLE/SET_TEXT）· 单行更新**不随行数线性增长**——★**2026-09-29 实测**：行级失效 `relinkRow` 后 JS 段 **5.42 → 1.91ms**；但**端到端仍 6.0ms**（瓶颈在协议层键池重发，见 I8 条目）· 长列表无回退（`V12`/`V14` PASS） |
 | **V4** L0/L1 安全判定 | ✅ **已达标** | 七条件实现于 `slot-runtime/src/tier.ts`（`build.ts` Step 6 复用，**同一语义一处实现**）· 反例测试在 `tests/`（含 `forcePure` 路径）· 误判为 L1 的**静默不更新**风险由 flush 判据 + `unsupported` 上报兜底 |
-| **I5** overdraw culling | ❌ **未达标** | `render-cmd.ts` 有绝对坐标（culling 前提），但**无按包围盒过滤视口外的实现**（`emitRenderCmds` 无 viewport 参数） |
+| **I5** overdraw culling | 🟢 **视口裁剪已实现（1/3）** | ✅ `EmitOptions.cullToViewport`（默认关闭，不静默改变历史读数语义）+ 读数 `culledCount`/`culledSubtrees`；**长列表指令 ↓90.1%**（16001→1592）· 4050 场景 ↓20.4% · 15 条测试（含"视口内指令逐条相同"等价性 + "absolute 子级不误裁"）· ❌ 遮挡剔除 / 同色合并未做 |
 | **C1** NativeBackend | 🟡 **原型在，生产未就绪** | `render-backend/src/native.ts` 有 `createNativeBackend`（ios/android/harmony 三平台映射表）· 但**真机嵌入与性能证据未建**（Android 侧有 `layout-core` 真机链路，非此 Backend 形态） |
 | **C2** Host Runtime | 🟡 **部分** | `web-host.ts` + `host-conformance.ts`（32 项）· `host-matrix.ts`（6×6 组合矩阵）在；**Native 侧 Host Runtime 未接真机** |
 | **V5** 与 Web VDOM 一致性 | ✅ **已达标** | 浏览器真值基准对拍：`packages/layout-core-rust/tests/golden/browser-layout.json`（21 用例）+ **`browser-mutation.json`**（增量对拍）→ 真机 `V6`/`conformance 0.375dp` |
@@ -65,7 +65,7 @@ I8 卡写着「**先做 I6 评估，明确指令流体积是否构成瓶颈，�
 - [ ] **V2** 槽位 O(1) 覆盖全部绑定类型 🟡 **部分**（绑定分类清单未产出）
 - [x] **V3** LIST_UPDATE 列表更新指令 ✅ **已达标**（含 `relinkRow` 真机量化）
 - [x] **V4** L0/L1 安全判定 ✅ **已达标**（七条件 + 反例 + flush 兜底判据）
-- [ ] **I5** overdraw culling — ★ 投入产出比最高 ❌ **未达标**（无视口过滤实现）
+- [x] **I5** overdraw culling 🟢 **视口裁剪已实现（1/3）**（长列表 ↓90.1% 指令）
 - [ ] **C3** 超级应用规模编译期性能 ❌ **未达标**（无基线数据）
 - [ ] **C4** 184 原语完备性验证 🟡 **工具就绪，数据未采集**
 
@@ -377,10 +377,16 @@ ExecutionCarrier（JSI / AOT）是"宿主侧 1ms"的载体。
 2. 被完全遮挡节点不 emit
 3. 同色相邻背景合并为一次 drawRect
 
-### 验收
-- [ ] 视口外指令不 emit
-- [ ] **绘制耗时下降可测**（对比前后）
-- [ ] 4050 场景绘制耗时改善有数据
+### 执行（★2026-09-29 已实现 1/3：视口裁剪；另两条为后续）
+
+### 验收（★2026-09-29 核对）
+- [x] 视口外指令不 emit —— ✅ 已实现（`EmitOptions.cullToViewport` + `viewportOffsetX/Y`；读 `stats.culledCount`/`culledSubtrees`）
+- [x] **绘制耗时下降可测**（对比前后）—— ✅ **上游代理已量化**（本地基准 `scripts/bench-culling.mjs`）：
+  长列表 400×40 场景 **指令 16001 → 1592（↓90.1%）** · 生成 **14ms → 2ms**；4050 场景 **2001 → 1592（↓20.4%）**。
+  ★**边界**：平台侧真实绘制耗时（Canvas/Skia）需真机 gfxinfo 复核，本地测不到
+- [x] 4050 场景绘制耗时改善有数据 —— ✅ 同上（↓20.4%；视口越小于内容，收益越大）
+- [ ] （执行项 2/3 未做）**被完全遮挡节点不 emit**——需层叠/遮挡分析（当前只做视口裁剪）
+- [ ] （执行项 3/3 未做）**同色相邻背景合并为一次 drawRect**
 
 ---
 
