@@ -25,7 +25,6 @@ const HERE = path.dirname(fileURLToPath(import.meta.url))
 const ROOT = path.resolve(HERE, '..')
 const CRATE = path.join(ROOT, 'packages/layout-core-rust')
 const EXAMPLE = path.join(CRATE, 'target', 'release', 'examples', 'relayout_phases')
-const OPS_MAGIC = 0x504f5650
 
 /** ★上限棘轮（只降不升）——当前值 = 2026-09-28 实测基线 + 余量 */
 const RATCHET = {
@@ -60,23 +59,36 @@ function makeListTree() {
   return { viewport: { width: W, height: H }, nodes }
 }
 
-/** 单条 SET_STYLE 指令的二进制编码（与 TS 侧 `encodeOps` 同格式） */
-function opsBin(nodeId, key, value) {
-  const keyBytes = Buffer.from(key, 'utf8')
-  const buf = Buffer.alloc(20 + 2 + keyBytes.length + 11)
-  let o = 0
-  buf.writeUInt32LE(OPS_MAGIC, o); o += 4
-  buf.writeUInt32LE(1, o); o += 4 // version
-  buf.writeUInt32LE(1, o); o += 4 // opCount
-  buf.writeUInt32LE(1, o); o += 4 // keyCount
-  buf.writeUInt32LE(0, o); o += 4 // strCount
-  buf.writeUInt16LE(keyBytes.length, o); o += 2
-  keyBytes.copy(buf, o); o += keyBytes.length
-  buf.writeUInt8(0x02, o); o += 1 // SET_STYLE
-  buf.writeUInt32LE(nodeId, o); o += 4
-  buf.writeUInt16LE(0, o); o += 2 // keyId
-  buf.writeFloatLE(value, o)
-  return buf
+/**
+ * 单条 SET_STYLE 指令的二进制编码 —— **调真实 TS 编码器**（不手写第二份线格式）
+ *
+ * 【为什么改成这样（本门禁 2026-09-29 实际踩坑）】此前这里**手写**了字节布局（并硬编码
+ *   `version = 1`）。协议 V2（池按需 + ref 重映射）落地时把 `OPS_VERSION` 改成了 2，
+ *   而这份手写副本**没人知道要跟着改** ⇒ Rust 解码「版本不符」直接拒绝 ⇒ `apply_ops` 返回错误体
+ *   ⇒ 门禁报出**误导性结论**「平移未产生位移」（看起来像平移传播坏了，实际是装置过期）。
+ *   这与卡 I2 的「第二份手写副本 = 下一个静默缺陷」是**同一条纪律**：
+ *   跨端格式只能有**一个**实现（`packages/slot-runtime` 的 `encodeOps`），任何地方再写一份
+ *   都必然在下次协议变更时静默过期。
+ *
+ * 【做法】起一次 tsx 子进程求值真实 `encodeOps`（与 `check-vapor-docs` 的 culling 重算同法）；
+ *   并在主流程断言**版本与代码一致**（见 `assertWireVersion`）——装置过期必须**报装置错**，
+ *   而不是伪装成性能回归。
+ */
+function opsBinBatch(nodeId, key, values) {
+  const probe = `
+import { OpCode, PropKeyTable, StringPool, encodeOps } from ${JSON.stringify(path.join(ROOT, 'packages/slot-runtime/src/index.ts'))}
+const keys = new PropKeyTable()
+const pool = new StringPool()
+const out = []
+for (const v of ${JSON.stringify(values)}) {
+  // ★逐条独立编码（每条自带池 ⇒ 与旧手写副本的语义一致：一次 apply 一条指令）
+  const ops = [{ op: OpCode.SET_STYLE, nodeId: ${nodeId}, keyId: keys.intern(${JSON.stringify(key)}), value: v }]
+  out.push(Array.from(encodeOps(ops, keys, pool)))
+}
+process.stdout.write(JSON.stringify(out))
+`
+  const raw = execFileSync('npx', ['tsx', '-e', probe], { cwd: ROOT, encoding: 'utf-8', timeout: 120000 })
+  return JSON.parse(raw.trim().split('\n').pop()).map((a) => Buffer.from(a))
 }
 
 /* ────────────────────── 跑探针 ────────────────────── */
@@ -84,6 +96,27 @@ function opsBin(nodeId, key, value) {
 function runProbe(treePath, opsA, opsB, iters) {
   const out = execFileSync(EXAMPLE, [treePath, opsA, opsB ?? '', String(iters)], { encoding: 'utf-8' })
   return JSON.parse(out)
+}
+
+/**
+ * ★装置自检：探针必须真的应用了指令（`applied`/`relayout_count` 是数，不是 null）。
+ *
+ * 【为什么必须前置于性能断言（本门禁 2026-09-29 实测的误导）】装置过期时（例如线格式版本
+ *   与 `OPS_VERSION` 漂移），`apply_ops` 返回**错误体**——顶层各字段为 null。
+ *   此时若直接跑性能断言，会报「translation_delta = 0 ⇒ 平移未产生位移」，
+ *   把人**引向性能路径**排查（本次就是这样白查了一轮），而真实原因是**装置**。
+ *   ⇒ 纪律：装置错必须报装置错，且要**指名方向**（"先确认线格式版本"）。
+ */
+function assertProbeApplied(res, label) {
+  if (res.applied === null || res.applied === undefined || res.relayout_count === null) {
+    console.error(`[vapor-perf] ✗ 装置失效（${label}）：探针返回错误体 ⇒ apply_ops 未应用任何指令。`)
+    console.error(`  原始返回：${JSON.stringify(res)}`)
+    console.error('  ★先查线格式版本（本门禁曾因**手写第二份编码**硬编码旧 version 而静默过期）：')
+    console.error('    · 期望版本 = packages/slot-runtime/src/buffer.ts 的 OPS_VERSION')
+    console.error('    · 本脚本改用真实编码器生成 ops（不再手写字节）——若仍失败，查 cargo 侧 ops.rs 的 OPS_VERSION')
+    fs.rmSync(TMP, { recursive: true, force: true })
+    process.exit(2)
+  }
 }
 
 function main() {
@@ -98,10 +131,15 @@ function main() {
   // ★类B：交替发 56↔80（真实 delta）；只发同一值会让 delta=0（本仓实测的假象）
   const ops56 = path.join(TMP, 'h56.bin')
   const ops80 = path.join(TMP, 'h80.bin')
-  fs.writeFileSync(ops56, opsBin(2, 'layout.height', 56))
-  fs.writeFileSync(ops80, opsBin(2, 'layout.height', 80))
+  const [b56, b80] = opsBinBatch(2, 'layout.height', [56, 80])
+  fs.writeFileSync(ops56, b56)
+  fs.writeFileSync(ops80, b80)
 
   const classB = runProbe(treePath, ops80, ops56, 30)
+  // ★装置自检（本仓纪律「测量装置必须先自测」的机器化）：探针必须真的应用了指令。
+  //   装置过期（如线格式版本漂移）时 apply_ops 返回**错误体**（applied=null / relayout_count=null）
+  //   ⇒ 必须报**装置错**并指名方向，而不是让下面的性能断言给出「平移未产生位移」这种误导结论。
+  assertProbeApplied(classB, '类B')
   const eng = classB.phases_of_median_round?.engine_phases ?? {}
   const delta = Math.abs(eng.translation_delta ?? 0)
   const shifted = eng.translation_shifted ?? 0
@@ -109,9 +147,11 @@ function main() {
   // ★类A：改行内圆点宽（边界内变化 ⇒ 范围应止于该行）
   const opsDot = path.join(TMP, 'dot.bin')
   const opsDot2 = path.join(TMP, 'dot2.bin')
-  fs.writeFileSync(opsDot, opsBin(1, 'layout.width', 20))
-  fs.writeFileSync(opsDot2, opsBin(1, 'layout.width', 44))
+  const [bDot, bDot2] = opsBinBatch(1, 'layout.width', [20, 44])
+  fs.writeFileSync(opsDot, bDot)
+  fs.writeFileSync(opsDot2, bDot2)
   const classA = runProbe(treePath, opsDot, opsDot2, 30)
+  assertProbeApplied(classA, '类A')
 
   const failures = []
   // ① 性能上限

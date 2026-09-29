@@ -638,6 +638,14 @@ const COVERED_PACKAGES = {
   test: '内部测试基建（非官网面）',
   'test-core': '内部测试基建（非官网面）',
   'test-ir': '内部测试基建（非官网面）',
+  // ★★2026-09-29 补登记（CI「原语分区漂移门禁」实测抓出的**三个漏登记包**）：
+  //   Vapor 线新增的三个包从落地起就没登记 —— 与 #460 的 worklet / E30 的 useMCP **同一类缺口**
+  //   （新增包未登记 ⇒ 官网搜索不到），只是这次一次漏了三个。
+  //   ★它们**不是**"逐条出原语页"形态（内部是算法实现而非语义原语 API），
+  //     而是已有**专页覆盖**（framework 分区）⇒ 正确处置是在 COVERED_PACKAGES 声明归属，非塞进 SOURCES。
+  'layout-core': '框架分区（framework/28-rust-layout-and-render-cmd：排版核心 + 绘制指令流）',
+  'layout-core-rust': '框架分区（同 28——Rust 实现的同一核心，TS 侧为对拍参考）',
+  'slot-runtime': '框架分区（framework/43-vapor-update-path：槽位运行时 + 指令流协议）',
 }
 let coverageIssues = 0
 {
