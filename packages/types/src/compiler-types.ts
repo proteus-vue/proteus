@@ -266,6 +266,22 @@ export interface CompileResult {
   sourcemap?: string
   /** ★#505 CompileIR 语义快照（M1 骨架：TemplateIR 投影；ScriptIR M4 迁入）——主编译路径经框架 IR 的第一段接线 */
   ir?: CompileIR
+  /**
+   * ★卡 C4：**编译期漏点记录**（三类 severity；空数组 = 本文件无漏点）。
+   *
+   * 【结构声明在此（而非 compiler 包）的原因】`CompileResult` 是本包的类型，
+   *   而漏点记录要跨包消费（CLI 报告 / 门禁 / 官网统计）⇒ 结构必须在这里可见。
+   *   ★**结构性类型**（不 import compiler 的 GapCounter 类）——types 包不能依赖 compiler（分层）。
+   */
+  gaps?: Array<{
+    file: string
+    line?: number
+    construct: string
+    category: string
+    severity: 'fallback' | 'degraded' | 'unsupported'
+    ruleId?: string
+    suggestedPrimitive?: string
+  }>
 }
 
 // ─────────────────────────────────────────────────────────────────────────────

@@ -7,6 +7,8 @@ import { transformScriptToPage } from './script'
 import { transformStyleToWxss } from './style'
 import { assertValidResult, CompilerError } from './validate'
 import { createTrace } from './trace'
+// ★卡 C4：编译期漏点计数器（只归纳既有诊断与规则 ID，不新增判断——见其文件头）
+import { GapCounter } from './gap-counter'
 import { buildCompileIR, emptyScriptIR } from './ir/build'
 import type { CompileOptions, CompileResult } from './types'
 import { extractSfcMacros, renameModelVarsInWxml } from './sfc-macros'
@@ -106,6 +108,9 @@ export { explainTransform, formatTransformTrace } from './explain'
 export type { ExplainOptions, ExplainResult } from './explain'
 export { createTrace, lineAt } from './trace'
 export type { TransformTrace, TransformTraceEvent } from './trace'
+// ★卡 C4：编译期漏点计数器（三类 severity + 报告；记录不阻断）
+export { GapCounter, formatGapReport } from './gap-counter'
+export type { PrimitiveGapRecord, GapSeverity } from './gap-counter'
 
 /** 整包编译：标准 Vue SFC 源码 → { wxml, js, wxss }（.json 由路由生成器负责） */
 export function compileVueSfc(source: string, options: CompileOptions = {}): CompileResult {
@@ -243,13 +248,38 @@ export function compileVueSfc(source: string, options: CompileOptions = {}): Com
   const pageScrollCss = tplResult.pageScrollWrapped ? '\n.proteus-page-scroll { height: 100vh; }\n' : ''
   const finalWxss = `${wxss}${pageScrollCss}`
 
+  const warnings = [...tplResult.warnings, ...scriptResult.warnings, ...styleLoadWarnings]
+  const trace = [...tplTrace.events, ...scriptTrace.events, ...styleTrace.events]
+
+  // ★★卡 C4：**编译期漏点计数器**（记录不阻断——埋点清单 §2.1 明确要求）
+  //
+  // 【归属原则（关键）】计数器**不判断"是不是漏点"**——那由既有诊断（warnings）与
+  //   结构化规则 ID（trace）决定；它只做**归类 + 计数**。⇒ 编译器新增诊断时，
+  //   计数器自动纳入（若分类表未覆盖，报告会显式列进"未归类"，**不静默丢**）。
+  const gapCounter = new GapCounter()
+  const file = options.filename ?? 'anonymous.vue'
+  for (const w of warnings) gapCounter.record(file, w)
+  // 规则 ID 路径：同一批诊断若带了规则 ID（trace 事件），用它做更可靠的归类
+  //   ★只为**已有对应 warning 的**规则补记（避免把"正常转换"（如 directive/v-bind）误当漏点）
+  const warnedIds = new Set<string>()
+  for (const ev of trace) {
+    if (!ev.ruleId) continue
+    // 规则 ID 与诊断文本同族时（如 svg-p2-unsupported / unknown-p-star），用它加固归类
+    for (const w of warnings) {
+      if (ruleIdMatchesWarning(ev.ruleId, w)) warnedIds.add(ev.ruleId)
+    }
+  }
+  for (const id of warnedIds) gapCounter.record(file, `（规则 ${id}）`, { ruleId: id })
+
   const result: CompileResult = {
     wxml,
     js: scriptResult.js,
     wxss: finalWxss,
-    warnings: [...tplResult.warnings, ...scriptResult.warnings, ...styleLoadWarnings],
-    trace: [...tplTrace.events, ...scriptTrace.events, ...styleTrace.events],
+    warnings,
+    trace,
     sourcemap: scriptResult.sourcemap,
+    /** ★卡 C4：漏点记录（三类分列；空数组 = 本文件无漏点） */
+    gaps: gapCounter.records,
   }
 
   // 反黑盒：产物自校验，坏产物当场抛错并指明文件（绝不静默输出）
@@ -259,4 +289,21 @@ export function compileVueSfc(source: string, options: CompileOptions = {}): Com
   // ★#505 M4 ScriptIR 首条：script 语义声明（提取层结构化投影——codegen 出口不变；确定性缺省为空）
   result.ir.script = scriptResult.ir ?? emptyScriptIR()
   return result
+}
+
+/**
+ * ★卡 C4：规则 ID 与诊断文本是否同族（用于给 warning 补上更可靠的规则归类）。
+ *
+ * 【为什么需要】诊断文本是中文散文（人读友好），规则 ID 是结构化标识（机器友好）。
+ *   计数器归类时**规则 ID 更可靠**，但并非每条 warning 都能拿到 ID（warning 点在 push 时未带 ID）。
+ *   ⇒ 这里做"同族判定"：取 ID 的**特征段**（以 `-`/`/` 切分后的末段），看它是否出现在诊断文本里。
+ *     命中则该 warning 用 ID 路径归类（比关键词更准）。
+ *   ★保守：只有明确同族才补记，避免把"正常转换"误判为漏点。
+ */
+function ruleIdMatchesWarning(ruleId: string, warning: string): boolean {
+  const seg = ruleId.split(/[/-]/).filter(Boolean)
+  if (!seg.length) return false
+  const last = seg[seg.length - 1]!
+  if (last.length < 3) return false
+  return warning.includes(last)
 }

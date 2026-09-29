@@ -34,7 +34,7 @@
     "changeset:publish": "node scripts/release.mjs",
     "release": "node scripts/release.mjs",
     "release:bump": "node scripts/release.mjs --bump-only",
-    "verify": "node scripts/build-packages.mjs && pnpm run test && pnpm run build:web && pnpm run build:mp && pnpm run check:mp-artifacts && pnpm -r build && npx vue-tsc --noEmit && npx vue-tsc --noEmit -p examples/tsconfig.json && pnpm run check:pkg && pnpm run check:publish-contents && pnpm run check:internal-versions && pnpm run check:deps && pnpm run check:script-compile && pnpm run check:stats && pnpm run check:vapor-docs && pnpm run check:fluid-wording && pnpm run check:ledger && pnpm run check:cobuild && pnpm run check:cobuild-kit && pnpm run check:vapor-perf && pnpm run check:en-drift && pnpm run check:content && pnpm run check:mp-spec && pnpm run check:mp-attrs && pnpm run check:degradation && pnpm run check:consistency && pnpm run check:docs && pnpm run check:docs-stats && pnpm run check:acceptance-stub && pnpm run check:instr-spec && pnpm run check:vue-compat-doc && pnpm run check:showcase-catalog && pnpm run check:capability-demo && pnpm run check:component-demo && npx vue-tsc --noEmit -p showcase/tsconfig.json && pnpm run check:gates-sync && pnpm run build:showcase:web && pnpm run test:e2e:showcase && pnpm run build:showcase:mp && pnpm run check:pushed && pnpm run check:deploy-pending && pnpm run check:host-rounding && pnpm run check:android-host-compile && pnpm run check:pixel-snap && pnpm run check:compile-baseline && pnpm run check:binding-matrix",
+    "verify": "node scripts/build-packages.mjs && pnpm run test && pnpm run build:web && pnpm run build:mp && pnpm run check:mp-artifacts && pnpm -r build && npx vue-tsc --noEmit && npx vue-tsc --noEmit -p examples/tsconfig.json && pnpm run check:pkg && pnpm run check:publish-contents && pnpm run check:internal-versions && pnpm run check:deps && pnpm run check:script-compile && pnpm run check:stats && pnpm run check:vapor-docs && pnpm run check:fluid-wording && pnpm run check:ledger && pnpm run check:cobuild && pnpm run check:cobuild-kit && pnpm run check:vapor-perf && pnpm run check:en-drift && pnpm run check:content && pnpm run check:mp-spec && pnpm run check:mp-attrs && pnpm run check:degradation && pnpm run check:consistency && pnpm run check:docs && pnpm run check:docs-stats && pnpm run check:acceptance-stub && pnpm run check:instr-spec && pnpm run check:vue-compat-doc && pnpm run check:showcase-catalog && pnpm run check:capability-demo && pnpm run check:component-demo && npx vue-tsc --noEmit -p showcase/tsconfig.json && pnpm run check:gates-sync && pnpm run build:showcase:web && pnpm run test:e2e:showcase && pnpm run build:showcase:mp && pnpm run check:pushed && pnpm run check:deploy-pending && pnpm run check:host-rounding && pnpm run check:android-host-compile && pnpm run check:pixel-snap && pnpm run check:compile-baseline && pnpm run check:binding-matrix && pnpm run check:gap-report",
     "check:pkg": "node scripts/check-package-health.js",
     "check:publish-contents": "node scripts/check-publish-contents.mjs",
     "check:internal-versions": "node scripts/sync-internal-versions.mjs --check",
@@ -105,7 +105,8 @@
     "check:pixel-snap": "npx tsx scripts/gen-pixel-snap-golden.mjs --check",
     "check:android-host-compile": "bash hosts/android/check-host-compile.sh",
     "check:compile-baseline": "npx tsx scripts/bench-compile.mjs --check",
-    "check:binding-matrix": "node scripts/gen-vapor-binding-matrix.mjs --check"
+    "check:binding-matrix": "node scripts/gen-vapor-binding-matrix.mjs --check",
+    "check:gap-report": "npx tsx scripts/report-gaps.mjs --check"
   },
   "dependencies": {
     "pinia": "^4.0.3",
