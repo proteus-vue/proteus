@@ -17,7 +17,7 @@
 | **V1** Vapor 产品化 | ✅ **5/5 全达标（2026-09-29）** | ✅ 模块可独立引用（`packages/compiler/src/vapor/` 已导出）· ✅ **4001 重排 ≤0.08ms 可复现**（`pnpm check:vapor-perf`，已接 CI）· ✅ 三层嵌套在单测（`tests/vapor-list-e2e.test.ts` 4 处）· ❌ **README 无独立章节**（`grep -c vapor README.md` = 0）· ✅ 单测全绿（**3881**，非 3441） |
 | **I1** 指令集规格化 | ✅ **4/4 达标（2026-09-29）** | ✅ 规格表 `docs/generated/instruction-spec.md`（**从代码生成**：12 opcode + 字节数 + Draw 6 kind；`--check` 接 CI）· ✅ `checkHostVersion()` 版本协商（Host ABI §6 三件套 + 可操作 upgradeHint）· ✅ major/minor 流程（含两次真实变更实例）· ★Anim 类未实现（归卡 V6），规格表如实标注 |
 | **I2** 舍入时机统一 | ✅ **2/3 达标（2026-09-29）** | ✅ **舍入仅在内核 + 平台零舍入（静态门禁）**：策略 = 边缘吸附 `snap(v)=floor(v+0.5)`，实现 `packages/layout-core/src/pixel-snap.ts` + `packages/layout-core-rust/src/snap.rs`（唯一实现）；宿主侧去除 `Math.round` 几何舍入（`ProteusHostView` / `MirrorHit`）并加静态门禁 `pnpm check:host-rounding`（破坏性验证过）· ✅ **两端（TS ⇄ Rust）同输入逐字节一致**：golden `packages/layout-core-rust/tests/golden/pixel-snap.json` + 两侧测试各自比对（含 f32 精度边界台账）· ❌ **鸿蒙三列错位无法验证——仓库无鸿蒙宿主**（`hosts/` 只有 android/ios）；内核级三列场景已证（33/34/33 守恒、无 1px 缝），但"ArkUI 上不错位"不能声称 |
-| **I3** paint-hint 编码进指令 | 🟡 **部分达标（2/3）** | ✅ 指令携带 hint（`RenderCmd.hint`，`layout-core/src/render-cmd.ts:58`）· ✅ 编译期推导、运行时零判断（`component-ir/src/pnode-style.ts:496`：`isMonochrome`/`isPureBackground`/`shareableContent`）· ❌ **iOS 内存增量复测未做**（该卡的风险正指向"平台层运行时猜 ⇒ +78% 内存复发"，而复测是验证 hint 真的被平台用于 backing store 策略的**唯一判据**） |
+| **I3** paint-hint 编码进指令 | 🟡 **部分达标（2/3，③ 阻塞已查明）** | ✅ 指令携带 hint（`RenderCmd.hint`）· ✅ 编译期推导、运行时零判断 · ★★**本轮修掉推导的两个"条件不充分"缺陷**（`isMonochrome` 不看底色、`isPureBackground` 不排除文本 ⇒ 接线即画错；已修 + 4 条回归 + 破坏性验证；颜色判定合并为唯一实现 `component-ir/src/color.ts`）· ❌ **iOS 内存复测未做，两层阻塞已查明**：① **全平台无消费者**（适配器/两端宿主零命中；`contentsFormat` 只在实验代码里）② **本机无 Xcode/SDK/iOS 设备**· ✅ 顺带核实 **Android 两种策略天然满足**（主路径零位图 + 图集已是 ALPHA_8）⇒ 战场只剩 iOS |
 | **I4** 文本在指令流的表达 | ✅ **4/4 达标（2026-09-29）** | ✅ 指令含度量结果（`SET_TEXT` 9B + **三通道**注入协议）· ✅ 平台层不参与排版（只度量并注入，内核算几何）· ✅ **方案 A 决策留痕**：`docs/proteus-performance-plan/12-dcp-i4-text-expression.md`（三条否决 B 的理由 + 代价 + **四条诚实边界**）· ✅ **文本进 conformance**：**2/21 → 6/25**（真实 Chromium 重生成），新用例**当场抓到一个真缺陷**（引擎把"未指定 min"映射成 `auto` ⇒ CSS `min-width:auto` 生效 ⇒ 文本不可收缩，差 **24.53dp**；已修为 `length(0.0)`，96 节点全过）★**更正卡的过时信息**：并非"textMeasures 全为空表"——原 2 条含真实浏览器度量，且 `conformance_browser_layout` 对每个用例都注入 measurer ⇒ 那两条几何**确实被对拍** |
 | **V2** 槽位 O(1) 覆盖 | ✅ **3/3 达标（2026-09-29）** | ✅ **绑定类型清单（9 类）**：生成式 `docs/generated/vapor-binding-matrix.md`（`scripts/gen-vapor-binding-matrix.mjs` —— 求值真实编译器 + 真项目，非手写）· ✅ **逐类标注 L1/L0**（每条带**代码证据位置**）：属性/文本/样式/类名/列表源/列表行内/可见性 = **L1 槽位直写**；条件（`v-if`）= **L0**（结构变化，非属性更新）· 事件 = **L0 侧通道**（命中测试 + 派发，非值更新语义）· ✅ **O(1) 验证**：`tests/vapor-binding-o1.test.ts` —— 结构判据：寻址为 `Map.get(slotId)` 直取（源码断言）+ **10× 绑定数下耗时比 1.05**（线性退化会是 ~10，阈值 3）+ 单源槽位 ≪ 全表 · ★**顺带抓出并修复一个真缺陷**（见卡正文）：源扫描**同行多声明静默丢弃** |
 | **V3** LIST_UPDATE | ✅ **已达标**（判据已量化） | 指令**可用**（`OpCode.LIST_UPDATE 0x22` + `ListRegistry` 解析为普通 SET_STYLE/SET_TEXT）· 单行更新**不随行数线性增长**——★**2026-09-29 实测**：行级失效 `relinkRow` 后 JS 段 **5.42 → 1.91ms**；但**端到端仍 6.0ms**（瓶颈在协议层键池重发，见 I8 条目）· 长列表无回退（`V12`/`V14` PASS） |
@@ -223,10 +223,30 @@ paint-hint 成为指令属性，编译期推导，平台层据以决定 backing 
 2. 编译期从归一化样式推导，**禁止运行时判断**
 3. 平台层据 hint 决策
 
-### 验收（★2026-09-29 核对：**2/3 达标**）
-- [x] 指令携带 paint-hint 字段 —— ✅ `RenderCmd.hint`（`layout-core/src/render-cmd.ts:58`，三类字段齐备）
-- [x] **编译期推导，运行时零判断** —— ✅ 推导在 IR 构建期（`component-ir/src/pnode-style.ts:496`：`isMonochrome` / `isPureBackground` / `shareableContent`）
-- [ ] iOS 内存增量复测 —— ❌ **未做**（`hosts/ios/results/` 内无对应复测结果；内存专题的 −91% 是**拍平**收益，与本卡的 hint→backing store 策略不同）
+### 验收（★2026-09-29 晚 复核：**2/3 达标，且 ③ 的阻塞已查明**）
+- [x] 指令携带 paint-hint 字段 —— ✅ `RenderCmd.hint`（`layout-core/src/render-cmd.ts`，三类字段齐备）
+- [x] **编译期推导，运行时零判断** —— ✅ 推导在 IR 构建期（`component-ir/src/pnode-style.ts`）
+  ★★**但本轮实测发现：原推导"条件不充分"——一旦接线会直接画错**（已修 + 4 条回归锁定）：
+  · `isMonochrome` 只看字色、**不看底色** ⇒ `color:#ffffff;background-color:#285ac8`
+    （**4050 夹具的真实形状**，白字 + 蓝底）判 `true`——而紧凑单通道格式**只能表达一种颜色**
+    ⇒ 平台按它分配存储 ⇒ **丢一个颜色**。同理未排除圆角/透明度（紧凑格式无 alpha 通道）。
+  · `isPureBackground`（语义 = "这一层只有一块底色要画"）**没排除带文本的节点** ⇒
+    `color:#fff;background-color:#285ac8` 同时判 `true` ⇒ 平台若据此跳过存储分配，**文字消失**。
+  · 修法：判据写成"该策略成立所需的**全部**条件"，拿不准一律 false；颜色判定抽成
+    `component-ir/src/color.ts` 的 `isOpaqueColor`（**唯一实现**——与 layout-core 遮挡剔除
+    原先的第二份副本合并为一份，见 `render-cmd.ts` 的引用）。
+  · 破坏性验证：各自退回旧条件 ⇒ 对应用例当场红（2 条 / 1 条）。
+- [ ] iOS 内存增量复测 —— ❌ **未做，且查明了两层阻塞**（不是"没跑"）：
+  · **① 全平台无消费者**（本轮全仓 grep 核实）：`isMonochrome` / `isPureBackground` 在
+    iOS 宿主（`hosts/ios/ProteusHost/selfdraw-scene.swift`）、Android 宿主（`layoutcore/*.java`）、
+    真机适配器（`renderer-app/src/adapters/selfdraw.ts`）**零命中**；iOS 正确的开关
+    `contentsFormat`（−39% 那个）**只出现在实验代码**（`experiments/device/main-device.swift` 的 J 变体），
+    产品建层路径（`makeLayer`）从未设置 ⇒ **优化本身没接线**，此时复测测不出收益。
+  · **② 本机 iOS 工具链不可用**：无 Xcode.app（仅 CommandLineTools）、`iphoneos` SDK 不可定位、
+    无 iOS 设备连接 ⇒ **本机无法做 iOS 真机/模拟器复测**（需在装有 Xcode 的机器或 iPhone 在线的机器上做）。
+  · **③ Android 侧已核实"两种策略天然满足"**（本轮）：主绘制路径 `drawCmds` **零位图**
+    （指令直下发宿主 Canvas）；文本图集若启用已用最省的 `ALPHA_8`（1 字节/像素，非 RGBA_8888）。
+    ⇒ Android 无"按最贵格式分配"的复发面，故本卡的实际战场**只剩 iOS**。
 
 ---
 

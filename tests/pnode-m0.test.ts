@@ -116,6 +116,50 @@ describe('★★M0 · PaintHint 编译期推导（承载两条已实测的内存
     // 有背景图/合成层时不再单色（策略不适用）
     expect(normalizeStyleString('color:#fff;background-image:linear-gradient(90deg,#000,#fff)').props.paintHint.isMonochrome).toBe(false)
   })
+
+  // ══════════════════════════════════════════════════════════════════════════
+  // ★★推导**必须充分**：这两条是 2026-09-29 实测抓出的真缺陷（修复前**恒真**）
+  //
+  // 为什么此前没人发现：两个 hint **全仓零消费者**（grep 无实现）⇒
+  //   条件写漏了也不会有人踩到；而一旦按 I3 接线（平台据此换存储格式），
+  //   后果是**静默画错**（不是慢）。
+  // ══════════════════════════════════════════════════════════════════════════
+  it('★★修复锁定：带底色的文本**不得**判 isMonochrome（单通道格式表达不了两种颜色）', () => {
+    // 4050 夹具的真实形状：白字 + 蓝底。修复前判 true ⇒ 平台按单通道分配 ⇒ 丢一个颜色。
+    const r = normalizeStyleString('color:#ffffff;background-color:#285ac8;font-size:14px')
+    expect(r.props.paintHint.isMonochrome, '有底色 ⇒ 两种颜色 ⇒ 不可用紧凑单通道').toBe(false)
+    // 对照：同一份样式在**无底色**时确实是单色（否则上一条会因为条件过严而"通过"）
+    const bare = normalizeStyleString('color:#ffffff;font-size:14px')
+    expect(bare.props.paintHint.isMonochrome, '无底色的纯色文本仍是单色').toBe(true)
+  })
+
+  it('★★修复锁定：圆角/透明度**不得**判 isMonochrome（紧凑格式无 alpha 通道）', () => {
+    expect(normalizeStyleString('color:#fff;border-radius:4px;font-size:14px').props.paintHint.isMonochrome).toBe(false)
+    expect(normalizeStyleString('color:#fff;opacity:0.5;font-size:14px').props.paintHint.isMonochrome).toBe(false)
+  })
+
+  it('★★修复锁定：带文本的节点**不得**判 isPureBackground（本字段语义 = 只有一块底色要画）', () => {
+    // 修复前：`color:#fff;background-color:#285ac8` 同时判 isPureBackground=true
+    // ⇒ 平台若据此跳过存储分配，**文字不见了**。
+    const r = normalizeStyleString('color:#fff;background-color:#285ac8;font-size:14px')
+    expect(r.props.paintHint.isPureBackground, '有字形要栅格化 ⇒ 必须有存储').toBe(false)
+    // 对照：纯底色（无文本）仍为 true
+    expect(normalizeStyleString('background-color:#285ac8').props.paintHint.isPureBackground).toBe(true)
+  })
+
+  it('★★颜色判定保守：拿不准的写法（具名色/hsl/半透明）一律不判"可用紧凑格式"', () => {
+    // 具名色：本仓不解析 CSS 具名色 ⇒ 拿不准 ⇒ 不能用紧凑格式（保守，宁可走通用路径）
+    expect(normalizeStyleString('color:red;font-size:14px').props.paintHint.isMonochrome).toBe(false)
+    // 半透明字色：4 位 hex 的 alpha 位（`#fff8` = a≈0.53）/ 8 位 hex / rgba α<1
+    //   ★注意 `#ffff` 是 **a=f（完全不透明）**，不属此列——CSS 4 位写法是 #RGBA
+    expect(normalizeStyleString('color:#fff8;font-size:14px').props.paintHint.isMonochrome).toBe(false)
+    expect(normalizeStyleString('color:#ffffff80;font-size:14px').props.paintHint.isMonochrome).toBe(false)
+    expect(normalizeStyleString('color:rgba(255,255,255,0.5);font-size:14px').props.paintHint.isMonochrome).toBe(false)
+    // 对照：**不透明**写法（6 位 hex / 8 位 alpha=ff / rgb 三参 / rgba α=1）可以
+    expect(normalizeStyleString('color:rgb(255,255,255);font-size:14px').props.paintHint.isMonochrome).toBe(true)
+    expect(normalizeStyleString('color:#ffffffff;font-size:14px').props.paintHint.isMonochrome).toBe(true)
+    expect(normalizeStyleString('color:rgba(255,255,255,1);font-size:14px').props.paintHint.isMonochrome).toBe(true)
+  })
 })
 
 describe('★★M0 · 拍平判定（主路径：实测内存 −91% / 耗时 −32%）', () => {
