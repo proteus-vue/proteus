@@ -696,6 +696,44 @@ slot 嵌套、scss 变量、长模板、分包引用）带来的编译成本。
 **⑧ 验证**：全量 **3942/3942**（329 文件，+5）· vue-tsc 0 错 · 门禁全绿
 （gap-report / docs / docs-stats / instr-spec / content / stats / binding-matrix / compile-baseline / gates-sync）。
 
+### ★★★卡 I8 + I6 双双收口（2026-09-29）—— 体积棘轮 + ★Native 双轨发现
+
+**① I8 指令流体积优化（P2）→ 已达标**
+核心优化**此前已落地**（协议 V1→V2「池按需 + ref 重映射」，\`cf8a4cf5\`）：
+单条 LIST_UPDATE **8935 → 48 字节（194×）** · 编码 0.258 → **0.017ms** ·
+端到端单节点更新 6.00 → **0.121ms**（§10 目标 3ms，**25× 余量**）。
+本次**实测核实规模效应已消除**：池 0/1000/3000/8000 键下消息**恒 48 字节**
+（V1 时代 3000 键达 28935B），编码耗时亦恒定（**这是"池按需"的判据本质**）。
+★**补结构缺口**：此前体积只有**文档侧间接保护**（比对外部报告读数）⇒ 改回全量池**不会当场红**。
+⇒ 在 \`check:vapor-perf\` 加**代码侧棘轮**：① 体积 ≤ 256B ② **规模无关性**（两池规模下必须相等
+——比绝对上限更强）。**破坏性验证**：注入全量池 ⇒ 两条同时红（78828B + 2328 vs 78828）；还原即绿。
+
+**② I6 后端就绪度评估 → 3/3 达标**
+报告 \`docs/proteus-render-backend-readiness-i6.md\`（证据驱动：跑真实 conformance + 读能力位 + 盘宿主）。
+五后端能力矩阵（8 维度）+ 风险清单/建议/优先级 + 三档判定。
+
+**★★★关键发现（卡里没有、评估才挖出）：Native 有两条路径**
+| | SPI 层 \`render-backend/native.ts\` | 真机链路 \`renderer-app/adapters/selfdraw.ts\` |
+|---|---|---|
+| 适配器 | **缺省 mock**（\`createMockNativeAdapter\`） | 宿主原生实现（Swift / Java） |
+| 证据 | conformance **13/13**（接口形状对，**不证明能驱动真机**） | iOS **22 份**报告 + Android **30 个**验收目录 |
+⇒ **"Native 生产就绪"必须分两句讲**：SPI 层**未就绪**（C1 说的就是这个）；
+App 端渲染链路**已真机验证**（但走 selfdraw，与 SPI 层**未统一**）。
+★**给 C1 的关键输入**：C1 不是"从零实现 Android 后端"，而是**把已有真机链路接到 SPI 接口上**
+（或论证 selfdraw 即 NativeBackend 的生产实现）——**可大幅下修 C1 的 4–6 人周估算**。
+
+**③ 三档判定（I6 输出）**：🟢 Headless / VueDom **生产就绪**（13/13 + 宿主天然）·
+🟡 Flutter / Hybrid **原型**（映射层就绪、**无真机嵌入**）· 🟡 Native×3 **双轨**（见上）。
+★共同缺口：\`remoteRendering: false\` 全后端一致（远程渲染未实现，诚实边界）。
+
+**④ 评估过程一处自纠**：首轮探针报 Native×3 未过 \`createElement.unique\`，看似真缺陷；
+查明是**我的调用错误**——\`createNativeBackend(adapter?, platform?)\` 第一参是**适配器**，
+我传了 \`{ platform: 'ios' }\` ⇒ 对象被当 adapter（无 \`createView\`）⇒ 抛错 ⇒ 判据失败。
+**教训：跨包调用先读签名（或抄既有测试的用法），别按参数名猜。**
+
+**⑤ 验证**：全量 **3942/3942**（329 文件）· vue-tsc 0 错 · 门禁全绿
+（vapor-perf 含新体积棘轮 / binding-matrix / compile-baseline / gap-report / docs / content / stats）。
+
 ### ★★M3 手势落地：平台识别器 + 核心命中标注 target（2026-09-29，提交 `44962ade`）
 
 **方案依据**（06-gesture-animation.md 映射表）：「tap→`GestureDetector` / longPress→`LongPressGesture` /
