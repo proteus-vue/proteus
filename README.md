@@ -37,7 +37,7 @@
 
 | 「不绑定」系列 | 语义层（框架定义） | 后端 SPI（可插拔实现） | 状态 |
 |---|---|---|---|
-| 不绑定平台 API（G-31/32） | p-* 语义组件 + 183 原语 SSOT + Capability Hook | 各端语义实现（小程序降级为 Layer 1 兼容层） | ✅ |
+| 不绑定平台 API（G-31/32） | p-* 语义组件 + 184 原语 SSOT + Capability Hook | 各端语义实现（小程序降级为 Layer 1 兼容层） | ✅ |
 | 不绑定渲染引擎（G-27/37） | VNode / Component IR / LayoutConstraint IR | `ProteusRenderBackend`（VueDom / Native×3 / Flutter / Headless） | ✅ |
 | 不绑定编译器（G-29/38） | Compiler IR（SFC → 中间表示） | `ProteusCompilerBackend`（Node ✅ / Rust ✅ / WASM 📋） | 🟡 |
 | 不绑定容器形态（G-42） | 页面生命周期状态机 + IR 单一 Owner | 六容器策略（Stack / SuperApp / Window / MiniProgram / Embedded / SinglePage） | ✅ |
@@ -63,7 +63,7 @@
 
 ### ③ 语义原语 SSOT + 能力 Hook（G-31/G-32）✅
 
-183 语义原语清单（`PRIMITIVE_CATALOG` 单一事实源）→ 76 个语义组件双端落地 → 64 个 implemented 语义 × 6 端 conformance 门禁 → 81 个 Capability Hook（useCamera / useLocation / usePayment / useBiometric… 双端真实实现，缺桥诚实降级不崩溃）+ 28 个工程原语（useQuery / useRouter / useAnimation…）+ `proteus audit coverage` / `api-check` 编译期门禁。**业务依赖能力，不依赖平台。**
+184 语义原语清单（`PRIMITIVE_CATALOG` 单一事实源）→ 77 个语义组件双端落地 → 65 个 implemented 语义 × 6 端 conformance 门禁 → 81 个 Capability Hook（useCamera / useLocation / usePayment / useBiometric… 双端真实实现，缺桥诚实降级不崩溃）+ 28 个工程原语（useQuery / useRouter / useAnimation…）+ `proteus audit coverage` / `api-check` 编译期门禁。**业务依赖能力，不依赖平台。**
 
 ### ④ 宿主层三件套（G-41/42/43）✅
 
@@ -102,6 +102,36 @@ p-fluid / p-grid / p-stack / p-fit 柔性布局——把 iOS `UICollectionView` 
 ### 工程化基座 ✅
 
 路由（命名路由 + 守卫 + Skyline 自定义转场，Web 端 Vue Transition 复刻同一套 API）、分包（编译期生成 subPackages）、模块化（契约 / 依赖图谱 / 懒加载 / CI 审计门禁）、状态（pinia-sync：LWW 零依赖默认 + CRDT 接口）、i18n（类型安全 t() + ICU 子集 + 审计）、DevTools（十视图：TraceBus / 所有权图 / 性能…）、CLI（build / explain / rules / audit / conformance / migrate / capabilities / i18n:check）、create-proteus 一键双端工程。
+### ⑫ Vapor 更新编译器（V0~V4 已落地）✅
+
+**抹平 Vue 的 diff 开销**：Vue 重渲染时要在 JS 侧重建 VNode 树并逐节点比对（改 1 个元素 ≈ 70ms）；Vapor 在**编译期**把模板转成「**响应式源 → 槽位**」的依赖图，更新时**直接写入变化的槽位**并下发二进制指令——不重建 VDOM、不 diff。
+
+**真机实测（iPhone 12）**：
+
+| 维度 | 改进 |
+|---|---|
+| 单节点更新 | **p50 0.121ms**（行级失效路径）/ 3.62ms（粗粒度全表触发）——§10 目标 ≤3ms **已达标** |
+| 更新载荷 | **45 字节**（协议 V2「池按需」；此前每条消息全量重发池 ⇒ 8964 字节） |
+| 结构变更（增/删/插入） | 336KB→**56KB** · 280KB→**526B** · 308KB→**28KB** |
+| 文本变更 | 281KB→**15KB** |
+| 整树重排 relayout | **17.16ms → 1.52ms**（持久 taffy 树；度量调用 6003→0） |
+| 长列表视口裁剪（I5） | 指令 **16001 → 1592（↓90.1%）**（随视口恒定，而非随内容增长） |
+
+**公开接口**（可从包入口直接引用，无需内部路径）：
+
+```ts
+import { buildLayoutTemplate, buildVaporSubscriptions } from '@proteus-vue/compiler'
+import { instantiateTemplate, SlotRuntime, VaporRuntime, ListRegistry } from '@proteus-vue/slot-runtime'
+
+const { template } = buildLayoutTemplate(sfc, 'app.vue')      // 模板 → 静态结构 + 槽位
+const { table } = buildVaporSubscriptions(sfc, 'app.vue')     // 响应式源 → 槽位订阅表
+const inst = instantiateTemplate(template, { viewport, read, table, registry })  // + 数据 → 节点树
+```
+
+**可复现验收**：`pnpm check:vapor-perf`（性能棘轮，已接 CI——两层判据：性能上限 + 优化路径生效证明）· `proteus explain --vapor <file>`（逐槽位 L1/L0 分层与依赖图）。
+
+★**诚实边界**：L1 覆盖率 **77.8% 是单个演示页**的读数（非全局）；真机绝对读数受热降频影响（**比值可信、绝对值不跨轮比**）；部分 opcode（`INSERT_BLOCK`/`MOVE_NODE`/`CALL_COMPONENT_UPDATE`）仍 unsupported 但**如实上报**不静默；虚拟化下 `splice` **显式拒绝**（层未全量物化，宁可拒绝不可静默错序）。详见 [Vapor 诚实边界](docs/proteus-vapor-honest-boundaries.md)。
+
 
 ## 对标矩阵（核心差异）
 
@@ -124,8 +154,9 @@ p-fluid / p-grid / p-stack / p-fit 柔性布局——把 iOS `UICollectionView` 
 
 ```
 ┌─ 应用层（业务）         标准 Vue SFC / 路由 / 状态 / 页面
-├─ 语义层（框架核心）     p-* 原语 / 183 原语 SSOT / Capability Hook / Fluid / Adaptive / Glass
+├─ 语义层（框架核心）     p-* 原语 / 184 原语 SSOT / Capability Hook / Fluid / Adaptive / Glass
 ├─ 编译层                Compiler + Plugin API + CompilerBackend SPI（Node / Rust / WASM）
+├─ 更新层（Vapor）        编译期响应式转换 → 槽位直写 → 二进制指令流（不重建 VDOM、不 diff）
 ├─ 渲染层                RenderBackend SPI（VueDom / Native / Flutter / Skia / Headless）+ Dispatcher 热切换
 ├─ 宿主层                HostRuntime SPI + 六容器策略 + 所有权/借用检查 + ExecutionCarrier（JSI/AOT）
 └─ 能力层                NativeBackend SPI（规划）+ Capability Hook 81（iOS / Android / Harmony / Web / MP）
@@ -214,7 +245,7 @@ beforeEach((to, from) => to.meta?.requiresAuth ? !!getToken() : true)
 ```
 proteus/
 ├── proteus.config.ts               # 框架统一配置（平台 / 路由 / 转场 / 规则覆盖 / compiler.backend）
-├── packages/                       # 38 个 @proteus-vue/* workspace 包
+├── packages/                       # 43 个 @proteus-vue/* workspace 包
 │   ├── compiler/                   #   编译引擎 + 规则注册表（69 条 AI 说明书 + apply 分派层）
 │   ├── compiler-backend/           #   CompilerIR 契约 + NodeBackend + 双端等价 Golden
 │   ├── compiler-backend-rust/      #   Rust 编译后端（cargo crate proteus-cc-rust → 同一 CompilerIR）
@@ -222,7 +253,7 @@ proteus/
 │   ├── render-backend/             #   渲染 SPI + 五后端 + 混合渲染 + 容器/所有权/宿主层（G-27/41/42/43）
 │   ├── compat-miniprogram/         #   wx 桥 + migrate codemod（Layer 1 兼容层，G-31 B6）
 │   ├── component-ir/ contracts/ types/ shared/    # C-IR schema / 契约 / 全局类型 / 公共层
-│   ├── built-in-components/        #   76 个语义组件（183 原语 SSOT）
+│   ├── built-in-components/        #   77 个语义组件（184 原语 SSOT）
 │   ├── fluid/ desktop/ gesture/    #   G-22 柔性布局 / G-24 桌面原语 / 手势识别器
 │   ├── api/ capabilities/ security/ #  Capability Hook 81 / Adapter Registry / 安全
 │   ├── router/ runtime/ module/    #   路由 / setData 桥接 / 模块化
@@ -231,7 +262,7 @@ proteus/
 │   ├── agent/ mcp/ docs/ test-ir/ test-core/      # Agent Kit / MCP Server / 文档引擎 / 测试 IR / 测试核心
 │   ├── dev-host/                   #   调试基座即宿主（G-45：Install-Once Host + 动态后端装载 + pending 回放）
 │   └── cli/ create-proteus/        #   CLI（build/explain/audit/conformance/migrate）/ 一键工程
-├── docs/                           # 77 份 plan 文档（G-01~G-60 连续 + 规约/方法论/白皮书）+ board-inventory
+├── docs/                           # 85 份 plan 文档（G-01~G-60 连续 + 规约/方法论/白皮书）+ board-inventory
 ├── examples/                       # 示例应用（20 页能力矩阵活文档 + 文档引擎 demo）
 ├── tests/                          # 1980 单测 / 185 文件 + Web e2e 18 例
 ├── .github/workflows/              # CI：test / vue-tsc / 双端构建 / 独立包构建 / e2e / consistency
@@ -244,7 +275,7 @@ proteus/
 npm test                # 1980 个单测 / 185 文件（compiler / render-backend / compiler-backend / 容器 / 所有权 / dev-host / conformance / …）
 npm run test:e2e:web    # Web e2e 18 例（Playwright：基础流 + 关键路径 + 渲染后端 demo）
 npm run verify          # test + build:web + build:mp 一键全过
-npm run check:pkg       # 38 包依赖一致性 0 error
+npm run check:pkg       # 43 包依赖一致性 0 error
 npm run proteus -- explain <vue-file | rule-id>     # 决策 trace / AI 说明书
 npm run proteus -- conformance --repo .             # 严禁 fork 仓库治理扫描
 ```
@@ -255,7 +286,8 @@ npm run proteus -- conformance --repo .             # 严禁 fork 仓库治理�
 |---|---|
 | [PROTEUS-METHODOLOGY](docs/proteus-methodology-plan/PROTEUS-METHODOLOGY.md) | 方法论哲学：统一语义收敛、五支柱、Tier 模型（onboarding 第一课） |
 | [定位 v3](docs/proteus-positioning-v3.md) | 对外定位：一句话定位 + 杀手特性详解 + 对标矩阵 + 对外话术 |
-| [架构全景](docs/board-inventory.md) | 六层分层 + 双路线 + 77 份 plan 文档状态总表（单一权威索引） |
+| [架构全景](docs/board-inventory.md) | 六层分层 + 双路线 + 85 份 plan 文档状态总表（单一权威索引） |
+| [Vapor 诚实边界](docs/proteus-vapor-honest-boundaries.md) | Vapor 更新编译器的**已知边界与 38 条实测纪律**（读它比读方案更接近真相） |
 | [Skyline 踩坑总账](docs/skyline-pitfalls.md) | 微信 Skyline 适配全部坑（S1-S49：症状/根因/处置/实测依据 + 已落成防护） |
 | [weui 组件规范参考](docs/weui-spec-reference.md) | 自绘 `p-*` 组件的视觉基准（从基础库 app.asar 提取的权威规格：checkbox/radio/switch/button） |
 | [规约](docs/proteus-architecture.md) | 原则 #0-#13 + 铁律总表 + 严格规则（真理来源） |
@@ -264,7 +296,7 @@ npm run proteus -- conformance --repo .             # 严禁 fork 仓库治理�
 
 ## 开发状态与路线图
 
-- **已落地**（41 包 / 3441 单测全绿 / 双端构建通过）：语义 IR + 双 SPI 定案（#290）→ G-27 渲染后端 B1-B6（五后端 + 混合渲染）→ G-31/G-32 语义 SSOT（183 原语 + 76 组件 + 81 Hook）→ G-29/G-38 编译双后端（Node/Rust 等价门禁 + SPI 冻结）→ G-41/42/43 宿主层（36 组合矩阵 + 六容器 + 所有权/借用检查）→ G-36 AI 基建（MCP / Agent Kit / Skill / 护栏）→ G-24 桌面原语 B1-B4 → G-44 测试 IR B1 → G-45 调试基座 B1-B3a（Install-Once Host：动态后端装载 + pending 回放 + 推送协议 + MITM 完整性门禁，打破自定义基座循环）→ 文档引擎（Markdown→IR→双端渲染）
+- **已落地**（43 包 / 3881 单测全绿 / 双端构建通过）：语义 IR + 双 SPI 定案（#290）→ G-27 渲染后端 B1-B6（五后端 + 混合渲染）→ G-31/G-32 语义 SSOT（184 原语 + 77 组件 + 81 Hook）→ G-29/G-38 编译双后端（Node/Rust 等价门禁 + SPI 冻结）→ G-41/42/43 宿主层（36 组合矩阵 + 六容器 + 所有权/借用检查）→ G-36 AI 基建（MCP / Agent Kit / Skill / 护栏）→ G-24 桌面原语 B1-B4 → G-44 测试 IR B1 → G-45 调试基座 B1-B3a（Install-Once Host：动态后端装载 + pending 回放 + 推送协议 + MITM 完整性门禁，打破自定义基座循环）→ 文档引擎（Markdown→IR→双端渲染）
 - **进行中 / 规划**：G-38 B3 Rust native 深化（oxc/swc + napi-rs）与 B4 WASM Playground、G-28 NativeBackend 实现（99% 零原生）、G-39/G-40 宿主运行时与执行载体实现、**G-46~G-52 七 plan 规划入库（2026-09 批次：宿主级资源池 / 组合一致性 / 兼容式小程序运行容器 / 进程级沙箱 / 开发者平台 / 验证执行 runner / 跨设备一致性——文档规划，B 批次待启）**、G-25 全终端（车机/TV/手表）、G-30 任意端接入、npm 发布（changesets 就绪）——完整分里程碑路线见 [roadmap](docs/roadmap.md) 与 [board-inventory](docs/board-inventory.md)
 
 ## 开源协议
@@ -283,4 +315,4 @@ Proteus 使用 [Apache-2.0](LICENSE) 协议：宽松可商用（与 MIT 同等�
 
 ---
 
-**文档版本**：v3.1（38 包；G-45 调试基座 B1-B3a：三态生命周期 + ABI 冻结 + 推送协议）· **适用框架**：Vue 3.4+ / Vite 5+ / TypeScript 5.4+ / 微信基础库 2.29.2+
+**文档版本**：v3.2（43 包；Vapor 更新编译器 V0~V4 已落地 + G-45 调试基座 B1-B3a）· **适用框架**：Vue 3.4+ / Vite 5+ / TypeScript 5.4+ / 微信基础库 2.29.2+

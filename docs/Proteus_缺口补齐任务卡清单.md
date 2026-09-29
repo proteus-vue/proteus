@@ -14,7 +14,7 @@
 
 | 卡 | 核对结论 | 逐条依据（可点开验证） |
 |---|---|---|
-| **V1** Vapor 产品化 | 🟡 **部分达标（3/5）** | ✅ 模块可独立引用（`packages/compiler/src/vapor/` 已导出）· ✅ **4001 重排 ≤0.08ms 可复现**（`pnpm check:vapor-perf`，已接 CI）· ✅ 三层嵌套在单测（`tests/vapor-list-e2e.test.ts` 4 处）· ❌ **README 无独立章节**（`grep -c vapor README.md` = 0）· ✅ 单测全绿（**3881**，非 3441） |
+| **V1** Vapor 产品化 | ✅ **5/5 全达标（2026-09-29）** | ✅ 模块可独立引用（`packages/compiler/src/vapor/` 已导出）· ✅ **4001 重排 ≤0.08ms 可复现**（`pnpm check:vapor-perf`，已接 CI）· ✅ 三层嵌套在单测（`tests/vapor-list-e2e.test.ts` 4 处）· ❌ **README 无独立章节**（`grep -c vapor README.md` = 0）· ✅ 单测全绿（**3881**，非 3441） |
 | **I1** 指令集规格化 | ❌ **未达标** | 无公开规格表（`docs/` 内无 opcode 规格文档）· `ir_version` 有机制但**未用于指令集协商** |
 | **I2** 舍入时机统一 | ❌ **未达标** | 主方案 §5.5 仍为"**待 M2 真机数据**"（`04-batches.md` 检查项未勾）；无三端一致的舍入实现 |
 | **I3** paint-hint 编码进指令 | 🟡 **部分达标（2/3）** | ✅ 指令携带 hint（`RenderCmd.hint`，`layout-core/src/render-cmd.ts:58`）· ✅ 编译期推导、运行时零判断（`component-ir/src/pnode-style.ts:496`：`isMonochrome`/`isPureBackground`/`shareableContent`）· ❌ **iOS 内存增量复测未做**（该卡的风险正指向"平台层运行时猜 ⇒ +78% 内存复发"，而复测是验证 hint 真的被平台用于 backing store 策略的**唯一判据**） |
@@ -49,7 +49,7 @@ I8 卡写着「**先做 I6 评估，明确指令流体积是否构成瓶颈，�
 
 ### 第一批 · P0（并行启动）
 
-- [ ] **V1** Vapor 成果产品化 — ★ 最高性价比 🟡 **3/5**（缺 README 章节）
+- [x] **V1** Vapor 成果产品化 — ★ 最高性价比 ✅ **5/5 全达标（2026-09-29）**
 - [ ] **I1** 指令集规格化与版本化 ❌ **未达标**（无规格表）
 - [ ] **I2** 舍入时机统一 ❌ **未达标**（主方案仍"待真机数据"）
 - [x] **I3** paint-hint 编码进指令 ✅ **2/3**（指令带 hint ✓ / 编译期推导 ✓ / iOS 内存复测 ❌）
@@ -112,7 +112,7 @@ I8 卡写着「**先做 I6 评估，明确指令流体积是否构成瓶颈，�
 - [x] 模块可独立引用 —— ✅ `packages/compiler/src/vapor/`（`buildLayoutTemplate` / `buildVaporSubscriptions` 等已导出）
 - [x] **4001 全量重排 ≤ 0.08ms 可复现** —— ✅ `pnpm check:vapor-perf`（**已接 CI + verify 链**，非口头）
 - [x] v-for 嵌套三层用例纳入单测 —— ✅ `tests/vapor-list-e2e.test.ts`（4 处三层嵌套断言）
-- [ ] README 有独立章节 —— ❌ **未做**（`grep -c vapor README.md` = 0）
+- [x] README 有独立章节 —— ✅ **已补（2026-09-29）**：杀手特性 ⑫「Vapor 更新编译器」+ 架构分层加「更新层」+ 文档导航加「Vapor 诚实边界」；含**公开接口示例**（可从包入口引用的 5 个符号，已实测可 import）+ **可复现验收入口**（`check:vapor-perf`）+ 真机数字表 + 诚实边界
 - [x] 既有单测全绿 —— ✅ **3881/3881**（324 文件；卡内 3441 为旧值）
 
 ---
