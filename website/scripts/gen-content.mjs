@@ -43,6 +43,8 @@ function writeDoc(p, content) {
 }
 
 // —— component-ir SSOT（tsx 直接 import TS 源） ——
+// ★2026-09-30：能力分域表也走同一 SSOT（原为本文件内部常量——那份副本已删除）
+import { CAPABILITY_CATEGORY, CAPABILITY_CATEGORY_ORDER } from '../../packages/component-ir/src/capability-domains.ts'
 async function loadIr() {
   const mod = await import(pathToFileURL(path.join(ROOT, 'packages', 'component-ir', 'src', 'index.ts')).href)
   return mod
@@ -57,19 +59,12 @@ async function loadEnds() {
 const STATUS_MARK = { '✅ 已落地': '✅', '🟡 部分落地': '🟡', '📋 规划已入库': '📋', '⬜ 未开始': '⬜' }
 const MP_STATUS_LABEL = { ok: 'L1 原语', compat: 'L2 兼容层', private: '平台私有', missing: '缺失' }
 
-// ★能力侧栏分组：50 能力按 9 类归组（生成器侧分类表，与组件 EXTRA_KIND「分类先行」同模式）
-const CAP_CATEGORY = {
-  fetch: '网络与通信', websocket: '网络与通信', 'socket-task': '网络与通信', socket: '网络与通信', 'local-service': '网络与通信', upload: '网络与通信', download: '网络与通信', 'data-channel': '网络与通信', bluetooth: '网络与通信', nfc: '网络与通信',
-  device: '设备与系统', screen: '设备与系统', battery: '设备与系统', orientation: '设备与系统', brightness: '设备与系统', sensor: '设备与系统', vibrate: '设备与系统', network: '设备与系统', keyboard: '设备与系统', clipboard: '设备与系统', 'element-query': '设备与系统', intersection: '设备与系统', 'media-query': '设备与系统', 'screen-capture': '设备与系统', 'cache-manager': '设备与系统', ar: '设备与系统', beacon: '设备与系统', 'device-capability': '设备与系统',
-  storage: '存储与文件', cookie: '存储与文件', 'file-system': '存储与文件', archive: '存储与文件',
-  location: '位置与地图', map: '位置与地图',
-  camera: '媒体与扫码', microphone: '媒体与扫码', live: '媒体与扫码', 'qr-code': '媒体与扫码', canvas: '媒体与扫码', video: '媒体与扫码', audio: '媒体与扫码', 'live-pusher': '媒体与扫码', 'image-edit': '媒体与扫码', 'media-processing': '媒体与扫码',
-  login: '账号与支付', auth: '账号与支付', biometric: '账号与支付', 'face-id': '账号与支付', permission: '账号与支付', payment: '账号与支付', 'in-app-purchase': '账号与支付', privacy: '账号与支付',
-  notification: '通知与分享', share: '通知与分享', shortcut: '通知与分享', sms: '通知与分享', contact: '通知与分享', 'phone-call': '通知与分享', calendar: '通知与分享', ad: '通知与分享', poster: '通知与分享', translation: '通知与分享',
-  'app-lifecycle': '应用与生命周期', 'page-lifecycle': '应用与生命周期', background: '应用与生命周期', 'mini-program': '应用与生命周期', embedded: '应用与生命周期', extension: '应用与生命周期', preload: '应用与生命周期', idle: '应用与生命周期', window: '应用与生命周期', 'navigation-guard': '应用与生命周期',
-  analytics: '可观测与调试', log: '可观测与调试', performance: '可观测与调试',
-}
-const CAP_CAT_ORDER = ['网络与通信', '设备与系统', '存储与文件', '位置与地图', '媒体与扫码', '账号与支付', '通知与分享', '应用与生命周期', '可观测与调试', '其他']
+// ★能力侧栏分组：按 10 类归组——★2026-09-30 已抽为 **component-ir 的共享事实源**
+//   （`CAPABILITY_CATEGORY` / `CAPABILITY_CATEGORY_ORDER`）：原表是本文件的内部常量（75 条、未导出），
+//   而 NC0《能力实现优先级表》需要**同一分组** ⇒ 各自维护即"第 N 份手写副本"（本仓纪律禁止）。
+//   同时补齐了 7 个未映射项（update/album/worker/address/wifi/we-run/webassembly —— 原落「其他」兜底）。
+const CAP_CATEGORY = CAPABILITY_CATEGORY
+const CAP_CAT_ORDER = [...CAPABILITY_CATEGORY_ORDER]
 
 // 兼容进度表（uni-app 式全端对照）：端列/状态来自 ENDS 注册表，说明 = 引擎（注册表） + 逐项注记
 function compatSection(rows, footer) {

@@ -1,7 +1,7 @@
 ---
 title: useImageEdit（capability.image-edit）
 group: 媒体与扫码
-order: 4009
+order: 4010
 ---
 
 # useImageEdit

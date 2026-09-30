@@ -1,7 +1,7 @@
 ---
 title: useMediaProcessing (capability.media-processing)
 group: 媒体与扫码
-order: 4010
+order: 4011
 ---
 
 # useMediaProcessing

@@ -1,7 +1,7 @@
 ---
 title: useWeRun (capability.we-run)
-group: 其他
-order: 9006
+group: 设备与系统
+order: 1011
 ---
 
 # useWeRun

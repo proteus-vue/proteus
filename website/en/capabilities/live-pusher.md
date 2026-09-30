@@ -1,7 +1,7 @@
 ---
 title: useLivePusher (capability.live-pusher)
 group: 媒体与扫码
-order: 4008
+order: 4009
 ---
 
 # useLivePusher

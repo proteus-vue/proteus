@@ -1,7 +1,7 @@
 ---
 title: useDeviceCapability（capability.device-capability）
 group: 设备与系统
-order: 1018
+order: 1019
 ---
 
 # useDeviceCapability

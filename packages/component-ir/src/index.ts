@@ -14,6 +14,9 @@ export type { ComponentConformanceResult, ControlMismatch, SemanticTree, Coverag
 // ★G-32 B1：完整语义原语清单 SSOT（128——it 唯一事实源）
 export { PRIMITIVE_CATALOG, componentPrimitives, implementedPrimitives, primitiveById, primitiveBySemantic, primitiveByTag, checkPrimitiveCatalog } from './primitives'
 export type { PrimitiveDef, PrimitiveKind, PrimitiveStatus } from './primitives'
+// ★能力分域表（唯一事实源）：官网能力页分组 + NC0 优先级表共用（2026-09-30 从官网生成器抽出）
+export { CAPABILITY_CATEGORY, CAPABILITY_CATEGORY_ORDER, capabilityDomainOf, auditCapabilityDomains } from './capability-domains'
+export type { CapabilityDomain } from './capability-domains'
 // ★G-32 B1：audit:coverage 工具 + 闭环一致性门禁（G-32.1 小程序能力 100%）
 export { MP_MAPPING_MATRIX, auditMiniprogramCoverage, auditMatrixReferences, auditCatalogConsistency, formatCoverageReport } from './audit'
 export type { MatrixRefIssue } from './audit'

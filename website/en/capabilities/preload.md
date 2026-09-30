@@ -1,7 +1,7 @@
 ---
 title: usePreload (capability.preload)
 group: 应用与生命周期
-order: 7007
+order: 7009
 ---
 
 # usePreload

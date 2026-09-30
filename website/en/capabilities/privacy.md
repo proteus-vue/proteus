@@ -1,7 +1,7 @@
 ---
 title: usePrivacy (capability.privacy)
 group: 账号与支付
-order: 5008
+order: 5009
 ---
 
 # usePrivacy

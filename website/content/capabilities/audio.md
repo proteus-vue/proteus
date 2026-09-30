@@ -1,7 +1,7 @@
 ---
 title: useAudio（capability.audio）
 group: 媒体与扫码
-order: 4007
+order: 4008
 ---
 
 # useAudio

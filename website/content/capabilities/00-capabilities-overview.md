@@ -8,7 +8,7 @@ order: 0
 
 > 82 个能力原语——SSOT = `PRIMITIVE_CATALOG`（capability kind）+ `CapabilityHooks` 接口。**Hook 全部已实现**（API 就绪，双端桥/降级见各页兼容进度表）
 
-## 网络与通信（10）
+## 网络与通信（11）
 
 | # | 能力 | API | 返回 | 小程序等价 |
 |---|---|---|---|---|
@@ -20,10 +20,11 @@ order: 0
 | C31 | [capability.data-channel](/docs/capability/data-channel) | `useDataChannel()` | `Channel` | wx...（直播/实时） |
 | C36 | [capability.bluetooth](/docs/capability/bluetooth) | `useBluetooth()` | `BluetoothAPI` | wx.openBluetoothAdapter |
 | C37 | [capability.nfc](/docs/capability/nfc) | `useNFC()` | `NFCAPI` | wx.getHCEState |
+| C55 | [capability.wifi](/docs/capability/wifi) | `useWifi()` | `WifiAPI` | wx.getConnectedWifi/getWifiList/connectWifi |
 | C69 | [capability.socket](/docs/capability/socket) | `useSocket()` | `UDPSocketHandle / TCPSocketHandle` | wx.createUDPSocket/createTCPSocket |
 | C78 | [capability.local-service](/docs/capability/local-service) | `useLocalService()` | `LocalServiceAPI` | wx.onLocalServiceFound/Lost/ResolveFail/DiscoveryStop |
 
-## 设备与系统（18）
+## 设备与系统（19）
 
 | # | 能力 | API | 返回 | 小程序等价 |
 |---|---|---|---|---|
@@ -37,6 +38,7 @@ order: 0
 | C12 | [capability.orientation](/docs/capability/orientation) | `useOrientation()` | `Orientation` | wx.onDeviceOrientationChange |
 | C13 | [capability.brightness](/docs/capability/brightness) | `useBrightness()` | `Result<void>` | wx.setScreenBrightness |
 | C14 | [capability.keyboard](/docs/capability/keyboard) | `useKeyboard()` | `KeyboardInfo` | wx.onKeyboardHeightChange |
+| C56 | [capability.we-run](/docs/capability/we-run) | `useWeRun()` | `WeRunData` | wx.getWeRunData |
 | C58 | [capability.element-query](/docs/capability/element-query) | `useElement()` | `ElementQuery` | wx.createSelectorQuery |
 | C59 | [capability.intersection](/docs/capability/intersection) | `useIntersection()` | `IntersectionHandle` | wx.createIntersectionObserver |
 | C60 | [capability.media-query](/docs/capability/media-query) | `useMediaQuery()` | `MediaQueryObserver` | wx.createMediaQueryObserver |
@@ -62,7 +64,7 @@ order: 0
 | C3 | [capability.location](/docs/capability/location) | `useLocation()` | `Result<Coords>` | wx.getLocation |
 | C4 | [capability.map](/docs/capability/map) | `useMap()` | `MapController` | wx.createMapContext |
 
-## 媒体与扫码（10）
+## 媒体与扫码（11）
 
 | # | 能力 | API | 返回 | 小程序等价 |
 |---|---|---|---|---|
@@ -70,6 +72,7 @@ order: 0
 | C2 | [capability.microphone](/docs/capability/microphone) | `useMicrophone()` | `Result<AudioBuffer>` | RecorderManager |
 | C42 | [capability.qr-code](/docs/capability/qr-code) | `useQRCode()` | `Result<string>` | wx.scanCode + canvas |
 | C49 | [capability.live](/docs/capability/live) | `useLive()` | `LiveRoom` | wx...（直播组件） |
+| C52 | [capability.album](/docs/capability/album) | `useAlbum()` | `AlbumAPI` | wx.chooseMedia/saveImageToPhotosAlbum/previewMedia |
 | C57 | [capability.canvas](/docs/capability/canvas) | `useCanvas()` | `CanvasController` | wx.createCanvasContext/canvasToTempFilePath/createOffscreenCanvas |
 | C61 | [capability.video](/docs/capability/video) | `useVideo()` | `VideoController` | wx.createVideoContext |
 | C62 | [capability.audio](/docs/capability/audio) | `useAudio()` | `AudioController` | wx.createInnerAudioContext |
@@ -77,7 +80,7 @@ order: 0
 | C68 | [capability.image-edit](/docs/capability/image-edit) | `useImageEdit()` | `ImageEditAPI` | wx.cropImage/editImage |
 | C70 | [capability.media-processing](/docs/capability/media-processing) | `useMediaProcessing()` | `MediaProcessingAPI` | wx.createMediaContainer/createVideoDecoder/createMediaAudioPlayer |
 
-## 账号与支付（8）
+## 账号与支付（9）
 
 | # | 能力 | API | 返回 | 小程序等价 |
 |---|---|---|---|---|
@@ -88,6 +91,7 @@ order: 0
 | C40 | [capability.payment](/docs/capability/payment) | `usePayment()` | `Result<PayResult>` | wx.requestPayment |
 | C41 | [capability.login](/docs/capability/login) | `useLogin()` | `Result<Token>` | wx.login |
 | C46 | [capability.in-app-purchase](/docs/capability/in-app-purchase) | `useInAppPurchase()` | `Result<Receipt>` | wx.requestPayment 扩展 |
+| C54 | [capability.address](/docs/capability/address) | `useAddress()` | `ShippingAddress` | wx.chooseAddress |
 | C65 | [capability.privacy](/docs/capability/privacy) | `usePrivacy()` | `PrivacyAPI` | wx.getPrivacySetting/openPrivacyContract/requirePrivacyAuthorize |
 
 ## 通知与分享（10）
@@ -105,7 +109,7 @@ order: 0
 | C79 | [capability.translation](/docs/capability/translation) | `useTranslation()` | `TranslationAPI` | wx.onUserTriggerTranslation/onUserOffTranslation |
 | C80 | [capability.poster](/docs/capability/poster) | `usePoster()` | `PosterAPI` | wx.onGeneratePoster |
 
-## 应用与生命周期（10）
+## 应用与生命周期（13）
 
 | # | 能力 | API | 返回 | 小程序等价 |
 |---|---|---|---|---|
@@ -115,10 +119,13 @@ order: 0
 | C47 | [capability.mini-program](/docs/capability/mini-program) | `useMiniProgram()` | `MPContext` | wx.navigateToMiniProgram |
 | C48 | [capability.embedded](/docs/capability/embedded) | `useEmbedded()` | `HostContext` | 无（被宿主嵌入） |
 | C50 | [capability.extension](/docs/capability/extension) | `useExtension()` | `ExtensionAPI` | 无（插件/扩展点 G-21） |
+| C51 | [capability.update](/docs/capability/update) | `useUpdate()` | `UpdateManagerAPI` | wx.getUpdateManager |
+| C53 | [capability.worker](/docs/capability/worker) | `useWorker()` | `WorkerHandle` | wx.createWorker |
 | C67 | [capability.preload](/docs/capability/preload) | `usePreload()` | `PreloadAPI` | wx.preloadAssets/preloadSkylineView/preloadWebview/preDownloadSubpackage |
 | C73 | [capability.idle](/docs/capability/idle) | `useIdle()` | `IdleAPI` | wx.requestIdleCallback/cancelIdleCallback |
 | C74 | [capability.window](/docs/capability/window) | `useWindow()` | `WindowAPI` | wx.setWindowSize |
 | C75 | [capability.navigation-guard](/docs/capability/navigation-guard) | `useNavigationGuard()` | `NavigationGuardAPI` | wx.enableAlertBeforeUnload/disableAlertBeforeUnload |
+| C82 | [capability.webassembly](/docs/capability/webassembly) | `useWebAssembly()` | `WebAssemblyAPI` | WXWebAssembly.instantiate（官方文档 performance/wasm） |
 
 ## 可观测与调试（3）
 
@@ -127,15 +134,3 @@ order: 0
 | C34 | [capability.analytics](/docs/capability/analytics) | `useAnalytics()` | `TrackAPI` | wx.reportEvent |
 | C35 | [capability.log](/docs/capability/log) | `useLog()` | `Logger` | console + 上报 |
 | C66 | [capability.performance](/docs/capability/performance) | `usePerformance()` | `PerformanceAPI` | wx.getPerformance/reportPerformance |
-
-## 其他（7）
-
-| # | 能力 | API | 返回 | 小程序等价 |
-|---|---|---|---|---|
-| C51 | [capability.update](/docs/capability/update) | `useUpdate()` | `UpdateManagerAPI` | wx.getUpdateManager |
-| C52 | [capability.album](/docs/capability/album) | `useAlbum()` | `AlbumAPI` | wx.chooseMedia/saveImageToPhotosAlbum/previewMedia |
-| C53 | [capability.worker](/docs/capability/worker) | `useWorker()` | `WorkerHandle` | wx.createWorker |
-| C54 | [capability.address](/docs/capability/address) | `useAddress()` | `ShippingAddress` | wx.chooseAddress |
-| C55 | [capability.wifi](/docs/capability/wifi) | `useWifi()` | `WifiAPI` | wx.getConnectedWifi/getWifiList/connectWifi |
-| C56 | [capability.we-run](/docs/capability/we-run) | `useWeRun()` | `WeRunData` | wx.getWeRunData |
-| C82 | [capability.webassembly](/docs/capability/webassembly) | `useWebAssembly()` | `WebAssemblyAPI` | WXWebAssembly.instantiate（官方文档 performance/wasm） |

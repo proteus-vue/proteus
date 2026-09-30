@@ -1,7 +1,7 @@
 ---
 title: useNavigationGuard (capability.navigation-guard)
 group: 应用与生命周期
-order: 7010
+order: 7012
 ---
 
 # useNavigationGuard

@@ -45,6 +45,9 @@ jobs:
       - name: 盲等门禁（★用户红线：脚本内 sleep 一律禁止——要么 App/被测对象主动上报，要么 wait_for.sh 条件等待）
         run: node scripts/check-no-blind-wait.mjs
 
+      - name: 能力优先级表门禁（NC0：能力清单 × 语料需求 × 官方承接 ⇒ 表与源一致；分域 0 缺口）
+        run: node scripts/gen-capability-priority.mjs --check
+
       # ★★2026-09-29 修正**步骤顺序**（此前必然红）：`tests/vapor-v3-e2e.test.ts` 需要
       #   `target/debug/examples/ops_roundtrip`，而构建它的步骤排在 `pnpm test` **之后**
       #   ⇒ CI 上四条端到端用例报 `ENOENT`（看起来像链路坏了，实际是装置没建）。

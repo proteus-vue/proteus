@@ -1,7 +1,7 @@
 ---
 title: useIntersection（capability.intersection）
 group: 设备与系统
-order: 1012
+order: 1013
 ---
 
 # useIntersection

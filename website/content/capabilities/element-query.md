@@ -1,7 +1,7 @@
 ---
 title: useElement（capability.element-query）
 group: 设备与系统
-order: 1011
+order: 1012
 ---
 
 # useElement

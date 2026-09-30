@@ -1,7 +1,7 @@
 ---
 title: useIdle (capability.idle)
 group: 应用与生命周期
-order: 7008
+order: 7010
 ---
 
 # useIdle

@@ -1,7 +1,7 @@
 ---
 title: useLocalService (capability.local-service)
 group: 网络与通信
-order: 10
+order: 11
 ---
 
 # useLocalService
