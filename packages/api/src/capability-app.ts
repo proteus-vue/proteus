@@ -223,7 +223,7 @@ export function createHostLifecycleBus(): HostLifecycleBus {
 // ══════════════════════════════════════════════════════════════════
 
 /**
- * 屏命令（**结构类型**——与 `@proteus/router` 的 `ScreenCommand` 同形；
+ * 屏命令（**结构类型**——与 `@proteus-vue/router` 的 `ScreenCommand` 同形；
  * 不 import 以免 api → router 依赖，router 是更下层）。
  */
 export interface StackScreenCommandLike {

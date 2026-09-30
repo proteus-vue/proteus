@@ -33,12 +33,12 @@ export const STATS: StatItem[] = [
   },
   {
     id: 'tests',
-    value: '3919',
+    value: '4152',
     label: '单测全绿',
     labelEn: 'unit tests green',
     // ★唯一「需跑全量」的项：门禁不重跑（代价高），由发布前手动核对——其余项均机器重算
-    source: 'pnpm test（官方门禁，排除 e2e；327 文件 / 3919 用例）',
-    sourceEn: 'pnpm test (official gate, e2e excluded; 327 files / 3919 cases)',
+    source: 'pnpm test（官方门禁，排除 e2e；337 文件 / 4152 用例）',
+    sourceEn: 'pnpm test (official gate, e2e excluded; 337 files / 4152 cases)',
   },
   {
     id: 'primitives',
@@ -50,7 +50,7 @@ export const STATS: StatItem[] = [
   },
   {
     id: 'implemented',
-    value: '69',
+    value: '72',
     label: 'implemented 语义 × 6 端',
     labelEn: 'implemented semantics × 6 ends',
     // 6 端 = vue-dom / skyline / native-ios / native-android / native-harmony / flutter；
@@ -76,7 +76,7 @@ export const STATS: StatItem[] = [
   },
   {
     id: 'conformance',
-    value: '10',
+    value: '11',
     label: 'conformance 套件入口',
     labelEn: 'conformance suite entry modules',
     // 计数规则明确化（原「8」无对应规则且与实际不符）：packages/*/src/*conformance*.ts 文件数

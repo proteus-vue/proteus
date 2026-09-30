@@ -66,6 +66,8 @@ const SEMANTIC_HEADLESS_MAP: Record<string, string> = {
   'shell.segment': 'segment',
   'shell.popover': 'popover',
   'shell.action-sheet': 'action-sheet',
+  'shell.toast': 'toast',
+  'ui.loading': 'loading',
   'ui.rich-text': 'rich-text',
   'ui.avatar': 'avatar',
   'ui.media': 'media',

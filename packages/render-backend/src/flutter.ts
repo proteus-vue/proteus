@@ -78,6 +78,8 @@ const SEMANTIC_FLUTTER_MAP: Record<string, string> = {
   'shell.segment': 'SegmentedButton',
   'shell.popover': 'showMenu',
   'shell.action-sheet': 'showModalBottomSheet',
+  'shell.toast': 'ScaffoldMessenger.showSnackBar',
+  'ui.loading': 'CircularProgressIndicator',
   'ui.rich-text': 'RichText',
   'ui.avatar': 'CircleAvatar',
   'ui.media': 'VideoPlayer',
