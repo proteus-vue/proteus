@@ -57,3 +57,6 @@ tests/.tmp-tree.json
 
 # 桩测指纹标记（本地状态：表示"当前源码指纹已通过桩测"；随源码变，不该入库）
 hosts/android/.acceptance-stub-ok
+
+# 设备控制台日志（XPC 噪音，非判据；证据在 paint-hint-summary.txt 与 JSON 读数里）
+hosts/ios/results/paint-hint-*.log

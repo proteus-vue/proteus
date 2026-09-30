@@ -42,6 +42,9 @@ jobs:
       - name: 全量 script 编译门禁（#497：examples+组件全部 .vue 一次整包编译 + js 语法校验——防 demo 逐个暴露编译器形态缺口）
         run: node scripts/check-script-compile.mjs
 
+      - name: 盲等门禁（★用户红线：脚本内 sleep 一律禁止——要么 App/被测对象主动上报，要么 wait_for.sh 条件等待）
+        run: node scripts/check-no-blind-wait.mjs
+
       # ★★2026-09-29 修正**步骤顺序**（此前必然红）：`tests/vapor-v3-e2e.test.ts` 需要
       #   `target/debug/examples/ops_roundtrip`，而构建它的步骤排在 `pnpm test` **之后**
       #   ⇒ CI 上四条端到端用例报 `ENOENT`（看起来像链路坏了，实际是装置没建）。

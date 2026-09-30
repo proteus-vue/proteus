@@ -823,10 +823,10 @@
   },
   "host_node_count" : 91,
   "host_timing_last" : {
-    "build_layers_ms" : 23.211002349853516,
-    "host_total_ms" : 24.661064147949219,
-    "layout_ms" : 0.37896633148193359,
-    "measure_ms" : 0.074028968811035156
+    "build_layers_ms" : 23.005962371826172,
+    "host_total_ms" : 24.488091468811035,
+    "layout_ms" : 0.392913818359375,
+    "measure_ms" : 0.069975852966308594
   },
   "js_js_avg_ms" : 4.4500000000000002,
   "js_ok" : true,
@@ -842,26 +842,26 @@
       "texts" : 26
     },
     "host_final_raw" : {
-      "build_layers_ms" : 23.210000000000001,
+      "build_layers_ms" : 23.010000000000002,
       "cgfont_failure" : "",
       "cgfont_fallbacks" : 0,
       "changed_rects" : 0,
       "font_family_fallbacks" : 0,
-      "host_total_ms" : 24.66,
+      "host_total_ms" : 24.489999999999998,
       "incremental" : false,
       "layer_count" : 91,
-      "layout_ms" : 0.38,
+      "layout_ms" : 0.39000000000000001,
       "measure_cache_hits" : 26,
       "measure_cache_misses" : 0,
       "measure_ms" : 0.070000000000000007,
-      "mem_mb" : 18,
-      "mem_peak_mb" : 28.699999999999999,
+      "mem_mb" : 23.399999999999999,
+      "mem_peak_mb" : 32.600000000000001,
       "node_count" : 91,
       "ok" : true,
-      "paint_hint_compact" : 57,
-      "paint_hint_disabled" : false,
-      "paint_hint_env" : "",
-      "paint_hint_generic" : 57,
+      "paint_hint_compact" : 0,
+      "paint_hint_disabled" : true,
+      "paint_hint_env" : "off",
+      "paint_hint_generic" : 0,
       "patch_count" : 0,
       "phase" : "update",
       "relayout_count" : 0,
@@ -871,26 +871,26 @@
     },
     "host_raw_by_phase" : {
       "update_grow" : {
-        "build_layers_ms" : 15.49,
+        "build_layers_ms" : 15.58,
         "cgfont_failure" : "",
         "cgfont_fallbacks" : 0,
         "changed_rects" : 0,
         "font_family_fallbacks" : 0,
-        "host_total_ms" : 19.23,
+        "host_total_ms" : 19.27,
         "incremental" : false,
         "layer_count" : 217,
-        "layout_ms" : 0.76000000000000001,
+        "layout_ms" : 0.75,
         "measure_cache_hits" : 43,
         "measure_cache_misses" : 19,
-        "measure_ms" : 0.91000000000000003,
-        "mem_mb" : 18.300000000000001,
-        "mem_peak_mb" : 17.5,
+        "measure_ms" : 0.88,
+        "mem_mb" : 19.5,
+        "mem_peak_mb" : 18.5,
         "node_count" : 217,
         "ok" : true,
-        "paint_hint_compact" : 44,
-        "paint_hint_disabled" : false,
-        "paint_hint_env" : "",
-        "paint_hint_generic" : 44,
+        "paint_hint_compact" : 0,
+        "paint_hint_disabled" : true,
+        "paint_hint_env" : "off",
+        "paint_hint_generic" : 0,
         "patch_count" : 0,
         "phase" : "update",
         "relayout_count" : 0,
@@ -900,7 +900,7 @@
       },
       "update_style" : {
         "_host_timing" : {
-          "diff_ms" : 0.63,
+          "diff_ms" : 0.59999999999999998,
           "layers_ms" : 0,
           "measure_ms" : 0.14000000000000001,
           "update_ffi_ms" : 0.029999999999999999
@@ -910,22 +910,22 @@
         "cgfont_fallbacks" : 0,
         "changed_rects" : 0,
         "font_family_fallbacks" : 0,
-        "host_total_ms" : 0.76000000000000001,
+        "host_total_ms" : 0.71999999999999997,
         "in_bytes" : 35794,
         "incremental" : true,
         "layer_count" : 217,
-        "layout_ms" : 0.70999999999999996,
+        "layout_ms" : 0.67000000000000004,
         "measure_cache_hits" : 62,
         "measure_cache_misses" : 0,
         "measure_ms" : 0.14000000000000001,
-        "mem_mb" : 28.699999999999999,
-        "mem_peak_mb" : 28.699999999999999,
+        "mem_mb" : 32.799999999999997,
+        "mem_peak_mb" : 32.600000000000001,
         "node_count" : 217,
         "ok" : true,
-        "paint_hint_compact" : 44,
-        "paint_hint_disabled" : false,
-        "paint_hint_env" : "",
-        "paint_hint_generic" : 44,
+        "paint_hint_compact" : 0,
+        "paint_hint_disabled" : true,
+        "paint_hint_env" : "off",
+        "paint_hint_generic" : 0,
         "parse_ms" : 0.75,
         "patch_count" : 0,
         "path" : "update",
@@ -938,7 +938,7 @@
     "js_only_throughput" : {
       "avg_ms" : 4.4500000000000002,
       "iterations" : 40,
-      "max_ms" : 8,
+      "max_ms" : 7,
       "note" : "★每次 = Vue 响应式变更 → 重渲染 → diff\/patch → 树拍平 → 数值折叠（**不含**宿主调用与 JSON 序列化）"
     },
     "notes" : [
@@ -953,12 +953,12 @@
     },
     "phases" : {
       "mount" : {
-        "host_ms" : 24,
+        "host_ms" : 19,
         "node_count" : 91,
         "patch_count" : 152,
         "serialize_ms" : 0,
-        "to_request_ms" : 2,
-        "total_ms" : 30,
+        "to_request_ms" : 1,
+        "total_ms" : 24,
         "vue_ms" : 4
       },
       "update_grow" : {
@@ -967,23 +967,23 @@
         "patch_count" : 280,
         "serialize_ms" : 0,
         "to_request_ms" : 3,
-        "total_ms" : 29,
-        "vue_ms" : 5
+        "total_ms" : 30,
+        "vue_ms" : 6
       },
       "update_style" : {
-        "host_ms" : 7,
+        "host_ms" : 6,
         "node_count" : 217,
         "patch_count" : 153,
         "serialize_ms" : 0,
         "to_request_ms" : 3,
-        "total_ms" : 14,
+        "total_ms" : 13,
         "vue_ms" : 4
       }
     },
     "runtime" : "JavaScriptCore（系统自带，与 iOS 竖切同一运行时）",
     "snapshot" : {
       "ok" : true,
-      "path" : "\/var\/mobile\/Containers\/Data\/Application\/2B4C0BC7-EB93-42C9-BA77-11A07FB9EF1F\/Documents\/selfdraw-final.png"
+      "path" : "\/var\/mobile\/Containers\/Data\/Application\/179AF697-8729-49B3-837E-3DD7F52EBF4F\/Documents\/selfdraw-final.png"
     },
     "unknown_keys" : {
 
@@ -994,8 +994,8 @@
     }
   },
   "launch_diag" : {
-    "bootstrap_ms" : 111.61,
-    "first_frame_ms" : 126.94,
+    "bootstrap_ms" : 39.159999999999997,
+    "first_frame_ms" : 46.390000000000001,
     "first_frame_source" : "kernel:p_starttime",
     "forced_style" : "Dark",
     "interface_style" : "Dark",
@@ -1643,6 +1643,6 @@
       "y" : 0
     }
   },
-  "run_ts" : 1790731338.369971,
-  "tree_hash" : "af7d1615"
+  "run_ts" : 1790731492.328495,
+  "tree_hash" : "d791966c"
 }

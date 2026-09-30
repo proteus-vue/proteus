@@ -48,7 +48,36 @@
   只有**可复制代码块**里的引用才真正有害。
 · 破坏性验证：恢复 `p-card` → 红并精确报 `03-fluid-grid.md:31`；还原 → 575 md 全过。
 
-## 当前状态速览（最近一次更新：**2026-09-29 深夜 · Android 端到端 + C1/C2 收官 + I3 iOS 接线**）★新会话以此为准
+## 当前状态速览（最近一次更新：**2026-09-30 · 禁止任何盲等红线升格 + iOS 事件驱动链路 + I3 收官**）★新会话以此为准
+
+### ★★★2026-09-30 · 红线升格：禁止**任何**盲等（sleep/timeout 全禁）+ iOS 链路事件驱动 + I3 收官
+
+> 用户原话：「**禁止任何情况下的 sleep、timeout**……要么让 App 主动报告，要么有条件等待……
+> 只要有异步脚本全部异步执行，而不是让我一直干等着！！！」
+
+**① 装置与门禁（结构性修复，不是"以后注意"）**
+| 项 | 现状 | 落点 |
+|---|---|---|
+| hook `deny-sleep.mjs` | v1 只拦 `sleep ≥5s` 且**只看命令字面量** ⇒ `sleep 1/2/4` 放行、`bash x.sh` 内部盲等看不见 ⇒ **v2 全禁**（任意时长 + `timeout N` 形态；四例自测） | `scripts/hooks/deny-sleep.mjs` |
+| **新增**静态门禁 | `pnpm check:no-blind-wait`：扫全部 `.sh` 命令位 sleep（跳 heredoc/注释），白名单**唯一** = `wait_for.sh`；棘轮基线 `scripts/no-blind-wait-baseline.json`（存量 7 文件/30 处，只减不增）。★**覆盖 hook 的结构性盲区**——同源于「verify 内部再调 vitest」那次教训：门禁覆盖面必须跟着实际形态走 | `scripts/check-no-blind-wait.mjs`（接 CI + verify） |
+| **事件驱动**（首选形态） | 宿主 `PROTEUS_EXIT_AFTER_REPORT=1` ⇒ 报告落盘后**进程自退**；`devicectl/simctl launch --console` **阻塞到退出** ⇒ 返回即完成信号。**零轮询/零 sleep/零 timeout**。已改：`run-selfdraw.sh`（bench+selfdraw 双模式）、`measure-paint-hint.sh`、`run-selfdraw-sim.sh`、`run-layout-bench.sh` | 各脚本 + 两个 Swift 宿主 |
+
+**② 当日挖出并修掉的三个装置缺陷（都靠"先取证再断言"）**
+1. **轮询判据只查"字段存在"** ⇒ 设备上**上一轮残留报告**同样满足 ⇒ 两个变体在同一份旧数据上比（差值恒 0），曾被误归因"环境变量未生效"。⇒ 改内容级判据：`run_ts`（宿主每轮写）+ 对照**设备自己的**旧报告（不跨机器比时钟）。
+2. **Swift 字典字面量重复键**：`paint_hint_env` 被插两组相同键 ⇒ 编译只出**告警**、运行是 **fatalError**（`Dictionary literal contains duplicate keys`）⇒ 一写报告就崩。⇒ 已修 + `check-selfdraw-compile.sh` 把该告警**升级为红**（破坏性验证过）。
+3. **`js_report.build_id` 判据在 selfdraw 模式下永远不可能满足**（该字段只有 bench 入口有）⇒ `run-selfdraw.sh` 每轮白等满 600 秒（11 分钟里 10 分钟）。⇒ `inject-build-id.mjs` 扩到两个入口 + 改为事件驱动。
+   ★附带两个 shell 陷阱（已进 `check:shell-i18n-vars` 判据 ④⑤，各经破坏性验证）：
+   · `strings | grep -q` 在 `pipefail` 下 SIGPIPE ⇒ **假红**（本仓第三次：前两次 `unzip | grep -q`）；
+   · **未加引号 heredoc 体内的反引号会被命令替换执行**（实测 `UILaunchScreen: command not found`）。
+     ★与 09-29 那条"注释里反引号无害"**不矛盾**：普通 `#` 注释无害，未加引号的 heredoc 体内有害。
+
+**③ I3 卡收官：A/B 净收益 +10.8%（32.4→28.9MB 中位）**
+- 真机 iPhone 12 · 9/10 轮有效（off 第 5 轮设备断连未取到——非脚本问题，如实记录）；**每轮装置自证全过**
+  （开启态 disabled=false+compact=44×5；关闭态 disabled=true+compact=0×4）。
+- 产物：`hosts/ios/results/paint-hint-*.json` + `paint-hint-summary.txt`；判据链：`measure-paint-hint.sh` → 新鲜度/变体自证 → `summarize-paint-hint.py`。
+- ★诚实边界：91 节点/88 文本层演示场景，**百分比不可与历史 −39%（2000 层）直接对比**。
+
+**④ 环境事实（供下轮少绕路）**：Swift **小字符串优化**——≤15 字节字面量不进数据段 ⇒ `strings` 搜不到短键名（`run_ts`），预检探针要用长字符串（`PROTEUS_EXIT_AFTER_REPORT`）。
 
 ### ★★★2026-09-29 全天收尾（94 个提交，全部已推送）· **★先读「今天的低效率」那一节**
 

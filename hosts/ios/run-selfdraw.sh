@@ -139,10 +139,11 @@ cat > "$APP/Info.plist" <<PLIST
   <key>UIDeviceFamily</key><array><integer>1</integer></array>
   <key>UILaunchScreen</key><dict/>
   <!-- ★启动屏**背景色**（本仓实测踩到的白屏根因）：
-       `UILaunchScreen` 空 dict ⇒ iOS 用**系统背景色**⇒ 浅色模式下是**白**，
+       「UILaunchScreen」空 dict ⇒ iOS 用**系统背景色**⇒ 浅色模式下是**白**，
        而本应用是深色（背景 #101020 / 黑）⇒ 启动瞬间**白一下**再变黑。
-       `UIUserInterfaceStyle = Dark` 让系统背景 = 黑 ⇒ 启动屏与首帧连续（白闪消失）。
-       ★本应用所有颜色都是硬编码深色 ⇒ 强制深色**语义正确**（不是权宜之计）。 -->
+       「UIUserInterfaceStyle = Dark」让系统背景 = 黑 ⇒ 启动屏与首帧连续（白闪消失）。
+       ★本应用所有颜色都是硬编码深色 ⇒ 强制深色**语义正确**（不是权宜之计）。
+       ★★这里不能写反引号：本 heredoc 未加引号 ⇒ 反引号会被**命令替换执行**。 -->
   <key>UIUserInterfaceStyle</key><string>Dark</string>
   <key>UIApplicationSceneManifest</key><dict>
     <key>UIApplicationSupportsMultipleScenes</key><false/>
@@ -195,43 +196,22 @@ rm -f "$INSTALL_LOG"
 
 # ★★从**桌面点开**等价于不带参数启动 = 自绘场景（两个 bundle 都在包内，任选其一都可用）。
 #   `--bench` 只是显式指定跑基准。
-# ★★必须先**终止旧进程**（本仓实测踩到：`process launch` 对已运行的应用只是切到前台，
-#   于是「重装 + 启动」后跑的还是**旧代码**，而报告 build_id 不变——我因此白查了好几轮，
-#   还误以为「S 组注册失败」。⇒ 纪律：重装后必须 terminate 再 launch。）
-xcrun devicectl device process terminate --device "$UDID" "$BUNDLE_ID" >/dev/null 2>&1 || true
-# ★terminate 是**异步**的，但不能固定 sleep 盲等（本仓效率纪律）：
-#   复用仓库自带的**条件等待**脚本，探测「该可执行文件已不在设备进程列表」。
-#   ★注意匹配的锚点：`device info processes` 列的是**可执行路径**
-#   （我们的 = `ProteusSelfDraw`），不含 bundle id——故用可执行名而非 ${BUNDLE_ID}。
-#   探测不到 = 就绪（含"本来就没在跑"，故用 `! grep`）。
-bash "$ROOT/.agents/skills/ai-efficiency-rules/scripts/wait_for.sh" \
-  --cmd "! xcrun devicectl device info processes --device $UDID 2>/dev/null | grep -q ProteusSelfDraw" \
-  --timeout 20 --interval 3 >/dev/null 2>&1 || true
-# ★★启动同样必须校验（本仓实测：首次用新证书安装后，启动会被拦为
-#   "profile has not been explicitly trusted by the user" —— 需在设备上
-#   设置 → 通用 → VPN与设备管理 → 信任该开发者证书；此步骤无法由脚本代做）。
-LAUNCH_LOG="$(mktemp)"
-if [ "$MODE" = "bench" ]; then
-  # ★用例过滤透传（`--cases=S5` ⇒ 宿主注入 __PROTEUS_CASES__）
-  if [ -n "$CASE_FILTER" ]; then
-    xcrun devicectl device process launch --device "$UDID" "$BUNDLE_ID" --bench "--cases=${CASE_FILTER}" > "$LAUNCH_LOG" 2>&1 || true
-  else
-    xcrun devicectl device process launch --device "$UDID" "$BUNDLE_ID" --bench > "$LAUNCH_LOG" 2>&1 || true
-  fi
-else
-  xcrun devicectl device process launch --device "$UDID" "$BUNDLE_ID" > "$LAUNCH_LOG" 2>&1 || true
-fi
-if grep -qiE "not been explicitly trusted|invalid code signature|error 3 \(0x03\)" "$LAUNCH_LOG"; then
-  echo "✗ 启动被拦：需在**设备上手动信任开发者证书**"
-  echo "    设置 → 通用 → VPN与设备管理 → 「Apple Development: …」→ 信任"
-  echo "    （iOS 的强制步骤，脚本无法代做）"
-  rm -f "$LAUNCH_LOG"
-  exit 5
-fi
-tail -1 "$LAUNCH_LOG" | sed 's/^/    /'
-rm -f "$LAUNCH_LOG"
-
-echo "==> ⑧ 取回报告与截图"
+#
+# ★★事件驱动完成信号（2026-09-30 重写；用户红线：「禁止任何盲等——要么让 App 主动上报，
+#   要么有条件等待；sleep/timeout 一律禁止」）
+#   原实现：launch 立即返回 → 轮询 copy 报告 → sleep 5 × 120（最多 600 秒）。当日实测三处缺陷：
+#     ① 轮询判据 `js_report.build_id` 在 **selfdraw 入口永不产出** ⇒ 该模式下判据
+#        **永远不可能满足**——每轮白等满 600 秒（一次 11 分钟的运行里 10 分钟花在这里）；
+#     ② 同判据对"上一轮残留报告 + 本次构建"也可能为真 ⇒ 可能拿到旧数据（判据不够强）；
+#     ③ 盲等本身已列为用户红线。
+#   ⇒ 新机制：宿主 `PROTEUS_EXIT_AFTER_REPORT=1` ⇒ 报告落盘后**进程即退出**；
+#     `devicectl ... launch --console` **等 App 退出才返回** ⇒ 该命令的返回就是完成信号。
+#     零轮询 / 零 sleep / 零 timeout —— 脚本里不存在"等"这个动作。
+#   ★`--console`：日志流落盘备查（成功时含 `SELFDRAW_REPORT_READY` 标记）。
+#   ★`--terminate-existing`：替代原先的「terminate + 条件等待进程消失」（devicectl 内处理；
+#     原有实测教训保留：重装后若复用了旧进程会跑**旧代码** —— 由下方 build_id 断言兜底）。
+#
+# ★报告文件名先算出（基准对照与取回都要用它）
 mkdir -p "$HERE/results"
 REPORT_FILE="selfdraw-report.json"
 SNAP_FILE="selfdraw-final.png"
@@ -242,62 +222,89 @@ if [ -n "$CASE_FILTER" ]; then
   REPORT_FILE="bench-filtered-${SLUG}.json"
   SNAP_FILE="bench-filtered-${SLUG}.png"
 fi
-# ★条件等待：报告必须**比开始时新**才算本次运行完成
-#
-# 【为什么不能用固定 sleep（本仓踩坑）】bench 有 19 个用例、最大 1000 项规模，
-#   跑完远超当初写的 6 秒 ⇒ 取回的是**上一次运行的残留报告**，
-#   读数全是旧的；我还因此误判成「新代码没生效」，白查一轮。
-#   ⇒ 改为：记录本地 mtime → 反复尝试取回 → 直到 mtime 前移（或超时）。
-# ★★判据必须是**内容**（报告的 build_id == 本次构建），不能用文件 mtime：
-#   拷贝动作本身就会刷新 mtime ⇒ 若拿 mtime 判「是否就绪」，会**永远判定为就绪**
-#   （本仓实测：脚本报「等待 0s」但拿到的其实是上一轮的残留报告）。
-WAITED=0
-TIMEOUT=600
-# ★★等待必须**可见且可归因**（本仓实测：等待循环全程静默 ⇒ 现象是"App 起来了、脚本没输出"，
-#   无从判断在等什么、还要等多久、App 是否还活着）。
-#   同时打印**期望的设备侧文件名**——文件名不匹配是实测踩过的真凶（过滤跑改了取回名、
-#   而 App 仍写旧名 ⇒ 永远取不到 ⇒ 静默等到超时）。
-echo "    等待报告：Documents/${REPORT_FILE}（build_id=${BUILD_ID}）"
-while [ "$WAITED" -lt "$TIMEOUT" ]; do
-  xcrun devicectl device copy from --device "$UDID" --domain-type appDataContainer \
-    --domain-identifier "$BUNDLE_ID" --source "Documents/$REPORT_FILE" \
-    --destination "$HERE/results/$REPORT_FILE" >/dev/null 2>&1 || true
-  OK=$(python3 - "$HERE/results/$REPORT_FILE" "$BUILD_ID" <<'PYCHK' 2>/dev/null || echo 0
-import json, sys
-try:
-    jr = (json.load(open(sys.argv[1])).get('js_report') or {})
-    print(1 if jr.get('build_id') == sys.argv[2] else 0)
-except Exception:
-    print(0)
-PYCHK
-)
-  if [ "$OK" = "1" ]; then echo "    报告已就绪（build_id=${BUILD_ID}，等待 ${WAITED}s）"; break; fi
-  # 每 30s 报一次进度 + **App 活性**（若 App 已退出而报告仍未出 ⇒ 不是"还在跑"，是出错/闪退）
-  if [ $((WAITED % 30)) -eq 0 ]; then
-    if xcrun devicectl device info processes --device "$UDID" 2>/dev/null | grep -q ProteusSelfDraw; then
-      APP_STATE="App 运行中"
-    else
-      APP_STATE="⚠ App 已不在运行（报告仍未出 ⇒ 查设备日志，不是在跑）"
-    fi
-    echo "      已等待 ${WAITED}s/${TIMEOUT}s · ${APP_STATE}"
-  fi
-  sleep 5
-  WAITED=$((WAITED + 5))
-done
-if [ "$WAITED" -ge "$TIMEOUT" ]; then echo "    ⚠ 等待超时（${TIMEOUT}s）——报告仍未含本次 build_id"; fi
 
-# ★截图与报告分开处理：报告缺 = 硬失败（要显眼）；截图缺 = 常见且无害
-#   （bench 模式本就不产 PNG ⇒ 原实现对 PNG 也 print `ERROR: error 7000`，
-#    读日志的人会以为整轮失败——**噪声信号与真失败混在一起是本仓明令禁止的**）
-for f in "$REPORT_FILE" "$SNAP_FILE"; do
-  LAST=$(xcrun devicectl device copy from --device "$UDID" --domain-type appDataContainer \
-    --domain-identifier "$BUNDLE_ID" --source "Documents/$f" \
-    --destination "$HERE/results/$f" 2>&1 | tail -1 || true)
-  case "$f" in
-    *.png) [ -f "$HERE/results/$f" ] || echo "    （无截图：$f —— bench 模式属正常）" ;;
-    *) [ -f "$HERE/results/$f" ] || echo "    ⚠ 报告未取到：$LAST" ;;
-  esac
-done
+# ★基准 run_ts：launch 前先读设备上**现有**报告的时间戳；launch 返回后取回的报告必须不同
+#   （证明"本轮真的写了新报告"；对照设备自己的旧报告 ⇒ 不涉及跨机器时钟）。
+BASE_TS="none"
+BASEF="$(mktemp)"
+if xcrun devicectl device copy from --device "$UDID" --domain-type appDataContainer \
+    --domain-identifier "$BUNDLE_ID" --source "Documents/$REPORT_FILE" \
+    --destination "$BASEF" >/dev/null 2>&1; then
+  BASE_TS="$(node "$HERE/lib/read-run-ts.mjs" "$BASEF")"
+fi
+rm -f "$BASEF"
+
+# ★★启动（**阻塞到 App 退出** = 报告已落盘）；启动被拦的情况必须显式报出（本仓实测：
+#   首次用新证书安装后会被拦为 "profile has not been explicitly trusted by the user"，
+#   需在设备上 设置 → 通用 → VPN与设备管理 信任证书——无法由脚本代做）。
+LAUNCH_LOG="$(mktemp)"
+LAUNCH_RC=0
+echo "    启动 App（阻塞到报告落盘后自退——无轮询 / 无 sleep / 无超时；长跑请放后台）"
+if [ "$MODE" = "bench" ]; then
+  # ★用例过滤透传（`--cases=S5` ⇒ 宿主注入 __PROTEUS_CASES__）
+  if [ -n "$CASE_FILTER" ]; then
+    xcrun devicectl device process launch --console --terminate-existing \
+      --environment-variables '{"PROTEUS_EXIT_AFTER_REPORT":"1"}' \
+      --device "$UDID" "$BUNDLE_ID" --bench "--cases=${CASE_FILTER}" > "$LAUNCH_LOG" 2>&1 || LAUNCH_RC=$?
+  else
+    xcrun devicectl device process launch --console --terminate-existing \
+      --environment-variables '{"PROTEUS_EXIT_AFTER_REPORT":"1"}' \
+      --device "$UDID" "$BUNDLE_ID" --bench > "$LAUNCH_LOG" 2>&1 || LAUNCH_RC=$?
+  fi
+else
+  xcrun devicectl device process launch --console --terminate-existing \
+    --environment-variables '{"PROTEUS_EXIT_AFTER_REPORT":"1"}' \
+    --device "$UDID" "$BUNDLE_ID" > "$LAUNCH_LOG" 2>&1 || LAUNCH_RC=$?
+fi
+if grep -qiE "not been explicitly trusted|invalid code signature|error 3 \(0x03\)" "$LAUNCH_LOG"; then
+  echo "✗ 启动被拦：需在**设备上手动信任开发者证书**"
+  echo "    设置 → 通用 → VPN与设备管理 → 「Apple Development: …」→ 信任"
+  echo "    （iOS 的强制步骤，脚本无法代做）"
+  rm -f "$LAUNCH_LOG"
+  exit 5
+fi
+if grep -q "SELFDRAW_REPORT_READY" "$LAUNCH_LOG"; then
+  echo "    App 已主动上报：报告落盘后退出（launch rc=${LAUNCH_RC}）"
+else
+  echo "    ⚠ 日志未见 SELFDRAW_REPORT_READY（launch rc=${LAUNCH_RC}）——以报告断言为准，日志尾："
+  tail -5 "$LAUNCH_LOG" | sed 's/^/      /'
+fi
+rm -f "$LAUNCH_LOG"
+
+echo "==> ⑧ 取回报告（App 已退出 ⇒ 只取一次；无轮询 / 无 sleep / 无超时）"
+# ★★事件驱动（见 §⑦ 注释）：launch --console 返回 ⇒ App 已退出 ⇒ 报告已落盘。
+#   只取**一次** + 两条内容断言（断言失败 ⇒ 直接失败退出，不等待）：
+#     ① run_ts ≠ 基线（基线 = 设备**自己的**上一份报告）⇒ 确系本轮新报告；
+#     ② js_report.build_id == 本次构建 ⇒ 防「重装后仍跑旧进程」（本仓实测踩过）。
+FETCH_ERR="$(mktemp)"
+if ! xcrun devicectl device copy from --device "$UDID" --domain-type appDataContainer \
+    --domain-identifier "$BUNDLE_ID" --source "Documents/$REPORT_FILE" \
+    --destination "$HERE/results/$REPORT_FILE" > "$FETCH_ERR" 2>&1; then
+  echo "✗ 报告未取到：$(tail -1 "$FETCH_ERR")"
+  rm -f "$FETCH_ERR"
+  exit 7
+fi
+rm -f "$FETCH_ERR"
+FRESH_MSG="$(node "$HERE/lib/check-report-freshness.mjs" "$HERE/results/$REPORT_FILE" "$BASE_TS" 2>&1)"; FRESH_RC=$?
+if [ "$FRESH_RC" != "0" ]; then
+  echo "✗ 报告不是本轮写出的（${FRESH_MSG}）——App 可能崩溃/被拦；不等待，直接失败"
+  exit 7
+fi
+BID_MSG="$(node "$HERE/lib/check-report-build-id.mjs" "$HERE/results/$REPORT_FILE" "$BUILD_ID" 2>&1)"; BID_RC=$?
+if [ "$BID_RC" != "0" ]; then
+  echo "✗ ${BID_MSG}——设备上跑的不是本次构建；不等待，直接失败"
+  exit 7
+fi
+echo "    ✅ 报告为本轮写出且 build_id 匹配（零等待）"
+
+# ★截图 = 软信号（bench 模式本就不产 PNG；报告已在上面硬断言过）
+if xcrun devicectl device copy from --device "$UDID" --domain-type appDataContainer \
+    --domain-identifier "$BUNDLE_ID" --source "Documents/$SNAP_FILE" \
+    --destination "$HERE/results/$SNAP_FILE" >/dev/null 2>&1; then
+  echo "    截图：$HERE/results/$SNAP_FILE"
+else
+  echo "    （无截图：$SNAP_FILE —— bench 模式属正常）"
+fi
 echo "    报告：$HERE/results/$REPORT_FILE"
 [ -f "$HERE/results/$REPORT_FILE" ] && python3 -c "
 import json,sys

@@ -553,6 +553,13 @@ final class BenchViewController: UIViewController {
             try? d.write(to: url)
         }
         NSLog("[proteus] bench 报告: %@", url.path)
+        // ★★事件驱动完成信号（2026-09-30 用户红线："要么让 App 主动报告，禁止任何盲等"）：
+        //   报告已落盘 ⇒ 打标记（供 --console 日志流消费）并按需自退 ⇒
+        //   `devicectl ... launch --console` 的**返回**就是完成信号（脚本零轮询 / 零 sleep）。
+        NSLog("[proteus] BENCH_REPORT_READY path=%@", url.path)
+        if ProcessInfo.processInfo.environment["PROTEUS_EXIT_AFTER_REPORT"] == "1" {
+            exit(0)
+        }
     }
 }
 
