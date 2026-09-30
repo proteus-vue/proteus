@@ -274,6 +274,88 @@ def main() -> int:
     else:
         report(f"⑤ 阶段快照：app={d.get('cap_app_phase')} · page={d.get('cap_page_phase')} · 订阅 {d.get('cap_subscribers')}")
 
+    # ── J App 端原生能力通道（用户要求：App 也要落地）──
+    # 【要证明什么】10 个能力经壳转发：**已实现的真调用成功、未实现的诚实 Err**（不伪造能力位）。
+    app_native = d.get("app_native") or {}
+    if not app_native.get("done"):
+        fail(f"App 原生能力组未完成（app_native.done={app_native.get('done')}，fatal={app_native.get('fatal')}）")
+    else:
+        # ① 已实现的能力：真实成功 + 数据正确
+        hc = app_native.get("hostContext") or {}
+        if not hc.get("provider"):
+            fail(f"① C48 宿主上下文缺失 provider：{hc}")
+        else:
+            report(f"① C48 宿主上下文：provider={hc.get('provider')} version={hc.get('version')}")
+        uc = app_native.get("updateCheck") or {}
+        if uc.get("ok") is not True:
+            fail(f"② C51 checkUpdate 应成功（壳已实现）：{uc}")
+        elif (app_native.get("updateApply") or {}).get("ok") is not True:
+            fail(f"② C51 applyUpdate 应成功：{app_native.get('updateApply')}")
+        else:
+            report(f"② C51 热更新：check/apply 均真实调用成功（check={uc.get('data')}）")
+        ws = app_native.get("windowSetSize") or {}
+        wd = ws.get("data") or {}
+        if ws.get("ok") is not True or (wd.get("applied") or {}).get("w") != 1024:
+            fail(f"③ C74 窗口设置应成功且回显尺寸：{ws}")
+        else:
+            report(f"③ C74 窗口：setSize(1024,768) → {wd.get('applied')}")
+        if (app_native.get("workerPost") or {}).get("ok") is not True:
+            fail(f"④ C53 Worker postMessage 应成功：{app_native.get('workerPost')}")
+        else:
+            report("④ C53 Worker：create/post/terminate 链路通")
+        if app_native.get("idleCallbackRan") is not True:
+            fail(f"⑤ C73 空闲回调未执行：{app_native.get('idleRequest')}")
+        else:
+            report(f"⑤ C73 空闲：request 返回 id={((app_native.get('idleRequest') or {}).get('data'))} 且回调已执行")
+        if (app_native.get("preloadAssets") or {}).get("ok") is not True:
+            fail(f"⑥ C67 预加载 assets 应成功：{app_native.get('preloadAssets')}")
+        else:
+            report("⑥ C67 预加载：assets 成功")
+        ge = app_native.get("guardEnable") or {}
+        if ge.get("ok") is not True:
+            fail(f"⑦ C75 导航守卫 enable 应成功（框架内实现）：{ge}")
+        else:
+            report("⑦ C75 导航守卫：enable/disable 均成功（虚拟栈 pop 拦截——**无需原生 API**）")
+        # ② ★诚实 Err 分档（未实现的必须明确失败，不假装成功）
+        honest = []
+        for key, label in [
+            ("preloadSubpackage", "C67 subpackage（App 无分包概念）"),
+            ("extensionLoad", "C50 扩展加载（壳未实现）"),
+            ("navigateMiniProgram", "C47 跳小程序（壳未实现）"),
+        ]:
+            v = app_native.get(key) or {}
+            if v.get("ok") is False:
+                honest.append(f"{label} → Err")
+            else:
+                fail(f"⑧ {label} 应诚实 Err（不伪造能力位），实得：{v}")
+        if honest:
+            report("⑧ 未实现能力诚实降级：" + " · ".join(honest))
+        # ③ wasm（引擎内置——真验证）
+        # ★判据按**引擎能力**分档（真机实测：QuickJS 只有 instantiate，无 compile/validate）：
+        #   实现了 ⇒ 必须返回正确结果；未实现 ⇒ 必须**诚实 Err**（不崩、不假装通过）。
+        wv = app_native.get("wasmValidateEmptyModule") or {}
+        if wv.get("ok") is True:
+            if wv.get("data") is not True:
+                fail(f"⑨ C82 validate 空模块应返回 true（引擎实现了该方法）：{wv}")
+            else:
+                report(f"⑨ C82 WebAssembly：引擎内置（streaming={app_native.get('wasmSupportsStreaming')}），空模块校验通过")
+        elif wv.get("ok") is False:
+            # ★场景侧已把 error 展开为 {ok:false, code, message}（Error 直接 JSON 化会丢字段）
+            code = wv.get("code")
+            # ★诚实分档：unsupported（引擎无此方法）= 合格；其它错误 = 真失败
+            if code == "webassembly.unsupported":
+                report("⑨ C82 WebAssembly：instantiate 可用；引擎未实现 validate ⇒ **诚实 Err**（QuickJS 能力差异）")
+            else:
+                fail(f"⑨ C82 validate 失败（非引擎能力差异）：{wv}")
+        else:
+            fail(f"⑨ C82 validate 未返回结果：{wv}")
+        # ④ 壳调用序列（证明真经壳转发，不是桥自己编数据）
+        calls = app_native.get("__calls") or []
+        if len(calls) < 8:
+            fail(f"⑩ 壳实际被调用次数不足（{len(calls)}）——疑桥未真正转发：{calls}")
+        else:
+            report(f"⑩ 壳转发实测调用 {len(calls)} 次：{', '.join(calls[:6])}…")
+
     # ── G 宿主 conformance ──
     total = d.get("conf_total", 0)
     if d.get("conf_fail", -1) != 0 or total != 32:

@@ -1,7 +1,7 @@
 # G-32 原语清单（自动生成——SSOT = packages/component-ir/src/primitives.ts）
 
 > ★由 `npm run gen:docs` 生成，勿手改。手工维护的叙述性规划见各 plan 文档。
-> 总计 **187** 原语 · implemented **72**。
+> 总计 **187** 原语 · implemented **82**。
 
 ## layout — 布局（12）
 
@@ -146,13 +146,13 @@
 | C44 | `capability.archive` | api:useArchive() | `useArchive()` | wx.compressFile | planned |
 | C45 | `capability.shortcut` | api:useShortcut() | `useShortcut()` | wx.addToDesktop | planned |
 | C46 | `capability.in-app-purchase` | api:useInAppPurchase() | `useInAppPurchase()` | wx.requestPayment 扩展 | planned |
-| C47 | `capability.mini-program` | api:useMiniProgram() | `useMiniProgram()` | wx.navigateToMiniProgram | planned |
-| C48 | `capability.embedded` | api:useEmbedded() | `useEmbedded()` | 无（被宿主嵌入） | planned |
+| C47 | `capability.mini-program` | api:useMiniProgram() | `useMiniProgram()` | wx.navigateToMiniProgram | implemented |
+| C48 | `capability.embedded` | api:useEmbedded() | `useEmbedded()` | 无（被宿主嵌入） | implemented |
 | C49 | `capability.live` | api:useLive() | `useLive()` | wx...（直播组件） | planned |
-| C50 | `capability.extension` | api:useExtension() | `useExtension()` | 无（插件/扩展点 G-21） | planned |
-| C51 | `capability.update` | api:useUpdate() | `useUpdate()` | wx.getUpdateManager | planned |
+| C50 | `capability.extension` | api:useExtension() | `useExtension()` | 无（插件/扩展点 G-21） | implemented |
+| C51 | `capability.update` | api:useUpdate() | `useUpdate()` | wx.getUpdateManager | implemented |
 | C52 | `capability.album` | api:useAlbum() | `useAlbum()` | wx.chooseMedia/saveImageToPhotosAlbum/previewMedia | planned |
-| C53 | `capability.worker` | api:useWorker() | `useWorker()` | wx.createWorker | planned |
+| C53 | `capability.worker` | api:useWorker() | `useWorker()` | wx.createWorker | implemented |
 | C54 | `capability.address` | api:useAddress() | `useAddress()` | wx.chooseAddress | planned |
 | C55 | `capability.wifi` | api:useWifi() | `useWifi()` | wx.getConnectedWifi/getWifiList/connectWifi | planned |
 | C56 | `capability.we-run` | api:useWeRun() | `useWeRun()` | wx.getWeRunData | planned |
@@ -166,22 +166,22 @@
 | C64 | `capability.ad` | api:useAd() | `useAd()` | wx.createRewardedVideoAd/createInterstitialAd/createBannerAd | planned |
 | C65 | `capability.privacy` | api:usePrivacy() | `usePrivacy()` | wx.getPrivacySetting/openPrivacyContract/requirePrivacyAuthorize | planned |
 | C66 | `capability.performance` | api:usePerformance() | `usePerformance()` | wx.getPerformance/reportPerformance | planned |
-| C67 | `capability.preload` | api:usePreload() | `usePreload()` | wx.preloadAssets/preloadSkylineView/preloadWebview/preDownloadSubpackage | planned |
+| C67 | `capability.preload` | api:usePreload() | `usePreload()` | wx.preloadAssets/preloadSkylineView/preloadWebview/preDownloadSubpackage | implemented |
 | C68 | `capability.image-edit` | api:useImageEdit() | `useImageEdit()` | wx.cropImage/editImage | planned |
 | C69 | `capability.socket` | api:useSocket() | `useSocket()` | wx.createUDPSocket/createTCPSocket | planned |
 | C70 | `capability.media-processing` | api:useMediaProcessing() | `useMediaProcessing()` | wx.createMediaContainer/createVideoDecoder/createMediaAudioPlayer | planned |
 | C71 | `capability.screen-capture` | api:useScreenCapture() | `useScreenCapture()` | wx.getScreenRecordingState/onScreenRecordingStateChanged/onUserCaptureScreen/checkIsPictureInPictureActive | planned |
 | C72 | `capability.cache-manager` | api:useCacheManager() | `useCacheManager()` | wx.createCacheManager | planned |
-| C73 | `capability.idle` | api:useIdle() | `useIdle()` | wx.requestIdleCallback/cancelIdleCallback | planned |
-| C74 | `capability.window` | api:useWindow() | `useWindow()` | wx.setWindowSize | planned |
-| C75 | `capability.navigation-guard` | api:useNavigationGuard() | `useNavigationGuard()` | wx.enableAlertBeforeUnload/disableAlertBeforeUnload | planned |
+| C73 | `capability.idle` | api:useIdle() | `useIdle()` | wx.requestIdleCallback/cancelIdleCallback | implemented |
+| C74 | `capability.window` | api:useWindow() | `useWindow()` | wx.setWindowSize | implemented |
+| C75 | `capability.navigation-guard` | api:useNavigationGuard() | `useNavigationGuard()` | wx.enableAlertBeforeUnload/disableAlertBeforeUnload | implemented |
 | C76 | `capability.ar` | api:useAR() | `useAR()` | wx.createVKSession/isVKSupport | planned |
 | C77 | `capability.beacon` | api:useBeacon() | `useBeacon()` | wx.onBeaconServiceChange/onBeaconUpdate | planned |
 | C78 | `capability.local-service` | api:useLocalService() | `useLocalService()` | wx.onLocalServiceFound/Lost/ResolveFail/DiscoveryStop | planned |
 | C79 | `capability.translation` | api:useTranslation() | `useTranslation()` | wx.onUserTriggerTranslation/onUserOffTranslation | planned |
 | C80 | `capability.poster` | api:usePoster() | `usePoster()` | wx.onGeneratePoster | planned |
 | C81 | `capability.device-capability` | api:useDeviceCapability() | `useDeviceCapability()` | wx.checkDeviceSupportHevc | planned |
-| C82 | `capability.webassembly` | api:useWebAssembly() | `useWebAssembly()` | WXWebAssembly.instantiate（官方文档 performance/wasm） | planned |
+| C82 | `capability.webassembly` | api:useWebAssembly() | `useWebAssembly()` | WXWebAssembly.instantiate（官方文档 performance/wasm） | implemented |
 | C83 | `capability.keep-screen-on` | api:useKeepScreenOn() | `useKeepScreenOn()` | wx.setKeepScreenOn（Web 对等：Screen Wake Lock API） | implemented |
 | C84 | `capability.document-preview` | api:useOpenDocument() | `useOpenDocument()` | wx.openDocument（Web 对等：window.open → 浏览器查看器） | implemented |
 

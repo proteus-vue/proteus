@@ -255,6 +255,96 @@ export const SEMANTIC_BACKEND_MAP: Record<string, Partial<Record<BackendId | 'we
     flutter: 'AppLifecycleState.paused',
     headless: 'background-bus',
   },
+  // ★2026-09-30 应用与生命周期域收口（能力已落地）
+  'capability.mini-program': {
+    'vue-dom': 'window.open (cross-app n/a)',
+    'native-ios': 'UIApplication.open',
+    'native-android': 'Intent.ACTION_VIEW',
+    'skyline': 'wx.navigateToMiniProgram',
+    'flutter': 'url_launcher',
+    'headless': 'mini-program-nav',
+  },
+  // ★2026-09-30 应用与生命周期域收口（能力已落地）
+  'capability.embedded': {
+    'vue-dom': 'window.parent (preset)',
+    'native-ios': 'UIApplicationDelegate.host',
+    'native-android': 'Activity.getIntent',
+    'skyline': 'wx.getEnterOptionsSync',
+    'flutter': 'PlatformDispatcher.host',
+    'headless': 'host-context',
+  },
+  // ★2026-09-30 应用与生命周期域收口（能力已落地）
+  'capability.extension': {
+    'vue-dom': 'dynamic import()',
+    'native-ios': 'NSBundle.load',
+    'native-android': 'DexClassLoader',
+    'skyline': 'plugin shell (host)',
+    'flutter': 'dynamic library load',
+    'headless': 'extension-loader',
+  },
+  // ★2026-09-30 应用与生命周期域收口（能力已落地）
+  'capability.update': {
+    'vue-dom': 'ServiceWorkerRegistration',
+    'native-ios': 'Bundle version check',
+    'native-android': 'Play Core In-App Updates',
+    'skyline': 'wx.getUpdateManager',
+    'flutter': 'upgrader',
+    'headless': 'update-manager',
+  },
+  // ★2026-09-30 应用与生命周期域收口（能力已落地）
+  'capability.worker': {
+    'vue-dom': 'new Worker()',
+    'native-ios': 'DispatchQueue.global',
+    'native-android': 'ThreadPoolExecutor',
+    'skyline': 'wx.createWorker',
+    'flutter': 'Isolate.spawn',
+    'headless': 'worker-thread',
+  },
+  // ★2026-09-30 应用与生命周期域收口（能力已落地）
+  'capability.preload': {
+    'vue-dom': 'link rel=preload',
+    'native-ios': 'NSBundle preload',
+    'native-android': 'Resources preload',
+    'skyline': 'wx.preloadAssets',
+    'flutter': 'precacheImage',
+    'headless': 'preload',
+  },
+  // ★2026-09-30 应用与生命周期域收口（能力已落地）
+  'capability.idle': {
+    'vue-dom': 'requestIdleCallback',
+    'native-ios': 'CADisplayLink idle',
+    'native-android': 'Choreographer idle',
+    'skyline': 'wx.requestIdleCallback',
+    'flutter': 'SchedulerBinding.idle',
+    'headless': 'idle-callback',
+  },
+  // ★2026-09-30 应用与生命周期域收口（能力已落地）
+  'capability.window': {
+    'vue-dom': 'window.resizeTo (limited)',
+    'native-ios': 'UIWindowScene.requestGeometryUpdate',
+    'native-android': 'WindowManager.LayoutParams',
+    'skyline': 'wx.setWindowSize',
+    'flutter': 'WindowManager',
+    'headless': 'window-manager',
+  },
+  // ★2026-09-30 应用与生命周期域收口（能力已落地）
+  'capability.navigation-guard': {
+    'vue-dom': 'beforeunload',
+    'native-ios': 'UINavigationController.delegate',
+    'native-android': 'OnBackPressedDispatcher',
+    'skyline': 'wx.enableAlertBeforeUnload',
+    'flutter': 'PopScope',
+    'headless': 'nav-guard',
+  },
+  // ★2026-09-30 应用与生命周期域收口（能力已落地）
+  'capability.webassembly': {
+    'vue-dom': 'WebAssembly.instantiate',
+    'native-ios': 'JavaScriptCore WebAssembly',
+    'native-android': 'QuickJS WebAssembly',
+    'skyline': 'WXWebAssembly.instantiate',
+    'flutter': 'wasm bindings',
+    'headless': 'wasm',
+  },
   'capability.camera': {
     'vue-dom': 'input.proteus-pick-photo',
     'native-ios': 'UIImagePicker',

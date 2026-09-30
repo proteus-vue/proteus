@@ -1,7 +1,7 @@
 # implemented 语义 × 后端映射（自动生成——SSOT = SEMANTIC_BACKEND_MAP + catalog status）
 
 > ★由 `npm run gen:docs` 生成，勿手改。覆盖门禁：每语义 ≥3 端映射（G-31.4）。
-> implemented 语义 **72** 个。
+> implemented 语义 **82** 个。
 
 | 语义 | vue-dom | native-ios | native-android | native-harmony | skyline | flutter | headless |
 |------|---------|-----------|----------------|----------------|---------|---------|----------|
@@ -71,6 +71,16 @@
 | `capability.page-lifecycle` | visibilitychange+history | UINavigationController.didShowViewController | Fragment.onResume | — | Page.onShow | RouteAware.didPush | page-lifecycle-bus |
 | `capability.background` | document.hidden | UIApplication.didEnterBackground | Activity.onStop | — | wx.onBackgroundAudioInterruptionBegin | AppLifecycleState.paused | background-bus |
 | `capability.qr-code` | button.proteus-scan-qr | AVCaptureSession | CameraX | ScanKit | wx.scanCode | scanQR | scan-qr |
+| `capability.mini-program` | window.open (cross-app n/a) | UIApplication.open | Intent.ACTION_VIEW | — | wx.navigateToMiniProgram | url_launcher | mini-program-nav |
+| `capability.embedded` | window.parent (preset) | UIApplicationDelegate.host | Activity.getIntent | — | wx.getEnterOptionsSync | PlatformDispatcher.host | host-context |
+| `capability.extension` | dynamic import() | NSBundle.load | DexClassLoader | — | plugin shell (host) | dynamic library load | extension-loader |
+| `capability.update` | ServiceWorkerRegistration | Bundle version check | Play Core In-App Updates | — | wx.getUpdateManager | upgrader | update-manager |
+| `capability.worker` | new Worker() | DispatchQueue.global | ThreadPoolExecutor | — | wx.createWorker | Isolate.spawn | worker-thread |
+| `capability.preload` | link rel=preload | NSBundle preload | Resources preload | — | wx.preloadAssets | precacheImage | preload |
+| `capability.idle` | requestIdleCallback | CADisplayLink idle | Choreographer idle | — | wx.requestIdleCallback | SchedulerBinding.idle | idle-callback |
+| `capability.window` | window.resizeTo (limited) | UIWindowScene.requestGeometryUpdate | WindowManager.LayoutParams | — | wx.setWindowSize | WindowManager | window-manager |
+| `capability.navigation-guard` | beforeunload | UINavigationController.delegate | OnBackPressedDispatcher | — | wx.enableAlertBeforeUnload | PopScope | nav-guard |
+| `capability.webassembly` | WebAssembly.instantiate | JavaScriptCore WebAssembly | QuickJS WebAssembly | — | WXWebAssembly.instantiate | wasm bindings | wasm |
 | `capability.keep-screen-on` | navigator.wakeLock | UIApplication.isIdleTimerDisabled | Window.FLAG_KEEP_SCREEN_ON | window.setWindowKeepScreenOn | wx.setKeepScreenOn | keepScreenOn | keep-screen-on |
 | `capability.document-preview` | window.open | QLPreviewController | Intent.ACTION_VIEW | — | wx.openDocument | open_file | open-document |
 | `engineering.router-link` | a.proteus-router-link | UIButton.link | TextView.link | Text.link | navigator | TextButton | router-link |

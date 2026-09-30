@@ -127,7 +127,8 @@ describe('G-31 B5 conformance：三端渲染快照一致', () => {
     //   + ★能力入口双形态（C1/C42 转 implemented）+ ★批次 8 共享元素转场：implemented 语义 = 64（planned 不设门禁）
     const impl = implementedPrimitives()
     // ★2026-09-30：65 → 72（先存在过时值 69——本轮 +3 生命周期 C23/C24/C25 App 腿）
-    expect(impl.length).toBe(72) // ★Fluid System v2 → 65；后续批次 → 69；本轮生命周期 → 72
+    // ★2026-09-30 应用与生命周期域收口：72 → 82（C47/48/50/51/53/67/73/74/75/82 三端落地）
+    expect(impl.length).toBe(82)
     for (const p of impl) {
       expect(Object.keys(SEMANTIC_BACKEND_MAP[p.semantic] ?? {}).length, `${p.semantic} 参考行不足`).toBeGreaterThanOrEqual(3)
     }

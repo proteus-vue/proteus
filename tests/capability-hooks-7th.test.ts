@@ -363,7 +363,18 @@ describe('G-32 B3 七期 web 桥（真实浏览器能力）', () => {
       await expect(hooks.useMap('m')).resolves.toMatchObject({ ok: false })
       await expect(hooks.useSMS('1', 'm')).resolves.toMatchObject({ ok: false })
       await expect(hooks.useInAppPurchase('p')).resolves.toMatchObject({ ok: false })
-      await expect(hooks.useMiniProgram()).resolves.toMatchObject({ ok: false })
+      // ★2026-09-30 域收口：C47 在 Web 端**已有实现**——句柄仍可取（句柄型语义），
+      //   但**调用 navigate 时**诚实失败并指出替代方案（不是"桥缺失"）
+      const mp = await hooks.useMiniProgram()
+      expect(mp.ok, 'Web 端句柄可取（navigateMiniProgram 已实现）').toBe(true)
+      if (mp.ok) {
+        const nav = await mp.data.navigate({ appId: 'wx123' })
+        expect(nav.ok, 'Web 端 navigate 应明确失败（无此平台概念）').toBe(false)
+        if (!nav.ok) {
+          expect(nav.error.code).toMatch(/mini-program\.unsupported/)
+          expect(nav.error.message).toMatch(/window\.open|路由/) // 可操作：给出替代方案
+        }
+      }
     } finally {
       g.wx = orig
     }

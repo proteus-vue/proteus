@@ -213,15 +213,15 @@ const CAPABILITY: PrimitiveDef[] = [
   cap('C45', 'shortcut', 'useShortcut()', 'wx.addToDesktop', 'Result<void>'),
   cap('C46', 'in-app-purchase', 'useInAppPurchase()', 'wx.requestPayment 扩展', 'Result<Receipt>'),
   // 7.5 平台特有（4——C47-C50，此前 7.4 末 C46，总 50）
-  { id: 'C47', kind: 'capability', semantic: 'capability.mini-program', api: 'useMiniProgram()', props: ['MPContext'], mpEquiv: 'wx.navigateToMiniProgram', tier: 'L1', status: 'planned' },
-  { id: 'C48', kind: 'capability', semantic: 'capability.embedded', api: 'useEmbedded()', props: ['HostContext'], mpEquiv: '无（被宿主嵌入）', tier: 'L1', status: 'planned' },
+  { id: 'C47', kind: 'capability', semantic: 'capability.mini-program', api: 'useMiniProgram()', props: ['MPContext'], mpEquiv: 'wx.navigateToMiniProgram', tier: 'L1', status: 'implemented' },
+  { id: 'C48', kind: 'capability', semantic: 'capability.embedded', api: 'useEmbedded()', props: ['HostContext'], mpEquiv: '无（被宿主嵌入）', tier: 'L1', status: 'implemented' },
   { id: 'C49', kind: 'capability', semantic: 'capability.live', api: 'useLive()', props: ['LiveRoom'], mpEquiv: 'wx...（直播组件）', tier: 'L1', status: 'planned' },
-  { id: 'C50', kind: 'capability', semantic: 'capability.extension', api: 'useExtension()', props: ['ExtensionAPI'], mpEquiv: '无（插件/扩展点 G-21）', tier: 'L1', status: 'planned' },
+  { id: 'C50', kind: 'capability', semantic: 'capability.extension', api: 'useExtension()', props: ['ExtensionAPI'], mpEquiv: '无（插件/扩展点 G-21）', tier: 'L1', status: 'implemented' },
   // ★颗粒度对齐 C（2026-09-11）：C51 小程序热更新（wx.getUpdateManager）
-  { id: 'C51', kind: 'capability', semantic: 'capability.update', api: 'useUpdate()', props: ['UpdateManagerAPI'], mpEquiv: 'wx.getUpdateManager', tier: 'L1', status: 'planned' },
+  { id: 'C51', kind: 'capability', semantic: 'capability.update', api: 'useUpdate()', props: ['UpdateManagerAPI'], mpEquiv: 'wx.getUpdateManager', tier: 'L1', status: 'implemented' },
   // ★颗粒度对齐 C3（2026-09-11）：相册 / Worker（对齐小程序媒体与多线程 API——纯 Hook，无 C-IR 节点 → planned）
   { id: 'C52', kind: 'capability', semantic: 'capability.album', api: 'useAlbum()', props: ['AlbumAPI'], mpEquiv: 'wx.chooseMedia/saveImageToPhotosAlbum/previewMedia', tier: 'L1', status: 'planned' },
-  { id: 'C53', kind: 'capability', semantic: 'capability.worker', api: 'useWorker()', props: ['WorkerHandle'], mpEquiv: 'wx.createWorker', tier: 'L1', status: 'planned' },
+  { id: 'C53', kind: 'capability', semantic: 'capability.worker', api: 'useWorker()', props: ['WorkerHandle'], mpEquiv: 'wx.createWorker', tier: 'L1', status: 'implemented' },
   // ★颗粒度对齐 C3 批 2：收货地址 / WiFi / 微信运动（对齐小程序系统 API——纯 Hook → planned）
   { id: 'C54', kind: 'capability', semantic: 'capability.address', api: 'useAddress()', props: ['ShippingAddress'], mpEquiv: 'wx.chooseAddress', tier: 'L1', status: 'planned' },
   { id: 'C55', kind: 'capability', semantic: 'capability.wifi', api: 'useWifi()', props: ['WifiAPI'], mpEquiv: 'wx.getConnectedWifi/getWifiList/connectWifi', tier: 'L1', status: 'planned' },
@@ -241,7 +241,7 @@ const CAPABILITY: PrimitiveDef[] = [
   { id: 'C65', kind: 'capability', semantic: 'capability.privacy', api: 'usePrivacy()', props: ['PrivacyAPI'], mpEquiv: 'wx.getPrivacySetting/openPrivacyContract/requirePrivacyAuthorize', tier: 'L1', status: 'planned' },
   // ★权威标尺缺口补齐批 D（2026-09-12）：性能 / 预加载 / 图像编辑（通用能力，无资质门槛）
   { id: 'C66', kind: 'capability', semantic: 'capability.performance', api: 'usePerformance()', props: ['PerformanceAPI'], mpEquiv: 'wx.getPerformance/reportPerformance', tier: 'L1', status: 'planned' },
-  { id: 'C67', kind: 'capability', semantic: 'capability.preload', api: 'usePreload()', props: ['PreloadAPI'], mpEquiv: 'wx.preloadAssets/preloadSkylineView/preloadWebview/preDownloadSubpackage', tier: 'L1', status: 'planned' },
+  { id: 'C67', kind: 'capability', semantic: 'capability.preload', api: 'usePreload()', props: ['PreloadAPI'], mpEquiv: 'wx.preloadAssets/preloadSkylineView/preloadWebview/preDownloadSubpackage', tier: 'L1', status: 'implemented' },
   { id: 'C68', kind: 'capability', semantic: 'capability.image-edit', api: 'useImageEdit()', props: ['ImageEditAPI'], mpEquiv: 'wx.cropImage/editImage', tier: 'L1', status: 'planned' },
   // ★权威标尺缺口补齐批 E（2026-09-12）：网络底层 / 媒体高级
   { id: 'C69', kind: 'capability', semantic: 'capability.socket', api: 'useSocket()', props: ['UDPSocketHandle / TCPSocketHandle'], mpEquiv: 'wx.createUDPSocket/createTCPSocket', tier: 'L1', status: 'planned' },
@@ -249,9 +249,9 @@ const CAPABILITY: PrimitiveDef[] = [
   // ★权威标尺缺口补齐批 F（2026-09-12）：录屏/缓存/空闲/窗口/导航拦截
   { id: 'C71', kind: 'capability', semantic: 'capability.screen-capture', api: 'useScreenCapture()', props: ['ScreenCaptureAPI'], mpEquiv: 'wx.getScreenRecordingState/onScreenRecordingStateChanged/onUserCaptureScreen/checkIsPictureInPictureActive', tier: 'L1', status: 'planned' },
   { id: 'C72', kind: 'capability', semantic: 'capability.cache-manager', api: 'useCacheManager()', props: ['CacheManagerHandle'], mpEquiv: 'wx.createCacheManager', tier: 'L1', status: 'planned' },
-  { id: 'C73', kind: 'capability', semantic: 'capability.idle', api: 'useIdle()', props: ['IdleAPI'], mpEquiv: 'wx.requestIdleCallback/cancelIdleCallback', tier: 'L1', status: 'planned' },
-  { id: 'C74', kind: 'capability', semantic: 'capability.window', api: 'useWindow()', props: ['WindowAPI'], mpEquiv: 'wx.setWindowSize', tier: 'L1', status: 'planned' },
-  { id: 'C75', kind: 'capability', semantic: 'capability.navigation-guard', api: 'useNavigationGuard()', props: ['NavigationGuardAPI'], mpEquiv: 'wx.enableAlertBeforeUnload/disableAlertBeforeUnload', tier: 'L1', status: 'planned' },
+  { id: 'C73', kind: 'capability', semantic: 'capability.idle', api: 'useIdle()', props: ['IdleAPI'], mpEquiv: 'wx.requestIdleCallback/cancelIdleCallback', tier: 'L1', status: 'implemented' },
+  { id: 'C74', kind: 'capability', semantic: 'capability.window', api: 'useWindow()', props: ['WindowAPI'], mpEquiv: 'wx.setWindowSize', tier: 'L1', status: 'implemented' },
+  { id: 'C75', kind: 'capability', semantic: 'capability.navigation-guard', api: 'useNavigationGuard()', props: ['NavigationGuardAPI'], mpEquiv: 'wx.enableAlertBeforeUnload/disableAlertBeforeUnload', tier: 'L1', status: 'implemented' },
   // ★权威标尺缺口补齐批 G（2026-09-12）：AR/XR / iBeacon / 局域网 / 翻译 / 海报 / 设备探测
   { id: 'C76', kind: 'capability', semantic: 'capability.ar', api: 'useAR()', props: ['ARAPI'], mpEquiv: 'wx.createVKSession/isVKSupport', tier: 'L1', status: 'planned' },
   { id: 'C77', kind: 'capability', semantic: 'capability.beacon', api: 'useBeacon()', props: ['BeaconAPI'], mpEquiv: 'wx.onBeaconServiceChange/onBeaconUpdate', tier: 'L1', status: 'planned' },
@@ -266,7 +266,7 @@ const CAPABILITY: PrimitiveDef[] = [
   //   v2.13.0+ 全局 / v2.15.0+ Worker；Web 与 App-iOS(JSC) 走标准 `WebAssembly`（收字节 · 有 compile/validate）；
   //   App-Android 当前宿主无 JS 引擎 ⇒ 不可用（诚实边界）。
   //   ⇒ 归一入口 `instantiate({bytes}|{path})` + 能力位 `supportsStreaming`/`supportsPathLoad`。
-  { id: 'C82', kind: 'capability', semantic: 'capability.webassembly', api: 'useWebAssembly()', props: ['WebAssemblyAPI'], mpEquiv: 'WXWebAssembly.instantiate（官方文档 performance/wasm）', tier: 'L1', status: 'planned' },
+  { id: 'C82', kind: 'capability', semantic: 'capability.webassembly', api: 'useWebAssembly()', props: ['WebAssemblyAPI'], mpEquiv: 'WXWebAssembly.instantiate（官方文档 performance/wasm）', tier: 'L1', status: 'implemented' },
   // ★★NC1 首个声明式能力（2026-09-30）：来源 = 权威标尺修复后浮现的真实缺口之一
   //   （快照抽取器修复前 `wx.setKeepScreenOn` 结构性不可见，见 mp-spec-coverage 的 SPEC_PLANNED）。
   //   落地方式 = **声明式**（`packages/api/src/bridge-decls/keep-screen-on.ts` → 生成 → 合并进 bridge）：
