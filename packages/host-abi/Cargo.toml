@@ -1,0 +1,24 @@
+[package]
+name = "proteus-host-abi"
+version = "0.1.0"
+edition = "2021"
+description = "★★Host ABI v1 —— 宿主抽象层的稳定契约（八接口 C ABI + 版本协商 + 批处理红线入口）。宿主实现本契约即可驱动 Proteus 内核；换宿主内核零改动"
+license = "Apache-2.0"
+
+# ★★依赖：**只依赖 layout-core-rust**（不依赖任何平台 crate）——
+#   ABI 层必须平台无关，否则"换宿主"会连带换掉平台适配（方案 §0.4.2 的边界）。
+[dependencies]
+proteus-layout-core = { path = "../layout-core-rust" }
+serde_json = "1"
+
+[lib]
+name = "proteus_host_abi"
+# ★rlib：本 crate 的单测/集成测试与未来 Rust 侧宿主（桌面 headless）消费
+# ★staticlib：iOS（Swift 直接链接）
+# ★cdylib：Android（JNI 动态库）/ 鸿蒙（NAPI）
+crate-type = ["rlib", "staticlib", "cdylib"]
+
+[profile.release]
+opt-level = 3
+lto = true
+codegen-units = 1
