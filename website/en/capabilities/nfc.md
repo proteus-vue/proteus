@@ -112,7 +112,8 @@ getAdapter(): NfcAdapter
 
 ### `NfcAdapter`
 
-★能力颗粒度对齐：C37 NFC 读卡模式（wx.getNFCAdapter——发现标签 + Ndef/NfcA/B/F/V/IsoDep/Mifare 连接） 与 HCE（模拟卡）互补：HCE 让手机当卡，Adapter 让手机读卡。
+★能力颗粒度对齐：C37 NFC 读卡模式（wx.getNFCAdapter——发现标签 + Ndef/NfcA/B/F/V/IsoDep/Mifare 连接）
+与 HCE（模拟卡）互补：HCE 让手机当卡，Adapter 让手机读卡。
 
 | Method | Signature | Doc |
 |---|---|---|

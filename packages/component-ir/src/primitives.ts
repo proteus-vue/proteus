@@ -264,7 +264,7 @@ const CAPABILITY: PrimitiveDef[] = [
   //   miniprogram-api-typings/lib.wx.wasm.d.ts）：
   //   MP `WXWebAssembly.instantiate(path)` 只收**代码包路径**（.wasm/.wasm.br）· 无 compile/validate ·
   //   v2.13.0+ 全局 / v2.15.0+ Worker；Web 与 App-iOS(JSC) 走标准 `WebAssembly`（收字节 · 有 compile/validate）；
-  //   App-Android 当前宿主无 JS 引擎 ⇒ 不可用（诚实边界）。
+  //   App-Android 由**宿主 wasm3** 执行（QuickJS 内建无 WASM——双端真机验证 add(2,40)=42）。
   //   ⇒ 归一入口 `instantiate({bytes}|{path})` + 能力位 `supportsStreaming`/`supportsPathLoad`。
   { id: 'C82', kind: 'capability', semantic: 'capability.webassembly', api: 'useWebAssembly()', props: ['WebAssemblyAPI'], mpEquiv: 'WXWebAssembly.instantiate（官方文档 performance/wasm）', tier: 'L1', status: 'implemented' },
   // ★★NC1 首个声明式能力（2026-09-30）：来源 = 权威标尺修复后浮现的真实缺口之一

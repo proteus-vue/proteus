@@ -32,8 +32,38 @@ const CAP_EXTRA_HOOKS = {
 //   与 gen-reference.mjs 同模式：--check 只比对不写，不一致 exit 1。
 const check = process.argv.includes('--check')
 const drifts = []
+/** 排版自检命中（见 assertNoCollapsedTable——生成物里的"表格塌成段落"形态） */
+const collapsed = []
+
+/**
+ * ★★排版自检（2026-09-30 用户反馈「这块儿排版是不是乱了？」——把这类生成器回归变成机器判据）
+ *
+ * 【反面形态（本轮截图实测）】多行 JSDoc 被 `.join(' ')` 压成**单行** ⇒ 源码里的 Markdown 表格
+ *   （如 C82 的「端 | 入口 | 首参」四行）在页面上退化成**一大段普通文字**。
+ *   修法是"解析保留行结构 + cell 处 oneline()"，但**判据必须存在**——否则下次谁再引入一处 `.join(' ')`
+ *   又会静默变丑（与「接线不靠记忆」「门禁覆盖面跟形态走」同源纪律）。
+ *
+ * 【判据】正文行（非表格行 / 非列表行 / 非代码围栏内）若**超长且含多个列分隔** ⇒ 视为塌表：
+ *   · 正常说明段落即使很长（本仓最长的接口头注约 250 字）也不会含 ≥3 个 ` | `；
+ *   · 塌表行实测 > 600 字且含 10+ 个 ` | `（阈值取 400 字 / 3 个，留足安全边际）。
+ */
+function assertNoCollapsedTable(relPath, content) {
+  if (!relPath.endsWith('.md')) return
+  const offenders = []
+  let inFence = false
+  content.split('\n').forEach((line, idx) => {
+    if (/^\s*```/.test(line)) { inFence = !inFence; return }
+    if (inFence) return
+    if (/^\s*\|/.test(line)) return        // 合法表格行
+    if (/^\s*[-*>]\s?/.test(line)) return  // 列表/引用行
+    if (line.length > 400 && (line.match(/ \| /g) ?? []).length >= 3) offenders.push(idx + 1)
+  })
+  if (offenders.length) collapsed.push(`${relPath}:${offenders.join(',')}`)
+}
+
 /** 写产物（--check 时改为比对；记录漂移文件） */
 function writeDoc(p, content) {
+  assertNoCollapsedTable(path.relative(ROOT, p), content)
   if (check) {
     const cur = fs.existsSync(p) ? fs.readFileSync(p, 'utf8') : ''
     if (cur !== content) drifts.push(path.relative(ROOT, p))
@@ -316,7 +346,6 @@ function extractInterfaces(src) {
         .replace(/\*\/$/, '')
         .split('\n')
         .map((l) => l.replace(/^\s*\*\s?/, '').trim())
-        .filter(Boolean)
       const paramDocs = {}
       let returns = ''
       const prose = []
@@ -327,7 +356,7 @@ function extractInterfaces(src) {
         else if (l.startsWith('@')) continue
         else prose.push(l)
       }
-      return { doc: prose.join(' '), paramDocs, returns }
+      return { doc: normalizeJsdoc(prose.join('\n')), paramDocs, returns } // ★保留行结构；cell 消费点过 oneline()
     }
     for (const raw of body.split('\n')) {
       const t = raw.trim()
@@ -343,7 +372,12 @@ function extractInterfaces(src) {
       mdocLines = []
     }
     out[name] = {
-      doc: jsdoc ? jsdoc.replace(/\/\*\*|\*\//g, '').split('\n').map((l) => l.replace(/^\s*\*\s?/, '').trim()).filter(Boolean).join(' ') : '',
+      // ★★保留换行（2026-09-30 用户反馈「这块儿排版是不是乱了？」）：
+      //   原 `.join(' ')` 把多行 JSDoc 压成一行 ⇒ 源码里的 **Markdown 表格**（如 C82 的
+      //   「端 | 入口 | 首参」四行）在页面上退化成一大段普通文字（截图实测）。
+      //   Markdown 的表格/列表/段落块都需要**行结构** ⇒ 这里保留 `\n`，
+      //   而**表格 cell** 的消费点统一过 `oneline()` 压平（见其定义——cell 里不能有换行）。
+      doc: normalizeJsdoc(jsdoc || ''),
       props,
       methods,
       extendsName,
@@ -362,6 +396,34 @@ function extractInterfaces(src) {
 
 // 表格单元格内类型/签名/描述竖线转义（'joined' | 'left' / string | null / 形态区间表达式——否则断列）
 const escMd = (s) => String(s).replace(/\|/g, '\\|')
+
+/**
+ * ★行内化：多行 doc 进**表格 cell** 必须压成单行（Markdown 表格行不能含换行——否则整表断裂）。
+ * 【为什么需要（2026-09-30 用户反馈「这块儿排版是不是乱了？」）】接口/方法的 JSDoc 现已**保留换行**
+ *   （`extractInterfaces`/`parseMethodDoc`：表格/列表/段落块需要行结构才能正确渲染），
+ *   而大量 cell 消费点（属性表/方法表/类型引用表）把 doc 直接插进 `| … |` ⇒ 必须在**这里**压平。
+ * ★判据（维护提示）：凡 `${…doc…}` 出现在以 `|` 开头的模板串里，就该过 oneline()。
+ */
+const oneline = (s) => String(s ?? '').replace(/\r?\n+/g, ' ').trim()
+
+/**
+ * ★JSDoc 归一：去注释壳与首尾空行，**内部空行保留**（Markdown 的表格/列表/段落块靠空行分隔——
+ *   压掉空行会让表格退化成普通文字，正是 2026-09-30 用户截图里的形态）。
+ * 用法：接口/方法/能力级 doc 的**块渲染**走本函数；表格 cell 一律过 `oneline()`。
+ * ★行内容左右都 trim（与旧实现一致）：只去一个前导空格会留下行首空白
+ *   ⇒ 一是渲染出多余缩进，二是 `.replace(/^C\d+\s+/, '')` 这类**行首锚定**的后处理失配
+ *   （实测踩到：useEmbedded 页出现 " C48 useEmbedded…" 前缀未被剥掉）。
+ */
+const normalizeJsdoc = (raw) => {
+  const lines = String(raw ?? '')
+    .replace(/^\/\*\*/, '')
+    .replace(/\*\/$/, '')
+    .split('\n')
+    .map((l) => l.replace(/^\s*\*\s?/, '').trim())
+  while (lines.length && !lines[0]) lines.shift()
+  while (lines.length && !lines[lines.length - 1]) lines.pop()
+  return lines.join('\n')
+}
 
 // ★详细文档（2026-09-11）：方法签名 → 参数列表（名称/类型/可选；与 JSDoc @param 合并）
 function parseSigArgs(argsStr) {
@@ -420,13 +482,13 @@ function renderTypeRefs(lines, names, ifaces, opts) {
     if (ti.props.length) {
       lines.push(`| ${cols[0]} | ${cols[1]} | ${cols[2]} |`)
       lines.push('|---|---|---|')
-      for (const pr of ti.props) lines.push(`| \`${pr.name}\` | \`${escMd(pr.type)}\` | ${pr.doc || '—'} |`)
+      for (const pr of ti.props) lines.push(`| \`${pr.name}\` | \`${escMd(pr.type)}\` | ${oneline(pr.doc) || '—'} |`)
       lines.push('')
     }
     if (ti.methods.length) {
       lines.push(`| ${cols[0]} | ${cols[1]} | ${cols[2]} |`)
       lines.push('|---|---|---|')
-      for (const mm of ti.methods) lines.push(`| \`${mm.name}\` | \`${escMd(mm.sig)}\` | ${mm.doc || '—'} |`)
+      for (const mm of ti.methods) lines.push(`| \`${mm.name}\` | \`${escMd(mm.sig)}\` | ${oneline(mm.doc) || '—'} |`)
       lines.push('')
     }
   }
@@ -512,7 +574,7 @@ function renderTypeRefsH2(lines, names, ifaces) {
       lines.push('|---|---|---|---|')
       for (const pr of ti.props) {
         const dflt = extractDefaultFromDoc(pr.doc)
-        lines.push(`| \`${pr.name}\` | \`${escMd(pr.type)}\` | ${dflt ? `\`${escMd(dflt)}\`` : '—'} | ${pr.doc || '—'} |`)
+        lines.push(`| \`${pr.name}\` | \`${escMd(pr.type)}\` | ${dflt ? `\`${escMd(dflt)}\`` : '—'} | ${oneline(pr.doc) || '—'} |`)
         for (const r of collectRefTypes([pr.type], ifaces)) if (!rendered.has(r)) queue.push(r)
       }
       lines.push('')
@@ -521,7 +583,7 @@ function renderTypeRefsH2(lines, names, ifaces) {
       lines.push('| 方法 | 签名 | 说明 |')
       lines.push('|---|---|---|')
       for (const mm of ti.methods) {
-        lines.push(`| \`${mm.name}\` | \`${escMd(mm.sig)}\` | ${mm.doc || '—'} |`)
+        lines.push(`| \`${mm.name}\` | \`${escMd(mm.sig)}\` | ${oneline(mm.doc) || '—'} |`)
         for (const r of collectRefTypes([mm.sig], ifaces)) if (!rendered.has(r)) queue.push(r)
       }
       lines.push('')
@@ -971,7 +1033,7 @@ function genComponents(ir, ends) {
       for (const p of props) {
         // 说明：源码 JSDoc 优先，公约属性兑底（COMMON_PROP_DOCS——pid/disabled 等跨组件公约语义）；escMd 防描述/默认值竖线断列
         const doc = p.doc !== '—' ? p.doc : COMMON_PROP_DOCS[p.name] ?? '—'
-        lines.push(`| \`${p.name}\` | ${escMd(doc)} | \`${escMd(p.type)}\` | ${p.default ? `\`${escMd(p.default)}\`` : p.required ? '**是**' : '—'} | ${p.required ? '**是**' : '否'} |`)
+        lines.push(`| \`${p.name}\` | ${escMd(oneline(doc))} | \`${escMd(p.type)}\` | ${p.default ? `\`${escMd(p.default)}\`` : p.required ? '**是**' : '—'} | ${p.required ? '**是**' : '否'} |`)
       }
       lines.push('')
       // ★颗粒度对齐 B（2026-09-11）：逐属性详解（对齐小程序「属性」粒度——每属性一段：类型/默认值/必填/说明）
@@ -1160,7 +1222,7 @@ function capContext(ir) {
   const JSDOC = '\\*\\*((?:[^*]|\\*(?!/))*)\\*\\/'
   const re = new RegExp(`${JSDOC}\\s*\\n\\s*(use[A-Z]\\w*|set[A-Z]\\w*)\\(`, 'g')
   let m
-  const cleanDoc = (t) => t.split('\n').map((l) => l.replace(/^\s*\*\s?/, '').trim()).filter(Boolean).join(' ')
+  const cleanDoc = (t) => normalizeJsdoc(t) // ★保留行结构（表格块需要空行分隔——见 normalizeJsdoc）
   while ((m = re.exec(iface))) hookDocs[m[2]] = cleanDoc(m[1])
   const hooksBody = apiSrc.slice(apiSrc.indexOf('export function createCapabilityHooks'))
   const reLine = /\/\/\s*(.+?)\s*\n\s*(use[A-Z]\w*|set[A-Z]\w*):/g
@@ -1779,7 +1841,7 @@ function genCapabilities(ir, ends) {
       for (const p of params) {
         const t = p.type
         const ti = ifaces[t]
-        const desc = ti?.doc || COMMON_PARAM_DOCS[p.name] || '—'
+        const desc = oneline(ti?.doc) || COMMON_PARAM_DOCS[p.name] || '—'
         lines.push(`| \`${p.name}\` | \`${escMd(t)}\` | ${p.optional ? '否' : '是'} | ${desc} |`)
       }
       lines.push('')
@@ -1845,7 +1907,7 @@ function genCapabilities(ir, ends) {
       const isLifecycleHandle = handleT === 'PageLifecycle' || handleT === 'AppLifecycle'
       const docOf = (mm) => {
         const m = isLifecycleHandle ? eventMetaOf(handleT, mm.name, lifecycleMeta) : null
-        return (m?.doc || mm.doc || '').replace(/^C\d+\s+/, '')
+        return oneline(m?.doc || mm.doc || '').replace(/^C\d+\s+/, '')
       }
       if (isLifecycleHandle) {
         lines.push('| 方法 | 说明 | 端支持（MP / Web / App） |')
@@ -1881,7 +1943,7 @@ function genCapabilities(ir, ends) {
       lines.push('')
       lines.push('| 属性 | 类型 | 必填 | 说明 |')
       lines.push('|---|---|---|---|')
-      for (const pr of allProps) lines.push(`| \`${pr.name}\` | \`${escMd(pr.type)}\` | ${pr.optional ? '否' : '是'} | ${pr.doc || '—'} |`)
+      for (const pr of allProps) lines.push(`| \`${pr.name}\` | \`${escMd(pr.type)}\` | ${pr.optional ? '否' : '是'} | ${oneline(pr.doc) || '—'} |`)
       lines.push('')
     }
     // ## 类型引用（h2）——签名/属性引用的接口展开为 h3
@@ -2004,7 +2066,7 @@ function genCapabilities(ir, ends) {
             lines.push('')
             lines.push('| 属性 | 类型 | 必填 | 说明 |')
             lines.push('|---|---|---|---|')
-            for (const pr of ehIface.props) lines.push(`| \`${pr.name}\` | \`${escMd(pr.type)}\` | ${pr.optional ? '否' : '是'} | ${pr.doc || '—'} |`)
+            for (const pr of ehIface.props) lines.push(`| \`${pr.name}\` | \`${escMd(pr.type)}\` | ${pr.optional ? '否' : '是'} | ${oneline(pr.doc) || '—'} |`)
             lines.push('')
           }
           if (ehIface.methods.length) {
@@ -2012,7 +2074,7 @@ function genCapabilities(ir, ends) {
             lines.push('')
             lines.push('| 方法 | 签名 | 说明 |')
             lines.push('|---|---|---|')
-            for (const mm of ehIface.methods) lines.push(`| \`${mm.name}\` | \`${escMd(mm.sig)}\` | ${mm.doc || '—'} |`)
+            for (const mm of ehIface.methods) lines.push(`| \`${mm.name}\` | \`${escMd(mm.sig)}\` | ${oneline(mm.doc) || '—'} |`)
             lines.push('')
             renderMethodDetails(lines, ehIface.methods, { hLevel: '####', paramCols: ['参数', '类型', '必填', '说明', '否', '是'], returnsLabel: '返回值', descLabel: '说明' })
             const erefs = collectRefTypes(ehIface.methods.map((m) => m.sig), ifaces)
@@ -2392,7 +2454,7 @@ async function genCapabilitiesEn(ir, ends) {
           const d = sheet[methodToEvent(mm.name)]
           if (d) return d
         }
-        return (CAP_METHODS_EN[shape.dataElemT] && CAP_METHODS_EN[shape.dataElemT][mm.name]) || (handleT && CAP_METHODS_EN[handleT] && CAP_METHODS_EN[handleT][mm.name]) || ''
+        return oneline((CAP_METHODS_EN[shape.dataElemT] && CAP_METHODS_EN[shape.dataElemT][mm.name]) || (handleT && CAP_METHODS_EN[handleT] && CAP_METHODS_EN[handleT][mm.name]) || '')
       }
       // 2026-09-30 feedback: doc-after-signature felt odd; some methods had no doc.
       // Table is now `Method | Doc` (signature lives in the h3 detail) and every method gets a doc.
@@ -2451,7 +2513,7 @@ async function genCapabilitiesEn(ir, ends) {
       lines.push(CAP_SHARED_EN.propSep4)
       for (const pr of allPropsEn) {
         const doc = (page.dataProps && page.dataProps[pr.name]) || (page.directProps && page.directProps[pr.name]) || pr.doc || '—'
-        lines.push(`| \`${pr.name}\` | \`${esc(pr.type)}\` | ${pr.optional ? 'No' : 'Yes'} | ${esc(doc)} |`)
+        lines.push(`| \`${pr.name}\` | \`${esc(pr.type)}\` | ${pr.optional ? 'No' : 'Yes'} | ${esc(oneline(doc))} |`)
       }
       lines.push('')
     }
@@ -2603,7 +2665,7 @@ async function genCapabilitiesEn(ir, ends) {
             lines.push('')
             lines.push('| Prop | Type | Required | Doc |')
             lines.push('|---|---|---|---|')
-            for (const pr of ehIface.props) lines.push(`| \`${pr.name}\` | \`${escMd(pr.type)}\` | ${pr.optional ? 'No' : 'Yes'} | ${pr.doc || '—'} |`)
+            for (const pr of ehIface.props) lines.push(`| \`${pr.name}\` | \`${escMd(pr.type)}\` | ${pr.optional ? 'No' : 'Yes'} | ${oneline(pr.doc) || '—'} |`)
             lines.push('')
           }
           if (ehIface.methods.length) {
@@ -2611,7 +2673,7 @@ async function genCapabilitiesEn(ir, ends) {
             lines.push('')
             lines.push('| Method | Signature | Doc |')
             lines.push('|---|---|---|')
-            for (const mm of ehIface.methods) lines.push(`| \`${mm.name}\` | \`${escMd(mm.sig)}\` | ${mm.doc || '—'} |`)
+            for (const mm of ehIface.methods) lines.push(`| \`${mm.name}\` | \`${escMd(mm.sig)}\` | ${oneline(mm.doc) || '—'} |`)
             lines.push('')
             for (const mm of ehIface.methods) {
               lines.push(`#### \`${mm.name}\``)
@@ -2641,13 +2703,13 @@ async function genCapabilitiesEn(ir, ends) {
                 if (rt.props.length) {
                   lines.push('| Prop/Method | Type | Doc |')
                   lines.push('|---|---|---|')
-                  for (const pr of rt.props) lines.push(`| \`${pr.name}\` | \`${escMd(pr.type)}\` | ${pr.doc || '—'} |`)
+                  for (const pr of rt.props) lines.push(`| \`${pr.name}\` | \`${escMd(pr.type)}\` | ${oneline(pr.doc) || '—'} |`)
                   lines.push('')
                 }
                 if (rt.methods.length) {
                   lines.push('| Prop/Method | Type | Doc |')
                   lines.push('|---|---|---|')
-                  for (const mm of rt.methods) lines.push(`| \`${mm.name}\` | \`${escMd(mm.sig)}\` | ${mm.doc || '—'} |`)
+                  for (const mm of rt.methods) lines.push(`| \`${mm.name}\` | \`${escMd(mm.sig)}\` | ${oneline(mm.doc) || '—'} |`)
                   lines.push('')
                 }
               }
@@ -2743,6 +2805,12 @@ const nCap = genCapabilities(ir, ends)
 const nCompEn = await genComponentsEn(ir, ends)
 const nCapEn = await genCapabilitiesEn(ir, ends)
 
+if (collapsed.length) {
+  console.error(`COLLAPSED: ${collapsed.length} 个生成页出现「表格塌成段落」形态（多行 JSDoc 被压平？）：`)
+  for (const f of collapsed.slice(0, 20)) console.error(`  - ${f}`)
+  console.error("  修法：检查该页对应源的 JSDoc 是否被 join(' ') 压平（块渲染保留行结构，cell 才用 oneline）")
+  process.exit(1)
+}
 if (check) {
   if (drifts.length) {
     console.error(`DRIFT: ${drifts.length} 个生成页与源不一致——运行 npm run gen:content 并提交：`)

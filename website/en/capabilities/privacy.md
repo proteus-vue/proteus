@@ -75,7 +75,10 @@ onNeedAuthorization(cb: (res: { privacyContractName: string }) => void): () => v
 
 ### `PrivacySetting`
 
-★权威标尺缺口补齐（C65）：隐私协议（wx.getPrivacySetting / openPrivacyContract / requirePrivacyAuthorize / onNeedPrivacyAuthorization）。 《个人信息保护法》+ 微信隐私协议合规的刚需：开发者需在用户触发隐私授权时弹协议、可跳转协议页、可主动触发授权。 web 端无对等标准（Cookie 同意可由宿主自建）→ 缺省 Err 诚实降级（常驻宿主桥）。
+★权威标尺缺口补齐（C65）：隐私协议（wx.getPrivacySetting / openPrivacyContract /
+requirePrivacyAuthorize / onNeedPrivacyAuthorization）。
+《个人信息保护法》+ 微信隐私协议合规的刚需：开发者需在用户触发隐私授权时弹协议、可跳转协议页、可主动触发授权。
+web 端无对等标准（Cookie 同意可由宿主自建）→ 缺省 Err 诚实降级（常驻宿主桥）。
 
 | Prop | Type | Default | Doc |
 |---|---|---|---|

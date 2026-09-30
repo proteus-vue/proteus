@@ -2598,7 +2598,7 @@ export interface DeviceCapabilityAPI {
  * | MP（微信） | `WXWebAssembly.instantiate(path, imports)` | **代码包路径**（.wasm / .wasm.br） | ❌ **无** | 官方文档 + `miniprogram-api-typings/lib.wx.wasm.d.ts` |
  * | Web | 标准 `WebAssembly` | `BufferSource \| Response \| URL` | ✅ 有 | 平台标准 |
  * | App-iOS | JSC 内建 `WebAssembly`（与 Web 同形） | 同上 | ✅ 有 | **本机实测**：`validate(minimalModule)===true`，8 个 API 齐备 |
- * | App-Android | **当前宿主无 JS 引擎** ⇒ 不可用 | — | — | `hosts/android` 内零 JS 引擎（诚实边界） |
+ * | App-Android | 宿主 **wasm3**（QuickJS 无内建 WASM ⇒ 宿主侧运行时） | `{ bytes }`（宿主通道） | ✅ 有（宿主实现） | **真机实测**：`add(2,40)===42`，真跑 i32.add（wasm3 解释器，MIT/无 JIT ⇒ 兼容 W^X） |
  *
  * 【因此本原语的设计取舍（★不是"照抄 Web 标准"）】
  *   · **入口归一为 `instantiate(source)`**，`source` 是**判别联合**（`{ bytes }` / `{ path }`）——
@@ -2612,6 +2612,9 @@ export interface DeviceCapabilityAPI {
  * 【诚实边界（明确不支持的）】
  *   · MP 端**无法**从网络/字节流加载：官方只接受代码包内路径 ⇒ 动态下载 wasm 需先落包
  *     （`useFileSystem` + 重新分包），本原语**不假装**能做。
+ *   · ★App-Android 的 JS 引擎（QuickJS）**内建无 WebAssembly** ⇒ 由**宿主侧 wasm3** 提供
+ *     （`webassembly.instantiate/call/release` 通道，`hosts/android/wasm/`）；iOS 的 JSC 内建
+ *     ⇒ 走引擎路径。同一份 JS 桥 **两条路径都被真机验证**（结果都是 add(2,40)=42）。
  *   · MP 端 export 支持 函数 / Memory / Table，**iOS 平台暂不支持 Global**（官方原文）。
  *   · 本原语**不做** WASM↔JS 的自动编组（那需要 IDL）；只负责"拿到 instance"，调用面归调用方。
  */
@@ -7703,8 +7706,9 @@ function webBridge(g: typeof globalThis & { navigator?: Navigator & { getBattery
         }),
     }),
     // ★C82 WASM（Web 端 / App-iOS JSC 同形）：标准 `WebAssembly`——收字节，compile/validate 齐备。
-    //   ★App-iOS 走本分支的依据：JSC 内建标准 WebAssembly（本机实测 validate(true) + 8 API 齐备）；
-    //     App-Android 当前宿主无 JS 引擎 ⇒ 本原语在该端结构性不可用（诚实边界，不假装支持）。
+    //   ★App-iOS 走本分支的依据：JSC 内建标准 WebAssembly（本机+真机实测 validate(true) + add(2,40)=42）；
+    //     ★App-Android 不走本分支：QuickJS 内建无 WASM ⇒ 由**宿主 wasm3** 提供（见 capability-app.ts
+    //     的 getWebAssembly 宿主优先路径——真机实测同样跑出 42）。
     /** ★C47 跳其他小程序：Web 无等价（小程序平台概念）→ 诚实 Err */
     navigateMiniProgram: () =>
       Promise.reject(
@@ -8107,9 +8111,10 @@ export interface CapabilityHooks {
   /**
    * ★C82 WebAssembly：WASM 编译/实例化/校验（跨端归一，平台差异见 `WebAssemblyAPI` 头）。
    *
-   * 【三端真实形态（已取证）】MP 走 `WXWebAssembly.instantiate(path)`（基础库 v2.13.0+ ·
-   *   只收**代码包路径** · 无 compile/validate）· Web 与 App-iOS(JSC) 走标准 `WebAssembly`
-   *   （收字节 · compile/validate 齐备）· App-Android 当前宿主无 JS 引擎 ⇒ 不可用。
+   * 【三端真实形态（已取证 + 双端真机验证）】MP 走 `WXWebAssembly.instantiate(path)`（基础库
+   *   v2.13.0+ · 只收**代码包路径** · 无 compile/validate）· Web 与 App-iOS(JSC) 走标准
+   *   `WebAssembly`（收字节 · compile/validate 齐备）· App-Android 由**宿主 wasm3** 执行
+   *   （QuickJS 无内建 WASM——真机 add(2,40)=42）。
    *   ⇒ 用 `supportsStreaming` / `supportsPathLoad` 两个能力位判断，**不要按平台名分支**。
    */
   useWebAssembly(): CapResult<WebAssemblyAPI>

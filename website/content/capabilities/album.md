@@ -104,7 +104,9 @@ preview(urls: string[], current?: string): Promise<CapResult<void>>
 
 ### `MediaFile`
 
-★颗粒度对齐 C3：C52 相册（wx.chooseMedia / saveImageToPhotosAlbum / previewImage） 选择媒体 + 保存到系统相册 + 预览——对齐小程序媒体类 API 组。 Web 端：pick 走 <input type=file>（需宿主/用户手势），save 无标准（下载替代）∪ 缺省 Err（诚实降级）。
+★颗粒度对齐 C3：C52 相册（wx.chooseMedia / saveImageToPhotosAlbum / previewImage）
+选择媒体 + 保存到系统相册 + 预览——对齐小程序媒体类 API 组。
+Web 端：pick 走 <input type=file>（需宿主/用户手势），save 无标准（下载替代）∪ 缺省 Err（诚实降级）。
 
 | 属性 | 类型 | 默认值 | 说明 |
 |---|---|---|---|

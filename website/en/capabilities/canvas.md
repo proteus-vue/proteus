@@ -100,7 +100,10 @@ offscreen(width: number, height: number, type?: '2d' | 'webgl'): CapResult<Offsc
 
 ### `CanvasContext`
 
-★组件实例 API 对齐（2026-09-12）：C57 CanvasContext 2D 绘图上下文。 方法名与参数**逐一对齐微信官方 CanvasContext**（`wx.createCanvasContext` 返回）—— web 由标准 `CanvasRenderingContext2D` 适配（`setFillStyle` → `fillStyle` 等）， 因此同一份绘图代码在小程序端与 Web 端均可运行，业务零平台分支。
+★组件实例 API 对齐（2026-09-12）：C57 CanvasContext 2D 绘图上下文。
+方法名与参数**逐一对齐微信官方 CanvasContext**（`wx.createCanvasContext` 返回）——
+web 由标准 `CanvasRenderingContext2D` 适配（`setFillStyle` → `fillStyle` 等），
+因此同一份绘图代码在小程序端与 Web 端均可运行，业务零平台分支。
 
 | Method | Signature | Doc |
 |---|---|---|
