@@ -500,15 +500,25 @@ export function getHostInvoke(): HostInvokeFn | null {
 /**
  * 调原生（**同步**——与 G-39 的 JNI trampoline 同契约：壳内同步完成）。
  *
+ * 【★两条通道（真机实测补上第二条）】App 壳可以从两处暴露原生调用：
+ *   ① `globalThis.__proteusHostInvoke(method, argsJson)` —— 通用通道（简单宿主/测试可自行注册）；
+ *   ② **`proteusHost.invoke(method, argsJson)`** —— **JNI 条件注入的主通道**
+ *      （`quickjs_jni.c` 的 `js_host_invoke`：宿主 Java 侧实现 `invoke(String,String):String` 即自动注入）。
+ *   ★初版只查 ① ⇒ 真实 Java 宿主（提供 ②）**够不着**——真机实测抓出（删掉 JS 桩后立即暴露）。
+ *
  * @returns `{ ok: true, data }` 或 `{ ok: false, reason }`
  * ★未注册（壳没提供该方法）与调用失败**分得开**：
  *   前者 = 该端无此能力（框架据此给 `*.unsupported`）；后者 = 有 API 但调用出错（`*.failed`）。
  */
 export function invokeHost(method: string, args?: unknown): { ok: true; data: unknown } | { ok: false; reason: string; missing: boolean } {
   const f = getHostInvoke()
-  if (!f) return { ok: false, reason: `壳未注册 ${HOST_INVOKE_KEY}（App 端原生通道）`, missing: true }
+  // ② JNI 注入通道：`proteusHost.invoke`（真机 Android/iOS 壳的主路径）
+  const ph = (globalThis as { proteusHost?: { invoke?: (m: string, a: string) => string } }).proteusHost
+  if (!f && typeof ph?.invoke !== 'function') {
+    return { ok: false, reason: `壳未注册 ${HOST_INVOKE_KEY} 且无 proteusHost.invoke（App 端原生通道）`, missing: true }
+  }
   try {
-    const out = f(method, JSON.stringify(args ?? null))
+    const out = f ? f(method, JSON.stringify(args ?? null)) : ph!.invoke!(method, JSON.stringify(args ?? null))
     const parsed = JSON.parse(out) as { ok?: boolean; data?: unknown; reason?: string; missing?: boolean }
     if (parsed && parsed.ok === false) {
       return { ok: false, reason: String(parsed.reason ?? '原生调用失败'), missing: !!parsed.missing }
@@ -592,6 +602,7 @@ export function createAppNativeCapabilities<E extends Error = Error>(CapError: n
       const r = invokeHost(APP_NATIVE_METHODS.hostContext)
       if (r.ok && r.data && typeof r.data === 'object') {
         const d = r.data as { provider?: string; version?: string; capabilities?: string[] }
+        // ★真机实测：Java 侧返回了 version（真 versionName），但初版未透传 ⇒ 文档/判据看不到
         return { provider: d.provider ?? 'app', version: d.version, capabilities: d.capabilities }
       }
       // 壳未注册 ⇒ 诚实回退到最小自述（不消极报错：上下文在 App 端总是可知的）
@@ -602,9 +613,10 @@ export function createAppNativeCapabilities<E extends Error = Error>(CapError: n
     loadExtension: (extensionId: string) => call<unknown>(APP_NATIVE_METHODS.extensionLoad, { id: extensionId }, 'extension'),
     /** C51 热更新（App：壳转发原生更新管理器——iOS App Store / Android 内更新） */
     getUpdateManager: () => ({
-      checkUpdate: async (): Promise<R<{ hasUpdate: boolean }, E>> => {
-        const r = await call<{ hasUpdate?: boolean }>(APP_NATIVE_METHODS.updateCheck, {}, 'update')
-        return r.ok ? { ok: true, data: { hasUpdate: !!r.data?.hasUpdate } } : r
+      checkUpdate: async (): Promise<R<{ hasUpdate: boolean; currentVersion?: string }, E>> => {
+        const r = await call<{ hasUpdate?: boolean; currentVersion?: string }>(APP_NATIVE_METHODS.updateCheck, {}, 'update')
+        // ★透传 currentVersion（宿主真实读的 versionName——判据用它证明"不是桩返回"）
+        return r.ok ? { ok: true, data: { hasUpdate: !!r.data?.hasUpdate, currentVersion: r.data?.currentVersion } } : r
       },
       applyUpdate: async (): Promise<R<void, E>> => {
         const r = await call<void>(APP_NATIVE_METHODS.updateApply, {}, 'update')
@@ -619,14 +631,18 @@ export function createAppNativeCapabilities<E extends Error = Error>(CapError: n
     createWorker: (scriptPath: string) => {
       const r = invokeHost(APP_NATIVE_METHODS.workerCreate, { scriptPath })
       if (!r.ok) throw new CapError(r.missing ? 'worker.unsupported' : 'worker.failed', `worker: ${r.reason}`)
+      // ★★真机实测抓出的真缺陷：宿主在 create 时返回 **workerId**，但初版 post/terminate
+      //   **没带上它** ⇒ 宿主找不到槽位 ⇒ `worker.failed`（桥与宿主契约断链）。
+      const created = (r.data ?? {}) as { id?: number }
+      const workerId = Number(created.id ?? 0)
       return {
         postMessage: (msg: unknown): R<void, E> => {
-          const p = invokeHost(APP_NATIVE_METHODS.workerPost, { msg })
+          const p = invokeHost(APP_NATIVE_METHODS.workerPost, { workerId, msg })
           return p.ok ? { ok: true, data: undefined } : errNow<void>(p.missing ? 'worker.unsupported' : 'worker.failed', p.reason)
         },
         onMessage: () => () => undefined, // 壳推知通过生命周期事件渠道
         terminate: (): R<void, E> => {
-          const p = invokeHost(APP_NATIVE_METHODS.workerTerminate, {})
+          const p = invokeHost(APP_NATIVE_METHODS.workerTerminate, { workerId })
           return p.ok ? { ok: true, data: undefined } : errNow<void>(p.missing ? 'worker.unsupported' : 'worker.failed', p.reason)
         },
       }

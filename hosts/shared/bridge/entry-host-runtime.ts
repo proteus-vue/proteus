@@ -186,66 +186,19 @@ function shellQuery(): string {
  *   G. ★G-41 宿主 conformance 用本运行时替换 stub：32 项（H-01~H-08）
  */
 // ══════════════════════════════════════════════════════════════════
-// ★★App 端原生能力通道（`__proteusHostInvoke`）——**壳侧示范实现**
+// ★★App 端原生能力通道（`proteusHost.invoke`）——**真机走真实 Java 宿主**
 //
-// 【为什么放在本场景（用户要求：「落地不是仅仅 web 和小程序，包括 App 也要落地，
-//   因为现在 App 宿主已经有了」）】
-//   `capability-app.ts` 的 `invokeHost` 需要壳注册 `globalThis.__proteusHostInvoke`。
-//   本场景注册一个**真实壳实现**（能提供的能力就真做，不能的显式报 missing），
-//   然后经真实 hooks 验证：**同一份业务代码在 App 端跑这些能力**。
-//
-// 【诚实边界】本场景用 JS 侧实现代替原生（真机上原生实现由 Java/Swift 壳提供同样契约）；
-//   但**契约与错误语义完全一致**（未注册 ⇒ missing ⇒ `*.unsupported`），故验证的是**桥这一层**。
+// 【★历史纠正（用户质疑「App 端是真的落地能力实现了吗？不是只有一个壳转发通道或者签名定义？」）】
+//   初版在此处写了一个 **JS 侧示范实现**（`g.__proteusHostInvoke = …`）并把读数当真机证据——
+//   那是**自我闭环**（用自己的桩证明自己的桥），本仓禁止。取证确认：真实 Android 宿主当时
+//   **没有** invoke 通道（`quickjs_jni.c` 只注入 post/mount/update/updatePatches/memUsage/gc）。
+//   ⇒ 现已改为**真实实现**：
+//     · Java 侧 `HostCapabilities.java`（Android 真 API：线程池/位图预热/窗口 LayoutParams/版本查询）
+//     · JNI 侧 `quickjs_jni.c` 的 `js_host_invoke`（条件注入 + 异常透传）
+//     · 本场景**不再注册任何桩**——`installHostInvokeDemo` 已删除；
+//       `invokeHost` 直接走 `globalThis.__proteusHostInvoke`，**未注册就会诚实 missing**
+//       （判据里有一条专门查"壳是否真的被调用"——桩在时不成立，真实现才成立）。
 // ══════════════════════════════════════════════════════════════════
-
-/** 壳侧示范实现：记录调用 + 对"真有平台能力"的返回数据，其余显式 missing */
-function installHostInvokeDemo(): { calls: string[]; restore: () => void } {
-  const calls: string[] = []
-  const g = globalThis as Record<string, unknown>
-  const prev = g.__proteusHostInvoke
-  g.__proteusHostInvoke = (method: string, argsJson: string): string => {
-    calls.push(method)
-    const args = (() => {
-      try {
-        return JSON.parse(argsJson) as Record<string, unknown>
-      } catch {
-        return {}
-      }
-    })()
-    switch (method) {
-      case 'host.context':
-        return JSON.stringify({ ok: true, data: { provider: HOST_ID, version: 'demo-1.0', capabilities: ['update', 'window', 'worker'] } })
-      case 'update.check':
-        return JSON.stringify({ ok: true, data: { hasUpdate: false } })
-      case 'update.apply':
-        return JSON.stringify({ ok: true, data: null })
-      case 'window.setSize':
-        return JSON.stringify({ ok: true, data: { applied: { w: args.width, h: args.height } } })
-      case 'worker.create':
-        return JSON.stringify({ ok: true, data: { id: 1 } })
-      case 'worker.post':
-        return JSON.stringify({ ok: true, data: null })
-      case 'worker.terminate':
-        return JSON.stringify({ ok: true, data: null })
-      case 'idle.request':
-        return JSON.stringify({ ok: true, data: { id: 7, timeRemaining: 4 } })
-      case 'idle.cancel':
-        return JSON.stringify({ ok: true, data: null })
-      case 'preload.assets':
-        return JSON.stringify({ ok: true, data: null })
-      default:
-        // ★未实现 ⇒ 显式 missing（桥据此给 `*.unsupported`，不假装成功）
-        return JSON.stringify({ ok: false, missing: true, reason: `壳未实现 ${method}` })
-    }
-  }
-  return {
-    calls,
-    restore: () => {
-      if (prev === undefined) delete g.__proteusHostInvoke
-      else g.__proteusHostInvoke = prev
-    },
-  }
-}
 
 export function __proteusHostRun(): string {
   const host = globalHost()
@@ -547,7 +500,6 @@ export function __proteusHostRun(): string {
   // 【异步形态】本场景主函数是**同步**的（与 I 组同构）⇒ 用 `.then` 链收集结果到 pending，
   //   由 finish 相位读（正好再证 job 泵）。
   // ══════════════════════════════════════════════════════════════════
-  const hostInvoke = installHostInvokeDemo()
   const appPending: Record<string, unknown> = { done: false }
   ;(globalThis as unknown as { __proteusAppPending?: typeof appPending }).__proteusAppPending = appPending
   void (async () => {
@@ -578,7 +530,11 @@ export function __proteusHostRun(): string {
       appPending.windowSetSize = await appCaps.getWindow().setSize(1024, 768)
       // ④ C53 Worker
       try {
-        const w = appCaps.createWorker('demo.js')
+        // ★桥现在会把 create 返回的 workerId 带到 post/terminate（真机实测修出的契约断链）
+        const w = appCaps.createWorker('demo.js') as unknown as {
+          postMessage: (m: unknown) => { ok: boolean; data?: unknown; error?: unknown }
+          terminate: () => { ok: boolean }
+        }
         appPending.workerPost = w.postMessage({ ping: 1 })
         appPending.workerTerminate = w.terminate()
       } catch (e) {
@@ -611,17 +567,25 @@ export function __proteusHostRun(): string {
         validate: (b: Uint8Array) => Promise<{ ok: boolean; data?: boolean; error?: { code?: string; message?: string } }>
       }
       appPending.wasmSupportsStreaming = wasmCaps.supportsStreaming
+      // ★★真实宿主自报调用记录（`native.calls`）——证明"能力确实经宿主导出"，
+      //   而非桥自造数据（初版用 JS 桩；现已删桩，读宿主的记账）。
       const wv = await wasmCaps.validate(new Uint8Array([0x00, 0x61, 0x73, 0x6d, 0x01, 0x00, 0x00, 0x00]))
       // ★Error 对象 JSON 序列化会丢 code/message（变成 {}）⇒ 显式展开（判据据此分档）
       const wvErr = (wv as { error?: { code?: string; message?: string } }).error
       appPending.wasmValidateEmptyModule = wv.ok
         ? { ok: true, data: wv.data }
         : { ok: false, code: wvErr?.code, message: String(wvErr?.message ?? '') }
-      appPending.__calls = hostInvoke.calls
     } catch (e) {
       appPending.fatal = String(e)
-    } finally {
-      hostInvoke.restore()
+    }
+    // ★★壳调用记录（真 Java 宿主自报——见 HostCapabilities.callLog）
+    //   ★若宿主未实现 invoke，此处会 unsupported ⇒ 判据红（桩时代不成立的判据）
+    try {
+      const { invokeHost: rawInvoke } = await import('@proteus-vue/api/capability-app')
+      const rec = rawInvoke('native.calls')
+      appPending.__hostCalls = rec.ok ? rec.data : { ok: false, reason: rec.reason }
+    } catch (e) {
+      appPending.__hostCalls = { ok: false, reason: String(e) }
     }
     appPending.done = true
   })()

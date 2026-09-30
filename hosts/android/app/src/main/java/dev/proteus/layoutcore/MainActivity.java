@@ -859,7 +859,10 @@ public class MainActivity extends Activity {
             QuickJsEngine.eval("globalThis.__PROTEUS_HOST_ID__ = 'android';"
                     + "globalThis.__PROTEUS_HOST_FRAME_DRIVER__ = 'Choreographer';");
             // ★宿主桥：memUsage / gc（无参签名——JNI 侧逐一条件探测注入）
-            final HostBridge bridge = new HostBridge();
+            //   ★★App 原生能力（invoke）：转调真实 HostCapabilities（Android 真 API 实现）
+            final HostCapabilities caps = new HostCapabilities(this);
+            this.hostCaps = caps;
+            final HostBridge bridge = new HostBridge(caps);
             long t0 = System.nanoTime();
             QuickJsEngine.EvalResult load = QuickJsEngine.evalWithHost(bundle, bridge);
             out.put("bundle_load_ok", load.ok);
@@ -927,6 +930,22 @@ public class MainActivity extends Activity {
      * ★无参签名与 post/mount/update 不同 ⇒ C 侧用独立探测（见 quickjs_jni.c 的 host_call_noarg_impl）。
      */
     public static final class HostBridge {
+        /**
+         * ★★App 端原生能力通道（真实实现）：转调 {@link HostCapabilities}。
+         * 未实现的方法由 HostCapabilities 抛 UnsupportedOperationException ⇒ JNI 转成 JS 异常
+         * ⇒ 桥识别 missing ⇒ `*.unsupported`（诚实分档，不是"静默失败"）。
+         */
+        private final HostCapabilities caps;
+
+        public HostBridge(HostCapabilities caps) {
+            this.caps = caps;
+        }
+
+        @SuppressWarnings("unused")
+        public String invoke(String method, String argsJson) throws Exception {
+            return caps.invoke(method, argsJson);
+        }
+
         @SuppressWarnings("unused")
         public String memUsage() {
             return QuickJsEngine.nativeMemoryUsage();
@@ -956,6 +975,8 @@ public class MainActivity extends Activity {
      *   bundle 未加载时（hook 未定义）静默跳过（不是本场景的测试轮次——如 js-render 路径）。
      */
     private boolean shellHookLoaded = false;
+    /** ★App 原生能力实现（真实 Java；见 HostCapabilities 头注） */
+    private HostCapabilities hostCaps = null;
 
     private void forwardShellLifecycle(String evt) {
         try {
@@ -986,6 +1007,17 @@ public class MainActivity extends Activity {
     protected void onResume() {
         super.onResume();
         forwardShellLifecycle("resume");
+        // ★真实空闲泵：回到前台时执行排队的 idle 任务（G-39「帧调度权归宿主」）
+        HostCapabilities c = this.hostCaps;
+        if (c != null) c.pumpIdle();
+    }
+
+    @Override
+    protected void onDestroy() {
+        super.onDestroy();
+        // ★框架代管资源释放（G-42 精神）：Worker 线程池 / 空闲队列
+        HostCapabilities c = this.hostCaps;
+        if (c != null) c.dispose();
     }
 
     /**

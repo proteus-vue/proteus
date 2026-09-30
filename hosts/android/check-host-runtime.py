@@ -282,27 +282,48 @@ def main() -> int:
     else:
         # ① 已实现的能力：真实成功 + 数据正确
         hc = app_native.get("hostContext") or {}
-        if not hc.get("provider"):
-            fail(f"① C48 宿主上下文缺失 provider：{hc}")
+        # ★内容判据（破坏性验证暴露：只看 ok 会放过"退回桩"）：
+        #   provider 必须是环境自报的（android），且 capabilities 非空（壳真声明了能力）
+        caps = hc.get("capabilities") or []
+        if hc.get("provider") != "android" or len(caps) < 5:
+            fail(f"① C48 宿主上下文内容不实（provider={hc.get('provider')} capabilities={caps}）"
+                 f"——期望 provider=android 且 ≥5 个能力（HostCapabilities.hostContext 真读）")
         else:
-            report(f"① C48 宿主上下文：provider={hc.get('provider')} version={hc.get('version')}")
+            report(f"① C48 宿主上下文：provider={hc.get('provider')} version={hc.get('version')} caps={len(caps)} 项")
         uc = app_native.get("updateCheck") or {}
         if uc.get("ok") is not True:
             fail(f"② C51 checkUpdate 应成功（壳已实现）：{uc}")
         elif (app_native.get("updateApply") or {}).get("ok") is not True:
             fail(f"② C51 applyUpdate 应成功：{app_native.get('updateApply')}")
         else:
-            report(f"② C51 热更新：check/apply 均真实调用成功（check={uc.get('data')}）")
+            # ★内容判据：currentVersion 由宿主读**真实 versionName**（PackageManager）
+            #   —— 桩实现给不出它（破坏性验证：把实现退回 "STUB" 时本判据当场红）
+            cv = (uc.get("data") or {}).get("currentVersion")
+            if not cv or cv == "STUB" or cv == "None":
+                fail(f"② C51 的 currentVersion 不是真实版本名（{cv}）——疑宿主实现退回桩")
+            else:
+                report(f"② C51 热更新：check/apply 真实调用成功（currentVersion={cv} 读自 PackageManager）")
         ws = app_native.get("windowSetSize") or {}
         wd = ws.get("data") or {}
-        if ws.get("ok") is not True or (wd.get("applied") or {}).get("w") != 1024:
-            fail(f"③ C74 窗口设置应成功且回显尺寸：{ws}")
+        # ★真实 Java 宿主返回 {requested:{w,h}, applied:bool, decorSize:[w,h]}（见 HostCapabilities）
+        req = wd.get("requested") or {}
+        if ws.get("ok") is not True or req.get("w") != 1024:
+            fail(f"③ C74 窗口设置应成功且回显请求尺寸：{ws}")
         else:
-            report(f"③ C74 窗口：setSize(1024,768) → {wd.get('applied')}")
-        if (app_native.get("workerPost") or {}).get("ok") is not True:
-            fail(f"④ C53 Worker postMessage 应成功：{app_native.get('workerPost')}")
+            report(f"③ C74 窗口：setSize(1024,768) 经真实宿主（applied={wd.get('applied')} decorSize={wd.get('decorSize')}）")
+        wp = app_native.get("workerPost") or {}
+        if wp.get("ok") is not True:
+            fail(f"④ C53 Worker postMessage 应成功：{wp}")
         else:
-            report("④ C53 Worker：create/post/terminate 链路通")
+            # ★诚实标注：桥的 WorkerHandle.postMessage 按接口契约返回 Result<void>（不透传宿主细节），
+            #   "是否真线程"的证据在**宿主侧**（HostCapabilities.workerPost 的 ranOnThread）。
+            #   ⇒ 判据改为：post/terminate 均成功（真实宿主执行）+ 宿主调用记录里含 worker.*
+            hp = app_native.get("__hostCalls")
+            worker_calls = [c for c in (hp if isinstance(hp, list) else []) if str(c).startswith("worker.")]
+            if len(worker_calls) < 3:
+                fail(f"④ C53 Worker 宿主调用不完整（{worker_calls}）—— create/post/terminate 应各有一次")
+            else:
+                report(f"④ C53 Worker：真实宿主执行 {len(worker_calls)} 次调用（{', '.join(worker_calls)}）——线程池实现在 HostCapabilities")
         if app_native.get("idleCallbackRan") is not True:
             fail(f"⑤ C73 空闲回调未执行：{app_native.get('idleRequest')}")
         else:
@@ -349,12 +370,21 @@ def main() -> int:
                 fail(f"⑨ C82 validate 失败（非引擎能力差异）：{wv}")
         else:
             fail(f"⑨ C82 validate 未返回结果：{wv}")
-        # ④ 壳调用序列（证明真经壳转发，不是桥自己编数据）
-        calls = app_native.get("__calls") or []
-        if len(calls) < 8:
-            fail(f"⑩ 壳实际被调用次数不足（{len(calls)}）——疑桥未真正转发：{calls}")
+        # ④ ★★壳调用记录（**由真实 Java 宿主自报**——证明能力经宿主执行，不是桥自造数据）
+        #   初版读 JS 侧桩的 `__calls`（自我闭环）；现读 `HostCapabilities.callLog`。
+        host_calls_raw = app_native.get("__hostCalls")
+        # ★形态：`invokeHost('native.calls')` 返回 {ok:true, data:[...]}（data 直接是数组——
+        #   初版按 .data.data 读 ⇒ 判据自身读错路径，真机实测暴露）
+        calls = None
+        if isinstance(host_calls_raw, list):
+            calls = host_calls_raw
+        elif isinstance(host_calls_raw, dict):
+            inner = host_calls_raw.get("data")
+            calls = inner if isinstance(inner, list) else None
+        if not isinstance(calls, list) or len(calls) < 8:
+            fail(f"⑩ 真实宿主未报告足够的调用记录（{host_calls_raw}）——疑宿主未实现 invoke 或桥未转发")
         else:
-            report(f"⑩ 壳转发实测调用 {len(calls)} 次：{', '.join(calls[:6])}…")
+            report(f"⑩ 真实 Java 宿主机自报调用 {len(calls)} 次：{', '.join(str(c) for c in calls[:6])}…（证据来自宿主记账，非桥自述）")
 
     # ── G 宿主 conformance ──
     total = d.get("conf_total", 0)
