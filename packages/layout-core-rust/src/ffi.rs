@@ -762,6 +762,13 @@ pub(crate) struct TreeEntry {
     ///   但节点体（含 style / String 字段）**留在数组里** ⇒ 长列表反复增删会持续积压。
     ///   本字段累计孤点数，超过阈值时触发 `compact()`（可达性重建，见其注释）。
     pub(crate) orphans: usize,
+    /// ★★**指令驱动动画引擎**（RT0，2026-09-30）
+    ///
+    /// 【为什么随句柄持久化】动画是**跨帧**状态（起始 → 每帧推进 → 结束）。
+    ///   若每次 `tick` 重建引擎，动画状态就丢了 ⇒ 必须与树同生命周期。
+    ///   ★它与树是**两个对象**（不是树的一部分）：动画只写 style 的绘制字段、不触发布局，
+    ///   语义上更接近"宿主侧每帧驱动"，故独立持有。
+    pub(crate) anim: crate::anim::AnimEngine,
 }
 
 impl TreeEntry {
@@ -771,7 +778,8 @@ impl TreeEntry {
             id_to_idx.insert(n.id, i as u32);
         }
         Self {
-            last_scopes: Vec::new(), measures, tree, id_to_idx, orphans: 0 }
+            last_scopes: Vec::new(), measures, tree, id_to_idx, orphans: 0,
+            anim: crate::anim::AnimEngine::new() }
     }
 
     /// ★★**压实**：把可达节点重建进新数组，回收孤点内存（O(存活节点数)）
@@ -2204,6 +2212,119 @@ pub unsafe extern "C" fn proteus_layout_apply_ops(handle: u64, ptr: *const u8, l
     //   本入口 = with_rects=true（兼容既有调用方，JSON 里带 `rects`）；
     //   二进制通道场景请用 `proteus_layout_apply_ops_norects`（省掉序列化与宿主解析）。
     match std::panic::catch_unwind(|| apply_ops_impl(handle, ptr, len, true)) {
+        Ok(Ok(s)) => CString::new(s).map(|c| c.into_raw()).unwrap_or(std::ptr::null_mut()),
+        Ok(Err(e)) => CString::new(serde_json::json!({"ok": false, "error": e}).to_string())
+            .map(|c| c.into_raw())
+            .unwrap_or(std::ptr::null_mut()),
+        Err(_) => CString::new(serde_json::json!({"ok": false, "error": "内部 panic（已捕获）"}).to_string())
+            .map(|c| c.into_raw())
+            .unwrap_or(std::ptr::null_mut()),
+    }
+}
+
+/// ★★RT0（2026-09-30）—— **动画指令入口**：启动/停止动画（**曲线求值在 Rust 侧**）
+///
+/// 【为什么不走 ops 指令流（与 ANIM_START opcode 的关系）】
+///   动画指令的两个语义层：① **启动**（一次性，含曲线 id/起止值/时长）；
+///   ② **每帧推进**（高频，只有 dt 一个数）。本函数承载 ①，`proteus_layout_anim_tick` 承载 ②。
+///   ★②**故意不走 ops 二进制流**：每帧一条 20B 消息去编码/解码一个 f32，是把 V2「池按需」
+///   好不容易省下的字节又花回去；而 **1 次函数调用 + 1 个 f32** 已是最小跨边界形态。
+///   （这就是 RT0 要验证的"最小协议"设计——数字见 examples/rt0_anim_spike.rs 的对照。）
+///
+/// 入参 JSON：`{"anims":[{"nodeId":1,"kind":0,"curve":1,"from":0,"to":200,"durMs":1000}]}`
+///   kind: 0=translateX / 1=translateY / 2=scale（与 `AnimKind` 一致）
+///   返回：`{"ok":true,"started":N}` 或 `{"ok":false,"error":...}`
+///
+/// # Safety
+/// `json` 须为有效 NUL 结尾 C 字符串。返回指针须用 `proteus_string_free` 释放。
+#[no_mangle]
+pub unsafe extern "C" fn proteus_layout_anim_start(handle: u64, json: *const c_char) -> *mut c_char {
+    let f = || -> Result<String, String> {
+        let s = unsafe { std::ffi::CStr::from_ptr(json) }
+            .to_str()
+            .map_err(|e| format!("入参不是合法 UTF-8：{e}"))?;
+        let v: serde_json::Value = serde_json::from_str(s).map_err(|e| format!("入参 JSON 解析失败：{e}"))?;
+        let list = v
+            .get("anims")
+            .and_then(|a| a.as_array())
+            .ok_or_else(|| "入参缺少 anims 数组".to_string())?;
+
+        let mut reg = registry().lock().map_err(|_| "注册表锁失败".to_string())?;
+        let entry = reg.get_mut(&handle).ok_or_else(|| format!("句柄 {handle} 不存在"))?;
+
+        let num = |o: &serde_json::Value, k: &str| -> Result<f32, String> {
+            o.get(k)
+                .and_then(|x| x.as_f64())
+                .map(|x| x as f32)
+                .ok_or_else(|| format!("动画缺少数值字段 `{k}`"))
+        };
+        let mut started = 0usize;
+        for a in list {
+            let node_id = a
+                .get("nodeId")
+                .and_then(|x| x.as_u64())
+                .ok_or_else(|| "动画缺少 nodeId".to_string())? as u32;
+            let kind_raw = a
+                .get("kind")
+                .and_then(|x| x.as_u64())
+                .ok_or_else(|| "动画缺少 kind".to_string())? as u8;
+            let kind = crate::anim::AnimKind::from_u8(kind_raw)?;
+            let curve = a.get("curve").and_then(|x| x.as_u64()).unwrap_or(0) as u8;
+            let anim = crate::anim::Anim {
+                node_id,
+                kind,
+                curve,
+                from: num(a, "from")?,
+                to: num(a, "to")?,
+                dur_ms: num(a, "durMs")?,
+                t_ms: 0.0,
+            };
+            // ★错误必须冒泡（节点不在树上 / 曲线越界）——静默会变成"动画不生效"难查
+            let tree = &entry.tree;
+            entry.anim.start(tree, anim)?;
+            started += 1;
+        }
+        Ok(serde_json::json!({"ok": true, "started": started}).to_string())
+    };
+    match std::panic::catch_unwind(f) {
+        Ok(Ok(s)) => CString::new(s).map(|c| c.into_raw()).unwrap_or(std::ptr::null_mut()),
+        Ok(Err(e)) => CString::new(serde_json::json!({"ok": false, "error": e}).to_string())
+            .map(|c| c.into_raw())
+            .unwrap_or(std::ptr::null_mut()),
+        Err(_) => CString::new(serde_json::json!({"ok": false, "error": "内部 panic（已捕获）"}).to_string())
+            .map(|c| c.into_raw())
+            .unwrap_or(std::ptr::null_mut()),
+    }
+}
+
+/// ★★RT0 —— **每帧推进动画**（一次调用 = 一帧；曲线求值与字段写入都在 Rust 侧）
+///
+/// 返回：`{"ok":true,"changed":N,"finished":M,"active":K}`
+///   `changed` = 本帧真正改动的字段数（值未变不计）；`finished` = 本帧结束的动画数；
+///   `active` = 推进后仍在活动的动画数。
+///
+/// ★语义：只写 style 的**绘制字段**（translateX/Y、scale），**不触发重排**——
+///   translate/scale 是绘制层变换，不改变布局几何（这正是指令路径的成本优势之一）。
+///
+/// # Safety
+/// 返回指针须用 `proteus_string_free` 释放。
+#[no_mangle]
+pub extern "C" fn proteus_layout_anim_tick(handle: u64, dt_ms: f32) -> *mut c_char {
+    let f = || -> Result<String, String> {
+        let mut reg = registry().lock().map_err(|_| "注册表锁失败".to_string())?;
+        let entry = reg.get_mut(&handle).ok_or_else(|| format!("句柄 {handle} 不存在"))?;
+        let mut eng = std::mem::take(&mut entry.anim);
+        let out = eng.tick(&mut entry.tree, dt_ms);
+        entry.anim = eng;
+        Ok(serde_json::json!({
+            "ok": true,
+            "changed": out.changed,
+            "finished": out.finished,
+            "active": out.active_after,
+        })
+        .to_string())
+    };
+    match std::panic::catch_unwind(f) {
         Ok(Ok(s)) => CString::new(s).map(|c| c.into_raw()).unwrap_or(std::ptr::null_mut()),
         Ok(Err(e)) => CString::new(serde_json::json!({"ok": false, "error": e}).to_string())
             .map(|c| c.into_raw())

@@ -14,6 +14,11 @@
 export { OpCode, InsertPos, SLOT_KIND_OP, PropKeyTable, StringPool } from './opcode'
 export type { SlotKind, UpdateTier, UpdateOp } from './opcode'
 
+// ★RT0（2026-09-30）：动画曲线（跨语言契约的 TS 半边——与 Rust `anim.rs` 同式；
+//   golden `tests/anim-curve-golden.test.ts` 以 Rust **实测值**为期望）
+export { AnimCurve, curveEval, animValue } from './anim-curve'
+export type { AnimCurveId, AnimKindId } from './anim-curve'
+
 export {
   OpBuffer,
   encodeOps,

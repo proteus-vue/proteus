@@ -25,6 +25,7 @@
 //   · `ops_apply`       → **指令的布局应用**（Vapor IR V3：指令 → 树变更 → 多范围增量重排）
 //   · `rects_bin`       → **变化集二进制返回通道**（V4：回程免 JSON 解析——V3 类B 的最大单项）
 //   · `snap`            → **坐标吸附**（卡 I2：舍入时机统一——内核唯一实现，平台层零舍入）
+//   · `anim`            → **指令驱动动画**（RT0：曲线查表 + tick，曲线求值不经 JS）
 //
 // ★尚未落地（诚实边界，后续里程碑）：`flatten/` `materialize/` `paint-hint/` `recycle/` `render/`
 pub mod blob;
@@ -35,6 +36,8 @@ pub mod ops;
 pub mod ops_apply;
 pub mod rects_bin;
 pub mod snap;
+// ★RT0（2026-09-30）：指令驱动动画的求值引擎（曲线查表 + tick；见文件头）
+pub mod anim;
 #[cfg(target_os = "android")]
 pub mod jni;
 pub mod node;
