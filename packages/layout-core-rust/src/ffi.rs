@@ -2964,6 +2964,32 @@ pub unsafe extern "C" fn proteus_layout_anim_tick_bin(handle: u64, dt_ms: f32, o
     }
 }
 
+/// ★★**仍在推进的动画条数**（0 = 全部结束）——幕切换的唯一权威判据
+///
+/// 【为什么必须在内核回答（2026-09-30 真机取证）】"这一幕演完了吗"**不能**由调用方按
+///   `delayMs + durMs` 推算：弹簧动画的时长由**物理**决定（名义 `durMs` 只是采样窗口，
+///   实际在 `settle_eps` 内静止才结束）⇒ JS 侧推算的"幕时长"要么早切（姿态没到）要么多等
+///   （可见的停顿——真机实测：每幕末尾一段"结束等会儿再开始"）。
+///   内核 tick 只回"**变化**记录"，静止但仍未结束的动画不在里面 ⇒ 外部无法推断。
+///   ⇒ 把"还有几条在动"作为**极小的标量查询**暴露出来（一次调用 = 一个 usize，零拷贝零分配）。
+///
+/// 语义：`a.drive == Progress` 的动画**永不自动结束**（由 stop 显式结束，见 `step` 注释）
+///   ⇒ 它们也会被计入——对"幕是否结束"的用途正是想要的语义（滚动/手势驱动的幕不应该自动切走）。
+///
+/// # Safety
+/// 纯标量返回，无指针；句柄不存在时返回 0（与"没有动画"同义，调用方不会卡住）。
+#[no_mangle]
+pub unsafe extern "C" fn proteus_layout_anim_active(handle: u64) -> u64 {
+    let r = std::panic::catch_unwind(|| -> u64 {
+        let Ok(reg) = registry().lock() else { return 0 };
+        match reg.get(&handle) {
+            Some(entry) => entry.anim.len() as u64,
+            None => 0,
+        }
+    });
+    r.unwrap_or(0)
+}
+
 /// ★V4 —— **变化集二进制返回**：应用指令后把变化矩形以二进制写回
 ///
 /// 【与 `proteus_layout_apply_ops` 的关系】

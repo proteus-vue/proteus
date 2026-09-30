@@ -76,11 +76,11 @@ const T = {
     ],
     showcaseTitle: '炫技场 · 真机跑给你看',
     showcaseLead:
-      '800 片瓦片同屏编舞：弹簧波浪（1600 条 spring）→ FLIP 整片重排 → 螺旋收束（3200 条三属性指令）——三段全部由**真指令**驱动，曲线与物理在 Rust 内核求值。这不是录屏特效，是 iPhone 12 上一次跑完的真实读数。',
+      '800 片瓦片同屏编舞的**整场演出**：星尘凝聚 → 聚字开场语 → 涟漪 → 多米诺 → 风暴（800×5 条指令并发）→ 全量重排 ×2 → 漩涡 → 聚字谢幕语，共 12 幕一幕到底、幕间零停顿。**全部由一句句声明式编排写出来**（相位序 + 构型预设，无一行手写循环），曲线与物理在 Rust 内核求值。这不是录屏特效，是 iPhone 12 上一次跑完的真实读数。',
     showcaseNote: '★为什么"别人不敢试"：Web/VDOM 框架 800 节点逐节点动画 = 每帧 800 次样式写入 + 布局失效；RN/小程序每个节点是原生视图，800 视图同屏是内存与桥接的双重灾难；Flutter 能跑但走 Dart 层求值。我们把曲线/物理放在内核，每帧只跨一次边界。',
-    showcaseImgAlt: 'Morpheus 炫技场真机截图：800 片瓦片收束成居中三圈漩涡（黄→绿→青→蓝紫渐变臂）',
-    showcaseCaption: '真机截图（iPhone 12 · 三段跑完的收尾帧）：800 片收束成漩涡',
-    showcaseCmd: '复跑：bash hosts/ios/run-selfdraw.sh --showcase',
+    showcaseImgAlt: 'Morpheus 炫技场真机截图：800 片瓦片聚成点阵文字 800 TILES，四周星尘环绕',
+    showcaseCaption: '真机截图（iPhone 12 · 谢幕语定格）：800 片聚成 800 TILES',
+    showcaseCmd: '复跑：bash hosts/ios/run-selfdraw.sh --showcase ｜ 演示 App：iPhone 上点开 Morpheus 即循环演出',
     demoTitle: '真机演示',
     demoNote: '演示播放的是引擎交给执行器的同一份指令（routeTransitionBatches）；曲线求值走与 Rust 内核 golden 对拍过的 TS 镜像。',
     dirLabel: '方向',
@@ -151,11 +151,11 @@ const T = {
     ],
     showcaseTitle: 'Showcase · verified on a device',
     showcaseLead:
-      '800 tiles choreographed on screen at once: a spring wave (1,600 spring animations) → a full-grid FLIP re-layout → a spiral convergence (3,200 instructions across four properties) — all driven by real engine instructions, with curves and physics evaluated in the Rust kernel. Not a filmed effect: these are readings from one run on an iPhone 12.',
+      'A full 12-act show on 800 tiles at once: stardust gathering → a clocked opening title → ripples → dominoes → a storm (800×5 concurrent instructions) → two full re-layouts → a spiral → a clocked finale, running end to end with no pause between acts. Every act is written as one declarative choreography (phase order + formation presets, zero hand-written loops), with curves and physics evaluated in the Rust kernel. Not a filmed effect: these are readings from one run on an iPhone 12.',
     showcaseNote: '★Why others do not attempt it: in Web/VDOM frameworks, animating 800 nodes means 800 style writes and a layout invalidation every frame; in RN/mini-programs every node is a native view, so 800 views on screen is a memory and bridge disaster; Flutter can do it but evaluates in Dart. We keep curves and physics in the kernel and cross the boundary once per frame.',
-    showcaseImgAlt: 'Morpheus showcase device screenshot: 800 tiles converging into a centred three-turn spiral (yellow-to-violet arms)',
-    showcaseCaption: 'Device screenshot (iPhone 12 · final frame after three segments): 800 tiles converge into a spiral',
-    showcaseCmd: 'Re-run: bash hosts/ios/run-selfdraw.sh --showcase',
+    showcaseImgAlt: 'Morpheus showcase device screenshot: 800 tiles forming the pixel text 800 TILES, ringed by stardust',
+    showcaseCaption: 'Device screenshot (iPhone 12 · finale): 800 tiles spell out 800 TILES',
+    showcaseCmd: 'Re-run: bash hosts/ios/run-selfdraw.sh --showcase | Demo app: tap Morpheus on iPhone for a looping show',
     demoTitle: 'Device demo',
     demoNote: 'The demo plays the very same instructions the engine hands to the executor (routeTransitionBatches); curve evaluation uses the TS mirror golden-tested against the Rust kernel.',
     dirLabel: 'Direction',
@@ -343,12 +343,12 @@ const EVIDENCE = computed<Array<{ v: string; u: string; l: string; src: string }
  * ★数字与截图同源同一轮：截图是那次跑完的收尾帧，读数来自同一次运行的宿主记账。
  */
 const SHOWCASE_STATS = [
-  { v: '800', u: isEn.value ? 'tiles' : '片瓦片', l: isEn.value ? 'On screen at once · 20×40 grid' : '同屏编舞 · 20×40 网格', lEn: 'On screen at once · 20×40 grid' },
-  { v: '58.29', u: 'FPS', l: 'iPhone 12（60Hz 上限）', lEn: 'iPhone 12 (60Hz ceiling)' },
-  { v: '2.476', u: 'ms', l: '每帧成本 p95（预算 16.7ms）', lEn: 'Frame cost p95 (budget 16.7ms)' },
-  { v: '0.117', u: 'ms', l: '每帧成本 p50', lEn: 'Frame cost p50' },
-  { v: '3', u: isEn.value ? '/ 281' : '/ 281 帧', l: isEn.value ? 'Dropped frames (1.07%)' : '掉帧（1.07%）', lEn: 'Dropped frames (1.07%)' },
-  { v: '4 800', u: isEn.value ? 'anims' : '条指令', l: isEn.value ? '1,600 spring + 3,200 four-property' : '1 600 条 spring + 3 200 条四属性', lEn: '1,600 spring + 3,200 four-property' },
+  { v: '800', u: isEn.value ? 'tiles' : '片瓦片', l: isEn.value ? 'On screen at once · 20×40 grid, centred' : '同屏编舞 · 20×40 网格居中', lEn: 'On screen at once · 20×40 grid, centred' },
+  { v: '58.3', u: 'FPS', l: 'iPhone 12（60Hz 上限）', lEn: 'iPhone 12 (60Hz ceiling)' },
+  { v: '2.509', u: 'ms', l: '每帧成本 p95（预算 16.7ms）', lEn: 'Frame cost p95 (budget 16.7ms)' },
+  { v: '0.135', u: 'ms', l: '每帧成本 p50', lEn: 'Frame cost p50' },
+  { v: '17', u: isEn.value ? '/ 1900' : '/ 1900 帧', l: isEn.value ? 'Dropped frames (0.89%)' : '掉帧（0.89%）', lEn: 'Dropped frames (0.89%)' },
+  { v: '800', u: isEn.value ? 'tiles' : '片全量重排', l: isEn.value ? 'FLIP full re-layout (kernel 1.64ms)' : 'FLIP 全量重排（内核 1.64ms）', lEn: 'FLIP full re-layout (kernel 1.64ms)' },
 ] as Array<{ v: string; u: string; l: string; lEn?: string }>
 
 const BOUNDARIES = computed(() =>

@@ -12,23 +12,16 @@
 //   · `route.*`  —— **页面级转场**（进场页 + 出场页两个"节点"）；对应 §5-bis 的合成属性路径；
 //   · `list.*`   —— **布局动画**（FLIP：几何在内核，零跨边界；对应 §5 的招牌能力）；
 //   · `easing.*` —— **手感预设**（弹簧参数；避免开发者手调）。
-import type { AnimDecl, CurveName, SpringConfig } from './types'
+import type { AnimDecl, CurveName } from './types'
+// ★手感预设的**单一事实来源**已抽到 `easing.ts`（原因见该文件头：编排层与预设库都要用它，
+//   留在本文件会与 choreography 形成循环依赖）——本处重导出，既有 `import { easing }` 不变。
+import { easing } from './easing'
+// ★编排预设（`choreograph.*`）挂在 `presets` 同一导出面上（"预设优先"哲学一致）。
+//   依赖方向：presets → choreography → easing/compile/bitmap-font ⇒ **无环**
+//   （choreography 不反向 import presets——若将来要反向引用，请把共享常量下沉到独立模块）。
+import { choreograph } from './choreography'
 
-/* ────────────────────────── 手感预设（弹簧） ────────────────────────── */
-
-/**
- * 弹簧预设（**与内核 `SpringParams::snappy/smooth` 同值**——跨语言契约）
- *
- * ★为什么钉在预设里而不是让开发者调参：手调 damping/stiffness/mass 是四个坑之一（§2）。
- * ★跨语言一致性：内核 `layout-core-rust/src/anim.rs` 的 `SpringParams::snappy()/smooth()`
- *   是**同一组数值**；两侧各有测试钉住（TS 侧 `presets.test.ts`，Rust 侧 `anim.rs` 单测）。
- */
-export const easing = {
-  /** 快速、微回弹（对齐 iOS `.snappy`） */
-  snappy: { stiffness: 320, damping: 30, mass: 1 } as SpringConfig,
-  /** 顺滑、几乎无回弹（对齐 iOS `.smooth`） */
-  smooth: { stiffness: 180, damping: 26, mass: 1 } as SpringConfig,
-} as const
+export { easing }
 
 /* ────────────────────────── 路由转场预设 ────────────────────────── */
 
@@ -462,4 +455,4 @@ export const scroll = {
 } as const
 
 /** 全部预设（单一入口——便于官网/AI 说明书枚举） */
-export const presets = { route, list, element, easing, scroll } as const
+export const presets = { route, list, element, easing, scroll, choreograph } as const

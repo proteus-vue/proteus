@@ -1,44 +1,30 @@
-// hosts/shared/bridge/entry-showcase.ts —— ★★Morpheus 炫技场（真机性能演示）
+// hosts/shared/bridge/entry-showcase.ts —— ★★Morpheus 炫技场（真机性能演示）· **设备入口**
 //
 // 【这一场要证明什么（用户要求）】「该演示就是动画引擎炫技的存在，要求酷炫，吸睛，丝滑流畅不掉帧，
-//   而且还能考验动画引擎性能，**在其他跨端框架不敢轻易尝试的那种**」。
+//   而且还能考验动画引擎性能，**在其他跨端框架不敢轻易尝试的那种**」
+//   ＋「做成**开场语 + 几分钟演出 + 谢幕语**，全部都是这 800 节点编舞完成」。
 //
-// 【为什么别人不敢试（本仓的差异化就在这里）】
-//   · Web/VDOM 框架：800 个节点的逐节点动画 = 800 次样式写入 + 800 次布局失效重算
-//     （浏览器每帧要重排/重绘整棵树）⇒ 常见做法是"只动 transform 并限制节点数"；
-//   · RN/小程序：每个节点是**原生视图**，800 个视图同屏编舞是内存与桥接的双重灾难；
-//   · Flutter：能跑，但走 Dart 层每帧求值（本仓的曲线/物理在 **Rust 内核**，且每帧只跨一次边界）。
-//   ⇒ 本场用**真指令**驱动 800 片瓦片做"弹簧波浪 → FLIP 重排 → 螺旋收束"三段编舞，
-//     并给出**帧率/掉帧/每帧成本/终值**四类机器读数（判据脚本 check-showcase.py）。
+// 【编舞在哪（评审的核心问题：手写相位 还是 声明式编排？）】
+//   ★**全部在 `showcase-program.ts`（节目单）——零手写相位循环**：
+//   每一幕 = `choreograph.*` 的一句声明（相位序 order + 错峰 staggerMs + 构型预设），
+//   编译走引擎同一条链（`compileChoreography → compileAnimations`，同一份校验/线格式）。
+//   本文件只做三件事：① 建树（内核算几何）② 逐幕取判决 + 发指令（含 FLIP 三段）③ 收尾报告。
 //
-// 【零伪造】所有运动都来自 `@proteus-vue/animation` 的**真编译产物**（`compileAnimations` /
-//   `presets.*`），逐帧值与内核同一套（`animValue` 是 golden 对拍过的镜像）。
-//   本场景不写任何"手搓关键帧"。
+// 【零伪造】所有运动都来自 `@proteus-vue/animation` 的**真编译产物**；坐标/姿态现读内核
+//   （`rects()`），不是 JS 侧另算一份几何。
 //
-// 【三段编舞（一段比一段"不敢试"）】
-//   A. **弹簧波浪**：800 片各自 spring 从 `fromY` 弹到 0，`delayMs = 列序 × stagger`
-//      ⇒ 一条从左上到右下的**斜向波浪**（每片都是真 spring 物理，不是正弦查表）。
-//   B. **FLIP 重排**：把网格从 40 列「重排」到 20 列（真实几何变更：先 capture → 改布局 →
-//      再 start）⇒ 800 片**同时**归位到新位置。这是"布局动画"的招牌——几何在内核，
-//      零跨边界几何查询。
-//   C. **螺旋收束**：800 片按 `index` 各自的 `rotate + scale + translate` 收成一个漩涡
-//      （每片参数不同 ⇒ 800 条独立指令并发）。
-//
-// 【为什么这三段能"考验性能"】A 段 800 条独立 spring（物理积分，最贵）；B 段 800 片几何全变
-//   （FLIP 补间，跨边界数据最多）；C 段 800 片三属性并发（每帧写层最多：2400 个属性/帧）。
-//
-// 【产物】两份报告（与其它场景同构）
-//   · `showcase.json`        —— 场景读数（段位、指令数、终值抽查、帧率/掉帧/每帧成本）
-//   · `showcase-final.png`   —— 收尾截图（宿主截）
-import { compileAnimations, presets } from '@proteus-vue/animation'
-import type { AnimDecl, CompiledBatch } from '@proteus-vue/animation'
-import { animValue } from '@proteus-vue/slot-runtime'
+// 【本入口的机器读数（→ showcase.json，判据 hosts/ios/check-showcase.py）】
+//   · `plan`/`acts`（节目单 vs 实际演出——两清单必须逐项一致）
+//   · 每幕指令数、发令耗时、幕时长；FLIP 幕的三段回执（capture/patch/start，去掉巨型数组只留摘要）
+//   · 终值探针（真读层）+ 帧循环统计（帧数）+ 收尾截图
+import { createShowcaseProgram, SOAK_CYCLE_MS } from './showcase-program'
+import type { ShowcaseAct, ShowcaseProgram } from './showcase-program'
 
 // ★构建标识（由 hosts/ios/bridge/inject-build-id.mjs **编译期替换**——与 entry-bench/entry-selfdraw
 //   同一机制；报告据此断言"设备上跑的是本次构建"）
-const BUILD_ID = 'e0646e73-220543'
+const BUILD_ID = '9692dfc7-230541'
 
-/** 帧内视图参数（建树时定，后续段复用） */
+/** 帧内视图参数（建树时定，后续幕复用） */
 interface ViewGeom {
   w: number
   h: number
@@ -48,9 +34,6 @@ interface ViewGeom {
   gap: number
   pad: number
 }
-let geom: ViewGeom = { w: 0, h: 0, cols: 0, rows: 0, tile: 0, gap: 3, pad: 10 }
-/** 每片瓦片的中心坐标（螺旋段要用；几何由**内核算出的布局**决定 ⇒ 建树后用 rects 读回） */
-let tileCenters: Array<{ x: number; y: number }> = []
 
 /* ────────────────── 宿主桥（与 entry-selfdraw 同一套注入名） ────────────────── */
 
@@ -65,6 +48,8 @@ interface ShowcaseHost {
   animStartFrameLoop(): string
   animStopFrameLoop(): string
   animFrameStats(): string
+  /** 仍在推进的动画条数（0 = 全部结束）——幕切换的权威判据（弹簧时长由物理决定） */
+  animActiveCount(): string
   rects(): string
   layerTransformProbe(idsJson: string): string
   snapshot(name: string): string
@@ -76,20 +61,30 @@ declare const proteusSelfDraw: ShowcaseHost
 /* ────────────────── 场景参数（真机可调；判据读回报） ────────────────── */
 
 interface Args {
-  /** 瓦片数（默认 800：40×20 网格） */
+  /** 瓦片数（默认 800：20×40 网格） */
   tiles?: number
-  /** 网格列数（默认 40） */
+  /** 网格列数（默认 20） */
   cols?: number
-  /** 每段时长（ms；默认 900） */
-  segmentMs?: number
-  /** 波浪行间错峰（ms） */
-  staggerMs?: number
-  /** 段间停顿（ms） */
-  gapMs?: number
+  /**
+   * 长跑（压力幕）时长 ms——**默认 0 = 不跑**（用户要求"不用为了时长去一直重复"）。
+   * > 0 时展开 N 轮"风暴 + 归位"循环（评审点名的泄漏/热节流压力测量，按需开启）
+   */
+  soakMs?: number
 }
 
-let COLS = 40
-const ROWS = (n: number, c: number): number => Math.ceil(n / c)
+/* ────────────────── 状态 ────────────────── */
+
+const state = {
+  args: { tiles: 800, cols: 20, soakMs: 0 } as Required<Args>,
+  geom: { w: 0, h: 0, cols: 0, rows: 0, tile: 0, gap: 3, pad: 8 } as ViewGeom,
+  n: 0,
+  ids: [] as number[],
+  program: null as ShowcaseProgram | null,
+  plan: [] as string[],
+  acts: [] as Array<{ name: string; anims: number; issue_ms: number; duration_ms: number; note: string; flip?: boolean }>,
+  sampleIds: [] as number[],
+}
+const results: Record<string, unknown> = { ok: false }
 
 /* ────────────────── ① 建树：瓦片网格（Rust 算几何） ────────────────── */
 
@@ -103,14 +98,26 @@ function buildTree(viewW: number, viewH: number, n: number, cols: number): strin
   const rows = Math.ceil(n / cols)
   const tile = Math.floor((viewW - pad * 2 - gap * (cols - 1)) / cols)
   const nodes: Array<Record<string, unknown>> = [
-    // 根：纵向排布所有行（column 流式）
-    { id: 1, width: viewW, height: viewH, flexDirection: 'column', gap, padding: { left: pad, top: pad, right: pad, bottom: pad } },
+    // 根：纵向排布所有行，**整块居中**（用户反馈"800 个节点在屏幕左上角排布"）
+    // ★用 flex 居中（justifyContent=主轴纵向 / alignItems=交叉轴横向）而不是手算 padding——
+    //   声明式，且 FLIP 改瓦片宽高后**仍然居中**（手算 padding 会在重排后失准）
+    {
+      id: 1,
+      width: viewW,
+      height: viewH,
+      flexDirection: 'column',
+      gap,
+      justifyContent: 'center',
+      alignItems: 'center',
+      padding: { left: pad, top: pad, right: pad, bottom: pad },
+    },
   ]
   let nextId = 2
   const rowIds: number[] = []
   for (let r = 0; r < rows; r++) {
     const rid = nextId++
     rowIds.push(rid)
+    // 行宽度不设 ⇒ 由根的 `alignItems: center` 收缩为内容宽并居中（行内瓦片左起排布）
     nodes.push({ id: rid, parentId: 1, flexDirection: 'row', gap, height: tile, flexShrink: 0 })
   }
   // 调色板（紫 → 青 → 橙 的横向渐变：波浪扫过时有明确的方向感）
@@ -126,7 +133,7 @@ function buildTree(viewW: number, viewH: number, n: number, cols: number): strin
       backgroundColor: hslToHex(258 - t * 200, 0.72, 0.55),
     })
   }
-  geom = { w: viewW, h: viewH, cols, rows, tile, gap, pad }
+  state.geom = { w: viewW, h: viewH, cols, rows, tile, gap, pad }
   return JSON.stringify({ viewport: { width: viewW, height: viewH }, nodes })
 }
 
@@ -142,165 +149,150 @@ function hslToHex(h: number, s: number, l: number): string {
   return `#${f(0)}${f(8)}${f(4)}`
 }
 
-/* ────────────────── ② 三段编舞：真编译产物 ────────────────── */
-
-/** 段 A：弹簧波浪（每片 spring 从 `fromY` 弹到 0；delay 按 **行+列** 斜向错峰） */
-function segmentWave(n: number, cols: number, staggerMs: number): { anims: unknown[]; decls: number } {
-  const all: unknown[] = []
-  for (let i = 0; i < n; i++) {
-    const row = Math.floor(i / cols)
-    const col = i % cols
-    const delay = (row + col) * staggerMs
-    const decls: AnimDecl[] = [
-      // ★真 spring（不是曲线查表）：stiffness/damping 取自预设库的 `easing.smooth` 家族
-      { kind: 'translateY', from: -260, to: 0, spring: presets.easing.smooth, delayMs: delay },
-      { kind: 'opacity', from: 0, to: 1, curve: 'easeOut', durationMs: 220, delayMs: delay },
-    ]
-    const b: CompiledBatch = compileAnimations(decls, { nodeId: 1000 + i })
-    all.push(...b.anims)
-  }
-  return { anims: all, decls: all.length }
-}
+/* ────────────────── ② 几何现读（编排的唯一几何来源） ────────────────── */
 
 /**
- * 段 C：螺旋收束（每片各自的 rotate + scale + translate —— 800×4 条并发指令）。
- * ★位移量取自**内核算出的真实布局**（`tileCenters` —— 建树后从 rects 读回），
- *   不是 JS 自己按列宽手算的（否则"几何在内核"这条纪律就破了）。
+ * 读**内核几何**（`rects`）→ 瓦片中心。
+ * ★为什么必须现读：构型（聚字/漩涡/凝聚）的位移 = 目标 − **当前**位置，而 FLIP 重排后
+ *   位置会变 ⇒ 用建树时的旧几何会让整幅构图偏向一侧（真机实测抓出的构图缺陷）。
+ * ★拿不到 ⇒ 抛错（节目单因此报错退出——**不静默退化**成错误构图）。
  */
-function segmentSpiral(n: number, viewW: number, viewH: number): { anims: unknown[]; decls: number } {
-  // ★构图锚点 = **视口中心**（真机截图实测：这一版漩涡居中且比例合适）。
-  //   ★不要再改成"瓦片质心"：FLIP 重排后质心会偏移（实测把漩涡推到右上角、画面几乎全黑）。
-  const cx = viewW / 2
-  const cy = viewH / 2
-  const all: unknown[] = []
-  for (let i = 0; i < n; i++) {
-    const c = tileCenters[i] ?? { x: cx, y: cy }
-    // ★★目标构型：**居中的多臂漩涡**（铺满屏幕、不溢出）
-    //   · 角度：3 圈渐开线（i/n × 6π）+ 每片一个小偏移 ⇒ 视觉上连续成臂
-    //   · 半径：从内圈 0.06 到外圈 0.46 × min(半宽,半高)（留 4% 边距，**不出屏**）
-    //   （此前 0.78 倍系数且在旧几何上算 ⇒ 漩涡偏向一角并大量出屏——真机截图抓出）
-    const ang = (i / n) * Math.PI * 6
-    // 半径：0.05 → 0.92 × min(半宽,半高)（铺满屏；外圈到 0.92 留 8% 边距不出屏）
-    const rMin = Math.min(viewW, viewH) / 2
-    const rad = rMin * (0.05 + 0.87 * (i / n))
-    const tx = cx + Math.cos(ang) * rad - c.x
-    const ty = cy + Math.sin(ang) * rad - c.y
-    const decls: AnimDecl[] = [
-      { kind: 'translateX', from: 0, to: tx, curve: 'easeInOut', durationMs: 900 },
-      { kind: 'translateY', from: 0, to: ty, curve: 'easeInOut', durationMs: 900 },
-      { kind: 'rotate', from: 0, to: (i % 2 === 0 ? 1 : -1) * (180 + (i / n) * 540), curve: 'easeInOut', durationMs: 900 },
-      { kind: 'scale', from: 1, to: 0.35, curve: 'easeInOut', durationMs: 900 },
-    ]
-    const b = compileAnimations(decls, { nodeId: 1000 + i })
-    all.push(...b.anims)
+function readTileCenters(): Array<{ x: number; y: number }> {
+  const raw = proteusSelfDraw.rects()
+  const o = JSON.parse(raw) as { ok?: boolean; rects?: Record<string, { x: number; y: number; width: number; height: number }> }
+  if (o?.ok !== true || !o.rects) {
+    throw new Error(`读内核几何失败（rects 返回 ${raw.slice(0, 120)}）——构型幕无法计算位移`)
   }
-  return { anims: all, decls: all.length }
-}
-
-/* ────────────────── ③ 场景主流程（同步相位 + 异步帧循环） ────────────────── */
-
-interface SegResult {
-  name: string
-  anims: number
-  ms: number
-}
-
-const state = {
-  args: {} as Required<Args>,
-  viewW: 0,
-  viewH: 0,
-  n: 0,
-  segments: [] as SegResult[],
-  framesStart: 0,
-  sampleIds: [] as number[],
-}
-const results: Record<string, unknown> = { ok: false }
-
-/** 段 A+B+C 的编排（宿主逐段调用；每段内部启动动画后由帧循环推进） */
-export function __proteusShowcaseSegment(which: string): string {
-  const t0 = Number(proteusSelfDraw.nowUs()) / 1000
-  const { viewW, viewH, n } = state
-  const cols = state.args.cols
-  let anims: unknown[] = []
-  let decls = 0
-
-  if (which === 'wave') {
-    const r = segmentWave(n, cols, state.args.staggerMs)
-    anims = r.anims
-    decls = r.decls
-  } else if (which === 'flip') {
-    // ★FLIP：capture（内核记 800 片绝对矩形）→ 改布局（列数 40 → 20）→ start（Δ→0 补间）
-    const cap = proteusSelfDraw.animFlip(JSON.stringify({ op: 'capture' }))
-    results.flip_capture = safeParse(cap)
-    // 改布局：把容器改成 20 列（通过 updatePatches 改瓦片宽度 —— 真实几何变更）
-    const newCols = Math.max(8, Math.floor(cols / 2))
-    const newW = Math.floor((viewW - 20 - 3 * (newCols - 1)) / newCols)
-    const patches = []
-    for (let i = 0; i < n; i++) patches.push({ id: 1000 + i, style: { width: newW, height: newW } })
-    const upd = proteusSelfDraw.updatePatches(JSON.stringify(patches))
-    results.flip_patch = safeParse(upd)
-    // ★stagger 归零：800 片 × stagger 会变成数秒级长尾（那成了"逐片入场"，不是"整片重排"）
-    const st = proteusSelfDraw.animFlip(
-      JSON.stringify({ op: 'start', durMs: state.args.segmentMs, curve: 1, staggerMs: 0 }),
-    )
-    results.flip_start = safeParse(st)
-    state.segments.push({ name: 'flip', anims: 0, ms: Number(proteusSelfDraw.nowUs()) / 1000 - t0 })
-    return st
-  } else if (which === 'spiral') {
-    // ★★现读**当前**几何（FLIP 重排之后！）——见 readTileCenters 注释
-    tileCenters = readTileCenters(n)
-    const r = segmentSpiral(n, viewW, viewH)
-    anims = r.anims
-    decls = r.decls
-  } else {
-    return JSON.stringify({ ok: false, error: `未知段：${which}` })
+  const out: Array<{ x: number; y: number }> = []
+  for (let i = 0; i < state.n; i++) {
+    const r = o.rects[String(1000 + i)]
+    if (!r) throw new Error(`内核几何缺瓦片 ${1000 + i}（(${i + 1}/${state.n})）`)
+    out.push({ x: r.x + r.width / 2, y: r.y + r.height / 2 })
   }
-
-  const out = proteusSelfDraw.animStart(JSON.stringify({ anims }))
-  state.segments.push({ name: which, anims: decls, ms: Number(proteusSelfDraw.nowUs()) / 1000 - t0 })
   return out
 }
+
+/* ────────────────── ③ 场景主流程 ────────────────── */
 
 export function __proteusShowcaseRun(argsJson?: string): string {
   const args: Args = argsJson ? JSON.parse(argsJson) : {}
   const a: Required<Args> = {
     tiles: args.tiles ?? 800,
-    cols: args.cols ?? 40,
-    segmentMs: args.segmentMs ?? 900,
-    staggerMs: args.staggerMs ?? 4,
-    gapMs: args.gapMs ?? 120,
+    cols: args.cols ?? 20,
+    soakMs: args.soakMs ?? 0,
   }
   state.args = a
   const vp = (globalThis as unknown as { __PROTEUS_VIEWPORT__?: { width: number; height: number } }).__PROTEUS_VIEWPORT__
-  state.viewW = Math.round(vp?.width ?? 390)
-  state.viewH = Math.round(vp?.height ?? 844)
+  const viewW = Math.round(vp?.width ?? 390)
+  const viewH = Math.round(vp?.height ?? 844)
   state.n = a.tiles
-  state.segments = []
-  COLS = a.cols
+  state.ids = Array.from({ length: a.tiles }, (_, i) => 1000 + i)
+  state.acts = []
 
   const t0 = Number(proteusSelfDraw.nowUs()) / 1000
-  const tree = buildTree(state.viewW, state.viewH, state.n, a.cols)
+  const tree = buildTree(viewW, viewH, a.tiles, a.cols)
   const mountOut = proteusSelfDraw.mount(tree)
   const mountMs = Number(proteusSelfDraw.nowUs()) / 1000 - t0
   const mounted = safeParse(mountOut)
+  if ((mounted as { ok?: boolean }).ok !== true) {
+    return JSON.stringify({ ok: false, error: '建树失败', detail: mounted })
+  }
 
-  // ★建树后从**内核几何**读回瓦片中心（螺旋段据此算位移——几何仍出自内核）
-  tileCenters = readTileCenters(state.n)
+  // 节目单（环境：几何现读函数 + 网格参数 + 长跑时长）
+  state.program = createShowcaseProgram({
+    ids: state.ids,
+    cols: a.cols,
+    view: { width: viewW, height: viewH },
+    tilePx: state.geom.tile,
+    centers: readTileCenters,
+    soakMs: a.soakMs,
+  })
+  state.plan = state.program.plan()
 
-  // 抽查节点（用于判据：终值 + 真实生效）
-  state.sampleIds = [1000, 1000 + Math.floor(state.n / 2), 1000 + state.n - 1]
+  // 抽查节点（判据用：终值 + 真实生效）
+  state.sampleIds = [1000, 1000 + Math.floor(a.tiles / 2), 1000 + a.tiles - 1]
 
   results.build_id = BUILD_ID
-  results.tiles = state.n
+  results.tiles = a.tiles
   results.cols = a.cols
-  results.grid = { cols: geom.cols, rows: geom.rows, tile: geom.tile }
-  results.view = { w: state.viewW, h: state.viewH }
+  results.grid = { cols: state.geom.cols, rows: state.geom.rows, tile: state.geom.tile }
+  results.view = { w: viewW, h: viewH }
   results.mount = mounted
   results.mount_ms = round2(mountMs)
-  return JSON.stringify({ ok: (mounted as { ok?: boolean }).ok === true, tiles: state.n, mount_ms: round2(mountMs) })
+  results.plan = state.plan
+  results.soak = { ms: a.soakMs, cycles: a.soakMs > 0 ? Math.max(1, Math.ceil(a.soakMs / SOAK_CYCLE_MS)) : 0 }
+  return JSON.stringify({ ok: true, tiles: a.tiles, mount_ms: round2(mountMs), acts: state.plan.length })
 }
 
-/** 帧循环结束后的收尾（宿主在时长跑满后调用）：读数 + 抽样探针 + 截图 */
+/**
+ * 取下一幕并**发令**（宿主在幕边界调用）。
+ * FLIP 幕 = 三条宿主指令（capture → updatePatches → start），其余幕 = 一批 animStart。
+ */
+export function __proteusShowcaseNext(): string {
+  const program = state.program
+  if (!program) return JSON.stringify({ ok: false, error: '节目单未初始化（先调 __proteusShowcaseRun）' })
+  const t0 = Number(proteusSelfDraw.nowUs()) / 1000
+  let act: ShowcaseAct | null = null
+  try {
+    act = program.next()
+  } catch (e) {
+    return JSON.stringify({ ok: false, error: `节目单取幕失败：${(e as Error).message}` })
+  }
+  if (!act) return JSON.stringify({ ok: true, done: true })
+
+  if (act.flip) {
+    // ★FLIP 三段：capture（内核记当前绝对矩形）→ 改几何（全量重排）→ start（Δ→0 补间）
+    const cap = safeParse(proteusSelfDraw.animFlip(JSON.stringify({ op: 'capture' })))
+    const upd = safeParse(proteusSelfDraw.updatePatches(JSON.stringify(act.flip.patches)))
+    const st = safeParse(proteusSelfDraw.animFlip(
+      JSON.stringify({ op: 'start', durMs: act.flip.durMs, curve: act.flip.curve, staggerMs: 0 }),
+    ))
+    // ★回执进报告：`start` 的 updates 有几百项（会撑爆报告）⇒ 只留摘要
+    results[`flip_${act.name}`] = {
+      note: act.flip.note,
+      capture: cap,
+      patch: upd,
+      start: summarizeFlipStart(st),
+    }
+  } else {
+    const out = safeParse(proteusSelfDraw.animStart(JSON.stringify({ anims: act.anims })))
+    if ((out as { ok?: boolean }).ok !== true) {
+      return JSON.stringify({ ok: false, error: `幕「${act.name}」发令失败`, detail: out })
+    }
+  }
+
+  const issueMs = Number(proteusSelfDraw.nowUs()) / 1000 - t0
+  state.acts.push({
+    name: act.name,
+    anims: act.anims.length,
+    issue_ms: round2(issueMs),
+    span_ms: round2(act.spanMs),
+    hold_ms: round2(act.holdMs),
+    duration_ms: round2(act.durationMs),
+    note: act.note,
+    ...(act.flip ? { flip: true } : {}),
+  })
+  return JSON.stringify({
+    ok: true,
+    name: act.name,
+    spanMs: act.spanMs,
+    holdMs: act.holdMs,
+    durationMs: act.durationMs,
+    anims: act.anims.length,
+    issue_ms: round2(issueMs),
+    note: act.note,
+  })
+}
+
+/** FLIP start 回执摘要（`updates` 只留条数——几千项数组不进报告） */
+function summarizeFlipStart(st: unknown): unknown {
+  const o = st as { ok?: boolean; animated?: number; maxDeltaPx?: number; updates?: unknown[] } | null
+  if (!o || typeof o !== 'object') return st
+  const { updates, ...rest } = o
+  return { ...rest, updates_len: Array.isArray(updates) ? updates.length : 0 }
+}
+
+/** 帧循环结束后的收尾（宿主在演完后调用）：读数 + 抽样探针 + 截图 */
 export function __proteusShowcaseFinalize(): string {
   const fr = safeParse(proteusSelfDraw.animFrameStats())
   const probe = safeParse(proteusSelfDraw.layerTransformProbe(JSON.stringify(state.sampleIds)))
@@ -308,16 +300,55 @@ export function __proteusShowcaseFinalize(): string {
   results.frame_stats = fr
   results.probe = probe
   results.snapshot = snap
-  results.segments = state.segments
+  results.acts = state.acts
+  results.acts_complete = state.acts.length === state.plan.length
+    && state.acts.every((a, i) => a.name === state.plan[i])
   results.ok = true
   const json = JSON.stringify(results)
   proteusSelfDraw.report(json)
   return json
 }
 
-/** 停掉全部动画并复位（段间清理——本仓纪律：不假设上一步留下的还能用） */
+/**
+ * ★★**动画还在动吗**（0 = 全部结束）——从宿主桥透传内核答案（幕切换的权威判据）。
+ * ★为什么不在这里按 `spanMs` 推算：弹簧的结束时刻由**物理**决定（`settle_eps` 内静止），
+ *   名义 `durMs` 只是采样窗口 ⇒ 推算会早切（姿态没到位）或多等（可见停顿）。
+ */
+export function __proteusShowcaseActive(): string {
+  return proteusSelfDraw.animActiveCount()
+}
+
+/** ★定格截图（宿主在指定幕边界调用；命名权在宿主侧静态量——见 showcase-scene.swift 注释） */
+export function __proteusShowcaseSnap(name: string): string {
+  return proteusSelfDraw.snapshot(name)
+}
+
+/** 停掉全部动画并复位（幕间清理——本仓纪律：不假设上一步留下的还能用） */
 export function __proteusShowcaseReset(): string {
   return proteusSelfDraw.animStopAll()
+}
+
+/**
+ * ★★**重播**（demo 模式：从桌面点开时循环演出——"随时点开给团队看"）。
+ *
+ * 语义：停掉全部动画（`animStopAll` 会**清视觉值** ⇒ 回到基线，见内核 `stop_all` 注释）
+ * → 重建节目单（上一轮的幕索引已耗尽）→ 返回新的幕数。
+ * ★为什么必须清值：谢幕语结束时全屏是"文字构型"（非基线），不清就重播会从错乱姿态开始。
+ */
+export function __proteusShowcaseRestart(): string {
+  const stop = safeParse(proteusSelfDraw.animStopAll())
+  state.acts = []
+  state.program = createShowcaseProgram({
+    ids: state.ids,
+    cols: state.args.cols,
+    view: { width: state.geom.w, height: state.geom.h },
+    tilePx: state.geom.tile,
+    centers: readTileCenters,
+    soakMs: state.args.soakMs,
+  })
+  state.plan = state.program.plan()
+  results.plan = state.plan
+  return JSON.stringify({ ok: true, stop, acts: state.plan.length })
 }
 
 /** 启动/停止帧循环（宿主侧 CADisplayLink） */
@@ -326,29 +357,6 @@ export function __proteusShowcaseFrameLoop(on: string): string {
 }
 
 /* ────────────────── 工具 ────────────────── */
-
-/**
- * 读**内核几何**（`rects`）→ 瓦片中心。
- * ★为什么必须现读（炫技场实测抓出的构图缺陷）：螺旋段的位移 = 目标 − **当前**位置，
- *   而 FLIP 重排后位置全变了（列数减半、瓦片变宽）⇒ 用建树时的旧几何 ⇒ 整幅漩涡**偏向一侧**。
- * ★拿不到就返回空数组（调用方退化为不位移，而不是用错误的旧值算出偏构图）。
- */
-function readTileCenters(n: number): Array<{ x: number; y: number }> {
-  const out: Array<{ x: number; y: number }> = []
-  try {
-    const raw = proteusSelfDraw.rects()
-    const o = JSON.parse(raw) as { ok?: boolean; rects?: Record<string, { x: number; y: number; width: number; height: number }> }
-    if (o?.ok !== true || !o.rects) return out
-    for (let i = 0; i < n; i++) {
-      const r = o.rects[String(1000 + i)]
-      if (!r) return out
-      out.push({ x: r.x + r.width / 2, y: r.y + r.height / 2 })
-    }
-  } catch {
-    /* 读失败 ⇒ 空数组（调用方退化） */
-  }
-  return out
-}
 
 function safeParse(s: string): unknown {
   try {
@@ -363,8 +371,11 @@ function round2(v: number): number {
 
 // 挂全局（IIFE 无模块系统——与其它 entry 同法）
 ;(globalThis as unknown as { __proteusShowcaseRun: typeof __proteusShowcaseRun }).__proteusShowcaseRun = __proteusShowcaseRun
-;(globalThis as unknown as { __proteusShowcaseSegment: typeof __proteusShowcaseSegment }).__proteusShowcaseSegment = __proteusShowcaseSegment
+;(globalThis as unknown as { __proteusShowcaseNext: typeof __proteusShowcaseNext }).__proteusShowcaseNext = __proteusShowcaseNext
 ;(globalThis as unknown as { __proteusShowcaseFinalize: typeof __proteusShowcaseFinalize }).__proteusShowcaseFinalize = __proteusShowcaseFinalize
+;(globalThis as unknown as { __proteusShowcaseSnap: typeof __proteusShowcaseSnap }).__proteusShowcaseSnap = __proteusShowcaseSnap
+;(globalThis as unknown as { __proteusShowcaseRestart: typeof __proteusShowcaseRestart }).__proteusShowcaseRestart = __proteusShowcaseRestart
+;(globalThis as unknown as { __proteusShowcaseActive: typeof __proteusShowcaseActive }).__proteusShowcaseActive = __proteusShowcaseActive
 ;(globalThis as unknown as { __proteusShowcaseReset: typeof __proteusShowcaseReset }).__proteusShowcaseReset = __proteusShowcaseReset
 ;(globalThis as unknown as { __proteusShowcaseFrameLoop: typeof __proteusShowcaseFrameLoop }).__proteusShowcaseFrameLoop = __proteusShowcaseFrameLoop
 // ★逐帧推进（宿主帧循环里调；与 entry-selfdraw 的 animTick 同源——但这里由**宿主**驱动而非脚本）

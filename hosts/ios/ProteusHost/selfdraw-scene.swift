@@ -73,6 +73,9 @@ func proteus_layout_anim_commit_spec(_ handle: UInt64, _ json: UnsafePointer<CCh
 func proteus_layout_flip(_ handle: UInt64, _ json: UnsafePointer<CChar>) -> UnsafeMutablePointer<CChar>
 @_silgen_name("proteus_layout_anim_stop")
 func proteus_layout_anim_stop(_ handle: UInt64, _ json: UnsafePointer<CChar>) -> UnsafeMutablePointer<CChar>
+// ★仍在动的动画条数（0 = 全部结束）——幕切换的权威判据（见内核 anim_active 注释）
+@_silgen_name("proteus_layout_anim_active")
+func proteus_layout_anim_active(_ handle: UInt64) -> UInt64
 @_silgen_name("proteus_layout_anim_tick_bin")
 func proteus_layout_anim_tick_bin(_ handle: UInt64, _ dtMs: Float, _ outLen: UnsafeMutablePointer<UInt32>) -> UnsafeMutablePointer<UInt8>?
 /// ★Vapor IR V4：**不带 rects 的 apply**（二进制通道场景——省掉 JSON 序列化与宿主解析）
@@ -325,6 +328,9 @@ func physFootprintMB() -> Double {
     func animStartFrameLoop() -> String
     func animStopFrameLoop() -> String
     func animFrameStats() -> String
+    /// ★仍在推进的动画条数（0 = 全部结束）——"这一幕演完了吗"的权威判据（弹簧时长由物理决定，
+    ///   调用方按名义 durMs 推算会早切或多等，见内核 `proteus_layout_anim_active` 注释）
+    func animActiveCount() -> String
     /// ★★**高分辨率单调时钟**（微秒，十进制字符串）——供 JS 侧做可靠计时
     ///
     /// 【为什么必须由宿主提供（本仓实测的第六个测量装置缺陷）】
@@ -3261,6 +3267,12 @@ final class SelfDrawBridge: NSObject, SelfDrawExports {
         return "{\"ok\":true,\"running\":\(view.frameLoopRunning),\"frames\":\(view.frameCount),\"frame_ms\":\(view.lastFrameMs)}"
     }
 
+    /// ★仍在推进的动画条数（0 = 全部结束）——**幕切换的权威判据**
+    func animActiveCount() -> String {
+        guard handle != 0 else { return "{\"ok\":false,\"error\":\"未接入核心\"}" }
+        return "{\"ok\":true,\"active\":\(proteus_layout_anim_active(handle))}"
+    }
+
     /// ★★**手势驱动进度**（方案 §4.2 的 ANIM_SEEK）：手指到哪，值到哪
     ///
     /// ★语义关键：内核**立即求值并写字段**（不等下一帧）+ 返回 `updates` ⇒ 本方法应用变换后
@@ -4684,13 +4696,22 @@ final class SelfDrawViewController: UIViewController {
         }
 
         // ★模式：`--bench` 跑逻辑层基准（复杂响应式用例 + 规模扫描），否则跑自绘场景
+        //   （`--selfdraw` 是自绘模式的**显式**写法——脚本用它避免落到 Info.plist 的缺省场景）
         let isBench = ProcessInfo.processInfo.arguments.contains("--bench")
         // ★★G-39：宿主运行时场景（`--host-runtime`）——独立模式，不进自绘/基准分支
         let isHostRuntime = ProcessInfo.processInfo.arguments.contains("--host-runtime")
         // ★★M5：执行器场景（`--app-stack`）——同上，独立模式
         let isAppStack = ProcessInfo.processInfo.arguments.contains("--app-stack")
-        // ★★Morpheus 炫技场（`--showcase`）——800 瓦片三段编舞
-        let isShowcase = ProcessInfo.processInfo.arguments.contains("--showcase")
+        // ★★Morpheus 炫技场（`--showcase`）——整场节目单编舞（开场语 → 演出 → 谢幕语）
+        //
+        // 【判定规则（"点开即演示"的落地）】显式参数 > Info.plist 缺省场景。
+        //   · 脚本跑实验：显式传 `--showcase` / `--bench` / `--selfdraw` / `--host-runtime` / `--app-stack`
+        //   · 从桌面点开（无参数）：用 `ProteusDefaultScene`（本仓构建时写 `showcase`）
+        //     ⇒ 点图标即演示，**不需要脚本**（用户要求"方便随时点开给团队看"）
+        let argv = ProcessInfo.processInfo.arguments
+        let explicit = argv.contains { $0.hasPrefix("--") && !$0.hasPrefix("--cases=") }
+        let plistScene = (Bundle.main.object(forInfoDictionaryKey: "ProteusDefaultScene") as? String) ?? "showcase"
+        let isShowcase = argv.contains("--showcase") || (!explicit && plistScene == "showcase")
         // ★★用例过滤（`--cases=S5,V4`）：只跑指定前缀的用例
         //
         // 【为什么需要（效率纪律：定向验证不得跑全量）】bench 有 46 个用例、全套数分钟；
