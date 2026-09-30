@@ -328,6 +328,241 @@ public class ProteusHostView extends ViewGroup {
     public int onMeasureCount() { return onMeasureCount; }
     public int onLayoutCount() { return onLayoutCount; }
 
+    /* ══════════ ★★内核驱动动画（tick 路径）：node id → Cmd 变换 ══════════ */
+
+    /**
+     * 指令表与节点 id 的**并行表**（`-1` = 该指令未绑定节点）。
+     *
+     * 【为什么需要】内核动画按**节点 id** 给值，而 `Cmd` 是"纯绘制指令"（不含 id——
+     *   见 `JsRenderHost.cmdIds` 的同款注释：给 Cmd 塞 id 会把宿主协议与簿记耦合）。
+     *   ⇒ 映射在宿主侧；绘制时按下标查表套变换。
+     */
+    private int[] cmdNodeIds = null;
+    /** 节点 id → [tx, ty, scale, rotate, opacity]（**宿主侧真源**：探针从这里读） */
+    private final Map<Integer, float[]> animTx = new HashMap<>();
+    /** 最近一次 apply 的条数（诊断） */
+    public int lastAnimApplied = 0;
+
+    public void setCmdNodeIds(int[] ids) {
+        this.cmdNodeIds = ids;
+        invalidate();
+    }
+
+    /** 节点 → 变换映射的规模（探针/判据：确认值真的落了） */
+    public int animTxCount() { return animTx.size(); }
+
+    /**
+     * 应用内核 `updates`（JSON 形态：`{"updates":[[id,tx,ty,scale,rot,op],…]}`）——返回条数。
+     *
+     * ★与 `applyTickBin` **同一条真源**（`animTx`）：两条通道只是编码不同（JSON/二进制），
+     *   语义必须一致 ⇒ 解析后都进同一个 map。
+     */
+    public int applyAnimUpdates(String json) {
+        if (json == null) return 0;
+        int n = 0;
+        try {
+            org.json.JSONObject o = new org.json.JSONObject(json);
+            org.json.JSONArray arr = o.optJSONArray("updates");
+            if (arr == null) return 0;
+            for (int i = 0; i < arr.length(); i++) {
+                org.json.JSONArray u = arr.optJSONArray(i);
+                if (u == null || u.length() < 4) continue;
+                int id = u.optInt(0);
+                float rot = u.length() >= 6 ? (float) u.optDouble(4) : 0f;
+                float op = u.length() >= 6 ? (float) u.optDouble(5) : 1f;
+                animTx.put(id, new float[]{
+                        (float) u.optDouble(1), (float) u.optDouble(2), (float) u.optDouble(3), rot, op});
+                n++;
+            }
+        } catch (Throwable ignored) {
+            // JSON 坏 ⇒ 返回真实条数（不假装成功）；判据侧比对"started vs applied"时会发现
+        }
+        lastAnimApplied = n;
+        if (n > 0) invalidate();
+        return n;
+    }
+
+    /** ★**每帧二进制通道**（24B/条，全小端）——与 iOS 同一份内核、同一条性能纪律 */
+    private int applyTickBin(byte[] bin) {
+        if (bin == null || bin.length < ANIM_RECORD_BYTES) return 0;
+        java.nio.ByteBuffer bb = java.nio.ByteBuffer.wrap(bin).order(java.nio.ByteOrder.LITTLE_ENDIAN);
+        int n = bin.length / ANIM_RECORD_BYTES;
+        for (int i = 0; i < n; i++) {
+            int id = bb.getInt();
+            float tx = bb.getFloat(), ty = bb.getFloat(), sc = bb.getFloat();
+            float rot = bb.getFloat(), op = bb.getFloat();
+            animTx.put(id, new float[]{tx, ty, sc, rot, op});
+        }
+        lastAnimApplied = n;
+        if (n > 0) invalidate();
+        return n;
+    }
+
+    /** 每帧记录长度（与 Rust 侧 `proteus_layout_anim_tick_bin` 的 24B/条对齐——**只在本处定义**） */
+    private static final int ANIM_RECORD_BYTES = 24;
+
+    /** 直接推进一帧（确定性步进：判据用它做"固定 dt"读数，与 iOS 的 JS 驱动 probe 同形） */
+    public int kernelAnimTick(float dtMs) {
+        return applyTickBin(RustLayout.animTickBin(coreHandle, dtMs));
+    }
+
+    /** 启动动画（转发内核；返回内核 JSON） */
+    public String kernelAnimStart(String json) {
+        return RustLayout.animStart(coreHandle, json);
+    }
+
+    /** 滚动驱动（转发内核 + 应用 updates） */
+    public String kernelAnimSeekScroll(String json) {
+        String out = RustLayout.animSeekScroll(coreHandle, json);
+        applyAnimUpdates(out);
+        return out;
+    }
+
+    /** 共享元素（转发内核 + 应用首帧 updates） */
+    public String kernelSharedElement(String json) {
+        String out = RustLayout.sharedElement(coreHandle, json);
+        applyAnimUpdates(out);
+        return out;
+    }
+
+    /** 停动画（`{"all":true}` 或 `{"nodeIds":[…]}`）——含**清值**（与 iOS `animStopAll` 同语义） */
+    public String kernelAnimStop(String json) {
+        String out = RustLayout.animStop(coreHandle, json);
+        animTx.clear();
+        invalidate();
+        return out;
+    }
+
+    /**
+     * 读某节点的当前变换（探针）——从**宿主侧真源** `animTx` 读，不是读我们自己传下去的参数。
+     *
+     * 入参 JSON：`[id, …]`；出参：`{"ok":true,"layers":[{"id":N,"tx":…,"ty":…,"scale":…,"rotate":…,"opacity":…}, …]}`
+     * （与 iOS `layerTransformProbe` **同形**——两端判据脚本可共用读法）
+     */
+    public String animTxProbe(String idsJson) {
+        StringBuilder sb = new StringBuilder("{\"ok\":true,\"layers\":[");
+        try {
+            org.json.JSONArray ids = new org.json.JSONArray(idsJson);
+            for (int i = 0; i < ids.length(); i++) {
+                int id = ids.optInt(i);
+                float[] v = animTx.get(id);
+                if (i > 0) sb.append(',');
+                if (v == null) {
+                    // 无记录 ⇒ 恒等（未被动过）——与"层上是 identity"语义一致
+                    sb.append("{\"id\":").append(id).append(",\"tx\":0,\"ty\":0,\"scale\":1,\"rotate\":0,\"opacity\":1}");
+                } else {
+                    sb.append("{\"id\":").append(id)
+                      .append(",\"tx\":").append(v[0]).append(",\"ty\":").append(v[1])
+                      .append(",\"scale\":").append(v[2]).append(",\"rotate\":").append(v[3])
+                      .append(",\"opacity\":").append(v[4]).append('}');
+                }
+            }
+        } catch (Throwable t) {
+            return "{\"ok\":false,\"error\":\"入参需为 id 数组 JSON\"}";
+        }
+        sb.append("]}");
+        return sb.toString();
+    }
+
+    /* ── 真帧循环（`postOnAnimation` = Choreographer 驱动，与 iOS CADisplayLink 同一形态） ── */
+
+    private boolean ktRunning = false;
+    private int ktFrames = 0;
+    private long ktStartNs = 0, ktLastNs = 0, ktStopAtNs = 0, ktFirstFrameNs = 0;
+    private final float[] ktWorkMs = new float[8192];
+    private int ktWorkN = 0;
+    /** 稳态窗口基线（启动后 80ms 重拍；见 `kernelTickStats` 的口径注释） */
+    private int ktMeasureBefore = 0, ktLayoutBefore = 0;
+    private int ktMeasureBoot = 0, ktLayoutBoot = 0;
+
+    private final android.view.Choreographer.FrameCallback ktCallback =
+            new android.view.Choreographer.FrameCallback() {
+        @Override public void doFrame(long frameTimeNanos) {
+            if (!ktRunning) return;
+            long t0 = System.nanoTime();
+            if (ktFirstFrameNs == 0) ktFirstFrameNs = t0;
+            float dtMs = (t0 - ktLastNs) / 1e6f;
+            ktLastNs = t0;
+            // ★首帧/卡顿保护：dt 上限 100ms（否则一步跳完整段动画——真机首帧常见）
+            if (dtMs > 100f) dtMs = 100f;
+            if (dtMs <= 0f) dtMs = 16.7f;
+            applyTickBin(RustLayout.animTickBin(coreHandle, dtMs));
+            ktFrames++;
+            float work = (System.nanoTime() - t0) / 1e6f;
+            if (ktWorkN < ktWorkMs.length) ktWorkMs[ktWorkN++] = work;
+            if (System.nanoTime() >= ktStopAtNs) { ktRunning = false; return; }
+            android.view.Choreographer.getInstance().postFrameCallback(this);
+        }
+    };
+
+    /**
+     * 启动真帧循环（时长驱动：到点自停——**不是**"看到没有动画了才停"，避免判据依赖时序）。
+     *
+     * 【★★为什么用 `Choreographer.postFrameCallback` 而不是 `View.postOnAnimation`（真机实测纠偏）】
+     *   首版用 `postOnAnimation`：真机读数 `frames=1`——**首帧即停**。
+     *   根因：`postOnAnimation` 对**尚未 attach 到窗口**的 View 会把 runnable **排队**，
+     *   直到首次 traversal（attach）才执行；而那时 `System.nanoTime()` 已超过 `ktStopAtNs`
+     *   ⇒ 首帧进来就判定"到点"，循环只跑 1 帧。
+     *   （同批读数 `measure_delta=1 / layout_delta=1` 正是那次 traversal —— 两处证据互相印证。）
+     *   ⇒ 改用 **Choreographer 直接注册**：与 View 的 attach 状态无关，语义也更贴近
+     *     iOS 的 `CADisplayLink`（"每 vsync 一次"是**显示器**的属性，不是某个 View 的属性）。
+     *
+     * 【基线口径（与 `carrierAnimStats` 同一先例）】`measure/layout` 的增量量的是
+     *   **稳态窗口**（启动 +80ms 之后）：接入 View 触发的**一次性 traversal** 不算"动画期间"。
+     */
+    public String kernelTickStart(long durationMs) {
+        if (coreHandle == 0) return "{\"ok\":false,\"error\":\"未接入核心\"}";
+        ktRunning = true; ktFrames = 0; ktWorkN = 0; ktFirstFrameNs = 0;
+        ktMeasureBoot = onMeasureCount; ktLayoutBoot = onLayoutCount;
+        ktMeasureBefore = onMeasureCount; ktLayoutBefore = onLayoutCount;
+        ktLastNs = System.nanoTime();
+        ktStartNs = ktLastNs;
+        ktStopAtNs = ktLastNs + durationMs * 1_000_000L;
+        // ★稳态基线：+80ms 重拍（那时首次 traversal 已发生，量的才是"动画期间"）
+        //   ——但只在**还没到点**时重拍（极短时长下不覆盖，避免语义含糊）
+        final long rebaseAt = ktStartNs + 80_000_000L;
+        if (ktStopAtNs > rebaseAt) {
+            postDelayed(new Runnable() {
+                @Override public void run() {
+                    if (!ktRunning) return;
+                    ktMeasureBefore = onMeasureCount;
+                    ktLayoutBefore = onLayoutCount;
+                }
+            }, 80);
+        }
+        android.view.Choreographer.getInstance().postFrameCallback(ktCallback);
+        return "{\"ok\":true,\"duration_ms\":" + durationMs + "}";
+    }
+
+    public void kernelTickStop() {
+        ktRunning = false;
+        android.view.Choreographer.getInstance().removeFrameCallback(ktCallback);
+    }
+    public boolean kernelTickRunning() { return ktRunning; }
+
+    /**
+     * 帧循环读数：帧数 / 每帧工作 p50·p95·max / **稳态窗口内是否发生 measure·layout**（应恒为 0）
+     *   / 首帧延迟（诊断"runnable 被排队"这类装置缺陷）。
+     */
+    public String kernelTickStats() {
+        float[] w = java.util.Arrays.copyOf(ktWorkMs, ktWorkN);
+        java.util.Arrays.sort(w);
+        float p50 = w.length == 0 ? -1 : w[(int) (w.length * 0.50)];
+        float p95 = w.length == 0 ? -1 : w[Math.min(w.length - 1, (int) (w.length * 0.95))];
+        float mx = w.length == 0 ? -1 : w[w.length - 1];
+        double firstDelayMs = ktFirstFrameNs > 0 ? (ktFirstFrameNs - ktStartNs) / 1e6 : -1;
+        return "{\"running\":" + ktRunning + ",\"frames\":" + ktFrames
+                + ",\"work_p50_ms\":" + p50 + ",\"work_p95_ms\":" + p95 + ",\"work_max_ms\":" + mx
+                + ",\"first_frame_delay_ms\":" + firstDelayMs
+                // 稳态窗口内增量（口径见 kernelTickStart 注释）
+                + ",\"measure_delta\":" + (onMeasureCount - ktMeasureBefore)
+                + ",\"layout_delta\":" + (onLayoutCount - ktLayoutBefore)
+                // 接入时的一次性成本（如实记录，不计入动画期）
+                + ",\"boot_measure_delta\":" + (onMeasureCount - ktMeasureBoot)
+                + ",\"boot_layout_delta\":" + (onLayoutCount - ktLayoutBoot)
+                + ",\"on_measure_count\":" + onMeasureCount + ",\"on_layout_count\":" + onLayoutCount + "}";
+    }
+
     public ProteusHostView(Context context) {
         super(context);
         // ★★**必须显式开自绘**（本仓实测踩到，2026-09-29 · S5 端到端）：
@@ -831,18 +1066,35 @@ public class ProteusHostView extends ViewGroup {
         // ★字号只在**变化时**设置（同字号连排时零开销；见 Cmd.fontSize 注释）
         float lastSize = textPaint.getTextSize();
         final java.util.Set<Integer> skip = skipCmdIndices;   // ★被载体提升的指令：跳过（否则重影）
+        final int[] ids = cmdNodeIds;
         for (int i = 0; i < list.size(); i++) {
             if (skip != null && skip.contains(i)) continue;
             final Cmd c = list.get(i);
+            // ★★逐节点变换（内核动画的**绘制落点**）：按并行表查该指令的节点变换
+            //   变换语义与 iOS `applyTransform` **同构**：平移 → 以**元素中心**为锚旋转/缩放。
+            float[] tf = (ids != null && i < ids.length && ids[i] >= 0) ? animTx.get(ids[i]) : null;
+            final boolean xf = tf != null && (tf[0] != 0f || tf[1] != 0f || tf[2] != 1f || tf[3] != 0f);
+            final int save = xf ? canvas.save() : -1;
+            float op = 1f;
+            if (tf != null) op = tf[4];
+            if (xf) {
+                canvas.translate(tf[0], tf[1]);
+                float cx = c.x + c.w * 0.5f, cy = c.y + c.h * 0.5f;
+                if (tf[3] != 0f) canvas.rotate(tf[3], cx, cy);
+                if (tf[2] != 1f) canvas.scale(tf[2], tf[2], cx, cy);
+            }
             bgPaint.setColor(c.color);
+            if (op < 1f) bgPaint.setAlpha(Math.max(0, Math.min(255, (int) (Color.alpha(c.color) * op))));
             canvas.drawRect(c.x, c.y, c.x + c.w, c.y + c.h, bgPaint);
             if (c.text != null) {
                 if (c.fontSize > 0 && c.fontSize != lastSize) {
                     textPaint.setTextSize(c.fontSize);
                     lastSize = c.fontSize;
                 }
+                textPaint.setAlpha(op < 1f ? Math.max(0, Math.min(255, (int) (255 * op))) : 255);
                 canvas.drawText(c.text, c.x + 1f, c.y + c.h * 0.8f, textPaint);
             }
+            if (xf) canvas.restoreToCount(save);
         }
     }
 

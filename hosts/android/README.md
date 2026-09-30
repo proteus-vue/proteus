@@ -68,6 +68,25 @@ adb logcat -d -s proteus:I | tail -60
 |---|---|---|
 | `platform-anim` | **整页转场** | `ProteusHostView.animatePageComposited`（容器级 `ViewPropertyAnimator` → RenderThread） |
 | `platform-anim-node` | **任意节点的合成动画** | `attachAnimCarrier`：把该节点的指令提升为**载体 View**，由平台动画驱动 |
+| `kernel-anim` | **内核驱动动画**（tick 路径） | JNI 转发内核 `anim_start/tick_bin/stop/seek_scroll/shared_element` + 宿主逐节点变换绘制 |
+
+★★**内核驱动路径（本轮补齐的关键缺口）**：Android 此前只有**平台**路径 ⇒
+**序列编排（keyframes）/ 滚动联动 / 共享元素在本端根本无法运行**（这些动效内核才表达得了）。
+本轮补上：JNI 五个导出 + 宿主逐节点变换（`Canvas.save/translate/rotate/scale`，变换语义与 iOS
+`applyTransform` 同构）+ Choreographer 帧循环。
+
+```bash
+adb shell am broadcast -a dev.proteus.RUN --es path kernel-anim
+adb pull /sdcard/Android/data/dev.proteus.layoutcore/files/kernel-anim.json hosts/android/results/
+python3 hosts/android/check-kernel-anim.py hosts/android/results/kernel-anim.json
+```
+
+★**两个装置坑（都真机踩到，判据文案里已写清）**：
+① `View.postOnAnimation` 对**未 attach** 的 View 会**排队** ⇒ 改用 `Choreographer.postFrameCallback`；
+② 测试**同步**跑在 `runAll()` 里会被同批重活（§9.2 采样循环）**饿死**主线程
+（实测首帧延迟 **3505ms** ⇒ 首帧即停）⇒ `postDelayed` 让出主线程。
+★**诚实边界**：`shared_element` 的 `fromNodeId` 路径需要核心树的**绝对几何**（与 iOS `node_abs_rect` 同源）；
+本端当前用 `sourceRect`（系统坐标）路径验证，单节点绝对几何入口未接（不影响结论）。
 
 ★**为什么逐节点必须落到 View（据 `android.jar` 取证，非记忆）**：`RenderNode` 与
 `Canvas.drawRenderNode` 是公开 API，但 **`RenderNodeAnimator` 不公开** ⇒ 裸 `RenderNode`

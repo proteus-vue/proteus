@@ -50,6 +50,22 @@ final class RustLayout {
     private static native String nativeCurveBezier(int curve);
     /** ★★MA0-RT：提交规格（合成属性判定 + 节点级采样） */
     private static native String nativeAnimCommitSpec(long handle, String json);
+    /* ★★内核驱动动画（tick 路径）——与 iOS 同一份内核（此前本端**完全没有**这条通路） */
+    /** 启动动画（封闭集声明：curve/spring/keyframes/scroll 窗口） */
+    private static native String nativeAnimStart(long handle, String json);
+    /**
+     * 每帧推进：返回 **24B/条**定长记录（`id u32 + tx/ty/scale/rotate/opacity f32`，全小端）。
+     *
+     * ★为什么走 byte[]：每帧 O(N) 条走 JSON 的编解码是白付（与 iOS 的二进制通道同一条纪律）；
+     *   Java 侧用 `ByteBuffer.order(LITTLE_ENDIAN)` 按偏移直读。
+     */
+    private static native byte[] nativeAnimTickBin(long handle, float dtMs);
+    /** 停动画（`{"nodeIds":[…]}` / `{"all":true}`） */
+    private static native String nativeAnimStop(long handle, String json);
+    /** ★MA5：滚动驱动（滚动位置 → 全部窗口动画；换算在内核） */
+    private static native String nativeAnimSeekScroll(long handle, String json);
+    /** ★共享元素（几何原语：源矩形 + 目标节点 ⇒ dx/dy/scale，内核算） */
+    private static native String nativeSharedElement(long handle, String json);
 
     static boolean isLoaded() { return loaded; }
     static String getLoadError() { return loadError; }
@@ -186,6 +202,33 @@ final class RustLayout {
     /** ★★MA0-RT：提交规格（合成属性判定 + 节点级采样；平台零参与路径的数据面） */
     static String animCommitSpec(long handle, String json) {
         return loaded ? nativeAnimCommitSpec(handle, json) : NOT_LOADED;
+    }
+
+    /* ══════════ ★★内核驱动动画（tick 路径） ══════════ */
+
+    /** 启动动画（返回 `{"ok":true,"started":N,…}`） */
+    static String animStart(long handle, String json) {
+        return loaded ? nativeAnimStart(handle, json) : NOT_LOADED;
+    }
+
+    /** 每帧推进（空数组 = 本帧无变化；步长 24B 见 native 声明） */
+    static byte[] animTickBin(long handle, float dtMs) {
+        return loaded ? nativeAnimTickBin(handle, dtMs) : new byte[0];
+    }
+
+    /** 停动画 */
+    static String animStop(long handle, String json) {
+        return loaded ? nativeAnimStop(handle, json) : NOT_LOADED;
+    }
+
+    /** ★MA5：滚动驱动 */
+    static String animSeekScroll(long handle, String json) {
+        return loaded ? nativeAnimSeekScroll(handle, json) : NOT_LOADED;
+    }
+
+    /** ★共享元素（几何原语） */
+    static String sharedElement(long handle, String json) {
+        return loaded ? nativeSharedElement(handle, json) : NOT_LOADED;
     }
 
     private static final String NOT_LOADED = "{\"ok\":false,\"error\":\"native 未加载\"}";

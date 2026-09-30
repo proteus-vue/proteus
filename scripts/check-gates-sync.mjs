@@ -94,6 +94,8 @@ const LOCAL_ONLY = {
   //   `check:android-host-compile`（宿主代码可编译）+ `check:acceptance-stub`（装置可用），
   //   三者分工：编译守形态 / 桩测守装置 / 本条守真机行为。
   'check:android-platform-anim': '需真机产物（adb pull 的 platform-anim*.json）；CI 无设备',
+  // ★内核驱动动画判据（曲线/序列/滚动/共享元素/真帧循环）：同族——输入是真机产物，CI 无设备。
+  'check:android-kernel-anim': '需真机产物（adb pull 的 kernel-anim.json）；CI 无设备',
   // ★hook 接线检查（2026-09-29）：CI 上 `.zcode/config.json` 不存在（gitignored）⇒ 该门禁
   //   走"未安装但给出指引"分支并**返回 0**（不判红是刻意的：CI 本来就不需要本地 hook）。
   //   ⇒ 归入"仅本地"是因为**它的判据只在本地才有意义**（CI 恒为"未安装"）。

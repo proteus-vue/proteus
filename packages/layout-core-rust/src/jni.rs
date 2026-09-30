@@ -475,3 +475,111 @@ pub extern "system" fn Java_dev_proteus_layoutcore_RustLayout_nativeAnimCommitSp
     .unwrap_or_else(|_| "{\"ok\":false,\"error\":\"panic（已捕获）\"}".to_string());
     into_java_string(&mut env, out)
 }
+
+/* ────────────────────────── ★★内核驱动动画（tick 路径：Android 侧补齐） ────────────────────────── */
+
+/// 通用「JSON 进 / JSON 出」转发（**五个内核动画入口共用**——避免五份手写副本，本仓纪律 #22）
+///
+/// ★JNIEnv 非 `UnwindSafe` ⇒ 入参字符串必须在闭包**外**取出（与 `nativeAnimCommitSpec` 同一纪律）。
+fn forward_cstr<'local>(
+    mut env: JNIEnv<'local>,
+    json: JString<'local>,
+    call: impl FnOnce(*const std::ffi::c_char) -> *mut std::ffi::c_char,
+) -> jstring {
+    let s: String = match env.get_string(&json) {
+        Ok(v) => v.into(),
+        Err(e) => {
+            return into_java_string(&mut env, format!("{{\"ok\":false,\"error\":\"入参读取失败：{e}\"}}"))
+        }
+    };
+    // ★`AssertUnwindSafe`：闭包只持有 `CString` + 一个 `FnOnce` 转发器（**无可共享可变状态**），
+    //   panic 被捕获后只产出错误字符串、不把破坏状态带出去 ⇒ 断言成立（并在注释里写明理由，
+    //   而不是无条件地"为了编译过"而断言——本仓纪律：豁免必须给出理由）。
+    let out = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| -> String {
+        let cs = match std::ffi::CString::new(s) {
+            Ok(c) => c,
+            Err(_) => return "{\"ok\":false,\"error\":\"入参含 NUL\"}".to_string(),
+        };
+        let p = call(cs.as_ptr());
+        if p.is_null() {
+            return "{\"ok\":false,\"error\":\"null\"}".to_string();
+        }
+        let o = unsafe { std::ffi::CStr::from_ptr(p) }.to_string_lossy().into_owned();
+        unsafe { crate::ffi::proteus_layout_free_string(p) };
+        o
+    }))
+    .unwrap_or_else(|_| "{\"ok\":false,\"error\":\"panic（已捕获）\"}".to_string());
+    into_java_string(&mut env, out)
+}
+
+/// ★★**启动动画**（Android 侧入口）——与 iOS `anim_start` 同一份内核语义
+#[no_mangle]
+pub extern "system" fn Java_dev_proteus_layoutcore_RustLayout_nativeAnimStart<'local>(
+    env: JNIEnv<'local>,
+    _class: JClass<'local>,
+    handle: jni::sys::jlong,
+    json: JString<'local>,
+) -> jstring {
+    forward_cstr(env, json, move |p| unsafe { crate::ffi::proteus_layout_anim_start(handle as u64, p) })
+}
+
+/// ★★**每帧推进（二进制通道）**——返回 **24B/条**定长记录（`id u32 + 五值 f32`，全小端）
+///
+/// 空数组 = 本帧无变化。★宿主按偏移直读、**无 JSON 解析**（与 iOS 同一条性能纪律；
+/// 记录长度**只在本处定义**，Java 侧以常量对齐——iOS 曾因两处各写步长而错位，本端从简：单入口）。
+#[no_mangle]
+pub extern "system" fn Java_dev_proteus_layoutcore_RustLayout_nativeAnimTickBin<'local>(
+    mut env: JNIEnv<'local>,
+    _class: JClass<'local>,
+    handle: jni::sys::jlong,
+    dt_ms: jni::sys::jfloat,
+) -> jni::sys::jbyteArray {
+    let buf = std::panic::catch_unwind(|| -> Vec<u8> {
+        let mut len: u32 = 0;
+        let p = unsafe { crate::ffi::proteus_layout_anim_tick_bin(handle as u64, dt_ms as f32, &mut len) };
+        if p.is_null() || len == 0 {
+            return Vec::new();
+        }
+        let v = unsafe { std::slice::from_raw_parts(p, len as usize) }.to_vec();
+        unsafe { crate::ffi::proteus_rects_free(p, len) };
+        v
+    })
+    .unwrap_or_default();
+    match env.byte_array_from_slice(&buf) {
+        Ok(a) => a.into_raw(),
+        Err(_) => std::ptr::null_mut(),
+    }
+}
+
+/// **停动画**（Android 侧）——`{"nodeIds":[…]}` 或 `{"all":true}`
+#[no_mangle]
+pub extern "system" fn Java_dev_proteus_layoutcore_RustLayout_nativeAnimStop<'local>(
+    env: JNIEnv<'local>,
+    _class: JClass<'local>,
+    handle: jni::sys::jlong,
+    json: JString<'local>,
+) -> jstring {
+    forward_cstr(env, json, move |p| unsafe { crate::ffi::proteus_layout_anim_stop(handle as u64, p) })
+}
+
+/// ★★**滚动驱动**（MA5）：滚动位置 → 全部窗口动画（换算在内核，宿主零数学）
+#[no_mangle]
+pub extern "system" fn Java_dev_proteus_layoutcore_RustLayout_nativeAnimSeekScroll<'local>(
+    env: JNIEnv<'local>,
+    _class: JClass<'local>,
+    handle: jni::sys::jlong,
+    json: JString<'local>,
+) -> jstring {
+    forward_cstr(env, json, move |p| unsafe { crate::ffi::proteus_layout_anim_seek_scroll(handle as u64, p) })
+}
+
+/// ★★**共享元素**（几何原语）：源矩形 + 目标节点 ⇒ dx/dy/scale（内核算，宿主零几何数学）
+#[no_mangle]
+pub extern "system" fn Java_dev_proteus_layoutcore_RustLayout_nativeSharedElement<'local>(
+    env: JNIEnv<'local>,
+    _class: JClass<'local>,
+    handle: jni::sys::jlong,
+    json: JString<'local>,
+) -> jstring {
+    forward_cstr(env, json, move |p| unsafe { crate::ffi::proteus_layout_shared_element(handle as u64, p) })
+}

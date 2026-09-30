@@ -315,7 +315,20 @@ public class MainActivity extends Activity {
             //   混在重活路径里会被主线程 Choreographer 饿死）
             sb.append("【MA0-RT 平台零参与动画（容器级）】\n");
             platformAnimRun();
-            sb.append("  读数见 platform-anim.json（异步采样）\n");        } else if ("platform-anim-node".equals(testPath)) {
+            sb.append("  读数见 platform-anim.json（异步采样）\n");        } else if ("kernel-anim".equals(testPath)) {
+            // ★★内核驱动动画（tick 路径，Android 侧此前**完全没有**这条通路）
+            sb.append("【内核驱动动画（Rust 曲线求值 + 逐节点变换）】\n");
+            // ★★**必须先让出主线程**（与 `platformAnimRun` 同一个坑的**第二次**踩，本轮真机抓出）：
+            //   首版直接同步调 `kernelAnimRun()` ⇒ 真机读数 `frames=1`、**首帧延迟 3505ms**。
+            //   根因：`runAll()` 在 dispatch **之后**还有同步重活（§9.2 的采样循环等）⇒
+            //   帧循环的 vsync 回调被主线程**饿死**，直到那批同步代码跑完才首帧 —— 而那时
+            //   `ktStopAtNs`（500ms）早已过期 ⇒ 首帧即停。
+            //   ⇒ 正解：`postDelayed` 把整个测试排到**广播栈退出、主线程空闲之后**再开始。
+            //   ★纪律（本仓第三次同源）：**测试装置不得与重型生产负载共用主线程时序**。
+            new android.os.Handler(android.os.Looper.getMainLooper())
+                    .postDelayed(new Runnable() { public void run() { kernelAnimRun(); } }, 300);
+            sb.append("  读数见 kernel-anim.json（异步采样；已让出主线程避免被同批重活饿死）\n");
+        } else if ("platform-anim-node".equals(testPath)) {
             // ★★**逐节点**平台动画（载体 View 路径）——独立路径同理（见 platformAnimRun 注释）
             sb.append("【逐节点平台动画（载体 View + ViewPropertyAnimator）】\n");
             platformAnimNodeRun();
@@ -880,6 +893,146 @@ public class MainActivity extends Activity {
      *   既有场景之所以没暴露该问题，是因为它们各自做了"隐藏按钮 + 绝对定位"，
      *   但**先前场景的 View 仍在**（多次触发就会叠）。本方法把它显式清掉。
      */
+    /**
+     * ★★**内核驱动动画**测试路径（Android 侧此前完全缺失的通路）
+     *
+     * 【与两条平台路径的分工】
+     *   · `platform-anim` / `platform-anim-node`：**平台**渲染线程自主插值（提交一次，主线程零参与）；
+     *   · 本条：**内核**逐帧求值（曲线/弹簧/序列/滚动全在这一条）⇒ 覆盖平台路径表达不了的动效。
+     *   本端此前只有前者 ⇒ 序列/滚动联动/共享元素在 Android 上**根本无法运行**（本轮补齐）。
+     *
+     * 【判据（写进 kernel-anim.json）】
+     *   M1 启动：`started` = 播种条数（内核真的受理）；
+     *   M2 **曲线求值真的发生**：固定 dt 推进下，值按曲线走（不是线性跳变）；
+     *   M3 终值精确（端点钉死——内核语义）；
+     *   M4 **真帧循环**：帧数增长 + 每帧工作 p50 有值 + 动画期间 **measure/layout 增量为 0**
+     *      （逐节点变换是绘制层的事，不该触发布局）；
+     *   M5 序列（keyframes）：分段定位 + 段边界精确（与 iOS J 组同源）；
+     *   M6 滚动联动：窗口映射（与 iOS I2 同源）；
+     *   M7 共享元素：内核几何（与 iOS K1 同源）。
+     */
+    private void kernelAnimRun() {
+        final org.json.JSONObject out = new org.json.JSONObject();
+        try {
+            clearSceneViews();
+            final ProteusHostView hv = new ProteusHostView(this);
+            android.widget.FrameLayout.LayoutParams lp = new android.widget.FrameLayout.LayoutParams(
+                    FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.MATCH_PARENT);
+            hv.setLayoutParams(lp);
+            root.addView(hv);
+
+            // 场景：3 个色块（各自独立节点 id，供逐节点动画）
+            final java.util.List<ProteusHostView.Cmd> cmds = new java.util.ArrayList<>();
+            cmds.add(new ProteusHostView.Cmd(20f, 120f, 140f, 90f, 0xFF3366CC, null));
+            cmds.add(new ProteusHostView.Cmd(200f, 120f, 140f, 90f, 0xFFCC6633, null));
+            cmds.add(new ProteusHostView.Cmd(20f, 300f, 140f, 90f, 0xFF33CC66, null));
+            hv.setCmds(cmds);
+            hv.setCmdNodeIds(new int[]{11, 12, 13});
+            final int W = getResources().getDisplayMetrics().widthPixels;
+            final int H = getResources().getDisplayMetrics().heightPixels;
+            hv.measure(android.view.View.MeasureSpec.makeMeasureSpec(W, android.view.View.MeasureSpec.EXACTLY),
+                       android.view.View.MeasureSpec.makeMeasureSpec(H, android.view.View.MeasureSpec.EXACTLY));
+            hv.layout(0, 0, W, H);
+            hv.attachCore(buildKernelTree(W, H));
+            out.put("core_handle_nonzero", true);
+
+            // ── M1/M2/M3：曲线动画（easeOut 0→120，300ms）——**固定 dt 确定性推进** ──
+            String startOut = hv.kernelAnimStart(
+                    "{\"anims\":[{\"nodeId\":11,\"kind\":0,\"curve\":1,\"from\":0,\"to\":120,"
+                            + "\"durMs\":300,\"takeover\":false}]}");
+            out.put("start", startOut);
+            float dt = 50f;
+            final org.json.JSONArray trace = new org.json.JSONArray();
+            for (int i = 0; i < 7; i++) {
+                hv.kernelAnimTick(dt);
+                trace.put(new org.json.JSONObject(hv.animTxProbe("[11]")));
+            }
+            out.put("trace", trace);
+            // 读最终值（终态必须精确 120）
+            out.put("fixed_end", new org.json.JSONObject(hv.animTxProbe("[11]")));
+
+            // ── M5：序列（一条动画三段，线性便于算术断言）──
+            hv.kernelAnimStop("{\"all\":true}");
+            hv.kernelAnimStart("{\"anims\":[{\"nodeId\":12,\"kind\":2,\"from\":1,\"to\":1,\"durMs\":400,"
+                    + "\"keyframes\":[{\"to\":0.6,\"durMs\":100,\"curve\":0},"
+                    + "{\"to\":1.2,\"durMs\":200,\"curve\":0},{\"to\":1.0,\"durMs\":100,\"curve\":0}]}]}");
+            final org.json.JSONArray seqTrace = new org.json.JSONArray();
+            final float[] seqSteps = {50f, 50f, 100f, 200f};
+            for (float st : seqSteps) {
+                hv.kernelAnimTick(st);
+                seqTrace.put(new org.json.JSONObject(hv.animTxProbe("[12]")));
+            }
+            out.put("seq_trace", seqTrace);
+
+            // ── M6：滚动联动（视差 窗 0..400 × 0.4）──
+            hv.kernelAnimStop("{\"all\":true}");
+            hv.kernelAnimStart("{\"anims\":[{\"nodeId\":13,\"kind\":1,\"curve\":0,\"from\":0,\"to\":-160,"
+                    + "\"durMs\":1,\"scrollFrom\":0,\"scrollTo\":400}]}");
+            final org.json.JSONArray scrollTrace = new org.json.JSONArray();
+            for (int off : new int[]{0, 200, 400}) {
+                hv.kernelAnimSeekScroll("{\"scroll\":" + off + "}");
+                scrollTrace.put(new org.json.JSONObject(hv.animTxProbe("[13]")));
+            }
+            out.put("scroll_trace", scrollTrace);
+
+            // ── M7：共享元素（源矩形 80×80 在 (40,600) → 目标节点 11）──
+            hv.kernelAnimStop("{\"all\":true}");
+            String se = hv.kernelSharedElement(
+                    "{\"targetId\":11,\"sourceRect\":{\"x\":40,\"y\":600,\"w\":80,\"h\":80},"
+                            + "\"durMs\":100,\"curve\":1,\"fadeIn\":false}");
+            out.put("shared_element", se);
+
+            // ── M4：真帧循环（500ms；跑满自停）──
+            hv.kernelAnimStop("{\"all\":true}");
+            hv.kernelAnimStart("{\"anims\":[{\"nodeId\":11,\"kind\":0,\"curve\":3,\"from\":-60,\"to\":60,"
+                    + "\"durMs\":500,\"takeover\":false}]}");
+            final android.os.Handler h = new android.os.Handler(android.os.Looper.getMainLooper());
+            h.postDelayed(new Runnable() {
+                public void run() {
+                    // ★匿名 Runnable 里 JSONObject.put 会抛 JSONException ⇒ 必须显式捕获
+                    //   （与既有 platformAnimRun 同法——本仓纪律：异常不许静默穿透）
+                    try {
+                        out.put("frame_loop", new org.json.JSONObject(hv.kernelTickStats()));
+                        out.put("frame_end", new org.json.JSONObject(hv.animTxProbe("[11]")));
+                    } catch (Exception ignored) {}
+                    try { writeReport("kernel-anim.json", out.toString()); } catch (Exception ignored) {}
+                    hv.kernelAnimStop("{\"all\":true}");
+                }
+            }, 900);
+            hv.kernelTickStart(500);
+        } catch (Exception e) {
+            try { out.put("ok", false); out.put("error", e.toString()); } catch (Exception ignored) {}
+            try { writeReport("kernel-anim.json", out.toString()); } catch (Exception ignored) {}
+        }
+    }
+
+    /** 建一棵最小内核树（3 个绝对定位色块——几何与本测试的绘制指令一致） */
+    private long buildKernelTree(int W, int H) {
+        try {
+            org.json.JSONObject rootNode = new org.json.JSONObject();
+            rootNode.put("id", 1); rootNode.put("parentId", org.json.JSONObject.NULL);
+            rootNode.put("width", W); rootNode.put("height", H);
+            rootNode.put("position", "relative");
+            org.json.JSONArray nodes = new org.json.JSONArray();
+            nodes.put(rootNode);
+            int[][] boxes = {{11, 20, 120, 140, 90}, {12, 200, 120, 140, 90}, {13, 20, 300, 140, 90}};
+            for (int[] b : boxes) {
+                org.json.JSONObject n = new org.json.JSONObject();
+                n.put("id", b[0]); n.put("parentId", 1);
+                n.put("position", "absolute");
+                n.put("left", b[1]); n.put("top", b[2]);
+                n.put("width", b[3]); n.put("height", b[4]);
+                nodes.put(n);
+            }
+            org.json.JSONObject req = new org.json.JSONObject();
+            req.put("viewport", new org.json.JSONObject().put("width", W).put("height", H));
+            req.put("nodes", nodes);
+            return RustLayout.create(req.toString());
+        } catch (Exception e) {
+            return 0;
+        }
+    }
+
     /**
      * ★★**逐节点平台动画**测试路径（载体 View 路径；与容器级 `platform-anim` 并列）
      *
