@@ -7,7 +7,7 @@
      ⇒ 本脚本读的是 `layerTransformProbe` 的结果（宿主从 `CALayer.transform` 反解），
        覆盖"写入路径真的生效"这一环。
 
-【八组判据（对应 RT2 / MA0-RT / MA1 要回答的问题；当前 35 条）】
+【九组判据（对应 RT2 / MA0-RT / MA1 / MA5 要回答的问题；当前 40 条）】
   A. **指令真的驱动了端上动画**：层上 transform 随进度变化，且**终值精确**等于目标（端点钉死）；
   B. **手势驱动（seek）立即生效**：seek 后**不等 tick**，层上已有对应值；
      Progress 驱动后再 tick **不应改它**（手势松手后动画不该自己跑）；
@@ -16,7 +16,8 @@
   E. **帧率测席**（§9）：FPS / 掉帧率 / 每帧工作 p95 / 跟随延迟 / 终值精确；
   F. **对齐 Flutter 能力面**：弹簧物理 / 打断接管（速度接力）/ FLIP（起点无跳变·终值归零）/ rotate+opacity；
   G. **平台零参与路径**（§5-bis）：合成属性判定 / 提交一次 / presentation 探针 / 明确拒绝 / 可撤销；
-  H. **MA1 预设库**：预设编译 → 微信语义对齐 → 指令下发 → 端上驱动 → 校验有效 → 跨语言同值。
+  H. **MA1 预设库**：预设编译 → 微信语义对齐 → 指令下发 → 端上驱动 → 校验有效 → 跨语言同值；
+  I. **MA5 滚动联动**：视差映射（窗×factor）/ 宿主滚动通路生产形态 / 退化窗口与滚动+弹簧拦截 / 平台路径排除。
 
 用法：python3 hosts/ios/check-anim-rt2.py <report.json>
 退出码：0 全过 / 1 有失败（逐条打印为什么）
@@ -403,9 +404,60 @@ def main() -> int:
     else:
         print("  · H 组跳过（无 anim_preset 读数）")
 
+    # ── I 组（MA5）：滚动联动（吸顶 / 视差 / 渐显——位置→进度换算在内核） ──
+    sc = d.get("anim_scroll") or js.get("anim_scroll") or {}
+    if sc:
+        # I1：三个滚动预设都编译并下发（视差 + 渐显 + 吸顶）
+        st = sc.get("start") or {}
+        if not st.get("ok") or (st.get("started", 0) or 0) < 3:
+            fail(f"I1 滚动预设未下发：{st}（应 started>=3——视差/渐显/吸顶各一条）")
+            ok = False
+        else:
+            print(f"  ✓ I1 滚动预设下发：started={st.get('started')} scroll={st.get('scroll')}")
+        # I2：视差映射——窗口 0..400、factor=0.4 ⇒ 滚 200 时 ty≈-80、滚 400 时 ty≈-160
+        b0, b2, b4 = sc.get("bg0_ty"), sc.get("bg200_ty"), sc.get("bg400_ty")
+        if b0 is None or abs(b0) > 0.01:
+            fail(f"I2a 滚动 0 时视差未在起点：ty={b0}（应 0）")
+            ok = False
+        elif b2 is None or not (-83 < b2 < -77):
+            fail(f"I2b 滚动 200 时视差半程不符：ty={b2}（应 ≈ -80 = 200×0.4）")
+            ok = False
+        elif b4 is None or not (-162 < b4 < -158):
+            fail(f"I2c 滚动 400 时视差全程不符：ty={b4}（应 ≈ -160 = 400×0.4）")
+            ok = False
+        else:
+            print(f"  ✓ I2 视差映射（窗 0..400 × 0.4）：0→{b0:.2f} · 200→{b2:.2f} · 400→{b4:.2f}")
+        # I3：**生产形态**——宿主滚动通路（scrollAnimSync）内部完成 驱动+刷层，滚 100 ⇒ ty≈-40
+        sy = sc.get("bgSync_ty")
+        sync = sc.get("sync") or {}
+        if sy is None or not (-43 < sy < -37):
+            fail(f"I3 宿主滚动通路未驱动到位：ty={sy}（滚 100 × 0.4 应 ≈ -40）；sync={sync}")
+            ok = False
+        else:
+            print(f"  ✓ I3 生产形态（宿主滚动通路零 JS）：滚 100 → ty={sy:.2f}（changed={sync.get('changed')}）")
+        # I4：编译期拦截——退化窗口 + 滚动/弹簧并存（都不允许静默通过）
+        deg = sc.get("degenerate_rejected") or ""
+        ss = sc.get("scroll_spring_rejected") or ""
+        if deg == "NOT_REJECTED" or "退化" not in deg:
+            fail(f"I4a 退化窗口未被拦：{deg[:60]}")
+            ok = False
+        elif ss == "NOT_REJECTED" or "弹簧" not in ss:
+            fail(f"I4b 滚动+弹簧并存未被拦：{ss[:60]}")
+            ok = False
+        else:
+            print("  ✓ I4 编译期拦截（退化窗口 / 滚动+弹簧 各一条）")
+        # I5：滚动批次**不得**具备平台零参与资格（驱动源不同：位置 vs 时间）
+        if sc.get("platform_eligible") is not False:
+            fail(f"I5 滚动批次被判为平台路径可用：{sc.get('platform_eligible')}（应 False）")
+            ok = False
+        else:
+            print("  ✓ I5 滚动批次正确排除在平台零参与路径之外")
+    else:
+        print("  · I 组跳过（无 anim_scroll 读数）")
+
     print()
     if ok:
-        print("✅ 判据全过（机制 + 帧率 + 复杂动效 + 平台零参与 + MA1 预设库）")
+        print("✅ 判据全过（机制 + 帧率 + 复杂动效 + 平台零参与 + MA1 预设库 + MA5 滚动联动）")
         return 0
     print("✗ RT2 判据有失败项（见上）")
     return 1

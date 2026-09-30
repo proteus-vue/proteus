@@ -61,6 +61,9 @@ func proteus_layout_apply_ops(_ handle: UInt64, _ ptr: UnsafePointer<UInt8>, _ l
 func proteus_layout_anim_start(_ handle: UInt64, _ json: UnsafePointer<CChar>) -> UnsafeMutablePointer<CChar>
 @_silgen_name("proteus_layout_anim_seek")
 func proteus_layout_anim_seek(_ handle: UInt64, _ json: UnsafePointer<CChar>) -> UnsafeMutablePointer<CChar>
+/// ★MA5：滚动驱动（位置 → 全部窗口动画；换算在内核）
+@_silgen_name("proteus_layout_anim_seek_scroll")
+func proteus_layout_anim_seek_scroll(_ handle: UInt64, _ json: UnsafePointer<CChar>) -> UnsafeMutablePointer<CChar>
 @_silgen_name("proteus_layout_anim_commit_spec")
 func proteus_layout_anim_commit_spec(_ handle: UInt64, _ json: UnsafePointer<CChar>) -> UnsafeMutablePointer<CChar>
 @_silgen_name("proteus_layout_flip")
@@ -157,6 +160,18 @@ func physFootprintMB() -> Double {
     func animStart(_ json: String) -> String
     func animSeek(_ json: String) -> String
     func animTick(_ dtMs: Double) -> String
+    /// ★★**MA5 滚动驱动**：宿主滚动回调 → 内核按**位置**换算进度并写字段（一次驱动全部窗口动画）
+    ///
+    /// 【为什么单开入口（而不是复用 animSeek）】滚动的影响面是**一个位置 → N 个节点**
+    ///   （视差层 + 吸顶头 + 渐显项）；而 `animSeek` 是"某个节点的某个属性"。
+    ///   换算（窗口/钳制/曲线）在**内核**——宿主只报"滚到哪了"。
+    func animSeekScroll(_ json: String) -> String
+    /// ★★**滚动 + 动画同步**（生产形态：宿主滚动通路里直接驱动，**零 JS 参与**）
+    ///
+    /// 一次调用 = 移动内容 + 内核 seek_scroll + 把 updates 当帧写层——
+    /// 真实产品的滚动回调（UIScrollView didScroll / 手势）走的就是这条路径，
+    /// 本入口把它暴露给真机判据（否则"滚动联动"只能靠 JS 分步调用，测不到生产形态）。
+    func scrollAnimSync(_ json: String) -> String
     /// ★★**层变换探针**（判据从 CALayer 真读——覆盖"写入路径真的生效"）
     func layerTransformProbe(_ idsJson: String) -> String
     /// ★★**停全部动画 + 复位变换**（相位间状态清理）
@@ -2908,6 +2923,39 @@ final class SelfDrawBridge: NSObject, SelfDrawExports {
         return "{\"ok\":true,\"flushed\":\(view.lastFlushedCount),\"offsetY\":\(Double(off.y))}"
     }
 
+    /// ★★**MA5：滚动 + 动画同步**（生产形态——宿主滚动通路里直接驱动，零 JS 参与）
+    ///
+    /// 一次调用完成三件事：① 移动内容（`applyContentOffset`）② 内核按**新滚动位置**驱动
+    /// 全部窗口动画（`anim_seek_scroll`）③ 把 `updates` 当帧写层。
+    ///
+    /// 【为什么这就是生产形态】真实产品里 ① 由滚动手势/UIScrollView 触发，②③ 在同一回调里完成
+    ///   ——JS 全程不在链路上（这正是"滚动联动不占 JS 线程"的落地形式）。
+    ///   本入口把它暴露给判据（否则只能靠 JS 分步调 `scrollBy` + `animSeekScroll`，测不到真形态）。
+    ///
+    /// 入参：`{"dx":0,"dy":120}`（滚动增量，px）。出参：`{ok, offsetY, changed, applied}`
+    func scrollAnimSync(_ json: String) -> String {
+        guard let view = view, handle != 0 else { return "{\"ok\":false,\"error\":\"未接入\"}" }
+        guard let data = json.data(using: .utf8),
+              let o = (try? JSONSerialization.jsonObject(with: data)) as? [String: Any] else {
+            return "{\"ok\":false,\"error\":\"入参解析失败（需 {dx,dy}）\"}"
+        }
+        let dx = (o["dx"] as? NSNumber)?.doubleValue ?? 0
+        let dy = (o["dy"] as? NSNumber)?.doubleValue ?? 0
+        // ① 内容偏移（与 scrollBy 同一条路径）
+        let off = view.applyContentOffset(dx: CGFloat(dx), dy: CGFloat(dy))
+        // ② 内核按当前位置驱动窗口动画（**宿主只报位置**——换算在内核）
+        let req = "{\"scroll\":\(Double(off.y))}"
+        let out = req.withCString { takeCString(proteus_layout_anim_seek_scroll(handle, $0)) }
+        // ③ 当帧刷层（与 animSeek 同一通道）
+        let applied = applyAnimUpdates(fromJson: out)
+        // ④ 与 scrollBy 一样补刷滚入视野的待更新层
+        view.setNeedsLayout()
+        view.layoutSubviews()
+        let parsed = (try? JSONSerialization.jsonObject(with: out.data(using: .utf8) ?? Data())) as? [String: Any]
+        let changed = (parsed?["changed"] as? NSNumber)?.intValue ?? 0
+        return "{\"ok\":true,\"offsetY\":\(Double(off.y)),\"changed\":\(changed),\"applied\":\(applied)}"
+    }
+
     /// ★★V5：批量像素采样（渲染一次 → 读 N 个点）
     ///
     /// 【为什么"渲染一次读多点"】逐点调用会各渲染一次（每次 `layer.render` 都不便宜）；
@@ -3239,6 +3287,17 @@ final class SelfDrawBridge: NSObject, SelfDrawExports {
     func animSeek(_ json: String) -> String {
         guard handle != 0 else { return "{\"ok\":false,\"error\":\"未接入核心\"}" }
         let out = json.withCString { takeCString(proteus_layout_anim_seek(handle, $0)) }
+        applyAnimUpdates(fromJson: out)
+        return out
+    }
+
+    /// ★★**MA5 滚动驱动**：滚动位置 → 内核（窗口换算 + 曲线 + 写字段）→ 当帧刷层
+    ///
+    /// 【生产语义（一句话）】滚动回调用**原始滚动位置**调这里 ⇒ 视差/吸顶/渐显全部当帧更新，
+    ///   JS 与曲线数学都不在链路上（换算唯一实现在内核 `AnimEngine::seek_scroll`）。
+    func animSeekScroll(_ json: String) -> String {
+        guard handle != 0 else { return "{\"ok\":false,\"error\":\"未接入核心\"}" }
+        let out = json.withCString { takeCString(proteus_layout_anim_seek_scroll(handle, $0)) }
         applyAnimUpdates(fromJson: out)
         return out
     }
@@ -4394,6 +4453,8 @@ final class SelfDrawViewController: UIViewController {
             ("__proteus.animPlatform()", 2),
             // ★★MA1：预设驱动的转场（"一句话写动画"端到端 + 编译期校验）
             ("__proteus.animPreset()", 2),
+            // ★★MA5：滚动联动（吸顶/视差/渐显——位置→进度在内核；含宿主滚动通路生产形态）
+            ("__proteus.animScroll()", 2),
             // ★★RT2 帧率测席（§9 指标）：**异步**——由 CADisplayLink 跑满时长后回调续链
             //   （事件驱动：跑满即继续，不轮询/不 sleep；看门狗只在卡死时兜底）
             ("__proteus.animBench()", 0),
@@ -4423,7 +4484,7 @@ final class SelfDrawViewController: UIViewController {
             }
             let out = js(expr)
             // 只记关键读数（避免日志爆炸——本仓「输出控制」纪律）
-            if expr.hasPrefix("__proteus.mount") || expr.hasPrefix("__proteus.finalize2") || expr.hasPrefix("__proteus.animProbe") || expr.hasPrefix("__proteus.animComplex") || expr.hasPrefix("__proteus.animPlatform") || expr.hasPrefix("__proteus.animPreset") {
+            if expr.hasPrefix("__proteus.mount") || expr.hasPrefix("__proteus.finalize2") || expr.hasPrefix("__proteus.animProbe") || expr.hasPrefix("__proteus.animComplex") || expr.hasPrefix("__proteus.animPlatform") || expr.hasPrefix("__proteus.animPreset") || expr.hasPrefix("__proteus.animScroll") {
                 NSLog("[proteus] %@ → %@", expr, String(out.prefix(400)))
             }
             // ★让出主线程 pump 轮：每轮一次 runloop 循环 ⇒ 微任务队列被排空

@@ -34,7 +34,7 @@ import { h, ref, nextTick } from '@vue/runtime-core'
 import { createAppRenderer } from '@proteus-vue/renderer-app'
 import { createSelfDrawAdapter } from '@proteus-vue/renderer-app/adapters/selfdraw'
 // ★★MA1：Morpheus 声明式动画表面（预设库 + 编译期校验）——本相位验证"一句话写转场"端到端
-import { presets, compileRoute, compileAnimations, isComposited, validateAnimations } from '@proteus-vue/animation'
+import { presets, compileRoute, compileAnimations, isComposited, validateAnimations, isPlatformEligible } from '@proteus-vue/animation'
 
 /* ────────────────────────── 宿主桥（Swift 经 JSExport 注入） ────────────────────────── */
 
@@ -50,8 +50,15 @@ interface SelfDrawNative {
   // ★★RT2（2026-09-30）：指令驱动动画——曲线求值在 Rust 侧，宿主每帧推进
   layerTransformProbe(idsJson: string): string
   animStopNodes(idsJson: string): string
+  /** ★停全部动画 + 复位所有层变换（相位收尾清场——滚动动画永不自动结束，必须显式停） */
+  animStopAll(): string
+  /** ★V4 滚动（纯内容偏移，像素）——不驱动动画；与 scrollAnimSync 的区别是它不碰动画 */
+  scrollBy(dx: number, dy: number): string
   animStart(json: string): string
   animSeek(json: string): string
+  // ★★MA5（2026-09-30）：滚动联动——宿主只报原始位置，窗口换算在内核
+  animSeekScroll(json: string): string
+  scrollAnimSync(json: string): string
   animTick(dtMs: number): string
   animStartFrameLoop(): string
   animStopFrameLoop(): string
@@ -70,7 +77,7 @@ const BN = { snapshot: 'selfdraw-final' }
 
 // ★构建标识（每次构建由 hosts/ios/bridge/inject-build-id.mjs 注入；与 entry-bench 同机制）
 //   —— 「设备上跑的是哪份代码」必须可**一眼判定**（报告新鲜度判据的内容锚点）。
-const BUILD_ID = 'aea14806-120810'
+const BUILD_ID = '365726ca-121928'
 
 const VP = (globalThis as unknown as { __PROTEUS_VIEWPORT__?: { width: number; height: number } })
   .__PROTEUS_VIEWPORT__ ?? { width: 390, height: 844 }
@@ -195,6 +202,8 @@ let animComplexResult: Record<string, unknown> = {}
 let animPlatformResult: Record<string, unknown> = {}
 /** ★★MA1 预设库读数 */
 let animPresetResult: Record<string, unknown> = {}
+/** ★★MA5 滚动联动读数 */
+let animScrollResult: Record<string, unknown> = {}
 
 /** 供宿主逐相位调用（每个函数在**自己那次 evaluateScript** 里同步启动，微任务在其后排空） */
 const api = {
@@ -453,6 +462,119 @@ const api = {
   },
 
   /**
+   * ★★**MA5：滚动联动**（吸顶 / 视差 / 渐显——Morpheus §6.1 预设库最后一项）
+   *
+   * 【要回答什么】
+   *   ① **滚动位置 → 动画进度**端到端可用：滚动回调只报**原始位置**，视差/渐显当帧变化；
+   *   ② 换算（窗口/钳制/曲线）在**内核**（宿主与 JS 都零数学）；
+   *   ③ **生产形态**：`scrollAnimSync`（滚动 + 驱动 + 刷层在宿主内一次完成，JS 不在链路）；
+   *   ④ 编译期拦截：退化窗口 / 滚动+弹簧并存被拦；滚动批次**不得**走平台零参与路径。
+   *
+   * 【判据】见 `check-anim-rt2.py` 的 I 组。
+   */
+  animScroll(): string {
+    const probe = safeParse(proteusSelfDraw.layerTransformProbe(JSON.stringify([2, 3, 4])))
+    const present = ((probe as { layers?: Array<{ id: number; missing?: boolean }> }).layers ?? [])
+      .filter((l) => !l.missing)
+      .map((l) => l.id)
+    const bg = present[0] ?? 2      // 视差背景层
+    const fade = present[1] ?? bg   // 渐显项
+    const head = present[2] ?? bg   // 吸顶头
+
+    // 相位隔离：只停自己关心的节点（不 animStopAll——见 animPreset 的教训注释）
+    proteusSelfDraw.animStopNodes(JSON.stringify({ nodeIds: [bg, fade, head] }))
+
+    // ① 预设：视差（factor=0.4，窗口 0..400）+ 渐显（窗口 100..300）+ 吸顶（pin 80）
+    const parallax = presets.scroll.parallax({ factor: 0.4, from: 0, to: 400 })
+    const fadeIn = presets.scroll.fadeIn({ from: 100, to: 300 })
+    const sticky = presets.scroll.sticky({ pinAt: 80, span: 120 })
+    const cBg = compileAnimations(parallax.decls, { nodeId: bg })
+    const cFade = compileAnimations(fadeIn.decls, { nodeId: fade })
+    const cHead = compileAnimations(sticky.decls, { nodeId: head })
+    const startOut = safeParse(
+      proteusSelfDraw.animStart(
+        JSON.stringify({ anims: [...cBg.anims, ...cFade.anims, ...cHead.anims] }),
+      ),
+    )
+
+    const tyOf = (idsJson: string, idx = 0): number | undefined => {
+      const p = safeParse(proteusSelfDraw.layerTransformProbe(idsJson))
+      const layers = (p as { layers?: Array<Record<string, number>> }).layers ?? []
+      return layers[idx]?.ty
+    }
+
+    // ② 滚动到 0：视差起点（ty=0）、渐显未到窗口（opacity=0 → 用 ty 无法看，故读 opacity）
+    const atZero = safeParse(proteusSelfDraw.animSeekScroll(JSON.stringify({ scroll: 0 })))
+    const bg0 = tyOf(JSON.stringify([bg]))
+
+    // ③ 滚动到 200（视差半程 ⇒ -80；渐显半程 ⇒ opacity 0.5）
+    const at200 = safeParse(proteusSelfDraw.animSeekScroll(JSON.stringify({ scroll: 200 })))
+    const bg200 = tyOf(JSON.stringify([bg]))
+
+    // ④ 滚动到 400（视差全程 ⇒ -160）
+    const at400 = safeParse(proteusSelfDraw.animSeekScroll(JSON.stringify({ scroll: 400 })))
+    const bg400 = tyOf(JSON.stringify([bg]))
+
+    // ⑤ 生产形态：宿主滚动通路（scrollAnimSync）——从 0 滚到 100（视差 -40）
+    proteusSelfDraw.animSeekScroll(JSON.stringify({ scroll: 0 }))
+    const syncOut = safeParse(proteusSelfDraw.scrollAnimSync(JSON.stringify({ dx: 0, dy: 100 })))
+    const bgSync = tyOf(JSON.stringify([bg]))
+
+    // ⑥ 编译期拦截：退化窗口 / 滚动+弹簧
+    let degenerateRejected = ''
+    try {
+      compileAnimations(
+        [{ kind: 'translateY', to: -50, scroll: { from: 300, to: 100 } }],
+        { nodeId: bg },
+      )
+      degenerateRejected = 'NOT_REJECTED'
+    } catch (e) {
+      degenerateRejected = String((e as { message?: string })?.message ?? e).slice(0, 60)
+    }
+    let scrollSpringRejected = ''
+    try {
+      compileAnimations(
+        [{ kind: 'translateY', to: -50, spring: { stiffness: 320, damping: 30 }, scroll: { from: 0, to: 100 } }],
+        { nodeId: bg },
+      )
+      scrollSpringRejected = 'NOT_REJECTED'
+    } catch (e) {
+      scrollSpringRejected = String((e as { message?: string })?.message ?? e).slice(0, 60)
+    }
+    // ⑦ 滚动批次不得走平台零参与路径（驱动源不同）
+    const platformEligible = isPlatformEligible(cBg)
+
+    const r = {
+      nodes: [bg, fade, head],
+      presets: { parallax: parallax.name, fadeIn: fadeIn.name, sticky: sticky.name },
+      window: parallax.window,
+      start: startOut,
+      bg0_ty: bg0,
+      bg200_ty: bg200,
+      bg400_ty: bg400,
+      sync: syncOut,
+      bgSync_ty: bgSync,
+      last_changed: (at400 as { changed?: number }).changed,
+      last_active: (at400 as { active?: number }).active,
+      degenerate_rejected: degenerateRejected,
+      scroll_spring_rejected: scrollSpringRejected,
+      platform_eligible: platformEligible,
+      zero_ok: (atZero as { ok?: boolean }).ok,
+    }
+
+    // ★★相位收尾（读数**已捕获**，此处只做状态清理）：
+    //   ① 恢复内容偏移（sync 已把内容滚了 100px——不恢复会污染后续相位的截图/几何）；
+    //   ② `animStopAll`：滚动动画**永不自动结束**（Progress 驱动）⇒ 不清场它会一直在帧率测席里
+    //      被每帧"保持写入"（污染 E 组每帧成本读数），并让层留下残姿。
+    //   ★顺序不能反：先滚回去（纯内容移动，不驱动动画），再清场。
+    proteusSelfDraw.scrollBy(0, -100)
+    proteusSelfDraw.animStopAll()
+
+    animScrollResult = r
+    return JSON.stringify(r)
+  },
+
+  /**
    * ★★**MA0-RT 相位：平台渲染线程零参与路径**（Morpheus §5-bis）
    *
    * 【要回答什么】
@@ -661,6 +783,8 @@ const api = {
       anim_rt2: animRt2Result,
       // ★★MA1 预设库（一句话写转场 + 编译期校验）
       anim_preset: animPresetResult,
+      // ★★MA5 滚动联动（吸顶 / 视差 / 渐显——位置→进度换算在内核）
+      anim_scroll: animScrollResult,
       // ★★MA0-RT 平台零参与路径（合成属性判定 + CAKeyframe 提交 + presentation 探针）
       anim_platform: animPlatformResult,
       // ★★RT2 复杂动效（弹簧 / 打断接管 / FLIP / rotate+opacity）
