@@ -26,6 +26,7 @@ const isEn = computed(() => locale.value === 'en')
 /** ★静态资产基路径（GitHub Pages 子路径部署：vite 的 BASE_URL 带前导斜杠） */
 const base = import.meta.env.BASE_URL || '/'
 
+
 /* ══════════════════════════════ 文案 ══════════════════════════════ */
 
 const T = {
@@ -74,13 +75,14 @@ const T = {
         ],
       },
     ],
-    showcaseTitle: '炫技场 · 真机跑给你看',
+    showcaseTitle: '炫技场 · 真机跑给你看（录屏）',
     showcaseLead:
       '800 片瓦片同屏编舞的**整场演出**：星尘凝聚 → 聚字开场语 → 涟漪 → 多米诺 → 风暴（800×5 条指令并发）→ 全量重排 ×2 → 漩涡 → 聚字谢幕语，共 12 幕一幕到底、幕间零停顿。**全部由一句句声明式编排写出来**（相位序 + 构型预设，无一行手写循环），曲线与物理在 Rust 内核求值。这不是录屏特效，是 iPhone 12 上一次跑完的真实读数。',
     showcaseNote: '★为什么"别人不敢试"：Web/VDOM 框架 800 节点逐节点动画 = 每帧 800 次样式写入 + 布局失效；RN/小程序每个节点是原生视图，800 视图同屏是内存与桥接的双重灾难；Flutter 能跑但走 Dart 层求值。我们把曲线/物理放在内核，每帧只跨一次边界。',
-    showcaseImgAlt: 'Morpheus 炫技场真机截图：800 片瓦片聚成点阵文字 800 TILES，四周星尘环绕',
-    showcaseCaption: '真机截图（iPhone 12 · 谢幕语定格）：800 片聚成 800 TILES',
-    showcaseCmd: '复跑：bash hosts/ios/run-selfdraw.sh --showcase ｜ 演示 App：iPhone 上点开 Morpheus 即循环演出',
+    showcaseImgAlt: 'Morpheus 炫技场真机录屏：800 片瓦片编排成 12 幕演出，收于点阵文字 800 TILES',
+    showcaseCaption:
+      '真机录屏（iPhone 12 · 60fps · 12 幕一遍到底，循环播放）：聚字开场 → 涟漪 → 风暴 → 全量重排 → 漩涡 → 谢幕语',
+    showcaseCmd: '复跑：bash hosts/ios/run-selfdraw.sh --showcase --record ｜ 演示 App：iPhone 上点开 Morpheus 即循环演出',
     demoTitle: '真机演示',
     demoNote: '演示播放的是引擎交给执行器的同一份指令（routeTransitionBatches）；曲线求值走与 Rust 内核 golden 对拍过的 TS 镜像。',
     dirLabel: '方向',
@@ -149,13 +151,14 @@ const T = {
         ],
       },
     ],
-    showcaseTitle: 'Showcase · verified on a device',
+    showcaseTitle: 'Showcase · recorded on a device',
     showcaseLead:
       'A full 12-act show on 800 tiles at once: stardust gathering → a clocked opening title → ripples → dominoes → a storm (800×5 concurrent instructions) → two full re-layouts → a spiral → a clocked finale, running end to end with no pause between acts. Every act is written as one declarative choreography (phase order + formation presets, zero hand-written loops), with curves and physics evaluated in the Rust kernel. Not a filmed effect: these are readings from one run on an iPhone 12.',
     showcaseNote: '★Why others do not attempt it: in Web/VDOM frameworks, animating 800 nodes means 800 style writes and a layout invalidation every frame; in RN/mini-programs every node is a native view, so 800 views on screen is a memory and bridge disaster; Flutter can do it but evaluates in Dart. We keep curves and physics in the kernel and cross the boundary once per frame.',
-    showcaseImgAlt: 'Morpheus showcase device screenshot: 800 tiles forming the pixel text 800 TILES, ringed by stardust',
-    showcaseCaption: 'Device screenshot (iPhone 12 · finale): 800 tiles spell out 800 TILES',
-    showcaseCmd: 'Re-run: bash hosts/ios/run-selfdraw.sh --showcase | Demo app: tap Morpheus on iPhone for a looping show',
+    showcaseImgAlt: 'Morpheus showcase device recording: 800 tiles choreographed through 12 acts, ending as the pixel text 800 TILES',
+    showcaseCaption:
+      'Device recording (iPhone 12 · 60fps · 12 acts in one pass, looping): clocked title → ripples → storm → full re-layout → spiral → finale',
+    showcaseCmd: 'Re-run: bash hosts/ios/run-selfdraw.sh --showcase --record | Demo app: tap Morpheus on iPhone for a looping show',
     demoTitle: 'Device demo',
     demoNote: 'The demo plays the very same instructions the engine hands to the executor (routeTransitionBatches); curve evaluation uses the TS mirror golden-tested against the Rust kernel.',
     dirLabel: 'Direction',
@@ -630,7 +633,21 @@ onUnmounted(() => {
         <p-text class="sec-note">{{ C.showcaseLead }}</p-text>
         <p-grid :min-col-width="320" :gap="22" class="sc-grid">
           <p-view class="sc-shot">
-            <img :src="`${base}morpheus-showcase.png`" :alt="C.showcaseImgAlt" class="sc-img" loading="lazy" />
+            <!-- ★真机录屏（ReplayKit 逐帧 · 60fps）：poster 是同一轮的收尾截图；
+                 reduced-motion ⇒ 不播动画，只显 poster（同一帧的静态图） -->
+            <video
+              v-if="motionOk"
+              class="sc-img sc-video"
+              :src="`${base}morpheus-showcase.mp4`"
+              :poster="`${base}morpheus-showcase.png`"
+              :aria-label="C.showcaseImgAlt"
+              autoplay
+              muted
+              loop
+              playsinline
+              preload="metadata"
+            />
+            <img v-else :src="`${base}morpheus-showcase.png`" :alt="C.showcaseImgAlt" class="sc-img" loading="lazy" />
             <p-text class="sc-cap">{{ C.showcaseCaption }}</p-text>
           </p-view>
           <p-stack direction="column" :gap="14" class="sc-side">
@@ -945,6 +962,12 @@ onUnmounted(() => {
   border-radius: var(--radius-xl);
   padding: 14px;
   overflow: hidden;
+}
+.sc-video {
+  /* ★`aspect-ratio` 与源片一致（586×1268 ≈ 1:2.164）——加载期不留空白跳变 */
+  aspect-ratio: 586 / 1268;
+  object-fit: cover;
+  background: #06060a;
 }
 .sc-img {
   display: block;

@@ -108,6 +108,23 @@
  ② 演示 App 的循环重播在**真机验证**（39s 打印重播标记），但未做长时间循环的稳定性统计；
  ③ 谢幕语"文字由元素聚成"依赖点阵字形表（仅 A–Z/0–9/空格/-/!/?，小写按大写渲染）。
 
+**六、★官网炫技场改为「真机录屏」（用户：「把真机截图换成录屏是不是更好」）**
+ · **零外部工具**：`devicectl` 没有录屏子命令（取证确认）⇒ 用 **App 内 ReplayKit 逐帧捕获**
+   （`startCapture` + 本进程 `AVAssetWriter`）——录的就是**判据同源那一轮的屏幕**。
+   ★真机踩坑：`stopRecording(withOutput:)` 报 `-5835 文件权限问题`（跨进程 daemon 写 app 沙盒被拒）
+   ⇒ 改逐帧版（文件自己写，无权限面；且方向可控：`RPVideoSampleOrientationKey` → `input.transform`）。
+   ★录屏对帧率几乎无影响（本轮 58.4 FPS / 掉帧 0.84%，与不录时同档——硬件编码）。
+ · **转码与自检**（`hosts/ios/make-showcase-video.sh`）：保留 **60fps**（这场要展示的就是丝滑，
+   降帧率等于自毁论点）· 宽 **586**（≈0.5×；★偶数——yuv420p 要求，585 会被 libx264 拒）·
+   crf 27 + faststart。产物 40MB→**3MB**。判据：体积 ≤12MB **且视频时长与真机报告
+   `elapsed_ms` 对账（±15%）**——"网站上的视频 = 被测的那次运行"靠等式成立，不靠人眼。
+ · **官网接线**：`<video autoplay muted loop playsinline poster=截图>`；
+   ★`prefers-reduced-motion` ⇒ **只显 poster**（复用页面既有的 `motionOk`，不新建第二份守卫）。
+ · **两个 bash 3.2 坑（本仓已记录，本轮又踩一个）**：`$VAR` 后接全角括号 ⇒ 变量名被吞
+   （`SRC…: unbound variable`）——必须写 `${VAR}`。
+ · 另：`hosts/ios/results/showcase.mp4`（40MB 原片）进 .gitignore（转码中间物；交付物是
+   `website/public/morpheus-showcase.mp4`）。
+
 ### ★★★2026-09-30（九）· Morpheus 炫技场：800 片瓦片真机三段编舞（58.29 FPS · 掉帧 1.07%）（用户「在其他跨端框架不敢轻易尝试的那种」）
 
 **一、形态**：新增 `--showcase` 真机模式（`hosts/shared/bridge/entry-showcase.ts` + iOS

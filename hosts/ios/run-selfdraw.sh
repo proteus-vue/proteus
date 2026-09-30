@@ -42,8 +42,12 @@ UDID=""
 # ★用例过滤（仅 --bench 有效）：`--cases=S5` 只跑 S5* 用例——定向验证不跑全套
 #   （效率纪律：bench 46 用例整套数分钟，验证单改动通常只需 2–4 个）
 CASE_FILTER=""
+# ★--record：炫技场模式额外用 **ReplayKit 录屏**（App 内录真机屏幕，零外部工具）——
+#   产物 Documents/showcase.mp4 随报告一起取回；之后由 `make-showcase-video.sh` 转网页格式。
+RECORD=0
 for a in "$@"; do
   case "$a" in
+    --record) RECORD=1 ;;
     --bench) MODE="bench" ;;
     --host-runtime) MODE="host-runtime" ;;
     --app-stack) MODE="app-stack" ;;
@@ -278,8 +282,11 @@ if [ "$MODE" = "showcase" ]; then
   #     默认 0 = 演出一遍到底（≈40 秒）；压力测量按需开启（如 300000 = 5 分钟）。
   #  ★默认 **0 = 不重复**（用户要求"每一幕演示一遍整个节目衔接就行，不用为了时长去一直重复"）
   SOAK_MS="${PROTEUS_SHOWCASE_SOAK_MS:-0}"
+  # ★--record ⇒ 追加 PROTEUS_SHOWCASE_RECORD=1（ReplayKit 录屏；见 showcase-scene.swift 注释）
+  REC_ENV=""
+  [ "$RECORD" = "1" ] && REC_ENV=",\"PROTEUS_SHOWCASE_RECORD\":\"1\""
   xcrun devicectl device process launch --console --terminate-existing \
-    --environment-variables "{\"PROTEUS_EXIT_AFTER_REPORT\":\"1\",\"PROTEUS_SHOWCASE_SOAK_MS\":\"$SOAK_MS\"}" \
+    --environment-variables "{\"PROTEUS_EXIT_AFTER_REPORT\":\"1\",\"PROTEUS_SHOWCASE_SOAK_MS\":\"$SOAK_MS\"$REC_ENV}" \
     --device "$UDID" "$BUNDLE_ID" --showcase > "$LAUNCH_LOG" 2>&1 || LAUNCH_RC=$?
 elif [ "$MODE" = "app-stack" ]; then
   # ★★M5 执行器模式：单段 launch（App 内部：主场景同步 → 执行器两相 → **非阻塞轮询** →
@@ -488,6 +495,17 @@ if [ "$MODE" = "showcase" ]; then
     echo "    漩涡定格：$HERE/results/showcase-spiral.png"
   else
     echo "    （漩涡定格截图未取到——不影响判据）"
+  fi
+  # 录屏（--record 时才有；缺了不判红——录屏是展示物，不是判据前提）
+  if [ "$RECORD" = "1" ]; then
+    if xcrun devicectl device copy from --device "$UDID" --domain-type appDataContainer \
+        --domain-identifier "$BUNDLE_ID" --source "Documents/showcase.mp4" \
+        --destination "$HERE/results/showcase.mp4" >/dev/null 2>&1; then
+      echo "    录屏：$HERE/results/showcase.mp4（$(du -h "$HERE/results/showcase.mp4" | cut -f1)）"
+      echo "    ⇒ 转网页格式：bash hosts/ios/make-showcase-video.sh"
+    else
+      echo "    ⚠ 录屏未取到（showcase.mp4）——检查日志里 SHOWCASE_RECORDING_* 标记"
+    fi
   fi
   echo "==> ⑨ 判据（hosts/ios/check-showcase.py）"
   python3 "$HERE/check-showcase.py" "$HERE/results/$REPORT_FILE" "$HERE/results/showcase-final.png" "$HERE/results/showcase-spiral.png"
