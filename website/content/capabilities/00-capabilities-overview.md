@@ -6,7 +6,7 @@ order: 0
 
 # 能力总览
 
-> 82 个能力原语——SSOT = `PRIMITIVE_CATALOG`（capability kind）+ `CapabilityHooks` 接口。**Hook 全部已实现**（API 就绪，双端桥/降级见各页兼容进度表）
+> 83 个能力原语——SSOT = `PRIMITIVE_CATALOG`（capability kind）+ `CapabilityHooks` 接口。**Hook 全部已实现**（API 就绪，双端桥/降级见各页兼容进度表）
 
 ## 网络与通信（11）
 
@@ -24,7 +24,7 @@ order: 0
 | C69 | [capability.socket](/docs/capability/socket) | `useSocket()` | `UDPSocketHandle / TCPSocketHandle` | wx.createUDPSocket/createTCPSocket |
 | C78 | [capability.local-service](/docs/capability/local-service) | `useLocalService()` | `LocalServiceAPI` | wx.onLocalServiceFound/Lost/ResolveFail/DiscoveryStop |
 
-## 设备与系统（19）
+## 设备与系统（20）
 
 | # | 能力 | API | 返回 | 小程序等价 |
 |---|---|---|---|---|
@@ -47,6 +47,7 @@ order: 0
 | C76 | [capability.ar](/docs/capability/ar) | `useAR()` | `ARAPI` | wx.createVKSession/isVKSupport |
 | C77 | [capability.beacon](/docs/capability/beacon) | `useBeacon()` | `BeaconAPI` | wx.onBeaconServiceChange/onBeaconUpdate |
 | C81 | [capability.device-capability](/docs/capability/device-capability) | `useDeviceCapability()` | `DeviceCapabilityAPI` | wx.checkDeviceSupportHevc |
+| C83 | [capability.keep-screen-on](/docs/capability/keep-screen-on) | `useKeepScreenOn()` | `KeepScreenOnState` | wx.setKeepScreenOn（Web 对等：Screen Wake Lock API） |
 
 ## 存储与文件（4）
 

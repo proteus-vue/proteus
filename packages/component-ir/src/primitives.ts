@@ -260,6 +260,13 @@ const CAPABILITY: PrimitiveDef[] = [
   //   App-Android 当前宿主无 JS 引擎 ⇒ 不可用（诚实边界）。
   //   ⇒ 归一入口 `instantiate({bytes}|{path})` + 能力位 `supportsStreaming`/`supportsPathLoad`。
   { id: 'C82', kind: 'capability', semantic: 'capability.webassembly', api: 'useWebAssembly()', props: ['WebAssemblyAPI'], mpEquiv: 'WXWebAssembly.instantiate（官方文档 performance/wasm）', tier: 'L1', status: 'planned' },
+  // ★★NC1 首个声明式能力（2026-09-30）：来源 = 权威标尺修复后浮现的真实缺口之一
+  //   （快照抽取器修复前 `wx.setKeepScreenOn` 结构性不可见，见 mp-spec-coverage 的 SPEC_PLANNED）。
+  //   落地方式 = **声明式**（`packages/api/src/bridge-decls/keep-screen-on.ts` → 生成 → 合并进 bridge）：
+  //   MP `wx.setKeepScreenOn` / Web **Screen Wake Lock**（`navigator.wakeLock.request('screen')`）——
+  //   双端都有真实对等（非降级对等）。status 标 implemented：桥与 Hook 已落地且测试覆盖
+  //   （含双端真跑 + 幂等 + 缺 API 降级）。
+  { id: 'C83', kind: 'capability', semantic: 'capability.keep-screen-on', api: 'useKeepScreenOn()', props: ['KeepScreenOnState'], mpEquiv: 'wx.setKeepScreenOn（Web 对等：Screen Wake Lock API）', tier: 'L1', status: 'implemented' },
 ]
 
 /** G-32 §8 ⑥ 工程原语 Engineering（28）——状态/生命周期 + 路由/导航 + 动画/过渡 + 调试/工程化 */

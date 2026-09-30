@@ -170,6 +170,20 @@ export const SEMANTIC_BACKEND_MAP: Record<string, Partial<Record<BackendId | 'we
     flutter: 'scanQR',
     headless: 'scan-qr',
   },
+  // ★★NC1 首个声明式能力（2026-09-30，C83）：屏幕常亮。
+  //   ★落地状态如实标注（两类）：**已接线** = vue-dom（`navigator.wakeLock`，生成桥真跑）
+  //     + skyline（`wx.setKeepScreenOn`，生成桥真跑）；**声明** = native-ios/android/harmony
+  //     （平台真实 API，按本表既有口径登记——与 capability.qr-code 的 AVCaptureSession 同性质，
+  //     属设计声明层；native 宿主接线是后续批次）。
+  'capability.keep-screen-on': {
+    'vue-dom': 'navigator.wakeLock',
+    'native-ios': 'UIApplication.isIdleTimerDisabled',
+    'native-android': 'Window.FLAG_KEEP_SCREEN_ON',
+    'native-harmony': 'window.setWindowKeepScreenOn',
+    skyline: 'wx.setKeepScreenOn',
+    flutter: 'keepScreenOn',
+    headless: 'keep-screen-on',
+  },
   // ★2026-09-18 语义去重：原键 capability.pick-photo 为重复名（组件实现调用 useCamera()，
   //   真实能力即 C1 capability.camera）——键已迁移，映射原样保留。
   'capability.camera': {

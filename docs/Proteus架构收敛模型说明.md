@@ -54,7 +54,7 @@
 
 | 层 | 收敛什么 | 后端面对的复杂度 |
 |---|---|---|
-| **① 185 语义原语** | Vue 语义 → 有限语义集（`PRIMITIVE_CATALOG` 为 SSOT） | 185 个概念 |
+| **① 186 语义原语** | Vue 语义 → 有限语义集（`PRIMITIVE_CATALOG` 为 SSOT） | 185 个概念 |
 | **② RenderCmd 线性指令流** | 语义 → 绘制指令 | **一组指令，不需要理解语义** |
 | **③ 拍平不产生独立指令** | 节点数 → 指令数解耦 | 2 万节点 → 24 个节点级开销 |
 
@@ -66,7 +66,7 @@ Proteus **遍历 AST 只有一次**，产出**语义 IR**——语义 IR 是**�
 之后所有后端面对的都是"有限 → 有限"。
 
 > **从无限到有限的这一步，才是规避无底洞的真正机制。**
-> conformance、双端 Golden、82 个 Capability Hook，都是建立在这个封闭集之上才可能存在——
+> conformance、双端 Golden、83 个 Capability Hook，都是建立在这个封闭集之上才可能存在——
 > **如果输入空间是开放的，根本没法写出完备的 conformance 套件。**
 
 ### 2.2 第 ② 层是 App 端能快速做出来的直接原因
@@ -198,7 +198,7 @@ implemented = 65 个已实现语义——后者指在 **≥3 端**有映射的�
 **建议**：`proteus audit coverage` 已给出机器可读分类（官方 382 项：
 已落地 252 · 规划 4 · 私有 106 · 不适用 20）——文档引用该口径即可，不必手写数字。
 
-### 6.3 风险三：82 个 Capability Hook
+### 6.3 风险三：83 个 Capability Hook
 
 Hook 是**原语层无法覆盖时的逃逸口**。
 
@@ -245,7 +245,7 @@ Web 端由浏览器自然支持全部 CSS。若不拦，
 Proteus
   Vue 源码
      ↓ 遍历一次 AST
-  185 语义原语（封闭集，SSOT）
+  186 语义原语（封闭集，SSOT）
      ↓ 编译期收敛
   RenderCmd 线性指令流（绝对坐标、平台无关）
      ↓ 拍平：不产生独立指令
@@ -268,7 +268,7 @@ Proteus
 - 仓库结构：43 个 `@proteus-vue/*` workspace 包；`compiler`（111 条规则 + apply 分派层）、`compiler-backend`（CompilerIR 契约 + NodeBackend + 双端等价 Golden）、`compiler-backend-rust`（cargo crate `proteus-cc-rust` → 同一 CompilerIR）、`render-backend`（渲染 SPI + 五后端 + 混合渲染 + 宿主层）
 - CompilerBackend SPI：parse / transform / emit 三阶段 + `IncrementalSession` 增量 + `FallbackBackend` 自动降级；conformance 42 项
 - RenderBackend SPI + conformance 门禁；五官方后端：Headless / VueDom / Native×3 / Flutter widget 映射
-- 185 语义原语清单（`PRIMITIVE_CATALOG` 单一事实源）→ 77 个组件目录（`check:stats` 口径）· 65 个已实现语义（`implementedPrimitives()`）；82 个 Capability Hook；编译期门禁
+- 186 语义原语清单（`PRIMITIVE_CATALOG` 单一事实源）→ 77 个组件目录（`check:stats` 口径）· 65 个已实现语义（`implementedPrimitives()`）；83 个 Capability Hook；编译期门禁
 - 宿主层：`hostRoot` Host Runtime（bootstrap / worker / engine / native 桥）、六容器策略可插拔、所有权/借用检查、`ExecutionCarrier`（JSI / AOT）
 - 验证先于运行：Render / Compiler / Host / Container / Ownership / Test 各层 conformance 32–42 项，CI 自动校验
 - 转场预设：`halfScreen` / `slideUp` / `scaleDown`，配置于 `proteus.config.ts`，可用微信预设 `routeType: 'wx://bottom-sheet'`

@@ -1,20 +1,26 @@
 ---
-title: useScreen (capability.screen)
+title: useKeepScreenOn (capability.keep-screen-on)
 group: 设备与系统
-order: 1006
+order: 1020
 ---
 
-# useScreen
+# useKeepScreenOn
 
-Screen (wx.getSystemInfo / window.screen + matchMedia / mock)
+useKeepScreenOn: keep the screen awake (mini program wx.setKeepScreenOn; Web Screen Wake Lock API). ★Web requires a visible page and a secure context — the system releases the lock automatically when the page is hidden, so call it again on visibility resume. Repeated calls are idempotent (on→on does not re-acquire; off→off does not re-release).
 
-> Capability primitive C10 · `capability.screen` · returns `ScreenInfo` · **Hook implemented** (API ready — target bridges in the table below)
+> Capability primitive C83 · `capability.keep-screen-on` · returns `KeepScreenOnState` · **Hook implemented** (API ready — target bridges in the table below)
 
 ## Signature
 
 ```ts
-useScreen(): Promise<CapResult<ScreenInfo>>
+useKeepScreenOn(on: boolean): Promise<CapResult<void>>
 ```
+
+## Parameters
+
+Param,Type,Required,Doc
+|---|---|---|---|
+| `on` | `boolean` | Yes | true = keep the screen on, false = allow the screen to sleep |
 
 ## Returns
 
@@ -23,24 +29,14 @@ useScreen(): Promise<CapResult<ScreenInfo>>
 | Property | Type | Doc |
 |---|---|---|
 | `ok` | `boolean` | Succeeded `true` / failed `false` |
-| `data` | `ScreenInfo` | Success payload (structure below) |
+| `data` | `void` | No payload on success |
 | `error` | `CapError` | Present on failure: `code` (machine code) / `message` (human-readable reason) / `cause` (original exception) |
-
-## Props
-
-| Prop | Type | Required | Doc |
-|---|---|---|---|
-| `width` | `number` | Yes | Screen width (px, CSS pixels) |
-| `height` | `number` | Yes | Screen height (px, CSS pixels) |
-| `dpr` | `number` | Yes | Device pixel ratio (physical pixels / CSS pixels) |
-| `orientation` | `'portrait' \| 'landscape'` | Yes | Current orientation |
 
 ## Error codes
 
 | code | Doc |
 |---|---|
-| `screen.unsupported` | window.screen does not exist (SSR) |
-| `screen.keep-on.unsupported` | — |
+| `screen.keep-on.unsupported` | The platform API is missing (mini program lacks wx.setKeepScreenOn; the Web runtime lacks navigator.wakeLock) |
 
 > Platform unsupported → the `*.unsupported` family; business branches on `code`, no try/catch needed.
 
@@ -48,8 +44,8 @@ useScreen(): Promise<CapResult<ScreenInfo>>
 
 | Target | Status | Notes |
 |---|---|---|
-| Web SPA | ✅ | vue-dom · webBridge implementation (direct platform API) |
-| WeChat Mini Program | ✅ | skyline (WebView fallback) · wx bridge → wx.getSystemInfo |
+| Web SPA | ⚠️ | vue-dom · webBridge missing setKeepScreenOn → explicit Err degradation (no direct platform API) |
+| WeChat Mini Program | ⚠️ | skyline (WebView fallback) · wx bridge missing setKeepScreenOn → explicit Err degradation |
 | Headless (SSR / testing) | ✅ | headless · mock bridge injected (testing / SSR tier) |
 | iOS native | 🟡 | native-ios (UIKit) · prototype mapping — capability bridge not wired |
 | Android native | 🟡 | native-android (Jetpack) · prototype mapping — capability bridge not wired |
@@ -64,10 +60,10 @@ useScreen(): Promise<CapResult<ScreenInfo>>
 ## Usage
 
 ```ts
-const res = await useScreen()
+const res = await useKeepScreenOn(on)
 
 if (res.ok) {
-  console.log(`${res.data.width}x${res.data.height} @${res.data.dpr}x`)
+  // success — void payload
 } else if (res.error.code.endsWith('.unsupported')) {
   // platform unsupported → degradation path
 }

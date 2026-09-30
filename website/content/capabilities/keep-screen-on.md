@@ -1,20 +1,26 @@
 ---
-title: useScreen（capability.screen）
+title: useKeepScreenOn（capability.keep-screen-on）
 group: 设备与系统
-order: 1006
+order: 1020
 ---
 
-# useScreen
+# useKeepScreenOn
 
-屏幕（wx.getSystemInfo / window.screen + matchMedia / mock）
+★NC1 C83 useKeepScreenOn：屏幕常亮开关（MP wx.setKeepScreenOn / Web Screen Wake Lock；重复调用幂等）
 
-> 能力原语 C10 · `capability.screen` · 返回 `ScreenInfo` · **Hook 已实现**（API 就绪，双端桥见下表）
+> 能力原语 C83 · `capability.keep-screen-on` · 返回 `KeepScreenOnState` · **Hook 已实现**（API 就绪，双端桥见下表）
 
 ## 签名
 
 ```ts
-useScreen(): Promise<CapResult<ScreenInfo>>
+useKeepScreenOn(on: boolean): Promise<CapResult<void>>
 ```
+
+## 参数
+
+| 参数 | 类型 | 必填 | 说明 |
+|---|---|---|---|
+| `on` | `boolean` | 是 | — |
 
 ## 返回值
 
@@ -23,23 +29,13 @@ useScreen(): Promise<CapResult<ScreenInfo>>
 | 属性 | 类型 | 说明 |
 |---|---|---|
 | `ok` | `boolean` | 成功 `true` / 失败 `false` |
-| `data` | `ScreenInfo` | 成功载荷（结构见下） |
+| `data` | `void` | 成功时无载荷 |
 | `error` | `CapError` | 失败时存在：`code`（机器码）/ `message`（人读原因）/ `cause`（原始异常） |
-
-## 属性
-
-| 属性 | 类型 | 必填 | 说明 |
-|---|---|---|---|
-| `width` | `number` | 是 | 屏幕宽度（px，CSS 像素） |
-| `height` | `number` | 是 | 屏幕高度（px，CSS 像素） |
-| `dpr` | `number` | 是 | 设备像素比（物理像素 / CSS 像素） |
-| `orientation` | `'portrait' \| 'landscape'` | 是 | 当前方向 |
 
 ## 错误码
 
 | code | 说明 |
 |---|---|
-| `screen.unsupported` | wx.getSystemInfoSync 缺失 |
 | `screen.keep-on.unsupported` | 桥未提供 setKeepScreenOn（useKeepScreenOn 不可用） |
 
 > 平台不支持 → `*.unsupported` 族；业务按 code 分支处理，无需 try/catch。
@@ -48,8 +44,8 @@ useScreen(): Promise<CapResult<ScreenInfo>>
 
 | 端 | 兼容 | 说明 |
 |---|---|---|
-| Web SPA | ✅ | vue-dom · webBridge 实现（平台 API 直连） |
-| 微信小程序 | ✅ | skyline（WebView 降级） · wx 桥 → wx.getSystemInfo |
+| Web SPA | ⚠️ | vue-dom · webBridge 未提供 setKeepScreenOn → Err 显式降级（平台无直通 API） |
+| 微信小程序 | ⚠️ | skyline（WebView 降级） · wx 桥未提供 setKeepScreenOn → Err 显式降级 |
 | Headless（SSR / 测试） | ✅ | headless · mock 桥注入（测试 / SSR 档） |
 | iOS 原生 | 🟡 | native-ios（UIKit） · 端原型映射——能力桥未接线 |
 | Android 原生 | 🟡 | native-android（Jetpack） · 端原型映射——能力桥未接线 |
@@ -64,10 +60,10 @@ useScreen(): Promise<CapResult<ScreenInfo>>
 ## 用法
 
 ```ts
-const res = await useScreen()
+const res = await useKeepScreenOn(on)
 
 if (res.ok) {
-  console.log(`${res.data.width}x${res.data.height} @${res.data.dpr}x`)
+  // 调用成功（void 无载荷）
 } else if (res.error.code.endsWith('.unsupported')) {
   // 平台不支持 → 降级路径
 }

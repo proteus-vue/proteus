@@ -6,7 +6,7 @@ order: 0
 
 # Capabilities overview
 
-> 82 capability primitives — SSOT = `PRIMITIVE_CATALOG` (capability kind) + `CapabilityHooks` interface. **All hooks implemented** (API ready — target bridges/degradation in each page's compat table).
+> 83 capability primitives — SSOT = `PRIMITIVE_CATALOG` (capability kind) + `CapabilityHooks` interface. **All hooks implemented** (API ready — target bridges/degradation in each page's compat table).
 
 ## Network & Communication (11)
 
@@ -24,7 +24,7 @@ order: 0
 | C69 | [capability.socket](/docs/capability/socket) | `useSocket()` | `UDPSocketHandle / TCPSocketHandle` | wx.createUDPSocket/createTCPSocket |
 | C78 | [capability.local-service](/docs/capability/local-service) | `useLocalService()` | `LocalServiceAPI` | wx.onLocalServiceFound/Lost/ResolveFail/DiscoveryStop |
 
-## Device & System (19)
+## Device & System (20)
 
 | # | Capability | API | Returns | Mini Program equivalent |
 |---|---|---|---|---|
@@ -47,6 +47,7 @@ order: 0
 | C76 | [capability.ar](/docs/capability/ar) | `useAR()` | `ARAPI` | wx.createVKSession/isVKSupport |
 | C77 | [capability.beacon](/docs/capability/beacon) | `useBeacon()` | `BeaconAPI` | wx.onBeaconServiceChange/onBeaconUpdate |
 | C81 | [capability.device-capability](/docs/capability/device-capability) | `useDeviceCapability()` | `DeviceCapabilityAPI` | wx.checkDeviceSupportHevc |
+| C83 | [capability.keep-screen-on](/docs/capability/keep-screen-on) | `useKeepScreenOn()` | `KeepScreenOnState` | — |
 
 ## Storage & Files (4)
 
