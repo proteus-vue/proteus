@@ -47,7 +47,7 @@ public final class OpsFixture {
      *
      * 形状：`{removes:[…], inserts:[{parentId, nodes:[…], index}], textMeasures:{…}}`
      */
-    public static final String SPLICE_JSON = "{\"removes\":[],\"inserts\":[{\"parentId\":3,\"index\":2,\"nodes\":[{\"id\":6,\"parentId\":3,\"height\":50,\"flexShrink\":0}]}]}";
+    public static final String SPLICE_JSON = "{\"removes\":[],\"inserts\":[{\"parentId\":3,\"index\":2,\"nodes\":[{\"id\":6,\"parentId\":3,\"height\":50,\"flexShrink\":0,\"paintHint\":{\"isMonochrome\":false,\"isPureBackground\":false}}]}]}";
 
     /** 该 splice 插入的节点数（与核心回报的 inserted 对账） */
     public static final int SPLICE_NODE_COUNT = 1;

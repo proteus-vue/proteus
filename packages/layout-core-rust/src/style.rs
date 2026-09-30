@@ -181,6 +181,24 @@ pub struct LStyle {
     pub left: Option<f32>,
     #[serde(default)]
     pub overflow: Overflow,
+
+    // ── ★RT0（2026-09-30）：绘制层变换（**不参与布局**）──
+    //
+    // 【为什么放在内核（而不是让宿主自己算）】指令驱动动画（RT0/V6）要把曲线求值结果
+    //   落在**内核持有的状态**上：ANIM_START 指令启动、每帧 tick 求值并写入这三个字段，
+    //   宿主（或后续 RenderCmd 输出）直接消费，全程**不经 JS**。
+    //   ★它们是 paint-only：不改变几何 ⇒ 不触发重排（这是指令路径的关键成本优势）。
+    #[serde(default)]
+    pub translate_x: f32,
+    #[serde(default)]
+    pub translate_y: f32,
+    /// 缩放倍率（缺省 = 1；**不是 0**）
+    #[serde(default = "default_scale")]
+    pub scale: f32,
+}
+
+fn default_scale() -> f32 {
+    1.0
 }
 
 fn default_justify() -> String {
@@ -220,6 +238,9 @@ impl Default for LStyle {
             top: None,
             left: None,
             overflow: Overflow::default(),
+            translate_x: 0.0,
+            translate_y: 0.0,
+            scale: 1.0,
         }
     }
 }

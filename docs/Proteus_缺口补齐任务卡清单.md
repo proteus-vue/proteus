@@ -31,7 +31,7 @@
 | **I6** 后端生产就绪度评估 | ✅ **3/3 达标（2026-09-29）** | 报告 `docs/proteus-render-backend-readiness-i6.md`（**证据驱动**：跑真实 conformance + 读能力位 + 盘宿主）· ✅ 五后端能力矩阵（实际读数，非文档抄录）· ✅ 各有风险清单与补齐建议 · ✅ 明确原型 vs 生产：**Headless/VueDom 🟢 生产就绪**（13/13 + 宿主天然）· **Flutter/Hybrid 🟡 原型**（映射层就绪，无真机）· **Native×3 🟡 双轨**（★关键发现：SPI 层用 **mock 适配器** 13/13；真机实际走 `renderer-app/adapters/selfdraw`——22 份 iOS 报告 + 30 个 Android 验收目录）· ★给 C1 的关键输入：**C1 不是从零实现，而是把已有真机链路接到 SPI 层** |
 | **I7** 指令级 conformance | ✅ **已达标** | `packages/layout-core-rust/tests/golden/`：`update-ops.json` + **`update-ops.bin`**（跨语言 golden：TS 编码 → Rust 解码）· `browser-layout.json`（21 用例）+ `browser-mutation.json`（增量对拍）· **已接 CI**（`ci.yml` 引用 golden） |
 | **V5** Vapor 与 Web VDOM 一致性 | ✅ **已达标** | 见 `browser-layout.json`（全量）+ `browser-mutation.json`（增量）⇒ 真机 `V6_sfc_full_tree` PASS · conformance **0.375dp**（合格线 0.5） |
-| **V6** 动画指令 AnimOp（P2） | ❌ **未达标** | `AnimOpCode` **仅存在于设计文档**（本仓 grep 无实现）——与 `Proteus_App端路由与动画系统设计方案` 的 RT0/RT2/RT4 未实现状态一致 |
+| **V6** 动画指令 AnimOp（P2） | 🟡 **部分达标（RT0 前置已过 + 骨架落地）** | ★**2026-09-30**：RT0 spike 完成并判定**路线 A 可行**（结论 `docs/generated/rt0-anim-spike.md`）——Rust 侧 `anim.rs`（5 曲线 + AnimEngine + 10 单测）· `style.rs` 加 paint-only 变换字段 · FFI `anim_start`/`anim_tick` · TS 镜像 `anim-curve.ts` + 跨语言 golden（期望值=Rust 实测）· 对照实验三场景 **10.5×～84.5×**（宿主侧下界）。**未达标项**：`ANIM_BIND`/`ANIM_SEEK`/`ANIM_PROGRESS` 完整指令集 · 帧循环接线 · 真机帧率验证（属 RT2 验收） |
 | **I8** 指令流体积优化（P2） | ✅ **已达标（2026-09-29）** | ✅ 核心优化**已落地**（协议 V1→V2「池按需 + ref 重映射」）：单条 LIST_UPDATE 消息 **8935 → 48 字节（194×）** · 编码 **0.258 → 0.017ms** · 端到端单节点更新 **6.00 → 0.121ms**（§10 目标 3ms，**25× 余量**）· ✅ **规模效应已消除**（实测池 0/1000/3000/8000 键下消息**恒 48 字节**——V1 时 3000 键达 28935B）· ★**新增体积棘轮**（补上结构缺口：此前只有文档侧间接保护，代码回退不会当场红）· **破坏性验证过**（改回全量池 ⇒ 两条判据同时红：78828B > 256B + 规模依赖 2328 vs 78828） |
 
 ### ★给 I6/I8 的实测输入（2026-09-29）
@@ -74,7 +74,7 @@ I8 卡写着「**先做 I6 评估，明确指令流体积是否构成瓶颈，�
 - [x] **I6** 后端生产就绪度评估 ✅ **3/3 达标**（五后端矩阵 + 风险清单 + 原型/生产判定；★发现 Native 双轨）
 - [x] **I7** 指令级 conformance ✅ **已达标**（跨语言 golden `update-ops.{json,bin}` + 浏览器对拍 + 已接 CI）
 - [x] **V5** Vapor 与 Web VDOM 一致性验证 ✅ **已达标**（`browser-layout.json` 全量 + `browser-mutation.json` 增量；真机 `V6` PASS）
-- [ ] **V6** 动画指令 AnimOp（P2） ❌ **未实现**（`AnimOpCode` 仅存在于设计文档）
+- [ ] **V6** 动画指令 AnimOp（P2） 🟡 **部分达标**（RT0 前置已过 + Rust 求值骨架落地；完整指令集与真机验收属 RT2）
 - [x] **I8** 指令流体积与带宽优化（P2）✅ **已达标**（池按需 8935→48B + 规模无关性棘轮）
 
 ---
