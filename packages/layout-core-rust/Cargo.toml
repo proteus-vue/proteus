@@ -20,20 +20,22 @@ taffy = { version = "0.14.0", default-features = false, features = ["std", "flex
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 
-# ★JNI 绑定：仅 Android 目标需要（本机 cargo test 不受影响）
-[target.'cfg(target_os = "android")'.dependencies]
-jni = "0.21"
+# ★HA2（2026-09-30）：`[target.'cfg(target_os = "android")'.dependencies] jni` 已移除 ——
+#   JNI 绑定搬到了 `platform/android/proteus-jni/`（那里自己依赖 jni crate）。
+#   内核从此不再有任何平台条件依赖。
 
 [lib]
 name = "proteus_layout_core"
 path = "src/lib.rs"
 # ★staticlib：iOS（ObjC++/Swift 直接链接）与 Android（JNI 静态链接）都用它；
 #   ★rlib：供本仓 Rust 测试与后续 Rust 侧消费（cargo test 需要）
-# ★三种产物各有用途（缺一不可）：
-#   · rlib      —— 本仓 Rust 测试与后续 Rust 侧消费（cargo test 需要）
-#   · staticlib —— iOS（ObjC++/Swift 直接链接）
-#   · cdylib    —— ★Android（JNI 必须动态库 lib<name>.so；staticlib 出不了 .so）
-crate-type = ["rlib", "staticlib", "cdylib"]
+# ★HA2：只剩两种产物，两种都**平台无关**：
+#   · rlib      —— 本仓 Rust 测试、host-abi、平台绑定层（path 依赖）消费
+#   · staticlib —— iOS（Swift 直接链接）
+#   ★`cdylib` **已移除**：Android 的 `.so` 现在由 `platform/android/proteus-jni`（cdylib）产出。
+#     留着它还有一个真实风险——旧路径会产出**没有 JNI 符号**的 `libproteus_layout_core.so`，
+#     谁若误用它只会在真机上 UnsatisfiedLinkError（"看起来是个 .so"）。移除 ⇒ 该路径**无产物**（响亮失败）。
+crate-type = ["rlib", "staticlib"]
 
 [profile.release]
 opt-level = 3

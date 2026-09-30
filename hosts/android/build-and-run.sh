@@ -68,10 +68,17 @@ export CC_aarch64_linux_android="$LINKER"
 export CXX_aarch64_linux_android="${LINKER%clang}clang++"
 export AR_aarch64_linux_android="$TOOLCHAIN/bin/llvm-ar"
 export CARGO_TARGET_AARCH64_LINUX_ANDROID_LINKER="$LINKER"
-(cd "$ROOT/packages/layout-core-rust" && cargo build --release --target aarch64-linux-android)
-SO_SRC="$CARGO_TARGET_DIR/aarch64-linux-android/release/libproteus_layout_core.so"
-[ -f "$SO_SRC" ] || { echo "✗ 未生成 .so：$SO_SRC"; exit 3; }
-echo "    .so $(du -h "$SO_SRC" | awk '{print $1}')"
+# ★HA2（2026-09-30）：构建的是**平台绑定层**（它 path 依赖内核 ⇒ 内核作为 rlib 静态链接进来，
+#   一个 .so 里既有内核代码也有 JNI 符号）。
+#
+# 【为什么不再构建内核 crate】内核已去掉 `cdylib`（见其 Cargo.toml 注释）：
+#   旧路径会产出一个**没有 JNI 符号**的 `libproteus_layout_core.so`，谁若误用它
+#   只会在真机上 `UnsatisfiedLinkError`（"看起来是个 .so"）⇒ 现在该路径**无产物**（响亮失败）。
+JNI_CRATE="$ROOT/platform/android/proteus-jni"
+(cd "$JNI_CRATE" && cargo build --release --target aarch64-linux-android)
+SO_SRC="$CARGO_TARGET_DIR/aarch64-linux-android/release/libproteus_jni.so"
+[ -f "$SO_SRC" ] || { echo "✗ 未生成 .so：$SO_SRC（平台绑定层 platform/android/proteus-jni）"; exit 3; }
+echo "    .so $(du -h "$SO_SRC" | awk '{print $1}')（平台绑定层，含内核）"
 
 echo "==> ①.5 生成跨语言夹具（TS 编码 → 冻结进 Java；见 gen-ops-fixture.mjs）"
 # ★★为什么必须在这里生成（而不是"构建前手工跑一次"）
@@ -183,9 +190,13 @@ echo "==> ⑤ 组装 APK（加入 dex 与 native 库）"
 # aapt2 link 只产出资源；用 zip 追加 dex 与 .so（jniLibs 布局：lib/<abi>/lib*.so）
 (cd "$BUILD" && zip -q -j "$APK" dex/classes.dex)
 mkdir -p "$BUILD/lib/arm64-v8a"
-cp "$SO_SRC" "$BUILD/lib/arm64-v8a/libproteus_layout_core.so"
+mkdir -p "$BUILD/lib/arm64-v8a"
+# ★清掉旧名残留（HA2 之前叫 libproteus_layout_core.so）——**必须删**：残留会被打进 APK 且
+#   `System.loadLibrary("proteus_jni")` 找不到它，但产物断言也会被"条目存在"骗过
+rm -f "$BUILD/lib/arm64-v8a/libproteus_layout_core.so"
+cp "$SO_SRC" "$BUILD/lib/arm64-v8a/libproteus_jni.so"
 # ★`-0` = Stored（不压缩）：16 KB page size 要求 .so 可直接 mmap（压缩的必须先解压到磁盘）
-(cd "$BUILD" && zip -q -0 "$APK" lib/arm64-v8a/libproteus_layout_core.so)
+(cd "$BUILD" && zip -q -0 "$APK" lib/arm64-v8a/libproteus_jni.so)
 
 # ★S2：JS 引擎（QuickJS JNI 桥）——由 scripts/setup-android-js-engine.sh 产出
 #   【为什么可选】引擎缺失时 QuickJsEngine.isAvailable()=false，宿主给出明确提示（不崩）
@@ -205,7 +216,7 @@ fi
 # 【为什么必须有】此前组装完 APK **不看产物**就进签名/安装 ⇒ 空包（aapt2 失败/残留）
 #   也能"构建成功"，直到真机上发现"代码没生效"才暴露——那是最贵的一类返工。
 #   判据（三条，任一不满足即中止）：① 文件非空且 ≥ 100KB（含 dex + .so 的下限）
-#   ② 含 classes.dex  ③ 含 Rust 核心 .so（JS 引擎 .so 可选——它是新增能力）
+#   ② 含 classes.dex  ③ 含平台绑定层 .so（HA2：`libproteus_jni.so`，含内核；JS 引擎 .so 可选）
 APK_BYTES=$(stat -f%z "$APK" 2>/dev/null || echo 0)
 if [ "$APK_BYTES" -lt 100000 ]; then
   echo "✗ APK 产物异常：仅 ${APK_BYTES} 字节（预期 ≥100KB）——组装失败（见上方 aapt2/zip 输出）"
@@ -216,13 +227,13 @@ fi
 #   ⇒ `if !` 判为"失败" ⇒ **明明有条目却报缺失**（本轮实测：手动执行同命令成功、脚本内失败，
 #   差异就在 pipefail）。⇒ 正解：把输出**先落变量**，再对变量做匹配（无管道、无信号竞争）。
 APK_LISTING="$(unzip -l "$APK" 2>/dev/null)"
-for entry in "classes.dex" "lib/arm64-v8a/libproteus_layout_core.so"; do
+for entry in "classes.dex" "lib/arm64-v8a/libproteus_jni.so"; do
   if ! printf '%s' "$APK_LISTING" | grep -q "$entry"; then
     echo "✗ APK 缺条目：${entry}（产物不完整，装到设备会 UnsatisfiedLinkError / 类缺失）"
     exit 3
   fi
 done
-echo "    产物断言通过：${APK_BYTES} 字节 · classes.dex ✓ · Rust 核心 .so ✓"
+echo "    产物断言通过：${APK_BYTES} 字节 · classes.dex ✓ · 平台绑定层 .so ✓"
 
 # ★★16 KB page size 对齐（2026-09-29 新增：用户真机实测反馈「so 库都没做 16 KB 对齐」）
 #

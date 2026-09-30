@@ -1,0 +1,43 @@
+# platform/android/proteus-jni/Cargo.toml
+# ★★Android 平台绑定层：**JNI 导出**（原 `packages/layout-core-rust/src/jni.rs`，HA2 迁出）
+#
+# 【为什么单独一个 crate（Host ABI §HA2 硬性判据）】内核 crate **不得出现 `target_os` 条件编译**
+#   ——"清除内核中的平台分支"。而 JNI 绑定天然是 Android 专属（`jni` crate + `System.loadLibrary`）
+#   ⇒ 把它留在内核里就必然要 `#[cfg(target_os = "android")]` 包一层。
+#   ⇒ 正解：绑成**独立 crate**，内核退回纯 rlib/staticlib（平台无关），本 crate 产出 `.so`。
+#
+# 【依赖方向（硬性，`scripts/check-platform-layering.mjs` 机器化）】
+#   `platform/* ──→ hosts/*` ❌ 禁止 · `platform/* ──→ Host ABI` ❌ 禁止
+#   本 crate 只依赖**内核**（`proteus-layout-core`）——它既不是宿主集成，也不感知 Host ABI。
+#
+# 【与 iOS 的对称性】iOS 侧的平台边界是内核的 **C ABI**（`ffi.rs`，Swift 用 `@_silgen_name` 调）；
+#   Android 侧的平台边界就是本 crate（把同一批 C ABI 函数转成 JNI 符号）。
+#   ⇒ 换宿主（同平台换壳）时，**本 crate 一行不用改**；换平台才需要新写一份（不可避免的平台成本）。
+#
+# 【产物名】`libproteus_jni.so`（`System.loadLibrary("proteus_jni")`）——
+#   `hosts/android/build-and-run.sh` 打包进 APK 的 `lib/arm64-v8a/` 并断言其存在。
+[package]
+name = "proteus-jni"
+version = "0.1.0"
+edition = "2021"
+description = "★★Android 平台绑定层：把 proteus 内核的 C ABI 转成 JNI 符号（System.loadLibrary 加载；内核保持平台无关）"
+license = "Apache-2.0"
+
+[dependencies]
+# ★唯一的运行时依赖：内核（平台无关）。JNI 边界只做「JSON 进 / JSON 出」，复杂度全在核心里。
+proteus-layout-core = { path = "../../../packages/layout-core-rust" }
+# ★JNI 绑定（仅本 crate 需要——这是"平台分支"搬到平台层的意义）
+jni = "0.21"
+
+[lib]
+# `System.loadLibrary("proteus_jni")` ⇒ 影射 `libproteus_jni.so`
+name = "proteus_jni"
+# ★cdylib：Android 必须动态库；本 crate 不再产 rlib/staticlib（那些是内核的事）
+crate-type = ["cdylib"]
+
+# ★★发布配置**必须与内核一致**（本 crate 是整条链接的**根**——cargo 只读根的 profile）
+#   ⇒ 不写这块，`.so` 就没有 LTO / opt-level 3，与迁移前的产物体积/性能不可比。
+[profile.release]
+opt-level = 3
+lto = true
+codegen-units = 1
