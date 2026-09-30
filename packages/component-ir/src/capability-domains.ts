@@ -51,6 +51,8 @@ export const CAPABILITY_CATEGORY: Record<string, CapabilityDomain> = {
   address: '账号与支付',
   wifi: '网络与通信',
   'we-run': '设备与系统',
+  // ★2026-09-30 NC1 首个声明式能力（C83——与设备/屏幕同域）
+  'keep-screen-on': '设备与系统',
 }
 
 /** 分组展示顺序（官网侧栏 / 优先级表共用） */

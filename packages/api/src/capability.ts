@@ -9,6 +9,12 @@ import { detectRuntime } from '@proteus-vue/shared'
 import type { HttpMethod, RequestConfig, RequestResponse } from '@proteus-vue/types/api-types'
 import { createAuth } from './auth'
 import type { AuthStorage } from './auth'
+// ★★NC1 声明式能力桥（2026-09-30）：桥的**模板化部分**由声明生成（`scripts/gen-bridge-ext.mjs`），
+//   在下方 createCapabilityBridge 里**真实合并**——生成物在运行路径上（不是摆设）。
+//   ★依赖方向：本文件 ← 生成物只取 `import type`（类型）；构造器经**参数注入**（CapError），
+//     避免 `import { CapError } from './capability'` 造成的循环值依赖（本仓纪律：依赖方向单向）。
+import { mpBridgeExt, webBridgeExt } from './generated/bridge-ext'
+import { BRIDGE_DECLS } from './bridge-decls/index'
 
 /** ★Result<T> 契约（G-32.4：能力原语全部返回 Result<T>，禁止回调） */
 export type CapResult<T> =
@@ -2931,6 +2937,9 @@ export interface CapabilityBridge {
   createLivePusher?(id: string): LivePusherController
   /** C64 广告（wx.createRewardedVideoAd/createInterstitialAd/createBannerAd / web 无标准 → 创建时 throw） */
   getAd?(): AdAPI
+  // ★★NC1 声明式能力桥（2026-09-30）：由 `bridge-decls/*.ts` 声明 → `gen-bridge-ext.mjs` 生成
+  /** C83 屏幕常亮（MP wx.setKeepScreenOn / Web Screen Wake Lock）——语义：开=取句柄，关=释放，重复调用幂等 */
+  setKeepScreenOn?(on: boolean): Promise<void>
 }
 
 /** 存储契约（useStorage / reactive storage 底座） */
@@ -3216,7 +3225,8 @@ interface WxStatsLike {
   isFile?: () => boolean
 }
 
-interface WxLike {
+/** ★2026-09-30 导出：NC1 声明式桥生成物（generated/bridge-ext.ts）以其为参数类型 */
+export interface WxLike {
   getLocation?: (opt: { success: (r: Coords) => void; fail: (e: unknown) => void }) => void
   vibrateShort?: (opt: { fail: () => void }) => void
   getNetworkType?: (opt: { success: (r: { networkType: string }) => void; fail?: (e: unknown) => void }) => void
@@ -3267,6 +3277,8 @@ interface WxLike {
   stopGyroscope?: (opt?: { success?: () => void; fail?: (e: unknown) => void }) => void
   getScreenBrightness?: (opt: { success: (r: { value: number }) => void }) => void
   setScreenBrightness?: (opt: { value: number; fail?: () => void }) => void
+  // ★NC1 声明式（2026-09-30）：C83 屏幕常亮（字段声明随能力落地；包装代码由生成器产出）
+  setKeepScreenOn?: (opt: { keepScreenOn: boolean; success?: () => void; fail?: (e: unknown) => void }) => void
   makePhoneCall?: (opt: { phoneNumber: string; success?: () => void; fail: () => void }) => void
   checkIsSupportFingerPrint?: (opt: { success: (r: { errMsg: string; isSupported: boolean }) => void; fail?: () => void }) => void
   startSoterAuthentication?: (opt: {
@@ -7840,11 +7852,16 @@ function encodedUrl(url: string, params?: Record<string, unknown>): string {
 }
 
 /** 运行时探测（★SSOT：@proteus-vue/shared.detectRuntime——window 前置守卫）：
- *  真·小程序运行时 → wx 桥；否则 web 桥（含 web 上 @proteus-vue/web 的 wx 模拟层——不误选 wx 窄桥） */
+ *  真·小程序运行时 → wx 桥；否则 web 桥（含 web 上 @proteus-vue/web 的 wx 模拟层——不误选 wx 窄桥）
+ *
+ *  ★★NC1（2026-09-30）：**声明式能力桥**在此合并——手写桥先展开，再用生成物覆盖/补齐声明过的能力。
+ *    · 合并顺序：手写在前、生成在后 ⇒ 声明是对该能力的**权威定义**（同一方法名以声明为准）；
+ *    · 生成物为空时行为与合并前**完全一致**（`...(undefined)` 不改变对象）；
+ *    · 覆盖能力数可由 `BRIDGE_DECLS.length` 断言（生成物含 `GENERATED_BRIDGE_COUNT` 供测试对账）。 */
 export function createCapabilityBridge(): CapabilityBridge {
   const g = globalThis as { wx?: WxLike }
-  if (detectRuntime() === 'mp' && g.wx) return wxBridge(g.wx)
-  return webBridge(globalThis)
+  if (detectRuntime() === 'mp' && g.wx) return { ...wxBridge(g.wx), ...mpBridgeExt(g.wx, CapError) }
+  return { ...webBridge(globalThis), ...webBridgeExt(globalThis, CapError) }
 }
 
 // —— useXxx Hook 层（G-32.4：Promise<Result<T>>，无回调，无全局对象） ——
@@ -7876,6 +7893,8 @@ export interface CapabilityHooks {
   useBrightness(): Promise<CapResult<number>>
   /** C13 setBrightness：设置亮度（0-1） */
   setBrightness(value: number): Promise<CapResult<void>>
+  /** ★NC1 C83 useKeepScreenOn：屏幕常亮开关（MP wx.setKeepScreenOn / Web Screen Wake Lock；重复调用幂等） */
+  useKeepScreenOn(on: boolean): Promise<CapResult<void>>
   /** C21 usePhoneCall：拨打电话 */
   usePhoneCall(phoneNumber: string): Promise<CapResult<void>>
   /** C33 useAuth：认证状态组合（token 托管 + 登录/登出 + 订阅）——业务不读 raw token（铁律 2） */
@@ -8162,6 +8181,14 @@ export function createCapabilityHooks(bridge: CapabilityBridge = createCapabilit
         (() => {
           if (!bridge.setBrightness) return Promise.reject(new CapError('brightness.unsupported', '桥未提供 setBrightness（setBrightness 不可用）'))
           return bridge.setBrightness(value)
+        })(),
+      ),
+    // ★NC1 声明式能力（2026-09-30）：C83 屏幕常亮——桥方法由生成物提供（缺省 → Err，G-32.3 降级语义）
+    useKeepScreenOn: (on: boolean) =>
+      wrap(
+        (() => {
+          if (!bridge.setKeepScreenOn) return Promise.reject(new CapError('screen.keep-on.unsupported', '桥未提供 setKeepScreenOn（useKeepScreenOn 不可用）'))
+          return bridge.setKeepScreenOn(on)
         })(),
       ),
     usePhoneCall: (phoneNumber) =>

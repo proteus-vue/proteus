@@ -93,6 +93,34 @@ kind=capability ⇒ 82）+ 黑名单条目 `hooks-81` + 两份新文档进正向
 **登记**：board-inventory「其他文档（非 plan）」表新增两行（含决策、依据、与既有计划关系）；
 roadmap v0.6 段追加两条决策接入注记 + v2.0+ 插件体系行补指针。
 
+**⑦ ★NC1 首个端到端切片落地（2026-09-30）：声明式能力桥（C83 屏幕常亮）**
+
+**机制（三层，判据清晰）**：
+| 层 | 内容 | 谁写 | 为什么 |
+|---|---|---|---|
+| **声明** | `packages/api/src/bridge-decl.ts`（类型）+ `bridge-decls/*.ts`（实例） | **人写**（架构事实：两端各对等什么 API） | 需 review；机器无法推断 |
+| **生成** | `scripts/gen-bridge-ext.mjs` → `src/generated/bridge-ext.ts` | 机器 | 模板化包装（Promise 化/错误码/缺失检测/状态闭包）——**手写即第 N 份副本** |
+| **合并** | `capability.ts` 的 `createCapabilityBridge`（手写桥在前，生成物在后覆盖） | 一次性 | **生成物在运行路径上**（不是摆设） |
+
+**首个能力 = C83 useKeepScreenOn**（来源：标尺修复后浮现的 21 个真实缺口之一）：
+· MP = `wx.setKeepScreenOn`（callback 形态）· Web = **Screen Wake Lock**（`navigator.wakeLock.request`，
+  **stateful 形态**——需持 sentinel 才能释放）⇒ 挑它正是因为**形态非平凡**（检验生成器不止能处理最简单那种）。
+· 诚实边界写进声明与生成物：Web 需页面可见 + 安全上下文；隐藏时系统自动释放。
+· **幂等语义在桥层收敛**（开→开不重复 request；关→关不重复 release）——Wake Lock 重复 request
+  会叠加系统引用计数，不是幂等操作。
+
+**测试与判据**：`tests/bridge-decl.test.ts` 9 条（双端真跑 · 参数映射 on→keepScreenOn · 缺 API ⇒
+`unsupported` · 失败 ⇒ `failed` · 幂等状态机 · Hook 层降级 · 声明↔生成物对账）。
+★**破坏性验证**：声明里参数映射写错（`keepScreenOn: 'WRONG'`）⇒ 3 条断言当场红。
+
+**门禁**：`check:bridge-ext`（声明↔生成物漂移即红，接 CI + verify）。
+★**门禁当场抓到我两处疏漏**（正是它们的价值）：① 新能力漏登分域表 ⇒ `check:capability-priority` 红并指名；
+② C83 标 `implemented` 但缺 ≥3 端映射 ⇒ `gen-docs` 自检红。都已修（含 `map.ts` 补 C83 映射 +
+官网 stats 185→186 / 65→66 + 三份文档数字 + EN overlay + 内容重生成）。
+
+**★遗留（NC1 后续）**：模板族扩展（MP 事件订阅族 / 返回句柄族 · Web 更多形态）；Android JNI / iOS ObjC
+胶水生成（需先定"声明 → 原生代码"产物形态，属 Host ABI 范畴）；编译期三方类型对账。
+
 **⑥ ★★★NC1 侦察即挖出重大测量装置缺陷：官方 API 标尺被截短 40%（298 → 495）**
 
 用户原话：「继续NC线看看」。NC1（codegen）侦察第一步就要用「官方 API 承接面」做输入

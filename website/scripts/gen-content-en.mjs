@@ -2024,6 +2024,16 @@ export const CAP_EN = {
       'device-capability.failed': 'Querying HEVC support failed',
     },
   },
+  'keep-screen-on': {
+    desc: 'useKeepScreenOn: keep the screen awake (mini program wx.setKeepScreenOn; Web Screen Wake Lock API). ★Web requires a visible page and a secure context — the system releases the lock automatically when the page is hidden, so call it again on visibility resume. Repeated calls are idempotent (on→on does not re-acquire; off→off does not re-release).',
+    params: {
+      on: 'true = keep the screen on, false = allow the screen to sleep',
+    },
+    errors: {
+      'screen.keep-on.unsupported': 'The platform API is missing (mini program lacks wx.setKeepScreenOn; the Web runtime lacks navigator.wakeLock)',
+      'screen.keep-on.failed': 'the platform call failed (e.g. the Web page is hidden or the request was denied)',
+    },
+  },
   webassembly: {
     desc: 'useWebAssembly: cross-platform WebAssembly — compile / instantiate / validate. ★Three runtime shapes differ substantively (dual-source evidence): mini program uses WXWebAssembly.instantiate(**package path**, .wasm/.wasm.br, base library v2.13.0+, no compile/validate); Web and App-iOS (JavaScriptCore) use the standard WebAssembly (bytes, compile/validate available); App-Android currently has no JS engine → unavailable. Branch on the capability flags (supportsStreaming / supportsPathLoad), never on platform name.',
     params: {

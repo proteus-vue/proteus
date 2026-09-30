@@ -40,6 +40,7 @@ useScreen(): Promise<CapResult<ScreenInfo>>
 | code | Doc |
 |---|---|
 | `screen.unsupported` | window.screen does not exist (SSR) |
+| `screen.keep-on.unsupported` | — |
 
 > Platform unsupported → the `*.unsupported` family; business branches on `code`, no try/catch needed.
 

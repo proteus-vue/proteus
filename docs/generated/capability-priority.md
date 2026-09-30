@@ -8,8 +8,8 @@
 
 | 事实源 | 内容 | 口径 |
 |---|---|---|
-| ① 能力清单（SSOT） | 82 个 capability（`PRIMITIVE_CATALOG` kind=capability） | 域来自 `capabilityDomainOf`（与官网能力页分组同一事实源） |
-| ② 需求证据 | 本仓消费侧语料（showcase / examples / website/src）Hook 调用点 | 只计 `useXxx(` 且 Xxx ∈ 82 名单；排除 node_modules / dist / scripts / tests / *.d.ts / generated |
+| ① 能力清单（SSOT） | 83 个 capability（`PRIMITIVE_CATALOG` kind=capability） | 域来自 `capabilityDomainOf`（与官网能力页分组同一事实源） |
+| ② 需求证据 | 本仓消费侧语料（showcase / examples / website/src）Hook 调用点 | 只计 `useXxx(` 且 Xxx ∈ 83 名单；排除 node_modules / dist / scripts / tests / *.d.ts / generated |
 | ③ 官方承接面 | 微信官方 API 清单（495 个）中该 Hook 承接的 covered 数 | `classifySpecApi` 反查 proteus 串（跨端对等标尺） |
 
 **优先级算法（方案 §1.1）**：跨项目覆盖数 **优先于** 单项目频次；成本加权 S/M/L=1/3/8。
@@ -21,8 +21,8 @@
 
 ## 1. 汇总
 
-- **能力总数**：82 · 语料出现过：**46** · 跨项目（≥2 工程）：**15**
-- **有官方承接**：69 / 82（合计承接 covered API 301 / 495）
+- **能力总数**：83 · 语料出现过：**46** · 跨项目（≥2 工程）：**15**
+- **有官方承接**：69 / 83（合计承接 covered API 301 / 495）
 - **未登记分域**：0（应为 0——非 0 即新能力漏登记，见 `auditCapabilityDomains`）
 
 ## 2. 优先级表（按 跨项目覆盖 ↓ · 语料频次 ↓ · 官方承接 ↓）
@@ -111,6 +111,7 @@
 | 80 | · | C46 | `useInAppPurchase()` | 账号与支付 | — | 0 | 0 | planned | ⏳ 待人工估 |
 | 81 | · | C48 | `useEmbedded()` | 应用与生命周期 | — | 0 | 0 | planned | ⏳ 待人工估 |
 | 82 | · | C82 | `useWebAssembly()` | 应用与生命周期 | — | 0 | 0 | planned | ⏳ 待人工估 |
+| 83 | · | C83 | `useKeepScreenOn()` | 设备与系统 | — | 0 | 0 | implemented | ⏳ 待人工估 |
 
 > 优先信号：★★ = 跨项目覆盖（最高证据）· ★ = 单项目有真实调用 · △ = 仅官方承接面（无本仓调用，属完整性缺口）· · = 暂无双侧信号
 
@@ -119,7 +120,7 @@
 | 域 | 能力数 | 跨项目 | 语料用过 | 官方承接合计 |
 |---|---|---|---|---|
 | 网络与通信 | 11 | 0 | 5 | 81 |
-| 设备与系统 | 19 | 5 | 13 | 85 |
+| 设备与系统 | 20 | 5 | 13 | 85 |
 | 存储与文件 | 4 | 3 | 4 | 20 |
 | 位置与地图 | 2 | 0 | 2 | 10 |
 | 媒体与扫码 | 11 | 1 | 4 | 27 |

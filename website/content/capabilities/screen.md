@@ -40,6 +40,7 @@ useScreen(): Promise<CapResult<ScreenInfo>>
 | code | 说明 |
 |---|---|
 | `screen.unsupported` | wx.getSystemInfoSync 缺失 |
+| `screen.keep-on.unsupported` | 桥未提供 setKeepScreenOn（useKeepScreenOn 不可用） |
 
 > 平台不支持 → `*.unsupported` 族；业务按 code 分支处理，无需 try/catch。
 
