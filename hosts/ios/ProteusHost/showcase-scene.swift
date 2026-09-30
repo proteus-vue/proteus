@@ -23,8 +23,10 @@
 // 【★屏幕常亮（3 分钟演出必须）】`isIdleTimerDisabled = true` —— 灭屏时 app 只渲染个位数帧，
 //   读数全废（Android 侧已有同样教训，写进 AGENTS.md；iOS 侧同样适用）。
 
+import AVFoundation
 import Foundation
 import JavaScriptCore
+import ReplayKit
 import UIKit
 
 final class ShowcaseScene: NSObject {
@@ -56,6 +58,19 @@ final class ShowcaseScene: NSObject {
     /// 每幕的"尾等待"（名义时间已到但内核说还有动画在动 ⇒ 这里等了多少 ms）——
     /// **无缝衔接的机器取证**：值 ≈ 0/一帧 = 动画完成即切幕；值很大 = 幕尾有空等
     private static var tailWaits: [[String: Any]] = []
+    /// ★录屏（`PROTEUS_SHOWCASE_RECORD=1`）：ReplayKit 硬件编码录**真机屏幕**——
+    ///   零外部工具（devicectl 无录屏子命令，实测确认）、无 usb 带宽依赖、且录的就是
+    ///   判据同源的那一轮画面（"网站上的视频 = 被测的那次运行"）。
+    private static var recording = false
+    /// ★自己写文件（不把 URL 交给 ReplayKit）——真机实测：`stopRecording(withOutput:)` 报
+    ///   `-5835 文件权限问题导致失败`（跨进程 daemon 写 app 沙盒被拒）
+    ///   ⇒ 改用 `startCapture` 逐帧拿 `CMSampleBuffer` + 本进程 `AVAssetWriter` 写 mp4。
+    ///   副产物是**方向可控**（`RPVideoSampleOrientationKey` → `input.transform`）。
+    private static var assetWriter: AVAssetWriter?
+    private static var videoInput: AVAssetWriterInput?
+    private static var sessionStarted = false
+    private static let videoURLName = "showcase.mp4"
+
     /// 中途截图（漩涡定格）
     private static var spiralSnap: [String: Any] = [:]
     private static var startThermal = ""
@@ -101,6 +116,12 @@ final class ShowcaseScene: NSObject {
             writeRaw("showcase.json", "{\"ok\":false,\"error\":\"建树失败\",\"detail\":\(jsonString(runOut))}")
             exit9IfRequested()
             return
+        }
+
+        // ⑤b ★录屏（可选）：必须在第一幕**之前**开始（否则开场语会被切掉）
+        //   失败不致命：如实记日志并继续（报告照写——录屏是"更好的展示"，不是判据前提）
+        if ProcessInfo.processInfo.environment["PROTEUS_SHOWCASE_RECORD"] == "1" {
+            startCaptureRecording()
         }
 
         // ⑥ 启动帧循环 + 第一幕
@@ -331,12 +352,138 @@ final class ShowcaseScene: NSObject {
         #else
         merged["platform"] = "ios"
         #endif
-        if let d = try? JSONSerialization.data(withJSONObject: merged, options: [.prettyPrinted, .sortedKeys]) {
-            try? d.write(to: reportDir.appendingPathComponent("showcase.json"))
+        // ★写报告 + 退出收进闭包：录屏模式下要**先等视频落盘**再写报告
+        //   （脚本侧判据 = "报告新鲜 ⇒ 本轮完成"；若报告先写、视频后落，脚本可能拉到半个文件）
+        let finishWrite = {
+            if let d = try? JSONSerialization.data(withJSONObject: merged, options: [.prettyPrinted, .sortedKeys]) {
+                try? d.write(to: reportDir.appendingPathComponent("showcase.json"))
+            }
+            NSLog("[proteus] SHOWCASE_REPORT_READY fps=%@ work_p95=%@ dropped=%@ frames=%@",
+                  "\(perf["fps"] ?? "?")", "\(perf["work_p95_ms"] ?? "?")", "\(perf["dropped"] ?? "?")", "\(perf["frames"] ?? "?")")
+            exit9IfRequested(exitCode: 0)
         }
-        NSLog("[proteus] SHOWCASE_REPORT_READY fps=%@ work_p95=%@ dropped=%@ frames=%@",
-              "\(perf["fps"] ?? "?")", "\(perf["work_p95_ms"] ?? "?")", "\(perf["dropped"] ?? "?")", "\(perf["frames"] ?? "?")")
-        exit9IfRequested(exitCode: 0)
+        if recording {
+            recording = false
+            stopCaptureRecording { finishWrite() }
+            return
+        }
+        finishWrite()
+    }
+
+    /* ── ★录屏（ReplayKit 逐帧捕获 → 本进程 AVAssetWriter 写 mp4） ──
+     *
+     * 【为什么不用 stopRecording(withOutput:)（真机实测）】那条路把 URL 交给 ReplayKit 的
+     *   跨进程 daemon 去写 ⇒ 报 `-5835 文件权限问题导致失败`（写不进 app 沙盒）。
+     *   逐帧捕获版：sample buffer 回到本进程，**文件由我们自己写** ⇒ 无权限面；
+     *   且方向可控（`RPVideoSampleOrientationKey` → `input.transform`）。
+     *
+     * 【为什么必须处理方向】buffer 的像素尺寸是**屏幕物理尺寸**（竖屏 1170×2532），
+     *   而 UI 方向变化时要做旋转——不设 transform 会在部分方向下录成侧躺画面。
+     *   映射表与社区实现（ScreenRecord 等）一致，真机抽帧验证。
+     *
+     * 【失败策略】录屏是**展示物**，不是判据前提 ⇒ 任何一步失败都只记日志并继续写报告
+     *   （不阻断验收）——但日志里必须有明确的 *_FAILED 标记（不静默）。
+     */
+
+    private static func startCaptureRecording() {
+        let rec = RPScreenRecorder.shared()
+        guard rec.isAvailable else {
+            NSLog("[proteus] SHOWCASE_RECORDING_FAILED isAvailable=false（模拟器 / 已被系统禁用）")
+            return
+        }
+        let url = reportDir.appendingPathComponent(videoURLName)
+        try? FileManager.default.removeItem(at: url)
+        guard let writer = try? AVAssetWriter(outputURL: url, fileType: .mp4) else {
+            NSLog("[proteus] SHOWCASE_RECORDING_FAILED 建 AVAssetWriter 失败：%@", url.path)
+            return
+        }
+        assetWriter = writer
+        videoInput = nil
+        sessionStarted = false
+        rec.startCapture { sampleBuffer, type, error in
+            if let error {
+                NSLog("[proteus] SHOWCASE_RECORDING_FAILED 捕获错误：%@", "\(error)")
+                return
+            }
+            guard type == .video, let writer = assetWriter else { return }
+            let sb = sampleBuffer
+            // 首个视频帧：格式已知 ⇒ 建 input（含方向 transform）+ 起 session
+            if videoInput == nil {
+                guard let fd = CMSampleBufferGetFormatDescription(sb) else { return }
+                let dims = CMVideoFormatDescriptionGetDimensions(fd)
+                let input = AVAssetWriterInput(mediaType: .video, outputSettings: [
+                    AVVideoCodecKey: AVVideoCodecType.h264,
+                    AVVideoWidthKey: Int(dims.width),
+                    AVVideoHeightKey: Int(dims.height),
+                    AVVideoCompressionPropertiesKey: [
+                        AVVideoAverageBitRateKey: 12_000_000,
+                        AVVideoProfileLevelKey: AVVideoProfileLevelH264HighAutoLevel,
+                    ],
+                ])
+                input.expectsMediaDataInRealTime = true
+                input.transform = videoTransform(from: sb)
+                guard writer.canAdd(input) else {
+                    NSLog("[proteus] SHOWCASE_RECORDING_FAILED writer 拒绝视频轨")
+                    return
+                }
+                writer.add(input)
+                videoInput = input
+                if writer.startWriting() {
+                    writer.startSession(atSourceTime: CMSampleBufferGetPresentationTimeStamp(sb))
+                    sessionStarted = true
+                } else {
+                    NSLog("[proteus] SHOWCASE_RECORDING_FAILED startWriting：%@", "\(writer.error?.localizedDescription ?? "?")")
+                }
+            }
+            guard sessionStarted, writer.status == .writing, let input = videoInput else { return }
+            if input.isReadyForMoreMediaData {
+                input.append(sb)
+            }
+        } completionHandler: { err in
+            if let err {
+                NSLog("[proteus] SHOWCASE_RECORDING_FAILED startCapture：%@", "\(err)")
+            } else {
+                recording = true
+                NSLog("[proteus] SHOWCASE_RECORDING_STARTED")
+            }
+        }
+    }
+
+    /// `RPVideoSampleOrientationKey` → `AVAssetWriterInput.transform`（社区一致的映射表）
+    private static func videoTransform(from sampleBuffer: CMSampleBuffer) -> CGAffineTransform {
+        guard
+            let att = CMGetAttachment(sampleBuffer, key: RPVideoSampleOrientationKey as CFString, attachmentModeOut: nil) as? NSNumber,
+            let o = CGImagePropertyOrientation(rawValue: att.uint32Value)
+        else { return .identity }
+        switch o {
+        case .down, .downMirrored: return CGAffineTransform(rotationAngle: .pi)
+        case .left, .leftMirrored: return CGAffineTransform(rotationAngle: .pi / 2)
+        case .right, .rightMirrored: return CGAffineTransform(rotationAngle: -.pi / 2)
+        default: return .identity
+        }
+    }
+
+    private static func stopCaptureRecording(_ done: @escaping () -> Void) {
+        RPScreenRecorder.shared().stopCapture { err in
+            if let err { NSLog("[proteus] SHOWCASE_RECORDING_FAILED stopCapture：%@", "\(err)") }
+            guard let writer = assetWriter, writer.status == .writing else {
+                // 从未真正开写（捕获没来帧 / 起写失败）⇒ 如实记，不阻断报告
+                NSLog("[proteus] SHOWCASE_RECORDING_FAILED 无可写会话（status=%@）", "\(assetWriter?.status.rawValue ?? -1)")
+                DispatchQueue.main.async { done() }
+                return
+            }
+            videoInput?.markAsFinished()
+            writer.finishWriting {
+                let url = reportDir.appendingPathComponent(videoURLName)
+                let size = (try? FileManager.default.attributesOfItem(atPath: url.path)[.size] as? Int) ?? 0
+                if writer.status == .completed {
+                    NSLog("[proteus] SHOWCASE_RECORDING_READY %@ bytes=%d", url.path, size)
+                } else {
+                    NSLog("[proteus] SHOWCASE_RECORDING_FAILED finishWriting：%@", "\(writer.error?.localizedDescription ?? "?")")
+                }
+                DispatchQueue.main.async { done() }
+            }
+        }
     }
 
     /// 长跑窗口的内存增长（MB）：前 5 个采样 vs 后 5 个采样的中位数差
