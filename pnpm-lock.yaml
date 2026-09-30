@@ -242,7 +242,11 @@ importers:
         specifier: 0.3.0-beta.21
         version: link:../mcp
 
-  packages/animation: {}
+  packages/animation:
+    dependencies:
+      '@proteus-vue/contracts':
+        specifier: 0.3.0-beta.11
+        version: link:../contracts
 
   packages/api:
     dependencies:

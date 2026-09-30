@@ -103,7 +103,11 @@ for (const rel of TARGETS) {
       const t = line.trim()
       if (t.startsWith('//') || t.startsWith('*') || t.startsWith('/*')) continue
       if (t.includes('${')) continue // 模板插值行（动态 require 路径——非静态依赖）
-      if (/["']import \{|\\nimport/.test(t)) continue // 字符串内嵌产物代码（codegen 生成文本/规则示例）
+      if (/["'`]import \{|\\nimport/.test(t)) continue // 字符串内嵌产物代码（codegen 生成文本/规则示例）
+      // ★2026-09-30 补：**模板字符串开头的文档示例**（`example: \`import … from '@proteus-vue/animation'\``）
+      //   首行没有 `\n` 前缀也不带引号包裹 ⇒ 上面那条漏网（实测：animation 的 rules.ts 两处误报）。
+      //   ★纪律：跳过规则要对着"实际形态"，不是对着"我想象的写法"——与门禁覆盖面必须跟着形态走同源。
+      if (/^[A-Za-z_$][\w$]*:\s*`/.test(t) || t.startsWith('`')) continue // 模板字符串起始行（文档示例）
       if (t.includes('@proteus/container') || t.includes('@proteus/core') || t.includes('<相对产物路径>')) continue // 文档/断言示例文本
       for (const m of line.matchAll(BARE_RE)) {
         const mod = extractBare(m[1])

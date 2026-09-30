@@ -99,6 +99,32 @@ export const route = {
   },
 
   /**
+   * **下滑关闭**（dismiss：当前页向下滑出，露出下层页）—— 对齐统一枚举的 `slideDown`
+   *
+   * 【与 `slideUp` 的方向关系】`slideUp` 是"推入"（新页从下往上），`slideDown` 是"弹出/关闭"
+   *   （当前页从上往下）——两者是**相反**的位移方向，对应统一枚举 `RouteTransition` 的两个成员
+   *   （Web 侧 `WEB_TRANSITION_MAP.slideDown = 'slide-down'`、MP 侧 `routeType: 'slideDown'`）。
+   *
+   * ★注意 `enter`/`exit` 的语义：本预设描述的是**被关闭页（exit）下滑**；
+   *   `enter` 留空（下层页本就静止——动它会让"关闭"看起来像"又推了一页"）。
+   */
+  slideDown(opts: { distance?: number; durationMs?: number } = {}): RouteTransitionSpec {
+    const dist = opts.distance ?? 800
+    const dur = opts.durationMs ?? 300
+    return {
+      name: 'slideDown',
+      wxRouteType: null, // ★诚实边界：微信 routeType 里没有"下滑关闭"这个预设（dismiss 由导航栈语义表达）
+      enter: [],
+      exit: [
+        { kind: 'translateY', from: 0, to: dist, curve: 'easeIn', durationMs: dur },
+        { kind: 'opacity', from: 1, to: 0.8, curve: 'easeIn', durationMs: dur },
+      ],
+      opaque: false, // 下滑时下层页可见
+      durationMs: dur,
+    }
+  },
+
+  /**
    * **缩放下沉**（新页从底部放大进入，旧页下沉）—— 对齐 `wx://zoom`
    */
   zoom(opts: { durationMs?: number; fromScale?: number; fromOffsetY?: number } = {}): RouteTransitionSpec {

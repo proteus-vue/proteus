@@ -29,6 +29,7 @@ Rust 内核（曲线求值 + 物理 + FLIP） ← 唯一实现，每帧零 JS �
 | 预设 | 说明 |
 |------|------|
 | `route.bottomSheet()` | 半屏弹窗从底部滑入，**只动进场页**（对齐 `wx://bottom-sheet`） |
+| `route.slideDown()` | **下滑关闭**（dismiss：当前页往下滑出，下层页静止） |
 | `route.slideUp()` | 全屏向上推入，旧页视差让位 + 淡出（对齐 `wx://upwards`） |
 | `route.zoom()` | 新页缩放进入 + 旧页下沉（对齐 `wx://zoom`） |
 | `route.cupertinoModal()` | iOS 风格全屏模态（弹簧）（对齐 `wx://cupertino-modal`） |
@@ -69,6 +70,23 @@ const batch = compileAnimations(px.decls, { node: heroBgId })
 engine.animStart(JSON.stringify({ anims: batch.anims }))
 onScroll((offsetY) => engine.animSeekScroll(JSON.stringify({ scroll: offsetY })))
 ```
+
+## 统一路由转场：三端同一份枚举
+
+仓库已有统一枚举 `RouteTransition`（`@proteus-vue/contracts`：`slideUp | slideDown | halfScreen | scaleDown | none`），
+**Web 腿**（`webTransitionName` → Vue `<Transition>` name）与 **MP 腿**（`mpRouteType` → `wx.navigateTo({routeType})`）
+在 `@proteus-vue/router`；**App 腿在本包**（其他端只报个名字给平台，而 App 侧是自己驱动动画）：
+
+```ts
+import { appTransition } from '@proteus-vue/animation'
+
+const spec = appTransition(route.meta?.transition)   // 非法/缺省 ⇒ none（数据防御，不抛错）
+const batch = compileRoute(spec, { enter: nextId, exit: curId })
+```
+
+★映射写成**穷尽 `Record`** ⇒ 枚举增员时**编译报错**（不是静默漏一个值）；
+★三端枚举有**跨包交叉核对**测试（同时加载 router 的两张表比对键集，防"某一端漏掉"）；
+★`none` 映射为空规格（不是 `undefined`）⇒ 调用方不需要写 `if (spec)` 分支。
 
 ## 滚动联动（MA5）——驱动通路
 

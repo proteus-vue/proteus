@@ -63,6 +63,18 @@ export const APP_TRANSITION_MAP = {
 }
 ```
 
+> **★2026-09-30 状态更新：Morpheus 侧的第三腿已接上**（本表的映射**语义**已实现，落点在
+>   `packages/animation/src/route-transition.ts`）：
+>   · `APP_TRANSITION_MAP: Record<RouteTransition, RouteTransitionSpec>`——**穷尽映射**（枚举增员即编译报错）；
+>   · 五个成员的落点：`slideUp`→`presets.route.slideUp()`、`slideDown`→新补的 `presets.route.slideDown()`、
+>     `halfScreen`→`bottomSheet()`、`scaleDown`→`zoom()`、`none`→**空规格**（不产生动画）；
+>   · **三端枚举已交叉核对**（测试里同时加载 router 的 Web/MP 两张表比对键集，`tests/animation-presets.test.ts`）；
+>   · ★**与上表的差别**：上表映射到"平台原生转场标识"（presentModal / pageSheet），
+>     适用于"用系统导航栈 + 系统转场"；Morpheus 是**自己驱动动画**（内核曲线/FLIP 那套）⇒
+>     返回的是**声明规格**而非标识串。两条路都合法，取决于 App 侧是否用系统导航栈。
+>   · ★**仍未做**：路由栈本身（push/pop/多层栈 / `navigation.generated.ts` / `createAppRouter()`）——
+>     本表是"就绪的第三腿"，等 M5 的路由栈来调用。
+
 ### 3.3 嵌套 → 嵌套栈
 
 App 支持原生**嵌套导航器**（stack-in-stack，如 tab 里的每个 tab 各有一个栈）：

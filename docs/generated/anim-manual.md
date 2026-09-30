@@ -8,7 +8,7 @@ generated: true
 # Morpheus 动画声明项 AI 说明书
 
 > **生成物，勿手改**：`node scripts/gen-anim-manual.mjs`（`--check` 接 CI，漂移即红）
-> **单一事实来源**：`packages/animation/src/rules.ts` 的 `ANIM_RULES`（24 条）
+> **单一事实来源**：`packages/animation/src/rules.ts` 的 `ANIM_RULES`（26 条）
 >
 > 本表与编译器的 111 条规则**同构**（Morpheus §13 第 11 条硬性要求）——
 > 每条含 what / why / when / 示例 / 如何验证 / 实现位置，AI 可单独消费一条。
@@ -16,7 +16,7 @@ generated: true
 > **conformance**：本页生成前会跑 `runConformance()` 对账（预设真实存在 / 跨语言契约值一致 /
 > `verify` 可追溯）——**对不上就不生成**，避免产出误导性文档。
 
-## 预设（可直接用）（12 条）
+## 预设（可直接用）（13 条）
 
 ### `preset/route.bottomSheet`
 
@@ -47,6 +47,21 @@ engine.animStart(JSON.stringify({ anims: batch.enter.anims }))
 ```ts
 const spec = presets.route.slideUp()
 const batch = compileRoute(spec, { enter: 2, exit: 1 })
+```
+
+### `preset/route.slideDown`
+
+**下滑关闭（dismiss：当前页往下滑出）** `[implemented]`
+
+- **是什么**：被关闭页 translateY: 0 → +distance + 轻微淡出；**进场页留空**（下层页本就静止）。
+- **为什么**：与 `slideUp` 是**相反**的位移方向（推入 vs 弹出）。★这是统一枚举 `RouteTransition.slideDown` 在本端的落点——Web 侧走 `slide-down` CSS、MP 侧走 `routeType: 'slideDown'`，三端同源。
+- **何时用**：页面关闭 / 弹层 dismiss（往下滑出，露出下层）
+- **如何验证**：tests/animation-presets.test.ts 第三腿段（slideDown 方向与 slideUp 相反）
+- **实现位置**：`packages/animation/src/presets.ts:route.slideDown`
+
+```ts
+const spec = presets.route.slideDown({ distance: 800 })
+const batch = compileRoute(spec, { exit: closingPageId })
 ```
 
 ### `preset/route.zoom`
@@ -202,7 +217,24 @@ const sticky = presets.scroll.sticky({ pinAt: 80, span: 120 })
 const f = presets.scroll.fadeIn({ from: 100, to: 300, risePx: 12 })
 ```
 
-## 声明面原语（字段/取值）（5 条）
+## 声明面原语（字段/取值）（6 条）
+
+### `primitive/route-transition-bridge`
+
+**统一路由转场枚举的第三腿（App ⇄ RouteTransition）** `[implemented]`
+
+- **是什么**：`appTransition(meta.transition)` / `APP_TRANSITION_MAP`——把统一枚举映射到本端转场规格（穷尽 `Record`）。
+- **为什么**：★仓库已有统一枚举 `RouteTransition`（`@proteus-vue/contracts`），Web 腿（`webTransitionName`）与 MP 腿（`mpRouteType`）都已落地，**App 腿此前是空的**（router 侧注释写着"App 走 native（v0.6）"）。本规则即第三腿：**同一份 `<route>.meta.transition` 三端取到语义对应的转场**，业务不写平台分支。★映射写成穷尽 `Record` ⇒ 枚举增员时**编译报错**（不是静默漏一个值）。
+- **何时用**：App 侧按路由元信息选转场时（由未来的 App 路由栈调用）
+- **相关决策**：docs/proteus-router-plan/05-m5-app-codegen.md §3.2（本端实现其映射表）
+- **如何验证**：tests/animation-presets.test.ts 第三腿段（穷尽性 / 非法输入兜底 / 参数覆盖 / 语义对齐） + 三端交叉核对段（**同时加载 router 两张表**比对键集）
+- **实现位置**：`packages/animation/src/route-transition.ts:APP_TRANSITION_MAP`
+
+```ts
+import { appTransition } from '@proteus-vue/animation'
+const spec = appTransition(route.meta?.transition)   // 非法/缺省 ⇒ none（数据防御）
+const batch = compileRoute(spec, { enter: nextId, exit: curId })
+```
 
 ### `primitive/AnimDecl`
 
