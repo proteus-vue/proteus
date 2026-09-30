@@ -96,6 +96,10 @@ const LOCAL_ONLY = {
   'check:android-platform-anim': '需真机产物（adb pull 的 platform-anim*.json）；CI 无设备',
   // ★内核驱动动画判据（曲线/序列/滚动/共享元素/真帧循环）：同族——输入是真机产物，CI 无设备。
   'check:android-kernel-anim': '需真机产物（adb pull 的 kernel-anim.json）；CI 无设备',
+  // ★★M5 路由虚拟栈判据（2026-09-30 新增）：与 kernel-anim 同族——输入是真机产物 app-stack.json。
+  //   端上读数（在 QuickJS 上跑**真实 app-stack.ts**：2 万层深栈 / 预算冻结 / 命令守恒）无法在 CI 复现
+  //   （CI 无设备、无宿主 APK）；本机侧的等价逻辑判据已在 tests/app-stack.test.ts（34 条，CI 覆盖）。
+  'check:app-stack': '需真机产物（adb pull 的 app-stack.json）；CI 无设备（本机侧等价判据 = tests/app-stack.test.ts）',
   // ★HA5：AAR 构建（需 NDK + JDK17；CI 为 ubuntu-latest 未装 NDK）。★注意它**不是**"读产物"型门禁：
   //   它每次都**真构建**并断言 AAR 的四条内容判据（manifest/classes.jar/jni/R.txt + 符号齐备）。
   'check:host-abi-aar': '需 NDK + JDK17 交叉编译；CI 无 NDK',

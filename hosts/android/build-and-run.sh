@@ -163,6 +163,30 @@ else
   echo "      （不阻断构建：缺它只影响 js-batch 测试路径）"
 fi
 
+# ★★M5：路由虚拟栈 bundle（同一构建脚本产出第二个 entry，见 build-batch.mjs）
+#   与 bundle-batch 分开：app-stack 是**零依赖纯逻辑**，单独产物让渲染链路的回归面不变。
+BUNDLE_AS="$HERE/bridge/dist/bundle-app-stack.js"
+ENTRY_AS="$HERE/bridge/entry-app-stack.ts"
+NEED_BUILD_AS=0
+if [ ! -f "$BUNDLE_AS" ]; then NEED_BUILD_AS=1; fi
+if [ -f "$ENTRY_AS" ] && [ -f "$BUNDLE_AS" ] && [ "$ENTRY_AS" -nt "$BUNDLE_AS" ]; then NEED_BUILD_AS=1; fi
+# ★app-stack 入口还依赖 packages/router/src —— 那几个文件更新也要重建（否则真机测旧代码）
+if [ -f "$BUNDLE_AS" ] && [ "$HERE/../../packages/router/src/app-stack.ts" -nt "$BUNDLE_AS" ]; then NEED_BUILD_AS=1; fi
+if [ "$NEED_BUILD_AS" = "1" ]; then
+  echo "    构建 app-stack bundle（缺产物 或 入口/核心更新）…"
+  if ! node "$HERE/bridge/build-batch.mjs" 2>&1 | sed 's/^/    /'; then
+    echo "✗ app-stack bundle 构建失败（含类型检查）—— 不静默跳过"
+    exit 3
+  fi
+fi
+if [ -f "$BUNDLE_AS" ]; then
+  mkdir -p "$APP/src/main/assets"
+  cp "$BUNDLE_AS" "$APP/src/main/assets/bundle-app-stack.js"
+  echo "    bundle-app-stack.js 已入 assets（$(du -h "$BUNDLE_AS" | awk '{print $1}')）"
+else
+  echo "    ⚠ 未见 $BUNDLE_AS —— 缺它只影响 app-stack 测试路径"
+fi
+
 echo "==> ③ 打包资源与清单（aapt2）"
 MANIFEST="$APP/src/main/AndroidManifest.xml"
 if [ "$MODE" = "release" ]; then

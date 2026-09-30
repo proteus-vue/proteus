@@ -76,3 +76,40 @@ console.log(`[android-bundle] ✅ ${path.relative(ROOT, OUT)}（${(bytes / 1024)
 if (result.warnings.length) {
   for (const w of result.warnings) console.warn(`  ⚠ ${w.text}`)
 }
+
+// ══════════════════════════════════════════════════════════════════
+// ★★M5：第二个 entry —— 路由虚拟栈（app-stack）
+//
+// 【为什么单独一个 bundle（而不是塞进 entry-batch.ts）】
+//   两者是**不同关注点**（渲染适配器 vs 路由栈），且 app-stack 零依赖——
+//   单独 bundle 让 S3b/S5 的产物**不受本入口改动影响**（减小回归面）。
+//
+// 【为什么 alias 指向 src 而不是 dist（与 render-backend 相反，且是刻意的）】
+//   render-backend 的 dist 是"已发布产物"（bundle 必须跑它）；
+//   而 router 的 src **本身就是唯一实现**，且 app-stack/codegen 只有**类型导入**
+//   （esbuild 会擦除）⇒ 直接打 src 有两个好处：
+//     ① 消除"忘了重建 dist ⇒ 真机测的是旧代码"这一本仓已踩过的陷阱（陈旧 AAR 同源）；
+//     ② 免去 build-packages 前置（router 的 src 可独立编译）。
+//   ★若将来 app-stack 引入运行期 import，本 alias 仍然成立（esbuild 会一并打包 src 依赖）。
+const OUT_APP_STACK = path.join(HERE, 'dist', 'bundle-app-stack.js')
+const resultAppStack = await build({
+  entryPoints: [path.join(HERE, 'entry-app-stack.ts')],
+  outfile: OUT_APP_STACK,
+  bundle: true,
+  format: 'iife',
+  platform: 'neutral',
+  target: 'es2020',
+  define: { 'process.env.NODE_ENV': '"production"', __DEV__: 'false' },
+  alias: {
+    '@proteus-vue/router/app-stack': path.join(ROOT, 'packages/router/src/app-stack.ts'),
+    '@proteus-vue/router/codegen': path.join(ROOT, 'packages/router/src/codegen/index.ts'),
+    '@proteus-vue/router/types': path.join(ROOT, 'packages/router/src/types.ts'),
+  },
+  legalComments: 'none',
+})
+
+const bytesAppStack = fs.statSync(OUT_APP_STACK).size
+console.log(`[android-bundle] ✅ ${path.relative(ROOT, OUT_APP_STACK)}（${(bytesAppStack / 1024).toFixed(1)} KB）`)
+if (resultAppStack.warnings.length) {
+  for (const w of resultAppStack.warnings) console.warn(`  ⚠ ${w.text}`)
+}

@@ -33,6 +33,8 @@ popover-open.png
 # ★Android 侧 IIFE bundle 的**拷贝**（源在 hosts/android/bridge/dist/，已被 dist/ 覆盖）
 #   ⇒ 由 build-and-run.sh 在构建时自动生成（见其步骤 ②.5），**不入库**（避免"两份副本漂移"）
 hosts/android/app/src/main/assets/bundle-batch.js
+# ★M5 路由虚拟栈 bundle 的拷贝（源 hosts/android/bridge/dist/bundle-app-stack.js；同款规则同款理由）
+hosts/android/app/src/main/assets/bundle-app-stack.js
 hosts/**/build/
 hosts/**/*.app/
 hosts/**/verify-jsc
