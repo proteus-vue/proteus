@@ -73,6 +73,33 @@ function simpleReactive<T extends object>(target: T): T {
 }
 
 /** mock 桥（全部能力可用——确定性数据） */
+
+/** ★完整生命周期句柄（扩展事件面后——mock 桥需提供全部方法，否则类型不满足接口） */
+function stubAppLifecycle(over: Partial<Record<string, unknown>> = {}): never {
+  const noop = () => () => undefined
+  return {
+    phase: 'PENDING',
+    onLaunch: noop, onShow: noop, onHide: noop,
+    onError: noop, onUnhandledRejection: noop, onMemoryWarning: noop, onThemeChange: noop,
+    onWindowResize: noop, onPageNotFound: noop, onAudioInterruptionBegin: noop, onAudioInterruptionEnd: noop,
+    ...over,
+  } as never
+}
+function stubPageLifecycle(over: Partial<Record<string, unknown>> = {}): never {
+  const noop = () => () => undefined
+  return {
+    phase: 'IDLE',
+    onLoad: noop, onShow: noop, onHide: noop, onReady: noop, onUnload: noop,
+    onRouteDone: noop, onPullDownRefresh: noop, onReachBottom: noop, onPageScroll: noop,
+    onResize: noop, onTabItemTap: noop,
+    setShareAppMessageProvider: () => undefined,
+    setShareTimelineProvider: () => undefined,
+    setAddToFavoritesProvider: () => undefined,
+    setSaveExitStateProvider: () => undefined,
+    ...over,
+  } as never
+}
+
 function mockBridge(partial?: Partial<CapabilityBridge>): CapabilityBridge {
   return {
     getLocation: async () => ({ latitude: 31.23, longitude: 121.47, accuracy: 10 }),
@@ -1153,15 +1180,12 @@ describe('G-32 B3 五期：notification / contact / calendar / app-lifecycle / a
     let offLaunch: (() => void) | undefined
     const hooks = createCapabilityHooks(
       mockBridge({
-        getAppLifecycle: () => ({
-          phase: 'PENDING' as const,
-          onLaunch: (cb) => {
+        getAppLifecycle: () => stubAppLifecycle({
+          onLaunch: (cb: () => void) => {
             cb()
             offLaunch = () => undefined
             return offLaunch
           },
-          onShow: () => () => undefined,
-          onHide: () => () => undefined,
         }),
       }),
     )
@@ -1209,7 +1233,7 @@ describe('G-32 B3 五期：notification / contact / calendar / app-lifecycle / a
         subscribeMessage: async (id) => ({ templateId: id, granted: true }),
         chooseContact: async () => [],
         addCalendarEvent: async () => undefined,
-        getAppLifecycle: () => ({ phase: 'PENDING' as const, onLaunch: () => () => undefined, onShow: () => () => undefined, onHide: () => () => undefined }),
+        getAppLifecycle: () => stubAppLifecycle(),
         compressFile: async () => undefined,
         addShortcut: async () => undefined,
       }),
@@ -1349,7 +1373,7 @@ describe('G-32 B3 六期：page-lifecycle / bluetooth / nfc / camera / microphon
   it('mock 桥全能力 + 缺桥 Err + probe 6 标志', async () => {
     const full = createCapabilityHooks(
       mockBridge({
-        getPageLifecycle: () => ({ phase: 'IDLE' as const, onLoad: () => () => undefined, onShow: () => () => undefined, onHide: () => () => undefined }),
+        getPageLifecycle: () => stubPageLifecycle(),
         getBluetooth: async () => ({ supported: true, available: true, devices: ['x'] }) as never, // 部分 mock：仅 info 字段
         getNfc: async () => ({ supported: true, available: true }) as never, // 部分 mock：仅 info 字段
         getCamera: async () => ({ kind: 'camera', supported: true, granted: true }),

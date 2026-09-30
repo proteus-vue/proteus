@@ -26,7 +26,19 @@ Returns `PageLifecycle` (synchronous handle/state object).
 |---|---|---|
 | [`onLoad`](#onload) | `onLoad(cb: () => void): () => void` | — |
 | [`onShow`](#onshow) | `onShow(cb: () => void): () => void` | — |
+| [`onReady`](#onready) | `onReady(cb: () => void): () => void` | — |
 | [`onHide`](#onhide) | `onHide(cb: () => void): () => void` | — |
+| [`onUnload`](#onunload) | `onUnload(cb: () => void): () => void` | — |
+| [`onRouteDone`](#onroutedone) | `onRouteDone(cb: (e: PageEventPayloads['route-done']) => void): () => void` | — |
+| [`onPullDownRefresh`](#onpulldownrefresh) | `onPullDownRefresh(cb: () => void): () => void` | — |
+| [`onReachBottom`](#onreachbottom) | `onReachBottom(cb: () => void): () => void` | — |
+| [`onPageScroll`](#onpagescroll) | `onPageScroll(cb: (e: PageEventPayloads['page-scroll']) => void): () => void` | — |
+| [`onResize`](#onresize) | `onResize(cb: (e: PageEventPayloads['resize']) => void): () => void` | — |
+| [`onTabItemTap`](#ontabitemtap) | `onTabItemTap(cb: (e: PageEventPayloads['tab-item-tap']) => void): () => void` | — |
+| [`setShareAppMessageProvider`](#setshareappmessageprovider) | `setShareAppMessageProvider(fn: () => ShareContent): void` | — |
+| [`setShareTimelineProvider`](#setsharetimelineprovider) | `setShareTimelineProvider(fn: () => ShareContent): void` | — |
+| [`setAddToFavoritesProvider`](#setaddtofavoritesprovider) | `setAddToFavoritesProvider(fn: () => ShareContent): void` | — |
+| [`setSaveExitStateProvider`](#setsaveexitstateprovider) | `setSaveExitStateProvider(fn: () => Record<string, unknown>): void` | — |
 
 ### `onLoad`
 
@@ -52,6 +64,18 @@ onShow(cb: () => void): () => void
 
 **Returns**: `() => void`
 
+### `onReady`
+
+```ts
+onReady(cb: () => void): () => void
+```
+
+| Param | Type | Required | Doc |
+|---|---|---|---|
+| `cb` | `() => void` | Yes | — |
+
+**Returns**: `() => void`
+
 ### `onHide`
 
 ```ts
@@ -64,11 +88,138 @@ onHide(cb: () => void): () => void
 
 **Returns**: `() => void`
 
-## Props
+### `onUnload`
 
-| Prop | Type | Required | Doc |
+```ts
+onUnload(cb: () => void): () => void
+```
+
+| Param | Type | Required | Doc |
 |---|---|---|---|
-| `phase` | `'IDLE' \| 'LOAD' \| 'SHOW' \| 'HIDE'` | Yes | 页面当前阶段（LOAD 加载 / SHOW 显示 / HIDE 隐藏） |
+| `cb` | `() => void` | Yes | — |
+
+**Returns**: `() => void`
+
+### `onRouteDone`
+
+```ts
+onRouteDone(cb: (e: PageEventPayloads['route-done']) => void): () => void
+```
+
+| Param | Type | Required | Doc |
+|---|---|---|---|
+| `cb` | `(e: PageEventPayloads['route-done']) => void` | Yes | — |
+
+**Returns**: `() => void`
+
+### `onPullDownRefresh`
+
+```ts
+onPullDownRefresh(cb: () => void): () => void
+```
+
+| Param | Type | Required | Doc |
+|---|---|---|---|
+| `cb` | `() => void` | Yes | — |
+
+**Returns**: `() => void`
+
+### `onReachBottom`
+
+```ts
+onReachBottom(cb: () => void): () => void
+```
+
+| Param | Type | Required | Doc |
+|---|---|---|---|
+| `cb` | `() => void` | Yes | — |
+
+**Returns**: `() => void`
+
+### `onPageScroll`
+
+```ts
+onPageScroll(cb: (e: PageEventPayloads['page-scroll']) => void): () => void
+```
+
+| Param | Type | Required | Doc |
+|---|---|---|---|
+| `cb` | `(e: PageEventPayloads['page-scroll']) => void` | Yes | — |
+
+**Returns**: `() => void`
+
+### `onResize`
+
+```ts
+onResize(cb: (e: PageEventPayloads['resize']) => void): () => void
+```
+
+| Param | Type | Required | Doc |
+|---|---|---|---|
+| `cb` | `(e: PageEventPayloads['resize']) => void` | Yes | — |
+
+**Returns**: `() => void`
+
+### `onTabItemTap`
+
+```ts
+onTabItemTap(cb: (e: PageEventPayloads['tab-item-tap']) => void): () => void
+```
+
+| Param | Type | Required | Doc |
+|---|---|---|---|
+| `cb` | `(e: PageEventPayloads['tab-item-tap']) => void` | Yes | — |
+
+**Returns**: `() => void`
+
+### `setShareAppMessageProvider`
+
+```ts
+setShareAppMessageProvider(fn: () => ShareContent): void
+```
+
+| Param | Type | Required | Doc |
+|---|---|---|---|
+| `fn` | `() => ShareContent` | Yes | — |
+
+**Returns**: `void`
+
+### `setShareTimelineProvider`
+
+```ts
+setShareTimelineProvider(fn: () => ShareContent): void
+```
+
+| Param | Type | Required | Doc |
+|---|---|---|---|
+| `fn` | `() => ShareContent` | Yes | — |
+
+**Returns**: `void`
+
+### `setAddToFavoritesProvider`
+
+```ts
+setAddToFavoritesProvider(fn: () => ShareContent): void
+```
+
+| Param | Type | Required | Doc |
+|---|---|---|---|
+| `fn` | `() => ShareContent` | Yes | — |
+
+**Returns**: `void`
+
+### `setSaveExitStateProvider`
+
+```ts
+setSaveExitStateProvider(fn: () => Record<string, unknown>): void
+```
+
+| Param | Type | Required | Doc |
+|---|---|---|---|
+| `fn` | `() => Record<string` | Yes | — |
+| `unknown>` | `—` | Yes | — |
+
+**Returns**: `void`
 
 ## Error codes
 

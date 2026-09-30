@@ -162,11 +162,12 @@ describe('② 三个真实 Hook 在 App 宿主上可用（端到端：桥 → Ho
     r.data.onUnhandledRejection((x) => seen.push(`rej:${x.reason}`))
     r.data.onNetworkStatusChange((s) => seen.push(`net:${s.isConnected}/${s.networkType}`))
 
-    bus.emit({ topic: 'memory-warning', level: 2 })
-    bus.emit({ topic: 'theme-change', theme: 'dark' })
-    bus.emit({ topic: 'resize', windowWidth: 390, windowHeight: 844 })
-    bus.emit({ topic: 'error', error: 'boom' })
-    bus.emit({ topic: 'unhandled-rejection', reason: 'why' })
+    // ★统一走 app 事件面（扩展后 memory-warning/theme-change/resize/error 都是 app:* —— 见 APP_EVENTS）
+    bus.emit({ topic: 'app', kind: 'memory-warning', payload: { level: 2 } })
+    bus.emit({ topic: 'app', kind: 'theme-change', payload: { theme: 'dark' } })
+    bus.emit({ topic: 'app', kind: 'resize', payload: { windowWidth: 390, windowHeight: 844 } })
+    bus.emit({ topic: 'app', kind: 'error', payload: { error: 'boom' } })
+    bus.emit({ topic: 'app', kind: 'unhandled-rejection', payload: { reason: 'why' } })
     bus.emit({ topic: 'network-change', isConnected: false, networkType: 'none' })
     expect(seen).toEqual(['mem:2', 'theme:dark', 'resize:390x844', 'err:boom', 'rej:why', 'net:false/none'])
   })

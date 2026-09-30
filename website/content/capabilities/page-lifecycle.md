@@ -24,17 +24,27 @@ usePageLifecycle(): PageLifecycle
 
 | 方法 | 签名 | 说明 |
 |---|---|---|
-| [`onLoad`](#onload) | `onLoad(cb: () => void): () => void` | 订阅「页面加载」（返回取消） |
-| [`onShow`](#onshow) | `onShow(cb: () => void): () => void` | 订阅「页面显示」（返回取消） |
-| [`onHide`](#onhide) | `onHide(cb: () => void): () => void` | 订阅「页面隐藏」（返回取消） |
+| [`onLoad`](#onload) | `onLoad(cb: () => void): () => void` | — |
+| [`onShow`](#onshow) | `onShow(cb: () => void): () => void` | — |
+| [`onReady`](#onready) | `onReady(cb: () => void): () => void` | — |
+| [`onHide`](#onhide) | `onHide(cb: () => void): () => void` | — |
+| [`onUnload`](#onunload) | `onUnload(cb: () => void): () => void` | — |
+| [`onRouteDone`](#onroutedone) | `onRouteDone(cb: (e: PageEventPayloads['route-done']) => void): () => void` | 路由动画完成（MP `onRouteDone` / App 转场结束 / Web transitionend） |
+| [`onPullDownRefresh`](#onpulldownrefresh) | `onPullDownRefresh(cb: () => void): () => void` | 下拉刷新（MP `onPullDownRefresh` / App 宿主手势；★Web 无原生——诚实不触发） |
+| [`onReachBottom`](#onreachbottom) | `onReachBottom(cb: () => void): () => void` | 触底（MP `onReachBottom` / Web 滚动到底 / App 滚动到底） |
+| [`onPageScroll`](#onpagescroll) | `onPageScroll(cb: (e: PageEventPayloads['page-scroll']) => void): () => void` | 页面滚动（★**高频**：微信文档明确会引起两线程通信 ⇒ MP 端仅"声明过 onPageScroll"才派发） |
+| [`onResize`](#onresize) | `onResize(cb: (e: PageEventPayloads['resize']) => void): () => void` | 尺寸变化（MP `onResize` / Web resize / App 旋转分屏） |
+| [`onTabItemTap`](#ontabitemtap) | `onTabItemTap(cb: (e: PageEventPayloads['tab-item-tap']) => void): () => void` | tab 点击（MP `onTabItemTap` / App tab 栏） |
+| [`setShareAppMessageProvider`](#setshareappmessageprovider) | `setShareAppMessageProvider(fn: () => ShareContent): void` | 转发给好友（返回分享内容；MP 端声明后右上角出现"转发"入口） |
+| [`setShareTimelineProvider`](#setsharetimelineprovider) | `setShareTimelineProvider(fn: () => ShareContent): void` | 分享到朋友圈（同上；声明后才显示入口） |
+| [`setAddToFavoritesProvider`](#setaddtofavoritesprovider) | `setAddToFavoritesProvider(fn: () => ShareContent): void` | 收藏（同上） |
+| [`setSaveExitStateProvider`](#setsaveexitstateprovider) | `setSaveExitStateProvider(fn: () => Record<string, unknown>): void` | 保存退出状态（MP `onSaveExitState`——返回需保存的状态对象） |
 
 ### `onLoad`
 
 ```ts
 onLoad(cb: () => void): () => void
 ```
-
-**说明**：订阅「页面加载」（返回取消）
 
 | 参数 | 类型 | 必填 | 说明 |
 |---|---|---|---|
@@ -48,7 +58,17 @@ onLoad(cb: () => void): () => void
 onShow(cb: () => void): () => void
 ```
 
-**说明**：订阅「页面显示」（返回取消）
+| 参数 | 类型 | 必填 | 说明 |
+|---|---|---|---|
+| `cb` | `() => void` | 是 | 事件 / 结果回调函数 |
+
+**返回值**：`() => void`
+
+### `onReady`
+
+```ts
+onReady(cb: () => void): () => void
+```
 
 | 参数 | 类型 | 必填 | 说明 |
 |---|---|---|---|
@@ -62,7 +82,17 @@ onShow(cb: () => void): () => void
 onHide(cb: () => void): () => void
 ```
 
-**说明**：订阅「页面隐藏」（返回取消）
+| 参数 | 类型 | 必填 | 说明 |
+|---|---|---|---|
+| `cb` | `() => void` | 是 | 事件 / 结果回调函数 |
+
+**返回值**：`() => void`
+
+### `onUnload`
+
+```ts
+onUnload(cb: () => void): () => void
+```
 
 | 参数 | 类型 | 必填 | 说明 |
 |---|---|---|---|
@@ -70,11 +100,146 @@ onHide(cb: () => void): () => void
 
 **返回值**：`() => void`
 
-## 属性
+### `onRouteDone`
 
-| 属性 | 类型 | 必填 | 说明 |
+```ts
+onRouteDone(cb: (e: PageEventPayloads['route-done']) => void): () => void
+```
+
+**说明**：路由动画完成（MP `onRouteDone` / App 转场结束 / Web transitionend）
+
+| 参数 | 类型 | 必填 | 说明 |
 |---|---|---|---|
-| `phase` | `'IDLE' \| 'LOAD' \| 'SHOW' \| 'HIDE'` | 是 | 页面当前阶段（LOAD 加载 / SHOW 显示 / HIDE 隐藏） |
+| `cb` | `(e: PageEventPayloads['route-done']) => void` | 是 | 事件 / 结果回调函数 |
+
+**返回值**：`() => void`
+
+### `onPullDownRefresh`
+
+```ts
+onPullDownRefresh(cb: () => void): () => void
+```
+
+**说明**：下拉刷新（MP `onPullDownRefresh` / App 宿主手势；★Web 无原生——诚实不触发）
+
+| 参数 | 类型 | 必填 | 说明 |
+|---|---|---|---|
+| `cb` | `() => void` | 是 | 事件 / 结果回调函数 |
+
+**返回值**：`() => void`
+
+### `onReachBottom`
+
+```ts
+onReachBottom(cb: () => void): () => void
+```
+
+**说明**：触底（MP `onReachBottom` / Web 滚动到底 / App 滚动到底）
+
+| 参数 | 类型 | 必填 | 说明 |
+|---|---|---|---|
+| `cb` | `() => void` | 是 | 事件 / 结果回调函数 |
+
+**返回值**：`() => void`
+
+### `onPageScroll`
+
+```ts
+onPageScroll(cb: (e: PageEventPayloads['page-scroll']) => void): () => void
+```
+
+**说明**：页面滚动（★**高频**：微信文档明确会引起两线程通信 ⇒ MP 端仅"声明过 onPageScroll"才派发）
+
+| 参数 | 类型 | 必填 | 说明 |
+|---|---|---|---|
+| `cb` | `(e: PageEventPayloads['page-scroll']) => void` | 是 | 事件 / 结果回调函数 |
+
+**返回值**：`() => void`
+
+### `onResize`
+
+```ts
+onResize(cb: (e: PageEventPayloads['resize']) => void): () => void
+```
+
+**说明**：尺寸变化（MP `onResize` / Web resize / App 旋转分屏）
+
+| 参数 | 类型 | 必填 | 说明 |
+|---|---|---|---|
+| `cb` | `(e: PageEventPayloads['resize']) => void` | 是 | 事件 / 结果回调函数 |
+
+**返回值**：`() => void`
+
+### `onTabItemTap`
+
+```ts
+onTabItemTap(cb: (e: PageEventPayloads['tab-item-tap']) => void): () => void
+```
+
+**说明**：tab 点击（MP `onTabItemTap` / App tab 栏）
+
+| 参数 | 类型 | 必填 | 说明 |
+|---|---|---|---|
+| `cb` | `(e: PageEventPayloads['tab-item-tap']) => void` | 是 | 事件 / 结果回调函数 |
+
+**返回值**：`() => void`
+
+### `setShareAppMessageProvider`
+
+```ts
+setShareAppMessageProvider(fn: () => ShareContent): void
+```
+
+**说明**：转发给好友（返回分享内容；MP 端声明后右上角出现"转发"入口）
+
+| 参数 | 类型 | 必填 | 说明 |
+|---|---|---|---|
+| `fn` | `() => ShareContent` | 是 | 回调函数 |
+
+**返回值**：`void`
+
+### `setShareTimelineProvider`
+
+```ts
+setShareTimelineProvider(fn: () => ShareContent): void
+```
+
+**说明**：分享到朋友圈（同上；声明后才显示入口）
+
+| 参数 | 类型 | 必填 | 说明 |
+|---|---|---|---|
+| `fn` | `() => ShareContent` | 是 | 回调函数 |
+
+**返回值**：`void`
+
+### `setAddToFavoritesProvider`
+
+```ts
+setAddToFavoritesProvider(fn: () => ShareContent): void
+```
+
+**说明**：收藏（同上）
+
+| 参数 | 类型 | 必填 | 说明 |
+|---|---|---|---|
+| `fn` | `() => ShareContent` | 是 | 回调函数 |
+
+**返回值**：`void`
+
+### `setSaveExitStateProvider`
+
+```ts
+setSaveExitStateProvider(fn: () => Record<string, unknown>): void
+```
+
+**说明**：保存退出状态（MP `onSaveExitState`——返回需保存的状态对象）
+
+| 参数 | 类型 | 必填 | 说明 |
+|---|---|---|---|
+| `fn` | `() => Record<string` | 是 | 回调函数 |
+| `unknown>` | `—` | 是 | — |
+
+**返回值**：`void`
 
 ## 错误码
 

@@ -21,8 +21,10 @@ import {
   detectAppHost,
   getHostLifecycleBus,
   installPageEmitBridge,
+  installWebEventSources,
   installWxAppEventBridge,
 } from './capability-app'
+import type { AppLifecycleHandle, PageLifecycleHandle } from './capability-app'
 import { BRIDGE_DECLS } from './bridge-decls/index'
 
 /** ★Result<T> 契约（G-32.4：能力原语全部返回 Result<T>，禁止回调） */
@@ -523,17 +525,15 @@ export interface Contact {
   email?: string
 }
 
-/** C23 应用生命周期句柄（wx App 钩子 / web visibilitychange+load 订阅） */
-export interface AppLifecycle {
-  /** 当前阶段：launch/show/hide */
-  phase: 'PENDING' | 'LAUNCH' | 'SHOW' | 'HIDE'
-  /** 订阅「应用启动」（返回取消） */
-  onLaunch(cb: () => void): () => void
-  /** 订阅「应用进入前台」（返回取消） */
-  onShow(cb: () => void): () => void
-  /** 订阅「应用退到后台」（返回取消） */
-  onHide(cb: () => void): () => void
-}
+/**
+ * ★★C23 应用生命周期句柄（**扩展为完整事件面**——2026-09-30）。
+ *
+ * 【类型收口（防漂移）】定义在 `capability-app.ts` 的 `AppLifecycleHandle`，
+ *   此处仅做别名导出——**单一事实源**。三端（MP/Web/App）共用同一句柄形状：
+ *   MP 走 wx 全局 API + 产物派发；Web 走 visibilitychange/resize/scroll；
+ *   App 走壳（G-39 运行时）转发。事件面 SSOT 见 `APP_EVENTS`（11 个事件）。
+ */
+export type AppLifecycle = AppLifecycleHandle
 
 /** C44 压缩选项（wx.compressFile / web 无标准 → 降级 undefined） */
 export interface ArchiveOptions {
@@ -576,17 +576,15 @@ export interface CalendarAPI {
 
 // ★G-32 B3 六期：page-lifecycle / bluetooth / nfc / camera / microphone / keyboard
 
-/** C24 页面生命周期句柄（wx Page 钩子 / web load+visibilitychange） */
-export interface PageLifecycle {
-  /** 页面当前阶段（LOAD 加载 / SHOW 显示 / HIDE 隐藏） */
-  phase: 'IDLE' | 'LOAD' | 'SHOW' | 'HIDE'
-  /** 订阅「页面加载」（返回取消） */
-  onLoad(cb: () => void): () => void
-  /** 订阅「页面显示」（返回取消） */
-  onShow(cb: () => void): () => void
-  /** 订阅「页面隐藏」（返回取消） */
-  onHide(cb: () => void): () => void
-}
+/**
+ * ★★C24 页面生命周期句柄（**扩展为完整事件面**——2026-09-30）。
+ *
+ * 【类型收口】定义在 `capability-app.ts` 的 `PageLifecycleHandle`，此处仅别名导出。
+ * 覆盖 15 个页面事件（`PAGE_EVENTS`）：阶段事件（load/show/ready/hide/unload）+
+ * 页面事件（route-done/pull-down-refresh/reach-bottom/page-scroll/resize/tab-item-tap）+
+ * 决策型（share-app-message/share-timeline/add-to-favorites/save-exit-state——单处理器）。
+ */
+export type PageLifecycle = PageLifecycleHandle
 
 /** C1/C2 媒体访问（camera/microphone——wx authorize / web getUserMedia） */
 export interface MediaAccess {
@@ -6421,6 +6419,14 @@ let idleSeq = 0
 function webBridge(g: typeof globalThis & { navigator?: Navigator & { getBattery?: () => Promise<unknown> } }): CapabilityBridge {
   const nav = g.navigator as (Navigator & { getBattery?: () => Promise<unknown> }) | undefined
   const sc = (g as { screen?: Screen }).screen
+  // ★★Web 端生命周期能力（2026-09-30 改走共享总线——与 MP/App 同构）：
+  //   装 Web 事件源（visibilitychange/resize/scroll/beforeunload）+ 取扩展句柄。
+  //   三端同一总线 ⇒ 事件面不因端而异（此前 Web 手写 3 事件、与扩展面分叉）。
+  const webLifecycleCaps = (() => {
+    const bus = getHostLifecycleBus()
+    installWebEventSources(bus, g as never)
+    return createAppLifecycleCapabilities(bus, CapError)
+  })()
   return {
     getLocation: () =>
       new Promise((resolve, reject) => {
@@ -6756,102 +6762,11 @@ function webBridge(g: typeof globalThis & { navigator?: Navigator & { getBattery
     // ★能力颗粒度对齐：web 设备订阅消息/客服会话（无标准对等 → 诚实 Err）
     subscribeDeviceMessage: () => Promise.reject(new CapError('notification.unsupported', 'Web 端无设备订阅消息对等')),
     openCustomerService: () => Promise.reject(new CapError('notification.unsupported', 'Web 端无客服会话对等')),
-    getAppLifecycle: () => {
-      let phase: 'PENDING' | 'LAUNCH' | 'SHOW' | 'HIDE' = 'PENDING'
-      const launchCbs: Array<() => void> = []
-      const showCbs: Array<() => void> = []
-      const hideCbs: Array<() => void> = []
-      const gany = g as {
-        addEventListener?: (t: string, cb: (e?: unknown) => void) => void
-        removeEventListener?: (t: string, cb: (e?: unknown) => void) => void
-        document?: { visibilityState?: string }
-      }
-      const onVischange = () => {
-        const hidden = gany.document ? gany.document.visibilityState === 'hidden' : false
-        phase = hidden ? 'HIDE' : 'SHOW'
-        if (hidden) hideCbs.forEach((cb) => cb())
-        else showCbs.forEach((cb) => cb())
-      }
-      const onLoad = () => {
-        phase = 'SHOW'
-        launchCbs.forEach((cb) => cb())
-        showCbs.forEach((cb) => cb())
-      }
-      if (typeof gany.addEventListener === 'function') {
-        gany.addEventListener('visibilitychange', onVischange)
-        gany.addEventListener('load', onLoad)
-      }
-      return {
-        phase,
-        onLaunch: (cb) => {
-          launchCbs.push(cb)
-          return () => {
-            const i = launchCbs.indexOf(cb)
-            if (i >= 0) launchCbs.splice(i, 1)
-          }
-        },
-        onShow: (cb) => {
-          showCbs.push(cb)
-          return () => {
-            const i = showCbs.indexOf(cb)
-            if (i >= 0) showCbs.splice(i, 1)
-          }
-        },
-        onHide: (cb) => {
-          hideCbs.push(cb)
-          return () => {
-            const i = hideCbs.indexOf(cb)
-            if (i >= 0) hideCbs.splice(i, 1)
-          }
-        },
-      }
-    },
+    // ★★2026-09-30 改走共享总线（与 MP/App 同构——见 installWebEventSources 注释）：
+    //   此前 Web 桥**手写**一套自己的订阅（只有 3 个事件），与 MP/App 的扩展事件面分叉。
+    getAppLifecycle: () => webLifecycleCaps.getAppLifecycle(),
     // ★G-32 B3 六期：web 实现（page-lifecycle=visibilitychange / bluetooth·nfc=特性探测 / camera·mic=getUserMedia / keyboard=visualViewport 启发式）
-    getPageLifecycle: () => {
-      let phase: 'IDLE' | 'LOAD' | 'SHOW' | 'HIDE' = 'IDLE'
-      const loadCbs: Array<() => void> = []
-      const showCbs: Array<() => void> = []
-      const hideCbs: Array<() => void> = []
-      const gany = g as {
-        addEventListener?: (t: string, cb: (e?: unknown) => void) => void
-        removeEventListener?: (t: string, cb: (e?: unknown) => void) => void
-        document?: { visibilityState?: string }
-      }
-      const onVis = () => {
-        const hidden = gany.document ? gany.document.visibilityState === 'hidden' : false
-        phase = hidden ? 'HIDE' : 'SHOW'
-        if (hidden) hideCbs.forEach((cb) => cb())
-        else showCbs.forEach((cb) => cb())
-      }
-      const onLoad = () => {
-        phase = 'SHOW'
-        loadCbs.forEach((cb) => cb())
-        showCbs.forEach((cb) => cb())
-      }
-      if (typeof gany.addEventListener === 'function') {
-        gany.addEventListener('visibilitychange', onVis)
-        gany.addEventListener('load', onLoad)
-      }
-      const unsub = (arr: Array<() => void>, cb: () => void) => {
-        const i = arr.indexOf(cb)
-        if (i >= 0) arr.splice(i, 1)
-      }
-      return {
-        phase,
-        onLoad: (cb) => {
-          loadCbs.push(cb)
-          return () => unsub(loadCbs, cb)
-        },
-        onShow: (cb) => {
-          showCbs.push(cb)
-          return () => unsub(showCbs, cb)
-        },
-        onHide: (cb) => {
-          hideCbs.push(cb)
-          return () => unsub(hideCbs, cb)
-        },
-      }
-    },
+    getPageLifecycle: () => webLifecycleCaps.getPageLifecycle(),
     getBluetooth: async () => {
       // Web Bluetooth：仅特性探测（真实请求需用户手势 + 权限）——诚实降级
       const nav = g.navigator as { bluetooth?: unknown } | undefined

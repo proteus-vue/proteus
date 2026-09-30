@@ -24,17 +24,23 @@ useAppLifecycle(): AppLifecycle
 
 | 方法 | 签名 | 说明 |
 |---|---|---|
-| [`onLaunch`](#onlaunch) | `onLaunch(cb: () => void): () => void` | 订阅「应用启动」（返回取消） |
-| [`onShow`](#onshow) | `onShow(cb: () => void): () => void` | 订阅「应用进入前台」（返回取消） |
-| [`onHide`](#onhide) | `onHide(cb: () => void): () => void` | 订阅「应用退到后台」（返回取消） |
+| [`onLaunch`](#onlaunch) | `onLaunch(cb: () => void): () => void` | — |
+| [`onShow`](#onshow) | `onShow(cb: () => void): () => void` | — |
+| [`onHide`](#onhide) | `onHide(cb: () => void): () => void` | — |
+| [`onError`](#onerror) | `onError(cb: (e: { error: string }) => void): () => void` | 未捕获异常（MP `App.onError` / Web window.onerror / App 壳） |
+| [`onUnhandledRejection`](#onunhandledrejection) | `onUnhandledRejection(cb: (e: { reason: string }) => void): () => void` | 未处理的 Promise rejection（MP `App.onUnhandledRejection` / Web unhandledrejection） |
+| [`onMemoryWarning`](#onmemorywarning) | `onMemoryWarning(cb: (e: { level: number }) => void): () => void` | 内存警告（MP `App.onMemoryWarning` / ★App 端壳：iOS didReceiveMemoryWarning / Android onTrimMemory） |
+| [`onThemeChange`](#onthemechange) | `onThemeChange(cb: (e: { theme: 'dark' \| 'light' }) => void): () => void` | 系统主题变化（MP `App.onThemeChange` / Web matchMedia / App 壳） |
+| [`onWindowResize`](#onwindowresize) | `onWindowResize(cb: (e: { windowWidth: number; windowHeight: number }) => void): () => void` | 窗口尺寸变化（MP `wx.onWindowResize` / Web resize / App 旋转分屏） |
+| [`onPageNotFound`](#onpagenotfound) | `onPageNotFound(cb: (e: { path: string }) => void): () => void` | 页面未找到（MP `App.onPageNotFound` / Web 路由未命中） |
+| [`onAudioInterruptionBegin`](#onaudiointerruptionbegin) | `onAudioInterruptionBegin(cb: () => void): () => void` | 音频中断开始（来电等——MP `App.onAudioInterruptionBegin` / App 壳） |
+| [`onAudioInterruptionEnd`](#onaudiointerruptionend) | `onAudioInterruptionEnd(cb: () => void): () => void` | 音频中断结束 |
 
 ### `onLaunch`
 
 ```ts
 onLaunch(cb: () => void): () => void
 ```
-
-**说明**：订阅「应用启动」（返回取消）
 
 | 参数 | 类型 | 必填 | 说明 |
 |---|---|---|---|
@@ -48,8 +54,6 @@ onLaunch(cb: () => void): () => void
 onShow(cb: () => void): () => void
 ```
 
-**说明**：订阅「应用进入前台」（返回取消）
-
 | 参数 | 类型 | 必填 | 说明 |
 |---|---|---|---|
 | `cb` | `() => void` | 是 | 事件 / 结果回调函数 |
@@ -62,7 +66,103 @@ onShow(cb: () => void): () => void
 onHide(cb: () => void): () => void
 ```
 
-**说明**：订阅「应用退到后台」（返回取消）
+| 参数 | 类型 | 必填 | 说明 |
+|---|---|---|---|
+| `cb` | `() => void` | 是 | 事件 / 结果回调函数 |
+
+**返回值**：`() => void`
+
+### `onError`
+
+```ts
+onError(cb: (e: { error: string }) => void): () => void
+```
+
+**说明**：未捕获异常（MP `App.onError` / Web window.onerror / App 壳）
+
+| 参数 | 类型 | 必填 | 说明 |
+|---|---|---|---|
+| `cb` | `(e: { error: string }) => void` | 是 | 事件 / 结果回调函数 |
+
+**返回值**：`() => void`
+
+### `onUnhandledRejection`
+
+```ts
+onUnhandledRejection(cb: (e: { reason: string }) => void): () => void
+```
+
+**说明**：未处理的 Promise rejection（MP `App.onUnhandledRejection` / Web unhandledrejection）
+
+| 参数 | 类型 | 必填 | 说明 |
+|---|---|---|---|
+| `cb` | `(e: { reason: string }) => void` | 是 | 事件 / 结果回调函数 |
+
+**返回值**：`() => void`
+
+### `onMemoryWarning`
+
+```ts
+onMemoryWarning(cb: (e: { level: number }) => void): () => void
+```
+
+**说明**：内存警告（MP `App.onMemoryWarning` / ★App 端壳：iOS didReceiveMemoryWarning / Android onTrimMemory）
+
+| 参数 | 类型 | 必填 | 说明 |
+|---|---|---|---|
+| `cb` | `(e: { level: number }) => void` | 是 | 事件 / 结果回调函数 |
+
+**返回值**：`() => void`
+
+### `onThemeChange`
+
+```ts
+onThemeChange(cb: (e: { theme: 'dark' | 'light' }) => void): () => void
+```
+
+**说明**：系统主题变化（MP `App.onThemeChange` / Web matchMedia / App 壳）
+
+| 参数 | 类型 | 必填 | 说明 |
+|---|---|---|---|
+| `cb` | `(e: { theme: 'dark' \| 'light' }) => void` | 是 | 事件 / 结果回调函数 |
+
+**返回值**：`() => void`
+
+### `onWindowResize`
+
+```ts
+onWindowResize(cb: (e: { windowWidth: number; windowHeight: number }) => void): () => void
+```
+
+**说明**：窗口尺寸变化（MP `wx.onWindowResize` / Web resize / App 旋转分屏）
+
+| 参数 | 类型 | 必填 | 说明 |
+|---|---|---|---|
+| `cb` | `(e: { windowWidth: number; windowHeight: number }) => void` | 是 | 事件 / 结果回调函数 |
+
+**返回值**：`() => void`
+
+### `onPageNotFound`
+
+```ts
+onPageNotFound(cb: (e: { path: string }) => void): () => void
+```
+
+**说明**：页面未找到（MP `App.onPageNotFound` / Web 路由未命中）
+
+| 参数 | 类型 | 必填 | 说明 |
+|---|---|---|---|
+| `cb` | `(e: { path: string }) => void` | 是 | 事件 / 结果回调函数 |
+
+**返回值**：`() => void`
+
+### `onAudioInterruptionBegin`
+
+```ts
+onAudioInterruptionBegin(cb: () => void): () => void
+```
+
+**说明**：音频中断开始（来电等——MP `App.onAudioInterruptionBegin` / App 壳）
 
 | 参数 | 类型 | 必填 | 说明 |
 |---|---|---|---|
@@ -70,11 +170,19 @@ onHide(cb: () => void): () => void
 
 **返回值**：`() => void`
 
-## 属性
+### `onAudioInterruptionEnd`
 
-| 属性 | 类型 | 必填 | 说明 |
+```ts
+onAudioInterruptionEnd(cb: () => void): () => void
+```
+
+**说明**：音频中断结束
+
+| 参数 | 类型 | 必填 | 说明 |
 |---|---|---|---|
-| `phase` | `'PENDING' \| 'LAUNCH' \| 'SHOW' \| 'HIDE'` | 是 | 当前阶段：launch/show/hide |
+| `cb` | `() => void` | 是 | 事件 / 结果回调函数 |
+
+**返回值**：`() => void`
 
 ## 错误码
 
