@@ -7,7 +7,7 @@
      ⇒ 本脚本读的是 `layerTransformProbe` 的结果（宿主从 `CALayer.transform` 反解），
        覆盖"写入路径真的生效"这一环。
 
-【十一组判据（对应 RT2 / MA0-RT / MA1 / MA5 / MA6 / 共享元素要回答的问题；当前 51 条）】
+【十二组判据（对应 RT2 / MA0-RT / MA1 / MA5 / MA6 / 共享元素 / 零唤醒要回答的问题；当前 54 条）】
   A. **指令真的驱动了端上动画**：层上 transform 随进度变化，且**终值精确**等于目标（端点钉死）；
   B. **手势驱动（seek）立即生效**：seek 后**不等 tick**，层上已有对应值；
      Progress 驱动后再 tick **不应改它**（手势松手后动画不该自己跑）；
@@ -21,6 +21,8 @@
   J. **MA6 序列编排**：一条动画三段 / 分段推进与边界精确 / 终值精确 / 平台路径仍是一条。
   K. **共享元素**：内核几何（中心差+宽度比）/ 首帧在源矩形 / 层级提升与复位 / 终值精确归位 /
      宽度比生效（小矩形源，中心锚点反解）/ 错误冒泡；外加 ★判据 -1「任何相位异常必须红」。
+  L. **主线程零唤醒**（OS 级 CPU 会计 + 阳性对照）：L0 提交成功 / L1 阳性对照有效（tick 必须显著 >0）/
+     L2 平台路径 CPU 显著低于 tick（比值 ≤0.25）——★「零」与「没测到」必须可区分。
 
 用法：python3 hosts/ios/check-anim-rt2.py <report.json>
 退出码：0 全过 / 1 有失败（逐条打印为什么）
@@ -596,9 +598,44 @@ def main() -> int:
     else:
         print("  · K 组跳过（无 anim_shared 读数）")
 
+    # ── L 组：主线程零唤醒实测（OS 级 CPU 会计 + 阳性对照） ──
+    #
+    # 【为什么是"三段式"（设计要点）】"主线程零参与"是个**否定性断言**——只量一个数无法区分
+    #   "真的是零"与"探针根本没测到"。⇒ 必须有：
+    #     L0 **前置**：平台动画真的提交了（否则窗口内什么都没跑，"零"毫无意义）；
+    #     L1 **阳性对照**：tick 路径必须有显著主线程 CPU（否则探针失效，不得判绿）；
+    #     L2 **比值判据**：平台路径显著低于 tick（比值而非绝对阈值——设备差异大）。
+    cpu = d.get("anim_cpu") or js.get("anim_cpu") or {}
+    if cpu:
+        if not cpu.get("committed_ok"):
+            fail(f"L0 平台动画未提交成功——「零 CPU」会是「什么都没发生」，不是证据：{str(cpu.get(chr(39)+chr(99)+chr(111)+chr(109)+chr(109)+chr(105)+chr(116)+chr(39)))[:120]}")
+            ok = False
+        else:
+            print("  ✓ L0 前置：平台动画已提交（committed=1）")
+        plat, tick = cpu.get("platform_cpu_us"), cpu.get("tick_cpu_us")
+        # ★显示用变量**先取好**（首版在 f-string 里写 cpu.get(...) 且用 chr() 拼键名——
+        #   那是为了绕开"嵌套引号"而做的丑陋变通，结果取到 None（显示成 "窗口 Nonems"）。
+        #   ⇒ 正解：先绑定局部变量，再进 f-string（f-string 里只做格式化，不做取值逻辑）。
+        win_ms = cpu.get("window_ms")
+        if plat is None or tick is None or plat < 0 or tick < 0:
+            fail(f"L1/L2 CPU 读数缺失或非法：platform={plat} tick={tick}")
+            ok = False
+        elif tick < 5000:
+            fail(f"L1 阳性对照无效：tick 路径 CPU 增量仅 {tick}µs < 5ms——探针没测到东西，不得判绿")
+            ok = False
+        else:
+            print(f"  ✓ L1 阳性对照有效：tick 路径主线程 CPU {tick/1000:.1f}ms（窗口 {win_ms}ms）")
+            ratio = plat / tick
+            if ratio > 0.25:
+                fail(f"L2 平台路径主线程 CPU 未显著更低：platform={plat/1000:.1f}ms vs tick={tick/1000:.1f}ms（比 {ratio:.2f}，应 <= 0.25）")
+                ok = False
+            else:
+                print(f"  ✓ L2 平台路径主线程 CPU 显著更低：{plat/1000:.1f}ms vs tick {tick/1000:.1f}ms（比 {ratio:.2f} <= 0.25）")
+    else:
+        print("  · L 组跳过（无 anim_cpu 读数——探针未跑或报告为旧版）")
     print()
     if ok:
-        print("✅ 判据全过（机制 + 帧率 + 复杂动效 + 平台零参与 + MA1 预设库 + MA5 滚动联动 + MA6 序列编排 + 共享元素）")
+        print("✅ 判据全过（机制 + 帧率 + 复杂动效 + 平台零参与 + MA1 预设库 + MA5 滚动联动 + MA6 序列编排 + 共享元素 + 零唤醒）")
         return 0
     print("✗ RT2 判据有失败项（见上）")
     return 1

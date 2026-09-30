@@ -438,8 +438,25 @@ iOS 同理：动 `transform` 是 GPU 加速，动 `frame` 触发布局重算。
    （单测 `spring_commit_window_covers_natural_settle` 守住）。
 
 **验收（iOS 侧已达）**：提交后主线程不再写值 ⇒ 由 render server 自主插值。
-★**诚实边界**：`Instruments` 级的"主线程零唤醒"实测**未做**（需真机 Instruments 会话，
-属跨端性能验证批次）；本轮可判定证据 = **presentationLayer 探针 + 提交路径判据（G 组 5 条）**。
+★**2026-09-30 补：主线程零唤醒已实测**（改用 **OS 级 CPU 会计**——见下）。
+
+**★★为什么不用 Instruments / xctrace（取证链条，如实记录）**：本机 Xcode 26.5 的 `xctrace` **无法录制本设备**——
+它是分层可用的：`ioreg` 显示 iPhone 在 USB 上 ✓ · `xcdevice list` 报 available ✓ · Mac 本地录音正常（产出 trace）✓ ·
+设备侧 `devicectl` 报 booted / DDI available / dev mode enabled / unlocked ✓ —— 唯独 `xctrace record --device` 卡在
+`Waiting for device to boot` 超时。→ **DeviceSupport 设备支持包只有 26.3，而设备已升 26.7**
+（补它要下 GB 级支持包，属环境准备而非代码问题）。
+
+⇒ 改用 **OS 级 CPU 会计**（`thread_info(THREAD_BASIC_INFO)` 两次采样之差 = 窗口内主线程真实 CPU），
+这正是"零唤醒"要证的东西，且**可机器判定**（比人看波形更可回归）。**配阳性对照**是关键：
+
+| 判据 | 读数（iPhone 12 · 600ms 窗口） |
+|---|---|
+| L0 前置：平台动画已提交 | committed=1（否则"零 CPU"是"什么都没发生"） |
+| L1 阳性对照：tick 路径必须有显著开销 | **17.4ms**（< 5ms 即判"探针没测到"，不得判绿） |
+| L2 比值：平台路径显著更低 | **1.0ms** vs 17.4ms ⇒ **比 0.06 ≤ 0.25** ✓ |
+
+★L2 的 1.0ms 是**提交本身**与首帧开销——提交一次后主线程确实不再逐帧参与
+（对照 tick 路径 17.4ms = 600ms 里每帧写层）。
 
 ### MA1 · 声明式表面 + 预设 —— ◐ **主体已落地并真机验证（2026-09-30）**
 
