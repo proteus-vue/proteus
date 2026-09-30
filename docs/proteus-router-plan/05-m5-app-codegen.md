@@ -2,19 +2,79 @@
 
 > **里程碑**：M5（B5）
 > **输入依赖**：`02-m2-route-tree.md`（RouteNode[]）
-> **产出**：`packages/router/src/codegen/app.ts`、`createAppRouter()`、转场 native 映射
+> **产出**：`packages/router/src/codegen/app.ts`、`packages/router/src/app-stack.ts`（虚拟栈）、转场 native 映射
 > **LLM 批次**：B5
+>
+> **★★2026-09-30 路线修正（用户决策）**：「路由的话吸取小程序和 uni-app 的路由栈数量限制的经验教训，
+> 路由实现的话也必须是高性能的，可以参考 Flutter」
+> ⇒ 本文档下方 §2/§3 原有的「**用系统导航栈**（`UINavigationController.pushViewController` /
+> `FragmentTransaction` / 每屏一个 ViewController/Activity）」路线**已废弃**——那正是小程序
+> 「10 层限制」路线的翻版（每屏一个原生容器 ⇒ 内存随层数线性增长 ⇒ 平台只能设层数上限）。
+> **新路线 = Flutter 式虚拟栈**（已实现）：屏 = 当前树的子树；栈是纯逻辑对象；可见性切换 =
+> `display:none`（内核已支持，零渲染成本）；内存由**预算冻结**治理而非层数上限。
+> 实现与判据：`packages/router/src/app-stack.ts` + `tests/app-stack.test.ts`（32 条，含 100 层深栈）。
+> 下方 §2-§6 保留为**历史设计记录**（原生桥形态仍有参考价值：屏注册表/转场映射/参数传递均沿用），
+> 但「栈的物理实现」以本文档 §0 与 app-stack.ts 为准。
+
+---
+
+## 0. ★虚拟栈（最终路线，2026-09-30 实现）
+
+### 0.1 两条路线的对照（为什么必须走虚拟栈）
+
+| 维度 | 系统导航栈（初稿路线） | **虚拟栈（已实现）** |
+|---|---|---|
+| 屏的物理形态 | 每屏一个原生容器（VC / Activity/Fragment） | **当前树的一棵子树**（同一棵树里 `display:none` 切换） |
+| 层数上限 | 有（原生容器内存线性增长；小程序 10 层、uni-app 同类） | **无**（100 层 push 实测全过——`tests/app-stack.test.ts` ①） |
+| 超限行为 | `navigateTo` 失败 ⇒ 业务被迫 `redirectTo` 降级（**返回栈断裂**） | **无失败点**；内存超预算时冻结最旧屏（栈位保留，返回=重建） |
+| 退场屏状态 | 系统销毁（热重载/内存压力下随时丢） | **树保留**（返程保状态；冻结是显式策略而非被动淘汰） |
+| 转场 | 系统转场 API（能力受平台限制） | **Morpheus 自驱动**（内核曲线/FLIP；平台零参与路径） |
+| 换宿主成本 | 每端重写栈桥 | 命令流消费（`ScreenCommand`）——换宿主只改执行器 |
+
+### 0.2 核心设计
+
+```
+屏 = 树内子树（load_tree 语义：屏的根子树；切屏 = display 切换）
+栈 = 纯逻辑对象（无平台调用；命令流交给执行器）
+```
+
+- **push**：新屏子树 mount → `enter`（Morpheus 转场）；旧顶 `exit`（转场完 → `display:none`，**树保留**）。
+- **pop**：栈顶子树 `unmount`（真销毁）；新顶 `enter`（若为 frozen 则先 mount(rebuild=true)）。
+- **内存有界**：`AppStackPolicy.nodeBudget`（缺省 `null` = 不冻结，全栈保状态）。
+  超预算 → 从栈底起冻结最旧 `hidden` 屏（`keepWindow` 默认 3 层保护栈顶——**冻结永不触及可见屏**）。
+  冻结 = 树销毁 + 栈位保留 + `needsRebuild` 标记；返回 = `mount(rebuild=true)`（重建，毫秒级）。
+
+### 0.3 与既有设施的关系
+
+- **转场**：命令流只携带 `RouteTransition`（声明），执行器经 `packages/animation` 的
+  `appTransition()`（`APP_TRANSITION_MAP`）换成 Morpheus 规格——router 包**零动画依赖**（方向纪律）。
+- **生命周期**：执行器建/销毁屏子树时对接 `render-backend` 的容器 SPI（五原子销毁 / ResourcePool），
+  与 `docs/proteus-host-container-plan/` 的页面模型对齐（`page-lifecycle.md` 的 keep-alive 配额
+  正是「预算冻结」的同族思路，本层把它的「深度限制 LRU」替换为「无深度限制 + 预算冻结」）。
+- **Host ABI**：屏子树的加载/卸载最终经 `proteus_load_tree` / ops 流落地（HA0-HA5 已落地）。
+
+### 0.4 执行器契约（`ScreenCommand`）
+
+| op | 载荷 | 执行器动作 |
+|---|---|---|
+| `mount` | `screenId/name/path/params/rebuild` | 建屏子树（`rebuild=true` 时是冻结后重建）；完成后调 `markRebuilt` |
+| `enter` | `screenId/transition?` | `display:flex` + 进场转场（Morpheus 规格来自 `appTransition(transition)`） |
+| `exit` | `screenId/transition?` | 退场转场（播放完由执行器置 `display:none`；树保留） |
+| `unmount` | `screenId/reason: 'pop'\|'reset'\|'freeze'` | 销毁子树（对接五原子销毁） |
+
+惯序：`push` = exit(旧顶) → mount(新) → enter(新)；`pop` = exit(旧顶) → unmount(旧顶) → enter(新顶)。
+★退场方向（pop 的反向转场）由执行器/Morpheus 推导——**动画知识不在 router**。
 
 ---
 
 ## 1. 目标
 
-App 端走 **Vue Custom Renderer + 原生桥**（前面架构决策），页面栈语义与小程序不同：
+App 端走 **Vue Custom Renderer + 自绘树**（架构决策），页面栈语义（**虚拟栈，见 §0**）：
 - Web：SPA 单根，`<router-view>` 切换组件
 - mp：MPA，每页独立 `Page()`
-- **App：栈式导航（Stack Navigator）**——`push` 压栈、`pop` 出栈，每屏对应原生 ViewController/Activity
+- **App：虚拟栈式导航**——`push` 压栈、`pop` 出栈；**每个屏是当前树的一棵子树**（不是原生容器）
 
-把 `RouteNode[]` 编译为 **栈式导航配置** + 生成各屏的原生组件挂载代码，转场映射到原生动画。
+把 `RouteNode[]` 编译为 **屏注册表**（`screens`）+ 嵌套栈结构，转场映射到 Morpheus 声明。
 
 ## 2. 导航模型抽象
 
@@ -71,82 +131,91 @@ export const APP_TRANSITION_MAP = {
 >   · **三端枚举已交叉核对**（测试里同时加载 router 的 Web/MP 两张表比对键集，`tests/animation-presets.test.ts`）；
 >   · ★**与上表的差别**：上表映射到"平台原生转场标识"（presentModal / pageSheet），
 >     适用于"用系统导航栈 + 系统转场"；Morpheus 是**自己驱动动画**（内核曲线/FLIP 那套）⇒
->     返回的是**声明规格**而非标识串。两条路都合法，取决于 App 侧是否用系统导航栈。
->   · ★**仍未做**：路由栈本身（push/pop/多层栈 / `navigation.generated.ts` / `createAppRouter()`）——
->     本表是"就绪的第三腿"，等 M5 的路由栈来调用。
+>     返回的是**声明规格**而非标识串。★且虚拟栈路线（§0）**不用系统导航栈** ⇒ 采用 Morpheus 规格路线。
+>
+> **★2026-09-30 更新（第二处）**：路由栈本身已落地（§0 虚拟栈 + 下方 §4/§5 的实现注记）——
+> `generateAppScreens`（codegen/app.ts）+ `createAppStack`（app-stack.ts）已实现并有 32 条单测；
+> `appTransition` 从"就绪的第三腿"变为**已被命令流消费**（`ScreenCommand.enter/exit` 携带枚举）。
 
 ### 3.3 嵌套 → 嵌套栈
 
-App 支持原生**嵌套导航器**（stack-in-stack，如 tab 里的每个 tab 各有一个栈）：
+App 支持嵌套导航器（stack-in-stack，如 tab 里的每个 tab 各有一个栈）：
 ```ts
-// RouteNode.children → NavigationStack
+// RouteNode.children → tabStacks 聚合产物（codegen/app.ts）
 {
-  tabBar: [
-    { name: 'home', stack: [home, homeProfile] },
-    { name: 'user', stack: [user, userSettings] },
-  ]
+  home: ['home', 'home-profile'],
+  user: ['user', 'user-settings'],
 }
 ```
-`children` 在 App 端**有意义**（不同于小程序平铺），编译为嵌套栈结构。
+`children` 在 App 端**有意义**（不同于小程序平铺），由 `tabStacks()` 编译为嵌套栈结构
+（★实测边界：虚拟栈下"嵌套栈"是**逻辑分组**——各 tab 的栈深/历史独立，但共享同一棵树的可见性机制，
+不产生额外的原生容器）。
 
-## 4. codegen 实现 `app.ts`
+## 4. codegen 实现 `app.ts`（★已实现）
 
 ```ts
-export function generateAppNavigation(nodes: RouteNode[]): string {
-  const screens = nodes.map(n => `
-  ${n.name ?? pathToName(n.path)}: {
-    component: () => import(${JSON.stringify(n.componentPath)}),
-    transition: ${JSON.stringify(TRANSITION_MAP[n.meta.transition] ?? 'slide')},
-    children: [${n.children.map(c => c.name!).join(', ')}]
-  }`).join(',\n  ')
-
-  return `
-import { registerScreens } from '@proteus-vue/runtime/app'
-export const screens = { ${screens} }
-registerScreens(screens)
-`
-}
+// packages/router/src/codegen/app.ts（实际产物形态）
+export function generateAppScreens(nodes: RouteNode[]): string
+// 产物 navigation.generated.ts：
+//   export const screens = { home: { name, path, component: () => import(...), transition, children, isTab } }
+//   export const tabStacks = { home: ['home', 'homeProfile'], ... }
 ```
 
-产物 `navigation.generated.ts` 在 App 入口调用：
+App 入口用法（★实际形态）：
 ```ts
 // main.app.ts
-import { createAppRouter } from '@proteus-vue/runtime'
+import { createAppStack } from '@proteus-vue/router'
 import { screens } from '../.proteus/navigation.generated'
 
-const router = createAppRouter({ screens, root: 'home' })
-router.push('user')
+const stack = createAppStack({ screens, policy: { nodeBudget: 3000 } }) // 预算可选
+stack.push('home')
+stack.push('user', { id: 1 }, { transition: 'slideUp' })
+// 执行器（宿主侧）：每帧 drainCommands() → 建/销毁子树 + Morpheus 转场
 ```
 
-## 5. 原生桥约定（Renderer 层）
+★与初稿的差别：`createAppRouter()` 更名为 **`createAppStack()`**（它是**栈核心**，不是"另一个
+三端 Router 实例"——三端 Router API 由 `createRouter`（index.ts）统一，App 端执行器把它的
+导航调用转发到 `createAppStack`）。这样避免出现"两套 Router API"。
 
-`proteus/runtime/app` 提供：
+## 5. 执行器（宿主侧）约定（★替代原 NativeBridge）
+
 ```ts
-interface NativeBridge {
-  pushScreen(name: string, params: any, anim: Transition): void
-  popScreen(anim: Transition): void
-  replaceScreen(name: string): void
+interface ScreenExecutor {
+  mount(cmd: { screenId, name, path, params, rebuild }): Promise<void>  // 建屏子树；完成后 stack.markRebuilt(screenId)
+  enter(cmd: { screenId, transition? }): void   // display:flex + Morpheus 转场（appTransition(transition)）
+  exit(cmd: { screenId, transition? }): void    // Morpheus 退场；播放完置 display:none（树保留）
+  unmount(cmd: { screenId, reason }): void      // 销毁子树（五原子销毁）
 }
 ```
-- iOS 侧：Swift 实现 `pushScreen` → `UINavigationController.pushViewController`
-- Android 侧：Kotlin 实现 → `FragmentTransaction` / `Activity.startActivity`
-- **桥协议是 JSON-RPC 风格**（对齐前面架构决策），同步调用用 JSI（推荐，零序列化开销）
+
+- 执行器**不写平台分支**：子树操作最终经 Host ABI（`proteus_load_tree` / ops 流），
+  转场经内核动画（平台零参与路径）——换宿主只换执行器的树操作实现。
+- 参数传递：`push('user', { id: 1 })` → 命令流 `mount.params` → 新屏读（栈帧即数据源，
+  不依赖全局单例；响应式对齐 Pinia store 注入由 runtime 层提供）。
 
 ## 6. 与 Custom Renderer 的关系
 
 - Router 只管**栈操作 + 屏注册**，不管组件渲染（Renderer 职责）
-- 屏内的 Vue 组件由 Renderer 渲染为原生 widget；Router 只负责"哪个屏在当前栈顶"
-- 参数传递：`push('user', { id: 1 })` → 序列化存栈项 → 新屏 `useRouteParams()` 读（**响应式，对齐 Pinia store 注入**）
+- 屏内的 Vue 组件由 Renderer 渲染为**当前树的一棵子树**；Router 只负责"哪棵子树在栈顶可见"
+- ★**屏与树的关系**：挂载新屏 = 把该屏子树加到树上（`display` 由栈状态控制）；
+  退场屏保留在树上（`display:none`）⇒ 返程零重建、状态保留。
 
-## 7. 测试
+## 7. 测试（★已实现，`tests/app-stack.test.ts` 32 条）
 
-- 快照：`navigation.generated.ts` 稳定
-- 栈操作单测（mock NativeBridge）：push/pop/replace 调用正确 anim
-- 嵌套栈：children → 嵌套结构正确
-- 转场映射：每个 transition 枚举有 iOS/Android 对应
+- ① **无层数上限**：100 层 push/pop 全成功；popToRoot 一条命令（对照小程序第 11 层失败）
+- ② **内存有界**：超预算冻结最旧 hidden 屏 + keepWindow 保护栈顶 + 冻结永不触及可见屏 +
+  返回冻结屏 = `mount(rebuild=true)` + `overBudget` 可观测
+- ③ **退场屏树保留**：push 不产生 unmount；exit 携带新屏声明的转场
+- ④ **栈语义**：push/pop/replace/popTo（找不到抛错）/popToRoot/reset(tab)/pop 保底不弹空
+- ⑤ **声明式 navigate**：公共前缀 diff（含 params 匹配）+ 同栈不重放 + 未注册屏抛错且不部分执行 +
+  与 `computeRoutePatch/applyRoutePatch` 结果一致（跨端同源模型）
+- ⑥ **命令流**：mount/enter/exit/unmount 配对与顺序 + drain 清空 + params 传递 + 事件流可观测
+- ⑦ **codegen**：字段提取/path 推导/budgetNodes/flatten/tabStacks/产物可执行（eval）且可直接喂栈
+- 转场映射：三端枚举交叉核对在 `tests/animation-presets.test.ts`（含 `APP_TRANSITION_MAP` 穷尽性）
 
 ---
 
-## LLM 执行提示（B5）
+## LLM 执行提示（B5）★已更新
 
-> 读 `00-overview.md` + `02-m2-route-tree.md` + 本文件。先实现 `generateAppNavigation` + `createAppRouter`（**mock NativeBridge**），跑通栈操作单测；原生侧（Swift/Kotlin）实现放最后，不影响 TS 逻辑验证。
+> 读 `00-overview.md` + `02-m2-route-tree.md` + 本文件 §0。栈核心（app-stack.ts）与 codegen（app.ts）
+> **已实现**——后续工作只剩**宿主执行器**（真实建/销毁屏子树 + Morpheus 转场接线）与真机验证装置。

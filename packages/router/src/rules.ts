@@ -191,6 +191,28 @@ const ROUTE_RULES: RouteRule[] = [
     source: 'packages/plugin-vite/src/gen-routes.ts → resolveConfigMeta',
     decision: '#113',
   },
+  {
+    id: 'route/app-screen-codegen',
+    title: 'App 屏注册表 codegen（M5：RouteNode[] → screens）',
+    description: 'RouteNode[] → 屏注册表源码（navigation.generated.ts 形态）：name/path/component 工厂/transition/children/isTab/budgetNodes；tab 根附 tabStacks 聚合（tab 里每个 tab 各有一个逻辑栈）',
+    why: 'App 端与 Web/MP 并列的第三条 codegen 腿（同一份 scan/tree 产物）；转场枚举**原样携带**（App 端不报平台标识串，由 Morpheus/appTransition 换成声明规格——router 包零动画依赖）',
+    when: '构建 App 端产物（gen-routes 的 app 平台目标）或测试直接调用',
+    example: { before: 'RouteNode{ path: "/home", meta: { transition: "slideUp", isTab: true } }', after: 'screens.home = { path: "/home", component: () => import(...), transition: "slideUp", isTab: true } + tabStacks.home = [...]' },
+    verify: 'tests/app-stack.test.ts ⑦（含产物 eval 可执行 + 直接喂 createAppStack 咬合）',
+    source: 'packages/router/src/codegen/app.ts → generateAppScreens / toScreenEntry / tabStacks',
+    decision: 'M5（05-m5-app-codegen §0）',
+  },
+  {
+    id: 'route/app-virtual-stack',
+    title: 'App 虚拟路由栈（无层数上限 + 预算冻结）',
+    description: '屏 = 树内子树；栈是纯逻辑对象（push/pop/replace/popTo/popToRoot/reset(tab)/声明式 navigate）；内存由 nodeBudget 预算冻结治理（超预算冻结最旧 hidden 屏、keepWindow 保护栈顶、可见屏永不冻结）；输出 ScreenCommand 命令流交执行器',
+    why: '★吸取小程序/uni-app 栈深限制的教训（用户决策 2026-09-30）：小程序 10 层限制的根因是「每屏一个独立原生容器」（内存线性增长 ⇒ 平台只能设层数上限，第 11 层直接失败）；Flutter 路线相反（Navigator 是纯逻辑栈，不可见层可整体丢弃/保留）⇒ Proteus 走虚拟栈 + display:none 可见性切换，无失败点、参考 Flutter、转场走 Morpheus 平台零参与路径',
+    when: 'App 端导航（push/pop/深链接冷启动栈）',
+    example: { before: 'push 100 层（小程序：第 11 层 navigateTo 失败 → 被迫 redirectTo 返回栈断裂）', after: 'push 100 层全成功；超预算时冻结最旧屏（栈位保留），返回=重建（tests/app-stack.test.ts ①②）' },
+    verify: 'tests/app-stack.test.ts（32 条：100 层深栈/冻结 LRU/树保留/栈语义/navigate diff/命令流）+ NAVIGATION_MAP App 三端 = app-stack.*（tests/router-plus.test.ts）',
+    source: 'packages/router/src/app-stack.ts → createAppStack',
+    decision: 'M5（05-m5-app-codegen §0）',
+  },
 ]
 
 const byId = new Map<string, RouteRule>(ROUTE_RULES.map((r) => [r.id, r]))
