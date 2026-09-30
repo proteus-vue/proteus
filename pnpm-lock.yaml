@@ -862,6 +862,9 @@ importers:
 
   website:
     dependencies:
+      '@proteus-vue/animation':
+        specifier: 0.3.0-beta.22
+        version: link:../packages/animation
       '@proteus-vue/api':
         specifier: 0.3.0-beta.21
         version: link:../packages/api
@@ -895,6 +898,9 @@ importers:
       '@proteus-vue/render-backend':
         specifier: 0.3.0-beta.21
         version: link:../packages/render-backend
+      '@proteus-vue/slot-runtime':
+        specifier: 0.3.0-beta.11
+        version: link:../packages/slot-runtime
       '@proteus-vue/test-ir':
         specifier: 0.3.0-beta.11
         version: link:../packages/test-ir

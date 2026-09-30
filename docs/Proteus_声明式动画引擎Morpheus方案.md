@@ -626,6 +626,28 @@ iOS 同理：动 `transform` 是 GPU 加速，动 `frame` 触发布局重算。
 
 ---
 
+## 13-bis. ★★官网专栏：Morpheus 从"内部引擎"到"产品"（2026-09-30）
+
+用户判断：「**这个也是我们框架的招牌，肯定要打造成正式产品文档的**，这个最好做得专业产品的介绍，
+非常吸睛的、炫酷的那种」。⇒ 本轮做成**两层产品面**：
+
+| 层 | 落点 | 形态 |
+|---|---|---|
+| **旗舰产品页** | `website/src/pages/Animation.vue`（路由 `/animation`，顶栏"动画引擎"） | Hero（一句话定位）· 三个杀手锏卡 · **两个真跑演示** · 13 预设目录（live 读 `ANIM_RULES`）· **真机证据表**（8 项读数逐条标判据）· 诚实边界 · 代码示例 |
+| **正式文档分区** | `website/animation/`（第 9 分区 `/docs/animation/*`，5 页 + EN 镜像） | 总览 / 架构与边界 / 声明面 / 路由转场 / 证据与诚实边界 |
+
+**★两条"零伪造"纪律（本仓铁律在**展示层**的延伸）**：
+1. **演示是真跑**——转场播放器直接播放 `routeTransitionBatches()`（引擎给执行器的同一份指令），
+   曲线求值走 `@proteus-vue/slot-runtime` 的 `animValue`（与 Rust 内核 golden 对拍过的 TS 镜像，
+   容差 1e-5）⇒ 页面上没有第二套曲线数学；
+2. **数字可追溯**——真机证据表每一项都标判据脚本（`check-anim-rt2.py` / `check-platform-anim.py` /
+   `rt0-anim-spike.md` / `check-app-stack.py`），且 `check:stats` 门禁守着全站数字与源码一致。
+
+**验证**：`check-en-drift`（9 分区 298 对）· `check-doc-components`（597 md）· `check:stats` ·
+`check:fluid-wording` · D-2 审计（零 error · 新页 4 处 v-p-fluid、零 @media/零裸平台 API）·
+website 构建通过 · **浏览器真跑验收**（三处交互确认：预设切换 / 方向切换 / 曲线滑杆；
+halfScreen forward `400→0` ↔ back `0→400` 镜像对在页面上可见）。
+
 ## 14. 为什么它是杀手锏
 
 | 维度 | 说明 |

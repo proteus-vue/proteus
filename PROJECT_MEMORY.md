@@ -48,7 +48,39 @@
   只有**可复制代码块**里的引用才真正有害。
 · 破坏性验证：恢复 `p-card` → 红并精确报 `03-fluid-grid.md:31`；还原 → 575 md 全过。
 
-## 当前状态速览（最近一次更新：**2026-09-30（七）· M5 执行器 iOS 腿对齐（同一入口/两壳/同一判据，双端真机全绿）**）★新会话以此为准
+## 当前状态速览（最近一次更新：**2026-09-30（八）· Morpheus 官网专栏落地（旗舰产品页 + 第 9 文档分区）—— 招牌能力产品化**）★新会话以此为准
+### ★★★2026-09-30（八）· Morpheus 官网专栏（用户：「这是招牌，要打造成正式产品文档，专业吸睛」）
+
+**一、用户的两个问题 + 取证结论**
+- 问「Morpheus 是否全部完成落地」⇒ 逐条核对 §10 里程碑：**MA0 / MA0-RT / MA1 / MA2 / MA3 / MA5 / MA6 全部落地**
+  （RT2 真机 40 条判据绿；Android 内核路径 M1–M7 全过），§11 验收表 12 行里 11 行达标；
+  **3 处诚实边界如实保留**（跨页面共享元素几何回传 / 真机手指手势 / 120fps 需 ProMotion）——结论：**可以产品化**。
+- 问「是否需要在官网增加专栏」⇒ 取证：官网此前**只有零散提及**（生命周期页一句 + primitives 分区一条），
+  **没有专属页面**⇒ 做。
+
+**二、落地（两层产品面）**
+| 层 | 落点 | 内容 |
+|---|---|---|
+| **旗舰产品页** | `website/src/pages/Animation.vue`（`/animation` + 顶栏"动画引擎"） | Hero / 三杀手锏 / **转场播放器**（真 `routeTransitionBatches` + 真曲线求值）/ **曲线求值器**（65 点真表 + 滑杆）/ **13 预设 live 目录**（读 `ANIM_RULES`）/ **真机证据表**（8 项，逐条标判据脚本）/ 诚实边界 / 代码示例 / CTA |
+| **正式文档分区** | `website/animation/`（第 9 分区 `/docs/animation/*`） | 总览 · 架构与边界 · 声明面 · 路由转场 · 证据与诚实边界（**5 页 + EN 镜像**） |
+
+**三、★两条"零伪造"纪律在展示层的延伸**
+1. **演示是真跑**：播放器播的就是引擎给执行器的同一份指令；曲线求值走 `@proteus-vue/slot-runtime`
+   的 `animValue`（与 Rust 内核 golden 对拍过的镜像）⇒ 页面上**没有第二套曲线数学**；
+2. **数字可追溯**：证据表每项标可复跑判据；`check:stats` 守全站数字与源码一致。
+
+**四、验证（含浏览器真跑验收）**
+- 门禁：en-drift（**9 分区 298 对**——新分区已纳入）· doc-components（597 md）· check:stats ·
+  fluid-wording · D-2 审计（**零 error**；新页 4 处 v-p-fluid、零 @media、零裸平台 API）· website 构建；
+- **浏览器真跑**（本地 preview + IAB）：预设切换（halfScreen forward `400→0` ↔ back `0→400`
+  **镜像对在页面可见**）· 曲线滑杆（u=0.50 → v=0.8750，与 easeOutCubic 精确一致）· 文档分区侧栏
+  "动画引擎 5" 与分组（总览/原理/使用/边界）出现。
+
+**五、接线清单（新分区的完整落点——供后续分区参考）**：`docs-registry.ts`（glob + buildSection）·
+`router.ts`（`/docs/animation/:slug`）· `DocsPage.vue`（sectionKey）· `i18n.ts`（sectionName 双语 ×2 +
+groupName 双语 ×2 新增四组名）· `check-en-drift.mjs`（SECTIONS 数组）· `website/package.json`
+（依赖 @proteus-vue/animation + slot-runtime）· `App.vue`（顶栏链接 + navText）。
+
 ### ★★★2026-09-30（七）· M5 执行器 iOS 腿对齐（用户：「继续」）
 
 **一、落地（与 Android 腿同构）**

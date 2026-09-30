@@ -17,7 +17,7 @@ import { fileURLToPath } from 'node:url'
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..')
 const WEBSITE = path.join(ROOT, 'website')
 
-/** 八个双语分区：zh 目录 → en 目录（slug 一一对应） */
+/** 九个双语分区：zh 目录 → en 目录（slug 一一对应） */
 const SECTIONS = [
   ['guides', 'guides'],
   ['framework', 'framework'],
@@ -27,6 +27,7 @@ const SECTIONS = [
   ['content/plugins', 'plugins'],
   ['content/reference', 'reference'],
   ['content/primitives', 'primitives'],
+  ['animation', 'animation'],
 ]
 
 /**
@@ -144,7 +145,7 @@ for (const [zhDir, enDir] of SECTIONS) {
 
 // —— 报告 ——
 
-console.log(`[en-drift] 比对 ${pairs} 对文档（8 分区）`)
+console.log(`[en-drift] 比对 ${pairs} 对文档（${SECTIONS.length} 分区）`)
 if (staleWhitelist.length) {
   console.log('[en-drift] ⚠ 白名单回收提示（豁免已无对应漂移）:')
   for (const s of staleWhitelist) console.log(`  - ${s}`)

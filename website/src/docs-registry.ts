@@ -56,6 +56,8 @@ const systemModules = import.meta.glob<{ default: DocsModule }>('../content/syst
 const pluginModules = import.meta.glob<{ default: DocsModule }>('../content/plugins/*.md', { eager: true })
 const referenceModules = import.meta.glob<{ default: DocsModule }>('../content/reference/*.md', { eager: true })
 const primitiveModules = import.meta.glob<{ default: DocsModule }>('../content/primitives/*.md', { eager: true })
+// ★Morpheus 动画引擎（招牌能力的独立分区——产品页 /animation 配一份正式文档）
+const animationModules = import.meta.glob<{ default: DocsModule }>('../animation/*.md', { eager: true })
 // ★#468 英文内容变体（overlay：en/<分区目录>/<slug>.md——试点指南区；缺失变体 → 页面提示回中文）
 const enModules = import.meta.glob<{ default: DocsModule }>('../en/**/*.md', { eager: true })
 /** 分区 base → en 变体目录（试点子集随翻译推进扩列） */
@@ -82,6 +84,7 @@ export const sections: DocSection[] = [
   buildSection('framework', '框架', '/docs/framework', frameworkModules, '总览'),
   buildSection('primitives', '语义原语', '/docs/primitives', primitiveModules, '语义原语'), // ★#460 原语分区：组件/能力的第三张脸——非组件形态家族逐条（desktop 模块由 gen-primitives 生成）
   buildSection('system', '柔性系统', '/docs/system', systemModules, '柔性系统'),
+  buildSection('animation', '动画引擎', '/docs/animation', animationModules, '动画引擎'),
   buildSection('plugins', '插件 API', '/docs/plugin', pluginModules, '插件 API'),
   buildSection('reference', '工具链', '/docs/reference', referenceModules, '工程参考'), // ★#438：参考升级为工具链分区（CLI/规则/兼容参考 + devtools/dev-host/MCP/模块化回归）
 ]
