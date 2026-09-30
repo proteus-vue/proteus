@@ -48,6 +48,41 @@
   只有**可复制代码块**里的引用才真正有害。
 · 破坏性验证：恢复 `p-card` → 红并精确报 `03-fluid-grid.md:31`；还原 → 575 md 全过。
 
+## 当前状态速览（最近一次更新：**2026-09-30 · M5 路由虚拟栈落地（真机 16/16 全绿）—— App 端无层数上限**）★新会话以此为准
+
+### ★★★2026-09-30 · M5 App 路由：**虚拟栈**（吸取小程序/uni-app 栈深限制教训，参考 Flutter）
+
+> 用户原话：「路由的话**吸取小程序和 uni-app 的路由栈数量限制的经验教训**，路由实现的话也必须是高性能的，可以参考 Flutter」
+
+**一、取证（两条外部事实 + 一条本仓现状）**
+- **小程序 10 层限制的根因**：每页 = **独立原生容器**（WebView/Page）⇒ 内存随层数线性增长 ⇒ 平台只能用「层数上限」这个粗粒度手段保护；第 11 层 `navigateTo` **直接失败**，业务被迫 `redirectTo` 降级（**返回栈断裂**）。本仓 `packages/router/src/index.ts` 也留有该降级的对应实现（`stackDepth>=9 → redirectTo`）。
+- **Flutter 的做法（官方文档取证，非推断）**：`ModalRoute.maintainState=false` ⇒ "allow the framework to **entirely discard** the route's widget hierarchy when it is not visible"；`OverlayEntry.opaque` ⇒ "the overlay will **skip building entries below** that entry unless they have maintainState set" ⇒ **没有层数上限，内存按需**。
+- **本仓 M7 文档此前的设计恰恰是反模式**：`MAX_DEPTH.app = 20` + 「栈深度 > 15 → 自动 popToRoot」——正是用户指出的"该吸取的教训"。已全部改掉（见下）。
+
+**二、实现（`packages/router/src/app-stack.ts`）**
+- **屏 = 当前树的一棵子树**（不是原生容器）；切屏 = 可见性切换（内核 `Display::None`：不布局/不绘制/不命中 ⇒ **退场屏零渲染成本**）；**不用系统导航栈**（那正是小程序路线翻版）。
+- **无层数上限**：100 层 push/pop 实测全过；**内存有界靠预算而非层数**：`nodeBudget` 超限 ⇒ 冻结最旧 hidden 屏（`keepWindow` 默认 3 层保护栈顶，**可见屏永不冻结**），冻结 = 树销毁 + **栈位保留** + `needsRebuild`；返回 = `mount(rebuild=true)`。缺省 `nodeBudget=null`（全栈保状态，对齐原生 App 预期）。
+- **执行器契约 `ScreenCommand`**：mount/enter/exit/unmount（`reason: pop|reset|freeze`）——router 包**零动画依赖**（转场只带 `RouteTransition` 声明，由 Morpheus 的 `appTransition()` 换规格）。
+- **转场路线同时修正**：`NAVIGATION_MAP` 的 App 三端从系统导航栈 API（`UINavigationController.pushViewController` / `FragmentTransaction.add` / `NavPathStack.push`）改为**虚拟栈操作名**（`app-stack.push|replace|pop|reset`）——被弃用的原因写进了代码注释与文档。
+- **codegen 第三腿**（`packages/router/src/codegen/app.ts`）：`RouteNode[] → screens` 注册表 + `tabStacks` 聚合；**转场枚举原样携带**（不报平台标识串）；`meta.budgetNodes` 供预算。
+- **性能（O(1) 均摊，有回归判据）**：`activeNodeCount` 增量记账 + `frozenPrefix` 冻结游标 ⇒ 无预算路径全 O(1)；**实测 100k push = 60ms**（退化实现 20k push 要 907ms ⇒ 55×）。判据：50k push（含近 5 万次冻结）< 1000ms（标定：O(1)=33ms vs O(n)=2748ms）。
+
+**三、验证**
+- **单测 34 条**（`tests/app-stack.test.ts`）：100 层深栈/popToRoot 一条命令/冻结 LRU+keepWindow 保护/可见屏永不冻结/overBudget 可观测/树保留（push 零 unmount）/栈语义（含 popTo 找不到抛错）/声明式 navigate 与 `computeRoutePatch` 同源/命令流配对/产物 eval 可执行 + 直接喂 stack。含 2 条性能回归判据。
+- **破坏性验证**：① keepWindow 保护打坏 ⇒ 4 条判据红；② 增量记账退化为全栈扫描 ⇒ 性能判据红（3488ms > 1000ms）。
+- **真机（Android QuickJS 跑真实 app-stack.ts，`check:app-stack` 16 条全绿）**：`a_push_ms=43`（**20000 层**！）/ pop_ms=7 / 冻结 19985 屏且 active=960 ≤ 预算 1000 / over_budget=false / freeze 命令数一致 / 冻结保留栈位 / 重建 mount=1 / navigate diff 零 mount / 命令守恒（mount=N、unmount=0、exit=N-1）。
+- **14 组破坏性验证**（判据脚本）：层数截断/popToRoot 未回根/出现 unmount/活跃超预算/over_budget 未暴露/冻结改栈深/freeze 计数不符/未重建等**每组都能红** + 产物缺失诚实跳过。
+
+**四、门禁与文档**
+- 新增 `check:app-stack`（接 verify 链 + `LOCAL_ONLY` 声明理由：需真机产物；CI 侧等价判据 = 单测 34 条）。
+- 装置：`hosts/android/bridge/entry-app-stack.ts`（**真实 TS 源码打进 bundle**，alias 指向 `src` 而非 dist ⇒ 结构上消除"忘了重建 dist"陷阱）+ `run-app-stack.sh`（条件等待，非 sleep）+ `check-app-stack.py`；`build-and-run.sh` 与 `build-batch.mjs` 均接线（含"入口或核心比产物新则重建"）。
+- 文档：`05-m5-app-codegen.md` 新增 §0（两路线对照表 + 执行器契约）并标注旧路线废弃；`12-m7-scale-lazy-animations.md` 改 `app: null` + 删「>15 popToRoot」；`rules.ts` 新增 2 条规则（app-screen-codegen / app-virtual-stack）。
+- ★附带修复：`tests/animation-presets.test.ts` 的 `as never` 断言缺陷（`Record<T,X>[never]` 求值为 `never`）——**此前让 `vue-tsc` exit 2**（阻塞交付门禁），改 `as RouteTransition` 后全仓类型检查恢复 exit 0。
+
+**五、诚实边界**
+- 执行器（真实建/销毁屏子树 + Morpheus 转场消费命令流）**尚未接线**——本轮的 App 栈是"就绪的栈核心 + 真机读数"，端到端（真点击→转场→返回保状态）待 App 渲染链路（C1/C2 线）接通后验证；
+- 预算冻结的**数值标定**（每屏节点估算）需要真实页面规模数据；当前默认 64 节点/屏是量级假设。
+
 ## 当前状态速览（最近一次更新：**2026-09-30 · HA5 落地（AAR + Java SDK + 嵌入 demo 真机全过）—— 存量 App 可嵌入**）★新会话以此为准
 
 ### ★★★2026-09-30 · 红线升格：禁止**任何**盲等（sleep/timeout 全禁）+ iOS 链路事件驱动 + I3 收官
