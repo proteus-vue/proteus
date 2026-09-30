@@ -31,6 +31,9 @@ use jni::JNIEnv;
 
 // ★内核（path 依赖）：平台无关的核心
 use proteus_layout_core::ffi::{json_str, run_bench, run_conformance};
+
+// ★HA5：Host ABI 的 JNI 绑定（客户 App 嵌入用；见该文件头的"回调穿梭"说明）
+mod host;
 use proteus_layout_core::{ffi, recycle, LayoutEngine, TaffyEngine};
 
 /// 把 Rust 字符串交给 JNI 侧（分配 Java String）。

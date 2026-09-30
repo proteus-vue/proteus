@@ -108,10 +108,19 @@ dependencies = [
 ]
 
 [[package]]
+name = "proteus-host-abi"
+version = "0.1.0"
+dependencies = [
+ "proteus-layout-core",
+ "serde_json",
+]
+
+[[package]]
 name = "proteus-jni"
 version = "0.1.0"
 dependencies = [
  "jni",
+ "proteus-host-abi",
  "proteus-layout-core",
 ]
 
