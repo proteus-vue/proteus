@@ -28,13 +28,23 @@ jobs:
       # ① 触发门：手动 dispatch 直接部署；push 需 commit message 含 [deploy]
       - name: 触发门（[deploy] 标记或手动 dispatch）
         id: gate
+        # ★★2026-09-30 修复（实测症状：push 带 [deploy]，但整个 run 全 skipped = **静默不部署**，
+        #   而 run conclusion 仍是 success —— 与「部署提交推上去但页面没变」同源的假绿）。
+        #   根因：旧版把提交消息**内联进 bash**（`echo "${{ github.event.head_commit.message }}"`）——
+        #   消息里的 **反引号会被当命令执行**、**双引号会截断字符串**。实测触发：一条含 48 个
+        #   反引号 + 中文引号的提交消息 ⇒ 门禁判 ok=false ⇒ 部署静默跳过。
+        #   ⇒ 消息一律经 `env:` 传入（按数据注入、不经 shell 解析），脚本内只读变量。
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          COMMIT_MSG: ${{ github.event.head_commit.message }}
         run: |
-          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+          if [ "$EVENT_NAME" = "workflow_dispatch" ]; then
             echo "ok=true" >> "$GITHUB_OUTPUT"
-          elif echo "${{ github.event.head_commit.message }}" | grep -q '\[deploy\]'; then
+          elif printf '%s' "$COMMIT_MSG" | grep -q '\[deploy\]'; then
             echo "ok=true" >> "$GITHUB_OUTPUT"
           else
             echo "ok=false" >> "$GITHUB_OUTPUT"
+            echo "::warning::本 push 未含 [deploy] ⇒ 部署跳过（run 会显示 success 但所有步骤 skipped——这是设计，不是失败）"
           fi
 
       - uses: actions/checkout@v4
