@@ -247,6 +247,16 @@ mkdir -p "$BUILD/lib/arm64-v8a"
 #   `System.loadLibrary("proteus_jni")` 找不到它，但产物断言也会被"条目存在"骗过
 rm -f "$BUILD/lib/arm64-v8a/libproteus_layout_core.so"
 cp "$SO_SRC" "$BUILD/lib/arm64-v8a/libproteus_jni.so"
+
+# ★★C82：wasm 运行时（wasm3）——宿主侧 wasm 引擎（QuickJS 内建无 WASM，见 setup-android-wasm.sh 头注）
+WASM_SO="$HERE/build/wasm/libproteus_wasm.so"
+if [ -f "$WASM_SO" ]; then
+  cp "$WASM_SO" "$BUILD/lib/arm64-v8a/libproteus_wasm.so"
+  (cd "$BUILD" && zip -q -0 "$APK" lib/arm64-v8a/libproteus_wasm.so)
+  echo "    wasm 运行时 .so 已打入（$(du -h "$WASM_SO" | awk '{print $1}')）"
+else
+  echo "    ⚠ 未见 $WASM_SO —— 先跑：bash scripts/setup-android-wasm.sh（不阻断：缺它则 C82 走诚实降级）"
+fi
 # ★`-0` = Stored（不压缩）：16 KB page size 要求 .so 可直接 mmap（压缩的必须先解压到磁盘）
 (cd "$BUILD" && zip -q -0 "$APK" lib/arm64-v8a/libproteus_jni.so)
 

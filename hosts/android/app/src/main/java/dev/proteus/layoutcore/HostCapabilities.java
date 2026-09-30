@@ -128,6 +128,63 @@ public final class HostCapabilities {
                 // ★Android 无"小程序"概念；"跳其他 App" 走 Intent（能力同名但语义不同——本场景如实说明）
                 throw new UnsupportedOperationException(
                         "mini-program.navigate: Android 无小程序概念（跨 App 跳转请用 Intent/App Links）");
+            // ── C82 WebAssembly（**真实 wasm3 执行**——宿主侧 wasm 运行时）──
+            //   为什么在宿主侧：App 端 JS 引擎 QuickJS **内建无 WebAssembly**（双证据见
+            //   scripts/setup-android-wasm.sh 头注），wasm 属宿主能力（Host ABI 的用途）。
+            case "webassembly.instantiate": {
+                if (!WasmRuntime.isAvailable()) {
+                    throw new UnsupportedOperationException("webassembly.instantiate: wasm 运行时未加载（" + WasmRuntime.getLoadError() + "）");
+                }
+                JSONArray bytes = args.optJSONArray("bytes");
+                if (bytes == null) throw new IllegalArgumentException("webassembly.instantiate 需要 { bytes: number[] }");
+                JSONObject limits = args.optJSONObject("limits");
+                long h = WasmRuntime.nativeWasmInstantiate(bytes.toString(), limits == null ? "{}" : limits.toString());
+                if (h == 0) {
+                    throw new IllegalStateException("wasm 实例化失败：" + (WasmRuntime.lastError != null ? WasmRuntime.lastError : "（未知原因，见 logcat ProteusWasm）"));
+                }
+                JSONObject d = new JSONObject();
+                d.put("handle", h);
+                d.put("engine", WasmRuntime.nativeWasmVersion());
+                return ok(d);
+            }
+            case "webassembly.validate": {
+                if (!WasmRuntime.isAvailable()) {
+                    throw new UnsupportedOperationException("webassembly.validate: wasm 运行时未加载");
+                }
+                JSONArray bytes = args.optJSONArray("bytes");
+                if (bytes == null) throw new IllegalArgumentException("webassembly.validate 需要 { bytes: number[] }");
+                // ★真实验证：实例化成功即格式合法（随后立即释放——不占槽位）
+                long h = WasmRuntime.nativeWasmInstantiate(bytes.toString(), "{}");
+                boolean valid = h != 0;
+                if (valid) WasmRuntime.nativeWasmRelease(h);
+                return ok(valid);
+            }
+            case "webassembly.call": {
+                if (!WasmRuntime.isAvailable()) {
+                    throw new UnsupportedOperationException("webassembly.call: wasm 运行时未加载");
+                }
+                long handle = args.optLong("handle", 0);
+                String fn = args.optString("fn", "");
+                JSONArray a2 = args.optJSONArray("args");
+                JSONObject call = new JSONObject();
+                call.put("fn", fn);
+                call.put("args", a2 == null ? new JSONArray() : a2);
+                String result = WasmRuntime.nativeWasmCall(handle, call.toString());
+                JSONObject parsed = new JSONObject(result);
+                if (!parsed.optBoolean("ok", false)) {
+                    throw new IllegalStateException("wasm 调用失败：" + parsed.optString("error", "（无原因）"));
+                }
+                return ok(parsed.optDouble("result", 0));
+            }
+            case "webassembly.release": {
+                if (!WasmRuntime.isAvailable()) {
+                    throw new UnsupportedOperationException("webassembly.release: wasm 运行时未加载");
+                }
+                boolean freed = WasmRuntime.nativeWasmRelease(args.optLong("handle", 0));
+                JSONObject d = new JSONObject();
+                d.put("released", freed);
+                return ok(d);
+            }
             case "native.calls":
                 // 诊断：返回宿主侧调用记录（判据证明"真实宿主被调用"）
                 return callsJson();

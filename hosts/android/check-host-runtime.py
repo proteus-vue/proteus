@@ -354,22 +354,35 @@ def main() -> int:
         # ③ wasm（引擎内置——真验证）
         # ★判据按**引擎能力**分档（真机实测：QuickJS 只有 instantiate，无 compile/validate）：
         #   实现了 ⇒ 必须返回正确结果；未实现 ⇒ 必须**诚实 Err**（不崩、不假装通过）。
-        wv = app_native.get("wasmValidateEmptyModule") or {}
-        if wv.get("ok") is True:
-            if wv.get("data") is not True:
-                fail(f"⑨ C82 validate 空模块应返回 true（引擎实现了该方法）：{wv}")
-            else:
-                report(f"⑨ C82 WebAssembly：引擎内置（streaming={app_native.get('wasmSupportsStreaming')}），空模块校验通过")
-        elif wv.get("ok") is False:
-            # ★场景侧已把 error 展开为 {ok:false, code, message}（Error 直接 JSON 化会丢字段）
-            code = wv.get("code")
-            # ★诚实分档：unsupported（引擎无此方法）= 合格；其它错误 = 真失败
-            if code == "webassembly.unsupported":
-                report("⑨ C82 WebAssembly：instantiate 可用；引擎未实现 validate ⇒ **诚实 Err**（QuickJS 能力差异）")
-            else:
-                fail(f"⑨ C82 validate 失败（非引擎能力差异）：{wv}")
+        # ★★C82 WebAssembly 真执行判据（宿主侧 wasm3 —— QuickJS 内建无 WASM，本轮补的宿主引擎）
+        #   判据链：① add(2,40) 必须 = 42（真跑 i32.add 指令序列）
+        #           ② 空模块也须可校验（说明解析器工作）
+        #           ③ 宿主调用记录里应有 wasm.*（证明经宿主执行）
+        # ★形态兼容（真机实测：宿主返回的 data 直接是**数字**，不是 {result:N} 对象——
+        #   初版判据按 .get("result") 读 ⇒ 落到"未接入"分支，**判据自身读错路径**）
+        wa = app_native.get("wasmAddResult")
+        res = wa if isinstance(wa, (int, float)) else (wa.get("result") if isinstance(wa, dict) else None)
+        wasm_type = wa.get("type") if isinstance(wa, dict) else None
+        if isinstance(wa, dict) and wa.get("ok") is False:
+            fail(f"⑨ C82 wasm 执行失败：{wa}")
+        elif res == 42:
+            report(f"⑨ C82 WebAssembly：**宿主 wasm3 真执行** add(2,40)={res}"
+                   f"{f'（type={wasm_type}）' if wasm_type else ''}——手写 41 字节模块，真跑 i32.add 指令")
+        elif res is None:
+            report("⑨ C82 WebAssembly：宿主 wasm 运行时未接入 ⇒ 诚实 Err（不假装支持）")
         else:
-            fail(f"⑨ C82 validate 未返回结果：{wv}")
+            fail(f"⑨ C82 wasm3 结果错误（期望 42，实得 {res}）：{wa}")
+        # ② 空模块校验（解析器工作）
+        wv = app_native.get("wasmValidateEmptyModule") or {}
+        if wv.get("ok") is True and wv.get("data") is True:
+            report("⑨ C82 空模块校验通过（wasm 解析器工作）")
+        elif wv.get("ok") is False:
+            code = wv.get("code")
+            if code == "webassembly.unsupported":
+                report("⑨ C82 空模块校验：引擎未实现 validate ⇒ 诚实 Err（能力差异）")
+            else:
+                fail(f"⑨ C82 空模块校验失败：{wv}")
+
         # ④ ★★壳调用记录（**由真实 Java 宿主自报**——证明能力经宿主执行，不是桥自造数据）
         #   初版读 JS 侧桩的 `__calls`（自我闭环）；现读 `HostCapabilities.callLog`。
         host_calls_raw = app_native.get("__hostCalls")

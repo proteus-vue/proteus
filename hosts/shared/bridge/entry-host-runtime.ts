@@ -561,12 +561,32 @@ export function __proteusHostRun(): string {
       appPending.navigateMiniProgram = await appCaps
         .navigateMiniProgram({ appId: 'wx-demo' })
         .then(() => ({ ok: true }), (e: Error & { code?: string }) => ({ ok: false, code: e.code }))
-      // ⑩ C82 WebAssembly（引擎内置——真验证空模块）
-      const wasmCaps = appCaps.getWebAssembly() as unknown as {
+      // ⑩ C82 WebAssembly（★★真实 wasm 执行：宿主侧 wasm3 —— 手写模块验证 add(a,b)）
+      //   为什么手写：QuickJS 内建无 WASM（实测）⇒ 本端由**宿主 wasm3**执行；
+      //   判据要真跑一条指令序列（i32.add），不是"能实例化空模块"这种弱断言。
+      type WasmCapsT = {
         supportsStreaming: boolean
         validate: (b: Uint8Array) => Promise<{ ok: boolean; data?: boolean; error?: { code?: string; message?: string } }>
+        instantiate: (src: { bytes: Uint8Array }, opts?: unknown) => Promise<{ ok: boolean; data?: { __hostHandle?: number; dispose?: () => void }; error?: { code?: string; message?: string } }>
       }
+      const wasmCaps = appCaps.getWebAssembly() as unknown as WasmCapsT
       appPending.wasmSupportsStreaming = wasmCaps.supportsStreaming
+      // 手写 wasm：(module (func (export "add") (param i32 i32) (result i32) local.get 0 local.get 1 i32.add))
+      const ADD_WASM = new Uint8Array([0, 97, 115, 109, 1, 0, 0, 0, 1, 7, 1, 96, 2, 127, 127, 1, 127, 3, 2, 1, 0, 7, 7, 1, 3, 97, 100, 100, 0, 0, 10, 9, 1, 7, 0, 32, 0, 32, 1, 106, 11])
+      const inst = await wasmCaps.instantiate({ bytes: ADD_WASM }, { limits: { stackBytes: 65536, gasUnits: 1000000 } })
+      if (inst.ok && inst.data) {
+        const h = inst.data.__hostHandle
+        // 真实调用 add(2, 40) → 期望 42
+        const { invokeHost: rawInv } = await import('@proteus-vue/api/capability-app')
+        const callRes = rawInv('webassembly.call', { handle: h, fn: 'add', args: [2, 40] })
+        // ★宿主返回 {ok:true, result:N, type:'i32'} —— 取 result（并带上 type 供判据核对）
+        appPending.wasmAddResult = callRes.ok
+          ? (callRes.data as { result?: unknown; type?: string })
+          : { ok: false, reason: callRes.reason }
+        inst.data.dispose?.()
+      } else {
+        appPending.wasmAddResult = { ok: false, reason: inst.error?.message ?? 'instantiate 失败' }
+      }
       // ★★真实宿主自报调用记录（`native.calls`）——证明"能力确实经宿主导出"，
       //   而非桥自造数据（初版用 JS 桩；现已删桩，读宿主的记账）。
       const wv = await wasmCaps.validate(new Uint8Array([0x00, 0x61, 0x73, 0x6d, 0x01, 0x00, 0x00, 0x00]))
