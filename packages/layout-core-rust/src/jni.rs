@@ -415,3 +415,63 @@ pub extern "system" fn Java_dev_proteus_layoutcore_RustLayout_nativeApplyOps<'lo
     .unwrap_or_else(|_| "{\"ok\":false,\"error\":\"panic（已捕获）\"}".to_string());
     into_java_string(&mut env, out)
 }
+
+/* ────────────────────────── ★★MA0-RT：平台零参与路径（Android） ────────────────────────── */
+
+/// ★★**曲线的贝塞尔近似**（Android `PathInterpolator` 用）——曲线知识只在引擎一处
+#[no_mangle]
+pub extern "system" fn Java_dev_proteus_layoutcore_RustLayout_nativeCurveBezier<'local>(
+    mut env: JNIEnv<'local>,
+    _class: JClass<'local>,
+    curve: jni::sys::jint,
+) -> jstring {
+    let out = std::panic::catch_unwind(|| -> String {
+        let p = crate::ffi::proteus_anim_curve_bezier(curve as u32);
+        if p.is_null() {
+            return "{\"ok\":false,\"error\":\"null\"}".to_string();
+        }
+        let s = unsafe { std::ffi::CStr::from_ptr(p) }.to_string_lossy().into_owned();
+        unsafe { crate::ffi::proteus_layout_free_string(p) };
+        s
+    })
+    .unwrap_or_else(|_| "{\"ok\":false,\"error\":\"panic（已捕获）\"}".to_string());
+    into_java_string(&mut env, out)
+}
+
+/// ★★**提交规格**（平台零参与路径的数据面：合成属性判定 + 节点级采样）
+///
+/// ★**Android 侧的诚实边界**：本入口返回的是**逐节点**规格（与 iOS 同一份内核数据），
+///   而 Android 生产绘制是"单 ViewGroup + Canvas 指令"（**无 per-node 平台对象**）
+///   ⇒ 逐节点平台动画需引入 per-node `RenderNode`（改绘制架构，另案评估）；
+///   本端当前落地的是**容器级**（`ProteusHostView.animatePageComposited`）。
+///   该入口保留：① 判定能力可测；② 未来接 per-node RenderNode 时数据面已就绪。
+#[no_mangle]
+pub extern "system" fn Java_dev_proteus_layoutcore_RustLayout_nativeAnimCommitSpec<'local>(
+    mut env: JNIEnv<'local>,
+    _class: JClass<'local>,
+    handle: jni::sys::jlong,
+    json: JString<'local>,
+) -> jstring {
+    // ★先在闭包外取字符串（JNIEnv 非 UnwindSafe —— 与 nativeUpdate 同一纪律）
+    let s: String = match env.get_string(&json) {
+        Ok(v) => v.into(),
+        Err(e) => {
+            return into_java_string(&mut env, format!("{{\"ok\":false,\"error\":\"入参读取失败：{e}\"}}"))
+        }
+    };
+    let out = std::panic::catch_unwind(|| -> String {
+        let cs = match std::ffi::CString::new(s) {
+            Ok(c) => c,
+            Err(_) => return "{\"ok\":false,\"error\":\"入参含 NUL\"}".to_string(),
+        };
+        let p = unsafe { crate::ffi::proteus_layout_anim_commit_spec(handle as u64, cs.as_ptr()) };
+        if p.is_null() {
+            return "{\"ok\":false,\"error\":\"null\"}".to_string();
+        }
+        let o = unsafe { std::ffi::CStr::from_ptr(p) }.to_string_lossy().into_owned();
+        unsafe { crate::ffi::proteus_layout_free_string(p) };
+        o
+    })
+    .unwrap_or_else(|_| "{\"ok\":false,\"error\":\"panic（已捕获）\"}".to_string());
+    into_java_string(&mut env, out)
+}

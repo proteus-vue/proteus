@@ -93,6 +93,44 @@ kind=capability ⇒ 82）+ 黑名单条目 `hooks-81` + 两份新文档进正向
 **登记**：board-inventory「其他文档（非 plan）」表新增两行（含决策、依据、与既有计划关系）；
 roadmap v0.6 段追加两条决策接入注记 + v2.0+ 插件体系行补指针。
 
+**⑮ ★★★MA0-RT Android 侧落地（容器级）+ 两端形态差异查明（2026-09-30）**
+
+**一、两端形态差异（本轮最重要的架构发现）**
+| | iOS | Android |
+|---|---|---|
+| 生产绘制 | **CALayer 树**（每节点一层） | **单 ViewGroup + Canvas 指令直下发**（真拍平，**无 per-node 对象**） |
+| 零参与落点 | **逐层**（每节点一条 `CAKeyframeAnimation`） | **容器级**（`ViewPropertyAnimator` → `RenderNodeAnimator` → 渲染线程） |
+| 覆盖 | 转场 + 任意节点合成动画 | **整页转场**（最主流的合成动画场景） |
+
+**二、Android 真机读数（独立测试路径 `platform-anim`）**
+| 判据 | 读数 |
+|---|---|
+| **主线程零参与** | `onDrawCount` **2 → 2（delta = 0）**——动画全程主线程没画过一帧 |
+| **真在逐帧插值** | tx **50.37 → 88.91 → 109.42 → 118.36 → 120**（easeOutCubic 减速形态 ✓） |
+| 终态精确 | tx=**120.0** / alpha=**0.5** |
+| 曲线来自内核 | 贝塞尔控制点由 Rust `curve_bezier_approx` 给出（Android `PathInterpolator` 消费） |
+
+**三、★贝塞尔近似的判据驱动优化（"判据逼出更好的实现"实例）**
+Android 的 `PathInterpolator` 只收**贝塞尔控制点**（不像 iOS 的 `CAKeyframeAnimation` 可收任意采样）
+⇒ 新增 `curve_bezier_approx`。首版**照抄 CSS 标准控制点**，被测试挡下（`easeOutCubic` 偏差 **0.0223** 超上界）；
+⇒ 数值拟合出更优控制点，偏差降到 **0.0040 / 0.0075 / 0.0128**（3–5× 改善），并**收紧测试上界**。
+★弹簧（阻尼振荡、非单调）**诚实返回 None**（不硬套贝塞尔）——有专门断言守着。
+
+**四、★两个装置缺陷（都是本轮真机抓出）**
+1. **同步 `Thread.sleep` 把主线程自己堵死**：`ViewPropertyAnimator` 的推进依赖**主线程 Choreographer 帧回调**，
+   而我在同一个方法里 sleep 等采样 ⇒ 动画根本不开始（真机：`running=true` 但 `tx` 恒 0、
+   `withEndAction` 从不触发）。⇒ 修：`Handler.postDelayed` 链异步采样。
+2. **测试混在重活路径里被"饿死"**：首版把测试塞在 `js-render` 路径末尾，而那条路径在主线程上跑
+   QuickJS + 全树渲染（数秒）⇒ 动画同样不推进（现象"时好时坏"）。
+   ⇒ 修：**独立测试路径** `platform-anim`（主线程空闲）。
+★教训（与"相位间清状态"同源）：**测试装置不得与重型生产负载共用主线程时序**——
+   要么异步，要么独立路径。
+
+**五、诚实边界**
+· Android 逐节点平台动画**未做**——需引入 per-node `RenderNode`（会改变"真拍平"这一核心设计取舍，另案评估）；
+  `proteus_layout_anim_commit_spec` 的 JNI 入口已就绪（数据面备好）；
+· `Instruments`/`Systrace` 级的"主线程零唤醒"实测仍未做（本轮判据是 `onDrawCount` 增量 + 逐帧采样）。
+
 **⑭ ★★★MA0-RT 平台零参与路径（iOS）+ 又挖出 1 个真缺陷（2026-09-30）**
 
 用户就 Morpheus 文档新增的 §5-bis「RenderThread 零参与路径」征求意见 ⇒ 核实后**直接实现**，

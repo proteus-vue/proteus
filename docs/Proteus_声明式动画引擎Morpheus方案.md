@@ -363,7 +363,23 @@ iOS 同理：动 `transform` 是 GPU 加速，动 `frame` 触发布局重算。
 - [x] **非合成属性的明确报错与降级标记**：`plan.composited=false` ⇒ 宿主返回错误 + 违规属性列表
       （**不静默降级**）· 真机判据 G4
 - [ ] 三端 `platform/` 层实现（共享元素跨页面几何传递 + 视图层级提升）—— 独立工程量
-- [ ] Android RenderThread 侧（`RenderNode` 动画 + `ViewPropertyAnimator`）
+- [x] **Android RenderThread 侧（容器级）**：`ProteusHostView.animatePageComposited`
+      （`ViewPropertyAnimator` → `RenderNodeAnimator` → 渲染线程）
+      · 真机：**`onDrawCount` delta = 0**（动画全程主线程零绘制）·
+        tx 逐帧插值 **50.37 → 88.91 → 109.42 → 118.36 → 120**（easeOutCubic 减速形态）·
+        终态精确（tx=120 / alpha=0.5）· 曲线贝塞尔来自内核（`PathInterpolator`）
+      ★**诚实边界：Android 的落点是"容器级"，与 iOS 的"逐层"不同**——见下条
+
+**★★两端形态差异（本轮实测的架构事实，必须写下来）**：
+| | iOS | Android |
+|---|---|---|
+| 生产绘制 | **CALayer 树**（每节点一层） | **单 ViewGroup + Canvas 指令直下发**（真拍平，**无 per-node 平台对象**） |
+| 平台零参与落点 | **逐层**（每节点一条 `CAKeyframeAnimation`） | **容器级**（`ViewPropertyAnimator` 动宿主 View 的 transform/alpha） |
+| 覆盖场景 | 转场 + 任意节点的合成动画 | **整页转场**（最主流的合成动画场景） |
+| 逐节点平台动画 | ✅ 已落地 | ❌ 需引入 per-node `RenderNode`（= 改绘制架构，另案评估） |
+
+⇒ **Android 逐节点需要 per-node `RenderNode`**（那会改变"真拍平"这一核心设计取舍），
+   本端当前覆盖"整页转场"；`proteus_layout_anim_commit_spec` 的 JNI 入口已就绪（数据面备好）。
 
 **★两条实现纪律（本轮确立，各有判据守住）**：
 1. **曲线求值只在 Rust**（唯一实现）⇒ 提交规格由内核**采样**（17 点/节点），宿主只做

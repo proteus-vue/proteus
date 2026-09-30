@@ -1026,6 +1026,92 @@ public class ProteusHostView extends ViewGroup {
         canvas.restoreToCount(save);
     }
 
+    /* ══════════════ ★★MA0-RT：容器级平台动画（RenderThread 零参与） ══════════════ */
+
+    /**
+     * ★★**容器级合成动画**（Morpheus §5-bis：提交一次 ⇒ RenderThread 自主插值）
+     *
+     * 【为什么 Android 的落点是"容器级"而不是像 iOS 那样的"逐层"】
+     *   两端生产绘制形态不同（本轮实测确认）：
+     *     · iOS：**CALayer 树**（每节点一层）⇒ 可对每个节点下 `CAKeyframeAnimation`；
+     *     · Android：**单 ViewGroup + Canvas 指令直下发**（真拍平，**无 per-node 平台对象**）
+     *       ⇒ 生产路径上没有"可动画的载体"，逐节点下动画需要引入 per-node `RenderNode`
+     *         （= 改绘制架构，另案评估）。
+     *   ⇒ **本端落地"整页转场"这一最主流的合成动画场景**：动**宿主 View 自己**的
+     *     transform / alpha —— 这正是 §5-bis.1 说的"转场天然只需要动 transform/opacity"。
+     *
+     * 【为什么这样就是 RenderThread 零参与】`View.animate()`（ViewPropertyAnimator）对
+     *   `translationX/Y` / `scaleX/Y` / `rotation` / `alpha` 这几个属性，Android 内部走
+     *   **`RenderNodeAnimator`（渲染线程原生动画）** ⇒ 主线程只在**启动时**参与一次，
+     *   之后每帧由 RenderThread 直接更新 RenderNode，**主线程不参与**（也不触发 onDraw）。
+     *
+     * 【与本引擎的关系】曲线由内核给（`curve_bezier_approx` → `PathInterpolator`）；
+     *   本方法**只做"翻译成平台 API"**，没有任何曲线数学。
+     *
+     * @return 是否成功提交
+     */
+    public boolean animatePageComposited(
+            float tx, float ty, float scale, float rotation, float alpha,
+            long durMs, long delayMs, float bezierX1, float bezierY1, float bezierX2, float bezierY2) {
+        android.animation.TimeInterpolator interp;
+        if (bezierX1 == 0f && bezierY1 == 0f && bezierX2 == 1f && bezierY2 == 1f) {
+            interp = new android.view.animation.LinearInterpolator();
+        } else {
+            // ★平台自带（API 21+），不需要 support library 依赖
+            interp = new android.view.animation.PathInterpolator(bezierX1, bezierY1, bezierX2, bezierY2);
+        }
+        // ★记录起始 onDrawCount：动画期间它应当**不增长**（= 主线程没参与每帧绘制）
+        pageAnimDrawBefore = onDrawCount;
+        pageAnimRunning = true;
+        this.animate()
+                .translationX(tx)
+                .translationY(ty)
+                .scaleX(scale)
+                .scaleY(scale)
+                .rotation(rotation)
+                .alpha(alpha)
+                .setDuration(durMs)
+                .setStartDelay(delayMs)
+                .setInterpolator(interp)
+                .withEndAction(new Runnable() {
+                    @Override public void run() {
+                        pageAnimRunning = false;
+                        pageAnimDrawAfter = onDrawCount;
+                    }
+                })
+                .start();
+        return true;
+    }
+
+    /** 容器级动画读数（判据：`draw_delta` 应为 0 = 主线程未参与每帧绘制） */
+    public String pageAnimStats() {
+        return "{\"running\":" + (pageAnimRunning ? "true" : "false")
+                + ",\"draw_before\":" + pageAnimDrawBefore
+                + ",\"draw_after\":" + pageAnimDrawAfter
+                + ",\"draw_delta\":" + (pageAnimDrawAfter - pageAnimDrawBefore)
+                + ",\"tx\":" + getTranslationX()
+                + ",\"alpha\":" + getAlpha()
+                + ",\"on_draw_count\":" + onDrawCount + "}";
+    }
+
+    private boolean pageAnimRunning = false;
+    private int pageAnimDrawBefore = 0;
+    private int pageAnimDrawAfter = 0;
+
+    /** 复位容器级动画（相位间清理） */
+    public void resetPageAnim() {
+        animate().cancel();
+        setTranslationX(0f);
+        setTranslationY(0f);
+        setScaleX(1f);
+        setScaleY(1f);
+        setRotation(0f);
+        setAlpha(1f);
+        pageAnimRunning = false;
+        pageAnimDrawBefore = onDrawCount;
+        pageAnimDrawAfter = onDrawCount;
+    }
+
     /* ══════════════ ★§9.2「不拍平时」对照变体（拍平的另一极） ══════════════ */
 
     /**

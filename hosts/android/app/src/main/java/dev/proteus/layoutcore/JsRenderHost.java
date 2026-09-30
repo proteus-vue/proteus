@@ -67,6 +67,9 @@ final class JsRenderHost {
     private final Map<Integer, Integer> cmdIndexOf = new HashMap<>();
 
     private ProteusHostView view;
+
+    /** ★★MA0-RT：暴露宿主 View（容器级平台动画的载体——见 ProteusHostView.animatePageComposited） */
+    ProteusHostView hostView() { return view; }
     private long handle = 0L;
 
     /* ────────────────────────── 读数（判据用）────────────────────────── */
