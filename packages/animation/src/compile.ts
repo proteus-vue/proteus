@@ -45,6 +45,8 @@ export function compileOne(d: AnimDecl, targets: AnimTargets): EngineAnim {
     drive: d.drive === 'progress' ? 1 : 0,
     takeover: d.takeover !== false,
     ...(d.spring ? { spring: { stiffness: d.spring.stiffness, damping: d.spring.damping, mass: d.spring.mass ?? 1 } } : {}),
+    // ★MA5：滚动窗口（内核据 scrollTo > scrollFrom 判定为滚动驱动）
+    ...(d.scroll ? { scrollFrom: d.scroll.from, scrollTo: d.scroll.to } : {}),
   }
 }
 
@@ -95,7 +97,16 @@ export function compileRoute(
  *
  * 与内核 `plan_animations` **同语义**（此处为编译期预判，避免明知不可行还发一轮跨边界调用）。
  * 真值以内核为准（内核是唯一实现）——这里是"快速否决"，不是"第二份判定"。
+ *
+ * ★MA5：**滚动驱动批次不具备资格**——平台路径的语义是"提交后平台按时间自主插值"，
+ *   而滚动动画的进度来自外部位置；混用会把"跟手"变成"到点自动播放"。
+ *   （内核在 `anim_commit_spec` 入口同样**明确拒绝**，此处提前否决省一轮跨边界调用。）
  */
 export function isPlatformEligible(batch: CompiledBatch): boolean {
-  return batch.composited && batch.anims.length > 0
+  return batch.composited && batch.anims.length > 0 && !isScrollDriven(batch)
+}
+
+/** 该批次是否含**滚动驱动**动画（MA5；内核按 `scrollTo > scrollFrom` 判定） */
+export function isScrollDriven(batch: CompiledBatch): boolean {
+  return batch.anims.some((a) => (a.scrollTo ?? 0) > (a.scrollFrom ?? 0))
 }

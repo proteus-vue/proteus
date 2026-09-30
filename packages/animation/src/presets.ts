@@ -233,5 +233,84 @@ export const element = {
   },
 } as const
 
+/* ────────────────────── 滚动联动预设（MA5：吸顶 / 视差 / 渐显） ────────────────────── */
+
+/** 滚动联动预设（一组"随滚动位置变化"的声明；窗口单位 = 滚动位置 px） */
+export interface ScrollSpec {
+  name: string
+  decls: AnimDecl[]
+  /** 名义窗口（供调用方做布局/调试参考；真正的窗口在每条 decl 的 `scroll` 里） */
+  window: { from: number; to: number }
+}
+
+/**
+ * ★★**滚动联动**（MA5）——"滚动位置 → 动画进度"的预设
+ *
+ * 【驱动通路（滚动过程零 JS）】宿主滚动回调 → `anim_seek_scroll(scroll)` → 内核
+ *   一次算完所有窗口动画并写字段 → 宿主把 `updates` 当帧刷层。
+ *   JS 与曲线数学都不在链路上（换算在内核，见 `AnimEngine::seek_scroll`）。
+ *
+ * 【为什么窗口语义（而非"滚动百分比"）】视差/吸顶的阈值都是**像素位置**（"滚过 120px 后标题吸住"），
+ *   与视口高度无关；用百分比会让不同机型的联动区间不一致。
+ */
+export const scroll = {
+  /**
+   * **吸顶**（滚过 `pinAt` 后头部固定：用反向位移抵消继续滚动）
+   *
+   * ★实现说明：本引擎只写**合成属性**（translate/opacity）⇒ 吸顶表达为
+   *   `translateY: 0 → -(scrollSpan)` 的窗口动画，配合布局让位实现"钉住"观感；
+   *   真·改变定位（position: sticky）属布局属性，不在本引擎属性面上（编译期会拦）。
+   */
+  sticky(opts: { pinAt?: number; span?: number; nodeIdHint?: string } = {}): ScrollSpec {
+    const pinAt = opts.pinAt ?? 80
+    const span = opts.span ?? 120
+    return {
+      name: 'scrollSticky',
+      decls: [{ kind: 'translateY', from: 0, to: -span, curve: 'linear', scroll: { from: pinAt, to: pinAt + span } }],
+      window: { from: pinAt, to: pinAt + span },
+    }
+  },
+
+  /**
+   * **视差**（背景层随滚动反向慢移；`factor` 0..1 = 慢移比例）
+   *
+   * `factor=0.4` ⇒ 滚过 100px 时背景只上移 40px（相对前景的"景深感"）。
+   */
+  parallax(opts: { factor?: number; from?: number; to?: number } = {}): ScrollSpec {
+    const factor = opts.factor ?? 0.4
+    const from = opts.from ?? 0
+    const to = opts.to ?? 400
+    return {
+      name: 'scrollParallax',
+      decls: [
+        {
+          kind: 'translateY',
+          from: 0,
+          to: -(to - from) * factor,
+          curve: 'linear',
+          scroll: { from, to },
+        },
+      ],
+      window: { from, to },
+    }
+  },
+
+  /**
+   * **渐显**（滚入 `from..to` 区间内透明度 0 → 1；可叠加轻微上移）
+   *
+   * ★`from/to` 通常取"元素进入视口"的滚动位置区间（由布局计算给出，预设不猜）。
+   */
+  fadeIn(opts: { from: number; to: number; risePx?: number }): ScrollSpec {
+    const rise = opts.risePx ?? 0
+    const decls: AnimDecl[] = [
+      { kind: 'opacity', from: 0, to: 1, curve: 'easeOut', scroll: { from: opts.from, to: opts.to } },
+    ]
+    if (rise > 0) {
+      decls.push({ kind: 'translateY', from: rise, to: 0, curve: 'easeOut', scroll: { from: opts.from, to: opts.to } })
+    }
+    return { name: 'scrollFadeIn', decls, window: { from: opts.from, to: opts.to } }
+  },
+} as const
+
 /** 全部预设（单一入口——便于官网/AI 说明书枚举） */
-export const presets = { route, list, element, easing } as const
+export const presets = { route, list, element, easing, scroll } as const

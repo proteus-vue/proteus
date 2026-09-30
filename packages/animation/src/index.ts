@@ -28,6 +28,7 @@ export type {
   CurveName,
   DriveName,
   SpringConfig,
+  ScrollWindow,
   AnimDecl,
   AnimTargets,
   EngineAnim,
@@ -36,6 +37,13 @@ export type {
 } from './types'
 
 export { COMPOSITED_KINDS, isComposited, validateAnimations, formatIssues } from './validate'
-export { compileAnimations, compileOne, compileRoute, toWireBatch, isPlatformEligible } from './compile'
-export { presets, route, list, element, easing } from './presets'
-export type { RouteTransitionSpec, ListShiftSpec, ElementSpec } from './presets'
+export {
+  compileAnimations,
+  compileOne,
+  compileRoute,
+  toWireBatch,
+  isPlatformEligible,
+  isScrollDriven,
+} from './compile'
+export { presets, route, list, element, easing, scroll } from './presets'
+export type { RouteTransitionSpec, ListShiftSpec, ElementSpec, ScrollSpec } from './presets'
