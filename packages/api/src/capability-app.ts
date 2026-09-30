@@ -234,6 +234,124 @@ export function installWxAppEventBridge(bus: HostLifecycleBus, wx: WxLifecycleSo
   tryOn(wx.onAudioInterruptionEnd && (() => wx.onAudioInterruptionEnd!(() => bus.emit({ topic: 'app', kind: 'audio-interruption-end' }))), 'onAudioInterruptionEnd')
 }
 
+/**
+ * `window` / `document` 子集（Web 端事件源的真实来源）
+ */
+export interface WebEventSource {
+  addEventListener?: (t: string, cb: (e?: unknown) => void) => void
+  removeEventListener?: (t: string, cb: (e?: unknown) => void) => void
+  document?: {
+    visibilityState?: string
+    documentElement?: { scrollTop?: number; scrollHeight?: number; clientHeight?: number }
+    addEventListener?: (t: string, cb: (e?: unknown) => void) => void
+  }
+  innerHeight?: number
+  requestAnimationFrame?: (cb: () => void) => unknown
+}
+
+/**
+ * ★★把 Web 平台事件接进总线（与 MP/App 同构——三端同一总线，不同事件源）。
+ *
+ * 覆盖（每项都是浏览器真实事件，不是模拟）：
+ * | 事件 | Web 真实来源 |
+ * |---|---|
+ * | app:show / app:hide | `visibilitychange`（页签切换/最小化） |
+ * | app:resize | `resize` |
+ * | page:ready | `load` 之后首帧（rAF 一次） |
+ * | page:page-scroll | `scroll`（★**rAF 节流**——滚动是高频事件，不节流会打爆订阅者） |
+ * | page:reach-bottom | 滚动到底（`scrollTop + innerHeight >= scrollHeight - 阈值`，一次性触发后需离开阈值区才重置） |
+ * | page:resize | `resize`（同 app:resize，两处都派发——语义不同：一个是窗口、一个是页面） |
+ * | page:save-exit-state | `beforeunload`（★决策型：调用 provider 的返回值决定是否拦截） |
+ * | page:unload | `beforeunload`（页面真的要走） |
+ *
+ * ★**诚实不覆盖**（Web 无原生等价——SSOT 已注明，不伪造）：
+ * `page:pull-down-refresh`（无原生下拉）、`page:tab-item-tap`（App/MP 概念）、
+ * `page:route-done`（由 router 层推）、决策型的分享三件套（Web 用 `navigator.share`，
+ * 属能力桥范畴而非页面生命周期）。
+ */
+export function installWebEventSources(bus: HostLifecycleBus, g: WebEventSource): void {
+  const doc = g.document
+  const win = g
+  if (typeof win.addEventListener !== 'function') return // 非浏览器环境（SSR/测试）——诚实跳过
+
+  // ── app:show/hide + page:show/hide（visibilitychange；launch 由总线在首个 show 时自动补） ──
+  //   ★两个层级都派发（语义不同、都要）：应用退后台 ⇒ 应用 hide **且** 页面 hide；
+  //     回前台 ⇒ 应用 show **且** 页面 show（页面重新可见）。
+  //     —— 此前只发了应用级，页面级订阅者（usePageLifecycle）收不到（真机/测试实测抓出）。
+  win.addEventListener('visibilitychange', () => {
+    const hidden = doc ? doc.visibilityState === 'hidden' : false
+    bus.emit({ topic: 'app', kind: hidden ? 'hide' : 'show' })
+    bus.emit({ topic: 'page', kind: hidden ? 'hide' : 'show' })
+  })
+  // ── app:resize + page:resize ──
+  win.addEventListener('resize', () => {
+    const size = { windowWidth: Number((win as { innerWidth?: number }).innerWidth ?? 0), windowHeight: Number(g.innerHeight ?? 0) }
+    bus.emit({ topic: 'app', kind: 'resize', payload: size })
+    bus.emit({ topic: 'page', kind: 'resize', payload: { size } })
+  })
+  // ── `load`：**应用启动**（wx 语义对齐：onLaunch 恰好一次，先于 onShow） + 页面 load/ready ──
+  const onLoad = (): void => {
+    // ① 应用启动（总线在首个 show 时也会补 launch——这里显式发一次，保证"load ⇒ launch+show"）
+    bus.emit({ topic: 'app', kind: 'show' })
+    // ② 页面 load（Web 的"页面加载"= 文档 load）
+    bus.emit({ topic: 'page', kind: 'load' })
+    // ③ 页面 show（**首屏即显示**——load 完成后页面立即可见；visibilitychange 只覆盖后续切换）
+    bus.emit({ topic: 'page', kind: 'show' })
+    // ④ page:ready（load 之后**首帧**——rAF 保证"渲染完成"语义，而不是"DOM 就绪"）
+    const markReady = (): void => bus.emit({ topic: 'page', kind: 'ready' })
+    if (typeof win.requestAnimationFrame === 'function') win.requestAnimationFrame(markReady)
+    else markReady()
+  }
+  win.addEventListener('load', onLoad)
+
+  // ── page:page-scroll（★rAF 节流——高频事件不得直连订阅者） + page:reach-bottom ──
+  let scrollRaf = 0
+  let reachBottomFired = false
+  const REACH_BOTTOM_PX = 50
+  const onScroll = (): void => {
+    const emitScroll = (): void => {
+      scrollRaf = 0
+      const el = doc?.documentElement
+      const scrollTop = Number(el?.scrollTop ?? 0)
+      bus.emit({ topic: 'page', kind: 'page-scroll', payload: { scrollTop, scrollLeft: 0 } })
+      // 触底（进入阈值区触发一次；离开后重置——与 wx onReachBottom 的"越过即触发"语义对齐）
+      const scrollHeight = Number(el?.scrollHeight ?? 0)
+      const clientHeight = Number(el?.clientHeight ?? g.innerHeight ?? 0)
+      const atBottom = scrollHeight > 0 && scrollTop + clientHeight >= scrollHeight - REACH_BOTTOM_PX
+      if (atBottom && !reachBottomFired) {
+        reachBottomFired = true
+        bus.emit({ topic: 'page', kind: 'reach-bottom' })
+      } else if (!atBottom && reachBottomFired) {
+        reachBottomFired = false
+      }
+    }
+    if (typeof win.requestAnimationFrame === 'function') {
+      if (scrollRaf !== 0) return // 本帧已排——合并（节流的本质）
+      scrollRaf = 1 // 标记已排（rAF 返回值形态各异，用 1 作哨兵）
+      win.requestAnimationFrame(emitScroll)
+    } else {
+      emitScroll()
+    }
+  }
+  win.addEventListener('scroll', onScroll)
+
+  // ── page:unload + page:save-exit-state（beforeunload；决策型可拦截） ──
+  const onBeforeUnload = (e?: unknown): void => {
+    bus.emit({ topic: 'page', kind: 'unload' })
+    // ★决策型：provider 有返回值 ⇒ 按浏览器语义设 returnValue（拦截离开）
+    const providers = (globalThis as { __proteusPageProviders?: { saveExitState?: () => unknown } }).__proteusPageProviders
+    if (providers?.saveExitState) {
+      try {
+        const ret = providers.saveExitState()
+        if (ret !== undefined && e && typeof e === 'object') (e as { returnValue?: unknown }).returnValue = ret
+      } catch {
+        /* provider 抛错不阻断离开 */
+      }
+    }
+  }
+  win.addEventListener('beforeunload', onBeforeUnload)
+}
+
 /** 壳/执行器推入的事件（总线入口的词汇表——每个词都对应一个真实系统事件） */
 export type HostLifecycleEvent =
   | { topic: 'app'; kind: AppEvent; payload?: unknown }
@@ -775,22 +893,22 @@ export function createAppLifecycleCapabilities<E extends Error = Error>(
           }
         },
         onMemoryWarning(cb) {
-          return bus.on('memory-warning', (p) => cb((p as { level: number }).level))
+          return bus.on('app:memory-warning', (p) => cb((p as { level: number }).level))
         },
         onThemeChange(cb) {
-          return bus.on('theme-change', (p) => cb((p as { theme: 'dark' | 'light' }).theme))
+          return bus.on('app:theme-change', (p) => cb((p as { theme: 'dark' | 'light' }).theme))
         },
         onWindowResize(cb) {
-          return bus.on('resize', (p) => {
+          return bus.on('app:resize', (p) => {
             const s = p as { windowWidth: number; windowHeight: number }
             cb({ windowWidth: s.windowWidth, windowHeight: s.windowHeight })
           })
         },
         onError(cb) {
-          return bus.on('error', (p) => cb((p as { error: string }).error))
+          return bus.on('app:error', (p) => cb((p as { error: string }).error))
         },
         onUnhandledRejection(cb) {
-          return bus.on('unhandled-rejection', (p) => {
+          return bus.on('app:unhandled-rejection', (p) => {
             const r = p as { reason: string }
             cb({ reason: r.reason, promise: Promise.resolve() })
           })

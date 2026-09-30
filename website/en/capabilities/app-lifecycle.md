@@ -27,6 +27,14 @@ Returns `AppLifecycle` (synchronous handle/state object).
 | [`onLaunch`](#onlaunch) | `onLaunch(cb: () => void): () => void` | — |
 | [`onShow`](#onshow) | `onShow(cb: () => void): () => void` | — |
 | [`onHide`](#onhide) | `onHide(cb: () => void): () => void` | — |
+| [`onError`](#onerror) | `onError(cb: (e: { error: string }) => void): () => void` | — |
+| [`onUnhandledRejection`](#onunhandledrejection) | `onUnhandledRejection(cb: (e: { reason: string }) => void): () => void` | — |
+| [`onMemoryWarning`](#onmemorywarning) | `onMemoryWarning(cb: (e: { level: number }) => void): () => void` | — |
+| [`onThemeChange`](#onthemechange) | `onThemeChange(cb: (e: { theme: 'dark' \| 'light' }) => void): () => void` | — |
+| [`onWindowResize`](#onwindowresize) | `onWindowResize(cb: (e: { windowWidth: number; windowHeight: number }) => void): () => void` | — |
+| [`onPageNotFound`](#onpagenotfound) | `onPageNotFound(cb: (e: { path: string }) => void): () => void` | — |
+| [`onAudioInterruptionBegin`](#onaudiointerruptionbegin) | `onAudioInterruptionBegin(cb: () => void): () => void` | — |
+| [`onAudioInterruptionEnd`](#onaudiointerruptionend) | `onAudioInterruptionEnd(cb: () => void): () => void` | — |
 
 ### `onLaunch`
 
@@ -64,11 +72,101 @@ onHide(cb: () => void): () => void
 
 **Returns**: `() => void`
 
-## Props
+### `onError`
 
-| Prop | Type | Required | Doc |
+```ts
+onError(cb: (e: { error: string }) => void): () => void
+```
+
+| Param | Type | Required | Doc |
 |---|---|---|---|
-| `phase` | `'PENDING' \| 'LAUNCH' \| 'SHOW' \| 'HIDE'` | Yes | 当前阶段：launch/show/hide |
+| `cb` | `(e: { error: string }) => void` | Yes | — |
+
+**Returns**: `() => void`
+
+### `onUnhandledRejection`
+
+```ts
+onUnhandledRejection(cb: (e: { reason: string }) => void): () => void
+```
+
+| Param | Type | Required | Doc |
+|---|---|---|---|
+| `cb` | `(e: { reason: string }) => void` | Yes | — |
+
+**Returns**: `() => void`
+
+### `onMemoryWarning`
+
+```ts
+onMemoryWarning(cb: (e: { level: number }) => void): () => void
+```
+
+| Param | Type | Required | Doc |
+|---|---|---|---|
+| `cb` | `(e: { level: number }) => void` | Yes | — |
+
+**Returns**: `() => void`
+
+### `onThemeChange`
+
+```ts
+onThemeChange(cb: (e: { theme: 'dark' | 'light' }) => void): () => void
+```
+
+| Param | Type | Required | Doc |
+|---|---|---|---|
+| `cb` | `(e: { theme: 'dark' \| 'light' }) => void` | Yes | — |
+
+**Returns**: `() => void`
+
+### `onWindowResize`
+
+```ts
+onWindowResize(cb: (e: { windowWidth: number; windowHeight: number }) => void): () => void
+```
+
+| Param | Type | Required | Doc |
+|---|---|---|---|
+| `cb` | `(e: { windowWidth: number; windowHeight: number }) => void` | Yes | — |
+
+**Returns**: `() => void`
+
+### `onPageNotFound`
+
+```ts
+onPageNotFound(cb: (e: { path: string }) => void): () => void
+```
+
+| Param | Type | Required | Doc |
+|---|---|---|---|
+| `cb` | `(e: { path: string }) => void` | Yes | — |
+
+**Returns**: `() => void`
+
+### `onAudioInterruptionBegin`
+
+```ts
+onAudioInterruptionBegin(cb: () => void): () => void
+```
+
+| Param | Type | Required | Doc |
+|---|---|---|---|
+| `cb` | `() => void` | Yes | — |
+
+**Returns**: `() => void`
+
+### `onAudioInterruptionEnd`
+
+```ts
+onAudioInterruptionEnd(cb: () => void): () => void
+```
+
+| Param | Type | Required | Doc |
+|---|---|---|---|
+| `cb` | `() => void` | Yes | — |
+
+**Returns**: `() => void`
 
 ## Error codes
 

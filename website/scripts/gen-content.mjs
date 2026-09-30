@@ -991,7 +991,37 @@ function emitComponentIndex(byDomain, total, DOMAIN_ORDER) {
 // ★#481 数据准备抽共享（zh 路径行为不变——同一函数输出必须与重构前逐字节一致）：zh 与 EN pass 同源
 function capContext(ir) {
   const caps = ir.PRIMITIVE_CATALOG.filter((p) => p.kind === 'capability')
-  const apiSrc = fs.readFileSync(path.join(ROOT, 'packages', 'api', 'src', 'capability.ts'), 'utf8')
+  let apiSrc = fs.readFileSync(path.join(ROOT, 'packages', 'api', 'src', 'capability.ts'), 'utf8')
+  // ★★类型别名解析（2026-09-30）：句柄类型已**收口**到 `capability-app.ts`（单一事实源），
+  //   `capability.ts` 里只剩 `export type AppLifecycle = AppLifecycleHandle` 这类别名 ⇒
+  //   只解析本文件会**抽不到方法列表**（页面会显示旧方法集——用户实测"搜不到新事件"即此形态）。
+  //   ⇒ 把所有 `export type X = Y` 解析成 `export interface X { ...原 Y 的接口体... }` 内联进来，
+  //     供既有行级解析器继续工作（不改解析器，只补数据源）。
+  const appSrchPath = path.join(ROOT, 'packages', 'api', 'src', 'capability-app.ts')
+  if (fs.existsSync(appSrchPath)) {
+    const appSrc = fs.readFileSync(appSrchPath, 'utf8')
+    const aliasRe = /export type (\w+) = (\w+)\n/g
+    let am
+    while ((am = aliasRe.exec(apiSrc))) {
+      const [, alias, target] = am
+      // 在 capability-app.ts 里找 `export interface <target> {` 的接口体
+      const ifaceRe = new RegExp(`export interface ${target}[^{]*{`)
+      const im = ifaceRe.exec(appSrc)
+      if (!im) continue
+      const bodyStart = im.index + im[0].length
+      let depth = 1
+      let i = bodyStart
+      while (i < appSrc.length && depth > 0) {
+        if (appSrc[i] === '{') depth++
+        else if (appSrc[i] === '}') depth--
+        i++
+      }
+      const body = appSrc.slice(bodyStart, i - 1)
+      // 用等价 interface 替换别名（保留别名导出语义：生成器只读不执行）
+      apiSrc = apiSrc.replace(am[0], `export interface ${alias} {${body}}
+`)
+    }
+  }
   const wxKeys = new Set(extractFnKeys(apiSrc, 'wxBridge'))
   const webKeys = new Set(extractFnKeys(apiSrc, 'webBridge'))
   const ifaces = extractInterfaces(apiSrc)
