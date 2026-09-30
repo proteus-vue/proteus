@@ -1,6 +1,14 @@
 #!/usr/bin/env python3
 """hosts/android/check-host-runtime.py —— ★★G-39 宿主运行时判据（真机产物 host-runtime.json + host-shell.json）
 
+【★两个平台共用本判据（2026-09-30）】Android（QuickJS 壳）与 iOS（JSC 壳）跑**同一份**
+  `hosts/shared/bridge/entry-host-runtime.ts`（平台中立入口），产物字段同名 ⇒ 同一判据。
+  平台差异以 `host_id` 自报（'android' / 'ios'）并对内存口径分档：
+    · `mem_scope="engine"`（Android/QuickJS：`JS_ComputeMemoryUsage` 引擎真实 JS 堆）
+    · `mem_scope="process"`（iOS/JSC：`phys_footprint`——本轮取证确认 JSC **无公开
+      per-context 内存 API**，故用进程口径；分配规模相应更大，IoT 判据按"增长/回落"方向断言）
+  两者共同断言：分配后读数增长、GC 后读数回落（**方向**判据，避免跨口径绝对值比较）。
+
 【要证明什么（G-39 宿主运行时 SPI 与职责边界，四块拼图的可执行判据）】
   A/B 生命周期唯一拥有：状态机走 created→running→suspended→running；**非法转换被拒绝且记账**
     （bootstrap 于 suspended / 未挂起 resume / 销毁后 enqueue / 重复 destroy 四条都必须拒绝）。
@@ -56,6 +64,9 @@ def main() -> int:
         print(f"  ✓ {msg}")
 
     # 前置
+    host_id = d.get("host_id")
+    if host_id:
+        print(f"  平台：{host_id}（壳自报；帧驱动={d.get('frame_driver')}）")
     if not d.get("engine_available"):
         fail(f"QuickJS 引擎不可用：{d.get('error')}")
         print()
@@ -183,8 +194,22 @@ def main() -> int:
         elif not (isinstance(mg, int) and mg < ma):
             fail(f"GC 后内存未下降：alloc={ma} → gc={mg}（GC 未生效或对象仍可达——经典作用域陷阱）")
         else:
-            report(f"F 内存账本：分配增长 {mb}→{ma}B（+{ma - mb}），GC 后降至 {mg}B"
-                   f"（引擎真实 JS 堆；判据侧独立重算）")
+            scope = d.get("mem_scope", "unknown")
+            scope_note = {
+                "engine": "引擎真实 JS 堆（QuickJS JS_ComputeMemoryUsage）",
+                "process": "进程口径 phys_footprint（JSC 无公开 per-context API——诚实标注）",
+            }.get(scope, f"口径={scope}")
+            # ★诚实读数（iOS/JSC 实测）：process 口径下 GC 后降幅可能远小于分配增幅——
+            #   这不是缺陷：JSC 的 JSGarbageCollect 是**提示性 GC**，回收后把页**保留在自身的
+            #   free pool**（不即时归还 OS），且 phys_footprint 只看 OS 侧 ⇒ 方向判据（降）成立、
+            #   幅度判据不成立。⇒ 显式标注，避免读的人误以为"32MB 全归还了"。
+            shrink = ma - mg
+            grow = ma - mb
+            shrink_note = ""
+            if scope == "process" and grow > 0 and shrink < grow * 0.1:
+                shrink_note = "；★降幅远小于增幅属**预期**（JSC 提示性 GC 把页留在 free pool，不即时归还 OS）"
+            report(f"F 内存账本：分配增长 {mb}→{ma}B（+{grow}），GC 后降至 {mg}B（-{shrink}）"
+                   f"（{scope_note}{shrink_note}；判据侧独立重算）")
 
     # ── G 宿主 conformance ──
     total = d.get("conf_total", 0)
@@ -199,7 +224,9 @@ def main() -> int:
         print("✗ 宿主运行时未通过（见上方失败项）")
         return 1
     print("✅ 宿主运行时通过：生命周期唯一拥有 + 真实壳转发 + 事件循环/job 泵 + 职责边界 + 内存账本")
-    print(f"  规模：bundle={d.get('bundle_chars')} 字符 · 总耗时 {d.get('total_ms')}ms")
+    # ★平台专有字段容错（bundle_chars/total_ms 由 Android Java 壳写入；iOS 壳不写这两个——不是缺失）
+    scale = "bundle=%s 字符 · 总耗时 %sms" % (d.get("bundle_chars", "n/a（iOS 壳不写）"), d.get("total_ms", "n/a"))
+    print(f"  规模：{scale} · 平台={host_id or '未自报'}")
     return 0
 
 

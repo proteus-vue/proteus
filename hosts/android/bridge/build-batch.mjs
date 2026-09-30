@@ -122,9 +122,11 @@ if (resultAppStack.warnings.length) {
 // 【为什么 host-conformance 也走 src】它与 quickjs-host 同在 render-backend/src；
 //   esbuild 会一并打包其相对依赖（dispatcher/headless/flutter）；
 //   唯一的外部包依赖是 @proteus-vue/component-ir（零依赖纯 TS）——显式 alias 到其 dist。
+//   ★★入口在 `hosts/shared/bridge/`（**Android/iOS 两个壳共用同一份**——平台中立：
+//     读壳注入的 `__PROTEUS_HOST_ID__` 自报标识；内存/GC 走各自的宿主桥）
 const OUT_HOST_RT = path.join(HERE, 'dist', 'bundle-host-runtime.js')
 const resultHostRt = await build({
-  entryPoints: [path.join(HERE, 'entry-host-runtime.ts')],
+  entryPoints: [path.join(ROOT, 'hosts/shared/bridge/entry-host-runtime.ts')],
   outfile: OUT_HOST_RT,
   bundle: true,
   format: 'iife',

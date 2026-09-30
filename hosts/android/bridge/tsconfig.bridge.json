@@ -13,5 +13,5 @@
   "compilerOptions": {
     "types": []
   },
-  "include": ["./*.ts"]
+  "include": ["./*.ts", "../../shared/bridge/*.ts"]
 }

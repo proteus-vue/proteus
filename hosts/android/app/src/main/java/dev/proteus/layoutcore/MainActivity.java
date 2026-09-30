@@ -852,6 +852,12 @@ public class MainActivity extends Activity {
             }
             out.put("bundle_chars", bundle.length());
 
+            // ★平台参数注入（与 iOS 壳同契约：TS 侧读它们自报标识——报告里 host_id 应为 "android"）
+            //   ★★顺序要求（本轮实测踩到）：必须**先注入再 eval bundle**——IIFE 在**加载时**
+            //   就把 `const HOST_ID = globalThis.__PROTEUS_HOST_ID__ ?? 默认值` 求值了；
+            //   加载后再设全局量对已捕获的常量**不起作用**（首版即此形态：host_id 报默认值）。
+            QuickJsEngine.eval("globalThis.__PROTEUS_HOST_ID__ = 'android';"
+                    + "globalThis.__PROTEUS_HOST_FRAME_DRIVER__ = 'Choreographer';");
             // ★宿主桥：memUsage / gc（无参签名——JNI 侧逐一条件探测注入）
             final HostBridge bridge = new HostBridge();
             long t0 = System.nanoTime();

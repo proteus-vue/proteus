@@ -45,6 +45,7 @@ CASE_FILTER=""
 for a in "$@"; do
   case "$a" in
     --bench) MODE="bench" ;;
+    --host-runtime) MODE="host-runtime" ;;
     --cases=*) CASE_FILTER="${a#--cases=}" ;;
     *) [ -z "$UDID" ] && UDID="$a" ;;
   esac
@@ -91,6 +92,7 @@ build_bundle() {
 }
 build_bundle build-selfdraw.mjs
 build_bundle build-bench.mjs
+build_bundle build-host-runtime.mjs
 
 echo "==> ③ 编译 Rust 核心（iOS release）"
 export PATH="$HOME/.cargo/bin:$PATH"
@@ -110,7 +112,8 @@ PLATFORM_SRC="$(ls "$ROOT"/platform/ios/ProteusPlatform/*.swift 2>/dev/null | tr
 [ -n "$PLATFORM_SRC" ] || { echo "✗ 找不到 platform/ios 平台适配源码（HA0.5 抽取后被删？）"; exit 3; }
 xcrun --sdk iphoneos swiftc -O -target arm64-apple-ios15.0 \
   -framework UIKit -framework CoreText -framework JavaScriptCore -parse-as-library \
-  -o "$APP/ProteusSelfDraw" $PLATFORM_SRC "$HERE/ProteusHost/selfdraw-scene.swift" "$ABI_LIB" "$LIB"
+  -o "$APP/ProteusSelfDraw" $PLATFORM_SRC "$HERE/ProteusHost/selfdraw-scene.swift" \
+  "$HERE/ProteusHost/host-runtime-scene.swift" "$ABI_LIB" "$LIB"
 
 echo "==> ⑤ 组装 .app"
 # ★★两个 bundle **都装**（本仓实测踩到：只装当前模式那个 ⇒ 从桌面点开时
@@ -119,6 +122,8 @@ echo "==> ⑤ 组装 .app"
 # ★② 已构建（若那里失败会 exit 6）；此处只拷贝——**重复构建既慢又掩盖失败**
 cp "$HERE/bridge/dist/bundle-selfdraw.js" "$APP/bundle-selfdraw.js"
 cp "$HERE/bridge/dist/bundle-bench.js" "$APP/bundle-bench.js"
+# ★G-39：宿主运行时 bundle（第三个——`--host-runtime` 模式用）
+cp "$HERE/bridge/dist/bundle-host-runtime.js" "$APP/bundle-host-runtime.js"
 # ★描述文件与 entitlements 从**描述文件原样提取**（本仓 iOS 竖切实测的坑：
 #   手工拼装会 0xe8008016 invalid entitlements；免费个人团队还需 team-identifier
 #   + keychain-access-groups，少一项即无效）
@@ -223,6 +228,8 @@ mkdir -p "$HERE/results"
 REPORT_FILE="selfdraw-report.json"
 SNAP_FILE="selfdraw-final.png"
 if [ "$MODE" = "bench" ]; then REPORT_FILE="logic-bench-report.json"; SNAP_FILE="bench-final.png"; fi
+# ★G-39：宿主运行时模式写独立报告（不污染既有产物命名）
+if [ "$MODE" = "host-runtime" ]; then REPORT_FILE="host-runtime.json"; SNAP_FILE="host-shell.json"; fi
 # ★过滤跑写独立文件（否则会把全量基准报告覆盖掉——历史读数不可再生）
 if [ -n "$CASE_FILTER" ]; then
   SLUG="$(printf '%s' "$CASE_FILTER" | tr ',' '_')"
@@ -247,7 +254,72 @@ rm -f "$BASEF"
 LAUNCH_LOG="$(mktemp)"
 LAUNCH_RC=0
 echo "    启动 App（阻塞到报告落盘后自退——无轮询 / 无 sleep / 无超时；长跑请放后台）"
-if [ "$MODE" = "bench" ]; then
+if [ "$MODE" = "host-runtime" ]; then
+  # ══════════════════════════════════════════════════════════════════
+  # ★★G-39 宿主运行时模式：**两段式**（本仓事件驱动纪律的延伸）
+  #
+  # 【为什么不能像 selfdraw/bench 那样一次 launch 到底】
+  #   本场景要验证的是「**真实系统生命周期**被壳转发进 JS 运行时」（G-39 动机第一条）——
+  #   而生命周期事件来自**外部动作**（切到别的 App → willResignActive；切回 → didBecomeActive）。
+  #   ⇒ 需要 ① 后台 launch（阻塞，等 App 自退）② 等"相位完成"信号 ③ 触发真实前后台往返
+  #     ④ 等 App 达成退出条件（suspend+resume 都 applied ⇒ HOST_RUNTIME_REPORT_READY ⇒ exit）
+  #     ⑤ 取回两份报告（主报告 + 壳转发报告）。
+  #
+  # 【为什么这不是"盲等"】每一步都有**条件**：
+  #   · phase done —— 等 launch 日志里出现 HOST_RUNTIME_PHASE_DONE（内容条件）；
+  #   · App 退出 —— `kill -0 $LPID` 探进程存活（本地判定，零成本），launch 返回 = 报告已落盘；
+  #   · 触发往返 —— 启动「设置」App（真实 willResignActive）后重新 launch 本 App（真实 didBecomeActive）。
+  #   ★launch 的 stdout 走文件（不是管道）——避免 `$(...)` 缓冲吞掉进度日志。
+  # ══════════════════════════════════════════════════════════════════
+  WAIT_SH="$ROOT/.agents/skills/ai-efficiency-rules/scripts/wait_for.sh"
+  wait_cond() { # $1=命令（字符串） $2=秒
+    if [ -x "$WAIT_SH" ]; then
+      bash "$WAIT_SH" --cmd "$1" --timeout "$2" --interval 2 || true
+    else
+      local n=$(( $2 / 2 ))
+      for _ in $(seq 1 "$n"); do eval "$1" >/dev/null 2>&1 && return 0; sleep 2; done
+    fi
+  }
+  ( xcrun devicectl device process launch --console --terminate-existing \
+      --environment-variables '{"PROTEUS_EXIT_AFTER_REPORT":"1"}' \
+      --device "$UDID" "$BUNDLE_ID" --host-runtime > "$LAUNCH_LOG" 2>&1; echo "LAUNCH_RC=$?" >> "$LAUNCH_LOG" ) &
+  LPID=$!
+  # ① 等"两相完成 + 生命周期观察者已装"（内容条件；缺此信号 ⇒ App 未就绪，后续触发会丢事件）
+  if ! wait_cond "grep -q HOST_RUNTIME_PHASE_DONE '$LAUNCH_LOG'" 60; then
+    echo "✗ 未等到相位完成信号（60s）——日志尾："
+    tail -8 "$LAUNCH_LOG" | sed 's/^/      /'
+    kill "$LPID" 2>/dev/null
+    rm -f "$LAUNCH_LOG"
+    exit 7
+  fi
+  echo "    相位完成信号已达（两相 + 观察者就绪）"
+  # ② 触发真实前后台往返：先启动「设置」（本 App → willResignActive），再重新激活本 App
+  #    ★实测依据（2026-09-30）：两次 launch 后 PID 不变 ⇒ 是同进程前后台往返，不是重启。
+  xcrun devicectl device process launch --device "$UDID" com.apple.Preferences >/dev/null 2>&1 || true
+  xcrun devicectl device process launch --device "$UDID" "$BUNDLE_ID" >/dev/null 2>&1 || true
+  # ③ 等 App 达成退出条件（kill -0 存活探测；launch 返回 = 报告已落盘）
+  if ! wait_cond "! kill -0 $LPID 2>/dev/null" 120; then
+    echo "✗ App 未在 120s 内达成退出条件（suspend+resume 都 applied 才退）——日志尾："
+    tail -10 "$LAUNCH_LOG" | sed 's/^/      /'
+    kill "$LPID" 2>/dev/null
+    rm -f "$LAUNCH_LOG"
+    exit 7
+  fi
+  wait "$LPID" 2>/dev/null || true
+  LAUNCH_RC="$(sed -n 's/^LAUNCH_RC=//p' "$LAUNCH_LOG" | tail -1)"
+  if grep -qiE "not been explicitly trusted|invalid code signature|error 3 \(0x03\)" "$LAUNCH_LOG"; then
+    echo "✗ 启动被拦：需在**设备上手动信任开发者证书**（设置 → 通用 → VPN与设备管理）"
+    rm -f "$LAUNCH_LOG"
+    exit 5
+  fi
+  if grep -q "HOST_RUNTIME_REPORT_READY" "$LAUNCH_LOG"; then
+    echo "    App 已主动上报：生命周期往返完成、报告落盘后退出（launch rc=${LAUNCH_RC:-?}）"
+  else
+    echo "    ⚠ 日志未见 HOST_RUNTIME_REPORT_READY（launch rc=${LAUNCH_RC:-?}）——以报告断言为准，日志尾："
+    tail -6 "$LAUNCH_LOG" | sed 's/^/      /'
+  fi
+  rm -f "$LAUNCH_LOG"
+elif [ "$MODE" = "bench" ]; then
   # ★用例过滤透传（`--cases=S5` ⇒ 宿主注入 __PROTEUS_CASES__）
   if [ -n "$CASE_FILTER" ]; then
     xcrun devicectl device process launch --console --terminate-existing \
@@ -270,13 +342,15 @@ if grep -qiE "not been explicitly trusted|invalid code signature|error 3 \(0x03\
   rm -f "$LAUNCH_LOG"
   exit 5
 fi
-if grep -q "SELFDRAW_REPORT_READY" "$LAUNCH_LOG"; then
-  echo "    App 已主动上报：报告落盘后退出（launch rc=${LAUNCH_RC}）"
-else
-  echo "    ⚠ 日志未见 SELFDRAW_REPORT_READY（launch rc=${LAUNCH_RC}）——以报告断言为准，日志尾："
-  tail -5 "$LAUNCH_LOG" | sed 's/^/      /'
+if [ "$MODE" != "host-runtime" ]; then
+  if grep -q "SELFDRAW_REPORT_READY" "$LAUNCH_LOG"; then
+    echo "    App 已主动上报：报告落盘后退出（launch rc=${LAUNCH_RC}）"
+  else
+    echo "    ⚠ 日志未见 SELFDRAW_REPORT_READY（launch rc=${LAUNCH_RC}）——以报告断言为准，日志尾："
+    tail -5 "$LAUNCH_LOG" | sed 's/^/      /'
+  fi
+  rm -f "$LAUNCH_LOG"
 fi
-rm -f "$LAUNCH_LOG"
 
 echo "==> ⑧ 取回报告（App 已退出 ⇒ 只取一次；无轮询 / 无 sleep / 无超时）"
 # ★★事件驱动（见 §⑦ 注释）：launch --console 返回 ⇒ App 已退出 ⇒ 报告已落盘。
@@ -297,12 +371,40 @@ if [ "$FRESH_RC" != "0" ]; then
   echo "✗ 报告不是本轮写出的（${FRESH_MSG}）——App 可能崩溃/被拦；不等待，直接失败"
   exit 7
 fi
-BID_MSG="$(node "$HERE/lib/check-report-build-id.mjs" "$HERE/results/$REPORT_FILE" "$BUILD_ID" 2>&1)"; BID_RC=$?
-if [ "$BID_RC" != "0" ]; then
-  echo "✗ ${BID_MSG}——设备上跑的不是本次构建；不等待，直接失败"
-  exit 7
+if [ "$MODE" = "host-runtime" ]; then
+  # host-runtime 报告的 build_id 在**顶层**（不是 js_report 嵌套——该形态属渲染场景）
+  BID_OK="$(python3 -c "
+import json,sys
+d=json.load(open('$HERE/results/$REPORT_FILE'))
+print('ok' if d.get('build_id')=='$BUILD_ID' else 'build_id 不符：报告=%r 期望=%r' % (d.get('build_id'),'$BUILD_ID'))
+" 2>&1)"
+  if [ "$BID_OK" != "ok" ]; then
+    echo "✗ ${BID_OK}——设备上跑的不是本次构建；不等待，直接失败"
+    exit 7
+  fi
+else
+  BID_MSG="$(node "$HERE/lib/check-report-build-id.mjs" "$HERE/results/$REPORT_FILE" "$BUILD_ID" 2>&1)"; BID_RC=$?
+  if [ "$BID_RC" != "0" ]; then
+    echo "✗ ${BID_MSG}——设备上跑的不是本次构建；不等待，直接失败"
+    exit 7
+  fi
 fi
 echo "    ✅ 报告为本轮写出且 build_id 匹配（零等待）"
+
+# ★★G-39：宿主运行时模式——取壳转发报告 + 跑判据（与 Android 侧**同一判据脚本**）
+if [ "$MODE" = "host-runtime" ]; then
+  SHELL_REPORT="host-shell.json"
+  if xcrun devicectl device copy from --device "$UDID" --domain-type appDataContainer \
+      --domain-identifier "$BUNDLE_ID" --source "Documents/$SHELL_REPORT" \
+      --destination "$HERE/results/$SHELL_REPORT" >/dev/null 2>&1; then
+    echo "    壳转发报告：$HERE/results/$SHELL_REPORT"
+  else
+    echo "    ⚠ 壳转发报告未取到（${SHELL_REPORT}）——判据会据此判红（生命周期未被壳转发）"
+  fi
+  echo "==> ⑨ 判据（与 Android 同一脚本：platform 由报告 host_id 自报）"
+  python3 "$ROOT/hosts/android/check-host-runtime.py" "$HERE/results/$REPORT_FILE" "$HERE/results/$SHELL_REPORT"
+  exit $?
+fi
 
 # ★截图 = 软信号（bench 模式本就不产 PNG；报告已在上面硬断言过）
 if xcrun devicectl device copy from --device "$UDID" --domain-type appDataContainer \
