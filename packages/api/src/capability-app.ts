@@ -696,8 +696,68 @@ export function createAppNativeCapabilities<E extends Error = Error>(CapError: n
         },
       }
     },
-    /** C82 WebAssembly（App：JSC/QuickJS 均内置 WebAssembly —— 与 Web 同形） */
+    /**
+     * C82 WebAssembly。
+     *
+     * 【★★两条实现路径（真机取证后的正确形态）】
+     *   ① **宿主侧 wasm 运行时**（wasm3，经 `webassembly.*` 通道）——iOS/Android 的 QuickJS **内建无 WASM**
+     *      （实测：`qjs -e "typeof WebAssembly"` → undefined；源码零命中）⇒ 宿主提供引擎；
+     *   ② **引擎内建 WebAssembly**（若 JS 引擎自带，如 JSC 完整版）——直接用，零跨边界开销。
+     *   优先级：**宿主优先**（能力更全：支持 limits/gas 治理；且端上实测可达）→ 回落引擎内建。
+     */
     getWebAssembly: () => {
+      // ① 宿主通道可用 ⇒ 用宿主 wasm 运行时（真 wasm3）
+      const hostWasm = invokeHost('webassembly.validate', { bytes: [0, 97, 115, 109, 1, 0, 0, 0] })
+      const hostAvailable = hostWasm.ok && hostWasm.data === true
+      if (hostAvailable) {
+        return {
+          supportsStreaming: false, // 宿主通道是"字节数组"形态（无 fetch/stream 语义）
+          supportsPathLoad: false,
+          // ★options 用宽形态（`unknown` 再窄化）——与 `WasmInstantiateOptions` 结构兼容即可：
+          //   收窄成具体形状会与 capability.ts 的声明不匹配（tsc 当场抓出）
+          instantiate: (source: { bytes?: ArrayBuffer | Uint8Array; path?: string }, options?: unknown): Promise<R<WasmHandle, E>> =>
+            Promise.resolve().then(() => {
+              const bytes = (source as { bytes?: ArrayBuffer | Uint8Array }).bytes
+              if (!bytes) {
+                return errNow<WasmHandle, E>('webassembly.unsupported', '宿主通道需要 { bytes }（无代码包路径概念）')
+              }
+              const arr = Array.from(bytes instanceof Uint8Array ? bytes : new Uint8Array(bytes))
+              const r = invokeHost('webassembly.instantiate', { bytes: arr, limits: (options as { limits?: unknown } | undefined)?.limits })
+              if (!r.ok) return errNow<WasmHandle, E>(r.missing ? 'webassembly.unsupported' : 'webassembly.failed', `宿主导出 wasm：${r.reason}`)
+              const d = (r.data ?? {}) as { handle?: number; engine?: string }
+              const handle = Number(d.handle ?? 0)
+              return {
+                ok: true as const,
+                data: {
+                  exports: {},
+                  fromPath: false,
+                  /** ★stub exports（宿主侧按导出函数名调用）——真实 memory/exports 面属后续批次 */
+                  dispose: () => {
+                    invokeHost('webassembly.release', { handle })
+                  },
+                  // ★宿主 cannel 的调用入口（非标准语义——见类型注；标准 `exports.fn()` 面属后续批次）
+                  ...( { __hostHandle: handle, __engine: d.engine } as Record<string, unknown>),
+                } as WasmHandle,
+              }
+            }),
+          compile: (bytes: ArrayBuffer | Uint8Array): Promise<R<unknown, E>> =>
+            Promise.resolve().then(() => {
+              // 宿主通道无独立 compile（validate 已覆盖格式检查）
+              const arr = Array.from(bytes instanceof Uint8Array ? bytes : new Uint8Array(bytes))
+              const v = invokeHost('webassembly.validate', { bytes: arr })
+              return v.ok && v.data === true
+                ? { ok: true as const, data: { engine: 'host-wasm3', validated: true } }
+                : errNow<unknown, E>('webassembly.failed', `宿主 wasm validate 未通过：${v.ok ? 'false' : v.reason}`)
+            }),
+          validate: (bytes: ArrayBuffer | Uint8Array): Promise<R<boolean, E>> =>
+            Promise.resolve().then(() => {
+              const arr = Array.from(bytes instanceof Uint8Array ? bytes : new Uint8Array(bytes))
+              const r = invokeHost('webassembly.validate', { bytes: arr })
+              return r.ok ? { ok: true as const, data: r.data === true } : errNow<boolean, E>('webassembly.failed', r.reason)
+            }),
+        }
+      }
+      // ② 回落：引擎内建 WebAssembly
       const WASM = (globalThis as { WebAssembly?: typeof WebAssembly }).WebAssembly
       if (!WASM) {
         return {

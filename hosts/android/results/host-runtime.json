@@ -1,13 +1,13 @@
 {
   "engine_available": true,
-  "bundle_chars": 197639,
+  "bundle_chars": 201490,
   "bundle_load_ok": true,
   "run_ok": true,
   "pending_after_run": false,
   "jobs_pumped": 0,
   "finish_ok": true,
   "pending_after_finish": false,
-  "total_ms": 514,
+  "total_ms": 516,
   "ok": true,
   "scene": "host-runtime",
   "host_id": "android",
@@ -29,9 +29,9 @@
   "refuse_background_thread": true,
   "async_resolved_at_run": false,
   "mem_available": true,
-  "mem_before": 461342,
-  "mem_after_alloc": 781606,
-  "mem_after_gc": 461622,
+  "mem_before": 477723,
+  "mem_after_alloc": 797987,
+  "mem_after_gc": 478003,
   "mem_obj_before": 519,
   "mem_obj_after": 521,
   "mem_ok": true,
@@ -165,10 +165,10 @@
       "code": "mini-program.failed"
     },
     "wasmSupportsStreaming": false,
+    "wasmAddResult": 42,
     "wasmValidateEmptyModule": {
-      "ok": false,
-      "code": "webassembly.unsupported",
-      "message": "[proteus-cap] webassembly.unsupported: 无 WebAssembly"
+      "ok": true,
+      "data": true
     },
     "__hostCalls": [
       "host.context",
@@ -182,6 +182,11 @@
       "preload.assets",
       "extension.load",
       "mini-program.navigate",
+      "webassembly.validate",
+      "webassembly.instantiate",
+      "webassembly.call",
+      "webassembly.release",
+      "webassembly.validate",
       "native.calls"
     ]
   }
