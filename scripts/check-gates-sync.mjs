@@ -89,6 +89,11 @@ const LOCAL_ONLY = {
   // ★Android 宿主编译检查（2026-09-29，与 check:ios-selfdraw-compile 同源盲区）：
   //   编译宿主需 Android SDK（android.jar）+ JDK；CI 为 ubuntu-latest，不装 Android SDK ⇒ 跑不了。
   'check:android-host-compile': '需 Android SDK（android.jar）+ JDK 17；CI 为 ubuntu-latest，未装 Android SDK',
+  // ★平台动画判据（容器级 + 逐节点）：**输入是真机产物**（platform-anim*.json，由 adb pull 取回）
+  //   且 App 是**广播触发**（需真机 + adb）⇒ CI 无法执行。它的配套是"零设备也能守"的
+  //   `check:android-host-compile`（宿主代码可编译）+ `check:acceptance-stub`（装置可用），
+  //   三者分工：编译守形态 / 桩测守装置 / 本条守真机行为。
+  'check:android-platform-anim': '需真机产物（adb pull 的 platform-anim*.json）；CI 无设备',
   // ★hook 接线检查（2026-09-29）：CI 上 `.zcode/config.json` 不存在（gitignored）⇒ 该门禁
   //   走"未安装但给出指引"分支并**返回 0**（不判红是刻意的：CI 本来就不需要本地 hook）。
   //   ⇒ 归入"仅本地"是因为**它的判据只在本地才有意义**（CI 恒为"未安装"）。

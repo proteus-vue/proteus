@@ -176,6 +176,158 @@ public class ProteusHostView extends ViewGroup {
     // ★StaticLayout 要求 `TextPaint`（Paint 的子类）——文本配置色/字号都在它上面
     private final android.text.TextPaint textPaint = new android.text.TextPaint(android.graphics.Paint.ANTI_ALIAS_FLAG);
 
+    /* ══════════ ★★逐节点平台动画（Android：载体 View + ViewPropertyAnimator）══════════ */
+
+    /**
+     * 动画载体：一个**只画该节点那几条指令**的 View。
+     *
+     * 【为什么必须是 View（据 android.jar 的取证结论，非记忆）】"逐节点平台动画"要求
+     *   **渲染线程**自主插值。Android 公开 API 里：
+     *   · `RenderNode` + `Canvas.drawRenderNode` **是**公开的，但 **`RenderNodeAnimator` 不公开**
+     *     ⇒ 裸 `RenderNode` 的属性只能被主线程逐帧"设置"，**无法在 RenderThread 上动画**；
+     *   · 能被平台动画的只有 **View**（`ViewPropertyAnimator` → `RenderNodeAnimator`）。
+     *   ⇒ 落点：把目标节点**提升**为只含该节点指令的载体 View，由平台动画驱动其 transform/alpha。
+     *
+     * ★**这不是"改回 View 体系"**：载体只承载**被动画的节点**（通常 1–3 个），其余节点仍走
+     *   `onDraw` 指令流（无 View 树）；动画结束载体即拆除。
+     */
+    private static final class CarrierView extends View {
+        private final List<Cmd> items;       // 已转成**相对载体**坐标
+        private final Paint bg = new Paint();
+        private final android.text.TextPaint tp = new android.text.TextPaint(android.graphics.Paint.ANTI_ALIAS_FLAG);
+
+        CarrierView(Context ctx, List<Cmd> items) {
+            super(ctx);
+            this.items = items;
+            setWillNotDraw(false);
+            tp.setColor(Color.BLACK);
+            tp.setTextSize(12f);
+        }
+
+        @Override
+        protected void onDraw(Canvas canvas) {
+            float last = tp.getTextSize();
+            for (int i = 0; i < items.size(); i++) {
+                Cmd c = items.get(i);
+                bg.setColor(c.color);
+                canvas.drawRect(c.x, c.y, c.x + c.w, c.y + c.h, bg);
+                if (c.text != null) {
+                    if (c.fontSize > 0 && c.fontSize != last) { tp.setTextSize(c.fontSize); last = c.fontSize; }
+                    canvas.drawText(c.text, c.x + 1f, c.y + c.h * 0.8f, tp);
+                }
+            }
+        }
+    }
+
+    /** 节点 id → 动画载体 */
+    private final Map<Integer, CarrierView> animCarriers = new HashMap<>();
+    /** 节点 id → 载体几何（节点矩形，宿主坐标系） */
+    private final Map<Integer, RectF> animCarrierRects = new HashMap<>();
+    /** 动画中**要从指令流里跳过**的指令下标（内容已由载体画 ⇒ 不能再画一份，否则重影） */
+    private java.util.Set<Integer> skipCmdIndices = null;
+
+    /* 判据计数器：动画期间 measure / layout / draw 的增量都应为 0（三个"零"） */
+    private int onMeasureCount = 0;
+    private int onLayoutCount = 0;
+    /** 载体动画读数（判据：model 值逐帧推进 + 终态精确） */
+    private float carrierTx = 0f, carrierTy = 0f, carrierScale = 1f, carrierAlpha = 1f;
+    private int carrierDrawBefore = 0, carrierDrawAfter = 0;
+    private int carrierMeasureBefore = 0, carrierMeasureAfter = 0;
+    private int carrierLayoutBefore = 0, carrierLayoutAfter = 0;
+    private boolean carrierAnimRunning = false;
+
+    /**
+     * ★★**接入逐节点动画载体**：把该节点的指令提升为独立 View，并启动平台动画。
+     *
+     * @param nodeId 节点 id（簿记键；宿主不解析其语义）
+     * @param items  该节点的绘制指令（**绝对坐标**；内部转成相对载体坐标）
+     * @param rect   节点矩形（宿主坐标系；载体位置 = 它，动画走 translation ⇒ 不触发 layout）
+     * @param skip   这些指令在 `cmds` 里的下标（从指令流跳过）
+     */
+    public void attachAnimCarrier(int nodeId, List<Cmd> items, RectF rect, java.util.Set<Integer> skip,
+                                  float tx, float ty, float scale, float rotation, float alpha,
+                                  long durMs, long delayMs,
+                                  float bx1, float by1, float bx2, float by2) {
+        // ① 指令坐标 → 相对载体
+        List<Cmd> rel = new java.util.ArrayList<>(items.size());
+        for (Cmd c : items) {
+            rel.add(new Cmd(c.x - rect.left, c.y - rect.top, c.w, c.h, c.color, c.text, c.fontSize));
+        }
+        final CarrierView carrier = new CarrierView(getContext(), rel);
+        // ② 播放中把这些指令从指令流跳过（否则**重影**：指令流一份 + 载体一份）
+        skipCmdIndices = skip;
+        animCarriers.put(nodeId, carrier);
+        animCarrierRects.put(nodeId, new RectF(rect));
+        addView(carrier);
+        carrier.layout(exactPx(rect.left), exactPx(rect.top), exactPx(rect.right), exactPx(rect.bottom));
+        invalidate();
+
+        android.animation.TimeInterpolator interp = (bx1 == 0f && by1 == 0f && bx2 == 1f && by2 == 1f)
+                ? new android.view.animation.LinearInterpolator()
+                : new android.view.animation.PathInterpolator(bx1, by1, bx2, by2);
+        // ③ 三个"零"的基线（动画期间 measure/layout/draw 都不得增长）
+        carrierDrawBefore = onDrawCount;
+        carrierMeasureBefore = onMeasureCount;
+        carrierLayoutBefore = onLayoutCount;
+        carrierAnimRunning = true;
+        carrier.animate()
+                .translationX(tx).translationY(ty)
+                .scaleX(scale).scaleY(scale)
+                .rotation(rotation).alpha(alpha)
+                .setDuration(durMs).setStartDelay(delayMs)
+                .setInterpolator(interp)
+                .withEndAction(new Runnable() {
+                    @Override public void run() {
+                        carrierAnimRunning = false;
+                        carrierDrawAfter = onDrawCount;
+                        carrierMeasureAfter = onMeasureCount;
+                        carrierLayoutAfter = onLayoutCount;
+                    }
+                })
+                .start();
+    }
+
+    /** 逐节点动画读数（判据：三个"零"增量 + model 值推进 + 终态） */
+    public String carrierAnimStats() {
+        CarrierView c = animCarriers.isEmpty() ? null : animCarriers.values().iterator().next();
+        if (c != null) {
+            carrierTx = c.getTranslationX();
+            carrierTy = c.getTranslationY();
+            carrierScale = c.getScaleX();
+            carrierAlpha = c.getAlpha();
+        }
+        return "{\"running\":" + (carrierAnimRunning ? "true" : "false")
+                + ",\"carriers\":" + animCarriers.size()
+                + ",\"tx\":" + carrierTx + ",\"ty\":" + carrierTy
+                + ",\"scale\":" + carrierScale + ",\"alpha\":" + carrierAlpha
+                + ",\"draw_delta\":" + (carrierDrawAfter - carrierDrawBefore)
+                + ",\"measure_delta\":" + (carrierMeasureAfter - carrierMeasureBefore)
+                + ",\"layout_delta\":" + (carrierLayoutAfter - carrierLayoutBefore)
+                + ",\"on_draw_count\":" + onDrawCount
+                + ",\"on_measure_count\":" + onMeasureCount
+                + ",\"on_layout_count\":" + onLayoutCount + "}";
+    }
+
+    /** 拆除全部动画载体（复位 + 恢复指令流绘制；相位间清理） */
+    public void resetAnimCarriers() {
+        for (CarrierView c : animCarriers.values()) {
+            c.animate().cancel();
+            removeView(c);
+        }
+        animCarriers.clear();
+        animCarrierRects.clear();
+        skipCmdIndices = null;
+        carrierAnimRunning = false;
+        carrierTx = carrierTy = 0f;
+        carrierScale = carrierAlpha = 1f;
+        carrierDrawBefore = carrierDrawAfter = onDrawCount;
+        invalidate();
+    }
+
+    public int animCarrierCount() { return animCarriers.size(); }
+    public int onMeasureCount() { return onMeasureCount; }
+    public int onLayoutCount() { return onLayoutCount; }
+
     public ProteusHostView(Context context) {
         super(context);
         // ★★**必须显式开自绘**（本仓实测踩到，2026-09-29 · S5 端到端）：
@@ -330,6 +482,7 @@ public class ProteusHostView extends ViewGroup {
 
     @Override
     protected void onMeasure(int widthSpec, int heightSpec) {
+        onMeasureCount++;   // ★判据："逐节点动画期间零测量"（见 carrierAnimStats）
         // 宿主自身：接受 parent 给的尺寸（它由外部布局决定）
         int w = MeasureSpec.getSize(widthSpec);
         int h = MeasureSpec.getSize(heightSpec);
@@ -347,6 +500,7 @@ public class ProteusHostView extends ViewGroup {
 
     @Override
     protected void onLayout(boolean changed, int l, int t, int r, int b) {
+        onLayoutCount++;    // ★判据："逐节点动画期间零布局"
         // ★子 View（native-host）：**位置来自 Rust 几何**（绝对定位，非流式排布）
         for (Map.Entry<Integer, View> e : nativeHosts.entrySet()) {
             RectF rect = nativeRects.get(e.getKey());
@@ -676,7 +830,9 @@ public class ProteusHostView extends ViewGroup {
         final List<Cmd> list = cmds;
         // ★字号只在**变化时**设置（同字号连排时零开销；见 Cmd.fontSize 注释）
         float lastSize = textPaint.getTextSize();
+        final java.util.Set<Integer> skip = skipCmdIndices;   // ★被载体提升的指令：跳过（否则重影）
         for (int i = 0; i < list.size(); i++) {
+            if (skip != null && skip.contains(i)) continue;
             final Cmd c = list.get(i);
             bgPaint.setColor(c.color);
             canvas.drawRect(c.x, c.y, c.x + c.w, c.y + c.h, bgPaint);

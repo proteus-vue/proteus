@@ -315,7 +315,11 @@ public class MainActivity extends Activity {
             //   混在重活路径里会被主线程 Choreographer 饿死）
             sb.append("【MA0-RT 平台零参与动画（容器级）】\n");
             platformAnimRun();
-            sb.append("  读数见 platform-anim.json（异步采样）\n");
+            sb.append("  读数见 platform-anim.json（异步采样）\n");        } else if ("platform-anim-node".equals(testPath)) {
+            // ★★**逐节点**平台动画（载体 View 路径）——独立路径同理（见 platformAnimRun 注释）
+            sb.append("【逐节点平台动画（载体 View + ViewPropertyAnimator）】\n");
+            platformAnimNodeRun();
+            sb.append("  读数见 platform-anim-node.json（异步采样）\n");
         } else if ("shot-scroll-native".equals(testPath)) {
             // ★★z-order 约束下的**滚动同步**验证（方案坑位 #4）
             //   场景：20 行列表，**第 5 行是 native-host（WebView）**；程序驱动滚动到若干位置，
@@ -876,6 +880,134 @@ public class MainActivity extends Activity {
      *   既有场景之所以没暴露该问题，是因为它们各自做了"隐藏按钮 + 绝对定位"，
      *   但**先前场景的 View 仍在**（多次触发就会叠）。本方法把它显式清掉。
      */
+    /**
+     * ★★**逐节点平台动画**测试路径（载体 View 路径；与容器级 `platform-anim` 并列）
+     *
+     * 【与容器级的差别】容器级动的是**整个宿主 View**（覆盖"整页转场"）；
+     *   本条把**单个节点**提升为只含它指令的载体 View ⇒ 覆盖"任意节点的合成动画"（如列表项）。
+     *
+     * 【判据（写进 platform-anim-node.json）】
+     *   ① 载体接入：carriers=1（节点真的被提升）；
+     *   ② **三个"零"**：动画期间 `onDraw` / `onMeasure` / `onLayout` 增量都为 0
+     *      （主线程既不重绘、也不重测——比容器级只测 draw 更强）；
+     *   ③ 逐帧推进：model 值随采样变化（**终值精确**：tx=120 / alpha=0.5）；
+     *   ④ 拆除后恢复：carriers=0 且指令流重新被绘制（draw 增量 > 0）。
+     */
+    private void platformAnimNodeRun() {
+        final org.json.JSONObject out = new org.json.JSONObject();
+        try {
+            clearSceneViews();
+            final ProteusHostView hv = new ProteusHostView(this);
+            android.widget.FrameLayout.LayoutParams lp = new android.widget.FrameLayout.LayoutParams(
+                    FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.MATCH_PARENT);
+            hv.setLayoutParams(lp);
+            root.addView(hv);
+
+            // 场景：3 个色块（第 2 个是被动画的"节点"）
+            final java.util.List<ProteusHostView.Cmd> cmds = new java.util.ArrayList<>();
+            cmds.add(new ProteusHostView.Cmd(20f, 100f, 120f, 80f, 0xFF3366CC, null));
+            cmds.add(new ProteusHostView.Cmd(200f, 100f, 120f, 80f, 0xFFCC6633, null));
+            cmds.add(new ProteusHostView.Cmd(20f, 240f, 120f, 80f, 0xFF33CC66, null));
+            hv.setCmds(cmds);
+            final android.graphics.RectF target = new android.graphics.RectF(200f, 100f, 320f, 180f);
+            final java.util.Set<Integer> skip = new java.util.HashSet<>();
+            skip.add(1);   // 第 2 条指令（下标 1）由载体画
+
+            out.put("bezier", RustLayout.curveBezier(1));
+            final android.os.Handler h = new android.os.Handler(android.os.Looper.getMainLooper());
+            h.postDelayed(new Runnable() {
+                public void run() {
+                    try {
+                        // 先让宿主完成一次真实布局/绘制（基线才有意义）
+                        hv.measure(android.view.View.MeasureSpec.makeMeasureSpec(
+                                        getResources().getDisplayMetrics().widthPixels, android.view.View.MeasureSpec.EXACTLY),
+                                android.view.View.MeasureSpec.makeMeasureSpec(
+                                        getResources().getDisplayMetrics().heightPixels, android.view.View.MeasureSpec.EXACTLY));
+                        hv.layout(0, 0, getResources().getDisplayMetrics().widthPixels,
+                                getResources().getDisplayMetrics().heightPixels);
+                        out.put("carriers_before", hv.animCarrierCount());
+                        out.put("measure_before", hv.onMeasureCount());
+                        out.put("layout_before", hv.onLayoutCount());
+
+                        hv.attachAnimCarrier(1, java.util.Collections.singletonList(cmds.get(1)), target, skip,
+                                120f, 300f, 0.6f, 0f, 0.5f, 500, 0, 0.255f, 0.76f, 0.515f, 1.03f);
+                        out.put("carriers_after", hv.animCarrierCount());
+                    } catch (Exception e) {
+                        try { out.put("attach_error", e.toString()); } catch (Exception ignored) {}
+                    }
+                    // ★★**动画窗口基线**（判据口径，真机读数纠偏换来的）：
+                    //   接入载体时的 `addView` 会引发**一次**真实布局/绘制（Android 集成新子 View 的
+                    //   固有一次性成本）——若以"接入那一刻"为基线，它会被算成"主线程参与了动画"。
+                    //   ⇒ 基线取在**接入稳定后、动画仍在跑**的时刻（+80ms），量**动画期间**的增量。
+                    final int[] winBase = new int[] { -1, -1, -1 };
+                    h.postDelayed(new Runnable() {
+                        public void run() {
+                            try {
+                                winBase[0] = hv.onDrawCount();
+                                winBase[1] = hv.onMeasureCount();
+                                winBase[2] = hv.onLayoutCount();
+                            } catch (Exception ignored) {}
+                        }
+                    }, 80);
+                    final org.json.JSONArray mids = new org.json.JSONArray();
+                    for (final int delayMs : new int[] { 100, 200, 300, 400 }) {
+                        h.postDelayed(new Runnable() {
+                            public void run() {
+                                try { mids.put(hv.carrierAnimStats()); } catch (Exception ignored) {}
+                            }
+                        }, delayMs);
+                    }
+                    h.postDelayed(new Runnable() {
+                        public void run() {
+                            try {
+                                out.put("mids", mids);
+                                out.put("end", hv.carrierAnimStats());
+                                // ★动画**窗口内**增量（win_base 在动画中途取；见上方注释）
+                                out.put("win_draw_delta", hv.onDrawCount() - winBase[0]);
+                                out.put("win_measure_delta", hv.onMeasureCount() - winBase[1]);
+                                out.put("win_layout_delta", hv.onLayoutCount() - winBase[2]);
+                                // ④ 拆除 ⇒ 恢复指令流绘制（再 layout/绘制一次，draw 应增长）
+                                int drawBeforeReset = hv.onDrawCount();
+                                hv.resetAnimCarriers();
+                                out.put("carriers_after_reset", hv.animCarrierCount());
+                                // 触发一次真实重绘（经 ViewRootImpl）：直接调 draw 会绕过分发，故用 invalidate + 手动 layout/draw
+                                hv.measure(android.view.View.MeasureSpec.makeMeasureSpec(
+                                                getResources().getDisplayMetrics().widthPixels, android.view.View.MeasureSpec.EXACTLY),
+                                        android.view.View.MeasureSpec.makeMeasureSpec(
+                                                getResources().getDisplayMetrics().heightPixels, android.view.View.MeasureSpec.EXACTLY));
+                                hv.layout(0, 0, getResources().getDisplayMetrics().widthPixels,
+                                        getResources().getDisplayMetrics().heightPixels);
+                                android.graphics.Bitmap bmp = android.graphics.Bitmap.createBitmap(
+                                        400, 400, android.graphics.Bitmap.Config.ARGB_8888);
+                                android.graphics.Canvas cv = new android.graphics.Canvas(bmp);
+                                hv.draw(cv);
+                                out.put("draw_after_reset_delta", hv.onDrawCount() - drawBeforeReset);
+                                out.put("reset_pixel_nonempty", nonTransparentSamples(bmp) > 0);
+                            } catch (Exception e) {
+                                try { out.put("end_error", e.toString()); } catch (Exception ignored) {}
+                            }
+                            writeReport("platform-anim-node.json", out.toString());
+                        }
+                    }, 700);
+                }
+            }, 300);
+        } catch (Exception e) {
+            try { out.put("ok", false); out.put("error", e.toString()); } catch (Exception ignored) {}
+            writeReport("platform-anim-node.json", out.toString());
+        }
+    }
+
+    /** 非透明采样点计数（像素自检；复用既有采样思路：画了什么必须落在结果上） */
+    private static int nonTransparentSamples(android.graphics.Bitmap bmp) {
+        int n = 0;
+        for (int y = 0; y < bmp.getHeight(); y += 8) {
+            for (int x = 0; x < bmp.getWidth(); x += 8) {
+                if (((bmp.getPixel(x, y) >>> 24) & 0xFF) > 0) n++;
+            }
+        }
+        return n;
+    }
+
     /**
      * ★★**MA0-RT 独立测试路径**：平台零参与动画（主线程空闲）
      *
