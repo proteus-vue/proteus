@@ -2773,6 +2773,46 @@ pub unsafe extern "C" fn proteus_layout_anim_seek_scroll(handle: u64, json: *con
     }
 }
 
+/// ★HA4 —— **单节点绝对几何**查询（宿主放置**原生 View** 用）
+///
+/// 【为什么单独一个入口（而不是让宿主解析 `rects_bin`）】`rects_bin` 返回的是
+///   **最近一次重排范围内**的矩形（V4 的性能设计：全量返回会让宿主白做排序过滤）。
+///   而"某个 nativeHost 节点现在在哪"是**点查询**：与重排范围无关，且必须**总是**拿得到
+///   （原生 View 的摆放不能依赖"它恰好在最近一次重排的 scope 里"）。
+///   ⇒ 独立入口，语义单一：**问一个节点，给一个矩形**。
+///
+/// 返回：`{"ok":true,"id":N,"x":..,"y":..,"width":..,"height":..}`；
+///   节点不存在 / 无几何（`display:none`）⇒ `{"ok":false,"error":..}`（不静默给 0 矩形）。
+///
+/// # Safety
+/// 返回指针须用 `proteus_layout_free_string` 释放。
+#[no_mangle]
+pub unsafe extern "C" fn proteus_layout_node_rect(handle: u64, node_id: u32) -> *mut c_char {
+    let r = std::panic::catch_unwind(|| -> Result<String, String> {
+        let reg = registry().lock().map_err(|_| "注册表锁失败".to_string())?;
+        let entry = reg.get(&handle).ok_or_else(|| format!("句柄 {handle} 不存在"))?;
+        match crate::anim::node_abs_rect(&entry.tree, node_id) {
+            Some(rect) => Ok(serde_json::json!({
+                "ok": true,
+                "id": node_id,
+                "x": rect.x,
+                "y": rect.y,
+                "width": rect.width,
+                "height": rect.height,
+            })
+            .to_string()),
+            None => Err(format!(
+                "节点 {node_id} 无绝对几何（不在树上或 display:none）——原生 View 无法定位"
+            )),
+        }
+    });
+    match r {
+        Ok(Ok(s)) => into_c_string(s),
+        Ok(Err(e)) => into_c_string(format!("{{\"ok\":false,\"error\":{}}}", json_str(&e))),
+        Err(_) => into_c_string("{\"ok\":false,\"error\":\"panic（已捕获）\"}".to_string()),
+    }
+}
+
 /// ★Host ABI：指令流线格式版本（**跨语言契约的单一来源**）
 ///
 /// 【为什么需要这个入口（纪律 #22：不另立副本）】Host ABI 的 `ops_wire_version` 必须与

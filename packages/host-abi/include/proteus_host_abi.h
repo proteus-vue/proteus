@@ -217,11 +217,41 @@ const uint8_t* proteus_rects(ProteusEngine* engine, uint32_t* out_len);
  * handler_calls / version 等）——判据用它验证"批处理红线"与调用方向 */
 const char* proteus_stats_json(ProteusEngine* engine);
 
-/* ────────────────────────── ⑦ 原生组件（契约联通入口；v1 内核暂无自动消费者） ────────────────────────── */
+/* ────────────────────────── ⑦ 原生组件（**引擎驱动的生命周期**，HA4） ──────────────────────────
+ *
+ * 【语义（谁负责什么）】
+ *   · 宿主只实现三个回调（create/update/destroy）+ 决定"这个 kind 支不支持"（不支持就返回 NULL）；
+ *   · **引擎负责编排**：`load_tree` 建新树 ⇒ 抽取树里的 `nativeHost` 节点
+ *     → 销毁旧树遗留的 View → 为每个 nativeHost 节点调 `create` 并给初始几何；
+ *     `submit_frame`（布局变了）⇒ 为**真变了的**节点调 `update`；
+ *     节点消失 / 换树 / 销毁引擎 ⇒ 调 `destroy`。
+ *     ⇒ 宿主**不必维护"IR ↔ 原生对象"的对应关系**（那正是"换宿主重写一遍"的来源）。
+ *
+ * 【为什么引擎能算几何】`nativeHost` 节点就在内核树里 ⇒ 它的绝对几何是内核的**本地产出**
+ *   （不经任何跨边界查询）。引擎只把矩形交给宿主，宿主只管摆 View。
+ *
+ * 【两条硬约束】
+ *   ① **z-order / 滚动同步仍属宿主**：原生 View 与自绘内容的层序由平台决定
+ *      （iOS 子视图天然在上、Android 需显式处理），内核只给几何——这是平台成本，不抽象；
+ *   ② **未提供 create 回调 ⇒ 引擎明确报错**（`last_error` + 返回错误码），
+ *      不静默跳过（"树里要原生组件但没人创建"= 界面缺一块，必须可见）。
+ *
+ * 下面三个是**手动入口**（一般不直接用；引擎在生命周期里自动调）。
+ * 唯一需要宿主主动调的是 `proteus_sync_native_views`（**滚动/动画后**几何变了，
+ * 但那两条路径不经过 load_tree/submit_frame）。
+ */
 
 void* proteus_native_view_create(ProteusEngine* engine, const char* kind, const ProteusRect* frame);
 void  proteus_native_view_update(ProteusEngine* engine, void* handle, const ProteusRect* frame);
 void  proteus_native_view_destroy(ProteusEngine* engine, void* handle);
+
+/* ★★**手动同步**（宿主在**滚动 / 动画帧**后调用）
+ *
+ * 【为什么需要（引擎自动同步挂在 load_tree/submit_frame 上）】滚动（宿主侧内容偏移）与
+ *   动画 tick（每帧改 translate）也会让原生 View 该跟着动，而**那两条路径不经过**上面两个入口。
+ *   宿主在这两处调一次即可（幂等：几何没变就不调平台 API）。
+ */
+int32_t proteus_sync_native_views(ProteusEngine* engine);
 
 /* ────────────────────────── ⑧ 能力插件 ────────────────────────── */
 

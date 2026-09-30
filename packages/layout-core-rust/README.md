@@ -55,3 +55,10 @@ conformance：比对 67 个节点，最大偏差 0.375dp（容差 0.5dp）
 # 构建产物统一落在 spike/target（★不写内置盘）
 CARGO_TARGET_DIR=../../spike/target cargo test
 ```
+
+## ★HA4：`proteus_layout_node_rect`（单节点绝对几何点查询）
+
+供宿主放置**原生组件**（⑦ 号接口）用。为什么单独一个入口而不是复用 `rects_bin`：
+后者返回**最近一次重排范围内**的矩形（V4 的性能设计），而原生 View 的摆放不能依赖
+"它恰好在最近那次 scope 里" ⇒ 点查询总是拿得到（节点不存在/`display:none` ⇒ 明确报错，
+不给 0 矩形）。
