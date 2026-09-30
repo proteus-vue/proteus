@@ -270,15 +270,33 @@ impl SpringParams {
     }
 }
 
-/// 求值模式：查表曲线 / 弹簧物理
+/// ★★序列编排的一段（对标 Flutter `TweenSequenceItem` 的曲线段）
+///
+/// 【为什么有它（本轮解掉的结构性缺口）】内核对同 `(节点,属性)` 是**替换**语义 ⇒
+///   "先下压再弹回"这类**同属性多段**动画，用多条声明表达会被后一条静默替换
+///   （编译层只能拦，不能表达）。⇒ 多段收敛到**一条动画**里：`AnimMode::Keyframes`。
+///   ★这也是与平台路径的契合点：整段序列仍是**一条** `CAKeyframeAnimation`（采样见 `commit_specs`）。
 #[derive(Debug, Clone, Copy, PartialEq)]
+pub struct KeySeg {
+    /// 本段终点（本段起点 = 上一段终点；首段起点 = `Anim::from`）
+    pub to: f32,
+    /// 本段时长（毫秒；> 0）
+    pub dur_ms: f32,
+    /// 本段曲线（与 `CURVE_*` 同编码）
+    pub curve: u8,
+}
+
+/// 求值模式：查表曲线 / 弹簧物理 / **关键帧序列**（多段）
+#[derive(Debug, Clone, PartialEq)]
 pub enum AnimMode {
     Curve,
     Spring(SpringParams),
+    /// 多段序列（非空；每段曲线求值 ⇒ **曲线知识仍只在引擎一处**）
+    Keyframes(Vec<KeySeg>),
 }
 
 /// 一条活动动画（值由编译器/调用方生成 ⇒ 全是数字，运行时无字符串）
-#[derive(Debug, Clone, Copy, PartialEq)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct Anim {
     /// 目标节点 id（生产语义用 id；索引在 start 时解析）
     pub node_id: u32,
@@ -336,6 +354,54 @@ impl Anim {
             takeover: true,
         }
     }
+
+    /// ★**按进度求值**（Progress 驱动 / `seek` / `seek_velocity` / 滚动联动**共用**的求值入口）
+    ///
+    /// 【为什么必须收敛成一个入口】此前三处各写 `from + (to-from)*curve_eval(p)`；
+    ///   本轮加入 `Keyframes` 后，多段序列要按 `p × 总时长` **分段定位**——
+    ///   若三个调用点各写一份，就会有"seek 对、滚动错"这类静默分叉。
+    pub fn value_at_progress(&self, p: f32) -> f32 {
+        let p = p.clamp(0.0, 1.0);
+        match &self.mode {
+            AnimMode::Keyframes(segs) if !segs.is_empty() => {
+                let total: f32 = segs.iter().map(|s| s.dur_ms.max(0.0)).sum();
+                if total <= 0.0 {
+                    return segs[segs.len() - 1].to; // 全零时长 ⇒ 直接落终点（不出 NaN）
+                }
+                eval_keyframes(self.from, segs, p * total).0
+            }
+            _ => self.from + (self.to - self.from) * curve_eval(self.curve, p),
+        }
+    }
+}
+
+/// 首段之外，某段的起点 = 上一段终点（推导；避免存两份"段的 from"）
+pub fn seg_start(from: f32, segs: &[KeySeg], i: usize) -> f32 {
+    if i == 0 {
+        from
+    } else {
+        segs[i - 1].to
+    }
+}
+
+/// ★★**关键帧序列求值**（距序列起点 `tau` 毫秒处的值）
+///
+/// 返回 `(值, 是否已走完)`；走完时值**精确等于**末段 `to`（端点钉死——与单段语义一致）。
+/// `tau` 落到第 i 段：局部 `u = tau_i / dur_i`，仍走 `curve_eval`（曲线知识只在引擎一处）。
+pub fn eval_keyframes(from: f32, segs: &[KeySeg], tau: f32) -> (f32, bool) {
+    let mut t = tau;
+    let n = segs.len();
+    for i in 0..n {
+        let s = segs[i];
+        if t < s.dur_ms || i == n - 1 {
+            let u = if s.dur_ms <= 0.0 { 1.0 } else { (t / s.dur_ms).clamp(0.0, 1.0) };
+            let start = seg_start(from, segs, i);
+            let x = start + (s.to - start) * curve_eval(s.curve, u);
+            return (x, u >= 1.0 && i == n - 1);
+        }
+        t -= s.dur_ms;
+    }
+    (from, true) // 空序列兜底（调用方保证非空）
 }
 
 /// ★★**复位一组节点的全部视觉字段**（"解绑"必须含**清值**，不能只停动画）
@@ -445,9 +511,9 @@ pub fn commit_specs(tree: &LayoutTree, anims: &[Anim]) -> Vec<CommitSpec> {
     for a in anims {
         let v = by_node.entry(a.node_id).or_default();
         if let Some(slot) = v.iter_mut().find(|x| x.kind == a.kind) {
-            *slot = *a;
+            *slot = a.clone(); // ★clone：Anim 含 Vec（Keyframes）⇒ 非 Copy
         } else {
-            v.push(*a);
+            v.push(a.clone());
         }
     }
 
@@ -460,12 +526,14 @@ pub fn commit_specs(tree: &LayoutTree, anims: &[Anim]) -> Vec<CommitSpec> {
         });
         let Some((bx, by, bsc, brot, bop)) = base else { continue };
 
-        // ★有效时长 = max(各动画时长)；**弹簧用自然静止时间**（否则会被窗口截断，实测抓出）
+        // ★有效时长 = max(各动画时长)；**弹簧用自然静止时间**（否则会被窗口截断，实测抓出）；
+        //   **序列用段时长之和**（不是名义 dur_ms——两者不一致时序列会被截断/拖尾）
         let dur = items
             .iter()
-            .map(|a| match a.mode {
+            .map(|a| match &a.mode {
                 AnimMode::Curve => a.dur_ms,
-                AnimMode::Spring(p) => a.dur_ms.max(spring_settle_ms(a, p)),
+                AnimMode::Spring(p) => a.dur_ms.max(spring_settle_ms(a, *p)),
+                AnimMode::Keyframes(segs) => segs.iter().map(|s| s.dur_ms).sum(),
             })
             .fold(0f32, f32::max)
             .max(1.0);
@@ -480,10 +548,14 @@ pub fn commit_specs(tree: &LayoutTree, anims: &[Anim]) -> Vec<CommitSpec> {
             let mut v = (bx, by, bsc, brot, bop);
             for a in &items {
                 let local = if a.dur_ms <= 0.0 { 1.0 } else { (u * dur / a.dur_ms).min(1.0) };
-                let val = match a.mode {
+                let val = match &a.mode {
                     AnimMode::Curve => a.from + (a.to - a.from) * curve_eval(a.curve, local),
                     // ★弹簧的解析采样：用同一套物理积分（**不是**平台 spring——保证与 tick 路径同形）
-                    AnimMode::Spring(p) => spring_sample(a, p, u * dur),
+                    AnimMode::Spring(p) => spring_sample(a, *p, u * dur),
+                    AnimMode::Keyframes(segs) => {
+                        let total: f32 = segs.iter().map(|s| s.dur_ms.max(0.0)).sum();
+                        eval_keyframes(a.from, segs, u * total).0
+                    }
                 };
                 match a.kind {
                     AnimKind::TranslateX => v.0 = val,
@@ -648,6 +720,20 @@ impl AnimEngine {
         if matches!(a.mode, AnimMode::Curve) && a.curve > CURVE_MAX {
             return Err(format!("未知曲线 id={}（0..={CURVE_MAX}）", a.curve));
         }
+        // ★序列校验：集合非空 + 每段时长 ≥ 0 + 每段曲线 id 合法（错误必须冒泡，不静默）
+        if let AnimMode::Keyframes(segs) = &a.mode {
+            if segs.is_empty() {
+                return Err("KEYFRAMES 序列为空（至少一段；表达单段请用 curve/spring）".to_string());
+            }
+            for (i, s) in segs.iter().enumerate() {
+                if s.dur_ms < 0.0 {
+                    return Err(format!("KEYFRAMES 第 {i} 段时长非法：{}（须 ≥ 0）", s.dur_ms));
+                }
+                if s.curve > CURVE_MAX {
+                    return Err(format!("KEYFRAMES 第 {i} 段曲线 id={} 未知（0..={CURVE_MAX}）", s.curve));
+                }
+            }
+        }
         let idx = tree
             .nodes
             .iter()
@@ -660,15 +746,19 @@ impl AnimEngine {
         {
             if a.takeover {
                 // ★接管：位置连续 + 速度移交（"丝滑"的来源）
-                let prev = slot.0;
-                a.from = prev.x;
+                //   ★序列动画**不重映射** —— 它的锚点是 from/to（编排好的两端），
+                //   重映射会让"下压→回弹"变成"从半途压回去→弹到旧目标"（静默错形）。
+                let prev = &slot.0;
+                if !matches!(a.mode, AnimMode::Keyframes(_)) {
+                    a.from = prev.x;
+                }
                 a.x = prev.x;
                 a.vel = prev.vel;
             } else {
                 a.x = a.from;
                 a.vel = 0.0;
             }
-            *slot = (a, idx);
+            slot.0 = a; // ★字段赋值而非 `*slot = (a, idx)`：Anim 含 Vec（Keyframes）⇒ 非 Copy（move 语义）
         } else {
             a.x = a.from;
             a.vel = 0.0;
@@ -808,7 +898,7 @@ impl AnimEngine {
             if *idx >= tree.nodes.len() {
                 continue; // 越界：跳过（与 tick 同策略——不 panic）
             }
-            let v = a.from + (a.to - a.from) * curve_eval(a.curve, p);
+            let v = a.value_at_progress(p); // ★统一求值入口（Curve / Keyframes 同一套语义）
             if let Some(dt) = dt_s {
                 if dt > 0.0 {
                     a.vel = (v - a.x) / dt; // 单位/秒（供接管）
@@ -861,7 +951,7 @@ impl AnimEngine {
             if *idx >= tree.nodes.len() {
                 continue; // 越界：跳过（与 tick/seek 同策略——不 panic）
             }
-            let v = a.from + (a.to - a.from) * curve_eval(a.curve, p);
+            let v = a.value_at_progress(p); // ★统一求值入口
             a.x = v;
             if a.kind.write(&mut tree.nodes[*idx], v) {
                 out.changed += 1;
@@ -1003,12 +1093,11 @@ impl AnimEngine {
     }
 }
 
-/// 单步求值（曲线或弹簧）——返回 `(新值, 新速度, 是否结束)`
+/// 单步求值（曲线 / 关键帧序列 / 弹簧）——返回 `(新值, 新速度, 是否结束)`
 fn step(a: &mut Anim, dt_ms: f32) -> (f32, f32, bool) {
     // ── Progress 驱动：值由 seek 维护；tick 只"保持写入"（层被重建时不丢值） ──
     if a.drive == AnimDrive::Progress {
-        let u = a.progress.clamp(0.0, 1.0);
-        let x = a.from + (a.to - a.from) * curve_eval(a.curve, u);
+        let x = a.value_at_progress(a.progress);
         return (x, a.vel, false); // Progress 永不自动结束（由 stop 显式结束）
     }
 
@@ -1018,21 +1107,7 @@ fn step(a: &mut Anim, dt_ms: f32) -> (f32, f32, bool) {
         return (a.x, a.vel, false);
     }
 
-    match a.mode {
-        AnimMode::Curve => {
-            let u = if a.dur_ms <= 0.0 {
-                1.0
-            } else {
-                ((a.t_ms - a.delay_ms) / a.dur_ms).min(1.0)
-            };
-            if u >= 1.0 {
-                return (a.to, 0.0, true); // ★端点钉死
-            }
-            let x = a.from + (a.to - a.from) * curve_eval(a.curve, u);
-            let dt_s = dt_ms / 1000.0;
-            let vel = if dt_s > 0.0 { (x - a.x) / dt_s } else { a.vel };
-            (x, vel, false)
-        }
+    match &a.mode {
         AnimMode::Spring(params) => {
             let p = params.sanitized();
             let (mut x, mut v) = (a.x, a.vel);
@@ -1054,6 +1129,21 @@ fn step(a: &mut Anim, dt_ms: f32) -> (f32, f32, bool) {
             } else {
                 (x, v, false)
             }
+        }
+        // Curve / Keyframes 统一：时间 → 进度 → 求值（同一入口 ⇒ 不会"seek 对、滚动错"）
+        _ => {
+            let u = if a.dur_ms <= 0.0 {
+                1.0
+            } else {
+                ((a.t_ms - a.delay_ms) / a.dur_ms).min(1.0)
+            };
+            if u >= 1.0 {
+                return (a.to, 0.0, true); // ★端点钉死（序列的 to = 末段 to）
+            }
+            let x = a.value_at_progress(u);
+            let dt_s = dt_ms / 1000.0;
+            let vel = if dt_s > 0.0 { (x - a.x) / dt_s } else { a.vel };
+            (x, vel, false)
         }
     }
 }
@@ -1525,7 +1615,7 @@ mod tests {
         a.mode = AnimMode::Spring(SpringParams { stiffness: 320.0, damping: 30.0, mass: 1.0 });
         // ★比较窗口 = **采样点的精确时刻**（t = u × dur），避免索引取整引入假差异。
         //   首版用 t=160ms（超出 dur=100ms 的窗口）⇒ 被端点钉死成 100 ⇒ 假红。
-        let specs = commit_specs(&t, &[a]);
+        let specs = commit_specs(&t, &[a.clone()]);
         let dur = specs[0].dur_ms; // 有效时长（弹簧 = 自然静止时间）
         assert!(dur > 100.0, "弹簧的有效时长应**长于**名义 dur_ms（自然静止时间；实测 {dur}）");
         let u = 0.5f32;
@@ -1570,6 +1660,36 @@ mod tests {
         let s0 = specs[0].samples[0];
         assert_eq!(s0.4, 0.42, "opacity 应保持静态基线（实测 {}）", s0.4);
         assert_eq!(s0.3, 7.0, "rotate 应保持静态基线（实测 {}）", s0.3);
+    }
+
+    #[test]
+    fn commit_spec_keyframes_uses_segment_sum_as_window() {
+        // ★回归（真机抓出的平台路径缺口）：commit 的采样窗口必须是**段时长之和**——
+        //   若误用名义 dur_ms，序列会被截断（末尾几段根本没进采样）；
+        //   且采样必须**按段求值**（下探/回冲都要出现在采样里，否则平台插值的是错的形状）。
+        let t = tree_with(1);
+        let mut a = anim(1, AnimKind::Scale);
+        a.from = 1.0;
+        a.to = 1.0;
+        a.dur_ms = 9999.0; // ★故意给一个与段和**不一致**的名义时长（错用它会当场红）
+        a.mode = AnimMode::Keyframes(vec![
+            KeySeg { to: 0.6, dur_ms: 100.0, curve: CURVE_LINEAR },
+            KeySeg { to: 1.2, dur_ms: 200.0, curve: CURVE_LINEAR },
+            KeySeg { to: 1.0, dur_ms: 100.0, curve: CURVE_LINEAR },
+        ]);
+        let specs = commit_specs(&t, &[a]);
+        assert!(
+            (specs[0].dur_ms - 400.0).abs() < 1e-3,
+            "有效时长必须是段和 400（实测 {}）",
+            specs[0].dur_ms
+        );
+        let scales: Vec<f32> = specs[0].samples.iter().map(|s| s.2).collect();
+        let min = scales.iter().cloned().fold(f32::MAX, f32::min);
+        let max = scales.iter().cloned().fold(f32::MIN, f32::max);
+        assert!(min <= 0.62, "采样应下探到 ≈0.6（实测 {min}）");
+        assert!(max >= 1.18, "采样应上冲到 ≈1.2（实测 {max}）");
+        // 端点钉死：末采样 = 声明的 to
+        assert_eq!(scales[scales.len() - 1], 1.0);
     }
 
     #[test]
@@ -1773,6 +1893,137 @@ mod tests {
         let o = e.tick(&mut t, 10.0);
         let v = find_visual(&o.updates, 2).expect("FLIP 节点的 update 必须被回报");
         assert!(v.ty > -40.0 && v.ty < 0.0, "回报的 ty 应在补间中（实测 {}）", v.ty);
+    }
+
+    /* ──────────────────── ★★MA6：序列编排（AnimMode::Keyframes） ──────────────────── */
+
+    /// 造一条序列动画：`[(to, durms, curve), …]`（线性便于算术断言）
+    fn seq_anim(node_id: u32, from: f32, segs: &[(f32, f32)]) -> Anim {
+        let mut a = anim(node_id, AnimKind::Scale);
+        a.from = from;
+        a.to = segs.last().map(|s| s.0).unwrap_or(from);
+        a.dur_ms = segs.iter().map(|s| s.1).sum();
+        a.mode = AnimMode::Keyframes(
+            segs.iter().map(|&(to, d)| KeySeg { to, dur_ms: d, curve: CURVE_LINEAR }).collect(),
+        );
+        a
+    }
+
+    #[test]
+    fn keyframes_hits_each_segment_endpoint_in_order() {
+        // 序列：100ms 到 0.9，再 100ms 回 1.0（"下压 → 回弹"）
+        let mut t = tree_with(1);
+        let mut e = AnimEngine::new();
+        let a = seq_anim(1, 1.0, &[(0.9, 100.0), (1.0, 100.0)]);
+        e.start(&t, a).unwrap();
+        // 50ms：段内（线性半程 ⇒ 0.95）
+        e.tick(&mut t, 50.0);
+        assert!((t.nodes[0].style.scale - 0.95).abs() < 1e-3, "首段半程应 ≈0.95（实测 {}）", t.nodes[0].style.scale);
+        // 100ms：**首段终点**（精确 = 0.9）
+        e.tick(&mut t, 50.0);
+        assert!((t.nodes[0].style.scale - 0.9).abs() < 1e-4, "首段终点须精确到 0.9（实测 {}）", t.nodes[0].style.scale);
+        // 150ms：次段半程（0.9 → 1.0 的中间 ≈ 0.95）
+        e.tick(&mut t, 50.0);
+        assert!((t.nodes[0].style.scale - 0.95).abs() < 1e-3, "次段半程应 ≈0.95（实测 {}）", t.nodes[0].style.scale);
+        // 200ms：终点（精确 = 1.0）+ 动画结束
+        let o = e.tick(&mut t, 50.0);
+        assert_eq!(o.finished, 1, "序列走完必须结束（否则永占活动集）");
+        assert!((t.nodes[0].style.scale - 1.0).abs() < 1e-4, "终值须精确到 1.0");
+    }
+
+    #[test]
+    fn keyframes_value_is_independent_of_tick_granularity() {
+        // ★帧率无关：同样 200ms，拆成 1×200 与 40×5 必须得到**同一个值**（曲线求值按时间，不按帧）
+        let mk = || seq_anim(1, 1.0, &[(0.5, 100.0), (1.0, 100.0)]);
+        let (mut t1, mut e1) = (tree_with(1), AnimEngine::new());
+        e1.start(&t1, mk()).unwrap();
+        e1.tick(&mut t1, 130.0);
+        let (mut t2, mut e2) = (tree_with(1), AnimEngine::new());
+        e2.start(&t2, mk()).unwrap();
+        for _ in 0..26 {
+            e2.tick(&mut t2, 5.0);
+        }
+        assert!(
+            (t1.nodes[0].style.scale - t2.nodes[0].style.scale).abs() < 1e-4,
+            "粒度不同但时间相同 ⇒ 值必须一致（1×130 = {} vs 26×5 = {}）",
+            t1.nodes[0].style.scale,
+            t2.nodes[0].style.scale
+        );
+    }
+
+    #[test]
+    fn keyframes_seek_and_scroll_use_same_evaluation() {
+        // ★统一求值入口：seek（手势）与滚动联动对同一条序列**同进度同值**（否则是静默分叉）
+        let mut t = tree_with(2);
+        let mut e = AnimEngine::new();
+        let seq = seq_anim(1, 1.0, &[(0.5, 100.0), (1.2, 300.0)]);
+        e.start(&t, seq.clone()).unwrap();
+        e.seek(&mut t, 1, AnimKind::Scale, 0.5);
+        let via_seek = t.nodes[0].style.scale;
+        let mut scrollable = seq;
+        scrollable.node_id = 2;
+        scrollable.scroll_from = 0.0;
+        scrollable.scroll_to = 100.0;
+        e.start_scroll(&t, scrollable).unwrap();
+        e.seek_scroll(&mut t, 50.0); // 进度 0.5
+        let via_scroll = t.nodes[1].style.scale;
+        assert!(
+            (via_seek - via_scroll).abs() < 1e-5,
+            "同进度必须同值（seek={via_seek} scroll={via_scroll}）"
+        );
+        // 进度 0.5 = 时间 200ms 落在次段（0..100 首段，100..400 次段）：u=(200-100)/300=1/3
+        //   线性 ⇒ 0.5 + (1.2-0.5)/3 ≈ 0.7333
+        assert!((via_seek - 0.7333).abs() < 5e-3, "分段定位应落在次段三分之一处（实测 {via_seek}）");
+    }
+
+    #[test]
+    fn keyframes_takeover_does_not_remap_anchors() {
+        // ★接管不重映射：序列的 from/to 是**编排好的两端**；重映射会让"下压→回弹"错形
+        let mut t = tree_with(1);
+        let mut e = AnimEngine::new();
+        // 先跑一条时间动画到中途（scale=1.0 → 0.6 的中途）
+        let mut pre = anim(1, AnimKind::Scale);
+        pre.from = 1.0;
+        pre.to = 0.6;
+        pre.dur_ms = 100.0;
+        e.start(&t, pre).unwrap();
+        e.tick(&mut t, 50.0);
+        let mid = t.nodes[0].style.scale;
+        assert!(mid < 1.0 && mid > 0.6, "前置条件：应处于中途（实测 {mid}）");
+        // 接管启动序列（from=1.0）：位置连续（从 mid 出发**不跳变**）但锚点仍是 1.0→0.9→1.0
+        e.start(&t, seq_anim(1, 1.0, &[(0.9, 100.0), (1.0, 100.0)])).unwrap();
+        let after = t.nodes[0].style.scale;
+        assert!((after - mid).abs() < 1e-5, "接管当帧位置必须连续（{} vs {}）", after, mid);
+        e.tick(&mut t, 100.0);
+        assert!((t.nodes[0].style.scale - 0.9).abs() < 1e-3, "锚点未被重映射（首段仍到 0.9，实测 {}）", t.nodes[0].style.scale);
+    }
+
+    #[test]
+    fn keyframes_empty_and_bad_segments_are_rejected() {
+        let t = tree_with(1);
+        let mut e = AnimEngine::new();
+        let mut empty = anim(1, AnimKind::Scale);
+        empty.mode = AnimMode::Keyframes(Vec::new());
+        assert!(e.start(&t, empty).is_err(), "空序列必须报错（不静默）");
+        let mut bad_curve = anim(1, AnimKind::Scale);
+        bad_curve.mode = AnimMode::Keyframes(vec![KeySeg { to: 1.0, dur_ms: 100.0, curve: 200 }]);
+        assert!(e.start(&t, bad_curve).is_err(), "段曲线越界必须报错");
+        let mut neg = anim(1, AnimKind::Scale);
+        neg.mode = AnimMode::Keyframes(vec![KeySeg { to: 1.0, dur_ms: -5.0, curve: 0 }]);
+        assert!(e.start(&t, neg).is_err(), "负时长必须报错");
+    }
+
+    #[test]
+    fn keyframes_zero_total_duration_pins_endpoint() {
+        // 全零时长（退化）⇒ 立刻落在末段终点，**不得**出 NaN / 除零
+        let mut t = tree_with(1);
+        let mut e = AnimEngine::new();
+        let a = seq_anim(1, 1.0, &[(0.8, 0.0), (0.95, 0.0)]);
+        e.start(&t, a).unwrap();
+        let o = e.tick(&mut t, 16.7);
+        assert_eq!(o.finished, 1, "零时长序列应立刻结束");
+        let v = t.nodes[0].style.scale;
+        assert!(v.is_finite() && (v - 0.95).abs() < 1e-4, "应精确落在末段 to（实测 {v}）");
     }
 
     /* ────────────────────── ★★MA5：滚动联动（seek_scroll） ────────────────────── */

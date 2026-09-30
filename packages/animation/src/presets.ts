@@ -218,6 +218,63 @@ export const element = {
     }
   },
 
+  /**
+   * ★★**按压反馈（两段序列）**——按下后回弹，**一条动画**表达完整序列（MA6 起）
+   *
+   * 【这条预设是"序列编排"的存在理由】此前只能做"弹回段"（`pressRelease`），
+   *   因为内核对同 (节点,属性) 是替换语义、两条 scale 会互相覆盖；
+   *   MA6 的 `keyframes` 让"下压 → 回弹"收敛在**一条**动画里，且提交平台路径时仍是**一条**
+   *   `CAKeyframeAnimation`（不额外增加提交次数）。
+   */
+  press(opts: { fromScale?: number; downMs?: number; upMs?: number; downCurve?: CurveName; upCurve?: CurveName } = {}): ElementSpec {
+    const sc = opts.fromScale ?? 0.94
+    const downMs = opts.downMs ?? 90
+    const upMs = opts.upMs ?? 260
+    return {
+      name: 'pressSequence',
+      decls: [
+        {
+          kind: 'scale',
+          from: 1,
+          to: 1,
+          keyframes: [
+            { to: sc, durationMs: downMs, curve: opts.downCurve ?? 'easeOut' },
+            { to: 1, durationMs: upMs, curve: opts.upCurve ?? 'springApprox' },
+          ],
+        },
+      ],
+      durationMs: downMs + upMs,
+    }
+  },
+
+  /**
+   * **抖动（错误提示）**——水平往复三段，末段回到起点
+   *
+   * ★为什么"末段必须回 0"：抖动是**扰动**，不是位移；末段不回 0 会让元素永久偏移
+   *   （这是"看起来对、实际错位"的典型）。预设已保证末段 `to: 0`。
+   */
+  shake(opts: { amplitude?: number; durationMs?: number } = {}): ElementSpec {
+    const amp = opts.amplitude ?? 10
+    const dur = opts.durationMs ?? 360
+    const seg = dur / 3
+    return {
+      name: 'shake',
+      decls: [
+        {
+          kind: 'translateX',
+          from: 0,
+          to: 0,
+          keyframes: [
+            { to: -amp, durationMs: seg, curve: 'easeOut' },
+            { to: amp, durationMs: seg, curve: 'easeInOut' },
+            { to: 0, durationMs: seg, curve: 'easeOut' },
+          ],
+        },
+      ],
+      durationMs: dur,
+    }
+  },
+
   /** **共享元素飞入**（B1 benchmark 的核心环节；从起点矩形飞入到当前位置） */
   sharedElementFlyIn(opts: { fromScale?: number; durationMs?: number } = {}): ElementSpec {
     const dur = opts.durationMs ?? 400

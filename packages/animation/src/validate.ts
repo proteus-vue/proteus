@@ -10,6 +10,7 @@
 // 【为什么不静默降级】降级成"每帧 tick"也能跑，但那是**另一种性能档位**——
 //   用户以为拿到的是"平台线程动画"，实际拿到的是"主线程每帧写值" ⇒ 静默的性能降级。
 //   ⇒ 必须**显式**（`ValidationIssue` 里点名属性 + 给修复建议）。
+import { CURVE_ID } from './types'
 import type { AnimDecl, AnimKindName, ValidationIssue } from './types'
 
 /** 合成属性集（§5-bis.1 的分水岭；与内核 `AnimKind::is_composited` 同集合） */
@@ -53,15 +54,79 @@ export function validateAnimations(decls: readonly AnimDecl[]): ValidationIssue[
     // ★★**同属性重复声明**（真陷阱，本轮写预设时自己踩到）：内核语义是「同 (节点,属性) = 替换」
     //   ⇒ 一个批次里出现两条 `scale`，**后者静默替换前者**——用户以为"按下再弹回"，
     //   实际只有一条在跑。⇒ 编译期拦住（这正是 §5-bis.2"把问题变编译期"的同一套做法）。
+    //   ★MA6 起：**正解是 `keyframes`**（一条动画多段），故提示直接指向它。
     const dup = decls.slice(0, i).find((p) => p.kind === d.kind)
     if (dup) {
       issues.push({
         index: i,
         code: 'duplicate-kind',
         message: `同一批次里 \`${d.kind}\` 出现了多次（内核对同 (节点,属性) 是**替换**语义 ⇒ 后者会静默替换前者）`,
-        hint: '「先下压再弹回」这类**序列编排**当前引擎不支持——拆成两次调用（第一次完成后启动第二次），' +
-          '或改用不同的属性组合（如 scale + opacity 同时进行）',
+        hint: '多段序列请用 `keyframes`（一条动画内分段，内核 AnimMode::Keyframes）；' +
+          '或拆成两次调用；或改用不同属性组合（如 scale + opacity 同时进行）',
       })
+    }
+    // ★MA6：序列编排的合法性（空序列 / 段时长非法 / 段曲线未知 / 与 spring 冲突）
+    if (d.keyframes) {
+      const kf = d.keyframes
+      if (kf.length === 0) {
+        issues.push({
+          index: i,
+          code: 'empty',
+          message: '`keyframes` 为空数组（序列至少要一段；单段请直接用 `curve`）',
+          hint: '去掉 `keyframes` 用单段声明，或补上至少一段 `{ to, durationMs }`',
+        })
+      }
+      const sum = kf.reduce((acc, s) => acc + (Number.isFinite(s.durationMs) ? s.durationMs : 0), 0)
+      kf.forEach((s, j) => {
+        if (!Number.isFinite(s.to)) {
+          issues.push({ index: i, code: 'invalid-range', message: `序列第 ${j} 段 \`to\` 非有限数`, hint: '给具体数值' })
+        }
+        if (!Number.isFinite(s.durationMs) || s.durationMs < 0) {
+          issues.push({
+            index: i,
+            code: 'invalid-range',
+            message: `序列第 ${j} 段 \`durationMs\` 非法：${s.durationMs}`,
+            hint: '给非负毫秒数（0 = 该段瞬变，合法但通常不是本意）',
+          })
+        }
+        if (s.curve !== undefined && !(s.curve in CURVE_ID)) {
+          issues.push({ index: i, code: 'invalid-range', message: `序列第 ${j} 段曲线未知：${s.curve}`, hint: '用 Curve 封闭集里的名字' })
+        }
+      })
+      if (sum <= 0) {
+        issues.push({
+          index: i,
+          code: 'invalid-range',
+          message: '序列总时长为 0 —— 动画会**瞬间跳到末段终点**',
+          hint: '至少给一段正时长；零时长序列在真机上看起来就是"没做动画"',
+        })
+      }
+      if (d.spring !== undefined) {
+        issues.push({
+          index: i,
+          code: 'conflicting-easing',
+          message: '`keyframes` 与 `spring` 并存 —— 求值模式必须唯一',
+          hint: '序列里要弹性手感，把某一段用曲线近似（如 springApprox），或整条改用 spring',
+        })
+      }
+      if (d.curve !== undefined) {
+        issues.push({
+          index: i,
+          code: 'conflicting-easing',
+          message: '`keyframes` 与 `curve` 并存 —— 段内曲线由每段自己的 `curve` 决定',
+          hint: '删掉外层的 `curve`（它只对单段模式有意义）',
+        })
+      }
+      // 末段 `to` 必须与声明的 `to` 一致（否则"声明说去哪、实际去哪"两处不一致 ⇒ 静默错形）
+      const last = kf[kf.length - 1]
+      if (last && Number.isFinite(last.to) && Number.isFinite(d.to) && last.to !== d.to) {
+        issues.push({
+          index: i,
+          code: 'invalid-range',
+          message: `末段 \`to\`(${last.to}) 与声明 \`to\`(${d.to}) 不一致 —— 两处都描述"终点"`,
+          hint: '让二者相等（编译器以声明 `to` 为准做端点钉死，不一致会让终值与你写的不符）',
+        })
+      }
     }
     if (!isComposited(d.kind)) {
       issues.push({

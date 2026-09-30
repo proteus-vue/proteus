@@ -33,7 +33,7 @@ Rust 内核（曲线求值 + 物理 + FLIP） ← 唯一实现，每帧零 JS �
 | `route.zoom()` | 新页缩放进入 + 旧页下沉（对齐 `wx://zoom`） |
 | `route.cupertinoModal()` | iOS 风格全屏模态（弹簧）（对齐 `wx://cupertino-modal`） |
 | `list.shift()` | **列表项增删让位**（映射内核 FLIP：几何在内核，零跨边界；是 §5 招牌能力） |
-| `element.fadeIn()` / `pressRelease()` / `sharedElementFlyIn()` | 元素入场 / 按压弹回 / 共享元素飞入 |
+| `element.fadeIn()` / `pressRelease()` / `press()` / `shake()` / `sharedElementFlyIn()` | 元素入场 / 按压弹回（单段）/ **按压序列**（下压+回弹两段）/ **抖动** / 共享元素飞入 |
 | `scroll.sticky()` / `parallax()` / `fadeIn()` | **滚动联动**（吸顶 / 视差 / 渐显——滚动位置驱动，换算在内核；见下） |
 | `easing.snappy` / `easing.smooth` | 手感弹簧预设（**与内核 `SpringParams::snappy/smooth` 同值**，两侧各有测试钉住） |
 
@@ -91,6 +91,21 @@ presets.scroll.fadeIn({ from: 100, to: 300, risePx: 12 })    // 滚入区间内 
 **外部位置**——混用会把"跟手"变成"到点自动播放"。编译期 `isPlatformEligible` 预判 + 内核
 `anim_commit_spec` 明确拒绝，双重拦住。
 
+多段序列已落地，并收敛在**每属性一条动画**里（内核 `AnimMode::Keyframes`）：
+
+```ts
+// 一条动画内两段（不是两条声明——内核对同属性是替换语义，两条会互相覆盖）
+presets.element.press()   // scale: 1 → 0.94（90ms）→ 1（260ms 弹性近似）
+presets.element.shake()   // translateX: 0 → -10 → +10 → 0（三段；末段必回 0）
+// 或手写：
+compileAnimations([{ kind: 'scale', from: 1, to: 1,
+  keyframes: [{ to: 0.9, durationMs: 80 }, { to: 1, durationMs: 200, curve: 'springApprox' }] }],
+  { nodeId: btn })
+```
+
+★**多段 ≠ 多条**：整段序列在平台零参与路径上仍是**一条** `CAKeyframeAnimation`（采样整段），
+不额外增加提交次数。段的边界精确（分段定位按 `p × 总时长`，边界处值恰为段 `to`）。
+
 ## 编译期校验（把"会不会掉帧"变成编译期问题）
 
 `compileAnimations` / `compileRoute` 内部先跑 `validateAnimations`，**失败即 throw**（附 `formatIssues` 可读文本 + 修复提示）。7 类判据：
@@ -101,7 +116,7 @@ presets.scroll.fadeIn({ from: 100, to: 300, risePx: 12 })    // 滚入区间内 
 
 ## 未做（诚实边界）
 
-- **序列编排（sequence）**：内核对同 `(节点, 属性)` 是替换语义，"先下压再弹回"这类**两段串联**在一个批次里表达不了 ⇒ 需要调用方拆成两次启动（或用单个弹簧从按下值弹回）。序列编排是已知缺口。
+- **跨属性编排**（如"位移与缩放共享一条时间轴、各自多段"）：当前每个属性各自成条，段之间**没有共享时间轴**的约束（各条动画用各自 `durMs`，内核按各自进度求值）。要"多属性严格对齐的分段编排"需引入显式时间轴（评估中）。
 - **共享元素跨页面**：`element.sharedElementFlyIn` 目前只做"在落点上做缩放+淡入"；真正的"从起点矩形飞入"需要三端 `platform/` 层（跨页面坐标换算），见 Morpheus 文档 B1 评测项。
 - **手势驱动 API 表面**：内核已支持 `Progress` 驱动（`seek` 立即写字段，手指到哪画面到哪），但本包暂未提供对应的声明式入口（当前由宿主直接调 `animSeek`）。
 - **`scroll.sticky` 是"位移补偿"而非布局吸顶**：本引擎只写合成属性，真·改变定位（`position: sticky`）属布局属性、不在属性面上（会被编译期拦）。吸顶观感依赖"位移补偿 + 布局让位"的组合。

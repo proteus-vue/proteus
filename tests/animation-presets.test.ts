@@ -226,6 +226,81 @@ describe('MA1 · 预设库（"开箱即用" = 预设，不是参数）', () => {
   })
 })
 
+describe('MA6 · 序列编排（keyframes：一条动画多段）', () => {
+  it('★press 预设编译出**一条** scale 动画、内两段（下压 → 回弹）', () => {
+    const sp = presets.element.press({ fromScale: 0.9, downMs: 80, upMs: 200 })
+    const c = compileAnimations(sp.decls, { nodeId: 3 })
+    expect(c.anims).toHaveLength(1)
+    const kf = c.anims[0]!.keyframes!
+    expect(kf).toHaveLength(2)
+    expect(kf[0]!.to).toBe(0.9)      // 下压终点
+    expect(kf[1]!.to).toBe(1)        // 回弹终点
+    expect(kf[0]!.durMs).toBe(80)
+    // ★durMs = 各段之和（内核据此做 时间→进度 换算，写错会整体错位）
+    expect(c.anims[0]!.durMs).toBe(280)
+    expect(c.anims[0]!.to).toBe(1)
+  })
+
+  it('★shake 预设末段必须回到 0（扰动不是位移——不回 0 会永久错位）', () => {
+    const sp = presets.element.shake({ amplitude: 12 })
+    const c = compileAnimations(sp.decls, { nodeId: 1 })
+    const kf = c.anims[0]!.keyframes!
+    expect(kf[kf.length - 1]!.to).toBe(0)
+    expect(c.anims[0]!.to).toBe(0)
+  })
+
+  it('★序列与弹簧/曲线互斥（求值模式必须唯一）', () => {
+    const withSpring = validateAnimations([
+      { kind: 'scale', from: 1, to: 1, spring: easing.snappy, keyframes: [{ to: 0.9, durationMs: 100 }, { to: 1, durationMs: 100 }] },
+    ])
+    expect(withSpring.some((i) => i.code === 'conflicting-easing')).toBe(true)
+    const withCurve = validateAnimations([
+      { kind: 'scale', from: 1, to: 1, curve: 'easeOut', keyframes: [{ to: 0.9, durationMs: 100 }, { to: 1, durationMs: 100 }] },
+    ])
+    expect(withCurve.some((i) => i.code === 'conflicting-easing')).toBe(true)
+  })
+
+  it('★红侧：空序列 / 总时长为 0 / 末段 to 与声明 to 不一致 都被拦', () => {
+    const empty = validateAnimations([{ kind: 'scale', from: 1, to: 1, keyframes: [] }])
+    expect(empty.some((i) => i.code === 'empty')).toBe(true)
+
+    const zero = validateAnimations([{ kind: 'scale', from: 1, to: 1, keyframes: [{ to: 0.5, durationMs: 0 }] }])
+    expect(zero.some((i) => i.message.includes('总时长为 0'))).toBe(true)
+
+    const mismatch = validateAnimations([
+      { kind: 'scale', from: 1, to: 1, keyframes: [{ to: 0.5, durationMs: 100 }, { to: 0.8, durationMs: 100 }] },
+    ])
+    expect(mismatch.some((i) => i.message.includes('不一致'))).toBe(true)
+  })
+
+  it('★红侧：段曲线未知 / 段时长非法 被拦', () => {
+    const badCurve = validateAnimations([
+      { kind: 'scale', from: 1, to: 1, keyframes: [{ to: 0.5, durationMs: 100, curve: 'nope' as never }, { to: 1, durationMs: 100 }] },
+    ])
+    expect(badCurve.some((i) => i.message.includes('曲线未知'))).toBe(true)
+    const badDur = validateAnimations([
+      { kind: 'scale', from: 1, to: 1, keyframes: [{ to: 0.5, durationMs: -1 }, { to: 1, durationMs: 100 }] },
+    ])
+    expect(badDur.some((i) => i.code === 'invalid-range')).toBe(true)
+  })
+
+  it('★同属性重复的提示现在指向 keyframes（不再是"不支持"）', () => {
+    const issues = validateAnimations([
+      { kind: 'scale', from: 1, to: 0.9, durationMs: 100 },
+      { kind: 'scale', from: 0.9, to: 1, durationMs: 100 },
+    ])
+    const dup = issues.find((i) => i.code === 'duplicate-kind')
+    expect(dup).toBeDefined()
+    expect(dup!.hint).toContain('keyframes')
+  })
+
+  it('★序列批次仍具备平台零参与资格（整段 = 一条 CAKeyframeAnimation，不是 N 条）', () => {
+    const c = compileAnimations(presets.element.shake().decls, { nodeId: 1 })
+    expect(c.anims).toHaveLength(1)
+    expect(isPlatformEligible(c)).toBe(true)
+  })
+})
+
 describe('MA5 · 滚动联动（吸顶 / 视差 / 渐显）', () => {
   it('三个滚动预设都编译通过，且每条声明都带滚动窗口（驱动源必须显式）', () => {
     const specs = [
