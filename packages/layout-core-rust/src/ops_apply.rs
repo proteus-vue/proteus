@@ -407,15 +407,22 @@ pub fn relayout_multi_in(engine: &mut TaffyEngine, tree: &mut LayoutTree, dirty:
     //   而它是沿父链上溯（O(深度)）⇒ S4 形态（300 个脏文本叶子）白付 300 次上溯。
     //   ⇒ 一遍算完存 `(scope, dirty)`，两处共用。
     let t_scope0 = std::time::Instant::now();
-    let mut pairs: Vec<(u32, u32)> = Vec::with_capacity(dirty.len()); // (scope, dirty)
+    // ★★按范围**分组**（scope → 该范围内的全部脏节点）
+    //
+    // 【为什么不是"每范围留一个代表"（2026-09-30 实测的真缺陷）】旧实现 `dedup_by_key` 只留
+    //   每个范围的首个脏节点。范围走"拷贝法"时碰巧正确（拷贝法从 LayoutTree 读**全部** style），
+    //   但**范围塌到根 / 覆盖整树**时（`layout_cached`）只同步那一个代表 ⇒ 其余脏节点的新样式
+    //   **永远进不了 taffy** ⇒ 几何静默停在旧值。真机复现：居中网格 800 条补丁只生效 1 条
+    //   （`scopes=[0]`，瓦片宽度分布 `{15:799, 9:1}`）。
+    //   ⇒ 语义：**分组，不丢**；去重只作用于"范围"层面（同一范围只解一次）。
+    let mut grouped: std::collections::BTreeMap<u32, Vec<u32>> = std::collections::BTreeMap::new();
     for &d in dirty {
         if d as usize >= tree.len() {
             continue;
         }
-        pairs.push((eng.relayout_scope_of(tree, d), d));
+        grouped.entry(eng.relayout_scope_of(tree, d)).or_default().push(d);
     }
-    pairs.sort_unstable();
-    pairs.dedup_by_key(|(sc, _)| *sc);   // 同一范围只保留一个代表（首个脏节点）
+    let pairs: Vec<(u32, Vec<u32>)> = grouped.into_iter().collect();
     let t_scope = t_scope0.elapsed().as_secs_f64() * 1000.0;
 
     // ★★② 去掉「被别的范围包含」的范围（保留最外层 ⇒ 不重复算同一子树）
@@ -466,9 +473,10 @@ pub fn relayout_multi_in(engine: &mut TaffyEngine, tree: &mut LayoutTree, dirty:
     let t_loop0 = std::time::Instant::now();
     let mut last_nonempty_phases: Option<std::collections::BTreeMap<String, f64>> = None;
     for sc in kept {
-        // ★`pairs` 已按 scope 去重且排序 ⇒ 二分查找代表脏节点（O(log n)，不再是 O(范围数) 扫描）
+        // ★`pairs` 已按 scope 分组且排序 ⇒ 二分查找该范围的**整组**脏节点
+        //   （O(log n)，不再是 O(范围数) 扫描；★必须是整组——见上方分组注释的缺陷记录）
         let d = match pairs.binary_search_by_key(&sc, |(s, _)| *s) {
-            Ok(i) => pairs[i].1,
+            Ok(i) => pairs[i].1.as_slice(),
             Err(_) => continue,
         };
         let r = engine.layout_incremental(tree, d);
@@ -547,6 +555,54 @@ mod tests {
         //   （本测试首版把 id 1 当根、断言 !contains(&1) —— 而索引 1 恰好是第二行，
         //    于是误报失败。教训：id 与索引在同一函数里混用时必须显式注明。）
         assert!(!out.scopes.contains(&0), "范围不应退化为树根（索引 0）：{:?}", out.scopes);
+    }
+
+    /// ★★决定性回归：**范围塌到根**时，一次重排的**每一个**脏节点都必须生效
+    ///
+    /// 【为什么单列（2026-09-30 真机复现的静默错几何）】`relayout_multi_in` 旧实现按范围
+    ///   `dedup_by_key` **只留一个代表脏节点**。范围走"拷贝法"时碰巧正确（拷贝法从 LayoutTree
+    ///   读全部样式），但**范围塌到根**（无布局边界，如居中网格：行容器因交叉轴不收缩而丢边界）
+    ///   时走持久树路径 ⇒ `sync_styles` 只同步那**一个**代表 ⇒ 其余脏节点的新样式
+    ///   **永远进不了 taffy** ⇒ 几何静默停在旧值（无任何报错）。
+    ///
+    ///   真机形态：800 条补丁（瓦片 15→9）只生效 1 条；本用例把它缩到 2 个节点：
+    ///   两个子节点的宽高都改 ⇒ **两个都必须变**。单脏节点的用例永远抓不到这条。
+    #[test]
+    fn root_scope_multi_dirty_applies_every_node() {
+        use crate::engine::{LayoutEngine, NullTextMeasurer, RootConstraint};
+
+        let mut tree = LayoutTree::new();
+        // 根：column + 显式宽高 ⇒ 根自身即布局边界（子节点无子 ⇒ 非边界）⇒ 范围塌到根。
+        let root_style = LStyle {
+            display: crate::style::Display::Flex,
+            flex_direction: crate::style::FlexDirection::Column,
+            width: Some(300.0),
+            height: Some(300.0),
+            ..Default::default()
+        };
+        let root_idx = tree.push(node(1, crate::node::NO_PARENT, root_style));
+        tree.roots.push(root_idx);
+        let child_style = LStyle { width: Some(50.0), height: Some(50.0), ..Default::default() };
+        let a_idx = tree.push(node(2, root_idx, child_style.clone()));
+        let b_idx = tree.push(node(3, root_idx, child_style));
+        tree.nodes[root_idx as usize].children.push(a_idx);
+        tree.nodes[root_idx as usize].children.push(b_idx);
+
+        let mut eng = TaffyEngine::new().with_measurer(Box::new(NullTextMeasurer));
+        eng.layout(&mut tree, RootConstraint::definite(300.0, 300.0));
+        // 前置断言：范围确实是根（否则本用例考不到持久树路径）
+        assert_eq!(eng.relayout_scope_of(&tree, a_idx), root_idx, "本用例要求范围塌到根");
+
+        // 两个节点**同时**改（不同属性，便于分别断言）
+        tree.nodes[a_idx as usize].style.width = Some(90.0);
+        tree.nodes[a_idx as usize].dirty = true;
+        tree.nodes[b_idx as usize].style.height = Some(70.0);
+        tree.nodes[b_idx as usize].dirty = true;
+
+        let _ = relayout_multi_in(&mut eng, &mut tree, &[a_idx, b_idx]);
+
+        assert_eq!(tree.nodes[a_idx as usize].rect.width, 90.0, "第 1 个脏节点的新样式必须生效");
+        assert_eq!(tree.nodes[b_idx as usize].rect.height, 70.0, "第 2 个脏节点的新样式必须生效（旧实现静默丢它）");
     }
 
     /// 嵌套情形：父子都脏 ⇒ 只保留最外层（不重复算同一子树）
@@ -797,7 +853,7 @@ mod tests {
         tree.nodes[dot_idx as usize].dirty = true;
         let scope = eng.relayout_scope_of(&tree, dot_idx);
         assert_eq!(scope, row_idx, "范围应为 row（非根）——这正是暴露缺陷的场景");
-        eng.layout_incremental(&mut tree, dot_idx);
+        eng.layout_incremental(&mut tree, &[dot_idx]);
 
         // 绝对坐标 = 沿父链累加（与 `parent_origin_of` 同款算法）
         let mut oy = 0.0f32;

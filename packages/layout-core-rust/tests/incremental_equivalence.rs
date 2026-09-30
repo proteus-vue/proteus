@@ -235,7 +235,7 @@ fn incremental_equals_full_on_nonzero_offset_chain() {
     tree.nodes[leaf as usize].dirty = true;
     let scope = eng.relayout_scope_of(&tree, leaf);
     assert_ne!(scope, r, "范围不应退化为根（否则本用例失去意义）");
-    eng.layout_incremental(&mut tree, leaf);
+    eng.layout_incremental(&mut tree, &[leaf]);
     let inc = snapshot_abs(&tree);
 
     // ② 另起一棵同样改了宽度的树，从头全量
@@ -260,7 +260,7 @@ fn incremental_equals_full_on_list_rows() {
     let target_dot = tree.nodes[rows[2] as usize].children[0];
     tree.nodes[target_dot as usize].style.width = Some(60.0);
     tree.nodes[target_dot as usize].dirty = true;
-    eng.layout_incremental(&mut tree, target_dot);
+    eng.layout_incremental(&mut tree, &[target_dot]);
     let inc = snapshot_abs(&tree);
 
     let (mut fresh, rows2) = list_tree(8);
@@ -281,7 +281,7 @@ fn incremental_equals_full_when_boundary_itself_changes() {
     eng.layout(&mut tree, RootConstraint::definite(375.0, 900.0));
     tree.nodes[rows[1] as usize].style.height = Some(90.0);
     tree.nodes[rows[1] as usize].dirty = true;
-    eng.layout_incremental(&mut tree, rows[1]);
+    eng.layout_incremental(&mut tree, &[rows[1]]);
     let inc = snapshot_abs(&tree);
 
     let (mut fresh, rows2) = list_tree(8);
@@ -331,7 +331,7 @@ fn translation_guards_each_reject_and_stay_equivalent() {
         tree.nodes[a as usize].style.height = Some(90.0);
         tree.nodes[a as usize].dirty = true;
         assert_eq!(eng.relayout_scope_of(&tree, a), p, "范围应为根");
-        eng.layout_incremental(&mut tree, a);
+        eng.layout_incremental(&mut tree, &[a]);
         assert_eq!(
             eng.translation_reject,
             Some("justify-content != flex-start"),
@@ -351,7 +351,7 @@ fn translation_guards_each_reject_and_stay_equivalent() {
         tree.nodes[a as usize].style.height = Some(90.0);
         tree.nodes[a as usize].dirty = true;
         assert_eq!(eng.relayout_scope_of(&tree, a), p, "范围应为根");
-        eng.layout_incremental(&mut tree, a);
+        eng.layout_incremental(&mut tree, &[a]);
         assert_eq!(
             eng.translation_reject,
             Some("parent main-axis size not declared"),
@@ -369,7 +369,7 @@ fn translation_guards_each_reject_and_stay_equivalent() {
         tree.nodes[a as usize].style.width = Some(120.0);
         tree.nodes[a as usize].dirty = true;
         assert_eq!(eng.relayout_scope_of(&tree, a), p, "范围应为根");
-        eng.layout_incremental(&mut tree, a);
+        eng.layout_incremental(&mut tree, &[a]);
         assert_eq!(
             eng.translation_reject,
             Some("dirty node main-axis size not declared"),
@@ -388,7 +388,7 @@ fn translation_guards_each_reject_and_stay_equivalent() {
         tree.nodes[a as usize].style.height = Some(90.0);
         tree.nodes[a as usize].dirty = true;
         assert_eq!(eng.relayout_scope_of(&tree, a), p, "范围应为根");
-        eng.layout_incremental(&mut tree, a);
+        eng.layout_incremental(&mut tree, &[a]);
         assert_eq!(eng.translation_reject, Some("child flex-shrink != 0"), "★ 应被 ③ 拒绝");
     }
 
@@ -403,7 +403,7 @@ fn translation_guards_each_reject_and_stay_equivalent() {
         tree.nodes[a as usize].style.height = Some(90.0);
         tree.nodes[a as usize].dirty = true;
         assert_eq!(eng.relayout_scope_of(&tree, a), p, "范围应为根");
-        eng.layout_incremental(&mut tree, a);
+        eng.layout_incremental(&mut tree, &[a]);
         assert_eq!(
             eng.translation_reject,
             Some("child has percentage size"),
@@ -421,7 +421,7 @@ fn translation_guards_each_reject_and_stay_equivalent() {
         tree.nodes[a as usize].style.height = Some(90.0);
         tree.nodes[a as usize].dirty = true;
         assert_eq!(eng.relayout_scope_of(&tree, a), p, "范围应为根");
-        eng.layout_incremental(&mut tree, a);
+        eng.layout_incremental(&mut tree, &[a]);
         assert_eq!(eng.translation_reject, Some("child flex-grow > 0"), "★ 应被 ② 拒绝");
     }
 }
@@ -441,7 +441,7 @@ fn grow_sibling_forces_full_relayout_and_stays_equivalent() {
     // 范围应为根（父是根）⇒ 会尝试平移；但前提②不满足 ⇒ 守卫应拒绝 ⇒ 回退全量
     // ★范围返回的是**索引**不是 id：根在索引 0
     assert_eq!(scope, 0, "范围应为根（A 的父就是根）");
-    eng.layout_incremental(&mut tree, a);
+    eng.layout_incremental(&mut tree, &[a]);
     let inc = snapshot_abs(&tree);
 
     let (mut fresh, ids2) = grow_sibling_tree();
@@ -476,12 +476,12 @@ fn incremental_equals_full_after_multiple_sequential_changes() {
             tree.nodes[dot as usize].style.width = Some(40.0 + i as f32);
             tree.nodes[dot as usize].dirty = true;
             changes.push((dot, "w", 40.0 + i as f32));
-            eng.layout_incremental(&mut tree, dot);
+            eng.layout_incremental(&mut tree, &[dot]);
         } else {
             tree.nodes[*row as usize].style.height = Some(60.0 + i as f32);
             tree.nodes[*row as usize].dirty = true;
             changes.push((*row, "h", 60.0 + i as f32));
-            eng.layout_incremental(&mut tree, *row);
+            eng.layout_incremental(&mut tree, &[*row]);
         }
     }
     let inc = snapshot_abs(&tree);

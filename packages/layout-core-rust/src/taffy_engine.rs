@@ -589,12 +589,15 @@ impl LayoutEngine for TaffyEngine {
     /// ★本实现的成本模型（诚实标注）：为范围子树**重建**了一棵 taffy 树 ⇒ 代价 O(范围)。
     ///   对比全量 O(整树)：当 范围 ≪ 整树 时是真实收益。进一步优化（复用 taffy 状态做真增量）
     ///   留到 M2 有真机数据后再评估——先保证语义正确。
-    fn layout_incremental(&mut self, tree: &mut LayoutTree, dirty: NodeIndex) -> LayoutOutput {
+    fn layout_incremental(&mut self, tree: &mut LayoutTree, dirty: &[NodeIndex]) -> LayoutOutput {
+        debug_assert!(!dirty.is_empty(), "layout_incremental 收到空脏集合（调用方应先过滤）");
         let t_pro = std::time::Instant::now();
         // ★每轮清空（否则上一轮的平移痕迹会污染本轮的收集集合）
         self.last_changed_roots.clear();
         self.translation_reject = None;
-        let scope = self.relayout_scope_of(tree, dirty);
+        // ★范围由**首个**脏节点推出：调用方（relayout_multi_in）保证同组同范围
+        //   （分组在那边完成）；若不同范围被误传进来，取首个仍安全（范围只会更大不更小）
+        let scope = self.relayout_scope_of(tree, dirty[0]);
 
         // ★★先**同步持久树**（本仓实测的关键：真增量的正确性前提）
         //
@@ -605,7 +608,8 @@ impl LayoutEngine for TaffyEngine {
         //   ⇒ 每条增量路径都把自己的脏节点同步进持久树（一次 set_style，成本可忽略）。
         if !self.taffy_ids.is_empty() {
             self.ensure_persistent(tree);
-            self.sync_styles(tree, &[dirty]);
+            // ★同步**整组**（不是首个代表）——见 trait 上的缺陷记录
+            self.sync_styles(tree, dirty);
         }
 
         // ★★退化保护：重排范围 == 根 ⇒ 直接走全量，别做「拷贝整树再布局」
@@ -620,8 +624,11 @@ impl LayoutEngine for TaffyEngine {
             //
             // 【为什么值得试（本仓实测）】类B 桌面 3.87ms / 真机 18ms，而其中后续兄弟
             //   只是整体位移 ⇒ 无需重解 flexbox。前提不满足时本函数返回 None（回退全量）。
-            if let Some(out) = self.try_translation_relayout(tree, dirty) {
-                return out;
+            // ★平移传播是"单个子树整体位移"的优化；多脏节点时语义不成立 ⇒ 只在单脏时尝试
+            if dirty.len() == 1 {
+                if let Some(out) = self.try_translation_relayout(tree, dirty[0]) {
+                    return out;
+                }
             }
             // 复用最近一次全量布局的约束（首次无记录时用「紧尺寸」兜底：范围是整树，
             // 根若为 auto 尺寸，MaxContent 语义与全量首帧一致）
@@ -632,7 +639,7 @@ impl LayoutEngine for TaffyEngine {
             // ★★真增量（本仓实测：整树重排里 79% 是"重建 taffy"的固定成本——
             //   保留树 + 只同步变更节点 ⇒ 同形状基准 2.96ms → 0.089ms）
             *self.phases_mut("prologue_ms") += t_pro.elapsed().as_secs_f64() * 1000.0;
-            return self.layout_cached(tree, c, &[dirty]);
+            return self.layout_cached(tree, c, dirty);
         }
 
         // ★★**"范围覆盖整树"时走持久树**（本仓实测：真机 V0 白付了一次全量拷贝+重建）
@@ -709,7 +716,7 @@ impl LayoutEngine for TaffyEngine {
             let ch = if scope_rect.height > 0.0 { scope_rect.height } else { fb_h.unwrap_or(f32::INFINITY) };
             *self.phases_mut("prologue_ms") += t_pro.elapsed().as_secs_f64() * 1000.0;
             *self.phases_mut("sole_path_ms") += 1.0;
-            return self.layout_cached(tree, RootConstraint::definite(cw, ch), &[dirty]);
+            return self.layout_cached(tree, RootConstraint::definite(cw, ch), dirty);
         }
 
         // ★★根约束 = 该边界节点**上次布局的实际尺寸**（而不是它的声明尺寸）
@@ -735,7 +742,7 @@ impl LayoutEngine for TaffyEngine {
         *self.phases_mut("prologue_ms") += t_pro.elapsed().as_secs_f64() * 1000.0;
         let t_phase0 = std::time::Instant::now();
         // ★★真增量：同一棵持久树里只重排该范围（替代"拷贝子树 + 子引擎重建"）
-        let out = self.layout_subtree_cached(tree, scope, constraint, &[dirty]);
+        let out = self.layout_subtree_cached(tree, scope, constraint, dirty);
         let t_total = t_phase0.elapsed().as_secs_f64() * 1000.0;
         self.last_phases.clear();
         self.last_phases.insert("subtree_ms".into(), t_total);

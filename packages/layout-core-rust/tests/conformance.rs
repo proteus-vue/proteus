@@ -827,7 +827,7 @@ fn incremental_with_boundary_does_not_crash_and_matches_full() {
     // 改叶子 → 增量重排（★此行曾栈溢出）
     tree.get_mut(target_idx).style.width = Some(25.0);
     tree.get_mut(target_idx).dirty = true;
-    let out = engine.layout_incremental(&mut tree, target_idx);
+    let out = engine.layout_incremental(&mut tree, &[target_idx]);
     assert!(out.relayout_count > 0, "增量应产出矩形");
 
     // ★结果必须与**全量重排**逐节点一致（不只是「没崩」）
@@ -870,7 +870,7 @@ fn incremental_without_boundary_still_matches_full() {
 
     tree.get_mut(target_idx).style.width = Some(25.0);
     tree.get_mut(target_idx).dirty = true;
-    engine.layout_incremental(&mut tree, target_idx);   // 无边界 ⇒ 内部退回全量
+    engine.layout_incremental(&mut tree, &[target_idx]);   // 无边界 ⇒ 内部退回全量
 
     let mut full = tree.clone();
     let mut e2 = TaffyEngine::new();
@@ -929,7 +929,7 @@ fn incremental_with_boundary_is_much_faster_than_full() {
     for _ in 0..50 {
         tree.get_mut(leaf).style.width = Some(41.0);
         tree.get_mut(leaf).dirty = true;
-        e.layout_incremental(&mut tree, leaf);
+        e.layout_incremental(&mut tree, &[leaf]);
     }
     let inc = t1.elapsed().as_secs_f64() / 50.0;
     let speedup = full / inc;

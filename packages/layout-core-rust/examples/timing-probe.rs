@@ -48,7 +48,7 @@ fn main() {
         let t1 = std::time::Instant::now();
         tree.get_mut(idx).style.width = Some(41.0);
         tree.get_mut(idx).dirty = true;
-        let out: LayoutOutput = e.layout_incremental(&mut tree, idx);
+        let out: LayoutOutput = e.layout_incremental(&mut tree, &[idx]);
         let t_relayout = t1.elapsed().as_secs_f64() * 1000.0;
 
         // ── ③ 变化集收集（scope 子树 + 父链原点）──

@@ -52,7 +52,7 @@ fn main() {
         for _ in 0..iters {
             tree.get_mut(leaf).style.width = Some(41.0);
             tree.get_mut(leaf).dirty = true;
-            e.layout_incremental(&mut tree, leaf);
+            e.layout_incremental(&mut tree, &[leaf]);
         }
         let inc_ms = t1.elapsed().as_secs_f64() * 1000.0 / iters as f64;
         // 边界数（诊断：解释增量为何快/慢）

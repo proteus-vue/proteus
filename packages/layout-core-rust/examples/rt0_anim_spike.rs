@@ -74,9 +74,17 @@ fn main() {
                         from,
                         to,
                         dur_ms: 1000.0,
+                        // ★字段随内核演进补齐（此前未补 ⇒ 本例子**编译不过**，挡住 cargo test）
+                        delay_ms: 0.0,
                         t_ms: 0.0,
                         drive: proteus_layout_core::anim::AnimDrive::Time,
                         progress: 0.0,
+                        scroll_from: 0.0,
+                        scroll_to: 0.0,
+                        mode: proteus_layout_core::anim::AnimMode::Curve,
+                        x: from,
+                        vel: 0.0,
+                        takeover: true,
                     },
                 )
                 .expect("start 失败");
