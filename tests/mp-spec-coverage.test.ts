@@ -60,17 +60,26 @@ describe('★权威标尺：官方清单 spec 驱动覆盖度', () => {
   it('planned 清单可见（规划待落地逐条列出，非黑盒）', () => {
     const r = auditSpecCoverage(spec, MP_MAPPING_MATRIX)
     expect(r.plannedItems.length).toBe(r.planned)
-    // ★API 侧 planned 已清零；剩余 planned 均为组件侧（来自矩阵 planned 行——需原生渲染/宿主）
+    // ★★2026-09-30 语义更新（原断言「API 侧 planned 已清零」是**旧尺子下的产物**）：
+    //   快照抽取器修掉泛型缺陷后（API 298 → 495），真实缺口首次可见 ⇒ API 侧 21 条 planned
+    //   （setKeepScreenOn / showToast / showModal / startPullDownRefresh / getUserProfile …）
+    //   —— 它们是 NC2「内置能力扩充」的候选输入。**planned 非零是诚实，不是回归**。
     const apiPlanned = r.plannedItems.filter((p) => p.kind === 'api')
-    expect(apiPlanned).toEqual([])
-    expect(r.plannedItems.every((p) => p.kind === 'component')).toBe(true)
+    expect(apiPlanned.length).toBeGreaterThan(0)
+    // 每条 planned 必须带承接说明（防「只报缺口不说去哪」的黑盒）
+    expect(apiPlanned.every((p) => typeof p.proteus === 'string' && p.proteus.length > 0)).toBe(true)
+    // 组件侧 planned 仍在（4 条手势处理器——需原生渲染/宿主）
+    expect(r.plannedItems.some((p) => p.kind === 'component')).toBe(true)
   })
 
   it('分类器：覆盖五态语义（covered/planned/private/na/gap）', () => {
     expect(classifySpecApi('createCanvasContext').status).toBe('covered')
     expect(classifySpecApi('createUDPSocket').status).toBe('covered')
     expect(classifySpecApi('createVKSession').status).toBe('covered')
-    // ★API 侧 planned 清零——planned 现仅剩组件侧（需原生渲染/宿主能力）
+    // ★2026-09-30：泛型签名修复后新可见的核心 API 也在标尺内（此前结构性漏抽）
+    expect(classifySpecApi('request').status).toBe('covered')     // wx.request —— 曾是最大漏项
+    expect(classifySpecApi('login').status).toBe('covered')       // wx.login
+    expect(classifySpecApi('setKeepScreenOn').status).toBe('planned') // 真实缺口（NC2 候选）
     expect(classifySpecComponent('camera', MP_MAPPING_MATRIX).status).toBe('covered')
     expect(classifySpecApi('requestMerchantTransfer').status).toBe('private')
     expect(classifySpecApi('nextTick').status).toBe('na')
