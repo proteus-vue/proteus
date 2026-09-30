@@ -410,8 +410,13 @@ iOS 同理：动 `transform` 是 GPU 加速，动 `frame` 触发布局重算。
       `wx://bottom-sheet` 等 routeType）· **元素预设 3 个**（fadeIn/pressRelease/sharedElementFlyIn）
       · **手感预设 2 个**（`easing.snappy/smooth`，与内核 `SpringParams` **同值**，两侧测试钉住）
       · 真机 H4：`bottomSheet` 预设驱动端上动画（mid ty=150.4 → end ty=0）
-- [ ] **编排（sequence）**：内核对同属性是替换语义 ⇒ "先压再弹"两段序列需调用方拆批，
-      本包已在 `validateAnimations` 显式拦下并给出提示（见包 README「未做」）
+- [x] **编排（sequence）**—— ✅ **已落地并真机验证（2026-09-30，MA6）**：
+      内核对同属性是替换语义 ⇒ 多段收敛到**一条动画**里（内核 `AnimMode::Keyframes`）；
+      声明侧 `AnimDecl.keyframes` + 预设 `element.press()`（下压+回弹）/ `element.shake()`（抖动三段）；
+      求值入口收敛为唯一 `value_at_progress`（tick/seek/滚动三处同源——避免"seek 对、滚动错"）；
+      **平台路径仍是一条** `CAKeyframeAnimation`（采样整段，不增提交次数）
+      · 真机 J 组 4/4：一条动画三段 · 50ms→0.800 / 100ms→0.600（边界精确）/ 200ms→0.900 ·
+      终值 1.0000 · 平台提交一条且采样经过各段（0.600..1.200）
 - [ ] **共享元素**：`sharedElementFlyIn` 目前只做落点缩放+淡入；真正的"从起点矩形飞入"需
       三端 `platform/` 层（跨页面坐标换算）—— 与 MA0-RT 未完成项同步
 - [ ] **AI 说明书**（与 111 条规则同构）—— 预设库已按"单一入口枚举"设计（`presets` 导出），待接生成器

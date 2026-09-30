@@ -3196,8 +3196,22 @@ final class SelfDrawBridge: NSObject, SelfDrawExports {
         for sp in specs where view.commitKeyframeAnimation(spec: sp) {
             committed += 1
         }
+        // ★采样极值（scale 分量 = samples[i][2]）：让判据能证明"提交出去的采样**真的经过**了
+        //   序列的各段"——只断言 "committed=1" 无法区分"三段序列"与"退化成单段"（MA6 J4）
+        var scaleMin = Double.greatestFiniteMagnitude
+        var scaleMax = -Double.greatestFiniteMagnitude
+        for sp in specs {
+            for row in (sp["samples"] as? [[Double]]) ?? [] where row.count >= 5 {
+                scaleMin = Swift.min(scaleMin, row[2])
+                scaleMax = Swift.max(scaleMax, row[2])
+            }
+        }
+        let rangeJson = scaleMax > scaleMin
+            ? "\"scaleMin\":\(scaleMin),\"scaleMax\":\(scaleMax)"
+            : "\"scaleMin\":null,\"scaleMax\":null"
         // ★把 plan 一并返回（判据要断言"合成属性判定"，见 check-anim-rt2.py G1）
-        return "{\"ok\":true,\"committed\":\(committed),\"plan\":{\"composited\":true,"
+        return "{\"ok\":true,\"committed\":\(committed),\"specs\":\(specs.count),\(rangeJson),"
+            + "\"plan\":{\"composited\":true,"
             + "\"nodeCount\":\(plan["nodeCount"] ?? 0),\"animCount\":\(plan["animCount"] ?? 0)}}"
     }
 
@@ -4455,6 +4469,8 @@ final class SelfDrawViewController: UIViewController {
             ("__proteus.animPreset()", 2),
             // ★★MA5：滚动联动（吸顶/视差/渐显——位置→进度在内核；含宿主滚动通路生产形态）
             ("__proteus.animScroll()", 2),
+            // ★★MA6：序列编排（多段动画——"先下压再弹回"收敛在一条动画里）
+            ("__proteus.animSequence()", 2),
             // ★★RT2 帧率测席（§9 指标）：**异步**——由 CADisplayLink 跑满时长后回调续链
             //   （事件驱动：跑满即继续，不轮询/不 sleep；看门狗只在卡死时兜底）
             ("__proteus.animBench()", 0),
@@ -4484,7 +4500,7 @@ final class SelfDrawViewController: UIViewController {
             }
             let out = js(expr)
             // 只记关键读数（避免日志爆炸——本仓「输出控制」纪律）
-            if expr.hasPrefix("__proteus.mount") || expr.hasPrefix("__proteus.finalize2") || expr.hasPrefix("__proteus.animProbe") || expr.hasPrefix("__proteus.animComplex") || expr.hasPrefix("__proteus.animPlatform") || expr.hasPrefix("__proteus.animPreset") || expr.hasPrefix("__proteus.animScroll") {
+            if expr.hasPrefix("__proteus.mount") || expr.hasPrefix("__proteus.finalize2") || expr.hasPrefix("__proteus.animProbe") || expr.hasPrefix("__proteus.animComplex") || expr.hasPrefix("__proteus.animPlatform") || expr.hasPrefix("__proteus.animPreset") || expr.hasPrefix("__proteus.animScroll") || expr.hasPrefix("__proteus.animSequence") {
                 NSLog("[proteus] %@ → %@", expr, String(out.prefix(400)))
             }
             // ★让出主线程 pump 轮：每轮一次 runloop 循环 ⇒ 微任务队列被排空

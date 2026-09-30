@@ -7,7 +7,7 @@
      ⇒ 本脚本读的是 `layerTransformProbe` 的结果（宿主从 `CALayer.transform` 反解），
        覆盖"写入路径真的生效"这一环。
 
-【九组判据（对应 RT2 / MA0-RT / MA1 / MA5 要回答的问题；当前 40 条）】
+【十组判据（对应 RT2 / MA0-RT / MA1 / MA5 / MA6 要回答的问题；当前 44 条）】
   A. **指令真的驱动了端上动画**：层上 transform 随进度变化，且**终值精确**等于目标（端点钉死）；
   B. **手势驱动（seek）立即生效**：seek 后**不等 tick**，层上已有对应值；
      Progress 驱动后再 tick **不应改它**（手势松手后动画不该自己跑）；
@@ -18,6 +18,7 @@
   G. **平台零参与路径**（§5-bis）：合成属性判定 / 提交一次 / presentation 探针 / 明确拒绝 / 可撤销；
   H. **MA1 预设库**：预设编译 → 微信语义对齐 → 指令下发 → 端上驱动 → 校验有效 → 跨语言同值；
   I. **MA5 滚动联动**：视差映射（窗×factor）/ 宿主滚动通路生产形态 / 退化窗口与滚动+弹簧拦截 / 平台路径排除。
+  J. **MA6 序列编排**：一条动画三段 / 分段推进与边界精确 / 终值精确 / 平台路径仍是一条。
 
 用法：python3 hosts/ios/check-anim-rt2.py <report.json>
 退出码：0 全过 / 1 有失败（逐条打印为什么）
@@ -455,9 +456,55 @@ def main() -> int:
     else:
         print("  · I 组跳过（无 anim_scroll 读数）")
 
+    # ── J 组（MA6）：序列编排（多段动画收敛在一条动画里；分段推进 + 边界精确） ──
+    q = d.get("anim_sequence") or js.get("anim_sequence") or {}
+    if q:
+        # J1：声明被编译成**一条**动画、内三段（"多段不等于多条"是本里程碑的核心语义）
+        segs = q.get("segments")
+        st = q.get("start") or {}
+        if segs != 3 or not st.get("ok"):
+            fail(f"J1 序列未按一条动画三段下发：segments={segs} start={st}")
+            ok = False
+        else:
+            print(f"  ✓ J1 一条动画内三段（keyframes=3 · durMs={q.get('durMs')}）")
+        # J2：分段推进——预期 50→0.8 / 100→0.6（精确）/ 200→0.9
+        s50, s100, s200 = q.get("s50"), q.get("s100"), q.get("s200")
+        if s50 is None or abs(s50 - 0.8) > 0.01:
+            fail(f"J2a 首段半程不符：scale={s50}（应 ≈0.8）")
+            ok = False
+        elif s100 is None or abs(s100 - 0.6) > 0.005:
+            fail(f"J2b 首段终点不精确：scale={s100}（应 =0.6——分段边界不得漂移）")
+            ok = False
+        elif s200 is None or abs(s200 - 0.9) > 0.01:
+            fail(f"J2c 次段半程不符：scale={s200}（应 ≈0.9）")
+            ok = False
+        else:
+            print(f"  ✓ J2 分段推进：50ms→{s50:.3f} · 100ms→{s100:.3f}（段边界精确）· 200ms→{s200:.3f}")
+        # J3：终值精确到声明的 to（1.0）
+        s400 = q.get("s400")
+        if s400 is None or abs(s400 - 1.0) > 0.005:
+            fail(f"J3 序列终值不精确：scale={s400}（应 =1.0）")
+            ok = False
+        else:
+            print(f"  ✓ J3 序列终值精确到声明 to：scale={s400:.4f}")
+        # J4：平台路径**仍是"一条"**（1 节点 ⇒ 1 条 CAKeyframeAnimation），
+        #     且**提交的采样真的经过各段**（scale 采样应先下探到 ≈0.6、再上冲到 ≈1.2）
+        committed = q.get("platform_committed")
+        smin, smax = q.get("platform_scale_min"), q.get("platform_scale_max")
+        if not q.get("platform_ok") or committed != 1 or q.get("platform_specs") != 1:
+            fail(f"J4a 序列的平台提交不是一条：committed={committed} specs={q.get('platform_specs')} ok={q.get('platform_ok')}")
+            ok = False
+        elif smin is None or smax is None or smin > 0.65 or smax < 1.15:
+            fail(f"J4b 提交采样未经过各段：scaleMin={smin} scaleMax={smax}（应下探 ≈0.6、上冲 ≈1.2）")
+            ok = False
+        else:
+            print(f"  ✓ J4 平台路径一条动画且采样经过各段（committed=1 · scale 采样 {smin:.3f}..{smax:.3f}）")
+    else:
+        print("  · J 组跳过（无 anim_sequence 读数）")
+
     print()
     if ok:
-        print("✅ 判据全过（机制 + 帧率 + 复杂动效 + 平台零参与 + MA1 预设库 + MA5 滚动联动）")
+        print("✅ 判据全过（机制 + 帧率 + 复杂动效 + 平台零参与 + MA1 预设库 + MA5 滚动联动 + MA6 序列编排）")
         return 0
     print("✗ RT2 判据有失败项（见上）")
     return 1
