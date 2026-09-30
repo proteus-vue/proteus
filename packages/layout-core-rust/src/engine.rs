@@ -134,7 +134,14 @@ pub trait LayoutEngine {
     /// 增量布局：从脏节点出发，**遇布局边界即停止向上传播**（§5.4 T2 的核心机制）
     ///
     /// 返回的 `LayoutOutput` 只包含**被重算**的节点（`sparse` 语义）。
-    fn layout_incremental(&mut self, tree: &mut LayoutTree, dirty: NodeIndex) -> LayoutOutput;
+    ///
+    /// ★★`dirty` 是**同范围内的一组**脏节点（而不是一个代表）——2026-09-30 实测的真缺陷：
+    ///   调用方（`relayout_multi_in`）曾按范围去重、只传一个代表；在"拷贝法"范围里碰巧正确
+    ///   （拷贝法自带完整 style），但**范围塌到根 / 覆盖整树**时走持久树路径 ⇒
+    ///   `sync_styles` 只同步那一个代表 ⇒ **其余脏节点的新样式永远进不了 taffy**
+    ///   ⇒ 几何静默停在旧值（真机形态：800 条补丁只生效 1 条，且无任何报错）。
+    ///   ⇒ 语义写死为"整组"：实现方必须把**每一个** dirty 都同步/标记。
+    fn layout_incremental(&mut self, tree: &mut LayoutTree, dirty: &[NodeIndex]) -> LayoutOutput;
 
     /// 引擎标识（诊断/门禁用）
     fn name(&self) -> &'static str;

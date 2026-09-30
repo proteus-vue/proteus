@@ -32,7 +32,7 @@ fn main() {
     println!("现在调用 layout_incremental …");
     tree.get_mut(target_idx).style.width = Some(25.0);
     tree.get_mut(target_idx).dirty = true;
-    let out = e.layout_incremental(&mut tree, target_idx);
+    let out = e.layout_incremental(&mut tree, &[target_idx]);
     println!("增量布局返回：relayout_count={}", out.relayout_count);
 
     // ★关键：结果**对不对**（不只是「没崩」）——与全量重排逐节点比对
