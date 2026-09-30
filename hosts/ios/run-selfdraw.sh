@@ -153,6 +153,10 @@ cat > "$APP/Info.plist" <<PLIST
   <key>CFBundleExecutable</key><string>ProteusSelfDraw</string>
   <key>CFBundleIdentifier</key><string>$BUNDLE_ID</string>
   <key>CFBundleName</key><string>ProteusSelfDraw</string>
+  <key>CFBundleDisplayName</key><string>Morpheus</string>
+  <!-- ★缺省场景（无参数启动 = 从桌面点开）：showcase ⇒ 点图标即演示（用户要求"随时点开给团队看"）。
+       脚本各模式用显式参数覆盖（--selfdraw/--bench/--host-runtime/--app-stack/--showcase）。 -->
+  <key>ProteusDefaultScene</key><string>showcase</string>
   <key>CFBundleVersion</key><string>1</string>
   <key>CFBundleShortVersionString</key><string>0.1.0</string>
   <key>CFBundlePackageType</key><string>APPL</string>
@@ -268,10 +272,14 @@ LAUNCH_LOG="$(mktemp)"
 LAUNCH_RC=0
 echo "    启动 App（阻塞到报告落盘后自退——无轮询 / 无 sleep / 无超时；长跑请放后台）"
 if [ "$MODE" = "showcase" ]; then
-  # ★★Morpheus 炫技场：单段 launch（App 内部：建树 → 三段编舞（帧循环驱动）→ 读数 + 截图 →
-  #   SHOWCASE_REPORT_READY → PROTEUS_EXIT_AFTER_REPORT=1 自退）。脚本侧零轮询。
+  # ★★Morpheus 炫技场：单段 launch（App 内部：建树 → **整场节目单**（开场语→演出→长跑→谢幕语，
+  #   帧循环驱动）→ 逐幕读数 + 内存采样 + 截图 → SHOWCASE_REPORT_READY → 自退）。脚本侧零轮询。
+  #   ★长跑时长可由本机环境注入（冒烟用短值）：PROTEUS_SHOWCASE_SOAK_MS=3000 bash … --showcase
+  #     默认 0 = 演出一遍到底（≈40 秒）；压力测量按需开启（如 300000 = 5 分钟）。
+  #  ★默认 **0 = 不重复**（用户要求"每一幕演示一遍整个节目衔接就行，不用为了时长去一直重复"）
+  SOAK_MS="${PROTEUS_SHOWCASE_SOAK_MS:-0}"
   xcrun devicectl device process launch --console --terminate-existing \
-    --environment-variables '{"PROTEUS_EXIT_AFTER_REPORT":"1"}' \
+    --environment-variables "{\"PROTEUS_EXIT_AFTER_REPORT\":\"1\",\"PROTEUS_SHOWCASE_SOAK_MS\":\"$SOAK_MS\"}" \
     --device "$UDID" "$BUNDLE_ID" --showcase > "$LAUNCH_LOG" 2>&1 || LAUNCH_RC=$?
 elif [ "$MODE" = "app-stack" ]; then
   # ★★M5 执行器模式：单段 launch（App 内部：主场景同步 → 执行器两相 → **非阻塞轮询** →
@@ -356,9 +364,11 @@ elif [ "$MODE" = "bench" ]; then
       --device "$UDID" "$BUNDLE_ID" --bench > "$LAUNCH_LOG" 2>&1 || LAUNCH_RC=$?
   fi
 else
+  # ★自绘模式**显式传参**：从桌面点开（无参数）走 Info.plist 的缺省场景 = showcase，
+  #   而脚本要的是自绘 ⇒ 必须显式声明（否则脚本跑起来的是演示）
   xcrun devicectl device process launch --console --terminate-existing \
     --environment-variables '{"PROTEUS_EXIT_AFTER_REPORT":"1"}' \
-    --device "$UDID" "$BUNDLE_ID" > "$LAUNCH_LOG" 2>&1 || LAUNCH_RC=$?
+    --device "$UDID" "$BUNDLE_ID" --selfdraw > "$LAUNCH_LOG" 2>&1 || LAUNCH_RC=$?
 fi
 if [ -f "$LAUNCH_LOG" ] && grep -qiE "not been explicitly trusted|invalid code signature|error 3 \(0x03\)" "$LAUNCH_LOG"; then
   echo "✗ 启动被拦：需在**设备上手动信任开发者证书**"
@@ -462,17 +472,25 @@ if [ "$MODE" = "host-runtime" ]; then
   exit $?
 fi
 
-# ★★Morpheus 炫技场：取收尾截图 + 跑专属判据
+# ★★Morpheus 炫技场：取两张截图（谢幕语收尾 + 漩涡中场面）+ 跑专属判据
 if [ "$MODE" = "showcase" ]; then
   if xcrun devicectl device copy from --device "$UDID" --domain-type appDataContainer \
       --domain-identifier "$BUNDLE_ID" --source "Documents/showcase-final.png" \
       --destination "$HERE/results/showcase-final.png" >/dev/null 2>&1; then
     echo "    收尾截图：$HERE/results/showcase-final.png"
   else
-    echo "    ⚠ 截图未取到（判据会据此判红）"
+    echo "    ⚠ 收尾截图未取到（判据会据此判红）"
+  fi
+  # 中场面（漩涡定格）——缺了不致命（判据对它是"有更好"），但如实报告
+  if xcrun devicectl device copy from --device "$UDID" --domain-type appDataContainer \
+      --domain-identifier "$BUNDLE_ID" --source "Documents/showcase-spiral.png" \
+      --destination "$HERE/results/showcase-spiral.png" >/dev/null 2>&1; then
+    echo "    漩涡定格：$HERE/results/showcase-spiral.png"
+  else
+    echo "    （漩涡定格截图未取到——不影响判据）"
   fi
   echo "==> ⑨ 判据（hosts/ios/check-showcase.py）"
-  python3 "$HERE/check-showcase.py" "$HERE/results/$REPORT_FILE" "$HERE/results/showcase-final.png"
+  python3 "$HERE/check-showcase.py" "$HERE/results/$REPORT_FILE" "$HERE/results/showcase-final.png" "$HERE/results/showcase-spiral.png"
   exit $?
 fi
 

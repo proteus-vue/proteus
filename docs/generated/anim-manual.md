@@ -8,7 +8,7 @@ generated: true
 # Morpheus 动画声明项 AI 说明书
 
 > **生成物，勿手改**：`node scripts/gen-anim-manual.mjs`（`--check` 接 CI，漂移即红）
-> **单一事实来源**：`packages/animation/src/rules.ts` 的 `ANIM_RULES`（26 条）
+> **单一事实来源**：`packages/animation/src/rules.ts` 的 `ANIM_RULES`（36 条）
 >
 > 本表与编译器的 111 条规则**同构**（Morpheus §13 第 11 条硬性要求）——
 > 每条含 what / why / when / 示例 / 如何验证 / 实现位置，AI 可单独消费一条。
@@ -16,7 +16,7 @@ generated: true
 > **conformance**：本页生成前会跑 `runConformance()` 对账（预设真实存在 / 跨语言契约值一致 /
 > `verify` 可追溯）——**对不上就不生成**，避免产出误导性文档。
 
-## 预设（可直接用）（13 条）
+## 预设（可直接用）（21 条）
 
 ### `preset/route.bottomSheet`
 
@@ -217,7 +217,128 @@ const sticky = presets.scroll.sticky({ pinAt: 80, span: 120 })
 const f = presets.scroll.fadeIn({ from: 100, to: 300, risePx: 12 })
 ```
 
-## 声明面原语（字段/取值）（6 条）
+### `preset/choreograph.wave`
+
+**编排 · 波浪（错峰弹回布局位）** `[implemented]`
+
+- **是什么**：每片从 `magnitude` 偏移处 spring 弹回布局位 + 淡入；相位序与错峰由 `order/staggerMs` 决定（`diagonal` = 斜向扫过，`dir: up` 则从下方托起）。
+- **为什么**：最通用的"群元素入场"：spring 是真物理积分（内核），相位是声明（引擎）——调用方零循环。
+- **何时用**：列表/网格/瓦片群的入场
+- **相关决策**：Morpheus 编排层（2026-09-30）
+- **如何验证**：tests/animation-choreography.test.ts「wave：spring 物理 + 对角相位」
+- **实现位置**：`packages/animation/src/choreography.ts:choreograph.wave`
+
+```ts
+presets.choreograph.wave({ ids, canvas, order: 'diagonal', staggerMs: 4, magnitude: 260 })
+```
+
+### `preset/choreograph.ripple`
+
+**编排 · 涟漪（中心向外逐圈脉冲）** `[implemented]`
+
+- **是什么**：scale/opacity 各一条两段 `keyframes` 序列（放大回弹 / 压暗回暖），`radialOut` 相位形成"一圈圈推出去"的节奏。
+- **为什么**：同节点同属性的"去了又回"必须走 `keyframes`（内核同 (节点,属性) 是替换语义）——预设把这条约束直接编进产物，调用方不会踩。
+- **何时用**：点击反馈的群体化 / 扩散动效
+- **相关决策**：Morpheus 编排层（2026-09-30）
+- **如何验证**：tests/animation-choreography.test.ts「ripple：两段 keyframes」
+- **实现位置**：`packages/animation/src/choreography.ts:choreograph.ripple`
+
+```ts
+presets.choreograph.ripple({ ids, canvas, order: 'radialOut', staggerMs: 12, peak: 1.35 })
+```
+
+### `preset/choreograph.spiral`
+
+**编排 · 漩涡（渐开线收束 + 旋转缩小）** `[implemented]`
+
+- **是什么**：每片沿渐开线（`turns` 圈）收向视口中心，同时 rotate + scale——800 片四属性并发。位移量 = 目标 − **当前**（`canvas.centers` 从内核几何读回）。
+- **为什么**：★真机取证：位移必须用**当前**几何——FLIP 重排后位置全变，用旧几何会让漩涡偏出画面（`entry-showcase` 实测抓出并修复）。缺 `centers` 当场抛错，不静默退化。
+- **何时用**：收束/汇聚类高潮段（演示、庆祝、转场收尾）
+- **相关决策**：Morpheus 编排层（2026-09-30）
+- **如何验证**：tests/animation-choreography.test.ts「spiral：位移 = 目标 − 当前」；hosts/ios/check-showcase.py（真机螺旋段终值真读层）
+- **实现位置**：`packages/animation/src/choreography.ts:choreograph.spiral`
+
+```ts
+presets.choreograph.spiral({ ids, canvas, turns: 3, toScale: 0.35, durationMs: 900 })
+```
+
+### `preset/choreograph.settle`
+
+**编排 · 归位（幕间清姿态，起点 = 传入的当前姿态）** `[implemented]`
+
+- **是什么**：四变换（+透明度）收归基线（位移/旋转 → 0、缩放/透明度 → 1），按相位错峰。起始值取 `canvas.attitudes`（**必填**——见 `constraint/from-is-mandatory`）。
+- **为什么**：多幕编排的"幕间清理"是通用需求：把上一幕留下的姿态收干净再进下一幕。起点必须显式给当前值（内核 `from` 必填），否则会瞬移归零。
+- **何时用**：连续多幕演出的幕间；任何"先把姿态收干净"的场合
+- **相关决策**：Morpheus 编排层（2026-09-30）
+- **如何验证**：tests/animation-choreography.test.ts「settle：…不给 ⇒ 抛错」+「terminalAttitudes…闭环」
+- **实现位置**：`packages/animation/src/choreography.ts:choreograph.settle + terminalAttitudes`
+
+```ts
+const atts = terminalAttitudes(prevAnims, ids)  // 或实读探针
+presets.choreograph.settle({ ids, canvas: { ...canvas, attitudes: atts }, durationMs: 700 })
+```
+
+### `preset/choreograph.domino`
+
+**编排 · 多米诺（翻倒再弹回，蛇形掠过）** `[implemented]`
+
+- **是什么**：每片 rotate/scale 各一条两段序列（倒下 → 弹回，奇偶反向），`serpentine` 相位形成掠过感。
+- **为什么**：轻量"有生命感"的群体动效；两段序列由 `keyframes` 表达（同属性多段的唯一合法形态）。
+- **何时用**：图标墙/缩略图墙的趣味动效
+- **相关决策**：Morpheus 编排层（2026-09-30）
+- **如何验证**：tests/animation-choreography.test.ts「domino：两段序列 + 奇偶反向」
+- **实现位置**：`packages/animation/src/choreography.ts:choreograph.domino`
+
+```ts
+presets.choreograph.domino({ ids, canvas, order: 'serpentine', staggerMs: 6, tilt: 26 })
+```
+
+### `preset/choreograph.text`
+
+**编排 · 聚字（元素聚成点阵文字）** `[implemented]`
+
+- **是什么**：每片就是一个"像素"：前 `lit.length` 片各就一个亮像素（`bitmap-font.ts` 的 5×7 字形），其余成为**星尘**（确定性伪随机散布在文字四周——同输入同画面）。亮像素数 > 元素数时按序取前几片（文字缺笔画——由调用方保证规模，判据端查"亮像素 ≤ 元素数"）。
+- **为什么**：★"让几百个元素聚成一个词"是**通用编排构型**（开场语/谢幕语/庆祝），不是某场演示的私有视觉⇒ 字库与构型进引擎（与其它构型同源可测）。演示因此能"说人话"：开场"800 片聚成 MORPHEUS"，谢幕"聚成 60 FPS"——全程同一批节点，零额外视图。
+- **何时用**：开场语/谢幕语/里程碑庆祝等"群元素成字"的场合
+- **相关决策**：Morpheus 编排层（2026-09-30）
+- **如何验证**：tests/animation-choreography.test.ts「text：亮像素/星尘…」+「点阵字体数据自检」
+- **实现位置**：`packages/animation/src/choreography.ts:choreograph.text + packages/animation/src/bitmap-font.ts`
+
+```ts
+presets.choreograph.text({ ids, canvas, text: 'MORPHEUS', pixelScale: 0.42, durationMs: 900 })
+```
+
+### `preset/choreograph.gather`
+
+**编排 · 汇聚（从屏外径向飞回）** `[implemented]`
+
+- **是什么**：每片从"屏心 → 自己"的径向外推 `spread` 倍处 spring 飞回原位（`spread ≥ 2` 时起点已在屏外）。
+- **为什么**：开场"星尘凝聚"：起点在屏外 ⇒ 画面从空到满，与 `text`（聚字）衔接自然。
+- **何时用**：演出开场 / 页面初始化（从空到满的凝聚感）
+- **相关决策**：Morpheus 编排层（2026-09-30）
+- **如何验证**：tests/animation-choreography.test.ts「gather：起点沿径向外推」
+- **实现位置**：`packages/animation/src/choreography.ts:choreograph.gather`
+
+```ts
+presets.choreograph.gather({ ids, canvas, spread: 2.6 })
+```
+
+### `preset/choreograph.storm`
+
+**编排 · 风暴（五属性并发，单帧负载最重的构型）** `[implemented]`
+
+- **是什么**：位移抖动 + 大幅旋转 + 收放 + 呼吸，五属性并发（800×5 = 4000 条指令），`alternate` 相位两班倒。
+- **为什么**：压力上限的代表：每帧写层最多（五属性全动）——演示里用它回答"引擎的边际在哪"。确定性伪随机 ⇒ 同输入同画面（可复现，判据可对账）。
+- **何时用**：压力演示 / 需要"密度感"的场面
+- **相关决策**：Morpheus 编排层（2026-09-30）
+- **如何验证**：tests/animation-choreography.test.ts「storm：五属性并发 + alternate 相位」
+- **实现位置**：`packages/animation/src/choreography.ts:choreograph.storm`
+
+```ts
+presets.choreograph.storm({ ids, canvas, order: 'alternate', staggerMs: 8, durationMs: 900 })
+```
+
+## 声明面原语（字段/取值）（7 条）
 
 ### `primitive/route-transition-bridge`
 
@@ -320,7 +441,25 @@ const c = compileTimeline({
 }, { nodeId: cardId })   // ⇒ 3 条动画，总时长都是 350ms
 ```
 
-## 约束与陷阱（会静默出错）（5 条）
+### `primitive/choreography`
+
+**声明式编排层（几百个元素的"谁先动、各自去哪"）** `[implemented]`
+
+- **是什么**：`compileChoreography({ids, canvas, order, staggerMs, make})`——把"800 片按相位错峰、协同收束"从**调用方手写循环**收敛成声明：相位由 `StaggerOrder` 封闭集决定（index/diagonal/serpentine/radialOut/radialIn/alternate），构型由 `choreograph.*` 预设推导；逐片复用 `compileAnimations` 同一条编译链（同一份校验/线格式/内核求值）。`terminalAttitudes(anims, ids)` 提取终态供下一幕衔接。
+- **为什么**：手写相位算术**错了不报错**（只是"看起来有点不齐"——典型静默缺陷）；相位/构型是可枚举的封闭集，与曲线、属性同性质 ⇒ 按"能收敛的别留给调用方"收敛进引擎。★真机验证：800 片三段编舞全程由本层声明，宿主帧循环 58.29 FPS / 每帧 p95 2.476ms（iPhone 12，`check:showcase` 读数）。
+- **何时用**：元素数 ≥ 几十且要"有编排关系"（相位/错拍/协同收束）；单片动画直接用 `compileAnimations`
+- **相关决策**：Morpheus §6（预设优先）＋ 用户反馈"审视 demo 是手写还是声明式"（2026-09-30）
+- **如何验证**：tests/animation-choreography.test.ts（相位序封闭集完备/编译片号定位/构型真编译产物）；hosts/ios/check-showcase.py（真机：800 片编舞帧率与终值）
+- **实现位置**：`packages/animation/src/choreography.ts:compileChoreography`
+
+```ts
+import { presets, STAGGER_ORDERS } from '@proteus-vue/animation'
+const anims = presets.choreograph.wave({ ids, canvas, order: 'diagonal', staggerMs: 4 })
+node.animStart(JSON.stringify({ anims }))
+// canvas.centers / canvas.attitudes = 从内核几何/姿态读回（见 primitive/choreography-canvas）
+```
+
+## 约束与陷阱（会静默出错）（6 条）
 
 ### `constraint/duplicate-kind`
 
@@ -402,6 +541,23 @@ escapes.register({
   site: 'components/Accordion.vue',
 })
 console.log(escapes.format())   // degraded 单列 + 类别汇总 + 率对照 5% 目标
+```
+
+### `constraint/from-is-mandatory`
+
+**`from` 是**必填量**（"缺省 = 节点当前值"不成立——取证结论）** `[implemented]`
+
+- **是什么**：内核对 `from` **无"取当前值"语义**：FFI 的解析里 `from` 缺失即报错，TS 编译侧缺省落 **0**（`compileOne`）。⇒ 任何"从当前姿态继续"的编排（如 `choreograph.settle`）必须由调用方**显式传入当前值**。
+- **为什么**：★2026-09-30 取证纠正：`types.ts` 原注释写"缺省 = 节点当前值，由内核在启动时解析"——**与实现不符**（内核 ffi.rs 的 `num(a, "from")?` 是必填；anim.rs `start` 不做当前值解析）。若信了旧注释："归位"动画会从 0 出发 ⇒ **瞬移归零**而不是收回去。`choreograph.settle` 选择**当场抛错**（`canvas.attitudes` 缺失即报），不静默退化。
+- **何时用**：编写"从当前继续"的动画时（归位/接管反向/幕间清理）——先拿到当前值（记账 `terminalAttitudes` 或实读探针）
+- **相关决策**：PROJECT_MEMORY（2026-09-30 from 语义取证）
+- **如何验证**：tests/animation-choreography.test.ts「settle：…不给 ⇒ 抛错」+「terminalAttitudes…记账闭环」；packages/layout-core-rust/src/ffi.rs 的 `num(a, "from")?`（必填解析）
+- **实现位置**：`packages/layout-core-rust/src/ffi.rs:2308（from 必填）· packages/animation/src/compile.ts:compileOne`
+
+```ts
+// 记法一：从上批指令提取终态（要求幕时长 ≥ 动画时长）
+const atts = terminalAttitudes(spiralAnims, ids)
+const settle = presets.choreograph.settle({ ids, canvas: { ...canvas, attitudes: atts } })
 ```
 
 ## 诚实边界（能做 / 不能做）（2 条）

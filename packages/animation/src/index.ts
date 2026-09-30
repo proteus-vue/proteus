@@ -47,6 +47,13 @@ export {
   isScrollDriven,
 } from './compile'
 export { presets, route, list, element, easing, scroll } from './presets'
+// ★★声明式编排层（"几百个元素谁先动、各自去哪"的一句话入口）
+//   —— 抽出的 `easing.ts` 是它与预设库共享的手感常量（避免循环依赖，见该文件头）
+export { compileChoreography, staggerRanks, choreograph, STAGGER_ORDERS, terminalAttitudes } from './choreography'
+export type { ChoreoAttitude, ChoreoCanvas, ChoreoCtx, ChoreoPoint, ChoreoScene, ChoreoSpec, StaggerOrder } from './choreography'
+// ★点阵字形（`choreograph.text` 的数据源；独立导出便于上层预览"这句会排成什么形状"）
+export { textBitmap, FONT_5X7, GLYPH_ADVANCE, GLYPH_HEIGHT } from './bitmap-font'
+export type { TextBitmap, GlyphRows } from './bitmap-font'
 // ★★统一路由转场枚举的**第三腿**（App / Morpheus；Web 与 MP 两腿在 @proteus-vue/router）
 export { APP_TRANSITION_MAP, appTransition, appTransitions } from './route-transition'
 // ★★方向语义 + 执行器入口（2026-09-30：M5 虚拟栈命令流的消费者接线）
