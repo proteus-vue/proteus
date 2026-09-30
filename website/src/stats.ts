@@ -25,10 +25,10 @@ export interface StatItem {
 export const STATS: StatItem[] = [
   {
     id: 'packages',
-    value: '43',
+    value: '44',
     label: '@proteus-vue/* 包',
     labelEn: '@proteus-vue/* packages',
-    source: 'pnpm check:pkg（43 包 0 error；43 个 packages/* 目录——第 43 个 = @proteus-vue/slot-runtime，Vapor IR 的 L1 层）',
+    source: 'pnpm check:pkg（44 包 0 error；44 个 packages/* 目录——含 @proteus-vue/animation，Morpheus 声明式动画表面）',
     sourceEn: 'pnpm check:pkg (43 packages, 0 errors; 43 packages/* dirs — the 43rd = @proteus-vue/slot-runtime, the L1 layer of Vapor IR)',
   },
   {

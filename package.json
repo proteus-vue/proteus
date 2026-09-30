@@ -129,6 +129,7 @@
     "@proteus-vue/devtools-runtime": "workspace:*",
     "@proteus-vue/fluid": "workspace:*",
     "@proteus-vue/gesture": "workspace:*",
+    "@proteus-vue/animation": "workspace:*",
     "@proteus-vue/glass": "workspace:*",
     "@proteus-vue/worklet": "workspace:*",
     "@types/node": "^20.0.0",
