@@ -286,6 +286,13 @@ func physFootprintMB() -> Double {
     /// 本入口把它暴露给真机判据（否则"滚动联动"只能靠 JS 分步调用，测不到生产形态）。
     func scrollAnimSync(_ json: String) -> String
     /// ★★**层变换探针**（判据从 CALayer 真读——覆盖"写入路径真的生效"）
+    /// ★★**内核几何读数**（绝对矩形）——判据与"基于真实几何编舞"的入口
+    ///
+    /// 【为什么必须暴露（炫技场实测抓出的缺陷）】螺旋段的位移 = 目标点 − 瓦片**当前位置**；
+    ///   而位置在 **FLIP 重排后已经变了**（列数 40→10、瓦片宽 ~15→~30）⇒ 用建树时的旧几何算位移，
+    ///   整幅构图会**偏向一侧**（实测：漩涡跑到右下角、大片出屏）。
+    ///   ⇒ 编舞前从**内核**读一次真实 rects（几何仍然出自内核，不是 JS 自己算的）。
+    func rects() -> String
     func layerTransformProbe(_ idsJson: String) -> String
     /// ★★**停全部动画 + 复位变换**（相位间状态清理）
     func animStopAll() -> String
@@ -3103,6 +3110,12 @@ final class SelfDrawBridge: NSObject, SelfDrawExports {
         return out
     }
 
+    /// 内核绝对几何（见协议注释：编舞要基于**当前**位置）
+    func rects() -> String {
+        guard handle != 0 else { return "{\"ok\":false,\"error\":\"未接入核心\"}" }
+        return takeCString(proteus_layout_rects(handle))
+    }
+
     /// ★★**停全部动画 + 复位变换**（相位间状态清理用；见 bench 注释）
     func animStopAll() -> String {
         guard handle != 0 else { return "{\"ok\":false,\"error\":\"未接入核心\"}" }
@@ -4676,6 +4689,8 @@ final class SelfDrawViewController: UIViewController {
         let isHostRuntime = ProcessInfo.processInfo.arguments.contains("--host-runtime")
         // ★★M5：执行器场景（`--app-stack`）——同上，独立模式
         let isAppStack = ProcessInfo.processInfo.arguments.contains("--app-stack")
+        // ★★Morpheus 炫技场（`--showcase`）——800 瓦片三段编舞
+        let isShowcase = ProcessInfo.processInfo.arguments.contains("--showcase")
         // ★★用例过滤（`--cases=S5,V4`）：只跑指定前缀的用例
         //
         // 【为什么需要（效率纪律：定向验证不得跑全量）】bench 有 46 个用例、全套数分钟；
@@ -4704,8 +4719,9 @@ final class SelfDrawViewController: UIViewController {
                 SelfDrawBridge.snapshotName = "bench-filtered-\(slug)"
             }
         }
-        let bundleName = isAppStack ? "bundle-app-stack"
-            : (isHostRuntime ? "bundle-host-runtime" : (isBench ? "bundle-bench" : "bundle-selfdraw"))
+        let bundleName = isShowcase ? "bundle-showcase"
+            : (isAppStack ? "bundle-app-stack"
+            : (isHostRuntime ? "bundle-host-runtime" : (isBench ? "bundle-bench" : "bundle-selfdraw")))
         guard let url = Bundle.main.url(forResource: bundleName, withExtension: "js"),
               let src = try? String(contentsOf: url, encoding: .utf8) else {
             NSLog("[proteus] 缺少 %@.js", bundleName)
@@ -4721,6 +4737,12 @@ final class SelfDrawViewController: UIViewController {
         if isAppStack {
             NSLog("[proteus] M5 执行器场景启动")
             AppStackScene.run(ctx: ctx, bundleURL: url)
+            return
+        }
+        // ★★Morpheus 炫技场：交独立模块驱动（建树 → 三段编舞 → 帧循环 → 读数 + 截图）
+        if isShowcase {
+            NSLog("[proteus] Morpheus 炫技场启动")
+            ShowcaseScene.run(ctx: ctx, bundleURL: url)
             return
         }
         let vp = jsonString(["width": w, "height": h])
