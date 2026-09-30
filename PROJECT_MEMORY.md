@@ -48,6 +48,65 @@
   只有**可复制代码块**里的引用才真正有害。
 · 破坏性验证：恢复 `p-card` → 红并精确报 `03-fluid-grid.md:31`；还原 → 575 md 全过。
 
+## 当前状态速览（最近一次更新：**2026-09-30 · G-39 宿主运行时切片落地（Android 真机 16/16）—— 生命周期/事件循环/内存账本有主**）★新会话以此为准
+
+### ★★★2026-09-30 · 宿主四议题取证 + G-39 嵌入式宿主切片落地
+
+**一、取证（用户问「宿主容器契约/生命周期治理/内存管理、宿主接入契约、宿主运行时 SPI 与职责边界，哪些现在能做」）**
+| 议题 | 真实状态 |
+|---|---|
+| **宿主容器契约 + 页面生命周期治理**（G-42） | **B1-B6 已落地**（六容器 + 五原子 + 资源代管）——**但零产品侧消费者**（只有测试用；真机接入缺"生产 App"） |
+| **宿主接入契约**（G-41） | **B1-B6 全落地**（dispatcher/vue-bridge/host-matrix 36 组合）；宿主运行时面**只有 stub**（`createHostRuntimeStub`） |
+| **宿主运行时 SPI 与职责边界**（G-39） | **纯规划**（参考实现 `runtime-reference.js` 不在 src）；**B4 的 iOS/Android 嵌入式宿主为零** |
+| **内存管理**（G-43） | B1-B5 落地（所有权/借用检查/Drop/PSS）；缺**引擎真实 JS 堆读数**（此前只有宿主 PSS 估算） |
+
+**二、本轮落地（G-39 嵌入式宿主切片——Android QuickJS，iOS JSC 同族骨架）**
+- **`packages/render-backend/src/quickjs-host.ts`**（真实实现，纯 TS 零平台依赖）：
+  · **生命周期唯一拥有**：宿主壳转发 onPause/onResume → 状态机；**非法转换拒绝 + 记账**
+    （挂起 bootstrap / 重复 resume / 销毁后 enqueue / 重复 destroy 四条）；running 重复 bootstrap 幂等；
+  · **事件循环归属**：队列只由宿主帧 `pumpFrame()` 推进（挂起时不推进）；帧内自排队同帧消化；
+  · **职责边界**：`runOnThread('background')` **诚实拒绝**（threads.background=false——不假排队）；
+    `invokeNative` 未注册 ⇒ 拒绝 + 列出已注册项；worker `real=false`（不假装真并行）；
+  · **诚实能力声明**：`capabilities`（threads/engine/nativeBridge/lifecycle/frameDriver）。
+- **★JNI 实缺修补（真机抓出）**：`quickjs_jni.c` 此前**从不泵 job** ⇒ `await`/Promise 续体在设备上
+  **半执行**（同步段跑了、续体静默丢失）。补：`nativeRunPendingJobs`（`JS_ExecutePendingJob`，
+  限 10000 防自续死循环）/ `nativeHasPendingJobs` / `nativeMemoryUsage`（`JS_ComputeMemoryUsage`）
+  / `nativeRunGC`（`JS_RunGC`）；eval 尾自动泵一次（安全网）+ 8 符号逐断言（`setup-android-js-engine.sh`）。
+- **内存账本（G-43 的端上证据）**：`proteusHost.memUsage()`/`gc()`（无参签名——C 侧独立探测
+  `host_call_noarg_impl`，与有参的 post/mount/update 分开）⇒ 真机读数
+  **分配 +320KB（227393→547657）→ GC 后回基线（227673）**。
+- **真机装置**：`entry-host-runtime.ts`（两相：run 注册续体 → **宿主泵 job** → finish 取结果；
+  证据链 `async_resolved_at_run=false` → `async_resolved=true`）+ `MainActivity` 覆写
+  **onPause/onResume 真实转发**（写 `host-shell.json`）+ `run-host-runtime.sh` + `check-host-runtime.py`
+  （**16 条判据**，含判据侧**独立重算**内存读数）。
+
+**三、验证**
+- **单测 18 条**（`tests/quickjs-host.test.ts`）：SPI 面 / 非法转换 5 例 / 线程诚实 / 原生桥 /
+  帧驱动语义 / 能力声明 / **★用真实运行时替换 stub 跑 G-41 conformance 32/32 PASS**；
+  破坏性验证 3 组（假排队 / 挂起时推进 / 未注册静默——全红）。
+- **真机 16/16 全绿**：状态机全链 / 四条拒绝记账 / **真实壳转发（events=2，pause+resume 都 applied）**
+  / 挂起不推进 / **job 泵证据链** / 职责边界三例 / 内存账本（含判据独立重算）/ conformance 32/32。
+- **破坏性验证 20 组**（判据脚本）全红；★其中 **F 组抓出判据自身缺陷**（只信 JS 侧算好的 `mem_ok`
+  而不核原始读数 ⇒ 改原始读数可放行）——已改为判据侧独立重算（"判据要落在结果上"）。
+- **既有链路无回归**（JNI 改了 eval 语义，必须验）：js-batch 9 条 / app-stack 16 条 / js-render 全过
+  （4051 节点 · 稳态 p50 0.479ms）+ 桩测通过。
+
+**四、装置坑（真机实测，记录防复发）**
+- `input keyevent KEYCODE_HOME` **不生效**（Android 新版要求 INJECT_EVENTS——本仓 M3 点击场景踩过
+  同坑，本轮又踩一次）⇒ 改用 `am start -n <本 Activity>`（日志实证触发真实 pause→resume 对）。
+- **GC 后内存不降**（首版判据红）：`const ballast` 留函数作用域 ⇒ 仍可达 ⇒ GC 不回收
+  （经典陷阱）；修法：分配/释放封装进函数作用域 + 显式置 `null`（`delete` 在 QuickJS 上未必生效）。
+- **陈旧 .so**：改了 `quickjs_jni.c` 后 `.so` 比源码旧 ⇒ 必须先跑 `setup-android-js-engine.sh`
+  （同族于陈旧 AAR/APK，本仓已记多次）。
+
+**五、门禁**：新增 `check:host-runtime`（接 verify 链 + LOCAL_ONLY 声明理由：需真机双产物；
+CI 侧等价判据 = 单测 18 条）。文档：`proteus-host-runtime-plan/06-batches.md` 加落地状态块；
+`board-inventory.md` G-39 行升为「🟡 嵌入式宿主切片已落地」。
+
+**六、诚实边界**：① iOS JSC 宿主壳（同族骨架已就绪，缺壳接线与真机读数）；② 多线程 Worker
+（`threads.background=false` 是对 QuickJS 现状的诚实声明，不是最终形态）；③ Flutter/Harmony 宿主（B5）；
+④ G-42 六容器的**产品级消费者**仍为空（需真实 App 接入——本轮未动）。
+
 ## 当前状态速览（最近一次更新：**2026-09-30 · M5 路由虚拟栈落地（真机 16/16 全绿）—— App 端无层数上限**）★新会话以此为准
 
 ### ★★★2026-09-30 · M5 App 路由：**虚拟栈**（吸取小程序/uni-app 栈深限制教训，参考 Flutter）
