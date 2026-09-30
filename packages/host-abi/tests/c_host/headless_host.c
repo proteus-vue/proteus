@@ -194,6 +194,47 @@ int main(void) {
     rc = proteus_call_capability(eng, "network.request", "{\"url\":\"x\"}", cap_out, sizeof(cap_out));
     CHECK(rc == PROTEUS_OK && strstr(cap_out, "echo") != NULL, "注册后调用成功并拿回结果");
 
+    /* ── 判据 6b：能力**清单**端上校验（Playground §4.2：壳清单 → 产物所需 → 端上校验）── */
+    /* ① 用 CLI `proteus capabilities:manifest` 落盘的**同一个 shape** 声明壳的能力
+     *    （证明：跨语言只有一份清单定义，不需要为 ABI 再包一层） */
+    const char* shell_manifest =
+        "{\"capabilities\":[{\"id\":\"network.request\",\"tier\":1},"
+        "{\"id\":\"storage.set\",\"tier\":1}]}";
+    rc = proteus_set_shell_capabilities(eng, shell_manifest);
+    CHECK(rc == PROTEUS_OK, "壳能力清单（capability-manifest.json 的同形）设置成功");
+
+    /* ② 绿侧：产物所需 ⊆ 壳提供 ⇒ 校验通过 */
+    rc = proteus_check_capabilities(eng, "[\"network.request\",\"storage.set\"]", cap_out, sizeof(cap_out));
+    CHECK(rc == PROTEUS_OK, "端上校验：所需 ⊆ 提供 ⇒ 通过");
+
+    /* ③ 红侧：缺一个 ⇒ 明确错误 + **可操作**报告（点名缺失项 + 提到扩展壳 + 列已提供） */
+    rc = proteus_check_capabilities(
+        eng, "[\"network.request\",\"map.render\"]", cap_out, sizeof(cap_out));
+    CHECK(rc == PROTEUS_ERR_CAPABILITY_UNREGISTERED, "端上校验：能力缺失 ⇒ 明确错误码（不静默）");
+    CHECK(strstr(cap_out, "map.render") != NULL, "报告**点名**缺失项（map.render）");
+    CHECK(strstr(cap_out, "扩展壳") != NULL, "报告给出**可操作出路**（构建扩展壳）——不是'不支持'四个字");
+    CHECK(strstr(cap_out, "本壳已提供") != NULL, "报告列出本壳已提供清单（帮助宿主排查）");
+    printf("      报告：%s\n", cap_out);
+
+    /* ④ load_tree 集成：产物带 requiredCapabilities ⇒ **加载前**校验，不满足即拒绝 */
+    const char* ok_tree_with_req =
+        "{\"requiredCapabilities\":[\"network.request\"],\"viewport\":{\"width\":390,\"height\":844},"
+        "\"nodes\":[{\"id\":1,\"width\":390,\"height\":800}]}";
+    rc = proteus_load_tree(eng, ok_tree_with_req);
+    CHECK(rc == PROTEUS_OK, "产物声明所需能力（满足）⇒ 正常加载");
+
+    const char* bad_tree_with_req =
+        "{\"requiredCapabilities\":[\"camera.capture\"],\"viewport\":{\"width\":390,\"height\":844},"
+        "\"nodes\":[{\"id\":1,\"width\":390,\"height\":800}]}";
+    rc = proteus_load_tree(eng, bad_tree_with_req);
+    CHECK(rc == PROTEUS_ERR_CAPABILITY_UNREGISTERED,
+          "产物声明所需能力（**不满足**）⇒ 拒绝加载（启动时暴露，不是跑到一半崩）");
+    {
+        const char* st2 = proteus_stats_json(eng);
+        CHECK(st2 != NULL && strstr(st2, "camera.capture") != NULL,
+              "拒绝原因可从 stats 的 last_error 读到（可归因）");
+    }
+
     /* ── 判据 7：原生组件接口（未提供回调 ⇒ 明确报错）── */
     ProteusRect fr = {0.0f, 0.0f, 100.0f, 100.0f};
     void* nv = proteus_native_view_create(eng, "map", &fr);

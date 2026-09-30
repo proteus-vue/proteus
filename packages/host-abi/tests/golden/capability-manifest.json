@@ -1,0 +1,14 @@
+{
+  "capabilities": [
+    {
+      "id": "clipboard",
+      "tier": 2,
+      "name": "剪贴板",
+      "platforms": [
+        "web",
+        "skyline"
+      ],
+      "source": "capabilities/clipboard.capability.ts"
+    }
+  ]
+}

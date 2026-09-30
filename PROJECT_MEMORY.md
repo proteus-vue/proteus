@@ -48,7 +48,7 @@
   只有**可复制代码块**里的引用才真正有害。
 · 破坏性验证：恢复 `p-card` → 红并精确报 `03-fluid-grid.md:31`；还原 → 575 md 全过。
 
-## 当前状态速览（最近一次更新：**2026-09-30 · HA2 落地（内核零平台分支，JNI 迁入 platform/android）**）★新会话以此为准
+## 当前状态速览（最近一次更新：**2026-09-30 · HA3 落地（能力清单端上校验 + 跨语言 golden 门禁）**）★新会话以此为准
 
 ### ★★★2026-09-30 · 红线升格：禁止**任何**盲等（sleep/timeout 全禁）+ iOS 链路事件驱动 + I3 收官
 
@@ -92,6 +92,53 @@ kind=capability ⇒ 82）+ 黑名单条目 `hooks-81` + 两份新文档进正向
 破坏性验证过（注入 `81 个 Capability Hook` ⇒ 精确报行号）。
 **登记**：board-inventory「其他文档（非 plan）」表新增两行（含决策、依据、与既有计划关系）；
 roadmap v0.6 段追加两条决策接入注记 + v2.0+ 插件体系行补指针。
+
+**㉚ ★★★HA3 落地：能力插件与 Playground 能力清单打通（2026-09-30）**
+
+继续 Host ABI 线。HA3 的三项（方案/Playground §4.2）：能力注册与调用（此前已通）、
+**与能力清单校验打通**（本轮）、未注册能力明确报错（本轮增强）。
+
+**一、清单机制（`proteus_set_shell_capabilities`）—— ★接受**现有**格式，不另立第二份**
+入参接受三种形态，**全部解析到同一个内层结构**（后续逻辑只有一份）：
+| 形态 | 例子 | 说明 |
+|---|---|---|
+| ① **CLI 落盘的 `capability-manifest.json`** | `{"capabilities":[{"id":"network.request","tier":1},…]}` | `proteus capabilities:manifest` 的**同形**（零转接） |
+| ② `ids` 数组 | `{"ids":["a","b"]}` | 手写省事 |
+| ③ 裸字符串数组 | `["a","b"]` | 最省 |
+★**诚实区分"声明"与"实现"**：清单是**声明**（可含由 JS 桥实现的能力，无需 Rust handler）；
+`register_capability` 是**实现**（能被 `call_capability` 真正调用）。校验取**并集**
+（`provided = 已注册 handler ∪ 壳清单声明`）——有单测钉住这条语义。
+
+**二、端上校验（`proteus_check_capabilities`）—— Playground §4.2 第三格的落地**
+不满足 ⇒ `PROTEUS_ERR_CAPABILITY_UNREGISTERED` + **可操作报告**：
+点名缺失项 / 列出本产物所需 / 列出本壳已提供 / **指向「扩展壳」**（Playground §4.3 的机制：
+扩展壳与公共壳共用同一套产物格式与加载器，只有内置模块集不同）。
+★**不是"不支持"四个字**——与"版本协商必须给升级方式"同一条纪律。
+
+**三、`load_tree` 集成：启动时暴露，不是跑到一半崩**
+产物带 `requiredCapabilities`（字符串数组）⇒ **加载前**校验，不满足即拒绝加载。
+★两个设计点：① 校验放在**最前**（失败不做任何副作用——度量回调/建树/换树都不该发生）；
+② **旧树保持完好**（有测试钉住：拒绝加载后 `proteus_rects` 仍可用）——
+   "校验失败不该破坏已加载状态"这类语义很容易在实现里被忽略。
+
+**四、★★跨语言对账（本仓核心纪律：跨语言契约只能有一份来源）**
+- 用 TS 侧 `scanCapabilities`（**CLI `capabilities:manifest` 调用的同一个函数**）的**真实产出**
+  冻结为 golden（`packages/host-abi/tests/golden/capability-manifest.json`）；
+- Rust 侧 `include_str!` 消费它（**编译期**冻结：不依赖 cwd，文件被删则编译失败）；
+- ★**新鲜度门禁** `check:capability-golden`：每次**重新生成**并与冻结副本逐字节比对
+  ⇒ **TS 侧一改形状就红**（否则"冻结那一刻一致"会静默过期）。
+  破坏性验证：改 golden 一项（tier 99）⇒ 当场红并报首个差异行。
+
+**五、判据读数**
+- Rust 单测 **11 条**（新增 4：三形态解析 / 校验红绿两侧+并集 / load_tree 集成 / golden 消费）；
+- **C 宿主一致性测试 36 条**（新增 9：清单设置 / 绿侧 / 红侧+可操作报告 / load_tree 两向）；
+- 内核 156 条不变（本轮的改动全在 ABI 层与文档）。
+
+**六、诚实边界**：
+· 能力清单的**端上校验**已通，但"**扩展壳**"本身（CLI 构建自定义壳）属 Playground 线（HA5/PG 批次）；
+· `requiredCapabilities` 目前由**产物作者**在树 JSON 里声明——"编译器自动把 `useCapability('id')`
+  的引用写进产物"（§4.2 的"产物声明所需能力"自动化）**未做**（现有 `scanCapabilityUsage` 已能扫出
+  引用，接线属后续批次；本轮的 `check:capability-golden` 与它无关，别混淆）。
 
 **㉙ ★★★HA2 落地：内核去平台分支（2026-09-30）—— JNI 层迁出 → platform/android/**
 

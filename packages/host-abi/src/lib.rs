@@ -186,6 +186,12 @@ struct EngineState {
     tree: u64,
     vtable: ProteusHostVTable,
     capabilities: HashMap<String, Capability>,
+    /// ★HA3：**壳的能力清单**（声明"本壳提供哪些能力"；与 `capabilities` 取并集做端上校验）
+    ///
+    /// 【与 `capabilities` 的区别（语义必须分清）】清单是**声明**（可能包含由 JS 桥实现的
+    ///   能力——无需 Rust handler）；`capabilities` 是**实现**（可被 `call_capability` 真正调用）。
+    ///   `None` = 未声明（此时只认已注册的 handler —— 向后兼容旧宿主）。
+    shell_capabilities: Option<Vec<String>>,
     stats: Stats,
     last_frame_ns: i64,
     surface: Option<ProteusSurface>,
@@ -394,6 +400,7 @@ pub unsafe extern "C" fn proteus_engine_create(
         tree: 0,
         vtable: vt,
         capabilities: HashMap::new(),
+        shell_capabilities: None,
         stats: Stats::default(),
         last_frame_ns: 0,
         surface: None,
@@ -539,6 +546,20 @@ pub unsafe extern "C" fn proteus_load_tree(engine: *mut ProteusEngine, tree_json
     }
     let raw = unsafe { cstr_or_empty(tree_json) };
     let r = with_engine(engine, |st| -> i32 {
+        // ★★HA3：**端上校验**（Playground §4.2）——产物若声明了 `requiredCapabilities`，
+        //   加载前先校验"本壳提不提供"；不满足即**拒绝加载**（不是跑到一半崩）。
+        //   ★放在最前：校验不过就不该做任何副作用（度量回调/建树/换树）。
+        if let Ok(v) = serde_json::from_str::<serde_json::Value>(&raw) {
+            if let Some(arr) = v.get("requiredCapabilities").and_then(|a| a.as_array()) {
+                let required: Vec<String> = arr.iter().filter_map(|x| x.as_str().map(|s| s.to_string())).collect();
+                let (missing, report) = capability_gap_report(st, &required);
+                if !missing.is_empty() {
+                    st.stats.capability_missing += 1;
+                    st.last_error = Some(report);
+                    return PROTEUS_ERR_CAPABILITY_UNREGISTERED;
+                }
+            }
+        }
         // ★★HA2 的落点：**平台能力经 vtable 注入**——宿主没预量文本时，由本层回调宿主逐节点度量。
         let prepared = match prepare_tree_json(&raw, st) {
             Ok(s) => s,
@@ -941,6 +962,178 @@ pub unsafe extern "C" fn proteus_call_capability(
     r.unwrap_or(PROTEUS_ERR_INVALID_ARG)
 }
 
+/* ────────────────────────── ⑧b 能力清单（HA3：Playground §4.2 端上校验） ────────────────────────── */
+
+/// 解析能力 id 列表（**三种入参形态**，见头文件注释）
+///
+/// ★为什么接受三种（而不是只留一种）：`capability-manifest.json` 是**已有产物**（CLI 落盘），
+///   简单数组是**手写最省**的形态 ⇒ 都认，避免调用方为了喂进 ABI 再包一层。
+///   ★三种形态**解析到同一个内层结构**（Vec<String>）⇒ 后续逻辑只有一份。
+fn parse_capability_ids(v: &serde_json::Value) -> Result<Vec<String>, String> {
+    let mut out: Vec<String> = Vec::new();
+    let mut push = |x: &serde_json::Value| -> Result<(), String> {
+        match x {
+            // 形态 ①：`{"capabilities":[{"id":"…"}, …]}` —— CLI 落盘的 capability-manifest.json
+            serde_json::Value::Object(o) => {
+                if let Some(id) = o.get("id").and_then(|i| i.as_str()) {
+                    out.push(id.to_string());
+                    Ok(())
+                } else {
+                    Err("能力项对象缺少 `id` 字段".to_string())
+                }
+            }
+            // 形态 ③ 的元素：裸字符串
+            serde_json::Value::String(s) => {
+                out.push(s.clone());
+                Ok(())
+            }
+            other => Err(format!("能力项形态无法识别：{other}")),
+        }
+    };
+    match v {
+        // 形态 ③：`["a","b"]`
+        serde_json::Value::Array(arr) => {
+            for x in arr {
+                push(x)?;
+            }
+        }
+        // 形态 ①/②：对象（含 `capabilities` 或 `ids` 键）
+        serde_json::Value::Object(_) => {
+            let arr = v
+                .get("capabilities")
+                .or_else(|| v.get("ids"))
+                .and_then(|a| a.as_array())
+                .ok_or_else(|| "对象形态需含 `capabilities` 或 `ids` 数组".to_string())?;
+            for x in arr {
+                push(x)?;
+            }
+        }
+        other => return Err(format!("入参需为数组或对象（含 capabilities/ids），实际：{other}")),
+    }
+    // 去重（保持稳定顺序：排序——判据与报告都要可复现）
+    out.sort_unstable();
+    out.dedup();
+    Ok(out)
+}
+
+/// 本壳**提供**的能力 = 已注册 handler ∪ 壳清单声明（去重排序）
+fn provided_capabilities(st: &EngineState) -> Vec<String> {
+    let mut v: Vec<String> = st.capabilities.keys().cloned().collect();
+    if let Some(decl) = &st.shell_capabilities {
+        v.extend(decl.iter().cloned());
+    }
+    v.sort_unstable();
+    v.dedup();
+    v
+}
+
+/// 端上校验（纯逻辑，便于单测）：返回 `(缺失清单, 可读报告)`
+///
+/// 报告必须**可操作**（Playground §4.2 的第三格：不满足 ⇒ 明确报错 + 提示需要「扩展壳」）。
+fn capability_gap_report(st: &EngineState, required: &[String]) -> (Vec<String>, String) {
+    let provided = provided_capabilities(st);
+    let missing: Vec<String> = required
+        .iter()
+        .filter(|r| !provided.contains(r))
+        .cloned()
+        .collect();
+    if missing.is_empty() {
+        return (missing, String::new());
+    }
+    let list = |v: &[String]| {
+        if v.is_empty() {
+            "（无）".to_string()
+        } else {
+            v.join(", ")
+        }
+    };
+    let report = format!(
+        "能力缺失：本壳不提供 [{}]\n  · 本产物需要：{}\n  · 本壳已提供：{}\n           ⇒ 解决方式：① 用 Proteus CLI 构建「扩展壳」（把缺失的原生模块编进去）——扩展壳与公共壳         共用同一套产物格式与加载器，只有内置模块集不同；② 或业务侧改走降级路径         （**不要**假设该能力可用——未注册时的静默失败是最恶劣的失效模式）",
+        list(&missing),
+        list(required),
+        list(&provided),
+    );
+    (missing, report)
+}
+
+/// ★设置**壳的能力清单**（声明"本壳提供哪些能力"）。见头文件注释的三种入参形态。
+#[no_mangle]
+pub unsafe extern "C" fn proteus_set_shell_capabilities(
+    engine: *mut ProteusEngine,
+    json: *const c_char,
+) -> i32 {
+    if json.is_null() {
+        return PROTEUS_ERR_INVALID_ARG;
+    }
+    let raw = unsafe { cstr_or_empty(json) };
+    let r = with_engine(engine, |st| -> i32 {
+        let v: serde_json::Value = match serde_json::from_str(&raw) {
+            Ok(v) => v,
+            Err(e) => {
+                st.last_error = Some(format!("壳能力清单解析失败：{e}"));
+                return PROTEUS_ERR_INVALID_ARG;
+            }
+        };
+        match parse_capability_ids(&v) {
+            Ok(ids) => {
+                st.shell_capabilities = Some(ids);
+                st.last_error = None;
+                PROTEUS_OK
+            }
+            Err(e) => {
+                st.last_error = Some(format!("壳能力清单形态非法：{e}"));
+                PROTEUS_ERR_INVALID_ARG
+            }
+        }
+    });
+    r.unwrap_or(PROTEUS_ERR_INVALID_ARG)
+}
+
+/// ★★**端上校验**（Playground §4.2）：产物声明的所需能力 ⊆ 壳提供的？
+#[no_mangle]
+pub unsafe extern "C" fn proteus_check_capabilities(
+    engine: *mut ProteusEngine,
+    required_json: *const c_char,
+    out: *mut c_char,
+    out_len: usize,
+) -> i32 {
+    if required_json.is_null() {
+        return PROTEUS_ERR_INVALID_ARG;
+    }
+    let raw = unsafe { cstr_or_empty(required_json) };
+    let r = with_engine(engine, |st| -> i32 {
+        let v: serde_json::Value = match serde_json::from_str(&raw) {
+            Ok(v) => v,
+            Err(e) => {
+                st.last_error = Some(format!("所需能力清单解析失败：{e}"));
+                unsafe { write_hint(out, out_len, &format!("所需能力清单解析失败：{e}")) };
+                return PROTEUS_ERR_INVALID_ARG;
+            }
+        };
+        let required = match parse_capability_ids(&v) {
+            Ok(ids) => ids,
+            Err(e) => {
+                st.last_error = Some(format!("所需能力清单形态非法：{e}"));
+                unsafe { write_hint(out, out_len, &format!("所需能力清单形态非法：{e}")) };
+                return PROTEUS_ERR_INVALID_ARG;
+            }
+        };
+        let (missing, report) = capability_gap_report(st, &required);
+        if missing.is_empty() {
+            st.last_error = None;
+            unsafe { write_hint(out, out_len, "能力校验通过（产物所需 ⊆ 本壳提供）") };
+            PROTEUS_OK
+        } else {
+            // ★不静默：报告写进 out（宿主必须展示/记录），并计入 stats
+            st.stats.capability_missing += 1;
+            st.last_error = Some(report.clone());
+            unsafe { write_hint(out, out_len, &report) };
+            PROTEUS_ERR_CAPABILITY_UNREGISTERED
+        }
+    });
+    r.unwrap_or(PROTEUS_ERR_INVALID_ARG)
+}
+
 /* ────────────────────────── 单测（Rust 侧；C 侧一致性测试另有集成用例） ────────────────────────── */
 
 #[cfg(test)]
@@ -1136,6 +1329,120 @@ mod tests {
         let v: serde_json::Value = serde_json::from_str(unsafe { cstr_or_empty(stats_ptr) }.as_str()).unwrap();
         assert!(v["frames"].as_u64().unwrap() >= 2);
         assert!(v["frame_requests"].as_u64().unwrap() >= 1, "有更新时应请求宿主续帧：{v}");
+        unsafe { proteus_engine_destroy(e) };
+    }
+
+    #[test]
+    fn capability_manifest_accepts_three_shapes() {
+        // ★三种入参形态解析到同一结果（CLI 落盘的 capability-manifest.json / ids / 裸数组）
+        let a = r#"{"capabilities":[{"id":"network.request","tier":1},{"id":"storage.set"}]}"#;
+        let b = r#"{"ids":["storage.set","network.request"]}"#;
+        let c = r#"["network.request","storage.set"]"#;
+        let pa = parse_capability_ids(&serde_json::from_str(a).unwrap()).unwrap();
+        let pb = parse_capability_ids(&serde_json::from_str(b).unwrap()).unwrap();
+        let pc = parse_capability_ids(&serde_json::from_str(c).unwrap()).unwrap();
+        assert_eq!(pa, vec!["network.request".to_string(), "storage.set".to_string()]);
+        assert_eq!(pa, pb);
+        assert_eq!(pb, pc);
+        // 非法形态：明确报错（不静默）
+        assert!(parse_capability_ids(&serde_json::from_str(r#"{"foo":1}"#).unwrap()).is_err());
+        assert!(parse_capability_ids(&serde_json::from_str(r#"{"capabilities":[{"tier":1}]}"#).unwrap()).is_err());
+        // 去重（同 id 出现两次只算一次）
+        let d = parse_capability_ids(&serde_json::from_str(r#"["a","a","b"]"#).unwrap()).unwrap();
+        assert_eq!(d, vec!["a".to_string(), "b".to_string()]);
+    }
+
+    #[test]
+    fn capability_check_green_and_red_with_actionable_report() {
+        let e = new_engine();
+        // 壳声明提供两项（用 CLI 落盘的那个 shape）——★声明 ≠ 实现：不注册 handler 也能通过校验
+        let manifest = CString::new(r#"{"capabilities":[{"id":"network.request"},{"id":"storage.set"}]}"#).unwrap();
+        assert_eq!(unsafe { proteus_set_shell_capabilities(e, manifest.as_ptr()) }, PROTEUS_OK);
+        // 绿：所需 ⊆ 提供
+        let ok_req = CString::new(r#"{"ids":["network.request"]}"#).unwrap();
+        let mut out = [0i8; 512];
+        assert_eq!(
+            unsafe { proteus_check_capabilities(e, ok_req.as_ptr(), out.as_mut_ptr(), out.len()) },
+            PROTEUS_OK
+        );
+        assert!(unsafe { cstr_or_empty(out.as_ptr()) }.contains("通过"));
+        // 红：缺 map.render ⇒ 明确错误 + 可操作报告（必须提到「扩展壳」与已提供清单）
+        let bad_req = CString::new(r#"["network.request","map.render"]"#).unwrap();
+        let rc = unsafe { proteus_check_capabilities(e, bad_req.as_ptr(), out.as_mut_ptr(), out.len()) };
+        assert_eq!(rc, PROTEUS_ERR_CAPABILITY_UNREGISTERED);
+        let msg = unsafe { cstr_or_empty(out.as_ptr()) };
+        assert!(msg.contains("map.render"), "报告必须点名缺失项：{msg}");
+        assert!(msg.contains("扩展壳"), "报告必须给出可操作出路（扩展壳）：{msg}");
+        assert!(msg.contains("本壳已提供"), "报告必须列出已提供清单（帮助排查）：{msg}");
+        // ★并集语义：注册的 handler 也算提供（清单没声明它）
+        let name = CString::new("camera.capture").unwrap();
+        assert_eq!(
+            unsafe { proteus_register_capability(e, name.as_ptr(), Some(test_cap), std::ptr::null_mut()) },
+            PROTEUS_OK
+        );
+        let req2 = CString::new(r#"["network.request","camera.capture"]"#).unwrap();
+        assert_eq!(
+            unsafe { proteus_check_capabilities(e, req2.as_ptr(), out.as_mut_ptr(), out.len()) },
+            PROTEUS_OK,
+            "壳清单 ∪ 已注册 handler = 提供集"
+        );
+        unsafe { proteus_engine_destroy(e) };
+    }
+
+    #[test]
+    fn capability_manifest_golden_is_accepted() {
+        // ★★跨语言对账（本仓的核心纪律：跨语言契约只能有一份来源）
+        //
+        // 【判据】TS 侧（`@proteus-vue/capabilities` 的 `scanCapabilities`，即 CLI
+        //   `proteus capabilities:manifest` 调用的**同一个函数**）产出的清单，
+        //   **必须能被本 ABI 直接接受** —— 若哪天 TS 侧改了 manifest 的字段形状而这里没跟，
+        //   本测试会红（而不是等到端上"能力校验永远通过"这种静默失效）。
+        //
+        // 【为什么用 `include_str!` 而不是运行时读文件】golden 冻结在**编译期**：
+        //   ① 测试不依赖 cwd（CI/任意目录都能跑）；② 文件被删则编译失败（比运行时 panic 更早）。
+        let raw = include_str!("../tests/golden/capability-manifest.json");
+        let v: serde_json::Value = serde_json::from_str(raw).expect("golden JSON 应合法");
+        let ids = parse_capability_ids(&v).expect("★ABI 必须接受 TS 侧产出的清单形态");
+        assert!(
+            ids.contains(&"clipboard".to_string()),
+            "golden 里的能力 id 应被解析出来（实测 {ids:?}）"
+        );
+        // 且解析出的 id 与 golden 文件里声明的**逐项一致**（防"解析器吞掉了某些项"）
+        let declared: Vec<String> = v["capabilities"]
+            .as_array()
+            .expect("golden 应有 capabilities 数组")
+            .iter()
+            .filter_map(|c| c["id"].as_str().map(|s| s.to_string()))
+            .collect();
+        assert_eq!(ids.len(), declared.len(), "解析出的条数应与 golden 声明一致");
+        for d in &declared {
+            assert!(ids.contains(d), "golden 声明的 `{d}` 未被解析出来");
+        }
+    }
+
+    #[test]
+    fn load_tree_rejects_when_required_capabilities_unmet() {
+        // ★HA3 的集成判据：产物声明所需能力 ⇒ **加载前**校验，不满足即拒绝（不是跑到一半崩）
+        let e = new_engine();
+        let shell = CString::new(r#"["network.request"]"#).unwrap();
+        assert_eq!(unsafe { proteus_set_shell_capabilities(e, shell.as_ptr()) }, PROTEUS_OK);
+
+        // 绿：所需 ⊆ 提供 ⇒ 正常加载
+        let ok_tree = r#"{"requiredCapabilities":["network.request"],"viewport":{"width":390,"height":844},"nodes":[{"id":1,"width":390,"height":800}]}"#;
+        let cs = CString::new(ok_tree).unwrap();
+        assert_eq!(unsafe { proteus_load_tree(e, cs.as_ptr()) }, PROTEUS_OK);
+
+        // 红：缺 camera.capture ⇒ 拒绝加载 + last_error 可读（从 stats 读）
+        let bad_tree = r#"{"requiredCapabilities":["camera.capture"],"viewport":{"width":390,"height":844},"nodes":[{"id":1,"width":390,"height":800}]}"#;
+        let cs2 = CString::new(bad_tree).unwrap();
+        let rc = unsafe { proteus_load_tree(e, cs2.as_ptr()) };
+        assert_eq!(rc, PROTEUS_ERR_CAPABILITY_UNREGISTERED);
+        let stats = unsafe { cstr_or_empty(proteus_stats_json(e)) };
+        assert!(stats.contains("camera.capture"), "last_error 必须点名缺失项：{stats}");
+        assert!(stats.contains("扩展壳"), "last_error 必须给出可操作出路：{stats}");
+        // ★且**旧树仍在**（校验失败不该破坏已加载的状态——校验放在副作用之前）
+        let mut len = 0u32;
+        assert!(!unsafe { proteus_rects(e, &mut len) }.is_null(), "拒绝加载后旧树应完好");
         unsafe { proteus_engine_destroy(e) };
     }
 

@@ -232,6 +232,37 @@ int32_t proteus_has_capability(ProteusEngine* engine, const char* name);
 int32_t proteus_call_capability(ProteusEngine* engine, const char* name, const char* arg_json,
                                 char* out, size_t out_len);
 
+/* ────────────────────────── ⑧b 能力**清单**（Playground §4.2：壳清单 → 产物所需 → 端上校验） ────────────────────────── */
+
+/* 设置**壳的能力清单**（声明"本壳提供哪些能力"）。
+ *
+ * 入参 json 接受三种形态（**第一种就是 CLI `proteus capabilities:manifest` 落盘的
+ * `capability-manifest.json` 的 shape** —— 同一份格式，不另立第二份定义）：
+ *   ① {"capabilities":[{"id":"network.request","tier":1,...}, …]}   ← capability-manifest.json
+ *   ② {"ids":["network.request", …]}
+ *   ③ ["network.request", …]
+ *
+ * 语义：清单是"**声明**"（可能包含由 JS 桥/其它机制实现的能力，无需 Rust handler）；
+ *   而 `proteus_register_capability` 是"**实现**"（可被 `proteus_call_capability` 真正调用）。
+ *   校验时取**并集**：provided = 已注册 handler ∪ 壳清单声明。
+ */
+int32_t proteus_set_shell_capabilities(ProteusEngine* engine, const char* json);
+
+/* ★★**端上校验**（Playground §4.2 的第三格）：产物声明的**所需能力** ⊆ 壳提供的？
+ *
+ * 不满足 ⇒ 返回 PROTEUS_ERR_CAPABILITY_UNREGISTERED，并向 out 写**可读报告**：
+ *   缺失清单 + 本壳已提供清单 + **可操作提示**（构建「扩展壳」，或业务侧走降级路径）。
+ *
+ * `required_json` 的形态与 `proteus_set_shell_capabilities` 相同（①/②/③ 皆可）。
+ */
+int32_t proteus_check_capabilities(ProteusEngine* engine, const char* required_json,
+                                   char* out, size_t out_len);
+
+/* ★`proteus_load_tree` 的**端上校验**集成：若树 JSON 里带
+ *   `"requiredCapabilities": ["id", …]`（字符串数组），加载前自动校验 ⇒ 不满足即**拒绝加载**
+ *   （返回 PROTEUS_ERR_CAPABILITY_UNREGISTERED，报告可从 `proteus_stats_json` 的
+ *    `last_error` 读到）。⇒ 产物"要什么"与壳"有什么"的不匹配在**启动时**就暴露，不是运行到一半崩。 */
+
 #ifdef __cplusplus
 } /* extern "C" */
 #endif
