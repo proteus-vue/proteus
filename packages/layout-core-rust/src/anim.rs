@@ -2016,6 +2016,89 @@ mod tests {
         assert!(v.ty > -40.0 && v.ty < 0.0, "回报的 ty 应在补间中（实测 {}）", v.ty);
     }
 
+    /* ──────────────────── ★★跨属性共享时间轴（tick 同步性） ──────────────────── */
+
+    #[test]
+    fn cross_property_tracks_advance_in_lockstep() {
+        // ★能力判据（此前的文档把它记为"未做/评估中"——先取证）：`tick` 对**所有**动画用同一个
+        //   `dt` 推进各自的 `t_ms` ⇒ 只要两条动画的 `dur_ms` 相同，它们的时间推进**严格同步**。
+        //   本测试要证明的正是这一点：不同段划分的两条轨道，在任意时刻都处于"同一个绝对时间点"。
+        let mut t = tree_with(1);
+        let mut e = AnimEngine::new();
+        // 轨道 A：100ms 到 100，再 100ms 回 0（总 200）
+        let mut a = anim(1, AnimKind::TranslateX);
+        a.from = 0.0;
+        a.to = 0.0;
+        a.dur_ms = 200.0;
+        a.mode = AnimMode::Keyframes(vec![
+            KeySeg { to: 100.0, dur_ms: 100.0, curve: CURVE_LINEAR },
+            KeySeg { to: 0.0, dur_ms: 100.0, curve: CURVE_LINEAR },
+        ]);
+        // 轨道 B：50ms 到 0.5，再 150ms 回 1.0（总 200；**段划分与 A 完全不同**）
+        let mut b = anim(1, AnimKind::Scale);
+        b.from = 1.0;
+        b.to = 1.0;
+        b.dur_ms = 200.0;
+        b.mode = AnimMode::Keyframes(vec![
+            KeySeg { to: 0.5, dur_ms: 50.0, curve: CURVE_LINEAR },
+            KeySeg { to: 1.0, dur_ms: 150.0, curve: CURVE_LINEAR },
+        ]);
+        e.start(&t, a).unwrap();
+        e.start(&t, b).unwrap();
+        // t=100ms：A 恰在首段终点（100）；B 处于次段 1/3（0.5 + 0.5×50/150 ≈ 0.6667）
+        e.tick(&mut t, 100.0);
+        assert!((t.nodes[0].style.translate_x - 100.0).abs() < 1e-3, "A 应在首段终点（实测 {}）", t.nodes[0].style.translate_x);
+        let b_at_100 = t.nodes[0].style.scale;
+        assert!((b_at_100 - 0.6667).abs() < 5e-3, "B 应在次段 1/3 处（实测 {b_at_100}）");
+        // 再推 50ms（t=150）：A 处于次段 1/2（50）；B 处于次段 2/3（0.5+0.5×2/3 ≈ 0.8333）
+        e.tick(&mut t, 50.0);
+        assert!((t.nodes[0].style.translate_x - 50.0).abs() < 1e-3, "A 次段半程（实测 {}）", t.nodes[0].style.translate_x);
+        let b_at_150 = t.nodes[0].style.scale;
+        assert!((b_at_150 - 0.8333).abs() < 5e-3, "B 次段 2/3 处（实测 {b_at_150}）");
+        // t=200：两条同时结束（同一时间轴 ⇒ **同刻完成**）
+        let o = e.tick(&mut t, 50.0);
+        assert_eq!(o.finished, 2, "两条轨道必须**同刻**结束（实测 finished={}）", o.finished);
+    }
+
+    #[test]
+    fn cross_property_lockstep_is_independent_of_tick_granularity() {
+        // 同步性的另一种破坏方式：不同帧率下两条轨道被**分别**推进 ⇒ 相位错开。
+        //   `tick` 单次调用内对所有动画循环 ⇒ 结构上不可能错开；本测试把它钉死。
+        let mk = || {
+            let mut a = anim(1, AnimKind::TranslateX);
+            a.from = 0.0; a.to = 0.0; a.dur_ms = 200.0;
+            a.mode = AnimMode::Keyframes(vec![KeySeg { to: 100.0, dur_ms: 100.0, curve: CURVE_LINEAR }, KeySeg { to: 0.0, dur_ms: 100.0, curve: CURVE_LINEAR }]);
+            let mut b = anim(1, AnimKind::Scale);
+            b.from = 1.0; b.to = 1.0; b.dur_ms = 200.0;
+            b.mode = AnimMode::Keyframes(vec![KeySeg { to: 0.5, dur_ms: 50.0, curve: CURVE_LINEAR }, KeySeg { to: 1.0, dur_ms: 150.0, curve: CURVE_LINEAR }]);
+            (a, b)
+        };
+        // ① 一次 tick(160)
+        let (mut t1, mut e1) = (tree_with(1), AnimEngine::new());
+        let (a1, b1) = mk();
+        e1.start(&t1, a1).unwrap();
+        e1.start(&t1, b1).unwrap();
+        e1.tick(&mut t1, 160.0);
+        // ② 32 次 tick(5)
+        let (mut t2, mut e2) = (tree_with(1), AnimEngine::new());
+        let (a2, b2) = mk();
+        e2.start(&t2, a2).unwrap();
+        e2.start(&t2, b2).unwrap();
+        for _ in 0..32 {
+            e2.tick(&mut t2, 5.0);
+        }
+        let (x1, s1) = (t1.nodes[0].style.translate_x, t1.nodes[0].style.scale);
+        let (x2, s2) = (t2.nodes[0].style.translate_x, t2.nodes[0].style.scale);
+        assert!((x1 - x2).abs() < 1e-4, "A 轨道与帧率无关（{x1} vs {x2}）");
+        assert!((s1 - s2).abs() < 1e-4, "B 轨道与帧率无关（{s1} vs {s2}）");
+        // ★同一时间点的**绝对值**才是判据（首版写"两轨道相位比例应一致"——**算式错了**：
+        //   两轨道的**段划分不同**（A: 100+100，B: 50+150）⇒ 同一时刻的局部进度本就不同，
+        //   拿它们的比例对照是在断言一件错的事。判据要落在"同刻的值"，不是"结构不同的两个量的比"。
+        //   t=160：A 处于次段 60/100 ⇒ x = 100 − 100×0.6 = 40；B 处于次段 110/150 ⇒ s = 0.5 + 0.5×110/150 ≈ 0.8667
+        assert!((x1 - 40.0).abs() < 1e-3, "A 在 t=160 应为 40（实测 {x1}）");
+        assert!((s1 - 0.8667).abs() < 5e-3, "B 在 t=160 应 ≈0.8667（实测 {s1}）");
+    }
+
     /* ──────────────────── ★★共享元素（几何原语） ──────────────────── */
 
     /// 造"已知几何"的树：根在 (0,0)，大小 200×200；子节点（相对）在 (40,60)，大小 80×40

@@ -29,6 +29,8 @@ import {
   runConformance,
   EscapeRegistry,
   ESCAPE_KINDS,
+  compileTimeline,
+  timelineDuration,
 } from '@proteus-vue/animation'
 import type { AnimDecl } from '@proteus-vue/animation'
 
@@ -549,5 +551,96 @@ describe('MA0/§4.2 · 逃生口（显式通道 + 可统计 + degraded 单列）
     reg.reset()
     expect(reg.summary().total).toBe(0)
     expect(reg.summary().declaratives).toBe(0)
+  })
+})
+
+describe('跨属性共享时间轴（多属性共享停靠点 ⇒ 内核结构性同拍）', () => {
+  const spec = {
+    kinds: ['scale', 'translateY', 'opacity'] as const,
+    stops: [
+      { at: 0, values: { scale: 1, translateY: 0, opacity: 0 }, curve: 'easeOut' as const },
+      { at: 90, values: { scale: 0.94, translateY: 6, opacity: 1 }, curve: 'springApprox' as const },
+      { at: 350, values: { scale: 1, translateY: 0, opacity: 1 } },
+    ],
+  }
+
+  it('★所有轨道总时长**相同**（内核 lockstep 推进的前提——由构造保证，不靠调用方凑）', () => {
+    const c = compileTimeline(spec, { nodeId: 7 })
+    expect(c.anims).toHaveLength(3)
+    for (const a of c.anims) expect(a.durMs).toBe(350)
+    // 且每段的时长 = 停靠点差值（三条轨道**各自的段划分一致**）
+    for (const a of c.anims) {
+      expect(a.keyframes!.map((k) => k.durMs)).toEqual([90, 260])
+    }
+    expect(timelineDuration(spec)).toBe(350)
+  })
+
+  it('★停靠点值正确落到各轨道（scale/translateY/opacity 三条各自的 from 与末段 to）', () => {
+    const c = compileTimeline(spec, { nodeId: 7 })
+    const byKind = new Map(c.anims.map((a) => [a.kind, a]))
+    expect(byKind.get(2)!.from).toBe(1)      // scale
+    expect(byKind.get(2)!.to).toBe(1)
+    expect(byKind.get(1)!.from).toBe(0)      // translateY
+    expect(byKind.get(4)!.from).toBe(0)      // opacity
+    expect(byKind.get(4)!.keyframes![0]!.to).toBe(1)
+  })
+
+  it('★曲线归属正确：段曲线取自**上一停靠点**（不是本点）', () => {
+    const c = compileTimeline(spec, { nodeId: 7 })
+    const kf = c.anims[0]!.keyframes!
+    expect(kf[0]!.curve).toBe(CURVE_ID.easeOut)          // stop#0 的 curve 管 0→90
+    expect(kf[1]!.curve).toBe(CURVE_ID.springApprox)     // stop#1 的 curve 管 90→350
+  })
+
+  it('★红侧：停靠点乱序 / 首点非 0 / 轨道缺值 / 重复轨道 全部被拦（不许静默错形）', () => {
+    // 乱序
+    expect(() =>
+      compileTimeline(
+        { kinds: ['scale'], stops: [{ at: 0, values: { scale: 1 } }, { at: 50, values: { scale: 2 } }, { at: 30, values: { scale: 1 } }] },
+        { nodeId: 1 },
+      ),
+    ).toThrow(/严格升序/)
+    // 首点非 0
+    expect(() =>
+      compileTimeline({ kinds: ['scale'], stops: [{ at: 10, values: { scale: 1 } }, { at: 50, values: { scale: 2 } }] }, { nodeId: 1 }),
+    ).toThrow(/首停靠点必须是/)
+    // 轨道缺值（断轨）
+    expect(() =>
+      compileTimeline(
+        { kinds: ['scale', 'opacity'], stops: [{ at: 0, values: { scale: 1, opacity: 0 } }, { at: 100, values: { scale: 2 } }] },
+        { nodeId: 1 },
+      ),
+    ).toThrow(/没有值/)
+    // 重复轨道
+    expect(() =>
+      compileTimeline(
+        { kinds: ['scale', 'scale'], stops: [{ at: 0, values: { scale: 1 } }, { at: 100, values: { scale: 2 } }] },
+        { nodeId: 1 },
+      ),
+    ).toThrow(/重复属性/)
+    // 单点（无法构成区间）
+    expect(() => compileTimeline({ kinds: ['scale'], stops: [{ at: 0, values: { scale: 1 } }] }, { nodeId: 1 })).toThrow(/至少\*\*两个\*\*停靠点/)
+  })
+
+  it('★逃生口记账贯穿时间轴（复用同一份 compile——不新增第二条路径）', () => {
+    const reg = new EscapeRegistry()
+    compileTimeline(spec, { nodeId: 1 }, { escapes: reg })
+    expect(reg.summary().declaratives).toBe(3)
+  })
+
+  it('★时间轴与手写 keyframes 编译结果逐字节等价（证明它不是"另一条实现"）', () => {
+    const viaTimeline = compileTimeline(spec, { nodeId: 7 })
+    const manual = compileAnimations(
+      [
+        { kind: 'scale', from: 1, to: 1, durationMs: 350, keyframes: [
+          { to: 0.94, durationMs: 90, curve: 'easeOut' }, { to: 1, durationMs: 260, curve: 'springApprox' }] },
+        { kind: 'translateY', from: 0, to: 0, durationMs: 350, keyframes: [
+          { to: 6, durationMs: 90, curve: 'easeOut' }, { to: 0, durationMs: 260, curve: 'springApprox' }] },
+        { kind: 'opacity', from: 0, to: 1, durationMs: 350, keyframes: [
+          { to: 1, durationMs: 90, curve: 'easeOut' }, { to: 1, durationMs: 260, curve: 'springApprox' }] },
+      ],
+      { nodeId: 7 },
+    )
+    expect(JSON.stringify(viaTimeline.anims)).toBe(JSON.stringify(manual.anims))
   })
 })

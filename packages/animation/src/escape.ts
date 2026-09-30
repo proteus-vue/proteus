@@ -26,7 +26,8 @@ export type EscapeKind =
   | 'external-driver'
   /** 布局属性动画（width/height/margin……会触发重排，平台零参与路径失效） */
   | 'layout-property'
-  /** 跨属性共享时间轴（当前未做：多属性精确同拍的分段编排） */
+  /** 跨属性共享时间轴（**多数场景已可用 `compileTimeline`**；此类别留给「时间轴也表达不了」的编排：
+   *  条件分支 / 运行期才决定下一停靠点 / 与外部时钟对齐） */
   | 'cross-property-timeline'
   /** 与平台原生动画混用（UIKit/CAAnimation / Android Animator 直接驱动同一元素） */
   | 'platform-mixing'
