@@ -184,6 +184,19 @@ export const SEMANTIC_BACKEND_MAP: Record<string, Partial<Record<BackendId | 'we
     flutter: 'keepScreenOn',
     headless: 'keep-screen-on',
   },
+  // ★★NC1 第二个声明式能力（2026-09-30，C84）：文档预览。
+  //   ★落地状态如实分两类：**已接线** = vue-dom（`window.open`）/ skyline（`wx.openDocument`，生成桥真跑）；
+  //     **声明** = native 两端（平台真实 API：iOS QLPreviewController / Android ACTION_VIEW，
+  //     与既有 capability.qr-code 的 AVCaptureSession 同性质，属设计声明层）。
+  //   ★**native-harmony 有意省略**：鸿蒙文档预览 API 名未经取证，**不编造**（≥3 端映射判据不受影响）。
+  'capability.document-preview': {
+    'vue-dom': 'window.open',
+    'native-ios': 'QLPreviewController',
+    'native-android': 'Intent.ACTION_VIEW',
+    skyline: 'wx.openDocument',
+    flutter: 'open_file',
+    headless: 'open-document',
+  },
   // ★★2026-09-30 反馈组件补齐（U19 shell.toast / S8 ui.loading）：
   //   组件本体（`p-toast` / `p-loading`）**早已存在且已注册**（`packages/components/index.ts`）
   //   并有 MP 产物级测试（`tests/component-b5.test.ts`：wx:if/定时器/A@keyframes 断言）——

@@ -4,5 +4,6 @@
 //   （`node scripts/gen-bridge-ext.mjs`；`--check` 接门禁）
 import type { CapabilityDecl } from '../bridge-decl'
 import { keepScreenOn } from './keep-screen-on'
+import { openDocument } from './open-document'
 
-export const BRIDGE_DECLS: readonly CapabilityDecl[] = [keepScreenOn]
+export const BRIDGE_DECLS: readonly CapabilityDecl[] = [keepScreenOn, openDocument]

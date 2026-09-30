@@ -28,6 +28,7 @@ export const keepScreenOn = defineCapability({
   web: {
     kind: 'stateful',
     guard: 'nav?.wakeLock',
+    guardMessage: 'Screen Wake Lock 不可用（需安全上下文 + 浏览器支持）',
     onExpr: 'await nav.wakeLock.request(\'screen\')',
     offExpr: 'await (sentinel as { release(): Promise<void> }).release()',
   },

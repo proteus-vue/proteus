@@ -270,6 +270,12 @@ const CAPABILITY: PrimitiveDef[] = [
   //   双端都有真实对等（非降级对等）。status 标 implemented：桥与 Hook 已落地且测试覆盖
   //   （含双端真跑 + 幂等 + 缺 API 降级）。
   { id: 'C83', kind: 'capability', semantic: 'capability.keep-screen-on', api: 'useKeepScreenOn()', props: ['KeepScreenOnState'], mpEquiv: 'wx.setKeepScreenOn（Web 对等：Screen Wake Lock API）', tier: 'L1', status: 'implemented' },
+  // ★★NC1 第二个声明式能力（2026-09-30）：**用户裁定**「openDocument 属原生能力落地范畴，
+  //   目标就是 99% 的业务代码不需要写原生代码」⇒ 落地而非搁置。
+  //   形态 = 声明式（bridge-decls/open-document.ts → 生成 → 合并）；MP `wx.openDocument` /
+  //   Web `window.open`（浏览器查看器）；★Web 诚实边界：office 格式通常转下载而非预览。
+  //   status = implemented：桥与 Hook 已落地 + 测试覆盖（含"弹窗被拦截 ⇒ Err"的防静默判据）。
+  { id: 'C84', kind: 'capability', semantic: 'capability.document-preview', api: 'useOpenDocument()', props: ['DocumentPath'], mpEquiv: 'wx.openDocument（Web 对等：window.open → 浏览器查看器）', tier: 'L1', status: 'implemented' },
 ]
 
 /** G-32 §8 ⑥ 工程原语 Engineering（28）——状态/生命周期 + 路由/导航 + 动画/过渡 + 调试/工程化 */

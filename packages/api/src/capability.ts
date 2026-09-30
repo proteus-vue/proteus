@@ -2940,6 +2940,8 @@ export interface CapabilityBridge {
   // ★★NC1 声明式能力桥（2026-09-30）：由 `bridge-decls/*.ts` 声明 → `gen-bridge-ext.mjs` 生成
   /** C83 屏幕常亮（MP wx.setKeepScreenOn / Web Screen Wake Lock）——语义：开=取句柄，关=释放，重复调用幂等 */
   setKeepScreenOn?(on: boolean): Promise<void>
+  /** C84 文档预览（MP wx.openDocument / Web window.open → 浏览器查看器）；原生宿主（QLPreviewController / ACTION_VIEW）属声明层 */
+  openDocument?(filePath: string): Promise<void>
 }
 
 /** 存储契约（useStorage / reactive storage 底座） */
@@ -3277,8 +3279,9 @@ export interface WxLike {
   stopGyroscope?: (opt?: { success?: () => void; fail?: (e: unknown) => void }) => void
   getScreenBrightness?: (opt: { success: (r: { value: number }) => void }) => void
   setScreenBrightness?: (opt: { value: number; fail?: () => void }) => void
-  // ★NC1 声明式（2026-09-30）：C83 屏幕常亮（字段声明随能力落地；包装代码由生成器产出）
+  // ★NC1 声明式（2026-09-30）：C83 屏幕常亮 / C84 文档预览（字段声明随能力落地；包装代码由生成器产出）
   setKeepScreenOn?: (opt: { keepScreenOn: boolean; success?: () => void; fail?: (e: unknown) => void }) => void
+  openDocument?: (opt: { filePath: string; success?: () => void; fail?: (e: unknown) => void }) => void
   makePhoneCall?: (opt: { phoneNumber: string; success?: () => void; fail: () => void }) => void
   checkIsSupportFingerPrint?: (opt: { success: (r: { errMsg: string; isSupported: boolean }) => void; fail?: () => void }) => void
   startSoterAuthentication?: (opt: {
@@ -7895,6 +7898,8 @@ export interface CapabilityHooks {
   setBrightness(value: number): Promise<CapResult<void>>
   /** ★NC1 C83 useKeepScreenOn：屏幕常亮开关（MP wx.setKeepScreenOn / Web Screen Wake Lock；重复调用幂等） */
   useKeepScreenOn(on: boolean): Promise<CapResult<void>>
+  /** ★NC1 C84 useOpenDocument：文档预览（MP wx.openDocument / Web window.open；Web 下 office 格式通常转为下载——浏览器能力所限） */
+  useOpenDocument(filePath: string): Promise<CapResult<void>>
   /** C21 usePhoneCall：拨打电话 */
   usePhoneCall(phoneNumber: string): Promise<CapResult<void>>
   /** C33 useAuth：认证状态组合（token 托管 + 登录/登出 + 订阅）——业务不读 raw token（铁律 2） */
@@ -8189,6 +8194,14 @@ export function createCapabilityHooks(bridge: CapabilityBridge = createCapabilit
         (() => {
           if (!bridge.setKeepScreenOn) return Promise.reject(new CapError('screen.keep-on.unsupported', '桥未提供 setKeepScreenOn（useKeepScreenOn 不可用）'))
           return bridge.setKeepScreenOn(on)
+        })(),
+      ),
+    // ★NC1 声明式能力（2026-09-30）：C84 文档预览（同上——缺桥 → Err）
+    useOpenDocument: (filePath: string) =>
+      wrap(
+        (() => {
+          if (!bridge.openDocument) return Promise.reject(new CapError('document.open.unsupported', '桥未提供 openDocument（useOpenDocument 不可用）'))
+          return bridge.openDocument(filePath)
         })(),
       ),
     usePhoneCall: (phoneNumber) =>

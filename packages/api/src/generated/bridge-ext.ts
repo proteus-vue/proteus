@@ -8,7 +8,7 @@ import type { CapabilityBridge, WxLike } from '../capability'
 import type { BridgeErrorCtor } from '../bridge-decl'
 
 /** 本文件覆盖的能力数（供门禁/测试断言"生成物非空且与声明同数"） */
-export const GENERATED_BRIDGE_COUNT = 1
+export const GENERATED_BRIDGE_COUNT = 2
 
 /** MP 侧：声明式生成的能力桥（由 createCapabilityBridge 合并进 wxBridge 结果） */
 export function mpBridgeExt(wx: WxLike, CapErrorCtor: BridgeErrorCtor): Partial<CapabilityBridge> {
@@ -23,6 +23,16 @@ export function mpBridgeExt(wx: WxLike, CapErrorCtor: BridgeErrorCtor): Partial<
           fail: (e: unknown) => reject(new CapErrorCtor('screen.keep-on.failed', 'wx.setKeepScreenOn 失败', e)),
         })
       }),
+    // C84 useOpenDocument：文档预览（MP wx.openDocument / Web window.open）。★Web 诚实边界：PDF/图片/文本由浏览器内联预览，office 格式通常转为下载（取决于浏览器能力）；MP 需传平台临时文件路径（如 wxfile://…）。
+    openDocument: (filePath: string) =>
+      new Promise((resolve, reject) => {
+        if (typeof wx.openDocument !== 'function') return reject(new CapErrorCtor('document.open.unsupported', 'wx.openDocument 缺失'))
+        wx.openDocument({
+          filePath: filePath,
+          success: () => resolve(),
+          fail: (e: unknown) => reject(new CapErrorCtor('document.open.failed', 'wx.openDocument 失败', e)),
+        })
+      }),
   }
 }
 
@@ -34,7 +44,7 @@ export function webBridgeExt(g: typeof globalThis, CapErrorCtor: BridgeErrorCtor
     setKeepScreenOn: (() => {
       let sentinel: unknown = null
       return async (on: boolean) => {
-        if (!(nav?.wakeLock)) throw new CapErrorCtor('screen.keep-on.unsupported', 'nav?.wakeLock 不支持')
+        if (!(nav?.wakeLock)) throw new CapErrorCtor('screen.keep-on.unsupported', "Screen Wake Lock 不可用（需安全上下文 + 浏览器支持）")
         if (on) {
           if (sentinel) return
           sentinel = await nav.wakeLock.request('screen')
@@ -45,5 +55,11 @@ export function webBridgeExt(g: typeof globalThis, CapErrorCtor: BridgeErrorCtor
         }
       }
     })(),
+    // C84 useOpenDocument：文档预览（MP wx.openDocument / Web window.open）。★Web 诚实边界：PDF/图片/文本由浏览器内联预览，office 格式通常转为下载（取决于浏览器能力）；MP 需传平台临时文件路径（如 wxfile://…）。
+    openDocument: async (filePath: string) => {
+      if (!(typeof g.open === 'function')) throw new CapErrorCtor('document.open.unsupported', "window.open 不可用（非浏览器运行环境？）")
+      const r = await g.open(filePath, '_blank')
+      if (!r) throw new CapErrorCtor('document.open.failed', "新窗口被浏览器拦截（预览须由用户手势触发）")
+    },
   }
 }

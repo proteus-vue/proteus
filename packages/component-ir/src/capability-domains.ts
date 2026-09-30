@@ -53,6 +53,8 @@ export const CAPABILITY_CATEGORY: Record<string, CapabilityDomain> = {
   'we-run': '设备与系统',
   // ★2026-09-30 NC1 首个声明式能力（C83——与设备/屏幕同域）
   'keep-screen-on': '设备与系统',
+  // ★2026-09-30 NC1：C84 文档预览（文件域——预览的是文件）
+  'document-preview': '存储与文件',
 }
 
 /** 分组展示顺序（官网侧栏 / 优先级表共用） */

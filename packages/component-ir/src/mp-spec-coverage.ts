@@ -189,6 +189,8 @@ export const SPEC_COVERED: Record<string, string> = {
   showToast: 'PlatformAPI.ui.showToast（+ shell.toast / p-toast 组件）',
   hideToast: 'PlatformAPI.ui（DOM/wx 提示随 showToast 生命周期；组件路径见 p-toast）',
   showLoading: 'PlatformAPI.ui.showLoading（+ ui.loading / p-loading 组件）',
+  // ★2026-09-30 NC1：C84 文档预览落地（声明式桥；MP wx.openDocument / Web window.open）
+  openDocument: 'useOpenDocument',
   hideLoading: 'PlatformAPI.ui.hideLoading',
   batchGetStorage: 'useStorage',
   batchSetStorage: 'useStorage',
@@ -419,7 +421,6 @@ export const SPEC_PLANNED: Record<string, string> = {
   getImageInfo: '图片元信息（宽高/方向——useFileSystem 只给 size/digest）',
   getVideoInfo: '视频元信息（同上族）',
   getRandomValues: '密码学随机数（Web 端有 crypto.getRandomValues——宿主未接线）',
-  openDocument: '文档预览（宿主文档能力，无对等）',
   pageScrollTo: '页面级滚动（p-scroll 只管组件内滚动）',
   startPullDownRefresh: '页面级下拉刷新（p-scroll refresher 只管 scroll-view）',
   stopPullDownRefresh: '页面级下拉刷新（同上）',
@@ -698,7 +699,7 @@ export const SPEC_RATCHET: { coveredMin: number; gapMax: number } = {
   //   原标 covered 且引用 `gesture.draggable`（拖拽）——引用错位 + MP 无对等（bindtap 不带 count）
   //   ⇒ 据实转 planned。**真实可运行的等价物一件没少**，只是不再把「仅 Web 成立」记成「两端已落地」。
   //   该条即上次注释要求「因诚实性修正需下调时，必须写明被修正的具体条目」所指的条目。
-  coveredMin: 361, // ★2026-09-30 上调 252 → 356（修标尺）→ 357（C83）→ **361**（4 条命令式提示：记账修正，非新能力）
+  coveredMin: 362, // ★2026-09-30 上调 252 → 356（修标尺）→ 357（C83）→ 361（4 条命令式提示：记账修正）→ **362**（C84 文档预览落地）
   gapMax: 0, // 全部官方项必须归类
   // ★★2026-09-30：抽标尺修复后的水位重锁（**性质：修的是尺子，不是能力**——必须写清楚）
   //   起因：快照抽取器（scripts/gen-mp-spec.mjs）的 API 正则不认**泛型方法签名** `name<T>(...)`

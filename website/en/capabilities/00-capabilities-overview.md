@@ -6,7 +6,7 @@ order: 0
 
 # Capabilities overview
 
-> 83 capability primitives — SSOT = `PRIMITIVE_CATALOG` (capability kind) + `CapabilityHooks` interface. **All hooks implemented** (API ready — target bridges/degradation in each page's compat table).
+> 84 capability primitives — SSOT = `PRIMITIVE_CATALOG` (capability kind) + `CapabilityHooks` interface. **All hooks implemented** (API ready — target bridges/degradation in each page's compat table).
 
 ## Network & Communication (11)
 
@@ -49,7 +49,7 @@ order: 0
 | C81 | [capability.device-capability](/docs/capability/device-capability) | `useDeviceCapability()` | `DeviceCapabilityAPI` | wx.checkDeviceSupportHevc |
 | C83 | [capability.keep-screen-on](/docs/capability/keep-screen-on) | `useKeepScreenOn()` | `KeepScreenOnState` | — |
 
-## Storage & Files (4)
+## Storage & Files (5)
 
 | # | Capability | API | Returns | Mini Program equivalent |
 |---|---|---|---|---|
@@ -57,6 +57,7 @@ order: 0
 | C32 | [capability.cookie](/docs/capability/cookie) | `useCookie()` | `CookieJar` | — |
 | C43 | [capability.file-system](/docs/capability/file-system) | `useFileSystem()` | `FSAdapter` | wx.getFileSystemManager |
 | C44 | [capability.archive](/docs/capability/archive) | `useArchive()` | `Result<void>` | wx.compressFile |
+| C84 | [capability.document-preview](/docs/capability/document-preview) | `useOpenDocument()` | `DocumentPath` | — |
 
 ## Location & Maps (2)
 
