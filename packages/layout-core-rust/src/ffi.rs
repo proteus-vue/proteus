@@ -2780,6 +2780,16 @@ pub unsafe extern "C" fn proteus_layout_anim_seek_scroll(handle: u64, json: *con
     }
 }
 
+/// ★Host ABI：指令流线格式版本（**跨语言契约的单一来源**）
+///
+/// 【为什么需要这个入口（纪律 #22：不另立副本）】Host ABI 的 `ops_wire_version` 必须与
+///   内核实际使用的 `OPS_VERSION` **同源**——若上层自己写一个常量，改协议时就靠人记着同步。
+///   ⇒ 本函数把内核的值**读出来**给上层（host-abi crate 的 `OPS_WIRE_VERSION` 直接引用它）。
+#[no_mangle]
+pub extern "C" fn proteus_ops_version() -> u32 {
+    crate::ops::OPS_VERSION
+}
+
 /// ★★**共享元素（跨元素飞行）**——从源矩形飞到目标节点，再归位到 identity
 ///
 /// 入参 JSON：`{"targetId":9, "sourceNodeId":3}` 或 `{"targetId":9, "sourceRect":{"x":..,"y":..,"w":..,"h":..}}`
