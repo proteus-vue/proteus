@@ -48,7 +48,7 @@
   只有**可复制代码块**里的引用才真正有害。
 · 破坏性验证：恢复 `p-card` → 红并精确报 `03-fluid-grid.md:31`；还原 → 575 md 全过。
 
-## 当前状态速览（最近一次更新：**2026-09-30 · G-39 宿主运行时切片落地（Android 真机 16/16）—— 生命周期/事件循环/内存账本有主**）★新会话以此为准
+## 当前状态速览（最近一次更新：**2026-09-30 · G-39 宿主运行时**双端**落地（Android 16/16 + iOS 16/16）—— B4 两条腿都跑通**）★新会话以此为准
 
 ### ★★★2026-09-30 · 宿主四议题取证 + G-39 嵌入式宿主切片落地
 
@@ -103,9 +103,26 @@
 CI 侧等价判据 = 单测 18 条）。文档：`proteus-host-runtime-plan/06-batches.md` 加落地状态块；
 `board-inventory.md` G-39 行升为「🟡 嵌入式宿主切片已落地」。
 
-**六、诚实边界**：① iOS JSC 宿主壳（同族骨架已就绪，缺壳接线与真机读数）；② 多线程 Worker
-（`threads.background=false` 是对 QuickJS 现状的诚实声明，不是最终形态）；③ Flutter/Harmony 宿主（B5）；
-④ G-42 六容器的**产品级消费者**仍为空（需真实 App 接入——本轮未动）。
+**六、★★续：iOS 腿同日落地（「按你的来」——B4 的第二条腿）**
+- **同一份 TS、两个壳**：入口提到 `hosts/shared/bridge/entry-host-runtime.ts`（平台中立——读壳注入的
+  `__PROTEUS_HOST_ID__`/`__PROTEUS_HOST_FRAME_DRIVER__` 自报标识）；Android 壳 = `MainActivity.appHostRun()`
+  + `quickjs_jni.c`；iOS 壳 = `ProteusHost/host-runtime-scene.swift`（`--host-runtime` 模式）。
+- **iOS 装置**：两段式（后台 `launch --console` 阻塞 → 等 `HOST_RUNTIME_PHASE_DONE` **内容信号** →
+  `devicectl launch com.apple.Preferences` 触发真实 willResignActive → 重新 launch 本 App 触发
+  didBecomeActive → 等 App 达成退出条件自退）。★实测：**Launch 两次后 PID 不变** ≈ 同进程往返（非重启）。
+- **真机读数（16/16 全绿，判据脚本与 Android 共用——平台由 `host_id` 自报）**：
+  · 真实生命周期转发 events=3（pause/resume 都 applied）；job 泵证据链同 Android；
+  · **内存口径差异（诚实标注）**：`scope="engine"`（Android/QuickJS 引擎真实 JS 堆，GC 回收 ≈100%）vs
+    `scope="process"`（iOS/JSC 用 `phys_footprint`——本轮取证确认 **JSC 无公开 per-context 内存 API**，
+    公开头只暴露 `JSGarbageCollect`）；JSC 分配 +33.8MB / GC 后 -147KB 属**预期**（提示性 GC 把页留
+    free pool，不即时归还 OS）——判据按**方向**断言并显式标注，不比较跨口径绝对值。
+- **★实测坑（防复发）**：平台参数必须在 **eval bundle 之前**注入（IIFE 在加载时即捕获 `const HOST_ID`
+  ⇒ 加载后再设全局量不生效——首版 Android 报默认 `host_id` 即此形态）。
+- **★门禁扩面**：`check:host-runtime` 现在**同跑两平台产物**（Android + iOS，各 16 条；缺产物诚实跳过）。
+
+**七、诚实边界**：① 多线程 Worker（`threads.background=false` 是对 QuickJS 现状的诚实声明，不是最终形态）；
+② Flutter/Harmony 宿主（B5）；③ G-42 六容器的**产品级消费者**仍为空（需真实 App 接入——本轮未动）；
+④ iOS 侧 `obj_count` 恒 0（JSC 无该读数——不伪造）。
 
 ## 当前状态速览（最近一次更新：**2026-09-30 · M5 路由虚拟栈落地（真机 16/16 全绿）—— App 端无层数上限**）★新会话以此为准
 
