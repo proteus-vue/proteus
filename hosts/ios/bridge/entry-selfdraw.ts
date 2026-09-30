@@ -77,6 +77,8 @@ interface SelfDrawNative {
   // ★★主线程零唤醒实测（OS 级 CPU 会计 + 阳性对照；xctrace 不可达时的机器判据）
   animCpuProbeStart(json: string): string
   animCpuProbeResults(): string
+  /** ★HA1：Host ABI 双路对照（同一棵树走直连 FFI 与 ABI，几何逐字节比对） */
+  abiProbe(json: string): string
 }
 declare const proteusSelfDraw: SelfDrawNative
 /** 快照名（宿主按模式注入；此处仅作默认） */
@@ -84,7 +86,7 @@ const BN = { snapshot: 'selfdraw-final' }
 
 // ★构建标识（每次构建由 hosts/ios/bridge/inject-build-id.mjs 注入；与 entry-bench 同机制）
 //   —— 「设备上跑的是哪份代码」必须可**一眼判定**（报告新鲜度判据的内容锚点）。
-const BUILD_ID = '715738b2-135852'
+const BUILD_ID = '9a3155e1-141605'
 
 const VP = (globalThis as unknown as { __PROTEUS_VIEWPORT__?: { width: number; height: number } })
   .__PROTEUS_VIEWPORT__ ?? { width: 390, height: 844 }
@@ -622,6 +624,24 @@ const api = {
   },
 
   /**
+   * ★★**HA1：Host ABI 双路对照**（现有宿主接入抽象层的等价性判据）
+   *
+   * 【为什么要"双路"】"ABI 能跑"不足以证明抽象正确——必须证明**两条路产出同一个东西**：
+   *   同一棵树分别走 [直连 FFI]（现有生产路径）与 [Host ABI]（新抽象层），几何**逐字节一致**。
+   *   同时验证：度量经 vtable 注入（宿主不再自己遍历树量文本）、批处理红线、
+   *   版本协商（不兼容必给可操作提示）、能力插件（未注册明确报错）、帧驱动（proteus_frame 推进动画）。
+   *
+   * 【判据】见 `check-anim-rt2.py` 的 N 组。
+   */
+  abiProbe(): string {
+    // 用**真实适配器产物**（当前树）做输入——不是手写 JSON（判据要落在真实链路上）
+    const req = adapter.toRequest(VP)
+    const treeJson = JSON.stringify(req)
+    const out = safeParse(proteusSelfDraw.abiProbe(JSON.stringify({ tree: treeJson })))
+    return JSON.stringify(out)
+  },
+
+  /**
    * ★★**MA1：预设驱动的转场**（真机验证"一句话写动画"）
    *
    * 【要回答什么】
@@ -1016,6 +1036,8 @@ const api = {
       anim_rt2: animRt2Result,
       // ★★MA1 预设库（一句话写转场 + 编译期校验）
       anim_preset: animPresetResult,
+      // ★★HA1：Host ABI 双路对照（几何逐字节一致性 + 批处理 + 能力插件 + 帧驱动）
+      host_abi: safeParse(proteusSelfDraw.abiProbe(JSON.stringify({ tree: JSON.stringify(adapter.toRequest(VP)) }))),
       // ★★主线程零唤醒实测（OS 级 CPU 会计 + 阳性对照）
       anim_cpu: safeParse(proteusSelfDraw.animCpuProbeResults()),
       // ★★MA5 滚动联动（吸顶 / 视差 / 渐显——位置→进度换算在内核）

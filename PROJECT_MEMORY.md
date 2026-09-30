@@ -48,7 +48,7 @@
   只有**可复制代码块**里的引用才真正有害。
 · 破坏性验证：恢复 `p-card` → 红并精确报 `03-fluid-grid.md:31`；还原 → 575 md 全过。
 
-## 当前状态速览（最近一次更新：**2026-09-30 · Host ABI 落地（HA0 契约+C 宿主证明 / HA0.5 platform 拆分）**）★新会话以此为准
+## 当前状态速览（最近一次更新：**2026-09-30 · HA1 落地（现有 iOS 宿主接 ABI，双路几何逐字节一致）**）★新会话以此为准
 
 ### ★★★2026-09-30 · 红线升格：禁止**任何**盲等（sleep/timeout 全禁）+ iOS 链路事件驱动 + I3 收官
 
@@ -92,6 +92,51 @@ kind=capability ⇒ 82）+ 黑名单条目 `hooks-81` + 两份新文档进正向
 破坏性验证过（注入 `81 个 Capability Hook` ⇒ 精确报行号）。
 **登记**：board-inventory「其他文档（非 plan）」表新增两行（含决策、依据、与既有计划关系）；
 roadmap v0.6 段追加两条决策接入注记 + v2.0+ 插件体系行补指针。
+
+**㉘ ★★★HA1 落地：现有 iOS 宿主改造为 Host ABI 实现（2026-09-30）—— 抽象正确性经双路对照验证**
+
+继续 Host ABI 线（用户：「先把 Host ABI 完整落地」）。HA0/HA0.5 已落；本轮做 **HA1**
+（方案原话：改造现有宿主是"检验抽象是否正确的**唯一方式**"）。
+
+**一、接入方式：保留直连路径，新增 ABI 路径 ⇒ ★双路对照**
+- Swift 侧：`@_silgen_name` 声明 18 个 ABI 入口 + C 结构体（vtable / VersionInfo / TextInput / Metrics）；
+- 宿主实现 vtable（`measure_text` 回调 → `ProteusTextAdapter.measureText`；`request_frame` 计数）；
+- `abiProbe`：同一棵树分别走 [直连 FFI] 与 [Host ABI]，**几何逐字节比对**（+ FNV-1a hash）；
+- host-abi crate 交叉编译 `aarch64-apple-ios` 并链接进真机构建（`run-selfdraw.sh`）。
+
+**二、真机读数（N 组 7/7 全过）**
+| 判据 | 读数 |
+|---|---|
+| **N1 ★双路几何逐字节一致** | **1836B · 同 hash `35041e8bf84b8d6f`**（等价性 = 抽象正确） |
+| N2 建树耗时同量级 | 直连 **0.254ms** vs ABI **0.399ms**（含版本协商 + 引擎创建） |
+| N3 度量经 vtable 注入 | 缺度量表时引擎**回调宿主 26 次**（宿主不必自己走树） |
+| N4 批处理红线 | 2 条指令 / **1 次**跨边界提交 |
+| N5 版本协商 | 不兼容 ⇒ 明确错误码 + 可操作升级提示 |
+| N6 能力插件 | 未注册 ⇒ -3（明确）· 注册后调用成功 |
+| N7 帧驱动 | `proteus_frame` 产出 7 条变换更新 |
+判据侧 **7 条破坏用例全红**（含 N1 几何不一致）。
+
+**三、★★本轮最重要的方法论（真机抓出的探针缺陷）**
+首版 N1 报"几何差 **195 字节**"（总长相同）——通过新增的**差异定位**（首差偏移 + 十六进制上下文）
+解出：差异在第 9 条记录的**高度字段**（直连 112.0 vs ABI 94.0）。
+根因：**探针喂了两份不同输入**——适配器产物**不含** `textMeasures`（生产里由宿主在 mount 时补），
+⇒ 直连路用 `NullTextMeasurer`（文本零尺寸）、ABI 路回调宿主度量 ⇒ 几何必然不同。
+★**那是探针的错，不是抽象的错**。修正：**等价性判据必须喂同一份输入**（两路都用"含度量表的树"）；
+而"注入能力"另设**独立**子项（用缺度量表的树验回调发生）。
+⇒ 纪律（比"判据要落在结果上"更具体）：**对照实验的输入必须先对齐**——否则测的是"两份输入的差"，
+不是"两条路的差"。
+
+**四、★四处 Swift 跨语言边界的真实约束（都写进注释）**
+1. `@convention(c)` 的参数类型必须 **ObjC 可表示** ⇒ `ProteusTextInput`（含 `UnsafePointer<CChar>?`）
+   不可用，改为 `UnsafeRawPointer` + `assumingMemoryBound` 还原（**按 C ABI 的真实形态声明才忠实**）；
+2. `out` 必须 `UnsafeMutableRawPointer`（`UnsafeRawPointer.pointee` 只读）；
+3. 结构体字面量里的**可选函数指针**推断不稳 ⇒ 字段按 C 的 `void*` 宽度用 `UnsafeMutableRawPointer?`
+   + `unsafeBitCast` 传值（不是绕开类型检查：C 侧本就是指针宽度的可空函数指针）；
+4. `UnsafeMutablePointer.withUnsafeBufferPointer` 不存在 ⇒ 显式 `UnsafeBufferPointer(start:count:)`。
+
+**五、诚实边界**：HA2（内核去 `target_os` 分支）需 JNI 交叉编译配合、属独立批次；
+HA3 与 Playground 能力清单尚未打通；HA4/HA5/HA6 未做；**Android 侧 platform/ 仍未抽**
+（其度量/绘制与宿主耦合更深）。
 
 **㉗ ★★★Host ABI 落地：HA0（契约+实现+C 宿主证明）+ HA0.5（platform/ 拆分）—— 用户决策驱动**
 

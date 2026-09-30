@@ -99,6 +99,104 @@ func proteus_recycle_stats(_ handle: UInt64) -> UnsafeMutablePointer<CChar>
 @_silgen_name("proteus_recycle_destroy")
 func proteus_recycle_destroy(_ handle: UInt64)
 
+/* ══════════ ★★Host ABI v1（HA1：现有宿主接入抽象层）══════════ */
+
+/// ★**为什么宿主也要接 ABI（HA0.5 的收益兑现）**：宿主集成（Surface/生命周期/输入/调度/能力注册）
+///   改为经契约驱动 ⇒ **换宿主不用重写平台适配**；本文件用"双路对照"验证抽象正确性：
+///   同一棵树分别走 [直连 FFI] 与 [Host ABI]，几何必须**逐字节一致**（等价性判据，不是"看起来对"）。
+
+struct ProteusVersionInfo {
+    var abi_version: UInt32 = 0
+    var ir_version: UInt32 = 0
+    var ops_wire_version: UInt32 = 0
+    var min_shell_version: UInt32 = 0
+}
+
+struct ProteusTextInput {
+    var text: UnsafePointer<CChar>?
+    var node_id: UInt32
+    var style_key: UInt32
+    var font_size: Float
+    var font_weight: Int32
+    var font_family: UnsafePointer<CChar>?
+    var max_width: Float
+}
+
+struct ProteusTextMetrics {
+    var width: Float = 0
+    var height: Float = 0
+}
+
+/// ★★**回调签名必须用"ObjC 可表示类型"**（本仓实测的 Swift 限制）
+///
+/// 【为什么不是 `UnsafePointer<ProteusTextInput>?`】Swift 要求 `@convention(c)` 的参数类型
+///   **在 ObjC 里可表示**；而 `ProteusTextInput` 是含 `UnsafePointer<CChar>?` 的 Swift 结构体
+///   ⇒ 报 `is not representable in Objective-C`。
+/// 【正解】按 C ABI 的真实形态：结构体指针在 C 侧就是一个**地址** ⇒ 用 `UnsafeRawPointer?`
+///   接收，回调内 `assumingMemoryBound(to:)` 还原。★这不是"绕过类型系统"——
+///   C 侧本来就是这样传的（`const ProteusTextInput*`），Swift 的严格类型在**跨语言边界**上
+///   表达不出来，按底层宽度声明才忠实。
+typealias ProteusMeasureTextFn = @convention(c) (UnsafeRawPointer?, UnsafeMutableRawPointer?, UnsafeMutableRawPointer?) -> Int32
+typealias ProteusRequestFrameFn = @convention(c) (UnsafeMutableRawPointer?) -> Void
+
+/// ★★**为什么函数指针字段用 `UnsafeMutableRawPointer?`（而不是 `@convention(c)` Optional）**
+///
+/// 【本仓实测的 Swift 类型系统限制】`@convention(c)` 的函数**可选类型**放进结构体**字面量**时，
+///   编译器要求"上下文类型"但在混合 `nil` 时不稳（报 `'nil' requires a contextual type`）——
+///   连逐字段赋值也躲不掉（结构体初始化器本身要推全部字段）。
+/// 【正解】按 **C ABI 的真实形态**声明：C 的函数指针就是**指针宽度**的值 ⇒ 用
+///   `UnsafeMutableRawPointer?` 承载，传参时经 `unsafeBitCast` 还原成 `@convention(c)` 类型。
+///   ★这不是绕开类型检查：C 侧本来就是 `void*`-等价的可空函数指针，Swift 的严格类型在这层
+///     表达不出来 ⇒ 按底层形态声明才是**忠实**的。
+struct ProteusHostVTable {
+    var user_data: UnsafeMutableRawPointer?
+    var request_frame: UnsafeMutableRawPointer?
+    var measure_text: UnsafeMutableRawPointer?
+    var decode_image: UnsafeMutableRawPointer?
+    var native_view_create: UnsafeMutableRawPointer?
+    var native_view_update: UnsafeMutableRawPointer?
+    var native_view_destroy: UnsafeMutableRawPointer?
+}
+
+@_silgen_name("proteus_abi_version_info")
+func proteus_abi_version_info() -> ProteusVersionInfo
+@_silgen_name("proteus_check_versions")
+func proteus_check_versions(_ host: UnsafePointer<ProteusVersionInfo>?, _ hint: UnsafeMutablePointer<CChar>?, _ len: Int) -> Int32
+@_silgen_name("proteus_engine_create")
+func proteus_engine_create(_ host: UnsafePointer<ProteusHostVTable>?, _ ver: UnsafePointer<ProteusVersionInfo>?, _ hint: UnsafeMutablePointer<CChar>?, _ len: Int) -> UnsafeMutableRawPointer?
+@_silgen_name("proteus_engine_destroy")
+func proteus_engine_destroy(_ engine: UnsafeMutableRawPointer?) -> UnsafeMutableRawPointer?
+@_silgen_name("proteus_load_tree")
+func proteus_load_tree(_ engine: UnsafeMutableRawPointer?, _ treeJson: UnsafePointer<CChar>?) -> Int32
+@_silgen_name("proteus_submit_frame")
+func proteus_submit_frame(_ engine: UnsafeMutableRawPointer?, _ ops: UnsafePointer<UInt8>?, _ byteLen: Int) -> Int32
+@_silgen_name("proteus_frame")
+func proteus_frame(_ engine: UnsafeMutableRawPointer?, _ frameTimeNs: Int64) -> Int32
+@_silgen_name("proteus_frame_updates")
+func proteus_frame_updates(_ engine: UnsafeMutableRawPointer?, _ outLen: UnsafeMutablePointer<UInt32>?) -> UnsafePointer<UInt8>?
+@_silgen_name("proteus_rects")
+func proteus_rects(_ engine: UnsafeMutableRawPointer?, _ outLen: UnsafeMutablePointer<UInt32>?) -> UnsafePointer<UInt8>?
+@_silgen_name("proteus_stats_json")
+func proteus_stats_json(_ engine: UnsafeMutableRawPointer?) -> UnsafePointer<CChar>?
+@_silgen_name("proteus_dispatch_pointers")
+func proteus_dispatch_pointers(_ engine: UnsafeMutableRawPointer?, _ events: UnsafeRawPointer?, _ count: Int) -> Int64
+@_silgen_name("proteus_register_capability")
+func proteus_register_capability(_ engine: UnsafeMutableRawPointer?, _ name: UnsafePointer<CChar>?, _ fn: (@convention(c) (UnsafePointer<CChar>?, UnsafeMutablePointer<CChar>?, Int, UnsafeMutableRawPointer?) -> Int32)?, _ userData: UnsafeMutableRawPointer?) -> Int32
+@_silgen_name("proteus_has_capability")
+func proteus_has_capability(_ engine: UnsafeMutableRawPointer?, _ name: UnsafePointer<CChar>?) -> Int32
+@_silgen_name("proteus_call_capability")
+func proteus_call_capability(_ engine: UnsafeMutableRawPointer?, _ name: UnsafePointer<CChar>?, _ argJson: UnsafePointer<CChar>?, _ out: UnsafeMutablePointer<CChar>?, _ outLen: Int) -> Int32
+@_silgen_name("proteus_surface_changed")
+func proteus_surface_changed(_ engine: UnsafeMutableRawPointer?, _ surface: UnsafeMutableRawPointer?)
+@_silgen_name("proteus_lifecycle")
+func proteus_lifecycle(_ engine: UnsafeMutableRawPointer?, _ state: UInt32)
+@_silgen_name("proteus_anim_start")
+func proteus_anim_start(_ engine: UnsafeMutableRawPointer?, _ animsJson: UnsafePointer<CChar>?) -> Int32
+@_silgen_name("proteus_anim_stop")
+func proteus_anim_stop(_ engine: UnsafeMutableRawPointer?, _ json: UnsafePointer<CChar>?) -> Int32
+@_silgen_name("proteus_prewarm")
+func proteus_prewarm()
+
 func takeCString(_ ptr: UnsafeMutablePointer<CChar>) -> String {
     defer { proteus_layout_free_string(ptr) }
     return String(cString: ptr)
@@ -212,6 +310,8 @@ func physFootprintMB() -> Double {
     ///   ★配**阳性对照**（tick 路径必须有显著开销）——否则"零"无法与"探针没测到"区分。
     func animCpuProbeStart(_ json: String) -> String
     func animCpuProbeResults() -> String
+    /// ★★**Host ABI 双路对照**（HA1）：同一棵树分别走直连 FFI 与 Host ABI ⇒ 几何逐字节比对
+    func abiProbe(_ json: String) -> String
     /// ★★**RT2/§7.3：按节点停动画**（宿主行回收时自动调用；暴露给判据做破坏性验证）
     func animStopNodes(_ idsJson: String) -> String
     /// ★★**帧循环三件套**（RT2）：启动（接 CADisplayLink）/ 停止 / 读数
@@ -3577,6 +3677,261 @@ final class SelfDrawBridge: NSObject, SelfDrawExports {
                 : "{\"ok\":false,\"error\":\"未运行探针\"}"
         }
         return jsonString(r)
+    }
+
+
+    /* ══════════ ★★Host ABI v1 接入（HA1）══════════ */
+
+    /// ABI 度量回调：**引擎回调宿主**去量文本（能力注入的宿主侧实现）
+    ///
+    /// 【★为什么必须在宿主侧（方案 §0.4.8）】文本度量是**平台适配**（CoreText / StaticLayout）——
+    ///   各端各写一份是正确设计；ABI 只定义"何时调、怎么传"。
+    ///   ★入参由引擎组装（text/fontSize/fontWeight/fontFamily），宿主只做度量本身。
+    private static let abiMeasureCallback: ProteusMeasureTextFn = { input, out, _ in
+        guard let input, let out else { return -1 }
+        let i = input.assumingMemoryBound(to: ProteusTextInput.self).pointee
+        let text = i.text.map { String(cString: $0) } ?? ""
+        if text.isEmpty {
+            out.assumingMemoryBound(to: ProteusTextMetrics.self).pointee = ProteusTextMetrics(width: 0, height: 0)
+            return 0
+        }
+        let fam = i.font_family.map { String(cString: $0) } ?? "system"
+        let sz = ProteusTextAdapter.measureText(
+            text,
+            fontSize: CGFloat(i.font_size > 0 ? i.font_size : 14),
+            fontWeight: CGFloat(i.font_weight > 0 ? i.font_weight : 400),
+            fontFamily: fam
+        )
+        out.assumingMemoryBound(to: ProteusTextMetrics.self).pointee =
+            ProteusTextMetrics(width: Float(sz.width), height: Float(sz.height))
+        return 0
+    }
+
+    /// 引擎请求宿主 schedule 下一帧（本测席是**同步驱动**，只计数——不真的排帧）
+    private static var abiFrameRequests = 0
+    private static let abiRequestFrameCallback: ProteusRequestFrameFn = { _ in
+        abiFrameRequests += 1
+    }
+
+    /// ★★**HA1 双路对照**：同一棵树分别走 [直连 FFI] 与 [Host ABI] ⇒ 比对几何 + 计数
+    ///
+    /// 【为什么要"双路"（判据设计）】"ABI 能跑"不足以证明抽象正确——必须证明
+    ///   **两条路产出同一个东西**。几何逐字节比对是最强的等价判据（不是"看起来差不多"）。
+    ///   同时验证：度量**经 vtable 注入**（宿主不再自己遍历树量文本）、批处理红线、
+    ///   能力插件（未注册明确报错）、帧驱动（`proteus_frame` 推进动画）。
+    ///
+    /// 入参 JSON：`{"tree": <核心请求 JSON 字符串>}`
+    /// 出参：两路的 rects 字节数 + hash、差异字节数、各计数读数
+    func abiProbe(_ json: String) -> String {
+        guard let d = json.data(using: .utf8),
+              let o = (try? JSONSerialization.jsonObject(with: d)) as? [String: Any],
+              let tree = o["tree"] as? String else {
+            return "{\"ok\":false,\"error\":\"入参需为 {tree: <JSON 字符串>}\"}"
+        }
+        var out: [String: Any] = ["ok": true]
+
+        // ★★**探针设计的关键（首版踩到，真机 N1 报 195 字节差）**：两条路必须吃**同一份输入**。
+        //   · 适配器产出的树**不含** `textMeasures`（生产里是宿主在 mount 时补的）
+        //     ⇒ 若直接拿它比：直连路会用 `NullTextMeasurer`（文本零尺寸），而 ABI 路会**回调宿主度量**
+        //       ⇒ 两条路输入不同，几何必然不同（**那是探针的错，不是抽象的错**）。
+        //   ⇒ 正解：宿主在这里按生产同法预算度量（与 `mount` 的循环一致）⇒ 两路等价性才可判定；
+        //     而"注入能力"另设**独立**子项（拿无度量表的树单跑 ABI，验回调确实发生）。
+        let treeWithMeasures: String = {
+            guard let d = tree.data(using: .utf8),
+                  var root = (try? JSONSerialization.jsonObject(with: d)) as? [String: Any],
+                  let nodes = root["nodes"] as? [[String: Any]] else { return tree }
+            var measures: [String: [String: Double]] = [:]
+            for n in nodes {
+                guard let text = n["text"] as? String, !text.isEmpty, let id = n["id"] as? Int else { continue }
+                let fs = (n["fontSize"] as? Double).map { CGFloat($0) } ?? 14
+                let fw = (n["fontWeight"] as? Double).map { CGFloat($0) } ?? 400
+                let fam = (n["fontFamily"] as? String) ?? "system"
+                let sz = ProteusTextAdapter.measureText(text, fontSize: fs, fontWeight: fw, fontFamily: fam)
+                measures["\(id)"] = ["width": Double(sz.width), "height": Double(sz.height)]
+            }
+            root["textMeasures"] = measures
+            out["probe_measure_count"] = measures.count
+            guard let dd = try? JSONSerialization.data(withJSONObject: root),
+                  let s = String(data: dd, encoding: .utf8) else { return tree }
+            return s
+        }()
+
+        // ── ① 直连 FFI 路（现有生产路径；输入 = 含度量表的树，与 ABI 路**同一份**）──
+        let directStart = CFAbsoluteTimeGetCurrent()
+        let h = treeWithMeasures.withCString { proteus_layout_create($0) }
+        guard h > 0 else { return "{\"ok\":false,\"error\":\"直连建树失败\"}" }
+        var directLen: UInt32 = 0
+        let directPtr = proteus_layout_rects_bin(h, &directLen)
+        // ★`UnsafeMutablePointer<UInt8>.withUnsafeBufferPointer` 不存在（那是 Array 的方法）
+        //   ⇒ 用 `UnsafeBufferPointer(start:count:)` 显式构造
+        //   （`proteus_layout_rects_bin` 返回**非可选**指针 ⇒ 不需要 nil 判断；本仓实测：
+        //    多写那个判断会触发 "comparing non-optional to nil" 警告）
+        let directBytes = Array(UnsafeBufferPointer(start: directPtr, count: Int(directLen)))
+        let directMs = (CFAbsoluteTimeGetCurrent() - directStart) * 1000
+        _ = proteus_layout_destroy(h)
+        out["direct_bytes"] = directBytes.count
+        out["direct_hash"] = fnv1a(directBytes)
+        out["direct_ms"] = round(directMs * 1000) / 1000
+
+        // ── ② Host ABI 路（版本协商 → 创建引擎 → 装树 → 取几何）──
+        var hint = [CChar](repeating: 0, count: 256)
+        var ver = proteus_abi_version_info()
+        let checkRC = proteus_check_versions(&ver, &hint, hint.count)
+        out["version_check_rc"] = Int(checkRC)
+        out["version"] = [
+            "abi": Int(ver.abi_version), "ir": Int(ver.ir_version),
+            "ops_wire": Int(ver.ops_wire_version), "min_shell": Int(ver.min_shell_version),
+        ]
+        // 版本不兼容的**可操作性**（非静默）：拿一个错的版本去协商，提示里必须有"升级方式"
+        var badVer = ver
+        badVer.abi_version = 99
+        var badHint = [CChar](repeating: 0, count: 512)
+        let badRC = proteus_check_versions(&badVer, &badHint, badHint.count)
+        out["version_mismatch_rc"] = Int(badRC)
+        out["version_mismatch_hint"] = String(cString: badHint)
+
+        // ★逐字段赋值（不用字面量构造）：可选函数指针字段在字面量里需要上下文类型，
+        //   而 `@convention(c)` 别名的推断在混合 nil 时不稳 ⇒ 显式赋值最清晰
+        var vt = ProteusHostVTable(user_data: nil, request_frame: nil, measure_text: nil,
+                                   decode_image: nil, native_view_create: nil,
+                                   native_view_update: nil, native_view_destroy: nil)
+        // ★函数指针按 C ABI 的真实形态传递（见结构体注释）：unsafeBitCast 到指针宽度
+        vt.request_frame = unsafeBitCast(SelfDrawBridge.abiRequestFrameCallback, to: UnsafeMutableRawPointer?.self)
+        vt.measure_text = unsafeBitCast(SelfDrawBridge.abiMeasureCallback, to: UnsafeMutableRawPointer?.self)
+        SelfDrawBridge.abiFrameRequests = 0
+        let abiStart = CFAbsoluteTimeGetCurrent()
+        let engine = withUnsafePointer(to: &vt) { vtPtr in
+            proteus_engine_create(vtPtr, &ver, &hint, hint.count)
+        }
+        guard let engine else {
+            return "{\"ok\":false,\"error\":\"引擎创建失败\",\"hint\":\(jsonEscape(String(cString: hint)))}"
+        }
+        let loadRC = treeWithMeasures.withCString { proteus_load_tree(engine, $0) }
+        out["abi_load_rc"] = Int(loadRC)
+        var abiLen: UInt32 = 0
+        var abiBytes: [UInt8] = []
+        if let p = proteus_rects(engine, &abiLen), abiLen > 0 {
+            abiBytes = Array(UnsafeBufferPointer(start: p, count: Int(abiLen)))
+        }
+        let abiMs = (CFAbsoluteTimeGetCurrent() - abiStart) * 1000
+        out["abi_bytes"] = abiBytes.count
+        out["abi_hash"] = fnv1a(abiBytes)
+        out["abi_ms"] = round(abiMs * 1000) / 1000
+
+        // ── ③ ★核心等价判据：几何**逐字节一致** ──
+        out["geometry_identical"] = (abiBytes == directBytes)
+        out["geometry_diff_bytes"] = zip(abiBytes, directBytes).filter { $0 != $1 }.count
+            + abs(abiBytes.count - directBytes.count)
+        // ★差异**定位**（不是只报个数）：首差偏移 + 两侧十六进制上下文（归因必须有依据）
+        //   记录二进制格式 = 头 + N×20B 矩形（x,y,w,h f32 + id u32）——见 rects_bin.rs
+        if abiBytes != directBytes {
+            var first = -1
+            for i in 0..<min(abiBytes.count, directBytes.count) where abiBytes[i] != directBytes[i] {
+                first = i; break
+            }
+            if first >= 0 {
+                let lo = max(0, first - 8), hi = min(min(abiBytes.count, directBytes.count), first + 12)
+                out["diff_first_offset"] = first
+                // 二进制格式（`rects_bin.rs`）：头 **16B**（magic+version+count+reserved）+ N×**20B**（id u32 + 4×f32）
+                out["diff_record_index"] = first >= 16 ? (first - 16) / 20 : -1
+                out["diff_direct_hex"] = (lo..<hi).map { String(format: "%02x", directBytes[$0]) }.joined()
+                out["diff_abi_hex"] = (lo..<hi).map { String(format: "%02x", abiBytes[$0]) }.joined()
+            }
+        }
+
+        // ── ④ 能力注入读数：引擎**回调宿主**量了几次文本 ──
+        //   ★独立子项：用**无度量表**的树**另建一个引擎** ⇒ 度量必须由引擎回调宿主产生
+        //     （与 ① 的等价性判据分开：等价性要"同输入"，注入能力要"缺度量时能补"）
+        if let sp = proteus_stats_json(engine) {
+            out["abi_stats"] = safeParseObject(String(cString: sp))
+        }
+        if let engine2 = withUnsafePointer(to: &vt, { proteus_engine_create($0, &ver, &hint, hint.count) }) {
+            let rc2 = tree.withCString { proteus_load_tree(engine2, $0) }
+            out["inject_load_rc"] = Int(rc2)
+            if let sp2 = proteus_stats_json(engine2) {
+                out["inject_stats"] = safeParseObject(String(cString: sp2))
+            }
+            _ = proteus_engine_destroy(engine2)
+        }
+
+        // ── ⑤ 批处理红线：一帧多条指令 ⇒ **一次** submit_frame ──
+        //    指令流线格式（与 slot-runtime/buffer.ts 逐字节对齐）：20B 头 + 指令体
+        //    头：magic u32("PVOP") + version u32(2) + opCount u32 + keyCount u32 + strCount u32
+        //    体：TOGGLE_VIS(0x05) = op u8 + nodeId u32 + visible u8
+        if let firstId = (try? JSONSerialization.jsonObject(with: tree.data(using: .utf8) ?? Data()))
+            .flatMap({ $0 as? [String: Any] })?["nodes"] as? [[String: Any]],
+           let id0 = firstId.first?["id"] as? Int {
+            var ops: [UInt8] = []
+            func u32(_ v: UInt32) { ops.append(contentsOf: withUnsafeBytes(of: v.littleEndian) { Array($0) }) }
+            u32(0x504F5650); u32(2); u32(2); u32(0); u32(0)  // 头（2 条指令、无键池/字符串池）
+            ops.append(0x05); u32(UInt32(id0)); ops.append(1)
+            ops.append(0x05); u32(UInt32(id0)); ops.append(1)
+            let submitRC = ops.withUnsafeBufferPointer { proteus_submit_frame(engine, $0.baseAddress, $0.count) }
+            out["submit_rc"] = Int(submitRC)
+            if let sp = proteus_stats_json(engine) {
+                out["stats_after_submit"] = safeParseObject(String(cString: sp))
+            }
+        }
+
+        // ── ⑥ 帧驱动：ABI 的 `proteus_frame` 推进动画（内核求值 → 更新缓冲）──
+        let animRC = "{\"anims\":[{\"nodeId\":1,\"kind\":0,\"curve\":1,\"from\":0,\"to\":50,\"durMs\":200,\"takeover\":false}]}"
+            .withCString { proteus_anim_start(engine, $0) }
+        out["anim_start_rc"] = Int(animRC)
+        var updatesSeen = 0
+        for i in 0..<8 {
+            _ = proteus_frame(engine, Int64(1_000_000_000 + i * 33_000_000))
+            var ul: UInt32 = 0
+            if let up = proteus_frame_updates(engine, &ul), ul > 0 { updatesSeen += Int(ul) / Self.animUpdateRecordBytes }
+        }
+        out["frame_updates_records"] = updatesSeen
+        out["frame_requests"] = SelfDrawBridge.abiFrameRequests
+        if let sp = proteus_stats_json(engine) {
+            out["stats_final"] = safeParseObject(String(cString: sp))
+        }
+
+        // ── ⑦ 能力插件：未注册 ⇒ **明确报错**；注册后可用 ──
+        var capOut = [CChar](repeating: 0, count: 512)
+        let missRC = "network.request".withCString { name in
+            proteus_call_capability(engine, name, nil, &capOut, capOut.count)
+        }
+        out["capability_missing_rc"] = Int(missRC)
+        out["capability_missing_msg"] = String(cString: capOut)
+        let echo: @convention(c) (UnsafePointer<CChar>?, UnsafeMutablePointer<CChar>?, Int, UnsafeMutableRawPointer?) -> Int32 = { arg, o, n, _ in
+            guard let o, n > 0 else { return -1 }
+            let s = arg.map { String(cString: $0) } ?? "{}"
+            let reply = "{\"ok\":true,\"echo\":\(s)}"
+            _ = reply.withCString { src in strncpy(o, src, n - 1) }
+            return 0
+        }
+        let regRC = "network.request".withCString { proteus_register_capability(engine, $0, echo, nil) }
+        out["capability_register_rc"] = Int(regRC)
+        var capOut2 = [CChar](repeating: 0, count: 512)
+        let callRC = "network.request".withCString { name in
+            "{\"u\":1}".withCString { arg in proteus_call_capability(engine, name, arg, &capOut2, capOut2.count) }
+        }
+        out["capability_call_rc"] = Int(callRC)
+        out["capability_call_out"] = String(cString: capOut2)
+
+        _ = proteus_engine_destroy(engine)
+        out["ok"] = true
+        return jsonString(out)
+    }
+
+    /// FNV-1a 64 位哈希（几何等价判据用——比"逐字段比"更快且不依赖解析）
+    private func fnv1a(_ bytes: [UInt8]) -> String {
+        var hash: UInt64 = 0xcbf29ce484222325
+        for b in bytes {
+            hash ^= UInt64(b)
+            hash = hash &* 0x100000001b3
+        }
+        return String(format: "%016llx", hash)
+    }
+
+    /// 宽松解析成对象（诊断读数；失败不抛）
+    private func safeParseObject(_ s: String) -> [String: Any] {
+        guard let d = s.data(using: .utf8),
+              let o = (try? JSONSerialization.jsonObject(with: d)) as? [String: Any] else { return [:] }
+        return o
     }
 
     /// `layerTransformProbe` 的 JSON → 层数组（仅收尾用，不在每帧路径）

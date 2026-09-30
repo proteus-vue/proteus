@@ -98,6 +98,10 @@ export PATH="$HOME/.cargo/bin:$PATH"
 (cd "$RUST_CRATE" && cargo build --release --target aarch64-apple-ios 2>&1 | grep -E "^error|warning: unused|Finished" | tail -3)
 LIB="$CARGO_TARGET_DIR/aarch64-apple-ios/release/libproteus_layout_core.a"
 [ -f "$LIB" ] || { echo "✗ 未生成静态库：$LIB"; exit 3; }
+# ★HA1：宿主接 Host ABI ⇒ 链接 host-abi 静态库（它与 layout-core 同源，只是 ABI 门面）
+(cd "$ROOT/packages/host-abi" && cargo build --release --target aarch64-apple-ios 2>&1 | grep -E "^error" -A 4 || true)
+ABI_LIB="$CARGO_TARGET_DIR/aarch64-apple-ios/release/libproteus_host_abi.a"
+[ -f "$ABI_LIB" ] || { echo "✗ 未生成 host-abi 静态库：$ABI_LIB"; exit 3; }
 
 echo "==> ④ 编译 Swift 宿主（自绘场景）"
 rm -rf "$APP"; mkdir -p "$APP"
@@ -106,7 +110,7 @@ PLATFORM_SRC="$(ls "$ROOT"/platform/ios/ProteusPlatform/*.swift 2>/dev/null | tr
 [ -n "$PLATFORM_SRC" ] || { echo "✗ 找不到 platform/ios 平台适配源码（HA0.5 抽取后被删？）"; exit 3; }
 xcrun --sdk iphoneos swiftc -O -target arm64-apple-ios15.0 \
   -framework UIKit -framework CoreText -framework JavaScriptCore -parse-as-library \
-  -o "$APP/ProteusSelfDraw" $PLATFORM_SRC "$HERE/ProteusHost/selfdraw-scene.swift" "$LIB"
+  -o "$APP/ProteusSelfDraw" $PLATFORM_SRC "$HERE/ProteusHost/selfdraw-scene.swift" "$ABI_LIB" "$LIB"
 
 echo "==> ⑤ 组装 .app"
 # ★★两个 bundle **都装**（本仓实测踩到：只装当前模式那个 ⇒ 从桌面点开时

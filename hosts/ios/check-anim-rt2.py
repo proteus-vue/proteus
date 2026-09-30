@@ -7,7 +7,7 @@
      ⇒ 本脚本读的是 `layerTransformProbe` 的结果（宿主从 `CALayer.transform` 反解），
        覆盖"写入路径真的生效"这一环。
 
-【十二组判据（对应 RT2 / MA0-RT / MA1 / MA5 / MA6 / 共享元素 / 零唤醒要回答的问题；当前 54 条）】
+【十三组判据（对应 RT2 / MA0-RT / MA1 / MA5 / MA6 / 共享元素 / 零唤醒 / Host ABI 要回答的问题；当前 61 条）】
   A. **指令真的驱动了端上动画**：层上 transform 随进度变化，且**终值精确**等于目标（端点钉死）；
   B. **手势驱动（seek）立即生效**：seek 后**不等 tick**，层上已有对应值；
      Progress 驱动后再 tick **不应改它**（手势松手后动画不该自己跑）；
@@ -23,6 +23,10 @@
      宽度比生效（小矩形源，中心锚点反解）/ 错误冒泡；外加 ★判据 -1「任何相位异常必须红」。
   L. **主线程零唤醒**（OS 级 CPU 会计 + 阳性对照）：L0 提交成功 / L1 阳性对照有效（tick 必须显著 >0）/
      L2 平台路径 CPU 显著低于 tick（比值 ≤0.25）——★「零」与「没测到」必须可区分。
+  N. **Host ABI 双路对照**（HA1）：几何逐字节一致 / 建树耗时同量级 / 度量经 vtable 注入 /
+     批处理红线 / 版本协商可操作 / 能力插件明确报错 / 帧驱动产出更新。
+  N. **Host ABI 双路对照**（HA1）：几何逐字节一致 / 建树耗时同量级 / 度量经 vtable 注入 /
+     批处理红线 / 版本协商可操作 / 能力插件明确报错 / 帧驱动产出更新。
 
 用法：python3 hosts/ios/check-anim-rt2.py <report.json>
 退出码：0 全过 / 1 有失败（逐条打印为什么）
@@ -633,9 +637,81 @@ def main() -> int:
                 print(f"  ✓ L2 平台路径主线程 CPU 显著更低：{plat/1000:.1f}ms vs tick {tick/1000:.1f}ms（比 {ratio:.2f} <= 0.25）")
     else:
         print("  · L 组跳过（无 anim_cpu 读数——探针未跑或报告为旧版）")
+    # ── N 组（HA1）：Host ABI 双路对照（抽象正确性的等价性判据） ──
+    #
+    # 【为什么"双路"是唯一有效判据（设计要点）】"ABI 能跑"只说明"能跑"，不说明"抽象对"。
+    #   必须证明**两条路产出同一个东西**：同一棵树走 [直连 FFI] 与 [Host ABI]，
+    #   几何**逐字节一致**（比"看起来差不多"强得多）。
+    #   同时验：度量经 vtable 注入 / 批处理红线 / 版本协商可操作 / 能力插件明确报错 / 帧驱动。
+    abi = d.get("host_abi") or js.get("host_abi") or {}
+    if abi:
+        # N1 ★核心：几何逐字节一致（等价性）
+        if not abi.get("geometry_identical"):
+            fail(f"N1 两路几何**不一致**：diff={abi.get('geometry_diff_bytes')} 字节"
+                 f"（direct={abi.get('direct_bytes')}B vs abi={abi.get('abi_bytes')}B）——抽象未保持等价")
+            ok = False
+        else:
+            print(f"  ✓ N1 ★双路几何逐字节一致（{abi.get('direct_bytes')}B · hash {abi.get('direct_hash')}）")
+        # N2 建树都成功 + 耗时同量级（ABI 只多一层门面，不应显著更慢）
+        dm, am = abi.get("direct_ms"), abi.get("abi_ms")
+        if abi.get("abi_load_rc") != 0:
+            fail(f"N2 ABI 路建树失败：load_rc={abi.get('abi_load_rc')}")
+            ok = False
+        elif dm is None or am is None or am > max(dm * 3.0, dm + 5.0):
+            fail(f"N2 ABI 路耗时异常：direct={dm}ms vs abi={am}ms（门面层不应显著更慢）")
+            ok = False
+        else:
+            print(f"  ✓ N2 建树耗时同量级：直连 {dm}ms vs ABI {am}ms（含版本协商+引擎创建）")
+        # N3 度量**经 vtable 注入**（独立子项：用**无度量表**的树单跑 ABI ⇒ 引擎必须回调宿主）
+        #   ★为什么不看 ① 的 abi_stats：① 的输入**含**度量表（与直连路同输入，为等价性判据）
+        #     ⇒ 那个引擎不会回调。注入能力要用"缺度量"的输入验（本仓实测：首版混在一起，
+        #     导致 N1 报"几何不一致"——那其实是探针喂了两份不同输入，不是抽象的缺陷）。
+        ist = abi.get("inject_stats") or {}
+        if abi.get("inject_load_rc") != 0 or (ist.get("measure_calls", 0) or 0) <= 0:
+            fail(f"N3 度量未注入：load_rc={abi.get('inject_load_rc')} measure_calls={ist.get('measure_calls')}"
+                 f"（无度量表的树 ⇒ 引擎应回调宿主度量）")
+            ok = False
+        else:
+            print(f"  ✓ N3 度量经 vtable 注入：缺度量表时引擎回调宿主 {ist.get('measure_calls')} 次"
+                  f"（宿主不必自己走树）")
+        # N4 ★批处理红线：一帧两条指令 ⇒ **一次** submit_frame
+        s2 = abi.get("stats_after_submit") or {}
+        calls, ops_n = s2.get("submit_frame_calls"), s2.get("submitted_ops")
+        if calls != 1 or (ops_n or 0) < 2:
+            fail(f"N4 批处理红线未达标：submit_frame_calls={calls}（应 1）· submitted_ops={ops_n}（应 ≥2）")
+            ok = False
+        else:
+            print(f"  ✓ N4 批处理红线：{ops_n} 条指令 / **1 次**跨边界提交（按帧计，不按节点计）")
+        # N5 版本协商：不兼容 ⇒ 明确错误码 + **可操作**提示
+        if abi.get("version_mismatch_rc") == 0:
+            fail("N5 版本不兼容时未报错（应为非 0）")
+            ok = False
+        elif "升级" not in (abi.get("version_mismatch_hint") or ""):
+            fail(f"N5 版本不兼容提示不可操作：{str(abi.get('version_mismatch_hint'))[:80]}")
+            ok = False
+        else:
+            print("  ✓ N5 版本协商：不兼容 ⇒ 明确错误码 + 可操作升级提示")
+        # N6 能力插件：未注册明确报错（列出已注册项）+ 注册后可用
+        if abi.get("capability_missing_rc") == 0:
+            fail("N6 未注册能力未报错（禁止静默失败）")
+            ok = False
+        elif abi.get("capability_register_rc") != 0 or abi.get("capability_call_rc") != 0:
+            fail(f"N6 能力注册/调用失败：reg={abi.get('capability_register_rc')} call={abi.get('capability_call_rc')}")
+            ok = False
+        else:
+            print(f"  ✓ N6 能力插件：未注册 ⇒ {abi.get('capability_missing_rc')}（明确）· 注册后调用成功")
+        # N7 帧驱动：proteus_frame 推进动画并产出更新
+        if (abi.get("frame_updates_records", 0) or 0) <= 0:
+            fail(f"N7 ABI 帧驱动未产出动画更新：{abi.get('frame_updates_records')} 条")
+            ok = False
+        else:
+            print(f"  ✓ N7 ABI 帧驱动：{abi.get('frame_updates_records')} 条变换更新（proteus_frame 推进内核动画）")
+    else:
+        print("  · N 组跳过（无 host_abi 读数）")
+
     print()
     if ok:
-        print("✅ 判据全过（机制 + 帧率 + 复杂动效 + 平台零参与 + MA1 预设库 + MA5 滚动联动 + MA6 序列编排 + 共享元素 + 零唤醒）")
+        print("✅ 判据全过（机制 + 帧率 + 复杂动效 + 平台零参与 + MA1 预设库 + MA5 滚动联动 + MA6 序列编排 + 共享元素 + 零唤醒 + Host ABI）")
         return 0
     print("✗ RT2 判据有失败项（见上）")
     return 1
