@@ -449,7 +449,15 @@ iOS 同理：动 `transform` 是 GPU 加速，动 `frame` 触发布局重算。
       · 真机 K 组 5 条：内核几何 · 首帧在源矩形（无跳变）· 层级提升与复位 · 终态精确归位 · 错误冒泡
       · ★诚实边界：内核只有**等比** scale ⇒ 以宽度比为准（源/目标宽高比不一致时高度按目标比例推出）；
         跨页面**稳态几何的回传**（导航栈参数 / 状态恢复通道）仍需页面栈层配合，本轮覆盖"同视图树"形态
-- [ ] **AI 说明书**（与 111 条规则同构）—— 预设库已按"单一入口枚举"设计（`presets` 导出），待接生成器
+- [x] **AI 说明书**—— ✅ **已落地（2026-09-30）**：`packages/animation/src/rules.ts` 的 `ANIM_RULES`
+      （**22 条**：预设 12 / 原语 4 / 约束 4 / 边界 2），与 111 条编译规则**同构**
+      （id/kind/title/description/why/when/example/verify/status/source/decision）
+      · 渲染器 `formatAnimRule` / `formatAnimCatalog`（AI 可独立消费一条）
+      · **conformance 对账**（`conformance.ts`）：预设真实存在于导出面 / 跨语言契约值一致 /
+        `verify` 可追溯（不许"大概测过"）——**对不上就不生成文档**
+      · 生成物 `docs/generated/anim-manual.md` + `pnpm check:anim-manual`（接 CI，漂移即红）
+      ★本轮实测价值：对账立刻抓出**包 README 的曲线名漂移**（写成 `snappy/customBezier`，
+        实现是 `easeIn/springApprox`）——"自描述没人对账 = 迟早骗人"。
 
 ### MA2 · 运行时核心 —— ◐ **主体已落地并真机验证（2026-09-30）**
 
@@ -560,6 +568,7 @@ iOS 同理：动 `transform` 是 GPU 加速，动 `frame` 触发布局重算。
 9. **不要把手势系统并进 Morpheus**，它是独立任务。
 10. **MA1–MA3 不等 RT0**；MA4 才应用 RT0 结论。
 11. 每个预设与声明项**必须配 conformance 断言 + AI 说明书**，与既有 111 条规则同构。
+    —— ✅ **已落地**（22 条 `ANIM_RULES` + `runConformance` + `pnpm check:anim-manual`，见 MA1 节）。
 12. 定名前**再做一次包名与商标检索**（§1.4）。
 13. ★**曲线求值与物理积分只在 Rust**：提交规格由内核**采样**下发，宿主只做"翻译成平台 API"，
     **宿主侧零曲线数学**（否则是"第 N 份手写副本"——本仓纪律 #22）。

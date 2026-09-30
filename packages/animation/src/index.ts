@@ -47,4 +47,9 @@ export {
   isScrollDriven,
 } from './compile'
 export { presets, route, list, element, easing, scroll } from './presets'
+// ★★MA1 收尾：AI 说明书（与 111 条编译规则同构）+ conformance 对账（说明书 ↔ 实现）
+export { ANIM_RULES, listAnimRules, getAnimRule, formatAnimRule, formatAnimCatalog } from './rules'
+export type { AnimRule, AnimRuleKind } from './rules'
+export { runConformance, conformanceSummary, resolvePreset, verifiableRefs } from './conformance'
+export type { ConformanceFinding } from './conformance'
 export type { RouteTransitionSpec, ListShiftSpec, ElementSpec, SharedElementSpec, ScrollSpec } from './presets'

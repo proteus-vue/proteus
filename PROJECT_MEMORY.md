@@ -48,7 +48,7 @@
   只有**可复制代码块**里的引用才真正有害。
 · 破坏性验证：恢复 `p-card` → 红并精确报 `03-fluid-grid.md:31`；还原 → 575 md 全过。
 
-## 当前状态速览（最近一次更新：**2026-09-30 · Android 逐节点平台动画落地（真机判据全绿）—— Morpheus 三端形态齐备**）★新会话以此为准
+## 当前状态速览（最近一次更新：**2026-09-30 · Morpheus AI 说明书 + conformance 落地（22 条，执行指令第 11 条闭环）**）★新会话以此为准
 
 ### ★★★2026-09-30 · 红线升格：禁止**任何**盲等（sleep/timeout 全禁）+ iOS 链路事件驱动 + I3 收官
 
@@ -92,6 +92,41 @@ kind=capability ⇒ 82）+ 黑名单条目 `hooks-81` + 两份新文档进正向
 破坏性验证过（注入 `81 个 Capability Hook` ⇒ 精确报行号）。
 **登记**：board-inventory「其他文档（非 plan）」表新增两行（含决策、依据、与既有计划关系）；
 roadmap v0.6 段追加两条决策接入注记 + v2.0+ 插件体系行补指针。
+
+**㉑ ★★★Morpheus AI 说明书 + conformance 落地（2026-09-30）—— 执行指令第 11 条闭环**
+
+用户「继续」⇒ 做 Morpheus §13 执行指令第 11 条（原文硬性要求）：
+「每个预设与声明项**必须配 conformance 断言 + AI 说明书**，与既有 111 条规则同构。」
+
+**一、AI 说明书（`packages/animation/src/rules.ts`，22 条）**
+四类：**预设 12**（route 4 / element 4 / scroll 3 / list 1）· **原语 4**（AnimDecl / AnimKind / Curve / keyframes）·
+**约束 4**（同属性替换 / 驱动源互斥 / 接管三类例外 / 平台资格）· **边界 2**（跨属性时间轴未做 / 不开放任意 JS 动画）。
+与 111 条编译规则同构（id/kind/title/description/why/when/example/verify/status/source/decision）+
+渲染器 `formatAnimRule` / `formatAnimCatalog`（AI 可独立消费一条）。
+
+**二、★★conformance：说明书 ↔ 实现/内核对账（`conformance.ts`）**
+三组断言：① preset 类声称的预设必须在 `presets` 导出面上**真实存在**；
+② **跨语言契约值**一致（弹簧 preset 180/26/1、AnimKind 0..4、Curve 0..4）；
+③ 每条 `verify` 必须**可追溯**（指向真实文件/符号）——不许"大概测过"。
+★boundary 类（planned/limitation）例外：本就没有可跑检查 ⇒ 允许指向文档（**如实设计不是放水**）。
+
+**三、★生成物 + 门禁**
+`docs/generated/anim-manual.md` + `pnpm check:anim-manual`（**接 CI**，纯静态零依赖）：
+先跑 conformance（对不上**不生成**文档，避免产出误导性内容）、再比对生成物一致（漂移即红）。
+★3 条破坏性验证：改生成物 ⇒ 红；改 `rules.ts` 的 preset 名 ⇒ conformance 红；退出码 0/1 逐一实测。
+
+**四、★★实测价值：对账立刻抓出两处真缺陷**
+1. **包 README 曲线名漂移**：写的 `easeOut/snappy/easeInOut/linear/customBezier`，
+   实现是 `linear/easeOut/easeIn/easeInOut/springApprox`（`snappy`/`customBezier` **根本不存在**）
+   ——"自描述没人对账 = 迟早骗人"。已按源码重新生成该行（不手抄）。
+2. **判据文案与事实自相矛盾**（破坏性验证当场读出）：preset 路径能解析但 obj 是 undefined 时，
+   详情仍打印"`presets.route.xxx` 存在"。⇒ 文案改为"路径可解析但**不是函数**（预设被删/改名）"。
+
+**五、门禁接线**：`check:gates-sync` 当场抓出"新增门禁未接线" ⇒ 接 CI（而非 LOCAL_ONLY，
+因为是纯静态检查）。**第二次**自证该门禁有效（首次是 `check:ios-export-wiring`）。
+
+**六、诚实边界**：conformance 保证"**已声称的**与实现一致"；它不覆盖"**未声称**的能力"
+（以及 boundary 类如实记录的未做项）——那是另一类问题（能力清单完整性），由 `check:capability-priority` 等管辖。
 
 **⑳ ★★★Android 逐节点平台动画落地（2026-09-30）—— 真机判据全绿 · ★据 android.jar 取证定形**
 

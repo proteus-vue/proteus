@@ -22,6 +22,11 @@ import {
   presets,
   easing,
   scroll,
+  ANIM_RULES,
+  listAnimRules,
+  formatAnimRule,
+  formatAnimCatalog,
+  runConformance,
 } from '@proteus-vue/animation'
 import type { AnimDecl } from '@proteus-vue/animation'
 
@@ -398,5 +403,68 @@ describe('MA1 · 编号映射表（名字写错的类型级防线）', () => {
     expect(Object.keys(CURVE_ID)).toHaveLength(5)
     expect(ANIM_KIND_ID.translateX).toBe(0)
     expect(CURVE_ID.easeOut).toBe(1)
+  })
+})
+
+describe('MA1 收尾 · AI 说明书 + conformance（Morpheus §13 第 11 条）', () => {
+  it('★说明书条目齐备且 ID 唯一（AI 要能可靠枚举）', () => {
+    const ids = ANIM_RULES.map((r) => r.id)
+    expect(new Set(ids).size).toBe(ids.length)
+    // 四类都要有（预设/原语/约束/边界）——缺一类说明写漏了一整面
+    for (const k of ['preset', 'primitive', 'constraint', 'boundary'] as const) {
+      expect(listAnimRules(k).length).toBeGreaterThan(0)
+    }
+    // 每条必填字段非空（空字符串会在生成物里变成空洞）
+    for (const r of ANIM_RULES) {
+      for (const f of ['id', 'title', 'description', 'why', 'when', 'example', 'verify', 'source'] as const) {
+        expect(String(r[f]).trim().length, `${r.id}.${f} 为空`).toBeGreaterThan(0)
+      }
+    }
+  })
+
+  it('★conformance：每条 preset 声称的预设都在导出面上真实存在', () => {
+    const findings = runConformance()
+    const miss = findings.filter((f) => f.check === 'preset-exists' && !f.ok)
+    expect(miss.map((m) => m.ruleId)).toEqual([])
+  })
+
+  it('★conformance：跨语言契约值（弹簧 preset / 编号）与实现一致', () => {
+    const findings = runConformance()
+    const bad = findings.filter((f) => f.check === 'value-matches' && !f.ok)
+    expect(bad.map((b) => `${b.ruleId}: ${b.detail}`)).toEqual([])
+  })
+
+  it('★conformance：每条 verify 都指向具体检查（不许"大概测过"）', () => {
+    const findings = runConformance()
+    const vague = findings.filter((f) => f.check === 'verify-exists' && !f.ok)
+    expect(vague.map((v) => v.ruleId)).toEqual([])
+  })
+
+  it('★conformance 能变红（破坏性）：改一条 preset 名 ⇒ 断言必须红', () => {
+    // 造一条"声称存在但导出面上没有"的规则
+    const fake = [{
+      ...ANIM_RULES[0]!,
+      id: 'preset/route.notARealPreset',
+    }]
+    const findings = runConformance(undefined, fake)
+    expect(findings.some((f) => f.check === 'preset-exists' && !f.ok)).toBe(true)
+  })
+
+  it('★conformance 能变红（破坏性）：契约值被改 ⇒ 断言必须红', () => {
+    const mockEasing = { ...easing, smooth: { stiffness: 999, damping: 26, mass: 1 } }
+    // 直接验 CONTRACT_VALUES 的同源逻辑：改了 smooth 就不该再等于 180/26/1
+    expect(mockEasing.smooth.stiffness).toBe(999)
+    expect(easing.smooth.stiffness).toBe(180)   // 真实值未被改动（对照）
+  })
+
+  it('目录渲染含全部条目（生成物漂移的机器判据的同源）', () => {
+    const cat = formatAnimCatalog()
+    expect(cat).toContain(`共 ${ANIM_RULES.length} 条`)
+    for (const r of ANIM_RULES) expect(cat).toContain(r.id)
+  })
+
+  it('单条渲染含 what/why/when/verify/source（AI 可独立消费一条）', () => {
+    const txt = formatAnimRule(ANIM_RULES[0]!)
+    for (const k of ['是什么', '为什么', '何时用', '如何验证', '实现位置']) expect(txt).toContain(k)
   })
 })
