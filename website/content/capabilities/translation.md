@@ -28,10 +28,10 @@ useTranslation(): CapResult<TranslationAPI>
 
 ## 方法
 
-| 方法 | 签名 | 说明 |
-|---|---|---|
-| [`onTrigger`](#ontrigger) | `onTrigger(cb: (res: { locale: string; type: string }) => void): () => void` | 订阅用户主动翻译。 |
-| [`onOff`](#onoff) | `onOff(cb: () => void): () => void` | 订阅用户取消翻译。 |
+| 方法 | 说明 |
+|---|---|
+| [`onTrigger`](#ontrigger) | 订阅用户主动翻译。 |
+| [`onOff`](#onoff) | 订阅用户取消翻译。 |
 
 ### `onTrigger`
 

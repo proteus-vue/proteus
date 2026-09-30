@@ -35,11 +35,11 @@ useWebSocket(url: string, protocols?: string[]): Promise<CapResult<WebSocketConn
 
 ## 方法
 
-| 方法 | 签名 | 说明 |
-|---|---|---|
-| [`send`](#send) | `send(data: string \| ArrayBuffer): void` | 发送消息（字符串或二进制） |
-| [`close`](#close) | `close(code?: number, reason?: string): void` | 关闭连接 |
-| [`on`](#on) | `on(event: 'open' \| 'message' \| 'close' \| 'error', handler: (payload?: unknown) => void): () => void` | 订阅事件（返回取消订阅函数）——open/message/close/error |
+| 方法 | 说明 |
+|---|---|
+| [`send`](#send) | 发送消息（字符串或二进制） |
+| [`close`](#close) | 关闭连接 |
+| [`on`](#on) | 订阅事件（返回取消订阅函数）——open/message/close/error |
 
 ### `send`
 

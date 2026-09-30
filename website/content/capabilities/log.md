@@ -22,11 +22,11 @@ useLog(): Logger
 
 ## 方法
 
-| 方法 | 签名 | 说明 |
-|---|---|---|
-| [`log`](#log) | `log(message: string, data?: unknown): Promise<CapResult<void>>` | 普通日志 |
-| [`warn`](#warn) | `warn(message: string, data?: unknown): Promise<CapResult<void>>` | 警告日志 |
-| [`error`](#error) | `error(message: string, data?: unknown): Promise<CapResult<void>>` | 错误日志（可触发上报） |
+| 方法 | 说明 |
+|---|---|
+| [`log`](#log) | 普通日志 |
+| [`warn`](#warn) | 警告日志 |
+| [`error`](#error) | 错误日志（可触发上报） |
 
 ### `log`
 

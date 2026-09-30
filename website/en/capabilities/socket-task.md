@@ -34,12 +34,12 @@ Param,Type,Required,Doc
 
 ## Methods
 
-| Method | Signature | Doc |
-|---|---|---|
-| [`send`](#send) | `send(data: string): Promise<CapResult<void>>` | — |
-| [`close`](#close) | `close(code?: number, reason?: string): Promise<CapResult<void>>` | — |
-| [`onMessage`](#onmessage) | `onMessage(cb: (data: string) => void): () => void` | — |
-| [`isConnected`](#isconnected) | `isConnected(): boolean` | — |
+| Method | Doc |
+|---|---|
+| [`send`](#send) | — |
+| [`close`](#close) | — |
+| [`onMessage`](#onmessage) | — |
+| [`isConnected`](#isconnected) | — |
 
 ### `send`
 

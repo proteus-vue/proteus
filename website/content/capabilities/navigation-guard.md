@@ -28,10 +28,10 @@ useNavigationGuard(): CapResult<NavigationGuardAPI>
 
 ## 方法
 
-| 方法 | 签名 | 说明 |
-|---|---|---|
-| [`enable`](#enable) | `enable(message: string): Promise<CapResult<void>>` | 开启卸载前确认弹窗。 |
-| [`disable`](#disable) | `disable(): Promise<CapResult<void>>` | 关闭卸载前确认弹窗 |
+| 方法 | 说明 |
+|---|---|
+| [`enable`](#enable) | 开启卸载前确认弹窗。 |
+| [`disable`](#disable) | 关闭卸载前确认弹窗 |
 
 ### `enable`
 

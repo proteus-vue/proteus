@@ -28,14 +28,14 @@ useNFC(): Promise<CapResult<NFCAPI>>
 
 ## Methods
 
-| Method | Signature | Doc |
-|---|---|---|
-| [`startHCE`](#starthce) | `startHCE(aidList: string[]): Promise<CapResult<void>>` | — |
-| [`stopHCE`](#stophce) | `stopHCE(): Promise<CapResult<void>>` | — |
-| [`sendHCEMessage`](#sendhcemessage) | `sendHCEMessage(data: ArrayBuffer): Promise<CapResult<void>>` | — |
-| [`onHCEMessage`](#onhcemessage) | `onHCEMessage(cb: (message: { messageType: number; data?: ArrayBuffer }) => void): () => void` | — |
-| [`onHCEStateChange`](#onhcestatechange) | `onHCEStateChange(cb: (available: boolean) => void): () => void` | — |
-| [`getAdapter`](#getadapter) | `getAdapter(): NfcAdapter` | — |
+| Method | Doc |
+|---|---|
+| [`startHCE`](#starthce) | — |
+| [`stopHCE`](#stophce) | — |
+| [`sendHCEMessage`](#sendhcemessage) | — |
+| [`onHCEMessage`](#onhcemessage) | — |
+| [`onHCEStateChange`](#onhcestatechange) | — |
+| [`getAdapter`](#getadapter) | — |
 
 ### `startHCE`
 

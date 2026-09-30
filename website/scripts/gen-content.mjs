@@ -8,7 +8,7 @@
 import fs from 'node:fs'
 import path from 'node:path'
 import { fileURLToPath, pathToFileURL } from 'node:url'
-import { COMP_EN, DOMAIN_EN, MP_STATUS_EN, ENDS_EN, END_NOTE_EN, COMP_LEGEND_EN, SHARED_EN, OVERVIEW_EN, CAP_SHARED_EN, CAP_USAGE_EN, CAP_ARGS_EN, CAP_DATA_HINTS_EN, CAP_METHODS_EN, CAP_EN, CAP_CAT_EN, CAP_OVERVIEW_EN } from './gen-content-en.mjs'
+import { COMP_EN, DOMAIN_EN, MP_STATUS_EN, ENDS_EN, END_NOTE_EN, COMP_LEGEND_EN, SHARED_EN, OVERVIEW_EN, CAP_SHARED_EN, CAP_USAGE_EN, CAP_ARGS_EN, CAP_DATA_HINTS_EN, CAP_METHODS_EN, CAP_EN, CAP_CAT_EN, CAP_OVERVIEW_EN, LIFECYCLE_EVENT_EN, LIFECYCLE_EVENT_NOTE_EN, LIFECYCLE_SRC_EN } from './gen-content-en.mjs'
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..')
 // ★组件库已拆包（2026-09-14）：@proteus-vue/components → packages/components（原仓库根 src/components）
@@ -57,6 +57,97 @@ async function loadEnds() {
 }
 
 const STATUS_MARK = { '✅ 已落地': '✅', '🟡 部分落地': '🟡', '📋 规划已入库': '📋', '⬜ 未开始': '⬜' }
+
+// ══════════════════════════════════════════════════════════════════
+// ★★生命周期事件 meta（用户反馈三点的数据源：说明缺失 / 无方法级端支持）
+//   SSOT = `packages/api/src/capability-app.ts` 的 PAGE_EVENT_META / APP_EVENT_META
+//   （动态 import——与 loadEnds 同款；改 SSOT 文档即变，无需在生成器里再写一份）
+// ══════════════════════════════════════════════════════════════════
+async function loadLifecycleMeta() {
+  try {
+    const mod = await import(pathToFileURL(path.join(ROOT, 'packages', 'api', 'src', 'capability-app.ts')).href)
+    return { page: mod.PAGE_EVENT_META ?? {}, app: mod.APP_EVENT_META ?? {}, topics: mod.PLATFORM_TOPICS ?? {} }
+  } catch {
+    return { page: {}, app: {}, topics: {} } // read failure (early build) → empty tables, docs fall back to JSDoc
+  }
+}
+
+/**
+ * 平台专栏渲染（用户反馈第 4 点：应用与生命周期缺平台特有专栏）
+ *
+ * ★设计：专栏内容是**交叉引用**（话题 → 该用哪个能力），不是另写一套说明——
+ *   避免 C23/C25 那样的重复（同一语义一处实现）。链接指向能力页（权威说明在那里）。
+ */
+function renderPlatformTopics(lines, topics, hookToSlug, lang) {
+  if (!topics || !Object.keys(topics).length) return
+  const LABEL = {
+    zh: { h: '## 平台专栏', sub: { mp: '### 小程序（MP）', web: '### Web', app: '### App（iOS / Android / 鸿蒙）' }, title: (t) => t.title, desc: (t) => t.desc, hooks: '相关能力' },
+    en: { h: '## Platform notes', sub: { mp: '### Mini Program (MP)', web: '### Web', app: '### App (iOS / Android / Harmony)' }, title: (t) => t.titleEn, desc: (t) => t.descEn, hooks: 'Related capabilities' },
+  }[lang]
+  lines.push(LABEL.h)
+  lines.push('')
+  for (const end of ['mp', 'web', 'app']) {
+    const list = topics[end]
+    if (!list || !list.length) continue
+    lines.push(LABEL.sub[end])
+    lines.push('')
+    for (const t of list) {
+      const links = t.hooks
+        .map((h) => {
+          const slug = hookToSlug?.[h]
+          return slug ? `[\`${h}\`](/capabilities/${slug})` : `\`${h}\``
+        })
+        .join(' / ')
+      lines.push(`- **${LABEL.title(t)}** — ${LABEL.desc(t)}${links ? ` · ${LABEL.hooks}: ${links}` : ''}`)
+    }
+    lines.push('')
+  }
+}
+
+/** 方法名 → kebab 事件名（与 SSOT 表的 key 对齐）：onShow→show / setShareAppMessageProvider→share-app-message */
+function methodToEvent(methodName) {
+  // 特例：方法名与事件名不同形（历史命名）
+  const SPECIAL = { onWindowResize: 'resize', onNetworkStatusChange: 'network-change' }
+  if (SPECIAL[methodName]) return SPECIAL[methodName]
+  const provider = methodName.match(/^set(.+)Provider$/)
+  let n = provider ? provider[1] : methodName.replace(/^on/, '')
+  return n.replace(/([a-z0-9])([A-Z])/g, '$1-$2').toLowerCase()
+}
+
+/** 取某方法的事件 meta（按句柄类型选表；无则 null） */
+function eventMetaOf(handleT, methodName, meta) {
+  if (!meta) return null
+  const table = handleT === 'PageLifecycle' ? meta.page : handleT === 'AppLifecycle' ? meta.app : meta.app
+  return table[methodToEvent(methodName)] ?? null
+}
+
+/** 端支持单元格（紧凑图标：MP/Web/App 有来源即 ✅，无即 —） */
+function endSupportCell(m) {
+  if (!m) return '—'
+  return `MP ${m.mp ? '✅' : '—'} · Web ${m.web ? '✅' : '—'} · App ${m.app ? '✅' : '—'}`
+}
+
+/** EN 源向量（优先 EN 译本，缺 key 回退 zh —— 诚实） */
+function srcEnOf(handleT, methodName, m) {
+  const sheet = handleT === 'PageLifecycle' ? (LIFECYCLE_SRC_EN.page ?? {}) : (LIFECYCLE_SRC_EN.app ?? {})
+  const d = sheet[methodToEvent(methodName)]
+  return { mp: d?.mp ?? m.mp, web: d?.web ?? m.web, app: d?.app ?? m.app }
+}
+
+/** Per-target support cell (EN) */
+function endSupportCellEn(m) {
+  if (!m) return '—'
+  return `MP ${m.mp ? '✅' : '—'} · Web ${m.web ? '✅' : '—'} · App ${m.app ? '✅' : '—'}`
+}
+
+/** 端支持详情行（各端真实来源；无来源的端显式标"无此事件"——诚实边界） */
+function endSupportLine(m, labels) {
+  const parts = []
+  parts.push(m.mp ? `${labels.mp} \`${m.mp}\`` : `${labels.mp} —（${labels.none}）`)
+  parts.push(m.web ? `${labels.web} \`${m.web}\`` : `${labels.web} —（${labels.none}）`)
+  parts.push(m.app ? `${labels.app} \`${m.app}\`` : `${labels.app} —（${labels.none}）`)
+  return parts.join(' · ')
+}
 
 /**
  * ★★App 宿主桥（`packages/api/src/capability-app.ts`）提供的方法集——**从源码推导**，不硬编码。
@@ -253,12 +344,19 @@ function parseSigArgs(argsStr) {
   if (!argsStr || !argsStr.trim()) return []
   const out = []
   // 顶层逗号切分（跳过尖括号/圆括号/方括号/花括号内）
+  // ★★`=>` 修复（2026-09-30）：箭头函数的 `>` 此前被当成**尖括号闭合** ⇒ 深度被打成负数
+  //   ⇒ 之后的 `<`（泛型开始）只回到 0 ⇒ 泛型内的逗号被当作顶层分隔 ⇒ 参数表被切坏
+  //   （实测形态：`fn: () => Record<string, unknown>` 被切成两行 `Record<string` / `unknown>`）。
+  //   修法：`>` 前一个字符是 `=`（即箭头 `=>`）时**不动深度**。
   let depth = 0
   let cur = ''
+  let prev = ''
   for (const ch of argsStr) {
     if ('<([{'.includes(ch)) depth++
+    else if (ch === '>' && prev === '=') { /* 箭头 => 的 > —— 不计深度 */ }
     else if ('>)]}'.includes(ch)) depth--
     if (ch === ',' && depth === 0) { out.push(cur.trim()); cur = '' } else cur += ch
+    prev = ch
   }
   if (cur.trim()) out.push(cur.trim())
   const params = []
@@ -1712,13 +1810,45 @@ function genCapabilities(ir, ends) {
       allMethods.push(...shape.handleIface.methods)
     }
     // ## 方法（h2）——汇总表 + 每方法 h3 详解
+    // ★★2026-09-30 用户反馈两点已落实：
+    //   ①「说明放签名后面有点怪」+「有的有说明有的没有」⇒ 表改为 `方法 | 说明`（**签名移入 h3 详情**，
+    //      那里本来就有完整签名块）；说明**优先取事件 meta**（SSOT）→ 全部方法都有说明，不再出现 `—`。
+    //   ②「没有单独的兼容进度说明（方法级）」⇒ 生命周期句柄的表**加 End support 列**
+    //      （MP/Web/App 三端是否触发——数据来自 meta 的三端来源字段），并有表下逐端详情。
     if (allMethods.length) {
       lines.push('## 方法')
       lines.push('')
-      lines.push('| 方法 | 签名 | 说明 |')
-      lines.push('|---|---|---|')
-      for (const mm of allMethods) lines.push(`| [\`${mm.name}\`](#${mm.name.toLowerCase()}) | \`${escMd(mm.sig)}\` | ${mm.doc ? mm.doc.replace(/^C\d+\s+/, '') : '—'} |`)
+      const isLifecycleHandle = handleT === 'PageLifecycle' || handleT === 'AppLifecycle'
+      const docOf = (mm) => {
+        const m = isLifecycleHandle ? eventMetaOf(handleT, mm.name, lifecycleMeta) : null
+        return (m?.doc || mm.doc || '').replace(/^C\d+\s+/, '')
+      }
+      if (isLifecycleHandle) {
+        lines.push('| 方法 | 说明 | 端支持（MP / Web / App） |')
+        lines.push('|---|---|---|')
+        for (const mm of allMethods) {
+          const m = eventMetaOf(handleT, mm.name, lifecycleMeta)
+          lines.push(`| [\`${mm.name}\`](#${mm.name.toLowerCase()}) | ${docOf(mm) || '—'} | ${endSupportCell(m)} |`)
+        }
+      } else {
+        lines.push('| 方法 | 说明 |')
+        lines.push('|---|---|')
+        for (const mm of allMethods) lines.push(`| [\`${mm.name}\`](#${mm.name.toLowerCase()}) | ${docOf(mm) || '—'} |`)
+      }
       lines.push('')
+      // 方法级兼容进度：逐事件列出各端真实来源（表列只给图标，这里给"到底走哪条路"）
+      if (isLifecycleHandle) {
+        const withMeta = allMethods.map((mm) => ({ mm, m: eventMetaOf(handleT, mm.name, lifecycleMeta) })).filter((x) => x.m)
+        if (withMeta.length) {
+          lines.push('### 方法级端支持（各端真实触发源）')
+          lines.push('')
+          for (const { mm, m } of withMeta) {
+            const none = '无此事件'
+            lines.push(`- \`${mm.name}\`：MP ${m.mp ? `\`${m.mp}\`` : `—（${none}）`} · Web ${m.web ? `\`${m.web}\`` : `—（${none}）`} · App ${m.app ? `\`${m.app}\`` : `—（${none}）`}${m.note ? ` — ${m.note}` : ''}`)
+          }
+          lines.push('')
+        }
+      }
       renderMethodDetails(lines, allMethods, { hLevel: '###', paramCols: ['参数', '类型', '必填', '说明', '否', '是'], returnsLabel: '返回值', descLabel: '说明' })
     }
     // ## 属性（h2）
@@ -1895,6 +2025,12 @@ function genCapabilities(ir, ends) {
     }
     lines.push('```')
     lines.push('')
+    // ★★平台特有专栏（用户反馈第 4 点）：仅在生命周期能力页渲染（话题表按端分组）
+    //   ★设计：内容是**交叉引用**（话题 → 该用哪个能力），不另写一套说明——避免 C23/C25 那样的重复
+    // ★含 useBackground：它承载了从 C23 去重移出的 5 个事件，同样需要平台专栏
+    if (hook === 'useAppLifecycle' || hook === 'usePageLifecycle' || hook === 'useBackground') {
+      renderPlatformTopics(lines, lifecycleMeta.topics, HOOK_TO_SLUG, 'zh')
+    }
     lines.push('<!-- generated by website/scripts/gen-content.mjs · 源码 SSOT：packages/component-ir/src/primitives.ts + packages/api/src/capability.ts -->')
     writeDoc(path.join(OUT_CAP, `${c.semantic.replace('capability.', '')}.md`), lines.join('\n'))
     ok++
@@ -2227,15 +2363,46 @@ async function genCapabilitiesEn(ir, ends) {
     if (allMethodsEn.length) {
       lines.push(CAP_SHARED_EN.hMethods)
       lines.push('')
-      lines.push(CAP_SHARED_EN.methodCols)
-      lines.push('|---|---|---|')
-      for (const mm of allMethodsEn) {
-        const doc = (CAP_METHODS_EN[shape.dataElemT] && CAP_METHODS_EN[shape.dataElemT][mm.name]) || (handleT && CAP_METHODS_EN[handleT] && CAP_METHODS_EN[handleT][mm.name]) || '—'
-        lines.push(`| [\`${mm.name}\`](#${mm.name.toLowerCase()}) | \`${esc(mm.sig)}\` | ${esc(doc)} |`)
+      const isLifecycleHandleEn = handleT === 'PageLifecycle' || handleT === 'AppLifecycle'
+      const sheet = handleT === 'PageLifecycle' ? (LIFECYCLE_EVENT_EN.page ?? {}) : (LIFECYCLE_EVENT_EN.app ?? {})
+      const docOfEn = (mm) => {
+        if (isLifecycleHandleEn) {
+          const d = sheet[methodToEvent(mm.name)]
+          if (d) return d
+        }
+        return (CAP_METHODS_EN[shape.dataElemT] && CAP_METHODS_EN[shape.dataElemT][mm.name]) || (handleT && CAP_METHODS_EN[handleT] && CAP_METHODS_EN[handleT][mm.name]) || ''
+      }
+      // 2026-09-30 feedback: doc-after-signature felt odd; some methods had no doc.
+      // Table is now `Method | Doc` (signature lives in the h3 detail) and every method gets a doc.
+      // Lifecycle handles add an "End support" column (per-method target support, same meta SSOT).
+      if (isLifecycleHandleEn) {
+        lines.push(CAP_SHARED_EN.methodColsWithEnds)
+        lines.push(CAP_SHARED_EN.methodColsSep3)
+        for (const mm of allMethodsEn) {
+          const m = eventMetaOf(handleT, mm.name, lifecycleMeta)
+          lines.push(`| [\`${mm.name}\`](#${mm.name.toLowerCase()}) | ${esc(docOfEn(mm))} | ${endSupportCellEn(m)} |`)
+        }
+      } else {
+        lines.push(CAP_SHARED_EN.methodCols)
+        lines.push(CAP_SHARED_EN.methodColsSep2)
+        for (const mm of allMethodsEn) lines.push(`| [\`${mm.name}\`](#${mm.name.toLowerCase()}) | ${esc(docOfEn(mm) || '—')} |`)
       }
       lines.push('')
+      if (isLifecycleHandleEn) {
+        lines.push(`### ${CAP_SHARED_EN.hEndSupport}`)
+        lines.push('')
+        for (const mm of allMethodsEn) {
+          const m = eventMetaOf(handleT, mm.name, lifecycleMeta)
+          if (!m) continue
+          const none = CAP_SHARED_EN.endNone
+          const noteEn = LIFECYCLE_EVENT_NOTE_EN[methodToEvent(mm.name)]
+          const src = srcEnOf(handleT, mm.name, m)
+          lines.push(`- \`${mm.name}\`: MP ${src.mp ? `\`${src.mp}\`` : `— (${none})`} · Web ${src.web ? `\`${src.web}\`` : `— (${none})`} · App ${src.app ? `\`${src.app}\`` : `— (${none})`}${noteEn ? ` — ${noteEn}` : ''}`)
+        }
+        lines.push('')
+      }
       for (const mm of allMethodsEn) {
-        const doc = (CAP_METHODS_EN[shape.dataElemT] && CAP_METHODS_EN[shape.dataElemT][mm.name]) || (handleT && CAP_METHODS_EN[handleT] && CAP_METHODS_EN[handleT][mm.name]) || ''
+        const doc = docOfEn(mm)
         lines.push(`### \`${mm.name}\``)
         lines.push('')
         lines.push('```ts')
@@ -2483,6 +2650,10 @@ async function genCapabilitiesEn(ir, ends) {
     }
     lines.push('```')
     lines.push('')
+    // Platform notes (user feedback #4) — lifecycle capability pages only; content is cross-references
+    if (hook === 'useAppLifecycle' || hook === 'usePageLifecycle' || hook === 'useBackground') {
+      renderPlatformTopics(lines, lifecycleMeta.topics, HOOK_TO_SLUG, 'en')
+    }
     lines.push('<!-- generated by website/scripts/gen-content.mjs (en overlay) · source SSOT: packages/component-ir/src/primitives.ts + packages/api/src/capability.ts -->')
     fs.mkdirSync(OUT, { recursive: true })
     writeDoc(path.join(OUT, `${slug}.md`), lines.join('\n'))
@@ -2525,7 +2696,21 @@ async function genCapabilitiesEn(ir, ends) {
 
 // —— main ——
 const ir = await loadIr()
+const capContextForSlugs = capContext(ir)
 const ends = await loadEnds()
+const lifecycleMeta = await loadLifecycleMeta()
+/** hook 名 → 能力页 slug（平台专栏的交叉引用用；如 useKeyboard → keyboard） */
+const HOOK_TO_SLUG = (() => {
+  const m = {}
+  for (const c of capContextForSlugs.caps) {
+    const slug = c.semantic.replace('capability.', '')
+    const hookM = String(c.api ?? '').match(/^(use[A-Za-z0-9]+)/)
+    if (hookM) m[hookM[1]] = slug
+    // 别名（同一能力多 hook——与 CAP_EXTRA_HOOKS 同源）
+    for (const extra of (CAP_EXTRA_HOOKS[c.semantic] ?? [])) m[extra] = slug
+  }
+  return m
+})()
 const nComp = genComponents(ir, ends)
 const nCap = genCapabilities(ir, ends)
 const nCompEn = await genComponentsEn(ir, ends)

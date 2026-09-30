@@ -28,9 +28,9 @@ useDeviceCapability(): CapResult<DeviceCapabilityAPI>
 
 ## Methods
 
-| Method | Signature | Doc |
-|---|---|---|
-| [`supportsHevc`](#supportshevc) | `supportsHevc(): Promise<CapResult<boolean>>` | — |
+| Method | Doc |
+|---|---|
+| [`supportsHevc`](#supportshevc) | — |
 
 ### `supportsHevc`
 

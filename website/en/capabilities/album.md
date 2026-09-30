@@ -28,12 +28,12 @@ useAlbum(): CapResult<AlbumAPI>
 
 ## Methods
 
-| Method | Signature | Doc |
-|---|---|---|
-| [`pick`](#pick) | `pick(options?: AlbumPickOptions): Promise<CapResult<MediaFile[]>>` | — |
-| [`saveImage`](#saveimage) | `saveImage(filePath: string): Promise<CapResult<void>>` | — |
-| [`saveVideo`](#savevideo) | `saveVideo(filePath: string): Promise<CapResult<void>>` | — |
-| [`preview`](#preview) | `preview(urls: string[], current?: string): Promise<CapResult<void>>` | — |
+| Method | Doc |
+|---|---|
+| [`pick`](#pick) | — |
+| [`saveImage`](#saveimage) | — |
+| [`saveVideo`](#savevideo) | — |
+| [`preview`](#preview) | — |
 
 ### `pick`
 

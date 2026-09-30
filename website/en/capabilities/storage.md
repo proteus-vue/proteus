@@ -22,17 +22,17 @@ Returns `CompatStorage` (synchronous handle/state object).
 
 ## Methods
 
-| Method | Signature | Doc |
-|---|---|---|
-| [`set`](#set) | `set(key: string, value: unknown): void` | — |
-| [`remove`](#remove) | `remove(key: string): void` | — |
-| [`clear`](#clear) | `clear(): void` | — |
-| [`setAsync`](#setasync) | `setAsync(key: string, value: unknown): Promise<CapResult<void>>` | — |
-| [`removeAsync`](#removeasync) | `removeAsync(key: string): Promise<CapResult<void>>` | — |
-| [`clearAsync`](#clearasync) | `clearAsync(): Promise<CapResult<void>>` | — |
-| [`info`](#info) | `info(): Promise<CapResult<{ keys: string[]; currentSize: number; limitSize: number }>>` | — |
-| [`batchGet`](#batchget) | `batchGet(keys: string[]): Promise<CapResult<Array<{ key: string; value: unknown }>>>` | — |
-| [`batchSet`](#batchset) | `batchSet(kvList: Array<{ key: string; value: unknown }>): Promise<CapResult<void>>` | — |
+| Method | Doc |
+|---|---|
+| [`set`](#set) | — |
+| [`remove`](#remove) | — |
+| [`clear`](#clear) | — |
+| [`setAsync`](#setasync) | — |
+| [`removeAsync`](#removeasync) | — |
+| [`clearAsync`](#clearasync) | — |
+| [`info`](#info) | — |
+| [`batchGet`](#batchget) | — |
+| [`batchSet`](#batchset) | — |
 
 ### `set`
 

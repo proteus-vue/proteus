@@ -34,17 +34,17 @@ useVideo(id: string): CapResult<VideoController>
 
 ## 方法
 
-| 方法 | 签名 | 说明 |
-|---|---|---|
-| [`play`](#play) | `play(): Promise<CapResult<void>>` | 播放 |
-| [`pause`](#pause) | `pause(): Promise<CapResult<void>>` | 暂停 |
-| [`stop`](#stop) | `stop(): Promise<CapResult<void>>` | 停止（回到起点） |
-| [`seek`](#seek) | `seek(position: number): Promise<CapResult<void>>` | 跳转到指定位置。 |
-| [`playbackRate`](#playbackrate) | `playbackRate(rate: number): Promise<CapResult<void>>` | 设置播放倍速。 |
-| [`requestFullScreen`](#requestfullscreen) | `requestFullScreen(options?: VideoFullScreenOptions): Promise<CapResult<void>>` | 进入全屏 |
-| [`exitFullScreen`](#exitfullscreen) | `exitFullScreen(): Promise<CapResult<void>>` | 退出全屏 |
-| [`sendDanmu`](#senddanmu) | `sendDanmu(danmu: { text: string; color?: string }): Promise<CapResult<void>>` | 发送弹幕 |
-| [`on`](#on) | `on(event: 'play' \| 'pause' \| 'ended' \| 'timeupdate' \| 'error' \| 'fullscreenchange', cb: (payload: unknown) => void): () => void` | 订阅视频事件（play / pause / ended / timeupdate / error / fullscreenchange）。 |
+| 方法 | 说明 |
+|---|---|
+| [`play`](#play) | 播放 |
+| [`pause`](#pause) | 暂停 |
+| [`stop`](#stop) | 停止（回到起点） |
+| [`seek`](#seek) | 跳转到指定位置。 |
+| [`playbackRate`](#playbackrate) | 设置播放倍速。 |
+| [`requestFullScreen`](#requestfullscreen) | 进入全屏 |
+| [`exitFullScreen`](#exitfullscreen) | 退出全屏 |
+| [`sendDanmu`](#senddanmu) | 发送弹幕 |
+| [`on`](#on) | 订阅视频事件（play / pause / ended / timeupdate / error / fullscreenchange）。 |
 
 ### `play`
 

@@ -28,9 +28,9 @@ useWebAssembly(): CapResult<WebAssemblyAPI>
 
 ## 方法
 
-| 方法 | 签名 | 说明 |
-|---|---|---|
-| [`instantiate`](#instantiate) | `instantiate(source: WasmSource, options?: WasmInstantiateOptions): Promise<CapResult<WasmModuleHandle>>` | 实例化 WASM 模块（**跨端归一的唯一入口**）。 不可用平台 / 来源形态不匹配 → `Err('webassembly.unsupported')`（不抛异常）。 |
+| 方法 | 说明 |
+|---|---|
+| [`instantiate`](#instantiate) | 实例化 WASM 模块（**跨端归一的唯一入口**）。 不可用平台 / 来源形态不匹配 → `Err('webassembly.unsupported')`（不抛异常）。 |
 
 ### `instantiate`
 

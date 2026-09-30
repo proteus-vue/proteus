@@ -28,11 +28,11 @@ useWifi(): CapResult<WifiAPI>
 
 ## Methods
 
-| Method | Signature | Doc |
-|---|---|---|
-| [`getConnected`](#getconnected) | `getConnected(): Promise<CapResult<WifiInfo>>` | — |
-| [`list`](#list) | `list(): Promise<CapResult<WifiInfo[]>>` | — |
-| [`connect`](#connect) | `connect(SSID: string, password?: string): Promise<CapResult<void>>` | — |
+| Method | Doc |
+|---|---|
+| [`getConnected`](#getconnected) | — |
+| [`list`](#list) | — |
+| [`connect`](#connect) | — |
 
 ### `getConnected`
 

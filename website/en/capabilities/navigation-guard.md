@@ -28,10 +28,10 @@ useNavigationGuard(): CapResult<NavigationGuardAPI>
 
 ## Methods
 
-| Method | Signature | Doc |
-|---|---|---|
-| [`enable`](#enable) | `enable(message: string): Promise<CapResult<void>>` | — |
-| [`disable`](#disable) | `disable(): Promise<CapResult<void>>` | — |
+| Method | Doc |
+|---|---|
+| [`enable`](#enable) | — |
+| [`disable`](#disable) | — |
 
 ### `enable`
 

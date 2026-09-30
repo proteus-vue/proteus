@@ -28,12 +28,12 @@ usePreload(): CapResult<PreloadAPI>
 
 ## 方法
 
-| 方法 | 签名 | 说明 |
-|---|---|---|
-| [`assets`](#assets) | `assets(data: PreloadAsset[]): Promise<CapResult<void>>` | 预加载资源（字体 / 图片）。 |
-| [`skylineView`](#skylineview) | `skylineView(): Promise<CapResult<void>>` | 预加载 Skyline 视图（配合 Skyline 渲染器的页面预载） |
-| [`webview`](#webview) | `webview(): Promise<CapResult<void>>` | 预加载 WebView 页面 |
-| [`subpackage`](#subpackage) | `subpackage(packageType: string): Promise<CapResult<PreDownloadTask>>` | 预下载分包（目前仅 workers 分包）。 |
+| 方法 | 说明 |
+|---|---|
+| [`assets`](#assets) | 预加载资源（字体 / 图片）。 |
+| [`skylineView`](#skylineview) | 预加载 Skyline 视图（配合 Skyline 渲染器的页面预载） |
+| [`webview`](#webview) | 预加载 WebView 页面 |
+| [`subpackage`](#subpackage) | 预下载分包（目前仅 workers 分包）。 |
 
 ### `assets`
 

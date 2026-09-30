@@ -28,12 +28,12 @@ useLocalService(): CapResult<LocalServiceAPI>
 
 ## 方法
 
-| 方法 | 签名 | 说明 |
-|---|---|---|
-| [`onFound`](#onfound) | `onFound(cb: (res: LocalServiceInfo) => void): () => void` | 订阅发现新服务。 |
-| [`onLost`](#onlost) | `onLost(cb: (res: LocalServiceInfo) => void): () => void` | 订阅服务离开。 |
-| [`onResolveFail`](#onresolvefail) | `onResolveFail(cb: (res: LocalServiceInfo) => void): () => void` | 订阅服务解析失败。 |
-| [`onDiscoveryStop`](#ondiscoverystop) | `onDiscoveryStop(cb: () => void): () => void` | 订阅搜索停止。 |
+| 方法 | 说明 |
+|---|---|
+| [`onFound`](#onfound) | 订阅发现新服务。 |
+| [`onLost`](#onlost) | 订阅服务离开。 |
+| [`onResolveFail`](#onresolvefail) | 订阅服务解析失败。 |
+| [`onDiscoveryStop`](#ondiscoverystop) | 订阅搜索停止。 |
 
 ### `onFound`
 

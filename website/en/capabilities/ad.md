@@ -28,11 +28,11 @@ useAd(): CapResult<AdAPI>
 
 ## Methods
 
-| Method | Signature | Doc |
-|---|---|---|
-| [`rewardedVideo`](#rewardedvideo) | `rewardedVideo(adUnitId: string): RewardedVideoAdHandle` | — |
-| [`interstitial`](#interstitial) | `interstitial(adUnitId: string): InterstitialAdHandle` | — |
-| [`banner`](#banner) | `banner(options: { adUnitId: string; style: BannerAdStyle }): BannerAdHandle` | — |
+| Method | Doc |
+|---|---|
+| [`rewardedVideo`](#rewardedvideo) | — |
+| [`interstitial`](#interstitial) | — |
+| [`banner`](#banner) | — |
 
 ### `rewardedVideo`
 

@@ -22,11 +22,11 @@ Returns `Logger` (synchronous handle/state object).
 
 ## Methods
 
-| Method | Signature | Doc |
-|---|---|---|
-| [`log`](#log) | `log(message: string, data?: unknown): Promise<CapResult<void>>` | — |
-| [`warn`](#warn) | `warn(message: string, data?: unknown): Promise<CapResult<void>>` | — |
-| [`error`](#error) | `error(message: string, data?: unknown): Promise<CapResult<void>>` | — |
+| Method | Doc |
+|---|---|
+| [`log`](#log) | — |
+| [`warn`](#warn) | — |
+| [`error`](#error) | — |
 
 ### `log`
 

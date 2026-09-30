@@ -28,10 +28,10 @@ useImageEdit(): CapResult<ImageEditAPI>
 
 ## Methods
 
-| Method | Signature | Doc |
-|---|---|---|
-| [`crop`](#crop) | `crop(src: string, cropScale: '16:9' \| '9:16' \| '4:3' \| '3:4' \| '5:4' \| '4:5' \| '1:1'): Promise<CapResult<string>>` | — |
-| [`edit`](#edit) | `edit(src: string): Promise<CapResult<string>>` | — |
+| Method | Doc |
+|---|---|
+| [`crop`](#crop) | — |
+| [`edit`](#edit) | — |
 
 ### `crop`
 

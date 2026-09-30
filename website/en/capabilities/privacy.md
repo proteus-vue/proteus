@@ -28,12 +28,12 @@ usePrivacy(): CapResult<PrivacyAPI>
 
 ## Methods
 
-| Method | Signature | Doc |
-|---|---|---|
-| [`getSetting`](#getsetting) | `getSetting(): Promise<CapResult<PrivacySetting>>` | — |
-| [`openContract`](#opencontract) | `openContract(): Promise<CapResult<void>>` | — |
-| [`requireAuthorize`](#requireauthorize) | `requireAuthorize(): Promise<CapResult<boolean>>` | — |
-| [`onNeedAuthorization`](#onneedauthorization) | `onNeedAuthorization(cb: (res: { privacyContractName: string }) => void): () => void` | — |
+| Method | Doc |
+|---|---|
+| [`getSetting`](#getsetting) | — |
+| [`openContract`](#opencontract) | — |
+| [`requireAuthorize`](#requireauthorize) | — |
+| [`onNeedAuthorization`](#onneedauthorization) | — |
 
 ### `getSetting`
 

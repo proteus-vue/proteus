@@ -28,10 +28,10 @@ useIdle(): CapResult<IdleAPI>
 
 ## 方法
 
-| 方法 | 签名 | 说明 |
-|---|---|---|
-| [`request`](#request) | `request(cb: (deadline: IdleDeadline) => void, timeout?: number): Promise<CapResult<number>>` | 在浏览器/宿主空闲时执行回调。 |
-| [`cancel`](#cancel) | `cancel(id: number): Promise<CapResult<void>>` | 取消待执行的空闲回调。 |
+| 方法 | 说明 |
+|---|---|
+| [`request`](#request) | 在浏览器/宿主空闲时执行回调。 |
+| [`cancel`](#cancel) | 取消待执行的空闲回调。 |
 
 ### `request`
 
@@ -43,7 +43,8 @@ request(cb: (deadline: IdleDeadline) => void, timeout?: number): Promise<CapResu
 
 | 参数 | 类型 | 必填 | 说明 |
 |---|---|---|---|
-| `cb` | `(deadline: IdleDeadline) => void, timeout?: number` | 否 | 空闲回调（携带 deadline） |
+| `cb` | `(deadline: IdleDeadline) => void` | 是 | 空闲回调（携带 deadline） |
+| `timeout` | `number` | 否 | 超时（ms，到时即执行） |
 
 **返回值**：`Promise<CapResult<number>>`——句柄 id（可传入 cancel）
 

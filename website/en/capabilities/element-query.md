@@ -34,13 +34,13 @@ Param,Type,Required,Doc
 
 ## Methods
 
-| Method | Signature | Doc |
-|---|---|---|
-| [`boundingClientRect`](#boundingclientrect) | `boundingClientRect(selector?: string): Promise<CapResult<ElementRect>>` | — |
-| [`scrollOffset`](#scrolloffset) | `scrollOffset(selector?: string): Promise<CapResult<ElementScrollOffset>>` | — |
-| [`fields`](#fields) | `fields(options: ElementFieldsOptions, selector?: string): Promise<CapResult<ElementFieldsResult>>` | — |
-| [`size`](#size) | `size(selector?: string): Promise<CapResult<{ width: number; height: number }>>` | — |
-| [`batch`](#batch) | `batch(selectors: string[]): Promise<CapResult<Array<ElementRect \| null>>>` | — |
+| Method | Doc |
+|---|---|
+| [`boundingClientRect`](#boundingclientrect) | — |
+| [`scrollOffset`](#scrolloffset) | — |
+| [`fields`](#fields) | — |
+| [`size`](#size) | — |
+| [`batch`](#batch) | — |
 
 ### `boundingClientRect`
 

@@ -28,13 +28,13 @@ usePerformance(): CapResult<PerformanceAPI>
 
 ## Methods
 
-| Method | Signature | Doc |
-|---|---|---|
-| [`getEntries`](#getentries) | `getEntries(entryType?: 'navigation' \| 'render' \| 'script'): Promise<CapResult<PerformanceEntry[]>>` | — |
-| [`getEntriesByName`](#getentriesbyname) | `getEntriesByName(name: string, entryType?: string): Promise<CapResult<PerformanceEntry[]>>` | — |
-| [`createObserver`](#createobserver) | `createObserver(): PerformanceObserverHandle` | — |
-| [`setBufferSize`](#setbuffersize) | `setBufferSize(size: number): void` | — |
-| [`report`](#report) | `report(id: number, value: number, dimensions?: string \| unknown[]): Promise<CapResult<void>>` | — |
+| Method | Doc |
+|---|---|
+| [`getEntries`](#getentries) | — |
+| [`getEntriesByName`](#getentriesbyname) | — |
+| [`createObserver`](#createobserver) | — |
+| [`setBufferSize`](#setbuffersize) | — |
+| [`report`](#report) | — |
 
 ### `getEntries`
 

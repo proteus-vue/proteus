@@ -28,9 +28,9 @@ usePoster(): CapResult<PosterAPI>
 
 ## Methods
 
-| Method | Signature | Doc |
-|---|---|---|
-| [`onGenerate`](#ongenerate) | `onGenerate(cb: (res: { src: string; promise?: unknown }) => void): () => void` | — |
+| Method | Doc |
+|---|---|
+| [`onGenerate`](#ongenerate) | — |
 
 ### `onGenerate`
 

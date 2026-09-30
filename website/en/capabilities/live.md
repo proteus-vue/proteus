@@ -41,19 +41,19 @@ Param,Type,Required,Doc
 
 ## Methods
 
-| Method | Signature | Doc |
-|---|---|---|
-| [`play`](#play) | `play(): Promise<CapResult<void>>` | — |
-| [`pause`](#pause) | `pause(): Promise<CapResult<void>>` | — |
-| [`resume`](#resume) | `resume(): Promise<CapResult<void>>` | — |
-| [`stop`](#stop) | `stop(): Promise<CapResult<void>>` | — |
-| [`mute`](#mute) | `mute(): void` | — |
-| [`snapshot`](#snapshot) | `snapshot(): Promise<CapResult<string>>` | — |
-| [`requestFullScreen`](#requestfullscreen) | `requestFullScreen(direction?: number): Promise<CapResult<void>>` | — |
-| [`exitFullScreen`](#exitfullscreen) | `exitFullScreen(): Promise<CapResult<void>>` | — |
-| [`status`](#status) | `status(): LivePlayState` | — |
-| [`onStateChange`](#onstatechange) | `onStateChange(cb: (state: LivePlayState) => void): () => void` | — |
-| [`leave`](#leave) | `leave(): Promise<CapResult<void>>` | — |
+| Method | Doc |
+|---|---|
+| [`play`](#play) | — |
+| [`pause`](#pause) | — |
+| [`resume`](#resume) | — |
+| [`stop`](#stop) | — |
+| [`mute`](#mute) | — |
+| [`snapshot`](#snapshot) | — |
+| [`requestFullScreen`](#requestfullscreen) | — |
+| [`exitFullScreen`](#exitfullscreen) | — |
+| [`status`](#status) | — |
+| [`onStateChange`](#onstatechange) | — |
+| [`leave`](#leave) | — |
 
 ### `play`
 

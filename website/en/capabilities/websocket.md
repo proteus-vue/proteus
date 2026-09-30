@@ -35,11 +35,11 @@ Param,Type,Required,Doc
 
 ## Methods
 
-| Method | Signature | Doc |
-|---|---|---|
-| [`send`](#send) | `send(data: string \| ArrayBuffer): void` | Send a message (string or binary) |
-| [`close`](#close) | `close(code?: number, reason?: string): void` | Close the connection |
-| [`on`](#on) | `on(event: 'open' \| 'message' \| 'close' \| 'error', handler: (payload?: unknown) => void): () => void` | Subscribe to events (returns an unsubscribe function) — open/message/close/error |
+| Method | Doc |
+|---|---|
+| [`send`](#send) | Send a message (string or binary) |
+| [`close`](#close) | Close the connection |
+| [`on`](#on) | Subscribe to events (returns an unsubscribe function) — open/message/close/error |
 
 ### `send`
 

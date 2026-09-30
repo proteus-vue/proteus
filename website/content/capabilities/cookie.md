@@ -28,12 +28,12 @@ useCookie(): Promise<CapResult<CookieJar>>
 
 ## 方法
 
-| 方法 | 签名 | 说明 |
-|---|---|---|
-| [`get`](#get) | `get(name: string): string \| undefined` | 读取 cookie |
-| [`set`](#set) | `set(name: string, value: string, maxAge?: number): void` | 写入 cookie（maxAge 秒；缺省会话级） |
-| [`remove`](#remove) | `remove(name: string): void` | 删除 cookie |
-| [`list`](#list) | `list(): Record<string, string>` | 列出全部 cookie |
+| 方法 | 说明 |
+|---|---|
+| [`get`](#get) | 读取 cookie |
+| [`set`](#set) | 写入 cookie（maxAge 秒；缺省会话级） |
+| [`remove`](#remove) | 删除 cookie |
+| [`list`](#list) | 列出全部 cookie |
 
 ### `get`
 

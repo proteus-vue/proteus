@@ -22,12 +22,12 @@ Returns `AuthState` (synchronous handle/state object).
 
 ## Methods
 
-| Method | Signature | Doc |
-|---|---|---|
-| [`login`](#login) | `login(provider?: string): Promise<CapResult<string>>` | Log in via the host bridge (stores the token on success; missing bridge → explicit Err) |
-| [`logout`](#logout) | `logout(): Promise<CapResult<void>>` | Log out (clears the token) |
-| [`setToken`](#settoken) | `setToken(token: string \| null): void` | Manually set the token (third-party login / server-issued session) |
-| [`subscribe`](#subscribe) | `subscribe(cb: (token: string \| null) => void): () => void` | Subscribe to auth-state changes (returns an unsubscribe function) |
+| Method | Doc |
+|---|---|
+| [`login`](#login) | Log in via the host bridge (stores the token on success; missing bridge → explicit Err) |
+| [`logout`](#logout) | Log out (clears the token) |
+| [`setToken`](#settoken) | Manually set the token (third-party login / server-issued session) |
+| [`subscribe`](#subscribe) | Subscribe to auth-state changes (returns an unsubscribe function) |
 
 ### `login`
 

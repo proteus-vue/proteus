@@ -235,6 +235,341 @@ export function installWxAppEventBridge(bus: HostLifecycleBus, wx: WxLifecycleSo
 }
 
 /**
+ * ★★生命周期事件**元数据 SSOT**（说明 + 各端真实触发源）——文档生成器的唯一数据源
+ *
+ * 【为什么单列一张表（用户反馈：「方法说明有的有有的没有」「没有单独的兼容进度说明」）】
+ *   事件的**说明**与**各端触发源**此前散在两处：接口 JSDoc（部分有）+ 代码注释 ⇒
+ *   文档里一半方法是 `—`、且**看不到每个事件在各端的支持情况**。
+ *   ⇒ 收敛为一张表：`doc`（一句话说明）+ `mp`/`web`/`app`（各端真实来源，`null` = 该端无此事件，
+ *     **诚实标注不伪造**）+ `note`（性能红线/决策型等要点）。
+ *   ★生成器直接消费本表（`website/scripts/gen-content.mjs` 动态 import）⇒ 改这里，文档跟着变。
+ */
+export interface LifecycleEventMeta {
+  /** 一句话说明（中文——渲染到方法表与详情） */
+  doc: string
+  /** 英文说明（缺省回退 `doc`——双语页优先用它） */
+  docEn?: string
+  /** 小程序端真实来源（null = 无此事件） */
+  mp: string | null
+  /** Web 端真实来源（null = 无此事件） */
+  web: string | null
+  /** App 端（iOS/Android/鸿蒙）真实来源（null = 无此事件） */
+  app: string | null
+  /** 要点（性能红线 / 决策型语义 / 平台限制等） */
+  note?: string
+  /** 英文要点（缺省回退 `note`） */
+  noteEn?: string
+}
+
+/** 页面级事件元数据（key = kebab 事件名，与 PAGE_EVENTS 一一对应） */
+export const PAGE_EVENT_META: Record<PageEvent, LifecycleEventMeta> = {
+  load: {
+    doc: '页面加载（每次进入该页触发一次，可读取路由参数）',
+    mp: 'Page.onLoad（编译产物派发）',
+    web: '文档 load',
+    app: '虚拟栈 mount 命令',
+  },
+  show: {
+    doc: '页面显示（切入前台，或从上层页面返回）',
+    mp: 'Page.onShow（编译产物派发）',
+    web: 'load 后 + visibilitychange→visible',
+    app: '虚拟栈 enter 命令 / 壳 resume',
+  },
+  ready: {
+    doc: '页面首帧渲染完成（一次）',
+    mp: 'Page.onReady（编译产物派发）',
+    web: 'load 后首帧（rAF）',
+    app: '屏首帧渲染完成',
+  },
+  hide: {
+    doc: '页面隐藏（切后台，或被上层页面覆盖）',
+    mp: 'Page.onHide（编译产物派发）',
+    web: 'visibilitychange→hidden',
+    app: '虚拟栈 exit 命令 / 壳 pause',
+  },
+  unload: {
+    doc: '页面卸载（离开并销毁）',
+    mp: 'Page.onUnload（编译产物派发）',
+    web: "beforeunload",
+    app: '虚拟栈 unmount 命令',
+  },
+  'route-done': {
+    doc: '路由动画完成（转场结束后）',
+    mp: 'Page.onRouteDone（基础库 2.32.1+）',
+    web: 'transitionend（由 router 层推）',
+    app: 'Morpheus 转场结束',
+    note: '基础库版本要求较高：低版本无此钩子（产物会生成，但不触发——诚实降级）',
+  },
+  'pull-down-refresh': {
+    doc: '下拉刷新（用户下拉页面）',
+    mp: "Page.onPullDownRefresh",
+    web: null,
+    app: '宿主下拉手势',
+    note: '★小程序需在 page.json 开 enablePullDownRefresh，否则不触发；**Web 无原生等价**（诚实不触发）',
+  },
+  'reach-bottom': {
+    doc: '滚动触底（可用于加载更多）',
+    mp: "Page.onReachBottom",
+    web: 'scroll 距底 ≤50px',
+    app: '滚动到底',
+    note: 'Web 端为阈值启发式（50px）；小程序按 onReachBottomDistance 配置',
+  },
+  'page-scroll': {
+    doc: '页面滚动（携带 scrollTop）',
+    mp: "Page.onPageScroll",
+    web: 'scroll（rAF 节流）',
+    app: '滚动回调',
+    note: '★★**高频事件**：微信官方明确会引起逻辑层与渲染层通信 ⇒ 小程序端**仅当你声明过 onPageScroll 时才派发**；Web 端已 rAF 节流',
+  },
+  resize: {
+    doc: '页面尺寸变化（旋转 / 分屏 / 窗口缩放）',
+    mp: 'Page.onResize（编译产物派发）',
+    web: "resize",
+    app: '屏幕旋转 / 分屏',
+  },
+  'tab-item-tap': {
+    doc: '点击 tab 栏项（携带 index / pagePath）',
+    mp: 'Page.onTabItemTap（编译产物派发）',
+    web: null,
+    app: 'tab 栏点击',
+    note: 'Web 端无 tab 栏概念（如自绘 tab 请直接用组件事件）',
+  },
+  'share-app-message': {
+    doc: '转发给好友（**决策型**：注册的 provider 返回值即分享内容）',
+    mp: "Page.onShareAppMessage",
+    web: 'navigator.share（需用户手势）',
+    app: '系统分享面板',
+    note: '★小程序**声明后才显示右上角"转发"入口**（框架不自动补——不擅自加用户可见行为）',
+  },
+  'share-timeline': {
+    doc: '分享到朋友圈（**决策型**）',
+    mp: "Page.onShareTimeline",
+    web: null,
+    app: '系统分享面板',
+    note: '同转发：小程序声明后才显示入口',
+  },
+  'add-to-favorites': {
+    doc: '收藏页面（**决策型**）',
+    mp: "Page.onAddToFavorites",
+    web: null,
+    app: '系统收藏',
+    note: '同转发：小程序声明后才显示入口',
+  },
+  'save-exit-state': {
+    doc: '保存退出状态（**决策型**：provider 返回需保存的状态对象）',
+    mp: 'Page.onSaveExitState（基础库 2.7.4+）',
+    web: "beforeunload' 的 'returnValue",
+    app: '退出前状态保存',
+    note: 'Web 端语义差异：beforeunload 的返回值用于**离开确认**（浏览器不持久化状态）',
+  },
+}
+
+/** 应用级事件元数据（key = kebab 事件名，与 APP_EVENTS 一一对应） */
+export const APP_EVENT_META: Record<AppEvent, LifecycleEventMeta> = {
+  launch: {
+    doc: '应用启动（**恰好一次**，先于首个 show；壳只需转发 show，总线自动补 launch）',
+    mp: '首个 onAppShow 自动补发',
+    web: '首个 load 自动补发',
+    app: '壳冷启动',
+  },
+  show: {
+    doc: '应用进入前台',
+    mp: "wx.onAppShow",
+    web: 'visibilitychange→visible',
+    app: '壳 resume（Activity.onResume / didBecomeActive）',
+  },
+  hide: {
+    doc: '应用退到后台',
+    mp: "wx.onAppHide",
+    web: 'visibilitychange→hidden',
+    app: '壳 pause（Activity.onPause / willResignActive）',
+  },
+  error: {
+    doc: '未捕获的运行时错误',
+    mp: "App.onError' / 'wx.onError",
+    web: "window.onerror",
+    app: '壳错误捕获',
+  },
+  'unhandled-rejection': {
+    doc: '未处理的 Promise rejection',
+    mp: "App.onUnhandledRejection",
+    web: "unhandledrejection",
+    app: '壳错误捕获',
+  },
+  'memory-warning': {
+    doc: '系统内存警告（可用于释放缓存）',
+    mp: "App.onMemoryWarning' / 'wx.onMemoryWarning",
+    web: 'performance.memory 启发式',
+    app: 'iOS didReceiveMemoryWarning / Android onTrimMemory',
+    note: '★**归属 C25 useBackground**（本事件不在 useAppLifecycle 上——两处重复已于 2026-09-30 去重）',
+  },
+  'theme-change': {
+    doc: '系统深色/浅色模式切换',
+    mp: "App.onThemeChange' / 'wx.onThemeChange",
+    web: "matchMedia(prefers-color-scheme)",
+    app: '壳主题通知',
+    note: '★**归属 C25 useBackground**（去重后从 useAppLifecycle 移除）',
+  },
+  resize: {
+    doc: '窗口尺寸变化',
+    mp: "wx.onWindowResize",
+    web: "resize",
+    app: '旋转 / 分屏',
+    note: '★**归属 C25 useBackground**（去重后从 useAppLifecycle 移除）',
+  },
+  'page-not-found': {
+    doc: '路由未命中（可跳兜底页）',
+    mp: 'App.onPageNotFound / wx.onPageNotFound',
+    web: '路由未命中（router 层推）',
+    app: '路由未命中',
+  },
+  'audio-interruption-begin': {
+    doc: '音频被系统中断开始（来电等）',
+    mp: "App.onAudioInterruptionBegin",
+    web: null,
+    app: '壳音频会话通知',
+  },
+  'audio-interruption-end': {
+    doc: '音频中断结束（可恢复播放）',
+    mp: "App.onAudioInterruptionEnd",
+    web: null,
+    app: '壳音频会话通知',
+  },
+}
+
+/**
+ * ★★平台特有生命周期话题 → **已有能力**的交叉引用（用户反馈第 4 点：
+ *   「应用与生命周期缺少平台特有专栏，比如 App 端的 activity 管理方法、键盘事件方法、
+ *     window 窗体管理方法等等。还有 web 或者小程序专栏」）
+ *
+ * 【为什么是交叉引用而不是另写一套（设计决策）】
+ *   这些话题**已经是独立能力原语**（各有自己的页面/文档/桥/测试）：
+ *     · App Activity/窗体生命周期 → `useWindow`（C74，wx.setWindowSize / App 窗体）
+ *     · 键盘事件 → `useKeyboard`（C14，wx.onKeyboardHeightChange / web visualViewport）
+ *     · 路由/导航事件 → `useRouter`（E10-E17）/ `useNavigationGuard`（C75）
+ *     · 网络状态 → `useNetworkStatusChange`（C25 句柄内）/ `useNetwork`（C8）
+ *   ⇒ 若在生命周期页**再抄一份**说明，就会像 C23/C25 那样重复（本仓纪律：同一语义一处实现）。
+ *   ⇒ 本表只提供**导航**（话题 → 该用哪个能力），生成器渲染成「平台专栏」段落。
+ *
+ * 【诚实边界】本表是"指路牌"，不是"能力清单"——链接指向的能力页才是权威说明。
+ */
+export interface PlatformTopic {
+  /** 话题标题 */
+  title: string
+  /** 英文标题 */
+  titleEn: string
+  /** 一句话：这个平台上这个话题是什么 */
+  desc: string
+  /** 英文说明 */
+  descEn: string
+  /** 关联能力（Hook 名——生成器渲染为到该能力页的链接） */
+  hooks: string[]
+}
+
+/** 平台特有专栏（按端分组；生成器渲染为 `## 平台专栏` 下的分端小节） */
+export const PLATFORM_TOPICS: Record<'mp' | 'web' | 'app', PlatformTopic[]> = {
+  mp: [
+    {
+      title: '页面栈与路由事件',
+      titleEn: 'Page stack & routing events',
+      desc: '小程序页面栈深 10 层、navigateTo/redirectTo/switchTab 的语义差异，以及路由完成时机（onRouteDone）',
+      descEn: 'The 10-page stack limit, navigateTo/redirectTo/switchTab semantics, and route-completion timing (onRouteDone)',
+      hooks: ['useNavigationGuard'],
+    },
+    {
+      title: 'tabBar 与 tab 切换',
+      titleEn: 'tabBar & tab switching',
+      desc: 'tab 页的 onTabItemTap 与 switchTab（非 tab 页全销毁、其他 tab 保活）',
+      descEn: 'onTabItemTap on tab pages and switchTab semantics (non-tab pages destroyed; other tabs kept alive)',
+      hooks: ['usePageLifecycle'],
+    },
+    {
+      title: '下拉刷新与触底',
+      titleEn: 'Pull-down refresh & reach-bottom',
+      desc: '★需在 page.json 开 enablePullDownRefresh；onReachBottomDistance 控制触底阈值',
+      descEn: '★Requires enablePullDownRefresh in page.json; onReachBottomDistance controls the bottom threshold',
+      hooks: ['usePageLifecycle'],
+    },
+    {
+      title: '后台与音频中断',
+      titleEn: 'Background & audio interruption',
+      desc: 'onAppHide/onAppShow 的前后台语义，以及来电等导致的音频中断（onAudioInterruption*）',
+      descEn: 'onAppHide/onAppShow foreground-background semantics and system audio interruptions (onAudioInterruption*)',
+      hooks: ['useAppLifecycle'],
+    },
+  ],
+  web: [
+    {
+      title: '页签可见性与前后台',
+      titleEn: 'Tab visibility & foreground/background',
+      desc: 'visibilitychange 是唯一的"前后台"信号（浏览器不区分"切后台"与"切页签"）；load 只触发一次',
+      descEn: 'visibilitychange is the only foreground/background signal (browsers do not distinguish backgrounding from tab switching); load fires once',
+      hooks: ['useAppLifecycle'],
+    },
+    {
+      title: '页面卸载与离开确认',
+      titleEn: 'Page unload & leave confirmation',
+      desc: 'beforeunload 的 returnValue 用于**离开确认**（浏览器不持久化状态，与小程序 onSaveExitState 语义不同）',
+      descEn: 'beforeunload returnValue drives **leave confirmation** (browsers do not persist state — unlike Mini Program onSaveExitState)',
+      hooks: ['usePageLifecycle'],
+    },
+    {
+      title: '高频滚动',
+      titleEn: 'High-frequency scrolling',
+      desc: 'scroll 事件由 rAF 节流后派发；触底用 50px 阈值启发式（无原生 onReachBottom）',
+      descEn: 'scroll is rAF-throttled before dispatch; reach-bottom uses a 50px heuristic (no native onReachBottom)',
+      hooks: ['usePageLifecycle'],
+    },
+    {
+      title: '分屏与窗口缩放',
+      titleEn: 'Split view & window resizing',
+      desc: 'resize 同时驱动应用级与应用级页面尺寸事件（旋转 / 分屏 / 缩放窗口都会触发）',
+      descEn: 'resize drives both app-level and page-level size events (rotation / split view / window resizing)',
+      hooks: ['useWindow'],
+    },
+  ],
+  app: [
+    {
+      title: 'Activity / ViewController 生命周期',
+      titleEn: 'Activity / ViewController lifecycle',
+      desc: '壳把 onCreate/onResume/onPause（iOS 的 viewDidLoad/didBecomeActive/willResignActive）转发到运行时，' +
+        '映射为 app 的 launch/show/hide——**业务不直接接触 Activity 生命周期**（G-39 生命周期唯一拥有）',
+      descEn: 'The shell forwards onCreate/onResume/onPause (iOS: viewDidLoad/didBecomeActive/willResignActive) into the runtime, ' +
+        'mapped to app launch/show/hide — **business code never touches Activity lifecycle directly** (G-39 single ownership)',
+      hooks: ['useAppLifecycle'],
+    },
+    {
+      title: '键盘事件（软键盘高度）',
+      titleEn: 'Keyboard events (soft-keyboard height)',
+      desc: '软键盘展开/收起与高度变化——App 端由壳转发，小程序用 wx.onKeyboardHeightChange，Web 用 visualViewport 启发式',
+      descEn: 'Soft-keyboard show/hide and height changes — forwarded by the App shell, wx.onKeyboardHeightChange on Mini Program, visualViewport heuristic on Web',
+      hooks: ['useKeyboard'],
+    },
+    {
+      title: '窗体与窗口管理',
+      titleEn: 'Window management',
+      desc: '多窗口 / 分屏 / 窗口尺寸（平板、折叠屏、桌面端）——App 端走宿主窗体 API（CMP 标签页内导航另有 useWindow）',
+      descEn: 'Multi-window / split view / window sizing (tablets, foldables, desktop) — via host window APIs on App (in-app tab navigation also uses useWindow)',
+      hooks: ['useWindow'],
+    },
+    {
+      title: '内存警告与低内存',
+      titleEn: 'Memory warnings & low memory',
+      desc: 'iOS didReceiveMemoryWarning / Android onTrimMemory 由壳转发——用于释放缓存（配合 G-43 所有权模型）',
+      descEn: 'iOS didReceiveMemoryWarning / Android onTrimMemory forwarded by the shell — release caches here (pairs with the G-43 ownership model)',
+      hooks: ['useBackground'],
+    },
+    {
+      title: '深链与冷启动参数',
+      titleEn: 'Deep links & cold-start params',
+      desc: '冷启动 launch/enter 参数（深链 query）与虚拟栈的初始栈恢复',
+      descEn: 'Cold-start launch/enter params (deep-link query) and restoring the initial virtual stack',
+      hooks: ['useBackground'],
+    },
+  ],
+}
+
+/**
  * `window` / `document` 子集（Web 端事件源的真实来源）
  */
 export interface WebEventSource {
@@ -609,33 +944,36 @@ export function createStackPageSource(bus: HostLifecycleBus): {
 // ══════════════════════════════════════════════════════════════════
 
 /**
- * ★★C23 句柄（**扩展为完整应用级事件面**）
+ * ★★C23 句柄：**应用生命周期**（阶段 + 应用级专属事件）
  *
- * 新增的事件都是**纯通知**（无返回值语义）⇒ 全部多订阅者形态。
- * 各端触发源见 `APP_EVENTS` 的注释表（memory-warning / theme-change 在 App 端由壳转发）。
+ * 【职责边界（★用户反馈「useAppLifecycle 与 useBackground 有重复」后的去重）】
+ *   · **C23（本句柄）**：应用**生命周期阶段**与**应用级专属事件**——
+ *     启动/前台/后台（launch/show/hide）+ 路由未命中（page-not-found，应用级兜底）
+ *     + 音频中断（audio-interruption-*，系统对应用的音频会话打断）。
+ *   · **C25（`useBackground`）**：**前后台切换事件 + 系统环境事件**——
+ *     `onEvent`（enter-background/enter-foreground）+ 内存警告/主题变化/窗口尺寸/
+ *     网络变化/错误/未处理 rejection + 启动参数（launchOptions/enterOptions）。
+ *   ★原先 C23 也带了 memory-warning/theme-change/resize/error/unhandled-rejection ⇒
+ *     **与 C25 重复**（同一事件两处订阅面，业务不知该用哪个）。现已移除，
+ *     这些事件**统一归 C25**——见 `BackgroundHandle` 与 `APP_EVENT_META` 的 note。
+ *   ★迁移：`useAppLifecycle().onMemoryWarning(cb)` → `(await useBackground()).data.onMemoryWarning(cb)`。
+ *   各端触发源见 `APP_EVENT_META`（生成器直接消费该表渲染文档）。
  */
 export interface AppLifecycleHandle {
   readonly phase: AppLifecyclePhase
-  // —— 阶段事件 ——
+  // —— 阶段事件（应用生命周期本体）——
+  /** 应用启动（**恰好一次**，先于首个 show；冷启动自动补发——壳只需转发 show/hide） */
   onLaunch(cb: () => void): () => void
+  /** 应用进入前台 */
   onShow(cb: () => void): () => void
+  /** 应用退到后台 */
   onHide(cb: () => void): () => void
-  // —— 应用级事件（通知型）——
-  /** 未捕获异常（MP `App.onError` / Web window.onerror / App 壳） */
-  onError(cb: (e: { error: string }) => void): () => void
-  /** 未处理的 Promise rejection（MP `App.onUnhandledRejection` / Web unhandledrejection） */
-  onUnhandledRejection(cb: (e: { reason: string }) => void): () => void
-  /** 内存警告（MP `App.onMemoryWarning` / ★App 端壳：iOS didReceiveMemoryWarning / Android onTrimMemory） */
-  onMemoryWarning(cb: (e: { level: number }) => void): () => void
-  /** 系统主题变化（MP `App.onThemeChange` / Web matchMedia / App 壳） */
-  onThemeChange(cb: (e: { theme: 'dark' | 'light' }) => void): () => void
-  /** 窗口尺寸变化（MP `wx.onWindowResize` / Web resize / App 旋转分屏） */
-  onWindowResize(cb: (e: { windowWidth: number; windowHeight: number }) => void): () => void
-  /** 页面未找到（MP `App.onPageNotFound` / Web 路由未命中） */
+  // —— 应用级专属事件（C25 不提供）——
+  /** 路由未命中（可跳兜底页） */
   onPageNotFound(cb: (e: { path: string }) => void): () => void
-  /** 音频中断开始（来电等——MP `App.onAudioInterruptionBegin` / App 壳） */
+  /** 音频被系统中断开始（来电等） */
   onAudioInterruptionBegin(cb: () => void): () => void
-  /** 音频中断结束 */
+  /** 音频中断结束（可恢复播放） */
   onAudioInterruptionEnd(cb: () => void): () => void
 }
 
@@ -740,7 +1078,7 @@ export function createAppLifecycleCapabilities<E extends Error = Error>(
   /** 订阅封装：phase 已过也**补发一次**（晚订阅者不应"永远等不到已经发生过的事"） */
   const sub = (topic: HostLifecycleTopic, cb: () => void): (() => void) => bus.on(topic, () => cb())
 
-  /** 纯通知型订阅（表驱动——新增事件只需在 APP_EVENTS 加项） */
+  /** 纯通知型订阅（无载荷事件——音频中断等） */
   const appNotify = (topic: HostLifecycleTopic) => (cb: (e: never) => void): (() => void) =>
     bus.on(topic, (p) => (cb as (e: unknown) => void)(p as never))
 
@@ -764,31 +1102,7 @@ export function createAppLifecycleCapabilities<E extends Error = Error>(
         onHide(cb) {
           return sub('app:hide', cb)
         },
-        // 应用级通知型（载荷各自归一——不同端的原始形态不同，这里统一成句柄声明的形状）
-        onError(cb) {
-          return bus.on('app:error', (p) => cb({ error: String((p as { error?: unknown })?.error ?? p ?? '') }))
-        },
-        onUnhandledRejection(cb) {
-          return bus.on('app:unhandled-rejection', (p) => {
-            const r = p as { reason?: unknown } | undefined
-            cb({ reason: typeof r?.reason === 'string' ? r.reason : String(r ?? '') })
-          })
-        },
-        onMemoryWarning(cb) {
-          return bus.on('app:memory-warning', (p) => cb({ level: Number((p as { level?: number })?.level ?? 0) }))
-        },
-        onThemeChange(cb) {
-          return bus.on('app:theme-change', (p) => {
-            const t = (p as { theme?: unknown })?.theme
-            cb({ theme: t === 'dark' ? 'dark' : 'light' })
-          })
-        },
-        onWindowResize(cb) {
-          return bus.on('app:resize', (p) => {
-            const s = (p as { windowWidth?: number; windowHeight?: number }) ?? {}
-            cb({ windowWidth: Number(s.windowWidth ?? 0), windowHeight: Number(s.windowHeight ?? 0) })
-          })
-        },
+        // 应用级专属事件（C25 useBackground 不提供的那些——见接口注释的职责边界）
         onPageNotFound(cb) {
           return bus.on('app:page-not-found', (p) => cb({ path: String((p as { path?: unknown })?.path ?? '') }))
         },

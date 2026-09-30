@@ -34,13 +34,13 @@ Param,Type,Required,Doc
 
 ## Methods
 
-| Method | Signature | Doc |
-|---|---|---|
-| [`createContext`](#createcontext) | `createContext(): CapResult<CanvasContext>` | — |
-| [`node`](#node) | `node(): Promise<CapResult<CanvasNode>>` | — |
-| [`toTempFilePath`](#totempfilepath) | `toTempFilePath(options?: CanvasExportOptions): Promise<CapResult<string>>` | — |
-| [`toDataURL`](#todataurl) | `toDataURL(options?: CanvasExportOptions): Promise<CapResult<string>>` | — |
-| [`offscreen`](#offscreen) | `offscreen(width: number, height: number, type?: '2d' \| 'webgl'): CapResult<OffscreenCanvasHandle>` | — |
+| Method | Doc |
+|---|---|
+| [`createContext`](#createcontext) | — |
+| [`node`](#node) | — |
+| [`toTempFilePath`](#totempfilepath) | — |
+| [`toDataURL`](#todataurl) | — |
+| [`offscreen`](#offscreen) | — |
 
 ### `createContext`
 

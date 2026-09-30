@@ -22,12 +22,12 @@ useAuth(): AuthState
 
 ## 方法
 
-| 方法 | 签名 | 说明 |
-|---|---|---|
-| [`login`](#login) | `login(provider?: string): Promise<CapResult<string>>` | 登录：调桥 login() → 成功存 token（无 login 桥 → Err<cap>.native 降级） |
-| [`logout`](#logout) | `logout(): Promise<CapResult<void>>` | 登出：清 token |
-| [`setToken`](#settoken) | `setToken(token: string \| null): void` | 手动设置 token（第三方登录 / 服务端下发的既有会话） |
-| [`subscribe`](#subscribe) | `subscribe(cb: (token: string \| null) => void): () => void` | 订阅登录态变化（响应式 UI 联动） |
+| 方法 | 说明 |
+|---|---|
+| [`login`](#login) | 登录：调桥 login() → 成功存 token（无 login 桥 → Err<cap>.native 降级） |
+| [`logout`](#logout) | 登出：清 token |
+| [`setToken`](#settoken) | 手动设置 token（第三方登录 / 服务端下发的既有会话） |
+| [`subscribe`](#subscribe) | 订阅登录态变化（响应式 UI 联动） |
 
 ### `login`
 

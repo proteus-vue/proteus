@@ -42,12 +42,12 @@ Param,Type,Required,Doc
 
 ## Methods
 
-| Method | Signature | Doc |
-|---|---|---|
-| [`relativeTo`](#relativeto) | `relativeTo(selector: string, margins?: { left?: number; right?: number; top?: number; bottom?: number }): IntersectionHandle` | — |
-| [`relativeToViewport`](#relativetoviewport) | `relativeToViewport(margins?: { left?: number; right?: number; top?: number; bottom?: number }): IntersectionHandle` | — |
-| [`observe`](#observe) | `observe(targetSelector: string, cb: (result: IntersectionResult) => void): IntersectionHandle` | — |
-| [`disconnect`](#disconnect) | `disconnect(): void` | — |
+| Method | Doc |
+|---|---|
+| [`relativeTo`](#relativeto) | — |
+| [`relativeToViewport`](#relativetoviewport) | — |
+| [`observe`](#observe) | — |
+| [`disconnect`](#disconnect) | — |
 
 ### `relativeTo`
 

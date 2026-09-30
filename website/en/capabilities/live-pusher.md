@@ -34,17 +34,17 @@ Param,Type,Required,Doc
 
 ## Methods
 
-| Method | Signature | Doc |
-|---|---|---|
-| [`start`](#start) | `start(): Promise<CapResult<void>>` | — |
-| [`stop`](#stop) | `stop(): Promise<CapResult<void>>` | — |
-| [`pause`](#pause) | `pause(): Promise<CapResult<void>>` | — |
-| [`resume`](#resume) | `resume(): Promise<CapResult<void>>` | — |
-| [`switchCamera`](#switchcamera) | `switchCamera(): Promise<CapResult<void>>` | — |
-| [`toggleTorch`](#toggletorch) | `toggleTorch(): Promise<CapResult<void>>` | — |
-| [`snapshot`](#snapshot) | `snapshot(): Promise<CapResult<string>>` | — |
-| [`sendMessage`](#sendmessage) | `sendMessage(msg: string): Promise<CapResult<void>>` | — |
-| [`on`](#on) | `on(event: 'statechange' \| 'netstatus' \| 'error', cb: (payload: unknown) => void): () => void` | — |
+| Method | Doc |
+|---|---|
+| [`start`](#start) | — |
+| [`stop`](#stop) | — |
+| [`pause`](#pause) | — |
+| [`resume`](#resume) | — |
+| [`switchCamera`](#switchcamera) | — |
+| [`toggleTorch`](#toggletorch) | — |
+| [`snapshot`](#snapshot) | — |
+| [`sendMessage`](#sendmessage) | — |
+| [`on`](#on) | — |
 
 ### `start`
 

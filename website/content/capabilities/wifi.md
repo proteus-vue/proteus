@@ -28,11 +28,11 @@ useWifi(): CapResult<WifiAPI>
 
 ## 方法
 
-| 方法 | 签名 | 说明 |
-|---|---|---|
-| [`getConnected`](#getconnected) | `getConnected(): Promise<CapResult<WifiInfo>>` | 当前连接的 WiFi（wx.getConnectedWifi） |
-| [`list`](#list) | `list(): Promise<CapResult<WifiInfo[]>>` | 已扫描到的 WiFi 列表（需 wx.startWifi + onGetWifiList 授权；wx.getWifiList → onGetWifiList） |
-| [`connect`](#connect) | `connect(SSID: string, password?: string): Promise<CapResult<void>>` | 连接指定 WiFi（wx.connectWifi——Android 支持；iOS/部分基础库 → Err） |
+| 方法 | 说明 |
+|---|---|
+| [`getConnected`](#getconnected) | 当前连接的 WiFi（wx.getConnectedWifi） |
+| [`list`](#list) | 已扫描到的 WiFi 列表（需 wx.startWifi + onGetWifiList 授权；wx.getWifiList → onGetWifiList） |
+| [`connect`](#connect) | 连接指定 WiFi（wx.connectWifi——Android 支持；iOS/部分基础库 → Err） |
 
 ### `getConnected`
 

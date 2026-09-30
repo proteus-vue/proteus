@@ -28,14 +28,14 @@ useNFC(): Promise<CapResult<NFCAPI>>
 
 ## 方法
 
-| 方法 | 签名 | 说明 |
-|---|---|---|
-| [`startHCE`](#starthce) | `startHCE(aidList: string[]): Promise<CapResult<void>>` | 启动 HCE（模拟卡；aidList 应用标识） |
-| [`stopHCE`](#stophce) | `stopHCE(): Promise<CapResult<void>>` | 停止 HCE |
-| [`sendHCEMessage`](#sendhcemessage) | `sendHCEMessage(data: ArrayBuffer): Promise<CapResult<void>>` | 发送 APDU 响应（收到 onHCEMessage 后回） |
-| [`onHCEMessage`](#onhcemessage) | `onHCEMessage(cb: (message: { messageType: number; data?: ArrayBuffer }) => void): () => void` | 订阅 HCE 消息（返回取消） |
-| [`onHCEStateChange`](#onhcestatechange) | `onHCEStateChange(cb: (available: boolean) => void): () => void` | 订阅 HCE 状态变化（返回取消） |
-| [`getAdapter`](#getadapter) | `getAdapter(): NfcAdapter` | ★能力颗粒度对齐：读卡模式适配器（wx.getNFCAdapter）——发现标签 + 各技术类型连接 |
+| 方法 | 说明 |
+|---|---|
+| [`startHCE`](#starthce) | 启动 HCE（模拟卡；aidList 应用标识） |
+| [`stopHCE`](#stophce) | 停止 HCE |
+| [`sendHCEMessage`](#sendhcemessage) | 发送 APDU 响应（收到 onHCEMessage 后回） |
+| [`onHCEMessage`](#onhcemessage) | 订阅 HCE 消息（返回取消） |
+| [`onHCEStateChange`](#onhcestatechange) | 订阅 HCE 状态变化（返回取消） |
+| [`getAdapter`](#getadapter) | ★能力颗粒度对齐：读卡模式适配器（wx.getNFCAdapter）——发现标签 + 各技术类型连接 |
 
 ### `startHCE`
 

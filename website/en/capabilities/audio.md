@@ -34,16 +34,16 @@ Param,Type,Required,Doc
 
 ## Methods
 
-| Method | Signature | Doc |
-|---|---|---|
-| [`play`](#play) | `play(src?: string): Promise<CapResult<void>>` | — |
-| [`pause`](#pause) | `pause(): Promise<CapResult<void>>` | — |
-| [`stop`](#stop) | `stop(): Promise<CapResult<void>>` | — |
-| [`seek`](#seek) | `seek(position: number): Promise<CapResult<void>>` | — |
-| [`setVolume`](#setvolume) | `setVolume(volume: number): void` | — |
-| [`setLoop`](#setloop) | `setLoop(loop: boolean): void` | — |
-| [`destroy`](#destroy) | `destroy(): void` | — |
-| [`on`](#on) | `on(event: 'canplay' \| 'play' \| 'pause' \| 'stop' \| 'ended' \| 'timeupdate' \| 'error', cb: (payload: unknown) => void): () => void` | — |
+| Method | Doc |
+|---|---|
+| [`play`](#play) | — |
+| [`pause`](#pause) | — |
+| [`stop`](#stop) | — |
+| [`seek`](#seek) | — |
+| [`setVolume`](#setvolume) | — |
+| [`setLoop`](#setloop) | — |
+| [`destroy`](#destroy) | — |
+| [`on`](#on) | — |
 
 ### `play`
 

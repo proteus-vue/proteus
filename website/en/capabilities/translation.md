@@ -28,10 +28,10 @@ useTranslation(): CapResult<TranslationAPI>
 
 ## Methods
 
-| Method | Signature | Doc |
-|---|---|---|
-| [`onTrigger`](#ontrigger) | `onTrigger(cb: (res: { locale: string; type: string }) => void): () => void` | — |
-| [`onOff`](#onoff) | `onOff(cb: () => void): () => void` | — |
+| Method | Doc |
+|---|---|
+| [`onTrigger`](#ontrigger) | — |
+| [`onOff`](#onoff) | — |
 
 ### `onTrigger`
 

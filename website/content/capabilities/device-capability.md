@@ -28,9 +28,9 @@ useDeviceCapability(): CapResult<DeviceCapabilityAPI>
 
 ## 方法
 
-| 方法 | 签名 | 说明 |
-|---|---|---|
-| [`supportsHevc`](#supportshevc) | `supportsHevc(): Promise<CapResult<boolean>>` | 查询设备是否支持 HEVC（H.265）硬解码 |
+| 方法 | 说明 |
+|---|---|
+| [`supportsHevc`](#supportshevc) | 查询设备是否支持 HEVC（H.265）硬解码 |
 
 ### `supportsHevc`
 

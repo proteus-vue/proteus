@@ -22,34 +22,34 @@ useFileSystem(): FSAdapter
 
 ## 方法
 
-| 方法 | 签名 | 说明 |
-|---|---|---|
-| [`readFile`](#readfile) | `readFile(path: string): Promise<CapResult<string>>` | 读取文本文件（UTF-8）。 |
-| [`writeFile`](#writefile) | `writeFile(path: string, data: string): Promise<CapResult<void>>` | 写入文件（覆盖；不存在则创建）。 |
-| [`appendFile`](#appendfile) | `appendFile(path: string, data: string): Promise<CapResult<void>>` | 追加写入（在文件尾部追加）。 |
-| [`copyFile`](#copyfile) | `copyFile(src: string, dest: string): Promise<CapResult<void>>` | 复制文件。 |
-| [`rename`](#rename) | `rename(oldPath: string, newPath: string): Promise<CapResult<void>>` | 重命名 / 移动。 |
-| [`remove`](#remove) | `remove(path: string): Promise<CapResult<void>>` | 删除文件。 |
-| [`exists`](#exists) | `exists(path: string): Promise<CapResult<boolean>>` | 文件 / 目录是否存在。 |
-| [`stat`](#stat) | `stat(path: string): Promise<CapResult<FileStat>>` | 获取文件 / 目录信息（大小 / 时间 / 类型）。 |
-| [`mkdir`](#mkdir) | `mkdir(path: string, recursive?: boolean): Promise<CapResult<void>>` | 创建目录。 |
-| [`rmdir`](#rmdir) | `rmdir(path: string, recursive?: boolean): Promise<CapResult<void>>` | 删除目录。 |
-| [`readdir`](#readdir) | `readdir(path: string): Promise<CapResult<string[]>>` | 读取目录，返回条目名列表。 |
-| [`getFileInfo`](#getfileinfo) | `getFileInfo(path: string, digestAlgorithm?: string): Promise<CapResult<{ size: number; digest: string }>>` | 获取文件摘要（大小 + 摘要值）。 |
-| [`saveFile`](#savefile) | `saveFile(tempPath: string): Promise<CapResult<string>>` | 保存临时文件到本地（返回持久路径）。 |
-| [`getSavedFileList`](#getsavedfilelist) | `getSavedFileList(): Promise<CapResult<SavedFileInfo[]>>` | 已保存文件列表 |
-| [`removeSavedFile`](#removesavedfile) | `removeSavedFile(path: string): Promise<CapResult<void>>` | 删除已保存文件。 |
-| [`unzip`](#unzip) | `unzip(zipPath: string, targetPath: string): Promise<CapResult<void>>` | 解压 zip。 |
-| [`readFileSync`](#readfilesync) | `readFileSync(path: string): CapResult<string>` | 同步读文件（阻塞主线程——仅小文件/启动期用） |
-| [`writeFileSync`](#writefilesync) | `writeFileSync(path: string, data: string): CapResult<void>` | 同步写文件（阻塞主线程） |
-| [`existsSync`](#existssync) | `existsSync(path: string): CapResult<boolean>` | 同步判断存在 |
-| [`statSync`](#statsync) | `statSync(path: string): CapResult<FileStat>` | 同步取文件信息 |
-| [`readdirSync`](#readdirsync) | `readdirSync(path: string): CapResult<string[]>` | 同步读目录 |
-| [`mkdirSync`](#mkdirsync) | `mkdirSync(path: string, recursive?: boolean): CapResult<void>` | 同步创建目录 |
-| [`renameSync`](#renamesync) | `renameSync(oldPath: string, newPath: string): CapResult<void>` | 同步重命名 |
-| [`unlinkSync`](#unlinksync) | `unlinkSync(path: string): CapResult<void>` | 同步删除 |
-| [`copyFileSync`](#copyfilesync) | `copyFileSync(src: string, dest: string): CapResult<void>` | 同步复制 |
-| [`appendFileSync`](#appendfilesync) | `appendFileSync(path: string, data: string): CapResult<void>` | 同步追加 |
+| 方法 | 说明 |
+|---|---|
+| [`readFile`](#readfile) | 读取文本文件（UTF-8）。 |
+| [`writeFile`](#writefile) | 写入文件（覆盖；不存在则创建）。 |
+| [`appendFile`](#appendfile) | 追加写入（在文件尾部追加）。 |
+| [`copyFile`](#copyfile) | 复制文件。 |
+| [`rename`](#rename) | 重命名 / 移动。 |
+| [`remove`](#remove) | 删除文件。 |
+| [`exists`](#exists) | 文件 / 目录是否存在。 |
+| [`stat`](#stat) | 获取文件 / 目录信息（大小 / 时间 / 类型）。 |
+| [`mkdir`](#mkdir) | 创建目录。 |
+| [`rmdir`](#rmdir) | 删除目录。 |
+| [`readdir`](#readdir) | 读取目录，返回条目名列表。 |
+| [`getFileInfo`](#getfileinfo) | 获取文件摘要（大小 + 摘要值）。 |
+| [`saveFile`](#savefile) | 保存临时文件到本地（返回持久路径）。 |
+| [`getSavedFileList`](#getsavedfilelist) | 已保存文件列表 |
+| [`removeSavedFile`](#removesavedfile) | 删除已保存文件。 |
+| [`unzip`](#unzip) | 解压 zip。 |
+| [`readFileSync`](#readfilesync) | 同步读文件（阻塞主线程——仅小文件/启动期用） |
+| [`writeFileSync`](#writefilesync) | 同步写文件（阻塞主线程） |
+| [`existsSync`](#existssync) | 同步判断存在 |
+| [`statSync`](#statsync) | 同步取文件信息 |
+| [`readdirSync`](#readdirsync) | 同步读目录 |
+| [`mkdirSync`](#mkdirsync) | 同步创建目录 |
+| [`renameSync`](#renamesync) | 同步重命名 |
+| [`unlinkSync`](#unlinksync) | 同步删除 |
+| [`copyFileSync`](#copyfilesync) | 同步复制 |
+| [`appendFileSync`](#appendfilesync) | 同步追加 |
 
 ### `readFile`
 

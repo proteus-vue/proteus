@@ -28,13 +28,13 @@ usePerformance(): CapResult<PerformanceAPI>
 
 ## 方法
 
-| 方法 | 签名 | 说明 |
-|---|---|---|
-| [`getEntries`](#getentries) | `getEntries(entryType?: 'navigation' \| 'render' \| 'script'): Promise<CapResult<PerformanceEntry[]>>` | 读取性能条目（可按类型过滤） |
-| [`getEntriesByName`](#getentriesbyname) | `getEntriesByName(name: string, entryType?: string): Promise<CapResult<PerformanceEntry[]>>` | 按名字读取性能条目 |
-| [`createObserver`](#createobserver) | `createObserver(): PerformanceObserverHandle` | 创建观察器（实时推送新条目） |
-| [`setBufferSize`](#setbuffersize) | `setBufferSize(size: number): void` | 设置性能缓冲区大小（条目数上限） |
-| [`report`](#report) | `report(id: number, value: number, dimensions?: string \| unknown[]): Promise<CapResult<void>>` | 上报自定义性能指标（微信性能监控平台——需后台配置 id）。 |
+| 方法 | 说明 |
+|---|---|
+| [`getEntries`](#getentries) | 读取性能条目（可按类型过滤） |
+| [`getEntriesByName`](#getentriesbyname) | 按名字读取性能条目 |
+| [`createObserver`](#createobserver) | 创建观察器（实时推送新条目） |
+| [`setBufferSize`](#setbuffersize) | 设置性能缓冲区大小（条目数上限） |
+| [`report`](#report) | 上报自定义性能指标（微信性能监控平台——需后台配置 id）。 |
 
 ### `getEntries`
 

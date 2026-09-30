@@ -28,12 +28,12 @@ useScreenCapture(): CapResult<ScreenCaptureAPI>
 
 ## 方法
 
-| 方法 | 签名 | 说明 |
-|---|---|---|
-| [`getRecordingState`](#getrecordingstate) | `getRecordingState(): Promise<CapResult<'on' \| 'off'>>` | 查询当前系统录屏状态（on 录制中 / off 未录制） |
-| [`onRecordingStateChange`](#onrecordingstatechange) | `onRecordingStateChange(cb: (state: 'on' \| 'off') => void): () => void` | 订阅系统录屏状态变化。 |
-| [`onUserCapture`](#onusercapture) | `onUserCapture(cb: () => void): () => void` | 订阅用户主动截屏事件。 |
-| [`isPictureInPictureActive`](#ispictureinpictureactive) | `isPictureInPictureActive(): Promise<CapResult<boolean>>` | 查询当前是否处于画中画（Picture-in-Picture）状态 |
+| 方法 | 说明 |
+|---|---|
+| [`getRecordingState`](#getrecordingstate) | 查询当前系统录屏状态（on 录制中 / off 未录制） |
+| [`onRecordingStateChange`](#onrecordingstatechange) | 订阅系统录屏状态变化。 |
+| [`onUserCapture`](#onusercapture) | 订阅用户主动截屏事件。 |
+| [`isPictureInPictureActive`](#ispictureinpictureactive) | 查询当前是否处于画中画（Picture-in-Picture）状态 |
 
 ### `getRecordingState`
 

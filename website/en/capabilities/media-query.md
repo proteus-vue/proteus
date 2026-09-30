@@ -28,10 +28,10 @@ useMediaQuery(): CapResult<MediaQueryObserver>
 
 ## Methods
 
-| Method | Signature | Doc |
-|---|---|---|
-| [`observe`](#observe) | `observe(condition: MediaQueryCondition, cb: (result: MediaQueryResult) => void): void` | — |
-| [`disconnect`](#disconnect) | `disconnect(): void` | — |
+| Method | Doc |
+|---|---|
+| [`observe`](#observe) | — |
+| [`disconnect`](#disconnect) | — |
 
 ### `observe`
 

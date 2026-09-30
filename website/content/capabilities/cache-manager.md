@@ -34,18 +34,18 @@ useCacheManager(options?: { maxAge?: number; mode?: 'weakNetwork' | 'always' | '
 
 ## 方法
 
-| 方法 | 签名 | 说明 |
-|---|---|---|
-| [`addRules`](#addrules) | `addRules(rules: CacheRule[]): Promise<CapResult<string[]>>` | 添加缓存规则。 |
-| [`deleteRules`](#deleterules) | `deleteRules(ids: string[]): Promise<CapResult<void>>` | 删除缓存规则。 |
-| [`clearRules`](#clearrules) | `clearRules(): Promise<CapResult<void>>` | 清空全部规则 |
-| [`start`](#start) | `start(): Promise<CapResult<void>>` | 启动缓存 |
-| [`stop`](#stop) | `stop(): Promise<CapResult<void>>` | 停止缓存 |
-| [`deleteCache`](#deletecache) | `deleteCache(id: string): Promise<CapResult<void>>` | 删除指定 URL 的缓存。 |
-| [`deleteCaches`](#deletecaches) | `deleteCaches(ids: string[]): Promise<CapResult<void>>` | 批量删除缓存。 |
-| [`clearCaches`](#clearcaches) | `clearCaches(): Promise<CapResult<void>>` | 清空全部缓存 |
-| [`getState`](#getstate) | `getState(): CacheManagerState` | 读取当前配置 |
-| [`on`](#on) | `on(event: 'request' \| 'enterWeakNetwork' \| 'exitWeakNetwork', cb: (payload: unknown) => void): () => void` | 订阅缓存事件。 |
+| 方法 | 说明 |
+|---|---|
+| [`addRules`](#addrules) | 添加缓存规则。 |
+| [`deleteRules`](#deleterules) | 删除缓存规则。 |
+| [`clearRules`](#clearrules) | 清空全部规则 |
+| [`start`](#start) | 启动缓存 |
+| [`stop`](#stop) | 停止缓存 |
+| [`deleteCache`](#deletecache) | 删除指定 URL 的缓存。 |
+| [`deleteCaches`](#deletecaches) | 批量删除缓存。 |
+| [`clearCaches`](#clearcaches) | 清空全部缓存 |
+| [`getState`](#getstate) | 读取当前配置 |
+| [`on`](#on) | 订阅缓存事件。 |
 
 ### `addRules`
 

@@ -40,10 +40,10 @@ useDataChannel(options: DataChannelOptions): Promise<CapResult<DataChannelHandle
 
 ## 方法
 
-| 方法 | 签名 | 说明 |
-|---|---|---|
-| [`send`](#send) | `send(data: string): Promise<CapResult<void>>` | 发送文本消息 |
-| [`onMessage`](#onmessage) | `onMessage(cb: (data: string) => void): () => void` | 订阅收到消息（返回取消） |
+| 方法 | 说明 |
+|---|---|
+| [`send`](#send) | 发送文本消息 |
+| [`onMessage`](#onmessage) | 订阅收到消息（返回取消） |
 
 ### `send`
 

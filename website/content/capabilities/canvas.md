@@ -34,13 +34,13 @@ useCanvas(id: string): CapResult<CanvasController>
 
 ## 方法
 
-| 方法 | 签名 | 说明 |
-|---|---|---|
-| [`createContext`](#createcontext) | `createContext(): CapResult<CanvasContext>` | 创建旧版 2D 绘图上下文（方法名对齐官方 CanvasContext） |
-| [`node`](#node) | `node(): Promise<CapResult<CanvasNode>>` | 取画布节点（`<canvas type="2d">` node——用于 requestAnimationFrame / 标准 getContext） |
-| [`toTempFilePath`](#totempfilepath) | `toTempFilePath(options?: CanvasExportOptions): Promise<CapResult<string>>` | 导出为临时文件路径（wx.canvasToTempFilePath；web 返回 data URL） |
-| [`toDataURL`](#todataurl) | `toDataURL(options?: CanvasExportOptions): Promise<CapResult<string>>` | 导出为 data URL（web 原生；wx 经临时文件读为 base64） |
-| [`offscreen`](#offscreen) | `offscreen(width: number, height: number, type?: '2d' \| 'webgl'): CapResult<OffscreenCanvasHandle>` | 创建离屏画布（Skyline 高频渲染 / 离屏合成） |
+| 方法 | 说明 |
+|---|---|
+| [`createContext`](#createcontext) | 创建旧版 2D 绘图上下文（方法名对齐官方 CanvasContext） |
+| [`node`](#node) | 取画布节点（`<canvas type="2d">` node——用于 requestAnimationFrame / 标准 getContext） |
+| [`toTempFilePath`](#totempfilepath) | 导出为临时文件路径（wx.canvasToTempFilePath；web 返回 data URL） |
+| [`toDataURL`](#todataurl) | 导出为 data URL（web 原生；wx 经临时文件读为 base64） |
+| [`offscreen`](#offscreen) | 创建离屏画布（Skyline 高频渲染 / 离屏合成） |
 
 ### `createContext`
 

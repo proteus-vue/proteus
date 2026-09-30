@@ -28,9 +28,9 @@ useMiniProgram(): Promise<CapResult<MiniProgramAPI>>
 
 ## 方法
 
-| 方法 | 签名 | 说明 |
-|---|---|---|
-| [`navigate`](#navigate) | `navigate(options: MiniProgramNavOptions): Promise<CapResult<void>>` | 跳转到其他小程序 |
+| 方法 | 说明 |
+|---|---|
+| [`navigate`](#navigate) | 跳转到其他小程序 |
 
 ### `navigate`
 

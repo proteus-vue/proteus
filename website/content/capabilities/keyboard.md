@@ -22,9 +22,9 @@ useKeyboard(): KeyboardLifecycle
 
 ## 方法
 
-| 方法 | 签名 | 说明 |
-|---|---|---|
-| [`onChange`](#onchange) | `onChange(cb: (info: KeyboardInfo) => void): () => void` | 订阅键盘高度变化（返回取消） |
+| 方法 | 说明 |
+|---|---|
+| [`onChange`](#onchange) | 订阅键盘高度变化（返回取消） |
 
 ### `onChange`
 

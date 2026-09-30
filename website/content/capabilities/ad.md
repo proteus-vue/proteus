@@ -28,11 +28,11 @@ useAd(): CapResult<AdAPI>
 
 ## 方法
 
-| 方法 | 签名 | 说明 |
-|---|---|---|
-| [`rewardedVideo`](#rewardedvideo) | `rewardedVideo(adUnitId: string): RewardedVideoAdHandle` | 创建激励视频广告（按 adUnitId 缓存实例——同 id 复用） |
-| [`interstitial`](#interstitial) | `interstitial(adUnitId: string): InterstitialAdHandle` | 创建插屏广告 |
-| [`banner`](#banner) | `banner(options: { adUnitId: string; style: BannerAdStyle }): BannerAdHandle` | 创建横幅广告 |
+| 方法 | 说明 |
+|---|---|
+| [`rewardedVideo`](#rewardedvideo) | 创建激励视频广告（按 adUnitId 缓存实例——同 id 复用） |
+| [`interstitial`](#interstitial) | 创建插屏广告 |
+| [`banner`](#banner) | 创建横幅广告 |
 
 ### `rewardedVideo`
 
