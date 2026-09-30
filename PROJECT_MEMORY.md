@@ -160,7 +160,30 @@ useBackground`）**早已实现**；缺的是**桥层**——`createCapabilityBr
 **诚实边界**：App 端**其余能力**（屏幕/设备/电池/剪贴板/localStorage…）仍走 web 桥降级路径
 ——本轮只开放**生命周期**三类（不冒充已完成）；`page:load` 不带路由参数（参数属 router 层）。
 
-**八、诚实边界**：① 多线程 Worker（`threads.background=false` 是对 QuickJS 现状的诚实声明，不是最终形态）；
+**八、★★官网更新（用户指出「官网文档好像没更新」）——门禁直接给出可判定的形态**
+
+`pnpm check:stats` **当场红**：implemented 声明 69 / 实际 72 · conformance 10 / 实际 11。
+更深的在**生成器**：能力页端表对 native 端**硬编码**「端原型映射——能力桥未接线」——
+对多数能力准确，但**生命周期三能力的 App 腿已落地并真机双端验证**（本轮 + 前一轮）。
+
+**修法：接线与否由源码决定**（与既有 `wxMissing`/`webMissing` 推导同构）：
+`gen-content.mjs` 新增 `loadAppBridgeKeys()` 读 `capability-app.ts` 的方法名 ⇒
+app-ios/app-android 桥覆盖 ⇒ ✅「真机双端验证」；app-harmony 桥就绪但壳未接 ⇒ 🟡（诚实）；
+其余维持原判。★**推导精确命中：84 页里只有生命周期 3 页漂移**；破坏性验证：删桥方法 ⇒ 页面当场漂移。
+
+**同一批修掉四个"改动前就已红"的既有缺陷**（都不属本轮引入，但阻塞交付）：
+① `component-audit`/`component-conformance` 的 implemented 快照 65 已过期（实测 69）→ 72；
+② `compiler-ir-m3-readback`：`shell.toast`/`ui.loading` 的**后端控件映射缺位**
+（上批只加 `SEMANTIC_BACKEND_MAP`，六端后端表漏补）→ 补齐；★flutter 值须按 SSOT 逐字
+（首版写 `showSnackBar`、SSOT 是 `ScaffoldMessenger.showSnackBar`——readback 逐字比对抓出）；
+③ `consistency-scope`：我在注释里写了旧 scope `@proteus/router` → 修（scope 扫描抓出）；
+④ `showcase-catalog`：能力域 10 → 9（"其他"兜底域**自然消失**——能力页全部归入正式域，是完善结果）。
+
+**数字对齐（SSOT）**：stats.ts（implemented 72 / conformance 11 / tests 4152）+ README
+（187 原语 / 44 包 / 4152 单测 / 84 Hook）+ showcase 快照重生成。
+**全量非 e2e：337 文件 / 4152 用例全绿**（此前 3919——含本轮新增）。
+
+**九、诚实边界**：① 多线程 Worker（`threads.background=false` 是对 QuickJS 现状的诚实声明，不是最终形态）；
 ② Flutter/Harmony 宿主（B5）；③ G-42 六容器的**产品级消费者**仍为空（需真实 App 接入——本轮未动）；
 ④ iOS 侧 `obj_count` 恒 0（JSC 无该读数——不伪造）。
 
