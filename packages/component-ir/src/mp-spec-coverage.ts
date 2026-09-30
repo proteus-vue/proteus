@@ -177,6 +177,8 @@ export const SPEC_COVERED: Record<string, string> = {
   requestSubscribeMessage: 'useNotification',
   setWifiList: 'useWifi',
   stopWifi: 'useWifi',
+  // ★2026-09-30 NC1：setKeepScreenOn 已由声明式能力 C83 承接（落地后据实由 planned 转 covered）
+  setKeepScreenOn: 'useKeepScreenOn',
   batchGetStorage: 'useStorage',
   batchSetStorage: 'useStorage',
   clearStorage: 'useStorage',
@@ -323,6 +325,10 @@ export const SPEC_PRIVATE: ReadonlySet<string> = new Set([
   'getBackgroundFetchData',
   'getBackgroundFetchToken',
   'setBackgroundFetchToken',
+  // ★2026-09-30 归类修正：这两条依赖**微信生态上下文**（聊天会话选文件 / 微信授权头像昵称），
+  //   与 Web/App 无共同语义 ⇒ 属「微信独占」而非「通用缺口」（重分类前误记 planned——那会虚增
+  //   缺口数并误导 NC2 排期去做"跨端对等"，而它本质上没有对等物）
+  'chooseMessageFile', 'getUserProfile',
 ])
 
 // —— ③ 显式「不适用」（废弃 / 构建期 / 被语义原语消灭） ——
@@ -398,19 +404,16 @@ export const SPEC_PLANNED: Record<string, string> = {
   canvasGetImageData: '画布像素读取（CanvasContext 无此方法——见 capability.ts CanvasContext）',
   canvasPutImageData: '画布像素写入（同上）',
   checkIsOpenAccessibility: '无障碍开关探测（无对等）',
-  chooseMessageFile: '聊天文件选择（无对等；chooseMedia 不含聊天文件）',
   createBLEPeripheralServer: '蓝牙外设模式（无对等）',
   getImageInfo: '图片元信息（宽高/方向——useFileSystem 只给 size/digest）',
   getVideoInfo: '视频元信息（同上族）',
   getRandomValues: '密码学随机数（Web 端有 crypto.getRandomValues——宿主未接线）',
-  getUserProfile: '用户资料获取（无对等 Hook）',
   hideLoading: '全局加载态（ui.loading 为 planned 组件）',
   showLoading: '全局加载态（同上）',
   hideToast: '全局轻提示（shell.toast 为 planned 组件）',
   showToast: '全局轻提示（同上）',
   openDocument: '文档预览（宿主文档能力，无对等）',
   pageScrollTo: '页面级滚动（p-scroll 只管组件内滚动）',
-  setKeepScreenOn: '屏幕常亮（无对等——NC2 首个候选）',
   startPullDownRefresh: '页面级下拉刷新（p-scroll refresher 只管 scroll-view）',
   stopPullDownRefresh: '页面级下拉刷新（同上）',
   startDeviceMotionListening: '设备运动监听（融合传感器——当前仅三轴单项）',
@@ -688,7 +691,7 @@ export const SPEC_RATCHET: { coveredMin: number; gapMax: number } = {
   //   原标 covered 且引用 `gesture.draggable`（拖拽）——引用错位 + MP 无对等（bindtap 不带 count）
   //   ⇒ 据实转 planned。**真实可运行的等价物一件没少**，只是不再把「仅 Web 成立」记成「两端已落地」。
   //   该条即上次注释要求「因诚实性修正需下调时，必须写明被修正的具体条目」所指的条目。
-  coveredMin: 356, // ★2026-09-30 上调 252 → 356（属「修标尺」——见下条长注释；标尺修好后必须显式锁新水位）
+  coveredMin: 357, // ★2026-09-30 上调 252 → 356（修标尺）→ **357**（C83 setKeepScreenOn 真实落地）
   gapMax: 0, // 全部官方项必须归类
   // ★★2026-09-30：抽标尺修复后的水位重锁（**性质：修的是尺子，不是能力**——必须写清楚）
   //   起因：快照抽取器（scripts/gen-mp-spec.mjs）的 API 正则不认**泛型方法签名** `name<T>(...)`
@@ -703,7 +706,7 @@ export const SPEC_RATCHET: { coveredMin: number; gapMax: number } = {
   //     分组注释（严格口径 = 剥注释后匹配 `wx.<name>(` 或同族动态派发，非"看起来像"）；
   //     private +39 · na +33 · planned +21 —— 合计 197。它们是**此前没被记账的既有覆盖**。
   //     这是"修尺子"带来的**账面**变化：真实可运行的等价物一件没多也没少。
-  //   ★同时新登记 **planned 25**（真实缺口，含 setKeepScreenOn / startPullDownRefresh / showToast 等）
+  //   ★同时新登记 **planned 24**（真实缺口，含 startPullDownRefresh / showToast / showModal 等）
   //     —— 它们是 NC2「内置能力扩充」的候选输入（**保守归类**：拿不准一律 planned，不虚标 covered）。
   //   ★附加修复：抽取范围原为「`interface Wx {` 起 → 文件尾」（未设边界，靠缩进巧合）⇒ 改为括号配对。
 }

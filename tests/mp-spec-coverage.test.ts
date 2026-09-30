@@ -79,7 +79,12 @@ describe('★权威标尺：官方清单 spec 驱动覆盖度', () => {
     // ★2026-09-30：泛型签名修复后新可见的核心 API 也在标尺内（此前结构性漏抽）
     expect(classifySpecApi('request').status).toBe('covered')     // wx.request —— 曾是最大漏项
     expect(classifySpecApi('login').status).toBe('covered')       // wx.login
-    expect(classifySpecApi('setKeepScreenOn').status).toBe('planned') // 真实缺口（NC2 候选）
+    // ★2026-09-30 更新：setKeepScreenOn 已由 NC1 声明式能力 C83 真实落地 ⇒ covered
+    //   （反向断言：若它退回 planned，说明覆盖回退——门禁应当红）
+    expect(classifySpecApi('setKeepScreenOn').status).toBe('covered')
+    // 真实缺口仍在（NC2 候选——这些尚未落地）
+    expect(classifySpecApi('showToast').status).toBe('planned')
+    expect(classifySpecApi('startPullDownRefresh').status).toBe('planned')
     expect(classifySpecComponent('camera', MP_MAPPING_MATRIX).status).toBe('covered')
     expect(classifySpecApi('requestMerchantTransfer').status).toBe('private')
     expect(classifySpecApi('nextTick').status).toBe('na')

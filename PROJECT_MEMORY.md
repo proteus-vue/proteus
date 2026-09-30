@@ -102,7 +102,7 @@ roadmap v0.6 段追加两条决策接入注记 + v2.0+ 插件体系行补指针�
 | **生成** | `scripts/gen-bridge-ext.mjs` → `src/generated/bridge-ext.ts` | 机器 | 模板化包装（Promise 化/错误码/缺失检测/状态闭包）——**手写即第 N 份副本** |
 | **合并** | `capability.ts` 的 `createCapabilityBridge`（手写桥在前，生成物在后覆盖） | 一次性 | **生成物在运行路径上**（不是摆设） |
 
-**首个能力 = C83 useKeepScreenOn**（来源：标尺修复后浮现的 21 个真实缺口之一）：
+**首个能力 = C83 useKeepScreenOn**（来源：标尺修复后浮现的真实缺口之一——该条已转 covered）：
 · MP = `wx.setKeepScreenOn`（callback 形态）· Web = **Screen Wake Lock**（`navigator.wakeLock.request`，
   **stateful 形态**——需持 sentinel 才能释放）⇒ 挑它正是因为**形态非平凡**（检验生成器不止能处理最简单那种）。
 · 诚实边界写进声明与生成物：Web 需页面可见 + 安全上下文；隐藏时系统自动释放。
@@ -141,11 +141,13 @@ roadmap v0.6 段追加两条决策接入注记 + v2.0+ 插件体系行补指针�
 
 **重分类（197 项逐条取证，不虚标）**：covered +104 · private +39 · na +33 · **planned +21**。
 棘轮 252 → **356**（性质 = **修尺子**，非能力增长——注释已写明并区分）；
-官方 579 项（组件 84 · API 495）· covered 356 · planned 25 · private 145 · na 53 · gap 0
-· 真·落地率 **93%**。
-★**21 条 planned 是真实缺口**（`setKeepScreenOn` / `showToast` / `showModal` /
-`startPullDownRefresh` / `getUserProfile` / `chooseMessageFile` / 画布像素读写…）
-⇒ **直接成为 NC2 的候选输入**（NC1 侦察的副产品）。
+官方 579 项（组件 84 · API 495）· covered **357** · planned **22** · private **147** · na 53 · gap 0
+· 真·落地率 **94%**（后续变动见下一段）。
+★**当前 22 条 planned 是真实缺口**（`showToast` / `showLoading` / `startPullDownRefresh` /
+画布像素读写 / `createBLEPeripheralServer` / `checkIsOpenAccessibility` / `startDeviceMotionListening` +
+4 个手势组件…）⇒ **直接成为 NC2 的候选输入**（NC1 侦察的副产品）。
+★同轮修正两条归类：`chooseMessageFile` / `getUserProfile` ⇒ **private**（依赖微信生态上下文，
+与 Web/App 无共同语义——误记 planned 会虚增缺口 并误导"跨端对等"排期）。
 ★同步刷新：NC0 优先级表（官方承接 197→**301**，有承接的能力 56→**69**）·
 台账 `miniprogram-coverage-ledger.md`（加"标尺修复"必读段）· 4 份文档的 298→495 ·
 测试 2 处旧断言（"API 侧 planned 清零"是**旧尺子下的产物**，已按新事实更新为"21 条并须带承接说明"）。

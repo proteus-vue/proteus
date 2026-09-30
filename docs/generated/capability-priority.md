@@ -14,6 +14,11 @@
 
 **优先级算法（方案 §1.1）**：跨项目覆盖数 **优先于** 单项目频次；成本加权 S/M/L=1/3/8。
 
+**列含义（★防误读）**：
+- **Hook 可用** = Hook 是否在 `CapabilityHooks` 接口声明（**机械判据**——API 层可直接调用，双端桥/降级见各能力页）；
+- **组件形态** = 该能力是否有 `p-*` 组件标签（`纯 Hook` = 无组件形态，只有函数式入口）；
+- ★**不要**把 catalog 的 `status` 字段读成「已实现/未实现」：对能力项它是**类别标记**（`planned` = 纯 Hook 无 C-IR 节点），源码注释已写明。本表因此**不展示**该字段（首版曾展示 ⇒ 把 useStorage/useNetwork 等日常在用的能力读成「待实现」，属误导）。
+
 **★诚实边界（必读）**：
 - 语料 = 本仓 **3 个自有工程**（非真实业务项目）⇒ 需求数字是**下界**；真实证据待接入超级应用后补齐（与《实战采集埋点清单》同一原则）；
 - **成本等级机器不可算**——表中该列标 `⏳ 待人工估`，**不编造数字**；NC0 出口时人工按 S/M/L=1/3/8 填写；
@@ -22,96 +27,96 @@
 ## 1. 汇总
 
 - **能力总数**：83 · 语料出现过：**46** · 跨项目（≥2 工程）：**15**
-- **有官方承接**：69 / 83（合计承接 covered API 301 / 495）
+- **有官方承接**：70 / 83（合计承接 covered API 302 / 495）
 - **未登记分域**：0（应为 0——非 0 即新能力漏登记，见 `auditCapabilityDomains`）
 
 ## 2. 优先级表（按 跨项目覆盖 ↓ · 语料频次 ↓ · 官方承接 ↓）
 
-| # | 优先信号 | 编号 | Hook | 域 | 跨项目 | 语料频次 | 官方承接 | 清单状态 | 成本（S/M/L=1/3/8） |
-|---|---|---|---|---|---|---|---|---|---|
-| 1 | ★★ | C1 | `useCamera()` | 媒体与扫码 | showcase+examples | 8 | 1 | implemented | ⏳ 待人工估 |
-| 2 | ★★ | C15 | `useStorage()` | 存储与文件 | showcase+examples | 5 | 14 | planned | ⏳ 待人工估 |
-| 3 | ★★ | C8 | `useNetwork()` | 设备与系统 | showcase+examples | 5 | 6 | planned | ⏳ 待人工估 |
-| 4 | ★★ | C25 | `useBackground()` | 应用与生命周期 | showcase+examples | 5 | 5 | planned | ⏳ 待人工估 |
-| 5 | ★★ | C9 | `useClipboard()` | 设备与系统 | showcase+examples | 5 | 4 | planned | ⏳ 待人工估 |
-| 6 | ★★ | C35 | `useLog()` | 可观测与调试 | showcase+examples | 5 | 4 | planned | ⏳ 待人工估 |
-| 7 | ★★ | C6 | `useVibrate()` | 设备与系统 | showcase+examples | 5 | 2 | planned | ⏳ 待人工估 |
-| 8 | ★★ | C11 | `useDevice()` | 设备与系统 | showcase+examples | 4 | 14 | planned | ⏳ 待人工估 |
-| 9 | ★★ | C23 | `useAppLifecycle()` | 应用与生命周期 | showcase+examples | 4 | 14 | planned | ⏳ 待人工估 |
-| 10 | ★★ | C24 | `usePageLifecycle()` | 应用与生命周期 | showcase+examples | 4 | 12 | planned | ⏳ 待人工估 |
-| 11 | ★★ | C14 | `useKeyboard()` | 设备与系统 | showcase+examples | 4 | 7 | planned | ⏳ 待人工估 |
-| 12 | ★★ | C43 | `useFileSystem()` | 存储与文件 | showcase+examples | 4 | 6 | planned | ⏳ 待人工估 |
-| 13 | ★★ | C38 | `useBiometric()` | 账号与支付 | showcase+examples | 4 | 3 | planned | ⏳ 待人工估 |
-| 14 | ★★ | C66 | `usePerformance()` | 可观测与调试 | showcase+examples | 4 | 2 | planned | ⏳ 待人工估 |
-| 15 | ★★ | C32 | `useCookie()` | 存储与文件 | showcase+examples | 4 | 0 | planned | ⏳ 待人工估 |
-| 16 | ★ | C3 | `useLocation()` | 位置与地图 | showcase | 5 | 9 | implemented | ⏳ 待人工估 |
-| 17 | ★ | C58 | `useElement()` | 设备与系统 | showcase | 4 | 4 | planned | ⏳ 待人工估 |
-| 18 | ★ | C57 | `useCanvas()` | 媒体与扫码 | showcase | 4 | 3 | planned | ⏳ 待人工估 |
-| 19 | ★ | C75 | `useNavigationGuard()` | 应用与生命周期 | showcase | 4 | 2 | planned | ⏳ 待人工估 |
-| 20 | ★ | C10 | `useScreen()` | 设备与系统 | showcase | 3 | 7 | planned | ⏳ 待人工估 |
-| 21 | ★ | C16 | `usePermission()` | 账号与支付 | showcase | 3 | 6 | planned | ⏳ 待人工估 |
-| 22 | ★ | C7 | `useBattery()` | 设备与系统 | showcase | 3 | 4 | planned | ⏳ 待人工估 |
-| 23 | ★ | C12 | `useOrientation()` | 设备与系统 | showcase | 3 | 2 | planned | ⏳ 待人工估 |
-| 24 | ★ | C73 | `useIdle()` | 应用与生命周期 | showcase | 3 | 2 | planned | ⏳ 待人工估 |
-| 25 | ★ | C30 | `useDownload()` | 网络与通信 | showcase | 3 | 1 | planned | ⏳ 待人工估 |
-| 26 | ★ | C59 | `useIntersection()` | 设备与系统 | showcase | 3 | 1 | planned | ⏳ 待人工估 |
-| 27 | ★ | C81 | `useDeviceCapability()` | 设备与系统 | showcase | 3 | 1 | planned | ⏳ 待人工估 |
-| 28 | ★ | C60 | `useMediaQuery()` | 设备与系统 | showcase | 3 | 0 | planned | ⏳ 待人工估 |
-| 29 | ★ | C26 | `useFetch()` | 网络与通信 | examples | 2 | 1 | planned | ⏳ 待人工估 |
-| 30 | ★ | C36 | `useBluetooth()` | 网络与通信 | examples | 1 | 32 | planned | ⏳ 待人工估 |
-| 31 | ★ | C5 | `useSensor()` | 设备与系统 | examples | 1 | 14 | planned | ⏳ 待人工估 |
-| 32 | ★ | C27 | `useWebSocket()` | 网络与通信 | examples | 1 | 7 | planned | ⏳ 待人工估 |
-| 33 | ★ | C37 | `useNFC()` | 网络与通信 | examples | 1 | 7 | planned | ⏳ 待人工估 |
-| 34 | ★ | C47 | `useMiniProgram()` | 应用与生命周期 | examples | 1 | 3 | planned | ⏳ 待人工估 |
-| 35 | ★ | C20 | `useCalendar()` | 通知与分享 | examples | 1 | 2 | planned | ⏳ 待人工估 |
-| 36 | ★ | C34 | `useAnalytics()` | 可观测与调试 | examples | 1 | 2 | planned | ⏳ 待人工估 |
-| 37 | ★ | C4 | `useMap()` | 位置与地图 | examples | 1 | 1 | planned | ⏳ 待人工估 |
-| 38 | ★ | C17 | `useNotification()` | 通知与分享 | examples | 1 | 1 | planned | ⏳ 待人工估 |
-| 39 | ★ | C19 | `useContact()` | 通知与分享 | examples | 1 | 1 | planned | ⏳ 待人工估 |
-| 40 | ★ | C42 | `useQRCode()` | 媒体与扫码 | examples | 1 | 1 | implemented | ⏳ 待人工估 |
-| 41 | ★ | C2 | `useMicrophone()` | 媒体与扫码 | examples | 1 | 0 | planned | ⏳ 待人工估 |
-| 42 | ★ | C33 | `useAuth()` | 账号与支付 | examples | 1 | 0 | planned | ⏳ 待人工估 |
-| 43 | ★ | C39 | `useFaceID()` | 账号与支付 | examples | 1 | 0 | planned | ⏳ 待人工估 |
-| 44 | ★ | C44 | `useArchive()` | 存储与文件 | examples | 1 | 0 | planned | ⏳ 待人工估 |
-| 45 | ★ | C45 | `useShortcut()` | 通知与分享 | examples | 1 | 0 | planned | ⏳ 待人工估 |
-| 46 | ★ | C50 | `useExtension()` | 应用与生命周期 | examples | 1 | 0 | planned | ⏳ 待人工估 |
-| 47 | △ | C55 | `useWifi()` | 网络与通信 | — | 0 | 12 | planned | ⏳ 待人工估 |
-| 48 | △ | C78 | `useLocalService()` | 网络与通信 | — | 0 | 10 | planned | ⏳ 待人工估 |
-| 49 | △ | C52 | `useAlbum()` | 媒体与扫码 | — | 0 | 7 | planned | ⏳ 待人工估 |
-| 50 | △ | C77 | `useBeacon()` | 设备与系统 | — | 0 | 7 | planned | ⏳ 待人工估 |
-| 51 | △ | C69 | `useSocket()` | 网络与通信 | — | 0 | 6 | planned | ⏳ 待人工估 |
-| 52 | △ | C71 | `useScreenCapture()` | 设备与系统 | — | 0 | 6 | planned | ⏳ 待人工估 |
-| 53 | △ | C70 | `useMediaProcessing()` | 媒体与扫码 | — | 0 | 5 | planned | ⏳ 待人工估 |
-| 54 | △ | C28 | `useSocketTask()` | 网络与通信 | — | 0 | 4 | planned | ⏳ 待人工估 |
-| 55 | △ | C62 | `useAudio()` | 媒体与扫码 | — | 0 | 4 | planned | ⏳ 待人工估 |
-| 56 | △ | C65 | `usePrivacy()` | 账号与支付 | — | 0 | 4 | planned | ⏳ 待人工估 |
-| 57 | △ | C67 | `usePreload()` | 应用与生命周期 | — | 0 | 4 | planned | ⏳ 待人工估 |
-| 58 | △ | C79 | `useTranslation()` | 通知与分享 | — | 0 | 4 | planned | ⏳ 待人工估 |
-| 59 | △ | C64 | `useAd()` | 通知与分享 | — | 0 | 3 | planned | ⏳ 待人工估 |
-| 60 | △ | C13 | `useBrightness()` | 设备与系统 | — | 0 | 2 | planned | ⏳ 待人工估 |
-| 61 | △ | C49 | `useLive()` | 媒体与扫码 | — | 0 | 2 | planned | ⏳ 待人工估 |
-| 62 | △ | C68 | `useImageEdit()` | 媒体与扫码 | — | 0 | 2 | planned | ⏳ 待人工估 |
-| 63 | △ | C76 | `useAR()` | 设备与系统 | — | 0 | 2 | planned | ⏳ 待人工估 |
-| 64 | △ | C80 | `usePoster()` | 通知与分享 | — | 0 | 2 | planned | ⏳ 待人工估 |
-| 65 | △ | C21 | `usePhoneCall()` | 通知与分享 | — | 0 | 1 | planned | ⏳ 待人工估 |
-| 66 | △ | C22 | `useSMS()` | 通知与分享 | — | 0 | 1 | planned | ⏳ 待人工估 |
-| 67 | △ | C29 | `useUpload()` | 网络与通信 | — | 0 | 1 | planned | ⏳ 待人工估 |
-| 68 | △ | C40 | `usePayment()` | 账号与支付 | — | 0 | 1 | planned | ⏳ 待人工估 |
-| 69 | △ | C41 | `useLogin()` | 账号与支付 | — | 0 | 1 | planned | ⏳ 待人工估 |
-| 70 | △ | C51 | `useUpdate()` | 应用与生命周期 | — | 0 | 1 | planned | ⏳ 待人工估 |
-| 71 | △ | C53 | `useWorker()` | 应用与生命周期 | — | 0 | 1 | planned | ⏳ 待人工估 |
-| 72 | △ | C54 | `useAddress()` | 账号与支付 | — | 0 | 1 | planned | ⏳ 待人工估 |
-| 73 | △ | C56 | `useWeRun()` | 设备与系统 | — | 0 | 1 | planned | ⏳ 待人工估 |
-| 74 | △ | C61 | `useVideo()` | 媒体与扫码 | — | 0 | 1 | planned | ⏳ 待人工估 |
-| 75 | △ | C63 | `useLivePusher()` | 媒体与扫码 | — | 0 | 1 | planned | ⏳ 待人工估 |
-| 76 | △ | C72 | `useCacheManager()` | 设备与系统 | — | 0 | 1 | planned | ⏳ 待人工估 |
-| 77 | △ | C74 | `useWindow()` | 应用与生命周期 | — | 0 | 1 | planned | ⏳ 待人工估 |
-| 78 | · | C18 | `useShare()` | 通知与分享 | — | 0 | 0 | planned | ⏳ 待人工估 |
-| 79 | · | C31 | `useDataChannel()` | 网络与通信 | — | 0 | 0 | planned | ⏳ 待人工估 |
-| 80 | · | C46 | `useInAppPurchase()` | 账号与支付 | — | 0 | 0 | planned | ⏳ 待人工估 |
-| 81 | · | C48 | `useEmbedded()` | 应用与生命周期 | — | 0 | 0 | planned | ⏳ 待人工估 |
-| 82 | · | C82 | `useWebAssembly()` | 应用与生命周期 | — | 0 | 0 | planned | ⏳ 待人工估 |
-| 83 | · | C83 | `useKeepScreenOn()` | 设备与系统 | — | 0 | 0 | implemented | ⏳ 待人工估 |
+| # | 优先信号 | 编号 | Hook | 域 | 跨项目 | 语料频次 | 官方承接 | Hook 可用 | 组件形态 | 成本（S/M/L=1/3/8） |
+|---|---|---|---|---|---|---|---|---|---|---|
+| 1 | ★★ | C1 | `useCamera()` | 媒体与扫码 | showcase+examples | 8 | 1 | ✅ | 组件+Hook | ⏳ 待人工估 |
+| 2 | ★★ | C15 | `useStorage()` | 存储与文件 | showcase+examples | 5 | 14 | ✅ | 纯 Hook | ⏳ 待人工估 |
+| 3 | ★★ | C8 | `useNetwork()` | 设备与系统 | showcase+examples | 5 | 6 | ✅ | 纯 Hook | ⏳ 待人工估 |
+| 4 | ★★ | C25 | `useBackground()` | 应用与生命周期 | showcase+examples | 5 | 5 | ✅ | 纯 Hook | ⏳ 待人工估 |
+| 5 | ★★ | C9 | `useClipboard()` | 设备与系统 | showcase+examples | 5 | 4 | ✅ | 纯 Hook | ⏳ 待人工估 |
+| 6 | ★★ | C35 | `useLog()` | 可观测与调试 | showcase+examples | 5 | 4 | ✅ | 纯 Hook | ⏳ 待人工估 |
+| 7 | ★★ | C6 | `useVibrate()` | 设备与系统 | showcase+examples | 5 | 2 | ✅ | 纯 Hook | ⏳ 待人工估 |
+| 8 | ★★ | C11 | `useDevice()` | 设备与系统 | showcase+examples | 4 | 14 | ✅ | 纯 Hook | ⏳ 待人工估 |
+| 9 | ★★ | C23 | `useAppLifecycle()` | 应用与生命周期 | showcase+examples | 4 | 14 | ✅ | 纯 Hook | ⏳ 待人工估 |
+| 10 | ★★ | C24 | `usePageLifecycle()` | 应用与生命周期 | showcase+examples | 4 | 12 | ✅ | 纯 Hook | ⏳ 待人工估 |
+| 11 | ★★ | C14 | `useKeyboard()` | 设备与系统 | showcase+examples | 4 | 7 | ✅ | 纯 Hook | ⏳ 待人工估 |
+| 12 | ★★ | C43 | `useFileSystem()` | 存储与文件 | showcase+examples | 4 | 6 | ✅ | 纯 Hook | ⏳ 待人工估 |
+| 13 | ★★ | C38 | `useBiometric()` | 账号与支付 | showcase+examples | 4 | 3 | ✅ | 纯 Hook | ⏳ 待人工估 |
+| 14 | ★★ | C66 | `usePerformance()` | 可观测与调试 | showcase+examples | 4 | 2 | ✅ | 纯 Hook | ⏳ 待人工估 |
+| 15 | ★★ | C32 | `useCookie()` | 存储与文件 | showcase+examples | 4 | 0 | ✅ | 纯 Hook | ⏳ 待人工估 |
+| 16 | ★ | C3 | `useLocation()` | 位置与地图 | showcase | 5 | 9 | ✅ | 组件+Hook | ⏳ 待人工估 |
+| 17 | ★ | C58 | `useElement()` | 设备与系统 | showcase | 4 | 4 | ✅ | 纯 Hook | ⏳ 待人工估 |
+| 18 | ★ | C57 | `useCanvas()` | 媒体与扫码 | showcase | 4 | 3 | ✅ | 纯 Hook | ⏳ 待人工估 |
+| 19 | ★ | C75 | `useNavigationGuard()` | 应用与生命周期 | showcase | 4 | 2 | ✅ | 纯 Hook | ⏳ 待人工估 |
+| 20 | ★ | C10 | `useScreen()` | 设备与系统 | showcase | 3 | 7 | ✅ | 纯 Hook | ⏳ 待人工估 |
+| 21 | ★ | C16 | `usePermission()` | 账号与支付 | showcase | 3 | 6 | ✅ | 纯 Hook | ⏳ 待人工估 |
+| 22 | ★ | C7 | `useBattery()` | 设备与系统 | showcase | 3 | 4 | ✅ | 纯 Hook | ⏳ 待人工估 |
+| 23 | ★ | C12 | `useOrientation()` | 设备与系统 | showcase | 3 | 2 | ✅ | 纯 Hook | ⏳ 待人工估 |
+| 24 | ★ | C73 | `useIdle()` | 应用与生命周期 | showcase | 3 | 2 | ✅ | 纯 Hook | ⏳ 待人工估 |
+| 25 | ★ | C30 | `useDownload()` | 网络与通信 | showcase | 3 | 1 | ✅ | 纯 Hook | ⏳ 待人工估 |
+| 26 | ★ | C59 | `useIntersection()` | 设备与系统 | showcase | 3 | 1 | ✅ | 纯 Hook | ⏳ 待人工估 |
+| 27 | ★ | C81 | `useDeviceCapability()` | 设备与系统 | showcase | 3 | 1 | ✅ | 纯 Hook | ⏳ 待人工估 |
+| 28 | ★ | C60 | `useMediaQuery()` | 设备与系统 | showcase | 3 | 0 | ✅ | 纯 Hook | ⏳ 待人工估 |
+| 29 | ★ | C26 | `useFetch()` | 网络与通信 | examples | 2 | 1 | ✅ | 纯 Hook | ⏳ 待人工估 |
+| 30 | ★ | C36 | `useBluetooth()` | 网络与通信 | examples | 1 | 32 | ✅ | 纯 Hook | ⏳ 待人工估 |
+| 31 | ★ | C5 | `useSensor()` | 设备与系统 | examples | 1 | 14 | ✅ | 纯 Hook | ⏳ 待人工估 |
+| 32 | ★ | C27 | `useWebSocket()` | 网络与通信 | examples | 1 | 7 | ✅ | 纯 Hook | ⏳ 待人工估 |
+| 33 | ★ | C37 | `useNFC()` | 网络与通信 | examples | 1 | 7 | ✅ | 纯 Hook | ⏳ 待人工估 |
+| 34 | ★ | C47 | `useMiniProgram()` | 应用与生命周期 | examples | 1 | 3 | ✅ | 纯 Hook | ⏳ 待人工估 |
+| 35 | ★ | C20 | `useCalendar()` | 通知与分享 | examples | 1 | 2 | ✅ | 纯 Hook | ⏳ 待人工估 |
+| 36 | ★ | C34 | `useAnalytics()` | 可观测与调试 | examples | 1 | 2 | ✅ | 纯 Hook | ⏳ 待人工估 |
+| 37 | ★ | C4 | `useMap()` | 位置与地图 | examples | 1 | 1 | ✅ | 纯 Hook | ⏳ 待人工估 |
+| 38 | ★ | C17 | `useNotification()` | 通知与分享 | examples | 1 | 1 | ✅ | 纯 Hook | ⏳ 待人工估 |
+| 39 | ★ | C19 | `useContact()` | 通知与分享 | examples | 1 | 1 | ✅ | 纯 Hook | ⏳ 待人工估 |
+| 40 | ★ | C42 | `useQRCode()` | 媒体与扫码 | examples | 1 | 1 | ✅ | 组件+Hook | ⏳ 待人工估 |
+| 41 | ★ | C2 | `useMicrophone()` | 媒体与扫码 | examples | 1 | 0 | ✅ | 纯 Hook | ⏳ 待人工估 |
+| 42 | ★ | C33 | `useAuth()` | 账号与支付 | examples | 1 | 0 | ✅ | 纯 Hook | ⏳ 待人工估 |
+| 43 | ★ | C39 | `useFaceID()` | 账号与支付 | examples | 1 | 0 | ✅ | 纯 Hook | ⏳ 待人工估 |
+| 44 | ★ | C44 | `useArchive()` | 存储与文件 | examples | 1 | 0 | ✅ | 纯 Hook | ⏳ 待人工估 |
+| 45 | ★ | C45 | `useShortcut()` | 通知与分享 | examples | 1 | 0 | ✅ | 纯 Hook | ⏳ 待人工估 |
+| 46 | ★ | C50 | `useExtension()` | 应用与生命周期 | examples | 1 | 0 | ✅ | 纯 Hook | ⏳ 待人工估 |
+| 47 | △ | C55 | `useWifi()` | 网络与通信 | — | 0 | 12 | ✅ | 纯 Hook | ⏳ 待人工估 |
+| 48 | △ | C78 | `useLocalService()` | 网络与通信 | — | 0 | 10 | ✅ | 纯 Hook | ⏳ 待人工估 |
+| 49 | △ | C52 | `useAlbum()` | 媒体与扫码 | — | 0 | 7 | ✅ | 纯 Hook | ⏳ 待人工估 |
+| 50 | △ | C77 | `useBeacon()` | 设备与系统 | — | 0 | 7 | ✅ | 纯 Hook | ⏳ 待人工估 |
+| 51 | △ | C69 | `useSocket()` | 网络与通信 | — | 0 | 6 | ✅ | 纯 Hook | ⏳ 待人工估 |
+| 52 | △ | C71 | `useScreenCapture()` | 设备与系统 | — | 0 | 6 | ✅ | 纯 Hook | ⏳ 待人工估 |
+| 53 | △ | C70 | `useMediaProcessing()` | 媒体与扫码 | — | 0 | 5 | ✅ | 纯 Hook | ⏳ 待人工估 |
+| 54 | △ | C28 | `useSocketTask()` | 网络与通信 | — | 0 | 4 | ✅ | 纯 Hook | ⏳ 待人工估 |
+| 55 | △ | C62 | `useAudio()` | 媒体与扫码 | — | 0 | 4 | ✅ | 纯 Hook | ⏳ 待人工估 |
+| 56 | △ | C65 | `usePrivacy()` | 账号与支付 | — | 0 | 4 | ✅ | 纯 Hook | ⏳ 待人工估 |
+| 57 | △ | C67 | `usePreload()` | 应用与生命周期 | — | 0 | 4 | ✅ | 纯 Hook | ⏳ 待人工估 |
+| 58 | △ | C79 | `useTranslation()` | 通知与分享 | — | 0 | 4 | ✅ | 纯 Hook | ⏳ 待人工估 |
+| 59 | △ | C64 | `useAd()` | 通知与分享 | — | 0 | 3 | ✅ | 纯 Hook | ⏳ 待人工估 |
+| 60 | △ | C13 | `useBrightness()` | 设备与系统 | — | 0 | 2 | ✅ | 纯 Hook | ⏳ 待人工估 |
+| 61 | △ | C49 | `useLive()` | 媒体与扫码 | — | 0 | 2 | ✅ | 纯 Hook | ⏳ 待人工估 |
+| 62 | △ | C68 | `useImageEdit()` | 媒体与扫码 | — | 0 | 2 | ✅ | 纯 Hook | ⏳ 待人工估 |
+| 63 | △ | C76 | `useAR()` | 设备与系统 | — | 0 | 2 | ✅ | 纯 Hook | ⏳ 待人工估 |
+| 64 | △ | C80 | `usePoster()` | 通知与分享 | — | 0 | 2 | ✅ | 纯 Hook | ⏳ 待人工估 |
+| 65 | △ | C21 | `usePhoneCall()` | 通知与分享 | — | 0 | 1 | ✅ | 纯 Hook | ⏳ 待人工估 |
+| 66 | △ | C22 | `useSMS()` | 通知与分享 | — | 0 | 1 | ✅ | 纯 Hook | ⏳ 待人工估 |
+| 67 | △ | C29 | `useUpload()` | 网络与通信 | — | 0 | 1 | ✅ | 纯 Hook | ⏳ 待人工估 |
+| 68 | △ | C40 | `usePayment()` | 账号与支付 | — | 0 | 1 | ✅ | 纯 Hook | ⏳ 待人工估 |
+| 69 | △ | C41 | `useLogin()` | 账号与支付 | — | 0 | 1 | ✅ | 纯 Hook | ⏳ 待人工估 |
+| 70 | △ | C51 | `useUpdate()` | 应用与生命周期 | — | 0 | 1 | ✅ | 纯 Hook | ⏳ 待人工估 |
+| 71 | △ | C53 | `useWorker()` | 应用与生命周期 | — | 0 | 1 | ✅ | 纯 Hook | ⏳ 待人工估 |
+| 72 | △ | C54 | `useAddress()` | 账号与支付 | — | 0 | 1 | ✅ | 纯 Hook | ⏳ 待人工估 |
+| 73 | △ | C56 | `useWeRun()` | 设备与系统 | — | 0 | 1 | ✅ | 纯 Hook | ⏳ 待人工估 |
+| 74 | △ | C61 | `useVideo()` | 媒体与扫码 | — | 0 | 1 | ✅ | 纯 Hook | ⏳ 待人工估 |
+| 75 | △ | C63 | `useLivePusher()` | 媒体与扫码 | — | 0 | 1 | ✅ | 纯 Hook | ⏳ 待人工估 |
+| 76 | △ | C72 | `useCacheManager()` | 设备与系统 | — | 0 | 1 | ✅ | 纯 Hook | ⏳ 待人工估 |
+| 77 | △ | C74 | `useWindow()` | 应用与生命周期 | — | 0 | 1 | ✅ | 纯 Hook | ⏳ 待人工估 |
+| 78 | △ | C83 | `useKeepScreenOn()` | 设备与系统 | — | 0 | 1 | ✅ | 纯 Hook | ⏳ 待人工估 |
+| 79 | · | C18 | `useShare()` | 通知与分享 | — | 0 | 0 | ✅ | 纯 Hook | ⏳ 待人工估 |
+| 80 | · | C31 | `useDataChannel()` | 网络与通信 | — | 0 | 0 | ✅ | 纯 Hook | ⏳ 待人工估 |
+| 81 | · | C46 | `useInAppPurchase()` | 账号与支付 | — | 0 | 0 | ✅ | 纯 Hook | ⏳ 待人工估 |
+| 82 | · | C48 | `useEmbedded()` | 应用与生命周期 | — | 0 | 0 | ✅ | 纯 Hook | ⏳ 待人工估 |
+| 83 | · | C82 | `useWebAssembly()` | 应用与生命周期 | — | 0 | 0 | ✅ | 纯 Hook | ⏳ 待人工估 |
 
 > 优先信号：★★ = 跨项目覆盖（最高证据）· ★ = 单项目有真实调用 · △ = 仅官方承接面（无本仓调用，属完整性缺口）· · = 暂无双侧信号
 
@@ -120,7 +125,7 @@
 | 域 | 能力数 | 跨项目 | 语料用过 | 官方承接合计 |
 |---|---|---|---|---|
 | 网络与通信 | 11 | 0 | 5 | 81 |
-| 设备与系统 | 20 | 5 | 13 | 85 |
+| 设备与系统 | 20 | 5 | 13 | 86 |
 | 存储与文件 | 4 | 3 | 4 | 20 |
 | 位置与地图 | 2 | 0 | 2 | 10 |
 | 媒体与扫码 | 11 | 1 | 4 | 27 |
