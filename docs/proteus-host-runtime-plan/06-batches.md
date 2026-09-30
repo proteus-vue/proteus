@@ -43,6 +43,28 @@
 > 同一机制——不用运行时环境变量，避免第二种形态）。★实测坑：平台参数必须在 **eval bundle 之前**注入
 > （IIFE 加载时即捕获常量——首版 Android 因此报默认 `host_id`）。
 >
+> **★★2026-09-30 三：应用与生命周期的能力开放（G-39 的第一个**上行消费者**）**
+>
+> 宿主运行时落地的价值在"上层能用它做什么"。本轮接通第一条：**C23/C24/C25 在 App 宿主上可用**
+> （此前 Hook 层早已实现，但桥层只有 wx/web 两份 ⇒ App 端形同虚设）。
+>
+> | 环节 | 落点 |
+> |---|---|
+> | 能力桥 | `packages/api/src/capability-app.ts`（`HostLifecycleBus` 总线 + 三能力 + **虚拟栈页面事件翻译器**） |
+> | 桥选择 | `createCapabilityBridge()`：壳注入 `__PROTEUS_HOST_ID__` ⇒ 合并 App 三能力（**不靠特征猜测**） |
+> | 事件链 | 系统事件 → 壳（Activity onPause / iOS willResignActive）→ **运行时状态机** → **能力总线** → Hooks |
+> | 页面事件 | 真实 `app-stack` 命令流（M5）→ 翻译器 → load/show/hide/unload（★`freeze` **跳过**：内存治理非页面退出） |
+> | 判据 | 单测 20 条（含真实 hooks 端到端 + 3 组破坏）· 真机 `check:host-runtime` **①~⑤ 双端全绿** |
+>
+> **真机证据（双端）**：① 冷启动补 launch 前置且恰好一次；② 真实栈命令驱动页面生命周期
+> （push→load/show，pop→hide/unload）；③ 启动参数经 **job 泵** 读到（async 链）；④ 壳事件**逐条**
+> 驱动总线（pause→`HIDE` → resume→`SHOW`——HIDE 只能由真实 hide 产生）；⑤ 阶段快照 + 订阅计数。
+>
+> ★**判据的一次真修正（两次 iOS 实测得出）**：`process` 口径（JSC phys_footprint）下"GC 后必然下降"
+> **不稳定**（两次运行分别降 147KB 与 **0**——JSC 提示性 GC 把页留在 free pool 不即时归还 OS）
+> ⇒ 改为**按口径分档**：`engine` 强制"必须下降"（QuickJS 实测 ≈100% 回收）；`process` 强制
+> "分配增长 + GC 不增"，归还与否作**观测项**输出。避免一个会随机红的判据变成噪声。
+
 > **诚实边界（仍未做）**：① 多线程 Worker（`threads.background=false` 是对现状的**诚实声明**，不是最终形态）；
 > ② Flutter/Harmony 宿主（B5）；③ iOS 侧 `obj_count` 恒 0（JSC 无该读数——不伪造）。
 > ⇒ **B4 状态：Android ✅ + iOS ✅（真机双绿）· Flutter 未开始**。
