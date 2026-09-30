@@ -226,6 +226,35 @@ export const SEMANTIC_BACKEND_MAP: Record<string, Partial<Record<BackendId | 'we
   },
   // ★2026-09-18 语义去重：原键 capability.pick-photo 为重复名（组件实现调用 useCamera()，
   //   真实能力即 C1 capability.camera）——键已迁移，映射原样保留。
+  // ★★2026-09-30：生命周期三能力的后端映射（C23/C24/C25 随 App 腿落地转为 implemented）。
+  //   各行含义：**平台真实触发源**（不是渲染类型——这三个是"事件源"类能力）。
+  //   · native-ios/android：系统生命周期回调（iOS `willResignActive`/Android `onPause`——本轮真机实证）
+  //   · vue-dom / skyline：既有实现（`visibilitychange` / `wx.onAppShow`）
+  //   · headless：确定性注入（测试夹具）
+  'capability.app-lifecycle': {
+    'vue-dom': 'document.visibilitychange',
+    'native-ios': 'UIApplication.willResignActive',
+    'native-android': 'Activity.onPause',
+    skyline: 'wx.onAppShow',
+    flutter: 'AppLifecycleState',
+    headless: 'app-lifecycle-bus',
+  },
+  'capability.page-lifecycle': {
+    'vue-dom': 'visibilitychange+history',
+    'native-ios': 'UINavigationController.didShowViewController',
+    'native-android': 'Fragment.onResume',
+    skyline: 'Page.onShow',
+    flutter: 'RouteAware.didPush',
+    headless: 'page-lifecycle-bus',
+  },
+  'capability.background': {
+    'vue-dom': 'document.hidden',
+    'native-ios': 'UIApplication.didEnterBackground',
+    'native-android': 'Activity.onStop',
+    skyline: 'wx.onBackgroundAudioInterruptionBegin',
+    flutter: 'AppLifecycleState.paused',
+    headless: 'background-bus',
+  },
   'capability.camera': {
     'vue-dom': 'input.proteus-pick-photo',
     'native-ios': 'UIImagePicker',

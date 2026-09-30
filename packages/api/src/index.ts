@@ -11,6 +11,29 @@ export type { HttpMethod, IRequestAdapter, RequestConfig, RequestResponse, ApiOp
 export type { PlatformAPI, RouterAPI, StorageAPI, UIAPI } from './types'
 // ★G-32 B3：useXxx 能力 Hook 层（无回调/无全局对象/全类型/Result<T>）
 export { createCapabilityHooks, createCapabilityBridge, createReactiveStorage, capOk, capErr, CapError } from './capability'
+// ★★应用与生命周期能力开放（App 宿主腿，2026-09-30）：总线 + 三能力 + 虚拟栈页面事件翻译器
+export {
+  createHostLifecycleBus,
+  getHostLifecycleBus,
+  detectAppHost,
+  createAppLifecycleCapabilities,
+  createStackPageSource,
+  HOST_LIFECYCLE_BUS_KEY,
+  HOST_ID_KEY,
+} from './capability-app'
+export type {
+  HostLifecycleBus,
+  HostLifecycleEvent,
+  HostLifecycleTopic,
+  HostLifecycleBus as HostLifecycleBusType,
+  AppLifecyclePhase,
+  PageLifecyclePhase,
+  AppLifecycleHandle,
+  PageLifecycleHandle,
+  BackgroundHandle,
+  AppLifecycleCapabilities,
+  StackScreenCommandLike,
+} from './capability-app'
 // ★G-32 B5：工程原语（injectable——E1 useState/E2 useComputed/E3 useWatch/E6 useLifecycle/E7 useReady/E9 usePageParam）
 export { createEngineering } from './engineering'
 export type { Engineering, EngineeringOptions, Reactivity, LifecycleHandle, LifecycleEvent, ParamSource } from './engineering'
