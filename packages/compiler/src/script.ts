@@ -3631,14 +3631,111 @@ ${indentBody([unsubLine, appConfigUnsubLine, semGridOffLine, storeDisposeLine, r
     for (let i = 0; i < sub.length; i++) lineMappings.push({ out: start + i, src: srcLine + i })
   }
 
+  // ★★用户已声明的生命周期钩子：体末追加**派发**（运行时订阅才收得到——见上方长注释）
+  //   载荷按事件类型传：resize→(arguments[0].size) / page-scroll→arguments[0] / 其余无载荷。
+  //   ★`onPageScroll`（高频）**用户声明才派发**——微信文档明确它会引发两线程通信（性能红线）。
+  const EMIT_ON_DECLARED: Record<string, { evt: string; passArg: boolean }> = {
+    onShow: { evt: 'show', passArg: false },
+    onHide: { evt: 'hide', passArg: false },
+    onReady: { evt: 'ready', passArg: false },
+    onUnload: { evt: 'unload', passArg: false },
+    onRouteDone: { evt: 'route-done', passArg: false },
+    onResize: { evt: 'resize', passArg: false }, // 载荷从 e.size 取（见下方拼接）
+    onTabItemTap: { evt: 'tab-item-tap', passArg: false }, // 载荷从 e 取
+    onReachBottom: { evt: 'reach-bottom', passArg: false },
+    onPageScroll: { evt: 'page-scroll', passArg: true },
+    onPullDownRefresh: { evt: 'pull-down-refresh', passArg: false },
+  }
+  const emitAppended = new Set<string>()
   for (const [name, m] of Object.entries(methods)) {
     if (extra.debug) methodLines.push(`  // @${m.line} ${name}()`)
     // ★签名行不参与改写（方法名定义处不能变 this.x）；仅函数体做 ref 重写 + 裸调用改写
     const braceIdx = m.src.indexOf('{')
     const sig = m.src.slice(0, braceIdx + 1)
     const body = m.src.slice(braceIdx + 1)
-    pushMethod(`  ${sig + rw(body)},`, m.line)
+    let rewritten = rw(body)
+    const emit = extra.isComponent || disabled.has('page/lifecycle-bus') ? undefined : EMIT_ON_DECLARED[name]
+    if (emit) {
+      // 在体末 `}` 前插入派发（多一个语句——用户体若以 return 提前退出，派发不执行是**可接受**的：
+      // 那种早退通常也是"这次事件不完整处理"的语义）
+      let emitLine: string
+      if (emit.evt === 'resize') emitLine = `try { var __e = arguments[0]; this.proteusPageEmit("resize", { size: (__e && __e.size) || {} }) } catch (__x) {}`
+      else if (emit.passArg) emitLine = `try { this.proteusPageEmit("${emit.evt}", arguments[0]) } catch (__x) {}`
+      else emitLine = `try { this.proteusPageEmit("${emit.evt}") } catch (__x) {}`
+      rewritten = rewritten.replace(/\}\s*$/, `
+  ${emitLine}
+}`)
+      emitAppended.add(name)
+    }
+    pushMethod(`  ${sig + rewritten},`, m.line)
   }
+  void emitAppended
+  // ══════════════════════════════════════════════════════════════════════
+  // ★★页面生命周期 → 运行时总线派发（2026-09-30；用户指出「生命周期能力太简单」）
+  //
+  // 【为什么必须由编译产物派发（本轮抓官方文档核实的事实）】
+  //   小程序**没有** `wx.onPageShow` / `wx.onPageHide` 这类全局订阅 API——页面级事件只能
+  //   声明在 `Page({ onShow(){…} })` 里。⇒ 运行时 `usePageLifecycle()` 要拿到事件，
+  //   唯一通道就是**产物在钩子里主动派发**（本仓上轮 MP 桥用了不存在的
+  //   `wx.onPageShow?.()` ⇒ 永远不触发，是静默失效的实缺）。
+  //
+  // 【两类钩子的处理不同（刻意的，不是疏漏）】
+  //   · **安全清单**（无用户可见副作用）：show/hide/ready/unload/route-done/resize/
+  //     tab-item-tap/reach-bottom ⇒ 用户未声明时**也生成钩子**（否则订阅者永远收不到）；
+  //   · **有副作用/性能影响的**（**绝不自动补**）：
+  //       - page-scroll：微信文档明确"会引起逻辑层与渲染层通信"（高频性能红线）
+  //       - share-app-message / share-timeline / add-to-favorites / save-exit-state：
+  //         **声明才显示对应菜单入口**（自动补 = 擅自给用户页面加转发/收藏按钮）
+  //       - pull-down-refresh：行为由 page.json `enablePullDownRefresh` 控制，但保守起见仅声明时派发
+  //     ⇒ 这些只在"用户已声明"时追加派发（不改变任何用户可见行为）。
+  //   · **决策型**（需返回值）：用户未声明钩子时，生成钩子调 `__proteusPageProviders`
+  //     （运行时 `setShareAppMessageProvider` 等注册）；用户已声明则以用户为准（微信只允许一个返回值）。
+  const PAGE_NOTIFY_SAFE = ['show', 'hide', 'ready', 'unload', 'route-done', 'resize', 'tab-item-tap', 'reach-bottom']
+  const PAGE_NOTIFY_SIDE_EFFECT = ['page-scroll', 'pull-down-refresh']
+  const PAGE_DECISION = ['share-app-message', 'share-timeline', 'add-to-favorites', 'save-exit-state']
+  /** 钩子名（wx）→ 事件名（总线）：onShow→show / onRouteDone→route-done … */
+  const hookToEvent = (hook: string): string =>
+    hook
+      .replace(/^on/, '')
+      .replace(/([a-z0-9])([A-Z])/g, '$1-$2')
+      .toLowerCase()
+  /** 用户已声明的事件名集合（从 methods 的键推导） */
+  const declaredEvents = new Set<string>(
+    Object.keys(methods)
+      .filter((m) => /^on[A-Z]/.test(m))
+      .map(hookToEvent),
+  )
+  if (!extra.isComponent && !disabled.has('page/lifecycle-bus')) {
+    // 派发辅助（Page 方法——不污染全局；运行时若未加载则静默掠过，产物可独立运行）
+    methodNames.add('proteusPageEmit')
+    methodLines.push(
+      '  proteusPageEmit(evt, payload) { var g = (typeof globalThis !== "undefined") ? globalThis : null; if (g && typeof g.__proteusEmitPage === "function") { try { g.__proteusEmitPage(evt, payload) } catch (e) {} } },'
+    )
+    // ① 安全清单：未声明则生成（否则运行时订阅永远收不到事件）
+    for (const evt of PAGE_NOTIFY_SAFE) {
+      if (declaredEvents.has(evt)) continue // 已声明：在下方"用户方法追加派发"处理
+      const hook = 'on' + evt.split('-').map((w) => w.charAt(0).toUpperCase() + w.slice(1)).join('')
+      methodNames.add(hook)
+      if (evt === 'resize') {
+        // ★resize 带载荷（windowWidth/windowHeight——微信 onResize({size})）
+        methodLines.push(`  ${hook}(e) { this.proteusPageEmit("${evt}", { size: (e && e.size) || {} }) },`)
+      } else {
+        methodLines.push(`  ${hook}() { this.proteusPageEmit("${evt}") },`)
+      }
+    }
+    // ② ★决策型**不自动生成钩子**（行为安全——这是本轮自己先写错、随即纠正的一处）：
+    //   微信语义「**声明才显示**对应菜单入口」⇒ 自动补 `onShareAppMessage` = 擅自给用户页面
+    //   加"转发"按钮、补 `onAddToFavorites` = 擅自加"收藏"——**改变用户可见行为**，不可接受。
+    //   ⇒ 用户要用分享/收藏：**显式声明钩子**（本仓原有语义，未变）；
+    //     运行时 `setShareAppMessageProvider` 等保留为"从运行时提供内容"的手段
+    //     （用户在钩子里读 `globalThis.__proteusPageProviders`，或直接用返回值）。
+    void PAGE_DECISION
+    trace?.add('page/lifecycle-bus', {
+      before: 'Page 生命周期仅声明式（运行时订阅收不到）',
+      after: `产物派发已接入（安全清单补 ${PAGE_NOTIFY_SAFE.filter((e) => !declaredEvents.has(e)).length} 个 / 决策型补 ${PAGE_DECISION.filter((e) => !declaredEvents.has(e)).length} 个）`,
+    })
+  }
+
   // ★15-page-scroll-container 批次2/3：桥接方法生成（dataExtra 已在 dataEntries 前赋值）
   if (!extra.isComponent && !disabled.has('page/scroll-bridge')) {
     if (bridgeHooks.hasOnPageScroll) {

@@ -20,6 +20,10 @@ import {
   createAppLifecycleCapabilities,
   HOST_ID_KEY,
   HOST_LIFECYCLE_BUS_KEY,
+  installPageEmitBridge,
+  installWxAppEventBridge,
+  PAGE_EVENTS,
+  APP_EVENTS,
   type HostLifecycleBus,
 } from '../packages/api/src/capability-app'
 import { createCapabilityBridge, createCapabilityHooks, CapError } from '../packages/api/src/capability'
@@ -295,5 +299,217 @@ describe('④ 与 wx 语义对齐（防两端手感分叉）', () => {
     const bus = createHostLifecycleBus()
     const caps = createAppLifecycleCapabilities(bus, CapError)
     expect(caps.getBackground()).toBeTruthy()
+  })
+})
+
+describe('★★扩展事件面（用户指出「生命周期能力太简单，真实项目远超三个」）', () => {
+  function appHooks(): { bus: HostLifecycleBus; hooks: ReturnType<typeof createCapabilityHooks> } {
+    ;(globalThis as Record<string, unknown>)[HOST_ID_KEY] = 'android'
+    const bridge = createCapabilityBridge()
+    return { bus: getHostLifecycleBus(), hooks: createCapabilityHooks(bridge) }
+  }
+
+  it('C23 应用级全事件面：error / unhandled-rejection / memory-warning / theme-change / resize / page-not-found / audio-interruption', () => {
+    const { bus, hooks } = appHooks()
+    const lc = hooks.useAppLifecycle()
+    const seen: string[] = []
+    lc.onError((e) => seen.push(`err:${e.error}`))
+    lc.onUnhandledRejection((e) => seen.push(`rej:${e.reason}`))
+    lc.onMemoryWarning((e) => seen.push(`mem:${e.level}`))
+    lc.onThemeChange((e) => seen.push(`theme:${e.theme}`))
+    lc.onWindowResize((e) => seen.push(`resize:${e.windowWidth}x${e.windowHeight}`))
+    lc.onPageNotFound((e) => seen.push(`404:${e.path}`))
+    lc.onAudioInterruptionBegin(() => seen.push('audio:begin'))
+    lc.onAudioInterruptionEnd(() => seen.push('audio:end'))
+
+    bus.emit({ topic: 'app', kind: 'error', payload: { error: 'boom' } })
+    bus.emit({ topic: 'app', kind: 'unhandled-rejection', payload: { reason: 'why' } })
+    bus.emit({ topic: 'app', kind: 'memory-warning', payload: { level: 2 } })
+    bus.emit({ topic: 'app', kind: 'theme-change', payload: { theme: 'dark' } })
+    bus.emit({ topic: 'app', kind: 'resize', payload: { windowWidth: 390, windowHeight: 844 } })
+    bus.emit({ topic: 'app', kind: 'page-not-found', payload: { path: '/missing' } })
+    bus.emit({ topic: 'app', kind: 'audio-interruption-begin' })
+    bus.emit({ topic: 'app', kind: 'audio-interruption-end' })
+
+    expect(seen).toEqual([
+      'err:boom', 'rej:why', 'mem:2', 'theme:dark', 'resize:390x844', '404:/missing', 'audio:begin', 'audio:end',
+    ])
+    // ★纯通知型不改变 phase（只有 launch/show/hide 驱动相位）
+    expect(bus.snapshot().app).toBe('PENDING')
+  })
+
+  it('C24 页面级全事件面：ready / route-done / page-scroll / resize / tab-item-tap / reach-bottom / pull-down-refresh', () => {
+    const { bus, hooks } = appHooks()
+    const pl = hooks.usePageLifecycle()
+    const seen: string[] = []
+    pl.onReady(() => seen.push('ready'))
+    pl.onRouteDone((e) => seen.push(`route:${e.path ?? '-'}`))
+    pl.onPageScroll((e) => seen.push(`scroll:${e.scrollTop}`))
+    pl.onResize((e) => seen.push(`resize:${e.size.windowWidth}`))
+    pl.onTabItemTap((e) => seen.push(`tab:${e.index}`))
+    pl.onReachBottom(() => seen.push('bottom'))
+    pl.onPullDownRefresh(() => seen.push('refresh'))
+    pl.onUnload(() => seen.push('unload'))
+
+    bus.emit({ topic: 'page', kind: 'load', screen: 'home' })
+    bus.emit({ topic: 'page', kind: 'show' })
+    bus.emit({ topic: 'page', kind: 'ready' })
+    bus.emit({ topic: 'page', kind: 'route-done', payload: { path: '/home' } })
+    bus.emit({ topic: 'page', kind: 'page-scroll', payload: { scrollTop: 120 } })
+    bus.emit({ topic: 'page', kind: 'resize', payload: { size: { windowWidth: 400, windowHeight: 800 } } })
+    bus.emit({ topic: 'page', kind: 'tab-item-tap', payload: { index: 1 } })
+    bus.emit({ topic: 'page', kind: 'reach-bottom' })
+    bus.emit({ topic: 'page', kind: 'pull-down-refresh' })
+    bus.emit({ topic: 'page', kind: 'hide' })
+    bus.emit({ topic: 'page', kind: 'unload' })
+
+    expect(seen).toEqual([
+      'ready', 'route:/home', 'scroll:120', 'resize:400', 'tab:1', 'bottom', 'refresh', 'unload',
+    ])
+  })
+
+  it('C24 决策型（分享/收藏/退出状态）是**单处理器**语义（后设覆盖前设——微信只允许一个返回值）', () => {
+    const { hooks } = appHooks()
+    const pl = hooks.usePageLifecycle()
+    pl.setShareAppMessageProvider(() => ({ title: 'first' }))
+    pl.setShareAppMessageProvider(() => ({ title: 'second' }))
+    const providers = (globalThis as Record<string, unknown>).__proteusPageProviders as {
+      shareAppMessage?: () => { title?: string }
+    }
+    expect(providers.shareAppMessage?.().title).toBe('second')
+
+    pl.setShareTimelineProvider(() => ({ title: 'tl' }))
+    pl.setSaveExitStateProvider(() => ({ n: 1 }))
+    expect(providers.shareAppMessage?.().title).toBe('second') // 各 provider 相互独立
+  })
+
+  it('★MP 页面事件通道：installPageEmitBridge（wx **没有**全局 onPageShow——只能靠产物派发）', () => {
+    const bus = createHostLifecycleBus()
+    installPageEmitBridge(bus)
+    const seen: string[] = []
+    bus.on('page:show', () => seen.push('show'))
+    bus.on('page:page-scroll', (p) => seen.push(`scroll:${(p as { scrollTop: number }).scrollTop}`))
+    // 模拟编译产物：globalThis.__proteusEmitPage('show') / ('page-scroll', {scrollTop})
+    const emit = (globalThis as Record<string, unknown>).__proteusEmitPage as (e: string, p?: unknown) => void
+    expect(typeof emit).toBe('function')
+    emit('show')
+    emit('page-scroll', { scrollTop: 42 })
+    emit(123 as never) // 非法事件名被忽略（不抛）
+    expect(seen).toEqual(['show', 'scroll:42'])
+  })
+
+  it('★MP 应用级事件通道：installWxAppEventBridge（wx 全局 API → 总线；缺失 API 不静默）', () => {
+    const bus = createHostLifecycleBus()
+    const calls: Record<string, ((...a: unknown[]) => void) | undefined> = {}
+    const fakeWx = {
+      onAppShow: (cb: () => void) => (calls.onAppShow = cb),
+      onAppHide: (cb: () => void) => (calls.onAppHide = cb),
+      onMemoryWarning: (cb: () => void) => (calls.onMemoryWarning = cb),
+      // ★故意不提供 onThemeChange / onPageNotFound —— 验证"缺失不静默"
+    }
+    // ★接线诊断走 console.warn（不进业务事件面——否则业务收 app:error 时会拿到内部噪音）
+    const warns: string[] = []
+    const origWarn = console.warn
+    console.warn = (m: string) => warns.push(m)
+    try {
+      installWxAppEventBridge(bus, fakeWx)
+    } finally {
+      console.warn = origWarn
+    }
+    const seen: string[] = []
+    bus.on('app:show', () => seen.push('show'))
+    bus.on('app:hide', () => seen.push('hide'))
+    bus.on('app:memory-warning', () => seen.push('mem'))
+
+    calls.onAppShow?.()
+    calls.onAppHide?.()
+    calls.onMemoryWarning?.()
+    expect(seen).toEqual(['show', 'hide', 'mem'])
+    // 缺失 API 有明确诊断（"没触发"与"没接线"必须可区分）
+    expect(warns.some((e) => e.includes('onThemeChange'))).toBe(true)
+    expect(warns.some((e) => e.includes('onPageNotFound'))).toBe(true)
+  })
+
+  it('事件面 SSOT 自洽：PAGE_EVENTS / APP_EVENTS 覆盖所有句柄方法（防"加了句柄忘了 SSOT"）', () => {
+    const { hooks } = (() => {
+      ;(globalThis as Record<string, unknown>)[HOST_ID_KEY] = 'android'
+      return { hooks: createCapabilityHooks(createCapabilityBridge()) }
+    })()
+    const pl = hooks.usePageLifecycle()
+    const lc = hooks.useAppLifecycle()
+    // 页面：SSOT 每个事件都应有对应可订阅面（`on<Pascal>` 或多词时 `set<Pascal>Provider`）
+    // ★命名规则与运行时一致：kebab → Pascal（load→Load / reach-bottom→ReachBottom）
+    const pascal = (kebab: string): string =>
+      kebab.split('-').map((w) => w.charAt(0).toUpperCase() + w.slice(1)).join('')
+    for (const evt of PAGE_EVENTS) {
+      const P = pascal(evt)
+      const has = `on${P}` in (pl as object) || `set${P}Provider` in (pl as object)
+      expect(has, `PAGE_EVENTS 的 ${evt}（期望 on${P} 或 set${P}Provider）在句柄上无可订阅面`).toBe(true)
+    }
+    // 应用级：阶段事件用短名（onLaunch/onShow/onHide）；其余「on<Pascal>」；
+    // ★两个刻意的别名（与既有命名保持一致，不是遗漏）：resize→onWindowResize / audio-interruption→onAudioInterruption*
+    const APP_ALIAS: Record<string, string> = { resize: 'onWindowResize' }
+    for (const evt of APP_EVENTS) {
+      if (evt === 'launch' || evt === 'show' || evt === 'hide') continue
+      const name = APP_ALIAS[evt] ?? `on${pascal(evt)}`
+      expect(name in (lc as object), `APP_EVENTS 的 ${evt}（期望 ${name}）在句柄上无可订阅面`).toBe(true)
+    }
+  })
+})
+
+describe('★★端到端：编译产物 → 产物派发（最接近真机的那一层，无需设备）', () => {
+  it('真实 SFC 编译：声明的 onShow 体末派发；未声明的安全钩子自动补；决策型**不自动补**', async () => {
+    const { compileVueSfc } = await import('../packages/compiler/src/index.ts')
+    const src = `<route>{"path":"/t","name":"t"}</route>
+<template><view>hi</view></template>
+<script setup>
+import { ref } from 'vue'
+const n = ref(0)
+function onShow() { n.value++ }
+</script>
+`
+    const out = compileVueSfc(src, { platform: 'mp-weixin' } as never) as { js: string }
+    const js = out.js
+
+    // ① 用户声明的 onShow：体末派发（否则运行时订阅收不到）
+    expect(js).toMatch(/onShow\(\)\s*\{[\s\S]*?proteusPageEmit\("show"\)[\s\S]*?\}/)
+    // ② 未声明的安全清单：自动补（无用户可见副作用——不补则订阅永远收不到）
+    expect(js).toContain('onHide() { this.proteusPageEmit("hide") }')
+    expect(js).toContain('onReady() { this.proteusPageEmit("ready") }')
+    expect(js).toContain('onUnload() { this.proteusPageEmit("unload") }')
+    expect(js).toContain('onRouteDone() { this.proteusPageEmit("route-done") }')
+    expect(js).toContain('onReachBottom() { this.proteusPageEmit("reach-bottom") }')
+    // ③ ★决策型**绝不自动补**（微信语义：声明才显示转发/收藏入口——自动补 = 擅自加用户可见行为）
+    expect(js).not.toContain('onShareAppMessage')
+    expect(js).not.toContain('onAddToFavorites')
+    expect(js).not.toContain('onSaveExitState')
+    // ④ ★高频 onPageScroll 同样不自动补（微信文档：会引起两线程通信）
+    expect(js).not.toContain('onPageScroll() { this.proteusPageEmit')
+    // ⑤ 派发辅助方法在位
+    expect(js).toContain('proteusPageEmit(evt, payload)')
+  })
+
+  it('用户**声明** onShareAppMessage 时：不覆盖用户实现（微信只允许一个返回值）', async () => {
+    const { compileVueSfc } = await import('../packages/compiler/src/index.ts')
+    const src = `<route>{"path":"/s","name":"s"}</route>
+<template><view>hi</view></template>
+<script setup>
+function onShareAppMessage() { return { title: 'mine' } }
+</script>
+`
+    const out = compileVueSfc(src, { platform: 'mp-weixin' } as never) as { js: string }
+    // 用户实现保留，且**不被派发覆盖**（决策型语义）
+    expect(out.js).toContain("title: 'mine'")
+  })
+
+  it('组件模式不注入页面派发（组件无页面生命周期——防误加）', async () => {
+    const { compileVueSfc } = await import('../packages/compiler/src/index.ts')
+    const src = `<template><view>c</view></template>
+<script setup>
+defineProps({ x: String })
+</script>
+`
+    const out = compileVueSfc(src, { platform: 'mp-weixin', isComponent: true } as never) as { js: string }
+    expect(out.js).not.toContain('proteusPageEmit')
   })
 })

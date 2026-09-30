@@ -16,7 +16,13 @@ import type { AuthStorage } from './auth'
 import { mpBridgeExt, webBridgeExt } from './generated/bridge-ext'
 // ★★应用与生命周期能力开放（App 宿主腿，2026-09-30）：C23/C24/C25 的第三个桥
 //   （此前只有 wx/web 两份 ⇒ App 宿主无生命周期能力；事件源 = 宿主运行时 + 虚拟栈命令流）
-import { createAppLifecycleCapabilities, detectAppHost, getHostLifecycleBus } from './capability-app'
+import {
+  createAppLifecycleCapabilities,
+  detectAppHost,
+  getHostLifecycleBus,
+  installPageEmitBridge,
+  installWxAppEventBridge,
+} from './capability-app'
 import { BRIDGE_DECLS } from './bridge-decls/index'
 
 /** ★Result<T> 契约（G-32.4：能力原语全部返回 Result<T>，禁止回调） */
@@ -4279,6 +4285,15 @@ function wxFileSystem(wx: WxLike): FileSystemBridge {
 }
 
 function wxBridge(wx: WxLike): CapabilityBridge {
+  // ★★MP 端生命周期能力（2026-09-30 改走共享总线——见 getAppLifecycle/getPageLifecycle 注释）：
+  //   懒建总线 + 装两个事件源（应用级=wx 全局 API；页面级=编译产物派发），只装一次。
+  const mpLifecycleCaps = (() => {
+    const bus = getHostLifecycleBus()
+    // ★幂等（模块加载时已装一次；此处兜底"外部先建桥"的路径——重复安装只覆盖同一全局函数）
+    installWxAppEventBridge(bus, wx)
+    installPageEmitBridge(bus)
+    return createAppLifecycleCapabilities(bus, CapError)
+  })()
   return {
     getLocation: () =>
       new Promise((resolve, reject) => {
@@ -4610,21 +4625,12 @@ function wxBridge(wx: WxLike): CapabilityBridge {
           fail: (e) => reject(new CapError('calendar.failed', 'wx.addPhoneCalendar 失败', e)),
         })
       }),
-    getAppLifecycle: () => ({
-      phase: 'PENDING',
-      onLaunch: (cb) => {
-        cb()
-        return () => undefined
-      },
-      onShow: (cb) => {
-        wx.onAppShow?.(cb)
-        return () => undefined
-      },
-      onHide: (cb) => {
-        wx.onAppHide?.(cb)
-        return () => undefined
-      },
-    }),
+    // ★★2026-09-30 修实缺：此前 MP 桥**手写** phase/订阅，且 `getPageLifecycle` 用了
+    //   **不存在**的 `wx.onPageShow?.()`（官方无此全局 API ⇒ 永远不触发、静默失效）。
+    //   现在 MP 端与其他端**共用同一条总线**（capability-app 的事件面）：
+    //     · 应用级 ← `installWxAppEventBridge`（wx.onAppShow/onHide/onError/… 真实全局 API）
+    //     · 页面级 ← `installPageEmitBridge`（编译产物在 Page 钩子里派发——wx 无全局页面事件）
+    getAppLifecycle: () => mpLifecycleCaps.getAppLifecycle(),
     compressFile: (options) =>
       new Promise((resolve, reject) => {
         if (!wx.compressFile) return reject(new CapError('archive.unsupported', 'wx.compressFile 缺失'))
@@ -4642,21 +4648,7 @@ function wxBridge(wx: WxLike): CapabilityBridge {
         wx.addToDesktop({ success: () => resolve(), fail: (e) => reject(new CapError('shortcut.failed', 'wx.addToDesktop 失败', e)) })
       }),
     // ★G-32 B3 六期：page-lifecycle / bluetooth / nfc / camera / microphone / keyboard
-    getPageLifecycle: () => ({
-      phase: 'IDLE' as const,
-      onLoad: (cb) => {
-        cb()
-        return () => undefined
-      },
-      onShow: (cb) => {
-        wx.onPageShow?.(cb)
-        return () => undefined
-      },
-      onHide: (cb) => {
-        wx.onPageHide?.(cb)
-        return () => undefined
-      },
-    }),
+    getPageLifecycle: () => mpLifecycleCaps.getPageLifecycle(),
     // ★能力颗粒度对齐：C36 蓝牙 BLE 富接口（连接/服务/特征值/通知/发现——原实现仅状态探测）
     //   打开适配器 → 返回 BluetoothAPI（方法统一 Promise<CapResult<T>>；订阅返回取消函数；缺 API → 方法级 Err）
     getBluetooth: async () => {
@@ -7864,6 +7856,28 @@ function encodedUrl(url: string, params?: Record<string, unknown>): string {
  *    · 合并顺序：手写在前、生成在后 ⇒ 声明是对该能力的**权威定义**（同一方法名以声明为准）；
  *    · 生成物为空时行为与合并前**完全一致**（`...(undefined)` 不改变对象）；
  *    · 覆盖能力数可由 `BRIDGE_DECLS.length` 断言（生成物含 `GENERATED_BRIDGE_COUNT` 供测试对账）。 */
+/**
+ * ★★安装页面/应用生命周期事件源（**必须在模块加载时调用**——不能等业务调 Hook）。
+ *
+ * 【为什么时序是关键（真机 e2e 抓出的实缺）】页面钩子（`Page.onShow/onHide/onReady…`）在
+ *   **页面创建时**就触发，早于业务代码调用 `usePageLifecycle()`。若派发桥等到"首次调桥"才装，
+ *   那么**首屏的 load/show/ready 事件全部丢失**（订阅者晚一步，早事件永久错过）。
+ *   ⇒ 本函数在模块加载时立刻装（幂等），`createCapabilityBridge` 内也调一次（防外部先建桥的路径）。
+ */
+export function installLifecycleEventSources(): void {
+  const g = globalThis as { wx?: WxLike }
+  // App 宿主（壳注入标识）走壳事件；MP 走 wx 全局 API + 产物派发；Web 由 web 桥的 visibilitychange 自管
+  const bus = getHostLifecycleBus()
+  if (detectAppHost()) return // App 端：事件由壳（G-39 运行时）推入，无需在此装
+  if (g.wx) {
+    installWxAppEventBridge(bus, g.wx)
+    installPageEmitBridge(bus)
+  }
+}
+
+// ★★模块加载即装（见函数注释：页面钩子早于业务调用——晚装会丢首屏事件）
+installLifecycleEventSources()
+
 export function createCapabilityBridge(): CapabilityBridge {
   const g = globalThis as { wx?: WxLike }
   // ★★App 宿主（壳注入 `__PROTEUS_HOST_ID__`）⇒ 挂 App 生命周期能力。

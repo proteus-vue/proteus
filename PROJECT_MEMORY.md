@@ -176,14 +176,57 @@ app-ios/app-android 桥覆盖 ⇒ ✅「真机双端验证」；app-harmony 桥�
 ② `compiler-ir-m3-readback`：`shell.toast`/`ui.loading` 的**后端控件映射缺位**
 （上批只加 `SEMANTIC_BACKEND_MAP`，六端后端表漏补）→ 补齐；★flutter 值须按 SSOT 逐字
 （首版写 `showSnackBar`、SSOT 是 `ScaffoldMessenger.showSnackBar`——readback 逐字比对抓出）；
-③ `consistency-scope`：我在注释里写了旧 scope `@proteus/router` → 修（scope 扫描抓出）；
+③ `consistency-scope`：我在注释里写了旧 scope（`@proteus` 前缀的 router 包名）→ 修（scope 扫描抓出）；
 ④ `showcase-catalog`：能力域 10 → 9（"其他"兜底域**自然消失**——能力页全部归入正式域，是完善结果）。
 
 **数字对齐（SSOT）**：stats.ts（implemented 72 / conformance 11 / tests 4152）+ README
 （187 原语 / 44 包 / 4152 单测 / 84 Hook）+ showcase 快照重生成。
 **全量非 e2e：337 文件 / 4152 用例全绿**（此前 3919——含本轮新增）。
 
-**九、诚实边界**：① 多线程 Worker（`threads.background=false` 是对 QuickJS 现状的诚实声明，不是最终形态）；
+**九、★★生命周期事件面扩展（用户指出「就三个太简单，真实项目远超三个」）+ 修一个我上轮引入的实缺**
+
+**一、取证：抓官方文档逐条核实（WebSearch 不可用 → WebFetch 抓 Page.html）**
+真实事件面远超 3 个：官方 Page 构造器有 **6 个生命周期回调**（onLoad/onShow/onReady/onHide/onUnload
+/**onRouteDone**）+ **9 个页面事件**（onPullDownRefresh/onReachBottom/onPageScroll/onResize/
+onTabItemTap/onShareAppMessage/onShareTimeline/onAddToFavorites/onSaveExitState）；应用级另有
+wx.onError/onMemoryWarning/onThemeChange/onWindowResize/onPageNotFound/onAudioInterruption*。
+
+**★★同时抓出一个「我上轮引入的实缺」**：`wx.onPageShow` / `wx.onPageHide` **不存在**
+（官方文档无此 API；页面级只有 `Page({onShow})` 声明式）⇒ 我上轮的 MP 桥用 `wx.onPageShow?.()`
+订阅，**永远不触发（静默失效）**，且 `tests/capability-hooks.test.ts` 里我还注入了假 API 并据此
+断言——**测试固化了缺陷**。两处都已修（测试改为断言真实机制）。
+
+**二、落地面（事件面 SSOT + 两类事件的 API 形态刻意不同）**
+- `capability-app.ts` 新增 **`PAGE_EVENTS`（15）** 与 **`APP_EVENTS`（11）** 两张 SSOT 表
+  （每个事件都注明各端真实触发源——小程序/Web/App 三列）；
+- 句柄扩展：C23 加 8 个应用级方法；C24 加 10 个页面级方法；
+- ★**通知型 vs 决策型**（刻意的不同形态，不是疏漏）：
+  · 通知型（load/show/ready/hide/unload/route-done/reach-bottom/page-scroll/resize/tab-item-tap）
+    ⇒ **多订阅者** `onXxx(cb): 取消`；
+  · 决策型（share-app-message/share-timeline/add-to-favorites/save-exit-state）
+    ⇒ **单处理器** `setXxxProvider(fn)`——微信要求钩子**返回内容**，多订阅者无法确定用谁的返回值。
+
+**三、编译器接线（`page/lifecycle-bus` 规则，已登记 AI 说明书）**
+产物在 Page 钩子里派发 → `globalThis.__proteusEmitPage` → 总线。两类钩子处理不同（关键）：
+- **安全清单**（无用户可见副作用）：show/hide/ready/unload/route-done/resize/tab-item-tap/reach-bottom
+  ⇒ 未声明也生成（否则订阅永远收不到）；
+- ★**绝不自动补**：`onPageScroll`（微信文档明确"引起两线程通信"——高频性能红线）、
+  `onShareAppMessage`/`onShareTimeline`/`onAddToFavorites`/`onSaveExitState`
+  （**声明才显示菜单入口**——自动补 = **擅自给用户页面加转发/收藏按钮**）。
+  ★这是我先写错、随即自我纠正的一处（首版把决策型也自动补了）。
+
+**四、★装置时序（真机 e2e 抓出的第二个实缺）**：派发桥原先在**首次调桥时**才装 ⇒
+页面钩子在**页面创建时**就触发（早于业务调 Hook）⇒ **首屏 load/show/ready 全丢**。
+修：① `installLifecycleEventSources()` 在 **api 模块加载时**即装；② 更可靠的一层——
+**app 骨架（`App({})` 之前）内联装配**（MP 无模块系统，内联最可靠）+ **总线自建**
+（不能等 api 包：业务可能从未调 Hook，但派发仍在发生 ⇒ 否则事件进黑洞）。
+
+**五、验证**：单测 **29 条**（含编译产物级：安全清单补齐/决策型不补/组件模式不注入 + 两组破坏性验证
+全红）；**MP 真机 e2e 7 passed**（含新加的「产物派发 → 总线 → 订阅回调」端到端断言，
+`wechatide` 实跑）；全量 **337 文件 / 4161 用例全绿**；门禁 stats/docs-stats/consistency/
+showcase-catalog/gen-docs/gen-reference/gen-content 七项全过。
+
+**十、诚实边界**：① 多线程 Worker（`threads.background=false` 是对 QuickJS 现状的诚实声明，不是最终形态）；
 ② Flutter/Harmony 宿主（B5）；③ G-42 六容器的**产品级消费者**仍为空（需真实 App 接入——本轮未动）；
 ④ iOS 侧 `obj_count` 恒 0（JSC 无该读数——不伪造）。
 

@@ -7,7 +7,7 @@ generated: true
 
 # Compile rule catalog
 
-> 111 compile rules — every rule ships its own AI explainer (id / when / before → after / why). SSOT = `@proteus-vue/compiler` TRANSFORM_RULES, same source as `npx proteus rules` and the Playground trace.
+> 112 compile rules — every rule ships its own AI explainer (id / when / before → after / why). SSOT = `@proteus-vue/compiler` TRANSFORM_RULES, same source as `npx proteus rules` and the Playground trace.
 
 ## Template transforms (62)
 
@@ -818,7 +818,7 @@ after:  <text style="font-size: calc(15.77px + 1.1268vw)">x</text>（示意—�
 
 > why: Skyline has no clamp length function (per the official support table) — the Web end keeps real CSS clamp while the MP end uses the linear calc alternative (vw is naturally viewport-fluid with zero runtime cost; converged through real-device testing in #496 M3)
 
-## Script transforms (35)
+## Script transforms (36)
 
 ### `script/const-to-data`
 
@@ -1183,6 +1183,20 @@ after:  自动包装 scroll-view bindscroll="proteusPageScroll" + proteusPageScr
 ```
 
 > why: Skyline pages themselves do not scroll (scrolling requires scroll-view), so page-level scroll hooks would never fire; after bridging, the semantics of onPageScroll/onReachBottom/onPullDownRefresh are preserved (consistent with the Web side)
+
+### `page/lifecycle-bus`
+
+**Page lifecycle → runtime bus dispatch (the only channel: Mini Programs have no global page-event API)**
+
+Page mode: (1) append this.proteusPageEmit(evt, payload) to user-declared hooks; (2) generate the safe-list hooks (no user-visible side effects) even when not declared; (3) NEVER auto-add side-effecting or hot hooks (onPageScroll triggers cross-thread IPC; share/favorite hooks gate menu entries) — dispatch only when the user declared them
+
+```
+before: function onShow() { refresh() }  // 运行时 usePageLifecycle().onShow 永不触发
+after:  function onShow() { refresh()
+  try { this.proteusPageEmit("show") } catch (__x) {} }  // 体末派发；未声明时另生成 onHide/onReady/… 安全钩子
+```
+
+> why: The official API only offers declarative Page({onShow}); there is no wx.onPageShow global subscription API (verified against official docs) — so the runtime can only receive events via compiled output dispatch. The previous MP bridge used the non-existent wx.onPageShow and failed silently. Not auto-adding side-effecting hooks keeps user-visible behavior unchanged (no surprise share buttons, no hot IPC)
 
 ### `script/onload-params`
 
