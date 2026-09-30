@@ -160,6 +160,22 @@ export interface ElementSpec {
   durationMs: number
 }
 
+/**
+ * ★**共享元素预设**（跨元素飞行；几何由**内核**算，见 `presets.element.sharedElement`）
+ *
+ * 不含 `decls`——它不走"声明→指令"那条路（多条 animDecl 本来也表达不了"从源矩形到目标"，
+ * 因为源几何只有运行时才知道）⇒ 宿主交 `proteus_layout_shared_element`，几何数学在内核。
+ */
+export interface SharedElementSpec {
+  name: string
+  durationMs: number
+  fadeIn: boolean
+  /** 源 = 系统坐标矩形（跨页面/跨稳态；由调用方注入） */
+  fromRect?: { x: number; y: number; w: number; h: number }
+  /** 源 = 同树节点 id（同页面共享元素） */
+  fromNodeId?: number
+}
+
 export const list = {
   /**
    * ★★**列表项增删让位**（Morpheus §5 的招牌能力）
@@ -275,7 +291,40 @@ export const element = {
     }
   },
 
-  /** **共享元素飞入**（B1 benchmark 的核心环节；从起点矩形飞入到当前位置） */
+  /**
+   * ★★**共享元素**（跨元素/跨页面飞行）——Morpheus §6.1 清单最后一项
+   *
+   * 【与 `sharedElementFlyIn` 的本质差别】那个是"**在落点上**做缩放+淡入"（不需要源几何）；
+   *   本条是**真·共享元素**：从**源矩形**飞到目标位置再归位——需要"源"的稳态几何。
+   *
+   * 【源有两种，覆盖两种场景】
+   *   - `fromNodeId`：**同树节点**（同页面内的共享元素，如列表项 → 扩展卡）；
+   *   - `fromRect`：**系统坐标矩形**（跨页面/跨稳态，如"上一页的缩略图位置"——
+   *     该几何由调用方注入：静态布局（tab/宫格/固定 header）可在**编译期**算出、随指令一起下发，
+   *     只有真正运行期才知道的才由宿主上报）。
+   *
+   * 【几何数学在内核，本预设只是"声明"】编译产物带 `shared: {sourceRect | sourceNodeId}`，
+   *   由宿主交 `proteus_layout_shared_element` 处理（中心差 + 宽度比 + 缓动都在内核）。
+   *
+   * ★诚实边界（见 README「未做」）：内核只有**等比** scale ⇒ 以宽度比为准，
+   *   源/目标宽高比不一致时高度按目标比例推出。
+   */
+  sharedElement(opts: { fromRect?: { x: number; y: number; w: number; h: number }; fromNodeId?: number; durationMs?: number; fadeIn?: boolean } = {}): SharedElementSpec {
+    if (!opts.fromRect && opts.fromNodeId === undefined) {
+      throw new Error('sharedElement 需要源：给 fromRect（系统坐标）或 fromNodeId（同树节点）')
+    }
+    if (opts.fromRect && opts.fromNodeId !== undefined) {
+      throw new Error('sharedElement 的源只能给一个：fromRect 与 fromNodeId 二选一')
+    }
+    return {
+      name: 'sharedElement',
+      durationMs: opts.durationMs ?? 400,
+      fadeIn: opts.fadeIn !== false,
+      ...(opts.fromRect ? { fromRect: opts.fromRect } : { fromNodeId: opts.fromNodeId! }),
+    }
+  },
+
+  /** **共享元素飞入**（在同树落点上做缩放+淡入——不需要源几何的简化形态） */
   sharedElementFlyIn(opts: { fromScale?: number; durationMs?: number } = {}): ElementSpec {
     const dur = opts.durationMs ?? 400
     const sc = opts.fromScale ?? 0.4

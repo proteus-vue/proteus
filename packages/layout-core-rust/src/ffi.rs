@@ -2780,6 +2780,91 @@ pub unsafe extern "C" fn proteus_layout_anim_seek_scroll(handle: u64, json: *con
     }
 }
 
+/// ★★**共享元素（跨元素飞行）**——从源矩形飞到目标节点，再归位到 identity
+///
+/// 入参 JSON：`{"targetId":9, "sourceNodeId":3}` 或 `{"targetId":9, "sourceRect":{"x":..,"y":..,"w":..,"h":..}}`
+/// `{"durMs":400,"curve":1,"fadeIn":true}`（可省：durMs 默认 400 / curve 默认 easeOut / fadeIn 默认 true）
+///
+/// sourceRect 是**系统坐标**（iOS：屏幕点；Android：视图坐标）——由调用方注入（跨页面的
+/// 稳态起点只有它知道）；sourceNodeId 是**同树节点**（同页面内的共享元素）。
+///
+/// 返回：`{"ok":true,"fromRect":{"x","y","w","h"},"toRect":{…},"dx","dy","scale","updates":[…]}`
+///
+/// 【为什么几何在内核算（与 FLIP/滚动联动同源纪律）】中心差 + 宽度比是**跨页面过渡的全部视觉语义**；
+///   宿主各写一份会三端手感分叉，且错误只在真机上肉眼可见。
+///
+/// # Safety
+/// `json` 须为有效 NUL 结尾 C 字符串。返回指针须用 `proteus_layout_free_string` 释放。
+#[no_mangle]
+pub unsafe extern "C" fn proteus_layout_shared_element(handle: u64, json: *const c_char) -> *mut c_char {
+    let f = || -> Result<String, String> {
+        let s = unsafe { std::ffi::CStr::from_ptr(json) }
+            .to_str()
+            .map_err(|e| format!("入参不是合法 UTF-8：{e}"))?;
+        let v: serde_json::Value = serde_json::from_str(s).map_err(|e| format!("入参 JSON 解析失败：{e}"))?;
+        let target_id = v
+            .get("targetId")
+            .and_then(|x| x.as_u64())
+            .ok_or_else(|| "缺少 targetId".to_string())? as u32;
+        let dur_ms = v.get("durMs").and_then(|x| x.as_f64()).unwrap_or(400.0) as f32;
+        let curve = v.get("curve").and_then(|x| x.as_u64()).unwrap_or(1) as u8;
+        let fade_in = v.get("fadeIn").and_then(|x| x.as_bool()).unwrap_or(true);
+
+        let mut reg = registry().lock().map_err(|_| "注册表锁失败".to_string())?;
+        let entry = reg.get_mut(&handle).ok_or_else(|| format!("句柄 {handle} 不存在"))?;
+
+        // 源：优先显式 sourceRect（系统坐标注入），否则同树 sourceNodeId（同页面共享元素）
+        let source = if let Some(sr) = v.get("sourceRect") {
+            let g = |k: &str| -> Result<f32, String> {
+                sr.get(k)
+                    .and_then(|x| x.as_f64())
+                    .map(|x| x as f32)
+                    .ok_or_else(|| format!("sourceRect 缺少数值字段 `{k}`"))
+            };
+            crate::style::Rect { x: g("x")?, y: g("y")?, width: g("w")?, height: g("h")? }
+        } else if let Some(sid) = v.get("sourceNodeId").and_then(|x| x.as_u64()) {
+            crate::anim::node_abs_rect(&entry.tree, sid as u32)
+                .ok_or_else(|| format!("源节点 {sid} 无绝对几何（不在树上或 display:none）"))?
+        } else {
+            return Err("缺少源：给 sourceNodeId（同树节点）或 sourceRect（系统坐标）".to_string());
+        };
+
+        let mut eng = std::mem::take(&mut entry.anim);
+        let r = eng.start_shared_element(&mut entry.tree, target_id, source, dur_ms, curve, fade_in);
+        entry.anim = eng;
+        let (plan, out) = r?;
+        let rect_json = |r: &crate::style::Rect| {
+            serde_json::json!({"x": r.x, "y": r.y, "w": r.width, "h": r.height})
+        };
+        let updates: Vec<serde_json::Value> = out
+            .updates
+            .iter()
+            .map(|u| serde_json::json!([u.id, u.tx, u.ty, u.scale, u.rotate, u.opacity]))
+            .collect();
+        Ok(serde_json::json!({
+            "ok": true,
+            "targetId": target_id,
+            "fromRect": rect_json(&plan.source),
+            "toRect": rect_json(&plan.target),
+            "dx": plan.dx,
+            "dy": plan.dy,
+            "scale": plan.scale,
+            // ★首帧起点随返回（宿主当帧上屏——否则首帧跳变，与 FLIP 同一条教训）
+            "updates": updates,
+        })
+        .to_string())
+    };
+    match std::panic::catch_unwind(f) {
+        Ok(Ok(s)) => CString::new(s).map(|c| c.into_raw()).unwrap_or(std::ptr::null_mut()),
+        Ok(Err(e)) => CString::new(serde_json::json!({"ok": false, "error": e}).to_string())
+            .map(|c| c.into_raw())
+            .unwrap_or(std::ptr::null_mut()),
+        Err(_) => CString::new(serde_json::json!({"ok": false, "error": "内部 panic（已捕获）"}).to_string())
+            .map(|c| c.into_raw())
+            .unwrap_or(std::ptr::null_mut()),
+    }
+}
+
 /// ★★RT2 —— **每帧推进（二进制通道）**：真机宿主走这个入口，**无 JSON 解析**
 ///
 /// 【为什么需要二进制形态（与 `_anim_tick` 的分工）】JSON 入口便于诊断/测试，但真机每帧

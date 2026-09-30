@@ -404,6 +404,62 @@ pub fn eval_keyframes(from: f32, segs: &[KeySeg], tau: f32) -> (f32, bool) {
     (from, true) // 空序列兜底（调用方保证非空）
 }
 
+/// ★★共享元素过渡的**几何计划**（"从哪飞到哪"的全部数学——唯一实现在内核）
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct SharedElementPlan {
+    /// 源中心 − 目标中心（x；动画从它归位到 0）
+    pub dx: f32,
+    pub dy: f32,
+    /// 源宽 / 目标宽（等比缩放系数；从它归位到 1）
+    pub scale: f32,
+    pub source: Rect,
+    pub target: Rect,
+}
+
+/// 由**源矩形 + 目标矩形**算飞行参数（中心差 + 宽度比）
+///
+/// 【为什么"宽度比"而不是别的】内核只有**等比** scale ⇒ 以宽度为准；
+///   源/目标宽高比不一致时高度按目标宽高比等比推出（如实边界见 README）。
+/// 【明确拒绝而非静默】目标无可测尺寸（未布局/被移除）⇒ Err——静默会变成"元素不动"难查。
+pub fn shared_element_plan(source: Rect, target: Rect) -> Result<SharedElementPlan, String> {
+    let finite = |r: &Rect| r.x.is_finite() && r.y.is_finite() && r.width.is_finite() && r.height.is_finite();
+    if !finite(&source) || !finite(&target) {
+        return Err(format!(
+            "共享元素：矩形含非有限值（源 {:?} / 目标 {:?}）",
+            (source.x, source.y, source.width, source.height),
+            (target.x, target.y, target.width, target.height)
+        ));
+    }
+    if target.width <= 0.5 || target.height <= 0.5 {
+        return Err(format!(
+            "共享元素：目标节点无可测尺寸（{}×{}）——先完成布局/物化再启动",
+            target.width, target.height
+        ));
+    }
+    if source.width <= 0.0 {
+        return Err(format!("共享元素：源矩形宽非法（{}）", source.width));
+    }
+    let dx = (source.x + source.width * 0.5) - (target.x + target.width * 0.5);
+    let dy = (source.y + source.height * 0.5) - (target.y + target.height * 0.5);
+    let scale = source.width / target.width;
+    if !scale.is_finite() || scale <= 0.0 {
+        return Err(format!("共享元素：缩放系数非法（{scale}）"));
+    }
+    Ok(SharedElementPlan { dx, dy, scale, source, target })
+}
+
+/// 节点的**绝对矩形**（与 `flip_capture` 同一套 offsets + 同一把尺子——卡 I2 的吸附在收集处）
+///
+/// 【为什么走同一条收集函数】`collect_abs_pairs` 同时承担：display:none 跳过、祖先偏移累加、
+///   导出边界吸附。单节点若另写一遍遍历，三件事都要各写一次 ⇒ 迟早有一件漏（本仓同源教训多次）。
+pub fn node_abs_rect(tree: &LayoutTree, node_id: u32) -> Option<Rect> {
+    let mut v: Vec<(u32, Rect)> = Vec::new();
+    for &root in &tree.roots {
+        crate::rects_bin::collect_abs_pairs(tree, root, 0.0, 0.0, &mut v);
+    }
+    v.into_iter().find(|(id, _)| *id == node_id).map(|(_, r)| r)
+}
+
 /// ★★**复位一组节点的全部视觉字段**（"解绑"必须含**清值**，不能只停动画）
 ///
 /// 【为什么必须有（本仓真机实测，一次污染两个判据）】`stop_nodes` 首版只把动画项从列表移除，
@@ -975,6 +1031,71 @@ impl AnimEngine {
         a.t_ms = 0.0;
         a.takeover = false;
         self.start(tree, a)
+    }
+
+    /* ──────────────────── ★★共享元素（跨元素飞行：几何原语） ──────────────────── */
+
+    /// ★★**共享元素：从源矩形飞到目标节点**（跨元素/跨页面过渡的几何原语）
+    ///
+    /// 【为什么几何必须在内核算（本仓纪律 #22 的又一次应用）】"从缩略图位置放大到详情页大图"
+    ///   看着是三行算术（中心差 + 宽度比），但它是**跨页面过渡的全部视觉语义**：
+    ///   - 三个数一旦有一个不对，元素就"跳一下"或"尺寸不对"，且只在真机上肉眼可见；
+    ///   - 若让平台/Host 各写一份，三端过渡就各有一个手感（与滚动联动同源教训）。
+    ///   ⇒ 内核吃**源矩形 + 目标节点**，吐 `dx/dy/scale`；宿主只把数字喂给层（零几何数学）。
+    ///
+    /// 【两条动效 + 硬重启语义】translateX/Y + scale 从 `(dx,dy,scale)` 归位到 `(0,0,1)`；
+    ///   **`takeover=false`**：起点是**算出来的几何**，不是"上一条动画的当前值"——
+    ///   若走接管，起点会被覆盖 ⇒ 视觉上不落在源矩形（静默错位，与滚动联动同一条红线）。
+    ///   `fade_in=true` 时附一条 opacity `0→1`（跨图/跨文内容时减弱"旧内容飞过去"的突兀感）。
+    ///
+    /// 【首帧不跳变】启动后**立即 `tick(0)` 写起点**并随 `updates` 返回 —— 宿主当帧上屏，
+    ///   首帧就在源矩形处（与 FLIP 的 `updates` 同一条教训）。
+    ///
+    /// 【等比缩放边界（如实）】内核只有**等比** scale ⇒ 以**宽度比**为准；
+    ///   源/目标宽高比不一致时，高度按目标宽高比等比推出（需要精确宽高比时业务侧应保持一致）。
+    pub fn start_shared_element(
+        &mut self,
+        tree: &mut LayoutTree,
+        target_id: u32,
+        source: Rect,
+        dur_ms: f32,
+        curve: u8,
+        fade_in: bool,
+    ) -> Result<(SharedElementPlan, TickOutcome), String> {
+        if curve > CURVE_MAX {
+            return Err(format!("未知曲线 id={curve}（0..={CURVE_MAX}）"));
+        }
+        let target = node_abs_rect(tree, target_id)
+            .ok_or_else(|| format!("SHARED_ELEMENT 的目标节点 {target_id} 无绝对几何（不在树上或 display:none）"))?;
+        let plan = shared_element_plan(source, target)?;
+        let dur = dur_ms.max(1.0);
+        let mk = |kind: AnimKind, from: f32, to: f32| Anim {
+            node_id: target_id,
+            kind,
+            curve,
+            from,
+            to,
+            dur_ms: dur,
+            delay_ms: 0.0,
+            t_ms: 0.0,
+            drive: AnimDrive::Time,
+            progress: 0.0,
+            scroll_from: 0.0,
+            scroll_to: 0.0,
+            mode: AnimMode::Curve,
+            x: from,
+            vel: 0.0,
+            takeover: false, // ★硬重启：起点 = 算出的几何（见注释）
+        };
+        self.start(tree, mk(AnimKind::TranslateX, plan.dx, 0.0))?;
+        self.start(tree, mk(AnimKind::TranslateY, plan.dy, 0.0))?;
+        self.start(tree, mk(AnimKind::Scale, plan.scale, 1.0))?;
+        if fade_in {
+            self.start(tree, mk(AnimKind::Opacity, 0.0, 1.0))?;
+        }
+        // ★首帧立即写（tick(0)：曲线在 u=0 处值 = from）——宿主据此把起点当帧上屏
+        let out = self.tick(tree, 0.0);
+        Ok((plan, out))
     }
 
     /// **记快照**：把当前所有节点的**绝对**矩形存进引擎（供布局变更后对比）
@@ -1893,6 +2014,105 @@ mod tests {
         let o = e.tick(&mut t, 10.0);
         let v = find_visual(&o.updates, 2).expect("FLIP 节点的 update 必须被回报");
         assert!(v.ty > -40.0 && v.ty < 0.0, "回报的 ty 应在补间中（实测 {}）", v.ty);
+    }
+
+    /* ──────────────────── ★★共享元素（几何原语） ──────────────────── */
+
+    /// 造"已知几何"的树：根在 (0,0)，大小 200×200；子节点（相对）在 (40,60)，大小 80×40
+    ///   ⇒ 子节点**绝对**矩形 = (40,60,80,40)
+    fn tree_with_known_rects() -> LayoutTree {
+        let mut t = LayoutTree::new();
+        let mut root = LNode::new(1, LStyle::default());
+        root.rect = Rect { x: 0.0, y: 0.0, width: 200.0, height: 200.0 };
+        let ri = t.push(root);
+        t.roots.push(ri);
+        let mut child = LNode::new(2, LStyle::default());
+        child.rect = Rect { x: 40.0, y: 60.0, width: 80.0, height: 40.0 };
+        let ci = t.push(child);
+        t.add_child(ri, ci);
+        t
+    }
+
+    #[test]
+    fn shared_element_plan_computes_center_delta_and_width_ratio() {
+        // 源：屏幕坐标 (100,300) 起、40×40 的缩略图；目标：绝对 (40,60) 的 80×40
+        let source = Rect { x: 100.0, y: 300.0, width: 40.0, height: 40.0 };
+        let target = Rect { x: 40.0, y: 60.0, width: 80.0, height: 40.0 };
+        let p = shared_element_plan(source, target).unwrap();
+        // dx = 源中心 120 − 目标中心 80 = +40；dy = 320 − 80 = +240
+        assert!((p.dx - 40.0).abs() < 1e-4, "dx 应为 +40（实测 {}）", p.dx);
+        assert!((p.dy - 240.0).abs() < 1e-4, "dy 应为 +240（实测 {}）", p.dy);
+        assert!((p.scale - 0.5).abs() < 1e-4, "scale 应为 40/80=0.5（实测 {}）", p.scale);
+    }
+
+    #[test]
+    fn shared_element_plan_rejects_unmeasurable_and_nonfinite() {
+        let ok = Rect { x: 0.0, y: 0.0, width: 50.0, height: 50.0 };
+        // 目标未布局（0 尺寸）⇒ 明确拒绝（静默会变成"元素不动"难查）
+        let zero = Rect { x: 0.0, y: 0.0, width: 0.0, height: 0.0 };
+        assert!(shared_element_plan(ok, zero).is_err(), "零尺寸目标必须报错");
+        // 非有限值 ⇒ 拒绝（比较恒 false 会造成静默错位）
+        let bad = Rect { x: f32::NAN, y: 0.0, width: 50.0, height: 50.0 };
+        assert!(shared_element_plan(bad, ok).is_err(), "NaN 源必须报错");
+        // 零宽源 ⇒ 缩放系数无意义 ⇒ 拒绝
+        let zero_w = Rect { x: 0.0, y: 0.0, width: 0.0, height: 50.0 };
+        assert!(shared_element_plan(zero_w, ok).is_err(), "零宽源必须报错");
+    }
+
+    #[test]
+    fn shared_element_starts_at_source_and_lands_identity() {
+        // ★两件事必须同时成立：① 首帧就在**源矩形**（不跳变）② 终态**精确归位**（identity）
+        let mut t = tree_with_known_rects();
+        let mut e = AnimEngine::new();
+        let source = Rect { x: 100.0, y: 300.0, width: 40.0, height: 40.0 };
+        let (plan, first) = e
+            .start_shared_element(&mut t, 2, source, 200.0, CURVE_LINEAR, true)
+            .unwrap();
+        // ① 首帧：updates 里就该有该节点，且值 = 起点（节点 2 是 index 1）
+        let v0 = find_visual(&first.updates, 2).expect("首帧必须回报起点（宿主当帧上屏）");
+        assert!((v0.tx - plan.dx).abs() < 1e-4, "首帧 tx 应为 dx={}（实测 {}）", plan.dx, v0.tx);
+        assert!((v0.ty - plan.dy).abs() < 1e-4, "首帧 ty 应为 dy={}（实测 {}）", plan.dy, v0.ty);
+        assert!((v0.scale - plan.scale).abs() < 1e-4, "首帧 scale 应为 {}", plan.scale);
+        assert_eq!(v0.opacity, 0.0, "fade_in ⇒ 首帧透明度 0");
+        // ② 终态：走完 ⇒ 精确归位（translate 0 / scale 1 / opacity 1）
+        let o = e.tick(&mut t, 250.0);
+        assert!(o.finished >= 4, "四条动画（tx/ty/scale/opacity）都应结束（实测 {}）", o.finished);
+        let st = &t.nodes[1].style;
+        assert_eq!(st.translate_x, 0.0, "终态 tx 必须精确为 0");
+        assert_eq!(st.translate_y, 0.0, "终态 ty 必须精确为 0");
+        assert_eq!(st.scale, 1.0, "终态 scale 必须精确为 1");
+        assert_eq!(st.opacity, 1.0, "终态 opacity 必须精确为 1");
+    }
+
+    #[test]
+    fn shared_element_does_not_take_over_previous_animation() {
+        // ★硬重启：起点是**算出来的几何**，不是上一条动画的当前值
+        //   （若走接管，起点被覆盖 ⇒ 视觉上不落在源矩形——静默错位）
+        let mut t = tree_with_known_rects();
+        let mut e = AnimEngine::new();
+        // 先在目标节点上跑一条 translateX（到中途）
+        e.start(&t, anim(2, AnimKind::TranslateX)).unwrap();
+        e.tick(&mut t, 50.0);
+        let mid = t.nodes[1].style.translate_x;
+        assert!(mid > 0.0 && mid < 100.0, "前置条件：应处于中途（实测 {mid}）");
+        let source = Rect { x: 10.0, y: 20.0, width: 160.0, height: 160.0 };
+        let (plan, _) = e
+            .start_shared_element(&mut t, 2, source, 150.0, CURVE_LINEAR, false)
+            .unwrap();
+        assert_eq!(t.nodes[1].style.translate_x, plan.dx, "起点必须等于算出的 dx（不是中途值 {mid}）");
+    }
+
+    #[test]
+    fn shared_element_from_node_uses_same_ruler_as_flip() {
+        // ★幂等自证：**目标自己作为源** ⇒ 恒等（dx=dy=0、scale=1）——
+        //   这同时证明"节点绝对几何"与 FLIP 用的是**同一把尺子**（否则会有半像素偏差）
+        let mut t = tree_with_known_rects();
+        let r = node_abs_rect(&t, 2).expect("节点 2 应有绝对几何");
+        assert!((r.x - 40.0).abs() < 1.0 && (r.width - 80.0).abs() < 1.0, "绝对矩形应 ≈(40,60,80,40)（实测 {r:?}）");
+        let mut e = AnimEngine::new();
+        let (plan, _) = e.start_shared_element(&mut t, 2, r, 100.0, CURVE_LINEAR, false).unwrap();
+        assert!(plan.dx.abs() < 0.01 && plan.dy.abs() < 0.01, "自反 ✓ dx/dy 应为 0（实测 {} {}）", plan.dx, plan.dy);
+        assert!((plan.scale - 1.0).abs() < 0.01, "自反 ✓ scale 应为 1（实测 {}）", plan.scale);
     }
 
     /* ──────────────────── ★★MA6：序列编排（AnimMode::Keyframes） ──────────────────── */
