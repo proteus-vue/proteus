@@ -4674,6 +4674,8 @@ final class SelfDrawViewController: UIViewController {
         let isBench = ProcessInfo.processInfo.arguments.contains("--bench")
         // ★★G-39：宿主运行时场景（`--host-runtime`）——独立模式，不进自绘/基准分支
         let isHostRuntime = ProcessInfo.processInfo.arguments.contains("--host-runtime")
+        // ★★M5：执行器场景（`--app-stack`）——同上，独立模式
+        let isAppStack = ProcessInfo.processInfo.arguments.contains("--app-stack")
         // ★★用例过滤（`--cases=S5,V4`）：只跑指定前缀的用例
         //
         // 【为什么需要（效率纪律：定向验证不得跑全量）】bench 有 46 个用例、全套数分钟；
@@ -4702,7 +4704,8 @@ final class SelfDrawViewController: UIViewController {
                 SelfDrawBridge.snapshotName = "bench-filtered-\(slug)"
             }
         }
-        let bundleName = isHostRuntime ? "bundle-host-runtime" : (isBench ? "bundle-bench" : "bundle-selfdraw")
+        let bundleName = isAppStack ? "bundle-app-stack"
+            : (isHostRuntime ? "bundle-host-runtime" : (isBench ? "bundle-bench" : "bundle-selfdraw"))
         guard let url = Bundle.main.url(forResource: bundleName, withExtension: "js"),
               let src = try? String(contentsOf: url, encoding: .utf8) else {
             NSLog("[proteus] 缺少 %@.js", bundleName)
@@ -4712,6 +4715,12 @@ final class SelfDrawViewController: UIViewController {
         if isHostRuntime {
             NSLog("[proteus] G-39 宿主运行时场景启动")
             HostRuntimeScene.run(ctx: ctx, bundleURL: url)
+            return
+        }
+        // ★★M5：执行器场景交独立模块驱动（主场景 + 两相 + 非阻塞轮询 + 两份报告），提前返回
+        if isAppStack {
+            NSLog("[proteus] M5 执行器场景启动")
+            AppStackScene.run(ctx: ctx, bundleURL: url)
             return
         }
         let vp = jsonString(["width": w, "height": h])

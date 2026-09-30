@@ -48,7 +48,33 @@
   只有**可复制代码块**里的引用才真正有害。
 · 破坏性验证：恢复 `p-card` → 红并精确报 `03-fluid-grid.md:31`；还原 → 575 md 全过。
 
-## 当前状态速览（最近一次更新：**2026-09-30（六）· M5 执行器端口接生产实现（真内核树 + 真帧循环动画，真机全绿）**）★新会话以此为准
+## 当前状态速览（最近一次更新：**2026-09-30（七）· M5 执行器 iOS 腿对齐（同一入口/两壳/同一判据，双端真机全绿）**）★新会话以此为准
+### ★★★2026-09-30（七）· M5 执行器 iOS 腿对齐（用户：「继续」）
+
+**一、落地（与 Android 腿同构）**
+- **入口提到 shared**：`entry-app-stack.ts` 从 `hosts/android/bridge/` → `hosts/shared/bridge/`（两壳共用，与
+  host-runtime 同法）；`build-app-stack.mjs`（iOS 侧打包器）+ 两端 build 脚本指向 shared。
+- **iOS 宿主实现**：`screen-host.swift`（`proteus_layout_create` 建屏树 + `display` 补丁切可见性 +
+  真销毁 + **CADisplayLink** 帧循环推 `anim_tick_bin`，`.common` 模式）。**按树分发**同 Android 腿。
+- **iOS 场景壳**：`app-stack-scene.swift`（主场景 → kick → **非阻塞轮询**（`asyncAfter` 链，16ms/轮，
+  上限 10s）→ 两份报告 `app-stack.json` + `app-stack-executor.json`，与 Android **同名同形**）。
+
+**二、真机验证（iPhone 12 · JSC）**：判据 ⑦ 组全绿 —— 宿主记账 `mount=2 · visible=4 · destroy=1 ·
+ anim=3/完成 3 · 零钩子缺失`；三份报告链：`screen.anim 完成回推 token=screen-anim-{1,2,3}` →
+ `APP_STACK_REPORT_READY`（轮数 73）。**破坏性验证 3/3 全红**。
+**Android 侧无回归**（同一判据脚本仍全绿）。
+
+**三、★真机+判据各抓出一处缺陷**
+1. **iOS runner 的缺失分支**：`--app-stack` 模式撞上两条 Android 专属断言（`run_ts` 新鲜度 / `build_id`）
+   ——报告是 `__proteusAppStackRun` 的原样输出（无这两个字段）⇒ 加平台分档（app-stack 跳过，
+   新鲜度由"launch 阻塞返回 = 本进程已退出"兜底）。
+2. **判据硬编码 Android 前置**（`engine_available`/`bundle_load_ok`/`handle_count`——都是 Java 壳加进
+   报告的字段）⇒ iOS 报告"前置不满足"。修：**按字段形态判别平台**（`engine_available` 存在 ⇒ Android），
+   平台专有读数分档（iOS 用等价的"屏保留语义"替代 `handle_count`）。
+
+**四、形态确认**：**同一份入口·两个壳·同一份判据**（`check-app-stack.py` 两端共用，平台自动判别）——
+与 G-39 宿主运行时/生命周期事件源同一条纪律：跨端共享语义，各端各自真做。
+
 ### ★★★2026-09-30（六）· M5 执行器端口 → 生产实现（用户：「继续」）
 
 **一、落地（两层）**

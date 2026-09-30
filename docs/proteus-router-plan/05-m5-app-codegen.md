@@ -112,6 +112,22 @@ anim=3/完成 3 · 在册句柄 1 · 零钩子缺失`；判据 ⑦ 组 **10 条�
 若在 `runAll()` 里 `sleep`/同步轮询等待动画完成会死锁 ⇒ 执行器结果走**异步报告**
 （`app-stack-executor.json`，`postDelayed` 链让出主线程推进，有界 10s）。
 
+### 0.7 ★★iOS 腿对齐（2026-09-30 三）—— 同一份入口、两个壳、**同一份判据**
+
+| 维度 | Android（QuickJS） | iOS（JSC） |
+|---|---|---|
+| JS 入口 | `hosts/shared/bridge/entry-app-stack.ts`（**两壳共用一份**——与 host-runtime 同法，从 android 目录提到 shared） ||
+| 宿主实现 | `ScreenHost.java`（内核树 `RustLayout.create` + **Choreographer** 帧循环） | `ScreenHost.swift`（`proteus_layout_create` + **CADisplayLink** 帧循环，`.common` 模式） |
+| 场景驱动 | `MainActivity` 两相 + `postDelayed` 异步报告 | `app-stack-scene.swift`：主场景 → kick → **非阻塞轮询**（`asyncAfter` 链，每轮让出主线程）→ 两份报告 |
+| 报告 | `app-stack.json` + `app-stack-executor.json` | **同名同形**（判据直接共用，无需第二套读法） |
+| 真机读数 | `mount=2 · visible=4 · destroy=1 · anim=3/完成 3 · 在册句柄 1 · 零钩子缺失` | **同量级一致**（`handle_count` 为 Android 专有读数 ⇒ 判据按平台分档，用"屏保留语义"替代） |
+| 判据 | `check-app-stack.py`（**同一脚本**；平台由字段形态判别：`engine_available` 存在 ⇒ Android） | 同上 |
+
+**★真机抓出的一处判据缺陷**：判据脚本原先硬编码 Android 专属前置（`engine_available` / `bundle_load_ok`
+/ `handle_count`——都是 Java 壳加进报告的字段）⇒ iOS 报告一进来就"前置不满足"。修法：**按字段形态判别平台**，
+平台专有读数按平台分档（iOS 用等价的"屏保留语义"断言替代 `handle_count`）。
+★**破坏性验证 3/3 全红**（iOS 侧：动画未完成 / 树操作未发生 / 屏保留破坏）。
+
 ---
 
 ## 1. 目标

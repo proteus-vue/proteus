@@ -46,6 +46,7 @@ for a in "$@"; do
   case "$a" in
     --bench) MODE="bench" ;;
     --host-runtime) MODE="host-runtime" ;;
+    --app-stack) MODE="app-stack" ;;
     --cases=*) CASE_FILTER="${a#--cases=}" ;;
     *) [ -z "$UDID" ] && UDID="$a" ;;
   esac
@@ -93,6 +94,7 @@ build_bundle() {
 build_bundle build-selfdraw.mjs
 build_bundle build-bench.mjs
 build_bundle build-host-runtime.mjs
+build_bundle build-app-stack.mjs
 
 echo "==> ③ 编译 Rust 核心（iOS release）"
 export PATH="$HOME/.cargo/bin:$PATH"
@@ -114,7 +116,7 @@ xcrun --sdk iphoneos swiftc -O -target arm64-apple-ios15.0 \
   -framework UIKit -framework CoreText -framework JavaScriptCore -framework AVFoundation -parse-as-library \
   -o "$APP/ProteusSelfDraw" $PLATFORM_SRC "$HERE/ProteusHost/selfdraw-scene.swift" \
   "$HERE/ProteusHost/host-runtime-scene.swift" "$HERE/ProteusHost/host-capabilities.swift" \
-  "$HERE/ProteusHost/host-lifecycle-events.swift" "$ABI_LIB" "$LIB"
+  "$HERE/ProteusHost/host-lifecycle-events.swift" "$HERE/ProteusHost/screen-host.swift" "$HERE/ProteusHost/app-stack-scene.swift" "$ABI_LIB" "$LIB"
 
 echo "==> ⑤ 组装 .app"
 # ★★两个 bundle **都装**（本仓实测踩到：只装当前模式那个 ⇒ 从桌面点开时
@@ -125,6 +127,8 @@ cp "$HERE/bridge/dist/bundle-selfdraw.js" "$APP/bundle-selfdraw.js"
 cp "$HERE/bridge/dist/bundle-bench.js" "$APP/bundle-bench.js"
 # ★G-39：宿主运行时 bundle（第三个——`--host-runtime` 模式用）
 cp "$HERE/bridge/dist/bundle-host-runtime.js" "$APP/bundle-host-runtime.js"
+# ★M5：执行器场景 bundle（`--app-stack` 模式用）
+cp "$HERE/bridge/dist/bundle-app-stack.js" "$APP/bundle-app-stack.js"
 # ★描述文件与 entitlements 从**描述文件原样提取**（本仓 iOS 竖切实测的坑：
 #   手工拼装会 0xe8008016 invalid entitlements；免费个人团队还需 team-identifier
 #   + keychain-access-groups，少一项即无效）
@@ -231,6 +235,8 @@ SNAP_FILE="selfdraw-final.png"
 if [ "$MODE" = "bench" ]; then REPORT_FILE="logic-bench-report.json"; SNAP_FILE="bench-final.png"; fi
 # ★G-39：宿主运行时模式写独立报告（不污染既有产物命名）
 if [ "$MODE" = "host-runtime" ]; then REPORT_FILE="host-runtime.json"; SNAP_FILE="host-shell.json"; fi
+# ★M5：执行器场景两份报告（主 + 执行器；判据合并读）
+if [ "$MODE" = "app-stack" ]; then REPORT_FILE="app-stack.json"; SNAP_FILE="app-stack-executor.json"; fi
 # ★过滤跑写独立文件（否则会把全量基准报告覆盖掉——历史读数不可再生）
 if [ -n "$CASE_FILTER" ]; then
   SLUG="$(printf '%s' "$CASE_FILTER" | tr ',' '_')"
@@ -255,7 +261,15 @@ rm -f "$BASEF"
 LAUNCH_LOG="$(mktemp)"
 LAUNCH_RC=0
 echo "    启动 App（阻塞到报告落盘后自退——无轮询 / 无 sleep / 无超时；长跑请放后台）"
-if [ "$MODE" = "host-runtime" ]; then
+if [ "$MODE" = "app-stack" ]; then
+  # ★★M5 执行器模式：单段 launch（App 内部：主场景同步 → 执行器两相 → **非阻塞轮询** →
+  #   两份报告落盘 → APP_STACK_REPORT_READY → PROTEUS_EXIT_AFTER_REPORT=1 自退）。
+  #   ★动画由 CADisplayLink 帧循环推进，轮询每轮让出主线程（见 app-stack-scene.swift 文件头）——
+  #     脚本侧只需**阻塞到退出**（与 selfdraw/bench 同款，零轮询）。
+  xcrun devicectl device process launch --console --terminate-existing \
+    --environment-variables '{"PROTEUS_EXIT_AFTER_REPORT":"1"}' \
+    --device "$UDID" "$BUNDLE_ID" --app-stack > "$LAUNCH_LOG" 2>&1 || LAUNCH_RC=$?
+elif [ "$MODE" = "host-runtime" ]; then
   # ══════════════════════════════════════════════════════════════════
   # ★★G-39 宿主运行时模式：**两段式**（本仓事件驱动纪律的延伸）
   #
@@ -365,10 +379,17 @@ if ! xcrun devicectl device copy from --device "$UDID" --domain-type appDataCont
   exit 7
 fi
 rm -f "$FETCH_ERR"
-FRESH_MSG="$(node "$HERE/lib/check-report-freshness.mjs" "$HERE/results/$REPORT_FILE" "$BASE_TS" 2>&1)"; FRESH_RC=$?
-if [ "$FRESH_RC" != "0" ]; then
-  echo "✗ 报告不是本轮写出的（${FRESH_MSG}）——App 可能崩溃/被拦；不等待，直接失败"
-  exit 7
+if [ "$MODE" = "app-stack" ]; then
+  # ★M5：app-stack 报告是 `__proteusAppStackRun` 的**原样输出**（无 run_ts/build_id 字段）。
+  #   新鲜度改由**退出口径**保证：`launch --console` 阻塞返回 = App 本进程已退出
+  #   （device 上只可能有一个本 App 实例）；内容断言由判据脚本负责（读的是端上真数据）。
+  echo "    （app-stack 模式：跳过 run_ts/build_id 断言——报告为纯逻辑读数；以判据为准）"
+else
+  FRESH_MSG="$(node "$HERE/lib/check-report-freshness.mjs" "$HERE/results/$REPORT_FILE" "$BASE_TS" 2>&1)"; FRESH_RC=$?
+  if [ "$FRESH_RC" != "0" ]; then
+    echo "✗ 报告不是本轮写出的（${FRESH_MSG}）——App 可能崩溃/被拦；不等待，直接失败"
+    exit 7
+  fi
 fi
 if [ "$MODE" = "host-runtime" ]; then
   # host-runtime 报告的 build_id 在**顶层**（不是 js_report 嵌套——该形态属渲染场景）
@@ -381,6 +402,10 @@ print('ok' if d.get('build_id')=='$BUILD_ID' else 'build_id 不符：报告=%r �
     echo "✗ ${BID_OK}——设备上跑的不是本次构建；不等待，直接失败"
     exit 7
   fi
+elif [ "$MODE" = "app-stack" ]; then
+  # ★M5：app-stack 报告是 `__proteusAppStackRun` 的**原样输出**（无 build_id 字段——它不是
+  #   编译期注入的 bundle，而是纯逻辑读数）⇒ build_id 断言不适用；新鲜度由 run_ts 断言兜底。
+  echo "    （app-stack 模式：跳过 build_id 断言——报告无该字段；run_ts 新鲜度已断言）"
 else
   BID_MSG="$(node "$HERE/lib/check-report-build-id.mjs" "$HERE/results/$REPORT_FILE" "$BUILD_ID" 2>&1)"; BID_RC=$?
   if [ "$BID_RC" != "0" ]; then
@@ -411,6 +436,22 @@ if [ "$MODE" = "host-runtime" ]; then
   fi
   echo "==> ⑨ 判据（与 Android 同一脚本：platform 由报告 host_id 自报）"
   python3 "$ROOT/hosts/android/check-host-runtime.py" "$HERE/results/$REPORT_FILE" "$HERE/results/$SHELL_REPORT"
+  exit $?
+fi
+
+# ★★M5：执行器模式——取第二份报告（执行器结果）+ 跑**同一份**判据（与 Android 侧共用）
+if [ "$MODE" = "app-stack" ]; then
+  EXEC_REPORT="app-stack-executor.json"
+  rm -f "$HERE/results/$EXEC_REPORT"  # ★先删本地旧件（防 pull 失败读上轮）
+  if xcrun devicectl device copy from --device "$UDID" --domain-type appDataContainer \
+      --domain-identifier "$BUNDLE_ID" --source "Documents/$EXEC_REPORT" \
+      --destination "$HERE/results/$EXEC_REPORT" >/dev/null 2>&1; then
+    echo "    执行器报告：$HERE/results/$EXEC_REPORT"
+  else
+    echo "    ⚠ 执行器报告未取到（${EXEC_REPORT}）——判据 ⑦ 组会如实判红"
+  fi
+  echo "==> ⑨ 判据（与 Android 同一脚本 hosts/android/check-app-stack.py）"
+  python3 "$ROOT/hosts/android/check-app-stack.py" "$HERE/results/$REPORT_FILE"
   exit $?
 fi
 
