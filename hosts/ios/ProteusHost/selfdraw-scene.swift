@@ -155,6 +155,9 @@ func physFootprintMB() -> Double {
     func animTick(_ dtMs: Double) -> String
     /// ★★**层变换探针**（判据从 CALayer 真读——覆盖"写入路径真的生效"）
     func layerTransformProbe(_ idsJson: String) -> String
+    /// ★★**帧率测席**（§9 指标测量）：启动 / 取结果
+    func animBenchStart(_ json: String) -> String
+    func animBenchResults() -> String
     /// ★★**RT2/§7.3：按节点停动画**（宿主行回收时自动调用；暴露给判据做破坏性验证）
     func animStopNodes(_ idsJson: String) -> String
     /// ★★**帧循环三件套**（RT2）：启动（接 CADisplayLink）/ 停止 / 读数
@@ -3033,6 +3036,214 @@ final class SelfDrawBridge: NSObject, SelfDrawExports {
         return "{\"ok\":true,\"applied\":\(applied),\"bytes\":\(outLen)}"
     }
 
+    /* ────────────────── ★★RT2：持续帧率测席（§9 帧率/帧耗时指标的测量装置） ────────────────── */
+
+    /// 帧率测席的运行状态（跨帧累积；由 CADisplayLink 驱动）
+    private struct AnimBenchRun {
+        let durationMs: Double
+        var elapsedMs: Double = 0
+        var frames: Int = 0
+        /// 每帧**被测工作**耗时（ms）：`tickLean + seekLean`（不含 CADisplayLink 自身的空闲等待）
+        var workMs: [Double] = []
+        /// 每个 vsync 间隔（ms）：证明"帧是否掉"的依据（超过标称 1.5× 视为掉帧）
+        var vsyncMs: [Double] = []
+        let gestureNodeId: Int
+        let gestureTo: Double
+        let yNodeIds: [Int]
+        let yTo: Double
+        var timedOut = false
+    }
+
+    private var benchRun: AnimBenchRun?
+    private var benchResult: [String: Any]?
+    /// 相位链的**续链回调**（由控制器注入；测量跑满 ⇒ 宿主回调 resume——事件驱动，非盲等）
+    var animBenchPhaseDone: (() -> Void)?
+
+    /// ★★**每帧推进（精简路径）**：只回计数，**不建 JSON 字符串**
+    ///
+    /// 【为什么与 `animTick` 分开（本仓纪律：测量要测生产路径）】`animTick` 面向 JS 探针
+    ///   （要返回可读 JSON）；而生产帧循环每帧对返回值**毫无兴趣** ⇒ 为它把计数格式化成字符串
+    ///   是纯浪费（且会**污染帧耗时测量**——测出来的是"生产 + 探针格式化"）。⇒ 两条路径分开。
+    @discardableResult
+    private func animTickLean(_ dtMs: Double) -> (applied: Int, bytes: Int) {
+        guard handle != 0 else { return (0, 0) }
+        var outLen: UInt32 = 0
+        let ptr = proteus_layout_anim_tick_bin(handle, Float(dtMs), &outLen)
+        guard let ptr, outLen > 0 else { return (0, 0) }
+        defer { proteus_rects_free(ptr, outLen) }
+        let n = Int(outLen) / 16
+        let buf = UnsafeRawBufferPointer(start: ptr, count: Int(outLen))
+        var applied = 0
+        CATransaction.begin()
+        CATransaction.setDisableActions(true)
+        for i in 0..<n {
+            let base = i * 16
+            let nodeId = buf.loadUnaligned(fromByteOffset: base, as: UInt32.self)
+            let tx = buf.loadUnaligned(fromByteOffset: base + 4, as: Float.self)
+            let ty = buf.loadUnaligned(fromByteOffset: base + 8, as: Float.self)
+            let sc = buf.loadUnaligned(fromByteOffset: base + 12, as: Float.self)
+            if view?.applyTransform(nodeId: Int(nodeId), tx: CGFloat(tx), ty: CGFloat(ty), scale: CGFloat(sc)) == true {
+                applied += 1
+            }
+        }
+        CATransaction.commit()
+        return (applied, Int(outLen))
+    }
+
+    /// **seek 精简路径**（生产手势跟随形态：宿主侧直接 seek，不经 JS）
+    @discardableResult
+    private func seekLean(nodeId: Int, kind: Int, progress: Double) -> Int {
+        guard handle != 0 else { return 0 }
+        let json = "{\"nodeId\":\(nodeId),\"kind\":\(kind),\"progress\":\(progress)}"
+        let out = json.withCString { takeCString(proteus_layout_anim_seek(handle, $0)) }
+        return applyAnimUpdates(fromJson: out)
+    }
+
+    /// ★★**启动帧率测席**（§9：转场帧率 / 帧耗时 P95 / 掉帧率的测量）
+    ///
+    /// 入参 JSON：`{durationMs, nodeIds:[ids], amp, gestureNodeId, gestureFrom, gestureTo}`
+    /// ・`nodeIds`：做**持续 Y 动画**（时长 = 测席时长 ⇒ 全程保持活动集恒定）
+    /// ・`gestureNodeId`：每帧被 `seek` 驱动（**模拟手指跟随**——把手势路径也纳入每帧成本）
+    ///
+    /// 【判据设计】见 `hosts/ios/check-anim-rt2.py` 的 E 组——fps / work p95 / 掉帧率 / 端点钉死。
+    /// 【诚实边界】① 本测席量的是**宿主侧每帧工作**（tick+seek+写层）；JS 侧成本为 0 是**设计目标**
+    ///   （曲线求值在内核）⇒ 这就是完整口径；② 帧率上限受**设备刷新率**约束（iPhone 12 = 60Hz
+    ///   ⇒ 120Hz 目标需 ProMotion 设备验证，本轮如实标注）。
+    func animBenchStart(_ json: String) -> String {
+        guard handle != 0, let view else { return "{\"ok\":false,\"error\":\"未接入\"}" }
+        guard let data = json.data(using: .utf8),
+              let o = (try? JSONSerialization.jsonObject(with: data)) as? [String: Any] else {
+            return "{\"ok\":false,\"error\":\"入参解析失败\"}"
+        }
+        let durationMs = (o["durationMs"] as? Double) ?? 3000
+        let nodeIds = (o["nodeIds"] as? [Int]) ?? []
+        let amp = (o["amp"] as? Double) ?? 60
+        let gestureNodeId = (o["gestureNodeId"] as? Int) ?? (nodeIds.first ?? 2)
+        let gestureTo = (o["gestureTo"] as? Double) ?? 80
+
+        // 先停旧循环（幂等），再播种持续动画
+        view.stopFrameLoop()
+        // ★★探针缺陷修正（真机抓出，第二次同类）：手势节点上可能**残留上一相位的动画**
+        //   （animProbe 给节点 2 起过 translateX 0→120）⇒ bench 的 seek 驱动的是那条旧动画
+        //   ⇒ 终值 =120 而非本测席期望的 gestureTo ⇒ 判据 E4 假红。
+        //   ⇒ 正解：**本测席自己给手势节点起一条明确的 X 动画**（同 (node,kind) 会**替换**旧的
+        //     ——见 AnimEngine::start 的替换语义），使 seek 驱动的目标确定。
+        if !nodeIds.isEmpty {
+            var anims: [[String: Any]] = nodeIds.map { id -> [String: Any] in
+                ["nodeId": id, "kind": 1, "curve": 3, "from": -amp, "to": amp, "durMs": durationMs]
+            }
+            // 手势节点：明确起一条 translateX 0 → gestureTo（**长时长**，全程可被 seek 驱动）
+            anims.append(["nodeId": gestureNodeId, "kind": 0, "curve": 3, "from": 0, "to": gestureTo, "durMs": durationMs])
+            let seed = (try? JSONSerialization.data(withJSONObject: ["anims": anims]))
+                .flatMap { String(data: $0, encoding: .utf8) } ?? "{}"
+            let seedOut = animStart(seed)
+            if !seedOut.contains("\"ok\":true") {
+                return "{\"ok\":false,\"error\":\"播种动画失败\",\"seed\":\(jsonEscape(seedOut))}"
+            }
+        }
+        benchRun = AnimBenchRun(
+            durationMs: durationMs, gestureNodeId: gestureNodeId,
+            gestureTo: gestureTo, yNodeIds: nodeIds, yTo: amp,
+        )
+        benchResult = nil
+        view.onFrame = { [weak self] dtMs in self?.benchFrame(dtMs) }
+        view.startFrameLoop()
+        // ★看门狗（**不是盲等**）：只在"测量卡死"（如屏幕熄灭导致 DisplayLink 停摆）时兜底，
+        //   正常路径由 CADisplayLink 跑满时长后自行收尾。超时结果会被标 `timed_out` ⇒ 判据判红。
+        let wdMs = durationMs * 3
+        DispatchQueue.main.asyncAfter(deadline: .now() + wdMs / 1000.0) { [weak self] in
+            guard let self, self.benchRun != nil else { return }
+            self.benchRun?.timedOut = true
+            self.finishBench()
+        }
+        return "{\"ok\":true,\"duration_ms\":\(durationMs),\"anims\":\(nodeIds.count),\"gesture_node\":\(gestureNodeId)}"
+    }
+
+    /// 每帧：**被测工作**（tick + seek + 写层）+ 帧计时记录
+    private func benchFrame(_ dtMs: Double) {
+        guard var b = benchRun, let view else { return }
+        let t0 = CACurrentMediaTime()
+        _ = animTickLean(dtMs)                                  // ← 被测：每帧推进 + 写层
+        let p = min(1.0, max(0.0, b.elapsedMs / max(b.durationMs, 1)))
+        _ = seekLean(nodeId: b.gestureNodeId, kind: 0, progress: p) // ← 被测：模拟手指跟随
+        let workMs = (CACurrentMediaTime() - t0) * 1000
+        b.workMs.append(workMs)
+        b.frames += 1
+        if b.frames > 1 { b.vsyncMs.append(view.lastFrameMs) }
+        b.elapsedMs += dtMs
+        if b.elapsedMs >= b.durationMs || b.timedOut {
+            benchRun = b
+            finishBench()
+        } else {
+            benchRun = b
+        }
+    }
+
+    /// 收尾：终值读数（端点钉死）+ 统计 → 存结果 → **回调续链**
+    private func finishBench() {
+        guard let b = benchRun, let view else { return }
+        view.stopFrameLoop()
+        view.onFrame = nil
+        // ★终值：把手势驱动显式 seek 到 1.0（端点钉死）⇒ 判据可断言"精确等于 to"
+        _ = seekLean(nodeId: b.gestureNodeId, kind: 0, progress: 1.0)
+        let gLayer = safeJsonLayers(view.layerTransformProbe("[\(b.gestureNodeId)]")).first
+        let yId = b.yNodeIds.first ?? 0
+        let yLayer = yId != 0 ? safeJsonLayers(view.layerTransformProbe("[\(yId)]")).first : nil
+
+        func pct(_ arr: [Double], _ p: Double) -> Double {
+            guard !arr.isEmpty else { return 0 }
+            if arr.count == 1 { return arr[0] }
+            let pos = p * Double(arr.count - 1)
+            let lo = Int(pos.rounded(.down))
+            let hi = min(lo + 1, arr.count - 1)
+            let frac = pos - Double(lo)
+            return arr[lo] * (1 - frac) + arr[hi] * frac
+        }
+        let workSorted = b.workMs.sorted()
+        let vsyncSorted = b.vsyncMs.sorted()
+        let nominal = vsyncSorted.isEmpty ? 0 : vsyncSorted[vsyncSorted.count / 2]
+        let dropped = nominal > 0 ? b.vsyncMs.filter { $0 > nominal * 1.5 }.count : 0
+        let totalVsync = b.vsyncMs.reduce(0, +)
+        let fps = totalVsync > 0 ? Double(max(b.frames - 1, 0)) * 1000.0 / totalVsync : 0
+
+        var out: [String: Any] = [
+            "ok": true,
+            "duration_ms": b.durationMs,
+            "frames": b.frames,
+            "elapsed_ms": (b.elapsedMs * 100) / 100,
+            "fps": (fps * 100).rounded() / 100,
+            "vsync_p50_ms": (nominal * 1000).rounded() / 1000,
+            "work_p50_ms": (pct(workSorted, 0.5) * 1000).rounded() / 1000,
+            "work_p95_ms": (pct(workSorted, 0.95) * 1000).rounded() / 1000,
+            "work_max_ms": (workSorted.last.map { ($0 * 1000).rounded() / 1000 }) ?? 0,
+            "dropped": dropped,
+            "dropped_ratio": b.vsyncMs.isEmpty ? 0 : (Double(dropped) / Double(b.vsyncMs.count) * 10000).rounded() / 10000,
+            "gesture_to": b.gestureTo,
+            "y_to": b.yTo,
+            "timed_out": b.timedOut,
+        ]
+        if let g = gLayer { out["gesture_tx"] = (g["tx"] as? Double).map { ($0 * 10000).rounded() / 10000 } ?? 0 }
+        if let y = yLayer { out["y_ty"] = (y["ty"] as? Double).map { ($0 * 10000).rounded() / 10000 } ?? 0 }
+        benchResult = out
+        benchRun = nil
+        // ★事件驱动续链：测量完成 ⇒ 通知相位驱动继续（不是让 JS/脚本轮询）
+        animBenchPhaseDone?()
+    }
+
+    /// 帧率测席结果（供 finalize2 带进报告）
+    func animBenchResults() -> String {
+        guard let r = benchResult else { return "{\"ok\":false,\"error\":\"未运行测席\"}" }
+        return (try? JSONSerialization.data(withJSONObject: r))
+            .flatMap { String(data: $0, encoding: .utf8) } ?? "{\"ok\":false}"
+    }
+
+    /// `layerTransformProbe` 的 JSON → 层数组（仅收尾用，不在每帧路径）
+    private func safeJsonLayers(_ json: String) -> [[String: Any]] {
+        guard let d = json.data(using: .utf8),
+              let o = (try? JSONSerialization.jsonObject(with: d)) as? [String: Any] else { return [] }
+        return (o["layers"] as? [[String: Any]]) ?? []
+    }
+
     /// 解析 JSON 形态的 updates（`animSeek` 用——它的频率低于 tick 且需带 changed 等元信息）
     @discardableResult
     private func applyAnimUpdates(fromJson out: String) -> Int {
@@ -3916,6 +4127,9 @@ final class SelfDrawViewController: UIViewController {
             // ★★RT2（2026-09-30）：动画相位——指令驱动动画的真机验证
             //   （启动 / seek 手势驱动 / tick 时间驱动 / CADisplayLink 帧循环；判据见 check-anim-rt2.py）
             ("__proteus.animProbe()", 2),
+            // ★★RT2 帧率测席（§9 指标）：**异步**——由 CADisplayLink 跑满时长后回调续链
+            //   （事件驱动：跑满即继续，不轮询/不 sleep；看门狗只在卡死时兜底）
+            ("__proteus.animBench()", 0),
         ]
         // 吞吐链需要多轮推进：每轮让出后读一次 pending
         for _ in 0..<12 { steps.append(("__proteus.pending()", 1)) }
@@ -3928,6 +4142,18 @@ final class SelfDrawViewController: UIViewController {
                 return
             }
             let (expr, pump) = steps[i]
+            // ★★帧率测席是**异步相位**：它要跑满真实时长（由 CADisplayLink 驱动）⇒ 相位链在此**停车**，
+            //   由宿主在测量完成时回调 `animBenchPhaseDone` 续链（**事件驱动**——不是让谁在这儿等）。
+            //   ★回调在 `js(expr)` 之前装好：即使测量瞬间结束也不会漏（DisplayLink 回调在下一轮 runloop 才可能触发）。
+            if expr.hasPrefix("__proteus.animBench") {
+                // ★run 是**局部函数**（不是方法）⇒ 续链闭包直接捕获它（不能用 self?.run）
+                bridge.animBenchPhaseDone = {
+                    DispatchQueue.main.async { run(i + 1) }
+                }
+                let benchOut = js(expr)
+                NSLog("[proteus] %@ → %@", expr, String(benchOut.prefix(300)))
+                return
+            }
             let out = js(expr)
             // 只记关键读数（避免日志爆炸——本仓「输出控制」纪律）
             if expr.hasPrefix("__proteus.mount") || expr.hasPrefix("__proteus.finalize2") || expr.hasPrefix("__proteus.animProbe") {

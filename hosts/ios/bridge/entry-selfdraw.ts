@@ -54,6 +54,9 @@ interface SelfDrawNative {
   animStartFrameLoop(): string
   animStopFrameLoop(): string
   animFrameStats(): string
+  // ★★RT2 帧率测席（§9 指标测量）
+  animBenchStart(json: string): string
+  animBenchResults(): string
 }
 declare const proteusSelfDraw: SelfDrawNative
 /** 快照名（宿主按模式注入；此处仅作默认） */
@@ -61,7 +64,7 @@ const BN = { snapshot: 'selfdraw-final' }
 
 // ★构建标识（每次构建由 hosts/ios/bridge/inject-build-id.mjs 注入；与 entry-bench 同机制）
 //   —— 「设备上跑的是哪份代码」必须可**一眼判定**（报告新鲜度判据的内容锚点）。
-const BUILD_ID = '218a4b3c-110149'
+const BUILD_ID = 'ed51e48a-110628'
 
 const VP = (globalThis as unknown as { __PROTEUS_VIEWPORT__?: { width: number; height: number } })
   .__PROTEUS_VIEWPORT__ ?? { width: 390, height: 844 }
@@ -257,6 +260,44 @@ const api = {
   },
 
   /**
+   * ★★**RT2 帧率测席**（§9：转场帧率 / 帧耗时 P95 / 掉帧率）
+   *
+   * 【与 animProbe 的分工】animProbe 验**机制与正确性**（同步、毫秒级）；本相位测**长时间性能**——
+   *   启动一段持续动画 + 每帧模拟手指跟随，由宿主 CADisplayLink 跑满真实时长后汇总。
+   *
+   * 【为什么本相位不阻塞 JS】它只负责**发起**；宿主跑满时长（事件驱动）后回调相位链继续
+   *   （见宿主 `schedulePhases` 的停车分支）——JS 从不等待，也不轮询。
+   *
+   * 【诚实边界】① 帧率上限受设备刷新率（iPhone 12 = **60Hz**）⇒ §9 的「120 FPS」目标
+   *   需 ProMotion 设备验证，本轮如实标注；② 本测席量的是**宿主每帧工作**
+   *   （tick + seek + 写层）——JS 侧成本为 0 是设计目标（曲线求值在内核）。
+   */
+  animBench(): string {
+    // 目标节点：复用 layerTransformProbe（不猜 id、不手算坐标——本仓纪律）
+    const probeIds = [2, 3, 4, 5, 6, 7, 8]
+    const probe = safeParse(proteusSelfDraw.layerTransformProbe(JSON.stringify(probeIds)))
+    const present = ((probe as { layers?: Array<{ id: number; missing?: boolean }> }).layers ?? [])
+      .filter((l) => !l.missing)
+      .map((l) => l.id)
+    const targets = present.length ? present : [2]
+    const yNodes = targets // Y 动画（持续时长 = 测席时长）
+    const gestureNode = targets[0]
+    const started = safeParse(
+      proteusSelfDraw.animBenchStart(
+        JSON.stringify({
+          durationMs: 3000,
+          nodeIds: yNodes,
+          amp: 60,
+          gestureNodeId: gestureNode,
+          gestureFrom: 0,
+          gestureTo: 80,
+        }),
+      ),
+    )
+    return JSON.stringify({ phase: 'animBench', started, targets })
+  },
+
+  /**
    * ★★**RT2 动画相位（真机验证）**：启动动画 → 逐帧 tick → 校验变换真的落到层上
    *
    * 【这一相位要回答什么（RT0 是桌面微基准，这里是真机）】
@@ -369,6 +410,8 @@ const api = {
       phases: phaseOut,
       // ★★RT2 动画读数（真机判据的输入——见 hosts/ios/check-anim-rt2.py）
       anim_rt2: animRt2Result,
+      // ★★RT2 帧率测席（§9 指标；宿主跑满时长后写入）
+      anim_bench: safeParse(proteusSelfDraw.animBenchResults()),
       js_only_throughput: {
         iterations: jsOnly.length,
         avg_ms: jsAvg >= 0 ? Math.round(jsAvg * 1000) / 1000 : -1,
