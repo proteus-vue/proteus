@@ -27,7 +27,7 @@ import type { TransformRuleOverrides } from '@proteus-vue/compiler'
 import type { ProteusConfig } from './config'
 import { matchWebviewPage } from './gen-routes'
 import { resolveComponentsRoot } from './resolve-components'
-import { APP_LAUNCH_SKELETON } from './appSkeleton'
+import { APP_LAUNCH_SKELETON, APP_LIFECYCLE_BOOTSTRAP } from './appSkeleton'
 import { createCompileCache, compileCacheKey, createBundleCache, bundleCacheKey } from './cache'
 import { collectUsedFrameworkComponents } from './tag-scan'
 
@@ -373,7 +373,8 @@ export function assembleAppJs(
     const register = presets.length
       ? `\nif (typeof wx !== 'undefined' && wx.router) {\n${registerLines.join('\n')}\n}\n`
       : ''
-    return `${custom}\n\n${presetCode}${register}`
+    // ★全量自定义路径也要装派发桥（同一时序理由——必须在 App() 之前）
+    return `${APP_LIFECYCLE_BOOTSTRAP}\n${custom}\n\n${presetCode}${register}`
   }
 
   // ② 极简模式：自动补全 app 骨架（App 包装 / 调试日志 / 错误捕获 / 预设注册 / Pinia 安装）
@@ -381,7 +382,8 @@ export function assembleAppJs(
   const skeletonReg = presets.map((p) => `      wx.router.addRouteBuilder('${p.name}', ${p.fnName})`)
   const skeleton = APP_LAUNCH_SKELETON.replace('__PRESET_REGISTRATION__', skeletonReg.join('\n') || '      // 无内置预设')
     .replace('__PINIA_INSTALL__', piniaInstall)
-  return `${custom ? `${custom}\n\n` : ''}${presetCode ? `${presetCode}\n\n` : ''}${skeleton}`
+  // ★★生命周期派发桥**置于最前**（App() 之前——页面钩子早于 App 回调，见 appSkeleton 注释）
+  return `${custom ? `${custom}\n\n` : ''}${presetCode ? `${presetCode}\n\n` : ''}${APP_LIFECYCLE_BOOTSTRAP}\n\n${skeleton}`
 }
 
 /**

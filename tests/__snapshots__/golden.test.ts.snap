@@ -30,6 +30,15 @@ Page({
   console.log('tapped')
 
 },
+  proteusPageEmit(evt, payload) { var g = (typeof globalThis !== "undefined") ? globalThis : null; if (g && typeof g.__proteusEmitPage === "function") { try { g.__proteusEmitPage(evt, payload) } catch (e) {} } },
+  onShow() { this.proteusPageEmit("show") },
+  onHide() { this.proteusPageEmit("hide") },
+  onReady() { this.proteusPageEmit("ready") },
+  onUnload() { this.proteusPageEmit("unload") },
+  onRouteDone() { this.proteusPageEmit("route-done") },
+  onResize(e) { this.proteusPageEmit("resize", { size: (e && e.size) || {} }) },
+  onTabItemTap() { this.proteusPageEmit("tab-item-tap") },
+  onReachBottom() { this.proteusPageEmit("reach-bottom") },
 })
 ",
   "warnings": [],
@@ -98,6 +107,15 @@ Page({
     this.setData(params)
   },
   proteusOnTextInput(e) { this.setData({ text: e.detail.value }) },
+  proteusPageEmit(evt, payload) { var g = (typeof globalThis !== "undefined") ? globalThis : null; if (g && typeof g.__proteusEmitPage === "function") { try { g.__proteusEmitPage(evt, payload) } catch (e) {} } },
+  onShow() { this.proteusPageEmit("show") },
+  onHide() { this.proteusPageEmit("hide") },
+  onReady() { this.proteusPageEmit("ready") },
+  onUnload() { this.proteusPageEmit("unload") },
+  onRouteDone() { this.proteusPageEmit("route-done") },
+  onResize(e) { this.proteusPageEmit("resize", { size: (e && e.size) || {} }) },
+  onTabItemTap() { this.proteusPageEmit("tab-item-tap") },
+  onReachBottom() { this.proteusPageEmit("reach-bottom") },
 })
 ",
   "warnings": [],
@@ -162,6 +180,15 @@ Page({
     }
     this.setData(params)
   },
+  proteusPageEmit(evt, payload) { var g = (typeof globalThis !== "undefined") ? globalThis : null; if (g && typeof g.__proteusEmitPage === "function") { try { g.__proteusEmitPage(evt, payload) } catch (e) {} } },
+  onShow() { this.proteusPageEmit("show") },
+  onHide() { this.proteusPageEmit("hide") },
+  onReady() { this.proteusPageEmit("ready") },
+  onUnload() { this.proteusPageEmit("unload") },
+  onRouteDone() { this.proteusPageEmit("route-done") },
+  onResize(e) { this.proteusPageEmit("resize", { size: (e && e.size) || {} }) },
+  onTabItemTap() { this.proteusPageEmit("tab-item-tap") },
+  onReachBottom() { this.proteusPageEmit("reach-bottom") },
 })
 ",
   "warnings": [],
@@ -223,6 +250,15 @@ Page({
     }
     this.setData(params)
   },
+  proteusPageEmit(evt, payload) { var g = (typeof globalThis !== "undefined") ? globalThis : null; if (g && typeof g.__proteusEmitPage === "function") { try { g.__proteusEmitPage(evt, payload) } catch (e) {} } },
+  onShow() { this.proteusPageEmit("show") },
+  onHide() { this.proteusPageEmit("hide") },
+  onReady() { this.proteusPageEmit("ready") },
+  onUnload() { this.proteusPageEmit("unload") },
+  onRouteDone() { this.proteusPageEmit("route-done") },
+  onResize(e) { this.proteusPageEmit("resize", { size: (e && e.size) || {} }) },
+  onTabItemTap() { this.proteusPageEmit("tab-item-tap") },
+  onReachBottom() { this.proteusPageEmit("reach-bottom") },
 })
 ",
   "warnings": [],

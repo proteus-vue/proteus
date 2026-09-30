@@ -1398,9 +1398,8 @@ describe('G-32 B3 六期：page-lifecycle / bluetooth / nfc / camera / microphon
 })
 
 describe('G-32 B3 六期 wx 桥（wx.* 归一为 Result——无回调泄漏）', () => {
-  it('wx openBluetoothAdapter/getHCEState/authorize/onKeyboardHeightChange/onPageShow/onPageHide → Promise 归一', async () => {
+  it('wx openBluetoothAdapter/getHCEState/authorize/onKeyboardHeightChange → Promise 归一（页面生命周期改走产物派发，见下）', async () => {
     let kbCb: ((r: { height: number }) => void) | undefined
-    let pageShowCb: (() => void) | undefined
     const wx = {
       openBluetoothAdapter: (opt: { success?: () => void }) => opt.success?.(),
       getBluetoothDevices: (opt: { success: (r: { devices?: Array<{ name?: string }> }) => void }) =>
@@ -1412,12 +1411,9 @@ describe('G-32 B3 六期 wx 桥（wx.* 归一为 Result——无回调泄漏）'
       onKeyboardHeightChange: (cb: (r: { height: number }) => void) => {
         kbCb = cb
       },
-      onPageShow: (cb: () => void) => {
-        pageShowCb = cb
-      },
-      onPageHide: (cb: () => void) => {
-        void cb
-      },
+      // ★2026-09-30 移除：**wx 没有 onPageShow / onPageHide 全局 API**（官方文档核实）。
+      //   此前这里注入假 API 并据此断言 ⇒ **测试固化了缺陷**（运行时用不存在的 API，
+      //   真机上永远不触发）。页面级事件现由**编译产物派发**（见下方 installPageEmitBridge 断言）。
     }
     const orig = (globalThis as { wx?: unknown }).wx
     ;(globalThis as { wx?: unknown }).wx = wx
@@ -1451,7 +1447,12 @@ describe('G-32 B3 六期 wx 桥（wx.* 归一为 Result——无回调泄漏）'
       lc.onShow(() => {
         shown += 1
       })
-      pageShowCb?.()
+      // ★真实机制：编译产物在 Page 钩子里派发（`this.proteusPageEmit('show')` → 全局入口）
+      const emitPage = (globalThis as Record<string, unknown>).__proteusEmitPage as
+        | ((evt: string, payload?: unknown) => void)
+        | undefined
+      expect(typeof emitPage, 'installPageEmitBridge 应已装好产物派发入口').toBe('function')
+      emitPage?.('show')
       expect(shown).toBe(1)
     } finally {
       ;(globalThis as { wx?: unknown }).wx = orig

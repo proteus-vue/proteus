@@ -33,12 +33,12 @@ export const STATS: StatItem[] = [
   },
   {
     id: 'tests',
-    value: '4152',
+    value: '4158',
     label: '单测全绿',
     labelEn: 'unit tests green',
     // ★唯一「需跑全量」的项：门禁不重跑（代价高），由发布前手动核对——其余项均机器重算
-    source: 'pnpm test（官方门禁，排除 e2e；337 文件 / 4152 用例）',
-    sourceEn: 'pnpm test (official gate, e2e excluded; 337 files / 4152 cases)',
+    source: 'pnpm test（官方门禁，排除 e2e；337 文件 / 4158 用例）',
+    sourceEn: 'pnpm test (official gate, e2e excluded; 337 files / 4158 cases)',
   },
   {
     id: 'primitives',
@@ -68,7 +68,7 @@ export const STATS: StatItem[] = [
   },
   {
     id: 'rules',
-    value: '111',
+    value: '112',
     label: '编译规则 AI 说明书',
     labelEn: 'compiler rules (AI-readable catalog)',
     source: 'listTransformRules().length（@proteus-vue/compiler transforms 注册表）',

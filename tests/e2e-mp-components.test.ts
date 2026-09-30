@@ -297,4 +297,49 @@ describe.skipIf(!ENABLED || !TABBAR_PAGE || !projectHasRoute(TABBAR_PAGE ?? ''))
     // ★核心断言②：底边不越过 tabBar 顶边（越界即遮挡）
     expect(d.containerBottom!, '★容器底边不得越过 windowHeight（越过即伸到 tabBar 之下）').toBeLessThanOrEqual(d.windowHeight + 1)
   })
+
+  // ★用主包首页（每个页面产物都含派发——`page/lifecycle-bus` 规则对所有页面生效）
+  const LIFECYCLE_PAGE = 'pages/index'
+  it('★★页面生命周期**产物派发**在真机生效（wx 无全局 onPageShow——只能靠产物派发）', () => {
+    // 【这条判什么（本轮修的核心链路）】
+    //   官方**没有** wx.onPageShow / wx.onPageHide 全局订阅 API（官方文档已核实）
+    //   ⇒ 运行时 usePageLifecycle() 拿页面事件只能靠**编译产物在 Page 钩子里派发**
+    //     （`this.proteusPageEmit('show')` → `globalThis.__proteusEmitPage`）。
+    //   本用例在真机里验证这条链路**真的通了**（不是只在单测里通）。
+    openPage(LIFECYCLE_PAGE)
+    settle(600)
+    const raw = evalIn<string>(
+      `function(){
+         var g = typeof globalThis !== 'undefined' ? globalThis : null;
+         return JSON.stringify({
+           hasEmitBridge: !!(g && typeof g.__proteusEmitPage === 'function'),
+           // 当前页实例上是否存在派发方法（产物生成的）
+           hasPageEmit: (function(){
+             var p = getCurrentPages(); var cur = p[p.length - 1];
+             return !!(cur && typeof cur.proteusPageEmit === 'function');
+           })(),
+           // 订阅者能否收到（让产物派发一次 show，看订阅回调是否被调）
+           received: (function(){
+             var n = 0;
+             try {
+               var bus = g && g.__proteusHostLifecycleBus;
+               if (!bus) return -1;
+               var off = bus.on('page:show', function(){ n += 1; });
+               var p = getCurrentPages(); var cur = p[p.length - 1];
+               if (cur && typeof cur.proteusPageEmit === 'function') cur.proteusPageEmit('show');
+               off();
+             } catch (e) { return -2; }
+             return n;
+           })()
+         });
+       }`,
+    )
+    const d = JSON.parse(String(raw)) as { hasEmitBridge: boolean; hasPageEmit: boolean; received: number }
+    // ① 派发桥已装（api 包在运行时装了它）
+    expect(d.hasEmitBridge, 'globalThis.__proteusEmitPage 应由 installPageEmitBridge 装好').toBe(true)
+    // ② 产物生成了页面派发方法（编译器接线生效）
+    expect(d.hasPageEmit, '产物应生成 proteusPageEmit 方法（page/lifecycle-bus 规则）').toBe(true)
+    // ③ ★链路真的通：产物派发 → 总线 → 订阅回调被调用
+    expect(d.received, '★产物派发应能驱动订阅回调（received 应为 1；-1=总线未建、-2=抛错）').toBe(1)
+  })
 })

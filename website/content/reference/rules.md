@@ -7,7 +7,7 @@ generated: true
 
 # 编译规则目录
 
-> 111 条编译规则——每条自带 AI 说明书（id / when / before → after / why）。SSOT = `@proteus-vue/compiler` TRANSFORM_RULES，与 `npx proteus rules` / Playground Trace 同源。
+> 112 条编译规则——每条自带 AI 说明书（id / when / before → after / why）。SSOT = `@proteus-vue/compiler` TRANSFORM_RULES，与 `npx proteus rules` / Playground Trace 同源。
 
 ## 模板转换（62）
 
@@ -818,7 +818,7 @@ after:  <text style="font-size: calc(15.77px + 1.1268vw)">x</text>（示意—�
 
 > why: Skyline 无 clamp 长度函数（官方支持表）——Web 端可保留真实 CSS clamp，MP 端 calc 线性替代（vw 天然随窗流式零运行时；#496 M3 实测收敛）
 
-## 脚本转换（35）
+## 脚本转换（36）
 
 ### `script/const-to-data`
 
@@ -1183,6 +1183,20 @@ after:  自动包装 scroll-view bindscroll="proteusPageScroll" + proteusPageScr
 ```
 
 > why: Skyline 页面本身不滚动（滚动必须 scroll-view）——页面级滚动钩子不会被触发；桥接后 onPageScroll/onReachBottom/onPullDownRefresh 语义保留（与 Web 端一致）
+
+### `page/lifecycle-bus`
+
+**页面生命周期 → 运行时总线派发（小程序无全局页面事件 API 的唯一通道）**
+
+页面模式：① 用户已声明的钩子（onShow/onHide/onReady/onUnload/onRouteDone/onResize/onTabItemTap/onReachBottom/onPageScroll/onPullDownRefresh）体末追加 this.proteusPageEmit(evt, payload)；② **安全清单**（无用户可见副作用）未声明时也生成钩子并派发；③ **有副作用/高频**的（onPageScroll 两线程通信、onShareAppMessage/onShareTimeline/onAddToFavorites/onSaveExitState 声明才显示菜单入口）**绝不自动补**——仅在用户声明时派发
+
+```
+before: function onShow() { refresh() }  // 运行时 usePageLifecycle().onShow 永不触发
+after:  function onShow() { refresh()
+  try { this.proteusPageEmit("show") } catch (__x) {} }  // 体末派发；未声明时另生成 onHide/onReady/… 安全钩子
+```
+
+> why: 官方只有 Page({onShow}) 声明式，**没有 wx.onPageShow / wx.onPageHide 全局订阅 API**（官方文档已核实）⇒ 运行时 usePageLifecycle() 要拿事件只能靠产物派发。★上轮 MP 桥用了不存在的 wx.onPageShow ⇒ 静默失效（本规则修的是那个实缺）。副作用清单不自动补 = 不改变用户可见行为（不擅自加转发按钮/不擅自开高频 IPC）
 
 ### `script/onload-params`
 
