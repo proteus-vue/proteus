@@ -49,6 +49,17 @@ export type { ProteusRenderer } from './vue-bridge'
 // ★G-41 B4：WebHostRuntime（Web 宿主骨架：Main + Worker + Event Loop——host-guide §5 落地）
 export { createWebHostRuntime } from './web-host'
 export type { WebHostRuntime, WebWorkerHandle, WebHostOptions } from './web-host'
+// ★★G-39 B4 切片：单线程 JS 引擎宿主运行时（Android QuickJS / iOS JSC 同族）——真实实现
+//   （此前 G-39 面只有 stub + Web 宿主 ⇒ 嵌入式宿主为零；落点/边界见 docs/proteus-host-runtime-plan）
+export { createQuickJsHostRuntime } from './quickjs-host'
+export type {
+  QuickJsHostRuntime,
+  QuickJsHostOptions,
+  QuickJsHostCapabilities,
+  LogicalWorkerHandle,
+  NativeTransport,
+  RuntimeRefusal,
+} from './quickjs-host'
 // ★G-41 B5：热切换生产级（switchBackend 三策略——rebuild/rehydrate/hybrid）
 export { createBackendSwitcher } from './hot-switch'
 export type { BackendSwitcher, HotSwitchOptions } from './hot-switch'

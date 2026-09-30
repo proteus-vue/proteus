@@ -45,13 +45,18 @@ export interface HostRuntimeLike {
   id: string
   state: 'created' | 'running' | 'suspended' | 'destroyed'
   threads: string[]
-  workers: Array<{ id: string; thread: string }>
+  /**
+   * 执行域列表。`real: false` = **逻辑域**（单线程宿主：无真并行——诚实声明，G-39.3）；
+   * 真实 Worker 宿主（Web）为 `true`。★可选字段：既有 stub 不声明（视为 true）——
+   * 但"单线程宿主"必须显式写 false（否则框架会按真并行调度 ⇒ 静默降级）。
+   */
+  workers: Array<{ id: string; thread: string; real?: boolean }>
   queue: Array<{ task: () => unknown; priority: number }>
   bootstrap(): this
   suspend(): void
   resume(): void
   destroy(): void
-  createWorker(): { id: string; thread: string }
+  createWorker(): { id: string; thread: string; real?: boolean }
   postMessage(): boolean
   enqueue(task: () => unknown, priority?: number): void
   nextTick(fn: () => unknown): void
