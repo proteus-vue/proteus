@@ -14,6 +14,9 @@ import type { AuthStorage } from './auth'
 //   ★依赖方向：本文件 ← 生成物只取 `import type`（类型）；构造器经**参数注入**（CapError），
 //     避免 `import { CapError } from './capability'` 造成的循环值依赖（本仓纪律：依赖方向单向）。
 import { mpBridgeExt, webBridgeExt } from './generated/bridge-ext'
+// ★★应用与生命周期能力开放（App 宿主腿，2026-09-30）：C23/C24/C25 的第三个桥
+//   （此前只有 wx/web 两份 ⇒ App 宿主无生命周期能力；事件源 = 宿主运行时 + 虚拟栈命令流）
+import { createAppLifecycleCapabilities, detectAppHost, getHostLifecycleBus } from './capability-app'
 import { BRIDGE_DECLS } from './bridge-decls/index'
 
 /** ★Result<T> 契约（G-32.4：能力原语全部返回 Result<T>，禁止回调） */
@@ -7863,8 +7866,17 @@ function encodedUrl(url: string, params?: Record<string, unknown>): string {
  *    · 覆盖能力数可由 `BRIDGE_DECLS.length` 断言（生成物含 `GENERATED_BRIDGE_COUNT` 供测试对账）。 */
 export function createCapabilityBridge(): CapabilityBridge {
   const g = globalThis as { wx?: WxLike }
-  if (detectRuntime() === 'mp' && g.wx) return { ...wxBridge(g.wx), ...mpBridgeExt(g.wx, CapError) }
-  return { ...webBridge(globalThis), ...webBridgeExt(globalThis, CapError) }
+  // ★★App 宿主（壳注入 `__PROTEUS_HOST_ID__`）⇒ 挂 App 生命周期能力。
+  //   · 为什么必须显式判定：QuickJS/JSC **无 window 无 wx** ⇒ detectRuntime() 落 'web'，
+  //     web 桥的 getAppLifecycle 依赖 visibilitychange（App 端不存在）⇒ 三个 Hook 形同虚设；
+  //   · 合并顺序：**最后展开**（App 能力覆盖 wx/web 的同名缺省——App 宿主上是权威实现）；
+  //   · 诚实边界：当前只覆盖**生命周期**三能力（C23/C24/C25）——App 端其余能力
+  //     （屏幕/设备/电池/剪贴板…）仍走 web 桥的降级路径，App 化是后续批次（不冒充已完成）。
+  const appCaps = detectAppHost()
+    ? createAppLifecycleCapabilities(getHostLifecycleBus(), CapError)
+    : ({} as Record<string, never>)
+  if (detectRuntime() === 'mp' && g.wx) return { ...wxBridge(g.wx), ...mpBridgeExt(g.wx, CapError), ...appCaps }
+  return { ...webBridge(globalThis), ...webBridgeExt(globalThis, CapError), ...appCaps }
 }
 
 // —— useXxx Hook 层（G-32.4：Promise<Result<T>>，无回调，无全局对象） ——

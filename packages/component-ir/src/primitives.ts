@@ -181,9 +181,13 @@ const CAPABILITY: PrimitiveDef[] = [
   cap('C20', 'calendar', 'useCalendar()', 'wx.addPhoneCalendar', 'CalendarAPI'),
   cap('C21', 'phone-call', 'usePhoneCall()', 'wx.makePhoneCall', 'Result<void>'),
   cap('C22', 'sms', 'useSMS()', 'wx.??（受限）', 'Result<void>'),
-  cap('C23', 'app-lifecycle', 'useAppLifecycle()', 'App.onLaunch/onShow', 'LifecycleHooks'),
-  cap('C24', 'page-lifecycle', 'usePageLifecycle()', 'Page.onLoad/onShow', 'LifecycleHooks'),
-  cap('C25', 'background', 'useBackground()', 'wx.onBackground', 'BackgroundAPI'),
+  // ★★2026-09-30：C23/C24/C25 App 宿主腿落地（此前仅 wx/web 两桥 ⇒ App 端形同虚设）——
+  //   App 桥 `packages/api/src/capability-app.ts`（总线 + 三能力 + 虚拟栈页面事件翻译器）；
+  //   真机判据 `check:host-runtime` ①~⑤（冷启动补 launch / 真实栈驱动页面生命周期 /
+  //   壳真实事件逐条驱动总线 / 启动参数经 job 泵 / 阶段快照）。
+  { id: 'C23', kind: 'capability', semantic: 'capability.app-lifecycle', api: 'useAppLifecycle()', props: ['LifecycleHooks'], mpEquiv: 'App.onLaunch/onShow', tier: 'L1', status: 'implemented' },
+  { id: 'C24', kind: 'capability', semantic: 'capability.page-lifecycle', api: 'usePageLifecycle()', props: ['LifecycleHooks'], mpEquiv: 'Page.onLoad/onShow', tier: 'L1', status: 'implemented' },
+  { id: 'C25', kind: 'capability', semantic: 'capability.background', api: 'useBackground()', props: ['BackgroundAPI'], mpEquiv: 'wx.onBackground', tier: 'L1', status: 'implemented' },
   // 7.3 通信/数据（10）
   cap('C26', 'fetch', 'useFetch()', 'wx.request', 'Promise<T>'),
   cap('C27', 'websocket', 'useWebSocket()', 'wx.connectSocket', 'WSConnection'),

@@ -1,7 +1,7 @@
 # G-32 原语清单（自动生成——SSOT = packages/component-ir/src/primitives.ts）
 
 > ★由 `npm run gen:docs` 生成，勿手改。手工维护的叙述性规划见各 plan 文档。
-> 总计 **187** 原语 · implemented **69**。
+> 总计 **187** 原语 · implemented **72**。
 
 ## layout — 布局（12）
 
@@ -122,9 +122,9 @@
 | C20 | `capability.calendar` | api:useCalendar() | `useCalendar()` | wx.addPhoneCalendar | planned |
 | C21 | `capability.phone-call` | api:usePhoneCall() | `usePhoneCall()` | wx.makePhoneCall | planned |
 | C22 | `capability.sms` | api:useSMS() | `useSMS()` | wx.??（受限） | planned |
-| C23 | `capability.app-lifecycle` | api:useAppLifecycle() | `useAppLifecycle()` | App.onLaunch/onShow | planned |
-| C24 | `capability.page-lifecycle` | api:usePageLifecycle() | `usePageLifecycle()` | Page.onLoad/onShow | planned |
-| C25 | `capability.background` | api:useBackground() | `useBackground()` | wx.onBackground | planned |
+| C23 | `capability.app-lifecycle` | api:useAppLifecycle() | `useAppLifecycle()` | App.onLaunch/onShow | implemented |
+| C24 | `capability.page-lifecycle` | api:usePageLifecycle() | `usePageLifecycle()` | Page.onLoad/onShow | implemented |
+| C25 | `capability.background` | api:useBackground() | `useBackground()` | wx.onBackground | implemented |
 | C26 | `capability.fetch` | api:useFetch() | `useFetch()` | wx.request | planned |
 | C27 | `capability.websocket` | api:useWebSocket() | `useWebSocket()` | wx.connectSocket | planned |
 | C28 | `capability.socket-task` | api:useSocketTask() | `useSocketTask()` | wx.SocketTask | planned |

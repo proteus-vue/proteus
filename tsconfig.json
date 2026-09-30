@@ -80,6 +80,9 @@
       // ★★G-39（2026-09-30）：宿主运行时子路径——hosts/android/bridge 的 entry 从子路径导入
       //   （子路径必须单列，同 renderer-app/adapters/selfdraw 的规定；esbuild 侧另有 alias）
       "@proteus-vue/render-backend/quickjs-host": ["packages/render-backend/src/quickjs-host.ts"],
+      // ★★应用与生命周期能力开放（2026-09-30）：api 子路径——hosts/shared 的设备入口从子路径导入
+      "@proteus-vue/api/capability-app": ["packages/api/src/capability-app.ts"],
+      "@proteus-vue/api/capability": ["packages/api/src/capability.ts"],
       "@proteus-vue/render-backend/host-conformance": ["packages/render-backend/src/host-conformance.ts"],
       "@proteus-vue/style-safety": ["packages/style-safety/src/index.ts"],
       "@proteus-vue/types": ["packages/types/src/index.ts"],
