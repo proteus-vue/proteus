@@ -32,6 +32,10 @@ W3_URL="https://codeload.github.com/wasm3/wasm3/tar.gz/refs/heads/${W3_REV}"
 
 ANDROID_API=24
 ABI="aarch64-linux-android${ANDROID_API}"
+# ★★16 KB page size 对齐（Android 15+ 要求）——与 setup-android-js-engine.sh 同款。
+#   【为什么必须有（用户指出「安卓三个 so 库没做 16kb 门禁校验」）】本脚本首版**漏了它**：
+#   实测 `llvm-readelf -l` 显示 LOAD 段 Align 全是 **0x1000（4 KB）** ⇒ 16 KB 设备上 mmap 失败。
+ALIGN_FLAG="-Wl,-z,max-page-size=16384"
 
 say() { printf '%s\n' "$*"; }
 die() { say "✗ $*"; exit 1; }
@@ -88,7 +92,7 @@ build_so() {
   "$cc" -fPIC -O2 -I"$W3_DIR/source" -I"$jni_inc" -I"$jni_inc/darwin" \
     -c -o "$OUT_DIR/proteus_wasm_jni.o" "$jni_src" 2>&1 | head -5
   [ -f "$OUT_DIR/proteus_wasm_jni.o" ] || die "JNI 桥编译失败"
-  "$cc" -shared -o "$OUT_DIR/libproteus_wasm.so" "$OUT_DIR/proteus_wasm_jni.o" "${objs[@]}" -lm -llog 2>&1 | head -3
+  "$cc" -shared "$ALIGN_FLAG" -o "$OUT_DIR/libproteus_wasm.so" "$OUT_DIR/proteus_wasm_jni.o" "${objs[@]}" -lm -llog 2>&1 | head -3
   [ -f "$OUT_DIR/libproteus_wasm.so" ] || die "链接失败"
   rm -f "$OUT_DIR"/*.o
   local kb; kb=$(( $(stat -f%z "$OUT_DIR/libproteus_wasm.so") / 1024 ))

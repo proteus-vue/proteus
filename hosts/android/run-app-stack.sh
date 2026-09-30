@@ -35,20 +35,19 @@ fi
 echo "==> ① 安装（release 包）"
 "$ADB" install -r -t "$APK" 2>&1 | grep -E "Success|Failure" | head -2
 
-echo "==> ② 清旧报告 + 重启 + 触发 app-stack"
+echo "==> ② 清旧报告 + 重启 + 等就绪 + 触发 app-stack"
 "$ADB" shell "rm -f $REPORT" >/dev/null 2>&1 || true
 "$ADB" shell "am force-stop $PKG" >/dev/null 2>&1 || true
 "$ADB" shell "monkey -p $PKG -c android.intent.category.LAUNCHER 1" >/dev/null 2>&1
-sleep 3
+# ★条件等待（替代原 `sleep 3`）：等 Activity 上报 "run-receiver-ready"（见 MainActivity.onCreate）
+WAIT_SH="$ROOT/.agents/skills/ai-efficiency-rules/scripts/wait_for.sh"
+[ -x "$WAIT_SH" ] || { echo "✗ 缺 wait_for.sh（${WAIT_SH}）——本脚本禁止盲等"; exit 2; }
+bash "$WAIT_SH" --cmd "\"$ADB\" logcat -d -s 'proteus:I' | grep -q run-receiver-ready" \
+  --timeout 30 --interval 1 --max-interval 3 || echo "  ⚠ 未见 run-receiver-ready（30s）——广播可能丢"
 "$ADB" shell "am broadcast -a dev.proteus.RUN --es path app-stack -p $PKG" >/dev/null 2>&1
 
 echo "==> ③ 等报告（条件等待）"
-WAIT="$ROOT/.agents/skills/ai-efficiency-rules/scripts/wait_for.sh"
-if [ -x "$WAIT" ]; then
-  bash "$WAIT" --cmd "$ADB shell \"test -f $REPORT\"" --timeout 90 --interval 3 || true
-else
-  for _ in $(seq 1 30); do "$ADB" shell "test -f $REPORT" >/dev/null 2>&1 && break; sleep 3; done
-fi
+bash "$WAIT_SH" --cmd "\"$ADB\" shell test -f $REPORT" --timeout 90 --interval 3 || true
 if ! "$ADB" shell "test -f $REPORT" >/dev/null 2>&1; then
   echo "✗ 报告未生成（${REPORT}）—— 看 adb logcat --pid=\$(pidof $PKG)"
   exit 1

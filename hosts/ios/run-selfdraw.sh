@@ -272,13 +272,10 @@ if [ "$MODE" = "host-runtime" ]; then
   #   ★launch 的 stdout 走文件（不是管道）——避免 `$(...)` 缓冲吞掉进度日志。
   # ══════════════════════════════════════════════════════════════════
   WAIT_SH="$ROOT/.agents/skills/ai-efficiency-rules/scripts/wait_for.sh"
+  # ★wait_for.sh 是唯一原语（check-no-blind-wait 门禁）——**没有盲等回退**
+  [ -x "$WAIT_SH" ] || { echo "✗ 缺 wait_for.sh（${WAIT_SH}）——本脚本禁止盲等"; exit 2; }
   wait_cond() { # $1=命令（字符串） $2=秒
-    if [ -x "$WAIT_SH" ]; then
-      bash "$WAIT_SH" --cmd "$1" --timeout "$2" --interval 2 || true
-    else
-      local n=$(( $2 / 2 ))
-      for _ in $(seq 1 "$n"); do eval "$1" >/dev/null 2>&1 && return 0; sleep 2; done
-    fi
+    bash "$WAIT_SH" --cmd "$1" --timeout "$2" --interval 2 || true
   }
   ( xcrun devicectl device process launch --console --terminate-existing \
       --environment-variables '{"PROTEUS_EXIT_AFTER_REPORT":"1"}' \

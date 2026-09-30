@@ -48,7 +48,42 @@
   只有**可复制代码块**里的引用才真正有害。
 · 破坏性验证：恢复 `p-card` → 红并精确报 `03-fluid-grid.md:31`；还原 → 575 md 全过。
 
-## 当前状态速览（最近一次更新：**2026-09-30 · 应用与生命周期能力开放（C23/C24/C25 App 腿）—— Hook 层从「文档阶段」变成端上可用**）★新会话以此为准
+## 当前状态速览（最近一次更新：**2026-09-30（续）· 安卓宿主两问收口（16KB 门禁补 wasm + 应用事件源假绿挖出并真落地）**）★新会话以此为准
+
+### ★★★2026-09-30（续）· 安卓宿主两问收口（用户：「三个 so 没做 16kb 门禁」「再检查下安卓应用生命周期是否真落地，保险点儿」）
+
+**问题 1 —— 16 KB 对齐（含门禁覆盖面缺陷）**
+- 实测：`libproteus_wasm.so` LOAD 段是 **0x1000（4KB）**，而 `check-16kb-align.sh` 只扫 `build/lib/` +
+  `build/js-engine/` ⇒ **漏了 `build/wasm/`**（门禁假绿——"覆盖面没跟着产物落点走"，与 verify 漏网同源）。
+- 修：`setup-android-wasm.sh` 加 `-Wl,-z,max-page-size=16384`（重编 wasm3）；门禁 glob 扩到 `build/wasm/*.so`
+  + 内容哈希去重（bash 3.2 无 declare -A）。现状：**4 个 .so 全 0x4000 + APK Stored 16KB 对齐**。
+
+**问题 2 —— 应用生命周期"真落地"核查（★挖出两处假绿 + 一处假实现）**
+- **假绿①（K 组自证）**：原 JS 探针 `emitFn(...)` **自触发**六个事件 ⇒ 把 Java 侧来源整类删掉也全绿。
+  **假绿②**：iOS 产物根本没有 `app_events` 字段，K 组对 iOS 从未成立。
+  **假实现**：`registerAudioNoisyReceiver()` 是空壳（注释自认"声明式最小面"）。
+- **真实现（HostLifecycleEvents.java 重写）**：`onTrimMemory`（memory-warning）/ `onConfigurationChanged`
+  读 uiMode（theme-change）与 screenWidthDp（resize）/ 全局未捕获异常钩子（error，链式保留原 handler）/
+  **BECOMING_NOISY + HEADSET_PLUG 动态接收器**（audio-interruption 近似——平台语义映射如实标注）。
+  ★**诚实两条**：unhandled-rejection / page-not-found = **平台无此概念**（引擎/框架语义），判据强制"不得伪造"。
+  ★manifest 补 `uiMode|smallestScreenSize|screenLayout`（否则配置变化重建 Activity、事件丢失）。
+- **真驱动（脚本，全部条件等待）**：`am send-trim-memory RUNNING_LOW`（rawLevel=10 内容断言）、
+  `cmd uimode night no→yes`（终态 dark）、`wm user-rotation lock`、`dev.proteus.CRASH` 广播 → 后台线程抛真异常
+  （**不用 `am crash`**——native 信号不过 Java 钩子）。★音频两条是**保护广播**，adb 注入被拒（SecurityException
+  实测）⇒ 按"接收器已注册"验，不假装驱动。
+- **证据链三环对齐**：Java 真回调 attempts → Java 推送 pushes（壳推回执 ok 才计）→ JS 收到 seen；证据由 Java
+  在**未捕获异常处理器里、进程死前**落盘 `host-app-events.json`（含 64 条历史环）。真机：
+  `memory 1/1/1 · theme 2/2/2 · resize 1/1/1 · error 1/1/1`（全绿）。
+- **装置缺陷（真机抓出并修）**：`am start` 让同进程出现**两个 MainActivity 实例** ⇒ 双接收器双崩溃双钩子
+  转发（一次崩溃 4 次落盘、seen=4）。修：记账静态化 + 只让**最新实例**转发（ACTIVE）+ 崩溃每进程一次（CAS）。
+- **破坏性验证 5 变体**：三环齐=绿；旧假绿（attempts 空）=红；载荷不实（无 rawLevel=10）=红；错误链断裂=红；
+  伪造平台不存在事件=红。
+- **iOS 分档**：J/K 两条改为**显式 ⚠ 待办**（Swift 壳无 HostCapabilities / 无应用事件源）——不误红、不静默。
+
+**顺手收口**：文档诚实分档（`APP_EVENT_META` App 列——unhandled-rejection/page-not-found 改 `null`=无此事件，
+其余改真来源描述；EN 镜像同步，en-drift ✅；gen:content --check ✅）；**盲等清零 3 脚本**（删盲等回退分支；
+MainActivity 加 `run-receiver-ready` 就绪日志 ⇒ "等 App 起来"变条件等待），check:no-blind-wait ✅；
+check:shell-i18n-vars 抓出并修 `$VAR<全角>` 3 处。
 
 ### ★★★2026-09-30 · 宿主四议题取证 + G-39 嵌入式宿主切片落地
 

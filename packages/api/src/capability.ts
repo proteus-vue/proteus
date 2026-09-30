@@ -21,6 +21,7 @@ import {
   createAppNativeCapabilities,
   detectAppHost,
   getHostLifecycleBus,
+  installAppEventSource,
   installPageEmitBridge,
   installWebEventSources,
   installWxAppEventBridge,
@@ -7874,12 +7875,22 @@ export function installLifecycleEventSources(): void {
   const g = globalThis as { wx?: WxLike }
   // App 宿主（壳注入标识）走壳事件；MP 走 wx 全局 API + 产物派发；Web 由 web 桥的 visibilitychange 自管
   const bus = getHostLifecycleBus()
-  if (detectAppHost()) return // App 端：事件由壳（G-39 运行时）推入，无需在此装
+  // ★★App 端（壳注入标识）：装**壳推通道**——`HostLifecycleEvents.forwardToJs` 消费。
+  //   ★这里曾是**提前 return**（`if (detectAppHost()) return`），而那会让下面的
+  //     `installAppEventSource` 在 App 端**永不执行**——恰恰是 App 端最需要的通道！
+  //     （真机验证抓出：App 端 memory-warning/theme-change/resize 全丢）
+  if (detectAppHost()) {
+    installAppEventSource(bus)
+    return
+  }
   if (g.wx) {
     installWxAppEventBridge(bus, g.wx)
     installPageEmitBridge(bus)
   }
+  // Web 端也装（壳推通道对 Web 无害；且 SSR/容器环境可能注入壳标识）
+  installAppEventSource(bus)
 }
+
 
 // ★★模块加载即装（见函数注释：页面钩子早于业务调用——晚装会丢首屏事件）
 installLifecycleEventSources()

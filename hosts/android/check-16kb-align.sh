@@ -35,13 +35,32 @@ fails=0
 
 echo "==> ① ELF LOAD 段对齐（要求每个段 Align = 0x4000）"
 shopt -s nullglob
-sos=("$HERE"/build/lib/arm64-v8a/*.so "$HERE"/build/js-engine/*.so)
+# ★★覆盖面必须跟着"产物落点"走（用户指出「安卓三个 so 库没做 16kb 门禁校验」）：
+#   初版只扫 build/lib + build/js-engine ⇒ **漏了 build/wasm/**（wasm3 运行时）⇒ 门禁假绿。
+#   ⚠ 别写死目录列表：**新 .so 落点**要一起加（本仓纪律：门禁覆盖面跟形态走）。
+sos=("$HERE"/build/lib/arm64-v8a/*.so "$HERE"/build/js-engine/*.so "$HERE"/build/wasm/*.so)
 if [ ${#sos[@]} -eq 0 ]; then
   echo "  ✗ 未找到任何 .so 产物 —— 先构建："
   echo "    · Rust 核心：bash hosts/android/build-and-run.sh --no-install"
   echo "    · JS 引擎：  bash scripts/setup-android-js-engine.sh"
   exit 2
 fi
+# ★去重（同一 .so 可能同时出现在"构建源"与"打包拷贝"两个落点——内容相同）
+#   ★★**不能用 `declare -A`**：macOS 自带 bash 3.2 不支持关联数组（本仓已踩过：
+#      acceptance-stub.mjs 有静态扫描专防它）。用**换行分隔的字符串**当集合（3.2 兼容）。
+_seen=""
+_uniq=()
+for so in "${sos[@]}"; do
+  [ -f "$so" ] || continue
+  h="$(shasum -a 256 "$so" 2>/dev/null | awk '{print $1}')"
+  case "$_seen" in
+    *" $h "*) continue ;;
+  esac
+  _seen="${_seen} ${h} "
+  _uniq+=("$so")
+done
+sos=("${_uniq[@]}")
+
 for so in "${sos[@]}"; do
   [ -f "$so" ] || continue
   name="$(basename "$so")"

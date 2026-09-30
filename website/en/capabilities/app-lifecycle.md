@@ -27,7 +27,7 @@ Returns `AppLifecycle` (synchronous handle/state object).
 | [`onLaunch`](#onlaunch) | App launched (exactly once, before the first show; auto-emitted on cold start) | MP ✅ · Web ✅ · App ✅ |
 | [`onShow`](#onshow) | App entered the foreground | MP ✅ · Web ✅ · App ✅ |
 | [`onHide`](#onhide) | App moved to the background | MP ✅ · Web ✅ · App ✅ |
-| [`onPageNotFound`](#onpagenotfound) | Route not matched (navigate to a fallback page) | MP ✅ · Web ✅ · App ✅ |
+| [`onPageNotFound`](#onpagenotfound) | Route not matched (navigate to a fallback page) | MP ✅ · Web ✅ · App — |
 | [`onAudioInterruptionBegin`](#onaudiointerruptionbegin) | Audio session interrupted by the system (e.g. incoming call) | MP ✅ · Web — · App ✅ |
 | [`onAudioInterruptionEnd`](#onaudiointerruptionend) | Audio interruption ended (playback may resume) | MP ✅ · Web — · App ✅ |
 
@@ -36,9 +36,9 @@ Returns `AppLifecycle` (synchronous handle/state object).
 - `onLaunch`: MP `auto-emitted on the first onAppShow` · Web `auto-emitted on the first load` · App `shell cold start`
 - `onShow`: MP `wx.onAppShow` · Web `visibilitychange→visible` · App `shell resume (Activity.onResume / didBecomeActive)`
 - `onHide`: MP `wx.onAppHide` · Web `visibilitychange→hidden` · App `shell pause (Activity.onPause / willResignActive)`
-- `onPageNotFound`: MP `App.onPageNotFound / wx.onPageNotFound` · Web `route miss (pushed by the router layer)` · App `route miss`
-- `onAudioInterruptionBegin`: MP `App.onAudioInterruptionBegin` · Web — (not on this target) · App `shell audio-session notification`
-- `onAudioInterruptionEnd`: MP `App.onAudioInterruptionEnd` · Web — (not on this target) · App `shell audio-session notification`
+- `onPageNotFound`: MP `App.onPageNotFound / wx.onPageNotFound` · Web `route miss (pushed by the router layer)` · App — (not on this target)
+- `onAudioInterruptionBegin`: MP `App.onAudioInterruptionBegin` · Web — (not on this target) · App `shell audio-signal receiver (Android BECOMING_NOISY / HEADSET_PLUG — registered; ★protected broadcast, not script-drivable)`
+- `onAudioInterruptionEnd`: MP `App.onAudioInterruptionEnd` · Web — (not on this target) · App `shell audio-signal receiver (Android HEADSET_PLUG state=1 — same; requires a physical plug/unplug)`
 
 ### `onLaunch`
 
