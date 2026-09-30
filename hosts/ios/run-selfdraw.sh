@@ -47,6 +47,7 @@ for a in "$@"; do
     --bench) MODE="bench" ;;
     --host-runtime) MODE="host-runtime" ;;
     --app-stack) MODE="app-stack" ;;
+    --showcase) MODE="showcase" ;;
     --cases=*) CASE_FILTER="${a#--cases=}" ;;
     *) [ -z "$UDID" ] && UDID="$a" ;;
   esac
@@ -95,6 +96,7 @@ build_bundle build-selfdraw.mjs
 build_bundle build-bench.mjs
 build_bundle build-host-runtime.mjs
 build_bundle build-app-stack.mjs
+build_bundle build-showcase.mjs
 
 echo "==> ③ 编译 Rust 核心（iOS release）"
 export PATH="$HOME/.cargo/bin:$PATH"
@@ -116,7 +118,7 @@ xcrun --sdk iphoneos swiftc -O -target arm64-apple-ios15.0 \
   -framework UIKit -framework CoreText -framework JavaScriptCore -framework AVFoundation -parse-as-library \
   -o "$APP/ProteusSelfDraw" $PLATFORM_SRC "$HERE/ProteusHost/selfdraw-scene.swift" \
   "$HERE/ProteusHost/host-runtime-scene.swift" "$HERE/ProteusHost/host-capabilities.swift" \
-  "$HERE/ProteusHost/host-lifecycle-events.swift" "$HERE/ProteusHost/screen-host.swift" "$HERE/ProteusHost/app-stack-scene.swift" "$ABI_LIB" "$LIB"
+  "$HERE/ProteusHost/host-lifecycle-events.swift" "$HERE/ProteusHost/screen-host.swift" "$HERE/ProteusHost/app-stack-scene.swift" "$HERE/ProteusHost/showcase-scene.swift" "$ABI_LIB" "$LIB"
 
 echo "==> ⑤ 组装 .app"
 # ★★两个 bundle **都装**（本仓实测踩到：只装当前模式那个 ⇒ 从桌面点开时
@@ -129,6 +131,8 @@ cp "$HERE/bridge/dist/bundle-bench.js" "$APP/bundle-bench.js"
 cp "$HERE/bridge/dist/bundle-host-runtime.js" "$APP/bundle-host-runtime.js"
 # ★M5：执行器场景 bundle（`--app-stack` 模式用）
 cp "$HERE/bridge/dist/bundle-app-stack.js" "$APP/bundle-app-stack.js"
+# ★Morpheus 炫技场 bundle（`--showcase` 模式用）
+cp "$HERE/bridge/dist/bundle-showcase.js" "$APP/bundle-showcase.js"
 # ★描述文件与 entitlements 从**描述文件原样提取**（本仓 iOS 竖切实测的坑：
 #   手工拼装会 0xe8008016 invalid entitlements；免费个人团队还需 team-identifier
 #   + keychain-access-groups，少一项即无效）
@@ -237,6 +241,8 @@ if [ "$MODE" = "bench" ]; then REPORT_FILE="logic-bench-report.json"; SNAP_FILE=
 if [ "$MODE" = "host-runtime" ]; then REPORT_FILE="host-runtime.json"; SNAP_FILE="host-shell.json"; fi
 # ★M5：执行器场景两份报告（主 + 执行器；判据合并读）
 if [ "$MODE" = "app-stack" ]; then REPORT_FILE="app-stack.json"; SNAP_FILE="app-stack-executor.json"; fi
+# ★Morpheus 炫技场（一份报告 + 一张收尾截图）
+if [ "$MODE" = "showcase" ]; then REPORT_FILE="showcase.json"; SNAP_FILE="showcase-final.png"; fi
 # ★过滤跑写独立文件（否则会把全量基准报告覆盖掉——历史读数不可再生）
 if [ -n "$CASE_FILTER" ]; then
   SLUG="$(printf '%s' "$CASE_FILTER" | tr ',' '_')"
@@ -261,7 +267,13 @@ rm -f "$BASEF"
 LAUNCH_LOG="$(mktemp)"
 LAUNCH_RC=0
 echo "    启动 App（阻塞到报告落盘后自退——无轮询 / 无 sleep / 无超时；长跑请放后台）"
-if [ "$MODE" = "app-stack" ]; then
+if [ "$MODE" = "showcase" ]; then
+  # ★★Morpheus 炫技场：单段 launch（App 内部：建树 → 三段编舞（帧循环驱动）→ 读数 + 截图 →
+  #   SHOWCASE_REPORT_READY → PROTEUS_EXIT_AFTER_REPORT=1 自退）。脚本侧零轮询。
+  xcrun devicectl device process launch --console --terminate-existing \
+    --environment-variables '{"PROTEUS_EXIT_AFTER_REPORT":"1"}' \
+    --device "$UDID" "$BUNDLE_ID" --showcase > "$LAUNCH_LOG" 2>&1 || LAUNCH_RC=$?
+elif [ "$MODE" = "app-stack" ]; then
   # ★★M5 执行器模式：单段 launch（App 内部：主场景同步 → 执行器两相 → **非阻塞轮询** →
   #   两份报告落盘 → APP_STACK_REPORT_READY → PROTEUS_EXIT_AFTER_REPORT=1 自退）。
   #   ★动画由 CADisplayLink 帧循环推进，轮询每轮让出主线程（见 app-stack-scene.swift 文件头）——
@@ -402,6 +414,17 @@ print('ok' if d.get('build_id')=='$BUILD_ID' else 'build_id 不符：报告=%r �
     echo "✗ ${BID_OK}——设备上跑的不是本次构建；不等待，直接失败"
     exit 7
   fi
+elif [ "$MODE" = "showcase" ]; then
+  # showcase 报告的 build_id 在**顶层**（JS 侧编译期注入——与 host-runtime 同款）
+  BID_OK="$(python3 -c "
+import json,sys
+d=json.load(open('$HERE/results/$REPORT_FILE'))
+print('ok' if d.get('build_id')=='$BUILD_ID' else 'build_id 不符：报告=%r 期望=%r' % (d.get('build_id'),'$BUILD_ID'))
+" 2>&1)"
+  if [ "$BID_OK" != "ok" ]; then
+    echo "✗ ${BID_OK}——设备上跑的不是本次构建；不等待，直接失败"
+    exit 7
+  fi
 elif [ "$MODE" = "app-stack" ]; then
   # ★M5：app-stack 报告是 `__proteusAppStackRun` 的**原样输出**（无 build_id 字段——它不是
   #   编译期注入的 bundle，而是纯逻辑读数）⇒ build_id 断言不适用；新鲜度由 run_ts 断言兜底。
@@ -436,6 +459,20 @@ if [ "$MODE" = "host-runtime" ]; then
   fi
   echo "==> ⑨ 判据（与 Android 同一脚本：platform 由报告 host_id 自报）"
   python3 "$ROOT/hosts/android/check-host-runtime.py" "$HERE/results/$REPORT_FILE" "$HERE/results/$SHELL_REPORT"
+  exit $?
+fi
+
+# ★★Morpheus 炫技场：取收尾截图 + 跑专属判据
+if [ "$MODE" = "showcase" ]; then
+  if xcrun devicectl device copy from --device "$UDID" --domain-type appDataContainer \
+      --domain-identifier "$BUNDLE_ID" --source "Documents/showcase-final.png" \
+      --destination "$HERE/results/showcase-final.png" >/dev/null 2>&1; then
+    echo "    收尾截图：$HERE/results/showcase-final.png"
+  else
+    echo "    ⚠ 截图未取到（判据会据此判红）"
+  fi
+  echo "==> ⑨ 判据（hosts/ios/check-showcase.py）"
+  python3 "$HERE/check-showcase.py" "$HERE/results/$REPORT_FILE" "$HERE/results/showcase-final.png"
   exit $?
 fi
 

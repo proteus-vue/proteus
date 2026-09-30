@@ -37,6 +37,7 @@ MODE="selfdraw"
 for a in "$@"; do
   case "$a" in
     --bench) MODE="bench" ;;
+    --showcase) MODE="showcase" ;;
     *) SIM_NAME="$a" ;;
   esac
 done
@@ -48,7 +49,7 @@ echo "==> ① 构建 TS 侧（renderer-app dist）"
 (cd "$ROOT" && pnpm --filter @proteus-vue/renderer-app run build 2>&1 | tail -1)
 
 echo "==> ② JS bundle（自绘 + bench 两个都建）"
-for s in build-selfdraw.mjs build-bench.mjs; do
+for s in build-selfdraw.mjs build-bench.mjs build-showcase.mjs; do
   if ! out="$( (cd "$ROOT" && node "hosts/ios/bridge/$s") 2>&1 )"; then
     echo "✗ bundle 构建失败：$s"; echo "$out" | tail -5 | sed 's/^/    /'; exit 6
   fi
@@ -73,6 +74,7 @@ xcrun --sdk iphonesimulator swiftc -O -target arm64-apple-ios15.0-simulator \
 echo "==> ⑤ 组装 .app（★无需签名/描述文件——模拟器不校验）"
 cp "$HERE/bridge/dist/bundle-selfdraw.js" "$APP/bundle-selfdraw.js"
 cp "$HERE/bridge/dist/bundle-bench.js" "$APP/bundle-bench.js"
+cp "$HERE/bridge/dist/bundle-showcase.js" "$APP/bundle-showcase.js"
 cat > "$APP/Info.plist" <<PLIST
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
@@ -118,6 +120,7 @@ CONTAINER="$(xcrun simctl get_app_container booted "$BUNDLE_ID" data 2>/dev/null
 #     由 App 自退 ⇒ 用 --console 无此问题。
 REPORT="selfdraw-report.json"
 [ "$MODE" = "bench" ] && REPORT="logic-bench-report.json"
+[ "$MODE" = "showcase" ] && REPORT="showcase.json"
 SIMCTL_CHILD_PROTEUS_EXIT_AFTER_REPORT=1 xcrun simctl launch --console booted "$BUNDLE_ID" >/dev/null 2>&1 || true
 if [ -f "$CONTAINER/Documents/$REPORT" ]; then
   echo "    报告已生成（App 主动上报；无等待）"
@@ -133,9 +136,16 @@ if [ -n "$CONTAINER" ] && [ -f "$CONTAINER/Documents/$REPORT" ]; then
   mkdir -p "$HERE/results"
   cp "$CONTAINER/Documents/$REPORT" "$HERE/results/sim-$REPORT"
   echo "    报告：hosts/ios/results/sim-$REPORT"
-  # ★★I3 判据（不是"打印读数"——读数必须能**判红**，否则等于没有门禁）
-  python3 hosts/ios/check-paint-hint.py "$HERE/results/sim-$REPORT"
-  RC=$?
+  # ★★判据分派：showcase 走专属判据（含截图）；其余走 I3
+  if [ "$MODE" = "showcase" ]; then
+    cp "$CONTAINER/Documents/showcase-final.png" "$HERE/results/sim-showcase-final.png" 2>/dev/null || true
+    python3 hosts/ios/check-showcase.py "$HERE/results/sim-$REPORT" "$HERE/results/sim-showcase-final.png"
+    RC=$?
+  else
+    # ★★I3 判据（不是"打印读数"——读数必须能**判红**，否则等于没有门禁）
+    python3 hosts/ios/check-paint-hint.py "$HERE/results/sim-$REPORT"
+    RC=$?
+  fi
   if [ "$RC" != "0" ]; then echo "✗ I3 接线判据未通过（见上方）"; exit 7; fi
 else
   echo "    ⚠ 未取到报告（容器：${CONTAINER:-未取得}）—— 看上方 console 输出"

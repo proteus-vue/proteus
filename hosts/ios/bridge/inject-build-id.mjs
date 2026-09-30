@@ -11,7 +11,7 @@ import { fileURLToPath } from 'node:url'
 const id = process.argv[2]
 if (!id) { console.error('用法：node inject-build-id.mjs <buildId>'); process.exit(2) }
 const HERE = path.dirname(fileURLToPath(import.meta.url))
-for (const name of ['entry-bench.ts', 'entry-selfdraw.ts', '../../shared/bridge/entry-host-runtime.ts']) {
+for (const name of ['entry-bench.ts', 'entry-selfdraw.ts', '../../shared/bridge/entry-host-runtime.ts', '../../shared/bridge/entry-showcase.ts']) {
   const p = path.join(HERE, name)
   if (!fs.existsSync(p)) { console.error(`缺少 ${name}`); process.exit(3) }
   const s = fs.readFileSync(p, 'utf8')

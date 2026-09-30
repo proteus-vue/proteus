@@ -23,6 +23,8 @@ import type { EngineAnim, RouteTransitionPlan } from '@proteus-vue/animation'
 import { curveEval } from '@proteus-vue/slot-runtime'
 
 const isEn = computed(() => locale.value === 'en')
+/** ★静态资产基路径（GitHub Pages 子路径部署：vite 的 BASE_URL 带前导斜杠） */
+const base = import.meta.env.BASE_URL || '/'
 
 /* ══════════════════════════════ 文案 ══════════════════════════════ */
 
@@ -72,6 +74,13 @@ const T = {
         ],
       },
     ],
+    showcaseTitle: '炫技场 · 真机跑给你看',
+    showcaseLead:
+      '800 片瓦片同屏编舞：弹簧波浪（1600 条 spring）→ FLIP 整片重排 → 螺旋收束（3200 条三属性指令）——三段全部由**真指令**驱动，曲线与物理在 Rust 内核求值。这不是录屏特效，是 iPhone 12 上一次跑完的真实读数。',
+    showcaseNote: '★为什么"别人不敢试"：Web/VDOM 框架 800 节点逐节点动画 = 每帧 800 次样式写入 + 布局失效；RN/小程序每个节点是原生视图，800 视图同屏是内存与桥接的双重灾难；Flutter 能跑但走 Dart 层求值。我们把曲线/物理放在内核，每帧只跨一次边界。',
+    showcaseImgAlt: 'Morpheus 炫技场真机截图：800 片瓦片收束成居中三圈漩涡（黄→绿→青→蓝紫渐变臂）',
+    showcaseCaption: '真机截图（iPhone 12 · 三段跑完的收尾帧）：800 片收束成漩涡',
+    showcaseCmd: '复跑：bash hosts/ios/run-selfdraw.sh --showcase',
     demoTitle: '真机演示',
     demoNote: '演示播放的是引擎交给执行器的同一份指令（routeTransitionBatches）；曲线求值走与 Rust 内核 golden 对拍过的 TS 镜像。',
     dirLabel: '方向',
@@ -140,6 +149,13 @@ const T = {
         ],
       },
     ],
+    showcaseTitle: 'Showcase · verified on a device',
+    showcaseLead:
+      '800 tiles choreographed on screen at once: a spring wave (1,600 spring animations) → a full-grid FLIP re-layout → a spiral convergence (3,200 instructions across four properties) — all driven by real engine instructions, with curves and physics evaluated in the Rust kernel. Not a filmed effect: these are readings from one run on an iPhone 12.',
+    showcaseNote: '★Why others do not attempt it: in Web/VDOM frameworks, animating 800 nodes means 800 style writes and a layout invalidation every frame; in RN/mini-programs every node is a native view, so 800 views on screen is a memory and bridge disaster; Flutter can do it but evaluates in Dart. We keep curves and physics in the kernel and cross the boundary once per frame.',
+    showcaseImgAlt: 'Morpheus showcase device screenshot: 800 tiles converging into a centred three-turn spiral (yellow-to-violet arms)',
+    showcaseCaption: 'Device screenshot (iPhone 12 · final frame after three segments): 800 tiles converge into a spiral',
+    showcaseCmd: 'Re-run: bash hosts/ios/run-selfdraw.sh --showcase',
     demoTitle: 'Device demo',
     demoNote: 'The demo plays the very same instructions the engine hands to the executor (routeTransitionBatches); curve evaluation uses the TS mirror golden-tested against the Rust kernel.',
     dirLabel: 'Direction',
@@ -321,6 +337,19 @@ const EVIDENCE = computed<Array<{ v: string; u: string; l: string; src: string }
         { v: '1:1', u: '镜像', l: '路由转场双向 · 双端', src: 'check-app-stack.py' },
       ],
 )
+
+/**
+ * ★炫技场真机读数（iPhone 12 · `hosts/ios/results/showcase.json`，判据 `check-showcase.py`）。
+ * ★数字与截图同源同一轮：截图是那次跑完的收尾帧，读数来自同一次运行的宿主记账。
+ */
+const SHOWCASE_STATS = [
+  { v: '800', u: isEn.value ? 'tiles' : '片瓦片', l: isEn.value ? 'On screen at once · 20×40 grid' : '同屏编舞 · 20×40 网格', lEn: 'On screen at once · 20×40 grid' },
+  { v: '58.29', u: 'FPS', l: 'iPhone 12（60Hz 上限）', lEn: 'iPhone 12 (60Hz ceiling)' },
+  { v: '2.476', u: 'ms', l: '每帧成本 p95（预算 16.7ms）', lEn: 'Frame cost p95 (budget 16.7ms)' },
+  { v: '0.117', u: 'ms', l: '每帧成本 p50', lEn: 'Frame cost p50' },
+  { v: '3', u: isEn.value ? '/ 281' : '/ 281 帧', l: isEn.value ? 'Dropped frames (1.07%)' : '掉帧（1.07%）', lEn: 'Dropped frames (1.07%)' },
+  { v: '4 800', u: isEn.value ? 'anims' : '条指令', l: isEn.value ? '1,600 spring + 3,200 four-property' : '1 600 条 spring + 3 200 条四属性', lEn: '1,600 spring + 3,200 four-property' },
+] as Array<{ v: string; u: string; l: string; lEn?: string }>
 
 const BOUNDARIES = computed(() =>
   isEn.value
@@ -590,6 +619,33 @@ onUnmounted(() => {
           {{ C.presetsMore }}：primitive × {{ ruleCounts.primitive }} · constraint × {{ ruleCounts.constraint }} ·
           boundary × {{ ruleCounts.boundary }}（共 {{ RULES.length }} 条 AI 说明书，与编译器规则同构）
         </p-text>
+      </p-view>
+
+      <!-- ═══════════ 炫技场（真机截图 + 读数） ═══════════ -->
+      <p-view data-reveal class="sec">
+        <p-stack direction="row" align="center" :gap="12" class="sec-head" wrap>
+          <p-heading :level="2" v-p-fluid="'font-size(24, 32)'" class="sec-title">{{ C.showcaseTitle }}</p-heading>
+          <span class="sec-rule" />
+        </p-stack>
+        <p-text class="sec-note">{{ C.showcaseLead }}</p-text>
+        <p-grid :min-col-width="320" :gap="22" class="sc-grid">
+          <p-view class="sc-shot">
+            <img :src="`${base}morpheus-showcase.png`" :alt="C.showcaseImgAlt" class="sc-img" loading="lazy" />
+            <p-text class="sc-cap">{{ C.showcaseCaption }}</p-text>
+          </p-view>
+          <p-stack direction="column" :gap="14" class="sc-side">
+            <p-grid :min-col-width="132" :gap="12">
+              <p-view v-for="(e, i) in SHOWCASE_STATS" :key="i" class="sc-stat">
+                <p-stack direction="row" align="baseline" :gap="5" class="ev-num">
+                  <span class="ev-v sc-v">{{ e.v }}</span><span class="ev-u">{{ e.u }}</span>
+                </p-stack>
+                <p-text class="ev-l">{{ isEn ? e.lEn : e.l }}</p-text>
+              </p-view>
+            </p-grid>
+            <p-text class="sc-note">{{ C.showcaseNote }}</p-text>
+            <code class="ev-src">{{ C.showcaseCmd }}</code>
+          </p-stack>
+        </p-grid>
       </p-view>
 
       <!-- ═══════════ 证据 ═══════════ -->
@@ -881,6 +937,34 @@ onUnmounted(() => {
 .preset-title { color: var(--ink); font-size: 14.5px; font-weight: 600; line-height: 1.55; display: block; }
 .preset-when { color: var(--dim); font-size: 12.5px; line-height: 1.65; margin-top: 6px; display: block; }
 .presets-more { margin-top: 24px; font-size: 13px; color: var(--dim); line-height: 1.7; }
+/* ── 炫技场 ── */
+.sc-grid { align-items: start; }
+.sc-shot {
+  background: #06060a;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-xl);
+  padding: 14px;
+  overflow: hidden;
+}
+.sc-img {
+  display: block;
+  width: 100%;
+  height: auto;
+  max-height: 520px;
+  object-fit: contain;
+  border-radius: var(--radius-lg);
+  background: #000;
+}
+.sc-cap { margin-top: 12px; font-size: 12.5px; color: var(--dim); line-height: 1.6; }
+.sc-side { min-width: 0; }
+.sc-stat {
+  background: linear-gradient(180deg, rgba(24, 24, 31, 0.9), rgba(16, 16, 22, 0.9));
+  border: 1px solid var(--line);
+  border-radius: var(--radius-lg);
+  padding: 16px 16px 14px;
+}
+.sc-v { font-size: 22px; }
+.sc-note { font-size: 12.5px; color: var(--muted); line-height: 1.8; }
 /* ═══════════ 证据卡 ═══════════ */
 .ev {
   background: linear-gradient(180deg, rgba(24, 24, 31, 0.9), rgba(16, 16, 22, 0.9));

@@ -35,6 +35,7 @@ HOST_SRCS=(
   "$HERE/ProteusHost/host-lifecycle-events.swift"
   "$HERE/ProteusHost/screen-host.swift"
   "$HERE/ProteusHost/app-stack-scene.swift"
+  "$HERE/ProteusHost/showcase-scene.swift"
 )
 for f in "${HOST_SRCS[@]}"; do
   [ -f "$f" ] || { echo "✗ 找不到宿主源码：$f"; exit 2; }
