@@ -21,6 +21,7 @@ import { routeTransitionBatches } from '@proteus-vue/animation'
 // ★执行器在 render-backend 的**子路径**（包 exports 未暴露 ⇒ 相对导入同一 src 文件：
 //   类型检查与 esbuild 走同一条路径，零 alias/paths 配置、也无'陈旧 dist'面）。
 import { createScreenExecutor } from '../../../packages/render-backend/src/screen-executor'
+import { createHostScreenPorts } from '../../../packages/render-backend/src/screen-executor-host'
 import { flattenScreenEntries } from '@proteus-vue/router/codegen'
 import type { RouteNode } from '@proteus-vue/router/types'
 
@@ -182,6 +183,13 @@ export function __proteusAppStackRun(argsJson?: string): string {
  * 场景 E 主体：真栈 + 真执行器 + 真转场规划器（端口 = 记录桩）。
  * 返回读数（JSON 可序列化）；断言细节在 python 判据侧（本函数只产出事实）。
  */
+function invokeHostRaw(method: string): unknown {
+  const ph = (globalThis as unknown as { proteusHost?: { invoke?: (m: string, a: string) => string } }).proteusHost
+  if (!ph || typeof ph.invoke !== 'function') throw new Error('宿主 invoke 通道缺失')
+  const out = JSON.parse(ph.invoke(method, 'null')) as { ok?: boolean; data?: unknown }
+  return out && out.ok === false ? { error: out } : (out as { data?: unknown }).data ?? out
+}
+
 async function runExecutorScenario(): Promise<Record<string, unknown>> {
   const eSpecs: Record<string, { name: string; path: string; transition?: 'slideUp' | 'halfScreen' | 'none' }> = {
     home: { name: 'home', path: '/home', transition: 'slideUp' },
@@ -190,29 +198,40 @@ async function runExecutorScenario(): Promise<Record<string, unknown>> {
   }
   const eStack = createAppStack({ screens: eSpecs, policy: { keepWindow: 3 } })
   const eLog: string[] = []
-  let eNextNode = 100
   const ePlays: Array<Record<string, unknown>> = []
-  const eExecutor = createScreenExecutor({
-    host: {
-      mountScreen(sc: { screenId: string; name: string; rebuild: boolean }) {
-        const node = eNextNode++
-        eLog.push(`mount:${sc.name}:rebuild=${sc.rebuild}:node=${node}`)
-        return node
-      },
-      setScreenVisible(screenId: string, v: boolean, root: number | undefined) {
-        eLog.push(`visible:${screenId}:${v}:node=${root}`)
-      },
-      destroyScreen(screenId: string, reason: string, root: number | undefined) {
-        eLog.push(`destroy:${screenId}:${reason}:node=${root}`)
-      },
+  // ★★真实端口（2026-09-30 续）：树操作/动画走**宿主通道**（`proteusHost.invoke`）
+  //   ⇒ 宿主侧 `ScreenHost` 真建内核树 / 真改 display / 真跑内核动画 + Choreographer 帧循环。
+  //   ★记录桩已退役为**观察者**（不干预调用，只记 direction/批次数——用于方向与镜像对断言）。
+  const ePorts = createHostScreenPorts({
+    invoke: (m, a) => {
+      const ph = (globalThis as unknown as { proteusHost?: { invoke?: (m: string, a: string) => string } }).proteusHost
+      if (!ph || typeof ph.invoke !== 'function') throw new Error('宿主 invoke 通道缺失（screen.* 无法送达宿主）')
+      return ph.invoke(m, a)
     },
+  })
+  // ★观察者包装（记录**调用序**——判据 ⑦.1/⑦.4 读它；真实动作仍在 ePorts 内）
+  const eTree: typeof ePorts.tree = {
+    mountScreen(sc) {
+      const node = ePorts.tree.mountScreen(sc)
+      eLog.push(`mount:${sc.name}:rebuild=${sc.rebuild}:node=${node}`)
+      return node
+    },
+    setScreenVisible(screenId, v, root) {
+      eLog.push(`visible:${screenId}:${v}:node=${root}`)
+      ePorts.tree.setScreenVisible(screenId, v, root)
+    },
+    destroyScreen(screenId, reason, root) {
+      eLog.push(`destroy:${screenId}:${reason}:node=${root}`)
+      ePorts.tree.destroyScreen(screenId, reason, root)
+    },
+  }
+  const eExecutor = createScreenExecutor({
+    host: eTree,
     anim: {
-      playRouteTransition(
-        plan: { incoming: { anims: readonly { nodeId: number; from?: number; to?: number }[] }; outgoing: { anims: readonly { nodeId: number; from?: number; to?: number }[] } },
-        ctx: { direction: string; transition: string },
-      ) {
-        const i0 = plan.incoming.anims[0]
-        const o0 = plan.outgoing.anims[0]
+      async playRouteTransition(plan, ctx) {
+        // 观察者记账（不改变调用——真实调用在 ePorts.anim 内）
+        const i0 = plan.incoming.anims[0] as { from?: number; to?: number } | undefined
+        const o0 = plan.outgoing.anims[0] as { from?: number; to?: number } | undefined
         ePlays.push({
           direction: ctx.direction,
           transition: ctx.transition,
@@ -223,6 +242,7 @@ async function runExecutorScenario(): Promise<Record<string, unknown>> {
           firstOutFrom: o0 && typeof o0.from === 'number' ? o0.from : null,
           firstOutTo: o0 && typeof o0.to === 'number' ? o0.to : null,
         })
+        await ePorts.anim.playRouteTransition(plan, ctx)
       },
     },
     plan: (t: unknown, targets: { incoming?: number; outgoing?: number }, o?: { direction?: 'forward' | 'back' }) =>
@@ -266,6 +286,17 @@ async function runExecutorScenario(): Promise<Record<string, unknown>> {
     e_home_id: eHomeId,
     e_detail_id: eDetailId,
     e_stats: eStats,
+    // ★真实端口读数：宿主侧记账（真建树/真可见性/真动画——判据据此证明"不是壳自述"）
+    e_host_stats: (() => {
+      try {
+        const r = invokeHostRaw('screen.stats')
+        return r
+      } catch (e) {
+        return { error: String(e) }
+      }
+    })(),
+    e_pending_anims: ePorts.pendingAnimations,
+    e_anim_hook: ePorts.animDoneHookInstalled,
   }
 }
 

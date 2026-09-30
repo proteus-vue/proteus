@@ -160,7 +160,21 @@ def main() -> int:
     else:
         report(f"⑤ navigate 仅销毁弹出段（{d.get('d_unmounts')} 屏）+ 1 次 enter")
 
-    # ── ⑦★场景 E：宿主执行器（M5 命令流的消费者——命令序/方向/镜像对/销毁时机）──
+    # ── ⑦★场景 E：宿主执行器（M5 命令流的消费者——**真实端口**：真内核树 + 真动画）──
+    # ★数据来源：执行器结果在**第二份报告**（`app-stack-executor.json`，异步写——动画由宿主
+    #   帧循环推进，不能同步取）。本组把它合并进 `d`（缺件 ⇒ 判红并指路）。
+    exec_path = os.path.join(os.path.dirname(os.path.abspath(path)), "app-stack-executor.json")
+    if not os.path.exists(exec_path):
+        fail(f"⑦ 执行器报告缺失（{exec_path}）——跑 run-app-stack.sh（它会取回第二份报告）")
+    else:
+        try:
+            with open(exec_path, encoding="utf-8") as f:
+                e = json.load(f)
+            d = {**d, **e}  # 合并（⑦ 组字段都来自执行器报告）
+            if e.get("timeout") is True:
+                fail(f"⑦ 执行器超时（timeout=true，轮数 {e.get('rounds')}）——动画未在 10s 内播完？")
+        except Exception as ex:  # noqa: BLE001
+            fail(f"⑦ 执行器报告读不出：{ex}")
     # 【要证明什么】M5 计划文档自述的剩余工作 =「宿主执行器（真实建/销毁屏子树 + Morpheus 转场接线）」。
     #   本组证明**编排层**在真机 QuickJS 上跑通（真栈 + 真执行器 + 真 animation 规划器；
     #   端口是记录桩——真机上的树操作/平台动画由宿主实现，属另一条链，不在本组声称）。
@@ -235,6 +249,40 @@ def main() -> int:
             fail(f"⑦ 执行器报错：{estats.get('errors')}")
         else:
             report(f"⑦ 计数自洽：{cmds} 命令 → {trans} 转场（forward {fwd} / back {backn} / 跳过 {skip}）· 零错误")
+        # ⑦.6 ★★宿主真动作（证据来自**宿主记账**，不是 JS 自述——与 ⑩ 组同一条纪律）
+        hs = d.get("e_host_stats") or {}
+        if not isinstance(hs, dict) or hs.get("error"):
+            fail(f"⑦ 宿主记账缺失（screen.stats 读不到）：{hs}")
+        else:
+            mounts = hs.get("mount_calls", 0)
+            vis = hs.get("visible_calls", 0)
+            des = hs.get("destroy_calls", 0)
+            anims = hs.get("anim_calls", 0)
+            done = hs.get("anim_completed", 0)
+            hookmiss = hs.get("anim_hook_missing", 0)
+            handles = hs.get("handle_count", -1)
+            if mounts < 2 or vis < 3 or des < 1:
+                fail(f"⑦ 宿主真动作不足：mount={mounts}(≥2) visible={vis}(≥3) destroy={des}(≥1)——树操作没真发生？")
+            elif anims < 2 or done < 2:
+                fail(f"⑦ 宿主动画未真播/未真完成：anim_calls={anims}(≥2) anim_completed={done}(≥2)——帧循环没推进？")
+            elif hookmiss != 0:
+                fail(f"⑦ 动画完成回推钩子缺失 {hookmiss} 次（JS 侧 __proteusHostScreenAnimDone 未装？）")
+            elif handles < 1:
+                fail(f"⑦ 宿主内核句柄数异常：handle_count={handles}（屏树应仍在册——树保留语义）")
+            else:
+                report(
+                    f"⑦ ★宿主真动作（宿主记账）：mount={mounts} · visible={vis} · destroy={des} · "
+                    f"anim={anims}/完成 {done} · 在册句柄 {handles} · 零钩子缺失"
+                )
+            # 屏保留语义：pop 后 detail 应**已销毁**、home 仍在册
+            scrs = hs.get("screens") or []
+            ids = [str(x.get("screenId", "")) for x in scrs if isinstance(x, dict)]
+            if not any(i.startswith("home#") for i in ids):
+                fail(f"⑦ 宿主在册屏异常（home 应保留在册——树保留语义）：{ids}")
+            elif any(i.startswith("detail#") for i in ids):
+                fail(f"⑦ 宿主在册屏异常（detail 应已销毁）：{ids}")
+            else:
+                report(f"⑦ 宿主屏保留语义正确：pop 后 detail 已销毁、home 仍在册（{ids}）")
 
     print()
     if not ok:

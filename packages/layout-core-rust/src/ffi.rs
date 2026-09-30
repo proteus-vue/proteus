@@ -2913,7 +2913,10 @@ pub unsafe extern "C" fn proteus_layout_shared_element(handle: u64, json: *const
 /// 【为什么需要二进制形态（与 `_anim_tick` 的分工）】JSON 入口便于诊断/测试，但真机每帧
 ///   要把它序列化 + 宿主解析一次；RT0 的对照实验证明"省掉 O(N) 编解码"正是指令路径的
 ///   主要收益来源之一 ⇒ 每帧通道不该再引入 JSON。本入口把结果写成**定长记录**：
-///   `[nodeId u32][translateX f32][translateY f32][scale f32]` = **16B/条**，宿主直接按偏移读。
+///   `[nodeId u32][tx f32][ty f32][scale f32][rotate f32][opacity f32]` = **24B/条**（按偏移读）。
+///   ★**记录宽度是 24B 而非 16B**（RT2 扩展 rotate/opacity 后从 16B 增至 24B）——本注释此前
+///     滞留在 16B 而实现早已是 24B（"注释与代码两份事实"的典型，与 check:docs-stats 同源教训）；
+///     唯一事实源 = 下方 `buf` 的 6 个 `extend_from_slice` 与 Java 侧 `ANIM_RECORD_BYTES`。
 ///
 /// 返回：字节缓冲区（`out_len` 写入字节数；0 = 本帧无变化）。用 `proteus_rects_free` 释放。
 ///

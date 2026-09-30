@@ -791,6 +791,58 @@ public class MainActivity extends Activity {
      *
      * 【判据（机器可判，见 hosts/android/check-app-stack.py）】见该脚本头注。
      */
+    /**
+     * ★★场景 E 的**异步报告轮询器**（见调用点注释：主线程不能被堵死，动画靠帧回调推进）。
+     *
+     * 形态：`root.postDelayed` 链——**每轮让出主线程**（帧回调得以派发、Choreographer 推进动画），
+     *   同时泵一次 QuickJS job（动画完成回推后 JS 续体需要它才能继续）。
+     * 退出条件（**有界，本仓红线**）：① 读到的结果非 pending ⇒ 写报告收工；
+     *   ② 超过 10 秒 ⇒ 如实写 `{"pending":true,"timeout":true}`（判据会红——不静默）。
+     */
+    private void startExecutorReportPoller(final android.view.View host) {
+        final long deadline = System.currentTimeMillis() + 10_000;
+        final int[] rounds = {0};
+        host.postDelayed(new Runnable() {
+            @Override public void run() {
+                rounds[0]++;
+                QuickJsEngine.nativeRunPendingJobs();
+                QuickJsEngine.EvalResult er = QuickJsEngine.eval("__proteusAppStackExecutorRead()");
+                boolean pending = true;
+                String json = null;
+                if (er.ok && er.value != null) {
+                    json = er.value;
+                    try {
+                        JSONObject eo = new JSONObject(json);
+                        // ★只认**显式的** pending:true（2026-09-30 实测缺陷：此前用
+                        //   `optBoolean("pending", true)` ⇒ 结果对象没有 pending 字段（如 fatal/数据）
+                        //   时也被当作 pending ⇒ 永不收工、必然超时）。
+                        pending = eo.has("pending") && eo.optBoolean("pending", false);
+                    } catch (Exception ignored) { /* 保持 pending */ }
+                }
+                if (!pending && json != null) {
+                    try {
+                        JSONObject eo = new JSONObject(json);
+                        eo.put("e_pump_rounds", rounds[0]);
+                        ScreenHost sh = screenHost;
+                        if (sh != null) eo.put("e_host_stats", sh.stats());
+                        writeReport("app-stack-executor.json", eo.toString(2));
+                        android.util.Log.i("proteus", "场景 E 执行器报告已写入（轮数 " + rounds[0] + "）");
+                    } catch (Exception e) {
+                        writeReport("app-stack-executor.json", "{\"ok\":false,\"error\":\"报告序列化失败：" + e.getMessage() + "\"}");
+                    }
+                    return;
+                }
+                if (System.currentTimeMillis() > deadline) {
+                    writeReport("app-stack-executor.json",
+                            "{\"pending\":true,\"timeout\":true,\"rounds\":" + rounds[0] + "}");
+                    android.util.Log.w("proteus", "场景 E 执行器超时（10s）——如实记 timeout");
+                    return;
+                }
+                host.postDelayed(this, 16); // ★让出主线程一拍（不 sleep：帧回调要靠主线程空闲）
+            }
+        }, 32);
+    }
+
     private String appStackRun() {
         org.json.JSONObject out = new org.json.JSONObject();
         try {
@@ -811,7 +863,15 @@ public class MainActivity extends Activity {
             out.put("bundle_chars", bundle.length());
 
             long t0 = System.nanoTime();
-            QuickJsEngine.EvalResult load = QuickJsEngine.eval(bundle);
+            // ★★宿主桥必须注入（2026-09-30 续：场景 E 换成**真实端口**后暴露的真缺陷）：
+            //   此前 app-stack 场景用裸 `eval(bundle)` ⇒ JS 侧 `proteusHost` 不存在 ⇒ 执行器的
+            //   生产端口（screen-executor-host）抛"通道缺失"（真机实测：执行器 10s 超时）。
+            //   ⇒ 与 host-runtime 场景同法：`evalWithHost` 注入 HostBridge（caps + screenHost）。
+            final HostCapabilities caps2 = new HostCapabilities(this);
+            this.hostCaps = caps2;
+            final ScreenHost screenHost2 = new ScreenHost(root);
+            this.screenHost = screenHost2;
+            QuickJsEngine.EvalResult load = QuickJsEngine.evalWithHost(bundle, new HostBridge(caps2, screenHost2));
             out.put("bundle_load_ok", load.ok);
             if (!load.ok) {
                 out.put("ok", false);
@@ -836,30 +896,19 @@ public class MainActivity extends Activity {
                 String k = keys.next();
                 out.put(k, r.get(k));
             }
-            // ★★场景 E：宿主执行器（两相——kick → 泵 job → read；执行器端口允许 Promise）
+            // ★★场景 E：宿主执行器（**异步报告**——kick → 泵 job → 有界轮询 → 写第二份报告）
             //   为什么必须泵 job：JS 侧 `await ePump()` 的续体只在宿主泵 job 时执行
             //   （本仓 host-runtime 场景已固化该模式）。
+            //   ★★为什么**不能**在这里同步等（本仓已踩两次的同款陷阱）：动画完成由宿主
+            //   Choreographer 帧回调驱动，而帧回调要在**主线程空闲**时才派发——在 runAll() 里
+            //   `Thread.sleep` 轮询会把主线程自己堵死 ⇒ 动画永不完成（死锁）。
+            //   ⇒ 正解：立即返回，用 `root.postDelayed` 链**让出主线程**地推进，完成后把结果写
+            //   `app-stack-executor.json`（与 platform-anim / kernel-anim 两条异步路径同一形态）。
             QuickJsEngine.EvalResult ek = QuickJsEngine.eval("__proteusAppStackExecutorKick()");
             out.put("e_kick", ek.ok ? ek.value : ("error:" + ek.error));
-            int eJobs = QuickJsEngine.nativeRunPendingJobs();
-            out.put("e_jobs_pumped", eJobs);
-            // ★第二次泵：kick 内部是 void(async) 链，首轮泵可能只推进到"await 第一跳"⇒ 再泵一轮收敛
-            //   （幂等；读数 0 = 已收敛）
-            out.put("e_jobs_pumped_2", QuickJsEngine.nativeRunPendingJobs());
-            QuickJsEngine.EvalResult er = QuickJsEngine.eval("__proteusAppStackExecutorRead()");
-            if (er.ok && er.value != null) {
-                org.json.JSONObject eo = new JSONObject(er.value);
-                java.util.Iterator<String> ekeys = eo.keys();
-                while (ekeys.hasNext()) {
-                    String k = ekeys.next();
-                    out.put(k, eo.get(k));
-                }
-                out.put("e_pending", eo.optBoolean("pending", false));
-                if (eo.has("fatal")) out.put("e_fatal", eo.getString("fatal"));
-            } else {
-                out.put("e_pending", true);
-                out.put("e_read_error", er.ok ? "null value" : er.error);
-            }
+            out.put("e_jobs_pumped", QuickJsEngine.nativeRunPendingJobs());
+            out.put("e_async", "执行器结果异步写 app-stack-executor.json（动画由宿主帧循环推进）");
+            startExecutorReportPoller(root);
             // 引擎侧自报 ok + 本次 bundle 可加载 ⇒ 报告 ok（判据细节由 python 侧查，不在这里重复判定）
             out.put("ok", r.optBoolean("ok"));
         } catch (Throwable t) {
@@ -917,9 +966,12 @@ public class MainActivity extends Activity {
                     + "globalThis.__PROTEUS_HOST_FRAME_DRIVER__ = 'Choreographer';");
             // ★宿主桥：memUsage / gc（无参签名——JNI 侧逐一条件探测注入）
             //   ★★App 原生能力（invoke）：转调真实 HostCapabilities（Android 真 API 实现）
+            //   ★★M5 执行器（screen.*）：转调 ScreenHost（真内核树 + Choreographer 帧循环动画）
             final HostCapabilities caps = new HostCapabilities(this);
             this.hostCaps = caps;
-            final HostBridge bridge = new HostBridge(caps);
+            final ScreenHost screenHost = new ScreenHost(root);
+            this.screenHost = screenHost;
+            final HostBridge bridge = new HostBridge(caps, screenHost);
             long t0 = System.nanoTime();
             QuickJsEngine.EvalResult load = QuickJsEngine.evalWithHost(bundle, bridge);
             out.put("bundle_load_ok", load.ok);
@@ -998,13 +1050,22 @@ public class MainActivity extends Activity {
          * ⇒ 桥识别 missing ⇒ `*.unsupported`（诚实分档，不是"静默失败"）。
          */
         private final HostCapabilities caps;
+        /** ★★M5 执行器的宿主实现（screen.* 协议——真内核树 + 真动画） */
+        private final ScreenHost screen;
 
-        public HostBridge(HostCapabilities caps) {
+        public HostBridge(HostCapabilities caps, ScreenHost screen) {
             this.caps = caps;
+            this.screen = screen;
         }
 
         @SuppressWarnings("unused")
         public String invoke(String method, String argsJson) throws Exception {
+            // ★screen.* 归 M5 执行器（真内核树操作 + 帧循环动画）；其余归能力层
+            if (method != null && method.startsWith("screen.")) {
+                org.json.JSONObject a = (argsJson == null || argsJson.isEmpty() || "null".equals(argsJson.trim()))
+                        ? new org.json.JSONObject() : new org.json.JSONObject(argsJson);
+                return screen.invoke(method, a);
+            }
             return caps.invoke(method, argsJson);
         }
 
@@ -1039,6 +1100,8 @@ public class MainActivity extends Activity {
     private boolean shellHookLoaded = false;
     /** ★App 原生能力实现（真实 Java；见 HostCapabilities 头注） */
     private HostCapabilities hostCaps = null;
+    /** ★★M5 执行器的宿主实现（screen.* 协议——真内核树 + 帧循环动画；随 host-runtime 场景创建） */
+    private ScreenHost screenHost = null;
     /** ★★应用级生命周期事件源（真 Android 回调：onTrimMemory/配置变化/全局异常——见其头注） */
     private HostLifecycleEvents lifecycleEvents = null;
 
@@ -1092,6 +1155,9 @@ public class MainActivity extends Activity {
         // ★框架代管资源释放（G-42 精神）：Worker 线程池 / 空闲队列
         HostCapabilities c = this.hostCaps;
         if (c != null) c.dispose();
+        // ★M5 屏树释放（真内核句柄——防泄漏）
+        ScreenHost sh = this.screenHost;
+        if (sh != null) sh.dispose();
         // ★生命周期事件源卸载（防 Activity 销毁后回调仍触发 → 泄漏）
         HostLifecycleEvents le = this.lifecycleEvents;
         if (le != null) {

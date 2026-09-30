@@ -35,8 +35,11 @@ fi
 echo "==> ① 安装（release 包）"
 "$ADB" install -r -t "$APK" 2>&1 | grep -E "Success|Failure" | head -2
 
+EXEC_REPORT="/sdcard/Android/data/$PKG/files/app-stack-executor.json"
+
 echo "==> ② 清旧报告 + 重启 + 等就绪 + 触发 app-stack"
-"$ADB" shell "rm -f $REPORT" >/dev/null 2>&1 || true
+# ★两份报告都清（场景 E 的异步报告；残留会让判据读上一轮——本仓已有此教训）
+"$ADB" shell "rm -f $REPORT $EXEC_REPORT" >/dev/null 2>&1 || true
 "$ADB" shell "am force-stop $PKG" >/dev/null 2>&1 || true
 "$ADB" shell "monkey -p $PKG -c android.intent.category.LAUNCHER 1" >/dev/null 2>&1
 # ★条件等待（替代原 `sleep 3`）：等 Activity 上报 "run-receiver-ready"（见 MainActivity.onCreate）
@@ -53,10 +56,19 @@ if ! "$ADB" shell "test -f $REPORT" >/dev/null 2>&1; then
   exit 1
 fi
 
-echo "==> ④ 取回报告"
+echo "==> ④ 等执行器报告（异步；条件等待——动画由宿主帧循环推进）"
+bash "$WAIT_SH" --cmd "\"$ADB\" shell test -f $EXEC_REPORT" --timeout 30 --interval 2 || true
+if ! "$ADB" shell "test -f $EXEC_REPORT" >/dev/null 2>&1; then
+  echo "  ⚠ 执行器报告未生成（${EXEC_REPORT}）—— 判据 ⑦ 组会如实判红"
+fi
+
+echo "==> ⑤ 取回报告（主报告 + 执行器报告）"
 mkdir -p "$HERE/results"
+rm -f "$HERE/results/app-stack.json" "$HERE/results/app-stack-executor.json"  # ★先删本地旧件（防 pull 失败读上轮）
 "$ADB" pull "$REPORT" "$HERE/results/app-stack.json" >/dev/null 2>&1 || {
   echo "✗ adb pull 失败"; exit 1; }
+"$ADB" pull "$EXEC_REPORT" "$HERE/results/app-stack-executor.json" >/dev/null 2>&1 || {
+  echo "  ⚠ 执行器报告未取到"; }
 
-echo "==> ⑤ 判据"
+echo "==> ⑥ 判据"
 python3 "$HERE/check-app-stack.py" "$HERE/results/app-stack.json"

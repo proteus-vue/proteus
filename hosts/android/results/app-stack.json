@@ -1,9 +1,9 @@
 {
   "engine_available": true,
-  "bundle_chars": 55420,
+  "bundle_chars": 59866,
   "bundle_load_ok": true,
   "run_ok": true,
-  "total_ms": 139,
+  "total_ms": 134,
   "ok": true,
   "scene": "app-stack",
   "depth": 20000,
@@ -11,8 +11,8 @@
   "budget": 1000,
   "screens": 32,
   "a_depth_reached": 20000,
-  "a_push_ms": 36,
-  "a_pop_ms": 11,
+  "a_push_ms": 34,
+  "a_pop_ms": 7,
   "a_depth_after_pop_to_root": 1,
   "a_mounts": 20000,
   "a_enters": 20000,
@@ -23,7 +23,7 @@
   "b_active_nodes": 960,
   "b_over_budget": false,
   "b_freeze_unmounts": 19985,
-  "b_push_ms": 50,
+  "b_push_ms": 53,
   "b_depth": 20000,
   "c_frozen_before_pop": 1,
   "c_rebuild_mounts": 1,
@@ -32,82 +32,8 @@
   "d_unmounts": 2500,
   "d_enters": 1,
   "d_depth": 2500,
-  "d_nav_ms": 3,
+  "d_nav_ms": 2,
   "e_kick": "kicked",
   "e_jobs_pumped": 0,
-  "e_jobs_pumped_2": 0,
-  "e1_log": [
-    "mount:home:rebuild=false:node=100",
-    "visible:home#1:true:node=100"
-  ],
-  "e1_plays": [
-    {
-      "direction": "forward",
-      "transition": "slideUp",
-      "inAnims": 1,
-      "outAnims": 0,
-      "firstInFrom": 800,
-      "firstInTo": 0,
-      "firstOutFrom": null,
-      "firstOutTo": null
-    }
-  ],
-  "e2_log": [
-    "mount:detail:rebuild=false:node=101",
-    "visible:detail#2:true:node=101",
-    "visible:home#1:false:node=100"
-  ],
-  "e2_plays": [
-    {
-      "direction": "forward",
-      "transition": "slideUp",
-      "inAnims": 1,
-      "outAnims": 2,
-      "firstInFrom": 800,
-      "firstInTo": 0,
-      "firstOutFrom": 0,
-      "firstOutTo": -240
-    }
-  ],
-  "e3_log": [
-    "visible:home#1:true:node=100",
-    "destroy:detail#2:pop:node=101"
-  ],
-  "e3_plays": [
-    {
-      "direction": "back",
-      "transition": "slideUp",
-      "inAnims": 2,
-      "outAnims": 1,
-      "firstInFrom": -240,
-      "firstInTo": 0,
-      "firstOutFrom": 0,
-      "firstOutTo": 800
-    }
-  ],
-  "e_mirror_ok": true,
-  "e_home_id": "home#1",
-  "e_detail_id": "detail#2",
-  "e_stats": {
-    "commands": 8,
-    "transitions": 3,
-    "forward": 2,
-    "back": 1,
-    "skippedNone": 0,
-    "destroyed": {
-      "pop": 1,
-      "reset": 0,
-      "freeze": 0
-    },
-    "visibility": {
-      "shown": 3,
-      "hidden": 1
-    },
-    "mounts": {
-      "first": 2,
-      "rebuild": 0
-    },
-    "errors": []
-  },
-  "e_pending": false
+  "e_async": "执行器结果异步写 app-stack-executor.json（动画由宿主帧循环推进）"
 }

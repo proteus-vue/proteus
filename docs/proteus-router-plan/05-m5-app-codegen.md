@@ -88,8 +88,29 @@
 - ★**判据侧独立复算**（不信 JS 自报的 `e_mirror_ok`——那是自我认证；`e_mirror_ok` 仅作交叉核对，
   两侧结论不一致 ⇒ 当场红）；**6 个破坏变体全红**（镜像对打坏/自报不符/方向写反/push 出销毁/计数不自洽/时机倒置）
 
-★**诚实边界**：执行器只做**编排**；真机上"树操作/平台动画"目前由**记录桩**承接（本组证明的是编排层端上可跑），
-真实 Host ABI 树操作与平台转场提交属后续接线（端口已就位——`ScreenTreeHost` / `ScreenAnimHost`）。
+★**诚实边界**：执行器只做**编排**；端口的生产实现在**同日第二轮**已接上（见下）。
+
+### 0.6 ★★端口接到生产实现（2026-09-30 续）——真内核树 + 真帧循环动画
+
+| 层 | 落点 | 说明 |
+|---|---|---|
+| **端口适配层**（跨边界协议） | `packages/render-backend/src/screen-executor-host.ts`（新）：`createHostScreenPorts` | 把执行器的树操作/动画翻译成宿主 `invoke` 请求（`screen.mount/visible/destroy/anim`）；**完成回调**：宿主帧循环播完后回推 `__proteusHostScreenAnimDone(token)`，本层把 promise 接回（两种完成形态：宿主声明 `immediate` / 回推 token） |
+| **宿主实现**（真动作） | `hosts/android/.../ScreenHost.java`（新） | `screen.mount` = 每屏一棵**真实内核树**（`RustLayout.create`，屏=树同构）；`screen.visible` = 内核 `display:flex/none` 补丁（布局与命中测试随之生效）；`screen.destroy` = 真句柄销毁；`screen.anim` = `anim_start` + **Choreographer 帧循环** `anim_tick_bin` 推进到播完 |
+
+**★真机读数（Android QuickJS · 宿主记账——不是 JS 自述）**：`mount=2 · visible=4 · destroy=1 ·
+anim=3/完成 3 · 在册句柄 1 · 零钩子缺失`；判据 ⑦ 组 **10 条全绿**（含"宿主真动作"与"屏保留语义"两条新断言）。
+
+**★★三个真机抓出的真缺陷（都修了，记账）**
+1. **`appStackRun` 用裸 `eval(bundle)` 没注入宿主桥** ⇒ JS 侧 `proteusHost` 不存在 ⇒ 生产端口抛
+   "通道缺失" ⇒ 执行器 10s 超时（记录桩阶段不暴露——**换真端口的价值之一**）；
+2. **轮询器把"无 pending 字段"当 pending**（`optBoolean("pending", true)`）⇒ 结果已就绪也永不收工
+   ⇒ 必修成"只认显式 `pending:true`"；
+3. **动画按树分发的必需性**：把整批 anims 灌给每棵树时，混批（含别棵树的节点）会让内核**整批拒绝**
+   （实测 3 次转场只成功 1 次）⇒ 按 `nodeId → 屏` 映射分发（`ScreenHost.nodeToScreen`）。
+
+**★方法学（第三处同源）**：**主线程不得被堵死**——动画推进依赖 Choreographer 帧回调，
+若在 `runAll()` 里 `sleep`/同步轮询等待动画完成会死锁 ⇒ 执行器结果走**异步报告**
+（`app-stack-executor.json`，`postDelayed` 链让出主线程推进，有界 10s）。
 
 ---
 
