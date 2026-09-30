@@ -93,7 +93,7 @@ if (result.warnings.length) {
 //   ★若将来 app-stack 引入运行期 import，本 alias 仍然成立（esbuild 会一并打包 src 依赖）。
 const OUT_APP_STACK = path.join(HERE, 'dist', 'bundle-app-stack.js')
 const resultAppStack = await build({
-  entryPoints: [path.join(HERE, 'entry-app-stack.ts')],
+  entryPoints: [path.join(ROOT, 'hosts', 'shared', 'bridge', 'entry-app-stack.ts')],
   outfile: OUT_APP_STACK,
   bundle: true,
   format: 'iife',

@@ -41,6 +41,8 @@ import UIKit
 final class HostRuntimeBridge: NSObject, HostRuntimeExports {
     /// ★App 端原生能力（真实 UIKit/Foundation 实现——见 host-capabilities.swift）
     let capabilities = HostCapabilities()
+    /// ★★M5 执行器的宿主实现（screen.* 协议——真内核树 + CADisplayLink 帧循环；见 screen-host.swift）
+    let screen = ScreenHost()
 
     /// ★内存读数（`scope="process"`——JSC 无 per-context API，见文件头）
     func memUsage() -> String {
@@ -62,8 +64,12 @@ final class HostRuntimeBridge: NSObject, HostRuntimeExports {
     }
 
     /// JS 桥 → 原生能力（同步；见 host-capabilities.swift 的契约说明）
+    /// ★`screen.*` 归 M5 执行器（真内核树操作 + 帧循环动画）；其余归能力层（与 Android 腿同一分发）
     func invoke(_ method: String, _ argsJson: String) -> String {
-        capabilities.invoke(method, argsJson)
+        if method.hasPrefix("screen.") {
+            return screen.invoke(method, argsJson)
+        }
+        return capabilities.invoke(method, argsJson)
     }
 }
 
@@ -88,6 +94,8 @@ final class HostRuntimeScene: NSObject {
 
         // ② 宿主桥（条件注入的判定在 JS 侧：typeof memUsage === 'function'）
         //   ★G-39 续：加 `invoke`（App 原生能力通道）——caps 由 bridge 持有（真实 UIKit 实现）
+        //   ★M5 续：ScreenHost 的完成回推需要 JS 求值入口（与 HostLifecycleEvents 同法）
+        ScreenHost.evalJs = { expr in ctx.evaluateScript(expr)?.toString() ?? "null" }
         ctx.setObject(HostRuntimeBridge(), forKeyedSubscript: "proteusHost" as NSString)
 
         // ③ 加载 bundle（JSC 无模块系统——IIFE 整份 evaluate）

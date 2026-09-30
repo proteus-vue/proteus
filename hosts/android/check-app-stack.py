@@ -40,7 +40,11 @@ def main() -> int:
         print("     3) bash hosts/android/run-app-stack.sh")
         return 0
 
-    print(f"═══ Android 路由虚拟栈判据：{path} ═══")
+    # ★★两平台共用本判据（2026-09-30 续：iOS 腿同款场景已接）
+    #   平台由**字段形态**判别：Android 报告有 `engine_available`（Java 壳加的前置），
+    #   iOS 报告是 `__proteusAppStackRun` 的原样输出（无该字段）。
+    plat = "android" if "engine_available" in json.load(open(path, encoding="utf-8")) else "ios"
+    print(f"═══ {plat} 路由虚拟栈判据：{path} ═══")
     ok = True
     try:
         with open(path, encoding="utf-8") as f:
@@ -57,8 +61,8 @@ def main() -> int:
     def report(msg: str) -> None:
         print(f"  ✓ {msg}")
 
-    # 引擎/加载前置（缺了就报错，不静默）
-    if not d.get("engine_available"):
+    # 引擎/加载前置（仅 Android——Java 壳把它放进报告；iOS 报告无该字段，由"报告存在且可解析"兜底）
+    if plat == "android" and not d.get("engine_available"):
         fail(f"QuickJS 引擎不可用：{d.get('error')}")
         print()
         print("✗ 前置不满足")
@@ -68,7 +72,7 @@ def main() -> int:
         print()
         print("✗ 前置不满足")
         return 1
-    if not d.get("bundle_load_ok") or not d.get("run_ok") or not d.get("ok"):
+    if plat == "android" and (not d.get("bundle_load_ok") or not d.get("run_ok") or not d.get("ok")):
         fail(f"bundle 加载/入口执行失败：load_ok={d.get('bundle_load_ok')} run_ok={d.get('run_ok')} ok={d.get('ok')}")
         print()
         print("✗ 前置不满足")
@@ -267,12 +271,15 @@ def main() -> int:
                 fail(f"⑦ 宿主动画未真播/未真完成：anim_calls={anims}(≥2) anim_completed={done}(≥2)——帧循环没推进？")
             elif hookmiss != 0:
                 fail(f"⑦ 动画完成回推钩子缺失 {hookmiss} 次（JS 侧 __proteusHostScreenAnimDone 未装？）")
-            elif handles < 1:
+            elif plat == "android" and handles < 1:
+                # ★handle_count 是 Android 专有读数（`RustLayout.handleCount()`）；iOS 报告无该字段
+                #   ——用"屏保留语义"（下方 screens 断言）替代，跨平台等价。
                 fail(f"⑦ 宿主内核句柄数异常：handle_count={handles}（屏树应仍在册——树保留语义）")
             else:
+                scale = f"在册句柄 {handles} · " if plat == "android" else ""
                 report(
                     f"⑦ ★宿主真动作（宿主记账）：mount={mounts} · visible={vis} · destroy={des} · "
-                    f"anim={anims}/完成 {done} · 在册句柄 {handles} · 零钩子缺失"
+                    f"anim={anims}/完成 {done} · {scale}零钩子缺失"
                 )
             # 屏保留语义：pop 后 detail 应**已销毁**、home 仍在册
             scrs = hs.get("screens") or []
@@ -288,7 +295,8 @@ def main() -> int:
     if not ok:
         print("✗ 路由虚拟栈未通过（见上方失败项）")
         return 1
-    print("✅ 路由虚拟栈通过：无层数上限 + 预算冻结有界 + 树保留 + 命令守恒（真机 QuickJS 证据）")
+    engine_name = "QuickJS" if plat == "android" else "JavaScriptCore"
+    print(f"✅ 路由虚拟栈通过：无层数上限 + 预算冻结有界 + 树保留 + 命令守恒（真机 {engine_name} 证据）")
     print(f"  规模：{depth} 层 · 屏池 {d.get('fans')} · 预算 {budget} 节点")
     return 0
 
