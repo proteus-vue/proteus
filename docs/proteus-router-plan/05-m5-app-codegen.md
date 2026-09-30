@@ -65,6 +65,32 @@
 惯序：`push` = exit(旧顶) → mount(新) → enter(新)；`pop` = exit(旧顶) → unmount(旧顶) → enter(新顶)。
 ★退场方向（pop 的反向转场）由执行器/Morpheus 推导——**动画知识不在 router**。
 
+### 0.5 ★执行器已落地（2026-09-30）—— 命令流有了消费者
+
+| 层 | 落点 | 判据 |
+|---|---|---|
+| **方向语义**（§0.4 的"由执行器/Morpheus 推导"） | `packages/animation/src/route-transition.ts`：`reverseDecls`（from/to 互换）+ `routeTransitionBatches`（forward/back 两向 + 两侧各自判空） | `tests/animation-presets.test.ts` 新增 9 条（含**镜像对**：forward.in `800→0` ↔ back.out `0→800`） |
+| **执行器本体**（编排：顺序/可见性/方向/事务） | `packages/render-backend/src/screen-executor.ts`：`createScreenExecutor`（端口注入——树操作 + 动画播放 + 转场规划器；**零平台依赖、零 animation 依赖**） | `tests/screen-executor.test.ts` 11 条（真栈 + 真规划器 + 记录桩） |
+| **真机证据** | `hosts/android/bridge/entry-app-stack.ts` 场景 E（两相：kick → 泵 job → read）+ Java 侧两相调用 | `check-app-stack.py` ⑦ 组 5 条 —— **真机全绿**（见下） |
+
+**★两个编排决策（M5 契约没写死、由执行器定的部分）**
+1. **退场销毁延迟到转场播完**：pop 的惯序是 `exit → unmount → enter`，若 unmount 即刻销毁，
+   旧页会在滑出动画**中途消失**（闪断）⇒ 执行器把被 exit 标记的屏的销毁挂起到转场完成后。
+2. **方向推导**（三值表）：本事务 `mount` 且 **非 rebuild** ⇒ `forward`（新内容到来）；
+   其余（含 rebuild 重建、子树早已在树上的返回）⇒ `back`。★`rebuild=true` 只有 activateTop
+   会产生（返回路径）⇒ 判 `back` 的观感正确（回程复位）。
+
+**★真机读数（QuickJS · Android）**
+- push 命令序 `mount(detail) → visible(detail,true) → visible(home,false)`（3 步 · 树保留零销毁）
+- 方向 `forward`/`back` 分档正确；**镜像对**：`forward.in 800→0` ↔ `back.out 0→800`
+- pop 销毁时机：`visible(home,true) → destroy(detail,pop)`（转场后销毁）
+- 计数自洽：8 命令 → 3 转场（forward 2 / back 1）· 零错误
+- ★**判据侧独立复算**（不信 JS 自报的 `e_mirror_ok`——那是自我认证；`e_mirror_ok` 仅作交叉核对，
+  两侧结论不一致 ⇒ 当场红）；**6 个破坏变体全红**（镜像对打坏/自报不符/方向写反/push 出销毁/计数不自洽/时机倒置）
+
+★**诚实边界**：执行器只做**编排**；真机上"树操作/平台动画"目前由**记录桩**承接（本组证明的是编排层端上可跑），
+真实 Host ABI 树操作与平台转场提交属后续接线（端口已就位——`ScreenTreeHost` / `ScreenAnimHost`）。
+
 ---
 
 ## 1. 目标
@@ -218,4 +244,5 @@ interface ScreenExecutor {
 ## LLM 执行提示（B5）★已更新
 
 > 读 `00-overview.md` + `02-m2-route-tree.md` + 本文件 §0。栈核心（app-stack.ts）与 codegen（app.ts）
-> **已实现**——后续工作只剩**宿主执行器**（真实建/销毁屏子树 + Morpheus 转场接线）与真机验证装置。
+> **已实现**；**宿主执行器（编排层）亦已落地**（§0.5：`createScreenExecutor` + 方向语义 + 真机 ⑦ 组全绿）。
+> ⇒ 后续工作只剩**端口的生产实现**（真机树操作接 Host ABI 的树接口 + 平台转场提交接内核动画/零参与路径）。

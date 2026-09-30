@@ -160,6 +160,82 @@ def main() -> int:
     else:
         report(f"⑤ navigate 仅销毁弹出段（{d.get('d_unmounts')} 屏）+ 1 次 enter")
 
+    # ── ⑦★场景 E：宿主执行器（M5 命令流的消费者——命令序/方向/镜像对/销毁时机）──
+    # 【要证明什么】M5 计划文档自述的剩余工作 =「宿主执行器（真实建/销毁屏子树 + Morpheus 转场接线）」。
+    #   本组证明**编排层**在真机 QuickJS 上跑通（真栈 + 真执行器 + 真 animation 规划器；
+    #   端口是记录桩——真机上的树操作/平台动画由宿主实现，属另一条链，不在本组声称）。
+    if d.get("e_pending") is True:
+        fail("⑦ 执行器两相未完成（e_pending=true）——kick 后 job 泵没把 async 链推进完？")
+    elif d.get("e_fatal"):
+        fail(f"⑦ 执行器场景 fatal：{d.get('e_fatal')}")
+    else:
+        e1_log = d.get("e1_log") or []
+        e2_log = d.get("e2_log") or []
+        e3_log = d.get("e3_log") or []
+        e1_plays = d.get("e1_plays") or []
+        e2_plays = d.get("e2_plays") or []
+        e3_plays = d.get("e3_plays") or []
+        estats = d.get("e_stats") or {}
+        # ⑦.1 命令序（push）：mount 新屏 → 置可见 → 旧屏隐藏（树保留）
+        if not (e2_log and e2_log[0].startswith("mount:detail") and "visible:detail" in " ".join(e2_log) and any(":false" in l for l in e2_log)):
+            fail(f"⑦ push 命令序不符（期望 mount(detail) → visible(true) → visible(旧,false)）：{e2_log}")
+        elif any(l.startswith("destroy:") for l in e2_log):
+            fail(f"⑦ push 产生了销毁（虚拟栈要求树保留）：{e2_log}")
+        else:
+            report(f"⑦ push 命令序正确（树保留）：{len(e2_log)} 步 · {e2_log}")
+        # ⑦.2 方向：push=forward / pop=back
+        if (e2_plays or [{}])[0].get("direction") != "forward":
+            fail(f"⑦ push 方向应为 forward：{e2_plays}")
+        elif (e3_plays or [{}])[0].get("direction") != "back":
+            fail(f"⑦ pop 方向应为 back：{e3_plays}")
+        else:
+            report("⑦ 方向推导：push=forward · pop=back（首屏=forward）")
+        # ⑦.3 ★镜像对（同一转场：forward.incoming 的 from/to ↔ back.outgoing 的 to/from）
+        #   ★★判据侧**独立复算**（不信 JS 自报的 e_mirror_ok——那是"自我认证"，本仓明令禁止；
+        #     e_mirror_ok 仅作交叉核对：若两侧结论不一致 ⇒ 说明有一侧算错了，当场红）。
+        fwd_p1 = (e2_plays or [{}])[0]
+        back_p1 = (e3_plays or [{}])[0]
+        mirror_recomputed = (
+            fwd_p1.get("firstInFrom") == back_p1.get("firstOutTo")
+            and fwd_p1.get("firstInTo") == back_p1.get("firstOutFrom")
+        )
+        if not mirror_recomputed:
+            fail(
+                "⑦ 镜像对不成立（判据侧独立复算）："
+                f"forward.in {fwd_p1.get('firstInFrom')}→{fwd_p1.get('firstInTo')} 应 ↔ "
+                f"back.out {back_p1.get('firstOutFrom')}→{back_p1.get('firstOutTo')}（互逆）"
+            )
+        elif d.get("e_mirror_ok") is not True:
+            fail(f"⑦ 判据复算与 JS 自报不一致（JS e_mirror_ok={d.get('e_mirror_ok')}）——两侧必有一侧算错")
+        else:
+            report(
+                f"⑦ 镜像对成立（判据侧独立复算）：forward.in {fwd_p1.get('firstInFrom')}→{fwd_p1.get('firstInTo')} "
+                f"↔ back.out {back_p1.get('firstOutFrom')}→{back_p1.get('firstOutTo')}"
+            )
+        # ⑦.4 销毁时机：pop 的旧顶必须在**转场播完后**销毁（记录桩同步返回 ⇒ 顺序即证据）
+        if not (e3_log and any(l.startswith("destroy:detail") and ":pop:" in l for l in e3_log)):
+            fail(f"⑦ pop 未在转场后销毁旧顶：{e3_log}")
+        else:
+            # 可见性先于销毁（旧顶先滑出、再销毁——不是先毁后播）
+            vis_idx = next((i for i, l in enumerate(e3_log) if l.startswith("visible:")), -1)
+            des_idx = next((i for i, l in enumerate(e3_log) if l.startswith("destroy:")), -1)
+            if vis_idx < 0 or des_idx < 0 or vis_idx > des_idx:
+                fail(f"⑦ 销毁时机不对（应先置可见/播转场、再销毁）：{e3_log}")
+            else:
+                report(f"⑦ 销毁时机正确（转场后销毁：{e3_log}）")
+        # ⑦.5 计数自洽（禁伪造：commands = 各分支之和；transitions = forward+back+skipped）
+        cmds = estats.get("commands", -1)
+        trans = estats.get("transitions", -1)
+        fwd, backn, skip = estats.get("forward", -1), estats.get("back", -1), estats.get("skippedNone", -1)
+        if cmds < 6:
+            fail(f"⑦ 执行器消费命令数过少（{cmds}）——编排链没跑全？")
+        elif trans != fwd + backn:
+            fail(f"⑦ 转场计数不自洽：transitions={trans} != forward+back={fwd}+{backn}")
+        elif not (estats.get("errors") == []):
+            fail(f"⑦ 执行器报错：{estats.get('errors')}")
+        else:
+            report(f"⑦ 计数自洽：{cmds} 命令 → {trans} 转场（forward {fwd} / back {backn} / 跳过 {skip}）· 零错误")
+
     print()
     if not ok:
         print("✗ 路由虚拟栈未通过（见上方失败项）")

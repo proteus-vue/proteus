@@ -160,3 +160,17 @@ export type {
   MatrixReport,
   MatrixOptions,
 } from './host-matrix'
+
+// ★★M5 虚拟栈的宿主执行器（ScreenCommand 命令流 → 树操作 + Morpheus 转场；2026-09-30）
+export { createScreenExecutor } from './screen-executor'
+export type {
+  ScreenCommandLike,
+  ScreenTreeHost,
+  ScreenAnimHost,
+  RouteTransitionPlanner,
+  RouteTransitionPlanLike,
+  ScreenExecutor,
+  ScreenExecutorOptions,
+  ScreenExecutorStats,
+  AnimLike,
+} from './screen-executor'

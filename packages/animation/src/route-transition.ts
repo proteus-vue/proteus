@@ -23,8 +23,10 @@
 //   尚未实现 ⇒ 本表当前是"就绪的第三腿"，由未来的 App 路由调用。
 
 import type { RouteTransition } from '@proteus-vue/contracts'
+import type { AnimDecl, CompiledBatch } from './types'
 import type { RouteTransitionSpec } from './presets'
 import { presets } from './presets'
+import { compileAnimations } from './compile'
 
 /**
  * ★**统一枚举 → Morpheus 转场规格**（App 腿；穷尽映射——枚举增员时本表编译报错）
@@ -83,4 +85,96 @@ export function appTransition(transition: unknown, opts?: { distance?: number; d
 /** 本端支持的转场清单（**从映射表推导**，不手写第二份——防漂移） */
 export function appTransitions(): RouteTransition[] {
   return Object.keys(APP_TRANSITION_MAP) as RouteTransition[]
+}
+
+// ══════════════════════════════════════════════════════════════════
+// ★★方向语义与执行器入口（2026-09-30：M5 虚拟栈消费者接线）
+//
+// 【为什么需要（M5 §0.4 契约的原话）】"退场方向（pop 的反向转场）由执行器/Morpheus 推导
+//   ——**动画知识不在 router**"。而此前 `appTransition()` **全仓零真实调用点**
+//   ⇒ 既有"就绪的第三腿"没有被任何执行器消费；本段补上"推入/返回"的方向换算 + 批次入口。
+//
+// 【方向语义（本段的核心）】
+//   · `forward`（push/replace/新页进入）：**进场页播 `spec.enter`，旧页播 `spec.exit`**——原样。
+//   · `back`（pop/popTo/返回）：**两组声明各自反向播放**——
+//       离开的旧顶播 `reverse(enter)`（如 slideUp 的"800→0 推入"反向成"0→800 滑出"）；
+//       回来的下层页播 `reverse(exit)`（视差 -240→0、透明度 0.7→1 复原）。
+//     ⇒ 这是"返回动画"与"推入动画"镜像对成的唯一实现（执行器不再各写一份）。
+// ══════════════════════════════════════════════════════════════════
+
+/**
+ * **反转一组声明**（`from`/`to` 互换；曲线/时长/弹簧/序列**原样**）——返回动画的基础操作。
+ *
+ * ★语义细节（都有测试守）：
+ *   · `from` 缺省（= 起点由内核取当前值）反转时按 **0** 落定（与 `compileOne` 的缺省一致）；
+ *   · `keyframes`（序列）**不逐段反转**——整条序列的端点互换（`from`↔`to`），
+ *     段内曲线保持（"先下压再弹回"反向播放仍是它自己的形状，不是逐段镜像——逐段镜像
+ *     会改变缓动观感，属另一个特性，本仓未声称）；
+ *   · 弹簧参数保持——回程用同一物理（不引入第二套参数）。
+ */
+export function reverseDecls(decls: readonly AnimDecl[]): AnimDecl[] {
+  return decls.map((d) => {
+    const { from, ...rest } = d
+    return { ...rest, from: d.to, to: from ?? 0 }
+  })
+}
+
+/** 空批次（与 `compileRoute` 对空 exit 的形态一致——调用方无需处理 undefined） */
+const EMPTY_BATCH: CompiledBatch = { anims: [], composited: true, nonComposited: [] }
+
+/** 转场方向：`forward` = push（新页进入）；`back` = pop（返回——两组声明各自反向） */
+export type RouteTransitionDirection = 'forward' | 'back'
+
+/** 执行器入口的产物：两页各自要播的**已绑定节点**批次 + 编排参数 */
+export interface RouteTransitionPlan {
+  /** 进入视野的页（forward：新页；back：返回后可见的下层页）的批次 */
+  incoming: CompiledBatch
+  /** 离开视野的页（forward：被压住的旧页；back：正在滑出、随后销毁的旧顶）的批次 */
+  outgoing: CompiledBatch
+  durationMs: number
+  opaque: boolean
+  direction: RouteTransitionDirection
+  /** 规范化的枚举名（非法输入已归一到 `none`） */
+  transition: RouteTransition
+}
+
+/**
+ * ★★**转场批次入口**（执行器唯一调用点；与 `ScreenCommand.enter/exit` 的命令流配套）
+ *
+ * @param transition 来自命令流（`ScreenCommand.enter/exit` 的 `transition`；非法/缺省 ⇒ none）
+ * @param targets 两页的**节点 id**（屏子树根节点；`incoming` 缺省 = 只播退场——如 exit-only 提交）
+ * @param opts `direction`（缺省 forward）+ 预设参数覆盖（distance/durationMs）
+ *
+ * @returns 两页各自的一批指令（一次 `animStart` 合并喂给引擎——**一次导航 = 一次跨边界提交**）
+ * @throws 校验失败（声明非法/非合成——与直接调 `compileRoute` 同一红线，不静默降级）
+ */
+export function routeTransitionBatches(
+  transition: unknown,
+  targets: { incoming?: number; outgoing?: number },
+  opts?: { direction?: RouteTransitionDirection; distance?: number; durationMs?: number },
+): RouteTransitionPlan {
+  const spec = appTransition(transition, opts)
+  const direction: RouteTransitionDirection = opts?.direction ?? 'forward'
+  // back：两组声明各自反向（见段头"方向语义"）
+  const effective =
+    direction === 'back'
+      ? { enter: reverseDecls(spec.exit), exit: reverseDecls(spec.enter), durationMs: spec.durationMs, opaque: spec.opaque }
+      : { enter: spec.enter, exit: spec.exit, durationMs: spec.durationMs, opaque: spec.opaque }
+  const name: RouteTransition = (Object.keys(APP_TRANSITION_MAP) as RouteTransition[]).includes(transition as RouteTransition)
+    ? (transition as RouteTransition)
+    : 'none'
+  // ★空规格 = 无动画转场（`none` / 缺省 / exit 为空的预设如 `bottomSheet`）——
+  //   必须**短路**返回空批次：`compileAnimations([])` 是**红线**（"空声明"是调用方的错，
+  //   不是"没有动画"的表达——表达"没有动画"的正是本分支）。真机实测抓出：首版直接进
+  //   compileRoute ⇒ `none` 转场抛 "[empty] 动画声明为空"。
+  // ★两侧各自独立判空（`bottomSheet` 只动进场页、`slideDown` 只动退场页 ⇒ 各有一侧为空）
+  const incoming =
+    targets.incoming !== undefined && effective.enter.length > 0
+      ? compileAnimations(effective.enter, { nodeId: targets.incoming })
+      : EMPTY_BATCH
+  const outgoing =
+    targets.outgoing !== undefined && effective.exit.length > 0
+      ? compileAnimations(effective.exit, { nodeId: targets.outgoing })
+      : EMPTY_BATCH
+  return { incoming, outgoing, durationMs: spec.durationMs, opaque: spec.opaque, direction, transition: name }
 }
