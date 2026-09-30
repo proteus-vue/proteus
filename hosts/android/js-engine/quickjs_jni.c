@@ -61,7 +61,9 @@ static struct {
   /* ★★G-39：引擎内存读数 / GC（宿主"内存账本"两个入口——见 nativeMemoryUsage 注释） */
   jmethodID mem_usage;
   jmethodID gc;
-} g_host_methods = { NULL, NULL, NULL, NULL, NULL, NULL };
+  /* ★★App 端原生能力通道（`proteusHost.invoke(method, argsJson)` —— capability-app.ts 的 invokeHost 消费） */
+  jmethodID invoke;
+} g_host_methods = { NULL, NULL, NULL, NULL, NULL, NULL, NULL };
 
 /* ★前向声明：eval_impl 之后要泵 job（定义在下方；C 里调用点必须先可见） */
 static int pump_jobs_bounded(void);
@@ -191,6 +193,70 @@ static JSValue host_call_noarg_impl(JSContext *ctx, jmethodID mid, int has_ret) 
   return out;
 }
 
+/**
+ * `proteusHost.invoke(method, argsJson)` —— ★★App 端原生能力通道（真实 Java 实现）。
+ *
+ * 【为什么两个参数、返回字符串】与 Java 侧 `HostCapabilities.invoke(String, String): String` 一一对应；
+ *   同步调用（G-39 同线程契约）——壳内完成，不在别的线程回调。
+ * 【未实现的方法】Java 侧**抛 UnsupportedOperationException** ⇒ 本函数转成 JS 异常
+ *   （见 host_call_impl 的异常处理）⇒ 桥侧识别为 missing ⇒ `*.unsupported`（诚实分档）。
+ */
+static JSValue js_host_invoke(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv) {
+  (void)this_val;
+  if (g_host_methods.invoke == NULL || g_host_obj == NULL || g_vm == NULL) {
+    return JS_ThrowInternalError(ctx, "宿主未实现 invoke（App 能力通道不可用）");
+  }
+  if (argc < 1) return JS_ThrowTypeError(ctx, "proteusHost.invoke 需要 (method, argsJson)");
+  const char *method = JS_ToCString(ctx, argv[0]);
+  if (method == NULL) return JS_ThrowTypeError(ctx, "invoke: method 转码失败");
+  const char *args = argc >= 2 ? JS_ToCString(ctx, argv[1]) : NULL;
+
+  JSValue out = JS_UNDEFINED;
+  JNIEnv *env = NULL;
+  int attached = 0;
+  if ((*g_vm)->GetEnv(g_vm, (void **)&env, JNI_VERSION_1_6) != JNI_OK) {
+    if ((*g_vm)->AttachCurrentThread(g_vm, (void **)&env, NULL) == JNI_OK) attached = 1;
+  }
+  if (env != NULL) {
+    jstring jm = (*env)->NewStringUTF(env, method);
+    jstring ja = (*env)->NewStringUTF(env, args != NULL ? args : "{}");
+    jstring ret = (jstring)(*env)->CallObjectMethod(env, g_host_obj, g_host_methods.invoke, jm, ja);
+    if ((*env)->ExceptionCheck(env)) {
+      // ★异常不吞：转成 JS 异常抛出（Java 侧 UnsupportedOperationException ⇒ 桥识别 missing）
+      jthrowable exc = (*env)->ExceptionOccurred(env);
+      (*env)->ExceptionClear(env);
+      jclass excCls = (*env)->GetObjectClass(env, exc);
+      jmethodID getMsg = (*env)->GetMethodID(env, excCls, "getMessage", "()Ljava/lang/String;");
+      jstring jmsg = getMsg != NULL ? (jstring)(*env)->CallObjectMethod(env, exc, getMsg) : NULL;
+      const char *cmsg = jmsg != NULL ? (*env)->GetStringUTFChars(env, jmsg, NULL) : NULL;
+      const char *full = cmsg != NULL ? cmsg : "宿主抛异常";
+      if (attached) (*g_vm)->DetachCurrentThread(g_vm);
+      if (jm != NULL) (*env)->DeleteLocalRef(env, jm);
+      if (ja != NULL) (*env)->DeleteLocalRef(env, ja);
+      if (jmsg != NULL && cmsg != NULL) (*env)->ReleaseStringUTFChars(env, jmsg, cmsg);
+      if (jmsg != NULL) (*env)->DeleteLocalRef(env, jmsg);
+      if (excCls != NULL) (*env)->DeleteLocalRef(env, excCls);
+      if (exc != NULL) (*env)->DeleteLocalRef(env, exc);
+      JS_FreeCString(ctx, method);
+      if (args != NULL) JS_FreeCString(ctx, args);
+      // ★消息前缀标记：桥侧按 'unsupported|missing|not implemented' 识别"无此能力"
+      return JS_ThrowInternalError(ctx, "host-invoke: %s", full);
+    }
+    if (ret != NULL) {
+      const char *rs = (*env)->GetStringUTFChars(env, ret, NULL);
+      out = JS_NewString(ctx, rs != NULL ? rs : "{}");
+      if (rs != NULL) (*env)->ReleaseStringUTFChars(env, ret, rs);
+      (*env)->DeleteLocalRef(env, ret);
+    }
+    if (jm != NULL) (*env)->DeleteLocalRef(env, jm);
+    if (ja != NULL) (*env)->DeleteLocalRef(env, ja);
+  }
+  if (attached) (*g_vm)->DetachCurrentThread(g_vm);
+  JS_FreeCString(ctx, method);
+  if (args != NULL) JS_FreeCString(ctx, args);
+  return out;
+}
+
 /** `proteusHost.memUsage()` —— 引擎内存读数（返回 JSON 串；见 nativeMemoryUsage） */
 static JSValue js_host_mem_usage(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv) {
   (void)this_val;
@@ -279,6 +345,11 @@ static jstring eval_impl(JNIEnv *env, jstring source, jboolean with_host) {
     } else {
       LOGI("宿主仅实现 post ⇒ JS 侧走本地桩（适配器→宿主入口 链路验证）");
     }
+    // ★★App 端原生能力通道（按 Java 侧是否实现条件注入——同 mount 原则）
+    if (g_host_methods.invoke != NULL) {
+      JS_SetPropertyStr(g_ctx, host, "invoke", JS_NewCFunction(g_ctx, js_host_invoke, "invoke", 2));
+      LOGI("宿主已实现 invoke ⇒ JS 侧可调 App 原生能力（update/window/worker/idle/preload…）");
+    }
     // ★★G-39：内存账本两入口（按 Java 侧是否实现条件注入——同 mount 的条件注入原则）
     if (g_host_methods.mem_usage != NULL) {
       JS_SetPropertyStr(g_ctx, host, "memUsage", JS_NewCFunction(g_ctx, js_host_mem_usage, "memUsage", 0));
@@ -357,6 +428,7 @@ Java_dev_proteus_layoutcore_QuickJsEngine_nativeSetHostCallback(JNIEnv *env, jcl
   }
   g_host_methods.post = g_host_methods.mount = g_host_methods.update = g_host_methods.update_patches = NULL;
   g_host_methods.mem_usage = g_host_methods.gc = NULL;
+  g_host_methods.invoke = NULL;
   if (obj != NULL) {
     g_host_obj = (*env)->NewGlobalRef(env, obj);
     jclass c = (*env)->GetObjectClass(env, obj);
@@ -373,6 +445,9 @@ Java_dev_proteus_layoutcore_QuickJsEngine_nativeSetHostCallback(JNIEnv *env, jcl
     g_host_methods.mem_usage = (*env)->GetMethodID(env, c, "memUsage", "()Ljava/lang/String;");
     if ((*env)->ExceptionCheck(env)) (*env)->ExceptionClear(env);
     g_host_methods.gc = (*env)->GetMethodID(env, c, "gc", "()V");
+    if ((*env)->ExceptionCheck(env)) (*env)->ExceptionClear(env);
+    /* ★★App 端原生能力通道（两参：method + argsJson；返回 String） */
+    g_host_methods.invoke = (*env)->GetMethodID(env, c, "invoke", "(Ljava/lang/String;Ljava/lang/String;)Ljava/lang/String;");
     if ((*env)->ExceptionCheck(env)) (*env)->ExceptionClear(env);
     if (g_host_methods.post == NULL) {
       LOGE("宿主回调缺少 post(String) 方法（其余入口仍按各自实现条件注入）");

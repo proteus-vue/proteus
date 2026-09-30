@@ -221,9 +221,13 @@ if [ "$MODE" = "release" ]; then
 fi
 APK="$BUILD/proteus-layoutcore.apk"
 rm -f "$APK"
+# ★★版本信息必须显式传（真机实测抓出）：aapt2 link **不会**从 manifest 读 versionName/versionCode
+#   ⇒ 产物 versionName='' ⇒ 宿主 `getPackageInfo().versionName` 为 null ⇒
+#     JSONObject.put(..., null) 静默丢弃该键 ⇒ 能力读数缺字段（"桥丢字段"的真因在这里）
 "$BT/aapt2" link -o "$APK" -I "$PLATFORM" \
   --manifest "$MANIFEST" \
   --min-sdk-version 24 --target-sdk-version 34 \
+  --version-code 1 --version-name "0.1.0-demo" \
   -A "$APP/src/main/assets" \
   --java "$BUILD/gen" 2>&1 | head -10
 
