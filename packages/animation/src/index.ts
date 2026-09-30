@@ -47,4 +47,4 @@ export {
   isScrollDriven,
 } from './compile'
 export { presets, route, list, element, easing, scroll } from './presets'
-export type { RouteTransitionSpec, ListShiftSpec, ElementSpec, ScrollSpec } from './presets'
+export type { RouteTransitionSpec, ListShiftSpec, ElementSpec, SharedElementSpec, ScrollSpec } from './presets'

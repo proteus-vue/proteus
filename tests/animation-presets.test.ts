@@ -226,6 +226,32 @@ describe('MA1 · 预设库（"开箱即用" = 预设，不是参数）', () => {
   })
 })
 
+describe('共享元素（跨元素飞行：几何在内核）', () => {
+  it('两种源各编译出正确形态（fromRect 系统坐标 / fromNodeId 同树节点）', () => {
+    const a = presets.element.sharedElement({ fromRect: { x: 100, y: 300, w: 40, h: 40 } })
+    expect(a.fromRect).toEqual({ x: 100, y: 300, w: 40, h: 40 })
+    expect(a.fromNodeId).toBeUndefined()
+    expect(a.fadeIn).toBe(true)
+    const b = presets.element.sharedElement({ fromNodeId: 7, fadeIn: false })
+    expect(b.fromNodeId).toBe(7)
+    expect(b.fadeIn).toBe(false)
+  })
+
+  it('★源必须给且只能给一个（缺源/双源都当场抛错，不静默）', () => {
+    expect(() => presets.element.sharedElement({})).toThrow()
+    expect(() =>
+      presets.element.sharedElement({ fromRect: { x: 0, y: 0, w: 10, h: 10 }, fromNodeId: 1 }),
+    ).toThrow()
+  })
+
+  it('★诚实边界：预设不含 decls（几何只有运行时才知道，"声明→指令"那条路表达不了）', () => {
+    const sp = presets.element.sharedElement({ fromNodeId: 1 })
+    expect('decls' in sp).toBe(false)
+    // 走的是内核几何原语（proteus_layout_shared_element），不是 compileAnimations
+    expect(sp.durationMs).toBe(400)
+  })
+})
+
 describe('MA6 · 序列编排（keyframes：一条动画多段）', () => {
   it('★press 预设编译出**一条** scale 动画、内两段（下压 → 回弹）', () => {
     const sp = presets.element.press({ fromScale: 0.9, downMs: 80, upMs: 200 })

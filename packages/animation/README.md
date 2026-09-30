@@ -33,7 +33,8 @@ Rust 内核（曲线求值 + 物理 + FLIP） ← 唯一实现，每帧零 JS �
 | `route.zoom()` | 新页缩放进入 + 旧页下沉（对齐 `wx://zoom`） |
 | `route.cupertinoModal()` | iOS 风格全屏模态（弹簧）（对齐 `wx://cupertino-modal`） |
 | `list.shift()` | **列表项增删让位**（映射内核 FLIP：几何在内核，零跨边界；是 §5 招牌能力） |
-| `element.fadeIn()` / `pressRelease()` / `press()` / `shake()` / `sharedElementFlyIn()` | 元素入场 / 按压弹回（单段）/ **按压序列**（下压+回弹两段）/ **抖动** / 共享元素飞入 |
+| `element.fadeIn()` / `pressRelease()` / `press()` / `shake()` / `sharedElementFlyIn()` | 元素入场 / 按压弹回（单段）/ **按压序列**（下压+回弹两段）/ **抖动** / 共享元素飞入（落点简化形态） |
+| `element.sharedElement()` | ★**真·共享元素**（从源飞到目标再归位）：`fromNodeId`（同树节点）或 `fromRect`（系统坐标） |
 | `scroll.sticky()` / `parallax()` / `fadeIn()` | **滚动联动**（吸顶 / 视差 / 渐显——滚动位置驱动，换算在内核；见下） |
 | `easing.snappy` / `easing.smooth` | 手感弹簧预设（**与内核 `SpringParams::snappy/smooth` 同值**，两侧各有测试钉住） |
 
@@ -114,10 +115,28 @@ compileAnimations([{ kind: 'scale', from: 1, to: 1,
 - **同属性重复**：内核对同 `(节点, 属性)` 是**替换**语义 ⇒ 同一批次里出现两次会静默替换 ⇒ 编译期拦截
 - 目标缺失 / 未知 `kind` / 未知 `curve` / 非合成属性警告（走平台零参与路径的门槛）
 
+## 共享元素（cross-element flight）
+
+几何由**内核**算（`proteus_layout_shared_element`）：吃「源矩形 + 目标节点」，吐 `dx/dy/scale`
+（中心差 + 宽度比），宿主只把数字喂给层 + 做**层级提升**（`zPosition`）。
+
+```ts
+// 源 = 同树节点（同页面共享元素，如列表缩略图 → 详情大图）
+const sp = presets.element.sharedElement({ fromNodeId: thumbnailId, durationMs: 400 })
+node.sharedElement(JSON.stringify({ targetId: heroId, sourceNodeId: thumbnailId, durMs: sp.durationMs, fadeIn: sp.fadeIn }))
+// 源 = 系统坐标矩形（跨稳态：静态布局可在编译期算出，随指令下发）
+node.sharedElement(JSON.stringify({ targetId: heroId, sourceRect: { x: 24, y: 300, w: 80, h: 80 } }))
+```
+
+★**硬重启语义**：起点是**算出来的几何**（不是上一条动画的当前值）——若走接管，层上起点会被覆盖
+⇒ 视觉上不落在源矩形（静默错位，与滚动联动同一条红线）。首帧起点随 `updates` 立即返回（不跳变）。
+★**层级必须复位**：`zPosition` 是持久状态，飞行结束要复位（否则后续相位里该层一直压着兄弟）。
+
 ## 未做（诚实边界）
 
 - **跨属性编排**（如"位移与缩放共享一条时间轴、各自多段"）：当前每个属性各自成条，段之间**没有共享时间轴**的约束（各条动画用各自 `durMs`，内核按各自进度求值）。要"多属性严格对齐的分段编排"需引入显式时间轴（评估中）。
-- **共享元素跨页面**：`element.sharedElementFlyIn` 目前只做"在落点上做缩放+淡入"；真正的"从起点矩形飞入"需要三端 `platform/` 层（跨页面坐标换算），见 Morpheus 文档 B1 评测项。
+- **共享元素的等比边界**：内核只有**等比** scale ⇒ 以**宽度比**为准；源/目标宽高比不一致时，高度按目标宽高比推出（要精确对应须业务侧保持一致）。
+- **跨页面稳态几何的回传**：`fromRect` 由调用方注入（静态布局可编译期算）；真正的"上一页滚动位置/动态位置"需要页面栈层提供回传通道，当前未接。
 - **手势驱动 API 表面**：内核已支持 `Progress` 驱动（`seek` 立即写字段，手指到哪画面到哪），但本包暂未提供对应的声明式入口（当前由宿主直接调 `animSeek`）。
 - **`scroll.sticky` 是"位移补偿"而非布局吸顶**：本引擎只写合成属性，真·改变定位（`position: sticky`）属布局属性、不在属性面上（会被编译期拦）。吸顶观感依赖"位移补偿 + 布局让位"的组合。
 - **滚动输入源**：`presets.scroll` 的驱动接口（报位置）已与输入源解耦；真机验证走的是宿主滚动通路（`applyContentOffset`，与既有 `scrollBy` 同一路径），真手指拖动 UIScrollView 的接线属后续工作。
@@ -130,4 +149,10 @@ npx vitest run tests/animation-presets.test.ts    # 24 条：编译正确性 / �
 pnpm --filter @proteus-vue/animation build        # 产物构建（ESM bundle + d.ts）
 ```
 
-真机验证：`hosts/ios/check-anim-rt2.py`（全 40 条判据；其中 H 组 6 条 = 预设编译 → 微信语义对齐 → 指令下发 → 端上驱动 → 校验有效 → 跨语言同值；I 组 5 条 = MA5 滚动联动：视差映射 / 宿主滚动通路生产形态 / 退化窗口与滚动+弹簧拦截 / 平台路径排除）。
+真机验证：`hosts/ios/check-anim-rt2.py`（**全 51 条判据**，iPhone 12 全绿）。分组：
+
+- H 组 6 条 = 预设编译 / 微信语义对齐 / 指令下发 / 端上驱动 / 校验有效 / 跨语言同值；
+- I 组 5 条 = 滚动联动（视差映射 / 宿主滚动通路生产形态 / 退化窗口与滚动+弹簧拦截 / 平台路径排除）；
+- J 组 4 条 = 序列编排（一条动画三段 / 分段推进与边界精确 / 终值精确 / 平台路径仍一条）；
+- K 组 6 条 = 共享元素（内核几何 / 首帧在源矩形 / 层级提升与复位 / 终值归位 / 宽度比生效 / 错误冒泡）；
+- 另有判据 -1：**任何相位异常必须红**（读数缺失不得伪装成「没做」）。
