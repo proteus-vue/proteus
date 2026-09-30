@@ -1246,14 +1246,17 @@ export const LIFECYCLE_SRC_EN = {
     launch: { mp: 'auto-emitted on the first onAppShow', web: 'auto-emitted on the first load', app: 'shell cold start' },
     show: { mp: 'wx.onAppShow', web: 'visibilitychange→visible', app: 'shell resume (Activity.onResume / didBecomeActive)' },
     hide: { mp: 'wx.onAppHide', web: 'visibilitychange→hidden', app: 'shell pause (Activity.onPause / willResignActive)' },
-    error: { mp: 'App.onError / wx.onError', web: 'window.onerror', app: 'shell error capture' },
-    'unhandled-rejection': { mp: 'App.onUnhandledRejection', web: 'unhandledrejection', app: 'shell error capture' },
-    'memory-warning': { mp: 'App.onMemoryWarning / wx.onMemoryWarning', web: 'performance.memory heuristic', app: 'iOS didReceiveMemoryWarning / Android onTrimMemory' },
-    'theme-change': { mp: 'App.onThemeChange / wx.onThemeChange', web: 'matchMedia(prefers-color-scheme)', app: 'shell theme notification' },
-    resize: { mp: 'wx.onWindowResize', web: 'resize', app: 'rotation / split view' },
-    'page-not-found': { mp: 'App.onPageNotFound / wx.onPageNotFound', web: 'route miss (pushed by the router layer)', app: 'route miss' },
-    'audio-interruption-begin': { mp: 'App.onAudioInterruptionBegin', web: null, app: 'shell audio-session notification' },
-    'audio-interruption-end': { mp: 'App.onAudioInterruptionEnd', web: null, app: 'shell audio-session notification' },
+    error: { mp: 'App.onError / wx.onError', web: 'window.onerror', app: 'shell global exception hook (Android Thread.setDefaultUncaughtExceptionHandler — device-verified via CRASH)' },
+    // ★honest tier (2026-09-30): Promise rejection is a JS-engine concept; Android/iOS have no such
+    //   system event (only thread-level uncaught exceptions, covered by error) → App has no such event.
+    'unhandled-rejection': { mp: 'App.onUnhandledRejection', web: 'unhandledrejection', app: null },
+    'memory-warning': { mp: 'App.onMemoryWarning / wx.onMemoryWarning', web: 'performance.memory heuristic', app: 'shell memory-pressure callback (Android ComponentCallbacks2.onTrimMemory — device-verified via send-trim-memory / iOS didReceiveMemoryWarning)' },
+    'theme-change': { mp: 'App.onThemeChange / wx.onThemeChange', web: 'matchMedia(prefers-color-scheme)', app: 'shell configuration callback (Android onConfigurationChanged reading uiMode — device-verified via uimode night)' },
+    resize: { mp: 'wx.onWindowResize', web: 'resize', app: 'shell configuration callback (screenWidthDp change — device-verified via rotation)' },
+    // ★honest tier (2026-09-30): a route miss is a framework-router fact; no host system event exists.
+    'page-not-found': { mp: 'App.onPageNotFound / wx.onPageNotFound', web: 'route miss (pushed by the router layer)', app: null },
+    'audio-interruption-begin': { mp: 'App.onAudioInterruptionBegin', web: null, app: 'shell audio-signal receiver (Android BECOMING_NOISY / HEADSET_PLUG — registered; ★protected broadcast, not script-drivable)' },
+    'audio-interruption-end': { mp: 'App.onAudioInterruptionEnd', web: null, app: 'shell audio-signal receiver (Android HEADSET_PLUG state=1 — same; requires a physical plug/unplug)' },
   },
 }
 

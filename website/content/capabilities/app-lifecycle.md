@@ -27,7 +27,7 @@ useAppLifecycle(): AppLifecycle
 | [`onLaunch`](#onlaunch) | 应用启动（**恰好一次**，先于首个 show；壳只需转发 show，总线自动补 launch） | MP ✅ · Web ✅ · App ✅ |
 | [`onShow`](#onshow) | 应用进入前台 | MP ✅ · Web ✅ · App ✅ |
 | [`onHide`](#onhide) | 应用退到后台 | MP ✅ · Web ✅ · App ✅ |
-| [`onPageNotFound`](#onpagenotfound) | 路由未命中（可跳兜底页） | MP ✅ · Web ✅ · App ✅ |
+| [`onPageNotFound`](#onpagenotfound) | 路由未命中（可跳兜底页） | MP ✅ · Web ✅ · App — |
 | [`onAudioInterruptionBegin`](#onaudiointerruptionbegin) | 音频被系统中断开始（来电等） | MP ✅ · Web — · App ✅ |
 | [`onAudioInterruptionEnd`](#onaudiointerruptionend) | 音频中断结束（可恢复播放） | MP ✅ · Web — · App ✅ |
 
@@ -36,9 +36,9 @@ useAppLifecycle(): AppLifecycle
 - `onLaunch`：MP `首个 onAppShow 自动补发` · Web `首个 load 自动补发` · App `壳冷启动`
 - `onShow`：MP `wx.onAppShow` · Web `visibilitychange→visible` · App `壳 resume（Activity.onResume / didBecomeActive）`
 - `onHide`：MP `wx.onAppHide` · Web `visibilitychange→hidden` · App `壳 pause（Activity.onPause / willResignActive）`
-- `onPageNotFound`：MP `App.onPageNotFound / wx.onPageNotFound` · Web `路由未命中（router 层推）` · App `路由未命中`
-- `onAudioInterruptionBegin`：MP `App.onAudioInterruptionBegin` · Web —（无此事件） · App `壳音频会话通知`
-- `onAudioInterruptionEnd`：MP `App.onAudioInterruptionEnd` · Web —（无此事件） · App `壳音频会话通知`
+- `onPageNotFound`：MP `App.onPageNotFound / wx.onPageNotFound` · Web `路由未命中（router 层推）` · App —（无此事件）
+- `onAudioInterruptionBegin`：MP `App.onAudioInterruptionBegin` · Web —（无此事件） · App `壳音频信号接收器（Android BECOMING_NOISY / HEADSET_PLUG——已注册，★保护广播不可脚本驱动）`
+- `onAudioInterruptionEnd`：MP `App.onAudioInterruptionEnd` · Web —（无此事件） · App `壳音频信号接收器（Android HEADSET_PLUG state=1——同上，真触发需物理插拔）`
 
 ### `onLaunch`
 

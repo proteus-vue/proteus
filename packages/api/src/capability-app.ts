@@ -388,52 +388,59 @@ export const APP_EVENT_META: Record<AppEvent, LifecycleEventMeta> = {
     doc: '未捕获的运行时错误',
     mp: "App.onError' / 'wx.onError",
     web: "window.onerror",
-    app: '壳错误捕获',
+    app: '壳全局异常钩子（Android Thread.setDefaultUncaughtExceptionHandler——真机 CRASH 驱动验证）',
   },
   'unhandled-rejection': {
     doc: '未处理的 Promise rejection',
     mp: "App.onUnhandledRejection",
     web: "unhandledrejection",
-    app: '壳错误捕获',
+    // ★诚实分档（2026-09-30 取证）：Promise rejection 是 **JS 引擎语义**，Android/iOS 系统层
+    //   没有这类事件（Android 只有线程级未捕获异常——已由 error 覆盖）。引擎侧未接 rejection
+    //   tracker ⇒ **App 端如实为「无此事件」**（原写"壳错误捕获"是把 error 的来源安到它头上）。
+    app: null,
   },
   'memory-warning': {
     doc: '系统内存警告（可用于释放缓存）',
     mp: "App.onMemoryWarning' / 'wx.onMemoryWarning",
     web: 'performance.memory 启发式',
-    app: 'iOS didReceiveMemoryWarning / Android onTrimMemory',
+    app: '壳内存压力回调（Android ComponentCallbacks2.onTrimMemory——真机 send-trim-memory 驱动验证 / iOS didReceiveMemoryWarning）',
     note: '★**归属 C25 useBackground**（本事件不在 useAppLifecycle 上——两处重复已于 2026-09-30 去重）',
   },
   'theme-change': {
     doc: '系统深色/浅色模式切换',
     mp: "App.onThemeChange' / 'wx.onThemeChange",
     web: "matchMedia(prefers-color-scheme)",
-    app: '壳主题通知',
+    app: '壳配置变化回调（Android Activity.onConfigurationChanged 读 uiMode——真机 uimode night 驱动验证）',
     note: '★**归属 C25 useBackground**（去重后从 useAppLifecycle 移除）',
   },
   resize: {
     doc: '窗口尺寸变化',
     mp: "wx.onWindowResize",
     web: "resize",
-    app: '旋转 / 分屏',
+    app: '壳配置变化回调（Android onConfigurationChanged 的 screenWidthDp 变化——真机旋转驱动验证）',
     note: '★**归属 C25 useBackground**（去重后从 useAppLifecycle 移除）',
   },
   'page-not-found': {
     doc: '路由未命中（可跳兜底页）',
     mp: 'App.onPageNotFound / wx.onPageNotFound',
     web: '路由未命中（router 层推）',
-    app: '路由未命中',
+    // ★诚实分档（2026-09-30 取证）：路由未命中属**框架 router 层**事实，宿主系统没有此类事件
+    //   （Android/iOS 都不会上报"路由未命中"）⇒ App 端如实为「无此事件」，等 router 层补发。
+    app: null,
   },
   'audio-interruption-begin': {
     doc: '音频被系统中断开始（来电等）',
     mp: "App.onAudioInterruptionBegin",
     web: null,
-    app: '壳音频会话通知',
+    // ★诚实分档（2026-09-30 取证）：Android 用 BECOMING_NOISY / HEADSET_PLUG **动态接收器**近似
+    //   （真实现已注册）；但两条是保护广播 ⇒ adb 无法注入驱动，真触发需物理插拔耳机。
+    app: '壳音频信号接收器（Android BECOMING_NOISY / HEADSET_PLUG——已注册，★保护广播不可脚本驱动）',
   },
   'audio-interruption-end': {
     doc: '音频中断结束（可恢复播放）',
     mp: "App.onAudioInterruptionEnd",
     web: null,
-    app: '壳音频会话通知',
+    app: '壳音频信号接收器（Android HEADSET_PLUG state=1——同上，真触发需物理插拔）',
   },
 }
 
@@ -1345,6 +1352,73 @@ export const PLATFORM_TOPICS: Record<string, Record<'mp' | 'web' | 'app', Platfo
 export const PLATFORM_TOPIC_ORDER = ['mp', 'web', 'app'] as const
 
 /**
+ * ★★应用级事件源的 JS 侧入口（宿主壳调它——Android `HostLifecycleEvents.forwardToJs`）。
+ *
+ * 【为什么需要】Android 的 `onTrimMemory`（内存警告）/`onConfigurationChanged`（主题与尺寸）/
+ *   全局异常钩子是**真实系统回调**，但只能由 Java 侧收到 ⇒ 经本函数转进总线。
+ *   ★与页面级（`installPageEmitBridge`）同模式：**壳推 → 总线 → Hooks**。
+ *
+ * 【为什么必须"模块加载即装"】与页面钩子同理：`onTrimMemory` 可能在业务首次调
+ *   `useBackground()` 之前就发生（系统随时可能发内存压力）⇒ 晚装会丢事件。
+ */
+export const APP_EVENT_KEY = '__proteusHostAppEvent'
+
+/**
+ * 安装"壳 → 总线"的应用级事件通道（幂等）。
+ *
+ * ★★**必须 try 包裹**（真机实测抓出）：QuickJS 里 `globalThis` 上的属性可能由 JNI
+ *   `JS_SetPropertyStr` 定义为**不可写**（严格模式下赋值抛 `TypeError: 'undefined' is read-only`）
+ *   ⇒ 首版未包裹 ⇒ **整个 bundle 加载失败**（一行装线炸掉全场景）。
+ *   ⇒ 装配失败**降级为警告**（通道缺失时系统事件走"未知事件"路径——可观测，不是静默），
+ *     但**不能阻断 bundle 加载**（装配是"增强"，不是"必需前置"）。
+ */
+export function installAppEventSource(bus: HostLifecycleBus): boolean {
+  const g = globalThis as Record<string, unknown>
+  const handler = (evt: unknown, payload?: unknown): string => {
+    if (typeof evt !== 'string') return 'bad-event'
+    // 白名单：只接受 APP_EVENTS 里的事件名（**不静默吞非法值**——返回回执供壳诊断）
+    if (!(APP_EVENTS as readonly string[]).includes(evt)) {
+      return `unknown-event:${evt}`
+    }
+    bus.emit({ topic: 'app', kind: evt as AppEvent, payload })
+    return 'ok'
+  }
+  const KEY = '__proteusHostAppEvent' // ★同上：字面量（自包含，不依赖模块级初始化顺序）
+  try {
+    g[KEY] = handler
+    return true
+  } catch {
+    // 不可写（QuickJS 的只读全局？）——退回 **defineProperty**（若仍失败则如实失败）
+    try {
+      Object.defineProperty(g, KEY, { value: handler, writable: true, configurable: true })
+      return true
+    } catch {
+      try {
+        ;(globalThis as { console?: { warn?: (m: string) => void } }).console?.warn?.(
+          `[proteus] ${KEY} 装配失败（宿主全局不可写）——应用级系统事件将不可达`,
+        )
+      } catch {
+        /* 无 console：静默降级（通道缺失会有可观测后果） */
+      }
+      return false
+    }
+  }
+}
+
+// ★★**模块加载即自装**（本文件是壳推通道的**定义处** ⇒ 谁 import 谁就装好，不依赖调用方）。
+//   【为什么必须放这里（真机抓出的设计缺陷）】初版把"模块加载即装"放在 `capability.ts` 的
+//   `installLifecycleEventSources()` 里 ⇒ 只 import 本子路径的宿主（如 host-runtime 场景）
+//   **不会触发它** ⇒ 通道缺失、系统回调无处可去（真机 K 组三条判据当场红）。
+//   ★纪律：**装配要跟着定义走**，不能依赖"另一个模块恰巧被加载"。
+//   ★幂等：重复执行只覆盖同一个全局函数（capability.ts 也调，无害）。
+//   ★外层 try 兜底（装配自身已防御；这是**双保险**——bundle 加载绝不能因装线失败而中断）
+try {
+  installAppEventSource(getHostLifecycleBus())
+} catch {
+  /* 装线失败不影响其余功能 */
+}
+
+/**
  * `window` / `document` 子集（Web 端事件源的真实来源）
  */
 export interface WebEventSource {
@@ -1529,10 +1603,16 @@ export function detectAppHost(): boolean {
 /** 取（或惰性建）宿主生命周期总线（全局单例——壳与桥拿到**同一个**） */
 export function getHostLifecycleBus(): HostLifecycleBus {
   const g = globalThis as Record<string, unknown>
-  const existing = g[HOST_LIFECYCLE_BUS_KEY] as HostLifecycleBus | undefined
+  // ★★用**字面量**而非模块级常量（真机 + 打包实测抓出的顺序陷阱）：esbuild 会把
+  //   `const HOST_LIFECYCLE_BUS_KEY = '…'` 提升为模块级变量**并在原位置赋值**，
+  //   而"模块级自装调用"若排在该赋值之前 ⇒ 读 `undefined` ⇒ `globalThis[undefined]`
+  //   ⇒ 总线键错位（K 组判据全红、且异常被 catch 吞成"装配失败"）。
+  //   ⇒ 字面量让本函数**自包含**，顺序无关。
+  const KEY = '__proteusHostLifecycleBus'
+  const existing = g[KEY] as HostLifecycleBus | undefined
   if (existing) return existing
   const created = createHostLifecycleBus()
-  g[HOST_LIFECYCLE_BUS_KEY] = created
+  g[KEY] = created
   return created
 }
 
