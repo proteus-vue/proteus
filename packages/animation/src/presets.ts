@@ -42,6 +42,20 @@ export interface RouteTransitionSpec {
   enter: AnimDecl[]
   /** 出场页（旧页面）的动画（可选——不是所有转场都动它） */
   exit: AnimDecl[]
+  /**
+   * ★★**语义角色**（缺省 `'push'`）——决定 `routeTransitionBatches` 在 **back 方向**如何绑定两组声明。
+   *
+   * 【为什么必须有这个字段（产品页演示取证抓出的真缺陷）】两类预设的角色约定**不同**：
+   *   · `'push'`（对称型，默认）：`enter` = 进场页动作、`exit` = 出场页动作（都是"前进"语义）。
+   *     back 方向 = **角色互换 + 反向播放**（镜像对）。例：`slideUp` / `scaleDown` / `bottomSheet`。
+   *   · `'dismiss'`（退场型）：`exit` **直接描述"被关闭页"的动作**——这是 **pop 语义**的预设
+   *     （对齐微信 `routeType: 'slideDown'` 的"下滑关闭"）。`enter` 通常为空（下层页本就静止）。
+   *     back 方向 = `exit` **原样**作用于 outgoing（被关闭页），`enter` 原样作用于 incoming。
+   *
+   * ★**按 `'push'` 推导 `'dismiss'` 预设会把动作绑到错的页上**——实测：`slideDown` 的 back
+   *   变成"**下层页从下方升上来**"（而正确的"下滑关闭"是**被关闭页向下滑出**）——方向完全相反。
+   */
+  role?: 'push' | 'dismiss'
   /** 是否不透明（`false` ⇒ 需要下层可见，如半屏弹窗） */
   opaque: boolean
   /** 名义时长（毫秒；供宿主做超时/编排参考） */
@@ -114,6 +128,9 @@ export const route = {
     return {
       name: 'slideDown',
       wxRouteType: null, // ★诚实边界：微信 routeType 里没有"下滑关闭"这个预设（dismiss 由导航栈语义表达）
+      // ★★`role: 'dismiss'`（退场型）——`exit` 描述的是**被关闭页**的下滑动作（pop 语义）。
+      //   没有它时 back 推导会把 `exit` 反向绑给"返回目标页"⇒ 视觉变成"下层页升上来"（方向反了）。
+      role: 'dismiss',
       enter: [],
       exit: [
         { kind: 'translateY', from: 0, to: dist, curve: 'easeIn', durationMs: dur },

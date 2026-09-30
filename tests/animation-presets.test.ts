@@ -690,6 +690,36 @@ describe('统一路由转场枚举的第三腿（App / Morpheus ⇄ RouteTransit
     expect(downExitY.to).toBeGreaterThan(0)
   })
 
+  it('★★dismiss 型（slideDown）：back 方向把 `exit` **原样**绑给"被关闭页"（不是反向绑给下层页）', () => {
+    // 【本仓实测抓出的真缺陷】此前 back 推导对所有预设都做"角色互换 + 反向" ⇒ slideDown 变成
+    //   "下层页从下方升上来"（与"下滑关闭"完全相反）。role:'dismiss' 显式声明退场语义后：
+    const plan = routeTransitionBatches('slideDown', { incoming: 1, outgoing: 2 }, { direction: 'back' })
+    expect(plan.role).toBe('dismiss')
+    // 被关闭页（outgoing）：向下滑出（0 → 正位移）+ 轻微淡出——**原样**，不反向
+    const outY = plan.outgoing.anims.find((a) => a.kind === 1)!
+    expect(outY.nodeId).toBe(2)
+    expect(outY.from).toBe(0)
+    expect(outY.to).toBeGreaterThan(0)
+    // 返回目标页（incoming）：不动（`enter` 为空——动它会让"关闭"看起来像"又推了一页"）
+    expect(plan.incoming.anims).toHaveLength(0)
+    // 对照：对称型预设（slideUp）仍是"角色互换 + 反向"（镜像对）
+    expect(routeTransitionBatches('slideUp', { incoming: 1, outgoing: 2 }, { direction: 'back' }).role).toBe('push')
+  })
+
+  it('★对称型与退场型的**方向语义分档**（push: 镜像对 / dismiss: 原样退场）', () => {
+    // push 型：back 时 incoming 播 reverse(exit)、outgoing 播 reverse(enter)（镜像对，已有断言覆盖）
+    const upF = routeTransitionBatches('slideUp', { incoming: 1, outgoing: 2 }, { direction: 'forward' })
+    const upB = routeTransitionBatches('slideUp', { incoming: 1, outgoing: 2 }, { direction: 'back' })
+    expect(upF.role).toBe('push')
+    expect(upB.outgoing.anims[0]!.from).toBe(upF.incoming.anims[0]!.to) // 0 ← 0
+    expect(upB.outgoing.anims[0]!.to).toBe(upF.incoming.anims[0]!.from) // 800 ← 800
+    // dismiss 型：**两个方向都**是"离开视野的页下滑"（动作与方向无关——它只描述退场）
+    const dnF = routeTransitionBatches('slideDown', { incoming: 1, outgoing: 2 }, { direction: 'forward' })
+    const dnB = routeTransitionBatches('slideDown', { incoming: 1, outgoing: 2 }, { direction: 'back' })
+    expect(dnF.role).toBe('dismiss')
+    expect(dnF.outgoing.anims[0]!.to).toBe(dnB.outgoing.anims[0]!.to)
+  })
+
   it('★halfScreen 映射到"只动进场页"的弹窗预设（与 Web halfscreen 语义一致）', () => {
     const h = APP_TRANSITION_MAP.halfScreen
     expect(h.exit).toHaveLength(0)     // 下层页不动（弹窗语义）
