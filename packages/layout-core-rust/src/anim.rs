@@ -1370,6 +1370,18 @@ mod tests {
     }
 
     #[test]
+    fn spring_presets_match_ts_side() {
+        // ★★跨语言契约：TS 侧 `packages/animation/src/presets.ts` 的 `easing.snappy/smooth`
+        //   必须与本文件的 `SpringParams::snappy()/smooth()` **逐字段相等**——
+        //   任一侧改了而另一侧没跟 ⇒ 两端手感分叉（而这是静默的：动画照样跑，只是不一样）。
+        //   （TS 侧 tests/animation-presets.test.ts 有对称断言；两侧互为镜像。）
+        let snappy = SpringParams::snappy();
+        assert_eq!((snappy.stiffness, snappy.damping, snappy.mass), (320.0, 30.0, 1.0));
+        let smooth = SpringParams::smooth();
+        assert_eq!((smooth.stiffness, smooth.damping, smooth.mass), (180.0, 26.0, 1.0));
+    }
+
+    #[test]
     fn all_anim_kinds_are_composited() {
         // ★本引擎的设计选择：只做绘制层变换 ⇒ 全部属性都是合成属性
         //   （这是"平台渲染线程零参与路径"可用的前提，见 Morpheus §5-bis）

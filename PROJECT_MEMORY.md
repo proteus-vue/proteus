@@ -12,7 +12,7 @@
 - **核心理念（架构方向已定案，决策 #290）**：**一份标准 Vue 源码 → 语义 IR（C-IR/CompilerIR）→ 可插拔渲染后端**（Render anywhere, on any engine）；不再是「小程序编译器」——小程序降级为 Layer 1 兼容层
 - **四层可插拔（原则 #10 终极形态）**：编译（G-29 CompilerBackend）/ 逻辑（JS 引擎）/ UI（G-27 RenderBackend）/ 能力（G-28 NativeBackend）
 - **技术栈**：Vue 3.4+ / Vite 5 / TypeScript 5.4+ / 微信基础库 2.29.2+（Skyline + wx.router）
-- **包规模**：**43 个 @proteus-vue/* npm 包**（+ `packages/layout-core-rust` = **cargo crate，非 npm 包**，故不计数）（★2026-09-29 layout-core = App 排版核心）（check:pkg 0 error · `pnpm check:stats` 校验 ✓；31→38 修正 → G-07 glass 39 → Skyline 收口 worklet 40 → ★2026-09-14 组件库拆包 `@proteus-vue/components` 41 → ★Vapor 线新增 `@proteus-vue/slot-runtime` 42 + `@proteus-vue/layout-core` 43；版本统一 0.3.0-beta.8，见「当前状态速览」）
+- **包规模**：**44 个 @proteus-vue/* npm 包**（+ `packages/layout-core-rust` = **cargo crate，非 npm 包**，故不计数）（★2026-09-29 layout-core = App 排版核心）（check:pkg 0 error · `pnpm check:stats` 校验 ✓；31→38 修正 → G-07 glass 39 → Skyline 收口 worklet 40 → ★2026-09-14 组件库拆包 `@proteus-vue/components` 41 → ★Vapor 线新增 `@proteus-vue/slot-runtime` 42 + `@proteus-vue/layout-core` 43 → ★2026-09-30 MA1 新增 `@proteus-vue/animation` 44；版本统一 0.3.0-beta.8，见「当前状态速览」）
 - **文档**：`docs/proteus-architecture.md`（L0 规约·真理来源）→ `docs/board-inventory.md`（全景索引）→ `docs/roadmap.md`（版本线）→ `roadmap-2-plan`（里程碑线）→ 各 plan
 
 ---
@@ -48,7 +48,7 @@
   只有**可复制代码块**里的引用才真正有害。
 · 破坏性验证：恢复 `p-card` → 红并精确报 `03-fluid-grid.md:31`；还原 → 575 md 全过。
 
-## 当前状态速览（最近一次更新：**2026-09-30 · 禁止任何盲等红线升格 + iOS 事件驱动链路 + I3 收官**）★新会话以此为准
+## 当前状态速览（最近一次更新：**2026-09-30 · MA1 声明式动画表面落地（真机 35/35）**）★新会话以此为准
 
 ### ★★★2026-09-30 · 红线升格：禁止**任何**盲等（sleep/timeout 全禁）+ iOS 链路事件驱动 + I3 收官
 
@@ -92,6 +92,37 @@ kind=capability ⇒ 82）+ 黑名单条目 `hooks-81` + 两份新文档进正向
 破坏性验证过（注入 `81 个 Capability Hook` ⇒ 精确报行号）。
 **登记**：board-inventory「其他文档（非 plan）」表新增两行（含决策、依据、与既有计划关系）；
 roadmap v0.6 段追加两条决策接入注记 + v2.0+ 插件体系行补指针。
+
+**⑯ ★★★MA1 声明式表面 + 预设库落地（2026-09-30）—— 真机 35/35 · 探针路径 24B 错位修复**
+
+**一、新包 `@proteus-vue/animation`（43→44 包）**
+声明 → 校验 → 编译成引擎指令的**纯函数层**，零运行时依赖、零曲线数学（曲线唯一实现在内核）。
+- `types.ts` 封闭集 + 跨语言契约编号（`ANIM_KIND_ID` / `CURVE_ID`，两侧测试钉住）；
+- `validate.ts` 编译期校验 7 类（含**同属性重复**——内核对同 (节点,属性) 是替换语义，同批次重复会静默替换）；
+- `compile.ts` 归一化 + 绑目标 + `compileRoute`（进场/出场页）+ `isPlatformEligible`（平台零参与门槛）；
+- `presets.ts` 路由转场 4（对齐微信 routeType）+ 元素 3 + 手感 2（`snappy/smooth` 与内核 `SpringParams` 同值）。
+
+**二、真机验证（H 组 6/6，`check-anim-rt2.py` 全 35 条绿）**
+H1 预设编译（bottomSheet → 1 条指令 composited=true）· H2 微信语义对齐 · H3 指令下发（started=1）·
+H4 端上驱动（mid ty=150.4 → end ty=0）· H5 编译期校验有效 · H6 弹簧预设跨语言同值（stiffness=320）。
+
+**三、★★真缺陷：探针路径按 16B 步长解析 24B 记录（F3d 残值的真根因）**
+- 现象：FLIP 终值残留 `-0.18px`（判据要求 0），且此前修过两次（清场时序 / stagger 长尾）都只是**治标**；
+- 取证：内核 `proteus_layout_anim_tick_bin` 写 **24B/条**（`ffi.rs:2686`，id + 五值），
+  而 Swift 探针 `animTick` 的步长还是老的 `i * 16`；`animTickLean` 已被 RT2 更新为 `i * 24` ⇒ **两条解析路径各写一份字面量，改一处漏一处**；
+- 链路自洽：`collect_updates` 遍历 `HashSet`（顺序随内容变）⇒ 16 步长下只有偶数序记录被正确应用，
+  相位变化一改迭代序，被测节点就落到奇数位 ⇒ **写入停在中途**（-0.18 恰是曲线在 t≈250ms 的值）。
+  ★这解释了"之前绿、加预设相位后红"——**不是相位隔离问题**，我最初改的 `animStopNodes` 治标；
+- 修（结构性，非"记得同步"）：记录长度收敛为**唯一常量** `animUpdateRecordBytes`，
+  `animTick` / `animTickLean` 合并到**唯一解析点** `animTickApply`（精简路径只剩"不包 JSON"这一点差异）；
+- 真机复验：**35/35 全过，F3d=0**。
+
+**四、门禁与工件**
+`packages/animation/README.md`（含「未做」：序列编排 / 共享元素 / 手势声明面 / Android 逐节点粒度）·
+`tests/animation-presets.test.ts` 24 条 · 定向门禁全过（pkg-health 0 error · docs/content/stats/en-drift/gates-sync/publish-contents）。
+
+**五、诚实边界**：序列编排（内核对同属性替换语义 ⇒ 需拆批，`validateAnimations` 已显式拦下）；
+共享元素跨页面（需三端 platform/ 层）；AI 说明书（预设单一入口已就绪，待接生成器）。
 
 **⑮ ★★★MA0-RT Android 侧落地（容器级）+ 两端形态差异查明（2026-09-30）**
 

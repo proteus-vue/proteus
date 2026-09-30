@@ -3243,25 +3243,33 @@ final class SelfDrawBridge: NSObject, SelfDrawExports {
         return out
     }
 
-    /// ★★**每帧推进**（时间驱动）：内核 tick（曲线求值）→ **二进制返回变换值** → 应用
+    /// 每帧动画更新记录的字节长度：`id u32 + tx/ty/scale/rotate/opacity（五个 f32）` = **24B/条**
     ///
-    /// 【为什么返回二进制而不复用 JSON】见协议注释：每帧 O(N) 条走 JSON 的编解码是白付。
-    ///   格式：重复的 **16B 记录** = `nodeId u32 · translateX f32 · translateY f32 · scale f32`（全小端）。
-    func animTick(_ dtMs: Double) -> String {
-        guard handle != 0 else { return "{\"ok\":false,\"error\":\"未接入核心\"}" }
+    /// 【为什么是"唯一常量"（2026-09-30 真机教训）】此前探针 `animTick` 与帧循环 `animTickLean`
+    ///   **各自**写解析循环、各自写字面量：RT2 把记录由 16B 扩到 24B 时只改了一处 ⇒ 探针路径按
+    ///   `i*16` 错位解析，FLIP 一次回 215 条记录时层上留下**错位残值**（真机 F3d：end ty=-0.18，
+    ///   应为 0）。⇒ 记录长度与步长收敛到本常量，解析只留一个函数。
+    private static let animUpdateRecordBytes = 24
+
+    /// ★★**每帧推进的唯一解析点**（探针 / 帧循环两条入口共用）
+    ///
+    /// 内核 tick（曲线求值）→ 二进制返回 → 逐条写层；返回 `(applied, bytes)`，**不做 JSON 格式化**
+    ///   （探针入口自己包；帧循环路径对返回值毫无兴趣，不应为它付格式化成本，更不能污染帧耗时测量）。
+    @discardableResult
+    private func animTickApply(_ dtMs: Double) -> (applied: Int, bytes: Int) {
+        guard handle != 0 else { return (0, 0) }
         var outLen: UInt32 = 0
         let ptr = proteus_layout_anim_tick_bin(handle, Float(dtMs), &outLen)
-        guard let ptr, outLen > 0 else {
-            return "{\"ok\":true,\"applied\":0,\"bytes\":0}"
-        }
+        guard let ptr, outLen > 0 else { return (0, 0) }
         defer { proteus_rects_free(ptr, outLen) }
-        let n = Int(outLen) / 24   // ★RT2 扩展属性后：24B/条（id + 五值）
+        let stride = Self.animUpdateRecordBytes
+        let n = Int(outLen) / stride
         let buf = UnsafeRawBufferPointer(start: ptr, count: Int(outLen))
         var applied = 0
         CATransaction.begin()
         CATransaction.setDisableActions(true)   // ★关掉隐式动画：我们每帧自己给值，不能再让 CA 补间
         for i in 0..<n {
-            let base = i * 16
+            let base = i * stride
             let nodeId = buf.loadUnaligned(fromByteOffset: base, as: UInt32.self)
             let tx = buf.loadUnaligned(fromByteOffset: base + 4, as: Float.self)
             let ty = buf.loadUnaligned(fromByteOffset: base + 8, as: Float.self)
@@ -3276,7 +3284,17 @@ final class SelfDrawBridge: NSObject, SelfDrawExports {
             }
         }
         CATransaction.commit()
-        return "{\"ok\":true,\"applied\":\(applied),\"bytes\":\(outLen)}"
+        return (applied, Int(outLen))
+    }
+
+    /// ★★**每帧推进（探针入口）**：内核 tick → 写层 → 返回可读 JSON（JS 探针用；帧循环走 `animTickLean`）
+    ///
+    /// 【为什么二进制而不复用 JSON 通道】每帧 O(N) 条走 JSON 的编解码是白付；记录格式见
+    ///   `animUpdateRecordBytes`（定长，全小端）。
+    func animTick(_ dtMs: Double) -> String {
+        guard handle != 0 else { return "{\"ok\":false,\"error\":\"未接入核心\"}" }
+        let r = animTickApply(dtMs)
+        return "{\"ok\":true,\"applied\":\(r.applied),\"bytes\":\(r.bytes)}"
     }
 
     /* ────────────────── ★★RT2：持续帧率测席（§9 帧率/帧耗时指标的测量装置） ────────────────── */
@@ -3304,38 +3322,13 @@ final class SelfDrawBridge: NSObject, SelfDrawExports {
 
     /// ★★**每帧推进（精简路径）**：只回计数，**不建 JSON 字符串**
     ///
-    /// 【为什么与 `animTick` 分开（本仓纪律：测量要测生产路径）】`animTick` 面向 JS 探针
-    ///   （要返回可读 JSON）；而生产帧循环每帧对返回值**毫无兴趣** ⇒ 为它把计数格式化成字符串
-    ///   是纯浪费（且会**污染帧耗时测量**——测出来的是"生产 + 探针格式化"）。⇒ 两条路径分开。
+    /// 【为什么保留两条入口（本仓纪律：测量要测生产路径）】`animTick` 面向 JS 探针（要返回可读
+    ///   JSON）；生产帧循环对返回值**毫无兴趣** ⇒ 为它格式化字符串是纯浪费（且会**污染帧耗时测量**
+    ///   ——测出来的是"生产 + 探针格式化"）。⇒ 只有"包 JSON"这一步分开；**解析/写层已合并**为
+    ///   `animTickApply`（唯一步长来源，见 `animUpdateRecordBytes`）。
     @discardableResult
     private func animTickLean(_ dtMs: Double) -> (applied: Int, bytes: Int) {
-        guard handle != 0 else { return (0, 0) }
-        var outLen: UInt32 = 0
-        let ptr = proteus_layout_anim_tick_bin(handle, Float(dtMs), &outLen)
-        guard let ptr, outLen > 0 else { return (0, 0) }
-        defer { proteus_rects_free(ptr, outLen) }
-        let n = Int(outLen) / 24   // ★RT2：24B/条（id + tx/ty/scale/rotate/opacity）
-        let buf = UnsafeRawBufferPointer(start: ptr, count: Int(outLen))
-        var applied = 0
-        CATransaction.begin()
-        CATransaction.setDisableActions(true)
-        for i in 0..<n {
-            let base = i * 24
-            let nodeId = buf.loadUnaligned(fromByteOffset: base, as: UInt32.self)
-            let tx = buf.loadUnaligned(fromByteOffset: base + 4, as: Float.self)
-            let ty = buf.loadUnaligned(fromByteOffset: base + 8, as: Float.self)
-            let sc = buf.loadUnaligned(fromByteOffset: base + 12, as: Float.self)
-            let rot = buf.loadUnaligned(fromByteOffset: base + 16, as: Float.self)
-            let op = buf.loadUnaligned(fromByteOffset: base + 20, as: Float.self)
-            if view?.applyTransform(
-                nodeId: Int(nodeId), tx: CGFloat(tx), ty: CGFloat(ty), scale: CGFloat(sc),
-                rotate: CGFloat(rot), opacity: CGFloat(op)
-            ) == true {
-                applied += 1
-            }
-        }
-        CATransaction.commit()
-        return (applied, Int(outLen))
+        animTickApply(dtMs)
     }
 
     /// **seek 精简路径**（生产手势跟随形态：宿主侧直接 seek，不经 JS）
@@ -4399,6 +4392,8 @@ final class SelfDrawViewController: UIViewController {
             ("__proteus.animComplex()", 2),
             // ★★MA0-RT：平台零参与路径（合成属性判定 + CAKeyframe 提交 + presentation 探针）
             ("__proteus.animPlatform()", 2),
+            // ★★MA1：预设驱动的转场（"一句话写动画"端到端 + 编译期校验）
+            ("__proteus.animPreset()", 2),
             // ★★RT2 帧率测席（§9 指标）：**异步**——由 CADisplayLink 跑满时长后回调续链
             //   （事件驱动：跑满即继续，不轮询/不 sleep；看门狗只在卡死时兜底）
             ("__proteus.animBench()", 0),
@@ -4428,7 +4423,7 @@ final class SelfDrawViewController: UIViewController {
             }
             let out = js(expr)
             // 只记关键读数（避免日志爆炸——本仓「输出控制」纪律）
-            if expr.hasPrefix("__proteus.mount") || expr.hasPrefix("__proteus.finalize2") || expr.hasPrefix("__proteus.animProbe") || expr.hasPrefix("__proteus.animComplex") || expr.hasPrefix("__proteus.animPlatform") {
+            if expr.hasPrefix("__proteus.mount") || expr.hasPrefix("__proteus.finalize2") || expr.hasPrefix("__proteus.animProbe") || expr.hasPrefix("__proteus.animComplex") || expr.hasPrefix("__proteus.animPlatform") || expr.hasPrefix("__proteus.animPreset") {
                 NSLog("[proteus] %@ → %@", expr, String(out.prefix(400)))
             }
             // ★让出主线程 pump 轮：每轮一次 runloop 循环 ⇒ 微任务队列被排空
