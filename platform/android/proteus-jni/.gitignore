@@ -1,0 +1,2 @@
+# Rust 构建产物（工作区统一 CARGO_TARGET_DIR 指到 spike/target；此处兜底）
+target/

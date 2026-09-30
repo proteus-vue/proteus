@@ -14,7 +14,9 @@
 > | **HA0.5**（`hosts/`→`platform/` 拆分 + CI 静态检查） | ✅ **已落地（iOS）** | `platform/ios/ProteusPlatform/ProteusTextAdapter.swift`（319 行抽取）；门禁 `check:platform-layering` 三条判据（引用方向 / 禁 ABI / 实质内容）+ 破坏性验证；Android 侧**待抽**（见下"诚实边界"） |
 > | **HA1**（现有 App 宿主改造） | ✅ **已落地（iOS 宿主）** | 真机 **N 组 7/7 全过**；★核心判据 = **双路几何逐字节一致**（同树走直连 FFI 与 Host ABI，1836B / 同 hash） |
 > | HA2（能力注入重构） | ✅ **主体已落地** | ① 度量经 vtable 注入**已通**（真机 N3：缺度量表时引擎回调宿主 26 次）；② ★**内核已零平台分支**（`check:platform-layering` D 组守住）：JNI 层迁出内核 → `platform/android/proteus-jni/`（独立 crate，产 `libproteus_jni.so`），内核 `crate-type` 去掉 `cdylib`；真机复验内核驱动动画 6 条判据照常全过。★图像解码 trait 已在 ABI 契约层声明，但内核侧**无消费点**（内核不处理图像——如实记录） |
-> | HA3（能力插件） | ◐ **part 已落地** | `proteus_register_capability` / `has` / `call` 已通（真机 N6）；未注册 ⇒ 明确错误码 + 列出已注册项。★与 Playground 能力清单**尚未打通** |
+> | HA3（能力插件） | ✅ **已落地** | ① 注册/查询/调用已通（真机 N6）；② ★**与 Playground §4.2 能力清单打通**（2026-09-30）：`proteus_set_shell_capabilities`（**接受 CLI `capability-manifest.json` 的同形**）+ `proteus_check_capabilities`（端上校验：所需 ⊆ 提供）；缺失 ⇒ 明确错误码 + **可操作报告**（点名缺失项 / 列出已提供 / 指向「扩展壳」）；
+> | | | ③ `proteus_load_tree` 集成：产物带 `requiredCapabilities` ⇒ **加载前**校验，不满足即拒绝（启动时暴露，不是跑到一半崩），且**不破坏已加载的旧树**；
+> | | | ④ ★**跨语言 golden**（`tests/golden/capability-manifest.json`，由 TS 侧 `scanCapabilities` 真实产出冻结）+ 新鲜度门禁 `check:capability-golden`（TS 侧一改形状就红）。C 宿主一致性测试 **36 条判据**全过 |
 > | HA4 / HA5 / HA6 | ❌ 未做 | — |
 >
 > **★HA1 落地时的一个关键方法论（值得记）**：等价性判据（"两条路产出同一个东西"）**必须喂同一份输入**——
