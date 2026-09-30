@@ -26,6 +26,20 @@
 import { createQuickJsHostRuntime } from '@proteus-vue/render-backend/quickjs-host'
 import type { NativeTransport } from '@proteus-vue/render-backend/quickjs-host'
 import { runHostConformance } from '@proteus-vue/render-backend/host-conformance'
+// ★★应用与生命周期能力开放（App 宿主腿）：真实事件源（壳 + 虚拟栈）→ 真实 Hooks
+import {
+  getHostLifecycleBus,
+  createAppLifecycleCapabilities,
+  createStackPageSource,
+} from '@proteus-vue/api/capability-app'
+// ★为什么**不** import `@proteus-vue/api/capability`（拿 createCapabilityHooks）：
+//   那个文件是 9000 行全能力面 + 依赖 @proteus-vue/shared（含 import.meta.env / window 探测）
+//   ⇒ 在 IIFE（QuickJS/JSC 无模块系统）下既拖进 267KB 无关代码，又触发 import.meta 警告。
+//   ★分工：**hooks 层的端到端证明在单测**（tests/capability-app.test.ts ② 组，真实 hooks + 真实栈）；
+//     本场景证明**端上行为**——壳注入标识后桥能力可用、真实事件真的驱动回调。
+// ★真实虚拟栈（M5 核心——不是手写假命令；与 app-stack 场景同一份实现）
+import { createAppStack } from '@proteus-vue/router/app-stack'
+import type { AppScreenSpec } from '@proteus-vue/router/app-stack'
 
 /** 宿主桥（Java 侧 JsRenderHost / iOS 侧 HostRuntimeBridge 可选实现 memUsage/gc —— 条件注入） */
 interface HostBridge {
@@ -51,7 +65,7 @@ const g = globalThis as unknown as HostGlobals
 const HOST_ID = g.__PROTEUS_HOST_ID__ ?? 'quickjs-desktop'
 // ★构建标识（由 hosts/ios/bridge/inject-build-id.mjs **编译期替换**——与 entry-bench/entry-selfdraw
 //   同一机制；报告据此断言"设备上跑的是本次构建"，而不是靠运行时环境变量（那种是第二种形态））
-const BUILD_ID = 'bb079e18-161334'
+const BUILD_ID = '6b4765b3-162814'
 const FRAME_DRIVER = g.__PROTEUS_HOST_FRAME_DRIVER__ ?? 'manual'
 
 // ══════════════════════════════════════════════════════════════════
@@ -68,6 +82,9 @@ interface ShellLifecycleEntry {
   evt: string
   applied: boolean
   state: string
+  /** ★转发到能力总线**之后**的应用生命周期阶段（判据用：HIDE 只能由真实 hide 事件产生
+   *  ⇒ 一次 pause 留下 cap_phase='HIDE' 即证明"壳事件确实驱动了能力总线"） */
+  cap_phase: string
 }
 const shellLog: ShellLifecycleEntry[] = []
 let shellRt: ReturnType<typeof createQuickJsHostRuntime> | null = null
@@ -99,7 +116,22 @@ function shellLifecycle(evt: string): number {
   } catch {
     applied = false
   }
-  shellLog.push({ evt, applied, state: rt.state })
+  // ★★执行器接线形态（本轮修正的关键点）：壳把真实生命周期转发给运行时**之后**，
+  //   运行时/执行器再把它派发到**能力总线**（C23/C24/C25 的事件源）。
+  //   —— 这是 App 侧"生命周期能力开放"的完整链路：
+  //       系统事件 → 壳（Activity/通知）→ 运行时状态机 → 能力总线 → Hooks
+  //   ★使用全局单例总线（`getHostLifecycleBus()`）⇒ 场景侧订阅的是**同一个**（键 `__proteusHostLifecycleBus`）。
+  let capPhase = 'unavailable'
+  if (applied) {
+    try {
+      const bus = getHostLifecycleBus()
+      bus.emit({ topic: 'app', kind: evt === 'pause' ? 'hide' : 'show' })
+      capPhase = bus.snapshot().app
+    } catch {
+      /* 总线不可用（极端情况）——不影响壳自身语义 */
+    }
+  }
+  shellLog.push({ evt, applied, state: rt.state, cap_phase: capPhase })
   return shellLog.length
 }
 ;(globalThis as unknown as { __proteusHostShellLifecycle: typeof shellLifecycle }).__proteusHostShellLifecycle =
@@ -109,6 +141,21 @@ function shellLifecycle(evt: string): number {
 function shellQuery(): string {
   const suspends = shellLog.filter((e) => e.evt === 'pause')
   const resumes = shellLog.filter((e) => e.evt === 'resume')
+  // ★★能力读数（C23/C24/C25 在**真实生命周期发生后**的状态）——本报告由壳在每次事件后写，
+  //   ⇒ 它是"壳事件 → 总线 → Hooks"链路的**后置证据**（主报告是场景相位的前置证据）。
+  const capSnap = (() => {
+    try {
+      const bus = getHostLifecycleBus()
+      const snap = bus.snapshot()
+      return {
+        app_phase: snap.app,
+        page_phase: snap.page,
+        subscribers: bus.subscriberCount,
+      }
+    } catch {
+      return { app_phase: 'unavailable', page_phase: 'unavailable', subscribers: -1 }
+    }
+  })()
   return JSON.stringify({
     hook_loaded: true,
     events: shellLog.length,
@@ -118,6 +165,10 @@ function shellQuery(): string {
     resume_applied: resumes.filter((e) => e.applied).length,
     final_state: shellRt ? shellRt.state : 'none',
     log: shellLog,
+    // ★能力开放：应用生命周期阶段由壳事件驱动后的最终态（应随 pause/resume 变化）
+    cap_app_phase: capSnap.app_phase,
+    cap_page_phase: capSnap.page_phase,
+    cap_subscribers: capSnap.subscribers,
   })
 }
 ;(globalThis as unknown as { __proteusHostShellQuery: typeof shellQuery }).__proteusHostShellQuery = shellQuery
@@ -311,6 +362,122 @@ export function __proteusHostRun(): string {
   }
   void c3
 
+  // ══════════════════════════════════════════════════════════════════
+  // I. ★★应用与生命周期能力开放（C23/C24/C25）——**端到端**：真实事件源 → 真实 Hooks
+  //
+  // 【为什么放在本场景（而不是单测就够了）】单测证明逻辑（Node/V8）；本场景证明
+  //   **设备上、经壳注入的标识与总线**能让三个 Hook 真的被驱动——这才是"能力开放"的判据。
+  // 【两条真实事件源】① 壳（`__proteusHostShellLifecycle` 的真实生命周期转发）；
+  //   ② 虚拟栈命令流（真实 app-stack 的 drain 输出 → 翻译器 → 页面事件）。
+  // ══════════════════════════════════════════════════════════════════
+  // ★用**全局单例**总线：壳（`shellLifecycle`）与场景订阅**同一个** ⇒ 壳事件能驱动这里的 Hooks
+  const capBus = getHostLifecycleBus()
+  const capCaps = createAppLifecycleCapabilities(capBus, Error as unknown as new (c: string, m: string) => Error)
+
+  const capLog: string[] = []
+  const lc = capCaps.getAppLifecycle()
+  let launches = 0
+  lc.onLaunch(() => {
+    launches++
+    capLog.push('app:launch')
+  })
+  lc.onShow(() => capLog.push('app:show'))
+  lc.onHide(() => capLog.push('app:hide'))
+  const pl = capCaps.getPageLifecycle()
+  pl.onLoad(() => capLog.push('page:load'))
+  pl.onShow(() => capLog.push('page:show'))
+  pl.onHide(() => capLog.push('page:hide'))
+
+  // ② 真实栈命令流 → 页面生命周期（**真实 app-stack**，与 M5 同实现）
+  const capSpecs: Record<string, AppScreenSpec> = {
+    home: { name: 'home', path: '/home' },
+    detail: { name: 'detail', path: '/detail' },
+  }
+  const capStack = createAppStack({ screens: capSpecs })
+  const pageSrc = createStackPageSource(capBus)
+  const feed = () => {
+    for (const c of capStack.drainCommands()) pageSrc.apply(c as never)
+  }
+  capStack.push('home')
+  feed()
+  capStack.push('detail', { id: 1 })
+  feed()
+  capStack.pop()
+  feed()
+  const capPageAfterPop = capBus.snapshot().currentScreen
+
+  // ① 壳事件 → 能力总线（**执行器的接线形态**：壳把真实生命周期转发给运行时后，
+  //   运行时/执行器再把它们派发到能力总线；此处用真实发生过的 shellLog 重放）
+  //
+  // ★★顺序（真机/桌面首验抓到的判据缺陷）：`shellLog` 里是**本场景开始前**发生过的事件
+  //   （壳转发在 bundle 加载时就已进行）⇒ 若先重放再订阅，"launch" 必然读不到。
+  //   真实 App 的顺序是「订阅在前、事件在后」⇒ 本场景也照此：**先补一次冷启动 show**
+  //   （壳里尚未发生的部分），再重放已发生的历史。
+  const shellSuspend = shellLog.filter((e) => e.evt === 'pause' && e.applied).length
+  const shellResume = shellLog.filter((e) => e.evt === 'resume' && e.applied).length
+  // ★壳事件已在 `shellLifecycle` 里直驱总线（执行器接线形态）——此处只在**尚无任何壳事件**时
+  //   补一次冷启动 show（桌面/未触发的形态，验证同一条语义链）
+  if (shellLog.length === 0) {
+    capBus.emit({ topic: 'app', kind: 'show' })
+  }
+
+  // ③ 异步部分（useBackground 返回 Promise ⇒ 挂全局，**finish 相位**读——正好再证 job 泵）
+  // ★冷启动补 launch 的**独立读数**（订阅已在前，此时总线仍是 PENDING ⇒ show 必备随 launch）
+  const coldLaunchProbe: string[] = []
+  const probeOff = capBus.on('app:launch', () => coldLaunchProbe.push('cold'))
+  probeOff()
+
+  const capShellDriven: string[] = []
+  const offShellProbe = capBus.on('app:show', () => capShellDriven.push('show'))
+  const offShellProbe2 = capBus.on('app:hide', () => capShellDriven.push('hide'))
+  void offShellProbe
+  void offShellProbe2
+
+  const capPending: {
+    bgReady: boolean
+    bgEvents: string[]
+    launchOptions: Record<string, unknown>
+    appPhase: string
+    pagePhase: string
+    pageAfterPop: string | null
+    launches: number
+    log: string[]
+    sysLog: string[]
+    subscribers: number
+  } = {
+    bgReady: false,
+    bgEvents: [],
+    launchOptions: {},
+    appPhase: capBus.snapshot().app,
+    pagePhase: capBus.snapshot().page,
+    pageAfterPop: capPageAfterPop,
+    launches,
+    log: capLog,
+    sysLog: [],
+    subscribers: capBus.subscriberCount,
+  }
+  ;(globalThis as unknown as { __proteusCapPending?: typeof capPending }).__proteusCapPending = capPending
+  capBus.setLaunchOptions({ path: 'pages/detail', query: { id: '7' } })
+  const bg = capCaps.getBackground()
+  bg.onEvent((e: { type: string }) => capPending.bgEvents.push(e.type))
+  // 事件面：发一次内存警告/主题变化验证系统事件通道
+  const sysLog: string[] = []
+  bg.onMemoryWarning((lv: number) => sysLog.push(`mem:${lv}`))
+  bg.onThemeChange((t: string) => sysLog.push(`theme:${t}`))
+  capBus.emit({ topic: 'memory-warning', level: 2 })
+  capBus.emit({ topic: 'theme-change', theme: 'dark' })
+  capPending.sysLog = sysLog
+  // ★async 部分：getLaunchOptions 返回 Promise（**finish 相位**读——再证 job 泵）
+  void bg.getLaunchOptions().then((r: { ok: boolean; data?: Record<string, unknown> }) => {
+    if (r.ok) capPending.launchOptions = r.data ?? {}
+    capPending.appPhase = capBus.snapshot().app
+    capPending.pagePhase = capBus.snapshot().page
+    capPending.launches = launches
+    capPending.log = capLog
+    capPending.subscribers = capBus.subscriberCount
+    capPending.bgReady = true
+  })
+
   const result = {
     ok: true,
     scene: 'host-runtime',
@@ -363,6 +530,16 @@ export function __proteusHostRun(): string {
     shell_lifecycle_logged: shellLog.length,
     shell_suspend_applied: shellLog.filter((e) => e.evt === 'pause' && e.applied).length,
     shell_resume_applied: shellLog.filter((e) => e.evt === 'resume' && e.applied).length,
+    // I：应用与生命周期能力（C23/C24/C25）——同步读数；异步部分（bg_*）在 finish 相位补齐
+    cap_log: capLog,
+    cap_launches: launches,
+    // ★冷启动补 launch 的独立证据：记录"第一个 show 事件到达时，launch 是否已随之前置"
+    cap_launch_before_any_show: capLog.indexOf('app:launch') >= 0 && (capLog.indexOf('app:show') < 0 || capLog.indexOf('app:launch') < capLog.indexOf('app:show')),
+    cap_page_after_pop: capPageAfterPop,
+    cap_shell_suspend: shellSuspend,
+    cap_shell_resume: shellResume,
+    cap_shell_driven_events: capShellDriven.length,
+    cap_subscribers: capBus.subscriberCount,
   }
   return JSON.stringify(result)
 }
@@ -383,11 +560,19 @@ export function __proteusHostRun(): string {
 export function __proteusHostFinish(): string {
   const st = (globalThis as unknown as { __proteusHostAsync?: { e2: boolean; e3: boolean; e3Value: string } })
     .__proteusHostAsync
+  const cap = (globalThis as unknown as { __proteusCapPending?: Record<string, unknown> }).__proteusCapPending
   return JSON.stringify({
     async_resolved: !!st && (st.e2 || st.e3),
     refuse_unregistered_native: st?.e2 ?? false,
     registered_native_ok: st?.e3 ?? false,
     registered_native_value: st?.e3Value ?? '',
+    // I：能力开放的异步读数（useBackground 的 Promise 经 job 泵 resolved）
+    cap_bg_ready: cap?.bgReady ?? false,
+    cap_bg_events: cap?.bgEvents ?? [],
+    cap_launch_options: cap?.launchOptions ?? {},
+    cap_app_phase: cap?.appPhase ?? 'PENDING',
+    cap_page_phase: cap?.pagePhase ?? 'IDLE',
+    cap_subscribers: cap?.subscribers ?? -1,
   })
 }
 

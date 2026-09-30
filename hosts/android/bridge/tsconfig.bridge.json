@@ -11,7 +11,14 @@
   ],
   "extends": "../../../tsconfig.json",
   "compilerOptions": {
-    "types": []
+    "types": [
+      "../../../packages/shared/src/shims/mp.d.ts",
+      "../../../packages/shared/src/shims/import-meta.d.ts"
+    ]
   },
-  "include": ["./*.ts", "../../shared/bridge/*.ts"]
+  "include": [
+    "./*.ts",
+    "../../shared/bridge/*.ts"
+  ],
+  "//types-why": "★G-39 续（2026-09-30）：@proteus-vue/api 的 capability.ts 依赖 @proteus-vue/shared（wx / import.meta.env 环境类型）⇒ 必须加载 shims，否则 TS2304 Cannot find name wx。与根 tsconfig 同款两份。"
 }
