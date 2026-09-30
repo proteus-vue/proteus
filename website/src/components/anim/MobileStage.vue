@@ -34,10 +34,18 @@ const props = withDefaults(
     autoplay?: boolean
     /** 尺寸档（hero 大 / 演示中 / 缩略小） */
     size?: 'lg' | 'md' | 'sm'
+    /**
+     * ★★形态（决定"进场页"以什么形态出现——**这是转场语义的一部分，不是装饰**）：
+     *   · `page`（默认）：全屏页（`slideUp` / `scaleDown` / `slideDown` 用）；
+     *   · `sheet`：**半屏面板**（`halfScreen` / `bottomSheet` 用）——面板占下半屏、顶部圆角 + 拖拽手柄，
+     *     上层（列表）保持可见。★若把半屏渲染成全屏页，视觉会变成"页面推入一半停住"，
+     *     而且 `opaque:false`（声明下层可见）会被全屏页遮死——产品页演示取证抓出的形态缺陷。
+     */
+    shape?: 'page' | 'sheet'
     /** 顶部标签（可选——多层演示用） */
     caption?: string
   }>(),
-  { outgoing: () => [], direction: 'forward', idle: false, autoplay: true, size: 'md', caption: '' },
+  { outgoing: () => [], direction: 'forward', idle: false, autoplay: true, size: 'md', caption: '', shape: 'page' },
 )
 
 const motionOk = !(typeof matchMedia === 'function' && matchMedia('(prefers-reduced-motion: reduce)').matches)
@@ -80,6 +88,21 @@ const tMs = ref(0)
 const playing = ref(false)
 let raf = 0
 const reduced = !motionOk
+
+/* ★★角色绑定（关键修复）：本组件的两个 pane 是**固定的两个页**
+   （"上层页" = 详情 / "下层页" = 列表），而引擎给的两批动画按**视野角色**命名
+   （`incoming` = 进入视野的页、`outgoing` = 离开视野的页）。二者的对应关系随方向翻转：
+
+   | 方向 | 进入视野（播 incoming） | 离开视野（播 outgoing） |
+   |---|---|---|
+   | forward（push） | 详情（新页） | 列表（旧页） |
+   | back（pop） | 列表（返回目标） | 详情（被关闭页） |
+
+   ⇒ 详情播的批次 = forward ? incoming : outgoing；列表反之。
+   ★此前把详情**固定**绑 incoming ⇒ back 时"被关闭页"变成列表（播的是返回目标的复位动画），
+     呈现"列表升上来"——与真实返回（详情滑出）方向相反。产品页演示取证抓出。 */
+const detailAnims = computed(() => (props.direction === 'back' ? props.outgoing : props.incoming))
+const listAnims = computed(() => (props.direction === 'back' ? props.incoming : props.outgoing))
 
 function stop(): void {
   if (raf) cancelAnimationFrame(raf)
@@ -125,21 +148,33 @@ defineExpose({ play, stop, playing })
     <p-view class="phone">
       <p-view class="phone-notch" />
       <p-view class="phone-screen">
-        <!-- B 页（被推走的旧页：列表） -->
-        <p-view class="pane pane--b" :style="{ ...paneStyle(outgoing, tMs), zIndex: direction === 'forward' ? 1 : 2 }">
+        <!-- 下层页（列表）：back 时它是"返回目标"（播 incoming 的复位） -->
+        <p-view class="pane pane--b" :style="{ ...paneStyle(listAnims, tMs), zIndex: 1 }">
           <p-view class="bar"><span class="bar-title">Morpheus</span><span class="bar-dot" /></p-view>
           <p-view class="hero-art" />
           <p-view class="list-row"><span class="row-line row-line--w1" /><span class="row-line row-line--w2" /></p-view>
           <p-view class="list-row"><span class="row-line row-line--w3" /><span class="row-line row-line--w2" /></p-view>
           <p-view class="list-row list-row--last"><span class="row-line row-line--w2" /></p-view>
         </p-view>
-        <!-- A 页（进场的详情页） -->
-        <p-view class="pane pane--a" :style="{ ...paneStyle(incoming, tMs), zIndex: direction === 'forward' ? 2 : 1 }">
-          <p-view class="bar bar--brand"><span class="bar-back">‹</span><span class="bar-title">Detail</span><span class="bar-dot bar-dot--brand" /></p-view>
-          <p-view class="detail-art"><span class="art-chip">Morpheus</span></p-view>
-          <p-view class="text-line text-line--title" />
-          <p-view class="text-line" /><p-view class="text-line text-line--short" />
-          <p-view class="cta-row"><span class="cta-pill" /></p-view>
+        <!-- 上层页（详情）：**恒在上层**——push 时它从下方盖上来，pop 时它滑出去露出列表 -->
+        <p-view class="pane pane--a" :class="{ 'pane--sheet': shape === 'sheet' }" :style="{ ...paneStyle(detailAnims, tMs), zIndex: 2 }">
+          <!-- sheet 形态：半屏面板（拖拽手柄 + 面板头 + 选项行 + 主按钮） -->
+          <template v-if="shape === 'sheet'">
+            <span class="sheet-handle" />
+            <p-view class="sheet-head"><span class="sheet-title">Share</span><span class="sheet-sub">Morpheus</span></p-view>
+            <p-view class="sheet-row"><span class="row-ic" /><span class="row-line row-line--w1" /></p-view>
+            <p-view class="sheet-row"><span class="row-ic" /><span class="row-line row-line--w3" /></p-view>
+            <p-view class="sheet-row"><span class="row-ic" /><span class="row-line row-line--w2" /></p-view>
+            <p-view class="sheet-cta"><span class="cta-pill" /></p-view>
+          </template>
+          <!-- page 形态：全屏详情页 -->
+          <template v-else>
+            <p-view class="bar bar--brand"><span class="bar-back">‹</span><span class="bar-title">Detail</span><span class="bar-dot bar-dot--brand" /></p-view>
+            <p-view class="detail-art"><span class="art-chip">Morpheus</span></p-view>
+            <p-view class="text-line text-line--title" />
+            <p-view class="text-line" /><p-view class="text-line text-line--short" />
+            <p-view class="cta-row"><span class="cta-pill" /></p-view>
+          </template>
         </p-view>
       </p-view>
       <p-view class="phone-home" />
@@ -221,6 +256,43 @@ defineExpose({ play, stop, playing })
 }
 .pane--b { background: linear-gradient(180deg, #14141b 0%, #0e0e14 100%); }
 .pane--a { background: linear-gradient(180deg, #191634 0%, #0d0c18 100%); }
+/* ★半屏面板形态：只占下半屏（`opaque:false` 的语义兑现——上层列表可见） */
+.pane--sheet {
+  inset: auto 0 0 0;
+  height: 58%;
+  border-radius: 18px 18px 0 0;
+  background: linear-gradient(180deg, #1b1830 0%, #100f1a 100%);
+  border-top: 1px solid rgba(124, 92, 255, 0.4);
+  box-shadow: 0 -18px 40px -18px rgba(0, 0, 0, 0.9);
+  padding: 10px 14px 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.stage--sm .pane--sheet { height: 60%; padding: 8px 10px 10px; gap: 7px; border-radius: 14px 14px 0 0; }
+.sheet-handle { display: block; width: 34px; height: 4px; border-radius: 2px; background: rgba(255, 255, 255, 0.34); margin: 0 auto 4px; flex: none; }
+.stage--sm .sheet-handle { width: 26px; height: 3px; }
+.sheet-head { display: flex; align-items: baseline; gap: 8px; flex: none; }
+.sheet-title { font-size: 13px; font-weight: 650; color: var(--ink); }
+.stage--sm .sheet-title { font-size: 11px; }
+.sheet-sub { font-family: var(--mono); font-size: 9.5px; color: var(--dim); }
+.sheet-row {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  height: 34px;
+  border-radius: 9px;
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.05);
+  padding: 0 10px;
+  flex: none;
+}
+.stage--sm .sheet-row { height: 26px; gap: 7px; padding: 0 8px; }
+.row-ic { display: block; width: 13px; height: 13px; border-radius: 4px; background: rgba(124, 92, 255, 0.5); flex: none; }
+.stage--sm .row-ic { width: 10px; height: 10px; }
+.sheet-cta { margin-top: auto; }
+.sheet-cta .cta-pill { height: 32px; }
+.stage--sm .sheet-cta .cta-pill { height: 24px; }
 /* 顶栏 */
 .bar {
   height: 42px;

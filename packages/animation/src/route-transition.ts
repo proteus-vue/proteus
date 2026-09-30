@@ -136,6 +136,14 @@ export interface RouteTransitionPlan {
   direction: RouteTransitionDirection
   /** 规范化的枚举名（非法输入已归一到 `none`） */
   transition: RouteTransition
+  /**
+   * ★预设的语义角色（见 `RouteTransitionSpec.role`）：
+   *   · `'push'`（对称型）：`enter`/`exit` 是"前进语义"，back 走角色互换 + 反向（镜像对）；
+   *   · `'dismiss'`（退场型，如 `slideDown`）：`exit` 描述"被关闭页下滑"（pop 语义），**原样**绑定。
+   * ★调用方（执行器/演示装置）可据此判断"这个转场在哪个方向才有意义"——
+   *   `'dismiss'` 型的动作是"退场"，**forward 方向下新页静止 ⇒ 视觉上看不到退场动作**（如实语义，不是 bug）。
+   */
+  role: 'push' | 'dismiss'
 }
 
 /**
@@ -155,11 +163,17 @@ export function routeTransitionBatches(
 ): RouteTransitionPlan {
   const spec = appTransition(transition, opts)
   const direction: RouteTransitionDirection = opts?.direction ?? 'forward'
-  // back：两组声明各自反向（见段头"方向语义"）
+  const role: 'push' | 'dismiss' = spec.role ?? 'push'
+  // ★★方向绑定（两类角色，见 `RouteTransitionSpec.role` 的完整说明）：
+  //   · 'push'（对称型）：back = **角色互换 + 反向播放**（镜像对）；
+  //   · 'dismiss'（退场型，如 slideDown）：`exit` 就是"被关闭页下滑"（pop 语义）⇒ **原样绑定**
+  //     （若按 push 推导会得到"下层页升上来"——方向完全相反，产品页演示取证抓出）。
   const effective =
-    direction === 'back'
-      ? { enter: reverseDecls(spec.exit), exit: reverseDecls(spec.enter), durationMs: spec.durationMs, opaque: spec.opaque }
-      : { enter: spec.enter, exit: spec.exit, durationMs: spec.durationMs, opaque: spec.opaque }
+    role === 'dismiss'
+      ? { enter: spec.enter, exit: spec.exit, durationMs: spec.durationMs, opaque: spec.opaque }
+      : direction === 'back'
+        ? { enter: reverseDecls(spec.exit), exit: reverseDecls(spec.enter), durationMs: spec.durationMs, opaque: spec.opaque }
+        : { enter: spec.enter, exit: spec.exit, durationMs: spec.durationMs, opaque: spec.opaque }
   const name: RouteTransition = (Object.keys(APP_TRANSITION_MAP) as RouteTransition[]).includes(transition as RouteTransition)
     ? (transition as RouteTransition)
     : 'none'
@@ -176,5 +190,5 @@ export function routeTransitionBatches(
     targets.outgoing !== undefined && effective.exit.length > 0
       ? compileAnimations(effective.exit, { nodeId: targets.outgoing })
       : EMPTY_BATCH
-  return { incoming, outgoing, durationMs: spec.durationMs, opaque: spec.opaque, direction, transition: name }
+  return { incoming, outgoing, durationMs: spec.durationMs, opaque: spec.opaque, direction, transition: name, role }
 }

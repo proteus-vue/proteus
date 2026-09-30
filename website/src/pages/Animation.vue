@@ -77,6 +77,7 @@ const T = {
     dirLabel: '方向',
     dirFwd: 'push 新页进入',
     dirBack: 'pop 返回 · 镜像对',
+    dismissNote: '★退场型预设：exit 描述"被关闭页下滑"——只有 pop 方向能看到它；forward 下新页静止（如实语义）',
     timeline: '指令时间轴',
     timelineNote: '每条动画按真实 durMs / delayMs 画成时间条——两页并发、一次提交。',
     readout: '引擎收到的指令（原样）',
@@ -144,6 +145,7 @@ const T = {
     dirLabel: 'Direction',
     dirFwd: 'push (new screen)',
     dirBack: 'pop (return · mirror pair)',
+    dismissNote: '★Dismiss-type preset: exit describes the closing screen sliding away — only visible in the pop direction; in forward the new screen is static (honest semantics)',
     timeline: 'Instruction timeline',
     timelineNote: 'Every animation is drawn as a time bar using its real durMs / delayMs — two screens in parallel, one commit.',
     readout: 'Instructions the engine receives (verbatim)',
@@ -175,6 +177,24 @@ const plan = computed<RouteTransitionPlan>(() =>
 )
 const hasAnims = computed(() => plan.value.incoming.anims.length + plan.value.outgoing.anims.length > 0)
 const totalMs = computed(() => Math.max(1, plan.value.durationMs))
+
+/**
+ * ★★进场页的**形态**（面板 / 全屏页）——转场语义的一部分，不是装饰：
+ *   · `halfScreen` 是"只动进场页 + `opaque:false`（下层可见）" ⇒ 进场页是**半屏面板**；
+ *   · 其余转场是**全屏页**。
+ * ★若把半屏渲染成全屏页：视觉变成"页面推入一半停住"，且 `opaque:false` 的声明被遮死
+ *   （用户反馈「半屏这个对不上」的根因）。
+ */
+const stageShape = computed<'page' | 'sheet'>(() => (picked.value === 'halfScreen' ? 'sheet' : 'page'))
+/**
+ * ★**退场型**（dismiss，如 `slideDown`）：其 `exit` 描述"被关闭页下滑"（pop 语义）
+ *   ⇒ 只有 **pop（返回）** 方向能看到它；forward 下新页静止（如实语义，不是 bug）。
+ */
+const isDismiss = computed(() => plan.value.role === 'dismiss')
+watch(picked, () => {
+  // 选中退场型 ⇒ 自动切到它有意义的方向（pop），让默认观感正确
+  if (plan.value.role === 'dismiss' && direction.value === 'forward') direction.value = 'back'
+})
 
 /** 时间轴：每条动画按真实 delayMs/durMs 换算成甘特条 */
 interface Bar {
@@ -405,6 +425,7 @@ onUnmounted(() => {
             :outgoing="plan.outgoing.anims"
             :duration-ms="plan.durationMs"
             :direction="direction"
+            :shape="stageShape"
             size="lg"
             :caption="C.stageCaption"
           />
@@ -446,6 +467,7 @@ onUnmounted(() => {
               :outgoing="plan.outgoing.anims"
               :duration-ms="plan.durationMs"
               :direction="direction"
+              :shape="stageShape"
               size="md"
               :autoplay="true"
             />
@@ -459,6 +481,7 @@ onUnmounted(() => {
                 <button class="chip" :class="{ on: direction === 'forward' }" @click="direction = 'forward'">{{ C.dirFwd }}</button>
                 <button class="chip" :class="{ on: direction === 'back' }" @click="direction = 'back'">{{ C.dirBack }}</button>
               </p-stack>
+              <p-text v-if="isDismiss" class="dismiss-note">{{ C.dismissNote }}</p-text>
               <p-stack direction="row" :gap="8" wrap>
                 <button
                   v-for="tr in TRANSITIONS"
@@ -760,6 +783,7 @@ onUnmounted(() => {
 .demo-grid { align-items: start; }
 .demo-stage { display: flex; flex-direction: column; align-items: center; gap: 16px; }
 .demo-hint { font-size: 12.5px; color: var(--dim); }
+.dismiss-note { font-size: 12px; color: var(--warn); line-height: 1.65; }
 .demo-side { min-width: 0; }
 .ctrl-label { font-family: var(--mono); font-size: 11px; letter-spacing: 0.1em; text-transform: uppercase; color: var(--dim); }
 .chip {
