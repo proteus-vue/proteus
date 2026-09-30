@@ -45,6 +45,15 @@ interface SelfDrawNative {
   snapshot(name: string): string
   report(json: string): void
   done(summaryJson: string): void
+  // ★★RT2（2026-09-30）：指令驱动动画——曲线求值在 Rust 侧，宿主每帧推进
+  layerTransformProbe(idsJson: string): string
+  animStopNodes(idsJson: string): string
+  animStart(json: string): string
+  animSeek(json: string): string
+  animTick(dtMs: number): string
+  animStartFrameLoop(): string
+  animStopFrameLoop(): string
+  animFrameStats(): string
 }
 declare const proteusSelfDraw: SelfDrawNative
 /** 快照名（宿主按模式注入；此处仅作默认） */
@@ -242,6 +251,94 @@ const api = {
     count.value = 12
     accent.value = '#6f4ae8'
     return JSON.stringify({ phase: 'finalize', mark: 'pending-flush' })
+  },
+
+  /**
+   * ★★**RT2 动画相位（真机验证）**：启动动画 → 逐帧 tick → 校验变换真的落到层上
+   *
+   * 【这一相位要回答什么（RT0 是桌面微基准，这里是真机）】
+   *   ① 指令真的能驱动端上动画（**曲线求值在 Rust 侧**，JS 只发启动参数）；
+   *   ② `tick` 的二进制返回被宿主**真的应用**到层上（读层上 transform 复核——不是"调了就算"）；
+   *   ③ 帧循环（CADisplayLink）真的在跑（帧计数增长 + dt 是真实 vsync 间隔）；
+   *   ④ 手势驱动（`seek`）**立即生效**（不等帧）。
+   *
+   * 【判据设计（本仓纪律：不是"跑通了"）】见 `check-anim-rt2.py`——
+   *   层上 transform 必须随进度变化，且终值必须精确等于目标（端点钉死）。
+   */
+  animProbe(): string {
+    const t0 = now()
+    // ★目标节点：取**真实存在于层表**的两个（探针先问宿主哪些 id 有层 ⇒ 不猜、不手算——本仓纪律）
+    const probeIds = [2, 3, 4, 5]
+    const before = safeParse(proteusSelfDraw.layerTransformProbe(JSON.stringify(probeIds)))
+    const layersBefore = (before as { layers?: Array<{ id: number; missing?: boolean }> }).layers ?? []
+    const present = layersBefore.filter((l) => !l.missing).map((l) => l.id)
+    const targetA = present[0] ?? 2
+    const targetB = present[1] ?? targetA
+
+    // ① 启动两条动画：位移（time 驱动）+ 缩放（progress 驱动，供 seek 用）
+    const startOut = proteusSelfDraw.animStart(
+      JSON.stringify({
+        anims: [
+          { nodeId: targetA, kind: 0, curve: 1, from: 0, to: 120, durMs: 300 },
+          { nodeId: targetB, kind: 2, curve: 1, from: 0.6, to: 1.0, durMs: 300, drive: 1 },
+        ],
+      }),
+    )
+
+    // ② 手势驱动：seek 到 50% ⇒ 应当**立即**在层上生效（不等 tick）
+    const seekOut = proteusSelfDraw.animSeek(JSON.stringify({ nodeId: targetB, kind: 2, progress: 0.5 }))
+    const afterSeek = safeParse(proteusSelfDraw.layerTransformProbe(JSON.stringify([targetA, targetB])))
+
+    // ③ 时间驱动：手动 tick 到终点（保证确定性——不依赖真实帧节奏）
+    //    ★同时验证"tick 返回 applied>0"（宿主真的写了层）
+    const tickOut1 = proteusSelfDraw.animTick(150)
+    const mid = safeParse(proteusSelfDraw.layerTransformProbe(JSON.stringify([targetA, targetB])))
+    const tickOut2 = proteusSelfDraw.animTick(200) // 累计 350ms > 300ms ⇒ 已到终点
+    const end = safeParse(proteusSelfDraw.layerTransformProbe(JSON.stringify([targetA, targetB])))
+
+    // ③-b ★§7.3 节点复用解绑（专项判据）：起一条动画 → 停它 → 再 tick 必须**不再改动**
+    //
+    // 【为什么单列（Morpheus §7 明确要求）】本仓复用率 0.997 ⇒ 节点会被回收给别的数据项。
+    //   若动画未解绑：重物化时显示"半路的变换"（错位）+ 每帧白算——两者都静默。
+    const stopBefore = safeParse(proteusSelfDraw.layerTransformProbe(JSON.stringify([targetA])))
+    const stopCall = safeParse(proteusSelfDraw.animStopNodes(JSON.stringify([targetA])))
+    const tickAfterStop = safeParse(proteusSelfDraw.animTick(100))
+    const stopAfter = safeParse(proteusSelfDraw.layerTransformProbe(JSON.stringify([targetA])))
+    const txBefore = ((stopBefore as { layers?: Array<{ id: number; tx: number }> }).layers ?? [])[0]?.tx ?? 0
+    const txAfter = ((stopAfter as { layers?: Array<{ id: number; tx: number }> }).layers ?? [])[0]?.tx ?? 0
+    const recycleUnbind = {
+      stopped: (stopCall as { removed?: number }).removed ?? 0,
+      moved_after_stop: Math.abs(txAfter - txBefore) > 0.001 ? 1 : 0,
+      tx_before: txBefore,
+      tx_after: txAfter,
+      tick_after_stop: tickAfterStop,
+    }
+
+    // ④ 真实帧循环：启动 → 让宿主自己跑若干帧 → 读数
+    const loopStart = proteusSelfDraw.animStartFrameLoop()
+    const stats1 = safeParse(proteusSelfDraw.animFrameStats())
+    const loopStop = proteusSelfDraw.animStopFrameLoop()
+    const stats2 = safeParse(proteusSelfDraw.animFrameStats())
+
+    phaseOut.animProbe = { vue_ms: 0, to_request_ms: 0, serialize_ms: 0, host_ms: 0, total_ms: now() - t0, node_count: 0, patch_count: 0 }
+    return JSON.stringify({
+      phase: 'animProbe',
+      targets: [targetA, targetB],
+      start: safeParse(startOut),
+      seek: safeParse(seekOut),
+      tick1: safeParse(tickOut1),
+      tick2: safeParse(tickOut2),
+      loopStart: safeParse(loopStart),
+      loopStop: safeParse(loopStop),
+      // ★层上读数（宿主从 CALayer 真读——不是回显我们自己的输入）
+      layer_after_seek: afterSeek,
+      layer_mid: mid,
+      layer_end: end,
+      recycle_unbind: recycleUnbind,
+      frame_stats_1: stats1,
+      frame_stats_2: stats2,
+      host_tick_bytes: (safeParse(tickOut1) as { bytes?: number }).bytes,
+    })
   },
 
   /** 收尾（第二段）：此时微任务已排空 —— 生成最终画面、截图、上报 */

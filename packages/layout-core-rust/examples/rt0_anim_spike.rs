@@ -67,7 +67,17 @@ fn main() {
             engine
                 .start(
                     &tree,
-                    Anim { node_id, kind, curve: CURVE_EASE_OUT_CUBIC, from, to, dur_ms: 1000.0, t_ms: 0.0 },
+                    Anim {
+                        node_id,
+                        kind,
+                        curve: CURVE_EASE_OUT_CUBIC,
+                        from,
+                        to,
+                        dur_ms: 1000.0,
+                        t_ms: 0.0,
+                        drive: proteus_layout_core::anim::AnimDrive::Time,
+                        progress: 0.0,
+                    },
                 )
                 .expect("start 失败");
             started += 1;
