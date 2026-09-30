@@ -1,0 +1,24 @@
+{
+  "name": "@proteus-vue/animation",
+  "version": "0.3.0-beta.22",
+  "description": "Proteus Morpheus（声明式动画引擎表面）：预设驱动的转场/布局动画声明 + 编译期校验 + 编译到内核指令——零运行时依赖，宿主只做翻译不做曲线数学",
+  "type": "module",
+  "license": "Apache-2.0",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js",
+      "default": "./dist/index.js"
+    },
+    "./package.json": "./package.json"
+  },
+  "files": [
+    "dist",
+    "README.md"
+  ],
+  "scripts": {
+    "build": "tsc -p tsconfig.build.json --emitDeclarationOnly && esbuild src/index.ts --bundle --format=esm --platform=browser --outfile=dist/index.js"
+  }
+}

@@ -586,6 +586,10 @@ const COVERED_ELSEWHERE = {
   client: 'API 客户端实现（非原语面）',
   platform: 'PlatformAPI 工厂（由 guides/reference 覆盖）',
   types: '类型定义（无运行面）',
+  // ★2026-09-30 补登记（NC1 声明式桥）：桥的**模板化部分**的声明与生成器
+  //   （`bridge-decls/*` + `generated/bridge-ext.ts`）——能力面由 capabilities 分区覆盖
+  //   （如 C83 useKeepScreenOn / C84 useOpenDocument 各自有页）。
+  'bridge-decl': 'NC1 声明式能力桥的声明层（能力面见 capabilities 分区各页）',
 }
 /**
  * ★★包级文档覆盖门禁（2026-09-27，防「worklet 缺页」第三次）：
@@ -646,6 +650,10 @@ const COVERED_PACKAGES = {
   'layout-core': '框架分区（framework/28-rust-layout-and-render-cmd：排版核心 + 绘制指令流）',
   'layout-core-rust': '框架分区（同 28——Rust 实现的同一核心，TS 侧为对拍参考）',
   'slot-runtime': '框架分区（framework/43-vapor-update-path：槽位运行时 + 指令流协议）',
+  // ★★2026-09-30 补登记（MA1 新建）：Morpheus 声明式动画表面（预设 + 编译期校验）
+  //   它是**声明/校验/编译层**（曲线求值与物理在 Rust 内核）⇒ 归入框架分区的动画主题，
+  //   非独立原语面（不逐条出页）。
+  animation: '框架分区（Morpheus 声明式动画表面：预设库 + 编译期校验——曲线/物理在内核）',
 }
 let coverageIssues = 0
 {
