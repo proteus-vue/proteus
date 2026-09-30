@@ -77,6 +77,10 @@
       // ★2026-09-12 CI 类型门禁修复：补 4 个缺失包（tests 走包名导入 → 缺 paths 报 TS2307 Cannot find module）
       "@proteus-vue/component-ir": ["packages/component-ir/src/index.ts"],
       "@proteus-vue/render-backend": ["packages/render-backend/src/index.ts"],
+      // ★★G-39（2026-09-30）：宿主运行时子路径——hosts/android/bridge 的 entry 从子路径导入
+      //   （子路径必须单列，同 renderer-app/adapters/selfdraw 的规定；esbuild 侧另有 alias）
+      "@proteus-vue/render-backend/quickjs-host": ["packages/render-backend/src/quickjs-host.ts"],
+      "@proteus-vue/render-backend/host-conformance": ["packages/render-backend/src/host-conformance.ts"],
       "@proteus-vue/style-safety": ["packages/style-safety/src/index.ts"],
       "@proteus-vue/types": ["packages/types/src/index.ts"],
       // ★组件库拆包（2026-09-14）：@proteus-vue/components 为真实包——补 paths 供仓库内类型检查解析包根
