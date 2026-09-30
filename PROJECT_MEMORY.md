@@ -48,7 +48,7 @@
   只有**可复制代码块**里的引用才真正有害。
 · 破坏性验证：恢复 `p-card` → 红并精确报 `03-fluid-grid.md:31`；还原 → 575 md 全过。
 
-## 当前状态速览（最近一次更新：**2026-09-30 · G-39 宿主运行时**双端**落地（Android 16/16 + iOS 16/16）—— B4 两条腿都跑通**）★新会话以此为准
+## 当前状态速览（最近一次更新：**2026-09-30 · 应用与生命周期能力开放（C23/C24/C25 App 腿）—— Hook 层从「文档阶段」变成端上可用**）★新会话以此为准
 
 ### ★★★2026-09-30 · 宿主四议题取证 + G-39 嵌入式宿主切片落地
 
@@ -120,7 +120,47 @@ CI 侧等价判据 = 单测 18 条）。文档：`proteus-host-runtime-plan/06-b
   ⇒ 加载后再设全局量不生效——首版 Android 报默认 `host_id` 即此形态）。
 - **★门禁扩面**：`check:host-runtime` 现在**同跑两平台产物**（Android + iOS，各 16 条；缺产物诚实跳过）。
 
-**七、诚实边界**：① 多线程 Worker（`threads.background=false` 是对 QuickJS 现状的诚实声明，不是最终形态）；
+**七、★★应用与生命周期的能力开放（用户点名：「现在是不是可以做应用与生命周期的能力开放了？
+因为现在 App 宿主已经落地了……文档都是 hooks 实现的阶段」）**
+
+**一、取证的结论（比"文档说是 hooks 阶段"更精确）**：Hook 层（`useAppLifecycle/usePageLifecycle/
+useBackground`）**早已实现**；缺的是**桥层**——`createCapabilityBridge()` 只有两份桥
+（wxBridge / webBridge），而 `detectRuntime()` 值域是 `web | mp` ⇒ **App 宿主（无 window 无 wx）
+落不到自己的桥**。事件源（G-39 宿主运行时 + M5 虚拟栈命令流）在前两轮已就绪。
+
+**二、落地（`packages/api/src/capability-app.ts`，零 import 本仓其他模块防循环）**
+- **`HostLifecycleBus`**：壳/执行器推事件（`emit`）、桥订阅（`on`，**诚实取消**——wx 桥的取消是 no-op）；
+  全局单例（键 `__proteusHostLifecycleBus`，壳与桥拿同一个）；
+- **三能力**：`getAppLifecycle/getPageLifecycle/getBackground`（结构兼容既有接口，`CapError` 注入）；
+- **虚拟栈翻译器** `createStackPageSource`：mount→load / enter→show / exit→hide / unmount→unload；
+  ★**`freeze` 跳过**（内存治理非页面退出——业务不应看到"页面被卸载"）；
+- **桥选择**：`detectAppHost()` 只看**壳注入的显式标识**（不靠特征猜测——"猜"在 App 宿主上必然错）。
+
+**三、与 wx 语义对齐**（防两端手感分叉）：冷启动第一个 show 自动补 launch（且**恰好一次**）；
+晚订阅者补发一次（已发生的事不该"永远等不到"）；重入安全（订阅者在回调里自取消不影响本次分发）。
+
+**四、验证**
+- **单测 20 条**（`tests/capability-app.test.ts`）：真实 `createCapabilityBridge` + 真实
+  `createCapabilityHooks` 端到端；★用**真实 `createAppStack`**（M5）产出命令流驱动翻译器；
+  破坏性验证 3 组（freeze 误当退出 / 不补 launch / 取消失效——全红）。
+- **真机双端全绿**（`check:host-runtime` 扩 **①~⑤** 组，Android + iOS）：
+  ① 冷启动 launch 前置且恰好一次；② 真实栈驱动页面生命周期；③ 启动参数经 **job 泵**读到；
+  ④ **壳事件逐条驱动总线**（pause→`HIDE` → resume→`SHOW`——HIDE 只能由真实 hide 产生）；
+  ⑤ 阶段快照/订阅计数。★装置修正：壳转发在 `shellLifecycle` 里**直驱总线**（执行器接线形态），
+  证据取壳报告（后置）而非主报告（前置写于生命周往返回合之前——首版据此误红过一次）。
+
+**五、★判据的一次真修正（两次 iOS 实测）**：`process` 口径（JSC `phys_footprint`）下
+"GC 后必然下降"**不稳定**（两次分别降 147KB 与 **0**——提示性 GC 把页留在 free pool 不归还 OS）
+⇒ **按口径分档**：`engine` 强制"必须下降"；`process` 强制"分配增长 + GC 不增"，归还与否为**观测项**。
+
+**六、生成物/状态位**：C23/C24/C25 `planned → implemented`（`primitives.ts`）+
+三语义补 `SEMANTIC_BACKEND_MAP`（≥3 端：vue-dom/ios/android/skyline/headless）→
+`pnpm gen:docs` 重生成（implemented 69 → 72）；`check:docs-stats` / `gen-docs --check` 全过。
+
+**诚实边界**：App 端**其余能力**（屏幕/设备/电池/剪贴板/localStorage…）仍走 web 桥降级路径
+——本轮只开放**生命周期**三类（不冒充已完成）；`page:load` 不带路由参数（参数属 router 层）。
+
+**八、诚实边界**：① 多线程 Worker（`threads.background=false` 是对 QuickJS 现状的诚实声明，不是最终形态）；
 ② Flutter/Harmony 宿主（B5）；③ G-42 六容器的**产品级消费者**仍为空（需真实 App 接入——本轮未动）；
 ④ iOS 侧 `obj_count` 恒 0（JSC 无该读数——不伪造）。
 
