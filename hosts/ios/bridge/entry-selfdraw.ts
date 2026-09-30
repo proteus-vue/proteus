@@ -77,7 +77,7 @@ const BN = { snapshot: 'selfdraw-final' }
 
 // ★构建标识（每次构建由 hosts/ios/bridge/inject-build-id.mjs 注入；与 entry-bench 同机制）
 //   —— 「设备上跑的是哪份代码」必须可**一眼判定**（报告新鲜度判据的内容锚点）。
-const BUILD_ID = '365726ca-121928'
+const BUILD_ID = '29850200-123343'
 
 const VP = (globalThis as unknown as { __PROTEUS_VIEWPORT__?: { width: number; height: number } })
   .__PROTEUS_VIEWPORT__ ?? { width: 390, height: 844 }
@@ -204,6 +204,8 @@ let animPlatformResult: Record<string, unknown> = {}
 let animPresetResult: Record<string, unknown> = {}
 /** ★★MA5 滚动联动读数 */
 let animScrollResult: Record<string, unknown> = {}
+/** ★★MA6 序列编排读数 */
+let animSequenceResult: Record<string, unknown> = {}
 
 /** 供宿主逐相位调用（每个函数在**自己那次 evaluateScript** 里同步启动，微任务在其后排空） */
 const api = {
@@ -385,6 +387,86 @@ const api = {
       rotate_opacity: { rotate: l0(rotOpEnd).rotate ?? NaN, opacity: l0(rotOpEnd).opacity ?? NaN },
     }
     animComplexResult = r
+    return JSON.stringify(r)
+  },
+
+  /**
+   * ★★**MA6：序列编排**（多段动画——"先下压再弹回"收敛在一条动画里）
+   *
+   * 【要回答什么】
+   *   ① **分段推进真的发生**：单条动画内走完"下压段 → 回弹段"（中间值落在两段各自区间）；
+   *   ② **段终点精确**：边界处值恰为段 `to`（分段定位不漂移）；
+   *   ③ **终值精确到声明 to** + 动画正常结束（否则永占活动集）；
+   *   ④ **平台路径仍是"一条"**：整段序列 → **一条** CAKeyframeAnimation（不是 N 条）。
+   *
+   * 【判据】见 `check-anim-rt2.py` 的 J 组。
+   */
+  animSequence(): string {
+    const probe = safeParse(proteusSelfDraw.layerTransformProbe(JSON.stringify([2, 3])))
+    const present = ((probe as { layers?: Array<{ id: number; missing?: boolean }> }).layers ?? [])
+      .filter((l) => !l.missing)
+      .map((l) => l.id)
+    const n = present[0] ?? 2
+    proteusSelfDraw.animStopNodes(JSON.stringify({ nodeIds: [n] }))
+
+    // 序列：scale 1 → 0.6（100ms）→ 1.2（200ms）→ 1.0（100ms），全线性便于算术断言
+    //   预期：t=50 → 0.8 · t=100 → 0.6（精确）· t=200 → 0.9 · t=400 → 1.0（精确）
+    const seq = [
+      {
+        kind: 'scale' as const,
+        from: 1,
+        to: 1,
+        keyframes: [
+          { to: 0.6, durationMs: 100, curve: 'linear' as const },
+          { to: 1.2, durationMs: 200, curve: 'linear' as const },
+          { to: 1.0, durationMs: 100, curve: 'linear' as const },
+        ],
+      },
+    ]
+    const c = compileAnimations(seq, { nodeId: n })
+    const startOut = safeParse(proteusSelfDraw.animStart(JSON.stringify({ anims: c.anims })))
+
+    const scaleOf = (): number | undefined => {
+      const p = safeParse(proteusSelfDraw.layerTransformProbe(JSON.stringify([n])))
+      const layers = (p as { layers?: Array<Record<string, number>> }).layers ?? []
+      return layers[0]?.scale
+    }
+
+    // ★算术必须与序列总时长对齐（段时长 100+200+100=400ms）。
+    //   首版只 tick 到 300ms 就读"终值" ⇒ 末段根本没跑到，读到的是次段终点 1.2（探针算术错，
+    //   被 J3 当场挡下——判据的价值就在于它认的是"声明 to"，不认"我觉得该到了"）。
+    proteusSelfDraw.animTick(50)    // 首段半程 ⇒ 0.8
+    const s50 = scaleOf()
+    proteusSelfDraw.animTick(50)    // 恰在首段终点（累计 100）⇒ 0.6（精确）
+    const s100 = scaleOf()
+    proteusSelfDraw.animTick(100)   // 次段半程（累计 200）⇒ 0.9
+    const s200 = scaleOf()
+    proteusSelfDraw.animTick(200)   // 末段走完（累计 400）⇒ 1.0（精确）
+    const s400 = scaleOf()
+
+    // 平台路径：整段序列 = **一条** 平台动画（不是 N 条）
+    proteusSelfDraw.animStopNodes(JSON.stringify({ nodeIds: [n] }))
+    const commitOut = safeParse(proteusSelfDraw.animCommit(JSON.stringify({ anims: c.anims })))
+    const co = commitOut as { ok?: boolean; committed?: number; specs?: number; scaleMin?: number; scaleMax?: number }
+    proteusSelfDraw.animRemovePlatform(JSON.stringify([n]))
+
+    const r = {
+      node: n,
+      start: startOut,
+      segments: c.anims[0]?.keyframes?.length,
+      durMs: c.anims[0]?.durMs,
+      s50,
+      s100,
+      s200,
+      s400,
+      platform_ok: co.ok,
+      platform_committed: co.committed,
+      platform_specs: co.specs,
+      // ★采样极值证明"提交内容真的经过各段"（只数 committed 无法区分"三段"与"退化单段"）
+      platform_scale_min: co.scaleMin,
+      platform_scale_max: co.scaleMax,
+    }
+    animSequenceResult = r
     return JSON.stringify(r)
   },
 
@@ -785,6 +867,8 @@ const api = {
       anim_preset: animPresetResult,
       // ★★MA5 滚动联动（吸顶 / 视差 / 渐显——位置→进度换算在内核）
       anim_scroll: animScrollResult,
+      // ★★MA6 序列编排（多段动画——一条动画内的分段推进）
+      anim_sequence: animSequenceResult,
       // ★★MA0-RT 平台零参与路径（合成属性判定 + CAKeyframe 提交 + presentation 探针）
       anim_platform: animPlatformResult,
       // ★★RT2 复杂动效（弹簧 / 打断接管 / FLIP / rotate+opacity）
