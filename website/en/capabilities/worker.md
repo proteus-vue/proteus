@@ -34,11 +34,11 @@ Param,Type,Required,Doc
 
 ## Methods
 
-| Method | Signature | Doc |
-|---|---|---|
-| [`postMessage`](#postmessage) | `postMessage(message: unknown): void` | — |
-| [`onMessage`](#onmessage) | `onMessage(cb: (message: unknown) => void): () => void` | — |
-| [`terminate`](#terminate) | `terminate(): void` | — |
+| Method | Doc |
+|---|---|
+| [`postMessage`](#postmessage) | — |
+| [`onMessage`](#onmessage) | — |
+| [`terminate`](#terminate) | — |
 
 ### `postMessage`
 

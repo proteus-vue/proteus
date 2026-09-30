@@ -28,9 +28,9 @@ useWebAssembly(): CapResult<WebAssemblyAPI>
 
 ## Methods
 
-| Method | Signature | Doc |
-|---|---|---|
-| [`instantiate`](#instantiate) | `instantiate(source: WasmSource, options?: WasmInstantiateOptions): Promise<CapResult<WasmModuleHandle>>` | — |
+| Method | Doc |
+|---|---|
+| [`instantiate`](#instantiate) | — |
 
 ### `instantiate`
 

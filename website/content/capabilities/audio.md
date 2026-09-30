@@ -34,16 +34,16 @@ useAudio(src?: string): CapResult<AudioController>
 
 ## 方法
 
-| 方法 | 签名 | 说明 |
-|---|---|---|
-| [`play`](#play) | `play(src?: string): Promise<CapResult<void>>` | 播放。 |
-| [`pause`](#pause) | `pause(): Promise<CapResult<void>>` | 暂停 |
-| [`stop`](#stop) | `stop(): Promise<CapResult<void>>` | 停止 |
-| [`seek`](#seek) | `seek(position: number): Promise<CapResult<void>>` | 跳转到指定位置。 |
-| [`setVolume`](#setvolume) | `setVolume(volume: number): void` | 设置音量（0–1） |
-| [`setLoop`](#setloop) | `setLoop(loop: boolean): void` | 设置是否循环 |
-| [`destroy`](#destroy) | `destroy(): void` | 释放音频资源 |
-| [`on`](#on) | `on(event: 'canplay' \| 'play' \| 'pause' \| 'stop' \| 'ended' \| 'timeupdate' \| 'error', cb: (payload: unknown) => void): () => void` | 订阅音频事件（canplay / play / pause / stop / ended / timeupdate / error）。 |
+| 方法 | 说明 |
+|---|---|
+| [`play`](#play) | 播放。 |
+| [`pause`](#pause) | 暂停 |
+| [`stop`](#stop) | 停止 |
+| [`seek`](#seek) | 跳转到指定位置。 |
+| [`setVolume`](#setvolume) | 设置音量（0–1） |
+| [`setLoop`](#setloop) | 设置是否循环 |
+| [`destroy`](#destroy) | 释放音频资源 |
+| [`on`](#on) | 订阅音频事件（canplay / play / pause / stop / ended / timeupdate / error）。 |
 
 ### `play`
 

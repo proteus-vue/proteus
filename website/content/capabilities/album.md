@@ -28,12 +28,12 @@ useAlbum(): CapResult<AlbumAPI>
 
 ## 方法
 
-| 方法 | 签名 | 说明 |
-|---|---|---|
-| [`pick`](#pick) | `pick(options?: AlbumPickOptions): Promise<CapResult<MediaFile[]>>` | 选择图片/视频（wx.chooseMedia；web <input type=file>） |
-| [`saveImage`](#saveimage) | `saveImage(filePath: string): Promise<CapResult<void>>` | 保存图片到系统相册（wx.saveImageToPhotosAlbum——需 scope.writePhotosAlbum 授权；web 无标准 → Err） |
-| [`saveVideo`](#savevideo) | `saveVideo(filePath: string): Promise<CapResult<void>>` | 保存视频到系统相册（wx.saveVideoToPhotosAlbum；web 无标准 → Err） |
-| [`preview`](#preview) | `preview(urls: string[], current?: string): Promise<CapResult<void>>` | 预览媒体（wx.previewImage / previewMedia；web 宿主视图） |
+| 方法 | 说明 |
+|---|---|
+| [`pick`](#pick) | 选择图片/视频（wx.chooseMedia；web <input type=file>） |
+| [`saveImage`](#saveimage) | 保存图片到系统相册（wx.saveImageToPhotosAlbum——需 scope.writePhotosAlbum 授权；web 无标准 → Err） |
+| [`saveVideo`](#savevideo) | 保存视频到系统相册（wx.saveVideoToPhotosAlbum；web 无标准 → Err） |
+| [`preview`](#preview) | 预览媒体（wx.previewImage / previewMedia；web 宿主视图） |
 
 ### `pick`
 

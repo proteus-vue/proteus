@@ -22,34 +22,34 @@ Returns `FSAdapter` (synchronous handle/state object).
 
 ## Methods
 
-| Method | Signature | Doc |
-|---|---|---|
-| [`readFile`](#readfile) | `readFile(path: string): Promise<CapResult<string>>` | — |
-| [`writeFile`](#writefile) | `writeFile(path: string, data: string): Promise<CapResult<void>>` | — |
-| [`appendFile`](#appendfile) | `appendFile(path: string, data: string): Promise<CapResult<void>>` | — |
-| [`copyFile`](#copyfile) | `copyFile(src: string, dest: string): Promise<CapResult<void>>` | — |
-| [`rename`](#rename) | `rename(oldPath: string, newPath: string): Promise<CapResult<void>>` | — |
-| [`remove`](#remove) | `remove(path: string): Promise<CapResult<void>>` | — |
-| [`exists`](#exists) | `exists(path: string): Promise<CapResult<boolean>>` | — |
-| [`stat`](#stat) | `stat(path: string): Promise<CapResult<FileStat>>` | — |
-| [`mkdir`](#mkdir) | `mkdir(path: string, recursive?: boolean): Promise<CapResult<void>>` | — |
-| [`rmdir`](#rmdir) | `rmdir(path: string, recursive?: boolean): Promise<CapResult<void>>` | — |
-| [`readdir`](#readdir) | `readdir(path: string): Promise<CapResult<string[]>>` | — |
-| [`getFileInfo`](#getfileinfo) | `getFileInfo(path: string, digestAlgorithm?: string): Promise<CapResult<{ size: number; digest: string }>>` | — |
-| [`saveFile`](#savefile) | `saveFile(tempPath: string): Promise<CapResult<string>>` | — |
-| [`getSavedFileList`](#getsavedfilelist) | `getSavedFileList(): Promise<CapResult<SavedFileInfo[]>>` | — |
-| [`removeSavedFile`](#removesavedfile) | `removeSavedFile(path: string): Promise<CapResult<void>>` | — |
-| [`unzip`](#unzip) | `unzip(zipPath: string, targetPath: string): Promise<CapResult<void>>` | — |
-| [`readFileSync`](#readfilesync) | `readFileSync(path: string): CapResult<string>` | — |
-| [`writeFileSync`](#writefilesync) | `writeFileSync(path: string, data: string): CapResult<void>` | — |
-| [`existsSync`](#existssync) | `existsSync(path: string): CapResult<boolean>` | — |
-| [`statSync`](#statsync) | `statSync(path: string): CapResult<FileStat>` | — |
-| [`readdirSync`](#readdirsync) | `readdirSync(path: string): CapResult<string[]>` | — |
-| [`mkdirSync`](#mkdirsync) | `mkdirSync(path: string, recursive?: boolean): CapResult<void>` | — |
-| [`renameSync`](#renamesync) | `renameSync(oldPath: string, newPath: string): CapResult<void>` | — |
-| [`unlinkSync`](#unlinksync) | `unlinkSync(path: string): CapResult<void>` | — |
-| [`copyFileSync`](#copyfilesync) | `copyFileSync(src: string, dest: string): CapResult<void>` | — |
-| [`appendFileSync`](#appendfilesync) | `appendFileSync(path: string, data: string): CapResult<void>` | — |
+| Method | Doc |
+|---|---|
+| [`readFile`](#readfile) | — |
+| [`writeFile`](#writefile) | — |
+| [`appendFile`](#appendfile) | — |
+| [`copyFile`](#copyfile) | — |
+| [`rename`](#rename) | — |
+| [`remove`](#remove) | — |
+| [`exists`](#exists) | — |
+| [`stat`](#stat) | — |
+| [`mkdir`](#mkdir) | — |
+| [`rmdir`](#rmdir) | — |
+| [`readdir`](#readdir) | — |
+| [`getFileInfo`](#getfileinfo) | — |
+| [`saveFile`](#savefile) | — |
+| [`getSavedFileList`](#getsavedfilelist) | — |
+| [`removeSavedFile`](#removesavedfile) | — |
+| [`unzip`](#unzip) | — |
+| [`readFileSync`](#readfilesync) | — |
+| [`writeFileSync`](#writefilesync) | — |
+| [`existsSync`](#existssync) | — |
+| [`statSync`](#statsync) | — |
+| [`readdirSync`](#readdirsync) | — |
+| [`mkdirSync`](#mkdirsync) | — |
+| [`renameSync`](#renamesync) | — |
+| [`unlinkSync`](#unlinksync) | — |
+| [`copyFileSync`](#copyfilesync) | — |
+| [`appendFileSync`](#appendfilesync) | — |
 
 ### `readFile`
 

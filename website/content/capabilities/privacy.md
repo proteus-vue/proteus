@@ -28,12 +28,12 @@ usePrivacy(): CapResult<PrivacyAPI>
 
 ## 方法
 
-| 方法 | 签名 | 说明 |
-|---|---|---|
-| [`getSetting`](#getsetting) | `getSetting(): Promise<CapResult<PrivacySetting>>` | 查询隐私授权状态（wx.getPrivacySetting） |
-| [`openContract`](#opencontract) | `openContract(): Promise<CapResult<void>>` | 打开隐私协议页面（wx.openPrivacyContract） |
-| [`requireAuthorize`](#requireauthorize) | `requireAuthorize(): Promise<CapResult<boolean>>` | 主动触发隐私授权弹窗（wx.requirePrivacyAuthorize）。 |
-| [`onNeedAuthorization`](#onneedauthorization) | `onNeedAuthorization(cb: (res: { privacyContractName: string }) => void): () => void` | 订阅「需要用户隐私授权」事件（wx.onNeedPrivacyAuthorization）。 用户在页面触发隐私接口但未同意时回调——业务据此弹自家协议 UI 或调用 openContract。 |
+| 方法 | 说明 |
+|---|---|
+| [`getSetting`](#getsetting) | 查询隐私授权状态（wx.getPrivacySetting） |
+| [`openContract`](#opencontract) | 打开隐私协议页面（wx.openPrivacyContract） |
+| [`requireAuthorize`](#requireauthorize) | 主动触发隐私授权弹窗（wx.requirePrivacyAuthorize）。 |
+| [`onNeedAuthorization`](#onneedauthorization) | 订阅「需要用户隐私授权」事件（wx.onNeedPrivacyAuthorization）。 用户在页面触发隐私接口但未同意时回调——业务据此弹自家协议 UI 或调用 openContract。 |
 
 ### `getSetting`
 

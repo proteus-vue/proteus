@@ -28,10 +28,10 @@ useMediaQuery(): CapResult<MediaQueryObserver>
 
 ## 方法
 
-| 方法 | 签名 | 说明 |
-|---|---|---|
-| [`observe`](#observe) | `observe(condition: MediaQueryCondition, cb: (result: MediaQueryResult) => void): void` | 开始观察媒体查询条件。 |
-| [`disconnect`](#disconnect) | `disconnect(): void` | 停止观察（释放） |
+| 方法 | 说明 |
+|---|---|
+| [`observe`](#observe) | 开始观察媒体查询条件。 |
+| [`disconnect`](#disconnect) | 停止观察（释放） |
 
 ### `observe`
 

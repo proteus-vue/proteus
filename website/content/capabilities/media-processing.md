@@ -28,11 +28,11 @@ useMediaProcessing(): CapResult<MediaProcessingAPI>
 
 ## 方法
 
-| 方法 | 签名 | 说明 |
-|---|---|---|
-| [`container`](#container) | `container(): MediaContainerHandle` | 创建视频轨道合成容器 |
-| [`videoDecoder`](#videodecoder) | `videoDecoder(): VideoDecoderHandle` | 创建视频解码器（取帧） |
-| [`audioPlayer`](#audioplayer) | `audioPlayer(): MediaAudioPlayerHandle` | 创建多音源混音播放器 |
+| 方法 | 说明 |
+|---|---|
+| [`container`](#container) | 创建视频轨道合成容器 |
+| [`videoDecoder`](#videodecoder) | 创建视频解码器（取帧） |
+| [`audioPlayer`](#audioplayer) | 创建多音源混音播放器 |
 
 ### `container`
 

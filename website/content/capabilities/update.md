@@ -28,13 +28,13 @@ useUpdate(): Promise<CapResult<UpdateManagerAPI>>
 
 ## 方法
 
-| 方法 | 签名 | 说明 |
-|---|---|---|
-| [`checkUpdate`](#checkupdate) | `checkUpdate(): Promise<CapResult<{ hasUpdate: boolean }>>` | 检查是否有新版本 |
-| [`onCheckForUpdate`](#oncheckforupdate) | `onCheckForUpdate(cb: (hasUpdate: boolean) => void): () => void` | 订阅「发现新版本」（返回取消） |
-| [`onUpdateReady`](#onupdateready) | `onUpdateReady(cb: () => void): () => void` | 订阅「新版本已下载，可立即应用」（返回取消） |
-| [`onUpdateFailed`](#onupdatefailed) | `onUpdateFailed(cb: (errMsg: string) => void): () => void` | 订阅「更新失败」（返回取消） |
-| [`applyUpdate`](#applyupdate) | `applyUpdate(): Promise<CapResult<void>>` | 应用更新并重启小程序 |
+| 方法 | 说明 |
+|---|---|
+| [`checkUpdate`](#checkupdate) | 检查是否有新版本 |
+| [`onCheckForUpdate`](#oncheckforupdate) | 订阅「发现新版本」（返回取消） |
+| [`onUpdateReady`](#onupdateready) | 订阅「新版本已下载，可立即应用」（返回取消） |
+| [`onUpdateFailed`](#onupdatefailed) | 订阅「更新失败」（返回取消） |
+| [`applyUpdate`](#applyupdate) | 应用更新并重启小程序 |
 
 ### `checkUpdate`
 

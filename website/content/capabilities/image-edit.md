@@ -28,10 +28,10 @@ useImageEdit(): CapResult<ImageEditAPI>
 
 ## 方法
 
-| 方法 | 签名 | 说明 |
-|---|---|---|
-| [`crop`](#crop) | `crop(src: string, cropScale: '16:9' \| '9:16' \| '4:3' \| '3:4' \| '5:4' \| '4:5' \| '1:1'): Promise<CapResult<string>>` | 裁剪图片（拉起裁剪 UI，按比例）。 |
-| [`edit`](#edit) | `edit(src: string): Promise<CapResult<string>>` | 编辑图片（拉起编辑 UI——涂鸦 / 裁剪 / 文字 / 马赛克）。 |
+| 方法 | 说明 |
+|---|---|
+| [`crop`](#crop) | 裁剪图片（拉起裁剪 UI，按比例）。 |
+| [`edit`](#edit) | 编辑图片（拉起编辑 UI——涂鸦 / 裁剪 / 文字 / 马赛克）。 |
 
 ### `crop`
 

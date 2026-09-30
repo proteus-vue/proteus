@@ -28,10 +28,10 @@ useIdle(): CapResult<IdleAPI>
 
 ## Methods
 
-| Method | Signature | Doc |
-|---|---|---|
-| [`request`](#request) | `request(cb: (deadline: IdleDeadline) => void, timeout?: number): Promise<CapResult<number>>` | — |
-| [`cancel`](#cancel) | `cancel(id: number): Promise<CapResult<void>>` | — |
+| Method | Doc |
+|---|---|
+| [`request`](#request) | — |
+| [`cancel`](#cancel) | — |
 
 ### `request`
 
@@ -41,7 +41,8 @@ request(cb: (deadline: IdleDeadline) => void, timeout?: number): Promise<CapResu
 
 | Param | Type | Required | Doc |
 |---|---|---|---|
-| `cb` | `(deadline: IdleDeadline) => void, timeout?: number` | No | 空闲回调（携带 deadline） |
+| `cb` | `(deadline: IdleDeadline) => void` | Yes | 空闲回调（携带 deadline） |
+| `timeout` | `number` | No | 超时（ms，到时即执行） |
 
 **Returns**: `Promise<CapResult<number>>` -- 句柄 id（可传入 cancel）
 

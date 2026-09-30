@@ -22,25 +22,31 @@ Returns `AppLifecycle` (synchronous handle/state object).
 
 ## Methods
 
-| Method | Signature | Doc |
+| Method | Doc | End support |
 |---|---|---|
-| [`onLaunch`](#onlaunch) | `onLaunch(cb: () => void): () => void` | — |
-| [`onShow`](#onshow) | `onShow(cb: () => void): () => void` | — |
-| [`onHide`](#onhide) | `onHide(cb: () => void): () => void` | — |
-| [`onError`](#onerror) | `onError(cb: (e: { error: string }) => void): () => void` | — |
-| [`onUnhandledRejection`](#onunhandledrejection) | `onUnhandledRejection(cb: (e: { reason: string }) => void): () => void` | — |
-| [`onMemoryWarning`](#onmemorywarning) | `onMemoryWarning(cb: (e: { level: number }) => void): () => void` | — |
-| [`onThemeChange`](#onthemechange) | `onThemeChange(cb: (e: { theme: 'dark' \| 'light' }) => void): () => void` | — |
-| [`onWindowResize`](#onwindowresize) | `onWindowResize(cb: (e: { windowWidth: number; windowHeight: number }) => void): () => void` | — |
-| [`onPageNotFound`](#onpagenotfound) | `onPageNotFound(cb: (e: { path: string }) => void): () => void` | — |
-| [`onAudioInterruptionBegin`](#onaudiointerruptionbegin) | `onAudioInterruptionBegin(cb: () => void): () => void` | — |
-| [`onAudioInterruptionEnd`](#onaudiointerruptionend) | `onAudioInterruptionEnd(cb: () => void): () => void` | — |
+| [`onLaunch`](#onlaunch) | App launched (exactly once, before the first show; auto-emitted on cold start) | MP ✅ · Web ✅ · App ✅ |
+| [`onShow`](#onshow) | App entered the foreground | MP ✅ · Web ✅ · App ✅ |
+| [`onHide`](#onhide) | App moved to the background | MP ✅ · Web ✅ · App ✅ |
+| [`onPageNotFound`](#onpagenotfound) | Route not matched (navigate to a fallback page) | MP ✅ · Web ✅ · App ✅ |
+| [`onAudioInterruptionBegin`](#onaudiointerruptionbegin) | Audio session interrupted by the system (e.g. incoming call) | MP ✅ · Web — · App ✅ |
+| [`onAudioInterruptionEnd`](#onaudiointerruptionend) | Audio interruption ended (playback may resume) | MP ✅ · Web — · App ✅ |
+
+### End support
+
+- `onLaunch`: MP `auto-emitted on the first onAppShow` · Web `auto-emitted on the first load` · App `shell cold start`
+- `onShow`: MP `wx.onAppShow` · Web `visibilitychange→visible` · App `shell resume (Activity.onResume / didBecomeActive)`
+- `onHide`: MP `wx.onAppHide` · Web `visibilitychange→hidden` · App `shell pause (Activity.onPause / willResignActive)`
+- `onPageNotFound`: MP `App.onPageNotFound / wx.onPageNotFound` · Web `route miss (pushed by the router layer)` · App `route miss`
+- `onAudioInterruptionBegin`: MP `App.onAudioInterruptionBegin` · Web — (not on this target) · App `shell audio-session notification`
+- `onAudioInterruptionEnd`: MP `App.onAudioInterruptionEnd` · Web — (not on this target) · App `shell audio-session notification`
 
 ### `onLaunch`
 
 ```ts
 onLaunch(cb: () => void): () => void
 ```
+
+**Doc**: App launched (exactly once, before the first show; auto-emitted on cold start)
 
 | Param | Type | Required | Doc |
 |---|---|---|---|
@@ -54,6 +60,8 @@ onLaunch(cb: () => void): () => void
 onShow(cb: () => void): () => void
 ```
 
+**Doc**: App entered the foreground
+
 | Param | Type | Required | Doc |
 |---|---|---|---|
 | `cb` | `() => void` | Yes | — |
@@ -66,69 +74,11 @@ onShow(cb: () => void): () => void
 onHide(cb: () => void): () => void
 ```
 
+**Doc**: App moved to the background
+
 | Param | Type | Required | Doc |
 |---|---|---|---|
 | `cb` | `() => void` | Yes | — |
-
-**Returns**: `() => void`
-
-### `onError`
-
-```ts
-onError(cb: (e: { error: string }) => void): () => void
-```
-
-| Param | Type | Required | Doc |
-|---|---|---|---|
-| `cb` | `(e: { error: string }) => void` | Yes | — |
-
-**Returns**: `() => void`
-
-### `onUnhandledRejection`
-
-```ts
-onUnhandledRejection(cb: (e: { reason: string }) => void): () => void
-```
-
-| Param | Type | Required | Doc |
-|---|---|---|---|
-| `cb` | `(e: { reason: string }) => void` | Yes | — |
-
-**Returns**: `() => void`
-
-### `onMemoryWarning`
-
-```ts
-onMemoryWarning(cb: (e: { level: number }) => void): () => void
-```
-
-| Param | Type | Required | Doc |
-|---|---|---|---|
-| `cb` | `(e: { level: number }) => void` | Yes | — |
-
-**Returns**: `() => void`
-
-### `onThemeChange`
-
-```ts
-onThemeChange(cb: (e: { theme: 'dark' | 'light' }) => void): () => void
-```
-
-| Param | Type | Required | Doc |
-|---|---|---|---|
-| `cb` | `(e: { theme: 'dark' \| 'light' }) => void` | Yes | — |
-
-**Returns**: `() => void`
-
-### `onWindowResize`
-
-```ts
-onWindowResize(cb: (e: { windowWidth: number; windowHeight: number }) => void): () => void
-```
-
-| Param | Type | Required | Doc |
-|---|---|---|---|
-| `cb` | `(e: { windowWidth: number; windowHeight: number }) => void` | Yes | — |
 
 **Returns**: `() => void`
 
@@ -137,6 +87,8 @@ onWindowResize(cb: (e: { windowWidth: number; windowHeight: number }) => void): 
 ```ts
 onPageNotFound(cb: (e: { path: string }) => void): () => void
 ```
+
+**Doc**: Route not matched (navigate to a fallback page)
 
 | Param | Type | Required | Doc |
 |---|---|---|---|
@@ -150,6 +102,8 @@ onPageNotFound(cb: (e: { path: string }) => void): () => void
 onAudioInterruptionBegin(cb: () => void): () => void
 ```
 
+**Doc**: Audio session interrupted by the system (e.g. incoming call)
+
 | Param | Type | Required | Doc |
 |---|---|---|---|
 | `cb` | `() => void` | Yes | — |
@@ -161,6 +115,8 @@ onAudioInterruptionBegin(cb: () => void): () => void
 ```ts
 onAudioInterruptionEnd(cb: () => void): () => void
 ```
+
+**Doc**: Audio interruption ended (playback may resume)
 
 | Param | Type | Required | Doc |
 |---|---|---|---|
@@ -202,5 +158,29 @@ console.log('current phase:', app.phase)
 const off = app.onShow(() => console.log('returned to foreground'))
 // app.onLaunch(...) / app.onHide(...); off() unsubscribes
 ```
+
+## Platform notes
+
+### Mini Program (MP)
+
+- **Page stack & routing events** — The 10-page stack limit, navigateTo/redirectTo/switchTab semantics, and route-completion timing (onRouteDone) · Related capabilities: [`useNavigationGuard`](/capabilities/navigation-guard)
+- **tabBar & tab switching** — onTabItemTap on tab pages and switchTab semantics (non-tab pages destroyed; other tabs kept alive) · Related capabilities: [`usePageLifecycle`](/capabilities/page-lifecycle)
+- **Pull-down refresh & reach-bottom** — ★Requires enablePullDownRefresh in page.json; onReachBottomDistance controls the bottom threshold · Related capabilities: [`usePageLifecycle`](/capabilities/page-lifecycle)
+- **Background & audio interruption** — onAppHide/onAppShow foreground-background semantics and system audio interruptions (onAudioInterruption*) · Related capabilities: [`useAppLifecycle`](/capabilities/app-lifecycle)
+
+### Web
+
+- **Tab visibility & foreground/background** — visibilitychange is the only foreground/background signal (browsers do not distinguish backgrounding from tab switching); load fires once · Related capabilities: [`useAppLifecycle`](/capabilities/app-lifecycle)
+- **Page unload & leave confirmation** — beforeunload returnValue drives **leave confirmation** (browsers do not persist state — unlike Mini Program onSaveExitState) · Related capabilities: [`usePageLifecycle`](/capabilities/page-lifecycle)
+- **High-frequency scrolling** — scroll is rAF-throttled before dispatch; reach-bottom uses a 50px heuristic (no native onReachBottom) · Related capabilities: [`usePageLifecycle`](/capabilities/page-lifecycle)
+- **Split view & window resizing** — resize drives both app-level and page-level size events (rotation / split view / window resizing) · Related capabilities: [`useWindow`](/capabilities/window)
+
+### App (iOS / Android / Harmony)
+
+- **Activity / ViewController lifecycle** — The shell forwards onCreate/onResume/onPause (iOS: viewDidLoad/didBecomeActive/willResignActive) into the runtime, mapped to app launch/show/hide — **business code never touches Activity lifecycle directly** (G-39 single ownership) · Related capabilities: [`useAppLifecycle`](/capabilities/app-lifecycle)
+- **Keyboard events (soft-keyboard height)** — Soft-keyboard show/hide and height changes — forwarded by the App shell, wx.onKeyboardHeightChange on Mini Program, visualViewport heuristic on Web · Related capabilities: [`useKeyboard`](/capabilities/keyboard)
+- **Window management** — Multi-window / split view / window sizing (tablets, foldables, desktop) — via host window APIs on App (in-app tab navigation also uses useWindow) · Related capabilities: [`useWindow`](/capabilities/window)
+- **Memory warnings & low memory** — iOS didReceiveMemoryWarning / Android onTrimMemory forwarded by the shell — release caches here (pairs with the G-43 ownership model) · Related capabilities: [`useBackground`](/capabilities/background)
+- **Deep links & cold-start params** — Cold-start launch/enter params (deep-link query) and restoring the initial virtual stack · Related capabilities: [`useBackground`](/capabilities/background)
 
 <!-- generated by website/scripts/gen-content.mjs (en overlay) · source SSOT: packages/component-ir/src/primitives.ts + packages/api/src/capability.ts -->

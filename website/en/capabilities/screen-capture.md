@@ -28,12 +28,12 @@ useScreenCapture(): CapResult<ScreenCaptureAPI>
 
 ## Methods
 
-| Method | Signature | Doc |
-|---|---|---|
-| [`getRecordingState`](#getrecordingstate) | `getRecordingState(): Promise<CapResult<'on' \| 'off'>>` | — |
-| [`onRecordingStateChange`](#onrecordingstatechange) | `onRecordingStateChange(cb: (state: 'on' \| 'off') => void): () => void` | — |
-| [`onUserCapture`](#onusercapture) | `onUserCapture(cb: () => void): () => void` | — |
-| [`isPictureInPictureActive`](#ispictureinpictureactive) | `isPictureInPictureActive(): Promise<CapResult<boolean>>` | — |
+| Method | Doc |
+|---|---|
+| [`getRecordingState`](#getrecordingstate) | — |
+| [`onRecordingStateChange`](#onrecordingstatechange) | — |
+| [`onUserCapture`](#onusercapture) | — |
+| [`isPictureInPictureActive`](#ispictureinpictureactive) | — |
 
 ### `getRecordingState`
 

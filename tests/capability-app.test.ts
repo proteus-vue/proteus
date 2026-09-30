@@ -310,33 +310,34 @@ describe('★★扩展事件面（用户指出「生命周期能力太简单，�
     return { bus: getHostLifecycleBus(), hooks: createCapabilityHooks(bridge) }
   }
 
-  it('C23 应用级全事件面：error / unhandled-rejection / memory-warning / theme-change / resize / page-not-found / audio-interruption', () => {
+  // ★★2026-09-30 去重（用户反馈：「useAppLifecycle 有些方法和 useBackground 重复」）：
+  //   C23 现在只管**应用生命周期本体**（launch/show/hide）+ 应用级专属（page-not-found / audio-interruption*）；
+  //   memory-warning / theme-change / resize / error / unhandled-rejection **统一归 C25（useBackground）**。
+  it('C23 应用级事件面（去重后）：page-not-found / audio-interruption 在 C23；阶段事件驱动相位', () => {
     const { bus, hooks } = appHooks()
     const lc = hooks.useAppLifecycle()
     const seen: string[] = []
-    lc.onError((e) => seen.push(`err:${e.error}`))
-    lc.onUnhandledRejection((e) => seen.push(`rej:${e.reason}`))
-    lc.onMemoryWarning((e) => seen.push(`mem:${e.level}`))
-    lc.onThemeChange((e) => seen.push(`theme:${e.theme}`))
-    lc.onWindowResize((e) => seen.push(`resize:${e.windowWidth}x${e.windowHeight}`))
     lc.onPageNotFound((e) => seen.push(`404:${e.path}`))
     lc.onAudioInterruptionBegin(() => seen.push('audio:begin'))
     lc.onAudioInterruptionEnd(() => seen.push('audio:end'))
+    // 阶段事件
+    lc.onLaunch(() => seen.push('launch'))
+    lc.onShow(() => seen.push('show'))
 
-    bus.emit({ topic: 'app', kind: 'error', payload: { error: 'boom' } })
-    bus.emit({ topic: 'app', kind: 'unhandled-rejection', payload: { reason: 'why' } })
-    bus.emit({ topic: 'app', kind: 'memory-warning', payload: { level: 2 } })
-    bus.emit({ topic: 'app', kind: 'theme-change', payload: { theme: 'dark' } })
-    bus.emit({ topic: 'app', kind: 'resize', payload: { windowWidth: 390, windowHeight: 844 } })
     bus.emit({ topic: 'app', kind: 'page-not-found', payload: { path: '/missing' } })
     bus.emit({ topic: 'app', kind: 'audio-interruption-begin' })
     bus.emit({ topic: 'app', kind: 'audio-interruption-end' })
+    bus.emit({ topic: 'app', kind: 'show' })
+    expect(seen).toEqual(['404:/missing', 'audio:begin', 'audio:end', 'launch', 'show'])
+    expect(bus.snapshot().app).toBe('SHOW')
+  })
 
-    expect(seen).toEqual([
-      'err:boom', 'rej:why', 'mem:2', 'theme:dark', 'resize:390x844', '404:/missing', 'audio:begin', 'audio:end',
-    ])
-    // ★纯通知型不改变 phase（只有 launch/show/hide 驱动相位）
-    expect(bus.snapshot().app).toBe('PENDING')
+  it('★去重验证：重叠事件**不再**出现在 C23 句柄上（单一归属 C25）', () => {
+    const { hooks } = appHooks()
+    const lc = hooks.useAppLifecycle() as unknown as Record<string, unknown>
+    for (const name of ['onMemoryWarning', 'onThemeChange', 'onWindowResize', 'onError', 'onUnhandledRejection']) {
+      expect(name in lc, `${name} 应已从 useAppLifecycle 移除（归 useBackground）`).toBe(false)
+    }
   })
 
   it('C24 页面级全事件面：ready / route-done / page-scroll / resize / tab-item-tap / reach-bottom / pull-down-refresh', () => {
@@ -431,13 +432,15 @@ describe('★★扩展事件面（用户指出「生命周期能力太简单，�
     expect(warns.some((e) => e.includes('onPageNotFound'))).toBe(true)
   })
 
-  it('事件面 SSOT 自洽：PAGE_EVENTS / APP_EVENTS 覆盖所有句柄方法（防"加了句柄忘了 SSOT"）', () => {
+  it('事件面 SSOT 自洽：PAGE_EVENTS / APP_EVENTS 覆盖所有句柄方法（防"加了句柄忘了 SSOT"）', async () => {
     const { hooks } = (() => {
       ;(globalThis as Record<string, unknown>)[HOST_ID_KEY] = 'android'
       return { hooks: createCapabilityHooks(createCapabilityBridge()) }
     })()
     const pl = hooks.usePageLifecycle()
     const lc = hooks.useAppLifecycle()
+    const bgRes = await hooks.useBackground()
+    const bg: Record<string, unknown> = bgRes.ok ? (bgRes.data as unknown as Record<string, unknown>) : {}
     // 页面：SSOT 每个事件都应有对应可订阅面（`on<Pascal>` 或多词时 `set<Pascal>Provider`）
     // ★命名规则与运行时一致：kebab → Pascal（load→Load / reach-bottom→ReachBottom）
     const pascal = (kebab: string): string =>
@@ -447,13 +450,27 @@ describe('★★扩展事件面（用户指出「生命周期能力太简单，�
       const has = `on${P}` in (pl as object) || `set${P}Provider` in (pl as object)
       expect(has, `PAGE_EVENTS 的 ${evt}（期望 on${P} 或 set${P}Provider）在句柄上无可订阅面`).toBe(true)
     }
-    // 应用级：阶段事件用短名（onLaunch/onShow/onHide）；其余「on<Pascal>」；
-    // ★两个刻意的别名（与既有命名保持一致，不是遗漏）：resize→onWindowResize / audio-interruption→onAudioInterruption*
-    const APP_ALIAS: Record<string, string> = { resize: 'onWindowResize' }
+    // 应用级（去重后）：每个事件**恰好**归属一个句柄——
+    //   C23 = 阶段（launch/show/hide）+ page-not-found + audio-interruption*
+    //   C25 = memory-warning / theme-change / resize / error / unhandled-rejection（+ network-change）
+    const C23_OWNED = new Set(['launch', 'show', 'hide', 'page-not-found', 'audio-interruption-begin', 'audio-interruption-end'])
+    const C25_OWNED: Record<string, string> = {
+      'memory-warning': 'onMemoryWarning',
+      'theme-change': 'onThemeChange',
+      resize: 'onWindowResize',
+      error: 'onError',
+      'unhandled-rejection': 'onUnhandledRejection',
+    }
     for (const evt of APP_EVENTS) {
-      if (evt === 'launch' || evt === 'show' || evt === 'hide') continue
-      const name = APP_ALIAS[evt] ?? `on${pascal(evt)}`
-      expect(name in (lc as object), `APP_EVENTS 的 ${evt}（期望 ${name}）在句柄上无可订阅面`).toBe(true)
+      if (C23_OWNED.has(evt)) {
+        const name = evt === 'launch' ? 'onLaunch' : evt === 'show' ? 'onShow' : evt === 'hide' ? 'onHide' : `on${pascal(evt)}`
+        expect(name in (lc as object), `APP_EVENTS 的 ${evt}（C23 归属，期望 ${name}）在句柄上无可订阅面`).toBe(true)
+      } else if (C25_OWNED[evt]) {
+        // ★去重后：这些事件不应在 C23 上（归属 C25）
+        expect(C25_OWNED[evt] in (bg as object), `APP_EVENTS 的 ${evt}（C25 归属，期望 ${C25_OWNED[evt]}）在 BackgroundHandle 上无可订阅面`).toBe(true)
+      } else {
+        throw new Error(`APP_EVENTS 的 ${evt} 未登记归属（新增事件必须显式归到 C23 或 C25）`)
+      }
     }
   })
 })

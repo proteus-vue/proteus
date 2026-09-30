@@ -22,9 +22,9 @@ useAnalytics(): TrackAPI
 
 ## 方法
 
-| 方法 | 签名 | 说明 |
-|---|---|---|
-| [`track`](#track) | `track(name: string, params?: Record<string, unknown>): Promise<CapResult<void>>` | 上报埋点事件 |
+| 方法 | 说明 |
+|---|---|
+| [`track`](#track) | 上报埋点事件 |
 
 ### `track`
 

@@ -28,12 +28,12 @@ useLocalService(): CapResult<LocalServiceAPI>
 
 ## Methods
 
-| Method | Signature | Doc |
-|---|---|---|
-| [`onFound`](#onfound) | `onFound(cb: (res: LocalServiceInfo) => void): () => void` | — |
-| [`onLost`](#onlost) | `onLost(cb: (res: LocalServiceInfo) => void): () => void` | — |
-| [`onResolveFail`](#onresolvefail) | `onResolveFail(cb: (res: LocalServiceInfo) => void): () => void` | — |
-| [`onDiscoveryStop`](#ondiscoverystop) | `onDiscoveryStop(cb: () => void): () => void` | — |
+| Method | Doc |
+|---|---|
+| [`onFound`](#onfound) | — |
+| [`onLost`](#onlost) | — |
+| [`onResolveFail`](#onresolvefail) | — |
+| [`onDiscoveryStop`](#ondiscoverystop) | — |
 
 ### `onFound`
 

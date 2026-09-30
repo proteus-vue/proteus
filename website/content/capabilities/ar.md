@@ -28,10 +28,10 @@ useAR(): CapResult<ARAPI>
 
 ## 方法
 
-| 方法 | 签名 | 说明 |
-|---|---|---|
-| [`createSession`](#createsession) | `createSession(options?: AROptions): ARSessionHandle` | 创建视觉算法会话 |
-| [`isSupported`](#issupported) | `isSupported(version?: 'v1' \| 'v2'): Promise<CapResult<boolean>>` | 查询设备是否支持视觉算法。 |
+| 方法 | 说明 |
+|---|---|
+| [`createSession`](#createsession) | 创建视觉算法会话 |
+| [`isSupported`](#issupported) | 查询设备是否支持视觉算法。 |
 
 ### `createSession`
 

@@ -41,19 +41,19 @@ useLive(options: LiveRoomOptions): Promise<CapResult<LiveRoomHandle>>
 
 ## 方法
 
-| 方法 | 签名 | 说明 |
-|---|---|---|
-| [`play`](#play) | `play(): Promise<CapResult<void>>` | 开始播放 |
-| [`pause`](#pause) | `pause(): Promise<CapResult<void>>` | 暂停播放 |
-| [`resume`](#resume) | `resume(): Promise<CapResult<void>>` | 从暂停处恢复播放 |
-| [`stop`](#stop) | `stop(): Promise<CapResult<void>>` | 停止播放 |
-| [`mute`](#mute) | `mute(): void` | 静音切换（同步，无 Promise） |
-| [`snapshot`](#snapshot) | `snapshot(): Promise<CapResult<string>>` | 截图（返回临时文件路径） |
-| [`requestFullScreen`](#requestfullscreen) | `requestFullScreen(direction?: number): Promise<CapResult<void>>` | 请求全屏（direction 0 竖屏 / 90 横屏；缺省不变） |
-| [`exitFullScreen`](#exitfullscreen) | `exitFullScreen(): Promise<CapResult<void>>` | 退出全屏 |
-| [`status`](#status) | `status(): LivePlayState` | 当前播放状态 |
-| [`onStateChange`](#onstatechange) | `onStateChange(cb: (state: LivePlayState) => void): () => void` | 订阅播放状态变化（返回取消） |
-| [`leave`](#leave) | `leave(): Promise<CapResult<void>>` | 离开直播间（= stop 的语义别名） |
+| 方法 | 说明 |
+|---|---|
+| [`play`](#play) | 开始播放 |
+| [`pause`](#pause) | 暂停播放 |
+| [`resume`](#resume) | 从暂停处恢复播放 |
+| [`stop`](#stop) | 停止播放 |
+| [`mute`](#mute) | 静音切换（同步，无 Promise） |
+| [`snapshot`](#snapshot) | 截图（返回临时文件路径） |
+| [`requestFullScreen`](#requestfullscreen) | 请求全屏（direction 0 竖屏 / 90 横屏；缺省不变） |
+| [`exitFullScreen`](#exitfullscreen) | 退出全屏 |
+| [`status`](#status) | 当前播放状态 |
+| [`onStateChange`](#onstatechange) | 订阅播放状态变化（返回取消） |
+| [`leave`](#leave) | 离开直播间（= stop 的语义别名） |
 
 ### `play`
 

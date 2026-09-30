@@ -42,12 +42,12 @@ useIntersection(options?: IntersectionOptions): CapResult<IntersectionHandle>
 
 ## 方法
 
-| 方法 | 签名 | 说明 |
-|---|---|---|
-| [`relativeTo`](#relativeto) | `relativeTo(selector: string, margins?: { left?: number; right?: number; top?: number; bottom?: number }): IntersectionHandle` | 指定参照元素（相对该元素观察）。 |
-| [`relativeToViewport`](#relativetoviewport) | `relativeToViewport(margins?: { left?: number; right?: number; top?: number; bottom?: number }): IntersectionHandle` | 以显示区域（视口）为参照。 |
-| [`observe`](#observe) | `observe(targetSelector: string, cb: (result: IntersectionResult) => void): IntersectionHandle` | 开始观察目标元素。 |
-| [`disconnect`](#disconnect) | `disconnect(): void` | 停止观察（释放） |
+| 方法 | 说明 |
+|---|---|
+| [`relativeTo`](#relativeto) | 指定参照元素（相对该元素观察）。 |
+| [`relativeToViewport`](#relativetoviewport) | 以显示区域（视口）为参照。 |
+| [`observe`](#observe) | 开始观察目标元素。 |
+| [`disconnect`](#disconnect) | 停止观察（释放） |
 
 ### `relativeTo`
 

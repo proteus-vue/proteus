@@ -28,9 +28,9 @@ useMiniProgram(): Promise<CapResult<MiniProgramAPI>>
 
 ## Methods
 
-| Method | Signature | Doc |
-|---|---|---|
-| [`navigate`](#navigate) | `navigate(options: MiniProgramNavOptions): Promise<CapResult<void>>` | — |
+| Method | Doc |
+|---|---|
+| [`navigate`](#navigate) | — |
 
 ### `navigate`
 

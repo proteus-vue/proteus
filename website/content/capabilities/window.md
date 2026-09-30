@@ -28,9 +28,9 @@ useWindow(): CapResult<WindowAPI>
 
 ## 方法
 
-| 方法 | 签名 | 说明 |
-|---|---|---|
-| [`setSize`](#setsize) | `setSize(width: number, height: number): Promise<CapResult<void>>` | 调整窗口大小（PC 端）。 |
+| 方法 | 说明 |
+|---|---|
+| [`setSize`](#setsize) | 调整窗口大小（PC 端）。 |
 
 ### `setSize`
 

@@ -28,9 +28,9 @@ usePoster(): CapResult<PosterAPI>
 
 ## 方法
 
-| 方法 | 签名 | 说明 |
-|---|---|---|
-| [`onGenerate`](#ongenerate) | `onGenerate(cb: (res: { src: string; promise?: unknown }) => void): () => void` | 订阅海报生成事件。 |
+| 方法 | 说明 |
+|---|---|
+| [`onGenerate`](#ongenerate) | 订阅海报生成事件。 |
 
 ### `onGenerate`
 

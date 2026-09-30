@@ -28,10 +28,10 @@ useBeacon(): CapResult<BeaconAPI>
 
 ## 方法
 
-| 方法 | 签名 | 说明 |
-|---|---|---|
-| [`onServiceChange`](#onservicechange) | `onServiceChange(cb: (res: { available: boolean; discovering: boolean }) => void): () => void` | 订阅 Beacon 服务状态变化。 |
-| [`onUpdate`](#onupdate) | `onUpdate(cb: (res: { beacons: BeaconInfo[] }) => void): () => void` | 订阅 Beacon 设备更新。 |
+| 方法 | 说明 |
+|---|---|
+| [`onServiceChange`](#onservicechange) | 订阅 Beacon 服务状态变化。 |
+| [`onUpdate`](#onupdate) | 订阅 Beacon 设备更新。 |
 
 ### `onServiceChange`
 

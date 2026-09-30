@@ -28,25 +28,25 @@ useBluetooth(): Promise<CapResult<BluetoothAPI>>
 
 ## Methods
 
-| Method | Signature | Doc |
-|---|---|---|
-| [`close`](#close) | `close(): Promise<CapResult<void>>` | — |
-| [`getAdapterState`](#getadapterstate) | `getAdapterState(): Promise<CapResult<{ available: boolean; discovering: boolean }>>` | — |
-| [`startDiscovery`](#startdiscovery) | `startDiscovery(allowDuplicatesKey?: boolean): Promise<CapResult<void>>` | — |
-| [`stopDiscovery`](#stopdiscovery) | `stopDiscovery(): Promise<CapResult<void>>` | — |
-| [`onDeviceFound`](#ondevicefound) | `onDeviceFound(cb: (devices: BleDevice[]) => void): () => void` | — |
-| [`getDevices`](#getdevices) | `getDevices(): Promise<CapResult<BleDevice[]>>` | — |
-| [`getConnectedDevices`](#getconnecteddevices) | `getConnectedDevices(): Promise<CapResult<BleDevice[]>>` | — |
-| [`connect`](#connect) | `connect(deviceId: string): Promise<CapResult<void>>` | — |
-| [`disconnect`](#disconnect) | `disconnect(deviceId: string): Promise<CapResult<void>>` | — |
-| [`onConnectionStateChange`](#onconnectionstatechange) | `onConnectionStateChange(cb: (deviceId: string, connected: boolean) => void): () => void` | — |
-| [`getServices`](#getservices) | `getServices(deviceId: string): Promise<CapResult<BleService[]>>` | — |
-| [`getCharacteristics`](#getcharacteristics) | `getCharacteristics(deviceId: string, serviceId: string): Promise<CapResult<BleCharacteristic[]>>` | — |
-| [`read`](#read) | `read(deviceId: string, serviceId: string, characteristicId: string): Promise<CapResult<ArrayBuffer>>` | — |
-| [`write`](#write) | `write(deviceId: string, serviceId: string, characteristicId: string, value: ArrayBuffer): Promise<CapResult<void>>` | — |
-| [`setNotify`](#setnotify) | `setNotify(deviceId: string, serviceId: string, characteristicId: string, state: boolean): Promise<CapResult<void>>` | — |
-| [`onCharacteristicValueChange`](#oncharacteristicvaluechange) | `onCharacteristicValueChange(cb: (deviceId: string, serviceId: string, characteristicId: string, value: ArrayBuffer) => void): () => void` | — |
-| [`getRSSI`](#getrssi) | `getRSSI(deviceId: string): Promise<CapResult<number>>` | — |
+| Method | Doc |
+|---|---|
+| [`close`](#close) | — |
+| [`getAdapterState`](#getadapterstate) | — |
+| [`startDiscovery`](#startdiscovery) | — |
+| [`stopDiscovery`](#stopdiscovery) | — |
+| [`onDeviceFound`](#ondevicefound) | — |
+| [`getDevices`](#getdevices) | — |
+| [`getConnectedDevices`](#getconnecteddevices) | — |
+| [`connect`](#connect) | — |
+| [`disconnect`](#disconnect) | — |
+| [`onConnectionStateChange`](#onconnectionstatechange) | — |
+| [`getServices`](#getservices) | — |
+| [`getCharacteristics`](#getcharacteristics) | — |
+| [`read`](#read) | — |
+| [`write`](#write) | — |
+| [`setNotify`](#setnotify) | — |
+| [`onCharacteristicValueChange`](#oncharacteristicvaluechange) | — |
+| [`getRSSI`](#getrssi) | — |
 
 ### `close`
 

@@ -28,12 +28,12 @@ usePreload(): CapResult<PreloadAPI>
 
 ## Methods
 
-| Method | Signature | Doc |
-|---|---|---|
-| [`assets`](#assets) | `assets(data: PreloadAsset[]): Promise<CapResult<void>>` | — |
-| [`skylineView`](#skylineview) | `skylineView(): Promise<CapResult<void>>` | — |
-| [`webview`](#webview) | `webview(): Promise<CapResult<void>>` | — |
-| [`subpackage`](#subpackage) | `subpackage(packageType: string): Promise<CapResult<PreDownloadTask>>` | — |
+| Method | Doc |
+|---|---|
+| [`assets`](#assets) | — |
+| [`skylineView`](#skylineview) | — |
+| [`webview`](#webview) | — |
+| [`subpackage`](#subpackage) | — |
 
 ### `assets`
 

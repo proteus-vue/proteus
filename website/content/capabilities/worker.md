@@ -34,11 +34,11 @@ useWorker(scriptPath: string): CapResult<WorkerHandle>
 
 ## 方法
 
-| 方法 | 签名 | 说明 |
-|---|---|---|
-| [`postMessage`](#postmessage) | `postMessage(message: unknown): void` | 主线程 → Worker 发消息 |
-| [`onMessage`](#onmessage) | `onMessage(cb: (message: unknown) => void): () => void` | 订阅 Worker → 主线程消息（返回取消） |
-| [`terminate`](#terminate) | `terminate(): void` | 终止 Worker 线程 |
+| 方法 | 说明 |
+|---|---|
+| [`postMessage`](#postmessage) | 主线程 → Worker 发消息 |
+| [`onMessage`](#onmessage) | 订阅 Worker → 主线程消息（返回取消） |
+| [`terminate`](#terminate) | 终止 Worker 线程 |
 
 ### `postMessage`
 

@@ -34,13 +34,13 @@ useElement(id?: string): CapResult<ElementQuery>
 
 ## 方法
 
-| 方法 | 签名 | 说明 |
-|---|---|---|
-| [`boundingClientRect`](#boundingclientrect) | `boundingClientRect(selector?: string): Promise<CapResult<ElementRect>>` | 查询元素几何。 |
-| [`scrollOffset`](#scrolloffset) | `scrollOffset(selector?: string): Promise<CapResult<ElementScrollOffset>>` | 查询元素滚动位置。 |
-| [`fields`](#fields) | `fields(options: ElementFieldsOptions, selector?: string): Promise<CapResult<ElementFieldsResult>>` | 按需查询元素字段（node/rect/size/scrollOffset/computedStyle）。 |
-| [`size`](#size) | `size(selector?: string): Promise<CapResult<{ width: number; height: number }>>` | 查询元素尺寸（boundingClientRect 的常用投影）。 |
-| [`batch`](#batch) | `batch(selectors: string[]): Promise<CapResult<Array<ElementRect \| null>>>` | 批量查询（同一查询内选择器数组——对齐官方 selectAll 的批量语义）。 |
+| 方法 | 说明 |
+|---|---|
+| [`boundingClientRect`](#boundingclientrect) | 查询元素几何。 |
+| [`scrollOffset`](#scrolloffset) | 查询元素滚动位置。 |
+| [`fields`](#fields) | 按需查询元素字段（node/rect/size/scrollOffset/computedStyle）。 |
+| [`size`](#size) | 查询元素尺寸（boundingClientRect 的常用投影）。 |
+| [`batch`](#batch) | 批量查询（同一查询内选择器数组——对齐官方 selectAll 的批量语义）。 |
 
 ### `boundingClientRect`
 

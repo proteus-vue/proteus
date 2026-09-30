@@ -34,17 +34,17 @@ useLivePusher(id: string): CapResult<LivePusherController>
 
 ## 方法
 
-| 方法 | 签名 | 说明 |
-|---|---|---|
-| [`start`](#start) | `start(): Promise<CapResult<void>>` | 开始推流 |
-| [`stop`](#stop) | `stop(): Promise<CapResult<void>>` | 停止推流 |
-| [`pause`](#pause) | `pause(): Promise<CapResult<void>>` | 暂停推流 |
-| [`resume`](#resume) | `resume(): Promise<CapResult<void>>` | 恢复推流 |
-| [`switchCamera`](#switchcamera) | `switchCamera(): Promise<CapResult<void>>` | 切换前后摄像头 |
-| [`toggleTorch`](#toggletorch) | `toggleTorch(): Promise<CapResult<void>>` | 开启/关闭闪光灯 |
-| [`snapshot`](#snapshot) | `snapshot(): Promise<CapResult<string>>` | 推流截图（返回临时文件路径 / data URL） |
-| [`sendMessage`](#sendmessage) | `sendMessage(msg: string): Promise<CapResult<void>>` | 发送 SEI 消息 |
-| [`on`](#on) | `on(event: 'statechange' \| 'netstatus' \| 'error', cb: (payload: unknown) => void): () => void` | 订阅推流事件（statechange / netstatus / error）。 |
+| 方法 | 说明 |
+|---|---|
+| [`start`](#start) | 开始推流 |
+| [`stop`](#stop) | 停止推流 |
+| [`pause`](#pause) | 暂停推流 |
+| [`resume`](#resume) | 恢复推流 |
+| [`switchCamera`](#switchcamera) | 切换前后摄像头 |
+| [`toggleTorch`](#toggletorch) | 开启/关闭闪光灯 |
+| [`snapshot`](#snapshot) | 推流截图（返回临时文件路径 / data URL） |
+| [`sendMessage`](#sendmessage) | 发送 SEI 消息 |
+| [`on`](#on) | 订阅推流事件（statechange / netstatus / error）。 |
 
 ### `start`
 

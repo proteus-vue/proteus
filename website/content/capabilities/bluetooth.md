@@ -28,25 +28,25 @@ useBluetooth(): Promise<CapResult<BluetoothAPI>>
 
 ## 方法
 
-| 方法 | 签名 | 说明 |
-|---|---|---|
-| [`close`](#close) | `close(): Promise<CapResult<void>>` | 关闭蓝牙适配器（释放系统资源；后续操作需重新 openBluetoothAdapter） |
-| [`getAdapterState`](#getadapterstate) | `getAdapterState(): Promise<CapResult<{ available: boolean; discovering: boolean }>>` | 获取适配器状态（available 是否可用 / discovering 是否在搜索） |
-| [`startDiscovery`](#startdiscovery) | `startDiscovery(allowDuplicatesKey?: boolean): Promise<CapResult<void>>` | 开始搜索附近 BLE 设备。 |
-| [`stopDiscovery`](#stopdiscovery) | `stopDiscovery(): Promise<CapResult<void>>` | 停止搜索附近设备 |
-| [`onDeviceFound`](#ondevicefound) | `onDeviceFound(cb: (devices: BleDevice[]) => void): () => void` | 订阅「发现新设备」事件。 |
-| [`getDevices`](#getdevices) | `getDevices(): Promise<CapResult<BleDevice[]>>` | 获取已发现设备列表 |
-| [`getConnectedDevices`](#getconnecteddevices) | `getConnectedDevices(): Promise<CapResult<BleDevice[]>>` | 获取已连接设备列表 |
-| [`connect`](#connect) | `connect(deviceId: string): Promise<CapResult<void>>` | 连接指定设备。 |
-| [`disconnect`](#disconnect) | `disconnect(deviceId: string): Promise<CapResult<void>>` | 断开指定设备。 |
-| [`onConnectionStateChange`](#onconnectionstatechange) | `onConnectionStateChange(cb: (deviceId: string, connected: boolean) => void): () => void` | 订阅「连接状态变化」事件。 |
-| [`getServices`](#getservices) | `getServices(deviceId: string): Promise<CapResult<BleService[]>>` | 获取设备的服务（Service）列表。 |
-| [`getCharacteristics`](#getcharacteristics) | `getCharacteristics(deviceId: string, serviceId: string): Promise<CapResult<BleCharacteristic[]>>` | 获取服务下的特征值（Characteristic）列表。 |
-| [`read`](#read) | `read(deviceId: string, serviceId: string, characteristicId: string): Promise<CapResult<ArrayBuffer>>` | 读特征值。 |
-| [`write`](#write) | `write(deviceId: string, serviceId: string, characteristicId: string, value: ArrayBuffer): Promise<CapResult<void>>` | 写特征值。 |
-| [`setNotify`](#setnotify) | `setNotify(deviceId: string, serviceId: string, characteristicId: string, state: boolean): Promise<CapResult<void>>` | 订阅 / 取消订阅特征值通知。 |
-| [`onCharacteristicValueChange`](#oncharacteristicvaluechange) | `onCharacteristicValueChange(cb: (deviceId: string, serviceId: string, characteristicId: string, value: ArrayBuffer) => void): () => void` | 订阅「特征值变化」通知数据。 |
-| [`getRSSI`](#getrssi) | `getRSSI(deviceId: string): Promise<CapResult<number>>` | 读取设备信号强度（RSSI）。 |
+| 方法 | 说明 |
+|---|---|
+| [`close`](#close) | 关闭蓝牙适配器（释放系统资源；后续操作需重新 openBluetoothAdapter） |
+| [`getAdapterState`](#getadapterstate) | 获取适配器状态（available 是否可用 / discovering 是否在搜索） |
+| [`startDiscovery`](#startdiscovery) | 开始搜索附近 BLE 设备。 |
+| [`stopDiscovery`](#stopdiscovery) | 停止搜索附近设备 |
+| [`onDeviceFound`](#ondevicefound) | 订阅「发现新设备」事件。 |
+| [`getDevices`](#getdevices) | 获取已发现设备列表 |
+| [`getConnectedDevices`](#getconnecteddevices) | 获取已连接设备列表 |
+| [`connect`](#connect) | 连接指定设备。 |
+| [`disconnect`](#disconnect) | 断开指定设备。 |
+| [`onConnectionStateChange`](#onconnectionstatechange) | 订阅「连接状态变化」事件。 |
+| [`getServices`](#getservices) | 获取设备的服务（Service）列表。 |
+| [`getCharacteristics`](#getcharacteristics) | 获取服务下的特征值（Characteristic）列表。 |
+| [`read`](#read) | 读特征值。 |
+| [`write`](#write) | 写特征值。 |
+| [`setNotify`](#setnotify) | 订阅 / 取消订阅特征值通知。 |
+| [`onCharacteristicValueChange`](#oncharacteristicvaluechange) | 订阅「特征值变化」通知数据。 |
+| [`getRSSI`](#getrssi) | 读取设备信号强度（RSSI）。 |
 
 ### `close`
 

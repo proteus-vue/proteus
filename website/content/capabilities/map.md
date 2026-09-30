@@ -34,42 +34,42 @@ useMap(id: string): Promise<CapResult<MapController>>
 
 ## 方法
 
-| 方法 | 签名 | 说明 |
-|---|---|---|
-| [`getRegion`](#getregion) | `getRegion(): Promise<CapResult<MapRegion>>` | 获取当前地图视野（中心经纬 + 缩放级别） |
-| [`moveTo`](#moveto) | `moveTo(latitude: number, longitude: number, scale?: number): Promise<CapResult<void>>` | 平移地图中心到指定经纬。 |
-| [`moveToLocation`](#movetolocation) | `moveToLocation(): Promise<CapResult<void>>` | 移动到当前定位点 |
-| [`includePoints`](#includepoints) | `includePoints(points: Array<{ latitude: number; longitude: number }>, padding?: number[]): Promise<CapResult<void>>` | 缩放视野以包含所有给定点。 |
-| [`translateMarker`](#translatemarker) | `translateMarker(opt: { markerId: number; destination: { latitude: number; longitude: number }; rotate?: number; duration?: number }): Promise<CapResult<void>>` | 平移指定标记到目标点（带旋转/时长）。 |
-| [`addMarkers`](#addmarkers) | `addMarkers(markers: MapMarker[]): Promise<CapResult<void>>` | 添加标记。 |
-| [`removeMarkers`](#removemarkers) | `removeMarkers(ids: number[]): Promise<CapResult<void>>` | 移除标记。 |
-| [`addPolylines`](#addpolylines) | `addPolylines(polylines: MapPolyline[]): Promise<CapResult<void>>` | 添加折线。 |
-| [`removePolylines`](#removepolylines) | `removePolylines(ids: number[]): Promise<CapResult<void>>` | 移除折线。 |
-| [`addCircles`](#addcircles) | `addCircles(circles: MapCircle[]): Promise<CapResult<void>>` | 添加圆。 |
-| [`removeCircles`](#removecircles) | `removeCircles(ids: number[]): Promise<CapResult<void>>` | 移除圆。 |
-| [`getScale`](#getscale) | `getScale(): Promise<CapResult<number>>` | 获取当前缩放级别 |
-| [`openMapApp`](#openmapapp) | `openMapApp(opt: { latitude: number; longitude: number; name?: string }): Promise<CapResult<void>>` | 打开第三方地图 App 导航（宿主放行才可用）。 |
-| [`on`](#on) | `on(event: 'regionchange' \| 'markerTap' \| 'updated', cb: (payload: unknown) => void): () => void` | 订阅地图事件。 |
-| [`getCenterLocation`](#getcenterlocation) | `getCenterLocation(): Promise<CapResult<{ latitude: number; longitude: number }>>` | 获取地图中心经纬 |
-| [`getRotate`](#getrotate) | `getRotate(): Promise<CapResult<number>>` | 获取地图旋转角（度） |
-| [`getSkew`](#getskew) | `getSkew(): Promise<CapResult<number>>` | 获取地图倾斜角（度） |
-| [`fromScreenLocation`](#fromscreenlocation) | `fromScreenLocation(x: number, y: number): Promise<CapResult<{ latitude: number; longitude: number }>>` | 屏幕坐标 → 经纬度。 |
-| [`toScreenLocation`](#toscreenlocation) | `toScreenLocation(latitude: number, longitude: number): Promise<CapResult<{ x: number; y: number }>>` | 经纬度 → 屏幕坐标。 |
-| [`setCenterOffset`](#setcenteroffset) | `setCenterOffset(offset: { x: number; y: number }): Promise<CapResult<void>>` | 设置地图中心偏移（把中心点从容器中心移开，露出标记）。 |
-| [`setBoundary`](#setboundary) | `setBoundary(boundaries: Array<{ latitude: number; longitude: number }>): Promise<CapResult<void>>` | 限制地图可拖动范围到给定边界多边形。 |
-| [`moveAlong`](#movealong) | `moveAlong(opt: { path: Array<{ latitude: number; longitude: number }>; duration?: number; autoRotate?: boolean }): Promise<CapResult<void>>` | 沿路径平滑移动（轨迹回放）。 |
-| [`addArc`](#addarc) | `addArc(arc: { id: number; start: { latitude: number; longitude: number }; end: { latitude: number; longitude: number }; color?: string; width?: number }): Promise<CapResult<void>>` | 添加弧线。 |
-| [`eraseLines`](#eraselines) | `eraseLines(ids: number[]): Promise<CapResult<void>>` | 删除折线（清空指定 id）。 |
-| [`initMarkerCluster`](#initmarkercluster) | `initMarkerCluster(enable: boolean): Promise<CapResult<void>>` | 开启/关闭点聚合。 |
-| [`setLocMarkerIcon`](#setlocmarkericon) | `setLocMarkerIcon(iconPath: string): Promise<CapResult<void>>` | 设置定位点图标。 |
-| [`addCustomLayer`](#addcustomlayer) | `addCustomLayer(layer: Record<string, unknown>): Promise<CapResult<void>>` | 添加自定义图层（Canvas 绘制覆盖物）。 |
-| [`removeCustomLayer`](#removecustomlayer) | `removeCustomLayer(layerId: string): Promise<CapResult<void>>` | 移除自定义图层。 |
-| [`addVisualLayer`](#addvisuallayer) | `addVisualLayer(layer: Record<string, unknown>): Promise<CapResult<void>>` | 添加可视化图层（GeoJSON → 样式）。 |
-| [`removeVisualLayer`](#removevisuallayer) | `removeVisualLayer(layerId: string): Promise<CapResult<void>>` | 移除可视化图层。 |
-| [`executeVisualLayerCommand`](#executevisuallayercommand) | `executeVisualLayerCommand(command: Record<string, unknown>): Promise<CapResult<string>>` | 执行可视化图层指令（增删改要素）。 |
-| [`addGroundOverlay`](#addgroundoverlay) | `addGroundOverlay(overlay: Record<string, unknown>): Promise<CapResult<void>>` | 添加地面覆盖物（图片贴地）。 |
-| [`updateGroundOverlay`](#updategroundoverlay) | `updateGroundOverlay(overlay: Record<string, unknown>): Promise<CapResult<void>>` | 更新地面覆盖物。 |
-| [`removeGroundOverlay`](#removegroundoverlay) | `removeGroundOverlay(overlayId: string): Promise<CapResult<void>>` | 移除地面覆盖物。 |
+| 方法 | 说明 |
+|---|---|
+| [`getRegion`](#getregion) | 获取当前地图视野（中心经纬 + 缩放级别） |
+| [`moveTo`](#moveto) | 平移地图中心到指定经纬。 |
+| [`moveToLocation`](#movetolocation) | 移动到当前定位点 |
+| [`includePoints`](#includepoints) | 缩放视野以包含所有给定点。 |
+| [`translateMarker`](#translatemarker) | 平移指定标记到目标点（带旋转/时长）。 |
+| [`addMarkers`](#addmarkers) | 添加标记。 |
+| [`removeMarkers`](#removemarkers) | 移除标记。 |
+| [`addPolylines`](#addpolylines) | 添加折线。 |
+| [`removePolylines`](#removepolylines) | 移除折线。 |
+| [`addCircles`](#addcircles) | 添加圆。 |
+| [`removeCircles`](#removecircles) | 移除圆。 |
+| [`getScale`](#getscale) | 获取当前缩放级别 |
+| [`openMapApp`](#openmapapp) | 打开第三方地图 App 导航（宿主放行才可用）。 |
+| [`on`](#on) | 订阅地图事件。 |
+| [`getCenterLocation`](#getcenterlocation) | 获取地图中心经纬 |
+| [`getRotate`](#getrotate) | 获取地图旋转角（度） |
+| [`getSkew`](#getskew) | 获取地图倾斜角（度） |
+| [`fromScreenLocation`](#fromscreenlocation) | 屏幕坐标 → 经纬度。 |
+| [`toScreenLocation`](#toscreenlocation) | 经纬度 → 屏幕坐标。 |
+| [`setCenterOffset`](#setcenteroffset) | 设置地图中心偏移（把中心点从容器中心移开，露出标记）。 |
+| [`setBoundary`](#setboundary) | 限制地图可拖动范围到给定边界多边形。 |
+| [`moveAlong`](#movealong) | 沿路径平滑移动（轨迹回放）。 |
+| [`addArc`](#addarc) | 添加弧线。 |
+| [`eraseLines`](#eraselines) | 删除折线（清空指定 id）。 |
+| [`initMarkerCluster`](#initmarkercluster) | 开启/关闭点聚合。 |
+| [`setLocMarkerIcon`](#setlocmarkericon) | 设置定位点图标。 |
+| [`addCustomLayer`](#addcustomlayer) | 添加自定义图层（Canvas 绘制覆盖物）。 |
+| [`removeCustomLayer`](#removecustomlayer) | 移除自定义图层。 |
+| [`addVisualLayer`](#addvisuallayer) | 添加可视化图层（GeoJSON → 样式）。 |
+| [`removeVisualLayer`](#removevisuallayer) | 移除可视化图层。 |
+| [`executeVisualLayerCommand`](#executevisuallayercommand) | 执行可视化图层指令（增删改要素）。 |
+| [`addGroundOverlay`](#addgroundoverlay) | 添加地面覆盖物（图片贴地）。 |
+| [`updateGroundOverlay`](#updategroundoverlay) | 更新地面覆盖物。 |
+| [`removeGroundOverlay`](#removegroundoverlay) | 移除地面覆盖物。 |
 
 ### `getRegion`
 

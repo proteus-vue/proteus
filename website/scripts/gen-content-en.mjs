@@ -1151,7 +1151,14 @@ export const CAP_SHARED_EN = {
   requiredNo: 'No',
   returnsLabel: 'Returns',
   descLabel: 'Doc',
-  methodCols: '| Method | Signature | Doc |',
+  // ★★方法表版式（2026-09-30 用户反馈：签名列放中间、"说明"在后面看着怪）
+  //   新版：`| Method | Doc |`（签名进方法详情段——那里本来就有完整签名块）；生命周期句柄再 + End support 列
+  methodCols: '| Method | Doc |',
+  methodColsWithEnds: '| Method | Doc | End support |',
+  methodColsSep2: '|---|---|',
+  methodColsSep3: '|---|---|---|',
+  hEndSupport: 'End support',
+  endNone: 'not on this target',
   noDataGeneric: '—',
   capLegend:
     '> Status scale: ✅ target shipped & this capability usable · ⚠️ target shipped but bridge missing → explicit `Err` degradation · 🟡 prototype mapping — capability bridge not wired · ⬜ target not started. Target architecture matrix → [Ends & maturity](/docs/framework/ends-matrix).',
@@ -1173,6 +1180,98 @@ export const CAP_SHARED_EN = {
 }
 
 /** 方法表 EN 文案（按接口名 → 方法名；缺省 '—'——签名列本身语言中立，zh JSDoc 不入 EN 页防零中文破功） */
+/**
+ * ★★生命周期事件 EN 文档（**与 SSOT 的 PAGE_EVENT_META / APP_EVENT_META 分表对应**）
+ *   ★为什么分两张 sheet：`show`/`hide`/`resize` 在页面级与应用级**同名但语义不同**
+ *     （页面显示 ≠ 应用进前台）——单层 key 会互相覆盖（本文件初版即此形态，自查纠正）。
+ */
+export const LIFECYCLE_EVENT_EN = {
+  page: {
+    load: 'Page loaded (fires once per entry; route params available)',
+    show: 'Page shown (app foregrounded, or returned from an upper page)',
+    ready: 'First frame rendered (once)',
+    hide: 'Page hidden (backgrounded, or covered by an upper page)',
+    unload: 'Page unloaded (left and destroyed)',
+    'route-done': 'Route animation finished (transition completed)',
+    'pull-down-refresh': 'Pull-to-refresh (user pulls the page down)',
+    'reach-bottom': 'Scrolled to bottom (useful for load-more)',
+    'page-scroll': 'Page scrolled (carries `scrollTop`)',
+    resize: 'Page size changed (rotation / split view / window resize)',
+    'tab-item-tap': 'Tab bar item tapped (carries `index` / `pagePath`)',
+    'share-app-message': 'Share to a friend (**decision-type**: the registered provider return value is the share content)',
+    'share-timeline': 'Share to timeline (**decision-type**)',
+    'add-to-favorites': 'Favorite the page (**decision-type**)',
+    'save-exit-state': 'Save exit state (**decision-type**: the provider returns the state object to persist)',
+  },
+  app: {
+    launch: 'App launched (exactly once, before the first show; auto-emitted on cold start)',
+    show: 'App entered the foreground',
+    hide: 'App moved to the background',
+    error: 'Uncaught runtime error',
+    'unhandled-rejection': 'Unhandled promise rejection',
+    'memory-warning': 'System memory warning (release caches here)',
+    'theme-change': 'System dark/light mode switched',
+    resize: 'Window size changed (rotation / split view)',
+    'page-not-found': 'Route not matched (navigate to a fallback page)',
+    'audio-interruption-begin': 'Audio session interrupted by the system (e.g. incoming call)',
+    'audio-interruption-end': 'Audio interruption ended (playback may resume)',
+  },
+}
+
+/**
+ * 事件各端来源 EN 译本（key = kebab 事件名；与 LIFECYCLE_EVENT_EN 同层、分页面/应用两组）
+ *   ★为何放在 EN 生成器（而不在 API 源）：API 源的 meta 是**中文 SSOT**（给 zh 页与代码读）；
+ *     EN 译本属「双语展示」层，与 CAP_METHODS_EN 同模式集中在本文件——避免在颐粒源里堆双语字符串。
+ *   ★缺 key 时回退中文（诚实：EN 页会看到中文来源说明）。
+ */
+export const LIFECYCLE_SRC_EN = {
+  page: {
+    load: { mp: 'Page.onLoad (dispatched by compiled output)', web: 'document load', app: 'virtual stack mount command' },
+    show: { mp: 'Page.onShow (dispatched by compiled output)', web: 'after load + visibilitychange→visible', app: 'stack enter command / shell resume' },
+    ready: { mp: 'Page.onReady (dispatched by compiled output)', web: 'first frame after load (rAF)', app: 'first frame of the screen' },
+    hide: { mp: 'Page.onHide (dispatched by compiled output)', web: 'visibilitychange→hidden', app: 'stack exit command / shell pause' },
+    unload: { mp: 'Page.onUnload (dispatched by compiled output)', web: 'beforeunload', app: 'stack unmount command' },
+    'route-done': { mp: 'Page.onRouteDone (base library 2.32.1+)', web: 'transitionend (pushed by the router layer)', app: 'Morpheus transition finished' },
+    'pull-down-refresh': { mp: 'Page.onPullDownRefresh', web: null, app: 'host pull gesture' },
+    'reach-bottom': { mp: 'Page.onReachBottom', web: 'scroll within 50px of bottom', app: 'scrolled to bottom' },
+    'page-scroll': { mp: 'Page.onPageScroll', web: 'scroll (rAF-throttled)', app: 'scroll callbacks' },
+    resize: { mp: 'Page.onResize (dispatched by compiled output)', web: 'resize', app: 'rotation / split view' },
+    'tab-item-tap': { mp: 'Page.onTabItemTap (dispatched by compiled output)', web: null, app: 'tab bar tap' },
+    'share-app-message': { mp: 'Page.onShareAppMessage', web: 'navigator.share (requires a user gesture)', app: 'system share sheet' },
+    'share-timeline': { mp: 'Page.onShareTimeline', web: null, app: 'system share sheet' },
+    'add-to-favorites': { mp: 'Page.onAddToFavorites', web: null, app: 'system favorite' },
+    'save-exit-state': { mp: 'Page.onSaveExitState (base library 2.7.4+)', web: 'beforeunload returnValue', app: 'state save before exit' },
+  },
+  app: {
+    launch: { mp: 'auto-emitted on the first onAppShow', web: 'auto-emitted on the first load', app: 'shell cold start' },
+    show: { mp: 'wx.onAppShow', web: 'visibilitychange→visible', app: 'shell resume (Activity.onResume / didBecomeActive)' },
+    hide: { mp: 'wx.onAppHide', web: 'visibilitychange→hidden', app: 'shell pause (Activity.onPause / willResignActive)' },
+    error: { mp: 'App.onError / wx.onError', web: 'window.onerror', app: 'shell error capture' },
+    'unhandled-rejection': { mp: 'App.onUnhandledRejection', web: 'unhandledrejection', app: 'shell error capture' },
+    'memory-warning': { mp: 'App.onMemoryWarning / wx.onMemoryWarning', web: 'performance.memory heuristic', app: 'iOS didReceiveMemoryWarning / Android onTrimMemory' },
+    'theme-change': { mp: 'App.onThemeChange / wx.onThemeChange', web: 'matchMedia(prefers-color-scheme)', app: 'shell theme notification' },
+    resize: { mp: 'wx.onWindowResize', web: 'resize', app: 'rotation / split view' },
+    'page-not-found': { mp: 'App.onPageNotFound / wx.onPageNotFound', web: 'route miss (pushed by the router layer)', app: 'route miss' },
+    'audio-interruption-begin': { mp: 'App.onAudioInterruptionBegin', web: null, app: 'shell audio-session notification' },
+    'audio-interruption-end': { mp: 'App.onAudioInterruptionEnd', web: null, app: 'shell audio-session notification' },
+  },
+}
+
+/** 事件 EN 备注（要点：性能红线 / 决策型语义 / 平台限制——与 zh SSOT 的 note 对应） */
+export const LIFECYCLE_EVENT_NOTE_EN = {
+  'route-done': 'Requires a recent base library; older versions generate the hook but never fire (honest degradation)',
+  'pull-down-refresh': 'Mini Program: requires `enablePullDownRefresh` in page.json; **Web has no native equivalent** (honestly never fires)',
+  'reach-bottom': 'Web uses a 50px threshold heuristic; Mini Program follows `onReachBottomDistance`',
+  'page-scroll': '**High-frequency event**: WeChat docs state it causes logical/render layer IPC ⇒ on Mini Program it is dispatched **only when you declared `onPageScroll`**; Web is rAF-throttled',
+  'tab-item-tap': 'Web has no tab bar concept (use component events for a custom tab bar)',
+  'share-app-message': 'Mini Program shows the top-right "Share" entry **only after you declare it** (the framework never adds it silently)',
+  'share-timeline': 'Same as share-to-friend: the entry appears only after declaration',
+  'add-to-favorites': 'Same as share-to-friend: the entry appears only after declaration',
+  'save-exit-state': 'Web semantics differ: the `beforeunload` return value is used for leave confirmation (browsers do not persist state)',
+  'memory-warning': 'Belongs to C25 `useBackground` (removed from `useAppLifecycle` in the 2026-09-30 dedupe)',
+  'theme-change': 'Belongs to C25 `useBackground` (removed from `useAppLifecycle` in the dedupe)',
+}
+
 export const CAP_METHODS_EN = {
   AuthState: {
     login: 'Log in via the host bridge (stores the token on success; missing bridge → explicit Err)',

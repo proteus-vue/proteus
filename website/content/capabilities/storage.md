@@ -22,17 +22,17 @@ useStorage(): CompatStorage
 
 ## 方法
 
-| 方法 | 签名 | 说明 |
-|---|---|---|
-| [`set`](#set) | `set(key: string, value: unknown): void` | 同步写入 |
-| [`remove`](#remove) | `remove(key: string): void` | 同步删除 |
-| [`clear`](#clear) | `clear(): void` | 同步清空 |
-| [`setAsync`](#setasync) | `setAsync(key: string, value: unknown): Promise<CapResult<void>>` | 异步写入（大值不阻塞主线程） |
-| [`removeAsync`](#removeasync) | `removeAsync(key: string): Promise<CapResult<void>>` | 异步删除 |
-| [`clearAsync`](#clearasync) | `clearAsync(): Promise<CapResult<void>>` | 异步清空 |
-| [`info`](#info) | `info(): Promise<CapResult<{ keys: string[]; currentSize: number; limitSize: number }>>` | 存储信息（keys / 已用 / 上限） |
-| [`batchGet`](#batchget) | `batchGet(keys: string[]): Promise<CapResult<Array<{ key: string; value: unknown }>>>` | 批量读 |
-| [`batchSet`](#batchset) | `batchSet(kvList: Array<{ key: string; value: unknown }>): Promise<CapResult<void>>` | 批量写 |
+| 方法 | 说明 |
+|---|---|
+| [`set`](#set) | 同步写入 |
+| [`remove`](#remove) | 同步删除 |
+| [`clear`](#clear) | 同步清空 |
+| [`setAsync`](#setasync) | 异步写入（大值不阻塞主线程） |
+| [`removeAsync`](#removeasync) | 异步删除 |
+| [`clearAsync`](#clearasync) | 异步清空 |
+| [`info`](#info) | 存储信息（keys / 已用 / 上限） |
+| [`batchGet`](#batchget) | 批量读 |
+| [`batchSet`](#batchset) | 批量写 |
 
 ### `set`
 

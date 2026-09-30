@@ -34,18 +34,18 @@ Param,Type,Required,Doc
 
 ## Methods
 
-| Method | Signature | Doc |
-|---|---|---|
-| [`addRules`](#addrules) | `addRules(rules: CacheRule[]): Promise<CapResult<string[]>>` | — |
-| [`deleteRules`](#deleterules) | `deleteRules(ids: string[]): Promise<CapResult<void>>` | — |
-| [`clearRules`](#clearrules) | `clearRules(): Promise<CapResult<void>>` | — |
-| [`start`](#start) | `start(): Promise<CapResult<void>>` | — |
-| [`stop`](#stop) | `stop(): Promise<CapResult<void>>` | — |
-| [`deleteCache`](#deletecache) | `deleteCache(id: string): Promise<CapResult<void>>` | — |
-| [`deleteCaches`](#deletecaches) | `deleteCaches(ids: string[]): Promise<CapResult<void>>` | — |
-| [`clearCaches`](#clearcaches) | `clearCaches(): Promise<CapResult<void>>` | — |
-| [`getState`](#getstate) | `getState(): CacheManagerState` | — |
-| [`on`](#on) | `on(event: 'request' \| 'enterWeakNetwork' \| 'exitWeakNetwork', cb: (payload: unknown) => void): () => void` | — |
+| Method | Doc |
+|---|---|
+| [`addRules`](#addrules) | — |
+| [`deleteRules`](#deleterules) | — |
+| [`clearRules`](#clearrules) | — |
+| [`start`](#start) | — |
+| [`stop`](#stop) | — |
+| [`deleteCache`](#deletecache) | — |
+| [`deleteCaches`](#deletecaches) | — |
+| [`clearCaches`](#clearcaches) | — |
+| [`getState`](#getstate) | — |
+| [`on`](#on) | — |
 
 ### `addRules`
 

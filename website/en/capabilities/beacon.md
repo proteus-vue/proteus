@@ -28,10 +28,10 @@ useBeacon(): CapResult<BeaconAPI>
 
 ## Methods
 
-| Method | Signature | Doc |
-|---|---|---|
-| [`onServiceChange`](#onservicechange) | `onServiceChange(cb: (res: { available: boolean; discovering: boolean }) => void): () => void` | — |
-| [`onUpdate`](#onupdate) | `onUpdate(cb: (res: { beacons: BeaconInfo[] }) => void): () => void` | — |
+| Method | Doc |
+|---|---|
+| [`onServiceChange`](#onservicechange) | — |
+| [`onUpdate`](#onupdate) | — |
 
 ### `onServiceChange`
 

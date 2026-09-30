@@ -28,11 +28,11 @@ useMediaProcessing(): CapResult<MediaProcessingAPI>
 
 ## Methods
 
-| Method | Signature | Doc |
-|---|---|---|
-| [`container`](#container) | `container(): MediaContainerHandle` | — |
-| [`videoDecoder`](#videodecoder) | `videoDecoder(): VideoDecoderHandle` | — |
-| [`audioPlayer`](#audioplayer) | `audioPlayer(): MediaAudioPlayerHandle` | — |
+| Method | Doc |
+|---|---|
+| [`container`](#container) | — |
+| [`videoDecoder`](#videodecoder) | — |
+| [`audioPlayer`](#audioplayer) | — |
 
 ### `container`
 

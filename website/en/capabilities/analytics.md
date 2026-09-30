@@ -22,9 +22,9 @@ Returns `TrackAPI` (synchronous handle/state object).
 
 ## Methods
 
-| Method | Signature | Doc |
-|---|---|---|
-| [`track`](#track) | `track(name: string, params?: Record<string, unknown>): Promise<CapResult<void>>` | — |
+| Method | Doc |
+|---|---|
+| [`track`](#track) | — |
 
 ### `track`
 

@@ -28,10 +28,10 @@ useAR(): CapResult<ARAPI>
 
 ## Methods
 
-| Method | Signature | Doc |
-|---|---|---|
-| [`createSession`](#createsession) | `createSession(options?: AROptions): ARSessionHandle` | — |
-| [`isSupported`](#issupported) | `isSupported(version?: 'v1' \| 'v2'): Promise<CapResult<boolean>>` | — |
+| Method | Doc |
+|---|---|
+| [`createSession`](#createsession) | — |
+| [`isSupported`](#issupported) | — |
 
 ### `createSession`
 

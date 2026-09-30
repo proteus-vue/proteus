@@ -28,9 +28,9 @@ useWindow(): CapResult<WindowAPI>
 
 ## Methods
 
-| Method | Signature | Doc |
-|---|---|---|
-| [`setSize`](#setsize) | `setSize(width: number, height: number): Promise<CapResult<void>>` | — |
+| Method | Doc |
+|---|---|
+| [`setSize`](#setsize) | — |
 
 ### `setSize`
 

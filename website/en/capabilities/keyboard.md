@@ -22,9 +22,9 @@ Returns `KeyboardLifecycle` (synchronous handle/state object).
 
 ## Methods
 
-| Method | Signature | Doc |
-|---|---|---|
-| [`onChange`](#onchange) | `onChange(cb: (info: KeyboardInfo) => void): () => void` | — |
+| Method | Doc |
+|---|---|
+| [`onChange`](#onchange) | — |
 
 ### `onChange`
 

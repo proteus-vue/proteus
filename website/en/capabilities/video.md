@@ -34,17 +34,17 @@ Param,Type,Required,Doc
 
 ## Methods
 
-| Method | Signature | Doc |
-|---|---|---|
-| [`play`](#play) | `play(): Promise<CapResult<void>>` | — |
-| [`pause`](#pause) | `pause(): Promise<CapResult<void>>` | — |
-| [`stop`](#stop) | `stop(): Promise<CapResult<void>>` | — |
-| [`seek`](#seek) | `seek(position: number): Promise<CapResult<void>>` | — |
-| [`playbackRate`](#playbackrate) | `playbackRate(rate: number): Promise<CapResult<void>>` | — |
-| [`requestFullScreen`](#requestfullscreen) | `requestFullScreen(options?: VideoFullScreenOptions): Promise<CapResult<void>>` | — |
-| [`exitFullScreen`](#exitfullscreen) | `exitFullScreen(): Promise<CapResult<void>>` | — |
-| [`sendDanmu`](#senddanmu) | `sendDanmu(danmu: { text: string; color?: string }): Promise<CapResult<void>>` | — |
-| [`on`](#on) | `on(event: 'play' \| 'pause' \| 'ended' \| 'timeupdate' \| 'error' \| 'fullscreenchange', cb: (payload: unknown) => void): () => void` | — |
+| Method | Doc |
+|---|---|
+| [`play`](#play) | — |
+| [`pause`](#pause) | — |
+| [`stop`](#stop) | — |
+| [`seek`](#seek) | — |
+| [`playbackRate`](#playbackrate) | — |
+| [`requestFullScreen`](#requestfullscreen) | — |
+| [`exitFullScreen`](#exitfullscreen) | — |
+| [`sendDanmu`](#senddanmu) | — |
+| [`on`](#on) | — |
 
 ### `play`
 

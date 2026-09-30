@@ -34,12 +34,12 @@ useSocketTask(url: string): Promise<CapResult<SocketTaskHandle>>
 
 ## 方法
 
-| 方法 | 签名 | 说明 |
-|---|---|---|
-| [`send`](#send) | `send(data: string): Promise<CapResult<void>>` | 发送文本消息 |
-| [`close`](#close) | `close(code?: number, reason?: string): Promise<CapResult<void>>` | 关闭连接（code/reason 透传给对端） |
-| [`onMessage`](#onmessage) | `onMessage(cb: (data: string) => void): () => void` | 订阅收到消息（返回取消） |
-| [`isConnected`](#isconnected) | `isConnected(): boolean` | 连接是否已建立 |
+| 方法 | 说明 |
+|---|---|
+| [`send`](#send) | 发送文本消息 |
+| [`close`](#close) | 关闭连接（code/reason 透传给对端） |
+| [`onMessage`](#onmessage) | 订阅收到消息（返回取消） |
+| [`isConnected`](#isconnected) | 连接是否已建立 |
 
 ### `send`
 

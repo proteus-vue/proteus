@@ -28,12 +28,12 @@ useCookie(): Promise<CapResult<CookieJar>>
 
 ## Methods
 
-| Method | Signature | Doc |
-|---|---|---|
-| [`get`](#get) | `get(name: string): string \| undefined` | — |
-| [`set`](#set) | `set(name: string, value: string, maxAge?: number): void` | — |
-| [`remove`](#remove) | `remove(name: string): void` | — |
-| [`list`](#list) | `list(): Record<string, string>` | — |
+| Method | Doc |
+|---|---|
+| [`get`](#get) | — |
+| [`set`](#set) | — |
+| [`remove`](#remove) | — |
+| [`list`](#list) | — |
 
 ### `get`
 

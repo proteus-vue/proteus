@@ -28,13 +28,13 @@ useUpdate(): Promise<CapResult<UpdateManagerAPI>>
 
 ## Methods
 
-| Method | Signature | Doc |
-|---|---|---|
-| [`checkUpdate`](#checkupdate) | `checkUpdate(): Promise<CapResult<{ hasUpdate: boolean }>>` | — |
-| [`onCheckForUpdate`](#oncheckforupdate) | `onCheckForUpdate(cb: (hasUpdate: boolean) => void): () => void` | — |
-| [`onUpdateReady`](#onupdateready) | `onUpdateReady(cb: () => void): () => void` | — |
-| [`onUpdateFailed`](#onupdatefailed) | `onUpdateFailed(cb: (errMsg: string) => void): () => void` | — |
-| [`applyUpdate`](#applyupdate) | `applyUpdate(): Promise<CapResult<void>>` | — |
+| Method | Doc |
+|---|---|
+| [`checkUpdate`](#checkupdate) | — |
+| [`onCheckForUpdate`](#oncheckforupdate) | — |
+| [`onUpdateReady`](#onupdateready) | — |
+| [`onUpdateFailed`](#onupdatefailed) | — |
+| [`applyUpdate`](#applyupdate) | — |
 
 ### `checkUpdate`
 
