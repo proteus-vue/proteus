@@ -341,6 +341,12 @@ public class MainActivity extends Activity {
             String as = appStackRun();
             sb.append(as).append('\n');
             writeReport("app-stack.json", as);
+        } else if ("host-runtime".equals(testPath)) {
+            // ★★G-39：**宿主运行时**（真实 quickjs-host.ts + 宿主壳生命周期转发 + 引擎内存账本）
+            sb.append("【G-39 宿主运行时（QuickJS 单线程宿主：生命周期/事件循环/职责边界/内存账本）】\n");
+            String hr = appHostRun();
+            sb.append(hr).append('\n');
+            writeReport("host-runtime.json", hr);
         } else if ("shot-scroll-native".equals(testPath)) {
             // ★★z-order 约束下的**滚动同步**验证（方案坑位 #4）
             //   场景：20 行列表，**第 5 行是 native-host（WebView）**；程序驱动滚动到若干位置，
@@ -810,6 +816,170 @@ public class MainActivity extends Activity {
         } catch (Exception e) {
             return "{\"ok\":false,\"error\":\"报告序列化失败\"}";
         }
+    }
+
+    /**
+     * ★★G-39：**宿主运行时**真机读数（真实 `quickjs-host.ts` 在 QuickJS 上跑 + 宿主壳转发 + 内存账本）。
+     *
+     * 【要证明什么（G-39 宿主运行时 SPI 与职责边界）】
+     *   ① 生命周期唯一拥有：宿主壳（onPause/onResume）转发事件 → runtime 状态机；非法转换被拒绝记账；
+     *   ② 事件循环归属：队列只由 `pumpFrame`/宿主泵推进；挂起不推进；
+     *      ★并且 **await/Promise 续体的 job 泵**（本轮新补的 `nativeRunPendingJobs`）——
+     *      两相调用顺序本身就是证明：run → 泵 job → finish；
+     *   ③ 职责边界：`runOnThread('background')` 诚实拒绝；未注册原生调用被拒（可操作信息）；
+     *   ④ 内存账本：`proteusHost.memUsage()` / `gc()` → JNI `JS_ComputeMemoryUsage` / `JS_RunGC`
+     *      ——**引擎真实 JS 堆**读数（不是宿主 PSS 估算）；
+     *   ⑤ G-41 宿主 conformance 用**本运行时**替换 stub：32 项（H-01~H-08）。
+     *
+     * 【宿主桥（transport）】本方法给 JS 侧注入 `memUsage`/`gc` 两个无参方法（JNI 条件探测注入）。
+     */
+    private String appHostRun() {
+        org.json.JSONObject out = new org.json.JSONObject();
+        try {
+            out.put("engine_available", QuickJsEngine.isAvailable());
+            if (!QuickJsEngine.isAvailable()) {
+                out.put("ok", false);
+                out.put("error", "引擎未加载：" + QuickJsEngine.getLoadError());
+                return out.toString(2);
+            }
+            String bundle;
+            try (java.io.InputStream is = getAssets().open("bundle-host-runtime.js")) {
+                java.io.ByteArrayOutputStream bos = new java.io.ByteArrayOutputStream();
+                byte[] buf = new byte[8192];
+                int n;
+                while ((n = is.read(buf)) > 0) bos.write(buf, 0, n);
+                bundle = new String(bos.toByteArray(), "UTF-8");
+            }
+            out.put("bundle_chars", bundle.length());
+
+            // ★宿主桥：memUsage / gc（无参签名——JNI 侧逐一条件探测注入）
+            final HostBridge bridge = new HostBridge();
+            long t0 = System.nanoTime();
+            QuickJsEngine.EvalResult load = QuickJsEngine.evalWithHost(bundle, bridge);
+            out.put("bundle_load_ok", load.ok);
+            if (!load.ok) {
+                out.put("ok", false);
+                out.put("error", "bundle eval 失败：" + load.error);
+                return out.toString(2);
+            }
+
+            // ① run 相位（含 async 注册：Promise 续体进 job 队列）
+            QuickJsEngine.EvalResult run = QuickJsEngine.eval("__proteusHostRun()");
+            out.put("run_ok", run.ok);
+            if (!run.ok) {
+                out.put("ok", false);
+                out.put("error", "run 相位失败：" + run.error);
+                return out.toString(2);
+            }
+            // ② ★job 泵（G-39 事件循环归属）：先读"是否还有挂起"，再显式泵。
+            //   ★诚实读数：C 桥在每次 eval 尾已自动泵一次（防 await 半执行）⇒ 这里的显式泵
+            //     通常拿 0——**0 不代表泵失效**，而是"eval 内已泵完"；证据链靠
+            //     `async_resolved_at_run=false` → finish 相位 `async_resolved=true` 的**转换**。
+            out.put("pending_after_run", QuickJsEngine.nativeHasPendingJobs());
+            int jobs = QuickJsEngine.nativeRunPendingJobs();
+            out.put("jobs_pumped", jobs);
+            // ③ finish 相位（读续体结果 + 内存账本）
+            QuickJsEngine.EvalResult fin = QuickJsEngine.eval("__proteusHostFinish()");
+            out.put("finish_ok", fin.ok);
+            if (!fin.ok) {
+                out.put("ok", false);
+                out.put("error", "finish 相位失败：" + fin.error);
+                return out.toString(2);
+            }
+            out.put("pending_after_finish", QuickJsEngine.nativeHasPendingJobs());
+            long ms = (System.nanoTime() - t0) / 1000000;
+            out.put("total_ms", ms);
+
+            org.json.JSONObject r = new org.json.JSONObject(run.value);
+            java.util.Iterator<String> keys = r.keys();
+            while (keys.hasNext()) {
+                String k = keys.next();
+                out.put(k, r.get(k));
+            }
+            org.json.JSONObject f = new org.json.JSONObject(fin.value);
+            java.util.Iterator<String> fk = f.keys();
+            while (fk.hasNext()) {
+                String k = fk.next();
+                out.put(k, f.get(k));
+            }
+            out.put("ok", r.optBoolean("ok") && f.optBoolean("async_resolved"));
+        } catch (Throwable t) {
+            try {
+                out.put("ok", false);
+                out.put("error", t.getClass().getSimpleName() + ": " + t.getMessage());
+            } catch (Exception ignored) { /* JSONObject 不会失败 */ }
+        }
+        try {
+            return out.toString(2);
+        } catch (Exception e) {
+            return "{\"ok\":false,\"error\":\"报告序列化失败\"}";
+        }
+    }
+
+    /**
+     * 宿主桥（G-39 transport）：`memUsage` / `gc` —— 由 JNI 按方法存在性**条件注入**。
+     * ★无参签名与 post/mount/update 不同 ⇒ C 侧用独立探测（见 quickjs_jni.c 的 host_call_noarg_impl）。
+     */
+    public static final class HostBridge {
+        @SuppressWarnings("unused")
+        public String memUsage() {
+            return QuickJsEngine.nativeMemoryUsage();
+        }
+
+        @SuppressWarnings("unused")
+        public void gc() {
+            QuickJsEngine.nativeRunGC();
+        }
+
+        @SuppressWarnings("unused")
+        public void post(String json) {
+            // 场景不依赖 post（渲染链路的 post 在 js-batch/js-render）；保留以满足 JNI 主入口探测
+        }
+    }
+
+    /**
+     * ★★G-39：**真实宿主壳生命周期转发**（Activity onPause/onResume → JS 侧运行时）。
+     *
+     * 【为什么必须由 Activity 覆写触发（而不是脚本里手动调 rt.suspend()）】
+     *   G-39 的核心治理对象是「谁拥有生命周期」——手动调只能证明**状态机**；
+     *   覆写 onPause/onResume ⇒ 证明**壳把系统的生命周期交给了 runtime**
+     *   （Backend 不再自己猜前后台——这正是 G-39 动机第一条）。
+     *   ⇒ 判据脚本会用 `adb shell input keyevent` / `am start another-app` 等方式触发真实 pause/resume。
+     *
+     * 【实现细节】转发经 QuickJS eval `__proteusHostShellLifecycle('pause'|'resume')`；
+     *   bundle 未加载时（hook 未定义）静默跳过（不是本场景的测试轮次——如 js-render 路径）。
+     */
+    private boolean shellHookLoaded = false;
+
+    private void forwardShellLifecycle(String evt) {
+        try {
+            if (!QuickJsEngine.isAvailable()) return;
+            QuickJsEngine.EvalResult r = QuickJsEngine.eval(
+                    "typeof __proteusHostShellLifecycle === 'function' ? String(__proteusHostShellLifecycle('" + evt + "')) : 'no-hook'");
+            if (r.ok && r.value != null && !"no-hook".equals(r.value)) {
+                shellHookLoaded = true;
+                QuickJsEngine.nativeRunPendingJobs();
+                // ★写壳转发报告（真机证据：脚本在 HOME/回前台后 pull 它，断言 suspend/resume 真被应用）
+                QuickJsEngine.EvalResult q = QuickJsEngine.eval(
+                        "typeof __proteusHostShellQuery === 'function' ? __proteusHostShellQuery() : '{\"hook_loaded\":false}'");
+                if (q.ok && q.value != null) writeReport("host-shell.json", q.value);
+                Log.i(TAG, "G-39 壳转发 " + evt + " → JS 侧（次数 " + r.value + "）");
+            }
+        } catch (Throwable t) {
+            Log.w(TAG, "G-39 壳转发失败（" + evt + "）：" + t.getMessage());
+        }
+    }
+
+    @Override
+    protected void onPause() {
+        super.onPause();
+        forwardShellLifecycle("pause");
+    }
+
+    @Override
+    protected void onResume() {
+        super.onResume();
+        forwardShellLifecycle("resume");
     }
 
     /**

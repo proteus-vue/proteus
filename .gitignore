@@ -35,6 +35,8 @@ popover-open.png
 hosts/android/app/src/main/assets/bundle-batch.js
 # ★M5 路由虚拟栈 bundle 的拷贝（源 hosts/android/bridge/dist/bundle-app-stack.js；同款规则同款理由）
 hosts/android/app/src/main/assets/bundle-app-stack.js
+# ★G-39 宿主运行时 bundle 的拷贝（源 hosts/android/bridge/dist/bundle-host-runtime.js；同款规则同款理由）
+hosts/android/app/src/main/assets/bundle-host-runtime.js
 hosts/**/build/
 hosts/**/*.app/
 hosts/**/verify-jsc

@@ -58,7 +58,13 @@ static struct {
   jmethodID mount;
   jmethodID update;
   jmethodID update_patches;
-} g_host_methods = { NULL, NULL, NULL, NULL };
+  /* ★★G-39：引擎内存读数 / GC（宿主"内存账本"两个入口——见 nativeMemoryUsage 注释） */
+  jmethodID mem_usage;
+  jmethodID gc;
+} g_host_methods = { NULL, NULL, NULL, NULL, NULL, NULL };
+
+/* ★前向声明：eval_impl 之后要泵 job（定义在下方；C 里调用点必须先可见） */
+static int pump_jobs_bounded(void);
 
 /** 惰性初始化运行时 + 上下文 */
 static int ensure_ctx(void) {
@@ -146,6 +152,61 @@ static JSValue js_host_post(JSContext *ctx, JSValueConst this_val, int argc, JSV
   return host_call_impl(ctx, g_host_methods.post, 0, this_val, argc, argv);
 }
 
+/**
+ * 无参宿主调用的公共实现（`proteusHost.memUsage()` / `proteusHost.gc()`）。
+ *
+ * 【为什么单列（不能复用 host_call_impl）】那个实现以「第一个参数是 payload 字符串」为前提
+ *   （`JS_ToCString(argv[0])`）⇒ 无参调用会直接 `argc<1` 返回 undefined（**静默**）。
+ *   两个入口的签名不同 ⇒ 分开实现，各自明确（本仓教训：形似而同名语义不同最危险）。
+ */
+static JSValue host_call_noarg_impl(JSContext *ctx, jmethodID mid, int has_ret) {
+  if (mid == NULL || g_host_obj == NULL || g_vm == NULL) return JS_UNDEFINED;
+  JSValue out = JS_UNDEFINED;
+  JNIEnv *env = NULL;
+  int attached = 0;
+  if ((*g_vm)->GetEnv(g_vm, (void **)&env, JNI_VERSION_1_6) != JNI_OK) {
+    if ((*g_vm)->AttachCurrentThread(g_vm, (void **)&env, NULL) == JNI_OK) attached = 1;
+  }
+  if (env != NULL) {
+    if (has_ret) {
+      jstring ret = (jstring)(*env)->CallObjectMethod(env, g_host_obj, mid);
+      if ((*env)->ExceptionCheck(env)) {
+        (*env)->ExceptionDescribe(env);
+        (*env)->ExceptionClear(env);
+        if (attached) (*g_vm)->DetachCurrentThread(g_vm);
+        return JS_ThrowInternalError(ctx, "宿主回调抛出异常（无参调用，见 logcat）");
+      }
+      if (ret != NULL) {
+        const char *rs = (*env)->GetStringUTFChars(env, ret, NULL);
+        out = JS_NewString(ctx, rs != NULL ? rs : "");
+        if (rs != NULL) (*env)->ReleaseStringUTFChars(env, ret, rs);
+        (*env)->DeleteLocalRef(env, ret);
+      }
+    } else {
+      (*env)->CallVoidMethod(env, g_host_obj, mid);
+      if ((*env)->ExceptionCheck(env)) (*env)->ExceptionDescribe(env), (*env)->ExceptionClear(env);
+    }
+  }
+  if (attached) (*g_vm)->DetachCurrentThread(g_vm);
+  return out;
+}
+
+/** `proteusHost.memUsage()` —— 引擎内存读数（返回 JSON 串；见 nativeMemoryUsage） */
+static JSValue js_host_mem_usage(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv) {
+  (void)this_val;
+  (void)argc;
+  (void)argv;
+  return host_call_noarg_impl(ctx, g_host_methods.mem_usage, 1);
+}
+
+/** `proteusHost.gc()` —— 触发 GC（宿主"内存管理"主动回收入口） */
+static JSValue js_host_gc(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv) {
+  (void)this_val;
+  (void)argc;
+  (void)argv;
+  return host_call_noarg_impl(ctx, g_host_methods.gc, 0);
+}
+
 /** `proteusHost.mount(treeJson)` —— 首帧建树（**有返回**：Java 侧回执 JSON） */
 static JSValue js_host_mount(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv) {
   return host_call_impl(ctx, g_host_methods.mount, 1, this_val, argc, argv);
@@ -218,6 +279,13 @@ static jstring eval_impl(JNIEnv *env, jstring source, jboolean with_host) {
     } else {
       LOGI("宿主仅实现 post ⇒ JS 侧走本地桩（适配器→宿主入口 链路验证）");
     }
+    // ★★G-39：内存账本两入口（按 Java 侧是否实现条件注入——同 mount 的条件注入原则）
+    if (g_host_methods.mem_usage != NULL) {
+      JS_SetPropertyStr(g_ctx, host, "memUsage", JS_NewCFunction(g_ctx, js_host_mem_usage, "memUsage", 0));
+    }
+    if (g_host_methods.gc != NULL) {
+      JS_SetPropertyStr(g_ctx, host, "gc", JS_NewCFunction(g_ctx, js_host_gc, "gc", 0));
+    }
     JS_SetPropertyStr(g_ctx, global, "proteusHost", host);
     JS_FreeValue(g_ctx, global);
   }
@@ -225,6 +293,11 @@ static jstring eval_impl(JNIEnv *env, jstring source, jboolean with_host) {
   // ★用 JS_Eval 的 GLOBAL 语义（src 作为全局脚本执行——与 IIFE bundle 的形态一致）
   JSValue v = JS_Eval(g_ctx, src, strlen(src), "<proteus-eval>", JS_EVAL_TYPE_GLOBAL);
   (*env)->ReleaseStringUTFChars(env, source, src);
+
+  // ★★G-39：eval 后**泵掉挂起 job**（await / Promise 续体）。
+  //   此前不泵 ⇒ 任何 await 代码在设备上"半执行"（同步段跑了、续体静默丢失）——本轮取证发现的实缺。
+  //   泵在结果判定**之前**：续体可能抛错（未捕获 rejection）⇒ 一并走下方异常分支（不静默）。
+  int jobs = pump_jobs_bounded();
 
   char *result = NULL;
   if (JS_IsException(v)) {
@@ -241,9 +314,10 @@ static jstring eval_impl(JNIEnv *env, jstring source, jboolean with_host) {
   } else {
     const char *s = js_to_utf8(g_ctx, v);
     char *esc = json_escape_alloc(s);
-    size_t need = strlen(esc) + 64;
+    size_t need = strlen(esc) + 96;
     result = (char *)malloc(need);
-    snprintf(result, need, "{\"ok\":true,\"value\":%s}", esc);
+    // ★`jobs` 读数随结果返回（诊断：await 稳定性——0 = 无续体，>0 = 事件循环确实推进过）
+    snprintf(result, need, "{\"ok\":true,\"value\":%s,\"jobs\":%d}", esc, jobs);
     free(esc);
     if (s != NULL) JS_FreeCString(g_ctx, s);
     JS_FreeValue(g_ctx, v);
@@ -282,6 +356,7 @@ Java_dev_proteus_layoutcore_QuickJsEngine_nativeSetHostCallback(JNIEnv *env, jcl
     g_host_obj = NULL;
   }
   g_host_methods.post = g_host_methods.mount = g_host_methods.update = g_host_methods.update_patches = NULL;
+  g_host_methods.mem_usage = g_host_methods.gc = NULL;
   if (obj != NULL) {
     g_host_obj = (*env)->NewGlobalRef(env, obj);
     jclass c = (*env)->GetObjectClass(env, obj);
@@ -293,6 +368,11 @@ Java_dev_proteus_layoutcore_QuickJsEngine_nativeSetHostCallback(JNIEnv *env, jcl
     g_host_methods.update = (*env)->GetMethodID(env, c, "update", "(Ljava/lang/String;)Ljava/lang/String;");
     if ((*env)->ExceptionCheck(env)) (*env)->ExceptionClear(env);
     g_host_methods.update_patches = (*env)->GetMethodID(env, c, "updatePatches", "(Ljava/lang/String;)Ljava/lang/String;");
+    if ((*env)->ExceptionCheck(env)) (*env)->ExceptionClear(env);
+    // ★★G-39：内存账本两入口（无参签名——与上面四个不同，各自探测）
+    g_host_methods.mem_usage = (*env)->GetMethodID(env, c, "memUsage", "()Ljava/lang/String;");
+    if ((*env)->ExceptionCheck(env)) (*env)->ExceptionClear(env);
+    g_host_methods.gc = (*env)->GetMethodID(env, c, "gc", "()V");
     if ((*env)->ExceptionCheck(env)) (*env)->ExceptionClear(env);
     if (g_host_methods.post == NULL) {
       LOGE("宿主回调缺少 post(String) 方法（其余入口仍按各自实现条件注入）");
@@ -313,4 +393,83 @@ Java_dev_proteus_layoutcore_QuickJsEngine_nativeVersion(JNIEnv *env, jclass cls)
   if (ctx != NULL) JS_FreeContext(ctx);
   JS_FreeRuntime(rt);
   return out;
+}
+
+/**
+ * ★★G-39：**挂起 job 泵**（事件循环归属的落地）。
+ *
+ * 【为什么必须有（本轮取证发现的真实缺口）】QuickJS 的 `await` / Promise 续体不进「待执行 job 队列」
+ *   就永远不会跑——此前本桥 eval 完**从不调 `JS_ExecutePendingJob`**
+ *   ⇒ 任何 `await`/`.then()` 的 JS 代码在设备上都是**半执行**（同步段跑了，续体静默丢失）。
+ *   G-39 说「事件循环由运行时的唯一拥有者管」——本函数就是这条所有权在 QuickJS 宿主上的落点：
+ *   **只有 runtime（宿主壳）能推进 job 队列**，JS 自己无法让续体跑起来。
+ *
+ * 【为什么限次】恶意的/错误的 promise 链可能无限自续（每次续体又建新 promise）
+ *   ⇒ 上限 `PROTEUS_MAX_JOBS_PER_PUMP`（10000）防死循环拖死宿主（诚实截断，返回实际执行数）。
+ */
+#define PROTEUS_MAX_JOBS_PER_PUMP 10000
+static int pump_jobs_bounded(void) {
+  if (g_rt == NULL) return 0;
+  int n = 0;
+  JSContext *c1 = NULL;
+  while (n < PROTEUS_MAX_JOBS_PER_PUMP && JS_ExecutePendingJob(g_rt, &c1) > 0) n++;
+  return n;
+}
+
+/** 泵掉全部可跑 job（含 eval 之后的续体）——返回执行数；未初始化 -1 */
+JNIEXPORT jint JNICALL
+Java_dev_proteus_layoutcore_QuickJsEngine_nativeRunPendingJobs(JNIEnv *env, jclass cls) {
+  (void)env;
+  (void)cls;
+  if (ensure_ctx() != 0) return -1;
+  return pump_jobs_bounded();
+}
+
+/** 是否还有挂起 job（诊断：await 未完成 = 还有 pending） */
+JNIEXPORT jboolean JNICALL
+Java_dev_proteus_layoutcore_QuickJsEngine_nativeHasPendingJobs(JNIEnv *env, jclass cls) {
+  (void)env;
+  (void)cls;
+  if (g_rt == NULL) return JNI_FALSE;
+  return JS_IsJobPending(g_rt) ? JNI_TRUE : JNI_FALSE;
+}
+
+/**
+ * ★★G-39/G-43：**引擎内存读数**（真实 JS 堆，不是宿主 PSS 估算）。
+ *
+ * 【为什么需要（"内存管理"要有账本）】G-43 所有权模型是 TS 侧承诺；端上验证需要
+ *   **引擎自己的内存读数**：分配前后、GC 前后的差值就是"内存管理是否真的在起作用"的机器证据
+ *   （`memory_used_size` / `malloc_size` / 对象数）。此前 Android 侧只有宿主 PSS（粗粒度、
+ *   含 native/Java/图形 → 分不出 JS 堆变化）。
+ */
+JNIEXPORT jstring JNICALL
+Java_dev_proteus_layoutcore_QuickJsEngine_nativeMemoryUsage(JNIEnv *env, jclass cls) {
+  (void)cls;
+  if (ensure_ctx() != 0) {
+    return (*env)->NewStringUTF(env, "{\"ok\":false,\"error\":\"运行时初始化失败\"}");
+  }
+  JSMemoryUsage u;
+  memset(&u, 0, sizeof(u));
+  JS_ComputeMemoryUsage(g_rt, &u);
+  char buf[768];
+  snprintf(buf, sizeof(buf),
+           "{\"ok\":true,\"malloc_size\":%lld,\"malloc_limit\":%lld,\"memory_used_size\":%lld,"
+           "\"malloc_count\":%lld,\"obj_count\":%lld,\"str_count\":%lld,\"str_size\":%lld,"
+           "\"js_func_count\":%lld,\"js_func_size\":%lld,\"js_func_code_size\":%lld,"
+           "\"atom_count\":%lld,\"array_count\":%lld}",
+           (long long)u.malloc_size, (long long)u.malloc_limit, (long long)u.memory_used_size,
+           (long long)u.malloc_count, (long long)u.obj_count, (long long)u.str_count,
+           (long long)u.str_size, (long long)u.js_func_count, (long long)u.js_func_size,
+           (long long)u.js_func_code_size, (long long)u.atom_count, (long long)u.array_count);
+  return (*env)->NewStringUTF(env, buf);
+}
+
+/** ★触发 GC（返回 0 成功；`JS_RunGC` 后内存读数应下降——GC 有效性的机器证据） */
+JNIEXPORT jint JNICALL
+Java_dev_proteus_layoutcore_QuickJsEngine_nativeRunGC(JNIEnv *env, jclass cls) {
+  (void)env;
+  (void)cls;
+  if (ensure_ctx() != 0) return -1;
+  JS_RunGC(g_rt);
+  return 0;
 }

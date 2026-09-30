@@ -100,6 +100,12 @@ const LOCAL_ONLY = {
   //   端上读数（在 QuickJS 上跑**真实 app-stack.ts**：2 万层深栈 / 预算冻结 / 命令守恒）无法在 CI 复现
   //   （CI 无设备、无宿主 APK）；本机侧的等价逻辑判据已在 tests/app-stack.test.ts（34 条，CI 覆盖）。
   'check:app-stack': '需真机产物（adb pull 的 app-stack.json）；CI 无设备（本机侧等价判据 = tests/app-stack.test.ts）',
+  // ★★G-39 宿主运行时判据（2026-09-30 新增）：与上两条同族——输入是真机产物
+  //   （host-runtime.json + host-shell.json）。端上读数（QuickJS 上跑真实 quickjs-host.ts：
+  //   生命周期状态机 / 真实 Activity 壳转发 / job 泵 / 引擎 JS 堆内存账本 / G-41 conformance
+  //   用真实运行时替换 stub）无法在 CI 复现（CI 无设备、无宿主 APK、无 QuickJS .so）。
+  //   本机侧等价判据 = tests/quickjs-host.test.ts（18 条，CI 覆盖，含 conformance 32/32）。
+  'check:host-runtime': '需真机产物（adb pull 的 host-runtime.json + host-shell.json）；CI 无设备（本机侧等价判据 = tests/quickjs-host.test.ts）',
   // ★HA5：AAR 构建（需 NDK + JDK17；CI 为 ubuntu-latest 未装 NDK）。★注意它**不是**"读产物"型门禁：
   //   它每次都**真构建**并断言 AAR 的四条内容判据（manifest/classes.jar/jni/R.txt + 符号齐备）。
   'check:host-abi-aar': '需 NDK + JDK17 交叉编译；CI 无 NDK',

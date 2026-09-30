@@ -187,6 +187,30 @@ else
   echo "    ⚠ 未见 $BUNDLE_AS —— 缺它只影响 app-stack 测试路径"
 fi
 
+# ★★G-39：宿主运行时 bundle（第三个 entry，同 build-batch.mjs）
+BUNDLE_HR="$HERE/bridge/dist/bundle-host-runtime.js"
+ENTRY_HR="$HERE/bridge/entry-host-runtime.ts"
+NEED_BUILD_HR=0
+if [ ! -f "$BUNDLE_HR" ]; then NEED_BUILD_HR=1; fi
+if [ -f "$ENTRY_HR" ] && [ -f "$BUNDLE_HR" ] && [ "$ENTRY_HR" -nt "$BUNDLE_HR" ]; then NEED_BUILD_HR=1; fi
+# ★同样盯核心源码（quickjs-host.ts 改了也要重建——否则真机测旧代码）
+if [ -f "$BUNDLE_HR" ] && [ "$HERE/../../packages/render-backend/src/quickjs-host.ts" -nt "$BUNDLE_HR" ]; then NEED_BUILD_HR=1; fi
+if [ -f "$BUNDLE_HR" ] && [ "$HERE/../../packages/render-backend/src/host-conformance.ts" -nt "$BUNDLE_HR" ]; then NEED_BUILD_HR=1; fi
+if [ "$NEED_BUILD_HR" = "1" ]; then
+  echo "    构建 host-runtime bundle（缺产物 或 入口/核心更新）…"
+  if ! node "$HERE/bridge/build-batch.mjs" 2>&1 | sed 's/^/    /'; then
+    echo "✗ host-runtime bundle 构建失败（含类型检查）—— 不静默跳过"
+    exit 3
+  fi
+fi
+if [ -f "$BUNDLE_HR" ]; then
+  mkdir -p "$APP/src/main/assets"
+  cp "$BUNDLE_HR" "$APP/src/main/assets/bundle-host-runtime.js"
+  echo "    bundle-host-runtime.js 已入 assets（$(du -h "$BUNDLE_HR" | awk '{print $1}')）"
+else
+  echo "    ⚠ 未见 $BUNDLE_HR —— 缺它只影响 host-runtime 测试路径"
+fi
+
 echo "==> ③ 打包资源与清单（aapt2）"
 MANIFEST="$APP/src/main/AndroidManifest.xml"
 if [ "$MODE" = "release" ]; then
