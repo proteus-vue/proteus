@@ -184,6 +184,33 @@ export const SEMANTIC_BACKEND_MAP: Record<string, Partial<Record<BackendId | 'we
     flutter: 'keepScreenOn',
     headless: 'keep-screen-on',
   },
+  // ★★2026-09-30 反馈组件补齐（U19 shell.toast / S8 ui.loading）：
+  //   组件本体（`p-toast` / `p-loading`）**早已存在且已注册**（`packages/components/index.ts`）
+  //   并有 MP 产物级测试（`tests/component-b5.test.ts`：wx:if/定时器/A@keyframes 断言）——
+  //   缺的只是**本表的后端映射登记**（G-31.4 门禁要求 ≥3 端才可标 implemented，
+  //   而 catalog 的 status 因此一直停在 planned ⇒ 与"组件已能用"的事实不符）。
+  //   ⇒ 本批补齐映射后，catalog status 据实转 implemented（**修的是记账，不是能力**）。
+  //   ★对照：`wx.showToast` / `wx.showLoading`（命令式全局提示）是**另一条路**——
+  //     前者由本组件承接（声明式、可跨端、样式可控），后者仍属 MP 官方 API 表（见 SPEC_PLANNED，
+  //     归"全局命令式提示"待补）。两者不冲突：组件是推荐路径，命令式是兼容路径。
+  'shell.toast': {
+    'vue-dom': 'div.proteus-toast',
+    'native-ios': 'UIView.toast',
+    'native-android': 'Toast',
+    'native-harmony': 'promptAction.showToast',
+    skyline: 'view.toast', // Skyline 无原生 toast 组件 → 用 view 自绘（组件本体即此策略）
+    flutter: 'ScaffoldMessenger.showSnackBar',
+    headless: 'toast',
+  },
+  'ui.loading': {
+    'vue-dom': 'div.proteus-loading',
+    'native-ios': 'UIActivityIndicatorView',
+    'native-android': 'ProgressBar',
+    'native-harmony': 'LoadingProgress',
+    skyline: 'view.loading', // 同上：自绘 spinner（组件内 @keyframes 动画）
+    flutter: 'CircularProgressIndicator',
+    headless: 'loading',
+  },
   // ★2026-09-18 语义去重：原键 capability.pick-photo 为重复名（组件实现调用 useCamera()，
   //   真实能力即 C1 capability.camera）——键已迁移，映射原样保留。
   'capability.camera': {

@@ -1,7 +1,7 @@
 # implemented 语义 × 后端映射（自动生成——SSOT = SEMANTIC_BACKEND_MAP + catalog status）
 
 > ★由 `npm run gen:docs` 生成，勿手改。覆盖门禁：每语义 ≥3 端映射（G-31.4）。
-> implemented 语义 **66** 个。
+> implemented 语义 **68** 个。
 
 | 语义 | vue-dom | native-ios | native-android | native-harmony | skyline | flutter | headless |
 |------|---------|-----------|----------------|----------------|---------|---------|----------|
@@ -38,6 +38,7 @@
 | `ui.slider` | div.proteus-slider | UISlider | SeekBar | Slider | slider | Slider | slider |
 | `ui.picker` | div.proteus-picker | UIDatePicker | DatePicker | DatePicker | picker-view | showDatePicker | picker |
 | `ui.form` | form | UIView.form | LinearLayout.form | FormComponent | form | Form | form |
+| `ui.loading` | div.proteus-loading | UIActivityIndicatorView | ProgressBar | LoadingProgress | view.loading | CircularProgressIndicator | loading |
 | `ui.progress` | div.proteus-progress | UIProgressView | ProgressBar | Progress | progress | LinearProgressIndicator | progress |
 | `ui.label` | label | UILabel.label | TextView.label | Text.label | label | Text.label | label |
 | `ui.selection` | div.proteus-selection | UITextView.selection | TextView.selection | Text.selection | selection | SelectableText | selection |
@@ -53,6 +54,7 @@
 | `shell.drawer` | aside.proteus-drawer | UIView.drawer | DrawerLayout | Panel | view.drawer | Drawer | drawer |
 | `shell.modal` | div.proteus-modal | UIAlertController | Dialog | CustomDialog | modal | showDialog | modal |
 | `shell.popover` | div.proteus-popover | UIPopoverController | PopupWindow | Popup | view.popover | showMenu | popover |
+| `shell.toast` | div.proteus-toast | UIView.toast | Toast | promptAction.showToast | view.toast | ScaffoldMessenger.showSnackBar | toast |
 | `shell.action-sheet` | div.proteus-action-sheet | UIAlertController.actionSheet | BottomSheet | ActionSheet | action-sheet | showModalBottomSheet | action-sheet |
 | `layout.split` | div.proteus-split | UISplitViewController | SlidingPaneLayout | SideBarContainer | view.split | Row | split |
 | `shell.page-container` | div.proteus-page-container | UIPresentationController | BottomSheetDialog | bindSheet | page-container | showModalBottomSheet | page-container |
