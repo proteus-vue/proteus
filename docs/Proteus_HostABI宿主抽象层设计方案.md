@@ -17,7 +17,9 @@
 > | HA3（能力插件） | ✅ **已落地** | ① 注册/查询/调用已通（真机 N6）；② ★**与 Playground §4.2 能力清单打通**（2026-09-30）：`proteus_set_shell_capabilities`（**接受 CLI `capability-manifest.json` 的同形**）+ `proteus_check_capabilities`（端上校验：所需 ⊆ 提供）；缺失 ⇒ 明确错误码 + **可操作报告**（点名缺失项 / 列出已提供 / 指向「扩展壳」）；
 > | | | ③ `proteus_load_tree` 集成：产物带 `requiredCapabilities` ⇒ **加载前**校验，不满足即拒绝（启动时暴露，不是跑到一半崩），且**不破坏已加载的旧树**；
 > | | | ④ ★**跨语言 golden**（`tests/golden/capability-manifest.json`，由 TS 侧 `scanCapabilities` 真实产出冻结）+ 新鲜度门禁 `check:capability-golden`（TS 侧一改形状就红）。C 宿主一致性测试 **36 条判据**全过 |
-> | HA4 / HA5 / HA6 | ❌ 未做 | — |
+> | HA4（原生组件宿主） | ✅ **主体已落地** | ⑦ 号接口从"契约联通"升级为**引擎驱动的生命周期**：`load_tree` 建树即创建（带内核算出的几何）/ `submit_frame` 后几何真变了才 update / 节点消失·换 kind·销毁引擎即销毁；`proteus_sync_native_views` 供**滚动/动画后**手动同步。★两种失败都明确：宿主未实现回调 ⇒ 报错 + last_error 点名；宿主拒绝 kind ⇒ 记账 + 可读原因。**C 宿主 46 条判据**（含 kind 变更重建）全过 |
+> | | | ★**诚实边界**：z-order 与滚动同步**仍属宿主**（原生 View 与自绘内容的层序由平台决定——iOS 子视图天然在上、Android 需显式处理）；内核只给几何。这是平台成本，不抽象。 |
+> | HA5 / HA6 | ❌ 未做 | — |
 >
 > **★HA1 落地时的一个关键方法论（值得记）**：等价性判据（"两条路产出同一个东西"）**必须喂同一份输入**——
 >   首版探针直接拿适配器产物比，而适配器**不含** `textMeasures`（生产里由宿主在 mount 时补）

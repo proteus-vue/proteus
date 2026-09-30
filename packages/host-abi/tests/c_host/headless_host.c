@@ -75,6 +75,29 @@ static int32_t on_cap_echo(const char* arg_json, char* out, size_t out_len, void
     return PROTEUS_OK;
 }
 
+/* ── ⑦ 原生组件回调（HA4：引擎驱动生命周期，宿主只实现这三个） ── */
+static int g_nv_created = 0, g_nv_updated = 0, g_nv_destroyed = 0;
+static char g_nv_last_kind[64] = {0};
+static float g_nv_last_h = 0.0f;
+
+static void* on_nv_create(const char* kind, const ProteusRect* frame, void* user_data) {
+    (void)user_data;
+    g_nv_created++;
+    if (kind) { strncpy(g_nv_last_kind, kind, sizeof(g_nv_last_kind) - 1); }
+    if (frame) g_nv_last_h = frame->height;
+    /* ★句柄是**不透明**的（引擎不解引用它）——用计数器伪造即可，正好验证该契约 */
+    return (void*)(intptr_t)g_nv_created;
+}
+static void on_nv_update(void* handle, const ProteusRect* frame, void* user_data) {
+    (void)handle; (void)user_data;
+    g_nv_updated++;
+    if (frame) g_nv_last_h = frame->height;
+}
+static void on_nv_destroy(void* handle, void* user_data) {
+    (void)handle; (void)user_data;
+    g_nv_destroyed++;
+}
+
 int main(void) {
     printf("═══ Host ABI headless 参考宿主（纯 C，零平台依赖）═══\n");
 
@@ -109,7 +132,8 @@ int main(void) {
     vt.user_data = NULL;
     vt.request_frame = on_request_frame;
     vt.measure_text = on_measure_text;
-    /* 故意**不提供** native_view_* —— 判据 7 要验"未提供时明确报错" */
+    /* ★HA4：先把 native_view_* 留空 —— 判据 7 要验"未提供时明确报错"；
+     *   判据 6c 会**另建一个引擎**带上真回调来验生命周期。 */
 
     ProteusEngine* eng = proteus_engine_create(&vt, &ver, hint, sizeof(hint));
     CHECK(eng != NULL, "按契约实现 vtable ⇒ 引擎创建成功");
@@ -236,12 +260,66 @@ int main(void) {
     }
 
     /* ── 判据 7：原生组件接口（未提供回调 ⇒ 明确报错）── */
+    /* 先验"树里有 nativeHost 节点 + 宿主没实现 ⑦ ⇒ 明确报错"（不静默跳过） */
+    {
+        const char* nat_tree =
+            "{\"viewport\":{\"width\":390,\"height\":844},\"nodes\":["
+            "{\"id\":1,\"width\":390,\"height\":800,\"flexDirection\":\"column\"},"
+            "{\"id\":9,\"parentId\":1,\"nativeHost\":true,\"semantic\":\"shell.webview\","
+            "\"width\":390,\"height\":200}]}";
+        rc = proteus_load_tree(eng, nat_tree);
+        CHECK(rc != PROTEUS_OK, "树里有 nativeHost 而宿主未实现 ⑦ ⇒ 拒绝加载（不静默跳过）");
+        stats = proteus_stats_json(eng);
+        CHECK(stats != NULL && strstr(stats, "native_view_create") != NULL,
+              "且诊断点名缺失的回调（可归因）");
+    }
+
+    /* ── 判据 6c：原生组件**生命周期**（引擎驱动；宿主只实现三个回调）── */
+    {
+        ProteusHostVTable vt2 = vt;
+        vt2.native_view_create = on_nv_create;
+        vt2.native_view_update = on_nv_update;
+        vt2.native_view_destroy = on_nv_destroy;
+        ProteusEngine* e2 = proteus_engine_create(&vt2, &ver, hint, sizeof(hint));
+        CHECK(e2 != NULL, "带原生组件回调的宿主创建引擎成功");
+
+        const char* nat_tree =
+            "{\"viewport\":{\"width\":390,\"height\":844},\"nodes\":["
+            "{\"id\":1,\"width\":390,\"height\":800,\"flexDirection\":\"column\"},"
+            "{\"id\":9,\"parentId\":1,\"nativeHost\":true,\"semantic\":\"shell.webview\","
+            "\"width\":390,\"height\":200}]}";
+        rc = proteus_load_tree(e2, nat_tree);
+        CHECK(rc == PROTEUS_OK, "带 nativeHost 的树加载成功");
+        CHECK(g_nv_created == 1, "★**引擎驱动创建**：建树即创建 1 个原生 View（宿主不必自己遍历）");
+        CHECK(strcmp(g_nv_last_kind, "shell.webview") == 0, "kind 来自树里的 semantic（shell.webview）");
+        CHECK(g_nv_last_h > 199.0f && g_nv_last_h < 201.0f, "★创建时**带上内核算出的几何**（高 ≈200）");
+
+        /* 几何没变 ⇒ 手动同步不该触发 update（幂等；不白付跨边界成本） */
+        rc = proteus_sync_native_views(e2);
+        CHECK(rc == PROTEUS_OK && g_nv_updated == 0, "几何未变 ⇒ 同步幂等（不调 update）");
+
+        /* 换一棵没有 nativeHost 的树 ⇒ 旧的应被销毁 */
+        const char* plain_tree =
+            "{\"viewport\":{\"width\":390,\"height\":844},\"nodes\":[{\"id\":1,\"width\":390,\"height\":800}]}";
+        rc = proteus_load_tree(e2, plain_tree);
+        CHECK(rc == PROTEUS_OK && g_nv_destroyed == 1, "★换树 ⇒ 引擎销毁旧的原生 View（不留孤儿对象）");
+
+        /* 换回带 native 的树，再销毁引擎 ⇒ 应再销毁一次
+         * ★断言口径（首版写错，当场被挡下）：`created_before` 必须在 **load_tree 之前**读——
+         *   写在之后读到的就是"已经 +1"的值，再 +1 就永远不成立。 */
+        int created_before = g_nv_created;
+        rc = proteus_load_tree(e2, nat_tree);
+        CHECK(rc == PROTEUS_OK && g_nv_created == created_before + 1, "换回带 native 的树 ⇒ 重新创建 1 个");
+        proteus_engine_destroy(e2);
+        CHECK(g_nv_destroyed == 2, "★销毁引擎 ⇒ 清场（宿主对象与内核树同生共死）");
+        printf("      原生组件读数：created=%d updated=%d destroyed=%d\n",
+               g_nv_created, g_nv_updated, g_nv_destroyed);
+    }
+
+    /* 手动入口仍可用（宿主显式创建/更新/销毁；引擎不解引用句柄） */
     ProteusRect fr = {0.0f, 0.0f, 100.0f, 100.0f};
     void* nv = proteus_native_view_create(eng, "map", &fr);
-    CHECK(nv == NULL, "宿主未实现 native_view_create ⇒ 返回 NULL（不伪造句柄）");
-    stats = proteus_stats_json(eng);
-    CHECK(stats != NULL && strstr(stats, "native_view_create") != NULL,
-          "并把'未实现'写进诊断（last_error 可读）");
+    CHECK(nv == NULL, "宿主未实现 native_view_create ⇒ 手动入口也返回 NULL（不伪造句柄）");
 
     /* ── 判据 8：入参防御 ── */
     CHECK(proteus_load_tree(eng, NULL) == PROTEUS_ERR_INVALID_ARG, "load_tree(NULL) ⇒ 明确错误码");

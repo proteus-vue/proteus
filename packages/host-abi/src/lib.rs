@@ -179,6 +179,13 @@ struct Stats {
     pointer_events: u64,
     lifecycle_events: u64,
     surface_changes: u64,
+    /// ★HA4：原生组件（⑦）生命周期读数——**四个数各自可分**（不做成一个大计数：
+    ///   "创建了几个/移动了几次/销毁了几个/跳过了几个"是四个不同的问题）
+    native_view_created: u64,
+    native_view_updated: u64,
+    native_view_destroyed: u64,
+    native_view_create_failed: u64,
+    native_view_skipped_no_geometry: u64,
 }
 
 struct EngineState {
@@ -192,6 +199,19 @@ struct EngineState {
     ///   能力——无需 Rust handler）；`capabilities` 是**实现**（可被 `call_capability` 真正调用）。
     ///   `None` = 未声明（此时只认已注册的 handler —— 向后兼容旧宿主）。
     shell_capabilities: Option<Vec<String>>,
+    /// ★HA4：**原生组件（⑦）的生命周期登记**（node_id → (kind, 宿主句柄, 上次上报的矩形)）
+    ///
+    /// 【为什么引擎要持有它（设计要点）】`nativeHost` 节点的真实原生 View 由**宿主**创建
+    ///   （内核不碰平台类型），但**谁在什么时候创建/移动/销毁**必须由引擎统一编排——
+    ///   否则宿主就得自己维护"IR ↔ 原生对象"的对应关系（那正是"换宿主重写一遍"的来源）。
+    ///   引擎侧只持**不透明句柄**（`*mut c_void`），不解释它。
+    native_views: std::collections::HashMap<u32, (String, *mut c_void, ProteusRect)>,
+    /// 树里的 nativeHost 节点（`id` + `semantic` as kind；**按 id 升序**）——`load_tree` 时抽取
+    ///
+    /// 【为什么在这里存（而不是每次重新扫树）】内核是"哪些节点是 nativeHost"的**唯一事实来源**
+    ///   （`NodeDto.native_host` 在 `proteus_layout_create` 的回传里有 `native_hosts`）；
+    ///   但本层拿到的是**树 JSON**（输入），抽取一次存下来即可——**不重建树、不遍历内核树**。
+    native_nodes: Vec<(u32, String)>,
     stats: Stats,
     last_frame_ns: i64,
     surface: Option<ProteusSurface>,
@@ -273,6 +293,11 @@ fn stats_json(s: &Stats) -> String {
         "pointer_events": s.pointer_events,
         "lifecycle_events": s.lifecycle_events,
         "surface_changes": s.surface_changes,
+        "native_view_created": s.native_view_created,
+        "native_view_updated": s.native_view_updated,
+        "native_view_destroyed": s.native_view_destroyed,
+        "native_view_create_failed": s.native_view_create_failed,
+        "native_view_skipped_no_geometry": s.native_view_skipped_no_geometry,
         // ★派生读数：批处理红线的直接判据（每次提交平均多少条指令 —— 越大越"批"）
         "ops_per_submit": if s.submit_frame_calls == 0 { 0.0 }
             else { s.submitted_ops as f64 / s.submit_frame_calls as f64 },
@@ -401,6 +426,8 @@ pub unsafe extern "C" fn proteus_engine_create(
         vtable: vt,
         capabilities: HashMap::new(),
         shell_capabilities: None,
+        native_views: HashMap::new(),
+        native_nodes: Vec::new(),
         stats: Stats::default(),
         last_frame_ns: 0,
         surface: None,
@@ -427,7 +454,10 @@ pub unsafe extern "C" fn proteus_engine_destroy(engine: *mut ProteusEngine) -> *
         .lock()
         .ok()
         .and_then(|mut g| g.as_mut().and_then(|m| m.remove(&id)));
-    if let Some(st) = removed {
+    if let Some(mut st) = removed {
+        // ★HA4：先销毁全部原生 View（⑧ 的顺序纪律：宿主对象与内核树**同生共死**——
+        //   若先销毁树再通知宿主，"此刻几何已查不到"，宿主只能凭空猜着拆）
+        destroy_all_native_views(&mut st);
         // 释放内核树（**必须**——否则内核注册表泄漏）
         if st.tree != 0 {
             let _ = ffi::proteus_layout_destroy(st.tree);
@@ -568,6 +598,8 @@ pub unsafe extern "C" fn proteus_load_tree(engine: *mut ProteusEngine, tree_json
                 return PROTEUS_ERR_INVALID_ARG;
             }
         };
+        // ★在 `CString::new` **吃掉** `prepared` 之前，先抽出 native 清单（顺序敏感）
+        let native_nodes = native_nodes_in_tree(&prepared);
         let cs = match CString::new(prepared) {
             Ok(c) => c,
             Err(_) => {
@@ -585,7 +617,21 @@ pub unsafe extern "C" fn proteus_load_tree(engine: *mut ProteusEngine, tree_json
             return PROTEUS_ERR_INTERNAL;
         }
         st.tree = h;
+        // ★HA4：换树 ⇒ ① 抽取本树的 nativeHost 清单（供生命周期驱动）
+        //              ② **旧的原生 View 全部销毁**（它们绑的是旧树；留着就是孤儿对象）
+        st.native_nodes = native_nodes;
+        destroy_all_native_views(st);
+        // ③ 建新的（宿主未实现 ⑦ 号接口时**明确报错**——不静默跳过）
+        //
+        // ★★注意清空 `last_error` 的**位置**（本轮实测的缺陷）：必须在 sync **之前**清。
+        //   首版把它放在最后 ⇒ 把 sync 刚写进去的"宿主拒绝创建（kind=X）"**当场抹掉**，
+        //   现象是"拒绝发生了但 last_error 是空的"（`native_view_create_failed=1` 却查不到原因）。
+        //   ⇒ 纪律：**完成类清理要在产生该类信息的动作之前**做，否则就是在擦自己的记录。
         st.last_error = None;
+        let rc = sync_native_views(st, "load_tree");
+        if rc != PROTEUS_OK {
+            return rc;
+        }
         PROTEUS_OK
     });
     r.unwrap_or(PROTEUS_ERR_INVALID_ARG)
@@ -690,7 +736,13 @@ pub unsafe extern "C" fn proteus_submit_frame(
             .and_then(|v| v.get("applied").and_then(|a| a.as_u64()))
             .unwrap_or(1);
         st.stats.submitted_ops += n;
+        // ★HA4：指令流改了布局 ⇒ 原生 View 的几何要跟着走（**只对真变了的调 update**）
+        //   ★`last_error` 的清空同样放在 sync **之前**（见 load_tree 处的同款注释）
         st.last_error = None;
+        let rc = sync_native_views(st, "submit_frame");
+        if rc != PROTEUS_OK {
+            return rc;
+        }
         PROTEUS_OK
     });
     r.unwrap_or(PROTEUS_ERR_INVALID_ARG)
@@ -834,6 +886,162 @@ pub unsafe extern "C" fn proteus_anim_stop(engine: *mut ProteusEngine, json: *co
     r.unwrap_or(PROTEUS_ERR_INVALID_ARG)
 }
 
+/* ────────────────────────── ⑦ 原生组件：**引擎驱动的生命周期**（HA4） ────────────────────────── */
+
+/// 读节点**绝对几何**（经内核 `proteus_layout_node_rect`；`None` = 查不到，含"不在树上/display:none"）
+///
+/// 【为什么用点查询而不是 `proteus_layout_rects_bin`】后者返回的是**最近一次重排范围内**的矩形
+///   （V4 的性能设计）；而原生 View 的摆放**不能**依赖"它恰好在最近那次 scope 里"。
+fn node_rect(st: &EngineState, node_id: u32) -> Option<ProteusRect> {
+    if st.tree == 0 {
+        return None;
+    }
+    let p = unsafe { ffi::proteus_layout_node_rect(st.tree, node_id) };
+    if p.is_null() {
+        return None;
+    }
+    let json = unsafe { CStr::from_ptr(p) }.to_string_lossy().into_owned();
+    unsafe { ffi::proteus_layout_free_string(p) };
+    let v: serde_json::Value = serde_json::from_str(&json).ok()?;
+    if v.get("ok").and_then(|b| b.as_bool()) != Some(true) {
+        return None;
+    }
+    Some(ProteusRect {
+        x: v.get("x")?.as_f64()? as f32,
+        y: v.get("y")?.as_f64()? as f32,
+        width: v.get("width")?.as_f64()? as f32,
+        height: v.get("height")?.as_f64()? as f32,
+    })
+}
+
+/// 从树 JSON 抽取 nativeHost 节点（`id` + `semantic` 作 kind）——**按 id 升序**（确定性）
+fn native_nodes_in_tree(raw: &str) -> Vec<(u32, String)> {
+    let mut out: Vec<(u32, String)> = Vec::new();
+    let Ok(v) = serde_json::from_str::<serde_json::Value>(raw) else {
+        return out;
+    };
+    if let Some(nodes) = v.get("nodes").and_then(|n| n.as_array()) {
+        for n in nodes {
+            if n.get("nativeHost").and_then(|b| b.as_bool()) != Some(true) {
+                continue;
+            }
+            let Some(id) = n.get("id").and_then(|i| i.as_u64()) else { continue };
+            let kind = n.get("semantic").and_then(|s| s.as_str()).unwrap_or("native").to_string();
+            out.push((id as u32, kind));
+        }
+    }
+    out.sort_by_key(|(id, _)| *id);
+    out
+}
+
+/// 矩形是否**真的**变了（逐字段；`NaN` 视作"变了"以求安全——宁可多同步一次）
+fn rect_changed(a: &ProteusRect, b: &ProteusRect) -> bool {
+    !(a.x == b.x && a.y == b.y && a.width == b.width && a.height == b.height)
+}
+
+/// ★**引擎驱动原生组件生命周期**：创建缺失的 / 同步几何 / 销毁过时的
+///
+/// 【三条语义（都是"静默失效"的预防）】
+///   ① **只创建缺失的**（同 id 二次同步不重复创建——原生对象是稀缺资源）；
+///   ② **几何真变了才调 update**（逐字段比较；每帧无脑同步 = 白付跨边界成本）；
+///   ③ **回调缺失 / 宿主拒绝 ⇒ 明确报错**（`last_error` + 错误码；不假装成功）。
+///
+/// 【为什么由引擎编排（而不是宿主自己维护）】否则宿主就得维护"IR ↔ 原生对象"的对应关系
+///   ——那正是"换宿主重写一遍"的来源。引擎只持**不透明句柄**，不解释平台类型。
+fn sync_native_views(st: &mut EngineState, reason: &str) -> i32 {
+    let ids = st.native_nodes.clone();
+    if ids.is_empty() && st.native_views.is_empty() {
+        return PROTEUS_OK; // 无 native 节点、也无已建对象 ⇒ 无活可干
+    }
+    // ① 销毁过时的（先销毁：避免 id 复用时新旧对象并存）
+    let stale: Vec<u32> = st
+        .native_views
+        .keys()
+        .copied()
+        .filter(|k| !ids.iter().any(|(i, _)| i == k))
+        .collect();
+    for id in stale {
+        if let Some((_, handle, _)) = st.native_views.remove(&id) {
+            if let Some(f) = st.vtable.native_view_destroy {
+                unsafe { f(handle, st.vtable.user_data) };
+            }
+            st.stats.native_view_destroyed += 1;
+        }
+    }
+    // ② 创建缺失 + ③ 同步几何
+    for (id, kind) in ids {
+        let rect = match node_rect(st, id) {
+            Some(r) => r,
+            None => {
+                // 无几何（如 display:none）⇒ 不创建（建了也摆不了）；记账以便归因
+                st.stats.native_view_skipped_no_geometry += 1;
+                continue;
+            }
+        };
+        match st.native_views.get_mut(&id) {
+            Some((_, handle, last)) => {
+                if rect_changed(last, &rect) {
+                    if let Some(f) = st.vtable.native_view_update {
+                        let h = *handle;
+                        unsafe { f(h, &rect as *const ProteusRect, st.vtable.user_data) };
+                        *last = rect;
+                        st.stats.native_view_updated += 1;
+                    }
+                }
+            }
+            None => {
+                let Some(f) = st.vtable.native_view_create else {
+                    // ★不静默：树里要原生组件而宿主没实现创建 ⇒ 明确报错（错误码 + last_error）
+                    st.last_error = Some(format!(
+                        "树里有 nativeHost 节点 {id}（kind={kind}），但宿主未提供 native_view_create \
+                         （⑦ 号接口未实现）——原生组件无法创建（{reason}）"
+                    ));
+                    return PROTEUS_ERR_INVALID_ARG;
+                };
+                let Ok(ck) = CString::new(kind.clone()) else {
+                    return PROTEUS_ERR_INVALID_ARG;
+                };
+                let handle = unsafe { f(ck.as_ptr(), &rect as *const ProteusRect, st.vtable.user_data) };
+                if handle.is_null() {
+                    // ★宿主**明确拒绝**（如 kind 不支持）⇒ 记账 + 可读原因（不静默）
+                    st.last_error = Some(format!(
+                        "宿主拒绝创建原生组件（node {id}, kind={kind}）——native_view_create 返回 NULL；\
+                         若该 kind 不受支持，业务侧应走降级路径（不要假设它可用）"
+                    ));
+                    st.stats.native_view_create_failed += 1;
+                    continue;
+                }
+                st.native_views.insert(id, (kind, handle, rect));
+                st.stats.native_view_created += 1;
+            }
+        }
+    }
+    PROTEUS_OK
+}
+
+/// 销毁全部原生 View（引擎销毁 / 换树时清场）
+fn destroy_all_native_views(st: &mut EngineState) {
+    let ids: Vec<u32> = st.native_views.keys().copied().collect();
+    for id in ids {
+        if let Some((_, handle, _)) = st.native_views.remove(&id) {
+            if let Some(f) = st.vtable.native_view_destroy {
+                unsafe { f(handle, st.vtable.user_data) };
+            }
+            st.stats.native_view_destroyed += 1;
+        }
+    }
+}
+
+/// ★**手动同步入口**（宿主在**滚动/动画**后调用）——几何可能变了而指令流没提交
+///
+/// 【为什么要手动入口】引擎自动同步挂在 `load_tree` / `submit_frame` 上；
+///   但**滚动**（宿主侧偏移）与**动画 tick**（每帧改 translate）也会让原生 View 该跟着动
+///   ——那些路径不经过上面两个入口 ⇒ 提供显式同步（宿主在滚动/每帧回调里调）。
+#[no_mangle]
+pub unsafe extern "C" fn proteus_sync_native_views(engine: *mut ProteusEngine) -> i32 {
+    let r = with_engine(engine, |st| sync_native_views(st, "manual-sync"));
+    r.unwrap_or(PROTEUS_ERR_INVALID_ARG)
+}
 /* ────────────────────────── ⑦ 原生组件宿主 ────────────────────────── */
 
 #[no_mangle]
@@ -1144,6 +1352,89 @@ mod tests {
     static MEASURE_HITS: Mutex<Vec<(u32, String)>> = Mutex::new(Vec::new());
     static FRAME_REQS: Mutex<u64> = Mutex::new(0);
 
+    // ★HA4 测试用的"假原生 View"：引擎只持不透明句柄 ⇒ 测试用序号当句柄就够
+    //   （正好也验证了"引擎不解释句柄"这条契约——它只存不动）
+    static NATIVE_CREATED: Mutex<Vec<(String, ProteusRect)>> = Mutex::new(Vec::new());
+    static NATIVE_UPDATED: Mutex<Vec<(usize, ProteusRect)>> = Mutex::new(Vec::new());
+    static NATIVE_DESTROYED: Mutex<Vec<usize>> = Mutex::new(Vec::new());
+    static NATIVE_NEXT_HANDLE: Mutex<usize> = Mutex::new(1);
+    /// 让"宿主拒绝某 kind"可测（模拟平台不支持 map 之类）
+    static NATIVE_REJECT_KIND: Mutex<Option<String>> = Mutex::new(None);
+
+    unsafe extern "C" fn test_native_create(
+        kind: *const c_char,
+        frame: *const ProteusRect,
+        _ud: *mut c_void,
+    ) -> *mut c_void {
+        let k = unsafe { cstr_or_empty(kind) };
+        if let Some(rej) = NATIVE_REJECT_KIND.lock().unwrap().as_ref() {
+            if *rej == k {
+                return std::ptr::null_mut(); // 明确拒绝（如 kind 不支持）
+            }
+        }
+        let rect = unsafe { *frame }; // 测试里 frame 必非空
+        NATIVE_CREATED.lock().unwrap().push((k, rect));
+        let mut n = NATIVE_NEXT_HANDLE.lock().unwrap();
+        let h = *n;
+        *n += 1;
+        // ★句柄是"不透明指针"∈ 测试用序号伪造（引擎不会解引用它——本测试即该契约的证据）
+        h as *mut c_void
+    }
+
+    unsafe extern "C" fn test_native_update(
+        handle: *mut c_void,
+        frame: *const ProteusRect,
+        _ud: *mut c_void,
+    ) {
+        let rect = unsafe { *frame };
+        NATIVE_UPDATED.lock().unwrap().push((handle as usize, rect));
+    }
+
+    unsafe extern "C" fn test_native_destroy(handle: *mut c_void, _ud: *mut c_void) {
+        NATIVE_DESTROYED.lock().unwrap().push(handle as usize);
+    }
+
+    /// ★native 测试**串行锁**：它们共享静态计数器（`NATIVE_CREATED` 等），而 cargo 默认**并行**
+    ///   跑测试 ⇒ 不加锁时一个测试的 `reset` 会清掉另一个测试的读数（本轮实测：两个 native
+    ///   测试同时红，而单跑各自都绿——这就是"共享可变静态状态 + 并行"的经典假红）。
+    ///   ★用 `unwrap_or_else(|e| e.into_inner())` 而不是 `unwrap()`：某测试 panic 后锁会**中毒**，
+    ///     后续测试不该因此连锁失败（那样会掩盖真正的失败原因）。
+    static NATIVE_TEST_LOCK: Mutex<()> = Mutex::new(());
+
+    fn native_test_guard() -> std::sync::MutexGuard<'static, ()> {
+        NATIVE_TEST_LOCK.lock().unwrap_or_else(|e| e.into_inner())
+    }
+
+    fn reset_native_counters() {
+        NATIVE_CREATED.lock().unwrap().clear();
+        NATIVE_UPDATED.lock().unwrap().clear();
+        NATIVE_DESTROYED.lock().unwrap().clear();
+        *NATIVE_NEXT_HANDLE.lock().unwrap() = 1;
+        *NATIVE_REJECT_KIND.lock().unwrap() = None;
+    }
+
+    /// 带**原生组件回调**的 vtable（其余同 `vtable()`）
+    fn vtable_with_native() -> ProteusHostVTable {
+        let mut vt = vtable();
+        // ★`unsafeBitCast` 是**自由函数**（`unsafeBitCast(x, to: T)`），不是方法
+        vt.native_view_create = Some(test_native_create);
+        vt.native_view_update = Some(test_native_update);
+        vt.native_view_destroy = Some(test_native_destroy);
+        vt
+    }
+
+    fn new_engine_with(vt: ProteusHostVTable) -> *mut ProteusEngine {
+        let ver = proteus_abi_version_info();
+        let mut hint = [0i8; 512];
+        unsafe { proteus_engine_create(&vt, &ver, hint.as_mut_ptr(), hint.len()) }
+    }
+
+    /// 一棵含 1 个 nativeHost 节点的树
+    const NATIVE_TREE: &str = r#"{"viewport":{"width":390,"height":844},"nodes":[
+        {"id":1,"width":390,"height":800,"flexDirection":"column"},
+        {"id":5,"parentId":1,"nativeHost":true,"semantic":"shell.webview","width":390,"height":200}
+    ]}"#;
+
     unsafe extern "C" fn test_measure(
         input: *const ProteusTextInput,
         out: *mut ProteusTextMetrics,
@@ -1444,6 +1735,152 @@ mod tests {
         let mut len = 0u32;
         assert!(!unsafe { proteus_rects(e, &mut len) }.is_null(), "拒绝加载后旧树应完好");
         unsafe { proteus_engine_destroy(e) };
+    }
+
+    #[test]
+    fn native_view_created_on_load_with_geometry() {
+        let _serial = native_test_guard(); // ★串行化（共享静态计数器，见 guard 注释）
+        // ★HA4 判据 ①：**建树即创建**（引擎驱动），且**带上内核算出的几何**
+        reset_native_counters();
+        let e = new_engine_with(vtable_with_native());
+        let cs = CString::new(NATIVE_TREE).unwrap();
+        assert_eq!(unsafe { proteus_load_tree(e, cs.as_ptr()) }, PROTEUS_OK);
+        let created = NATIVE_CREATED.lock().unwrap().clone();
+        assert_eq!(created.len(), 1, "应创建 1 个原生 View：{created:?}");
+        assert_eq!(created[0].0, "shell.webview", "kind 应来自树里的 semantic");
+        // 几何来自内核（不是 0）——该节点是 390×200
+        assert!((created[0].1.width - 390.0).abs() < 1.0, "宽度应 ≈390（实测 {}）", created[0].1.width);
+        assert!((created[0].1.height - 200.0).abs() < 1.0, "高度应 ≈200（实测 {}）", created[0].1.height);
+        unsafe { proteus_engine_destroy(e) };
+    }
+
+    #[test]
+    fn native_view_only_updates_when_geometry_actually_changes() {
+        let _serial = native_test_guard(); // ★串行化（共享静态计数器，见 guard 注释）
+        // ★HA4 判据 ②：**几何真变了才 update**（每帧无脑同步 = 白付跨边界成本）
+        reset_native_counters();
+        let e = new_engine_with(vtable_with_native());
+        let cs = CString::new(NATIVE_TREE).unwrap();
+        assert_eq!(unsafe { proteus_load_tree(e, cs.as_ptr()) }, PROTEUS_OK);
+        assert!(NATIVE_UPDATED.lock().unwrap().is_empty(), "刚创建时不该有 update");
+        // 手动同步一次（几何没变）⇒ 仍不该有 update
+        assert_eq!(unsafe { proteus_sync_native_views(e) }, PROTEUS_OK);
+        assert!(NATIVE_UPDATED.lock().unwrap().is_empty(), "几何未变 ⇒ 不该调 update（实测 {:?}）",
+                NATIVE_UPDATED.lock().unwrap());
+        // 改几何（用指令流改高度）⇒ 同步后应有 update
+        //   SET_STYLE(0x02): op u8 + nodeId u32 + keyId u16 + value f32
+        //   ★用 `layout.height` 的 keyId=1（测试夹具里的约定；未注册会被内核明确拒绝——
+        //     那时本测试会红，正是"不静默"的价值）
+        let mut ops: Vec<u8> = Vec::new();
+        ops.extend_from_slice(&0x504F5650u32.to_le_bytes());
+        ops.extend_from_slice(&2u32.to_le_bytes());
+        ops.extend_from_slice(&1u32.to_le_bytes());
+        ops.extend_from_slice(&1u32.to_le_bytes()); // keyCount=1
+        ops.extend_from_slice(&0u32.to_le_bytes()); // strCount=0
+        let k = "layout.height";
+        ops.extend_from_slice(&(k.len() as u16).to_le_bytes());
+        ops.extend_from_slice(k.as_bytes());
+        ops.push(0x02u8);
+        ops.extend_from_slice(&5u32.to_le_bytes()); // node 5（nativeHost 节点）
+        ops.extend_from_slice(&0u16.to_le_bytes()); // keyId=0（池内唯一键 = layout.height）
+        ops.extend_from_slice(&300.0f32.to_le_bytes());
+        let rc = unsafe { proteus_submit_frame(e, ops.as_ptr(), ops.len()) };
+        assert_eq!(rc, PROTEUS_OK, "改高度的指令流应被接受");
+        let updated = NATIVE_UPDATED.lock().unwrap().clone();
+        assert_eq!(updated.len(), 1, "几何变了 ⇒ 应恰有 1 次 update（实测 {updated:?}）");
+        assert!((updated[0].1.height - 300.0).abs() < 1.0, "update 应带新高度 ≈300（实测 {}）", updated[0].1.height);
+        unsafe { proteus_engine_destroy(e) };
+    }
+
+    #[test]
+    fn native_view_destroyed_on_tree_swap_and_engine_destroy() {
+        let _serial = native_test_guard(); // ★串行化（共享静态计数器，见 guard 注释）
+        // ★HA4 判据 ③：**换树销毁旧的**、**销毁引擎清场**（不留下孤儿原生对象）
+        reset_native_counters();
+        let e = new_engine_with(vtable_with_native());
+        let cs = CString::new(NATIVE_TREE).unwrap();
+        assert_eq!(unsafe { proteus_load_tree(e, cs.as_ptr()) }, PROTEUS_OK);
+        assert_eq!(NATIVE_CREATED.lock().unwrap().len(), 1);
+        // 换一棵**没有 nativeHost** 的树 ⇒ 旧的应被销毁
+        let plain = r#"{"viewport":{"width":390,"height":844},"nodes":[{"id":1,"width":390,"height":800}]}"#;
+        let cs2 = CString::new(plain).unwrap();
+        assert_eq!(unsafe { proteus_load_tree(e, cs2.as_ptr()) }, PROTEUS_OK);
+        assert_eq!(NATIVE_DESTROYED.lock().unwrap().len(), 1, "换树应销毁旧的原生 View");
+        // 再换回带 native 的树 ⇒ 又创建 1 个；然后销毁引擎 ⇒ 应销毁它
+        let cs3 = CString::new(NATIVE_TREE).unwrap();
+        assert_eq!(unsafe { proteus_load_tree(e, cs3.as_ptr()) }, PROTEUS_OK);
+        let before = NATIVE_DESTROYED.lock().unwrap().len();
+        unsafe { proteus_engine_destroy(e) };
+        assert_eq!(NATIVE_DESTROYED.lock().unwrap().len(), before + 1,
+                   "销毁引擎应销毁其持有的原生 View（否则宿主侧留孤儿对象）");
+    }
+
+    #[test]
+    fn native_view_recreated_when_same_node_changes_kind() {
+        // ★★这条判据是**补盲区**的（首版漏了，被破坏性验证逼出来）：
+        //   "换树销毁旧 View" 有两条路径会碰到 —— ① 旧节点 id 消失、② **同一 id 换了 kind**。
+        //   ① 由 `sync_native_views` 的"过时清理"顺带覆盖；**② 只能靠 load_tree 阶段的
+        //   `destroy_all_native_views`** —— 否则宿主那边会**留着一个旧 kind 的原生对象**
+        //   （新树要 map，而屏幕上还是 webview），且几何还会被同步过去（看起来"正常"）。
+        let _serial = native_test_guard();
+        reset_native_counters();
+        let e = new_engine_with(vtable_with_native());
+        let t1 = r#"{"viewport":{"width":390,"height":844},"nodes":[
+            {"id":1,"width":390,"height":800},
+            {"id":5,"parentId":1,"nativeHost":true,"semantic":"shell.webview","width":390,"height":200}
+        ]}"#;
+        assert_eq!(unsafe { proteus_load_tree(e, CString::new(t1).unwrap().as_ptr()) }, PROTEUS_OK);
+        assert_eq!(NATIVE_CREATED.lock().unwrap().len(), 1);
+        assert_eq!(NATIVE_CREATED.lock().unwrap()[0].0, "shell.webview");
+
+        // 同一 node id（5）换成另一个 kind
+        let t2 = r#"{"viewport":{"width":390,"height":844},"nodes":[
+            {"id":1,"width":390,"height":800},
+            {"id":5,"parentId":1,"nativeHost":true,"semantic":"map","width":390,"height":200}
+        ]}"#;
+        assert_eq!(unsafe { proteus_load_tree(e, CString::new(t2).unwrap().as_ptr()) }, PROTEUS_OK);
+        let created = NATIVE_CREATED.lock().unwrap().clone();
+        assert_eq!(created.len(), 2, "kind 变了 ⇒ 应**重新创建**（实测 {created:?}）");
+        assert_eq!(created[1].0, "map", "新对象应是新 kind");
+        assert_eq!(NATIVE_DESTROYED.lock().unwrap().len(), 1,
+                   "且旧 kind 的对象必须被销毁（否则宿主侧留着旧组件）");
+        unsafe { proteus_engine_destroy(e) };
+    }
+
+    #[test]
+    fn native_view_explicit_errors_when_callback_missing_or_host_rejects() {
+        let _serial = native_test_guard(); // ★串行化（共享静态计数器，见 guard 注释）
+        // ★HA4 判据 ④：**两种失败都明确**（不许静默跳过）
+        reset_native_counters();
+        // (a) 宿主未提供 create 回调 ⇒ load_tree 明确报错 + last_error 可读
+        let e = new_engine(); // 基础 vtable：native_* 全为 None
+        let cs = CString::new(NATIVE_TREE).unwrap();
+        let rc = unsafe { proteus_load_tree(e, cs.as_ptr()) };
+        assert_eq!(rc, PROTEUS_ERR_INVALID_ARG, "缺 native_view_create ⇒ 明确错误码（不静默跳过）");
+        let stats = unsafe { cstr_or_empty(proteus_stats_json(e)) };
+        assert!(stats.contains("native_view_create"), "last_error 必须点名缺失的回调：{stats}");
+        assert!(stats.contains("shell.webview"), "last_error 应带 kind（可归因）：{stats}");
+        unsafe { proteus_engine_destroy(e) };
+
+        // (b) 宿主**拒绝**某 kind（返回 NULL）⇒ 记账 + 可读原因（不静默）
+        reset_native_counters();
+        *NATIVE_REJECT_KIND.lock().unwrap() = Some("shell.webview".to_string());
+        let e2 = new_engine_with(vtable_with_native());
+        let cs2 = CString::new(NATIVE_TREE).unwrap();
+        // 拒绝不是"加载失败"（该节点可能是可降级的）⇒ 树仍加载成功，但**必须留下痕迹**
+        assert_eq!(unsafe { proteus_load_tree(e2, cs2.as_ptr()) }, PROTEUS_OK);
+        let stats2 = unsafe { cstr_or_empty(proteus_stats_json(e2)) };
+        assert!(stats2.contains("拒绝创建"), "宿主拒绝必须留痕：{stats2}");
+        assert!(stats2.contains("降级"), "提示应给可操作出路（降级路径）：{stats2}");
+        let v = v2(&stats2);
+        assert_eq!(v["native_view_create_failed"], 1, "拒绝次数应记账：{stats2}");
+        assert_eq!(v["native_view_created"], 0, "被拒绝的不该计入创建成功：{stats2}");
+        unsafe { proteus_engine_destroy(e2) };
+    }
+
+    /// 解析 stats JSON（测试辅助）
+    fn v2(s: &str) -> serde_json::Value {
+        serde_json::from_str(s).unwrap_or(serde_json::Value::Null)
     }
 
     #[test]
