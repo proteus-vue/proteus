@@ -35,9 +35,13 @@ describe('★showcase 目录数据（catalog.ts）', () => {
     }
   })
 
-  it('分组与条目数量对账（6 组件域 / 10 能力域；条目 >0）', () => {
+  // ★2026-09-30：能力域 10 → 9 —— "其他"兜底域**自然消失**（所有能力页都已归入正式域，
+  //   CAPABILITY_CATEGORY 的 7 个未映射项补齐后兜底不再有消费者）。这是分组完善的**正确结果**，
+  //   不是回归：原断言写死的 "10" 属过时基线。
+  it('分组与条目数量对账（6 组件域 / 9 能力域——无兜底"其他"；条目 >0）', () => {
     expect(COMPONENT_GROUPS.length).toBe(6)
-    expect(CAPABILITY_GROUPS.length).toBe(10)
+    expect(CAPABILITY_GROUPS.length).toBe(9)
+    expect(CAPABILITY_GROUPS.every((g) => g.items.length > 0)).toBe(true)
     expect(CATALOG_STATS.componentGroups).toBe(COMPONENT_GROUPS.length)
     expect(CATALOG_STATS.capabilityGroups).toBe(CAPABILITY_GROUPS.length)
     const compTotal = COMPONENT_GROUPS.reduce((n, g) => n + g.items.length, 0)

@@ -73,6 +73,9 @@ const SEMANTIC_WEB_MAP: Record<string, { tag: string; className?: string }> = {
   'shell.segment': { tag: 'div', className: 'proteus-segment' },
   'shell.popover': { tag: 'div', className: 'proteus-popover' },
   'shell.action-sheet': { tag: 'div', className: 'proteus-action-sheet' },
+  // ★2026-09-30 补缺（U19/S8 上批加了 SEMANTIC_BACKEND_MAP 但后端控件表漏补——M3 readback 门禁抓出）
+  'shell.toast': { tag: 'div', className: 'proteus-toast' },
+  'ui.loading': { tag: 'div', className: 'proteus-loading' },
   'ui.rich-text': { tag: 'div', className: 'proteus-rich-text' },
   'ui.avatar': { tag: 'div', className: 'proteus-avatar' },
   'ui.media': { tag: 'div', className: 'proteus-media' },

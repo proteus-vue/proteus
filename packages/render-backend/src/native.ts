@@ -166,6 +166,9 @@ const SEMANTIC_NATIVE_MAPS: Record<NativePlatform, Record<string, string>> = {
     'shell.segment': 'UISegmentedControl',
     'shell.popover': 'UIPopoverController',
     'shell.action-sheet': 'UIAlertController.actionSheet',
+    // ★2026-09-30 补缺（同 vue-dom 注释）
+    'shell.toast': 'UIView.toast',
+    'ui.loading': 'UIActivityIndicatorView',
     'ui.rich-text': 'UITextView.attributed',
     'ui.avatar': 'UIImageView.avatar',
     'ui.media': 'AVPlayerView',
@@ -236,6 +239,9 @@ const SEMANTIC_NATIVE_MAPS: Record<NativePlatform, Record<string, string>> = {
     'shell.segment': 'TabLayout',
     'shell.popover': 'PopupWindow',
     'shell.action-sheet': 'BottomSheet',
+    // ★2026-09-30 补缺（同 vue-dom 注释）
+    'shell.toast': 'Toast',
+    'ui.loading': 'ProgressBar',
     'ui.rich-text': 'TextView.html',
     'ui.avatar': 'ImageView.avatar',
     'ui.media': 'VideoView',
@@ -306,6 +312,8 @@ const SEMANTIC_NATIVE_MAPS: Record<NativePlatform, Record<string, string>> = {
     'shell.segment': 'Segmented',
     'shell.popover': 'Popup',
     'shell.action-sheet': 'ActionSheet',
+    'shell.toast': 'promptAction.showToast',
+    'ui.loading': 'LoadingProgress',
     'ui.rich-text': 'RichText',
     'ui.avatar': 'Image.avatar',
     'ui.media': 'Video',

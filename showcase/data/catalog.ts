@@ -133,7 +133,7 @@ export const COMPONENT_GROUPS: CatalogGroup[] = [
   },
 ]
 
-/** 能力：10 域 / 82 个（已备详情页 29） */
+/** 能力：9 域 / 84 个（已备详情页 29） */
 export const CAPABILITY_GROUPS: CatalogGroup[] = [
   {
     name: "网络与通信",
@@ -147,6 +147,7 @@ export const CAPABILITY_GROUPS: CatalogGroup[] = [
       { name: "useDataChannel", id: "capability.data-channel", desc: "数据通道", route: "" },
       { name: "useBluetooth", id: "capability.bluetooth", desc: "蓝牙状态", route: "" },
       { name: "useNFC", id: "capability.nfc", desc: "NFC 状态", route: "" },
+      { name: "useWifi", id: "capability.wifi", desc: "WiFi 句柄", route: "" },
       { name: "useSocket", id: "capability.socket", desc: "底层网络 Socket", route: "" },
       { name: "useLocalService", id: "capability.local-service", desc: "局域网 mDNS", route: "" },
     ],
@@ -165,6 +166,7 @@ export const CAPABILITY_GROUPS: CatalogGroup[] = [
       { name: "useOrientation", id: "capability.orientation", desc: "屏幕方向", route: "/subpackages/capabilities/pages/orientation" },
       { name: "useBrightness", id: "capability.brightness", desc: "读取当前亮度", route: "" },
       { name: "useKeyboard", id: "capability.keyboard", desc: "键盘生命周期句柄", route: "/subpackages/capabilities/pages/keyboard" },
+      { name: "useWeRun", id: "capability.we-run", desc: "微信运动数据", route: "" },
       { name: "useElement", id: "capability.element-query", desc: "元素查询句柄", route: "/subpackages/capabilities/pages/element-query" },
       { name: "useIntersection", id: "capability.intersection", desc: "交叉观察句柄", route: "/subpackages/capabilities/pages/intersection" },
       { name: "useMediaQuery", id: "capability.media-query", desc: "媒体查询句柄", route: "/subpackages/capabilities/pages/media-query" },
@@ -173,6 +175,7 @@ export const CAPABILITY_GROUPS: CatalogGroup[] = [
       { name: "useAR", id: "capability.ar", desc: "AR/XR 视觉算法", route: "" },
       { name: "useBeacon", id: "capability.beacon", desc: "iBeacon", route: "" },
       { name: "useDeviceCapability", id: "capability.device-capability", desc: "设备能力探测", route: "/subpackages/capabilities/pages/device-capability" },
+      { name: "useKeepScreenOn", id: "capability.keep-screen-on", desc: "★NC1 C83 useKeepScreenOn：屏幕常亮开关", route: "" },
     ],
   },
   {
@@ -183,6 +186,7 @@ export const CAPABILITY_GROUPS: CatalogGroup[] = [
       { name: "useMicrophone", id: "capability.microphone", desc: "麦克风访问", route: "" },
       { name: "useQRCode", id: "capability.qr-code", desc: "扫码", route: "" },
       { name: "useLive", id: "capability.live", desc: "直播房间", route: "" },
+      { name: "useAlbum", id: "capability.album", desc: "相册句柄", route: "" },
       { name: "useCanvas", id: "capability.canvas", desc: "画布控制器", route: "/subpackages/capabilities/pages/canvas" },
       { name: "useVideo", id: "capability.video", desc: "视频控制器", route: "" },
       { name: "useAudio", id: "capability.audio", desc: "音频控制器", route: "" },
@@ -199,6 +203,7 @@ export const CAPABILITY_GROUPS: CatalogGroup[] = [
       { name: "useCookie", id: "capability.cookie", desc: "Cookie 罐", route: "/subpackages/capabilities/pages/cookie" },
       { name: "useFileSystem", id: "capability.file-system", desc: "文件系统句柄", route: "/subpackages/capabilities/pages/file-system" },
       { name: "useArchive", id: "capability.archive", desc: "压缩文件", route: "" },
+      { name: "useOpenDocument", id: "capability.document-preview", desc: "★NC1 C84 useOpenDocument：文档预览", route: "" },
     ],
   },
   {
@@ -211,10 +216,13 @@ export const CAPABILITY_GROUPS: CatalogGroup[] = [
       { name: "useMiniProgram", id: "capability.mini-program", desc: "跳小程序", route: "" },
       { name: "useEmbedded", id: "capability.embedded", desc: "宿主嵌入上下文", route: "" },
       { name: "useExtension", id: "capability.extension", desc: "扩展/插件", route: "" },
+      { name: "useUpdate", id: "capability.update", desc: "小程序热更新管理器", route: "" },
+      { name: "useWorker", id: "capability.worker", desc: "多线程 Worker", route: "" },
       { name: "usePreload", id: "capability.preload", desc: "预加载句柄", route: "" },
       { name: "useIdle", id: "capability.idle", desc: "空闲调度", route: "/subpackages/capabilities/pages/idle" },
       { name: "useWindow", id: "capability.window", desc: "窗口", route: "" },
       { name: "useNavigationGuard", id: "capability.navigation-guard", desc: "卸载拦截", route: "/subpackages/capabilities/pages/navigation-guard" },
+      { name: "useWebAssembly", id: "capability.webassembly", desc: "WASM 编译/实例化/校验", route: "" },
     ],
   },
   {
@@ -252,6 +260,7 @@ export const CAPABILITY_GROUPS: CatalogGroup[] = [
       { name: "usePayment", id: "capability.payment", desc: "拉起支付", route: "" },
       { name: "useLogin", id: "capability.login", desc: "登录", route: "" },
       { name: "useInAppPurchase", id: "capability.in-app-purchase", desc: "内购", route: "" },
+      { name: "useAddress", id: "capability.address", desc: "收货地址", route: "" },
       { name: "usePrivacy", id: "capability.privacy", desc: "隐私协议句柄", route: "" },
     ],
   },
@@ -264,26 +273,13 @@ export const CAPABILITY_GROUPS: CatalogGroup[] = [
       { name: "usePerformance", id: "capability.performance", desc: "性能句柄", route: "/subpackages/capabilities/pages/performance" },
     ],
   },
-  {
-    name: "其他",
-    desc: "WiFi / Worker / 相册 / 更新 / 小程序",
-    items: [
-      { name: "useUpdate", id: "capability.update", desc: "小程序热更新管理器", route: "" },
-      { name: "useAlbum", id: "capability.album", desc: "相册句柄", route: "" },
-      { name: "useWorker", id: "capability.worker", desc: "多线程 Worker", route: "" },
-      { name: "useAddress", id: "capability.address", desc: "收货地址", route: "" },
-      { name: "useWifi", id: "capability.wifi", desc: "WiFi 句柄", route: "" },
-      { name: "useWeRun", id: "capability.we-run", desc: "微信运动数据", route: "" },
-      { name: "useWebAssembly", id: "capability.webassembly", desc: "WASM 编译/实例化/校验", route: "" },
-    ],
-  },
 ]
 
 export const CATALOG_STATS = {
   componentGroups: 6,
   componentTotal: 74,
   componentReady: 73,
-  capabilityGroups: 10,
-  capabilityTotal: 82,
+  capabilityGroups: 9,
+  capabilityTotal: 84,
   capabilityReady: 29,
 }

@@ -48,13 +48,18 @@ describe('G-32 B1 清单冻结（SSOT 规模快照）', () => {
     expect(count('shell')).toBe(17)
     expect(count('gesture')).toBe(10)
     //   + ★2026-09-29 C82 WebAssembly 跨平台：capability+1（81→82）
-    expect(count('capability')).toBe(82)
+    //   + ★2026-09-30 NC1 声明式能力桥：capability+2（C83 屏幕常亮 / C84 文档预览——82→84）
+    expect(count('capability')).toBe(84)
     expect(count('engineering')).toBe(30)
   })
 
-  it('implemented 65 项（批次 7 +5 → 59；语义决策批净 0；手势 tap/longpress +2、能力双形态 +2 → 63；批次 8 +1 → 64；★2026-09-26 Fluid System v2 +1 → 65）· 其余 planned 待落地', () => {
+  // ★★2026-09-30 更新（本轮）：65 → 72。
+  //   改动前**该断言已过时**（实测 69 ≠ 65——先存在的红）；本轮 +3 = C23/C24/C25
+  //   应用与生命周期能力开放（App 宿主腿：capability-app.ts + 真机 check:host-runtime ①~⑤）。
+  //   累计：65（Fluid System v2）→ 69（NC1 期间的能力批次）→ 72（本轮生命周期三能力）。
+  it('implemented 72 项（…Fluid System v2 → 65；后续能力批次 → 69；★2026-09-30 生命周期 C23/C24/C25 App 腿 → 72）· 其余 planned 待落地', () => {
     const impl = implementedPrimitives()
-    expect(impl.length).toBe(65)
+    expect(impl.length).toBe(72)
     // ★Fluid System v2 形态容器
     expect(new Set(impl.map((p) => p.semantic)).has('layout.formfactor')).toBe(true)
     // 新增 implemented 语义代表性断言

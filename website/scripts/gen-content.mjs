@@ -57,6 +57,25 @@ async function loadEnds() {
 }
 
 const STATUS_MARK = { '✅ 已落地': '✅', '🟡 部分落地': '🟡', '📋 规划已入库': '📋', '⬜ 未开始': '⬜' }
+
+/**
+ * ★★App 宿主桥（`packages/api/src/capability-app.ts`）提供的方法集——**从源码推导**，不硬编码。
+ *
+ * 【为什么需要（2026-09-30 用户指出「官网文档好像没更新」）】能力页的端表对 native 端**硬编码**
+ *   写「端原型映射——能力桥未接线」。此前对多数能力是准确的，但**生命周期三能力（C23/C24/C25）
+ *   的 App 腿已落地并真机双端验证**（`capability-app.ts` + `check:host-runtime` ①~⑤）
+ *   ⇒ 页面与源码事实脱节（与 wx/web 列早已用 `wxMissing`/`webMissing` 推导同构，只有 native 列是写死的）。
+ *   ⇒ 本函数读 `capability-app.ts` 的返回对象，抽出它真正提供的方法名（如 getAppLifecycle）。
+ *   于是「接线与否」由**源码**决定：桥里加了方法，页面自动跟着变（`gen:content --check` 守漂移）。
+ */
+function loadAppBridgeKeys() {
+  const src = fs.readFileSync(path.join(ROOT, 'packages', 'api', 'src', 'capability-app.ts'), 'utf8')
+  // 返回对象形如 `return { getAppLifecycle(): …, getPageLifecycle(): …, getBackground(): … }`
+  const keys = new Set()
+  for (const m of src.matchAll(/^\s{4}(get[A-Z]\w*)\(/gm)) keys.add(m[1])
+  return keys
+}
+const APP_BRIDGE_KEYS = loadAppBridgeKeys()
 const MP_STATUS_LABEL = { ok: 'L1 原语', compat: 'L2 兼容层', private: '平台私有', missing: '缺失' }
 
 // ★能力侧栏分组：按 10 类归组——★2026-09-30 已抽为 **component-ir 的共享事实源**
@@ -1742,6 +1761,22 @@ function genCapabilities(ir, ends) {
         case 'headless': note = 'mock 桥注入（测试 / SSR 档）'; break
         case 'flutter': note = '同一 JS 逻辑层——能力桥未接线'; break
         case 'quick-app': note = '端未开始'; break
+        // ★App 端（app-ios/app-android/app-harmony）：由**源码事实**推导（见 APP_BRIDGE_KEYS 注释）
+        case 'app-ios':
+        case 'app-android':
+          if (refs.length && refs.every((r) => APP_BRIDGE_KEYS.has(r))) {
+            status = '✅'
+            note = 'App 宿主桥（capability-app.ts）· 真机双端验证（check:host-runtime）'
+          } else {
+            note = '端原型映射——能力桥未接线'
+          }
+          break
+        case 'app-harmony':
+          // ★鸿蒙：桥是**平台中立 TS**（壳注入标识即生效）——但鸿蒙宿主壳尚未构建 ⇒ 诚实标 🟡
+          note = refs.length && refs.every((r) => APP_BRIDGE_KEYS.has(r))
+            ? 'App 桥已就绪（平台中立）——鸿蒙宿主壳未接线'
+            : '端原型映射——能力桥未接线'
+          break
         default: note = '端原型映射——能力桥未接线'
       }
       capRows.push({ name: end.name, status, note: `${end.engine} · ${note}` })
@@ -2290,6 +2325,21 @@ async function genCapabilitiesEn(ir, ends) {
         case 'headless': note = CAP_SHARED_EN.endNote.headless; break
         case 'flutter': note = CAP_SHARED_EN.endNote.flutter; break
         case 'quick-app': note = CAP_SHARED_EN.endNote['quick-app']; break
+        // ★App ends: derived from source facts (see APP_BRIDGE_KEYS comment)
+        case 'app-ios':
+        case 'app-android':
+          if (refs.length && refs.every((r) => APP_BRIDGE_KEYS.has(r))) {
+            status = '✅'
+            note = 'App host bridge (capability-app.ts) · device-verified on both ends (check:host-runtime)'
+          } else {
+            note = CAP_SHARED_EN.endNote.prototype
+          }
+          break
+        case 'app-harmony':
+          note = refs.length && refs.every((r) => APP_BRIDGE_KEYS.has(r))
+            ? 'App bridge ready (platform-neutral TS) — Harmony host shell not wired'
+            : CAP_SHARED_EN.endNote.prototype
+          break
         default: note = CAP_SHARED_EN.endNote.prototype
       }
       const endEn = ENDS_EN[end.id]
