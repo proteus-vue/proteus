@@ -1,7 +1,7 @@
 # G-32 原语清单（自动生成——SSOT = packages/component-ir/src/primitives.ts）
 
 > ★由 `npm run gen:docs` 生成，勿手改。手工维护的叙述性规划见各 plan 文档。
-> 总计 **186** 原语 · implemented **66**。
+> 总计 **186** 原语 · implemented **68**。
 
 ## layout — 布局（12）
 
@@ -47,7 +47,7 @@
 | U16 | `ui.slider` | tag:p-slider | `p-slider` | <slider> | implemented |
 | U17 | `ui.picker` | tag:p-picker | `p-picker` | <picker> | implemented |
 | U18 | `ui.form` | tag:p-form | `p-form` | 组合 | implemented |
-| U19 | `ui.loading` | tag:p-loading | `p-loading` | wx.showLoading 部分 | planned |
+| U19 | `ui.loading` | tag:p-loading | `p-loading` | wx.showLoading 部分 | implemented |
 | U20 | `ui.scale` | tag:p-scale | `p-scale` | 无（无障碍档位） | planned |
 | U21 | `ui.skeleton` | tag:p-skeleton | `p-skeleton` | 无 | planned |
 | U22 | `ui.progress` | tag:p-progress | `p-progress` | <progress> | implemented |
@@ -70,7 +70,7 @@
 | S5 | `shell.drawer` | tag:p-drawer | `p-drawer` | 组合 | implemented |
 | S6 | `shell.modal` | tag:p-modal | `p-modal` | <modal>+wx.showModal | implemented |
 | S7 | `shell.popover` | tag:p-popover | `p-popover` | 组合 | implemented |
-| S8 | `shell.toast` | tag:p-toast | `p-toast` | wx.showToast | planned |
+| S8 | `shell.toast` | tag:p-toast | `p-toast` | wx.showToast | implemented |
 | S9 | `shell.action-sheet` | tag:p-action-sheet | `p-action-sheet` | wx.showActionSheet | implemented |
 | S10 | `layout.split` | tag:p-split | `p-split` | 无（分栏布局） | implemented |
 | S11 | `shell.mask` | tag:p-mask | `p-mask` | 组合（遮罩层） | planned |

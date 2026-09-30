@@ -33,7 +33,15 @@
 > ⇒ covered（357）；② `chooseMessageFile` / `getUserProfile` **归类修正为 private**
 > （它们依赖**微信生态上下文**——聊天会话 / 微信授权头像昵称——与 Web/App 无共同语义，
 > 重分类前误记 planned 会虚增缺口并误导"跨端对等"排期）。
-> **当前**：covered **357** · planned **22**（18 API + 4 组件手势）· private **147** · na **53** · gap 0。
+> **当前（2026-09-30 收盘）**：covered **361** · planned **18**（14 API + 4 组件手势）· private **147** · na **53** · gap 0
+> · 真·落地率 **95%**。
+> ★**同轮第二批修正（记账，非新能力）**：
+> · `p-toast` / `p-loading` 组件**早已存在且已注册**并有 MP 产物测试 ⇒ 补 `SEMANTIC_BACKEND_MAP`
+>   后端映射后，catalog status 据实 **planned → implemented**（U19 / S8）；
+> · `showToast` / `showLoading` / `hideToast` / `hideLoading` **早已实现**（`platform.ts` 的 `createUIAPI`：
+>   MP 走 wx、Web 走 DOM 自绘 + SSR console 降级，`tests/platform-api.test.ts` 覆盖）
+>   ⇒ 据实 **planned → covered**。★**同一份实现**里的 `showModal`/`showActionSheet` 早已标 covered，
+>   这 4 条却记 planned ⇒ 属**记账不一致**（此类偏差会让"缺口清单"虚增，误导排期）。
 | **合计** | | **382** |
 
 > 快照由 `node scripts/gen-mp-spec.mjs` 生成（幂等）；`--check` 比对漂移（防快照与官方脱节）。

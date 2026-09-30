@@ -83,7 +83,9 @@ const UI: PrimitiveDef[] = [
   { id: 'U17', kind: 'ui', semantic: 'ui.picker', tag: 'p-picker', props: ['mode', 'start', 'end', 'indicatorStyle', 'indicatorClass', 'maskClass', 'maskStyle', 'immediateChange'], mpEquiv: '<picker>', tier: 'L1', status: 'implemented' },
   { id: 'U18', kind: 'ui', semantic: 'ui.form', tag: 'p-form', props: ['model', 'rules', 'layout'], mpEquiv: '组合', tier: 'L1', status: 'implemented' },
   // ★#405 语义登记批：反馈/状态类组件
-  { id: 'U19', kind: 'ui', semantic: 'ui.loading', tag: 'p-loading', props: ['size', 'text'], mpEquiv: 'wx.showLoading 部分', tier: 'L2', status: 'planned' },
+  // ★2026-09-30 反馈组件补齐：组件本体（p-loading）与 MP 产物测试早已存在，
+  //   缺的只是 SEMANTIC_BACKEND_MAP 的后端映射登记 ⇒ 补齐后据实转 implemented（**修记账非修能力**）
+  { id: 'U19', kind: 'ui', semantic: 'ui.loading', tag: 'p-loading', props: ['size', 'text'], mpEquiv: 'wx.showLoading 部分', tier: 'L1', status: 'implemented' },
   { id: 'U20', kind: 'ui', semantic: 'ui.scale', tag: 'p-scale', props: ['level', 'density', 'baseSize'], mpEquiv: '无（无障碍档位）', tier: 'L2', status: 'planned' },
   { id: 'U21', kind: 'ui', semantic: 'ui.skeleton', tag: 'p-skeleton', props: ['rows', 'avatar', 'animated'], mpEquiv: '无', tier: 'L2', status: 'planned' },
   // ★能力颗粒度对齐 C2：进度条 / 表单标签
@@ -113,7 +115,8 @@ const SHELL: PrimitiveDef[] = [
   { id: 'S5', kind: 'shell', semantic: 'shell.drawer', tag: 'p-drawer', props: ['side', 'width', 'overlay'], mpEquiv: '组合', tier: 'L1', status: 'implemented' },
   { id: 'S6', kind: 'shell', semantic: 'shell.modal', tag: 'p-modal', props: ['open', 'dismissible', 'sheet', 'dialog', 'alert'], mpEquiv: '<modal>+wx.showModal', tier: 'L1', status: 'implemented' },
   { id: 'S7', kind: 'shell', semantic: 'shell.popover', tag: 'p-popover', props: ['trigger', 'placement'], mpEquiv: '组合', tier: 'L1', status: 'implemented' },
-  { id: 'S8', kind: 'shell', semantic: 'shell.toast', tag: 'p-toast', props: ['message', 'duration', 'type'], mpEquiv: 'wx.showToast', tier: 'L1', status: 'planned' },
+  // ★2026-09-30 同上（p-toast 已有 MP 产物测试 + 7 端映射 ⇒ 据实转 implemented）
+  { id: 'S8', kind: 'shell', semantic: 'shell.toast', tag: 'p-toast', props: ['message', 'duration', 'type'], mpEquiv: 'wx.showToast', tier: 'L1', status: 'implemented' },
   { id: 'S9', kind: 'shell', semantic: 'shell.action-sheet', tag: 'p-action-sheet', props: ['actions', 'cancel'], mpEquiv: 'wx.showActionSheet', tier: 'L1', status: 'implemented' },
   { id: 'S10', kind: 'shell', semantic: 'layout.split', tag: 'p-split', props: ['breakpoint', 'ratio', 'collapse'], mpEquiv: '无（分栏布局）', tier: 'L1', status: 'implemented' }, // ★已落地绑定：分栏语义由 layout.split 承载（G-32 文档为 shell.split——机器事实以实现为准）
   // ★#405 语义登记批：弹层/工具栏组件

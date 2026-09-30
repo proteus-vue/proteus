@@ -143,9 +143,13 @@ roadmap v0.6 段追加两条决策接入注记 + v2.0+ 插件体系行补指针�
 棘轮 252 → **356**（性质 = **修尺子**，非能力增长——注释已写明并区分）；
 官方 579 项（组件 84 · API 495）· covered **357** · planned **22** · private **147** · na 53 · gap 0
 · 真·落地率 **94%**（后续变动见下一段）。
-★**当前 22 条 planned 是真实缺口**（`showToast` / `showLoading` / `startPullDownRefresh` /
-画布像素读写 / `createBLEPeripheralServer` / `checkIsOpenAccessibility` / `startDeviceMotionListening` +
+★**当前 18 条 planned 是真实缺口**（`startPullDownRefresh` / 画布像素读写 /
+`createBLEPeripheralServer` / `checkIsOpenAccessibility` / `startDeviceMotionListening` +
 4 个手势组件…）⇒ **直接成为 NC2 的候选输入**（NC1 侦察的副产品）。
+★**同轮第二批修正（记账，非新能力——covered 357→361）**：① `p-toast`/`p-loading` 组件早已存在
+⇒ 补映射后 catalog 转 implemented；② `showToast`/`showLoading`/`hideToast`/`hideLoading`
+**早已实现**（`platform.ts` 的 `createUIAPI` 双端 + 测试）⇒ 转 covered（同一实现的
+showModal/showActionSheet 早已 covered ⇒ 原 planned 属**记账不一致**）。
 ★同轮修正两条归类：`chooseMessageFile` / `getUserProfile` ⇒ **private**（依赖微信生态上下文，
 与 Web/App 无共同语义——误记 planned 会虚增缺口 并误导"跨端对等"排期）。
 ★同步刷新：NC0 优先级表（官方承接 197→**301**，有承接的能力 56→**69**）·
