@@ -133,6 +133,24 @@ impl AnimKind {
         }
     }
 
+    /// ★★**是否合成属性**（§5-bis.1 的分水岭）——决定能否走「提交一次 + 平台渲染线程自主插值」
+    ///
+    /// 合成属性 = 平台渲染线程能独立插值、**主线程无需每帧参与**的属性集：
+    ///   · Android：`translationX/Y` / `scaleX/Y` / `rotation` / `alpha` → RenderThread 直接更新 RenderNode；
+    ///   · iOS：`transform` / `opacity` → CoreAnimation render server（独立进程）自主插值。
+    /// 非合成属性（width/height/margin 等）会触发 `requestLayout` / 布局重算 ⇒ **异步红利完全失效**。
+    ///
+    /// ★本引擎的 `AnimKind` **全部**是合成属性（translate/scale/rotate/opacity）——
+    ///   这正是"动画引擎只做绘制层变换"这一设计选择的直接收益（见 `LStyle` 的 paint-only 字段）。
+    ///   判定函数保留的意义：① 未来若加入布局属性动画（如 FLIP 的几何补间），它必须能**分辨并降级**；
+    ///   ② 它是 §5-bis.2「把会不会掉帧变成编译期问题」在内核侧的落点。
+    pub fn is_composited(self) -> bool {
+        match self {
+            AnimKind::TranslateX | AnimKind::TranslateY | AnimKind::Scale | AnimKind::Rotate
+            | AnimKind::Opacity => true,
+        }
+    }
+
     /// 写入节点的样式槽（返回"值真的变了"）
     fn write(self, node: &mut crate::node::LNode, v: f32) -> bool {
         let slot = match self {
@@ -290,6 +308,194 @@ pub fn reset_visuals(tree: &mut LayoutTree, node_ids: &[u32]) -> usize {
     n
 }
 
+/// ★★**动画计划**（§5-bis.2：合成属性判定 —— "把会不会掉帧变成编译期问题"的内核落点）
+///
+/// 【它回答什么】一批动画能否走**平台渲染线程零参与**路径（提交一次 ⇒ 主线程不再每帧参与）？
+///   · 全部属性 ∈ 合成集 ⇒ ✅ 可走（`platform_path = true`）
+///   · 含非合成属性 ⇒ ❌ 必须走每帧 tick 路径（或由上层在**编译期**就拦住 —— 见 Morpheus §5-bis.2）
+///
+/// ★为什么判定要在**启动前**做（而不是每帧试探）：平台路径与 tick 路径是**两套提交机制**
+///   （前者把动画描述交给系统，后者由我们每帧写值）——混用会导致同一属性被两处写（抖动）。
+#[derive(Debug, Clone, PartialEq)]
+pub struct AnimPlan {
+    /// 该批动画是否全部为合成属性（⇒ 可走平台渲染线程零参与路径）
+    pub composited: bool,
+    /// 非合成属性的种类（`composited=false` 时非空；供上层报错/降级标记）
+    pub non_composited_kinds: Vec<AnimKind>,
+    /// 涉及节点数（去重）
+    pub node_count: usize,
+    /// 动画条数
+    pub anim_count: usize,
+}
+
+/// 对一批动画做**合成属性判定**（见 `AnimPlan`）
+pub fn plan_animations(anims: &[Anim]) -> AnimPlan {
+    let mut bad: Vec<AnimKind> = Vec::new();
+    let mut nodes: std::collections::HashSet<u32> = std::collections::HashSet::new();
+    for a in anims {
+        nodes.insert(a.node_id);
+        if !a.kind.is_composited() && !bad.contains(&a.kind) {
+            bad.push(a.kind);
+        }
+    }
+    AnimPlan {
+        composited: bad.is_empty(),
+        non_composited_kinds: bad,
+        node_count: nodes.len(),
+        anim_count: anims.len(),
+    }
+}
+
+/// ★★**平台提交规格**（§5-bis：走"提交一次 + 平台渲染线程自主插值"路径所需的全部数据）
+///
+/// 【设计分工（为什么采样在 Rust 侧做）】曲线求值是**本引擎的唯一实现**（`curve_eval`）；
+///   若宿主自己再写一份曲线，就是"第 N 份手写副本"（本仓纪律禁止）。⇒ Rust 侧把动画
+///   **采样成关键帧序列**，宿主只做"翻译成平台 API"（iOS `CAKeyframeAnimation` /
+///   Android `RenderNode` 动画）——宿主里**没有任何曲线数学**。
+///
+/// 【为什么是节点级（而不是逐属性）】平台的合成动画以**层/视图**为单位：
+///   iOS 的 `transform` 是一个整体（`CATransform3D`），拆成多条子属性动画会互相覆盖
+///   ⇒ 必须把同节点的多个属性**合成为一组采样**（宿主据此构造 `CATransform3D` 序列）。
+#[derive(Debug, Clone, PartialEq)]
+pub struct CommitSpec {
+    pub node_id: u32,
+    /// 时长（毫秒）= 该节点各自动画时长的**最大值**（短的补到长）
+    pub dur_ms: f32,
+    /// 起始延迟（毫秒）= 各动画延迟的最小值
+    pub delay_ms: f32,
+    /// 采样时刻（0..1，含端点；长度 = `samples.len()`）
+    pub key_times: Vec<f32>,
+    /// 每个采样点的**五元组**：`(tx, ty, scale, rotate, opacity)`
+    pub samples: Vec<(f32, f32, f32, f32, f32)>,
+}
+
+/// 采样点数（17 = 16 段）：曲线表是 65 点，17 点表达后平台侧误差 ≤1e-3 量级（视觉不可辨）
+pub const COMMIT_SAMPLES: usize = 17;
+
+/// 把一批动画**合成为平台提交规格**（节点级；见 `CommitSpec`）
+///
+/// 仅对**合成属性**有意义（非合成属性必须走 tick 路径——见 `AnimPlan`）。
+/// 同一 `(node, kind)` 重复出现时**后发者胜**（与 `start` 的替换语义一致）。
+pub fn commit_specs(tree: &LayoutTree, anims: &[Anim]) -> Vec<CommitSpec> {
+    // ① 按节点分组（同 (node,kind) 后发者胜）
+    let mut by_node: std::collections::HashMap<u32, Vec<Anim>> = std::collections::HashMap::new();
+    for a in anims {
+        let v = by_node.entry(a.node_id).or_default();
+        if let Some(slot) = v.iter_mut().find(|x| x.kind == a.kind) {
+            *slot = *a;
+        } else {
+            v.push(*a);
+        }
+    }
+
+    // ② 逐节点采样
+    let mut out: Vec<CommitSpec> = Vec::with_capacity(by_node.len());
+    for (node_id, items) in by_node {
+        // 该节点当前的静态视觉值（未参与动画的属性取它——避免采样把无关属性清零）
+        let base = tree.nodes.iter().find(|n| n.id == node_id).map(|n| {
+            (n.style.translate_x, n.style.translate_y, n.style.scale, n.style.rotate, n.style.opacity)
+        });
+        let Some((bx, by, bsc, brot, bop)) = base else { continue };
+
+        // ★有效时长 = max(各动画时长)；**弹簧用自然静止时间**（否则会被窗口截断，实测抓出）
+        let dur = items
+            .iter()
+            .map(|a| match a.mode {
+                AnimMode::Curve => a.dur_ms,
+                AnimMode::Spring(p) => a.dur_ms.max(spring_settle_ms(a, p)),
+            })
+            .fold(0f32, f32::max)
+            .max(1.0);
+        let delay = items.iter().map(|a| a.delay_ms).fold(f32::MAX, f32::min).min(0.0);
+
+        let mut key_times = Vec::with_capacity(COMMIT_SAMPLES);
+        let mut samples = Vec::with_capacity(COMMIT_SAMPLES);
+        for i in 0..COMMIT_SAMPLES {
+            let u = i as f32 / (COMMIT_SAMPLES - 1) as f32;
+            key_times.push(u);
+            // 起点：各属性取自己的 `from`（未动画的属性取静态基线）
+            let mut v = (bx, by, bsc, brot, bop);
+            for a in &items {
+                let local = if a.dur_ms <= 0.0 { 1.0 } else { (u * dur / a.dur_ms).min(1.0) };
+                let val = match a.mode {
+                    AnimMode::Curve => a.from + (a.to - a.from) * curve_eval(a.curve, local),
+                    // ★弹簧的解析采样：用同一套物理积分（**不是**平台 spring——保证与 tick 路径同形）
+                    AnimMode::Spring(p) => spring_sample(a, p, u * dur),
+                };
+                match a.kind {
+                    AnimKind::TranslateX => v.0 = val,
+                    AnimKind::TranslateY => v.1 = val,
+                    AnimKind::Scale => v.2 = val,
+                    AnimKind::Rotate => v.3 = val,
+                    AnimKind::Opacity => v.4 = val,
+                }
+            }
+            samples.push(v);
+        }
+        // ★端点钉死（与 tick 路径同语义：必须精确落在 to）
+        if samples.len() >= 2 {
+            let mut last = samples[samples.len() - 1];
+            for a in &items {
+                match a.kind {
+                    AnimKind::TranslateX => last.0 = a.to,
+                    AnimKind::TranslateY => last.1 = a.to,
+                    AnimKind::Scale => last.2 = a.to,
+                    AnimKind::Rotate => last.3 = a.to,
+                    AnimKind::Opacity => last.4 = a.to,
+                }
+            }
+            let n = samples.len();
+            samples[n - 1] = last;
+        }
+        out.push(CommitSpec { node_id, dur_ms: dur, delay_ms: delay, key_times, samples });
+    }
+    out.sort_by_key(|s| s.node_id);
+    out
+}
+
+/// 弹簧的**自然静止时间**（毫秒）：跑一遍积分直到满足静止判据（或到安全上限）
+///
+/// 【为什么需要（本仓实测的截断缺陷）】弹簧**没有固定时长**（由物理决定）；若用 `dur_ms`
+///   当采样窗口，窗口末尾会被"端点钉死"逻辑截断 ⇒ **动画看起来没走完**。
+///   ⇒ 提交路径必须用**自然静止时间**做窗口（`commit_specs` 里取 `max(dur_ms, settle_ms)`）。
+fn spring_settle_ms(a: &Anim, p: SpringParams) -> f32 {
+    let p = p.sanitized();
+    let (mut x, mut v) = (a.from, 0.0);
+    let (eps_pos, eps_vel) = a.kind.settle_eps();
+    let step = MAX_SUBSTEP_S * 1000.0; // 4ms 步（与 tick 的子步一致）
+    let mut t = 0.0f32;
+    while t < SPRING_MAX_MS {
+        let h = MAX_SUBSTEP_S;
+        let acc = (-p.stiffness * (x - a.to) - p.damping * v) / p.mass;
+        v += acc * h;
+        x += v * h;
+        t += step;
+        if (x - a.to).abs() <= eps_pos && v.abs() <= eps_vel {
+            return t;
+        }
+    }
+    SPRING_MAX_MS
+}
+
+/// 弹簧的**离线采样**（把物理积分跑一遍，取 t 时刻的值）——供提交规格用
+///
+/// 【为什么不用平台的 spring】iOS `CASpringAnimation` / Android SpringAnimation 的
+///   参数语义与本引擎的（stiffness/damping/mass 半隐式欧拉）**不完全一致** ⇒ 直接交给它们
+///   会让"提交路径"与"tick 路径"的观感分叉。⇒ 用**同一套积分**离线采样，保证两条路径同形。
+fn spring_sample(a: &Anim, p: SpringParams, t_ms: f32) -> f32 {
+    let p = p.sanitized();
+    let (mut x, mut v) = (a.from, 0.0);
+    let mut remaining = t_ms / 1000.0;
+    while remaining > 0.0 {
+        let h = remaining.min(MAX_SUBSTEP_S);
+        let acc = (-p.stiffness * (x - a.to) - p.damping * v) / p.mass;
+        v += acc * h;
+        x += v * h;
+        remaining -= h;
+    }
+    x
+}
+
 /// **受影响节点的视觉状态**（宿主据此刷层/绘制的唯一真相）
 ///
 /// 【为什么必须回报（本仓纪律：静默不更新是最危险的失效模式）】宿主（CALayer/Canvas）
@@ -443,6 +649,20 @@ impl AnimEngine {
             }
         }
         n
+    }
+
+    /// ★★**只移交、不清值**：把一批节点的动画从引擎中**摘出**（不移除样式值）
+    ///
+    /// 【用途（MA0-RT 的交接语义）】走"提交一次 + 平台自主插值"路径时，动画责任**转移给平台**：
+    ///   引擎这边必须把对应动画摘掉（否则 tick 会继续写 model 值，与平台的 presentation 动画打架）。
+    ///   ★与 `stop_nodes` 的区别：**不清视觉值**——因为提交规格是基于"当前静态基线"采样的
+    ///   （清值会把未参与动画的属性也复位，见 `commit_specs` 的 base 读取）。
+    ///
+    /// - Returns: 摘出的动画数
+    pub fn detach_nodes(&mut self, node_ids: &[u32]) -> usize {
+        let before = self.anims.len();
+        self.anims.retain(|(a, _)| !node_ids.contains(&a.node_id));
+        before - self.anims.len()
     }
 
     /// ★★**批量按节点停动画**（RT2/§7.3 节点复用解绑）
@@ -606,7 +826,11 @@ impl AnimEngine {
             // ① 立即写在旧位置（视觉无跳变）——直接改样式，不经过动画
             tree.nodes[idx].style.translate_x = *dx;
             tree.nodes[idx].style.translate_y = *dy;
-            let delay = i as f32 * stagger_ms;
+            // ★`stagger_ms = 0` ⇒ **无级联**（所有节点同时开始）；非零才按新 y 序逐项递增。
+            //   （首版无条件乘 i ⇒ 215 节点会排出 214×stagger 的尾巴：即使 stagger=0 也会
+            //    因浮点累加产生微小延迟；真机 F3d 的 -0.43px 残留就是这么来的——最后一帧
+            //    仍有节点没走完。★这是"看起来没问题但数值不干净"的典型。）
+            let delay = if stagger_ms > 0.0 { i as f32 * stagger_ms } else { 0.0 };
             // ② 两条归零补间（takeover=false：上面已把 translate 设为 Δ，必须**从这里**开始）
             for (kind, delta) in [(AnimKind::TranslateX, *dx), (AnimKind::TranslateY, *dy)] {
                 if delta.abs() <= 0.5 {
@@ -1094,6 +1318,138 @@ mod tests {
     }
 
     #[test]
+    fn all_anim_kinds_are_composited() {
+        // ★本引擎的设计选择：只做绘制层变换 ⇒ 全部属性都是合成属性
+        //   （这是"平台渲染线程零参与路径"可用的前提，见 Morpheus §5-bis）
+        for k in [AnimKind::TranslateX, AnimKind::TranslateY, AnimKind::Scale, AnimKind::Rotate, AnimKind::Opacity] {
+            assert!(k.is_composited(), "{k:?} 应为合成属性");
+        }
+    }
+
+    #[test]
+    fn plan_reports_composited_for_transform_only_batch() {
+        let anims = vec![
+            anim(1, AnimKind::TranslateX),
+            anim(1, AnimKind::Scale),
+            anim(2, AnimKind::Opacity),
+        ];
+        let p = plan_animations(&anims);
+        assert!(p.composited, "全合成属性 ⇒ 可走平台零参与路径");
+        assert!(p.non_composited_kinds.is_empty());
+        assert_eq!(p.node_count, 2);
+        assert_eq!(p.anim_count, 3);
+    }
+
+    /* ────────────────────────── ★MA0-RT：提交规格（平台零参与路径） ────────────────────────── */
+
+    #[test]
+    fn commit_spec_has_17_samples_with_pinned_endpoints() {
+        let t = tree_with(1);
+        let mut a = anim(1, AnimKind::TranslateX); // 0 → 100, easeOutCubic
+        a.dur_ms = 300.0;
+        let specs = commit_specs(&t, &[a]);
+        assert_eq!(specs.len(), 1, "单节点 ⇒ 一条规格");
+        let sp = &specs[0];
+        assert_eq!(sp.samples.len(), COMMIT_SAMPLES, "采样点数须为 17");
+        assert_eq!(sp.key_times.len(), COMMIT_SAMPLES);
+        assert_eq!(sp.key_times[0], 0.0);
+        assert_eq!(*sp.key_times.last().unwrap(), 1.0);
+        // 起点 = from（0）、终点 = to（100，**精确**）
+        assert_eq!(sp.samples[0].0, 0.0, "起点须精确等于 from");
+        assert_eq!(sp.samples[COMMIT_SAMPLES - 1].0, 100.0, "终点须精确等于 to（端点钉死）");
+        // 中途值应与 curve_eval 一致（采样器与 tick 路径同源）
+        let mid = sp.samples[COMMIT_SAMPLES / 2].0;
+        let expect = 100.0 * curve_eval(0x01 /* EASE_OUT_CUBIC */, 0.5);
+        assert!((mid - expect).abs() < 0.01, "中途值 {mid} 应 ≈ {expect}（与 tick 同曲线）");
+    }
+
+    #[test]
+    fn commit_spec_merges_multiple_kinds_for_same_node() {
+        let t = tree_with(1);
+        let mut x = anim(1, AnimKind::TranslateX);
+        x.dur_ms = 300.0;
+        let mut sc = anim(1, AnimKind::Scale);
+        sc.from = 1.0;
+        sc.to = 0.5;
+        sc.dur_ms = 300.0;
+        let specs = commit_specs(&t, &[x, sc]);
+        assert_eq!(specs.len(), 1, "同节点多属性 ⇒ 合并为**一条**规格（平台的 transform 是整体）");
+        let last = specs[0].samples[COMMIT_SAMPLES - 1];
+        assert_eq!(last.0, 100.0, "translate 终点");
+        assert_eq!(last.2, 0.5, "scale 终点");
+    }
+
+    #[test]
+    fn commit_spec_spring_uses_same_integration_as_tick() {
+        let mut t = tree_with(1);
+        let mut e = AnimEngine::new();
+        let mut a = anim(1, AnimKind::TranslateX);
+        a.to = 100.0;
+        a.mode = AnimMode::Spring(SpringParams { stiffness: 320.0, damping: 30.0, mass: 1.0 });
+        // ★比较窗口 = **采样点的精确时刻**（t = u × dur），避免索引取整引入假差异。
+        //   首版用 t=160ms（超出 dur=100ms 的窗口）⇒ 被端点钉死成 100 ⇒ 假红。
+        let specs = commit_specs(&t, &[a]);
+        let dur = specs[0].dur_ms; // 有效时长（弹簧 = 自然静止时间）
+        assert!(dur > 100.0, "弹簧的有效时长应**长于**名义 dur_ms（自然静止时间；实测 {dur}）");
+        let u = 0.5f32;
+        let idx = ((u * (COMMIT_SAMPLES - 1) as f32).round() as usize).min(COMMIT_SAMPLES - 1);
+        // ① tick 路径：积分到 t = u × dur
+        e.start(&t, a).unwrap();
+        e.tick(&mut t, u * dur);
+        let via_tick = t.nodes[0].style.translate_x;
+        // ② 提交路径：同一时刻的采样值
+        let via_commit = specs[0].samples[idx].0;
+        assert!(
+            (via_tick - via_commit).abs() < 1.0,
+            "两条路径必须同形（tick {via_tick} vs commit {via_commit}，t={}ms）", u * dur
+        );
+    }
+
+    #[test]
+    fn spring_commit_window_covers_natural_settle() {
+        // 回归：弹簧的提交窗口必须覆盖到自然静止（否则动画被截断——真机/单测都抓过）
+        let t = tree_with(1);
+        let mut a = anim(1, AnimKind::TranslateX);
+        a.to = 100.0;
+        a.dur_ms = 100.0; // 名义时长故意设得**比自然静止短**
+        a.mode = AnimMode::Spring(SpringParams { stiffness: 320.0, damping: 30.0, mass: 1.0 });
+        let specs = commit_specs(&t, &[a]);
+        let last = specs[0].samples[COMMIT_SAMPLES - 1].0;
+        assert_eq!(last, 100.0, "窗口末尾应精确落在 to（自然静止）");
+        // 且中途值应已非常接近目标（说明确实到了静止附近，而不是被硬截断）
+        let near_end = specs[0].samples[COMMIT_SAMPLES - 2].0;
+        assert!((near_end - 100.0).abs() < 5.0, "窗口倒数第二点应已接近静止（实测 {near_end}）");
+    }
+
+    #[test]
+    fn commit_spec_respects_static_baseline_for_untouched_kinds() {
+        // 未参与动画的属性：应取**节点当前值**（不是硬编码 0/1——否则会把无关属性清零）
+        let mut t = tree_with(1);
+        t.nodes[0].style.opacity = 0.42;
+        t.nodes[0].style.rotate = 7.0;
+        let mut a = anim(1, AnimKind::TranslateX);
+        a.dur_ms = 100.0;
+        let specs = commit_specs(&t, &[a]);
+        let s0 = specs[0].samples[0];
+        assert_eq!(s0.4, 0.42, "opacity 应保持静态基线（实测 {}）", s0.4);
+        assert_eq!(s0.3, 7.0, "rotate 应保持静态基线（实测 {}）", s0.3);
+    }
+
+    #[test]
+    fn detach_nodes_removes_animations_but_keeps_values() {
+        // ★MA0-RT 交接语义：摘出动画但**保留样式值**（提交规格基于静态基线采样）
+        let mut t = tree_with(1);
+        let mut e = AnimEngine::new();
+        e.start(&t, anim(1, AnimKind::TranslateX)).unwrap();
+        e.tick(&mut t, 50.0);
+        let v = t.nodes[0].style.translate_x;
+        assert!(v > 0.0);
+        assert_eq!(e.detach_nodes(&[1]), 1);
+        assert_eq!(t.nodes[0].style.translate_x, v, "detach 不得改样式值");
+        assert!(e.is_empty());
+    }
+
+    #[test]
     fn reset_visuals_clears_all_five_fields() {
         let mut t = tree_with(1);
         let n = &mut t.nodes[0];
@@ -1167,6 +1523,36 @@ mod tests {
         assert!(mid > -30.0 && mid < 0.0, "中途应在 [-30, 0] 之间（实测 {mid}）");
         e.tick(&mut t, 200.0);
         assert_eq!(t.nodes[1].style.translate_y, 0.0, "终值必须精确归零");
+    }
+
+    #[test]
+    fn flip_zero_stagger_has_no_tail_delay() {
+        // ★回归（真机 F3d 抓出）：stagger=0 时**不得**产生级联延迟——否则 215 节点会排出长尾，
+        //   探针/真实场景都会看到"最后一帧仍有节点没走完"的残留（真机实测 -0.43px）。
+        let mut t = LayoutTree::new();
+        let mut root = LNode::new(1, LStyle::default());
+        root.rect = Rect { x: 0.0, y: 0.0, width: 100.0, height: 400.0 };
+        let ri = t.push(root);
+        t.roots.push(ri);
+        for nid in 2u32..=5 {
+            let mut n = LNode::new(nid, LStyle::default());
+            n.rect = Rect { x: 0.0, y: (nid as f32) * 20.0, width: 50.0, height: 20.0 };
+            let i = t.push(n);
+            t.add_child(ri, i);
+        }
+        let mut e = AnimEngine::new();
+        e.flip_capture(&t);
+        for i in 1..t.nodes.len() {
+            t.nodes[i].rect.y += 30.0; // 全部下移 30
+        }
+        let out = e.flip_start(&mut t, 100.0, CURVE_LINEAR, 0.0).unwrap();
+        assert_eq!(out.animated, 4);
+        // stagger=0 ⇒ 一次 tick 走满时长，**全部**归零（无长尾）
+        e.tick(&mut t, 120.0);
+        for nid in 2u32..=5 {
+            let n = t.nodes.iter().find(|x| x.id == nid).unwrap();
+            assert_eq!(n.style.translate_y, 0.0, "节点 {nid} 应归零（stagger=0 时无长尾延迟）");
+        }
     }
 
     #[test]

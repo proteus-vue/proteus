@@ -61,6 +61,8 @@ func proteus_layout_apply_ops(_ handle: UInt64, _ ptr: UnsafePointer<UInt8>, _ l
 func proteus_layout_anim_start(_ handle: UInt64, _ json: UnsafePointer<CChar>) -> UnsafeMutablePointer<CChar>
 @_silgen_name("proteus_layout_anim_seek")
 func proteus_layout_anim_seek(_ handle: UInt64, _ json: UnsafePointer<CChar>) -> UnsafeMutablePointer<CChar>
+@_silgen_name("proteus_layout_anim_commit_spec")
+func proteus_layout_anim_commit_spec(_ handle: UInt64, _ json: UnsafePointer<CChar>) -> UnsafeMutablePointer<CChar>
 @_silgen_name("proteus_layout_flip")
 func proteus_layout_flip(_ handle: UInt64, _ json: UnsafePointer<CChar>) -> UnsafeMutablePointer<CChar>
 @_silgen_name("proteus_layout_anim_stop")
@@ -159,6 +161,10 @@ func physFootprintMB() -> Double {
     func layerTransformProbe(_ idsJson: String) -> String
     /// ★★**停全部动画 + 复位变换**（相位间状态清理）
     func animStopAll() -> String
+    /// ★★**MA0-RT 平台零参与路径**：提交一次（CAKeyframeAnimation）/ presentation 探针 / 撤销
+    func animCommit(_ json: String) -> String
+    func layerPresentedProbe(_ idsJson: String) -> String
+    func animRemovePlatform(_ idsJson: String) -> String
     /// ★★**FLIP 布局动画**（招牌能力）：capture 记快照 / start 启动补间
     func animFlip(_ json: String) -> String
     /// ★★**帧率测席**（§9 指标测量）：启动 / 取结果
@@ -531,6 +537,127 @@ final class SelfDrawView: UIView {
         for (_, layer) in layersById {
             layer.transform = CATransform3DIdentity
             layer.opacity = 1
+        }
+        CATransaction.commit()
+    }
+
+    /* ────────────────── ★★MA0-RT：平台渲染线程零参与路径（§5-bis） ────────────────── */
+
+    /// ★★**读"正在屏幕上显示的值"**（`presentationLayer`）——证明**平台在自己插值**
+    ///
+    /// 【为什么必须读 presentation（判据设计）】`layer.transform` 是 **model 值**（动画结束后
+    ///   要显示的值）；而屏幕上**此刻**显示的是 `presentationLayer` 的值。
+    ///   ⇒ 走"提交一次 + 平台自主插值"路径时，**主线程不再写值** ⇒ 只有 presentation 层
+    ///     能证明"动画真的在跑"（若只读 model，会得到静止的终值，看起来像"没动"）。
+    func layerPresentedProbe(_ idsJson: String) -> String {
+        guard let data = idsJson.data(using: .utf8),
+              let ids = (try? JSONSerialization.jsonObject(with: data)) as? [Int] else {
+            return "{\"ok\":false,\"error\":\"入参需为 id 数组 JSON\"}"
+        }
+        var parts: [String] = []
+        for id in ids {
+            guard let layer = layersById[id] else {
+                parts.append("{\"id\":\(id),\"missing\":true}")
+                continue
+            }
+            // ★presentation() 在**无动画时返回 nil**（或与 model 相同）⇒ 回落到 model
+            let p = layer.presentation()
+            let t = (p ?? layer).transform
+            let op = (p ?? layer).opacity
+            let rotateDeg = atan2(t.m12, t.m11) * 180 / .pi
+            parts.append(
+                "{\"id\":\(id),\"tx\":\(t.m41),\"ty\":\(t.m42),\"scale\":\(t.m11),"
+                    + "\"rotate\":\(rotateDeg),\"opacity\":\(op),\"hasPresentation\":\(p != nil)}"
+            )
+        }
+        return "{\"ok\":true,\"layers\":[\(parts.joined(separator: ","))]}"
+    }
+
+    /// ★★**提交一次 ⇒ 平台自主插值**（`CAKeyframeAnimation`）——主线程之后**零参与**
+    ///
+    /// 【为什么用 `CAKeyframeAnimation` 而不是 `CABasicAnimation`】我们的曲线是**任意采样表**
+    ///   （easeOutCubic / 弹簧积分结果），而 `CABasicAnimation` 的 timingFunction 只有三次贝塞尔
+    ///   ⇒ 用**关键帧数组**表达才能**精确复现**本引擎的曲线（采样值与 `tick` 路径同源，
+    ///   见 `commit_specs`）。⇒ 两条路径观感一致（这是"换实现不是重做"的判据）。
+    ///
+    /// 【Swift 侧没有任何曲线数学】采样值全部来自内核（`proteus_layout_anim_commit_spec`）；
+    ///   本方法只负责"翻译成 CoreAnimation 的 API 形状"。
+    @discardableResult
+    func commitKeyframeAnimation(spec: [String: Any]) -> Bool {
+        guard let nodeId = spec["nodeId"] as? Int,
+              let layer = layersById[nodeId],
+              let durMs = spec["durMs"] as? Double,
+              let keyTimes = spec["keyTimes"] as? [Double],
+              let samples = spec["samples"] as? [[Double]],
+              samples.count == keyTimes.count, samples.count >= 2 else {
+            return false
+        }
+        let delayS = ((spec["delayMs"] as? Double) ?? 0) / 1000.0
+        let duration = max(durMs, 1) / 1000.0
+
+        // ① 构造 CATransform3D 序列（与 applyTransform **同一构造**：中心锚点缩放/旋转）
+        let b = layer.bounds
+        var transforms: [CATransform3D] = []
+        var opacities: [Float] = []
+        var opacityChanges = false
+        for s in samples {
+            let tx = CGFloat(s[0]), ty = CGFloat(s[1]), sc = CGFloat(s[2])
+            let rot = CGFloat(s[3]), op = Float(s[4])
+            var t = CATransform3DTranslate(CATransform3DIdentity, tx, ty, 0)
+            if sc != 1 || rot != 0 {
+                t = CATransform3DTranslate(t, b.midX, b.midY, 0)
+                if rot != 0 { t = CATransform3DRotate(t, rot * .pi / 180, 0, 0, 1) }
+                if sc != 1 { t = CATransform3DScale(t, sc, sc, 1) }
+                t = CATransform3DTranslate(t, -b.midX, -b.midY, 0)
+            }
+            transforms.append(t)
+            opacities.append(op)
+            if abs(op - 1) > 1e-6 { opacityChanges = true }
+        }
+        let last = samples[samples.count - 1]
+
+        CATransaction.begin()
+        CATransaction.setDisableActions(true)
+        // ② model 值先设成**终值**（动画移除后显示它 ⇒ 不会回弹）
+        layer.transform = transforms[transforms.count - 1]
+        layer.opacity = Float(last[4])
+
+        let kt = keyTimes.map { NSNumber(value: $0) }
+        let begin = CACurrentMediaTime() + delayS
+
+        // ③ transform 关键帧（一条覆盖整个变换——平台的 transform 是整体，拆子属性会互相覆盖）
+        let anim = CAKeyframeAnimation(keyPath: "transform")
+        anim.values = transforms.map { NSValue(caTransform3D: $0) }
+        anim.keyTimes = kt
+        anim.duration = duration
+        anim.beginTime = begin
+        anim.fillMode = .forwards
+        anim.isRemovedOnCompletion = false // 动画保留到结束（配合 model 值=终值；显式撤销由调用方/clearTree 负责）
+        layer.add(anim, forKey: "proteus.anim.transform")
+
+        // ④ opacity 仅在**真的变化**时提交（省一条动画）
+        if opacityChanges {
+            let oa = CAKeyframeAnimation(keyPath: "opacity")
+            oa.values = opacities.map { NSNumber(value: $0) }
+            oa.keyTimes = kt
+            oa.duration = duration
+            oa.beginTime = begin
+            oa.fillMode = .forwards
+            oa.isRemovedOnCompletion = false
+            layer.add(oa, forKey: "proteus.anim.opacity")
+        }
+        CATransaction.commit()
+        return true
+    }
+
+    /// **撤销平台动画**（回落 model 值）——相位间清理 / 节点复用时调用
+    func removePlatformAnimations(_ ids: [Int]) {
+        CATransaction.begin()
+        CATransaction.setDisableActions(true)
+        let keys = ["proteus.anim.transform", "proteus.anim.opacity"]
+        for id in ids {
+            guard let layer = layersById[id] else { continue }
+            for k in keys { layer.removeAnimation(forKey: k) }
         }
         CATransaction.commit()
     }
@@ -2989,6 +3116,60 @@ final class SelfDrawBridge: NSObject, SelfDrawExports {
         return idsJson.withCString { takeCString(proteus_layout_anim_stop(handle, $0)) }
     }
 
+    /* ────────────────── ★★MA0-RT：平台零参与路径（Bridge 层） ────────────────── */
+
+    /// ★★**提交一次 ⇒ 平台自主插值**（MA0-RT 的核心入口）
+    ///
+    /// 流程：① 调内核拿**提交规格**（含合成属性判定 `plan` + 节点级采样）；
+    ///      ② `plan.composited=false` ⇒ **明确返回错误**（不静默降级——Morpheus §5-bis.2 要求）；
+    ///      ③ 逐 spec 构造 `CAKeyframeAnimation` 提交给 CoreAnimation render server；
+    ///      ④ 交接：内核已把这些动画**摘出**（`detach_nodes`，见 FFI 注释）⇒ 之后 tick 不再碰它们。
+    ///
+    /// ★此后**主线程零参与**：动画由 **CoreAnimation render server（独立进程）** 自主插值。
+    func animCommit(_ json: String) -> String {
+        guard handle != 0, let view else { return "{\"ok\":false,\"error\":\"未接入\"}" }
+        let specJson = json.withCString { takeCString(proteus_layout_anim_commit_spec(handle, $0)) }
+        guard let d = specJson.data(using: .utf8),
+              let o = (try? JSONSerialization.jsonObject(with: d)) as? [String: Any] else {
+            return "{\"ok\":false,\"error\":\"规格解析失败\",\"raw\":\(jsonEscape(String(specJson.prefix(200))))}"
+        }
+        guard (o["ok"] as? Bool) == true else {
+            return "{\"ok\":false,\"error\":\"内核拒绝\",\"raw\":\(jsonEscape(String(specJson.prefix(300))))}"
+        }
+        let plan = (o["plan"] as? [String: Any]) ?? [:]
+        let composited = (plan["composited"] as? Bool) ?? false
+        if !composited {
+            // ★**不静默降级**（§5-bis.2）：非合成属性必须由上层显式处理
+            let bad = (plan["nonCompositedKinds"] as? [Int]) ?? []
+            return "{\"ok\":false,\"error\":\"含非合成属性，不能走平台零参与路径\",\"nonCompositedKinds\":\(bad)}"
+        }
+        let specs = (o["specs"] as? [[String: Any]]) ?? []
+        var committed = 0
+        for sp in specs where view.commitKeyframeAnimation(spec: sp) {
+            committed += 1
+        }
+        // ★把 plan 一并返回（判据要断言"合成属性判定"，见 check-anim-rt2.py G1）
+        return "{\"ok\":true,\"committed\":\(committed),\"plan\":{\"composited\":true,"
+            + "\"nodeCount\":\(plan["nodeCount"] ?? 0),\"animCount\":\(plan["animCount"] ?? 0)}}"
+    }
+
+    /// **presentation 层探针**（证明"平台自己在插值"——见 `SelfDrawView.layerPresentedProbe`）
+    func layerPresentedProbe(_ idsJson: String) -> String {
+        guard let view else { return "{\"ok\":false,\"error\":\"未接入视图\"}" }
+        return view.layerPresentedProbe(idsJson)
+    }
+
+    /// **撤销平台动画**（相位间清理）
+    func animRemovePlatform(_ idsJson: String) -> String {
+        guard let view else { return "{\"ok\":false,\"error\":\"未接入视图\"}" }
+        guard let d = idsJson.data(using: .utf8),
+              let ids = (try? JSONSerialization.jsonObject(with: d)) as? [Int] else {
+            return "{\"ok\":false,\"error\":\"入参需为 id 数组\"}"
+        }
+        view.removePlatformAnimations(ids)
+        return "{\"ok\":true,\"removed\":\(ids.count)}"
+    }
+
     /// ★★**FLIP 布局动画**（招牌能力）：`op=capture` 记快照 / `op=start` 启动补间
     ///
     /// ★为什么这是招牌（Morpheus §5）：几何本来就在内核 ⇒ 两次快照都是内部读，
@@ -4216,6 +4397,8 @@ final class SelfDrawViewController: UIViewController {
             ("__proteus.animProbe()", 2),
             // ★★RT2 复杂动效（弹簧 / 打断接管 / FLIP / rotate+opacity）——判据见 check-anim-rt2.py F 组
             ("__proteus.animComplex()", 2),
+            // ★★MA0-RT：平台零参与路径（合成属性判定 + CAKeyframe 提交 + presentation 探针）
+            ("__proteus.animPlatform()", 2),
             // ★★RT2 帧率测席（§9 指标）：**异步**——由 CADisplayLink 跑满时长后回调续链
             //   （事件驱动：跑满即继续，不轮询/不 sleep；看门狗只在卡死时兜底）
             ("__proteus.animBench()", 0),
@@ -4245,7 +4428,7 @@ final class SelfDrawViewController: UIViewController {
             }
             let out = js(expr)
             // 只记关键读数（避免日志爆炸——本仓「输出控制」纪律）
-            if expr.hasPrefix("__proteus.mount") || expr.hasPrefix("__proteus.finalize2") || expr.hasPrefix("__proteus.animProbe") || expr.hasPrefix("__proteus.animComplex") {
+            if expr.hasPrefix("__proteus.mount") || expr.hasPrefix("__proteus.finalize2") || expr.hasPrefix("__proteus.animProbe") || expr.hasPrefix("__proteus.animComplex") || expr.hasPrefix("__proteus.animPlatform") {
                 NSLog("[proteus] %@ → %@", expr, String(out.prefix(400)))
             }
             // ★让出主线程 pump 轮：每轮一次 runloop 循环 ⇒ 微任务队列被排空

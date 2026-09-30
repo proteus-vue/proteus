@@ -14,6 +14,8 @@
 | 该不该做 | ✅ **该做**——只开放 API 会让开发者必踩打断/协调/生命周期/调参四个坑 |
 | 照 Reanimated 做？ | ❌ **不要**——它为"逃离 JS 线程"而生，你的动机不同 |
 | 你的真正理由 | **把"编译期收敛"这套方法论应用到动画领域** |
+| **转场为什么能极快** | **平台白送**（Android RenderThread / iOS CoreAnimation render server）——Flutter 自绘，才被迫自建 raster thread |
+| **转场快的前提** | 只动**合成属性**（transform / opacity）；动了布局属性则红利**完全失效** |
 | 最大超能力 | **布局动画（FLIP）**——几何本就在 Rust 侧，零跨边界查询 |
 | 最大陷阱 | **节点复用 × 动画**：动画必须绑 Slot 身份，不能绑 Node 身份 |
 | 关键边界 | 动画是收敛模型**第一次正面撞上"连续运行时"**，必须先定边界 |
@@ -179,6 +181,84 @@ Reanimated / Skyline 做 worklet 的动机是 **逃离 JS 线程**——
 
 ---
 
+## 5-bis. ★ 转场动画：RenderThread 零参与路径（平台红利）
+
+### 5-bis.0 先纠正一个说法
+
+准确表述不是"我们做 Flutter 的方案"，而是——
+**平台已经把这个东西白送给我们了，Flutter 才是被迫自建的那个。**
+
+| | 逻辑线程 | 渲染线程 |
+|---|---|---|
+| **Flutter** | Dart build + layout + paint 录制 → LayerTree | **自建 raster thread** 做光栅化 |
+| **Android 原生** | measure / layout / draw 录制 DisplayList | **系统 RenderThread**（Android 5.0 起）转 GPU 指令 |
+| **iOS** | 主线程提交 transaction | **CoreAnimation render server**（独立进程） |
+
+关键事实：**Flutter 不使用 Android RenderThread**——它自绘，所以必须自己建一套。
+
+而我们不自绘 → **直接用系统的**，零成本，且它比 Flutter 自建的更成熟（操作系统级组件）。
+
+Android 官方文档对 RenderThread 的定义：
+> "A new system-managed processing thread called RenderThread keeps animations smooth
+> even when there are delays in the main UI thread."
+
+### 5-bis.1 🔴 分水岭：只有「合成属性」享受这个红利
+
+这是转场能不能真的快起来的唯一关键：
+
+| 动的属性 | 走哪条路 |
+|---|---|
+| `translation / scale / alpha / rotation` | ✅ **RenderThread 直接更新 RenderNode，主线程无需参与每帧** |
+| `width / height / margin / LayoutParams` | ❌ 触发 `requestLayout` → measure+layout+draw，**异步优势完全失效** |
+
+iOS 同理：动 `transform` 是 GPU 加速，动 `frame` 触发布局重算。
+
+**所以转场能快，是因为它天然只需要动 transform / opacity。**
+
+> ⚠️ 工程陷阱：若在动画回调里改 `LayoutParams` 或调用 `invalidate()`，
+> 会强制触发主线程 `requestLayout()` 全链路，**RenderThread 的异步优势完全失效**。
+
+### 5-bis.2 ★ 关键机制：合成属性集合在编译期判定
+
+这一点是 Morpheus 相对 Flutter / RN 的结构性优势：
+
+```
+编译期分析动画声明
+  → 属性集 ⊆ { transform, opacity } ？
+      ├─ 是 → 走「提交一次 + RenderThread 自主插值」路径
+      │        主线程在整个动画期间零参与（MA-RT 路径）
+      └─ 否 → 编译期报错 / 显式降级标记（degraded）
+```
+
+**它把"会不会掉帧"从运行时问题变成了编译期问题。**
+
+对照：Flutter 里开发者不小心在动画回调改了布局属性，只能靠运行时 profile 发现；
+**我们能在编译期拦住。**
+
+### 5-bis.3 两类动画的分野（互补，不冲突）
+
+| 类型 | 能否走 RenderThread | 靠什么 |
+|---|---|---|
+| **页面转场** | ✅ 只动合成属性，主线程零参与 | **平台白送**（§5-bis） |
+| **布局动画**（列表项让位） | ❌ 必须改布局 | **0.08ms 全量重排**（§5） |
+
+**两者合起来才是完整能力，而别人往往只有一半。**
+这也是 Morpheus 相对 Reanimated / Flutter 动画库的结构性覆盖优势。
+
+### 5-bis.4 两条实现约束
+
+**① 共享元素转场是另一回事**
+它需要跨页面几何传递 + 原生视图层级提升（把元素盖在两个页面之上），
+三平台实现不同，**须在 `platform/` 层各写一份**。
+好消息：**几何本来在 Rust 侧**，这步我们比别人省事。
+
+**② 这个红利依赖「不自绘」**
+桌面端 Linux 若走"统一后端"那个例外，此红利消失——
+那时就得自建 raster thread。
+**此条应作为《桌面端可行性评估方案》中"倾向系统管线"的又一个决策依据。**
+
+---
+
 ## 6. "开箱即用" = 预设，不是参数
 
 开发者的真实需求不是"能配 spring 参数"，是：
@@ -190,9 +270,9 @@ Reanimated / Skyline 做 worklet 的动机是 **逃离 JS 线程**——
 | 预设 | 说明 | 现状 |
 |---|---|---|
 | 路由转场 | halfScreen / slideUp / scaleDown | ✅ **已有，是现成地基** |
-| **共享元素** | B1 benchmark 案例的核心环节 | 待做 |
-| **列表项增删让位** | §5 的超能力 | 待做 |
-| 滚动联动 | 吸顶 / 视差 / 渐显 | 待做 |
+| **共享元素** | B1 benchmark 案例的核心环节 | 待做（需 `platform/` 层，见 §5-bis.4①） |
+| **列表项增删让位** | §5 的超能力 | ◐ **内核机制已落地**（`flip_capture`/`flip_start` + `staggerMs`，真机 215 节点通过）；缺**预设封装** |
+| 滚动联动 | 吸顶 / 视差 / 渐显 | 待做（MA5）|
 
 **先做预设，引擎够用就行。**
 
@@ -267,8 +347,37 @@ Reanimated / Skyline 做 worklet 的动机是 **逃离 JS 线程**——
 - [ ] 编译层 / 运行时层边界（§4.1）
 - [ ] Slot 身份绑定约束（§7.3）
 - [ ] 逃生口分类与统计口径（§4.2）
+- [x] **合成属性集合的编译期判定规则**（§5-bis.2）—— ✅ **内核侧已落地**：
+      `AnimKind::is_composited()` + `plan_animations()`（判定在内核，唯一实现）；
+      返回 `plan.composited` + `nonCompositedKinds` 供上层报错
 
-**出口**：边界文档 + 回归测试用例。
+**出口**：边界文档 + 回归测试用例 + 合成属性判定表。
+
+### MA0-RT · RenderThread 零参与路径 —— ◐ **iOS 侧已落地并真机验证（2026-09-30）**
+
+- [x] **合成属性判定**（transform / opacity 子集检查）：`AnimKind::is_composited()` +
+      `plan_animations()` —— 判定在**内核**（唯一实现），随提交规格一起返回
+- [x] **提交一次 + 平台自主插值**（iOS）：`proteus_layout_anim_commit_spec`（Rust 生成**节点级采样**）
+      → `CAKeyframeAnimation` 提交给 **CoreAnimation render server**（独立进程）⇒ 主线程此后零参与
+      · 真机：`committed=1`（1 节点 2 属性合并为一条动画）· `hasPresentation=true`（平台确实在插值）
+- [x] **非合成属性的明确报错与降级标记**：`plan.composited=false` ⇒ 宿主返回错误 + 违规属性列表
+      （**不静默降级**）· 真机判据 G4
+- [ ] 三端 `platform/` 层实现（共享元素跨页面几何传递 + 视图层级提升）—— 独立工程量
+- [ ] Android RenderThread 侧（`RenderNode` 动画 + `ViewPropertyAnimator`）
+
+**★两条实现纪律（本轮确立，各有判据守住）**：
+1. **曲线求值只在 Rust**（唯一实现）⇒ 提交规格由内核**采样**（17 点/节点），宿主只做
+   "翻译成平台 API"，**Swift 侧零曲线数学**（否则是"第 N 份手写副本"）；
+2. **弹簧必须离线采样、不能用平台的 spring**——iOS `CASpringAnimation` / Android
+   `SpringAnimation` 的参数语义与本引擎（stiffness/damping/mass 半隐式欧拉）**不一致**，
+   直接交给它们会让"提交路径"与"tick 路径"观感分叉 ⇒ 用同一套积分采样
+   （单测 `commit_spec_spring_uses_same_integration_as_tick` 守住）；
+   ★且**采样窗口必须用"自然静止时间"**（不是名义 `dur_ms`）——否则被端点钉死**截断**
+   （单测 `spring_commit_window_covers_natural_settle` 守住）。
+
+**验收（iOS 侧已达）**：提交后主线程不再写值 ⇒ 由 render server 自主插值。
+★**诚实边界**：`Instruments` 级的"主线程零唤醒"实测**未做**（需真机 Instruments 会话，
+属跨端性能验证批次）；本轮可判定证据 = **presentationLayer 探针 + 提交路径判据（G 组 5 条）**。
 
 ### MA1 · 声明式表面 + 预设（≈2 人周）
 
@@ -322,7 +431,9 @@ Reanimated / Skyline 做 worklet 的动机是 **逃离 JS 线程**——
 | 协调 | 同属性多动画、手势与动画**不打架** | 可预测 |
 | 生命周期 | 组件卸载**立即停止**，无写死节点 | 零崩溃 |
 | 节点复用 | 长列表快速滚动**无错误项动画** | 专项回归通过 |
-| 布局动画 | 列表增删让位 | 60Hz **不掉帧** |
+| 布局动画 | 列表增删让位 | 60Hz **不掉帧** | ◐ 真机 215 节点补间通过（帧耗时 p95 0.7ms） |
+| **转场（合成属性）** | **主线程零参与**（Systrace / Instruments 实测） | 提交一次 | ◐ iOS 已落地：`CAKeyframeAnimation` 提交 + presentation 探针；★Instruments 级实测**未做** |
+| **转场（误改布局属性）** | **编译期拦截**，不得静默降级 | 零静默失败 | ✅ 内核判定 + 宿主**明确拒绝**（真机 G4） |
 | 声明式覆盖 | 常见动画**无需逃生口** | 逃生口率 < 5% |
 | 性能 | 与 B1 benchmark 同口径实测 | 不掉帧 + 输入延迟达标 |
 
@@ -342,6 +453,10 @@ Reanimated / Skyline 做 worklet 的动机是 **逃离 JS 线程**——
 | 8 | **逃生口静默扩大** | 必须可统计，`degraded` 单列高亮（§4.2） |
 | 9 | **命名与既有项目冲突** | 已排除 Iris / Kinesis / Triton / Hermes（§1.3） |
 | 10 | **布局动画没做成招牌** | 它是架构差异化，不是普通功能（§5.3） |
+| 11 | **转场动画里改了布局属性** | 触发 `requestLayout` 全链路，**RenderThread 红利完全失效**；须编译期拦截（§5-bis.1） |
+| 12 | **误以为转场要自建渲染线程** | 不自绘即可**直接用系统组件**；自建是自绘的代价，不是先进（§5-bis.0） |
+| 13 | **共享元素转场当成普通动画做** | 需跨页面几何传递 + 视图层级提升，须 `platform/` 层各端实现（§5-bis.4①） |
+| 14 | **桌面端例外吃掉平台红利** | 若 Linux 走"统一后端"（自绘），此红利消失——需重新评估（§5-bis.4②） |
 
 ---
 
@@ -352,11 +467,17 @@ Reanimated / Skyline 做 worklet 的动机是 **逃离 JS 线程**——
 3. **不开放任意 JS 动画函数**——任何"让开发者写任意动画逻辑"的实现应被拒绝。
 4. **编译层覆盖不了的走显式逃生口，且必须可统计**；`degraded` 类单独高亮。
 5. **布局动画是招牌能力**，实现时必须利用"几何在 Rust 侧"这个事实，不得退化成跨边界查询。
-6. **预设优先于参数**——先做预设库，引擎够用就行。
-7. **不要把手势系统并进 Morpheus**，它是独立任务。
-8. **MA1–MA3 不等 RT0**；MA4 才应用 RT0 结论。
-9. 每个预设与声明项**必须配 conformance 断言 + AI 说明书**，与既有 111 条规则同构。
-10. 定名前**再做一次包名与商标检索**（§1.4）。
+6. **转场动画必须走平台渲染线程**（Android RenderThread / iOS CoreAnimation render server），
+   **禁止自建渲染线程**——不自绘即可直接用系统组件，自建是自绘的代价不是先进。
+7. **合成属性集合必须在编译期判定**：属性集 ⊆ {transform, opacity} 才走零参与路径；
+   动了布局属性（width/height/margin）必须**编译期报错或显式降级**，不得静默。
+8. **预设优先于参数**——先做预设库，引擎够用就行。
+9. **不要把手势系统并进 Morpheus**，它是独立任务。
+10. **MA1–MA3 不等 RT0**；MA4 才应用 RT0 结论。
+11. 每个预设与声明项**必须配 conformance 断言 + AI 说明书**，与既有 111 条规则同构。
+12. 定名前**再做一次包名与商标检索**（§1.4）。
+13. ★**曲线求值与物理积分只在 Rust**：提交规格由内核**采样**下发，宿主只做"翻译成平台 API"，
+    **宿主侧零曲线数学**（否则是"第 N 份手写副本"——本仓纪律 #22）。
 
 ---
 
@@ -364,9 +485,11 @@ Reanimated / Skyline 做 worklet 的动机是 **逃离 JS 线程**——
 
 | 维度 | 说明 |
 |---|---|
-| **架构差异化** | 布局动画靠"几何在 Rust 侧"，别人做不到这么便宜 |
-| **与王炸同构** | 编译期收敛 → conformance → **AI 可写且可验证** |
+| **架构差异化（布局）** | 布局动画靠"几何在 Rust 侧"，别人做不到这么便宜 |
+| **架构差异化（转场）** | 不自绘 → 直接用系统 RenderThread / CoreAnimation；**Flutter 自绘，才被迫自建 raster thread** |
+| **与王炸同构** | 编译期收敛 → conformance → **AI 可写且可验证**；**合成属性判定把"会不会掉帧"变成编译期问题** |
 | **开箱即用** | 预设驱动，开发者一句话写出复杂转场 |
+| **覆盖完整** | 转场（平台线程）+ 布局动画（0.08ms 重排）**两类互补**，别人往往只有一半 |
 | **复用已有资产** | 三个转场预设已落地；B1 benchmark 即是展示场 |
 
 > **效率提示**：B1 benchmark 案例（万级列表 → 共享元素飞入 → 手势返回）
