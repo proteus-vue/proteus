@@ -531,3 +531,75 @@ defineProps({ x: String })
     expect(out.js).not.toContain('proteusPageEmit')
   })
 })
+
+describe('★★平台专栏的诚实性（用户反馈：链接无效 + 推荐了未实现的能力）', () => {
+  it('专栏是**按能力分组**的（三页内容不同——初版做成全局表导致三页相同）', async () => {
+    const { PLATFORM_TOPICS } = await import('../packages/api/src/capability-app')
+    const keys = Object.keys(PLATFORM_TOPICS)
+    expect(keys.length, '平台专栏应按能力分页').toBeGreaterThanOrEqual(3)
+    // 三页内容必须彼此不同（各能力有自己的平台扩展）
+    const seen = new Set<string>()
+    for (const k of keys) seen.add(JSON.stringify(PLATFORM_TOPICS[k]))
+    expect(seen.size, '三页专栏内容不得相同').toBe(keys.length)
+  })
+
+  it('★专栏只引用 **implemented** 的能力（未实现 → 纯文本 + roadmap 标注，不生成链接）', async () => {
+    const { PLATFORM_TOPICS } = await import('../packages/api/src/capability-app')
+    const { PRIMITIVE_CATALOG } = await import('../packages/component-ir/src/index.ts')
+    // 建 hook → status 索引
+    const statusOf: Record<string, string> = {}
+    for (const p of PRIMITIVE_CATALOG) {
+      if (p.kind !== 'capability') continue
+      const m = String(p.api ?? '').match(/^(use[A-Za-z0-9]+)/)
+      if (m) statusOf[m[1]] = p.status ?? 'planned'
+    }
+    const violations: string[] = []
+    for (const [cap, perEnd] of Object.entries(PLATFORM_TOPICS)) {
+      for (const [end, list] of Object.entries(perEnd as Record<string, Array<{ hooks?: string[]; roadmap?: string; title: string }>>)) {
+        for (const t of list) {
+          for (const h of t.hooks ?? []) {
+            const st = statusOf[h]
+            if (st !== 'implemented') {
+              violations.push(`${cap}/${end}「${t.title}」引用了 ${h}（status=${st ?? 'not-found'}）——专栏不得把未实现能力列为"相关能力"`)
+            }
+          }
+        }
+      }
+    }
+    expect(violations, violations.join('\n')).toEqual([])
+  })
+
+  it('未实现的实现方向写在 roadmap 字段（纯文本，不给链接）', async () => {
+    const { PLATFORM_TOPICS } = await import('../packages/api/src/capability-app')
+    let roadmapCount = 0
+    for (const perEnd of Object.values(PLATFORM_TOPICS)) {
+      for (const list of Object.values(perEnd as Record<string, Array<{ roadmap?: string }>>)) {
+        for (const t of list) if (t.roadmap) roadmapCount++
+      }
+    }
+    expect(roadmapCount, '应有 roadmap 标注（诚实区分"已实现"与"规划中"）').toBeGreaterThan(0)
+  })
+
+  it('★生成产物中不含指向未实现能力的链接（防回归：链接会 404）', async () => {
+    const fs = await import('node:fs')
+    const path = await import('node:path')
+    const root = path.resolve(__dirname, '..')
+    const pages = ['website/content/capabilities/app-lifecycle.md', 'website/content/capabilities/page-lifecycle.md', 'website/content/capabilities/background.md']
+    const bad: string[] = []
+    for (const rel of pages) {
+      const f = path.join(root, rel)
+      if (!fs.existsSync(f)) continue
+      const src = fs.readFileSync(f, 'utf8')
+      const links = [...src.matchAll(/\]\(([^)]+)\)/g)].map((m) => m[1])
+      for (const l of links) {
+        // 能力页链接必须指向 /docs/capability/<slug>（官网真实前缀——初版写成 /capabilities/ 全 404）
+        if (l.startsWith('/capabilities/')) bad.push(`${rel}: ${l}（前缀应为 /docs/capability/）`)
+        // 指向未实现能力的 slug（useKeyboard→keyboard 等）不得出现
+        if (/\/docs\/capability\/(keyboard|window|navigation-guard)$/.test(l)) {
+          bad.push(`${rel}: ${l}（目标能力未实现，应为纯文本+roadmap 标注）`)
+        }
+      }
+    }
+    expect(bad, bad.join('\n')).toEqual([])
+  })
+})

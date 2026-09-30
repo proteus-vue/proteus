@@ -50,7 +50,7 @@ export const STATS: StatItem[] = [
   },
   {
     id: 'implemented',
-    value: '72',
+    value: '82',
     label: 'implemented 语义 × 6 端',
     labelEn: 'implemented semantics × 6 ends',
     // 6 端 = vue-dom / skyline / native-ios / native-android / native-harmony / flutter；

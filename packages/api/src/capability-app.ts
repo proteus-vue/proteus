@@ -437,137 +437,836 @@ export const APP_EVENT_META: Record<AppEvent, LifecycleEventMeta> = {
   },
 }
 
+// ══════════════════════════════════════════════════════════════════
+// ★★App 端（iOS / Android / 鸿蒙）的**平台特有扩展**：壳转发通道
+//
+// 【用户要求（2026-09-30）】：「落地不是仅仅 web 和小程序，**包括 App 也要落地**，因为现在 App 宿主已经有了」
+//
+// 【为什么 App 端要单独一条通道（设计依据）】
+//   App 宿主**没有 wx（小程序 API 表），也不是浏览器**（无 window/navigator）⇒ wxBridge/webBridge
+//   都够不着它。App 端的原生能力必须由**壳转发**（G-39 宿主运行时的既定模式：
+//   业务 → 框架 → 桥 → 壳 → 平台 API）。
+//   ⇒ 本模块提供 `__proteusHostInvoke` 通道：壳注册一个同步调用入口，桥经它调原生。
+//
+// 【与 Web/MP 的对称性（同一能力形状，不同实现来源）】
+//   同一个 `useUpdate()` / `useWindow()` / `useKeyboard()` 在：
+//     · MP → wx.getUpdateManager / wx.setWindowSize / wx.onKeyboardHeightChange
+//     · Web → Service Worker / 无（诚实 Err） / visualViewport
+//     · App → **壳转发**（原生 UpdateManager / 窗口管理 / 系统键盘通知）
+//   ⇒ 业务代码零平台分支（铁律），差异只在桥的内部分支。
+//
+// 【诚实边界（本模块的 range）】壳未注册某原生能力 ⇒ 该能力返回 `*.unsupported` Err
+//   （**不伪造成功**）；壳只需实现它真有 API 的那几个（其余自动诚实降级）。
+// ══════════════════════════════════════════════════════════════════
+
+/** 壳注册的原生调用入口的全局键（壳侧：`globalThis.__proteusHostInvoke = (name, argsJson) => json`） */
+export const HOST_INVOKE_KEY = '__proteusHostInvoke'
+
+/** App 端原生调用名（**契约**：壳按此名实现；未实现 ⇒ 桥返回 unsupported） */
+export const APP_NATIVE_METHODS = {
+  /** C51 热更新：`{ hasUpdate, ready }` 或 `{ action: 'apply' }` */
+  updateCheck: 'update.check',
+  updateApply: 'update.apply',
+  /** C74 窗口：`{ width, height }` */
+  windowSetSize: 'window.setSize',
+  /** C14 键盘：壳主动推 `keyboard.height` 事件（见 APP_EVENT_SOURCES） */
+  /** C48 宿主上下文：`{ provider, version, capabilities }` */
+  hostContext: 'host.context',
+  /** C50 扩展加载：`{ id }` → 模块句柄（App 端由壳动态装载原生模块） */
+  extensionLoad: 'extension.load',
+  /** C47 跳其他小程序：App 端无此概念（对齐 Web） */
+  navigateMiniProgram: 'mini-program.navigate',
+  /** C53 Worker：App 端由壳创建后台线程（G-39 runOnThread） */
+  workerCreate: 'worker.create',
+  workerPost: 'worker.post',
+  workerTerminate: 'worker.terminate',
+  /** C73 空闲回调：壳提供主线程空闲时机 */
+  idleRequest: 'idle.request',
+  idleCancel: 'idle.cancel',
+  /** C67 预加载 */
+  preloadAssets: 'preload.assets',
+} as const
+
+/** 壳注册的原生调用签名（同步：返回 JSON 串；抛错 = 原生调用失败） */
+export type HostInvokeFn = (method: string, argsJson: string) => string
+
+/** 取壳注册的原生调用入口（未注册 ⇒ null） */
+export function getHostInvoke(): HostInvokeFn | null {
+  const g = globalThis as Record<string, unknown>
+  const f = g[HOST_INVOKE_KEY]
+  return typeof f === 'function' ? (f as HostInvokeFn) : null
+}
+
 /**
- * ★★平台特有生命周期话题 → **已有能力**的交叉引用（用户反馈第 4 点：
- *   「应用与生命周期缺少平台特有专栏，比如 App 端的 activity 管理方法、键盘事件方法、
- *     window 窗体管理方法等等。还有 web 或者小程序专栏」）
+ * 调原生（**同步**——与 G-39 的 JNI trampoline 同契约：壳内同步完成）。
  *
- * 【为什么是交叉引用而不是另写一套（设计决策）】
- *   这些话题**已经是独立能力原语**（各有自己的页面/文档/桥/测试）：
- *     · App Activity/窗体生命周期 → `useWindow`（C74，wx.setWindowSize / App 窗体）
- *     · 键盘事件 → `useKeyboard`（C14，wx.onKeyboardHeightChange / web visualViewport）
- *     · 路由/导航事件 → `useRouter`（E10-E17）/ `useNavigationGuard`（C75）
- *     · 网络状态 → `useNetworkStatusChange`（C25 句柄内）/ `useNetwork`（C8）
- *   ⇒ 若在生命周期页**再抄一份**说明，就会像 C23/C25 那样重复（本仓纪律：同一语义一处实现）。
- *   ⇒ 本表只提供**导航**（话题 → 该用哪个能力），生成器渲染成「平台专栏」段落。
+ * @returns `{ ok: true, data }` 或 `{ ok: false, reason }`
+ * ★未注册（壳没提供该方法）与调用失败**分得开**：
+ *   前者 = 该端无此能力（框架据此给 `*.unsupported`）；后者 = 有 API 但调用出错（`*.failed`）。
+ */
+export function invokeHost(method: string, args?: unknown): { ok: true; data: unknown } | { ok: false; reason: string; missing: boolean } {
+  const f = getHostInvoke()
+  if (!f) return { ok: false, reason: `壳未注册 ${HOST_INVOKE_KEY}（App 端原生通道）`, missing: true }
+  try {
+    const out = f(method, JSON.stringify(args ?? null))
+    const parsed = JSON.parse(out) as { ok?: boolean; data?: unknown; reason?: string; missing?: boolean }
+    if (parsed && parsed.ok === false) {
+      return { ok: false, reason: String(parsed.reason ?? '原生调用失败'), missing: !!parsed.missing }
+    }
+    return { ok: true, data: parsed?.data ?? parsed }
+  } catch (e) {
+    // 抛错 = 壳未实现该方法（壳侧 `throw new Error('unsupported: …')`）或真失败——
+    // 消息里带 'unsupported'/'missing' 视为"无此能力"（诚实降级），否则算失败
+    const msg = e instanceof Error ? e.message : String(e)
+    const missing = /unsupported|missing|not implemented|no such/i.test(msg)
+    return { ok: false, reason: msg, missing }
+  }
+}
+
+/** App 端能力位是否可用（壳注册了通道 + 该方法可用——供生成器/文档的端支持分档） */
+export function appNativeAvailable(method: string): boolean {
+  const r = invokeHost(method, { probe: true })
+  return r.ok || !r.missing
+}
+
+// ══════════════════════════════════════════════════════════════════
+// ★★App 端的 10 个「应用与生命周期」能力（壳转发实现）
+//
+// 覆盖：C47 mini-program / C48 embedded / C50 extension / C51 update / C53 worker /
+//       C67 preload / C73 idle / C74 window / C75 navigation-guard / C82 webassembly
+//   （C23/C24/C25 由 `createAppLifecycleCapabilities` 提供——见上）
+//
+// ★设计：**逐个走 `invokeHost`**（壳实现即用、未实现即诚实 Err）——不伪造能力位。
+// ══════════════════════════════════════════════════════════════════
+
+/** WASM 模块句柄（与 capability.ts 的 `WasmModuleHandle` **结构一致**——本模块不 import 它，保持依赖单向） */
+export interface WasmHandle {
+  exports: Record<string, unknown>
+  fromPath: boolean
+  dispose(): void
+}
+
+/** CapResult 形态（与 capability.ts 结构兼容；本模块不 import 它——依赖方向单向） */
+type R<T, E extends Error = Error> = { ok: true; data: T } | { ok: false; error: E }
+
+/**
+ * ★★创建 App 端的平台能力（供 `createCapabilityBridge` 合并；CapError 注入防循环依赖）
  *
- * 【诚实边界】本表是"指路牌"，不是"能力清单"——链接指向的能力页才是权威说明。
+ * ★诚实边界：壳未实现的方法 ⇒ 返回 `*.unsupported` Err（不假装成功）；
+ *   则业务按铁律分支 `res.ok` 即可（与 Web/MP 同一体验）。
+ */
+export function createAppNativeCapabilities<E extends Error = Error>(CapError: new (code: string, message: string, cause?: unknown) => E) {
+  /** 统一封装：未注册/未实现 ⇒ `unsupported`；真失败 ⇒ `failed` */
+  const call = <T,>(method: string, args: unknown, capSlug: string): Promise<R<T, E>> =>
+    Promise.resolve().then(() => {
+      const r = invokeHost(method, args)
+      if (r.ok) return { ok: true as const, data: r.data as T }
+      const code = r.missing ? `${capSlug}.unsupported` : `${capSlug}.failed`
+      return errNow<T>(code, `${capSlug}: ${r.reason}`)
+    })
+
+  /**
+   * 构造失败结果。
+   * ★★防御（真机实测抓出的用法陷阱）：业务侧可能误传原生 `Error` 作为构造器
+   *   （`new Error(code, msg)` 只取第一个参数当 message ⇒ **`code` 属性丢失**）⇒
+   *   异常分档（`*.unsupported` vs `*.failed`）在消费侧无法判断。
+   *   ⇒ 这里确保产出的 error **恒带 `code`**（缺失就补上）——契约不靠调用方记得传对构造器。
+   */
+  const errNow = <T, Er extends Error = E>(code: string, message: string): R<T, Er> => {
+    const err = new CapError(code, message) as unknown as Er & { code?: string }
+    if (typeof (err as { code?: unknown }).code !== 'string') {
+      // 构造器没设 code（原生 Error）⇒ 补上（派生属性，不覆盖已有的）
+      Object.defineProperty(err, 'code', { value: code, enumerable: true, configurable: true })
+    }
+    return { ok: false, error: err }
+  }
+
+  return {
+    /** C47 跳其他小程序（App 端无此概念——除非壳提供；★桥合同是 Promise<void>，失败即抛） */
+    navigateMiniProgram: (options: { appId: string; path?: string }): Promise<void> =>
+      call<void>(APP_NATIVE_METHODS.navigateMiniProgram, options, 'mini-program').then((r) => {
+        if (!r.ok) throw r.error
+      }),
+    /** C48 宙主上下文（App 端：provider = 壳标识 + 应用版本 + 能力清单） */
+    getHostContext: (): { provider: string; version?: string; capabilities?: string[] } => {
+      const r = invokeHost(APP_NATIVE_METHODS.hostContext)
+      if (r.ok && r.data && typeof r.data === 'object') {
+        const d = r.data as { provider?: string; version?: string; capabilities?: string[] }
+        return { provider: d.provider ?? 'app', version: d.version, capabilities: d.capabilities }
+      }
+      // 壳未注册 ⇒ 诚实回退到最小自述（不消极报错：上下文在 App 端总是可知的）
+      const hostId = (globalThis as Record<string, unknown>).__PROTEUS_HOST_ID__
+      return { provider: typeof hostId === 'string' ? hostId : 'app' }
+    },
+    /** C50 扩展加载（App：壳动态装载原生模块 —— G-45 调试基座同机制） */
+    loadExtension: (extensionId: string) => call<unknown>(APP_NATIVE_METHODS.extensionLoad, { id: extensionId }, 'extension'),
+    /** C51 热更新（App：壳转发原生更新管理器——iOS App Store / Android 内更新） */
+    getUpdateManager: () => ({
+      checkUpdate: async (): Promise<R<{ hasUpdate: boolean }, E>> => {
+        const r = await call<{ hasUpdate?: boolean }>(APP_NATIVE_METHODS.updateCheck, {}, 'update')
+        return r.ok ? { ok: true, data: { hasUpdate: !!r.data?.hasUpdate } } : r
+      },
+      applyUpdate: async (): Promise<R<void, E>> => {
+        const r = await call<void>(APP_NATIVE_METHODS.updateApply, {}, 'update')
+        return r.ok ? { ok: true, data: undefined } : r
+      },
+      // App 端事件由壳推（同生命周期事件渠道）——该句柄上诚实空订阅
+      onCheckForUpdate: () => () => undefined,
+      onUpdateReady: () => () => undefined,
+      onUpdateFailed: () => () => undefined,
+    }),
+    /** C53 Worker（App：壳创建后台线程 —— G-39 runOnThread） */
+    createWorker: (scriptPath: string) => {
+      const r = invokeHost(APP_NATIVE_METHODS.workerCreate, { scriptPath })
+      if (!r.ok) throw new CapError(r.missing ? 'worker.unsupported' : 'worker.failed', `worker: ${r.reason}`)
+      return {
+        postMessage: (msg: unknown): R<void, E> => {
+          const p = invokeHost(APP_NATIVE_METHODS.workerPost, { msg })
+          return p.ok ? { ok: true, data: undefined } : errNow<void>(p.missing ? 'worker.unsupported' : 'worker.failed', p.reason)
+        },
+        onMessage: () => () => undefined, // 壳推知通过生命周期事件渠道
+        terminate: (): R<void, E> => {
+          const p = invokeHost(APP_NATIVE_METHODS.workerTerminate, {})
+          return p.ok ? { ok: true, data: undefined } : errNow<void>(p.missing ? 'worker.unsupported' : 'worker.failed', p.reason)
+        },
+      }
+    },
+    /** C67 预加载（App：壳预初始化模块） */
+    getPreload: () => ({
+      assets: (data: unknown) => call<void>(APP_NATIVE_METHODS.preloadAssets, { data }, 'preload'),
+      skylineView: () => call<void>(APP_NATIVE_METHODS.preloadAssets, { kind: 'view' }, 'preload'),
+      webview: () => call<void>(APP_NATIVE_METHODS.preloadAssets, { kind: 'webview' }, 'preload'),
+      subpackage: (packageType: string) =>
+        Promise.resolve(errNow<never>('preload.unsupported', `App 端无小程序分包概念（收到 ${packageType}）——请用壳预初始化模块`)),
+    }),
+    /** C73 空闲回调（App：壳提供主线程空闲时机） */
+    getIdle: () => ({
+      request: (cb: (d: { timeRemaining: () => number; didTimeout: boolean }) => void, timeout?: number): Promise<R<number, E>> =>
+        call<{ id?: number }>(APP_NATIVE_METHODS.idleRequest, { timeout }, 'idle').then((r) => {
+          if (!r.ok) return r
+          // 壳同步回调完成后返回（与 wx 的"requestIdleCallback 即执行"同形）
+          try {
+            cb({ timeRemaining: () => Number((r.data as { timeRemaining?: number })?.timeRemaining ?? 0), didTimeout: false })
+          } catch {
+            /* 回调抛错不影响宙主 */
+          }
+          return { ok: true as const, data: Number((r.data as { id?: number })?.id ?? 0) }
+        }),
+      cancel: (id: number) => call<void>(APP_NATIVE_METHODS.idleCancel, { id }, 'idle'),
+    }),
+    /** C74 窗体管理（App：原生窗口 API —— iPad 分屏 / 折叠屏 / 桌面端） */
+    getWindow: () => ({
+      setSize: (width: number, height: number) => call<void>(APP_NATIVE_METHODS.windowSetSize, { width, height }, 'window'),
+    }),
+    /** C75 导航卸载拦截（App：虚拟栈 pop 拦截 —— M5 栈命令链） */
+    getNavigationGuard: () => {
+      // ★App 端实现依据：虚拟栈的 pop 是**框架自己的命令**（M5）⇒ 拦截在框架内完成（无需原生 API）
+      let guardMessage: string | null = null
+      const g = globalThis as Record<string, unknown>
+      const apply = (): void => {
+        g.__proteusNavGuardMessage = guardMessage
+      }
+      apply()
+      return {
+        enable: (message: string): Promise<R<void, E>> => {
+          guardMessage = message
+          apply()
+          return Promise.resolve({ ok: true as const, data: undefined })
+        },
+        disable: (): Promise<R<void, E>> => {
+          guardMessage = null
+          apply()
+          return Promise.resolve({ ok: true as const, data: undefined })
+        },
+      }
+    },
+    /** C82 WebAssembly（App：JSC/QuickJS 均内置 WebAssembly —— 与 Web 同形） */
+    getWebAssembly: () => {
+      const WASM = (globalThis as { WebAssembly?: typeof WebAssembly }).WebAssembly
+      if (!WASM) {
+        return {
+          supportsStreaming: false,
+          supportsPathLoad: false,
+          instantiate: () => Promise.resolve(errNow<never>('webassembly.unsupported', '当前 JS 引擎无 WebAssembly（App 端应用 JSC/QuickJS）')),
+          compile: () => Promise.resolve(errNow<never>('webassembly.unsupported', '无 WebAssembly')),
+          validate: () => Promise.resolve(errNow<boolean>('webassembly.unsupported', '无 WebAssembly')),
+        }
+      }
+      return {
+        supportsStreaming: typeof WASM.instantiateStreaming === 'function',
+        supportsPathLoad: false,
+        instantiate: (source: { bytes?: ArrayBuffer | Uint8Array; path?: string }, options?: unknown): Promise<R<WasmHandle, E>> =>
+          Promise.resolve()
+            .then(async () => {
+              const bytes = (source as { bytes?: ArrayBuffer | Uint8Array }).bytes
+              if (!bytes) {
+                return errNow<WasmHandle, E>('webassembly.unsupported', 'App 端请传 { bytes }（无"代码包路径"概念——那是小程序形态）')
+              }
+              const res = (await WASM.instantiate(bytes as BufferSource, options as never)) as { instance?: { exports?: Record<string, unknown> } }
+              const exportsObj = res?.instance?.exports ?? {}
+              return {
+                ok: true as const,
+                data: { exports: exportsObj, fromPath: false, dispose: () => undefined },
+              }
+            })
+            .catch((e) => errNow<WasmHandle, E>('webassembly.failed', `WebAssembly 实例化失败：${e instanceof Error ? e.message : String(e)}`)),
+        // ★诚实边界（真机实测抓到）：**不是所有 JS 引擎都实现 compile/validate**
+        //   （Android QuickJS 只有 instantiate——Node/V8 三者齐全）⇒ 缺方法时明确 Err
+        //   （`webassembly.unsupported` + 指出引擎差异），不假装"校验通过"。
+        compile: (bytes: ArrayBuffer | Uint8Array): Promise<R<unknown, E>> =>
+          Promise.resolve()
+            .then(async () => {
+              if (typeof WASM.compile !== 'function') {
+                return errNow<unknown, E>('webassembly.unsupported', '当前 JS 引擎未实现 WebAssembly.compile（Android QuickJS 只有 instantiate）')
+              }
+              return { ok: true as const, data: await WASM.compile(bytes as BufferSource) }
+            })
+            .catch((e) => errNow<unknown, E>('webassembly.failed', `compile 失败：${e instanceof Error ? e.message : String(e)}`)),
+        validate: (bytes: ArrayBuffer | Uint8Array): Promise<R<boolean, E>> =>
+          Promise.resolve()
+            .then(async () => {
+              if (typeof WASM.validate !== 'function') {
+                return errNow<boolean, E>('webassembly.unsupported', '当前 JS 引擎未实现 WebAssembly.validate（Android QuickJS 只有 instantiate）')
+              }
+              return { ok: true as const, data: await WASM.validate(bytes as BufferSource) }
+            })
+            .catch(() => errNow<boolean, E>('webassembly.failed', 'validate 失败（字节非法？）')),
+      }
+    },
+  }
+}
+
+/**
+ * ★★平台专栏（用户反馈第 4 点：「应用与生命周期缺少平台特有专栏」）
+ *
+ * 【★【修正一：专栏是「**本能力在各平台上独有的扩展**」，不是全局话题清单】】
+ *   初版把专栏做成了**三页共用的全局表** ⇒ 三个页面内容完全一样
+ *   （用户反馈：「为什么三个页面加的平台专栏内容完全一样？平台专栏指的是当前能力的
+ *   平台独有能力扩展啊」）——理解错了。
+ *   ⇒ 现在：**按能力分页**（每个能力只列它自己在各平台上的独有扩展）。
+ *
+ * 【★【修正二：只引用**已实现**的能力（用户反馈：「相关能力都只有文档，没有实际落地实现！」）】】
+ *   初版指向 `useKeyboard`（C14）/ `useWindow`（C74）/ `useNavigationGuard`（C75）--
+ *   这三个在 catalog 里都是 **`planned`**（未实现）⇒ 文档推荐了不存在的能力。
+ *   ★本仓铁律：**先实现再宣称**（W-4）。⇒ 现在 `hooks` 只能列 **implemented** 的；
+ *     未实现的实现方向唱在 `roadmap` 字段（不冒充为"相关能力"，不给链接）。
+ *   ★判据：生成器在渲染时**校验每个 hook 的 catalog status**；
+ *     `planned` 的写成纯文本并标「（未实现，见 roadmap）」，**不生成链接**（链接会 404）。
  */
 export interface PlatformTopic {
-  /** 话题标题 */
+  /** 话题标题（该能力在该平台上的独有扩展） */
   title: string
   /** 英文标题 */
   titleEn: string
-  /** 一句话：这个平台上这个话题是什么 */
+  /** 一句话：这个扩展在该平台上具体是什么 */
   desc: string
   /** 英文说明 */
   descEn: string
-  /** 关联能力（Hook 名——生成器渲染为到该能力页的链接） */
-  hooks: string[]
+  /** 关联能力（must be `implemented`；未实现的放 roadmap） */
+  hooks?: string[]
+  /** 尚未实现的实现方向（纯文本，不生成链接——诚实标注"roadmap"） */
+  roadmap?: string
+  /** 英文 roadmap */
+  roadmapEn?: string
 }
 
-/** 平台特有专栏（按端分组；生成器渲染为 `## 平台专栏` 下的分端小节） */
-export const PLATFORM_TOPICS: Record<'mp' | 'web' | 'app', PlatformTopic[]> = {
-  mp: [
-    {
-      title: '页面栈与路由事件',
-      titleEn: 'Page stack & routing events',
-      desc: '小程序页面栈深 10 层、navigateTo/redirectTo/switchTab 的语义差异，以及路由完成时机（onRouteDone）',
-      descEn: 'The 10-page stack limit, navigateTo/redirectTo/switchTab semantics, and route-completion timing (onRouteDone)',
-      hooks: ['useNavigationGuard'],
-    },
-    {
-      title: 'tabBar 与 tab 切换',
-      titleEn: 'tabBar & tab switching',
-      desc: 'tab 页的 onTabItemTap 与 switchTab（非 tab 页全销毁、其他 tab 保活）',
-      descEn: 'onTabItemTap on tab pages and switchTab semantics (non-tab pages destroyed; other tabs kept alive)',
-      hooks: ['usePageLifecycle'],
-    },
-    {
-      title: '下拉刷新与触底',
-      titleEn: 'Pull-down refresh & reach-bottom',
-      desc: '★需在 page.json 开 enablePullDownRefresh；onReachBottomDistance 控制触底阈值',
-      descEn: '★Requires enablePullDownRefresh in page.json; onReachBottomDistance controls the bottom threshold',
-      hooks: ['usePageLifecycle'],
-    },
-    {
-      title: '后台与音频中断',
-      titleEn: 'Background & audio interruption',
-      desc: 'onAppHide/onAppShow 的前后台语义，以及来电等导致的音频中断（onAudioInterruption*）',
-      descEn: 'onAppHide/onAppShow foreground-background semantics and system audio interruptions (onAudioInterruption*)',
-      hooks: ['useAppLifecycle'],
-    },
-  ],
-  web: [
-    {
-      title: '页签可见性与前后台',
-      titleEn: 'Tab visibility & foreground/background',
-      desc: 'visibilitychange 是唯一的"前后台"信号（浏览器不区分"切后台"与"切页签"）；load 只触发一次',
-      descEn: 'visibilitychange is the only foreground/background signal (browsers do not distinguish backgrounding from tab switching); load fires once',
-      hooks: ['useAppLifecycle'],
-    },
-    {
-      title: '页面卸载与离开确认',
-      titleEn: 'Page unload & leave confirmation',
-      desc: 'beforeunload 的 returnValue 用于**离开确认**（浏览器不持久化状态，与小程序 onSaveExitState 语义不同）',
-      descEn: 'beforeunload returnValue drives **leave confirmation** (browsers do not persist state — unlike Mini Program onSaveExitState)',
-      hooks: ['usePageLifecycle'],
-    },
-    {
-      title: '高频滚动',
-      titleEn: 'High-frequency scrolling',
-      desc: 'scroll 事件由 rAF 节流后派发；触底用 50px 阈值启发式（无原生 onReachBottom）',
-      descEn: 'scroll is rAF-throttled before dispatch; reach-bottom uses a 50px heuristic (no native onReachBottom)',
-      hooks: ['usePageLifecycle'],
-    },
-    {
-      title: '分屏与窗口缩放',
-      titleEn: 'Split view & window resizing',
-      desc: 'resize 同时驱动应用级与应用级页面尺寸事件（旋转 / 分屏 / 缩放窗口都会触发）',
-      descEn: 'resize drives both app-level and page-level size events (rotation / split view / window resizing)',
-      hooks: ['useWindow'],
-    },
-  ],
-  app: [
-    {
-      title: 'Activity / ViewController 生命周期',
-      titleEn: 'Activity / ViewController lifecycle',
-      desc: '壳把 onCreate/onResume/onPause（iOS 的 viewDidLoad/didBecomeActive/willResignActive）转发到运行时，' +
-        '映射为 app 的 launch/show/hide——**业务不直接接触 Activity 生命周期**（G-39 生命周期唯一拥有）',
-      descEn: 'The shell forwards onCreate/onResume/onPause (iOS: viewDidLoad/didBecomeActive/willResignActive) into the runtime, ' +
-        'mapped to app launch/show/hide — **business code never touches Activity lifecycle directly** (G-39 single ownership)',
-      hooks: ['useAppLifecycle'],
-    },
-    {
-      title: '键盘事件（软键盘高度）',
-      titleEn: 'Keyboard events (soft-keyboard height)',
-      desc: '软键盘展开/收起与高度变化——App 端由壳转发，小程序用 wx.onKeyboardHeightChange，Web 用 visualViewport 启发式',
-      descEn: 'Soft-keyboard show/hide and height changes — forwarded by the App shell, wx.onKeyboardHeightChange on Mini Program, visualViewport heuristic on Web',
-      hooks: ['useKeyboard'],
-    },
-    {
-      title: '窗体与窗口管理',
-      titleEn: 'Window management',
-      desc: '多窗口 / 分屏 / 窗口尺寸（平板、折叠屏、桌面端）——App 端走宿主窗体 API（CMP 标签页内导航另有 useWindow）',
-      descEn: 'Multi-window / split view / window sizing (tablets, foldables, desktop) — via host window APIs on App (in-app tab navigation also uses useWindow)',
-      hooks: ['useWindow'],
-    },
-    {
-      title: '内存警告与低内存',
-      titleEn: 'Memory warnings & low memory',
-      desc: 'iOS didReceiveMemoryWarning / Android onTrimMemory 由壳转发——用于释放缓存（配合 G-43 所有权模型）',
-      descEn: 'iOS didReceiveMemoryWarning / Android onTrimMemory forwarded by the shell — release caches here (pairs with the G-43 ownership model)',
-      hooks: ['useBackground'],
-    },
-    {
-      title: '深链与冷启动参数',
-      titleEn: 'Deep links & cold-start params',
-      desc: '冷启动 launch/enter 参数（深链 query）与虚拟栈的初始栈恢复',
-      descEn: 'Cold-start launch/enter params (deep-link query) and restoring the initial virtual stack',
-      hooks: ['useBackground'],
-    },
-  ],
+/** ★★平台专栏 SSOT：**按能力分组**（key = 能力 slug；只列该能力自己的平台扩展） */
+export const PLATFORM_TOPICS: Record<string, Record<'mp' | 'web' | 'app', PlatformTopic[]>> = {
+  // ── C23 应用生命周期：各平台的"app 级事件" ──
+  'app-lifecycle': {
+    mp: [
+      {
+        title: '小程序全局事件面',
+        titleEn: 'Mini Program global event surface',
+        desc: 'App.onError / onUnhandledRejection / onMemoryWarning / onThemeChange / onPageNotFound / onAudioInterruption* 均为小程序**独有**（Web/App 无对应语义）',
+        descEn: 'App.onError / onUnhandledRejection / onMemoryWarning / onThemeChange / onPageNotFound / onAudioInterruption* are Mini-Program-only (no Web/App equivalent)',
+        hooks: ['useBackground'],
+      },
+      {
+        title: '小程序白屏与启动路径',
+        titleEn: 'Cold-start route & scene',
+        desc: '冷启动参数（scene / query / 分享来源）由 App.onLaunch 提供，在生命周期里等同于首个 show',
+        descEn: 'Cold-start params (scene / query / share origin) come from App.onLaunch — equivalent to the first show in this lifecycle',
+        roadmap: '专用的启动参数读取（launchOptions/enterOptions）已在 useBackground 提供',
+        roadmapEn: 'Dedicated launch/enter option readers already ship in useBackground',
+        hooks: ['useBackground'],
+      },
+    ],
+    web: [
+      {
+        title: '浏览器无"启动"概念',
+        titleEn: 'Browsers have no "launch" concept',
+        desc: '浏览器不区分"冷启动"与"刷新"——首个 load 后总线自动补一次 launch（语义等价化）',
+        descEn: 'Browsers do not distinguish cold start from reload — the first load auto-emits one launch (semantic equivalence)',
+      },
+      {
+        title: '页签切换 ≠ 应用切后台',
+        titleEn: 'Tab switch != app background',
+        desc: 'visibilitychange 无法区分"用户切到另一个标签"与"最小化窗口"——两者都会触发 hide',
+        descEn: 'visibilitychange cannot distinguish a tab switch from a minimized window — both fire hide',
+      },
+    ],
+    app: [
+      {
+        title: 'Activity / ViewController 生命周期转发',
+        titleEn: 'Activity / ViewController lifecycle forwarding',
+        desc: '壳把 onCreate/onResume/onPause（iOS：viewDidLoad/didBecomeActive/willResignActive）转发到运行时——**业务不直接接触 Activity 生命周期**（G-39 唯一拥有）',
+        descEn: 'The shell forwards onCreate/onResume/onPause (iOS: viewDidLoad/didBecomeActive/willResignActive) into the runtime — **business code never touches Activity lifecycle directly** (G-39 single ownership)',
+      },
+      {
+        title: '内存警告与低内存',
+        titleEn: 'Memory warnings & low memory',
+        desc: 'iOS didReceiveMemoryWarning / Android onTrimMemory 由壳转发 —— 用于释放缓存（配合 G-43 所有权模型）',
+        descEn: 'iOS didReceiveMemoryWarning / Android onTrimMemory forwarded by the shell — release caches here (pairs with the G-43 ownership model)',
+        hooks: ['useBackground'],
+      },
+      {
+        title: '音频会话中断',
+        titleEn: 'Audio session interruption',
+        desc: '电话/其他应用占用音频会话时，系统会怕断 —— App 端由壳转发（小程序同名事件来自 App.onAudioInterruption*）',
+        descEn: 'When a call or another app takes the audio session the system interrupts playback — forwarded by the App shell',
+      },
+    ],
+  },
+
+  // ── C24 页面生命周期：各平台的"页面级事件" ──
+  'page-lifecycle': {
+    mp: [
+      {
+        title: '页面栈与 tab 语义',
+        titleEn: 'Page stack & tab semantics',
+        desc: '页面栈最多 10 层；switchTab 会销毁非 tab 页并保活其他 tab（返回时不重新初始化）——这是 Web/App 都没有的语义',
+        descEn: 'Up to a 10-page stack; switchTab destroys non-tab pages while keeping other tabs alive (no re-init on return) — semantics Web/App lack',
+      },
+      {
+        title: '下拉刷新与触底',
+        titleEn: 'Pull-down refresh & reach-bottom',
+        desc: '★需在 page.json 开 enablePullDownRefresh 才会触发；onReachBottomDistance 控制触底阈值（Web 无原生等价）',
+        descEn: '★Requires enablePullDownRefresh in page.json; onReachBottomDistance controls the bottom threshold (Web has no native equivalent)',
+      },
+      {
+        title: 'onRouteDone（转场完成）',
+        titleEn: 'onRouteDone (transition finished)',
+        desc: '基础库 2.32.1+：自定义转场真正结束的时机（不是"调用返回时"）',
+        descEn: 'Base library 2.32.1+: the moment a custom transition actually finishes (not when the call returns)',
+      },
+      {
+        title: '高频 onPageScroll',
+        titleEn: 'High-frequency onPageScroll',
+        desc: '微信官方明确：会引起逻辑层与渲染层通信 —— 框架**仅在你声明过 onPageScroll 时才派发**',
+        descEn: 'WeChat docs state this causes logical/render layer IPC — the framework dispatches it **only when you declared onPageScroll**',
+      },
+    ],
+    web: [
+      {
+        title: '无原生下拉刷新 / 无页面栈',
+        titleEn: 'No native pull-to-refresh / no page stack',
+        desc: '浏览器没有下拉刷新与页面栈概念——`onPullDownRefresh` 不会触发（诚实降级），返回行为由 history 提供',
+        descEn: 'No pull-to-refresh or page stack in browsers — `onPullDownRefresh` never fires (honest degradation); back navigation comes from history',
+        roadmap: '页面栈语义（push/pop/popTo）属路由层（router）职责，不在本能力内重建',
+        roadmapEn: 'Page-stack semantics (push/pop/popTo) belong to the router layer, not rebuilt here',
+      },
+      {
+        title: 'beforeunload 的语义差异',
+        titleEn: 'beforeunload semantics',
+        desc: '返回值用于**离开确认**（浏览器不持久化状态）——与小程序 onSaveExitState 的"保存状态"语义不同',
+        descEn: 'The return value drives **leave confirmation** (browsers do not persist state) — unlike Mini Program onSaveExitState which saves state',
+      },
+      {
+        title: '滚动由 rAF 节流',
+        titleEn: 'Scroll is rAF-throttled',
+        desc: '浏览器 scroll 频率远高于小程序 —— 框架在 rAF 里合并本帧多次滚动后才派发',
+        descEn: 'Browser scroll fires far more often than Mini Programs — the framework coalesces bursts into one dispatch per rAF',
+      },
+    ],
+    app: [
+      {
+        title: '屏的可见性由虚拟栈驱动',
+        titleEn: 'Visibility driven by the virtual stack',
+        desc: '页面 show/hide 来自虚拟栈的 enter/exit 命令（不是原生 Fragment/VC 回调）—— G-39 + M5 的组合形态',
+        descEn: 'Page show/hide comes from virtual-stack enter/exit commands (not native Fragment/VC callbacks) — the G-39 + M5 combination',
+      },
+      {
+        title: '转场结束由 Morpheus 告知',
+        titleEn: 'Transition completion via Morpheus',
+        desc: 'route-done 在内核转场动画结束时触发（平台零参与路径）—— 与小程序 onRouteDone 同语义',
+        descEn: 'route-done fires when the kernel transition animation finishes (platform-zero path) — same semantics as Mini Program onRouteDone',
+      },
+    ],
+  },
+
+  // ── C51 热更新：各平台的更新通道 ──
+  update: {
+    mp: [
+      {
+        title: '小程序热更新（静默）',
+        titleEn: 'Mini Program silent update',
+        desc: 'wx.getUpdateManager 下载新版本并在下次冷启动生效（onUpdateReady → applyUpdate）；无审核、无需发版',
+        descEn: 'wx.getUpdateManager downloads the new bundle and applies it on next cold start (onUpdateReady → applyUpdate); no review, no release',
+      },
+    ],
+    web: [
+      {
+        title: 'Service Worker 更新',
+        titleEn: 'Service Worker update flow',
+        desc: 'SW 检测到新版本后进入 waiting；applyUpdate 发 skipWaiting 激活，页面 reload 后换装',
+        descEn: 'A new SW version goes to waiting; applyUpdate sends skipWaiting to activate, the new version takes effect after reload',
+      },
+    ],
+    app: [
+      {
+        title: '原生更新（商店 / 内更新）',
+        titleEn: 'Native update (store / in-app)',
+        desc: '壳转发原生更新流程——iOS 走 App Store、Android 走 Play Core In-App Updates（静默更新受平台策略限制）',
+        descEn: 'The shell forwards the native update flow — App Store on iOS, Play Core In-App Updates on Android (silent updates are limited by platform policy)',
+        hooks: [],
+        roadmap: '壳实现 `update.check` / `update.apply` 后本端可用（未实现时诚实返回 unsupported）',
+        roadmapEn: 'Available once the shell implements `update.check` / `update.apply` (honest unsupported otherwise)',
+      },
+    ],
+  },
+
+  // ── C74 窗口管理：各平台的窗体能力 ──
+  window: {
+    mp: [
+      {
+        title: 'wx.setWindowSize（PC 端）',
+        titleEn: 'wx.setWindowSize (PC only)',
+        desc: '仅微信 PC 端支持设置窗口尺寸；移动端无此 API（诚实 Err）',
+        descEn: 'Only WeChat on PC supports setting the window size; mobile has no such API (honest Err)',
+      },
+    ],
+    web: [
+      {
+        title: '浏览器窗口尺寸受限',
+        titleEn: 'Browser window sizing is restricted',
+        desc: 'window.resizeTo 仅对脚本打开的弹出窗口有效——普通页签无法改尺寸（诚实 Err，不假装成功）',
+        descEn: 'window.resizeTo only works on script-opened popups — regular tabs cannot resize (honest Err, never fake success)',
+      },
+    ],
+    app: [
+      {
+        title: '原生窗口管理（分屏 / 折叠屏 / 桌面）',
+        titleEn: 'Native window management (split view / foldable / desktop)',
+        desc: 'iPad 分屏、折叠屏多窗口、桌面端自由缩放——壳转发原生窗口 API（iOS UIWindowScene / Android WindowManager）',
+        descEn: 'iPad split view, foldable multi-window, desktop free resizing — the shell forwards native window APIs (iOS UIWindowScene / Android WindowManager)',
+        roadmap: '壳实现 `window.setSize` 后本端可用',
+        roadmapEn: 'Available once the shell implements `window.setSize`',
+      },
+      {
+        title: '尺寸变化通知',
+        titleEn: 'Size-change notifications',
+        desc: '窗口尺寸变化经 app:resize 事件送达（无需轮询）——分屏/旋转时业务可重排布局',
+        descEn: 'Size changes arrive via the app:resize event (no polling) — re-layout on split view / rotation',
+        hooks: ['useBackground'],
+      },
+    ],
+  },
+
+  // ── C53 Worker：各平台的后台线程 ──
+  worker: {
+    mp: [
+      {
+        title: 'wx.createWorker（真线程）',
+        titleEn: 'wx.createWorker (real thread)',
+        desc: '小程序多线程 Worker：独立 JS 上下文，postMessage 通信——需在 app.json 声明 worker 目录',
+        descEn: 'Mini Program multithread Worker: an isolated JS context communicating via postMessage — declare the worker dir in app.json',
+      },
+    ],
+    web: [
+      {
+        title: 'Web Worker（真线程）',
+        titleEn: 'Web Worker (real thread)',
+        desc: 'new Worker(url) 独立线程；onMessage 可用 removeEventListener 取消（比 MP 更完整）',
+        descEn: 'new Worker(url) runs on a separate thread; onMessage can be unsubscribed via removeEventListener (more complete than MP)',
+      },
+      {
+        title: '跨线程数据限制',
+        titleEn: 'Cross-thread data limits',
+        desc: '结构化克隆（非引用传递）；大对象建议 Transferable（ArrayBuffer 转移所有权，零拷贝）',
+        descEn: 'Structured clone (no reference sharing); use Transferables for large payloads (ArrayBuffer ownership transfer, zero copy)',
+      },
+    ],
+    app: [
+      {
+        title: '壳后台线程（G-39 runOnThread）',
+        titleEn: 'Shell background threads (G-39 runOnThread)',
+        desc: 'App 端的"线程"由宿主运行时提供（G-39 唯一拥有）——桥经壳创建，业务不直接建线程',
+        descEn: 'App-side "threads" come from the host runtime (G-39 single ownership) — the bridge creates them via the shell; business code never spawns threads directly',
+        roadmap: '壳实现 `worker.create/post/terminate` 后本端可用',
+        roadmapEn: 'Available once the shell implements `worker.create/post/terminate`',
+      },
+    ],
+  },
+
+  // ── C75 导航卸载拦截 ──
+  'navigation-guard': {
+    mp: [
+      {
+        title: 'wx.enableAlertBeforeUnload',
+        titleEn: 'wx.enableAlertBeforeUnload',
+        desc: '返回时弹出确认框（防误退丢草稿）——需基础库 2.12.0+；仅拦截"返回"，不拦截"关闭小程序"',
+        descEn: 'Shows a confirm dialog on back navigation (guards unsaved drafts) — base library 2.12.0+; intercepts back only, not app close',
+      },
+    ],
+    web: [
+      {
+        title: 'beforeunload 的浏览器限制',
+        titleEn: 'Browser limits on beforeunload',
+        desc: '浏览器只允许"询问是否离开"，**不能自定义文案**（现代浏览器强制显示通用提示）',
+        descEn: 'Browsers only allow "are you sure you want to leave" and **cannot show custom text** (modern browsers force a generic prompt)',
+      },
+    ],
+    app: [
+      {
+        title: '虚拟栈 pop 拦截（框架内完成）',
+        titleEn: 'Virtual-stack pop interception (in-framework)',
+        desc: '★App 端无需原生 API：虚拟栈的 pop 是框架自己的命令（M5）⇒ 拦截在框架内完成，可自定义弹层与文案',
+        descEn: "★No native API needed on App: virtual-stack pop is the framework's own command (M5) — interception happens in-framework with custom dialogs and copy",
+        hooks: ['usePageLifecycle'],
+      },
+      {
+        title: 'Android 物理返回键',
+        titleEn: 'Android hardware back key',
+        desc: '实体/手势返回同样经栈 pop 派发——与 UI 返回一致（壳负责把 onBackPressed 转成虚拟栈 pop）',
+        descEn: 'Hardware/gesture back dispatches through the same stack pop — consistent with UI back (the shell maps onBackPressed to a virtual-stack pop)',
+        roadmap: '壳接线 onBackPressed → 栈 pop 后生效',
+        roadmapEn: 'Effective once the shell wires onBackPressed to a stack pop',
+      },
+    ],
+  },
+
+  // ── C82 WebAssembly ──
+  webassembly: {
+    mp: [
+      {
+        title: 'WXWebAssembly（路径加载）',
+        titleEn: 'WXWebAssembly (path load)',
+        desc: '★只能从**代码包路径**加载（.wasm / .wasm.br）——不支持字节/流式编译（能力位 supportsStreaming=false）',
+        descEn: '★Loads only from **code-package paths** (.wasm / .wasm.br) — no byte/streaming compilation (capability flag supportsStreaming=false)',
+      },
+    ],
+    web: [
+      {
+        title: '标准 WebAssembly（流式）',
+        titleEn: 'Standard WebAssembly (streaming)',
+        desc: 'instantiateStreaming 边下边编译（比先下载再编译更快）；compile/validate 全可用',
+        descEn: 'instantiateStreaming compiles while downloading (faster than download-then-compile); compile/validate fully available',
+      },
+    ],
+    app: [
+      {
+        title: 'JSC / QuickJS 内置 WASM',
+        titleEn: 'WASM built into JSC / QuickJS',
+        desc: 'App 端 JS 引擎（iOS JavaScriptCore / Android QuickJS）均内置 WebAssembly——与 Web 同形（字节加载 + 流式能力位随引擎）',
+        descEn: 'App JS engines (JavaScriptCore on iOS / QuickJS on Android) ship WebAssembly — same shape as Web (byte loading; streaming flag follows the engine)',
+      },
+    ],
+  },
+
+  // ── C47 跳其他小程序 ──
+  'mini-program': {
+    mp: [
+      {
+        title: 'wx.navigateToMiniProgram',
+        titleEn: 'wx.navigateToMiniProgram',
+        desc: '跳转到其它小程序（需在 app.json 声明 navigateToMiniProgramAppIdList——白名单上限 10）',
+        descEn: 'Jump to another Mini Program (declare navigateToMiniProgramAppIdList in app.json — up to 10 entries)',
+      },
+    ],
+    web: [
+      {
+        title: '无跨小程序概念',
+        titleEn: 'No cross-mini-program concept',
+        desc: 'Web 没有"跳其他小程序"——用 window.open / 前端路由替代（诚实 Err 且给出路）',
+        descEn: 'The Web has no "jump to another Mini Program" — use window.open / client routing instead (honest Err with guidance)',
+      },
+    ],
+    app: [
+      {
+        title: 'App 间跳转（URL Scheme / Universal Link）',
+        titleEn: 'App-to-app jumps (URL Scheme / Universal Link)',
+        desc: 'App 端对应"跳其他应用"——iOS Universal Link、Android Intent；需目标应用声明可被唤起',
+        descEn: 'The App counterpart: jumping to another app via iOS Universal Links or Android Intents; the target must declare itself launchable',
+        roadmap: '壳实现 `mini-program.navigate` 后本端可用',
+        roadmapEn: 'Available once the shell implements `mini-program.navigate`',
+      },
+    ],
+  },
+
+  // ── C48 被宿主嵌入 ──
+  embedded: {
+    mp: [
+      {
+        title: '无"被嵌入"形态',
+        titleEn: 'No "embedded" form',
+        desc: '小程序总是运行在微信宿主内（不存在"被别的 App 嵌入"）——provider 恒为 weixin',
+        descEn: 'Mini Programs always run inside the WeChat host (never embedded by another app) — provider is always weixin',
+      },
+    ],
+    web: [
+      {
+        title: 'iframe 嵌入与父窗口',
+        titleEn: 'iframe embedding & parent window',
+        desc: 'Web 的"被嵌入"= iframe——provider=web，父窗口经 window.parent 可达（跨域时受限）',
+        descEn: 'Web embedding means iframe — provider=web, the parent is reachable via window.parent (restricted cross-origin)',
+      },
+    ],
+    app: [
+      {
+        title: '被宿主 App 嵌入（核心场景）',
+        titleEn: 'Embedded in a host App (the core scenario)',
+        desc: 'App 端"被嵌入"是一等场景（AAR / 静态库集成）——宿主经 `__PROTEUS_HOST_ID__` 自述身份，业务据此定制行为',
+        descEn: 'On App, embedding is a first-class scenario (AAR / static-lib integration) — the host identifies itself via `__PROTEUS_HOST_ID__` so business code can adapt',
+      },
+    ],
+  },
+
+  // ── C50 扩展加载 ──
+  extension: {
+    mp: [
+      {
+        title: '无插件加载 API',
+        titleEn: 'No plugin-loading API',
+        desc: '小程序端不能运行时加载外部代码——需宿主扩展壳（同层渲染 / 动态组件）承接，见 docs/proteus-platform-plan',
+        descEn: 'Mini Programs cannot load external code at runtime — a host extension shell (same-layer rendering / dynamic components) is required, see docs/proteus-platform-plan',
+      },
+    ],
+    web: [
+      {
+        title: '动态 import()',
+        titleEn: 'Dynamic import()',
+        desc: '运行时加载 ES 模块（真实实现）；只接受模块 URL（相对/绝对/http(s)）——不透传裸标识符',
+        descEn: 'Loads ES modules at runtime (a real implementation); accepts module URLs only (relative/absolute/http(s)) — bare specifiers are rejected',
+      },
+    ],
+    app: [
+      {
+        title: '壳动态装载原生模块（G-45 同机制）',
+        titleEn: 'Shell-loaded native modules (same mechanism as G-45)',
+        desc: 'App 端可动态装载原生模块（Android DexClassLoader / iOS 动态库）——与调试基座的插件装载同机制',
+        descEn: 'Apps can dynamically load native modules (Android DexClassLoader / iOS dynamic libraries) — the same mechanism as dev-host plugin loading',
+        roadmap: '壳实现 `extension.load` 后本端可用',
+        roadmapEn: 'Available once the shell implements `extension.load`',
+      },
+    ],
+  },
+
+  // ── C67 预加载 ──
+  preload: {
+    mp: [
+      {
+        title: 'wx.preload* 家族',
+        titleEn: 'wx.preload* family',
+        desc: 'preloadAssets / preloadSkylineView / preloadWebview / preDownloadSubpackage——各自预热一种资源',
+        descEn: 'preloadAssets / preloadSkylineView / preloadWebview / preDownloadSubpackage — each warms a different resource kind',
+      },
+    ],
+    web: [
+      {
+        title: 'link rel=preload',
+        titleEn: 'link rel=preload',
+        desc: 'Web 无统一预加载 API——用 `<link rel=preload>` 或动态 import 预热（本桥诚实 Err 并指出替代）',
+        descEn: 'The Web has no unified preload API — use `<link rel=preload>` or dynamic import (this bridge honestly errors and points to the alternatives)',
+      },
+    ],
+    app: [
+      {
+        title: '壳预初始化模块',
+        titleEn: 'Shell pre-initialized modules',
+        desc: 'App 端预加载 = 壳提前初始化原生模块/字体/资源（把首次成本挪出首屏）',
+        descEn: 'App preloading means the shell initializing native modules/fonts/resources ahead of time (moving first-use cost off the first screen)',
+        roadmap: '壳实现 `preload.assets` 后本端可用',
+        roadmapEn: 'Available once the shell implements `preload.assets`',
+      },
+    ],
+  },
+
+  // ── C73 空闲回调 ──
+  idle: {
+    mp: [
+      {
+        title: 'wx.requestIdleCallback',
+        titleEn: 'wx.requestIdleCallback',
+        desc: '★wx 不返回 id（回调即执行）——本桥用递增计数模拟 cancel 句柄（与浏览器形态的差异见实现注释）',
+        descEn: '★wx returns no id (the callback runs immediately) — this bridge uses an incrementing counter to emulate a cancel handle',
+      },
+    ],
+    web: [
+      {
+        title: 'requestIdleCallback（原生）',
+        titleEn: 'requestIdleCallback (native)',
+        desc: '浏览器原生空闲回调（timeRemaining 反映真实剩余预算）；Safari 支持较晚——缺失时诚实 Err',
+        descEn: 'Native browser idle callback (timeRemaining reflects the real budget); Safari support arrived late — honest Err when missing',
+      },
+    ],
+    app: [
+      {
+        title: '壳提供的空闲时机',
+        titleEn: 'Shell-provided idle slots',
+        desc: 'App 端的空闲时机由壳决定（如帧间空隙）——低优先级任务（日志上报/预热）走这里，不抢首屏',
+        descEn: 'Idle slots come from the shell (e.g. between frames) — low-priority work (log upload, warming) goes here without competing with the first screen',
+        roadmap: '壳实现 `idle.request` / `idle.cancel` 后本端可用',
+        roadmapEn: 'Available once the shell implements `idle.request` / `idle.cancel`',
+      },
+    ],
+  },
+
+  // ── C25 后台与环境：各平台的"环境事件" ──
+  background: {
+    mp: [
+      {
+        title: '全局订阅 API 面',
+        titleEn: 'Global subscription APIs',
+        desc: 'wx.onAppShow/onAppHide/onMemoryWarning/onThemeChange/onWindowResize/onError/onUnhandledRejection 均为全局订阅（与页面级的 Page 钩子机制不同）',
+        descEn: 'wx.onAppShow/Hide/MemoryWarning/ThemeChange/WindowResize/Error/UnhandledRejection are global subscriptions (unlike declarative Page hooks)',
+      },
+      {
+        title: '启动参数读取',
+        titleEn: 'Launch / enter options',
+        desc: 'getLaunchOptions（一次性，启动时）与 getEnterOptions（每次回前台）—— 深链参数的两种语义',
+        descEn: 'getLaunchOptions (once, at startup) and getEnterOptions (every foreground return) — deep-link params have two semantics here',
+      },
+    ],
+    web: [
+      {
+        title: 'visibilitychange 为唯一信号',
+        titleEn: 'visibilitychange is the only signal',
+        desc: 'Web 没有独立的 onAppShow/onAppHide —— 前后台与应用级 resize 都由浏览器事件推导；内存警告用 performance.memory 启发式',
+        descEn: 'No standalone onAppShow/onAppHide on Web — foreground/background and resize derive from browser events; memory warnings use a performance.memory heuristic',
+      },
+      {
+        title: '下载预防的离开确认',
+        titleEn: 'Leave confirmation for unsaved work',
+        desc: '与 usePageLifecycle 的 save-exit-state 共用 beforeunload 通道（本能力负责环境事件，离开确认在页面层）',
+        descEn: 'Shares the beforeunload channel with usePageLifecycle save-exit-state (this capability owns environment events; leave confirmation lives at the page layer)',
+      },
+    ],
+    app: [
+      {
+        title: '业务欄的前后台转发',
+        titleEn: 'Foreground/background forwarding',
+        desc: 'Activity.onResume/onPause（iOS didBecomeActive/willResignActive）由壳转发 —— 与 useAppLifecycle 的 launch/show/hide 是**同一组事件**，本能力多了环境面',
+        descEn: 'Activity.onResume/onPause (iOS didBecomeActive/willResignActive) forwarded by the shell — the same events as useAppLifecycle launch/show/hide, plus the environment surface here',
+      },
+      {
+        title: '内存压力与回收',
+        titleEn: 'Memory pressure & reclamation',
+        desc: 'iOS didReceiveMemoryWarning / Android onTrimMemory —— 与 G-43 所有权 Drop 协议配合释放缓存',
+        descEn: 'iOS didReceiveMemoryWarning / Android onTrimMemory — pairs with the G-43 ownership Drop protocol to release caches',
+      },
+      {
+        title: '系统主题与分屏',
+        titleEn: 'System theme & split view',
+        desc: '深色模式切换与窗口尺寸变化由壳转发（平板/折叠屏上分屏频繁）',
+        descEn: 'Dark-mode switches and window-size changes forwarded by the shell (split view is frequent on tablets/foldables)',
+      },
+    ],
+  },
 }
+
+/** 平台专栏的展示顺序（小程序 → Web → App） */
+export const PLATFORM_TOPIC_ORDER = ['mp', 'web', 'app'] as const
 
 /**
  * `window` / `document` 子集（Web 端事件源的真实来源）

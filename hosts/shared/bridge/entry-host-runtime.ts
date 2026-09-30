@@ -185,6 +185,68 @@ function shellQuery(): string {
  *   F. 内存账本（真机才有宿主桥）：memUsage 基线 → 分配大数组 → 再读 → gc → 再读
  *   G. ★G-41 宿主 conformance 用本运行时替换 stub：32 项（H-01~H-08）
  */
+// ══════════════════════════════════════════════════════════════════
+// ★★App 端原生能力通道（`__proteusHostInvoke`）——**壳侧示范实现**
+//
+// 【为什么放在本场景（用户要求：「落地不是仅仅 web 和小程序，包括 App 也要落地，
+//   因为现在 App 宿主已经有了」）】
+//   `capability-app.ts` 的 `invokeHost` 需要壳注册 `globalThis.__proteusHostInvoke`。
+//   本场景注册一个**真实壳实现**（能提供的能力就真做，不能的显式报 missing），
+//   然后经真实 hooks 验证：**同一份业务代码在 App 端跑这些能力**。
+//
+// 【诚实边界】本场景用 JS 侧实现代替原生（真机上原生实现由 Java/Swift 壳提供同样契约）；
+//   但**契约与错误语义完全一致**（未注册 ⇒ missing ⇒ `*.unsupported`），故验证的是**桥这一层**。
+// ══════════════════════════════════════════════════════════════════
+
+/** 壳侧示范实现：记录调用 + 对"真有平台能力"的返回数据，其余显式 missing */
+function installHostInvokeDemo(): { calls: string[]; restore: () => void } {
+  const calls: string[] = []
+  const g = globalThis as Record<string, unknown>
+  const prev = g.__proteusHostInvoke
+  g.__proteusHostInvoke = (method: string, argsJson: string): string => {
+    calls.push(method)
+    const args = (() => {
+      try {
+        return JSON.parse(argsJson) as Record<string, unknown>
+      } catch {
+        return {}
+      }
+    })()
+    switch (method) {
+      case 'host.context':
+        return JSON.stringify({ ok: true, data: { provider: HOST_ID, version: 'demo-1.0', capabilities: ['update', 'window', 'worker'] } })
+      case 'update.check':
+        return JSON.stringify({ ok: true, data: { hasUpdate: false } })
+      case 'update.apply':
+        return JSON.stringify({ ok: true, data: null })
+      case 'window.setSize':
+        return JSON.stringify({ ok: true, data: { applied: { w: args.width, h: args.height } } })
+      case 'worker.create':
+        return JSON.stringify({ ok: true, data: { id: 1 } })
+      case 'worker.post':
+        return JSON.stringify({ ok: true, data: null })
+      case 'worker.terminate':
+        return JSON.stringify({ ok: true, data: null })
+      case 'idle.request':
+        return JSON.stringify({ ok: true, data: { id: 7, timeRemaining: 4 } })
+      case 'idle.cancel':
+        return JSON.stringify({ ok: true, data: null })
+      case 'preload.assets':
+        return JSON.stringify({ ok: true, data: null })
+      default:
+        // ★未实现 ⇒ 显式 missing（桥据此给 `*.unsupported`，不假装成功）
+        return JSON.stringify({ ok: false, missing: true, reason: `壳未实现 ${method}` })
+    }
+  }
+  return {
+    calls,
+    restore: () => {
+      if (prev === undefined) delete g.__proteusHostInvoke
+      else g.__proteusHostInvoke = prev
+    },
+  }
+}
+
 export function __proteusHostRun(): string {
   const host = globalHost()
   const transport: NativeTransport | undefined =
@@ -478,6 +540,92 @@ export function __proteusHostRun(): string {
     capPending.bgReady = true
   })
 
+  // ══════════════════════════════════════════════════════════════════
+  // J. ★★App 端原生能力通道（`__proteusHostInvoke`）——**同一份业务代码在 App 端跑**
+  //
+  // 【验证什么（用户要求 App 也要落地）】10 个能力经壳转发：已实现的真调用、未实现的诚实 Err。
+  // 【异步形态】本场景主函数是**同步**的（与 I 组同构）⇒ 用 `.then` 链收集结果到 pending，
+  //   由 finish 相位读（正好再证 job 泵）。
+  // ══════════════════════════════════════════════════════════════════
+  const hostInvoke = installHostInvokeDemo()
+  const appPending: Record<string, unknown> = { done: false }
+  ;(globalThis as unknown as { __proteusAppPending?: typeof appPending }).__proteusAppPending = appPending
+  void (async () => {
+    try {
+      const { createAppNativeCapabilities } = await import('@proteus-vue/api/capability-app')
+      // ★★构造器必须**带 code 属性**（真实用户传 `CapError`）——传原生 `Error` 会让 code 丢失
+      //   （`new Error(code, msg)` 只取第一个参数当 message）⇒ 判据读不到 code（真机实测抓出）。
+      //   本场景自建一个 CapError 形态的构造器（与 packages/api 的 CapError 同形）。
+      class DemoCapError extends Error {
+        constructor(
+          public readonly code: string,
+          message: string,
+          public readonly cause?: unknown,
+        ) {
+          super(`[proteus-cap] ${code}: ${message}`)
+          this.name = 'CapError'
+        }
+      }
+      const appCaps = createAppNativeCapabilities(DemoCapError)
+
+      // ① C48 宿主上下文（壳自述——已实现）
+      appPending.hostContext = appCaps.getHostContext()
+      // ② C51 热更新
+      const um = appCaps.getUpdateManager()
+      appPending.updateCheck = await um.checkUpdate()
+      appPending.updateApply = await um.applyUpdate()
+      // ③ C74 窗口
+      appPending.windowSetSize = await appCaps.getWindow().setSize(1024, 768)
+      // ④ C53 Worker
+      try {
+        const w = appCaps.createWorker('demo.js')
+        appPending.workerPost = w.postMessage({ ping: 1 })
+        appPending.workerTerminate = w.terminate()
+      } catch (e) {
+        appPending.workerError = String(e)
+      }
+      // ⑤ C73 空闲（含回调）
+      let idleCalled = false
+      appPending.idleRequest = await appCaps.getIdle().request(() => {
+        idleCalled = true
+      }, 100)
+      appPending.idleCallbackRan = idleCalled
+      // ⑥ C67 预加载（assets 已实现 / subpackage 诚实 Err）
+      const pre = appCaps.getPreload() as unknown as { assets: (d: unknown) => Promise<unknown>; subpackage: (t: string) => Promise<unknown> }
+      appPending.preloadAssets = await pre.assets([])
+      appPending.preloadSubpackage = await pre.subpackage('main')
+      // ⑦ C75 导航守卫（框架内实现）
+      const ng = appCaps.getNavigationGuard()
+      appPending.guardEnable = await ng.enable('有未保存内容')
+      appPending.guardDisable = await ng.disable()
+      // ⑧ C50 扩展（壳未实现 ⇒ 诚实 Err）——★读真实 R（loadExtension 返回 CapResult 而非抛错：
+      //   初版脚本用 `.then(ok, err)` ⇒ 恒 ok:true（第一个回调总执行）——**验证脚本自身写错**，已纠正）
+      appPending.extensionLoad = await appCaps.loadExtension('demo-ext')
+      // ⑨ C47 跳小程序（壳未实现 ⇒ 诚实 Err）
+      appPending.navigateMiniProgram = await appCaps
+        .navigateMiniProgram({ appId: 'wx-demo' })
+        .then(() => ({ ok: true }), (e: Error & { code?: string }) => ({ ok: false, code: e.code }))
+      // ⑩ C82 WebAssembly（引擎内置——真验证空模块）
+      const wasmCaps = appCaps.getWebAssembly() as unknown as {
+        supportsStreaming: boolean
+        validate: (b: Uint8Array) => Promise<{ ok: boolean; data?: boolean; error?: { code?: string; message?: string } }>
+      }
+      appPending.wasmSupportsStreaming = wasmCaps.supportsStreaming
+      const wv = await wasmCaps.validate(new Uint8Array([0x00, 0x61, 0x73, 0x6d, 0x01, 0x00, 0x00, 0x00]))
+      // ★Error 对象 JSON 序列化会丢 code/message（变成 {}）⇒ 显式展开（判据据此分档）
+      const wvErr = (wv as { error?: { code?: string; message?: string } }).error
+      appPending.wasmValidateEmptyModule = wv.ok
+        ? { ok: true, data: wv.data }
+        : { ok: false, code: wvErr?.code, message: String(wvErr?.message ?? '') }
+      appPending.__calls = hostInvoke.calls
+    } catch (e) {
+      appPending.fatal = String(e)
+    } finally {
+      hostInvoke.restore()
+    }
+    appPending.done = true
+  })()
+
   const result = {
     ok: true,
     scene: 'host-runtime',
@@ -561,6 +709,7 @@ export function __proteusHostFinish(): string {
   const st = (globalThis as unknown as { __proteusHostAsync?: { e2: boolean; e3: boolean; e3Value: string } })
     .__proteusHostAsync
   const cap = (globalThis as unknown as { __proteusCapPending?: Record<string, unknown> }).__proteusCapPending
+  const app = (globalThis as unknown as { __proteusAppPending?: Record<string, unknown> }).__proteusAppPending
   return JSON.stringify({
     async_resolved: !!st && (st.e2 || st.e3),
     refuse_unregistered_native: st?.e2 ?? false,
@@ -573,6 +722,8 @@ export function __proteusHostFinish(): string {
     cap_app_phase: cap?.appPhase ?? 'PENDING',
     cap_page_phase: cap?.pagePhase ?? 'IDLE',
     cap_subscribers: cap?.subscribers ?? -1,
+    // J：App 端原生能力通道读数（**同一份业务代码在 App 端跑**）
+    app_native: app ?? { done: false },
   })
 }
 

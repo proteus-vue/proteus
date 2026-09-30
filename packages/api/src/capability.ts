@@ -18,6 +18,7 @@ import { mpBridgeExt, webBridgeExt } from './generated/bridge-ext'
 //   （此前只有 wx/web 两份 ⇒ App 宿主无生命周期能力；事件源 = 宿主运行时 + 虚拟栈命令流）
 import {
   createAppLifecycleCapabilities,
+  createAppNativeCapabilities,
   detectAppHost,
   getHostLifecycleBus,
   installPageEmitBridge,
@@ -6109,6 +6110,28 @@ function wxBridge(wx: WxLike): CapabilityBridge {
     }),
     // ★C82 WASM（MP 端）：微信 `WXWebAssembly.instantiate(path, imports)`——**只收代码包路径**。
     //   与 Web 标准的差异（见 WebAssemblyAPI 头）：无 compile/validate；不支持字节加载。
+    /** ★C48 宿主上下文（MP：provider=weixin + 基础库版本；被嵌入场景的宿主自述） */
+    getHostContext: () => ({
+      provider: 'weixin',
+      version: (() => {
+        try {
+          if (typeof wx.getSystemInfoSync !== 'function') return undefined
+          const info = wx.getSystemInfoSync() as { SDKVersion?: string }
+          return info?.SDKVersion
+        } catch {
+          return undefined
+        }
+      })(),
+      capabilities: ['navigateToMiniProgram', 'share', 'subscribe-message', 'update', 'worker'],
+    }),
+    /** ★C50 扩展加载（MP 无插件加载 API——需宿主扩展壳；诚实 Err 且给出路） */
+    loadExtension: (extensionId) =>
+      Promise.reject(
+        new CapError(
+          'extension.unsupported',
+          `小程序端无插件加载 API（请求 ${extensionId}）——需宿主扩展壳（同层渲染/动态组件），见 docs/proteus-platform-plan`,
+        ),
+      ),
     getWebAssembly: () => ({
       supportsStreaming: false, // MP 只收路径，不支持字节/流式编译（能力位，供调用方免于按平台名分支）
       supportsPathLoad: true,
@@ -7681,6 +7704,74 @@ function webBridge(g: typeof globalThis & { navigator?: Navigator & { getBattery
     // ★C82 WASM（Web 端 / App-iOS JSC 同形）：标准 `WebAssembly`——收字节，compile/validate 齐备。
     //   ★App-iOS 走本分支的依据：JSC 内建标准 WebAssembly（本机实测 validate(true) + 8 API 齐备）；
     //     App-Android 当前宿主无 JS 引擎 ⇒ 本原语在该端结构性不可用（诚实边界，不假装支持）。
+    /** ★C47 跳其他小程序：Web 无等价（小程序平台概念）→ 诚实 Err */
+    navigateMiniProgram: () =>
+      Promise.reject(
+        new CapError('mini-program.unsupported', 'Web 无"跳其他小程序"概念（该 API 属小程序平台）——Web 请用 window.open 或前端路由'),
+      ),
+    /** ★C48 宿主上下文（Web：provider=web + 可选构建版本 meta） */
+    getHostContext: () => ({
+      provider: 'web',
+      version: (() => {
+        try {
+          const doc = (g as { document?: { querySelector?: (s: string) => { getAttribute?: (n: string) => string | null } | null } }).document
+          const meta = doc?.querySelector?.('meta[name="proteus-build"]')
+          return meta?.getAttribute?.('content') ?? undefined
+        } catch {
+          return undefined
+        }
+      })(),
+      capabilities: ['share', 'clipboard', 'wasm', 'worker'],
+    }),
+    /** ★C50 扩展加载（Web：**动态 import** —— 真实实现；只接受模块 URL 形态） */
+    loadExtension: (extensionId) => {
+      const id = String(extensionId)
+      // 安全边界：只接受相对/绝对路径或 http(s) URL —— 不接受裸标识符（避免任意解析）
+      if (!/^(https?:|\/|\.\/|\.\.\/)/.test(id)) {
+        return Promise.reject(
+          new CapError(
+            'extension.unsupported',
+            `Web 端 loadExtension 只接受模块 URL（收到 ${id}）——请传 './ext/foo.js' 或 'https://…/foo.js'`,
+          ),
+        )
+      }
+      return import(/* @vite-ignore */ id)
+    },
+    /** ★C51 更新管理（Web：Service Worker 更新流；无 SW → 诚实 Err 且给出路） */
+    getUpdateManager: () => {
+      type SwReg = { installing?: unknown; waiting?: { postMessage?: (m: unknown) => void } }
+      const sw = (g as { navigator?: { serviceWorker?: { getRegistration?: () => Promise<unknown> } } }).navigator?.serviceWorker
+      const noSw = (): string =>
+        'Web 无 Service Worker（未注册 SW 的站点无法运行时更新）——静态站点请用构建哈希/ETag 轮询'
+      return {
+        checkUpdate: () =>
+          Promise.resolve()
+            .then(async () => {
+              if (!sw?.getRegistration) return capErr<{ hasUpdate: boolean }>('update.unsupported', noSw())
+              const reg = (await sw.getRegistration()) as SwReg | undefined
+              if (!reg) return capErr<{ hasUpdate: boolean }>('update.unsupported', noSw())
+              return capOk({ hasUpdate: !!(reg.installing || reg.waiting) })
+            })
+            .catch((e) => capErr<{ hasUpdate: boolean }>('update.failed', '检查更新失败', e)),
+        applyUpdate: () =>
+          Promise.resolve()
+            .then(async () => {
+              if (!sw?.getRegistration) return capErr<void>('update.unsupported', noSw())
+              const reg = (await sw.getRegistration()) as SwReg | undefined
+              if (!reg?.waiting) {
+                return capErr<void>('update.not-ready', '无等待中的新版本（applyUpdate 需 checkUpdate 报告 hasUpdate 后调用）')
+              }
+              // ★标准语义：向 waiting worker 发 skipWaiting ⇒ 新版本激活（页面 reload 后换装）
+              reg.waiting.postMessage?.({ type: 'SKIP_WAITING' })
+              return capOk(undefined)
+            })
+            .catch((e) => capErr<void>('update.failed', '应用更新失败', e)),
+        // Web 无对应事件（SW updatefound 在 registration 级）——诚实空订阅
+        onCheckForUpdate: () => () => undefined,
+        onUpdateReady: () => () => undefined,
+        onUpdateFailed: () => () => undefined,
+      }
+    },
     getWebAssembly: () => {
       const WASM = (g as { WebAssembly?: typeof WebAssembly }).WebAssembly
       if (!WASM) {
@@ -7801,8 +7892,13 @@ export function createCapabilityBridge(): CapabilityBridge {
   //   · 合并顺序：**最后展开**（App 能力覆盖 wx/web 的同名缺省——App 宿主上是权威实现）；
   //   · 诚实边界：当前只覆盖**生命周期**三能力（C23/C24/C25）——App 端其余能力
   //     （屏幕/设备/电池/剪贴板…）仍走 web 桥的降级路径，App 化是后续批次（不冒充已完成）。
+  // ★★App 端：生命周期三能力（C23/C24/C25）+ **10 个平台能力**（壳转发实现）
+  //   —— 后者此前走 web 桥降级（App 端拿不到），现在由壳经 `__proteusHostInvoke` 提供。
   const appCaps = detectAppHost()
-    ? createAppLifecycleCapabilities(getHostLifecycleBus(), CapError)
+    ? {
+        ...createAppLifecycleCapabilities(getHostLifecycleBus(), CapError),
+        ...createAppNativeCapabilities(CapError),
+      }
     : ({} as Record<string, never>)
   if (detectRuntime() === 'mp' && g.wx) return { ...wxBridge(g.wx), ...mpBridgeExt(g.wx, CapError), ...appCaps }
   return { ...webBridge(globalThis), ...webBridgeExt(globalThis, CapError), ...appCaps }
