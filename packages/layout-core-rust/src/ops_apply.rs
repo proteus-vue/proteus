@@ -286,6 +286,40 @@ pub fn apply_style_key(node: &mut LNode, key: &str, value: f32) -> Result<bool, 
             s.display = if v == 0.0 { crate::style::Display::None } else { crate::style::Display::Flex };
             Ok(true)
         }
+        // ★★2026-09-30 补登记（真缺口）：`LStyle` 一直有 `top`/`left`（position:absolute 的核心属性），
+        //   但**指令映射表漏了它们** ⇒ 通过指令流改不了绝对定位偏移。
+        //   发现路径：FLIP 的真机测试用 `updatePatches {top:40}` 改几何，结果 **位移恒 0**
+        //   ⇒ 顺藤摸到本表缺项（**不是探针问题，是内核缺口**）。
+        //   ★这正是"FLIP 招牌能力"的前置：没有它就无法由业务/测试触发绝对定位变更。
+        "layout.top" => {
+            s.top = if v.is_finite() { Some(v) } else { None };
+            Ok(true)
+        }
+        "layout.left" => {
+            s.left = if v.is_finite() { Some(v) } else { None };
+            Ok(true)
+        }
+        // ★★2026-09-30 补登记（同批第二个真缺口）：margin 四方向。
+        //   `LStyle.margin` 一直存在（流动布局最常用的位移手段），但指令映射表**逐个方向都没登记**
+        //   ⇒ 通过指令流无法改外边距 ⇒ 布局动画（FLIP 的"让位"效果）在 in-flow 布局上无法触发。
+        //   ★发现路径同 layout.top：FLIP 真机测试改几何后**位移恒 0**（top 只对 position:absolute 有效，
+        //     而场景是 in-flow）⇒ 改用 margin 时又发现它也没登记。
+        "layout.marginTop" => {
+            s.margin.top = if v.is_finite() { v } else { 0.0 };
+            Ok(true)
+        }
+        "layout.marginRight" => {
+            s.margin.right = if v.is_finite() { v } else { 0.0 };
+            Ok(true)
+        }
+        "layout.marginBottom" => {
+            s.margin.bottom = if v.is_finite() { v } else { 0.0 };
+            Ok(true)
+        }
+        "layout.marginLeft" => {
+            s.margin.left = if v.is_finite() { v } else { 0.0 };
+            Ok(true)
+        }
         k if k.starts_with("paint.") || k.starts_with("text.") || k.starts_with("attr.") => Ok(false),
         other => Err(format!("本层不支持布局键 `{other}`（若为几何属性，请在 ops_apply 的映射表里登记）")),
     }
@@ -787,16 +821,22 @@ mod tests {
     }
 
     fn void<T>(_: T) {}
-}
-
-/// `a` 是否为 `b` 的祖先（含自身？**不含**——调用处已保证 a != b）
-fn is_ancestor(tree: &LayoutTree, a: u32, b: u32) -> bool {
-    let mut cur = tree.nodes[b as usize].parent;
-    while cur != crate::node::NO_PARENT {
-        if cur == a {
-            return true;
-        }
-        cur = tree.nodes[cur as usize].parent;
+    #[test]
+    fn layout_top_and_left_are_mapped() {
+        // ★2026-09-30 真缺口回归：`layout.top`/`layout.left` 曾**未登记**（改不了绝对定位偏移）；
+        //   发现路径：FLIP 真机测试用补丁改 `top` 后**位移恒 0** ⇒ 顺藤摸到本表缺项。
+        let mut n = crate::node::LNode::new(1, crate::style::LStyle::default());
+        assert!(apply_style_key(&mut n, "layout.top", 40.0).unwrap());
+        assert_eq!(n.style.top, Some(40.0));
+        assert!(apply_style_key(&mut n, "layout.left", 12.0).unwrap());
+        assert_eq!(n.style.left, Some(12.0));
+        // 非有限值 ⇒ 清空（与 width/height 同策略）
+        assert!(apply_style_key(&mut n, "layout.top", f32::NAN).unwrap());
+        assert_eq!(n.style.top, None);
+        // margin 四方向（in-flow 布局的位移手段；FLIP"让位"效果依赖它）
+        assert!(apply_style_key(&mut n, "layout.marginTop", 8.0).unwrap());
+        assert!(apply_style_key(&mut n, "layout.marginLeft", 4.0).unwrap());
+        assert_eq!(n.style.margin.top, 8.0);
+        assert_eq!(n.style.margin.left, 4.0);
     }
-    false
 }

@@ -2259,6 +2259,8 @@ pub unsafe extern "C" fn proteus_layout_anim_start(handle: u64, json: *const c_c
                 .ok_or_else(|| format!("动画缺少数值字段 `{k}`"))
         };
         let mut started = 0usize;
+        let mut spring_count = 0usize;
+        let mut delayed_count = 0usize;
         for a in list {
             let node_id = a
                 .get("nodeId")
@@ -2272,23 +2274,50 @@ pub unsafe extern "C" fn proteus_layout_anim_start(handle: u64, json: *const c_c
             let curve = a.get("curve").and_then(|x| x.as_u64()).unwrap_or(0) as u8;
             // ★RT2：驱动方式（缺省 time ⇒ 向后兼容 RT0 的启动报文）
             let drive = crate::anim::AnimDrive::from_u8(a.get("drive").and_then(|x| x.as_u64()).unwrap_or(0) as u8)?;
+            // ★RT2 追加：弹簧（`spring:{stiffness,damping,mass}` 提供时用物理模式）
+            let mode = match a.get("spring") {
+                Some(sp) => {
+                    spring_count += 1;
+                    crate::anim::AnimMode::Spring(crate::anim::SpringParams {
+                        stiffness: num(sp, "stiffness")?,
+                        damping: num(sp, "damping")?,
+                        mass: sp.get("mass").and_then(|x| x.as_f64()).unwrap_or(1.0) as f32,
+                    })
+                }
+                None => crate::anim::AnimMode::Curve,
+            };
+            // ★延迟（编排/交错）；`takeover:false` ⇒ 硬重启
+            let delay_ms = a.get("delayMs").and_then(|x| x.as_f64()).unwrap_or(0.0) as f32;
+            if delay_ms > 0.0 {
+                delayed_count += 1;
+            }
+            let takeover = a.get("takeover").and_then(|x| x.as_bool()).unwrap_or(true);
+            let from = num(a, "from")?;
             let anim = crate::anim::Anim {
                 node_id,
                 kind,
                 curve,
-                from: num(a, "from")?,
+                from,
                 to: num(a, "to")?,
                 dur_ms: num(a, "durMs")?,
+                delay_ms,
                 t_ms: 0.0,
                 drive,
                 progress: 0.0,
+                mode,
+                x: from,
+                vel: 0.0,
+                takeover,
             };
             // ★错误必须冒泡（节点不在树上 / 曲线越界）——静默会变成"动画不生效"难查
             let tree = &entry.tree;
             entry.anim.start(tree, anim)?;
             started += 1;
         }
-        Ok(serde_json::json!({"ok": true, "started": started}).to_string())
+        Ok(serde_json::json!({
+            "ok": true, "started": started, "spring": spring_count, "delayed": delayed_count
+        })
+        .to_string())
     };
     match std::panic::catch_unwind(f) {
         Ok(Ok(s)) => CString::new(s).map(|c| c.into_raw()).unwrap_or(std::ptr::null_mut()),
@@ -2324,7 +2353,7 @@ pub extern "C" fn proteus_layout_anim_tick(handle: u64, dt_ms: f32) -> *mut c_ch
         let updates: Vec<serde_json::Value> = out
             .updates
             .iter()
-            .map(|(id, tx, ty, sc)| serde_json::json!([id, tx, ty, sc]))
+            .map(|v| serde_json::json!([v.id, v.tx, v.ty, v.scale, v.rotate, v.opacity]))
             .collect();
         Ok(serde_json::json!({
             "ok": true,
@@ -2364,15 +2393,83 @@ pub unsafe extern "C" fn proteus_layout_anim_stop(handle: u64, json: *const c_ch
             .to_str()
             .map_err(|e| format!("入参不是合法 UTF-8：{e}"))?;
         let v: serde_json::Value = serde_json::from_str(s).map_err(|e| format!("入参 JSON 解析失败：{e}"))?;
+        let mut reg = registry().lock().map_err(|_| "注册表锁失败".to_string())?;
+        let entry = reg.get_mut(&handle).ok_or_else(|| format!("句柄 {handle} 不存在"))?;
+        // ★`{"all":true}` ⇒ 停全部（相位间状态清理；见宿主 animStopAll）
+        if v.get("all").and_then(|x| x.as_bool()).unwrap_or(false) {
+            let before = entry.anim.len();
+            let reset = entry.anim.stop_all(&mut entry.tree);
+            return Ok(serde_json::json!({"ok": true, "removed": before, "reset": reset}).to_string());
+        }
         let ids: Vec<u32> = v
             .get("nodeIds")
             .and_then(|x| x.as_array())
             .map(|a| a.iter().filter_map(|x| x.as_u64()).map(|x| x as u32).collect())
-            .ok_or_else(|| "入参缺少 nodeIds 数组".to_string())?;
+            .ok_or_else(|| "入参缺少 nodeIds 数组（或 {\"all\":true}）".to_string())?;
+        let removed = entry.anim.stop_nodes(&mut entry.tree, &ids);
+        Ok(serde_json::json!({"ok": true, "removed": removed}).to_string())
+    };
+    match std::panic::catch_unwind(f) {
+        Ok(Ok(s)) => CString::new(s).map(|c| c.into_raw()).unwrap_or(std::ptr::null_mut()),
+        Ok(Err(e)) => CString::new(serde_json::json!({"ok": false, "error": e}).to_string())
+            .map(|c| c.into_raw())
+            .unwrap_or(std::ptr::null_mut()),
+        Err(_) => CString::new(serde_json::json!({"ok": false, "error": "内部 panic（已捕获）"}).to_string())
+            .map(|c| c.into_raw())
+            .unwrap_or(std::ptr::null_mut()),
+    }
+}
+
+/// ★★**FLIP 布局动画**（招牌能力，Morpheus §5）—— 记快照 / 启动补间
+///
+/// 入参：`{"op":"capture"}` 或 `{"op":"start","durMs":300,"curve":1,"staggerMs":0}`
+/// 返回：`{"ok":true,"captured":N}` 或 `{"ok":true,"animated":N,"maxDeltaPx":D}`
+///
+/// 【为什么这是招牌（Morpheus §5）】传统 FLIP 要前后各读一次几何（**跨边界查询**，VDOM 框架里很贵）；
+///   而本仓几何**本来就在内核** ⇒ 两次快照都是内部读，**零跨边界、零 JS**。
+///   「列表项增删时其他项平滑让位」这种效果因此几乎白送。
+///
+/// # Safety
+/// `json` 须为有效 NUL 结尾 C 字符串。返回指针须用 `proteus_layout_free_string` 释放。
+#[no_mangle]
+pub unsafe extern "C" fn proteus_layout_flip(handle: u64, json: *const c_char) -> *mut c_char {
+    let f = || -> Result<String, String> {
+        let s = unsafe { std::ffi::CStr::from_ptr(json) }
+            .to_str()
+            .map_err(|e| format!("入参不是合法 UTF-8：{e}"))?;
+        let v: serde_json::Value = serde_json::from_str(s).map_err(|e| format!("入参 JSON 解析失败：{e}"))?;
+        let op = v.get("op").and_then(|x| x.as_str()).ok_or_else(|| "入参缺少 op".to_string())?;
         let mut reg = registry().lock().map_err(|_| "注册表锁失败".to_string())?;
         let entry = reg.get_mut(&handle).ok_or_else(|| format!("句柄 {handle} 不存在"))?;
-        let removed = entry.anim.stop_nodes(&ids);
-        Ok(serde_json::json!({"ok": true, "removed": removed}).to_string())
+        match op {
+            "capture" => {
+                let mut eng = std::mem::take(&mut entry.anim);
+                let n = eng.flip_capture(&entry.tree);
+                entry.anim = eng;
+                Ok(serde_json::json!({"ok": true, "captured": n}).to_string())
+            }
+            "start" => {
+                let dur = v.get("durMs").and_then(|x| x.as_f64()).unwrap_or(300.0) as f32;
+                let curve = v.get("curve").and_then(|x| x.as_u64()).unwrap_or(1) as u8;
+                let stagger = v.get("staggerMs").and_then(|x| x.as_f64()).unwrap_or(0.0) as f32;
+                let mut eng = std::mem::take(&mut entry.anim);
+                let r = eng.flip_start(&mut entry.tree, dur, curve, stagger);
+                entry.anim = eng;
+                let out = r?;
+                // ★起点立即返回（宿主据此把"旧位置"当帧上屏——否则 FLIP 首帧跳变）
+                let updates: Vec<serde_json::Value> = out
+                    .updates
+                    .iter()
+                    .map(|v| serde_json::json!([v.id, v.tx, v.ty, v.scale, v.rotate, v.opacity]))
+                    .collect();
+                Ok(serde_json::json!({
+                    "ok": true, "animated": out.animated, "maxDeltaPx": out.max_delta_px,
+                    "updates": updates
+                })
+                .to_string())
+            }
+            other => Err(format!("未知 op `{other}`（capture / start）")),
+        }
     };
     match std::panic::catch_unwind(f) {
         Ok(Ok(s)) => CString::new(s).map(|c| c.into_raw()).unwrap_or(std::ptr::null_mut()),
@@ -2416,7 +2513,7 @@ pub unsafe extern "C" fn proteus_layout_anim_seek(handle: u64, json: *const c_ch
         let updates: Vec<serde_json::Value> = out
             .updates
             .iter()
-            .map(|(id, tx, ty, sc)| serde_json::json!([id, tx, ty, sc]))
+            .map(|v| serde_json::json!([v.id, v.tx, v.ty, v.scale, v.rotate, v.opacity]))
             .collect();
         Ok(serde_json::json!({"ok": true, "changed": out.changed, "updates": updates}).to_string())
     };
@@ -2451,12 +2548,16 @@ pub unsafe extern "C" fn proteus_layout_anim_tick_bin(handle: u64, dt_ms: f32, o
         let mut eng = std::mem::take(&mut entry.anim);
         let out = eng.tick(&mut entry.tree, dt_ms);
         entry.anim = eng;
-        let mut buf = Vec::with_capacity(out.updates.len() * 16);
-        for (id, tx, ty, sc) in &out.updates {
-            buf.extend_from_slice(&id.to_le_bytes());
-            buf.extend_from_slice(&tx.to_le_bytes());
-            buf.extend_from_slice(&ty.to_le_bytes());
-            buf.extend_from_slice(&sc.to_le_bytes());
+        // ★每帧通道：**24B/条**定长 = id u32 + 五值 f32（tx/ty/scale/rotate/opacity）
+        //   （RT2 扩展属性后由 16B 增至 24B；判据在 hosts/ios/check-anim-rt2.py）
+        let mut buf = Vec::with_capacity(out.updates.len() * 24);
+        for v in &out.updates {
+            buf.extend_from_slice(&v.id.to_le_bytes());
+            buf.extend_from_slice(&v.tx.to_le_bytes());
+            buf.extend_from_slice(&v.ty.to_le_bytes());
+            buf.extend_from_slice(&v.scale.to_le_bytes());
+            buf.extend_from_slice(&v.rotate.to_le_bytes());
+            buf.extend_from_slice(&v.opacity.to_le_bytes());
         }
         Ok(buf)
     });

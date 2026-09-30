@@ -61,6 +61,8 @@ func proteus_layout_apply_ops(_ handle: UInt64, _ ptr: UnsafePointer<UInt8>, _ l
 func proteus_layout_anim_start(_ handle: UInt64, _ json: UnsafePointer<CChar>) -> UnsafeMutablePointer<CChar>
 @_silgen_name("proteus_layout_anim_seek")
 func proteus_layout_anim_seek(_ handle: UInt64, _ json: UnsafePointer<CChar>) -> UnsafeMutablePointer<CChar>
+@_silgen_name("proteus_layout_flip")
+func proteus_layout_flip(_ handle: UInt64, _ json: UnsafePointer<CChar>) -> UnsafeMutablePointer<CChar>
 @_silgen_name("proteus_layout_anim_stop")
 func proteus_layout_anim_stop(_ handle: UInt64, _ json: UnsafePointer<CChar>) -> UnsafeMutablePointer<CChar>
 @_silgen_name("proteus_layout_anim_tick_bin")
@@ -155,6 +157,10 @@ func physFootprintMB() -> Double {
     func animTick(_ dtMs: Double) -> String
     /// ★★**层变换探针**（判据从 CALayer 真读——覆盖"写入路径真的生效"）
     func layerTransformProbe(_ idsJson: String) -> String
+    /// ★★**停全部动画 + 复位变换**（相位间状态清理）
+    func animStopAll() -> String
+    /// ★★**FLIP 布局动画**（招牌能力）：capture 记快照 / start 启动补间
+    func animFlip(_ json: String) -> String
     /// ★★**帧率测席**（§9 指标测量）：启动 / 取结果
     func animBenchStart(_ json: String) -> String
     func animBenchResults() -> String
@@ -508,9 +514,25 @@ final class SelfDrawView: UIView {
                 continue
             }
             let t = layer.transform
-            parts.append("{\"id\":\(id),\"tx\":\(t.m41),\"ty\":\(t.m42),\"scale\":\(t.m11)}")
+            // ★RT2 扩展：rotate 从变换矩阵反解（`atan2(m12, m11)`——对本仓的"中心旋转+缩放"构造成立）
+            let rotateDeg = atan2(t.m12, t.m11) * 180 / .pi
+            parts.append(
+                "{\"id\":\(id),\"tx\":\(t.m41),\"ty\":\(t.m42),\"scale\":\(t.m11),"
+                    + "\"rotate\":\(rotateDeg),\"opacity\":\(layer.opacity)}"
+            )
         }
         return "{\"ok\":true,\"layers\":[\(parts.joined(separator: ","))]}"
+    }
+
+    /// ★★**复位所有层的变换与透明度**（相位间状态清理；见 `animStopAll`）
+    func resetAllTransforms() {
+        CATransaction.begin()
+        CATransaction.setDisableActions(true)
+        for (_, layer) in layersById {
+            layer.transform = CATransform3DIdentity
+            layer.opacity = 1
+        }
+        CATransaction.commit()
     }
 
     /// ★★**RT2：把内核算出的变换写到层上**（translate/scale 是绘制层变换——不改几何、不触发布局）
@@ -521,16 +543,29 @@ final class SelfDrawView: UIView {
     ///
     /// 实现：`CATransform3D` 以**层中心**为锚点做缩放（等价 CSS `transform: scale()` 默认 origin=center）。
     @discardableResult
-    func applyTransform(nodeId: Int, tx: CGFloat, ty: CGFloat, scale: CGFloat) -> Bool {
+    func applyTransform(
+        nodeId: Int, tx: CGFloat, ty: CGFloat, scale: CGFloat,
+        rotate: CGFloat = 0, opacity: CGFloat = 1
+    ) -> Bool {
         guard let layer = layersById[nodeId] else { return false }
+        // ★RT2 扩展：位移 + 缩放 + 旋转（**以层中心为锚点**——等价 CSS transform 默认 origin）
         var t = CATransform3DTranslate(CATransform3DIdentity, tx, ty, 0)
-        if scale != 1.0 {
-            let b = layer.bounds
+        let b = layer.bounds
+        if scale != 1.0 || rotate != 0 {
             t = CATransform3DTranslate(t, b.midX, b.midY, 0)
-            t = CATransform3DScale(t, scale, scale, 1)
+            if rotate != 0 {
+                t = CATransform3DRotate(t, rotate * .pi / 180, 0, 0, 1) // 度 → 弧度
+            }
+            if scale != 1.0 {
+                t = CATransform3DScale(t, scale, scale, 1)
+            }
             t = CATransform3DTranslate(t, -b.midX, -b.midY, 0)
         }
         layer.transform = t
+        // ★opacity 只在非 1 时设（避免对无谓层写属性；且 1 是 CALayer 缺省）
+        if opacity != 1 {
+            layer.opacity = Float(opacity)
+        }
         return true
     }
 
@@ -2939,10 +2974,32 @@ final class SelfDrawBridge: NSObject, SelfDrawExports {
         return out
     }
 
+    /// ★★**停全部动画 + 复位变换**（相位间状态清理用；见 bench 注释）
+    func animStopAll() -> String {
+        guard handle != 0 else { return "{\"ok\":false,\"error\":\"未接入核心\"}" }
+        let out = "{\"all\":true}".withCString { takeCString(proteus_layout_anim_stop(handle, $0)) }
+        // 顺带把层上的变换复位（否则层还显示上一次相位留下的姿态）
+        view?.resetAllTransforms()
+        return out
+    }
+
     /// ★★**按节点停动画**（§7.3）：宿主行回收自动调用；也暴露给判据做破坏性验证
     func animStopNodes(_ idsJson: String) -> String {
         guard handle != 0 else { return "{\"ok\":false,\"error\":\"未接入核心\"}" }
         return idsJson.withCString { takeCString(proteus_layout_anim_stop(handle, $0)) }
+    }
+
+    /// ★★**FLIP 布局动画**（招牌能力）：`op=capture` 记快照 / `op=start` 启动补间
+    ///
+    /// ★为什么这是招牌（Morpheus §5）：几何本来就在内核 ⇒ 两次快照都是内部读，
+    ///   **零跨边界几何查询**（传统 FLIP 要前后各读一次）。
+    func animFlip(_ json: String) -> String {
+        guard handle != 0 else { return "{\"ok\":false,\"error\":\"未接入核心\"}" }
+        let out = json.withCString { takeCString(proteus_layout_flip(handle, $0)) }
+        // ★★`start` 的初始位置必须**立即上屏**（否则首帧跳变——见 FlipOutcome.updates 注释）：
+        //   本方法把返回里的 updates 当帧应用（与 animSeek 同一通道）。
+        applyAnimUpdates(fromJson: out)
+        return out
     }
 
     /// 层变换探针（转发给视图；见 `SelfDrawView.layerTransformProbe`）
@@ -3017,7 +3074,7 @@ final class SelfDrawBridge: NSObject, SelfDrawExports {
             return "{\"ok\":true,\"applied\":0,\"bytes\":0}"
         }
         defer { proteus_rects_free(ptr, outLen) }
-        let n = Int(outLen) / 16
+        let n = Int(outLen) / 24   // ★RT2 扩展属性后：24B/条（id + 五值）
         let buf = UnsafeRawBufferPointer(start: ptr, count: Int(outLen))
         var applied = 0
         CATransaction.begin()
@@ -3028,7 +3085,12 @@ final class SelfDrawBridge: NSObject, SelfDrawExports {
             let tx = buf.loadUnaligned(fromByteOffset: base + 4, as: Float.self)
             let ty = buf.loadUnaligned(fromByteOffset: base + 8, as: Float.self)
             let sc = buf.loadUnaligned(fromByteOffset: base + 12, as: Float.self)
-            if view?.applyTransform(nodeId: Int(nodeId), tx: CGFloat(tx), ty: CGFloat(ty), scale: CGFloat(sc)) == true {
+            let rot = buf.loadUnaligned(fromByteOffset: base + 16, as: Float.self)
+            let op = buf.loadUnaligned(fromByteOffset: base + 20, as: Float.self)
+            if view?.applyTransform(
+                nodeId: Int(nodeId), tx: CGFloat(tx), ty: CGFloat(ty), scale: CGFloat(sc),
+                rotate: CGFloat(rot), opacity: CGFloat(op)
+            ) == true {
                 applied += 1
             }
         }
@@ -3071,18 +3133,23 @@ final class SelfDrawBridge: NSObject, SelfDrawExports {
         let ptr = proteus_layout_anim_tick_bin(handle, Float(dtMs), &outLen)
         guard let ptr, outLen > 0 else { return (0, 0) }
         defer { proteus_rects_free(ptr, outLen) }
-        let n = Int(outLen) / 16
+        let n = Int(outLen) / 24   // ★RT2：24B/条（id + tx/ty/scale/rotate/opacity）
         let buf = UnsafeRawBufferPointer(start: ptr, count: Int(outLen))
         var applied = 0
         CATransaction.begin()
         CATransaction.setDisableActions(true)
         for i in 0..<n {
-            let base = i * 16
+            let base = i * 24
             let nodeId = buf.loadUnaligned(fromByteOffset: base, as: UInt32.self)
             let tx = buf.loadUnaligned(fromByteOffset: base + 4, as: Float.self)
             let ty = buf.loadUnaligned(fromByteOffset: base + 8, as: Float.self)
             let sc = buf.loadUnaligned(fromByteOffset: base + 12, as: Float.self)
-            if view?.applyTransform(nodeId: Int(nodeId), tx: CGFloat(tx), ty: CGFloat(ty), scale: CGFloat(sc)) == true {
+            let rot = buf.loadUnaligned(fromByteOffset: base + 16, as: Float.self)
+            let op = buf.loadUnaligned(fromByteOffset: base + 20, as: Float.self)
+            if view?.applyTransform(
+                nodeId: Int(nodeId), tx: CGFloat(tx), ty: CGFloat(ty), scale: CGFloat(sc),
+                rotate: CGFloat(rot), opacity: CGFloat(op)
+            ) == true {
                 applied += 1
             }
         }
@@ -3123,17 +3190,31 @@ final class SelfDrawBridge: NSObject, SelfDrawExports {
 
         // 先停旧循环（幂等），再播种持续动画
         view.stopFrameLoop()
+        // ★★相位间状态清理（本仓纪律：不假设"上一步留下的还能用"）——
+        //   animComplex 相位会在同一批节点上留动画/变换（spring/接管/FLIP/rotate）⇒ 不清掉会污染本测席的
+        //   E4/E5 终值判据（实测：tx=697 而非 80）。⇒ 测席启动前**清空全部动画状态**。
+        _ = animStopAll()
         // ★★探针缺陷修正（真机抓出，第二次同类）：手势节点上可能**残留上一相位的动画**
         //   （animProbe 给节点 2 起过 translateX 0→120）⇒ bench 的 seek 驱动的是那条旧动画
         //   ⇒ 终值 =120 而非本测席期望的 gestureTo ⇒ 判据 E4 假红。
         //   ⇒ 正解：**本测席自己给手势节点起一条明确的 X 动画**（同 (node,kind) 会**替换**旧的
         //     ——见 AnimEngine::start 的替换语义），使 seek 驱动的目标确定。
         if !nodeIds.isEmpty {
+            // ★★探针纪律（同类第四次）：本测席必须**显式声明自己的播种**，且用 `takeover:false`
+            //   硬重启——否则 `start` 的接管语义会从**上一相位残留动画的当前位置**继续
+            //   （真机实测：gesture_tx=697 而非 80、y_ty=287 而非 60 —— 都是被 complex 相位的
+            //   接管/F2 弹簧动画"夺走"了起点）。⇒ 硬重启让本测席的起点**确定**。
             var anims: [[String: Any]] = nodeIds.map { id -> [String: Any] in
-                ["nodeId": id, "kind": 1, "curve": 3, "from": -amp, "to": amp, "durMs": durationMs]
+                [
+                    "nodeId": id, "kind": 1, "curve": 3, "from": -amp, "to": amp,
+                    "durMs": durationMs, "takeover": false,
+                ]
             }
             // 手势节点：明确起一条 translateX 0 → gestureTo（**长时长**，全程可被 seek 驱动）
-            anims.append(["nodeId": gestureNodeId, "kind": 0, "curve": 3, "from": 0, "to": gestureTo, "durMs": durationMs])
+            anims.append([
+                "nodeId": gestureNodeId, "kind": 0, "curve": 3, "from": 0, "to": gestureTo,
+                "durMs": durationMs, "takeover": false,
+            ])
             let seed = (try? JSONSerialization.data(withJSONObject: ["anims": anims]))
                 .flatMap { String(data: $0, encoding: .utf8) } ?? "{}"
             let seedOut = animStart(seed)
@@ -3254,7 +3335,13 @@ final class SelfDrawBridge: NSObject, SelfDrawExports {
         CATransaction.begin()
         CATransaction.setDisableActions(true)
         for u in updates where u.count >= 4 {
-            if view?.applyTransform(nodeId: Int(u[0]), tx: CGFloat(u[1]), ty: CGFloat(u[2]), scale: CGFloat(u[3])) == true {
+            // 兼容 4 值（RT0 形态）与 6 值（RT2 扩展：rotate/opacity）
+            let rot: CGFloat = u.count >= 6 ? CGFloat(u[4]) : 0
+            let op: CGFloat = u.count >= 6 ? CGFloat(u[5]) : 1
+            if view?.applyTransform(
+                nodeId: Int(u[0]), tx: CGFloat(u[1]), ty: CGFloat(u[2]), scale: CGFloat(u[3]),
+                rotate: rot, opacity: op
+            ) == true {
                 applied += 1
             }
         }
@@ -4127,6 +4214,8 @@ final class SelfDrawViewController: UIViewController {
             // ★★RT2（2026-09-30）：动画相位——指令驱动动画的真机验证
             //   （启动 / seek 手势驱动 / tick 时间驱动 / CADisplayLink 帧循环；判据见 check-anim-rt2.py）
             ("__proteus.animProbe()", 2),
+            // ★★RT2 复杂动效（弹簧 / 打断接管 / FLIP / rotate+opacity）——判据见 check-anim-rt2.py F 组
+            ("__proteus.animComplex()", 2),
             // ★★RT2 帧率测席（§9 指标）：**异步**——由 CADisplayLink 跑满时长后回调续链
             //   （事件驱动：跑满即继续，不轮询/不 sleep；看门狗只在卡死时兜底）
             ("__proteus.animBench()", 0),
@@ -4156,7 +4245,7 @@ final class SelfDrawViewController: UIViewController {
             }
             let out = js(expr)
             // 只记关键读数（避免日志爆炸——本仓「输出控制」纪律）
-            if expr.hasPrefix("__proteus.mount") || expr.hasPrefix("__proteus.finalize2") || expr.hasPrefix("__proteus.animProbe") {
+            if expr.hasPrefix("__proteus.mount") || expr.hasPrefix("__proteus.finalize2") || expr.hasPrefix("__proteus.animProbe") || expr.hasPrefix("__proteus.animComplex") {
                 NSLog("[proteus] %@ → %@", expr, String(out.prefix(400)))
             }
             // ★让出主线程 pump 轮：每轮一次 runloop 循环 ⇒ 微任务队列被排空
