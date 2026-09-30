@@ -7,7 +7,7 @@
      ⇒ 本脚本读的是 `layerTransformProbe` 的结果（宿主从 `CALayer.transform` 反解），
        覆盖"写入路径真的生效"这一环。
 
-【十组判据（对应 RT2 / MA0-RT / MA1 / MA5 / MA6 要回答的问题；当前 44 条）】
+【十一组判据（对应 RT2 / MA0-RT / MA1 / MA5 / MA6 / 共享元素要回答的问题；当前 51 条）】
   A. **指令真的驱动了端上动画**：层上 transform 随进度变化，且**终值精确**等于目标（端点钉死）；
   B. **手势驱动（seek）立即生效**：seek 后**不等 tick**，层上已有对应值；
      Progress 驱动后再 tick **不应改它**（手势松手后动画不该自己跑）；
@@ -19,6 +19,8 @@
   H. **MA1 预设库**：预设编译 → 微信语义对齐 → 指令下发 → 端上驱动 → 校验有效 → 跨语言同值；
   I. **MA5 滚动联动**：视差映射（窗×factor）/ 宿主滚动通路生产形态 / 退化窗口与滚动+弹簧拦截 / 平台路径排除。
   J. **MA6 序列编排**：一条动画三段 / 分段推进与边界精确 / 终值精确 / 平台路径仍是一条。
+  K. **共享元素**：内核几何（中心差+宽度比）/ 首帧在源矩形 / 层级提升与复位 / 终值精确归位 /
+     宽度比生效（小矩形源，中心锚点反解）/ 错误冒泡；外加 ★判据 -1「任何相位异常必须红」。
 
 用法：python3 hosts/ios/check-anim-rt2.py <report.json>
 退出码：0 全过 / 1 有失败（逐条打印为什么）
@@ -66,6 +68,20 @@ def main() -> int:
     print("═══ RT2 动画真机判据 ═══")
     print(f"  目标节点：{targets} · 启动：{start}")
     ok = True
+
+    # ── 判据 -1：★**任何相位异常都必须红**（否则"做错了"会伪装成"没做"）──
+    #
+    # 【为什么这条必须最先判（2026-09-30 真机教训）】`animShared` 相位调了一个只存在于宿主 view、
+    #   未进 JSExport 协议的方法 ⇒ JS TypeError；但那时相位没有统一异常捕获 ⇒ 该读数**为空**、
+    #   报告 `phase_errors` 仍为 `{}`、整套判据只因"K 组跳过"而**变绿**。
+    #   ⇒ 现在相位函数统一包裹（异常进 `phase_errors`），本判据把"非空"直接判红——
+    #     "缺读数"不再能伪装成"没跑这一组"。
+    phase_errs = js.get("phase_errors") or {}
+    if phase_errs:
+        fail(f"存在相位异常（读数缺失 ≠ 没做）：{json.dumps(phase_errs, ensure_ascii=False)[:300]}")
+        ok = False
+    else:
+        print("  ✓ 无相位异常（所有相位函数都正常返回）")
 
     # ── 判据 0：启动成功（错误必须冒泡，不静默）──
     if not start.get("ok"):
@@ -502,9 +518,87 @@ def main() -> int:
     else:
         print("  · J 组跳过（无 anim_sequence 读数）")
 
+    # ── K 组：共享元素（跨元素飞行——几何在内核 + 宿主层级提升） ──
+    sh = d.get("anim_shared") or js.get("anim_shared") or {}
+    if sh:
+        # K1：几何由内核算出（dx/dy/scale 三值齐备且有限）
+        dx, dy, scale = sh.get("dx"), sh.get("dy"), sh.get("scale")
+        if not sh.get("ok") or dx is None or dy is None or scale is None or not (scale > 0):
+            fail(f"K1 共享元素几何未算出：ok={sh.get('ok')} dx={dx} dy={dy} scale={scale}")
+            ok = False
+        else:
+            print(f"  ✓ K1 内核几何：dx={dx:.1f} dy={dy:.1f} scale={scale:.3f}"
+                  f"（源 {sh.get('fromRect')} → 目标 {sh.get('toRect')}）")
+        # K2：首帧就在**源矩形**（不跳变）——层上 tx/ty/scale 应等于内核起点
+        ftx, fty, fsc = sh.get("first_tx"), sh.get("first_ty"), sh.get("first_scale")
+        if ftx is None or abs(ftx - dx) > 0.5 or abs(fty - dy) > 0.5 or abs(fsc - scale) > 0.01:
+            fail(f"K2 首帧未落在源矩形：层 ({ftx}, {fty}, {fsc}) vs 内核 ({dx}, {dy}, {scale})")
+            ok = False
+        else:
+            print(f"  ✓ K2 首帧在源矩形（无跳变）：tx={ftx:.1f} ty={fty:.1f} scale={fsc:.3f}")
+        # K3：**层级提升**真的生效（zPosition 被抬起，且可复位清零）
+        z_lifted, z_after = sh.get("z_lifted", 0), sh.get("z_after")
+        z_reset = sh.get("z_reset_val")
+        if not z_lifted or z_after is None or abs(z_after) < 1.0:
+            fail(f"K3a 飞行元素层级未被提升：zLifted={z_lifted} z={z_after}")
+            ok = False
+        elif z_reset is None or abs(z_reset) > 0.001:
+            fail(f"K3b 层级未复位：z={z_reset}（zPosition 是持久状态，必须复位）")
+            ok = False
+        else:
+            print(f"  ✓ K3 层级提升生效且可复位（飞行中 z={z_after:.1f} → 复位后 z={z_reset:.1f}）")
+        # K4：终态**精确归位**（identity：tx/ty=0、scale=1）
+        etx, ety, esc = sh.get("end_tx"), sh.get("end_ty"), sh.get("end_scale")
+        if etx is None or abs(etx) > 0.01 or abs(ety) > 0.01 or abs(esc - 1.0) > 0.001:
+            fail(f"K4 未精确归位：tx={etx} ty={ety} scale={esc}（应为 0/0/1）")
+            ok = False
+        else:
+            print(f"  ✓ K4 终态精确归位（identity）：tx={etx} ty={ety} scale={esc}")
+        # K4b：★**宽度比数学**真的生效（同树源常与目标同尺寸 ⇒ scale 恒 1 无判别力；
+        #      用小矩形源 ⇒ scale 必须明显 ≠ 1，且层上"中心真的落在源矩形中心"）
+        #
+        # 【判据算式（为什么不是直接比 m41 与 dx）】宿主探针从 `CATransform3D` 直接读 m41/m42，
+        #   而本引擎的构造是「平移 ∘ 中心缩放 ∘ 反平移」⇒ 缩放 ≠ 1 时 m41 含**中心锚点分量**：
+        #     m41 = tx + midX×(1−s)，m42 = ty + midY×(1−s)
+        #   （与既有的 rotate 教训同源：那次 m41 = tx + midX + midY）。
+        #   ⇒ 判据必须**反解**出纯位移再与内核 dx/dy 比对；且 midX/midY 取目标矩形一半。
+        rsc = sh.get("rect_scale")
+        rdx, rdy = sh.get("rect_dx"), sh.get("rect_dy")
+        rm41, rm42, rm11 = sh.get("rect_first_tx"), sh.get("rect_first_ty"), sh.get("rect_first_scale")
+        r_to = sh.get("rect_to") or {}
+        if not sh.get("rect_ok") or rsc is None or not (rsc < 0.5 or rsc > 1.5):
+            fail(f"K4b 宽度比未生效：rect_scale={rsc}（小矩形源应明显 ≠ 1）；ok={sh.get('rect_ok')}")
+            ok = False
+        elif rm11 is None or abs(rm11 - rsc) > 0.01:
+            fail(f"K4b 层上缩放 ≠ 内核宽度比：层 m11={rm11} vs 内核 scale={rsc}")
+            ok = False
+        elif rm41 is None or rm42 is None or not r_to:
+            fail(f"K4b 读数缺失：m41={rm41} m42={rm42} toRect={r_to}")
+            ok = False
+        else:
+            mx, my = (r_to.get("w", 0) or 0) / 2.0, (r_to.get("h", 0) or 0) / 2.0
+            pure_tx = rm41 - mx * (1.0 - rm11)
+            pure_ty = rm42 - my * (1.0 - rm11)
+            if abs(pure_tx - rdx) > 0.5 or abs(pure_ty - rdy) > 0.5:
+                fail(
+                    f"K4b 反解纯位移与内核不符：层 ({pure_tx:.2f}, {pure_ty:.2f}) vs 内核 ({rdx}, {rdy})"
+                    f"（m41/m42={rm41}/{rm42} · mid=({mx},{my}) · s={rm11}）"
+                )
+                ok = False
+            else:
+                print(f"  ✓ K4b 宽度比生效（小矩形源 scale={rsc:.3f}；反解纯位移 ({pure_tx:.1f},{pure_ty:.1f}) = 内核 dx/dy）")
+        # K5：错误**明确冒泡**（目标不存在 / 缺源——都不允许静默）
+        if not sh.get("bad_rejected") or not sh.get("no_src_rejected"):
+            fail(f"K5 错误未冒泡：bad_rejected={sh.get('bad_rejected')} no_src_rejected={sh.get('no_src_rejected')}")
+            ok = False
+        else:
+            print(f"  ✓ K5 错误明确冒泡（目标缺失 / 缺源：{str(sh.get('bad_error'))[:30]}…）")
+    else:
+        print("  · K 组跳过（无 anim_shared 读数）")
+
     print()
     if ok:
-        print("✅ 判据全过（机制 + 帧率 + 复杂动效 + 平台零参与 + MA1 预设库 + MA5 滚动联动 + MA6 序列编排）")
+        print("✅ 判据全过（机制 + 帧率 + 复杂动效 + 平台零参与 + MA1 预设库 + MA5 滚动联动 + MA6 序列编排 + 共享元素）")
         return 0
     print("✗ RT2 判据有失败项（见上）")
     return 1

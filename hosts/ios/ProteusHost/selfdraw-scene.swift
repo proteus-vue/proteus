@@ -64,6 +64,9 @@ func proteus_layout_anim_seek(_ handle: UInt64, _ json: UnsafePointer<CChar>) ->
 /// ★MA5：滚动驱动（位置 → 全部窗口动画；换算在内核）
 @_silgen_name("proteus_layout_anim_seek_scroll")
 func proteus_layout_anim_seek_scroll(_ handle: UInt64, _ json: UnsafePointer<CChar>) -> UnsafeMutablePointer<CChar>
+/// ★共享元素（跨元素飞行；几何原语——中心差 + 宽度比在内核）
+@_silgen_name("proteus_layout_shared_element")
+func proteus_layout_shared_element(_ handle: UInt64, _ json: UnsafePointer<CChar>) -> UnsafeMutablePointer<CChar>
 @_silgen_name("proteus_layout_anim_commit_spec")
 func proteus_layout_anim_commit_spec(_ handle: UInt64, _ json: UnsafePointer<CChar>) -> UnsafeMutablePointer<CChar>
 @_silgen_name("proteus_layout_flip")
@@ -166,6 +169,18 @@ func physFootprintMB() -> Double {
     ///   （视差层 + 吸顶头 + 渐显项）；而 `animSeek` 是"某个节点的某个属性"。
     ///   换算（窗口/钳制/曲线）在**内核**——宿主只报"滚到哪了"。
     func animSeekScroll(_ json: String) -> String
+    /// ★★**共享元素（跨元素飞行）**：从源矩形飞到目标节点再归位
+    ///
+    /// 【几何在内核（与 FLIP/滚动联动同源纪律）】中心差 + 宽度比是跨页面过渡的**全部视觉语义**；
+    ///   宿主只把源（系统坐标矩形 或 同树节点 id）报进去，把算出的 `updates` 当帧刷层。
+    ///   本方法另外做**层级提升**（`zPosition`）——飞行中的元素必须浮在其余内容之上。
+    func sharedElement(_ json: String) -> String
+    /// ★层级提升（zPosition）：把若干层抬到同层序最前 / 复位（瞬时的层序调整，不改几何）
+    ///
+    /// 入参：`{"ids":[…],"z":2}`（`z` 缺省 1；判据用它验证"飞行元素真的在别人之上"）
+    func setLayerZ(_ json: String) -> String
+    /// **读层的 zPosition**（判据用：从层的**实际状态**读——不比对我们自己传下去的参数）
+    func layerZProbe(_ idsJson: String) -> String
     /// ★★**滚动 + 动画同步**（生产形态：宿主滚动通路里直接驱动，**零 JS 参与**）
     ///
     /// 一次调用 = 移动内容 + 内核 seek_scroll + 把 updates 当帧写层——
@@ -675,6 +690,43 @@ final class SelfDrawView: UIView {
             for k in keys { layer.removeAnimation(forKey: k) }
         }
         CATransaction.commit()
+    }
+
+    /// ★**层级提升 / 复位**（`zPosition`）：把若干层抬到同层序最前（或复位到 0）
+    ///
+    /// 【为什么需要（共享元素的必需配套）】飞行元素会越过容器边界压过中间内容；
+    ///   CALayer 绘制顺序由 sublayer 顺序决定 ⇒ 需临时抬 `zPosition`。
+    ///   ★`zPosition` 是**持久状态**：调用方必须在飞行结束后复位（否则后续相位里该层一直压着兄弟）。
+    /// - Returns: 实际设置成功的层数
+    @discardableResult
+    func setLayerZ(ids: [Int], z: Float) -> Int {
+        CATransaction.begin()
+        CATransaction.setDisableActions(true)
+        var n = 0
+        for id in ids {
+            guard let layer = layersById[id] else { continue }
+            layer.zPosition = CGFloat(z)
+            n += 1
+        }
+        CATransaction.commit()
+        return n
+    }
+
+    /// 读层的 `zPosition`（判据用：证明飞行元素**真的**在别人之上）
+    func layerZProbe(_ idsJson: String) -> String {
+        guard let data = idsJson.data(using: .utf8),
+              let ids = (try? JSONSerialization.jsonObject(with: data)) as? [Int] else {
+            return "{\"ok\":false,\"error\":\"入参需为 id 数组 JSON\"}"
+        }
+        var parts: [String] = []
+        for id in ids {
+            guard let layer = layersById[id] else {
+                parts.append("{\"id\":\(id),\"missing\":true}")
+                continue
+            }
+            parts.append("{\"id\":\(id),\"z\":\(Double(layer.zPosition))}")
+        }
+        return "{\"ok\":true,\"layers\":[\(parts.joined(separator: ","))]}" 
     }
 
     /// ★★**RT2：把内核算出的变换写到层上**（translate/scale 是绘制层变换——不改几何、不触发布局）
@@ -3316,6 +3368,69 @@ final class SelfDrawBridge: NSObject, SelfDrawExports {
         return out
     }
 
+    /// ★★**共享元素（跨元素飞行）**：源 → 目标（几何在内核）→ **层级提升** → 当帧写层
+    ///
+    /// 【为什么在这里做层级提升】飞行中的元素会**越过**它所在的容器边界（缩略图飞向大图的路上
+    ///   会压过中间的内容）。CALayer 的绘制顺序由 sublayer 顺序决定 ⇒ 必须临时抬 `zPosition`。
+    ///   内核只管**几何**（它不知道层序）；层序是宿主的知识 ⇒ 这一半落在宿主（职责边界）。
+    ///
+    /// 【为什么结束时复位】`zPosition` 是**持久状态**：不复位的话，该元素在后续所有相位里
+    ///   都压着兄弟节点（典型的"看起来对、交互错位"）。⇒ 飞行结束后 `setLayerZ(ids, z=0)` 复位。
+    func sharedElement(_ json: String) -> String {
+        guard handle != 0, let view else { return "{\"ok\":false,\"error\":\"未接入\"}" }
+        let out = json.withCString { takeCString(proteus_layout_shared_element(handle, $0)) }
+        // ★★**内核错误必须原样透传**（真机 K5 抓出的宿主缺陷）：首版无脑 `"ok": true`，
+        //   把内核的 `{ok:false,error}` 吞掉 ⇒ "目标节点不存在"被伪装成"飞行成功但 dx=0"。
+        //   本仓红线是"不静默降级"——宿主的职责是**通道**，不是把失败改写成成功。
+        if let d = out.data(using: .utf8),
+           let o = (try? JSONSerialization.jsonObject(with: d)) as? [String: Any],
+           (o["ok"] as? Bool) != true {
+            let err = (o["error"] as? String) ?? "内核拒绝（无错误详情）"
+            return "{\"ok\":false,\"error\":\(jsonEscape(err))}"
+        }
+        // ① 首帧起点当帧上屏（否则首帧跳变——与 FLIP 同一条教训）
+        let applied = applyAnimUpdates(fromJson: out)
+        // ② 层级提升（飞行期间浮在最上）
+        var targetId = 0
+        var zLifted = 0
+        if let d = out.data(using: .utf8),
+           let o = (try? JSONSerialization.jsonObject(with: d)) as? [String: Any],
+           let tid = (o["targetId"] as? NSNumber)?.intValue {
+            targetId = tid
+            zLifted = view.setLayerZ(ids: [tid], z: 2)
+        }
+        var result: [String: Any] = [
+            "ok": true, "applied": applied, "targetId": targetId, "zLifted": zLifted,
+        ]
+        // 透传内核几何（判据要用 dx/dy/scale 对账）
+        if let d = out.data(using: .utf8),
+           let o = (try? JSONSerialization.jsonObject(with: d)) as? [String: Any] {
+            for k in ["dx", "dy", "scale", "fromRect", "toRect"] where o[k] != nil {
+                result[k] = o[k]
+            }
+        }
+        return jsonString(result)
+    }
+
+    /// **层级提升 / 复位**（见协议声明）
+    func setLayerZ(_ json: String) -> String {
+        guard let view else { return "{\"ok\":false,\"error\":\"无视图\"}" }
+        guard let d = json.data(using: .utf8),
+              let o = (try? JSONSerialization.jsonObject(with: d)) as? [String: Any],
+              let ids = o["ids"] as? [Int] else {
+            return "{\"ok\":false,\"error\":\"入参需为 {ids:[…], z?}\"}"
+        }
+        let z = (o["z"] as? NSNumber)?.floatValue ?? 1
+        let n = view.setLayerZ(ids: ids, z: z)
+        return "{\"ok\":true,\"set\":\(n)}"
+    }
+
+    /// **读层的 zPosition**（判据用：证明飞行元素**真的**在别人之上——见 view 上的同名方法）
+    func layerZProbe(_ idsJson: String) -> String {
+        guard let view else { return "{\"ok\":false,\"error\":\"无视图\"}" }
+        return view.layerZProbe(idsJson)
+    }
+
     /// 每帧动画更新记录的字节长度：`id u32 + tx/ty/scale/rotate/opacity（五个 f32）` = **24B/条**
     ///
     /// 【为什么是"唯一常量"（2026-09-30 真机教训）】此前探针 `animTick` 与帧循环 `animTickLean`
@@ -4471,6 +4586,8 @@ final class SelfDrawViewController: UIViewController {
             ("__proteus.animScroll()", 2),
             // ★★MA6：序列编排（多段动画——"先下压再弹回"收敛在一条动画里）
             ("__proteus.animSequence()", 2),
+            // ★★共享元素（从源矩形飞到目标再归位；几何在内核 + 宿主层级提升）
+            ("__proteus.animShared()", 2),
             // ★★RT2 帧率测席（§9 指标）：**异步**——由 CADisplayLink 跑满时长后回调续链
             //   （事件驱动：跑满即继续，不轮询/不 sleep；看门狗只在卡死时兜底）
             ("__proteus.animBench()", 0),
@@ -4500,7 +4617,7 @@ final class SelfDrawViewController: UIViewController {
             }
             let out = js(expr)
             // 只记关键读数（避免日志爆炸——本仓「输出控制」纪律）
-            if expr.hasPrefix("__proteus.mount") || expr.hasPrefix("__proteus.finalize2") || expr.hasPrefix("__proteus.animProbe") || expr.hasPrefix("__proteus.animComplex") || expr.hasPrefix("__proteus.animPlatform") || expr.hasPrefix("__proteus.animPreset") || expr.hasPrefix("__proteus.animScroll") || expr.hasPrefix("__proteus.animSequence") {
+            if expr.hasPrefix("__proteus.mount") || expr.hasPrefix("__proteus.finalize2") || expr.hasPrefix("__proteus.animProbe") || expr.hasPrefix("__proteus.animComplex") || expr.hasPrefix("__proteus.animPlatform") || expr.hasPrefix("__proteus.animPreset") || expr.hasPrefix("__proteus.animScroll") || expr.hasPrefix("__proteus.animSequence") || expr.hasPrefix("__proteus.animShared") {
                 NSLog("[proteus] %@ → %@", expr, String(out.prefix(400)))
             }
             // ★让出主线程 pump 轮：每轮一次 runloop 循环 ⇒ 微任务队列被排空

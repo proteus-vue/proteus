@@ -59,6 +59,10 @@ interface SelfDrawNative {
   // ★★MA5（2026-09-30）：滚动联动——宿主只报原始位置，窗口换算在内核
   animSeekScroll(json: string): string
   scrollAnimSync(json: string): string
+  // ★★共享元素（跨元素飞行——几何在内核；宿主负责层级提升）
+  sharedElement(json: string): string
+  setLayerZ(json: string): string
+  layerZProbe(idsJson: string): string
   animTick(dtMs: number): string
   animStartFrameLoop(): string
   animStopFrameLoop(): string
@@ -77,7 +81,7 @@ const BN = { snapshot: 'selfdraw-final' }
 
 // ★构建标识（每次构建由 hosts/ios/bridge/inject-build-id.mjs 注入；与 entry-bench 同机制）
 //   —— 「设备上跑的是哪份代码」必须可**一眼判定**（报告新鲜度判据的内容锚点）。
-const BUILD_ID = '29850200-123343'
+const BUILD_ID = 'f7b5298b-124618'
 
 const VP = (globalThis as unknown as { __PROTEUS_VIEWPORT__?: { width: number; height: number } })
   .__PROTEUS_VIEWPORT__ ?? { width: 390, height: 844 }
@@ -206,6 +210,8 @@ let animPresetResult: Record<string, unknown> = {}
 let animScrollResult: Record<string, unknown> = {}
 /** ★★MA6 序列编排读数 */
 let animSequenceResult: Record<string, unknown> = {}
+/** ★★共享元素读数 */
+let animSharedResult: Record<string, unknown> = {}
 
 /** 供宿主逐相位调用（每个函数在**自己那次 evaluateScript** 里同步启动，微任务在其后排空） */
 const api = {
@@ -387,6 +393,127 @@ const api = {
       rotate_opacity: { rotate: l0(rotOpEnd).rotate ?? NaN, opacity: l0(rotOpEnd).opacity ?? NaN },
     }
     animComplexResult = r
+    return JSON.stringify(r)
+  },
+
+  /**
+   * ★★**共享元素**（跨元素飞行：从源矩形飞到目标再归位）
+   *
+   * 【要回答什么】
+   *   ① **几何由内核算**：`dx/dy/scale` 由源矩形与目标几何推出（宿主零几何数学）；
+   *   ② **首帧不跳变**：启动当帧值就在**源矩形**（中心对齐 + 宽度比）；
+   *   ③ **层级提升生效**：飞行元素 zPosition 被抬起（真读层上值），结束可复位；
+   *   ④ **终态精确归位**：translate 0 / scale 1（identity）。
+   *
+   * 【判据】见 `check-anim-rt2.py` 的 K 组。
+   */
+  animShared(): string {
+    const probe = safeParse(proteusSelfDraw.layerTransformProbe(JSON.stringify([2, 3, 4])))
+    const present = ((probe as { layers?: Array<{ id: number; missing?: boolean }> }).layers ?? [])
+      .filter((l) => !l.missing)
+      .map((l) => l.id)
+    const target = present[0] ?? 2
+    const srcNode = present[1] ?? target
+    proteusSelfDraw.animStopNodes(JSON.stringify({ nodeIds: [target] }))
+
+    // ① 预设：源 = **同树节点**（同页面共享元素）——几何由内核从该节点绝对矩形取
+    const spec = presets.element.sharedElement({ fromNodeId: srcNode, durationMs: 300 })
+    const seOut = safeParse(
+      proteusSelfDraw.sharedElement(
+        JSON.stringify({ targetId: target, sourceNodeId: srcNode, durMs: spec.durationMs, curve: 1, fadeIn: spec.fadeIn }),
+      ),
+    )
+    // 首帧：目标层上的值应 = 内核算出的起点（弹窗/缩略图的中心差与宽度比）
+    const afterStart = safeParse(proteusSelfDraw.layerTransformProbe(JSON.stringify([target])))
+    const l0 = ((afterStart as { layers?: Array<Record<string, number>> }).layers ?? [])[0] ?? {}
+
+    // ② 层级提升读数（真读层 zPosition）
+    const zAfter = safeParse(proteusSelfDraw.layerZProbe(JSON.stringify([target])))
+    const zVal = (((zAfter as { layers?: Array<Record<string, number>> }).layers ?? [])[0] ?? {}).z
+
+    // ③ 跑完（300ms；30 帧 × 16.7 ≈ 501ms 留足）
+    for (let i = 0; i < 30; i++) proteusSelfDraw.animTick(16.7)
+    const afterEnd = safeParse(proteusSelfDraw.layerTransformProbe(JSON.stringify([target])))
+    const l1 = ((afterEnd as { layers?: Array<Record<string, number>> }).layers ?? [])[0] ?? {}
+
+    // ④ 复位层级（飞行结束后必须复位——zPosition 是持久状态）
+    const zReset = safeParse(proteusSelfDraw.setLayerZ(JSON.stringify({ ids: [target], z: 0 })))
+    const zAfterReset = safeParse(proteusSelfDraw.layerZProbe(JSON.stringify([target])))
+    const zResetVal = (((zAfterReset as { layers?: Array<Record<string, number>> }).layers ?? [])[0] ?? {}).z
+
+    // ①b ★**判别力补强**（放在首飞行完整跑完之后——首版插在它前面，
+    //     导致 K2/K3 读到的是**被本次覆盖后**的状态，判据全乱。探针的**顺序**也是判据的一部分）：
+    //   同树源常与目标同尺寸 ⇒ scale 恒 1，无法证明"宽度比"这条数学。
+    //   ⇒ 再用一个**显式小矩形**（系统坐标）跑一次：scale 必须明显 ≠ 1。这也是 `fromRect` 的实用形态。
+    const probeRect = { x: 36, y: 620, w: 72, h: 72 }
+    const seRectOut = safeParse(
+      proteusSelfDraw.sharedElement(
+        JSON.stringify({ targetId: target, sourceRect: probeRect, durMs: 120, curve: 1, fadeIn: false }),
+      ),
+    )
+    const re = seRectOut as {
+      ok?: boolean; dx?: number; dy?: number; scale?: number
+      toRect?: { x: number; y: number; w: number; h: number }
+    }
+    const afterRectStart = safeParse(proteusSelfDraw.layerTransformProbe(JSON.stringify([target])))
+    const lr0 = ((afterRectStart as { layers?: Array<Record<string, number>> }).layers ?? [])[0] ?? {}
+    for (let i = 0; i < 12; i++) proteusSelfDraw.animTick(16.7)  // 跑完 120ms 归位
+    proteusSelfDraw.setLayerZ(JSON.stringify({ ids: [target], z: 0 }))
+
+    // ⑤ 拒绝分支：源与目标都给错（未布局 / 缺源）必须明确报错
+    const badOut = safeParse(
+      proteusSelfDraw.sharedElement(JSON.stringify({ targetId: 99999, sourceRect: { x: 0, y: 0, w: 10, h: 10 } })),
+    )
+    const noSrcOut = safeParse(proteusSelfDraw.sharedElement(JSON.stringify({ targetId: target })))
+
+    const se = seOut as {
+      ok?: boolean
+      dx?: number
+      dy?: number
+      scale?: number
+      fromRect?: { x: number; y: number; w: number; h: number }
+      toRect?: { x: number; y: number; w: number; h: number }
+      applied?: number
+      zLifted?: number
+    }
+    const r = {
+      node: target,
+      srcNode,
+      preset: spec.name,
+      ok: se.ok,
+      dx: se.dx,
+      dy: se.dy,
+      scale: se.scale,
+      fromRect: se.fromRect,
+      toRect: se.toRect,
+      applied: se.applied,
+      // 首帧：层上值应等于内核的起点（tx=dx、scale=scale）
+      first_tx: l0.tx,
+      first_ty: l0.ty,
+      first_scale: l0.scale,
+      // 终态：精确归位
+      end_tx: l1.tx,
+      end_ty: l1.ty,
+      end_scale: l1.scale,
+      z_lifted: se.zLifted,
+      z_after: zVal,
+      z_reset_val: zResetVal,
+      z_reset_ok: (zReset as { ok?: boolean }).ok,
+      bad_rejected: (badOut as { ok?: boolean }).ok === false && !!(badOut as { error?: string }).error,
+      bad_error: (badOut as { error?: string }).error?.slice(0, 60),
+      no_src_rejected: (noSrcOut as { ok?: boolean }).ok === false,
+      // ★fromRect 路径（判别力补强）：小矩形 ⇒ scale 明显 ≠ 1、dx/dy 非零
+      rect_ok: re.ok,
+      rect_dx: re.dx,
+      rect_dy: re.dy,
+      rect_scale: re.scale,
+      rect_to: re.toRect,
+      rect_first_tx: lr0.tx,
+      rect_first_ty: lr0.ty,
+      rect_first_scale: lr0.scale,
+      rect_first_ty_mid: lr0.ty,
+    }
+    animSharedResult = r
     return JSON.stringify(r)
   },
 
@@ -869,6 +996,8 @@ const api = {
       anim_scroll: animScrollResult,
       // ★★MA6 序列编排（多段动画——一条动画内的分段推进）
       anim_sequence: animSequenceResult,
+      // ★★共享元素（跨元素飞行：源矩形 → 目标 → 归位）
+      anim_shared: animSharedResult,
       // ★★MA0-RT 平台零参与路径（合成属性判定 + CAKeyframe 提交 + presentation 探针）
       anim_platform: animPlatformResult,
       // ★★RT2 复杂动效（弹簧 / 打断接管 / FLIP / rotate+opacity）
@@ -905,7 +1034,31 @@ const api = {
 }
 
 ;(globalThis as unknown as { __proteus: Record<string, unknown> }).__proteus = {
-  ...api,
+  /**
+   * ★★**相位函数的自动包裹**（结构性修复：相位抛异常必须可观测，不能只是"该读数缺失"）
+   *
+   * 【为什么必须自动（2026-09-30 真机教训）】`animShared` 相位调了 `layerZProbe`，
+   *   而该方法只在宿主 view 上有、**没加进 JSExport 协议** ⇒ JS 侧 TypeError。
+   *   现象：该相位读数**为空**、报告 `phase_errors` **仍为 {}**、整套判据只因"K 组跳过"而变绿
+   *   ——静默失败的最坏形态：**错的东西看起来是"没做"，而不是"做错了"**。
+   *   ⇒ 用一处包裹覆盖**所有**相位函数（新增相位自动受保护），异常写进 `phase_errors`
+   *     并返回 `{ok:false,error}`；判据侧再断言 `phase_errors` 为空（错误必须红）。
+   *   ★这与本仓「三条红线要工具层管」同源：靠"记得写 try/catch"是记不住的。
+   */
+  ...Object.fromEntries(
+    Object.entries(api).map(([k, fn]) => [
+      k,
+      (...args: unknown[]) => {
+        try {
+          return (fn as (...a: unknown[]) => string)(...args)
+        } catch (e) {
+          const msg = String((e as { message?: string })?.message ?? e)
+          phaseErrors[k] = msg
+          return JSON.stringify({ ok: false, phase: k, error: msg })
+        }
+      },
+    ]),
+  ),
   /**
    * 宿主读相位结果（**在下一次** evaluateScript 里调用，此时上一轮排的微任务已排空）。
    *

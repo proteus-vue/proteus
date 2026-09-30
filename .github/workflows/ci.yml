@@ -45,6 +45,12 @@ jobs:
       - name: 盲等门禁（★用户红线：脚本内 sleep 一律禁止——要么 App/被测对象主动上报，要么 wait_for.sh 条件等待）
         run: node scripts/check-no-blind-wait.mjs
 
+      - name: iOS JSExport 接线门禁（★JS 调用 / 协议声明 / Bridge 实现三处一致——缺协议声明会运行时 TypeError）
+        # ★2026-09-30 加：真机连踩两次（layerZProbe 只在 view 上、未进 JSExport 协议 ⇒ JS TypeError；
+        #   而当时相位无统一异常捕获 ⇒ 该读数"为空"、判据"该组跳过"变绿 = 做错了伪装成没做）。
+        #   纯静态、零依赖 ⇒ 接 CI。
+        run: node scripts/check-ios-export-wiring.mjs
+
       - name: 能力优先级表门禁（NC0：能力清单 × 语料需求 × 官方承接 ⇒ 表与源一致；分域 0 缺口）
         run: node scripts/gen-capability-priority.mjs --check
 
