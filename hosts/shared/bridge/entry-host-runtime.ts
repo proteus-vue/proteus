@@ -1,4 +1,12 @@
-// hosts/android/bridge/entry-host-runtime.ts —— ★★G-39：真实宿主运行时在设备上跑（QuickJS）
+// hosts/android/bridge/entry-host-runtime.ts —— ★★G-39：真实宿主运行时在设备上跑（QuickJS / JSC 共用）
+//
+// 【★平台中立（2026-09-30 改造；两端共用本文件——「同一语义一处实现」）】
+//   Android 侧壳（MainActivity + quickjs_jni.c）与 iOS 侧壳（selfdraw-scene.swift 的
+//   `HostRuntimeBridge` + UIApplication 通知）**注入同一份本 bundle**，差异只在：
+//     · `__PROTEUS_HOST_ID__` / `__PROTEUS_HOST_FRAME_DRIVER__`（宿主标识与帧驱动源名，壳注入）；
+//     · `proteusHost.memUsage()` 的**口径**：QuickJS 返回 `scope:"engine"`（引擎真实 JS 堆，
+//       `JS_ComputeMemoryUsage`）；JSC 无公开 per-context 内存 API ⇒ iOS 壳返回
+//       `scope:"process"`（`phys_footprint`，iOS 标准口径）——报告带 `mem_scope` 供判据分档。
 //
 // 【要证明什么（G-39 宿主运行时 SPI 与职责边界）】
 //   ① **生命周期唯一拥有**：宿主壳转发 suspend/resume（Android onPause/onResume）→ runtime 状态机；
@@ -19,7 +27,7 @@ import { createQuickJsHostRuntime } from '@proteus-vue/render-backend/quickjs-ho
 import type { NativeTransport } from '@proteus-vue/render-backend/quickjs-host'
 import { runHostConformance } from '@proteus-vue/render-backend/host-conformance'
 
-/** 宿主桥（Java 侧 JsRenderHost 可选实现 memUsage/gc —— 条件注入，见 quickjs_jni.c） */
+/** 宿主桥（Java 侧 JsRenderHost / iOS 侧 HostRuntimeBridge 可选实现 memUsage/gc —— 条件注入） */
 interface HostBridge {
   post?(json: string): void
   memUsage?(): string
@@ -33,6 +41,18 @@ function globalHost(): HostBridge | null {
   if (typeof proteusHost === 'undefined' || proteusHost === undefined) return null
   return proteusHost
 }
+
+// ── ★平台参数（壳注入；缺省 = 桌面自检形态）──
+interface HostGlobals {
+  __PROTEUS_HOST_ID__?: string
+  __PROTEUS_HOST_FRAME_DRIVER__?: string
+}
+const g = globalThis as unknown as HostGlobals
+const HOST_ID = g.__PROTEUS_HOST_ID__ ?? 'quickjs-desktop'
+// ★构建标识（由 hosts/ios/bridge/inject-build-id.mjs **编译期替换**——与 entry-bench/entry-selfdraw
+//   同一机制；报告据此断言"设备上跑的是本次构建"，而不是靠运行时环境变量（那种是第二种形态））
+const BUILD_ID = 'bb079e18-161334'
+const FRAME_DRIVER = g.__PROTEUS_HOST_FRAME_DRIVER__ ?? 'manual'
 
 // ══════════════════════════════════════════════════════════════════
 // ★★真实宿主壳转发钩子（Activity onPause/onResume → 这里）
@@ -55,7 +75,7 @@ let shellRt: ReturnType<typeof createQuickJsHostRuntime> | null = null
 /** 懒创建壳转发用的运行时（跨广播存活；不销毁——它代表"App 进程"本身） */
 function ensureShellRt(): ReturnType<typeof createQuickJsHostRuntime> {
   if (!shellRt || shellRt.state === 'destroyed') {
-    shellRt = createQuickJsHostRuntime({ id: 'android-shell', engine: 'quickjs', frameDriver: 'activity-lifecycle' })
+    shellRt = createQuickJsHostRuntime({ id: `${HOST_ID}-shell`, engine: 'quickjs', frameDriver: FRAME_DRIVER })
     shellRt.bootstrap()
   }
   return shellRt
@@ -130,7 +150,7 @@ export function __proteusHostRun(): string {
         }
       : undefined
 
-  const rt = createQuickJsHostRuntime({ id: 'android', engine: 'quickjs', frameDriver: 'device-scene', transport })
+  const rt = createQuickJsHostRuntime({ id: HOST_ID, engine: 'quickjs', frameDriver: FRAME_DRIVER, transport })
 
   // ── A. 建运行时 ──
   const stateA0 = rt.state // created
@@ -222,15 +242,35 @@ export function __proteusHostRun(): string {
   let memAfterGc = 0
   let memObjBefore = 0
   let memObjAfter = 0
+  let memScopeForReport = 'none'
   if (transport) {
+    let memScope = 'unknown'
     const read = (): { used: number; obj: number } => {
-      const j = JSON.parse(transport.call('memUsage', 'null')) as { memory_used_size?: number; obj_count?: number }
+      const j = JSON.parse(transport.call('memUsage', 'null')) as {
+        memory_used_size?: number
+        obj_count?: number
+        scope?: string
+      }
+      memScope = j.scope ?? 'engine' // 缺省 engine（QuickJS 口径；JSC 壳显式返回 process）
       return { used: j.memory_used_size ?? 0, obj: j.obj_count ?? 0 }
     }
-    const allocateBallast = (): void => {
+    // ★分配规模：按**内存口径**分档——engine 口径（QuickJS）小数组即可见；
+    //   process 口径（JSC phys_footprint）需要**大块**才在噪声上可测（本项目 iOS 侧的标准口径）
+    const balloonBig = () => {
+      // 32MB typed array（Uint8Array 逐块写入：真占用物理页，不是惰性映射）
+      const big = new Uint8Array(32 * 1024 * 1024)
+      for (let i = 0; i < big.length; i += 4096) big[i] = 1
+      return big
+    }
+    const smallBallast = () => {
       const ballast: number[] = []
       for (let i = 0; i < 20000; i++) ballast.push(i) // 逐元素写入：真占内存（防惰性/稀疏数组）
-      ;(globalThis as unknown as { __proteusMemBallast?: number[] }).__proteusMemBallast = ballast
+      return ballast
+    }
+    let ballastHolder: unknown = null
+    const allocateBallast = (scope: string): void => {
+      ballastHolder = scope === 'process' ? balloonBig() : smallBallast()
+      ;(globalThis as unknown as { __proteusMemBallast?: unknown }).__proteusMemBallast = ballastHolder
     }
     const releaseBallast = (): void => {
       ;(globalThis as unknown as { __proteusMemBallast?: number[] | null }).__proteusMemBallast = null
@@ -238,16 +278,18 @@ export function __proteusHostRun(): string {
     const m0 = read()
     memBefore = m0.used
     memObjBefore = m0.obj
-    allocateBallast()
+    allocateBallast(memScope) // ★按口径选分配规模（见 allocateBallast 注释）
     const m1 = read()
     memAfterAlloc = m1.used
     memObjAfter = m1.obj
     // 释放 + GC（GC 是宿主能力——经 transport 调 Java → JNI nativeRunGC → JS_RunGC）
     releaseBallast()
+    ballastHolder = null // 双保险（模块级变量也置空——防"引用仍在"导致 GC 不回收）
     transport.call('gc', 'null')
     const m2 = read()
     memAfterGc = m2.used
     memOk = memAfterAlloc > memBefore && memAfterGc < memAfterAlloc
+    memScopeForReport = memScope
   }
 
   // ── G. G-41 宿主 conformance（用**本运行时**替换 stub） ──
@@ -272,6 +314,10 @@ export function __proteusHostRun(): string {
   const result = {
     ok: true,
     scene: 'host-runtime',
+    // ★平台标识（壳注入——判据按此分档：内存口径 engine/process、帧驱动源名）
+    host_id: HOST_ID,
+    frame_driver: FRAME_DRIVER,
+    build_id: BUILD_ID,
     // A/B：生命周期
     state_created: stateA0,
     state_running: stateA1,
@@ -302,6 +348,7 @@ export function __proteusHostRun(): string {
     mem_obj_before: memObjBefore,
     mem_obj_after: memObjAfter,
     mem_ok: memOk,
+    mem_scope: memScopeForReport,
     // G：conformance
     conf_total: conf.total,
     conf_pass: conf.pass,

@@ -4672,6 +4672,8 @@ final class SelfDrawViewController: UIViewController {
 
         // ★模式：`--bench` 跑逻辑层基准（复杂响应式用例 + 规模扫描），否则跑自绘场景
         let isBench = ProcessInfo.processInfo.arguments.contains("--bench")
+        // ★★G-39：宿主运行时场景（`--host-runtime`）——独立模式，不进自绘/基准分支
+        let isHostRuntime = ProcessInfo.processInfo.arguments.contains("--host-runtime")
         // ★★用例过滤（`--cases=S5,V4`）：只跑指定前缀的用例
         //
         // 【为什么需要（效率纪律：定向验证不得跑全量）】bench 有 46 个用例、全套数分钟；
@@ -4700,10 +4702,16 @@ final class SelfDrawViewController: UIViewController {
                 SelfDrawBridge.snapshotName = "bench-filtered-\(slug)"
             }
         }
-        let bundleName = isBench ? "bundle-bench" : "bundle-selfdraw"
+        let bundleName = isHostRuntime ? "bundle-host-runtime" : (isBench ? "bundle-bench" : "bundle-selfdraw")
         guard let url = Bundle.main.url(forResource: bundleName, withExtension: "js"),
               let src = try? String(contentsOf: url, encoding: .utf8) else {
             NSLog("[proteus] 缺少 %@.js", bundleName)
+            return
+        }
+        // ★★G-39：宿主运行时场景交独立模块驱动（两相 + 生命周期观察者 + 报告），提前返回
+        if isHostRuntime {
+            NSLog("[proteus] G-39 宿主运行时场景启动")
+            HostRuntimeScene.run(ctx: ctx, bundleURL: url)
             return
         }
         let vp = jsonString(["width": w, "height": h])

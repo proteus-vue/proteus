@@ -189,7 +189,7 @@ fi
 
 # ★★G-39：宿主运行时 bundle（第三个 entry，同 build-batch.mjs）
 BUNDLE_HR="$HERE/bridge/dist/bundle-host-runtime.js"
-ENTRY_HR="$HERE/bridge/entry-host-runtime.ts"
+ENTRY_HR="$HERE/../shared/bridge/entry-host-runtime.ts"  # ★两个壳共用（平台中立入口）
 NEED_BUILD_HR=0
 if [ ! -f "$BUNDLE_HR" ]; then NEED_BUILD_HR=1; fi
 if [ -f "$ENTRY_HR" ] && [ -f "$BUNDLE_HR" ] && [ "$ENTRY_HR" -nt "$BUNDLE_HR" ]; then NEED_BUILD_HR=1; fi

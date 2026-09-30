@@ -20,9 +20,21 @@ set -euo pipefail
 source "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/lib/xcode-env.sh"
 
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-HOST_SRC="$HERE/ProteusHost/selfdraw-scene.swift"
-
-[ -f "$HOST_SRC" ] || { echo "✗ 找不到宿主源码：$HOST_SRC"; exit 2; }
+# ★★G-39（2026-09-30）：selfdraw App 的源码是**多个文件**（selfdraw-scene.swift +
+#   host-runtime-scene.swift）；写死单文件会让新文件**悄悄不参与类型检查**
+#   （本轮实测：加 host-runtime-scene.swift 后本脚本报 "cannot find HostRuntimeScene in scope"
+#   ——正是它该抓的"文件没进编译"形态）。
+#   ★**不能 glob 整个 ProteusHost/**：同目录有**四个独立 App 的 @main 入口**
+#   （main.swift / calayer-scene.swift / layout-core-bench.swift / selfdraw-scene.swift），
+#   一起编译会多 @main 冲突。⇒ 显式列出本 App 的源码集（新增文件必须加到这里 + run-selfdraw.sh）。
+#   ★判据：列表里每个文件都必须存在（缺一个即红——不静默跳过）。
+HOST_SRCS=(
+  "$HERE/ProteusHost/selfdraw-scene.swift"
+  "$HERE/ProteusHost/host-runtime-scene.swift"
+)
+for f in "${HOST_SRCS[@]}"; do
+  [ -f "$f" ] || { echo "✗ 找不到宿主源码：$f"; exit 2; }
+done
 
 # ★与 run-selfdraw.sh 的编译参数**保持一致**（否则本地绿、设备红——"验证了但验的是别的"）：
 #   sdk=iphoneos · target arm64-apple-ios15.0 · 同批 framework
@@ -35,7 +47,7 @@ OUT="$(xcrun --sdk iphoneos swiftc -typecheck \
   -target arm64-apple-ios15.0 \
   -framework UIKit -framework CoreText -framework JavaScriptCore \
   -parse-as-library \
-  $PLATFORM_SRC "$HOST_SRC" 2>&1)" || RC=$?
+  $PLATFORM_SRC "${HOST_SRCS[@]}" 2>&1)" || RC=$?
 if [ "$RC" -ne 0 ]; then
   printf '%s\n' "$OUT" | tail -20
   echo "✗ 类型检查失败（exit ${RC}）"

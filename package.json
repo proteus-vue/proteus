@@ -61,7 +61,7 @@
     "check:android-platform-anim": "python3 hosts/android/check-platform-anim.py hosts/android/results/platform-anim-node.json hosts/android/results/platform-anim.json",
     "check:android-kernel-anim": "python3 hosts/android/check-kernel-anim.py hosts/android/results/kernel-anim.json",
     "check:app-stack": "python3 hosts/android/check-app-stack.py hosts/android/results/app-stack.json",
-    "check:host-runtime": "python3 hosts/android/check-host-runtime.py hosts/android/results/host-runtime.json hosts/android/results/host-shell.json",
+    "check:host-runtime": "python3 hosts/android/check-host-runtime.py hosts/android/results/host-runtime.json hosts/android/results/host-shell.json && python3 hosts/android/check-host-runtime.py hosts/ios/results/host-runtime.json hosts/ios/results/host-shell.json",
     "build:aar": "bash platform/android/build-aar.sh",
     "check:host-abi-aar": "bash platform/android/build-aar.sh",
     "check:embed-demo": "python3 hosts/android/embed-demo/check-embed-demo.py hosts/android/results/embed-demo.json",
