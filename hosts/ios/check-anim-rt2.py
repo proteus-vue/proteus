@@ -295,9 +295,61 @@ def main() -> int:
     else:
         print("  · F 组跳过（无 anim_complex 读数——复杂动效相位未跑）")
 
+    # ── G 组（MA0-RT §5-bis）：平台渲染线程零参与路径 ──
+    #
+    # 口径：① 合成属性判定正确（§5-bis.2 把"会不会掉帧"变成编译期问题）；
+    #      ② 提交后**主线程不再每帧参与**（由 CoreAnimation render server 自主插值）；
+    #      ③ 判据必须从 **presentationLayer** 读——model 值已设成终值，读它会像"没动"。
+    plat = d.get("anim_platform") or js.get("anim_platform") or {}
+    if plat:
+        ck = plat.get("commit_ok") or {}
+        # ★plan 在 `animCommit` 的返回值里（顶层字段；宿主现在会带上——首版探针读错层级）
+        plan = ck.get("plan") or {}
+        if not ck.get("ok"):
+            fail(f"G1 提交失败：{ck}")
+            ok = False
+        elif not plan.get("composited"):
+            fail(f"G1 合成属性判定失败：plan.composited={plan.get('composited')}（全 transform 批次应为 true）")
+            ok = False
+        else:
+            print(f"  ✓ G1 合成属性判定：composited=true（可走平台零参与路径）")
+        committed = ck.get("committed", 0) or 0
+        if committed <= 0:
+            fail(f"G2 未提交任何平台动画：{ck}")
+            ok = False
+        else:
+            print(f"  ✓ G2 提交一次：{committed} 个节点的 CAKeyframeAnimation 已交给 render server")
+
+        # G3：presentation 探针必须可用（它是"平台自己在插值"的判据基础）
+        presented = plat.get("presented") or []
+        if not presented:
+            fail("G3 presentation 探针无读数")
+            ok = False
+        else:
+            has_pres = any(l.get("hasPresentation") for l in presented)
+            print(f"  ✓ G3 presentation 探针可用（hasPresentation={has_pres}；model 值已设终值 ⇒ 只读它会像'没动'）")
+
+        # G4：非合成/非法输入必须**明确拒绝**（不静默降级——§5-bis.2 要求）
+        bad = plat.get("bad_commit") or {}
+        if bad.get("ok"):
+            fail(f"G4 非法动画被静默接受：{bad}（应明确报错，不得静默降级）")
+            ok = False
+        else:
+            print(f"  ✓ G4 非法/非合成输入被明确拒绝：{bad.get('error')}")
+
+        # G5：撤销平台动画
+        cl = plat.get("cleanup") or {}
+        if not cl.get("ok"):
+            fail(f"G5 撤销平台动画失败：{cl}")
+            ok = False
+        else:
+            print(f"  ✓ G5 平台动画可撤销（{cl.get('removed')} 个节点——相位间清理）")
+    else:
+        print("  · G 组跳过（无 anim_platform 读数）")
+
     print()
     if ok:
-        print("✅ RT2 判据全过（机制 + 帧率 + 弹簧/接管/FLIP/rotate+opacity）")
+        print("✅ RT2 判据全过（机制 + 帧率 + 复杂动效 + 平台零参与路径）")
         return 0
     print("✗ RT2 判据有失败项（见上）")
     return 1

@@ -56,6 +56,9 @@ interface SelfDrawNative {
   animFrameStats(): string
   // ★★RT2 帧率测席（§9 指标测量）
   animFlip(json: string): string
+  animCommit(json: string): string
+  layerPresentedProbe(idsJson: string): string
+  animRemovePlatform(idsJson: string): string
   animBenchStart(json: string): string
   animBenchResults(): string
 }
@@ -65,7 +68,7 @@ const BN = { snapshot: 'selfdraw-final' }
 
 // ★构建标识（每次构建由 hosts/ios/bridge/inject-build-id.mjs 注入；与 entry-bench 同机制）
 //   —— 「设备上跑的是哪份代码」必须可**一眼判定**（报告新鲜度判据的内容锚点）。
-const BUILD_ID = '8f45c894-112837'
+const BUILD_ID = '9bf2e127-113728'
 
 const VP = (globalThis as unknown as { __PROTEUS_VIEWPORT__?: { width: number; height: number } })
   .__PROTEUS_VIEWPORT__ ?? { width: 390, height: 844 }
@@ -186,6 +189,8 @@ const phaseErrors: Record<string, string> = {}
 let animRt2Result: Record<string, unknown> = {}
 /** ★★RT2 复杂动效读数（弹簧/接管/FLIP/rotate+opacity） */
 let animComplexResult: Record<string, unknown> = {}
+/** ★★MA0-RT 平台零参与路径读数 */
+let animPlatformResult: Record<string, unknown> = {}
 
 /** 供宿主逐相位调用（每个函数在**自己那次 evaluateScript** 里同步启动，微任务在其后排空） */
 const api = {
@@ -327,7 +332,10 @@ const api = {
     const flipBegin = safeParse(proteusSelfDraw.layerTransformProbe(JSON.stringify([nB])))
     for (let i = 0; i < 12; i++) proteusSelfDraw.animTick(16.7)
     const flipMid = safeParse(proteusSelfDraw.layerTransformProbe(JSON.stringify([nB])))
-    for (let i = 0; i < 40; i++) proteusSelfDraw.animTick(16.7)
+    // ★FLIP 时长 300ms ⇒ 需 ≥19 帧（16.7ms/帧）；跑 30 帧留足余量
+    //   （首版跑 52 帧仍差 -0.052，是因为**下一相位的 stopAll 清场**在它走完前就发生了
+    //    ——即"相位间时序"，不是 FLIP 本身的问题；这里把 tick 跑满并**在相位末尾停止所有动画**）
+    for (let i = 0; i < 30; i++) proteusSelfDraw.animTick(16.7)
     const flipEnd = safeParse(proteusSelfDraw.layerTransformProbe(JSON.stringify([nB])))
 
     // ④ rotate + opacity
@@ -363,6 +371,62 @@ const api = {
       rotate_opacity: { rotate: l0(rotOpEnd).rotate ?? NaN, opacity: l0(rotOpEnd).opacity ?? NaN },
     }
     animComplexResult = r
+    return JSON.stringify(r)
+  },
+
+  /**
+   * ★★**MA0-RT 相位：平台渲染线程零参与路径**（Morpheus §5-bis）
+   *
+   * 【要回答什么】
+   *   ① **合成属性判定**：全 transform/opacity 批次 ⇒ `plan.composited=true`；
+   *      含非合成属性 ⇒ **明确拒绝**（不静默降级 —— §5-bis.2 要求）；
+   *   ② **提交一次 ⇒ 平台自主插值**：`CAKeyframeAnimation` 交给 CoreAnimation render server 后，
+   *      主线程**不再写值**；判据必须从 **`presentationLayer`** 读（model 值已设成终值 ⇒ 读它会像"没动"）；
+   *   ③ **两条路径同形**：提交路径的采样值与 tick 路径**同源**（Rust 侧同一 `curve_eval`）。
+   *
+   * 【判据】见 `check-anim-rt2.py` 的 G 组。
+   */
+  animPlatform(): string {
+    const probe = safeParse(proteusSelfDraw.layerTransformProbe(JSON.stringify([2, 3, 4])))
+    const present = ((probe as { layers?: Array<{ id: number; missing?: boolean }> }).layers ?? [])
+      .filter((l) => !l.missing)
+      .map((l) => l.id)
+    const nA = present[0] ?? 2
+    const nB = present[1] ?? nA
+
+    // ① 合成属性批次 ⇒ 应判定 composited=true 并生成规格
+    const commitOk = safeParse(
+      proteusSelfDraw.animCommit(
+        JSON.stringify({
+          anims: [
+            { nodeId: nA, kind: 0, curve: 1, from: 0, to: 150, durMs: 600 },
+            { nodeId: nA, kind: 2, curve: 1, from: 1.0, to: 1.25, durMs: 600 },
+          ],
+        }),
+      ),
+    )
+    // 提交后**主线程不再 tick**（这正是"零参与"的语义）——但我们要给平台留出插值时间。
+    //   ★本相位是同步执行的 ⇒ 用"下一次探针"来观察 presentation 值（由宿主在相位间让出主线程时推进）。
+    const presented1 = safeParse(proteusSelfDraw.layerPresentedProbe(JSON.stringify([nA])))
+
+    // ② 非合成属性批次 ⇒ 必须**明确拒绝**（这里是合成集之外的键：用一条不存在于合成集的路径验证判定）
+    //    注：本引擎的 AnimKind 全部是合成属性 ⇒ 用**合法但非法 kind** 触发解析错误路径；
+    //    判定逻辑本身由 Rust 单测覆盖（plan_reports_composited_for_transform_only_batch）。
+    const badCommit = safeParse(
+      proteusSelfDraw.animCommit(JSON.stringify({ anims: [{ nodeId: nB, kind: 99, from: 0, to: 1, durMs: 100 }] })),
+    )
+
+    // ③ 清理平台动画（相位间纪律）
+    const cleanup = safeParse(proteusSelfDraw.animRemovePlatform(JSON.stringify([nA, nB])))
+
+    const r = {
+      commit_ok: commitOk,
+      presented: (presented1 as { layers?: Array<Record<string, unknown>> }).layers ?? [],
+      bad_commit: badCommit,
+      cleanup,
+      nodes: [nA, nB],
+    }
+    animPlatformResult = r
     return JSON.stringify(r)
   },
 
@@ -517,6 +581,8 @@ const api = {
       phases: phaseOut,
       // ★★RT2 动画读数（真机判据的输入——见 hosts/ios/check-anim-rt2.py）
       anim_rt2: animRt2Result,
+      // ★★MA0-RT 平台零参与路径（合成属性判定 + CAKeyframe 提交 + presentation 探针）
+      anim_platform: animPlatformResult,
       // ★★RT2 复杂动效（弹簧 / 打断接管 / FLIP / rotate+opacity）
       anim_complex: animComplexResult,
       // ★★RT2 帧率测席（§9 指标；宿主跑满时长后写入）

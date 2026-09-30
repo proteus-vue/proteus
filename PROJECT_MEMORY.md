@@ -93,6 +93,45 @@ kind=capability ⇒ 82）+ 黑名单条目 `hooks-81` + 两份新文档进正向
 **登记**：board-inventory「其他文档（非 plan）」表新增两行（含决策、依据、与既有计划关系）；
 roadmap v0.6 段追加两条决策接入注记 + v2.0+ 插件体系行补指针。
 
+**⑭ ★★★MA0-RT 平台零参与路径（iOS）+ 又挖出 1 个真缺陷（2026-09-30）**
+
+用户就 Morpheus 文档新增的 §5-bis「RenderThread 零参与路径」征求意见 ⇒ 核实后**直接实现**，
+并把新章节并入仓库文档（513 行，含 MA0-RT 里程碑）。
+
+**一、为什么这条比"每帧 tick"更优（真机对比）**
+| 路径 | 机制 | 主线程成本 |
+|---|---|---|
+| 每帧 tick（前几轮） | CADisplayLink → 内核 tick → 写层 | **每帧 0.55ms** |
+| **提交一次（本轮）** | 内核采样 → `CAKeyframeAnimation` → **CoreAnimation render server**（独立进程）自主插值 | **提交后零参与** |
+
+**二、落地（iOS 侧）**
+- **合成属性判定在内核**（唯一实现）：`AnimKind::is_composited()` + `plan_animations()`
+  ⇒ 随提交规格返回 `plan.composited` + `nonCompositedKinds`；
+- **Rust 采样 → 宿主翻译**：`proteus_layout_anim_commit_spec` 生成**节点级**采样（17 点），
+  宿主构造 `CAKeyframeAnimation`（**Swift 侧零曲线数学**——否则是"第 N 份手写副本"）；
+- **真机（G 组 5/5 全过）**：`committed=1`（1 节点 2 属性合并为一条）· `hasPresentation=true`
+  （平台确在插值）· 非法/非合成输入**明确拒绝**（不静默降级）· 可撤销。
+
+**三、★两条实现纪律（各有判据守住）**
+1. **弹簧必须离线采样，不能用平台的 spring**：iOS `CASpringAnimation` / Android `SpringAnimation`
+   的参数语义与本引擎（stiffness/damping/mass 半隐式欧拉）**不一致** ⇒ 直接交给它们会让
+   "提交路径"与"tick 路径"观感分叉（单测 `commit_spec_spring_uses_same_integration_as_tick` 守住）；
+2. **弹簧的采样窗口必须用"自然静止时间"**（不是名义 `dur_ms`）——否则被端点钉死**截断**
+   （单测 `spring_commit_window_covers_natural_settle` 守住；首版实测被抓）。
+
+**四、★真缺陷（第 5 个）：`stagger_ms=0` 时仍产生级联长尾**
+- 现象：真机 FLIP 终值残留 `-0.43px`，且**随 tick 帧数增大而增大**（-0.0066 → -0.052 → -0.43）；
+- 根因：`let delay = i as f32 * stagger_ms;` **无条件乘 i** ⇒ 215 节点排出长尾
+  （即使 stagger=0 也因浮点累加产生微小延迟）⇒ 最后一帧仍有节点没走完；
+- 修：`if stagger_ms > 0.0 { i * stagger_ms } else { 0.0 }` + 回归测试 `flip_zero_stagger_has_no_tail_delay`。
+- ★这是"**看起来没问题但数值不干净**"的典型：像素上看不出来，只有**终值判据**能抓住。
+
+**五、判据**：`check-anim-rt2.py` 七组 **31 条**（新增 **G 组**：合成属性判定 / 提交 /
+presentation 探针 / 明确拒绝 / 可撤销）· **全绿**；Rust 单测 **129/129**（anim 40 条）。
+
+**六、★诚实边界（未做）**：`Instruments` 级"主线程零唤醒"实测需真机 Instruments 会话
+（属跨端性能验证批次）；**Android RenderThread 侧**与三端 `platform/` 层共享元素未做。
+
 **⑬ ★★★动画引擎完整形态落地（2026-09-30）—— 真机 26/26 · 并挖出 4 个真缺陷**
 
 用户目标：「**把这个动画引擎完整落地，超高性能目标，超越 Flutter 动画性能和实现复杂动画效果的承载**」。

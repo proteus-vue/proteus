@@ -2420,6 +2420,121 @@ pub unsafe extern "C" fn proteus_layout_anim_stop(handle: u64, json: *const c_ch
     }
 }
 
+/// ★★**MA0-RT：提交规格**（"提交一次 + 平台渲染线程自主插值"路径的数据面）
+///
+/// 入参：与 `anim_start` 相同的 `{"anims":[…]}`。
+/// 返回：`{"ok":true,"plan":{composited,nonCompositedKinds,nodeCount,animCount},
+///        "specs":[{nodeId,durMs,delayMs,keyTimes:[…],samples:[[tx,ty,scale,rotate,opacity],…]}]}`
+///
+/// 【它做什么（§5-bis.2 的落点）】
+///   ① **合成属性判定**：整批属性 ⊆ {translate, scale, rotate, opacity} ⇒ `composited=true`
+///      （可走平台零参与路径）；否则 `composited=false` 并列出违规属性（**供上层报错/降级**，不静默）；
+///   ② **生成采样规格**：曲线求值在 Rust（唯一实现）⇒ 宿主只做"翻译成平台 API"，**宿主里没有曲线数学**；
+///   ③ **交接**：把这些动画从 tick 引擎**摘出**（不清样式值）——责任转移给平台渲染线程。
+///
+/// # Safety
+/// `json` 须为有效 NUL 结尾 C 字符串。返回指针须用 `proteus_layout_free_string` 释放。
+#[no_mangle]
+pub unsafe extern "C" fn proteus_layout_anim_commit_spec(handle: u64, json: *const c_char) -> *mut c_char {
+    let f = || -> Result<String, String> {
+        let s = unsafe { std::ffi::CStr::from_ptr(json) }
+            .to_str()
+            .map_err(|e| format!("入参不是合法 UTF-8：{e}"))?;
+        let v: serde_json::Value = serde_json::from_str(s).map_err(|e| format!("入参 JSON 解析失败：{e}"))?;
+        let list = v.get("anims").and_then(|a| a.as_array()).ok_or_else(|| "入参缺少 anims 数组".to_string())?;
+
+        let num = |o: &serde_json::Value, k: &str| -> Result<f32, String> {
+            o.get(k)
+                .and_then(|x| x.as_f64())
+                .map(|x| x as f32)
+                .ok_or_else(|| format!("动画缺少数值字段 `{k}`"))
+        };
+        // 解析成 Anim（与 anim_start 同一语义）
+        let mut anims: Vec<crate::anim::Anim> = Vec::with_capacity(list.len());
+        for a in list {
+            let node_id = a.get("nodeId").and_then(|x| x.as_u64()).ok_or_else(|| "动画缺少 nodeId".to_string())? as u32;
+            let kind = crate::anim::AnimKind::from_u8(
+                a.get("kind").and_then(|x| x.as_u64()).ok_or_else(|| "动画缺少 kind".to_string())? as u8,
+            )?;
+            let mode = match a.get("spring") {
+                Some(sp) => crate::anim::AnimMode::Spring(crate::anim::SpringParams {
+                    stiffness: num(sp, "stiffness")?,
+                    damping: num(sp, "damping")?,
+                    mass: sp.get("mass").and_then(|x| x.as_f64()).unwrap_or(1.0) as f32,
+                }),
+                None => crate::anim::AnimMode::Curve,
+            };
+            let from = num(a, "from")?;
+            anims.push(crate::anim::Anim {
+                node_id,
+                kind,
+                curve: a.get("curve").and_then(|x| x.as_u64()).unwrap_or(1) as u8,
+                from,
+                to: num(a, "to")?,
+                dur_ms: num(a, "durMs")?,
+                delay_ms: a.get("delayMs").and_then(|x| x.as_f64()).unwrap_or(0.0) as f32,
+                t_ms: 0.0,
+                drive: crate::anim::AnimDrive::Time,
+                progress: 0.0,
+                mode,
+                x: from,
+                vel: 0.0,
+                takeover: false,
+            });
+        }
+
+        let plan = crate::anim::plan_animations(&anims);
+        let mut reg = registry().lock().map_err(|_| "注册表锁失败".to_string())?;
+        let entry = reg.get_mut(&handle).ok_or_else(|| format!("句柄 {handle} 不存在"))?;
+
+        // ★非合成属性 ⇒ 不生成平台规格（**明确返回 plan 让上层处理**，不静默降级）
+        let specs: Vec<crate::anim::CommitSpec> = if plan.composited {
+            let sp = crate::anim::commit_specs(&entry.tree, &anims);
+            // 交接：把这些节点的 tick 动画摘出（不清样式值——规格基于静态基线采样）
+            let ids: Vec<u32> = anims.iter().map(|a| a.node_id).collect();
+            entry.anim.detach_nodes(&ids);
+            sp
+        } else {
+            Vec::new()
+        };
+
+        let specs_json: Vec<serde_json::Value> = specs
+            .iter()
+            .map(|sp| {
+                serde_json::json!({
+                    "nodeId": sp.node_id,
+                    "durMs": sp.dur_ms,
+                    "delayMs": sp.delay_ms,
+                    "keyTimes": sp.key_times,
+                    "samples": sp.samples.iter().map(|(tx, ty, sc, rot, op)| {
+                        serde_json::json!([tx, ty, sc, rot, op])
+                    }).collect::<Vec<_>>(),
+                })
+            })
+            .collect();
+        Ok(serde_json::json!({
+            "ok": true,
+            "plan": {
+                "composited": plan.composited,
+                "nonCompositedKinds": plan.non_composited_kinds.iter().map(|k| *k as u8).collect::<Vec<_>>(),
+                "nodeCount": plan.node_count,
+                "animCount": plan.anim_count,
+            },
+            "specs": specs_json,
+        })
+        .to_string())
+    };
+    match std::panic::catch_unwind(f) {
+        Ok(Ok(s)) => CString::new(s).map(|c| c.into_raw()).unwrap_or(std::ptr::null_mut()),
+        Ok(Err(e)) => CString::new(serde_json::json!({"ok": false, "error": e}).to_string())
+            .map(|c| c.into_raw())
+            .unwrap_or(std::ptr::null_mut()),
+        Err(_) => CString::new(serde_json::json!({"ok": false, "error": "内部 panic（已捕获）"}).to_string())
+            .map(|c| c.into_raw())
+            .unwrap_or(std::ptr::null_mut()),
+    }
+}
+
 /// ★★**FLIP 布局动画**（招牌能力，Morpheus §5）—— 记快照 / 启动补间
 ///
 /// 入参：`{"op":"capture"}` 或 `{"op":"start","durMs":300,"curve":1,"staggerMs":0}`
