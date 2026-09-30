@@ -28,11 +28,14 @@ HOST_SRC="$HERE/ProteusHost/selfdraw-scene.swift"
 #   sdk=iphoneos · target arm64-apple-ios15.0 · 同批 framework
 echo "==> 类型检查 iOS 自绘宿主（swiftc -typecheck · 零设备）"
 RC=0
+# ★HA0.5：宿主依赖平台适配层（`platform/ios/`）⇒ 两者必须**一起**类型检查
+#   （否则会出现"宿主引用了一个没参与编译的类型"这类假红/假绿）
+PLATFORM_SRC="$(ls "$HERE"/../../platform/ios/ProteusPlatform/*.swift 2>/dev/null | tr '\n' ' ')"
 OUT="$(xcrun --sdk iphoneos swiftc -typecheck \
   -target arm64-apple-ios15.0 \
   -framework UIKit -framework CoreText -framework JavaScriptCore \
   -parse-as-library \
-  "$HOST_SRC" 2>&1)" || RC=$?
+  $PLATFORM_SRC "$HOST_SRC" 2>&1)" || RC=$?
 if [ "$RC" -ne 0 ]; then
   printf '%s\n' "$OUT" | tail -20
   echo "✗ 类型检查失败（exit ${RC}）"

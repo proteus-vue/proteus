@@ -48,7 +48,7 @@
   只有**可复制代码块**里的引用才真正有害。
 · 破坏性验证：恢复 `p-card` → 红并精确报 `03-fluid-grid.md:31`；还原 → 575 md 全过。
 
-## 当前状态速览（最近一次更新：**2026-09-30 · Android 补齐内核驱动动画（真机 M1–M7 全过）—— 三端动效能力对齐**）★新会话以此为准
+## 当前状态速览（最近一次更新：**2026-09-30 · Host ABI 落地（HA0 契约+C 宿主证明 / HA0.5 platform 拆分）**）★新会话以此为准
 
 ### ★★★2026-09-30 · 红线升格：禁止**任何**盲等（sleep/timeout 全禁）+ iOS 链路事件驱动 + I3 收官
 
@@ -92,6 +92,61 @@ kind=capability ⇒ 82）+ 黑名单条目 `hooks-81` + 两份新文档进正向
 破坏性验证过（注入 `81 个 Capability Hook` ⇒ 精确报行号）。
 **登记**：board-inventory「其他文档（非 plan）」表新增两行（含决策、依据、与既有计划关系）；
 roadmap v0.6 段追加两条决策接入注记 + v2.0+ 插件体系行补指针。
+
+**㉗ ★★★Host ABI 落地：HA0（契约+实现+C 宿主证明）+ HA0.5（platform/ 拆分）—— 用户决策驱动**
+
+用户决策（原话）：「**先把 Host ABI 完整落地**，后面这些都是宿主的实现，必须要先把这个落地，
+不然换宿主又得实现一遍」+「M5 是不是需要 App 宿主实现路由才可以？如果这样的话先停下，
+看下我们的 Host ABI 落地了没」。⇒ 取证确认 HA0 零实现（全仓 `submit_frame`/`host_abi` 零命中、
+无 `platform/` 目录），随即开工。
+
+**一、HA0：契约 + 实现 + ★可执行证明**
+- **契约** `packages/host-abi/include/proteus_host_abi.h`：八接口全定义（Surface / 生命周期 /
+  输入**带时间戳** / 调度 request_frame / 文本度量注入 / 图片解码注入 / 原生组件双向 / 能力插件）
+  + 五条硬约束写在头注（批处理红线 / 内核不自建线程 / 平台能力注入而非分支 / 版本不静默 /
+  未注册能力报错）。
+- **实现** `packages/host-abi/src/lib.rs`：
+  · 版本协商（ABI major 相等 + ops_wire 一致；不兼容 ⇒ 错误码 + **可操作**升级提示含"怎么升"）；
+  · ★`OPS_WIRE_VERSION` **直接引用内核常量**（首版想 `pub const = ffi::proteus_ops_version()`
+    ⇒ 编译期即拒 E0015：const 不能调 FFI ⇒ 改引用符号本身，比"同值"更强）；
+  · **批处理红线可判定**：`submit_frame_calls` + `submitted_ops` 两读数（按帧计 vs 按节点计）；
+  · **HA2 落点**：宿主未预量文本 ⇒ 本层遍历树 + 回调宿主 `measure_text` + 补进内核输入
+    （宿主只需一个度量函数，不必自己走树）；
+  · **HA3 落点**：能力注册/查询/调用；未注册 ⇒ 明确错误码 + **列出已注册项**（帮助排查）。
+- **★★可执行证明** `tests/c_host/`：**纯 C** 写一个全新宿主（零平台 SDK、零 iOS/Android 类型），
+  真编译 + 真链接 + 真跑，**27 条判据全过**。这是"换宿主零改内核"的最强证明，
+  也是客户接入文档的可运行版本。关键读数：`submit_frame_calls=1` / `submitted_ops=2`
+  （同一帧两次节点变更 ⇒ 恰好一次跨边界调用）。
+
+**二、HA0.5：platform/ 拆分（真抽取，不是建空壳目录）**
+- 从 `hosts/ios/ProteusHost/selfdraw-scene.swift` 抽出 **319 行**平台适配
+  （文本度量 CoreText + 字体角色映射 + 自定义字体注册 + paint hint? —— 见下）→
+  `platform/ios/ProteusPlatform/ProteusTextAdapter.swift`（类型改名 `SelfDrawBridge` → `ProteusTextAdapter`，
+  宿主 26 处引用同步改）；宿主保留**宿主集成**部分。
+- ★**过程中当场纠正一处误抽**：`applyPaintHint`（I3 的 paint hint）**不是平台适配**——
+  它读宿主环境变量做 A/B 开关 + 报诊断读数 ⇒ 按 §0.4.8 判断标准（"换到同平台另一个 App 要改吗？"
+  ——要改）**归还宿主**。★这正是"判断标准"的价值：形似（都在 CALayer 上操作）而实不同。
+- 两个编译入口（`check-selfdraw-compile.sh` 与 `run-selfdraw.sh`）都加上 platform 源
+  （**漏一个就是假绿/假红**）；缺文件时显式 exit 3（不静默）。
+- **真机复验 54/54 全过** —— 抽取类改动的唯一有效判据是"行为未变"。
+
+**三、★新增门禁 `check:platform-layering`（三条判据，都做了破坏性验证）**
+| 判据 | 内容 |
+|---|---|
+| A | `platform/**` 不得引用 `hosts/**`（相对路径 + 包名两种形态） |
+| B | `platform/**` 不得引用 Host ABI 符号（`proteus_host_abi` / `proteus_engine_` / …） |
+| C | `platform/<端>/` 必须有**实质平台代码**（特征 API 匹配）——**防"建个空目录充数"** |
+★C 判据是刻意加的：方案 §0.4.5 的原文只要求 A/B，但"空壳目录"同样会让 HA0.5 名存实亡。
+接 CI + verify（纯静态零依赖）；`check:gates-sync` 通过。
+
+**四、诚实边界（写进代码与 platform/README）**
+- 动画指令**走 ops 流**（`AnimOp`）未做（v1 经直调入口；届时 ops 通路接上后本入口保留）；
+- 跨平台链接（Xcode / NDK / 鸿蒙工具链）属各端载体；
+- `proteus_prewarm` 目前只初始化注册表，**不伪造"已热"**（真预热 = 宿主先 load 空树）；
+- **Android 侧 platform/ 未抽**（其度量/绘制与宿主耦合更深，需先做 JNI 侧解耦，属后续批次）——
+  platform/README 如实标注"待抽"，门禁 C 判据不因"没建目录"而假绿（无目录 = 未开始，不是违规）。
+
+**五、下一步**：HA1（现有宿主改为 ABI 实现）——那时 M5 的路由栈才有地基可按。
 
 **㉖ ★★★Android 补齐内核驱动动画（2026-09-30）—— 跨端能力缺口闭合 + ★两个装置坑**
 

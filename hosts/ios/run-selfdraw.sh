@@ -101,9 +101,12 @@ LIB="$CARGO_TARGET_DIR/aarch64-apple-ios/release/libproteus_layout_core.a"
 
 echo "==> ④ 编译 Swift 宿主（自绘场景）"
 rm -rf "$APP"; mkdir -p "$APP"
+# ★HA0.5：宿主依赖平台适配层（`platform/ios/`）⇒ 必须一起编译（与 check-selfdraw-compile.sh 同口径）
+PLATFORM_SRC="$(ls "$ROOT"/platform/ios/ProteusPlatform/*.swift 2>/dev/null | tr '\n' ' ')"
+[ -n "$PLATFORM_SRC" ] || { echo "✗ 找不到 platform/ios 平台适配源码（HA0.5 抽取后被删？）"; exit 3; }
 xcrun --sdk iphoneos swiftc -O -target arm64-apple-ios15.0 \
   -framework UIKit -framework CoreText -framework JavaScriptCore -parse-as-library \
-  -o "$APP/ProteusSelfDraw" "$HERE/ProteusHost/selfdraw-scene.swift" "$LIB"
+  -o "$APP/ProteusSelfDraw" $PLATFORM_SRC "$HERE/ProteusHost/selfdraw-scene.swift" "$LIB"
 
 echo "==> ⑤ 组装 .app"
 # ★★两个 bundle **都装**（本仓实测踩到：只装当前模式那个 ⇒ 从桌面点开时

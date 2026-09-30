@@ -45,6 +45,10 @@ jobs:
       - name: 盲等门禁（★用户红线：脚本内 sleep 一律禁止——要么 App/被测对象主动上报，要么 wait_for.sh 条件等待）
         run: node scripts/check-no-blind-wait.mjs
 
+      - name: 分层依赖门禁（★HA0.5：platform/ 不得引用 hosts/ 与 Host ABI —— 换宿主的收益靠它守住）
+        # ★2026-09-30 加：分层只写在文档里必然漂移；平台层一旦"顺手"import 宿主 ⇒ 编译照过、分层塌了。
+        run: node scripts/check-platform-layering.mjs
+
       - name: Morpheus 动画说明书门禁（★说明书 ↔ 实现/内核对账 + 生成物一致——Morpheus §13 第 11 条）
         # ★2026-09-30 加：说明书是**自描述**，没人对账就会变成"文档说一套、实现另一套"
         #   （实测抓到 README 曲线名漂移）；conformance + 生成物一致性都在本脚本里判。
