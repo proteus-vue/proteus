@@ -395,12 +395,26 @@ iOS 同理：动 `transform` 是 GPU 加速，动 `frame` 触发布局重算。
 ★**诚实边界**：`Instruments` 级的"主线程零唤醒"实测**未做**（需真机 Instruments 会话，
 属跨端性能验证批次）；本轮可判定证据 = **presentationLayer 探针 + 提交路径判据（G 组 5 条）**。
 
-### MA1 · 声明式表面 + 预设（≈2 人周）
+### MA1 · 声明式表面 + 预设 —— ◐ **主体已落地并真机验证（2026-09-30）**
 
-- [ ] 声明式 API（属性 / 曲线 / 时长 / 编排 / 协调 / 打断）
-- [ ] 编译期校验 + 报错
-- [ ] 预设库：路由转场（复用已有三个）+ 共享元素
-- [ ] AI 说明书（与 111 条规则同构）
+> 新建包 `@proteus-vue/animation`（43→44 包，零运行时依赖）：**声明 → 校验 → 编译成引擎指令**的纯函数层，
+> 不含任何曲线数学（那是内核唯一实现）。真机判据 H 组 6/6 全过（`hosts/ios/check-anim-rt2.py`）。
+
+- [x] **声明式 API**：`AnimKind`（5 属性封闭集）+ `Curve`（5 曲线封闭集）+ `AnimDecl`
+      （from/to/duration/delay/curve/spring/takeover）——所有取值都是**跨语言契约编号**
+      （`ANIM_KIND_ID`/`CURVE_ID`，两侧测试钉住）
+- [x] **编译期校验 + 报错**：7 类判据（参数非法 / 同属性重复 / 非合成属性 / 目标缺失 / 未知 kind/curve）
+      —— `validateAnimations` + `formatIssues`（附修复提示）· 真机 H5 验证「同属性重复被拦」
+      ★真机测试自己踩出来的判据：内核对同 (节点,属性) 是**替换**语义 ⇒ 同批次重复会静默替换 ⇒ 编译期拦截
+- [x] **预设库：路由转场 4 个**（`bottomSheet`/`slideUp`/`zoom`/`cupertinoModal`，语义对齐微信
+      `wx://bottom-sheet` 等 routeType）· **元素预设 3 个**（fadeIn/pressRelease/sharedElementFlyIn）
+      · **手感预设 2 个**（`easing.snappy/smooth`，与内核 `SpringParams` **同值**，两侧测试钉住）
+      · 真机 H4：`bottomSheet` 预设驱动端上动画（mid ty=150.4 → end ty=0）
+- [ ] **编排（sequence）**：内核对同属性是替换语义 ⇒ "先压再弹"两段序列需调用方拆批，
+      本包已在 `validateAnimations` 显式拦下并给出提示（见包 README「未做」）
+- [ ] **共享元素**：`sharedElementFlyIn` 目前只做落点缩放+淡入；真正的"从起点矩形飞入"需
+      三端 `platform/` 层（跨页面坐标换算）—— 与 MA0-RT 未完成项同步
+- [ ] **AI 说明书**（与 111 条规则同构）—— 预设库已按"单一入口枚举"设计（`presets` 导出），待接生成器
 
 ### MA2 · 运行时核心 —— ◐ **主体已落地并真机验证（2026-09-30）**
 
@@ -425,8 +439,9 @@ iOS 同理：动 `transform` 是 GPU 加速，动 `frame` 触发布局重算。
 - [x] **FLIP 实现**：`flip_capture`（快照绝对矩形，全在内核，**零跨边界查询**）+ `flip_start`
       （对比 → 生成 `Δ → 0` 补间；`stagger_ms` 支持自上而下级联）
       · 真机：**215 节点 · 最大位移 40px · 起点 ty=-40（无跳变）· 终值归零**
-- [x] **性能实测**：与帧率测席同批（59.3 FPS · 帧耗时 p95 0.684ms）
-- [ ] 列表项增删让位**预设**（把 FLIP 包成开箱即用的预设 API；内核机制已就绪）
+- [x] **性能实测**：与帧率测席同批（59.3 FPS · 帧耗时 p95 0.713ms）
+- [x] 列表项增删让位**预设**（`presets.list.shift()`——把 FLIP 包成开箱即用形态，
+      参数即内核 `flip_start` 的三个入参；MA1 一并落地）
 
 ### MA4 · RT0 结论应用（时机取决于 RT0）
 

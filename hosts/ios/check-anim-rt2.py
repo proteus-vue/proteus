@@ -7,11 +7,16 @@
      ⇒ 本脚本读的是 `layerTransformProbe` 的结果（宿主从 `CALayer.transform` 反解），
        覆盖"写入路径真的生效"这一环。
 
-【三组判据（对应 RT2 要回答的三个问题）】
+【八组判据（对应 RT2 / MA0-RT / MA1 要回答的问题；当前 35 条）】
   A. **指令真的驱动了端上动画**：层上 transform 随进度变化，且**终值精确**等于目标（端点钉死）；
   B. **手势驱动（seek）立即生效**：seek 后**不等 tick**，层上已有对应值；
      Progress 驱动后再 tick **不应改它**（手势松手后动画不该自己跑）；
-  C. **帧循环真的在跑**：`running` 为真且 `frames` 增长（不是"设了没动"）。
+  C. **帧循环真的在跑**：`running` 为真且 `frames` 增长（不是"设了没动"）；
+  D. **节点复用解绑**（§7.3）：回收的节点不得再被 tick 改动；
+  E. **帧率测席**（§9）：FPS / 掉帧率 / 每帧工作 p95 / 跟随延迟 / 终值精确；
+  F. **对齐 Flutter 能力面**：弹簧物理 / 打断接管（速度接力）/ FLIP（起点无跳变·终值归零）/ rotate+opacity；
+  G. **平台零参与路径**（§5-bis）：合成属性判定 / 提交一次 / presentation 探针 / 明确拒绝 / 可撤销；
+  H. **MA1 预设库**：预设编译 → 微信语义对齐 → 指令下发 → 端上驱动 → 校验有效 → 跨语言同值。
 
 用法：python3 hosts/ios/check-anim-rt2.py <report.json>
 退出码：0 全过 / 1 有失败（逐条打印为什么）
@@ -347,9 +352,60 @@ def main() -> int:
     else:
         print("  · G 组跳过（无 anim_platform 读数）")
 
+    # ── H 组（MA1）：预设库（"一句话写转场" + 编译期校验） ──
+    pre = d.get("anim_preset") or js.get("anim_preset") or {}
+    if pre:
+        # H1：预设编译通过 + 合成属性判定
+        n = pre.get("compiled_count", 0) or 0
+        if n <= 0 or not pre.get("composited"):
+            fail(f"H1 预设未编译出指令：compiled={n} composited={pre.get('composited')}")
+            ok = False
+        else:
+            print(f"  ✓ H1 预设编译：{pre.get('preset')} → {n} 条指令（composited=true）")
+        # H2：语义与微信 routeType 对齐（双端认知一致）
+        wrt = pre.get("wx_route_type") or ""
+        if not wrt.startswith("wx://"):
+            fail(f"H2 预设未对齐微信 routeType：{wrt}")
+            ok = False
+        else:
+            print(f"  ✓ H2 语义对齐微信：{wrt}")
+        # H3：真的驱动了端上动画（位移从起点走到 0）
+        st = pre.get("start") or {}
+        if not st.get("ok"):
+            fail(f"H3 预设指令下发失败：{st}")
+            ok = False
+        else:
+            print(f"  ✓ H3 指令下发：started={st.get('started')}")
+        mty, ety = pre.get("mid_ty"), pre.get("end_ty")
+        if mty is None or ety is None:
+            fail(f"H4 层读数缺失：mid={mty} end={ety}")
+            ok = False
+        else:
+            if abs(ety) > 0.01:
+                fail(f"H4 预设动画未落到终值：end ty={ety}（应 =0——弹窗滑到位）")
+                ok = False
+            else:
+                print(f"  ✓ H4 预设驱动端上动画：mid ty={mty} → end ty={ety}（滑到位）")
+        # H5：★编译期校验有效（同属性重复必须被拦）
+        dup = pre.get("dup_rejected") or ""
+        if dup == "NOT_REJECTED" or "校验失败" not in dup:
+            fail(f"H5 非法声明未被拦下：{dup[:60]}（编译期校验失效）")
+            ok = False
+        else:
+            print(f"  ✓ H5 编译期校验有效（同属性重复被拦）")
+        # H6：弹簧预设与内核同值（跨语言手感一致）
+        stiff = pre.get("spring_stiffness")
+        if stiff != 320:
+            fail(f"H6 弹簧预设值不符：stiffness={stiff}（应 320——与内核 SpringParams::snappy 同值）")
+            ok = False
+        else:
+            print(f"  ✓ H6 弹簧预设跨语言同值（stiffness={stiff}）")
+    else:
+        print("  · H 组跳过（无 anim_preset 读数）")
+
     print()
     if ok:
-        print("✅ RT2 判据全过（机制 + 帧率 + 复杂动效 + 平台零参与路径）")
+        print("✅ 判据全过（机制 + 帧率 + 复杂动效 + 平台零参与 + MA1 预设库）")
         return 0
     print("✗ RT2 判据有失败项（见上）")
     return 1

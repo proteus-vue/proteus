@@ -33,6 +33,8 @@
 import { h, ref, nextTick } from '@vue/runtime-core'
 import { createAppRenderer } from '@proteus-vue/renderer-app'
 import { createSelfDrawAdapter } from '@proteus-vue/renderer-app/adapters/selfdraw'
+// ★★MA1：Morpheus 声明式动画表面（预设库 + 编译期校验）——本相位验证"一句话写转场"端到端
+import { presets, compileRoute, compileAnimations, isComposited, validateAnimations } from '@proteus-vue/animation'
 
 /* ────────────────────────── 宿主桥（Swift 经 JSExport 注入） ────────────────────────── */
 
@@ -68,7 +70,7 @@ const BN = { snapshot: 'selfdraw-final' }
 
 // ★构建标识（每次构建由 hosts/ios/bridge/inject-build-id.mjs 注入；与 entry-bench 同机制）
 //   —— 「设备上跑的是哪份代码」必须可**一眼判定**（报告新鲜度判据的内容锚点）。
-const BUILD_ID = '9bf2e127-113728'
+const BUILD_ID = 'aea14806-120810'
 
 const VP = (globalThis as unknown as { __PROTEUS_VIEWPORT__?: { width: number; height: number } })
   .__PROTEUS_VIEWPORT__ ?? { width: 390, height: 844 }
@@ -191,6 +193,8 @@ let animRt2Result: Record<string, unknown> = {}
 let animComplexResult: Record<string, unknown> = {}
 /** ★★MA0-RT 平台零参与路径读数 */
 let animPlatformResult: Record<string, unknown> = {}
+/** ★★MA1 预设库读数 */
+let animPresetResult: Record<string, unknown> = {}
 
 /** 供宿主逐相位调用（每个函数在**自己那次 evaluateScript** 里同步启动，微任务在其后排空） */
 const api = {
@@ -332,9 +336,10 @@ const api = {
     const flipBegin = safeParse(proteusSelfDraw.layerTransformProbe(JSON.stringify([nB])))
     for (let i = 0; i < 12; i++) proteusSelfDraw.animTick(16.7)
     const flipMid = safeParse(proteusSelfDraw.layerTransformProbe(JSON.stringify([nB])))
-    // ★FLIP 时长 300ms ⇒ 需 ≥19 帧（16.7ms/帧）；跑 30 帧留足余量
-    //   （首版跑 52 帧仍差 -0.052，是因为**下一相位的 stopAll 清场**在它走完前就发生了
-    //    ——即"相位间时序"，不是 FLIP 本身的问题；这里把 tick 跑满并**在相位末尾停止所有动画**）
+    // ★FLIP 时长 300ms ⇒ 需 ≥19 帧（16.7ms/帧）；跑 30 帧留足余量。
+    //   （★别信"52 帧还差一点 = 相位时序"这个直觉——2026-09-30 实测推翻：
+    //     真根因是探针路径按 16B 步长解析 24B 记录，见 selfdraw-scene.swift `animUpdateRecordBytes`。
+    //     判据端表现：残值恒为"某个中间帧的值"而不是"接近终点的小量"。）
     for (let i = 0; i < 30; i++) proteusSelfDraw.animTick(16.7)
     const flipEnd = safeParse(proteusSelfDraw.layerTransformProbe(JSON.stringify([nB])))
 
@@ -371,6 +376,79 @@ const api = {
       rotate_opacity: { rotate: l0(rotOpEnd).rotate ?? NaN, opacity: l0(rotOpEnd).opacity ?? NaN },
     }
     animComplexResult = r
+    return JSON.stringify(r)
+  },
+
+  /**
+   * ★★**MA1：预设驱动的转场**（真机验证"一句话写动画"）
+   *
+   * 【要回答什么】
+   *   ① **预设 → 引擎指令** 端到端可用（不是"API 存在"而是"真的驱动了端上动画"）；
+   *   ② **编译期校验有效**：非法声明（非合成属性 / 同属性重复）在**下发前**就被拦下；
+   *   ③ 语义与微信 routeType 对齐（`wx://bottom-sheet` 等——双端认知一致）。
+   *
+   * 【判据】见 check-anim-rt2.py 的 H 组。
+   */
+  animPreset(): string {
+    const probe = safeParse(proteusSelfDraw.layerTransformProbe(JSON.stringify([2, 3, 4])))
+    const present = ((probe as { layers?: Array<{ id: number; missing?: boolean }> }).layers ?? [])
+      .filter((l) => !l.missing)
+      .map((l) => l.id)
+    const enterId = present[0] ?? 2
+    const exitId = present[1] ?? enterId
+
+    // ① 预设：半屏弹窗（对齐 wx://bottom-sheet）——一句话
+    const sheet = presets.route.bottomSheet()
+    const compiled = compileRoute(sheet, { enter: enterId, exit: exitId })
+    // ★相位隔离：本相位要独占动画状态 ⇒ 先停掉上一相位**可能仍在跑**的动画。
+    //   ★注意停的是"自己关心的节点"而不是 `animStopAll`（真机教训，两次误判换来的）：
+    //     曾把 F3d（FLIP 终值 -0.18）归因于"下一相位 stopAll 清场"，实测**不成立**——
+    //     相位是同步串行的，flipEnd 在 complex 相位内就已捕获，后相位动不了它。
+    //     真根因是探针路径按 16B 步长解析 24B 记录（见 selfdraw-scene.swift
+    //     `animUpdateRecordBytes`）。⇒ 保留精确停（对状态更干净），但别再把"清场"当根因。
+    proteusSelfDraw.animStopNodes(JSON.stringify({ nodeIds: [enterId, exitId] }))
+    const startOut = safeParse(
+      proteusSelfDraw.animStart(JSON.stringify({ anims: [...compiled.enter.anims, ...compiled.exit.anims] })),
+    )
+    for (let i = 0; i < 5; i++) proteusSelfDraw.animTick(16.7)
+    const mid = safeParse(proteusSelfDraw.layerTransformProbe(JSON.stringify([enterId])))
+    for (let i = 0; i < 30; i++) proteusSelfDraw.animTick(16.7)
+    const end = safeParse(proteusSelfDraw.layerTransformProbe(JSON.stringify([enterId])))
+
+    // ② 编译期校验：非法声明必须被拦（两条红线各验一次）
+    let dupRejected = ''
+    try {
+      compileAnimations(
+        [
+          { kind: 'scale', to: 0.9, durationMs: 100 },
+          { kind: 'scale', to: 1, durationMs: 100 },
+        ],
+        { nodeId: 1 },
+      )
+      dupRejected = 'NOT_REJECTED'
+    } catch (e) {
+      dupRejected = String((e as { message?: string })?.message ?? e).slice(0, 80)
+    }
+    const nonCompositedIssue = isComposited('width' as never) ? 'WRONG' : 'ok(编译期已识别为不可合成)'
+
+    // ③ 手感预设（弹簧）——与内核同值
+    const pressed = compileAnimations(presets.element.pressRelease().decls, { nodeId: enterId })
+
+    const r = {
+      nodes: [enterId, exitId],
+      preset: sheet.name,
+      wx_route_type: sheet.wxRouteType,
+      compiled_count: compiled.enter.anims.length + compiled.exit.anims.length,
+      composited: compiled.enter.composited,
+      start: startOut,
+      mid_ty: ((((mid as { layers?: Array<Record<string, number>> }).layers ?? [])[0] ?? {}) as Record<string, number>).ty,
+      end_ty: ((((end as { layers?: Array<Record<string, number>> }).layers ?? [])[0] ?? {}) as Record<string, number>).ty,
+      dup_rejected: dupRejected,
+      non_composited_hint: nonCompositedIssue,
+      spring_stiffness: pressed.anims[0]?.spring?.stiffness,
+      validation_clean: validateAnimations(presets.route.slideUp().enter).length === 0,
+    }
+    animPresetResult = r
     return JSON.stringify(r)
   },
 
@@ -581,6 +659,8 @@ const api = {
       phases: phaseOut,
       // ★★RT2 动画读数（真机判据的输入——见 hosts/ios/check-anim-rt2.py）
       anim_rt2: animRt2Result,
+      // ★★MA1 预设库（一句话写转场 + 编译期校验）
+      anim_preset: animPresetResult,
       // ★★MA0-RT 平台零参与路径（合成属性判定 + CAKeyframe 提交 + presentation 探针）
       anim_platform: animPlatformResult,
       // ★★RT2 复杂动效（弹簧 / 打断接管 / FLIP / rotate+opacity）
