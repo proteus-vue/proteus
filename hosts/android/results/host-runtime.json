@@ -1,13 +1,13 @@
 {
   "engine_available": true,
-  "bundle_chars": 201490,
+  "bundle_chars": 203957,
   "bundle_load_ok": true,
   "run_ok": true,
   "pending_after_run": false,
   "jobs_pumped": 0,
   "finish_ok": true,
   "pending_after_finish": false,
-  "total_ms": 516,
+  "total_ms": 512,
   "ok": true,
   "scene": "host-runtime",
   "host_id": "android",
@@ -29,11 +29,11 @@
   "refuse_background_thread": true,
   "async_resolved_at_run": false,
   "mem_available": true,
-  "mem_before": 477723,
-  "mem_after_alloc": 797987,
-  "mem_after_gc": 478003,
-  "mem_obj_before": 519,
-  "mem_obj_after": 521,
+  "mem_before": 485935,
+  "mem_after_alloc": 806199,
+  "mem_after_gc": 486215,
+  "mem_obj_before": 534,
+  "mem_obj_after": 536,
   "mem_ok": true,
   "mem_scope": "engine",
   "conf_total": 32,
@@ -189,5 +189,33 @@
       "webassembly.validate",
       "native.calls"
     ]
+  },
+  "app_events": {
+    "seen": {
+      "launch": 0,
+      "show": 0,
+      "hide": 0,
+      "error": 0,
+      "unhandled-rejection": 0,
+      "memory-warning": 0,
+      "theme-change": 0,
+      "resize": 0,
+      "page-not-found": 0,
+      "audio-interruption-begin": 0,
+      "audio-interruption-end": 0
+    },
+    "subscribed": 11,
+    "hostChannelInstalled": true,
+    "emitBadEvent": "unknown-event:not-a-real-event",
+    "done": true
+  },
+  "host_app_events": {
+    "attempts": {},
+    "pushes": {},
+    "history": [],
+    "lastPayload": {},
+    "errorHandlerInstalled": true,
+    "audioReceiverRegistered": true,
+    "active": true
   }
 }
