@@ -38,8 +38,9 @@ pub mod rects_bin;
 pub mod snap;
 // ★RT0（2026-09-30）：指令驱动动画的求值引擎（曲线查表 + tick；见文件头）
 pub mod anim;
-#[cfg(target_os = "android")]
-pub mod jni;
+// ★HA2（2026-09-30）：`pub mod jni;` 已移出 —— JNI 绑定是**平台适配**，
+//   搬到了 `platform/android/proteus-jni/`。内核从此**零平台分支**（本文件不再有 `cfg(target_os)`），
+//   判据见 `scripts/check-platform-layering.mjs` 的 D 组（内核不得出现 `target_os`）。
 pub mod node;
 pub mod recycle;
 pub mod style;
@@ -64,9 +65,7 @@ pub use snap::{snap_coord, snap_rect};
 // ★M3 `recycle/`：列表复用池 + 生命周期状态机（§5.1 / §12.6）
 pub use recycle::{Lifecycle, ListStateMachine, ListWindow, RecycleConfig, RecyclePool, ScrollDirection, VisibleRange};
 
-// ★crate 根转出（供 jni.rs 以 `crate::xxx` 引用，避免两处逻辑分叉）
-//   ★仅在 Android 目标下转出：非 Android 时无人引用 → 会产生 unused_imports 警告
-#[cfg(target_os = "android")]
-pub(crate) use ffi::into_java_string;
-#[cfg(target_os = "android")]
-pub(crate) use ffi::{json_str, run_bench, run_conformance};
+// ★HA2：原来的三处 `#[cfg(target_os = "android")] pub(crate) use …`（供 jni.rs 引用）已删除。
+//   它们的存在理由只有一个——JNI 层住在同 crate 里 + `pub(crate)` 不可跨 crate。
+//   JNI 层搬走后：① 内核再无平台分支；② 被平台层需要的三个诊断入口（`json_str` /
+//   `run_bench` / `run_conformance`）在 `ffi` 模块里改为 `pub`（诚实公开，而不是"靠 cfg 转出"）。

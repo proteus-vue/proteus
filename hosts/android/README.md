@@ -22,7 +22,7 @@ aapt2（资源+清单）→ javac（Java 宿主）→ d8（dex）→ apksigner �
 | 端 | 边界 | 位置 |
 |---|---|---|
 | iOS | **C ABI**（Swift `@_silgen_name` 直调） | `packages/layout-core-rust/src/ffi.rs` |
-| Android | **JNI**（Java `native` 方法） | `packages/layout-core-rust/src/jni.rs` |
+| Android | **JNI**（Java `native` 方法） | `platform/android/proteus-jni/src/lib.rs`（★HA2 迁出内核——内核零平台分支；产 `libproteus_jni.so`，静态链接内核） |
 
 两边都只做「JSON 进 / JSON 出」——结构体 ABI 跨语言易踩坑，JSON 可观测、可存档。
 

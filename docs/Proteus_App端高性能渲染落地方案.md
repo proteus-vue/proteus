@@ -677,7 +677,7 @@ export default defineConfig({
 
 - [x] 仅实现三个组件：`view` / `text` / `image` —— `hosts/android/app/src/main/java/dev/proteus/layoutcore/{RustLayout,MainActivity}.java`
 - [x] 宿主 View + Canvas 下发 —— 同上
-- [x] Java/Kotlin ↔ C++ 绑定 —— **实际走 Rust**：`packages/layout-core-rust/src/jni.rs`（JNI 入口）
+- [x] Java/Kotlin ↔ C++ 绑定 —— **实际走 Rust**：`platform/android/proteus-jni/src/lib.rs`（JNI 入口；★HA2 从内核迁出 ⇒ 内核零平台分支，产物 `libproteus_jni.so`）
 - [x] **跑 4050 元素测试与原生 View 体系对打** —— `hosts/android/ACCEPTANCE.md`：**三项全部达标**
       （布局 **0.063×** · 绘制 **2.0**（★口径已更正，原 0.667 系子项）· 内存 **0.331×**——绘制未达标，见 `ACCEPTANCE.md`）+ 10+ 次运行记录在 `hosts/android/results/acceptance/`
 

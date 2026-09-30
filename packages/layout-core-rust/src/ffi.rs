@@ -33,17 +33,6 @@ fn into_c_string(s: String) -> *mut c_char {
     }
 }
 
-/// 把 Rust 字符串交给 JNI 侧（Android：分配 Java String）。
-///
-/// ★只在 Android 目标下编译（非 Android 时无 jni crate 依赖）
-#[cfg(target_os = "android")]
-pub(crate) fn into_java_string(env: &mut jni::JNIEnv, s: String) -> jni::sys::jstring {
-    match env.new_string(s) {
-        Ok(js) => js.into_raw(),
-        Err(_) => std::ptr::null_mut(),
-    }
-}
-
 /// 释放本模块返回的字符串（**必须**用它而非 free）
 ///
 /// # Safety
@@ -1543,7 +1532,7 @@ struct ConformanceReport {
     failures: Vec<String>,
 }
 
-pub(crate) fn run_conformance(raw: &str) -> Result<String, String> {
+pub fn run_conformance(raw: &str) -> Result<String, String> {
     let golden: GoldenFile = serde_json::from_str(raw).map_err(|e| format!("golden 解析失败：{e}"))?;
     let tolerance = if golden.tolerance > 0.0 { golden.tolerance } else { 0.5 };
 
@@ -1627,7 +1616,7 @@ struct BenchReport {
     measure_calls_first: usize,
 }
 
-pub(crate) fn run_bench(node_count: u32, iterations: u32) -> Result<String, String> {
+pub fn run_bench(node_count: u32, iterations: u32) -> Result<String, String> {
     if node_count == 0 {
         return Err("node_count 需 > 0".into());
     }
@@ -1695,7 +1684,11 @@ pub(crate) fn run_bench(node_count: u32, iterations: u32) -> Result<String, Stri
 }
 
 /// 极简 JSON 字符串转义（错误信息用；不引入额外依赖）
-pub(crate) fn json_str(s: &str) -> String {
+///
+/// ★HA2：由 `pub(crate)` 改 `pub` —— 平台绑定层（`platform/android/proteus-jni`）用它组装
+///   错误 JSON。这比原来"靠 `#[cfg(target_os)] pub(crate) use` 转出"更诚实：内核只是**公开**了
+///   一个诊断工具，而不再因为"某个平台的绑定层住在自己家里"而带平台分支。
+pub fn json_str(s: &str) -> String {
     let mut out = String::with_capacity(s.len() + 2);
     out.push('"');
     for c in s.chars() {

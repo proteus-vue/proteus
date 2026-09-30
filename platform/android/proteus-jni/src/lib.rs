@@ -1,27 +1,49 @@
-// packages/layout-core-rust/src/jni.rs
-// ★★Rust 排版核心的 **JNI 导出层**（Android 侧）。
+// platform/android/proteus-jni/src/lib.rs
+// ★★**Android 平台绑定层：JNI 导出**（原 `packages/layout-core-rust/src/jni.rs`，HA2 迁出）
 //
-// 【与 iOS 侧的关系】两端共用同一份核心逻辑（`engine`/`node`/`taffy_engine`），
-//   只是**边界形态**不同：
-//     · iOS：`ffi.rs` 的 C ABI（Swift 用 `@_silgen_name` 直接调）
-//     · Android：本文件（Kotlin 用 `external fun` 调，JNI 名字规则见下）
-//   两边都只做「JSON 进 / JSON 出」，把复杂度留在核心内。
+// 【为什么单独成 crate（HA2 的硬性判据）】Host ABI 方案 §2.6 要求「**内核中不得出现平台分支**」
+//   ——判据是"内核 crate 不得有 `target_os` 条件编译"。而 JNI 绑定天然是 Android 专属
+//   （`jni` crate + `System.loadLibrary`）⇒ 它留在内核里就必然要 `#[cfg(target_os = "android")]`
+//   包一层 ⇒ **内核被迫认识平台**。搬出来之后：内核零平台分支，本 crate 是这个分支的**唯一住所**
+//   （`#![cfg]` 在这里是**正确**的：它本来就是平台代码）。
+//
+// 【边界归属（Host ABI §0.4.8 的判断标准）】"这段代码换到同平台的另一个 App 里，需要改吗？"
+//   · 本 crate —— **不用改**（换壳时它随 SDK 一起发布）⇒ **平台适配**，归 `platform/`
+//   · 宿主集成（Surface / 生命周期 / 输入 / 调度 / 能力注册）—— 要改 ⇒ 归 `hosts/`
+//
+// 【与 iOS 的对称性】两端共用同一份内核（`engine`/`node`/`taffy_engine`），只是**边界形态**不同：
+//   · iOS：内核的 **C ABI**（`ffi.rs`，Swift 用 `@_silgen_name` 直接调；静态库）
+//   · Android：**本 crate**（Java 用 `external fun` 调；把同一批 C ABI 函数转成 JNI 符号）——动态库
+//   两边都只做「JSON 进 / JSON 出」，复杂度留在内核。
 //
 // 【JNI 函数名规则】`Java_<包名下划线化>_<类名>_<方法名>`
-//   本文件对应 Kotlin 侧：
-//     package dev.proteus.layoutcore · object RustLayout · external fun nativeVersion() 等
+//   本文件对应 Java 侧：
+//     package dev.proteus.layoutcore · class RustLayout · private static native … 等
 //   → `Java_dev_proteus_layoutcore_RustLayout_nativeVersion`
 //
-// 【本模块仅在 Android 目标下编译】（`cfg(target_os = "android")`）——
-//   否则本机 cargo test 会因缺 JNI 头而失败。
+// 【产物】`libproteus_jni.so`（`System.loadLibrary("proteus_jni")`）——
+//   静态链接内核（rlib），所以**一个 .so 里既有内核代码也有 JNI 符号**。
 #![cfg(target_os = "android")]
 
 use jni::objects::{JClass, JString};
 use jni::sys::jstring;
 use jni::JNIEnv;
 
-use crate::engine::LayoutEngine;
-use crate::{into_java_string, run_bench, run_conformance};
+// ★内核（path 依赖）：平台无关的核心
+use proteus_layout_core::ffi::{json_str, run_bench, run_conformance};
+use proteus_layout_core::{ffi, recycle, LayoutEngine, TaffyEngine};
+
+/// 把 Rust 字符串交给 JNI 侧（分配 Java String）。
+///
+/// 【为什么在本 crate 而不是内核（HA2）】这个函数存在的唯一理由是"Java 侧要一个 jstring"——
+///   那是**平台绑定**的事；内核不该知道 `JNIEnv` 是什么（原实现放在内核 `ffi.rs` 并用
+///   `#[cfg(target_os = "android")]` 包着，正是"内核被平台污染"的实例）。
+fn into_java_string(env: &mut JNIEnv, s: String) -> jstring {
+    match env.new_string(s) {
+        Ok(js) => js.into_raw(),
+        Err(_) => std::ptr::null_mut(),
+    }
+}
 
 /// `RustLayout.nativeVersion(): String`
 #[no_mangle]
@@ -32,7 +54,7 @@ pub extern "system" fn Java_dev_proteus_layoutcore_RustLayout_nativeVersion<'loc
     let text = format!(
         "proteus-layout-core {} · engine={} · taffy 锁定 0.14（0.13 有 measure 指数退化）",
         env!("CARGO_PKG_VERSION"),
-        crate::TaffyEngine::new().name()
+        TaffyEngine::new().name()
     );
     into_java_string(&mut env, text)
 }
@@ -52,7 +74,7 @@ pub extern "system" fn Java_dev_proteus_layoutcore_RustLayout_nativeConformance<
         };
         match run_conformance(&raw) {
             Ok(s) => s,
-            Err(e) => format!("{{\"ok\":false,\"error\":{}}}", crate::json_str(&e)),
+            Err(e) => format!("{{\"ok\":false,\"error\":{}}}", json_str(&e)),
         }
     }))
     .unwrap_or_else(|_| "{\"ok\":false,\"error\":\"panic（已捕获）\"}".to_string());
@@ -72,7 +94,7 @@ pub extern "system" fn Java_dev_proteus_layoutcore_RustLayout_nativeBench<'local
         let it = if iterations <= 0 { 1u32 } else { iterations as u32 };
         match run_bench(n, it) {
             Ok(s) => s,
-            Err(e) => format!("{{\"ok\":false,\"error\":{}}}", crate::json_str(&e)),
+            Err(e) => format!("{{\"ok\":false,\"error\":{}}}", json_str(&e)),
         }
     })
     .unwrap_or_else(|_| "{\"ok\":false,\"error\":\"panic（已捕获）\"}".to_string());
@@ -90,9 +112,9 @@ pub extern "system" fn Java_dev_proteus_layoutcore_RustLayout_nativeRecycleBench
     let out = std::panic::catch_unwind(|| -> String {
         let r = if rows <= 0 { 4000usize } else { rows as usize };
         let f = if frames <= 0 { 400usize } else { frames as usize };
-        match crate::recycle::run_recycle_bench(r, f) {
+        match recycle::run_recycle_bench(r, f) {
             Ok(s) => s,
-            Err(e) => format!("{{\"ok\":false,\"error\":{}}}", crate::json_str(&e)),
+            Err(e) => format!("{{\"ok\":false,\"error\":{}}}", json_str(&e)),
         }
     })
     .unwrap_or_else(|_| "{\"ok\":false,\"error\":\"panic（已捕获）\"}".to_string());
@@ -115,7 +137,7 @@ pub extern "system" fn Java_dev_proteus_layoutcore_RustLayout_nativeCreate<'loca
             Ok(c) => c,
             Err(_) => return 0,
         };
-        unsafe { crate::ffi::proteus_layout_create(c.as_ptr()) as i64 }
+        unsafe { ffi::proteus_layout_create(c.as_ptr()) as i64 }
     }))
     .unwrap_or(0)
 }
@@ -127,7 +149,7 @@ pub extern "system" fn Java_dev_proteus_layoutcore_RustLayout_nativeDestroy<'loc
     _class: JClass<'local>,
     handle: jni::sys::jlong,
 ) -> jni::sys::jboolean {
-    let ok = std::panic::catch_unwind(|| crate::ffi::proteus_layout_destroy(handle as u64)).unwrap_or(false);
+    let ok = std::panic::catch_unwind(|| ffi::proteus_layout_destroy(handle as u64)).unwrap_or(false);
     if ok { 1 } else { 0 }
 }
 
@@ -137,7 +159,7 @@ pub extern "system" fn Java_dev_proteus_layoutcore_RustLayout_nativeHandleCount<
     _env: JNIEnv<'local>,
     _class: JClass<'local>,
 ) -> jni::sys::jint {
-    std::panic::catch_unwind(|| crate::ffi::proteus_layout_handle_count()).unwrap_or(0) as i32
+    std::panic::catch_unwind(|| ffi::proteus_layout_handle_count()).unwrap_or(0) as i32
 }
 
 /// `RustLayout.nativeReadRects(handle: Long): String`
@@ -148,12 +170,12 @@ pub extern "system" fn Java_dev_proteus_layoutcore_RustLayout_nativeReadRects<'l
     handle: jni::sys::jlong,
 ) -> jstring {
     let out = std::panic::catch_unwind(|| -> String {
-        let p = unsafe { crate::ffi::proteus_layout_rects(handle as u64) };
+        let p = unsafe { ffi::proteus_layout_rects(handle as u64) };
         if p.is_null() {
             return "{\"ok\":false,\"error\":\"null\"}".to_string();
         }
         let s = unsafe { std::ffi::CStr::from_ptr(p) }.to_string_lossy().into_owned();
-        unsafe { crate::ffi::proteus_layout_free_string(p) };
+        unsafe { ffi::proteus_layout_free_string(p) };
         s
     })
     .unwrap_or_else(|_| "{\"ok\":false,\"error\":\"panic（已捕获）\"}".to_string());
@@ -175,12 +197,12 @@ pub extern "system" fn Java_dev_proteus_layoutcore_RustLayout_nativeHitTest<'loc
     y: jni::sys::jfloat,
 ) -> jstring {
     let out = std::panic::catch_unwind(|| -> String {
-        let p = unsafe { crate::ffi::proteus_layout_hit_test(handle as u64, x, y) };
+        let p = unsafe { ffi::proteus_layout_hit_test(handle as u64, x, y) };
         if p.is_null() {
             return "{\"ok\":false,\"error\":\"null\"}".to_string();
         }
         let s = unsafe { std::ffi::CStr::from_ptr(p) }.to_string_lossy().into_owned();
-        unsafe { crate::ffi::proteus_layout_free_string(p) };
+        unsafe { ffi::proteus_layout_free_string(p) };
         s
     })
     .unwrap_or_else(|_| "{\"ok\":false,\"error\":\"panic（已捕获）\"}".to_string());
@@ -209,12 +231,12 @@ pub extern "system" fn Java_dev_proteus_layoutcore_RustLayout_nativeUpdate<'loca
             Ok(c) => c,
             Err(_) => return "{\"ok\":false,\"error\":\"patches 含 NUL\"}".to_string(),
         };
-        let p = unsafe { crate::ffi::proteus_layout_update(handle as u64, c.as_ptr()) };
+        let p = unsafe { ffi::proteus_layout_update(handle as u64, c.as_ptr()) };
         if p.is_null() {
             return "{\"ok\":false,\"error\":\"null\"}".to_string();
         }
         let ret = unsafe { std::ffi::CStr::from_ptr(p) }.to_string_lossy().into_owned();
-        unsafe { crate::ffi::proteus_layout_free_string(p) };
+        unsafe { ffi::proteus_layout_free_string(p) };
         ret
     })
     .unwrap_or_else(|_| "{\"ok\":false,\"error\":\"panic（已捕获）\"}".to_string());
@@ -241,7 +263,7 @@ pub extern "system" fn Java_dev_proteus_layoutcore_RustLayout_nativeRecycleCreat
     following_rows: jni::sys::jint,
 ) -> jni::sys::jlong {
     std::panic::catch_unwind(|| unsafe {
-        crate::ffi::proteus_recycle_create(
+        ffi::proteus_recycle_create(
             item_count.max(0) as u32,
             leading_rows.max(0) as u32,
             following_rows.max(0) as u32,
@@ -266,7 +288,7 @@ pub extern "system" fn Java_dev_proteus_layoutcore_RustLayout_nativeRecycleUpdat
 ) -> jstring {
     let out = std::panic::catch_unwind(|| -> String {
         let p = unsafe {
-            crate::ffi::proteus_recycle_update(
+            ffi::proteus_recycle_update(
                 handle as u64,
                 first_visible.max(0) as u32,
                 last_visible.max(0) as u32,
@@ -276,7 +298,7 @@ pub extern "system" fn Java_dev_proteus_layoutcore_RustLayout_nativeRecycleUpdat
             return "{\"ok\":false,\"error\":\"null\"}".to_string();
         }
         let s = unsafe { std::ffi::CStr::from_ptr(p) }.to_string_lossy().into_owned();
-        unsafe { crate::ffi::proteus_layout_free_string(p) };
+        unsafe { ffi::proteus_layout_free_string(p) };
         s
     })
     .unwrap_or_else(|_| "{\"ok\":false,\"error\":\"panic（已捕获）\"}".to_string());
@@ -291,12 +313,12 @@ pub extern "system" fn Java_dev_proteus_layoutcore_RustLayout_nativeRecycleStats
     handle: jni::sys::jlong,
 ) -> jstring {
     let out = std::panic::catch_unwind(|| -> String {
-        let p = unsafe { crate::ffi::proteus_recycle_stats(handle as u64) };
+        let p = unsafe { ffi::proteus_recycle_stats(handle as u64) };
         if p.is_null() {
             return "{\"ok\":false,\"error\":\"null\"}".to_string();
         }
         let s = unsafe { std::ffi::CStr::from_ptr(p) }.to_string_lossy().into_owned();
-        unsafe { crate::ffi::proteus_layout_free_string(p) };
+        unsafe { ffi::proteus_layout_free_string(p) };
         s
     })
     .unwrap_or_else(|_| "{\"ok\":false,\"error\":\"panic（已捕获）\"}".to_string());
@@ -310,7 +332,7 @@ pub extern "system" fn Java_dev_proteus_layoutcore_RustLayout_nativeRecycleDestr
     _class: JClass<'local>,
     handle: jni::sys::jlong,
 ) -> jni::sys::jboolean {
-    std::panic::catch_unwind(|| unsafe { crate::ffi::proteus_recycle_destroy(handle as u64) })
+    std::panic::catch_unwind(|| unsafe { ffi::proteus_recycle_destroy(handle as u64) })
         .map(|_| 1)
         .unwrap_or(0)
 }
@@ -338,12 +360,12 @@ pub extern "system" fn Java_dev_proteus_layoutcore_RustLayout_nativeSetTextMeasu
             Ok(c) => c,
             Err(_) => return "{\"ok\":false,\"error\":\"measures 含 NUL\"}".to_string(),
         };
-        let p = unsafe { crate::ffi::proteus_layout_set_text_measures(handle as u64, c.as_ptr()) };
+        let p = unsafe { ffi::proteus_layout_set_text_measures(handle as u64, c.as_ptr()) };
         if p.is_null() {
             return "{\"ok\":false,\"error\":\"null\"}".to_string();
         }
         let s = unsafe { std::ffi::CStr::from_ptr(p) }.to_string_lossy().into_owned();
-        unsafe { crate::ffi::proteus_layout_free_string(p) };
+        unsafe { ffi::proteus_layout_free_string(p) };
         s
     })
     .unwrap_or_else(|_| "{\"ok\":false,\"error\":\"panic（已捕获）\"}".to_string());
@@ -369,12 +391,12 @@ pub extern "system" fn Java_dev_proteus_layoutcore_RustLayout_nativeSplice<'loca
             Ok(c) => c,
             Err(_) => return "{\"ok\":false,\"error\":\"splice 含 NUL\"}".to_string(),
         };
-        let p = unsafe { crate::ffi::proteus_layout_splice(handle as u64, c.as_ptr()) };
+        let p = unsafe { ffi::proteus_layout_splice(handle as u64, c.as_ptr()) };
         if p.is_null() {
             return "{\"ok\":false,\"error\":\"null\"}".to_string();
         }
         let s = unsafe { std::ffi::CStr::from_ptr(p) }.to_string_lossy().into_owned();
-        unsafe { crate::ffi::proteus_layout_free_string(p) };
+        unsafe { ffi::proteus_layout_free_string(p) };
         s
     })
     .unwrap_or_else(|_| "{\"ok\":false,\"error\":\"panic（已捕获）\"}".to_string());
@@ -403,13 +425,13 @@ pub extern "system" fn Java_dev_proteus_layoutcore_RustLayout_nativeApplyOps<'lo
             return "{\"ok\":false,\"error\":\"空指令流\"}".to_string();
         }
         let p = unsafe {
-            crate::ffi::proteus_layout_apply_ops(handle as u64, bytes.as_ptr(), bytes.len() as u32)
+            ffi::proteus_layout_apply_ops(handle as u64, bytes.as_ptr(), bytes.len() as u32)
         };
         if p.is_null() {
             return "{\"ok\":false,\"error\":\"null\"}".to_string();
         }
         let s = unsafe { std::ffi::CStr::from_ptr(p) }.to_string_lossy().into_owned();
-        unsafe { crate::ffi::proteus_layout_free_string(p) };
+        unsafe { ffi::proteus_layout_free_string(p) };
         s
     })
     .unwrap_or_else(|_| "{\"ok\":false,\"error\":\"panic（已捕获）\"}".to_string());
@@ -426,12 +448,12 @@ pub extern "system" fn Java_dev_proteus_layoutcore_RustLayout_nativeCurveBezier<
     curve: jni::sys::jint,
 ) -> jstring {
     let out = std::panic::catch_unwind(|| -> String {
-        let p = crate::ffi::proteus_anim_curve_bezier(curve as u32);
+        let p = ffi::proteus_anim_curve_bezier(curve as u32);
         if p.is_null() {
             return "{\"ok\":false,\"error\":\"null\"}".to_string();
         }
         let s = unsafe { std::ffi::CStr::from_ptr(p) }.to_string_lossy().into_owned();
-        unsafe { crate::ffi::proteus_layout_free_string(p) };
+        unsafe { ffi::proteus_layout_free_string(p) };
         s
     })
     .unwrap_or_else(|_| "{\"ok\":false,\"error\":\"panic（已捕获）\"}".to_string());
@@ -464,12 +486,12 @@ pub extern "system" fn Java_dev_proteus_layoutcore_RustLayout_nativeAnimCommitSp
             Ok(c) => c,
             Err(_) => return "{\"ok\":false,\"error\":\"入参含 NUL\"}".to_string(),
         };
-        let p = unsafe { crate::ffi::proteus_layout_anim_commit_spec(handle as u64, cs.as_ptr()) };
+        let p = unsafe { ffi::proteus_layout_anim_commit_spec(handle as u64, cs.as_ptr()) };
         if p.is_null() {
             return "{\"ok\":false,\"error\":\"null\"}".to_string();
         }
         let o = unsafe { std::ffi::CStr::from_ptr(p) }.to_string_lossy().into_owned();
-        unsafe { crate::ffi::proteus_layout_free_string(p) };
+        unsafe { ffi::proteus_layout_free_string(p) };
         o
     })
     .unwrap_or_else(|_| "{\"ok\":false,\"error\":\"panic（已捕获）\"}".to_string());
@@ -505,7 +527,7 @@ fn forward_cstr<'local>(
             return "{\"ok\":false,\"error\":\"null\"}".to_string();
         }
         let o = unsafe { std::ffi::CStr::from_ptr(p) }.to_string_lossy().into_owned();
-        unsafe { crate::ffi::proteus_layout_free_string(p) };
+        unsafe { ffi::proteus_layout_free_string(p) };
         o
     }))
     .unwrap_or_else(|_| "{\"ok\":false,\"error\":\"panic（已捕获）\"}".to_string());
@@ -520,7 +542,7 @@ pub extern "system" fn Java_dev_proteus_layoutcore_RustLayout_nativeAnimStart<'l
     handle: jni::sys::jlong,
     json: JString<'local>,
 ) -> jstring {
-    forward_cstr(env, json, move |p| unsafe { crate::ffi::proteus_layout_anim_start(handle as u64, p) })
+    forward_cstr(env, json, move |p| unsafe { ffi::proteus_layout_anim_start(handle as u64, p) })
 }
 
 /// ★★**每帧推进（二进制通道）**——返回 **24B/条**定长记录（`id u32 + 五值 f32`，全小端）
@@ -536,12 +558,12 @@ pub extern "system" fn Java_dev_proteus_layoutcore_RustLayout_nativeAnimTickBin<
 ) -> jni::sys::jbyteArray {
     let buf = std::panic::catch_unwind(|| -> Vec<u8> {
         let mut len: u32 = 0;
-        let p = unsafe { crate::ffi::proteus_layout_anim_tick_bin(handle as u64, dt_ms as f32, &mut len) };
+        let p = unsafe { ffi::proteus_layout_anim_tick_bin(handle as u64, dt_ms as f32, &mut len) };
         if p.is_null() || len == 0 {
             return Vec::new();
         }
         let v = unsafe { std::slice::from_raw_parts(p, len as usize) }.to_vec();
-        unsafe { crate::ffi::proteus_rects_free(p, len) };
+        unsafe { ffi::proteus_rects_free(p, len) };
         v
     })
     .unwrap_or_default();
@@ -559,7 +581,7 @@ pub extern "system" fn Java_dev_proteus_layoutcore_RustLayout_nativeAnimStop<'lo
     handle: jni::sys::jlong,
     json: JString<'local>,
 ) -> jstring {
-    forward_cstr(env, json, move |p| unsafe { crate::ffi::proteus_layout_anim_stop(handle as u64, p) })
+    forward_cstr(env, json, move |p| unsafe { ffi::proteus_layout_anim_stop(handle as u64, p) })
 }
 
 /// ★★**滚动驱动**（MA5）：滚动位置 → 全部窗口动画（换算在内核，宿主零数学）
@@ -570,7 +592,7 @@ pub extern "system" fn Java_dev_proteus_layoutcore_RustLayout_nativeAnimSeekScro
     handle: jni::sys::jlong,
     json: JString<'local>,
 ) -> jstring {
-    forward_cstr(env, json, move |p| unsafe { crate::ffi::proteus_layout_anim_seek_scroll(handle as u64, p) })
+    forward_cstr(env, json, move |p| unsafe { ffi::proteus_layout_anim_seek_scroll(handle as u64, p) })
 }
 
 /// ★★**共享元素**（几何原语）：源矩形 + 目标节点 ⇒ dx/dy/scale（内核算，宿主零几何数学）
@@ -581,5 +603,5 @@ pub extern "system" fn Java_dev_proteus_layoutcore_RustLayout_nativeSharedElemen
     handle: jni::sys::jlong,
     json: JString<'local>,
 ) -> jstring {
-    forward_cstr(env, json, move |p| unsafe { crate::ffi::proteus_layout_shared_element(handle as u64, p) })
+    forward_cstr(env, json, move |p| unsafe { ffi::proteus_layout_shared_element(handle as u64, p) })
 }

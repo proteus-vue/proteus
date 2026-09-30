@@ -13,7 +13,7 @@
 > | **HA0**（八接口 C ABI + 版本协商 + `proteus_submit_frame`） | ✅ **已落地** | `packages/host-abi/`（crate + `include/proteus_host_abi.h`）；Rust 单测 7 条；**纯 C headless 宿主**真编译真链接真跑 **27 条判据全过** |
 > | **HA0.5**（`hosts/`→`platform/` 拆分 + CI 静态检查） | ✅ **已落地（iOS）** | `platform/ios/ProteusPlatform/ProteusTextAdapter.swift`（319 行抽取）；门禁 `check:platform-layering` 三条判据（引用方向 / 禁 ABI / 实质内容）+ 破坏性验证；Android 侧**待抽**（见下"诚实边界"） |
 > | **HA1**（现有 App 宿主改造） | ✅ **已落地（iOS 宿主）** | 真机 **N 组 7/7 全过**；★核心判据 = **双路几何逐字节一致**（同树走直连 FFI 与 Host ABI，1836B / 同 hash） |
-> | HA2（能力注入重构） | ◐ **part 已落地** | 度量经 vtable 注入**已通**（真机 N3：缺度量表时引擎回调宿主 26 次）；★内核仍留 `target_os` 分支（JNI 需交叉编译，属独立批次） |
+> | HA2（能力注入重构） | ✅ **主体已落地** | ① 度量经 vtable 注入**已通**（真机 N3：缺度量表时引擎回调宿主 26 次）；② ★**内核已零平台分支**（`check:platform-layering` D 组守住）：JNI 层迁出内核 → `platform/android/proteus-jni/`（独立 crate，产 `libproteus_jni.so`），内核 `crate-type` 去掉 `cdylib`；真机复验内核驱动动画 6 条判据照常全过。★图像解码 trait 已在 ABI 契约层声明，但内核侧**无消费点**（内核不处理图像——如实记录） |
 > | HA3（能力插件） | ◐ **part 已落地** | `proteus_register_capability` / `has` / `call` 已通（真机 N6）；未注册 ⇒ 明确错误码 + 列出已注册项。★与 Playground 能力清单**尚未打通** |
 > | HA4 / HA5 / HA6 | ❌ 未做 | — |
 >

@@ -4,11 +4,16 @@ package dev.proteus.layoutcore;
  * ★★Rust 排版核心的 JNI 门面（Android 侧）——对应 iOS 的 layout-core-device.swift。
  *
  * 【与 iOS 共用同一份核心】两端都通过各自的边界调同一个 Rust 核心：
- *   · iOS：C ABI（ffi.rs，Swift 用 @_silgen_name）
- *   · Android：JNI（jni.rs，本类用 external 方法）
+ *   · iOS：内核 C ABI（`packages/layout-core-rust/src/ffi.rs`，Swift 用 @_silgen_name 直调）
+ *   · Android：**平台绑定层**（`platform/android/proteus-jni/src/lib.rs`，本类用 native 方法）
  * 两边都只做「JSON 进 / JSON 出」，复杂度留在核心内。
  *
- * 【Rust 堆内存】返回的字符串由 Rust 分配 → 由 Rust 侧统一释放（见 jni.rs 的 into_java_string
+ * ★HA2（2026-09-30）：JNI 绑定原来是内核里的 `layout-core-rust/src/jni.rs`，已搬到
+ *   `platform/android/proteus-jni/`（独立 crate，产 `libproteus_jni.so`）——
+ *   这样**内核 crate 零平台分支**（Host ABI §2.6 硬性判据）。本类**不受迁移影响**
+ *   （方法签名逐字未变，只有 `System.loadLibrary` 的名字跟着新产物走）。
+ *
+ * 【Rust 堆内存】返回的字符串由 Rust 分配 → 由 Rust 侧统一释放（平台绑定层的 `into_java_string`
  * 用 JNIEnv::new_string 生成为 Java String，故 Java 侧无需手动释放）。
  */
 final class RustLayout {
@@ -19,7 +24,10 @@ final class RustLayout {
 
     static {
         try {
-            System.loadLibrary("proteus_layout_core");
+            // ★HA2：加载的是**平台绑定层**的产物（它静态链接内核 ⇒ 一个 .so 里既有内核也有 JNI 符号）。
+            //   名字与 `platform/android/proteus-jni/Cargo.toml` 的 `[lib] name` 一致；
+            //   改名的理由：原 `proteus_layout_core` 语义上是"内核"，而实际被加载的是绑定层。
+            System.loadLibrary("proteus_jni");
             loaded = true;
         } catch (Throwable t) {
             loadError = t.getClass().getSimpleName() + ": " + t.getMessage();

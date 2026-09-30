@@ -48,7 +48,7 @@
   只有**可复制代码块**里的引用才真正有害。
 · 破坏性验证：恢复 `p-card` → 红并精确报 `03-fluid-grid.md:31`；还原 → 575 md 全过。
 
-## 当前状态速览（最近一次更新：**2026-09-30 · HA1 落地（现有 iOS 宿主接 ABI，双路几何逐字节一致）**）★新会话以此为准
+## 当前状态速览（最近一次更新：**2026-09-30 · HA2 落地（内核零平台分支，JNI 迁入 platform/android）**）★新会话以此为准
 
 ### ★★★2026-09-30 · 红线升格：禁止**任何**盲等（sleep/timeout 全禁）+ iOS 链路事件驱动 + I3 收官
 
@@ -92,6 +92,57 @@ kind=capability ⇒ 82）+ 黑名单条目 `hooks-81` + 两份新文档进正向
 破坏性验证过（注入 `81 个 Capability Hook` ⇒ 精确报行号）。
 **登记**：board-inventory「其他文档（非 plan）」表新增两行（含决策、依据、与既有计划关系）；
 roadmap v0.6 段追加两条决策接入注记 + v2.0+ 插件体系行补指针。
+
+**㉙ ★★★HA2 落地：内核去平台分支（2026-09-30）—— JNI 层迁出 → platform/android/**
+
+继续 Host ABI 线。HA2 的硬性判据（方案 §2.6 原文）：「**内核中不得出现平台分支**」
+——判据具体化为"内核 crate 不得有 `target_os` 条件编译"。
+
+**一、现状取证（4 处平台分支，根因是"绑定层住错地方"）**
+| 位置 | 内容 |
+|---|---|
+| `lib.rs` | `#[cfg(target_os="android")] pub mod jni;` |
+| `lib.rs` | 两处 `#[cfg(target_os="android")] pub(crate) use …`（供 jni.rs 引用） |
+| `ffi.rs` | `#[cfg(target_os="android")] pub(crate) fn into_java_string`（**内核里有 JNIEnv**） |
+| `Cargo.toml` | `[target.'cfg(target_os = "android")'.dependencies] jni = "0.21"` |
+⇒ 根因只有一个：**585 行的 JNI 绑定层住在内核 crate 里**。按 §0.4.8 判断标准
+（"换到同平台的另一个 App 里要改吗？"——不用改）它属**平台适配** ⇒ 应归 `platform/`。
+
+**二、迁移（`git mv` 保历史）**
+`packages/layout-core-rust/src/jni.rs` → `platform/android/proteus-jni/src/lib.rs`（独立 crate）；
+`.cargo/config.toml`（16 KB 对齐）也随之搬到平台层。
+- 导入改写：`crate::ffi::` → `ffi::`、`crate::json_str` → `json_str`、`crate::TaffyEngine` → `TaffyEngine`；
+- `into_java_string` 从内核**搬进本 crate**（它存在的唯一理由是"Java 侧要 jstring"——平台绑定的事）；
+  内核的 `json_str` / `run_bench` / `run_conformance` 由 `pub(crate)` 改 **`pub`**
+  （诚实公开，而不是"靠 cfg 转出"）；
+- 内核 `crate-type` 去掉 **`cdylib`**：旧路径会产出**没有 JNI 符号**的 `.so`，
+  误用只会在真机 `UnsatisfiedLinkError`（"看起来是个 .so"）⇒ 移除后该路径**无产物**（响亮失败）。
+
+**三、★产物与符号（迁移的正确性证据）**
+| 判据 | 读数 |
+|---|---|
+| 交叉编译（aarch64-linux-android） | ✅ `.so` 1.4MB（含内核 rlib 静态链接） |
+| JNI 符号数 | **24 个**（与 `RustLayout.java` 的 24 个 native 方法**数目正好对上**） |
+| 16 KB 对齐 | LOAD 段全 `0x4000` ✓ · APK 内 Stored + 16 KB 偏移 ✓ |
+
+**四、真机验证（Redmi）—— 内核驱动动画 6 条判据照常全过**
+M2 曲线求值（easeOut 形态）· M3 终值精确 120 · M5 序列段边界精确（100ms→0.600）·
+M6 滚动窗口映射 · M7 共享元素几何 · **M4 真帧循环 58 帧 · p50 0.094ms · 稳态零布局**。
+⇒ 迁移**行为未变**（这是重构类改动唯一有效的判据）。
+
+**五、★门禁补 D 组（内核禁平台分支）+ 修一处扫描面缺口**
+`check:platform-layering` 新增 D 组：扫内核源码的 `#[cfg(...target_os...)]` / `cfg!(...)` 与
+Cargo.toml 的 `[target.*target_os*]`——**注释豁免**（我们的注释正在解释"为什么搬走"）。
+两条破坏用例都验证过变红。
+★同时修了一处**门禁自身的扫描面缺口**：`SRCEXT` 白名单**漏了 `.rs`**
+（它是在只有 Swift/Java 时写的）⇒ `platform/android/` 一度被判"没有源码文件"。
+**形态变了（平台层新增 Rust crate），扫描面必须跟着走**——与"deny-blind-verify 只认字面 vitest"同源。
+
+**六、诚实边界**：HA2 **part**（本端 + 度量/几何已注入 trait）；
+· 图片解码 trait 已在 **ABI 契约层**声明（`ProteusDecodeImageFn`），但**内核侧无消费点**
+  （内核目前不处理图像——如实说明，不假装已接）；
+· 宿主侧 `target_os`（Swift `#if os(...)` / Java `Build.VERSION`）**不属于本约束**——
+  那是宿主集成，本来就该按平台写。
 
 **㉘ ★★★HA1 落地：现有 iOS 宿主改造为 Host ABI 实现（2026-09-30）—— 抽象正确性经双路对照验证**
 
