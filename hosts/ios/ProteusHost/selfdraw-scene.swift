@@ -200,6 +200,18 @@ func physFootprintMB() -> Double {
     /// ★★**帧率测席**（§9 指标测量）：启动 / 取结果
     func animBenchStart(_ json: String) -> String
     func animBenchResults() -> String
+    /// ★★**主线程零唤醒实测**（OS 级 CPU 会计 + 阳性对照）：启动 / 取结果
+    ///
+    /// 【为什么不用 Instruments/xctrace（2026-09-30 取证）】本机 Xcode 26.5 的 `xctrace` **无法录制
+    ///   本设备**（`Waiting for device to boot` 超时）。证据链：`ioreg` 显示 iPhone 在 USB 上、
+    ///   `xcdevice list` 报 available、xctrace 在 Mac 本地录音正常、设备侧 devicectl 报
+    ///   booted/DDI available/dev mode enabled/unlocked —— 唯一缺口是 **DeviceSupport 设备支持包
+    ///   只有 26.3 而设备已 26.7**（补它要下 GB 级支持包）。
+    ///   ⇒ 改用 **OS 级 CPU 会计**：`thread_info(THREAD_BASIC_INFO)` 两次采样之差 = 该窗口内主线程
+    ///     真正消耗的 CPU——这正是"零唤醒"要证的东西，且**可机器判定**（比人看波形更可回归）。
+    ///   ★配**阳性对照**（tick 路径必须有显著开销）——否则"零"无法与"探针没测到"区分。
+    func animCpuProbeStart(_ json: String) -> String
+    func animCpuProbeResults() -> String
     /// ★★**RT2/§7.3：按节点停动画**（宿主行回收时自动调用；暴露给判据做破坏性验证）
     func animStopNodes(_ idsJson: String) -> String
     /// ★★**帧循环三件套**（RT2）：启动（接 CADisplayLink）/ 停止 / 读数
@@ -3680,6 +3692,103 @@ final class SelfDrawBridge: NSObject, SelfDrawExports {
             .flatMap { String(data: $0, encoding: .utf8) } ?? "{\"ok\":false}"
     }
 
+    /* ────────────── ★★主线程零唤醒：OS 级 CPU 会计（xctrace 不可达时的机器判据） ────────────── */
+
+    /// 本线程累计 CPU 时间（微秒；user + system）
+    ///
+    /// ★单位说明：`thread_info(THREAD_BASIC_INFO)` 的 user/system 时间是**微秒**
+    ///   （与 `task_info` 的绝对时间单位不同——后者需乘 timebase 换算）。
+    private func threadCpuUs() -> Double {
+        var info = thread_basic_info_data_t()
+        var count = mach_msg_type_number_t(
+            MemoryLayout<thread_basic_info_data_t>.stride / MemoryLayout<integer_t>.stride)
+        let th = mach_thread_self()
+        defer { mach_port_deallocate(mach_task_self_, th) }   // ★采样会创建 send right，必须释放（否则反复采样泄漏端口权）
+        let kr = withUnsafeMutablePointer(to: &info) { p -> kern_return_t in
+            p.withMemoryRebound(to: integer_t.self, capacity: Int(count)) { ip in
+                thread_info(th, thread_flavor_t(THREAD_BASIC_INFO), ip, &count)
+            }
+        }
+        guard kr == KERN_SUCCESS else { return -1 }
+        return Double(info.user_time.seconds) * 1_000_000 + Double(info.user_time.microseconds)
+            + Double(info.system_time.seconds) * 1_000_000 + Double(info.system_time.microseconds)
+    }
+
+    private var cpuProbeResult: [String: Any]?
+    private var cpuProbeBusy = false
+    /// **异步相位续链回调**（两段测量共 ~2×windowMs；跑完回调——事件驱动，非盲等）
+    var animCpuProbeDone: (() -> Void)?
+
+    /// ★★**两段对照测量**：① 平台路径（提交一次 ⇒ 主线程应零参与）② tick 路径（阳性对照）
+    ///
+    /// 判据（`check-anim-rt2.py` 的 L 组）：
+    ///   L0 **提交必须成功**（否则"零 CPU"是"什么都没发生"——不是证据）；
+    ///   L1 阳性对照**必须有显著 CPU**（tick 路径 < 5ms ⇒ 探针失效，不得判绿）；
+    ///   L2 平台路径 CPU 显著低于 tick 路径（比值判据，不是绝对阈值——设备差异大）。
+    func animCpuProbeStart(_ json: String) -> String {
+        guard handle != 0, let view else { return "{\"ok\":false,\"error\":\"未接入\"}" }
+        guard let data = json.data(using: .utf8),
+              let o = (try? JSONSerialization.jsonObject(with: data)) as? [String: Any] else {
+            return "{\"ok\":false,\"error\":\"入参解析失败\"}"
+        }
+        let windowMs = (o["windowMs"] as? Double) ?? 600
+        let targetId = (o["targetId"] as? Int) ?? 2
+        var out: [String: Any] = ["ok": true, "window_ms": windowMs, "target": targetId]
+        // 相位间清场（不假设上一步残留可用——本仓纪律）
+        view.stopFrameLoop()
+        view.onFrame = nil
+        _ = animStopAll()
+        view.removePlatformAnimations([targetId])
+        cpuProbeResult = nil
+        cpuProbeBusy = true
+
+        // ── 阶段 1：平台路径（提交一次 → render server 自主插值）──
+        let c0 = threadCpuUs()
+        let commitOut = animCommit(jsonString([
+            "anims": [["nodeId": targetId, "kind": 0, "curve": 1, "from": 0.0, "to": 120.0, "durMs": windowMs]],
+        ]))
+        out["commit"] = commitOut
+        let committedOk = commitOut.contains("\"committed\":1")
+        DispatchQueue.main.asyncAfter(deadline: .now() + windowMs / 1000.0) { [weak self] in
+            guard let self else { return }
+            out["platform_cpu_us"] = self.threadCpuUs() - c0
+            out["committed_ok"] = committedOk
+            self.view?.removePlatformAnimations([targetId])
+            _ = self.animStopAll()
+
+            // ── 阶段 2：tick 路径（阳性对照——CADisplayLink 每帧推进 ⇒ 主线程必然有开销）──
+            let t0 = self.threadCpuUs()
+            let seedOut = self.animStart(jsonString([
+                "anims": [["nodeId": targetId, "kind": 0, "curve": 3, "from": -60.0, "to": 60.0,
+                           "durMs": windowMs, "takeover": false]],
+            ]))
+            out["seed"] = seedOut
+            self.view?.onFrame = { [weak self] dtMs in self?.animTickLean(dtMs) }
+            self.view?.startFrameLoop()
+            DispatchQueue.main.asyncAfter(deadline: .now() + windowMs / 1000.0) { [weak self] in
+                guard let self else { return }
+                out["tick_cpu_us"] = self.threadCpuUs() - t0
+                self.view?.stopFrameLoop()
+                self.view?.onFrame = nil
+                _ = self.animStopAll()
+                self.cpuProbeResult = out
+                self.cpuProbeBusy = false
+                self.animCpuProbeDone?()   // ★事件驱动续链（与 animBench 同法）
+            }
+        }
+        return jsonString(out)
+    }
+
+    /// CPU 探针结果（供 finalize2 带进报告）
+    func animCpuProbeResults() -> String {
+        guard let r = cpuProbeResult else {
+            return cpuProbeBusy
+                ? "{\"ok\":false,\"error\":\"测量进行中（应已由相位链等完）\"}"
+                : "{\"ok\":false,\"error\":\"未运行探针\"}"
+        }
+        return jsonString(r)
+    }
+
     /// `layerTransformProbe` 的 JSON → 层数组（仅收尾用，不在每帧路径）
     private func safeJsonLayers(_ json: String) -> [[String: Any]] {
         guard let d = json.data(using: .utf8),
@@ -4588,6 +4697,8 @@ final class SelfDrawViewController: UIViewController {
             ("__proteus.animSequence()", 2),
             // ★★共享元素（从源矩形飞到目标再归位；几何在内核 + 宿主层级提升）
             ("__proteus.animShared()", 2),
+            // ★★主线程零唤醒实测（OS 级 CPU 会计 + 阳性对照）：**异步**两段各 600ms
+            ("__proteus.animCpuProbe()", 0),
             // ★★RT2 帧率测席（§9 指标）：**异步**——由 CADisplayLink 跑满时长后回调续链
             //   （事件驱动：跑满即继续，不轮询/不 sleep；看门狗只在卡死时兜底）
             ("__proteus.animBench()", 0),
@@ -4615,9 +4726,18 @@ final class SelfDrawViewController: UIViewController {
                 NSLog("[proteus] %@ → %@", expr, String(benchOut.prefix(300)))
                 return
             }
+            // ★★CPU 探针（L 组）也是**异步相位**：两段各 windowMs（默认 600）⇒ 同样停车等回调
+            if expr.hasPrefix("__proteus.animCpuProbe") {
+                bridge.animCpuProbeDone = {
+                    DispatchQueue.main.async { run(i + 1) }
+                }
+                let cpuOut = js(expr)
+                NSLog("[proteus] %@ → %@", expr, String(cpuOut.prefix(300)))
+                return
+            }
             let out = js(expr)
             // 只记关键读数（避免日志爆炸——本仓「输出控制」纪律）
-            if expr.hasPrefix("__proteus.mount") || expr.hasPrefix("__proteus.finalize2") || expr.hasPrefix("__proteus.animProbe") || expr.hasPrefix("__proteus.animComplex") || expr.hasPrefix("__proteus.animPlatform") || expr.hasPrefix("__proteus.animPreset") || expr.hasPrefix("__proteus.animScroll") || expr.hasPrefix("__proteus.animSequence") || expr.hasPrefix("__proteus.animShared") {
+            if expr.hasPrefix("__proteus.mount") || expr.hasPrefix("__proteus.finalize2") || expr.hasPrefix("__proteus.animProbe") || expr.hasPrefix("__proteus.animComplex") || expr.hasPrefix("__proteus.animPlatform") || expr.hasPrefix("__proteus.animPreset") || expr.hasPrefix("__proteus.animScroll") || expr.hasPrefix("__proteus.animSequence") || expr.hasPrefix("__proteus.animShared") || expr.hasPrefix("__proteus.animCpu") {
                 NSLog("[proteus] %@ → %@", expr, String(out.prefix(400)))
             }
             // ★让出主线程 pump 轮：每轮一次 runloop 循环 ⇒ 微任务队列被排空

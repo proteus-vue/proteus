@@ -74,6 +74,9 @@ interface SelfDrawNative {
   animRemovePlatform(idsJson: string): string
   animBenchStart(json: string): string
   animBenchResults(): string
+  // ★★主线程零唤醒实测（OS 级 CPU 会计 + 阳性对照；xctrace 不可达时的机器判据）
+  animCpuProbeStart(json: string): string
+  animCpuProbeResults(): string
 }
 declare const proteusSelfDraw: SelfDrawNative
 /** 快照名（宿主按模式注入；此处仅作默认） */
@@ -81,7 +84,7 @@ const BN = { snapshot: 'selfdraw-final' }
 
 // ★构建标识（每次构建由 hosts/ios/bridge/inject-build-id.mjs 注入；与 entry-bench 同机制）
 //   —— 「设备上跑的是哪份代码」必须可**一眼判定**（报告新鲜度判据的内容锚点）。
-const BUILD_ID = 'f7b5298b-124618'
+const BUILD_ID = 'b8d152e3-132225'
 
 const VP = (globalThis as unknown as { __PROTEUS_VIEWPORT__?: { width: number; height: number } })
   .__PROTEUS_VIEWPORT__ ?? { width: 390, height: 844 }
@@ -598,6 +601,27 @@ const api = {
   },
 
   /**
+   * ★★**主线程零唤醒实测**（OS 级 CPU 会计 + 阳性对照）——**异步相位**
+   *
+   * 【为什么是 OS 级会计而不是 Instruments（2026-09-30 取证）】xctrace 无法录制本设备
+   *   （`Waiting for device to boot` 超时）；证据链见 swift 侧 `animCpuProbeStart` 注释。
+   *   ⇒ 用 `thread_info` 的主线程 CPU 增量对照——**可机器判定**（比人看波形更可回归）。
+   *
+   * 【判据】见 `check-anim-rt2.py` 的 L 组（L0 提交成功 / L1 阳性对照有效 / L2 平台路径显著更低）。
+   */
+  animCpuProbe(): string {
+    const probe = safeParse(proteusSelfDraw.layerTransformProbe(JSON.stringify([2, 3])))
+    const present = ((probe as { layers?: Array<{ id: number; missing?: boolean }> }).layers ?? [])
+      .filter((l) => !l.missing)
+      .map((l) => l.id)
+    const target = present[0] ?? 2
+    const startOut = safeParse(
+      proteusSelfDraw.animCpuProbeStart(JSON.stringify({ windowMs: 600, targetId: target })),
+    )
+    return JSON.stringify({ phase: 'cpuProbe', started: startOut })
+  },
+
+  /**
    * ★★**MA1：预设驱动的转场**（真机验证"一句话写动画"）
    *
    * 【要回答什么】
@@ -992,6 +1016,8 @@ const api = {
       anim_rt2: animRt2Result,
       // ★★MA1 预设库（一句话写转场 + 编译期校验）
       anim_preset: animPresetResult,
+      // ★★主线程零唤醒实测（OS 级 CPU 会计 + 阳性对照）
+      anim_cpu: safeParse(proteusSelfDraw.animCpuProbeResults()),
       // ★★MA5 滚动联动（吸顶 / 视差 / 渐显——位置→进度换算在内核）
       anim_scroll: animScrollResult,
       // ★★MA6 序列编排（多段动画——一条动画内的分段推进）
