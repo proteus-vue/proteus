@@ -174,3 +174,7 @@ export type {
   ScreenExecutorStats,
   AnimLike,
 } from './screen-executor'
+
+// ★★M5 执行器的**生产端口**（宿主通道适配：树操作/动画转发 + 完成回调接回；2026-09-30）
+export { createHostScreenPorts, SCREEN_ANIM_DONE_KEY } from './screen-executor-host'
+export type { HostInvokeChannel, HostScreenPorts, HostScreenPortsOptions } from './screen-executor-host'

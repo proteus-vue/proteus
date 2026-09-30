@@ -1,0 +1,108 @@
+{
+  "e1_log": [
+    "mount:home:rebuild=false:node=100",
+    "visible:home#1:true:node=100"
+  ],
+  "e1_plays": [
+    {
+      "direction": "forward",
+      "transition": "slideUp",
+      "inAnims": 1,
+      "outAnims": 0,
+      "firstInFrom": 800,
+      "firstInTo": 0,
+      "firstOutFrom": null,
+      "firstOutTo": null
+    }
+  ],
+  "e2_log": [
+    "mount:detail:rebuild=false:node=110",
+    "visible:detail#2:true:node=110",
+    "visible:home#1:false:node=100"
+  ],
+  "e2_plays": [
+    {
+      "direction": "forward",
+      "transition": "slideUp",
+      "inAnims": 1,
+      "outAnims": 2,
+      "firstInFrom": 800,
+      "firstInTo": 0,
+      "firstOutFrom": 0,
+      "firstOutTo": -240
+    }
+  ],
+  "e3_log": [
+    "visible:home#1:true:node=100",
+    "destroy:detail#2:pop:node=110"
+  ],
+  "e3_plays": [
+    {
+      "direction": "back",
+      "transition": "slideUp",
+      "inAnims": 2,
+      "outAnims": 1,
+      "firstInFrom": -240,
+      "firstInTo": 0,
+      "firstOutFrom": 0,
+      "firstOutTo": 800
+    }
+  ],
+  "e_mirror_ok": true,
+  "e_home_id": "home#1",
+  "e_detail_id": "detail#2",
+  "e_stats": {
+    "commands": 8,
+    "transitions": 3,
+    "forward": 2,
+    "back": 1,
+    "skippedNone": 0,
+    "destroyed": {
+      "pop": 1,
+      "reset": 0,
+      "freeze": 0
+    },
+    "visibility": {
+      "shown": 3,
+      "hidden": 1
+    },
+    "mounts": {
+      "first": 2,
+      "rebuild": 0
+    },
+    "errors": []
+  },
+  "e_host_stats": {
+    "mount_calls": 2,
+    "visible_calls": 4,
+    "destroy_calls": 1,
+    "anim_calls": 3,
+    "anim_completed": 3,
+    "anim_hook_missing": 0,
+    "live_screens": 1,
+    "calls": [
+      "screen.mount",
+      "screen.visible",
+      "screen.anim",
+      "screen.mount",
+      "screen.visible",
+      "screen.anim",
+      "screen.visible",
+      "screen.visible",
+      "screen.anim",
+      "screen.destroy",
+      "screen.stats"
+    ],
+    "screens": [
+      {
+        "screenId": "home#1",
+        "visible": true,
+        "rootNodeId": 100
+      }
+    ],
+    "handle_count": 1
+  },
+  "e_pending_anims": 0,
+  "e_anim_hook": true,
+  "e_pump_rounds": 53
+}
