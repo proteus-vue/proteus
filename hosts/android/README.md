@@ -60,6 +60,36 @@ adb shell run-as dev.proteus.layoutcore cat files/layout-report.txt
 adb logcat -d -s proteus:I | tail -60
 ```
 
+## 平台动画（MA0-RT + 逐节点）
+
+两条路径，各有**机器判据**（`hosts/android/check-platform-anim.py`——此前只有手工读数，本轮补齐）：
+
+| 路径 | 覆盖场景 | 机制 |
+|---|---|---|
+| `platform-anim` | **整页转场** | `ProteusHostView.animatePageComposited`（容器级 `ViewPropertyAnimator` → RenderThread） |
+| `platform-anim-node` | **任意节点的合成动画** | `attachAnimCarrier`：把该节点的指令提升为**载体 View**，由平台动画驱动 |
+
+★**为什么逐节点必须落到 View（据 `android.jar` 取证，非记忆）**：`RenderNode` 与
+`Canvas.drawRenderNode` 是公开 API，但 **`RenderNodeAnimator` 不公开** ⇒ 裸 `RenderNode`
+的属性只能被主线程逐帧"设置"，**无法在 RenderThread 上动画**；能被平台动画的只有 View。
+载体只承载**被动画的节点**（其余仍走 `onDraw` 指令流），动画结束即拆除。
+
+```bash
+# 构建安装（release）
+bash hosts/android/build-and-run.sh --release
+# 触发（★App 是**广播触发**：`--es path` 只改按钮文案，不会自动跑）
+adb shell am broadcast -a dev.proteus.RUN --es path platform-anim-node
+adb shell am broadcast -a dev.proteus.RUN --es path platform-anim
+# 取回 + 判据
+adb pull /sdcard/Android/data/dev.proteus.layoutcore/files/platform-anim-node.json hosts/android/results/
+adb pull /sdcard/Android/data/dev.proteus.layoutcore/files/platform-anim.json hosts/android/results/
+python3 hosts/android/check-platform-anim.py hosts/android/results/platform-anim-node.json hosts/android/results/platform-anim.json
+```
+
+**判据口径（一处易错）**：B2 量的是**动画窗口内**增量（基线在动画中途取）——
+`addView` 接入载体的**一次性**布局/绘制成本不该算作"主线程参与了动画"（如实记录在报告里）。
+```
+
 ## 三个已实测的坑（脚本已处理）
 
 | # | 坑 | 正解 |

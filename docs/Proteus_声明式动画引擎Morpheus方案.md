@@ -376,10 +376,35 @@ iOS 同理：动 `transform` 是 GPU 加速，动 `frame` 触发布局重算。
 | 生产绘制 | **CALayer 树**（每节点一层） | **单 ViewGroup + Canvas 指令直下发**（真拍平，**无 per-node 平台对象**） |
 | 平台零参与落点 | **逐层**（每节点一条 `CAKeyframeAnimation`） | **容器级**（`ViewPropertyAnimator` 动宿主 View 的 transform/alpha） |
 | 覆盖场景 | 转场 + 任意节点的合成动画 | **整页转场**（最主流的合成动画场景） |
-| 逐节点平台动画 | ✅ 已落地 | ❌ 需引入 per-node `RenderNode`（= 改绘制架构，另案评估） |
+| 逐节点平台动画 | ✅ 已落地 | ✅ **已落地（载体 View 路径）** —— 见下 |
 
-⇒ **Android 逐节点需要 per-node `RenderNode`**（那会改变"真拍平"这一核心设计取舍），
-   本端当前覆盖"整页转场"；`proteus_layout_anim_commit_spec` 的 JNI 入口已就绪（数据面备好）。
+**★★Android 逐节点：为什么是"载体 View"而不是 per-node `RenderNode`（2026-09-30 取证结论）**
+
+据**本机 `android.jar`（API 34）实测**（`javap`，非记忆）：
+- `android.graphics.RenderNode` 与 `Canvas.drawRenderNode` **是公开 API**（`setTranslationX/Y`、
+  `setScaleX/Y`、`setRotationZ`、`setAlpha`、`setPivot`、`beginRecording` 均可调用）；
+- 但 **`android.view.RenderNodeAnimator` 不在公开 API 里** ⇒ 裸 `RenderNode` 的属性只能被
+  **主线程逐帧"设置"**，**无法在 RenderThread 上动画**；
+- 能被平台动画的只有 **View**（`ViewPropertyAnimator` → 内部的 RenderNodeAnimator）。
+
+⇒ 落点：把被动画的节点**提升**为一个只含它那几条指令的**载体 View**（`ProteusHostView.attachAnimCarrier`），
+   由平台动画驱动其 transform/alpha ⇒ 内容不重绘、主线程不参与。
+   · **不是"改回 View 体系"**：载体只承载被动画的节点（通常 1–3 个），其余仍走 `onDraw` 指令流；
+   · 播放期间该节点的指令从指令流**跳过**（否则重影）；动画结束载体即拆除并恢复。
+   · `Cmd` 保持纯净（不含 node id）——"哪些指令属于哪个节点"是由**适配器/簿记**提供的外部信息
+     （判据侧由探针直接给下标），不需要把协议改脏。
+
+**真机判据（`hosts/android/check-platform-anim.py`，容器级 + 逐节点，7 条判据 + 7 条破坏用例）**
+| 判据 | 读数 |
+|---|---|
+| B2 **动画期三个"零"** | draw / measure / layout 增量都为 0，且 4 个采样点计数恒定 (2,3,3) |
+| B3 终态精确 | tx=120 / ty=300 / scale=0.6 / alpha=0.5 |
+| B3b 逐帧推进 | 4 个不同读数 54.84 → 91.58 → 110.76 → 118.75（easeOut 减速形态） |
+| B4 拆除后恢复 | carriers=0 · 指令流重新绘制 · 像素非空 |
+| A2/A4（容器级） | 逐帧推进 + draw_delta=0（**本轮补齐的机器判据**——此前只有手工读数） |
+
+★**判据口径（一处易错，真机读数纠偏换来的）**：B2 量的是**动画窗口内**增量（基线在动画中途取）——
+`addView` 接入载体的**一次性**布局/绘制成本不该算作"主线程参与了动画"（报告里如实记录该值）。
 
 **★两条实现纪律（本轮确立，各有判据守住）**：
 1. **曲线求值只在 Rust**（唯一实现）⇒ 提交规格由内核**采样**（17 点/节点），宿主只做
