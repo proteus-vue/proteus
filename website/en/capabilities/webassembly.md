@@ -1,7 +1,7 @@
 ---
 title: useWebAssembly (capability.webassembly)
-group: 其他
-order: 9007
+group: 应用与生命周期
+order: 7013
 ---
 
 # useWebAssembly

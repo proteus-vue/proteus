@@ -1,7 +1,7 @@
 ---
 title: useCacheManager（capability.cache-manager）
 group: 设备与系统
-order: 1015
+order: 1016
 ---
 
 # useCacheManager

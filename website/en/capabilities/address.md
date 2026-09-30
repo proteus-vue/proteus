@@ -1,7 +1,7 @@
 ---
 title: useAddress (capability.address)
-group: 其他
-order: 9004
+group: 账号与支付
+order: 5008
 ---
 
 # useAddress

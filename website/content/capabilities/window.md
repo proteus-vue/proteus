@@ -1,7 +1,7 @@
 ---
 title: useWindow（capability.window）
 group: 应用与生命周期
-order: 7009
+order: 7011
 ---
 
 # useWindow

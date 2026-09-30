@@ -1,7 +1,7 @@
 ---
 title: useWifi (capability.wifi)
-group: 其他
-order: 9005
+group: 网络与通信
+order: 9
 ---
 
 # useWifi

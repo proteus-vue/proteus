@@ -8,7 +8,7 @@ order: 0
 
 > 82 capability primitives — SSOT = `PRIMITIVE_CATALOG` (capability kind) + `CapabilityHooks` interface. **All hooks implemented** (API ready — target bridges/degradation in each page's compat table).
 
-## Network & Communication (10)
+## Network & Communication (11)
 
 | # | Capability | API | Returns | Mini Program equivalent |
 |---|---|---|---|---|
@@ -20,10 +20,11 @@ order: 0
 | C31 | [capability.data-channel](/docs/capability/data-channel) | `useDataChannel()` | `Channel` | — |
 | C36 | [capability.bluetooth](/docs/capability/bluetooth) | `useBluetooth()` | `BluetoothAPI` | wx.openBluetoothAdapter |
 | C37 | [capability.nfc](/docs/capability/nfc) | `useNFC()` | `NFCAPI` | wx.getHCEState |
+| C55 | [capability.wifi](/docs/capability/wifi) | `useWifi()` | `WifiAPI` | wx.getConnectedWifi/getWifiList/connectWifi |
 | C69 | [capability.socket](/docs/capability/socket) | `useSocket()` | `UDPSocketHandle / TCPSocketHandle` | wx.createUDPSocket/createTCPSocket |
 | C78 | [capability.local-service](/docs/capability/local-service) | `useLocalService()` | `LocalServiceAPI` | wx.onLocalServiceFound/Lost/ResolveFail/DiscoveryStop |
 
-## Device & System (18)
+## Device & System (19)
 
 | # | Capability | API | Returns | Mini Program equivalent |
 |---|---|---|---|---|
@@ -37,6 +38,7 @@ order: 0
 | C12 | [capability.orientation](/docs/capability/orientation) | `useOrientation()` | `Orientation` | wx.onDeviceOrientationChange |
 | C13 | [capability.brightness](/docs/capability/brightness) | `useBrightness()` | `Result<void>` | wx.setScreenBrightness |
 | C14 | [capability.keyboard](/docs/capability/keyboard) | `useKeyboard()` | `KeyboardInfo` | wx.onKeyboardHeightChange |
+| C56 | [capability.we-run](/docs/capability/we-run) | `useWeRun()` | `WeRunData` | wx.getWeRunData |
 | C58 | [capability.element-query](/docs/capability/element-query) | `useElement()` | `ElementQuery` | wx.createSelectorQuery |
 | C59 | [capability.intersection](/docs/capability/intersection) | `useIntersection()` | `IntersectionHandle` | wx.createIntersectionObserver |
 | C60 | [capability.media-query](/docs/capability/media-query) | `useMediaQuery()` | `MediaQueryObserver` | wx.createMediaQueryObserver |
@@ -62,7 +64,7 @@ order: 0
 | C3 | [capability.location](/docs/capability/location) | `useLocation()` | `Result<Coords>` | wx.getLocation |
 | C4 | [capability.map](/docs/capability/map) | `useMap()` | `MapController` | wx.createMapContext |
 
-## Media & Scanning (10)
+## Media & Scanning (11)
 
 | # | Capability | API | Returns | Mini Program equivalent |
 |---|---|---|---|---|
@@ -70,6 +72,7 @@ order: 0
 | C2 | [capability.microphone](/docs/capability/microphone) | `useMicrophone()` | `Result<AudioBuffer>` | RecorderManager |
 | C42 | [capability.qr-code](/docs/capability/qr-code) | `useQRCode()` | `Result<string>` | wx.scanCode + canvas |
 | C49 | [capability.live](/docs/capability/live) | `useLive()` | `LiveRoom` | — |
+| C52 | [capability.album](/docs/capability/album) | `useAlbum()` | `AlbumAPI` | wx.chooseMedia/saveImageToPhotosAlbum/previewMedia |
 | C57 | [capability.canvas](/docs/capability/canvas) | `useCanvas()` | `CanvasController` | wx.createCanvasContext/canvasToTempFilePath/createOffscreenCanvas |
 | C61 | [capability.video](/docs/capability/video) | `useVideo()` | `VideoController` | wx.createVideoContext |
 | C62 | [capability.audio](/docs/capability/audio) | `useAudio()` | `AudioController` | wx.createInnerAudioContext |
@@ -77,7 +80,7 @@ order: 0
 | C68 | [capability.image-edit](/docs/capability/image-edit) | `useImageEdit()` | `ImageEditAPI` | wx.cropImage/editImage |
 | C70 | [capability.media-processing](/docs/capability/media-processing) | `useMediaProcessing()` | `MediaProcessingAPI` | wx.createMediaContainer/createVideoDecoder/createMediaAudioPlayer |
 
-## Account & Payment (8)
+## Account & Payment (9)
 
 | # | Capability | API | Returns | Mini Program equivalent |
 |---|---|---|---|---|
@@ -88,6 +91,7 @@ order: 0
 | C40 | [capability.payment](/docs/capability/payment) | `usePayment()` | `Result<PayResult>` | wx.requestPayment |
 | C41 | [capability.login](/docs/capability/login) | `useLogin()` | `Result<Token>` | wx.login |
 | C46 | [capability.in-app-purchase](/docs/capability/in-app-purchase) | `useInAppPurchase()` | `Result<Receipt>` | — |
+| C54 | [capability.address](/docs/capability/address) | `useAddress()` | `ShippingAddress` | wx.chooseAddress |
 | C65 | [capability.privacy](/docs/capability/privacy) | `usePrivacy()` | `PrivacyAPI` | wx.getPrivacySetting/openPrivacyContract/requirePrivacyAuthorize |
 
 ## Notifications & Sharing (10)
@@ -105,7 +109,7 @@ order: 0
 | C79 | [capability.translation](/docs/capability/translation) | `useTranslation()` | `TranslationAPI` | wx.onUserTriggerTranslation/onUserOffTranslation |
 | C80 | [capability.poster](/docs/capability/poster) | `usePoster()` | `PosterAPI` | wx.onGeneratePoster |
 
-## App & Lifecycle (10)
+## App & Lifecycle (13)
 
 | # | Capability | API | Returns | Mini Program equivalent |
 |---|---|---|---|---|
@@ -115,10 +119,13 @@ order: 0
 | C47 | [capability.mini-program](/docs/capability/mini-program) | `useMiniProgram()` | `MPContext` | wx.navigateToMiniProgram |
 | C48 | [capability.embedded](/docs/capability/embedded) | `useEmbedded()` | `HostContext` | — |
 | C50 | [capability.extension](/docs/capability/extension) | `useExtension()` | `ExtensionAPI` | — |
+| C51 | [capability.update](/docs/capability/update) | `useUpdate()` | `UpdateManagerAPI` | wx.getUpdateManager |
+| C53 | [capability.worker](/docs/capability/worker) | `useWorker()` | `WorkerHandle` | wx.createWorker |
 | C67 | [capability.preload](/docs/capability/preload) | `usePreload()` | `PreloadAPI` | wx.preloadAssets/preloadSkylineView/preloadWebview/preDownloadSubpackage |
 | C73 | [capability.idle](/docs/capability/idle) | `useIdle()` | `IdleAPI` | wx.requestIdleCallback/cancelIdleCallback |
 | C74 | [capability.window](/docs/capability/window) | `useWindow()` | `WindowAPI` | wx.setWindowSize |
 | C75 | [capability.navigation-guard](/docs/capability/navigation-guard) | `useNavigationGuard()` | `NavigationGuardAPI` | wx.enableAlertBeforeUnload/disableAlertBeforeUnload |
+| C82 | [capability.webassembly](/docs/capability/webassembly) | `useWebAssembly()` | `WebAssemblyAPI` | — |
 
 ## Observability & Debugging (3)
 
@@ -127,15 +134,3 @@ order: 0
 | C34 | [capability.analytics](/docs/capability/analytics) | `useAnalytics()` | `TrackAPI` | wx.reportEvent |
 | C35 | [capability.log](/docs/capability/log) | `useLog()` | `Logger` | — |
 | C66 | [capability.performance](/docs/capability/performance) | `usePerformance()` | `PerformanceAPI` | wx.getPerformance/reportPerformance |
-
-## Other (7)
-
-| # | Capability | API | Returns | Mini Program equivalent |
-|---|---|---|---|---|
-| C51 | [capability.update](/docs/capability/update) | `useUpdate()` | `UpdateManagerAPI` | wx.getUpdateManager |
-| C52 | [capability.album](/docs/capability/album) | `useAlbum()` | `AlbumAPI` | wx.chooseMedia/saveImageToPhotosAlbum/previewMedia |
-| C53 | [capability.worker](/docs/capability/worker) | `useWorker()` | `WorkerHandle` | wx.createWorker |
-| C54 | [capability.address](/docs/capability/address) | `useAddress()` | `ShippingAddress` | wx.chooseAddress |
-| C55 | [capability.wifi](/docs/capability/wifi) | `useWifi()` | `WifiAPI` | wx.getConnectedWifi/getWifiList/connectWifi |
-| C56 | [capability.we-run](/docs/capability/we-run) | `useWeRun()` | `WeRunData` | wx.getWeRunData |
-| C82 | [capability.webassembly](/docs/capability/webassembly) | `useWebAssembly()` | `WebAssemblyAPI` | — |

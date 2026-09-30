@@ -286,18 +286,28 @@ JSI 的优势恰恰是**细粒度同步调用**——而我们的性能叙事建
 
 ## 9. 里程碑
 
-### NC0 · 能力清单扫描（≈3 人日）★ 前置（★2026-09-30 升格为战略线起点）
+### NC0 · 能力清单扫描 ✅ **核心交付完成（2026-09-30）**——优先级表已生成并接门禁
 
 > ★现状（2026-09-30 核实）：82 Hook 的清单**已有**（`PRIMITIVE_CATALOG` 的 capability 类 + `audit` 矩阵），
 > 本步的真实工作量在**按业务频次排序**（复用 UC0 优先级算法）与**缺口清单产出**，不是从零盘点。
 > 可复用设施：`proteus explain` / `coverage-audit` / `check:gap-report`（degraded 只降不升棘轮）。
 
-- [ ] 复用 UC0 扫描工具，统计真实项目的原生能力调用清单
-- [ ] 跨项目聚合（**优先于单项目频次**）
-- [ ] 成本加权（S/M/L = 1/3/8）
-- [ ] 输出《能力实现优先级表》
+- [x] 统计能力调用清单 —— ✅ **生成式**（`scripts/gen-capability-priority.mjs`：三事实源求值，非手写）
+      · 事实源① 能力清单 82 项（SSOT）· ② 消费侧语料 Hook 调用点（showcase/examples/website，口径写死）
+      · ③ 微信官方 API 298 个中该 Hook 的 covered 承接数（`classifySpecApi` 反查）
+- [x] 跨项目聚合（**优先于单项目频次**）—— ✅ 排序键 = 跨项目覆盖 ↓ 语料频次 ↓ 官方承接 ↓ 编号
+- [x] 输出《能力实现优先级表》—— ✅ `docs/generated/capability-priority.md`
+      （82 能力 · 跨项目 15 · 语料用过 46 · 有官方承接 56）
+- [ ] 成本加权（S/M/L = 1/3/8）—— ⏳ **人工步骤**（机器不可算 ⇒ 表中该列**不编造**，标 `⏳ 待人工估`）
+- [ ] 真实业务语料替换 —— ⏳ 待接入超级应用后按同口径重跑（当前数字是**下界**）
 
-**出口**：拿到优先级表。**没有它，NC1 无法定范围。**
+**出口（已达）**：优先级表已产出且**接门禁**（`pnpm check:capability-priority`，CI + verify；表漂移/新能力漏登记分域 ⇒ 红）。
+NC1 可以据此定范围；剩余两项（成本人工估 + 真实语料）**不阻塞** NC1 起步（先用跨项目覆盖 ≥2 的 15 项）。
+
+**★附带修复的真缺陷**：能力分域表原为官网生成器内部常量（75 条，未导出）而 capability 实为 82
+⇒ 7 个 hook（update/album/worker/address/wifi/we-run/webassembly）落入「其他」兜底。
+已抽为 **`packages/component-ir/src/capability-domains.ts`**（唯一事实源，官网与 NC0 共用）+ 补齐 7 条
++ `auditCapabilityDomains` 防未来漏登记（单测 4 条锁定）。
 
 ### NC1 · codegen 工具链（≈2 人周）
 

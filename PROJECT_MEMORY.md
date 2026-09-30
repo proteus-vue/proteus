@@ -93,6 +93,24 @@ kind=capability ⇒ 82）+ 黑名单条目 `hooks-81` + 两份新文档进正向
 **登记**：board-inventory「其他文档（非 plan）」表新增两行（含决策、依据、与既有计划关系）；
 roadmap v0.6 段追加两条决策接入注记 + v2.0+ 插件体系行补指针。
 
+**⑤ ★NC0 开工（2026-09-30 同轮）：能力优先级表已生成并接门禁（战略线启动）**
+用户原话：「这条线启动顺序你可以根据我们现在的主线进度在合适的时机开工」⇒ 判断依据：**主线无 P0/P1 阻塞项**
+（18 张卡 15 全达标 / 3 部分达标且阻塞已归因）· **NC0 零依赖**（不需要新设施）· 输入齐备（catalog 82 + 语料 + 官方 spec）
+⇒ 即刻开工，一次做完 NC0 核心交付。
+
+| 交付物 | 说明 |
+|---|---|
+| `scripts/gen-capability-priority.mjs`（新） | 三事实源**求值**生成优先级表（非手写，防漂移）：① `PRIMITIVE_CATALOG` capability 82 · ② 消费侧语料 Hook 调用点（showcase/examples/website，**口径写死**：只计 `useXxx(` 且 Xxx ∈ 名单，排除 node_modules/dist/scripts/tests/generated）· ③ 微信官方 298 API 的 covered 承接数（`classifySpecApi` 反查） |
+| `docs/generated/capability-priority.md`（新） | 82 能力 × 9 列优先级表 · 跨项目 15 · 语料用过 46 · 有官方承接 56（合计 covered 197/298）· 按域汇总 + NC0 剩余人工步骤 |
+| `packages/component-ir/src/capability-domains.ts`（新，★真缺陷修复） | 能力分域表**唯一事实源**（原为官网生成器内部常量 75 条 ⇒ **7 个 hook 落「其他」**：update/album/worker/address/wifi/we-run/webassembly）；补齐 + `auditCapabilityDomains` 防漏登记；官网生成器改引用（**删除副本**），官网 29 个能力页分组随之归位 |
+| 门禁 | `check:capability-priority`（接 CI + verify）：表漂移 ⇒ 红；**新能力漏登记分域 ⇒ 红并指名**（判据顺序：先报装置错，不伪装成表漂移——破坏性验证过两种形态）+ 单测 `tests/capability-domains.test.ts` 4 条 |
+
+**★方法学教训（本轮新增）**：首版扫描**未设口径**时得到「82/82 全被用到」——**假信号**（定义处/测试/生成物
+都被算成"使用"）。⇒ 消费者侧口径（排除定义/测试/生成物）后真实值 46/82。**测量定义必须先写死再读数**，
+否则产出的优先级表是错的（与「判据的目标是正确时的样子」同源）。
+
+**NC1 可以起步**：剩余人工项（成本 S/M/L 估计 + 真实业务语料）**不阻塞**——先用跨项目覆盖 ≥2 的 15 项定范围。
+
 **④ 环境事实（供下轮少绕路）**：Swift **小字符串优化**——≤15 字节字面量不进数据段 ⇒ `strings` 搜不到短键名（`run_ts`），预检探针要用长字符串（`PROTEUS_EXIT_AFTER_REPORT`）。
 
 ### ★★★2026-09-29 全天收尾（94 个提交，全部已推送）· **★先读「今天的低效率」那一节**

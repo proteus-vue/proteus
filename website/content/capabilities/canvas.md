@@ -1,7 +1,7 @@
 ---
 title: useCanvas（capability.canvas）
 group: 媒体与扫码
-order: 4005
+order: 4006
 ---
 
 # useCanvas

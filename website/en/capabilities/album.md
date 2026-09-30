@@ -1,7 +1,7 @@
 ---
 title: useAlbum (capability.album)
-group: 其他
-order: 9002
+group: 媒体与扫码
+order: 4005
 ---
 
 # useAlbum

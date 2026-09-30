@@ -1,7 +1,7 @@
 ---
 title: useVideo (capability.video)
 group: 媒体与扫码
-order: 4006
+order: 4007
 ---
 
 # useVideo

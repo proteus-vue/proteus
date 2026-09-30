@@ -1,7 +1,7 @@
 ---
 title: useScreenCapture（capability.screen-capture）
 group: 设备与系统
-order: 1014
+order: 1015
 ---
 
 # useScreenCapture

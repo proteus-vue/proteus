@@ -1,7 +1,7 @@
 ---
 title: useMediaQuery (capability.media-query)
 group: 设备与系统
-order: 1013
+order: 1014
 ---
 
 # useMediaQuery

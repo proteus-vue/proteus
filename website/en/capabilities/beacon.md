@@ -1,7 +1,7 @@
 ---
 title: useBeacon (capability.beacon)
 group: 设备与系统
-order: 1017
+order: 1018
 ---
 
 # useBeacon

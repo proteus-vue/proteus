@@ -1,7 +1,7 @@
 ---
 title: useSocket (capability.socket)
 group: 网络与通信
-order: 9
+order: 10
 ---
 
 # useSocket
