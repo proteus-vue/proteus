@@ -494,6 +494,59 @@ export function __proteusHostRun(): string {
   })
 
   // ══════════════════════════════════════════════════════════════════
+  // K. ★★应用级生命周期事件源（真系统回调 → JS 总线）——用户要求「保险点儿」
+  //
+  // 【验证什么】能用 Android 真 API 的事件必须有**真实来源**，且**三环对齐**（任一环断 ⇒ K 红）：
+  //   ① Java 侧真系统回调（HostLifecycleEvents.attempts——只在真回调入口 +1）
+  //   ② Java 侧成功推入 JS（pushes——壳推通道回执 ok 才 +1）
+  //   ③ 本探针（总线订阅者）收到（seen）
+  //
+  // 【★★为什么重做（2026-09-30 实测抓出的假绿）】初版在这里 `emitFn(...)` **自触发**六个事件
+  //   ⇒ 判据读的是"场景自己造的事件"：**把 Java 侧来源整类删掉，K 组照样全绿**。
+  //   ⇒ 现在：系统事件一律由**脚本驱动**（run-host-runtime.sh ④/⑥ 阶段：
+  //     send-trim-memory / uimode night / user-rotation / TEST_CRASH），本探针**只被动记录**。
+  //   ★唯一保留的自触发是 `emitBadEvent`（那是对**校验器**的单测：非法事件名必须被拒——
+  //     它验的不是"来源"，不构成假绿）。
+  //
+  // 【证据落盘】最终快照由 Java 侧在**未捕获异常处理器**里写 `host-app-events.json`
+  //   （进程死前最后一刻：java 记账 + 本探针快照 + crash 节）——判据读那份做三链对齐。
+  // ══════════════════════════════════════════════════════════════════
+  const appEventProbe: Record<string, unknown> =
+    (globalThis as unknown as { __proteusAppEventProbe?: Record<string, unknown> }).__proteusAppEventProbe ?? {}
+  ;(globalThis as unknown as { __proteusAppEventProbe?: typeof appEventProbe }).__proteusAppEventProbe = appEventProbe
+  void (async () => {
+    try {
+      const { getHostLifecycleBus: getBus, APP_EVENTS: ALL_APP_EVENTS } = await import('@proteus-vue/api/capability-app')
+      const bus = getBus()
+      // ★幂等：bundle 重载（同进程内二次 RUN）不重复订阅——seen 计数不翻倍、总线不泄漏订阅
+      if (appEventProbe.subscribed === undefined) {
+        const seen: Record<string, number> = {}
+        for (const e of ALL_APP_EVENTS) seen[e] = 0
+        // 订阅全部（观察总线层——不经 Hooks，避免 Hook 层的"晚订阅补发"干扰计数）
+        for (const e of ALL_APP_EVENTS) {
+          bus.on(`app:${e}` as never, () => {
+            seen[e] = (seen[e] ?? 0) + 1
+          })
+        }
+        appEventProbe.seen = seen
+        appEventProbe.subscribed = ALL_APP_EVENTS.length
+      }
+      // ★壳推通道是否已装（installAppEventSource 的产物）
+      appEventProbe.hostChannelInstalled =
+        typeof (globalThis as { __proteusHostAppEvent?: unknown }).__proteusHostAppEvent === 'function'
+      // ★唯一自触发：校验器单测（非法事件名必须被拒 + 可读回执）
+      const emitFn = (globalThis as { __proteusHostAppEvent?: (e: string, p?: unknown) => string }).__proteusHostAppEvent
+      if (emitFn && appEventProbe.emitBadEvent === undefined) {
+        appEventProbe.emitBadEvent = emitFn('not-a-real-event')
+      }
+      appEventProbe.done = true
+    } catch (e) {
+      appEventProbe.fatal = String(e)
+      appEventProbe.done = true
+    }
+  })()
+
+  // ══════════════════════════════════════════════════════════════════
   // J. ★★App 端原生能力通道（`__proteusHostInvoke`）——**同一份业务代码在 App 端跑**
   //
   // 【验证什么（用户要求 App 也要落地）】10 个能力经壳转发：已实现的真调用、未实现的诚实 Err。
@@ -708,6 +761,8 @@ export function __proteusHostFinish(): string {
     cap_subscribers: cap?.subscribers ?? -1,
     // J：App 端原生能力通道读数（**同一份业务代码在 App 端跑**）
     app_native: app ?? { done: false },
+    // K：应用级生命周期事件源（真系统回调 → 总线）
+    app_events: (globalThis as unknown as { __proteusAppEventProbe?: unknown }).__proteusAppEventProbe ?? { done: false },
   })
 }
 

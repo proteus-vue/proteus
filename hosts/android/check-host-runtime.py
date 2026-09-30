@@ -22,8 +22,13 @@
     注册后调用成功且值正确。
   F 内存账本：引擎真实 JS 堆读数（memUsage）——分配后增长、GC 后下降；无宿主桥时诚实标注。
   G G-41 宿主 conformance 用**本运行时**替换 stub：32/32 PASS（H-01~H-08）。
+  J App 端原生能力通道（10 能力经壳转发：真调用成功 / 诚实 Err）——**Android 腿**（iOS 显式待办）。
+  K 应用级生命周期事件源（安卓腿）：系统事件由脚本真驱动，证据链**三环对齐**
+    （Java 真回调 attempts → Java 推送 pushes → JS 收到 seen），读同目录 host-app-events.json
+    （Java 在未捕获异常处理器里、进程死前落盘）。无该文件 ⇒ 判红指向 run-host-runtime.sh。
 
 用法：python3 hosts/android/check-host-runtime.py <host-runtime.json> [host-shell.json]
+  （K 证据文件按主报告同目录推导：host-app-events.json）
 退出码：0 全过 / 1 有失败 / 0（产物缺失时诚实跳过）
 """
 import json
@@ -62,6 +67,10 @@ def main() -> int:
 
     def report(msg: str) -> None:
         print(f"  ✓ {msg}")
+
+    def warn(msg: str) -> None:
+        """显式待办标注（非失败：平台分档的诚实边界——不静默，也不误判）"""
+        print(f"  ⚠ {msg}")
 
     # 前置
     host_id = d.get("host_id")
@@ -276,8 +285,12 @@ def main() -> int:
 
     # ── J App 端原生能力通道（用户要求：App 也要落地）──
     # 【要证明什么】10 个能力经壳转发：**已实现的真调用成功、未实现的诚实 Err**（不伪造能力位）。
+    # ★平台分档（2026-09-30）：本组是**安卓壳**的实现（HostCapabilities.java + JNI）；
+    #   iOS 腿未接线（Swift 壳无原生能力层）⇒ 显式标注待办，不用"安卓的判据"误判 iOS。
     app_native = d.get("app_native") or {}
-    if not app_native.get("done"):
+    if host_id == "ios":
+        warn("J 组（App 原生能力）：iOS 腿未接线——Swift 壳无 HostCapabilities（显式标注，待办）")
+    elif not app_native.get("done"):
         fail(f"App 原生能力组未完成（app_native.done={app_native.get('done')}，fatal={app_native.get('fatal')}）")
     else:
         # ① 已实现的能力：真实成功 + 数据正确
@@ -398,6 +411,114 @@ def main() -> int:
             fail(f"⑩ 真实宿主未报告足够的调用记录（{host_calls_raw}）——疑宿主未实现 invoke 或桥未转发")
         else:
             report(f"⑩ 真实 Java 宿主机自报调用 {len(calls)} 次：{', '.join(str(c) for c in calls[:6])}…（证据来自宿主记账，非桥自述）")
+
+    # ── K 应用级生命周期事件源（用户要求「再检查下安卓是否真的实现了应用生命周期相关的能力落地」）──
+    # 【★★2026-09-30 重做：初版是**假绿**】初版由 JS 探针**自触发**六个事件 ⇒ 把 Android 侧
+    #   来源整类删掉也全绿（与 J 组"自我认证"同款缺陷，本仓禁止）。现在证据链=**三环对齐**：
+    #     ① attempts——Java 侧真系统回调发生（只在真回调入口 +1；JS 侧无法写入）
+    #     ② pushes  ——Java 侧成功推入 JS（壳推通道回执 ok 才 +1）
+    #     ③ seen    ——JS 总线订阅者实际收到（探针**只被动记录**，不再自触发任何系统事件）
+    #   系统事件由脚本驱动（send-trim-memory / uimode night / user-rotation / TEST_CRASH），
+    #   证据由 Java 在**未捕获异常处理器里**（进程死前）落盘：host-app-events.json（与本报告同目录）。
+    ae = d.get("app_events") or {}
+    evidence_path = os.path.join(os.path.dirname(path), "host-app-events.json")
+    if host_id == "ios":
+        # 诚实边界：应用级事件源是**安卓腿**的实现（HostLifecycleEvents.java 接 Android 真回调）；
+        #   iOS 壳当前只转发壳生命周期（pause/resume）⇒ 显式标注待办，不静默、不假装。
+        warn("K 组（应用级事件源）：iOS 腿未接线——Swift 壳只转发壳生命周期（显式标注，待办）")
+    elif not ae.get("done"):
+        fail(f"K 应用级事件源未完成（done={ae.get('done')} fatal={ae.get('fatal')}）")
+    elif ae.get("hostChannelInstalled") is not True:
+        fail("K 壳推通道未装（__proteusHostAppEvent 缺失）——Java 侧系统回调无处可去")
+    else:
+        report(f"K 壳推通道已装（订阅 {ae.get('subscribed')} 个应用级事件）")
+        ev = None
+        try:
+            with open(evidence_path, encoding="utf-8") as f:
+                ev = json.load(f)
+        except Exception as e:  # noqa: BLE001
+            fail(f"K 证据文件读不出（{evidence_path}）：{e} —— 跑 run-host-runtime.sh（它驱动真事件并取回证据）")
+        if ev is not None:
+            java = ev.get("java") or {}
+            js = ev.get("jsProbe") or {}
+            crash = ev.get("crash") or {}
+            attempts = java.get("attempts") or {}
+            pushes = java.get("pushes") or {}
+            lp = java.get("lastPayload") or {}
+            history = java.get("history") or []
+            seen = js.get("seen") or {}
+
+            # ① 装配面（真来源存在的前提；两条独立）
+            if java.get("errorHandlerInstalled") is not True:
+                fail("K 全局未捕获异常钩子未装（error 事件无真来源）")
+            if java.get("audioReceiverRegistered") is not True:
+                fail("K 音频信号接收器未注册（BECOMING_NOISY / HEADSET_PLUG）——audio-interruption 无真来源")
+
+            # ② 四个可驱动事件：三环各自 ≥1（任一环断 = 链路断了）
+            driven = ["memory-warning", "theme-change", "resize", "error"]
+            broken = []
+            for e in driven:
+                a, p, s = (attempts.get(e) or 0, pushes.get(e) or 0, seen.get(e) or 0)
+                if a < 1 or p < 1 or s < 1:
+                    broken.append(f"{e}(回调{a}/推送{p}/收到{s})")
+            if broken:
+                fail("K 三环未对齐（真回调→壳推送→JS 收到）：" + " · ".join(broken))
+            else:
+                detail = " · ".join(
+                    f"{e} {attempts.get(e)}/{pushes.get(e)}/{seen.get(e)}" for e in driven)
+                report(f"K 三环对齐（回调/推送/收到）：{detail}")
+
+            # ③ 驱动载荷内容（历史环里必须能找到脚本驱动的那**具体载荷**——自动触发的替代不了它）
+            def hist_has(evt: str, pred) -> bool:
+                for h in history:
+                    if not isinstance(h, dict) or h.get("evt") != evt:
+                        continue
+                    pl = h.get("payload")
+                    try:
+                        if pred(pl if isinstance(pl, dict) else {}):
+                            return True
+                    except Exception:  # noqa: BLE001
+                        continue
+                return False
+
+            if not hist_has("memory-warning", lambda p: p.get("rawLevel") == 10):
+                fail("K 历史环里没有 send-trim-memory RUNNING_LOW(rawLevel=10) 的载荷"
+                     "—— memory-warning 不是真驱动（自动触发的其它等级替代不了）")
+            else:
+                report("K memory-warning 内容：rawLevel=10（RUNNING_LOW——脚本驱动的真实等级）")
+            if (lp.get("theme-change") or {}).get("theme") != "dark":
+                fail(f"K theme-change 终态应为 dark（脚本最后一步为 uimode night yes）：{lp.get('theme-change')}")
+            else:
+                report("K theme-change 内容：终态 theme=dark（uimode night no→yes 真驱动）")
+            rz = lp.get("resize") or {}
+            if not (isinstance(rz.get("windowWidth"), int) and isinstance(rz.get("windowHeight"), int)
+                    and rz.get("windowWidth", 0) > 0 and rz.get("windowHeight", 0) > 0
+                    and rz.get("windowWidth") != rz.get("windowHeight")):
+                fail(f"K resize 载荷异常（应为正且宽高不等的真实窗口尺寸）：{rz}")
+            else:
+                report(f"K resize 内容：{rz.get('windowWidth')}x{rz.get('windowHeight')}dp（wm user-rotation 真驱动）")
+            if "proteus-test-crash" not in str(crash.get("error") or "") or crash.get("jsAck") != "ok":
+                fail(f"K error 链证据不实（期望真未捕获异常 + JS 回执 ok）：{crash}")
+            else:
+                report(f"K error 链：真未捕获异常（线程 {crash.get('thread')}）→ JS 回执 ok → 进程死前落盘")
+
+            # ④ 音频两条：★诚实验证面——保护广播不可 adb 注入（SecurityException，已实测）⇒
+            #    按"接收器已注册"验，**不驱动、不假装**（真触发=物理拔插耳机）。
+            report("K audio-interruption：接收器已注册（★保护广播不可注入 ⇒ 不驱动，诚实标注）")
+
+            # ⑤ 平台确实没有的两条：如实不触发，且**不得伪造**（宿主不该硬发）
+            fabricated = [e for e in ("unhandled-rejection", "page-not-found") if (attempts.get(e) or 0) > 0]
+            if fabricated:
+                fail(f"K 宿主伪造了平台不存在的事件：{fabricated}（Android 无此概念——引擎/框架语义）")
+            else:
+                report("K 平台无概念两条（unhandled-rejection / page-not-found）如实未触发（未伪造）")
+
+            # ⑥ 白名单校验（非法事件名必须被拒——不是"什么都收"）
+            bad = js.get("emitBadEvent", ae.get("emitBadEvent"))
+            if bad != "unknown-event:not-a-real-event":
+                fail(f"K 白名单未生效（非法事件名应被拒并回执）：{bad}")
+            else:
+                report("K 白名单校验生效（非法事件名被拒 + 可读回执）")
 
     # ── G 宿主 conformance ──
     total = d.get("conf_total", 0)

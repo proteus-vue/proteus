@@ -1,0 +1,100 @@
+{
+  "ts": 1790768435386,
+  "java": {
+    "attempts": {
+      "memory-warning": 1,
+      "resize": 1,
+      "error": 1,
+      "theme-change": 2
+    },
+    "pushes": {
+      "memory-warning": 1,
+      "resize": 1,
+      "error": 1,
+      "theme-change": 2
+    },
+    "history": [
+      {
+        "evt": "memory-warning",
+        "payload": {
+          "level": 1,
+          "rawLevel": 10
+        },
+        "ts": 1790768425541
+      },
+      {
+        "evt": "theme-change",
+        "payload": {
+          "theme": "light"
+        },
+        "ts": 1790768425637
+      },
+      {
+        "evt": "theme-change",
+        "payload": {
+          "theme": "dark"
+        },
+        "ts": 1790768425728
+      },
+      {
+        "evt": "resize",
+        "payload": {
+          "windowWidth": 821,
+          "windowHeight": 332
+        },
+        "ts": 1790768435248
+      },
+      {
+        "evt": "error",
+        "payload": {
+          "error": "java.lang.RuntimeException: proteus-test-crash"
+        },
+        "ts": 1790768435386
+      }
+    ],
+    "lastPayload": {
+      "memory-warning": {
+        "level": 1,
+        "rawLevel": 10
+      },
+      "resize": {
+        "windowWidth": 821,
+        "windowHeight": 332
+      },
+      "error": {
+        "error": "java.lang.RuntimeException: proteus-test-crash"
+      },
+      "theme-change": {
+        "theme": "dark"
+      }
+    },
+    "errorHandlerInstalled": true,
+    "audioReceiverRegistered": true,
+    "active": true
+  },
+  "jsProbe": {
+    "seen": {
+      "launch": 0,
+      "show": 1,
+      "hide": 1,
+      "error": 1,
+      "unhandled-rejection": 0,
+      "memory-warning": 1,
+      "theme-change": 2,
+      "resize": 1,
+      "page-not-found": 0,
+      "audio-interruption-begin": 0,
+      "audio-interruption-end": 0
+    },
+    "subscribed": 11,
+    "hostChannelInstalled": true,
+    "emitBadEvent": "unknown-event:not-a-real-event",
+    "done": true
+  },
+  "crash": {
+    "note": "android-uncaught",
+    "thread": "proteus-test-crash",
+    "error": "java.lang.RuntimeException: proteus-test-crash",
+    "jsAck": "ok"
+  }
+}

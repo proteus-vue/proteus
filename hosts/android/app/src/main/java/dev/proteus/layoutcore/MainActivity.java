@@ -57,6 +57,17 @@ public class MainActivity extends Activity {
         root = new FrameLayout(this);
         setContentView(root);
 
+        // ★★应用级生命周期事件源（用户要求「再检查下安卓是否真的实现了应用生命周期相关的能力落地」）：
+        //   注册 ComponentCallbacks2（onTrimMemory/onLowMemory 的真实来源）+ 装全局异常钩子 +
+        //   动态注册音频信号接收器（BECOMING_NOISY / HEADSET_PLUG）。
+        //   ★此前只有 onResume/onPause ⇒ 11 个应用级事件里 8 个是"声明未实现"（本轮补齐）。
+        lifecycleEvents = new HostLifecycleEvents(this, reportDir());
+        getApplicationContext().registerComponentCallbacks(lifecycleEvents);
+        lifecycleEvents.installErrorHandler();
+        // ★音频中断的**真来源**：动态接收器（★保护广播不可 adb 注入 ⇒ K 组按"接收器已注册"验，
+        //   见 HostLifecycleEvents 类头的诚实边界）。
+        lifecycleEvents.registerAudioReceiver();
+
         runButton = new android.widget.Button(this);
         runButton.setText("运行 4050 元素测试（" + testPath + "）");
         runButton.setTextSize(16f);
@@ -73,18 +84,40 @@ public class MainActivity extends Activity {
         //   （本仓实测报 SecurityException）→ 改用显式广播，语义上仍是「外部触发」而非自启动。
         android.content.BroadcastReceiver receiver = new android.content.BroadcastReceiver() {
             @Override public void onReceive(android.content.Context c, android.content.Intent i) {
+                String a = i.getAction();
+                // ★★K 组错误链的**真驱动**（用户「保险点儿」）：真未捕获异常（后台线程抛出）
+                //   → 真全局钩子（HostLifecycleEvents）→ JS 回执 ok → 证据落盘 → 链式原 handler
+                //   （进程**真死**——脚本随后 pull 证据文件并断言，不做"假崩溃"）。
+                //   ★为什么不用 `am crash`：它是 SIGSEGV（native 信号），**不经过 Java 未捕获钩子**；
+                //     本动作抛的是真 Java 异常，走的正是 App.onError 该覆盖的那条路。
+                if ("dev.proteus.CRASH".equals(a)) {
+                    // ★每进程一次（CRASH_CLAIMED CAS）：多 Activity 实例 = 多接收器，广播会到达每一个
+                    //   ⇒ 不加许可会起多个崩溃线程（今日实测：一次驱动 4 次转发/4 次落盘）。
+                    if (!HostLifecycleEvents.claimCrashOnce()) return;
+                    new Thread(new Runnable() {
+                        @Override public void run() {
+                            throw new RuntimeException("proteus-test-crash");
+                        }
+                    }, "proteus-test-crash").start();
+                    return;
+                }
                 String p = i.getStringExtra("path");
                 if (p != null) testPath = p;
                 runAll();
             }
         };
         android.content.IntentFilter filter = new android.content.IntentFilter("dev.proteus.RUN");
+        filter.addAction("dev.proteus.CRASH");
         // ★Android 14+ 要求显式声明导出行为
         if (android.os.Build.VERSION.SDK_INT >= 34) {
             registerReceiver(receiver, filter, android.content.Context.RECEIVER_EXPORTED);
         } else {
             registerReceiver(receiver, filter);
         }
+        // ★★就绪标记（run-*.sh 的**条件等待**信号——替代"monkey 后盲等 N 秒再发广播"）：
+        //   receiver 已注册 ⇒ 脚本的 `am broadcast dev.proteus.RUN` 必定被收到。
+        //   脚本：logcat -s proteus:I 等 "run-receiver-ready"（见 check-no-blind-wait 门禁）。
+        Log.i(TAG, "run-receiver-ready");
     }
 
     /** 报告目录：★外置存储（release 包无 run-as，脚本经 adb pull 取回） */
@@ -911,6 +944,11 @@ public class MainActivity extends Activity {
                 String k = fk.next();
                 out.put(k, f.get(k));
             }
+            // ★★K 组证据链（用户「保险点儿」）：Java 侧**独立记账**并入报告顶层——
+            //   attempts=真系统回调次数 / pushes=成功推入 JS 次数 / lastPayload=最后载荷。
+            //   JS 侧"我收到了"可伪造；本记账在 Java 进程内，判据要求两者对齐（任一环断即红）。
+            HostLifecycleEvents le = this.lifecycleEvents;
+            if (le != null) out.put("host_app_events", le.stats());
             out.put("ok", r.optBoolean("ok") && f.optBoolean("async_resolved"));
         } catch (Throwable t) {
             try {
@@ -977,6 +1015,8 @@ public class MainActivity extends Activity {
     private boolean shellHookLoaded = false;
     /** ★App 原生能力实现（真实 Java；见 HostCapabilities 头注） */
     private HostCapabilities hostCaps = null;
+    /** ★★应用级生命周期事件源（真 Android 回调：onTrimMemory/配置变化/全局异常——见其头注） */
+    private HostLifecycleEvents lifecycleEvents = null;
 
     private void forwardShellLifecycle(String evt) {
         try {
@@ -1003,6 +1043,16 @@ public class MainActivity extends Activity {
         forwardShellLifecycle("pause");
     }
 
+    /**
+     * ★配置变化（主题/尺寸/旋转/折叠屏）——**真系统回调**。
+     * 必须覆写（否则系统会重建 Activity；且这是 theme-change / resize 的唯一真实来源）。
+     */
+    @Override
+    public void onConfigurationChanged(android.content.res.Configuration newConfig) {
+        super.onConfigurationChanged(newConfig);
+        if (lifecycleEvents != null) lifecycleEvents.handleConfiguration(newConfig);
+    }
+
     @Override
     protected void onResume() {
         super.onResume();
@@ -1018,6 +1068,12 @@ public class MainActivity extends Activity {
         // ★框架代管资源释放（G-42 精神）：Worker 线程池 / 空闲队列
         HostCapabilities c = this.hostCaps;
         if (c != null) c.dispose();
+        // ★生命周期事件源卸载（防 Activity 销毁后回调仍触发 → 泄漏）
+        HostLifecycleEvents le = this.lifecycleEvents;
+        if (le != null) {
+            le.dispose();
+            getApplicationContext().unregisterComponentCallbacks(le);
+        }
     }
 
     /**
