@@ -83,6 +83,20 @@ const batch = compileRoute(spec, { enter: 2, exit: 1 })`,
     source: 'packages/animation/src/presets.ts:route.slideUp',
   },
   {
+    id: 'preset/route.slideDown',
+    kind: 'preset',
+    title: '下滑关闭（dismiss：当前页往下滑出）',
+    description: '被关闭页 translateY: 0 → +distance + 轻微淡出；**进场页留空**（下层页本就静止）。',
+    why: '与 `slideUp` 是**相反**的位移方向（推入 vs 弹出）。★这是统一枚举 `RouteTransition.slideDown` '
+      + '在本端的落点——Web 侧走 `slide-down` CSS、MP 侧走 `routeType: \'slideDown\'`，三端同源。',
+    when: '页面关闭 / 弹层 dismiss（往下滑出，露出下层）',
+    example: `const spec = presets.route.slideDown({ distance: 800 })
+const batch = compileRoute(spec, { exit: closingPageId })`,
+    verify: 'tests/animation-presets.test.ts 第三腿段（slideDown 方向与 slideUp 相反）',
+    status: 'implemented',
+    source: 'packages/animation/src/presets.ts:route.slideDown',
+  },
+  {
     id: 'preset/route.zoom',
     kind: 'preset',
     title: '缩放下沉（新页放大进入 + 旧页下沉）',
@@ -221,6 +235,26 @@ onScroll((y) => engine.animSeekScroll(JSON.stringify({ scroll: y })))`,
     verify: 'hosts/ios/check-anim-rt2.py 的 I4（退化窗口 / 滚动+弹簧 各被拦）',
     status: 'implemented',
     source: 'packages/animation/src/presets.ts:scroll.fadeIn',
+  },
+
+  {
+    id: 'primitive/route-transition-bridge',
+    kind: 'primitive',
+    title: '统一路由转场枚举的第三腿（App ⇄ RouteTransition）',
+    description: '`appTransition(meta.transition)` / `APP_TRANSITION_MAP`——把统一枚举映射到本端转场规格（穷尽 `Record`）。',
+    why: '★仓库已有统一枚举 `RouteTransition`（`@proteus-vue/contracts`），Web 腿（`webTransitionName`）'
+      + '与 MP 腿（`mpRouteType`）都已落地，**App 腿此前是空的**（router 侧注释写着"App 走 native（v0.6）"）。'
+      + '本规则即第三腿：**同一份 `<route>.meta.transition` 三端取到语义对应的转场**，业务不写平台分支。'
+      + '★映射写成穷尽 `Record` ⇒ 枚举增员时**编译报错**（不是静默漏一个值）。',
+    when: 'App 侧按路由元信息选转场时（由未来的 App 路由栈调用）',
+    example: `import { appTransition } from '@proteus-vue/animation'
+const spec = appTransition(route.meta?.transition)   // 非法/缺省 ⇒ none（数据防御）
+const batch = compileRoute(spec, { enter: nextId, exit: curId })`,
+    verify: 'tests/animation-presets.test.ts 第三腿段（穷尽性 / 非法输入兜底 / 参数覆盖 / 语义对齐）'
+      + ' + 三端交叉核对段（**同时加载 router 两张表**比对键集）',
+    status: 'implemented',
+    source: 'packages/animation/src/route-transition.ts:APP_TRANSITION_MAP',
+    decision: 'docs/proteus-router-plan/05-m5-app-codegen.md §3.2（本端实现其映射表）',
   },
 
   /* ────────────────────────── 声明面原语 ────────────────────────── */

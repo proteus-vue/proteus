@@ -31,6 +31,9 @@ import {
   ESCAPE_KINDS,
   compileTimeline,
   timelineDuration,
+  APP_TRANSITION_MAP,
+  appTransition,
+  appTransitions,
 } from '@proteus-vue/animation'
 import type { AnimDecl } from '@proteus-vue/animation'
 
@@ -642,5 +645,94 @@ describe('跨属性共享时间轴（多属性共享停靠点 ⇒ 内核结构�
       { nodeId: 7 },
     )
     expect(JSON.stringify(viaTimeline.anims)).toBe(JSON.stringify(manual.anims))
+  })
+})
+
+describe('统一路由转场枚举的第三腿（App / Morpheus ⇄ RouteTransition）', () => {
+  // 枚举的字面清单（与 @proteus-vue/contracts 的 RouteTransition 同源；此处写死用于**交叉核对**）
+  const ENUM: readonly string[] = ['slideUp', 'slideDown', 'halfScreen', 'scaleDown', 'none']
+
+  it('★映射**穷尽**枚举（少一个就红——防"枚举增员、这端静默漏掉"）', () => {
+    expect(appTransitions().sort()).toEqual([...ENUM].sort())
+    for (const t of ENUM) {
+      expect(APP_TRANSITION_MAP[t as never], `${t} 缺映射`).toBeDefined()
+    }
+  })
+
+  it('★每个转场都能编译出指令（除 none——瞬切不应产生动画）', () => {
+    for (const t of ENUM) {
+      const spec = APP_TRANSITION_MAP[t as never]
+      expect(spec.name).toBeTruthy()
+      const decls = [...spec.enter, ...spec.exit]
+      if (t === 'none') {
+        expect(decls).toHaveLength(0)
+      } else {
+        expect(decls.length, `${t} 应有动画声明`).toBeGreaterThan(0)
+        // 必须能通过编译期校验（预设自身不能违反红线）
+        expect(() => compileAnimations(spec.enter.length ? spec.enter : spec.exit, { nodeId: 1 })).not.toThrow()
+      }
+    }
+  })
+
+  it('★slideDown 方向与 slideUp **相反**（dismiss 语义：往下滑出）', () => {
+    const up = APP_TRANSITION_MAP.slideUp
+    const down = APP_TRANSITION_MAP.slideDown
+    const upEnterY = up.enter.find((d) => d.kind === 'translateY')!
+    const downExitY = down.exit.find((d) => d.kind === 'translateY')!
+    expect(upEnterY.from!).toBeGreaterThan(0)      // slideUp：新页从下方（正位移）进
+    expect(upEnterY.to).toBe(0)
+    expect(downExitY.from).toBe(0)                 // slideDown：当前页往下方（正位移）出
+    expect(downExitY.to).toBeGreaterThan(0)
+  })
+
+  it('★halfScreen 映射到"只动进场页"的弹窗预设（与 Web halfscreen 语义一致）', () => {
+    const h = APP_TRANSITION_MAP.halfScreen
+    expect(h.exit).toHaveLength(0)     // 下层页不动（弹窗语义）
+    expect(h.opaque).toBe(false)       // 半屏 ⇒ 下层可见
+  })
+
+  it('★非法 / 缺省输入 ⇒ 落到 none（数据防御，不抛错——与 Web 侧 fade 兜底同一姿态）', () => {
+    expect(appTransition(undefined).name).toBe('none')
+    expect(appTransition('nonsense').name).toBe('none')
+    expect(appTransition(123).name).toBe('none')
+    expect(appTransition({}).name).toBe('none')
+  })
+
+  it('★参数覆盖生效（distance / durationMs 透传到对应预设）', () => {
+    const a = appTransition('slideUp', { distance: 600, durationMs: 500 })
+    expect(a.durationMs).toBe(500)
+    expect(a.enter[0]!.from).toBe(600)
+    const b = appTransition('halfScreen', { distance: 250 })
+    expect(b.enter[0]!.from).toBe(250)
+    // 不传参数 ⇒ 与预设默认逐字段一致
+    expect(appTransition('slideUp').enter[0]!.from).toBe(presets.route.slideUp().enter[0]!.from)
+  })
+
+  it('★与 Web/MP 两腿语义对齐（同一枚举成员指向同一类转场，不串味）', () => {
+    // Web: halfScreen→halfscreen（层叠半屏）、scaleDown→scale（缩放）；MP: 同名 routeType
+    // 本端：halfScreen→bottomSheet（半屏弹窗）、scaleDown→zoom（缩放下沉）——语义对应而非名字相同
+    expect(APP_TRANSITION_MAP.halfScreen.name).toBe('bottomSheet')
+    expect(APP_TRANSITION_MAP.scaleDown.name).toBe('zoom')
+    expect(APP_TRANSITION_MAP.slideUp.name).toBe('slideUp')
+    expect(APP_TRANSITION_MAP.slideDown.name).toBe('slideDown')
+  })
+})
+
+describe('三端转场枚举一致性（跨包交叉核对——防"枚举增员、某一端漏掉"）', () => {
+  it('★Web / MP / App 三张映射表的键**完全相同**（同一份 RouteTransition）', async () => {
+    // 直接加载 router 的两张表做**真实交叉核对**（不是读文档、不是抄清单）
+    const mod = await import('../packages/router/src/transforms/transform-transition')
+    const web = Object.keys(mod.WEB_TRANSITION_MAP).sort()
+    const mp = Object.keys(mod.MP_ROUTE_TYPE_MAP).sort()
+    const app = appTransitions().sort()
+    expect(web).toEqual(mp)
+    expect(mp).toEqual(app)
+    // 且每一端都真的给了值（不是空字符串/undefined 占位）
+    for (const t of web) {
+      expect(typeof mod.WEB_TRANSITION_MAP[t as never]).toBe('string')
+      expect(typeof mod.MP_ROUTE_TYPE_MAP[t as never]).toBe('string')
+      expect(APP_TRANSITION_MAP[t as never]).toBeDefined()
+      expect(mod.isTransition(t)).toBe(true)
+    }
   })
 })

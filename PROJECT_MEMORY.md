@@ -48,7 +48,7 @@
   只有**可复制代码块**里的引用才真正有害。
 · 破坏性验证：恢复 `p-card` → 红并精确报 `03-fluid-grid.md:31`；还原 → 575 md 全过。
 
-## 当前状态速览（最近一次更新：**2026-09-30 · 跨属性共享时间轴落地（compileTimeline）—— 取证推翻"未做"判断**）★新会话以此为准
+## 当前状态速览（最近一次更新：**2026-09-30 · 统一路由转场第三腿（App/Morpheus）接上 —— 三端枚举交叉核对通过**）★新会话以此为准
 
 ### ★★★2026-09-30 · 红线升格：禁止**任何**盲等（sleep/timeout 全禁）+ iOS 链路事件驱动 + I3 收官
 
@@ -92,6 +92,58 @@ kind=capability ⇒ 82）+ 黑名单条目 `hooks-81` + 两份新文档进正向
 破坏性验证过（注入 `81 个 Capability Hook` ⇒ 精确报行号）。
 **登记**：board-inventory「其他文档（非 plan）」表新增两行（含决策、依据、与既有计划关系）；
 roadmap v0.6 段追加两条决策接入注记 + v2.0+ 插件体系行补指针。
+
+**㉔ ★★★统一路由转场枚举的第三腿（App/Morpheus）落地（2026-09-30）—— 取证发现"两套命名互不相干"**
+
+用户「继续」⇒ 取证剩余项时发现一个**真缺口**：仓库有统一转场枚举但我此前没把它接到 Morpheus。
+
+**一、★取证发现（两处"声明了但无人消费"）**
+1. `wxRouteType`（Morpheus 预设里每个转场都带）——**全仓无人消费**（唯一出现是 dist 的 d.ts）。
+   即"同一份源码 MP 走 routeType、App 走 Morpheus"当时只是**注释里的愿望**。
+2. 统一枚举 `RouteTransition`（`@proteus-vue/contracts`：`slideUp | slideDown | halfScreen | scaleDown | none`）
+   的三端映射表在 `packages/router/.../transform-transition.ts`：**Web 腿**（`webTransitionName`）与
+   **MP 腿**（`mpRouteType`）**都已落地**，而 **App 腿是空的**（注释写着"App 走 native（v0.6）"，
+   `APP_TRANSITION_MAP` 从未实现）。而 Morpheus 预设库正是 App 侧转场的实现 ⇒ **本轮的活就是接第三腿**。
+
+**二、实现（`packages/animation/src/route-transition.ts`）**
+- `APP_TRANSITION_MAP: Record<RouteTransition, RouteTransitionSpec>`——**穷尽映射**：
+  枚举增员时**编译报错**（不是静默漏一个值；与 Web/MP 两张表的防漂移方式一致）；
+- 五个成员：`slideUp`→`slideUp()`、`slideDown`→**新补的** `slideDown()`、`halfScreen`→`bottomSheet()`、
+  `scaleDown`→`zoom()`、`none`→**空规格**（不是 `undefined` ⇒ 调用方不用写 `if (spec)` 分支）；
+- `appTransition(transition, opts?)`：**非法/缺省 ⇒ none**（数据防御，不抛错——与 Web 侧 fade 兜底同一姿态），
+  支持 `distance`/`durationMs` 覆盖；
+- `appTransitions()`：**从映射表推导**清单（不手写第二份）。
+
+**三、新补 `presets.route.slideDown()`**（统一枚举里唯一缺的那一个）
+dismiss 语义：被关闭页往下滑出（`translateY: 0 → +dist`），**`enter` 留空**（下层页本就静止）；
+★`wxRouteType: null` 并注明理由——微信 routeType 里没有"下滑关闭"这个预设（dismiss 由导航栈语义表达）。
+
+**四、测试 8 条（TS 71/71）**
+穷尽性（少一个就红）/ 每个转场都能编译（`none` 应有 0 条声明）/ **`slideDown` 方向与 `slideUp` 相反** /
+`halfScreen` 是"只动进场页"的弹窗语义 / 非法输入兜底 / 参数覆盖 / 与 Web·MP 语义对齐 /
+★**跨包交叉核对**：测试里**同时加载 router 的两张表**比对键集（`Web ≡ MP ≡ App`），
+且每个键在每端都有真实值——防"枚举增员、某一端漏掉"。
+
+**五、门禁新发现：`check-deps` 的扫描盲区（已修 + 破坏性验证）**
+`rules.ts` 里的**文档示例**（`` example: `import { x } from '@proteus-vue/animation'` ``）被误判成真 import
+⇒ 误报"缺依赖"。根因：跳过规则写的是 `/["'`]import {|\\nimport/`，而模板串**首行**没有引号包裹、
+也不带 `\n` 前缀 ⇒ 漏网。⇒ 补一条"模板字符串起始行"跳过（含 `x: \`` 与行首反引号两种形态）；
+★**破坏性验证**：注入未声明的真 import ⇒ 仍当场变红（确认没放水）。
+★纪律（第二次同类）：**跳过规则要对着"实际形态"，不是对着"我想象的写法"**。
+
+**六、依赖与文档**
+- `packages/animation` 新增 `@proteus-vue/contracts` 依赖（**type-only**：只 import `RouteTransition` 类型，
+  运行时仍零依赖——`check:publish-contents` 与 `check:deps` 都过）；
+- 说明书 26 条（新增 `preset/route.slideDown` + `primitive/route-transition-bridge`）；
+- 包 README 补"统一路由转场：三端同一份枚举"一节；
+- **router M5 计划文档**（`docs/proteus-router-plan/05-m5-app-codegen.md`）标注状态更新：
+  映射的**语义**已实现，但**路由栈本身**（push/pop/多层栈 / `navigation.generated.ts` / `createAppRouter()`）仍未做——
+  本表是"就绪的第三腿"，等 M5 路由栈来调用（如实写清，不含糊）。
+
+**七、诚实边界**：`wxRouteType` 至今仍是**信息性字段**（本端不消费它；真正跨端对齐靠的正是本轮接上的
+统一枚举）。两条路都合法：M5 文档里的 `APP_TRANSITION_MAP`（→ `presentModal`/`pageSheet` 等**平台标识**）
+适合"用系统导航栈 + 系统转场"；本轮的桥返回**声明规格**（Morpheus 自己驱动动画）——
+取决于 App 侧是否用系统导航栈，两者可并存。
 
 **㉓ ★★★跨属性共享时间轴落地（2026-09-30）—— ★取证推翻了文档里"未做"的原判断**
 

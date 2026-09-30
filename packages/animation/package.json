@@ -18,6 +18,9 @@
     "dist",
     "README.md"
   ],
+  "dependencies": {
+    "@proteus-vue/contracts": "0.3.0-beta.11"
+  },
   "scripts": {
     "build": "tsc -p tsconfig.build.json --emitDeclarationOnly && esbuild src/index.ts --bundle --format=esm --platform=browser --outfile=dist/index.js"
   }
