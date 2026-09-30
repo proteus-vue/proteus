@@ -31,6 +31,8 @@ HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 HOST_SRCS=(
   "$HERE/ProteusHost/selfdraw-scene.swift"
   "$HERE/ProteusHost/host-runtime-scene.swift"
+  "$HERE/ProteusHost/host-capabilities.swift"
+  "$HERE/ProteusHost/host-lifecycle-events.swift"
 )
 for f in "${HOST_SRCS[@]}"; do
   [ -f "$f" ] || { echo "✗ 找不到宿主源码：$f"; exit 2; }
@@ -45,7 +47,7 @@ RC=0
 PLATFORM_SRC="$(ls "$HERE"/../../platform/ios/ProteusPlatform/*.swift 2>/dev/null | tr '\n' ' ')"
 OUT="$(xcrun --sdk iphoneos swiftc -typecheck \
   -target arm64-apple-ios15.0 \
-  -framework UIKit -framework CoreText -framework JavaScriptCore \
+  -framework UIKit -framework CoreText -framework JavaScriptCore -framework AVFoundation \
   -parse-as-library \
   $PLATFORM_SRC "${HOST_SRCS[@]}" 2>&1)" || RC=$?
 if [ "$RC" -ne 0 ]; then

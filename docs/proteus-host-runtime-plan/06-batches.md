@@ -69,6 +69,36 @@
 > ② Flutter/Harmony 宿主（B5）；③ iOS 侧 `obj_count` 恒 0（JSC 无该读数——不伪造）。
 > ⇒ **B4 状态：Android ✅ + iOS ✅（真机双绿）· Flutter 未开始**。
 
+> **★★2026-09-30 四：两腿**能力层**对齐（用户「继续对齐 iOS」）——J/K 组从"安卓单腿"变成双端真验**
+>
+> | 维度 | Android（QuickJS） | iOS（JSC） |
+> |---|---|---|
+> | 原生能力层 | `HostCapabilities.java`（Java + JNI） | `HostCapabilities.swift`（**镜像同一 `invoke(method, argsJson)` 契约**——UIKit/Foundation 真实现） |
+> | 能力数 | 13 方法（host.context / update.* / window / worker.* / idle.* / preload / extension / mini-program / webassembly.* / native.calls） | 同 13 方法（★webassembly 走**引擎内建**路径——JSC 自带 WASM） |
+> | 诚实降级 | 抛 `UnsupportedOperationException`（JNI 转异常） | 返回 `{"ok":false,"missing":true}`（桥两通道之一） |
+> | 应用事件源 | `HostLifecycleEvents.java`（`ComponentCallbacks2` + 广播接收器 + 异常钩子） | `HostLifecycleEvents.swift`（**同构**：通知观察者 + AVAudioSession + `NSSetUncaughtExceptionHandler`） |
+> | K 证据形态 | 死前落盘 `host-app-events.json`（`java` 节） | 死前落盘同文件（`native` 节——判据两边都读） |
+> | 真机结果 | J 组 10 项全绿 + K 三环对齐（memory/theme/resize/error 各 1/1/1） | J 组 10 项全绿 + K 三环对齐（memory/theme/error） |
+>
+> ★★**iOS 三个真缺陷（本轮真机抓出，记录防复发）**：
+> ① **`NSGetUncaughtExceptionHandler()` 返回的是自己** ⇒ "链式保留原 handler"变成**无限递归**
+>    （实测一次崩溃转发 **1629 次**，还把 64 条历史环冲刷干净）⇒ 正解：安装时**保存**原 handler；
+> ② **两相驱动的相间等待不足**：JSC 的 `evaluateScript` 只排空**微任务**，而 J 组的
+>    `WebAssembly.instantiate` 是**异步编译**（要更多轮主循环）⇒ 让出一轮就 finish 会读到
+>    `app_nested.done=false`（J 组整组判红）⇒ 正解：**条件等待**（轮询 `__proteusAppPending.done`，
+>    50ms × 40 轮上界）；
+> ③ **编译诊断与类型检查不一致**：`swiftc -typecheck` 漏报
+>    （`a C function pointer cannot be formed from a closure that captures dynamic Self type`——
+>    只做类型检查时不报、真编译才报）⇒ 记入"零设备检查的诚实边界"。
+>
+> ★**驱动面差异（诚实标注，不假装对齐）**：Android 有 adb **外部**事件注入
+> （send-trim-memory / uimode night / user-rotation / CRASH 广播）；iOS **没有**等价通道
+> ⇒ iOS 的 theme/memory 走**应用内探针**（真 UIKit `traitCollectionDidChange` 回调 / 真
+> `didReceiveMemoryWarning` 通知路径），resize/audio 只验"观察者已注册"（需真旋转/真来电）。
+> ★**破坏性验证 4/4 命中**：drives 不实 / memory 载荷不实 / error 链断裂 / 推送环为空——全部当场红。
+>
+> ⇒ **能力层状态：Android ✅ + iOS ✅（真机双绿，判据共用一套）**。
+
 ---
 
 ## 1. 分批总览

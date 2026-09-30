@@ -111,9 +111,10 @@ rm -rf "$APP"; mkdir -p "$APP"
 PLATFORM_SRC="$(ls "$ROOT"/platform/ios/ProteusPlatform/*.swift 2>/dev/null | tr '\n' ' ')"
 [ -n "$PLATFORM_SRC" ] || { echo "✗ 找不到 platform/ios 平台适配源码（HA0.5 抽取后被删？）"; exit 3; }
 xcrun --sdk iphoneos swiftc -O -target arm64-apple-ios15.0 \
-  -framework UIKit -framework CoreText -framework JavaScriptCore -parse-as-library \
+  -framework UIKit -framework CoreText -framework JavaScriptCore -framework AVFoundation -parse-as-library \
   -o "$APP/ProteusSelfDraw" $PLATFORM_SRC "$HERE/ProteusHost/selfdraw-scene.swift" \
-  "$HERE/ProteusHost/host-runtime-scene.swift" "$ABI_LIB" "$LIB"
+  "$HERE/ProteusHost/host-runtime-scene.swift" "$HERE/ProteusHost/host-capabilities.swift" \
+  "$HERE/ProteusHost/host-lifecycle-events.swift" "$ABI_LIB" "$LIB"
 
 echo "==> ⑤ 组装 .app"
 # ★★两个 bundle **都装**（本仓实测踩到：只装当前模式那个 ⇒ 从桌面点开时
@@ -279,7 +280,7 @@ if [ "$MODE" = "host-runtime" ]; then
   }
   ( xcrun devicectl device process launch --console --terminate-existing \
       --environment-variables '{"PROTEUS_EXIT_AFTER_REPORT":"1"}' \
-      --device "$UDID" "$BUNDLE_ID" --host-runtime > "$LAUNCH_LOG" 2>&1; echo "LAUNCH_RC=$?" >> "$LAUNCH_LOG" ) &
+      --device "$UDID" "$BUNDLE_ID" --host-runtime --k-crash > "$LAUNCH_LOG" 2>&1; echo "LAUNCH_RC=$?" >> "$LAUNCH_LOG" ) &
   LPID=$!
   # ① 等"两相完成 + 生命周期观察者已装"（内容条件；缺此信号 ⇒ App 未就绪，后续触发会丢事件）
   if ! wait_cond "grep -q HOST_RUNTIME_PHASE_DONE '$LAUNCH_LOG'" 60; then
@@ -295,6 +296,7 @@ if [ "$MODE" = "host-runtime" ]; then
   xcrun devicectl device process launch --device "$UDID" com.apple.Preferences >/dev/null 2>&1 || true
   xcrun devicectl device process launch --device "$UDID" "$BUNDLE_ID" >/dev/null 2>&1 || true
   # ③ 等 App 达成退出条件（kill -0 存活探测；launch 返回 = 报告已落盘）
+  #    ★K 组（--k-crash）：退出条件是**真未捕获异常**（进程真死，非 exit(0)）——同一探测语义
   if ! wait_cond "! kill -0 $LPID 2>/dev/null" 120; then
     echo "✗ App 未在 120s 内达成退出条件（suspend+resume 都 applied 才退）——日志尾："
     tail -10 "$LAUNCH_LOG" | sed 's/^/      /'
@@ -332,7 +334,7 @@ else
     --environment-variables '{"PROTEUS_EXIT_AFTER_REPORT":"1"}' \
     --device "$UDID" "$BUNDLE_ID" > "$LAUNCH_LOG" 2>&1 || LAUNCH_RC=$?
 fi
-if grep -qiE "not been explicitly trusted|invalid code signature|error 3 \(0x03\)" "$LAUNCH_LOG"; then
+if [ -f "$LAUNCH_LOG" ] && grep -qiE "not been explicitly trusted|invalid code signature|error 3 \(0x03\)" "$LAUNCH_LOG"; then
   echo "✗ 启动被拦：需在**设备上手动信任开发者证书**"
   echo "    设置 → 通用 → VPN与设备管理 → 「Apple Development: …」→ 信任"
   echo "    （iOS 的强制步骤，脚本无法代做）"
@@ -397,6 +399,15 @@ if [ "$MODE" = "host-runtime" ]; then
     echo "    壳转发报告：$HERE/results/$SHELL_REPORT"
   else
     echo "    ⚠ 壳转发报告未取到（${SHELL_REPORT}）——判据会据此判红（生命周期未被壳转发）"
+  fi
+  # ★K 证据（死前落盘）：判据按主报告**同目录**推导 host-app-events.json —— 必须先删本地旧件
+  rm -f "$HERE/results/host-app-events.json"
+  if xcrun devicectl device copy from --device "$UDID" --domain-type appDataContainer \
+      --domain-identifier "$BUNDLE_ID" --source "Documents/host-app-events.json" \
+      --destination "$HERE/results/host-app-events.json" >/dev/null 2>&1; then
+    echo "    K 证据：$HERE/results/host-app-events.json（真未捕获异常 → JS 回执 → 死前落盘）"
+  else
+    echo "    ⚠ K 证据未取到（host-app-events.json）——判据会据此判红（应用事件源未被真驱动）"
   fi
   echo "==> ⑨ 判据（与 Android 同一脚本：platform 由报告 host_id 自报）"
   python3 "$ROOT/hosts/android/check-host-runtime.py" "$HERE/results/$REPORT_FILE" "$HERE/results/$SHELL_REPORT"

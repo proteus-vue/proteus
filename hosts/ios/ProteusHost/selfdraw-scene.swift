@@ -4737,6 +4737,22 @@ final class SelfDrawViewController: UIViewController {
         }
     }
 
+    // ── ★★应用级事件源（K 组 iOS 腿）：两个**真系统回调**转发到 HostLifecycleEvents ──
+    //   ★为什么在这里覆写：VC 的这两个方法是系统调用的**唯一入口**（通知中心没有等价通知）。
+    //     两者都是"真实来源"——本仓不留"声明了但没来源"的事件（判据按观察者注册 + 真回调验）。
+
+    /// 主题变化（iOS 13+ 外观切换 / 真系统回调）
+    override func traitCollectionDidChange(_ previous: UITraitCollection?) {
+        super.traitCollectionDidChange(previous)
+        HostRuntimeScene.handleTraitChange(traitCollection)
+    }
+
+    /// 尺寸变化（旋转 / 分屏 / 折叠屏——真系统回调；pt 单位）
+    override func viewWillTransition(to size: CGSize, with coordinator: UIViewControllerTransitionCoordinator) {
+        super.viewWillTransition(to: size, with: coordinator)
+        HostRuntimeScene.handleTransition(size: size)
+    }
+
     /// ★★逻辑层基准的驱动器：**逐用例**调用 `__proteus.step()`，每次之间让出主线程。
     ///
     /// 为什么这样驱动（同自绘场景的结论）：JSC 的 `evaluateScript` 不排空微任务，

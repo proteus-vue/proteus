@@ -388,7 +388,7 @@ export const APP_EVENT_META: Record<AppEvent, LifecycleEventMeta> = {
     doc: '未捕获的运行时错误',
     mp: "App.onError' / 'wx.onError",
     web: "window.onerror",
-    app: '壳全局异常钩子（Android Thread.setDefaultUncaughtExceptionHandler——真机 CRASH 驱动验证）',
+    app: '壳全局异常钩子（Android Thread.setDefaultUncaughtExceptionHandler / iOS NSSetUncaughtExceptionHandler——双端真机验证）',
   },
   'unhandled-rejection': {
     doc: '未处理的 Promise rejection',
@@ -403,14 +403,14 @@ export const APP_EVENT_META: Record<AppEvent, LifecycleEventMeta> = {
     doc: '系统内存警告（可用于释放缓存）',
     mp: "App.onMemoryWarning' / 'wx.onMemoryWarning",
     web: 'performance.memory 启发式',
-    app: '壳内存压力回调（Android ComponentCallbacks2.onTrimMemory——真机 send-trim-memory 驱动验证 / iOS didReceiveMemoryWarning）',
+    app: '壳内存压力回调（Android ComponentCallbacks2.onTrimMemory / iOS didReceiveMemoryWarning——双端真机验证）',
     note: '★**归属 C25 useBackground**（本事件不在 useAppLifecycle 上——两处重复已于 2026-09-30 去重）',
   },
   'theme-change': {
     doc: '系统深色/浅色模式切换',
     mp: "App.onThemeChange' / 'wx.onThemeChange",
     web: "matchMedia(prefers-color-scheme)",
-    app: '壳配置变化回调（Android Activity.onConfigurationChanged 读 uiMode——真机 uimode night 驱动验证）',
+    app: '壳配置变化回调（Android onConfigurationChanged 读 uiMode / iOS traitCollectionDidChange——双端真机验证）',
     note: '★**归属 C25 useBackground**（去重后从 useAppLifecycle 移除）',
   },
   resize: {
@@ -906,8 +906,8 @@ export const PLATFORM_TOPICS: Record<string, Record<'mp' | 'web' | 'app', Platfo
       {
         title: '音频会话中断',
         titleEn: 'Audio session interruption',
-        desc: '电话/其他应用占用音频会话时，系统会怕断 —— App 端由壳转发（小程序同名事件来自 App.onAudioInterruption*）',
-        descEn: 'When a call or another app takes the audio session the system interrupts playback — forwarded by the App shell',
+        desc: '电话/其他应用占用音频会话时，系统会打断播放 —— 两平台都由壳接真来源（iOS `AVAudioSession.interruptionNotification` 真会话语义；Android 无统一回调 ⇒ 用 `BECOMING_NOISY`/`HEADSET_PLUG` 接收器近似，★保护广播不可脚本驱动）',
+        descEn: 'When a call or another app takes the audio session the system interrupts playback — both shells wire real sources (iOS: `AVAudioSession.interruptionNotification`; Android has no unified callback ⇒ approximated via `BECOMING_NOISY`/`HEADSET_PLUG` receivers, ★protected broadcasts, not script-drivable)',
       },
     ],
   },

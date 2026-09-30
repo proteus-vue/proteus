@@ -1,7 +1,133 @@
 {
+  "app_events" : {
+    "done" : true,
+    "emitBadEvent" : "unknown-event:not-a-real-event",
+    "hostChannelInstalled" : true,
+    "seen" : {
+      "audio-interruption-begin" : 0,
+      "audio-interruption-end" : 0,
+      "error" : 0,
+      "hide" : 0,
+      "launch" : 0,
+      "memory-warning" : 0,
+      "page-not-found" : 0,
+      "resize" : 0,
+      "show" : 0,
+      "theme-change" : 0,
+      "unhandled-rejection" : 0
+    },
+    "subscribed" : 11
+  },
+  "app_native" : {
+    "__hostCalls" : [
+      "host.context",
+      "update.check",
+      "update.apply",
+      "window.setSize",
+      "worker.create",
+      "worker.post",
+      "worker.terminate",
+      "idle.request",
+      "preload.assets",
+      "extension.load",
+      "mini-program.navigate",
+      "webassembly.validate",
+      "native.calls"
+    ],
+    "done" : true,
+    "extensionLoad" : {
+      "error" : {
+        "code" : "extension.unsupported",
+        "name" : "CapError"
+      },
+      "ok" : false
+    },
+    "guardDisable" : {
+      "ok" : true
+    },
+    "guardEnable" : {
+      "ok" : true
+    },
+    "hostContext" : {
+      "capabilities" : [
+        "update",
+        "window",
+        "worker",
+        "idle",
+        "preload"
+      ],
+      "provider" : "ios",
+      "version" : "0.1.0"
+    },
+    "idleCallbackRan" : true,
+    "idleRequest" : {
+      "data" : 1,
+      "ok" : true
+    },
+    "navigateMiniProgram" : {
+      "code" : "mini-program.unsupported",
+      "ok" : false
+    },
+    "preloadAssets" : {
+      "data" : {
+        "total" : 0,
+        "warmed" : 0
+      },
+      "ok" : true
+    },
+    "preloadSubpackage" : {
+      "error" : {
+        "code" : "preload.unsupported",
+        "name" : "CapError"
+      },
+      "ok" : false
+    },
+    "updateApply" : {
+      "ok" : true
+    },
+    "updateCheck" : {
+      "data" : {
+        "currentVersion" : "0.1.0",
+        "hasUpdate" : false
+      },
+      "ok" : true
+    },
+    "wasmAddResult" : {
+      "engine" : "engine-builtin",
+      "ok" : true,
+      "result" : 42,
+      "type" : "i32"
+    },
+    "wasmSupportsStreaming" : false,
+    "wasmValidateEmptyModule" : {
+      "data" : true,
+      "ok" : true
+    },
+    "windowSetSize" : {
+      "data" : {
+        "applied" : false,
+        "decorSize" : [
+          1170,
+          2532
+        ],
+        "note" : "iOS 全屏 App 不可程序化改窗口（iPad 分屏由系统驱动）——如实 applied=false",
+        "requested" : {
+          "h" : 768,
+          "w" : 1024
+        }
+      },
+      "ok" : true
+    },
+    "workerPost" : {
+      "ok" : true
+    },
+    "workerTerminate" : {
+      "ok" : true
+    }
+  },
   "async_resolved" : true,
   "async_resolved_at_run" : false,
-  "build_id" : "6b4765b3-162814",
+  "build_id" : "95a57438-195853",
   "bundle_load_ok" : true,
   "cap_app_phase" : "SHOW",
   "cap_bg_events" : [
@@ -44,10 +170,10 @@
   "finish_ok" : true,
   "frame_driver" : "CADisplayLink",
   "host_id" : "ios",
-  "mem_after_alloc" : 42059584,
-  "mem_after_gc" : 42059584,
+  "mem_after_alloc" : 42583936,
+  "mem_after_gc" : 42583936,
   "mem_available" : true,
-  "mem_before" : 8357632,
+  "mem_before" : 10078016,
   "mem_obj_after" : 0,
   "mem_obj_before" : 0,
   "mem_ok" : false,
@@ -75,7 +201,7 @@
   "registered_native_ok" : true,
   "registered_native_value" : "{\"v\":1}",
   "run_ok" : true,
-  "run_ts" : 1790756917,
+  "run_ts" : 1790769561,
   "scene" : "host-runtime",
   "shell_hook_installed" : true,
   "shell_lifecycle_logged" : 0,
