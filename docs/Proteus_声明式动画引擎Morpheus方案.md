@@ -576,6 +576,7 @@ iOS 同理：动 `transform` 是 GPU 加速，动 `frame` 触发布局重算。
 | 节点复用 | 长列表快速滚动**无错误项动画** | 专项回归通过 |
 | 布局动画 | 列表增删让位 | 60Hz **不掉帧** | ◐ 真机 215 节点补间通过（帧耗时 p95 0.7ms） |
 | **转场（合成属性）** | **主线程零参与**（Systrace / Instruments 实测） | 提交一次 | ◐ iOS 已落地：`CAKeyframeAnimation` 提交 + presentation 探针；★Instruments 级实测**未做** |
+| **转场（路由接线）** | 命令流 → 执行器 → Morpheus 批次 | 端上可跑 | ✅ **2026-09-30**：`routeTransitionBatches`（含 pop 反向的**镜像对**）+ `createScreenExecutor`（M5 命令流消费者）+ 真机 ⑦ 组 5 条全绿（`check-app-stack.py`）|
 | **转场（误改布局属性）** | **编译期拦截**，不得静默降级 | 零静默失败 | ✅ 内核判定 + 宿主**明确拒绝**（真机 G4） |
 | 声明式覆盖 | 常见动画**无需逃生口** | 逃生口率 < 5% ← **口径已机器化**：`escapes.format()` 报率（常量 `ESCAPE_RATIO_TARGET`），超阈值给出提示（当前无业务用点，故如实为「装置就绪、待采数」） |
 | 性能 | 与 B1 benchmark 同口径实测 | 不掉帧 + 输入延迟达标 |

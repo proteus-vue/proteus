@@ -49,6 +49,9 @@ export {
 export { presets, route, list, element, easing, scroll } from './presets'
 // ★★统一路由转场枚举的**第三腿**（App / Morpheus；Web 与 MP 两腿在 @proteus-vue/router）
 export { APP_TRANSITION_MAP, appTransition, appTransitions } from './route-transition'
+// ★★方向语义 + 执行器入口（2026-09-30：M5 虚拟栈命令流的消费者接线）
+export { reverseDecls, routeTransitionBatches } from './route-transition'
+export type { RouteTransitionDirection, RouteTransitionPlan } from './route-transition'
 // ★★跨属性共享时间轴（多属性共享停靠点——内核 lockstep 推进的声明面入口）
 export { compileTimeline, timelineDuration } from './timeline'
 export type { TimelineSpec, TimelineStop } from './timeline'

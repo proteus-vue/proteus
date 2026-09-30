@@ -16,6 +16,11 @@
 // 【产物】`hosts/android/bridge/dist/bundle-app-stack.js`（IIFE；由 build-batch.mjs 生成）
 // 【调用】Java 侧：eval(bundle) 定义 `globalThis.__proteusAppStackRun`，再 eval 调用它
 import { createAppStack } from '@proteus-vue/router/app-stack'
+// ★场景 E：执行器（命令流的消费者）+ 转场规划器（真 animation 包）
+import { routeTransitionBatches } from '@proteus-vue/animation'
+// ★执行器在 render-backend 的**子路径**（包 exports 未暴露 ⇒ 相对导入同一 src 文件：
+//   类型检查与 esbuild 走同一条路径，零 alias/paths 配置、也无'陈旧 dist'面）。
+import { createScreenExecutor } from '../../../packages/render-backend/src/screen-executor'
 import { flattenScreenEntries } from '@proteus-vue/router/codegen'
 import type { RouteNode } from '@proteus-vue/router/types'
 
@@ -172,3 +177,129 @@ export function __proteusAppStackRun(argsJson?: string): string {
 // ★挂到全局，供 Java 侧直接 eval 调用（IIFE 无模块系统）
 ;(globalThis as unknown as { __proteusAppStackRun: typeof __proteusAppStackRun }).__proteusAppStackRun =
   __proteusAppStackRun
+
+/**
+ * 场景 E 主体：真栈 + 真执行器 + 真转场规划器（端口 = 记录桩）。
+ * 返回读数（JSON 可序列化）；断言细节在 python 判据侧（本函数只产出事实）。
+ */
+async function runExecutorScenario(): Promise<Record<string, unknown>> {
+  const eSpecs: Record<string, { name: string; path: string; transition?: 'slideUp' | 'halfScreen' | 'none' }> = {
+    home: { name: 'home', path: '/home', transition: 'slideUp' },
+    detail: { name: 'detail', path: '/detail', transition: 'slideUp' },
+    third: { name: 'third', path: '/third', transition: 'halfScreen' },
+  }
+  const eStack = createAppStack({ screens: eSpecs, policy: { keepWindow: 3 } })
+  const eLog: string[] = []
+  let eNextNode = 100
+  const ePlays: Array<Record<string, unknown>> = []
+  const eExecutor = createScreenExecutor({
+    host: {
+      mountScreen(sc: { screenId: string; name: string; rebuild: boolean }) {
+        const node = eNextNode++
+        eLog.push(`mount:${sc.name}:rebuild=${sc.rebuild}:node=${node}`)
+        return node
+      },
+      setScreenVisible(screenId: string, v: boolean, root: number | undefined) {
+        eLog.push(`visible:${screenId}:${v}:node=${root}`)
+      },
+      destroyScreen(screenId: string, reason: string, root: number | undefined) {
+        eLog.push(`destroy:${screenId}:${reason}:node=${root}`)
+      },
+    },
+    anim: {
+      playRouteTransition(
+        plan: { incoming: { anims: readonly { nodeId: number; from?: number; to?: number }[] }; outgoing: { anims: readonly { nodeId: number; from?: number; to?: number }[] } },
+        ctx: { direction: string; transition: string },
+      ) {
+        const i0 = plan.incoming.anims[0]
+        const o0 = plan.outgoing.anims[0]
+        ePlays.push({
+          direction: ctx.direction,
+          transition: ctx.transition,
+          inAnims: plan.incoming.anims.length,
+          outAnims: plan.outgoing.anims.length,
+          firstInFrom: i0 && typeof i0.from === 'number' ? i0.from : null,
+          firstInTo: i0 && typeof i0.to === 'number' ? i0.to : null,
+          firstOutFrom: o0 && typeof o0.from === 'number' ? o0.from : null,
+          firstOutTo: o0 && typeof o0.to === 'number' ? o0.to : null,
+        })
+      },
+    },
+    plan: (t: unknown, targets: { incoming?: number; outgoing?: number }, o?: { direction?: 'forward' | 'back' }) =>
+      routeTransitionBatches(t, targets, o ?? {}),
+    onScreenMounted: (id: string) => eStack.markRebuilt(id),
+  })
+  const ePump = () => eExecutor.applyCommands(eStack.drainCommands())
+
+  // E1 首屏 → E2 push（forward）→ E3 pop（back，镜像对）
+  eStack.push('home')
+  await ePump()
+  const e1 = { log: [...eLog], plays: [...ePlays] }
+  const eHomeId = eStack.stack[0]?.screenId ?? ''
+  eLog.length = 0
+  ePlays.length = 0
+  eStack.push('detail')
+  await ePump()
+  const e2 = { log: [...eLog], plays: [...ePlays] }
+  const eDetailId = eStack.stack[1]?.screenId ?? ''
+  eLog.length = 0
+  ePlays.length = 0
+  eStack.pop()
+  await ePump()
+  const e3 = { log: [...eLog], plays: [...ePlays] }
+  const eStats = eExecutor.stats()
+  const e2play = e2.plays[0] as Record<string, unknown> | undefined
+  const e3play = e3.plays[0] as Record<string, unknown> | undefined
+  const mirrorOk =
+    !!e2play &&
+    !!e3play &&
+    e2play.firstInFrom === e3play.firstOutTo &&
+    e2play.firstInTo === e3play.firstOutFrom
+  return {
+    e1_log: e1.log,
+    e1_plays: e1.plays,
+    e2_log: e2.log,
+    e2_plays: e2.plays,
+    e3_log: e3.log,
+    e3_plays: e3.plays,
+    e_mirror_ok: mirrorOk,
+    e_home_id: eHomeId,
+    e_detail_id: eDetailId,
+    e_stats: eStats,
+  }
+}
+
+/** 场景 E 主体（定义在上方两相导出处之后可被引用——函数提升语义，导出顺序无关） */
+// ══════════════════════════════════════════════════════════════════
+// ★★场景 E：宿主执行器（命令流的消费者）——**两相模式**（kick → 宿主泵 job → read）
+//
+// 【为什么不能挤进主入口（同步函数）】执行器端口允许返回 Promise（真机的建屏/动画完成
+//   天然是异步的）⇒ 编排链要经微任务排空。而 QuickJS 的微任务只在宿主泵 job 时执行
+//   （本仓已在 host-runtime 场景踩过并固化两相模式）⇒ 与它同款：
+//     ① `kick()` 发起异步链（结果写全局）→ ② 宿主 `nativeRunPendingJobs()` → ③ `read()` 取读数。
+// ══════════════════════════════════════════════════════════════════
+export function __proteusAppStackExecutorKick(): string {
+  const g = globalThis as unknown as { __proteusAppStackExecutorResult?: unknown }
+  if (g.__proteusAppStackExecutorResult !== undefined) return 'already'
+  void (async () => {
+    try {
+      const r = await runExecutorScenario()
+      g.__proteusAppStackExecutorResult = r
+    } catch (e) {
+      g.__proteusAppStackExecutorResult = { fatal: String(e) }
+    }
+  })()
+  return 'kicked'
+}
+
+/** 读两相结果（宿主泵完 job 后调用；未就绪 ⇒ {pending:true}） */
+export function __proteusAppStackExecutorRead(): string {
+  const g = globalThis as unknown as { __proteusAppStackExecutorResult?: unknown }
+  if (g.__proteusAppStackExecutorResult === undefined) return JSON.stringify({ pending: true })
+  return JSON.stringify(g.__proteusAppStackExecutorResult)
+}
+
+// ★挂到全局（IIFE 无模块系统——与 __proteusAppStackRun 同法，宿主直接 eval 调用）
+;(globalThis as unknown as { __proteusAppStackExecutorKick: typeof __proteusAppStackExecutorKick }).__proteusAppStackExecutorKick = __proteusAppStackExecutorKick
+;(globalThis as unknown as { __proteusAppStackExecutorRead: typeof __proteusAppStackExecutorRead }).__proteusAppStackExecutorRead = __proteusAppStackExecutorRead
+

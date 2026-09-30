@@ -34,6 +34,8 @@ import {
   APP_TRANSITION_MAP,
   appTransition,
   appTransitions,
+  reverseDecls,
+  routeTransitionBatches,
 } from '@proteus-vue/animation'
 import type { AnimDecl } from '@proteus-vue/animation'
 // ★类型断言用（不能用 `as never`——`Record<RouteTransition, X>[never]` 求值为 `never`，
@@ -718,6 +720,106 @@ describe('统一路由转场枚举的第三腿（App / Morpheus ⇄ RouteTransit
     expect(APP_TRANSITION_MAP.scaleDown.name).toBe('zoom')
     expect(APP_TRANSITION_MAP.slideUp.name).toBe('slideUp')
     expect(APP_TRANSITION_MAP.slideDown.name).toBe('slideDown')
+  })
+})
+
+describe('★★方向语义与执行器入口（routeTransitionBatches —— M5 命令流的消费者）', () => {
+  it('reverseDecls：from/to 互换、曲线与时长原样、弹簧参数保持', () => {
+    const decls = [
+      { kind: 'translateY' as const, from: 800, to: 0, curve: 'easeOut' as const, durationMs: 300 },
+      { kind: 'opacity' as const, from: 1, to: 0.7, curve: 'easeIn' as const, durationMs: 300 },
+    ]
+    const rev = reverseDecls(decls)
+    expect(rev[0]).toMatchObject({ kind: 'translateY', from: 0, to: 800, curve: 'easeOut', durationMs: 300 })
+    expect(rev[1]).toMatchObject({ kind: 'opacity', from: 0.7, to: 1, curve: 'easeIn', durationMs: 300 })
+    // 纯粹性：不改原数组
+    expect(decls[0].from).toBe(800)
+  })
+
+  it('reverseDecls：from 缺省按 0 落定（与 compileOne 的缺省一致）；keyframes 整条端点互换、段不逐段反转', () => {
+    const noFrom = reverseDecls([{ kind: 'scale' as const, to: 1 }])
+    expect(noFrom[0].from).toBe(1)
+    expect(noFrom[0].to).toBe(0)
+    const kf = reverseDecls([
+      { kind: 'translateY' as const, from: -60, to: 60, keyframes: [
+        { to: 20, durationMs: 100, curve: 'easeOut' as const },
+        { to: 60, durationMs: 120, curve: 'easeIn' as const },
+      ] } as never,
+    ])
+    expect(kf[0].from).toBe(60)
+    expect(kf[0].to).toBe(-60)
+    // 段本身保持（不镜像）：段边界值/曲线/时长原样
+    expect((kf[0] as { keyframes: unknown[] }).keyframes).toEqual([
+      { to: 20, durationMs: 100, curve: 'easeOut' },
+      { to: 60, durationMs: 120, curve: 'easeIn' },
+    ])
+  })
+
+  it('forward（push）：incoming 播 enter、outgoing 播 exit —— 与 compileRoute 同形', () => {
+    const plan = routeTransitionBatches('slideUp', { incoming: 200, outgoing: 100 })
+    expect(plan.direction).toBe('forward')
+    expect(plan.transition).toBe('slideUp')
+    // enter = translateY 800→0（进场页）
+    expect(plan.incoming.anims).toHaveLength(1)
+    expect(plan.incoming.anims[0]).toMatchObject({ nodeId: 200, kind: 1, from: 800, to: 0 }) // kind 1 = translateY
+    // exit = 旧页让位（translateY 0→-240）+ 淡出（opacity 1→0.7）
+    expect(plan.outgoing.anims.length).toBeGreaterThanOrEqual(2)
+    expect(plan.outgoing.anims.every((a) => a.nodeId === 100)).toBe(true)
+    expect(plan.durationMs).toBe(300)
+    expect(plan.opaque).toBe(true)
+  })
+
+  it('★back（pop）：两组声明各自反向 —— 离开页播 reverse(enter)、回来页播 reverse(exit)', () => {
+    const plan = routeTransitionBatches('slideUp', { incoming: 100, outgoing: 200 }, { direction: 'back' })
+    expect(plan.direction).toBe('back')
+    // 回来的下层页：reverse(exit) ⇒ translateY -240→0（视差复原）+ opacity 0.7→1
+    expect(plan.incoming.anims.every((a) => a.nodeId === 100)).toBe(true)
+    const backTx = plan.incoming.anims.find((a) => a.kind === 1) // translateY
+    expect(backTx).toMatchObject({ from: -240, to: 0 })
+    // 离开的旧顶：reverse(enter) ⇒ translateY 0→800（向上推入的反向 = 向下滑出）
+    expect(plan.outgoing.anims).toHaveLength(1)
+    expect(plan.outgoing.anims[0]).toMatchObject({ nodeId: 200, kind: 1, from: 0, to: 800 })
+  })
+
+  it('★back 与 forward 是**镜像对**（同一转场：forward.enter 的 from/to 恰是 back.outgoing 的 to/from）', () => {
+    const fwd = routeTransitionBatches('slideUp', { incoming: 200, outgoing: 100 })
+    const back = routeTransitionBatches('slideUp', { incoming: 100, outgoing: 200 }, { direction: 'back' })
+    const fe = fwd.incoming.anims[0]
+    const bo = back.outgoing.anims[0]
+    expect({ from: bo.from, to: bo.to }).toEqual({ from: fe.to, to: fe.from })
+  })
+
+  it('none / 非法枚举：空批次 + 规范化为 none（不产生任何动画，不抛错）', () => {
+    for (const t of ['none', 'not-a-transition', undefined]) {
+      const plan = routeTransitionBatches(t, { incoming: 1, outgoing: 2 })
+      expect(plan.transition).toBe('none')
+      expect(plan.incoming.anims).toEqual([])
+      expect(plan.outgoing.anims).toEqual([])
+      expect(plan.durationMs).toBe(0)
+    }
+  })
+
+  it('exit-only 提交（incoming 缺省）：只绑 outgoing（step 命令流里"只退场"的边界）', () => {
+    const plan = routeTransitionBatches('slideUp', { outgoing: 100 })
+    expect(plan.incoming.anims).toEqual([])
+    expect(plan.outgoing.anims.every((a) => a.nodeId === 100)).toBe(true)
+  })
+
+  it('参数覆盖经 opts 透传（distance/durationMs 作用于预设）', () => {
+    const plan = routeTransitionBatches('slideUp', { incoming: 2, outgoing: 1 }, { distance: 1200, durationMs: 500 })
+    expect(plan.durationMs).toBe(500)
+    expect(plan.incoming.anims[0]).toMatchObject({ from: 1200, to: 0, durMs: 500 })
+  })
+
+  it('★非法声明（非合成属性）在批次入口即被拦（不静默降级——与 compileRoute 同一红线）', () => {
+    // 合法声明过；`width`（布局属性）不是 AnimKind 的成员 ⇒ TS 层就拦（这里用 never 绕过类型做运行时验证）
+    expect(() => compileAnimations([{ kind: 'translateY' as never, from: 0, to: 1 }], { nodeId: 1 })).not.toThrow()
+    expect(() =>
+      compileAnimations([{ kind: 'width' as never, from: 0, to: 1 }], { nodeId: 1 }),
+    ).toThrow(/校验失败/)
+    // reverseDecls 反转后仍是同一封闭集（不引入非法 kind）
+    const rev = reverseDecls([{ kind: 'opacity', from: 0, to: 1 }])
+    expect(() => compileAnimations(rev, { nodeId: 1 })).not.toThrow()
   })
 })
 

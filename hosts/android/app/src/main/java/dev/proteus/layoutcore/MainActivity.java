@@ -830,11 +830,35 @@ public class MainActivity extends Activity {
                 return out.toString(2);
             }
             // 入口返回 JSON 串 → 解析后**平铺**进报告（判据脚本直接读字段）
-            org.json.JSONObject r = new org.json.JSONObject(run.value);
+            org.json.JSONObject r = new JSONObject(run.value);
             java.util.Iterator<String> keys = r.keys();
             while (keys.hasNext()) {
                 String k = keys.next();
                 out.put(k, r.get(k));
+            }
+            // ★★场景 E：宿主执行器（两相——kick → 泵 job → read；执行器端口允许 Promise）
+            //   为什么必须泵 job：JS 侧 `await ePump()` 的续体只在宿主泵 job 时执行
+            //   （本仓 host-runtime 场景已固化该模式）。
+            QuickJsEngine.EvalResult ek = QuickJsEngine.eval("__proteusAppStackExecutorKick()");
+            out.put("e_kick", ek.ok ? ek.value : ("error:" + ek.error));
+            int eJobs = QuickJsEngine.nativeRunPendingJobs();
+            out.put("e_jobs_pumped", eJobs);
+            // ★第二次泵：kick 内部是 void(async) 链，首轮泵可能只推进到"await 第一跳"⇒ 再泵一轮收敛
+            //   （幂等；读数 0 = 已收敛）
+            out.put("e_jobs_pumped_2", QuickJsEngine.nativeRunPendingJobs());
+            QuickJsEngine.EvalResult er = QuickJsEngine.eval("__proteusAppStackExecutorRead()");
+            if (er.ok && er.value != null) {
+                org.json.JSONObject eo = new JSONObject(er.value);
+                java.util.Iterator<String> ekeys = eo.keys();
+                while (ekeys.hasNext()) {
+                    String k = ekeys.next();
+                    out.put(k, eo.get(k));
+                }
+                out.put("e_pending", eo.optBoolean("pending", false));
+                if (eo.has("fatal")) out.put("e_fatal", eo.getString("fatal"));
+            } else {
+                out.put("e_pending", true);
+                out.put("e_read_error", er.ok ? "null value" : er.error);
             }
             // 引擎侧自报 ok + 本次 bundle 可加载 ⇒ 报告 ok（判据细节由 python 侧查，不在这里重复判定）
             out.put("ok", r.optBoolean("ok"));
