@@ -2,6 +2,34 @@
 
 > 配套：`01-host-runtime.md` §10
 
+> **★★2026-09-30 状态更新（嵌入式 JS 引擎宿主切片已落地）**
+>
+> 取证背景：G-39 的「宿主运行时」此前只有**极简 stub**（`host-conformance.ts` 的
+> `createHostRuntimeStub`）+ **Web 宿主**（`web-host.ts`）——即 **B4 的 iOS/Android 嵌入式宿主为零**。
+> 本轮补上两端的**同族骨架**（Android QuickJS 真机验证；iOS JSC 可复用同一实现）：
+>
+> | 产物 | 落点 | 判据 |
+> |---|---|---|
+> | **单线程 JS 引擎宿主运行时** | `packages/render-backend/src/quickjs-host.ts`（纯 TS 零平台依赖） | `tests/quickjs-host.test.ts` **18 条**（含用**真实运行时**替换 stub 跑 G-41 conformance **32/32 PASS**） |
+> | **设备端真机装置** | `hosts/android/bridge/entry-host-runtime.ts` + `MainActivity.appHostRun()` + `run-host-runtime.sh` | `check:host-runtime` **16 条**（真机全绿）+ **20 组破坏性验证** |
+> | **JNI 支撑（实缺修补）** | `quickjs_jni.c`：**job 泵**（`JS_ExecutePendingJob`）/ `JS_ComputeMemoryUsage` / `JS_RunGC` + 8 符号逐断言 | 补漏前 `await` **半执行**（续体静默丢失）——判据当场抓出并固化 |
+>
+> **落地的 G-39 条款**（都有机器判据，不是文档声明）：
+> · **生命周期唯一拥有**：宿主壳（Activity onPause/onResume）**转发**事件 → runtime 状态机；
+>   非法转换（挂起 bootstrap / 重复 resume / 销毁后 enqueue / 重复 destroy）**被拒绝且记账**；
+> · **事件循环归属**：队列只由宿主帧（`pumpFrame`）推进；挂起不推进；**job 泵**让 await/Promise 续体可执行；
+> · **职责边界**：`runOnThread('background')` 诚实拒绝（`threads.background=false`——不假排队）；
+>   未注册原生调用被拒且给出可操作信息（已注册清单）；
+> · **诚实能力声明**：逻辑 worker `real=false`（单线程宿主不假装真并行）。
+>
+> **★同时验证的相邻 plan**：G-41 宿主接入契约用真实运行时全过（H-01~H-08 32 项）；
+> G-43 内存治理有了**引擎真实 JS 堆账本**（分配 +320KB → GC 后回到基线，真机读数）。
+>
+> **诚实边界（仍未做）**：① iOS JSC 宿主壳（同族骨架已就绪，缺宿主壳接线与真机读数）；
+> ② 多线程 Worker（本仓 Android 用 QuickJS 单线程——`threads.background=false` 是对现状的**诚实声明**，
+> 不是最终形态）；③ Flutter/Harmony 宿主（B5）。
+> ⇒ **B4 状态：Android 切片 ✅（真机）· iOS 骨架就绪（缺壳）· Flutter 未开始**。
+
 ---
 
 ## 1. 分批总览
@@ -11,7 +39,7 @@
 | **B1** | SPI 定义 + 生命周期状态机 + 类型 | M1 | G-37, G-38（Backend 接口稳定） | TypeScript 可编译，接口完整 |
 | **B2** | Conformance 测试套件 + runner | M1 | B1 | 42 项可运行，FAIL=0 |
 | **B3** | Web + Terminal 参考实现 | M1 | B1, B2 | `runtime-reference.js` 跑通，两个宿主 |
-| **B4** | iOS / Android / Flutter 宿主 | M2 | B1, B2 | 三端 conformance 全 PASS |
+| **B4** | iOS / Android / Flutter 宿主 | M2 | B1, B2 | 三端 conformance 全 PASS（★Android 切片已落地，见上） |
 | **B5** | Harmony / TV / Watch 宿主 | M2-M3 | B4 | 能力声明 + 降级链完整 |
 
 ---
