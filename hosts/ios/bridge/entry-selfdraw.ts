@@ -55,6 +55,7 @@ interface SelfDrawNative {
   animStopFrameLoop(): string
   animFrameStats(): string
   // ★★RT2 帧率测席（§9 指标测量）
+  animFlip(json: string): string
   animBenchStart(json: string): string
   animBenchResults(): string
 }
@@ -64,7 +65,7 @@ const BN = { snapshot: 'selfdraw-final' }
 
 // ★构建标识（每次构建由 hosts/ios/bridge/inject-build-id.mjs 注入；与 entry-bench 同机制）
 //   —— 「设备上跑的是哪份代码」必须可**一眼判定**（报告新鲜度判据的内容锚点）。
-const BUILD_ID = 'ed51e48a-110628'
+const BUILD_ID = '8f45c894-112837'
 
 const VP = (globalThis as unknown as { __PROTEUS_VIEWPORT__?: { width: number; height: number } })
   .__PROTEUS_VIEWPORT__ ?? { width: 390, height: 844 }
@@ -183,6 +184,8 @@ const phaseErrors: Record<string, string> = {}
 
 /** ★★RT2 动画相位读数（finalize2 带进报告；见 animProbe） */
 let animRt2Result: Record<string, unknown> = {}
+/** ★★RT2 复杂动效读数（弹簧/接管/FLIP/rotate+opacity） */
+let animComplexResult: Record<string, unknown> = {}
 
 /** 供宿主逐相位调用（每个函数在**自己那次 evaluateScript** 里同步启动，微任务在其后排空） */
 const api = {
@@ -257,6 +260,110 @@ const api = {
     count.value = 12
     accent.value = '#6f4ae8'
     return JSON.stringify({ phase: 'finalize', mark: 'pending-flush' })
+  },
+
+  /**
+   * ★★**RT2 复杂动效相位**（弹簧 / 打断接管 / FLIP 布局动画 / rotate+opacity）
+   *
+   * 【要回答什么（对齐 Flutter 的能力面）】
+   *   ① **弹簧物理**：真实物理求解（非查表），静止后精确钉在目标；
+   *   ② **打断接管**：曲线跑到一半 → 弹簧接管 ⇒ 位置无跳变 + 速度被带着走；
+   *   ③ **FLIP 布局动画**（招牌）：记快照 → 改几何 → 启动 ⇒ 从旧位置平滑滑到新位置（零跨边界几何查询）；
+   *   ④ **rotate / opacity**：复杂动效标配属性真的落到层上。
+   *
+   * 【判据】见 `check-anim-rt2.py` 的 F 组（每步都从**层上真读**——不是回显输入）。
+   */
+  animComplex(): string {
+    const probe = safeParse(proteusSelfDraw.layerTransformProbe(JSON.stringify([2, 3, 4, 5])))
+    const present = ((probe as { layers?: Array<{ id: number; missing?: boolean }> }).layers ?? [])
+      .filter((l) => !l.missing)
+      .map((l) => l.id)
+    const nA = present[0] ?? 2
+    const nB = present[1] ?? nA
+
+    // ① 弹簧：0 → 100（snappy 预设）
+    const springStart = safeParse(
+      proteusSelfDraw.animStart(
+        JSON.stringify({
+          anims: [
+            { nodeId: nA, kind: 0, from: 0, to: 100, durMs: 1000, spring: { stiffness: 320, damping: 30, mass: 1 } },
+          ],
+        }),
+      ),
+    )
+    for (let i = 0; i < 60; i++) proteusSelfDraw.animTick(16.7) // 约 1s ⇒ snappy 应已静止
+    const springEnd = safeParse(proteusSelfDraw.layerTransformProbe(JSON.stringify([nA])))
+
+    // ② 打断接管：曲线跑到一半 → 弹簧接管（目标反向 ⇒ 必须带速度回弹而非硬跳）
+    proteusSelfDraw.animStopNodes(JSON.stringify({ nodeIds: [nB] }))
+    proteusSelfDraw.animStart(
+      JSON.stringify({ anims: [{ nodeId: nB, kind: 0, curve: 0, from: 0, to: 200, durMs: 400 }] }),
+    )
+    for (let i = 0; i < 6; i++) proteusSelfDraw.animTick(16.7) // 约 100ms ⇒ 线性 25% ≈ 50px
+    const beforeTakeover = safeParse(proteusSelfDraw.layerTransformProbe(JSON.stringify([nB])))
+    proteusSelfDraw.animStart(
+      JSON.stringify({
+        anims: [
+          { nodeId: nB, kind: 0, from: 0, to: 60, durMs: 1000, spring: { stiffness: 300, damping: 26, mass: 1 } },
+        ],
+      }),
+    )
+    const afterTakeover = safeParse(proteusSelfDraw.layerTransformProbe(JSON.stringify([nB])))
+    for (let i = 0; i < 120; i++) proteusSelfDraw.animTick(16.7) // 跑够静止
+    const takeoverEnd = safeParse(proteusSelfDraw.layerTransformProbe(JSON.stringify([nB])))
+
+    // ③ FLIP：capture → 改几何（真实补丁路径）→ start
+    const flipCapture = safeParse(proteusSelfDraw.animFlip(JSON.stringify({ op: 'capture' })))
+    // ★几何变更的属性选择（两次试错后定论，写下来省下轮）：
+    //   ① `top` 只对 `position:absolute` 生效 → 本场景是流式布局，无位移；
+    //   ② `marginTop` **不是** PatchStyle 的字段名（走 updatePatches 时必须用 LStyle 字段名）；
+    //   ③ 正解：`margin: { top: 40 }`（Edges 对象）——改外边距真实改变后续元素位置，FLIP 才有位移可测。
+    const patchOut = proteusSelfDraw.updatePatches(
+      JSON.stringify([{ id: nB, style: { margin: { top: 40 } } }]),
+    )
+    const flipStart = safeParse(
+      proteusSelfDraw.animFlip(JSON.stringify({ op: 'start', durMs: 300, curve: 1, staggerMs: 0 })),
+    )
+    const flipBegin = safeParse(proteusSelfDraw.layerTransformProbe(JSON.stringify([nB])))
+    for (let i = 0; i < 12; i++) proteusSelfDraw.animTick(16.7)
+    const flipMid = safeParse(proteusSelfDraw.layerTransformProbe(JSON.stringify([nB])))
+    for (let i = 0; i < 40; i++) proteusSelfDraw.animTick(16.7)
+    const flipEnd = safeParse(proteusSelfDraw.layerTransformProbe(JSON.stringify([nB])))
+
+    // ④ rotate + opacity
+    proteusSelfDraw.animStopNodes(JSON.stringify({ nodeIds: [nA] }))
+    proteusSelfDraw.animStart(
+      JSON.stringify({
+        anims: [
+          { nodeId: nA, kind: 3, curve: 0, from: 0, to: 90, durMs: 100 },
+          { nodeId: nA, kind: 4, curve: 0, from: 1, to: 0.2, durMs: 100 },
+        ],
+      }),
+    )
+    for (let i = 0; i < 10; i++) proteusSelfDraw.animTick(16.7)
+    const rotOpEnd = safeParse(proteusSelfDraw.layerTransformProbe(JSON.stringify([nA])))
+
+    const l0 = (o: unknown) => ((o as { layers?: Array<Record<string, number>> }).layers ?? [])[0] ?? {}
+    const r = {
+      nodes: [nA, nB],
+      spring: { start: springStart, end: l0(springEnd).tx ?? NaN },
+      takeover: {
+        before: l0(beforeTakeover).tx ?? NaN,
+        after_start: l0(afterTakeover).tx ?? NaN,
+        end: l0(takeoverEnd).tx ?? NaN,
+      },
+      flip: {
+        capture: flipCapture,
+        patch: safeParse(patchOut),
+        start: flipStart,
+        begin: { tx: l0(flipBegin).tx ?? NaN, ty: l0(flipBegin).ty ?? NaN },
+        mid: { tx: l0(flipMid).tx ?? NaN, ty: l0(flipMid).ty ?? NaN },
+        end: { tx: l0(flipEnd).tx ?? NaN, ty: l0(flipEnd).ty ?? NaN },
+      },
+      rotate_opacity: { rotate: l0(rotOpEnd).rotate ?? NaN, opacity: l0(rotOpEnd).opacity ?? NaN },
+    }
+    animComplexResult = r
+    return JSON.stringify(r)
   },
 
   /**
@@ -410,6 +517,8 @@ const api = {
       phases: phaseOut,
       // ★★RT2 动画读数（真机判据的输入——见 hosts/ios/check-anim-rt2.py）
       anim_rt2: animRt2Result,
+      // ★★RT2 复杂动效（弹簧 / 打断接管 / FLIP / rotate+opacity）
+      anim_complex: animComplexResult,
       // ★★RT2 帧率测席（§9 指标；宿主跑满时长后写入）
       anim_bench: safeParse(proteusSelfDraw.animBenchResults()),
       js_only_throughput: {

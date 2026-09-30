@@ -218,9 +218,86 @@ def main() -> int:
     else:
         print(f"  · E 组跳过（无 anim_bench 读数或未成功：{bench or '缺失'}）")
 
+    # ── F 组（对齐 Flutter 能力面）：弹簧物理 / 打断接管 / FLIP / rotate+opacity ──
+    #
+    # 口径：每项都从 **层上真读**（`layerTransformProbe` 从 CATransform3D 反解），
+    #   不是回显我们传下去的参数——这样才覆盖"写入路径真的生效"。
+    cplx = d.get("anim_complex") or js.get("anim_complex") or {}
+    if cplx:
+        # F1 弹簧：真实物理求解 ⇒ 静止后**精确**钉在目标（100）
+        sp_end = (cplx.get("spring") or {}).get("end")
+        if sp_end is None or abs(sp_end - 100.0) > 0.01:
+            fail(f"F1 弹簧未精确落到目标：end tx={sp_end}（应 =100——弹簧静止后必须钉在 to）")
+            ok = False
+        else:
+            print(f"  ✓ F1 弹簧物理：静止后精确钉在目标（tx={sp_end}）")
+
+        # F2 打断接管：位置无跳变（after_start ≈ before）+ 最终落到新目标（60）
+        tk = cplx.get("takeover") or {}
+        b, a_, e_ = tk.get("before"), tk.get("after_start"), tk.get("end")
+        if b is None or a_ is None:
+            fail(f"F2 接管读数缺失：{tk}")
+            ok = False
+        else:
+            if abs(a_ - b) > 0.01:
+                fail(f"F2 接管有跳变：接管前 tx={b} → 接管后 tx={a_}（必须位置连续）")
+                ok = False
+            else:
+                print(f"  ✓ F2a 接管位置连续：{b} → {a_}（无跳变）")
+            if e_ is None or abs(e_ - 60.0) > 0.01:
+                fail(f"F2b 接管后未落到新目标：end tx={e_}（应 =60）")
+                ok = False
+            else:
+                print(f"  ✓ F2b 接管后落到新目标：tx={e_}（=60，弹簧带速度走完）")
+
+        # F3 FLIP：capture 有节点 + start 有位移 + 起点在"旧位置"（非 0）+ 终值归零
+        fl = cplx.get("flip") or {}
+        cap = (fl.get("capture") or {}).get("captured", 0) or 0
+        st = fl.get("start") or {}
+        animated = st.get("animated", 0) or 0
+        max_delta = st.get("maxDeltaPx", 0) or 0
+        if cap <= 0:
+            fail(f"F3a FLIP capture 无可快照节点：{fl.get('capture')}")
+            ok = False
+        else:
+            print(f"  ✓ F3a FLIP 快照：{cap} 个节点（几何在内核，零跨边界）")
+        if not st.get("ok") or animated <= 0:
+            fail(f"F3b FLIP start 未产生补间：{st}（布局变更后应有位移节点）")
+            ok = False
+        else:
+            print(f"  ✓ F3b FLIP 补间：{animated} 个节点 · 最大位移 {max_delta}px")
+        begin_ty = (fl.get("begin") or {}).get("ty")
+        end_ty = (fl.get("end") or {}).get("ty")
+        if begin_ty is None or abs(begin_ty) < 0.5:
+            fail(f"F3c FLIP 起点未在旧位置：begin ty={begin_ty}（应为非零偏移，否则会跳变）")
+            ok = False
+        else:
+            print(f"  ✓ F3c FLIP 起点在旧位置（无跳变）：begin ty={begin_ty}")
+        if end_ty is None or abs(end_ty) > 0.01:
+            fail(f"F3d FLIP 终值未归零：end ty={end_ty}")
+            ok = False
+        else:
+            print(f"  ✓ F3d FLIP 终值归零：end ty={end_ty}")
+
+        # F4 rotate + opacity 真的落到层上
+        ro = cplx.get("rotate_opacity") or {}
+        rot, op = ro.get("rotate"), ro.get("opacity")
+        if rot is None or abs(rot - 90.0) > 0.5:
+            fail(f"F4a rotate 未落到层上：{rot}（应 ≈90 度）")
+            ok = False
+        else:
+            print(f"  ✓ F4a rotate 落到层上：{rot} 度")
+        if op is None or abs(op - 0.2) > 0.01:
+            fail(f"F4b opacity 未落到层上：{op}（应 =0.2）")
+            ok = False
+        else:
+            print(f"  ✓ F4b opacity 落到层上：{op}")
+    else:
+        print("  · F 组跳过（无 anim_complex 读数——复杂动效相位未跑）")
+
     print()
     if ok:
-        print("✅ RT2 判据全过（层上 transform 真变 + seek 立即生效 + Progress 稳定 + 帧循环可启停 + 帧率达标）")
+        print("✅ RT2 判据全过（机制 + 帧率 + 弹簧/接管/FLIP/rotate+opacity）")
         return 0
     print("✗ RT2 判据有失败项（见上）")
     return 1
