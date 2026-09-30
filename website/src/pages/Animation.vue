@@ -1,242 +1,237 @@
 <script setup lang="ts">
-// website/src/pages/Animation.vue —— ★★Morpheus 动画引擎（旗舰产品页）
+// website/src/pages/Animation.vue —— ★★Morpheus 动画引擎（旗舰产品页 · v2 视觉精修）
 //
-// 【这一页的规矩（与全站一致）】
-//   · **零伪造**：页面上的两处演示都是**真跑**——
-//     ① 转场播放器：真 `routeTransitionBatches()`（引擎给执行器的同一份指令）+ 真曲线求值
-//        （`@proteus-vue/slot-runtime` 的 `animValue`——跨语言契约的 TS 半边，与 Rust 内核 golden 对拍 1e-5）；
-//     ② 曲线求值器：真 65 点表（同上镜像），端点精确 0/1。
-//   · **数字可追溯**：证据表的每一项都标注判据脚本（真机读数，非估算）。
-//   · **诚实边界**：能力矩阵之外的"没做的"逐条列出（本仓铁律：宣称不得先于实现）。
-//   · D-2/W-6：布局走 p-* 语义标签 + 柔性网格（零 @media、零裸 window/document 调用）。
+// 【v2 相比 v1 的升级（用户：「产品页做得还是太粗糙了，视觉效果包括排版要大幅升级」）】
+//   · **Hero**：左文右真机（MobileStage）双栏构图 + 品牌光晕 + 网格底纹 + 数据 pills
+//   · **三大杀手锏**：编号 01/02/03 + 图标底 + 关键数字三栏 + hover 抬升
+//   · **演示区**：真机舞台（真指令）+ **指令时间轴**（按真实 durMs/delayMs 画的甘特条）+ 读数面板
+//   · **预设库**：每张卡**真预设缩略预览**（PresetPreview——真编译真求值），不再只有文字
+//   · **曲线**：真采样曲线 + 参考线 + 端点/实时数值三读数 + 滑杆
+//   · **证据区**：表格 → **数据卡网格**（大数字 + 判据脚注）
+//   · **滚动显现**：`data-reveal` 分节入场（与首页同机制；reduced-motion 直接终态）
+//   · 零 @media / 零裸平台 API（D-2 + W-6 门禁守着）；响应式走柔性网格
 import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
-import { locale, t } from '../i18n'
+import { locale } from '../i18n'
 import FeatureIcon from '../components/FeatureIcon.vue'
+import MobileStage from '../components/anim/MobileStage.vue'
+import PresetPreview from '../components/anim/PresetPreview.vue'
 import { highlight } from '@proteus-vue/docs'
-// ★真引擎：转场规格/批次（引擎给执行器的同一份）+ 预设目录（ANIM_RULES 单一事实源）
+// ★真引擎：批次/规格/预设目录/跨语言契约常量
 import { ANIM_KIND_ID, CURVE_ID, appTransitions, listAnimRules, routeTransitionBatches } from '@proteus-vue/animation'
-import type { EngineAnim } from '@proteus-vue/animation'
-// ★真曲线求值：跨语言契约 TS 半边（`tests/anim-curve-golden.test.ts` 与 Rust 实测值对拍）
-import { animValue, curveEval } from '@proteus-vue/slot-runtime'
+import type { EngineAnim, RouteTransitionPlan } from '@proteus-vue/animation'
+// ★真曲线求值（与 Rust 内核 golden 对拍的 TS 镜像）
+import { curveEval } from '@proteus-vue/slot-runtime'
 
 const isEn = computed(() => locale.value === 'en')
 
-/* ────────────────────────── 文案（zh / en 双语） ────────────────────────── */
+/* ══════════════════════════════ 文案 ══════════════════════════════ */
 
-const COPY = {
+const T = {
   zh: {
-    eyebrow: 'MORPHEUS · 声明式动画引擎',
-    h1a: '让动画回到',
+    chip: 'Morpheus · 声明式动画引擎',
+    h1a: '把动画变成',
     h1b: '编译期',
-    tagline: '把「会不会掉帧」变成编译期问题。',
-    lead: '一句话声明演出。曲线求值与物理积分在 Rust 内核；布局动画几乎白送（几何本就在内核）；转场直通系统渲染线程——不自绘，零主线程参与。',
+    h1c: '问题',
+    tagline: '会不会掉帧，编译期就知道。',
+    lead: '一句话声明演出。曲线与物理在 Rust 内核求值，宿主零曲线数学；布局动画几乎白送，因为几何本来就在内核；转场直通系统渲染线程——不自绘，零主线程参与。',
     ctaDocs: '读文档',
-    ctaDemo: '看演示',
-    pillarTitle: '三个杀手锏',
+    ctaDemo: '看真机演示',
+    heroPills: ['Rust 内核求值', '零主线程参与', '编译期拦截'],
+    stageCaption: '真指令驱动 · 非示意图',
     pillars: [
       {
-        icon: 'layers',
+        ic: 'layers',
+        n: '01',
         title: '布局动画，几乎白送',
-        desc: '传统 FLIP 要在变更前后各读一次几何——在 VDOM 框架里很贵。我们的几何本来就在 Rust 核心里：变更前后快照都在内核，直接生成 Δ→0 补间，零跨边界查询。',
-        fact: '215 节点同屏补间 · 帧耗时 p95 0.7ms · 4 001 节点全量重排 0.08ms',
+        desc: '传统 FLIP 要在变更前后各读一次几何——VDOM 框架里很贵。我们的几何本来就在 Rust 内核：两次快照都在内核完成，直接生成 Δ→0 补间，零跨边界查询。',
+        metrics: [
+          ['215', '节点同屏补间'],
+          ['0.7ms', '帧耗时 p95'],
+          ['0.08ms', '全量重排'],
+        ],
       },
       {
-        icon: 'bolt',
+        ic: 'bolt',
+        n: '02',
         title: '转场零主线程参与',
-        desc: '不自绘，所以直接用系统的渲染线程（Android RenderThread / iOS CoreAnimation render server）。Flutter 自绘，才被迫自建 raster thread——我们不必。',
-        fact: '动画全程主线程 0 绘制 · 600ms 窗口 CPU 1.0ms（对照 tick 路径 17.4ms）',
+        desc: '不自绘，所以直接用系统渲染线程（Android RenderThread / iOS CoreAnimation render server）。Flutter 自绘，才被迫自建 raster thread——我们不必。',
+        metrics: [
+          ['0', '动画期主线程绘制'],
+          ['1.0ms', '600ms 窗口 CPU'],
+          ['17.4ms', 'tick 路径对照'],
+        ],
       },
       {
-        icon: 'shield',
+        ic: 'shield',
+        n: '03',
         title: '编译期拦截，零静默降级',
-        desc: '合成属性集合（transform / opacity）在编译期判定；在转场里误改布局属性（width / margin）编译期报错、宿主明确拒绝——「会不会掉帧」不再靠调参赌。',
-        fact: '5 条会静默出错的约束被编译期拦下 · conformance 对账不过就不出文档',
+        desc: '合成属性（transform / opacity）在编译期判定；转场里误改布局属性编译报错、宿主明确拒绝——「会不会掉帧」不再靠调参赌。',
+        metrics: [
+          ['5', '约束被编译期拦下'],
+          ['26', '条 AI 说明书'],
+          ['11/12', '验收项达标'],
+        ],
       },
     ],
-    demoTitle: '转场播放器',
-    demoNote: '演示直接播放引擎给执行器的同一份指令（routeTransitionBatches）；曲线求值走与 Rust 内核 golden 对拍过的 TS 镜像。',
-    demoDir: '方向',
-    demoForward: 'push（新页进入）',
-    demoBack: 'pop（返回·镜像对）',
-    demoReplay: '重放',
-    demoInstant: '瞬切（不做动画）',
-    demoCompiled: '引擎收到的指令',
+    demoTitle: '真机演示',
+    demoNote: '演示播放的是引擎交给执行器的同一份指令（routeTransitionBatches）；曲线求值走与 Rust 内核 golden 对拍过的 TS 镜像。',
+    dirLabel: '方向',
+    dirFwd: 'push 新页进入',
+    dirBack: 'pop 返回 · 镜像对',
+    timeline: '指令时间轴',
+    timelineNote: '每条动画按真实 durMs / delayMs 画成时间条——两页并发、一次提交。',
+    readout: '引擎收到的指令（原样）',
     curveTitle: '曲线与内核同源',
-    curveNote: '65 点采样表 + 线性插值；与 Rust 内核实测值对拍（容差 1e-5）、端点精确钉死 0 / 1。',
-    curveProgress: '进度',
+    curveNote: '65 点采样表 + 线性插值；与 Rust 内核实测值对拍（容差 1e-5）、端点精确钉死 0 / 1。拖动滑杆——数值就是引擎每一帧用的值。',
+    curveU: '进度 u',
     presetsTitle: '预设库',
-    presetsNote: '预设优先于参数——常见演出都是一句话。下列条目从 ANIM_RULES（单一事实源）实时读取，与 AI 说明书同源。',
-    presetsOther: '另有',
+    presetsNote: '预设优先于参数——常见演出都是一句话。缩略图由真预设真编译驱动（滚动与共享元素需外部驱动源，如实标注不假装）。',
+    presetsMore: '另有',
     evidenceTitle: '真机证据',
-    evidenceNote: '每一项都有可复跑的判据脚本；数字来自真机读数，不是估算。',
+    evidenceNote: '每一项都可复跑；数字来自真机读数，不是估算。',
     codeTitle: '怎么写',
     codeNote: '路由级一行声明，三端各自兑现；元素级一句话演出。',
     boundaryTitle: '诚实边界',
     boundaryNote: '还没做到的，逐条列出——宣称不得先于实现。',
-    docCta: '完整文档（架构 / 声明面 / 转场 / 布局与滚动 / 边界）',
+    docCta: '完整文档：架构 / 声明面 / 转场 / 边界',
   },
   en: {
-    eyebrow: 'MORPHEUS · DECLARATIVE ANIMATION ENGINE',
+    chip: 'Morpheus · Declarative Animation Engine',
     h1a: 'Animation is a',
-    h1b: 'compile-time concern',
-    tagline: "Make “will it jank?” a compile-time question.",
-    lead: 'One line of declaration. Curve evaluation and spring physics live in the Rust core; layout animation is nearly free (the geometry is already there); transitions ride the system render thread — no custom renderer, zero main-thread involvement.',
+    h1b: 'compile-time',
+    h1c: 'question',
+    tagline: 'Will it jank? You know at compile time.',
+    lead: 'One line of declaration. Curves and physics are evaluated in the Rust kernel; hosts do zero curve math; layout animation is nearly free because the geometry already lives there; transitions ride the system render thread — no custom renderer, zero main-thread involvement.',
     ctaDocs: 'Read the docs',
-    ctaDemo: 'See the demos',
-    pillarTitle: 'Three differentiators',
+    ctaDemo: 'See it on a device',
+    heroPills: ['Kernel-evaluated', 'Zero main-thread', 'Compile-time gates'],
+    stageCaption: 'Real instructions · not a mockup',
     pillars: [
       {
-        icon: 'layers',
+        ic: 'layers',
+        n: '01',
         title: 'Layout animation, nearly free',
-        desc: 'Classic FLIP reads geometry twice (before/after) — expensive in a VDOM framework. Our geometry already lives in the Rust core: both snapshots are taken inside the kernel, which then emits the Δ→0 tween. Zero cross-boundary geometry queries.',
-        fact: '215-node FLIP · frame cost p95 0.7ms · full relayout of 4,001 nodes in 0.08ms',
+        desc: 'Classic FLIP reads geometry twice — expensive in a VDOM framework. Ours already lives in the Rust core: both snapshots happen inside the kernel, which emits the Δ→0 tween. Zero cross-boundary queries.',
+        metrics: [
+          ['215', 'nodes tweening'],
+          ['0.7ms', 'frame cost p95'],
+          ['0.08ms', 'full relayout'],
+        ],
       },
       {
-        icon: 'bolt',
-        title: 'Transitions with zero main-thread involvement',
-        desc: 'Because we do not self-draw, transitions run directly on the system render thread (Android RenderThread / iOS CoreAnimation render server). Flutter self-draws, and therefore had to build its own raster thread — we do not.',
-        fact: '0 main-thread draws during animation · 1.0ms CPU in a 600ms window (tick path: 17.4ms)',
+        ic: 'bolt',
+        n: '02',
+        title: 'Transitions, zero main thread',
+        desc: 'Because we do not self-draw, transitions run on the system render thread (Android RenderThread / iOS CoreAnimation render server). Flutter self-draws and had to build its own raster thread — we do not.',
+        metrics: [
+          ['0', 'main-thread draws'],
+          ['1.0ms', 'CPU per 600ms'],
+          ['17.4ms', 'tick path control'],
+        ],
       },
       {
-        icon: 'shield',
-        title: 'Compile-time interception, no silent downgrade',
-        desc: 'The composited-property set (transform / opacity) is decided at compile time; touching layout properties (width / margin) inside a transition fails compilation and is explicitly rejected by the host — “will it jank?” stops being a tuning gamble.',
-        fact: '5 silent-failure constraints caught at compile time · no doc is generated if conformance fails',
+        ic: 'shield',
+        n: '03',
+        title: 'Compile-time gates, no silent downgrade',
+        desc: 'Composited properties (transform / opacity) are decided at compile time; touching layout properties inside a transition fails compilation and is rejected by the host — jank stops being a tuning gamble.',
+        metrics: [
+          ['5', 'constraints gated'],
+          ['26', 'AI manual entries'],
+          ['11/12', 'acceptance items met'],
+        ],
       },
     ],
-    demoTitle: 'Transition player',
-    demoNote: 'This demo plays the very same instructions the engine hands to the executor (routeTransitionBatches); curve evaluation uses the TS mirror that is golden-tested against the Rust kernel.',
-    demoDir: 'Direction',
-    demoForward: 'push (new screen enters)',
-    demoBack: 'pop (return · mirror pair)',
-    demoReplay: 'Replay',
-    demoInstant: 'Instant (no animation)',
-    demoCompiled: 'Instructions the engine receives',
+    demoTitle: 'Device demo',
+    demoNote: 'The demo plays the very same instructions the engine hands to the executor (routeTransitionBatches); curve evaluation uses the TS mirror golden-tested against the Rust kernel.',
+    dirLabel: 'Direction',
+    dirFwd: 'push (new screen)',
+    dirBack: 'pop (return · mirror pair)',
+    timeline: 'Instruction timeline',
+    timelineNote: 'Every animation is drawn as a time bar using its real durMs / delayMs — two screens in parallel, one commit.',
+    readout: 'Instructions the engine receives (verbatim)',
     curveTitle: 'Curves are kernel-sourced',
-    curveNote: '65-point sampled table + linear interpolation; golden-tested against Rust kernel readings (1e-5 tolerance), endpoints pinned exactly to 0 / 1.',
-    curveProgress: 'Progress',
+    curveNote: '65-point sampled table + linear interpolation; golden-tested against the Rust kernel (1e-5), endpoints pinned exactly to 0 / 1. Drag the slider — this is the value the engine uses every frame.',
+    curveU: 'Progress u',
     presetsTitle: 'Preset library',
-    presetsNote: 'Presets over parameters — common motions are one-liners. Entries are read live from ANIM_RULES (single source of truth), shared with the AI manual.',
-    presetsOther: 'Plus',
+    presetsNote: 'Presets over parameters — common motions are one-liners. Thumbnails are driven by real presets compiled for real (scroll and shared elements need external drivers — honestly labelled, never faked).',
+    presetsMore: 'Plus',
     evidenceTitle: 'Device evidence',
-    evidenceNote: 'Every row points to a re-runnable assertion script; numbers are real device readings, not estimates.',
+    evidenceNote: 'Every reading is re-runnable; numbers come from devices, not estimates.',
     codeTitle: 'How you write it',
-    codeNote: 'One declaration per route, honoured by each target; one line per element motion.',
+    codeNote: 'One declaration per route, honoured per target; one line per element motion.',
     boundaryTitle: 'Honest boundaries',
-    boundaryNote: 'What is not done yet, listed item by item — claims never precede implementation.',
-    docCta: 'Full documentation (architecture / surface / transitions / layout & scroll / boundaries)',
+    boundaryNote: 'What is not done yet, item by item — claims never precede implementation.',
+    docCta: 'Full docs: architecture / surface / transitions / boundaries',
   },
 } as const
+const C = computed(() => T[isEn.value ? 'en' : 'zh'])
 
-const C = computed(() => COPY[isEn.value ? 'en' : 'zh'])
+/* ══════════════════════════════ 演示状态 ══════════════════════════════ */
 
-/* ────────────────────────── ① 转场播放器（真指令 + 真曲线） ────────────────────────── */
-
-/** 统一枚举成员（从映射表推导，不手写第二份） */
 const TRANSITIONS = appTransitions()
-const TRANSITION_LABEL: Record<string, string> = {
-  slideUp: 'slideUp · 全屏上推',
-  slideDown: 'slideDown · 下滑关闭',
-  halfScreen: 'halfScreen · 半屏弹窗',
-  scaleDown: 'scaleDown · 缩放下沉',
-  none: 'none · 瞬切',
-}
-
-const picked = ref<string>('slideUp')
+const picked = ref('slideUp')
 const direction = ref<'forward' | 'back'>('forward')
 
-/** ★真批次：引擎交给执行器的同一份（含 back 方向的两组反向声明——镜像对） */
-const batch = computed(() =>
+const plan = computed<RouteTransitionPlan>(() =>
   routeTransitionBatches(picked.value, { incoming: 1, outgoing: 2 }, { direction: direction.value }),
 )
-const totalMs = computed(() => Math.max(1, batch.value.durationMs))
-const hasAnims = computed(() => batch.value.incoming.anims.length + batch.value.outgoing.anims.length > 0)
+const hasAnims = computed(() => plan.value.incoming.anims.length + plan.value.outgoing.anims.length > 0)
+const totalMs = computed(() => Math.max(1, plan.value.durationMs))
 
-interface PaneStyle {
-  transform: string
-  opacity: number
+/** 时间轴：每条动画按真实 delayMs/durMs 换算成甘特条 */
+interface Bar {
+  pane: 'in' | 'out'
+  label: string
+  curve: string
+  left: number
+  width: number
 }
-/** 按时间求值一批引擎指令（kind 编号用 ANIM_KIND_ID——不写字面量，防跨语言契约漂移） */
-function paneStyle(anims: readonly EngineAnim[], tMs: number): PaneStyle {
-  let tx = 0
-  let ty = 0
-  let sc = 1
-  let rot = 0
-  let op = 1
-  for (const a of anims) {
-    const dur = a.durMs > 0 ? a.durMs : 1
-    const u = Math.min(1, Math.max(0, (tMs - (a.delayMs ?? 0)) / dur))
-    const v = animValue(a.curve, a.from, a.to, u)
-    if (a.kind === ANIM_KIND_ID.translateX) tx = v
-    else if (a.kind === ANIM_KIND_ID.translateY) ty = v
-    else if (a.kind === ANIM_KIND_ID.scale) sc = v
-    else if (a.kind === ANIM_KIND_ID.rotate) rot = v
-    else if (a.kind === ANIM_KIND_ID.opacity) op = v
-  }
-  return { transform: `translate3d(${tx.toFixed(2)}px, ${ty.toFixed(2)}px, 0) scale(${sc.toFixed(4)}) rotate(${rot.toFixed(2)}deg)`, opacity: op }
+const KIND_LABEL: Record<number, string> = {
+  [ANIM_KIND_ID.translateX]: 'translateX',
+  [ANIM_KIND_ID.translateY]: 'translateY',
+  [ANIM_KIND_ID.scale]: 'scale',
+  [ANIM_KIND_ID.rotate]: 'rotate',
+  [ANIM_KIND_ID.opacity]: 'opacity',
 }
-
-const tMs = ref(0)
-const playing = ref(false)
-let raf = 0
-const motionOk = !(typeof matchMedia === 'function' && matchMedia('(prefers-reduced-motion: reduce)').matches)
-
-const paneIn = computed(() => paneStyle(batch.value.incoming.anims, tMs.value))
-const paneOut = computed(() => paneStyle(batch.value.outgoing.anims, tMs.value))
-/** 前进：新页在上层；返回：旧页在上层（滑出后露出下层） */
-const zIn = computed(() => (direction.value === 'forward' ? 2 : 1))
-const zOut = computed(() => (direction.value === 'forward' ? 1 : 2))
-
-function stop(): void {
-  if (raf) cancelAnimationFrame(raf)
-  raf = 0
-  playing.value = false
+const CURVE_LABEL: Record<number, string> = {
+  [CURVE_ID.linear]: 'linear',
+  [CURVE_ID.easeOut]: 'easeOut',
+  [CURVE_ID.easeIn]: 'easeIn',
+  [CURVE_ID.easeInOut]: 'easeInOut',
+  [CURVE_ID.springApprox]: 'springApprox',
 }
-function play(): void {
-  stop()
-  if (!hasAnims.value || !motionOk) {
-    tMs.value = hasAnims.value ? totalMs.value : 0 // reduced-motion：直接终态（不做补间）
-    return
-  }
-  playing.value = true
-  const start = performance.now()
-  const step = (now: number): void => {
-    const t = now - start
-    tMs.value = Math.min(t, totalMs.value)
-    if (t < totalMs.value) raf = requestAnimationFrame(step)
-    else {
-      playing.value = false
-      raf = 0
-    }
-  }
-  raf = requestAnimationFrame(step)
-}
-watch([picked, direction], () => play())
-onMounted(play)
-onUnmounted(stop)
+const bars = computed<Bar[]>(() => {
+  const total = totalMs.value
+  const mk = (anims: readonly EngineAnim[], pane: 'in' | 'out'): Bar[] =>
+    anims.map((a) => ({
+      pane,
+      label: KIND_LABEL[a.kind] ?? `kind ${a.kind}`,
+      curve: CURVE_LABEL[a.curve] ?? `#${a.curve}`,
+      left: (((a.delayMs ?? 0) / total) * 100),
+      width: Math.max(7, ((a.durMs ?? 0) / total) * 100),
+    }))
+  return [...mk(plan.value.incoming.anims, 'in'), ...mk(plan.value.outgoing.anims, 'out')]
+})
 
-/** 指令读数（引擎收到什么，页面上就显示什么——不是示意图） */
 const compiledReadout = computed(() =>
   JSON.stringify(
     {
       direction: direction.value,
-      transition: batch.value.transition,
-      durationMs: batch.value.durationMs,
-      incoming: batch.value.incoming.anims.map((a) => ({ nodeId: a.nodeId, kind: a.kind, from: a.from, to: a.to, curve: a.curve, durMs: a.durMs })),
-      outgoing: batch.value.outgoing.anims.map((a) => ({ nodeId: a.nodeId, kind: a.kind, from: a.from, to: a.to, curve: a.curve, durMs: a.durMs })),
+      transition: plan.value.transition,
+      durationMs: plan.value.durationMs,
+      incoming: plan.value.incoming.anims.map((a) => ({ nodeId: a.nodeId, kind: a.kind, from: a.from, to: a.to, curve: a.curve, durMs: a.durMs })),
+      outgoing: plan.value.outgoing.anims.map((a) => ({ nodeId: a.nodeId, kind: a.kind, from: a.from, to: a.to, curve: a.curve, durMs: a.durMs })),
     },
     null,
     1,
   ),
 )
 
-/* ────────────────────────── ② 曲线求值器（真 65 点表） ────────────────────────── */
-
-const CURVES = Object.entries(CURVE_ID) as Array<[string, number]> // [名字, 契约编号]
+/* ── 曲线区 ── */
+const CURVES = Object.entries(CURVE_ID) as Array<[string, number]>
 const curveId = ref<number>(CURVE_ID.easeOut)
-const curveU = ref<number>(0.5)
+const curveU = ref(0.5)
 const curveValue = computed(() => curveEval(curveId.value, curveU.value))
-/** 真采样画曲线（同一条 curveEval——页面上没有第二套曲线数学） */
 const curvePath = computed(() => {
   const N = 64
   const pts: string[] = []
@@ -247,49 +242,85 @@ const curvePath = computed(() => {
   }
   return 'M' + pts.join(' L')
 })
-const curveMarker = computed(() => ({
-  x: (curveU.value * 200).toFixed(1),
-  y: (100 - curveValue.value * 100).toFixed(1),
-}))
+const marker = computed(() => ({ x: (curveU.value * 200).toFixed(1), y: (100 - curveValue.value * 100).toFixed(1) }))
+const endpoints = computed(() => ({ at0: curveEval(curveId.value, 0).toFixed(4), at1: curveEval(curveId.value, 1).toFixed(4) }))
 
-/* ────────────────────────── ③ 预设目录（ANIM_RULES 单一事实源） ────────────────────────── */
-
+/* ── 预设区 ── */
 const RULES = listAnimRules()
 const PRESETS = RULES.filter((r) => r.kind === 'preset')
+type PreviewKind =
+  | 'route.slideUp'
+  | 'route.bottomSheet'
+  | 'route.zoom'
+  | 'route.slideDown'
+  | 'element.press'
+  | 'element.shake'
+  | 'element.fadeIn'
+  | 'list.shift'
+  | 'needs-scroll'
+  | 'needs-geometry'
+function previewOf(id: string): PreviewKind {
+  if (id === 'preset/route.slideUp') return 'route.slideUp'
+  if (id === 'preset/route.bottomSheet') return 'route.bottomSheet'
+  if (id === 'preset/route.zoom') return 'route.zoom'
+  if (id === 'preset/route.slideDown') return 'route.slideDown'
+  if (id === 'preset/element.press') return 'element.press'
+  if (id === 'preset/element.shake') return 'element.shake'
+  if (id === 'preset/element.fadeIn') return 'element.fadeIn'
+  if (id === 'preset/list.shift') return 'list.shift'
+  if (id === 'preset/element.sharedElement') return 'needs-geometry'
+  if (id.startsWith('preset/scroll.')) return 'needs-scroll'
+  if (id.includes('cupertinoModal')) return 'route.bottomSheet'
+  return 'element.fadeIn'
+}
 const ruleCounts = computed(() => ({
   primitive: RULES.filter((r) => r.kind === 'primitive').length,
   constraint: RULES.filter((r) => r.kind === 'constraint').length,
   boundary: RULES.filter((r) => r.kind === 'boundary').length,
 }))
 
-/* ────────────────────────── ④ 真机证据 / ⑤ 边界 ────────────────────────── */
+/* ── 证据区（数据卡） ── */
+const EVIDENCE = computed<Array<{ v: string; u: string; l: string; src: string }>>(() =>
+  isEn.value
+    ? [
+        { v: '59.3', u: 'FPS', l: 'Transition frame rate (iPhone 12 · at the 60Hz ceiling)', src: 'check-anim-rt2.py' },
+        { v: '0.679', u: 'ms', l: 'Frame cost p95 (budget 8.33ms)', src: 'check-anim-rt2.py' },
+        { v: '0', u: '/ 179', l: 'Dropped frames over 3.0s', src: 'check-anim-rt2.py' },
+        { v: '1.0', u: 'ms', l: 'Main-thread CPU per 600ms (tick path: 17.4ms)', src: 'MA0-RT' },
+        { v: '0', u: 'delta', l: 'Main-thread draws during animation (Android)', src: 'check-platform-anim.py' },
+        { v: '215', u: 'nodes', l: 'FLIP layout animation, p95 0.713ms', src: 'check-anim-rt2.py' },
+        { v: '84.5', u: '×', l: 'Instruction path vs JS path at N=1000', src: 'rt0-anim-spike.md' },
+        { v: '1:1', u: 'mirror', l: 'Route transition, both directions, both targets', src: 'check-app-stack.py' },
+      ]
+    : [
+        { v: '59.3', u: 'FPS', l: '转场帧率（iPhone 12 · 已达 60Hz 上限）', src: 'check-anim-rt2.py' },
+        { v: '0.679', u: 'ms', l: '帧耗时 p95（预算 8.33ms）', src: 'check-anim-rt2.py' },
+        { v: '0', u: '/ 179', l: '3.0s 持续测量零掉帧', src: 'check-anim-rt2.py' },
+        { v: '1.0', u: 'ms', l: '600ms 窗口主线程 CPU（tick 对照 17.4ms）', src: 'MA0-RT' },
+        { v: '0', u: 'delta', l: '动画期主线程绘制增量（Android）', src: 'check-platform-anim.py' },
+        { v: '215', u: '节点', l: 'FLIP 布局动画 · p95 0.713ms', src: 'check-anim-rt2.py' },
+        { v: '84.5', u: '×', l: '指令路径 vs JS 路径（N=1000）', src: 'rt0-anim-spike.md' },
+        { v: '1:1', u: '镜像', l: '路由转场双向 · 双端', src: 'check-app-stack.py' },
+      ],
+)
 
-const EVIDENCE: Array<{ label: string; labelEn: string; value: string; src: string }> = [
-  { label: '转场帧率', labelEn: 'Transition frame rate', value: '59.3 FPS（iPhone 12 · 60Hz 上限）', src: 'check-anim-rt2.py E 组' },
-  { label: '帧耗时 p95', labelEn: 'Frame cost p95', value: '0.679 ms（预算 8.33ms）', src: 'check-anim-rt2.py E 组' },
-  { label: '掉帧', labelEn: 'Dropped frames', value: '0 / 179 帧（3.0s 持续测量）', src: 'check-anim-rt2.py E 组' },
-  { label: '主线程参与（转场）', labelEn: 'Main-thread CPU (transition)', value: '1.0 ms vs tick 对照 17.4ms（600ms 窗口 · OS 级会计）', src: 'MA0-RT 实测（阳性对照）' },
-  { label: '主线程绘制（Android 容器级）', labelEn: 'Main-thread draws (Android)', value: 'onDrawCount 增量 = 0', src: 'check-platform-anim.py B2' },
-  { label: '布局动画 FLIP', labelEn: 'Layout animation (FLIP)', value: '215 节点同屏补间 · p95 0.713ms', src: 'check-anim-rt2.py F/H' },
-  { label: '指令路径 vs JS 路径', labelEn: 'Instruction path vs JS path', value: '10.5× – 84.5×（N=50 → 1000）', src: 'rt0-anim-spike.md' },
-  { label: '路由转场双向', labelEn: 'Route transition (both ways)', value: 'forward 800→0 ↔ back 0→800（镜像对）', src: 'check-app-stack.py ⑦ 组（双端）' },
-]
-
-const BOUNDARIES: Array<{ zh: string; en: string }> = [
-  {
-    zh: '共享元素：同视图树形态已落地；跨页面的稳态几何回传需页面栈层配合（未做）',
-    en: 'Shared elements: same-tree form landed; cross-page steady-state geometry handoff needs the page-stack layer (not done)',
-  },
-  {
-    zh: '滚动联动：驱动接口与输入源解耦；真机手指拖拽手势未接线',
-    en: 'Scroll-linked: driver interface decoupled from input source; real finger-drag gesture not wired yet',
-  },
-  { zh: '120 FPS 目标需 ProMotion 设备（iPhone 12 为 60Hz——如实标注，未声称）', en: '120 FPS target needs a ProMotion device (iPhone 12 is 60Hz — honestly noted, not claimed)' },
-  { zh: '手势协商（嵌套滚动冲突 / 多指）：按方案设计不属本引擎，独立立项', en: 'Gesture negotiation (nested scroll / multi-touch): by design not part of this engine, tracked separately' },
-  { zh: '逃生口率：统计装置就绪（escapes.format()），业务用量待采数', en: 'Escape-hatch ratio: instrumentation ready (escapes.format()), business usage pending' },
-]
-
-/* ────────────────────────── 代码示例（高亮走文档引擎同一套） ────────────────────────── */
+const BOUNDARIES = computed(() =>
+  isEn.value
+    ? [
+        'Shared elements: same-tree form landed; cross-page steady-state geometry handoff needs the page-stack layer (not done)',
+        'Scroll-linked: driver interface decoupled from input; real finger-drag gesture not wired',
+        '120 FPS needs a ProMotion device (iPhone 12 is 60Hz — honestly noted, not claimed)',
+        'Gesture negotiation (nested scroll / multi-touch) is by design not part of this engine, tracked separately',
+        'Escape-hatch ratio: instrumentation ready (escapes.format()), business usage pending',
+      ]
+    : [
+        '共享元素：同视图树形态已落地；跨页面的稳态几何回传需页面栈层配合（未做）',
+        '滚动联动：驱动接口与输入源解耦；真机手指拖拽手势未接线',
+        '120 FPS 目标需 ProMotion 设备（iPhone 12 为 60Hz——如实标注，未声称）',
+        '手势协商（嵌套滚动冲突 / 多指）：按方案设计不属本引擎，独立立项',
+        '逃生口率：统计装置就绪（escapes.format()），业务用量待采数',
+      ],
+)
 
 const CODE = computed(() =>
   highlight(
@@ -315,346 +346,414 @@ const batch = compileRoute(spec, { enter: a, exit: b })
     'ts',
   ),
 )
+
+/* ── 滚动显现（与首页同机制） ── */
+const rootEl = ref<{ $el?: HTMLElement } | null>(null)
+const motionOk = !(typeof matchMedia === 'function' && matchMedia('(prefers-reduced-motion: reduce)').matches)
+let io: IntersectionObserver | null = null
+onMounted(() => {
+  const el = rootEl.value?.$el
+  const nodes = el ? Array.from(el.querySelectorAll('[data-reveal]')) : []
+  if (!motionOk || typeof IntersectionObserver !== 'function') {
+    nodes.forEach((n) => n.classList.add('revealed'))
+    return
+  }
+  io = new IntersectionObserver(
+    (entries) => {
+      for (const e of entries) {
+        if (e.isIntersecting) {
+          ;(e.target as HTMLElement).classList.add('revealed')
+          io?.unobserve(e.target)
+        }
+      }
+    },
+    { rootMargin: '0px 0px -8% 0px', threshold: 0.08 },
+  )
+  nodes.forEach((n) => io?.observe(n))
+})
+onUnmounted(() => {
+  io?.disconnect()
+  io = null
+})
 </script>
 
 <template>
-  <p-page class="anim-page">
-    <p-view class="wrap">
-      <!-- ─────────── Hero ─────────── -->
-      <p-stack direction="column" :gap="18" class="hero">
-        <p-text class="eyebrow"><FeatureIcon name="bolt" />{{ C.eyebrow }}</p-text>
-        <p-heading :level="1" v-p-fluid="'font-size(34, 54)'" class="hero-h1">{{ C.h1a }}<em>{{ C.h1b }}</em></p-heading>
-        <p-text class="hero-tagline">{{ C.tagline }}</p-text>
-        <p-text class="hero-lead">{{ C.lead }}</p-text>
-        <p-stack direction="row" :gap="10" wrap class="hero-cta">
-          <router-link to="/docs/animation/00-overview" class="btn btn-primary">{{ C.ctaDocs }}</router-link>
-          <a href="#demo" class="btn btn-ghost">{{ C.ctaDemo }}</a>
-        </p-stack>
-      </p-stack>
+  <p-page ref="rootEl" class="ap">
+    <!-- 背景层（品牌光晕 + 细网格；纯装饰） -->
+    <p-view class="ap-bg" aria-hidden="true"><span class="ap-grid" /></p-view>
 
-      <!-- ─────────── 三个杀手锏 ─────────── -->
-      <p-heading :level="2" v-p-fluid="'font-size(22, 28)'" class="sec-title">{{ C.pillarTitle }}</p-heading>
-      <p-grid :min-col-width="280" :gap="14">
-        <p-view v-for="(p, i) in C.pillars" :key="i" class="card pillar">
-          <p-text class="pillar-ic"><FeatureIcon :name="p.icon" /></p-text>
-          <p-heading :level="3" class="pillar-title">{{ p.title }}</p-heading>
-          <p-text class="pillar-desc">{{ p.desc }}</p-text>
-          <p-text class="pillar-fact">{{ p.fact }}</p-text>
+    <p-view class="ap-wrap">
+      <!-- ═══════════ Hero（布局归 p-grid：窄容器自动堆叠，零 @media） ═══════════ -->
+      <p-grid :min-col-width="330" :gap="36" class="hero">
+        <p-stack direction="column" :gap="16" class="hero-copy">
+          <p-text class="chip"><FeatureIcon name="bolt" /><span>{{ C.chip }}</span></p-text>
+          <p-heading :level="1" v-p-fluid="'font-size(38, 62)'" class="hero-h1">
+            {{ C.h1a }}<em>{{ C.h1b }}</em>{{ C.h1c }}
+          </p-heading>
+          <p-text v-p-fluid="'font-size(17, 21)'" class="hero-tag">{{ C.tagline }}</p-text>
+          <p-text class="hero-lead">{{ C.lead }}</p-text>
+          <p-stack direction="row" :gap="12" wrap class="hero-cta">
+            <router-link to="/docs/animation/00-overview" class="btn btn-primary">{{ C.ctaDocs }}</router-link>
+            <a href="#demo" class="btn btn-ghost">{{ C.ctaDemo }}</a>
+          </p-stack>
+          <p-stack direction="row" :gap="8" wrap class="hero-pills">
+            <span v-for="p in C.heroPills" :key="p" class="pill">{{ p }}</span>
+          </p-stack>
+        </p-stack>
+        <p-view class="hero-stage">
+          <MobileStage
+            :incoming="plan.incoming.anims"
+            :outgoing="plan.outgoing.anims"
+            :duration-ms="plan.durationMs"
+            :direction="direction"
+            size="lg"
+            :caption="C.stageCaption"
+          />
         </p-view>
       </p-grid>
 
-      <!-- ─────────── ① 转场播放器 ─────────── -->
-      <!-- ─────────── ① 转场播放器 ─────────── -->
-      <p-heading :level="2" v-p-fluid="'font-size(22, 28)'" class="sec-title" id="demo">{{ C.demoTitle }}</p-heading>
-      <p-text class="sec-note">{{ C.demoNote }}</p-text>
-      <p-grid :min-col-width="300" :gap="18" class="demo-grid">
-        <!-- 手机框：两页叠放，各自动画 -->
-        <p-view class="phone">
-          <p-view class="phone-screen">
-            <p-view class="pane pane-out" :style="{ ...paneOut, zIndex: zOut }">
-              <p-view class="mock-bar" /><p-view class="mock-hero mock-hero--dim" />
-              <p-view class="mock-row" /><p-view class="mock-row" /><p-view class="mock-row mock-row--short" />
-              <p-text class="pane-tag">B</p-text>
-            </p-view>
-            <p-view class="pane pane-in" :style="{ ...paneIn, zIndex: zIn }">
-              <p-view class="mock-bar mock-bar--brand" /><p-view class="mock-hero" />
-              <p-view class="mock-row" /><p-view class="mock-row" /><p-view class="mock-row mock-row--short" />
-              <p-text class="pane-tag pane-tag--brand">A</p-text>
+      <!-- ═══════════ 三个杀手锏 ═══════════ -->
+      <p-view data-reveal class="sec">
+        <p-grid :min-col-width="300" :gap="16">
+          <p-view v-for="p in C.pillars" :key="p.n" class="pcard">
+            <p-stack direction="row" align="center" :gap="10" class="pcard-head">
+              <span class="pcard-no">{{ p.n }}</span>
+              <span class="pcard-ic"><FeatureIcon :name="p.ic" /></span>
+            </p-stack>
+            <p-heading :level="3" class="pcard-title">{{ p.title }}</p-heading>
+            <p-text class="pcard-desc">{{ p.desc }}</p-text>
+            <p-view class="pcard-metrics">
+              <p-view v-for="m in p.metrics" :key="m[1]" class="metric">
+                <span class="metric-v">{{ m[0] }}</span>
+                <span class="metric-l">{{ m[1] }}</span>
+              </p-view>
             </p-view>
           </p-view>
-        </p-view>
-        <!-- 控制区 -->
-        <p-stack direction="column" :gap="10" class="demo-ctrl">
-          <p-stack direction="row" :gap="8" wrap>
-            <button
-              v-for="tr in TRANSITIONS"
-              :key="tr"
-              class="chip"
-              :class="{ active: picked === tr }"
-              @click="picked = tr"
-            >
-              {{ TRANSITION_LABEL[tr] ?? tr }}
-            </button>
-          </p-stack>
-          <p-stack direction="row" :gap="8" wrap>
-            <button class="chip" :class="{ active: direction === 'forward' }" @click="direction = 'forward'">{{ C.demoForward }}</button>
-            <button class="chip" :class="{ active: direction === 'back' }" @click="direction = 'back'">{{ C.demoBack }}</button>
-            <button class="chip chip-play" :disabled="playing" @click="play">{{ C.demoReplay }}</button>
-          </p-stack>
-          <p-text v-if="!hasAnims" class="demo-hint">{{ C.demoInstant }}</p-text>
-          <p-view class="readout">
-            <p-text class="readout-title">{{ C.demoCompiled }}</p-text>
-            <pre>{{ compiledReadout }}</pre>
-          </p-view>
-        </p-stack>
-      </p-grid>
-
-      <!-- ─────────── ② 曲线求值器 ─────────── -->
-      <p-heading :level="2" v-p-fluid="'font-size(22, 28)'" class="sec-title">{{ C.curveTitle }}</p-heading>
-      <p-text class="sec-note">{{ C.curveNote }}</p-text>
-      <p-grid :min-col-width="300" :gap="18" class="demo-grid demo-grid--curve">
-        <p-view class="curve-box">
-          <svg viewBox="0 0 200 100" class="curve-svg" role="img">
-            <line x1="0" y1="100" x2="200" y2="100" class="curve-axis" />
-            <line x1="0" y1="0" x2="0" y2="100" class="curve-axis" />
-            <path :d="curvePath" class="curve-line" />
-            <circle :cx="curveMarker.x" :cy="curveMarker.y" r="3.2" class="curve-dot" />
-          </svg>
-        </p-view>
-        <p-stack direction="column" :gap="10" class="demo-ctrl">
-          <p-stack direction="row" :gap="8" wrap>
-            <button v-for="[name, id] in CURVES" :key="name" class="chip" :class="{ active: curveId === id }" @click="curveId = id">
-              {{ name }} <span class="chip-id">#{{ id }}</span>
-            </button>
-          </p-stack>
-          <p-text class="demo-hint">{{ C.curveProgress }} u = {{ curveU.toFixed(2) }} → v = <b>{{ curveValue.toFixed(4) }}</b></p-text>
-          <input v-model.number="curveU" type="range" min="0" max="1" step="0.01" class="slider" />
-        </p-stack>
-      </p-grid>
-
-      <!-- ─────────── ③ 预设目录（live） ─────────── -->
-      <p-heading :level="2" v-p-fluid="'font-size(22, 28)'" class="sec-title">{{ C.presetsTitle }}</p-heading>
-      <p-text class="sec-note">{{ C.presetsNote }}</p-text>
-      <p-grid :min-col-width="240" :gap="12">
-        <p-view v-for="r in PRESETS" :key="r.id" class="card preset">
-          <p-stack direction="row" :gap="8" align="center" wrap>
-            <code class="preset-id">{{ r.id }}</code>
-            <span class="status" :class="`status--${r.status}`">{{ r.status }}</span>
-          </p-stack>
-          <p-heading :level="3" class="preset-title">{{ r.title }}</p-heading>
-          <p-text class="preset-when">{{ r.when }}</p-text>
-        </p-view>
-      </p-grid>
-      <p-text class="sec-note">
-        {{ C.presetsOther }}：primitive × {{ ruleCounts.primitive }} · constraint × {{ ruleCounts.constraint }} · boundary ×
-        {{ ruleCounts.boundary }}（共 {{ RULES.length }} 条 AI 说明书，与编译器规则同构）
-      </p-text>
-
-      <!-- ─────────── ④ 真机证据 ─────────── -->
-      <p-heading :level="2" v-p-fluid="'font-size(22, 28)'" class="sec-title">{{ C.evidenceTitle }}</p-heading>
-      <p-text class="sec-note">{{ C.evidenceNote }}</p-text>
-      <p-view class="table-wrap">
-        <table class="ev-table">
-          <thead>
-            <tr>
-              <th>{{ isEn ? 'Metric' : '指标' }}</th>
-              <th>{{ isEn ? 'Reading' : '读数' }}</th>
-              <th>{{ isEn ? 'Assertion' : '判据' }}</th>
-            </tr>
-          </thead>
-          <tbody>
-            <tr v-for="(e, i) in EVIDENCE" :key="i">
-              <td>{{ isEn ? e.labelEn : e.label }}</td>
-              <td class="ev-value">{{ e.value }}</td>
-              <td><code>{{ e.src }}</code></td>
-            </tr>
-          </tbody>
-        </table>
+        </p-grid>
       </p-view>
 
-      <!-- ─────────── ⑤ 怎么写 ─────────── -->
-      <p-heading :level="2" v-p-fluid="'font-size(22, 28)'" class="sec-title">{{ C.codeTitle }}</p-heading>
-      <p-text class="sec-note">{{ C.codeNote }}</p-text>
-      <p-view class="code-box"><pre v-html="CODE"></pre></p-view>
+      <!-- ═══════════ 演示 ═══════════ -->
+      <p-view id="demo" data-reveal class="sec">
+        <p-stack direction="row" align="center" :gap="12" class="sec-head" wrap>
+          <p-heading :level="2" v-p-fluid="'font-size(24, 32)'" class="sec-title">{{ C.demoTitle }}</p-heading>
+          <span class="sec-rule" />
+        </p-stack>
+        <p-text class="sec-note">{{ C.demoNote }}</p-text>
 
-      <!-- ─────────── ⑥ 诚实边界 ─────────── -->
-      <p-heading :level="2" v-p-fluid="'font-size(22, 28)'" class="sec-title">{{ C.boundaryTitle }}</p-heading>
-      <p-text class="sec-note">{{ C.boundaryNote }}</p-text>
-      <p-stack direction="column" :gap="8" class="boundaries">
-        <p-text v-for="(b, i) in BOUNDARIES" :key="i" class="boundary"><span class="dot">◐</span>{{ isEn ? b.en : b.zh }}</p-text>
-      </p-stack>
+        <p-grid :min-col-width="300" :gap="22" class="demo-grid">
+          <p-view class="demo-stage">
+            <MobileStage
+              :incoming="plan.incoming.anims"
+              :outgoing="plan.outgoing.anims"
+              :duration-ms="plan.durationMs"
+              :direction="direction"
+              size="md"
+              :autoplay="true"
+            />
+            <p-text v-if="!hasAnims" class="demo-hint">none · 瞬切（无动画）</p-text>
+          </p-view>
 
-      <!-- ─────────── CTA ─────────── -->
-      <p-view class="cta-card">
-        <router-link to="/docs/animation/00-overview" class="btn btn-primary">{{ C.docCta }}</router-link>
-        <p-text class="cta-sub">Morpheus · {{ isEn ? 'Declarative animation engine' : '声明式动画引擎' }} · {{ isEn ? 'docs' : '文档' }} v0.3</p-text>
+          <p-stack direction="column" :gap="14" class="demo-side">
+            <p-stack direction="column" :gap="8">
+              <p-text class="ctrl-label">{{ C.dirLabel }}</p-text>
+              <p-stack direction="row" :gap="8" wrap>
+                <button class="chip" :class="{ on: direction === 'forward' }" @click="direction = 'forward'">{{ C.dirFwd }}</button>
+                <button class="chip" :class="{ on: direction === 'back' }" @click="direction = 'back'">{{ C.dirBack }}</button>
+              </p-stack>
+              <p-stack direction="row" :gap="8" wrap>
+                <button
+                  v-for="tr in TRANSITIONS"
+                  :key="tr"
+                  class="chip"
+                  :class="{ on: picked === tr }"
+                  @click="picked = tr"
+                >
+                  {{ tr }}
+                </button>
+              </p-stack>
+            </p-stack>
+
+            <p-view class="tl">
+              <p-stack direction="row" align="center" :gap="8" class="tl-head">
+                <span class="tl-title">{{ C.timeline }}</span>
+                <span class="tl-total">{{ totalMs }}ms</span>
+              </p-stack>
+              <p-view class="tl-rows">
+                <p-view v-for="(b, i) in bars" :key="i" class="tl-row" :class="`tl-row--${b.pane}`">
+                  <span class="tl-pane">{{ b.pane === 'in' ? 'A' : 'B' }}</span>
+                  <span class="tl-bar" :style="{ marginLeft: b.left + '%', width: b.width + '%' }">
+                    <span class="tl-bar-text">{{ b.label }} · {{ b.curve }}</span>
+                  </span>
+                </p-view>
+                <p-text v-if="!bars.length" class="tl-empty">none（无动画）</p-text>
+              </p-view>
+              <p-text class="tl-note">{{ C.timelineNote }}</p-text>
+            </p-view>
+
+            <p-view class="readout">
+              <p-text class="readout-title">{{ C.readout }}</p-text>
+              <pre>{{ compiledReadout }}</pre>
+            </p-view>
+          </p-stack>
+        </p-grid>
+      </p-view>
+
+      <!-- ═══════════ 曲线 ═══════════ -->
+      <p-view data-reveal class="sec">
+        <p-stack direction="row" align="center" :gap="12" class="sec-head" wrap>
+          <p-heading :level="2" v-p-fluid="'font-size(24, 32)'" class="sec-title">{{ C.curveTitle }}</p-heading>
+          <span class="sec-rule" />
+        </p-stack>
+        <p-text class="sec-note">{{ C.curveNote }}</p-text>
+        <p-grid :min-col-width="320" :gap="18" class="curve-grid">
+          <p-view class="curve-card">
+            <svg viewBox="-8 -8 216 116" class="curve-svg" role="img">
+              <defs>
+                <linearGradient id="curveStroke" x1="0" y1="0" x2="1" y2="0">
+                  <stop offset="0%" stop-color="#7c5cff" />
+                  <stop offset="100%" stop-color="#ab9bff" />
+                </linearGradient>
+              </defs>
+              <line x1="0" y1="100" x2="200" y2="100" class="axis" />
+              <line x1="0" y1="0" x2="0" y2="100" class="axis" />
+              <line :x1="marker.x" :y1="100" :x2="marker.x" :y2="marker.y" class="guide" />
+              <line x1="0" :y1="marker.y" :x2="marker.x" :y2="marker.y" class="guide" />
+              <path :d="curvePath" class="curve" />
+              <circle :cx="marker.x" :cy="marker.y" r="3.4" class="dot" />
+              <circle cx="0" cy="100" r="2.4" class="anchor" />
+              <circle cx="200" cy="0" r="2.4" class="anchor" />
+            </svg>
+            <p-stack direction="row" align="center" :gap="12" wrap class="curve-facts">
+              <span class="fact">f(0) = <b>{{ endpoints.at0 }}</b></span>
+              <span class="fact">f(1) = <b>{{ endpoints.at1 }}</b></span>
+              <span class="fact fact--live">f({{ curveU.toFixed(2) }}) = <b>{{ curveValue.toFixed(4) }}</b></span>
+            </p-stack>
+          </p-view>
+          <p-stack direction="column" :gap="12" class="curve-side">
+            <p-grid :min-col-width="150" :gap="8">
+              <button v-for="[name, id] in CURVES" :key="name" class="curve-chip" :class="{ on: curveId === id }" @click="curveId = id">
+                <span class="cc-name">{{ name }}</span><span class="cc-id">#{{ id }}</span>
+              </button>
+            </p-grid>
+            <p-view class="slider-box">
+              <p-stack direction="row" align="center" :gap="10" class="slider-head">
+                <span class="ctrl-label">{{ C.curveU }}</span>
+                <span class="slider-val">{{ curveU.toFixed(2) }}</span>
+              </p-stack>
+              <input v-model.number="curveU" type="range" min="0" max="1" step="0.01" class="slider" />
+            </p-view>
+          </p-stack>
+        </p-grid>
+      </p-view>
+
+      <!-- ═══════════ 预设库 ═══════════ -->
+      <p-view data-reveal class="sec">
+        <p-stack direction="row" align="center" :gap="12" class="sec-head" wrap>
+          <p-heading :level="2" v-p-fluid="'font-size(24, 32)'" class="sec-title">{{ C.presetsTitle }}</p-heading>
+          <span class="sec-rule" />
+        </p-stack>
+        <p-text class="sec-note">{{ C.presetsNote }}</p-text>
+        <p-grid :min-col-width="232" :gap="12">
+          <p-view v-for="r in PRESETS" :key="r.id" class="preset">
+            <PresetPreview :kind="previewOf(r.id)" />
+            <p-stack direction="row" align="center" :gap="7" wrap class="preset-head">
+              <code class="preset-id">{{ r.id }}</code>
+              <span class="status" :class="`status--${r.status}`">{{ r.status }}</span>
+            </p-stack>
+            <p-text class="preset-title">{{ r.title }}</p-text>
+            <p-text class="preset-when">{{ r.when }}</p-text>
+          </p-view>
+        </p-grid>
+        <p-text class="presets-more">
+          {{ C.presetsMore }}：primitive × {{ ruleCounts.primitive }} · constraint × {{ ruleCounts.constraint }} ·
+          boundary × {{ ruleCounts.boundary }}（共 {{ RULES.length }} 条 AI 说明书，与编译器规则同构）
+        </p-text>
+      </p-view>
+
+      <!-- ═══════════ 证据 ═══════════ -->
+      <p-view data-reveal class="sec">
+        <p-stack direction="row" align="center" :gap="12" class="sec-head" wrap>
+          <p-heading :level="2" v-p-fluid="'font-size(24, 32)'" class="sec-title">{{ C.evidenceTitle }}</p-heading>
+          <span class="sec-rule" />
+        </p-stack>
+        <p-text class="sec-note">{{ C.evidenceNote }}</p-text>
+        <p-grid :min-col-width="200" :gap="12">
+          <p-view v-for="(e, i) in EVIDENCE" :key="i" class="ev">
+            <p-stack direction="row" align="baseline" :gap="6" class="ev-num">
+              <span class="ev-v">{{ e.v }}</span><span class="ev-u">{{ e.u }}</span>
+            </p-stack>
+            <p-text class="ev-l">{{ e.l }}</p-text>
+            <code class="ev-src">{{ e.src }}</code>
+          </p-view>
+        </p-grid>
+      </p-view>
+
+      <!-- ═══════════ 怎么写 ═══════════ -->
+      <p-view data-reveal class="sec">
+        <p-stack direction="row" align="center" :gap="12" class="sec-head" wrap>
+          <p-heading :level="2" v-p-fluid="'font-size(24, 32)'" class="sec-title">{{ C.codeTitle }}</p-heading>
+          <span class="sec-rule" />
+        </p-stack>
+        <p-text class="sec-note">{{ C.codeNote }}</p-text>
+        <p-view class="code-box"><pre v-html="CODE"></pre></p-view>
+      </p-view>
+
+      <!-- ═══════════ 边界 ═══════════ -->
+      <p-view data-reveal class="sec">
+        <p-stack direction="row" align="center" :gap="12" class="sec-head" wrap>
+          <p-heading :level="2" v-p-fluid="'font-size(24, 32)'" class="sec-title">{{ C.boundaryTitle }}</p-heading>
+          <span class="sec-rule" />
+        </p-stack>
+        <p-text class="sec-note">{{ C.boundaryNote }}</p-text>
+        <p-stack direction="column" :gap="9" class="boundaries">
+          <p-text v-for="(b, i) in BOUNDARIES" :key="i" class="boundary"><span class="b-dot">◐</span>{{ b }}</p-text>
+        </p-stack>
+      </p-view>
+
+      <!-- ═══════════ CTA ═══════════ -->
+      <p-view data-reveal class="cta">
+        <p-view class="cta-glow" aria-hidden="true" />
+        <p-heading :level="3" v-p-fluid="'font-size(20, 26)'" class="cta-title">Morpheus</p-heading>
+        <p-text class="cta-sub">{{ isEn ? 'Declarative animation engine' : '声明式动画引擎' }} · v0.3</p-text>
+        <router-link to="/docs/animation/00-overview" class="btn btn-primary cta-btn">{{ C.docCta }}</router-link>
       </p-view>
     </p-view>
   </p-page>
 </template>
 
 <style scoped>
-.wrap {
-  max-width: 1080px;
-  margin: 0 auto;
-  padding: 96px 20px 80px;
+/* ═══════════ 背景 ═══════════ */
+.ap { position: relative; background: var(--bg); }
+.ap-bg { position: absolute; inset: 0; overflow: hidden; pointer-events: none; }
+.ap-bg::before {
+  content: '';
+  position: absolute;
+  top: -320px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 1100px;
+  height: 700px;
+  background: radial-gradient(50% 50% at 50% 50%, rgba(124, 92, 255, 0.2), transparent 70%);
+  filter: blur(24px);
 }
-.hero {
-  padding: 26px 0 10px;
+.ap-grid {
+  position: absolute;
+  inset: 0;
+  background-image: linear-gradient(rgba(255, 255, 255, 0.028) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(255, 255, 255, 0.028) 1px, transparent 1px);
+  background-size: 56px 56px;
+  mask-image: radial-gradient(70% 46% at 50% 8%, #000 0%, transparent 78%);
+  -webkit-mask-image: radial-gradient(70% 46% at 50% 8%, #000 0%, transparent 78%);
 }
-.eyebrow {
-  display: inline-flex;
-  align-items: center;
-  gap: 7px;
-  font-family: var(--mono);
-  font-size: 12px;
-  letter-spacing: 0.14em;
-  color: var(--brand-ink);
-  background: var(--brand-soft);
-  border: 1px solid var(--line);
-  border-radius: var(--radius-pill);
-  padding: 5px 12px;
-  width: fit-content;
-}
-.hero-h1 {
-  font-size: var(--p-heading-size-1, clamp(34px, 5vw, 54px));
-  line-height: 1.08;
-  letter-spacing: -0.02em;
-}
-.hero-h1 em {
-  font-style: normal;
-  color: var(--brand-ink);
-}
-.hero-tagline {
-  font-size: clamp(16px, 2.2vw, 20px);
-  color: var(--ink);
-  font-weight: 600;
-}
-.hero-lead {
-  color: var(--muted);
-  line-height: 1.75;
-  max-width: 780px;
-}
-.hero-cta {
-  margin-top: 6px;
-}
-.btn {
+.ap-wrap { position: relative; max-width: 1120px; margin: 0 auto; padding: 104px 22px 90px; }
+/* ═══════════ Hero ═══════════ */
+.hero { align-items: center; padding-bottom: 30px; }
+.hero-copy { min-width: 0; }
+.chip {
   display: inline-flex;
   align-items: center;
   gap: 8px;
-  padding: 9px 18px;
+  width: fit-content;
+  font-family: var(--mono);
+  font-size: 11.5px;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--brand-ink);
+  background: var(--brand-soft);
+  border: 1px solid rgba(124, 92, 255, 0.35);
+  border-radius: var(--radius-pill);
+  padding: 6px 14px;
+}
+.hero-h1 { color: var(--ink); line-height: 1.06; letter-spacing: -0.025em; font-weight: 800; margin: 4px 0 2px; }
+.hero-h1 em {
+  font-style: normal;
+  background: linear-gradient(96deg, var(--brand-ink), var(--brand) 55%, var(--accent));
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+.hero-tag { color: var(--ink); font-weight: 650; line-height: 1.5; }
+.hero-lead { color: var(--muted); line-height: 1.8; max-width: 660px; font-size: 15px; }
+.hero-cta { margin-top: 4px; }
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 11px 22px;
   border-radius: var(--radius-md);
-  font-size: 14px;
-  font-weight: 600;
+  font-size: 14.5px;
+  font-weight: 650;
   text-decoration: none;
   border: 1px solid var(--line);
-  transition: border-color 0.18s ease, transform 0.18s ease;
+  transition: transform 0.18s ease, box-shadow 0.18s ease, border-color 0.18s ease;
 }
-.btn:hover {
-  transform: translateY(-1px);
-}
+.btn:hover { transform: translateY(-2px); }
 .btn-primary {
-  background: var(--brand);
-  border-color: var(--brand);
+  background: linear-gradient(120deg, var(--brand), #6a4bf0);
+  border-color: transparent;
   color: #fff;
+  box-shadow: 0 10px 30px -12px rgba(124, 92, 255, 0.9);
 }
-.btn-ghost {
-  color: var(--ink);
-  background: var(--panel);
+.btn-ghost { color: var(--ink); background: var(--panel); }
+.btn-ghost:hover { border-color: var(--brand); }
+.hero-pills { margin-top: 6px; }
+.pill { font-size: 12px; color: var(--muted); border: 1px solid var(--line); background: rgba(20, 20, 25, 0.7); border-radius: var(--radius-pill); padding: 4px 11px; }
+.hero-stage { display: flex; justify-content: center; }
+/* ═══════════ 分节通式 ═══════════ */
+.sec { margin-top: 82px; }
+.sec-head { margin-bottom: 6px; }
+.sec-title { color: var(--ink); letter-spacing: -0.015em; }
+.sec-rule { flex: 1; min-width: 40px; height: 1px; background: linear-gradient(90deg, var(--line), transparent); }
+.sec-note { color: var(--dim); font-size: 13.5px; line-height: 1.75; margin-bottom: 18px; max-width: 820px; }
+[data-reveal] {
+  opacity: 0;
+  transform: translateY(16px);
+  transition: opacity 0.6s cubic-bezier(0.22, 1, 0.36, 1), transform 0.6s cubic-bezier(0.22, 1, 0.36, 1);
 }
-.sec-title {
-  margin: 56px 0 6px;
-  font-size: clamp(22px, 3vw, 28px);
-  letter-spacing: -0.01em;
-}
-.sec-note {
-  color: var(--dim);
-  font-size: 13.5px;
-  line-height: 1.7;
-  margin-bottom: 14px;
-  max-width: 860px;
-}
-/* ── 卡片 ── */
-.card {
-  background: var(--panel);
-  border: 1px solid var(--line);
-  border-radius: var(--radius-lg);
-  padding: 18px 16px;
-}
-.pillar-ic {
-  color: var(--brand-ink);
-  font-size: 18px;
-}
-.pillar-title {
-  margin: 8px 0 6px;
-  font-size: 16.5px;
-}
-.pillar-desc {
-  color: var(--muted);
-  font-size: 13.5px;
-  line-height: 1.72;
-}
-.pillar-fact {
-  margin-top: 10px;
-  padding-top: 10px;
-  border-top: 1px dashed var(--line);
-  color: var(--brand-ink);
-  font-size: 12.5px;
-  line-height: 1.6;
-}
-/* ── 演示区 ── */
-/* 演示区两栏：布局归 p-grid（minColWidth 自动堆叠——零 @media，W-6） */
-.demo-grid {
-  align-items: start;
-}
-.phone {
-  background: var(--panel2);
-  border: 1px solid var(--line);
-  border-radius: 26px;
-  padding: 12px;
-}
-.phone-screen {
+[data-reveal].revealed { opacity: 1; transform: none; }
+/* ═══════════ 杀手锏卡 ═══════════ */
+.pcard {
   position: relative;
-  height: 380px;
-  border-radius: 16px;
-  overflow: hidden;
-  background: var(--bg);
-  border: 1px solid var(--line-soft);
+  background: linear-gradient(180deg, rgba(24, 24, 31, 0.9), rgba(17, 17, 23, 0.9));
+  border: 1px solid var(--line);
+  border-radius: var(--radius-xl);
+  padding: 22px 20px 18px;
+  transition: transform 0.22s ease, border-color 0.22s ease;
 }
-.pane {
-  position: absolute;
-  inset: 0;
-  will-change: transform, opacity;
-  transform-origin: center center;
-}
-.pane-out {
-  background: linear-gradient(180deg, #17171d, #101015);
-}
-.pane-in {
-  background: linear-gradient(180deg, #1a1830, #12111d);
-}
-.pane-tag {
-  position: absolute;
-  right: 10px;
-  bottom: 8px;
-  font-family: var(--mono);
-  font-size: 11px;
-  color: var(--dim);
-}
-.pane-tag--brand {
+.pcard:hover { transform: translateY(-3px); border-color: rgba(124, 92, 255, 0.45); }
+.pcard-head { margin-bottom: 10px; }
+.pcard-no { font-family: var(--mono); font-size: 12px; letter-spacing: 0.1em; color: var(--dim); }
+.pcard-ic {
+  display: inline-flex;
+  width: 32px;
+  height: 32px;
+  align-items: center;
+  justify-content: center;
+  border-radius: 9px;
   color: var(--brand-ink);
-}
-.mock-bar {
-  height: 34px;
-  margin: 10px 10px 8px;
-  border-radius: 8px;
-  background: rgba(255, 255, 255, 0.08);
-}
-.mock-bar--brand {
   background: var(--brand-soft);
-  border: 1px solid var(--brand);
+  border: 1px solid rgba(124, 92, 255, 0.3);
 }
-.mock-hero {
-  height: 96px;
-  margin: 0 10px 10px;
-  border-radius: 10px;
-  background: linear-gradient(135deg, rgba(124, 92, 255, 0.5), rgba(124, 92, 255, 0.16));
+.pcard-title { color: var(--ink); font-size: 17px; margin: 2px 0 8px; }
+.pcard-desc { color: var(--muted); font-size: 13.5px; line-height: 1.75; }
+.pcard-metrics {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+  margin-top: 16px;
+  padding-top: 14px;
+  border-top: 1px dashed var(--line);
 }
-.mock-hero--dim {
-  background: linear-gradient(135deg, rgba(255, 255, 255, 0.12), rgba(255, 255, 255, 0.05));
-}
-.mock-row {
-  height: 26px;
-  margin: 0 10px 8px;
-  border-radius: 7px;
-  background: rgba(255, 255, 255, 0.07);
-}
-.mock-row--short {
-  width: 60%;
-}
-.demo-ctrl {
-  min-width: 0;
-}
+.metric { display: block; min-width: 0; }
+.metric-v { display: block; font-family: var(--mono); font-size: 17px; color: var(--brand-ink); font-weight: 600; letter-spacing: -0.01em; }
+.metric-l { display: block; font-size: 11px; color: var(--dim); line-height: 1.45; margin-top: 3px; }
+/* ═══════════ 演示区 ═══════════ */
+.demo-grid { align-items: start; }
+.demo-stage { display: flex; flex-direction: column; align-items: center; gap: 10px; }
+.demo-hint { font-size: 12.5px; color: var(--dim); }
+.demo-side { min-width: 0; }
+.ctrl-label { font-family: var(--mono); font-size: 11px; letter-spacing: 0.1em; text-transform: uppercase; color: var(--dim); }
 .chip {
   font-family: var(--mono);
   font-size: 12px;
@@ -662,192 +761,143 @@ const batch = compileRoute(spec, { enter: a, exit: b })
   background: var(--panel);
   border: 1px solid var(--line);
   border-radius: var(--radius-pill);
-  padding: 7px 12px;
+  padding: 7px 13px;
   cursor: pointer;
-  transition: border-color 0.16s ease, color 0.16s ease;
+  transition: border-color 0.16s ease, color 0.16s ease, background 0.16s ease;
 }
-.chip:hover {
-  border-color: var(--brand);
+.chip:hover { border-color: var(--brand); }
+.chip.on { color: var(--ink); border-color: var(--brand); background: var(--brand-soft); }
+.tl { background: #101016; border: 1px solid var(--line); border-radius: var(--radius-lg); padding: 12px 14px; }
+.tl-head { margin-bottom: 8px; }
+.tl-title { font-family: var(--mono); font-size: 11px; letter-spacing: 0.1em; text-transform: uppercase; color: var(--muted); }
+.tl-total { margin-left: auto; font-family: var(--mono); font-size: 11.5px; color: var(--brand-ink); }
+.tl-rows { display: flex; flex-direction: column; gap: 7px; }
+.tl-row { display: flex; align-items: center; gap: 8px; }
+.tl-pane { width: 16px; font-family: var(--mono); font-size: 11px; color: var(--dim); flex: none; }
+.tl-bar {
+  display: flex;
+  align-items: center;
+  height: 20px;
+  border-radius: 6px;
+  padding: 0 7px;
+  overflow: hidden;
+  min-width: 40px;
+  transition: margin 0.3s ease, width 0.3s ease;
 }
-.chip.active {
-  color: var(--ink);
-  border-color: var(--brand);
-  background: var(--brand-soft);
+.tl-row--in .tl-bar { background: linear-gradient(120deg, rgba(124, 92, 255, 0.55), rgba(124, 92, 255, 0.3)); border: 1px solid rgba(124, 92, 255, 0.5); }
+.tl-row--out .tl-bar { background: rgba(255, 255, 255, 0.07); border: 1px solid rgba(255, 255, 255, 0.1); }
+.tl-bar-text { font-family: var(--mono); font-size: 10.5px; color: var(--ink); white-space: nowrap; }
+.tl-empty { font-family: var(--mono); font-size: 12px; color: var(--dim); }
+.tl-note { margin-top: 9px; font-size: 11.5px; color: var(--dim); line-height: 1.6; }
+.readout { background: #101016; border: 1px solid var(--line); border-radius: var(--radius-lg); padding: 12px 14px; }
+.readout-title { font-family: var(--mono); font-size: 11px; letter-spacing: 0.1em; text-transform: uppercase; color: var(--dim); margin-bottom: 8px; }
+.readout pre { margin: 0; max-height: 190px; overflow: auto; font-family: var(--mono); font-size: 11.5px; line-height: 1.65; color: var(--brand-ink); }
+/* ═══════════ 曲线 ═══════════ */
+.curve-grid { align-items: stretch; }
+.curve-card {
+  background: linear-gradient(180deg, rgba(24, 24, 31, 0.85), rgba(16, 16, 22, 0.85));
+  border: 1px solid var(--line);
+  border-radius: var(--radius-xl);
+  padding: 16px;
 }
-.chip-id {
-  color: var(--dim);
-  font-size: 10.5px;
-}
-.chip-play {
-  color: var(--brand-ink);
-}
-.chip:disabled {
-  opacity: 0.5;
-  cursor: default;
-}
-.demo-hint {
-  font-size: 12.5px;
-  color: var(--dim);
-}
-.readout {
-  background: #101016;
+.curve-svg { width: 100%; height: auto; display: block; }
+.axis { stroke: var(--line); stroke-width: 0.7; }
+.guide { stroke: rgba(255, 138, 92, 0.4); stroke-width: 0.7; stroke-dasharray: 3 3; }
+.curve { fill: none; stroke: url(#curveStroke); stroke-width: 2; stroke-linecap: round; }
+.dot { fill: var(--accent); }
+.anchor { fill: var(--brand-ink); }
+.curve-facts { margin-top: 12px; }
+.fact { font-family: var(--mono); font-size: 11.5px; color: var(--dim); }
+.fact b { color: var(--muted); font-weight: 600; }
+.fact--live { color: var(--accent); }
+.fact--live b { color: var(--accent); }
+.curve-side { min-width: 0; }
+.curve-chip {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px;
+  font-family: var(--mono);
+  font-size: 12px;
+  color: var(--muted);
+  background: var(--panel);
   border: 1px solid var(--line);
   border-radius: var(--radius-md);
-  padding: 10px 12px;
+  padding: 9px 11px;
+  cursor: pointer;
+  transition: border-color 0.16s ease, color 0.16s ease, background 0.16s ease;
 }
-.readout-title {
-  font-size: 11.5px;
-  color: var(--dim);
-  letter-spacing: 0.06em;
-  text-transform: uppercase;
-  margin-bottom: 6px;
-}
-.readout pre {
-  margin: 0;
-  max-height: 200px;
-  overflow: auto;
-  font-family: var(--mono);
-  font-size: 11.5px;
-  line-height: 1.6;
-  color: var(--brand-ink);
-}
-/* ── 曲线 ── */
-.curve-box {
+.curve-chip.on { color: var(--ink); border-color: var(--brand); background: var(--brand-soft); }
+.cc-id { font-size: 10.5px; color: var(--dim); }
+.slider-box { background: var(--panel); border: 1px solid var(--line); border-radius: var(--radius-lg); padding: 12px 14px; }
+.slider-head { margin-bottom: 8px; }
+.slider-val { margin-left: auto; font-family: var(--mono); font-size: 13px; color: var(--accent); }
+.slider { width: 100%; accent-color: var(--brand); }
+/* ═══════════ 预设 ═══════════ */
+.preset {
   background: var(--panel);
   border: 1px solid var(--line);
   border-radius: var(--radius-lg);
-  padding: 10px;
+  padding: 12px;
+  transition: transform 0.2s ease, border-color 0.2s ease;
 }
-.curve-svg {
-  width: 100%;
-  height: auto;
-  display: block;
-}
-.curve-axis {
-  stroke: var(--line);
-  stroke-width: 0.6;
-}
-.curve-line {
-  fill: none;
-  stroke: var(--brand-ink);
-  stroke-width: 1.6;
-}
-.curve-dot {
-  fill: var(--accent);
-}
-.slider {
-  width: 100%;
-  accent-color: var(--brand);
-}
-/* ── 预设 ── */
-.preset-id {
-  font-family: var(--mono);
-  font-size: 11.5px;
-  color: var(--brand-ink);
-}
-.status {
-  font-size: 10.5px;
-  padding: 2px 7px;
-  border-radius: var(--radius-pill);
-  border: 1px solid var(--line);
-  color: var(--muted);
-}
-.status--implemented {
-  color: var(--ok);
-  border-color: rgba(61, 220, 151, 0.4);
-}
-.preset-title {
-  margin: 8px 0 4px;
-  font-size: 14.5px;
-}
-.preset-when {
-  color: var(--muted);
-  font-size: 12.5px;
-  line-height: 1.6;
-}
-/* ── 证据表 ── */
-.table-wrap {
-  overflow-x: auto;
+.preset:hover { transform: translateY(-2px); border-color: rgba(124, 92, 255, 0.4); }
+.preset-head { margin: 12px 0 6px; }
+.preset-id { font-family: var(--mono); font-size: 11px; color: var(--brand-ink); }
+.status { font-size: 10px; padding: 2px 7px; border-radius: var(--radius-pill); border: 1px solid var(--line); color: var(--muted); }
+.status--implemented { color: var(--ok); border-color: rgba(61, 220, 151, 0.4); }
+.preset-title { color: var(--ink); font-size: 13.5px; font-weight: 600; line-height: 1.5; display: block; }
+.preset-when { color: var(--dim); font-size: 12px; line-height: 1.55; margin-top: 3px; display: block; }
+.presets-more { margin-top: 14px; font-size: 12.5px; color: var(--dim); }
+/* ═══════════ 证据卡 ═══════════ */
+.ev {
+  background: linear-gradient(180deg, rgba(24, 24, 31, 0.9), rgba(16, 16, 22, 0.9));
   border: 1px solid var(--line);
   border-radius: var(--radius-lg);
+  padding: 14px 15px;
 }
-.ev-table {
-  width: 100%;
-  border-collapse: collapse;
-  font-size: 13px;
-}
-.ev-table th {
-  text-align: left;
-  font-weight: 600;
-  color: var(--muted);
-  font-size: 12px;
-  letter-spacing: 0.05em;
-  padding: 10px 14px;
-  border-bottom: 1px solid var(--line);
-  background: var(--panel2);
-}
-.ev-table td {
-  padding: 10px 14px;
-  border-bottom: 1px solid var(--line-soft);
-  color: var(--ink);
-  vertical-align: top;
-}
-.ev-table tr:last-child td {
-  border-bottom: none;
-}
-.ev-value {
+.ev-num { margin-bottom: 6px; }
+.ev-v {
   font-family: var(--mono);
-  font-size: 12.5px;
-  color: var(--brand-ink);
+  font-size: 26px;
+  font-weight: 650;
+  letter-spacing: -0.02em;
+  background: linear-gradient(96deg, var(--brand-ink), var(--brand));
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
 }
-.ev-table code {
-  font-family: var(--mono);
-  font-size: 11.5px;
-  color: var(--dim);
-}
-/* ── 代码 ── */
-.code-box {
-  background: #101016;
-  border: 1px solid var(--line);
-  border-radius: var(--radius-lg);
-  padding: 16px 18px;
-  overflow-x: auto;
-}
-.code-box pre {
-  margin: 0;
-  font-family: var(--mono);
-  font-size: 12.5px;
-  line-height: 1.75;
-}
-/* ── 边界 ── */
-.boundaries {
-  border-left: 2px solid var(--line);
-  padding-left: 14px;
-}
-.boundary {
-  color: var(--muted);
-  font-size: 13.5px;
-  line-height: 1.7;
-}
-.boundary .dot {
-  color: var(--warn);
-  margin-right: 8px;
-}
-/* ── CTA ── */
-.cta-card {
-  margin-top: 56px;
-  padding: 26px;
+.ev-u { font-family: var(--mono); font-size: 12px; color: var(--dim); }
+.ev-l { color: var(--muted); font-size: 12.5px; line-height: 1.55; display: block; }
+.ev-src { display: block; margin-top: 8px; font-size: 10.5px; color: var(--dim); }
+/* ═══════════ 代码 / 边界 / CTA ═══════════ */
+.code-box { background: #101016; border: 1px solid var(--line); border-radius: var(--radius-xl); padding: 18px 20px; overflow-x: auto; }
+.code-box pre { margin: 0; font-family: var(--mono); font-size: 12.5px; line-height: 1.8; }
+.boundaries { border-left: 2px solid var(--line); padding-left: 15px; }
+.boundary { color: var(--muted); font-size: 13.5px; line-height: 1.7; }
+.b-dot { color: var(--warn); margin-right: 9px; }
+.cta {
+  position: relative;
+  margin-top: 76px;
+  padding: 40px 24px;
   text-align: center;
   border: 1px solid var(--line);
   border-radius: var(--radius-xl);
-  background: linear-gradient(180deg, var(--brand-soft), transparent 70%);
+  overflow: hidden;
+  background: linear-gradient(180deg, rgba(124, 92, 255, 0.08), transparent 62%);
 }
-.cta-card .btn {
-  justify-content: center;
+.cta-glow {
+  position: absolute;
+  left: 50%;
+  bottom: -160px;
+  transform: translateX(-50%);
+  width: 560px;
+  height: 320px;
+  background: radial-gradient(50% 50% at 50% 50%, rgba(124, 92, 255, 0.28), transparent 70%);
+  filter: blur(20px);
+  pointer-events: none;
 }
-.cta-sub {
-  margin-top: 10px;
-  color: var(--dim);
-  font-size: 12.5px;
-}
+.cta-title { color: var(--ink); }
+.cta-sub { color: var(--dim); font-size: 12.5px; margin: 6px 0 18px; display: block; }
+.cta-btn { position: relative; }
 </style>
