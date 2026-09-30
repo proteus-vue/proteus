@@ -369,17 +369,29 @@ console.log(escapes.format())   // degraded 单列 + 类别汇总 + 率对照 5%
 
   /* ────────────────────────── 诚实边界 ────────────────────────── */
   {
-    id: 'boundary/cross-property-timeline',
-    kind: 'boundary',
-    title: '跨属性共享时间轴：未做',
-    description: '当前每个属性各自成条、各按自身 `durMs`/进度求值；**没有**"多属性严格对齐的分段编排"。',
-    why: '要"位移与缩放共享一条时间轴、各自多段"需引入显式时间轴模型（评估中）；当前用同名时长可近似。',
-    when: '需要多属性精确同拍的复杂编排时（当前能力不足，需拆解或接受近似）',
-    example: `// 近似做法：给同一 durationMs，让各属性各自跑完
-[{ kind: 'translateX', to: 100, durationMs: 400 }, { kind: 'scale', to: 1.2, durationMs: 400 }]`,
-    verify: '包 README「未做」一节（如实记录）',
-    status: 'planned',
-    source: 'packages/animation/README.md:未做（conformance 只保证"已声称的与实现一致"，不覆盖未做项）',
+    id: 'primitive/timeline',
+    kind: 'primitive',
+    title: '跨属性共享时间轴（多属性共享停靠点）',
+    description: '`compileTimeline({kinds, stops})`——停靠点（`at` + 各属性值）**共享**，各轨道由它推导；'
+      + '**所有轨道总时长由构造保证相同**，且每段曲线取自**上一停靠点**。',
+    why: '★**取证结论（2026-09-30）**：内核 `tick` 单次调用内对**所有**动画施加同一个 `dt` '
+      + '⇒ 只要总时长相同，多属性就是**结构性同拍**（Rust 两条判据钉住）。'
+      + '⇒ 缺的是**声明面入口**：手写"凑同一个总时长"极易算错（少 1ms 就错拍）且**不报错**（静默）。',
+    when: '多属性共享一条时间线的编排（如"压下 + 位移 + 淡入"三条轨道严格同拍）',
+    example: `const c = compileTimeline({
+  kinds: ['scale', 'translateY', 'opacity'],
+  stops: [
+    { at: 0,   values: { scale: 1, translateY: 0, opacity: 0 }, curve: 'easeOut' },
+    { at: 90,  values: { scale: 0.94, translateY: 6, opacity: 1 } },
+    { at: 350, values: { scale: 1, translateY: 0, opacity: 1 } },
+  ],
+}, { nodeId: cardId })   // ⇒ 3 条动画，总时长都是 350ms`,
+    verify: 'tests/animation-presets.test.ts 时间轴段（总时长一致/停靠点落值/曲线归属/4 类红侧/'
+      + '逃生口贯通/**与手写 keyframes 逐字节等价**）；'
+      + 'packages/layout-core-rust/src/anim.rs 的 `cross_property_tracks_advance_in_lockstep`',
+    status: 'implemented',
+    source: 'packages/animation/src/timeline.ts:compileTimeline（内核 anim.rs:tick 的共享 dt）',
+    decision: 'PROJECT_MEMORY ㉓（本轮取证推翻了"未做"的原判断）',
   },
   {
     id: 'boundary/slot-identity-binding',

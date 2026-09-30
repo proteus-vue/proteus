@@ -47,6 +47,9 @@ export {
   isScrollDriven,
 } from './compile'
 export { presets, route, list, element, easing, scroll } from './presets'
+// ★★跨属性共享时间轴（多属性共享停靠点——内核 lockstep 推进的声明面入口）
+export { compileTimeline, timelineDuration } from './timeline'
+export type { TimelineSpec, TimelineStop } from './timeline'
 // ★★MA0/§4.2：逃生口（显式通道 + 可统计 + degraded 单列）
 export { EscapeRegistry, escapes, ESCAPE_KINDS, ESCAPE_RATIO_TARGET } from './escape'
 export type { EscapeKind, EscapeRecord, EscapeSummary } from './escape'
