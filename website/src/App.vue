@@ -34,12 +34,15 @@ const links: NavLink[] = [
   { to: '/multi-device', label: '多端同屏', key: 'multidev' },
   // ★2026-09-26 P0-3：生态栏目（官方工程案例起步——对标 Flutter Showcase 的导航位）
   { to: '/ecosystem', label: '生态', key: 'ecosystem' },
+  // ★Morpheus 动画引擎（招牌能力——独立产品页）
+  { to: '/animation', label: '动画引擎', key: 'animation' },
 ]
 /** 导航文案（双语 key） */
 function navText(l: { key: string; label: string }): string {
   if (l.key === 'home') return t('app.home')
   if (l.key === 'multidev') return t('app.multidev')
   if (l.key === 'ecosystem') return t('app.ecosystem')
+  if (l.key === 'animation') return t('app.animation')
   return l.label
 }
 

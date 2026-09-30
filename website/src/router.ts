@@ -10,6 +10,7 @@ import DocsPage from './pages/DocsPage.vue'
 import Playground from './pages/Playground.vue'
 import MultiDevice from './pages/MultiDevice.vue'
 import Ecosystem from './pages/Ecosystem.vue'
+import Animation from './pages/Animation.vue'
 import Changelog from './pages/Changelog.vue'
 
 export const router = createRouter({
@@ -20,12 +21,15 @@ export const router = createRouter({
     { path: '/playground', name: 'playground', component: Playground },
     { path: '/multi-device', name: 'multidev', component: MultiDevice },
     { path: '/ecosystem', name: 'ecosystem', component: Ecosystem },
+    // ★Morpheus 动画引擎旗舰页（招牌产品页——真跑演示 + 真机证据）
+    { path: '/animation', name: 'animation', component: Animation },
     { path: '/changelog', name: 'changelog', component: Changelog },
     { path: '/docs', redirect: '/docs/01-intro' },
     { path: '/docs/:slug', name: 'guide', component: DocsPage },
     { path: '/docs/component/:slug', name: 'doc-component', component: DocsPage },
     { path: '/docs/capability/:slug', name: 'doc-capability', component: DocsPage },
     { path: '/docs/system/:slug', name: 'doc-system', component: DocsPage },
+    { path: '/docs/animation/:slug', name: 'doc-animation', component: DocsPage },
     { path: '/docs/primitives/:slug', name: 'doc-primitives', component: DocsPage },
     { path: '/docs/framework/:slug', name: 'doc-framework', component: DocsPage },
     { path: '/docs/plugin/:slug', name: 'doc-plugin', component: DocsPage },

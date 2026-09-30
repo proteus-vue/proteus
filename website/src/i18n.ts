@@ -82,6 +82,7 @@ const zh = {
   // —— App 壳（★#475）——
   'app.home': '首页',
   'app.ecosystem': '生态',
+  'app.animation': '动画引擎',
   'app.footerIssues': 'Issues 反馈',
   'app.footerChangelog': '版本与动态',
   'app.docs': '文档',
@@ -187,6 +188,7 @@ const en = {
   // —— App shell（★#475）——
   'app.home': 'Home',
   'app.ecosystem': 'Ecosystem',
+  'app.animation': 'Animation',
   'app.footerIssues': 'Issues',
   'app.footerChangelog': 'Releases',
   'app.docs': 'Docs',
@@ -261,6 +263,7 @@ const SECTION_NAME: Record<SiteLocale, Record<string, string>> = {
     capabilities: '能力', capability: '能力',
     primitives: '原语',
     system: '柔性系统',
+    animation: '动画引擎',
     plugins: '插件 API', plugin: '插件 API',
     reference: '工具链',
   },
@@ -271,6 +274,7 @@ const SECTION_NAME: Record<SiteLocale, Record<string, string>> = {
     capabilities: 'Capabilities', capability: 'Capabilities',
     primitives: 'Primitives',
     system: 'Fluid System',
+    animation: 'Animation',
     plugins: 'Plugin API', plugin: 'Plugin API',
     reference: 'Tooling',
   },
@@ -294,6 +298,8 @@ const GROUP_NAME: Record<SiteLocale, Record<string, string>> = {
     工程原语: '工程原语', 手势原语: '手势原语', 桌面原语: '桌面原语',
     '柔性系统': '柔性系统', '插件 API': '插件 API', '工程参考': '工程参考', 工程命令: '工程命令',
     开发者工具: '开发者工具', 模块化: '模块化',
+    // ★Morpheus 动画引擎分区的组名
+    原理: '原理', 使用: '使用', 边界: '边界',
   },
   en: {
     起步: 'Getting Started', 开始: 'Start', 代码构成: 'Code Anatomy', 基础概念: 'Core Concepts',
@@ -308,6 +314,7 @@ const GROUP_NAME: Record<SiteLocale, Record<string, string>> = {
     工程原语: 'Engineering Primitives', 手势原语: 'Gesture Primitives', 桌面原语: 'Desktop Primitives',
     '柔性系统': 'Fluid System', '插件 API': 'Plugin API', '工程参考': 'Engineering Reference', 工程命令: 'Engineering Commands',
     开发者工具: 'Developer Tools', 模块化: 'Modularity',
+    原理: 'Principles', 使用: 'Usage', 边界: 'Boundaries',
   },
 }
 export function groupName(name: string): string {

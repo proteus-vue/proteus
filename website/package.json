@@ -24,9 +24,11 @@
     "check:stats": "tsx scripts/check-stats.ts"
   },
   "dependencies": {
+    "@proteus-vue/animation": "0.3.0-beta.22",
     "@proteus-vue/api": "0.3.0-beta.21",
     "@proteus-vue/compiler": "0.3.0-beta.21",
     "@proteus-vue/compiler-backend": "0.3.0-beta.21",
+    "@proteus-vue/components": "workspace:*",
     "@proteus-vue/desktop": "0.3.0-beta.11",
     "@proteus-vue/devtools-runtime": "0.3.0-beta.11",
     "@proteus-vue/docs": "0.3.0-beta.11",
@@ -34,11 +36,11 @@
     "@proteus-vue/gesture": "0.3.0-beta.11",
     "@proteus-vue/i18n": "0.3.0-beta.11",
     "@proteus-vue/render-backend": "0.3.0-beta.21",
+    "@proteus-vue/slot-runtime": "0.3.0-beta.11",
     "@proteus-vue/test-ir": "0.3.0-beta.11",
     "miniprogram-api-typings": "^3.12.2",
     "vue": "^3.4.0",
-    "vue-router": "^4.3.0",
-    "@proteus-vue/components": "workspace:*"
+    "vue-router": "^4.3.0"
   },
   "devDependencies": {
     "@vitejs/plugin-vue": "^5.0.0",
