@@ -56,6 +56,9 @@ console.log(JSON.stringify({
   rules: listTransformRules().length,
   packages: pkgs,
   components: comps,
+  // ★Capability Hook 数 = PRIMITIVE_CATALOG 中 kind === 'capability' 的项（C1..Cn）
+  //   —— 与「架构收敛模型说明 §6.3 Hook 体温计」同口径
+  hooks: PRIMITIVE_CATALOG.filter((x) => x.kind === 'capability').length,
 }))
 `
   const out = execFileSync('npx', ['tsx', '-e', probe], {
@@ -94,6 +97,12 @@ const STALE = [
     re: /76\s*个语义组件/g,
     truth: `${facts.components}`,
     why: '组件目录 ' + facts.components + ' 个 · 已实现语义 ' + facts.implemented + ' 个',
+  },
+  {
+    id: 'hooks-81',
+    re: /81\s*个\s*(?:Capability\s*)?Hook/g,
+    truth: `${facts.hooks}`,
+    why: '`PRIMITIVE_CATALOG` 中 kind=capability 实为 ' + facts.hooks + ' 项（C82 useWebAssembly 后为 82）',
   },
   {
     id: 'draw-0667',
@@ -174,6 +183,10 @@ for (const rel of ['hosts/android/ACCEPTANCE.md', 'hosts/android/ACCEPTANCE-hono
 const MUST_STATE = [
   { file: 'docs/Proteus架构收敛模型说明.md', re: new RegExp(`${facts.primitives}\\s*语义原语`), why: `${facts.primitives} 语义原语（SSOT 数）` },
   { file: 'docs/Proteus_实战采集埋点清单.md', re: new RegExp(`${facts.primitives}\\s*原语`), why: `${facts.primitives} 原语（SSOT 数）` },
+  // ★2026-09-30 新增两份当前态文档：必须写出当前权威值（防"删掉就绿"）
+  { file: 'docs/Proteus_原生能力接入方案.md', re: new RegExp(`${facts.hooks}\\s*个\\s*Capability\\s*Hook`), why: `${facts.hooks} 个 Capability Hook（SSOT 数）` },
+  { file: 'docs/Proteus_原生能力接入方案.md', re: new RegExp(`${facts.primitives}\\s*个?\\s*语义原语`), why: `${facts.primitives} 语义原语（SSOT 数）` },
+  { file: 'docs/Proteus_JS引擎选型与可插拔方案.md', re: /EN2/, why: '含 EN2（引擎层可插拔）推进项' },
 ]
 for (const { file, re, why } of MUST_STATE) {
   const p = path.join(ROOT, file)
@@ -184,7 +197,7 @@ for (const { file, re, why } of MUST_STATE) {
 }
 
 console.log('文档权威数字门禁（docs ↔ 源码实际值）')
-console.log(`  事实来源：原语 ${facts.primitives} · 已实现语义 ${facts.implemented} · 规则 ${facts.rules} · 包 ${facts.packages} · 组件 ${facts.components}`)
+console.log(`  事实来源：原语 ${facts.primitives} · 已实现语义 ${facts.implemented} · 规则 ${facts.rules} · 包 ${facts.packages} · 组件 ${facts.components} · Capability Hook ${facts.hooks}`)
 console.log(`  扫描：docs 根目录 ${scanned.length} 份当前态文档（跳过 ${SKIP_FILES.size} 份历史载体）`)
 if (failures.length) {
   console.error(`\n❌ 发现 ${failures.length} 处过期/缺失数字：`)
