@@ -11,19 +11,44 @@ import type { AnimDecl, AnimTargets, CompiledBatch, CurveId, EngineAnim } from '
 import { validateAnimations } from './validate'
 
 /**
+ * 编译选项（**可选注入**——与 C4 漏点计数器的注入模式同构）
+ *
+ * ★为什么是"注入"而不是"内部记账"：`compileAnimations` 是**纯函数**（可预测、可缓存、零全局状态），
+ *   这个性质值得保住 ⇒ 只有调用方显式传入注册表时才记账（见 `escape.ts` 的逃生口统计）。
+ */
+export interface CompileOptions {
+  /**
+   * 逃生口注册表：成功编译的声明会计入"声明式使用量"（逃生口率的分母）。
+   * 不传 ⇒ 零副作用（纯函数行为不变）。
+   */
+  escapes?: { noteDeclarative: (n: number) => void }
+}
+
+/**
  * 编译一批声明为**引擎指令**
  *
  * @param decls 声明（封闭集）
  * @param targets 目标节点（单个；多条声明可作用于同一节点——如转场的"进场页"同时位移+淡入）
+ * @param opts 可选（逃生口记账——见 `CompileOptions`）
  * @throws 有校验问题时**抛错**（带可读的修复建议）——不静默降级
  */
-export function compileAnimations(decls: readonly AnimDecl[], targets: AnimTargets): CompiledBatch {
+export function compileAnimations(
+  decls: readonly AnimDecl[],
+  targets: AnimTargets,
+  opts?: CompileOptions,
+): CompiledBatch {
   const issues = validateAnimations(decls)
   if (issues.length > 0) {
     const detail = issues.map((i) => `[${i.code}] #${i.index} ${i.message} → ${i.hint}`).join('; ')
-    throw new Error(`Morpheus 动画声明校验失败：${detail}`)
+    throw new Error(
+      `Morpheus 动画声明校验失败：${detail}` +
+        '\n  ⇒ 若封闭集确实表达不了，走**显式逃生口**（`escapes.register({kind, detail, reason, behaviorRisk})`）' +
+        '——可用但必须登记并接受 degraded 风险（Morpheus §4.2），不要绕过框架。',
+    )
   }
   const anims = decls.map((d) => compileOne(d, targets))
+  // ★§4.2：声明式使用量记账（仅在显式注入注册表时——纯函数性质不变）
+  opts?.escapes?.noteDeclarative(anims.length)
   return {
     anims,
     composited: true, // 校验已保证全为合成属性（非合成会抛错）
