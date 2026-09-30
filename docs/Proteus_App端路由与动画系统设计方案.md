@@ -357,10 +357,24 @@ TS 镜像 `slot-runtime/src/anim-curve.ts` + 跨语言 golden `tests/anim-curve-
 - [x] Skyline 端映射验证 —— ✅ `router/src/skyline.ts` + `tests/platform-variant-router.test.ts`
 - [ ] 页面栈层数实测 —— ❌ 无证据
 
-### RT2 · 动画指令（≈3 人周，依赖 RT0 结论）—— ◐ **RT0 已过（前置满足）+ 骨架已落地**（2026-09-30）
+### RT2 · 动画指令（≈3 人周，依赖 RT0 结论）—— ◐ **骨架 + 真机验证通过**（2026-09-30）
 
-> ★**RT0 出口已满足**（见上）⇒ 本卡可开工。已落地的骨架见 RT0 交付清单；
-> 剩余：完整指令集（BIND/SEEK/PROGRESS）· 帧循环接线（vsync/Choreographer）· 真机帧率验证。
+> ★**RT0 出口已满足**（见上）⇒ 本卡已开工。
+
+**已落地（真机验证 8/8 判据全过，`hosts/ios/check-anim-rt2.py`）**：
+- [x] **驱动力式**：`AnimDrive::{Time, Progress}`——Time 自动播放；Progress 由外部设进度（手势跟随）
+- [x] **`ANIM_SEEK`**（手势驱动进度）：`seek` **立即求值写字段**（不等帧）；Progress 驱动后 tick 不再推进它
+- [x] **帧循环**：iOS `CADisplayLink`（真实 vsync；`.common` 模式不被滚动/手势掐停）→ 内核 tick
+- [x] **宿主变换应用**：`CATransform3D` 中心锚点缩放（等价 CSS 默认 origin）
+- [x] **每帧二进制通道**：`anim_tick_bin` **16B/条**（JSON 每帧 O(N) 编解码是白付——RT0 证明的主要收益来源）
+- [x] **§7.3 节点复用解绑**（Morpheus 方案要求）：`AnimEngine::stop_nodes` + FFI + 宿主 `dematerializeRow`
+      成批解绑 + **层进池前重置 transform**（否则池里取出的层带旧变换 ⇒ 新内容错位）
+- [x] **真机证据**：位移中途 tx=**105.00**（=120×easeOutCubic(0.5)=120×0.875 **精确吻合**）·
+      终值 **120.0000**（端点钉死）· seek 后 scale=**0.9500**（=0.6+0.4×0.875 **精确吻合**）·
+      Progress 稳定不被 tick 改动 · 帧循环可启停 · 回收解绑（stopped=1 + 解绑后不再动）
+
+**剩余**：`ANIM_BIND`（槽位绑定）/ `ANIM_PROGRESS`（路由进度广播）· **真机帧率指标**（§9 的
+转场帧率 ≥60/120 FPS 与 P95 帧耗时——本轮只验证了机制与正确性，**未做长时帧率测量**）· Android 侧帧驱动（Choreographer）。
 
 - [ ] `AnimOpCode` 指令集 —— ❌ 全仓 `AnimOpCode`/`AnimExpr` 命中 8 处，**7 处在本方案自身、0 处实现**
 - [ ] 动画表达式编译器（生成 `AnimExpr`）—— ❌

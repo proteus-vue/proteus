@@ -61,7 +61,7 @@ const BN = { snapshot: 'selfdraw-final' }
 
 // ★构建标识（每次构建由 hosts/ios/bridge/inject-build-id.mjs 注入；与 entry-bench 同机制）
 //   —— 「设备上跑的是哪份代码」必须可**一眼判定**（报告新鲜度判据的内容锚点）。
-const BUILD_ID = 'de4516e4-092153'
+const BUILD_ID = '218a4b3c-110149'
 
 const VP = (globalThis as unknown as { __PROTEUS_VIEWPORT__?: { width: number; height: number } })
   .__PROTEUS_VIEWPORT__ ?? { width: 390, height: 844 }
@@ -177,6 +177,9 @@ function measureAsync(
 
 /** ★相位异常（必须可观测——静默失败是本仓反复记录的坑） */
 const phaseErrors: Record<string, string> = {}
+
+/** ★★RT2 动画相位读数（finalize2 带进报告；见 animProbe） */
+let animRt2Result: Record<string, unknown> = {}
 
 /** 供宿主逐相位调用（每个函数在**自己那次 evaluateScript** 里同步启动，微任务在其后排空） */
 const api = {
@@ -300,8 +303,17 @@ const api = {
     //
     // 【为什么单列（Morpheus §7 明确要求）】本仓复用率 0.997 ⇒ 节点会被回收给别的数据项。
     //   若动画未解绑：重物化时显示"半路的变换"（错位）+ 每帧白算——两者都静默。
+    // ★探针顺序修正（首版缺陷，真机抓出）：前一段的 tick(200) 已让 targetA 的动画**自然结束并被移除**
+    //   ⇒ 那时再 stop 得到 stopped=0，**看着像"没调用 stop_nodes"**，实为"已无动画可停"（探针缺陷）。
+    //   ⇒ 正解：**先起一条新的**（长时长，确保仍在活动），再停它——这才真正检验"解绑"。
+    const _seed = proteusSelfDraw.animStart(
+      JSON.stringify({ anims: [{ nodeId: targetA, kind: 0, curve: 0, from: 0, to: 60, durMs: 5000 }] }),
+    )
     const stopBefore = safeParse(proteusSelfDraw.layerTransformProbe(JSON.stringify([targetA])))
-    const stopCall = safeParse(proteusSelfDraw.animStopNodes(JSON.stringify([targetA])))
+    // ★报文形状：FFI 期望 `{"nodeIds":[…]}`（**不是裸数组**）——首版传了裸数组 ⇒ 内核
+    //   正确拒绝（ok:false）**不是静默**，但探针把 removed 读成 0 ⇒ 看着像"解绑失败"。
+    //   （这反而验证了内核的入参校验有效；探针已修。）
+    const stopCall = safeParse(proteusSelfDraw.animStopNodes(JSON.stringify({ nodeIds: [targetA] })))
     const tickAfterStop = safeParse(proteusSelfDraw.animTick(100))
     const stopAfter = safeParse(proteusSelfDraw.layerTransformProbe(JSON.stringify([targetA])))
     const txBefore = ((stopBefore as { layers?: Array<{ id: number; tx: number }> }).layers ?? [])[0]?.tx ?? 0
@@ -321,7 +333,7 @@ const api = {
     const stats2 = safeParse(proteusSelfDraw.animFrameStats())
 
     phaseOut.animProbe = { vue_ms: 0, to_request_ms: 0, serialize_ms: 0, host_ms: 0, total_ms: now() - t0, node_count: 0, patch_count: 0 }
-    return JSON.stringify({
+    const _r = {
       phase: 'animProbe',
       targets: [targetA, targetB],
       start: safeParse(startOut),
@@ -334,11 +346,14 @@ const api = {
       layer_after_seek: afterSeek,
       layer_mid: mid,
       layer_end: end,
-      recycle_unbind: recycleUnbind,
+      recycle_unbind: { ...recycleUnbind, seed: safeParse(_seed), stop_raw: stopCall },
       frame_stats_1: stats1,
       frame_stats_2: stats2,
       host_tick_bytes: (safeParse(tickOut1) as { bytes?: number }).bytes,
-    })
+    }
+    // ★存进模块级变量：finalize2 生成报告时带上（否则判据脚本读不到——只有 NSLog 前 400 字符）
+    animRt2Result = _r
+    return JSON.stringify(_r)
   },
 
   /** 收尾（第二段）：此时微任务已排空 —— 生成最终画面、截图、上报 */
@@ -352,6 +367,8 @@ const api = {
       runtime: 'JavaScriptCore（系统自带，与 iOS 竖切同一运行时）',
       viewport: VP,
       phases: phaseOut,
+      // ★★RT2 动画读数（真机判据的输入——见 hosts/ios/check-anim-rt2.py）
+      anim_rt2: animRt2Result,
       js_only_throughput: {
         iterations: jsOnly.length,
         avg_ms: jsAvg >= 0 ? Math.round(jsAvg * 1000) / 1000 : -1,

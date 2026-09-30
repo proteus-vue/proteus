@@ -38,11 +38,12 @@ def main() -> int:
         print(f"报告不是合法 JSON：{e}")
         return 2
 
-    # 定位 animProbe 的输出（宿主把它塞在 js_report.host_raw_by_phase.animProbe 或直接顶层）
+    # 定位 RT2 读数：`js_report.anim_rt2`（entry-selfdraw 的 animProbe 相位写入；见 report() 的构造）
+    # ★兼容三个可能位置（顶层 / js_report 下 / host_raw_by_phase 下）——避免路径写死导致"跑过了却读不到"
     js = d.get("js_report") or {}
-    probe = js.get("animProbe") or (js.get("host_raw_by_phase") or {}).get("animProbe") or {}
+    probe = d.get("anim_rt2") or js.get("anim_rt2") or (js.get("host_raw_by_phase") or {}).get("anim_rt2") or {}
     if not probe:
-        fail("报告里没有 animProbe 相位输出——相位没跑？(检查宿主 schedulePhases 是否包含该步)")
+        fail("报告里没有 anim_rt2 读数——相位没跑？（检查宿主 schedulePhases 是否含 __proteus.animProbe()）")
         return 1
 
     layers_after_seek = (probe.get("layer_after_seek") or {}).get("layers") or []
