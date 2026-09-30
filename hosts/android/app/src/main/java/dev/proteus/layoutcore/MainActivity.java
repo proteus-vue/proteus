@@ -333,6 +333,14 @@ public class MainActivity extends Activity {
             sb.append("【逐节点平台动画（载体 View + ViewPropertyAnimator）】\n");
             platformAnimNodeRun();
             sb.append("  读数见 platform-anim-node.json（异步采样）\n");
+        } else if ("app-stack".equals(testPath)) {
+            // ★★M5：**路由虚拟栈**（真实 TS 核心打进 QuickJS bundle）——深栈/冻结/重建/navigate diff
+            //   为什么要真机读数：单测证明逻辑正确（Node/V8），真机证明 **QuickJS 上跑得动 + 端上数字**
+            //   （"无层数上限""高性能"都要有端上读数，不能只有本机断言）
+            sb.append("【M5 路由虚拟栈（真实 app-stack.ts 在 QuickJS 上跑）】\n");
+            String as = appStackRun();
+            sb.append(as).append('\n');
+            writeReport("app-stack.json", as);
         } else if ("shot-scroll-native".equals(testPath)) {
             // ★★z-order 约束下的**滚动同步**验证（方案坑位 #4）
             //   场景：20 行列表，**第 5 行是 native-host（WebView）**；程序驱动滚动到若干位置，
@@ -719,6 +727,78 @@ public class MainActivity extends Activity {
                 && r.optInt("mountedNodes") == 4 && r.optInt("updatedNodes") == 5
                 && !posts.toString().isEmpty();
             out.put("ok", ok);
+        } catch (Throwable t) {
+            try {
+                out.put("ok", false);
+                out.put("error", t.getClass().getSimpleName() + ": " + t.getMessage());
+            } catch (Exception ignored) { /* JSONObject 不会失败 */ }
+        }
+        try {
+            return out.toString(2);
+        } catch (Exception e) {
+            return "{\"ok\":false,\"error\":\"报告序列化失败\"}";
+        }
+    }
+
+    /**
+     * ★★M5：**路由虚拟栈**真机读数（真实 TS 核心在 QuickJS 上跑）。
+     *
+     * 【与单测的分工】`tests/app-stack.test.ts`（34 条）证明**逻辑正确性**（Node/V8）；
+     *   本方法把**同一份 TS 源码**（`packages/router/src/app-stack.ts`，经 esbuild 打进
+     *   `assets/bundle-app-stack.js`）在 Android 的 QuickJS 上执行 ⇒ 证明的是：
+     *   ① 端上**真的没有层数上限**（2 万层 push/pop 全成——对照小程序第 10 层失败）；
+     *   ② **端上性能量级**（push 毫秒读数）；③ 冻结路径正确（预算守住 + 重建标记）；
+     *   ④ 命令守恒（mount/enter/exit/unmount 与栈操作一一对应——执行器契约不被破坏）。
+     *
+     * 【判据（机器可判，见 hosts/android/check-app-stack.py）】见该脚本头注。
+     */
+    private String appStackRun() {
+        org.json.JSONObject out = new org.json.JSONObject();
+        try {
+            out.put("engine_available", QuickJsEngine.isAvailable());
+            if (!QuickJsEngine.isAvailable()) {
+                out.put("ok", false);
+                out.put("error", "引擎未加载：" + QuickJsEngine.getLoadError());
+                return out.toString(2);
+            }
+            String bundle;
+            try (java.io.InputStream is = getAssets().open("bundle-app-stack.js")) {
+                java.io.ByteArrayOutputStream bos = new java.io.ByteArrayOutputStream();
+                byte[] buf = new byte[8192];
+                int n;
+                while ((n = is.read(buf)) > 0) bos.write(buf, 0, n);
+                bundle = new String(bos.toByteArray(), "UTF-8");
+            }
+            out.put("bundle_chars", bundle.length());
+
+            long t0 = System.nanoTime();
+            QuickJsEngine.EvalResult load = QuickJsEngine.eval(bundle);
+            out.put("bundle_load_ok", load.ok);
+            if (!load.ok) {
+                out.put("ok", false);
+                out.put("error", "bundle eval 失败：" + load.error);
+                return out.toString(2);
+            }
+            // ★传参：默认 20000 层（远超小程序 10 层——差异要大到不可能误判）
+            QuickJsEngine.EvalResult run = QuickJsEngine.eval(
+                    "__proteusAppStackRun('{\"depth\":20000,\"fans\":32,\"budget\":1000}')");
+            long ms = (System.nanoTime() - t0) / 1000000;
+            out.put("run_ok", run.ok);
+            out.put("total_ms", ms);
+            if (!run.ok) {
+                out.put("ok", false);
+                out.put("error", "入口调用失败：" + run.error);
+                return out.toString(2);
+            }
+            // 入口返回 JSON 串 → 解析后**平铺**进报告（判据脚本直接读字段）
+            org.json.JSONObject r = new org.json.JSONObject(run.value);
+            java.util.Iterator<String> keys = r.keys();
+            while (keys.hasNext()) {
+                String k = keys.next();
+                out.put(k, r.get(k));
+            }
+            // 引擎侧自报 ok + 本次 bundle 可加载 ⇒ 报告 ok（判据细节由 python 侧查，不在这里重复判定）
+            out.put("ok", r.optBoolean("ok"));
         } catch (Throwable t) {
             try {
                 out.put("ok", false);
