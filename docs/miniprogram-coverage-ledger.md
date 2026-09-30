@@ -33,8 +33,13 @@
 > ⇒ covered（357）；② `chooseMessageFile` / `getUserProfile` **归类修正为 private**
 > （它们依赖**微信生态上下文**——聊天会话 / 微信授权头像昵称——与 Web/App 无共同语义，
 > 重分类前误记 planned 会虚增缺口并误导"跨端对等"排期）。
-> **当前（2026-09-30 收盘）**：covered **361** · planned **18**（14 API + 4 组件手势）· private **147** · na **53** · gap 0
+> **当前（2026-09-30 收盘）**：covered **362** · planned **17**（13 API + 4 组件手势）· private **147** · na **53** · gap 0
 > · 真·落地率 **95%**。
+> ★**第三批（按用户裁定）**：`openDocument`（文档预览）原判"需宿主 → 搁置"，用户指出
+> **「这个本身就是我们原生能力落地的范畴，目标就是 99% 的业务代码不需要写原生代码」**
+> ⇒ 重新审视为**应该做**并已落地（C84，声明式桥）：MP `wx.openDocument` / Web `window.open`
+> → 浏览器查看器；★原生宿主（iOS QLPreviewController / Android ACTION_VIEW）属声明层，随宿主批次接线；
+> ★Web 诚实边界：office 格式通常转**下载**而非预览（浏览器能力所限，已写进声明与能力页）。
 > ★**同轮第二批修正（记账，非新能力）**：
 > · `p-toast` / `p-loading` 组件**早已存在且已注册**并有 MP 产物测试 ⇒ 补 `SEMANTIC_BACKEND_MAP`
 >   后端映射后，catalog status 据实 **planned → implemented**（U19 / S8）；

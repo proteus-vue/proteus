@@ -88,15 +88,23 @@ function webImpl(d) {
     body.push(`      throw new CapErrorCtor('${d.errPrefix}.unsupported', ${JSON.stringify(web.reason ?? `${d.hook}：Web 端无对等 API`)})`)
     body.push('    },')
   } else if (web.kind === 'direct') {
-    const guard = web.guard ? `if (!(${web.guard})) throw new CapErrorCtor('${d.errPrefix}.unsupported', '${web.guard} 不支持')` : ''
+    const gMsg = web.guardMessage ?? `${web.guard} 不支持`
+    const guard = web.guard ? `if (!(${web.guard})) throw new CapErrorCtor('${d.errPrefix}.unsupported', ${JSON.stringify(gMsg)})` : ''
     // $0/$1… → 参数名
     const call = web.call.replace(/\$(\d+)/g, (_, i) => P[Number(i)]?.name ?? `$arg${i}`)
     body.push(`    ${d.method}: async (${sig}) => {`)
     if (guard) body.push(`      ${guard}`)
-    body.push(`      await ${call}`)
+    if (web.assert) {
+      // ★assert：结果须为真值（await 兼容同步/异步返回）——防「静默无反应」
+      body.push(`      const r = await ${call}`)
+      body.push(`      if (!r) throw new CapErrorCtor('${d.errPrefix}.failed', ${JSON.stringify(web.assert.message)})`)
+    } else {
+      body.push(`      await ${call}`)
+    }
     body.push('    },')
   } else if (web.kind === 'stateful') {
-    const guard = web.guard ? `if (!(${web.guard})) throw new CapErrorCtor('${d.errPrefix}.unsupported', '${web.guard} 不支持')` : ''
+    const sMsg = web.guardMessage ?? `${web.guard} 不支持`
+    const guard = web.guard ? `if (!(${web.guard})) throw new CapErrorCtor('${d.errPrefix}.unsupported', ${JSON.stringify(sMsg)})` : ''
     const main = P[0]?.name ?? 'on'
     // ★stateful 语义：开 = 取句柄并持有；关 = 释放并清空。重复开/关**幂等**（不重复获取/重复释放
     //   ——Wake Lock 重复 request 会叠加系统引用计数，不是幂等操作；这里在桥层收敛为幂等语义）

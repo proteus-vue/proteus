@@ -1,7 +1,7 @@
 # G-32 原语清单（自动生成——SSOT = packages/component-ir/src/primitives.ts）
 
 > ★由 `npm run gen:docs` 生成，勿手改。手工维护的叙述性规划见各 plan 文档。
-> 总计 **186** 原语 · implemented **68**。
+> 总计 **187** 原语 · implemented **69**。
 
 ## layout — 布局（12）
 
@@ -183,6 +183,7 @@
 | C81 | `capability.device-capability` | api:useDeviceCapability() | `useDeviceCapability()` | wx.checkDeviceSupportHevc | planned |
 | C82 | `capability.webassembly` | api:useWebAssembly() | `useWebAssembly()` | WXWebAssembly.instantiate（官方文档 performance/wasm） | planned |
 | C83 | `capability.keep-screen-on` | api:useKeepScreenOn() | `useKeepScreenOn()` | wx.setKeepScreenOn（Web 对等：Screen Wake Lock API） | implemented |
+| C84 | `capability.document-preview` | api:useOpenDocument() | `useOpenDocument()` | wx.openDocument（Web 对等：window.open → 浏览器查看器） | implemented |
 
 ## engineering — 工程（28）
 

@@ -1,7 +1,7 @@
 # implemented 语义 × 后端映射（自动生成——SSOT = SEMANTIC_BACKEND_MAP + catalog status）
 
 > ★由 `npm run gen:docs` 生成，勿手改。覆盖门禁：每语义 ≥3 端映射（G-31.4）。
-> implemented 语义 **68** 个。
+> implemented 语义 **69** 个。
 
 | 语义 | vue-dom | native-ios | native-android | native-harmony | skyline | flutter | headless |
 |------|---------|-----------|----------------|----------------|---------|---------|----------|
@@ -69,6 +69,7 @@
 | `capability.location` | button.proteus-location | CLLocationManager | FusedLocation | geoLocationManager | wx.getLocation | getLocation | location |
 | `capability.qr-code` | button.proteus-scan-qr | AVCaptureSession | CameraX | ScanKit | wx.scanCode | scanQR | scan-qr |
 | `capability.keep-screen-on` | navigator.wakeLock | UIApplication.isIdleTimerDisabled | Window.FLAG_KEEP_SCREEN_ON | window.setWindowKeepScreenOn | wx.setKeepScreenOn | keepScreenOn | keep-screen-on |
+| `capability.document-preview` | window.open | QLPreviewController | Intent.ACTION_VIEW | — | wx.openDocument | open_file | open-document |
 | `engineering.router-link` | a.proteus-router-link | UIButton.link | TextView.link | Text.link | navigator | TextButton | router-link |
 | `engineering.transition` | div.proteus-transition | UIView.transition | View.animate.transition | animateTo.transition | view.transition | AnimatedOpacity | transition |
 | `engineering.animate` | div.proteus-animate | CAKeyframeAnimation | ValueAnimator | Animator.transition | view.animation | AnimationController | animate |

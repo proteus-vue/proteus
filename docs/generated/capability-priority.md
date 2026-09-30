@@ -8,8 +8,8 @@
 
 | 事实源 | 内容 | 口径 |
 |---|---|---|
-| ① 能力清单（SSOT） | 83 个 capability（`PRIMITIVE_CATALOG` kind=capability） | 域来自 `capabilityDomainOf`（与官网能力页分组同一事实源） |
-| ② 需求证据 | 本仓消费侧语料（showcase / examples / website/src）Hook 调用点 | 只计 `useXxx(` 且 Xxx ∈ 83 名单；排除 node_modules / dist / scripts / tests / *.d.ts / generated |
+| ① 能力清单（SSOT） | 84 个 capability（`PRIMITIVE_CATALOG` kind=capability） | 域来自 `capabilityDomainOf`（与官网能力页分组同一事实源） |
+| ② 需求证据 | 本仓消费侧语料（showcase / examples / website/src）Hook 调用点 | 只计 `useXxx(` 且 Xxx ∈ 84 名单；排除 node_modules / dist / scripts / tests / *.d.ts / generated |
 | ③ 官方承接面 | 微信官方 API 清单（495 个）中该 Hook 承接的 covered 数 | `classifySpecApi` 反查 proteus 串（跨端对等标尺） |
 
 **优先级算法（方案 §1.1）**：跨项目覆盖数 **优先于** 单项目频次；成本加权 S/M/L=1/3/8。
@@ -26,8 +26,8 @@
 
 ## 1. 汇总
 
-- **能力总数**：83 · 语料出现过：**46** · 跨项目（≥2 工程）：**15**
-- **有官方承接**：70 / 83（合计承接 covered API 306 / 495）
+- **能力总数**：84 · 语料出现过：**46** · 跨项目（≥2 工程）：**15**
+- **有官方承接**：71 / 84（合计承接 covered API 307 / 495）
 - **未登记分域**：0（应为 0——非 0 即新能力漏登记，见 `auditCapabilityDomains`）
 
 ## 2. 优先级表（按 跨项目覆盖 ↓ · 语料频次 ↓ · 官方承接 ↓）
@@ -112,11 +112,12 @@
 | 76 | △ | C72 | `useCacheManager()` | 设备与系统 | — | 0 | 1 | ✅ | 纯 Hook | ⏳ 待人工估 |
 | 77 | △ | C74 | `useWindow()` | 应用与生命周期 | — | 0 | 1 | ✅ | 纯 Hook | ⏳ 待人工估 |
 | 78 | △ | C83 | `useKeepScreenOn()` | 设备与系统 | — | 0 | 1 | ✅ | 纯 Hook | ⏳ 待人工估 |
-| 79 | · | C18 | `useShare()` | 通知与分享 | — | 0 | 0 | ✅ | 纯 Hook | ⏳ 待人工估 |
-| 80 | · | C31 | `useDataChannel()` | 网络与通信 | — | 0 | 0 | ✅ | 纯 Hook | ⏳ 待人工估 |
-| 81 | · | C46 | `useInAppPurchase()` | 账号与支付 | — | 0 | 0 | ✅ | 纯 Hook | ⏳ 待人工估 |
-| 82 | · | C48 | `useEmbedded()` | 应用与生命周期 | — | 0 | 0 | ✅ | 纯 Hook | ⏳ 待人工估 |
-| 83 | · | C82 | `useWebAssembly()` | 应用与生命周期 | — | 0 | 0 | ✅ | 纯 Hook | ⏳ 待人工估 |
+| 79 | △ | C84 | `useOpenDocument()` | 存储与文件 | — | 0 | 1 | ✅ | 纯 Hook | ⏳ 待人工估 |
+| 80 | · | C18 | `useShare()` | 通知与分享 | — | 0 | 0 | ✅ | 纯 Hook | ⏳ 待人工估 |
+| 81 | · | C31 | `useDataChannel()` | 网络与通信 | — | 0 | 0 | ✅ | 纯 Hook | ⏳ 待人工估 |
+| 82 | · | C46 | `useInAppPurchase()` | 账号与支付 | — | 0 | 0 | ✅ | 纯 Hook | ⏳ 待人工估 |
+| 83 | · | C48 | `useEmbedded()` | 应用与生命周期 | — | 0 | 0 | ✅ | 纯 Hook | ⏳ 待人工估 |
+| 84 | · | C82 | `useWebAssembly()` | 应用与生命周期 | — | 0 | 0 | ✅ | 纯 Hook | ⏳ 待人工估 |
 
 > 优先信号：★★ = 跨项目覆盖（最高证据）· ★ = 单项目有真实调用 · △ = 仅官方承接面（无本仓调用，属完整性缺口）· · = 暂无双侧信号
 
@@ -126,7 +127,7 @@
 |---|---|---|---|---|
 | 网络与通信 | 11 | 0 | 5 | 81 |
 | 设备与系统 | 20 | 5 | 13 | 86 |
-| 存储与文件 | 4 | 3 | 4 | 20 |
+| 存储与文件 | 5 | 3 | 4 | 21 |
 | 位置与地图 | 2 | 0 | 2 | 10 |
 | 媒体与扫码 | 11 | 1 | 4 | 27 |
 | 账号与支付 | 9 | 1 | 4 | 16 |

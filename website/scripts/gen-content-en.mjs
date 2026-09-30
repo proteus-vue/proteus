@@ -2024,6 +2024,16 @@ export const CAP_EN = {
       'device-capability.failed': 'Querying HEVC support failed',
     },
   },
+  'document-preview': {
+    desc: 'useOpenDocument: open a document for preview — a PDF, image, text, or office file (mini program wx.openDocument; Web window.open → the browser viewer). ★Honest boundary on Web: PDFs, images, and text preview inline, but office formats are usually downloaded rather than previewed (it depends on the browser). On the mini program you must pass a platform temp-file path (e.g. wxfile://...).',
+    params: {
+      filePath: 'Document path (mini program: a platform temp-file path; Web: an HTTP(S) URL or data URL)',
+    },
+    errors: {
+      'document.open.unsupported': 'The platform API is missing (mini program lacks wx.openDocument; the runtime lacks window.open)',
+      'document.open.failed': 'Opening failed — on Web this also covers a pop-up blocked by the browser (preview must be triggered by a user gesture)',
+    },
+  },
   'keep-screen-on': {
     desc: 'useKeepScreenOn: keep the screen awake (mini program wx.setKeepScreenOn; Web Screen Wake Lock API). ★Web requires a visible page and a secure context — the system releases the lock automatically when the page is hidden, so call it again on visibility resume. Repeated calls are idempotent (on→on does not re-acquire; off→off does not re-release).',
     params: {

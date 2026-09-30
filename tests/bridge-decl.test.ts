@@ -112,3 +112,75 @@ describe('NC1 声明式能力桥（C83 useKeepScreenOn）', () => {
     expect(decl.errPrefix).toBe('screen.keep-on')
   })
 })
+
+describe('NC1 声明式能力桥（C84 useOpenDocument）', () => {
+  const docDecl = BRIDGE_DECLS.find((d) => d.hook === 'useOpenDocument')!
+
+  it('MP 侧：真实调用 wx.openDocument 并透传 filePath', async () => {
+    const calls: string[] = []
+    const wx = {
+      openDocument: (opt: { filePath: string; success?: () => void }) => {
+        calls.push(opt.filePath)
+        opt.success?.()
+      },
+    }
+    const ext = mpBridgeExt(wx as never, CapError)
+    await ext.openDocument!('wxfile://tmp/a.pdf')
+    expect(calls).toEqual(['wxfile://tmp/a.pdf'])
+  })
+
+  it('MP 侧：缺 API ⇒ Err(unsupported)（诚实降级）', async () => {
+    const ext = mpBridgeExt({} as never, CapError)
+    await expect(ext.openDocument!('x.pdf')).rejects.toThrow(/document\.open\.unsupported/)
+  })
+
+  it('MP 侧：失败回调 ⇒ Err(failed)（错误必须传播）', async () => {
+    const wx = { openDocument: (opt: { fail?: (e: unknown) => void }) => opt.fail?.(new Error('unsupported format')) }
+    const ext = mpBridgeExt(wx as never, CapError)
+    await expect(ext.openDocument!('x.pdf')).rejects.toThrow(/document\.open\.failed/)
+  })
+
+  it('Web 侧：调用 window.open(url, _blank)（浏览器查看器；office 格式通常转下载——声明里已写明）', async () => {
+    const opened: string[] = []
+    const g = {
+      open: (url: string, target?: string) => {
+        opened.push(`${url}|${target}`)
+        return { closed: false }
+      },
+    }
+    const ext = webBridgeExt(g as never, CapError)
+    await ext.openDocument!('https://x/a.pdf')
+    expect(opened).toEqual(['https://x/a.pdf|_blank'])
+  })
+
+  it('Web 侧：★弹窗被拦截（返回 null）⇒ Err(failed)——不静默无反应（assert 判据）', async () => {
+    const g = { open: () => null }
+    const ext = webBridgeExt(g as never, CapError)
+    await expect(ext.openDocument!('https://x/a.pdf')).rejects.toThrow(/document\.open\.failed/)
+  })
+
+  it('Web 侧：缺 window.open ⇒ Err(unsupported)（非浏览器环境）', async () => {
+    const ext = webBridgeExt({} as never, CapError)
+    await expect(ext.openDocument!('https://x/a.pdf')).rejects.toThrow(/document\.open\.unsupported/)
+  })
+
+  it('Hook 层：桥缺失 ⇒ Err / 桥可用 ⇒ 透传（端到端接线成立）', async () => {
+    const missing = createCapabilityHooks({} as CapabilityBridge)
+    const r1 = await missing.useOpenDocument('x.pdf')
+    expect(r1.ok).toBe(false)
+    if (!r1.ok) expect(r1.error.code).toBe('document.open.unsupported')
+
+    const wx = { openDocument: (opt: { success?: () => void }) => opt.success?.() }
+    const bridge = { ...mpBridgeExt(wx as never, CapError) } as CapabilityBridge
+    const hooks = createCapabilityHooks(bridge)
+    const r2 = await hooks.useOpenDocument('x.pdf')
+    expect(r2.ok).toBe(true)
+  })
+
+  it('声明字段自洽（形态分派正确）', () => {
+    expect(docDecl.semantic).toBe('capability.document-preview')
+    expect(docDecl.mp.kind).toBe('callback')
+    expect(docDecl.web.kind).toBe('direct')
+    if (docDecl.web.kind === 'direct') expect(docDecl.web.assert).toBeTruthy()
+  })
+})

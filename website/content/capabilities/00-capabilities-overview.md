@@ -6,7 +6,7 @@ order: 0
 
 # 能力总览
 
-> 83 个能力原语——SSOT = `PRIMITIVE_CATALOG`（capability kind）+ `CapabilityHooks` 接口。**Hook 全部已实现**（API 就绪，双端桥/降级见各页兼容进度表）
+> 84 个能力原语——SSOT = `PRIMITIVE_CATALOG`（capability kind）+ `CapabilityHooks` 接口。**Hook 全部已实现**（API 就绪，双端桥/降级见各页兼容进度表）
 
 ## 网络与通信（11）
 
@@ -49,7 +49,7 @@ order: 0
 | C81 | [capability.device-capability](/docs/capability/device-capability) | `useDeviceCapability()` | `DeviceCapabilityAPI` | wx.checkDeviceSupportHevc |
 | C83 | [capability.keep-screen-on](/docs/capability/keep-screen-on) | `useKeepScreenOn()` | `KeepScreenOnState` | wx.setKeepScreenOn（Web 对等：Screen Wake Lock API） |
 
-## 存储与文件（4）
+## 存储与文件（5）
 
 | # | 能力 | API | 返回 | 小程序等价 |
 |---|---|---|---|---|
@@ -57,6 +57,7 @@ order: 0
 | C32 | [capability.cookie](/docs/capability/cookie) | `useCookie()` | `CookieJar` | 无 |
 | C43 | [capability.file-system](/docs/capability/file-system) | `useFileSystem()` | `FSAdapter` | wx.getFileSystemManager |
 | C44 | [capability.archive](/docs/capability/archive) | `useArchive()` | `Result<void>` | wx.compressFile |
+| C84 | [capability.document-preview](/docs/capability/document-preview) | `useOpenDocument()` | `DocumentPath` | wx.openDocument（Web 对等：window.open → 浏览器查看器） |
 
 ## 位置与地图（2）
 

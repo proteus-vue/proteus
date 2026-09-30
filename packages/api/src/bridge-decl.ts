@@ -39,10 +39,19 @@ export type MpForm =
 
 /** web 侧形态 */
 export type WebForm =
-  /** 直接调用：表达式里用 `$args` 占位（如 `nav.clipboard.writeText($0)`） */
-  | { kind: 'direct'; call: string; guard?: string }
+  /** 直接调用：表达式里用 `$0`/`$1`… 占位参数（如 `nav.clipboard.writeText($0)`） */
+  | {
+      kind: 'direct'
+      call: string
+      guard?: string
+      /** 守卫失败时的消息（缺省 `${guard} 不支持`） */
+      guardMessage?: string
+      /** ★结果须为真值，否则报 `<errPrefix>.failed`：某些 Web API 用「返回 null」表示被拦截
+       *  （如 `window.open` 在非用户手势触发时）——**静默无反应是最危险的失败形态**，必须转成 Err */
+      assert?: { message: string }
+    }
   /** 有状态：需要持有句柄（如 Screen Wake Lock 的 sentinel）；`onExpr`/`offExpr` 在闭包内求值 */
-  | { kind: 'stateful'; onExpr: string; offExpr: string; guard?: string }
+  | { kind: 'stateful'; onExpr: string; offExpr: string; guard?: string; guardMessage?: string }
   /** 诚实降级（web 无对等） */
   | { kind: 'unsupported'; reason?: string }
 
