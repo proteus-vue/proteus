@@ -147,6 +147,14 @@ Web + 微信 Skyline 双端编译、编译期路由/分包/tabBar、自定义路
 
 **★2026-09 提前落地**：本节的「App 端自定义渲染器」框架侧已远超规划——`@proteus-vue/render-backend` 的 **G-41 vue-bridge**（`createProteusRenderer`：真实 `createRenderer(nodeOps)` 接入，业务 `h()`/SFC 落到 Headless/vue-dom/Flutter 任意后端，swap 后端 = 换 `currentBackend`）+ **G-41 WebHostRuntime**（Web 宿主骨架）；既有 `packages/renderer-app/`（`@proteus-vue/renderer-app` createRenderer + NativeAdapter）是原生宿主接线的底座；v0.6 剩余 = 原生宿主工程（iOS/Android）实现 RenderBackend + 接入 `createProteusRenderer`——「标准 Vue SFC 直接运行在原生端」的渲染器机制已就绪。
 
+**★2026-09-30 决策接入（两条线，载体见 board-inventory「其他文档」表）**：
+- **JS 引擎线：选型收口**——默认现状（iOS 系统 JSC 解释执行 / Android 内置 QuickJS），**不做引擎切换**；
+  「引擎层可插拔」作为架构保险保留（载体 `docs/Proteus_JS引擎选型与可插拔方案.md`；落点建议 = G-39/G-40 的一个批次）。
+  与本段的关系：v0.6 的原生宿主工程**按现状引擎推进**，不被选型阻塞。
+- **原生能力接入线：升格为战略线**——目标「业务代码 99% 不用手写原生插件」（三条腿：codegen / 原语化 / 降本；
+  红线：不开放任意原生调用；载体 `docs/Proteus_原生能力接入方案.md`，里程碑 NC0–NC5）。
+  与本段的关系：本段「原生能力桥（App）」由该方案承接细化——**入口收敛**（Hook / 内置能力 / 经 codegen 的插件）。
+
 ### v1.0 生产可用（能力矩阵达标）
 
 **目标**：能力矩阵 9 域全部达标 + 真实项目验证，可对外宣传"生产级"。
@@ -165,7 +173,7 @@ Web + 微信 Skyline 双端编译、编译期路由/分包/tabBar、自定义路
 | 调试 devtools | 小程序端编译产物可读面板（转场 / setData / 路由时间线），对标 Taro devtools / uni-app HBuilderX 调试器 |
 | 组件库拆包（★前置） | **@proteus-vue/components 独立 npm 包**：框架内置组件（virtual-list 等）从仓库根 `src/components/` 迁入包内（含 src/components/index.ts 聚合入口）；Web 侧删除 alias 改直接 import；MP 侧 plugin-vite / gen-routes 改为解析包内组件目录（复用 `resolvePkgPath` node_modules 包内路径机制），**`frameworkComponentsDir` 两个选项退役**（含缺省相对工程根 `src/components` 兜底），产物路径 `proteus/<name>/index` 不变；详见 docs/packages.md「框架内置组件的定位与退役路径」 |
 | 组件库 | 首个由社区共建的跨端组件库（走"标准 Vue + 编译"路线，天然双端可用）——架构规划见 docs/proteus-component-plan/ |
-| 插件体系 | 编译期插件（自定义映射 / 自定义产物）、运行时插件（中间件） |
+| 插件体系 | 编译期插件（自定义映射 / 自定义产物）、运行时插件（中间件）；★2026-09-30 接入：**原生能力插件成本降低（codegen，8 小时→30 分钟目标）与内置能力覆盖扩充**见 `docs/Proteus_原生能力接入方案.md`（战略线，NC0–NC5） |
 | 社区设施 | 示例仓库、Gitter/Discord、贡献者指南、RFC 流程 |
 
 ## 5. 架构演进（monorepo 拆分）

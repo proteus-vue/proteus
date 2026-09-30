@@ -353,7 +353,7 @@ ExecutionCarrier（JSI / AOT）是"宿主侧 1ms"的载体。未实现则 JS 桥
 - 仓库 **43** 个 `@proteus-vue/*` 包；**3881** 单测全绿（324 文件）；双端构建通过
 - ① 可插拔渲染底座（G-27）✅：**五官方后端原型集齐**（Headless / VueDom / Native×3 / Flutter widget 映射）
 - ② 可插拔编译器（G-29/G-38）🟡：`config.compiler.backend: 'node' | 'rust'`；RustBackend 为独立 cargo crate（`proteus-cc-rust` → 同一 CompilerIR JSON）
-- ③ 语义原语 SSOT（G-31/G-32）✅：184 原语（PRIMITIVE_CATALOG SSOT）→ **77 个组件目录 / 65 个已实现语义**双端落地；81 个 Capability Hook
+- ③ 语义原语 SSOT（G-31/G-32）✅：184 原语（PRIMITIVE_CATALOG SSOT）→ **77 个组件目录 / 65 个已实现语义**双端落地；82 个 Capability Hook
 - ④ 宿主层三件套（G-41/42/43）✅：六容器策略；所有权/借用检查编译期拦截
 - ⑤ AI-native（G-21/23/36）✅：111 条规则各带 AI 说明书；MCP Server（11 工具 + 5 Resources + 鉴权）；Agent Kit SDK
 - 已知限制：支持 Web 全功能 + 微信小程序（Skyline 优先，WebView 降级仅保证可运行）；支付宝/抖音/快手为非目标；**规划已入库、尚未有可运行实现：G-28 NativeBackend**
