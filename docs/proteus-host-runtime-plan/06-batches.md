@@ -25,10 +25,27 @@
 > **★同时验证的相邻 plan**：G-41 宿主接入契约用真实运行时全过（H-01~H-08 32 项）；
 > G-43 内存治理有了**引擎真实 JS 堆账本**（分配 +320KB → GC 后回到基线，真机读数）。
 >
-> **诚实边界（仍未做）**：① iOS JSC 宿主壳（同族骨架已就绪，缺宿主壳接线与真机读数）；
-> ② 多线程 Worker（本仓 Android 用 QuickJS 单线程——`threads.background=false` 是对现状的**诚实声明**，
-> 不是最终形态）；③ Flutter/Harmony 宿主（B5）。
-> ⇒ **B4 状态：Android 切片 ✅（真机）· iOS 骨架就绪（缺壳）· Flutter 未开始**。
+> **★★2026-09-30 续：iOS 腿落地（同一天）——同一份 TS、两个壳**
+>
+> | 维度 | Android（QuickJS） | iOS（JSC） |
+> |---|---|---|
+> | JS 入口 | `hosts/shared/bridge/entry-host-runtime.ts`（**平台中立，两端共用一份**） ||
+> | 壳 | `MainActivity.appHostRun()` + `quickjs_jni.c` | `ProteusHost/host-runtime-scene.swift`（`--host-runtime` 模式） |
+> | 事件循环泵 | `nativeRunPendingJobs`（`JS_ExecutePendingJob`，限 10000） | 让出主线程（JSC 在 `evaluateScript` 返回时排空微任务——本仓已记录的事实） |
+> | 生命周期转发 | 覆写 `onPause/onResume` | `willResignActive/didBecomeActive` 通知 |
+> | 触发手段 | `am start -n 本Activity`（日志实证 pause→resume；★`input keyevent HOME` 无效） | `devicectl process launch com.apple.Preferences` → 重新 launch 本 App（实测 **PID 不变 ≈ 同进程往返**） |
+> | 内存口径 | `scope="engine"`（`JS_ComputeMemoryUsage` 引擎真实 JS 堆） | `scope="process"`（`phys_footprint`——★**JSC 无公开 per-context 内存 API**，本轮取证：公开头只暴露 `JSGarbageCollect`） |
+> | 真机读数 | 16/16 全绿 · GC 回收 -319984/+320264B（≈100%） | 16/16 全绿 · 分配 +33.8MB，GC 后 -147456B（★诚实标注：JSC 提示性 GC 把页留 free pool，不即时归还 OS） |
+> | 判据 | `check:host-runtime`（**同一脚本；平台由报告 `host_id` 自报**） ||
+>
+> ★装置要点：两段式驱动（后台 `launch --console` 阻塞 → 等 `HOST_RUNTIME_PHASE_DONE` 内容信号 →
+> 触发真实前后台往返 → 等 App 达成退出条件自退）；build_id 走**编译期注入**（与 entry-bench/selfdraw
+> 同一机制——不用运行时环境变量，避免第二种形态）。★实测坑：平台参数必须在 **eval bundle 之前**注入
+> （IIFE 加载时即捕获常量——首版 Android 因此报默认 `host_id`）。
+>
+> **诚实边界（仍未做）**：① 多线程 Worker（`threads.background=false` 是对现状的**诚实声明**，不是最终形态）；
+> ② Flutter/Harmony 宿主（B5）；③ iOS 侧 `obj_count` 恒 0（JSC 无该读数——不伪造）。
+> ⇒ **B4 状态：Android ✅ + iOS ✅（真机双绿）· Flutter 未开始**。
 
 ---
 
