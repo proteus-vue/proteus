@@ -2420,6 +2420,26 @@ pub unsafe extern "C" fn proteus_layout_anim_stop(handle: u64, json: *const c_ch
     }
 }
 
+/// ★★**曲线的贝塞尔近似**（供平台插值器用——Android `PathInterpolator` 只收控制点）
+///
+/// 入参：曲线 id（0..=4）。返回：`{"ok":true,"bezier":[x1,y1,x2,y2]}` 或
+///   `{"ok":true,"bezier":null}`（该曲线无合适近似，如弹簧——**诚实返回 null，不硬套**）。
+///
+/// 【为什么由内核给（而不是宿主自己写）】曲线知识必须**只在引擎一处**（本仓纪律 #22：
+///   第 N 份手写副本 = 下一个静默缺陷）。宿主只做"把控制点交给平台 API"。
+///
+/// # Safety
+/// 无指针参数。
+#[no_mangle]
+pub extern "C" fn proteus_anim_curve_bezier(curve: u32) -> *mut c_char {
+    let c = crate::anim::curve_bezier_approx(curve as u8);
+    let v = match c {
+        Some((x1, y1, x2, y2)) => serde_json::json!({"ok": true, "bezier": [x1, y1, x2, y2]}),
+        None => serde_json::json!({"ok": true, "bezier": serde_json::Value::Null}),
+    };
+    CString::new(v.to_string()).map(|c| c.into_raw()).unwrap_or(std::ptr::null_mut())
+}
+
 /// ★★**MA0-RT：提交规格**（"提交一次 + 平台渲染线程自主插值"路径的数据面）
 ///
 /// 入参：与 `anim_start` 相同的 `{"anims":[…]}`。

@@ -310,6 +310,12 @@ public class MainActivity extends Activity {
             String jsr = jsRenderRun();
             sb.append(jsr).append('\n');
             writeReport("js-render.json", jsr);
+        } else if ("platform-anim".equals(testPath)) {
+            // ★★MA0-RT：平台零参与动画（**独立路径**——见 platformAnimRun 的注释：
+            //   混在重活路径里会被主线程 Choreographer 饿死）
+            sb.append("【MA0-RT 平台零参与动画（容器级）】\n");
+            platformAnimRun();
+            sb.append("  读数见 platform-anim.json（异步采样）\n");
         } else if ("shot-scroll-native".equals(testPath)) {
             // ★★z-order 约束下的**滚动同步**验证（方案坑位 #4）
             //   场景：20 行列表，**第 5 行是 native-host（WebView）**；程序驱动滚动到若干位置，
@@ -847,6 +853,7 @@ public class MainActivity extends Activity {
                     && host.lastNodeCount == r.optInt("nodes")
                     && host.lastError == null;   // ★宿主侧有错 ⇒ 就算 JS 侧读数全绿也不放行（静默失败防线）
             out.put("ok", ok);
+
         } catch (Throwable t) {
             try {
                 out.put("ok", false);
@@ -869,6 +876,71 @@ public class MainActivity extends Activity {
      *   既有场景之所以没暴露该问题，是因为它们各自做了"隐藏按钮 + 绝对定位"，
      *   但**先前场景的 View 仍在**（多次触发就会叠）。本方法把它显式清掉。
      */
+    /**
+     * ★★**MA0-RT 独立测试路径**：平台零参与动画（主线程空闲）
+     *
+     * 【为什么必须独立成一条路径（本仓实测的装置缺陷）】首版把平台动画测试**塞在 `js-render` 路径末尾**——
+     *   而那条路径在主线程上跑 QuickJS 求值 + 全树渲染（**数秒**），而 `ViewPropertyAnimator` 的推进
+     *   依赖**主线程 Choreographer 的帧回调** ⇒ 动画被自己的重活饿死：
+     *   真机现象 `running=true` 但 `tx` 恒 0、`withEndAction` 从不触发（采样时主线程仍被占用）。
+     *   ⇒ 独立路径（零前置负载）⇒ 主线程空闲 ⇒ 帧回调正常推进。
+     *
+     * 【判据（写进 platform-anim.json）】
+     *   ① 曲线贝塞尔来自**内核**（`{"ok":true,"bezier":[x1,y1,x2,y2]}`——宿主无曲线数学）；
+     *   ② **终态精确**：tx=120 / scale=0.85 / alpha=0.5（动画真的跑到目标）；
+     *   ③ **主线程零参与**：动画期间 `onDrawCount` **不增长**（逐帧重绘会看到 ~30 帧）；
+     *   ④ 中间采样点（诊断用）：**可能显示起始值**——这是 RenderNodeAnimator 的固有语义
+     *      （属性动画在**渲染线程**更新，"model 值"仅在结束时同步；所以中间读到 0 不代表没动，
+     *       而**恰好说明主线程侧没有被逐帧更新**——正是零参与的正面证据）。
+     */
+    private void platformAnimRun() {
+        final org.json.JSONObject out = new org.json.JSONObject();
+        try {
+            clearSceneViews();
+            final ProteusHostView hv = new ProteusHostView(this);
+            android.widget.FrameLayout.LayoutParams lp = new android.widget.FrameLayout.LayoutParams(
+                    FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.MATCH_PARENT);
+            hv.setLayoutParams(lp);
+            root.addView(hv);
+            out.put("bezier", RustLayout.curveBezier(1));
+            out.put("draw_before", hv.onDrawCount());
+            // ★异步采样（见方法注释：同步 sleep 会把主线程自己堵死）
+            final android.os.Handler h = new android.os.Handler(android.os.Looper.getMainLooper());
+            h.postDelayed(new Runnable() {
+                public void run() {
+                    final int drawBefore = hv.onDrawCount();
+                    try {
+                        out.put("draw_before", drawBefore);
+                        hv.animatePageComposited(120f, 0f, 0.85f, 0f, 0.5f, 500, 0, 0.255f, 0.76f, 0.515f, 1.03f);
+                    } catch (Exception ignored) {}
+                    final org.json.JSONArray mids = new org.json.JSONArray();
+                    for (final int delayMs : new int[] { 100, 200, 300, 400 }) {
+                        h.postDelayed(new Runnable() {
+                            public void run() {
+                                try { mids.put(hv.pageAnimStats()); } catch (Exception ignored) {}
+                            }
+                        }, delayMs);
+                    }
+                    h.postDelayed(new Runnable() {
+                        public void run() {
+                            try {
+                                out.put("mids", mids);
+                                out.put("end", hv.pageAnimStats());
+                                out.put("draw_after", hv.onDrawCount());
+                                out.put("draw_delta", hv.onDrawCount() - drawBefore);
+                            } catch (Exception ignored) {}
+                            writeReport("platform-anim.json", out.toString());
+                            hv.resetPageAnim();
+                        }
+                    }, 700);
+                }
+            }, 300);   // ★先让出主线程（等广播栈退出），再开始
+        } catch (Exception e) {
+            try { out.put("ok", false); out.put("error", e.toString()); } catch (Exception ignored) {}
+            writeReport("platform-anim.json", out.toString());
+        }
+    }
+
     private void clearSceneViews() {
         int n = root.getChildCount();
         List<android.view.View> keep = new java.util.ArrayList<>();

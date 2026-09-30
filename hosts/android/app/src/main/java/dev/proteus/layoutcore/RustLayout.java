@@ -46,6 +46,10 @@ final class RustLayout {
     private static native String nativeSetTextMeasures(long handle, String measuresJson);
     private static native String nativeSplice(long handle, String spliceJson);
     private static native String nativeApplyOps(long handle, byte[] opsBytes);
+    /** ★★MA0-RT：曲线贝塞尔近似（供 PathInterpolator 用；曲线知识只在引擎一处） */
+    private static native String nativeCurveBezier(int curve);
+    /** ★★MA0-RT：提交规格（合成属性判定 + 节点级采样） */
+    private static native String nativeAnimCommitSpec(long handle, String json);
 
     static boolean isLoaded() { return loaded; }
     static String getLoadError() { return loadError; }
@@ -172,6 +176,16 @@ final class RustLayout {
     /** ★★Vapor IR 二进制指令流（JNI 原生 byte[] —— 无需 iOS 那层 JSON 数组包装） */
     static String applyOps(long handle, byte[] opsBytes) {
         return loaded ? nativeApplyOps(handle, opsBytes) : NOT_LOADED;
+    }
+
+    /** ★★MA0-RT：曲线贝塞尔近似（`{"ok":true,"bezier":[…4 个数…]|null}`） */
+    static String curveBezier(int curve) {
+        return loaded ? nativeCurveBezier(curve) : NOT_LOADED;
+    }
+
+    /** ★★MA0-RT：提交规格（合成属性判定 + 节点级采样；平台零参与路径的数据面） */
+    static String animCommitSpec(long handle, String json) {
+        return loaded ? nativeAnimCommitSpec(handle, json) : NOT_LOADED;
     }
 
     private static final String NOT_LOADED = "{\"ok\":false,\"error\":\"native 未加载\"}";
