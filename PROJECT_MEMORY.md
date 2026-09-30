@@ -48,7 +48,48 @@
   只有**可复制代码块**里的引用才真正有害。
 · 破坏性验证：恢复 `p-card` → 红并精确报 `03-fluid-grid.md:31`；还原 → 575 md 全过。
 
-## 当前状态速览（最近一次更新：**2026-09-30（续）· 安卓宿主两问收口（16KB 门禁补 wasm + 应用事件源假绿挖出并真落地）**）★新会话以此为准
+## 当前状态速览（最近一次更新：**2026-09-30（三）· iOS 腿对齐（J/K 组双端真验）—— 两腿能力层与事件源同构**）★新会话以此为准
+### ★★★2026-09-30（三）· iOS 腿对齐（用户：「继续对齐 iOS」）
+
+**目标**：上一轮把安卓的应用事件源做成真落地（J 组原生能力 + K 组三环对齐）后对齐 iOS。
+
+**一、iOS 原生能力层（新增 `host-capabilities.swift`，~230 行）**
+- **镜像安卓同一契约**：`invoke(method, argsJson) -> JSON`（13 方法：host.context / update.check/apply /
+  window.setSize / worker.create/post/terminate / idle.request/cancel / preload.assets / extension.load /
+  mini-program.navigate / native.calls）。
+- 真实现：版本读 `Info.plist CFBundleShortVersionString`；worker 用 **GCD 队列**（真后台线程，记录线程名）；
+  idle 排到**主循环下一轮**（对应安卓的帧回调泵）；preload 真解码 Bundle 图片（UIImage）。
+- **诚实降级**：`extension.load`（iOS 禁止动态模块加载）/`mini-program.navigate`（无小程序概念）
+  返回 `{ok:false,missing:true}` ⇒ 桥映射 `*.unsupported`。
+- ★**C82 WebAssembly 走"引擎内建"第二条路径**：取证确认 **JSC 自带 WebAssembly**
+  （`typeof WebAssembly==='object'`、validate 通过、实例化 add(2,40)=42 真执行）——安卓（QuickJS 无 WASM）
+  用宿主 wasm3、iOS 用引擎内建，**同一份 JS 桥两个分支各自真跑**。
+
+**二、iOS 应用事件源（新增 `host-lifecycle-events.swift`，~260 行）**
+- 与 Android 同构：真观察者（didReceiveMemoryWarning / AVAudioSession interruption）+ VC 系统回调
+  （`traitCollectionDidChange` / `viewWillTransition`）+ `NSSetUncaughtExceptionHandler`；
+  三链记账（真回调 attempts → 推送 pushes → JS 收到 seen）并入**死前落盘** `host-app-events.json`（`native` 节）。
+
+**三、★★真机抓出的三个真缺陷（都已在代码里修 + 注释记录原因）**
+1. **`NSGetUncaughtExceptionHandler()` 返回自己** ⇒ 链式"保留原 handler"变成**无限递归**：
+   实测一次崩溃转发 **1629 次**（还把 64 条历史环冲刷干净、memory 判据连带读了空）。
+   修：安装时**保存** prevHandler；加崩溃重入保护（同进程只处理一次）。
+2. **两相等待不足**：JSC `evaluateScript` 只排空微任务，而 `WebAssembly.instantiate` 是**异步编译**
+   ⇒ 让出一轮就 finish 会读到 `done=false`（J 组整组判红）。修：**条件等待**（轮询 `__proteusAppPending.done`，
+   50ms×40 轮上界）。
+3. **`swiftc -typecheck` 漏报真编译错**（`a C function pointer cannot be formed from a closure that
+   captures dynamic Self type`）⇒ 记入"零设备检查的诚实边界"（能抓大部分类型错，不替代真编译）。
+
+**四、判据（同一份 `check-host-runtime.py`，双端共用）**
+- J/K 组按 `host_id` 分档真验（iOS 不再"待办"）；J 组 provider 按平台断言、窗口 applied=false 属 iOS 平台约束（如实标注）。
+- **真机结果**：iOS J 组 10 项全绿（含 JSC 内建 WASM 42）+ K 三环对齐（memory/theme/error 各 1:1:1）；
+  Android 回归无变化（memory/theme/resize/error 全 1:1:1）。
+- **破坏性验证 4/4**：drives 不实 / memory 载荷不实 / error 链断裂 / 推送环空 ⇒ 全红；真实证据 ⇒ 绿。
+- 诚实边界：iOS 无外部事件注入通道 ⇒ theme/memory 走应用内真路径探针，**resize/audio 只验"观察者已注册"**（不假装驱动）。
+
+**五、顺手**：文档双端口径（APP_EVENT_META / EN 镜像 → "双端真机验证"）；计划文档 `06-batches.md`
+加"两腿能力层对齐"块（含三个缺陷与驱动面差异）；`check:no-blind-wait` / `shell-i18n-vars` / `en-drift` 全过。
+
 
 ### ★★★2026-09-30（续）· 安卓宿主两问收口（用户：「三个 so 没做 16kb 门禁」「再检查下安卓应用生命周期是否真落地，保险点儿」）
 

@@ -27,15 +27,21 @@ import Foundation
 import JavaScriptCore
 import UIKit
 
-/// 宿主桥（JS 侧 `proteusHost.memUsage()` / `.gc()` / `.post()`）——**条件注入**语义同 Android：
+/// 宿主桥（JS 侧 `proteusHost.memUsage()` / `.gc()` / `.post()` / `.invoke()`）——**条件注入**语义同 Android：
 /// JS 侧按 `typeof proteusHost.memUsage === 'function'` 判定内存账本是否可用（缺则诚实标注）
 @objc protocol HostRuntimeExports: JSExport {
     func memUsage() -> String
     func gc() -> Void
     func post(_ json: String) -> Void
+    /// ★★App 原生能力通道（与 Android 的 `quickjs_jni.c` `js_host_invoke` 同一契约：
+    ///   返回 JSON 串；`{"ok":false,"missing":true}` = 诚实降级，桥映射为 `*.unsupported`）
+    func invoke(_ method: String, _ argsJson: String) -> String
 }
 
 final class HostRuntimeBridge: NSObject, HostRuntimeExports {
+    /// ★App 端原生能力（真实 UIKit/Foundation 实现——见 host-capabilities.swift）
+    let capabilities = HostCapabilities()
+
     /// ★内存读数（`scope="process"`——JSC 无 per-context API，见文件头）
     func memUsage() -> String {
         let mb = physFootprintMB()
@@ -53,6 +59,11 @@ final class HostRuntimeBridge: NSObject, HostRuntimeExports {
     /// 场景不依赖 post（渲染链路在 js-render/selfdraw 场景）；保留以满足探测
     func post(_ json: String) {
         NSLog("[proteus] host-runtime post: %@", json.count > 200 ? String(json.prefix(200)) + "…" : json)
+    }
+
+    /// JS 桥 → 原生能力（同步；见 host-capabilities.swift 的契约说明）
+    func invoke(_ method: String, _ argsJson: String) -> String {
+        capabilities.invoke(method, argsJson)
     }
 }
 
@@ -76,6 +87,7 @@ final class HostRuntimeScene: NSObject {
         _ = ctx.evaluateScript("var __PROTEUS_HOST_FRAME_DRIVER__ = 'CADisplayLink';")
 
         // ② 宿主桥（条件注入的判定在 JS 侧：typeof memUsage === 'function'）
+        //   ★G-39 续：加 `invoke`（App 原生能力通道）——caps 由 bridge 持有（真实 UIKit 实现）
         ctx.setObject(HostRuntimeBridge(), forKeyedSubscript: "proteusHost" as NSString)
 
         // ③ 加载 bundle（JSC 无模块系统——IIFE 整份 evaluate）
@@ -86,19 +98,34 @@ final class HostRuntimeScene: NSObject {
         }
         _ = ctx.evaluateScript(src, withSourceURL: bundleURL)
 
-        // ④ 两相驱动（JSC：evaluateScript 返回时排空微任务 ⇒ 相间让出主线程）
+        // ④ 两相驱动（JSC：evaluateScript 返回时排空**微任务** ⇒ 相间让出主线程）
         let p1 = evalJson("__proteusHostRun()")
         mainPhase1 = p1
-        DispatchQueue.main.async {
-            // ★这一跳就是"宿主驱动事件循环"：JSC 在控制权回到宿主后把微任务队列排空，
-            //   Promise 续体在此刻执行 ⇒ 下一相才读得到结果（缺这一跳 ⇒ 续体永不执行）。
+        // ★★为什么不能"让出一轮就 finish"（本仓 iOS 实测抓出）：
+        //   JSC 的 `evaluateScript` 返回时只排空**微任务**；而 J 组里 `WebAssembly.instantiate`
+        //   是**异步编译**（其 resolve 要等更多轮主循环）⇒ 只让出一轮时 `appPending.done=false`、
+        //   `wasmAddResult` 整段缺失（实测：J 组判红于"未完成"）。
+        //   ⇒ 改为**条件等待 + 有界预算**：轮询 JS 侧的 `__proteusAppPending.done`（条件），
+        //     每轮让出主循环 50ms、最多 40 轮（2s 上限——超时则如实进 finish，判据按缺项红）。
+        waitAsyncThenFinish(attempts: 0)
+    }
+
+    /// 条件等待 JS 异步面完成，再进 finish 相位（见调用点注释）
+    private static func waitAsyncThenFinish(attempts: Int) {
+        let done = evalJs?("String(typeof __proteusAppPending === 'object' && __proteusAppPending !== null && __proteusAppPending.done === true)") == "true"
+        if done || attempts >= 40 {
+            if !done {
+                NSLog("[proteus] ⚠ 等 JS 异步面超时（2s）——按当前状态进 finish（缺项将如实判红）")
+            }
             let p2 = evalJson("__proteusHostFinish()")
             mainPhase2 = p2
             writeMainReport()
             installLifecycleObservers()
             NSLog("[proteus] HOST_RUNTIME_PHASE_DONE async_resolved=%@",
                   String(describing: p2["async_resolved"] ?? "?"))
+            return
         }
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) { waitAsyncThenFinish(attempts: attempts + 1) }
     }
 
     // ── 生命周期（真实系统事件 → JS 运行时） ──
@@ -114,6 +141,32 @@ final class HostRuntimeScene: NSObject {
             forward("resume")
         }
         NSLog("[proteus] G-39 生命周期观察者已装（willResignActive → pause / didBecomeActive → resume）")
+
+        // ★★应用级事件源（K 组）：memory/theme/resize/audio 观察者 + error 钩子（iOS 腿真实现）
+        //   证据目录 = Documents（与报告同目录——脚本 pull 后判据按同目录推导）
+        HostLifecycleEvents.shared.configure(
+            eval: { expr in evalJs?(expr) ?? "null" },
+            evidenceDir: reportURL("host-app-events.json").deletingLastPathComponent()
+        )
+        if ProcessInfo.processInfo.arguments.contains("--k-crash") {
+            HostLifecycleEvents.shared.requestCrashOnRoundTrip()
+            NSLog("[proteus] --k-crash：生命周期往返完成后将触发真未捕获异常（K 证据，进程真死）")
+            // ★K 探针驱动（应用内可驱动面——见 HostLifecycleEvents.driveKProbes 的诚实说明）：
+            //   theme（真 UIKit trait 回调）+ memory（真通知路径）；必须在观察者装配**之后**
+            HostLifecycleEvents.shared.driveKProbes()
+        }
+    }
+
+    /// 主题变化转发（`SelfDrawViewController.traitCollectionDidChange` 调用）
+    static func handleTraitChange(_ tc: UITraitCollection) {
+        if #available(iOS 13.0, *) {
+            HostLifecycleEvents.shared.handleTraitChange(styleRaw: Int(tc.userInterfaceStyle.rawValue))
+        }
+    }
+
+    /// 尺寸变化转发（`SelfDrawViewController.viewWillTransition` 调用）——单位 pt
+    static func handleTransition(size: CGSize) {
+        HostLifecycleEvents.shared.handleTransition(size: size)
     }
 
     private static func forward(_ evt: String) {
@@ -130,6 +183,12 @@ final class HostRuntimeScene: NSObject {
             let ra = (d["resume_applied"] as? NSNumber)?.intValue ?? 0
             if sa >= 1 && ra >= 1 {
                 NSLog("[proteus] HOST_RUNTIME_REPORT_READY path=%@", reportURL("host-runtime.json").path)
+                // ★★K 组 error 链的真驱动（`--k-crash`）：**不优雅退出**，改触发真未捕获异常
+                //   （后台线程 raise NSException → 全局钩子 → JS 回执 → 证据死前落盘 → 进程真死）。
+                if HostLifecycleEvents.shared.wantsCrash {
+                    HostLifecycleEvents.shared.triggerTestCrash()
+                    return
+                }
                 if ProcessInfo.processInfo.environment["PROTEUS_EXIT_AFTER_REPORT"] == "1" {
                     exit(0)
                 }

@@ -1,0 +1,101 @@
+{
+  "crash" : {
+    "error" : "NSGenericException: proteus-test-crash",
+    "jsAck" : "ok",
+    "note" : "ios-uncaught",
+    "thread" : "proteus-test-crash"
+  },
+  "jsProbe" : {
+    "done" : true,
+    "emitBadEvent" : "unknown-event:not-a-real-event",
+    "hostChannelInstalled" : true,
+    "seen" : {
+      "audio-interruption-begin" : 0,
+      "audio-interruption-end" : 0,
+      "error" : 1,
+      "hide" : 1,
+      "launch" : 0,
+      "memory-warning" : 1,
+      "page-not-found" : 0,
+      "resize" : 0,
+      "show" : 1,
+      "theme-change" : 2,
+      "unhandled-rejection" : 0
+    },
+    "subscribed" : 11
+  },
+  "native" : {
+    "attempts" : {
+      "error" : 1,
+      "memory-warning" : 1,
+      "theme-change" : 3
+    },
+    "audioReceiverRegistered" : true,
+    "drives" : {
+      "theme" : "dark"
+    },
+    "errorHandlerInstalled" : true,
+    "history" : [
+      {
+        "evt" : "theme-change",
+        "payload" : {
+          "theme" : "dark"
+        },
+        "ts" : 1790769561370
+      },
+      {
+        "evt" : "theme-change",
+        "payload" : {
+          "theme" : "light"
+        },
+        "ts" : 1790769561421
+      },
+      {
+        "evt" : "memory-warning",
+        "payload" : {
+          "level" : 2,
+          "source" : "didReceiveMemoryWarning"
+        },
+        "ts" : 1790769561422
+      },
+      {
+        "evt" : "theme-change",
+        "payload" : {
+          "theme" : "dark"
+        },
+        "ts" : 1790769561424
+      },
+      {
+        "evt" : "error",
+        "payload" : {
+          "error" : "NSGenericException: proteus-test-crash"
+        },
+        "ts" : 1790769564725
+      }
+    ],
+    "lastPayload" : {
+      "error" : {
+        "error" : "NSGenericException: proteus-test-crash"
+      },
+      "memory-warning" : {
+        "level" : 2,
+        "source" : "didReceiveMemoryWarning"
+      },
+      "theme-change" : {
+        "theme" : "dark"
+      }
+    },
+    "observers" : {
+      "audio" : true,
+      "memory" : true,
+      "resize" : true,
+      "theme" : true
+    },
+    "pushes" : {
+      "error" : 1,
+      "memory-warning" : 1,
+      "theme-change" : 2
+    }
+  },
+  "ts" : 1790769564726
+}

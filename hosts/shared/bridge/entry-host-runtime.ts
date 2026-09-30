@@ -41,11 +41,13 @@ import {
 import { createAppStack } from '@proteus-vue/router/app-stack'
 import type { AppScreenSpec } from '@proteus-vue/router/app-stack'
 
-/** 宿主桥（Java 侧 JsRenderHost / iOS 侧 HostRuntimeBridge 可选实现 memUsage/gc —— 条件注入） */
+/** 宿主桥（Java 侧 JsRenderHost / iOS 侧 HostRuntimeBridge 可选实现 memUsage/gc/invoke —— 条件注入） */
 interface HostBridge {
   post?(json: string): void
   memUsage?(): string
   gc?(): void
+  /** ★App 原生能力通道（Android: quickjs_jni 注入 / iOS: JSExport `invoke(_:_:)`——同一契约） */
+  invoke?(method: string, argsJson: string): string
 }
 
 declare const proteusHost: HostBridge | undefined
@@ -65,7 +67,7 @@ const g = globalThis as unknown as HostGlobals
 const HOST_ID = g.__PROTEUS_HOST_ID__ ?? 'quickjs-desktop'
 // ★构建标识（由 hosts/ios/bridge/inject-build-id.mjs **编译期替换**——与 entry-bench/entry-selfdraw
 //   同一机制；报告据此断言"设备上跑的是本次构建"，而不是靠运行时环境变量（那种是第二种形态））
-const BUILD_ID = '6b4765b3-162814'
+const BUILD_ID = '95a57438-195853'
 const FRAME_DRIVER = g.__PROTEUS_HOST_FRAME_DRIVER__ ?? 'manual'
 
 // ══════════════════════════════════════════════════════════════════
@@ -628,14 +630,23 @@ export function __proteusHostRun(): string {
       const ADD_WASM = new Uint8Array([0, 97, 115, 109, 1, 0, 0, 0, 1, 7, 1, 96, 2, 127, 127, 1, 127, 3, 2, 1, 0, 7, 7, 1, 3, 97, 100, 100, 0, 0, 10, 9, 1, 7, 0, 32, 0, 32, 1, 106, 11])
       const inst = await wasmCaps.instantiate({ bytes: ADD_WASM }, { limits: { stackBytes: 65536, gasUnits: 1000000 } })
       if (inst.ok && inst.data) {
-        const h = inst.data.__hostHandle
-        // 真实调用 add(2, 40) → 期望 42
-        const { invokeHost: rawInv } = await import('@proteus-vue/api/capability-app')
-        const callRes = rawInv('webassembly.call', { handle: h, fn: 'add', args: [2, 40] })
-        // ★宿主返回 {ok:true, result:N, type:'i32'} —— 取 result（并带上 type 供判据核对）
-        appPending.wasmAddResult = callRes.ok
-          ? (callRes.data as { result?: unknown; type?: string })
-          : { ok: false, reason: callRes.reason }
+        const h = (inst.data as { __hostHandle?: number }).__hostHandle
+        if (h) {
+          // ① 宿主运行时路径（Android wasm3）：真调用 add(2, 40) → 期望 42
+          const { invokeHost: rawInv } = await import('@proteus-vue/api/capability-app')
+          const callRes = rawInv('webassembly.call', { handle: h, fn: 'add', args: [2, 40] })
+          // ★宿主返回 {ok:true, result:N, type:'i32'} —— 取 result（并带上 type 供判据核对）
+          appPending.wasmAddResult = callRes.ok
+            ? (callRes.data as { result?: unknown; type?: string })
+            : { ok: false, reason: callRes.reason }
+        } else {
+          // ② 引擎内建路径（iOS JSC：`typeof WebAssembly === 'object'` 实测）——标准 WASM API 直调。
+          //    ★两条路径**都必须真执行** i32.add（不是"能实例化"这种弱断言）；engine 字段供判据分档。
+          const ex = (inst.data as unknown as { exports?: Record<string, unknown> }).exports
+          const fn = ex?.add
+          const val = typeof fn === 'function' ? (fn as (...a: unknown[]) => unknown)(2, 40) : null
+          appPending.wasmAddResult = { ok: true, result: val, type: 'i32', engine: 'engine-builtin' }
+        }
         inst.data.dispose?.()
       } else {
         appPending.wasmAddResult = { ok: false, reason: inst.error?.message ?? 'instantiate 失败' }

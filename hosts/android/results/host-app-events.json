@@ -1,5 +1,5 @@
 {
-  "ts": 1790768435386,
+  "ts": 1790769614110,
   "java": {
     "attempts": {
       "memory-warning": 1,
@@ -20,21 +20,21 @@
           "level": 1,
           "rawLevel": 10
         },
-        "ts": 1790768425541
+        "ts": 1790769604238
       },
       {
         "evt": "theme-change",
         "payload": {
           "theme": "light"
         },
-        "ts": 1790768425637
+        "ts": 1790769604334
       },
       {
         "evt": "theme-change",
         "payload": {
           "theme": "dark"
         },
-        "ts": 1790768425728
+        "ts": 1790769604442
       },
       {
         "evt": "resize",
@@ -42,14 +42,14 @@
           "windowWidth": 821,
           "windowHeight": 332
         },
-        "ts": 1790768435248
+        "ts": 1790769613967
       },
       {
         "evt": "error",
         "payload": {
           "error": "java.lang.RuntimeException: proteus-test-crash"
         },
-        "ts": 1790768435386
+        "ts": 1790769614110
       }
     ],
     "lastPayload": {

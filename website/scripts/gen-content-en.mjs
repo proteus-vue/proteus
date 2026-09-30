@@ -1246,12 +1246,12 @@ export const LIFECYCLE_SRC_EN = {
     launch: { mp: 'auto-emitted on the first onAppShow', web: 'auto-emitted on the first load', app: 'shell cold start' },
     show: { mp: 'wx.onAppShow', web: 'visibilitychange→visible', app: 'shell resume (Activity.onResume / didBecomeActive)' },
     hide: { mp: 'wx.onAppHide', web: 'visibilitychange→hidden', app: 'shell pause (Activity.onPause / willResignActive)' },
-    error: { mp: 'App.onError / wx.onError', web: 'window.onerror', app: 'shell global exception hook (Android Thread.setDefaultUncaughtExceptionHandler — device-verified via CRASH)' },
+    error: { mp: 'App.onError / wx.onError', web: 'window.onerror', app: 'shell global exception hook (Android Thread.setDefaultUncaughtExceptionHandler / iOS NSSetUncaughtExceptionHandler — device-verified on both ends)' },
     // ★honest tier (2026-09-30): Promise rejection is a JS-engine concept; Android/iOS have no such
     //   system event (only thread-level uncaught exceptions, covered by error) → App has no such event.
     'unhandled-rejection': { mp: 'App.onUnhandledRejection', web: 'unhandledrejection', app: null },
-    'memory-warning': { mp: 'App.onMemoryWarning / wx.onMemoryWarning', web: 'performance.memory heuristic', app: 'shell memory-pressure callback (Android ComponentCallbacks2.onTrimMemory — device-verified via send-trim-memory / iOS didReceiveMemoryWarning)' },
-    'theme-change': { mp: 'App.onThemeChange / wx.onThemeChange', web: 'matchMedia(prefers-color-scheme)', app: 'shell configuration callback (Android onConfigurationChanged reading uiMode — device-verified via uimode night)' },
+    'memory-warning': { mp: 'App.onMemoryWarning / wx.onMemoryWarning', web: 'performance.memory heuristic', app: 'shell memory-pressure callback (Android ComponentCallbacks2.onTrimMemory / iOS didReceiveMemoryWarning — device-verified on both ends)' },
+    'theme-change': { mp: 'App.onThemeChange / wx.onThemeChange', web: 'matchMedia(prefers-color-scheme)', app: 'shell configuration callback (Android onConfigurationChanged uiMode / iOS traitCollectionDidChange — device-verified on both ends)' },
     resize: { mp: 'wx.onWindowResize', web: 'resize', app: 'shell configuration callback (screenWidthDp change — device-verified via rotation)' },
     // ★honest tier (2026-09-30): a route miss is a framework-router fact; no host system event exists.
     'page-not-found': { mp: 'App.onPageNotFound / wx.onPageNotFound', web: 'route miss (pushed by the router layer)', app: null },
