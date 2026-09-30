@@ -93,6 +93,33 @@ kind=capability ⇒ 82）+ 黑名单条目 `hooks-81` + 两份新文档进正向
 **登记**：board-inventory「其他文档（非 plan）」表新增两行（含决策、依据、与既有计划关系）；
 roadmap v0.6 段追加两条决策接入注记 + v2.0+ 插件体系行补指针。
 
+**⑩ ★★★RT2 开工（零设备部分）+ ★Morpheus 文档入库 + §7.3 复用陷阱修复（2026-09-30）**
+
+**一、RT2 骨架落地（承接 RT0 结论，真机验证待设备隧道恢复）**
+| 项 | 内容 |
+|---|---|
+| **驱动力式** | `AnimDrive::{Time, Progress}`——Time 自动播放；**Progress 由外部设进度**（手势跟随语义：手指不动值不动） |
+| **`seek`（ANIM_SEEK）** | 手势/滚动/路由进度 → **立即求值并写字段**（不等下一帧）；切到 Progress 后 **tick 不再推进它** |
+| **`updates` 回报** | `TickOutcome.updates`（nodeId + 三变换值）——**宿主不知道内核改了什么就会静默不动**（与 V6 的 `text_updates` 同源第二例） |
+| **每帧二进制通道** | `proteus_layout_anim_tick_bin`：**16B/条**定长记录（JSON 每帧 O(N) 编解码是白付——正是 RT0 证明的主要收益来源） |
+| **宿主帧循环** | iOS `CADisplayLink`（跟随真实 vsync；`.common` 模式保证滚动/手势期间不停）+ `onFrame` 接内核 tick + `frameCount/frame_ms` 读数 |
+| **层变换应用** | `SelfDrawView.applyTransform`（CATransform3D 中心锚点缩放）+ **层进池前重置 transform**（池里取出的层带旧变换 ⇒ 新内容错位，静默） |
+| **判据** | `hosts/ios/check-anim-rt2.py`：A 组（层上 transform 真变 + 终值精确）· B 组（seek 立即生效 + Progress 稳定）· C 组（帧循环可启停）· **D 组（§7.3 复用解绑）**。★**逐条破坏性验证**：5 种失败形态各自变红 |
+
+**二、★§7.3 节点复用陷阱（Morpheus 文档点出，本轮已修）**
+- **风险**：本仓复用率 **0.997** ⇒ 节点（及其层）会被回收给别的数据项。动画绑在 `node_id` 上 ⇒
+  ① 重物化时显示"半路的变换"（错位）；② 动画永不结束（每帧白算）。**两者都静默**（小规模测不出）。
+- **修复（两侧）**：① Rust `AnimEngine::stop_nodes(&[u32])` + FFI `proteus_layout_anim_stop`（批量）；
+  ② 宿主 `dematerializeRow` 里对整行 ids **成批解绑**（经 `onRowDematerialized` 回调注入，与 onGesture/onFrame 同模式）
+  + 层进池前 `transform = CATransform3DIdentity`（与 configureLayer 的格式重配同源——paint-hint 教训的复用）。
+- **判据**：D 组两条（`stopped > 0` / 解绑后 tick 不得再改动），破坏性验证过（stopped=0 ⇒ 红；moved>0 ⇒ 红）。
+
+**三、Morpheus 文档入库**（你新增的方案：`docs/Proteus_声明式动画引擎Morpheus方案.md`）
+核心判断已登记进 board-inventory：不照 Reanimated 做（"逃离 JS 线程"的动机在本仓不成立）·
+真正理由 = 编译期收敛方法论 · 边界 = **封闭集第一次撞上开放运行时**（双层结构 + 可统计逃生口）·
+招牌 = FLIP 布局动画（几何在 Rust 侧，零跨边界）· **§7 复用陷阱**（本轮已修）· 与 RT0 解耦时序。
+★入库对账：文档里 `183 原语`/`69 条规则` 过时数字被 `check:docs-stats` **当场抓出**并修正（→ 187/111）。
+
 **⑨ ★★★RT0 spike 完成：指令驱动动画判定可行（2026-09-30）——路线 A 拿到实测支撑**
 
 > 背景：V6 是 18 张卡里唯一未开工的（`AnimOpCode` 仅存在于设计文档）。它的**前置 RT0**

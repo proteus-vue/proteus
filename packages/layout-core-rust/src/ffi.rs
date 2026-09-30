@@ -2270,6 +2270,8 @@ pub unsafe extern "C" fn proteus_layout_anim_start(handle: u64, json: *const c_c
                 .ok_or_else(|| "动画缺少 kind".to_string())? as u8;
             let kind = crate::anim::AnimKind::from_u8(kind_raw)?;
             let curve = a.get("curve").and_then(|x| x.as_u64()).unwrap_or(0) as u8;
+            // ★RT2：驱动方式（缺省 time ⇒ 向后兼容 RT0 的启动报文）
+            let drive = crate::anim::AnimDrive::from_u8(a.get("drive").and_then(|x| x.as_u64()).unwrap_or(0) as u8)?;
             let anim = crate::anim::Anim {
                 node_id,
                 kind,
@@ -2278,6 +2280,8 @@ pub unsafe extern "C" fn proteus_layout_anim_start(handle: u64, json: *const c_c
                 to: num(a, "to")?,
                 dur_ms: num(a, "durMs")?,
                 t_ms: 0.0,
+                drive,
+                progress: 0.0,
             };
             // ★错误必须冒泡（节点不在树上 / 曲线越界）——静默会变成"动画不生效"难查
             let tree = &entry.tree;
@@ -2316,11 +2320,18 @@ pub extern "C" fn proteus_layout_anim_tick(handle: u64, dt_ms: f32) -> *mut c_ch
         let mut eng = std::mem::take(&mut entry.anim);
         let out = eng.tick(&mut entry.tree, dt_ms);
         entry.anim = eng;
+        // ★updates 只在诊断入口返回（真机每帧走 `_anim_tick_bin`——16B/条，无 JSON 解析）
+        let updates: Vec<serde_json::Value> = out
+            .updates
+            .iter()
+            .map(|(id, tx, ty, sc)| serde_json::json!([id, tx, ty, sc]))
+            .collect();
         Ok(serde_json::json!({
             "ok": true,
             "changed": out.changed,
             "finished": out.finished,
             "active": out.active_after,
+            "updates": updates,
         })
         .to_string())
     };
@@ -2332,6 +2343,140 @@ pub extern "C" fn proteus_layout_anim_tick(handle: u64, dt_ms: f32) -> *mut c_ch
         Err(_) => CString::new(serde_json::json!({"ok": false, "error": "内部 panic（已捕获）"}).to_string())
             .map(|c| c.into_raw())
             .unwrap_or(std::ptr::null_mut()),
+    }
+}
+
+/// ★★RT2 —— **按节点批量停动画**（Morpheus §7.3「节点回收必须解绑」的实现面）
+///
+/// 入参 JSON：`{"nodeIds":[1,2,3]}`
+/// 返回：`{"ok":true,"removed":N}`（N = 实际移除的动画数，供宿主对账"真的解绑了"）
+///
+/// 【为什么必须有这个入口（而不是让宿主自己记着停）】本仓纪律：**能靠机制消除的副作用，
+///   不要靠"记得调用"来管理**。宿主的 `dematerializeRow` 是回收点，在那里调用本入口
+///   即形成结构性保证（调用点单一只，且有回归测试）。
+///
+/// # Safety
+/// `json` 须为有效 NUL 结尾 C 字符串。返回指针须用 `proteus_layout_free_string` 释放。
+#[no_mangle]
+pub unsafe extern "C" fn proteus_layout_anim_stop(handle: u64, json: *const c_char) -> *mut c_char {
+    let f = || -> Result<String, String> {
+        let s = unsafe { std::ffi::CStr::from_ptr(json) }
+            .to_str()
+            .map_err(|e| format!("入参不是合法 UTF-8：{e}"))?;
+        let v: serde_json::Value = serde_json::from_str(s).map_err(|e| format!("入参 JSON 解析失败：{e}"))?;
+        let ids: Vec<u32> = v
+            .get("nodeIds")
+            .and_then(|x| x.as_array())
+            .map(|a| a.iter().filter_map(|x| x.as_u64()).map(|x| x as u32).collect())
+            .ok_or_else(|| "入参缺少 nodeIds 数组".to_string())?;
+        let mut reg = registry().lock().map_err(|_| "注册表锁失败".to_string())?;
+        let entry = reg.get_mut(&handle).ok_or_else(|| format!("句柄 {handle} 不存在"))?;
+        let removed = entry.anim.stop_nodes(&ids);
+        Ok(serde_json::json!({"ok": true, "removed": removed}).to_string())
+    };
+    match std::panic::catch_unwind(f) {
+        Ok(Ok(s)) => CString::new(s).map(|c| c.into_raw()).unwrap_or(std::ptr::null_mut()),
+        Ok(Err(e)) => CString::new(serde_json::json!({"ok": false, "error": e}).to_string())
+            .map(|c| c.into_raw())
+            .unwrap_or(std::ptr::null_mut()),
+        Err(_) => CString::new(serde_json::json!({"ok": false, "error": "内部 panic（已捕获）"}).to_string())
+            .map(|c| c.into_raw())
+            .unwrap_or(std::ptr::null_mut()),
+    }
+}
+
+/// ★★RT2 —— **手势驱动的进度定位**（方案 §4.2 的 `ANIM_SEEK`）
+///
+/// 入参 JSON：`{"nodeId":6,"kind":0,"progress":0.42}`
+///   · `kind` 与 `anim_start` 同编码（0=translateX/1=translateY/2=scale）
+///   · `progress` clamp 到 0..1；该动画被切到 **Progress 驱动**（此后 `tick` 不再推进它）
+/// 返回：`{"ok":true,"changed":N,"updates":[[nodeId,tx,ty,scale],…]}`
+///
+/// ★语义（与方案 §9 验收「手势跟随延迟 ≤ 1 帧」的关系）：`seek` **立即求值并写字段**，
+///   不等下一帧 ⇒ 宿主拿到 updates 后当帧刷新即可，延迟由宿主的刷新时机决定（不是内核侧累积）。
+///
+/// # Safety
+/// `json` 须为有效 NUL 结尾 C 字符串。返回指针须用 `proteus_layout_free_string` 释放。
+#[no_mangle]
+pub unsafe extern "C" fn proteus_layout_anim_seek(handle: u64, json: *const c_char) -> *mut c_char {
+    let f = || -> Result<String, String> {
+        let s = unsafe { std::ffi::CStr::from_ptr(json) }
+            .to_str()
+            .map_err(|e| format!("入参不是合法 UTF-8：{e}"))?;
+        let v: serde_json::Value = serde_json::from_str(s).map_err(|e| format!("入参 JSON 解析失败：{e}"))?;
+        let node_id = v.get("nodeId").and_then(|x| x.as_u64()).ok_or_else(|| "缺少 nodeId".to_string())? as u32;
+        let kind = crate::anim::AnimKind::from_u8(v.get("kind").and_then(|x| x.as_u64()).unwrap_or(0) as u8)?;
+        let progress = v.get("progress").and_then(|x| x.as_f64()).ok_or_else(|| "缺少 progress".to_string())? as f32;
+
+        let mut reg = registry().lock().map_err(|_| "注册表锁失败".to_string())?;
+        let entry = reg.get_mut(&handle).ok_or_else(|| format!("句柄 {handle} 不存在"))?;
+        let mut eng = std::mem::take(&mut entry.anim);
+        let out = eng.seek(&mut entry.tree, node_id, kind, progress);
+        entry.anim = eng;
+        let updates: Vec<serde_json::Value> = out
+            .updates
+            .iter()
+            .map(|(id, tx, ty, sc)| serde_json::json!([id, tx, ty, sc]))
+            .collect();
+        Ok(serde_json::json!({"ok": true, "changed": out.changed, "updates": updates}).to_string())
+    };
+    match std::panic::catch_unwind(f) {
+        Ok(Ok(s)) => CString::new(s).map(|c| c.into_raw()).unwrap_or(std::ptr::null_mut()),
+        Ok(Err(e)) => CString::new(serde_json::json!({"ok": false, "error": e}).to_string())
+            .map(|c| c.into_raw())
+            .unwrap_or(std::ptr::null_mut()),
+        Err(_) => CString::new(serde_json::json!({"ok": false, "error": "内部 panic（已捕获）"}).to_string())
+            .map(|c| c.into_raw())
+            .unwrap_or(std::ptr::null_mut()),
+    }
+}
+
+/// ★★RT2 —— **每帧推进（二进制通道）**：真机宿主走这个入口，**无 JSON 解析**
+///
+/// 【为什么需要二进制形态（与 `_anim_tick` 的分工）】JSON 入口便于诊断/测试，但真机每帧
+///   要把它序列化 + 宿主解析一次；RT0 的对照实验证明"省掉 O(N) 编解码"正是指令路径的
+///   主要收益来源之一 ⇒ 每帧通道不该再引入 JSON。本入口把结果写成**定长记录**：
+///   `[nodeId u32][translateX f32][translateY f32][scale f32]` = **16B/条**，宿主直接按偏移读。
+///
+/// 返回：字节缓冲区（`out_len` 写入字节数；0 = 本帧无变化）。用 `proteus_rects_free` 释放。
+///
+/// # Safety
+/// `out_len` 须为有效指针。
+#[no_mangle]
+pub unsafe extern "C" fn proteus_layout_anim_tick_bin(handle: u64, dt_ms: f32, out_len: *mut u32) -> *mut u8 {
+    unsafe { *out_len = 0 };
+    let r = std::panic::catch_unwind(|| -> Result<Vec<u8>, String> {
+        let mut reg = registry().lock().map_err(|_| "注册表锁失败".to_string())?;
+        let entry = reg.get_mut(&handle).ok_or_else(|| format!("句柄 {handle} 不存在"))?;
+        let mut eng = std::mem::take(&mut entry.anim);
+        let out = eng.tick(&mut entry.tree, dt_ms);
+        entry.anim = eng;
+        let mut buf = Vec::with_capacity(out.updates.len() * 16);
+        for (id, tx, ty, sc) in &out.updates {
+            buf.extend_from_slice(&id.to_le_bytes());
+            buf.extend_from_slice(&tx.to_le_bytes());
+            buf.extend_from_slice(&ty.to_le_bytes());
+            buf.extend_from_slice(&sc.to_le_bytes());
+        }
+        Ok(buf)
+    });
+    match r {
+        Ok(Ok(buf)) => {
+            let n = buf.len();
+            let mut boxed = buf.into_boxed_slice();
+            let ptr = boxed.as_mut_ptr();
+            std::mem::forget(boxed);
+            unsafe { *out_len = n as u32 };
+            ptr
+        }
+        Ok(Err(e)) => {
+            eprintln!("[proteus] anim_tick_bin 失败：{e}");
+            std::ptr::null_mut()
+        }
+        Err(_) => {
+            eprintln!("[proteus] anim_tick_bin 内部 panic（已捕获）");
+            std::ptr::null_mut()
+        }
     }
 }
 

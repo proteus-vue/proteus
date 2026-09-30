@@ -55,6 +55,16 @@ func proteus_layout_set_text_measures(_ handle: UInt64, _ measuresJson: UnsafePo
 /// ★Vapor IR V3：二进制指令流入口（字节指针 + 长度）
 @_silgen_name("proteus_layout_apply_ops")
 func proteus_layout_apply_ops(_ handle: UInt64, _ ptr: UnsafePointer<UInt8>, _ len: UInt32) -> UnsafeMutablePointer<CChar>
+
+// ★★RT2（2026-09-30）：指令驱动动画（曲线求值在 Rust 侧；宿主只负责"每帧推进 + 应用变换"）
+@_silgen_name("proteus_layout_anim_start")
+func proteus_layout_anim_start(_ handle: UInt64, _ json: UnsafePointer<CChar>) -> UnsafeMutablePointer<CChar>
+@_silgen_name("proteus_layout_anim_seek")
+func proteus_layout_anim_seek(_ handle: UInt64, _ json: UnsafePointer<CChar>) -> UnsafeMutablePointer<CChar>
+@_silgen_name("proteus_layout_anim_stop")
+func proteus_layout_anim_stop(_ handle: UInt64, _ json: UnsafePointer<CChar>) -> UnsafeMutablePointer<CChar>
+@_silgen_name("proteus_layout_anim_tick_bin")
+func proteus_layout_anim_tick_bin(_ handle: UInt64, _ dtMs: Float, _ outLen: UnsafeMutablePointer<UInt32>) -> UnsafeMutablePointer<UInt8>?
 /// ★Vapor IR V4：**不带 rects 的 apply**（二进制通道场景——省掉 JSON 序列化与宿主解析）
 @_silgen_name("proteus_layout_apply_ops_norects")
 func proteus_layout_apply_ops_norects(_ handle: UInt64, _ ptr: UnsafePointer<UInt8>, _ len: UInt32) -> UnsafeMutablePointer<CChar>
@@ -131,6 +141,26 @@ func physFootprintMB() -> Double {
     ///   入参 `opsJson` 是**字节数组的 JSON 表示**（JSExport 对 ArrayBuffer 支持不稳，
     ///   而指令流本就极小——实测单节点更新 45 字节，base64/数组序列化成本可忽略）。
     func applyOps(_ opsBytesJson: String) -> String
+    /// ★★**RT2 动画三件套**：start（一次性批量启动）/ seek（手势驱动进度）/ tick（每帧推进）
+    ///
+    /// 【为什么是三个入口而不是一个】三种**频率**完全不同：
+    ///   · `animStart` —— 一次（转场开始时批量启动 N 条动画）
+    ///   · `animSeek` —— 手势每帧（**外部给进度**；内核立即求值，不等 tick）
+    ///   · `animTick` —— 每帧（时间驱动推进；**二进制返回**，见下）
+    /// 【为什么 tick 返二进制】每帧 O(N) 条的变换值若走 JSON：序列化 + 宿主解析都是白付
+    ///   （RT0 对照实验证明"省掉 O(N) 编解码"正是指令路径的主要收益）⇒ 定长 16B/条，
+    ///   宿主按偏移顺序读。
+    func animStart(_ json: String) -> String
+    func animSeek(_ json: String) -> String
+    func animTick(_ dtMs: Double) -> String
+    /// ★★**层变换探针**（判据从 CALayer 真读——覆盖"写入路径真的生效"）
+    func layerTransformProbe(_ idsJson: String) -> String
+    /// ★★**RT2/§7.3：按节点停动画**（宿主行回收时自动调用；暴露给判据做破坏性验证）
+    func animStopNodes(_ idsJson: String) -> String
+    /// ★★**帧循环三件套**（RT2）：启动（接 CADisplayLink）/ 停止 / 读数
+    func animStartFrameLoop() -> String
+    func animStopFrameLoop() -> String
+    func animFrameStats() -> String
     /// ★★**高分辨率单调时钟**（微秒，十进制字符串）——供 JS 侧做可靠计时
     ///
     /// 【为什么必须由宿主提供（本仓实测的第六个测量装置缺陷）】
@@ -406,6 +436,100 @@ final class SelfDrawView: UIView {
     }
 
     /* ────────────────────────── ★V7：结构变更的层维护 ────────────────────────── */
+
+    /* ────────────────────────── ★★RT2：帧驱动（CADisplayLink） ────────────────────────── */
+
+    /// 帧循环回调（由 DisplayLink 每 vsync 调一次）——入参为**单调帧间隔毫秒**
+    var onFrame: ((Double) -> Void)?
+    /// ★★**行回收回调**（§7.3 动画解绑）：Bridge 注入，入参 = 该行全部节点 id
+    var onRowDematerialized: (([Int]) -> Void)?
+    private var displayLink: CADisplayLink?
+    private var lastFrameTs: CFTimeInterval = 0
+
+    /// 帧统计（判据：`frames` 真在增长 = 驱动真的在跑，而不是"设了没动"）
+    private(set) var frameCount = 0
+    private(set) var lastFrameMs: Double = 0
+
+    /// 启动帧循环（幂等：重复调用不重复建 Link）
+    ///
+    /// 【为什么用 CADisplayLink（而不是 Timer / DispatchSourceTimer）】
+    ///   ① 它**跟随真实 vsync**（120Hz 屏 ⇒ 120 次/秒）——与"掉帧率/帧耗时"的测量口径直接对齐；
+    ///   ② 系统会自动在暂停/后台时停掉它（省电且不会积压）；
+    ///   ③ `targetTimestamp - timestamp` 给出**本帧预算**（可用于判断是否掉帧）。
+    ///   ★不用固定 sleep/定时器：那测出来的"帧率"是定时器的频率，不是屏幕的（本仓纪律）。
+    @discardableResult
+    func startFrameLoop() -> Bool {
+        if displayLink != nil { return true }
+        lastFrameTs = 0
+        let link = CADisplayLink(target: self, selector: #selector(onDisplayLink(_:)))
+        link.add(to: .main, forMode: .common)   // .common：滚动/手势期间也继续（动画不能被滚动掐停）
+        displayLink = link
+        return true
+    }
+
+    func stopFrameLoop() {
+        displayLink?.invalidate()
+        displayLink = nil
+        lastFrameTs = 0
+    }
+
+    var frameLoopRunning: Bool { displayLink != nil }
+
+    @objc private func onDisplayLink(_ link: CADisplayLink) {
+        let now = link.timestamp
+        // ★首帧 dt = 0（没有"上一帧"）；此后用**真实 timestamp 差**（不是假设 16.67ms）
+        let dtMs = lastFrameTs == 0 ? 0.0 : (now - lastFrameTs) * 1000.0
+        lastFrameTs = now
+        lastFrameMs = dtMs
+        frameCount += 1
+        onFrame?(dtMs)
+    }
+
+    /// ★★**层变换探针**（RT2 判据用）：从 **CALayer 真读**当前 transform——不是回显我们写入的值
+    ///
+    /// 【为什么必须"真读"（本仓纪律）】若判据比对我们自己传下去的参数，那是**自证**：
+    ///   宿主可能收了参数但没写层（静默失效），比对仍会绿。⇒ 判据必须从**层的实际状态**读，
+    ///   这样才覆盖"写入路径真的生效"。
+    ///
+    /// 返回：`[{"id":N,"tx":x,"ty":y,"scale":s}, …]`（从 CATransform3D 反解：tx/ty 取 m41/m42，
+    ///   scale 取 m11——因为我们的构造是「平移 ∘ 中心缩放 ∘ 反平移」，m11 即缩放系数）
+    func layerTransformProbe(_ idsJson: String) -> String {
+        guard let data = idsJson.data(using: .utf8),
+              let ids = (try? JSONSerialization.jsonObject(with: data)) as? [Int] else {
+            return "{\"ok\":false,\"error\":\"入参需为 id 数组 JSON\"}"
+        }
+        var parts: [String] = []
+        for id in ids {
+            guard let layer = layersById[id] else {
+                parts.append("{\"id\":\(id),\"missing\":true}")
+                continue
+            }
+            let t = layer.transform
+            parts.append("{\"id\":\(id),\"tx\":\(t.m41),\"ty\":\(t.m42),\"scale\":\(t.m11)}")
+        }
+        return "{\"ok\":true,\"layers\":[\(parts.joined(separator: ","))]}"
+    }
+
+    /// ★★**RT2：把内核算出的变换写到层上**（translate/scale 是绘制层变换——不改几何、不触发布局）
+    ///
+    /// 【为什么必须显式应用（本仓纪律：静默不更新是最危险的失效模式）】内核改 `style.translate_*`
+    ///   只是内核状态；`CALayer.transform` 不会自己变。不应用 ⇒ **屏幕完全不动**
+    ///   （几何/日志/单测全对，只有肉眼能发现）——与 `text_updates`（V6 教训）同源的第二例。
+    ///
+    /// 实现：`CATransform3D` 以**层中心**为锚点做缩放（等价 CSS `transform: scale()` 默认 origin=center）。
+    @discardableResult
+    func applyTransform(nodeId: Int, tx: CGFloat, ty: CGFloat, scale: CGFloat) -> Bool {
+        guard let layer = layersById[nodeId] else { return false }
+        var t = CATransform3DTranslate(CATransform3DIdentity, tx, ty, 0)
+        if scale != 1.0 {
+            let b = layer.bounds
+            t = CATransform3DTranslate(t, b.midX, b.midY, 0)
+            t = CATransform3DScale(t, scale, scale, 1)
+            t = CATransform3DTranslate(t, -b.midX, -b.midY, 0)
+        }
+        layer.transform = t
+        return true
+    }
 
     /// ★★**摘除子树**（递归清理层与全部 id 簿记）
     ///
@@ -1309,9 +1433,19 @@ final class SelfDrawView: UIView {
         // ★父 id 先取（下面会把表清掉）
         let rootParent = parentById[row.root] ?? (nodesById[row.root]?["parentId"] as? Int) ?? -1
         // 逆序回收（子先于父：避免父的 childrenById 被提前清空导致子找不到落点）
+        // ★★§7.3（Morpheus 方案）：**节点回收必须解绑动画**
+        //
+        // 【不做的后果（两重，都是静默错）】① 动画仍绑在旧 node id 上 ⇒ 该行重新物化时会
+        //   显示"半路的变换"（错误位置）；② 动画永不结束 ⇒ 每帧白算。
+        //   ⇒ 在回收点**成批解绑**（机制保证，不靠"记得调"）。
+        //   ★经回调转给 Bridge（句柄在那边）——与本文件 onGesture/onFrame 同一模式。
+        onRowDematerialized?(row.ids)
         for id in row.ids.reversed() {
             if let l = layersById[id] {
                 l.removeFromSuperlayer()
+                // ★★层进池前**重置变换**（与 configureLayer 的格式重配同源——本仓 paint-hint 教训）：
+                //   否则池里取出的层会带着上一个节点的动画变换 ⇒ **新内容错位**（静默错显示）
+                l.transform = CATransform3DIdentity
                 if layerPool.count < layerPoolCapacity {
                     layerPool.append(l)
                     layersReturned += 1
@@ -1990,6 +2124,8 @@ final class SelfDrawBridge: NSObject, SelfDrawExports {
     ///      宿主不自己算预载——方向敏感规则属平台无关逻辑，已在核心单测锁定）。
     func mountVirtual(_ requestJson: String) -> String {
         guard let view = view else { return "{\"ok\":false,\"error\":\"view 未设置\"}" }
+        // ★§7.3：安装「行回收 ⇒ 动画解绑」（幂等；虚拟化是节点复用的唯一入口 ⇒ 在此接线）
+        attachRowRecycleUnbind()
         let t0 = CFAbsoluteTimeGetCurrent()
         guard let d = requestJson.data(using: .utf8),
               let root = (try? JSONSerialization.jsonObject(with: d)) as? [String: Any],
@@ -2786,6 +2922,133 @@ final class SelfDrawBridge: NSObject, SelfDrawExports {
     func setOptMode(_ mode: String) -> String {
         SelfDrawBridge.optMode = (mode == "v3") ? "v3" : "v4"
         return "{\"ok\":true,\"mode\":\"\(SelfDrawBridge.optMode)\"}"
+    }
+
+    /* ────────────────────────── ★★RT2：指令驱动动画（宿主侧） ────────────────────────── */
+
+    /// ★★**启动动画**（一次性批量）：入参透传给内核（`{anims:[{nodeId,kind,curve,from,to,durMs,drive?}]}`）
+    ///
+    /// 【为什么"批量"很重要】转场经常一次启动几十~几百条（每行一个元素）；逐条跨边界调用
+    ///   会把"每帧 1 次"的收益又还回去。
+    func animStart(_ json: String) -> String {
+        guard handle != 0 else { return "{\"ok\":false,\"error\":\"未接入核心\"}" }
+        let out = json.withCString { takeCString(proteus_layout_anim_start(handle, $0)) }
+        return out
+    }
+
+    /// ★★**按节点停动画**（§7.3）：宿主行回收自动调用；也暴露给判据做破坏性验证
+    func animStopNodes(_ idsJson: String) -> String {
+        guard handle != 0 else { return "{\"ok\":false,\"error\":\"未接入核心\"}" }
+        return idsJson.withCString { takeCString(proteus_layout_anim_stop(handle, $0)) }
+    }
+
+    /// 层变换探针（转发给视图；见 `SelfDrawView.layerTransformProbe`）
+    func layerTransformProbe(_ idsJson: String) -> String {
+        guard let view else { return "{\"ok\":false,\"error\":\"未接入视图\"}" }
+        return view.layerTransformProbe(idsJson)
+    }
+
+    /// ★★**接线：行回收 ⇒ 动画解绑**（§7.3；由 `attachRowRecycleUnbind()` 一次性安装）
+    ///
+    /// 【为什么用回调注入而不是让 View 直接调 FFI】句柄（handle）在 Bridge 上；View 不该持有它
+    ///   （职责分离，且句柄生命周期由 Bridge 管）。与本文件 onGesture/onFrame 同一模式。
+    private var recycleUnbindInstalled = false
+
+    /// 安装「行回收 ⇒ 动画解绑」（幂等；`mountVirtual` 时自动调用）
+    func attachRowRecycleUnbind() {
+        guard !recycleUnbindInstalled, let view else { return }
+        recycleUnbindInstalled = true
+        view.onRowDematerialized = { [weak self] ids in
+            guard let self, self.handle != 0, !ids.isEmpty else { return }
+            let json = "{\"nodeIds\":[" + ids.map { String($0) }.joined(separator: ",") + "]}"
+            _ = json.withCString { takeCString(proteus_layout_anim_stop(self.handle, $0)) }
+        }
+    }
+
+    /// ★★**启动帧循环**（把 CADisplayLink 的 dt 直接喂给内核 tick）
+    ///
+    /// 【接线语义（一句话）】屏幕每 vsync 一次 ⇒ 内核 tick 一次 ⇒ 变换写回层。
+    ///   全过程**不经 JS**（这正是 RT0 验证的"指令驱动"在宿主侧的落地点）。
+    func animStartFrameLoop() -> String {
+        guard let view else { return "{\"ok\":false,\"error\":\"未接入视图\"}" }
+        view.onFrame = { [weak self] dtMs in
+            _ = self?.animTick(dtMs)
+        }
+        _ = view.startFrameLoop()
+        return "{\"ok\":true,\"running\":\(view.frameLoopRunning)}"
+    }
+
+    func animStopFrameLoop() -> String {
+        guard let view else { return "{\"ok\":false,\"error\":\"未接入视图\"}" }
+        view.stopFrameLoop()
+        view.onFrame = nil
+        return "{\"ok\":true,\"running\":\(view.frameLoopRunning)}"
+    }
+
+    /// 帧循环读数（`frames` 与 `frame_ms`：证明驱动真的在跑、且 dt 是真实 vsync 间隔）
+    func animFrameStats() -> String {
+        guard let view else { return "{\"ok\":false,\"error\":\"未接入视图\"}" }
+        return "{\"ok\":true,\"running\":\(view.frameLoopRunning),\"frames\":\(view.frameCount),\"frame_ms\":\(view.lastFrameMs)}"
+    }
+
+    /// ★★**手势驱动进度**（方案 §4.2 的 ANIM_SEEK）：手指到哪，值到哪
+    ///
+    /// ★语义关键：内核**立即求值并写字段**（不等下一帧）+ 返回 `updates` ⇒ 本方法应用变换后
+    ///   当帧即可见 ⇒ "手势跟随延迟 ≤ 1 帧"由宿主刷新时机决定，不引入内核侧累积。
+    func animSeek(_ json: String) -> String {
+        guard handle != 0 else { return "{\"ok\":false,\"error\":\"未接入核心\"}" }
+        let out = json.withCString { takeCString(proteus_layout_anim_seek(handle, $0)) }
+        applyAnimUpdates(fromJson: out)
+        return out
+    }
+
+    /// ★★**每帧推进**（时间驱动）：内核 tick（曲线求值）→ **二进制返回变换值** → 应用
+    ///
+    /// 【为什么返回二进制而不复用 JSON】见协议注释：每帧 O(N) 条走 JSON 的编解码是白付。
+    ///   格式：重复的 **16B 记录** = `nodeId u32 · translateX f32 · translateY f32 · scale f32`（全小端）。
+    func animTick(_ dtMs: Double) -> String {
+        guard handle != 0 else { return "{\"ok\":false,\"error\":\"未接入核心\"}" }
+        var outLen: UInt32 = 0
+        let ptr = proteus_layout_anim_tick_bin(handle, Float(dtMs), &outLen)
+        guard let ptr, outLen > 0 else {
+            return "{\"ok\":true,\"applied\":0,\"bytes\":0}"
+        }
+        defer { proteus_rects_free(ptr, outLen) }
+        let n = Int(outLen) / 16
+        let buf = UnsafeRawBufferPointer(start: ptr, count: Int(outLen))
+        var applied = 0
+        CATransaction.begin()
+        CATransaction.setDisableActions(true)   // ★关掉隐式动画：我们每帧自己给值，不能再让 CA 补间
+        for i in 0..<n {
+            let base = i * 16
+            let nodeId = buf.loadUnaligned(fromByteOffset: base, as: UInt32.self)
+            let tx = buf.loadUnaligned(fromByteOffset: base + 4, as: Float.self)
+            let ty = buf.loadUnaligned(fromByteOffset: base + 8, as: Float.self)
+            let sc = buf.loadUnaligned(fromByteOffset: base + 12, as: Float.self)
+            if view?.applyTransform(nodeId: Int(nodeId), tx: CGFloat(tx), ty: CGFloat(ty), scale: CGFloat(sc)) == true {
+                applied += 1
+            }
+        }
+        CATransaction.commit()
+        return "{\"ok\":true,\"applied\":\(applied),\"bytes\":\(outLen)}"
+    }
+
+    /// 解析 JSON 形态的 updates（`animSeek` 用——它的频率低于 tick 且需带 changed 等元信息）
+    @discardableResult
+    private func applyAnimUpdates(fromJson out: String) -> Int {
+        guard let data = out.data(using: .utf8),
+              let o = (try? JSONSerialization.jsonObject(with: data)) as? [String: Any],
+              let updates = o["updates"] as? [[Double]] else { return 0 }
+        var applied = 0
+        CATransaction.begin()
+        CATransaction.setDisableActions(true)
+        for u in updates where u.count >= 4 {
+            if view?.applyTransform(nodeId: Int(u[0]), tx: CGFloat(u[1]), ty: CGFloat(u[2]), scale: CGFloat(u[3])) == true {
+                applied += 1
+            }
+        }
+        CATransaction.commit()
+        return applied
     }
 
     func nowUs() -> String {
@@ -3650,6 +3913,9 @@ final class SelfDrawViewController: UIViewController {
             ("__proteus.updateStyle()", 2),    // ③ 纯样式路径
             ("__proteus.pending()", 1),
             ("__proteus.throughput()", 1),     // ④ 纯 JS 吞吐（40 次链式）
+            // ★★RT2（2026-09-30）：动画相位——指令驱动动画的真机验证
+            //   （启动 / seek 手势驱动 / tick 时间驱动 / CADisplayLink 帧循环；判据见 check-anim-rt2.py）
+            ("__proteus.animProbe()", 2),
         ]
         // 吞吐链需要多轮推进：每轮让出后读一次 pending
         for _ in 0..<12 { steps.append(("__proteus.pending()", 1)) }
@@ -3664,7 +3930,7 @@ final class SelfDrawViewController: UIViewController {
             let (expr, pump) = steps[i]
             let out = js(expr)
             // 只记关键读数（避免日志爆炸——本仓「输出控制」纪律）
-            if expr.hasPrefix("__proteus.mount") || expr.hasPrefix("__proteus.finalize2") {
+            if expr.hasPrefix("__proteus.mount") || expr.hasPrefix("__proteus.finalize2") || expr.hasPrefix("__proteus.animProbe") {
                 NSLog("[proteus] %@ → %@", expr, String(out.prefix(400)))
             }
             // ★让出主线程 pump 轮：每轮一次 runloop 循环 ⇒ 微任务队列被排空
