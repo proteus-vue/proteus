@@ -45,6 +45,11 @@ jobs:
       - name: 盲等门禁（★用户红线：脚本内 sleep 一律禁止——要么 App/被测对象主动上报，要么 wait_for.sh 条件等待）
         run: node scripts/check-no-blind-wait.mjs
 
+      - name: Morpheus 动画说明书门禁（★说明书 ↔ 实现/内核对账 + 生成物一致——Morpheus §13 第 11 条）
+        # ★2026-09-30 加：说明书是**自描述**，没人对账就会变成"文档说一套、实现另一套"
+        #   （实测抓到 README 曲线名漂移）；conformance + 生成物一致性都在本脚本里判。
+        run: node scripts/gen-anim-manual.mjs --check
+
       - name: iOS JSExport 接线门禁（★JS 调用 / 协议声明 / Bridge 实现三处一致——缺协议声明会运行时 TypeError）
         # ★2026-09-30 加：真机连踩两次（layerZProbe 只在 view 上、未进 JSExport 协议 ⇒ JS TypeError；
         #   而当时相位无统一异常捕获 ⇒ 该读数"为空"、判据"该组跳过"变绿 = 做错了伪装成没做）。

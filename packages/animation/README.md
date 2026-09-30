@@ -17,7 +17,7 @@ Rust 内核（曲线求值 + 物理 + FLIP） ← 唯一实现，每帧零 JS �
 | API | 说明 |
 |-----|------|
 | `AnimKind` / `ANIM_KIND_ID` | 动画属性封闭集（`translateX/translateY/scale/rotate/opacity`）与内核编号契约 |
-| `Curve` / `CURVE_ID` | 曲线封闭集（`easeOut/snappy/easeInOut/linear/customBezier`）与内核编号契约 |
+| `Curve` / `CURVE_ID` | 曲线封闭集（`linear/easeOut/easeIn/easeInOut/springApprox`）与内核编号契约 |
 | `validateAnimations(decls)` / `formatIssues(issues)` | 编译期校验：非法参数 / **非合成属性** / **同属性重复** / 目标缺失等 7 类 |
 | `compileAnimations(decls, targets)` | 校验（失败即 throw）→ 归一化（补默认时长/曲线）→ 绑目标 → `CompiledBatch` |
 | `compileRoute(spec, { enter, exit })` | 转场预设 → 整批指令（进场页 + 出场页分别绑节点） |
