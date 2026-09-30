@@ -135,6 +135,9 @@ const resultHostRt = await build({
   define: { 'process.env.NODE_ENV': '"production"', __DEV__: 'false' },
   alias: {
     '@proteus-vue/render-backend/quickjs-host': path.join(ROOT, 'packages/render-backend/src/quickjs-host.ts'),
+    '@proteus-vue/router/app-stack': path.join(ROOT, 'packages/router/src/app-stack.ts'),
+    '@proteus-vue/api/capability-app': path.join(ROOT, 'packages/api/src/capability-app.ts'),
+    '@proteus-vue/api/capability': path.join(ROOT, 'packages/api/src/capability.ts'),
     '@proteus-vue/render-backend/host-conformance': path.join(ROOT, 'packages/render-backend/src/host-conformance.ts'),
     '@proteus-vue/component-ir': path.join(ROOT, 'packages/component-ir/dist/index.js'),
   },

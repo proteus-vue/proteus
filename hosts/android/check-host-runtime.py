@@ -183,33 +183,96 @@ def main() -> int:
     # ── F 内存账本 ──
     # ★判据侧**独立重算**（不采信 JS 侧算好的 mem_ok——破坏性验证抓出过这个漏洞：
     #   只改原始读数不改 mem_ok 时旧版判据放行 ⇒ 判据必须落在**原始结果**上）
+    #
+    # ★★按口径分档断言（2026-09-30 两次 iOS 实测得出的必要修正）：
+    #   · engine（Android/QuickJS）：「GC 后下降」是**稳定**的（实测 -319984/+320264 ≈ 全回收）⇒ 强制；
+    #   · process（iOS/JSC）：同一条判据**不稳定**——两次真机运行分别降 147KB 与 **0**（1 字节未降）。
+    #     根因（取证）：JSC 的 `JSGarbageCollect` 是**提示性 GC**，回收后把页留在自身 free pool、
+    #     不即时归还 OS；`phys_footprint` 只看 OS 侧 ⇒ **降不降取决于回收时机**，不是缺陷信号。
+    #   ⇒ process 口径下强制两条**稳定**的断言（分配增长 / GC 不导致增长），把"是否归还 OS"
+    #     作为**观测项**输出（含明确说明）——不让一个会随机红的判据变成噪声。
     if d.get("mem_available") is not True:
         fail("内存账本不可用（宿主桥 memUsage 未接入——引擎真实 JS 堆读数缺失）")
     else:
         mb = d.get("mem_before", 0)
         ma = d.get("mem_after_alloc", 0)
         mg = d.get("mem_after_gc", 0)
-        if not (isinstance(ma, int) and isinstance(mb, int) and ma > mb):
+        scope = d.get("mem_scope", "unknown")
+        scope_note = {
+            "engine": "引擎真实 JS 堆（QuickJS JS_ComputeMemoryUsage）",
+            "process": "进程口径 phys_footprint（JSC 无公开 per-context API——诚实标注）",
+        }.get(scope, f"口径={scope}")
+        ok_alloc = isinstance(ma, int) and isinstance(mb, int) and ma > mb
+        ok_no_grow = isinstance(mg, int) and mg <= ma
+        if not ok_alloc:
             fail(f"分配后内存未增长：{mb}→{ma}（读数或分配逻辑失效）")
-        elif not (isinstance(mg, int) and mg < ma):
-            fail(f"GC 后内存未下降：alloc={ma} → gc={mg}（GC 未生效或对象仍可达——经典作用域陷阱）")
+        elif not ok_no_grow:
+            fail(f"GC 后内存反而增长：alloc={ma} → gc={mg}（GC 本身不该让占用上升）")
+        elif scope == "engine" and not (mg < ma):
+            fail(f"GC 后内存未下降：alloc={ma} → gc={mg}（engine 口径下回收应稳定生效——"
+                 f"QuickJS 实测 ≈100% 回收；不降说明对象仍可达或 GC 未接线）")
         else:
-            scope = d.get("mem_scope", "unknown")
-            scope_note = {
-                "engine": "引擎真实 JS 堆（QuickJS JS_ComputeMemoryUsage）",
-                "process": "进程口径 phys_footprint（JSC 无公开 per-context API——诚实标注）",
-            }.get(scope, f"口径={scope}")
-            # ★诚实读数（iOS/JSC 实测）：process 口径下 GC 后降幅可能远小于分配增幅——
-            #   这不是缺陷：JSC 的 JSGarbageCollect 是**提示性 GC**，回收后把页**保留在自身的
-            #   free pool**（不即时归还 OS），且 phys_footprint 只看 OS 侧 ⇒ 方向判据（降）成立、
-            #   幅度判据不成立。⇒ 显式标注，避免读的人误以为"32MB 全归还了"。
-            shrink = ma - mg
             grow = ma - mb
-            shrink_note = ""
-            if scope == "process" and grow > 0 and shrink < grow * 0.1:
-                shrink_note = "；★降幅远小于增幅属**预期**（JSC 提示性 GC 把页留在 free pool，不即时归还 OS）"
-            report(f"F 内存账本：分配增长 {mb}→{ma}B（+{grow}），GC 后降至 {mg}B（-{shrink}）"
-                   f"（{scope_note}{shrink_note}；判据侧独立重算）")
+            shrink = ma - mg
+            if scope == "process":
+                # 观测项（判据不强制——见上方注释的实测依据）
+                observed = "已归还" if shrink > 0 else "未归还 OS（提示性 GC 保留在 free pool——预期形态之一）"
+                report(f"F 内存账本：分配增长 {mb}→{ma}B（+{grow}）· GC 后 {mg}B（-{shrink}，{observed}）"
+                       f"（{scope_note}；判据侧独立重算；过程口径强制项=分配增长+GC 不增）")
+            else:
+                report(f"F 内存账本：分配增长 {mb}→{ma}B（+{grow}），GC 后降至 {mg}B（-{shrink}）"
+                       f"（{scope_note}；判据侧独立重算）")
+
+    # ── I 应用与生命周期能力开放（C23/C24/C25——App 宿主腿）──
+    # 【要证明什么】三个 Hook 在**设备上**真的被事件驱动（不是"桥存在"就算）：
+    #   ① 冷启动补 launch（app:launch 在首个 app:show 之前）；② 真实栈命令驱动页面生命周期；
+    #   ③ 系统事件面（内存警告/主题）真分发；④ 壳真实事件（pause/resume）进了应用生命周期。
+    cap_log = d.get("cap_log") or []
+    if not d.get("cap_launch_before_any_show"):
+        fail(f"① 冷启动未补 launch（cap_log={cap_log}）——wx 语义：onLaunch 恰好一次且先于 onShow")
+    else:
+        report("① C23 冷启动语义：app:launch 前置且恰好一次（launches=%s）" % d.get("cap_launches"))
+    if (d.get("cap_page_after_pop") or "") != "home":
+        fail(f"② 真实栈命令未驱动页面生命周期：pop 后 currentScreen={d.get('cap_page_after_pop')}（期望 home）")
+    else:
+        report("② C24 页面生命周期：真实 app-stack 命令流驱动（push→load/show，pop→hide/unload，回到 home）")
+    bg_events = d.get("cap_bg_events") or []
+    if d.get("cap_bg_ready") is not True:
+        fail("③ useBackground 的异步部分未完成（getLaunchOptions 的 Promise 未解析——job 泵？）")
+    elif (d.get("cap_launch_options") or {}).get("path") != "pages/detail":
+        fail(f"③ 启动参数未读到：{d.get('cap_launch_options')}（期望 path=pages/detail——深链数据源）")
+    else:
+        report(f"③ C25 启动参数经 Promise 读到（job 泵链）：{d.get('cap_launch_options')}")
+    # ★④ 读**壳报告**（后置证据：壳事件发生之后写出的状态）
+    #   为什么不在主报告读：主报告写于场景相位（生命周期往返**之前**）⇒ 那时壳历史必为空。
+    #   判据要落在"壳事件真的驱动了能力总线"上 ⇒ 用后置报告里的 cap_app_phase。
+    sh_d = None
+    if shell_path and os.path.exists(shell_path):
+        try:
+            with open(shell_path, encoding="utf-8") as f:
+                sh_d = json.load(f)
+        except Exception:  # noqa: BLE001
+            sh_d = None
+    sh_app = (sh_d or {}).get("cap_app_phase")
+    # ★强判据（不是"终态是 SHOW"这么弱）：逐条查 shellLog 的 cap_phase ——
+    #   pause 必须留下 HIDE、resume 必须留下 SHOW。**HIDE 只能由真实 hide 事件产生**
+    #   （总线初始态是 PENDING，且场景的冷启动补发只发 show）⇒ 这条绑定证明"壳事件驱动了能力总线"。
+    sh_log = (sh_d or {}).get("log") or []
+    pause_entry = next((e for e in sh_log if e.get("evt") == "pause" and e.get("applied")), None)
+    resume_entry = next((e for e in sh_log if e.get("evt") == "resume" and e.get("applied")), None)
+    if d.get("cap_shell_driven_events") is None and not sh_log:
+        fail("④ 壳报告缺失或为空——无法验证壳事件→能力总线链路")
+    elif not pause_entry or pause_entry.get("cap_phase") != "HIDE":
+        fail(f"④ pause 未驱动能力总线到 HIDE：条目={pause_entry}（期望 cap_phase=HIDE）")
+    elif not resume_entry or resume_entry.get("cap_phase") != "SHOW":
+        fail(f"④ resume 未驱动能力总线到 SHOW：条目={resume_entry}（期望 cap_phase=SHOW）")
+    else:
+        report(f"④ 壳事件逐条驱动能力总线：pause→{pause_entry.get('cap_phase')} "
+               f"→ resume→{resume_entry.get('cap_phase')}（HIDE 只能由真实 hide 事件产生）")
+    if d.get("cap_app_phase") not in ("SHOW", "HIDE") or d.get("cap_page_phase") not in ("LOAD", "SHOW", "HIDE"):
+        fail(f"⑤ 阶段快照异常：app={d.get('cap_app_phase')} page={d.get('cap_page_phase')}")
+    else:
+        report(f"⑤ 阶段快照：app={d.get('cap_app_phase')} · page={d.get('cap_page_phase')} · 订阅 {d.get('cap_subscribers')}")
 
     # ── G 宿主 conformance ──
     total = d.get("conf_total", 0)
