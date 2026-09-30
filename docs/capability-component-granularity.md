@@ -28,7 +28,7 @@
 - `audit.ts` 的 `MP_MAPPING_MATRIX` 是**手写常量**，`auditMiniprogramCoverage` 只统计写进去的行有无 `missing` → **永远 pass、不可失败**。
 - 矩阵引用**不存在**的 primitive（`p-overlay/p-progress/p-label/p-camera/p-map/p-webview`、`capability.toast/capability.media/capability.element` 等，catalog/schema/组件目录 0 命中）却标 ok/compat。
 - 真实覆盖：**微信内置组件 48** → ✅22 / 🟡17 / ❌9（矩阵漏 13 个真实组件）；**API 大组** → ✅26 / 🟡3 / ❌15。
-- ~~文档声称的 `scripts/miniprogram-official-spec.json` + `coverage-audit.ts` **不存在**。~~ → ★2026-09-12 **已落地权威标尺**：`scripts/gen-mp-spec.mjs` → `docs/generated/miniprogram-official-spec.json`（官方组件 84 + 官方 API 298）+ `packages/component-ir/src/mp-spec-coverage.ts` 分类器 + `proteus audit coverage` spec 门禁。详见 `docs/miniprogram-coverage-ledger.md`。
+- ~~文档声称的 `scripts/miniprogram-official-spec.json` + `coverage-audit.ts` **不存在**。~~ → ★2026-09-12 **已落地权威标尺**：`scripts/gen-mp-spec.mjs` → `docs/generated/miniprogram-official-spec.json`（官方组件 84 + 官方 API 495）+ `packages/component-ir/src/mp-spec-coverage.ts` 分类器 + `proteus audit coverage` spec 门禁。详见 `docs/miniprogram-coverage-ledger.md`。
 
 ---
 
@@ -49,7 +49,7 @@
 | **H** | 组件侧补齐（标尺驱动） | ✅ **p-selection**（`ui.selection`——局部文本选区：selectionchange 事件载荷归一 + Web document.getSelection；对齐小程序 `<selection>`）· **p-keyboard-accessory**（`shell.keyboard-accessory`——键盘上方工具栏：Web visualViewport 驱动 + MP 原生承接；对齐小程序 `<keyboard-accessory>`）。全端一致性接线（schema/tag/catalog/map 六端/Rust/vue-dom/native×3/flutter/headless/导出/d.ts）。覆盖 covered 249→**251** · 落地率 96→**97%** · 组件 66→**68** · implemented 48→**50** | ✅ 已落地 |
 | **I** | 相机 + 冗余组件诚实归类 | ✅ **p-camera**（`ui.camera`——MP 原生 `<camera>` / Web getUserMedia + `<video>` 双分支；props devicePosition/flash/aspectRatio）· ⬜ cover-view/cover-image 归 **na**（Skyline 同层渲染后冗余，官方建议 view/image 替代）。覆盖 covered 251→**252** · 落地率 97→**98%** · 组件 68→**69** · implemented 50→**51** | ✅ 已落地 |
 | **J** | 组件批（标尺驱动） | ✅ **p-webview**（shell.webview——MP 原生 `<web-view>` / Web iframe 运行时注入，无 iframe 泄漏）· **p-ad**（shell.ad——MP 原生 `<ad>` / Web 诚实占位）· **p-map**（ui.map——MP 原生 `<map>` / Web 宿主 SDK 槽位）· ⬜ aria-component 归 **na**（ARIA 属性文档页非组件）。★诚实指标改 **floor**（永不夸大）。覆盖 covered 252→**255** · 落地率 98→**99%** · planned 5→**1**（仅 share-element）· 组件 69→**72** · implemented 51→**54** | ✅ 已落地 |
-| **C5** | 权威标尺 + 隐私合规 | ✅ **权威标尺**（`scripts/gen-mp-spec.mjs` → 官方清单快照 84 组件 + 298 API；`mp-spec-coverage.ts` 五态分类器；`proteus audit coverage` spec 门禁 + 棘轮）——修「手写矩阵自证 100%」根因；台账 `docs/miniprogram-coverage-ledger.md`（真实落地率 78%）。✅ **C65 usePrivacy**（隐私协议——getPrivacySetting/openPrivacyContract/requirePrivacyAuthorize/onNeedPrivacyAuthorization，PIPL+微信隐私合规刚需；web 缺省 Err）。⬜ 剩余 planned 56 项（网络底层 UDP/TCP · 媒体高级 MediaContainer/VideoDecoder · 图像编辑 · 性能 · 预加载 · 录屏 · AR…）按标尺驱动分批 | ✅ 标尺+C65 落地 |
+| **C5** | 权威标尺 + 隐私合规 | ✅ **权威标尺**（`scripts/gen-mp-spec.mjs` → 官方清单快照 84 组件 + 495 API；`mp-spec-coverage.ts` 五态分类器；`proteus audit coverage` spec 门禁 + 棘轮）——修「手写矩阵自证 100%」根因；台账 `docs/miniprogram-coverage-ledger.md`（真实落地率 78%）。✅ **C65 usePrivacy**（隐私协议——getPrivacySetting/openPrivacyContract/requirePrivacyAuthorize/onNeedPrivacyAuthorization，PIPL+微信隐私合规刚需；web 缺省 Err）。⬜ 剩余 planned 56 项（网络底层 UDP/TCP · 媒体高级 MediaContainer/VideoDecoder · 图像编辑 · 性能 · 预加载 · 录屏 · AR…）按标尺驱动分批 | ✅ 标尺+C65 落地 |
 
 ---
 

@@ -13,7 +13,24 @@
 | 维度 | 官方来源 | 项数 |
 |---|---|---|
 | 组件 | [官方组件索引页](https://developers.weixin.qq.com/miniprogram/dev/component/)（页面内全部 `/component/<tag>.html` 链接） | **84** |
-| API | 官方类型定义 `miniprogram-api-typings`（`interface Wx` 方法名） | **298** |
+| API | 官方类型定义 `miniprogram-api-typings`（`interface Wx` 方法名） | **495** |
+
+> ★★**2026-09-30 重大标尺修复（必读）**：上表 API 数原为 **298**——**是错的**：快照抽取器的正则
+> `/^\s{8}(name)\s*\(/` **不认泛型方法签名** `name<T>(...)`，而官方 typings 里大量方法是泛型的
+> ⇒ 197 个真实 API **从未进入标尺**（含 `wx.request` / `wx.login` / `wx.authorize` /
+> `wx.getStorageSync` / `wx.chooseMedia` / `wx.setKeepScreenOn` 等**最核心的一批**），
+> 分母被截短 **40%**。
+> **后果**：① 这些 API 的缺口**结构性不可见**——`gap = 0` 是假象（它们根本不在表里）；
+>   ② 所有引用「官方 N 项」的报表都带着错分母。
+> **为什么长期未暴露**：`check:mp-spec --check` 只比对「快照 == 抽取器输出」——
+>   **校验了快照与源一致，却没校验尺子本身**（一类经典覆盖盲区：判据的判据没人管）。
+> **修复**：① 判据接受 `<` 或 `(`；② 抽取范围由「切到文件尾」改为**括号配对**（原靠缩进巧合）；
+>   ③ 新增**装置自检**（抽取数 < 450 即抛错并指名"先查抽取器"——防未来静默退回旧量级，
+>   破坏性验证过：退回旧正则 ⇒ 报「仅 298 个（预期 ≥450）」）。
+> **修复后重分类**（197 项逐条取证，不虚标）：covered +104 · private +39 · na +33 · **planned +21**。
+> 其中 21 条 planned 是**真实缺口**（`setKeepScreenOn` / `showToast` / `showModal` /
+> `startPullDownRefresh` / `getUserProfile` / `chooseMessageFile` / 画布像素读写 …）
+> ⇒ 已成为 **NC2「内置能力扩充」的候选输入**。
 | **合计** | | **382** |
 
 > 快照由 `node scripts/gen-mp-spec.mjs` 生成（幂等）；`--check` 比对漂移（防快照与官方脱节）。

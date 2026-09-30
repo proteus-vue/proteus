@@ -294,7 +294,7 @@ JSI 的优势恰恰是**细粒度同步调用**——而我们的性能叙事建
 
 - [x] 统计能力调用清单 —— ✅ **生成式**（`scripts/gen-capability-priority.mjs`：三事实源求值，非手写）
       · 事实源① 能力清单 82 项（SSOT）· ② 消费侧语料 Hook 调用点（showcase/examples/website，口径写死）
-      · ③ 微信官方 API 298 个中该 Hook 的 covered 承接数（`classifySpecApi` 反查）
+      · ③ 微信官方 API **495** 个中该 Hook 的 covered 承接数（`classifySpecApi` 反查）
 - [x] 跨项目聚合（**优先于单项目频次**）—— ✅ 排序键 = 跨项目覆盖 ↓ 语料频次 ↓ 官方承接 ↓ 编号
 - [x] 输出《能力实现优先级表》—— ✅ `docs/generated/capability-priority.md`
       （82 能力 · 跨项目 15 · 语料用过 46 · 有官方承接 56）

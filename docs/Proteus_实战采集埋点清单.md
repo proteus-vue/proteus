@@ -298,7 +298,7 @@ T4  全量开启 + 接入超级应用
 | `proteus explain` + 决策 trace | `packages/compiler/src/explain.ts` · `trace.ts` | 已有规则命中与决策记录 ⇒ `PrimitiveGapRecord` 在此聚合输出即可 |
 | 结构化诊断通道 | `packages/compiler/src/index.ts`（`VaporDiagnostic`） | 已有分级诊断类型 ⇒ fallback / degraded / unsupported 三档可复用 |
 | 属性三级降级门禁 | `scripts/audit-degradation.mjs`（`pnpm check:degradation`） | 已有 supported / fallback / unsupported 判定 + 反黑盒校验 ⇒ **`degraded` 高亮沿用该口径** |
-| 覆盖审计 | `proteus audit coverage`（`packages/cli/src/coverage-audit.ts`） | 已有官方 382 项（组件 84 · API 298）归类 ⇒ 漏点报告与之并列输出 |
+| 覆盖审计 | `proteus audit coverage`（`packages/cli/src/coverage-audit.ts`） | 已有官方 579 项（组件 84 · API 495）归类 ⇒ 漏点报告与之并列输出 |
 
 ⇒ **A 类的工作量主要在聚合与报表，不在新建判定逻辑。**
 

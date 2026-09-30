@@ -140,6 +140,111 @@ export const SPEC_COVERED: Record<string, string> = {
   onUserTriggerTranslation: 'useTranslation', offUserTriggerTranslation: 'useTranslation',
   onUserOffTranslation: 'useTranslation', offUserOffTranslation: 'useTranslation',
   onGeneratePoster: 'usePoster', offGeneratePoster: 'usePoster',
+
+  // ★★2026-09-30 补齐（快照抽取器修泛型缺陷后新可见的 102 个官方 API——
+  //   旧快照结构性漏抽它们 ⇒ 此前从未被归类。逐条证据见 tools 归类记录）
+  authorize: 'usePermission',
+  canvasToTempFilePath: 'useCanvas',
+  chooseAddress: 'useAddress',
+  chooseMedia: 'useAlbum',
+  connectWifi: 'useWifi',
+  getBatteryInfo: 'useBattery',
+  getClipboardData: 'useClipboard',
+  getConnectedWifi: 'useWifi',
+  getHCEState: 'useNFC',
+  getLocation: 'useLocation',
+  getNetworkType: 'useNetwork',
+  getScreenBrightness: 'useBrightness',
+  getSetting: 'usePermission',
+  getStorageSync: 'useStorage',
+  getWeRunData: 'useWeRun',
+  getWifiList: 'useWifi',
+  login: 'useLogin',
+  makePhoneCall: 'usePhoneCall',
+  navigateToMiniProgram: 'useMiniProgram',
+  previewMedia: 'useAlbum',
+  request: 'useFetch',
+  requestPayment: 'usePayment',
+  saveImageToPhotosAlbum: 'useAlbum',
+  saveVideoToPhotosAlbum: 'useAlbum',
+  scanCode: 'useQRCode',
+  setClipboardData: 'useClipboard',
+  setScreenBrightness: 'useBrightness',
+  setStorageSync: 'useStorage',
+  startSoterAuthentication: 'useBiometric',
+  startWifi: 'useWifi',
+  vibrateShort: 'useVibrate',
+  requestSubscribeMessage: 'useNotification',
+  setWifiList: 'useWifi',
+  stopWifi: 'useWifi',
+  batchGetStorage: 'useStorage',
+  batchSetStorage: 'useStorage',
+  clearStorage: 'useStorage',
+  getStorage: 'useStorage',
+  setStorage: 'useStorage',
+  removeStorage: 'useStorage',
+  getStorageInfo: 'useStorage',
+  startAccelerometer: 'useSensorStream',
+  stopAccelerometer: 'useSensorStream',
+  startCompass: 'useSensorStream',
+  stopCompass: 'useSensorStream',
+  startGyroscope: 'useSensorStream',
+  stopGyroscope: 'useSensorStream',
+  startLocationUpdate: 'useLocation',
+  stopLocationUpdate: 'useLocation',
+  startLocationUpdateBackground: 'useLocation',
+  openBluetoothAdapter: 'useBluetooth',
+  closeBluetoothAdapter: 'useBluetooth',
+  getBluetoothAdapterState: 'useBluetooth',
+  getBluetoothDevices: 'useBluetooth',
+  getConnectedBluetoothDevices: 'useBluetooth',
+  createBLEConnection: 'useBluetooth',
+  closeBLEConnection: 'useBluetooth',
+  getBLEDeviceCharacteristics: 'useBluetooth',
+  getBLEDeviceServices: 'useBluetooth',
+  getBLEDeviceRSSI: 'useBluetooth',
+  getBLEMTU: 'useBluetooth',
+  setBLEMTU: 'useBluetooth',
+  isBluetoothDevicePaired: 'useBluetooth',
+  makeBluetoothPair: 'useBluetooth',
+  notifyBLECharacteristicValueChange: 'useBluetooth',
+  readBLECharacteristicValue: 'useBluetooth',
+  writeBLECharacteristicValue: 'useBluetooth',
+  startBluetoothDevicesDiscovery: 'useBluetooth',
+  stopBluetoothDevicesDiscovery: 'useBluetooth',
+  openSystemBluetoothSetting: 'useBluetooth',
+  closeSocket: 'useWebSocket',
+  sendSocketMessage: 'useWebSocket',
+  getBeacons: 'useBeacon',
+  startBeaconDiscovery: 'useBeacon',
+  stopBeaconDiscovery: 'useBeacon',
+  startLocalServiceDiscovery: 'useLocalService',
+  stopLocalServiceDiscovery: 'useLocalService',
+  startHCE: 'useNFC',
+  stopHCE: 'useNFC',
+  sendHCEMessage: 'useNFC',
+  checkIsSupportSoterAuthentication: 'useBiometric',
+  checkIsSoterEnrolledInDevice: 'useBiometric',
+  chooseImage: 'useAlbum',
+  chooseVideo: 'useAlbum',
+  previewImage: 'useAlbum',
+  compressImage: 'useMediaProcessing',
+  compressVideo: 'useMediaProcessing',
+  getAvailableAudioSources: 'useAudio',
+  setInnerAudioOption: 'useAudio',
+  vibrateLong: 'useVibrate',
+  hideKeyboard: 'useKeyboard',
+  openSetting: 'usePermission',
+  openAppAuthorizeSetting: 'usePermission',
+  addPhoneRepeatCalendar: 'useCalendarAPI',
+  navigateTo: 'useRouter/useRoute（packages/router）',
+  navigateBack: 'useRouter/useRoute（packages/router）',
+  redirectTo: 'useRouter/useRoute（packages/router）',
+  reLaunch: 'useRouter/useRoute（packages/router）',
+  switchTab: 'useRouter/useRoute（packages/router）',
+  showModal: 'shell.modal（p-modal 组件）',
+  showActionSheet: 'shell.action-sheet（p-action-sheet 组件）',
+  getSelectedTextRange: 'ui.selection（p-selection 组件）',
 }
 
 // —— ② 显式「平台私有」（微信独占；收敛 useMiniProgram / 宿主桥） ——
@@ -180,6 +285,44 @@ export const SPEC_PRIVATE: ReadonlySet<string> = new Set([
   'onEmbeddedMiniProgramHeightChange', 'offEmbeddedMiniProgramHeightChange', 'openData',
   // 小程序归属 / 开屏广告 / XR 系统（微信私有）
   'checkIsAddedToMyMiniProgram', 'getShowSplashAdStatus', 'getXrFrameSystem',
+  // ★★2026-09-30 补齐（新可见 36 条——微信生态独占：卡券/红包/订单支付/发票/车牌/POI/
+  //   群工具与群分享/VoIP/收藏/后台周期拉取/分享菜单控制/小程序返回链/提示更新微信）
+  'addCard',
+  'openCard',
+  'showRedPackage',
+  'requestOrderPayment',
+  'chooseInvoice',
+  'chooseInvoiceTitle',
+  'chooseLicensePlate',
+  'chooseLocation',
+  'choosePoi',
+  'getChatToolInfo',
+  'openChatTool',
+  'notifyGroupMembers',
+  'selectGroupMembers',
+  'shareAppMessageToGroup',
+  'shareEmojiToGroup',
+  'shareFileMessage',
+  'shareFileToGroup',
+  'shareImageToGroup',
+  'shareVideoMessage',
+  'shareVideoToGroup',
+  'shareToWeRun',
+  'subscribeVoIPVideoMembers',
+  'updateVoIPChatMuteConfig',
+  'exitVoIPChat',
+  'addFileToFavorites',
+  'addVideoToFavorites',
+  'hideShareMenu',
+  'showShareMenu',
+  'updateShareMenu',
+  'showShareImageMenu',
+  'navigateBackMiniProgram',
+  'updateWeChatApp',
+  'openLocation',
+  'getBackgroundFetchData',
+  'getBackgroundFetchToken',
+  'setBackgroundFetchToken',
 ])
 
 // —— ③ 显式「不适用」（废弃 / 构建期 / 被语义原语消灭） ——
@@ -198,6 +341,40 @@ export const SPEC_NA: ReadonlySet<string> = new Set([
   'getSystemInfoAsync',
   // 调度原语（Vue nextTick / 渲染器调度等价，非平台能力）
   'nextTick',
+  // ★★2026-09-30 补齐（新可见 33 条——已废弃/构建期/被语义原语消灭/宿主层；逐组见注释）
+  'checkSession',
+  'getShareInfo',
+  'getUserInfo',
+  'getSystemInfo',
+  'setEnableDebug',
+  'playVoice',
+  'pauseVoice',
+  'stopVoice',
+  'startRecord',
+  'stopRecord',
+  'playBackgroundAudio',
+  'pauseBackgroundAudio',
+  'stopBackgroundAudio',
+  'seekBackgroundAudio',
+  'getBackgroundAudioPlayerState',
+  'getExtConfig',
+  'loadFontFace',
+  'setNavigationBarTitle',
+  'setNavigationBarColor',
+  'showNavigationBarLoading',
+  'hideNavigationBarLoading',
+  'setTopBarText',
+  'hideHomeButton',
+  'showTabBar',
+  'hideTabBar',
+  'setTabBarBadge',
+  'removeTabBarBadge',
+  'setTabBarItem',
+  'setTabBarStyle',
+  'showTabBarRedDot',
+  'hideTabBarRedDot',
+  'setBackgroundColor',
+  'setBackgroundTextStyle',
 ])
 
 // —— ③-b 显式「规划待落地」（L2 通用缺口——可见待办，非 owned 自证；棘轮约束下只能降不能升） ——
@@ -216,6 +393,28 @@ export const SPEC_PLANNED: Record<string, string> = {
   //   非「API」章节）⇒ **不进 SPEC_COVERED**：那会让 covered 分子虚增而分母不变 ⇒ 覆盖率虚高。
   //   也不进 SPEC_PRIVATE（它是**公开能力**，不是微信私有 API）
   //   ⇒ 归类为「超清单能力」，由 primitives C82 直接承载（矩阵见 audit.ts）
+  // ★★2026-09-30 补齐（新可见 21 条——真实缺口，NC2「内置能力扩充」候选输入）
+  addPhoneContact: '通讯录写入（无对等 Hook）',
+  canvasGetImageData: '画布像素读取（CanvasContext 无此方法——见 capability.ts CanvasContext）',
+  canvasPutImageData: '画布像素写入（同上）',
+  checkIsOpenAccessibility: '无障碍开关探测（无对等）',
+  chooseMessageFile: '聊天文件选择（无对等；chooseMedia 不含聊天文件）',
+  createBLEPeripheralServer: '蓝牙外设模式（无对等）',
+  getImageInfo: '图片元信息（宽高/方向——useFileSystem 只给 size/digest）',
+  getVideoInfo: '视频元信息（同上族）',
+  getRandomValues: '密码学随机数（Web 端有 crypto.getRandomValues——宿主未接线）',
+  getUserProfile: '用户资料获取（无对等 Hook）',
+  hideLoading: '全局加载态（ui.loading 为 planned 组件）',
+  showLoading: '全局加载态（同上）',
+  hideToast: '全局轻提示（shell.toast 为 planned 组件）',
+  showToast: '全局轻提示（同上）',
+  openDocument: '文档预览（宿主文档能力，无对等）',
+  pageScrollTo: '页面级滚动（p-scroll 只管组件内滚动）',
+  setKeepScreenOn: '屏幕常亮（无对等——NC2 首个候选）',
+  startPullDownRefresh: '页面级下拉刷新（p-scroll refresher 只管 scroll-view）',
+  stopPullDownRefresh: '页面级下拉刷新（同上）',
+  startDeviceMotionListening: '设备运动监听（融合传感器——当前仅三轴单项）',
+  stopDeviceMotionListening: '设备运动监听（同上）',
 }
 
 // —— ④ 事件对 → 承接（status 区分：映射既有 Hook = covered，映射新 Hook = planned） ——
@@ -489,6 +688,22 @@ export const SPEC_RATCHET: { coveredMin: number; gapMax: number } = {
   //   原标 covered 且引用 `gesture.draggable`（拖拽）——引用错位 + MP 无对等（bindtap 不带 count）
   //   ⇒ 据实转 planned。**真实可运行的等价物一件没少**，只是不再把「仅 Web 成立」记成「两端已落地」。
   //   该条即上次注释要求「因诚实性修正需下调时，必须写明被修正的具体条目」所指的条目。
-  coveredMin: 252, // 2026-09-18 上行基线（250 修正基线 + tap/longpress 落地）；2026-09-19 因 double-tap 修正后实测亦为 252
+  coveredMin: 356, // ★2026-09-30 上调 252 → 356（属「修标尺」——见下条长注释；标尺修好后必须显式锁新水位）
   gapMax: 0, // 全部官方项必须归类
+  // ★★2026-09-30：抽标尺修复后的水位重锁（**性质：修的是尺子，不是能力**——必须写清楚）
+  //   起因：快照抽取器（scripts/gen-mp-spec.mjs）的 API 正则不认**泛型方法签名** `name<T>(...)`
+  //   ⇒ 197 个真实官方 API（含 `wx.request` / `wx.login` / `wx.authorize` / `wx.getStorageSync` /
+  //   `wx.chooseMedia` / `wx.setKeepScreenOn` 等**最核心的一批**）**从未进入权威标尺**：
+  //   分母被截短 40%（298 vs 实际 495）。
+  //   后果有两面：① 这些 API 的缺口**结构性不可见**（gap=0 是假的——根本没在表里）；
+  //   ② 报表里的「官方 N 项」本身是错的。
+  //   ✅ 修复后：官方 579 项（组件 84 · API 495）；covered 356 / planned 25 / private 145 / na 53 / gap 0。
+  //   ★为什么 covered **大幅上涨**（252→356）却不是"能力增长"：新增可见的 197 项里，
+  //     **104 项**（102 新归类 + 2 由既有规则命中）经逐条取证确认**已有承接**——证据见下方各表
+  //     分组注释（严格口径 = 剥注释后匹配 `wx.<name>(` 或同族动态派发，非"看起来像"）；
+  //     private +39 · na +33 · planned +21 —— 合计 197。它们是**此前没被记账的既有覆盖**。
+  //     这是"修尺子"带来的**账面**变化：真实可运行的等价物一件没多也没少。
+  //   ★同时新登记 **planned 25**（真实缺口，含 setKeepScreenOn / startPullDownRefresh / showToast 等）
+  //     —— 它们是 NC2「内置能力扩充」的候选输入（**保守归类**：拿不准一律 planned，不虚标 covered）。
+  //   ★附加修复：抽取范围原为「`interface Wx {` 起 → 文件尾」（未设边界，靠缩进巧合）⇒ 改为括号配对。
 }

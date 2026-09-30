@@ -79,17 +79,62 @@ async function fetchComponents() {
 }
 
 // —— ② API：官方 typings `interface Wx` 方法名 ——
+//
+// ★★2026-09-30 修复重大缺陷：原判据 `/^\s{8}(name)\s*\(/` **不认泛型方法签名** `name<T>(...)`，
+//   而新版 typings 里大量方法是泛型的 ⇒ **197 个真实官方 API 从未进入快照（298 vs 实际 495）**，
+//   含 `wx.request` / `wx.login` / `wx.authorize` / `wx.getStorageSync` / `wx.chooseMedia` /
+//   `wx.setKeepScreenOn` —— 最核心的一批。
+//   后果：权威标尺（覆盖度门禁的分母）被截短 40% ⇒ 这些 API 的缺口**结构性不可见**、
+//   覆盖数字系统性虚高；且 `--check` 只比对"快照 == 抽取器输出"⇒ 抽取器错则门禁一起错
+//   （一类经典缺陷：**校验了被测对象，没校验尺子本身**）。
+//   修法：名字后接受 `<` 或 `(`（只取名字，不解析泛型体——避开嵌套 `<>` 的解析复杂度）。
+//   ★同时新增**装置自检**：抽取数量低于 450 即抛错（防未来 typings 形态再变时静默退回旧量级）。
 function extractApis() {
   if (!fs.existsSync(TYPINGS)) throw new Error('缺少官方 typings（miniprogram-api-typings）：' + TYPINGS)
   const src = fs.readFileSync(TYPINGS, 'utf8')
   const start = src.indexOf('    interface Wx {')
   if (start < 0) throw new Error('typings 中未找到 `interface Wx`')
-  let body = src.slice(start)
+  // ★★2026-09-30 第二个修复：原实现从 `interface Wx {` **切到文件尾**（该文件 1.28MB、
+  //   其后还有 1500+ 个同级声明）——靠"成员恰好缩进 8 空格"这一巧合没出错，但属**未设边界**，
+  //   任一侧文件结构变化就会静默污染统计。⇒ 改为**括号配对**求 interface 体的真实闭合位置
+  //   （跳过字符串/模板串/注释；本文件用 4 空格缩进，闭合处为 `^    }`，配对法对缩进不敏感）。
+  const openIdx = src.indexOf('{', start)
+  let depth = 0
+  let endIdx = -1
+  let inStr = null
+  let inTpl = false
+  for (let i = openIdx; i < src.length; i++) {
+    const c = src[i]
+    if (inStr) {
+      if (c === '\\') { i++; continue }
+      if (c === inStr) inStr = null
+      continue
+    }
+    if (c === "'" || c === '"') { inStr = c; continue }
+    if (c === '`') { inTpl = !inTpl; continue }
+    if (inTpl) continue
+    if (c === '/' && src[i + 1] === '*') { const j = src.indexOf('*/', i + 2); i = j < 0 ? src.length : j + 1; continue }
+    if (c === '/' && src[i + 1] === '/') { const j = src.indexOf('\n', i); i = j < 0 ? src.length : j; continue }
+    if (c === '{') depth++
+    else if (c === '}') { depth--; if (depth === 0) { endIdx = i; break } }
+  }
+  if (endIdx < 0) throw new Error('`interface Wx` 括号未闭合（typings 结构异常）')
+  let body = src.slice(openIdx + 1, endIdx)
   // ★先剥离 JSDoc 注释块——否则示例代码里的 `if (`/`resolve (` 等会被误当方法名
   body = body.replace(/\/\*\*[\s\S]*?\*\//g, '')
   const names = new Set()
-  for (const m of body.matchAll(/^\s{8}([a-zA-Z_][a-zA-Z0-9_]*)\s*\(/gm)) names.add(m[1])
-  return [...names].sort()
+  // ★名字后可为 `(`（普通方法）或 `<`（泛型方法）；不解析泛型体
+  for (const m of body.matchAll(/^\s{8}([a-zA-Z_][a-zA-Z0-9_]*)\s*(?:<|\()/gm)) names.add(m[1])
+  const list = [...names].sort()
+  // ★装置自检（本仓纪律：装置失效报装置错，不伪装成数据缩水）：
+  //   修复后实测 495；下限 450 留余量且能拦住"退回 298 量级"的回归。
+  if (list.length < 450) {
+    throw new Error(
+      `抽取到的 API 仅 ${list.length} 个（预期 ≥450）——typings 形态可能又变了（新泛型/修饰符写法），` +
+        '请对照 node_modules/miniprogram-api-typings 的 `interface Wx` 修本抽取器（勿直接放行：会截短权威标尺）',
+    )
+  }
+  return list
 }
 
 const comp = await fetchComponents()

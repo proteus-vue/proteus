@@ -14,7 +14,7 @@
 //        排除 node_modules / dist / scripts / tests / *.d.ts / *.test.* / generated。
 //      ★**跨项目覆盖数优先于单项目频次**（方案 §1.1 的优先级算法：「被几个项目用到」> 单项目调用次数）。
 //      ★诚实边界：语料=本仓 3 个自有工程（非真实业务项目）⇒ 这是**下界**，真实需求证据待接入补齐。
-//   ③ **官方承接面**：微信官方 API 清单（`docs/generated/miniprogram-official-spec.json`，298 个）
+//   ③ **官方承接面**：微信官方 API 清单（`docs/generated/miniprogram-official-spec.json`，495 个）
 //      经 `classifySpecApi` 反查 —— 每个 Hook 承接了几个官方 API（covered 且 proteus 串含该 Hook 名）。
 //      这是「完整性标尺」：承接越多 = 收敛缺口越大时影响面越大。
 //
