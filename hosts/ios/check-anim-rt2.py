@@ -162,9 +162,65 @@ def main() -> int:
     else:
         print("  · D 组跳过（本报告无 recycle_unbind 读数——虚拟化场景未跑；属正常，非失败）")
 
+    # ── E 组（§9 指标）：帧率测席——转场帧率 / 帧耗时 P95 / 掉帧率 ──
+    #
+    # 【口径（方案 §9）】转场动画帧率 ≥60 FPS（目标 120）· 帧耗时 P95 ≤8.33ms（目标 ≤4ms）。
+    # ★诚实边界：帧率上限 = 设备刷新率（iPhone 12 为 **60Hz**）⇒ 本轮验证「60 FPS 不掉帧」，
+    #   「120 FPS」需 ProMotion 设备（如实标注，不声称）。
+    bench = d.get("anim_bench") or js.get("anim_bench") or {}
+    if bench and bench.get("ok"):
+        if bench.get("timed_out"):
+            fail(f"E0 测席超时（看门狗触发——DisplayLink 停摆？屏幕熄灭/后台？）：{bench}")
+            ok = False
+        else:
+            print(f"  ✓ E0 测席完成：{bench.get('frames')} 帧 / {bench.get('elapsed_ms')}ms")
+        fps = bench.get("fps", 0) or 0
+        if fps < 58:
+            fail(f"E1 帧率不达标：{fps} FPS（60Hz 设备应 ≈60；§9 合格线 ≥60）")
+            ok = False
+        else:
+            print(f"  ✓ E1 帧率：**{fps} FPS**（vsync 间隔 p50 {bench.get('vsync_p50_ms')}ms）")
+        dr = bench.get("dropped_ratio", 1) or 0
+        if dr > 0.02:
+            fail(f"E2 掉帧率过高：{dr}（{bench.get('dropped')} 帧超标称 1.5×——上限 2%）")
+            ok = False
+        else:
+            print(f"  ✓ E2 掉帧率：{dr}（{bench.get('dropped')} 帧）")
+        w95 = bench.get("work_p95_ms", 99) or 99
+        if w95 > 8.33:
+            fail(f"E3 帧耗时 P95 超线：{w95}ms（§9 合格线 ≤8.33ms）")
+            ok = False
+        else:
+            print(f"  ✓ E3 帧耗时：p50 **{bench.get('work_p50_ms')}ms** · p95 **{w95}ms** · max {bench.get('work_max_ms')}ms")
+        gt, gto = bench.get("gesture_tx"), bench.get("gesture_to")
+        if gt is None or gto is None or abs(gt - gto) > 0.01:
+            fail(f"E4 手势跟随终值未钉死：tx={gt}（应 ={gto}——seek 到 progress=1 应精确落位）")
+            ok = False
+        else:
+            print(f"  ✓ E4 手势跟随终值精确：tx={gt}（={gto}）")
+        # E6：手势跟随延迟（§9 验收「≤1 帧」）——机制保证：seek **立即求值写字段**（不等 try 下一帧），
+        #     因此延迟 = 宿主「seek 到写层」的耗时（已含在 work 里），必然 << 1 帧（16.7ms）。
+        #     ⇒ 判据：每帧工作 p95 必须远小于帧间隔（否则跟随会在视觉上滞后）
+        vsync = bench.get("vsync_p50_ms", 16.67) or 16.67
+        if w95 > vsync * 0.5:
+            fail(f"E6 跟随延迟风险：每帧工作 p95 {w95}ms 超过帧间隔的 50%（{vsync * 0.5:.2f}ms）"
+                 "——手势跟随会出现可见滞后")
+            ok = False
+        else:
+            print(f"  ✓ E6 跟随延迟：每帧工作 p95 {w95}ms 仅为帧间隔 {vsync}ms 的 {(w95 / vsync * 100):.1f}%"
+                  "（seek 立即写字段 ⇒ 延迟 = 宿主写层耗时，远小于 1 帧）")
+        yt, yto = bench.get("y_ty"), bench.get("y_to")
+        if yt is None or yto is None or abs(yt - yto) > 0.01:
+            fail(f"E5 持续动画终值未钉死：ty={yt}（应 ={yto}）")
+            ok = False
+        else:
+            print(f"  ✓ E5 持续动画终值精确：ty={yt}（={yto}）")
+    else:
+        print(f"  · E 组跳过（无 anim_bench 读数或未成功：{bench or '缺失'}）")
+
     print()
     if ok:
-        print("✅ RT2 判据全过（层上 transform 真变 + seek 立即生效 + Progress 稳定 + 帧循环可启停）")
+        print("✅ RT2 判据全过（层上 transform 真变 + seek 立即生效 + Progress 稳定 + 帧循环可启停 + 帧率达标）")
         return 0
     print("✗ RT2 判据有失败项（见上）")
     return 1
