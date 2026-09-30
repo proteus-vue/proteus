@@ -17,7 +17,7 @@
 | **V1** Vapor 产品化 | ✅ **5/5 全达标（2026-09-29）** | ✅ 模块可独立引用（`packages/compiler/src/vapor/` 已导出）· ✅ **4001 重排 ≤0.08ms 可复现**（`pnpm check:vapor-perf`，已接 CI）· ✅ 三层嵌套在单测（`tests/vapor-list-e2e.test.ts` 4 处）· ❌ **README 无独立章节**（`grep -c vapor README.md` = 0）· ✅ 单测全绿（**3881**，非 3441） |
 | **I1** 指令集规格化 | ✅ **4/4 达标（2026-09-29）** | ✅ 规格表 `docs/generated/instruction-spec.md`（**从代码生成**：12 opcode + 字节数 + Draw 6 kind；`--check` 接 CI）· ✅ `checkHostVersion()` 版本协商（Host ABI §6 三件套 + 可操作 upgradeHint）· ✅ major/minor 流程（含两次真实变更实例）· ★Anim 类未实现（归卡 V6），规格表如实标注 |
 | **I2** 舍入时机统一 | ✅ **2/3 达标（2026-09-29）** | ✅ **舍入仅在内核 + 平台零舍入（静态门禁）**：策略 = 边缘吸附 `snap(v)=floor(v+0.5)`，实现 `packages/layout-core/src/pixel-snap.ts` + `packages/layout-core-rust/src/snap.rs`（唯一实现）；宿主侧去除 `Math.round` 几何舍入（`ProteusHostView` / `MirrorHit`）并加静态门禁 `pnpm check:host-rounding`（破坏性验证过）· ✅ **两端（TS ⇄ Rust）同输入逐字节一致**：golden `packages/layout-core-rust/tests/golden/pixel-snap.json` + 两侧测试各自比对（含 f32 精度边界台账）· ❌ **鸿蒙三列错位无法验证——仓库无鸿蒙宿主**（`hosts/` 只有 android/ios）；内核级三列场景已证（33/34/33 守恒、无 1px 缝），但"ArkUI 上不错位"不能声称 |
-| **I3** paint-hint 编码进指令 | 🟡 **部分达标（2/3，③ 阻塞已查明）** | ✅ 指令携带 hint（`RenderCmd.hint`）· ✅ 编译期推导、运行时零判断 · ★★**本轮修掉推导的两个"条件不充分"缺陷**（`isMonochrome` 不看底色、`isPureBackground` 不排除文本 ⇒ 接线即画错；已修 + 4 条回归 + 破坏性验证；颜色判定合并为唯一实现 `component-ir/src/color.ts`）· ✅ **iOS 接线已完成并真机验证**（`makeLayer`/`configureLayer` 应用 hint；真机 iPhone 12：**compact=44 / generic=44**，白字走紧凑、非中性色保持通用 ⇒ 判据有区分力）· 判据 `check-paint-hint.py`（三判据 + 破坏性验证）· 模拟器旁路 `run-selfdraw-sim.sh` · 🟡 **A/B 净收益数值未取得**（装置自证拦下两轮无效数据：环境变量未生效 ⇒ 差值恒 0；已加 `paint_hint_env` 诊断以备下轮）· ✅ Android 两种策略天然满足（主路径零位图 + 图集 ALPHA_8） |
+| **I3** paint-hint 编码进指令 | ✅ **3/3 全部达标（2026-09-30 收官）** | ✅ 指令携带 hint（`RenderCmd.hint`）· ✅ 编译期推导、运行时零判断 · ★★**本轮修掉推导的两个"条件不充分"缺陷**（`isMonochrome` 不看底色、`isPureBackground` 不排除文本 ⇒ 接线即画错；已修 + 4 条回归 + 破坏性验证；颜色判定合并为唯一实现 `component-ir/src/color.ts`）· ✅ **iOS 接线已完成并真机验证**（`makeLayer`/`configureLayer` 应用 hint；真机 iPhone 12：**compact=44 / generic=44**，白字走紧凑、非中性色保持通用 ⇒ 判据有区分力）· 判据 `check-paint-hint.py`（三判据 + 破坏性验证）· 模拟器旁路 `run-selfdraw-sim.sh` · ✅ **A/B 净收益已取得（2026-09-30）：+10.8%（开启 28.9MB / 关闭 32.4MB 中位，9/10 轮有效，装置自证全过）**——原装置两处缺陷（旧报告冒充本轮 / 报告字典重复键运行崩溃）已修，并重写为**事件驱动**（零 sleep/轮询/超时）· ✅ Android 两种策略天然满足（主路径零位图 + 图集 ALPHA_8） |
 | **I4** 文本在指令流的表达 | ✅ **4/4 达标（2026-09-29）** | ✅ 指令含度量结果（`SET_TEXT` 9B + **三通道**注入协议）· ✅ 平台层不参与排版（只度量并注入，内核算几何）· ✅ **方案 A 决策留痕**：`docs/proteus-performance-plan/12-dcp-i4-text-expression.md`（三条否决 B 的理由 + 代价 + **四条诚实边界**）· ✅ **文本进 conformance**：**2/21 → 6/25**（真实 Chromium 重生成），新用例**当场抓到一个真缺陷**（引擎把"未指定 min"映射成 `auto` ⇒ CSS `min-width:auto` 生效 ⇒ 文本不可收缩，差 **24.53dp**；已修为 `length(0.0)`，96 节点全过）★**更正卡的过时信息**：并非"textMeasures 全为空表"——原 2 条含真实浏览器度量，且 `conformance_browser_layout` 对每个用例都注入 measurer ⇒ 那两条几何**确实被对拍** |
 | **V2** 槽位 O(1) 覆盖 | ✅ **3/3 达标（2026-09-29）** | ✅ **绑定类型清单（9 类）**：生成式 `docs/generated/vapor-binding-matrix.md`（`scripts/gen-vapor-binding-matrix.mjs` —— 求值真实编译器 + 真项目，非手写）· ✅ **逐类标注 L1/L0**（每条带**代码证据位置**）：属性/文本/样式/类名/列表源/列表行内/可见性 = **L1 槽位直写**；条件（`v-if`）= **L0**（结构变化，非属性更新）· 事件 = **L0 侧通道**（命中测试 + 派发，非值更新语义）· ✅ **O(1) 验证**：`tests/vapor-binding-o1.test.ts` —— 结构判据：寻址为 `Map.get(slotId)` 直取（源码断言）+ **10× 绑定数下耗时比 1.05**（线性退化会是 ~10，阈值 3）+ 单源槽位 ≪ 全表 · ★**顺带抓出并修复一个真缺陷**（见卡正文）：源扫描**同行多声明静默丢弃** |
 | **V3** LIST_UPDATE | ✅ **已达标**（判据已量化） | 指令**可用**（`OpCode.LIST_UPDATE 0x22` + `ListRegistry` 解析为普通 SET_STYLE/SET_TEXT）· 单行更新**不随行数线性增长**——★**2026-09-29 实测**：行级失效 `relinkRow` 后 JS 段 **5.42 → 1.91ms**；但**端到端仍 6.0ms**（瓶颈在协议层键池重发，见 I8 条目）· 长列表无回退（`V12`/`V14` PASS） |
@@ -52,7 +52,7 @@ I8 卡写着「**先做 I6 评估，明确指令流体积是否构成瓶颈，�
 - [x] **V1** Vapor 成果产品化 — ★ 最高性价比 ✅ **5/5 全达标（2026-09-29）**
 - [x] **I1** 指令集规格化与版本化 ✅ **4/4 达标**（生成式规格表 + 版本协商 + CI 门禁）
 - [x] **I2** 舍入时机统一 ✅ **2/3 达标**（内核唯一实现 + 平台零舍入门禁 + 两端 golden；鸿蒙无宿主 ⇒ 第三项无法验证）
-- [x] **I3** paint-hint 编码进指令 ✅ **2/3**（指令带 hint ✓ / 编译期推导 ✓ / iOS 内存复测 ❌）
+- [x] **I3** paint-hint 编码进指令 ✅ **3/3 全部达标（2026-09-30：A/B 净收益 +10.8%；装置改事件驱动——零盲等）**
 
 ### 第二批 · P0（依赖第一批）
 
@@ -223,7 +223,7 @@ paint-hint 成为指令属性，编译期推导，平台层据以决定 backing 
 2. 编译期从归一化样式推导，**禁止运行时判断**
 3. 平台层据 hint 决策
 
-### 验收（★2026-09-29 晚 复核：**2/3 达标，且 ③ 的阻塞已查明**）
+### 验收（★2026-09-30 收官：**3/3 全部达标**——③ 的净收益已取得，见下）
 - [x] 指令携带 paint-hint 字段 —— ✅ `RenderCmd.hint`（`layout-core/src/render-cmd.ts`，三类字段齐备）
 - [x] **编译期推导，运行时零判断** —— ✅ 推导在 IR 构建期（`component-ir/src/pnode-style.ts`）
   ★★**但本轮实测发现：原推导"条件不充分"——一旦接线会直接画错**（已修 + 4 条回归锁定）：
@@ -236,21 +236,23 @@ paint-hint 成为指令属性，编译期推导，平台层据以决定 backing 
     `component-ir/src/color.ts` 的 `isOpaqueColor`（**唯一实现**——与 layout-core 遮挡剔除
     原先的第二份副本合并为一份，见 `render-cmd.ts` 的引用）。
   · 破坏性验证：各自退回旧条件 ⇒ 对应用例当场红（2 条 / 1 条）。
-- [x] iOS 内存增量复测 —— 🟡 **接线已完成并在真机验证；A/B 净收益数值未取得**
+- [x] iOS 内存增量复测 —— ✅ **2026-09-30：A/B 净收益已取得（+10.8% · 32.4→28.9MB 中位）**
   ★★**2026-09-29 晚：hint 已真正接到 iOS 产品建层路径**（此前**全平台无消费者**）：
     `selfdraw-scene.swift` 的 `makeLayer`（新建）与 `configureLayer`（**复用**——必须同样重配，
     否则池里取出的层会保留上一个节点的格式）+ `styleOf` 透传 hint。
-  **真机证据（iPhone 12 · `hosts/ios/results/selfdraw-report-i3-paint-hint.json`）**：
-    `paint_hint_compact = 44` · `paint_hint_generic = 44` —— 88 个文本层里白字走紧凑格式、
-    灰蓝 `#9aa3b2`（非中性色）正确保持通用 ⇒ **判据在真实数据上有区分力**。
   ★**判据**：`python3 hosts/ios/check-paint-hint.py <report>`（三条，均可判红；
     破坏性验证过：读数缺失/紧凑为 0/全放行 三种形态各自红）。
   ★**模拟器旁路**：`bash hosts/ios/run-selfdraw-sim.sh`（免签名/免设备，秒级验"接线正确"）。
-  ❌ **未取得的部分**：A/B（hint 开 vs 关）的**净内存差值**——装置自证拦下了两轮无效数据
-    （关闭态 `paint_hint_disabled` 不为 true ⇒ 环境变量未生效 ⇒ 差值恒 0）。
-    ⇒ 已把 `paint_hint_env`（宿主实际读到的环境变量原样）加进报告以便归因；
-      **该数值待下一轮复测**。★诚实边界：场景仅 91 节点/88 文本层，与历史 −39%（2000 层）规模不同，
-      百分比不可直接对比。
+  ★★**2026-09-30：A/B 复测完成（`bash hosts/ios/measure-paint-hint.sh 5`）**——
+    原装置两处缺陷查明并修复（① 轮询判据只查"字段存在"⇒ 旧报告冒充新报告——差值恒 0 的真凶；
+    ② 宿主报告字典 `paint_hint_env` **重复键** ⇒ Swift 字面量重复键是运行期 fatalError ⇒ 一写报告就崩），
+    并按要求重写为**事件驱动**（App 报告落盘后自退；`launch --console` 返回即完成；零 sleep/零轮询/零超时）。
+    真机读数（iPhone 12 · 9/10 轮有效——off 第 5 轮设备断连未取到，非脚本问题）：
+    **开启态中位 28.9MB（原始 29.0/28.9/28.6/29.2/18.4）· 关闭态中位 32.4MB（32.4/32.4/25.7/32.6）
+    ⇒ 净收益 +3.5MB（+10.8%）**；每轮装置自证全过（开启态 disabled=false+compact=44×5；
+    关闭态 disabled=true+compact=0×4）。产物 `hosts/ios/results/paint-hint-*.json` + `paint-hint-summary.txt`。
+  ★诚实边界：本场景 91 节点/88 文本层（演示场景），**百分比不可与历史 −39%（2000 层）直接对比**；
+    本测的价值 = 「方向 + 接线 + 装置可信」三者齐备。
 
 ### 历史记录：本轮之前的阻塞（保留以供追溯）
 - [ ] iOS 内存增量复测（**原状**）—— ❌ 查明了两层阻塞（不是"没跑"）：

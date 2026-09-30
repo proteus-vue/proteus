@@ -823,15 +823,16 @@
   },
   "host_node_count" : 91,
   "host_timing_last" : {
-    "build_layers_ms" : 23.218989372253418,
-    "host_total_ms" : 24.731040000915527,
-    "layout_ms" : 0.42796134948730469,
-    "measure_ms" : 0.070095062255859375
+    "build_layers_ms" : 23.211002349853516,
+    "host_total_ms" : 24.661064147949219,
+    "layout_ms" : 0.37896633148193359,
+    "measure_ms" : 0.074028968811035156
   },
-  "js_js_avg_ms" : 4.5,
+  "js_js_avg_ms" : 4.4500000000000002,
   "js_ok" : true,
   "js_phases" : 3,
   "js_report" : {
+    "build_id" : "de4516e4-092153",
     "created_nodes_after_all" : {
       "elements" : 190,
       "texts" : 76
@@ -841,24 +842,25 @@
       "texts" : 26
     },
     "host_final_raw" : {
-      "build_layers_ms" : 23.219999999999999,
+      "build_layers_ms" : 23.210000000000001,
       "cgfont_failure" : "",
       "cgfont_fallbacks" : 0,
       "changed_rects" : 0,
       "font_family_fallbacks" : 0,
-      "host_total_ms" : 24.73,
+      "host_total_ms" : 24.66,
       "incremental" : false,
       "layer_count" : 91,
-      "layout_ms" : 0.42999999999999999,
+      "layout_ms" : 0.38,
       "measure_cache_hits" : 26,
       "measure_cache_misses" : 0,
       "measure_ms" : 0.070000000000000007,
-      "mem_mb" : 20.399999999999999,
-      "mem_peak_mb" : 29.199999999999999,
+      "mem_mb" : 18,
+      "mem_peak_mb" : 28.699999999999999,
       "node_count" : 91,
       "ok" : true,
       "paint_hint_compact" : 57,
       "paint_hint_disabled" : false,
+      "paint_hint_env" : "",
       "paint_hint_generic" : 57,
       "patch_count" : 0,
       "phase" : "update",
@@ -869,24 +871,25 @@
     },
     "host_raw_by_phase" : {
       "update_grow" : {
-        "build_layers_ms" : 15.699999999999999,
+        "build_layers_ms" : 15.49,
         "cgfont_failure" : "",
         "cgfont_fallbacks" : 0,
         "changed_rects" : 0,
         "font_family_fallbacks" : 0,
-        "host_total_ms" : 19.510000000000002,
+        "host_total_ms" : 19.23,
         "incremental" : false,
         "layer_count" : 217,
-        "layout_ms" : 0.87,
+        "layout_ms" : 0.76000000000000001,
         "measure_cache_hits" : 43,
         "measure_cache_misses" : 19,
-        "measure_ms" : 0.88,
-        "mem_mb" : 18.600000000000001,
-        "mem_peak_mb" : 17.699999999999999,
+        "measure_ms" : 0.91000000000000003,
+        "mem_mb" : 18.300000000000001,
+        "mem_peak_mb" : 17.5,
         "node_count" : 217,
         "ok" : true,
         "paint_hint_compact" : 44,
         "paint_hint_disabled" : false,
+        "paint_hint_env" : "",
         "paint_hint_generic" : 44,
         "patch_count" : 0,
         "phase" : "update",
@@ -897,7 +900,7 @@
       },
       "update_style" : {
         "_host_timing" : {
-          "diff_ms" : 0.59999999999999998,
+          "diff_ms" : 0.63,
           "layers_ms" : 0,
           "measure_ms" : 0.14000000000000001,
           "update_ffi_ms" : 0.029999999999999999
@@ -907,22 +910,23 @@
         "cgfont_fallbacks" : 0,
         "changed_rects" : 0,
         "font_family_fallbacks" : 0,
-        "host_total_ms" : 0.72999999999999998,
+        "host_total_ms" : 0.76000000000000001,
         "in_bytes" : 35794,
         "incremental" : true,
         "layer_count" : 217,
-        "layout_ms" : 0.68000000000000005,
+        "layout_ms" : 0.70999999999999996,
         "measure_cache_hits" : 62,
         "measure_cache_misses" : 0,
         "measure_ms" : 0.14000000000000001,
-        "mem_mb" : 29.199999999999999,
-        "mem_peak_mb" : 29.199999999999999,
+        "mem_mb" : 28.699999999999999,
+        "mem_peak_mb" : 28.699999999999999,
         "node_count" : 217,
         "ok" : true,
         "paint_hint_compact" : 44,
         "paint_hint_disabled" : false,
+        "paint_hint_env" : "",
         "paint_hint_generic" : 44,
-        "parse_ms" : 0.73999999999999999,
+        "parse_ms" : 0.75,
         "patch_count" : 0,
         "path" : "update",
         "relayout_count" : 0,
@@ -932,9 +936,9 @@
       }
     },
     "js_only_throughput" : {
-      "avg_ms" : 4.5,
+      "avg_ms" : 4.4500000000000002,
       "iterations" : 40,
-      "max_ms" : 7,
+      "max_ms" : 8,
       "note" : "★每次 = Vue 响应式变更 → 重渲染 → diff\/patch → 树拍平 → 数值折叠（**不含**宿主调用与 JSON 序列化）"
     },
     "notes" : [
@@ -949,13 +953,13 @@
     },
     "phases" : {
       "mount" : {
-        "host_ms" : 18,
+        "host_ms" : 24,
         "node_count" : 91,
         "patch_count" : 152,
-        "serialize_ms" : 1,
-        "to_request_ms" : 1,
-        "total_ms" : 25,
-        "vue_ms" : 5
+        "serialize_ms" : 0,
+        "to_request_ms" : 2,
+        "total_ms" : 30,
+        "vue_ms" : 4
       },
       "update_grow" : {
         "host_ms" : 21,
@@ -963,8 +967,8 @@
         "patch_count" : 280,
         "serialize_ms" : 0,
         "to_request_ms" : 3,
-        "total_ms" : 30,
-        "vue_ms" : 6
+        "total_ms" : 29,
+        "vue_ms" : 5
       },
       "update_style" : {
         "host_ms" : 7,
@@ -979,7 +983,7 @@
     "runtime" : "JavaScriptCore（系统自带，与 iOS 竖切同一运行时）",
     "snapshot" : {
       "ok" : true,
-      "path" : "\/var\/mobile\/Containers\/Data\/Application\/6AAA2F31-525D-4D6C-AD2C-7904A6D6679E\/Documents\/selfdraw-final.png"
+      "path" : "\/var\/mobile\/Containers\/Data\/Application\/2B4C0BC7-EB93-42C9-BA77-11A07FB9EF1F\/Documents\/selfdraw-final.png"
     },
     "unknown_keys" : {
 
@@ -990,8 +994,8 @@
     }
   },
   "launch_diag" : {
-    "bootstrap_ms" : 54.100000000000001,
-    "first_frame_ms" : 60.509999999999998,
+    "bootstrap_ms" : 111.61,
+    "first_frame_ms" : 126.94,
     "first_frame_source" : "kernel:p_starttime",
     "forced_style" : "Dark",
     "interface_style" : "Dark",
@@ -1639,5 +1643,6 @@
       "y" : 0
     }
   },
-  "tree_hash" : "67f07e53"
+  "run_ts" : 1790731338.369971,
+  "tree_hash" : "af7d1615"
 }

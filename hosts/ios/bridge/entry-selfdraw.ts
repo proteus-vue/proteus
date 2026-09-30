@@ -50,6 +50,10 @@ declare const proteusSelfDraw: SelfDrawNative
 /** 快照名（宿主按模式注入；此处仅作默认） */
 const BN = { snapshot: 'selfdraw-final' }
 
+// ★构建标识（每次构建由 hosts/ios/bridge/inject-build-id.mjs 注入；与 entry-bench 同机制）
+//   —— 「设备上跑的是哪份代码」必须可**一眼判定**（报告新鲜度判据的内容锚点）。
+const BUILD_ID = 'de4516e4-092153'
+
 const VP = (globalThis as unknown as { __PROTEUS_VIEWPORT__?: { width: number; height: number } })
   .__PROTEUS_VIEWPORT__ ?? { width: 390, height: 844 }
 const now = (): number => Date.now()
@@ -247,6 +251,7 @@ const api = {
     const shot = proteusSelfDraw.snapshot(BN.snapshot)
     const jsAvg = jsOnly.length > 0 ? jsOnly.reduce((x, y) => x + y, 0) / jsOnly.length : -1
     const report = {
+      build_id: BUILD_ID,
       runtime: 'JavaScriptCore（系统自带，与 iOS 竖切同一运行时）',
       viewport: VP,
       phases: phaseOut,

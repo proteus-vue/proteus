@@ -3106,7 +3106,6 @@ final class SelfDrawBridge: NSObject, SelfDrawExports {
                         "paint_hint_compact": SelfDrawBridge.paintHintCompact,
                         "paint_hint_generic": SelfDrawBridge.paintHintGeneric,
                         "paint_hint_disabled": SelfDrawBridge.paintHintDisabled,
-            "paint_hint_env": SelfDrawBridge.paintHintEnvRaw,
                         "paint_hint_env": SelfDrawBridge.paintHintEnvRaw,
                         // ★字体族契约读数（两端词汇表是否一致：非零即为契约分叉）
                         "font_family_fallbacks": SelfDrawBridge.fontFamilyFallbackCount,
@@ -3197,7 +3196,6 @@ final class SelfDrawBridge: NSObject, SelfDrawExports {
             "paint_hint_generic": SelfDrawBridge.paintHintGeneric,
             "paint_hint_disabled": SelfDrawBridge.paintHintDisabled,
             "paint_hint_env": SelfDrawBridge.paintHintEnvRaw,
-                        "paint_hint_env": SelfDrawBridge.paintHintEnvRaw,
             "font_family_fallbacks": SelfDrawBridge.fontFamilyFallbackCount,
             "unknown_font_family": SelfDrawBridge.lastUnknownFontFamily,
             "cgfont_fallbacks": SelfDrawBridge.cgFontFallbackCount,
@@ -3235,6 +3233,10 @@ final class SelfDrawBridge: NSObject, SelfDrawExports {
         out["layer_count"] = view?.builtLayerCount ?? -1
         // ★白屏诊断（见 SelfDrawViewController.launchDiag 注释）
         out["launch_diag"] = SelfDrawViewController.launchDiag
+        // ★本轮报告写出时刻（Unix 秒）——A/B 测量脚本的**内容级新鲜度判据**：
+        //   只认「run_ts ≥ 本次 launch 时刻」的报告。实测踩到：轮询只查"字段存在"
+        //   ⇒ 上一轮的残留报告同样满足 ⇒ 两个变体其实在同一份旧数据上比，差值恒 0。
+        out["run_ts"] = Date().timeIntervalSince1970
         if let d = summaryJson.data(using: .utf8), let o = try? JSONSerialization.jsonObject(with: d) as? [String: Any] {
             for (k, v) in o { out["js_\(k)"] = v }
         }
@@ -3262,6 +3264,18 @@ final class SelfDrawBridge: NSObject, SelfDrawExports {
             try? d.write(to: url)
         }
         NSLog("[proteus] selfdraw 报告: %@", url.path)
+        // ★★事件驱动的完成信号（2026-09-30 用户红线："要么让 App 主动报告，禁止任何盲等"）
+        //   脚本侧等待报告 = 盲等（轮询 + sleep + 超时）；本行把「等」变成「收事件」：
+        //   ① 标记先打（日志流里可见，供 --console 消费）；
+        //   ② `PROTEUS_EXIT_AFTER_REPORT=1` ⇒ 报告写完立即退出进程 ⇒
+        //      `devicectl device process launch --console` 的**返回**就是完成信号
+        //      （零轮询 / 零 sleep / 零 timeout——脚本里不存在"等"这个动作）。
+        //   ★为什么退在 done() 而不是别处：done() 是报告**已落盘**后的唯一收尾点
+        //     （写文件 → NSLog → 本块），退出后数据完整性不受影响。
+        NSLog("[proteus] SELFDRAW_REPORT_READY path=%@", url.path)
+        if ProcessInfo.processInfo.environment["PROTEUS_EXIT_AFTER_REPORT"] == "1" {
+            exit(0)
+        }
     }
 }
 

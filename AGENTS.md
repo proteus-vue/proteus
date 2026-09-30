@@ -24,12 +24,26 @@
 - **能并行就并行，能批量就批量**：无依赖的调用合并同批发出。
 - 冲突优先级：**正确性 > 安全性 > 效率**。
 
-### ★★ 红线：禁止固定 sleep 盲等（2026-09-27 起有工具级拦截）
+### ★★ 红线：禁止**任何**盲等（sleep / timeout / 轮询）—— 2026-09-30 起收紧为全禁
 
-- **`sleep ≥ 5s` 会被 hook 拦截**（PreToolUse → `scripts/hooks/deny-sleep.mjs`，返回 deny + 替代方案）。
-  · hook 脚本**已入库**（`scripts/hooks/deny-sleep.mjs`），配置在 `.zcode/config.json`（该目录 gitignore，
-    属本地配置）：新 worktree/新机器请把下方 `hooks` 块加进 `.zcode/config.json` 并**重启会话**——
-    ZCode 在会话启动时读取 hooks 源，中途创建不生效。
+- **判据（用户 2026-09-30 原话）**：「**禁止任何情况下的 sleep、timeout**，只要有异步脚本全部异步执行……
+  要么让 App 主动报告，要么有条件等待」。**`sleep` 任意时长一律拒绝**（含 `sleep 1`，不再有 ≥5s 阈值）。
+- **两道门禁是一个整体**（工具层 hook + 静态门禁——覆盖面必须跟着实际形态走）：
+  · `scripts/hooks/deny-sleep.mjs`（PreToolUse）：拦**命令字面量**里的 `sleep` / `timeout N`；
+  · `pnpm check:no-blind-wait`（静态扫 `hosts/**` `scripts/**` `.agents/**` 全部 `.sh`）：
+    拦**脚本内部**的 sleep（hook 的结构性盲区——实测：`bash run-selfdraw.sh` 字面无 sleep，
+    而脚本内部盲等 600 秒/轮，一次测试 11 分钟里 10 分钟白等，且等的判据**永远不可能满足**）。
+  · 基线棘轮 `scripts/no-blind-wait-baseline.json`：存量只减不增；改到哪个文件就把那个文件的清掉。
+- **两条合法形态（优先级从高到低）**：
+  1. **让被测对象主动上报**（首选）：等进程退出 / 读管道 / 读事件流。本仓实例：
+     iOS 宿主 `PROTEUS_EXIT_AFTER_REPORT=1` ⇒ 报告落盘后进程自退 ⇒
+     `devicectl/simctl launch --console` 的**返回即完成信号**（零轮询 / 零 sleep / 零 timeout）。
+  2. **有条件等待**：`bash .agents/skills/ai-efficiency-rules/scripts/wait_for.sh --cmd/--file/--http`
+     （有界轮询，全仓**唯一**允许含 sleep 的原语，白名单在 check-no-blind-wait.mjs）。
+- **长任务一律后台异步执行**（run_in_background），不得让用户/AI 前台干等。
+- **hook 接线**：hook 脚本**已入库**（`scripts/hooks/deny-sleep.mjs`），配置在 `.zcode/config.json`
+  （该目录 gitignore，属本地配置）：新 worktree/新机器请把下方 `hooks` 块加进 `.zcode/config.json`
+  并**重启会话**——ZCode 在会话启动时读取 hooks 源，中途创建不生效。
   · 安装片段（`hooks.enabled` 必填，否则配置文件的 hooks 默认不运行）：
     ```json
     { "hooks": { "enabled": true, "events": { "PreToolUse": [
@@ -44,12 +58,11 @@
     ★**三个 hook 是一个整体**（sleep 盲等 / 全量测试重复跑 / 全量门禁链重复跑）——
       只装第一个等于三条红线只落实一条（本仓实测过：`deny-blind-tests` 在别人的机器上缺失时，
       「全量跑三遍」那类浪费照样发生）。
-  · 自测：`printf '%s' '{"tool_name":"Bash","tool_input":{"command":"sleep 100"}}' | node scripts/hooks/deny-sleep.mjs`
-    → 应输出 `permissionDecision: deny`。
-- **部署/线上核验**：跑一次 `pnpm check:live`（仓库自带 `website/scripts/verify-live.mjs`，带 CDN 传播重试）。
-  **不要**自行写 `for i in ...; do curl ...; sleep N; done` 轮询——这正是被拦截的模式。
-- **等条件就绪**：`bash .agents/skills/ai-efficiency-rules/scripts/wait_for.sh --http <url> --timeout 90`。
-- **无法判定时（等 CI 队列等）**：**直接告诉用户「已触发，请刷新查看」**——用户目视验收比 AI 轮询快。
+- 自测：
+  `printf '%s' '{"tool_name":"Bash","tool_input":{"command":"sleep 1"}}' | node scripts/hooks/deny-sleep.mjs` → deny；
+  `node scripts/check-no-blind-wait.mjs` → 绿（存量已钉）；往任意 `.sh` 注入一行 `sleep 1` → 当场红。
+- 部署/线上核验：跑一次 `pnpm check:live`（仓库自带 `website/scripts/verify-live.mjs`，带 CDN 传播重试）。
+  **无法机器判定时（等 CI 队列等）**：直接告诉用户「已触发，请刷新查看」——用户目视验收比 AI 轮询快。
   （用户原话：「等你验证还不如我直接去看」「不用验证了，已经生效了」——已发生 3 次，记牢。）
 - 禁止的三种错误验证法（均实测踩过）：① 轮询 HTML 抓 CSS 哈希（有 CDN 缓存）；
   ② grep 主 bundle 找文档标记（内容在独立 chunk）；③ 资产名已变仍判 old。

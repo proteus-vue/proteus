@@ -94,18 +94,13 @@ cat > "$APP/Info.plist" <<PLIST
 </dict></plist>
 PLIST
 
-echo "==> ⑥ 启动模拟器"
-xcrun simctl boot "$SIM_NAME" 2>/dev/null || true
-# ★条件等待（不用固定 sleep）：等到设备真的 booted
-BOOTED=0
-for _ in $(seq 1 20); do
-  if xcrun simctl list devices booted 2>/dev/null | grep -q "$SIM_NAME"; then BOOTED=1; break; fi
-  sleep 2
-done
-[ "$BOOTED" = "1" ] || { echo "✗ 模拟器未能启动：$SIM_NAME"; exit 4; }
+echo "==> ⑥ 启动模拟器（事件驱动：bootstatus 阻塞到完成——无轮询 / 无 sleep）"
+# ★`simctl bootstatus -b`：需要则先 boot，然后**阻塞**直到启动完成（系统自带的完成事件；
+#   替代原先的「for 循环 + sleep 2」探测）。
+xcrun simctl bootstatus "$SIM_NAME" -b >/dev/null 2>&1 || { echo "✗ 模拟器未能启动：$SIM_NAME"; exit 4; }
 echo "    已启动：$SIM_NAME"
 
-echo "==> ⑦ 安装并启动"
+echo "==> ⑦ 安装并启动（事件驱动：App 报告落盘后自退——launch --console 返回即完成）"
 # ★★安装会**换容器**（实测踩到）：`simctl install` 之后数据容器路径可能变化
 #   ⇒ 容器路径必须在 install **之后**取（先取再装 ⇒ 拿到旧容器 ⇒ 报告永远找不到）。
 xcrun simctl uninstall booted "$BUNDLE_ID" >/dev/null 2>&1 || true
@@ -113,22 +108,23 @@ xcrun simctl install booted "$APP" || { echo "✗ 安装失败"; exit 4; }
 CONTAINER="$(xcrun simctl get_app_container booted "$BUNDLE_ID" data 2>/dev/null || true)"
 [ -n "$CONTAINER" ] || { echo "✗ 取不到数据容器"; exit 4; }
 
-# ★不用 `--console-pty`：它把 stdout 绑到 pty，脚本 `timeout` 到达时会连应用一起杀
-#   ⇒ **报告还没写就被杀**（实测：日志里看到了 mount 输出，但 Documents 是空的）。
-#   改为**后台启动 + 条件等待报告**（本仓效率纪律：等待有条件，不固定 sleep）。
+# ★★事件驱动（2026-09-30 重写；替代原先的「for + sleep 2 × 60」轮询。用户红线：
+#   「禁止任何 sleep/timeout——要么 App 主动上报，要么有条件等待」）：
+#   宿主 `PROTEUS_EXIT_AFTER_REPORT=1` ⇒ 报告落盘后**进程自退**；
+#   `simctl launch --console` **阻塞到进程退出**才返回 ⇒ 返回即完成。零轮询 / 零 sleep。
+#   ★环境变量经 `SIMCTL_CHILD_` 前缀传给 App（simctl 的既定机制）。
+#   ★原注释保留（它解释了为什么弃用 --console-pty）：--console-pty 把 stdout 绑到 pty，
+#     脚本被外部 timeout 杀掉时会连应用一起杀（报告未写就被杀）；现在**不用 timeout**、
+#     由 App 自退 ⇒ 用 --console 无此问题。
 REPORT="selfdraw-report.json"
 [ "$MODE" = "bench" ] && REPORT="logic-bench-report.json"
-xcrun simctl launch booted "$BUNDLE_ID" >/dev/null 2>&1 || { echo "✗ 启动失败"; exit 4; }
-OK=0
-for _ in $(seq 1 60); do
-  if [ -f "$CONTAINER/Documents/$REPORT" ]; then OK=1; break; fi
-  sleep 2
-done
-if [ "$OK" = "1" ]; then
-  echo "    报告已生成（等待完成）"
+SIMCTL_CHILD_PROTEUS_EXIT_AFTER_REPORT=1 xcrun simctl launch --console booted "$BUNDLE_ID" >/dev/null 2>&1 || true
+if [ -f "$CONTAINER/Documents/$REPORT" ]; then
+  echo "    报告已生成（App 主动上报；无等待）"
 else
-  echo "    ⚠ 等待 120s 仍未生成报告——打印最近日志以便归因："
+  echo "    ✗ 报告未生成——打印最近日志以便归因："
   xcrun simctl spawn booted log show --last 2m --predicate 'process == "ProteusSelfDraw"' 2>/dev/null | grep -iE "proteus|error" | tail -8 | sed 's/^/      /'
+  exit 5
 fi
 
 echo ""

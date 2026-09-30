@@ -33,6 +33,18 @@
 //        ★★**顺带纠正一条我先前写错的经验**：注释里的反引号（\`cmd\`）**不会**被 bash 执行
 //          （实测：`# 注释 \`echo x\`` 无任何输出）——我曾在记忆里把它写成"会触发命令替换"，
 //          属**未经验证的推断**。⇒ 本条判据覆盖的是**真语法错误**，不是那条假规则。
+//          ★★2026-09-30 补充（这两条**不矛盾**）：普通 `#` 注释里的反引号无害；
+//          但**未加引号的 heredoc 体内**的反引号**会**被命令替换执行（判据 ⑤）。
+//   ④ **`strings … | grep -q` 变形**（仅在启用 pipefail 的脚本里）：grep 找到即退 ⇒
+//      `strings` 收 SIGPIPE ⇒ 管道状态 141 ⇒ `if ! …` 判成"没找到"——**假红**。
+//      ★实测（2026-09-30）：measure-paint-hint.sh 的产物预检因此**每次必红**，
+//        把"二进制没问题"报成"旧产物"；本仓已第三次踩（前两次：`unzip | grep -q`，
+//        见 hosts/android/run-js-batch.sh:38 与 build-and-run.sh:214 的注释）。
+//      ★正解：先落变量（`STR="$(strings …)"`）再用 `case`/`grep`（对变量），或 `grep -c` 读全量。
+//   ⑤ **未加引号 heredoc 体内的反引号**：`<<PLIST`（不带引号）的正文会被命令替换执行 ⇒
+//      正文里的 \`word\` 会被当命令跑（实测：Info.plist 注释里的 \`UILaunchScreen\` ⇒
+//      `UILaunchScreen: command not found` 噪声 + 注释文字被替换成空）。
+//      ★修法：把反引号换成「」等普通字符，或给 heredoc 定界符加引号（但那样 `$VAR` 也不再展开）。
 //
 // 用法：node scripts/check-shell-i18n-vars.mjs
 // 退出码：0 通过 / 1 命中
@@ -75,36 +87,57 @@ const HEREDOC_START = /<<(-?)\s*(['"]?)([A-Za-z_][A-Za-z0-9_]*)\2/
  */
 function heredocLines(lines) {
   const inside = new Array(lines.length).fill(false)
+  const unquoted = new Array(lines.length).fill(false) // ★判据 ⑤ 用：该行是否在**未加引号**的 heredoc 内
   let end = null // 当前 heredoc 的结束词（null = 不在 heredoc 内）
+  let quote = null // 定界符的引号（'' = 未加引号 ⇒ 正文会做参数/命令替换）
   for (let i = 0; i < lines.length; i++) {
     const line = lines[i]
     if (end !== null) {
       inside[i] = true
-      if (line.trim() === end) end = null
+      unquoted[i] = quote === ''
+      if (line.trim() === end) {
+        end = null
+        quote = null
+      }
       continue
     }
     const m = HEREDOC_START.exec(line)
     if (m) {
       // ★同一行可能有多个 heredoc（罕见）；此处取**最后一个**（与 bash 的读取顺序一致）
       const starts = [...line.matchAll(new RegExp(HEREDOC_START.source, 'g'))]
-      end = starts[starts.length - 1][3]
-      // 若本行的结束词就是自身（`<<EOF` 后紧跟 EOF），交给下一轮
+      const last = starts[starts.length - 1]
+      end = last[3]
+      quote = last[2]
     }
   }
-  return inside
+  return { inside, unquoted }
 }
 
 const hits = []
 const foreignHits = []
+const sigpipeHits = [] // 判据 ④
+const heredocBacktickHits = [] // 判据 ⑤
+// ★判据 ④ 的形态：同一行里 `strings … | … grep … -q`（只对启用了 pipefail 的脚本判——无 pipefail 时该写法不产生假红）
+const SIGPIPE_Q = /strings[^|#]*\|[^|#]*grep[^|#]*\s-q/
 for (const f of files) {
   const rel = path.relative(ROOT, f)
-  const lines = fs.readFileSync(f, 'utf-8').split('\n')
-  const inHeredoc = heredocLines(lines)
+  const text = fs.readFileSync(f, 'utf-8')
+  const pipefail = /set\s+[^\n]*pipefail/.test(text)
+  const lines = text.split('\n')
+  const { inside: inHeredoc, unquoted: inUnquoted } = heredocLines(lines)
   lines.forEach((line, i) => {
     const m = RISKY.exec(line)
     if (m) hits.push({ file: rel, line: i + 1, text: m[0], src: line.trim().slice(0, 100) })
     if (!inHeredoc[i] && FOREIGN_COMMENT.test(line)) {
       foreignHits.push({ file: rel, line: i + 1, src: line.trim().slice(0, 100) })
+    }
+    // ④ 跳过注释行：陷阱是**代码形态**，而解释它的注释里天然会出现该写法（本文件头就有）
+    if (pipefail && !line.trim().startsWith('#') && SIGPIPE_Q.test(line)) {
+      sigpipeHits.push({ file: rel, line: i + 1, src: line.trim().slice(0, 100) })
+    }
+    // ⑤ 未加引号 heredoc 内的反引号（会被当命令执行）
+    if (inHeredoc[i] && inUnquoted[i] && line.includes('`')) {
+      heredocBacktickHits.push({ file: rel, line: i + 1, src: line.trim().slice(0, 100) })
     }
   })
 }
@@ -130,7 +163,23 @@ for (const f of files) {
   }
 }
 
-if (hits.length || foreignHits.length || syntaxHits.length) {
+if (sigpipeHits.length) {
+  console.error(`\n❌ 发现 ${sigpipeHits.length} 处 \`strings … | grep -q\`（pipefail 下 SIGPIPE ⇒ **假红**）：\n`)
+  for (const h of sigpipeHits) console.error(`  ${h.file}:${h.line}\n      ${h.src}`)
+  console.error('\n  原理：`grep -q` 找到即退 ⇒ `strings` 收 SIGPIPE（141）⇒ 管道状态 141 ⇒ `if ! …` 判成"没找到"。')
+  console.error('  修法：先落变量再匹配——`STR="$(strings "$BIN")"` 然后 `case "$STR" in *"$needle"*) …`；')
+  console.error('        或 `grep -c`（读全量、不提前退出）。同类前科：`unzip | grep -q`（run-js-batch.sh:38 注释）。')
+}
+if (heredocBacktickHits.length) {
+  console.error(`\n❌ 发现 ${heredocBacktickHits.length} 处**未加引号 heredoc 体内的反引号**（会被命令替换执行）：\n`)
+  for (const h of heredocBacktickHits) console.error(`  ${h.file}:${h.line}\n      ${h.src}`)
+  console.error('\n  原理：`<<PLIST`（无引号）的正文会做参数/命令替换 ⇒ 正文里的 \`cmd\` 真的会被执行')
+  console.error('        （实测：Info.plist 注释里的 \`UILaunchScreen\` ⇒ "UILaunchScreen: command not found" 噪声）。')
+  console.error('  修法：正文里的反引号换成「」等普通字符；若要正文原样输出则给定界符加引号')
+  console.error('        （`<<\'PLIST\'`——但那样 `$VAR` 也不再展开，需另用替换实现）。')
+}
+
+if (hits.length || foreignHits.length || syntaxHits.length || sigpipeHits.length || heredocBacktickHits.length) {
   if (syntaxHits.length) {
     console.error(`\n❌ 发现 ${syntaxHits.length} 个**语法错误**（bash -n 未通过）：\n`)
     for (const h of syntaxHits) console.error(`  ${h.file}\n      ${h.msg}`)
@@ -140,4 +189,4 @@ if (hits.length || foreignHits.length || syntaxHits.length) {
   }
   process.exit(1)
 }
-console.log('✅ 三类检查全过：变量边界 · 注释语言 · bash -n 语法')
+console.log('✅ 五类检查全过：变量边界 · 注释语言 · bash -n 语法 · pipefail-SIGPIPE · heredoc 反引号')

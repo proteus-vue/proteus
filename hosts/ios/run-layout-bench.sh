@@ -47,10 +47,11 @@ cat > "$APP/Info.plist" <<PLIST
   <key>UIDeviceFamily</key><array><integer>1</integer><integer>2</integer></array>
   <key>UILaunchScreen</key><dict/>
   <!-- ★启动屏**背景色**（本仓实测踩到的白屏根因）：
-       `UILaunchScreen` 空 dict ⇒ iOS 用**系统背景色**⇒ 浅色模式下是**白**，
+       「UILaunchScreen」空 dict ⇒ iOS 用**系统背景色**⇒ 浅色模式下是**白**，
        而本应用是深色（背景 #101020 / 黑）⇒ 启动瞬间**白一下**再变黑。
-       `UIUserInterfaceStyle = Dark` 让系统背景 = 黑 ⇒ 启动屏与首帧连续（白闪消失）。
-       ★本应用所有颜色都是硬编码深色 ⇒ 强制深色**语义正确**（不是权宜之计）。 -->
+       「UIUserInterfaceStyle = Dark」让系统背景 = 黑 ⇒ 启动屏与首帧连续（白闪消失）。
+       ★本应用所有颜色都是硬编码深色 ⇒ 强制深色**语义正确**（不是权宜之计）。
+       ★★这里不能写反引号：本 heredoc 未加引号 ⇒ 反引号会被**命令替换执行**。 -->
   <key>UIUserInterfaceStyle</key><string>Dark</string>
   <key>UIApplicationSceneManifest</key>
   <dict><key>UIApplicationSupportsMultipleScenes</key><false/><key>UISceneConfigurations</key><dict/></dict>
@@ -75,11 +76,24 @@ else
   echo "    ⚠ 无匹配描述文件（先 provision ${BUNDLE_ID}）"; codesign --force --sign "$IDENTITY" --timestamp=none "$APP"
 fi
 
-echo "==> ⑤ 安装并启动"
+echo "==> ⑤ 安装并启动（事件驱动：报告落盘后自退——launch --console 返回即完成）"
+# ★★2026-09-30 重写（用户红线：「禁止任何 sleep/timeout——要么 App 主动上报，要么有条件等待」）：
+#   原实现 `launch` 后 `sleep 6` 再取报告（盲等；报告晚了就静默取到旧数据）。
+#   现在：宿主 `PROTEUS_EXIT_AFTER_REPORT=1` ⇒ 报告落盘后进程自退；
+#   `launch --console` **阻塞到进程退出**才返回 ⇒ 返回即完成。零睡眠 / 零轮询。
 xcrun devicectl device install app --device "$UDID" "$APP" 2>&1 | tail -2
-xcrun devicectl device process launch --device "$UDID" "$BUNDLE_ID" 2>&1 | tail -1
-sleep 6
-echo "==> ⑥ 取回报告"
+LB_LOG="$(mktemp)"
+xcrun devicectl device process launch --console --terminate-existing \
+  --environment-variables '{"PROTEUS_EXIT_AFTER_REPORT":"1"}' \
+  --device "$UDID" "$BUNDLE_ID" > "$LB_LOG" 2>&1 || true
+if grep -q "BENCH_REPORT_READY" "$LB_LOG"; then
+  echo "    App 已主动上报（报告落盘后退出）"
+else
+  echo "    ⚠ 日志未见 BENCH_REPORT_READY —— 以取回的报告为准；日志尾："
+  tail -5 "$LB_LOG" | sed 's/^/      /'
+fi
+rm -f "$LB_LOG"
+echo "==> ⑥ 取回报告（App 已退出 ⇒ 一次取回；无 sleep）"
 mkdir -p "$HERE/results"
 xcrun devicectl device copy from --device "$UDID" --domain-type appDataContainer \
   --domain-identifier "$BUNDLE_ID" --source Documents/layout-core-bench.json \

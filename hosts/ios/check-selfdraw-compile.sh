@@ -27,10 +27,26 @@ HOST_SRC="$HERE/ProteusHost/selfdraw-scene.swift"
 # ★与 run-selfdraw.sh 的编译参数**保持一致**（否则本地绿、设备红——"验证了但验的是别的"）：
 #   sdk=iphoneos · target arm64-apple-ios15.0 · 同批 framework
 echo "==> 类型检查 iOS 自绘宿主（swiftc -typecheck · 零设备）"
-xcrun --sdk iphoneos swiftc -typecheck \
+RC=0
+OUT="$(xcrun --sdk iphoneos swiftc -typecheck \
   -target arm64-apple-ios15.0 \
   -framework UIKit -framework CoreText -framework JavaScriptCore \
   -parse-as-library \
-  "$HOST_SRC"
+  "$HOST_SRC" 2>&1)" || RC=$?
+if [ "$RC" -ne 0 ]; then
+  printf '%s\n' "$OUT" | tail -20
+  echo "✗ 类型检查失败（exit ${RC}）"
+  exit "$RC"
+fi
+
+# ★★重复键门禁（2026-09-30 加）：字典**字面量**里插两组相同键 ⇒ 编译期只出**告警**
+#   （exit 0）、运行期是 fatalError（`Dictionary literal contains duplicate keys`）。
+#   本仓已踩两次（模拟器闪退 / A/B 报告路径——paint_hint_env 被插两次），
+#   两次都**悄悄漏过**本脚本（旧版忽略告警）⇒ 在此把该告警升级为红。
+if printf '%s' "$OUT" | grep -q "duplicate entries for string literal key"; then
+  echo "✗ 检测到字典字面量重复键（编译告警 · 运行必崩）——必须先修："
+  printf '%s\n' "$OUT" | grep -n -B1 -A1 "duplicate entries for string literal key" | head -12
+  exit 1
+fi
 
 echo "✅ iOS 宿主类型检查通过（改动 selfdraw-scene.swift 后先跑本脚本，再上真机）"
