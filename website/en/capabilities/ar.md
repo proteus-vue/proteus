@@ -69,7 +69,9 @@ isSupported(version?: 'v1' | 'v2'): Promise<CapResult<boolean>>
 
 ### `ARSessionHandle`
 
-★权威标尺缺口 C76：AR/XR 视觉算法（`useAR()`）。 wx：`wx.createVKSession`（v1/v2 视觉算法会话——平面检测/人脸/手势/深度/OCR/标记）； web：`WebXR` 无对等视觉算法 → Err 诚实降级（isVKSupport 恒 false）。
+★权威标尺缺口 C76：AR/XR 视觉算法（`useAR()`）。
+wx：`wx.createVKSession`（v1/v2 视觉算法会话——平面检测/人脸/手势/深度/OCR/标记）；
+web：`WebXR` 无对等视觉算法 → Err 诚实降级（isVKSupport 恒 false）。
 
 | Method | Signature | Doc |
 |---|---|---|

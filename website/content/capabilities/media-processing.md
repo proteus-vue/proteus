@@ -97,7 +97,10 @@ audioPlayer(): MediaAudioPlayerHandle
 
 ### `MediaTrackInfo`
 
-★权威标尺缺口 C70：媒体高级（wx.createMediaContainer / createVideoDecoder / createMediaAudioPlayer）。 MediaContainer 视频轨道合成 / VideoDecoder 视频解码取帧 / MediaAudioPlayer 多音源混音。 wx 侧真实接入；web：MediaContainer/MediaAudioPlayer 无标准 → Err（可用 WebCodecs 之 VideoDecoder 做尽力承接），VideoDecoder 有 WebCodecs 标准 → 承接。
+★权威标尺缺口 C70：媒体高级（wx.createMediaContainer / createVideoDecoder / createMediaAudioPlayer）。
+MediaContainer 视频轨道合成 / VideoDecoder 视频解码取帧 / MediaAudioPlayer 多音源混音。
+wx 侧真实接入；web：MediaContainer/MediaAudioPlayer 无标准 → Err（可用 WebCodecs 之 VideoDecoder
+做尽力承接），VideoDecoder 有 WebCodecs 标准 → 承接。
 
 | 属性 | 类型 | 默认值 | 说明 |
 |---|---|---|---|

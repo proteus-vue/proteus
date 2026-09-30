@@ -71,7 +71,8 @@ requireAuthorize(): Promise<CapResult<boolean>>
 onNeedAuthorization(cb: (res: { privacyContractName: string }) => void): () => void
 ```
 
-**说明**：订阅「需要用户隐私授权」事件（wx.onNeedPrivacyAuthorization）。 用户在页面触发隐私接口但未同意时回调——业务据此弹自家协议 UI 或调用 openContract。
+**说明**：订阅「需要用户隐私授权」事件（wx.onNeedPrivacyAuthorization）。
+用户在页面触发隐私接口但未同意时回调——业务据此弹自家协议 UI 或调用 openContract。
 
 | 参数 | 类型 | 必填 | 说明 |
 |---|---|---|---|
@@ -83,7 +84,10 @@ onNeedAuthorization(cb: (res: { privacyContractName: string }) => void): () => v
 
 ### `PrivacySetting`
 
-★权威标尺缺口补齐（C65）：隐私协议（wx.getPrivacySetting / openPrivacyContract / requirePrivacyAuthorize / onNeedPrivacyAuthorization）。 《个人信息保护法》+ 微信隐私协议合规的刚需：开发者需在用户触发隐私授权时弹协议、可跳转协议页、可主动触发授权。 web 端无对等标准（Cookie 同意可由宿主自建）→ 缺省 Err 诚实降级（常驻宿主桥）。
+★权威标尺缺口补齐（C65）：隐私协议（wx.getPrivacySetting / openPrivacyContract /
+requirePrivacyAuthorize / onNeedPrivacyAuthorization）。
+《个人信息保护法》+ 微信隐私协议合规的刚需：开发者需在用户触发隐私授权时弹协议、可跳转协议页、可主动触发授权。
+web 端无对等标准（Cookie 同意可由宿主自建）→ 缺省 Err 诚实降级（常驻宿主桥）。
 
 | 属性 | 类型 | 默认值 | 说明 |
 |---|---|---|---|
