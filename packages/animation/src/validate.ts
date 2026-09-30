@@ -113,6 +113,36 @@ export function validateAnimations(decls: readonly AnimDecl[]): ValidationIssue[
         })
       }
     }
+    // ★MA5：滚动窗口的合法性——退化窗口（to <= from）会让进度恒 1（内核按"已滑过"处理）
+    //   而不是报错；但写成声明里多半是**笔误**（把 from/to 写反）⇒ 编译期拦住。
+    if (d.scroll) {
+      const { from, to } = d.scroll
+      if (!Number.isFinite(from) || !Number.isFinite(to)) {
+        issues.push({
+          index: i,
+          code: 'invalid-range',
+          message: `滚动窗口含非有限值：${JSON.stringify(d.scroll)}`,
+          hint: '窗口两端都要是具体的滚动位置（px）',
+        })
+      } else if (to <= from) {
+        issues.push({
+          index: i,
+          code: 'invalid-range',
+          message: `滚动窗口退化（to=${to} <= from=${from}）——进度将恒为 1，动画一开始就停在终点`,
+          hint: '检查 from/to 是否写反；窗口跨度应为正数（如 from: 0, to: 120）',
+        })
+      }
+    }
+    // ★MA5：滚动 + 弹簧并存 ⇒ 语义不明确（弹簧是**按时间**的物理积分，其进度参数在滚动驱动下
+    //   没有意义——内核以滚动位置换算出进度后走 `curve_eval`，物理积分不参与）
+    if (d.scroll && d.spring) {
+      issues.push({
+        index: i,
+        code: 'conflicting-easing',
+        message: '滚动驱动与弹簧物理并存 —— 弹簧的进度参数在滚动驱动下无意义（内核按位置换算进度后走曲线求值）',
+        hint: '滚动联动请用 `curve`（如 easeOut / linear）；弹簧留给时间驱动的动画',
+      })
+    }
   })
 
   return issues

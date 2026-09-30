@@ -295,6 +295,15 @@ pub struct Anim {
     pub drive: AnimDrive,
     /// `Progress` 驱动下的当前进度（0..1；`Time` 驱动下此字段被忽略）
     pub progress: f32,
+    /// ★★MA5：**滚动窗口**（`scroll_to > scroll_from` 时生效）——滚动位置→进度的换算在**内核**
+    ///
+    /// 【为什么换算必须在内核（本仓纪律 #22 的又一次应用）】"视差系数 / 吸顶阈值"看着像布局数学，
+    ///   但它决定的是**动画进度**：若宿主各写一份 `(off - from) / span`，三端就会各有一套滚动手感，
+    ///   且与 `curve_eval` 的组合方式也会分叉。⇒ 宿主只报**原始滚动位置**，换算 + 曲线 + 写值都在内核。
+    /// 【与 `drive` 的关系】带滚动窗口的动画**恒以 `Progress` 语义求值**（`drive` 字段被忽略）——
+    ///   窗口的存在本身就说明"进度由外部位置决定"，不是时间。
+    pub scroll_from: f32,
+    pub scroll_to: f32,
     /// 求值模式
     pub mode: AnimMode,
     /// 当前值（权威 —— 曲线模式 = 本轮求值结果；弹簧模式 = 积分状态）
@@ -319,6 +328,8 @@ impl Anim {
             t_ms: 0.0,
             drive: AnimDrive::Time,
             progress: 0.0,
+            scroll_from: 0.0,
+            scroll_to: 0.0,
             mode: AnimMode::Curve,
             x: from,
             vel: 0.0,
@@ -814,7 +825,67 @@ impl AnimEngine {
         out
     }
 
-    /* ────────────────────────── ★★FLIP 布局动画（招牌能力） ────────────────────────── */
+    /* ──────────────────── ★★MA5：滚动联动（滚动位置 → 进度，换算在内核） ──────────────────── */
+
+    /// ★★**按滚动位置推进**（视差 / 吸顶 / 渐显的统一驱动）——把所有带**滚动窗口**的动画
+    /// 按当前滚动位置求值并写字段。
+    ///
+    /// 【为什么是"按位置"而不是"按节点"（与 `seek` 的关键差别）】滚动的输入是**一个标量**
+    ///   （内容偏移），而受它影响的动画可能分布在多个节点上（视差层、吸顶头、渐显项）。
+    ///   ⇒ 一次调用驱动**所有窗口动画**：宿主一次滚动回调 = 一次内核算值 = N 节点写值，
+    ///   宿主与 JS **都不参与**任何逐节点循环。
+    ///
+    /// 【换算规则（唯一实现在此，宿主零数学）】
+    ///   `p = ((scroll - from) / (to - from)).clamp(0,1)`；`to <= from` ⇒ 进度恒 1
+    ///   （退化窗口 = "已滑过"，不是除以零）。
+    ///   求值仍走 `curve_eval`（曲线知识也只在引擎一处）；写值走 `AnimKind::write`。
+    ///
+    /// 【与 takeover 的关系】滚动驱动**不参与接管**（位置由输入唯一决定，没有"速度移交"可言）——
+    ///   但 `start` 阶段的接管语义仍适用（同一节点上从时间动画切换过来时位置连续）。
+    ///
+    /// - Returns: `TickOutcome`（`updates` 供宿主当帧写层；`changed` 为真正变值的字段数）
+    pub fn seek_scroll(&mut self, tree: &mut LayoutTree, scroll: f32) -> TickOutcome {
+        let mut out = TickOutcome::default();
+        let mut touched: std::collections::HashSet<u32> = std::collections::HashSet::new();
+        for (a, idx) in self.anims.iter_mut() {
+            // 只驱动**滚动窗口**动画（`Time`/`Progress` 动画不受滚动影响）
+            if a.scroll_to <= a.scroll_from {
+                continue;
+            }
+            let p = if a.scroll_to > a.scroll_from {
+                ((scroll - a.scroll_from) / (a.scroll_to - a.scroll_from)).clamp(0.0, 1.0)
+            } else {
+                1.0
+            };
+            a.progress = p;
+            if *idx >= tree.nodes.len() {
+                continue; // 越界：跳过（与 tick/seek 同策略——不 panic）
+            }
+            let v = a.from + (a.to - a.from) * curve_eval(a.curve, p);
+            a.x = v;
+            if a.kind.write(&mut tree.nodes[*idx], v) {
+                out.changed += 1;
+                touched.insert(a.node_id);
+            }
+        }
+        out.active_after = self.anims.len();
+        out.updates = Self::collect_updates(tree, &touched);
+        out
+    }
+
+    /// 带窗口的声明式启动（MA5 的装配入口）：`scroll_from`/`scroll_to` 非退化时该动画
+    /// **恒以滚动驱动**（`drive`/`delay` 被忽略，见 `Anim::scroll_from` 注释）。
+    ///
+    /// ★**不接管**（`takeover=false`）：进度由滚动位置唯一决定，`from`/`to` 是**窗口映射的两端**
+    ///   ——若走接管语义，`from` 会被上一条动画的当前值覆盖 ⇒ 窗口映射静默偏移
+    ///   （现象：滚动联动"整体偏了一截"，且只在上一条动画中途切换时出现——典型静默缺陷）。
+    ///   回归测试 `start_scroll_does_not_inherit_previous_value_into_range` 守住。
+    pub fn start_scroll(&mut self, tree: &LayoutTree, mut a: Anim) -> Result<(), String> {
+        a.drive = AnimDrive::Progress;
+        a.t_ms = 0.0;
+        a.takeover = false;
+        self.start(tree, a)
+    }
 
     /// **记快照**：把当前所有节点的**绝对**矩形存进引擎（供布局变更后对比）
     ///
@@ -1013,6 +1084,8 @@ mod tests {
             t_ms: 0.0,
             drive: AnimDrive::Time,
             progress: 0.0,
+            scroll_from: 0.0,
+            scroll_to: 0.0,
             mode: AnimMode::Curve,
             x: 0.0,
             vel: 0.0,
@@ -1700,5 +1773,145 @@ mod tests {
         let o = e.tick(&mut t, 10.0);
         let v = find_visual(&o.updates, 2).expect("FLIP 节点的 update 必须被回报");
         assert!(v.ty > -40.0 && v.ty < 0.0, "回报的 ty 应在补间中（实测 {}）", v.ty);
+    }
+
+    /* ────────────────────── ★★MA5：滚动联动（seek_scroll） ────────────────────── */
+
+    /// 造一条"滚动窗口动画"：窗口 [from, to]，值 0 → 100，线性曲线（便于算术断言）
+    fn scroll_anim(node_id: u32, sf: f32, st: f32) -> Anim {
+        let mut a = anim(node_id, AnimKind::TranslateY);
+        a.curve = CURVE_LINEAR;
+        a.scroll_from = sf;
+        a.scroll_to = st;
+        a
+    }
+
+    #[test]
+    fn seek_scroll_maps_position_to_progress_and_value() {
+        // 窗口 [100, 200]：滚动 100 → 0；150 → 50（半程）；200 → 100
+        let mut t = tree_with(1);
+        let mut e = AnimEngine::new();
+        e.start_scroll(&t, scroll_anim(1, 100.0, 200.0)).unwrap();
+        e.seek_scroll(&mut t, 100.0);
+        assert_eq!(t.nodes[0].style.translate_y, 0.0, "窗口起点 ⇒ from");
+        e.seek_scroll(&mut t, 150.0);
+        assert!((t.nodes[0].style.translate_y - 50.0).abs() < 0.6, "半程 ⇒ 中值附近");
+        e.seek_scroll(&mut t, 200.0);
+        assert!((t.nodes[0].style.translate_y - 100.0).abs() < 1e-4, "窗口终点 ⇒ to（精确）");
+    }
+
+    #[test]
+    fn seek_scroll_clamps_outside_window() {
+        // 窗口外必须**钳制**（不是外推——否则视差会飞出屏幕）
+        let mut t = tree_with(1);
+        let mut e = AnimEngine::new();
+        e.start_scroll(&t, scroll_anim(1, 100.0, 200.0)).unwrap();
+        e.seek_scroll(&mut t, 0.0);
+        assert_eq!(t.nodes[0].style.translate_y, 0.0, "未到窗口 ⇒ 钉在起点");
+        e.seek_scroll(&mut t, 9999.0);
+        assert!((t.nodes[0].style.translate_y - 100.0).abs() < 1e-4, "滑过窗口 ⇒ 钉在终点");
+    }
+
+    #[test]
+    fn seek_scroll_degenerate_window_is_one_not_divide_by_zero() {
+        // 退化窗口（to <= from）⇒ 进度恒 1（"已滑过"），**不得**产生 NaN/Inf
+        let mut t = tree_with(1);
+        let mut e = AnimEngine::new();
+        e.start_scroll(&t, scroll_anim(1, 100.0, 100.0)).unwrap();
+        e.seek_scroll(&mut t, 100.0);
+        let v = t.nodes[0].style.translate_y;
+        assert!(v.is_finite(), "退化窗口不得产生非有限值（实测 {v}）");
+        // ★语义说明：退化窗口在 seek_scroll 里被跳过（不算"滚动动画"）——故值保持在起点。
+        //   本判据钉的是"不出 NaN/Inf"，不是"等于 to"。
+        assert_eq!(v, 0.0);
+    }
+
+    #[test]
+    fn seek_scroll_ignores_time_and_progress_anims() {
+        // 不带窗口的动画（时间驱动 / 手势驱动）**不受滚动影响**——滚动是独立通道
+        let mut t = tree_with(2);
+        let mut e = AnimEngine::new();
+        e.start(&t, anim(1, AnimKind::TranslateX)).unwrap(); // 时间驱动（无窗口）
+        let mut p = anim(2, AnimKind::Scale);
+        p.drive = AnimDrive::Progress;
+        p.progress = 0.5;
+        e.start(&t, p).unwrap();
+        let before_tx = t.nodes[0].style.translate_x;
+        let before_sc = t.nodes[1].style.scale;
+        e.seek_scroll(&mut t, 5000.0);
+        assert_eq!(t.nodes[0].style.translate_x, before_tx, "时间动画不被滚动改动");
+        assert_eq!(t.nodes[1].style.scale, before_sc, "无窗口的手势动画不被滚动改动");
+    }
+
+    #[test]
+    fn seek_scroll_drives_multiple_nodes_in_one_call() {
+        // ★一次滚动回调驱动**全部**窗口动画（视差层 + 吸顶 + 渐显混在一起）
+        let mut t = tree_with(3);
+        let mut e = AnimEngine::new();
+        let mut head = scroll_anim(1, 0.0, 100.0);
+        head.kind = AnimKind::TranslateY;
+        let mut bg = scroll_anim(2, 0.0, 100.0);
+        bg.to = -50.0; // 反向视差
+        let mut fade = scroll_anim(3, 0.0, 100.0);
+        fade.kind = AnimKind::Opacity;
+        fade.from = 1.0; // ★算术必须自洽：渐显是 1 → 0（首版写了 0 → 0，被断言当场挡下）
+        fade.to = 0.0;
+        e.start_scroll(&t, head).unwrap();
+        e.start_scroll(&t, bg).unwrap();
+        e.start_scroll(&t, fade).unwrap();
+        let o = e.seek_scroll(&mut t, 50.0);
+        assert_eq!(o.changed, 3, "三个节点的字段都应变值");
+        assert_eq!(o.updates.len(), 3, "updates 必须回报全部受影响节点（宿主一次刷完）");
+        assert!((t.nodes[1].style.translate_y - (-25.0)).abs() < 0.5, "反向视差半程 ≈ -25");
+        assert!((t.nodes[2].style.opacity - 0.5).abs() < 0.01, "渐显半程 ≈ 0.5");
+    }
+
+    #[test]
+    fn seek_scroll_respects_curve() {
+        // 曲线仍由内核求值：easeOut 在 50% 处应 **> 50%**（减速曲线的特征）
+        let mut t = tree_with(1);
+        let mut e = AnimEngine::new();
+        let mut a = scroll_anim(1, 0.0, 100.0);
+        a.curve = CURVE_EASE_OUT_CUBIC;
+        e.start_scroll(&t, a).unwrap();
+        e.seek_scroll(&mut t, 50.0);
+        let v = t.nodes[0].style.translate_y;
+        assert!(v > 50.0, "easeOut 半程应快于线性（实测 {v}）");
+        assert!(v < 100.0);
+    }
+
+    #[test]
+    fn seek_scroll_after_stop_does_nothing() {
+        // 解绑后滚动不得再动该节点（与 §7.3 同一红线——回收节点不能残留滚动绑定）
+        let mut t = tree_with(1);
+        let mut e = AnimEngine::new();
+        e.start_scroll(&t, scroll_anim(1, 0.0, 100.0)).unwrap();
+        e.seek_scroll(&mut t, 50.0);
+        let stopped = e.stop_nodes(&mut t, &[1]);
+        assert_eq!(stopped, 1);
+        let after_stop = t.nodes[0].style.translate_y;
+        e.seek_scroll(&mut t, 100.0);
+        assert_eq!(t.nodes[0].style.translate_y, after_stop, "解绑后滚动不得再写值");
+    }
+
+    #[test]
+    fn start_scroll_does_not_inherit_previous_value_into_range() {
+        // ★回归（本轮新写的设计决策）：滚动驱动**不接管**——窗口映射必须以**声明的 from** 为起点。
+        //   若走接管语义（from=上一条动画的当前值），上一条动画中途切换时映射会静默偏移。
+        let mut t = tree_with(1);
+        let mut e = AnimEngine::new();
+        e.start(&t, anim(1, AnimKind::TranslateY)).unwrap(); // 时间动画 0 → 100
+        e.tick(&mut t, 50.0);
+        let mid = t.nodes[0].style.translate_y;
+        assert!(mid > 0.0 && mid < 100.0, "前置条件：时间动画应处于中途（实测 {mid}）");
+        // 同 (节点,属性) 上启动滚动动画：映射起点必须是声明的 from=0
+        e.start_scroll(&t, scroll_anim(1, 200.0, 300.0)).unwrap();
+        e.seek_scroll(&mut t, 200.0);
+        assert_eq!(
+            t.nodes[0].style.translate_y, 0.0,
+            "滚动窗口起点必须映射到声明的 from=0（接管语义会让它变成上一动画的中途值 {mid}）"
+        );
+        e.seek_scroll(&mut t, 300.0);
+        assert!((t.nodes[0].style.translate_y - 100.0).abs() < 1e-4, "窗口终点映射到声明的 to=100");
     }
 }

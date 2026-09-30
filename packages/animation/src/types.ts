@@ -66,6 +66,14 @@ export interface SpringConfig {
 /** 驱动方式：时间自动播放 / 外部设进度（手势跟随） */
 export type DriveName = 'time' | 'progress'
 
+/** ★MA5：**滚动窗口**（滚动位置驱动动画的区间；`to > from` 时该动画由滚动位置驱动） */
+export interface ScrollWindow {
+  /** 窗口起点（滚动位置，px） */
+  from: number
+  /** 窗口终点（滚动位置，px；必须 > from） */
+  to: number
+}
+
 /** ★**单条动画声明**（封闭集的全部字段） */
 export interface AnimDecl {
   /** 动哪个属性 */
@@ -82,8 +90,16 @@ export interface AnimDecl {
   curve?: CurveName
   /** 弹簧物理（给了它就用物理积分，不是查表） */
   spring?: SpringConfig
-  /** 驱动方式（缺省 `time`） */
+  /** 驱动方式（缺省 `time`；给了 `scroll` 时本字段被忽略——窗口存在即说明进度来自滚动位置） */
   drive?: DriveName
+  /**
+   * ★MA5：滚动窗口（视差 / 吸顶 / 渐显的驱动源）
+   *
+   * 给了它 ⇒ 本动画**不走时间**、也**不走平台零参与路径**（进度来自滚动位置，
+   * 而平台路径的语义是"按时间自主插值"——两者是不同驱动源，混用会让"跟手"变成"到点播放"）。
+   * 宿主只需在滚动回调里报**原始位置**，换算在内核（`AnimEngine::seek_scroll`）。
+   */
+  scroll?: ScrollWindow
   /** 遇同 (节点,属性) 已有动画时是否**接管**（缺省 `true`：位置连续 + 速度移交） */
   takeover?: boolean
 }
@@ -112,6 +128,9 @@ export interface EngineAnim {
   takeover: boolean
   /** 仅弹簧模式出现（内核据此走物理积分） */
   spring?: { stiffness: number; damping: number; mass: number }
+  /** ★MA5：仅滚动驱动出现（内核据此按滚动位置求值；两者都给且 `scrollTo > scrollFrom` 才生效） */
+  scrollFrom?: number
+  scrollTo?: number
 }
 
 /** 编译产物：一次"提交"（可整批喂给 `anim_start` 或 `anim_commit_spec`） */

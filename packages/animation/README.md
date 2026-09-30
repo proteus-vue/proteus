@@ -22,7 +22,7 @@ Rust 内核（曲线求值 + 物理 + FLIP） ← 唯一实现，每帧零 JS �
 | `compileAnimations(decls, targets)` | 校验（失败即 throw）→ 归一化（补默认时长/曲线）→ 绑目标 → `CompiledBatch` |
 | `compileRoute(spec, { enter, exit })` | 转场预设 → 整批指令（进场页 + 出场页分别绑节点） |
 | `toWireBatch(batch)` / `isPlatformEligible(batch)` | 输出内核 `animStart` 的线上格式 / 判定整批是否可走平台零参与路径 |
-| `presets` / `route` / `list` / `element` / `easing` | 预设库（见下） |
+| `presets` / `route` / `list` / `element` / `easing` / `scroll` | 预设库（见下） |
 
 ## 预设库（"开箱即用" = 预设，不是参数）
 
@@ -34,6 +34,7 @@ Rust 内核（曲线求值 + 物理 + FLIP） ← 唯一实现，每帧零 JS �
 | `route.cupertinoModal()` | iOS 风格全屏模态（弹簧）（对齐 `wx://cupertino-modal`） |
 | `list.shift()` | **列表项增删让位**（映射内核 FLIP：几何在内核，零跨边界；是 §5 招牌能力） |
 | `element.fadeIn()` / `pressRelease()` / `sharedElementFlyIn()` | 元素入场 / 按压弹回 / 共享元素飞入 |
+| `scroll.sticky()` / `parallax()` / `fadeIn()` | **滚动联动**（吸顶 / 视差 / 渐显——滚动位置驱动，换算在内核；见下） |
 | `easing.snappy` / `easing.smooth` | 手感弹簧预设（**与内核 `SpringParams::snappy/smooth` 同值**，两侧各有测试钉住） |
 
 每个转场预设带 `wxRouteType` 字段与微信 routeType **语义对齐**——同一份源码在 MP 走 Skyline routeType、在 App 走 Morpheus 预设，降低双端认知差。
@@ -60,7 +61,35 @@ const custom = compileAnimations(
    { kind: 'scale', from: 0.9, to: 1, spring: easing.snappy }],
   { node: detailCardId },
 )
+
+// ④ 滚动联动（MA5）：宿主滚动回调里**只报原始位置**，窗口换算在内核
+const px = presets.scroll.parallax({ factor: 0.4, from: 0, to: 400 })
+const batch = compileAnimations(px.decls, { node: heroBgId })
+engine.animStart(JSON.stringify({ anims: batch.anims }))
+onScroll((offsetY) => engine.animSeekScroll(JSON.stringify({ scroll: offsetY })))
 ```
+
+## 滚动联动（MA5）——驱动通路
+
+```
+宿主滚动回调（UIScrollView didScroll / 手势 / 内容偏移）
+      ↓ 只报**原始滚动位置**（px）
+内核 anim_seek_scroll —— 窗口换算（(off-from)/span + 钳制 + curve_eval）唯一实现
+      ↓ updates（一次算完视差层 + 吸顶头 + 渐显项）
+宿主当帧写层
+```
+
+**滚动过程零 JS**，宿主零曲线数学、零窗口数学（它不需要知道任何动画窗口的存在）。声明侧只需给窗口：
+
+```ts
+presets.scroll.parallax({ factor: 0.4, from: 0, to: 400 })   // 滚 400px ⇒ 反向位移 -160px
+presets.scroll.sticky({ pinAt: 80, span: 120 })              // 滚过 80px 后 120px 内完成钉住位移
+presets.scroll.fadeIn({ from: 100, to: 300, risePx: 12 })    // 滚入区间内 opacity 0→1 + 上移 12px
+```
+
+★**滚动批次不走平台零参与路径**：那条路径是"提交后平台按**时间**自主插值"，而滚动动画的进度来自
+**外部位置**——混用会把"跟手"变成"到点自动播放"。编译期 `isPlatformEligible` 预判 + 内核
+`anim_commit_spec` 明确拒绝，双重拦住。
 
 ## 编译期校验（把"会不会掉帧"变成编译期问题）
 
@@ -75,6 +104,8 @@ const custom = compileAnimations(
 - **序列编排（sequence）**：内核对同 `(节点, 属性)` 是替换语义，"先下压再弹回"这类**两段串联**在一个批次里表达不了 ⇒ 需要调用方拆成两次启动（或用单个弹簧从按下值弹回）。序列编排是已知缺口。
 - **共享元素跨页面**：`element.sharedElementFlyIn` 目前只做"在落点上做缩放+淡入"；真正的"从起点矩形飞入"需要三端 `platform/` 层（跨页面坐标换算），见 Morpheus 文档 B1 评测项。
 - **手势驱动 API 表面**：内核已支持 `Progress` 驱动（`seek` 立即写字段，手指到哪画面到哪），但本包暂未提供对应的声明式入口（当前由宿主直接调 `animSeek`）。
+- **`scroll.sticky` 是"位移补偿"而非布局吸顶**：本引擎只写合成属性，真·改变定位（`position: sticky`）属布局属性、不在属性面上（会被编译期拦）。吸顶观感依赖"位移补偿 + 布局让位"的组合。
+- **滚动输入源**：`presets.scroll` 的驱动接口（报位置）已与输入源解耦；真机验证走的是宿主滚动通路（`applyContentOffset`，与既有 `scrollBy` 同一路径），真手指拖动 UIScrollView 的接线属后续工作。
 - **平台零参与路径的粒度**：iOS 已落地（CAKeyframeAnimation → render server）；Android 当前是**页面级**（ViewPropertyAnimator 挂在容器上），逐节点形态需要改"真拍平"承载结构，单独评估。
 
 ## 门禁与测试
@@ -84,4 +115,4 @@ npx vitest run tests/animation-presets.test.ts    # 24 条：编译正确性 / �
 pnpm --filter @proteus-vue/animation build        # 产物构建（ESM bundle + d.ts）
 ```
 
-真机验证：`hosts/ios/check-anim-rt2.py`（H 组 6 条判据：预设编译 → 微信语义对齐 → 指令下发 → 端上驱动 → 校验有效 → 跨语言同值）。
+真机验证：`hosts/ios/check-anim-rt2.py`（全 40 条判据；其中 H 组 6 条 = 预设编译 → 微信语义对齐 → 指令下发 → 端上驱动 → 校验有效 → 跨语言同值；I 组 5 条 = MA5 滚动联动：视差映射 / 宿主滚动通路生产形态 / 退化窗口与滚动+弹簧拦截 / 平台路径排除）。

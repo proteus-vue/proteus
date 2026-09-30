@@ -2261,6 +2261,7 @@ pub unsafe extern "C" fn proteus_layout_anim_start(handle: u64, json: *const c_c
         let mut started = 0usize;
         let mut spring_count = 0usize;
         let mut delayed_count = 0usize;
+        let mut scroll_count = 0usize;
         for a in list {
             let node_id = a
                 .get("nodeId")
@@ -2293,6 +2294,9 @@ pub unsafe extern "C" fn proteus_layout_anim_start(handle: u64, json: *const c_c
             }
             let takeover = a.get("takeover").and_then(|x| x.as_bool()).unwrap_or(true);
             let from = num(a, "from")?;
+            // ★MA5：滚动窗口（两者都给且 to > from ⇒ 该动画由滚动位置驱动；缺省 0/0 = 非滚动）
+            let scroll_from = a.get("scrollFrom").and_then(|x| x.as_f64()).unwrap_or(0.0) as f32;
+            let scroll_to = a.get("scrollTo").and_then(|x| x.as_f64()).unwrap_or(0.0) as f32;
             let anim = crate::anim::Anim {
                 node_id,
                 kind,
@@ -2304,18 +2308,28 @@ pub unsafe extern "C" fn proteus_layout_anim_start(handle: u64, json: *const c_c
                 t_ms: 0.0,
                 drive,
                 progress: 0.0,
+                scroll_from,
+                scroll_to,
                 mode,
                 x: from,
                 vel: 0.0,
                 takeover,
             };
             // ★错误必须冒泡（节点不在树上 / 曲线越界）——静默会变成"动画不生效"难查
+            // ★MA5：带滚动窗口的动画走 `start_scroll`（drive 切 Progress——时间 tick 不再推进它，
+            //   只"保持写入"；进度由宿主滚动回调经 `anim_seek_scroll` 设置）
             let tree = &entry.tree;
-            entry.anim.start(tree, anim)?;
+            if scroll_to > scroll_from {
+                scroll_count += 1;
+                entry.anim.start_scroll(tree, anim)?;
+            } else {
+                entry.anim.start(tree, anim)?;
+            }
             started += 1;
         }
         Ok(serde_json::json!({
-            "ok": true, "started": started, "spring": spring_count, "delayed": delayed_count
+            "ok": true, "started": started, "spring": spring_count, "delayed": delayed_count,
+            "scroll": scroll_count
         })
         .to_string())
     };
@@ -2485,6 +2499,17 @@ pub unsafe extern "C" fn proteus_layout_anim_commit_spec(handle: u64, json: *con
                 None => crate::anim::AnimMode::Curve,
             };
             let from = num(a, "from")?;
+            // ★MA5：滚动驱动动画**不得**走平台零参与路径——它的进度来自**外部滚动位置**，
+            //   而平台路径的语义是"提交后由平台按**时间**自主插值"⇒ 二者是不同驱动源。
+            //   静默按时间提交会让"视差跟手"变成"到点自动播放"（完全不是同一动效）。
+            if a.get("scrollTo").and_then(|x| x.as_f64()).unwrap_or(0.0)
+                > a.get("scrollFrom").and_then(|x| x.as_f64()).unwrap_or(0.0)
+            {
+                return Err(format!(
+                    "节点 {node_id} 的动画带滚动窗口（scrollFrom/scrollTo）——滚动驱动不得走平台零参与路径；\
+                     请走 anim_start + 宿主滚动回调（anim_seek_scroll）"
+                ));
+            }
             anims.push(crate::anim::Anim {
                 node_id,
                 kind,
@@ -2496,6 +2521,8 @@ pub unsafe extern "C" fn proteus_layout_anim_commit_spec(handle: u64, json: *con
                 t_ms: 0.0,
                 drive: crate::anim::AnimDrive::Time,
                 progress: 0.0,
+                scroll_from: 0.0,
+                scroll_to: 0.0,
                 mode,
                 x: from,
                 vel: 0.0,
@@ -2651,6 +2678,59 @@ pub unsafe extern "C" fn proteus_layout_anim_seek(handle: u64, json: *const c_ch
             .map(|v| serde_json::json!([v.id, v.tx, v.ty, v.scale, v.rotate, v.opacity]))
             .collect();
         Ok(serde_json::json!({"ok": true, "changed": out.changed, "updates": updates}).to_string())
+    };
+    match std::panic::catch_unwind(f) {
+        Ok(Ok(s)) => CString::new(s).map(|c| c.into_raw()).unwrap_or(std::ptr::null_mut()),
+        Ok(Err(e)) => CString::new(serde_json::json!({"ok": false, "error": e}).to_string())
+            .map(|c| c.into_raw())
+            .unwrap_or(std::ptr::null_mut()),
+        Err(_) => CString::new(serde_json::json!({"ok": false, "error": "内部 panic（已捕获）"}).to_string())
+            .map(|c| c.into_raw())
+            .unwrap_or(std::ptr::null_mut()),
+    }
+}
+
+/// ★★MA5 —— **滚动驱动**（视差 / 吸顶 / 渐显的统一入口）：滚动位置 → 全部窗口动画
+///
+/// 入参 JSON：`{"scroll": 240.5}`（**原始滚动位置**，单位与声明里的窗口一致 = px）
+///
+/// 【为什么入参是"位置"而不是"进度"（判据设计）】进度 = `(off-from)/span` 看着像一行除法，
+///   但它属于**动画语义**（窗口语义/钳制/退化处理），若留给宿主各写一份，三端滚动手感就会分叉、
+///   且与 `curve_eval` 的组合也会分叉 ⇒ 换算在**内核**（唯一实现，见 `AnimEngine::seek_scroll`）。
+///   宿主只报"滚到哪了"——它不需要知道任何动画窗口的存在。
+///
+/// 返回：`{"ok":true,"changed":N,"updates":[[nodeId,tx,ty,scale,rotate,opacity],…]}`
+///   （一次滚动回调驱动**所有**窗口动画——视差层 + 吸顶头 + 渐显项一个调用里全算完）
+///
+/// ★与手势 `seek` 的区别：那个按 `(node,kind)` 定位单条动画（手指按住哪个就动哪个）；
+///   本入口按**滚动位置**驱动全部窗口动画（滚动影响的从来不是一个节点）。
+///
+/// # Safety
+/// `json` 须为有效 NUL 结尾 C 字符串。返回指针须用 `proteus_layout_free_string` 释放。
+#[no_mangle]
+pub unsafe extern "C" fn proteus_layout_anim_seek_scroll(handle: u64, json: *const c_char) -> *mut c_char {
+    let f = || -> Result<String, String> {
+        let s = unsafe { std::ffi::CStr::from_ptr(json) }
+            .to_str()
+            .map_err(|e| format!("入参不是合法 UTF-8：{e}"))?;
+        let v: serde_json::Value = serde_json::from_str(s).map_err(|e| format!("入参 JSON 解析失败：{e}"))?;
+        let scroll = v
+            .get("scroll")
+            .and_then(|x| x.as_f64())
+            .ok_or_else(|| "缺少 scroll（原始滚动位置，px）".to_string())? as f32;
+
+        let mut reg = registry().lock().map_err(|_| "注册表锁失败".to_string())?;
+        let entry = reg.get_mut(&handle).ok_or_else(|| format!("句柄 {handle} 不存在"))?;
+        let mut eng = std::mem::take(&mut entry.anim);
+        let out = eng.seek_scroll(&mut entry.tree, scroll);
+        entry.anim = eng;
+        let updates: Vec<serde_json::Value> = out
+            .updates
+            .iter()
+            .map(|v| serde_json::json!([v.id, v.tx, v.ty, v.scale, v.rotate, v.opacity]))
+            .collect();
+        Ok(serde_json::json!({"ok": true, "changed": out.changed, "active": out.active_after, "updates": updates})
+            .to_string())
     };
     match std::panic::catch_unwind(f) {
         Ok(Ok(s)) => CString::new(s).map(|c| c.into_raw()).unwrap_or(std::ptr::null_mut()),

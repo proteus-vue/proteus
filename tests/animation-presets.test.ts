@@ -18,8 +18,10 @@ import {
   compileAnimations,
   compileRoute,
   isPlatformEligible,
+  isScrollDriven,
   presets,
   easing,
+  scroll,
 } from '@proteus-vue/animation'
 import type { AnimDecl } from '@proteus-vue/animation'
 
@@ -221,6 +223,71 @@ describe('MA1 · 预设库（"开箱即用" = 预设，不是参数）', () => {
     const sp = presets.element.sharedElementFlyIn()
     const kinds = sp.decls.map((d) => d.kind)
     expect(new Set(kinds).size).toBe(kinds.length)   // 属性唯一
+  })
+})
+
+describe('MA5 · 滚动联动（吸顶 / 视差 / 渐显）', () => {
+  it('三个滚动预设都编译通过，且每条声明都带滚动窗口（驱动源必须显式）', () => {
+    const specs = [
+      scroll.sticky(),
+      scroll.parallax(),
+      scroll.fadeIn({ from: 100, to: 300, risePx: 12 }),
+    ]
+    for (const sp of specs) {
+      const c = compileAnimations(sp.decls, { nodeId: 7 })
+      expect(c.composited).toBe(true)
+      expect(c.anims.length).toBeGreaterThan(0)
+      for (const a of c.anims) {
+        expect(a.scrollFrom).toBeDefined()
+        expect(a.scrollTo!).toBeGreaterThan(a.scrollFrom!)
+      }
+    }
+  })
+
+  it('★滚动窗口的线格式与内核字段名一致（scrollFrom/scrollTo）', () => {
+    const c = compileAnimations(scroll.parallax({ factor: 0.5, from: 0, to: 200 }).decls, { nodeId: 1 })
+    const a = c.anims[0]!
+    expect(a.scrollFrom).toBe(0)
+    expect(a.scrollTo).toBe(200)
+    // factor=0.5 ⇒ 位移 -100（线性，窗口全程）
+    expect(a.to).toBe(-100)
+  })
+
+  it('★滚动批次不具备平台零参与资格（驱动源不同：位置 vs 时间）', () => {
+    const c = compileAnimations(scroll.sticky().decls, { nodeId: 1 })
+    expect(isScrollDriven(c)).toBe(true)
+    expect(isPlatformEligible(c)).toBe(false)
+    // 反例：时间驱动的同一份声明**有**资格（证明判据不是恒 false）
+    const t = compileAnimations([{ kind: 'translateY', from: 0, to: -8, durationMs: 100 }], { nodeId: 1 })
+    expect(isScrollDriven(t)).toBe(false)
+    expect(isPlatformEligible(t)).toBe(true)
+  })
+
+  it('★红侧：退化窗口（to <= from）被拦下——多半是 from/to 写反', () => {
+    const issues = validateAnimations([
+      { kind: 'translateY', from: 0, to: -100, curve: 'linear', scroll: { from: 200, to: 50 } },
+    ])
+    expect(issues.some((i) => i.code === 'invalid-range' && /写反|正数/.test(i.hint))).toBe(true)
+  })
+
+  it('★红侧：滚动 + 弹簧并存被拦下（弹簧是按时间的物理，滚动进度下无意义）', () => {
+    const issues = validateAnimations([
+      { kind: 'translateY', from: 0, to: -100, spring: easing.snappy, scroll: { from: 0, to: 100 } },
+    ])
+    expect(issues.some((i) => i.code === 'conflicting-easing')).toBe(true)
+  })
+
+  it('★红侧：窗口含非有限值被拦下', () => {
+    const issues = validateAnimations([
+      { kind: 'translateY', from: 0, to: -100, scroll: { from: Number.NaN, to: 100 } },
+    ])
+    expect(issues.some((i) => i.code === 'invalid-range')).toBe(true)
+  })
+
+  it('渐显叠加上移时属性不重复（opacity + translateY ⇒ 合法）', () => {
+    const sp = scroll.fadeIn({ from: 0, to: 100, risePx: 10 })
+    expect(sp.decls.map((d) => d.kind).sort()).toEqual(['opacity', 'translateY'])
+    expect(() => compileAnimations(sp.decls, { nodeId: 1 })).not.toThrow()
   })
 })
 
