@@ -48,7 +48,7 @@
   只有**可复制代码块**里的引用才真正有害。
 · 破坏性验证：恢复 `p-card` → 红并精确报 `03-fluid-grid.md:31`；还原 → 575 md 全过。
 
-## 当前状态速览（最近一次更新：**2026-09-30 · 主线程零唤醒实测落地（OS 级 CPU 会计，真机 54/54）—— MA0-RT 验收闭合**）★新会话以此为准
+## 当前状态速览（最近一次更新：**2026-09-30 · Android 补齐内核驱动动画（真机 M1–M7 全过）—— 三端动效能力对齐**）★新会话以此为准
 
 ### ★★★2026-09-30 · 红线升格：禁止**任何**盲等（sleep/timeout 全禁）+ iOS 链路事件驱动 + I3 收官
 
@@ -92,6 +92,49 @@ kind=capability ⇒ 82）+ 黑名单条目 `hooks-81` + 两份新文档进正向
 破坏性验证过（注入 `81 个 Capability Hook` ⇒ 精确报行号）。
 **登记**：board-inventory「其他文档（非 plan）」表新增两行（含决策、依据、与既有计划关系）；
 roadmap v0.6 段追加两条决策接入注记 + v2.0+ 插件体系行补指针。
+
+**㉖ ★★★Android 补齐内核驱动动画（2026-09-30）—— 跨端能力缺口闭合 + ★两个装置坑**
+
+用户「继续」⇒ 取证发现一个**跨端能力缺口**：Android 只有**平台**路径（容器级 + 载体），
+**完全没有内核驱动通路** ⇒ **序列编排（keyframes）/ 滚动联动 / 共享元素在本端根本无法运行**。
+
+**一、缺口取证（据代码，非推断）**
+`jni.rs` 里动画相关只有 `nativeCurveBezier` + `nativeAnimCommitSpec`（平台路径的数据面），
+**无** `anim_start/tick/stop/seek_scroll/shared_element` ⇒ 内核动效在 Android 上不可达。
+
+**二、补齐（三层）**
+1. **JNI**：新增五个导出 + 一个**通用转发** `forward_cstr`（避免五份手写副本；`AssertUnwindSafe`
+   并写明理由：闭包只持 `CString` + 转发器，无可共享可变状态）；
+2. **宿主**：`ProteusHostView` 加**逐节点变换渲染**（`Canvas.save/translate/rotate/scale`，
+   变换语义与 iOS `applyTransform` 同构：平移 → 以**元素中心**为锚旋转/缩放）、
+   `animTx` 真源（JSON 与二进制**两条通道进同一个 map**）、`animTxProbe`（与 iOS 探针同形）、
+   **Choreographer 帧循环**（时长驱动自停）；
+3. **测试路径** `kernel-anim` + 判据脚本 `hosts/android/check-kernel-anim.py`（M1–M7）。
+
+**三、真机读数（honor · release）——M1–M7 全过**
+M2 曲线求值 `[50.5, 84.4, 105.0, 115.5, 119.4, 120.0, 120.0]`（easeOut 形态，**M2b 用"前段快于线性"
+把"线性插值"区分开**——84.4 > 线性 44.4）· M3 终值精确 120 · M5 序列段边界精确（100ms→0.600）·
+M6 滚动窗口映射（200→-80.00 / 400→-160.00）· M7 共享元素几何 · **M4 真帧循环 57 帧 ·
+每帧工作 p50=0.098ms · 首帧延迟 17.5ms · 稳态窗口内 measure/layout 增量 = 0**。
+判据侧 **6 条破坏用例全红**（含"线性插值"那条）。
+
+**四、★★两个装置坑（都是真机跑出来的，都写进了判据提示）**
+1. **`View.postOnAnimation` 对未 attach 的 View 会排队** ⇒ 首帧被推迟到超过停止时刻 ⇒ `frames=1`。
+   改用 `Choreographer.postFrameCallback`（与 View attach 状态无关，语义也更贴近 iOS 的 CADisplayLink
+   ——"每 vsync 一次"是**显示器**的属性，不是某个 View 的属性）。
+2. **测试与重活同批 ⇒ 被饿死**：首版同步跑在 `runAll()` 里，而它 dispatch 之后还有 §9.2 采样循环
+   ⇒ 首帧延迟 **3505ms**、首帧即停。⇒ `postDelayed` 让出主线程。
+   ★这是本仓**第三次**踩同一形态（前两次：Android platform-anim 塞在 js-render 末尾、
+   iOS 探针顺序）——**测试装置不得与重型生产负载共用主线程时序**。
+
+**五、判据口径（与载体路径同一先例）**：measure/layout 增量量**稳态窗口**（启动 +80ms 后），
+接入 View 的**一次性 traversal** 如实记录在 `boot_*_delta`、不计入动画期。
+
+**六、门禁接线**：`pnpm check:android-kernel-anim`（接 verify；产物缺失诚实跳过）+ 登记 LOCAL_ONLY
+（需真机产物）。`check:gates-sync` 通过。
+
+**七、诚实边界**：`shared_element` 的 `fromNodeId` 路径需核心树**绝对几何**入口——
+本端本次用 `sourceRect`（系统坐标）路径验证，单节点绝对几何转发未接（不影响"几何原语可用"结论）。
 
 **㉕ ★★★主线程零唤醒实测落地（2026-09-30）—— ★xctrace 不可达的取证链条 + 否定性断言的判据设计**
 
