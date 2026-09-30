@@ -36,6 +36,9 @@ import {
   appTransitions,
 } from '@proteus-vue/animation'
 import type { AnimDecl } from '@proteus-vue/animation'
+// ★类型断言用（不能用 `as never`——`Record<RouteTransition, X>[never]` 求值为 `never`，
+//   属性访问会报 TS2339；本文件曾因此在 `vue-tsc` 下红，阻塞交付门禁）
+import type { RouteTransition } from '@proteus-vue/contracts'
 
 describe('MA1 · 类型与跨语言契约（编号必须与 Rust 一致）', () => {
   it('AnimKind 编号与内核一致（0..4；改号会静默错位）', () => {
@@ -655,13 +658,13 @@ describe('统一路由转场枚举的第三腿（App / Morpheus ⇄ RouteTransit
   it('★映射**穷尽**枚举（少一个就红——防"枚举增员、这端静默漏掉"）', () => {
     expect(appTransitions().sort()).toEqual([...ENUM].sort())
     for (const t of ENUM) {
-      expect(APP_TRANSITION_MAP[t as never], `${t} 缺映射`).toBeDefined()
+      expect(APP_TRANSITION_MAP[t as RouteTransition], `${t} 缺映射`).toBeDefined()
     }
   })
 
   it('★每个转场都能编译出指令（除 none——瞬切不应产生动画）', () => {
     for (const t of ENUM) {
-      const spec = APP_TRANSITION_MAP[t as never]
+      const spec = APP_TRANSITION_MAP[t as RouteTransition]
       expect(spec.name).toBeTruthy()
       const decls = [...spec.enter, ...spec.exit]
       if (t === 'none') {

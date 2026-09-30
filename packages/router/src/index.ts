@@ -247,6 +247,24 @@ export type { RouteTransition } from './transforms/transform-transition'
 export { generateWebRoutes, generateMpConfig, mergeAppJson, flattenNodes, toPageConfig } from './codegen'
 export type { MpPageConfig } from './codegen'
 
+// ★★路由规划 M5（App 端）：虚拟路由栈（屏 = 树内子树；无系统导航栈 / 无层数上限 / 内存预算冻结）
+//   设计对齐 Flutter Navigator——栈是纯逻辑对象，不可见层树保留（display:none）或按预算冻结（重建）。
+//   本层不产生平台调用：通过 ScreenCommand 命令流交给执行器（Morpheus 转场 + Host ABI）。
+export { createAppStack } from './app-stack'
+export type {
+  AppStack,
+  AppStackPolicy,
+  AppStackStats,
+  AppStackEvent,
+  AppScreen,
+  AppScreenSpec,
+  AppScreenState,
+  ScreenFrame,
+  ScreenCommand,
+} from './app-stack'
+export { generateAppScreens, toScreenEntry, flattenScreenEntries, tabStacks } from './codegen'
+export type { AppScreenEntry } from './codegen'
+
 // ★G-32 B6（2026-09-19）：路由名推导是**跨包公开契约**——迁移工具链（compat-miniprogram 路由名表
 //   `routeNameFromPath`）必须与 derivePath 模式下的真实产物同名，否则 codemod 建议的
 //   `router.push({ name })` 在 routeMap 中查不到（死引用）。导出供 tests/route-table.test.ts 跨包一致性断言。

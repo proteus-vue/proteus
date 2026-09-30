@@ -133,17 +133,26 @@ Skyline 的 `routeType` + 小程序页面栈有**层级约束**（页面栈深�
 const MAX_DEPTH = {
   web: 20,        // vue-router 无硬限制，保守值
   mp: 10,         // 小程序页面栈建议上限（微信实际 10 层）
-  app: 20,
+  app: null,      // ★App 端无限制（虚拟栈，2026-09-30）——见下方注
 }
 
 function validateDepth(node: RouteNode, depth: number, platform: Platform) {
-  if (depth > MAX_DEPTH[platform]) {
+  const max = MAX_DEPTH[platform]
+  if (max !== null && depth > max) {
     // 降级：把超深层级「扁平化」为该父级下的平铺子页
     // 转场退化为 slideUp（放弃父子嵌套转场效果）
     node.meta.__flattened = true
   }
 }
 ```
+
+> **★2026-09-30 更正（用户决策：吸取小程序/uni-app 栈深限制教训）**：`app: 20` 是**沿袭小程序思维的错误**——
+> App 端走**虚拟栈**（`packages/router/src/app-stack.ts`：屏 = 树内子树，栈是纯逻辑对象；
+> 内存由 `nodeBudget` 预算冻结治理，替代「层数上限」）。⇒ **App 端不设任何层级/栈深上限**：
+>  - 嵌套层级（本 M7.3）：虚拟栈下 `children` 只是**逻辑分组**（tabStacks），不产生额外原生容器 ⇒ 无上限；
+>  - 运行时栈深（M7.5）：无上限（100 层 push/pop 已有判据——`tests/app-stack.test.ts` ①）；
+>  - 唯一治理手段 = 内存预算（超预算冻结最旧屏，**无失败点**，最坏结果是重建）。
+>  小程序/Web 的层级校验保留（那是**平台真实约束**，不是框架自设的）。
 
 ### mp 端降级规则（关键）
 小程序**不支持真正的嵌套路由**，M4 已做平铺。M7 在此基础上：
@@ -278,9 +287,13 @@ export function popTo(router: Router, name: string) {
 }
 ```
 
-### 栈溢出保护
-- App 端监听栈深度 > 15 → 自动 `popToRoot` + 告警
-- 小程序端 `navigateTo` 失败（栈满）→ 自动降级 `redirectTo`
+### 栈溢出保护（★2026-09-30 按虚拟栈修正）
+- **App 端：无栈深上限 ⇒ 不做 `popToRoot` 保护**（原「> 15 自动 popToRoot」已废弃——那会让用户的
+  返回栈**突然清空**，正是小程序 10 层限制同类的体验伤害）。治理改为**内存预算冻结**
+  （`AppStackPolicy.nodeBudget`）：超预算冻结最旧 hidden 屏、栈位保留、返回=重建；
+  当前可见屏**永不冻结**（保底语义）。冻结/超预算事件可观测（`on()` 事件流 + 统计读数）。
+- 小程序端 `navigateTo` 失败（栈满）→ 自动降级 `redirectTo`（**平台真实约束**，保留）；
+  但注意这与 App 端无关——App 端没有这个失败点。
 - `--trace-transform` 输出每次栈操作，便于复现导航异常
 
 ---
@@ -355,7 +368,8 @@ export const tradeRoutes = [
 | 冷启动到可交互 | < 1.5s（首屏仅加载 root chunk） |
 | 转场帧率（Skyline） | ≥ 58fps（halfScreen + 手势） |
 | 路由表构建时间（300 页） | < 3s |
-| 导航栈深度 | ≤ 15（超出自动保护） |
+| 导航栈深度（App） | **无上限**（虚拟栈；100 层判据在 `tests/app-stack.test.ts` ①） |
+| 内存治理（App） | 超 `nodeBudget` 冻结最旧屏；可见屏永不冻结；无失败点 |
 | `popTo` 准确性 | 100%（测试矩阵覆盖） |
 
 ---

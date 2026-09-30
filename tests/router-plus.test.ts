@@ -29,6 +29,12 @@ describe('NAVIGATION_MAP（01-router.md §2.2 五端映射）', () => {
     expect(NAVIGATION_MAP.tab.skyline).toBe('wx.switchTab')
     expect(BACK_MAP.web).toBe('history.back')
     expect(BACK_MAP.skyline).toBe('wx.navigateBack')
+    // ★2026-09-30 路线修正：App 三端 = 虚拟栈操作名（非系统导航栈 API——
+    //   系统导航栈是「每屏一个原生容器」，正是小程序 10 层限制路线的翻版）
+    expect(NAVIGATION_MAP.push.ios).toBe('app-stack.push')
+    expect(NAVIGATION_MAP.push.android).toBe('app-stack.push')
+    expect(NAVIGATION_MAP.push.harmony).toBe('app-stack.push')
+    expect(BACK_MAP.ios).toBe('app-stack.pop')
   })
 
   it('isStackSemantic / validateStackSemantic（ROUTE004 语义）', () => {
@@ -41,7 +47,8 @@ describe('NAVIGATION_MAP（01-router.md §2.2 五端映射）', () => {
 
   it('resolveNavigation：语义 → 端 API（缺省 push，未知端 fallback web）', () => {
     expect(resolveNavigation(undefined, 'skyline')).toBe('wx.navigateTo')
-    expect(resolveNavigation('tab', 'ios')).toBe('UITabBarController')
+    // App 端 tab = 虚拟栈 reset（清栈换根；对齐 M7 三端指令表）
+    expect(resolveNavigation('tab', 'ios')).toBe('app-stack.reset')
   })
 })
 
