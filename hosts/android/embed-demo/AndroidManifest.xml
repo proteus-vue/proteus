@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- hosts/android/embed-demo —— ★★HA5 的"客户 App 嵌入"demo（**独立包名**，模拟第三方 App）
+     它只依赖 `platform/android/build/proteus-sdk.aar`（不经 Proteus 工具链、不引内核源码）
+     ⇒ 这本身就是"二进制集成可行"的证据（方案 §8.2）。 -->
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    package="dev.proteus.demo">
+    <application
+        android:label="Proteus Embed Demo"
+        android:allowBackup="false"
+        android:hasCode="true">
+        <activity
+            android:name=".MainActivity"
+            android:exported="true"
+            android:configChanges="orientation|screenSize|keyboardHidden">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+        </activity>
+    </application>
+</manifest>

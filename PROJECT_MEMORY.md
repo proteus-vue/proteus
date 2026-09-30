@@ -48,7 +48,7 @@
   只有**可复制代码块**里的引用才真正有害。
 · 破坏性验证：恢复 `p-card` → 红并精确报 `03-fluid-grid.md:31`；还原 → 575 md 全过。
 
-## 当前状态速览（最近一次更新：**2026-09-30 · HA4 落地（原生组件生命周期由引擎驱动）**）★新会话以此为准
+## 当前状态速览（最近一次更新：**2026-09-30 · HA5 落地（AAR + Java SDK + 嵌入 demo 真机全过）—— 存量 App 可嵌入**）★新会话以此为准
 
 ### ★★★2026-09-30 · 红线升格：禁止**任何**盲等（sleep/timeout 全禁）+ iOS 链路事件驱动 + I3 收官
 
@@ -92,6 +92,76 @@ kind=capability ⇒ 82）+ 黑名单条目 `hooks-81` + 两份新文档进正向
 破坏性验证过（注入 `81 个 Capability Hook` ⇒ 精确报行号）。
 **登记**：board-inventory「其他文档（非 plan）」表新增两行（含决策、依据、与既有计划关系）；
 roadmap v0.6 段追加两条决策接入注记 + v2.0+ 插件体系行补指针。
+
+**㉜ ★★★HA5 落地：存量 App 嵌入（AAR + Java SDK + 嵌入 demo）（2026-09-30）**
+
+继续 Host ABI 线。HA5 四项原文：「二进制产物打包（AAR）/ 一个完整的"客户 App 嵌入单页面"demo /
+引擎预热接口与文档 / 接入文档」——**四项全落地**。
+
+**一、★缺口取证（"iOS 能接入、Android 不能"）**
+`platform/android/proteus-jni/src/lib.rs` 里 **32 处绑定全是内核 C ABI**（`proteus_layout_*`），
+而 **Host ABI（`proteus_engine_*`）零绑定** ⇒ iOS 侧已能"按 ABI 实现宿主"（HA1），
+Android 侧却拿不到入口。⇒ 本轮补 `host.rs`。
+
+**二、★★本文件最难的一处：C → Java 的**回调穿梭**（vtable 是 C 函数指针，宿主是 Java 对象）**
+- `JNI_OnLoad` 抓 `JavaVM`（**唯一可靠时机**——回调里现取不可靠）；
+- 宿主对象存 `GlobalRef`（**必须全局**：局部引用出 JNI 调用即失效）；
+- 蹦床：`vm.get_env()` → `call_method` 回 Java；**panic 一律 `catch_unwind`**（不得跨 FFI）；
+- ★度量回传用 **打包成 i64 的两个 float**（`(Float.floatToRawIntBits(w) & 0xFFFFFFFFL) | (h << 32)`）
+  ——每棵树每文本节点调一次，返回数组 = 每次一个临时对象（GC 压力）。
+
+**三、Java SDK（`platform/android/proteus-sdk/`，**零 Android 依赖**——只用 `java.*`）**
+`ProteusEngine`（建/销毁/装树/提交帧/推进/取更新/取几何/统计/能力/输入/原生组件同步/动画）
++ `ProteusHost`（**两个必需回调**：量文本 + 请求帧）。
+★"零 Android 依赖"本身是设计信号：门面不该依赖平台 API，否则客户在单元测试里都用不了。
+
+**四、AAR（`platform/android/build-aar.sh`）—— 四条内容断言**
+manifest / classes.jar / jni .so / R.txt **齐备** + classes.jar 含两个门面类 +
+**.so LOAD 段全 16 KB 对齐** + ★**符号齐备**（内核 ABI 24 · Host ABI 15 · JNI_OnLoad 1）
+——只看"文件在不在"会被空 .so 骗过。产物 684K。
+
+**五、★★嵌入 demo（`hosts/android/embed-demo/`）—— 客户视角的可执行证据**
+**独立包名** `dev.proteus.demo`（区别于 Proteus 自己的宿主 `dev.proteus.layoutcore`），
+**只依赖 AAR**（解包出 classes.jar + .so 就能构建出可运行 App ⇒ "二进制集成可行"不是文档声称）。
+真机 **6 条判据全过**：① 建引擎 ② **度量回调被引擎调用**（C 蹦床→Java 通路成立）
+③ 能力校验两侧（满足⇒0 / 缺失⇒-3）④ **批处理红线**（一帧两条指令 / 1 次提交）
+⑤ 几何 4 盒 + 帧更新 18 条 ⑥ 输入命中节点。
+★**demo 里"平台代码"只有约 40 行**（量文本 + 排帧）——其余编排全在引擎（HA0–HA4 的成果）。
+
+**六、★过程中修的三处自引入缺陷（都被判据当场抓出）**
+1. **`tap()` 数组不等长**（1/1/2/2）⇒ JNI 侧契约要求四个数组等长 ⇒ 恒返回 -1
+   （"输入不可用"）；修后命中节点 4。
+2. **旧 AAR 被静默复用**：改了 SDK（加 `animStart`）后直接跑 demo 脚本 ⇒ 用旧 AAR ⇒
+   编译失败在"找不到符号"，而根因是**产物陈旧**。⇒ build.sh 加**新鲜度判据**（源比产物新则重建）。
+3. **manifest 包名与 Java 包不一致**（`dev.proteus.demo.embed` vs `dev.proteus.demo`）⇒
+   `am start` 按 manifest 包展开 `.MainActivity` ⇒ `ClassNotFoundException`。
+   ⇒ 统一为 `dev.proteus.demo`。
+
+**七、预热（§8.5）**
+`prewarm()`（只做初始化，**不伪造"已热"**）+ `warm(host)`（**真预热** = 建引擎 → 装空树 → 销毁，
+把首次解析成本挪出首屏）。★诚实边界写进文档：它复用 JIT 热码与分配器状态，**不是**缓存引擎实例。
+
+**八、接入文档** `docs/proteus-host-abi-integration.md`（30 秒开始 / AAR 引入 / 两个回调 /
+一帧驱动 / 预热 / 能力校验 / 输入 / **排查表** / 边界）+ board-inventory 登记
+（★顺手更正了该表里 HostABI 的**过时状态**：从"规划态"改为主表）。
+
+**九、门禁**：`check:host-abi-aar`（**真构建 + 四条断言**）· `check:embed-demo`（真机产物判据）
+——均接 verify 并登记 LOCAL_ONLY（需 NDK/设备）。`check:gates-sync` 通过。
+
+**★九-b、分层门禁 B 组的**精确化**（本轮踩到，值得单列）**
+`check:platform-layering` 的 B 组原写"`platform/**` 不得引用 Host ABI"——而本轮把
+**JNI 绑定层**放进 `platform/android/proteus-jni/` 后，它**必须**引 ABI（职责就是"契约 ↔ JNI"翻译）。
+⇒ 这不是违规，是**规则的粒度问题**：方案 §0.4.5 的二分法（平台适配 vs 宿主集成）漏了"**绑定层**"。
+★修正方式（不是放宽）：B 组拆成两小类——**平台适配**引 ABI 即红；**绑定层**需在文件头写
+`ABI-BINDING: <理由>` 且① 在头部 25 行内 ② 理由非空 ③ 路径含 jni/napi/binding（**物理特征**，
+防有人给平台适配文件也加标记蒙混）。三条都做了破坏性验证。
+★途中被破坏性验证抓出一个**判据自己的 bug**：豁免正则用了 `\s*`（JS 里**包含换行**）
+⇒ "空理由"会吃掉下一行内容当理由 ⇒ 判据放行。改 `[ \t]*` 后空理由当场红。
+⇒ 与"门禁覆盖面要跟着实际形态走"同源：**判据的每个字符都要能被证伪**。
+
+**十、诚实边界**：AAR 目前**只含 arm64-v8a**（本仓验证设备形态；32 位/模拟器需另加成）；
+原生组件回调（⑦）的 Java 侧穿梭**未绑**（引擎侧已驱动，Java 宿主暂无 create/update/destroy 回调——
+属后续批次）；HA6（Playground 壳统一走 ABI）依赖 Playground 本身（规划态·零实现）。
 
 **㉛ ★★★HA4 落地：原生组件宿主（⑦ 号接口升级为引擎驱动的生命周期）（2026-09-30）**
 

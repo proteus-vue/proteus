@@ -19,7 +19,13 @@
 > | | | ④ ★**跨语言 golden**（`tests/golden/capability-manifest.json`，由 TS 侧 `scanCapabilities` 真实产出冻结）+ 新鲜度门禁 `check:capability-golden`（TS 侧一改形状就红）。C 宿主一致性测试 **36 条判据**全过 |
 > | HA4（原生组件宿主） | ✅ **主体已落地** | ⑦ 号接口从"契约联通"升级为**引擎驱动的生命周期**：`load_tree` 建树即创建（带内核算出的几何）/ `submit_frame` 后几何真变了才 update / 节点消失·换 kind·销毁引擎即销毁；`proteus_sync_native_views` 供**滚动/动画后**手动同步。★两种失败都明确：宿主未实现回调 ⇒ 报错 + last_error 点名；宿主拒绝 kind ⇒ 记账 + 可读原因。**C 宿主 46 条判据**（含 kind 变更重建）全过 |
 > | | | ★**诚实边界**：z-order 与滚动同步**仍属宿主**（原生 View 与自绘内容的层序由平台决定——iOS 子视图天然在上、Android 需显式处理）；内核只给几何。这是平台成本，不抽象。 |
-> | HA5 / HA6 | ❌ 未做 | — |
+> | HA5（存量 App 嵌入） | ✅ **已落地** | ① **AAR 产出**（`platform/android/build-aar.sh`，四条内容断言：manifest / classes.jar / jni .so / R.txt + **符号齐备**（内核 ABI 24 · Host ABI 15 · JNI_OnLoad））；
+> | | | ② **Java SDK 门面**（`dev.proteus.sdk.ProteusEngine` + `ProteusHost`，**零 Android 依赖**）；
+> | | | ③ ★**C→Java 回调穿梭**（vtable 是 C 函数指针、宿主是 Java 对象 ⇒ 蹦床 + `JNI_OnLoad` 抓 VM + `GlobalRef`）；
+> | | | ④ ★★**嵌入 demo**（`hosts/android/embed-demo/`，**独立包名**的第三方 App，**只依赖 AAR**）真机 **6 条判据全过**：建引擎 / 度量回调被调 / 能力校验两侧 / 批处理红线 / 几何+帧更新 / 输入命中；
+> | | | ⑤ **预热**：`prewarm()` + `warm(host)`（真预热 = 装空树，把首次解析成本挪出首屏）；
+> | | | ⑥ **接入文档** `docs/proteus-host-abi-integration.md`（含 30 秒开始 / 排查表 / 边界）。 |
+> | HA6 | ❌ 未做 | 依赖 Playground 本身（**规划态·零实现**） |
 >
 > **★HA1 落地时的一个关键方法论（值得记）**：等价性判据（"两条路产出同一个东西"）**必须喂同一份输入**——
 >   首版探针直接拿适配器产物比，而适配器**不含** `textMeasures`（生产里由宿主在 mount 时补）
@@ -568,9 +574,12 @@ Flutter 3.0 起 Android 用 **Hybrid Composition**：把 native view 直接放�
 Flutter Add-to-App 的已知问题：初始化 FlutterEngine 约需 100–200ms，若只在用户点击时才初始化，会出现**白屏闪烁**。官方解法是**预热**——在 App 启动阶段（Android `Application.onCreate` / iOS `didFinishLaunchingWithOptions`）就初始化引擎 [citation:7]。
 
 **Proteus 应照做**：
-- 提供 `proteus_prewarm()` 接口
-- 文档建议客户在 App 启动时调用
-- 内核初始化成本需实测并记录（这是与 Flutter 对比的卖点——Flutter 每个 engine 约 15–30MB 常驻内存，Proteus 应显著更低 [citation:7]）
+- 提供 `proteus_prewarm()` 接口 —— ✅ **已落地**（C ABI + Java `ProteusEngine.prewarm()`）；
+  另提供 `warm(host)`（**真预热** = 建引擎 → 装空树 → 销毁，把首次解析成本挪出首屏）
+- 文档建议客户在 App 启动时调用 —— ✅（见 `docs/proteus-host-abi-integration.md` §4）
+- 内核初始化成本需实测并记录 —— ◐ **部分**：本仓有"4051 节点 create = 75.84ms（95% 是 JSON 解析）"
+  的真机读数（`packages/layout-core-rust/src/ffi.rs` 的 `create_blob` 注释），
+  但**空树预热成本**未单独测（诚实边界）；与 Flutter 的常驻内存对比亦未做
 
 ---
 

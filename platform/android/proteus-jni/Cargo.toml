@@ -26,6 +26,10 @@ license = "Apache-2.0"
 [dependencies]
 # ★唯一的运行时依赖：内核（平台无关）。JNI 边界只做「JSON 进 / JSON 出」，复杂度全在核心里。
 proteus-layout-core = { path = "../../../packages/layout-core-rust" }
+# ★HA5：Host ABI（`proteus_engine_*`）——客户 App 嵌入用的**抽象层**入口。
+#   内核 ABI（上面的 layout-core）是"自绘宿主"的低层接口；两者都在同一个 .so 里，
+#   但用途不同：本 crate 的 `host.rs` 绑前者、`lib.rs` 绑后者。
+proteus-host-abi = { path = "../../../packages/host-abi" }
 # ★JNI 绑定（仅本 crate 需要——这是"平台分支"搬到平台层的意义）
 jni = "0.21"
 

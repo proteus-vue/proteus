@@ -96,6 +96,11 @@ const LOCAL_ONLY = {
   'check:android-platform-anim': '需真机产物（adb pull 的 platform-anim*.json）；CI 无设备',
   // ★内核驱动动画判据（曲线/序列/滚动/共享元素/真帧循环）：同族——输入是真机产物，CI 无设备。
   'check:android-kernel-anim': '需真机产物（adb pull 的 kernel-anim.json）；CI 无设备',
+  // ★HA5：AAR 构建（需 NDK + JDK17；CI 为 ubuntu-latest 未装 NDK）。★注意它**不是**"读产物"型门禁：
+  //   它每次都**真构建**并断言 AAR 的四条内容判据（manifest/classes.jar/jni/R.txt + 符号齐备）。
+  'check:host-abi-aar': '需 NDK + JDK17 交叉编译；CI 无 NDK',
+  // ★HA5：嵌入 demo 判据（输入是真机产物 embed-demo.json）。
+  'check:embed-demo': '需真机产物（adb pull 的 embed-demo.json）；CI 无设备',
   // ★hook 接线检查（2026-09-29）：CI 上 `.zcode/config.json` 不存在（gitignored）⇒ 该门禁
   //   走"未安装但给出指引"分支并**返回 0**（不判红是刻意的：CI 本来就不需要本地 hook）。
   //   ⇒ 归入"仅本地"是因为**它的判据只在本地才有意义**（CI 恒为"未安装"）。

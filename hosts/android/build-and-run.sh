@@ -77,7 +77,7 @@ export CARGO_TARGET_AARCH64_LINUX_ANDROID_LINKER="$LINKER"
 JNI_CRATE="$ROOT/platform/android/proteus-jni"
 (cd "$JNI_CRATE" && cargo build --release --target aarch64-linux-android)
 SO_SRC="$CARGO_TARGET_DIR/aarch64-linux-android/release/libproteus_jni.so"
-[ -f "$SO_SRC" ] || { echo "✗ 未生成 .so：$SO_SRC（平台绑定层 platform/android/proteus-jni）"; exit 3; }
+[ -f "$SO_SRC" ] || { echo "✗ 未生成 .so：${SO_SRC}（平台绑定层 platform/android/proteus-jni）"; exit 3; }
 echo "    .so $(du -h "$SO_SRC" | awk '{print $1}')（平台绑定层，含内核）"
 
 echo "==> ①.5 生成跨语言夹具（TS 编码 → 冻结进 Java；见 gen-ops-fixture.mjs）"

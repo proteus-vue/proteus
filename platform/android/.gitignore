@@ -1,0 +1,2 @@
+# 构建产物（AAR / classes / dex —— 本地生成，勿入库；与 hosts/android/.gitignore 同款约定）
+build/

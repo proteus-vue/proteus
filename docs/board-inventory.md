@@ -151,6 +151,10 @@
 
 ### 其他文档（非 plan）
 
+> ★**2026-09-30 新增**：`docs/proteus-host-abi-integration.md` —— **客户接入指南**（把 Proteus 嵌进已有
+> Android App：AAR 引入 / 两个回调 / 一帧驱动 / 预热 / 能力校验 / 排查表 / 边界）。
+> 可运行对照：`hosts/android/embed-demo/`（独立包名的第三方 App，只依赖 AAR）。
+
 | 文件 | 说明 |
 |------|------|
 | `docs/roadmap.md` | 版本线（v0.1→v2.0，对标 uni-app/Taro）——与本表 §1 双路线对照 |
