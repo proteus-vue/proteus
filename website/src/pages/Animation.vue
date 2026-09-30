@@ -29,9 +29,8 @@ const isEn = computed(() => locale.value === 'en')
 const T = {
   zh: {
     chip: 'Morpheus · 声明式动画引擎',
-    h1a: '把动画变成',
-    h1b: '编译期',
-    h1c: '问题',
+    h1line1: '把动画变成',
+    h1line2: '编译期问题',
     tagline: '会不会掉帧，编译期就知道。',
     lead: '一句话声明演出。曲线与物理在 Rust 内核求值，宿主零曲线数学；布局动画几乎白送，因为几何本来就在内核；转场直通系统渲染线程——不自绘，零主线程参与。',
     ctaDocs: '读文档',
@@ -97,9 +96,8 @@ const T = {
   },
   en: {
     chip: 'Morpheus · Declarative Animation Engine',
-    h1a: 'Animation is a',
-    h1b: 'compile-time',
-    h1c: 'question',
+    h1line1: 'Animation is a',
+    h1line2: 'compile-time question',
     tagline: 'Will it jank? You know at compile time.',
     lead: 'One line of declaration. Curves and physics are evaluated in the Rust kernel; hosts do zero curve math; layout animation is nearly free because the geometry already lives there; transitions ride the system render thread — no custom renderer, zero main-thread involvement.',
     ctaDocs: 'Read the docs',
@@ -384,19 +382,20 @@ onUnmounted(() => {
 
     <p-view class="ap-wrap">
       <!-- ═══════════ Hero（布局归 p-grid：窄容器自动堆叠，零 @media） ═══════════ -->
-      <p-grid :min-col-width="330" :gap="36" class="hero">
-        <p-stack direction="column" :gap="16" class="hero-copy">
+      <p-grid :min-col-width="340" :gap="56" class="hero">
+        <p-stack direction="column" :gap="22" class="hero-copy">
           <p-text class="chip"><FeatureIcon name="bolt" /><span>{{ C.chip }}</span></p-text>
-          <p-heading :level="1" v-p-fluid="'font-size(38, 62)'" class="hero-h1">
-            {{ C.h1a }}<em>{{ C.h1b }}</em>{{ C.h1c }}
+          <p-heading :level="1" v-p-fluid="'font-size(36, 58)'" class="hero-h1">
+            <span class="h1-l1">{{ C.h1line1 }}</span>
+            <em class="h1-l2">{{ C.h1line2 }}</em>
           </p-heading>
           <p-text v-p-fluid="'font-size(17, 21)'" class="hero-tag">{{ C.tagline }}</p-text>
           <p-text class="hero-lead">{{ C.lead }}</p-text>
-          <p-stack direction="row" :gap="12" wrap class="hero-cta">
+          <p-stack direction="row" :gap="14" wrap class="hero-cta">
             <router-link to="/docs/animation/00-overview" class="btn btn-primary">{{ C.ctaDocs }}</router-link>
             <a href="#demo" class="btn btn-ghost">{{ C.ctaDemo }}</a>
           </p-stack>
-          <p-stack direction="row" :gap="8" wrap class="hero-pills">
+          <p-stack direction="row" :gap="10" wrap class="hero-pills">
             <span v-for="p in C.heroPills" :key="p" class="pill">{{ p }}</span>
           </p-stack>
         </p-stack>
@@ -414,9 +413,9 @@ onUnmounted(() => {
 
       <!-- ═══════════ 三个杀手锏 ═══════════ -->
       <p-view data-reveal class="sec">
-        <p-grid :min-col-width="300" :gap="16">
+        <p-grid :min-col-width="300" :gap="22">
           <p-view v-for="p in C.pillars" :key="p.n" class="pcard">
-            <p-stack direction="row" align="center" :gap="10" class="pcard-head">
+            <p-stack direction="row" align="center" :gap="12" class="pcard-head">
               <span class="pcard-no">{{ p.n }}</span>
               <span class="pcard-ic"><FeatureIcon :name="p.ic" /></span>
             </p-stack>
@@ -440,7 +439,7 @@ onUnmounted(() => {
         </p-stack>
         <p-text class="sec-note">{{ C.demoNote }}</p-text>
 
-        <p-grid :min-col-width="300" :gap="22" class="demo-grid">
+        <p-grid :min-col-width="300" :gap="32" class="demo-grid">
           <p-view class="demo-stage">
             <MobileStage
               :incoming="plan.incoming.anims"
@@ -453,8 +452,8 @@ onUnmounted(() => {
             <p-text v-if="!hasAnims" class="demo-hint">none · 瞬切（无动画）</p-text>
           </p-view>
 
-          <p-stack direction="column" :gap="14" class="demo-side">
-            <p-stack direction="column" :gap="8">
+          <p-stack direction="column" :gap="20" class="demo-side">
+            <p-stack direction="column" :gap="12">
               <p-text class="ctrl-label">{{ C.dirLabel }}</p-text>
               <p-stack direction="row" :gap="8" wrap>
                 <button class="chip" :class="{ on: direction === 'forward' }" @click="direction = 'forward'">{{ C.dirFwd }}</button>
@@ -505,7 +504,7 @@ onUnmounted(() => {
           <span class="sec-rule" />
         </p-stack>
         <p-text class="sec-note">{{ C.curveNote }}</p-text>
-        <p-grid :min-col-width="320" :gap="18" class="curve-grid">
+        <p-grid :min-col-width="320" :gap="26" class="curve-grid">
           <p-view class="curve-card">
             <svg viewBox="-8 -8 216 116" class="curve-svg" role="img">
               <defs>
@@ -529,8 +528,8 @@ onUnmounted(() => {
               <span class="fact fact--live">f({{ curveU.toFixed(2) }}) = <b>{{ curveValue.toFixed(4) }}</b></span>
             </p-stack>
           </p-view>
-          <p-stack direction="column" :gap="12" class="curve-side">
-            <p-grid :min-col-width="150" :gap="8">
+          <p-stack direction="column" :gap="18" class="curve-side">
+            <p-grid :min-col-width="150" :gap="10">
               <button v-for="[name, id] in CURVES" :key="name" class="curve-chip" :class="{ on: curveId === id }" @click="curveId = id">
                 <span class="cc-name">{{ name }}</span><span class="cc-id">#{{ id }}</span>
               </button>
@@ -553,7 +552,7 @@ onUnmounted(() => {
           <span class="sec-rule" />
         </p-stack>
         <p-text class="sec-note">{{ C.presetsNote }}</p-text>
-        <p-grid :min-col-width="232" :gap="12">
+        <p-grid :min-col-width="240" :gap="18">
           <p-view v-for="r in PRESETS" :key="r.id" class="preset">
             <PresetPreview :kind="previewOf(r.id)" />
             <p-stack direction="row" align="center" :gap="7" wrap class="preset-head">
@@ -577,7 +576,7 @@ onUnmounted(() => {
           <span class="sec-rule" />
         </p-stack>
         <p-text class="sec-note">{{ C.evidenceNote }}</p-text>
-        <p-grid :min-col-width="200" :gap="12">
+        <p-grid :min-col-width="204" :gap="18">
           <p-view v-for="(e, i) in EVIDENCE" :key="i" class="ev">
             <p-stack direction="row" align="baseline" :gap="6" class="ev-num">
               <span class="ev-v">{{ e.v }}</span><span class="ev-u">{{ e.u }}</span>
@@ -605,7 +604,7 @@ onUnmounted(() => {
           <span class="sec-rule" />
         </p-stack>
         <p-text class="sec-note">{{ C.boundaryNote }}</p-text>
-        <p-stack direction="column" :gap="9" class="boundaries">
+        <p-stack direction="column" :gap="14" class="boundaries">
           <p-text v-for="(b, i) in BOUNDARIES" :key="i" class="boundary"><span class="b-dot">◐</span>{{ b }}</p-text>
         </p-stack>
       </p-view>
@@ -645,36 +644,45 @@ onUnmounted(() => {
   mask-image: radial-gradient(70% 46% at 50% 8%, #000 0%, transparent 78%);
   -webkit-mask-image: radial-gradient(70% 46% at 50% 8%, #000 0%, transparent 78%);
 }
-.ap-wrap { position: relative; max-width: 1120px; margin: 0 auto; padding: 104px 22px 90px; }
+.ap-wrap { position: relative; max-width: 1240px; margin: 0 auto; padding: 120px 28px 120px; }
 /* ═══════════ Hero ═══════════ */
-.hero { align-items: center; padding-bottom: 30px; }
+.hero { align-items: center; padding-bottom: 44px; }
 .hero-copy { min-width: 0; }
 .chip {
   display: inline-flex;
   align-items: center;
-  gap: 8px;
+  gap: 9px;
   width: fit-content;
   font-family: var(--mono);
-  font-size: 11.5px;
+  font-size: 12px;
   letter-spacing: 0.16em;
   text-transform: uppercase;
   color: var(--brand-ink);
   background: var(--brand-soft);
   border: 1px solid rgba(124, 92, 255, 0.35);
   border-radius: var(--radius-pill);
-  padding: 6px 14px;
+  padding: 8px 16px;
 }
-.hero-h1 { color: var(--ink); line-height: 1.06; letter-spacing: -0.025em; font-weight: 800; margin: 4px 0 2px; }
-.hero-h1 em {
-  font-style: normal;
+.hero-h1 {
+  color: var(--ink);
+  line-height: 1.14;
+  letter-spacing: -0.025em;
+  font-weight: 800;
+  margin: 6px 0 4px;
+}
+/* ★确定性两行构图：每行独立块级（不依赖容器宽度断行——`把动画变成 / 编译期问题`
+   不会被折成孤立单字；英文同理）。行距是两行版式的呼吸来源。 */
+.h1-l1 { display: block; }
+.h1-l2 { display: block; font-style: normal; }
+.hero-h1 .h1-l2 {
   background: linear-gradient(96deg, var(--brand-ink), var(--brand) 55%, var(--accent));
   -webkit-background-clip: text;
   background-clip: text;
   color: transparent;
 }
-.hero-tag { color: var(--ink); font-weight: 650; line-height: 1.5; }
-.hero-lead { color: var(--muted); line-height: 1.8; max-width: 660px; font-size: 15px; }
-.hero-cta { margin-top: 4px; }
+.hero-tag { color: var(--ink); font-weight: 650; line-height: 1.55; }
+.hero-lead { color: var(--muted); line-height: 1.95; max-width: 640px; font-size: 15.5px; }
+.hero-cta { margin-top: 12px; }
 .btn {
   display: inline-flex;
   align-items: center;
@@ -697,15 +705,15 @@ onUnmounted(() => {
 }
 .btn-ghost { color: var(--ink); background: var(--panel); }
 .btn-ghost:hover { border-color: var(--brand); }
-.hero-pills { margin-top: 6px; }
+.hero-pills { margin-top: 10px; }
 .pill { font-size: 12px; color: var(--muted); border: 1px solid var(--line); background: rgba(20, 20, 25, 0.7); border-radius: var(--radius-pill); padding: 4px 11px; }
 .hero-stage { display: flex; justify-content: center; }
 /* ═══════════ 分节通式 ═══════════ */
-.sec { margin-top: 82px; }
-.sec-head { margin-bottom: 6px; }
+.sec { margin-top: 128px; }
+.sec-head { margin-bottom: 12px; }
 .sec-title { color: var(--ink); letter-spacing: -0.015em; }
 .sec-rule { flex: 1; min-width: 40px; height: 1px; background: linear-gradient(90deg, var(--line), transparent); }
-.sec-note { color: var(--dim); font-size: 13.5px; line-height: 1.75; margin-bottom: 18px; max-width: 820px; }
+.sec-note { color: var(--muted); font-size: 14.5px; line-height: 1.85; margin-bottom: 30px; max-width: 860px; }
 [data-reveal] {
   opacity: 0;
   transform: translateY(16px);
@@ -718,7 +726,7 @@ onUnmounted(() => {
   background: linear-gradient(180deg, rgba(24, 24, 31, 0.9), rgba(17, 17, 23, 0.9));
   border: 1px solid var(--line);
   border-radius: var(--radius-xl);
-  padding: 22px 20px 18px;
+  padding: 30px 26px 26px;
   transition: transform 0.22s ease, border-color 0.22s ease;
 }
 .pcard:hover { transform: translateY(-3px); border-color: rgba(124, 92, 255, 0.45); }
@@ -736,21 +744,21 @@ onUnmounted(() => {
   border: 1px solid rgba(124, 92, 255, 0.3);
 }
 .pcard-title { color: var(--ink); font-size: 17px; margin: 2px 0 8px; }
-.pcard-desc { color: var(--muted); font-size: 13.5px; line-height: 1.75; }
+.pcard-desc { color: var(--muted); font-size: 14.5px; line-height: 1.9; }
 .pcard-metrics {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 10px;
-  margin-top: 16px;
-  padding-top: 14px;
+  gap: 14px;
+  margin-top: 24px;
+  padding-top: 20px;
   border-top: 1px dashed var(--line);
 }
 .metric { display: block; min-width: 0; }
-.metric-v { display: block; font-family: var(--mono); font-size: 17px; color: var(--brand-ink); font-weight: 600; letter-spacing: -0.01em; }
-.metric-l { display: block; font-size: 11px; color: var(--dim); line-height: 1.45; margin-top: 3px; }
+.metric-v { display: block; font-family: var(--mono); font-size: 19px; color: var(--brand-ink); font-weight: 600; letter-spacing: -0.01em; }
+.metric-l { display: block; font-size: 11.5px; color: var(--dim); line-height: 1.55; margin-top: 5px; }
 /* ═══════════ 演示区 ═══════════ */
 .demo-grid { align-items: start; }
-.demo-stage { display: flex; flex-direction: column; align-items: center; gap: 10px; }
+.demo-stage { display: flex; flex-direction: column; align-items: center; gap: 16px; }
 .demo-hint { font-size: 12.5px; color: var(--dim); }
 .demo-side { min-width: 0; }
 .ctrl-label { font-family: var(--mono); font-size: 11px; letter-spacing: 0.1em; text-transform: uppercase; color: var(--dim); }
@@ -767,11 +775,11 @@ onUnmounted(() => {
 }
 .chip:hover { border-color: var(--brand); }
 .chip.on { color: var(--ink); border-color: var(--brand); background: var(--brand-soft); }
-.tl { background: #101016; border: 1px solid var(--line); border-radius: var(--radius-lg); padding: 12px 14px; }
-.tl-head { margin-bottom: 8px; }
+.tl { background: #101016; border: 1px solid var(--line); border-radius: var(--radius-lg); padding: 18px 20px; }
+.tl-head { margin-bottom: 14px; }
 .tl-title { font-family: var(--mono); font-size: 11px; letter-spacing: 0.1em; text-transform: uppercase; color: var(--muted); }
 .tl-total { margin-left: auto; font-family: var(--mono); font-size: 11.5px; color: var(--brand-ink); }
-.tl-rows { display: flex; flex-direction: column; gap: 7px; }
+.tl-rows { display: flex; flex-direction: column; gap: 10px; }
 .tl-row { display: flex; align-items: center; gap: 8px; }
 .tl-pane { width: 16px; font-family: var(--mono); font-size: 11px; color: var(--dim); flex: none; }
 .tl-bar {
@@ -788,17 +796,17 @@ onUnmounted(() => {
 .tl-row--out .tl-bar { background: rgba(255, 255, 255, 0.07); border: 1px solid rgba(255, 255, 255, 0.1); }
 .tl-bar-text { font-family: var(--mono); font-size: 10.5px; color: var(--ink); white-space: nowrap; }
 .tl-empty { font-family: var(--mono); font-size: 12px; color: var(--dim); }
-.tl-note { margin-top: 9px; font-size: 11.5px; color: var(--dim); line-height: 1.6; }
-.readout { background: #101016; border: 1px solid var(--line); border-radius: var(--radius-lg); padding: 12px 14px; }
-.readout-title { font-family: var(--mono); font-size: 11px; letter-spacing: 0.1em; text-transform: uppercase; color: var(--dim); margin-bottom: 8px; }
-.readout pre { margin: 0; max-height: 190px; overflow: auto; font-family: var(--mono); font-size: 11.5px; line-height: 1.65; color: var(--brand-ink); }
+.tl-note { margin-top: 14px; font-size: 12px; color: var(--dim); line-height: 1.7; }
+.readout { background: #101016; border: 1px solid var(--line); border-radius: var(--radius-lg); padding: 18px 20px; }
+.readout-title { font-family: var(--mono); font-size: 11px; letter-spacing: 0.1em; text-transform: uppercase; color: var(--dim); margin-bottom: 14px; }
+.readout pre { margin: 0; max-height: 220px; overflow: auto; font-family: var(--mono); font-size: 12px; line-height: 1.8; color: var(--brand-ink); }
 /* ═══════════ 曲线 ═══════════ */
 .curve-grid { align-items: stretch; }
 .curve-card {
   background: linear-gradient(180deg, rgba(24, 24, 31, 0.85), rgba(16, 16, 22, 0.85));
   border: 1px solid var(--line);
   border-radius: var(--radius-xl);
-  padding: 16px;
+  padding: 24px;
 }
 .curve-svg { width: 100%; height: auto; display: block; }
 .axis { stroke: var(--line); stroke-width: 0.7; }
@@ -806,8 +814,8 @@ onUnmounted(() => {
 .curve { fill: none; stroke: url(#curveStroke); stroke-width: 2; stroke-linecap: round; }
 .dot { fill: var(--accent); }
 .anchor { fill: var(--brand-ink); }
-.curve-facts { margin-top: 12px; }
-.fact { font-family: var(--mono); font-size: 11.5px; color: var(--dim); }
+.curve-facts { margin-top: 20px; }
+.fact { font-family: var(--mono); font-size: 12.5px; color: var(--dim); }
 .fact b { color: var(--muted); font-weight: 600; }
 .fact--live { color: var(--accent); }
 .fact--live b { color: var(--accent); }
@@ -829,8 +837,8 @@ onUnmounted(() => {
 }
 .curve-chip.on { color: var(--ink); border-color: var(--brand); background: var(--brand-soft); }
 .cc-id { font-size: 10.5px; color: var(--dim); }
-.slider-box { background: var(--panel); border: 1px solid var(--line); border-radius: var(--radius-lg); padding: 12px 14px; }
-.slider-head { margin-bottom: 8px; }
+.slider-box { background: var(--panel); border: 1px solid var(--line); border-radius: var(--radius-lg); padding: 18px 20px; }
+.slider-head { margin-bottom: 14px; }
 .slider-val { margin-left: auto; font-family: var(--mono); font-size: 13px; color: var(--accent); }
 .slider { width: 100%; accent-color: var(--brand); }
 /* ═══════════ 预设 ═══════════ */
@@ -838,25 +846,25 @@ onUnmounted(() => {
   background: var(--panel);
   border: 1px solid var(--line);
   border-radius: var(--radius-lg);
-  padding: 12px;
+  padding: 16px 16px 18px;
   transition: transform 0.2s ease, border-color 0.2s ease;
 }
 .preset:hover { transform: translateY(-2px); border-color: rgba(124, 92, 255, 0.4); }
-.preset-head { margin: 12px 0 6px; }
+.preset-head { margin: 16px 0 9px; }
 .preset-id { font-family: var(--mono); font-size: 11px; color: var(--brand-ink); }
 .status { font-size: 10px; padding: 2px 7px; border-radius: var(--radius-pill); border: 1px solid var(--line); color: var(--muted); }
 .status--implemented { color: var(--ok); border-color: rgba(61, 220, 151, 0.4); }
-.preset-title { color: var(--ink); font-size: 13.5px; font-weight: 600; line-height: 1.5; display: block; }
-.preset-when { color: var(--dim); font-size: 12px; line-height: 1.55; margin-top: 3px; display: block; }
-.presets-more { margin-top: 14px; font-size: 12.5px; color: var(--dim); }
+.preset-title { color: var(--ink); font-size: 14.5px; font-weight: 600; line-height: 1.55; display: block; }
+.preset-when { color: var(--dim); font-size: 12.5px; line-height: 1.65; margin-top: 6px; display: block; }
+.presets-more { margin-top: 24px; font-size: 13px; color: var(--dim); line-height: 1.7; }
 /* ═══════════ 证据卡 ═══════════ */
 .ev {
   background: linear-gradient(180deg, rgba(24, 24, 31, 0.9), rgba(16, 16, 22, 0.9));
   border: 1px solid var(--line);
   border-radius: var(--radius-lg);
-  padding: 14px 15px;
+  padding: 22px 22px 20px;
 }
-.ev-num { margin-bottom: 6px; }
+.ev-num { margin-bottom: 12px; }
 .ev-v {
   font-family: var(--mono);
   font-size: 26px;
@@ -868,18 +876,18 @@ onUnmounted(() => {
   color: transparent;
 }
 .ev-u { font-family: var(--mono); font-size: 12px; color: var(--dim); }
-.ev-l { color: var(--muted); font-size: 12.5px; line-height: 1.55; display: block; }
-.ev-src { display: block; margin-top: 8px; font-size: 10.5px; color: var(--dim); }
+.ev-l { color: var(--muted); font-size: 13.5px; line-height: 1.7; display: block; }
+.ev-src { display: block; margin-top: 14px; font-size: 11px; color: var(--dim); }
 /* ═══════════ 代码 / 边界 / CTA ═══════════ */
-.code-box { background: #101016; border: 1px solid var(--line); border-radius: var(--radius-xl); padding: 18px 20px; overflow-x: auto; }
-.code-box pre { margin: 0; font-family: var(--mono); font-size: 12.5px; line-height: 1.8; }
-.boundaries { border-left: 2px solid var(--line); padding-left: 15px; }
-.boundary { color: var(--muted); font-size: 13.5px; line-height: 1.7; }
+.code-box { background: #101016; border: 1px solid var(--line); border-radius: var(--radius-xl); padding: 26px 28px; overflow-x: auto; }
+.code-box pre { margin: 0; font-family: var(--mono); font-size: 13px; line-height: 2; }
+.boundaries { border-left: 2px solid var(--line); padding-left: 22px; }
+.boundary { color: var(--muted); font-size: 14px; line-height: 1.95; }
 .b-dot { color: var(--warn); margin-right: 9px; }
 .cta {
   position: relative;
-  margin-top: 76px;
-  padding: 40px 24px;
+  margin-top: 120px;
+  padding: 56px 28px;
   text-align: center;
   border: 1px solid var(--line);
   border-radius: var(--radius-xl);
@@ -898,6 +906,6 @@ onUnmounted(() => {
   pointer-events: none;
 }
 .cta-title { color: var(--ink); }
-.cta-sub { color: var(--dim); font-size: 12.5px; margin: 6px 0 18px; display: block; }
+.cta-sub { color: var(--dim); font-size: 13px; margin: 10px 0 28px; display: block; }
 .cta-btn { position: relative; }
 </style>
