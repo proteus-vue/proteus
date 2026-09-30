@@ -2262,6 +2262,7 @@ pub unsafe extern "C" fn proteus_layout_anim_start(handle: u64, json: *const c_c
         let mut spring_count = 0usize;
         let mut delayed_count = 0usize;
         let mut scroll_count = 0usize;
+        let mut keyframes_count = 0usize;
         for a in list {
             let node_id = a
                 .get("nodeId")
@@ -2276,16 +2277,34 @@ pub unsafe extern "C" fn proteus_layout_anim_start(handle: u64, json: *const c_c
             // ★RT2：驱动方式（缺省 time ⇒ 向后兼容 RT0 的启动报文）
             let drive = crate::anim::AnimDrive::from_u8(a.get("drive").and_then(|x| x.as_u64()).unwrap_or(0) as u8)?;
             // ★RT2 追加：弹簧（`spring:{stiffness,damping,mass}` 提供时用物理模式）
-            let mode = match a.get("spring") {
-                Some(sp) => {
-                    spring_count += 1;
-                    crate::anim::AnimMode::Spring(crate::anim::SpringParams {
-                        stiffness: num(sp, "stiffness")?,
-                        damping: num(sp, "damping")?,
-                        mass: sp.get("mass").and_then(|x| x.as_f64()).unwrap_or(1.0) as f32,
-                    })
+            // ★序列编排：`keyframes:[{to,durMs,curve},…]` 提供时用多段模式（与 spring 二选一，先判序列）
+            let mode = match a.get("keyframes") {
+                Some(kf) => {
+                    let arr = kf
+                        .as_array()
+                        .ok_or_else(|| format!("节点 {node_id} 的 keyframes 必须是数组"))?;
+                    let mut segs: Vec<crate::anim::KeySeg> = Vec::with_capacity(arr.len());
+                    for (i, s) in arr.iter().enumerate() {
+                        segs.push(crate::anim::KeySeg {
+                            to: num(s, "to").map_err(|e| format!("keyframes[{i}] {e}"))?,
+                            dur_ms: num(s, "durMs").map_err(|e| format!("keyframes[{i}] {e}"))?,
+                            curve: s.get("curve").and_then(|x| x.as_u64()).unwrap_or(1) as u8,
+                        });
+                    }
+                    keyframes_count += 1;
+                    crate::anim::AnimMode::Keyframes(segs)
                 }
-                None => crate::anim::AnimMode::Curve,
+                None => match a.get("spring") {
+                    Some(sp) => {
+                        spring_count += 1;
+                        crate::anim::AnimMode::Spring(crate::anim::SpringParams {
+                            stiffness: num(sp, "stiffness")?,
+                            damping: num(sp, "damping")?,
+                            mass: sp.get("mass").and_then(|x| x.as_f64()).unwrap_or(1.0) as f32,
+                        })
+                    }
+                    None => crate::anim::AnimMode::Curve,
+                },
             };
             // ★延迟（编排/交错）；`takeover:false` ⇒ 硬重启
             let delay_ms = a.get("delayMs").and_then(|x| x.as_f64()).unwrap_or(0.0) as f32;
@@ -2329,7 +2348,7 @@ pub unsafe extern "C" fn proteus_layout_anim_start(handle: u64, json: *const c_c
         }
         Ok(serde_json::json!({
             "ok": true, "started": started, "spring": spring_count, "delayed": delayed_count,
-            "scroll": scroll_count
+            "scroll": scroll_count, "keyframes": keyframes_count
         })
         .to_string())
     };
@@ -2490,13 +2509,31 @@ pub unsafe extern "C" fn proteus_layout_anim_commit_spec(handle: u64, json: *con
             let kind = crate::anim::AnimKind::from_u8(
                 a.get("kind").and_then(|x| x.as_u64()).ok_or_else(|| "动画缺少 kind".to_string())? as u8,
             )?;
-            let mode = match a.get("spring") {
-                Some(sp) => crate::anim::AnimMode::Spring(crate::anim::SpringParams {
-                    stiffness: num(sp, "stiffness")?,
-                    damping: num(sp, "damping")?,
-                    mass: sp.get("mass").and_then(|x| x.as_f64()).unwrap_or(1.0) as f32,
-                }),
-                None => crate::anim::AnimMode::Curve,
+            // ★MA6：序列编排（与 `anim_start` 同一解析语义——缺了它平台路径会把序列当单段，
+            //   静默错形：from=to=1 ⇒ 提交出去"几乎不动的动画"）
+            let mode = match a.get("keyframes") {
+                Some(kf) => {
+                    let arr = kf
+                        .as_array()
+                        .ok_or_else(|| format!("节点 {node_id} 的 keyframes 必须是数组"))?;
+                    let mut segs: Vec<crate::anim::KeySeg> = Vec::with_capacity(arr.len());
+                    for (i, s) in arr.iter().enumerate() {
+                        segs.push(crate::anim::KeySeg {
+                            to: num(s, "to").map_err(|e| format!("keyframes[{i}] {e}"))?,
+                            dur_ms: num(s, "durMs").map_err(|e| format!("keyframes[{i}] {e}"))?,
+                            curve: s.get("curve").and_then(|x| x.as_u64()).unwrap_or(1) as u8,
+                        });
+                    }
+                    crate::anim::AnimMode::Keyframes(segs)
+                }
+                None => match a.get("spring") {
+                    Some(sp) => crate::anim::AnimMode::Spring(crate::anim::SpringParams {
+                        stiffness: num(sp, "stiffness")?,
+                        damping: num(sp, "damping")?,
+                        mass: sp.get("mass").and_then(|x| x.as_f64()).unwrap_or(1.0) as f32,
+                    }),
+                    None => crate::anim::AnimMode::Curve,
+                },
             };
             let from = num(a, "from")?;
             // ★MA5：滚动驱动动画**不得**走平台零参与路径——它的进度来自**外部滚动位置**，

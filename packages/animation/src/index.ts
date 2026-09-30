@@ -29,6 +29,7 @@ export type {
   DriveName,
   SpringConfig,
   ScrollWindow,
+  KeyframeSeg,
   AnimDecl,
   AnimTargets,
   EngineAnim,

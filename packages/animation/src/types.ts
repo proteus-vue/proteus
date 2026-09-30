@@ -74,22 +74,40 @@ export interface ScrollWindow {
   to: number
 }
 
+/** ★MA6：**序列编排的一段**（对标 Flutter `TweenSequenceItem`）——多段收敛在**一条**动画里 */
+export interface KeyframeSeg {
+  /** 本段终点（本段起点 = 上一段终点；首段起点 = 声明的 `from`） */
+  to: number
+  /** 本段时长（毫秒） */
+  durationMs: number
+  /** 本段曲线（缺省 = `easeOut`） */
+  curve?: CurveName
+}
+
 /** ★**单条动画声明**（封闭集的全部字段） */
 export interface AnimDecl {
   /** 动哪个属性 */
   kind: AnimKindName
   /** 起点（缺省 = 节点当前值，由内核在启动时解析） */
   from?: number
-  /** 终点（**必填**——动画必须有确定目标） */
+  /** 终点（**必填**——动画必须有确定目标；序列模式下 = 末段 `to`） */
   to: number
-  /** 时长（毫秒；弹簧模式可省——由物理决定） */
+  /** 时长（毫秒；弹簧模式可省——由物理决定；序列模式下 = 各段之和） */
   durationMs?: number
   /** 起始延迟（毫秒；编排/交错用） */
   delayMs?: number
-  /** 查表曲线（与 `spring` 二选一；都缺省 = `easeOut`） */
+  /** 查表曲线（与 `spring` / `keyframes` 三选一；都缺省 = `easeOut`） */
   curve?: CurveName
   /** 弹簧物理（给了它就用物理积分，不是查表） */
   spring?: SpringConfig
+  /**
+   * ★MA6：**序列编排**（多段；与 `curve`/`spring` 三选一）
+   *
+   * 解决的结构性缺口：内核对同 `(节点,属性)` 是**替换**语义 ⇒ "先下压再弹回"这类
+   * **同属性多段**动画用多条声明表达会被静默替换。⇒ 多段收敛到一条动画里（内核 `AnimMode::Keyframes`）。
+   * ★整段序列仍是**一条**平台动画（`CAKeyframeAnimation` 采样整段），不额外增加提交次数。
+   */
+  keyframes?: KeyframeSeg[]
   /** 驱动方式（缺省 `time`；给了 `scroll` 时本字段被忽略——窗口存在即说明进度来自滚动位置） */
   drive?: DriveName
   /**
@@ -128,6 +146,8 @@ export interface EngineAnim {
   takeover: boolean
   /** 仅弹簧模式出现（内核据此走物理积分） */
   spring?: { stiffness: number; damping: number; mass: number }
+  /** ★MA6：仅序列模式出现（内核据此走分段求值；整段 = 一条平台动画） */
+  keyframes?: Array<{ to: number; durMs: number; curve: CurveId }>
   /** ★MA5：仅滚动驱动出现（内核据此按滚动位置求值；两者都给且 `scrollTo > scrollFrom` 才生效） */
   scrollFrom?: number
   scrollTo?: number

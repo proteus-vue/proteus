@@ -45,6 +45,16 @@ export function compileOne(d: AnimDecl, targets: AnimTargets): EngineAnim {
     drive: d.drive === 'progress' ? 1 : 0,
     takeover: d.takeover !== false,
     ...(d.spring ? { spring: { stiffness: d.spring.stiffness, damping: d.spring.damping, mass: d.spring.mass ?? 1 } } : {}),
+    // ★MA6：序列（每段曲线在编译期落定；durMs = 各段之和 ⇒ 内核用它做时间→进度换算）
+    ...(d.keyframes
+      ? {
+          keyframes: d.keyframes.map((s) => ({
+            to: s.to,
+            durMs: s.durationMs,
+            curve: CURVE_ID[s.curve ?? 'easeOut'],
+          })),
+        }
+      : {}),
     // ★MA5：滚动窗口（内核据 scrollTo > scrollFrom 判定为滚动驱动）
     ...(d.scroll ? { scrollFrom: d.scroll.from, scrollTo: d.scroll.to } : {}),
   }
@@ -52,6 +62,11 @@ export function compileOne(d: AnimDecl, targets: AnimTargets): EngineAnim {
 
 /** 求值参数归一（曲线/时长缺省落定——下发给内核的指令不含"未指定"） */
 function resolveEasing(d: AnimDecl): { curve: CurveId; durMs: number } {
+  // ★MA6：序列模式的时长 = 各段之和（**不是**缺省 300——否则内核的 time→progress 换算会错）
+  if (d.keyframes) {
+    const sum = d.keyframes.reduce((acc, s) => acc + s.durationMs, 0)
+    return { curve: CURVE_ID[d.curve ?? 'easeOut'], durMs: d.durationMs ?? sum }
+  }
   if (d.spring) {
     // 弹簧：时长由物理决定；`durMs` 给一个**名义值**（内核会用自然静止时间覆盖采样窗口）
     return { curve: CURVE_ID.easeOut, durMs: d.durationMs ?? 1000 }
