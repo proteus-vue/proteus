@@ -27,6 +27,8 @@ import {
   formatAnimRule,
   formatAnimCatalog,
   runConformance,
+  EscapeRegistry,
+  ESCAPE_KINDS,
 } from '@proteus-vue/animation'
 import type { AnimDecl } from '@proteus-vue/animation'
 
@@ -466,5 +468,86 @@ describe('MA1 收尾 · AI 说明书 + conformance（Morpheus §13 第 11 条）
   it('单条渲染含 what/why/when/verify/source（AI 可独立消费一条）', () => {
     const txt = formatAnimRule(ANIM_RULES[0]!)
     for (const k of ['是什么', '为什么', '何时用', '如何验证', '实现位置']) expect(txt).toContain(k)
+  })
+})
+
+describe('MA0/§4.2 · 逃生口（显式通道 + 可统计 + degraded 单列）', () => {
+  it('★登记三要素齐备才通过；缺任一 → 当场抛错（"没有理由的逃生口"是设计泄漏）', () => {
+    const reg = new EscapeRegistry()
+    expect(() => reg.register({ kind: 'custom-easing', detail: 'x', reason: 'y', behaviorRisk: '' })).toThrow(/behaviorRisk/)
+    expect(() => reg.register({ kind: 'custom-easing', detail: 'x', reason: '  ', behaviorRisk: 'z' })).toThrow(/reason/)
+    expect(() => reg.register({ kind: 'custom-easing', detail: '', reason: 'y', behaviorRisk: 'z' })).toThrow(/detail/)
+    // 未知类别也拦（类别是封闭集；覆盖不了用 other 但须写清细节）
+    expect(() => reg.register({ kind: 'nope' as never, detail: 'x', reason: 'y', behaviorRisk: 'z' })).toThrow(/未知逃生口类别/)
+    expect(reg.list()).toHaveLength(0)
+  })
+
+  it('★声明式 + 逃生口 → 率的分母含两者（逃生口率 = total/(declaratives+total)）', () => {
+    const reg = new EscapeRegistry()
+    compileAnimations([{ kind: 'opacity', from: 0, to: 1 }], { nodeId: 1 }, { escapes: reg })
+    compileAnimations([{ kind: 'scale', from: 1, to: 1.1 }, { kind: 'translateY', from: 0, to: -4 }], { nodeId: 2 }, { escapes: reg })
+    reg.register({ kind: 'custom-easing', detail: 'cubic-bezier(.1,.9,.2,1)', reason: '品牌曲线', behaviorRisk: '不进内核曲线表' })
+    const s = reg.summary()
+    expect(s.declaratives).toBe(3)   // 1 + 2 条声明
+    expect(s.total).toBe(1)
+    expect(s.ratio).toBeCloseTo(1 / 4, 5)
+  })
+
+  it('★不注入注册表 ⇒ 零副作用（compileAnimations 保持纯函数）', () => {
+    const reg = new EscapeRegistry()
+    compileAnimations([{ kind: 'opacity', from: 0, to: 1 }], { nodeId: 1 })  // 不传 escapes
+    expect(reg.summary().declaratives).toBe(0)
+    expect(reg.summary().ratio).toBe(0)
+  })
+
+  it('★degraded 必须**单列**（不与类别汇总混排）——报告结构断言', () => {
+    const reg = new EscapeRegistry()
+    reg.register({ kind: 'layout-property', detail: 'width 0→200', reason: '展开动画需真实占位', behaviorRisk: '触发重排，平台零参与失效', site: 'Comp.vue' })
+    reg.register({ kind: 'external-driver', detail: '自建 rAF 交错', reason: '跨属性时间轴未做', behaviorRisk: '不走内核 tick，与声明式动画可能互相覆盖' })
+    const txt = reg.format()
+    const degradedIdx = txt.indexOf('degraded')
+    const byKindIdx = txt.indexOf('按类别汇总')
+    expect(degradedIdx).toBeGreaterThan(-1)
+    expect(byKindIdx).toBeGreaterThan(degradedIdx)      // degraded 在汇总**之前**（独立一节）
+    expect(txt).toContain('最高危险度')
+    // 三条信息都要出现（做什么/为什么/风险）
+    expect(txt).toContain('width 0→200')
+    expect(txt).toContain('展开动画需真实占位')
+    expect(txt).toContain('触发重排')
+  })
+
+  it('★全部类别都出现（零值也列）——不留"未归类"的想象空间', () => {
+    const reg = new EscapeRegistry()
+    const s = reg.summary()
+    for (const k of ESCAPE_KINDS) expect(s.byKind[k]).toBe(0)
+    const txt = reg.format()
+    for (const k of ESCAPE_KINDS) expect(txt).toContain(`· ${k}:`)
+  })
+
+  it('★超目标（> 5%）时报告给出提示；未超则不给（判据不是恒真）', () => {
+    const reg = new EscapeRegistry()
+    for (let i = 0; i < 6; i++) {
+      reg.register({ kind: 'other', detail: `d${i}`, reason: 'r', behaviorRisk: 'b' })
+    }
+    expect(reg.summary().ratio).toBe(1)          // 分母 0 + 6
+    expect(reg.format()).toContain('超过目标')
+    const reg2 = new EscapeRegistry()
+    compileAnimations([{ kind: 'opacity', from: 0, to: 1 }], { nodeId: 1 }, { escapes: reg2 })
+    expect(reg2.format()).not.toContain('超过目标')
+  })
+
+  it('★校验失败时报错指向逃生口通道（不是只说"不支持"）', () => {
+    expect(() =>
+      compileAnimations([{ kind: 'scale', to: 0.9 }, { kind: 'scale', to: 1 }], { nodeId: 1 }),
+    ).toThrow(/显式逃生口[\s\S]*register/)
+  })
+
+  it('reset 可归零（测试隔离——跨用例共享状态必须可归零，本仓纪律）', () => {
+    const reg = new EscapeRegistry()
+    reg.register({ kind: 'other', detail: 'd', reason: 'r', behaviorRisk: 'b' })
+    compileAnimations([{ kind: 'opacity', from: 0, to: 1 }], { nodeId: 1 }, { escapes: reg })
+    reg.reset()
+    expect(reg.summary().total).toBe(0)
+    expect(reg.summary().declaratives).toBe(0)
   })
 })

@@ -344,6 +344,29 @@ compileAnimations([{ kind: 'scale', from: 1, to: 1, keyframes: [...] }], { nodeI
     source: 'packages/animation/src/compile.ts:isPlatformEligible',
   },
 
+  {
+    id: 'constraint/escape-hatch',
+    kind: 'constraint',
+    title: '逃生口（§4.2）：能用，但必须登记且被统计',
+    description: '`escapes.register({kind, detail, reason, behaviorRisk, site?})`——封闭集表达不了时走这条'
+      + '（`custom-easing` / `external-driver` / `layout-property` / `cross-property-timeline` / `platform-mixing` / `other`）。',
+    why: '★§4.2 的三条硬要求：① 显式（不静默降级）② **可统计**（与 UC0 漏点统计同构）'
+      + '③ `degraded` **单列**（"最高危险度"）。'
+      + '★为什么不直接拦住：拦死会逼开发者绕过框架（脱离统计视野，比登记更糟）。',
+    when: '封闭集（5 曲线 / 5 属性 / 单段时间轴）确实表达不了，且补预设来不及',
+    example: `escapes.register({
+  kind: 'layout-property', detail: 'width 0→200 展开动画',
+  reason: '需要真实占位变化（合成属性无法表达）',
+  behaviorRisk: '触发重排，平台零参与路径失效，且与声明式动画可能打架',
+  site: 'components/Accordion.vue',
+})
+console.log(escapes.format())   // degraded 单列 + 类别汇总 + 率对照 5% 目标`,
+    verify: 'tests/animation-presets.test.ts 逃生口段 8 条（三要素必填 / 率分母含声明式 / 零副作用 / degraded 单列 / 类别恒输出 / 阈值提示 / 报错指向 / reset）',
+    status: 'implemented',
+    source: 'packages/animation/src/escape.ts:EscapeRegistry',
+    decision: 'Morpheus §4.2（MA0 第三项）',
+  },
+
   /* ────────────────────────── 诚实边界 ────────────────────────── */
   {
     id: 'boundary/cross-property-timeline',
@@ -359,15 +382,38 @@ compileAnimations([{ kind: 'scale', from: 1, to: 1, keyframes: [...] }], { nodeI
     source: 'packages/animation/README.md:未做（conformance 只保证"已声称的与实现一致"，不覆盖未做项）',
   },
   {
+    id: 'boundary/slot-identity-binding',
+    kind: 'boundary',
+    title: 'Slot 身份绑定：经**节点回收解绑**实现（非直接绑 Slot）',
+    description: '动画绑定到 **node id**；节点被回收到别的数据项时，回收路径自动 `stop_nodes`（含清值）解绑。',
+    why: 'Morpheus §7.3 要求"绑 Slot 身份，不是 Node 身份"。本仓的等价保护是**回收即解绑**'
+      + '（§7.3 的第二句"节点回收时动画状态必须一并解绑"）——真机 D 组判据守住。'
+      + '★**如实边界**：`VirtualRow.key`（行身份）在宿主侧**存了但尚未消费**，且 `setupVirtual` '
+      + '只在挂载时调用（**没有"行数据重键"路径**）⇒ "同一 node id 换了数据、动画应随之失效"这一形态当前不可达。',
+    when: '长列表快速滚动 / 行复用（当前由回收解绑覆盖）',
+    example: `// 宿主回收行时自动解绑（宿主内部）：
+view.onRowDematerialized = { ids in animStopNodes({ nodeIds: ids }) }`,
+    verify: 'hosts/ios/check-anim-rt2.py 的 D 组（回收已解绑 / 解绑后不再被 tick 改动）；'
+      + 'packages/layout-core-rust/src/anim.rs 的 `stop_nodes_unbinds_animations_for_recycled_nodes`',
+    status: 'limitation',
+    source: 'packages/layout-core-rust/src/anim.rs:stop_nodes（含 reset_visuals）+ hosts/ios/ProteusHost/selfdraw-scene.swift:dematerializeRow',
+    decision: 'Morpheus §7.3（MA0 第二项）',
+  },
+  {
     id: 'boundary/no-arbitrary-js-animation',
     kind: 'boundary',
     title: '不开放任意 JS 动画函数（设计红线）',
     description: '没有"让开发者写任意动画逻辑"的 API；能声明的只有封闭集。',
     why: 'Morpheus §13 第 3 条：那是"在第一王炸上开口子"（与"不开放任意原生调用"同理）。'
-      + '需要算不出来的东西时，走**显式逃生口**（且要可统计），不是开任意函数。',
+      + '需要算不出来的东西时，走**显式逃生口**（§4.2：可用但必须登记，且被统计为 degraded）。',
     when: '遇到"预设和字段都不够用"时（**不要**找后门，先看是否该补预设）',
-    example: `// 逃生口方向（当前未实现）：记 degraded 并单列——不得静默降级`,
-    verify: 'validate.ts 的封闭集校验（未知 kind/curve 直接报错）',
+    example: `// 显式逃生口（§4.2）：能用，但必须登记三要素并被计入 degraded
+escapes.register({
+  kind: 'custom-easing', detail: 'cubic-bezier(.1,.9,.2,1)',
+  reason: '品牌曲线不在封闭集 5 条里',
+  behaviorRisk: '不进内核曲线表 ⇒ 无法走平台零参与路径',
+})`,
+    verify: 'tests/animation-presets.test.ts 逃生口段（三要素必填 / 率统计 / degraded 单列 / 零副作用）',
     status: 'limitation',
     source: 'packages/animation/src/types.ts（封闭集定义）',
     decision: 'Morpheus §13 第 3 条',

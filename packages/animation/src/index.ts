@@ -47,6 +47,9 @@ export {
   isScrollDriven,
 } from './compile'
 export { presets, route, list, element, easing, scroll } from './presets'
+// ★★MA0/§4.2：逃生口（显式通道 + 可统计 + degraded 单列）
+export { EscapeRegistry, escapes, ESCAPE_KINDS, ESCAPE_RATIO_TARGET } from './escape'
+export type { EscapeKind, EscapeRecord, EscapeSummary } from './escape'
 // ★★MA1 收尾：AI 说明书（与 111 条编译规则同构）+ conformance 对账（说明书 ↔ 实现）
 export { ANIM_RULES, listAnimRules, getAnimRule, formatAnimRule, formatAnimCatalog } from './rules'
 export type { AnimRule, AnimRuleKind } from './rules'
