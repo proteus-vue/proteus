@@ -113,3 +113,34 @@ console.log(`[android-bundle] ✅ ${path.relative(ROOT, OUT_APP_STACK)}（${(byt
 if (resultAppStack.warnings.length) {
   for (const w of resultAppStack.warnings) console.warn(`  ⚠ ${w.text}`)
 }
+
+// ══════════════════════════════════════════════════════════════════
+// ★★G-39：第三个 entry —— 宿主运行时（host-runtime：生命周期/事件循环/职责边界/内存账本）
+//
+// 【为什么指向 src 而非 dist】与 app-stack 同款理由（消除"忘了重建 dist ⇒ 测旧代码"）
+//   + quickjs-host.ts 是**本轮新增**（dist 里还没有）⇒ alias 到 src 是唯一正确的形态。
+// 【为什么 host-conformance 也走 src】它与 quickjs-host 同在 render-backend/src；
+//   esbuild 会一并打包其相对依赖（dispatcher/headless/flutter）；
+//   唯一的外部包依赖是 @proteus-vue/component-ir（零依赖纯 TS）——显式 alias 到其 dist。
+const OUT_HOST_RT = path.join(HERE, 'dist', 'bundle-host-runtime.js')
+const resultHostRt = await build({
+  entryPoints: [path.join(HERE, 'entry-host-runtime.ts')],
+  outfile: OUT_HOST_RT,
+  bundle: true,
+  format: 'iife',
+  platform: 'neutral',
+  target: 'es2020',
+  define: { 'process.env.NODE_ENV': '"production"', __DEV__: 'false' },
+  alias: {
+    '@proteus-vue/render-backend/quickjs-host': path.join(ROOT, 'packages/render-backend/src/quickjs-host.ts'),
+    '@proteus-vue/render-backend/host-conformance': path.join(ROOT, 'packages/render-backend/src/host-conformance.ts'),
+    '@proteus-vue/component-ir': path.join(ROOT, 'packages/component-ir/dist/index.js'),
+  },
+  legalComments: 'none',
+})
+
+const bytesHostRt = fs.statSync(OUT_HOST_RT).size
+console.log(`[android-bundle] ✅ ${path.relative(ROOT, OUT_HOST_RT)}（${(bytesHostRt / 1024).toFixed(1)} KB）`)
+if (resultHostRt.warnings.length) {
+  for (const w of resultHostRt.warnings) console.warn(`  ⚠ ${w.text}`)
+}

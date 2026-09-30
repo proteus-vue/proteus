@@ -51,6 +51,29 @@ final class QuickJsEngine {
     /** 注册宿主回调（须有 `public void post(String)` 方法）；传 null 解除 */
     static native void nativeSetHostCallback(Object host);
 
+    /**
+     * ★★G-39：**泵掉挂起 job**（QuickJS 的 await / Promise 续体队列）。
+     *
+     * 为什么要有它（本轮取证发现的实缺）：此前 eval 完从不泵 job ⇒ 任何 `await`/`.then()`
+     * 的 JS 代码在设备上**半执行**（同步段跑了、续体静默丢失）。G-39「事件循环由运行时唯一拥有」
+     * 在 QuickJS 宿主上的落点 = 本入口（只有宿主壳能推进 job 队列）。
+     *
+     * @return 本次泵执行的任务数；未初始化返回 -1
+     */
+    static native int nativeRunPendingJobs();
+
+    /** 是否仍有挂起 job（诊断：await 未完成 = 还有 pending） */
+    static native boolean nativeHasPendingJobs();
+
+    /**
+     * ★★G-39/G-43：**引擎内存读数**（真实 JS 堆，不是宿主 PSS 估算）。
+     * 返回 JSON：`{ok, malloc_size, memory_used_size, malloc_count, obj_count, str_size, …}`。
+     */
+    static native String nativeMemoryUsage();
+
+    /** ★触发 GC（返回 0 成功）——`JS_RunGC` 后内存读数应下降（GC 有效性的机器证据） */
+    static native int nativeRunGC();
+
     // ── Java 侧友好封装（与 native 返回的 JSON 解耦：调用方拿布尔 + 字符串） ──
 
     /** 执行结果（不解析 JSON 的轻量视图——调用方多数只关心"成了没 + 值/错误"） */

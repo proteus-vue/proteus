@@ -152,8 +152,18 @@ assert_jni_export() {
   local nm_bin
   nm_bin="$(find_ndk_cc 2>/dev/null | sed 's|/bin/[^/]*$|/bin/llvm-nm|')"
   if [ -x "$nm_bin" ]; then
-    if "$nm_bin" -D --defined-only "$so" 2>/dev/null | grep -q "Java_dev_proteus_layoutcore_QuickJsEngine_nativeEval"; then
-      say "  ✅ JNI 导出断言通过（nativeEval / nativeEvalWithHost 符号在场）"
+    local missing=0 sym
+    # ★逐符号断言（不只抽查一个——JNI 声明与 C 侧名字漂移是本仓踩过的形态：
+    #   缺一个符号时该入口**首次调用**才炸，而测试路径可能整段没跑到）
+    for sym in nativeEval nativeEvalWithHost nativeVersion nativeSetHostCallback \
+               nativeRunPendingJobs nativeHasPendingJobs nativeMemoryUsage nativeRunGC; do
+      if ! "$nm_bin" -D --defined-only "$so" 2>/dev/null | grep -q "Java_dev_proteus_layoutcore_QuickJsEngine_${sym}"; then
+        say "  ✗ 缺符号：Java_dev_proteus_layoutcore_QuickJsEngine_${sym}"
+        missing=1
+      fi
+    done
+    if [ "$missing" = "0" ]; then
+      say "  ✅ JNI 导出断言通过（8 个 native 符号全在场：eval/evalWithHost/version/setHostCallback/jobs×2/mem/gc）"
     else
       die "JNI 导出符号缺失（System.loadLibrary 后会 UnsatisfiedLinkError）"
     fi
