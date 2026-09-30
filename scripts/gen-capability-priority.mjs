@@ -63,8 +63,10 @@ const rows = caps.map((c) => ({
   tier: c.tier,
   domain: capabilityDomainOf(c.semantic),
   mpEquiv: c.mpEquiv,
+  tag: c.tag ?? '',
   officialApis: officialByHook[String(c.api).replace('()', '')] ?? 0,
 }))
+// (Hook 可用性判据在主脚本侧计算——见下方「事实源 ①-b」)
 console.log(JSON.stringify({
   rows,
   officialCoveredTotal: coveredTotal,
@@ -76,6 +78,40 @@ console.log(JSON.stringify({
 const raw = execFileSync('npx', ['tsx', '-e', probe], { cwd: ROOT, encoding: 'utf-8', timeout: 300000 })
 const facts = JSON.parse(raw.trim().split('\n').pop())
 const { rows } = facts
+
+// ── 事实源 ①-b：**Hook 是否真的可用**（机械判据，不靠 catalog 的 status 字段）────────────
+//
+// 【为什么必须单独算（本仓实测的口径陷阱）】catalog 里的 status 对**能力项**是**类别标记**，
+//   不是实现状态——源码注释写明「纯 Hook，无 C-IR 节点 → planned」（C3 / C3 批 2 / 组件实例批）。
+//   ⇒ 若直接把该字段当"已实现/未实现"，会把 useStorage / useNetwork 这些**日常在用的能力**
+//     读成"planned（待实现）"——本表首版正是如此，属**误导性列**（已从表中移除该字段）。
+//   真实判据 = Hook 是否在 CapabilityHooks 接口里声明（= API 层可直接调用）。
+//   ★判据必须认**泛型方法签名** useFetch<T>(...)——本仓同类正则盲区已犯过两次
+//   （MP 快照抽取器 298→495；本判据首版也漏了 useFetch）。
+{
+  const apiSrc = fs.readFileSync(path.join(ROOT, 'packages/api/src/capability.ts'), 'utf8')
+  const ifaceStart = apiSrc.indexOf('export interface CapabilityHooks')
+  if (ifaceStart < 0) throw new Error('capability.ts 中未找到 CapabilityHooks 接口（结构变了？）')
+  const ifaceOpen = apiSrc.indexOf('{', ifaceStart)
+  let depth = 0
+  let ifaceEnd = -1
+  for (let i = ifaceOpen; i < apiSrc.length; i++) {
+    if (apiSrc[i] === '{') depth++
+    else if (apiSrc[i] === '}') { depth--; if (depth === 0) { ifaceEnd = i; break } }
+  }
+  if (ifaceEnd < 0) throw new Error('CapabilityHooks 接口括号未闭合')
+  const ifaceBody = apiSrc.slice(ifaceOpen + 1, ifaceEnd)
+  const declared = new Set()
+  for (const m of ifaceBody.matchAll(/^\s+(use[A-Z]\w*)\s*(?:<|\()/gm)) declared.add(m[1])
+  for (const r of rows) r.hookImplemented = declared.has(r.hook)
+  const notImpl = rows.filter((r) => !r.hookImplemented)
+  if (notImpl.length) {
+    throw new Error(
+      `${notImpl.length} 个能力的 Hook 未在 CapabilityHooks 接口声明：` + notImpl.map((r) => r.api).join(', ') +
+        ' —— 要么补声明，要么从 catalog 移除（勿静默：会让"能力可用性"数字失真）',
+    )
+  }
+}
 
 // ── 事实源 ②：消费侧语料的 Hook 调用点聚合 ────────────────────────────────
 // ★口径写死（见文件头）；改动本处 = 改动测量定义，须同步更新文档头部的口径说明。
@@ -154,6 +190,11 @@ lines.push(`| ③ 官方承接面 | 微信官方 API 清单（${facts.specApiCou
 lines.push('')
 lines.push('**优先级算法（方案 §1.1）**：跨项目覆盖数 **优先于** 单项目频次；成本加权 S/M/L=1/3/8。')
 lines.push('')
+lines.push('**列含义（★防误读）**：')
+lines.push('- **Hook 可用** = Hook 是否在 `CapabilityHooks` 接口声明（**机械判据**——API 层可直接调用，双端桥/降级见各能力页）；')
+lines.push('- **组件形态** = 该能力是否有 `p-*` 组件标签（`纯 Hook` = 无组件形态，只有函数式入口）；')
+lines.push('- ★**不要**把 catalog 的 `status` 字段读成「已实现/未实现」：对能力项它是**类别标记**（`planned` = 纯 Hook 无 C-IR 节点），源码注释已写明。本表因此**不展示**该字段（首版曾展示 ⇒ 把 useStorage/useNetwork 等日常在用的能力读成「待实现」，属误导）。')
+lines.push('')
 lines.push('**★诚实边界（必读）**：')
 lines.push('- 语料 = 本仓 **3 个自有工程**（非真实业务项目）⇒ 需求数字是**下界**；真实证据待接入超级应用后补齐（与《实战采集埋点清单》同一原则）；')
 lines.push('- **成本等级机器不可算**——表中该列标 `⏳ 待人工估`，**不编造数字**；NC0 出口时人工按 S/M/L=1/3/8 填写；')
@@ -167,12 +208,14 @@ lines.push(`- **未登记分域**：${facts.unregisteredDomains.length}（应为
 lines.push('')
 lines.push('## 2. 优先级表（按 跨项目覆盖 ↓ · 语料频次 ↓ · 官方承接 ↓）')
 lines.push('')
-lines.push('| # | 优先信号 | 编号 | Hook | 域 | 跨项目 | 语料频次 | 官方承接 | 清单状态 | 成本（S/M/L=1/3/8） |')
-lines.push('|---|---|---|---|---|---|---|---|---|---|')
+lines.push('| # | 优先信号 | 编号 | Hook | 域 | 跨项目 | 语料频次 | 官方承接 | Hook 可用 | 组件形态 | 成本（S/M/L=1/3/8） |')
+lines.push('|---|---|---|---|---|---|---|---|---|---|---|')
 sorted.forEach((r, i) => {
   const signal = r.projects.length >= 2 ? '★★' : r.calls > 0 ? '★' : r.officialApis > 0 ? '△' : '·'
   const proj = r.projects.length ? r.projects.join('+') : '—'
-  lines.push(`| ${i + 1} | ${signal} | ${r.id} | \`${r.api}\` | ${r.domain} | ${proj} | ${r.calls} | ${r.officialApis} | ${r.status} | ⏳ 待人工估 |`)
+  const impl = r.hookImplemented ? '✅' : '❌'
+  const shape = r.tag ? '组件+Hook' : '纯 Hook'
+  lines.push(`| ${i + 1} | ${signal} | ${r.id} | \`${r.api}\` | ${r.domain} | ${proj} | ${r.calls} | ${r.officialApis} | ${impl} | ${shape} | ⏳ 待人工估 |`)
 })
 lines.push('')
 lines.push('> 优先信号：★★ = 跨项目覆盖（最高证据）· ★ = 单项目有真实调用 · △ = 仅官方承接面（无本仓调用，属完整性缺口）· · = 暂无双侧信号')

@@ -28,9 +28,12 @@
 >   ③ 新增**装置自检**（抽取数 < 450 即抛错并指名"先查抽取器"——防未来静默退回旧量级，
 >   破坏性验证过：退回旧正则 ⇒ 报「仅 298 个（预期 ≥450）」）。
 > **修复后重分类**（197 项逐条取证，不虚标）：covered +104 · private +39 · na +33 · **planned +21**。
-> 其中 21 条 planned 是**真实缺口**（`setKeepScreenOn` / `showToast` / `showModal` /
-> `startPullDownRefresh` / `getUserProfile` / `chooseMessageFile` / 画布像素读写 …）
-> ⇒ 已成为 **NC2「内置能力扩充」的候选输入**。
+> 其中 planned 是**真实缺口** ⇒ 成为 **NC2「内置能力扩充」的候选输入**。
+> ★**后续变动（2026-09-30 同轮）**：① `setKeepScreenOn` 经 **NC1 声明式桥（C83）真实落地**
+> ⇒ covered（357）；② `chooseMessageFile` / `getUserProfile` **归类修正为 private**
+> （它们依赖**微信生态上下文**——聊天会话 / 微信授权头像昵称——与 Web/App 无共同语义，
+> 重分类前误记 planned 会虚增缺口并误导"跨端对等"排期）。
+> **当前**：covered **357** · planned **22**（18 API + 4 组件手势）· private **147** · na **53** · gap 0。
 | **合计** | | **382** |
 
 > 快照由 `node scripts/gen-mp-spec.mjs` 生成（幂等）；`--check` 比对漂移（防快照与官方脱节）。
