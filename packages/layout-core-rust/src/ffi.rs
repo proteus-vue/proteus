@@ -4102,9 +4102,13 @@ mod tests {
         };
         let mut n: u32 = 0;
         let p = unsafe { proteus_layout_anim_tick_bin(h, 50.0, &mut n) };
-        assert_eq!(n, 188, "记录应为 188B（含 morph 因子）");
+        // ★用**推导**而非写死（本仓纪律：记录宽度是跨语言契约，测试也照同一门禁口径——
+        //   写死数字会在"追加新字段"时制造陈旧断言；上一批就踩过：188 → 192 改完漏改这里）
+        assert_eq!(n % 4, 0, "记录长度应是 4 的倍数（全 f32/u32）");
+        assert!(n >= 192, "记录应 ≥192B（含 morph + glow 段）：实际 {n}");
         let sl = unsafe { std::slice::from_raw_parts(p, n as usize) }.to_vec();
         unsafe { proteus_rects_free(p, n) };
+        // morph 因子固定在 @184（后续追加字段都在它之后——追加不改既有偏移）
         let morph = f32::from_le_bytes([sl[184], sl[185], sl[186], sl[187]]);
         assert!((morph - 0.5).abs() < 0.05, "半程因子应 ≈0.5，实际 {morph}");
         // 查询变形后的段：终点应 ≈(15, 5)
