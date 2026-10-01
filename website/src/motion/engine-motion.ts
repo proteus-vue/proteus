@@ -184,6 +184,23 @@ export function applyPose(
   opts?: { clipKind?: 'inset' | 'circle' | 'polygon'; strokeLen?: number; perspective?: number },
 ): void {
   if (!el || !el.style) return
+  // ★**纯透明度快路径**（2026-10-01 实测导向）：星场里 158 颗星只有 opacity 一条通道，
+  //   走这条路径可以跳过全部 transform/通道遍历（一次赋值 vs 十几次判断+字符串拼接）。
+  //   这是宿主层的热路径优化——求值语义完全不变。
+  if (
+    p.opacity !== 1 &&
+    p.tx === 0 && p.ty === 0 && p.scale === 1 && p.rotate === 0 &&
+    p.rotateX === 0 && p.rotateY === 0 && p.skewX === 0 && p.skewY === 0 &&
+    p.channels.size === 0
+  ) {
+    el.style.opacity = p.opacity.toFixed(4)
+    return
+  }
+  if (p.opacity >= 1 && p.tx === 0 && p.ty === 0 && p.scale === 1 && p.rotate === 0 && p.channels.size === 0) {
+    // 回到基态（opacity=1 且无其余通道）：清掉内联 opacity（不写空 transform）
+    if (el.style.opacity !== '') el.style.opacity = ''
+    return
+  }
   const tf: string[] = []
   if (p.tx || p.ty) tf.push(`translate3d(${p.tx.toFixed(2)}px, ${p.ty.toFixed(2)}px, 0)`)
   if (p.scale !== 1) tf.push(`scale(${p.scale.toFixed(4)})`)
@@ -322,6 +339,13 @@ export interface RunnerOptions {
   seekSource?: () => number
   /** 每当一帧写完后回调（探针/调试用） */
   onFrame?: (tMs: number, poses: Map<number, Pose>) => void
+  /**
+   * ★★**写层步进**（跨帧节流；2026-10-01 为星空背景加的、实测导向的优化）：
+   *   每 N 帧才把值写进 DOM（值本身每帧照算）——远景星的呼吸周期是 3–7 秒，
+   *   30Hz 的写层与 60Hz 在视觉上无差别，但**省掉一半的样式写入**（星空有 200+ 元素时这很值）。
+   *   ★只影响写层频率，不影响求值（曲线语义不变）；末帧必写（保证终值落地）。
+   */
+  writeStride?: number
 }
 
 export interface Runner {
@@ -430,10 +454,14 @@ export function createRunner(
     opts?.onFrame?.(tMs, poses)
   }
 
+  let frames = 0
+  const stride = Math.max(1, opts?.writeStride ?? 1)
+  const shouldWrite = (last: boolean): boolean => last || frames % stride === 0
   const step = (now: number): void => {
     if (!running) return
+    frames++
     if (opts?.seekSource) {
-      // 外部驱动：进度源给出 0..1
+      // 外部驱动：进度源给出 0..1（外部驱动每帧都写——它本来就是"手指到哪画面到哪"）
       write(Math.max(0, Math.min(1, opts.seekSource())) * total)
       raf = requestAnimationFrame(step)
       return
@@ -442,13 +470,14 @@ export function createRunner(
     if (keepAlive) {
       // 持续供帧：时间**不回卷**（各声明的相位/循环由 evalAnim 处理）
       t = raw
-      write(t)
+      if (shouldWrite(false)) write(t)
       raf = requestAnimationFrame(step)
       return
     }
     t = Math.min(raw, total)
-    write(t)
-    if (raw < total) {
+    const last = raw >= total
+    if (shouldWrite(last)) write(t)
+    if (!last) {
       raf = requestAnimationFrame(step)
     } else {
       running = false

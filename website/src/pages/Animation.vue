@@ -21,6 +21,8 @@ import EngineMark from '../components/anim/EngineMark.vue'
 import MotionFlow from '../components/anim/MotionFlow.vue'
 import OpeningCeremony from '../components/anim/OpeningCeremony.vue'
 import AnimWorkbench from '../components/anim/AnimWorkbench.vue'
+// ★★星空背景：真实星场（几百条互不同步的无限循环 + 流星 + 多层视差）——全部由引擎声明驱动
+import StarfieldBackdrop from '../components/anim/StarfieldBackdrop.vue'
 import { useMotion, useChoreography, MOTION } from '../motion/use-motion'
 import { SITE_STATS, asElement, compile, countUp, createRunner, motionAllowed, settle } from '../motion/engine-motion'
 import { motionController } from '../motion/use-motion'
@@ -726,6 +728,8 @@ onUnmounted(() => {
 
 <template>
   <p-page ref="rootEl" class="ap">
+    <!-- ★★星空背景（fixed 全视口；在内容之下）——真实星场，由引擎声明驱动 -->
+    <StarfieldBackdrop />
     <!-- ★★开幕仪式：引擎把自己的产品页"打开"（徽记落笔 → 软遮罩渗字 → 帷幕上抽） -->
     <OpeningCeremony v-if="showOpening" @done="onOpeningDone" />
     <!-- 背景层（品牌光晕 + 细网格；纯装饰） -->
@@ -1185,7 +1189,12 @@ onUnmounted(() => {
 
 <style scoped>
 /* ═══════════ 背景 ═══════════ */
-.ap { position: relative; background: var(--bg); }
+/* ★底色改为**半透明**（星空透出来；径向暗罩保证正文可读性——对比度仍达标） */
+.ap {
+  position: relative;
+  background:
+    radial-gradient(120% 80% at 50% 0%, rgba(10, 10, 16, 0.42) 0%, rgba(9, 9, 14, 0.86) 58%, rgba(8, 8, 12, 0.94) 100%);
+}
 .ap-bg { position: absolute; inset: 0; overflow: hidden; pointer-events: none; }
 .ap-bg::before {
   content: '';
