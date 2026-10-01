@@ -3341,6 +3341,34 @@ pub unsafe extern "C" fn proteus_layout_text_color_nodes(handle: u64) -> *mut c_
     }
 }
 
+/// ★★**带裁剪形状的节点清单**（2026-10-01 · C1；与 `bg_nodes`/`text_color_nodes` 同一取样纪律）
+///
+/// 返回：`{"ok":true,"ids":[…],"count":N}`（最多 64 个）。
+/// 【为什么单列一个】目标节点 id 由适配器/Vue **动态分配**（调用方无法预知）——
+///   裁剪动画的前提是"节点声明了 clipPath"，取样必须**向唯一事实源要答案**
+///   （首次接通时真机实测：探针盲取 targets[0] ⇒ started=0 且原因误导）。
+#[no_mangle]
+pub unsafe extern "C" fn proteus_layout_clip_nodes(handle: u64) -> *mut c_char {
+    let r = std::panic::catch_unwind(|| -> Result<String, String> {
+        let reg = registry().lock().map_err(|_| "注册表锁失败".to_string())?;
+        let entry = reg.get(&handle).ok_or_else(|| format!("句柄 {handle} 不存在"))?;
+        let ids: Vec<u32> = entry
+            .tree
+            .nodes
+            .iter()
+            .filter(|n| n.style.clip_kind != 0)
+            .map(|n| n.id)
+            .take(64)
+            .collect();
+        Ok(serde_json::json!({"ok": true, "ids": ids, "count": ids.len()}).to_string())
+    });
+    match r {
+        Ok(Ok(s)) => into_c_string(s),
+        Ok(Err(e)) => into_c_string(format!("{{\"ok\":false,\"error\":{}}}", json_str(&e))),
+        Err(_) => into_c_string("{\"ok\":false,\"error\":\"panic（已捕获）\"}".to_string()),
+    }
+}
+
 /// ★★**带底色的节点清单**（2026-10-01，颜色通道的取样入口）
 ///
 /// 【为什么需要它（真机判据抓出的取样缺陷）】颜色动画要求目标节点在内核里有**底色**

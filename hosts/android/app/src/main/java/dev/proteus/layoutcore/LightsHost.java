@@ -606,6 +606,18 @@ final class LightsHost {
             int textColor = tc == null || tc.isEmpty() ? 0 : MainActivity.parseHex(tc);
             // 圆角（纯绘制；灯光秀的灯珠 4px）
             float radius = (float) spec.optDouble("borderRadius", 0);
+            // ★★C1：裁剪形状注入（静态声明也必须渲染——与 iOS makeLayer 的应用同义务）
+            org.json.JSONObject cpo = spec.optJSONObject("clipPath");
+            if (cpo != null) {
+                String k = cpo.optString("kind", "");
+                org.json.JSONArray pa = cpo.optJSONArray("params");
+                int kind = "inset".equals(k) ? 1 : "circle".equals(k) ? 2 : "polygon".equals(k) ? 3 : 0;
+                if (kind != 0 && pa != null) {
+                    float[] ps = new float[pa.length()];
+                    for (int kk = 0; kk < pa.length(); kk++) ps[kk] = (float) pa.optDouble(kk, 0);
+                    view.setNodeClipPath(id, kind, ps);
+                }
+            }
             cmds.add(new ProteusHostView.Cmd(
                     (float) r.getDouble("x"), (float) r.getDouble("y"),
                     (float) r.getDouble("width"), (float) r.getDouble("height"),

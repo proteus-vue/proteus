@@ -1701,6 +1701,78 @@ public class MainActivity extends Activity {
                     "{\"anims\":[{\"nodeId\":11,\"kind\":0,\"curveBezier\":[-0.2,0,0.64,1],"
                             + "\"from\":0,\"to\":100,\"durMs\":200}]}"));
 
+            // ── U 组（★★C1 裁剪形变 clip-path，2026-10-01）──
+            //   判据（check-kernel-anim.py U 组）：
+            //     U1 有 clipPath 声明的节点：inset 动画（四边分数）被内核受理 + 终值精确
+            //     U2 无 clipPath 声明的节点：裁剪动画**明确拒绝**（含修法）
+            //     U3 clip 参数真落到宿主绘制（探针报 mask 包围盒——真读，不回显参数）
+            try {
+                org.json.JSONObject clipTree = new org.json.JSONObject();
+                clipTree.put("viewport", new org.json.JSONObject().put("width", W).put("height", H));
+                org.json.JSONArray cn = new org.json.JSONArray();
+                cn.put(new org.json.JSONObject().put("id", 1).put("parentId", org.json.JSONObject.NULL)
+                        .put("width", W).put("height", H));
+                // 节点 11：带 inset 裁剪声明（基态四边 0）
+                cn.put(new org.json.JSONObject().put("id", 11).put("parentId", 1).put("width", 200).put("height", 200)
+                        .put("backgroundColor", "#3366CC")
+                        .put("clipPath", new org.json.JSONObject().put("kind", "inset")
+                                .put("params", new org.json.JSONArray(new double[]{0, 0, 0, 0}))));
+                // 节点 12：**无** clipPath（拒绝分支用）
+                cn.put(new org.json.JSONObject().put("id", 12).put("parentId", 1).put("width", 200).put("height", 200)
+                        .put("backgroundColor", "#CC6633"));
+                clipTree.put("nodes", cn);
+                long clipHandle = RustLayout.create(clipTree.toString());
+                if (clipHandle <= 0) throw new IllegalStateException("裁剪场景建树失败");
+                final ProteusHostView cv = new ProteusHostView(this);
+                cv.setCmds(java.util.Arrays.asList(
+                        new ProteusHostView.Cmd(0f, 0f, 200f, 200f, 0xFF3366CC, null, 0f, 0, 0f),
+                        new ProteusHostView.Cmd(220f, 0f, 200f, 200f, 0xFFCC6633, null, 0f, 0, 0f)));
+                cv.setCmdNodeIds(new int[]{11, 12});
+                cv.setNodeClipPath(11, 1, new float[]{0f, 0f, 0f, 0f});
+                cv.attachCore(clipHandle);
+                // U1：inset 四边 0 → 0.25（内缩 25%）
+                out.put("clip_start", cv.kernelAnimStart(
+                        "{\"anims\":["
+                        + "{\"nodeId\":11,\"kind\":15,\"curve\":0,\"from\":0,\"to\":0.25,\"durMs\":100},"
+                        + "{\"nodeId\":11,\"kind\":16,\"curve\":0,\"from\":0,\"to\":0.25,\"durMs\":100},"
+                        + "{\"nodeId\":11,\"kind\":17,\"curve\":0,\"from\":0,\"to\":0.25,\"durMs\":100},"
+                        + "{\"nodeId\":11,\"kind\":18,\"curve\":0,\"from\":0,\"to\":0.25,\"durMs\":100}]}"));
+                cv.kernelAnimTick(50f);
+                out.put("clip_mid", new org.json.JSONObject(cv.animTxProbe("[11]")));
+                cv.kernelAnimTick(60f);
+                out.put("clip_end", new org.json.JSONObject(cv.animTxProbe("[11]")));
+                // U3：真读绘制侧 —— 离屏画一遍，检查裁剪真的生效（中心点被裁掉）
+                // ★★正确的"裁剪生效"判据（2026-10-01 修正测试读法）：**比较裁/不裁两侧的四角**——
+                //   内缩 25% 后，四角（50px 内缩带内）应被裁掉（透明）；
+                //   而**再画一次不带裁剪的同一指令**（新 View 无 clip 声明）四角应不透明。
+                //   首版只看"中心 alpha" ⇒ 中心在裁剪后区域内（裁剪是内缩不是挖洞）⇒ 必然 255 ⇒ 误判。
+                android.graphics.Bitmap cb = android.graphics.Bitmap.createBitmap(420, 200,
+                        android.graphics.Bitmap.Config.ARGB_8888);
+                cv.drawCmds(new android.graphics.Canvas(cb));
+                int cornerClipped = android.graphics.Color.alpha(cb.getPixel(10, 10));   // 左上角：被裁掉
+                int insideKept = android.graphics.Color.alpha(cb.getPixel(100, 100));   // 中心：保留
+                // 对照：无裁剪的同一指令
+                final ProteusHostView noClip = new ProteusHostView(this);
+                noClip.setCmds(java.util.Arrays.asList(
+                        new ProteusHostView.Cmd(0f, 0f, 200f, 200f, 0xFF3366CC, null, 0f, 0, 0f)));
+                noClip.setCmdNodeIds(new int[]{11});
+                android.graphics.Bitmap cb2 = android.graphics.Bitmap.createBitmap(420, 200,
+                        android.graphics.Bitmap.Config.ARGB_8888);
+                noClip.drawCmds(new android.graphics.Canvas(cb2));
+                int cornerUnclipped = android.graphics.Color.alpha(cb2.getPixel(10, 10)); // 无裁剪：不透明
+                out.put("clip_corner_alpha", cornerClipped);
+                out.put("clip_inside_alpha", insideKept);
+                out.put("noclip_corner_alpha", cornerUnclipped);
+                cb.recycle();
+                cb2.recycle();
+                RustLayout.destroy(clipHandle);
+                // U2：无声明节点 ⇒ 明确拒绝
+                out.put("clip_rejected", hv.kernelAnimStart(
+                        "{\"anims\":[{\"nodeId\":12,\"kind\":15,\"from\":0,\"to\":0.5,\"durMs\":100}]}"));
+            } catch (Exception ce2) {
+                out.put("clip_error", ce2.toString());
+            }
+
             // ── T 组（★★3D 旋转 rotateX/rotateY，2026-10-01 · B 批）──
             //   判据（check-kernel-anim.py T 组）：
             //     T1 rotateY 0→180 的动画被内核受理（kind 14），探针能真读 rotateY 通道

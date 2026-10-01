@@ -67,6 +67,9 @@ func proteus_layout_anim_seek_scroll(_ handle: UInt64, _ json: UnsafePointer<CCh
 /// ★共享元素（跨元素飞行；几何原语——中心差 + 宽度比在内核）
 @_silgen_name("proteus_layout_bg_nodes")
 func proteus_layout_bg_nodes(_ handle: UInt64) -> UnsafeMutablePointer<CChar>
+/// ★★C1：带裁剪形状的节点清单（与 bg_nodes 同一取样纪律——id 动态分配，必须问内核）
+@_silgen_name("proteus_layout_clip_nodes")
+func proteus_layout_clip_nodes(_ handle: UInt64) -> UnsafeMutablePointer<CChar>
 @_silgen_name("proteus_layout_text_color_nodes")
 func proteus_layout_text_color_nodes(_ handle: UInt64) -> UnsafeMutablePointer<CChar>
 @_silgen_name("proteus_layout_shared_element")
@@ -317,6 +320,8 @@ func physFootprintMB() -> Double {
     func bgNodes() -> String
     /// ★★带文字色的节点清单（文字色动画的取样入口——与 `bgNodes` 对称）
     func textColorNodes() -> String
+    /// ★★C1：带裁剪形状的节点清单（裁剪形变动画的取样入口——与 `bgNodes` 对称）
+    func clipNodes() -> String
     /// ★★**MA0-RT 平台零参与路径**：提交一次（CAKeyframeAnimation）/ presentation 探针 / 撤销
     func animCommit(_ json: String) -> String
     func layerPresentedProbe(_ idsJson: String) -> String
@@ -586,6 +591,23 @@ final class SelfDrawView: UIView {
         if let d = style["perspective"] as? CGFloat, d > 0 {
             layerPerspective[nodeId] = d
         }
+        // ★★C1：裁剪形状快照（树里声明的静态类型 + 基态参数；动画只改参数不改类型）
+        //   ★并**立即应用基态遮罩**——静态裁剪（声明了但未动画）也必须渲染
+        //     （内核只上报"值变化"的节点 ⇒ 未动的裁剪节点不会出现在每帧记录里；
+        //      首版只从每帧记录取参数 ⇒ 静态裁剪完全不生效——本仓纪律：判据要覆盖静/动两态）。
+        if let cp = style["clipPath"] as? [String: Any],
+           let kindS = cp["kind"] as? String,
+           let ps = cp["params"] as? [Double] {
+            let kind = kindS == "inset" ? 1 : kindS == "circle" ? 2 : kindS == "polygon" ? 3 : 0
+            if kind != 0 {
+                layerClipShape[nodeId] = (kind, ps.map { CGFloat($0) })
+                // 基态参数（补足 16 槽）——与每帧记录同形，直接走 applyClip
+                var base = [Float](repeating: 0, count: 16)
+                for (i, v) in ps.enumerated() where i < 16 { base[i] = Float(v) }
+                layerClipBase[nodeId] = base
+                applyClip(nodeId: nodeId, layer: layer, params: base)
+            }
+        }
         return layer
     }
 
@@ -723,6 +745,13 @@ final class SelfDrawView: UIView {
             //   ★诚实边界：多轴+Z 旋转复合时读数会耦合（数值如实，不做伪单轴分解）。
             let rotateXDeg = atan2(t.m23, t.m22) * 180 / .pi
             let rotateYDeg = atan2(t.m31, t.m33) * 180 / .pi
+            // ★★C1：**真读**裁剪遮罩的路径包围盒（判据据此断言"形变真的落到层上"——
+            //   不回显我们写入的参数；bbox 是 CoreGraphics 对 path 的实际计算结果）。
+            var clipBox = ""
+            if let mask = layer.mask as? CAShapeLayer, let p = mask.path {
+                let bb = p.boundingBox
+                clipBox = String(format: "%.3f,%.3f,%.3f,%.3f", bb.origin.x, bb.origin.y, bb.width, bb.height)
+            }
             // ★★颜色（2026-10-01）：从 **CALayer 真读** `backgroundColor` 反解打包色
             //   （判据纪律：真读层上状态，不回显我们写入的参数）
             let bgStr = Self.packedHexFromCGColor(layer.backgroundColor)
@@ -732,7 +761,7 @@ final class SelfDrawView: UIView {
                 "{\"id\":\(id),\"tx\":\(t.m41),\"ty\":\(t.m42),\"scale\":\(t.m11),"
                     + "\"rotate\":\(rotateDeg),\"rotateX\":\(rotateXDeg),\"rotateY\":\(rotateYDeg),"
                     + "\"opacity\":\(layer.opacity),\"bg\":\"\(bgStr)\","
-                    + "\"textColor\":\"\(textStr)\"}"
+                    + "\"textColor\":\"\(textStr)\",\"clipBox\":\"\(clipBox)\"}"
             )
         }
         return "{\"ok\":true,\"layers\":[\(parts.joined(separator: ","))]}"
@@ -757,6 +786,12 @@ final class SelfDrawView: UIView {
             if let tl = layer as? CATextLayer, let orig = layerOriginalTextColor[id] {
                 tl.foregroundColor = orig
             }
+            // ★★C1：裁剪遮罩回**基态形状**（2026-10-01）——stop/复位后遮罩不能停在末帧
+            //   （首版漏此步：动画停止后 mask 留在末帧路径 ⇒ 层被永久裁到错误形状）。
+            if layerClipShape[id] != nil {
+                let base = layerClipBase[id] ?? [Float](repeating: 0, count: 16)
+                applyClip(nodeId: id, layer: layer, params: base)
+            }
         }
         CATransaction.commit()
     }
@@ -771,6 +806,16 @@ final class SelfDrawView: UIView {
     private(set) var layerOriginalTextColor: [Int: CGColor] = [:]
     /// ★★**透视距离快照**（B 批 3D；建层时从树样式读一次——动画期只读不查树）
     private(set) var layerPerspective: [Int: CGFloat] = [:]
+    /**
+     * ★★**裁剪形状快照**（C1；建层时从树样式读一次）——`(kind, params16)`。
+     * kind：1=inset 2=circle 3=polygon（与内核 `LStyle.clip_kind` 同编码）；
+     * params 是**盒分数**（inset 四边 / circle cx,cy,r / polygon 顶点对）。
+     */
+    private(set) var layerClipShape: [Int: (kind: Int, params: [CGFloat])] = [:]
+    /** ★C1 基态参数（16 槽；stop/复位时回它——与 layerOriginalBg 同一义务） */
+    private(set) var layerClipBase: [Int: [Float]] = [:]
+    /** 当前层的裁剪遮罩（复用；每帧只更新 path——不重建 layer） */
+    private var layerClipMasks: [Int: CAShapeLayer] = [:]
 
     /* ────────────────── ★★MA0-RT：平台渲染线程零参与路径（§5-bis） ────────────────── */
 
@@ -942,7 +987,9 @@ final class SelfDrawView: UIView {
         nodeId: Int, tx: CGFloat, ty: CGFloat, scale: CGFloat,
         rotate: CGFloat = 0, rotateX: CGFloat = 0, rotateY: CGFloat = 0,
         opacity: CGFloat = 1,
-        rgba: UInt32? = nil, textRgba: UInt32? = nil
+        rgba: UInt32? = nil, textRgba: UInt32? = nil,
+        // ★★C1：裁剪参数（16 槽；nil = 本节点无裁剪声明 —— 不做任何遮罩操作）
+        clipParams: [Float]? = nil
     ) -> Bool {
         guard let layer = layersById[nodeId] else { return false }
         // ★RT2 扩展：位移 + 缩放 + 旋转（**以层中心为锚点**——等价 CSS transform 默认 origin）
@@ -985,7 +1032,65 @@ final class SelfDrawView: UIView {
         if let packed = textRgba, let tl = layer as? CATextLayer {
             tl.foregroundColor = Self.cgColorFromPacked(packed)
         }
+        // ★★C1：裁剪形变（每帧参数原子更新——遮罩走 CAShapeLayer，见 applyClip 注释）
+        if let cp = clipParams {
+            applyClip(nodeId: nodeId, layer: layer, params: cp)
+        }
         return true
+    }
+
+    /// ★★**应用裁剪形状**（C1，2026-10-01）——`CAShapeLayer` 作 `mask`（iOS 的裁剪原语）
+    ///
+    /// 【为什么用 mask 而不是 `layer.mask(toBounds:)`】后者只支持矩形；形状裁剪必须用
+    ///   `CAShapeLayer` 的 `path` 作 `mask`（CoreAnimation 通用做法，路径任意）。
+    /// 【性能】遮罩层**复用**（首次建、之后只改 `path`）——每帧只重建贝塞尔路径
+    ///   （与 Android `canvas.clipPath` 的重建成本同量级：几十个点到 Path 的构建）。
+    /// 【坐标系】参数是**盒分数** ⇒ 用 `layer.bounds`（局部坐标）换算成 px。
+    private func applyClip(nodeId: Int, layer: CALayer, params: [Float]) {
+        guard let shape = layerClipShape[nodeId] else { return } // 无声明 ⇒ 不裁剪（内核也会拒）
+        let b = layer.bounds
+        let w = b.width
+        let h = b.height
+        // ★opacity=0 或尺寸为 0 的退化情形：不建遮罩（避免除零与无效路径）
+        guard w > 0, h > 0 else { return }
+        let path = CGMutablePath()
+        switch shape.kind {
+        case 1: // inset(top, right, bottom, left)——盒分数，可负（外扩）
+            let top = CGFloat(params.count > 0 ? params[0] : 0) * h
+            let right = CGFloat(params.count > 1 ? params[1] : 0) * w
+            let bottom = CGFloat(params.count > 2 ? params[2] : 0) * h
+            let left = CGFloat(params.count > 3 ? params[3] : 0) * w
+            path.addRect(CGRect(x: left, y: top, width: max(0, w - left - right), height: max(0, h - top - bottom)))
+        case 2: // circle(cx, cy, r)——r 相对 min(w,h)（圆在非方形盒里仍是圆）
+            let cx = CGFloat(params.count > 0 ? params[0] : 0.5) * w
+            let cy = CGFloat(params.count > 1 ? params[1] : 0.5) * h
+            let r = CGFloat(params.count > 2 ? params[2] : 0.5) * min(w, h)
+            path.addEllipse(in: CGRect(x: cx - r, y: cy - r, width: 2 * r, height: 2 * r))
+        default: // polygon(pairs) —— 顶点按盒分数换算；至少 3 点
+            let n = min(params.count / 2, 8)
+            guard n >= 3 else { break }
+            path.move(to: CGPoint(x: CGFloat(params[0]) * w, y: CGFloat(params[1]) * h))
+            for i in 1..<n {
+                path.addLine(to: CGPoint(x: CGFloat(params[2 * i]) * w, y: CGFloat(params[2 * i + 1]) * h))
+            }
+            path.closeSubpath()
+        }
+        let mask: CAShapeLayer
+        if let m = layerClipMasks[nodeId] {
+            mask = m
+        } else {
+            mask = CAShapeLayer()
+            layerClipMasks[nodeId] = mask
+            // ★在隐式动画关闭的前提下挂 mask（与 applyTransform 同一纪律：每帧显式赋值）
+            CATransaction.begin()
+            CATransaction.setDisableActions(true)
+            layer.mask = mask
+            CATransaction.commit()
+        }
+        CATransaction.begin()
+        CATransaction.setDisableActions(true) // ★不做隐式动画（每帧显式设）——见 applyTransform
+        mask.path = path
+        CATransaction.commit()
     }
 
     /// 打包色 `0xAARRGGBB` → `CGColor`（颜色动画的落点；与内核 `LStyle.bg` 同编码）
@@ -2029,6 +2134,13 @@ final class SelfDrawView: UIView {
         if let fw = n["fontWeight"] as? CGFloat { style["fontWeight"] = fw }
         if let br = n["borderRadius"] as? Double { style["borderRadius"] = CGFloat(br) }
         if let br = n["borderRadius"] as? CGFloat { style["borderRadius"] = br }
+        // ★★C1/B（2026-10-01）：两个**内核动画的静态基态**必须透传（本函数是建层必经之路）——
+        //   `clipPath`（裁剪形状：类型 + 基态参数，mask 的来源）/ `perspective`（3D 透视距离）。
+        //   ★漏透传的后果（真机实测抓到）：内核里动画被受理（started=4）但宿主读不到声明 ⇒
+        //     mask 根本不建 ⇒ 探针 clipBox 全空；且透视此前同样漏（3D 立体感缺失，无人发现）。
+        //   ⇒ 本函数"一处实现"的白名单必须跟着**内核新增的静态样式**走。
+        if let cp = n["clipPath"] as? [String: Any] { style["clipPath"] = cp }
+        if let pp = n["perspective"] as? Double { style["perspective"] = CGFloat(pp) }
         return style
     }
 
@@ -3514,6 +3626,12 @@ final class SelfDrawBridge: NSObject, SelfDrawExports {
         return takeCString(proteus_layout_text_color_nodes(handle))
     }
 
+    /// ★★C1：带裁剪形状的节点清单（同款取样纪律——见内核 `proteus_layout_clip_nodes` 注释）
+    func clipNodes() -> String {
+        guard handle != 0 else { return "{\"ok\":false,\"error\":\"未接入核心\"}" }
+        return takeCString(proteus_layout_clip_nodes(handle))
+    }
+
     /// ★仍在推进的动画条数（0 = 全部结束）——**幕切换的权威判据**
     func animControl(_ json: String) -> String {
         guard handle != 0 else { return "{\"ok\":false,\"error\":\"未接入核心\"}" }
@@ -3653,12 +3771,23 @@ final class SelfDrawBridge: NSObject, SelfDrawExports {
             // ★B 批 3D（2026-10-01）：末尾追加 rotateX/rotateY（@32/@36——40B 记录）
             let rotateX = buf.loadUnaligned(fromByteOffset: base + 32, as: Float.self)
             let rotateY = buf.loadUnaligned(fromByteOffset: base + 36, as: Float.self)
+            // ★★C1（2026-10-01）：裁剪形状（@40 起：kind u32 + 16×f32——108B 记录）
+            let clipKindRaw = buf.loadUnaligned(fromByteOffset: base + 40, as: UInt32.self)
+            var clipParams: [Float]? = nil
+            if clipKindRaw != 0 {
+                var ps = [Float](repeating: 0, count: 16)
+                for i in 0..<16 {
+                    ps[i] = buf.loadUnaligned(fromByteOffset: base + 44 + i * 4, as: Float.self)
+                }
+                clipParams = ps
+            }
             if view?.applyTransform(
                 nodeId: Int(nodeId), tx: CGFloat(tx), ty: CGFloat(ty), scale: CGFloat(sc),
                 rotate: CGFloat(rot), rotateX: CGFloat(rotateX), rotateY: CGFloat(rotateY),
                 opacity: CGFloat(op),
                 rgba: rgba == UInt32.max ? nil : rgba,
-                textRgba: textRgba == UInt32.max ? nil : textRgba
+                textRgba: textRgba == UInt32.max ? nil : textRgba,
+                clipParams: clipParams
             ) == true {
                 applied += 1
             }
@@ -4308,10 +4437,21 @@ final class SelfDrawBridge: NSObject, SelfDrawExports {
             // ★B 批 3D：第 9/10 项是 rotateX/rotateY（40B 记录的 JSON 形态）
             let rx: CGFloat = u.count >= 10 ? CGFloat(u[8]) : 0
             let ry: CGFloat = u.count >= 10 ? CGFloat(u[9]) : 0
+            // ★C1：第 11 项 = 裁剪类型（0=无），第 12..27 项 = 16 个参数（108B 记录的 JSON 形态）
+            var clipP: [Float]? = nil
+            if u.count >= 27, u[10] != 0 {
+                var ps = [Float](repeating: 0, count: 16)
+                for i in 0..<16 {
+                    let idx = 11 + i
+                    if idx < u.count { ps[i] = Float(u[idx]) }
+                }
+                clipP = ps
+            }
             if view?.applyTransform(
                 nodeId: Int(u[0]), tx: CGFloat(u[1]), ty: CGFloat(u[2]), scale: CGFloat(u[3]),
                 rotate: rot, rotateX: rx, rotateY: ry,
-                opacity: op, rgba: packedOpt(6), textRgba: packedOpt(7)
+                opacity: op, rgba: packedOpt(6), textRgba: packedOpt(7),
+                clipParams: clipP
             ) == true {
                 applied += 1
             }
@@ -5275,6 +5415,8 @@ final class SelfDrawViewController: UIViewController {
             ("__proteus.animBezier()", 2),
             // ★★循环与往复（2026-10-01 · A2）：repeat/yoyo/infinite（判据 check-anim-rt2.py R10）
             ("__proteus.animRepeat()", 2),
+            // ★★裁剪形变（2026-10-01 · C1）：clip-path（判据 check-anim-rt2.py V13）
+            ("__proteus.animClip()", 2),
             // ★★主线程零唤醒实测（OS 级 CPU 会计 + 阳性对照）：**异步**两段各 600ms
             ("__proteus.animCpuProbe()", 0),
             // ★★RT2 帧率测席（§9 指标）：**异步**——由 CADisplayLink 跑满时长后回调续链
@@ -5315,7 +5457,7 @@ final class SelfDrawViewController: UIViewController {
             }
             let out = js(expr)
             // 只记关键读数（避免日志爆炸——本仓「输出控制」纪律）
-            if expr.hasPrefix("__proteus.mount") || expr.hasPrefix("__proteus.finalize2") || expr.hasPrefix("__proteus.animProbe") || expr.hasPrefix("__proteus.animComplex") || expr.hasPrefix("__proteus.animPlatform") || expr.hasPrefix("__proteus.animPreset") || expr.hasPrefix("__proteus.animScroll") || expr.hasPrefix("__proteus.animSequence") || expr.hasPrefix("__proteus.animShared") || expr.hasPrefix("__proteus.animColor") || expr.hasPrefix("__proteus.animBezier") || expr.hasPrefix("__proteus.animRepeat") || expr.hasPrefix("__proteus.animCpu") {
+            if expr.hasPrefix("__proteus.mount") || expr.hasPrefix("__proteus.finalize2") || expr.hasPrefix("__proteus.animProbe") || expr.hasPrefix("__proteus.animComplex") || expr.hasPrefix("__proteus.animPlatform") || expr.hasPrefix("__proteus.animPreset") || expr.hasPrefix("__proteus.animScroll") || expr.hasPrefix("__proteus.animSequence") || expr.hasPrefix("__proteus.animShared") || expr.hasPrefix("__proteus.animColor") || expr.hasPrefix("__proteus.animBezier") || expr.hasPrefix("__proteus.animRepeat") || expr.hasPrefix("__proteus.animClip") || expr.hasPrefix("__proteus.animCpu") {
                 NSLog("[proteus] %@ → %@", expr, String(out.prefix(400)))
             }
             // ★让出主线程 pump 轮：每轮一次 runloop 循环 ⇒ 微任务队列被排空
