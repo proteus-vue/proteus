@@ -50,10 +50,11 @@ The closed set of the compile layer **deliberately does not try to cover everyth
 
 ## Colour is in the closed set (since 2026-10-01; with new boundaries)
 
-The closed set went from **five to six**: `translateX / translateY / scale / rotate / opacity` **+ `color`**.
+The closed set went from **five to seven**: `translateX / translateY / scale / rotate / opacity`
+**+ `color` (background) + `textColor` (text)**.
 
 **One declaration on the surface, four channels in the kernel** — `{ kind: 'color', from: '#2f6fed', to: '#ff5533' }`
-compiles into four scalar `R/G/B/A` instructions (contract ids 5/6/7/8).
+compiles into four scalar `R/G/B/A` instructions (contract ids 5/6/7/8; text colour is isomorphic, ids 9/10/11/12).
 
 > **Why decompose this way (an architectural payoff, not a stopgap)**: every evaluation machine in the engine
 > (curve lookup / spring integration / sequence segments / scroll windows / seek / takeover velocity handoff /
@@ -68,18 +69,31 @@ compiles into four scalar `R/G/B/A` instructions (contract ids 5/6/7/8).
 | Precondition | The target node must declare `backgroundColor` (it is the **start basis and the reset target**); otherwise the kernel **rejects explicitly** (never silently) |
 | Reset | `animStopAll` / node-recycle unbinding / phase cleanup all **restore the base colour** (not the last frame — another application of “unbinding must include clearing”) |
 
-**★New boundaries (two, stated honestly)**:
+**Text colour** (2026-10-01) is isomorphic to background colour but lives on a **separate track**:
+`{ kind: 'textColor', … }` → channel ids **9/10/11/12** (it does not reuse slots 5..8 — both tracks may
+animate the same node at once, and sharing slots would let the later write clobber the earlier one).
+Precondition: the node declares `color` (the text-colour base; `from` is equally **required**, and stop
+restores the base). The landing point is iOS `CATextLayer.foregroundColor` / Android `textPaint`.
+The per-frame record therefore grew from 28B to **32B** (last two u32 = packed background + text colour;
+`u32::MAX` = that base does not exist; width is derived from the kernel's write sequence by
+`scripts/check-anim-record-bytes.mjs` and reconciled against every consumer).
+
+**Colour keyframes (multi-segment sequences)** ship in the same batch: `keyframes: [{ to, durationMs, curve? }, …]`
+is expanded per channel with exactly the same semantics as scalar sequences (exact segment boundaries,
+pinned endpoints — the same evaluation machine).
+
+**★Remaining boundaries (two, stated honestly)**:
 
 1. **Colour is paint-only but “non-composited” ⇒ it does not take the platform zero-involvement path.**
    Not because it triggers layout (it does not — same cost class as `opacity`, **zero layout** during the
-   animation) but for **cross-target consistency**: Android's `RenderNode` has **no background colour** in its
+   animation) but for **cross-target consistency**: Android's `RenderNode` has **no colour** in its
    interpolatable set (`setBackgroundColor` is not a RenderThread animation property), so if iOS were allowed
    through unilaterally (a `CALayer.backgroundColor` could in principle be interpolated by the CA render server),
    the two targets would **diverge in path** — a single source running different paths per target, which this
-   repository treats as the worst kind of fork. ⇒ v1 uses the **tick path** on both targets.
-2. **v1 animates background colour only.** Text colour (iOS `CATextLayer.foregroundColor` / Android `textPaint`)
-   is a different cost class (text redraw) and comes in a later batch. Colour `keyframes` (multi-segment
-   sequences) are also unavailable — and are **rejected at compile time**, not silently ignored.
+   repository treats as the worst kind of fork. ⇒ both targets use the **tick path**.
+2. **Text colour covers “one colour for a whole run of text” only** (`CATextLayer` / `textPaint`).
+   Rich-text **run-level colouring** (several colours inside one text node) is out of scope for this engine —
+   that is the text-layout layer's job and comes as a separate item.
 
 > **Relation to escape hatches (this boundary has changed meaning)**: `color` is now a **contract capability**
 > and no longer needs `escapes.register`. The discipline itself is unchanged: **if colour moves on screen,

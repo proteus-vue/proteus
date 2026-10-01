@@ -229,6 +229,10 @@ const KIND_LABEL: Record<number, string> = {
   [ANIM_KIND_ID.scale]: 'scale',
   [ANIM_KIND_ID.rotate]: 'rotate',
   [ANIM_KIND_ID.opacity]: 'opacity',
+  // ★颜色通道是**四通道展开**（5..8 = 底色 R/G/B/A；9..12 = 文字色）：时间轴上数条同源通道
+  //   用同一个标签（否则会显示成 "kind 5 / kind 6 …"——那是编号，不是用户语言）
+  5: 'color', 6: 'color', 7: 'color', 8: 'color',
+  9: 'textColor', 10: 'textColor', 11: 'textColor', 12: 'textColor',
 }
 const CURVE_LABEL: Record<number, string> = {
   [CURVE_ID.linear]: 'linear',
