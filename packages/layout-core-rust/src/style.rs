@@ -120,8 +120,21 @@ impl Default for Overflow {
     }
 }
 
-/// 引擎就绪样式（对应 TS 侧 `LayoutNode` 的输入部分）
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+/// ★★**发光规格**（glow v1）：颜色 + 半径 + 强度（见 `LStyle.glow` 的分层描边说明）。
+#[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
+pub struct GlowSpec {
+    /// 发光色（打包 `0xAARRGGBB`——alpha 通道由 `alpha` 乘子覆盖，与 TS 契约一致）
+    pub color: u32,
+    /// 发光半径（px；分层描边的最外圈超出量——> 0）
+    pub radius: f32,
+    /// 强度（0..1；与 `glow_intensity` 相乘后落到每层 alpha）
+    pub alpha: f32,
+}
+
+fn default_glow_intensity() -> f32 {
+    1.0
+}
+
 /// ★★**渐变状态**（渐变 v2）：A 态（树里 `fillGradient`）+ B 态（`fillGradientTo`）+ 混合因子。
 ///
 /// 【语义（与 CSS 的差别——这是本引擎的**超出**项）】CSS 的渐变**不可过渡**
@@ -131,6 +144,7 @@ impl Default for Overflow {
 ///
 /// 【结构约束（建树时校验，违反即明确拒绝）】A 与 B 的 `kind` 相同、色标**个数**相同
 ///   （否则"逐标混合"无定义——不做"补齐/截断"这类静默猜测）。
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct GradState {
     /// 1=linear 2=radial（与 TS 契约一致）
     pub kind: u8,
@@ -177,7 +191,7 @@ impl GradState {
     }
 }
 
-/// ★★引擎就绪样式（全数值）——与 TS 参考实现字段一一对应（见文件头）。
+/// 引擎就绪样式（对应 TS 侧 `LayoutNode` 的输入部分；字段与 TS 参考实现一一对应）。
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct LStyle {
     /// 显式宽高（逻辑像素；`None` = auto）
@@ -286,6 +300,21 @@ pub struct LStyle {
     ///   与原 `d` 有 <3% 的弧长差"（本仓纪律：静默的行为改变是最贵的缺陷）。
     #[serde(default)]
     pub svg_morph_resampled: bool,
+    /// ★★**发光声明**（2026-10-01 · glow v1）：`{color, radius, alpha}` ——
+    ///   渲染 = **N 层同心描边**（`boost_k = radius×k/N`，`alpha_k = alpha×(1-(k-1)/N)²`）。
+    ///   【为什么不用平台原生（iOS `CALayer.shadow` / Android `Paint.setShadowLayer`）】
+    ///   · Android 的 `setShadowLayer` 在**硬件加速下只支持文本**（对 Path 无效——
+    ///     真机上会静默不画；这是"看起来能跑"的经典陷阱）；
+    ///   · iOS 原生阴影是高斯（质量高但**与 Android 不同形**）——本仓的"跨端一致优先"
+    ///     纪律要求**同一算法两端**（分层描边是确定性的，且 GPU 填充极廉价）。
+    ///   ⇒ 两端同 N、同宽度增长、同 alpha 衰减（参考实现见 TS `glowLayers` + 单测钉值）。
+    ///   ★若节点有 `svg_path`：发光随**画线进度**走（画到哪、光到哪——PathMeasure 截断）。
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub glow: Option<GlowSpec>,
+    /// ★★**发光强度**（0..1 乘子；基态 = 1 = 按声明的 alpha 全额发光）。
+    ///   `glowIntensity` 通道（34）驱动——呼吸/渐亮/渐隐都走它（曲线/弹簧/序列/循环全复用）。
+    #[serde(default = "default_glow_intensity")]
+    pub glow_intensity: f32,
     /// ★★**描边颜色**（打包 `0xAARRGGBB`；0 = 未声明）
     #[serde(default)]
     pub stroke_color: u32,
@@ -411,6 +440,8 @@ impl Default for LStyle {
             svg_path: None,
             svg_path_to: None,
             path_morph: 0.0,
+            glow: None,
+            glow_intensity: 1.0,
             svg_morph_resampled: false,
             stroke_color: 0,
             stroke_width: 0.0,

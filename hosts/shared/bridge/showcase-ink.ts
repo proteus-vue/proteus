@@ -229,6 +229,8 @@ export const INK_SAMPLE_IDS: readonly number[] = [
   INK_IDS.banks[0],
   INK_IDS.banks[1],
   INK_IDS.rollCylinder,
+  INK_IDS.moon,
+  INK_IDS.bamboo[0][0],
 ]
 
 /* ────────────────────────── 造型（d 的坐标系 = 节点盒 px——与 C2 内核解析同一约定） ────────────────────────── */
@@ -560,6 +562,9 @@ export function buildInkTree(view: View): string {
       left, top, width: rw, height: rh,
       svgPath: { d: dCore, stroke: ink(coreColor, r === 0 ? 0.82 : 0.94), strokeWidth: core * W },
       svgPathTo: { d: dAlt },
+      // ★★发光（glow v1）：近山骨线的**微光**（半径小；笔触在月色里"泛光"）
+      //   ★发光随画线进度走（画到哪、光到哪）——moonGlow 幕呼吸（intensity 0→1→0 yoyo）
+      ...(r === 2 ? { glow: { color: '#cfe0f0', radius: R(W * 0.012), alpha: 0.32 } } : {}),
     })
     nodes.push({
       id: INK_IDS.rangeDry[r], parentId: INK_IDS.root, position: 'absolute',
@@ -711,6 +716,10 @@ export function buildInkTree(view: View): string {
     borderRadius: R(moonSize / 2),
     backgroundColor: P.moon,
     clipPath: { kind: 'circle', params: [0.5, 1.9, 0.5] },
+    // ★★发光（glow v1）：**月光晕**——分层描边（N 层）在月盘外圈叠出真实的光雾。
+    //   ★web 上做这件事要动 blur/drop-shadow（每帧全量重绘）；这里只是 N 次描边填充。
+    //   ★与月盘同锚（月升时一起出现）；强度由 `glowIntensity` 通道在 moonGlow 幕呼吸。
+    glow: { color: '#fff6d8', radius: R(moonSize * 0.55), alpha: 0.5 },
   })
 
   // ⑦ 云海：**2 条 polygon 带**（大起伏 3 丘——见 MIST_*，7 点/14 参数）+
@@ -1297,6 +1306,9 @@ export function createInkProgram(_env: { view: View }): InkProgram {
         ...onto(I.haloOuter, { kind: 'scale', from: 1, to: 1.06, durationMs: 1800, repeat: 2, direction: 'alternate', curve: 'easeInOut' }),
         ...onto(I.moon, { kind: 'scale', from: 1, to: 1.09, durationMs: 1800, repeat: 2, direction: 'alternate', curve: 'easeInOut' }),
         ...onto(I.moon, { kind: 'color', from: P.moon, to: P.moonLit, durationMs: 1800, repeat: 2, direction: 'alternate', curve: 'easeInOut' }),
+        // ★★发光（glow v1）的"呼吸"：月亮与近山骨线在 0.35..1 之间往复——月色明暗的"气"
+        ...onto(I.moon, { kind: 'glowIntensity', from: 0.35, to: 1, durationMs: 2200, repeat: 2, direction: 'alternate', curve: 'easeInOut' }),
+        ...onto(I.rangeCore[2], { kind: 'glowIntensity', from: 0.15, to: 1, durationMs: 2600, delayMs: 300, repeat: 2, direction: 'alternate', curve: 'easeInOut' }),
         ...onto(I.reflection, { kind: 'translateX', from: -4, to: 4, durationMs: 1600, repeat: 2, direction: 'alternate', curve: 'easeInOut' }),
       ]
       I.ripples.forEach((id, i) => {

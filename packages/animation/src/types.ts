@@ -61,6 +61,8 @@ export const AnimKind = {
   GRADIENT_MIX: 32,
   /** ★★路径变形因子（2026-10-01 · 路径变形 v1）：0..1 = A 态（svgPath）→ B 态（svgPathTo） */
   PATH_MORPH: 33,
+  /** ★★发光强度（2026-10-01 · glow v1）：0..1 乘子（1 = 按声明全额发光） */
+  GLOW_INTENSITY: 34,
 } as const
 export type AnimKindId = (typeof AnimKind)[keyof typeof AnimKind]
 export type AnimKindName =
@@ -87,6 +89,9 @@ export type AnimKindName =
   /** ★★路径变形因子（2026-10-01 · 路径变形 v1；两态在树里声明为 svgPath/svgPathTo；走 tick 路径）
    *  ★CSS 完全不能做（`d` 属性不可过渡）——见内核 `svg_path::SvgPath::morphed` */
   | 'pathMorph'
+  /** ★★发光强度（2026-10-01 · glow v1；规格在树里声明为 `glow`；走 tick 路径）
+   *  ★web 上发光动画是性能雷区（box-shadow/blur 每帧全量重绘）——本引擎用分层描边 */
+  | 'glowIntensity'
 
 /** 名称 → 编号（编译期用；也是"名字写错"的**类型级**防线） */
 export const ANIM_KIND_ID: Record<AnimKindName, AnimKindId> = {
@@ -113,6 +118,8 @@ export const ANIM_KIND_ID: Record<AnimKindName, AnimKindId> = {
   gradientMix: AnimKind.GRADIENT_MIX,
   // ★路径变形是**单通道**（33——与内核同号）
   pathMorph: AnimKind.PATH_MORPH,
+  // ★发光强度是**单通道**（34——与内核同号）
+  glowIntensity: AnimKind.GLOW_INTENSITY,
 }
 
 /** 曲线（与内核 `CURVE_*` 一一对应——**不得改号**） */

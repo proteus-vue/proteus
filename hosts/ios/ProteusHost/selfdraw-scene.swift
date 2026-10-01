@@ -565,6 +565,9 @@ final class SelfDrawView: UIView {
         layerStrokeShapes.removeAll(keepingCapacity: true)
         // ★★渐变层同款成对清理（与描边同一教训：只清一份簿记 ⇒ 重建后幂等检查命中旧层）
         layerGradients.removeAll(keepingCapacity: true)
+        // ★★发光子层同款成对清理（与描边/渐变同一教训：只清一份簿记 ⇒ 重建后命中旧层）
+        layerGlowShapes.removeAll(keepingCapacity: true)
+        layerGlowSpec.removeAll(keepingCapacity: true)
         parentById.removeAll(keepingCapacity: true)
         childrenById.removeAll(keepingCapacity: true)
         builtFrames.removeAll(keepingCapacity: true)
@@ -636,6 +639,37 @@ final class SelfDrawView: UIView {
                 layer.addSublayer(g)
                 layerGradients[nodeId] = g
             }
+        }
+        // ★★发光（glow v1）：**分层描边子层**——N 层（宽度梯度 + alpha 平方衰减，见 TS `glowLayers`）。
+        //   ★与 Android 同式（不用 iOS 原生 `shadow*`：那是高斯阴影、与 Android 不同形——
+        //     本仓"跨端一致优先"）。子层几何 = 本层 bounds；描边色/宽在每帧"发光明暗"时更新。
+        if let gl = style["glow"] as? [String: Any],
+           let colorHex = gl["color"] as? String,
+           let radius = gl["radius"] as? Double,
+           let alpha = gl["alpha"] as? Double,
+           let baseColor = parseHexColor(colorHex), radius > 0, alpha > 0 {
+            var shapes: [CAShapeLayer] = []
+            let n = Self.glowLayerCount
+            for k in 1...n {
+                let t = Double(k - 1) / Double(n)
+                let a = alpha * (1 - t) * (1 - t)
+                let boost = radius * (Double(k) / Double(n))
+                let sh = CAShapeLayer()
+                sh.fillColor = nil
+                sh.strokeColor = baseColor.withAlphaComponent(CGFloat(a)).cgColor
+                sh.lineWidth = CGFloat(boost * 2.0)
+                sh.lineCap = .round
+                sh.lineJoin = .round
+                // 形状在"发光明暗/draw 时"按内容设（线条用 svg path + 进度；色块用圆角矩形）
+                sh.path = CGPath(
+                    roundedRect: layer.bounds, cornerWidth: (style["borderRadius"] as? CGFloat) ?? 0,
+                    cornerHeight: (style["borderRadius"] as? CGFloat) ?? 0, transform: nil)
+                sh.contentsScale = UIScreen.main.scale
+                layer.addSublayer(sh)
+                shapes.append(sh)
+            }
+            layerGlowShapes[nodeId] = shapes
+            layerGlowSpec[nodeId] = (baseColor, CGFloat(alpha))
         }
         // ★★C1：裁剪形状快照（树里声明的静态类型 + 基态参数；动画只改参数不改类型）
         //   ★并**立即应用基态遮罩**——静态裁剪（声明了但未动画）也必须渲染
@@ -819,6 +853,13 @@ final class SelfDrawView: UIView {
                 let t = g.type == .radial ? "radial" : g.type == .axial ? "linear" : "?"
                 gradStr = "\(t):\(g.colors?.count ?? 0)"
             }
+            // ★★发光（v1）：**真读**子层数与首层 alpha（判据据此断言"发光真的建出来了/真的在变"）
+            var glowStr = ""
+            if let shapes = layerGlowShapes[id], let first = shapes.first,
+               let c = first.strokeColor {
+                let a = c.alpha
+                glowStr = String(format: "%d:%.3f", shapes.count, a)
+            }
             // ★文字色（2026-10-01）：CATextLayer 才有 `foregroundColor`；非文本层报空串
             let textStr = Self.packedHexFromCGColor((layer as? CATextLayer)?.foregroundColor)
             // ★诊断串**先算成变量**（2026-10-01）：把多个 `\(…)` 插值直接续在拼接链的
@@ -834,6 +875,7 @@ final class SelfDrawView: UIView {
                     + "\"textColor\":\"\(textStr)\",\"clipBox\":\"\(clipBox)\","
                     + "\"strokeEnd\":\(strokeEndV),\"subLayers\":\(subCount),"
                     + "\"gradient\":\"\(gradStr)\","
+                    + "\"glow\":\"\(glowStr)\","
                     + "\"svgDiag\":\"\(diagStr)\"}"
             )
         }
@@ -912,6 +954,16 @@ final class SelfDrawView: UIView {
      *   ★探针真读（`gradient` 字段）读的就是这一张表 ⇒ 判据断言"渐变真的建出来了"。
      */
     private var layerGradients: [Int: CAGradientLayer] = [:]
+    /**
+     * ★★**发光分层描边子层**（glow v1）：节点 id → N 个 CAShapeLayer（由内到外）。
+     *   与 Android 的 `GLOW_LAYERS` / TS `GLOW_LAYERS` **同值**（分层不一致 = 两端光晕形状不同）。
+     */
+    private var layerGlowShapes: [Int: [CAShapeLayer]] = [:]
+    /// 发光的**声明规格快照**（色 + alpha）——每帧强度变化时从它重算（★不从"当前层值"反推：
+    /// 那会随每次写入累积失真——"读回自己写的值"是本仓既有教训）。
+    private var layerGlowSpec: [Int: (color: UIColor, alpha: CGFloat)] = [:]
+    /// ★跨语言常数（glow v1）：与 TS `GLOW_LAYERS` / Kotlin `GLOW_LAYERS` 同值——改必须三处同批
+    static let glowLayerCount = 5
     // ★诊断计数改为**文件级全局**（真机接通排查用；见文件尾 `SvgDiag`）：
     //   ★为什么不用类内 static：首版写在类内且 swiftc 报 "static properties may only be
     //     declared on a type"（紧跟其后的一串字段全红）——而类在 L2508 才闭合（结构正常）。
@@ -1315,6 +1367,23 @@ final class SelfDrawView: UIView {
         CATransaction.begin()
         CATransaction.setDisableActions(true)
         shape.path = path
+        CATransaction.commit()
+    }
+
+    /// ★★**每帧发光强度**（glow v1）——按 `"intensity"` 乘子重算每层 alpha（同式：a0×intensity×(1-t)²）。
+    ///   契约键名（与 TS `GRADIENT_CONTRACT_KEYS` 同表）：`"glow"` / `"radius"` / `"alpha"` / `"intensity"`。
+    ///   ★只改 alpha（不重建层）——与 `applyGradientTick` 同一形态。
+    func applyGlowTick(nodeId: Int, intensity: Float) {
+        guard let shapes = layerGlowShapes[nodeId], let spec = layerGlowSpec[nodeId] else { return }
+        let n = shapes.count
+        let a0 = spec.alpha * CGFloat(intensity) // 声明 alpha × 当前强度（**从快照算**——不累积）
+        CATransaction.begin()
+        CATransaction.setDisableActions(true)
+        for (i, sh) in shapes.enumerated() {
+            let t = CGFloat(i) / CGFloat(n)
+            let declA = max(0, min(1, a0 * (1 - t) * (1 - t)))
+            sh.strokeColor = spec.color.withAlphaComponent(declA).cgColor
+        }
         CATransaction.commit()
     }
 
@@ -4022,13 +4091,13 @@ final class SelfDrawBridge: NSObject, SelfDrawExports {
     /// `id u32 + tx/ty/scale/rotate/opacity（五个 f32）+ bg u32 + textColor u32`
     ///
     /// ★★2026-10-01 由 **24B → 28B（底色）→ 32B（文字色）→ 40B（3D 旋转）→ 108B（裁剪）**
-    ///   **→ 112B（描边）→ 184B（渐变 v2）→ 188B（路径变形 v1）**：末两个 u32 都是**打包色**
+    ///   **→ 112B（描边）→ 184B（渐变 v2）→ 188B（路径变形 v1）→ 192B（发光 v1）**：末两个 u32 都是**打包色**
     ///   `0xAARRGGBB`，值 `0xFFFFFFFF` = **本节点无该基色**（忽略该字段，保持静态绘制）。
     ///   ★唯一事实源 = 内核 `ffi.rs::proteus_layout_anim_tick_bin` 的 8 个 `extend_from_slice`；
     ///     两端宿主 / SDK / embed-demo 的常量必须与它同批更新（本仓历史上因两处各写步长
     ///     而错位解析过：24B 记录被按 16B 读 ⇒ 层上留下错位残值）。
     ///     `scripts/check-anim-record-bytes.mjs` 从内核推出宽度并与各消费端对账。
-    private static let animUpdateRecordBytes = 188
+    private static let animUpdateRecordBytes = 192
 
     /// ★★**每帧推进的唯一解析点**（探针 / 帧循环两条入口共用）
     ///
@@ -4071,6 +4140,11 @@ final class SelfDrawBridge: NSObject, SelfDrawExports {
             let morphRaw = buf.loadUnaligned(fromByteOffset: base + 184, as: Float.self)
             if morphRaw.isFinite {
                 applyPathMorphTick(nodeId: Int(nodeId), factor: morphRaw)
+            }
+            // ★★发光强度（glow v1，@188 的 f32；NaN = 无发光——192B 记录）：变化时更新每层 alpha
+            let glowRaw = buf.loadUnaligned(fromByteOffset: base + 188, as: Float.self)
+            if glowRaw.isFinite {
+                view?.applyGlowTick(nodeId: Int(nodeId), intensity: glowRaw)
             }
             // ★★渐变 v2（2026-10-01）：混合后的色标（@112 起：kind u32 + n u32 + 8×colors u32
             //   + 8×offsets f32——184B 记录）。`kind=0` = 本节点无渐变/未变化（忽略）。

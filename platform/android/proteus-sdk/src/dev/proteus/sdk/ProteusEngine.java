@@ -43,7 +43,7 @@ public final class ProteusEngine implements AutoCloseable {
      *   / iOS `animUpdateRecordBytes` / embed-demo 的常量同批更新
      *   （`scripts/check-anim-record-bytes.mjs` 从内核推出宽度并对账）。
      */
-    public static final int FRAME_UPDATE_BYTES = 188;
+    public static final int FRAME_UPDATE_BYTES = 192;
     /** 几何二进制流的头长度（`RECTS_HEADER_BYTES` = 16） */
     public static final int RECTS_HEADER_BYTES = 16;
     /** 单条矩形字节数（id u32 + 4×f32） */

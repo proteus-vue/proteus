@@ -293,6 +293,32 @@ def main() -> int:
         print(f"  ✓ ⑤d-2 ★山峦呼吸（路径变形 v2 异构）：moonGlow 幕 {g_anims} 条指令"
               f"（含 9 条山脊 pathMorph · 内核受理见三方一致 · 异构重采样在建树时完成）")
 
+    # ── ⑤f ★发光（glow v1）：探针真读发光子层数 + 呼吸末态强度 ──
+    #   证据 1：月盘的 `glow` 字段（宿主侧真读 = "N:alpha" 形态——N = 分层数）
+    #   证据 2：moonGlow 幕的 glowIntensity 通道在场（anims 计数）
+    m_moon = None
+    for a in host_acts:
+        cand = _layer(a.get("probe_all") or [], 62)
+        if cand is not None:
+            m_moon = cand
+            break
+    g_str = (m_moon or {}).get("glow") if m_moon else None
+    glow_act2 = hbyname.get("moonGlow") or {}
+    n_anims2 = glow_act2.get("anims") or 0
+    if g_str is None or g_str == "":
+        fail("⑤f 探针缺月盘发光读数（glow 字段空——发光子层未建或用错了取样节点）")
+        ok = False
+    elif not g_str.startswith("5:"):
+        fail(f"⑤f 发光分层数异常：'{g_str}'（应 '5:<alpha>'——分层数 5 必须三端一致）")
+        ok = False
+    elif n_anims2 < 60:
+        fail(f"⑤f moonGlow 幕指令数异常（{n_anims2}）——发光呼吸可能未被编译进去")
+        ok = False
+    else:
+        parts = g_str.split(":")
+        print(f"  ✓ ⑤f ★发光（glow v1）真的建出来了：月盘子层 = {parts[0]} 层（跨语言常数一致）· "
+              f"首层 alpha = {parts[1]} · moonGlow 幕 {n_anims2} 条指令（含发光呼吸）")
+
     # ── ⑥ 帧率与流畅 ──
     vsync = host.get("vsync_p50")
     p95 = host.get("work_p95")
