@@ -647,6 +647,35 @@ def main() -> int:
         else:
             print(f"  ✓ P8 ★文字色（独立轨道）：{t0} → {t1}（终值精确）· stop 回原值 · 底色**未被动**")
 
+        # ★P9（2026-10-01 扩）：**自定义三次贝塞尔**（转正）——回弹过冲 + 拒绝分支
+        #   ★取值路径：它是**独立相位**的结果（在报告根/js_report，不在 anim_color 内）
+        bz = d.get("anim_bezier") or js.get("anim_bezier") or {}
+        if not bz:
+            print("  · P9 跳过（anim_bezier 读数缺失——相位未跑？）")
+        else:
+            bstarted = bz.get("started")
+            btr = bz.get("trace") or []
+            bpeak = bz.get("peak")
+            bend = bz.get("end")
+            brej = str(bz.get("rejected") or "")
+            if bstarted != 1:
+                fail(f"P9a 自定义曲线动画未被内核受理：started={bstarted}")
+                ok = False
+            elif not btr or bpeak is None or bend is None:
+                fail(f"P9b 自定义曲线轨迹读数不齐：trace={btr}")
+                ok = False
+            elif bpeak <= 101.0:
+                fail(f"P9c 未见过冲：峰值 ty={bpeak} 应 > 101（回弹曲线 y1=1.56 的指纹；不过冲=自定义未生效）")
+                ok = False
+            elif abs(bend - 100.0) > 0.01:
+                fail(f"P9d 终点未钉死：末值 ty={bend}（应精确 = 100）")
+                ok = False
+            elif "[0,1]" not in brej or "节点" not in brej:
+                fail(f"P9e 非法控制点未被明确拒绝（应含 [0,1] 与节点 id）：{brej[:140]}")
+                ok = False
+            else:
+                print(f"  ✓ P9 ★自定义贝塞尔（真读层）：过冲到 ty={bpeak:.2f}（> 终点 100）后回落，终点钉死 {bend:.2f} · 拒绝分支可定位")
+
         # P6：拒绝分支——无底色节点上的颜色动画必须**明确拒绝**（不静默）
         rej = c.get("rejected_no_bg") or ""
         if c.get("no_bg_nodes") and ("底色" not in rej):

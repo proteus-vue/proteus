@@ -20,7 +20,12 @@
 
 /** 逃生口类别（封闭集——与 §4.2 的举例对齐；`other` 兜底但**必须**写明细节，不许滥用） */
 export type EscapeKind =
-  /** 自定义缓动（封闭集 5 条曲线不够，如 cubic-bezier(0.1,0.9,0.2,1)） */
+  /**
+   * 自定义缓动（**2026-10-01 起多数场景已有内建替代**：`curveBezier: [x1,y1,x2,y2]`
+   *   或 `parseCubicBezier('cubic-bezier(…)')`——见 `primitive/curveBezier` 说明）。
+   *   本类别留给"内建也表达不了"的缓动：**分段自定义曲线**（段级 curveBezier 暂不支持）、
+   *   运行期才决定控制点、或与外部时钟对齐的缓动。登记时请在 detail 写明为何内建不够。
+   */
   | 'custom-easing'
   /** 外部驱动（自己 rAF / CSS transition / 第三方动画库——完全绕开内核） */
   | 'external-driver'

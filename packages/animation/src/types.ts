@@ -72,6 +72,19 @@ export const Curve = {
 export type CurveId = (typeof Curve)[keyof typeof Curve]
 export type CurveName = 'linear' | 'easeOut' | 'easeIn' | 'easeInOut' | 'springApprox'
 
+/**
+ * ★★**自定义三次贝塞尔曲线的控制点**（`[x1, y1, x2, y2]`——CSS `cubic-bezier()` 同一参数化）
+ *
+ * 【与 `CurveName` 封闭集的关系（2026-10-01 转正）】封闭集是"常用曲线"的快捷名；
+ *   设计稿里任意一条缓动此前只能走**逃生口**（`custom-easing` = degraded，要登记）。
+ *   现在它是**契约能力**：与内置曲线走**同一台求值机器**（内核 65 点表 + 插值——
+ *   控制点在解析期生成一次表并缓存，之后求值零迭代），跨端逐位一致。
+ *
+ * 【约束】`x1 / x2 ∈ [0,1]`（时间轴必须单调——否则给定进度求值不唯一）；
+ *   `y1 / y2` **任意**（> 1 / < 0 是回弹、预期效果的来源，CSS 同规）。
+ */
+export type BezierPoints = readonly [number, number, number, number]
+
 export const CURVE_ID: Record<CurveName, CurveId> = {
   linear: Curve.LINEAR,
   easeOut: Curve.EASE_OUT,
@@ -142,8 +155,16 @@ export interface ScalarAnimDecl {
   durationMs?: number
   /** 起始延迟（毫秒；编排/交错用） */
   delayMs?: number
-  /** 查表曲线（与 `spring` / `keyframes` 三选一；都缺省 = `easeOut`） */
+  /** 查表曲线（与 `spring` / `keyframes` / `curveBezier` 四选一；都缺省 = `easeOut`） */
   curve?: CurveName
+  /**
+   * ★★**自定义三次贝塞尔**（`cubic-bezier(x1,y1,x2,y2)` 的四个控制点；与 `curve` 互斥）
+   *
+   * 给了它 ⇒ 求值走该曲线的采样表（内核生成并缓存——800 片同曲线只生成一次）。
+   * `x1/x2 ∈ [0,1]`（编译期校验）；`y1/y2` 任意（回弹）。与 `keyframes` 互斥
+   * （段级曲线目前只用封闭集——诚实边界）。
+   */
+  curveBezier?: BezierPoints
   /** 弹簧物理（给了它就用物理积分，不是查表） */
   spring?: SpringConfig
   /**
@@ -202,6 +223,8 @@ export interface ColorAnimDecl {
   delayMs?: number
   /** 查表曲线（缺省 = `easeOut`） */
   curve?: CurveName
+  /** ★自定义三次贝塞尔（与 `curve` 互斥；同标量语义——见 `ScalarAnimDecl.curveBezier`） */
+  curveBezier?: BezierPoints
   /** 弹簧物理（**逐通道**独立积分；4 条通道各自静止，整色在最后一条静止时到位） */
   spring?: SpringConfig
   /**
@@ -238,6 +261,8 @@ export interface EngineAnim {
   nodeId: number
   kind: AnimKindId
   curve: CurveId
+  /** ★自定义三次贝塞尔控制点（可选；内核求值优先于 `curve`——见内核 `Anim::curve_at`） */
+  curveBezier?: [number, number, number, number]
   from: number
   to: number
   durMs: number

@@ -2351,6 +2351,40 @@ pub unsafe extern "C" fn proteus_layout_apply_ops(handle: u64, ptr: *const u8, l
 ///   好不容易省下的字节又花回去；而 **1 次函数调用 + 1 个 f32** 已是最小跨边界形态。
 ///   （这就是 RT0 要验证的"最小协议"设计——数字见 examples/rt0_anim_spike.rs 的对照。）
 ///
+/// ★★**解析自定义贝塞尔控制点**（`curveBezier:[x1,y1,x2,y2]`）——两处 anim 入口共用
+///
+/// 【契约（CSS `cubic-bezier` 同规）】`x1/x2 ∈ [0,1]`（时间轴必须单调，否则求值不唯一）；
+///   `y1/y2` 任意（> 1 / < 0 = 回弹/预期效果的来源）。越界 ⇒ **明确拒绝**（不静默钳制——
+///   钳制会让"写错的曲线"悄悄变成另一条，本仓纪律：静默失败最致命）。
+/// 【为什么单独校验而不做类型约束】JSON 通道是跨语言的（TS 已按类型校验过一遍，
+///   但 FFI 是第二个入口——两边都校验，任何一侧漏了另一侧兜住）。
+fn parse_curve_bezier(a: &serde_json::Value, node_id: u32) -> Result<Option<std::sync::Arc<crate::anim::BezierTable>>, String> {
+    let Some(v) = a.get("curveBezier") else { return Ok(None) };
+    let arr = v
+        .as_array()
+        .ok_or_else(|| format!("节点 {node_id} 的 curveBezier 必须是 [x1,y1,x2,y2] 数组"))?;
+    if arr.len() != 4 {
+        return Err(format!(
+            "节点 {node_id} 的 curveBezier 需要 4 个数（x1,y1,x2,y2），收到 {} 个",
+            arr.len()
+        ));
+    }
+    let mut c = [0f32; 4];
+    for (i, x) in arr.iter().enumerate() {
+        c[i] = x
+            .as_f64()
+            .ok_or_else(|| format!("节点 {node_id} 的 curveBezier[{i}] 不是数字"))?
+            as f32;
+    }
+    if !(0.0..=1.0).contains(&c[0]) || !(0.0..=1.0).contains(&c[2]) {
+        return Err(format!(
+            "节点 {node_id} 的 curveBezier 控制点 x1/x2 必须在 [0,1]（时间轴单调），收到 x1={}, x2={}",
+            c[0], c[2]
+        ));
+    }
+    Ok(Some(crate::anim::bezier_table(c)))
+}
+
 /// 入参 JSON：`{"anims":[{"nodeId":1,"kind":0,"curve":1,"from":0,"to":200,"durMs":1000}]}`
 ///   kind: 0=translateX / 1=translateY / 2=scale（与 `AnimKind` 一致）
 ///   返回：`{"ok":true,"started":N}` 或 `{"ok":false,"error":...}`
@@ -2394,6 +2428,8 @@ pub unsafe extern "C" fn proteus_layout_anim_start(handle: u64, json: *const c_c
                 .ok_or_else(|| "动画缺少 kind".to_string())? as u8;
             let kind = crate::anim::AnimKind::from_u8(kind_raw)?;
             let curve = a.get("curve").and_then(|x| x.as_u64()).unwrap_or(0) as u8;
+            // ★自定义贝塞尔（可选；Some 时求值优先于内置 curve id——见 Anim::curve_at）
+            let curve_pts = parse_curve_bezier(a, node_id)?;
             // ★RT2：驱动方式（缺省 time ⇒ 向后兼容 RT0 的启动报文）
             let drive = crate::anim::AnimDrive::from_u8(a.get("drive").and_then(|x| x.as_u64()).unwrap_or(0) as u8)?;
             // ★RT2 追加：弹簧（`spring:{stiffness,damping,mass}` 提供时用物理模式）
@@ -2453,6 +2489,7 @@ pub unsafe extern "C" fn proteus_layout_anim_start(handle: u64, json: *const c_c
                 x: from,
                 vel: 0.0,
                 takeover,
+                curve_pts,
             };
             // ★错误必须冒泡（节点不在树上 / 曲线越界）——静默会变成"动画不生效"难查
             // ★MA5：带滚动窗口的动画走 `start_scroll`（drive 切 Progress——时间 tick 不再推进它，
@@ -2656,6 +2693,8 @@ pub unsafe extern "C" fn proteus_layout_anim_commit_spec(handle: u64, json: *con
                 },
             };
             let from = num(a, "from")?;
+            // ★自定义贝塞尔（与 anim_start 同一条解析——含范围校验与可定位错误）
+            let curve_pts = parse_curve_bezier(a, node_id)?;
             // ★MA5：滚动驱动动画**不得**走平台零参与路径——它的进度来自**外部滚动位置**，
             //   而平台路径的语义是"提交后由平台按**时间**自主插值"⇒ 二者是不同驱动源。
             //   静默按时间提交会让"视差跟手"变成"到点自动播放"（完全不是同一动效）。
@@ -2684,6 +2723,7 @@ pub unsafe extern "C" fn proteus_layout_anim_commit_spec(handle: u64, json: *con
                 x: from,
                 vel: 0.0,
                 takeover: false,
+                curve_pts,
             });
         }
 
@@ -3278,6 +3318,51 @@ mod tests {
         ("#gggggg", 0, false),            // 非十六进制
         ("#ABC", 0xFF_AABBCC, true),      // 大写 + 简写
     ];
+
+    /// ★★**curveBezier JSON 解析**（2026-10-01 自定义曲线转正）——两处 anim 入口共用
+    ///
+    /// 守两件事：① 合法控制点解析成 BezierTable（且缓存命中同一 Arc）；
+    ///   ② 非法形态（数量错 / 非数字 / x 越界）**明确拒绝**且消息含 nodeId（可定位）。
+    #[test]
+    fn parse_curve_bezier_accepts_valid_and_rejects_bad() {
+        let ok = serde_json::json!({ "curveBezier": [0.34, 1.56, 0.64, 1.0] });
+        let t = parse_curve_bezier(&ok, 7).expect("合法控制点应通过").expect("应产生表");
+        let t2 = parse_curve_bezier(&ok, 7).unwrap().unwrap();
+        assert!(std::sync::Arc::ptr_eq(&t, &t2), "同控制点应命中缓存（800 片共享一份表）");
+        // 无字段 ⇒ None（不影响旧声明）
+        assert!(parse_curve_bezier(&serde_json::json!({}), 7).unwrap().is_none());
+        // 非法：数量错 / 非数字 / x 越界 —— 全部拒绝且消息含 nodeId
+        for (bad, needle) in [
+            (serde_json::json!({ "curveBezier": [0.3, 1.5, 0.6] }), "4 个数"),
+            (serde_json::json!({ "curveBezier": ["a", 1, 0, 1] }), "不是数字"),
+            (serde_json::json!({ "curveBezier": [-0.1, 1.5, 0.64, 1] }), "[0,1]"),
+            (serde_json::json!({ "curveBezier": [0.34, 1.5, 1.2, 1] }), "[0,1]"),
+        ] {
+            let err = parse_curve_bezier(&bad, 7).expect_err("非法输入必须被拒绝");
+            assert!(err.contains(needle) || err.contains("节点 7"), "错误消息应可定位：{err}");
+            assert!(err.contains("节点 7"), "错误消息应含 nodeId：{err}");
+        }
+    }
+
+    /// ★★**anim_start 全链路**：JSON（含 curveBezier）→ Anim（curve_pts 生效）——
+    ///   守"线格式字段名与内核解析键名一致"（两侧各写各的名字是经典的静默失联）。
+    #[test]
+    fn anim_start_json_parses_curve_bezier_into_anim() {
+        // 直接构造请求体（不经过 FFI 句柄）——复刻 anim_start 的解析路径
+        let req = serde_json::json!({
+            "anims": [{ "nodeId": 1, "kind": 1, "curve": 1, "curveBezier": [0.34, 1.56, 0.64, 1.0],
+                        "from": 0.0, "to": 100.0, "durMs": 400.0 }]
+        });
+        let list = req.get("anims").unwrap().as_array().unwrap();
+        let a = &list[0];
+        let node_id = a.get("nodeId").unwrap().as_u64().unwrap() as u32;
+        let pts = parse_curve_bezier(a, node_id).unwrap();
+        assert!(pts.is_some(), "解析器应产出 BezierTable");
+        // 用该表驱动一条真实 Anim，验证求值确实走自定义曲线（过冲）——与 anim.rs 的单测同源
+        let mut anim = crate::anim::Anim::curve_anim(1, crate::anim::AnimKind::TranslateY, 0.0, 100.0, 400.0);
+        anim.curve_pts = pts;
+        assert!(anim.value_at_progress(0.5) > 100.0, "回弹曲线中点应过冲（这证明自定义曲线真的接上了）");
+    }
 
     #[test]
     fn parse_css_color_matches_pinned_table() {

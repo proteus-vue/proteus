@@ -57,7 +57,71 @@ export function isPaintOnly(kind: AnimKindName): boolean {
  *   ④ 同时给了 `curve` 与 `spring` ⇒ `conflicting-easing`（求值模式必须唯一）
  *   ⑤ 弹簧参数非法（非正刚度 / 负阻尼 / 非正质量）
  *   ⑥ 空批次
+ *   ⑦ ★自定义贝塞尔非法（非 4 个数 / 非有限 / x∉[0,1]）＋ 与 `curve`/`spring`/`keyframes` 互斥
  */
+/**
+ * ★★**自定义贝塞尔的编译期校验**（标量/颜色两条路径共用——见 `curveBezier` 类型注释）
+ *
+ * 三条规则（与内核解析层**同一套**——两边都校验，任一侧漏了另一侧兜住）：
+ *   ① 必须是 4 个有限数（`[x1,y1,x2,y2]`）
+ *   ② `x1/x2 ∈ [0,1]`（时间轴单调；`y` 任意——回弹来源）
+ *   ③ 与 `curve` / `spring` / `keyframes` **互斥**（求值模式必须唯一；段级曲线暂不支持自定义——诚实边界）
+ */
+function checkCurveBezier(
+  d: { curveBezier?: readonly number[]; curve?: unknown; spring?: unknown; keyframes?: unknown },
+  i: number,
+  issues: ValidationIssue[],
+): void {
+  const cb = d.curveBezier
+  if (cb === undefined) return
+  if (!Array.isArray(cb) || cb.length !== 4) {
+    issues.push({
+      index: i,
+      code: 'invalid-range',
+      message: `\`curveBezier\` 需要 4 个控制点 [x1,y1,x2,y2]，收到 ${JSON.stringify(cb)}`,
+      hint: '例：curveBezier: [0.34, 1.56, 0.64, 1]（回弹）或 [0.2, 0, 0, 1]',
+    })
+    return
+  }
+  const bad = cb.some((v) => typeof v !== 'number' || !Number.isFinite(v))
+  if (bad) {
+    issues.push({ index: i, code: 'invalid-range', message: `\`curveBezier\` 含非有限数：${JSON.stringify(cb)}`, hint: '给具体数值' })
+    return
+  }
+  if (cb[0]! < 0 || cb[0]! > 1 || cb[2]! < 0 || cb[2]! > 1) {
+    issues.push({
+      index: i,
+      code: 'invalid-range',
+      message: `\`curveBezier\` 的 x1/x2 必须在 [0,1]（时间轴单调——否则给定进度求值不唯一）：x1=${cb[0]}, x2=${cb[2]}`,
+      hint: 'y1/y2 可以任意（> 1 或 < 0 是回弹/预期效果）；只有 x 受限（CSS cubic-bezier 同规）',
+    })
+  }
+  if (d.curve !== undefined) {
+    issues.push({
+      index: i,
+      code: 'conflicting-easing',
+      message: '`curveBezier` 与 `curve` 并存 —— 两处都描述缓动，必须唯一',
+      hint: '删掉 `curve`（封闭集快捷名），只留 `curveBezier`',
+    })
+  }
+  if (d.spring !== undefined) {
+    issues.push({
+      index: i,
+      code: 'conflicting-easing',
+      message: '`curveBezier` 与 `spring` 并存 —— 求值模式必须唯一',
+      hint: '二选一：要物理手感用 `spring`，要确定曲线用 `curveBezier`',
+    })
+  }
+  if (d.keyframes !== undefined) {
+    issues.push({
+      index: i,
+      code: 'conflicting-easing',
+      message: '`curveBezier` 与 `keyframes` 并存 —— 段级曲线目前只用封闭集（诚实边界）',
+      hint: '删掉 `curveBezier`（多段序列里每段用 `curve` 封闭集），或改用单段 + `curveBezier`',
+    })
+  }
+}
+
 export function validateAnimations(decls: readonly AnimDecl[]): ValidationIssue[] {
   const issues: ValidationIssue[] = []
   if (decls.length === 0) {
@@ -225,8 +289,13 @@ export function validateAnimations(decls: readonly AnimDecl[]): ValidationIssue[
           })
         }
       }
+      // ★自定义贝塞尔（颜色路径同支持——四条通道共用同一曲线）
+      checkCurveBezier(d, i, issues)
       return // ★颜色分支到此为止（不落进标量路径的数值校验）
     }
+
+    // ★自定义贝塞尔（标量路径）
+    checkCurveBezier(d, i, issues)
 
     // ★★**同属性重复声明**（真陷阱，本轮写预设时自己踩到）：内核语义是「同 (节点,属性) = 替换」
     //   ⇒ 一个批次里出现两条 `scale`，**后者静默替换前者**——用户以为"按下再弹回"，

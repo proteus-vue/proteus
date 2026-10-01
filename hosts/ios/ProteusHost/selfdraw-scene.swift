@@ -3899,11 +3899,39 @@ final class SelfDrawBridge: NSObject, SelfDrawExports {
         let c1 = threadCpuUs()
         out["commit_cpu_us"] = c1 - c0
         let committedOk = commitOut.contains("\"committed\":1")
-        DispatchQueue.main.asyncAfter(deadline: .now() + windowMs / 1000.0) { [weak self] in
+        // ★★**分段采样**（2026-10-01 · L2 间歇定位）：把 600ms 窗口切成 6×100ms 子段——
+        //   一次跑就能定性"idle 段被什么污染"：
+        //     · 某一段独大（如 18ms 在中间）⇒ **一次性卡顿**（CA flush / 系统活动）——
+        //       结论"平台路径不每帧参与"仍然成立，判据应容忍单段尖峰；
+        //     · 六段均匀（各 ~3ms）⇒ **每帧都有主线程工作** ⇒ 真回归（该判红）。
+        //   此前只有 18.9ms 这一个总数，无法区分两种形态（本仓纪律：读数要能归因）。
+        var segs: [Double] = []
+        let segCount = 6
+        let segMs = windowMs / Double(segCount)
+        var lastCpu = c1
+        func collectSeg(_ k: Int) {
+            let now = threadCpuUs()
+            segs.append(now - lastCpu)
+            lastCpu = now
+        }
+        // ★递归步进：k 达到段数即完成（**不再多记一段**——首版多记了一个 0 值尾巴）
+        func segStep(_ k: Int, _ done: @escaping () -> Void) {
+            if k >= segCount {
+                done()
+                return
+            }
+            DispatchQueue.main.asyncAfter(deadline: .now() + segMs / 1000.0) { [weak self] in
+                guard let self else { return }
+                collectSeg(k)
+                segStep(k + 1, done)
+            }
+        }
+        segStep(0) { [weak self] in
             guard let self else { return }
             let c2 = self.threadCpuUs()
             out["platform_cpu_us"] = c2 - c0
             out["idle_cpu_us"] = c2 - c1
+            out["idle_segments_us"] = segs
             out["frame_loop_running"] = self.view?.frameLoopRunning ?? false
             out["committed_ok"] = committedOk
             self.view?.removePlatformAnimations([targetId])
@@ -5188,6 +5216,8 @@ final class SelfDrawViewController: UIViewController {
             ("__proteus.animShared()", 2),
             // ★★颜色通道（2026-10-01）：一个声明 → 四条内核通道 → 宿主真写层背景色
             ("__proteus.animColor()", 2),
+            // ★★自定义贝塞尔（2026-10-01 转正）：回弹过冲 + 拒绝分支（判据 check-anim-rt2.py P9）
+            ("__proteus.animBezier()", 2),
             // ★★主线程零唤醒实测（OS 级 CPU 会计 + 阳性对照）：**异步**两段各 600ms
             ("__proteus.animCpuProbe()", 0),
             // ★★RT2 帧率测席（§9 指标）：**异步**——由 CADisplayLink 跑满时长后回调续链
@@ -5228,7 +5258,7 @@ final class SelfDrawViewController: UIViewController {
             }
             let out = js(expr)
             // 只记关键读数（避免日志爆炸——本仓「输出控制」纪律）
-            if expr.hasPrefix("__proteus.mount") || expr.hasPrefix("__proteus.finalize2") || expr.hasPrefix("__proteus.animProbe") || expr.hasPrefix("__proteus.animComplex") || expr.hasPrefix("__proteus.animPlatform") || expr.hasPrefix("__proteus.animPreset") || expr.hasPrefix("__proteus.animScroll") || expr.hasPrefix("__proteus.animSequence") || expr.hasPrefix("__proteus.animShared") || expr.hasPrefix("__proteus.animColor") || expr.hasPrefix("__proteus.animCpu") {
+            if expr.hasPrefix("__proteus.mount") || expr.hasPrefix("__proteus.finalize2") || expr.hasPrefix("__proteus.animProbe") || expr.hasPrefix("__proteus.animComplex") || expr.hasPrefix("__proteus.animPlatform") || expr.hasPrefix("__proteus.animPreset") || expr.hasPrefix("__proteus.animScroll") || expr.hasPrefix("__proteus.animSequence") || expr.hasPrefix("__proteus.animShared") || expr.hasPrefix("__proteus.animColor") || expr.hasPrefix("__proteus.animBezier") || expr.hasPrefix("__proteus.animCpu") {
                 NSLog("[proteus] %@ → %@", expr, String(out.prefix(400)))
             }
             // ★让出主线程 pump 轮：每轮一次 runloop 循环 ⇒ 微任务队列被排空

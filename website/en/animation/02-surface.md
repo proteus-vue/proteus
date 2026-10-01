@@ -38,6 +38,8 @@ Morpheus exposes exactly one package: **`@proteus-vue/animation`** (declare + va
 | `easeInOut` | 3 |
 | `springApprox` | 4 |
 
+**Arbitrary easing (`curveBezier`, promoted 2026-10-01)**: design-handoff curves outside the closed set no longer need an escape hatch — `curveBezier: [x1,y1,x2,y2]` (or paste the CSS value with `parseCubicBezier('cubic-bezier(…)')`) runs on the **same kernel evaluation machine** (65-point table + interpolation; the control-point table is generated once and cached). Constraint: `x1/x2 ∈ [0,1]` (monotonic time axis); `y1/y2` are free (> 1 = overshoot, < 0 = anticipation), and it is mutually exclusive with `curve` / `spring` / `keyframes` (the evaluation mode must be unique).
+
 **Composited = eligible for the platform zero-involvement path.** The five scalar properties are composited; **`color` / `textColor` are paint-only but non-composited** (they do not trigger layout, but Android's RenderNode cannot interpolate colours, so both targets use the tick path for consistency). Note also: **changing layout properties (width / margin) is not animation, it is relayout**, and compilation rejects it outright.
 
 ```ts

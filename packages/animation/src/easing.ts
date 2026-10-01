@@ -25,3 +25,34 @@ export const easing = {
   /** 顺滑、几乎无回弹（对齐 iOS `.smooth`） */
   smooth: { stiffness: 180, damping: 26, mass: 1 } as SpringConfig,
 } as const
+
+/**
+ * ★★**解析 CSS `cubic-bezier()` 字符串**（2026-10-01 自定义曲线转正的一部分）
+ *
+ * 让人能**直接从设计稿/浏览器 DevTools 粘贴**缓动值：
+ * ```ts
+ * { kind: 'translateY', from: -40, to: 0, curveBezier: parseCubicBezier('cubic-bezier(.34,1.56,.64,1)') }
+ * ```
+ *
+ * 规则：接受 `cubic-bezier(a,b,c,d)`（大小写/空白不敏感；数可写 `.5`）或裸 `a,b,c,d`。
+ * `x1/x2 ∈ [0,1]`（时间轴单调）；`y1/y2` 任意（回弹）。非法 ⇒ **抛错**（带原文，
+ * 这是"粘贴进来的值"——把原文回显出来才好定位；不静默落默认值）。
+ */
+export function parseCubicBezier(src: string): [number, number, number, number] {
+  const m = /cubic-bezier\(\s*([^)]+)\)/i.exec(src)
+  const body = m ? m[1]! : src
+  const parts = body.split(',').map((x) => Number(x.trim()))
+  if (parts.length !== 4 || parts.some((v) => !Number.isFinite(v))) {
+    throw new Error(
+      `parseCubicBezier: 无法从 "${src}" 解析出 4 个控制点（期望 cubic-bezier(x1,y1,x2,y2)）`,
+    )
+  }
+  const [x1, y1, x2, y2] = parts as [number, number, number, number]
+  if (x1 < 0 || x1 > 1 || x2 < 0 || x2 > 1) {
+    throw new Error(
+      `parseCubicBezier: x1/x2 必须在 [0,1]（时间轴单调），收到 "${src}"（x1=${x1}, x2=${x2}）；` +
+        'y1/y2 可以任意（> 1 / < 0 是回弹效果）',
+    )
+  }
+  return [x1, y1, x2, y2]
+}
