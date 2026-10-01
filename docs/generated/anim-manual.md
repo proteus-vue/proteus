@@ -8,7 +8,7 @@ generated: true
 # Morpheus 动画声明项 AI 说明书
 
 > **生成物，勿手改**：`node scripts/gen-anim-manual.mjs`（`--check` 接 CI，漂移即红）
-> **单一事实来源**：`packages/animation/src/rules.ts` 的 `ANIM_RULES`（42 条）
+> **单一事实来源**：`packages/animation/src/rules.ts` 的 `ANIM_RULES`（48 条）
 >
 > 本表与编译器的 111 条规则**同构**（Morpheus §13 第 11 条硬性要求）——
 > 每条含 what / why / when / 示例 / 如何验证 / 实现位置，AI 可单独消费一条。
@@ -338,7 +338,7 @@ presets.choreograph.gather({ ids, canvas, spread: 2.6 })
 presets.choreograph.storm({ ids, canvas, order: 'alternate', staggerMs: 8, durationMs: 900 })
 ```
 
-## 声明面原语（字段/取值）（13 条）
+## 声明面原语（字段/取值）（19 条）
 
 ### `primitive/route-transition-bridge`
 
@@ -377,9 +377,9 @@ compileAnimations(
 
 ### `primitive/AnimKind`
 
-**动画属性封闭集（11 个：五个合成 + color + textColor + 3D×2 + clip + strokeProgress）** `[implemented]`
+**动画属性封闭集（16 个：五合成 + color + textColor + 3D×2 + clip + strokeProgress + 5 个 v2 通道）** `[implemented]`
 
-- **是什么**：`translateX`(0) / `translateY`(1) / `scale`(2) / `rotate`(3) / `opacity`(4) / `color`(5..8) / `textColor`(9..12，**均按 R/G/B/A 四通道分解**) / `rotateX`(13) / `rotateY`(14) / `clip`(15..30，**按参数槽分解**) / `strokeProgress`(31)——编号是**跨语言契约**。
+- **是什么**：`translateX`(0) / `translateY`(1) / `scale`(2) / `rotate`(3) / `opacity`(4) / `color`(5..8) / `textColor`(9..12，**均按 R/G/B/A 四通道分解**) / `rotateX`(13) / `rotateY`(14) / `clip`(15..30，**按参数槽分解**) / `strokeProgress`(31) / `gradientMix`(32) / `pathMorph`(33) / `glowIntensity`(34) / `maskProgress`(35) / `skewX`(36) / `skewY`(37)——编号是**跨语言契约**。
 - **为什么**：★**合成属性判定是分水岭**（§5-bis.1）：只有 transform/opacity 子集能走平台渲染线程零参与路径；本引擎**只做绘制层变换** ⇒ 五个标量属性全是合成属性（`width/height/margin` 这类布局属性会被编译期拦）。★`color`/`textColor` 是**第三类**：paint-only（与 opacity 同成本类，**不触发布局**）但**非合成**——Android 的 `RenderNode` 无法在渲染线程插值颜色 ⇒ 两端一致走 tick 路径（跨端一致优先；见架构页）。**一个声明 → 四条通道**：求值机器（曲线/弹簧/序列/滚动/seek/接管）全是标量的 ⇒ 零改动复用，不新增"多通道求值"的第二套实现（代价如实：一次颜色动画 = 4 条指令）。★`textColor` 与 `color` **独立轨道**（编号 9..12 不复用 5..8 槽位）：同节点可同时动底色与文字色。
 - **何时用**：任何声明都要从这里选（写错名字是类型级错误）；`color` 要求目标节点已声明 `backgroundColor`、`textColor` 要求已声明 `color`（基色 = 起点与复位目标；缺失内核明确拒绝）
 - **如何验证**：packages/layout-core-rust/src/anim.rs 的 `AnimKind::from_u8`；tests/anim-color-golden.test.ts（跨语言钉值 + 编译形态 + 解析拦截）；真机：check-anim-rt2.py P 组（iOS 真读 CALayer 背景色/文字色）· check-kernel-anim.py P 组（Android）
@@ -528,6 +528,108 @@ animControl({ paused: false })    // 恢复——从冻结处继续（不是重�
 // 动画：2 秒沿弧长画完
 { kind: 'strokeProgress', from: 0, to: 1, durationMs: 2000, curve: 'easeOut' }
 // 擦除（倒放）：1 → 0（"画完再擦掉"不需要第二套能力）
+```
+
+### `primitive/gradientMix`
+
+**渐变填充与混合（`gradientMix` —— 2026-10-01 · v1+v2）** `[implemented]`
+
+- **是什么**：节点样式静态声明 `fillGradient: { kind: 'linear'|'radial', angle | cx/cy/r, stops: [{ offset, color, alpha? }] }`（2..8 色标、offset 严格升序）；`fillGradientTo` 声明 B 态后，`{ kind: 'gradientMix', from: 0, to: 1 }`（**单通道 32**）在 A/B 两态间混合——色标（颜色+位置）与**几何**（angle / cx·cy·r）都随同一因子过渡。
+- **为什么**：★**"光本身在动"**（月晕扩散 / 角度转向 / 光斑移动）——CSS 完全不能过渡渐变几何（`linear-gradient` 插值是"整幅互换"，不能动半径/角度）；色标过渡在 web 上要靠库。★几何与色标是"同一个两态混合"语义的两个面 ⇒ **零新通道**。★lerp 是内核唯一实现（`GradState::mixed` / `mixed_geometry`）——宿主零插值（只消费已算好的值）。★B 态必须与 A 态**同 kind、同色标个数**（内核建树时校验；缺 B ⇒ 明确拒绝）。
+- **何时用**：晕染/呼吸光/极光/金属反光——"光在变化"的任何演出（静态渐变不需要通道——只声明 A 态即可）
+- **如何验证**：tests/anim-gradient.test.ts（角度数学跨语言钉子 + 校验器 + 发光钉值）+ tests/showcase-ink.test.ts 的渐变三节（v1 声明 / v2 两态结构一致 / 几何动画同色标不同半径）；内核单测 `gradient_mix_lerps_stops_and_resets_to_a` / `gradient_geometry_mix_expands_radius` / `gradient_mix_rejects_missing_or_mismatched_states`；真机：check-ink.py ⑤b（探针真读宿主建出的渐变）/ ⑤c（混合受理）/ ⑤g（几何半径真读 0.9500）
+- **实现位置**：`packages/animation/src/gradient.ts（内核 style.rs:GradState::mixed/mixed_geometry + ffi.rs:parse_gradient）`
+
+```ts
+// 节点样式（A 态为主，B 态为目标形态）
+// fillGradient:   { kind: 'radial', cx: 0.5, cy: 0.5, r: 0.55, stops: [...] }
+// fillGradientTo: { kind: 'radial', cx: 0.5, cy: 0.5, r: 0.95, stops: [...] }  // 同色标、更大半径
+// 动画：1.2 秒扩散
+{ kind: 'gradientMix', from: 0, to: 1, durationMs: 1200, curve: 'easeOut' }
+```
+
+### `primitive/pathMorph`
+
+**路径变形（`pathMorph` —— 2026-10-01 · v1+v2 异构重采样）** `[implemented]`
+
+- **是什么**：树里声明两态路径（`svgPath` A + `svgPathTo` B），一条 `{ kind: 'pathMorph', from: 0, to: 1 }`（**单通道 33**）驱动**逐点插值**。v2 起异构路径对（段数/段型不同）在建树时**自动重采样**（均匀弧长取点 + Catmull-Rom 转三次贝塞尔，段数 `max(两侧).clamp(12,48)`）——同构对零开销走直插。
+- **为什么**：★**CSS 完全不能做** `d` 的过渡（SVG 属性不在 CSS 过渡集——网页端必须引 GSAP MorphSVG / flubber 这类库逐点重算）。本引擎把它做进内核：lerp 唯一实现 = `SvgPath::morphed`，宿主只翻译变形后的段列表（二进制通道 `_bin`，避免每帧 JSON 编解码——实测 8× 性能修正）。★弧长随几何重算（`compute_arc_lengths` 单一实现）⇒ `strokeProgress` 的"画到哪"永远与几何同步。★重采样是**近似**（弧长差 <3%）且**如实标注**：查询响应带 `resampled` 字段，不静默。
+- **何时用**："山在呼吸" / 表情切换 / 图标变形 / 形状液化的任何演出（同构对最精确；异构对走重采样）
+- **如何验证**：tests/showcase-ink.test.ts 的路径变形两节（v1 同构校验 / v2 异构峰数不同）+ svg_path.rs 单测 `morph_interpolates_coordinates_and_recomputes_arc_length` / `morph_signature_distinguishes_structures` / `resample_uniform_preserves_length_and_structure` / `resample_makes_hetero_paths_morphable`；真机：check-ink.py ⑤d（扇翅因子终值 1.0000）/ ⑤d-2（山峦呼吸 9 条 pathMorph 在场）
+- **实现位置**：`packages/animation/src/types.ts:AnimKind.PATH_MORPH（内核 anim.rs:PathMorph=33 + svg_path.rs:SvgPath::morphed/resample_uniform + ffi.rs:proteus_layout_svg_morph_path_bin）`
+
+```ts
+// 节点样式：两态路径（异构也可——内核自动重采样）
+// svgPath:   { d: 'M0 0 Q30 40 60 0 Q90 40 120 0', stroke: '#333', strokeWidth: 3 }    // 2 峰
+// svgPathTo: { d: 'M0 0 Q20 50 40 0 Q60 60 80 0 Q100 50 120 0' }                       // 3 峰（异构）
+// 动画：2 秒在两组山形间缓变（yoyo 呼吸）
+{ kind: 'pathMorph', from: 0, to: 1, durationMs: 2000, repeat: 'infinite', direction: 'alternate' }
+```
+
+### `primitive/glowIntensity`
+
+**发光强度（`glowIntensity` —— 2026-10-01 · glow v1）** `[implemented]`
+
+- **是什么**：树里声明 `glow: { color, radius, alpha }`，`{ kind: 'glowIntensity', from: 0, to: 1 }`（**单通道 34**）驱动呼吸/渐亮/渐隐。渲染 = **N 层同心描边**（N=5 跨语言常数）：宽度梯度 `radius×k/N`、alpha 平方衰减 `a0×(1-(k-1)/N)²`。
+- **为什么**：★**为什么不用平台原生**（能力设计里最值得说明的一条）：Android `Paint.setShadowLayer` 在硬件加速下**只支持文本**（对 Path 无效——真机静默不画）；iOS `CALayer.shadow*` 是高斯阴影（质量高但与 Android 任何实现都不同形）。⇒ 分层描边是**确定性**算法：两端逐像素可预期、GPU 填充极廉价（实测每帧 p95 0.28ms——"几乎零成本"）。★web 对照：`box-shadow` / `filter: drop-shadow` 的每帧变化 = 每帧全量重绘（性能雷区）；分层描边把它降为 N 次普通填充。
+- **何时用**：月光晕 / 霓虹 / 荧光 / 聚焦高亮——任何"该发光的东西"（发光随描边进度走："画到哪、光到哪"）
+- **如何验证**：tests/anim-gradient.test.ts 的发光钉值节（分层算法 Swift/Kotlin 必须同式——门禁 check-gradient-contract 守键名、单测守数学）+ tests/showcase-ink.test.ts 的发光节；真机：check-ink.py ⑤f（探针真读分层数 5 + 呼吸末态强度）
+- **实现位置**：`packages/animation/src/gradient.ts:glowLayers（内核 style.rs:GlowSpec + anim.rs:GlowIntensity=34；GLOW_LAYERS=5 三端同值）`
+
+```ts
+// 节点样式：glow: { color: '#fff6d8', radius: 60, alpha: 0.5 }
+// 动画：2.6 秒呼吸（强度 0.35 → 1，yoyo 无限）
+{ kind: 'glowIntensity', from: 0.35, to: 1, durationMs: 2600,
+  repeat: 'infinite', direction: 'alternate', curve: 'easeInOut' }
+```
+
+### `primitive/maskProgress`
+
+**软边遮罩（`maskProgress` —— 2026-10-01 · mask v1）** `[implemented]`
+
+- **是什么**：树里声明 `mask: { kind: 'linear'|'radial', angle | cx/cy/r, softness, progress? }`，`{ kind: 'maskProgress', from: 0, to: 1 }`（**单通道 35**，0=全隐 / 1=全显）驱动**进度驱动的双色标柔化揭示**。`progress` 是声明基态（如"未显出"的基态律 = 0）。
+- **为什么**：★**与 clip 的分工**：clip = 硬边裁剪（一刀切）、mask = 软边渐隐（"从雾里渗开"）——两者互补且天然可叠加。揭示数学（`MaskSpec::reveal_stops`）是**内核唯一实现**：宿主零数学（iOS 把色标写给 CAGradientLayer、Android 用渐变 shader + DST_IN 合成）。★CSS 对照：`mask-image` 动它是重绘雷区且前缀生态碎片化；本引擎是一个标量通道。★端点钉死（f32 漂移的实证）：`1.0×1.4−0.4` 在 f32 下是 0.99999994 ⇒ 端点用**显式短路**，不靠浮点比较（否则"进度到底了但画面留一条软边"）。
+- **何时用**："从雾里渗开" / 柔光揭示 / 渐隐退场——需要软边而非硬边的任何揭示演出
+- **如何验证**：tests/showcase-ink.test.ts 的软边遮罩节（线性 · 软边 0.5 · 基态全隐）；内核单测 `mask_reveal_stops_pins_three_states` / `mask_progress_writes_and_reports_stops` / `mask_progress_rejects_without_declaration`；真机：check-ink.py ⑤h（探针真读揭示位置末态 0.000,1.000 = 全显）
+- **实现位置**：`packages/animation/src/gradient.ts:maskRevealStops（内核 style.rs:MaskSpec::reveal_stops + anim.rs:MaskProgress=35）`
+
+```ts
+// 节点样式：mask: { kind: 'linear', angle: 0, softness: 0.5, progress: 0 }  // 自下而上、基态全隐
+// 动画：1.5 秒"渗开"
+{ kind: 'maskProgress', from: 0, to: 1, durationMs: 1500, curve: 'easeInOut' }
+```
+
+### `primitive/skew`
+
+**倾斜（`skewX` / `skewY` —— 2026-10-01 · 变换栈补齐）** `[implemented]`
+
+- **是什么**：`{ kind: 'skewX' | 'skewY', from, to }`（**通道 36 / 37**；度）——`x' = x + tan(skewX)·y`（CSS `skewX` 同式）。配 `transformOrigin` 放在根部即"从根部弯折"。
+- **为什么**：★CSS 有的变换里，倾斜是跨端框架的坑点：**两端都不是一等属性**（Android 无 `setSkewX`、iOS `CALayer` 无倾斜属性——只能自组 shear 矩阵 `m21 = tan(skewX)`）⇒ 平台插值器无从谈起 ⇒ 统一 tick 路径（与 rotateX/Y 同一推理）。★**变换栈完整**：位移/缩放/旋转/3D/倾斜 × 任意 `transformOrigin`——"门轴旋转""从根部弯折""从角落放大"全都能表达（此前"竹的风摆"只能靠平移，观感是"竹在滑"）。
+- **何时用**：风吹草动（从根部弯折 + 轻微平移）/ 速度残影 / 等距视角 / 旗帜飘动
+- **如何验证**：tests/showcase-ink.test.ts 的倾斜节（竹/水草 origin 在底部）；内核单测 `skew_writes_reports_and_resets` / `transform_origin_rejects_non_finite`；真机：check-ink.py ⑤i（grove 幕 9 条 skewX 风摆在场 + 探针 skewX 读法在场）
+- **实现位置**：`packages/animation/src/types.ts:AnimKind.SKEW_X/SKEW_Y（内核 anim.rs:SkewX=36/SkewY=37 + style.rs:transform_origin_x/y）`
+
+```ts
+// 节点样式：transformOrigin: { x: 0.5, y: 1 }   // 锚在底部中点（"根"）
+// 动画：±4° 风摆（从根部弯折；yoyo 无限）
+{ kind: 'skewX', from: 0, to: 4, durationMs: 1700,
+  repeat: 'infinite', direction: 'alternate', curve: 'easeInOut' }
+```
+
+### `primitive/transformOrigin`
+
+**变换原点（`transformOrigin` —— 2026-10-01 · 与倾斜同批）** `[implemented]`
+
+- **是什么**：节点样式静态声明 `transformOrigin: { x, y }`——**盒分数**（0.5, 0.5 = 元素中心，缺省）。旋转 / 缩放 / 倾斜 / 3D **全部**绕它发生。
+- **为什么**：★不是一个独立通道（求值机器零改动）——但它是**变换语义的一半**："门轴旋转"（左缘）/"从根部弯折"（底边中点）/"从角落放大"（角点）靠它才能表达。★缺省 (0.5, 0.5) = 既有行为零变化（向后兼容的静态声明）。★非法值（NaN / 无穷）内核**明确拒绝**（静默会把整个变换矩阵污染成 NaN）。
+- **何时用**：与 rotate / scale / skew / 3D 搭配——凡"不从中心发生的变换"都要声明它
+- **如何验证**：tests/showcase-ink.test.ts 的倾斜+原点节（建树成功即证明透传链通——内核会拒非法值）；内核单测 `transform_origin_rejects_non_finite`；真机：check-ink.py ⑤i（竹/水草 origin 在底部 · 三方一致 ⇒ 内核受理）
+- **实现位置**：`packages/animation/src/types.ts:TransformOrigin（内核 style.rs:transform_origin_x/y + ffi.rs 解析）`
+
+```ts
+// 节点样式：transformOrigin: { x: 0.5, y: 1 }
+// ⇒ 该节点上所有旋转/缩放/倾斜都绕"底边中点"发生
+// 例：从根部弯折的竹（配合 skewX）、从左缘开的门（x: 0）
 ```
 
 ### `primitive/timeline`

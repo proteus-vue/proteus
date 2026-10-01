@@ -33,8 +33,17 @@ function walkAll() {
 
 interface NodeSpec {
   id: number
+  /** ★2026-10-01 补齐：几何字段（宽卷树断言读 left/width；此前用 `as` 强转被 TS 判为不重叠） */
+  left?: number
+  top?: number
+  width?: number
+  height?: number
   clipPath?: { kind: string; params: number[] }
-  svgPath?: { d: string; stroke: string; strokeWidth: number }
+  /** ★`progress` = 声明基态（宽卷树声明 1 = 已画成——静态描边可见性的关键字段） */
+  svgPath?: { d: string; stroke: string; strokeWidth: number; progress?: number }
+  svgPathTo?: { d: string }
+  fillGradient?: { stops: Array<{ offset: number; color: string }> }
+  glow?: { color: string; radius: number; alpha: number }
   text?: string
   backgroundColor?: string
   [k: string]: unknown
@@ -61,7 +70,6 @@ const NODE_SLOT_BASE: Record<number, number> = {
   [INK_IDS.sealInner]: 15,
   [INK_IDS.clouds[0]]: 15,
   [INK_IDS.clouds[1]]: 15,
-  [INK_IDS.clouds[2]]: 15,
 
   [INK_IDS.rangePuffs[0][0]]: 15,
   [INK_IDS.rangePuffs[0][1]]: 15,
@@ -462,8 +470,8 @@ describe('Morpheus 炫技场 · 第四个节目（墨绘·山水卷）', () => {
       expect(k.borderRadius ?? 0, `轴头 ${kid}`).toBeGreaterThan(0)
     }
     // 右端轴：贴右缘（left 在右 5% 内）
-    const rb = nodes.get(INK_IDS.rollerRightBar) as { left: number }
-    expect(rb.left).toBeGreaterThan(VIEW.width * 0.95)
+    const rb = nodes.get(INK_IDS.rollerRightBar)!
+    expect(rb.left ?? 0).toBeGreaterThan(VIEW.width * 0.95)
 
     const { acts } = walkAll()
     const unfurl = acts.find((a) => a.name === 'unfurl')!
@@ -627,9 +635,7 @@ describe('Morpheus 炫技场 · 第四个节目（墨绘·山水卷）', () => {
     // ★环境动效：无限循环 ≥ 20（月辉/风摆/荡漾/扇翅/云漂/水纹）
     expect(act.anims.filter((x) => x.repeat === -1).length).toBeGreaterThanOrEqual(20)
     // ★树：纸面 = 3.2 屏宽；两端卷轴在**视口坐标**（左轴贴左缘 / 右轴贴右缘）
-    const tree = JSON.parse(buildInkScrollTree(VIEW)) as {
-      nodes: Array<{ id: number; left?: number; width?: number }>
-    }
+    const tree = JSON.parse(buildInkScrollTree(VIEW)) as { nodes: NodeSpec[] }
     const paper = tree.nodes.find((n) => n.id === INK_IDS.paper)!
     expect(paper.width, '纸面宽').toBe(total)
     const leftRoll = tree.nodes.find((n) => n.id === INK_IDS.rollCylinder)!
@@ -638,13 +644,10 @@ describe('Morpheus 炫技场 · 第四个节目（墨绘·山水卷）', () => {
     expect((rightRoll.left ?? 0) + (rightRoll.width ?? 0), '右轴贴右缘').toBe(VIEW.width)
     // ★★静态描边**必须声明 `progress:1`**（2026-10-01 真机目视抓出：缺省基态 0 = 未画 ⇒
     //   57 条描边节点全不可见、整幅画像空白纸）——浏览模式是"看一幅已画成的画"。
-    const svgNodes = tree.nodes.filter((n) => n.svgPath) as Array<{
-      id: number
-      svgPath: { progress?: number }
-    }>
+    const svgNodes = tree.nodes.filter((n) => n.svgPath)
     expect(svgNodes.length, '宽卷应有大量描边节点').toBeGreaterThan(40)
     for (const n of svgNodes) {
-      expect(n.svgPath.progress, `节点 ${n.id} 的 svgPath 缺 progress:1（会画不出来）`).toBe(1)
+      expect(n.svgPath!.progress, `节点 ${n.id} 的 svgPath 缺 progress:1（会画不出来）`).toBe(1)
     }
     // ★回归锁：画卷**不整体平移**（平移是宿主画布层的事；内核通道里不得有 paper 的位移）
     expect(act.anims.filter((x) => x.nodeId === INK_IDS.paper).length, 'paper 不应有通道').toBe(0)

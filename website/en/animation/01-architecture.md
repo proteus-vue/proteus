@@ -69,7 +69,10 @@ with `curve`/`spring`/`keyframes`; (3) **segment-level** custom curves are not s
 
 ## Colour is in the closed set (since 2026-10-01; with new boundaries)
 
-The closed set went from **five to seven**: `translateX / translateY / scale / rotate / opacity`
+The closed set went from **five to seven** (three further batches — 3D / clip / stroke / the v2 five —
+have since taken it to **17**; the full list with contract ids is in the [declaration surface](/docs/animation/02-surface) property table):
+
+`translateX / translateY / scale / rotate / opacity`
 **+ `color` (background) + `textColor` (text)**.
 
 **One declaration on the surface, four channels in the kernel** — `{ kind: 'color', from: '#2f6fed', to: '#ff5533' }`
