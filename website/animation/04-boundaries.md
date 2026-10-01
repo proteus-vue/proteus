@@ -29,6 +29,12 @@ group: 边界
 | **跨端几何一致**（双端真机） | 同一 golden（25 case / 96 节点）：两端指纹 `f5550ca5f41dfa9c` **同值**（逐字节一致）· 距浏览器基准各 0.46875dp | `hosts/shared/check-cross-end-geometry.py` |
 | **120 FPS**（Android · 120Hz 设备） | **115.8 FPS** · vsync p50 8.328ms（预算 8.33ms）· 每帧工作 p50 0.119ms · 动画期零布局 | `check-kernel-anim.py` M4e |
 | **颜色通道**（双端真机） | iOS：`FF101020 → FF204087 → FF2F6FED`（**真读 CALayer.backgroundColor**）→ 复位回底色 · Android：`FF3366CC → FF993366 → FFFF0000` 同款 | `check-anim-rt2.py` P 组 · `check-kernel-anim.py` P 组 |
+| **任意缓动**（双端真机 · A1） | iOS：回弹曲线过冲 `ty=108.74`（> 100）后回落、终点钉死 100.00 · Android：同款（108.74 → 100.00）· 非法控制点双端明确拒绝 | `check-anim-rt2.py` P9 · `check-kernel-anim.py` Q 组 |
+| **循环与往复**（双端真机 · A2） | iOS：repeat:2 中途 50.0 / 两遍钉死 100.0 · yoyo 回程 75.0 → 归零 0.0 · Android：同款（yoyo 净位移 0） | `check-anim-rt2.py` R10 · `check-kernel-anim.py` R 组 |
+| **播放控制**（双端真机 · A3） | iOS：慢动作 tx=25.0（4× 慢）· 暂停冻结 100.0（200ms 不变）· 恢复继续到 150.0 · Android：同款（timeScale 0.25 = 4× 慢） | `check-anim-rt2.py` S11 · `check-kernel-anim.py` S 组 |
+| **3D 旋转**（双端真机 · B） | iOS：层矩阵反解 `rotateY` 半程 90.0 → 终值 180.0（钉死）· Android：同款 + 明确不进平台零参与路径（`composited: false` 机器证据） | `check-anim-rt2.py` T12 · `check-kernel-anim.py` T 组 |
+| **裁剪形变**（双端真机 · C1） | iOS：mask 包围盒半程 `15,7.5,90,45`（内缩 25%）→ 终值 `30,15,60,30`（内缩 50%）· stop 回基态 `0,0,120,60` · Android：**裁/不裁对照**（裁剪侧角落 alpha=0 vs 无裁剪 255、中心保留 255） | `check-anim-rt2.py` V13 · `check-kernel-anim.py` U 组 |
+| **SVG 描边**（双端真机 · C2） | iOS：`strokeEnd` 半程 0.5 → 终值 1（画完）→ stop 回 0（未画）· Android：离屏像素半程左 255/右 0 → 走完右 255 · 无路径节点双端明确拒绝 | `check-anim-rt2.py` W14 · `check-kernel-anim.py` X 组 |
 
 > **为什么"零唤醒"用 OS 级 CPU 会计而不是 Instruments**：本机 `xctrace` 无法录制设备（DeviceSupport 版本滞后），改用 `thread_info` 两次采样差 → 可机器判定，且配了**阳性对照**（tick 路径必须有显著开销，< 5ms 即判"探针失效"不得判绿）——否定性断言必须有对照才可信。
 

@@ -29,6 +29,9 @@ Morpheus 的对外表面只有一个包：**`@proteus-vue/animation`**（声明 
 | `opacity` | 4 | ✅ |
 | `color` | 5..8（R/G/B/A 四通道） | ❌ **paint-only**（不触发布局，但不进平台零参与路径——见架构页） |
 | `textColor` | 9..12（R/G/B/A 四通道，独立轨道） | ❌ **paint-only**（同上；与 `color` 可同节点并行） |
+| `rotateX` / `rotateY` | 13 / 14 | ❌ **tick-only**（3D——见下文） |
+| `clip` | 15..30（按参数槽分解，最多 16 通道） | ❌ **tick-only**（裁剪形变——见下文） |
+| `strokeProgress` | 31（单通道标量：0..1 沿弧长画到哪） | ❌ **tick-only**（SVG 描边——见下文） |
 
 | 曲线 | 契约编号 |
 |---|---|
@@ -58,7 +61,19 @@ Morpheus 的对外表面只有一个包：**`@proteus-vue/animation`**（声明 
 约束：`x1/x2 ∈ [0,1]`（时间轴单调）；`y1/y2` 任意（> 1 = 回弹、< 0 = 预期），
 与 `curve` / `spring` / `keyframes` 互斥（求值模式必须唯一）。
 
-**合成属性 = 可以走平台零参与路径**。五个标量属性是合成属性；**`color` / `textColor` 是 paint-only 但非合成**（不触发布局，但 Android 的 RenderNode 无法插值颜色 ⇒ 两端一致走 tick 路径）。另注意：**修改布局属性（宽度/边距）不是动画，是重排**，编译期会直接拦下。
+**裁剪形变（`clip`，2026-10-01）**：`clip-path` 形变动画。形状类型在节点样式**静态**声明
+（`clipPath: { kind: 'inset' | 'circle' | 'polygon', … }`，参数为盒分数 0..1），参数可动画——
+**一个声明 → 最多 16 条标量参数通道**（kind 15..30，与颜色同源的分解法：
+曲线/弹簧/序列/循环/接管零改动复用）。异型间不插值（inset→circle 无意义，CSS 同规）。
+渲染：iOS `CAShapeLayer` 作 `layer.mask` / Android `canvas.clipPath`（静/动两态都覆盖）。
+
+**SVG 描边（`strokeProgress`，2026-10-01）**：路径本体（`d`）在节点样式声明
+（`svgPath: { d, stroke, strokeWidth }`），动画只有一个标量：`{ kind: 'strokeProgress', from: 0, to: 1 }`
+——0..1 = 沿路径弧长画到哪（"手写字/画线"）。路径由**内核唯一解析**（段列表 + 弧长，
+两端共用同一份——不出现"同一条 `d` 两端画得不一样"）。
+支持 `M/L/C/Q/Z`（相对命令与隐式重复已支持；`A` 弧线 / `S`/`T` 简写明确拒绝并给替代写法）。
+
+**合成属性 = 可以走平台零参与路径**。五个标量属性是合成属性；**`color` / `textColor` / `rotateX` / `rotateY` / `clip` / `strokeProgress` 是 tick-only 或 paint-only 但非合成**（不触发布局，但两端平台插值器语义不同或无法插值 ⇒ 统一走内核逐帧路径，跨端一致优先）。另注意：**修改布局属性（宽度/边距）不是动画，是重排**，编译期会直接拦下。
 
 ```ts
 // 颜色是**一个声明**——编译成内核的**四条通道**
@@ -91,8 +106,7 @@ const batch = compileRoute(spec, { enter: 101, exit: 100 })
 
 ## 与 AI 说明书同源
 
-26 条声明项（13 预设 / 6 声明面原语 / 5 约束 / 2 边界）以 `ANIM_RULES` 为单一事实源，与编译器 111 条规则**同构**：每条含 what / why / when / 示例 / 如何验证 / 实现位置，AI 可单独消费一条。
-
+42 条声明项（21 预设 / 13 声明面原语 / 6 约束 / 2 边界）以 `ANIM_RULES` 为单一事实源，与编译器 112 条规则**同构**：每条含 what / why / when / 示例 / 如何验证 / 实现位置，AI 可单独消费一条。
 生成物 [anim-manual](/docs/generated/anim-manual) 在生成前会跑 `runConformance()` 对账——预设必须真实存在于导出面、跨语言契约值必须一致、`verify` 必须可追溯；**对不上就不生成文档**。
 
 ## 下一步

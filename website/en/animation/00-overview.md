@@ -72,7 +72,7 @@ const batch = compileRoute(spec, { enter: a, exit: b })
 
 - **Interactive demos** (transition player / curve evaluator / preset catalogue): [Animation engine product page](/animation)
 - **Device evidence table** (every row points to a re-runnable script): [Evidence & honest boundaries](/docs/animation/04-boundaries)
-- **AI manual** (26 declaration entries with what / why / when / example / how to verify): [Morpheus declaration manual](/docs/generated/anim-manual)
+- **AI manual** (42 declaration entries with what / why / when / example / how to verify): [Morpheus declaration manual](/docs/generated/anim-manual)
 
 ## Next
 
