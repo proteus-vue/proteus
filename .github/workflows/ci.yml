@@ -91,6 +91,10 @@ jobs:
       - name: 坐标吸附跨语言 golden（卡 I2：TS ⇄ Rust 同输入同输出——三端差 1px 的机器判据）
         run: pnpm run check:pixel-snap
 
+      - name: 双端 golden 单一来源（★2026-10-01：两端 conformance golden 必须同源——不同源会让
+              覆盖面不一致，收「双端几何一致性」判据时变成**装置性判红**）
+        run: pnpm run check:cross-end-golden
+
       - name: 依赖声明完整性审计（#422：pnpm 严格解析——import vs package.json 零缺失）
         run: node scripts/check-deps.mjs
 

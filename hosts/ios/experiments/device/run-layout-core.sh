@@ -96,7 +96,14 @@ cat > "$APP/Info.plist" <<'PLIST'
 PLIST
 
 echo "==> ⑤ 签名（复用 provision.sh 申请的描述文件 + entitlements）"
-IDENTITY="$(security find-identity -v -p codesigning 2>/dev/null | awk -F'"' '/Apple Development|iPhone Developer/ {print $2; exit}')"
+# ★★按 **SHA-1** 选身份（2026-10-01，与 run-selfdraw.sh 同款修复）：证书吊销重签后**同名两张**
+#   ⇒ 按名称取第一个会命中吊销的那张（装机报 0xe8008018 identity is no longer valid）。
+IDENTITY="$(security find-identity -v -p codesigning 2>/dev/null \
+  | grep -v CSSMERR | grep -E 'Apple Development|iPhone Developer' \
+  | grep -oE '[0-9A-F]{40}' | head -1)"
+if [ -z "$IDENTITY" ]; then
+  IDENTITY="$(security find-identity -v -p codesigning 2>/dev/null | awk -F'"' '/Apple Development|iPhone Developer/ {print $2; exit}')"
+fi
 [ -n "$IDENTITY" ] || { echo "✗ 无签名身份——先按 provision.sh 的指引在 Xcode 登录 Apple ID"; exit 4; }
 
 # ★描述文件位置：Xcode 把为「swiftc 直编 + codesign」申请的描述文件放在 UserData 下
@@ -134,14 +141,35 @@ fi
 echo "==> ⑥ 安装到真机"
 xcrun devicectl device install app --device "$UDID" "$APP" 2>&1 | tail -5
 
-echo "==> ⑦ 启动（报告写入 App 的 Documents）"
-xcrun devicectl device process launch --device "$UDID" "$BUNDLE_ID" 2>&1 | tail -3
+# ★★事件驱动（2026-10-01，收"双端几何一致性"判据的一环；与 run-selfdraw.sh 同一纪律）：
+#   原实现：`launch`（立即返回）+ 让人手工 `copy from`（第⑧步打印命令）。
+#   ⇒ 改为：`PROTEUS_EXIT_AFTER_REPORT=1`（宿主写完报告即 exit(0)）+
+#     `launch --console`（**等 App 退出才返回** = 完成信号）⇒ 零轮询 / 零 sleep / 零 timeout。
+echo "==> ⑦ 启动（阻塞到报告落盘后自退——零轮询 / 零 sleep / 零超时）"
+LAUNCH_LOG="$(mktemp)"
+xcrun devicectl device process launch --console --terminate-existing \
+  --environment-variables '{"PROTEUS_EXIT_AFTER_REPORT":"1"}' \
+  --device "$UDID" "$BUNDLE_ID" > "$LAUNCH_LOG" 2>&1 || true
+if grep -q "LAYOUT_CORE_REPORT_READY" "$LAUNCH_LOG"; then
+  echo "    App 已主动上报：报告落盘后退出"
+else
+  echo "    ⚠ 日志未见 LAYOUT_CORE_REPORT_READY——以取回产物为准，日志尾："
+  tail -5 "$LAUNCH_LOG" | sed 's/^/      /'
+fi
+rm -f "$LAUNCH_LOG"
 
-cat <<'MSG'
+echo "==> ⑧ 取回报告（App 已退出 ⇒ 只取一次；无轮询 / 无 sleep / 无超时）"
+for f in layout-conformance.json layout-bench.json; do
+  if xcrun devicectl device copy from --device "$UDID" \
+      --domain-type appDataContainer --domain-identifier "$BUNDLE_ID" \
+      --source "Documents/$f" --destination "$RESULTS/layout-core-${f#layout-}" >/dev/null 2>&1; then
+    echo "    $f → $RESULTS/layout-core-${f#layout-}"
+  else
+    echo "    ⚠ $f 未取到"
+  fi
+done
+echo "    （iOS 一致性产物：$RESULTS/layout-core-conformance.json —— 供 hosts/shared/check-cross-end-geometry.py 比对）"
 
-==> ⑧ 取回报告
-   等 3–5 秒后执行（本脚本已打印 App 容器路径，把下两行替换为实际路径）：
-     xcrun devicectl device info files --device <UDID> --domain-type appDataContainer --domain-identifier dev.proteus.layoutcore
-     # 或直接看日志（更快）：
-     xcrun devicectl device console --device <UDID> 2>&1 | grep -A 30 "Rust 排版核心"
-MSG
+echo
+echo "==> 双端几何一致性（若 Android 产物已在：hosts/android/results/layout-conformance.json）"
+python3 "$ROOT/hosts/shared/check-cross-end-geometry.py" || true

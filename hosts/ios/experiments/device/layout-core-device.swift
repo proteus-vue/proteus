@@ -48,6 +48,20 @@ func loadGolden() -> String? {
     return try? String(contentsOfFile: path, encoding: .utf8)
 }
 
+/// ★★报告落盘后自退（2026-10-01 加，与 `run-selfdraw.sh` 同一约定）
+///
+/// 【为什么需要（收"双端几何一致性"判据的一环）】此前本实验宿主跑完只是"停在界面"，
+///   取产物靠人手工 `devicectl … copy from`（`run-layout-core.sh` 第⑧步就是打印手工命令）。
+///   ⇒ 无法在脚本里做**事件驱动**的取回（本仓红线：禁止盲等/轮询）。
+///   加本开关：`PROTEUS_EXIT_AFTER_REPORT=1` ⇒ 两份报告写完即 `exit(0)` ⇒
+///   `devicectl … launch --console` 的**返回即完成信号**（零轮询/零 sleep）。
+func exitIfRequested() {
+    if ProcessInfo.processInfo.environment["PROTEUS_EXIT_AFTER_REPORT"] == "1" {
+        NSLog("[proteus] LAYOUT_CORE_REPORT_READY（PROTEUS_EXIT_AFTER_REPORT=1 ⇒ 自退）")
+        exit(0)
+    }
+}
+
 // ────────────────────────── 宿主 App ──────────────────────────
 
 final class ViewController: UIViewController {
@@ -104,6 +118,8 @@ final class ViewController: UIViewController {
         reportText = lines.joined(separator: "\n")
         label.text = reportText
         NSLog("[proteus] 完整报告：\n%@", reportText)
+        // ★两份报告已落盘 ⇒ 自退（见 exitIfRequested 注释：让脚本的 launch 返回即完成信号）
+        exitIfRequested()
     }
 }
 

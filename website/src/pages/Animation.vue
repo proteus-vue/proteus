@@ -357,17 +357,17 @@ const SHOWCASE_STATS = [
 const BOUNDARIES = computed(() =>
   isEn.value
     ? [
-        'Shared elements: same-tree form landed; cross-page steady-state geometry handoff needs the page-stack layer (not done)',
-        'Scroll-linked: driver interface decoupled from input; real finger-drag gesture not wired',
+        'Cross-target geometry: layout geometry is **byte-identical** on both targets (same golden, kernel-computed digest compared on device: iOS ⇄ Android). "Looks identical" beyond geometry (corner clipping / shadows / text baselines) still relies on conformance + browser-truth baselines',
+        'Cross-page shared elements: choreography landed; **compositing several kernel trees** (both pages visible mid-flight) is outside the current harness — same boundary as the existing ScreenHost note',
         '120 FPS needs a ProMotion device (iPhone 12 is 60Hz — honestly noted, not claimed)',
-        'Gesture negotiation (nested scroll / multi-touch) is by design not part of this engine, tracked separately',
+        'Gesture negotiation (nested scroll / multi-touch) is by design not part of this engine; the design doc schedules it as a separate ~3-person-week workstream (RT5) — not claimed here',
         'Escape-hatch ratio: showcase surface sampled (31,200 declarative / 0 escape hatches = 0%, asserted every run); wider business surface pending',
       ]
     : [
-        '共享元素：同视图树形态已落地；跨页面的稳态几何回传需页面栈层配合（未做）',
-        '滚动联动：驱动接口与输入源解耦；真机手指拖拽手势未接线',
+        '跨端几何：布局几何在两端**逐字节一致**（同一 golden，内核算出的 digest 双端真机比对：iOS ⇄ Android）。"画出来一样"在几何之外的部分（圆角裁剪/阴影/文本基线）仍靠 conformance + 浏览器真值兜底',
+        '跨页面共享元素：编排已落地；**多棵内核树叠放渲染**（飞行途中两页同屏）不在本装置范围——与 ScreenHost 既有边界同源',
         '120 FPS 目标需 ProMotion 设备（iPhone 12 为 60Hz——如实标注，未声称）',
-        '手势协商（嵌套滚动冲突 / 多指）：按方案设计不属本引擎，独立立项',
+        '手势协商（嵌套滚动冲突 / 多指）：按方案设计不属本引擎；设计文档已排为独立工作流（RT5，≈3 人周）——此处不声称',
         '逃生口率：演示面已采数（炫技场 31200 条声明式 / 0 条逃生口 = 0%，每轮判据机器断言）；全业务面待采',
       ],
 )
