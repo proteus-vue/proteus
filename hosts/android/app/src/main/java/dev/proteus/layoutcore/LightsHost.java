@@ -176,6 +176,9 @@ final class LightsHost {
 
             // ③ 几何 → 绘制指令
             int cmds = emitCmds();
+            // ★★C2：按**内核解析好的段列表**补建 SVG 描边（解析在内核；宿主只翻译——
+            //   与 iOS `attachSvgStroke` 同款设计与顺序纪律：必须在建树之后）
+            attachSvgStrokes();
 
             out.put("ok", true);
             out.put("nodes", specs.size());
@@ -584,6 +587,34 @@ final class LightsHost {
             spec.put("fontSize", fs);
         }
         return measures;
+    }
+
+    /**
+     * ★★**按内核段列表补建 SVG 描边**（C2）——`svgNodes()` 回带解析好的段列表；
+     *   宿主只做"段 → android.graphics.Path"翻译（不做第二份解析器）。
+     */
+    private void attachSvgStrokes() {
+        if (handle == 0L || view == null) return;
+        try {
+            org.json.JSONObject o = new org.json.JSONObject(RustLayout.svgNodes(handle));
+            org.json.JSONObject paths = o.optJSONObject("paths");
+            if (paths == null) return;
+            java.util.Iterator<String> it = paths.keys();
+            while (it.hasNext()) {
+                String idS = it.next();
+                org.json.JSONObject info = paths.optJSONObject(idS);
+                if (info == null) continue;
+                org.json.JSONArray segs = info.optJSONArray("segs");
+                if (segs == null) continue;
+                // ★stroke 色是 u32 打包（0xFFFFFFFF = 未声明 ⇒ 白）
+                long packed = (long) info.optDouble("strokeColor", 4294967295.0);
+                int col = packed >= 0 && packed < 4294967295L ? (int) packed : 0xFFFFFFFF;
+                float sw = (float) info.optDouble("strokeWidth", 2);
+                view.setNodeSvgStroke(Integer.parseInt(idS), segs, col, sw);
+            }
+        } catch (Throwable t) {
+            android.util.Log.w("proteus", "SVG 描边建层失败（不阻断）：" + t);
+        }
     }
 
     /** 几何 → 绘制指令（★几何只来自内核；本方法不含任何布局计算） */

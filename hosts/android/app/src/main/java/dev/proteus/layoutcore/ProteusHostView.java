@@ -200,6 +200,8 @@ public class ProteusHostView extends ViewGroup {
     private final Paint atlasPaint = new Paint();
     // ★StaticLayout 要求 `TextPaint`（Paint 的子类）——文本配置色/字号都在它上面
     private final android.text.TextPaint textPaint = new android.text.TextPaint(android.graphics.Paint.ANTI_ALIAS_FLAG);
+    /** ★★C2：描边笔（STROKE 风格——与填充用的 bgPaint 分开；圆头圆角与 iOS 一致） */
+    private final android.graphics.Paint strokePaint = new android.graphics.Paint(android.graphics.Paint.ANTI_ALIAS_FLAG);
 
     /* ══════════ ★★逐节点平台动画（Android：载体 View + ViewPropertyAnimator）══════════ */
 
@@ -402,8 +404,54 @@ public class ProteusHostView extends ViewGroup {
         return v == null ? 0 : (int) v[0];
     }
 
+    /**
+     * 场景注入某节点的 SVG 描边（C2）——段列表由内核给出。
+     *
+     * ★段形态 = **内核 `PathSeg` 的 serde 序列化形态**（2026-10-01 真机接通时修正）：
+     *   `{"MoveTo":[x,y]}` / `{"LineTo":[x,y]}` / `{"CubicTo":[x1,y1,x2,y2,x,y]}` /
+     *   `{"QuadTo":[x1,y1,x,y]}` / `"Close"`（单位串）。
+     *   ★首版按臆想的 `{"t":"M","v":[…]}` 写 ⇒ 与内核不对接（iOS 侧真机抓出 strokeEnd=-1）。
+     */
+    public void setNodeSvgStroke(int nodeId, org.json.JSONArray segs, int strokeColor, float strokeWidth) {
+        android.graphics.Path path = new android.graphics.Path();
+        for (int i = 0; i < segs.length(); i++) {
+            Object raw = segs.opt(i);
+            if ("Close".equals(raw)) { path.close(); continue; }
+            if (!(raw instanceof org.json.JSONObject)) continue;
+            org.json.JSONObject seg = (org.json.JSONObject) raw;
+            java.util.Iterator<String> keys = seg.keys();
+            while (keys.hasNext()) {
+                String k = keys.next();
+                org.json.JSONArray va = seg.optJSONArray(k);
+                if (va == null) continue;
+                float[] v = new float[va.length()];
+                for (int kk = 0; kk < va.length(); kk++) v[kk] = (float) va.optDouble(kk, 0);
+                switch (k) {
+                    case "MoveTo": if (v.length >= 2) path.moveTo(v[0], v[1]); break;
+                    case "LineTo": if (v.length >= 2) path.lineTo(v[0], v[1]); break;
+                    case "CubicTo":
+                        if (v.length >= 6) path.cubicTo(v[0], v[1], v[2], v[3], v[4], v[5]);
+                        break;
+                    case "QuadTo":
+                        if (v.length >= 4) path.quadTo(v[0], v[1], v[2], v[3]);
+                        break;
+                    default: break;
+                }
+            }
+        }
+        nodeSvgStroke.put(nodeId, new Object[]{path, strokeColor, strokeWidth});
+    }
+
     /** 每帧下发的裁剪参数（16 槽；空 = 本帧该节点无裁剪更新） */
     private final Map<Integer, float[]> animClip = new HashMap<>();
+
+    /**
+     * ★★**SVG 描边快照**（C2；建树时注入）——段列表 + 描边色 + 线宽。
+     * 段列表由**内核解析**（`svg_path` 模块）；本类只做"段 → android.graphics.Path"的翻译。
+     */
+    private final Map<Integer, Object[]> nodeSvgStroke = new HashMap<>(); // {Path, strokeColor(int), strokeWidth(float)}
+    /** 每帧下发的描边进度（0..1；空 = 本帧无更新） */
+    private final Map<Integer, Float> animStroke = new HashMap<>();
     /**
      * ★★节点 id → **动画颜色**（打包 `0xAARRGGBB`）——内核颜色通道的绘制落点（2026-10-01）
      *
@@ -457,6 +505,15 @@ public class ProteusHostView extends ViewGroup {
                 float rotY = u.length() >= 10 ? (float) u.optDouble(9) : 0f;
                 animTx.put(id, new float[]{
                         (float) u.optDouble(1), (float) u.optDouble(2), (float) u.optDouble(3), rot, op, rotX, rotY});
+                // ★C2：第 28 项 = 描边进度（u32::MAX = 无描边路径；否则 f32 位模式）
+                if (u.length() >= 28) {
+                    long sv = (long) u.optDouble(27, 4294967295.0);
+                    if (sv >= 0 && sv < 4294967295L) {
+                        animStroke.put(id, Float.intBitsToFloat((int) sv));
+                    } else {
+                        animStroke.remove(id);
+                    }
+                }
                 // ★C1：第 11 项 = 裁剪类型；第 12..27 项 = 16 参数
                 if (u.length() >= 27) {
                     final boolean hasClip = u.optDouble(10, 0) != 0;
@@ -518,6 +575,10 @@ public class ProteusHostView extends ViewGroup {
                 animClip.remove(id);
                 for (int k = 0; k < 16; k++) bb.getFloat();
             }
+            // ★★C2：描边进度（@108 的 f32；NaN = 无描边路径——112B 记录）
+            float strokeRaw = bb.getFloat();
+            if (!Float.isNaN(strokeRaw)) animStroke.put(id, strokeRaw);
+            else animStroke.remove(id);
             // ★颜色（2026-10-01）：0xFFFFFFFF = 无该基色 ⇒ 不入覆盖表（保持静态绘制）
             if (rgba != 0xFFFFFFFF) animColor.put(id, rgba);
             if (textRgba != 0xFFFFFFFF) animTextColor.put(id, textRgba);
@@ -537,7 +598,7 @@ public class ProteusHostView extends ViewGroup {
      *     的常量必须与它同批更新（历史上因两处各写步长而错位解析过）。
      *     `scripts/check-anim-record-bytes.mjs` 从内核推出宽度并与各消费端对账。
      */
-    private static final int ANIM_RECORD_BYTES = 108;
+    private static final int ANIM_RECORD_BYTES = 112;
 
     /** 直接推进一帧（确定性步进：判据用它做"固定 dt"读数，与 iOS 的 JS 驱动 probe 同形） */
     public int kernelAnimTick(float dtMs) {
@@ -631,6 +692,7 @@ public class ProteusHostView extends ViewGroup {
         animColor.clear();     // ★颜色与变换同一生命周期（2026-10-01）
         animTextColor.clear(); // ★文字色同（两条轨道同一生命周期）
         animClip.clear();      // ★C1 裁剪同（清表 ⇒ 回树里声明的基态形状）
+        animStroke.clear();    // ★C2 描边同（清表 ⇒ 回基态：未画）
         invalidate();
         return out;
     }
@@ -682,6 +744,15 @@ public class ProteusHostView extends ViewGroup {
                 }
                 final String textHex = tcv == null ? "" : String.format("%08X", tcv);
                 final String bgHex = bgv == null ? "" : String.format("%08X", bgv);
+                // ★★C2：描边进度真读（与 iOS `strokeEnd` 同语义、同三态）：
+                //   ① 动画表有 ⇒ 报动画值（绘制侧 `drawCmds` 用的正是它）；
+                //   ② 表无但节点有 svgPath ⇒ **0**（基态 = 未画——与 stop 后 `animStroke.remove`
+                //      的复位语义一致，探针读的是"绘制时实际会用哪个值"）；
+                //   ③ 连路径都没有 ⇒ **-1**（"无描边轨道"——与 iOS 找不到 CAShapeLayer 报 -1 同口径）。
+                final float strokeProg;
+                if (animStroke.containsKey(id)) strokeProg = animStroke.get(id);
+                else if (nodeSvgStroke.containsKey(id)) strokeProg = 0f;
+                else strokeProg = -1f;
                 // ★★C1：裁剪参数真读（动画表优先，否则基态）——判据据此断言形变真的落到绘制侧
                 final float[] clipDisp;
                 if (animClip.containsKey(id)) clipDisp = animClip.get(id);
@@ -705,6 +776,7 @@ public class ProteusHostView extends ViewGroup {
                     sb.append("{\"id\":").append(id)
                       .append(",\"tx\":0,\"ty\":0,\"scale\":1,\"rotate\":0,\"opacity\":1")
                       .append(",\"rotateX\":0,\"rotateY\":0")
+                      .append(",\"strokeProgress\":").append(strokeProg)
                       .append(",\"bg\":\"").append(bgHex)
                       .append("\",\"textColor\":\"").append(textHex).append("\"}");
                 } else {
@@ -714,6 +786,7 @@ public class ProteusHostView extends ViewGroup {
                       .append(",\"opacity\":").append(v[4])
                       .append(",\"rotateX\":").append(rX).append(",\"rotateY\":").append(rY)
                       .append(",\"clip\":\"").append(clipStr).append("\"")
+                      .append(",\"strokeProgress\":").append(strokeProg)
                       .append(",\"bg\":\"").append(bgHex)
                       .append("\",\"textColor\":\"").append(textHex).append("\"}");
                 }
@@ -882,6 +955,10 @@ public class ProteusHostView extends ViewGroup {
         setWillNotDraw(false);
         textPaint.setColor(Color.BLACK);
         textPaint.setTextSize(12f);
+        // ★C2：描边笔样式（STROKE + 圆头圆角——与 iOS `.round` 一致）
+        strokePaint.setStyle(android.graphics.Paint.Style.STROKE);
+        strokePaint.setStrokeCap(android.graphics.Paint.Cap.ROUND);
+        strokePaint.setStrokeJoin(android.graphics.Paint.Join.ROUND);
     }
 
     public void setCmds(List<Cmd> value) {
@@ -1465,6 +1542,31 @@ public class ProteusHostView extends ViewGroup {
             // ★圆角（灯光秀的灯珠）：radius > 0 走 drawRoundRect——纯绘制属性，默认 0 零行为变化
             if (c.radius > 0f) canvas.drawRoundRect(c.x, c.y, c.x + c.w, c.y + c.h, c.radius, c.radius, bgPaint);
             else canvas.drawRect(c.x, c.y, c.x + c.w, c.y + c.h, bgPaint);
+            // ★★C2 描边（2026-10-01）：该节点有 SVG 路径时**画线**——用 PathMeasure 按进度截取
+            //   （`getSegment(0, progress×len)` 的原生等价物；与 iOS `strokeEnd` 同一语义）。
+            //   ★画在内容之后（描边叠在色块上——与 iOS 子层顺序一致）。
+            if (ids != null && i < ids.length && ids[i] >= 0) {
+                final Object[] svg = nodeSvgStroke.get(ids[i]);
+                if (svg != null) {
+                    final android.graphics.Path sp = (android.graphics.Path) svg[0];
+                    final int scol = (Integer) svg[1];
+                    final float swid = (Float) svg[2];
+                    final float prog = animStroke.containsKey(ids[i]) ? animStroke.get(ids[i]) : 0f;
+                    if (prog > 0f) {
+                        strokePaint.setColor(scol);
+                        strokePaint.setStrokeWidth(swid);
+                        if (prog >= 1f) {
+                            canvas.drawPath(sp, strokePaint);
+                        } else {
+                            // 按弧长截取（PathMeasure——Android 原生）
+                            android.graphics.PathMeasure pm = new android.graphics.PathMeasure(sp, false);
+                            android.graphics.Path seg = new android.graphics.Path();
+                            pm.getSegment(0f, pm.getLength() * prog, seg, true);
+                            canvas.drawPath(seg, strokePaint);
+                        }
+                    }
+                }
+            }
             if (c.text != null) {
                 if (c.fontSize > 0 && c.fontSize != lastSize) {
                     textPaint.setTextSize(c.fontSize);

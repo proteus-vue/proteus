@@ -70,6 +70,9 @@ func proteus_layout_bg_nodes(_ handle: UInt64) -> UnsafeMutablePointer<CChar>
 /// ★★C1：带裁剪形状的节点清单（与 bg_nodes 同一取样纪律——id 动态分配，必须问内核）
 @_silgen_name("proteus_layout_clip_nodes")
 func proteus_layout_clip_nodes(_ handle: UInt64) -> UnsafeMutablePointer<CChar>
+/// ★★C2：带 SVG 路径的节点清单（描边动画的取样入口——同取样纪律）
+@_silgen_name("proteus_layout_svg_nodes")
+func proteus_layout_svg_nodes(_ handle: UInt64) -> UnsafeMutablePointer<CChar>
 @_silgen_name("proteus_layout_text_color_nodes")
 func proteus_layout_text_color_nodes(_ handle: UInt64) -> UnsafeMutablePointer<CChar>
 @_silgen_name("proteus_layout_shared_element")
@@ -322,6 +325,8 @@ func physFootprintMB() -> Double {
     func textColorNodes() -> String
     /// ★★C1：带裁剪形状的节点清单（裁剪形变动画的取样入口——与 `bgNodes` 对称）
     func clipNodes() -> String
+    /// ★★C2：带 SVG 路径的节点清单（描边动画的取样入口——同款纪律）
+    func svgNodes() -> String
     /// ★★**MA0-RT 平台零参与路径**：提交一次（CAKeyframeAnimation）/ presentation 探针 / 撤销
     func animCommit(_ json: String) -> String
     func layerPresentedProbe(_ idsJson: String) -> String
@@ -472,6 +477,15 @@ func physFootprintMB() -> Double {
 /// bench 完成标志（由 JS 链尾的 `done()` 置位；宿主据此收尾）
 enum BenchDone { static var flag = false }
 
+/// ★★C2 诊断计数（文件级全局——见 `SelfDrawView` 里"为什么不用类内 static"的注释）
+enum SvgDiag {
+    static var attachStats = 0
+    static var skipNoId = 0
+    static var skipNoLayer = 0
+    static var skipNoSegs = 0
+    static var built = 0
+}
+
 final class SelfDrawView: UIView {
 
     /// 当前 CALayer 树（★自绘：每节点一个 CALayer，**不创建 UIView**）
@@ -535,6 +549,13 @@ final class SelfDrawView: UIView {
         metaByNodeId.removeAll(keepingCapacity: true)
         absOriginByNodeId.removeAll(keepingCapacity: true)
         layersById.removeAll(keepingCapacity: true)
+        // ★★C2（2026-10-01）：描边形状层也要清——**它与 `layersById` 是同一份层的两份簿记**：
+        //   只清前者 ⇒ 全量重建后 `attachSvgStroke` 的幂等检查（`layerStrokeShapes[id] != nil`）
+        //   会命中**已被丢弃的旧层**的登记 ⇒ 新层上永远没有描边子层
+        //   （真机现象：diag built=1 而探针 subLayers=0——建在了别处）。
+        //   ★纪律：**一张层上挂了两份簿记时，清理必须成对**（与"层树与簿记是同一事实的两份视图"
+        //     的历史教训同源）。
+        layerStrokeShapes.removeAll(keepingCapacity: true)
         parentById.removeAll(keepingCapacity: true)
         childrenById.removeAll(keepingCapacity: true)
         builtFrames.removeAll(keepingCapacity: true)
@@ -591,6 +612,10 @@ final class SelfDrawView: UIView {
         if let d = style["perspective"] as? CGFloat, d > 0 {
             layerPerspective[nodeId] = d
         }
+        // ★★C2：SVG 描边的**建层**走 `attachSvgStroke(fromKernelPaths:)`（全量挂载后调用）——
+        //   段列表**只能从内核拿**（解析在内核；请求树里只有 `d` 字符串——见内核
+        //   `proteus_layout_svg_nodes` 的注释：宿主不解析，只翻译）。
+        //   本函数（makeLayer）在建层时**不碰** SVG（无段列表可用）。
         // ★★C1：裁剪形状快照（树里声明的静态类型 + 基态参数；动画只改参数不改类型）
         //   ★并**立即应用基态遮罩**——静态裁剪（声明了但未动画）也必须渲染
         //     （内核只上报"值变化"的节点 ⇒ 未动的裁剪节点不会出现在每帧记录里；
@@ -752,16 +777,34 @@ final class SelfDrawView: UIView {
                 let bb = p.boundingBox
                 clipBox = String(format: "%.3f,%.3f,%.3f,%.3f", bb.origin.x, bb.origin.y, bb.width, bb.height)
             }
+            // ★★C2：**真读**描边形状层的 strokeEnd（判据据此断言画线进度真的落到层上）
+            var strokeEndV = -1.0
+            var subCount = 0
+            for sub in layer.sublayers ?? [] {
+                subCount += 1
+                if let shape = sub as? CAShapeLayer, shape.strokeEnd >= 0 {
+                    strokeEndV = Double(shape.strokeEnd)
+                    break
+                }
+            }
             // ★★颜色（2026-10-01）：从 **CALayer 真读** `backgroundColor` 反解打包色
             //   （判据纪律：真读层上状态，不回显我们写入的参数）
             let bgStr = Self.packedHexFromCGColor(layer.backgroundColor)
             // ★文字色（2026-10-01）：CATextLayer 才有 `foregroundColor`；非文本层报空串
             let textStr = Self.packedHexFromCGColor((layer as? CATextLayer)?.foregroundColor)
+            // ★诊断串**先算成变量**（2026-10-01）：把多个 `\(…)` 插值直接续在拼接链的
+            //   最后一段上时，`\""`（转义引号 + 字符串结束）与后续 `}` 让 Swift 解析器
+            //   产生歧义（实测：错误被报成相距 400 行的 "static properties may only be
+            //   declared on a type"——**误导性极强**）。变量化后错误消失。
+            //   ★教训：拼接链的最后一段含"转义引号收尾 + 多插值"时，先落变量再拼。
+            let diagStr = "\(SvgDiag.attachStats)/\(SvgDiag.built)/\(SvgDiag.skipNoId)/\(SvgDiag.skipNoLayer)/\(SvgDiag.skipNoSegs)"
             parts.append(
                 "{\"id\":\(id),\"tx\":\(t.m41),\"ty\":\(t.m42),\"scale\":\(t.m11),"
                     + "\"rotate\":\(rotateDeg),\"rotateX\":\(rotateXDeg),\"rotateY\":\(rotateYDeg),"
                     + "\"opacity\":\(layer.opacity),\"bg\":\"\(bgStr)\","
-                    + "\"textColor\":\"\(textStr)\",\"clipBox\":\"\(clipBox)\"}"
+                    + "\"textColor\":\"\(textStr)\",\"clipBox\":\"\(clipBox)\","
+                    + "\"strokeEnd\":\(strokeEndV),\"subLayers\":\(subCount),"
+                    + "\"svgDiag\":\"\(diagStr)\"}"
             )
         }
         return "{\"ok\":true,\"layers\":[\(parts.joined(separator: ","))]}"
@@ -792,6 +835,11 @@ final class SelfDrawView: UIView {
                 let base = layerClipBase[id] ?? [Float](repeating: 0, count: 16)
                 applyClip(nodeId: id, layer: layer, params: base)
             }
+            // ★★C2：描边进度回**基态**（0 = 未画）——与遮罩同一条"stop 必须清值"的义务
+            //   （真机判据 W14f 抓到首版漏此步：stop 后 strokeEnd 停在 1）。
+            if let shape = layerStrokeShapes[id] {
+                shape.strokeEnd = 0
+            }
         }
         CATransaction.commit()
     }
@@ -816,6 +864,20 @@ final class SelfDrawView: UIView {
     private(set) var layerClipBase: [Int: [Float]] = [:]
     /** 当前层的裁剪遮罩（复用；每帧只更新 path——不重建 layer） */
     private var layerClipMasks: [Int: CAShapeLayer] = [:]
+    /**
+     * ★★**SVG 描边快照**（C2）：**只存形状层**（段列表与样式是建层时的输入，不需留存）——
+     * 与 `animStroke` 的每帧进度分开（前者是静态前提，后者是动态值）。
+     * ★首版曾加一个 `[Int: (path:color:width:)]` 元组属性且**从未使用**——
+     *   元组 + `private(set)` 触发了 Swift 解析器问题（报错原文 `static properties may only be
+     *   declared on a type` ——紧跟其后的 static 字段全报错）；删掉未用属性即恢复。
+     *   本仓纪律：**未使用的声明不留**（它们不只是噪音，还会以意外方式影响编译）。
+     */
+    /** 描边形状层（复用；每帧只改 `strokeEnd`——不重建 path） */
+    private var layerStrokeShapes: [Int: CAShapeLayer] = [:]
+    // ★诊断计数改为**文件级全局**（真机接通排查用；见文件尾 `SvgDiag`）：
+    //   ★为什么不用类内 static：首版写在类内且 swiftc 报 "static properties may only be
+    //     declared on a type"（紧跟其后的一串字段全红）——而类在 L2508 才闭合（结构正常）。
+    //     为避免与解析器纠缠，诊断量（非产品状态）直接放文件级。
 
     /* ────────────────── ★★MA0-RT：平台渲染线程零参与路径（§5-bis） ────────────────── */
 
@@ -989,7 +1051,9 @@ final class SelfDrawView: UIView {
         opacity: CGFloat = 1,
         rgba: UInt32? = nil, textRgba: UInt32? = nil,
         // ★★C1：裁剪参数（16 槽；nil = 本节点无裁剪声明 —— 不做任何遮罩操作）
-        clipParams: [Float]? = nil
+        clipParams: [Float]? = nil,
+        // ★★C2：描边进度（nil = 本节点无描边路径 —— 不动）
+        strokeProgress: Float? = nil
     ) -> Bool {
         guard let layer = layersById[nodeId] else { return false }
         // ★RT2 扩展：位移 + 缩放 + 旋转（**以层中心为锚点**——等价 CSS transform 默认 origin）
@@ -1036,7 +1100,106 @@ final class SelfDrawView: UIView {
         if let cp = clipParams {
             applyClip(nodeId: nodeId, layer: layer, params: cp)
         }
+        // ★★C2：描边进度（`strokeEnd` 0..1——路径本体建层时定死，此处只改进度）
+        if let sp = strokeProgress, let shape = layerStrokeShapes[nodeId] {
+            CATransaction.begin()
+            CATransaction.setDisableActions(true)
+            // ★clamp 到 0..1（内核已 clamp；此处兜底防御——Swift 不能在函数内声明类型扩展）
+            shape.strokeEnd = CGFloat(Swift.max(0, Swift.min(1, sp)))
+            CATransaction.commit()
+        }
         return true
+    }
+
+    /// ★★**全量挂载后：按内核返回的段列表补建 SVG 描边子层**（C2，2026-10-01）
+    ///
+    /// 【为什么必须在"挂载后"（本仓设计缺口的修复）】段列表由内核解析（单一实现）⇒
+    ///   宿主建层时**没有**它（请求树只有 `d`）。⇒ 流程：内核收到树 → `svgNodes()` 查询
+    ///   回带段列表 → 宿主据此建 `CAShapeLayer`。★与"度量先注入再建树"同款顺序纪律。
+    func attachSvgStroke(fromKernelPaths json: String) {
+        guard let data = json.data(using: .utf8),
+              let o = (try? JSONSerialization.jsonObject(with: data)) as? [String: Any] else {
+            NSLog("[proteus] attachSvgStroke: JSON 解析失败（%d 字节）", json.count)
+            return
+        }
+        guard let paths = o["paths"] as? [String: [String: Any]] else {
+            NSLog("[proteus] attachSvgStroke: paths 形态不符（raw=%d 字节）", json.count)
+            return
+        }
+        SvgDiag.attachStats += paths.count
+        NSLog("[proteus] attachSvgStroke: 收到 %d 个 SVG 路径", paths.count)
+        for (idS, info) in paths {
+            // ★分段诊断（真机接通排查用）：三个 continue 各自归因，不静默跳过
+            guard let id = Int(idS) else {
+                SvgDiag.skipNoId += 1
+                continue
+            }
+            guard let layer = layersById[id] else {
+                SvgDiag.skipNoLayer += 1
+                continue
+            }
+            guard let segs = info["segs"] as? [Any] else {
+                SvgDiag.skipNoSegs += 1
+                continue
+            }
+            if layerStrokeShapes[id] != nil { continue } // 已建（幂等——全量重建时先清理）
+            SvgDiag.built += 1
+            let packed = (info["strokeColor"] as? NSNumber)?.uint32Value ?? 0xFFFFFFFF
+            let strokeColor = Self.cgColorFromPacked(packed)
+            let sw = CGFloat((info["strokeWidth"] as? Double) ?? 2)
+            let shape = CAShapeLayer()
+            shape.path = self.cgPathFromSegs(segs)
+            shape.strokeColor = strokeColor
+            shape.fillColor = nil
+            shape.lineWidth = sw
+            shape.lineCap = .round
+            shape.lineJoin = .round
+            shape.strokeEnd = 0 // 基态 = 未画（进度 0）
+            shape.contentsScale = UIScreen.main.scale
+            layer.addSublayer(shape)
+            layerStrokeShapes[id] = shape
+        }
+    }
+
+    /// ★★**段列表 → CGPath**（C2，2026-10-01）——**只做翻译**（解析在内核，见 `svg_path` 模块）
+    ///
+    /// ★★段形态 = **内核 `PathSeg` 的 serde 序列化形态**（2026-10-01 · C2 真机接通时修正）：
+    ///   `{"MoveTo":[x,y]}` / `{"LineTo":[x,y]}` / `{"CubicTo":[x1,y1,x2,y2,x,y]}` /
+    ///   `{"QuadTo":[x1,y1,x,y]}` / `"Close"`（单位串）。
+    ///   ★首版按 `{"t":"M","v":[…]}` 写（**臆想的形态**）⇒ 真机 strokeEnd=-1（层根本没建）
+    ///     而内核侧读数全对——两端各写一份"形态假设"正是本仓纪律 #22 警告的形态。
+    ///   ⇒ 期望值以内核 `svg_dump2` 实测输出为准（见 `scripts/check-svg-path-shape.mjs` 门禁）。
+    func cgPathFromSegs(_ segs: [Any]) -> CGPath {
+        let p = CGMutablePath()
+        for item in segs {
+            if let s2 = item as? String, s2 == "Close" {
+                p.closeSubpath()
+                continue
+            }
+            guard let seg = item as? [String: Any] else { continue }
+            for (k, vAny) in seg {
+                let v = (vAny as? [Double]) ?? []
+                switch k {
+                case "MoveTo":
+                    if v.count >= 2 { p.move(to: CGPoint(x: v[0], y: v[1])) }
+                case "LineTo":
+                    if v.count >= 2 { p.addLine(to: CGPoint(x: v[0], y: v[1])) }
+                case "CubicTo":
+                    if v.count >= 6 {
+                        p.addCurve(to: CGPoint(x: v[4], y: v[5]),
+                                   control1: CGPoint(x: v[0], y: v[1]),
+                                   control2: CGPoint(x: v[2], y: v[3]))
+                    }
+                case "QuadTo":
+                    if v.count >= 4 {
+                        p.addQuadCurve(to: CGPoint(x: v[2], y: v[3]), control: CGPoint(x: v[0], y: v[1]))
+                    }
+                default:
+                    break
+                }
+            }
+        }
+        return p
     }
 
     /// ★★**应用裁剪形状**（C1，2026-10-01）——`CAShapeLayer` 作 `mask`（iOS 的裁剪原语）
@@ -2141,6 +2304,10 @@ final class SelfDrawView: UIView {
         //   ⇒ 本函数"一处实现"的白名单必须跟着**内核新增的静态样式**走。
         if let cp = n["clipPath"] as? [String: Any] { style["clipPath"] = cp }
         if let pp = n["perspective"] as? Double { style["perspective"] = CGFloat(pp) }
+        // ★★C2：SVG 描边三键（路径段列表 / 描边色 / 线宽）——同"必须透传"纪律
+        if let sp = n["svgPath"] as? [String: Any] { style["svgPath"] = sp }
+        if let sc = n["strokeColor"] as? NSNumber { style["strokeColor"] = sc }
+        if let sw = n["strokeWidth"] as? Double { style["strokeWidth"] = CGFloat(sw) }
         return style
     }
 
@@ -3632,6 +3799,12 @@ final class SelfDrawBridge: NSObject, SelfDrawExports {
         return takeCString(proteus_layout_clip_nodes(handle))
     }
 
+    /// ★★C2：带 SVG 路径的节点清单（描边动画的取样入口）
+    func svgNodes() -> String {
+        guard handle != 0 else { return "{\"ok\":false,\"error\":\"未接入核心\"}" }
+        return takeCString(proteus_layout_svg_nodes(handle))
+    }
+
     /// ★仍在推进的动画条数（0 = 全部结束）——**幕切换的权威判据**
     func animControl(_ json: String) -> String {
         guard handle != 0 else { return "{\"ok\":false,\"error\":\"未接入核心\"}" }
@@ -3737,7 +3910,7 @@ final class SelfDrawBridge: NSObject, SelfDrawExports {
     ///     两端宿主 / SDK / embed-demo 的常量必须与它同批更新（本仓历史上因两处各写步长
     ///     而错位解析过：24B 记录被按 16B 读 ⇒ 层上留下错位残值）。
     ///     `scripts/check-anim-record-bytes.mjs` 从内核推出宽度并与各消费端对账。
-    private static let animUpdateRecordBytes = 108
+    private static let animUpdateRecordBytes = 112
 
     /// ★★**每帧推进的唯一解析点**（探针 / 帧循环两条入口共用）
     ///
@@ -3771,6 +3944,9 @@ final class SelfDrawBridge: NSObject, SelfDrawExports {
             // ★B 批 3D（2026-10-01）：末尾追加 rotateX/rotateY（@32/@36——40B 记录）
             let rotateX = buf.loadUnaligned(fromByteOffset: base + 32, as: Float.self)
             let rotateY = buf.loadUnaligned(fromByteOffset: base + 36, as: Float.self)
+            // ★★C2（2026-10-01）：描边进度（@108 的 f32；NaN/非有限 = 无描边路径——112B 记录）
+            let strokeRaw = buf.loadUnaligned(fromByteOffset: base + 108, as: Float.self)
+            let strokeProgress: Float? = strokeRaw.isFinite ? strokeRaw : nil
             // ★★C1（2026-10-01）：裁剪形状（@40 起：kind u32 + 16×f32——108B 记录）
             let clipKindRaw = buf.loadUnaligned(fromByteOffset: base + 40, as: UInt32.self)
             var clipParams: [Float]? = nil
@@ -3787,7 +3963,8 @@ final class SelfDrawBridge: NSObject, SelfDrawExports {
                 opacity: CGFloat(op),
                 rgba: rgba == UInt32.max ? nil : rgba,
                 textRgba: textRgba == UInt32.max ? nil : textRgba,
-                clipParams: clipParams
+                clipParams: clipParams,
+                strokeProgress: strokeProgress
             ) == true {
                 applied += 1
             }
@@ -4438,6 +4615,14 @@ final class SelfDrawBridge: NSObject, SelfDrawExports {
             let rx: CGFloat = u.count >= 10 ? CGFloat(u[8]) : 0
             let ry: CGFloat = u.count >= 10 ? CGFloat(u[9]) : 0
             // ★C1：第 11 项 = 裁剪类型（0=无），第 12..27 项 = 16 个参数（108B 记录的 JSON 形态）
+            // ★C2：第 28 项 = 描边进度（u32::MAX = 无描边路径；否则是 f32 的位模式）
+            var strokeP: Float? = nil
+            if u.count >= 28 {
+                let raw = u[27]
+                if raw >= 0 && raw < 4_294_967_295 {
+                    strokeP = Float(bitPattern: UInt32(raw))
+                }
+            }
             var clipP: [Float]? = nil
             if u.count >= 27, u[10] != 0 {
                 var ps = [Float](repeating: 0, count: 16)
@@ -4451,7 +4636,7 @@ final class SelfDrawBridge: NSObject, SelfDrawExports {
                 nodeId: Int(u[0]), tx: CGFloat(u[1]), ty: CGFloat(u[2]), scale: CGFloat(u[3]),
                 rotate: rot, rotateX: rx, rotateY: ry,
                 opacity: op, rgba: packedOpt(6), textRgba: packedOpt(7),
-                clipParams: clipP
+                clipParams: clipP, strokeProgress: strokeP
             ) == true {
                 applied += 1
             }
@@ -4843,6 +5028,9 @@ final class SelfDrawBridge: NSObject, SelfDrawExports {
         }
         view.clearLayers()
         view.buildLayers(flat: flat)
+        // ★★C2：全量挂载后，按**内核解析好的段列表**补建 SVG 描边子层（见 attachSvgStroke 注释）
+        let svgJson = handle != 0 ? takeCString(proteus_layout_svg_nodes(handle)) : "{}"
+        view.attachSvgStroke(fromKernelPaths: svgJson)
         let buildMs = (CFAbsoluteTimeGetCurrent() - tBuild0) * 1000
         let totalMs = (CFAbsoluteTimeGetCurrent() - t0) * 1000
 
@@ -5417,6 +5605,8 @@ final class SelfDrawViewController: UIViewController {
             ("__proteus.animRepeat()", 2),
             // ★★裁剪形变（2026-10-01 · C1）：clip-path（判据 check-anim-rt2.py V13）
             ("__proteus.animClip()", 2),
+            // ★★SVG 描边（2026-10-01 · C2）：strokeProgress 画线（判据 check-anim-rt2.py W14）
+            ("__proteus.animStroke()", 2),
             // ★★主线程零唤醒实测（OS 级 CPU 会计 + 阳性对照）：**异步**两段各 600ms
             ("__proteus.animCpuProbe()", 0),
             // ★★RT2 帧率测席（§9 指标）：**异步**——由 CADisplayLink 跑满时长后回调续链
@@ -5457,7 +5647,7 @@ final class SelfDrawViewController: UIViewController {
             }
             let out = js(expr)
             // 只记关键读数（避免日志爆炸——本仓「输出控制」纪律）
-            if expr.hasPrefix("__proteus.mount") || expr.hasPrefix("__proteus.finalize2") || expr.hasPrefix("__proteus.animProbe") || expr.hasPrefix("__proteus.animComplex") || expr.hasPrefix("__proteus.animPlatform") || expr.hasPrefix("__proteus.animPreset") || expr.hasPrefix("__proteus.animScroll") || expr.hasPrefix("__proteus.animSequence") || expr.hasPrefix("__proteus.animShared") || expr.hasPrefix("__proteus.animColor") || expr.hasPrefix("__proteus.animBezier") || expr.hasPrefix("__proteus.animRepeat") || expr.hasPrefix("__proteus.animClip") || expr.hasPrefix("__proteus.animCpu") {
+            if expr.hasPrefix("__proteus.mount") || expr.hasPrefix("__proteus.finalize2") || expr.hasPrefix("__proteus.animProbe") || expr.hasPrefix("__proteus.animComplex") || expr.hasPrefix("__proteus.animPlatform") || expr.hasPrefix("__proteus.animPreset") || expr.hasPrefix("__proteus.animScroll") || expr.hasPrefix("__proteus.animSequence") || expr.hasPrefix("__proteus.animShared") || expr.hasPrefix("__proteus.animColor") || expr.hasPrefix("__proteus.animBezier") || expr.hasPrefix("__proteus.animRepeat") || expr.hasPrefix("__proteus.animClip") || expr.hasPrefix("__proteus.animStroke") || expr.hasPrefix("__proteus.animCpu") {
                 NSLog("[proteus] %@ → %@", expr, String(out.prefix(400)))
             }
             // ★让出主线程 pump 轮：每轮一次 runloop 循环 ⇒ 微任务队列被排空

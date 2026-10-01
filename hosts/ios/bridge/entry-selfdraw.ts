@@ -58,6 +58,8 @@ interface SelfDrawNative {
   textColorNodes(): string
   /** ★★C1：带裁剪形状的节点清单（裁剪形变动画的取样入口——与 `bgNodes` 对称） */
   clipNodes(): string
+  /** ★★C2：带 SVG 路径的节点清单（描边动画的取样入口——同款纪律） */
+  svgNodes(): string
   /** ★V4 滚动（纯内容偏移，像素）——不驱动动画；与 scrollAnimSync 的区别是它不碰动画 */
   scrollBy(dx: number, dy: number): string
   animStart(json: string): string
@@ -94,7 +96,7 @@ const BN = { snapshot: 'selfdraw-final' }
 
 // ★构建标识（每次构建由 hosts/ios/bridge/inject-build-id.mjs 注入；与 entry-bench 同机制）
 //   —— 「设备上跑的是哪份代码」必须可**一眼判定**（报告新鲜度判据的内容锚点）。
-const BUILD_ID = '8be8744b-154249'
+const BUILD_ID = 'ea118647-161511'
 
 const VP = (globalThis as unknown as { __PROTEUS_VIEWPORT__?: { width: number; height: number } })
   .__PROTEUS_VIEWPORT__ ?? { width: 390, height: 844 }
@@ -165,6 +167,15 @@ const App = {
           clipPath: { kind: 'inset', params: [0, 0, 0, 0] },
         },
       }),
+      // ★★C2（2026-10-01）：**SVG 描边标记节点**——W14 判据的目标（路径画线动画）。
+      //   路径 `d` 由内核解析（段列表）；宿主建 CAShapeLayer，进度驱动 `strokeEnd`。
+      h('p-view', {
+        key: 'svg-marker',
+        style: {
+          width: 120, height: 60, flexShrink: 0, margin: { bottom: 8 },
+          svgPath: { d: 'M10 50 L40 10 L70 50 L100 10', stroke: '#ff5533', strokeWidth: 4 },
+        },
+      }),
       ...rows,
     ])
   },
@@ -228,6 +239,7 @@ let animComplexResult: Record<string, unknown> = {}
 let animBezierResult: Record<string, unknown> = {}
 let animRepeatResult: Record<string, unknown> = {}
 let animClipResult: Record<string, unknown> = {}
+let animStrokeResult: Record<string, unknown> = {}
 /** ★★MA0-RT 平台零参与路径读数 */
 let animPlatformResult: Record<string, unknown> = {}
 /** ★★MA1 预设库读数 */
@@ -842,6 +854,79 @@ const api = {
       rejected,
     }
     animClipResult = r
+    return JSON.stringify(r)
+  },
+
+  /**
+   * ★★**W14：SVG 描边**（2026-10-01 · C2）——路径画线动画端到端。
+   *
+   * 判据（check-anim-rt2.py W14）：① 进度动画被受理（kind 31）；
+   *   ② 探针**真读**层上 `strokeEnd`（不回显参数）——半程 ≈0.5、终值 =1；
+   *   ③ stop 后回 0（基态 = 未画）；④ 无 `svgPath` 声明的节点上启动 ⇒ 明确拒绝。
+   */
+  animStroke(): string {
+    // ★取样纪律：问内核哪些节点带 SVG 路径（id 动态分配）
+    const probe = safeParse(proteusSelfDraw.svgNodes())
+    const ids = ((probe as { ids?: number[] }).ids ?? [])
+    const target = ids[0] ?? -1
+    const endOf = (): number => {
+      if (target < 0) return -1
+      const p = safeParse(proteusSelfDraw.layerTransformProbe(JSON.stringify([target])))
+      const v = ((p as { layers?: Array<{ strokeEnd?: number }> }).layers ?? [])[0]?.strokeEnd
+      return typeof v === 'number' ? v : -1
+    }
+    let started = 0
+    let mid = -1
+    let end = -1
+    let afterStop = -1
+    if (target >= 0) {
+      proteusSelfDraw.animStopAll()
+      const decl = { kind: 'strokeProgress' as const, from: 0, to: 1, durationMs: 100, curve: 'linear' as const }
+      const batch = compileAnimations([decl], { nodeId: target })
+      const startOut = safeParse(proteusSelfDraw.animStart(JSON.stringify({ anims: batch.anims })))
+      started = (startOut as { started?: number }).started ?? 0
+      proteusSelfDraw.animTick(50)
+      mid = endOf()
+      proteusSelfDraw.animTick(60)
+      end = endOf()
+      proteusSelfDraw.animStopAll()
+      proteusSelfDraw.animTick(1)
+      afterStop = endOf()
+    }
+    // 拒绝分支：找一个**没有** SVG 路径的节点（不在 ids 里的探针可见节点）
+    const some = safeParse(proteusSelfDraw.layerTransformProbe(JSON.stringify([2, 3, 4, 5])))
+    const present = ((some as { layers?: Array<{ id: number; missing?: boolean }> }).layers ?? [])
+      .filter((l) => !l.missing)
+      .map((l) => l.id)
+    const noSvg = present.find((id) => !ids.includes(id))
+    let rejected = ''
+    if (noSvg !== undefined) {
+      const bad = safeParse(
+        proteusSelfDraw.animStart(
+          JSON.stringify({ anims: [{ nodeId: noSvg, kind: 31, from: 0, to: 1, durMs: 50 }] }),
+        ),
+      )
+      rejected = String((bad as { error?: string }).error ?? '').slice(0, 160)
+    }
+    const layerInfo = (() => {
+      if (target < 0) return {}
+      const p = safeParse(proteusSelfDraw.layerTransformProbe(JSON.stringify([target])))
+      return (((p as { layers?: Array<Record<string, unknown>> }).layers ?? [])[0] ?? {})
+    })()
+    const r = {
+      node: target,
+      svg_ids_from_kernel: ids.slice(0, 8),
+      probe_sub_layers: layerInfo.subLayers,
+      // ★探针字段名以宿主实际输出为准（2026-10-01：首版按臆想的三个字段名读 ⇒ 全 None——
+      //   与"C2 段形态"同款教训；宿主输出的实际字段是 `svgDiag`）
+      svg_diag: layerInfo.svgDiag,
+      started,
+      mid_stroke_end: mid,
+      end_stroke_end: end,
+      after_stop_stroke_end: afterStop,
+      rejected,
+    }
+    animStrokeResult = r
     return JSON.stringify(r)
   },
 
@@ -1500,6 +1585,7 @@ const api = {
       anim_bezier: animBezierResult,
       anim_repeat: animRepeatResult,
       anim_clip: animClipResult,
+      anim_stroke: animStrokeResult,
       // ★★RT2 帧率测席（§9 指标；宿主跑满时长后写入）
       anim_bench: safeParse(proteusSelfDraw.animBenchResults()),
       js_only_throughput: {

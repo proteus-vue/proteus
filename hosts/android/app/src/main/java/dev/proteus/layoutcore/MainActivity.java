@@ -1701,6 +1701,77 @@ public class MainActivity extends Activity {
                     "{\"anims\":[{\"nodeId\":11,\"kind\":0,\"curveBezier\":[-0.2,0,0.64,1],"
                             + "\"from\":0,\"to\":100,\"durMs\":200}]}"));
 
+            // ── X 组（★★C2 SVG 描边 strokeProgress，2026-10-01）──
+            //   判据（check-kernel-anim.py X 组）：
+            //     X1 有 svgPath 声明的节点：进度动画受理（kind 31）+ 离屏绘制按进度变长
+            //     X2 无 svgPath 声明的节点：明确拒绝（含修法）
+            try {
+                org.json.JSONObject svgTree = new org.json.JSONObject();
+                svgTree.put("viewport", new org.json.JSONObject().put("width", W).put("height", H));
+                org.json.JSONArray sn = new org.json.JSONArray();
+                sn.put(new org.json.JSONObject().put("id", 1).put("parentId", org.json.JSONObject.NULL)
+                        .put("width", W).put("height", H));
+                // 节点 11：一条横线路径（描边）
+                sn.put(new org.json.JSONObject().put("id", 11).put("parentId", 1)
+                        .put("width", 200).put("height", 100)
+                        .put("svgPath", new org.json.JSONObject().put("d", "M10 50 L190 50")
+                                .put("stroke", "#FF5533").put("strokeWidth", 8)));
+                // 节点 12：无路径（拒绝分支）
+                sn.put(new org.json.JSONObject().put("id", 12).put("parentId", 1)
+                        .put("width", 200).put("height", 100));
+                svgTree.put("nodes", sn);
+                long svgHandle = RustLayout.create(svgTree.toString());
+                if (svgHandle <= 0) throw new IllegalStateException("SVG 场景建树失败");
+                final ProteusHostView sv = new ProteusHostView(this);
+                sv.setCmds(java.util.Arrays.asList(
+                        new ProteusHostView.Cmd(0f, 0f, 200f, 100f, 0, null, 0f, 0, 0f)));
+                sv.setCmdNodeIds(new int[]{11});
+                sv.attachCore(svgHandle);
+                // ★C2：从内核拿段列表补建描边（与 iOS attachSvgStroke 同款）
+                try {
+                    org.json.JSONObject snodes = new org.json.JSONObject(RustLayout.svgNodes(svgHandle));
+                    org.json.JSONObject spaths = snodes.optJSONObject("paths");
+                    if (spaths != null) {
+                        org.json.JSONObject info = spaths.optJSONObject("11");
+                        if (info != null) {
+                            sv.setNodeSvgStroke(11, info.optJSONArray("segs"),
+                                    (int) ((long) info.optDouble("strokeColor", 4294923571.0)),
+                                    (float) info.optDouble("strokeWidth", 8));
+                            out.put("svg_paths_from_kernel", spaths.length());
+                        }
+                    }
+                } catch (Throwable te) {
+                    out.put("svg_attach_error", te.toString());
+                }
+                // X1：进度动画
+                out.put("svg_start", sv.kernelAnimStart(
+                        "{\"anims\":[{\"nodeId\":11,\"kind\":31,\"curve\":0,\"from\":0,\"to\":1,\"durMs\":100}]}"));
+                sv.kernelAnimTick(50f);
+                out.put("svg_mid", new org.json.JSONObject(sv.animTxProbe("[11]")));
+                // X3：离屏真读——半程画线（后半段应为空）
+                android.graphics.Bitmap sb = android.graphics.Bitmap.createBitmap(200, 100,
+                        android.graphics.Bitmap.Config.ARGB_8888);
+                sv.drawCmds(new android.graphics.Canvas(sb));
+                out.put("svg_left_px", android.graphics.Color.alpha(sb.getPixel(50, 50)));   // 前半：已画
+                out.put("svg_right_px", android.graphics.Color.alpha(sb.getPixel(180, 50))); // 后半：未画
+                sb.recycle();
+                sv.kernelAnimTick(60f);
+                android.graphics.Bitmap sb2 = android.graphics.Bitmap.createBitmap(200, 100,
+                        android.graphics.Bitmap.Config.ARGB_8888);
+                sv.drawCmds(new android.graphics.Canvas(sb2));
+                out.put("svg_right_end_px", android.graphics.Color.alpha(sb2.getPixel(180, 50))); // 走完：后半也画上
+                sb2.recycle();
+                RustLayout.destroy(svgHandle);
+                // X2：无声明 ⇒ 拒绝
+                out.put("svg_rejected", hv.kernelAnimStart(
+                        "{\"anims\":[{\"nodeId\":12,\"kind\":31,\"from\":0,\"to\":1,\"durMs\":50}]}"));
+            } catch (Exception sve) {
+                // ★变量名**不得**用 `se`——同方法 1533 行已有 `String se`（共享元素）⇒ javac
+                // 判「已在方法中定义变量」，**整包编译失败** ⇒ 装了旧 APK（X 组判据全缺，
+                // 2026-10-01 实测踩过）。门禁 check:android-host-compile 已同步修为"看 javac 退出码"。
+                out.put("svg_error", sve.toString());
+            }
+
             // ── U 组（★★C1 裁剪形变 clip-path，2026-10-01）──
             //   判据（check-kernel-anim.py U 组）：
             //     U1 有 clipPath 声明的节点：inset 动画（四边分数）被内核受理 + 终值精确
