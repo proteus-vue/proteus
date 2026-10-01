@@ -52,8 +52,8 @@ export { COMPOSITED_KINDS, PAINT_ONLY_KINDS, TICK_ONLY_KINDS, isComposited, isPa
 // ★★渐变填充（v1 静态 paint——2026-10-01）：类型 + 校验器 + 跨语言契约键名。
 //   ★边界写清楚（防误判为"漏进内核"）：渐变不参与内核计算（v1 无动画通道/不影响布局）
 //     ⇒ 与 `borderRadius` 同层（宿主绘制属性）；将来色标要做动画才按 C1/C2 迁入内核。
-export { validateGradientFill, linearGradientEndpoints, radialNormalized, GRADIENT_CONTRACT_KEYS } from './gradient'
-export type { GradientStop, GradientFill, LinearGradientFill, RadialGradientFill } from './gradient'
+export { validateGradientFill, validateGradientPair, linearGradientEndpoints, radialNormalized, GRADIENT_CONTRACT_KEYS } from './gradient'
+export type { GradientStop, GradientFill, LinearGradientFill, RadialGradientFill, GradientPair } from './gradient'
 export {
   compileAnimations,
   compileOne,

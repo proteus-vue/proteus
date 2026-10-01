@@ -140,6 +140,15 @@ pub(crate) struct NodeDto {
     ///   `d` 由**内核解析**（单一实现，见 `svg_path` 模块）；`stroke` 是描边色（CSS hex）。
     #[serde(skip_serializing_if = "Option::is_none")]
     pub(crate) svg_path: Option<serde_json::Value>,
+    /// ★★**渐变填充 A 态**（2026-10-01 · 渐变 v2）：与 TS `GradientFill` 同形——
+    ///   `{kind:'linear'|'radial', angle|cx/cy/r, stops:[{offset,color,alpha?}]}`。
+    ///   【为什么 v1 在宿主、v2 迁内核】v2 要逐帧混合色标 ⇒ 求值进了内核 ⇒ 数学必须一处实现
+    ///   （v1 文件头写好的迁移条件被打破即迁——见 `style::GradState` 注释）。
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub(crate) fill_gradient: Option<serde_json::Value>,
+    /// ★★**渐变填充 B 态**（可选）：与 A 同 kind、同色标个数——两态之间由 `gradientMix` 通道混合。
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub(crate) fill_gradient_to: Option<serde_json::Value>,
     /// ★★**裁剪形状**（2026-10-01 · C1）：CSS `clip-path` 的**结构化形态**——
     ///   `{kind: 'inset'|'circle'|'polygon', params: number[]}`（params 按形状类型解释，
     ///   分数/px 混合见 `clip_params_from_decl`）。类型静态、参数可动画（CSS 同规）。
@@ -218,6 +227,8 @@ impl NodeDto {
             perspective: None,
             clip_path: None,
             svg_path: None,
+            fill_gradient: None,
+            fill_gradient_to: None,
             text: None,
             is_text: false,
             native_host: false,
@@ -379,6 +390,39 @@ pub(crate) fn style_from_dto(dto: &NodeDto) -> Result<LStyle, String> {
         }
     }
     // ★★裁剪形状（C1）：结构形态 → (kind, [f32; 16])。类型静态、参数进基态（复位目标）。
+    // ★★渐变（v2）：A 态必需配套 B 态才有"混合"——两态都在时校验结构一致（kind/色标数）。
+    if let Some(fg) = dto.fill_gradient.as_ref() {
+        let a = parse_gradient(fg, "fillGradient")?;
+        let state = match dto.fill_gradient_to.as_ref() {
+            None => crate::style::GradState { has_b: false, ..a },
+            Some(b_raw) => {
+                let b = parse_gradient(b_raw, "fillGradientTo")?;
+                if a.kind != b.kind {
+                    return Err(format!(
+                        "fillGradient 与 fillGradientTo 的类型不同（{} vs {}）——两态必须同 kind                         （异型渐变之间没有'逐标混合'的定义）",
+                        if a.kind == 1 { "linear" } else { "radial" },
+                        if b.kind == 1 { "linear" } else { "radial" },
+                    ));
+                }
+                if a.n != b.n {
+                    return Err(format!(
+                        "fillGradient 与 fillGradientTo 的色标个数不同（{} vs {}）——逐标混合要求一一对应                         （本引擎不做'补齐/截断'这类静默猜测）",
+                        a.n, b.n
+                    ));
+                }
+                crate::style::GradState {
+                    colors_b: b.colors_a,
+                    offsets_b: b.offsets_a,
+                    has_b: true,
+                    ..a
+                }
+            }
+        };
+        style.grad = Some(state);
+    } else if dto.fill_gradient_to.is_some() {
+        return Err("只声明了 `fillGradientTo`（B 态）而没有 `fillGradient`（A 态）——                    混合需要起点与终点两态；请补 A 态或删掉 B 态"
+            .to_string());
+    }
     if let Some(cp) = dto.clip_path.as_ref() {
         let (kind, params) = parse_clip_path(cp)?;
         style.clip_kind = kind;
@@ -2426,6 +2470,104 @@ pub unsafe extern "C" fn proteus_layout_apply_ops(handle: u64, ptr: *const u8, l
 ///
 /// 校验：未知类型 / 参数数量不符 / 非有限数 ⇒ **明确拒绝**（不静默截断——截断会让
 /// "写错的形状"悄悄变成另一个形状，本仓纪律：静默失败最致命）。
+/// ★★**渐变解析**（渐变 v2）——`{kind, angle|cx/cy/r, stops:[{offset,color,alpha?}]}`
+///   → `GradState`（A 态填 `colors_a/offsets_a`；B 态由调用方搬到 `_b` 槽）。
+///   ★色标颜色走 `parse_css_color`（**与底色同一解析器**——含 `#RRGGBBAA` 支持）；
+///     但 TS 声明面只发六位 + 独立 `alpha`（8 位在色标被校验器拒绝——防两端顺序分歧）。
+///   ★全部拒绝分支带修法（数量/升序/非数/未知类型）。
+fn parse_gradient(v: &serde_json::Value, field: &str) -> Result<crate::style::GradState, String> {
+    let kind_s = v
+        .get("kind")
+        .and_then(|x| x.as_str())
+        .ok_or_else(|| format!("{field} 缺少 kind（应为 'linear'/'radial'）"))?;
+    let kind = match kind_s {
+        "linear" => 1u8,
+        "radial" => 2u8,
+        other => {
+            return Err(format!(
+                "{field}.kind 未知：{other:?}（支持 'linear'（angle）与 'radial'（cx/cy/r））"
+            ))
+        }
+    };
+    let angle = if kind == 1 {
+        v.get("angle")
+            .and_then(|x| x.as_f64())
+            .map(|f| f as f32)
+            .ok_or_else(|| format!("{field} 是 linear 但缺 angle（度；0=向上 90=向右）"))?
+    } else {
+        0.0
+    };
+    let (cx, cy, r) = if kind == 2 {
+        let cx = v.get("cx").and_then(|x| x.as_f64()).unwrap_or(0.5) as f32;
+        let cy = v.get("cy").and_then(|x| x.as_f64()).unwrap_or(0.5) as f32;
+        let r = v.get("r").and_then(|x| x.as_f64()).unwrap_or(1.0) as f32;
+        if !(r > 0.0) {
+            return Err(format!("{field}.r 必须为正：{r}（r=0 的径向渐变不可见）"));
+        }
+        (cx, cy, r)
+    } else {
+        (0.5, 0.5, 1.0)
+    };
+    let stops = v
+        .get("stops")
+        .and_then(|x| x.as_array())
+        .ok_or_else(|| format!("{field}.stops 缺失或不是数组（至少 2 个色标）"))?;
+    if stops.len() < 2 || stops.len() > 8 {
+        return Err(format!(
+            "{field}.stops 色标数量 {} 不在 2..8（超出请拆成多节点）",
+            stops.len()
+        ));
+    }
+    let mut colors = [0u32; 8];
+    let mut offsets = [0f32; 8];
+    let mut prev = f32::NEG_INFINITY;
+    for (i, st) in stops.iter().enumerate() {
+        let off = st
+            .get("offset")
+            .and_then(|x| x.as_f64())
+            .map(|f| f as f32)
+            .ok_or_else(|| format!("{field}.stops[{i}].offset 缺失或非数（应为 0..1）"))?;
+        if !(0.0..=1.0).contains(&off) {
+            return Err(format!("{field}.stops[{i}].offset 越界：{off}（应为 0..1）"));
+        }
+        if off <= prev {
+            return Err(format!(
+                "{field}.stops[{i}].offset 非升序：{off} 不大于前一个 {prev}（色标必须严格升序）"
+            ));
+        }
+        prev = off;
+        let color_s = st
+            .get("color")
+            .and_then(|x| x.as_str())
+            .ok_or_else(|| format!("{field}.stops[{i}].color 缺失或非字符串"))?;
+        let mut packed = parse_css_color(color_s)?;
+        // ★可选 `alpha`（0..1）：**独立数值字段**——与 TS 契约一致（不靠 8 位十六进制顺序）
+        if let Some(a) = st.get("alpha").and_then(|x| x.as_f64()) {
+            if !(0.0..=1.0).contains(&a) {
+                return Err(format!("{field}.stops[{i}].alpha 越界：{a}（应为 0..1）"));
+            }
+            let aa = (a * 255.0).round().clamp(0.0, 255.0) as u32;
+            packed = (packed & 0x00FF_FFFF) | (aa << 24);
+        }
+        colors[i] = packed;
+        offsets[i] = off;
+    }
+    Ok(crate::style::GradState {
+        kind,
+        angle,
+        cx,
+        cy,
+        r,
+        n: stops.len() as u8,
+        colors_a: colors,
+        offsets_a: offsets,
+        has_b: false,
+        colors_b: [0u32; 8],
+        offsets_b: [0f32; 8],
+        mix: 0.0,
+    })
+}
+
 fn parse_clip_path(v: &serde_json::Value) -> Result<(u8, [f32; 16]), String> {
     let kind_s = v
         .get("kind")
@@ -3303,7 +3445,7 @@ pub unsafe extern "C" fn proteus_layout_anim_tick_bin(handle: u64, dt_ms: f32, o
         //     （iOS `animUpdateRecordBytes` / Android `ANIM_RECORD_BYTES` / SDK `FRAME_UPDATE_BYTES` /
         //     embed-demo 与 `proteus-jni::host`）必须**同批改**——
         //     ★`scripts/check-anim-record-bytes.mjs` 会从本处的写入序列**推出**宽度并与各消费端对账。
-        let mut buf = Vec::with_capacity(out.updates.len() * 112);
+        let mut buf = Vec::with_capacity(out.updates.len() * 184);
         for v in out.updates {
             buf.extend_from_slice(&v.id.to_le_bytes());
             buf.extend_from_slice(&v.tx.to_le_bytes());
@@ -3324,6 +3466,20 @@ pub unsafe extern "C" fn proteus_layout_anim_tick_bin(handle: u64, dt_ms: f32, o
             }
             // ★C2：描边进度（末尾追加——偏移 @108；无描边路径时写 u32::MAX 的位模式）
             buf.extend_from_slice(&v.stroke_progress.unwrap_or(f32::NAN).to_le_bytes());
+            // ★★渐变 v2（末尾追加——偏移 @112 起）：kind u32 + n u32 + 8×colors u32 + 8×offsets f32
+            //   （kind=0 = 无渐变/未变化 ⇒ 宿主忽略；kind≠0 时 colors/offsets 是**已混合**结果）
+            let (gk, gn, gc, go) = v
+                .grad
+                .map(|(k, n, c, o)| (k as u32, n as u32, c, o))
+                .unwrap_or((0, 0, [0u32; 8], [0f32; 8]));
+            buf.extend_from_slice(&gk.to_le_bytes());
+            buf.extend_from_slice(&gn.to_le_bytes());
+            for i in 0..8 {
+                buf.extend_from_slice(&gc[i].to_le_bytes());
+            }
+            for i in 0..8 {
+                buf.extend_from_slice(&go[i].to_le_bytes());
+            }
         }
         Ok(buf)
     });
