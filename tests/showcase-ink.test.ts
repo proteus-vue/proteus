@@ -481,6 +481,25 @@ describe('Morpheus 炫技场 · 第四个节目（墨绘·山水卷）', () => {
     expect(backTxs[0]!.to).toBe(0)
   })
 
+  it('★★路径变形 v2（异构）：三叠山的呼吸态与 A 态**峰数不同**（内核自动重采样）', () => {
+    const sig = (d: string) => (d.match(/[MLQCZ]/g) ?? []).join('')
+    const nodes = treeNodes()
+    for (const r of [0, 1, 2] as const) {
+      const wet = nodes.get(INK_IDS.rangeWet[r]) as { svgPath?: { d: string }; svgPathTo?: { d: string } }
+      expect(wet.svgPathTo?.d, `山 ${r} 呼吸 B 态`).toBeTruthy()
+      // ★异构的证据：两态**命令数不同**（峰数不同 ⇒ 段数不同）——v1 会拒绝这种配对
+      const nA = (wet.svgPath!.d.match(/Q/g) ?? []).length
+      const nB = (wet.svgPathTo!.d.match(/Q/g) ?? []).length
+      expect(nB, `山 ${r} 两态段数应不同（异构）`).not.toBe(nA)
+    }
+    // moonGlow 幕：三叠 × 三层 = 9 条 pathMorph（呼吸）
+    const { acts } = walkAll()
+    const glow = acts.find((a) => a.name === 'moonGlow')!
+    const morphs = glow.anims.filter((x) => x.kind === 33)
+    expect(morphs.length, 'moonGlow 的 pathMorph 条数').toBe(9)
+    for (const m of morphs) expect(m.alternate, '呼吸应 yoyo').toBe(true)
+  })
+
   it('★工具函数契约：blend 预混（6 位）· ink 加 alpha（8 位 #RRGGBBAA）', () => {
     expect(blend('#000000', '#ffffff', 0.5)).toBe('#808080')
     expect(blend('#f2ead6', '#f2ead6', 0.3)).toBe('#f2ead6')

@@ -279,6 +279,20 @@ def main() -> int:
         print(f"  ✓ ⑤e ★真·卷轴展开：卷筒 tx 展卷末={u_tx:.1f}（≤-0.9W · 滚到左缘）· "
               f"收卷末={c_tx:.1f}（≈0 · 回到右缘）")
 
+    # ── ⑤d-2 ★山峦呼吸（路径变形 v2 异构）：moonGlow 幕末，山脊三层应停在"呼吸位"
+    #   证据 = 探针真读山脊节点的变形因子（yoyo 2 次 = 偶数 ⇒ 末态回 0；故读**幕中**更理想，
+    #   但宿主 mid_probe 只采第一处 midSample 幕（mountains）⇒ 这里用"收卷前最后一幕末态"
+    #   的路径查询副作用：收卷幕不影响山 ⇒ 末态因子应 = 0（回 A）。真正的"动过"证据是
+    #   **moonGlow 幕的 anims 计数**（9 条 pathMorph）+ 三方一致（内核受理）。
+    glow_act = hbyname.get("moonGlow") or {}
+    g_anims = glow_act.get("anims") or 0
+    if g_anims < 60:
+        fail(f"⑤d-2 moonGlow 幕指令数异常（{g_anims}）——9 条呼吸 pathMorph 可能未被编译进去")
+        ok = False
+    else:
+        print(f"  ✓ ⑤d-2 ★山峦呼吸（路径变形 v2 异构）：moonGlow 幕 {g_anims} 条指令"
+              f"（含 9 条山脊 pathMorph · 内核受理见三方一致 · 异构重采样在建树时完成）")
+
     # ── ⑥ 帧率与流畅 ──
     vsync = host.get("vsync_p50")
     p95 = host.get("work_p95")

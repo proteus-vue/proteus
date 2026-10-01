@@ -717,34 +717,26 @@ public class ProteusHostView extends ViewGroup {
         Object[] cached = morphCache.get(nodeId);
         if (cached != null && ((Float) cached[0]) == factor) return;
         try {
-            org.json.JSONObject q = new org.json.JSONObject();
-            q.put("nodeId", nodeId);
-            org.json.JSONObject r = new org.json.JSONObject(RustLayout.svgMorphPath(coreHandle, q.toString()));
-            if (r.optBoolean("ok") != true) return;
-            org.json.JSONArray segs = r.optJSONArray("segs");
-            if (segs == null) return;
+            // ★★二进制通道（性能修正）：JSON 版在此把 p95 抬到 2.57ms（每帧 JSON 编解码）——
+            //   与 tick_bin 同源理由（"每帧走 JSON 是白付"）。格式见内核
+            //   `proteus_layout_svg_morph_path_bin` 注释（u32 count + 每条 u32 tag + f32 坐标）。
+            byte[] bin = RustLayout.svgMorphPathBin(coreHandle, nodeId);
+            if (bin == null || bin.length < 4) return;
+            java.nio.ByteBuffer bb = java.nio.ByteBuffer.wrap(bin).order(java.nio.ByteOrder.LITTLE_ENDIAN);
+            int count = bb.getInt();
             android.graphics.Path path = new android.graphics.Path();
-            // 与 setNodeSvgStroke 同一翻译规则（键名见 check-svg-path-shape 门禁）
-            for (int i = 0; i < segs.length(); i++) {
-                Object raw = segs.opt(i);
-                if ("Close".equals(raw)) { path.close(); continue; }
-                if (!(raw instanceof org.json.JSONObject)) continue;
-                org.json.JSONObject seg = (org.json.JSONObject) raw;
-                if (seg.has("MoveTo")) {
-                    org.json.JSONArray a = seg.optJSONArray("MoveTo");
-                    path.moveTo((float) a.optDouble(0), (float) a.optDouble(1));
-                } else if (seg.has("LineTo")) {
-                    org.json.JSONArray a = seg.optJSONArray("LineTo");
-                    path.lineTo((float) a.optDouble(0), (float) a.optDouble(1));
-                } else if (seg.has("CubicTo")) {
-                    org.json.JSONArray a = seg.optJSONArray("CubicTo");
-                    path.cubicTo((float) a.optDouble(0), (float) a.optDouble(1),
-                            (float) a.optDouble(2), (float) a.optDouble(3),
-                            (float) a.optDouble(4), (float) a.optDouble(5));
-                } else if (seg.has("QuadTo")) {
-                    org.json.JSONArray a = seg.optJSONArray("QuadTo");
-                    path.quadTo((float) a.optDouble(0), (float) a.optDouble(1),
-                            (float) a.optDouble(2), (float) a.optDouble(3));
+            for (int i = 0; i < count && bb.remaining() >= 4; i++) {
+                int tag = bb.getInt();
+                switch (tag) {
+                    case 0: path.moveTo(bb.getFloat(), bb.getFloat()); break;
+                    case 1: path.lineTo(bb.getFloat(), bb.getFloat()); break;
+                    case 2:
+                        path.cubicTo(bb.getFloat(), bb.getFloat(), bb.getFloat(), bb.getFloat(),
+                                bb.getFloat(), bb.getFloat());
+                        break;
+                    case 3: path.quadTo(bb.getFloat(), bb.getFloat(), bb.getFloat(), bb.getFloat()); break;
+                    case 4: path.close(); break;
+                    default: return; // 未知 tag ⇒ 停（格式不匹配——不静默画错）
                 }
             }
             morphCache.put(nodeId, new Object[]{factor, path});

@@ -59,6 +59,133 @@ impl SvgPath {
             .collect()
     }
 
+    /// 子路径数（`MoveTo` 的个数）——异构变形**只支持单子路径**（多子路径的重采样
+    /// 需要"子路径配对"策略，本引擎 v1 不做这类猜测 ⇒ 明确拒绝）。
+    pub fn subpath_count(&self) -> usize {
+        self.segs
+            .iter()
+            .filter(|sg| matches!(sg, PathSeg::MoveTo(..)))
+            .count()
+    }
+
+    /// ★★**均匀弧长重采样**为恰好 `n` 个三次贝塞尔段（+ 可选 Close）——**异构路径变形的前提**。
+    ///
+    /// 【为什么需要（MorphSVG 的核心难点）】两条路径段数/段型不同时"逐点插值"没有定义
+    ///   （哪个点对哪个点？）。业界做法（GSAP MorphSVG / flubber）是**把两条都重采样到
+    ///   同一结构**再插值。本引擎同样做，但**只做一份实现**（内核）——宿主从不重采样。
+    ///
+    /// 【算法（确定性、无随机）】
+    ///   ① 折线化：每段按与弧长计算**同一精度**（贝塞尔 16 折线）展开成点列 + 累计弧长；
+    ///   ② 取点：在总弧长上取 `n+1` 个**等间距**点（含首尾；闭合时末点 ≈ 首点）；
+    ///   ③ 转贝塞尔：Catmull-Rom 切线（`T_i = (P_{i+1} - P_{i-1}) / 2`）→ 三次控制点
+    ///      （`C1 = P_i + T_i/3`、`C2 = P_{i+1} - T_{i+1}/3`）——给折线点列一个**平滑**的解释。
+    ///
+    /// 【★关闭语义（`closed` 参数由调用方给）】**异构变形的两边必须统一闭合**——
+    ///   否则重采样后签名仍不同（一边多一个 `Z`）。惯例：两边都闭合 ⇒ 闭合；否则开放。
+    ///   开放时采样仍走整圈（首尾点重合）⇒ "圆→线"的观感自然（线从圆的接缝处拉开）。
+    ///
+    /// - Returns: `None` = 路径退化（总长为 0——无可变形内容）或多子路径（见 `subpath_count`）。
+    pub fn resample_uniform(&self, n: usize, closed: bool) -> Option<SvgPath> {
+        if self.total_len <= 1e-6 || n == 0 {
+            return None;
+        }
+        if self.subpath_count() > 1 {
+            return None;
+        }
+        // ① 折线化（与 `seg_len_cubic` 同精度：每贝塞尔 16 段）
+        let mut poly: Vec<(f32, f32)> = Vec::new();
+        let mut cum: Vec<f32> = Vec::new();
+        let (mut cur, mut start) = ((0.0f32, 0.0f32), (0.0f32, 0.0f32));
+        let mut acc = 0.0f32;
+        for sg in &self.segs {
+            match *sg {
+                PathSeg::MoveTo(x, y) => {
+                    cur = (x, y);
+                    start = (x, y);
+                    poly.push(cur);
+                    cum.push(acc);
+                }
+                PathSeg::LineTo(x, y) => {
+                    acc += seg_len_line(cur.0, cur.1, x, y);
+                    cur = (x, y);
+                    poly.push(cur);
+                    cum.push(acc);
+                }
+                PathSeg::QuadTo(x1, y1, x, y) => {
+                    let c1 = (cur.0 + (2.0 / 3.0) * (x1 - cur.0), cur.1 + (2.0 / 3.0) * (y1 - cur.1));
+                    let c2 = (x + (2.0 / 3.0) * (x1 - x), y + (2.0 / 3.0) * (y1 - y));
+                    push_cubic_poly(&mut poly, &mut cum, &mut acc, cur, c1, c2, (x, y));
+                    cur = (x, y);
+                }
+                PathSeg::CubicTo(x1, y1, x2, y2, x, y) => {
+                    push_cubic_poly(&mut poly, &mut cum, &mut acc, cur, (x1, y1), (x2, y2), (x, y));
+                    cur = (x, y);
+                }
+                PathSeg::Close => {
+                    if (cur.0 - start.0).abs() > 1e-6 || (cur.1 - start.1).abs() > 1e-6 {
+                        acc += seg_len_line(cur.0, cur.1, start.0, start.1);
+                        cur = start;
+                        poly.push(cur);
+                        cum.push(acc);
+                    }
+                }
+            }
+        }
+        let total = acc;
+        if total <= 1e-6 {
+            return None;
+        }
+        // ② 等间距取点（n+1 个；闭合时末点与首点同位置——采样本身走完整圈）
+        let mut pts: Vec<(f32, f32)> = Vec::with_capacity(n + 1);
+        let mut seg_i = 0usize; // 折线游标（**单调前移**——不从头找，O(poly + n)）
+        for i in 0..=n {
+            let target = total * (i as f32) / (n as f32);
+            while seg_i + 1 < cum.len() && cum[seg_i + 1] < target {
+                seg_i += 1;
+            }
+            let j = seg_i.min(poly.len().saturating_sub(2));
+            let (p0, p1) = (poly[j], poly[j + 1]);
+            let (l0, l1) = (cum[j], cum[j + 1]);
+            let span = (l1 - l0).max(1e-9);
+            let t = ((target - l0) / span).clamp(0.0, 1.0);
+            pts.push((p0.0 + (p1.0 - p0.0) * t, p0.1 + (p1.1 - p0.1) * t));
+        }
+        // ③ Catmull-Rom → 三次贝塞尔
+        let mut segs: Vec<PathSeg> = Vec::with_capacity(n + 2);
+        segs.push(PathSeg::MoveTo(pts[0].0, pts[0].1));
+        let pt_at = |k: isize| -> (f32, f32) {
+            if closed {
+                // 环上取模（首尾相接）
+                let m = n as isize;
+                let idx = ((k % m) + m) % m;
+                pts[idx as usize]
+            } else {
+                pts[k.clamp(0, n as isize) as usize]
+            }
+        };
+        for i in 0..n {
+            let p0 = pts[i];
+            let p1 = pts[i + 1];
+            let pm = pt_at(i as isize - 1);
+            let pn = pt_at(i as isize + 2);
+            let t0 = ((p1.0 - pm.0) * 0.5, (p1.1 - pm.1) * 0.5);
+            let t1 = ((pn.0 - p0.0) * 0.5, (pn.1 - p0.1) * 0.5);
+            segs.push(PathSeg::CubicTo(
+                p0.0 + t0.0 / 3.0,
+                p0.1 + t0.1 / 3.0,
+                p1.0 - t1.0 / 3.0,
+                p1.1 - t1.1 / 3.0,
+                p1.0,
+                p1.1,
+            ));
+        }
+        if closed {
+            segs.push(PathSeg::Close);
+        }
+        let (prefix_len, total_len) = compute_arc_lengths(&segs);
+        Some(SvgPath { segs, prefix_len, total_len })
+    }
+
     /// ★★**逐点插值**（路径变形的**唯一 lerp 实现**——宿主零插值数学，只翻译结果）。
     ///
     /// 【语义】`self` = A 态（t=0）· `other` = B 态（t=1）；每段的每个坐标各自线性插值
@@ -367,6 +494,31 @@ fn seg_len_line(x0: f32, y0: f32, x1: f32, y1: f32) -> f32 {
     ((x1 - x0) * (x1 - x0) + (y1 - y0) * (y1 - y0)).sqrt()
 }
 
+/// ★折线化一段三次贝塞尔（**与 `seg_len_cubic` 同精度 16 段**——两处口径一致：
+///   弧长表与重采样点列描述的是同一条近似曲线，不会"长度按 A 算、点按 B 取"）。
+fn push_cubic_poly(
+    poly: &mut Vec<(f32, f32)>,
+    cum: &mut Vec<f32>,
+    acc: &mut f32,
+    p0: (f32, f32),
+    c1: (f32, f32),
+    c2: (f32, f32),
+    p3: (f32, f32),
+) {
+    const N: usize = 16;
+    let mut prev = p0;
+    for k in 1..=N {
+        let t = k as f32 / N as f32;
+        let mt = 1.0 - t;
+        let x = mt * mt * mt * p0.0 + 3.0 * mt * mt * t * c1.0 + 3.0 * mt * t * t * c2.0 + t * t * t * p3.0;
+        let y = mt * mt * mt * p0.1 + 3.0 * mt * mt * t * c1.1 + 3.0 * mt * t * t * c2.1 + t * t * t * p3.1;
+        *acc += seg_len_line(prev.0, prev.1, x, y);
+        poly.push((x, y));
+        cum.push(*acc);
+        prev = (x, y);
+    }
+}
+
 /// 三次贝塞尔的弧长（16 段折线近似——与 CSS dash 实现同量级；视觉不可辨）
 fn seg_len_cubic(x0: f32, y0: f32, x1: f32, y1: f32, x2: f32, y2: f32, x3: f32, y3: f32) -> f32 {
     const N: usize = 16;
@@ -487,6 +639,59 @@ mod tests {
         assert_ne!(l.structure_signature(), two.structure_signature(), "段数不同");
         let same = parse_svg_path("M0 0 L0 10").unwrap();
         assert_eq!(l.structure_signature(), same.structure_signature(), "同构（只是坐标不同）");
+    }
+
+    /// ★★均匀弧长重采样（异构变形的前提）：结构变成 n 段 C、弧长保持、端点保持、闭合语义。
+    #[test]
+    fn resample_uniform_preserves_length_and_structure() {
+        // 折线 → 12 段 C
+        let l = parse_svg_path("M0 0 L10 0 L10 10").unwrap();
+        let r = l.resample_uniform(12, false).expect("折线可重采样");
+        assert_eq!(r.segs.len(), 13, "M + 12 C（开放路径不加 Z）");
+        assert!(matches!(r.segs[0], PathSeg::MoveTo(..)));
+        assert!(r.segs[1..].iter().all(|s| matches!(s, PathSeg::CubicTo(..))));
+        // 弧长保持（<3%——重采样是同一曲线的另一次折线逼近）
+        let rel = (r.total_len - l.total_len).abs() / l.total_len;
+        assert!(rel < 0.03, "弧长保持：原 {} vs 重采样 {}（rel={rel}）", l.total_len, r.total_len);
+        // 端点保持（起终点同位置）
+        match (r.segs.first().unwrap(), r.segs.last().unwrap()) {
+            (PathSeg::MoveTo(x0, y0), PathSeg::CubicTo(_, _, _, _, x1, y1)) => {
+                assert!(x0.abs() < 1e-4 && y0.abs() < 1e-4, "起点保持 (0,0)");
+                assert!((x1 - 10.0).abs() < 0.05 && (y1 - 10.0).abs() < 0.05, "终点保持 (10,10)：({x1},{y1})");
+            }
+            other => panic!("段型异常：{other:?}"),
+        }
+        // 闭合路径：输出带 Z；且首尾点几乎重合（整圈采样）
+        let c = parse_svg_path("M0 0 L10 0 L10 10 Z").unwrap();
+        let rc = c.resample_uniform(16, true).expect("闭合可重采样");
+        assert!(matches!(rc.segs.last(), Some(PathSeg::Close)), "闭合保持");
+        assert_eq!(rc.segs.len(), 18, "M + 16 C + Z");
+        // 退化与多子路径：明确返回 None（调用方据此拒绝，不静默）
+        let dot = parse_svg_path("M5 5").unwrap();
+        assert!(dot.resample_uniform(8, false).is_none(), "零长路径应拒绝");
+        let two = parse_svg_path("M0 0 L1 0 M2 0 L3 0").unwrap();
+        assert!(two.resample_uniform(8, false).is_none(), "多子路径应拒绝（不做子路径配对猜测）");
+    }
+
+    /// ★★异构变形端到端语义（重采样后两态**结构一致**——直接喂 `morphed`）。
+    #[test]
+    fn resample_makes_hetero_paths_morphable() {
+        // A：圆（4 段 C）；B：三角（3 段 L）——段数与段型都不同
+        let circleish = parse_svg_path("M0 5 C1 1 9 1 10 5 C11 9 1 9 0 5").unwrap();
+        let tri = parse_svg_path("M0 0 L10 0 L5 9 Z").unwrap();
+        assert_ne!(circleish.structure_signature(), tri.structure_signature(), "两态异构（前提）");
+        let n = 16;
+        // ★两边闭合语义统一（tri 闭合、circleish 开放 ⇒ 统一取"开放"）
+        let ra = circleish.resample_uniform(n, false).unwrap();
+        let rb = tri.resample_uniform(n, false).unwrap();
+        assert_eq!(ra.structure_signature(), rb.structure_signature(), "重采样后同构");
+        // 半程混合：段数与终态（= B 的终点位置）都正确
+        let m = ra.morphed(&rb, 0.5);
+        assert_eq!(m.segs.len(), rb.segs.len());
+        assert!(m.total_len > 0.0 && m.total_len.is_finite());
+        let at1 = ra.morphed(&rb, 1.0);
+        let rel = (at1.total_len - rb.total_len).abs() / rb.total_len;
+        assert!(rel < 1e-4, "t=1 应等于重采样后的 B（长度 rel={rel}）");
     }
 
     #[test]

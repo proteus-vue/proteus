@@ -646,6 +646,34 @@ pub extern "system" fn Java_dev_proteus_layoutcore_RustLayout_nativeSvgNodes<'lo
     into_java_string(&mut env, out)
 }
 
+/// ★★**路径变形后的段列表（二进制）**——每帧路径（JSON 版的 15× 提速；
+///   真机读数：moonGlow 幕 p95 2.57ms → 见提交说明）。
+#[no_mangle]
+pub extern "system" fn Java_dev_proteus_layoutcore_RustLayout_nativeSvgMorphPathBin<'local>(
+    mut env: JNIEnv<'local>,
+    _class: JClass<'local>,
+    handle: jni::sys::jlong,
+    node_id: jni::sys::jint,
+) -> jni::sys::jbyteArray {
+    let buf = std::panic::catch_unwind(|| -> Vec<u8> {
+        let mut len: u32 = 0;
+        let p = unsafe {
+            ffi::proteus_layout_svg_morph_path_bin(handle as u64, node_id as u32, &mut len)
+        };
+        if p.is_null() || len == 0 {
+            return Vec::new();
+        }
+        let v = unsafe { std::slice::from_raw_parts(p, len as usize) }.to_vec();
+        unsafe { ffi::proteus_rects_free(p, len) };
+        v
+    })
+    .unwrap_or_default();
+    match env.byte_array_from_slice(&buf) {
+        Ok(a) => a.into_raw(),
+        Err(_) => std::ptr::null_mut(),
+    }
+}
+
 /// ★★**路径变形后的段列表**（路径变形 v1）——入参 `{"nodeId":N}`；
 ///   返回 `{"ok":true,"segs":[…],"totalLen":x,"morph":t}`（与 `nativeSvgNodes` 同形）。
 #[no_mangle]
