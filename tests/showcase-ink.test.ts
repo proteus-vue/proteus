@@ -394,6 +394,28 @@ describe('Morpheus 炫技场 · 第四个节目（墨绘·山水卷）', () => {
     }
   })
 
+  it('★★渐变 v2（两态混合）：云带/云团声明 B 态（结构严格一致——内核会再校验）', () => {
+    const nodes = treeNodes()
+    // 云带 2 条：linear 两态，色标数一致
+    for (const cid of INK_IDS.clouds) {
+      const g = (nodes.get(cid) as { fillGradient?: { kind: string; stops: unknown[] }; fillGradientTo?: { kind: string; stops: unknown[] } })
+      expect(g.fillGradientTo?.kind, `云带 ${cid} B 态类型`).toBe(g.fillGradient?.kind)
+      expect(g.fillGradientTo?.stops.length, `云带 ${cid} 两态色标数`).toBe(g.fillGradient?.stops.length)
+    }
+    // 云团 3 个：radial 两态
+    for (const pid of INK_IDS.cloudPuffs) {
+      const g = (nodes.get(pid) as { fillGradient?: { kind: string }; fillGradientTo?: { kind: string } })
+      expect(g.fillGradient?.kind).toBe('radial')
+      expect(g.fillGradientTo?.kind).toBe('radial')
+    }
+    // moonGlow 幕有 gradientMix 通道（CSS 做不到的那件事）
+    const { acts } = walkAll()
+    const glow = acts.find((a) => a.name === 'moonGlow')!
+    const mixes = glow.anims.filter((x) => x.kind === 32)
+    expect(mixes.length, 'moonGlow 的 gradientMix 指令').toBeGreaterThanOrEqual(5) // 2 云带 + 3 云团
+    for (const m of mixes) expect(m.alternate, '混合应 yoyo（呼吸感）').toBe(true)
+  })
+
   it('★工具函数契约：blend 预混（6 位）· ink 加 alpha（8 位 #RRGGBBAA）', () => {
     expect(blend('#000000', '#ffffff', 0.5)).toBe('#808080')
     expect(blend('#f2ead6', '#f2ead6', 0.3)).toBe('#f2ead6')

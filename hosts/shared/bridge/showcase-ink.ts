@@ -657,6 +657,10 @@ export function buildInkTree(view: View): string {
       backgroundColor: color,
       // ★★真渐变（v1）：云带**顶浓底淡**（竖直渐隐）——比纯色的"横贯色带"接近云
       fillGradient: mistFade(blend(P.paper, '#b9cbdb', 0.55), i === 0 ? 0.85 : 0.7),
+      // ★★渐变 v2（两态）：**晨雾态**（更暖更亮）——由 `gradientMix` 通道过渡。
+      //   ★这是 CSS 做不到的事：`background-image` 的渐变不可过渡（改色标是硬跳变）。
+      //   两态结构严格一致（同 linear、同 2 色标）——内核建树时会再校验一次。
+      fillGradientTo: mistFade(blend(P.paper, '#e8d9b8', 0.6), i === 0 ? 0.95 : 0.8),
       clipPath: { kind: 'polygon', params: MIST_FLAT },
     })
   })
@@ -677,6 +681,8 @@ export function buildInkTree(view: View): string {
       backgroundColor: blend(P.paper, '#cfdce8', tint),
       // ★★真渐变（v1）：云团的径向渐隐（边缘不切边）
       fillGradient: inkWash('#c3d4e4', tint + 0.15),
+      // ★★v2 两态：晨光晕（更暖）——moonGlow 幕混合过去（同 radial / 同 3 色标）
+      fillGradientTo: inkWash('#f0dcb4', tint + 0.2),
       clipPath: { kind: 'inset', params: [1, 0, 0, 0] }, // 基态全隐（clip 揭现）
     })
   })
@@ -1125,6 +1131,14 @@ export function createInkProgram(_env: { view: View }): InkProgram {
         ...I.cloudPuffs.flatMap((id, i) =>
           onto(id, { kind: 'translateX', from: 0, to: i % 2 === 0 ? 26 : -22, durationMs: 2600, delayMs: i * 300, repeat: 2, direction: 'alternate', curve: 'easeInOut' }),
         ),
+        // ★★渐变 v2（两态混合——CSS 做不到）：云带/云团由"冷雾"过渡到"晨光暖雾"，
+        //   再 yoyo 回冷 —— "云开月明"的色调叙事（不是换一个渐变，是**渐变本身在呼吸**）
+        ...I.clouds.flatMap((id, i) => [
+          ...onto(id, { kind: 'gradientMix', from: 0, to: 1, durationMs: 2200, delayMs: i * 300, repeat: 2, direction: 'alternate', curve: 'easeInOut' }),
+        ]),
+        ...I.cloudPuffs.flatMap((id, i) => [
+          ...onto(id, { kind: 'gradientMix', from: 0, to: 1, durationMs: 2400, delayMs: 200 + i * 320, repeat: 2, direction: 'alternate', curve: 'easeInOut' }),
+        ]),
         ...onto(I.haloOuter, { kind: 'scale', from: 1, to: 1.06, durationMs: 1800, repeat: 2, direction: 'alternate', curve: 'easeInOut' }),
         ...onto(I.moon, { kind: 'scale', from: 1, to: 1.09, durationMs: 1800, repeat: 2, direction: 'alternate', curve: 'easeInOut' }),
         ...onto(I.moon, { kind: 'color', from: P.moon, to: P.moonLit, durationMs: 1800, repeat: 2, direction: 'alternate', curve: 'easeInOut' }),

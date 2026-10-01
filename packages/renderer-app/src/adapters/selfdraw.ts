@@ -237,6 +237,8 @@ const LAYOUT_KEYS = new Set([
   //   ★本集合是"请求树"的筛选器（内核 + iOS 宿主共读这棵树）——
   //     漏放 ⇒ **iOS 宿主的建层读不到声明 ⇒ 静默不渲染**（对内核则无害：它不算渐变）。
   'fillGradient',
+  // ★★渐变 v2：B 态（混合终点）——漏放 ⇒ 请求不带 B ⇒ 内核拒绝混合动画且静默
+  'fillGradientTo',
 ])
 
 /**
@@ -288,7 +290,8 @@ function layoutStyleOf(props: Record<string, unknown>): Record<string, unknown> 
     // ★★C1/B：两个键是**复合/非长度值**（clipPath 是对象、perspective 是数）——
     //   原样透传给内核（不经过下面的长度折叠：它们不是长度）。
     if (key === 'clipPath' || key === 'perspective' || key === 'svgPath'
-        || key === 'strokeColor' || key === 'strokeWidth' || key === 'fillGradient') {
+        || key === 'strokeColor' || key === 'strokeWidth' || key === 'fillGradient'
+        || key === 'fillGradientTo') {
         out[key] = value
         continue
     }

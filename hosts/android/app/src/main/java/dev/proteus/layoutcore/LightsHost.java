@@ -589,7 +589,9 @@ final class LightsHost {
             "clipPath", "svgPath", "perspective",
             // ★★渐变（v1 静态 paint——2026-10-01）：与 borderRadius 同层的绘制属性；
             //   不在白名单 ⇒ 请求树不带声明 ⇒ 宿主读不到 ⇒ **静默不渲染**。
-            "fillGradient"));
+            "fillGradient",
+            // ★★渐变 v2：B 态（两态混合的终点）——同"必须在白名单"纪律
+            "fillGradientTo"));
 
     /** 缺省字号（**布局单位** = px，与本场景 viewport 同坐标系） */
     private static final double DEFAULT_FONT_UNITS = 14.0;
