@@ -58,6 +58,12 @@ export interface LightsAct {
   note: string
   /** 本幕里的颜色通道指令条数（判据：颜色驱动占比——本节目的是 100%） */
   colorAnims: number
+  /**
+   * ★**着色采样帧标记**（2026-10-01）：宿主在该幕进行中采一次"颜色多样性"
+   *   （此前按幕名 `rainbow` 硬编码——改为**节目单显式声明**：采样帧是导演的选择，
+   *   不是宿主猜的名字）。
+   */
+  midSample?: boolean
 }
 
 /** 节目单环境（入口与 CI 各自注入：几何现读函数、网格参数、标题节点） */
@@ -85,11 +91,21 @@ export interface LightsProgram {
 
 /* ────────────────────────── 工具 ────────────────────────── */
 
-/** 一批指令的时间跨度 = max(delayMs + durMs) */
+/**
+ * 一批指令的**名义时间跨度** = max(delayMs + durMs × 遍数)
+ *
+ * ★★**必须含 `repeat`**（2026-10-01 真机抓出的算术缺陷）：`breathe` 幕（repeat:6，
+ *   durMs 300）的名义 span 首版算成 300ms，而实际跑 1800ms ⇒ 幕时长远小于动画时长
+ *   ⇒ 幕在动画半途被切走（判据③的 wall/span = 6.0 就是它）。
+ *   ★`repeat: -1`（infinite）⇒ **没有名义终点**：调用方必须显式给 `holdMs`（或用 stop）
+ *   ——此处返回 `+∞` 会让宿主的安全上限逻辑失效，故按"一遍 + 极大值"处理：
+ *   用 `durMs` 返回（宿主靠 `animActiveCount` 判幕尾；幕时长只作兜底参考）。
+ */
 export function spanMs(anims: readonly EngineAnim[]): number {
   let m = 0
   for (const a of anims) {
-    const end = (a.delayMs ?? 0) + (a.durMs ?? 0)
+    const reps = a.repeat === undefined ? 1 : a.repeat < 0 ? 1 : a.repeat
+    const end = (a.delayMs ?? 0) + (a.durMs ?? 0) * reps
     if (end > m) m = end
   }
   return m
@@ -111,6 +127,8 @@ interface Step {
   name: string
   note: string
   holdMs?: number
+  /** ★着色采样帧（见 `LightsAct.midSample`） */
+  midSample?: boolean
   build: () => EngineAnim[]
 }
 
@@ -185,8 +203,10 @@ export function createLightsProgram(env: LightsEnv): LightsProgram {
   })
 
   // ④ 彩虹流：色相波沿对角扫过（多段 keyframes 的流动色带）
+  //   ★midSample：本幕中途（色带最盛）是全场颜色最丰富的一帧——宿主在此采颜色多样性
   steps.push({
     name: 'rainbow',
+    midSample: true,
     note: '彩虹流：每颗灯 6 段色相循环（蓝→粉→紫→粉→蓝→青）斜向相位——流动色带',
     build: () =>
       choreograph.cycle({
@@ -423,7 +443,16 @@ export function createLightsProgram(env: LightsEnv): LightsProgram {
       const hold = s.holdMs ?? 0
       // 本节目灯不动：姿态永远基线（记账接口保留，与节目一同构）
       const colorAnims = anims.filter((a) => isColorKind(a.kind)).length
-      return { name: s.name, spanMs: span, holdMs: hold, durationMs: span + hold, anims, note: s.note, colorAnims }
+      return {
+        name: s.name,
+        spanMs: span,
+        holdMs: hold,
+        durationMs: span + hold,
+        anims,
+        note: s.note,
+        colorAnims,
+        ...(s.midSample ? { midSample: true } : {}),
+      }
     },
     plan(): string[] {
       return steps.map((s) => s.name)

@@ -2430,13 +2430,23 @@ fn parse_repeat(a: &serde_json::Value, node_id: u32) -> Result<(f32, bool), Stri
             n
         }
     };
-    let alternate = match a.get("direction").and_then(|x| x.as_str()) {
-        None | Some("normal") => false,
-        Some("alternate") => true,
-        Some(other) => {
-            return Err(format!(
-                "节点 {node_id} 的 direction 只支持 \"normal\" / \"alternate\"，收到 {other:?}"
-            ))
+    // ★★yoyo 方向：**两种字段形态都认**（2026-10-01 真机抓出的跨语言分叉修正）——
+    //   TS 编译产物发的是 `alternate: true`（boolean），而本函数首版只读
+    //   `direction: "alternate"`（字符串）⇒ **真机上 yoyo 静默不生效**：
+    //   sweep 幕第 2 遍变成"重跑 0→180"，末态 180（应回 0）——由 check-flip.py ④ 抓出。
+    //   ★教训（与 color_shift 通配同源）：跨语言字段名/形态必须有**对拍测试**，
+    //     光有两侧各自的单测不够（它们各自都绿）。见 ffi 单测 `repeat_yoyo_field_forms`。
+    let alternate = if a.get("alternate").and_then(|x| x.as_bool()).unwrap_or(false) {
+        true
+    } else {
+        match a.get("direction").and_then(|x| x.as_str()) {
+            None | Some("normal") => false,
+            Some("alternate") => true,
+            Some(other) => {
+                return Err(format!(
+                    "节点 {node_id} 的 direction 只支持 \"normal\" / \"alternate\"，收到 {other:?}"
+                ))
+            }
         }
     };
     Ok((iterations, alternate))
@@ -3461,6 +3471,36 @@ mod tests {
             assert!(err.contains(needle) || err.contains("节点 7"), "错误消息应可定位：{err}");
             assert!(err.contains("节点 7"), "错误消息应含 nodeId：{err}");
         }
+    }
+
+    /// ★★**repeat/yoyo 的跨语言字段形态**（2026-10-01 真机分叉修正的回归锁）
+    ///
+    /// 【为什么必须钉】TS 编译产物发 `{ repeat: 2, alternate: true }`；内核首版只认
+    ///   `direction: "alternate"` ⇒ 真机上 yoyo **静默不生效**（该幕第 2 遍重跑而非回程，
+    ///   末态 180° 而应 0°）。两侧各自的单测都绿——只有真机判据（check-flip.py ④）抓到。
+    ///   ⇒ 本测试把**两种形态**都钉住（TS 形态必须工作；字符串形态向后兼容）。
+    #[test]
+    fn repeat_yoyo_field_forms() {
+        // TS 编译产物形态：alternate: true
+        let ts_form = serde_json::json!({ "repeat": 2, "alternate": true });
+        let (it, alt) = parse_repeat(&ts_form, 7).unwrap();
+        assert_eq!(it, 2.0);
+        assert!(alt, "TS 形态 alternate:true 必须被识别（否则 yoyo 真机静默失效）");
+        // 字符串形态（向后兼容）
+        let str_form = serde_json::json!({ "repeat": 3, "direction": "alternate" });
+        let (it2, alt2) = parse_repeat(&str_form, 7).unwrap();
+        assert_eq!(it2, 3.0);
+        assert!(alt2);
+        // 无 repeat ⇒ 缺省（1 遍、非 yoyo）
+        let plain = serde_json::json!({});
+        let (it3, alt3) = parse_repeat(&plain, 7).unwrap();
+        assert_eq!(it3, 1.0);
+        assert!(!alt3);
+        // infinite + alternate（呼吸灯的典型形态）
+        let inf = serde_json::json!({ "repeat": "infinite", "alternate": true });
+        let (it4, alt4) = parse_repeat(&inf, 7).unwrap();
+        assert_eq!(it4, -1.0);
+        assert!(alt4);
     }
 
     /// ★★**anim_start 全链路**：JSON（含 curveBezier）→ Anim（curve_pts 生效）——

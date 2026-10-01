@@ -90,6 +90,13 @@ const T = {
     lightsImgAlt: 'Morpheus 灯光秀真机录屏：800 颗彩灯在黑舞台上完成 15 幕亮灭演出，中间灯阵点字 800 与 LIGHTS',
     lightsCaption: '真机录屏（Redmi · 120Hz · 15 幕一遍到底，循环播放）：点火 → 跑马灯 → 彩虹流 → 光扇 → 灯阵点字 → 熄灯谢幕',
     lightsCmd: '复跑：bash hosts/android/build-and-run.sh --release --lights ｜ 分享版 APK：proteus-lights.apk（点开即循环演出）',
+    foldTitle: '第三个节目 · 维度折叠（2D ↔ 3D 穿越 · 安卓真机）',
+    foldLead:
+      '800 张薄片在**二维平面与三维立体之间反复穿越**：拍平成地面 → 立起成墙 → 折扇 → 鳞片扭转 → 砸回平面 → 镜墙风浪 → 立体涟漪 → **镜面慢翻（0.3× 慢动作）** → 归位谢幕。**颜色 = 第三维度的语言**：平面世界是白纸（无色），每次"立起"色彩沿列涌现，每次"砸平"褪回白色——颜色本身证明了第三个维度存在。整场 24800 条指令 100% 声明式（3D 8800 条 · 自定义曲线 4800 条 · 循环 3200 条）。',
+    foldNote: '★**本场是 2026-10-01 能力扩充的验收演出**：任意三次贝塞尔（`elastic` 一拍即平 / `backOut` 立起回弹 / `anticipate` 蓄力再砸）给三种"运动性格"；`rotateX/Y + perspective` 是所有维度转换本身；`repeat + alternate` 做折扇与鳞片的往复；`timeScale` 做 0.3× 慢翻与 1.6× 涟漪。真机判据端到端验证：slowYaw wall/span 3.34×（慢动作真的改变了时间推进）· ripple 0.63× · 其余精确 1.00× · 3D 逐幕终态钉死（-85°/0°/180°）。',
+    foldImgAlt: 'Morpheus 维度折叠真机录屏：800 张薄片在 2D 平面与 3D 立体间穿越，彩虹色沿列涌现',
+    foldCaption: '真机录屏（Redmi · 120Hz · 9 幕一遍到底，循环播放）：拍平 → 立起涌现色彩 → 折扇 → 鳞片 → 砸平 → 慢翻 → 谢幕',
+    foldCmd: '复跑：bash hosts/android/build-and-run.sh --release --flip ｜ 分享版 APK：proteus-flip.apk（点开即循环演出）',
     demoTitle: '真机演示',
     demoNote: '演示播放的是引擎交给执行器的同一份指令（routeTransitionBatches）；曲线求值走与 Rust 内核 golden 对拍过的 TS 镜像。',
     dirLabel: '方向',
@@ -174,6 +181,13 @@ const T = {
     lightsCaption: 'Device recording (Redmi · 120 Hz · 15 acts in one pass, looping): ignition → marquee → rainbow → fan → matrix text → curtain',
     lightsCmd:
       'Re-run: bash hosts/android/build-and-run.sh --release --lights | Shareable APK: proteus-lights.apk (tap to loop the show)',
+    foldTitle: 'Third show · Dimensional Folding (2D ↔ 3D traversal · Android device)',
+    foldLead:
+      '800 thin tiles travel **repeatedly between a 2D plane and 3D space**: flattened into a floor → lifted into a wall → accordion folds → scaled twist → slammed flat → mirror wall with wind waves → volumetric ripples → **mirror slow-turn (0.3× slow motion)** → reset finale. **Colour is the language of the third dimension**: the planar world is blank white, every lift makes colour emerge column by column, every slam fades back to white — colour itself proves the third dimension exists. All 24,800 instructions 100% declarative (8,800 3D · 4,800 custom curves · 3,200 looping).',
+    foldNote: '★This show is the **acceptance performance of the 2026-10-01 capability expansion**: arbitrary cubic-bezier (`elastic` / `backOut` / `anticipate`) gives three motion personalities; `rotateX/Y + perspective` is every dimension change itself; `repeat + alternate` drives the accordion and scales; `timeScale` powers the 0.3× slow turn and 1.6× ripple. Device judge verifies end to end: slowYaw wall/span 3.34× (slow motion truly changed time advance) · ripple 0.63× · others exactly 1.00× · per-act 3D end states pinned (-85° / 0° / 180°).',
+    foldImgAlt: 'Morpheus dimensional-folding device recording: 800 tiles traversing between 2D plane and 3D space, rainbow colour emerging column by column',
+    foldCaption: 'Device recording (Redmi · 120 Hz · 9 acts in one pass, looping): flatten → lift with emerging colour → accordion → scales → slam flat → slow turn → finale',
+    foldCmd: 'Re-run: bash hosts/android/build-and-run.sh --release --flip | Shareable APK: proteus-flip.apk (tap to loop the show)',
     demoTitle: 'Device demo',
     demoNote: 'The demo plays the very same instructions the engine hands to the executor (routeTransitionBatches); curve evaluation uses the TS mirror golden-tested against the Rust kernel.',
     dirLabel: 'Direction',
@@ -386,6 +400,16 @@ const LIGHTS_STATS = [
   { v: '8.333', u: 'ms', l: isEn.value ? 'vsync p50 (= the 120Hz budget)' : 'vsync p50（= 120Hz 预算）', lEn: 'vsync p50 (= the 120Hz budget)' },
   { v: '2.03', u: 'ms', l: isEn.value ? 'Per-frame p95 (24% of budget)' : '每帧 p95（预算的 24%）', lEn: 'Per-frame p95 (24% of budget)' },
   { v: '1160', u: isEn.value ? 'colours' : '种颜色', l: isEn.value ? 'Sampled mid-show (colour really flows)' : '演出中途采样（颜色真的在流动）', lEn: 'Sampled mid-show (colour really flows)' },
+] as Array<{ v: string; u: string; l: string; lEn?: string }>
+
+// ★★第三个节目（维度折叠）的机器读数——来自 check-flip.py 全绿的那一轮真机报告
+const FOLD_STATS = [
+  { v: '9', u: isEn.value ? 'acts' : '幕', l: isEn.value ? '2D ↔ 3D traversal, one pass' : '2D ↔ 3D 穿越，一遍到底', lEn: '2D ↔ 3D traversal, one pass' },
+  { v: '24800', u: isEn.value ? 'instr.' : '条指令', l: isEn.value ? '100% declarative · 8800 3D · 4800 curves' : '100% 声明式 · 3D 8800 · 曲线 4800', lEn: '100% declarative · 8800 3D · 4800 curves' },
+  { v: '3.34×', u: isEn.value ? 'slower' : '慢动作', l: isEn.value ? 'slow-turn (timeScale 0.3, wall/span)' : '镜面慢翻（timeScale 0.3 · wall/span 实测）', lEn: 'slow-turn (timeScale 0.3, wall/span)' },
+  { v: '0.63×', u: isEn.value ? 'faster' : '加速', l: isEn.value ? 'ripple (timeScale 1.6)' : '涟漪（timeScale 1.6）', lEn: 'ripple (timeScale 1.6)' },
+  { v: '120', u: 'Hz', l: isEn.value ? '4134 frames · p95 0.80ms/frame' : '4134 帧 · 每帧 p95 0.80ms', lEn: '4134 frames · p95 0.80ms/frame' },
+  { v: '0%', u: isEn.value ? 'escape' : '逃生口', l: isEn.value ? 'Every pixel traceable to a declaration' : '每个像素可追溯到一句声明', lEn: 'Every pixel traceable to a declaration' },
 ] as Array<{ v: string; u: string; l: string; lEn?: string }>
 
 const BOUNDARIES = computed(() =>
@@ -734,6 +758,45 @@ onUnmounted(() => {
             </p-grid>
             <p-text class="sc-note">{{ C.lightsNote }}</p-text>
             <code class="ev-src">{{ C.lightsCmd }}</code>
+          </p-stack>
+        </p-grid>
+      </p-view>
+
+      <!-- ═══════════ 第三个节目 · 维度折叠（安卓真机录屏） ═══════════ -->
+      <p-view data-reveal class="sec">
+        <p-stack direction="row" align="center" :gap="12" class="sec-head" wrap>
+          <p-heading :level="2" v-p-fluid="'font-size(24, 32)'" class="sec-title">{{ C.foldTitle }}</p-heading>
+          <span class="sec-rule" />
+        </p-stack>
+        <p-text class="sec-note">{{ C.foldLead }}</p-text>
+        <p-grid :min-col-width="320" :gap="22" class="sc-grid">
+          <p-view class="sc-shot">
+            <video
+              v-if="motionOk"
+              class="sc-img sc-video sc-video-tall"
+              :src="`${base}morpheus-flip.mp4`"
+              :poster="`${base}morpheus-flip.png`"
+              :aria-label="C.foldImgAlt"
+              autoplay
+              muted
+              loop
+              playsinline
+              preload="metadata"
+            />
+            <img v-else :src="`${base}morpheus-flip.png`" :alt="C.foldImgAlt" class="sc-img" loading="lazy" />
+            <p-text class="sc-cap">{{ C.foldCaption }}</p-text>
+          </p-view>
+          <p-stack direction="column" :gap="14" class="sc-side">
+            <p-grid :min-col-width="132" :gap="12">
+              <p-view v-for="(e, i) in FOLD_STATS" :key="i" class="sc-stat">
+                <p-stack direction="row" align="baseline" :gap="5" class="ev-num">
+                  <span class="ev-v sc-v">{{ e.v }}</span><span class="ev-u">{{ e.u }}</span>
+                </p-stack>
+                <p-text class="ev-l">{{ isEn ? e.lEn : e.l }}</p-text>
+              </p-view>
+            </p-grid>
+            <p-text class="sc-note">{{ C.foldNote }}</p-text>
+            <code class="ev-src">{{ C.foldCmd }}</code>
           </p-stack>
         </p-grid>
       </p-view>

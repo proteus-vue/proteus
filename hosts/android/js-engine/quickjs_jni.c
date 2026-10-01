@@ -76,7 +76,9 @@ static struct {
   jmethodID rects;
   jmethodID probe;
   jmethodID report;
-} g_host_methods = { NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL };
+  /* ★★A3 播放控制（2026-10-01 · 第三节目）：animControl(String)->String */
+  jmethodID anim_control;
+} g_host_methods = { NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL };
 
 /* ★前向声明：eval_impl 之后要泵 job（定义在下方；C 里调用点必须先可见） */
 static int pump_jobs_bounded(void);
@@ -336,6 +338,10 @@ static JSValue js_host_probe(JSContext *ctx, JSValueConst this_val, int argc, JS
 static JSValue js_host_report(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv) {
   return host_call_impl(ctx, g_host_methods.report, 0, this_val, argc, argv);
 }
+/** ★★A3 播放控制：`proteusHost.animControl(json)`——时间因子 / 暂停（回显生效值） */
+static JSValue js_host_anim_control(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv) {
+  return host_call_impl(ctx, g_host_methods.anim_control, 1, this_val, argc, argv);
+}
 
 /** 组装 JSON 字符串结果（转义 `"` `\` 与换行；最小实现，不引第三方） */
 static char *json_escape_alloc(const char *s) {
@@ -411,6 +417,10 @@ static jstring eval_impl(JNIEnv *env, jstring source, jboolean with_host) {
     }
     if (g_host_methods.report != NULL) {
       JS_SetPropertyStr(g_ctx, host, "report", JS_NewCFunction(g_ctx, js_host_report, "report", 1));
+    }
+    // ★★A3 播放控制（条件注入——同 mount 原则）
+    if (g_host_methods.anim_control != NULL) {
+      JS_SetPropertyStr(g_ctx, host, "animControl", JS_NewCFunction(g_ctx, js_host_anim_control, "animControl", 1));
     }
     // ★★动画桥（条件注入——同 mount 原则；灯光秀的 JS 侧驱动依赖它）
     if (g_host_methods.anim_start != NULL && g_host_methods.anim_tick != NULL) {
@@ -505,6 +515,7 @@ Java_dev_proteus_layoutcore_QuickJsEngine_nativeSetHostCallback(JNIEnv *env, jcl
   g_host_methods.invoke = NULL;
   g_host_methods.anim_start = g_host_methods.anim_tick = g_host_methods.anim_stop = g_host_methods.anim_active = NULL;
   g_host_methods.now_us = g_host_methods.rects = g_host_methods.probe = g_host_methods.report = NULL;
+  g_host_methods.anim_control = NULL;
   if (obj != NULL) {
     g_host_obj = (*env)->NewGlobalRef(env, obj);
     jclass c = (*env)->GetObjectClass(env, obj);
@@ -542,6 +553,9 @@ Java_dev_proteus_layoutcore_QuickJsEngine_nativeSetHostCallback(JNIEnv *env, jcl
     g_host_methods.probe = (*env)->GetMethodID(env, c, "probe", "(Ljava/lang/String;)Ljava/lang/String;");
     if ((*env)->ExceptionCheck(env)) (*env)->ExceptionClear(env);
     g_host_methods.report = (*env)->GetMethodID(env, c, "report", "(Ljava/lang/String;)V");
+    if ((*env)->ExceptionCheck(env)) (*env)->ExceptionClear(env);
+    /* ★★A3 播放控制（一参：json；返回 String） */
+    g_host_methods.anim_control = (*env)->GetMethodID(env, c, "animControl", "(Ljava/lang/String;)Ljava/lang/String;");
     if ((*env)->ExceptionCheck(env)) (*env)->ExceptionClear(env);
     if (g_host_methods.post == NULL) {
       LOGE("宿主回调缺少 post(String) 方法（其余入口仍按各自实现条件注入）");

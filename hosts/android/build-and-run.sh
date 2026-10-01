@@ -53,9 +53,11 @@ LINKER="$TOOLCHAIN/bin/aarch64-linux-android${API}-clang"
 #   Rust 侧始终是 release（见下方 cargo --release）
 MODE="debug"
 LIGHTS=0
+FLIP=0
 for arg in "$@"; do
   [ "$arg" = "--release" ] && MODE="release"
   [ "$arg" = "--lights" ] && LIGHTS=1
+  [ "$arg" = "--flip" ] && FLIP=1
 done
 echo "    构建模式：$MODE$([ "$MODE" = "release" ] && echo "（§9.2 正式验收口径）" || echo "（冒烟用；debug 数据不可作验收）")$([ "$LIGHTS" = "1" ] && echo " · 灯光秀独立应用（dev.proteus.lights）")"
 
@@ -266,10 +268,21 @@ if [ "$LIGHTS" = "1" ]; then
   grep -q 'dev.proteus.lights' "$MANIFEST" || { echo "✗ lights 清单生成失败（包名没换）"; exit 3; }
   grep -q 'LightsDemoActivity' "$MANIFEST" || { echo "✗ lights 清单生成失败（Activity 没换）"; exit 3; }
 fi
+if [ "$FLIP" = "1" ]; then
+  # ★★翻牌剧场独立应用（2026-10-01 · 第三个节目）：同 sed 生成法。
+  MANIFEST="$BUILD/AndroidManifest.flip.xml"
+  sed -e 's/package="dev.proteus.layoutcore"/package="dev.proteus.flip"/'       -e 's/android:label="Proteus LayoutCore"/android:label="Morpheus Flip"/'       -e 's/android:name="\.MainActivity"/android:name="dev.proteus.layoutcore.FlipDemoActivity" android:theme="@android:style\/Theme.NoTitleBar.Fullscreen"/'       "$APP/src/main/AndroidManifest.xml" > "$MANIFEST"
+  grep -q 'dev.proteus.flip' "$MANIFEST" || { echo "✗ flip 清单生成失败（包名没换）"; exit 3; }
+  grep -q 'FlipDemoActivity' "$MANIFEST" || { echo "✗ flip 清单生成失败（Activity 没换）"; exit 3; }
+fi
 if [ "$MODE" = "release" ]; then
   # ★release：从清单里去掉 android:debuggable（debug 包数据 §9.2 明确作废）
   if [ "$LIGHTS" = "1" ]; then
     _M="$BUILD/AndroidManifest.lights.release.xml"
+    sed 's/ *android:debuggable="true"//' "$MANIFEST" > "$_M"
+    MANIFEST="$_M"
+  elif [ "$FLIP" = "1" ]; then
+    _M="$BUILD/AndroidManifest.flip.release.xml"
     sed 's/ *android:debuggable="true"//' "$MANIFEST" > "$_M"
     MANIFEST="$_M"
   else
@@ -280,6 +293,8 @@ if [ "$MODE" = "release" ]; then
 fi
 if [ "$LIGHTS" = "1" ]; then
   APK="$BUILD/proteus-lights.apk"
+elif [ "$FLIP" = "1" ]; then
+  APK="$BUILD/proteus-flip.apk"
 else
   APK="$BUILD/proteus-layoutcore.apk"
 fi
@@ -414,6 +429,7 @@ if [ "$NO_INSTALL" = "1" ]; then
   exit 0
 fi
 if [ "$LIGHTS" = "1" ]; then PKG="dev.proteus.lights"; ACTIVITY="dev.proteus.lights/dev.proteus.layoutcore.LightsDemoActivity"
+elif [ "$FLIP" = "1" ]; then PKG="dev.proteus.flip"; ACTIVITY="dev.proteus.flip/dev.proteus.layoutcore.FlipDemoActivity"
 else PKG="dev.proteus.layoutcore"; ACTIVITY="dev.proteus.layoutcore/.MainActivity"; fi
 "$ADB" wait-for-device
 "$ADB" install -r -t "$APK" 2>&1 | tail -3

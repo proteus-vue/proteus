@@ -20,6 +20,18 @@
 import { escapes } from '@proteus-vue/animation'
 import { createLightsProgram, LIGHTS_PALETTE } from '../../shared/bridge/showcase-lights'
 import type { LightsAct, LightsProgram } from '../../shared/bridge/showcase-lights'
+// ★第三个节目（翻牌剧场）：验收 A/B 批新能力（任意缓动 / 3D / 循环 / 播放控制）
+import { createFlipProgram } from '../../shared/bridge/showcase-flip'
+import type { FlipAct, FlipControl } from '../../shared/bridge/showcase-flip'
+
+/** 两个节目的幕的**公共形状**（entry 只依赖这个——节目单各自扩展） */
+type AnyAct = (LightsAct | FlipAct) & {
+  control?: FlipControl
+  midSample?: boolean
+  rotate3dAnims?: number
+  curveBezierAnims?: number
+  repeatAnims?: number
+}
 
 /* ────────────────── 宿主桥（android QuickJS 注入的 `proteusHost`） ────────────────── */
 
@@ -27,6 +39,8 @@ interface LightsHostBridge {
   mount(treeJson: string): string
   animStart(json: string): string
   animStop(json: string): string
+  /** ★A3 播放控制（时间因子/暂停）：可选（宿主未实现时跳过——保持向后兼容） */
+  animControl?(json: string): string
   rects(): string
   nowUs(): string
   probe(idsJson: string): string
@@ -44,14 +58,25 @@ interface Args {
   cols?: number
   /** 视口（宿主注入；缺省 1080×2400） */
   viewport?: { width: number; height: number }
+  /** ★节目选择（缺省 'lights'）：'flip' = 翻牌剧场（验收 A/B 批新能力） */
+  program?: 'lights' | 'flip'
 }
 
 const state = {
-  args: { tiles: 800, cols: 20 } as Required<Omit<Args, 'viewport'>>,
+  args: { tiles: 800, cols: 20 } as Required<Omit<Args, 'viewport' | 'program'>>,
   view: { width: 1080, height: 2400 },
   ids: [] as number[],
   titleId: 2000,
+  /** ★节目选择（'lights' = 灯光秀 / 'flip' = 翻牌剧场；2026-10-01） */
+  programKind: 'lights' as 'lights' | 'flip',
   program: null as LightsProgram | null,
+  programAny: null as { next(): AnyAct | null; plan(): string[] } | null,
+  /** 翻牌剧场的能力计数（灯光秀为 0） */
+  rotate3dAnims: 0,
+  curveBezierAnims: 0,
+  repeatAnims: 0,
+  /** 执行过的播放控制序列（判据对账用） */
+  controls: [] as Array<{ act: string; control: FlipControl }>,
   plan: [] as string[],
   acts: [] as Array<Record<string, unknown>>,
   sampleIds: [] as number[],
@@ -110,6 +135,10 @@ function buildTree(viewW: number, viewH: number, n: number, cols: number): strin
       flexShrink: 0,
       borderRadius: lampRadius,
       backgroundColor: LIGHTS_PALETTE.off,
+      // ★★透视距离（B 批 3D · "维度折叠"节目）：落在卡片自身样式（CSS perspective 语义）。
+      //   1100 是舞台尺度的甜点值（太小 = 畸变过度，太大 = 立体感消失）。
+      //   ★灯光秀不用 3D ⇒ 对它是无害的静态字段（同一棵树、两个节目）。
+      perspective: 1100,
     })
   }
   // ★标题文字节点（**文字色轨道**的落点）：绝对定位在顶部，基色 = 青（与节目单的链一致）
@@ -154,8 +183,9 @@ function readLampCenters(): Array<{ x: number; y: number }> {
 
 export function __proteusLightsRun(argsJson?: string): string {
   const args: Args = argsJson ? JSON.parse(argsJson) : {}
-  const a: Required<Omit<Args, 'viewport'>> = { tiles: args.tiles ?? 800, cols: args.cols ?? 20 }
+  const a: Required<Omit<Args, 'viewport' | 'program'>> = { tiles: args.tiles ?? 800, cols: args.cols ?? 20 }
   state.args = a
+  state.programKind = args.program === 'flip' ? 'flip' : 'lights'
   const vp = args.viewport ?? { width: 1080, height: 2400 }
   state.view = { width: Math.round(vp.width), height: Math.round(vp.height) }
   state.ids = Array.from({ length: a.tiles }, (_, i) => 1000 + i)
@@ -170,17 +200,27 @@ export function __proteusLightsRun(argsJson?: string): string {
     return JSON.stringify({ ok: false, error: '建树失败', detail: mounted })
   }
 
-  state.program = createLightsProgram({
+  // ★按节目名建节目单（两个节目共用同一棵树：灯珠就是牌）
+  const envCommon = {
     ids: state.ids,
     cols: a.cols,
     view: state.view,
     tilePx: Math.floor((state.view.width - 16 - 3 * (a.cols - 1)) / a.cols),
     centers: readLampCenters,
     titleId: state.titleId,
-  })
-  state.plan = state.program.plan()
+  }
+  if (state.programKind === 'flip') {
+    const fp = createFlipProgram(envCommon)
+    state.programAny = fp as unknown as { next(): AnyAct | null; plan(): string[] }
+    state.program = null
+  } else {
+    state.program = createLightsProgram(envCommon)
+    state.programAny = state.program as unknown as { next(): AnyAct | null; plan(): string[] }
+  }
+  state.plan = state.programAny.plan()
   state.sampleIds = [1000, 1000 + Math.floor(a.tiles / 2), 1000 + a.tiles - 1, state.titleId]
 
+  results.program = state.programKind
   results.tiles = a.tiles
   results.cols = a.cols
   results.view = state.view
@@ -193,16 +233,28 @@ export function __proteusLightsRun(argsJson?: string): string {
 
 /** 取下一幕并发令（宿主在幕边界调用；返回 done=true = 演完） */
 export function __proteusLightsNext(): string {
-  const program = state.program
+  const program = state.programAny
   if (!program) return JSON.stringify({ ok: false, error: '节目单未初始化（先调 __proteusLightsRun）' })
   const t0 = Number(proteusHost.nowUs()) / 1000
-  let act: LightsAct | null = null
+  let act: AnyAct | null = null
   try {
     act = program.next()
   } catch (e) {
     return JSON.stringify({ ok: false, error: `节目单取幕失败：${(e as Error).message}` })
   }
   if (!act) return JSON.stringify({ ok: true, done: true })
+
+  // ★★播放控制（A3）：幕开始前应用（慢动作/疾速/恢复常速）——
+  //   判据据此对账"ctl 序列"+"wall/span 比值"。
+  if (act.control) {
+    // ★宿主未实现 animControl 时不静默扮演——如实记录，判据会因此判红
+    if (typeof proteusHost.animControl === 'function') {
+      proteusHost.animControl(JSON.stringify(act.control))
+    } else {
+      results.control_unsupported = true
+    }
+    state.controls.push({ act: act.name, control: act.control })
+  }
 
   // ★记账（"全程只有亮灭"的机器证据，2026-10-01 用户语义修正）：
   //   非颜色指令（kind 0..4：位移/缩放/旋转/透明度）= 0 才是灯阵语义。
@@ -216,6 +268,10 @@ export function __proteusLightsNext(): string {
     }
   }
   state.colorAnims += act.colorAnims
+  // ★翻牌剧场的能力计数（灯光秀无这些字段 ⇒ 0）
+  state.rotate3dAnims += act.rotate3dAnims ?? 0
+  state.curveBezierAnims += act.curveBezierAnims ?? 0
+  state.repeatAnims += act.repeatAnims ?? 0
 
   const out = safeParse(proteusHost.animStart(JSON.stringify({ anims: act.anims }))) as { ok?: boolean; started?: number }
   if (out.ok !== true) {
@@ -230,6 +286,10 @@ export function __proteusLightsNext(): string {
     name: act.name,
     anims: act.anims.length,
     color_anims: act.colorAnims,
+    rotate3d_anims: act.rotate3dAnims ?? 0,
+    curve_bezier_anims: act.curveBezierAnims ?? 0,
+    repeat_anims: act.repeatAnims ?? 0,
+    mid_sample: act.midSample === true,
     issue_ms: round2(issueMs),
     span_ms: round2(act.spanMs),
     hold_ms: round2(act.holdMs),
@@ -244,6 +304,11 @@ export function __proteusLightsNext(): string {
     durationMs: act.durationMs,
     anims: act.anims.length,
     color_anims: act.colorAnims,
+    rotate3d_anims: act.rotate3dAnims ?? 0,
+    curve_bezier_anims: act.curveBezierAnims ?? 0,
+    repeat_anims: act.repeatAnims ?? 0,
+    mid_sample: act.midSample === true,
+    control: act.control ?? null,
     issue_ms: round2(issueMs),
     note: act.note,
   })
@@ -273,6 +338,10 @@ export function __proteusLightsFinalize(hostStatsJson?: string): string {
   results.opacity_min_to = Math.round(state.opacityMinTo * 1000) / 1000
   results.color_anims_total = state.colorAnims
   results.non_color_anims = state.nonColorAnims
+  results.rotate3d_anims_total = state.rotate3dAnims
+  results.curve_bezier_anims_total = state.curveBezierAnims
+  results.repeat_anims_total = state.repeatAnims
+  results.controls = state.controls
   results.ok = true
   const json = JSON.stringify(results)
   proteusHost.report(json)
@@ -297,15 +366,23 @@ export function __proteusLightsRestart(): string {
   state.opacityAnims = 0
   state.colorAnims = 0
   state.nonColorAnims = 0
-  state.program = createLightsProgram({
+  const envCommon = {
     ids: state.ids,
     cols: state.args.cols,
     view: state.view,
     tilePx: Math.floor((state.view.width - 16 - 3 * (state.args.cols - 1)) / state.args.cols),
     centers: readLampCenters,
     titleId: state.titleId,
-  })
-  state.plan = state.program.plan()
+  }
+  if (state.programKind === 'flip') {
+    state.programAny = createFlipProgram(envCommon) as unknown as { next(): AnyAct | null; plan(): string[] }
+    state.program = null
+  } else {
+    state.program = createLightsProgram(envCommon)
+    state.programAny = state.program as unknown as { next(): AnyAct | null; plan(): string[] }
+  }
+  state.controls = []
+  state.plan = state.programAny.plan()
   results.plan = state.plan
   return JSON.stringify({ ok: true, stop, acts: state.plan.length })
 }

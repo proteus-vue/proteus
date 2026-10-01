@@ -43,6 +43,8 @@ hosts/android/app/src/main/assets/bundle-lights.js
 #   website/public/morpheus-lights.mp4（6.6MB，已在库）；原片留本机复跑用
 hosts/android/results/lights-demo.mp4
 hosts/android/results/lights.mp4
+# ★维度折叠录屏原片（38MB）——同款：网页交付物是 website/public/morpheus-flip.mp4（4MB）
+hosts/android/results/flip-demo.mp4
 hosts/**/build/
 hosts/**/*.app/
 hosts/**/verify-jsc
