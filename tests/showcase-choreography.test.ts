@@ -115,6 +115,26 @@ describe('Morpheus 炫技场 · 节目单（真模块驱动）', () => {
     expect(total).toBeLessThan(400_000)
   })
 
+  it('★★长跑时长按**真编译产物的 span** 展开（防"名义常量算循环数"复发——2026-10-01 真机实测）', () => {
+    // 【背景】storm 幕的真实跨度 = maxRank×staggerMs + durationMs（相位错峰的最大延迟也要算），
+    //   800 片 / alternate 下 ≈3497ms，是名义 `SOAK_CYCLE_MS`（1700ms）的 2.4×。
+    //   旧算法（ceil(soakMs / 名义值)）把"5 分钟"展开成 **12.6 分钟**（真机实测）。
+    //   ⇒ 本测试锁住：整场时长落在 [目标, 目标×1.25] 内——不早退、不超发。
+    const soakMs = 300_000
+    const { acts } = walkAll(soakMs)
+    const total = acts.reduce((s, a) => s + a.durationMs, 0)
+    const soakOnly = acts.filter((a) => a.name.startsWith('soak-')).reduce((s, a) => s + a.durationMs, 0)
+    expect(soakOnly).toBeGreaterThanOrEqual(soakMs)
+    expect(soakOnly).toBeLessThanOrEqual(soakMs * 1.25)
+    // 首尾非长跑幕（gather…finale）都还在，且总时长 = 长跑 + 其余（≈32s）
+    expect(acts[0]!.name).toBe('gather')
+    expect(acts[acts.length - 1]!.name).toBe('finale')
+    expect(total - soakOnly).toBeLessThan(60_000)
+    // 循环数在两轮之间交替相位序（风暴 span 不同 ⇒ 两轮时长不同；合计仍贴近目标）
+    const storms = acts.filter((a) => a.name.startsWith('soak-storm#'))
+    expect(storms.length).toBeGreaterThan(10)
+  })
+
   it('FLIP 幕：指令单形状正确（只改瓦片宽高；两幕互为"缩略/展开"）', () => {
     const { acts } = walkAll(1200)
     const condense = acts.find((a) => a.name === 'flip-condense')!

@@ -44,6 +44,8 @@ UDID=""
 CASE_FILTER=""
 # ★--record：炫技场模式额外用 **ReplayKit 录屏**（App 内录真机屏幕，零外部工具）——
 #   产物 Documents/showcase.mp4 随报告一起取回；之后由 `make-showcase-video.sh` 转网页格式。
+# ★PROTEUS_SHOWCASE_SOAK_MS=<ms>：炫技场**长跑压力测量**（内存泄漏 + 热节流；默认 0 = 不跑）。
+#   开启时报告本地另存 `results/showcase-soak.json`（canonical `showcase.json` 保持不变）。
 RECORD=0
 for a in "$@"; do
   case "$a" in
@@ -259,20 +261,30 @@ if [ "$MODE" = "host-runtime" ]; then REPORT_FILE="host-runtime.json"; SNAP_FILE
 # ★M5：执行器场景两份报告（主 + 执行器；判据合并读）
 if [ "$MODE" = "app-stack" ]; then REPORT_FILE="app-stack.json"; SNAP_FILE="app-stack-executor.json"; fi
 # ★Morpheus 炫技场（一份报告 + 一张收尾截图）
-if [ "$MODE" = "showcase" ]; then REPORT_FILE="showcase.json"; SNAP_FILE="showcase-final.png"; fi
+if [ "$MODE" = "showcase" ]; then
+  REPORT_FILE="showcase.json"; SNAP_FILE="showcase-final.png"
+  # ★长跑（压力测量）模式：设备端写的**仍是** showcase.json，本地**另存** showcase-soak.json——
+  #   不覆盖「一轮到底」canonical 报告（它是官网视频/数字/截图同源的那一轮；长跑是独立证据）。
+  if [ "${PROTEUS_SHOWCASE_SOAK_MS:-0}" != "0" ]; then
+    REPORT_FILE="showcase-soak.json"
+    DEVICE_REPORT_FILE="showcase.json"
+  fi
+fi
 # ★过滤跑写独立文件（否则会把全量基准报告覆盖掉——历史读数不可再生）
 if [ -n "$CASE_FILTER" ]; then
   SLUG="$(printf '%s' "$CASE_FILTER" | tr ',' '_')"
   REPORT_FILE="bench-filtered-${SLUG}.json"
   SNAP_FILE="bench-filtered-${SLUG}.png"
 fi
+# ★设备侧报告文件名（默认与本地同名；长跑模式本地另存、设备侧仍是 showcase.json——见上）
+DEVICE_REPORT_FILE="${DEVICE_REPORT_FILE:-$REPORT_FILE}"
 
 # ★基准 run_ts：launch 前先读设备上**现有**报告的时间戳；launch 返回后取回的报告必须不同
 #   （证明"本轮真的写了新报告"；对照设备自己的旧报告 ⇒ 不涉及跨机器时钟）。
 BASE_TS="none"
 BASEF="$(mktemp)"
 if xcrun devicectl device copy from --device "$UDID" --domain-type appDataContainer \
-    --domain-identifier "$BUNDLE_ID" --source "Documents/$REPORT_FILE" \
+    --domain-identifier "$BUNDLE_ID" --source "Documents/$DEVICE_REPORT_FILE" \
     --destination "$BASEF" >/dev/null 2>&1; then
   BASE_TS="$(node "$HERE/lib/read-run-ts.mjs" "$BASEF")"
 fi
@@ -289,11 +301,18 @@ if [ "$MODE" = "showcase" ]; then
   #   帧循环驱动）→ 逐幕读数 + 内存采样 + 截图 → SHOWCASE_REPORT_READY → 自退）。脚本侧零轮询。
   #   ★长跑时长可由本机环境注入（冒烟用短值）：PROTEUS_SHOWCASE_SOAK_MS=3000 bash … --showcase
   #     默认 0 = 演出一遍到底（≈40 秒）；压力测量按需开启（如 300000 = 5 分钟）。
-  #  ★默认 **0 = 不重复**（用户要求"每一幕演示一遍整个节目衔接就行，不用为了时长去一直重复"）
+  #  ★默认 **0 = 不重复**（用户要求"每一幕演示一遍整个节目衔接就行，不用为了时长去一直重复"）；
+  #    soak>0 ⇒ 本地另存 showcase-soak.json（canonical 不被覆盖——见报告名段注释）
   SOAK_MS="${PROTEUS_SHOWCASE_SOAK_MS:-0}"
   # ★--record ⇒ 追加 PROTEUS_SHOWCASE_RECORD=1（ReplayKit 录屏；见 showcase-scene.swift 注释）
   REC_ENV=""
-  [ "$RECORD" = "1" ] && REC_ENV=",\"PROTEUS_SHOWCASE_RECORD\":\"1\""
+  if [ "$RECORD" = "1" ]; then
+    REC_ENV=",\"PROTEUS_SHOWCASE_RECORD\":\"1\""
+    # ★★必须让用户知道什么时候点（2026-10-01 实测教训）：ReplayKit 的录屏授权是**系统弹窗**，
+    #   只能手动点「允许」。App 侧已改为"等首帧到达才开演"（最长 30s）——**请在看到弹窗后点允许**，
+    #   否则 30s 到点照常开演（无录屏，产物缺开场段会被对账判据判红）。
+    echo "    ★★注意：设备将弹出「录制屏幕」授权窗——请点【允许】（App 会等首帧，最长 30s；不点则无录屏）"
+  fi
   xcrun devicectl device process launch --console --terminate-existing \
     --environment-variables "{\"PROTEUS_EXIT_AFTER_REPORT\":\"1\",\"PROTEUS_SHOWCASE_SOAK_MS\":\"$SOAK_MS\"$REC_ENV}" \
     --device "$UDID" "$BUNDLE_ID" --showcase > "$LAUNCH_LOG" 2>&1 || LAUNCH_RC=$?
@@ -410,7 +429,7 @@ echo "==> ⑧ 取回报告（App 已退出 ⇒ 只取一次；无轮询 / 无 sl
 #     ② js_report.build_id == 本次构建 ⇒ 防「重装后仍跑旧进程」（本仓实测踩过）。
 FETCH_ERR="$(mktemp)"
 if ! xcrun devicectl device copy from --device "$UDID" --domain-type appDataContainer \
-    --domain-identifier "$BUNDLE_ID" --source "Documents/$REPORT_FILE" \
+    --domain-identifier "$BUNDLE_ID" --source "Documents/$DEVICE_REPORT_FILE" \
     --destination "$HERE/results/$REPORT_FILE" > "$FETCH_ERR" 2>&1; then
   echo "✗ 报告未取到：$(tail -1 "$FETCH_ERR")"
   rm -f "$FETCH_ERR"
@@ -490,6 +509,14 @@ fi
 
 # ★★Morpheus 炫技场：取两张截图（谢幕语收尾 + 漩涡中场面）+ 跑专属判据
 if [ "$MODE" = "showcase" ]; then
+  if [ "$REPORT_FILE" = "showcase-soak.json" ]; then
+    # ★长跑模式：截图/录屏**跳过取回**（避免用长跑那轮覆盖 canonical 产物——它们是「一轮到底」
+    #   那轮的同一轮证据；长跑的证据 = 报告本身：内存采样 + 热状态 + 帧统计）。
+    echo "    （长跑模式：截图/录屏不取回——canonical 产物保持「一轮到底」那轮不被覆盖）"
+    echo "==> ⑨ 判据（hosts/ios/check-showcase.py · 长跑报告）"
+    python3 "$HERE/check-showcase.py" "$HERE/results/$REPORT_FILE"
+    exit $?
+  fi
   if xcrun devicectl device copy from --device "$UDID" --domain-type appDataContainer \
       --domain-identifier "$BUNDLE_ID" --source "Documents/showcase-final.png" \
       --destination "$HERE/results/showcase-final.png" >/dev/null 2>&1; then

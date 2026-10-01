@@ -48,6 +48,17 @@ The closed set of the compile layer **deliberately does not try to cover everyth
 
 > Design stance: **an explicitly registered escape hatch is better than a silently introduced second implementation** — the former is countable and convergent, the latter always diverges.
 
+## Why colour is not in this table (an explicit boundary)
+
+The closed set is `translateX / translateY / scale / rotate / opacity` — **five properties, no colour**. That is not an omission; it is a boundary of the current design, written down so it cannot be misread as “there is a hidden second channel”:
+
+- **Colour is not an animatable property here**: this engine is a *paint-layer transform* engine (the direct payoff of the `is_composited()` judgement). Interpolating colour would drag in colour-space choices (sRGB / linear / P3), interactions with platform blend modes, and per-platform `color`-animation semantics — a **separate capability line**, not a goal of this engine.
+- **Static colour is unaffected**: a node's colour in its style is **build-time data**; it travels the layout/paint chain (never through the animation channel, never touched by `tick`).
+- **Need to animate colour?** Use an **explicit escape hatch** (`escapes.register({ kind: 'other' | 'platform-mixing', ... })`) — it is possible (e.g. a platform-side `CALayer.backgroundColor` translation), but it must be registered, it is counted as `degraded`, and it is **outside the engine's consistency guarantee**. This is precisely the “explicitly registered escape hatch beats a silent second implementation” case.
+- **If it is ever adopted**: step one is extending the cross-language contract (a new `kind` id + Rust-side colour interpolation + host translation) plus conformance coverage — **not** quietly hand-writing a copy inside a demo.
+
+> ★ **Test**: if a demo ever shows colour moving, check whether it is registered in `escapes`. Unregistered = a violation of rule #22 (hand-written copies), not “a new capability”. In the Morpheus showcase the colour is a **static palette** (generated once at build time); no colour participates in the animation.
+
 ## Relation to “a second JS runtime”
 
 Route B from the design (a second runtime executing arbitrary animation logic) **stays off for now**: it requires all three of “a real scenario that cannot be analysed at compile time”, “measurements prove the main-thread approach janks”, and “the team accepts the extra memory and startup cost”. Today route A (instruction-driven) is proven viable and much faster by the RT0 comparison — at N=1000 the kernel spends only **2.38µs** per frame, and per-frame work **does not grow with the node count**.

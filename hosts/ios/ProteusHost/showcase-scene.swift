@@ -142,13 +142,20 @@ final class ShowcaseScene: NSObject {
         //   ★★2026-10-01 加「等首帧」：ReplayKit 从 startCapture 到**首批 buffer 到达**有
         //   实测 ≈2s 的冷启动延迟（上一版录屏的第一帧 = 开演后 ~1.9s —— 星尘凝聚整个丢了）。
         //   ⇒ 录屏模式下**开演推迟到首个视频帧已写入**（`pendingShowStart` →
-        //   `startShowIfPending`）；同时给 3s 有界兜底（捕获不可用时照常开演，不挂死）。
+        //   `startShowIfPending`）；同时给**30s** 有界兜底（见下）。
+        //
+        //   ★★30s（2026-10-01 真机教训，用户反馈）：ReplayKit 每次都要**手动点「允许」**
+        //   （系统授权，无法自动完成）。此前兜底只有 3s——用户还没点，3s 就到了 ⇒
+        //   照常开演 ⇒ 录屏从"开演后 5.5s"才开始（实测录屏 26.8s vs 报告 32.3s，对账判据当场判红）。
+        //   ⇒ 兜底放宽到 30s：**你没点之前 App 不会开演**（首帧到达=开发信号），开场必定被录到；
+        //      真不点/被拒（completion 回 err）⇒ 立即开演（不挂死，只少录屏）。
         if ProcessInfo.processInfo.environment["PROTEUS_SHOWCASE_RECORD"] == "1" {
             pendingShowStart = true
+            NSLog("[proteus] SHOWCASE_RECORD_REQUEST：系统将弹录屏授权——请点「允许」（App 等首帧，最长 30s）")
             startCaptureRecording()
-            DispatchQueue.main.asyncAfter(deadline: .now() + 3.0) {
+            DispatchQueue.main.asyncAfter(deadline: .now() + 30.0) {
                 if pendingShowStart {
-                    NSLog("[proteus] SHOWCASE_RECORD_WARMUP_TIMEOUT：3s 内未拿到首帧（捕获不可用？）——照常开演")
+                    NSLog("[proteus] SHOWCASE_RECORD_WARMUP_TIMEOUT：30s 内未拿到首帧（授权未点/被拒/捕获不可用）——照常开演（无录屏）")
                     startShow()
                 }
             }
@@ -462,13 +469,15 @@ final class ShowcaseScene: NSObject {
     private static func startCaptureRecording() {
         let rec = RPScreenRecorder.shared()
         guard rec.isAvailable else {
-            NSLog("[proteus] SHOWCASE_RECORDING_FAILED isAvailable=false（模拟器 / 已被系统禁用）")
+            NSLog("[proteus] SHOWCASE_RECORDING_FAILED isAvailable=false（模拟器 / 已被系统禁用）——立即开演（无录屏）")
+            startShow()
             return
         }
         let url = reportDir.appendingPathComponent(videoURLName)
         try? FileManager.default.removeItem(at: url)
         guard let writer = try? AVAssetWriter(outputURL: url, fileType: .mp4) else {
-            NSLog("[proteus] SHOWCASE_RECORDING_FAILED 建 AVAssetWriter 失败：%@", url.path)
+            NSLog("[proteus] SHOWCASE_RECORDING_FAILED 建 AVAssetWriter 失败：%@——立即开演（无录屏）", url.path)
+            startShow()
             return
         }
         assetWriter = writer
@@ -478,7 +487,9 @@ final class ShowcaseScene: NSObject {
         droppedFrames = 0
         rec.startCapture { sampleBuffer, type, error in
             if let error {
-                NSLog("[proteus] SHOWCASE_RECORDING_FAILED 捕获错误：%@", "\(error)")
+                // ★授权被拒 / 捕获启动失败 ⇒ **立即开演**（不等 30s 兜底；只少录屏，不挂死）
+                NSLog("[proteus] SHOWCASE_RECORDING_FAILED 捕获错误：%@——立即开演（无录屏）", "\(error)")
+                DispatchQueue.main.async { ShowcaseScene.startShowIfPending() }
                 return
             }
             guard type == .video, let writer = assetWriter else { return }
