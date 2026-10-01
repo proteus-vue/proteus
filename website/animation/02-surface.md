@@ -32,6 +32,11 @@ Morpheus 的对外表面只有一个包：**`@proteus-vue/animation`**（声明 
 | `rotateX` / `rotateY` | 13 / 14 | ❌ **tick-only**（3D——见下文） |
 | `clip` | 15..30（按参数槽分解，最多 16 通道） | ❌ **tick-only**（裁剪形变——见下文） |
 | `strokeProgress` | 31（单通道标量：0..1 沿弧长画到哪） | ❌ **tick-only**（SVG 描边——见下文） |
+| `gradientMix` | 32（单通道：两态渐变混合因子） | ❌ **tick-only**（渐变 v1+v2——见下文） |
+| `pathMorph` | 33（单通道：两态路径插值因子） | ❌ **tick-only**（路径变形 v1+v2——见下文） |
+| `glowIntensity` | 34（单通道：发光强度 0..1） | ❌ **tick-only**（发光——见下文） |
+| `maskProgress` | 35（单通道：软边遮罩揭示进度） | ❌ **tick-only**（遮罩——见下文） |
+| `skewX` / `skewY` | 36 / 37（度） | ❌ **tick-only**（倾斜——见下文） |
 
 | 曲线 | 契约编号 |
 |---|---|
@@ -73,7 +78,41 @@ Morpheus 的对外表面只有一个包：**`@proteus-vue/animation`**（声明 
 两端共用同一份——不出现"同一条 `d` 两端画得不一样"）。
 支持 `M/L/C/Q/Z`（相对命令与隐式重复已支持；`A` 弧线 / `S`/`T` 简写明确拒绝并给替代写法）。
 
-**合成属性 = 可以走平台零参与路径**。五个标量属性是合成属性；**`color` / `textColor` / `rotateX` / `rotateY` / `clip` / `strokeProgress` 是 tick-only 或 paint-only 但非合成**（不触发布局，但两端平台插值器语义不同或无法插值 ⇒ 统一走内核逐帧路径，跨端一致优先）。另注意：**修改布局属性（宽度/边距）不是动画，是重排**，编译期会直接拦下。
+**渐变填充与混合（`gradientMix`，2026-10-01 · v1+v2）**：节点样式声明 `fillGradient`
+（`{ kind: 'linear'|'radial', angle | cx/cy/r, stops: [{offset, color, alpha?}] }`，2..8 色标、
+offset 严格升序）；再声明 `fillGradientTo`（B 态——必须同 kind、同色标个数）后，一条
+`gradientMix` 通道（32）在两态之间混合：**色标（颜色 + 位置）与几何（angle / cx·cy·r）
+都随同一因子过渡**——"光本身在动"（月晕扩散 / 角度转向 / 光斑移动）。CSS 完全不能过渡
+渐变几何（`linear-gradient` 的插值是"整幅互换"）；lerp 是内核唯一实现（`GradState::mixed`），
+两端宿主零插值（只消费已算好的值）。
+
+**路径变形（`pathMorph`，2026-10-01 · v1+v2）**：两态路径（`svgPath` A + `svgPathTo` B）
+逐点插值——**CSS 完全不能做**（`d` 不在 CSS 过渡集，web 端必须引 GSAP MorphSVG / flubber
+这类库逐点重算）。v2 起异构路径对（段数 / 段型不同）在建树时**自动重采样**到同构
+（均匀弧长取点 + Catmull-Rom 转三次贝塞尔，段数 `max(两侧段数).clamp(12,48)`）；
+重采样是近似（弧长差 <3%）且**如实标注**（查询响应带 `resampled` 字段）。lerp 唯一实现
+在内核（`SvgPath::morphed`），宿主只翻译变形后的段列表（二进制通道，避开每帧 JSON 编解码）。
+
+**发光（`glow` + `glowIntensity`，2026-10-01 · glow v1）**：节点声明 `glow: {color, radius, alpha}`，
+通道 34 驱动呼吸 / 渐亮 / 渐隐（与描边进度联动——"画到哪、光到哪"）。渲染 = **N 层同心描边**
+（N=5 跨语言常数；宽度梯度 `radius×k/N`、alpha 平方衰减 `a0×(1-(k-1)/N)²`）——
+**刻意不用平台原生**：Android `Paint.setShadowLayer` 在硬件加速下只支持文本（对 Path 静默不画）、
+iOS `CALayer.shadow*` 是高斯阴影（两端不同形）。分层描边是确定性算法、两端逐像素可预期，
+实测每帧 p95 0.28ms（"几乎零成本"）。
+
+**软边遮罩（`mask` + `maskProgress`，2026-10-01 · mask v1）**：与 `clip` 互补——clip 是硬边
+一刀切、mask 是软边渐隐（"从雾里渗开"），两者天然可叠加。`mask: {kind: 'linear'|'radial',
+angle|cx/cy/r, softness, progress?}`；通道 35（0=全隐 / 1=全显）驱动**双色标柔化揭示**，
+揭示数学是内核唯一实现（宿主零数学）。端点**显式短路**——f32 实测教训：`1.0×1.4−0.4`
+在 f32 下是 `0.99999994` ⇒ 不靠浮点比较（否则"进度到底了但画面留一条软边"）。
+
+**倾斜与变换原点（`skewX` / `skewY` + `transformOrigin`，2026-10-01）**：通道 36/37（度；
+`x' = x + tan(skewX)·y`，CSS `skewX` 同式）；配 `transformOrigin: {x, y}`（盒分数）任意锚点
+——"从根部弯折"（底边中点）/"门轴旋转"（左缘）/"从角落放大"（角点）。两端都不是一等属性
+（Android 无 `setSkewX`、iOS `CALayer` 无倾斜属性）⇒ 统一 tick 路径。变换栈至此完整：
+位移 / 缩放 / 旋转 / 3D / 倾斜 × 任意锚点。
+
+**合成属性 = 可以走平台零参与路径**。五个标量属性是合成属性；**`color` / `textColor` / `rotateX` / `rotateY` / `clip` / `strokeProgress` / `gradientMix` / `pathMorph` / `glowIntensity` / `maskProgress` / `skewX` / `skewY` 是 tick-only 或 paint-only 但非合成**（不触发布局，但两端平台插值器语义不同或无法插值 ⇒ 统一走内核逐帧路径，跨端一致优先）。另注意：**修改布局属性（宽度/边距）不是动画，是重排**，编译期会直接拦下。
 
 ```ts
 // 颜色是**一个声明**——编译成内核的**四条通道**
@@ -106,7 +145,7 @@ const batch = compileRoute(spec, { enter: 101, exit: 100 })
 
 ## 与 AI 说明书同源
 
-42 条声明项（21 预设 / 13 声明面原语 / 6 约束 / 2 边界）以 `ANIM_RULES` 为单一事实源，与编译器 112 条规则**同构**：每条含 what / why / when / 示例 / 如何验证 / 实现位置，AI 可单独消费一条。
+48 条声明项（21 预设 / 19 声明面原语 / 6 约束 / 2 边界）以 `ANIM_RULES` 为单一事实源，与编译器 112 条规则**同构**：每条含 what / why / when / 示例 / 如何验证 / 实现位置，AI 可单独消费一条。
 生成物 [anim-manual](/docs/generated/anim-manual) 在生成前会跑 `runConformance()` 对账——预设必须真实存在于导出面、跨语言契约值必须一致、`verify` 必须可追溯；**对不上就不生成文档**。
 
 ## 下一步

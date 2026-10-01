@@ -66,7 +66,8 @@ Morpheus 的架构只有一件事要做对：**把"连续量"关进一个笼子�
 ## 颜色在封闭集里（★2026-10-01 起；附新的边界）
 
 封闭集由 **5 项扩到 7 项**：`translateX / translateY / scale / rotate / opacity`
-**＋ `color`（底色）＋ `textColor`（文字色）**。
+**＋ `color`（底色）＋ `textColor`（文字色）**（此后又经 3D / clip / 描边 / v2 五批扩至 **17 项**
+——完整清单与编号契约见[声明面](/docs/animation/02-surface)的属性表）。
 
 **用户面一个声明，内核面四条通道**——`{ kind: 'color', from: '#2f6fed', to: '#ff5533' }`
 在编译期展开成 `R/G/B/A` 四条标量指令（契约编号 5/6/7/8；文字色同构，编号 9/10/11/12）。

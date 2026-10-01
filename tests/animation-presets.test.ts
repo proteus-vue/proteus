@@ -412,10 +412,16 @@ describe('MA5 · 滚动联动（吸顶 / 视差 / 渐显）', () => {
 describe('MA1 · 编号映射表（名字写错的类型级防线）', () => {
   it('ANIM_KIND_ID / CURVE_ID 覆盖全部名字', () => {
     // ★契约变更（2026-10-01）：封闭集由 5 → 6（`color`）→ 7（`textColor`）→ 9（B 批 3D）
-    //   → 10（C1 裁剪形变：`clip`）→ **11**（C2 SVG 描边：`strokeProgress`）。
+    //   → 10（C1 裁剪形变：`clip`）→ 11（C2 SVG 描边：`strokeProgress`）
+    //   → **17**（v2 五批：`gradientMix`/`pathMorph`/`glowIntensity`/`maskProgress`/`skewX`/`skewY`）。
     //   计数变化是**如实反映契约**，不是放宽断言
-    //   ——下面逐条钉住编号（含 color / textColor / rotateX / rotateY / clip / strokeProgress）。
-    expect(Object.keys(ANIM_KIND_ID)).toHaveLength(11)
+    //   ——下面逐条钉住编号（含全部 17 个名字）。
+    // ★★为什么这条断言曾红过一轮（2026-10-01 收口时发现）：v2 五批把新通道加进了
+    //   `ANIM_KIND_ID` 映射，但这条**计数断言**没同步（它盯的是"映射表覆盖全部名字"，
+    //   而新名字恰好也全在映射表里 ⇒ 断言从 11 变旧）。这是"契约增长而钉子没跟"的
+    //   经典形态——各批次都只跑了定向测试，整条 `pnpm test` 的这条红没被看见。
+    //   ⇒ 纪律：**新增/变更 kind 时必须同批更新本断言**（与 AnimKind 编号一样是契约面）。
+    expect(Object.keys(ANIM_KIND_ID)).toHaveLength(17)
     expect(Object.keys(CURVE_ID)).toHaveLength(5)
     expect(ANIM_KIND_ID.translateX).toBe(0)
     expect(ANIM_KIND_ID.translateY).toBe(1)
@@ -434,6 +440,13 @@ describe('MA1 · 编号映射表（名字写错的类型级防线）', () => {
     expect(ANIM_KIND_ID.clip).toBe(15)
     // ★C2：`strokeProgress` 是**单通道**（31——与内核同号；0..1 = 沿弧长画到哪）
     expect(ANIM_KIND_ID.strokeProgress).toBe(31)
+    // ★v2 五批（2026-10-01）——**全部单通道**，编号 32..37 与内核 AnimKind 同号：
+    expect(ANIM_KIND_ID.gradientMix).toBe(32)     // 色标+几何两态混合（v1+v2）
+    expect(ANIM_KIND_ID.pathMorph).toBe(33)       // 路径逐点插值（v1+v2 异构重采样）
+    expect(ANIM_KIND_ID.glowIntensity).toBe(34)   // 分层描边发光强度
+    expect(ANIM_KIND_ID.maskProgress).toBe(35)    // 软边遮罩揭示进度
+    expect(ANIM_KIND_ID.skewX).toBe(36)           // 倾斜 X（配 transformOrigin）
+    expect(ANIM_KIND_ID.skewY).toBe(37)           // 倾斜 Y
     expect(CURVE_ID.easeOut).toBe(1)
   })
 })

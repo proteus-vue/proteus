@@ -97,6 +97,13 @@ const T = {
     foldImgAlt: 'Morpheus 维度折叠真机录屏：800 张薄片在 2D 平面与 3D 立体间穿越，彩虹色沿列涌现',
     foldCaption: '真机录屏（Redmi · 120Hz · 9 幕一遍到底，循环播放）：拍平 → 立起涌现色彩 → 折扇 → 鳞片 → 砸平 → 慢翻 → 谢幕',
     foldCmd: '复跑：bash hosts/android/build-and-run.sh --release --flip ｜ 分享版 APK：proteus-flip.apk（点开即循环演出）',
+    inkTitle: '第四个节目 · 墨绘·山水卷（水墨长卷自己画出来 · 安卓真机）',
+    inkLead:
+      '一幅水墨长卷**自己画出来**：展卷 → 远山三叠（晕团 + 湿/骨/枯三层落笔逐笔画出）→ 飞瀑（崖口 + 三笔 + 飞沫飞溅）→ 江水涨潮 → 明月升起（月晕先扩、月由缺到圆）→ 云海翻涌 → 松竹风摆（**从根部弯折**）→ 渔舟荡漾 → 飞鸟掠水（**翅膀逐帧变形**）→ 竖排题款逐字写出 → 落印 → **收卷**。13 幕 · 43.9 秒 · **326 条指令 100% 声明式 · 0 逃生口**。',
+    inkNote: '★**这是一场"把 CSS 做不到的清单逐项做出来"的演出**：笔触逐笔画出 = `strokeProgress`（SVG 描边弧长进度，39 条）；远山晕染 = 渐变填充 + 月光晕呼吸 = 发光分层（25 条 `glowIntensity`）；山峦呼吸 = **路径变形**（两态峰数不同——内核自动重采样，9 条 `pathMorph`）；月晕扩散 = **渐变几何动画**（色标与几何同因子混合）；云海渗开 = 软边遮罩（`maskProgress`）；竹的风摆 = **倾斜 + 变换原点**（从根部弯折，9 条 `skewX`）；山/水/云的分段揭示 = 裁剪形变（185 条 clip 通道）。真机：5270 帧 · vsync p50 8.333ms · **每帧 p95 0.306ms**（帧预算的 3.7%）。',
+    inkImgAlt: 'Morpheus 墨绘·山水卷真机录屏：水墨长卷从空白纸上逐笔画出远山、飞瀑、江水、明月、竹舟，最后题款落印收卷',
+    inkCaption: '真机录屏（Redmi · 120Hz · 13 幕一遍到底，循环播放）：展卷 → 落笔远山 → 飞瀑 → 涨潮 → 月升 → 云海 → 竹风 → 渔舟 → 飞鸟 → 题款 → 落印 → 收卷',
+    inkCmd: '复跑：bash hosts/android/build-and-run.sh --release --ink ｜ 分享版 APK：proteus-ink.apk（点开即循环演出）',
     demoTitle: '真机演示',
     demoNote: '演示播放的是引擎交给执行器的同一份指令（routeTransitionBatches）；曲线求值走与 Rust 内核 golden 对拍过的 TS 镜像。',
     dirLabel: '方向',
@@ -188,6 +195,13 @@ const T = {
     foldImgAlt: 'Morpheus dimensional-folding device recording: 800 tiles traversing between 2D plane and 3D space, rainbow colour emerging column by column',
     foldCaption: 'Device recording (Redmi · 120 Hz · 9 acts in one pass, looping): flatten → lift with emerging colour → accordion → scales → slam flat → slow turn → finale',
     foldCmd: 'Re-run: bash hosts/android/build-and-run.sh --release --flip | Shareable APK: proteus-flip.apk (tap to loop the show)',
+    inkTitle: 'Fourth show · Ink Landscape Scroll (a Chinese ink painting that draws itself · Android device)',
+    inkLead:
+      'A Chinese ink handscroll **paints itself**: the scroll unfurls → three receding mountain stacks (a wash layer plus wet / bone / dry strokes, drawn stroke by stroke) → a waterfall (cliff lip + three falls + flying spray) → the river rises → the moon climbs (halo widens first, moon waxes from crescent to full) → clouds churn → bamboo and reeds sway (**bending from the root**) → a fishing boat bobs → birds skim the water (**wings morph frame by frame**) → a vertical title is written character by character → the seal is stamped → **the scroll rolls shut**. 13 acts · 43.9 s · **326 instructions, 100% declarative · 0 escapes**.',
+    inkNote: '★**This show works through the list of things CSS cannot do, one by one**: strokes drawing themselves = `strokeProgress` (SVG arc-length progress, 39 of them); mountain washes = gradient fills, the moon halo breathing = layered glow (25 `glowIntensity`); the mountain breathing = **path morph** (the two states differ in peak count — auto-resampled in the kernel, 9 `pathMorph`); the halo expanding = **gradient geometry animation** (stops and geometry blend on one factor); clouds seeping out = soft mask (`maskProgress`); the bamboo sway = **skew + transform origin** (bending from the root, 9 `skewX`); the staged reveal of mountains / river / clouds = clip-path morph (185 clip channels). On device: 5270 frames · vsync p50 8.333 ms · **p95 0.306 ms per frame** (3.7% of the frame budget).',
+    inkImgAlt: 'Morpheus ink-landscape device recording: a handscroll draws mountains, waterfall, river, moon, bamboo and a boat stroke by stroke, then signs and seals itself',
+    inkCaption: 'Device recording (Redmi · 120 Hz · 13 acts in one pass, looping): unfurl → mountain strokes → waterfall → rising river → moonrise → clouds → bamboo wind → boat → birds → inscription → seal → roll shut',
+    inkCmd: 'Re-run: bash hosts/android/build-and-run.sh --release --ink | Shareable APK: proteus-ink.apk (tap to loop the show)',
     demoTitle: 'Device demo',
     demoNote: 'The demo plays the very same instructions the engine hands to the executor (routeTransitionBatches); curve evaluation uses the TS mirror golden-tested against the Rust kernel.',
     dirLabel: 'Direction',
@@ -410,6 +424,16 @@ const FOLD_STATS = [
   { v: '0.63×', u: isEn.value ? 'faster' : '加速', l: isEn.value ? 'ripple (timeScale 1.6)' : '涟漪（timeScale 1.6）', lEn: 'ripple (timeScale 1.6)' },
   { v: '120', u: 'Hz', l: isEn.value ? '4134 frames · p95 0.80ms/frame' : '4134 帧 · 每帧 p95 0.80ms', lEn: '4134 frames · p95 0.80ms/frame' },
   { v: '0%', u: isEn.value ? 'escape' : '逃生口', l: isEn.value ? 'Every pixel traceable to a declaration' : '每个像素可追溯到一句声明', lEn: 'Every pixel traceable to a declaration' },
+] as Array<{ v: string; u: string; l: string; lEn?: string }>
+
+// ★★第四个节目（墨绘·山水卷）的机器读数——来自 check-ink.py 全绿的那一轮真机报告
+const INK_STATS = [
+  { v: '13', u: isEn.value ? 'acts' : '幕', l: isEn.value ? 'Unfurl → mountains → … → roll shut' : '展卷 → 远山 → … → 收卷', lEn: 'Unfurl → mountains → … → roll shut' },
+  { v: '39', u: isEn.value ? 'strokes' : '条描边', l: isEn.value ? 'Every stroke drawn along its arc (strokeProgress)' : '每道笔触沿弧长逐笔画出（strokeProgress）', lEn: 'Every stroke drawn along its arc (strokeProgress)' },
+  { v: '185', u: isEn.value ? 'clip ch.' : '条裁剪', l: isEn.value ? 'Staged reveal of mountains, river, clouds' : '山 / 水 / 云的分段揭示', lEn: 'Staged reveal of mountains, river, clouds' },
+  { v: '190', u: isEn.value ? 'colours' : '种颜色', l: isEn.value ? 'Sampled mid-show (ink washes really blend)' : '演出中途采样（墨色真的在晕）', lEn: 'Sampled mid-show (ink washes really blend)' },
+  { v: '0.306', u: 'ms', l: isEn.value ? 'p95 per frame · 5270 frames · vsync 8.333ms' : '每帧 p95 · 5270 帧 · vsync 8.333ms', lEn: 'p95 per frame · 5270 frames · vsync 8.333ms' },
+  { v: '0%', u: isEn.value ? 'escape' : '逃生口', l: isEn.value ? '326 instructions, every pixel traceable' : '326 条指令，每个像素可追溯', lEn: '326 instructions, every pixel traceable' },
 ] as Array<{ v: string; u: string; l: string; lEn?: string }>
 
 const BOUNDARIES = computed(() =>
@@ -797,6 +821,45 @@ onUnmounted(() => {
             </p-grid>
             <p-text class="sc-note">{{ C.foldNote }}</p-text>
             <code class="ev-src">{{ C.foldCmd }}</code>
+          </p-stack>
+        </p-grid>
+      </p-view>
+
+      <!-- ═══════════ 第四个节目 · 墨绘·山水卷（安卓真机录屏） ═══════════ -->
+      <p-view data-reveal class="sec">
+        <p-stack direction="row" align="center" :gap="12" class="sec-head" wrap>
+          <p-heading :level="2" v-p-fluid="'font-size(24, 32)'" class="sec-title">{{ C.inkTitle }}</p-heading>
+          <span class="sec-rule" />
+        </p-stack>
+        <p-text class="sec-note">{{ C.inkLead }}</p-text>
+        <p-grid :min-col-width="320" :gap="22" class="sc-grid">
+          <p-view class="sc-shot">
+            <video
+              v-if="motionOk"
+              class="sc-img sc-video sc-video-tall"
+              :src="`${base}morpheus-ink.mp4`"
+              :poster="`${base}morpheus-ink.png`"
+              :aria-label="C.inkImgAlt"
+              autoplay
+              muted
+              loop
+              playsinline
+              preload="metadata"
+            />
+            <img v-else :src="`${base}morpheus-ink.png`" :alt="C.inkImgAlt" class="sc-img" loading="lazy" />
+            <p-text class="sc-cap">{{ C.inkCaption }}</p-text>
+          </p-view>
+          <p-stack direction="column" :gap="14" class="sc-side">
+            <p-grid :min-col-width="132" :gap="12">
+              <p-view v-for="(e, i) in INK_STATS" :key="i" class="sc-stat">
+                <p-stack direction="row" align="baseline" :gap="5" class="ev-num">
+                  <span class="ev-v sc-v">{{ e.v }}</span><span class="ev-u">{{ e.u }}</span>
+                </p-stack>
+                <p-text class="ev-l">{{ isEn ? e.lEn : e.l }}</p-text>
+              </p-view>
+            </p-grid>
+            <p-text class="sc-note">{{ C.inkNote }}</p-text>
+            <code class="ev-src">{{ C.inkCmd }}</code>
           </p-stack>
         </p-grid>
       </p-view>
