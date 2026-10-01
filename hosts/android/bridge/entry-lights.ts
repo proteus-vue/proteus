@@ -23,14 +23,19 @@ import type { LightsAct, LightsProgram } from '../../shared/bridge/showcase-ligh
 // ★第三个节目（翻牌剧场）：验收 A/B 批新能力（任意缓动 / 3D / 循环 / 播放控制）
 import { createFlipProgram } from '../../shared/bridge/showcase-flip'
 import type { FlipAct, FlipControl } from '../../shared/bridge/showcase-flip'
+// ★第四个节目（墨绘·山水卷）：验收 C1 裁剪形变 × C2 SVG 描边
+import { buildInkTree, createInkProgram, INK_SAMPLE_IDS, INK_IDS } from '../../shared/bridge/showcase-ink'
+import type { InkAct } from '../../shared/bridge/showcase-ink'
 
-/** 两个节目的幕的**公共形状**（entry 只依赖这个——节目单各自扩展） */
-type AnyAct = (LightsAct | FlipAct) & {
+/** 三个节目的幕的**公共形状**（entry 只依赖这个——节目单各自扩展） */
+type AnyAct = (LightsAct | FlipAct | InkAct) & {
   control?: FlipControl
   midSample?: boolean
   rotate3dAnims?: number
   curveBezierAnims?: number
   repeatAnims?: number
+  clipAnims?: number
+  strokeAnims?: number
 }
 
 /* ────────────────── 宿主桥（android QuickJS 注入的 `proteusHost`） ────────────────── */
@@ -52,14 +57,14 @@ declare const proteusHost: LightsHostBridge
 /* ────────────────── 场景参数 ────────────────── */
 
 interface Args {
-  /** 灯数（默认 800：20×40） */
+  /** 灯数（默认 800：20×40）——ink 节目不用 */
   tiles?: number
-  /** 列数（默认 20） */
+  /** 列数（默认 20）——ink 节目不用 */
   cols?: number
   /** 视口（宿主注入；缺省 1080×2400） */
   viewport?: { width: number; height: number }
-  /** ★节目选择（缺省 'lights'）：'flip' = 翻牌剧场（验收 A/B 批新能力） */
-  program?: 'lights' | 'flip'
+  /** ★节目选择（缺省 'lights'）：'flip' = 翻牌剧场 / 'ink' = 墨绘·山水卷 */
+  program?: 'lights' | 'flip' | 'ink'
 }
 
 const state = {
@@ -67,14 +72,17 @@ const state = {
   view: { width: 1080, height: 2400 },
   ids: [] as number[],
   titleId: 2000,
-  /** ★节目选择（'lights' = 灯光秀 / 'flip' = 翻牌剧场；2026-10-01） */
-  programKind: 'lights' as 'lights' | 'flip',
+  /** ★节目选择（'lights' / 'flip' / 'ink'；2026-10-01） */
+  programKind: 'lights' as 'lights' | 'flip' | 'ink',
   program: null as LightsProgram | null,
   programAny: null as { next(): AnyAct | null; plan(): string[] } | null,
   /** 翻牌剧场的能力计数（灯光秀为 0） */
   rotate3dAnims: 0,
   curveBezierAnims: 0,
   repeatAnims: 0,
+  /** 墨绘·山水卷的能力计数（C1/C2） */
+  clipAnims: 0,
+  strokeAnims: 0,
   /** 执行过的播放控制序列（判据对账用） */
   controls: [] as Array<{ act: string; control: FlipControl }>,
   plan: [] as string[],
@@ -185,14 +193,17 @@ export function __proteusLightsRun(argsJson?: string): string {
   const args: Args = argsJson ? JSON.parse(argsJson) : {}
   const a: Required<Omit<Args, 'viewport' | 'program'>> = { tiles: args.tiles ?? 800, cols: args.cols ?? 20 }
   state.args = a
-  state.programKind = args.program === 'flip' ? 'flip' : 'lights'
+  state.programKind = args.program === 'flip' ? 'flip' : args.program === 'ink' ? 'ink' : 'lights'
   const vp = args.viewport ?? { width: 1080, height: 2400 }
   state.view = { width: Math.round(vp.width), height: Math.round(vp.height) }
   state.ids = Array.from({ length: a.tiles }, (_, i) => 1000 + i)
   state.acts = []
 
   const t0 = Number(proteusHost.nowUs()) / 1000
-  const tree = buildTree(state.view.width, state.view.height, a.tiles, a.cols)
+  // ★墨绘·山水卷：**另一棵树**（水墨长卷——绝对定位的路径/裁剪节点，不是 800 灯珠网格）
+  const tree = state.programKind === 'ink'
+    ? buildInkTree(state.view)
+    : buildTree(state.view.width, state.view.height, a.tiles, a.cols)
   const mountOut = proteusHost.mount(tree)
   const mountMs = Number(proteusHost.nowUs()) / 1000 - t0
   const mounted = safeParse(mountOut)
@@ -200,7 +211,7 @@ export function __proteusLightsRun(argsJson?: string): string {
     return JSON.stringify({ ok: false, error: '建树失败', detail: mounted })
   }
 
-  // ★按节目名建节目单（两个节目共用同一棵树：灯珠就是牌）
+  // ★按节目名建节目单（三个节目共用同一驱动；ink 用自己的树）
   const envCommon = {
     ids: state.ids,
     cols: a.cols,
@@ -213,12 +224,19 @@ export function __proteusLightsRun(argsJson?: string): string {
     const fp = createFlipProgram(envCommon)
     state.programAny = fp as unknown as { next(): AnyAct | null; plan(): string[] }
     state.program = null
+  } else if (state.programKind === 'ink') {
+    const ip = createInkProgram({ view: state.view })
+    state.programAny = ip as unknown as { next(): AnyAct | null; plan(): string[] }
+    state.program = null
   } else {
     state.program = createLightsProgram(envCommon)
     state.programAny = state.program as unknown as { next(): AnyAct | null; plan(): string[] }
   }
   state.plan = state.programAny.plan()
-  state.sampleIds = [1000, 1000 + Math.floor(a.tiles / 2), 1000 + a.tiles - 1, state.titleId]
+  // ★探针样本：ink 用**节目自己的关键节点**（幕布/月亮/题字/山/印/云——逐幕末态判据的依据）
+  state.sampleIds = state.programKind === 'ink'
+    ? [...INK_SAMPLE_IDS]
+    : [1000, 1000 + Math.floor(a.tiles / 2), 1000 + a.tiles - 1, state.titleId]
 
   results.program = state.programKind
   results.tiles = a.tiles
@@ -228,7 +246,7 @@ export function __proteusLightsRun(argsJson?: string): string {
   results.mount_ms = round2(mountMs)
   results.plan = state.plan
   results.started_at_ms = Date.now()
-  return JSON.stringify({ ok: true, tiles: a.tiles, mount_ms: round2(mountMs), plan: state.plan })
+  return JSON.stringify({ ok: true, tiles: a.tiles, mount_ms: round2(mountMs), plan: state.plan, sample_ids: state.sampleIds })
 }
 
 /** 取下一幕并发令（宿主在幕边界调用；返回 done=true = 演完） */
@@ -272,6 +290,9 @@ export function __proteusLightsNext(): string {
   state.rotate3dAnims += act.rotate3dAnims ?? 0
   state.curveBezierAnims += act.curveBezierAnims ?? 0
   state.repeatAnims += act.repeatAnims ?? 0
+  // ★墨绘·山水卷的能力计数（C1 裁剪通道 / C2 描边条数）
+  state.clipAnims += act.clipAnims ?? 0
+  state.strokeAnims += act.strokeAnims ?? 0
 
   const out = safeParse(proteusHost.animStart(JSON.stringify({ anims: act.anims }))) as { ok?: boolean; started?: number }
   if (out.ok !== true) {
@@ -289,6 +310,8 @@ export function __proteusLightsNext(): string {
     rotate3d_anims: act.rotate3dAnims ?? 0,
     curve_bezier_anims: act.curveBezierAnims ?? 0,
     repeat_anims: act.repeatAnims ?? 0,
+    clip_anims: act.clipAnims ?? 0,
+    stroke_anims: act.strokeAnims ?? 0,
     mid_sample: act.midSample === true,
     issue_ms: round2(issueMs),
     span_ms: round2(act.spanMs),
@@ -307,6 +330,8 @@ export function __proteusLightsNext(): string {
     rotate3d_anims: act.rotate3dAnims ?? 0,
     curve_bezier_anims: act.curveBezierAnims ?? 0,
     repeat_anims: act.repeatAnims ?? 0,
+    clip_anims: act.clipAnims ?? 0,
+    stroke_anims: act.strokeAnims ?? 0,
     mid_sample: act.midSample === true,
     control: act.control ?? null,
     issue_ms: round2(issueMs),
@@ -341,6 +366,8 @@ export function __proteusLightsFinalize(hostStatsJson?: string): string {
   results.rotate3d_anims_total = state.rotate3dAnims
   results.curve_bezier_anims_total = state.curveBezierAnims
   results.repeat_anims_total = state.repeatAnims
+  results.clip_anims_total = state.clipAnims
+  results.stroke_anims_total = state.strokeAnims
   results.controls = state.controls
   results.ok = true
   const json = JSON.stringify(results)
@@ -366,6 +393,8 @@ export function __proteusLightsRestart(): string {
   state.opacityAnims = 0
   state.colorAnims = 0
   state.nonColorAnims = 0
+  state.clipAnims = 0
+  state.strokeAnims = 0
   const envCommon = {
     ids: state.ids,
     cols: state.args.cols,
@@ -376,6 +405,9 @@ export function __proteusLightsRestart(): string {
   }
   if (state.programKind === 'flip') {
     state.programAny = createFlipProgram(envCommon) as unknown as { next(): AnyAct | null; plan(): string[] }
+    state.program = null
+  } else if (state.programKind === 'ink') {
+    state.programAny = createInkProgram({ view: state.view }) as unknown as { next(): AnyAct | null; plan(): string[] }
     state.program = null
   } else {
     state.program = createLightsProgram(envCommon)

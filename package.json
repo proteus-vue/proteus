@@ -35,6 +35,7 @@
     "check:android-kernel-anim": "python3 hosts/android/check-kernel-anim.py hosts/android/results/kernel-anim.json",
     "check:android-lights": "python3 hosts/android/check-lights.py hosts/android/results/lights.json",
     "check:android-flip": "python3 hosts/android/check-flip.py hosts/android/results/flip.json",
+    "check:android-ink": "python3 hosts/android/check-ink.py hosts/android/results/ink.json",
     "check:android-platform-anim": "python3 hosts/android/check-platform-anim.py hosts/android/results/platform-anim-node.json hosts/android/results/platform-anim.json",
     "check:anim-manual": "node scripts/gen-anim-manual.mjs --check",
     "check:app-stack": "python3 hosts/android/check-app-stack.py hosts/android/results/app-stack.json",
