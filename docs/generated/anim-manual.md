@@ -8,7 +8,7 @@ generated: true
 # Morpheus 动画声明项 AI 说明书
 
 > **生成物，勿手改**：`node scripts/gen-anim-manual.mjs`（`--check` 接 CI，漂移即红）
-> **单一事实来源**：`packages/animation/src/rules.ts` 的 `ANIM_RULES`（40 条）
+> **单一事实来源**：`packages/animation/src/rules.ts` 的 `ANIM_RULES`（42 条）
 >
 > 本表与编译器的 111 条规则**同构**（Morpheus §13 第 11 条硬性要求）——
 > 每条含 what / why / when / 示例 / 如何验证 / 实现位置，AI 可单独消费一条。
@@ -338,7 +338,7 @@ presets.choreograph.gather({ ids, canvas, spread: 2.6 })
 presets.choreograph.storm({ ids, canvas, order: 'alternate', staggerMs: 8, durationMs: 900 })
 ```
 
-## 声明面原语（字段/取值）（11 条）
+## 声明面原语（字段/取值）（13 条）
 
 ### `primitive/route-transition-bridge`
 
@@ -377,9 +377,9 @@ compileAnimations(
 
 ### `primitive/AnimKind`
 
-**动画属性封闭集（7 个：五个合成 + color + textColor）** `[implemented]`
+**动画属性封闭集（11 个：五个合成 + color + textColor + 3D×2 + clip + strokeProgress）** `[implemented]`
 
-- **是什么**：`translateX`(0) / `translateY`(1) / `scale`(2) / `rotate`(3) / `opacity`(4) / `color`(5..8) / `textColor`(9..12，**均按 R/G/B/A 四通道分解**)——编号是**跨语言契约**。
+- **是什么**：`translateX`(0) / `translateY`(1) / `scale`(2) / `rotate`(3) / `opacity`(4) / `color`(5..8) / `textColor`(9..12，**均按 R/G/B/A 四通道分解**) / `rotateX`(13) / `rotateY`(14) / `clip`(15..30，**按参数槽分解**) / `strokeProgress`(31)——编号是**跨语言契约**。
 - **为什么**：★**合成属性判定是分水岭**（§5-bis.1）：只有 transform/opacity 子集能走平台渲染线程零参与路径；本引擎**只做绘制层变换** ⇒ 五个标量属性全是合成属性（`width/height/margin` 这类布局属性会被编译期拦）。★`color`/`textColor` 是**第三类**：paint-only（与 opacity 同成本类，**不触发布局**）但**非合成**——Android 的 `RenderNode` 无法在渲染线程插值颜色 ⇒ 两端一致走 tick 路径（跨端一致优先；见架构页）。**一个声明 → 四条通道**：求值机器（曲线/弹簧/序列/滚动/seek/接管）全是标量的 ⇒ 零改动复用，不新增"多通道求值"的第二套实现（代价如实：一次颜色动画 = 4 条指令）。★`textColor` 与 `color` **独立轨道**（编号 9..12 不复用 5..8 槽位）：同节点可同时动底色与文字色。
 - **何时用**：任何声明都要从这里选（写错名字是类型级错误）；`color` 要求目标节点已声明 `backgroundColor`、`textColor` 要求已声明 `color`（基色 = 起点与复位目标；缺失内核明确拒绝）
 - **如何验证**：packages/layout-core-rust/src/anim.rs 的 `AnimKind::from_u8`；tests/anim-color-golden.test.ts（跨语言钉值 + 编译形态 + 解析拦截）；真机：check-anim-rt2.py P 组（iOS 真读 CALayer 背景色/文字色）· check-kernel-anim.py P 组（Android）
@@ -492,6 +492,42 @@ animControl({ paused: false })    // 恢复——从冻结处继续（不是重�
 ```ts
 { kind: 'scale', from: 1, to: 1, keyframes: [
     { to: 0.9, durationMs: 80 }, { to: 1, durationMs: 200, curve: 'springApprox' }] }
+```
+
+### `primitive/clip`
+
+**裁剪形变（`clip` —— 2026-10-01 · C1）** `[implemented]`
+
+- **是什么**：`{ kind: 'clip', from: […], to: […] }`——`clip-path` 形变动画的声明面：形状类型**静态**（节点样式 `clipPath` 声明 inset / circle / polygon）、**参数可动画**（分数坐标 0..1）。一个声明 → 内核**最多 16 条标量参数通道**（kind 15..30）。
+- **为什么**：★**与颜色同源的分解法**：形状参数逐槽拆成标量通道 ⇒ 曲线/弹簧/序列/循环/接管**零改动复用**（没有第二套"多通道求值"实现）。★走 tick 路径（非合成——Android RenderNode 无"可动画裁剪形状"属性 ⇒ 两端一致）。★异型间**不插值**（inset→circle 无意义，CSS 同规）——形状类型在树里静态声明。★`from` 必填且与 `to` 对齐（内核无"缺省 = 当前值"语义——同 `constraint/from-is-mandatory`）。
+- **何时用**：扫描线揭示 / 开门透出 / 圆形聚焦 / 多边形形变——任何"可见区域在变"的演出
+- **如何验证**：tests/anim-clip-golden.test.ts（编译产物/校验/窄化/反转 10 条）+ 内核单测 `clip_channels_write_independently_and_reset_to_base` / `clip_anim_rejected_without_declared_shape` / `clip_slot_mapping_and_display`；真机：check-anim-rt2.py V13（iOS 真读 mask 包围盒）× check-kernel-anim.py U 组（Android 裁/不裁对照）
+- **实现位置**：`packages/animation/src/types.ts:ClipAnimDecl/ClipShape（内核 anim.rs:AnimKind::Clip0..15 + ffi.rs:parse_clip_path）`
+
+```ts
+// 节点样式：clipPath: { kind: 'inset', params: [0, 0, 0, 0] }
+// 动画：上边内缩 40%（"从上拉下帷幕"）
+{ kind: 'clip', from: [0, 0, 0, 0], to: [0.4, 0, 0, 0], durationMs: 400 }
+// polygon 顶点形变（每顶点 2 参——最多 8 点）
+{ kind: 'clip', from: [0,0, 1,0, 0.5,1], to: [0.1,0.1, 0.9,0.1, 0.5,0.9], durationMs: 500 }
+```
+
+### `primitive/strokeProgress`
+
+**SVG 描边进度（`strokeProgress` —— 2026-10-01 · C2）** `[implemented]`
+
+- **是什么**：`{ kind: 'strokeProgress', from: 0, to: 1 }`——"手写字/画线"动效：**单通道标量**（kind **31**），0..1 = 沿路径弧长画到哪。路径本体（`d`）在节点样式静态声明：`svgPath: { d, stroke, strokeWidth }`——内核解析成段列表（MoveTo/LineTo/CubicTo/QuadTo/Close）+ 预计算弧长，宿主按进度截取。
+- **为什么**：★**路径解析只有一份**（内核 `svg_path.rs`）：宿主拿这**同一份**段列表建绘制层（`proteus_layout_svg_nodes` 下发完整 segs）——两端不各自实现 SVG 解析器（否则"同一条 `d` 两端画得不一样"）。★单通道 ⇒ 标量求值机器全复用（曲线/贝塞尔/序列/循环/暂停全可用）。★如实边界：只支持 M/L/C/Q/Z（`A` 弧线 / `S`/`T` 简写**明确拒绝**并给替代写法——画弧可拆成多段 C；相对命令与隐式重复（M 后多组坐标 ⇒ 自动 L）已支持。
+- **何时用**：签名/手写字 / 图表演化线 / 路线描绘 / 边框描线——任何"线条自己长出来"的演出
+- **如何验证**：tests/anim-stroke-golden.test.ts（编译产物/编排/校验 8 条）+ 内核单测 `stroke_progress_writes_clamps_and_resets` + svg_path.rs 的解析与弧长单测；真机：check-anim-rt2.py W14（iOS 真读 CAShapeLayer.strokeEnd）× check-kernel-anim.py X 组（Android 离屏像素）
+- **实现位置**：`packages/animation/src/types.ts:AnimKind.STROKE_PROGRESS（内核 anim.rs:StrokeProgress=31 + svg_path.rs:parse_svg_path + ffi.rs:proteus_layout_svg_nodes）`
+
+```ts
+// 节点样式（路径 + 描边色；静态就画的部分由宿主层负责）
+// svgPath: { d: 'M10 80 Q 50 10 90 80', stroke: '#ff5533', strokeWidth: 4 }
+// 动画：2 秒沿弧长画完
+{ kind: 'strokeProgress', from: 0, to: 1, durationMs: 2000, curve: 'easeOut' }
+// 擦除（倒放）：1 → 0（"画完再擦掉"不需要第二套能力）
 ```
 
 ### `primitive/timeline`

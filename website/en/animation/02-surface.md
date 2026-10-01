@@ -29,6 +29,9 @@ Morpheus exposes exactly one package: **`@proteus-vue/animation`** (declare + va
 | `opacity` | 4 | ✅ |
 | `color` | 5..8（R/G/B/A 四通道） | ❌ **paint-only**（不触发布局，但不进平台零参与路径——见架构页） |
 | `textColor` | 9..12 (R/G/B/A channels, separate track) | ❌ **paint-only** (same as above; runs in parallel with `color` on the same node) |
+| `rotateX` / `rotateY` | 13 / 14 | ❌ **tick-only** (3D — see below) |
+| `clip` | 15..30 (per-parameter slots, up to 16 channels) | ❌ **tick-only** (clip-path morph — see below) |
+| `strokeProgress` | 31 (single scalar channel: 0..1 = how far along the arc to draw) | ❌ **tick-only** (SVG stroke — see below) |
 
 | Curve | Contract id |
 |---|---|
@@ -46,7 +49,11 @@ Morpheus exposes exactly one package: **`@proteus-vue/animation`** (declare + va
 
 **Arbitrary easing (`curveBezier`, promoted 2026-10-01)**: design-handoff curves outside the closed set no longer need an escape hatch — `curveBezier: [x1,y1,x2,y2]` (or paste the CSS value with `parseCubicBezier('cubic-bezier(…)')`) runs on the **same kernel evaluation machine** (65-point table + interpolation; the control-point table is generated once and cached). Constraint: `x1/x2 ∈ [0,1]` (monotonic time axis); `y1/y2` are free (> 1 = overshoot, < 0 = anticipation), and it is mutually exclusive with `curve` / `spring` / `keyframes` (the evaluation mode must be unique).
 
-**Composited = eligible for the platform zero-involvement path.** The five scalar properties are composited; **`color` / `textColor` are paint-only but non-composited** (they do not trigger layout, but Android's RenderNode cannot interpolate colours, so both targets use the tick path for consistency). Note also: **changing layout properties (width / margin) is not animation, it is relayout**, and compilation rejects it outright.
+**Clip-path morph (`clip`, 2026-10-01)**: the shape type is declared **statically** on the node's style (`clipPath: { kind: 'inset' | 'circle' | 'polygon', … }`, parameters as box fractions 0..1) while the parameters animate — **one declaration → up to 16 scalar parameter channels** (kinds 15..30, the same decomposition as colour: curve / spring / keyframes / repeat / takeover all reused unchanged). Cross-shape interpolation is not supported (inset→circle is meaningless, same as CSS). Rendering: iOS `CAShapeLayer` as `layer.mask` / Android `canvas.clipPath` (both static and animated states are covered).
+
+**SVG stroke (`strokeProgress`, 2026-10-01)**: the path itself (`d`) is declared on the node's style (`svgPath: { d, stroke, strokeWidth }`) and the animation is a single scalar: `{ kind: 'strokeProgress', from: 0, to: 1 }` — 0..1 = how far along the arc to draw ("handwriting / line drawing"). The path is parsed by **the kernel, once** (segment list + arc length, shared by both hosts — no "same `d`, two different drawings"). Supports `M/L/C/Q/Z` (relative commands and implicit repetition included; `A` arcs and `S`/`T` shorthands are rejected with an actionable alternative).
+
+**Composited = eligible for the platform zero-involvement path.** The five scalar properties are composited; **`color` / `textColor` / `rotateX` / `rotateY` / `clip` / `strokeProgress` are tick-only or paint-only but non-composited** (they do not trigger layout, but the two platforms' interpolators differ in semantics or cannot interpolate at all, so both targets use the kernel tick path for consistency). Note also: **changing layout properties (width / margin) is not animation, it is relayout**, and compilation rejects it outright.
 
 ```ts
 // colour is one declaration — compiled into four kernel channels
@@ -79,7 +86,7 @@ const batch = compileRoute(spec, { enter: 101, exit: 100 })
 
 ## Shared single source with the AI manual
 
-The 26 declaration entries (13 presets / 6 surface primitives / 5 constraints / 2 boundaries) share `ANIM_RULES` as their single source of truth and are **isomorphic** to the compiler’s 111 rules: each carries what / why / when / example / how to verify / implementation site, so an AI can consume a single entry.
+The 42 declaration entries (21 presets / 13 surface primitives / 6 constraints / 2 boundaries) share `ANIM_RULES` as their single source of truth and are **isomorphic** to the compiler’s 112 rules: each carries what / why / when / example / how to verify / implementation site, so an AI can consume a single entry.
 
 The generated [anim-manual](/docs/generated/anim-manual) runs `runConformance()` before rendering — presets must really exist in the export surface, cross-language contract values must match, and `verify` must be traceable; **if the reconciliation fails, no document is generated**.
 
