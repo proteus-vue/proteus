@@ -416,6 +416,30 @@ describe('Morpheus 炫技场 · 第四个节目（墨绘·山水卷）', () => {
     for (const m of mixes) expect(m.alternate, '混合应 yoyo（呼吸感）').toBe(true)
   })
 
+  it('★★路径变形 v1：三只鸟声明扑翼 B 态（同结构 M Q Q——内核建树时校验签名）', () => {
+    const nodes = treeNodes()
+    for (const bid of INK_IDS.birds) {
+      const n = nodes.get(bid) as { svgPath?: { d: string }; svgPathTo?: { d: string } }
+      expect(n.svgPath?.d, `鸟 ${bid} A 态`).toBeTruthy()
+      expect(n.svgPathTo?.d, `鸟 ${bid} B 态（扑翼）`).toBeTruthy()
+      // 同构 = 命令序列相同（M Q Q）——用与内核同一判据的轻量版
+      const sig = (d: string) => (d.match(/[MLQCZ]/g) ?? []).join('')
+      expect(sig(n.svgPathTo!.d), `鸟 ${bid} 两态同构`).toBe(sig(n.svgPath!.d))
+      // 起点/终点一致（只有控制点变 = "翅膀在动"而不是"鸟在跳"）
+      const parts = (d: string) => d.match(/-?\d+(?:\.\d+)?/g)!.map(Number)
+      const a = parts(n.svgPath!.d)
+      const b = parts(n.svgPathTo!.d)
+      expect(b[0], `鸟 ${bid} 起点 x`).toBe(a[0])
+      expect(b[a.length - 1], `鸟 ${bid} 终点 y`).toBe(a[a.length - 1])
+    }
+    // birds 幕含 pathMorph 通道且 yoyo（扇翅往复）
+    const { acts } = walkAll()
+    const birds = acts.find((a) => a.name === 'birds')!
+    const morphs = birds.anims.filter((x) => x.kind === 33)
+    expect(morphs.length, 'birds 幕 pathMorph 指令').toBe(3)
+    for (const m of morphs) expect(m.alternate, '扇翅应 yoyo').toBe(true)
+  })
+
   it('★工具函数契约：blend 预混（6 位）· ink 加 alpha（8 位 #RRGGBBAA）', () => {
     expect(blend('#000000', '#ffffff', 0.5)).toBe('#808080')
     expect(blend('#f2ead6', '#f2ead6', 0.3)).toBe('#f2ead6')
