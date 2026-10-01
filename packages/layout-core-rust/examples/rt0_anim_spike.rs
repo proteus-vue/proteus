@@ -85,6 +85,10 @@ fn main() {
                         x: from,
                         vel: 0.0,
                         takeover: true,
+                        // ★2026-10-01 能力扩充的字段（A1 自定义曲线 / A2 循环语义）
+                        curve_pts: None,
+                        iterations: 1.0,
+                        alternate: false,
                     },
                 )
                 .expect("start 失败");
