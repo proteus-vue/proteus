@@ -1,15 +1,16 @@
 // packages/animation/src/gradient.ts —— ★★**渐变填充**（v1：静态 paint —— 2026-10-01）
 //
-// 【为什么在这里（而不是内核）——一套刻意的边界，写下来防后人误判为疏漏】
-//   本仓的"内核是唯一解析器"纪律（C1/C2）成立于两个前提之一：
-//     ① 内核**要求值**才能在每帧求值（颜色/裁剪/描边的通道分解——内核要算）；
-//     ② 解析本身**复杂到两端各写一份必然分叉**（SVG `d` 的段语法 + 弧长）。
-//   渐变 v1 **两条都不满足**：它不参与任何内核计算（无动画通道、不影响布局）；
-//   解析只是"形状 + 色标"的结构校验（与 `borderRadius` 同层——宿主绘制属性，
-//   内核从不管它）。⇒ 正确的落点 = **宿主的绘制层**，与 `borderRadius`/`borderRadius`
-//   同一层；硬塞进内核只会让内核背一个它不算的负担（本仓反模式"假抽象"）。
-//   ★若渐变**将来要动**（色标颜色/位置动画），那时它才满足前提 ①——届时按 C1/C2
-//   同款路径迁入内核（值通道分解），本文件的类型/校验器**接口不变**（声明面稳定）。
+// 【★边界的两阶段记录（v1 → v2——"条件变了就迁"的实操记录，防后人误判为反复）】
+//   · **v1（静态 paint）刻意落在宿主绘制层**（与 `borderRadius` 同层）：本仓的
+//     "内核是唯一解析器"纪律（C1/C2）成立于两个前提之一——① 内核**要求值**才能每帧求值；
+//     ② 解析复杂到两端各写一份必然分叉。v1 两条都不满足（不参与内核计算；只是结构校验）
+//     ⇒ 硬塞内核会让内核背它不算的负担（本仓反模式"假抽象"）。
+//   · **v2（色标动画）打破前提 ①**：`gradientMix` 通道要逐帧混合色标 ⇒ 求值进了内核 ⇒
+//     色标数学必须**一处实现**（否则两端各写一份 lerp = 第 N 份手写副本的经典事故）
+//     ⇒ 按 v1 写好的迁移路径**迁入内核**（`style::GradState` 是唯一 lerp 实现；
+//     宿主只翻译"内核算好的"结果）。**声明面不变**（本文件仍是类型与校验的单一事实源）。
+//   ★CSS 对照（这是本引擎的**超出**项）：CSS 的渐变**不可过渡**（`background-image`
+//     不在可插值属性里——改色标是硬跳变；平滑要 Houdini，而它只有 Chromium 系）。
 //
 // 【跨语言契约（三层各自实现，本文件是**声明面与校验的单一事实源**）】
 //   · TS（本文件）：类型 + 校验器（作者面：写错立刻报错，带修法）；
@@ -71,12 +72,49 @@ export interface RadialGradientFill {
 export type GradientFill = LinearGradientFill | RadialGradientFill
 
 /**
+ * ★★**渐变的两态声明**（v2：可动画）——`{ from: 渐变A, to: 渐变B }`。
+ *
+ * 【怎么用】树里声明 `fillGradient`（A）与 `fillGradientTo`（B）后，动画写
+ * `{ kind: 'gradientMix', from: 0, to: 1 }`——内核逐帧混合两态的**每个色标**
+ * （颜色四通道 + 位置标量），宿主只翻译结果（零 lerp 数学）。
+ *
+ * 【结构约束（违反即明确拒绝）】A 与 B 的 `kind` 相同、色标**个数**相同——
+ *   "逐标混合"要求一一对应；本引擎不做"补齐/截断"这类静默猜测。
+ */
+export interface GradientPair {
+  from: GradientFill
+  to: GradientFill
+}
+
+/** 校验两态结构一致（供声明层/测试用；内核在建树时会做同一套校验并给可定位错误） */
+export function validateGradientPair(pair: GradientPair): Array<{ path: string; message: string; hint: string }> {
+  const out = [validateGradientFill(pair.from), validateGradientFill(pair.to)].flat()
+  if (out.length > 0) return out
+  if (pair.from.kind !== pair.to.kind) {
+    out.push({
+      path: 'fillGradientTo.kind',
+      message: `两态类型不同（${pair.from.kind} vs ${pair.to.kind}）`,
+      hint: '异型渐变之间没有"逐标混合"的定义——两态必须同 kind',
+    })
+  }
+  if (pair.from.stops.length !== pair.to.stops.length) {
+    out.push({
+      path: 'fillGradientTo.stops',
+      message: `两态色标个数不同（${pair.from.stops.length} vs ${pair.to.stops.length}）`,
+      hint: '逐标混合要求一一对应（本引擎不做"补齐/截断"这类静默猜测）',
+    })
+  }
+  return out
+}
+
+/**
  * ★跨语言契约的**必需键名**（机器门禁 `check-gradient-contract.mjs` 的唯一事实源）：
  *   两端宿主必须都引用这些键名——漏一个就是"该端读不到该维度"（静默降级）。
  *   ★加字段时**只改这里**（门禁与两端检查一起跟进——与 hook 清单同一纪律）。
  */
 export const GRADIENT_CONTRACT_KEYS = [
   'fillGradient',
+  'fillGradientTo',
   'kind',
   'linear',
   'radial',

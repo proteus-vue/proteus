@@ -122,6 +122,63 @@ impl Default for Overflow {
 
 /// 引擎就绪样式（对应 TS 侧 `LayoutNode` 的输入部分）
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+/// ★★**渐变状态**（渐变 v2）：A 态（树里 `fillGradient`）+ B 态（`fillGradientTo`）+ 混合因子。
+///
+/// 【语义（与 CSS 的差别——这是本引擎的**超出**项）】CSS 的渐变**不可过渡**
+///   （`background-image` 不在可插值属性里——浏览器里改色标是硬跳变；平滑要 Houdini，而
+///   Houdini 只有 Chromium 系）。本引擎把它做成内核逐帧求值：`mix` 0..1 线性混合 A/B 的
+///   每个色标（颜色按四通道、位置按标量）——**两端宿主只翻译内核算好的结果**（零 lerp 数学）。
+///
+/// 【结构约束（建树时校验，违反即明确拒绝）】A 与 B 的 `kind` 相同、色标**个数**相同
+///   （否则"逐标混合"无定义——不做"补齐/截断"这类静默猜测）。
+pub struct GradState {
+    /// 1=linear 2=radial（与 TS 契约一致）
+    pub kind: u8,
+    /// 线性：方向角（度；CSS 语义 0=向上 90=向右）
+    pub angle: f32,
+    /// 径向：圆心与半径（单位空间——与 TS `radialNormalized` 同义）
+    pub cx: f32,
+    pub cy: f32,
+    pub r: f32,
+    /// 色标个数（2..8）
+    pub n: u8,
+    /// A 态色标（打包 `0xAARRGGBB`——与底色同编码）与位置
+    pub colors_a: [u32; 8],
+    pub offsets_a: [f32; 8],
+    /// B 态色标（`fillGradientTo`；`has_b=false` 时其余字段无意义）
+    pub has_b: bool,
+    pub colors_b: [u32; 8],
+    pub offsets_b: [f32; 8],
+    /// ★★**混合因子**（`gradientMix` 通道的当前值；0 = 全 A / 1 = 全 B）
+    pub mix: f32,
+}
+
+impl GradState {
+    /// 当前（混合后）的色标——**唯一的 lerp 实现**（宿主与探针都消费它的结果）。
+    /// 颜色按四通道各自 lerp（与颜色通道动画同一数学：sRGB 直插，两端一致）。
+    pub fn mixed(&self) -> ([u32; 8], [f32; 8]) {
+        let t = self.mix.clamp(0.0, 1.0);
+        let mut colors = self.colors_a;
+        let mut offsets = self.offsets_a;
+        if self.has_b {
+            for i in 0..self.n as usize {
+                let a = self.colors_a[i];
+                let b = self.colors_b[i];
+                let lerp_ch = |sh: u32| -> u32 {
+                    let ca = ((a >> sh) & 0xFF) as f32;
+                    let cb = ((b >> sh) & 0xFF) as f32;
+                    (ca + (cb - ca) * t).round().clamp(0.0, 255.0) as u32
+                };
+                colors[i] = (lerp_ch(24) << 24) | (lerp_ch(16) << 16) | (lerp_ch(8) << 8) | lerp_ch(0);
+                offsets[i] = self.offsets_a[i] + (self.offsets_b[i] - self.offsets_a[i]) * t;
+            }
+        }
+        (colors, offsets)
+    }
+}
+
+/// ★★引擎就绪样式（全数值）——与 TS 参考实现字段一一对应（见文件头）。
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct LStyle {
     /// 显式宽高（逻辑像素；`None` = auto）
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -219,6 +276,14 @@ pub struct LStyle {
     /// ★★**描边宽度**（px；0 = 未声明）
     #[serde(default)]
     pub stroke_width: f32,
+    /// ★★**渐变填充**（2026-10-01 · 渐变 v2 可动画）——A/B 两态 + 混合因子。
+    ///   【为什么在内核（v1 时它刻意在宿主——那是有条件的，条件变了）】v1 的边界论证是
+    ///   "① 内核不参与它的求值 ② 解析不到'两端必然分叉'的程度"——**v2 打破了 ①**：
+    ///   `gradientMix` 通道要逐帧混合色标 ⇒ 求值进了内核 ⇒ 色标数学必须**一处实现**
+    ///   （否则两端各写一份 lerp = 本仓第 N 份手写副本的经典事故）。⇒ 按 v1 文件头
+    ///   写好的迁移路径迁入内核；**声明面不变**（`fillGradient` 写法照旧，新增可选 `fillGradientTo`）。
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub grad: Option<GradState>,
     /// ★★**裁剪形状类型**（2026-10-01 · C1；0=无 1=inset 2=circle 3=polygon）
     ///   【为什么类型静态】CSS 同规：异型形状间不插值（inset→circle 无意义）——
     ///   类型在建树时定死，**参数**参与动画（`clip: [f32; 16]`）。
@@ -325,6 +390,7 @@ impl Default for LStyle {
             clip_kind: 0,
             clip: [0.0; 16],
             clip_base: [0.0; 16],
+            grad: None,
             stroke_progress: 0.0,
             svg_path: None,
             stroke_color: 0,

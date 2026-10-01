@@ -309,6 +309,13 @@ pub enum AnimKind {
     ///   沿路径总弧长从起点画到 `progress × total_len`（"手写字/画圈"的经典动效）。
     ///   路径本体 `d` 是**静态声明**（树里 `svgPath`），本通道只驱动"画到哪"。
     StrokeProgress = 31,
+    /// ★★**渐变混合因子**（2026-10-01 · 渐变 v2）：`0..1` = A 态（`fillGradient`）与
+    ///   B 态（`fillGradientTo`）之间的**逐色标混合**（颜色四通道 + 位置标量）。
+    ///   【为什么这是一个"标量通道"而不是"每色标各一条通道"】色标是**同一个造型的两态**——
+    ///   混合语义天然是"整体过渡"（且 A/B 色标一一对应，逐标独立动反而会撕开渐变）；
+    ///   ⇒ 与 `opacity` 同级的标量：曲线/弹簧/序列/循环/接管/播放控制**全部零改动复用**。
+    ///   ★CSS 没有这个能力（`background-image` 不可过渡）——见 `style::GradState` 注释。
+    GradientMix = 32,
 }
 
 impl AnimKind {
@@ -346,6 +353,7 @@ impl AnimKind {
             29 => AnimKind::Clip14,
             30 => AnimKind::Clip15,
             31 => AnimKind::StrokeProgress,
+            32 => AnimKind::GradientMix,
             other => {
                 return Err(format!(
                     "未知动画属性 kind={other}（0=translateX/1=translateY/2=scale/3=rotate/4=opacity/\
@@ -391,12 +399,18 @@ impl AnimKind {
             | AnimKind::Clip14
             | AnimKind::Clip15 => "clip",
             AnimKind::StrokeProgress => "strokeProgress",
+            AnimKind::GradientMix => "gradientMix",
         }
     }
 
     /// 是否 **SVG 描边进度通道**（C2，31）
     pub fn is_stroke(self) -> bool {
         matches!(self, AnimKind::StrokeProgress)
+    }
+
+    /// 是否 **渐变混合通道**（渐变 v2，32）
+    pub fn is_gradient_mix(self) -> bool {
+        matches!(self, AnimKind::GradientMix)
     }
 
     /// 是否 **clip 形状参数通道**（15..30）——对应槽位 = kind - 15
@@ -491,7 +505,8 @@ impl AnimKind {
             | AnimKind::Clip13
             | AnimKind::Clip14
             | AnimKind::Clip15
-            | AnimKind::StrokeProgress => 0,
+            | AnimKind::StrokeProgress
+            | AnimKind::GradientMix => 0,
         }
     }
 
@@ -524,6 +539,8 @@ impl AnimKind {
             | AnimKind::Clip15 => (0.002, 0.04),                        // 盒分数, 盒分数/s
             // ★描边进度是 0..1 量纲（与 clip 参数同）
             AnimKind::StrokeProgress => (0.002, 0.04),
+            // ★渐变混合因子同为 0..1 量纲
+            AnimKind::GradientMix => (0.002, 0.04),
             AnimKind::Opacity => (0.003, 0.06),                         // 1, 1/s
             // ★颜色通道：0.5/255 的通道步 ≈ 视觉不可辨（与 translate 的 0.5px 同量级取法）
             AnimKind::ColorR | AnimKind::ColorG | AnimKind::ColorB | AnimKind::ColorA => (0.5, 10.0),
@@ -580,6 +597,9 @@ impl AnimKind {
             | AnimKind::Clip15 => false,
             // ★描边进度同样非合成（绘制期约束——两端都是"改占位层/重画路径"）
             AnimKind::StrokeProgress => false,
+            // ★★渐变混合同样非合成（2026-10-01 · v2）：色标是 paint 状态（改 shader/gradient 层
+            //   ——与颜色同类）；且 lerp 数学只在**内核**一处（宿主零插值）⇒ 必走 tick。
+            AnimKind::GradientMix => false,
             AnimKind::ColorR
             | AnimKind::ColorG
             | AnimKind::ColorB
@@ -603,6 +623,17 @@ impl AnimKind {
             if node.style.clip[slot] != v {
                 node.style.clip[slot] = v;
                 return true;
+            }
+            return false;
+        }
+        // ★★渐变混合（v2）：一个标量槽（0..1 钳位——与描边同款"内核只管存"）
+        if self.is_gradient_mix() {
+            let v = v.clamp(0.0, 1.0);
+            if let Some(g) = node.style.grad.as_mut() {
+                if g.mix != v {
+                    g.mix = v;
+                    return true;
+                }
             }
             return false;
         }
@@ -666,6 +697,8 @@ impl AnimKind {
                 | AnimKind::Clip15 => return false,
                 // 描边进度走上面的早退分支（见 write 开头）
                 AnimKind::StrokeProgress => return false,
+                // 渐变混合走上面的早退分支（见 write 开头）
+                AnimKind::GradientMix => return false,
                 // 颜色走上面的分支（此处不可达——`is_color` 已分流）
                 AnimKind::ColorR
                 | AnimKind::ColorG
@@ -1005,6 +1038,8 @@ pub fn reset_visuals(tree: &mut LayoutTree, node_ids: &[u32]) -> usize {
             let clip_dirty = s.clip_kind != 0 && s.clip != s.clip_base;
             // ★C2：描边进度回 0（基态 = 未画）
             let stroke_dirty = s.svg_path.is_some() && s.stroke_progress != 0.0;
+            // ★渐变 v2：混合因子回 0（基态 = 全 A——与"解绑必须含清值"同一义务）
+            let grad_dirty = s.grad.as_ref().is_some_and(|g| g.mix != 0.0);
             let dirty = s.translate_x != 0.0
                 || s.translate_y != 0.0
                 || s.scale != 1.0
@@ -1014,7 +1049,8 @@ pub fn reset_visuals(tree: &mut LayoutTree, node_ids: &[u32]) -> usize {
                 || s.opacity != 1.0
                 || color_dirty
                 || clip_dirty
-                || stroke_dirty;
+                || stroke_dirty
+                || grad_dirty;
             if dirty {
                 s.translate_x = 0.0;
                 s.translate_y = 0.0;
@@ -1024,6 +1060,9 @@ pub fn reset_visuals(tree: &mut LayoutTree, node_ids: &[u32]) -> usize {
                 s.rotate_y = 0.0;
                 s.clip = s.clip_base; // ★C1：裁剪参数回基态（与颜色回底色同一条"解绑含清值"）
                 s.stroke_progress = 0.0; // ★C2：描边进度回 0（未画）
+                if let Some(g) = s.grad.as_mut() {
+                    g.mix = 0.0; // ★渐变 v2：混合因子回 0（全 A）
+                }
                 s.opacity = 1.0;
                 // ★复位 = 回底色 / 回原文字色（不是清成 None：那会丢掉"本节点有基色"的事实）
                 s.bg = s.bg_base;
@@ -1193,7 +1232,10 @@ pub fn commit_specs(tree: &LayoutTree, anims: &[Anim]) -> Vec<CommitSpec> {
                     | AnimKind::Clip13
                     | AnimKind::Clip14
                     | AnimKind::Clip15
-                    | AnimKind::StrokeProgress => {}
+                    | AnimKind::StrokeProgress
+                    // ★渐变混合（v2）：与颜色/裁剪同类——**不可达**（commit 是"五元组平台路径"，
+                    //   入口 `anim_commit_spec` 已按 `plan_animations` 整批拒绝非合成属性）。
+                    | AnimKind::GradientMix => {}
                 }
             }
             samples.push(v);
@@ -1235,7 +1277,10 @@ pub fn commit_specs(tree: &LayoutTree, anims: &[Anim]) -> Vec<CommitSpec> {
                     | AnimKind::Clip13
                     | AnimKind::Clip14
                     | AnimKind::Clip15
-                    | AnimKind::StrokeProgress => {}
+                    | AnimKind::StrokeProgress
+                    // ★渐变混合（v2）：与颜色/裁剪同类——**不可达**（commit 是"五元组平台路径"，
+                    //   入口 `anim_commit_spec` 已按 `plan_animations` 整批拒绝非合成属性）。
+                    | AnimKind::GradientMix => {}
                 }
             }
             let n = samples.len();
@@ -1327,6 +1372,13 @@ pub struct NodeVisual {
     /// ★★**SVG 描边进度**（2026-10-01 · C2）：`None` = 本节点无描边路径（宿主保持静态绘制）；
     ///   `Some(p)` = 当前画线进度（0..1——宿主据此设 strokeEnd / trimPath）。
     pub stroke_progress: Option<f32>,
+    /// ★★**渐变（混合后）**（2026-10-01 · 渐变 v2）：`None` = 本节点无渐变（宿主保持静态绘制）；
+    ///   `Some((kind, n, colors, offsets))` = **内核已混合**的当前色标——宿主零 lerp 数学
+    ///   （与 clip 的"内核算好参数、宿主只翻译"同一分工）。
+    ///   · `kind`：1=linear 2=radial（静态，但随帧带上 = 记录自描述）
+    ///   · `n`：有效色标数（2..8）
+    ///   · `colors`/`offsets`：**已含 `mix` 混合**的 8 槽数组（只用前 n 个）
+    pub grad: Option<(u8, u8, [u32; 8], [f32; 8])>,
 }
 
 /// 一次 tick（或 seek）的结果（供宿主刷新层 / 测试观测）
@@ -1465,6 +1517,28 @@ impl AnimEngine {
                 a.node_id
             ));
         }
+        // ★★渐变混合**要求节点声明了 `fillGradient` + `fillGradientTo` 两态**（v2）：
+        //   单态渐变没有"混合"可言（缺 B ⇒ 明确拒绝，不静默当 0/1）——与 clip 需要形状同一条纪律。
+        if a.kind.is_gradient_mix() {
+            let g = tree.nodes[idx].style.grad.as_ref();
+            let reason = match g {
+                None => Some((
+                    "没有渐变（树里未声明 `fillGradient`）",
+                    "请先给该节点声明 `fillGradient`（A 态）与 `fillGradientTo`（B 态）",
+                )),
+                Some(gs) if !gs.has_b => Some((
+                    "只有 A 态（树里未声明 `fillGradientTo`）",
+                    "混合需要两态：再声明 `fillGradientTo`（与 A 的 kind 与色标个数一致）",
+                )),
+                _ => None,
+            };
+            if let Some((what, fix)) = reason {
+                return Err(format!(
+                    "渐变混合动画的目标节点 {} {what}——混合需要一个可过渡的两态；{fix}，或去掉这条渐变动画",
+                    a.node_id
+                ));
+            }
+        }
         if a.kind.is_clip() && tree.nodes[idx].style.clip_kind == 0 {
             return Err(format!(
                 "裁剪动画的目标节点 {} 没有裁剪形状（树里未声明 `clipPath`）——裁剪动画需要静态形状作为起点与复位目标；                 请先给该节点声明 `clipPath`（inset/circle/polygon），或去掉这条裁剪动画",
@@ -1522,6 +1596,7 @@ impl AnimEngine {
             let color_dirty = s.bg != s.bg_base || s.text_color != s.text_color_base;
             let clip_dirty = s.clip_kind != 0 && s.clip != s.clip_base;
             let stroke_dirty = s.svg_path.is_some() && s.stroke_progress != 0.0;
+            let grad_dirty = s.grad.as_ref().is_some_and(|g| g.mix != 0.0);
             if s.translate_x != 0.0
                 || s.translate_y != 0.0
                 || s.scale != 1.0
@@ -1532,6 +1607,7 @@ impl AnimEngine {
                 || color_dirty
                 || clip_dirty
                 || stroke_dirty
+                || grad_dirty
             {
                 s.translate_x = 0.0;
                 s.translate_y = 0.0;
@@ -1541,6 +1617,9 @@ impl AnimEngine {
                 s.rotate_y = 0.0;
                 s.clip = s.clip_base; // ★C1：裁剪参数回基态
                 s.stroke_progress = 0.0; // ★C2：描边进度回 0
+                if let Some(g) = s.grad.as_mut() {
+                    g.mix = 0.0; // ★渐变 v2：混合因子回 0（全 A）
+                }
                 s.opacity = 1.0;
                 s.bg = s.bg_base; // ★颜色回底色 / 回原文字色（见 reset_visuals 注释）
                 s.text_color = s.text_color_base;
@@ -1922,6 +2001,12 @@ impl AnimEngine {
                 } else {
                     None
                 },
+                // ★渐变 v2：带上**混合后**的色标（唯一 lerp 实现是 `GradState::mixed`——
+                //   宿主与探针都消费它的结果；本字段是"已算好"，不是"待插值"）
+                grad: node.style.grad.as_ref().map(|g| {
+                    let (colors, offsets) = g.mixed();
+                    (g.kind, g.n, colors, offsets)
+                }),
             });
         }
         out
@@ -2786,6 +2871,122 @@ mod tests {
             .expect_err("应拒绝");
         assert!(err.contains("没有裁剪形状"), "错误消息应点明原因：{err}");
         assert!(err.contains("clipPath"), "错误消息应给修法：{err}");
+    }
+
+    #[test]
+    /// ★★渐变 v2（色标混合）：**混合数学钉值**（唯一 lerp 实现——两端消费它的结果）。
+    #[test]
+    fn gradient_mix_lerps_stops_and_resets_to_a() {
+        use crate::ffi::{proteus_layout_create, proteus_layout_anim_start, proteus_layout_anim_tick_bin};
+        // A：黑→白；B：红→蓝（同 kind/同色标数 ⇒ 可混合）
+        let req = serde_json::json!({
+            "viewport": {"width": 100.0, "height": 100.0},
+            "nodes": [
+                {"id": 1, "width": 100.0, "height": 100.0},
+                {"id": 9, "parentId": 1, "width": 100.0, "height": 100.0,
+                 "fillGradient": {"kind": "linear", "angle": 90,
+                    "stops": [{"offset": 0.0, "color": "#000000"}, {"offset": 1.0, "color": "#ffffff"}]},
+                 "fillGradientTo": {"kind": "linear", "angle": 90,
+                    "stops": [{"offset": 0.0, "color": "#ff0000"}, {"offset": 1.0, "color": "#0000ff"}]}}
+            ]
+        });
+        let h = unsafe {
+            proteus_layout_create(std::ffi::CString::new(req.to_string()).unwrap().as_ptr())
+        };
+        assert!(h > 0, "建树应成功（渐变两态结构一致）");
+        let start = serde_json::json!({
+            "anims": [{"nodeId": 9, "kind": 32, "from": 0.0, "to": 1.0, "durMs": 100, "curve": 0}]
+        });
+        let r = unsafe {
+            proteus_layout_anim_start(h, std::ffi::CString::new(start.to_string()).unwrap().as_ptr())
+        };
+        let msg = unsafe { std::ffi::CStr::from_ptr(r) }.to_string_lossy().to_string();
+        assert!(msg.contains("\"ok\":true"), "混合动画应被受理：{msg}");
+
+        // 半程（t=0.5）：色标应是 (0x80,0,0x80) 与 (0xff,0x80,0xff)（四通道各自 lerp）
+        let tick_half = |h: u64, dt: f32| -> (u32, u32) {
+            let mut n: u32 = 0;
+            let p = unsafe { proteus_layout_anim_tick_bin(h, dt, &mut n) };
+            let sl = unsafe { std::slice::from_raw_parts(p, n as usize) }.to_vec();
+            unsafe { crate::ffi::proteus_rects_free(p, n) };
+            assert!(sl.len() >= 184, "记录应 ≥184B（含渐变段）");
+            // 记录布局：id@0 ... stroke@108, gradKind@112, gradN@116, colors@120..152, offsets@152..184
+            let c0 = u32::from_le_bytes([sl[120], sl[121], sl[122], sl[123]]);
+            let c1 = u32::from_le_bytes([sl[124], sl[125], sl[126], sl[127]]);
+            (c0, c1)
+        };
+        let (c0, c1) = tick_half(h, 50.0);
+        let ch = |c: u32, sh: u32| ((c >> sh) & 0xFF) as i32;
+        // c0（offset 0）：黑(0,0,0,255) → 红(255,0,0,255) 半程 ⇒ (128,0,0,255)
+        assert!((ch(c0, 16) - 128).abs() <= 1, "混合作半程 R 应 ≈128，实际 {}", ch(c0, 16));
+        assert_eq!(ch(c0, 8), 0);
+        // c1（offset 1）：白(255,255,255,255) → 蓝(0,0,255,255) 半程 ⇒ (128,128,255,255)
+        assert!((ch(c1, 8) - 128).abs() <= 1, "终标 G 应 ≈128，实际 {}", ch(c1, 8));
+        assert!((ch(c1, 0) - 255).abs() <= 1, "终标 B 应 ≈255（白→蓝的 B 通道未变）");
+
+        // ── stop 后：mix 回 0（基态 A）——"解绑必须含清值" ──
+        // ★判据设计（首版想错了一轮，记下来）：**写 0 与"已复位为 0"相同时不产生更新**
+        //   ⇒ "有没有更新"本身就是信号：新动画 `from=0`（恰等于复位值）⇒ **无更新 = 复位成功**；
+        //   若 stop 没清（残余 0.5）⇒ 0.5→0 是变化 ⇒ 会冒出更新。再用阴性对照证明通道没坏。
+        let stop = "{\"all\":true}";
+        unsafe {
+            crate::ffi::proteus_layout_anim_stop(h, std::ffi::CString::new(stop).unwrap().as_ptr())
+        };
+        let keep = serde_json::json!({
+            "anims": [{"nodeId": 9, "kind": 32, "from": 0.0, "to": 1.0, "durMs": 100,
+                       "curve": 0, "takeover": false}]
+        });
+        let r2 = unsafe {
+            proteus_layout_anim_start(h, std::ffi::CString::new(keep.to_string()).unwrap().as_ptr())
+        };
+        let m2 = unsafe { std::ffi::CStr::from_ptr(r2) }.to_string_lossy().to_string();
+        assert!(m2.contains("\"ok\":true"), "复位后的新动画应被受理：{m2}");
+        // ① 复位证据：dt=0 ⇒ 写入 from=0 ⇒ 与复位值相同 ⇒ **零更新**
+        let mut n0: u32 = 0;
+        let p0 = unsafe { proteus_layout_anim_tick_bin(h, 0.0, &mut n0) };
+        if !p0.is_null() {
+            unsafe { crate::ffi::proteus_rects_free(p0, n0) };
+        }
+        assert_eq!(n0, 0, "stop 后 mix 应已回 0（写 from=0 不应产生更新）——实际 {} 字节", n0);
+        // ② 阴性对照：同一动画推进到半程 ⇒ 必须有更新（证明通道与读法都没坏）
+        let (c0c, _c1c) = tick_half(h, 50.0);
+        assert!(
+            (ch(c0c, 16) - 128).abs() <= 1,
+            "阴性对照：半程混合作应可读（R≈128）——实际 {}",
+            ch(c0c, 16)
+        );
+        unsafe { crate::ffi::proteus_layout_destroy(h) };
+    }
+
+    /// ★★渐变 v2 拒绝分支：缺 B 态 / 色标个数不一致 / 只在 B 态——都必须**明确拒绝**。
+    #[test]
+    fn gradient_mix_rejects_missing_or_mismatched_states() {
+        use crate::ffi::proteus_layout_create;
+        let mk = |a: bool, b: Option<&str>| -> u64 {
+            let mut node = serde_json::json!({
+                "id": 9, "parentId": 1, "width": 100.0, "height": 100.0,
+            });
+            if a {
+                node["fillGradient"] = serde_json::json!({"kind": "linear", "angle": 90,
+                    "stops": [{"offset": 0.0, "color": "#000000"}, {"offset": 1.0, "color": "#ffffff"}]});
+            }
+            if let Some(bj) = b {
+                node["fillGradientTo"] = serde_json::from_str(bj).unwrap();
+            }
+            let req = serde_json::json!({
+                "viewport": {"width": 100.0, "height": 100.0},
+                "nodes": [{"id": 1, "width": 100.0, "height": 100.0}, node]
+            });
+            unsafe { proteus_layout_create(std::ffi::CString::new(req.to_string()).unwrap().as_ptr()) }
+        };
+        // 只在 B 态（无 A）⇒ 拒绝
+        assert_eq!(mk(false, Some(r##"{"kind":"linear","angle":90,"stops":[{"offset":0.0,"color":"#000000"},{"offset":1.0,"color":"#ffffff"}]}"##)), 0);
+        // 色标个数不一致（A 2 个 / B 3 个）⇒ 拒绝
+        assert_eq!(mk(true, Some(r##"{"kind":"linear","angle":90,"stops":[{"offset":0.0,"color":"#000000"},{"offset":0.5,"color":"#888888"},{"offset":1.0,"color":"#ffffff"}]}"##)), 0);
+        // kind 不一致（A linear / B radial）⇒ 拒绝
+        assert_eq!(mk(true, Some(r##"{"kind":"radial","cx":0.5,"cy":0.5,"r":0.8,"stops":[{"offset":0.0,"color":"#000000"},{"offset":1.0,"color":"#ffffff"}]}"##)), 0);
+        // 两态一致 ⇒ 成功
+        assert!(mk(true, Some(r##"{"kind":"linear","angle":90,"stops":[{"offset":0.0,"color":"#ff0000"},{"offset":1.0,"color":"#0000ff"}]}"##)) > 0);
     }
 
     #[test]

@@ -56,6 +56,9 @@ export const TICK_ONLY_KINDS: readonly AnimKindName[] = [
   'clip',
   // ★★C2（2026-10-01）：SVG 描边进度同样非合成（改占位层/重画路径）⇒ tick 路径。
   'strokeProgress',
+  // ★★渐变 v2（2026-10-01）：色标混合是 paint 状态（改 shader/渐变层），且 lerp 只在
+  //   内核一处 ⇒ 两端一致走 tick（与颜色同类决策）。
+  'gradientMix',
 ]
 
 /** 该属性是否 tick-only（受支持、走内核逐帧路径，但不进平台零参与） */

@@ -57,6 +57,8 @@ export const AnimKind = {
   CLIP15: 30,
   /** ★★SVG 描边进度（2026-10-01 · C2）：0..1 = 沿路径弧长画到哪（"手写字"动效） */
   STROKE_PROGRESS: 31,
+  /** ★★渐变混合因子（2026-10-01 · 渐变 v2）：0..1 = A 态（fillGradient）→ B 态（fillGradientTo） */
+  GRADIENT_MIX: 32,
 } as const
 export type AnimKindId = (typeof AnimKind)[keyof typeof AnimKind]
 export type AnimKindName =
@@ -77,6 +79,9 @@ export type AnimKindName =
   | 'clip'
   /** ★★SVG 描边进度（2026-10-01 · C2；路径本体的 d 在树里静态声明；走 tick 路径） */
   | 'strokeProgress'
+  /** ★★渐变混合因子（2026-10-01 · 渐变 v2；两态在树里声明为 fillGradient/fillGradientTo；走 tick 路径）
+   *  ★CSS 没有这个能力（背景渐变不可过渡）——见 `gradient.ts` 文件头 */
+  | 'gradientMix'
 
 /** 名称 → 编号（编译期用；也是"名字写错"的**类型级**防线） */
 export const ANIM_KIND_ID: Record<AnimKindName, AnimKindId> = {
@@ -99,6 +104,8 @@ export const ANIM_KIND_ID: Record<AnimKindName, AnimKindId> = {
   clip: AnimKind.CLIP0,
   // ★描边进度是**单通道**（31——与内核同号）
   strokeProgress: AnimKind.STROKE_PROGRESS,
+  // ★渐变混合是**单通道**（32——与内核同号）
+  gradientMix: AnimKind.GRADIENT_MIX,
 }
 
 /** 曲线（与内核 `CURVE_*` 一一对应——**不得改号**） */

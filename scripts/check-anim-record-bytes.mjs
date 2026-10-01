@@ -44,10 +44,10 @@ function kernelRecordBytes() {
    *   104B ⇒ 门禁判红；若为了让门禁变绿把消费端改成 48B，就会**真错位**。
    *   ⇒ 正解：读出循环次数（`for … in 0..N` 的 N），把该写入行按 N 倍计。
    */
-  const loopMultiplier = (() => {
-    const m = body.match(/for\s+\w+\s+in\s+0\.\.(\d+)\s*\{/)
-    return m ? Number(m[1]) : 1
-  })()
+  // ★★**多循环**（2026-10-01 · 渐变 v2）：v2 在 clip 的 `0..16` 之后又加了两个 `0..8`
+  //   （colors / offsets）⇒ **首版只识别第一个循环**的写法会漏掉后两个（实测读成 128B）。
+  //   ⇒ 收集**全部** `for … in 0..N {` 并用花括号配对各自的范围（支持任意个计数循环）。
+  const loopMatches = [...body.matchAll(/for\s+\w+\s+in\s+0\.\.(\d+)\s*\{/g)]
   // ★用**匹配位置**（m.index）判定"是否在循环体内"——不能用 indexOf（重复表达式会定位到首处，
   //   首版把它算成 108B（多算 1 条）；本仓纪律：解析器要对着实际形态写）
   const writesWithPos = [...body.matchAll(RE_WRITE_G)].map((m) => ({ expr: m[1].trim(), pos: m.index ?? 0 }))
@@ -65,28 +65,39 @@ function kernelRecordBytes() {
   //   "for 之后全算循环内"太粗——C2 在循环**之后**还有写入（strokeProgress），
   //   会被按 16 倍误算（实测 172B 假读数）。
   //   ⇒ 从 `for … in 0..N {` 的 `{` 起配对到对应 `}`——范围内的写入 × N，范围外的原样计。
-  const forMatch = /for\s+\w+\s+in\s+0\.\.\d+\s*\{/.exec(body)
   let fields = []
-  if (forMatch && loopMultiplier > 1) {
-    const braceStart = (forMatch.index ?? 0) + forMatch[0].length - 1
-    let depth = 0
-    let braceEnd = braceStart
-    for (let i = braceStart; i < body.length; i++) {
-      if (body[i] === '{') depth++
-      else if (body[i] === '}') {
-        depth--
-        if (depth === 0) {
-          braceEnd = i
-          break
+  if (loopMatches.length > 0) {
+    // 每个循环的体范围（花括号配对；只收最外层——本处循环不嵌套，沿用"最内层优先"亦安全）
+    const loops = loopMatches.map((m) => {
+      const braceStart = (m.index ?? 0) + m[0].length - 1
+      let depth = 0
+      let braceEnd = braceStart
+      for (let i = braceStart; i < body.length; i++) {
+        if (body[i] === '{') depth++
+        else if (body[i] === '}') {
+          depth--
+          if (depth === 0) {
+            braceEnd = i
+            break
+          }
         }
       }
+      return { braceStart, braceEnd, n: Number(m[1]) }
+    })
+    // 每个写入归入**包含它的最内层循环**（没有 ⇒ 直计），再按源码位置排序展开
+    const expanded = []
+    for (const w of writesWithPos) {
+      const inner = loops
+        .filter((l) => w.pos > l.braceStart && w.pos < l.braceEnd)
+        .sort((a, b) => a.braceEnd - a.braceStart - (b.braceEnd - b.braceStart))[0]
+      if (inner) {
+        for (let k = 0; k < inner.n; k++) expanded.push({ pos: w.pos, expr: `${w.expr}#${k}` })
+      } else {
+        expanded.push(w)
+      }
     }
-    const inLoop = writesWithPos.filter((w) => w.pos > braceStart && w.pos < braceEnd).map((w) => w.expr)
-    const outside = writesWithPos.filter((w) => !(w.pos > braceStart && w.pos < braceEnd)).map((w) => w.expr)
-    fields = [...outside]
-    for (let k = 0; k < loopMultiplier; k++) {
-      for (const w of inLoop) fields.push(`${w}#${k}`)
-    }
+    expanded.sort((a, b) => a.pos - b.pos)
+    fields = expanded.map((w) => w.expr)
   } else {
     fields = writesRaw
   }
