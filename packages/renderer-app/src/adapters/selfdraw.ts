@@ -241,6 +241,8 @@ const LAYOUT_KEYS = new Set([
   'fillGradientTo',
   // ★★路径变形 v1：B 态（变形终点）——同款纪律（漏放 ⇒ 内核拒绝变形动画）
   'svgPathTo',
+  // ★★发光 v1（glow）：静态规格（色/半径/强度）——漏放 ⇒ 宿主不发光且静默
+  'glow',
 ])
 
 /**
@@ -293,7 +295,7 @@ function layoutStyleOf(props: Record<string, unknown>): Record<string, unknown> 
     //   原样透传给内核（不经过下面的长度折叠：它们不是长度）。
     if (key === 'clipPath' || key === 'perspective' || key === 'svgPath'
         || key === 'strokeColor' || key === 'strokeWidth' || key === 'fillGradient'
-        || key === 'fillGradientTo' || key === 'svgPathTo') {
+        || key === 'fillGradientTo' || key === 'svgPathTo' || key === 'glow') {
         out[key] = value
         continue
     }

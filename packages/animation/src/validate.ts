@@ -62,6 +62,8 @@ export const TICK_ONLY_KINDS: readonly AnimKindName[] = [
   // ★★路径变形 v1（2026-10-01）：改的是**几何**（宿主每帧重建平台 path），且 lerp 只在
   //   内核一处（宿主只翻译变形后的段）⇒ 必走 tick（与描边同族但更重）。
   'pathMorph',
+  // ★★发光强度（glow v1）：改的是 paint 状态（分层描边 alpha）——非合成，走 tick。
+  'glowIntensity',
 ]
 
 /** 该属性是否 tick-only（受支持、走内核逐帧路径，但不进平台零参与） */

@@ -112,6 +112,72 @@ export function validateGradientPair(pair: GradientPair): Array<{ path: string; 
  *   两端宿主必须都引用这些键名——漏一个就是"该端读不到该维度"（静默降级）。
  *   ★加字段时**只改这里**（门禁与两端检查一起跟进——与 hook 清单同一纪律）。
  */
+/**
+ * ★★**发光规格**（glow v1 · 2026-10-01）——**分层描边**实现。
+ *
+ * 【为什么不用平台原生（这是能力设计里最值得说明的一条）】
+ *   · Android 的 `Paint.setShadowLayer` 在**硬件加速下只支持文本绘制**——对 Path **无效**
+ *     （真机上会静默不画：典型的"看起来能跑"陷阱）；
+ *   · iOS 的 `CALayer.shadow*` 是**高斯阴影**（质量高，但与 Android 上任一实现都不同形）。
+ *   ⇒ 本仓"跨端一致优先"纪律要求**同一算法两端**：N 层同心描边（宽度梯度 + alpha 梯度），
+ *   每层都是一次普通 GPU 填充——确定性、廉价、且两端**逐像素可预期**。
+ *   ★CSS 的角度：web 上给"发光"做动画是性能雷区（`box-shadow`/`filter: drop-shadow`/`blur`
+ *   每帧变化 = 每帧全量重绘）；分层描边把它变成 N 次填充。
+ */
+export interface GlowSpec {
+  /** 发光色（`#RRGGBB`——alpha 走独立 `alpha` 字段，与渐变色标同一纪律：零十六进制顺序分歧） */
+  color: string
+  /** 发光半径（px；最外圈超出量——> 0） */
+  radius: number
+  /** 强度（0..1；每层 alpha = `alpha × (1-(k-1)/N)²`） */
+  alpha: number
+}
+
+/** 分层数（两端与参考实现共用同一常数——**改它必须三处同批**：TS/Swift/Kotlin） */
+export const GLOW_LAYERS = 5
+
+/**
+ * ★★**分层描边的层参数**（参考实现——**单测钉值**；Swift/Kotlin 必须同式，门禁保证键名覆盖）。
+ *
+ * @returns 每层 `{boostPx, alpha}`：由内到外——`boostPx = radius × k/N`（k=1..N）、
+ *          `alpha = alpha × (1-(k-1)/N)²`（外圈衰减更快 ⇒ 读起来像"光晕"而不是"描边叠影"）。
+ */
+export function glowLayers(spec: GlowSpec, intensity = 1): Array<{ boostPx: number; alpha: number }> {
+  const n = GLOW_LAYERS
+  const a0 = Math.max(0, Math.min(1, spec.alpha)) * Math.max(0, Math.min(1, intensity))
+  const out: Array<{ boostPx: number; alpha: number }> = []
+  for (let k = 1; k <= n; k++) {
+    const t = (k - 1) / n
+    out.push({ boostPx: spec.radius * (k / n), alpha: a0 * (1 - t) * (1 - t) })
+  }
+  return out
+}
+
+/** 校验发光声明（作者面：错误当场报，消息含修法） */
+export function validateGlowSpec(g: unknown): Array<{ path: string; message: string; hint: string }> {
+  const out: Array<{ path: string; message: string; hint: string }> = []
+  if (g == null || typeof g !== 'object') {
+    return [{ path: 'glow', message: '不是对象', hint: "应为 { color: '#RRGGBB', radius: 12, alpha: 0.6 }" }]
+  }
+  const o = g as Record<string, unknown>
+  if (typeof o['color'] !== 'string' || !/^#[0-9a-fA-F]{6}$/.test(o['color'] as string)) {
+    out.push({
+      path: 'glow.color',
+      message: `颜色非法：${JSON.stringify(o['color'])}`,
+      hint: '只接受 **#RRGGBB 六位**（透明度用独立的 alpha 字段——与渐变色标同一纪律）',
+    })
+  }
+  const r = o['radius']
+  if (typeof r !== 'number' || !Number.isFinite(r) || r <= 0) {
+    out.push({ path: 'glow.radius', message: `radius 非法：${JSON.stringify(r)}`, hint: '应为正数 px（发光的最外圈超出量）' })
+  }
+  const a = o['alpha']
+  if (typeof a !== 'number' || !Number.isFinite(a) || a < 0 || a > 1) {
+    out.push({ path: 'glow.alpha', message: `alpha 非法：${JSON.stringify(a)}`, hint: '应为 0..1（每层 alpha 由它按平方衰减）' })
+  }
+  return out
+}
+
 export const GRADIENT_CONTRACT_KEYS = [
   'fillGradient',
   'fillGradientTo',
@@ -125,6 +191,11 @@ export const GRADIENT_CONTRACT_KEYS = [
   'alpha',
   'cx',
   'cy',
+  // ★★发光（glow v1）：树里的静态键（宿主两端必须都引用——漏一个 = 该端不发光）。
+  //   ★不含 `intensity`：它是**动画通道值**（`glowIntensity` 通道逐帧下发），**不出现在树 JSON**——
+  //     把它列进"树键契约"会让门禁要求宿主解析一个树里没有的键（假要求）。
+  'glow',
+  'radius',
 ] as const
 
 /**

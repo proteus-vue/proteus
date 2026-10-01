@@ -14,6 +14,9 @@ import {
   linearGradientEndpoints,
   radialNormalized,
   GRADIENT_CONTRACT_KEYS,
+  validateGlowSpec,
+  glowLayers,
+  GLOW_LAYERS,
 } from '@proteus-vue/animation'
 
 describe('渐变填充（v1）· 校验器', () => {
@@ -74,8 +77,36 @@ describe('渐变填充（v1）· 校验器', () => {
     expect(radialNormalized({ kind: 'radial', cx: 0.2, cy: 0.3, r: 0.6, stops: [] })).toEqual({ cx: 0.2, cy: 0.3, r: 0.6 })
   })
 
+  it('★★发光（glow v1）：分层描边算法钉值（Swift/Kotlin 必须同式——门禁守键名、单测守数学）', () => {
+    const spec = { color: '#ffcc66', radius: 10, alpha: 0.8 }
+    const layers = glowLayers(spec, 1)
+    expect(layers.length).toBe(GLOW_LAYERS)
+    // 逐层钉值：boost = radius×k/N；alpha = a0×(1-(k-1)/N)²
+    expect(layers[0]!.boostPx).toBeCloseTo(10 * (1 / 5), 6)
+    expect(layers[0]!.alpha).toBeCloseTo(0.8, 6)
+    expect(layers[4]!.boostPx).toBeCloseTo(10, 6)
+    expect(layers[4]!.alpha).toBeCloseTo(0.8 * (1 - 4 / 5) ** 2, 6) // 0.032
+    // 单调性：宽度递增、alpha 递减（"由内到外"的唯一形态）
+    for (let i = 1; i < layers.length; i++) {
+      expect(layers[i]!.boostPx).toBeGreaterThan(layers[i - 1]!.boostPx)
+      expect(layers[i]!.alpha).toBeLessThan(layers[i - 1]!.alpha)
+    }
+    // 强度乘子：0 ⇒ 全透明（"熄光"）；0.5 ⇒ 半数
+    expect(glowLayers(spec, 0).every((l) => l.alpha === 0)).toBe(true)
+    expect(glowLayers(spec, 0.5)[0]!.alpha).toBeCloseTo(0.4, 6)
+    // 越界强度钳位（与全部通道同一纪律）
+    expect(glowLayers(spec, 5)[0]!.alpha).toBeCloseTo(0.8, 6)
+  })
+
+  it('★发光校验器：颜色六位 / radius 正数 / alpha 0..1（错误可定位）', () => {
+    expect(validateGlowSpec({ color: '#ffcc66', radius: 12, alpha: 0.6 })).toEqual([])
+    expect(validateGlowSpec({ color: '#ffcc6680', radius: 12, alpha: 0.6 }).some((x) => x.path === 'glow.color')).toBe(true)
+    expect(validateGlowSpec({ color: '#ffcc66', radius: 0, alpha: 0.6 }).some((x) => x.path === 'glow.radius')).toBe(true)
+    expect(validateGlowSpec({ color: '#ffcc66', radius: 12, alpha: 1.5 }).some((x) => x.path === 'glow.alpha')).toBe(true)
+  })
+
   it('★契约键名表完整（门禁 check-gradient-contract 的事实源）', () => {
-    for (const k of ['fillGradient', 'kind', 'linear', 'radial', 'angle', 'stops', 'offset', 'color', 'alpha', 'cx', 'cy']) {
+    for (const k of ['fillGradient', 'kind', 'linear', 'radial', 'angle', 'stops', 'offset', 'color', 'alpha', 'cx', 'cy', 'glow', 'radius']) {
       expect(GRADIENT_CONTRACT_KEYS as readonly string[], `键名 ${k}`).toContain(k)
     }
   })

@@ -593,7 +593,9 @@ final class LightsHost {
             // ★★渐变 v2：B 态（两态混合的终点）——同"必须在白名单"纪律
             "fillGradientTo",
             // ★★路径变形 v1：B 态（变形终点）——同款纪律（漏 ⇒ 内核拒绝变形动画）
-            "svgPathTo"));
+            "svgPathTo",
+            // ★★发光 v1（glow）：静态规格（色/半径/强度）——漏 ⇒ 宿主不发光（内核照常收）
+            "glow"));
 
     /** 缺省字号（**布局单位** = px，与本场景 viewport 同坐标系） */
     private static final double DEFAULT_FONT_UNITS = 14.0;
@@ -717,10 +719,23 @@ final class LightsHost {
             }
             // ★★渐变（v1 · 2026-10-01）：解析进 Cmd（`GradSpec.parse` 非法返回 null ⇒ 退回纯色）
             ProteusHostView.GradSpec grad = ProteusHostView.GradSpec.parse(spec.optJSONObject("fillGradient"));
+            // ★★发光 v1：静态规格 → `[color(int), radius, alpha]`（缺省 null = 不发光）
+            float[] glow = null;
+            org.json.JSONObject glo = spec.optJSONObject("glow");
+            if (glo != null) {
+                String gcolS = glo.optString("color", "");
+                if (gcolS.startsWith("#") && gcolS.length() == 7) {
+                    try {
+                        int gcol = (int) (0xFF000000L | Long.parseLong(gcolS.substring(1), 16));
+                        glow = new float[]{
+                                gcol, (float) glo.optDouble("radius", 0), (float) glo.optDouble("alpha", 0.5)};
+                    } catch (NumberFormatException ignored) { /* 坏色 ⇒ 不发光（不静默画错色） */ }
+                }
+            }
             cmds.add(new ProteusHostView.Cmd(
                     (float) r.getDouble("x"), (float) r.getDouble("y"),
                     (float) r.getDouble("width"), (float) r.getDouble("height"),
-                    color, isText ? text : null, fs, textColor, radius, grad));
+                    color, isText ? text : null, fs, textColor, radius, grad, glow));
             cmdIds.add(id);
         }
         int[] ids = new int[cmdIds.size()];

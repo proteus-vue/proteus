@@ -54,6 +54,9 @@ export { COMPOSITED_KINDS, PAINT_ONLY_KINDS, TICK_ONLY_KINDS, isComposited, isPa
 //     ⇒ 与 `borderRadius` 同层（宿主绘制属性）；将来色标要做动画才按 C1/C2 迁入内核。
 export { validateGradientFill, validateGradientPair, linearGradientEndpoints, radialNormalized, GRADIENT_CONTRACT_KEYS } from './gradient'
 export type { GradientStop, GradientFill, LinearGradientFill, RadialGradientFill, GradientPair } from './gradient'
+// ★★发光（glow v1）：规格 + 分层参考实现（Swift/Kotlin 同式——门禁保证键名覆盖）
+export { validateGlowSpec, glowLayers, GLOW_LAYERS } from './gradient'
+export type { GlowSpec } from './gradient'
 export {
   compileAnimations,
   compileOne,

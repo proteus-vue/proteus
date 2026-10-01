@@ -500,6 +500,26 @@ describe('Morpheus 炫技场 · 第四个节目（墨绘·山水卷）', () => {
     for (const m of morphs) expect(m.alternate, '呼吸应 yoyo').toBe(true)
   })
 
+  it('★★发光（glow v1）：月盘 + 近山骨线声明 glow；moonGlow 幕有 glowIntensity 呼吸', () => {
+    const nodes = treeNodes()
+    // 月盘：月光晕（半径 = 月径的 0.55 倍量级）
+    const moon = nodes.get(INK_IDS.moon) as { glow?: { color: string; radius: number; alpha: number } }
+    expect(moon.glow?.color).toMatch(/^#[0-9a-f]{6}$/)
+    expect(moon.glow?.radius ?? 0).toBeGreaterThan(0)
+    expect(moon.glow?.alpha ?? 0).toBeGreaterThan(0)
+    // 近山骨线：微光
+    const nearCore = nodes.get(INK_IDS.rangeCore[2]) as { glow?: { alpha: number } }
+    expect(nearCore.glow?.alpha ?? 0).toBeGreaterThan(0)
+    // 远/中两叠**无**发光（避免"到处发光"——微光只在近景，是构图选择）
+    expect((nodes.get(INK_IDS.rangeCore[0]) as { glow?: unknown }).glow).toBeUndefined()
+    // moonGlow 幕：两条 glowIntensity（月 + 近山）且 yoyo
+    const { acts } = walkAll()
+    const glow = acts.find((a) => a.name === 'moonGlow')!
+    const gis = glow.anims.filter((x) => x.kind === 34)
+    expect(gis.length, 'moonGlow 的 glowIntensity 条数').toBe(2)
+    for (const g of gis) expect(g.alternate, '发光呼吸应 yoyo').toBe(true)
+  })
+
   it('★工具函数契约：blend 预混（6 位）· ink 加 alpha（8 位 #RRGGBBAA）', () => {
     expect(blend('#000000', '#ffffff', 0.5)).toBe('#808080')
     expect(blend('#f2ead6', '#f2ead6', 0.3)).toBe('#f2ead6')

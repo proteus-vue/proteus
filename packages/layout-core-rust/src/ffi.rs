@@ -149,6 +149,10 @@ pub(crate) struct NodeDto {
     /// ★★**渐变填充 B 态**（可选）：与 A 同 kind、同色标个数——两态之间由 `gradientMix` 通道混合。
     #[serde(skip_serializing_if = "Option::is_none")]
     pub(crate) fill_gradient_to: Option<serde_json::Value>,
+    /// ★★**发光声明**（2026-10-01 · glow v1）：`{color, radius, alpha}`——分层描边实现
+    ///   （见 `style::GlowSpec` 的"为什么不用平台原生"论证）。
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub(crate) glow: Option<serde_json::Value>,
     /// ★★**路径变形的 B 态**（2026-10-01 · 路径变形 v1）：与 `svg_path` 同形
     ///   （`{d, stroke, strokeWidth}`）；两态必须**同构**（同命令序列）才能逐点插值。
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -234,6 +238,7 @@ impl NodeDto {
             fill_gradient: None,
             fill_gradient_to: None,
             svg_path_to: None,
+            glow: None,
             text: None,
             is_text: false,
             native_host: false,
@@ -440,6 +445,32 @@ pub(crate) fn style_from_dto(dto: &NodeDto) -> Result<LStyle, String> {
         style.svg_path = Some(final_a);
         style.svg_path_to = Some(final_b);
         style.svg_morph_resampled = resampled;
+    }
+    // ★★发光（glow v1）：`{color, radius, alpha}` —— 全部字段必填且各自校验（不静默用默认值：
+    //   "写了 glow 但少了 radius" 应该报错而不是渲染一个半径为 0 的隐形发光）。
+    if let Some(g) = dto.glow.as_ref() {
+        let color_s = g
+            .get("color")
+            .and_then(|x| x.as_str())
+            .ok_or_else(|| "glow 缺少 `color`（发光色，如 '#ffcc66'）".to_string())?;
+        let color = parse_css_color(color_s)?;
+        let radius = g
+            .get("radius")
+            .and_then(|x| x.as_f64())
+            .ok_or_else(|| "glow 缺少 `radius`（发光半径 px——分层描边的最外圈超出量）".to_string())?
+            as f32;
+        if !radius.is_finite() || radius <= 0.0 {
+            return Err(format!("glow.radius 非法：{radius}（应为正数 px）"));
+        }
+        let alpha = g
+            .get("alpha")
+            .and_then(|x| x.as_f64())
+            .ok_or_else(|| "glow 缺少 `alpha`（强度 0..1——每层 alpha 由它按平方衰减）".to_string())?
+            as f32;
+        if !alpha.is_finite() || !(0.0..=1.0).contains(&alpha) {
+            return Err(format!("glow.alpha 非法：{alpha}（应为 0..1）"));
+        }
+        style.glow = Some(crate::style::GlowSpec { color, radius, alpha });
     }
     // ★★裁剪形状（C1）：结构形态 → (kind, [f32; 16])。类型静态、参数进基态（复位目标）。
     // ★★渐变（v2）：A 态必需配套 B 态才有"混合"——两态都在时校验结构一致（kind/色标数）。
@@ -3497,7 +3528,7 @@ pub unsafe extern "C" fn proteus_layout_anim_tick_bin(handle: u64, dt_ms: f32, o
         //     （iOS `animUpdateRecordBytes` / Android `ANIM_RECORD_BYTES` / SDK `FRAME_UPDATE_BYTES` /
         //     embed-demo 与 `proteus-jni::host`）必须**同批改**——
         //     ★`scripts/check-anim-record-bytes.mjs` 会从本处的写入序列**推出**宽度并与各消费端对账。
-        let mut buf = Vec::with_capacity(out.updates.len() * 188);
+        let mut buf = Vec::with_capacity(out.updates.len() * 192);
         for v in out.updates {
             buf.extend_from_slice(&v.id.to_le_bytes());
             buf.extend_from_slice(&v.tx.to_le_bytes());
@@ -3536,6 +3567,8 @@ pub unsafe extern "C" fn proteus_layout_anim_tick_bin(handle: u64, dt_ms: f32, o
             //   ★**只带因子**（4B）——段列表是变长数据、且只在因子变化时需要 ⇒ 宿主按需
             //     调 `proteus_layout_svg_morph_path` 取（避免每帧搬运整条路径）。
             buf.extend_from_slice(&v.path_morph.unwrap_or(f32::NAN).to_le_bytes());
+            // ★★发光强度（glow v1，末尾追加——偏移 @188；NaN = 本节点无发光，宿主保持静态）
+            buf.extend_from_slice(&v.glow_intensity.unwrap_or(f32::NAN).to_le_bytes());
         }
         Ok(buf)
     });

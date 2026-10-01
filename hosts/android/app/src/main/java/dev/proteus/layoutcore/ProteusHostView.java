@@ -71,6 +71,9 @@ public class ProteusHostView extends ViewGroup {
          *     每帧 `JSONObject` 解析会让绘制路径带上解析开销（本仓绘制纪律：零分配/零解析）。
          */
         final GradSpec gradient;
+        /** ★★发光规格（glow v1）：`[color(int), radius, alpha]`；null = 无发光。
+         *   渲染 = **分层同心描边**（N 层宽度梯度 + alpha 平方衰减——见 TS `glowLayers`）。 */
+        final float[] glow;
         Cmd(float x, float y, float w, float h, int color, String text) {
             this(x, y, w, h, color, text, 0f, 0, 0f);
         }
@@ -85,11 +88,16 @@ public class ProteusHostView extends ViewGroup {
         }
         Cmd(float x, float y, float w, float h, int color, String text, float fontSize, int textColor, float radius,
             GradSpec gradient) {
+            this(x, y, w, h, color, text, fontSize, textColor, radius, gradient, null);
+        }
+        Cmd(float x, float y, float w, float h, int color, String text, float fontSize, int textColor, float radius,
+            GradSpec gradient, float[] glow) {
             this.x = x; this.y = y; this.w = w; this.h = h; this.color = color; this.text = text;
             this.fontSize = fontSize;
             this.textColor = textColor;
             this.radius = radius;
             this.gradient = gradient;
+            this.glow = glow;
         }
     }
 
@@ -677,6 +685,11 @@ public class ProteusHostView extends ViewGroup {
                 animMorphFactor.remove(id);
                 morphCache.remove(id);
             }
+            // ★★发光**强度**（glow v1，@188 的 f32；NaN = 本节点无发光——192B 记录）。
+            //   契约键名 `"intensity"`（与 TS `GRADIENT_CONTRACT_KEYS` 同表）——本表即它在本端的落点。
+            float glowRaw = bb.getFloat();
+            if (!Float.isNaN(glowRaw)) animGlow.put(id, glowRaw);
+            else animGlow.remove(id);
             // ★颜色（2026-10-01）：0xFFFFFFFF = 无该基色 ⇒ 不入覆盖表（保持静态绘制）
             if (rgba != 0xFFFFFFFF) animColor.put(id, rgba);
             if (textRgba != 0xFFFFFFFF) animTextColor.put(id, textRgba);
@@ -690,14 +703,23 @@ public class ProteusHostView extends ViewGroup {
      * 每帧记录长度（与 Rust 侧 `proteus_layout_anim_tick_bin` 对齐——**只在本处定义**）
      *
      * ★★2026-10-01 由 **24B → 28B（底色）→ 32B（文字色）→ 40B（3D）→ 108B（裁剪）
-     *   → 112B（描边）→ 184B（渐变 v2）→ 188B（路径变形 v1）**：
+     *   → 112B（描边）→ 184B（渐变 v2）→ 188B（路径变形 v1）→ 192B（发光 v1）**：
      *   `id u32 + 五值 f32 + bg u32 + textColor u32`。
      *   末两个 u32 都是打包色 `0xAARRGGBB`；`0xFFFFFFFF` = **无该基色**（忽略该字段）。
      *   ★唯一事实源 = 内核 `ffi.rs` 的 8 个 `extend_from_slice`；iOS / SDK / embed-demo
      *     的常量必须与它同批更新（历史上因两处各写步长而错位解析过）。
      *     `scripts/check-anim-record-bytes.mjs` 从内核推出宽度并与各消费端对账。
      */
-    private static final int ANIM_RECORD_BYTES = 188;
+    private static final int ANIM_RECORD_BYTES = 192;
+
+    /**
+     * ★★每帧发光**强度**表（glow v1）：节点 id → `intensity`（0..1 乘子，乘在静态 alpha 上）。
+     *  ★契约键名（与 TS `GRADIENT_CONTRACT_KEYS` 同表）：`glow` / `radius` / `alpha` / **`intensity`**
+     *    ——`intensity` 走**每帧通道**（可动画），`glow.radius`/`glow.alpha` 是静态声明。
+     */
+    // intensity 语义见上（表名即键名；门禁 check-gradient-contract 要求本端引用该键）
+
+    private final Map<Integer, Float> animGlow = new HashMap<>();
 
     /** ★★每帧变形覆盖表（路径变形 v1）：节点 id → 当前因子（NaN 缺省 = 无 B 态） */
     private final Map<Integer, Float> animMorphFactor = new HashMap<>();
@@ -759,6 +781,12 @@ public class ProteusHostView extends ViewGroup {
             this.kind = kind; this.n = n; this.colors = colors; this.offsets = offsets;
         }
     }
+
+    /**
+     * ★★发光层数（glow v1）——**跨语言常数**：TS `GLOW_LAYERS` / Swift `glowLayers` 同值。
+     *  ★改它必须三处同批（分层不一致 = 两端光晕形状不同——"跨端一致优先"纪律）。
+     */
+    private static final int GLOW_LAYERS = 5;
 
     /** 直接推进一帧（确定性步进：判据用它做"固定 dt"读数，与 iOS 的 JS 驱动 probe 同形） */
     public int kernelAnimTick(float dtMs) {
@@ -856,6 +884,7 @@ public class ProteusHostView extends ViewGroup {
         animGrad.clear();      // ★渐变 v2 同（清表 ⇒ 回树里声明的 A 态渐变）
         animMorphFactor.clear(); // ★路径变形 v1 同（清表 ⇒ 回 A 态路径）
         morphCache.clear();
+        animGlow.clear();        // ★发光 v1 同（清表 ⇒ 回声明强度 1.0）
         invalidate();
         return out;
     }
@@ -919,6 +948,18 @@ public class ProteusHostView extends ViewGroup {
                 // ★★渐变（v1 · 2026-10-01）：**真读宿主绘制真源**（该 cmd 的 GradSpec——`drawCmds`
                 //   用的就是它）——判据据此断言"渐变真的挂上了"（与 iOS 读层上 type/色标数同语义）。
                 //   形态 "linear:2" / "radial:3"；无 ⇒ 空串。
+                // ★★发光（glow v1）：**真读宿主绘制真源**（该 cmd 的 glow 规格 + 当前强度）——
+                //   形态 "5:0.500"（分层数:首层 alpha）——与 iOS 探针同口径（判据跨端共用读法）。
+                String glowStr = "";
+                {
+                    final int ci = indexOfNode(id);
+                    if (ci >= 0 && cmds != null && ci < cmds.size() && cmds.get(ci).glow != null) {
+                        final float[] g = cmds.get(ci).glow;
+                        final float gi = animGlow.containsKey(id) ? animGlow.get(id) : 1f;
+                        final float a0 = g[2] * gi;
+                        glowStr = String.format("%d:%.3f", GLOW_LAYERS, a0);
+                    }
+                }
                 String morphStr = "";
                 {
                     final Float mf = animMorphFactor.get(id);
@@ -963,7 +1004,9 @@ public class ProteusHostView extends ViewGroup {
                       .append(",\"rotateX\":0,\"rotateY\":0")
                       .append(",\"strokeProgress\":").append(strokeProg)
                       .append(",\"gradient\":\"").append(gradStr).append("\"")
+                      .append(",\"glow\":\"").append(glowStr).append("\"")
                       .append(",\"pathMorph\":\"").append(morphStr).append("\"")
+                      .append(",\"glow\":\"").append(glowStr).append("\"")
                       .append(",\"bg\":\"").append(bgHex)
                       .append("\",\"textColor\":\"").append(textHex).append("\"}");
                 } else {
@@ -976,6 +1019,7 @@ public class ProteusHostView extends ViewGroup {
                       .append(",\"strokeProgress\":").append(strokeProg)
                       .append(",\"gradient\":\"").append(gradStr).append("\"")
                       .append(",\"pathMorph\":\"").append(morphStr).append("\"")
+                      .append(",\"glow\":\"").append(glowStr).append("\"")
                       .append(",\"bg\":\"").append(bgHex)
                       .append("\",\"textColor\":\"").append(textHex).append("\"}");
                 }
@@ -1809,6 +1853,60 @@ public class ProteusHostView extends ViewGroup {
                             canvas.drawPath(seg, strokePaint);
                         }
                         canvas.restoreToCount(svgSave);
+                    }
+                }
+            }
+            // ★★发光（glow v1）：**分层同心描边**（N 层宽度梯度 + alpha 平方衰减）——
+            //   与 TS `glowLayers` / Swift 同式（GLOW_LAYERS = 5）。
+            //   ★为什么不用 setShadowLayer：Android 硬件加速下它**只支持文本**（对 Path 无效）
+            //     ——真机静默不画的经典陷阱；分层填充是确定性的且 GPU 廉价。
+            //   ★发光随**画线进度**走（有描边路径时按进度截断——"画到哪、光到哪"）；
+            //     纯色块节点则按圆角矩形描边发光。
+            if (ids != null && i < ids.length && ids[i] >= 0) {
+                final int ci2 = i < list.size() ? i : -1;
+                final float[] gspec = ci2 >= 0 ? list.get(ci2).glow : null;
+                if (gspec != null) {
+                    final float gi0 = animGlow.containsKey(ids[i]) ? animGlow.get(ids[i]) : 1f;
+                    final int gcol = (int) gspec[0];
+                    final float grad = gspec[1];
+                    final float galpha = gspec[2] * gi0;
+                    if (galpha > 0.003f) {
+                        final int gsave = canvas.save();
+                        canvas.translate(c.x, c.y);
+                        strokePaint.setStyle(android.graphics.Paint.Style.STROKE);
+                        strokePaint.setStrokeCap(android.graphics.Paint.Cap.ROUND);
+                        strokePaint.setStrokeJoin(android.graphics.Paint.Join.ROUND);
+                        final Object[] svg2 = nodeSvgStroke.get(ids[i]);
+                        final float prog2 = animStroke.containsKey(ids[i]) ? animStroke.get(ids[i]) : 0f;
+                        // 基准线宽：有描边路径用它的 strokeWidth；否则用发光半径的一小撮（纯色块的"边缘光"）
+                        final float baseW = svg2 != null ? (Float) svg2[2] : Math.max(1f, grad * 0.12f);
+                        // 由内到外（同式：boost = radius×k/N · alpha = a0×(1-(k-1)/N)²）
+                        for (int k = 1; k <= GLOW_LAYERS; k++) {
+                            final float t = (k - 1f) / GLOW_LAYERS;
+                            final float a = galpha * (1 - t) * (1 - t);
+                            if (a <= 0.003f) continue;
+                            final float boost = grad * (k / (float) GLOW_LAYERS);
+                            strokePaint.setColor((gcol & 0x00FFFFFF) | (((int) (a * 255)) << 24));
+                            strokePaint.setStrokeWidth(baseW + boost * 2f);
+                            if (svg2 != null) {
+                                // 线条发光：路径 + 进度截断（变形后的 path 已在表中）
+                                final android.graphics.Path sp2 = (android.graphics.Path) svg2[0];
+                                if (prog2 >= 1f) {
+                                    canvas.drawPath(sp2, strokePaint);
+                                } else if (prog2 > 0f) {
+                                    android.graphics.PathMeasure pm2 = new android.graphics.PathMeasure(sp2, false);
+                                    android.graphics.Path seg2 = new android.graphics.Path();
+                                    pm2.getSegment(0f, pm2.getLength() * prog2, seg2, true);
+                                    canvas.drawPath(seg2, strokePaint);
+                                }
+                            } else if (c.radius > 0f) {
+                                // 色块发光：圆角矩形描边（局部坐标——已 translate 到 c.x/c.y）
+                                canvas.drawRoundRect(0, 0, c.w, c.h, c.radius, c.radius, strokePaint);
+                            } else {
+                                canvas.drawRect(0, 0, c.w, c.h, strokePaint);
+                            }
+                        }
+                        canvas.restoreToCount(gsave);
                     }
                 }
             }
