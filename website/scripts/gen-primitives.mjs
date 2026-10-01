@@ -590,6 +590,10 @@ const COVERED_ELSEWHERE = {
   //   （`bridge-decls/*` + `generated/bridge-ext.ts`）——能力面由 capabilities 分区覆盖
   //   （如 C83 useKeepScreenOn / C84 useOpenDocument 各自有页）。
   'bridge-decl': 'NC1 声明式能力桥的声明层（能力面见 capabilities 分区各页）',
+  // ★2026-10-01 补登记（应用与生命周期能力域）：SSOT（PAGE_EVENTS/APP_EVENTS 两张事件表 +
+  //   域桥工厂）——能力面由 capabilities 分区覆盖（app-lifecycle / page-lifecycle 等页由
+  //   gen-content.mjs 生成），非本分区的「工程原语」模块。
+  'capability-app': '应用/生命周期能力域 SSOT（C23/C24/C25 App 宿主腿——能力面见 capabilities 分区的 app-lifecycle / page-lifecycle 各页）',
 }
 /**
  * ★★包级文档覆盖门禁（2026-09-27，防「worklet 缺页」第三次）：
@@ -654,6 +658,10 @@ const COVERED_PACKAGES = {
   //   它是**声明/校验/编译层**（曲线求值与物理在 Rust 内核）⇒ 归入框架分区的动画主题，
   //   非独立原语面（不逐条出页）。
   animation: '框架分区（Morpheus 声明式动画表面：预设库 + 编译期校验——曲线/物理在内核）',
+  // ★★2026-10-01 补登记（HA0–HA5 宿主接入线）：Host ABI 门面——`src/` 只有 `lib.rs`
+  //   （Rust C ABI 八接口 + 版本协商），**无 TS 原语面** ⇒ 不逐条出页；
+  //   架构面见框架分区 `framework/22-architecture.md`，接入流程见 `docs/proteus-host-abi-integration.md`。
+  'host-abi': '框架分区（framework/22-architecture.md 宿主接入架构；接入指南见 docs/proteus-host-abi-integration.md）',
 }
 let coverageIssues = 0
 {
