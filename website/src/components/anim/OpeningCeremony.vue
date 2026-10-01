@@ -4,43 +4,43 @@
 // 【它为什么存在（灵魂元素的第二件）】
 //   动画引擎的官网，开场不该是"渐显的标题"——应当是**引擎当场证明自己**：
 //   徽记**自己落笔成形**（strokeProgress）→ 核心点亮（glowIntensity）→ 标题**从雾里渗开**
-//   （maskProgress 软边揭示）→ 两道弧光收拢 → 帷幕上抽（clip 扫除）让出页面。
-//   全程 8 个节点、一批引擎编译产物驱动——观众看到的第一件事就是引擎在工作。
+//   （maskProgress 软边揭示）→ 标题隐去、暗场退潮，**徽记飞向 Hero 位置落位**——
+//   与页面里那枚本来就在的徽记**重合**（共享元素式交棒：几何=两帧矩形之差 + 宽度比，
+//   与内核 `sharedElement` 同一套分解；真机上那一步的几何由内核算，浏览器宿主在这里代算，
+//   如实标注）。⇒ 开幕不是一个"被打断的画面"，而是**徽记从仪式里飞回页面**。
+//
+// 【★衔接的做法（用户反馈"开幕和正文没有丝滑衔接"）】首版是"帷幕整块上抽"——画面切走
+//   而正文纹丝不动，观感是两个东西。现在：暗场**淡出**（不是滑动）、徽记**飞行落位**、
+//    Hero 徽记在暗场下早已按同一套声明画好并持续呼吸 ⇒ 交棒瞬间两者重合，观感是
+//    "开幕收束成页面里的那一点"。
 //
 // 【何时播 / 何时不播（都不靠记忆，靠机器判据）】
 //   · `prefers-reduced-motion` ⇒ 不播（父组件不发车）；
 //   · 每次**页面加载**只播一次（模块级标志——刷新可重看，适合分享链接）；
 //   · 任意交互（点击/滚轮/按键/触摸）⇒ 立即跳过（跳过键常驻可见）。
 import { onMounted, onUnmounted, ref } from 'vue'
-import type { AnimDecl } from '@proteus-vue/animation'
+import SigilSvg from './SigilSvg.vue'
 import { compile, createRunner, settle, motionAllowed, type Runner } from '../../motion/engine-motion'
 import { markOpeningPlayed } from '../../motion/opening'
+
+const props = withDefaults(
+  defineProps<{
+    /** 交棒目标（Hero 徽记的选择器）——飞行的落点由它与本体的两帧矩形之差算出 */
+    targetSelector?: string
+  }>(),
+  { targetSelector: '[data-sigil-target]' },
+)
 
 const emit = defineEmits<{ done: [] }>()
 // ★策略在 `src/motion/opening.ts`（`<script setup>` 不允许 export——首版因此构建失败）
 
-/** 大徽记几何（viewBox 240×240，圆心 120,120） */
-const ARCS = [
-  { r: 104, a0: -150, a1: 44, w: 3.2 },
-  { r: 78, a0: 26, a1: 212, w: 2.6 },
-  { r: 52, a0: -104, a1: 96, w: 2.0 },
-] as const
-const P = (a: number, r: number): string => {
-  const rad = (a * Math.PI) / 180
-  return `${(120 + r * Math.cos(rad)).toFixed(2)} ${(120 + r * Math.sin(rad)).toFixed(2)}`
-}
-const arcPath = (a: (typeof ARCS)[number]): string => {
-  const large = Math.abs(a.a1 - a.a0) > 180 ? 1 : 0
-  return `M${P(a.a0, a.r)} A${a.r} ${a.r} 0 ${large} 1 ${P(a.a1, a.r)}`
-}
-
+const sigil = ref<InstanceType<typeof SigilSvg>>()
 const rootEl = ref<HTMLElement>()
-const arcEls = ref<SVGPathElement[]>([])
-const baseEl = ref<SVGPathElement>()
-const coreEl = ref<SVGGElement>()
+/** 飞行的载体（包裹 SigilSvg 的普通 div——平移/缩放绑在它身上） */
+const wrapEl = ref<HTMLElement>()
+const backdropEl = ref<HTMLElement>()
 const titleEl = ref<HTMLElement>()
 const subEl = ref<HTMLElement>()
-const veilEl = ref<HTMLElement>()
 let runner: Runner | null = null
 let doneTimer: ReturnType<typeof setTimeout> | null = null
 let finished = false
@@ -56,57 +56,85 @@ function finish(): void {
 
 onMounted(() => {
   markOpeningPlayed()
-  const arcs = arcEls.value.filter((p): p is SVGPathElement => !!p && typeof p.getTotalLength === 'function')
-  const nodes = new Map<number, SVGElement>()
-  arcs.forEach((p, i) => nodes.set(i + 1, p))
-  if (baseEl.value) nodes.set(7, baseEl.value)
-  if (coreEl.value) nodes.set(4, coreEl.value)
-  const slots = new Map<number, HTMLElement | SVGElement>(nodes)
-
-  // 标题/副题/帷幕（HTML 侧）——软遮罩与裁剪扫除都在 CSS 里消费引擎写的值
-  if (titleEl.value) {
-    slots.set(5, titleEl.value)
-    titleEl.value.style.setProperty('--mkind', 'linear')
-  }
-  if (subEl.value) slots.set(6, subEl.value)
-  if (veilEl.value) {
-    slots.set(8, veilEl.value)
-  }
-
-  const anims = [
-    ...arcs.flatMap((_, i) => compile([{ kind: 'strokeProgress', from: 0, to: 1, durationMs: 1000, delayMs: i * 260, curve: 'easeInOut' }], i + 1)),
-    ...(baseEl.value
-      ? compile([{ kind: 'strokeProgress', from: 0, to: 1, durationMs: 700, delayMs: 420, curve: 'easeOut' }], 7)
-      : []),
-    ...(coreEl.value
-      ? [
-          ...compile([{ kind: 'glowIntensity', from: 0.15, to: 1, durationMs: 900, delayMs: 1000, curve: 'easeOut' }], 4),
-          ...compile([{ kind: 'opacity', from: 0, to: 1, durationMs: 700, delayMs: 1050, curve: 'easeOut' }], 4),
-        ]
-      : []),
-    ...(titleEl.value ? compile([{ kind: 'maskProgress', from: 0, to: 1, durationMs: 900, delayMs: 1500, curve: 'easeInOut' }], 5) : []),
-    ...(subEl.value ? compile([{ kind: 'maskProgress', from: 0, to: 1, durationMs: 800, delayMs: 1980, curve: 'easeOut' }], 6) : []),
-    // 帷幕上抽（clip inset bottom 0→1：从底边扫除 ⇒ 页面自下而上让出）+ 轻微上移
-    ...(veilEl.value
-      ? [
-          ...compile([{ kind: 'clip', from: [0, 0, 0, 0], to: [0, 0, 1, 0], durationMs: 760, delayMs: 2980, curve: 'easeInOut' } as AnimDecl], 8),
-          ...compile([{ kind: 'translateY', from: 0, to: -26, durationMs: 760, delayMs: 2980, curve: 'easeInOut' }], 8),
-        ]
-      : []),
-  ]
-
-  const lens = new Map<number, number>()
-  arcs.forEach((p, i) => lens.set(i + 1, p.getTotalLength()))
-  if (baseEl.value) lens.set(7, baseEl.value.getTotalLength())
-
-  if (!motionAllowed()) {
-    settle(anims, slots, { strokeLens: lens, clipKinds: new Map([[8, 'inset' as const]]) })
+  const sv = sigil.value
+  if (!sv) {
     finish()
     return
   }
-  runner = createRunner(anims, slots, { strokeLens: lens, clipKinds: new Map([[8, 'inset']]), durationMs: 3760 })
+  const arcs = (sv.arcEls ?? []).filter((p): p is SVGPathElement => !!p && typeof p.getTotalLength === 'function')
+  const slots = new Map<number, HTMLElement | SVGElement>()
+  const lens = new Map<number, number>()
+  const anims = []
+
+  // 节点 1..3：三段弧逐段画出（错峰）
+  arcs.forEach((p, i) => {
+    const nodeId = i + 1
+    slots.set(nodeId, p)
+    lens.set(nodeId, p.getTotalLength())
+    anims.push(...compile([{ kind: 'strokeProgress', from: 0, to: 1, durationMs: 1000, delayMs: i * 260, curve: 'easeInOut' }], nodeId))
+  })
+  // 节点 4：基座线
+  if (sv.baseEl) {
+    slots.set(4, sv.baseEl)
+    lens.set(4, sv.baseEl.getTotalLength())
+    anims.push(...compile([{ kind: 'strokeProgress', from: 0, to: 1, durationMs: 700, delayMs: 420, curve: 'easeOut' }], 4))
+  }
+  // 节点 5：整枚上光（无限呼吸，画完后接管——与 Hero 印记同一条声明）；节点 7：核心呼吸
+  if (sv.svgEl) {
+    slots.set(5, sv.svgEl)
+    anims.push(...compile([{ kind: 'glowIntensity', from: 0.12, to: 1, durationMs: 2100, delayMs: 1000, repeat: 'infinite', direction: 'alternate', curve: 'easeInOut' }], 5))
+  }
+  if (sv.coreEl) {
+    slots.set(7, sv.coreEl)
+    anims.push(...compile([{ kind: 'scale', from: 1, to: 1.12, durationMs: 2100, delayMs: 1000, repeat: 'infinite', direction: 'alternate', curve: 'easeInOut' }], 7))
+  }
+  // 节点 6：扫描弧旋转（无限）
+  if (sv.sweepEl) {
+    slots.set(6, sv.sweepEl)
+    anims.push(...compile([{ kind: 'rotate', from: 0, to: 360, durationMs: 26000, delayMs: 1000, repeat: 'infinite', curve: 'linear' }], 6))
+  }
+  // 节点 8/9：标题与副题——软遮罩渗开（引擎写 --mmix，CSS 消费）
+  if (titleEl.value) {
+    slots.set(8, titleEl.value)
+    anims.push(...compile([{ kind: 'maskProgress', from: 0, to: 1, durationMs: 900, delayMs: 1400, curve: 'easeInOut' }], 8))
+    // 隐去（为交棒让位）
+    anims.push(...compile([{ kind: 'opacity', from: 1, to: 0, durationMs: 300, delayMs: 3200, curve: 'easeIn' }], 8))
+  }
+  if (subEl.value) {
+    slots.set(9, subEl.value)
+    anims.push(...compile([{ kind: 'maskProgress', from: 0, to: 1, durationMs: 800, delayMs: 1800, curve: 'easeOut' }], 9))
+    anims.push(...compile([{ kind: 'opacity', from: 1, to: 0, durationMs: 300, delayMs: 3200, curve: 'easeIn' }], 9))
+  }
+  // 节点 10：暗场**淡出**（不是滑动——滑动是"画面切走"，淡出才是"退潮"）
+  if (backdropEl.value) {
+    slots.set(10, backdropEl.value)
+    anims.push(...compile([{ kind: 'opacity', from: 1, to: 0, durationMs: 620, delayMs: 3300, curve: 'easeInOut' }], 10))
+  }
+  // 节点 11/12/13：**徽记飞向 Hero 落点**（共享元素式交棒）
+  //   几何 = 两帧矩形（起/落）之差 + 宽度比——与内核 `sharedElement` 同一套分解
+  //   （真机上这一步由内核算；浏览器宿主在这里代算，如实标注）
+  if (wrapEl.value) {
+    slots.set(11, wrapEl.value)
+    const start = wrapEl.value.getBoundingClientRect()
+    const target = props.targetSelector ? document.querySelector(props.targetSelector)?.getBoundingClientRect() : null // d2-exempt: 读落点矩形（无框架原语；共享元素几何需目标元素的视口坐标）
+    if (target && start.width > 0 && target.width > 0) {
+      const dx = target.left + target.width / 2 - (start.left + start.width / 2)
+      const dy = target.top + target.height / 2 - (start.top + start.height / 2)
+      const sc = target.width / start.width
+      anims.push(...compile([{ kind: 'translateX', from: 0, to: dx, durationMs: 900, delayMs: 3300, curve: 'easeInOut' }], 11))
+      anims.push(...compile([{ kind: 'translateY', from: 0, to: dy, durationMs: 900, delayMs: 3300, curve: 'easeInOut' }], 11))
+      anims.push(...compile([{ kind: 'scale', from: 1, to: sc, durationMs: 900, delayMs: 3300, curve: 'easeInOut' }], 11))
+    }
+  }
+
+  if (!motionAllowed()) {
+    settle(anims, slots, { strokeLens: lens })
+    finish()
+    return
+  }
+  runner = createRunner(anims, slots, { strokeLens: lens, durationMs: 4260 })
   runner.play()
-  doneTimer = setTimeout(finish, 3780)
+  doneTimer = setTimeout(finish, 4280)
 
   // 任意交互 ⇒ 立即跳过（点击/滚轮/按键/触摸；跳过键亦在其列）
   const skip = (): void => finish()
@@ -130,17 +158,14 @@ onUnmounted(() => {
        ⇒ 它自成 stacking context ⇒ 无论内部 z-index 多大，都盖不住同级的 sticky 导航
        （实测：帷幕下方露出导航栏）。Teleport 到 body 后与导航同级，z-index 才真正生效。 -->
   <Teleport to="body">
-  <div ref="rootEl" class="op" role="presentation">
-    <!-- 帷幕（节点 8：clip 扫除 + 上移——用引擎的裁剪通道，不是 CSS 动画） -->
-    <div ref="veilEl" class="op-veil">
+    <div ref="rootEl" class="op" role="presentation">
+      <!-- 暗场（节点 10：交接时**淡出退潮**——不是滑动切走） -->
+      <div ref="backdropEl" class="op-backdrop" />
       <div class="op-stage">
-        <svg viewBox="0 0 240 240" class="op-sigil" fill="none">
-          <path v-for="(a, i) in ARCS" :key="i" ref="arcEls" :d="arcPath(a)" class="op-arc" :stroke-width="a.w" stroke-linecap="round" />
-          <path ref="baseEl" d="M84 196 L156 196" class="op-base" stroke-width="2" stroke-linecap="round" />
-          <g ref="coreEl" class="op-core-g">
-            <circle cx="120" cy="120" r="8" class="op-core" />
-          </g>
-        </svg>
+        <!-- 徽记（飞行的载体 = 这层包裹：平移/缩放绑它；与 Hero/HUD 共用 SigilSvg 视觉语言） -->
+        <div ref="wrapEl" class="op-sigilwrap">
+          <SigilSvg ref="sigil" :size="220" />
+        </div>
         <div class="op-title-wrap">
           <h1 ref="titleEl" class="op-title">Morpheus</h1>
           <p ref="subEl" class="op-sub">声明式动画引擎 · 一份声明 → 任意宿主</p>
@@ -148,7 +173,6 @@ onUnmounted(() => {
       </div>
       <button class="op-skip" type="button" @click="finish">跳过 ›</button>
     </div>
-  </div>
   </Teleport>
 </template>
 
@@ -157,31 +181,25 @@ onUnmounted(() => {
   position: fixed;
   inset: 0;
   z-index: 90;
-}
-.op-veil {
-  position: absolute;
-  inset: 0;
-  background: radial-gradient(80% 60% at 50% 42%, #14131f 0%, #0a0a10 62%, #06060a 100%);
   display: flex;
   align-items: center;
   justify-content: center;
 }
+/* 暗场（独立层：只有它淡出——徽记/标题在它之上继续飞行/隐去） */
+.op-backdrop {
+  position: absolute;
+  inset: 0;
+  background: radial-gradient(80% 60% at 50% 42%, #14131f 0%, #0a0a10 62%, #06060a 100%);
+}
 .op-stage {
+  position: relative;
   display: flex;
   flex-direction: column;
   align-items: center;
   gap: 26px;
 }
-.op-sigil { width: 220px; height: 220px; }
-.op-arc {
-  stroke: var(--brand);
-  stroke-dasharray: 1200;
-  stroke-dashoffset: 1200;
-}
-.op-base { stroke: var(--accent); stroke-dasharray: 120; stroke-dashoffset: 120; }
-.op-core { fill: #fff; }
-.op-core-g { opacity: 0; }
-/* 标题：**软遮罩**由 maskProgress 驱动（引擎写 --mmix，这里只消费——
+.op-sigilwrap { will-change: transform; }
+/* 标题/副题：**软遮罩**由 maskProgress 驱动（引擎写 --mmix，这里只消费——
    与两端宿主"零揭示数学"同一条纪律） */
 .op-title {
   margin: 0;

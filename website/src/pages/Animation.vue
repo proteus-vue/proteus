@@ -584,26 +584,49 @@ function readSiteStats(): void {
 const h1a = ref<HTMLElement>()
 const h1b = ref<HTMLElement>()
 const leadEl = ref<HTMLElement>()
-// ★开幕期间 Hero 文案**不抢戏**（等帷幕拉起后再逐行入场——见 heroCtl 与 onOpeningDone）
+// ★★开幕与正文的**衔接编排**（用户反馈"没有丝滑衔接"后重做）：三段时序互相咬合——
+//   · `heroHidden`：开幕期间 Hero 文案/徽记**先藏着**（否则会看到"双徽记同框"与"文案闪现又重演"）；
+//   · Hero 文案在 **3.25s** 起演（= 暗场开始退潮的时刻）⇒ 文本**在退潮中升起**，不是切完才出现；
+//   · 开幕徽记 3.3s 起飞、**4.2s 精确落到 Hero 徽记的矩形上**（实测 dx=dy=0），
+//     4.28s 开幕卸载时 Hero 徽记同时显形 ⇒ 同一枚徽记的连续交接（共享元素式）。
 const heroCtl1 = motionController(h1a, MOTION.riseIn(30, 820))
 const heroCtl2 = motionController(h1b, MOTION.riseIn(30, 820).map((d) => ({ ...d, delayMs: 120 })))
 const heroCtl3 = motionController(leadEl, MOTION.riseIn(20, 900).map((d) => ({ ...d, delayMs: 260 })))
 /** 开幕（仅本页、仅首次加载；reduced-motion 或已播过 ⇒ 直接进场） */
 const showOpening = ref(openingEligible())
-if (!showOpening.value) {
-  // 无开幕：Hero 立即入场（与降级路径同一口径——reduced-motion 下 motionController 直达终态）
-  requestAnimationFrame(() => {
-    heroCtl1.play()
-    heroCtl2.play()
-    heroCtl3.play()
-  })
-}
-function onOpeningDone(): void {
-  showOpening.value = false
-  // 帷幕拉起（引擎的 clip 扫除）同时，Hero 三行错峰入场
+/**
+ * ★★**两份隐藏标志**（衔接的关键，各管一件事——2026-10-01 实测后拆开）：
+ *   · `textHidden`：Hero 文案。暗场开始退潮时（3.25s）撤除并起演 ⇒ **在退潮中升起**；
+ *   · `markHidden`：Hero 徽记。**要等到开徽飞到落点（4.2s）之后、开幕卸载的同一刻**才显形
+ *     ⇒ 观感是"那枚徽记飞过去落定"，而不是"两枚徽记同框"（首版把两者绑在同一标志上，
+ *     实测 3.5s 时双徽记同框——据此拆开）。
+ */
+const textHidden = ref(showOpening.value)
+const markHidden = ref(showOpening.value)
+let heroStarted = false
+function playHero(): void {
+  if (heroStarted) return
+  heroStarted = true
+  textHidden.value = false // 先撤隐藏（DOM 与本帧引擎写值同帧生效：引擎 seek(0) 写 opacity 0，不闪）
   heroCtl1.play()
   window.setTimeout(() => heroCtl2.play(), 90) // d2-exempt: 仅作入场错峰的时序编排（无框架原语；值即声明里的 delayMs）
   window.setTimeout(() => heroCtl3.play(), 210) // d2-exempt: 同上
+}
+if (!showOpening.value) {
+  // 无开幕：Hero 立即入场（与降级路径同一口径——reduced-motion 下 motionController 直达终态）
+  requestAnimationFrame(() => {
+    playHero()
+    markHidden.value = false
+  })
+} else {
+  // 有开幕：文案在暗场开始退潮时（3.25s）起演——**在退潮中升起**（衔接的关键一拍）
+  window.setTimeout(playHero, 3250) // d2-exempt: 与开幕时刻表的编排点（无框架原语；值的依据在 OpeningCeremony 的声明延迟里）
+}
+function onOpeningDone(): void {
+  showOpening.value = false
+  playHero() // 幂等：正常路径下 3.25s 已起演；跳过路径下在此立即起演
+  // 徽记交接：开幕已卸载（飞行在 4.2s 精确落到本徽记的矩形上）⇒ 此刻显形即为"落定"
+  markHidden.value = false
 }
 
 /* ── 滚动显现（与首页同机制） ── */
@@ -713,12 +736,12 @@ onUnmounted(() => {
       <p-grid :min-col-width="340" :gap="56" class="hero">
         <p-stack direction="column" :gap="22" class="hero-copy">
           <p-text class="chip"><FeatureIcon name="bolt" /><span>{{ C.chip }}</span></p-text>
-          <p-heading :level="1" v-p-fluid="'font-size(36, 58)'" class="hero-h1">
+          <p-heading :level="1" v-p-fluid="'font-size(36, 58)'" class="hero-h1" :class="{ 'is-pre': textHidden }">
             <span ref="h1a" class="h1-l1">{{ C.h1line1 }}</span>
             <em ref="h1b" class="h1-l2">{{ C.h1line2 }}</em>
           </p-heading>
           <p-text v-p-fluid="'font-size(17, 21)'" class="hero-tag">{{ C.tagline }}</p-text>
-          <p-text ref="leadEl" class="hero-lead">{{ C.lead }}</p-text>
+          <p-text ref="leadEl" class="hero-lead" :class="{ 'is-pre': textHidden }">{{ C.lead }}</p-text>
           <p-stack direction="row" :gap="14" wrap class="hero-cta">
             <router-link to="/docs/animation/00-overview" class="btn btn-primary">{{ C.ctaDocs }}</router-link>
             <a href="#demo" class="btn btn-ghost">{{ C.ctaDemo }}</a>
@@ -735,7 +758,9 @@ onUnmounted(() => {
           </p-view>
         </p-stack>
         <p-view class="hero-stage">
-          <EngineMark class="hero-mark" />
+          <!-- ★`data-sigil-target`：开幕飞行的落点（开幕徽记飞到这枚上重合——共享元素式交棒）
+               ★`heroHidden`：开幕期间隐身（否则飞行途中会"双徽记同框"）——交接瞬间与引擎动画同帧显形 -->
+          <EngineMark class="hero-mark" :class="{ 'is-pre': markHidden }" data-sigil-target />
           <MobileStage
             :incoming="plan.incoming.anims"
             :outgoing="plan.outgoing.anims"
@@ -1246,6 +1271,8 @@ onUnmounted(() => {
 .hero-pills { margin-top: 10px; }
 .pill { font-size: 12px; color: var(--muted); border: 1px solid var(--line); background: rgba(20, 20, 25, 0.7); border-radius: var(--radius-pill); padding: 4px 11px; }
 .hero-stage { display: flex; flex-direction: column; align-items: center; gap: 18px; }
+/* ★开幕期间的"待场"态：不可见但**占据布局**（交接时不做位移，只做显形——零跳变） */
+.is-pre { opacity: 0; pointer-events: none; }
 /* ★Hero 印记：引擎自己"画"出来的标志（strokeProgress + glowIntensity——见 EngineMark.vue） */
 .hero-mark { display: block; }
 /* ★产品页自证徽标：本页动效由引擎真包编译（数字真实统计） */
