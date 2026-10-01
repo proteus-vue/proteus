@@ -36,6 +36,8 @@ pub mod ops;
 pub mod ops_apply;
 pub mod rects_bin;
 pub mod snap;
+// ★★C2（2026-10-01）：SVG 路径解析 + 弧长（**单一实现**——宿主不做第二份解析器）
+pub mod svg_path;
 // ★RT0（2026-09-30）：指令驱动动画的求值引擎（曲线查表 + tick；见文件头）
 pub mod anim;
 // ★HA2（2026-09-30）：`pub mod jni;` 已移出 —— JNI 绑定是**平台适配**，

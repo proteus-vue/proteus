@@ -61,12 +61,28 @@ function kernelRecordBytes() {
   }
   // ★循环内的写入行按循环次数展开（仅当那一行确实是"循环体"里的——此处按"出现在 for 之后的
   //   第一条写入"近似；本仓当前只有 cp[i] 一条在循环内，形态可控）
-  const forIdx = body.search(/for\s+\w+\s+in\s+0\.\.\d+\s*\{/)
+  // ★★循环体范围用**花括号配对**精确判定（2026-10-01 · C2 修正）：
+  //   "for 之后全算循环内"太粗——C2 在循环**之后**还有写入（strokeProgress），
+  //   会被按 16 倍误算（实测 172B 假读数）。
+  //   ⇒ 从 `for … in 0..N {` 的 `{` 起配对到对应 `}`——范围内的写入 × N，范围外的原样计。
+  const forMatch = /for\s+\w+\s+in\s+0\.\.\d+\s*\{/.exec(body)
   let fields = []
-  if (forIdx >= 0 && loopMultiplier > 1) {
-    // 循环体：for 行之后的写入（用匹配位置判定，精确）
-    const inLoop = writesWithPos.filter((w) => w.pos > forIdx).map((w) => w.expr)
-    const outside = writesWithPos.filter((w) => w.pos <= forIdx).map((w) => w.expr)
+  if (forMatch && loopMultiplier > 1) {
+    const braceStart = (forMatch.index ?? 0) + forMatch[0].length - 1
+    let depth = 0
+    let braceEnd = braceStart
+    for (let i = braceStart; i < body.length; i++) {
+      if (body[i] === '{') depth++
+      else if (body[i] === '}') {
+        depth--
+        if (depth === 0) {
+          braceEnd = i
+          break
+        }
+      }
+    }
+    const inLoop = writesWithPos.filter((w) => w.pos > braceStart && w.pos < braceEnd).map((w) => w.expr)
+    const outside = writesWithPos.filter((w) => !(w.pos > braceStart && w.pos < braceEnd)).map((w) => w.expr)
     fields = [...outside]
     for (let k = 0; k < loopMultiplier; k++) {
       for (const w of inLoop) fields.push(`${w}#${k}`)

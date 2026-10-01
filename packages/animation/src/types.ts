@@ -55,6 +55,8 @@ export const AnimKind = {
   CLIP13: 28,
   CLIP14: 29,
   CLIP15: 30,
+  /** ★★SVG 描边进度（2026-10-01 · C2）：0..1 = 沿路径弧长画到哪（"手写字"动效） */
+  STROKE_PROGRESS: 31,
 } as const
 export type AnimKindId = (typeof AnimKind)[keyof typeof AnimKind]
 export type AnimKindName =
@@ -73,6 +75,8 @@ export type AnimKindName =
   | 'rotateY'
   /** ★★裁剪形状形变（2026-10-01 · C1；一个声明 → 最多 16 条参数通道；走 tick 路径） */
   | 'clip'
+  /** ★★SVG 描边进度（2026-10-01 · C2；路径本体的 d 在树里静态声明；走 tick 路径） */
+  | 'strokeProgress'
 
 /** 名称 → 编号（编译期用；也是"名字写错"的**类型级**防线） */
 export const ANIM_KIND_ID: Record<AnimKindName, AnimKindId> = {
@@ -93,6 +97,8 @@ export const ANIM_KIND_ID: Record<AnimKindName, AnimKindId> = {
   // ★`clip` 的编号是**名义值**（= 参数槽 0 的 15）：编译期按参数个数展开成 N 条参数通道
   //   （见 `isClipDecl` 分支——它不读这个值）。给名义值是为了 `ANIM_KIND_ID` 的完备形状。
   clip: AnimKind.CLIP0,
+  // ★描边进度是**单通道**（31——与内核同号）
+  strokeProgress: AnimKind.STROKE_PROGRESS,
 }
 
 /** 曲线（与内核 `CURVE_*` 一一对应——**不得改号**） */
