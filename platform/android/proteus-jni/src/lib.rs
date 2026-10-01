@@ -612,6 +612,27 @@ pub extern "system" fn Java_dev_proteus_layoutcore_RustLayout_nativeSharedElemen
     forward_cstr(env, json, move |p| unsafe { ffi::proteus_layout_shared_element(handle as u64, p) })
 }
 
+/// ★★**仍在推进的动画条数**（0 = 全部结束）——幕切换的权威判据（与 iOS 同源）。
+///
+/// 【为什么单列这个入口（灯光秀幕驱动需要它）】节目单的幕时长是**名义**跨度；
+///   弹簧的实际结束时刻由物理决定（`settle_eps` 内静止），按名义时间切幕会早切/多等。
+///   iOS 侧由 `proteus_layout_anim_active` 直连；Android 侧此前没有这条入口
+///   ⇒ 灯光秀（第二个炫技节目）在 Android 上驱动幕需要它（见 hosts/android 的 LightsHost）。
+#[no_mangle]
+pub extern "system" fn Java_dev_proteus_layoutcore_RustLayout_nativeAnimActive<'local>(
+    mut env: JNIEnv<'local>,
+    _class: JClass<'local>,
+    handle: jni::sys::jlong,
+) -> jstring {
+    let out = std::panic::catch_unwind(|| {
+        format!("{{\"ok\":true,\"active\":{}}}", unsafe {
+            ffi::proteus_layout_anim_active(handle as u64)
+        })
+    })
+    .unwrap_or_else(|_| "{\"ok\":false,\"error\":\"panic（已捕获）\"}".to_string());
+    into_java_string(&mut env, out)
+}
+
 /// `RustLayout.nativeNodeRect(handle: Long, nodeId: Int): String`
 ///
 /// ★★**单节点绝对矩形**（2026-10-01：跨页面共享元素所需的"稳态几何回传"）——

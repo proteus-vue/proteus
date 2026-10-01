@@ -15,8 +15,11 @@
 #   · JDK 17+：本仓库位在 .tools/jdk17
 #   · Rust target：rustup target add aarch64-linux-android
 #
-# 用法：bash hosts/android/build-and-run.sh [--no-install] [--release]
+# 用法：bash hosts/android/build-and-run.sh [--no-install] [--release] [--lights]
 #   --release  ★§9.2 正式验收要求：非 debuggable 包（debug 模式数据无效）
+#   --lights   ★★打包**灯光秀独立应用**（`dev.proteus.lights`，点开即演·循环）——
+#              同一份 dex/.so 与 assets，只换 Manifest/包名/启动 Activity（2026-10-01）。
+#              产物：build/proteus-lights.apk（给团队分享用）
 set -euo pipefail
 
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -49,8 +52,12 @@ LINKER="$TOOLCHAIN/bin/aarch64-linux-android${API}-clang"
 # ★§9.2：正式验收必须 release 包。debuggable 只影响 APK 的 manifest 与 dex 优化级别，
 #   Rust 侧始终是 release（见下方 cargo --release）
 MODE="debug"
-if [ "${1:-}" = "--release" ] || [ "${2:-}" = "--release" ]; then MODE="release"; fi
-echo "    构建模式：$MODE$([ "$MODE" = "release" ] && echo "（§9.2 正式验收口径）" || echo "（冒烟用；debug 数据不可作验收）")"
+LIGHTS=0
+for arg in "$@"; do
+  [ "$arg" = "--release" ] && MODE="release"
+  [ "$arg" = "--lights" ] && LIGHTS=1
+done
+echo "    构建模式：$MODE$([ "$MODE" = "release" ] && echo "（§9.2 正式验收口径）" || echo "（冒烟用；debug 数据不可作验收）")$([ "$LIGHTS" = "1" ] && echo " · 灯光秀独立应用（dev.proteus.lights）")"
 
 mkdir -p "$BUILD"
 
@@ -225,15 +232,57 @@ else
   echo "    ⚠ 未见 $BUNDLE_HR —— 缺它只影响 host-runtime 测试路径"
 fi
 
+# ★★灯光秀（Morpheus 第二个炫技节目 · 800 灯颜色编舞）——第四个 entry，同一构建脚本产出
+BUNDLE_LT="$HERE/bridge/dist/bundle-lights.js"
+ENTRY_LT="$HERE/bridge/entry-lights.ts"
+NEED_BUILD_LT=0
+if [ ! -f "$BUNDLE_LT" ]; then NEED_BUILD_LT=1; fi
+if [ -f "$ENTRY_LT" ] && [ -f "$BUNDLE_LT" ] && [ "$ENTRY_LT" -nt "$BUNDLE_LT" ]; then NEED_BUILD_LT=1; fi
+# ★节目单与编排包更新也要重建（否则真机测旧节目——与 app-stack 同款纪律）
+if [ -f "$BUNDLE_LT" ] && [ "$HERE/../shared/bridge/showcase-lights.ts" -nt "$BUNDLE_LT" ]; then NEED_BUILD_LT=1; fi
+if [ -f "$BUNDLE_LT" ] && [ "$HERE/../../packages/animation/dist/index.js" -nt "$BUNDLE_LT" ]; then NEED_BUILD_LT=1; fi
+if [ "$NEED_BUILD_LT" = "1" ]; then
+  echo "    构建 lights bundle（缺产物 或 入口/节目单更新）…"
+  if ! node "$HERE/bridge/build-batch.mjs" 2>&1 | sed 's/^/    /'; then
+    echo "✗ lights bundle 构建失败（含类型检查）—— 不静默跳过"
+    exit 3
+  fi
+fi
+if [ -f "$BUNDLE_LT" ]; then
+  mkdir -p "$APP/src/main/assets"
+  cp "$BUNDLE_LT" "$APP/src/main/assets/bundle-lights.js"
+  echo "    bundle-lights.js 已入 assets（$(du -h "$BUNDLE_LT" | awk '{print $1}')）"
+else
+  echo "    ⚠ 未见 $BUNDLE_LT —— 缺它只影响 lights 测试路径"
+fi
+
 echo "==> ③ 打包资源与清单（aapt2）"
 MANIFEST="$APP/src/main/AndroidManifest.xml"
+if [ "$LIGHTS" = "1" ]; then
+  # ★★灯光秀独立应用（2026-10-01）：同 dex/.so，只换包名 + 启动 Activity + 标签。
+  #   为什么 sed 生成而不入库第二份清单：单点维护（原清单改了这里自动跟随结构）。
+  MANIFEST="$BUILD/AndroidManifest.lights.xml"
+  sed -e 's/package="dev.proteus.layoutcore"/package="dev.proteus.lights"/'       -e 's/android:label="Proteus LayoutCore"/android:label="Morpheus Lights"/'       -e 's/android:name="\.MainActivity"/android:name="dev.proteus.layoutcore.LightsDemoActivity" android:theme="@android:style\/Theme.NoTitleBar.Fullscreen"/'       "$APP/src/main/AndroidManifest.xml" > "$MANIFEST"
+  grep -q 'dev.proteus.lights' "$MANIFEST" || { echo "✗ lights 清单生成失败（包名没换）"; exit 3; }
+  grep -q 'LightsDemoActivity' "$MANIFEST" || { echo "✗ lights 清单生成失败（Activity 没换）"; exit 3; }
+fi
 if [ "$MODE" = "release" ]; then
   # ★release：从清单里去掉 android:debuggable（debug 包数据 §9.2 明确作废）
-  MANIFEST="$BUILD/AndroidManifest.release.xml"
-  sed 's/ *android:debuggable="true"//' "$APP/src/main/AndroidManifest.xml" > "$MANIFEST"
+  if [ "$LIGHTS" = "1" ]; then
+    _M="$BUILD/AndroidManifest.lights.release.xml"
+    sed 's/ *android:debuggable="true"//' "$MANIFEST" > "$_M"
+    MANIFEST="$_M"
+  else
+    MANIFEST="$BUILD/AndroidManifest.release.xml"
+    sed 's/ *android:debuggable="true"//' "$APP/src/main/AndroidManifest.xml" > "$MANIFEST"
+  fi
   grep -q debuggable "$MANIFEST" && { echo "✗ release 清单仍含 debuggable"; exit 3; }
 fi
-APK="$BUILD/proteus-layoutcore.apk"
+if [ "$LIGHTS" = "1" ]; then
+  APK="$BUILD/proteus-lights.apk"
+else
+  APK="$BUILD/proteus-layoutcore.apk"
+fi
 rm -f "$APK"
 # ★★版本信息必须显式传（真机实测抓出）：aapt2 link **不会**从 manifest 读 versionName/versionCode
 #   ⇒ 产物 versionName='' ⇒ 宿主 `getPackageInfo().versionName` 为 null ⇒
@@ -358,14 +407,18 @@ fi
 "$BT/apksigner" verify --print-certs "$APK" 2>&1 | head -3
 
 echo "==> ⑦ 安装并启动"
-if [ "${1:-}" = "--no-install" ]; then
+NO_INSTALL=0
+for arg in "$@"; do [ "$arg" = "--no-install" ] && NO_INSTALL=1; done
+if [ "$NO_INSTALL" = "1" ]; then
   echo "    跳过安装（--no-install）。APK：$APK"
   exit 0
 fi
+if [ "$LIGHTS" = "1" ]; then PKG="dev.proteus.lights"; ACTIVITY="dev.proteus.lights/dev.proteus.layoutcore.LightsDemoActivity"
+else PKG="dev.proteus.layoutcore"; ACTIVITY="dev.proteus.layoutcore/.MainActivity"; fi
 "$ADB" wait-for-device
 "$ADB" install -r -t "$APK" 2>&1 | tail -3
-"$ADB" shell am force-stop dev.proteus.layoutcore || true
-"$ADB" shell am start -n dev.proteus.layoutcore/.MainActivity 2>&1 | tail -2
+"$ADB" shell am force-stop "$PKG" || true
+"$ADB" shell am start -n "$ACTIVITY" 2>&1 | tail -2
 
 cat <<'MSG'
 

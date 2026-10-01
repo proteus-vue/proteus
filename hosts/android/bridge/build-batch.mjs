@@ -154,3 +154,31 @@ console.log(`[android-bundle] ✅ ${path.relative(ROOT, OUT_HOST_RT)}（${(bytes
 if (resultHostRt.warnings.length) {
   for (const w of resultHostRt.warnings) console.warn(`  ⚠ ${w.text}`)
 }
+
+// ══════════════════════════════════════════════════════════════════
+// ★★第四个 entry —— **灯光秀**（Morpheus 第二个炫技节目 · 800 灯颜色编舞）
+//
+// 【与节目一（showcase）的差别】节目一的设备入口在 iOS 壳（`entry-showcase.ts`，JSC）；
+//   灯光秀的用户要求是**在安卓上做** ⇒ 本 entry 面向 Android QuickJS，
+//   桥名 = `proteusHost`（动画桥 animStart/animTick/...，见 quickjs_jni.c 条件注入表）。
+//   节目单（showcase-lights.ts）在 `hosts/shared/bridge/`——平台中立，同一份声明链。
+const OUT_LIGHTS = path.join(HERE, 'dist', 'bundle-lights.js')
+const resultLights = await build({
+  entryPoints: [path.join(HERE, 'entry-lights.ts')],
+  outfile: OUT_LIGHTS,
+  bundle: true,
+  format: 'iife',
+  platform: 'neutral',
+  target: 'es2020',
+  define: { 'process.env.NODE_ENV': '"production"', __DEV__: 'false' },
+  alias: {
+    '@proteus-vue/animation': path.join(ROOT, 'packages/animation/dist/index.js'),
+  },
+  legalComments: 'none',
+})
+
+const bytesLights = fs.statSync(OUT_LIGHTS).size
+console.log(`[android-bundle] ✅ ${path.relative(ROOT, OUT_LIGHTS)}（${(bytesLights / 1024).toFixed(1)} KB）`)
+if (resultLights.warnings.length) {
+  for (const w of resultLights.warnings) console.warn(`  ⚠ ${w.text}`)
+}
