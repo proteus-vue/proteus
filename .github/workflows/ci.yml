@@ -104,6 +104,11 @@ jobs:
       - name: SVG 段列表跨语言形态（C2：内核 serde ⇄ 双端翻译器）
         run: pnpm run check:svg-path-shape
 
+      # ★★渐变填充（v1，2026-10-01）：契约键名（TS 声明面为唯一事实源）⇄ 两端宿主 + 适配器——
+      #   漏一个键名 = 该维度在某一端静默降级（渐变的"跨语言形态"与 SVG 段同源教训）。
+      - name: 渐变跨语言契约（TS 声明 ⇄ 双端宿主 ⇄ 适配器透传）
+        run: pnpm run check:gradient-contract
+
       - name: 依赖声明完整性审计（#422：pnpm 严格解析——import vs package.json 零缺失）
         run: node scripts/check-deps.mjs
 

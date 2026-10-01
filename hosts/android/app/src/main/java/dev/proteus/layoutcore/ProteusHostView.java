@@ -63,6 +63,14 @@ public class ProteusHostView extends ViewGroup {
          *   既有 `drawCmds` 只有直角 `drawRect`。默认 0 ⇒ **既有全部路径零行为变化**。
          */
         final float radius;
+        /**
+         * ★★**渐变填充规格**（v1 · 2026-10-01）——`fillGradient` 的**结构化副本**
+         *   （`kind` u8: 0=无 / 1=linear / 2=radial；`angleDeg`；`cx/cy/r`；`stops` 色标数组）。
+         *   空（null）= 纯色填充（既有路径零行为变化）。
+         *   ★为什么用"结构化副本"而不是原始 JSON：绘制每帧都要用（`drawCmds` 的 shader），
+         *     每帧 `JSONObject` 解析会让绘制路径带上解析开销（本仓绘制纪律：零分配/零解析）。
+         */
+        final GradSpec gradient;
         Cmd(float x, float y, float w, float h, int color, String text) {
             this(x, y, w, h, color, text, 0f, 0, 0f);
         }
@@ -73,10 +81,76 @@ public class ProteusHostView extends ViewGroup {
             this(x, y, w, h, color, text, fontSize, textColor, 0f);
         }
         Cmd(float x, float y, float w, float h, int color, String text, float fontSize, int textColor, float radius) {
+            this(x, y, w, h, color, text, fontSize, textColor, radius, null);
+        }
+        Cmd(float x, float y, float w, float h, int color, String text, float fontSize, int textColor, float radius,
+            GradSpec gradient) {
             this.x = x; this.y = y; this.w = w; this.h = h; this.color = color; this.text = text;
             this.fontSize = fontSize;
             this.textColor = textColor;
             this.radius = radius;
+            this.gradient = gradient;
+        }
+    }
+
+    /**
+     * ★★**渐变规格**（v1 · 2026-10-01）——`fillGradient` 的宿主侧结构化形态。
+     *
+     * 【跨语言契约（与 TS `packages/animation/src/gradient.ts`、iOS `applyGradient` 同式）】
+     *   · linear：`angle`（CSS 语义：0=向上/90=向右）——端点 = 中心 ± 半程方向向量；
+     *   · radial：`cx/cy/r` 单位空间——`RadialGradient` 半径 = `r × 宽度`；
+     *   · 色标：`colors`（ARGB int[]）+ `offsets`（0..1 float[]），**两数组等长**。
+     *   ★alpha 已在颜色里（`alpha` 字段乘进 ARGB）——两端都不靠十六进制顺序。
+     */
+    static final class GradSpec {
+        final int kind; // 1=linear 2=radial
+        final float angleDeg;
+        final float cx, cy, r;
+        final int[] colors;
+        final float[] offsets;
+        GradSpec(int kind, float angleDeg, float cx, float cy, float r, int[] colors, float[] offsets) {
+            this.kind = kind; this.angleDeg = angleDeg; this.cx = cx; this.cy = cy; this.r = r;
+            this.colors = colors; this.offsets = offsets;
+        }
+        /**
+         * 解析树里的 **`fillGradient`** JSON（非法 ⇒ null——★不静默挂一个空渐变）。
+         * ★契约键名（与 TS `GRADIENT_CONTRACT_KEYS` 同表）：`kind` · `linear` · `radial` ·
+         *   `angle` · `stops` · `offset` · `color` · `alpha` · `cx` · `cy`。门禁
+         *   `check-gradient-contract.mjs` 要求本端引用全部键名（漏一个 = 该维度静默降级）。
+         */
+        static GradSpec parse(org.json.JSONObject fg) {
+            if (fg == null) return null;
+            String k = fg.optString("kind", "");
+            int kind = "linear".equals(k) ? 1 : "radial".equals(k) ? 2 : 0;
+            if (kind == 0) return null;
+            org.json.JSONArray st = fg.optJSONArray("stops");
+            if (st == null || st.length() < 2) return null;
+            int n = st.length();
+            int[] colors = new int[n];
+            float[] offsets = new float[n];
+            for (int i = 0; i < n; i++) {
+                org.json.JSONObject o = st.optJSONObject(i);
+                if (o == null) return null;
+                String hex = o.optString("color", "");
+                if (!hex.startsWith("#") || hex.length() != 7) return null; // 只接受 #RRGGBB（与 TS 校验同规）
+                int c;
+                try {
+                    c = (int) (0xFF000000L | Long.parseLong(hex.substring(1), 16));
+                } catch (NumberFormatException e) {
+                    return null;
+                }
+                float a = (float) o.optDouble("alpha", 1.0);
+                a = a < 0 ? 0 : a > 1 ? 1 : a;
+                int aa = (int) (a * 255f + 0.5f);
+                colors[i] = (c & 0x00FFFFFF) | (aa << 24);
+                offsets[i] = (float) o.optDouble("offset", 0);
+            }
+            float angle = (float) fg.optDouble("angle", 90);
+            float cx = (float) fg.optDouble("cx", 0.5);
+            float cy = (float) fg.optDouble("cy", 0.5);
+            float r = (float) fg.optDouble("r", 1.0);
+            if (kind == 2 && !(r > 0)) return null;
+            return new GradSpec(kind, angle, cx, cy, r, colors, offsets);
         }
     }
 
@@ -753,6 +827,17 @@ public class ProteusHostView extends ViewGroup {
                 if (animStroke.containsKey(id)) strokeProg = animStroke.get(id);
                 else if (nodeSvgStroke.containsKey(id)) strokeProg = 0f;
                 else strokeProg = -1f;
+                // ★★渐变（v1 · 2026-10-01）：**真读宿主绘制真源**（该 cmd 的 GradSpec——`drawCmds`
+                //   用的就是它）——判据据此断言"渐变真的挂上了"（与 iOS 读层上 type/色标数同语义）。
+                //   形态 "linear:2" / "radial:3"；无 ⇒ 空串。
+                String gradStr = "";
+                {
+                    final int ci = indexOfNode(id);
+                    if (ci >= 0 && cmds != null && ci < cmds.size() && cmds.get(ci).gradient != null) {
+                        final GradSpec g = cmds.get(ci).gradient;
+                        gradStr = (g.kind == 2 ? "radial:" : "linear:") + g.colors.length;
+                    }
+                }
                 // ★★C1：裁剪参数真读（动画表优先，否则基态）——判据据此断言形变真的落到绘制侧
                 final float[] clipDisp;
                 if (animClip.containsKey(id)) clipDisp = animClip.get(id);
@@ -777,6 +862,7 @@ public class ProteusHostView extends ViewGroup {
                       .append(",\"tx\":0,\"ty\":0,\"scale\":1,\"rotate\":0,\"opacity\":1")
                       .append(",\"rotateX\":0,\"rotateY\":0")
                       .append(",\"strokeProgress\":").append(strokeProg)
+                      .append(",\"gradient\":\"").append(gradStr).append("\"")
                       .append(",\"bg\":\"").append(bgHex)
                       .append("\",\"textColor\":\"").append(textHex).append("\"}");
                 } else {
@@ -787,6 +873,7 @@ public class ProteusHostView extends ViewGroup {
                       .append(",\"rotateX\":").append(rX).append(",\"rotateY\":").append(rY)
                       .append(",\"clip\":\"").append(clipStr).append("\"")
                       .append(",\"strokeProgress\":").append(strokeProg)
+                      .append(",\"gradient\":\"").append(gradStr).append("\"")
                       .append(",\"bg\":\"").append(bgHex)
                       .append("\",\"textColor\":\"").append(textHex).append("\"}");
                 }
@@ -1539,9 +1626,38 @@ public class ProteusHostView extends ViewGroup {
                 int base = animBg != null ? animBg : c.color;
                 bgPaint.setAlpha(Math.max(0, Math.min(255, (int) (Color.alpha(base) * op))));
             }
+            // ★★渐变填充（v1 · 2026-10-01）：有规格 ⇒ 给 bgPaint 挂 shader（**矩形局部坐标**——
+            //   shader 的坐标是画布绝对坐标，故按 cmd 的 x/y/w/h 建）。
+            //   ★与 TS `linearGradientEndpoints` / iOS `applyGradient` **同式**：
+            //     线性端点 = 中心 ± 半程方向向量（0°=向上）；径向半径 = r × 宽度。
+            //   ★用完即清 shader（paint 是复用的——不清会漏到后续所有指令，与"裁剪不 restore"
+            //     同一类画布状态泄漏）。
+            android.graphics.Shader gradShader = null;
+            if (c.gradient != null) {
+                final GradSpec g = c.gradient;
+                if (g.kind == 1) {
+                    final double rad = Math.toRadians(g.angleDeg);
+                    // I2-ALLOW: **非几何舍入**——渐变端点（绘制效果参数）的浮点换算；
+                    //   内核只管矩形几何（已吸附），渐变是宿主绘制属性（与 borderRadius 同层）。
+                    final float dx = (float) Math.sin(rad);
+                    final float dy = (float) -Math.cos(rad);
+                    final float ex0 = c.x + (0.5f - dx / 2f) * c.w;
+                    final float ey0 = c.y + (0.5f - dy / 2f) * c.h;
+                    final float ex1 = c.x + (0.5f + dx / 2f) * c.w;
+                    final float ey1 = c.y + (0.5f + dy / 2f) * c.h;
+                    gradShader = new android.graphics.LinearGradient(ex0, ey0, ex1, ey1, g.colors, g.offsets,
+                            android.graphics.Shader.TileMode.CLAMP);
+                } else if (g.kind == 2 && g.r > 0f) {
+                    gradShader = new android.graphics.RadialGradient(
+                            c.x + g.cx * c.w, c.y + g.cy * c.h, g.r * c.w, g.colors, g.offsets,
+                            android.graphics.Shader.TileMode.CLAMP);
+                }
+            }
+            if (gradShader != null) bgPaint.setShader(gradShader);
             // ★圆角（灯光秀的灯珠）：radius > 0 走 drawRoundRect——纯绘制属性，默认 0 零行为变化
             if (c.radius > 0f) canvas.drawRoundRect(c.x, c.y, c.x + c.w, c.y + c.h, c.radius, c.radius, bgPaint);
             else canvas.drawRect(c.x, c.y, c.x + c.w, c.y + c.h, bgPaint);
+            if (gradShader != null) bgPaint.setShader(null); // ★清（paint 复用——漏挂会污染后续指令）
             // ★★C2 描边（2026-10-01）：该节点有 SVG 路径时**画线**——用 PathMeasure 按进度截取
             //   （`getSegment(0, progress×len)` 的原生等价物；与 iOS `strokeEnd` 同一语义）。
             //   ★画在内容之后（描边叠在色块上——与 iOS 子层顺序一致）。

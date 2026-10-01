@@ -556,6 +556,8 @@ final class SelfDrawView: UIView {
         //   ★纪律：**一张层上挂了两份簿记时，清理必须成对**（与"层树与簿记是同一事实的两份视图"
         //     的历史教训同源）。
         layerStrokeShapes.removeAll(keepingCapacity: true)
+        // ★★渐变层同款成对清理（与描边同一教训：只清一份簿记 ⇒ 重建后幂等检查命中旧层）
+        layerGradients.removeAll(keepingCapacity: true)
         parentById.removeAll(keepingCapacity: true)
         childrenById.removeAll(keepingCapacity: true)
         builtFrames.removeAll(keepingCapacity: true)
@@ -616,6 +618,18 @@ final class SelfDrawView: UIView {
         //   段列表**只能从内核拿**（解析在内核；请求树里只有 `d` 字符串——见内核
         //   `proteus_layout_svg_nodes` 的注释：宿主不解析，只翻译）。
         //   本函数（makeLayer）在建层时**不碰** SVG（无段列表可用）。
+        // ★★渐变填充（v1 静态 paint——2026-10-01）：声明了 fillGradient ⇒ 挂一个 CAGradientLayer
+        //   子层（几何在本层 bounds 内铺满；端点换算见 `applyGradient` 的注释——与 TS
+        //   `linearGradientEndpoints` / Kotlin 同式：0°=向上，端点 = 中心 ± 半程向量）。
+        //   ★静态 paint：不参与动画（v1 边界，见 animation/gradient.ts 文件头）。
+        if let fg = style["fillGradient"] as? [String: Any] {
+            let g = CAGradientLayer()
+            g.contentsScale = UIScreen.main.scale
+            if Self.applyGradient(g, spec: fg, bounds: layer.bounds) {
+                layer.addSublayer(g)
+                layerGradients[nodeId] = g
+            }
+        }
         // ★★C1：裁剪形状快照（树里声明的静态类型 + 基态参数；动画只改参数不改类型）
         //   ★并**立即应用基态遮罩**——静态裁剪（声明了但未动画）也必须渲染
         //     （内核只上报"值变化"的节点 ⇒ 未动的裁剪节点不会出现在每帧记录里；
@@ -790,6 +804,14 @@ final class SelfDrawView: UIView {
             // ★★颜色（2026-10-01）：从 **CALayer 真读** `backgroundColor` 反解打包色
             //   （判据纪律：真读层上状态，不回显我们写入的参数）
             let bgStr = Self.packedHexFromCGColor(layer.backgroundColor)
+            // ★★渐变（v1 · 2026-10-01）：**真读层上真源**（`layerGradients` 表的层 +
+            //   该层自身的 type/色标数）——判据据此断言"渐变真的建出来了"（不回显声明参数）。
+            //   形态 `"linear:2"` / `"radial:3"`；无渐变 ⇒ 空串（与 bg/textColor 的空串语义同款）。
+            var gradStr = ""
+            if let g = layerGradients[id] {
+                let t = g.type == .radial ? "radial" : g.type == .axial ? "linear" : "?"
+                gradStr = "\(t):\(g.colors?.count ?? 0)"
+            }
             // ★文字色（2026-10-01）：CATextLayer 才有 `foregroundColor`；非文本层报空串
             let textStr = Self.packedHexFromCGColor((layer as? CATextLayer)?.foregroundColor)
             // ★诊断串**先算成变量**（2026-10-01）：把多个 `\(…)` 插值直接续在拼接链的
@@ -804,6 +826,7 @@ final class SelfDrawView: UIView {
                     + "\"opacity\":\(layer.opacity),\"bg\":\"\(bgStr)\","
                     + "\"textColor\":\"\(textStr)\",\"clipBox\":\"\(clipBox)\","
                     + "\"strokeEnd\":\(strokeEndV),\"subLayers\":\(subCount),"
+                    + "\"gradient\":\"\(gradStr)\","
                     + "\"svgDiag\":\"\(diagStr)\"}"
             )
         }
@@ -874,6 +897,14 @@ final class SelfDrawView: UIView {
      */
     /** 描边形状层（复用；每帧只改 `strokeEnd`——不重建 path） */
     private var layerStrokeShapes: [Int: CAShapeLayer] = [:]
+    /**
+     * ★★**渐变填充层**（2026-10-01 · 渐变 v1）——`fillGradient` 声明 ⇒ 本节点挂一个
+     *   `CAGradientLayer` 作**子层**（在底色之上、内容之下）。
+     *   ★为什么不用 `mask`/`backgroundColor`：渐变是本层的 **fill**（与底色同语义的替换），
+     *     不是裁剪；`CAGradientLayer` 的 `type = .axial/.radial` 与声明的两种 kind 一一对应。
+     *   ★探针真读（`gradient` 字段）读的就是这一张表 ⇒ 判据断言"渐变真的建出来了"。
+     */
+    private var layerGradients: [Int: CAGradientLayer] = [:]
     // ★诊断计数改为**文件级全局**（真机接通排查用；见文件尾 `SvgDiag`）：
     //   ★为什么不用类内 static：首版写在类内且 swiftc 报 "static properties may only be
     //     declared on a type"（紧跟其后的一串字段全红）——而类在 L2508 才闭合（结构正常）。
@@ -1159,6 +1190,57 @@ final class SelfDrawView: UIView {
             layer.addSublayer(shape)
             layerStrokeShapes[id] = shape
         }
+    }
+
+    /**
+     * ★★**渐变规格 → CAGradientLayer**（2026-10-01 · 渐变 v1）——与 TS/Kotlin **同式**：
+     *   · 线性：`angle`（CSS 语义）→ 端点 = 盒中心 ± 半程方向向量（单位空间，再乘 bounds）；
+     *   · 径向：`cx/cy/r`（单位空间）→ `type = .radial`，`startPoint = 圆心`，
+     *     `endPoint = 圆上一点`（`x + r` 方向——CoreAnimation 用 start→end 的距离作半径，
+     *     故 endPoint 取 `(cx + r, cy)`）。
+     *   · 色标：`colors`（CGColor 数组）+ `locations`（0..1 数组）。
+     *
+     * @returns 是否成功应用（false = 规格非法/零点 ⇒ 不挂层；★不静默挂一个空渐变）
+     */
+    @discardableResult
+    static func applyGradient(_ layer: CAGradientLayer, spec: [String: Any], bounds: CGRect) -> Bool {
+        guard let kind = spec["kind"] as? String,
+              let stops = spec["stops"] as? [[String: Any]], stops.count >= 2 else { return false }
+        var colors: [CGColor] = []
+        var locations: [NSNumber] = []
+        for st in stops {
+            guard let off = (st["offset"] as? Double) ?? (st["offset"] as? CGFloat).map(Double.init),
+                  let hex = st["color"] as? String else { return false }
+            let alpha = (st["alpha"] as? Double) ?? (st["alpha"] as? CGFloat).map(Double.init) ?? 1.0
+            guard let base = parseHexColor(hex) else { return false }
+            guard let c = base.withAlphaComponent(CGFloat(max(0, min(1, alpha)))).cgColor as CGColor? else { return false }
+            colors.append(c)
+            locations.append(NSNumber(value: off))
+        }
+        layer.colors = colors
+        layer.locations = locations
+        if kind == "linear" {
+            guard let angle = (spec["angle"] as? Double) ?? (spec["angle"] as? CGFloat).map(Double.init) else { return false }
+            let rad = angle * .pi / 180
+            let dx = sin(rad)
+            let dy = -cos(rad)
+            // ★与 TS linearGradientEndpoints 同式（单位空间 0..1）：
+            layer.startPoint = CGPoint(x: 0.5 - dx / 2, y: 0.5 - dy / 2)
+            layer.endPoint = CGPoint(x: 0.5 + dx / 2, y: 0.5 + dy / 2)
+            layer.type = .axial
+        } else if kind == "radial" {
+            let cx = (spec["cx"] as? Double) ?? (spec["cx"] as? CGFloat).map(Double.init) ?? 0.5
+            let cy = (spec["cy"] as? Double) ?? (spec["cy"] as? CGFloat).map(Double.init) ?? 0.5
+            let r = (spec["r"] as? Double) ?? (spec["r"] as? CGFloat).map(Double.init) ?? 1.0
+            guard r > 0 else { return false }
+            layer.type = .radial
+            layer.startPoint = CGPoint(x: cx, y: cy)
+            // CoreAnimation 径向：半径 = |end - start| ⇒ 取 (cx + r, cy) 与 TS/Kotlin 的"r 相对盒宽"对齐
+            layer.endPoint = CGPoint(x: cx + r, y: cy)
+        } else {
+            return false
+        }
+        return true
     }
 
     /// ★★**段列表 → CGPath**（C2，2026-10-01）——**只做翻译**（解析在内核，见 `svg_path` 模块）
@@ -2304,6 +2386,9 @@ final class SelfDrawView: UIView {
         //   ⇒ 本函数"一处实现"的白名单必须跟着**内核新增的静态样式**走。
         if let cp = n["clipPath"] as? [String: Any] { style["clipPath"] = cp }
         if let pp = n["perspective"] as? Double { style["perspective"] = CGFloat(pp) }
+        // ★★渐变（v1 静态 paint——2026-10-01）：同"必须透传"纪律（本函数是建层必经之路）
+        //   ★漏透传的后果与 clipPath 同款：声明在请求树里而宿主读不到 ⇒ **静默不渲染**。
+        if let fg = n["fillGradient"] as? [String: Any] { style["fillGradient"] = fg }
         // ★★C2：SVG 描边三键（路径段列表 / 描边色 / 线宽）——同"必须透传"纪律
         if let sp = n["svgPath"] as? [String: Any] { style["svgPath"] = sp }
         if let sc = n["strokeColor"] as? NSNumber { style["strokeColor"] = sc }
