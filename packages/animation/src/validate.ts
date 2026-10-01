@@ -366,6 +366,20 @@ export function validateAnimations(decls: readonly AnimDecl[]): ValidationIssue[
     }
 
     // ★★裁剪形变（C1）：参数数组的三重校验（数量 / 有限性 / from-to 对齐）+ 贝塞尔互斥
+    // ★★滚动窗口（长卷探索补）：clip 与标量同规（退化窗口 ⇒ 编译期拦住）
+    if (d.kind === 'clip' && d.scroll) {
+      const { from: sfrom, to: sto } = d.scroll
+      if (!Number.isFinite(sfrom) || !Number.isFinite(sto)) {
+        issues.push({ index: i, code: 'invalid-range', message: '滚动窗口含非有限数', hint: 'from/to 都应是有限 px' })
+      } else if (sto <= sfrom) {
+        issues.push({
+          index: i,
+          code: 'invalid-range',
+          message: `滚动窗口退化（to=${sto} <= from=${sfrom}）——进度将恒为 1`,
+          hint: '检查 from/to 是否写反；窗口跨度应为正数',
+        })
+      }
+    }
     if (d.kind === 'clip') {
       const cd = d as { from: readonly number[]; to: readonly number[]; keyframes?: Array<{ to: readonly number[]; durationMs: number; curve?: string }> }
       const n = cd.to?.length ?? 0

@@ -24,7 +24,7 @@ import type { LightsAct, LightsProgram } from '../../shared/bridge/showcase-ligh
 import { createFlipProgram } from '../../shared/bridge/showcase-flip'
 import type { FlipAct, FlipControl } from '../../shared/bridge/showcase-flip'
 // ★第四个节目（墨绘·山水卷）：验收 C1 裁剪形变 × C2 SVG 描边
-import { buildInkTree, createInkProgram, INK_SAMPLE_IDS, INK_IDS } from '../../shared/bridge/showcase-ink'
+import { buildInkTree, createInkProgram, createInkScrollProgram, INK_SAMPLE_IDS, INK_IDS } from '../../shared/bridge/showcase-ink'
 import type { InkAct } from '../../shared/bridge/showcase-ink'
 
 /** 三个节目的幕的**公共形状**（entry 只依赖这个——节目单各自扩展） */
@@ -42,6 +42,8 @@ type AnyAct = (LightsAct | FlipAct | InkAct) & {
 
 interface LightsHostBridge {
   mount(treeJson: string): string
+  /** ★★长卷模式（横向手势通路——宿主据此把 onScroll 接到 X 轴；可选（老宿主无此方法）） */
+  horizontalScroll?(on: boolean): string
   animStart(json: string): string
   animStop(json: string): string
   /** ★A3 播放控制（时间因子/暂停）：可选（宿主未实现时跳过——保持向后兼容） */
@@ -64,7 +66,7 @@ interface Args {
   /** 视口（宿主注入；缺省 1080×2400） */
   viewport?: { width: number; height: number }
   /** ★节目选择（缺省 'lights'）：'flip' = 翻牌剧场 / 'ink' = 墨绘·山水卷 */
-  program?: 'lights' | 'flip' | 'ink'
+  program?: 'lights' | 'flip' | 'ink' | 'inkScroll'
 }
 
 const state = {
@@ -73,7 +75,7 @@ const state = {
   ids: [] as number[],
   titleId: 2000,
   /** ★节目选择（'lights' / 'flip' / 'ink'；2026-10-01） */
-  programKind: 'lights' as 'lights' | 'flip' | 'ink',
+  programKind: 'lights' as 'lights' | 'flip' | 'ink' | 'inkScroll',
   program: null as LightsProgram | null,
   programAny: null as { next(): AnyAct | null; plan(): string[] } | null,
   /** 翻牌剧场的能力计数（灯光秀为 0） */
@@ -193,7 +195,11 @@ export function __proteusLightsRun(argsJson?: string): string {
   const args: Args = argsJson ? JSON.parse(argsJson) : {}
   const a: Required<Omit<Args, 'viewport' | 'program'>> = { tiles: args.tiles ?? 800, cols: args.cols ?? 20 }
   state.args = a
-  state.programKind = args.program === 'flip' ? 'flip' : args.program === 'ink' ? 'ink' : 'lights'
+  state.programKind =
+    args.program === 'flip' ? 'flip'
+    : args.program === 'inkScroll' ? 'inkScroll'
+    : args.program === 'ink' ? 'ink'
+    : 'lights'
   const vp = args.viewport ?? { width: 1080, height: 2400 }
   state.view = { width: Math.round(vp.width), height: Math.round(vp.height) }
   state.ids = Array.from({ length: a.tiles }, (_, i) => 1000 + i)
@@ -201,7 +207,7 @@ export function __proteusLightsRun(argsJson?: string): string {
 
   const t0 = Number(proteusHost.nowUs()) / 1000
   // ★墨绘·山水卷：**另一棵树**（水墨长卷——绝对定位的路径/裁剪节点，不是 800 灯珠网格）
-  const tree = state.programKind === 'ink'
+  const tree = (state.programKind === 'ink' || state.programKind === 'inkScroll')
     ? buildInkTree(state.view)
     : buildTree(state.view.width, state.view.height, a.tiles, a.cols)
   const mountOut = proteusHost.mount(tree)
@@ -224,6 +230,12 @@ export function __proteusLightsRun(argsJson?: string): string {
     const fp = createFlipProgram(envCommon)
     state.programAny = fp as unknown as { next(): AnyAct | null; plan(): string[] }
     state.program = null
+  } else if (state.programKind === 'inkScroll') {
+    // ★★长卷探索（滚动驱动）：单幕 + 横向手势（宿主据此把 onScroll 接到 X 轴）
+    const isp = createInkScrollProgram({ view: state.view })
+    state.programAny = isp as unknown as { next(): AnyAct | null; plan(): string[] }
+    state.program = null
+    if (typeof proteusHost.horizontalScroll === 'function') proteusHost.horizontalScroll(true)
   } else if (state.programKind === 'ink') {
     const ip = createInkProgram({ view: state.view })
     state.programAny = ip as unknown as { next(): AnyAct | null; plan(): string[] }
@@ -234,7 +246,11 @@ export function __proteusLightsRun(argsJson?: string): string {
   }
   state.plan = state.programAny.plan()
   // ★探针样本：ink 用**节目自己的关键节点**（幕布/月亮/题字/山/印/云——逐幕末态判据的依据）
-  state.sampleIds = state.programKind === 'ink'
+  // ★★墨绘两模式（ink / inkScroll）都用**节目自己的关键节点**做探针样本——
+  //   首版只判了 `=== 'ink'` ⇒ inkScroll 落在灯珠样本（[1000,…]）上 ⇒ 判据读不到
+  //   root/江水（真机实证：probe ids = [1000,1400,1799,2000]）。同源纪律：新增模式
+  //   必须逐处检查"按模式分叉"的每一处（这类遗漏是静默的）。
+  state.sampleIds = (state.programKind === 'ink' || state.programKind === 'inkScroll')
     ? [...INK_SAMPLE_IDS]
     : [1000, 1000 + Math.floor(a.tiles / 2), 1000 + a.tiles - 1, state.titleId]
 
@@ -406,6 +422,10 @@ export function __proteusLightsRestart(): string {
   if (state.programKind === 'flip') {
     state.programAny = createFlipProgram(envCommon) as unknown as { next(): AnyAct | null; plan(): string[] }
     state.program = null
+  } else if (state.programKind === 'inkScroll') {
+    state.programAny = createInkScrollProgram({ view: state.view }) as unknown as { next(): AnyAct | null; plan(): string[] }
+    state.program = null
+    if (typeof proteusHost.horizontalScroll === 'function') proteusHost.horizontalScroll(true)
   } else if (state.programKind === 'ink') {
     state.programAny = createInkProgram({ view: state.view }) as unknown as { next(): AnyAct | null; plan(): string[] }
     state.program = null

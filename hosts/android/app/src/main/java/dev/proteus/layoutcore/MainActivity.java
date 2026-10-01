@@ -102,6 +102,19 @@ public class MainActivity extends Activity {
                     return;
                 }
                 String p = i.getStringExtra("path");
+                // ★★长卷收尾**不进 runAll**（2026-10-01 真机实证的致命细节）：
+                //   `runAll()` 会 `clearSceneViews()`（把长卷清掉）+ 重跑全套重活测试 ⇒
+                //   长卷的"帧循环/滚动记账"全部作废（报告只剩静态壳）。
+                //   ⇒ 收尾是**独立控制命令**（只 finalize 不重跑），与"测试路径"分流。
+                if ("inkScrollFinalize".equals(p)) {
+                    if (lightsHost != null) {
+                        lightsHost.finishScrollShow();
+                        android.util.Log.i("proteus", "长卷已收尾（独立命令——未走 runAll）");
+                    } else {
+                        android.util.Log.w("proteus", "长卷收尾：无活跃宿主（未先跑 inkScroll？）");
+                    }
+                    return;
+                }
                 if (p != null) testPath = p;
                 runAll();
             }
@@ -380,20 +393,47 @@ public class MainActivity extends Activity {
             String hr = appHostRun();
             sb.append(hr).append('\n');
             writeReport("host-runtime.json", hr);
-        } else if ("lights".equals(testPath) || "flip".equals(testPath) || "ink".equals(testPath)) {
-            // ★★Morpheus 炫技场：第二个节目（灯光秀）/ 第三个节目（翻牌剧场）/ 第四个（墨绘·山水卷）
+        } else if ("inkScrollFinalize".equals(testPath)) {
+            // ★★长卷探索的**显式收尾**（滚动模式不自行 finalize——见 LightsHost.scrollMode）：
+            //   判据驱动完手势后发这条广播 ⇒ 宿主截屏 + 统计 + 写报告。
+            sb.append("【长卷探索 · 收尾（显式 finalize——滚动模式）】\n");
+            if (lightsHost != null) {
+                lightsHost.finishScrollShow();
+                sb.append("  已收尾（报告见 ink.json）\n");
+            } else {
+                sb.append("  ⚠ 无活跃的长卷宿主（先发 path=inkScroll）\n");
+            }
+            writeReport("layout-report.txt", sb.toString());
+        } else if ("lights".equals(testPath) || "flip".equals(testPath) || "ink".equals(testPath)
+                || "inkScroll".equals(testPath)) {
+            // ★★Morpheus 炫技场：灯光秀 / 翻牌剧场 / 墨绘·山水卷 / **长卷探索（滚动驱动）**
             //   ——同一宿主与 kernel-anim 同一时序纪律：重活让出主线程后再开演（见上一分支的注释）
             final boolean isFlip = "flip".equals(testPath);
             final boolean isInk = "ink".equals(testPath);
-            final String prog = isFlip ? "flip" : isInk ? "ink" : "lights";
-            final String rep = isFlip ? "flip.json" : isInk ? "ink.json" : "lights.json";
+            final boolean isInkScroll = "inkScroll".equals(testPath);
+            final String prog = isFlip ? "flip" : isInk || isInkScroll ? (isInkScroll ? "inkScroll" : "ink") : "lights";
+            final String rep = isFlip ? "flip.json" : isInk || isInkScroll ? "ink.json" : "lights.json";
             sb.append(isFlip
                     ? "【Morpheus 翻牌剧场（任意缓动 × 3D 翻转 × 循环 × 慢动作）】\n"
-                    : isInk
-                        ? "【Morpheus 墨绘·山水卷（C1 裁剪揭示 × C2 SVG 描边——水墨长卷自己画出来）】\n"
-                        : "【Morpheus 灯光秀（800 灯颜色编舞 · QuickJS 驱动内核动画）】\n");
+                    : isInkScroll
+                        ? "【Morpheus 长卷探索（滚动驱动 · 手势横移整幅山水长卷）】\n"
+                        : isInk
+                            ? "【Morpheus 墨绘·山水卷（C1 裁剪揭示 × C2 SVG 描边——水墨长卷自己画出来）】\n"
+                            : "【Morpheus 灯光秀（800 灯颜色编舞 · QuickJS 驱动内核动画）】\n");
             new android.os.Handler(android.os.Looper.getMainLooper())
                     .postDelayed(new Runnable() { public void run() { lightsRun(prog, rep, false); } }, 300);
+            // ★★长卷探索：**自驱动**（手势 + 收尾都在进程内——不依赖 `adb input` 注入，
+            //   那条路在本机被 INJECT_EVENTS 权限拒（见 LightsHost.driveHorizontalGestures 注释）。
+            //   时序：建树（~几十 ms）→ 等演出就绪 → 横挥 6 步 → 收尾出报告。
+            if (isInkScroll) {
+                new android.os.Handler(android.os.Looper.getMainLooper()).postDelayed(new Runnable() {
+                    public void run() {
+                        if (lightsHost == null) { sb.append("  ⚠ 长卷驱动：无宿主\n"); return; }
+                        lightsHost.driveHorizontalGestures(6);
+                        lightsHost.finishScrollShow();
+                    }
+                }, 2500);
+            }
             sb.append("  读数见 ").append(rep).append("（异步演出；帧循环由宿主 Choreographer 拥有）\n");
         } else if ("shot-scroll-native".equals(testPath)) {
             // ★★z-order 约束下的**滚动同步**验证（方案坑位 #4）
@@ -466,6 +506,18 @@ public class MainActivity extends Activity {
             String compare = compareAgainstNative();
             sb.append(compare).append('\n');
             writeReport("layout-compare-native.json", compare);
+        }
+
+        // ★★长卷探索（滚动驱动）：**独占主线程到显式收尾**——这里直接返回，跳过公共收尾
+        //   （那些是同步重活 + 会 `clearSceneViews()` 把长卷清掉；而滚动模式的演出
+        //   **永不自行结束**（等手势）⇒ 与"先跑完测试再收尾"的结构根本不兼容）。
+        //   ★真机实证（2026-10-01）：不跳过时帧循环只跑 33 帧就被后续测试清场 ⇒
+        //     报告 `acts: []`（幕从未记录）——这就是"长卷没动"的根因。
+        //   收尾由 `path=inkScrollFinalize` 显式触发（见上面的分支）。
+        if ("inkScroll".equals(testPath)) {
+            sb.append("  ★长卷模式：跳过其余测试（滚动驱动独占主线程；收尾用 path=inkScrollFinalize）\n");
+            writeReport("layout-report.txt", sb.toString());
+            return;
         }
 
         // ★§9.2 核判定：测试尾部收口采样器；并对**未启动持续采样**的通路（内存/不拍平）
@@ -1383,6 +1435,8 @@ public class MainActivity extends Activity {
             final LightsHost host = new LightsHost(act, root, dm.density);
             host.setReportName(reportFile);
             if (loop) host.setLoopMode(true);
+            // ★★长卷探索（滚动驱动）：幕不按时间结束，等外部手势——见 LightsHost.scrollMode
+            if ("inkScroll".equals(programKind)) host.setScrollMode(true);
             if (act instanceof MainActivity) ((MainActivity) act).lightsHost = host;
 
             QuickJsEngine.EvalResult load = QuickJsEngine.evalWithHost(bundle, host);
@@ -1417,6 +1471,14 @@ public class MainActivity extends Activity {
                     return;
                 }
             } catch (Throwable ignored) { /* 回执非 JSON ⇒ 下面 notePlan 会按缺失判红 */ }
+            // ★★滚动模式：把**手势位置**接到宿主记账（判据从报告读 scroll_min/max——
+            //   "手势真的驱动了长卷"的机器证据）。视图此刻已建（入口里 mount 过）。
+            if ("inkScroll".equals(programKind) && host.hostView() != null) {
+                host.hostView().setScrollPosListener(new ProteusHostView.ScrollPosListener() {
+                    @Override public void onScrollPos(int x, int y) { host.noteScrollPosition(x); }
+                });
+                if (host.hostView() != null) host.hostView().setHorizontalScroll(true);
+            }
             try {
                 org.json.JSONObject ro = new org.json.JSONObject(run.value);
                 host.notePlan(ro.optJSONArray("plan") != null ? ro.getJSONArray("plan").toString() : "[]");

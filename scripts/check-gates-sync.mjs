@@ -108,6 +108,9 @@ const LOCAL_ONLY = {
   //   （adb pull 的 ink.json：幕中描边"进行中"探针 + 裁剪逐幕揭示终态，CI 无设备无法复现）。
   //   本机侧等价判据 = tests/showcase-ink.test.ts（11 幕 / 双能力计数 / 裁剪链 / 构建态律，CI 覆盖）。
   'check:android-ink': '需真机产物（adb pull 的 ink.json）；CI 无设备（本机侧等价判据 = tests/showcase-ink.test.ts）',
+  // ★★长卷探索（滚动驱动 · 2026-10-01）：需**真机手势**产物（adb pull 的 ink-scroll.json，
+  //   含手势区间/长卷位移/分段揭示读数）；CI 无设备。本机侧 = tests/showcase-ink.test.ts 的长卷段。
+  'check:android-ink-scroll': '需真机手势产物（adb pull 的 ink-scroll.json）；CI 无设备（本机侧等价判据 = tests/showcase-ink.test.ts 长卷段）',
   // ★★M5 路由虚拟栈判据（2026-09-30 新增）：与 kernel-anim 同族——输入是真机产物 app-stack.json。
   //   端上读数（在 QuickJS 上跑**真实 app-stack.ts**：2 万层深栈 / 预算冻结 / 命令守恒）无法在 CI 复现
   //   （CI 无设备、无宿主 APK）；本机侧的等价逻辑判据已在 tests/app-stack.test.ts（34 条，CI 覆盖）。

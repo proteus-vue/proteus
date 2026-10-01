@@ -11,7 +11,7 @@
 //   （三层笔触色阶与宽度关系）· **多边形 16 参数契约**（内核 ≤8 点）· 确定性。
 import { describe, it, expect } from 'vitest'
 import {
-  buildInkTree, createInkProgram, INK_IDS, INK_SAMPLE_IDS, INK_PALETTE,
+  buildInkTree, createInkProgram, createInkScrollProgram, INK_IDS, INK_SAMPLE_IDS, INK_PALETTE,
   blend, ink, MIST_FLAT, MIST_A, MIST_B, MIST_C, RANGES, scrollMetrics,
 } from '../hosts/shared/bridge/showcase-ink'
 import { spanMs } from '../hosts/shared/bridge/showcase-lights'
@@ -311,8 +311,10 @@ describe('Morpheus 炫技场 · 第四个节目（墨绘·山水卷）', () => {
     expect(grove.anims.filter((x) => x.repeat !== undefined).length).toBeGreaterThanOrEqual(9) // 三棵 × 三笔
   })
 
-  it('★探针样本：首样本 = 中山骨线（mountains 幕"进行中"断言目标）；midSample 幕存在', () => {
-    expect(INK_SAMPLE_IDS[0]).toBe(INK_IDS.rangeCore[1])
+  it('★探针样本：含 root（长卷判据读 tx）与中山骨线（幕中"进行中"目标）；midSample 幕存在', () => {
+    // ★首样本 = root（长卷探索的"画随手动"证据）；中山骨线仍在列表（幕序模式的"进行中"目标）
+    expect(INK_SAMPLE_IDS[0]).toBe(INK_IDS.root)
+    expect(INK_SAMPLE_IDS as readonly number[]).toContain(INK_IDS.rangeCore[1])
     const { acts } = walkAll()
     expect(acts.filter((a) => a.midSample).map((a) => a.name)).toContain('mountains')
   })
@@ -595,6 +597,27 @@ describe('Morpheus 炫技场 · 第四个节目（墨绘·山水卷）', () => {
     // river 幕：水草 4 条 skewX
     const river = acts.find((a) => a.name === 'river')!
     expect(river.anims.filter((x) => x.kind === 36).length, 'river 幕水草 skewX').toBe(4)
+  })
+
+  it('★★长卷探索（滚动驱动）：单幕 100+ 条通道全在一条滚动轴上（位移/裁剪/描边/渐变联动）', () => {
+    const prog = createInkScrollProgram({ view: VIEW })
+    expect(prog.plan()).toEqual(['scroll'])
+    const act = prog.next()!
+    expect(prog.next(), '长卷只有一幕').toBeNull()
+    // ★规模与构成：位移（长卷左移 + 视差）+ clip（幕布/江水/月/云/题款/印）+ stroke（山/水纹/竹/舟/鸟）
+    expect(act.anims.length).toBeGreaterThan(90)
+    expect(act.clipAnims).toBeGreaterThan(50)
+    expect(act.strokeAnims).toBeGreaterThan(15)
+    // ★★**全部通道都挂在滚动窗口上**（`drive:'progress'` + scrollFrom/scrollTo）——
+    //   这是"滚动驱动"的机器证据（少一条 = 那条不跟随手势）
+    const scrollDriven = act.anims.filter((x) => x.drive === 1 && x.scrollFrom !== undefined)
+    expect(scrollDriven.length, '滚动驱动通道数').toBe(act.anims.length)
+    // 窗口单调递增（分段窗口按进入视野顺序——乱序会让"后面的先出现"）
+    const starts = scrollDriven.map((x) => x.scrollFrom!).sort((a, b) => a - b)
+    expect(starts[starts.length - 1]!).toBeGreaterThan(starts[0]!)
+    // 长卷左移：位移终点 = -2.2×视口宽
+    const move = act.anims.find((x) => x.nodeId === INK_IDS.root && x.kind === 0)!
+    expect(move.to).toBe(-Math.round(VIEW.width * 2.2))
   })
 
   it('★工具函数契约：blend 预混（6 位）· ink 加 alpha（8 位 #RRGGBBAA）', () => {

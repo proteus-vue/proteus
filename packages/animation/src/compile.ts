@@ -128,7 +128,9 @@ export function compileOne(d: AnimDecl, targets: AnimTargets): EngineAnim[] {
       to: d.to[slot] ?? 0,
       durMs: easing.durMs,
       delayMs: d.delayMs ?? 0,
-      drive: 0,
+      // ★★滚动驱动（长卷探索补）：与标量/颜色同字段同语义（内核 `start_scroll` 支持任意 kind）
+      drive: d.drive === 'progress' ? 1 : 0,
+      ...(d.scroll ? { scrollFrom: d.scroll.from, scrollTo: d.scroll.to } : {}),
       takeover: d.takeover !== false,
       ...(d.spring
         ? { spring: { stiffness: d.spring.stiffness, damping: d.spring.damping, mass: d.spring.mass ?? 1 } }

@@ -420,6 +420,16 @@ export interface ClipAnimDecl {
   repeat?: RepeatCount
   /** ★A2 交替方向 */
   direction?: RepeatDirection
+  /**
+   * ★★**驱动方式**（长卷探索补 · 2026-10-01）：`'progress'` = 外部设进度（手势/滚动跟随）。
+   * 【为什么补上（类型检查抓出的真缺口）】三个节目长卷模式要"滚动到哪、哪一段揭开"，
+   *   而 `ClipAnimDecl` 当时**没有 `drive`** ⇒ 裁剪通道无法滚动驱动（只有标量/颜色能）。
+   *   ⇒ 补 `drive` + `scroll`（与 `ScalarAnimDecl` 同字段同语义——内核 `start_scroll` 早就
+   *   支持任意 kind，只是编译期类型没开这个口）。
+   */
+  drive?: DriveName
+  /** ★★**滚动窗口**（`drive:'progress'` 时随 `scrollFrom → scrollTo` 映射进度） */
+  scroll?: ScrollWindow
   /** 接管（缺省 true） */
   takeover?: boolean
 }
