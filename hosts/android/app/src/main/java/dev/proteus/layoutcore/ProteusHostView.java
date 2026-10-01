@@ -671,12 +671,13 @@ public class ProteusHostView extends ViewGroup {
             float[] gOffsets = new float[8];
             for (int k = 0; k < 8; k++) gColors[k] = bb.getInt();
             for (int k = 0; k < 8; k++) gOffsets[k] = bb.getFloat();
-            if (gradKind != 0) {
-                animGrad.put(id, new ProteusHostView.TickGrad(gradKind, Math.min(gradN, 8), gColors, gOffsets));
-            } else {
-                animGrad.remove(id);
-            }
-            // ★★路径变形 v1（@184 的 f32；NaN = 本节点无 B 态——188B 记录）
+            // ★★路径变形 v1（@184 的 f32；NaN = 本节点无 B 态）
+            //   ★★顺序纪律（2026-10-01 真机崩溃的根因）：**读取顺序必须与内核写入顺序逐字节一致**。
+            //     内核顺序 = 渐变段 → path_morph(@184) → glow(@188) → **geo(@192)**；
+            //     首版把 geo 写在 morph/glow **之前**读 ⇒ 全部错位（"geo[0]"读到 path_morph，
+            //     无 B 态节点是 NaN ⇒ NaN 传进 LinearGradient 端点 ⇒ nativeCreate 抛
+            //     IllegalArgumentException ⇒ **绘制线程崩溃**（真机黑屏无报告）。
+            //     这是本仓"线格式偏移即契约"纪律的又一次实证：**追加字段也要按序读**。
             float morphRaw = bb.getFloat();
             if (!Float.isNaN(morphRaw)) {
                 animMorphFactor.put(id, morphRaw);
@@ -690,6 +691,20 @@ public class ProteusHostView extends ViewGroup {
             float glowRaw = bb.getFloat();
             if (!Float.isNaN(glowRaw)) animGlow.put(id, glowRaw);
             else animGlow.remove(id);
+            // ★★渐变几何（@192 起 4×f32 = `[angle, cx, cy, r]`——渐变 v2 扩展；
+            //   在 morph/glow **之后**（与内核写入顺序一致——顺序纪律见上）。
+            //   ★NaN/非有限 ⇒ 不覆盖几何（首版错位把 NaN 传进 shader 崩了绘制线程）。
+            float gAngle = bb.getFloat(), gCx = bb.getFloat(), gCy = bb.getFloat(), gR = bb.getFloat();
+            // ★★渐变**入表**（2026-10-01 真机取证：此前只读不用 ⇒ animGrad 永远空 ⇒
+            //   探针读到静态回落值 0.55、绘制也用静态几何——**"读了但没入表"是最隐蔽的一类**）
+            if (gradKind != 0) {
+                final boolean geoOk = Float.isFinite(gAngle) && Float.isFinite(gCx)
+                        && Float.isFinite(gCy) && Float.isFinite(gR);
+                animGrad.put(id, new ProteusHostView.TickGrad(gradKind, Math.min(gradN, 8), gColors, gOffsets,
+                        geoOk ? new float[]{gAngle, gCx, gCy, gR} : new float[]{0f, 0f, 0f, 0f}));
+            } else {
+                animGrad.remove(id);
+            }
             // ★颜色（2026-10-01）：0xFFFFFFFF = 无该基色 ⇒ 不入覆盖表（保持静态绘制）
             if (rgba != 0xFFFFFFFF) animColor.put(id, rgba);
             if (textRgba != 0xFFFFFFFF) animTextColor.put(id, textRgba);
@@ -703,14 +718,14 @@ public class ProteusHostView extends ViewGroup {
      * 每帧记录长度（与 Rust 侧 `proteus_layout_anim_tick_bin` 对齐——**只在本处定义**）
      *
      * ★★2026-10-01 由 **24B → 28B（底色）→ 32B（文字色）→ 40B（3D）→ 108B（裁剪）
-     *   → 112B（描边）→ 184B（渐变 v2）→ 188B（路径变形 v1）→ 192B（发光 v1）**：
+     *   → 112B（描边）→ 184B（渐变 v2）→ 188B（路径变形 v1）→ 192B（发光 v1）→ 208B（渐变几何）**：
      *   `id u32 + 五值 f32 + bg u32 + textColor u32`。
      *   末两个 u32 都是打包色 `0xAARRGGBB`；`0xFFFFFFFF` = **无该基色**（忽略该字段）。
      *   ★唯一事实源 = 内核 `ffi.rs` 的 8 个 `extend_from_slice`；iOS / SDK / embed-demo
      *     的常量必须与它同批更新（历史上因两处各写步长而错位解析过）。
      *     `scripts/check-anim-record-bytes.mjs` 从内核推出宽度并与各消费端对账。
      */
-    private static final int ANIM_RECORD_BYTES = 192;
+    private static final int ANIM_RECORD_BYTES = 208;
 
     /**
      * ★★每帧发光**强度**表（glow v1）：节点 id → `intensity`（0..1 乘子，乘在静态 alpha 上）。
@@ -777,8 +792,10 @@ public class ProteusHostView extends ViewGroup {
         final int n;
         final int[] colors;
         final float[] offsets;
-        TickGrad(int kind, int n, int[] colors, float[] offsets) {
-            this.kind = kind; this.n = n; this.colors = colors; this.offsets = offsets;
+        /** ★★几何（渐变 v2 扩展）：`[angle, cx, cy, r]`——**内核已混合**（"光本身在动"） */
+        final float[] geo;
+        TickGrad(int kind, int n, int[] colors, float[] offsets, float[] geo) {
+            this.kind = kind; this.n = n; this.colors = colors; this.offsets = offsets; this.geo = geo;
         }
     }
 
@@ -970,12 +987,17 @@ public class ProteusHostView extends ViewGroup {
                     // ★v2：每帧覆盖优先（内核已混合 ⇒ 报实时色标数——判据据此断言"动画中色标在变"）
                     final TickGrad tg0 = animGrad.get(id);
                     if (tg0 != null) {
-                        gradStr = (tg0.kind == 2 ? "radial:" : "linear:") + tg0.n;
+                        // ★几何也报（判据据此断言"光的几何真的在动"）：径向报 r、线性报 angle
+                        final float geo = tg0.kind == 2 ? tg0.geo[3] : tg0.geo[0];
+                        gradStr = (tg0.kind == 2 ? "radial:" : "linear:") + tg0.n
+                                + ":" + String.format(java.util.Locale.US, "%.4f", geo);
                     } else {
                         final int ci = indexOfNode(id);
                         if (ci >= 0 && cmds != null && ci < cmds.size() && cmds.get(ci).gradient != null) {
                             final GradSpec g = cmds.get(ci).gradient;
-                            gradStr = (g.kind == 2 ? "radial:" : "linear:") + g.colors.length;
+                            final float geo = g.kind == 2 ? g.r : g.angleDeg;
+                            gradStr = (g.kind == 2 ? "radial:" : "linear:") + g.colors.length
+                                    + ":" + String.format(java.util.Locale.US, "%.4f", geo);
                         }
                     }
                 }
@@ -1782,8 +1804,12 @@ public class ProteusHostView extends ViewGroup {
             // ★★渐变 v2：**每帧覆盖优先**（内核已混合的色标——动画期用它；否则用静态声明）
             final TickGrad tg = (ids != null && i < ids.length && ids[i] >= 0) ? animGrad.get(ids[i]) : null;
             if (tg != null) {
-                if (tg.kind == 1 && c.gradient != null) {
-                    final double rad = Math.toRadians(c.gradient.angleDeg);
+                // ★★几何用**内核已混合**的值（`tg.geo = [angle, cx, cy, r]`——渐变 v2 扩展：
+                //   "光本身在动"：r 扩散 / angle 转向 / cx 移动）——与 iOS 同式
+                final boolean geoOk = Float.isFinite(tg.geo[0]) && Float.isFinite(tg.geo[1])
+                        && Float.isFinite(tg.geo[2]) && Float.isFinite(tg.geo[3]);
+                if (tg.kind == 1 && c.gradient != null && geoOk) {
+                    final double rad = Math.toRadians(tg.geo[0]);
                     final float dx = (float) Math.sin(rad);
                     final float dy = (float) -Math.cos(rad);
                     gradShader = new android.graphics.LinearGradient(
@@ -1791,9 +1817,9 @@ public class ProteusHostView extends ViewGroup {
                             c.x + (0.5f + dx / 2f) * c.w, c.y + (0.5f + dy / 2f) * c.h,
                             java.util.Arrays.copyOf(tg.colors, tg.n), java.util.Arrays.copyOf(tg.offsets, tg.n),
                             android.graphics.Shader.TileMode.CLAMP);
-                } else if (tg.kind == 2 && c.gradient != null && c.gradient.r > 0f) {
+                } else if (tg.kind == 2 && c.gradient != null && geoOk && tg.geo[3] > 0f) {
                     gradShader = new android.graphics.RadialGradient(
-                            c.x + c.gradient.cx * c.w, c.y + c.gradient.cy * c.h, c.gradient.r * c.w,
+                            c.x + tg.geo[1] * c.w, c.y + tg.geo[2] * c.h, tg.geo[3] * c.w,
                             java.util.Arrays.copyOf(tg.colors, tg.n), java.util.Arrays.copyOf(tg.offsets, tg.n),
                             android.graphics.Shader.TileMode.CLAMP);
                 }

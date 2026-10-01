@@ -520,6 +520,35 @@ describe('Morpheus 炫技场 · 第四个节目（墨绘·山水卷）', () => {
     for (const g of gis) expect(g.alternate, '发光呼吸应 yoyo').toBe(true)
   })
 
+  it('★★渐变几何动画（"光本身在动"）：月晕扩散态与 A 态同色标、不同半径', () => {
+    const nodes = treeNodes()
+    const halo = nodes.get(INK_IDS.haloOuter) as {
+      fillGradient?: { kind: string; r?: number; stops: Array<{ offset: number; color: string; alpha?: number }> }
+      fillGradientTo?: { kind: string; r?: number; stops: Array<{ offset: number; color: string; alpha?: number }> }
+    }
+    expect(halo.fillGradient?.kind).toBe('radial')
+    expect(halo.fillGradientTo?.kind, '两态同 kind（否则内核拒绝）').toBe('radial')
+    // ★几何不同：r 从收拢 → 扩散
+    expect(halo.fillGradientTo!.r!).toBeGreaterThan(halo.fillGradient!.r!)
+    // ★色标**完全一致**（"同一束光在扩散"而不是"换了一个渐变"）
+    expect(halo.fillGradientTo!.stops.length).toBe(halo.fillGradient!.stops.length)
+    for (let i = 0; i < halo.fillGradient!.stops.length; i++) {
+      expect(halo.fillGradientTo!.stops[i]!.offset).toBe(halo.fillGradient!.stops[i]!.offset)
+      expect(halo.fillGradientTo!.stops[i]!.color).toBe(halo.fillGradient!.stops[i]!.color)
+      expect(halo.fillGradientTo!.stops[i]!.alpha).toBe(halo.fillGradient!.stops[i]!.alpha)
+    }
+    // 幕里两处：moonrise 扩散（末态 mix=1）+ moonGlow 呼吸（1↔0 yoyo）
+    const { acts } = walkAll()
+    const rise = acts.find((a) => a.name === 'moonrise')!
+    const riseMix = rise.anims.filter((x) => x.kind === 32 && x.nodeId === INK_IDS.haloOuter)
+    expect(riseMix.length, 'moonrise 的月晕扩散').toBe(1)
+    expect(riseMix[0]!.to, '扩散到底').toBe(1)
+    const glow = acts.find((a) => a.name === 'moonGlow')!
+    const glowMix = glow.anims.filter((x) => x.kind === 32 && x.nodeId === INK_IDS.haloOuter)
+    expect(glowMix.length, 'moonGlow 的月晕呼吸').toBe(1)
+    expect(glowMix[0]!.alternate, '呼吸应 yoyo').toBe(true)
+  })
+
   it('★工具函数契约：blend 预混（6 位）· ink 加 alpha（8 位 #RRGGBBAA）', () => {
     expect(blend('#000000', '#ffffff', 0.5)).toBe('#808080')
     expect(blend('#f2ead6', '#f2ead6', 0.3)).toBe('#f2ead6')

@@ -162,3 +162,87 @@ if (bad) {
   process.exit(1)
 }
 console.log(`\n✅ 每帧动画记录线格式一致：${k.width}B/条（内核 ⇄ ${CONSUMERS.length} 处消费端）`)
+
+// ══════════════════════════════════════════════════════════════════
+// ★★追加检查（2026-10-01）：**每段的消费**（不只是总宽度）
+//
+// 【为什么需要（两次真机缺陷的直接教训）】总宽度一致 ≠ 解析正确：
+//   ① 首版 Android 把新段（geo）**写在 morph/glow 之前**读 ⇒ 全部错位（"geo[0]"读到 NaN
+//      ⇒ 传给 shader ⇒ **绘制线程崩溃**，真机黑屏）；
+//   ② 后又出现"**读了但没入表**"（gradKind/gColors 解析了却从未 put 进 animGrad ⇒
+//      探针永远读到静态回落值 0.55——**看起来一切正常**，只有真机读数对不上）。
+//   总宽度门禁对两者都无感（宽度没变/没错）。
+//   ⇒ 本检查：从内核写入序列提取**每个字段名**，要求两端宿主的解析源码里都出现
+//     （顺序也检查：出现位置的先后必须与内核写入顺序一致——错位会被抓出）。
+//
+// 诚实边界：名字匹配是**启发式**（变量名可能改），但它已能抓住"漏读/乱序"这两类真实缺陷；
+//   更强的形态（字节级往返）需要设备，见 `check:android-kernel-anim` 的真机判据。
+// ══════════════════════════════════════════════════════════════════
+{
+  const { fields } = kernelRecordBytes() // 复用上面的推导（含循环展开后的顺序）
+  // 内核字段名 → 两端宿主应有的**可辨识 token**（变量/注释里出现即可——不强制命名）
+  // ★映射是"语义等价"而非"字面相同"（宿主用自己的命名合理；要抓的是"整段缺失"）
+  // ★★判据形态（首版写成"任一 token 命中" ⇒ **无牙**：改名后别的 token 仍在别处命中，
+  //   破坏性验证当场证明它抓不到——本仓纪律：门禁必须被破坏性验证钉住）。
+  //   ⇒ 改为**要求"该段被读取"的语义证据**：每个消费端必须出现
+  //      `read:<该段的读取 token>`（正则），即"用这些 token 之一真正读取了字节流"。
+  //   ★诚实边界：仍是**源码级**证据（不能证明运行期正确）——运行期由真机判据守；
+  //     它要抓的是"整段没读/读了没用"这两类**已在真机发生过的**缺陷形态。
+  const SEGMENTS = [
+    { field: 'v.bg', read: /(getInt|loadUnaligned)[^\n]*\b(rgba|textRgba|animatedBg)\b|\b(rgba|textRgba|animatedBg)\s*=\s*(bb\.getInt|buf\.loadUnaligned)/ },
+    { field: 'ck', read: /\b(clipKind|clipKindRaw)\s*=\s*(bb\.getInt|buf\.loadUnaligned)/ },
+    { field: 'v.stroke_progress', read: /\b(strokeRaw)\s*=\s*(bb\.getFloat|buf\.loadUnaligned)/ },
+    { field: 'gk', read: /\bgradKind\s*=\s*(bb\.getInt|buf\.loadUnaligned)/ },
+    // ★iOS 形态是 `let gn = Int(buf.loadUnaligned(…))`（Swift 的显式转换）——正则要覆盖两种写法：
+    //   "赋值号右侧出现读取调用" 即可（不强制变量名在左）
+    { field: 'gn', read: /\b(gn|gradN)\b[^\n]*?(bb\.getInt|loadUnaligned\(fromByteOffset)/ },
+    // ★gc/go 是循环读（8 槽）——要求"读取 + 入表"两处（"读了没入表"正是真机缺陷形态）
+    { field: 'gc', read: /gColors\[(k|i|gi|idx)\]\s*=|gColors\.append/ },
+    { field: 'go', read: /gOffsets\[(k|i|gi|idx)\]\s*=|gLocs\.append/ },
+    { field: 'v.path_morph', read: /\bmorphRaw\s*=\s*(bb\.getFloat|buf\.loadUnaligned)/ },
+    { field: 'v.glow_intensity', read: /\bglowRaw\s*=\s*(bb\.getFloat|buf\.loadUnaligned)/ },
+    // ★geo 段：读取 + **必须被使用**（入表 / 传给 applyGradientTick / 用于 shader 端点——
+    //   "读了没入表"与"读了但绘制不用"是同一类缺陷的两个面，真机都实证过）
+    {
+      field: 'geo',
+      read: /(gAngle|gCx)\s*=\s*(bb\.getFloat|buf\.loadUnaligned)/,
+      use: /(animGrad\.put|applyGradientTick|tg\.geo)/,
+    },
+    // ★渐变段整体：色标+几何必须**进入绘制**（入表或被应用——"读了没入表"的实锤处）
+    { field: 'gk', read: /\bgradKind\s*=\s*(bb\.getInt|buf\.loadUnaligned)/, use: /(animGrad\.put|applyGradientTick|layerGradients)/ },
+  ]
+  const CONSUMERS = [
+    { label: 'iOS', file: 'hosts/ios/ProteusHost/selfdraw-scene.swift' },
+    { label: 'Android', file: 'hosts/android/app/src/main/java/dev/proteus/layoutcore/ProteusHostView.java' },
+  ]
+  let bad = 0
+  for (const c of CONSUMERS) {
+    const src = fs.readFileSync(path.join(ROOT, c.file), 'utf8')
+    for (const seg of SEGMENTS) {
+      // 内核确实写了这一段才要求。
+      // ★匹配形态（首版写成 `f === field || f.startsWith(field + '#')` ⇒ 漏掉了**数组下标**形态：
+      //   内核写的是 `geo[i]`（循环展开成 `geo[i]#0`）⇒ 两个条件都不命中 ⇒ **该段被静默跳过**
+      //   （注入①的破坏性验证当场证明门禁无牙）。⇒ 用**词边界包含**匹配（覆盖 `v.tx` / `cp[i]` /
+      //   `geo[i]#0` 等所有实际形态）。
+      const segField = seg.field
+      const re = new RegExp(`(^|[^A-Za-z0-9_.])${segField.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}([^A-Za-z0-9_]|$)`)
+      if (!fields.some((f) => re.test(f))) continue
+      if (!seg.read.test(src)) {
+        console.error(`  ❌ ${c.label} 宿主**未见「${seg.field}」段的读取**（应形如 ${seg.read}）——`)
+        console.error('     该段没被读（真机表现：动画看起来没生效，而不是报错）')
+        bad++
+        continue
+      }
+      if (seg.use && !seg.use.test(src)) {
+        console.error(`  ❌ ${c.label} 宿主**读了「${seg.field}」但没用**（应形如 ${seg.use}）——`)
+        console.error('     这正是真机实证过的缺陷形态："读了但没入表" ⇒ 探针/绘制仍用静态值')
+        bad++
+      }
+    }
+  }
+  if (bad === 0) console.log('\n✅ 每帧记录的**每段**都被两端宿主消费（宽度之外的第二道门）')
+  else {
+    console.error('\n✗ 存在"未消费的记录段"——总宽度对但值错，属最隐蔽的一类')
+    process.exitCode = 1
+  }
+}

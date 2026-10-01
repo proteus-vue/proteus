@@ -1456,7 +1456,8 @@ pub struct NodeVisual {
     ///   · `kind`：1=linear 2=radial（静态，但随帧带上 = 记录自描述）
     ///   · `n`：有效色标数（2..8）
     ///   · `colors`/`offsets`：**已含 `mix` 混合**的 8 槽数组（只用前 n 个）
-    pub grad: Option<(u8, u8, [u32; 8], [f32; 8])>,
+    ///   · `geo`：`[angle, cx, cy, r]`——**已含 `mix` 混合**的几何（渐变 v2 扩展）
+    pub grad: Option<(u8, u8, [u32; 8], [f32; 8], [f32; 4])>,
     /// ★★**路径变形因子**（路径变形 v1）：`None` = 本节点无 B 态（不可变形）；
     ///   `Some(t)` = 当前因子（宿主见它变化时向内核要**变形后的段列表**——
     ///   段是变长数据，不进定长记录；见 FFI `proteus_layout_svg_morph_path`）。
@@ -2128,7 +2129,8 @@ impl AnimEngine {
                 //   宿主与探针都消费它的结果；本字段是"已算好"，不是"待插值"）
                 grad: node.style.grad.as_ref().map(|g| {
                     let (colors, offsets) = g.mixed();
-                    (g.kind, g.n, colors, offsets)
+                    let (angle, cx, cy, r) = g.mixed_geometry();
+                    (g.kind, g.n, colors, offsets, [angle, cx, cy, r])
                 }),
                 // ★路径变形 v1：带上当前变形因子（`None` = 本节点无 B 态；宿主据此决定
                 //   是否向内核要"变形后的段列表"——**段本身按需查询**，不进定长记录）。
@@ -3091,6 +3093,56 @@ mod tests {
             "阴性对照：半程混合作应可读（R≈128）——实际 {}",
             ch(c0c, 16)
         );
+        unsafe { crate::ffi::proteus_layout_destroy(h) };
+    }
+
+    /// ★★渐变**几何**动画（v2 扩展）：径向 `r` 扩散的**混合数学钉值**（"光本身在动"）。
+    #[test]
+    fn gradient_geometry_mix_expands_radius() {
+        use crate::ffi::{proteus_layout_create, proteus_layout_anim_start, proteus_layout_anim_tick_bin};
+        // 两态：同 kind（radial）、同色标数；**几何不同**（r 0.4 → 1.0）
+        let req = serde_json::json!({
+            "viewport": {"width": 100.0, "height": 100.0},
+            "nodes": [
+                {"id": 1, "width": 100.0, "height": 100.0},
+                {"id": 9, "parentId": 1, "width": 100.0, "height": 100.0,
+                 "fillGradient": {"kind": "radial", "cx": 0.5, "cy": 0.5, "r": 0.4,
+                    "stops": [{"offset": 0.0, "color": "#ffffff", "alpha": 0.8},
+                              {"offset": 1.0, "color": "#ffffff", "alpha": 0.0}]},
+                 "fillGradientTo": {"kind": "radial", "cx": 0.5, "cy": 0.5, "r": 1.0,
+                    "stops": [{"offset": 0.0, "color": "#ffffff", "alpha": 0.8},
+                              {"offset": 1.0, "color": "#ffffff", "alpha": 0.0}]}}
+            ]
+        });
+        let h = unsafe {
+            proteus_layout_create(std::ffi::CString::new(req.to_string()).unwrap().as_ptr())
+        };
+        assert!(h > 0, "两态应建树成功");
+        let start = serde_json::json!({
+            "anims": [{"nodeId": 9, "kind": 32, "from": 0.0, "to": 1.0, "durMs": 100, "curve": 0}]
+        });
+        unsafe {
+            proteus_layout_anim_start(h, std::ffi::CString::new(start.to_string()).unwrap().as_ptr())
+        };
+        let read_r = |h: u64, dt: f32| -> f32 {
+            let mut n: u32 = 0;
+            let p = unsafe { proteus_layout_anim_tick_bin(h, dt, &mut n) };
+            assert!(n >= 208, "记录应 ≥208B（含几何段）：实际 {n}");
+            let sl = unsafe { std::slice::from_raw_parts(p, n as usize) }.to_vec();
+            unsafe { crate::ffi::proteus_rects_free(p, n) };
+            // 几何段固定在 @192（末尾追加——既有偏移全不变）
+            let mut f = [0f32; 4];
+            for i in 0..4 {
+                f[i] = f32::from_le_bytes([
+                    sl[192 + i * 4], sl[193 + i * 4], sl[194 + i * 4], sl[195 + i * 4],
+                ]);
+            }
+            f[3] // r
+        };
+        let r_half = read_r(h, 50.0);
+        assert!((r_half - 0.7).abs() < 0.02, "半程 r 应 ≈0.7（0.4→1.0 的中点），实际 {r_half}");
+        let r_end = read_r(h, 60.0);
+        assert!((r_end - 1.0).abs() < 0.02, "终态 r 应 = 1.0（端点钉死），实际 {r_end}");
         unsafe { crate::ffi::proteus_layout_destroy(h) };
     }
 

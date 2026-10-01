@@ -319,6 +319,30 @@ def main() -> int:
         print(f"  ✓ ⑤f ★发光（glow v1）真的建出来了：月盘子层 = {parts[0]} 层（跨语言常数一致）· "
               f"首层 alpha = {parts[1]} · moonGlow 幕 {n_anims2} 条指令（含发光呼吸）")
 
+    # ── ⑤g ★渐变**几何**动画（"光本身在动"）：月晕半径在 moonrise 末态被**真读**为扩散值 ──
+    #   证据 = 探针的 gradient 字段第三段（"radial:3:0.9500"——几何半径；随读法两端同口径）
+    rise_act3 = hbyname.get("moonrise") or {}
+    halo_l = _layer(rise_act3.get("probe_all") or [], 60)
+    g_str2 = (halo_l or {}).get("gradient") if halo_l else None
+    if not g_str2 or g_str2.count(":") < 2:
+        fail(f"⑤g 探针缺月晕几何读数（gradient='{g_str2}'——应 'radial:N:<r>'）")
+        ok = False
+    else:
+        parts2 = g_str2.split(":")
+        try:
+            gr = float(parts2[2])
+        except ValueError:
+            fail(f"⑤g 几何段不可解析：'{g_str2}'")
+            gr = -1.0
+        if gr < 0:
+            ok = False
+        elif not (0.8 <= gr <= 1.1):
+            fail(f"⑤g 月晕半径未扩散：r={gr}（moonrise 末态应 ≈0.95——读到 0.55 表示几何动画没落地）")
+            ok = False
+        else:
+            print(f"  ✓ ⑤g ★渐变几何动画真的落地（探针真读光的半径）：月晕 r = {gr:.4f}"
+                  f"（收拢态 0.55 → 扩散态 0.95 —— 光本身在动）")
+
     # ── ⑥ 帧率与流畅 ──
     vsync = host.get("vsync_p50")
     p95 = host.get("work_p95")

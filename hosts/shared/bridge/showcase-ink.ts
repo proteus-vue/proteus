@@ -129,6 +129,25 @@ export function inkWash(hex: string, centerAlpha: number): GradientFill {
   }
 }
 
+/**
+ * ★★**同色标、不同半径**的径向渐变（渐变**几何**动画用——见 `haloOuter` 的扩散态）。
+ *   ★与 `inkWash` **必须色标完全一致**（count 一致是内核的硬约束；这里连数值也保持一致——
+ *   否则"扩散"会顺带变色，读起来不像同一束光）。
+ */
+export function inkWashWide(hex: string, centerAlpha: number, r: number): GradientFill {
+  return {
+    kind: 'radial',
+    cx: 0.5,
+    cy: 0.5,
+    r,
+    stops: [
+      { offset: 0, color: hex, alpha: centerAlpha },
+      { offset: 0.55, color: hex, alpha: centerAlpha * 0.55 },
+      { offset: 1, color: hex, alpha: 0 },
+    ],
+  }
+}
+
 /** ★云/雾的**竖直渐隐**（上浓下淡——云带顶缘的柔边） */
 export function mistFade(hex: string, topAlpha: number): GradientFill {
   return {
@@ -695,6 +714,10 @@ export function buildInkTree(view: View): string {
     backgroundColor: blend(P.paper, P.moon, 0.28),
     // ★★真渐变（v1）：月晕的外圈（中心 alpha 0.32 → 边缘 0）——"光"必须有渐隐
     fillGradient: inkWash(P.moon, 0.34),
+    // ★★渐变**几何**动画（v2 扩展）：扩散态（r 0.55 → 0.95）——同 kind、同色标数，
+    //   **只改几何** ⇒ `gradientMix` 驱动的是"光的半径"（月晕扩散，不是换一个渐变）。
+    //   ★CSS 同样不能过渡渐变几何（`background-image` 不可插值；要 Houdini）。
+    fillGradientTo: inkWashWide(P.moon, 0.34, 0.95),
     clipPath: { kind: 'circle', params: [0.5, 0.5, 0] },
   })
   const haloSize2 = R(W * 0.34)
@@ -1163,6 +1186,9 @@ export function createInkProgram(_env: { view: View }): InkProgram {
     holdMs: 450,
     build: () => [
       ...onto(I.haloOuter, { kind: 'clip', from: [0.5, 0.5, 0], to: [0.5, 0.5, 0.5], durationMs: 1600, curve: 'easeOut' }),
+      // ★★渐变几何动画（"光本身在动"）：月升的同时**月晕向外扩散**（r 0.55→0.95 · easeOut）
+      //   ——与月盘升起同时发生（同一幕两条通道，观感是"月亮带着光一起出来"）。
+      ...onto(I.haloOuter, { kind: 'gradientMix', from: 0, to: 1, durationMs: 1600, delayMs: 200, curve: 'easeOut' }),
       ...onto(I.haloInner, { kind: 'clip', from: [0.5, 0.5, 0], to: [0.5, 0.5, 0.5], durationMs: 1300, delayMs: 200, curve: 'easeOut' }),
       ...onto(I.moon, { kind: 'clip', from: [0.5, 1.9, 0.5], to: [0.5, 0.5, 0.5], durationMs: 1700, delayMs: 150, curve: 'easeOut' }),
     ],
@@ -1304,6 +1330,9 @@ export function createInkProgram(_env: { view: View }): InkProgram {
           ...onto(id, { kind: 'gradientMix', from: 0, to: 1, durationMs: 2400, delayMs: 200 + i * 320, repeat: 2, direction: 'alternate', curve: 'easeInOut' }),
         ]),
         ...onto(I.haloOuter, { kind: 'scale', from: 1, to: 1.06, durationMs: 1800, repeat: 2, direction: 'alternate', curve: 'easeInOut' }),
+        // ★★渐变几何的"呼吸"：月晕半径在扩散态（1）与收拢态（0）之间往复——
+        //   光在"吐纳"（与 scale 呼吸叠加：尺寸+光半径双呼吸）
+        ...onto(I.haloOuter, { kind: 'gradientMix', from: 1, to: 0, durationMs: 2000, delayMs: 200, repeat: 2, direction: 'alternate', curve: 'easeInOut' }),
         ...onto(I.moon, { kind: 'scale', from: 1, to: 1.09, durationMs: 1800, repeat: 2, direction: 'alternate', curve: 'easeInOut' }),
         ...onto(I.moon, { kind: 'color', from: P.moon, to: P.moonLit, durationMs: 1800, repeat: 2, direction: 'alternate', curve: 'easeInOut' }),
         // ★★发光（glow v1）的"呼吸"：月亮与近山骨线在 0.35..1 之间往复——月色明暗的"气"
