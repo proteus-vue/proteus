@@ -377,12 +377,12 @@ compileAnimations(
 
 ### `primitive/AnimKind`
 
-**动画属性封闭集（6 个：五个合成 + color）** `[implemented]`
+**动画属性封闭集（7 个：五个合成 + color + textColor）** `[implemented]`
 
-- **是什么**：`translateX`(0) / `translateY`(1) / `scale`(2) / `rotate`(3) / `opacity`(4) / `color`(5..8，**内核按 R/G/B/A 四通道分解**)——编号是**跨语言契约**。
-- **为什么**：★**合成属性判定是分水岭**（§5-bis.1）：只有 transform/opacity 子集能走平台渲染线程零参与路径；本引擎**只做绘制层变换** ⇒ 五个标量属性全是合成属性（`width/height/margin` 这类布局属性会被编译期拦）。★`color` 是**第三类**：paint-only（与 opacity 同成本类，**不触发布局**）但**非合成**——Android 的 `RenderNode` 无法在渲染线程插值背景色 ⇒ 两端一致走 tick 路径（跨端一致优先；见架构页）。**一个声明 → 四条通道**：求值机器（曲线/弹簧/序列/滚动/seek/接管）全是标量的 ⇒ 零改动复用，不新增"多通道求值"的第二套实现（代价如实：一次颜色动画 = 4 条指令）。
-- **何时用**：任何声明都要从这里选（写错名字是类型级错误）；颜色要求目标节点已声明 `backgroundColor`（底色 = 起点与复位目标）
-- **如何验证**：packages/layout-core-rust/src/anim.rs 的 `AnimKind::from_u8`；tests/anim-color-golden.test.ts（跨语言钉值 + 编译形态 + 解析拦截）；真机：check-anim-rt2.py P 组（iOS 真读 CALayer 背景色）· check-kernel-anim.py P 组（Android）
+- **是什么**：`translateX`(0) / `translateY`(1) / `scale`(2) / `rotate`(3) / `opacity`(4) / `color`(5..8) / `textColor`(9..12，**均按 R/G/B/A 四通道分解**)——编号是**跨语言契约**。
+- **为什么**：★**合成属性判定是分水岭**（§5-bis.1）：只有 transform/opacity 子集能走平台渲染线程零参与路径；本引擎**只做绘制层变换** ⇒ 五个标量属性全是合成属性（`width/height/margin` 这类布局属性会被编译期拦）。★`color`/`textColor` 是**第三类**：paint-only（与 opacity 同成本类，**不触发布局**）但**非合成**——Android 的 `RenderNode` 无法在渲染线程插值颜色 ⇒ 两端一致走 tick 路径（跨端一致优先；见架构页）。**一个声明 → 四条通道**：求值机器（曲线/弹簧/序列/滚动/seek/接管）全是标量的 ⇒ 零改动复用，不新增"多通道求值"的第二套实现（代价如实：一次颜色动画 = 4 条指令）。★`textColor` 与 `color` **独立轨道**（编号 9..12 不复用 5..8 槽位）：同节点可同时动底色与文字色。
+- **何时用**：任何声明都要从这里选（写错名字是类型级错误）；`color` 要求目标节点已声明 `backgroundColor`、`textColor` 要求已声明 `color`（基色 = 起点与复位目标；缺失内核明确拒绝）
+- **如何验证**：packages/layout-core-rust/src/anim.rs 的 `AnimKind::from_u8`；tests/anim-color-golden.test.ts（跨语言钉值 + 编译形态 + 解析拦截）；真机：check-anim-rt2.py P 组（iOS 真读 CALayer 背景色/文字色）· check-kernel-anim.py P 组（Android）
 - **实现位置**：`packages/animation/src/types.ts:AnimKind + color.ts（内核 anim.rs:AnimKind + ffi.rs:parse_css_color）`
 
 ```ts
@@ -391,6 +391,9 @@ ANIM_KIND_ID.translateY   // → 1（与内核 AnimKind 同号）
 // ★颜色：一个声明，编译成四条通道（kind 5/6/7/8）
 compileAnimations([{ kind: 'color', from: '#2f6fed', to: '#ff5533' }], { nodeId: 7 })
 // ⇒ 4 条指令 · batch.composited === false（paint-only 非合成）
+// ★文字色：独立轨道（kind 9/10/11/12）；keyframes 多段序列两轨通用
+compileAnimations([{ kind: 'textColor', from: '#ffffff', to: '#00ff00',
+  keyframes: [{ to: '#ff0000', durationMs: 100 }] }], { nodeId: 7 })
 ```
 
 ### `primitive/Curve`
