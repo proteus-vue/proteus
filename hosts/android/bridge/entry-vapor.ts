@@ -38,6 +38,12 @@
 // 【产物】hosts/android/bridge/dist/bundle-vapor.js（IIFE，QuickJS 直接 eval）
 // 【调用】Java：`__proteusVaporRun(argsJson)`（见 MainActivity 的 `vapor` 通路）
 import { instantiateTemplate, ListRegistry, PropKeyTable, StringPool, SlotRuntime, VaporRuntime, evalExpr } from '@proteus-vue/slot-runtime'
+// ★★★A/B 对照（2026-10-01）：**同一份 SFC 的第二条路**——Vue 运行时渲染。
+//   `abRender` 由构建期用 **@vue/compiler-sfc** 从同一份 SFC 编出（见 gen-vapor-fixture.mjs）。
+import { createAppRenderer } from '@proteus-vue/renderer-app'
+import { createSelfDrawAdapter } from '@proteus-vue/renderer-app/adapters/selfdraw'
+import { ref } from '@vue/runtime-core'
+import { abRender } from './vapor-ab-render.generated'
 import type { LayoutTemplate, SubscriptionTable } from '@proteus-vue/slot-runtime'
 
 /* ══════════════════ 宿主桥（Java 经 JNI 注入；与 JsRenderHost 的三个入口同形） ══════════════════ */
@@ -80,7 +86,7 @@ interface VaporArgs {
    * 模式：`'short'`（缺省）= 实例化 + 订阅驱动增量；
    *      `'list'` = **长列表虚拟化**（1000 行、行高 100px、30 下 + 30 上滚动）。
    */
-  mode?: 'short' | 'list'
+  mode?: 'short' | 'list' | 'ab'
   /** 行数（覆盖产物里的首行数据；短列表缺省 8 / 长列表缺省 1000） */
   rows?: number
   /** 增量更新轮数（每轮改一行文本 + 一行宽度 ⇒ 走订阅表 → 指令流） */
@@ -120,6 +126,45 @@ interface VaporListReport {
   built_total: number
   released_total: number
   uninstantiated_slots: number
+  notes: string[]
+}
+
+/**
+ * ★★★**A/B 对照报告**（2026-10-01）：同一份 SFC，两条渲染路——
+ *   · A = **Vapor**（编译产物：LayoutTemplate + 订阅表 → 实例化）
+ *   · B = **Vue 运行时**（@vue/compiler-sfc 编出的 render 函数 → runtime-core → selfdraw 适配器）
+ * 判据：**两条路的树规模与几何逐节点一致**（都把同一份语义交给同一个内核算几何）、
+ *   以及各自的成本（JS 侧建树耗时 / 宿主布局耗时）。
+ *
+ * 【诚实边界】本档覆盖 **mount 几何 + 成本**；更新路径的对照（A 走订阅增量、B 走 Vue patch
+ *   → `updatePatches`）需要宿主实现 `updatePatches` 端口，属后续批次——不在这里假装覆盖。
+ */
+interface AbReport {
+  ok: boolean
+  error?: string
+  /** 两条路的节点数（B 减去适配器的 2 个包装节点：adapter.root + mount container） */
+  nodes_a: number
+  nodes_b: number
+  /** 有文本的节点数（两条路各自数） */
+  texts_a: number
+  texts_b: number
+  /** ★几何对比的**样本数**（A 侧语义文本节点数；=0 ⇒ 对比无效，判据必须红） */
+  samples: number
+  /** ★几何逐节点对比（同一树序）：最大绝对差（px，x/y/w/h 四量一起取最大） */
+  max_delta: number
+  /** 超出容差的节点数（容差 0.01px——两路喂给同一内核，理论应逐位相同） */
+  mismatches: number
+  /** 首个不一致节点的诊断（index / A 的 rect / B 的 rect） */
+  first_mismatch: Record<string, unknown> | null
+  /** 成本（ms）：A = 实例化+挂载；B = Vue mount + toRequest + 序列化 + 宿主挂载 */
+  cost_a: { instantiate_ms: number; host_ms: number; total_ms: number }
+  cost_b: { vue_ms: number; request_ms: number; serialize_ms: number; host_ms: number; total_ms: number }
+  /** 宿主侧布局耗时（同一内核，两侧各自 mount 的读数） */
+  layout_ms_a: number
+  layout_ms_b: number
+  /** 绘制通道一致性：两侧各探针的"非空通道数"（应相同） */
+  channels_a: number
+  channels_b: number
   notes: string[]
 }
 
@@ -202,7 +247,254 @@ function makeData(rows: number): Record<string, unknown> {
 export function __proteusVaporRun(argsJson: string): string {
   const args = JSON.parse(argsJson) as VaporArgs
   if (args.mode === 'list') return runVirtualList(args)
+  if (args.mode === 'ab') return runAb(args)
   return runShort(args)
+}
+
+/**
+ * ★★★**A/B 对照**：同一份 SFC 两条路各自建树 → 逐节点比几何。
+ *
+ * 【为什么这是"Vapor 能替换 Vue 运行时"的关键证据】此前所有读数都只证明"Vapor 这条路能跑"，
+ *   但没有回答"它跑出来的东西**与 Vue 运行时是否等价**"。本模式把两条路放在同一台设备、
+ *   同一份 SFC、同一个内核上跑，**逐节点比几何**（树序对齐）——
+ *   等价性从"感觉差不多"变成"最大绝对差 0.xx px"。
+ */
+function runAb(args: VaporArgs): string {
+  const t = (): number => Date.now()
+  const rows = Math.max(1, args.rows ?? 8)
+  const notes: string[] = []
+  const rep: AbReport = {
+    ok: false,
+    nodes_a: 0, nodes_b: 0, texts_a: 0, texts_b: 0,
+    samples: 0, max_delta: -1, mismatches: -1, first_mismatch: null,
+    cost_a: { instantiate_ms: 0, host_ms: 0, total_ms: 0 },
+    cost_b: { vue_ms: 0, request_ms: 0, serialize_ms: 0, host_ms: 0, total_ms: 0 },
+    layout_ms_a: -1, layout_ms_b: -1,
+    channels_a: -1, channels_b: -1,
+    notes,
+  }
+  try {
+    const artifacts = JSON.parse(args.artifacts) as { tpl: LayoutTemplate; table: SubscriptionTable; sfc: string }
+    if (!artifacts.tpl.ok) {
+      rep.error = '模板不可用（构建期诊断）'
+      return JSON.stringify(rep)
+    }
+    const read = (n: string): unknown => abData[n]
+    const registry = new ListRegistry()
+
+    /* ── 路 A：Vapor（编译产物 → 实例化 → 宿主） ── */
+    const tA0 = t()
+    const inst = instantiateTemplate(artifacts.tpl, { viewport: args.viewport, read, table: artifacts.table, registry })
+    /** ★几何对比用：A 侧的**语义文本节点**（Vapor 里文本折在元素上，故就是带 text 的节点） */
+    const textNodesAForAb = (inst.nodes as unknown as Array<Record<string, unknown>>)
+      .filter((n) => typeof n.text === 'string' && n.text.length > 0)
+      .map((n) => ({ id: Number(n.id), text: String(n.text) }))
+    const tA1 = t()
+    rep.nodes_a = inst.nodes.length
+    rep.texts_a = inst.nodes.filter((n) => typeof n.text === 'string' && n.text.length > 0).length
+    const mountA = JSON.parse(
+      proteusHost.mount(JSON.stringify({ viewport: inst.viewport, nodes: inst.nodes })),
+    ) as { ok?: boolean; layout_ms?: number; error?: string }
+    const tA2 = t()
+    rep.cost_a = { instantiate_ms: tA1 - tA0, host_ms: tA2 - tA1, total_ms: tA2 - tA0 }
+    rep.layout_ms_a = mountA.layout_ms ?? -1
+    if (mountA.ok !== true) {
+      rep.error = 'A 路 mount 失败：' + (mountA.error ?? '')
+      return JSON.stringify(rep)
+    }
+    // 读 A 的几何（**先读**——B 路 mount 会 destroy 掉 A 的句柄）
+    // ★几何对比口径：只比**语义文本节点**（A 侧就是那些带 text 的节点；见对齐注释）
+    const semIdsA = textNodesAForAb.map((n) => n.id)
+    const rectsA = readRectsByOrder(semIdsA)
+    // A 的绘制通道探针（同样先读）
+    const chA = probeChannelsFor(inst.nodes.map((n) => n.id))
+
+    /* ── 路 B：Vue 运行时（官方 render → runtime-core → selfdraw 适配器） ── */
+    const adapter = createSelfDrawAdapter()
+    const renderer = createAppRenderer(adapter)
+    const container = adapter.createElement('p-view')
+    adapter.root.children.push(container)
+    container.parent = adapter.root
+    const abList = ref(abData.list)
+    const abBoxW = ref(abData.boxW)
+    const AbApp = {
+      name: 'VaporAbApp',
+      setup() {
+        return { list: abList, boxW: abBoxW }
+      },
+      render: abRender,
+    }
+    const tB0 = t()
+    renderer.createApp(AbApp as never).mount(container as never)
+    const tB1 = t()
+    const req = adapter.toRequest(args.viewport)
+    const tB2 = t()
+    const treeJson = JSON.stringify(req)
+    const tB3 = t()
+    const mountB = JSON.parse(proteusHost.mount(treeJson)) as { ok?: boolean; layout_ms?: number; error?: string }
+    const tB4 = t()
+    rep.cost_b = {
+      vue_ms: tB1 - tB0,
+      request_ms: tB2 - tB1,
+      serialize_ms: tB3 - tB2,
+      host_ms: tB4 - tB3,
+      total_ms: tB4 - tB0,
+    }
+    rep.layout_ms_b = mountB.layout_ms ?? -1
+    if (mountB.ok !== true) {
+      rep.error = 'B 路 mount 失败：' + (mountB.error ?? '')
+      return JSON.stringify(rep)
+    }
+
+    /* ── 逐节点对比（**跳过 B 的 2 个包装节点**：adapter.root + mount container） ── */
+    //   【为什么跳过】Vue 路的树多两层：`adapter.root`（适配器根）与 `container`（mount 挂载点）——
+    //   那是**宿主集成形态**的一部分，不是应用树。⇒ B 取 slice(2)，与 A 的"应用根"对齐。
+    // ★★对齐口径（**两轮实测修正，这是 A/B 最本质的一条**）：
+    //   A（Vapor）与 B（Vue 运行时）的**树形不同**——Vapor 模板编译器把 `<p-text>文本</p-text>`
+    //   折成**一个节点**（文本即元素的 text 属性）；而 Vue 运行时按标准 vnode 树建**两层**
+    //   （`p-text` 元素 + 匿名文本子节点，且字体/颜色从父元素继承——见适配器 `fillSpec` 注释）。
+    //   另有 B 侧的包装层（`adapter.root` + `container` + 组件 resolve 层）。
+    //   ⇒ **绝不能按 index 硬对齐**（首版这么做过：25 vs 36，几何差 1040px 全是错位假象）。
+    //   ⇒ 正解：**按"有文本的语义节点"对齐**——
+    //     A 侧：所有 `text` 非空的节点（Vapor 里文本就在元素上）；
+    //     B 侧：所有 `text` 非空的节点（Vue 里文本是匿名子节点，其父才是语义元素）。
+    //     两边的语义元素 = 该文本节点自身（A）/ 其父（B）—— 几何应指向**同一个盒子**。
+    //     ★校验：两边的**文本内容序列**必须逐一相同（内容不同 ⇒ 对齐本身就错了，先报出来）。
+    const textNodesA = textNodesAForAb
+    const textNodesBAll = (req.nodes as unknown as Array<Record<string, unknown>>).filter(
+      (n) => typeof n.text === 'string' && n.text.length > 0,
+    )
+    // B 的语义元素 = 文本节点的父（Vue 的 `p-text` 元素）
+    const parentIdOf = new Map<number, number | null>()
+    for (const n of req.nodes as unknown as Array<Record<string, unknown>>) {
+      parentIdOf.set(Number(n.id), (n.parentId ?? null) as number | null)
+    }
+    const semB = textNodesBAll
+      .map((t) => {
+        const pid = parentIdOf.get(Number(t.id)) ?? null
+        const parent = pid !== null ? (req.nodes as unknown as Array<Record<string, unknown>>).find((x) => Number(x.id) === pid) : undefined
+        return { text: String(t.text), nodeId: parent ? Number(parent.id) : Number(t.id) }
+      })
+    const seqA = textNodesA.map((n) => n.text)
+    const seqB = semB.map((x) => x.text)
+    const seqSame = seqA.length === seqB.length && seqA.every((t, i) => t === seqB[i] as never)
+    if (!seqSame) {
+      notes.push(`★★文本序列不同（对齐失效——先看这个）：A=${JSON.stringify(seqA.slice(0, 6))} · B=${JSON.stringify(seqB.slice(0, 6))}`)
+    }
+    // B 的**全树规模**（含包装与文本叶——与 A 的"全树"并列，如实各报各的）
+    rep.nodes_b = req.nodes.length
+    // ★语义对齐后的 id 列表（用于几何逐项对比——这才是"同一个盒子"）
+    const semIdsB = semB.map((x) => x.nodeId)
+    // 文本节点数（两条路各自数——B 的"有文本节点"就是前面筛出来的那批）
+    rep.texts_b = textNodesBAll.length
+    const rectsB = readRectsByOrder(semIdsB)
+    const chB = probeChannelsFor(semIdsB)
+    // ★诊断（判据缺读数时用它定位）：两路的树形态摘要
+    if (rep.nodes_a !== rep.nodes_b || rep.texts_a !== rep.texts_b || true) {
+      const fmt = (ns: Array<Record<string, unknown>>): string =>
+        ns.slice(0, 40).map((n) => `${n.id}${n.parentId === null ? '' : '<' + String(n.parentId)}:${String(n.tag ?? '')}${typeof n.text === 'string' && n.text ? '(' + String(n.text).slice(0, 6) + ')' : ''}`).join(' ')
+      notes.push('A 树: ' + fmt(inst.nodes as unknown as Array<Record<string, unknown>>))
+      notes.push('B 树: ' + fmt(req.nodes as unknown as Array<Record<string, unknown>>))
+      // 带样式键的摘要（看"多出来的节点到底是什么"）
+      const fmt2 = (ns: Array<Record<string, unknown>>): string =>
+        ns
+          .slice(0, 40)
+          .map((n) => {
+            // ★读**请求树形态**（样式平铺在顶层——`InstantiatedNode` 与 `SelfDrawNodeSpec` 同形；
+            //   首版读 `n.style` 恒空 ⇒ 诊断误导"样式全丢"）
+            const keys = Object.keys(n).filter(
+              (k) => !['id', 'parentId', 'text'].includes(k),
+            )
+            return `${n.id}<${n.parentId ?? '-'}[${keys.slice(0, 3).join(',')}${keys.length > 3 ? '…' : ''}]${typeof n.text === 'string' && n.text ? '{' + String(n.text).slice(0, 5) + '}' : ''}`
+          })
+          .join(' ')
+      notes.push('A 明细: ' + fmt2(inst.nodes as unknown as Array<Record<string, unknown>>))
+      notes.push('B 明细: ' + fmt2(req.nodes as unknown as Array<Record<string, unknown>>))
+    }
+
+    if (rep.nodes_a !== rep.nodes_b) {
+      notes.push(`★节点数不同：A=${rep.nodes_a} · B=${rep.nodes_b}（树规模就不一致——先看这个）`)
+    }
+    const n = Math.min(rectsA.length, rectsB.length)
+    let maxD = 0
+    let mism = 0
+    let first: Record<string, unknown> | null = null
+    for (let i = 0; i < n; i++) {
+      const a = rectsA[i]
+      const b = rectsB[i]
+      if (!a || !b) continue
+      const d = Math.max(
+        Math.abs(a.x - b.x), Math.abs(a.y - b.y),
+        Math.abs(a.width - b.width), Math.abs(a.height - b.height),
+      )
+      if (d > maxD) maxD = d
+      if (d > 0.01) {
+        mism++
+        if (!first) first = { index: i, id_a: a.id, id_b: b.id, rect_a: a, rect_b: b, delta: Math.round(d * 1000) / 1000 }
+      }
+    }
+    rep.samples = n
+    rep.max_delta = Math.round(maxD * 1000) / 1000
+    rep.mismatches = mism
+    rep.first_mismatch = first
+
+    // 绘制通道一致性（两侧"非空通道数"应相同；逐节点细比留给判据脚本）
+    rep.channels_a = chA.filter((c) => c.nonEmpty > 0).length
+    rep.channels_b = chB.filter((c) => c.nonEmpty > 0).length
+
+    rep.ok = true
+    notes.push(`A 路 ${rep.cost_a.total_ms.toFixed(1)}ms（实例化 ${rep.cost_a.instantiate_ms} + 宿主 ${rep.cost_a.host_ms}）`)
+    notes.push(`B 路 ${rep.cost_b.total_ms.toFixed(1)}ms（Vue mount ${rep.cost_b.vue_ms} + 请求 ${rep.cost_b.request_ms} + 序列化 ${rep.cost_b.serialize_ms} + 宿主 ${rep.cost_b.host_ms}）`)
+    return JSON.stringify(rep)
+  } catch (e) {
+    rep.error = (e as { message?: string })?.message ?? String(e)
+    return JSON.stringify(rep)
+  }
+}
+
+/** AB 对照的数据（两条路**共用同一份**——否则比的不是渲染路而是数据） */
+const abData = makeData(8)
+
+/** 按给定 id 顺序读内核几何（返回与 ids 等长的数组；缺失项为 null） */
+function readRectsByOrder(ids: number[]): Array<{ id: number; x: number; y: number; width: number; height: number }> {
+  const out: Array<{ id: number; x: number; y: number; width: number; height: number }> = []
+  try {
+    const all = JSON.parse(proteusHost.readRects()) as {
+      rects?: Record<string, { x: number; y: number; width: number; height: number }>
+    }
+    const m = all.rects ?? {}
+    for (const id of ids) {
+      const r = m[String(id)]
+      if (r) out.push({ id, x: r.x, y: r.y, width: r.width, height: r.height })
+    }
+  } catch {
+    /* 读失败 ⇒ 返回已收集部分（判据按缺失判红） */
+  }
+  return out
+}
+
+/** 逐节点探针绘制通道（返回与 ids 等长的"非空通道数"） */
+function probeChannelsFor(ids: number[]): Array<{ id: number; nonEmpty: number }> {
+  try {
+    const r = JSON.parse(proteusHost.probeChannels(JSON.stringify(ids))) as {
+      ok?: boolean
+      channels?: Array<Record<string, unknown>>
+    }
+    return (r.channels ?? []).map((c) => {
+      const id = Number(c.id ?? -1)
+      let nonEmpty = 0
+      for (const k of ['radius', 'grad', 'glow', 'clip', 'stroke_len', 'mask']) {
+        const v = c[k]
+        if (v === undefined || v === null) continue
+        if (k === 'mask') { if (Number(v) > 0) nonEmpty++; continue }
+        if (typeof v === 'number' && v > 0) nonEmpty++
+        else if (typeof v === 'string' && v.length > 0) nonEmpty++
+      }
+      return { id, nonEmpty }
+    })
+  } catch {
+    return []
+  }
 }
 
 /**

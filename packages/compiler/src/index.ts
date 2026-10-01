@@ -82,6 +82,8 @@ export {
   slotKindOf,
   buildLayoutTemplate,
   parseStaticStyle,
+  parsePaintDeclAttr,
+  isPaintDeclAttr,
   compileEvents,
 } from './vapor'
 export type {

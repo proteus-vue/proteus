@@ -372,6 +372,14 @@ public class MainActivity extends Activity {
             String vpl = vaporRun(true);
             sb.append(vpl).append('\n');
             writeReport("vapor-list.json", vpl);
+        } else if ("vaporAb".equals(testPath)) {
+            // ★★★**A/B 对照**（2026-10-01）：同一份 SFC 两条渲染路——
+            //   A = Vapor（编译产物 → 实例化）· B = Vue 运行时（官方 render → runtime-core）
+            //   逐节点比几何（同一内核）+ 比成本。这是"Vapor 能替换 Vue 运行时"的量化证据。
+            sb.append("【Vapor A/B 对照（同一 SFC · 两条渲染路 · 逐节点几何对比）】\n");
+            String vab = vaporRunAb();
+            sb.append(vab).append('\n');
+            writeReport("vapor-ab.json", vab);
         } else if ("platform-anim".equals(testPath)) {
             // ★★MA0-RT：平台零参与动画（**独立路径**——见 platformAnimRun 的注释：
             //   混在重活路径里会被主线程 Choreographer 饿死）
@@ -631,7 +639,7 @@ public class MainActivity extends Activity {
         //   ★`js-render` 同理：它的证据就是"屏幕上真的画出来了"；
         //    报告从 JSON 文件读（不上屏不影响任何判据）。
         if (!testPath.startsWith("shot") && !"js-render".equals(testPath) && !"vapor".equals(testPath)
-                && !"vaporList".equals(testPath)) {
+                && !"vaporList".equals(testPath) && !"vaporAb".equals(testPath)) {
             TextView tv = new TextView(this);
             tv.setText(text);
             tv.setTextSize(9f);
@@ -1289,11 +1297,20 @@ public class MainActivity extends Activity {
         return vaporRun(false);
     }
 
+    /** A/B 对照通路（`mode:'ab'`；见 `runAb` 的说明） */
+    private String vaporRunAb() {
+        return vaporRun(false, true);
+    }
+
     /**
      * Vapor 通路（`list=false` 短列表 / `list=true` 长列表虚拟化）。
      * @param list true ⇒ 用 `vapor-list-artifacts.json` + `mode:'list'` + 行数 1000
      */
     private String vaporRun(boolean list) {
+        return vaporRun(list, false);
+    }
+
+    private String vaporRun(boolean list, boolean ab) {
         org.json.JSONObject out = new org.json.JSONObject();
         try {
             if (!QuickJsEngine.isAvailable()) {
@@ -1341,7 +1358,10 @@ public class MainActivity extends Activity {
             }
             org.json.JSONObject args = new org.json.JSONObject();
             args.put("artifacts", artifacts);
-            if (list) {
+            if (ab) {
+                args.put("mode", "ab");
+                args.put("rows", 8);
+            } else if (list) {
                 args.put("mode", "list");
                 args.put("rows", 1000);
             } else {
