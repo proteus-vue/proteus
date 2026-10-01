@@ -225,6 +225,8 @@ export const INK_IDS = {
  *   进度应**严格居中**——"真的在画"（不是 0 瞬现、也不是 1 早已画完）的机器证据。
  */
 export const INK_SAMPLE_IDS: readonly number[] = [
+  // ★root（id=1）必须在内：长卷探索判据读它的 tx（"画随手动"的探针证据）
+  INK_IDS.root,
   INK_IDS.rangeCore[1],
   INK_IDS.curtain,
   INK_IDS.moon,
@@ -1423,6 +1425,131 @@ export function createInkProgram(_env: { view: View }): InkProgram {
     },
     plan(): string[] {
       return steps.map((s) => s.name)
+    },
+  }
+}
+
+/* ────────────────────────── ★★长卷探索模式（滚动驱动） ────────────────────────── */
+
+/**
+ * ★★**长卷探索**（scroll-driven）——把整幅山水卷变成一条**可用手势横移的长卷**。
+ *
+ * 【与幕序演出的差别（为什么要单立一个模式）】
+ *   · 幕序模式（`createInkProgram`）：**时间驱动**——13 幕依次演出，观众看"画卷自己画出来"；
+ *   · 长卷模式（本函数）：**滚动驱动**——所有元素一次性声明为"滚动位置的函数"，
+ *     观众**拖动手势**横移长卷：画卷往左移，右侧的景象"随着进入视野"逐段浮现、
+ *     卷轴的墨幕随滚动位置揭开。**同一条滚动位置驱动几十条通道**（位移/裁剪/描边/渐变/发光）。
+ *   ★这是本引擎"滚动驱动"能力的压力测试：`scrollFrom`/`scrollTo` 窗口 + `drive:'progress'`
+ *     让**全部**能力（含 clip/渐变/变形/发光/遮罩）都在同一条轴上联动——
+ *     传统跨端框架的滚动联动通常只敢做 translate/opacity。
+ *
+ * 【编排（滚动窗 [0, SCROLL_RANGE] 映射到整场）】
+ *   · 长卷整体左移（`translateX` 0 → -(总宽-视口)）：**画随手动**；
+ *   · 卷轴墨幕（curtain）随进度揭开（clip right）：**"边看边展"**；
+ *   · 每叠山/每条水纹/竹/舟/鸟：各自的**入场窗**（分段窗口 ⇒ 依次进入视野时"落笔"）；
+ *   · 远景巡游：远山组反向微移（视差）——"长卷有纵深"。
+ */
+export function createInkScrollProgram(env: { view: View }): InkProgram {
+  const P = INK_PALETTE
+  const I = INK_IDS
+  const vw = env.view.width
+  /** 总滚动行程（= 长卷长度 − 视口）——各窗按它分段 */
+  const SCROLL_RANGE = Math.round(vw * 2.2)
+
+  /**
+   * 窗口辅助：把 `[a, b]`（0..1 全局分段）映射到滚动窗。
+   * ★★形态纪律（本仓第 N 次"形态假设"教训）：声明面用的是**嵌套 `scroll: {from, to}`**
+   *   （与 `ScalarAnimDecl.scroll` 一致——编译期再展成平铺的 `scrollFrom/scrollTo`）。
+   *   首版写成平铺 `{scrollFrom, scrollTo}` ⇒ 编译期读 `d.scroll` 为 undefined ⇒
+   *   **101 条通道全部退化成时间驱动**（测试当场抓到——`drive=1 且有窗口` 的条数 = 0）。
+   */
+  const win = (a: number, b: number): { scroll: { from: number; to: number } } => ({
+    scroll: { from: Math.round(SCROLL_RANGE * a), to: Math.round(SCROLL_RANGE * b) },
+  })
+
+  const decls: EngineAnim[] = []
+
+  // ① 长卷整体左移（画随手动）——位移量 = 全程 −(总宽−视口)
+  decls.push(
+    ...onto(I.root, {
+      kind: 'translateX', from: 0, to: -(SCROLL_RANGE), durationMs: 1000,
+      drive: 'progress', ...win(0, 1),
+    }),
+  )
+  // ② 卷轴墨幕：随滚动揭开（0..0.35 段）——"边看边展"；卷筒同步滚动
+  const sm = scrollMetrics(env.view)
+  decls.push(
+    ...onto(I.curtain, { kind: 'clip', from: [0, 0, 0, 0], to: [0, 1, 0, 0], durationMs: 1000, drive: 'progress', ...win(0, 0.32) }),
+    ...onto(I.rollCylinder, { kind: 'translateX', from: 0, to: sm.txOpen, durationMs: 1000, drive: 'progress', ...win(0, 0.32) }),
+    ...onto(I.rollKnobTop, { kind: 'translateX', from: 0, to: sm.txOpen, durationMs: 1000, drive: 'progress', ...win(0, 0.32) }),
+    ...onto(I.rollKnobBottom, { kind: 'translateX', from: 0, to: sm.txOpen, durationMs: 1000, drive: 'progress', ...win(0, 0.32) }),
+  )
+  // ③ 视差：远山组反向微移（0 → +18px——"长卷有纵深"）
+  decls.push(
+    ...I.rangeWet.flatMap((id, i) => onto(id, {
+      kind: 'translateX', from: 0, to: 14 + i * 4, durationMs: 1000, drive: 'progress', ...win(0, 1),
+    })),
+  )
+  // ④ 山的"落笔"随进入视野（三叠各占一段窗口：0.2–0.5 / 0.3–0.6 / 0.4–0.7）
+  const mtWins = [[0.2, 0.5], [0.3, 0.6], [0.4, 0.7]]
+  I.rangeCore.forEach((id, r) => {
+    decls.push(...onto(id, { kind: 'strokeProgress', from: 0, to: 1, durationMs: 1000, drive: 'progress', ...win(mtWins[r]![0]!, mtWins[r]![1]!) }))
+  })
+  // ⑤ 江水/月/云/竹/舟/鸟：各自窗口（滚动到哪、哪一幕"长出来"）
+  decls.push(
+    ...onto(I.water, { kind: 'clip', from: [1, 0, 0, 0], to: [0.3, 0, 0, 0], durationMs: 1000, drive: 'progress', ...win(0.42, 0.62) }),
+    ...onto(I.waterDeep, { kind: 'clip', from: [1, 0, 0, 0], to: [0.34, 0, 0, 0], durationMs: 1000, drive: 'progress', ...win(0.44, 0.64) }),
+    ...onto(I.moon, { kind: 'clip', from: [0.5, 1.9, 0.5], to: [0.5, 0.5, 0.5], durationMs: 1000, drive: 'progress', ...win(0.5, 0.72) }),
+    ...onto(I.haloOuter, { kind: 'clip', from: [0.5, 0.5, 0], to: [0.5, 0.5, 0.5], durationMs: 1000, drive: 'progress', ...win(0.5, 0.72) }),
+  )
+  I.ripples.forEach((id, i) => {
+    decls.push(...onto(id, { kind: 'strokeProgress', from: 0, to: 1, durationMs: 1000, drive: 'progress', ...win(0.48 + i * 0.03, 0.68 + i * 0.03) }))
+  })
+  I.clouds.forEach((id, i) => {
+    decls.push(...onto(id, { kind: 'clip', from: [...MIST_FLAT], to: [...MIST_A], durationMs: 1000, drive: 'progress', ...win(0.55 + i * 0.05, 0.75 + i * 0.05) }))
+  })
+  ;[...I.bamboo].forEach((triple, i) => {
+    triple.forEach((id, k) => {
+      decls.push(...onto(id, { kind: 'strokeProgress', from: 0, to: 1, durationMs: 1000, drive: 'progress', ...win(0.6 + i * 0.04 + k * 0.02, 0.8 + i * 0.04) }))
+    })
+  })
+  decls.push(
+    ...I.boat.flatMap((id, i) => onto(id, { kind: 'strokeProgress', from: 0, to: 1, durationMs: 1000, drive: 'progress', ...win(0.7 + i * 0.03, 0.88) })),
+    ...I.birds.flatMap((id, i) => onto(id, { kind: 'strokeProgress', from: 0, to: 1, durationMs: 1000, drive: 'progress', ...win(0.75 + i * 0.04, 0.92) })),
+  )
+  // ⑥ 题款与落印：长卷末端（最后 15% 行程里"写"出来）
+  I.titleChars.forEach((id, i) => {
+    decls.push(...onto(id, { kind: 'clip', from: [0, 1, 0, 0], to: [0, 0, 0, 0], durationMs: 1000, drive: 'progress', ...win(0.82 + i * 0.02, 0.94 + i * 0.01) }))
+  })
+  decls.push(
+    ...onto(I.sealFill, { kind: 'clip', from: [0.5, 0.5, 0.5, 0.5], to: [0, 0, 0, 0], durationMs: 1000, drive: 'progress', ...win(0.92, 0.99) }),
+  )
+
+  /** 拆成"幕"：一条滚动驱动的长卷 = 单幕（宿主只发一次令，之后全靠 seek_scroll） */
+  const act: InkAct = {
+    name: 'scroll',
+    spanMs: 1000,   // 名义跨度（滚动驱动不按时间走——宿主用 seek 推进）
+    holdMs: 0,
+    durationMs: 1000,
+    anims: decls,
+    note: `长卷探索：${decls.length} 条滚动驱动通道（位移/裁剪/描边/渐变/发光全联动）——` +
+      `拖动手势即横移（行程 ${SCROLL_RANGE}px），沿途景象依次浮现`,
+    colorAnims: decls.filter((x) => isColorKind(x.kind)).length,
+    clipAnims: decls.filter((x) => isClipKind(x.kind)).length,
+    strokeAnims: decls.filter((x) => isStrokeKind(x.kind)).length,
+    rotate3dAnims: 0,
+    curveBezierAnims: decls.filter((x) => x.curveBezier !== undefined).length,
+    repeatAnims: 0,
+  }
+  let served = false
+  return {
+    next(): InkAct | null {
+      if (served) return null
+      served = true
+      return act
+    },
+    plan(): string[] {
+      return ['scroll']
     },
   }
 }

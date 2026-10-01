@@ -58,6 +58,15 @@ final class LightsHost {
 
     /** 全场帧数（Choreographer） */
     private int totalFrames = 0;
+    /** ★★滚动模式：记录 seen 的最大/最小滚动位置（判据断言"手势真的驱动了"） */
+    private int scrollMinSeen = Integer.MAX_VALUE;
+    private int scrollMaxSeen = Integer.MIN_VALUE;
+
+    /** 滚动模式：外部每推进一步就喂这里（判据从报告读 min/max） */
+    void noteScrollPosition(int scroll) {
+        if (scroll < scrollMinSeen) scrollMinSeen = scroll;
+        if (scroll > scrollMaxSeen) scrollMaxSeen = scroll;
+    }
     /** 逐帧工作耗时（ms）——全场 */
     private final List<Double> allWork = new ArrayList<>();
     /** vsync 间隔（ms，frameTimeNanos 差分）——全场 */
@@ -95,6 +104,62 @@ final class LightsHost {
      *   判据模式（广播触发）保持 false ⇒ 演完出报告。
      */
     private boolean loopMode = false;
+    /**
+     * ★★**滚动模式**（长卷探索 · 2026-10-01）：幕**不按时间结束**——等外部手势（`seek_scroll`）
+     *   驱动；宿主在此模式下不切幕、不 finalize（由 `finishScrollShow()` 显式收尾）。
+     *   ★为什么必须单列：正常节目的幕边界是"名义时间到 + 内核静止"，而滚动驱动的幕
+     *   **永远静止**（值由 seek 给、不由 tick 推）⇒ 会被安全上限强切。
+     */
+    private boolean scrollMode = false;
+
+    void setScrollMode(boolean v) { this.scrollMode = v; }
+
+    /**
+     * 滚动模式收尾（判据/测试显式调用：记录末态 + 截屏 + 统计 + 写报告）。
+     * ★必须**先记录末态**（`recordAct`）——滚动模式下幕永不结束（这是设计），
+     *   若不记录 ⇒ 报告里 `acts` 为空 ⇒ 探针（root.tx / 江水 clip）全部丢失。
+     */
+    void finishScrollShow() {
+        if (act != null) recordAct(activeCount());
+        finishShow();
+    }
+
+    /**
+     * ★★**进程内驱动真手势**（长卷探索 · 2026-10-01）——横挥 N 步（与 M6b 同一先例）。
+     *
+     * 【为什么不用 `adb shell input swipe`】本仓血泪纪律（AGENTS.md 已记）：
+     *   Android 新版对 `input` 注入要求 INJECT_EVENTS 权限 ⇒ 真机 **SecurityException**、
+     *   静默失败（实测：报告 `scroll_min/max = -1`——手势一条都没到）。
+     *   ⇒ 进程内 `dispatchTouchEvent` 注入**真 MotionEvent**（走完整 GestureDetector →
+     *     生产通路链），与 M6b 的"真手势滚动"同一形态（本仓已接受该先例为验收级）。
+     *
+     * @param steps 横挥步数（每步从右往左 ~780px ⇒ 6 步覆盖 2.2×视口的行程）
+     */
+    void driveHorizontalGestures(int steps) {
+        if (view == null) return;
+        final float y = 1200f;
+        long t0 = android.os.SystemClock.uptimeMillis();
+        for (int s = 0; s < steps; s++) {
+            float startX = 900f, endX = 120f;
+            android.view.MotionEvent down = android.view.MotionEvent.obtain(
+                    t0, t0, android.view.MotionEvent.ACTION_DOWN, startX, y, 0);
+            view.dispatchTouchEvent(down);
+            down.recycle();
+            for (int i = 1; i <= 6; i++) {
+                float x = startX + (endX - startX) * i / 6f;
+                android.view.MotionEvent mv = android.view.MotionEvent.obtain(
+                        t0, t0 + i * 16L, android.view.MotionEvent.ACTION_MOVE, x, y, 0);
+                view.dispatchTouchEvent(mv);
+                mv.recycle();
+            }
+            android.view.MotionEvent up = android.view.MotionEvent.obtain(
+                    t0, t0 + 120L, android.view.MotionEvent.ACTION_UP, endX, y, 0);
+            view.dispatchTouchEvent(up);
+            up.recycle();
+            t0 += 200L;
+        }
+        android.util.Log.i("proteus", "长卷手势驱动完成：" + steps + " 步（每步 780px）");
+    }
 
     void setLoopMode(boolean v) { loopMode = v; }
 
@@ -112,6 +177,11 @@ final class LightsHost {
     /** 节目声明的探针样本 id（JS `__proteusLightsRun` 回执里的 `sample_ids`；
      *  缺省 [1000,1001] = 既有两节目（灯珠/牌面）的行为不变） */
     private int[] sampleIds = new int[]{1000, 1001};
+
+    /** ★★长卷探索模式（`program='inkScroll'`：单幕滚动驱动 + 横向手势） */
+    void enableHorizontalScroll() {
+        if (view != null) view.setHorizontalScroll(true);
+    }
 
     void setSampleIds(int[] ids) {
         if (ids != null && ids.length > 0) sampleIds = ids;
@@ -145,6 +215,19 @@ final class LightsHost {
     public String nowUs() {
         return String.valueOf(System.nanoTime() / 1000);
     }
+
+    /**
+     * ★★**长卷模式开关**（JS `proteusHost.horizontalScroll(true)`——长卷探索节目用）：
+     *   宿主据此把 `GestureDetector.onScroll` 接到 **X 轴**（横移整幅长卷）。
+     */
+    public String horizontalScroll(String onJson) {
+        boolean on = onJson == null || onJson.trim().isEmpty() || !onJson.trim().startsWith("f");
+        horizontalScrollOn = on;
+        if (view != null) view.setHorizontalScroll(on);
+        return "{\"ok\":true,\"horizontal\":" + on + "}";
+    }
+
+    private boolean horizontalScrollOn = false;
 
     /** JS 侧上报（计数；不作为消费证据——与 JsRenderHost.post 同口径） */
     @SuppressWarnings("unused")
@@ -395,7 +478,9 @@ final class LightsHost {
             // ③ 幕边界：内核报 active=0（首次）→ 再等 holdMs 定型 ⇒ 切幕
             int active = activeCount();
             if (actAnimEndMs < 0 && active == 0 && actFrames > 1) actAnimEndMs = actElapsed;
-            boolean natural = actAnimEndMs >= 0 && actElapsed >= actAnimEndMs + act.optDouble("holdMs", 0);
+            // ★★滚动模式：不切幕（等外部手势驱动——见 `scrollMode` 注释）
+            boolean natural = !scrollMode && actAnimEndMs >= 0
+                    && actElapsed >= actAnimEndMs + act.optDouble("holdMs", 0);
             // ★★安全上限**必须感知 timeScale**（2026-10-01 真机抓出）：慢动作幕（timeScale 0.25）
             //   的墙钟时长是名义的 4×——固定 +3000ms 的窗口会把慢动作幕**强制切走**
             //   （真机实测：slowmo 被 forced，anim_end 永远到不了）。⇒ 兜底窗口按 1/timeScale 放大。
@@ -404,7 +489,7 @@ final class LightsHost {
                 ts = act.optJSONObject("control").optDouble("timeScale", 1.0);
             }
             double wallBudget = (act.optDouble("spanMs", 0) + act.optDouble("holdMs", 0)) / Math.max(0.05, ts) + 3000;
-            boolean cap = actElapsed > wallBudget;
+            boolean cap = !scrollMode && actElapsed > wallBudget;
             if (natural || cap) {
                 if (cap && !natural) forced = true;
                 recordAct(active);
@@ -520,6 +605,9 @@ final class LightsHost {
             stats.put("painted_colors", painted[1]);
             stats.put("mid_painted", midPainted);
             stats.put("mid_colors", midColors);
+            // ★★滚动模式读数（长卷探索判据用）：手势驱动到的范围
+            stats.put("scroll_min", scrollMinSeen == Integer.MAX_VALUE ? -1 : scrollMinSeen);
+            stats.put("scroll_max", scrollMaxSeen == Integer.MIN_VALUE ? -1 : scrollMaxSeen);
             // ★幕中探针（C1/C2 的"进行中"证据——幕 45% 处采的真实宿主表读数）
             if (midProbe != null) stats.put("mid_probe", new JSONObject(midProbe));
             if (midProbeAct != null) stats.put("mid_probe_act", midProbeAct);
@@ -780,6 +868,8 @@ final class LightsHost {
     private void ensureView() {
         if (view != null) return;
         view = new ProteusHostView(ctx);
+        // ★长卷模式：建视图时即接上横向手势（JS 的 horizontalScroll 可能在视图建立前调用）
+        if (horizontalScrollOn) view.setHorizontalScroll(true);
         android.widget.FrameLayout.LayoutParams lp = new android.widget.FrameLayout.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT);
         view.setLayoutParams(lp);

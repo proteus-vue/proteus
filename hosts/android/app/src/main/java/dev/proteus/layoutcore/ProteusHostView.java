@@ -864,6 +864,11 @@ public class ProteusHostView extends ViewGroup {
     /** 拖拽滚动出口**被驱动次数**（判据读它证明"这条路径真的走过"——不区分来源） */
     public int scrollDragDriveCount = 0;
 
+    /** ★★滚动位置观察者（滚动模式：宿主把每次位置喂给 LightsHost 记账——见 noteScrollPosition） */
+    public interface ScrollPosListener { void onScrollPos(int x, int y); }
+    private ScrollPosListener scrollPosListener;
+    public void setScrollPosListener(ScrollPosListener l) { this.scrollPosListener = l; }
+
     /** 拖拽回调（**真手势接线点**：`GestureDetector.onScroll` 与判据探针都调这一处） */
     public interface ScrollDragListener {
         /** @param dx,dy 平台 `onScroll` 的滚动量（px；正片 = 手指上移 = 向下滚动） */
@@ -904,6 +909,28 @@ public class ProteusHostView extends ViewGroup {
         if (scrollDragListener != null) scrollDragListener.onScrollDrag(dx, dy);
         return out;
     }
+
+    /**
+     * ★★**横向手势滚动一步**（长卷探索模式 · 2026-10-01）——与 `scrollDragBy` **同构**
+     *   （同三步：内容偏移 → 内核 seek → 观察者回调），只是轴换成 X。
+     *
+     * @param dx 平台 `onScroll` 的横向滚动量（px；正 = 手指左移 = 内容左移 = 看右侧）
+     */
+    public String scrollDragByX(float dx) {
+        scrollDragDriveCount++;
+        final int prev = scrollX;
+        // ★符号：`onScroll` 的 dx 是**滚动量**（正 = 内容左移）——与 Y 轴同款"直接相加"
+        setContentScrollX(Math.max(0, prev + (int) dx));
+        if (scrollPosListener != null) scrollPosListener.onScrollPos(scrollX, scrollY);
+        if (coreHandle == 0) return "{\"ok\":false,\"error\":\"未接入核心\"}";
+        // 内核按位置驱动全部窗口动画（含长卷的位移/clip/描边/渐变——全在一条轴上）
+        String out = kernelAnimSeekScroll("{\"scroll\":" + scrollX + "}");
+        if (scrollDragListener != null) scrollDragListener.onScrollDrag(dx, 0f);
+        return out;
+    }
+
+    /** 当前横向偏移（判据/诊断读数） */
+    public int contentScrollX() { return scrollX; }
 
     /** 共享元素（转发内核 + 应用首帧 updates） */
     public String kernelSharedElement(String json) {
@@ -1328,6 +1355,8 @@ public class ProteusHostView extends ViewGroup {
      *   本类只持有 scrollY 并驱动绘制/子 View 平移。
      */
     private int scrollY = 0;
+    /** ★★**横向内容偏移**（长卷探索模式 · 2026-10-01）：`scrollDragByX` 写它、绘制平移用 */
+    private int scrollX = 0;
     /** 滚动视口（内容坐标系里的可见矩形；native-host 的裁剪面） */
     private android.graphics.Rect scrollViewport = null;
 
@@ -1345,6 +1374,19 @@ public class ProteusHostView extends ViewGroup {
         if (this.scrollY == y) return;
         this.scrollY = y;
         applyScrollToNativeHosts();
+        invalidate();
+    }
+
+    /** ★★**长卷模式开关**（横向手势通路——`program: 'inkScroll'` 时置 true） */
+    private boolean horizontalScroll = false;
+
+    /** 设置长卷模式（横向手势驱动；见 `scrollDragByX`） */
+    public void setHorizontalScroll(boolean v) { this.horizontalScroll = v; }
+
+    /** ★★横向内容偏移（长卷探索模式：横移整幅长卷）——与 `setContentScrollY` 同语义（X 轴）。 */
+    public void setContentScrollX(int x) {
+        if (this.scrollX == x) return;
+        this.scrollX = x;
         invalidate();
     }
 
@@ -1587,7 +1629,13 @@ public class ProteusHostView extends ViewGroup {
                             // ★★真手势滚动**接线**（2026-10-01 收诚实边界）：平台的拖拽识别
                             //   直接进生产通路（内容偏移 + 内核滚动联动 + 写层）——此前这里
                             //   只 report（手势语义上报），内容纹丝不动（边界原文："真机手指拖拽未接线"）。
-                            scrollDragBy(dx, dy);
+                            // ★★长卷模式（2026-10-01）：`horizontalScroll` 开时走 **X 轴**通路
+                            //   （横移整幅长卷——同类手势、另一个轴；两轴互斥由模式开关决定）。
+                            if (horizontalScroll) {
+                                scrollDragByX(dx);
+                            } else {
+                                scrollDragBy(dx, dy);
+                            }
                             return true;
                         }
                     });
@@ -1733,7 +1781,7 @@ public class ProteusHostView extends ViewGroup {
             if (scrollViewport != null) {
                 canvas.clipRect(scrollViewport.left, scrollViewport.top, scrollViewport.right, scrollViewport.bottom);
             }
-            canvas.translate(0, -scrollY);
+            canvas.translate(-scrollX, -scrollY);
         }
         // ★滚动列表模式：绘制列表内容（这是**真实帧**的来源——canvas 来自窗口）
         if (listRenderer != null) {
