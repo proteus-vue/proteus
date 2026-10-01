@@ -1,0 +1,102 @@
+{
+  "bundle_chars": 48393,
+  "run_ms": 133,
+  "host_mount_calls": 1,
+  "host_apply_calls": 0,
+  "host_nodes": -1,
+  "host_text_nodes": 1001,
+  "host_cmds": 54,
+  "host_layout_ms": -1,
+  "host_measure_ms": -1,
+  "host_painted_samples": -1,
+  "host_painted_colors": -1,
+  "host_applied": -1,
+  "host_changed_nodes": -1,
+  "host_view_on_draw": 9,
+  "report": {
+    "ok": true,
+    "tpl_nodes": 4,
+    "sub_l1": 3,
+    "inst_nodes": 2002,
+    "inst_rows": 1000,
+    "inst_allocated_ids": 1998,
+    "mount_ms": 85,
+    "row_count": 1000,
+    "row_pitch": 100,
+    "rows_live_first": 26,
+    "cmds_live_first": 54,
+    "down_frames": 30,
+    "down_built_delta": 36,
+    "up_frames": 30,
+    "up_built_delta": 27,
+    "trail": [
+      {
+        "f": 0,
+        "scroll": 100,
+        "live": 27,
+        "cmds": 56,
+        "built": 27
+      },
+      {
+        "f": 10,
+        "scroll": 1100,
+        "live": 35,
+        "cmds": 72,
+        "built": 43
+      },
+      {
+        "f": 20,
+        "scroll": 2100,
+        "live": 35,
+        "cmds": 72,
+        "built": 53
+      },
+      {
+        "f": 29,
+        "scroll": 3000,
+        "live": 35,
+        "cmds": 72,
+        "built": 62
+      },
+      {
+        "f": 0,
+        "scroll": 2900,
+        "live": 35,
+        "cmds": 72,
+        "built": 69
+      },
+      {
+        "f": 10,
+        "scroll": 1900,
+        "live": 35,
+        "cmds": 72,
+        "built": 79
+      },
+      {
+        "f": 20,
+        "scroll": 900,
+        "live": 35,
+        "cmds": 72,
+        "built": 89
+      },
+      {
+        "f": 29,
+        "scroll": 0,
+        "live": 26,
+        "cmds": 54,
+        "built": 89
+      }
+    ],
+    "moved_diff_pct": 2.1,
+    "back_top_diff_pct": 0,
+    "final_scroll": 0,
+    "row_frames_total": 2098,
+    "built_total": 89,
+    "released_total": 63,
+    "uninstantiated_slots": 0,
+    "notes": [
+      "整树 2002 节点 \/ 1000 行 · 首帧物化 26 行 \/ 54 指令"
+    ]
+  },
+  "ok": true
+}

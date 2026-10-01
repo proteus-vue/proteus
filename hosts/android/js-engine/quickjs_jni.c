@@ -83,6 +83,10 @@ static struct {
    *   同一条件注入原则（Java 未实现 ⇒ 不注入 ⇒ JS 侧探测为 undefined，走诚实降级）。 */
   jmethodID apply_ops;
   jmethodID read_rects;
+  /* ★★★长列表虚拟化（2026-10-01）：整树在内核、宿主只物化可见区。
+   *   同一条件注入原则（Java 未实现 ⇒ 不注入 ⇒ JS 侧探测为 undefined）。 */
+  jmethodID mount_virtual;
+  jmethodID scroll_rows;
 } g_host_methods = { NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL };
 
 /* ★前向声明：eval_impl 之后要泵 job（定义在下方；C 里调用点必须先可见） */
@@ -362,6 +366,16 @@ static JSValue js_host_read_rects(JSContext *ctx, JSValueConst this_val, int arg
   return host_call_noarg_impl(ctx, g_host_methods.read_rects, 1);
 }
 
+/** `proteusHost.mountVirtual(treeJson)` —— ★★★**虚拟化挂载**（长列表：整树在内核、只物化可见区） */
+static JSValue js_host_mount_virtual(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv) {
+  return host_call_impl(ctx, g_host_methods.mount_virtual, 1, this_val, argc, argv);
+}
+
+/** `proteusHost.scrollRows(argsJson)` —— 虚拟化滚动一帧（核心给决策、宿主执行动作） */
+static JSValue js_host_scroll_rows(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv) {
+  return host_call_impl(ctx, g_host_methods.scroll_rows, 1, this_val, argc, argv);
+}
+
 /** 组装 JSON 字符串结果（转义 `"` `\` 与换行；最小实现，不引第三方） */
 static char *json_escape_alloc(const char *s) {
   if (s == NULL) return strdup("\"\"");
@@ -448,6 +462,14 @@ static jstring eval_impl(JNIEnv *env, jstring source, jboolean with_host) {
     }
     if (g_host_methods.read_rects != NULL) {
       JS_SetPropertyStr(g_ctx, host, "readRects", JS_NewCFunction(g_ctx, js_host_read_rects, "readRects", 0));
+    }
+    // ★★★长列表虚拟化（条件注入——同 mount 原则）
+    if (g_host_methods.mount_virtual != NULL) {
+      JS_SetPropertyStr(g_ctx, host, "mountVirtual", JS_NewCFunction(g_ctx, js_host_mount_virtual, "mountVirtual", 1));
+      LOGI("宿主已实现 mountVirtual ⇒ JS 侧可跑**虚拟化**（整树在内核、只物化可见区）");
+    }
+    if (g_host_methods.scroll_rows != NULL) {
+      JS_SetPropertyStr(g_ctx, host, "scrollRows", JS_NewCFunction(g_ctx, js_host_scroll_rows, "scrollRows", 1));
     }
     // ★★动画桥（条件注入——同 mount 原则；灯光秀的 JS 侧驱动依赖它）
     if (g_host_methods.anim_start != NULL && g_host_methods.anim_tick != NULL) {
@@ -544,6 +566,7 @@ Java_dev_proteus_layoutcore_QuickJsEngine_nativeSetHostCallback(JNIEnv *env, jcl
   g_host_methods.now_us = g_host_methods.rects = g_host_methods.probe = g_host_methods.report = NULL;
   g_host_methods.anim_control = NULL;
   g_host_methods.apply_ops = g_host_methods.read_rects = NULL;
+  g_host_methods.mount_virtual = g_host_methods.scroll_rows = NULL;
   if (obj != NULL) {
     g_host_obj = (*env)->NewGlobalRef(env, obj);
     jclass c = (*env)->GetObjectClass(env, obj);
@@ -589,6 +612,11 @@ Java_dev_proteus_layoutcore_QuickJsEngine_nativeSetHostCallback(JNIEnv *env, jcl
     g_host_methods.apply_ops = (*env)->GetMethodID(env, c, "applyOps", "(Ljava/lang/String;)Ljava/lang/String;");
     if ((*env)->ExceptionCheck(env)) (*env)->ExceptionClear(env);
     g_host_methods.read_rects = (*env)->GetMethodID(env, c, "readRects", "()Ljava/lang/String;");
+    if ((*env)->ExceptionCheck(env)) (*env)->ExceptionClear(env);
+    /* ★★★长列表虚拟化（各一参返回串） */
+    g_host_methods.mount_virtual = (*env)->GetMethodID(env, c, "mountVirtual", "(Ljava/lang/String;)Ljava/lang/String;");
+    if ((*env)->ExceptionCheck(env)) (*env)->ExceptionClear(env);
+    g_host_methods.scroll_rows = (*env)->GetMethodID(env, c, "scrollRows", "(Ljava/lang/String;)Ljava/lang/String;");
     if ((*env)->ExceptionCheck(env)) (*env)->ExceptionClear(env);
     if (g_host_methods.post == NULL) {
       LOGE("宿主回调缺少 post(String) 方法（其余入口仍按各自实现条件注入）");

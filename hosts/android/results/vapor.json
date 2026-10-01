@@ -1,13 +1,13 @@
 {
-  "bundle_chars": 43387,
-  "run_ms": 88,
+  "bundle_chars": 48393,
+  "run_ms": 30,
   "host_mount_calls": 1,
   "host_apply_calls": 3,
   "host_nodes": 18,
   "host_text_nodes": 9,
   "host_cmds": 18,
-  "host_layout_ms": 1.548646,
-  "host_measure_ms": 0.824948,
+  "host_layout_ms": 1.517813,
+  "host_measure_ms": 0.769375,
   "host_painted_samples": 12060,
   "host_painted_colors": 13,
   "host_applied": 2,
@@ -32,33 +32,37 @@
     "inst_virtual_rows": 8,
     "inst_text_filled": 9,
     "inst_width_filled": 9,
-    "mount_ms": 78,
+    "mount_ms": 25,
     "mount_nodes": 18,
     "updates_run": 3,
     "ops_bytes": 183,
     "ops_ms": 0,
-    "apply_ms": 6,
+    "apply_ms": 1,
+    "text_synced_total": 3,
     "update_evidence": [
       {
         "round": 0,
         "row": 1,
         "ops": 61,
         "changed_rects": 2,
-        "relayout": -1
+        "relayout": 2,
+        "text_synced": 1
       },
       {
         "round": 1,
         "row": 2,
         "ops": 61,
         "changed_rects": 2,
-        "relayout": -1
+        "relayout": 2,
+        "text_synced": 1
       },
       {
         "round": 2,
         "row": 3,
         "ops": 61,
         "changed_rects": 2,
-        "relayout": -1
+        "relayout": 2,
+        "text_synced": 1
       }
     ],
     "geom_probe": [
@@ -72,7 +76,7 @@
     "notes": [
       "实例树 18 节点 \/ 行 18 \/ 虚拟化行 8 \/ 增量 3 轮"
     ],
-    "host_layout_ms": 1.549,
+    "host_layout_ms": 1.518,
     "host_cmds": 18
   },
   "ok": true
