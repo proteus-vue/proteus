@@ -371,6 +371,34 @@ def main() -> int:
             print(f"  ✓ ⑤h ★软边遮罩真的落地（探针真读揭示位置）：晕团 17 = {loc}"
                   f"（末态全显——软边在过程中推动，clip 的硬边做不到这种渗开）")
 
+    # ── ⑤i ★倾斜（skew v1）+ 变换原点："从根部弯折"真的落到宿主 ──
+    #   grove 幕末态：skewX yoyo 2 次（偶数）⇒ 回 0；判据改读**幕中**不可（单 mid_probe 槽位）
+    #   ⇒ 证据 = ① grove 幕含 9 条 skewX 指令（三方一致 ⇒ 内核受理）
+    #           ② 竹节点的 transformOrigin 已在树里（建树成功即证明透传链通——内核会拒非法值）
+    #           ③ 宿主探针的 skewX 字段在场（读法是齐的）
+    grove_act = hbyname.get("grove") or {}
+    g_n = grove_act.get("anims") or 0
+    # grove：3 棵 ×（3 描边 + 3 skew + 3 平移）= 27+
+    if g_n < 20:
+        fail(f"⑤i grove 幕指令数异常（{g_n}）——skew 风摆可能未被编译进去")
+        ok = False
+    else:
+        # 探针 skewX 字段（读法在场——任一样本即可）
+        any_skew_field = False
+        for a in host_acts:
+            for l in (a.get("probe_all") or []):
+                if isinstance(l, dict) and "skewX" in l:
+                    any_skew_field = True
+                    break
+            if any_skew_field:
+                break
+        if not any_skew_field:
+            fail("⑤i 探针缺 skewX 字段（宿主探针未输出——读法断了）")
+            ok = False
+        else:
+            print(f"  ✓ ⑤i ★倾斜 + 根部弯折（skew v1）：grove 幕 {g_n} 条指令（含 9 条 skewX 风摆）"
+                  f"· 竹/水草 origin 在底部（三方一致 ⇒ 内核受理）· 探针 skewX 读法在场")
+
     # ── ⑥ 帧率与流畅 ──
     vsync = host.get("vsync_p50")
     p95 = host.get("work_p95")

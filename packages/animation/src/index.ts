@@ -42,6 +42,7 @@ export type {
   ClipShape,
   ClipParams,
   ClipAnimDecl,
+  TransformOrigin,
   AnimTargets,
   EngineAnim,
   CompiledBatch,

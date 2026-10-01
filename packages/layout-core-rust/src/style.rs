@@ -195,6 +195,10 @@ fn default_glow_intensity() -> f32 {
     1.0
 }
 
+fn default_origin() -> f32 {
+    0.5
+}
+
 fn default_mask_progress() -> f32 {
     1.0
 }
@@ -363,9 +367,16 @@ pub struct LStyle {
     ///   参与动画（同 (节点,属性) 替换语义要求"每轴一个槽"）；合一个 = 谁先写谁被覆盖。
     #[serde(default)]
     pub rotate_x: f32,
-    /// ★★**绕 Y 轴旋转**（度；锚点 = 层中心）——翻转/翻牌的轴
+    /// ★★**绕 Y 轴旋转**（度；锚点 = `transform_origin`（默认层中心））——翻转/翻牌的轴
     #[serde(default)]
     pub rotate_y: f32,
+    /// ★★**倾斜 X**（2026-10-01 · skew v1；度）——`x' = x + tan(skewX)·y`（CSS `skewX` 同式）。
+    ///   用途：旗帜飘动 / 水草从根部弯折（配 `transform_origin` 在底部）/ 等距视角 / 速度残影。
+    #[serde(default)]
+    pub skew_x: f32,
+    /// ★★**倾斜 Y**（度）——`y' = y + tan(skewY)·x`（CSS `skewY` 同式）
+    #[serde(default)]
+    pub skew_y: f32,
     /// ★★**SVG 描边进度**（2026-10-01 · C2；0..1 = 画到哪——内核只存；路径本体见 `svg_d`）
     #[serde(default)]
     pub stroke_progress: f32,
@@ -435,6 +446,15 @@ pub struct LStyle {
     /// ★★**裁剪形状的基态**（复位目标；建树时从节点声明取——与 `bg_base`/`text_color_base` 同义务）
     #[serde(default)]
     pub clip_base: [f32; 16],
+    /// ★★**变换原点**（2026-10-01 · transform-origin v1）：**盒分数**（0.5,0.5 = 层中心，CSS 缺省）。
+    ///   旋转/缩放/倾斜/3D **全部**绕它发生——"门轴旋转""从根部弯折"这类演出靠它。
+    ///   ★静态样式（v1 不可动画——CSS 允许但极少用；诚实边界写在这）。
+    ///   ★为什么必须进内核透传给宿主：宿主是**执行变换的那一端**（内核只存语义），
+    ///     而这个值决定"绕哪转"——漏传就是"所有旋转都绕中心"（很难与 bug 区分）。
+    #[serde(default = "default_origin")]
+    pub transform_origin_x: f32,
+    #[serde(default = "default_origin")]
+    pub transform_origin_y: f32,
     /// ★★**透视距离**（px；CSS `perspective` 语义；`None` = 无透视（正交投影））
     ///
     /// 【为什么在**节点**上（而不是父容器）】本仓当前没有"父风格继承"链路（父的 perspective
@@ -539,6 +559,10 @@ impl Default for LStyle {
             glow_intensity: 1.0,
             mask: None,
             mask_progress: 1.0,
+            skew_x: 0.0,
+            skew_y: 0.0,
+            transform_origin_x: 0.5,
+            transform_origin_y: 0.5,
             svg_morph_resampled: false,
             stroke_color: 0,
             stroke_width: 0.0,

@@ -210,6 +210,18 @@ console.log(`\n✅ 每帧动画记录线格式一致：${k.width}B/条（内核 
     },
     // ★渐变段整体：色标+几何必须**进入绘制**（入表或被应用——"读了没入表"的实锤处）
     { field: 'gk', read: /\bgradKind\s*=\s*(bb\.getInt|buf\.loadUnaligned)/, use: /(animGrad\.put|applyGradientTick|layerGradients)/ },
+    // ★★倾斜（skew v1）：读取 + **必须被使用**（Android 写进 animTx / iOS 传给 applyTransform）
+    {
+      field: 'v.skew_x',
+      read: /\bskewX\s*=\s*(bb\.getFloat|buf\.loadUnaligned)/,
+      use: /(txArr\[7\]|skewX:\s*CGFloat\(skewX\)|applyTransform)/,
+    },
+    // ★★遮罩（mask v1）：读取 + 必须被使用（入 animMask / 传给 applyMaskTick）
+    {
+      field: 'mk',
+      read: /\b(mk|mKind)\s*=\s*(bb\.getInt|buf\.loadUnaligned)/,
+      use: /(animMask\.put|applyMaskTick|layerMasks)/,
+    },
   ]
   const CONSUMERS = [
     { label: 'iOS', file: 'hosts/ios/ProteusHost/selfdraw-scene.swift' },

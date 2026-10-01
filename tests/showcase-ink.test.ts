@@ -573,6 +573,30 @@ describe('Morpheus 炫技场 · 第四个节目（墨绘·山水卷）', () => {
     expect(mt.anims.filter((x) => x.kind === 31).length).toBeGreaterThan(0)
   })
 
+  it('★★倾斜 + 变换原点（skew v1）：竹与水草"从根部弯折"（origin 在底部）', () => {
+    const nodes = treeNodes()
+    // 竹三棵 × 三条笔触、水草四笔：origin 全部在**底部中点**（= 从根部弯折的物理直觉）
+    for (const triple of INK_IDS.bamboo) {
+      for (const id of triple) {
+        const o = (nodes.get(id) as { transformOrigin?: { x: number; y: number } }).transformOrigin
+        expect(o, `竹 ${id} 应有 transformOrigin`).toEqual({ x: 0.5, y: 1.0 })
+      }
+    }
+    for (const id of INK_IDS.reeds) {
+      const o = (nodes.get(id) as { transformOrigin?: { x: number; y: number } }).transformOrigin
+      expect(o, `水草 ${id} 应有 transformOrigin`).toEqual({ x: 0.5, y: 1.0 })
+    }
+    // grove 幕：每棵 2 条 skewX（弯折）+ 2 条 translateX（梢头位移）= 3 棵 × 2 笔触×2 类 …
+    const { acts } = walkAll()
+    const grove = acts.find((a) => a.name === 'grove')!
+    const skews = grove.anims.filter((x) => x.kind === 36)
+    expect(skews.length, 'grove 幕 skewX 条数（3 棵 × 3 笔触）').toBe(9)
+    for (const sk of skews) expect(sk.alternate, '风摆应 yoyo').toBe(true)
+    // river 幕：水草 4 条 skewX
+    const river = acts.find((a) => a.name === 'river')!
+    expect(river.anims.filter((x) => x.kind === 36).length, 'river 幕水草 skewX').toBe(4)
+  })
+
   it('★工具函数契约：blend 预混（6 位）· ink 加 alpha（8 位 #RRGGBBAA）', () => {
     expect(blend('#000000', '#ffffff', 0.5)).toBe('#808080')
     expect(blend('#f2ead6', '#f2ead6', 0.3)).toBe('#f2ead6')
