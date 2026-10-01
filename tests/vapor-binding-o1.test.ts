@@ -52,7 +52,7 @@ describe('★卡 V2 · 槽位 O(1)（结构判据，非绝对秒数）', () => {
   })
 
   it('② 10× 绑定数 ⇒ 单节点更新耗时比 ≤ 3（线性退化会是 ~10）', () => {
-    const measure = (n: number): number => {
+    const measureOnce = (n: number): number => {
       const table = tableOf(n)
       const { tpl, read } = buildTpl(table)
       const reg = new ListRegistry()
@@ -68,6 +68,16 @@ describe('★卡 V2 · 槽位 O(1)（结构判据，非绝对秒数）', () => {
         instantiateTemplate(tpl, { viewport: { width: 390, height: 844 }, read: (k) => (k === 'v0' ? data['v0'] : read(k)), table, registry: reg })
       }
       return performance.now() - t0
+    }
+    // ★★测量口径（2026-10-01，与 T4 同一原则「信号必须远大于噪声」）：
+    //   单轮读数仅 0.03ms（= `performance.now()` 粒度），全量套件并发下实测比值 3.78 假红
+    //   （同代码隔离复跑 4 次：0.85 / 1.05 / 1.20 / 0.98）。⇒ 每侧取**多轮最小值**：
+    //   min 是最接近"无干扰真实成本"的估计（抢占/GC 只会让单轮变慢、不会让 min 变快），
+    //   而线性退化在 min 下同样成立（真 O(n) ⇒ 两侧 min 就是 ~10×）。
+    const measure = (n: number): number => {
+      let best = Number.POSITIVE_INFINITY
+      for (let r = 0; r < 7; r++) best = Math.min(best, measureOnce(n))
+      return best
     }
     // ★预热（JIT）——两侧同等对待（本仓 T4/V11 的教训：不对称预热会制造假差异）
     measure(20)

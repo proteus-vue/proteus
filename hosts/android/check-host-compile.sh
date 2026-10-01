@@ -46,12 +46,23 @@ echo "==> 编译检查 Android 宿主（javac · 零设备）"
 echo "    JDK: $JDK"
 echo "    android.jar: $ANDROID_JAR"
 
-# shellcheck disable=SC2046
-"$JDK/bin/javac" -nowarn -encoding UTF-8 -d "$OUT" -cp "$ANDROID_JAR" $(find "$SRC_DIR" -name '*.java') 2>&1 \
-  | grep -vE '^注:|^Note:|使用或覆盖了已过时的 API|uses or overrides a deprecated API|unchecked|deprecat' || true
+# ★★判据必须是 **javac 自己的退出码**（2026-10-01 实测的假绿 bug）：
+#   旧写法 `javac ... | grep -v ... || true` 把 javac 退出码**吞掉**，随后只查
+#   `ProteusHostView.class` 是否存在——javac 在个别文件报错时**仍会为无错文件写 class**
+#   ⇒ 有编译错照样 ✅。实测影响：MainActivity 变量名冲突（`se` 重复定义）未被拦，
+#   打出的 APK 不含新测试组，真机跑完判据全缺——"假绿门禁"比没有门禁更贵（排查一轮）。
+JAVAC_LOG="$OUT/javac.log"
+if ! "$JDK/bin/javac" -nowarn -encoding UTF-8 -d "$OUT" -cp "$ANDROID_JAR" \
+    $(find "$SRC_DIR" -name '*.java') > "$JAVAC_LOG" 2>&1; then
+  grep -vE '^注:|^Note:|使用或覆盖了已过时的 API|uses or overrides a deprecated API|unchecked|deprecat' "$JAVAC_LOG" || true
+  echo "✗ javac 编译失败（退出码非 0，见上方输出）"
+  exit 1
+fi
+grep -vE '^注:|^Note:|使用或覆盖了已过时的 API|uses or overrides a deprecated API|unchecked|deprecat' "$JAVAC_LOG" || true
 
+# 纵深防御（javac 退出码已是主判据，这条只防"退出码 0 但产物缺失"的异常）
 if [ ! -f "$OUT/dev/proteus/layoutcore/ProteusHostView.class" ]; then
-  echo "✗ 编译未产出 ProteusHostView.class —— 存在编译错误（见上方输出）"
+  echo "✗ javac 退出码为 0 但未产出 ProteusHostView.class —— 工具链异常（见上方输出）"
   exit 1
 fi
 

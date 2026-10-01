@@ -132,7 +132,9 @@ const PAGES: Array<{ route: string; keySelector: string; label: string; minVisib
   { route: '/subpackages/components/pages/p-pick-photo', keySelector: '.p-pick-photo', label: 'p-pick-photo（选图入口真实渲染）', minVisibleRatio: 1, expectedCount: 1 },
   // ★分组目录页（官网式信息架构）：断言分组卡片可见
   { route: '/pages/components', keySelector: '[class*=cat-group]', label: '组件库分组目录', minVisibleRatio: 1, expectedCount: 6 },
-  { route: '/pages/capabilities', keySelector: '[class*=cat-group]', label: '能力分组目录', minVisibleRatio: 1, expectedCount: 10 },
+  // ★能力分组：9 组（`d7eda185` 把「其他」组并入各域后 = 9——与 `CATALOG_STATS.capabilityGroups`
+  //   同源；那次提交更新了 STATS 但漏改本期望，2026-10-01 全量链实测 9<10 红，据此修正）
+  { route: '/pages/capabilities', keySelector: '[class*=cat-group]', label: '能力分组目录', minVisibleRatio: 1, expectedCount: 9 },
   { route: '/pages/system-glass', keySelector: '[class*=glass], [class*=stage]', label: '液态玻璃', minVisibleRatio: 0.8 },
   { route: '/pages/engineering-state', keySelector: 'button', label: '状态管理（Pinia）', minVisibleRatio: 1 },
   { route: '/pages/semantics', keySelector: '[class*=pipe], [class*=code]', label: '语义与编译', minVisibleRatio: 0.8 },
