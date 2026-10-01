@@ -123,6 +123,15 @@ pub(crate) struct NodeDto {
     ///   （与适配器/宿主既有键名一致——不需要新的字段名）。
     #[serde(skip_serializing_if = "Option::is_none")]
     pub(crate) background_color: Option<String>,
+    /// ★★**文字色**（2026-10-01）：CSS 十六进制（`#RGB`/`#RRGGBB`/`#RRGGBBAA`，与底色同一解析器）。
+    ///
+    /// 【为什么用键名 `color`】它与既有语义一致：适配器（`renderer-app` 的 PAINT_KEYS）与
+    ///   两端宿主的历史路径都用 `color` 表示**文字色**（底色是 `backgroundColor`）——
+    ///   内核采用同名字段，避免"同一语义两个键名"（本仓纪律：一处实现一套命名）。
+    /// 【谁在阻止它进内核（本轮修）】iOS 宿主组装请求时把 `color` 当"纯绘制字段"**删掉**
+    ///   （见其 `render/fullRequest` 注释）；它现在是内核字段 ⇒ 必须放行。
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub(crate) color: Option<String>,
     /// 文本字面量（有此字段即为文本叶子，走宿主注入的度量）
     #[serde(skip_serializing_if = "Option::is_none")]
     pub(crate) text: Option<String>,
@@ -190,8 +199,9 @@ impl NodeDto {
             top: None,
             left: None,
             overflow: None,
-            // ★颜色：blob 形态暂无该字段（按位图解码；未提供 ⇒ 该节点不进颜色轨道）
+            // ★颜色：blob 形态暂无这两个字段（按位图解码；未提供 ⇒ 该节点不进颜色轨道）
             background_color: None,
+            color: None,
             text: None,
             is_text: false,
             native_host: false,
@@ -241,6 +251,27 @@ fn default_viewport() -> ViewportDto {
 ///   编译期半边**：它把用户声明的颜色拆成 4 个通道值（下发 4 条指令）。两者不重复——
 ///   内核这一份只解析**底色**（树 DTO 的字符串），TS 那一份解析**动画的 from/to**。
 ///   判据 `tests/anim-color-golden.test.ts` 以内核实测值为期望比对 TS 半边（防分叉）。
+/// `NodeVisual` → JSON 数组（**唯一序列化点**——2026-10-01）
+///
+/// 形状：`[id, tx, ty, scale, rotate, opacity, bg, textColor]`（8 项）。
+///
+/// 【为什么收敛成一处（本仓「同一语义一处实现」的又一次应用）】此前**5 个 JSON 入口**
+///   （tick / flip / seek / seek_scroll / shared_element）各自内联写了同一段 6 值 map ⇒
+///   颜色落地时若要逐个改，就是"改 5 处、漏 1 处"的经典形态（二进制通道已经因为漏改
+///   出过错位解析）。⇒ 抽出本函数，5 个入口共用；`u32::MAX` = 该基色不存在。
+fn visual_to_json(v: &crate::anim::NodeVisual) -> serde_json::Value {
+    serde_json::json!([
+        v.id,
+        v.tx,
+        v.ty,
+        v.scale,
+        v.rotate,
+        v.opacity,
+        v.bg.unwrap_or(u32::MAX),
+        v.text_color.unwrap_or(u32::MAX)
+    ])
+}
+
 pub(crate) fn parse_css_color(raw: &str) -> Result<u32, String> {
     let s = raw.trim();
     let hex = s.strip_prefix('#').ok_or_else(|| {
@@ -281,6 +312,12 @@ pub(crate) fn style_from_dto(dto: &NodeDto) -> Result<LStyle, String> {
         let packed = parse_css_color(raw)?;
         style.bg = Some(packed);
         style.bg_base = Some(packed);
+    }
+    // ★★文字色（2026-10-01）：与底色同一条链（同一解析器、同一四通道数学），只是另一个槽
+    if let Some(raw) = dto.color.as_deref() {
+        let packed = parse_css_color(raw)?;
+        style.text_color = Some(packed);
+        style.text_color_base = Some(packed);
     }
     style.width = dto.width;
     style.height = dto.height;
@@ -2469,7 +2506,7 @@ pub extern "C" fn proteus_layout_anim_tick(handle: u64, dt_ms: f32) -> *mut c_ch
         let updates: Vec<serde_json::Value> = out
             .updates
             .iter()
-            .map(|v| serde_json::json!([v.id, v.tx, v.ty, v.scale, v.rotate, v.opacity]))
+            .map(visual_to_json)
             .collect();
         Ok(serde_json::json!({
             "ok": true,
@@ -2742,7 +2779,7 @@ pub unsafe extern "C" fn proteus_layout_flip(handle: u64, json: *const c_char) -
                 let updates: Vec<serde_json::Value> = out
                     .updates
                     .iter()
-                    .map(|v| serde_json::json!([v.id, v.tx, v.ty, v.scale, v.rotate, v.opacity]))
+                    .map(visual_to_json)
                     .collect();
                 Ok(serde_json::json!({
                     "ok": true, "animated": out.animated, "maxDeltaPx": out.max_delta_px,
@@ -2795,7 +2832,7 @@ pub unsafe extern "C" fn proteus_layout_anim_seek(handle: u64, json: *const c_ch
         let updates: Vec<serde_json::Value> = out
             .updates
             .iter()
-            .map(|v| serde_json::json!([v.id, v.tx, v.ty, v.scale, v.rotate, v.opacity]))
+            .map(visual_to_json)
             .collect();
         Ok(serde_json::json!({"ok": true, "changed": out.changed, "updates": updates}).to_string())
     };
@@ -2847,7 +2884,7 @@ pub unsafe extern "C" fn proteus_layout_anim_seek_scroll(handle: u64, json: *con
         let updates: Vec<serde_json::Value> = out
             .updates
             .iter()
-            .map(|v| serde_json::json!([v.id, v.tx, v.ty, v.scale, v.rotate, v.opacity]))
+            .map(visual_to_json)
             .collect();
         Ok(serde_json::json!({"ok": true, "changed": out.changed, "active": out.active_after, "updates": updates})
             .to_string())
@@ -2972,7 +3009,7 @@ pub unsafe extern "C" fn proteus_layout_shared_element(handle: u64, json: *const
         let updates: Vec<serde_json::Value> = out
             .updates
             .iter()
-            .map(|u| serde_json::json!([u.id, u.tx, u.ty, u.scale, u.rotate, u.opacity]))
+            .map(visual_to_json)
             .collect();
         Ok(serde_json::json!({
             "ok": true,
@@ -3021,14 +3058,16 @@ pub unsafe extern "C" fn proteus_layout_anim_tick_bin(handle: u64, dt_ms: f32, o
         let mut eng = std::mem::take(&mut entry.anim);
         let out = eng.tick(&mut entry.tree, dt_ms);
         entry.anim = eng;
-        // ★每帧通道：**28B/条**定长 = id u32 + 五值 f32（tx/ty/scale/rotate/opacity）+ rgba u32
-        //   ★2026-10-01 由 24B 增至 28B（颜色）：`rgba` 是**打包色**（0xAARRGGBB）；
-        //     `u32::MAX` = **本节点无内核底色**（宿主忽略该字段——见 `NodeVisual.color_valid`）。
+        // ★每帧通道：**32B/条**定长 = id u32 + 五值 f32（tx/ty/scale/rotate/opacity）
+        //   + bg u32 + textColor u32
+        //   ★2026-10-01 由 24B → 28B（底色）→ **32B**（文字色）：两个 u32 都是**打包色**
+        //     （0xAARRGGBB）；`u32::MAX` = **本节点无该基色**（宿主忽略该字段——
+        //     见 `NodeVisual.color_valid` / `text_color_valid`）。
         //   ★改动须知：记录宽度是**跨语言契约**，两端宿主 + SDK + demo 的解析常量
         //     （iOS `animUpdateRecordBytes` / Android `ANIM_RECORD_BYTES` / SDK `FRAME_UPDATE_BYTES` /
-        //     embed-demo 与 `proteus-jni::host`）必须**同批改**——本仓 iOS 曾因两处各写步长
-        //     而错位解析（`24B` 记录的探针按 `16B` 读），本轮把"唯一事实源"写在此处。
-        let mut buf = Vec::with_capacity(out.updates.len() * 28);
+        //     embed-demo 与 `proteus-jni::host`）必须**同批改**——
+        //     ★`scripts/check-anim-record-bytes.mjs` 会从本处的写入序列**推出**宽度并与各消费端对账。
+        let mut buf = Vec::with_capacity(out.updates.len() * 32);
         for v in out.updates {
             buf.extend_from_slice(&v.id.to_le_bytes());
             buf.extend_from_slice(&v.tx.to_le_bytes());
@@ -3037,6 +3076,7 @@ pub unsafe extern "C" fn proteus_layout_anim_tick_bin(handle: u64, dt_ms: f32, o
             buf.extend_from_slice(&v.rotate.to_le_bytes());
             buf.extend_from_slice(&v.opacity.to_le_bytes());
             buf.extend_from_slice(&v.bg.unwrap_or(u32::MAX).to_le_bytes());
+            buf.extend_from_slice(&v.text_color.unwrap_or(u32::MAX).to_le_bytes());
         }
         Ok(buf)
     });
@@ -3057,6 +3097,33 @@ pub unsafe extern "C" fn proteus_layout_anim_tick_bin(handle: u64, dt_ms: f32, o
             eprintln!("[proteus] anim_tick_bin 内部 panic（已捕获）");
             std::ptr::null_mut()
         }
+    }
+}
+
+/// ★★**带文字色的节点清单**（2026-10-01，文字色通道的取样入口——与 `bg_nodes` 对称）
+///
+/// 返回：`{"ok":true,"ids":[…],"count":N}`（最多 64 个）。
+/// 【为什么单列一个（而不是让调用方从 bg 清单推）】底色与文字色是**两个独立基色**
+///   （节点可能只声明其一）⇒ 取样必须问各自的清单（真机判据的取样纪律：向唯一事实源要答案）。
+#[no_mangle]
+pub unsafe extern "C" fn proteus_layout_text_color_nodes(handle: u64) -> *mut c_char {
+    let r = std::panic::catch_unwind(|| -> Result<String, String> {
+        let reg = registry().lock().map_err(|_| "注册表锁失败".to_string())?;
+        let entry = reg.get(&handle).ok_or_else(|| format!("句柄 {handle} 不存在"))?;
+        let ids: Vec<u32> = entry
+            .tree
+            .nodes
+            .iter()
+            .filter(|n| n.style.text_color_base.is_some())
+            .map(|n| n.id)
+            .take(64)
+            .collect();
+        Ok(serde_json::json!({"ok": true, "ids": ids, "count": ids.len()}).to_string())
+    });
+    match r {
+        Ok(Ok(s)) => into_c_string(s),
+        Ok(Err(e)) => into_c_string(format!("{{\"ok\":false,\"error\":{}}}", json_str(&e))),
+        Err(_) => into_c_string("{\"ok\":false,\"error\":\"panic（已捕获）\"}".to_string()),
     }
 }
 

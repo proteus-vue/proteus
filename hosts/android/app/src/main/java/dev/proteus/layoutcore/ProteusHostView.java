@@ -46,12 +46,26 @@ public class ProteusHostView extends ViewGroup {
          *     像素自检 14803 vs 2479 直接暴露）——字号同属"同样的东西"。
          */
         final float fontSize;
+        /**
+         * ★★文本**静态色**（打包 `0xAARRGGBB`；0 = 未声明 ⇒ 用 `textPaint` 当前值）。
+         *
+         * 【为什么要带上（2026-10-01 收文字色边界）】文字色动画的"复位目标"与"探针回落值"
+         *   都必须是**该节点绘制时真正会用到的静态色**——没有这个字段，`animTxProbe` 在
+         *   stop 清表后只能报空串 ⇒ 判据无法区分"复位成功（应=基色）"与"读不到"
+         *   （与底色当年抓出的口径缺陷同一形态）。
+         *   ★与内核树里该节点的 `color` 声明**必须一致**（由场景构造方保证；判据断言自洽）。
+         */
+        final int textColor;
         Cmd(float x, float y, float w, float h, int color, String text) {
-            this(x, y, w, h, color, text, 0f);
+            this(x, y, w, h, color, text, 0f, 0);
         }
         Cmd(float x, float y, float w, float h, int color, String text, float fontSize) {
+            this(x, y, w, h, color, text, fontSize, 0);
+        }
+        Cmd(float x, float y, float w, float h, int color, String text, float fontSize, int textColor) {
             this.x = x; this.y = y; this.w = w; this.h = h; this.color = color; this.text = text;
             this.fontSize = fontSize;
+            this.textColor = textColor;
         }
     }
 
@@ -350,6 +364,14 @@ public class ProteusHostView extends ViewGroup {
      *   本表只装**颜色**——两者生命周期一致（都在 `animStopAll`/`clearScene` 时清）。
      */
     private final Map<Integer, Integer> animColor = new HashMap<>();
+    /**
+     * ★★节点 id → **动画文字色**（打包 `0xAARRGGBB`）——文字色通道的绘制落点（2026-10-01）
+     *
+     * 【为什么单开一张表（而不是与 `animColor` 合并成一个"当前色"）】底色与文字色是
+     *   两条**独立轨道**（一个节点可以同时动两者），合并会让后写者覆盖前者。
+     *   绘制时分别取：底色 → `bgPaint`，文字色 → `textPaint`。
+     */
+    private final Map<Integer, Integer> animTextColor = new HashMap<>();
     /** 最近一次 apply 的条数（诊断） */
     public int lastAnimApplied = 0;
 
@@ -382,11 +404,20 @@ public class ProteusHostView extends ViewGroup {
                 float op = u.length() >= 6 ? (float) u.optDouble(5) : 1f;
                 animTx.put(id, new float[]{
                         (float) u.optDouble(1), (float) u.optDouble(2), (float) u.optDouble(3), rot, op});
-                // ★颜色（2026-10-01）：第 7 项（若存在）是打包色；-1/越界 ⇒ 无底色
+                // ★颜色（2026-10-01）：第 7/8 项是打包色（底色 / 文字色）；
+                //   **越界或 u32::MAX 哨兵**（JSON 形态 4294967295 = "无该基色"）⇒ 清出表。
+                //   ★哨兵必须**排除**（与 iOS `packedOpt` 同一处口径缺陷的修复）：
+                //     写成 `<= 0xFFFFFFFF` 会把哨兵当合法色（0xFFFFFFFF = 不透明白）⇒
+                //     无颜色轨道的节点被涂白。`< 0xFFFFFFFF` 才正确。
                 if (u.length() >= 7) {
                     long raw = (long) u.optDouble(6, -1);
-                    if (raw >= 0 && raw <= 0xFFFFFFFFL) animColor.put(id, (int) raw);
+                    if (raw >= 0 && raw < 0xFFFFFFFFL) animColor.put(id, (int) raw);
                     else animColor.remove(id);
+                }
+                if (u.length() >= 8) {
+                    long raw = (long) u.optDouble(7, -1);
+                    if (raw >= 0 && raw < 0xFFFFFFFFL) animTextColor.put(id, (int) raw);
+                    else animTextColor.remove(id);
                 }
                 n++;
             }
@@ -398,7 +429,7 @@ public class ProteusHostView extends ViewGroup {
         return n;
     }
 
-    /** ★**每帧二进制通道**（28B/条，全小端）——与 iOS 同一份内核、同一条性能纪律 */
+    /** ★**每帧二进制通道**（32B/条，全小端）——与 iOS 同一份内核、同一条性能纪律 */
     private int applyTickBin(byte[] bin) {
         if (bin == null || bin.length < ANIM_RECORD_BYTES) return 0;
         java.nio.ByteBuffer bb = java.nio.ByteBuffer.wrap(bin).order(java.nio.ByteOrder.LITTLE_ENDIAN);
@@ -408,9 +439,11 @@ public class ProteusHostView extends ViewGroup {
             float tx = bb.getFloat(), ty = bb.getFloat(), sc = bb.getFloat();
             float rot = bb.getFloat(), op = bb.getFloat();
             int rgba = bb.getInt();
+            int textRgba = bb.getInt();
             animTx.put(id, new float[]{tx, ty, sc, rot, op});
-            // ★颜色（2026-10-01）：0xFFFFFFFF = 无内核底色 ⇒ 不入覆盖表（保持静态绘制）
+            // ★颜色（2026-10-01）：0xFFFFFFFF = 无该基色 ⇒ 不入覆盖表（保持静态绘制）
             if (rgba != 0xFFFFFFFF) animColor.put(id, rgba);
+            if (textRgba != 0xFFFFFFFF) animTextColor.put(id, textRgba);
         }
         lastAnimApplied = n;
         if (n > 0) invalidate();
@@ -420,12 +453,14 @@ public class ProteusHostView extends ViewGroup {
     /**
      * 每帧记录长度（与 Rust 侧 `proteus_layout_anim_tick_bin` 对齐——**只在本处定义**）
      *
-     * ★★2026-10-01 由 **24B 增至 28B**（颜色）：`id u32 + 五值 f32 + rgba u32`。
-     *   末 4 字节 = 打包色 `0xAARRGGBB`；`0xFFFFFFFF` = **无内核底色**（忽略该字段）。
-     *   ★唯一事实源 = 内核 `ffi.rs` 的 7 个 `extend_from_slice`；iOS / SDK / embed-demo
+     * ★★2026-10-01 由 **24B → 28B（底色）→ 32B（文字色）**：
+     *   `id u32 + 五值 f32 + bg u32 + textColor u32`。
+     *   末两个 u32 都是打包色 `0xAARRGGBB`；`0xFFFFFFFF` = **无该基色**（忽略该字段）。
+     *   ★唯一事实源 = 内核 `ffi.rs` 的 8 个 `extend_from_slice`；iOS / SDK / embed-demo
      *     的常量必须与它同批更新（历史上因两处各写步长而错位解析过）。
+     *     `scripts/check-anim-record-bytes.mjs` 从内核推出宽度并与各消费端对账。
      */
-    private static final int ANIM_RECORD_BYTES = 28;
+    private static final int ANIM_RECORD_BYTES = 32;
 
     /** 直接推进一帧（确定性步进：判据用它做"固定 dt"读数，与 iOS 的 JS 驱动 probe 同形） */
     public int kernelAnimTick(float dtMs) {
@@ -501,7 +536,8 @@ public class ProteusHostView extends ViewGroup {
     public String kernelAnimStop(String json) {
         String out = RustLayout.animStop(coreHandle, json);
         animTx.clear();
-        animColor.clear();   // ★颜色与变换同一生命周期（2026-10-01）
+        animColor.clear();     // ★颜色与变换同一生命周期（2026-10-01）
+        animTextColor.clear(); // ★文字色同（两条轨道同一生命周期）
         invalidate();
         return out;
     }
@@ -541,18 +577,31 @@ public class ProteusHostView extends ViewGroup {
                     final int cmdIdx = indexOfNode(id);
                     if (cmdIdx >= 0 && cmds != null && cmdIdx < cmds.size()) bgv = cmds.get(cmdIdx).color;
                 }
+                // ★文字色（2026-10-01）：语义同上——动画覆盖表优先，否则回落该指令的**静态文字色**
+                //   （`Cmd.textColor`；0 = 未声明 ⇒ 空串 = "无文字色轨道"——如实标注）。
+                Integer tcv = animTextColor.get(id);
+                if (tcv == null) {
+                    final int cmdIdx = indexOfNode(id);
+                    if (cmdIdx >= 0 && cmds != null && cmdIdx < cmds.size()) {
+                        final int staticTc = cmds.get(cmdIdx).textColor;
+                        tcv = staticTc != 0 ? staticTc : null;
+                    }
+                }
+                final String textHex = tcv == null ? "" : String.format("%08X", tcv);
                 final String bgHex = bgv == null ? "" : String.format("%08X", bgv);
                 if (v == null) {
                     // 无记录 ⇒ 恒等（未被动过）——与"层上是 identity"语义一致
                     sb.append("{\"id\":").append(id)
                       .append(",\"tx\":0,\"ty\":0,\"scale\":1,\"rotate\":0,\"opacity\":1")
-                      .append(",\"bg\":\"").append(bgHex).append("\"}");
+                      .append(",\"bg\":\"").append(bgHex)
+                      .append("\",\"textColor\":\"").append(textHex).append("\"}");
                 } else {
                     sb.append("{\"id\":").append(id)
                       .append(",\"tx\":").append(v[0]).append(",\"ty\":").append(v[1])
                       .append(",\"scale\":").append(v[2]).append(",\"rotate\":").append(v[3])
                       .append(",\"opacity\":").append(v[4])
-                      .append(",\"bg\":\"").append(bgHex).append("\"}");
+                      .append(",\"bg\":\"").append(bgHex)
+                      .append("\",\"textColor\":\"").append(textHex).append("\"}");
                 }
             }
         } catch (Throwable t) {
@@ -1241,7 +1290,18 @@ public class ProteusHostView extends ViewGroup {
                     textPaint.setTextSize(c.fontSize);
                     lastSize = c.fontSize;
                 }
-                textPaint.setAlpha(op < 1f ? Math.max(0, Math.min(255, (int) (255 * op))) : 255);
+                // ★★文字色覆盖（2026-10-01）：动画值优先，其次静态 `Cmd.textColor`
+                //   （两者都无 ⇒ 保持 paint 现值——既有场景不受影响，零额外开销）。
+                //   ★alpha 口径（与底色路径同一条）：把**色自身 alpha × opacity** 落进 paint——
+                //     此前 `op==1` 时无条件 `setAlpha(255)` 会把动画色的 alpha 通道**压回不透明**
+                //     （文字色四通道里 A 是独立可动的，钳住它 = 静默丢一个通道）。
+                final Integer animTc = (ids != null && i < ids.length && ids[i] >= 0)
+                        ? animTextColor.get(ids[i]) : null;
+                if (animTc != null) textPaint.setColor(animTc);
+                else if (c.textColor != 0) textPaint.setColor(c.textColor);
+                final int alphaBase = (animTc != null || c.textColor != 0)
+                        ? Color.alpha(animTc != null ? animTc : c.textColor) : 255;
+                textPaint.setAlpha(op < 1f ? Math.max(0, Math.min(255, (int) (alphaBase * op))) : alphaBase);
                 canvas.drawText(c.text, c.x + 1f, c.y + c.h * 0.8f, textPaint);
             }
             if (xf) canvas.restoreToCount(save);

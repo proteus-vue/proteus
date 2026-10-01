@@ -51,12 +51,13 @@ export interface TimelineSpec {
   /**
    * 参与时间轴的属性（每项编译成一条动画；**不许重复**）
    *
-   * ★**只接受标量属性**（2026-10-01 明确）：`color` 的值是颜色字符串，而停靠点的
-   *   `values` 是数字表 ⇒ 颜色轨道**类型不过**（不是运行时才发现）。这是 v1 的显式边界：
+   * ★**只接受标量属性**（2026-10-01 明确）：`color` / `textColor` 的值是颜色字符串，而停靠点的
+   *   `values` 是数字表 ⇒ 颜色轨道**类型不过**（不是运行时才发现）。这是显式边界：
    *   颜色要"多属性同拍"，把它的 4 条通道当独立动画另发即可
    *   （`compileAnimations([{ kind: 'color', … }])`），时间轴暂不承载颜色。
+   *   ★颜色自身要"多段同拍"用 `ColorAnimDecl.keyframes`（那条已支持）。
    */
-  kinds: readonly Exclude<AnimKindName, 'color'>[]
+  kinds: readonly Exclude<AnimKindName, 'color' | 'textColor'>[]
   /** 停靠点（**按 `at` 严格升序**；首点 `at === 0`） */
   stops: readonly TimelineStop[]
 }

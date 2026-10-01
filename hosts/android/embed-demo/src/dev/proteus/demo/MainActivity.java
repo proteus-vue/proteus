@@ -102,7 +102,7 @@ public class MainActivity extends Activity implements ProteusHost {
         }
     }
 
-    /** ★把每帧更新（**28B/条**）套到几何上——**无 JSON 解析**（与内核的二进制通道对齐） */
+    /** ★把每帧更新（**32B/条**）套到几何上——**无 JSON 解析**（与内核的二进制通道对齐） */
     private void applyUpdates(byte[] updates) {
         if (updates == null) return;
         ByteBuffer bb = ByteBuffer.wrap(updates).order(ByteOrder.LITTLE_ENDIAN);
@@ -111,10 +111,12 @@ public class MainActivity extends Activity implements ProteusHost {
             Box b = boxes.get(id);
             float tx = bb.getFloat(), ty = bb.getFloat(), sc = bb.getFloat();
             float rot = bb.getFloat(), op = bb.getFloat();
-            // ★★颜色（2026-10-01）：末 4 字节打包色**必须读走**——否则 `remaining()` 不减，
-            //   循环会退化成错位（本仓 embed-demo 与内核通道的字节对齐由判据守）。
-            //   `0xFFFFFFFF` = 无内核底色 ⇒ 保留本端静态色。
+            // ★★颜色（2026-10-01）：末 **8** 字节（底色 + 文字色）**必须读走**——否则 `remaining()`
+            //   不减，循环会退化成错位（本仓 embed-demo 与内核通道的字节对齐由判据守）。
+            //   `0xFFFFFFFF` = 无该基色 ⇒ 保留本端静态色。
             int rgba = bb.getInt();
+            int textRgba = bb.getInt();
+            if (textRgba != 0xFFFFFFFF && b != null) b.tint = textRgba; // 顺带消费（demo 用 tint 画字）
             if (b != null) { b.tx = tx; b.ty = ty; b.scale = sc; b.rotate = rot; b.opacity = op; }
         }
     }

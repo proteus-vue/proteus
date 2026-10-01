@@ -25,6 +25,13 @@ export const AnimKind = {
   COLOR_G: 6,
   COLOR_B: 7,
   COLOR_A: 8,
+  // ★★文字色（2026-10-01）：与底色**同一条数学、不同的样式槽**（`text_color` vs `bg`）。
+  //   分成两组编号（而不是复用 5..8）的唯一原因：内核 `write()` 必须知道**往哪个槽写**——
+  //   用同一批编号无法区分（会在"同时动底色与文字色"时互相覆盖）。
+  TEXT_COLOR_R: 9,
+  TEXT_COLOR_G: 10,
+  TEXT_COLOR_B: 11,
+  TEXT_COLOR_A: 12,
 } as const
 export type AnimKindId = (typeof AnimKind)[keyof typeof AnimKind]
 export type AnimKindName =
@@ -33,7 +40,10 @@ export type AnimKindName =
   | 'scale'
   | 'rotate'
   | 'opacity'
+  /** 背景色（内核四通道 5..8） */
   | 'color'
+  /** 文字色（内核四通道 9..12） */
+  | 'textColor'
 
 /** 名称 → 编号（编译期用；也是"名字写错"的**类型级**防线） */
 export const ANIM_KIND_ID: Record<AnimKindName, AnimKindId> = {
@@ -46,6 +56,8 @@ export const ANIM_KIND_ID: Record<AnimKindName, AnimKindId> = {
   //   这里给 COLOR_R 是为了让 `ANIM_KIND_ID` 保持"每个名字都有编号"的完备形状——
   //   直接消费它会少写 3 个通道，故 `compileOne` 有专门的 `color` 分支（不读这个值）。
   color: AnimKind.COLOR_R,
+  // ★`textColor` 同理（名义值 = 文字色 R 通道 9；编译期展开成 4 条）
+  textColor: AnimKind.TEXT_COLOR_R,
 }
 
 /** 曲线（与内核 `CURVE_*` 一一对应——**不得改号**） */
@@ -96,10 +108,32 @@ export interface KeyframeSeg {
   curve?: CurveName
 }
 
+/**
+ * ★★**颜色序列的一段**（2026-10-01：颜色 keyframes）——对标 `KeyframeSeg`，值域是**颜色**
+ *
+ * 【为什么单开一个类型（而不是把 `KeyframeSeg.to` 放宽成 `number | string`）】放宽联合会让
+ *   标量路径的**全部使用点**都要处理 string 分支（那里只可能收到数字）⇒ 类型噪音大、
+ *   且丢掉"标量段是数字"的编译期保证。单开类型 = 两边都保持精确（与 `ScalarAnimDecl |
+ *   ColorAnimDecl` 同一取向）。
+ */
+export interface ColorKeyframeSeg {
+  /** 本段终点颜色（本段起点 = 上一段终点；首段起点 = 声明的 `from`） */
+  to: string
+  /** 本段时长（毫秒） */
+  durationMs: number
+  /** 本段曲线（缺省 = `easeOut`） */
+  curve?: CurveName
+}
+
 /** ★**单条动画声明**（封闭集的全部字段）——**标量属性**（数字值） */
 export interface ScalarAnimDecl {
-  /** 动哪个属性（**不含 `color`**——颜色走 `ColorAnimDecl`，见下） */
-  kind: Exclude<AnimKindName, 'color'>
+  /**
+   * 动哪个属性（**不含颜色两类**——`color` / `textColor` 走 `ColorAnimDecl`，见下）
+   *
+   * ★2026-10-01：排除集加上 `textColor`（文字色落地时，只排 `color` 会让
+   *   `ScalarAnimDecl` 声称支持 `textColor` 却带数字值 ⇒ 联合判别失效、类型检查报错）。
+   */
+  kind: Exclude<AnimKindName, 'color' | 'textColor'>
   /** 起点（缺省 = 节点当前值，由内核在启动时解析） */
   from?: number
   /** 终点（**必填**——动画必须有确定目标；序列模式下 = 末段 `to`） */
@@ -152,11 +186,17 @@ export interface ScalarAnimDecl {
  *   故预设（`presets.color.*`）通常由调用方传入 `from`（= 该节点的底色）。
  */
 export interface ColorAnimDecl {
-  /** 固定为 `'color'`（用户面就这一个属性——内部的 4 通道分解不暴露） */
-  kind: 'color'
+  /**
+   * 颜色属性（**两个**：`color` = 背景色 / `textColor` = 文字色；2026-10-01）
+   *
+   * 【为什么是两个独立属性而不是一个"当前色"】底色与文字色是**两条独立轨道**——
+   *   同一节点可以同时动两者（内核写**不同的样式槽** `bg` / `text_color`）。
+   *   合并成一个属性会让"同时动"变成"后者覆盖前者"（真机判据有专门用例守这条）。
+   */
+  kind: 'color' | 'textColor'
   /** 起点颜色（**必填**——见上） */
   from: string
-  /** 终点颜色（必填） */
+  /** 终点颜色（必填；序列模式下 = 末段 `to`） */
   to: string
   durationMs?: number
   delayMs?: number
@@ -165,12 +205,13 @@ export interface ColorAnimDecl {
   /** 弹簧物理（**逐通道**独立积分；4 条通道各自静止，整色在最后一条静止时到位） */
   spring?: SpringConfig
   /**
-   * ★**序列对颜色暂不可用**（v1 边界，明确拦下而不是静默忽略）
+   * ★★**颜色序列**（多段；2026-10-01 起支持）
    *
-   * 【为什么】`KeyframeSeg.to` 是数字（多段颜色的每段终点得是颜色）⇒ 支持它要把该字段
-   *   也放宽成联合类型，那会波及标量路径的全部使用点。v1：多段颜色请拆成多条调用。
+   * 【与标量序列的关系】语义同 `ScalarAnimDecl.keyframes`（多段收敛在**一条**动画/每通道里，
+   *   段边界精确、末段端点钉死），只是段的终点是**颜色**。
+   *   内核侧：每通道各得一条 `AnimMode::Keyframes`（4 条通道共用同一段时长表）。
    */
-  keyframes?: never
+  keyframes?: ColorKeyframeSeg[]
   /** 滚动驱动的颜色（窗口换算在内核，与标量属性同一套） */
   scroll?: ScrollWindow
   /** 驱动方式（缺省 `time`；`progress` = 外部设进度，与标量属性同一语义） */

@@ -197,6 +197,94 @@ describe('颜色 · 编译期校验（都拦下，不静默）', () => {
     expect(issues.some((i) => i.code === 'conflicting-easing')).toBe(true)
   })
 
+  // ══════════════════════════════════════════════════════════════
+  // ★★文字色（2026-10-01）：与底色**同一条数学、不同的槽**
+  // ══════════════════════════════════════════════════════════════
+  it('textColor：一个声明 → 四条**文字色**通道（kind 9/10/11/12，不是 5..8）', () => {
+    const batch = compileAnimations([{ kind: 'textColor', from: '#ffffff', to: '#000000' }], { nodeId: 3 })
+    expect(batch.anims.map((a) => a.kind)).toEqual([9, 10, 11, 12])
+    expect(batch.composited).toBe(false)
+    expect(batch.nonComposited).toEqual(['textColor'])
+  })
+
+  it('★底色与文字色是**两组独立编号**（同时动时不会互相覆盖）', () => {
+    const batch = compileAnimations(
+      [
+        { kind: 'color', from: '#000000', to: '#ffffff' },
+        { kind: 'textColor', from: '#ffffff', to: '#000000' },
+      ],
+      { nodeId: 3 },
+    )
+    expect(batch.anims).toHaveLength(8)
+    expect(batch.anims.map((a) => a.kind)).toEqual([5, 6, 7, 8, 9, 10, 11, 12])
+  })
+
+  it('textColor 的 from 也必填（与底色同一条纪律）', () => {
+    const issues = validateAnimations([
+      { kind: 'textColor', to: '#ffffff', durationMs: 100 } as unknown as ColorAnimDecl,
+    ])
+    expect(issues.some((i) => i.message.includes('from'))).toBe(true)
+  })
+
+  // ══════════════════════════════════════════════════════════════
+  // ★★颜色序列 keyframes（2026-10-01：v1 边界收掉）
+  // ══════════════════════════════════════════════════════════════
+  it('颜色 keyframes：四条通道各得一条多段序列（段表共用、终点逐段解析）', () => {
+    const batch = compileAnimations(
+      [
+        {
+          kind: 'color',
+          from: '#000000',
+          to: '#ff0000',
+          durationMs: 300,
+          keyframes: [
+            { to: '#00ff00', durationMs: 100, curve: 'linear' },
+            { to: '#ff0000', durationMs: 200, curve: 'linear' },
+          ],
+        },
+      ],
+      { nodeId: 5 },
+    )
+    expect(batch.anims).toHaveLength(4)
+    // 每条通道都有自己的 2 段序列（R 通道：0 → 0 → 255）
+    for (const a of batch.anims) {
+      expect(a.keyframes).toHaveLength(2)
+      expect(a.keyframes!.map((s) => s.durMs)).toEqual([100, 200])
+      expect(a.keyframes!.map((s) => s.curve)).toEqual([0, 0]) // linear = 0
+    }
+    // R 通道：黑(0) → 绿(0) → 红(255)；G 通道：黑(0) → 绿(255) → 红(0)
+    const r = batch.anims.find((a) => a.kind === AnimKind.COLOR_R)!
+    const g = batch.anims.find((a) => a.kind === AnimKind.COLOR_G)!
+    expect(r.keyframes!.map((s) => s.to)).toEqual([0, 255])
+    expect(g.keyframes!.map((s) => s.to)).toEqual([255, 0])
+    // 末段端点 = 声明的 to（端点钉死）
+    expect(r.to).toBe(255)
+  })
+
+  it('颜色序列：段终点非法 / 总时长为零 / 末段与声明 to 不一致 ⇒ 各自拦下', () => {
+    const badSeg = validateAnimations([
+      { kind: 'color', from: '#000000', to: '#ffffff', keyframes: [{ to: 'nope', durationMs: 100 }] },
+    ])
+    expect(badSeg.some((i) => i.message.includes('段'))).toBe(true)
+
+    const zero = validateAnimations([
+      { kind: 'color', from: '#000000', to: '#ffffff', keyframes: [{ to: '#ffffff', durationMs: 0 }] },
+    ])
+    expect(zero.some((i) => i.message.includes('总时长为 0'))).toBe(true)
+
+    const mismatch = validateAnimations([
+      { kind: 'color', from: '#000000', to: '#ffffff', keyframes: [{ to: '#0000ff', durationMs: 100 }] },
+    ])
+    expect(mismatch.some((i) => i.message.includes('不一致'))).toBe(true)
+  })
+
+  it('颜色序列：末段与声明一致（大小写不敏感）⇒ 通过', () => {
+    const okv = validateAnimations([
+      { kind: 'color', from: '#000000', to: '#FFFFFF', keyframes: [{ to: '#ffffff', durationMs: 100 }] },
+    ])
+    expect(okv).toEqual([])
+  })
+
   it('同色（from === to）合法但无视觉变化——不报错（与标量"同值"同口径）', () => {
     const issues = validateAnimations([{ kind: 'color', from: '#ff0000', to: '#ff0000', durationMs: 100 }])
     expect(issues).toEqual([])

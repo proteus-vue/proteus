@@ -39,6 +39,23 @@ def fail(msg: str) -> None:
     print(f"  ✗ {msg}")
 
 
+def _color_key(v) -> str:
+    """把颜色归一到 `RRGGBBAA` 大写（**跨形态比较**）——接受 `#rgb` / `#rrggbb` / `#rrggbbaa` / `rrggbbaa`
+
+    【为什么需要（2026-10-01 真机判据实测）】同一条文字色的**声明形态**是 `#ffffff`（六位小写），
+    而**探针形态**是 `FFFFFFFF`（八位大写，从 CGColor 反解）⇒ 直接字符串比较会误红。
+    ⇒ 统一归一（缺 alpha 补 FF）——判据比的是**颜色**，不是**写法**。
+    """
+    if not isinstance(v, str):
+        return ""
+    t = v.strip().lstrip("#")
+    if len(t) == 3:
+        t = "".join(c * 2 for c in t)
+    if len(t) == 6:
+        t += "FF"
+    return t.upper() if len(t) == 8 else ""
+
+
 def main() -> int:
     if len(sys.argv) < 2:
         print("用法：python3 hosts/ios/check-anim-rt2.py <report.json>")
@@ -521,7 +538,7 @@ def main() -> int:
     # 【收的是哪条边界】官网架构页此前写着「颜色为什么不在这张表里」——颜色动画**不是能力**。
     #   本轮把它做成契约能力（封闭集 5 → 6 个 kind；内核面按 R/G/B/A 四通道分解）。
     #   本组证明端到端：① 声明面一个 `color`；② 编译面 4 条通道（kind 5..8）+ composited=false；
-    #   ③ 执行面内核算值 → 28B 记录 → 宿主写 `CALayer.backgroundColor`（**探针真读层**反解）；
+    #   ③ 执行面内核算值 → 32B 记录 → 宿主写 `CALayer.backgroundColor`（**探针真读层**反解）；
     #   ④ 复位面 `animStopAll` 后回**底色**（不是停在末帧）；⑤ 拒绝面 无底色节点明确报错。
     c = d.get("anim_color") or js.get("anim_color") or {}
     if c:
@@ -589,6 +606,47 @@ def main() -> int:
             ok = False
         else:
             print(f"  ✓ P5 复位回底色：{after}（stop 后不留末帧颜色）")
+        # ★P7（2026-10-01 扩）：**颜色序列**（keyframes 多段）——段边界精确 + 端点钉死
+        sm, se = c.get("seq_mid"), c.get("seq_end")
+        if not sm or not se:
+            fail(f"P7 颜色序列读数缺失：mid={sm!r} end={se!r}")
+            ok = False
+        elif sm.startswith("ERR") or se.startswith("ERR"):
+            fail(f"P7 颜色序列抛错：{sm[:100]}")
+            ok = False
+        elif sm.upper() != "FF00FF00":
+            fail(f"P7a 颜色序列段边界不精确：半程 bg={sm}（应 FF00FF00 = #00ff00，linear 段边界）")
+            ok = False
+        elif se.upper() != "FFFF0000":
+            fail(f"P7b 颜色序列终点不精确：bg={se}（应 FFFF0000 = #ff0000，端点钉死）")
+            ok = False
+        else:
+            print(f"  ✓ P7 ★颜色序列（多段收敛在每通道一条动画）：黑 → {sm}（段边界）→ {se}（端点钉死）")
+
+        # ★P8（2026-10-01 扩）：**文字色**——与底色**两条独立轨道**
+        tids = c.get("text_color_ids") or []
+        t0, t1, tstop = c.get("text_start"), c.get("text_end"), c.get("text_after_stop")
+        unchanged = c.get("text_bg_unchanged")
+        if not tids:
+            # 场景里没有带 `color` 的节点 ⇒ 如实标注（不判红：这是**场景**的边界，不是引擎的）
+            print("  · P8 跳过（本场景树里没有声明 `color`（文字色）的节点——如实标注，非失败）")
+        elif t1.startswith("ERR"):
+            fail(f"P8 文字色抛错：{t1[:100]}")
+            ok = False
+        elif t1.upper() != "FF00FF00":
+            fail(f"P8a 文字色终值不精确：层上 textColor={t1}（应 FF00FF00 = #00ff00）")
+            ok = False
+        elif tstop and _color_key(tstop) != _color_key(t0):
+            # ★归一化比较（2026-10-01 修）：`t0` 是**声明形态**（`#ffffff`），`tstop` 是
+            #   **探针形态**（`FFFFFFFF` 八位大写）——直接比字符串会因格式差异误红（真机实测）。
+            fail(f"P8b 文字色 stop 后未回原值：{tstop}（应回 {t0}）")
+            ok = False
+        elif unchanged != "same":
+            fail(f"P8c 文字色动画**改动了底色**（两条轨道必须独立）：{unchanged}")
+            ok = False
+        else:
+            print(f"  ✓ P8 ★文字色（独立轨道）：{t0} → {t1}（终值精确）· stop 回原值 · 底色**未被动**")
+
         # P6：拒绝分支——无底色节点上的颜色动画必须**明确拒绝**（不静默）
         rej = c.get("rejected_no_bg") or ""
         if c.get("no_bg_nodes") and ("底色" not in rej):
@@ -752,12 +810,24 @@ def main() -> int:
             ok = False
         else:
             print(f"  ✓ L1 阳性对照有效：tick 路径主线程 CPU {tick/1000:.1f}ms（窗口 {win_ms}ms）")
-            ratio = plat / tick
-            if ratio > 0.25:
-                fail(f"L2 平台路径主线程 CPU 未显著更低：platform={plat/1000:.1f}ms vs tick={tick/1000:.1f}ms（比 {ratio:.2f}，应 <= 0.25）")
+            # ★★测量有效性前置（2026-10-01，L2 回归排查后固化）：窗口内**不得有帧循环在跑**——
+            #   若在跑，主线程 CPU 混入的是"我们自己每帧推进"的成本，平台读数不可信
+            #   （此时红/绿都无法归因；判红并明示"先修装置"）。
+            if cpu.get("frame_loop_running") is True:
+                fail("L2 测量无效：窗口内帧循环仍在运行（读数混入每帧推进成本，须先修装置）")
                 ok = False
             else:
-                print(f"  ✓ L2 平台路径主线程 CPU 显著更低：{plat/1000:.1f}ms vs tick {tick/1000:.1f}ms（比 {ratio:.2f} <= 0.25）")
+                ratio = plat / tick
+                # ★读数分解进消息（commit=提交一次的成本 / idle=提交后平台自主渲染时主线程的空闲段）：
+                #   红时一眼看出是"提交变贵"还是"窗口被污染"（2026-10-01 一次两小时排查的固化）。
+                split = ""
+                if cpu.get("commit_cpu_us") is not None and cpu.get("idle_cpu_us") is not None:
+                    split = f" · 分解 commit={cpu.get('commit_cpu_us')}µs idle={cpu.get('idle_cpu_us')}µs"
+                if ratio > 0.25:
+                    fail(f"L2 平台路径主线程 CPU 未显著更低：platform={plat/1000:.1f}ms vs tick={tick/1000:.1f}ms（比 {ratio:.2f}，应 <= 0.25）{split}")
+                    ok = False
+                else:
+                    print(f"  ✓ L2 平台路径主线程 CPU 显著更低：{plat/1000:.1f}ms vs tick {tick/1000:.1f}ms（比 {ratio:.2f} <= 0.25）{split}")
     else:
         print("  · L 组跳过（无 anim_cpu 读数——探针未跑或报告为旧版）")
     # ── N 组（HA1）：Host ABI 双路对照（抽象正确性的等价性判据） ──

@@ -7,7 +7,7 @@
 //   ② **编译期校验**：非法/非合成属性在这里被拦下（§5-bis.2），不等到运行时掉帧；
 //   ③ **默认值归一**：曲线/时长的缺省在编译期落定 ⇒ 下发给内核的指令**没有歧义**。
 import { ANIM_KIND_ID, AnimKind, CURVE_ID } from './types'
-import type { AnimDecl, AnimKindId, AnimTargets, CompiledBatch, CurveId, EngineAnim } from './types'
+import type { AnimDecl, AnimKindId, AnimTargets, ColorAnimDecl, CompiledBatch, CurveId, EngineAnim } from './types'
 import { validateAnimations, isComposited } from './validate'
 import { parseColorToChannels } from './color'
 
@@ -59,6 +59,7 @@ export function compileAnimations(
   return {
     anims,
     composited,
+    // ★颜色两类（color / textColor）都是 paint-only 非合成 ⇒ 如实列进清单
     nonComposited: composited ? [] : [...kindNames].filter((k) => !isComposited(k)),
   }
 }
@@ -67,33 +68,65 @@ export function compileAnimations(
  * 编译单条声明（校验已过的前提下）——★**返回数组**：颜色声明会展开成 4 条通道指令
  *   （见内核 `AnimKind::ColorR/G/B/A`；分解理由：求值机器全是标量的 ⇒ 零改动复用）。
  */
+/**
+ * 判别颜色声明（`color` / `textColor`）——**类型窄化用**
+ *
+ * 【为什么需要它（本轮类型检查实测）】写 `d.kind === 'color' || d.kind === 'textColor'` 时
+ *   TS **不窄化**（`ScalarAnimDecl.kind` 是 `Exclude<AnimKindName,'color'>`，而 `'textColor'`
+ *   不在其排除集里 ⇒ 两侧仍可能是标量）⇒ 后面读 `d.from` 得到 `string | number` 联合、处处报错。
+ *   ⇒ 用类型谓词显式判定（编译器与读代码的人都一眼看懂）。
+ */
+export function isColorDecl(d: AnimDecl): d is ColorAnimDecl {
+  return d.kind === 'color' || d.kind === 'textColor'
+}
+
 export function compileOne(d: AnimDecl, targets: AnimTargets): EngineAnim[] {
   const easing = resolveEasing(d)
   // ★★颜色：一个声明 → 四条标量通道（R/G/B/A），共用同一曲线/时长/延迟/弹簧
-  if (d.kind === 'color') {
+  // ★判别式（判别联合的真窄化）：`'color' in ...` 这种写法 TS 收不紧，故用显式函数
+  if (isColorDecl(d)) {
     const from = parseColorToChannels(d.from)
     const to = parseColorToChannels(d.to)
-    const mk = (kind: AnimKindId, f: number, t: number): EngineAnim => ({
-      nodeId: targets.nodeId,
-      kind,
-      curve: easing.curve,
-      from: f,
-      to: t,
-      durMs: easing.durMs,
-      delayMs: d.delayMs ?? 0,
-      drive: d.drive === 'progress' ? 1 : 0,
-      takeover: d.takeover !== false,
-      ...(d.spring
-        ? { spring: { stiffness: d.spring.stiffness, damping: d.spring.damping, mass: d.spring.mass ?? 1 } }
-        : {}),
-      ...(d.scroll ? { scrollFrom: d.scroll.from, scrollTo: d.scroll.to } : {}),
+    // ★底色 vs 文字色：**两组通道编号**（5..8 / 9..12）——内核据此写不同的样式槽
+    const base: readonly AnimKindId[] =
+      d.kind === 'color'
+        ? [AnimKind.COLOR_R, AnimKind.COLOR_G, AnimKind.COLOR_B, AnimKind.COLOR_A]
+        : [AnimKind.TEXT_COLOR_R, AnimKind.TEXT_COLOR_G, AnimKind.TEXT_COLOR_B, AnimKind.TEXT_COLOR_A]
+    // ★★颜色序列（多段）：每段终点是颜色 ⇒ 逐段解析成通道值，四条通道共用同一张段表
+    //   （内核侧每条通道各得一条 `AnimMode::Keyframes`——"多段收敛在一条动画/每通道"与标量同语义）
+    const kf = d.keyframes?.map((seg) => {
+      const ch = parseColorToChannels(seg.to)
+      return { ch, durMs: seg.durationMs, curve: CURVE_ID[seg.curve ?? 'easeOut'] }
     })
-    return [
-      mk(AnimKind.COLOR_R, from.r, to.r),
-      mk(AnimKind.COLOR_G, from.g, to.g),
-      mk(AnimKind.COLOR_B, from.b, to.b),
-      mk(AnimKind.COLOR_A, from.a, to.a),
-    ]
+    const mk = (kind: AnimKindId, idx: 0 | 1 | 2 | 3): EngineAnim => {
+      const f = [from.r, from.g, from.b, from.a][idx]!
+      const t = [to.r, to.g, to.b, to.a][idx]!
+      return {
+        nodeId: targets.nodeId,
+        kind,
+        curve: easing.curve,
+        from: f,
+        to: t,
+        durMs: easing.durMs,
+        delayMs: d.delayMs ?? 0,
+        drive: d.drive === 'progress' ? 1 : 0,
+        takeover: d.takeover !== false,
+        ...(d.spring
+          ? { spring: { stiffness: d.spring.stiffness, damping: d.spring.damping, mass: d.spring.mass ?? 1 } }
+          : {}),
+        ...(kf
+          ? {
+              keyframes: kf.map(({ ch, durMs, curve }) => ({
+                to: [ch.r, ch.g, ch.b, ch.a][idx]!,
+                durMs,
+                curve,
+              })),
+            }
+          : {}),
+        ...(d.scroll ? { scrollFrom: d.scroll.from, scrollTo: d.scroll.to } : {}),
+      }
+    }
+    return [mk(base[0]!, 0), mk(base[1]!, 1), mk(base[2]!, 2), mk(base[3]!, 3)]
   }
   return [
     {
@@ -126,7 +159,8 @@ export function compileOne(d: AnimDecl, targets: AnimTargets): EngineAnim[] {
 /** 求值参数归一（曲线/时长缺省落定——下发给内核的指令不含"未指定"） */
 function resolveEasing(d: AnimDecl): { curve: CurveId; durMs: number } {
   // ★MA6：序列模式的时长 = 各段之和（**不是**缺省 300——否则内核的 time→progress 换算会错）
-  if (d.kind !== 'color' && d.keyframes) {
+  //   ★颜色序列（2026-10-01）同此规则：四条通道共用段表 ⇒ 时长也必须一致
+  if (d.keyframes) {
     const sum = d.keyframes.reduce((acc, s) => acc + s.durationMs, 0)
     return { curve: CURVE_ID[d.curve ?? 'easeOut'], durMs: d.durationMs ?? sum }
   }

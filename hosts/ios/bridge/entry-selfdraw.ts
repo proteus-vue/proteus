@@ -54,6 +54,8 @@ interface SelfDrawNative {
   animStopAll(): string
   /** ★★带底色的节点清单（颜色动画的取样入口——见宿主注释：不再盲试 id） */
   bgNodes(): string
+  /** ★★带文字色的节点清单（文字色动画的取样入口——与 `bgNodes` 对称） */
+  textColorNodes(): string
   /** ★V4 滚动（纯内容偏移，像素）——不驱动动画；与 scrollAnimSync 的区别是它不碰动画 */
   scrollBy(dx: number, dy: number): string
   animStart(json: string): string
@@ -90,7 +92,7 @@ const BN = { snapshot: 'selfdraw-final' }
 
 // ★构建标识（每次构建由 hosts/ios/bridge/inject-build-id.mjs 注入；与 entry-bench 同机制）
 //   —— 「设备上跑的是哪份代码」必须可**一眼判定**（报告新鲜度判据的内容锚点）。
-const BUILD_ID = 'b993f246-121047'
+const BUILD_ID = '8a4702f2-123959'
 
 const VP = (globalThis as unknown as { __PROTEUS_VIEWPORT__?: { width: number; height: number } })
   .__PROTEUS_VIEWPORT__ ?? { width: 390, height: 844 }
@@ -492,9 +494,93 @@ const api = {
       rejected = String((bad as { error?: string }).error ?? '').slice(0, 120)
     }
 
+    // ⑦ ★**颜色序列（keyframes 多段）**：黑 → 绿 → 红（两段）——验"多段收敛在每通道一条动画里"
+    //   判据：半程在绿（段边界精确）、终值在红（端点钉死）——与标量序列同一套语义
+    let seqMid = ''
+    let seqEnd = ''
+    try {
+      proteusSelfDraw.animStopAll()
+      const seqDecl = {
+        kind: 'color' as const,
+        from: '#000000',
+        to: '#ff0000',
+        durationMs: 200,
+        keyframes: [
+          { to: '#00ff00', durationMs: 100, curve: 'linear' as const },
+          { to: '#ff0000', durationMs: 100, curve: 'linear' as const },
+        ],
+      }
+      const seqBatch = compileAnimations([seqDecl], { nodeId: target })
+      proteusSelfDraw.animStart(JSON.stringify({ anims: seqBatch.anims }))
+      proteusSelfDraw.animTick(100) // 段边界：应精确落在绿
+      seqMid = bgOf(target)
+      proteusSelfDraw.animTick(100) // 末段终点：应精确落在红
+      seqEnd = bgOf(target)
+    } catch (e) {
+      seqMid = `ERR:${String((e as Error).message).slice(0, 60)}`
+    }
+
+    // ⑧ ★**文字色**：问内核要"带文字色的节点"，动它的文字色（与底色两条独立轨道）
+    let textIds: number[] = []
+    let textStart = ''
+    let textEnd = ''
+    let textAfterStop = ''
+    let textBgUnchanged = ''
+    try {
+      const tcProbe = safeParse(proteusSelfDraw.textColorNodes())
+      textIds = ((tcProbe as { ids?: number[] }).ids ?? []).slice(0, 8)
+      // ★★挑**真正落在 CATextLayer 上的**节点（2026-10-01 真机修正）：文字色基色挂在
+      //   声明了 `color` 的节点上，但那节点可能是**元素**（文字在其文本子节点上）——
+      //   元素层不是 CATextLayer ⇒ 探针读 `foregroundColor` 得到空。
+      //   ⇒ 用探针**实测**哪几个 id 有 CATextLayer，取第一个（"取样要对着实际形态"）。
+      const textCapable = textIds.filter((id) => {
+        const p0 = safeParse(proteusSelfDraw.layerTransformProbe(JSON.stringify([id])))
+        const has = (((p0 as { layers?: Array<{ textColor?: string }> }).layers ?? [])[0] ?? {}) as { textColor?: string }
+        return typeof has.textColor === 'string' && has.textColor.length === 8
+      })
+      // 退化：若没有一个是 CATextLayer（装置形态变了），用内核给的第一个（判据会如实报空）
+      const tid = (textCapable[0] ?? textIds[0])!
+      if (textIds.length > 0) {
+        proteusSelfDraw.animStopAll()
+        const tcHex = (() => {
+          const p = safeParse(proteusSelfDraw.layerTransformProbe(JSON.stringify([tid])))
+          const hex = (((p as { layers?: Array<{ textColor?: string }> }).layers ?? [])[0]?.textColor ?? '')
+          const s6 = hex.length === 8 ? hex.slice(2) : ''
+          return s6.length === 6 ? `#${s6.toLowerCase()}` : '#ffffff'
+        })()
+        const tcDecl = { kind: 'textColor' as const, from: tcHex, to: '#00ff00', durationMs: 100, curve: 'linear' as const }
+        const tcBatch = compileAnimations([tcDecl], { nodeId: tid })
+        proteusSelfDraw.animStart(JSON.stringify({ anims: tcBatch.anims }))
+        const tcBgBefore = bgOf(tid)
+        textStart = tcHex
+        proteusSelfDraw.animTick(60)
+        const midProbe = safeParse(proteusSelfDraw.layerTransformProbe(JSON.stringify([tid])))
+        textEnd = (((midProbe as { layers?: Array<{ textColor?: string }> }).layers ?? [])[0]?.textColor ?? '')
+        proteusSelfDraw.animTick(60)
+        const endProbe = safeParse(proteusSelfDraw.layerTransformProbe(JSON.stringify([tid])))
+        textEnd = (((endProbe as { layers?: Array<{ textColor?: string }> }).layers ?? [])[0]?.textColor ?? '')
+        // 底色必须没被文字色动画改动（两条轨道独立）
+        textBgUnchanged = bgOf(tid) === tcBgBefore ? 'same' : `CHANGED:${tcBgBefore}->${bgOf(tid)}`
+        proteusSelfDraw.animStopAll()
+        const stopProbe = safeParse(proteusSelfDraw.layerTransformProbe(JSON.stringify([tid])))
+        textAfterStop = (((stopProbe as { layers?: Array<{ textColor?: string }> }).layers ?? [])[0]?.textColor ?? '')
+      }
+    } catch (e) {
+      textStart = `ERR:${String((e as Error).message).slice(0, 60)}`
+    }
+
     const r = {
       node: target,
       decl_kind: decl.kind,
+      // ★颜色序列（多段）
+      seq_mid: seqMid,
+      seq_end: seqEnd,
+      // ★文字色（两条独立轨道）
+      text_color_ids: textIds,
+      text_start: textStart,
+      text_end: textEnd,
+      text_after_stop: textAfterStop,
+      text_bg_unchanged: textBgUnchanged,
       // ★一个声明 → 四条通道（kind 序列是契约：5=R / 6=G / 7=B / 8=A）
       declared_from: startBg,
       compiled_kinds: batch.anims.map((a) => a.kind),

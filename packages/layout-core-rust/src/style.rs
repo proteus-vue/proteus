@@ -221,6 +221,16 @@ pub struct LStyle {
     ///     没有复位目标就不能安全清场（内核在 `start` 处**明确拒绝**，不静默）。
     #[serde(skip_serializing_if = "Option::is_none")]
     pub bg_base: Option<u32>,
+    /// ★★**文字色**（2026-10-01）：`0xAARRGGBB` 打包——文字色动画的当前值槽位
+    ///
+    /// 【与 `bg` 的关系】完全同构的两条轨道：同一套四通道数学（`AnimKind::TextColorR/G/B/A`），
+    ///   只是写**不同的槽**（底色写 `bg`、文字色写本字段）。分成两个字段而不是复用一个
+    ///   "当前颜色 + 目标槽"结构，是为了让"同时动底色和文字色"天然可行（两条轨道互不干扰）。
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub text_color: Option<u32>,
+    /// 文字色（**复位目标**；来自树 DTO 的 `color`，建树时定，动画不改它）
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub text_color_base: Option<u32>,
 }
 
 fn default_scale() -> f32 {
@@ -271,6 +281,8 @@ impl Default for LStyle {
             opacity: 1.0,
             bg: None,
             bg_base: None,
+            text_color: None,
+            text_color_base: None,
         }
     }
 }

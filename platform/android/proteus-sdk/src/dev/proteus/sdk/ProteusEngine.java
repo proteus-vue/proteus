@@ -34,14 +34,16 @@ public final class ProteusEngine implements AutoCloseable {
     public static final int ERR_INTERNAL = -5;
 
     /**
-     * 每帧视觉更新记录长度 = **28B/条**（小端）：`id u32 + tx/ty/scale/rotate/opacity f32 + rgba u32`
+     * 每帧视觉更新记录长度 = **32B/条**（小端）：
+     * `id u32 + tx/ty/scale/rotate/opacity f32 + bg u32 + textColor u32`
      *
-     * ★★2026-10-01 由 24B 增至 28B（颜色）——末 4 字节是打包色 `0xAARRGGBB`；
-     *   `0xFFFFFFFF` = 本节点无内核底色（消费方**忽略**该字段）。
+     * ★★2026-10-01 由 24B → 28B（底色）→ **32B**（文字色）——末两个 u32 都是打包色
+     *   `0xAARRGGBB`；`0xFFFFFFFF` = 本节点无该基色（消费方**忽略**该字段）。
      *   ★唯一事实源 = 内核 `ffi.rs::proteus_layout_anim_tick_bin`；与本端 `ProteusHostView`
-     *   / iOS `animUpdateRecordBytes` / embed-demo 的常量同批更新。
+     *   / iOS `animUpdateRecordBytes` / embed-demo 的常量同批更新
+     *   （`scripts/check-anim-record-bytes.mjs` 从内核推出宽度并对账）。
      */
-    public static final int FRAME_UPDATE_BYTES = 28;
+    public static final int FRAME_UPDATE_BYTES = 32;
     /** 几何二进制流的头长度（`RECTS_HEADER_BYTES` = 16） */
     public static final int RECTS_HEADER_BYTES = 16;
     /** 单条矩形字节数（id u32 + 4×f32） */
@@ -140,11 +142,11 @@ public final class ProteusEngine implements AutoCloseable {
     }
 
     /**
-     * 本帧的视觉更新（**24B/条**：`id u32 + tx/ty/scale/rotate/opacity f32`，小端）。
-     * 空数组 = 本帧无变化。
+     * 本帧的视觉更新（**32B/条**：`id u32 + tx/ty/scale/rotate/opacity f32 + bg u32 + textColor u32`，小端）。
+     * 空数组 = 本帧无变化。末两个 u32 是打包色（`0xAARRGGBB`；`0xFFFFFFFF` = 无该基色）。
      *
      * 【怎么用】`ByteBuffer.order(ByteOrder.LITTLE_ENDIAN)` 按偏移直读，
-     *   把五值套到你的视图/图层上（平移 → 以元素中心为锚的缩放/旋转）。
+     *   把五值套到你的视图/图层上（平移 → 以元素中心为锚的缩放/旋转；有基色的节点另取颜色）。
      */
     public byte[] frameUpdates() {
         ensureOpen();

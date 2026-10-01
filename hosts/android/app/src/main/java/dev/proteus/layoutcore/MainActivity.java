@@ -1356,10 +1356,13 @@ public class MainActivity extends Activity {
             root.addView(hv);
 
             // 场景：3 个色块（各自独立节点 id，供逐节点动画）
+            // ★第三块（节点 13）带**文字色**（`Cmd.textColor`）——颜色段的文字色轨道用它：
+            //   探针在 stop 清表后回落到它（= 该节点"绘制时会用的静态文字色"，
+            //   与内核树里节点 13 的 `color` 声明一致——判据断言自洽的前提）。
             final java.util.List<ProteusHostView.Cmd> cmds = new java.util.ArrayList<>();
             cmds.add(new ProteusHostView.Cmd(20f, 120f, 140f, 90f, 0xFF3366CC, null));
             cmds.add(new ProteusHostView.Cmd(200f, 120f, 140f, 90f, 0xFFCC6633, null));
-            cmds.add(new ProteusHostView.Cmd(20f, 300f, 140f, 90f, 0xFF33CC66, null));
+            cmds.add(new ProteusHostView.Cmd(20f, 300f, 140f, 90f, 0xFF224466, null, 0f, 0xFF3366CC));
             hv.setCmds(cmds);
             hv.setCmdNodeIds(new int[]{11, 12, 13});
             final int W = getResources().getDisplayMetrics().widthPixels;
@@ -1485,6 +1488,12 @@ public class MainActivity extends Activity {
                         .put("backgroundColor", "#3366CC"));
                 cnodes.put(new org.json.JSONObject()
                         .put("id", 12).put("parentId", 1).put("width", 140).put("height", 90));
+                // ★节点 13：底色 + **文字色**双声明——文字色轨道（kind 9..12）的合法目标；
+                //   其 Cmd 的 color/textColor 与本声明一致（见上方 cmds 构造处）。
+                cnodes.put(new org.json.JSONObject()
+                        .put("id", 13).put("parentId", 1).put("width", 140).put("height", 90)
+                        .put("backgroundColor", "#224466")
+                        .put("color", "#3366CC"));
                 colorTree.put("nodes", cnodes);
                 long seHandle = RustLayout.create(colorTree.toString());
                 if (seHandle <= 0) throw new IllegalStateException("颜色场景建树失败");
@@ -1512,6 +1521,42 @@ public class MainActivity extends Activity {
                 // ⑤ 拒绝分支：无色节点（节点 12 未声明 backgroundColor）⇒ 必须明确拒绝
                 out.put("color_rejected", hv.kernelAnimStart(
                         "{\"anims\":[{\"nodeId\":12,\"kind\":5,\"curve\":0,\"from\":0,\"to\":255,\"durMs\":50}]}"));
+
+                // ⑥ ★颜色序列（keyframes 多段）：黑 → 绿 → 红（每通道一条动画带两段）
+                //   判据：半程（段边界）精确在绿、终值精确在红——与标量序列同一套语义（与 iOS P7 同源）。
+                hv.kernelAnimStop("{\"all\":true}");
+                hv.kernelAnimStart("{\"anims\":["
+                        + "{\"nodeId\":11,\"kind\":5,\"from\":0,\"to\":255,\"durMs\":200,"
+                        + "\"keyframes\":[{\"to\":0,\"durMs\":100,\"curve\":0},{\"to\":255,\"durMs\":100,\"curve\":0}]},"
+                        + "{\"nodeId\":11,\"kind\":6,\"from\":0,\"to\":0,\"durMs\":200,"
+                        + "\"keyframes\":[{\"to\":255,\"durMs\":100,\"curve\":0},{\"to\":0,\"durMs\":100,\"curve\":0}]},"
+                        + "{\"nodeId\":11,\"kind\":7,\"from\":0,\"to\":0,\"durMs\":200,"
+                        + "\"keyframes\":[{\"to\":0,\"durMs\":100,\"curve\":0},{\"to\":0,\"durMs\":100,\"curve\":0}]},"
+                        + "{\"nodeId\":11,\"kind\":8,\"from\":255,\"to\":255,\"durMs\":200,"
+                        + "\"keyframes\":[{\"to\":255,\"durMs\":100,\"curve\":0},{\"to\":255,\"durMs\":100,\"curve\":0}]}]}");
+                hv.kernelAnimTick(100f);
+                out.put("color_seq_mid", new org.json.JSONObject(hv.animTxProbe("[11]")));
+                hv.kernelAnimTick(100f);
+                out.put("color_seq_end", new org.json.JSONObject(hv.animTxProbe("[11]")));
+
+                // ⑦ ★文字色（与底色**两条独立轨道**）：节点 13 的 color 基色 #3366CC → #00FF00
+                //   （kind 9..12 = 文字色 R/G/B/A；与 iOS P8 同源）
+                hv.kernelAnimStop("{\"all\":true}");
+                out.put("color_text_start", new org.json.JSONObject(hv.animTxProbe("[13]")));
+                hv.kernelAnimStart("{\"anims\":["
+                        + "{\"nodeId\":13,\"kind\":9,\"curve\":0,\"from\":51,\"to\":0,\"durMs\":100},"
+                        + "{\"nodeId\":13,\"kind\":10,\"curve\":0,\"from\":102,\"to\":255,\"durMs\":100},"
+                        + "{\"nodeId\":13,\"kind\":11,\"curve\":0,\"from\":204,\"to\":0,\"durMs\":100},"
+                        + "{\"nodeId\":13,\"kind\":12,\"curve\":0,\"from\":255,\"to\":255,\"durMs\":100}]}");
+                hv.kernelAnimTick(60f);
+                out.put("color_text_mid", new org.json.JSONObject(hv.animTxProbe("[13]")));
+                hv.kernelAnimTick(60f);   // 累计 120ms > 100ms ⇒ 精确到端点（与 iOS P8 同法）
+                out.put("color_text_end", new org.json.JSONObject(hv.animTxProbe("[13]")));
+                hv.kernelAnimStop("{\"all\":true}");
+                out.put("color_text_after_stop", new org.json.JSONObject(hv.animTxProbe("[13]")));
+                // 拒绝分支：节点 12 未声明 `color` ⇒ 文字色动画必须明确拒绝（错误信息含"文字色"）
+                out.put("color_text_rejected", hv.kernelAnimStart(
+                        "{\"anims\":[{\"nodeId\":12,\"kind\":9,\"curve\":0,\"from\":0,\"to\":255,\"durMs\":50}]}"));
             } catch (Exception ce) {
                 out.put("color_error", ce.toString());
             }
