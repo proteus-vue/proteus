@@ -74,6 +74,29 @@ export interface HostScreenPorts {
   tree: ScreenTreeHost
   /** 动画端口（执行器用） */
   anim: ScreenAnimHost
+  /**
+   * ★★**跨页面共享元素**（2026-10-01 收诚实边界）：两棵内核树之间的飞行。
+   *
+   * 与同树共享元素的差别：源几何由**调用方注入**（跨页面的稳态起点只有页面栈层知道——
+   * 内核只认识"当前树"）。
+   *
+   * 用法（页面栈层）：目标页 mount 后 → `rect(目标屏, 目标节点)` 取终点基准 →
+   *   以「源页当前矩形」为 `sourceRect` 调 `fly(...)` ⇒ 内核算 dx/dy/scale 并写首帧 ⇒
+   *   宿主帧循环推进（与转场**同一条**完成链）。
+   */
+  shared: {
+    /** 单节点绝对矩形（内核算；跨页面几何回传的入口） */
+    rect(screenId: string, nodeId: number): Promise<{ x: number; y: number; w: number; h: number }>
+    /** 启动跨页面飞行（源=系统坐标矩形；目标=目标屏的节点） */
+    fly(opts: {
+      targetScreenId: string
+      targetNodeId: number
+      sourceRect: { x: number; y: number; w: number; h: number }
+      durMs?: number
+      curve?: number
+      fadeIn?: boolean
+    }): Promise<{ fromRect?: unknown; toRect?: unknown }>
+  }
   /** 在途动画 promise 数（诊断：应回落到 0） */
   readonly pendingAnimations: number
   /** 完成回调是否已装（判据读——未装时"动画播完"不可达） */
@@ -166,6 +189,45 @@ export function createHostScreenPorts(opts: HostScreenPortsOptions): HostScreenP
   return {
     tree,
     anim,
+    shared: {
+      async rect(screenId, nodeId) {
+        const d = call(channel, 'screen.rect', { screenId, nodeId }) as
+          | { x?: number; y?: number; width?: number; height?: number } | null
+        if (!d || typeof d.x !== 'number') {
+          throw new Error(`[screen-host] screen.rect 未返回几何（${JSON.stringify(d)}）`)
+        }
+        return { x: d.x, y: d.y ?? 0, w: d.width ?? 0, h: d.height ?? 0 }
+      },
+      fly(opts) {
+        const token = `screen-shared-${++tokenSeq}`
+        const d = call(channel, 'screen.shared', { ...opts, token }) as
+          | { started?: number; fromRect?: unknown; toRect?: unknown } | null
+        // ★同步校验（started 是宿主**同步**回执）——失败即抛，绝不产生悬挂 promise
+        if (!d || (d.started ?? 0) < 1) {
+          return Promise.reject(new Error(`[screen-host] screen.shared 未启动（${JSON.stringify(d)}）`))
+        }
+        // ★几何在**同步回执**里（内核算完即回），完成在**回推**里（帧循环到点）——
+        //   两者都要：先记几何，回推时合并返回（否则调用方拿不到 fromRect/toRect）。
+        const geom = { fromRect: d.fromRect, toRect: d.toRect }
+        return new Promise((resolve) => {
+          pending.set(token, (v) => {
+            // 宿主回推 payload 可能是 JSON 串（`'{}'`）或对象——宽容解析后合并（几何不被覆盖）
+            let extra: Record<string, unknown> = {}
+            if (typeof v === 'string') {
+              try {
+                const o = JSON.parse(v) as unknown
+                if (o && typeof o === 'object') extra = o as Record<string, unknown>
+              } catch {
+                /* 非 JSON 串 ⇒ 忽略（几何仍然返回） */
+              }
+            } else if (v && typeof v === 'object') {
+              extra = v as Record<string, unknown>
+            }
+            resolve({ ...geom, ...extra })
+          })
+        })
+      },
+    },
     get pendingAnimations() {
       return pending.size
     },

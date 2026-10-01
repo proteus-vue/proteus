@@ -186,3 +186,90 @@ describe('M5 生产端口 · 与执行器合流（全链：栈 → 执行器 →
     expect(ports.pendingAnimations).toBe(0)
   })
 })
+
+// ══════════════════════════════════════════════════════════════════
+// ★★跨页面共享元素（2026-10-01 收诚实边界）：页面栈层的几何回传 + 跨树飞行
+//
+// 【要证明什么】边界原文"跨页面的稳态几何回传需页面栈层配合（未做）"。
+//   本组证明该配合已接上：① `screen.rect` 真回几何（内核算）；② `screen.shared` 把
+//   **源页矩形**（另一棵树）+ 目标节点送进内核；③ 完成走**同一条** token 回推链（与转场同构）。
+//   ★不押宿主自报的 dx/dy/scale：几何由内核回，测试只断言"请求形态 + 完成链 + 失败冒泡"。
+// ══════════════════════════════════════════════════════════════════
+describe('M5 生产端口 · 跨页面共享元素', () => {
+  it('rect：转发 screenId/nodeId 并解析内核几何（width/height → w/h）', async () => {
+    const { channel, log } = makeChannel({
+      'screen.rect': { ok: true, data: { x: 40, y: 600, width: 80, height: 80 } },
+    })
+    const ports = createHostScreenPorts({ invoke: channel })
+    const r = await ports.shared.rect('home#1', 102)
+    expect(r).toEqual({ x: 40, y: 600, w: 80, h: 80 })
+    expect(log[0]).toMatchObject({ method: 'screen.rect', args: { screenId: 'home#1', nodeId: 102 } })
+  })
+
+  it('rect：内核回几何不全 ⇒ 抛错（不静默返回 0 几何）', async () => {
+    const { channel } = makeChannel({ 'screen.rect': { ok: true, data: { y: 1 } } })
+    const ports = createHostScreenPorts({ invoke: channel })
+    await expect(ports.shared.rect('home#1', 102)).rejects.toThrow(/未返回几何/)
+  })
+
+  it('fly：源矩形 + 目标节点送进 screen.shared，完成靠 token 回推（与转场同一条链）', async () => {
+    let captured: Record<string, unknown> | null = null
+    const { channel, log } = makeChannel({
+      'screen.shared': (() => {
+        // 捕获请求后回"非 immediate"（等回推）；token 由本回执决定
+        return { ok: true, data: { started: 1, fromRect: { x: 40, y: 600, w: 80, h: 80 }, toRect: { x: 0, y: 200, w: 1080, h: 200 } } }
+      })(),
+    })
+    // 用包装通道捕获 args（makeChannel 的 log 已够——但它记录的是解析后的 args）
+    const ports = createHostScreenPorts({ invoke: channel })
+    const p = ports.shared.fly({
+      targetScreenId: 'detail#2',
+      targetNodeId: 114,
+      sourceRect: { x: 40, y: 600, w: 80, h: 80 },
+      durMs: 200,
+      curve: 1,
+      fadeIn: false,
+    })
+    await tick()
+    // 请求形态：目标屏/节点/源矩形/时长全在
+    const req = log.find((l) => l.method === 'screen.shared')
+    expect(req).toBeTruthy()
+    captured = req!.args
+    expect(captured).toMatchObject({
+      targetScreenId: 'detail#2',
+      targetNodeId: 114,
+      sourceRect: { x: 40, y: 600, w: 80, h: 80 },
+      durMs: 200,
+    })
+    // 在途 1（等宿主回推）
+    expect(ports.pendingAnimations).toBe(1)
+    // 宿主回推（与转场共用 __proteusHostScreenAnimDone）
+    const done = (globalThis as Record<string, unknown>)[SCREEN_ANIM_DONE_KEY] as (t: unknown, r?: unknown) => string
+    const token = captured!.token as string
+    expect(done(token, '{}')).toBe('ok')
+    const out = await p
+    // ★几何在同步回执、完成在回推 ⇒ 合并返回（fromRect/toRect 不被空 payload 覆盖）
+    expect(out).toMatchObject({
+      fromRect: { x: 40, y: 600, w: 80, h: 80 },
+      toRect: { x: 0, y: 200, w: 1080, h: 200 },
+    })
+    expect(ports.pendingAnimations).toBe(0)
+  })
+
+  it('fly：宿主未启动（started=0）⇒ 抛错（不产生永不 resolve 的悬挂 promise）', async () => {
+    const { channel } = makeChannel({ 'screen.shared': { ok: true, data: { started: 0 } } })
+    const ports = createHostScreenPorts({ invoke: channel })
+    await expect(
+      ports.shared.fly({ targetScreenId: 'd#1', targetNodeId: 1, sourceRect: { x: 0, y: 0, w: 1, h: 1 } }),
+    ).rejects.toThrow(/未启动/)
+    expect(ports.pendingAnimations).toBe(0) // ★不许留悬挂
+  })
+
+  it('未知 token 回推 ⇒ 不崩（返回 unknown-token，与既有语义一致）', () => {
+    const { channel } = makeChannel({})
+    const ports = createHostScreenPorts({ invoke: channel })
+    void ports // 仅需钩子装上
+    const done = (globalThis as Record<string, unknown>)[SCREEN_ANIM_DONE_KEY] as (t: unknown) => string
+    expect(done('nope')).toBe('unknown-token')
+  })
+})

@@ -24,6 +24,8 @@ Every reading points to a **re-runnable assertion script**; every “not done ye
 | Showcase · **soak stress** (160 acts · 5.6 min) | 57.9 FPS · 0.95% dropped · **memory +0.2MB** (148 samples) · no thermal throttling (fair→fair) · 623,200 declarative instructions | `check-showcase.py` (device `showcase-soak.json`) |
 | Soak thermal edge (stated honestly) | In zero-stagger full-concurrency acts (3200 simultaneous), tail frames sit at 8.2–9.6ms once the device warms up (p50 actually drops to ~3.7ms); staggered acts stay ≤4ms — far below the 16.7ms budget; the soak budget is a 12ms line | `check-showcase.py` (`SOAK_FRAME_BUDGET_MS`) |
 | Animation **does not finish early** (the 1×-speed assertion) | per act `anim_end/nominal span ≥ 0.84` (curve acts ≈1.00; ≈0.5 at 2× speed — this is the assertion that catches it) | `check-showcase.py` ②d · self-tested by `selftest-showcase-judge.py` 15/15 |
+| **Real-gesture scrolling** (both targets) | iOS: pan recogniser installed · sole outlet driven 4× · offset returns to 0 · kernel changed=5 · layer writes 5 · Android: **real MotionEvents** → `scrollY=100` · parallax `ty=-40` (≈-0.4× scroll amount) | `check-anim-rt2.py` I6 · `check-kernel-anim.py` M6b |
+| **Cross-page shared element** (both targets) | source-page rect captured before the switch (1080×200) → target-page node (a different screen) → kernel computes geometry + writes the first frame → frame loop completes it; dx/dy/scale recomputed independently by the judge | `check-app-stack.py` ⑦.7 |
 
 > **Why “zero wake-ups” uses OS-level CPU accounting instead of Instruments**: `xctrace` on this machine cannot record from the device (DeviceSupport version lags), so the measurement uses the difference of two `thread_info` samples — machine-judgeable, and paired with a **positive control** (the tick path must show significant cost; below 5ms the probe is declared broken and must not pass) — a negative assertion is only trustworthy with a control.
 
@@ -31,12 +33,11 @@ Every reading points to a **re-runnable assertion script**; every “not done ye
 
 | Item | Status |
 |---|---|
-| Shared elements (cross-page) | Same-tree form landed; **cross-page steady-state geometry handoff** needs the page-stack layer (not done) |
-| Scroll-linked (real gesture) | Driver interface decoupled from the input source (the callback just reports the position); **real finger-drag** not wired |
 | 120 FPS | The target needs a ProMotion device; iPhone 12 is 60Hz — **honestly noted, not claimed** |
 | Gesture negotiation | Nested-scroll conflicts / multi-touch: by design **not part of this engine**, tracked separately |
 | Escape-hatch ratio | Instrumentation ready (`escapes.format()`); **showcase surface now sampled**: 31,200 declarative instructions / 0 escape hatches = **0%** (asserted every run by judge ⑥) — the wider business surface is **still pending** (a demo surface ≠ a business surface; stated honestly) |
 | Cross-target visual identity | The instruction stream guarantees “what to draw”, **not “it looks identical”** (corner clipping / shadows / text baselines differ) — backstopped by conformance and browser-truth baselines |
+| Cross-page shared-element **visual compositing** | Choreography / geometry / completion chain are device-verified on both targets (see the evidence table); **compositing several kernel trees on screen** (both pages visible mid-flight) is outside this harness — same boundary as the existing ScreenHost note |
 
 ## Destructive verification (the assertions have teeth)
 

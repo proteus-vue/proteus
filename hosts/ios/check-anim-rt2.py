@@ -475,6 +475,30 @@ def main() -> int:
             ok = False
         else:
             print("  ✓ I5 滚动批次正确排除在平台零参与路径之外")
+        # I6：★真手势滚动（2026-10-01 收诚实边界）——pan 识别器在岗 + 唯一出口驱动后
+        #   内容偏移与**内核滚动联动**都真实推进；驱动路径与真手指是**同一条**（driveScrollDrag）。
+        pan = sc.get("pan") or {}
+        if not pan:
+            fail("I6 真手势滚动读数缺失（anim_scroll 相位未跑 panDragProbe）")
+            ok = False
+        elif pan.get("recognizer_installed") is not True:
+            fail(f"I6a 真 pan 识别器未装在视图上：{pan}")
+            ok = False
+        elif pan.get("wired") is not True:
+            fail(f"I6b 拖拽出口未接线（onScrollDrag 为 nil）：{pan}")
+            ok = False
+        elif not (pan.get("drive_count") or 0) >= (pan.get("steps") or 0):
+            fail(f"I6c 出口未被驱动：drive_count={pan.get('drive_count')} < steps={pan.get('steps')}")
+            ok = False
+        elif (pan.get("changed_total") or 0) <= 0 or (pan.get("applied_total") or 0) <= 0:
+            fail(f"I6d 驱动后内核无变化/未写层：changed={pan.get('changed_total')} applied={pan.get('applied_total')}")
+            ok = False
+        else:
+            print(
+                f"  ✓ I6 ★真手势滚动（pan 识别器在岗 + 唯一出口）：驱动 {pan.get('drive_count')} 次 · "
+                f"偏移 {pan.get('offset_y_before'):.0f}→{pan.get('offset_y_after'):.0f} · "
+                f"内核 changed 累计 {pan.get('changed_total')} · 写层 {pan.get('applied_total')}"
+            )
     else:
         print("  · I 组跳过（无 anim_scroll 读数）")
 

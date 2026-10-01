@@ -608,3 +608,28 @@ pub extern "system" fn Java_dev_proteus_layoutcore_RustLayout_nativeSharedElemen
 ) -> jstring {
     forward_cstr(env, json, move |p| unsafe { ffi::proteus_layout_shared_element(handle as u64, p) })
 }
+
+/// `RustLayout.nativeNodeRect(handle: Long, nodeId: Int): String`
+///
+/// ★★**单节点绝对矩形**（2026-10-01：跨页面共享元素所需的"稳态几何回传"）——
+///   页面栈层的共享元素编排要在**目标页刚 mount 后**取它的节点矩形，作为飞行的终点基准；
+///   与 `proteus_layout_node_rect`（内核唯一实现，与 FLIP 走同一套偏移+吸附收集）同源。
+#[no_mangle]
+pub extern "system" fn Java_dev_proteus_layoutcore_RustLayout_nativeNodeRect<'local>(
+    mut env: JNIEnv<'local>,
+    _class: JClass<'local>,
+    handle: jni::sys::jlong,
+    node_id: jni::sys::jint,
+) -> jstring {
+    let out = std::panic::catch_unwind(|| -> String {
+        let p = unsafe { ffi::proteus_layout_node_rect(handle as u64, node_id as u32) };
+        if p.is_null() {
+            return "{\"ok\":false,\"error\":\"null\"}".to_string();
+        }
+        let s = unsafe { std::ffi::CStr::from_ptr(p) }.to_string_lossy().into_owned();
+        unsafe { ffi::proteus_layout_free_string(p) };
+        s
+    })
+    .unwrap_or_else(|_| "{\"ok\":false,\"error\":\"panic（已捕获）\"}".to_string());
+    into_java_string(&mut env, out)
+}

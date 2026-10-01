@@ -418,6 +418,52 @@ public class ProteusHostView extends ViewGroup {
         return out;
     }
 
+    // ────────────────────────── ★★真手势滚动（生产通路） ──────────────────────────
+
+    /** 拖拽滚动出口**被驱动次数**（判据读它证明"这条路径真的走过"——不区分来源） */
+    public int scrollDragDriveCount = 0;
+
+    /** 拖拽回调（**真手势接线点**：`GestureDetector.onScroll` 与判据探针都调这一处） */
+    public interface ScrollDragListener {
+        /** @param dx,dy 平台 `onScroll` 的滚动量（px；正片 = 手指上移 = 向下滚动） */
+        void onScrollDrag(float dx, float dy);
+    }
+
+    private ScrollDragListener scrollDragListener;
+
+    public void setScrollDragListener(ScrollDragListener l) {
+        this.scrollDragListener = l;
+    }
+
+    /**
+     * ★★**真手势滚动一步**（生产通路，2026-10-01 收诚实边界）：
+     *   ① 内容偏移（`setContentScrollY`——native-host 平移/裁剪随之更新）
+     *   ② 内核按新位置驱动窗口动画（`anim_seek_scroll`——换算在内核，宿主只报位置）
+     *   ③ 把 updates 当帧写层（`applyAnimUpdates`）
+     *
+     * 【★符号（自然滚动方向）——实测标定，勿凭直觉】平台 `GestureDetector.onScroll` 的
+     *   `(dx, dy)` 是**滚动量**（源码：`mLastFocusY - focusY`，正 = 手指**上移**），
+     *   **不是**手指位移。手指上移 = 向下翻看 = 内容上移；而 `setContentScrollY` 的约定是
+     *   "正数 = 内容上移" ⇒ **直接相加** `scrollY += dy`。
+     *   ★首版按"dy = 手指位移"实现成 `+= -dy`，真机 M6b 当场读出 `scrollY=-100`（方向反）——
+     *   同源纪律：算术方向一律用真机读数标定，不靠假设。
+     *
+     * 【为什么这就是生产形态】真实产品里由**手指**触发（GestureDetector.onScroll → 本函数）；
+     *   JS/QuickJS 全程不在链路上（内核 seek 与写层都在宿主这一次调用里完成）。
+     */
+    public String scrollDragBy(float dx, float dy) {
+        scrollDragDriveCount++;
+        // ① 内容偏移（滚动量直接相加：正 = 向下滚动 = 内容上移）
+        final int prev = scrollY;
+        setContentScrollY(prev + (int) dy);
+        if (coreHandle == 0) return "{\"ok\":false,\"error\":\"未接入核心\"}";
+        // ② 内核按**新滚动位置**驱动全部窗口动画（宿主只报位置——换算在内核）
+        String out = kernelAnimSeekScroll("{\"scroll\":" + scrollY + "}");
+        // ③ 观察者回调（诊断/判据读数；不改变上面两条实现）
+        if (scrollDragListener != null) scrollDragListener.onScrollDrag(dx, dy);
+        return out;
+    }
+
     /** 共享元素（转发内核 + 应用首帧 updates） */
     public String kernelSharedElement(String json) {
         String out = RustLayout.sharedElement(coreHandle, json);
@@ -887,6 +933,10 @@ public class ProteusHostView extends ViewGroup {
                             b.putFloat("dx", dx);
                             b.putFloat("dy", dy);
                             report("scroll", e2, b);
+                            // ★★真手势滚动**接线**（2026-10-01 收诚实边界）：平台的拖拽识别
+                            //   直接进生产通路（内容偏移 + 内核滚动联动 + 写层）——此前这里
+                            //   只 report（手势语义上报），内容纹丝不动（边界原文："真机手指拖拽未接线"）。
+                            scrollDragBy(dx, dy);
                             return true;
                         }
                     });

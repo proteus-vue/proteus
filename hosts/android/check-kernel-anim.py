@@ -144,6 +144,43 @@ def main() -> int:
         else:
             print(f"  ✓ M6 滚动联动映射正确（窗 0..400 × 0.4）：0→{tys[0]:.2f} · 200→{tys[1]:.2f} · 400→{tys[2]:.2f}")
 
+    # ── M6b：★真手势滚动（2026-10-01 收诚实边界）──
+    #   与 M6 的区别：M6 直接调 `kernelAnimSeekScroll`（只证内核映射）；
+    #   本组用**真实 MotionEvent 序列**（DOWN + 3×MOVE + UP）走 `GestureDetector.onScroll`
+    #   → 生产通路 `scrollDragBy`（内容偏移 + 内核 seek + 写层）——
+    #   "手指拖拽"这一环真的被走到，不是合成替身。
+    gse = d.get("gesture_scroll_error")
+    gst = d.get("gesture_scroll_trace")
+    if gse:
+        fail(f"M6b 真手势滚动抛异常：{gse}")
+        ok = False
+    elif not isinstance(gst, list) or len(gst) != 3:
+        fail(f"M6b 真手势滚动读数缺失：{gst}（应 [scrollY, ty, driveDelta]）")
+        ok = False
+    else:
+        scroll_y, ty, drive_delta = gst[0], gst[1], gst[2]
+        # ★断言写在**语义层**（不押绝对值）：手指上移 ⇒ 滚动量 > 0 ⇒ 内容上移；
+        #   视差 ty 与滚动量必须满足内核窗口映射（-0.4×scroll），**且方向为负**。
+        #   （不押 scrollY==100：触摸 slop 会吃掉起步的一小段——押绝对值 = 押装置细节。）
+        if scroll_y <= 0:
+            fail(f"M6b 真手势未驱动内容偏移：scrollY={scroll_y}（手指上移应 ⇒ 向下滚动 ⇒ >0）")
+            ok = False
+        elif ty == -2147483648:
+            fail("M6b 视差层位读不到（探针失败——哨兵值）")
+            ok = False
+        elif not (ty < 0):
+            fail(f"M6b 视差方向错：ty={ty}（内容上移 ⇒ 视差层应上移 ⇒ ty<0）")
+            ok = False
+        elif abs(ty - (-0.4 * scroll_y)) > 1.0:
+            fail(f"M6b 视差与滚动量不满足内核窗口映射：ty={ty} 应 ≈ -0.4×{scroll_y}={-0.4 * scroll_y:.1f}")
+            ok = False
+        elif not (drive_delta and drive_delta > 0):
+            fail(f"M6b 生产通路出口未被驱动：drive_delta={drive_delta}（GestureDetector.onScroll 未接线？）")
+            ok = False
+        else:
+            print(f"  ✓ M6b ★真手势滚动（真实 MotionEvent → GestureDetector → 生产通路）："
+                  f"手指上移 ⇒ scrollY={scroll_y} · 视差 ty={ty}（≈-0.4×{scroll_y}）· 出口驱动 {drive_delta} 次")
+
     # ── M7：共享元素（内核几何） ──
     se = d.get("shared_element")
     if isinstance(se, str):
