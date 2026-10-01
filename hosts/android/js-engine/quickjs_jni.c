@@ -78,6 +78,11 @@ static struct {
   jmethodID report;
   /* ★★A3 播放控制（2026-10-01 · 第三节目）：animControl(String)->String */
   jmethodID anim_control;
+  /* ★★★Vapor 设备端（2026-10-01）：二进制指令流 + 内核几何真源读
+   *   ——「真实 SFC 编译产物 → 设备端实例化 → 订阅驱动更新」那条链的宿主入口。
+   *   同一条件注入原则（Java 未实现 ⇒ 不注入 ⇒ JS 侧探测为 undefined，走诚实降级）。 */
+  jmethodID apply_ops;
+  jmethodID read_rects;
 } g_host_methods = { NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL };
 
 /* ★前向声明：eval_impl 之后要泵 job（定义在下方；C 里调用点必须先可见） */
@@ -343,6 +348,20 @@ static JSValue js_host_anim_control(JSContext *ctx, JSValueConst this_val, int a
   return host_call_impl(ctx, g_host_methods.anim_control, 1, this_val, argc, argv);
 }
 
+/**
+ * `proteusHost.applyOps(bytesJson)` —— ★★★**二进制指令流**入口（Vapor 设备端）。
+ * 入参是 `number[]`（0..255）的 JSON 串（QuickJS 侧无 ArrayBuffer 直传——与 iOS 同约定）。
+ */
+static JSValue js_host_apply_ops(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv) {
+  return host_call_impl(ctx, g_host_methods.apply_ops, 1, this_val, argc, argv);
+}
+
+/** `proteusHost.readRects()` —— **内核几何真源**读（判据用；不是从参数复述） */
+static JSValue js_host_read_rects(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv) {
+  (void)this_val; (void)argc; (void)argv;
+  return host_call_noarg_impl(ctx, g_host_methods.read_rects, 1);
+}
+
 /** 组装 JSON 字符串结果（转义 `"` `\` 与换行；最小实现，不引第三方） */
 static char *json_escape_alloc(const char *s) {
   if (s == NULL) return strdup("\"\"");
@@ -421,6 +440,14 @@ static jstring eval_impl(JNIEnv *env, jstring source, jboolean with_host) {
     // ★★A3 播放控制（条件注入——同 mount 原则）
     if (g_host_methods.anim_control != NULL) {
       JS_SetPropertyStr(g_ctx, host, "animControl", JS_NewCFunction(g_ctx, js_host_anim_control, "animControl", 1));
+    }
+    // ★★★Vapor 设备端（条件注入——同 mount 原则）：二进制指令流 + 内核几何真源
+    if (g_host_methods.apply_ops != NULL) {
+      JS_SetPropertyStr(g_ctx, host, "applyOps", JS_NewCFunction(g_ctx, js_host_apply_ops, "applyOps", 1));
+      LOGI("宿主已实现 applyOps ⇒ JS 侧可发**二进制指令流**（订阅驱动增量）");
+    }
+    if (g_host_methods.read_rects != NULL) {
+      JS_SetPropertyStr(g_ctx, host, "readRects", JS_NewCFunction(g_ctx, js_host_read_rects, "readRects", 0));
     }
     // ★★动画桥（条件注入——同 mount 原则；灯光秀的 JS 侧驱动依赖它）
     if (g_host_methods.anim_start != NULL && g_host_methods.anim_tick != NULL) {
@@ -516,6 +543,7 @@ Java_dev_proteus_layoutcore_QuickJsEngine_nativeSetHostCallback(JNIEnv *env, jcl
   g_host_methods.anim_start = g_host_methods.anim_tick = g_host_methods.anim_stop = g_host_methods.anim_active = NULL;
   g_host_methods.now_us = g_host_methods.rects = g_host_methods.probe = g_host_methods.report = NULL;
   g_host_methods.anim_control = NULL;
+  g_host_methods.apply_ops = g_host_methods.read_rects = NULL;
   if (obj != NULL) {
     g_host_obj = (*env)->NewGlobalRef(env, obj);
     jclass c = (*env)->GetObjectClass(env, obj);
@@ -556,6 +584,11 @@ Java_dev_proteus_layoutcore_QuickJsEngine_nativeSetHostCallback(JNIEnv *env, jcl
     if ((*env)->ExceptionCheck(env)) (*env)->ExceptionClear(env);
     /* ★★A3 播放控制（一参：json；返回 String） */
     g_host_methods.anim_control = (*env)->GetMethodID(env, c, "animControl", "(Ljava/lang/String;)Ljava/lang/String;");
+    if ((*env)->ExceptionCheck(env)) (*env)->ExceptionClear(env);
+    /* ★★★Vapor 设备端（applyOps 一参返回串；readRects 无参返回串） */
+    g_host_methods.apply_ops = (*env)->GetMethodID(env, c, "applyOps", "(Ljava/lang/String;)Ljava/lang/String;");
+    if ((*env)->ExceptionCheck(env)) (*env)->ExceptionClear(env);
+    g_host_methods.read_rects = (*env)->GetMethodID(env, c, "readRects", "()Ljava/lang/String;");
     if ((*env)->ExceptionCheck(env)) (*env)->ExceptionClear(env);
     if (g_host_methods.post == NULL) {
       LOGE("宿主回调缺少 post(String) 方法（其余入口仍按各自实现条件注入）");

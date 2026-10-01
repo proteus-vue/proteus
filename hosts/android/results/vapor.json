@@ -1,0 +1,79 @@
+{
+  "bundle_chars": 43387,
+  "run_ms": 88,
+  "host_mount_calls": 1,
+  "host_apply_calls": 3,
+  "host_nodes": 18,
+  "host_text_nodes": 9,
+  "host_cmds": 18,
+  "host_layout_ms": 1.548646,
+  "host_measure_ms": 0.824948,
+  "host_painted_samples": 12060,
+  "host_painted_colors": 13,
+  "host_applied": 2,
+  "host_changed_nodes": 2,
+  "host_view_on_draw": 2,
+  "report": {
+    "ok": true,
+    "tpl_nodes": 4,
+    "tpl_ok": true,
+    "sub_l1": 3,
+    "sub_l0": 0,
+    "sub_l1_rate": 1,
+    "sub_sources": [
+      "list"
+    ],
+    "inst_ms": 0,
+    "inst_nodes": 18,
+    "inst_reused_ids": 2,
+    "inst_allocated_ids": 14,
+    "inst_rows": 18,
+    "inst_values_filled": 16,
+    "inst_virtual_rows": 8,
+    "inst_text_filled": 9,
+    "inst_width_filled": 9,
+    "mount_ms": 78,
+    "mount_nodes": 18,
+    "updates_run": 3,
+    "ops_bytes": 183,
+    "ops_ms": 0,
+    "apply_ms": 6,
+    "update_evidence": [
+      {
+        "round": 0,
+        "row": 1,
+        "ops": 61,
+        "changed_rects": 2,
+        "relayout": -1
+      },
+      {
+        "round": 1,
+        "row": 2,
+        "ops": 61,
+        "changed_rects": 2,
+        "relayout": -1
+      },
+      {
+        "round": 2,
+        "row": 3,
+        "ops": 61,
+        "changed_rects": 2,
+        "relayout": -1
+      }
+    ],
+    "geom_probe": [
+      {
+        "id": 5,
+        "before": 52,
+        "after": 80
+      }
+    ],
+    "uninstantiated_slots": 0,
+    "notes": [
+      "实例树 18 节点 \/ 行 18 \/ 虚拟化行 8 \/ 增量 3 轮"
+    ],
+    "host_layout_ms": 1.549,
+    "host_cmds": 18
+  },
+  "ok": true
+}
