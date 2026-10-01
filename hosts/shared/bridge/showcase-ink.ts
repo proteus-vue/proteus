@@ -394,6 +394,8 @@ interface RangeDef {
    *   椭圆靠 `borderRadius` 天然柔边，且"墨晕"本就是圆的。
    */
   puffs: ReadonlyArray<readonly [number, number, number, number]>
+  /** ★★"呼吸"的另一态山形（**峰数不同**——异构变形的用武之地：内核自动重采样） */
+  peaksAlt: ReadonlyArray<readonly [number, number]>
 }
 
 /**
@@ -410,16 +412,22 @@ export const RANGES: readonly RangeDef[] = [
   { // 远山（天际一痕——淡、缓、偏右）
     top: 0.105, hh: 0.105, lf: 0.3, wf: 0.66, y0: 0.98, seed: 1,
     peaks: [[0.08, 0.48], [0.2, 0.4], [0.33, 0.46], [0.45, 0.34], [0.58, 0.48], [0.72, 0.42], [0.85, 0.5], [0.95, 0.45]],
+    // 呼吸态：**少峰大峦**（4 峰 vs 8 峰——异构 ⇒ 内核自动重采样）
+    peaksAlt: [[0.12, 0.42], [0.36, 0.32], [0.62, 0.44], [0.88, 0.4]],
     puffs: [[0.34, 0.6, 0.22, 0.1], [0.68, 0.64, 0.26, 0.11]],
   },
   { // 中山（主角——一座主峰在 0.42，偏左）
     top: 0.145, hh: 0.15, lf: 0.06, wf: 0.62, y0: 0.985, seed: 7,
     peaks: [[0.05, 0.52], [0.14, 0.42], [0.26, 0.48], [0.42, 0.26], [0.55, 0.45], [0.66, 0.38], [0.78, 0.5], [0.9, 0.44]],
+    // 呼吸态：主峰更耸、两翼舒展（3 峰 vs 8）
+    peaksAlt: [[0.16, 0.44], [0.42, 0.16], [0.74, 0.4]],
     puffs: [[0.3, 0.58, 0.2, 0.11], [0.72, 0.6, 0.22, 0.12]],
   },
   { // 近山（压阵——全宽、左低右高、双主峰 + 谷口）
     top: 0.205, hh: 0.21, lf: 0.0, wf: 1.0, y0: 0.985, seed: 13,
     peaks: [[0.03, 0.56], [0.1, 0.46], [0.16, 0.3], [0.26, 0.5], [0.36, 0.4], [0.46, 0.56], [0.52, 0.46], [0.6, 0.54], [0.7, 0.38], [0.78, 0.26], [0.88, 0.46], [0.96, 0.54]],
+    // 呼吸态：双峰更高更窄（4 峰 vs 12）
+    peaksAlt: [[0.14, 0.24], [0.36, 0.46], [0.62, 0.5], [0.8, 0.2]],
     puffs: [[0.2, 0.56, 0.24, 0.12], [0.66, 0.54, 0.28, 0.14]],
   },
 ]
@@ -537,21 +545,27 @@ export function buildInkTree(view: View): string {
     })
 
     // 三层笔触（同一 d·不同宽/色/偏移——"晕→骨→枯"）
+    //   ★★路径变形 v2（"山峦呼吸"）：B 态 = `peaksAlt`（**峰数不同** ⇒ 异构）——
+    //     内核自动重采样到同构后插值（v1 会拒绝这种配对）。呼吸幕里三层同步变形。
     const dCore = ridge(rw, rh, rg.peaks, rg.y0, rg.seed)
+    const dAlt = ridge(rw, rh, rg.peaksAlt, rg.y0, rg.seed + 40)
     nodes.push({
       id: INK_IDS.rangeWet[r], parentId: INK_IDS.root, position: 'absolute',
       left, top: top + R(rh * 0.02), width: rw, height: rh,
       svgPath: { d: dCore, stroke: ink(coreColor, r === 0 ? 0.22 : 0.26), strokeWidth: core * W * 2.3 },
+      svgPathTo: { d: dAlt },
     })
     nodes.push({
       id: INK_IDS.rangeCore[r], parentId: INK_IDS.root, position: 'absolute',
       left, top, width: rw, height: rh,
       svgPath: { d: dCore, stroke: ink(coreColor, r === 0 ? 0.82 : 0.94), strokeWidth: core * W },
+      svgPathTo: { d: dAlt },
     })
     nodes.push({
       id: INK_IDS.rangeDry[r], parentId: INK_IDS.root, position: 'absolute',
       left, top: top + R(rh * 0.008), width: rw, height: rh,
       svgPath: { d: dCore, stroke: ink(coreColor, r === 0 ? 0.4 : 0.5), strokeWidth: core * W * 0.42 },
+      svgPathTo: { d: dAlt },
     })
 
     // 米点（山腰两点——"点苔"）
@@ -1265,6 +1279,12 @@ export function createInkProgram(_env: { view: View }): InkProgram {
         // ★第三带已并入椭圆云团（柔边）——cloudPuffs 在 moonGlow 里做缓慢横向漂移
         ...I.cloudPuffs.flatMap((id, i) =>
           onto(id, { kind: 'translateX', from: 0, to: i % 2 === 0 ? 26 : -22, durationMs: 2600, delayMs: i * 300, repeat: 2, direction: 'alternate', curve: 'easeInOut' }),
+        ),
+        // ★★路径变形 v2（异构"山峦呼吸"——CSS 做不到）：三叠山的**三层笔触**同步在两组
+        //   山形之间缓变（峰数不同 ⇒ 内核重采样）——山在动，但读不出"坐标在插值"。
+        //   错时 0.4s（远→中→近，像"气"从远处漫过来）。yoyo 2 次（一来一回）。
+        ...[...I.rangeWet, ...I.rangeCore, ...I.rangeDry].flatMap((id, i) =>
+          onto(id, { kind: 'pathMorph', from: 0, to: 1, durationMs: 2600, delayMs: (i % 3) * 400, repeat: 2, direction: 'alternate', curve: 'easeInOut' }),
         ),
         // ★★渐变 v2（两态混合——CSS 做不到）：云带/云团由"冷雾"过渡到"晨光暖雾"，
         //   再 yoyo 回冷 —— "云开月明"的色调叙事（不是换一个渐变，是**渐变本身在呼吸**）

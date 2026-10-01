@@ -410,12 +410,36 @@ pub(crate) fn style_from_dto(dto: &NodeDto) -> Result<LStyle, String> {
         };
         let sa = a.structure_signature();
         let sb = parsed2.structure_signature();
-        if sa != sb {
-            return Err(format!(
-                "svgPath 与 svgPathTo 结构不同（{sa} vs {sb}）——逐点插值要求**同命令序列**                 （同段数、同段型）；异型之间没有'变形'的定义。请把两条路径改成同构                 （设计工具里复制一份再改坐标），或去掉 svgPathTo"
-            ));
-        }
-        style.svg_path_to = Some(parsed2);
+        let (final_a, final_b, resampled) = if sa == sb {
+            // 同构：直接用（零重采样开销——常见路径的最优路径）
+            (a.clone(), parsed2, false)
+        } else {
+            // ★★**异构 ⇒ 自动重采样**（2026-10-01 · 路径变形 v2）：把两态都重采样到
+            //   相同的 `n` 段三次贝塞尔（均匀弧长 + Catmull-Rom 平滑）——
+            //   这是 MorphSVG / flubber 的核心手法，本引擎的实现在内核**一处**
+            //   （`SvgPath::resample_uniform`）。
+            //   段数取两边段数的较大者（并夹到 12..48：太少的"圆"不圆、太多的每帧插值变重）。
+            let n = a.segs.len().max(parsed2.segs.len()).clamp(12, 48);
+            // 闭合语义统一：两边都闭合才闭合（否则签名仍会差一个 Z）
+            let a_closed = matches!(a.segs.last(), Some(crate::svg_path::PathSeg::Close));
+            let b_closed = matches!(parsed2.segs.last(), Some(crate::svg_path::PathSeg::Close));
+            let closed = a_closed && b_closed;
+            let ra = a.resample_uniform(n, closed).ok_or_else(|| {
+                format!(
+                    "svgPath 与 svgPathTo 结构不同（{sa} vs {sb}）需要**自动重采样**，                     但 A 态无法重采样——路径退化（总长≈0）或多子路径。                     请让 A 态是单子路径且非零长，或把两条路径改成同构"
+                )
+            })?;
+            let rb = parsed2.resample_uniform(n, closed).ok_or_else(|| {
+                format!(
+                    "svgPath 与 svgPathTo 结构不同（{sa} vs {sb}）需要**自动重采样**，                     但 B 态无法重采样——路径退化（总长≈0）或多子路径。                     请让 B 态是单子路径且非零长，或把两条路径改成同构"
+                )
+            })?;
+            (ra, rb, true)
+        };
+        // ★A 态**替换**为重采样版（`morphed` 以 `style.svg_path` 为 A——不替换会 zip 错结构）
+        style.svg_path = Some(final_a);
+        style.svg_path_to = Some(final_b);
+        style.svg_morph_resampled = resampled;
     }
     // ★★裁剪形状（C1）：结构形态 → (kind, [f32; 16])。类型静态、参数进基态（复位目标）。
     // ★★渐变（v2）：A 态必需配套 B 态才有"混合"——两态都在时校验结构一致（kind/色标数）。
@@ -3587,6 +3611,9 @@ pub unsafe extern "C" fn proteus_layout_svg_morph_path(
             "segs": morphed.segs,
             "totalLen": morphed.total_len,
             "morph": t,
+            // ★重采样标注（v2）：异构路径对在**建树时**被重采样到同构——如实告知调用方
+            //   （几何是重采样近似，与原 `d` 弧长差 <3%）
+            "resampled": node.style.svg_morph_resampled,
         })
         .to_string())
     });
@@ -3594,6 +3621,99 @@ pub unsafe extern "C" fn proteus_layout_svg_morph_path(
         Ok(Ok(s)) => into_c_string(s),
         Ok(Err(e)) => into_c_string(format!("{{\"ok\":false,\"error\":{}}}", serde_json::to_string(&e).unwrap_or_else(|_| "\"?\"".into()))),
         Err(_) => into_c_string("{\"ok\":false,\"error\":\"内部 panic（已捕获）\"}".to_string()),
+    }
+}
+
+/// ★★**当前变形后的段列表（二进制）**（2026-10-01 · 性能修正）——每帧路径。
+///
+/// 【为什么必须有（真机读数）】JSON 版（`proteus_layout_svg_morph_path`）在 moonGlow 幕
+///   把每帧工作 p95 从 0.17ms 抬到 **2.57ms**（9 条山脊 × 每帧 JSON 编解码 + org.json 解析）
+///   ——正是 tick_bin 当年被二进制化的同一条理由（"每帧 O(N) 条走 JSON 是白付"）。
+///   ⇒ 二进制版：**一次 JNI 拷贝 + 定长字段**，宿主零 JSON 解析。
+///
+/// 【格式（全小端）】`u32 count` + 每条目 `u32 tag` + 坐标（f32）：
+///   · tag 0 = MoveTo(x,y) · 1 = LineTo(x,y) · 2 = CubicTo(x1,y1,x2,y2,x,y)
+///   · tag 3 = QuadTo(x1,y1,x,y) · 4 = Close（无坐标）
+///   ★tag 与坐标都用 4 字节（对齐简单；路径段数小，字节数不敏感）。
+///   ★JSON 版保留：给内核测试/人工诊断用（"可读"），生产路径走本二进制版。
+///
+/// # Safety
+/// 返回指针须用 `proteus_rects_free` 释放。
+#[no_mangle]
+pub unsafe extern "C" fn proteus_layout_svg_morph_path_bin(
+    handle: u64,
+    node_id: u32,
+    out_len: *mut u32,
+) -> *mut u8 {
+    unsafe { *out_len = 0 };
+    let r = std::panic::catch_unwind(|| -> Result<Vec<u8>, String> {
+        let reg = registry().lock().map_err(|_| "注册表锁失败".to_string())?;
+        let entry = reg.get(&handle).ok_or_else(|| format!("句柄 {handle} 不存在"))?;
+        let node = entry
+            .tree
+            .nodes
+            .iter()
+            .find(|n| n.id == node_id)
+            .ok_or_else(|| format!("节点 {node_id} 不在树上"))?;
+        let a = node
+            .style
+            .svg_path
+            .as_ref()
+            .ok_or_else(|| format!("节点 {node_id} 没有 svgPath（A 态）"))?;
+        let b = node
+            .style
+            .svg_path_to
+            .as_ref()
+            .ok_or_else(|| format!("节点 {node_id} 没有 svgPathTo（B 态）"))?;
+        let morphed = a.morphed(b, node.style.path_morph);
+        let mut buf = Vec::with_capacity(4 + morphed.segs.len() * 28);
+        buf.extend_from_slice(&(morphed.segs.len() as u32).to_le_bytes());
+        for sg in &morphed.segs {
+            let tag: u32 = match sg {
+                crate::svg_path::PathSeg::MoveTo(..) => 0,
+                crate::svg_path::PathSeg::LineTo(..) => 1,
+                crate::svg_path::PathSeg::CubicTo(..) => 2,
+                crate::svg_path::PathSeg::QuadTo(..) => 3,
+                crate::svg_path::PathSeg::Close => 4,
+            };
+            buf.extend_from_slice(&tag.to_le_bytes());
+            match *sg {
+                crate::svg_path::PathSeg::MoveTo(x, y) | crate::svg_path::PathSeg::LineTo(x, y) => {
+                    buf.extend_from_slice(&x.to_le_bytes());
+                    buf.extend_from_slice(&y.to_le_bytes());
+                }
+                crate::svg_path::PathSeg::CubicTo(x1, y1, x2, y2, x, y) => {
+                    for v in [x1, y1, x2, y2, x, y] {
+                        buf.extend_from_slice(&v.to_le_bytes());
+                    }
+                }
+                crate::svg_path::PathSeg::QuadTo(x1, y1, x, y) => {
+                    for v in [x1, y1, x, y] {
+                        buf.extend_from_slice(&v.to_le_bytes());
+                    }
+                }
+                crate::svg_path::PathSeg::Close => {}
+            }
+        }
+        Ok(buf)
+    });
+    match r {
+        Ok(Ok(buf)) => {
+            let n = buf.len();
+            let mut boxed = buf.into_boxed_slice();
+            let ptr = boxed.as_mut_ptr();
+            std::mem::forget(boxed);
+            unsafe { *out_len = n as u32 };
+            ptr
+        }
+        Ok(Err(e)) => {
+            eprintln!("[proteus] svg_morph_path_bin 失败：{e}");
+            std::ptr::null_mut()
+        }
+        Err(_) => {
+            eprintln!("[proteus] svg_morph_path_bin 内部 panic（已捕获）");
+            std::ptr::null_mut()
+        }
     }
 }
 
@@ -3971,9 +4091,10 @@ mod tests {
         unsafe { proteus_layout_destroy(h) };
     }
 
-    /// 拒绝分支：异结构（L vs C）/ 只在 B 态 —— 都必须明确拒绝（含修法）。
+    /// ★★路径变形 v2：**异构自动重采样**（不再拒绝）——上限/退化的拒绝分支也在本测试。
     #[test]
-    fn svg_path_morph_rejects_hetero_and_missing_a() {
+    fn svg_path_morph_v2_auto_resamples_hetero() {
+        use crate::ffi::proteus_layout_create;
         let mk = |a: Option<&str>, b: Option<&str>| -> u64 {
             let mut node = serde_json::json!({"id": 9, "parentId": 1, "width": 100.0, "height": 100.0});
             if let Some(ad) = a {
@@ -3988,12 +4109,47 @@ mod tests {
             });
             unsafe { proteus_layout_create(std::ffi::CString::new(req.to_string()).unwrap().as_ptr()) }
         };
-        assert_eq!(mk(Some("M0 0 L10 0"), Some("M0 0 C1 1 2 2 10 0")), 0, "L vs C 应拒绝");
-        assert_eq!(mk(Some("M0 0 L10 0"), Some("M0 0 L5 0 L10 0")), 0, "段数不同应拒绝");
+        // ★L vs C：现在**接受**（自动重采样到同构）
+        assert!(mk(Some("M0 0 L10 0"), Some("M0 0 C1 1 2 2 10 0")) > 0, "L vs C 应自动重采样");
+        // ★段数不同（2 段 vs 3 段）：接受
+        assert!(mk(Some("M0 0 L10 0"), Some("M0 0 L5 0 L10 0")) > 0, "段数不同应自动重采样");
+        // 圆（C×2）→ 三角（L×2+Z）：接受（闭合语义统一为开放）
+        assert!(mk(Some("M0 5 C1 1 9 1 10 5"), Some("M0 0 L10 0 L5 9 Z")) > 0, "闭合差异应统一");
+        // 只有 B 态：拒绝（无 A 无从变形）
         assert_eq!(mk(None, Some("M0 0 L10 0")), 0, "只有 B 态应拒绝");
-        assert!(mk(Some("M0 0 L10 0"), Some("M0 0 L20 10")) > 0, "同构两态应成功");
+        // 退化（零长）：拒绝并给修法
+        assert_eq!(mk(Some("M5 5"), Some("M0 0 L1 0")), 0, "退化 A 态应拒绝");
+        // 异构 + 多子路径：拒绝（不做子路径配对猜测）
+        assert_eq!(mk(Some("M0 0 L1 0 M2 0 L3 0"), Some("M0 0 C1 1 2 2 10 0")), 0, "异构多子路径应拒绝");
+        // 同构 + 多子路径：照旧可用（不重采样）
+        assert!(mk(Some("M0 0 L1 0 M2 0 L3 0"), Some("M0 0 L2 0 M4 0 L6 0")) > 0, "同构多子路径仍可用");
+        // 同构：接受（零重采样）
+        assert!(mk(Some("M0 0 L10 0"), Some("M0 0 L20 10")) > 0, "同构应成功");
         assert!(mk(Some("M0 0 L10 0"), None) > 0, "只有 A 态应成功（只是不可变形）");
     }
+
+    /// 拒绝分支（v2 保留项）：只在 B 态 / 退化 A —— 都必须明确拒绝（含修法）。
+    #[test]
+    fn svg_path_morph_rejects_missing_a_or_degenerate_only() {
+        use crate::ffi::proteus_layout_create;
+        let mk = |a: Option<&str>, b: Option<&str>| -> u64 {
+            let mut node = serde_json::json!({"id": 9, "parentId": 1, "width": 100.0, "height": 100.0});
+            if let Some(ad) = a {
+                node["svgPath"] = serde_json::json!({"d": ad, "strokeWidth": 2});
+            }
+            if let Some(bd) = b {
+                node["svgPathTo"] = serde_json::json!({"d": bd});
+            }
+            let req = serde_json::json!({
+                "viewport": {"width": 100.0, "height": 100.0},
+                "nodes": [{"id": 1, "width": 100.0, "height": 100.0}, node]
+            });
+            unsafe { proteus_layout_create(std::ffi::CString::new(req.to_string()).unwrap().as_ptr()) }
+        };
+        assert_eq!(mk(None, Some("M0 0 L10 0")), 0, "只有 B 态应拒绝");
+        assert_eq!(mk(Some("M5 5"), Some("M0 0 L1 0")), 0, "退化 A 态应拒绝");
+    }
+
 
     fn parse_clip_path_shapes_and_rejects() {
         // inset：4 参 → kind 1，槽 0..3

@@ -281,6 +281,11 @@ pub struct LStyle {
     /// ★★**路径变形的当前因子**（0 = 全 A / 1 = 全 B；`pathMorph` 通道写入）
     #[serde(default)]
     pub path_morph: f32,
+    /// ★★**两态是否经过自动重采样**（路径变形 v2）：异构路径对 ⇒ 建树时重采样到同构。
+    ///   ★如实标注（不静默）：宿主/判据可读到"这条路径被重采样过——几何是重采样近似，
+    ///   与原 `d` 有 <3% 的弧长差"（本仓纪律：静默的行为改变是最贵的缺陷）。
+    #[serde(default)]
+    pub svg_morph_resampled: bool,
     /// ★★**描边颜色**（打包 `0xAARRGGBB`；0 = 未声明）
     #[serde(default)]
     pub stroke_color: u32,
@@ -406,6 +411,7 @@ impl Default for LStyle {
             svg_path: None,
             svg_path_to: None,
             path_morph: 0.0,
+            svg_morph_resampled: false,
             stroke_color: 0,
             stroke_width: 0.0,
             opacity: 1.0,

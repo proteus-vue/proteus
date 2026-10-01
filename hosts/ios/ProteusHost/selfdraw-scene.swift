@@ -76,6 +76,10 @@ func proteus_layout_svg_nodes(_ handle: UInt64) -> UnsafeMutablePointer<CChar>
 /// ★★路径变形 v1：按当前因子**算好**的变形段列表（宿主零插值——见内核 `SvgPath::morphed`）
 @_silgen_name("proteus_layout_svg_morph_path")
 func proteus_layout_svg_morph_path(_ handle: UInt64, _ json: UnsafePointer<CChar>) -> UnsafeMutablePointer<CChar>
+/// ★★路径变形（**二进制版**——每帧路径：一次拷贝 + 定长字段，无 JSON 解析。
+///   真机读数：JSON 版把 moonGlow 幕 p95 抬到 2.57ms——见内核同函数的注释）
+@_silgen_name("proteus_layout_svg_morph_path_bin")
+func proteus_layout_svg_morph_path_bin(_ handle: UInt64, _ nodeId: UInt32, _ outLen: UnsafeMutablePointer<UInt32>) -> UnsafeMutablePointer<UInt8>
 @_silgen_name("proteus_layout_text_color_nodes")
 func proteus_layout_text_color_nodes(_ handle: UInt64) -> UnsafeMutablePointer<CChar>
 @_silgen_name("proteus_layout_shared_element")
@@ -1303,13 +1307,14 @@ final class SelfDrawView: UIView {
         g.locations = locations
     }
 
-    /// ★★**接收内核已变形的段列表**（路径变形 v1）——**只设 path**（查内核在桥类：
-    ///   本类没有 tree handle）。因子缓存/去重在桥类（见 `applyPathMorphTick`）。
-    func setMorphedPath(nodeId: Int, segs: [Any]) {
+    /// ★★**接收内核已变形、已翻译的 CGPath**（路径变形 v1/v2）——**只设 path**
+    ///   （查内核 + 二进制解析在桥类：本类没有 tree handle）。
+    ///   ★v2 起直接收 `CGPath`（二进制通道的宿主侧一步到位——不再过 `cgPathFromSegs`）。
+    func setMorphedPathDirect(nodeId: Int, path: CGPath) {
         guard let shape = layerStrokeShapes[nodeId] else { return }
         CATransaction.begin()
         CATransaction.setDisableActions(true)
-        shape.path = cgPathFromSegs(segs)
+        shape.path = path
         CATransaction.commit()
     }
 
@@ -4118,15 +4123,59 @@ final class SelfDrawBridge: NSObject, SelfDrawExports {
         if let cached = layerMorphFactor[nodeId], cached == factor { return }
         layerMorphFactor[nodeId] = factor
         guard handle != 0, let view else { return }
-        let json = "{\"nodeId\":\(nodeId)}"
-        let out: String = json.withCString { cs in
-            takeCString(proteus_layout_svg_morph_path(handle, cs))
+        // ★★二进制通道（性能修正）：JSON 版在此把 moonGlow 幕 p95 抬到 2.57ms
+        //   （每帧 JSON 编解码）——与 tick_bin 同源理由。格式见内核
+        //   `proteus_layout_svg_morph_path_bin`（u32 count + 每条 u32 tag + f32 坐标）。
+        var len: UInt32 = 0
+        let ptr = proteus_layout_svg_morph_path_bin(handle, UInt32(nodeId), &len)
+        // ★返回值非 Optional（C 侧空指针时 len=0）——按长度判定，不写 `guard let`
+        guard len >= 4 else { return }
+        defer { proteus_rects_free(ptr, len) }
+        let buf = UnsafeRawBufferPointer(start: ptr, count: Int(len))
+        let count = Int(buf.loadUnaligned(fromByteOffset: 0, as: UInt32.self))
+        let path = CGMutablePath()
+        var off = 4
+        for _ in 0..<count {
+            guard off + 4 <= Int(len) else { return }
+            let tag = buf.loadUnaligned(fromByteOffset: off, as: UInt32.self)
+            off += 4
+            switch tag {
+            case 0: // MoveTo
+                let x = buf.loadUnaligned(fromByteOffset: off, as: Float.self)
+                let y = buf.loadUnaligned(fromByteOffset: off + 4, as: Float.self)
+                off += 8
+                path.move(to: CGPoint(x: CGFloat(x), y: CGFloat(y)))
+            case 1: // LineTo
+                let x = buf.loadUnaligned(fromByteOffset: off, as: Float.self)
+                let y = buf.loadUnaligned(fromByteOffset: off + 4, as: Float.self)
+                off += 8
+                path.addLine(to: CGPoint(x: CGFloat(x), y: CGFloat(y)))
+            case 2: // CubicTo
+                let x1 = buf.loadUnaligned(fromByteOffset: off, as: Float.self)
+                let y1 = buf.loadUnaligned(fromByteOffset: off + 4, as: Float.self)
+                let x2 = buf.loadUnaligned(fromByteOffset: off + 8, as: Float.self)
+                let y2 = buf.loadUnaligned(fromByteOffset: off + 12, as: Float.self)
+                let x = buf.loadUnaligned(fromByteOffset: off + 16, as: Float.self)
+                let y = buf.loadUnaligned(fromByteOffset: off + 20, as: Float.self)
+                off += 24
+                path.addCurve(to: CGPoint(x: CGFloat(x), y: CGFloat(y)),
+                              control1: CGPoint(x: CGFloat(x1), y: CGFloat(y1)),
+                              control2: CGPoint(x: CGFloat(x2), y: CGFloat(y2)))
+            case 3: // QuadTo
+                let x1 = buf.loadUnaligned(fromByteOffset: off, as: Float.self)
+                let y1 = buf.loadUnaligned(fromByteOffset: off + 4, as: Float.self)
+                let x = buf.loadUnaligned(fromByteOffset: off + 8, as: Float.self)
+                let y = buf.loadUnaligned(fromByteOffset: off + 12, as: Float.self)
+                off += 16
+                path.addQuadCurve(to: CGPoint(x: CGFloat(x), y: CGFloat(y)),
+                                  control: CGPoint(x: CGFloat(x1), y: CGFloat(y1)))
+            case 4: // Close
+                path.closeSubpath()
+            default:
+                return // 未知 tag ⇒ 停（格式不匹配——不静默画错）
+            }
         }
-        guard let data = out.data(using: .utf8),
-              let o = (try? JSONSerialization.jsonObject(with: data)) as? [String: Any],
-              (o["ok"] as? Bool) == true,
-              let segs = o["segs"] as? [Any] else { return }
-        view.setMorphedPath(nodeId: nodeId, segs: segs)
+        view.setMorphedPathDirect(nodeId: nodeId, path: path)
     }
 
     /// ★★**每帧推进（探针入口）**：内核 tick → 写层 → 返回可读 JSON（JS 探针用；帧循环走 `animTickLean`）
