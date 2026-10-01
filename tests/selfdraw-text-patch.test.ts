@@ -12,7 +12,7 @@
 //   ③ 无结构变更信号：`takeSplice()` 必须为 null（文本更新不该触发结构通道）
 //   ④ 形态真变时（多子节点）仍走"替换"（那是真结构变更，不得被静默吞掉）
 import { describe, it, expect } from 'vitest'
-import { h, ref, nextTick } from '@vue/runtime-core'
+import { h, ref, nextTick, createTextVNode } from '@vue/runtime-core'
 import { createAppRenderer } from '@proteus-vue/renderer-app'
 import { createSelfDrawAdapter } from '@proteus-vue/renderer-app/adapters/selfdraw'
 
@@ -140,6 +140,45 @@ describe('V7 · 文本更新走补丁（而非全量重发）', () => {
     // 未改的行不应出现（补丁是 delta，不是全量快照）
     const titles = textPatches.map((p) => p.style.text)
     expect(titles).not.toContain('t15')
+    app.unmount()
+  })
+
+  /**
+   * ★★⑥ **文本 vnode 路径**（编译模板 `{{ }}` 插值就是这条——与上面五条不同的路）
+   *
+   * 【为什么必须单列（2026-10-01 更新路径 A/B 抓出的静默丢件）】
+   *   `h('p-text', {}, 'x')`（字符串孩子）走 **`setElementText`**（上面①..⑤覆盖的路径）；
+   *   而编译模板里的 `{{ x }}` 产出的是 **`createTextVNode(...)` 孩子**——
+   *   更新时走 **`hostSetText` → `setText`**，是**另一条路**。
+   *   初版 `setText` 只改 `node.text` 不入 `textDirty` ⇒ `takePatches()` 里没有该补丁
+   *   ⇒ 宿主永远收不到文本变更（**静默丢件**：JS 树是新值、全量请求也是新值，
+   *     唯独增量通道少一条——与 V7 被修的 `setElementText` 缺陷同族，但入口不同）。
+   *   ⇒ 本用例钉住：文本 vnode 更新必须产出与 Rust `StylePatch` 同形状的文本补丁。
+   */
+  it('★★⑥ 文本 vnode（`{{ }}` 插值路径 → setText）更新 ⇒ 同样必须产出文本补丁', async () => {
+    const adapter = createSelfDrawAdapter() as Adapter
+    const renderer = createAppRenderer(adapter)
+    const label = ref('A')
+    // ★形态与编译产物一致：p-text 的孩子是 **Text vnode**（不是字符串）
+    const App = {
+      render: () => h('p-view', {}, [h('p-text', { width: 80 }, [createTextVNode(label.value)])]),
+    }
+    const container = adapter.createElement('p-view')
+    adapter.root.children.push(container)
+    container.parent = adapter.root
+    const app = renderer.createApp(App)
+    app.mount(container)
+    await nextTick()
+    adapter.markFullSync()
+
+    label.value = 'B'
+    await nextTick()
+    const patches = adapter.takePatches()
+    expect(patches, '文本 vnode 更新必须产出补丁（此前静默丢件 ⇒ 宿主收不到文本变更）').not.toBeNull()
+    const textPatches = (patches ?? []).filter((p) => p.style.text !== undefined)
+    expect(textPatches.length, '应恰好一条文本补丁').toBe(1)
+    // ★形状与 Rust StylePatch 一致（`text` 在 style 内）——顶层 `{id,text}` 会被 serde 静默忽略
+    expect(textPatches[0]!.style.text).toBe('B')
     app.unmount()
   })
 })

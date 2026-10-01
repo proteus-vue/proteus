@@ -1361,6 +1361,8 @@ public class MainActivity extends Activity {
             if (ab) {
                 args.put("mode", "ab");
                 args.put("rows", 8);
+                // ★更新路径 A/B（2026-10-01）：两轮（每轮 = 文本 + 行宽 + 标量宽，两侧同序列）
+                args.put("updates", 2);
             } else if (list) {
                 args.put("mode", "list");
                 args.put("rows", 1000);
@@ -1385,6 +1387,8 @@ public class MainActivity extends Activity {
             // ③ 宿主侧读数（**真实消费的证据**——与 JS 侧读数独立）
             out.put("host_mount_calls", host.mountCalls);
             out.put("host_apply_calls", host.applyCalls);
+            // ★更新路径 A/B：B 路补丁真的到了宿主吗（JS 侧自报补丁数 ≠ 宿主消费数）
+            out.put("host_update_patch_calls", host.updatePatchCalls);
             out.put("host_nodes", host.lastNodeCount);
             out.put("host_text_nodes", host.lastTextCount);
             out.put("host_cmds", host.lastCmdCount);

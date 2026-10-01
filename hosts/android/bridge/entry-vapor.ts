@@ -42,7 +42,7 @@ import { instantiateTemplate, ListRegistry, PropKeyTable, StringPool, SlotRuntim
 //   `abRender` 由构建期用 **@vue/compiler-sfc** 从同一份 SFC 编出（见 gen-vapor-fixture.mjs）。
 import { createAppRenderer } from '@proteus-vue/renderer-app'
 import { createSelfDrawAdapter } from '@proteus-vue/renderer-app/adapters/selfdraw'
-import { ref } from '@vue/runtime-core'
+import { ref, getCurrentInstance } from '@vue/runtime-core'
 import { abRender } from './vapor-ab-render.generated'
 import type { LayoutTemplate, SubscriptionTable } from '@proteus-vue/slot-runtime'
 
@@ -53,6 +53,12 @@ interface VaporHost {
   mount(treeJson: string): string
   /** 二进制指令流（`number[]` JSON 形态——JNI 侧转 byte[]，见 JsRenderHost.applyOps） */
   applyOps(opsJson: string): string
+  /**
+   * ★★**样式/文本增量补丁**（B 路 / Vue 运行时的更新入口；2026-10-01 更新路径 A/B 新增宿主端口）：
+   *   适配器 `takePatches()` 产出的 `[{id, style}]` → 宿主度量 → 内核 `update` → 变化集 → 增量指令。
+   *   （形状与 iOS `selfdraw-scene.updatePatches`、Rust `StylePatch` 三处同形。）
+   */
+  updatePatches(patchesJson: string): string
   /** 核心几何读数（判据用：**从内核真源读**，不是从我们发下去的参数复述） */
   readRects(): string
   /** ★★绘制通道探针（读**宿主真源**：渐变/发光/遮罩/圆角/裁剪/描边建出来了没） */
@@ -136,8 +142,19 @@ interface VaporListReport {
  * 判据：**两条路的树规模与几何逐节点一致**（都把同一份语义交给同一个内核算几何）、
  *   以及各自的成本（JS 侧建树耗时 / 宿主布局耗时）。
  *
- * 【诚实边界】本档覆盖 **mount 几何 + 成本**；更新路径的对照（A 走订阅增量、B 走 Vue patch
- *   → `updatePatches`）需要宿主实现 `updatePatches` 端口，属后续批次——不在这里假装覆盖。
+ * 本档覆盖两段：
+ *   · **mount 段**（首帧建树 + 几何逐节点对比 + 绘制通道 + 成本）；
+ *   · **update 段**（2026-10-01 本轮新增）：同一份数据变更在两条路上的等价性——
+ *     A 走**订阅增量**（改数据 → 触发源 → VaporRuntime → 二进制指令 → 内核），
+ *     B 走 **Vue patch**（ref 变更 → 组件更新 → 适配器 `takePatches()` → 宿主 `updatePatches`）。
+ *     两条路改的是同一语义（列表标题/宽度、标量宽度），更新后几何应仍逐节点一致。
+ *
+ * 【update 段的驱动方式（本仓实测的调度事实，写在类型旁边）】Vue 的组件更新是**微任务**调度——
+ *   单次 eval 内改 `ref` 不会立刻产 patch。而 QuickJS 的 `eval_impl` **在每个 eval 之后泵微任务**
+ *   （`pump_jobs_bounded`）⇒ 本入口按**两相位**驱动 B 路：
+ *     相位①（本次 eval）：改 ref + `$forceUpdate` → 返回时宿主泵微任务 ⇒ patch 已入队；
+ *     相位②（下一次 eval，由宿主逐相位调用）：`takePatches()` + `updatePatches` + 读数。
+ *   A 路不需要相位拆分（`slotRt.flush()` 是确定性驱动）。
  */
 interface AbReport {
   ok: boolean
@@ -165,6 +182,23 @@ interface AbReport {
   /** 绘制通道一致性：两侧各探针的"非空通道数"（应相同） */
   channels_a: number
   channels_b: number
+  /* ════════════ ★★update 段（2026-10-01：同一份变更在两条路上的等价性） ════════════ */
+  /** 实际跑了几轮更新（两侧轮数相同） */
+  upd_rounds: number
+  /** A 路每轮：变更规模（ops 字节）+ 内核回执（changed 数 / 重排范围）+ 耗时 + 本轮几何位移 */
+  upd_a: Array<{ round: number; ops_bytes: number; ops_ms: number; apply_ms: number; changed_rects: number; relayout: number; layout_ms: number; text_synced: number; moved: number }>
+  /** B 路每轮：适配器产了几条补丁 + 宿主回执（applied / 变更集 / 文本落层）+ 耗时 + 本轮几何位移 */
+  upd_b: Array<{ round: number; patches: number; applied: number; changed_rects: number; relayout: number; host_ms: number; text_layers: number; moved: number; driver_ms: number }>
+  /** ★更新后几何对比（与 mount 同一对齐口径）：样本数 / 最大差 / 不一致数 */
+  upd_samples: number
+  upd_max_delta: number
+  upd_mismatches: number
+  upd_first_mismatch: Record<string, unknown> | null
+  /** ★每轮更新后两路的**几何真值**（readRects 读内核）——比对它们的逐轮演化 */
+  upd_geom_rounds: Array<{ round: number; delta: number; mismatches: number; samples: number }>
+  /** ★文本通道证据（两条路各自的回归锁）：A = 内核 text_updates 被宿主消费数；B = 文本落层数 */
+  upd_a_text_synced: number
+  upd_b_text_applied: number
   notes: string[]
 }
 
@@ -271,6 +305,9 @@ function runAb(args: VaporArgs): string {
     cost_b: { vue_ms: 0, request_ms: 0, serialize_ms: 0, host_ms: 0, total_ms: 0 },
     layout_ms_a: -1, layout_ms_b: -1,
     channels_a: -1, channels_b: -1,
+    upd_rounds: 0, upd_a: [], upd_b: [],
+    upd_samples: 0, upd_max_delta: -1, upd_mismatches: -1, upd_first_mismatch: null,
+    upd_geom_rounds: [], upd_a_text_synced: 0, upd_b_text_applied: 0,
     notes,
   }
   try {
@@ -279,7 +316,13 @@ function runAb(args: VaporArgs): string {
       rep.error = '模板不可用（构建期诊断）'
       return JSON.stringify(rep)
     }
-    const read = (n: string): unknown => abData[n]
+    // ★★数据给**两份独立副本**（2026-10-01 更新路径 A/B）：两条路从同一初值出发、
+    //   各自承受同一序列的变更——比的是「同语义、两条路」，而不是「谁先改了共享数据」。
+    //   ★为什么不在模块级 `abData` 上直接改：同一进程重复跑 `vaporAb` 时，上一轮的改动
+    //     会污染下一轮的初值（本仓"装置污染读数"同族；副本把这个问题从根上消掉）。
+    const data = JSON.parse(JSON.stringify(abData)) as Record<string, unknown>
+    const dataB = JSON.parse(JSON.stringify(abData)) as Record<string, unknown>
+    const read = (n: string): unknown => data[n]
     const registry = new ListRegistry()
 
     /* ── 路 A：Vapor（编译产物 → 实例化 → 宿主） ── */
@@ -309,17 +352,107 @@ function runAb(args: VaporArgs): string {
     // A 的绘制通道探针（同样先读）
     const chA = probeChannelsFor(inst.nodes.map((n) => n.id))
 
+    /* ═══════════ ★★update 段 · 路 A：订阅驱动的增量（放在 B mount 之前） ═══════════
+     *
+     * 【为什么 A 的更新必须在 B mount 之前跑】宿主只有**一个句柄**：B 的 mount 会 destroy
+     *   掉 A 的句柄（与 mount 几何"先读"是同一约束）。⇒ 顺序 = A mount/更新 → B mount/更新。
+     *
+     * 【和 runShort 的更新循环同一条链】改数据 → 触发订阅源 → `VaporRuntime.relink` →
+     *   `slotRt.flush()`（确定性提交）→ 二进制指令 → 宿主 `applyOps` → 内核增量重排。
+     *   逐轮读数（ops 字节 / 内核 changed 集 / 重排范围 / 文本同步）+ 逐轮几何真值快照。
+     */
+    const updRounds = Math.max(0, args.updates ?? 2)
+    const updA: AbReport['upd_a'] = []
+    const geomsA: Array<ReturnType<typeof readRectsByOrder>> = []
+    if (updRounds > 0) {
+      const keys = new PropKeyTable()
+      const strings = new StringPool()
+      const captured: Uint8Array[] = []
+      // ★sink 捕获字节；flush() 是**确定性驱动**（runShort 同款：微任务调度器在 eval 里不排空）
+      const slotRt = new SlotRuntime(keys, strings, (bytes) => captured.push(bytes))
+      const evals = VaporRuntime.buildEvaluators(artifacts.table.evaluators)
+      const vapor = new VaporRuntime(artifacts.table, slotRt, evals, registry)
+      const ctx = { read }
+      const triggers = new Map<string, () => void>()
+      vapor.load(ctx, (name, cb) => triggers.set(name, cb))
+      vapor.relink(ctx)          // 首轮值（与 mount 相同 ⇒ 指令无净变化）
+      slotRt.flush()
+      captured.length = 0        // ★丢掉首帧指令（初始值已由 instantiateTemplate 回填进树）
+      for (let r = 0; r < updRounds; r++) {
+        const list = data.list as Array<{ id: number; w: number; title: string }>
+        if (!Array.isArray(list) || list.length === 0) break
+        const at = r % Math.min(list.length, rows)
+        // 改数据：行内两处（文本 + 宽度）+ 标量源一处（boxW）——与 B 路逐字同语义
+        list[at]!.title = `upd ${r}`
+        list[at]!.w = 60 + (r % 4) * 20
+        data.boxW = 150 + 30 * r
+
+        const to = t()
+        triggers.get('list')?.()
+        triggers.get('boxW')?.()
+        slotRt.flush()
+        const opsMs = t() - to
+        const payload = captured.length ? captured[captured.length - 1]! : new Uint8Array(0)
+        captured.length = 0
+        let changedN = 0
+        let relayout = -1
+        let tsyn = 0
+        let layoutMs = -1
+        const ta = t()
+        if (payload.length > 0) {
+          const ao = JSON.parse(proteusHost.applyOps(JSON.stringify(Array.from(payload)))) as {
+            ok?: boolean; applied?: number; changed?: number; rects?: Record<string, unknown>
+            relayout?: number; text_synced?: number; layout_ms?: number; error?: string
+            unsupported?: unknown[]
+          }
+          if (ao.ok === true) {
+            changedN = ao.rects ? Object.keys(ao.rects).length : (ao.changed ?? 0)
+            relayout = ao.relayout ?? -1
+            tsyn = ao.text_synced ?? 0
+            layoutMs = ao.layout_ms ?? -1
+          }
+          // ★内核拒收明细透传（宿主已读；JS 侧记 note——"指令被拒"不得伪装成"指令生效"）
+          if (ao.unsupported && ao.unsupported.length > 0) {
+            notes.push(`A 轮 ${r}：内核拒收 ${ao.unsupported.length} 条：${JSON.stringify(ao.unsupported).slice(0, 200)}`)
+          }
+        }
+        const applyMs = t() - ta
+        const geom = readRectsByOrder(semIdsA)
+        geomsA.push(geom)
+        const prevGeom = r === 0 ? rectsA : geomsA[r - 1]!
+        updA.push({
+          round: r, ops_bytes: payload.length, ops_ms: opsMs, apply_ms: applyMs,
+          changed_rects: changedN, relayout, layout_ms: layoutMs, text_synced: tsyn,
+          moved: maxGeomDelta(prevGeom, geom),
+        })
+        rep.upd_a_text_synced += tsyn
+      }
+    }
+
     /* ── 路 B：Vue 运行时（官方 render → runtime-core → selfdraw 适配器） ── */
     const adapter = createSelfDrawAdapter()
     const renderer = createAppRenderer(adapter)
     const container = adapter.createElement('p-view')
     adapter.root.children.push(container)
     container.parent = adapter.root
-    const abList = ref(abData.list)
-    const abBoxW = ref(abData.boxW)
+    const abList = ref(dataB.list)
+    const abBoxW = ref(dataB.boxW)
+    /**
+     * ★★B 路更新的**同步驱动柄**（2026-10-01 更新路径 A/B）。
+     *
+     * 【为什么需要它】Vue 的组件更新走**微任务调度**（`queueJob` → `resolvedPromise.then(flushJobs)`）
+     *   ⇒ 单次 eval 内改 `ref` 不会立刻产出 patch，而本入口是**全同步**的（铁律 A-02）。
+     * 【为什么这是"同一套机制"而非绕过】`instance.update` 就是调度器排的那个 job 本体
+     *   （Vue 3.5 源码：`instance.update = effect.run.bind(effect)`）——
+     *   这里只是把"何时跑"从微任务改成**显式同步调用**，patch 链路（render → patch → 适配器）一字未改。
+     * 【取实例】`getCurrentInstance()` 在 setup 里调用拿到组件内部实例（`update` 属性在
+     *   `setupRenderEffect` 里赋值——本入口在 mount 之后才调它，时序安全）。
+     */
+    let abRootInst: { update?: () => void } | null = null
     const AbApp = {
       name: 'VaporAbApp',
       setup() {
+        abRootInst = getCurrentInstance() as unknown as { update?: () => void }
         return { list: abList, boxW: abBoxW }
       },
       render: abRender,
@@ -345,6 +478,11 @@ function runAb(args: VaporArgs): string {
       rep.error = 'B 路 mount 失败：' + (mountB.error ?? '')
       return JSON.stringify(rep)
     }
+    // ★★声明"宿主已与我对齐"（本仓实测的必需调用，不是可选优化）：挂载期 createElement/createText
+    //   置了 `structuralChange` 并累积 `createdNodes`——不清掉的话**第一次 `takePatches()` 必返 null**
+    //   （"结构变化"标志语义是"自上次取走以来"）⇒ B 路更新永远退化成全量，而更新对照看起来"没 patch"。
+    //   （iOS `entry-bench` 的 Vue 通路在每次全量后都调它——同款约定。）
+    adapter.markFullSync()
 
     /* ── 逐节点对比（**跳过 B 的 2 个包装节点**：adapter.root + mount container） ── */
     //   【为什么跳过】Vue 路的树多两层：`adapter.root`（适配器根）与 `container`（mount 挂载点）——
@@ -442,6 +580,100 @@ function runAb(args: VaporArgs): string {
     rep.channels_a = chA.filter((c) => c.nonEmpty > 0).length
     rep.channels_b = chB.filter((c) => c.nonEmpty > 0).length
 
+    /* ═══════════ ★★update 段 · 路 B：Vue patch → 适配器补丁 → 宿主 updatePatches ═══════════
+     *
+     * 【与 A 路逐字同语义的变更序列】行内（文本 + 宽度）+ 标量源（boxW）——两条路改的是
+     *   同一序列的值（A 改 `data` 的镜像、B 改 `dataB` 的镜像，初值相同、互不污染）。
+     *
+     * 【驱动链（每一步都是产品形态里的真环节）】
+     *   改 `abList`/`abBoxW`（reactive）→ `instance.update()` **同步**重渲染
+     *   → Vue patch 打到适配器（`patchProp` 标 dirty / 文本走 `setText|setElementText` 标 textDirty）
+     *   → `adapter.takePatches()` 产出 `[{id, style}]`
+     *   → 宿主 `updatePatches`（度量 → 内核 update → 变化集 → 文本落层 → 增量指令）。
+     */
+    const updB: AbReport['upd_b'] = []
+    const geomsB: Array<ReturnType<typeof readRectsByOrder>> = []
+    if (updRounds > 0) {
+      const listB = abList.value as Array<{ id: number; w: number; title: string }>
+      for (let r = 0; r < updRounds; r++) {
+        if (!Array.isArray(listB) || listB.length === 0) break
+        const at = r % Math.min(listB.length, rows)
+        // 与 A 路逐字同语义（同一序列的值）
+        listB[at]!.title = `upd ${r}`
+        listB[at]!.w = 60 + (r % 4) * 20
+        abBoxW.value = 150 + 30 * r
+        const t0 = t()
+        // ★同步驱动（见 `abRootInst` 的注释）：调的就是调度器排的那个 job 本体
+        //   （TS 收窄：`abRootInst` 只在 setup 回调里赋值，控制流分析到不了——显式断言恢复其真实类型）
+        const rootInst = abRootInst as { update?: () => void } | null
+        rootInst?.update?.()
+        const patched = adapter.takePatches()
+        const tPatch = t()
+        let hostMs = -1
+        let applied = -1
+        let changedN = 0
+        let relayout = -1
+        let textLayers = 0
+        if (patched === null) {
+          // 结构性变化 ⇒ 适配器要求走全量。更新段**不测全量路径**（那是 mount 段的形态）
+          // ⇒ 如实记一条 note（判据按"补丁为 null"判红——本夹具的变更不该触发结构）
+          notes.push(`第 ${r} 轮 B 路 takePatches() === null（结构性变化）——夹具的文本/宽度变更不该触发结构`)
+        } else {
+          const hu = t()
+          const ho = JSON.parse(proteusHost.updatePatches(JSON.stringify(patched))) as {
+            ok?: boolean; applied?: number; changed_rects?: number; relayout?: number
+            total_ms?: number; text_layers_applied?: number; error?: string
+            unsupported?: unknown[]
+          }
+          hostMs = t() - hu
+          if (ho.ok === true) {
+            applied = ho.applied ?? -1
+            changedN = ho.changed_rects ?? 0
+            relayout = ho.relayout ?? -1
+            textLayers = ho.text_layers_applied ?? 0
+          } else {
+            notes.push(`第 ${r} 轮 B 路 updatePatches 失败：${ho.error ?? ''}`)
+          }
+          if (ho.unsupported && ho.unsupported.length > 0) {
+            notes.push(`B 轮 ${r}：内核拒收 ${ho.unsupported.length} 条：${JSON.stringify(ho.unsupported).slice(0, 200)}`)
+          }
+        }
+        const geom = readRectsByOrder(semIdsB)
+        geomsB.push(geom)
+        const prevGeom = r === 0 ? rectsB : geomsB[r - 1]!
+        updB.push({
+          round: r, patches: patched === null ? -1 : patched.length,
+          applied, changed_rects: changedN, relayout, host_ms: hostMs, text_layers: textLayers,
+          moved: maxGeomDelta(prevGeom, geom), driver_ms: tPatch - t0,
+        })
+        rep.upd_b_text_applied += textLayers
+        // ★★逐轮几何对照：A 轮 r 的快照（`geomsA[r]`）vs B 轮 r 的快照——同一语义两次更新后应仍一致
+        const gA = geomsA[r]
+        if (gA) {
+          const { delta: dR, mismatches: mR, samples: sR } = geomDiff(gA, geom)
+          rep.upd_geom_rounds.push({ round: r, delta: dR, mismatches: mR, samples: sR })
+          if (!rep.upd_first_mismatch && mR > 0) {
+            rep.upd_first_mismatch = { round: r, delta: dR }
+          }
+        }
+      }
+      rep.upd_rounds = updB.length
+      rep.upd_b = updB
+      // 汇总更新后几何对照（取每轮的最大值与样本和——与 mount 段同口径）
+      let umax = 0
+      let umism = 0
+      let usamples = 0
+      for (const g of rep.upd_geom_rounds) {
+        if (g.delta > umax) umax = g.delta
+        umism += g.mismatches
+        usamples += g.samples
+      }
+      rep.upd_samples = usamples
+      rep.upd_max_delta = Math.round(umax * 1000) / 1000
+      rep.upd_mismatches = umism
+    }
+    rep.upd_a = updA
+
     rep.ok = true
     notes.push(`A 路 ${rep.cost_a.total_ms.toFixed(1)}ms（实例化 ${rep.cost_a.instantiate_ms} + 宿主 ${rep.cost_a.host_ms}）`)
     notes.push(`B 路 ${rep.cost_b.total_ms.toFixed(1)}ms（Vue mount ${rep.cost_b.vue_ms} + 请求 ${rep.cost_b.request_ms} + 序列化 ${rep.cost_b.serialize_ms} + 宿主 ${rep.cost_b.host_ms}）`)
@@ -452,7 +684,8 @@ function runAb(args: VaporArgs): string {
   }
 }
 
-/** AB 对照的数据（两条路**共用同一份**——否则比的不是渲染路而是数据） */
+/** AB 对照的**初值**（同一份数据模板）——入口内为两条路各拷一份独立副本（见 runAb 内的说明：
+ *  同一进程重复跑 `vaporAb` 时，上一轮的改动不得污染下一轮的初值）。 */
 const abData = makeData(8)
 
 /** 按给定 id 顺序读内核几何（返回与 ids 等长的数组；缺失项为 null） */
@@ -471,6 +704,40 @@ function readRectsByOrder(ids: number[]): Array<{ id: number; x: number; y: numb
     /* 读失败 ⇒ 返回已收集部分（判据按缺失判红） */
   }
   return out
+}
+
+/** 两次几何快照之间的**最大绝对差**（px；用于"本轮更新真的动了没"的逐轮读数） */
+function maxGeomDelta(
+  a: Array<{ x: number; y: number; width: number; height: number }>,
+  b: Array<{ x: number; y: number; width: number; height: number }>,
+): number {
+  let m = 0
+  const n = Math.min(a.length, b.length)
+  for (let i = 0; i < n; i++) {
+    const x = a[i]!
+    const y = b[i]!
+    const d = Math.max(Math.abs(x.x - y.x), Math.abs(x.y - y.y), Math.abs(x.width - y.width), Math.abs(x.height - y.height))
+    if (d > m) m = d
+  }
+  return Math.round(m * 1000) / 1000
+}
+
+/** 两路几何快照的逐项对比（返回最大差 / 超容差数 / 样本数）——更新段与 mount 段同一口径 */
+function geomDiff(
+  a: Array<{ x: number; y: number; width: number; height: number }>,
+  b: Array<{ x: number; y: number; width: number; height: number }>,
+): { delta: number; mismatches: number; samples: number } {
+  const n = Math.min(a.length, b.length)
+  let delta = 0
+  let mismatches = 0
+  for (let i = 0; i < n; i++) {
+    const x = a[i]!
+    const y = b[i]!
+    const d = Math.max(Math.abs(x.x - y.x), Math.abs(x.y - y.y), Math.abs(x.width - y.width), Math.abs(x.height - y.height))
+    if (d > delta) delta = d
+    if (d > 0.01) mismatches++
+  }
+  return { delta: Math.round(delta * 1000) / 1000, mismatches, samples: n }
 }
 
 /** 逐节点探针绘制通道（返回与 ids 等长的"非空通道数"） */

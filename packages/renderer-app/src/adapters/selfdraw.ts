@@ -993,7 +993,19 @@ export function createSelfDrawAdapter(): SelfDrawAdapter {
       return { __kind: 'comment' }
     },
     setText(node: NativeTextNode, text: string): void {
-      node.text = text
+      // ★★**文本 vnode 的更新入口**（编译模板的 `{{ }}` 插值走**这一条**，与 `setElementText` 是两条路）
+      //
+      // 【为什么必须标 `textDirty`（2026-10-01 更新路径 A/B 抓出，此前是静默丢件）】
+      //   `_createTextVNode(_toDisplayString(x))` 产出的 Text vnode 在更新时走 `hostSetText`
+      //   ⇒ 本方法。初版只改 `node.text` **不入 `textDirty`** ⇒ `takePatches()` 里没有这条文本
+      //   补丁 ⇒ 宿主永远不知道文本变了（JS 树里文本是新的、全量请求也是新的，唯独**增量通道
+      //   静默丢件**——"改了数据屏幕不动"的又一形态，且没有任何报错）。
+      //   ★与 `setElementText` 的 V7 修正是同一原则：**文本变更必须进补丁通道**，
+      //     既不能被静默丢弃，也不该被迫走全量（id 稳定 ⇒ 走补丁）。
+      if (node.text !== text) {
+        node.text = text
+        textDirty.set(node, text)
+      }
       patches++
     },
     setElementText(el: NativeElementNode, text: string): void {

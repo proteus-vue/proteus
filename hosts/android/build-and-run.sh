@@ -286,6 +286,20 @@ if [ ! -f "$BUNDLE_VP" ]; then NEED_BUILD_VP=1; fi
 if [ -f "$ENTRY_VP" ] && [ -f "$BUNDLE_VP" ] && [ "$ENTRY_VP" -nt "$BUNDLE_VP" ]; then NEED_BUILD_VP=1; fi
 # slot-runtime dist 更新也要重建（实例化/订阅的表征在那里）
 if [ -f "$BUNDLE_VP" ] && [ "$HERE/../../packages/slot-runtime/dist/index.js" -nt "$BUNDLE_VP" ]; then NEED_BUILD_VP=1; fi
+# ★★renderer-app dist 更新也要重建（2026-10-01 实测抓出的陈旧产物：bundle 的 alias 指向
+#   `packages/renderer-app/dist`——改了 src（如 setText 文本补丁修复）而 dist 未重建 ⇒
+#   设备跑的是**旧适配器**，新修的在设备上根本不生效（"我修了但设备没变"的又一形态）。
+#   ★dist 陈旧修复：构建前若 src 比 dist 新，先重建 renderer-app（不是只等 bundle 重编）。
+APP_DIST="$HERE/../../packages/renderer-app/dist"
+if [ -d "$APP_DIST" ] && [ -n "$(find "$HERE/../../packages/renderer-app/src" -newer "$APP_DIST/index.js" -name '*.ts' -print -quit 2>/dev/null)" ]; then
+  echo "    renderer-app dist 落后于 src ⇒ 先重建（bundle alias 指向 dist，不重建则设备跑旧适配器）"
+  if ! (cd "$HERE/../../packages/renderer-app" && npx -y pnpm@9.15.9 build) 2>&1 | sed 's/^/    /'; then
+    echo "✗ renderer-app 重建失败——不静默跳过"
+    exit 3
+  fi
+  NEED_BUILD_VP=1
+fi
+if [ -f "$BUNDLE_VP" ] && [ -f "$APP_DIST/index.js" ] && [ "$APP_DIST/index.js" -nt "$BUNDLE_VP" ]; then NEED_BUILD_VP=1; fi
 if [ "$NEED_BUILD_VP" = "1" ]; then
   echo "    构建 vapor bundle（缺产物 或 入口/slot-runtime 更新）…"
   if ! node "$HERE/bridge/build-batch.mjs" 2>&1 | sed 's/^/    /'; then

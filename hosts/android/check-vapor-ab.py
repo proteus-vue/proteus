@@ -9,19 +9,24 @@
 
 【判据（每条都打在"会失败的那一点"上）】
   ① **两路都真的跑了**：`nodes_a > 0` · `nodes_b > 0` · 两路宿主布局耗时都 > 0
-  ② **★树规模一致**：`nodes_a == nodes_b`（A 的实例树 == B 的应用树；B 已剔除 2 个包装节点）
-     · 以及 `texts_a == texts_b`（文本节点数——最容易分叉的一类）
-  ③ **★★几何逐节点一致**：`max_delta ≤ 0.01px` · `mismatches == 0`
-     —— 两条路把同一份语义交给**同一个内核**，理论几何应逐位相同；任何差异都是
-     "某一路的样式/结构翻译错了"（这是 A/B 最核心的一条，也是"能替换"的量化证据）
-  ④ **绘制通道一致**：`channels_a == channels_b`（有非空绘制通道的节点数相同）
-     —— 渐变/圆角/发光/裁剪/描边在两条路上同样落地
+  ② **★文本序列可对齐**：`texts_a == texts_b`（两条路树形天然不同——Vapor 折文本进元素、
+     Vue 是标准 vnode 树——故判据是"同一份 SFC 的同一处文本可逐一对齐"，不是树规模相等）
+  ③ **★★几何逐节点一致**：`max_delta ≤ 0.01px` · `mismatches == 0`（mount 段）
+  ④ **绘制通道齐备**（A 侧 ≥5：夹具里 5 个通道各一节点）
   ⑤ **成本可读**（不设阈值，只如实记录）：两路各自的 JS 侧 + 宿主侧耗时
+  ⑥ ★★**更新路径对照（2026-10-01 新增）**：同一序列的变更（行文本 + 行宽 + 标量宽）在两条路上——
+     · A 走**订阅增量**（触发源 → VaporRuntime → 二进制指令 → 内核 applyOps）
+     · B 走 **Vue patch**（同步驱动 `instance.update()` → 适配器 `takePatches()` → 宿主 `updatePatches`）
+     · 判据 ⑥a：B 路每轮**必须产出补丁**（`patches > 0`；null ⇒ 结构性变化 ⇒ 红——夹具变更不该触发结构）
+     · 判据 ⑥b：两路每轮**内核几何都真的动了**（`moved > 0`；两侧更新都要落到几何上）
+     · 判据 ⑥c：**更新后几何仍逐节点一致**（`upd_samples > 0` 防空比假绿 · `upd_mismatches == 0`）
+     · 判据 ⑥d：**文本通道两条路都消费**（A：`text_synced` 累计 > 0；B：`text_layers` 累计 > 0）
+       —— 文本不落层 = 屏幕停留旧值，是几何断言发现不了的一类静默缺陷
+     · 判据 ⑥e：B 路补丁**真的到了宿主**（宿主侧读数 `host_update_patch_calls > 0`，不是只看 JS 自报）
 
 【诚实边界（本档不覆盖）】
-  · 只覆盖 **mount 几何 + 成本**；**更新路径**的对照（A 订阅增量 vs B Vue patch → updatePatches）
-    需要宿主实现 updatePatches 端口，属后续批次；
-  · 事件路径同理（A 已有交互闭环；B 的 `onClick` 经 Vue 的合成事件在自绘适配器上的落地未接）。
+  · 事件路径（A 已有交互闭环；B 的 `onClick` 经 Vue 的合成事件在自绘适配器上的落地未接）；
+  · B 侧绘制通道的**逐项等价**（探针口径未按 B 的 paintHint 形态对齐，只报"非空通道数"）。
 
 用法：python3 hosts/android/check-vapor-ab.py <vapor-ab.json>
 退出码：0 全过 / 1 有失败 / 2 用法错（产物缺失时诚实跳过，返回 0）
@@ -54,6 +59,8 @@ def main() -> int:
 
     # ★★下钻到 JS 侧报告（宿主回执把 JS 报告包在 `report` 字段里——
     #   与 `check-vapor-device.py` 同一读法；首版忘了这步 ⇒ 全部读数取不到，判据"空绿"风险）
+    #   ★`orig` 保留宿主侧读数（`host_*` 在顶层——⑥e"B 路补丁真的到了宿主"要读它）
+    orig = d
     rep = d.get("report") or {}
     if d.get("ok") is not True or rep.get("ok") is not True:
         fail(f"通路未成功：{str(rep.get('error') or d.get('error'))[:300]}")
@@ -149,12 +156,100 @@ def main() -> int:
         if ratio > 0:
             print(f"       ⇒ JS 侧总耗时比（B/A）= {ratio:.2f}×")
 
+    # ── ⑥ ★★更新路径对照（2026-10-01；本批判据的核心新增）──
+    upd_rounds = d.get("upd_rounds", 0)
+    upd_a = d.get("upd_a") or []
+    upd_b = d.get("upd_b") or []
+    if upd_rounds is None or upd_rounds <= 0:
+        fail(f"★更新路径未跑（upd_rounds={upd_rounds}）——A 订阅增量 vs B Vue patch 的对照缺失")
+        ok = False
+    else:
+        # ⑥a B 路每轮必须产出补丁（-1 = takePatches() 返回 null = 结构性变化）
+        # ★空列表也是失败（真实跑出过一次：upd_rounds=2 而 upd_b=[] —— JS 侧漏赋值，
+        #   判据当时对空列表**空绿**通过——本仓「空比假绿」同族）
+        if len(upd_b) < upd_rounds:
+            fail(f"★B 路更新读数不足：upd_rounds={upd_rounds} 而 upd_b 只有 {len(upd_b)} 条"
+                 f"（空列表 = 读数缺失，不是『每轮都有补丁』）")
+            ok = False
+        bad_patch = [r for r in upd_b if (r.get("patches") or -1) <= 0]
+        if bad_patch:
+            fail(f"★B 路补丁缺失：第 {[r.get('round') for r in bad_patch]} 轮 patches≤0"
+                 f"（-1 = takePatches() 返回 null ⇒ 结构性变化；夹具的文本/宽度变更不该触发结构）")
+            ok = False
+        if not bad_patch and len(upd_b) >= upd_rounds:
+            print(f"  ✓ ⑥a B 路每轮产出补丁：{[r.get('patches') for r in upd_b]} 条"
+                  f"（适配器 takePatches → 宿主 updatePatches）")
+
+        # ⑥b 两路每轮几何都真的动了
+        still_a = [r.get("round") for r in upd_a if not (r.get("moved") or 0) > 0]
+        still_b = [r.get("round") for r in upd_b if not (r.get("moved") or 0) > 0]
+        if still_a:
+            fail(f"★A 路第 {still_a} 轮几何**没有变化**（moved=0）——更新没落到内核几何上")
+            ok = False
+        if still_b:
+            fail(f"★B 路第 {still_b} 轮几何**没有变化**（moved=0）——patch 没落到内核几何上")
+            ok = False
+        if not still_a and not still_b:
+            print(f"  ✓ ⑥b 两路每轮几何都动了：A moved={[r.get('moved') for r in upd_a]} · "
+                  f"B moved={[r.get('moved') for r in upd_b]}")
+
+        # ⑥c 更新后几何仍逐节点一致（样本 0 ⇒ 空比假绿 ⇒ 红）
+        us = d.get("upd_samples", 0)
+        um = d.get("upd_mismatches", -1)
+        ud = d.get("upd_max_delta", -1)
+        if us is None or us <= 0:
+            fail(f"★更新后几何对比**没有样本**（upd_samples={us}）——空比假绿，不是『一致』")
+            ok = False
+        elif um is None or um < 0 or ud is None or ud < 0:
+            fail(f"更新后几何读数缺失：upd_max_delta={ud} · upd_mismatches={um}")
+            ok = False
+        elif um > 0 or ud > GEOM_TOL:
+            fm = d.get("upd_first_mismatch")
+            fail(f"★★更新后几何不一致：{um} 处超容差 · 最大差 {ud}px"
+                 + (f" · 首例 {json.dumps(fm, ensure_ascii=False)}" if fm else ""))
+            ok = False
+        else:
+            print(f"  ✓ ⑥c ★★更新后几何仍逐节点一致：{us} 样本 · 最大差 {ud}px · 不一致 {um} 处"
+                  f"（逐轮：{[(g.get('round'), g.get('delta')) for g in (d.get('upd_geom_rounds') or [])]}）")
+
+        # ⑥d 文本通道两条路都消费（回归锁：内核 text_updates 必须被宿主落层）
+        tsa = d.get("upd_a_text_synced", 0)
+        tsb = d.get("upd_b_text_applied", 0)
+        if not tsa or tsa <= 0:
+            fail(f"★A 路文本同步为 0（text_synced={tsa}）——内核 text_updates 没被宿主消费（屏幕会停留旧字）")
+            ok = False
+        if not tsb or tsb <= 0:
+            fail(f"★B 路文本落层为 0（text_layers={tsb}）——Vue patch 的文本没落到绘制真源")
+            ok = False
+        if tsa and tsb and tsa > 0 and tsb > 0:
+            print(f"  ✓ ⑥d 文本通道两侧都消费：A text_synced={tsa} · B text_layers={tsb}")
+
+        # ⑥e B 路补丁真的到了宿主（宿主侧读数——不是只信 JS 自报）
+        #   ★宿主读数在产物顶层（`host_update_patch_calls`），不在 report 里——取原始 d0
+        hup = (orig.get("host_update_patch_calls") if isinstance(orig, dict) else None)
+        if hup is None:
+            print(f"  ⚠ ⑥e 宿主补丁调用读数缺失（旧产物格式？）——跳过（判据其余项仍有效）")
+        elif hup <= 0:
+            fail(f"★B 路补丁没有到宿主（host_update_patch_calls={hup}）——JS 自报有补丁但宿主没消费")
+            ok = False
+        else:
+            print(f"  ✓ ⑥e B 路补丁真的到了宿主：host_update_patch_calls={hup}")
+
+        # 成本对照（如实记录）
+        print(f"  ℹ ⑥f 更新成本对照（如实记录）：")
+        for r in upd_a:
+            print(f"       A 轮 {r.get('round')}: ops {r.get('ops_bytes')}B · 编码 {r.get('ops_ms')}ms · "
+                  f"宿主 {r.get('apply_ms')}ms · 变更 {r.get('changed_rects')} 节点 · relayout {r.get('relayout')}")
+        for r in upd_b:
+            print(f"       B 轮 {r.get('round')}: 补丁 {r.get('patches')} 条 · 驱动 {r.get('driver_ms')}ms · "
+                  f"宿主 {r.get('host_ms')}ms · 变更 {r.get('changed_rects')} 节点 · relayout {r.get('relayout')}")
+
     for n in (d.get("notes") or []):
         print(f"      · {n}")
 
     if ok:
-        print("\n✅ A/B 判据全过（两路树规模一致 · 几何逐节点一致 · 绘制通道一致）"
-              "—— 「Vapor 能替换 Vue 运行时」有了**量化等价证据**")
+        print("\n✅ A/B 判据全过（mount 几何逐节点一致 + 更新路径两路等价 + 文本通道双消费）"
+              "—— 「Vapor 能替换 Vue 运行时」有了**量化等价证据**（含更新路径）")
         return 0
     print("\n✗ A/B 判据有失败项（见上）")
     return 1
