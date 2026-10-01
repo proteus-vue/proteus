@@ -137,6 +137,7 @@
     "check:cross-end-geometry": "python3 hosts/shared/check-cross-end-geometry.py",
     "check:anim-color-golden": "npx vitest run tests/anim-color-golden.test.ts",
     "check:svg-path-shape": "node scripts/check-svg-path-shape.mjs",
+    "check:gradient-contract": "node scripts/check-gradient-contract.mjs",
     "check:anim-record-bytes": "node scripts/check-anim-record-bytes.mjs"
   },
   "dependencies": {

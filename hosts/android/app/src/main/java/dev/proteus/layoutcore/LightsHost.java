@@ -586,7 +586,10 @@ final class LightsHost {
             // ★★C1/C2（2026-10-01 · 墨绘节目）：裁剪形状与 SVG 路径是内核动画的**静态基态声明**——
             //   不在白名单 ⇒ 请求不带声明 ⇒ 内核拒绝 clip/stroke 动画且**静默**
             //   （与适配器白名单漏键同款教训；真机判据会以"拒绝消息"暴露，但那时已白跑一轮）。
-            "clipPath", "svgPath", "perspective"));
+            "clipPath", "svgPath", "perspective",
+            // ★★渐变（v1 静态 paint——2026-10-01）：与 borderRadius 同层的绘制属性；
+            //   不在白名单 ⇒ 请求树不带声明 ⇒ 宿主读不到 ⇒ **静默不渲染**。
+            "fillGradient"));
 
     /** 缺省字号（**布局单位** = px，与本场景 viewport 同坐标系） */
     private static final double DEFAULT_FONT_UNITS = 14.0;
@@ -686,7 +689,10 @@ final class LightsHost {
             //   它的 svg 路径画在 `drawCmds` 里（按 cmd 节点 id 查 `nodeSvgStroke`）；
             //   首版 `color==0 && !isText ⇒ continue` 会把它整个丢掉 ⇒ 描边永远不画（静默）。
             boolean hasSvg = spec.optJSONObject("svgPath") != null;
-            if (!isText && color == 0 && !hasSvg) continue;
+            // ★★渐变节点同理（v1）：有 fillGradient 但**无 backgroundColor** 的节点也必须进
+            //   指令表——否则渐变填充被整个丢掉（本仓"纯描边节点被丢"的同款缺陷，预防性覆盖）。
+            boolean hasGrad = spec.optJSONObject("fillGradient") != null;
+            if (!isText && color == 0 && !hasSvg && !hasGrad) continue;
             float fs = isText ? (float) spec.optDouble("fontSize", DEFAULT_FONT_UNITS) : 0f;
             // 文字静态色（探针回落 + 绘制兜底都与它同源）
             String tc = spec.optString("color", null);
@@ -705,10 +711,12 @@ final class LightsHost {
                     view.setNodeClipPath(id, kind, ps);
                 }
             }
+            // ★★渐变（v1 · 2026-10-01）：解析进 Cmd（`GradSpec.parse` 非法返回 null ⇒ 退回纯色）
+            ProteusHostView.GradSpec grad = ProteusHostView.GradSpec.parse(spec.optJSONObject("fillGradient"));
             cmds.add(new ProteusHostView.Cmd(
                     (float) r.getDouble("x"), (float) r.getDouble("y"),
                     (float) r.getDouble("width"), (float) r.getDouble("height"),
-                    color, isText ? text : null, fs, textColor, radius));
+                    color, isText ? text : null, fs, textColor, radius, grad));
             cmdIds.add(id);
         }
         int[] ids = new int[cmdIds.size()];

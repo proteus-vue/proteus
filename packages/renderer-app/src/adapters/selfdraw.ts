@@ -233,6 +233,10 @@ const LAYOUT_KEYS = new Set([
   // ★★C2（2026-10-01）：SVG 描边三键同属"内核动画的静态基态"（路径本体 / 描边色 / 线宽）。
   //   ★与 clipPath 同款教训：不在本集合 ⇒ 请求不带声明 ⇒ 描边动画被拒且静默。
   'svgPath', 'strokeColor', 'strokeWidth',
+  // ★★渐变（v1 静态 paint——2026-10-01）：宿主绘制属性（与 borderRadius 同层）。
+  //   ★本集合是"请求树"的筛选器（内核 + iOS 宿主共读这棵树）——
+  //     漏放 ⇒ **iOS 宿主的建层读不到声明 ⇒ 静默不渲染**（对内核则无害：它不算渐变）。
+  'fillGradient',
 ])
 
 /**
@@ -284,7 +288,7 @@ function layoutStyleOf(props: Record<string, unknown>): Record<string, unknown> 
     // ★★C1/B：两个键是**复合/非长度值**（clipPath 是对象、perspective 是数）——
     //   原样透传给内核（不经过下面的长度折叠：它们不是长度）。
     if (key === 'clipPath' || key === 'perspective' || key === 'svgPath'
-        || key === 'strokeColor' || key === 'strokeWidth') {
+        || key === 'strokeColor' || key === 'strokeWidth' || key === 'fillGradient') {
         out[key] = value
         continue
     }
