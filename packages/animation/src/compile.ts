@@ -6,9 +6,10 @@
 //      ⇒ 编译期把二者绑定（`compileAnimations(decls, targets)`）；
 //   ② **编译期校验**：非法/非合成属性在这里被拦下（§5-bis.2），不等到运行时掉帧；
 //   ③ **默认值归一**：曲线/时长的缺省在编译期落定 ⇒ 下发给内核的指令**没有歧义**。
-import { ANIM_KIND_ID, CURVE_ID } from './types'
-import type { AnimDecl, AnimTargets, CompiledBatch, CurveId, EngineAnim } from './types'
-import { validateAnimations } from './validate'
+import { ANIM_KIND_ID, AnimKind, CURVE_ID } from './types'
+import type { AnimDecl, AnimKindId, AnimTargets, CompiledBatch, CurveId, EngineAnim } from './types'
+import { validateAnimations, isComposited } from './validate'
+import { parseColorToChannels } from './color'
 
 /**
  * 编译选项（**可选注入**——与 C4 漏点计数器的注入模式同构）
@@ -46,49 +47,86 @@ export function compileAnimations(
         '——可用但必须登记并接受 degraded 风险（Morpheus §4.2），不要绕过框架。',
     )
   }
-  const anims = decls.map((d) => compileOne(d, targets))
+  const anims = decls.flatMap((d) => compileOne(d, targets))
   // ★§4.2：声明式使用量记账（仅在显式注入注册表时——纯函数性质不变）
   opts?.escapes?.noteDeclarative(anims.length)
+  // ★★**合成属性判定**（2026-10-01 修正：此前恒 `true`）
+  //   颜色（kind 5..8）是 paint-only 但**非合成**（见 validate.ts 的 PAINT_ONLY_KINDS 注释）
+  //   ⇒ `composited` 必须如实反映，否则上层会把它当平台路径可用（`isPlatformEligible` 会放行，
+  //     而内核 `anim_commit_spec` 侧会**整批拒绝**——两处结论不一致就是"静默分档"）。
+  const kindNames = new Set(decls.map((d) => d.kind))
+  const composited = [...kindNames].every((k) => isComposited(k))
   return {
     anims,
-    composited: true, // 校验已保证全为合成属性（非合成会抛错）
-    nonComposited: [],
+    composited,
+    nonComposited: composited ? [] : [...kindNames].filter((k) => !isComposited(k)),
   }
 }
 
-/** 编译单条声明（校验已过的前提下） */
-export function compileOne(d: AnimDecl, targets: AnimTargets): EngineAnim {
+/**
+ * 编译单条声明（校验已过的前提下）——★**返回数组**：颜色声明会展开成 4 条通道指令
+ *   （见内核 `AnimKind::ColorR/G/B/A`；分解理由：求值机器全是标量的 ⇒ 零改动复用）。
+ */
+export function compileOne(d: AnimDecl, targets: AnimTargets): EngineAnim[] {
   const easing = resolveEasing(d)
-  return {
-    nodeId: targets.nodeId,
-    kind: ANIM_KIND_ID[d.kind],
-    curve: easing.curve,
-    from: d.from ?? 0,
-    to: d.to,
-    durMs: easing.durMs,
-    delayMs: d.delayMs ?? 0,
-    drive: d.drive === 'progress' ? 1 : 0,
-    takeover: d.takeover !== false,
-    ...(d.spring ? { spring: { stiffness: d.spring.stiffness, damping: d.spring.damping, mass: d.spring.mass ?? 1 } } : {}),
-    // ★MA6：序列（每段曲线在编译期落定；durMs = 各段之和 ⇒ 内核用它做时间→进度换算）
-    ...(d.keyframes
-      ? {
-          keyframes: d.keyframes.map((s) => ({
-            to: s.to,
-            durMs: s.durationMs,
-            curve: CURVE_ID[s.curve ?? 'easeOut'],
-          })),
-        }
-      : {}),
-    // ★MA5：滚动窗口（内核据 scrollTo > scrollFrom 判定为滚动驱动）
-    ...(d.scroll ? { scrollFrom: d.scroll.from, scrollTo: d.scroll.to } : {}),
+  // ★★颜色：一个声明 → 四条标量通道（R/G/B/A），共用同一曲线/时长/延迟/弹簧
+  if (d.kind === 'color') {
+    const from = parseColorToChannels(d.from)
+    const to = parseColorToChannels(d.to)
+    const mk = (kind: AnimKindId, f: number, t: number): EngineAnim => ({
+      nodeId: targets.nodeId,
+      kind,
+      curve: easing.curve,
+      from: f,
+      to: t,
+      durMs: easing.durMs,
+      delayMs: d.delayMs ?? 0,
+      drive: d.drive === 'progress' ? 1 : 0,
+      takeover: d.takeover !== false,
+      ...(d.spring
+        ? { spring: { stiffness: d.spring.stiffness, damping: d.spring.damping, mass: d.spring.mass ?? 1 } }
+        : {}),
+      ...(d.scroll ? { scrollFrom: d.scroll.from, scrollTo: d.scroll.to } : {}),
+    })
+    return [
+      mk(AnimKind.COLOR_R, from.r, to.r),
+      mk(AnimKind.COLOR_G, from.g, to.g),
+      mk(AnimKind.COLOR_B, from.b, to.b),
+      mk(AnimKind.COLOR_A, from.a, to.a),
+    ]
   }
+  return [
+    {
+      nodeId: targets.nodeId,
+      kind: ANIM_KIND_ID[d.kind],
+      curve: easing.curve,
+      from: d.from ?? 0,
+      to: d.to,
+      durMs: easing.durMs,
+      delayMs: d.delayMs ?? 0,
+      drive: d.drive === 'progress' ? 1 : 0,
+      takeover: d.takeover !== false,
+      ...(d.spring ? { spring: { stiffness: d.spring.stiffness, damping: d.spring.damping, mass: d.spring.mass ?? 1 } } : {}),
+      // ★MA6：序列（每段曲线在编译期落定；durMs = 各段之和 ⇒ 内核用它做时间→进度换算）
+      ...(d.keyframes
+        ? {
+            keyframes: d.keyframes.map((s) => ({
+              to: s.to,
+              durMs: s.durationMs,
+              curve: CURVE_ID[s.curve ?? 'easeOut'],
+            })),
+          }
+        : {}),
+      // ★MA5：滚动窗口（内核据 scrollTo > scrollFrom 判定为滚动驱动）
+      ...(d.scroll ? { scrollFrom: d.scroll.from, scrollTo: d.scroll.to } : {}),
+    },
+  ]
 }
 
 /** 求值参数归一（曲线/时长缺省落定——下发给内核的指令不含"未指定"） */
 function resolveEasing(d: AnimDecl): { curve: CurveId; durMs: number } {
   // ★MA6：序列模式的时长 = 各段之和（**不是**缺省 300——否则内核的 time→progress 换算会错）
-  if (d.keyframes) {
+  if (d.kind !== 'color' && d.keyframes) {
     const sum = d.keyframes.reduce((acc, s) => acc + s.durationMs, 0)
     return { curve: CURVE_ID[d.curve ?? 'easeOut'], durMs: d.durationMs ?? sum }
   }

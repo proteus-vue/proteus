@@ -52,6 +52,8 @@ interface SelfDrawNative {
   animStopNodes(idsJson: string): string
   /** ★停全部动画 + 复位所有层变换（相位收尾清场——滚动动画永不自动结束，必须显式停） */
   animStopAll(): string
+  /** ★★带底色的节点清单（颜色动画的取样入口——见宿主注释：不再盲试 id） */
+  bgNodes(): string
   /** ★V4 滚动（纯内容偏移，像素）——不驱动动画；与 scrollAnimSync 的区别是它不碰动画 */
   scrollBy(dx: number, dy: number): string
   animStart(json: string): string
@@ -88,7 +90,7 @@ const BN = { snapshot: 'selfdraw-final' }
 
 // ★构建标识（每次构建由 hosts/ios/bridge/inject-build-id.mjs 注入；与 entry-bench 同机制）
 //   —— 「设备上跑的是哪份代码」必须可**一眼判定**（报告新鲜度判据的内容锚点）。
-const BUILD_ID = '0ed7d664-112326'
+const BUILD_ID = 'b993f246-121047'
 
 const VP = (globalThis as unknown as { __PROTEUS_VIEWPORT__?: { width: number; height: number } })
   .__PROTEUS_VIEWPORT__ ?? { width: 390, height: 844 }
@@ -219,6 +221,8 @@ let animScrollResult: Record<string, unknown> = {}
 let animSequenceResult: Record<string, unknown> = {}
 /** ★★共享元素读数 */
 let animSharedResult: Record<string, unknown> = {}
+/** ★★颜色通道读数（2026-10-01） */
+let animColorResult: Record<string, unknown> = {}
 
 /** 供宿主逐相位调用（每个函数在**自己那次 evaluateScript** 里同步启动，微任务在其后排空） */
 const api = {
@@ -241,6 +245,10 @@ const api = {
       vue_ms: tVue - t0, to_request_ms: tReq - tVue, serialize_ms: tSer - tReq,
       host_ms: tHost - tSer, total_ms: tHost - t0,
       node_count: req.nodes.length, patch_count: adapter.patchCount(),
+      // ★取证读数（2026-10-01）：请求里**带底色**的节点 id（颜色动画的前提）
+      //   真机判据曾抓到"内核说没底色"⇒ 本读数把"是请求没带还是内核没解析"一分为二。
+      bg_nodes: req.nodes.filter((n) => typeof (n as { backgroundColor?: string }).backgroundColor === 'string').map((n) => n.id).slice(0, 8),
+
     }
     return JSON.stringify({ phase: 'mount', timing: phaseOut.mount, host: safeParse(hostOut), created: mountCreated })
   },
@@ -414,6 +422,100 @@ const api = {
    *
    * 【判据】见 `check-anim-rt2.py` 的 K 组。
    */
+  /**
+   * ★★**颜色通道**（2026-10-01）—— 一个 `color` 声明驱动**四个内核通道**
+   *
+   * 【要证明什么】
+   *   ① 声明面：`{ kind: 'color', from, to }` 一个声明（用户语言）；
+   *   ② 编译面：展开成 4 条通道指令（kind 5..8）——`composited=false`（paint-only 非合成）；
+   *   ③ 执行面：内核逐通道求值 → 28B 记录带回打包色 → 宿主真写 `CALayer.backgroundColor`；
+   *   ④ 复位面：`animStopAll` 后**回底色**（不是停在末帧颜色）。
+   *   ⑤ 拒绝面：**无底色**的节点上启动颜色动画 ⇒ 内核明确拒绝（不静默）。
+   *
+   * 【判据】见 `check-anim-rt2.py` 的 P 组（探针从 CALayer 真读 backgroundColor 反解）。
+   */
+  animColor(): string {
+    // ★★**目标由内核给出**（2026-10-01 修取样缺陷）：问内核"哪些节点有底色"，
+    //   取第一个作为动画目标。此前是"层上有底色就选 + 盲试兜底"⇒ 真机实测全被拒且
+    //   原因误导（节点 id 由适配器/Vue 动态分配，调用方无法预知）。
+    const bgProbe = safeParse(proteusSelfDraw.bgNodes())
+    const bgIds = ((bgProbe as { ids?: number[] }).ids ?? [])
+    const target = bgIds[0] ?? 2
+    // 拒绝分支样本：**不带底色**的节点（取一个不在 bgIds 里的常见 id）
+    const noBg = bgIds.length > 0 ? [2, 3, 4, 5, 6, 7, 8].filter((id) => !bgIds.includes(id)).slice(0, 2) : []
+
+    proteusSelfDraw.animStopNodes(JSON.stringify({ nodeIds: [target] }))
+
+    // ① 声明（用户语言）：**起点 = 该节点的真实底色**（读层拿，不写死——见下）
+    //
+    // ★为什么 from 必须现读（2026-10-01 修正）：目标由内核查询给出，其底色是场景里任意一个
+    //   ⇒ 写死 `#1b1b21` 时若目标底色不是它，动画会从"一个不是它底色的值"起步
+    //   （视觉上首帧跳色）——真机判据正是这样抓到的（层上 bg=FF101020 vs 声明 from=#1b1b21）。
+    //   ⇒ from 现读（`bgNodes` 给 id、探针给该 id 的实际色）——**声明要基于事实**。
+    const startBg = (() => {
+      const p = safeParse(proteusSelfDraw.layerTransformProbe(JSON.stringify([target])))
+      const hex = (((p as { layers?: Array<{ bg?: string }> }).layers ?? [])[0]?.bg ?? '')
+      const s6 = hex.length === 8 ? hex.slice(2) : '' // FFRRGGBB → RRGGBB
+      return s6.length === 6 ? `#${s6.toLowerCase()}` : '#1b1b21'
+    })()
+    const decl = { kind: 'color' as const, from: startBg, to: '#2f6fed', durationMs: 120, curve: 'linear' as const }
+    const batch = compileAnimations([decl], { nodeId: target })
+    const startOut = safeParse(proteusSelfDraw.animStart(JSON.stringify({ anims: batch.anims })))
+
+    const bgOf = (id: number): string => {
+      const p = safeParse(proteusSelfDraw.layerTransformProbe(JSON.stringify([id])))
+      const l = ((p as { layers?: Array<{ bg?: string }> }).layers ?? [])[0]
+      return l?.bg ?? ''
+    }
+
+    // ② 起点：层上应已是底色（from 全通道）
+    const bgStart = bgOf(target)
+    // ③ 半程（60ms / 120ms，linear ⇒ 各通道走到一半）
+    proteusSelfDraw.animTick(60)
+    const bgMid = bgOf(target)
+    // ④ 走完（再 60ms）⇒ 精确等于 to
+    proteusSelfDraw.animTick(60)
+    const bgEnd = bgOf(target)
+
+    // ⑤ 复位：停全部 ⇒ 回底色（不是停在末帧）
+    proteusSelfDraw.animStopAll()
+    const bgAfterStop = bgOf(target)
+
+    // ⑥ 拒绝分支：无底色节点 ⇒ 内核必须明确拒绝（错误信息里点明原因与修法）
+    let rejected = ''
+    if (noBg.length > 0) {
+      const bad = safeParse(
+        proteusSelfDraw.animStart(
+          JSON.stringify({ anims: [{ nodeId: noBg[0], kind: 5, curve: 0, from: 0, to: 255, durMs: 50 }] }),
+        ),
+      )
+      rejected = String((bad as { error?: string }).error ?? '').slice(0, 120)
+    }
+
+    const r = {
+      node: target,
+      decl_kind: decl.kind,
+      // ★一个声明 → 四条通道（kind 序列是契约：5=R / 6=G / 7=B / 8=A）
+      declared_from: startBg,
+      compiled_kinds: batch.anims.map((a) => a.kind),
+      compiled_from: batch.anims.map((a) => a.from),
+      compiled_to: batch.anims.map((a) => a.to),
+      composited: batch.composited,
+      non_composited: batch.nonComposited,
+      start: startOut,
+      bg_start: bgStart,
+      bg_mid: bgMid,
+      bg_end: bgEnd,
+      bg_after_stop: bgAfterStop,
+      no_bg_nodes: noBg,
+      bg_ids_from_kernel: bgIds.slice(0, 8),
+      rejected_no_bg: rejected,
+
+    }
+    animColorResult = r
+    return JSON.stringify(r)
+  },
+
   animShared(): string {
     const probe = safeParse(proteusSelfDraw.layerTransformProbe(JSON.stringify([2, 3, 4])))
     const present = ((probe as { layers?: Array<{ id: number; missing?: boolean }> }).layers ?? [])
@@ -1060,6 +1162,8 @@ const api = {
       anim_sequence: animSequenceResult,
       // ★★共享元素（跨元素飞行：源矩形 → 目标 → 归位）
       anim_shared: animSharedResult,
+      // ★★颜色通道（一个声明 → 四条内核通道；2026-10-01）
+      anim_color: animColorResult,
       // ★★MA0-RT 平台零参与路径（合成属性判定 + CAKeyframe 提交 + presentation 探针）
       anim_platform: animPlatformResult,
       // ★★RT2 复杂动效（弹簧 / 打断接管 / FLIP / rotate+opacity）

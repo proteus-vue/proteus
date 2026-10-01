@@ -65,6 +65,8 @@ func proteus_layout_anim_seek(_ handle: UInt64, _ json: UnsafePointer<CChar>) ->
 @_silgen_name("proteus_layout_anim_seek_scroll")
 func proteus_layout_anim_seek_scroll(_ handle: UInt64, _ json: UnsafePointer<CChar>) -> UnsafeMutablePointer<CChar>
 /// ★共享元素（跨元素飞行；几何原语——中心差 + 宽度比在内核）
+@_silgen_name("proteus_layout_bg_nodes")
+func proteus_layout_bg_nodes(_ handle: UInt64) -> UnsafeMutablePointer<CChar>
 @_silgen_name("proteus_layout_shared_element")
 func proteus_layout_shared_element(_ handle: UInt64, _ json: UnsafePointer<CChar>) -> UnsafeMutablePointer<CChar>
 @_silgen_name("proteus_layout_anim_commit_spec")
@@ -306,6 +308,8 @@ func physFootprintMB() -> Double {
     func layerTransformProbe(_ idsJson: String) -> String
     /// ★★**停全部动画 + 复位变换**（相位间状态清理）
     func animStopAll() -> String
+    /// ★★带底色的节点清单（颜色动画的取样入口——见实现处注释）
+    func bgNodes() -> String
     /// ★★**MA0-RT 平台零参与路径**：提交一次（CAKeyframeAnimation）/ presentation 探针 / 撤销
     func animCommit(_ json: String) -> String
     func layerPresentedProbe(_ idsJson: String) -> String
@@ -531,7 +535,8 @@ final class SelfDrawView: UIView {
     /// 【为什么抽成方法（本仓纪律：同一语义一处实现）】全量重建（`buildLayers`）与
     ///   **结构增量**（`insertLayers`）都要造层——两份实现必然分叉 ⇒
     ///   新插入的行会与全量树**外观不一致**（静默错，且只有像素比对能发现）。
-    private func makeLayer(style: [String: Any]) -> CALayer {
+    /// @param nodeId 节点 id（**仅用于记底色快照** `layerOriginalBg`——复位目标，见其注释）
+    private func makeLayer(style: [String: Any], nodeId: Int) -> CALayer {
         let text = style["text"] as? String
         let fontSize = style["fontSize"] as? CGFloat
         if let text = text, !text.isEmpty {
@@ -557,6 +562,9 @@ final class SelfDrawView: UIView {
         let layer = CALayer()
         if let bg = (style["backgroundColor"] as? String).flatMap(parseHexColor) {
             layer.backgroundColor = bg.cgColor
+            // ★记底色快照（复位目标；见 `layerOriginalBg` 注释）——id 在调用方（makeLayer）不可见，
+            //   故由 `id` 参数写入（`makeLayer` 已带 nodeId）
+            layerOriginalBg[nodeId] = bg.cgColor
         }
         if let r = style["borderRadius"] as? CGFloat, r > 0 {
             layer.cornerRadius = r
@@ -575,7 +583,7 @@ final class SelfDrawView: UIView {
         CATransaction.setDisableActions(true)
         var byId: [Int: CALayer] = [:]
         for item in flat {
-            let layer = makeLayer(style: item.style)
+            let layer = makeLayer(style: item.style, nodeId: item.id)
             // ★几何**完全来自 Rust 核心**（位置/尺寸都不是 UIKit 算的）
             //
             // ★★坐标系换算（本仓实测踩到，是本场景最关键的一处）：
@@ -693,24 +701,42 @@ final class SelfDrawView: UIView {
             let t = layer.transform
             // ★RT2 扩展：rotate 从变换矩阵反解（`atan2(m12, m11)`——对本仓的"中心旋转+缩放"构造成立）
             let rotateDeg = atan2(t.m12, t.m11) * 180 / .pi
+            // ★★颜色（2026-10-01）：从 **CALayer 真读** `backgroundColor` 反解打包色
+            //   （判据纪律：真读层上状态，不回显我们写入的参数）
+            let bgStr = Self.packedHexFromCGColor(layer.backgroundColor)
             parts.append(
                 "{\"id\":\(id),\"tx\":\(t.m41),\"ty\":\(t.m42),\"scale\":\(t.m11),"
-                    + "\"rotate\":\(rotateDeg),\"opacity\":\(layer.opacity)}"
+                    + "\"rotate\":\(rotateDeg),\"opacity\":\(layer.opacity),\"bg\":\"\(bgStr)\"}"
             )
         }
         return "{\"ok\":true,\"layers\":[\(parts.joined(separator: ","))]}"
     }
 
     /// ★★**复位所有层的变换与透明度**（相位间状态清理；见 `animStopAll`）
+    ///
+    /// ★★**颜色（2026-10-01）**：内核侧的 `stop_all` 会把 `bg` 复位回底色（`bg_base`），
+    ///   宿主这一侧必须**跟同一件事**——否则层上留着动画末帧的颜色（内核已回、层未回 ⇒ 分叉）。
+    ///   ⇒ 把 `backgroundColor` 一并按底色重建（底色的字符串形态在建层时已持有，见 `layerOriginalBg`）。
     func resetAllTransforms() {
         CATransaction.begin()
         CATransaction.setDisableActions(true)
-        for (_, layer) in layersById {
+        for (id, layer) in layersById {
             layer.transform = CATransform3DIdentity
             layer.opacity = 1
+            // ★回底色（`layerOriginalBg` 是建层时记下的静态值；缺省 nil = 本层本来无底色）
+            if let orig = layerOriginalBg[id] {
+                layer.backgroundColor = orig
+            }
         }
         CATransaction.commit()
     }
+
+    /// 建层时的**底色快照**（复位目标；与内核 `bg_base` 同一件事的宿主侧副本）
+    ///
+    /// 【为什么必须存（不是"重新解析一遍 style"）】建层后 `style` 不再保留在层上
+    ///   （`makeLayer` 只把值写进 CALayer）；而复位需要"原始值" ⇒ 建层时记一份。
+    ///   ★与内核 `bg_base` 的一致性由判据守（同一条 stop 语义两端都要回底色）。
+    private(set) var layerOriginalBg: [Int: CGColor] = [:]
 
     /* ────────────────── ★★MA0-RT：平台渲染线程零参与路径（§5-bis） ────────────────── */
 
@@ -880,7 +906,8 @@ final class SelfDrawView: UIView {
     @discardableResult
     func applyTransform(
         nodeId: Int, tx: CGFloat, ty: CGFloat, scale: CGFloat,
-        rotate: CGFloat = 0, opacity: CGFloat = 1
+        rotate: CGFloat = 0, opacity: CGFloat = 1,
+        rgba: UInt32? = nil
     ) -> Bool {
         guard let layer = layersById[nodeId] else { return false }
         // ★RT2 扩展：位移 + 缩放 + 旋转（**以层中心为锚点**——等价 CSS transform 默认 origin）
@@ -901,7 +928,37 @@ final class SelfDrawView: UIView {
         if opacity != 1 {
             layer.opacity = Float(opacity)
         }
+        // ★★颜色（2026-10-01）：`nil` = 该节点无内核底色 ⇒ **保持本层静态绘制**（不动）
+        if let packed = rgba {
+            layer.backgroundColor = Self.cgColorFromPacked(packed)
+        }
         return true
+    }
+
+    /// 打包色 `0xAARRGGBB` → `CGColor`（颜色动画的落点；与内核 `LStyle.bg` 同编码）
+    ///
+    /// 【为什么不用 `parseHexColor`（那是对字符串的）】内核通道以 **u32** 下发（每帧二进制），
+    ///   再转成字符串解析一遍纯属白付（本仓每帧通道的纪律：不做可避免的编解码）。
+    private static func cgColorFromPacked(_ v: UInt32) -> CGColor {
+        CGColor(
+            red: CGFloat((v >> 16) & 0xFF) / 255.0,
+            green: CGFloat((v >> 8) & 0xFF) / 255.0,
+            blue: CGFloat(v & 0xFF) / 255.0,
+            alpha: CGFloat((v >> 24) & 0xFF) / 255.0
+        )
+    }
+
+    /// `CGColor` → 打包色 `0xAARRGGBB`（探针用：**真读层**，把值报给判据）
+    ///
+    /// ★取不到分量（颜色空间非 RGB / `nil`）⇒ 返回 `""`（空串）——判据据此判"读不到"，
+    ///   而不是伪装成某个颜色（本仓纪律：判据要能区分"没做"与"做了值为 0"）。
+    private static func packedHexFromCGColor(_ c: CGColor?) -> String {
+        guard let c, let comps = c.components, comps.count >= 3 else { return "" }
+        let r = UInt32((comps[0] * 255).rounded())
+        let g = UInt32((comps[1] * 255).rounded())
+        let b = UInt32((comps[2] * 255).rounded())
+        let a = comps.count >= 4 ? UInt32((comps[3] * 255).rounded()) : 255
+        return String(format: "%08X", (a << 24) | (r << 16) | (g << 8) | b)
     }
 
     /// ★★**摘除子树**（递归清理层与全部 id 簿记）
@@ -984,7 +1041,7 @@ final class SelfDrawView: UIView {
                 let pid = isBlockRoot ? parentId : rawPid!
                 let parentLayer: CALayer = layersById[pid] ?? self.layer
                 let style = spliceStyleOf(n)
-                let layer = makeLayer(style: style)
+                let layer = makeLayer(style: style, nodeId: id)
                 if isBlockRoot && rootSlot >= 0 {
                     // ★★块根按 `index` 插（层序 = 绘制顺序 = 核心 children 序）
                     //
@@ -1795,7 +1852,7 @@ final class SelfDrawView: UIView {
             guard let spec = nodesById[id] else { continue }
             guard layersById[id] == nil else { continue }   // 已物化（防御：重复 acquire）
             let style = SelfDrawView.styleOf(spec)
-            let (layer, reused) = acquireLayer(style: style)
+            let (layer, reused) = acquireLayer(style: style, nodeId: id)
             if !reused { made += 1 }
             // ★帧 = 节点绝对 rect − 父绝对原点（父的 rect 也在核心几何里 ⇒ 与物化顺序无关）
             let abs = nodeRects[id] ?? .zero
@@ -1886,7 +1943,7 @@ final class SelfDrawView: UIView {
     }
 
     /// 取一个层：**同类型**优先从池里复用（类型不匹配不复用——CATextLayer 当容器会残留 string）
-    private func acquireLayer(style: [String: Any]) -> (CALayer, Bool) {
+    private func acquireLayer(style: [String: Any], nodeId: Int) -> (CALayer, Bool) {
         let wantsText = !((style["text"] as? String) ?? "").isEmpty
         if let i = layerPool.firstIndex(where: { wantsText ? ($0 is CATextLayer) : !($0 is CATextLayer) }) {
             let l = layerPool.remove(at: i)
@@ -1895,7 +1952,7 @@ final class SelfDrawView: UIView {
             return (l, true)
         }
         layersCreated += 1
-        return (makeLayer(style: style), false)
+        return (makeLayer(style: style, nodeId: nodeId), false)
     }
 
     /// 把节点规格里的绘制字段取出来（与全量路径同款；单一实现避免分叉）
@@ -2056,7 +2113,7 @@ final class SelfDrawView: UIView {
         for n in nodes {
             guard let id = n["id"] as? Int, rowOfNode[id] == nil, layersById[id] == nil else { continue }
             let style = SelfDrawView.styleOf(n)
-            let (layer, reused) = acquireLayer(style: style)
+            let (layer, reused) = acquireLayer(style: style, nodeId: id)
             if !reused { made += 1 }
             let abs = nodeRects[id] ?? .zero
             let pid = (n["parentId"] as? Int) ?? -1
@@ -3382,6 +3439,16 @@ final class SelfDrawBridge: NSObject, SelfDrawExports {
         return "{\"ok\":true,\"running\":\(view.frameLoopRunning),\"frames\":\(view.frameCount),\"frame_ms\":\(view.lastFrameMs)}"
     }
 
+    /// ★★带底色的节点清单（颜色动画的取样入口；2026-10-01）
+    ///
+    /// 【为什么必须有（真机判据抓出的取样缺陷）】节点 id 由适配器/Vue 动态分配，
+    ///   调用方无法预知哪个 id 有底色 ⇒ 盲试 + 兜底 `?? 2` 会让判据判红且原因误导。
+    ///   本入口把"谁有底色"的问答案交回**内核**（唯一事实源）。
+    func bgNodes() -> String {
+        guard handle != 0 else { return "{\"ok\":false,\"error\":\"未接入核心\"}" }
+        return takeCString(proteus_layout_bg_nodes(handle))
+    }
+
     /// ★仍在推进的动画条数（0 = 全部结束）——**幕切换的权威判据**
     func animActiveCount() -> String {
         guard handle != 0 else { return "{\"ok\":false,\"error\":\"未接入核心\"}" }
@@ -3473,13 +3540,14 @@ final class SelfDrawBridge: NSObject, SelfDrawExports {
         return view.layerZProbe(idsJson)
     }
 
-    /// 每帧动画更新记录的字节长度：`id u32 + tx/ty/scale/rotate/opacity（五个 f32）` = **24B/条**
+    /// 每帧动画更新记录的字节长度：`id u32 + tx/ty/scale/rotate/opacity（五个 f32）+ rgba u32`
     ///
-    /// 【为什么是"唯一常量"（2026-09-30 真机教训）】此前探针 `animTick` 与帧循环 `animTickLean`
-    ///   **各自**写解析循环、各自写字面量：RT2 把记录由 16B 扩到 24B 时只改了一处 ⇒ 探针路径按
-    ///   `i*16` 错位解析，FLIP 一次回 215 条记录时层上留下**错位残值**（真机 F3d：end ty=-0.18，
-    ///   应为 0）。⇒ 记录长度与步长收敛到本常量，解析只留一个函数。
-    private static let animUpdateRecordBytes = 24
+    /// ★★2026-10-01 由 **24B 增至 28B**（颜色通道）：末 4 字节是**打包色** `0xAARRGGBB`，
+    ///   值 `0xFFFFFFFF` = **本节点无内核底色**（忽略该字段，保持本层静态绘制）。
+    ///   ★唯一事实源 = 内核 `ffi.rs::proteus_layout_anim_tick_bin` 的 7 个 `extend_from_slice`；
+    ///     两端宿主 / SDK / embed-demo 的常量必须与它同批更新（本仓历史上因两处各写步长
+    ///     而错位解析过：24B 记录被按 16B 读 ⇒ 层上留下错位残值）。
+    private static let animUpdateRecordBytes = 28
 
     /// ★★**每帧推进的唯一解析点**（探针 / 帧循环两条入口共用）
     ///
@@ -3506,9 +3574,12 @@ final class SelfDrawBridge: NSObject, SelfDrawExports {
             let sc = buf.loadUnaligned(fromByteOffset: base + 12, as: Float.self)
             let rot = buf.loadUnaligned(fromByteOffset: base + 16, as: Float.self)
             let op = buf.loadUnaligned(fromByteOffset: base + 20, as: Float.self)
+            // ★颜色（2026-10-01）：末 4 字节打包色 `0xAARRGGBB`；`UInt32.max` = 无内核底色
+            let rgba = buf.loadUnaligned(fromByteOffset: base + 24, as: UInt32.self)
             if view?.applyTransform(
                 nodeId: Int(nodeId), tx: CGFloat(tx), ty: CGFloat(ty), scale: CGFloat(sc),
-                rotate: CGFloat(rot), opacity: CGFloat(op)
+                rotate: CGFloat(rot), opacity: CGFloat(op),
+                rgba: rgba == UInt32.max ? nil : rgba
             ) == true {
                 applied += 1
             }
@@ -4097,12 +4168,18 @@ final class SelfDrawBridge: NSObject, SelfDrawExports {
         CATransaction.begin()
         CATransaction.setDisableActions(true)
         for u in updates where u.count >= 4 {
-            // 兼容 4 值（RT0 形态）与 6 值（RT2 扩展：rotate/opacity）
+            // 兼容 4 值（RT0 形态）/ 6 值（RT2：rotate/opacity）/ 7 值（2026-10-01：+ 打包色）
             let rot: CGFloat = u.count >= 6 ? CGFloat(u[4]) : 0
             let op: CGFloat = u.count >= 6 ? CGFloat(u[5]) : 1
+            // ★颜色：第 7 项是打包色；缺省/`-1`（内核用 u32::MAX 表示"无底色"经 JSON 变成 4294967295）
+            var rgba: UInt32? = nil
+            if u.count >= 7 {
+                let raw = u[6]
+                if raw >= 0 && raw < 4_294_967_296 { rgba = UInt32(raw) }
+            }
             if view?.applyTransform(
                 nodeId: Int(u[0]), tx: CGFloat(u[1]), ty: CGFloat(u[2]), scale: CGFloat(u[3]),
-                rotate: rot, opacity: op
+                rotate: rot, opacity: op, rgba: rgba
             ) == true {
                 applied += 1
             }
@@ -4317,9 +4394,15 @@ final class SelfDrawBridge: NSObject, SelfDrawExports {
         var req: [String: Any] = ["viewport": root["viewport"] as? [String: Any] ?? ["width": 390, "height": 844],
                                  "nodes": nodes, "textMeasures": textMeasures]
         // 删掉纯绘制字段（核心只管几何——传了也无害，但保持请求最小便于诊断）
+        //
+        // ★★例外：`backgroundColor` **不再删**（2026-10-01，颜色通道的前提）。
+        //   【为什么（真机判据抓出的真缺陷）】它从此是**内核字段**：颜色动画的**底色**
+        //   （`LStyle.bg_base`）= 起点基准 + 复位目标（见内核 `style_from_dto`）。
+        //   此前它被当作"纯绘制字段"删掉 ⇒ 内核收不到底色 ⇒ **所有颜色动画被内核拒绝**
+        //   （真机现象：`bg_ids_from_kernel: []` 而请求里明明有 8 个节点带底色）。
+        //   其余三项（color/fontSize/borderRadius）确实只用于宿主绘制与度量，仍然删。
         if var ns = req["nodes"] as? [[String: Any]] {
             for i in ns.indices {
-                ns[i].removeValue(forKey: "backgroundColor")
                 ns[i].removeValue(forKey: "color")
                 ns[i].removeValue(forKey: "fontSize")
                 ns[i].removeValue(forKey: "borderRadius")
@@ -4617,8 +4700,11 @@ final class SelfDrawBridge: NSObject, SelfDrawExports {
 ///   · 节点**增删**（id 集合不同）—— 核心的 update 入口不处理结构变化
 ///   · 某节点的文本变化 —— 度量需重新注入，而当前 update 入口不带度量表
 ///
-/// 【只比布局字段】绘制属性（背景色/圆角/字号）**不影响几何** ⇒ 不进补丁，
+/// 【只比布局字段】绘制属性（圆角/字号/文字色）**不影响几何** ⇒ 不进补丁，
 ///   避免用「无关变化」触发重排（这是增量能否真正省下来的关键）。
+///   ★`backgroundColor` 的特殊性（2026-10-01）：它**也不进补丁**（底色变化不该触发重排），
+///   但**必须进全量请求**（它是内核颜色动画的 `bg_base`——见 `buildFullRequest` 注释）。
+///   两条要求不矛盾：补丁管"几何变更"，全量请求管"内核需要的样式事实"。
 /// 上一帧全量请求的字节数（诊断：证明增量路径确实没走整树序列化）
 private var lastFullRequestBytes = 0
 
@@ -4628,7 +4714,9 @@ func buildFullRequest(nodes: [[String: Any]], textMeasures: [String: [String: Do
                              "nodes": nodes, "textMeasures": textMeasures]
     if var ns = req["nodes"] as? [[String: Any]] {
         for i in ns.indices {
-            ns[i].removeValue(forKey: "backgroundColor")
+            // ★★`backgroundColor` **不删**（2026-10-01）：它已是内核字段（颜色动画的底色）。
+            //   与 `render(treeJson:)` 里的同类过滤**同源**——两处都要放行，否则
+            //   "首帧全量路径"与"结构变更后的全量路径"行为不同（一有一无底色 ⇒ 颜色动画时灵时不灵）。
             ns[i].removeValue(forKey: "color")
             ns[i].removeValue(forKey: "fontSize")
             ns[i].removeValue(forKey: "borderRadius")
@@ -5048,6 +5136,8 @@ final class SelfDrawViewController: UIViewController {
             ("__proteus.animSequence()", 2),
             // ★★共享元素（从源矩形飞到目标再归位；几何在内核 + 宿主层级提升）
             ("__proteus.animShared()", 2),
+            // ★★颜色通道（2026-10-01）：一个声明 → 四条内核通道 → 宿主真写层背景色
+            ("__proteus.animColor()", 2),
             // ★★主线程零唤醒实测（OS 级 CPU 会计 + 阳性对照）：**异步**两段各 600ms
             ("__proteus.animCpuProbe()", 0),
             // ★★RT2 帧率测席（§9 指标）：**异步**——由 CADisplayLink 跑满时长后回调续链
@@ -5088,7 +5178,7 @@ final class SelfDrawViewController: UIViewController {
             }
             let out = js(expr)
             // 只记关键读数（避免日志爆炸——本仓「输出控制」纪律）
-            if expr.hasPrefix("__proteus.mount") || expr.hasPrefix("__proteus.finalize2") || expr.hasPrefix("__proteus.animProbe") || expr.hasPrefix("__proteus.animComplex") || expr.hasPrefix("__proteus.animPlatform") || expr.hasPrefix("__proteus.animPreset") || expr.hasPrefix("__proteus.animScroll") || expr.hasPrefix("__proteus.animSequence") || expr.hasPrefix("__proteus.animShared") || expr.hasPrefix("__proteus.animCpu") {
+            if expr.hasPrefix("__proteus.mount") || expr.hasPrefix("__proteus.finalize2") || expr.hasPrefix("__proteus.animProbe") || expr.hasPrefix("__proteus.animComplex") || expr.hasPrefix("__proteus.animPlatform") || expr.hasPrefix("__proteus.animPreset") || expr.hasPrefix("__proteus.animScroll") || expr.hasPrefix("__proteus.animSequence") || expr.hasPrefix("__proteus.animShared") || expr.hasPrefix("__proteus.animColor") || expr.hasPrefix("__proteus.animCpu") {
                 NSLog("[proteus] %@ → %@", expr, String(out.prefix(400)))
             }
             // ★让出主线程 pump 轮：每轮一次 runloop 循环 ⇒ 微任务队列被排空

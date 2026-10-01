@@ -12,6 +12,7 @@
 //   ⇒ 必须**显式**（`ValidationIssue` 里点名属性 + 给修复建议）。
 import { CURVE_ID } from './types'
 import type { AnimDecl, AnimKindName, ValidationIssue } from './types'
+import { parseColorToChannels } from './color'
 
 /** 合成属性集（§5-bis.1 的分水岭；与内核 `AnimKind::is_composited` 同集合） */
 export const COMPOSITED_KINDS: readonly AnimKindName[] = [
@@ -22,9 +23,28 @@ export const COMPOSITED_KINDS: readonly AnimKindName[] = [
   'opacity',
 ]
 
+/**
+ * ★★**paint-only（非合成）但受支持的属性**（2026-10-01：`color`）
+ *
+ * 【它与"非合成红线"的关系（这条区分很重要）】`non-composited` 检查拦的是
+ *   **会触发平台布局链路**（requestLayout / 布局重算）的属性——那类属性让"平台渲染线程
+ *   零参与"的收益**完全失效**，是本引擎的红线。而 `color`：
+ *   · **不触发布局**（只改绘制属性 ⇒ 与 opacity 同一成本类）；
+ *   · 但**也不进**平台零参与路径（Android RenderNode 的可插值集里没有背景色 ⇒
+ *     若 iOS 单边放行就会两端分档）。
+ *   ⇒ 它是**第三种**：paint-only 且必须走 tick 路径。故从红线里**排除**，
+ *     但走 `CompiledBatch.composited=false` 如实反映（不静默当成合成）。
+ */
+export const PAINT_ONLY_KINDS: readonly AnimKindName[] = ['color']
+
 /** 该属性是否合成（编译期可查——上层可在**写代码时**就得到答案） */
 export function isComposited(kind: AnimKindName): boolean {
   return COMPOSITED_KINDS.includes(kind)
+}
+
+/** 该属性是否 paint-only（受支持、不触发布局，但不走平台零参与路径） */
+export function isPaintOnly(kind: AnimKindName): boolean {
+  return PAINT_ONLY_KINDS.includes(kind)
 }
 
 /**
@@ -51,6 +71,96 @@ export function validateAnimations(decls: readonly AnimDecl[]): ValidationIssue[
   }
 
   decls.forEach((d, i) => {
+    // ★★**颜色声明走独立分支**（2026-10-01）：值为颜色字符串、形态规则与标量不同
+    //   （`from` 必填 / `keyframes` 暂不可用 / `spring` 逐通道），故不与标量路径混判
+    //   （混判的典型错法是拿 `Number.isFinite` 去查一个字符串 ⇒ 恒假 ⇒ 误报）。
+    if (d.kind === 'color') {
+      // 起点必填（内核无"缺省 = 当前值"语义——见 constraint/from-is-mandatory）
+      if (d.from === undefined) {
+        issues.push({
+          index: i,
+          code: 'invalid-range',
+          message: '`color` 动画的 `from` 是**必填**（内核没有"缺省 = 节点当前底色"语义）',
+          hint: "显式给起点，如 from: '#2f6fed'（通常取该节点的 backgroundColor）",
+        })
+      }
+      for (const [key, val] of [
+        ['from', d.from],
+        ['to', d.to],
+      ] as const) {
+        if (val === undefined) continue
+        try {
+          parseColorToChannels(val as string)
+        } catch (e) {
+          issues.push({
+            index: i,
+            code: 'invalid-range',
+            message: `\`color\` 的 \`${key}\` 非法：${(e as Error).message}`,
+            hint: "用十六进制：'#RGB' / '#RRGGBB' / '#RRGGBBAA'（CSS4 序，最后两位是 alpha）",
+          })
+        }
+      }
+      // v1 边界：多段颜色暂不可用（`KeyframeSeg.to` 是数字）——明确拦下，不静默忽略
+      if (d.keyframes !== undefined) {
+        issues.push({
+          index: i,
+          code: 'invalid-range',
+          message: '`color` 暂不支持 `keyframes` 序列（多段颜色的每段终点得是颜色，v1 未开放）',
+          hint: '拆成多条颜色声明（分次调用），或等序列支持颜色值；单段颜色用 `curve` 即可',
+        })
+      }
+      if (d.curve !== undefined && d.spring !== undefined) {
+        issues.push({
+          index: i,
+          code: 'conflicting-easing',
+          message: '同时声明了 `curve` 与 `spring` —— 求值模式必须唯一',
+          hint: '二选一：要物理手感用 `spring`，要确定曲线用 `curve`',
+        })
+      }
+      // 弹簧参数校验（与标量路径同规则）
+      if (d.spring) {
+        const s = d.spring
+        const bad =
+          !Number.isFinite(s.stiffness) || s.stiffness <= 0 ||
+          !Number.isFinite(s.damping) || s.damping < 0 ||
+          (s.mass !== undefined && (!Number.isFinite(s.mass) || s.mass <= 0))
+        if (bad) {
+          issues.push({
+            index: i,
+            code: 'invalid-spring',
+            message: `弹簧参数非法：${JSON.stringify(s)}（要求 stiffness>0 · damping≥0 · mass>0）`,
+            hint: '用预设（presets.easing.snappy / smooth）避免手调；内核有 10s 安全上限兜底但那是兜底不是设计',
+          })
+        }
+      }
+      // 时长/延迟/滚动窗口（与标量路径同规则）
+      if (d.durationMs !== undefined && (!Number.isFinite(d.durationMs) || d.durationMs < 0)) {
+        issues.push({ index: i, code: 'invalid-range', message: `\`durationMs\` 非法：${d.durationMs}`, hint: '给非负毫秒数' })
+      }
+      if (d.delayMs !== undefined && (!Number.isFinite(d.delayMs) || d.delayMs < 0)) {
+        issues.push({ index: i, code: 'invalid-range', message: `\`delayMs\` 非法：${d.delayMs}`, hint: '给非负毫秒数' })
+      }
+      if (d.scroll) {
+        const { from, to } = d.scroll
+        if (!Number.isFinite(from) || !Number.isFinite(to)) {
+          issues.push({
+            index: i,
+            code: 'invalid-range',
+            message: `滚动窗口含非有限值：${JSON.stringify(d.scroll)}`,
+            hint: '窗口两端都要是具体的滚动位置（px）',
+          })
+        } else if (to <= from) {
+          issues.push({
+            index: i,
+            code: 'invalid-range',
+            message: `滚动窗口退化（to=${to} <= from=${from}）——进度将恒为 1，动画一开始就停在终点`,
+            hint: '检查 from/to 是否写反；窗口跨度应为正数（如 from: 0, to: 120）',
+          })
+        }
+      }
+      return // ★颜色分支到此为止（不落进标量路径的数值校验）
+    }
+
     // ★★**同属性重复声明**（真陷阱，本轮写预设时自己踩到）：内核语义是「同 (节点,属性) = 替换」
     //   ⇒ 一个批次里出现两条 `scale`，**后者静默替换前者**——用户以为"按下再弹回"，
     //   实际只有一条在跑。⇒ 编译期拦住（这正是 §5-bis.2"把问题变编译期"的同一套做法）。

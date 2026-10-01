@@ -33,8 +33,15 @@ public final class ProteusEngine implements AutoCloseable {
     public static final int ERR_NO_TREE = -4;
     public static final int ERR_INTERNAL = -5;
 
-    /** 每帧视觉更新记录长度：`id u32 + tx/ty/scale/rotate/opacity f32` = **24B/条**（小端） */
-    public static final int FRAME_UPDATE_BYTES = 24;
+    /**
+     * 每帧视觉更新记录长度 = **28B/条**（小端）：`id u32 + tx/ty/scale/rotate/opacity f32 + rgba u32`
+     *
+     * ★★2026-10-01 由 24B 增至 28B（颜色）——末 4 字节是打包色 `0xAARRGGBB`；
+     *   `0xFFFFFFFF` = 本节点无内核底色（消费方**忽略**该字段）。
+     *   ★唯一事实源 = 内核 `ffi.rs::proteus_layout_anim_tick_bin`；与本端 `ProteusHostView`
+     *   / iOS `animUpdateRecordBytes` / embed-demo 的常量同批更新。
+     */
+    public static final int FRAME_UPDATE_BYTES = 28;
     /** 几何二进制流的头长度（`RECTS_HEADER_BYTES` = 16） */
     public static final int RECTS_HEADER_BYTES = 16;
     /** 单条矩形字节数（id u32 + 4×f32） */

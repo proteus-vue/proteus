@@ -1468,6 +1468,56 @@ public class MainActivity extends Activity {
                 out.put("gesture_scroll_error", gse.toString());
             }
 
+            // ── P 组（★★颜色通道，2026-10-01）：一个声明 → 四条内核通道 → 宿主写色 ──
+            //   【与 iOS 腿同一条链】声明面（kind 5..8 四条）→ 内核算值 → 28B 记录 → 宿主覆盖色。
+            //   ★本端「真读」= 从宿主真源 `animColor` 读（Android 无 CA 层，绘制时经 `Cmd.color` 覆盖）。
+            try {
+                // 树：给节点 11 声明底色（`backgroundColor`）——颜色动画的起点与复位基准。
+                // ★本段自带一棵树（不复用 buildKernelTree：那棵没有底色，颜色动画会被内核拒绝）。
+                org.json.JSONObject colorTree = new org.json.JSONObject();
+                colorTree.put("viewport", new org.json.JSONObject().put("width", W).put("height", H));
+                org.json.JSONArray cnodes = new org.json.JSONArray();
+                cnodes.put(new org.json.JSONObject()
+                        .put("id", 1).put("parentId", org.json.JSONObject.NULL)
+                        .put("width", W).put("height", H));
+                cnodes.put(new org.json.JSONObject()
+                        .put("id", 11).put("parentId", 1).put("width", 140).put("height", 90)
+                        .put("backgroundColor", "#3366CC"));
+                cnodes.put(new org.json.JSONObject()
+                        .put("id", 12).put("parentId", 1).put("width", 140).put("height", 90));
+                colorTree.put("nodes", cnodes);
+                long seHandle = RustLayout.create(colorTree.toString());
+                if (seHandle <= 0) throw new IllegalStateException("颜色场景建树失败");
+                hv.attachCore(seHandle);
+
+                // ① 声明面：四条通道（R/G/B/A）——与 TS 编译产物同形（kind 5..8）
+                //    #3366CC → #FF0000：R 0x33→0xFF · G 0x66→0x00 · B 0xCC→0x00 · A 0xFF→0xFF
+                String colorStart = hv.kernelAnimStart("{\"anims\":["
+                        + "{\"nodeId\":11,\"kind\":5,\"curve\":0,\"from\":51,\"to\":255,\"durMs\":100},"
+                        + "{\"nodeId\":11,\"kind\":6,\"curve\":0,\"from\":102,\"to\":0,\"durMs\":100},"
+                        + "{\"nodeId\":11,\"kind\":7,\"curve\":0,\"from\":204,\"to\":0,\"durMs\":100},"
+                        + "{\"nodeId\":11,\"kind\":8,\"curve\":0,\"from\":255,\"to\":255,\"durMs\":100}]}");
+                org.json.JSONObject cs = new org.json.JSONObject(colorStart);
+                out.put("color_start", cs);
+
+                // ② 半程（50ms · linear ⇒ 各通道中点）→ 读宿主真源
+                hv.kernelAnimTick(50f);
+                out.put("color_mid", new org.json.JSONObject(hv.animTxProbe("[11]")));
+                // ③ 走完（再 60ms）⇒ 精确到 #FF0000
+                hv.kernelAnimTick(60f);
+                out.put("color_end", new org.json.JSONObject(hv.animTxProbe("[11]")));
+                // ④ 复位：停全部 ⇒ 回底色 #3366CC（不是停在末帧）
+                hv.kernelAnimStop("{\"all\":true}");
+                out.put("color_after_stop", new org.json.JSONObject(hv.animTxProbe("[11]")));
+                // ⑤ 拒绝分支：无色节点（节点 12 未声明 backgroundColor）⇒ 必须明确拒绝
+                out.put("color_rejected", hv.kernelAnimStart(
+                        "{\"anims\":[{\"nodeId\":12,\"kind\":5,\"curve\":0,\"from\":0,\"to\":255,\"durMs\":50}]}"));
+            } catch (Exception ce) {
+                out.put("color_error", ce.toString());
+            }
+            // 恢复原树（后续 M4 真帧循环用）
+            hv.attachCore(buildKernelTree(W, H));
+
             // ── M4：真帧循环（500ms；跑满自停）──
             hv.kernelAnimStop("{\"all\":true}");
             hv.kernelAnimStart("{\"anims\":[{\"nodeId\":11,\"kind\":0,\"curve\":3,\"from\":-60,\"to\":60,"

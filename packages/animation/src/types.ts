@@ -18,6 +18,13 @@ export const AnimKind = {
   SCALE: 2,
   ROTATE: 3,
   OPACITY: 4,
+  // ★★颜色（2026-10-01）：用户面**一个** `color` 声明，内核面**四个标量通道**（kind 5..8）。
+  //   分解的理由见内核 `anim.rs::AnimKind` 头注（求值机器全是标量的 ⇒ 零改动复用）。
+  //   ★对外**不暴露**通道号（`ANIM_KIND_ID` 里也没有它们）——那是编译内部的事。
+  COLOR_R: 5,
+  COLOR_G: 6,
+  COLOR_B: 7,
+  COLOR_A: 8,
 } as const
 export type AnimKindId = (typeof AnimKind)[keyof typeof AnimKind]
 export type AnimKindName =
@@ -26,6 +33,7 @@ export type AnimKindName =
   | 'scale'
   | 'rotate'
   | 'opacity'
+  | 'color'
 
 /** 名称 → 编号（编译期用；也是"名字写错"的**类型级**防线） */
 export const ANIM_KIND_ID: Record<AnimKindName, AnimKindId> = {
@@ -34,6 +42,10 @@ export const ANIM_KIND_ID: Record<AnimKindName, AnimKindId> = {
   scale: AnimKind.SCALE,
   rotate: AnimKind.ROTATE,
   opacity: AnimKind.OPACITY,
+  // ★`color` 的编号是**名义值**：编译期会把它展开成 4 条通道指令（见 `compileOne`）。
+  //   这里给 COLOR_R 是为了让 `ANIM_KIND_ID` 保持"每个名字都有编号"的完备形状——
+  //   直接消费它会少写 3 个通道，故 `compileOne` 有专门的 `color` 分支（不读这个值）。
+  color: AnimKind.COLOR_R,
 }
 
 /** 曲线（与内核 `CURVE_*` 一一对应——**不得改号**） */
@@ -84,10 +96,10 @@ export interface KeyframeSeg {
   curve?: CurveName
 }
 
-/** ★**单条动画声明**（封闭集的全部字段） */
-export interface AnimDecl {
-  /** 动哪个属性 */
-  kind: AnimKindName
+/** ★**单条动画声明**（封闭集的全部字段）——**标量属性**（数字值） */
+export interface ScalarAnimDecl {
+  /** 动哪个属性（**不含 `color`**——颜色走 `ColorAnimDecl`，见下） */
+  kind: Exclude<AnimKindName, 'color'>
   /** 起点（缺省 = 节点当前值，由内核在启动时解析） */
   from?: number
   /** 终点（**必填**——动画必须有确定目标；序列模式下 = 末段 `to`） */
@@ -121,6 +133,53 @@ export interface AnimDecl {
   /** 遇同 (节点,属性) 已有动画时是否**接管**（缺省 `true`：位置连续 + 速度移交） */
   takeover?: boolean
 }
+
+/**
+ * ★★**颜色动画声明**（2026-10-01）
+ *
+ * 【为什么是独立类型（而不是把 `to` 放宽成 `number | string`）】用联合类型让
+ *   "颜色声明必须是颜色字符串"成为**类型级保证**——写错形态在编辑器里就红，
+ *   而不是等到运行时才发现（与 `ANIM_KIND_ID` 的"名字写错是类型级防线"同一取向）。
+ *
+ * 【值形态】`#RGB` / `#RRGGBB` / `#RRGGBBAA`（CSS4 序）——与内核 `parse_css_color` 同规则。
+ *
+ * 【`from` 必填（诚实标注）】内核对"缺省 = 当前值"**没有实现**（这正是约束
+ *   `constraint/from-is-mandatory` 记下的事）：颜色动画的起点必须由调用方给出。
+ *   ⇒ 本类型把 `from` 定为必填，编译期就拦住"我没写起点"这类静默错色。
+ *
+ * 【与"节点当前底色"的关系】内核要求该节点**有底色**（树里声明了 `backgroundColor`）——
+ *   它既是"复位目标"也是校验基准；没底色的节点上启动颜色动画会被内核**明确拒绝**。
+ *   故预设（`presets.color.*`）通常由调用方传入 `from`（= 该节点的底色）。
+ */
+export interface ColorAnimDecl {
+  /** 固定为 `'color'`（用户面就这一个属性——内部的 4 通道分解不暴露） */
+  kind: 'color'
+  /** 起点颜色（**必填**——见上） */
+  from: string
+  /** 终点颜色（必填） */
+  to: string
+  durationMs?: number
+  delayMs?: number
+  /** 查表曲线（缺省 = `easeOut`） */
+  curve?: CurveName
+  /** 弹簧物理（**逐通道**独立积分；4 条通道各自静止，整色在最后一条静止时到位） */
+  spring?: SpringConfig
+  /**
+   * ★**序列对颜色暂不可用**（v1 边界，明确拦下而不是静默忽略）
+   *
+   * 【为什么】`KeyframeSeg.to` 是数字（多段颜色的每段终点得是颜色）⇒ 支持它要把该字段
+   *   也放宽成联合类型，那会波及标量路径的全部使用点。v1：多段颜色请拆成多条调用。
+   */
+  keyframes?: never
+  /** 滚动驱动的颜色（窗口换算在内核，与标量属性同一套） */
+  scroll?: ScrollWindow
+  /** 驱动方式（缺省 `time`；`progress` = 外部设进度，与标量属性同一语义） */
+  drive?: DriveName
+  takeover?: boolean
+}
+
+/** ★**单条动画声明**（封闭集的全部字段；`ScalarAnimDecl | ColorAnimDecl` 的联合） */
+export type AnimDecl = ScalarAnimDecl | ColorAnimDecl
 
 /**
  * ★**动画目标**（"对谁做"——声明与目标解耦的理由）

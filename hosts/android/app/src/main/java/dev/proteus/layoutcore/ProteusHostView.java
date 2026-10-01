@@ -340,6 +340,16 @@ public class ProteusHostView extends ViewGroup {
     private int[] cmdNodeIds = null;
     /** 节点 id → [tx, ty, scale, rotate, opacity]（**宿主侧真源**：探针从这里读） */
     private final Map<Integer, float[]> animTx = new HashMap<>();
+    /**
+     * ★★节点 id → **动画颜色**（打包 `0xAARRGGBB`）——内核颜色通道的绘制落点（2026-10-01）
+     *
+     * 【为什么要这张表（与 `animTx` 同源的理由）】内核每帧下发的颜色要**落到绘制**上：
+     *   `drawCmds` 用 `Cmd.color` 画（那是 Java 侧的静态调色板）⇒ 动画期间必须用覆盖值。
+     *   表里没有的节点 ⇒ 用 `Cmd.color`（= 未参与颜色动画的常态，零额外开销）。
+     * 【与 `animTx` 的分工】`animTx` 是**几何变换**（tx/ty/scale/rotate/opacity），
+     *   本表只装**颜色**——两者生命周期一致（都在 `animStopAll`/`clearScene` 时清）。
+     */
+    private final Map<Integer, Integer> animColor = new HashMap<>();
     /** 最近一次 apply 的条数（诊断） */
     public int lastAnimApplied = 0;
 
@@ -372,6 +382,12 @@ public class ProteusHostView extends ViewGroup {
                 float op = u.length() >= 6 ? (float) u.optDouble(5) : 1f;
                 animTx.put(id, new float[]{
                         (float) u.optDouble(1), (float) u.optDouble(2), (float) u.optDouble(3), rot, op});
+                // ★颜色（2026-10-01）：第 7 项（若存在）是打包色；-1/越界 ⇒ 无底色
+                if (u.length() >= 7) {
+                    long raw = (long) u.optDouble(6, -1);
+                    if (raw >= 0 && raw <= 0xFFFFFFFFL) animColor.put(id, (int) raw);
+                    else animColor.remove(id);
+                }
                 n++;
             }
         } catch (Throwable ignored) {
@@ -382,7 +398,7 @@ public class ProteusHostView extends ViewGroup {
         return n;
     }
 
-    /** ★**每帧二进制通道**（24B/条，全小端）——与 iOS 同一份内核、同一条性能纪律 */
+    /** ★**每帧二进制通道**（28B/条，全小端）——与 iOS 同一份内核、同一条性能纪律 */
     private int applyTickBin(byte[] bin) {
         if (bin == null || bin.length < ANIM_RECORD_BYTES) return 0;
         java.nio.ByteBuffer bb = java.nio.ByteBuffer.wrap(bin).order(java.nio.ByteOrder.LITTLE_ENDIAN);
@@ -391,15 +407,25 @@ public class ProteusHostView extends ViewGroup {
             int id = bb.getInt();
             float tx = bb.getFloat(), ty = bb.getFloat(), sc = bb.getFloat();
             float rot = bb.getFloat(), op = bb.getFloat();
+            int rgba = bb.getInt();
             animTx.put(id, new float[]{tx, ty, sc, rot, op});
+            // ★颜色（2026-10-01）：0xFFFFFFFF = 无内核底色 ⇒ 不入覆盖表（保持静态绘制）
+            if (rgba != 0xFFFFFFFF) animColor.put(id, rgba);
         }
         lastAnimApplied = n;
         if (n > 0) invalidate();
         return n;
     }
 
-    /** 每帧记录长度（与 Rust 侧 `proteus_layout_anim_tick_bin` 的 24B/条对齐——**只在本处定义**） */
-    private static final int ANIM_RECORD_BYTES = 24;
+    /**
+     * 每帧记录长度（与 Rust 侧 `proteus_layout_anim_tick_bin` 对齐——**只在本处定义**）
+     *
+     * ★★2026-10-01 由 **24B 增至 28B**（颜色）：`id u32 + 五值 f32 + rgba u32`。
+     *   末 4 字节 = 打包色 `0xAARRGGBB`；`0xFFFFFFFF` = **无内核底色**（忽略该字段）。
+     *   ★唯一事实源 = 内核 `ffi.rs` 的 7 个 `extend_from_slice`；iOS / SDK / embed-demo
+     *     的常量必须与它同批更新（历史上因两处各写步长而错位解析过）。
+     */
+    private static final int ANIM_RECORD_BYTES = 28;
 
     /** 直接推进一帧（确定性步进：判据用它做"固定 dt"读数，与 iOS 的 JS 驱动 probe 同形） */
     public int kernelAnimTick(float dtMs) {
@@ -475,6 +501,7 @@ public class ProteusHostView extends ViewGroup {
     public String kernelAnimStop(String json) {
         String out = RustLayout.animStop(coreHandle, json);
         animTx.clear();
+        animColor.clear();   // ★颜色与变换同一生命周期（2026-10-01）
         invalidate();
         return out;
     }
@@ -485,6 +512,14 @@ public class ProteusHostView extends ViewGroup {
      * 入参 JSON：`[id, …]`；出参：`{"ok":true,"layers":[{"id":N,"tx":…,"ty":…,"scale":…,"rotate":…,"opacity":…}, …]}`
      * （与 iOS `layerTransformProbe` **同形**——两端判据脚本可共用读法）
      */
+    /** 节点 id → 绘制指令下标（-1 = 未登记）；探针回落到静态色时要查它 */
+    private int indexOfNode(int nodeId) {
+        final int[] ids = cmdNodeIds;
+        if (ids == null) return -1;
+        for (int i = 0; i < ids.length; i++) if (ids[i] == nodeId) return i;
+        return -1;
+    }
+
     public String animTxProbe(String idsJson) {
         StringBuilder sb = new StringBuilder("{\"ok\":true,\"layers\":[");
         try {
@@ -493,14 +528,31 @@ public class ProteusHostView extends ViewGroup {
                 int id = ids.optInt(i);
                 float[] v = animTx.get(id);
                 if (i > 0) sb.append(',');
+                // ★颜色（2026-10-01）：从宿主真源读——**语义 = "绘制时实际会用哪个颜色"**。
+                //   ① 动画覆盖表里有 ⇒ 报它（动画值，16 进制不带 `#`）；
+                //   ② 表里没有（未参与 / 已 stop 清表）⇒ 回落到该节点的**静态绘制色**
+                //      （与 `drawCmds` 的取色规则同一处：`Cmd.color`）——**不是空串**。
+                //   ★为什么必须回落（真机判据抓出的口径缺陷）：`kernelAnimStop` 清表之后，
+                //     若探针报空，判据就无法区分"复位成功（应=底色）"与"读不到"——
+                //     而绘制侧那一刻用的正是静态色 ⇒ 探针必须报同一个数（真读＝读实际值）。
+                Integer bgv = animColor.get(id);
+                if (bgv == null) {
+                    // ★回落到静态绘制色（与 `drawCmds` 取色规则同源：该指令的 `Cmd.color`）
+                    final int cmdIdx = indexOfNode(id);
+                    if (cmdIdx >= 0 && cmds != null && cmdIdx < cmds.size()) bgv = cmds.get(cmdIdx).color;
+                }
+                final String bgHex = bgv == null ? "" : String.format("%08X", bgv);
                 if (v == null) {
                     // 无记录 ⇒ 恒等（未被动过）——与"层上是 identity"语义一致
-                    sb.append("{\"id\":").append(id).append(",\"tx\":0,\"ty\":0,\"scale\":1,\"rotate\":0,\"opacity\":1}");
+                    sb.append("{\"id\":").append(id)
+                      .append(",\"tx\":0,\"ty\":0,\"scale\":1,\"rotate\":0,\"opacity\":1")
+                      .append(",\"bg\":\"").append(bgHex).append("\"}");
                 } else {
                     sb.append("{\"id\":").append(id)
                       .append(",\"tx\":").append(v[0]).append(",\"ty\":").append(v[1])
                       .append(",\"scale\":").append(v[2]).append(",\"rotate\":").append(v[3])
-                      .append(",\"opacity\":").append(v[4]).append('}');
+                      .append(",\"opacity\":").append(v[4])
+                      .append(",\"bg\":\"").append(bgHex).append("\"}");
                 }
             }
         } catch (Throwable t) {
@@ -1175,8 +1227,14 @@ public class ProteusHostView extends ViewGroup {
                 if (tf[3] != 0f) canvas.rotate(tf[3], cx, cy);
                 if (tf[2] != 1f) canvas.scale(tf[2], tf[2], cx, cy);
             }
-            bgPaint.setColor(c.color);
-            if (op < 1f) bgPaint.setAlpha(Math.max(0, Math.min(255, (int) (Color.alpha(c.color) * op))));
+            // ★★颜色覆盖（2026-10-01）：该节点参与颜色动画时用内核值，否则用静态 `Cmd.color`
+            //   （表里没有 ⇒ 零额外开销；与 `animTx` 的查表同一形态）
+            final Integer animBg = (ids != null && i < ids.length && ids[i] >= 0) ? animColor.get(ids[i]) : null;
+            bgPaint.setColor(animBg != null ? animBg : c.color);
+            if (op < 1f) {
+                int base = animBg != null ? animBg : c.color;
+                bgPaint.setAlpha(Math.max(0, Math.min(255, (int) (Color.alpha(base) * op))));
+            }
             canvas.drawRect(c.x, c.y, c.x + c.w, c.y + c.h, bgPaint);
             if (c.text != null) {
                 if (c.fontSize > 0 && c.fontSize != lastSize) {
