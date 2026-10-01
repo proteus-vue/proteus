@@ -305,6 +305,10 @@ pub enum AnimKind {
     Clip13 = 28,
     Clip14 = 29,
     Clip15 = 30,
+    /// ★★**SVG 描边进度**（2026-10-01 · C2）：`0..1` 的**画线进度**——
+    ///   沿路径总弧长从起点画到 `progress × total_len`（"手写字/画圈"的经典动效）。
+    ///   路径本体 `d` 是**静态声明**（树里 `svgPath`），本通道只驱动"画到哪"。
+    StrokeProgress = 31,
 }
 
 impl AnimKind {
@@ -341,6 +345,7 @@ impl AnimKind {
             28 => AnimKind::Clip13,
             29 => AnimKind::Clip14,
             30 => AnimKind::Clip15,
+            31 => AnimKind::StrokeProgress,
             other => {
                 return Err(format!(
                     "未知动画属性 kind={other}（0=translateX/1=translateY/2=scale/3=rotate/4=opacity/\
@@ -385,7 +390,13 @@ impl AnimKind {
             | AnimKind::Clip13
             | AnimKind::Clip14
             | AnimKind::Clip15 => "clip",
+            AnimKind::StrokeProgress => "strokeProgress",
         }
+    }
+
+    /// 是否 **SVG 描边进度通道**（C2，31）
+    pub fn is_stroke(self) -> bool {
+        matches!(self, AnimKind::StrokeProgress)
     }
 
     /// 是否 **clip 形状参数通道**（15..30）——对应槽位 = kind - 15
@@ -479,7 +490,8 @@ impl AnimKind {
             | AnimKind::Clip12
             | AnimKind::Clip13
             | AnimKind::Clip14
-            | AnimKind::Clip15 => 0,
+            | AnimKind::Clip15
+            | AnimKind::StrokeProgress => 0,
         }
     }
 
@@ -510,6 +522,8 @@ impl AnimKind {
             | AnimKind::Clip13
             | AnimKind::Clip14
             | AnimKind::Clip15 => (0.002, 0.04),                        // 盒分数, 盒分数/s
+            // ★描边进度是 0..1 量纲（与 clip 参数同）
+            AnimKind::StrokeProgress => (0.002, 0.04),
             AnimKind::Opacity => (0.003, 0.06),                         // 1, 1/s
             // ★颜色通道：0.5/255 的通道步 ≈ 视觉不可辨（与 translate 的 0.5px 同量级取法）
             AnimKind::ColorR | AnimKind::ColorG | AnimKind::ColorB | AnimKind::ColorA => (0.5, 10.0),
@@ -564,6 +578,8 @@ impl AnimKind {
             | AnimKind::Clip13
             | AnimKind::Clip14
             | AnimKind::Clip15 => false,
+            // ★描边进度同样非合成（绘制期约束——两端都是"改占位层/重画路径"）
+            AnimKind::StrokeProgress => false,
             AnimKind::ColorR
             | AnimKind::ColorG
             | AnimKind::ColorB
@@ -586,6 +602,16 @@ impl AnimKind {
         if let Some(slot) = self.clip_slot() {
             if node.style.clip[slot] != v {
                 node.style.clip[slot] = v;
+                return true;
+            }
+            return false;
+        }
+        // ★★C2：描边进度（一个标量槽——与 clip 的"多槽"不同，它只有一条）
+        if self.is_stroke() {
+            /// 进度语义：内核侧**只存不裁**（clamp 在写入处做——见 `Anim` 的求值）
+            let v = v.clamp(0.0, 1.0);
+            if node.style.stroke_progress != v {
+                node.style.stroke_progress = v;
                 return true;
             }
             return false;
@@ -638,6 +664,8 @@ impl AnimKind {
                 | AnimKind::Clip13
                 | AnimKind::Clip14
                 | AnimKind::Clip15 => return false,
+                // 描边进度走上面的早退分支（见 write 开头）
+                AnimKind::StrokeProgress => return false,
                 // 颜色走上面的分支（此处不可达——`is_color` 已分流）
                 AnimKind::ColorR
                 | AnimKind::ColorG
@@ -975,6 +1003,8 @@ pub fn reset_visuals(tree: &mut LayoutTree, node_ids: &[u32]) -> usize {
             //   的新字段版：新加可动画字段时必须进这里（漏一个 = 静默残留）。
             // ★C1：clip 参数也要判脏（有裁剪且参数偏离基态 = 脏）
             let clip_dirty = s.clip_kind != 0 && s.clip != s.clip_base;
+            // ★C2：描边进度回 0（基态 = 未画）
+            let stroke_dirty = s.svg_path.is_some() && s.stroke_progress != 0.0;
             let dirty = s.translate_x != 0.0
                 || s.translate_y != 0.0
                 || s.scale != 1.0
@@ -983,7 +1013,8 @@ pub fn reset_visuals(tree: &mut LayoutTree, node_ids: &[u32]) -> usize {
                 || s.rotate_y != 0.0
                 || s.opacity != 1.0
                 || color_dirty
-                || clip_dirty;
+                || clip_dirty
+                || stroke_dirty;
             if dirty {
                 s.translate_x = 0.0;
                 s.translate_y = 0.0;
@@ -992,6 +1023,7 @@ pub fn reset_visuals(tree: &mut LayoutTree, node_ids: &[u32]) -> usize {
                 s.rotate_x = 0.0;   // ★B 批 3D：与 rotate 同一义务
                 s.rotate_y = 0.0;
                 s.clip = s.clip_base; // ★C1：裁剪参数回基态（与颜色回底色同一条"解绑含清值"）
+                s.stroke_progress = 0.0; // ★C2：描边进度回 0（未画）
                 s.opacity = 1.0;
                 // ★复位 = 回底色 / 回原文字色（不是清成 None：那会丢掉"本节点有基色"的事实）
                 s.bg = s.bg_base;
@@ -1160,7 +1192,8 @@ pub fn commit_specs(tree: &LayoutTree, anims: &[Anim]) -> Vec<CommitSpec> {
                     | AnimKind::Clip12
                     | AnimKind::Clip13
                     | AnimKind::Clip14
-                    | AnimKind::Clip15 => {}
+                    | AnimKind::Clip15
+                    | AnimKind::StrokeProgress => {}
                 }
             }
             samples.push(v);
@@ -1201,7 +1234,8 @@ pub fn commit_specs(tree: &LayoutTree, anims: &[Anim]) -> Vec<CommitSpec> {
                     | AnimKind::Clip12
                     | AnimKind::Clip13
                     | AnimKind::Clip14
-                    | AnimKind::Clip15 => {}
+                    | AnimKind::Clip15
+                    | AnimKind::StrokeProgress => {}
                 }
             }
             let n = samples.len();
@@ -1290,6 +1324,9 @@ pub struct NodeVisual {
     ///   `Some((kind, params))` = 当前形状（每帧内核求值后的值——宿主据它重建裁剪路径）。
     ///   `kind`：1=inset 2=circle 3=polygon（与 `LStyle.clip_kind` 同编码）
     pub clip: Option<(u8, [f32; 16])>,
+    /// ★★**SVG 描边进度**（2026-10-01 · C2）：`None` = 本节点无描边路径（宿主保持静态绘制）；
+    ///   `Some(p)` = 当前画线进度（0..1——宿主据此设 strokeEnd / trimPath）。
+    pub stroke_progress: Option<f32>,
 }
 
 /// 一次 tick（或 seek）的结果（供宿主刷新层 / 测试观测）
@@ -1419,6 +1456,15 @@ impl AnimEngine {
         // ★★裁剪动画**要求节点有静态裁剪形状**（2026-10-01 · C1）：形状类型与基态参数既是
         //   "从哪开始"的基准，也是复位目标（与颜色的基色同一条纪律）。
         //   ⇒ 没有 `clipPath` 声明的节点上启动裁剪动画 = **明确拒绝**（不静默）。
+        // ★★SVG 描边进度**要求节点声明了 svgPath**（2026-10-01 · C2）：路径本体是"画什么"的
+        //   静态前提（与 clip 需要形状、color 需要底色同一条纪律）⇒ 明确拒绝。
+        if a.kind.is_stroke() && tree.nodes[idx].style.svg_path.is_none() {
+            return Err(format!(
+                "描边动画的目标节点 {} 没有 SVG 路径（树里未声明 `svgPath`）——描边进度需要路径本体\
+                 才能换算『画到哪』；请先给该节点声明 `svgPath: {{ d: 'M…' }}`，或去掉这条描边动画",
+                a.node_id
+            ));
+        }
         if a.kind.is_clip() && tree.nodes[idx].style.clip_kind == 0 {
             return Err(format!(
                 "裁剪动画的目标节点 {} 没有裁剪形状（树里未声明 `clipPath`）——裁剪动画需要静态形状作为起点与复位目标；                 请先给该节点声明 `clipPath`（inset/circle/polygon），或去掉这条裁剪动画",
@@ -1475,6 +1521,7 @@ impl AnimEngine {
             let s = &mut node.style;
             let color_dirty = s.bg != s.bg_base || s.text_color != s.text_color_base;
             let clip_dirty = s.clip_kind != 0 && s.clip != s.clip_base;
+            let stroke_dirty = s.svg_path.is_some() && s.stroke_progress != 0.0;
             if s.translate_x != 0.0
                 || s.translate_y != 0.0
                 || s.scale != 1.0
@@ -1484,6 +1531,7 @@ impl AnimEngine {
                 || s.opacity != 1.0
                 || color_dirty
                 || clip_dirty
+                || stroke_dirty
             {
                 s.translate_x = 0.0;
                 s.translate_y = 0.0;
@@ -1492,6 +1540,7 @@ impl AnimEngine {
                 s.rotate_x = 0.0;
                 s.rotate_y = 0.0;
                 s.clip = s.clip_base; // ★C1：裁剪参数回基态
+                s.stroke_progress = 0.0; // ★C2：描边进度回 0
                 s.opacity = 1.0;
                 s.bg = s.bg_base; // ★颜色回底色 / 回原文字色（见 reset_visuals 注释）
                 s.text_color = s.text_color_base;
@@ -1865,6 +1914,11 @@ impl AnimEngine {
                 // ★C1：有裁剪声明 ⇒ 带上当前形状（每帧权威值；宿主据此重建裁剪路径）
                 clip: if node.style.clip_kind != 0 {
                     Some((node.style.clip_kind, node.style.clip))
+                } else {
+                    None
+                },
+                stroke_progress: if node.style.svg_path.is_some() {
+                    Some(node.style.stroke_progress)
                 } else {
                     None
                 },
@@ -2732,6 +2786,40 @@ mod tests {
             .expect_err("应拒绝");
         assert!(err.contains("没有裁剪形状"), "错误消息应点明原因：{err}");
         assert!(err.contains("clipPath"), "错误消息应给修法：{err}");
+    }
+
+    #[test]
+    fn stroke_progress_writes_clamps_and_resets() {
+        // ★C2（2026-10-01）：描边进度单槽——写入 clamp 到 0..1；stop 后回 0（未画）；
+        //   无 svgPath 声明的节点上启动 ⇒ 明确拒绝（消息含原因与修法）。
+        let mut t = tree_with(1);
+        t.nodes[0].style.svg_path = Some(crate::svg_path::parse_svg_path("M0 0 L10 0").unwrap());
+        let mut e = AnimEngine::new();
+        let mut a = Anim::curve_anim(1, AnimKind::StrokeProgress, 0.0, 1.0, 100.0);
+        a.takeover = false;
+        e.start(&t, a).unwrap();
+        let mut out = e.tick(&mut t, 200.0);
+        out.updates.clear();
+        assert!((t.nodes[0].style.stroke_progress - 1.0).abs() < 1e-4);
+        e.stop_all(&mut t);
+        assert_eq!(t.nodes[0].style.stroke_progress, 0.0, "stop 后描边进度回 0（未画）");
+        // 拒绝：无 svgPath
+        let plain = tree_with(1);
+        let mut e2 = AnimEngine::new();
+        let err = e2
+            .start(&plain, Anim::curve_anim(1, AnimKind::StrokeProgress, 0.0, 1.0, 100.0))
+            .expect_err("应拒绝");
+        assert!(err.contains("没有 SVG 路径"), "err={err}");
+        assert!(err.contains("svgPath"), "err={err}");
+        // clamp：to = 2.0 写入后应被夹到 1.0
+        let mut t3 = tree_with(1);
+        t3.nodes[0].style.svg_path = Some(crate::svg_path::parse_svg_path("M0 0 L10 0").unwrap());
+        let mut e3 = AnimEngine::new();
+        let mut a3 = Anim::curve_anim(1, AnimKind::StrokeProgress, 1.0, 2.0, 100.0);
+        a3.takeover = false;
+        e3.start(&t3, a3).unwrap();
+        e3.tick(&mut t3, 200.0);
+        assert!(t3.nodes[0].style.stroke_progress <= 1.0, "写入必须 clamp 到 1.0");
     }
 
     #[test]

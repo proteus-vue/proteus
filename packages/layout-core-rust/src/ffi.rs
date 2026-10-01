@@ -136,6 +136,10 @@ pub(crate) struct NodeDto {
     ///   静态样式（非动画属性）：宿主建层时读取用于组 3D 矩阵。
     #[serde(skip_serializing_if = "Option::is_none")]
     pub(crate) perspective: Option<f32>,
+    /// ★★**SVG 路径声明**（2026-10-01 · C2）：`{d, stroke, strokeWidth}`——
+    ///   `d` 由**内核解析**（单一实现，见 `svg_path` 模块）；`stroke` 是描边色（CSS hex）。
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub(crate) svg_path: Option<serde_json::Value>,
     /// ★★**裁剪形状**（2026-10-01 · C1）：CSS `clip-path` 的**结构化形态**——
     ///   `{kind: 'inset'|'circle'|'polygon', params: number[]}`（params 按形状类型解释，
     ///   分数/px 混合见 `clip_params_from_decl`）。类型静态、参数可动画（CSS 同规）。
@@ -213,6 +217,7 @@ impl NodeDto {
             color: None,
             perspective: None,
             clip_path: None,
+            svg_path: None,
             text: None,
             is_text: false,
             native_host: false,
@@ -276,6 +281,11 @@ fn visual_to_json(v: &crate::anim::NodeVisual) -> serde_json::Value {
     // ★★C1（2026-10-01）：末尾再追加 clip 段——第 11 项 = 形状类型（0 = 无），
     //   第 12..28 项 = 16 个形状参数。**既有索引全不变**（向后兼容的线格式演进）。
     let (ck, cp) = v.clip.map(|(k, p)| (k as u32, p)).unwrap_or((0, [0.0; 16]));
+    // ★★C2：末尾再追加描边进度（第 28 项；`u32::MAX` = 无描边路径——与颜色的哨兵同约定）
+    let stroke = v
+        .stroke_progress
+        .map(|p| p.to_bits() as u64)
+        .unwrap_or(u32::MAX as u64);
     serde_json::json!([
         v.id,
         v.tx,
@@ -289,7 +299,8 @@ fn visual_to_json(v: &crate::anim::NodeVisual) -> serde_json::Value {
         v.rotate_y,
         ck,
         cp[0], cp[1], cp[2], cp[3], cp[4], cp[5], cp[6], cp[7],
-        cp[8], cp[9], cp[10], cp[11], cp[12], cp[13], cp[14], cp[15]
+        cp[8], cp[9], cp[10], cp[11], cp[12], cp[13], cp[14], cp[15],
+        stroke
     ])
 }
 
@@ -346,6 +357,26 @@ pub(crate) fn style_from_dto(dto: &NodeDto) -> Result<LStyle, String> {
             return Err(format!("perspective 非法：{p}（应为正数 px——越大越弱，如 1200）"));
         }
         style.perspective = Some(p);
+    }
+    // ★★SVG 路径（C2）：`d` **内核解析**（单一实现；宿主不做第二份解析器）——
+    //   段列表进样式（宿主建平台 path 用）；写线进度是独立通道（`StrokeProgress`）。
+    if let Some(sp) = dto.svg_path.as_ref() {
+        let d = sp
+            .get("d")
+            .and_then(|x| x.as_str())
+            .ok_or_else(|| "svgPath 缺少 `d`（路径数据字符串，如 'M0 0 L10 10 Z'）".to_string())?;
+        let parsed = crate::svg_path::parse_svg_path(d)?;
+        style.svg_path = Some(parsed);
+        if let Some(col) = sp.get("stroke").and_then(|x| x.as_str()) {
+            style.stroke_color = parse_css_color(col)?;
+        }
+        if let Some(w) = sp.get("strokeWidth").and_then(|x| x.as_f64()) {
+            let w = w as f32;
+            if !w.is_finite() || w <= 0.0 {
+                return Err(format!("svgPath.strokeWidth 非法：{w}（应为正数 px）"));
+            }
+            style.stroke_width = w;
+        }
     }
     // ★★裁剪形状（C1）：结构形态 → (kind, [f32; 16])。类型静态、参数进基态（复位目标）。
     if let Some(cp) = dto.clip_path.as_ref() {
@@ -3258,8 +3289,8 @@ pub unsafe extern "C" fn proteus_layout_anim_tick_bin(handle: u64, dt_ms: f32, o
         let mut eng = std::mem::take(&mut entry.anim);
         let out = eng.tick(&mut entry.tree, dt_ms);
         entry.anim = eng;
-        // ★每帧通道：**108B/条**定长 = id u32 + 七值 f32（tx/ty/scale/rotate/opacity/rotateX/rotateY）
-        //   + bg u32 + textColor u32 + **clipKind u32 + 16 个 clip 参数 f32**（0 值 = 无裁剪）
+        // ★每帧通道：**112B/条**定长 = id u32 + 七值 f32（tx/ty/scale/rotate/opacity/rotateX/rotateY）
+        //   + bg u32 + textColor u32 + clipKind u32 + 16 个 clip 参数 f32 + **strokeProgress f32**
         //   ★C1（2026-10-01）：裁剪形状在**末尾追加**（一切既有偏移保持不变——
         //     消费端既有字段读取零改动；clipKind=0 = 无裁剪，参数全 0）。
         //   ★为什么不量化：clip 参数含**负值语义**（inset 可负 = 外扩；polygon 顶点可越界）——
@@ -3272,7 +3303,7 @@ pub unsafe extern "C" fn proteus_layout_anim_tick_bin(handle: u64, dt_ms: f32, o
         //     （iOS `animUpdateRecordBytes` / Android `ANIM_RECORD_BYTES` / SDK `FRAME_UPDATE_BYTES` /
         //     embed-demo 与 `proteus-jni::host`）必须**同批改**——
         //     ★`scripts/check-anim-record-bytes.mjs` 会从本处的写入序列**推出**宽度并与各消费端对账。
-        let mut buf = Vec::with_capacity(out.updates.len() * 108);
+        let mut buf = Vec::with_capacity(out.updates.len() * 112);
         for v in out.updates {
             buf.extend_from_slice(&v.id.to_le_bytes());
             buf.extend_from_slice(&v.tx.to_le_bytes());
@@ -3291,6 +3322,8 @@ pub unsafe extern "C" fn proteus_layout_anim_tick_bin(handle: u64, dt_ms: f32, o
             for i in 0..16 {
                 buf.extend_from_slice(&cp[i].to_le_bytes());
             }
+            // ★C2：描边进度（末尾追加——偏移 @108；无描边路径时写 u32::MAX 的位模式）
+            buf.extend_from_slice(&v.stroke_progress.unwrap_or(f32::NAN).to_le_bytes());
         }
         Ok(buf)
     });
@@ -3361,6 +3394,48 @@ pub unsafe extern "C" fn proteus_layout_clip_nodes(handle: u64) -> *mut c_char {
             .take(64)
             .collect();
         Ok(serde_json::json!({"ok": true, "ids": ids, "count": ids.len()}).to_string())
+    });
+    match r {
+        Ok(Ok(s)) => into_c_string(s),
+        Ok(Err(e)) => into_c_string(format!("{{\"ok\":false,\"error\":{}}}", json_str(&e))),
+        Err(_) => into_c_string("{\"ok\":false,\"error\":\"panic（已捕获）\"}".to_string()),
+    }
+}
+
+/// ★★**带 SVG 路径的节点清单 + 路径详情**（2026-10-01 · C2）
+///
+/// 返回：`{"ok":true,"ids":[…],"paths":{id: {segs, strokeColor, strokeWidth, totalLen}}, "count":N}`。
+///
+/// 【为什么把**解析结果**一并回带（真机接通抓出的设计缺口）】宿主建层需要**段列表**才能建
+///   平台 path，而 `d` 的解析**只在核内做**（单一实现）⇒ 宿主拿请求树里的 `d` 字符串
+///   是**解析不出**段列表的（首版建层时两难：要么宿主自己解析（第二份实现）、要么拿不到）。
+///   ⇒ 正解：把内核已解析好的段列表**随查询回带**——宿主只翻译、不解析（纪律 #22）。
+#[no_mangle]
+pub unsafe extern "C" fn proteus_layout_svg_nodes(handle: u64) -> *mut c_char {
+    let r = std::panic::catch_unwind(|| -> Result<String, String> {
+        let reg = registry().lock().map_err(|_| "注册表锁失败".to_string())?;
+        let entry = reg.get(&handle).ok_or_else(|| format!("句柄 {handle} 不存在"))?;
+        let mut ids: Vec<u32> = Vec::new();
+        let mut paths = serde_json::Map::new();
+        for n in entry.tree.nodes.iter() {
+            if let Some(sp) = n.style.svg_path.as_ref() {
+                if ids.len() >= 64 {
+                    break;
+                }
+                ids.push(n.id);
+                paths.insert(
+                    n.id.to_string(),
+                    serde_json::json!({
+                        "segs": sp.segs,
+                        "strokeColor": n.style.stroke_color,
+                        "strokeWidth": n.style.stroke_width,
+                        "totalLen": sp.total_len,
+                    }),
+                );
+            }
+        }
+        let count = ids.len();
+        Ok(serde_json::json!({"ok": true, "ids": ids, "paths": paths, "count": count}).to_string())
     });
     match r {
         Ok(Ok(s)) => into_c_string(s),

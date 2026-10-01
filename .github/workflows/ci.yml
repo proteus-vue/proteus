@@ -99,6 +99,11 @@ jobs:
               消费端常量一致——历史上错位解析过，本门禁从内核写入序列**推出**宽度再比对）
         run: pnpm run check:anim-record-bytes
 
+      # ★★C2（2026-10-01）：SVG 段列表的跨语言序列化形态（内核 serde ⇄ 两端翻译器）——
+      #   真缺陷教训：两端各写"臆想的形态" ⇒ 层建不出来而内核读数全对（静默）。
+      - name: SVG 段列表跨语言形态（C2：内核 serde ⇄ 双端翻译器）
+        run: pnpm run check:svg-path-shape
+
       - name: 依赖声明完整性审计（#422：pnpm 严格解析——import vs package.json 零缺失）
         run: node scripts/check-deps.mjs
 

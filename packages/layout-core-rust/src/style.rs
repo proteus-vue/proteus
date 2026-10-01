@@ -206,6 +206,19 @@ pub struct LStyle {
     /// ★★**绕 Y 轴旋转**（度；锚点 = 层中心）——翻转/翻牌的轴
     #[serde(default)]
     pub rotate_y: f32,
+    /// ★★**SVG 描边进度**（2026-10-01 · C2；0..1 = 画到哪——内核只存；路径本体见 `svg_d`）
+    #[serde(default)]
+    pub stroke_progress: f32,
+    /// ★★**SVG 路径声明**（C2）：归一化后的段列表（由 `svg_path::parse_svg_path` 解析——
+    ///   **单一实现**：宿主不做第二份 SVG 解析器，只把段列表翻译成平台 path）
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub svg_path: Option<crate::svg_path::SvgPath>,
+    /// ★★**描边颜色**（打包 `0xAARRGGBB`；0 = 未声明）
+    #[serde(default)]
+    pub stroke_color: u32,
+    /// ★★**描边宽度**（px；0 = 未声明）
+    #[serde(default)]
+    pub stroke_width: f32,
     /// ★★**裁剪形状类型**（2026-10-01 · C1；0=无 1=inset 2=circle 3=polygon）
     ///   【为什么类型静态】CSS 同规：异型形状间不插值（inset→circle 无意义）——
     ///   类型在建树时定死，**参数**参与动画（`clip: [f32; 16]`）。
@@ -312,6 +325,10 @@ impl Default for LStyle {
             clip_kind: 0,
             clip: [0.0; 16],
             clip_base: [0.0; 16],
+            stroke_progress: 0.0,
+            svg_path: None,
+            stroke_color: 0,
+            stroke_width: 0.0,
             opacity: 1.0,
             bg: None,
             bg_base: None,

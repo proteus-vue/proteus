@@ -48,7 +48,15 @@ export const PAINT_ONLY_KINDS: readonly AnimKindName[] = ['color', 'textColor']
  *     ⇒ 单边放行就是两端分档 ⇒ v1 统一走 **tick 路径**（跨端一致优先，与 color 同源决策）。
  *   ★实测余量：120Hz、800 节点、每帧工作 p95 2ms（预算 8.3ms）——3D 走 tick 完全在预算内。
  */
-export const TICK_ONLY_KINDS: readonly AnimKindName[] = ['rotateX', 'rotateY']
+export const TICK_ONLY_KINDS: readonly AnimKindName[] = [
+  'rotateX',
+  'rotateY',
+  // ★★C1（2026-10-01）：裁剪形状是绘制期约束（canvas.clipPath / CALayer.mask）——
+  //   Android RenderNode 无"可动画裁剪形状"属性 ⇒ 两端统一 tick 路径。
+  'clip',
+  // ★★C2（2026-10-01）：SVG 描边进度同样非合成（改占位层/重画路径）⇒ tick 路径。
+  'strokeProgress',
+]
 
 /** 该属性是否 tick-only（受支持、走内核逐帧路径，但不进平台零参与） */
 export function isTickOnly(kind: AnimKindName): boolean {
