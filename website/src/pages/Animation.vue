@@ -328,6 +328,7 @@ const EVIDENCE = computed<Array<{ v: string; u: string; l: string; src: string }
         { v: '215', u: 'nodes', l: 'FLIP layout animation, p95 0.713ms', src: 'check-anim-rt2.py' },
         { v: '84.5', u: '×', l: 'Instruction path vs JS path at N=1000', src: 'rt0-anim-spike.md' },
         { v: '1:1', u: 'mirror', l: 'Route transition, both directions, both targets', src: 'check-app-stack.py' },
+        { v: '115.8', u: 'FPS', l: 'Kernel loop on a 120Hz Android device (vsync p50 8.328ms ≈ budget)', src: 'check-kernel-anim.py' },
       ]
     : [
         { v: '59.3', u: 'FPS', l: '转场帧率（iPhone 12 · 已达 60Hz 上限）', src: 'check-anim-rt2.py' },
@@ -338,6 +339,7 @@ const EVIDENCE = computed<Array<{ v: string; u: string; l: string; src: string }
         { v: '215', u: '节点', l: 'FLIP 布局动画 · p95 0.713ms', src: 'check-anim-rt2.py' },
         { v: '84.5', u: '×', l: '指令路径 vs JS 路径（N=1000）', src: 'rt0-anim-spike.md' },
         { v: '1:1', u: '镜像', l: '路由转场双向 · 双端', src: 'check-app-stack.py' },
+        { v: '115.8', u: 'FPS', l: '120Hz 安卓设备内核帧循环（vsync p50 8.328ms ≈ 预算）', src: 'check-kernel-anim.py' },
       ],
 )
 
@@ -359,14 +361,14 @@ const BOUNDARIES = computed(() =>
     ? [
         'Cross-target geometry: layout geometry is **byte-identical** on both targets (same golden, kernel-computed digest compared on device: iOS ⇄ Android). "Looks identical" beyond geometry (corner clipping / shadows / text baselines) still relies on conformance + browser-truth baselines',
         'Cross-page shared elements: choreography landed; **compositing several kernel trees** (both pages visible mid-flight) is outside the current harness — same boundary as the existing ScreenHost note',
-        '120 FPS needs a ProMotion device (iPhone 12 is 60Hz — honestly noted, not claimed)',
+        '120 FPS: closed on the Android leg — a 120Hz device (Redmi M098FE) runs the kernel loop at **115.8 FPS** (vsync p50 8.328ms ≈ the 8.33ms budget, zero layout), asserted by M4e. The iOS leg is still hardware-bound (iPhone 12 = 60Hz) and is **not** claimed',
         'Gesture negotiation (nested scroll / multi-touch) is by design not part of this engine; the design doc schedules it as a separate ~3-person-week workstream (RT5) — not claimed here',
         'Escape-hatch ratio: showcase surface sampled (31,200 declarative / 0 escape hatches = 0%, asserted every run); wider business surface pending',
       ]
     : [
         '跨端几何：布局几何在两端**逐字节一致**（同一 golden，内核算出的 digest 双端真机比对：iOS ⇄ Android）。"画出来一样"在几何之外的部分（圆角裁剪/阴影/文本基线）仍靠 conformance + 浏览器真值兜底',
         '跨页面共享元素：编排已落地；**多棵内核树叠放渲染**（飞行途中两页同屏）不在本装置范围——与 ScreenHost 既有边界同源',
-        '120 FPS 目标需 ProMotion 设备（iPhone 12 为 60Hz——如实标注，未声称）',
+        '120 FPS：Android 腿已收口——120Hz 设备（Redmi M098FE）内核帧循环 **115.8 FPS**（vsync p50 8.328ms ≈ 8.33ms 预算，动画期零布局），由 M4e 断言；iOS 腿仍受硬件限制（iPhone 12 = 60Hz），**不声称**',
         '手势协商（嵌套滚动冲突 / 多指）：按方案设计不属本引擎；设计文档已排为独立工作流（RT5，≈3 人周）——此处不声称',
         '逃生口率：演示面已采数（炫技场 31200 条声明式 / 0 条逃生口 = 0%，每轮判据机器断言）；全业务面待采',
       ],

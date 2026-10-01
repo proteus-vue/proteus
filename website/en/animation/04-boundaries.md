@@ -27,6 +27,7 @@ Every reading points to a **re-runnable assertion script**; every “not done ye
 | **Real-gesture scrolling** (both targets) | iOS: pan recogniser installed · sole outlet driven 4× · offset returns to 0 · kernel changed=5 · layer writes 5 · Android: **real MotionEvents** → `scrollY=100` · parallax `ty=-40` (≈-0.4× scroll amount) | `check-anim-rt2.py` I6 · `check-kernel-anim.py` M6b |
 | **Cross-page shared element** (both targets) | source-page rect captured before the switch (1080×200) → target-page node (a different screen) → kernel computes geometry + writes the first frame → frame loop completes it; dx/dy/scale recomputed independently by the judge | `check-app-stack.py` ⑦.7 |
 | **Cross-target geometry** (both targets, on device) | same golden (25 cases / 96 nodes): both digests are `f5550ca5f41dfa9c` — **identical**, byte for byte · 0.46875dp from the browser baseline on each | `hosts/shared/check-cross-end-geometry.py` |
+| **120 FPS** (Android · 120Hz device) | **115.8 FPS** · vsync p50 8.328ms (budget 8.33ms) · per-frame work p50 0.119ms · zero layout during the animation | `check-kernel-anim.py` M4e |
 
 > **Why “zero wake-ups” uses OS-level CPU accounting instead of Instruments**: `xctrace` on this machine cannot record from the device (DeviceSupport version lags), so the measurement uses the difference of two `thread_info` samples — machine-judgeable, and paired with a **positive control** (the tick path must show significant cost; below 5ms the probe is declared broken and must not pass) — a negative assertion is only trustworthy with a control.
 
@@ -34,7 +35,7 @@ Every reading points to a **re-runnable assertion script**; every “not done ye
 
 | Item | Status |
 |---|---|
-| 120 FPS | The target needs a ProMotion device; iPhone 12 is 60Hz — **honestly noted, not claimed** |
+| 120 FPS | ✅ **Closed on the Android leg (2026-10-01)**: on a Redmi M098FE (120Hz device) the kernel frame loop runs at **115.8 FPS** · vsync p50 **8.328ms** (120Hz budget 8.33ms) · per-frame work p50 0.119ms · zero layout during the animation (judge `check-kernel-anim.py` M4e: **the frame rate must reach the display refresh rate**; it honestly skips when no refresh baseline is present). **The iOS leg is still hardware-bound**: an iPhone 12 is 60Hz ⇒ stated honestly, 120 is not claimed (a ProMotion device would verify it the same way) |
 | Gesture negotiation | Nested-scroll conflicts / multi-touch: by design **not part of this engine**, tracked separately |
 | Escape-hatch ratio | Instrumentation ready (`escapes.format()`); **showcase surface now sampled**: 31,200 declarative instructions / 0 escape hatches = **0%** (asserted every run by judge ⑥) — the wider business surface is **still pending** (a demo surface ≠ a business surface; stated honestly) |
 | Cross-target visual identity | ✅ **The geometry half is closed (2026-10-01)**: under the same golden, the layout geometry both targets compute **is byte-identical** (a `geometry_digest` compared on device, 96 nodes, same value; judge `hosts/shared/check-cross-end-geometry.py`). **Beyond geometry** (rasterisation: corner clipping / shadows / text baselines) “it looks identical” is still **not guaranteed** — backstopped by conformance and browser-truth baselines |

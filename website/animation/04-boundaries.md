@@ -27,6 +27,7 @@ group: 边界
 | **真手势滚动**（双端） | iOS：pan 识别器在岗 · 唯一出口驱动 4 次 · 偏移归零 · 内核 changed=5 · 写层 5 · Android：**真实 MotionEvent** → `scrollY=100` · 视差 `ty=-40`（≈-0.4×滚动量） | `check-anim-rt2.py` I6 · `check-kernel-anim.py` M6b |
 | **跨页面共享元素**（双端） | 源页矩形切换前捕获（1080×200）→ 目标页节点（不同屏）→ 内核算几何 + 写首帧 → 帧循环完成；判据侧独立复算 dx/dy/scale | `check-app-stack.py` ⑦.7 |
 | **跨端几何一致**（双端真机） | 同一 golden（25 case / 96 节点）：两端指纹 `f5550ca5f41dfa9c` **同值**（逐字节一致）· 距浏览器基准各 0.46875dp | `hosts/shared/check-cross-end-geometry.py` |
+| **120 FPS**（Android · 120Hz 设备） | **115.8 FPS** · vsync p50 8.328ms（预算 8.33ms）· 每帧工作 p50 0.119ms · 动画期零布局 | `check-kernel-anim.py` M4e |
 
 > **为什么"零唤醒"用 OS 级 CPU 会计而不是 Instruments**：本机 `xctrace` 无法录制设备（DeviceSupport 版本滞后），改用 `thread_info` 两次采样差 → 可机器判定，且配了**阳性对照**（tick 路径必须有显著开销，< 5ms 即判"探针失效"不得判绿）——否定性断言必须有对照才可信。
 
@@ -34,7 +35,7 @@ group: 边界
 
 | 事项 | 现状 |
 |---|---|
-| 120 FPS | 目标需 ProMotion 设备；iPhone 12 为 60Hz——**如实标注未声称** |
+| 120 FPS | ✅ **Android 腿已实测收口（2026-10-01）**：Redmi M098FE（120Hz 设备）上内核帧循环 **115.8 FPS** · vsync p50 **8.328ms**（120Hz 预算 8.33ms）· 每帧工作 p50 0.119ms · 动画期零布局（判据 `check-kernel-anim.py` M4e：**帧率必须达到显示器刷新率**，无刷新率基线时如实跳过）。**iOS 腿仍受硬件限制**：iPhone 12 为 60Hz ⇒ 如实标注、不声称 120（换 ProMotion 设备即可同款验证） |
 | 手势协商 | 嵌套滚动冲突 / 多指：按方案设计**不属本引擎**，独立立项 |
 | 逃生口率 | 装置就绪（`escapes.format()`）；**演示面已采数**：炫技场 31200 条声明式指令 / 0 条逃生口 = **0%**（判据 ⑥ 每轮机器断言）——全业务面**待采**（演示面 ≠ 业务面，如实标注） |
 | 跨端视觉一致性 | ✅ **几何部分已收口（2026-10-01）**：同一份 golden 下，两端内核算出的布局几何**逐字节一致**（`geometry_digest` 双端真机比对，96 节点同值；判据 `hosts/shared/check-cross-end-geometry.py`）。**几何之外**（圆角裁剪/阴影/文本基线等光栅化差异）仍**不保证"画出来一样"**——靠 conformance 与浏览器真值基准兜底 |
