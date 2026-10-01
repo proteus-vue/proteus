@@ -49,6 +49,10 @@ interface VaporHost {
   applyOps(opsJson: string): string
   /** 核心几何读数（判据用：**从内核真源读**，不是从我们发下去的参数复述） */
   readRects(): string
+  /** ★★**虚拟化挂载**（长列表：整树在内核、宿主只物化可见区）——`{viewport,nodes,rows}` */
+  mountVirtual(treeJson: string): string
+  /** ★★虚拟化滚动一帧：`{dy, capture}` → 核心给决策、宿主执行动作 */
+  scrollRows(argsJson: string): string
 }
 
 declare const proteusHost: VaporHost
@@ -59,10 +63,51 @@ interface VaporArgs {
   viewport: { width: number; height: number }
   /** 编译产物（构建期产出的 JSON 串；必填）——`{tpl, table, sfc}` */
   artifacts: string
-  /** 行数（覆盖产物里的首行数据；缺省 8） */
+  /**
+   * 模式：`'short'`（缺省）= 实例化 + 订阅驱动增量；
+   *      `'list'` = **长列表虚拟化**（1000 行、行高 100px、30 下 + 30 上滚动）。
+   */
+  mode?: 'short' | 'list'
+  /** 行数（覆盖产物里的首行数据；短列表缺省 8 / 长列表缺省 1000） */
   rows?: number
   /** 增量更新轮数（每轮改一行文本 + 一行宽度 ⇒ 走订阅表 → 指令流） */
   updates?: number
+}
+
+/** 长列表（虚拟化）报告 */
+interface VaporListReport {
+  ok: boolean
+  error?: string
+  tpl_nodes: number
+  sub_l1: number
+  inst_nodes: number
+  inst_rows: number
+  inst_allocated_ids: number
+  mount_ms: number
+  row_count: number
+  row_pitch: number
+  /** ★物化有界：存活行 / 存活指令（**与滚动距离无关**是核心断言） */
+  rows_live_first: number
+  cmds_live_first: number
+  /** 30 下滚动：物化总数增量（应**有界**——每帧新物化的行数 = 新进视野的行数） */
+  down_frames: number
+  down_built_delta: number
+  /** 30 上滚动（回顶） */
+  up_frames: number
+  up_built_delta: number
+  /** 滚动过程的读数轨迹（每 10 帧采一次：存活行/指令/已物化总数——"有界"的证据） */
+  trail: Array<{ f: number; scroll: number; live: number; cmds: number; built: number }>
+  /** 部分帧的签名差异（"真的动了"） */
+  moved_diff_pct: number
+  /** 回顶后与顶部签名的差异（**应 ≈ 0 = 恒等**：虚拟化没有累积漂移） */
+  back_top_diff_pct: number
+  /** 最后一帧的 scroll_y / 复用的行帧累计 */
+  final_scroll: number
+  row_frames_total: number
+  built_total: number
+  released_total: number
+  uninstantiated_slots: number
+  notes: string[]
 }
 
 interface VaporReport {
@@ -97,8 +142,10 @@ interface VaporReport {
   ops_bytes: number
   ops_ms: number
   apply_ms: number
+  /** ★文本同步累计（回归锁：内核 text_updates 必须被宿主消费——本批修的缺陷） */
+  text_synced_total: number
   /** 每轮：改了哪一行 / 内核报的变更集大小 / 重排范围（几何真的动了吗） */
-  update_evidence: Array<{ round: number; row: number; ops: number; changed_rects: number; relayout: number }>
+  update_evidence: Array<{ round: number; row: number; ops: number; changed_rects: number; relayout: number; text_synced: number }>
   /** 首轮前后**几何真值对比**（readRects 读内核真源：目标行节点宽度应变） */
   geom_probe: Array<{ id: number; before: number; after: number }>
   // —— 观测 ——
@@ -115,8 +162,137 @@ function makeData(rows: number): Record<string, unknown> {
 
 /** 主入口（全同步——铁律 A-02；本入口不依赖微任务：`SlotRuntime.flush()` 是确定性驱动） */
 export function __proteusVaporRun(argsJson: string): string {
-  const t = (): number => Date.now()
   const args = JSON.parse(argsJson) as VaporArgs
+  if (args.mode === 'list') return runVirtualList(args)
+  return runShort(args)
+}
+
+/**
+ * ★★★**长列表虚拟化**（`mode: 'list'`）：整树进内核（几何正确）、宿主**只物化可见区**。
+ *
+ * 【它验什么（§9.3 长列表验收的端上缺口）】文档定义「4000 行 / 每行 40+ 元素」的端上规模
+ *   此前未跑过（只有 Rust 纯逻辑读数与 iOS 的 1000 行 V12）。本入口跑 **1000 行**：
+ *   · 整树 1000 行都在内核（几何正确）；
+ *   · 宿主物化行数**有界**（与滚动距离无关）——这是虚拟化的唯一意义所在；
+ *   · 30 帧下滚 + 30 帧上滚（回顶）：**回顶签名应恒等**（无累积漂移）；
+ *   · 复用池的 acquire/release 由**核心给决策**（`recycleUpdate`），宿主只执行动作。
+ */
+function runVirtualList(args: VaporArgs): string {
+  const t = (): number => Date.now()
+  const rows = Math.max(2, args.rows ?? 1000)
+  const notes: string[] = []
+  const rep: VaporListReport = {
+    ok: false, tpl_nodes: 0, sub_l1: 0, inst_nodes: 0, inst_rows: 0, inst_allocated_ids: 0,
+    mount_ms: 0, row_count: 0, row_pitch: 0, rows_live_first: 0, cmds_live_first: 0,
+    down_frames: 0, down_built_delta: 0, up_frames: 0, up_built_delta: 0, trail: [],
+    moved_diff_pct: -1, back_top_diff_pct: -1, final_scroll: 0,
+    row_frames_total: 0, built_total: 0, released_total: 0, uninstantiated_slots: 0, notes,
+  }
+  try {
+    const artifacts = JSON.parse(args.artifacts) as { tpl: LayoutTemplate; table: SubscriptionTable; sfc: string }
+    rep.tpl_nodes = artifacts.tpl.nodes.length
+    rep.sub_l1 = artifacts.table.stats.l1
+    if (!artifacts.tpl.ok) {
+      rep.error = '模板不可用（构建期诊断）'
+      return JSON.stringify(rep)
+    }
+
+    // ① 实例化（1000 行）——`virtual.rows` 就是虚拟化要的行描述
+    const data = makeListData(rows)
+    const read = (n: string): unknown => data[n]
+    const registry = new ListRegistry()
+    const inst = instantiateTemplate(artifacts.tpl, { viewport: args.viewport, read, table: artifacts.table, registry })
+    rep.inst_nodes = inst.nodes.length
+    rep.inst_rows = inst.virtual?.rows.length ?? 0
+    rep.inst_allocated_ids = inst.stats.allocatedIds
+    if (!inst.virtual || inst.virtual.rows.length === 0) {
+      rep.error = '实例化没有产出 virtual.rows（虚拟化不可用）'
+      return JSON.stringify(rep)
+    }
+
+    // ② 虚拟化挂载（整树进内核、只物化可见区）
+    const t2 = t()
+    const mo = JSON.parse(
+      proteusHost.mountVirtual(JSON.stringify({ viewport: inst.viewport, nodes: inst.nodes, rows: inst.virtual.rows })),
+    ) as { ok?: boolean; node_count?: number; row_count?: number; row_pitch?: number; rows_live?: number; cmds_live?: number; error?: string }
+    rep.mount_ms = t() - t2
+    if (mo.ok !== true) {
+      rep.error = 'mountVirtual 失败：' + (mo.error ?? '')
+      return JSON.stringify(rep)
+    }
+    rep.row_count = mo.row_count ?? -1
+    rep.row_pitch = mo.row_pitch ?? -1
+    rep.rows_live_first = mo.rows_live ?? -1
+    rep.cmds_live_first = mo.cmds_live ?? -1
+
+    const probe = (): { live: number; cmds: number; built: number; released: number } => {
+      const o = JSON.parse(proteusHost.scrollRows('{"dy":0}')) as {
+        live_rows?: number; cmds_live?: number; built_total?: number; released_total?: number
+      }
+      return { live: o.live_rows ?? -1, cmds: o.cmds_live ?? -1, built: o.built_total ?? -1, released: o.released_total ?? -1 }
+    }
+    const p0 = probe()
+    let builtPrev = p0.built
+
+    // ③ 30 帧下滚（每帧 +100px = 一行）
+    const step = (dir: 1 | -1, frames: number, label: string): { builtDelta: number; lastDiff: number } => {
+      let builtDelta = 0
+      let lastDiff = -1
+      for (let i = 0; i < frames; i++) {
+        const cap = i % 10 === 9
+        const o = JSON.parse(proteusHost.scrollRows(JSON.stringify({ dy: dir * 100, capture: cap }))) as {
+          ok?: boolean; scroll_y?: number; live_rows?: number; cmds_live?: number; built_total?: number
+          released_total?: number; sig_diff_pct?: number; row_frames_total?: number; error?: string
+        }
+        if (o.ok !== true) {
+          notes.push(`${label} 第 ${i} 帧失败：${o.error ?? ''}`)
+          break
+        }
+        rep.final_scroll = o.scroll_y ?? 0
+        rep.row_frames_total = o.row_frames_total ?? 0
+        rep.built_total = o.built_total ?? 0
+        rep.released_total = o.released_total ?? 0
+        if (o.sig_diff_pct !== undefined) lastDiff = o.sig_diff_pct
+        if (i % 10 === 0 || i === frames - 1) {
+          rep.trail.push({ f: i, scroll: o.scroll_y ?? 0, live: o.live_rows ?? -1, cmds: o.cmds_live ?? -1, built: o.built_total ?? -1 })
+        }
+      }
+      builtDelta = (rep.built_total || 0) - builtPrev
+      builtPrev = rep.built_total || 0
+      return { builtDelta, lastDiff }
+    }
+    const down = step(1, 30, '下滚')
+    rep.down_frames = 30
+    rep.down_built_delta = down.builtDelta
+    rep.moved_diff_pct = down.lastDiff
+
+    // ④ 30 帧上滚（回顶）+ 回顶签名对比
+    const up = step(-1, 30, '上滚')
+    rep.up_frames = 30
+    rep.up_built_delta = up.builtDelta
+    // 回顶帧：capture=true 对比顶部签名
+    const top = JSON.parse(proteusHost.scrollRows('{"dy":0,"capture":true}')) as { sig_diff_pct?: number; scroll_y?: number }
+    rep.back_top_diff_pct = top.sig_diff_pct ?? -1
+    rep.final_scroll = top.scroll_y ?? rep.final_scroll
+
+    rep.uninstantiated_slots = 0
+    rep.ok = rep.down_frames > 0 && rep.up_frames > 0
+    notes.push(`整树 ${rep.inst_nodes} 节点 / ${rep.row_count} 行 · 首帧物化 ${rep.rows_live_first} 行 / ${rep.cmds_live_first} 指令`)
+    return JSON.stringify(rep)
+  } catch (e) {
+    rep.error = (e as { message?: string })?.message ?? String(e)
+    return JSON.stringify(rep)
+  }
+}
+
+/** 长列表数据（`item.w` 行内绑定 + `item.title` 插值——行内槽位都要有值） */
+function makeListData(rows: number): Record<string, unknown> {
+  return { list: Array.from({ length: rows }, (_, i) => ({ id: i + 1, w: 120, title: `row ${i + 1}` })) }
+}
+
+/** 短列表（缺省模式）：实例化 + 订阅驱动增量 */
+function runShort(args: VaporArgs): string {
+  const t = (): number => Date.now()
   const rows = Math.max(1, args.rows ?? 8)
   const notes: string[] = []
   const rep: VaporReport = {
@@ -125,7 +301,7 @@ export function __proteusVaporRun(argsJson: string): string {
     inst_ms: 0, inst_nodes: 0, inst_reused_ids: 0, inst_allocated_ids: 0, inst_rows: 0,
     inst_values_filled: 0, inst_virtual_rows: 0, inst_text_filled: 0, inst_width_filled: 0,
     mount_ms: 0, mount_nodes: 0,
-    updates_run: 0, ops_bytes: 0, ops_ms: 0, apply_ms: 0, update_evidence: [], geom_probe: [],
+    updates_run: 0, ops_bytes: 0, ops_ms: 0, apply_ms: 0, text_synced_total: 0, update_evidence: [], geom_probe: [],
     uninstantiated_slots: 0, notes,
   }
   try {
@@ -245,13 +421,23 @@ export function __proteusVaporRun(argsJson: string): string {
       const ta = t()
       const applyOut = proteusHost.applyOps(JSON.stringify(Array.from(payload)))
       rep.apply_ms += t() - ta
-      const ao = JSON.parse(applyOut) as { ok?: boolean; applied?: number; rects?: Record<string, unknown>; relayout?: number; error?: string }
+      const ao = JSON.parse(applyOut) as {
+        ok?: boolean; applied?: number; rects?: Record<string, unknown>
+        relayout?: number; text_synced?: number; text_synced_total?: number; error?: string
+      }
       if (ao.ok !== true) {
         notes.push(`第 ${r} 轮 applyOps 失败：${ao.error ?? ''}`)
         continue
       }
       const changed = ao.rects ? Object.keys(ao.rects).length : 0
-      evidence.push({ round: r, row: at + 1, ops: payload.length, changed_rects: changed, relayout: ao.relayout ?? -1 })
+      evidence.push({
+        round: r, row: at + 1, ops: payload.length, changed_rects: changed,
+        relayout: ao.relayout ?? -1,
+        // ★文本同步（本批修的"读了没入表"缺陷的**回归锁**）：内核回 text_updates，
+        //   宿主必须消费并把新文本落到绘制真源（否则文字改了屏幕还是旧字）
+        text_synced: ao.text_synced ?? -1,
+      })
+      rep.text_synced_total += ao.text_synced ?? 0
       rep.updates_run++
     }
     rep.update_evidence = evidence

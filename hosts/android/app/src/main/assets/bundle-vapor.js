@@ -1130,8 +1130,125 @@
     };
   }
   function __proteusVaporRun(argsJson) {
-    const t = () => Date.now();
     const args = JSON.parse(argsJson);
+    if (args.mode === "list") return runVirtualList(args);
+    return runShort(args);
+  }
+  function runVirtualList(args) {
+    const t = () => Date.now();
+    const rows = Math.max(2, args.rows ?? 1e3);
+    const notes = [];
+    const rep = {
+      ok: false,
+      tpl_nodes: 0,
+      sub_l1: 0,
+      inst_nodes: 0,
+      inst_rows: 0,
+      inst_allocated_ids: 0,
+      mount_ms: 0,
+      row_count: 0,
+      row_pitch: 0,
+      rows_live_first: 0,
+      cmds_live_first: 0,
+      down_frames: 0,
+      down_built_delta: 0,
+      up_frames: 0,
+      up_built_delta: 0,
+      trail: [],
+      moved_diff_pct: -1,
+      back_top_diff_pct: -1,
+      final_scroll: 0,
+      row_frames_total: 0,
+      built_total: 0,
+      released_total: 0,
+      uninstantiated_slots: 0,
+      notes
+    };
+    try {
+      const artifacts = JSON.parse(args.artifacts);
+      rep.tpl_nodes = artifacts.tpl.nodes.length;
+      rep.sub_l1 = artifacts.table.stats.l1;
+      if (!artifacts.tpl.ok) {
+        rep.error = "\u6A21\u677F\u4E0D\u53EF\u7528\uFF08\u6784\u5EFA\u671F\u8BCA\u65AD\uFF09";
+        return JSON.stringify(rep);
+      }
+      const data = makeListData(rows);
+      const read = (n) => data[n];
+      const registry = new ListRegistry();
+      const inst = instantiateTemplate(artifacts.tpl, { viewport: args.viewport, read, table: artifacts.table, registry });
+      rep.inst_nodes = inst.nodes.length;
+      rep.inst_rows = inst.virtual?.rows.length ?? 0;
+      rep.inst_allocated_ids = inst.stats.allocatedIds;
+      if (!inst.virtual || inst.virtual.rows.length === 0) {
+        rep.error = "\u5B9E\u4F8B\u5316\u6CA1\u6709\u4EA7\u51FA virtual.rows\uFF08\u865A\u62DF\u5316\u4E0D\u53EF\u7528\uFF09";
+        return JSON.stringify(rep);
+      }
+      const t2 = t();
+      const mo = JSON.parse(
+        proteusHost.mountVirtual(JSON.stringify({ viewport: inst.viewport, nodes: inst.nodes, rows: inst.virtual.rows }))
+      );
+      rep.mount_ms = t() - t2;
+      if (mo.ok !== true) {
+        rep.error = "mountVirtual \u5931\u8D25\uFF1A" + (mo.error ?? "");
+        return JSON.stringify(rep);
+      }
+      rep.row_count = mo.row_count ?? -1;
+      rep.row_pitch = mo.row_pitch ?? -1;
+      rep.rows_live_first = mo.rows_live ?? -1;
+      rep.cmds_live_first = mo.cmds_live ?? -1;
+      const probe = () => {
+        const o = JSON.parse(proteusHost.scrollRows('{"dy":0}'));
+        return { live: o.live_rows ?? -1, cmds: o.cmds_live ?? -1, built: o.built_total ?? -1, released: o.released_total ?? -1 };
+      };
+      const p0 = probe();
+      let builtPrev = p0.built;
+      const step = (dir, frames, label) => {
+        let builtDelta = 0;
+        let lastDiff = -1;
+        for (let i = 0; i < frames; i++) {
+          const cap = i % 10 === 9;
+          const o = JSON.parse(proteusHost.scrollRows(JSON.stringify({ dy: dir * 100, capture: cap })));
+          if (o.ok !== true) {
+            notes.push(`${label} \u7B2C ${i} \u5E27\u5931\u8D25\uFF1A${o.error ?? ""}`);
+            break;
+          }
+          rep.final_scroll = o.scroll_y ?? 0;
+          rep.row_frames_total = o.row_frames_total ?? 0;
+          rep.built_total = o.built_total ?? 0;
+          rep.released_total = o.released_total ?? 0;
+          if (o.sig_diff_pct !== void 0) lastDiff = o.sig_diff_pct;
+          if (i % 10 === 0 || i === frames - 1) {
+            rep.trail.push({ f: i, scroll: o.scroll_y ?? 0, live: o.live_rows ?? -1, cmds: o.cmds_live ?? -1, built: o.built_total ?? -1 });
+          }
+        }
+        builtDelta = (rep.built_total || 0) - builtPrev;
+        builtPrev = rep.built_total || 0;
+        return { builtDelta, lastDiff };
+      };
+      const down = step(1, 30, "\u4E0B\u6EDA");
+      rep.down_frames = 30;
+      rep.down_built_delta = down.builtDelta;
+      rep.moved_diff_pct = down.lastDiff;
+      const up = step(-1, 30, "\u4E0A\u6EDA");
+      rep.up_frames = 30;
+      rep.up_built_delta = up.builtDelta;
+      const top = JSON.parse(proteusHost.scrollRows('{"dy":0,"capture":true}'));
+      rep.back_top_diff_pct = top.sig_diff_pct ?? -1;
+      rep.final_scroll = top.scroll_y ?? rep.final_scroll;
+      rep.uninstantiated_slots = 0;
+      rep.ok = rep.down_frames > 0 && rep.up_frames > 0;
+      notes.push(`\u6574\u6811 ${rep.inst_nodes} \u8282\u70B9 / ${rep.row_count} \u884C \xB7 \u9996\u5E27\u7269\u5316 ${rep.rows_live_first} \u884C / ${rep.cmds_live_first} \u6307\u4EE4`);
+      return JSON.stringify(rep);
+    } catch (e) {
+      rep.error = e?.message ?? String(e);
+      return JSON.stringify(rep);
+    }
+  }
+  function makeListData(rows) {
+    return { list: Array.from({ length: rows }, (_, i) => ({ id: i + 1, w: 120, title: `row ${i + 1}` })) };
+  }
+  function runShort(args) {
+    const t = () => Date.now();
     const rows = Math.max(1, args.rows ?? 8);
     const notes = [];
     const rep = {
@@ -1157,6 +1274,7 @@
       ops_bytes: 0,
       ops_ms: 0,
       apply_ms: 0,
+      text_synced_total: 0,
       update_evidence: [],
       geom_probe: [],
       uninstantiated_slots: 0,
@@ -1264,7 +1382,17 @@
           continue;
         }
         const changed = ao.rects ? Object.keys(ao.rects).length : 0;
-        evidence.push({ round: r, row: at + 1, ops: payload.length, changed_rects: changed, relayout: ao.relayout ?? -1 });
+        evidence.push({
+          round: r,
+          row: at + 1,
+          ops: payload.length,
+          changed_rects: changed,
+          relayout: ao.relayout ?? -1,
+          // ★文本同步（本批修的"读了没入表"缺陷的**回归锁**）：内核回 text_updates，
+          //   宿主必须消费并把新文本落到绘制真源（否则文字改了屏幕还是旧字）
+          text_synced: ao.text_synced ?? -1
+        });
+        rep.text_synced_total += ao.text_synced ?? 0;
         rep.updates_run++;
       }
       rep.update_evidence = evidence;

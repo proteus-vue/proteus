@@ -365,6 +365,13 @@ public class MainActivity extends Activity {
             String vp = vaporRun();
             sb.append(vp).append('\n');
             writeReport("vapor.json", vp);
+        } else if ("vaporList".equals(testPath)) {
+            // ★★★**长列表虚拟化**（2026-10-01）：真实 SFC 编译产物（1000 行）→ 设备端实例化
+            //   → 整树进内核、**只物化可见区**（核心给决策、宿主执行动作）→ 30 下 + 30 上滚动。
+            sb.append("【Vapor 长列表虚拟化（1000 行 · 物化有界 · 回顶恒等）】\n");
+            String vpl = vaporRun(true);
+            sb.append(vpl).append('\n');
+            writeReport("vapor-list.json", vpl);
         } else if ("platform-anim".equals(testPath)) {
             // ★★MA0-RT：平台零参与动画（**独立路径**——见 platformAnimRun 的注释：
             //   混在重活路径里会被主线程 Choreographer 饿死）
@@ -623,7 +630,8 @@ public class MainActivity extends Activity {
         //   （实测：overlap 行采到 #787A84 —— 那是文字抗锯齿像素，不是场景内容）
         //   ★`js-render` 同理：它的证据就是"屏幕上真的画出来了"；
         //    报告从 JSON 文件读（不上屏不影响任何判据）。
-        if (!testPath.startsWith("shot") && !"js-render".equals(testPath) && !"vapor".equals(testPath)) {
+        if (!testPath.startsWith("shot") && !"js-render".equals(testPath) && !"vapor".equals(testPath)
+                && !"vaporList".equals(testPath)) {
             TextView tv = new TextView(this);
             tv.setText(text);
             tv.setTextSize(9f);
@@ -1278,6 +1286,14 @@ public class MainActivity extends Activity {
      *   ★这正是产品形态：`proteus build` 编译、App 运行时实例化 + 更新。
      */
     private String vaporRun() {
+        return vaporRun(false);
+    }
+
+    /**
+     * Vapor 通路（`list=false` 短列表 / `list=true` 长列表虚拟化）。
+     * @param list true ⇒ 用 `vapor-list-artifacts.json` + `mode:'list'` + 行数 1000
+     */
+    private String vaporRun(boolean list) {
         org.json.JSONObject out = new org.json.JSONObject();
         try {
             if (!QuickJsEngine.isAvailable()) {
@@ -1307,16 +1323,22 @@ public class MainActivity extends Activity {
                 return out.toString(2);
             }
 
-            String artifacts = readAsset("vapor-artifacts.json");
+            String artifacts = readAsset(list ? "vapor-list-artifacts.json" : "vapor-artifacts.json");
             if (artifacts == null) {
                 out.put("ok", false);
-                out.put("error", "缺 assets/vapor-artifacts.json（构建时应由 gen-vapor-fixture.mjs 产出）");
+                out.put("error", "缺 assets/" + (list ? "vapor-list-artifacts.json" : "vapor-artifacts.json")
+                        + "（构建时应由 gen-vapor-fixture.mjs 产出）");
                 return out.toString(2);
             }
             org.json.JSONObject args = new org.json.JSONObject();
             args.put("artifacts", artifacts);
-            args.put("rows", 8);
-            args.put("updates", 3);
+            if (list) {
+                args.put("mode", "list");
+                args.put("rows", 1000);
+            } else {
+                args.put("rows", 8);
+                args.put("updates", 3);
+            }
             args.put("viewport", new org.json.JSONObject()
                     .put("width", dm.widthPixels).put("height", dm.heightPixels));
 

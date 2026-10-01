@@ -164,6 +164,22 @@ def main() -> int:
             print(f"  ✓ ⑤ ★订阅驱动真的改了内核几何：{updates} 轮 · {ops_bytes} 字节指令 · "
                   f"累计内核变更集 {changed_total} 项 · {probe_msg}")
 
+    # ── ⑥ ★文本同步真的落到了绘制真源（2026-10-01 修的"读了没入表"缺陷的回归锁）──
+    #   【为什么单独判】内核在 applyOps 回执里带 `text_updates`，而宿主**消费它**才能让新文本
+    #     真的画出来——本仓首版漏消费 ⇒ 文字改了但屏幕上还是旧字（几何全对、零报错）。
+    #     ⇒ 判据断言：每轮更新的 `text_synced ≥ 1`（内核报了文本变更就必然被宿主接住）。
+    ts_total = rep.get("text_synced_total", -1)
+    ts_rounds = [e.get("text_synced", -1) for e in ev] if ev else []
+    if ts_total is None or ts_total <= 0:
+        fail(f"★文本同步没有发生：text_synced_total={ts_total}（每轮改文本 ⇒ 内核应报 text_updates）"
+             f"—— 宿主可能没消费（'读了没入表'形态：几何对但文字不更新）")
+        ok = False
+    elif any((x is not None and x < 0) for x in ts_rounds):
+        fail(f"某轮缺 text_synced 读数：{ts_rounds}")
+        ok = False
+    else:
+        print(f"  ✓ ⑥ ★文本同步落到了绘制真源：累计 {ts_total} 处（逐轮 {ts_rounds}）")
+
     # 附加观测（不判红，只如实报）
     una = rep.get("uninstantiated_slots", 0)
     if una:

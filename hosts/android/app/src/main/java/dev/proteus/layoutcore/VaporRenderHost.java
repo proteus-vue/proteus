@@ -66,6 +66,46 @@ final class VaporRenderHost {
     /** 最近一次 `applyOps` 的读数（判据直接从回执读，这里留痕便于 logcat 诊断） */
     int lastApplied = -1;
     int lastChangedNodes = -1;
+    /** ★★文本同步（2026-10-01 修复上一批的漏消费）：内核回 `text_updates`，宿主必须落到绘制真源 */
+    int textSyncedTotal = 0;
+    /** 最近一次文本更新的探针（`{id,text}` JSON——判据据此断言"新文本真的到了宿主"） */
+    String lastTextProbe = null;
+
+    /* ── ★★虚拟化状态（长列表：整树在内核、宿主只物化可见区）────────────────── */
+
+    /** 行描述（来自设备端实例化的 `virtual.rows`） */
+    private int[][] vrowIds = null;
+    private int[] vrowRoots = null;
+    /** 行根的内容坐标 y（算可见区用）——来自内核 rects（几何真源） */
+    private int[] rowTops = null;
+    private int rowPitch = 0;
+    private int vViewportH = 2400;
+    private int vScrollY = 0;
+    private long recycleHandle = 0L;
+    /** id → 内核矩形（mount 时全量读一次；物化行时用） */
+    private final Map<Integer, JSONObject> vRects = new HashMap<>();
+    /** 不属任何行的节点（容器/标题）——全量物化（与 iOS「静态部分全量物化」同一条纪律） */
+    private final List<NodeCmd> staticCmds = new ArrayList<>();
+    /** 行 → 已物化指令（release 时整行丢弃） */
+    private final Map<Integer, List<NodeCmd>> rowCmds = new HashMap<>();
+    /** 当前存活（可见 + 预载）的行（升序——组装时按节点序输出） */
+    private final java.util.TreeSet<Integer> liveRows = new java.util.TreeSet<>();
+    /** 读数：物化过的行数 / 已释放行数 / 行-帧累计（复用率分母） */
+    private int builtTotal = 0;
+    private int releasedRowsTotal = 0;
+    private int rowFramesTotal = 0;
+    /** 顶部签名（mount 时采；`capture` 帧对比——"滚动真的动了 / 回顶恒等"的像素证据） */
+    private int[] sigTop = null;
+
+    /** 一条指令 + 它的节点序（组装时按节点序排序 ⇒ 绘制顺序 = 树序，与既有一致） */
+    private static final class NodeCmd {
+        final int nodeIdx;
+        final ProteusHostView.Cmd cmd;
+        NodeCmd(int nodeIdx, ProteusHostView.Cmd cmd) {
+            this.nodeIdx = nodeIdx;
+            this.cmd = cmd;
+        }
+    }
 
     VaporRenderHost(Context ctx, ViewGroup root) {
         this.ctx = ctx;
@@ -185,16 +225,50 @@ final class VaporRenderHost {
             lastApplied = uo.optInt("applied", -1);
             lastChangedNodes = changed != null ? changed.length() : 0;
 
+            // ★★**文本同步**（2026-10-01 修上一批的漏消费）：内核回执里带
+            //   `text_updates: {id: 新文本}`——上一批没消费 ⇒ **文字改了但屏幕上还是旧字**
+            //   （iOS 宿主的 applyOps 消费了它，见 selfdraw-scene.swift「文本落层」；
+            //    两端分叉，Android 补上。本仓纪律：内核给了变更明细就必须落到绘制真源。）
+            java.util.List<Integer> textChangedIds = new java.util.ArrayList<>();
+            JSONObject tu = uo.optJSONObject("text_updates");
+            if (tu != null && tu.length() > 0) {
+                for (java.util.Iterator<String> it = tu.keys(); it.hasNext(); ) {
+                    String k = it.next();
+                    int id = Integer.parseInt(k);
+                    String t = tu.optString(k, null);
+                    Integer idx = indexById.get(id);
+                    if (idx == null || t == null) continue;
+                    specs.get(idx).put("text", t);
+                    textChangedIds.add(id);
+                    textSyncedTotal++;
+                    lastTextProbe = "{\"id\":" + id + ",\"text\":" + JSONObject.quote(t) + "}";
+                }
+            }
+
             // 文本可能变了 ⇒ 需重度量（订阅更新里文本与宽度都可能动）
             double measureMs = remeasureChanged();
             long te = System.nanoTime();
             patchedCmdsFor(changed);
+            // 文本变更也要落到指令（文本改了但**几何没动**时不在 changed 矩形集里——
+            // 不补这一步，"文本同步了却仍画旧字"）
+            for (int id : textChangedIds) {
+                Integer at = cmdIndexById.get(id);
+                Integer idx = indexById.get(id);
+                if (at == null || idx == null) continue;
+                cmds.set(at, mkCmd(specs.get(idx), cmds.get(at)));
+            }
+            if (!textChangedIds.isEmpty()) pushToView();
             double emitMs = (System.nanoTime() - te) / 1e6;
 
             out.put("ok", true);
             out.put("applied", lastApplied);
             out.put("changed", lastChangedNodes);
-            out.put("relayout", uo.optInt("relayout", -1));
+            out.put("text_synced", textChangedIds.size());
+            out.put("text_synced_total", textSyncedTotal);
+            if (lastTextProbe != null) out.put("text_probe", new JSONObject(lastTextProbe));
+            // ★字段名对着内核回执核过（内核回的是 `relayout_count`——首版读 `relayout` ⇒ 恒 -1，
+            //   读数静默失效。本仓纪律：判据/读数取数要对实现核一遍。）
+            out.put("relayout", uo.optInt("relayout_count", -1));
             out.put("layout_ms", round3(layoutMs));
             out.put("measure_ms", round3(measureMs));
             out.put("emit_cmds_ms", round3(emitMs));
@@ -213,6 +287,286 @@ final class VaporRenderHost {
         } catch (Throwable t) {
             return "{\"ok\":false,\"error\":\"" + t.getMessage() + "\"}";
         }
+    }
+
+    /* ══════════════════ ★★虚拟化（长列表：整树在内核、宿主只物化可见区）══════════════════ */
+
+    /**
+     * ★★★**虚拟化挂载**：`{viewport, nodes, rows}` → 全树进内核（几何正确）→ **只物化可见区**。
+     *
+     * 【与 iOS `mountVirtual` 同一分工（本仓纪律：两端同构）】
+     *   · 核心给**决策**（`proteus_recycle_update` 回 acquire/release 行号），宿主只执行**动作**；
+     *   · 不在任何行里的节点（容器/标题）**全量物化**——否则行会挂到根上（层序错）；
+     *   · 行几何**不动**（内容坐标）：滚动 = `setContentScrollY`（画布平移），
+     *     ⇒ 只有**进出视野的行**需要物化/丢弃，已物化的行零重算。
+     *
+     * @param treeJson `{viewport:{width,height}, nodes:[…], rows:[{index,key,root,ids:[…]}]}`
+     *                 （`rows` 来自设备端实例化的 `instantiateTemplate(...).virtual.rows`）
+     */
+    public String mountVirtual(String treeJson) {
+        mountCalls++;
+        JSONObject out = new JSONObject();
+        try {
+            JSONObject tree = new JSONObject(treeJson);
+            JSONArray nodes = tree.optJSONArray("nodes");
+            JSONArray rowsRaw = tree.optJSONArray("rows");
+            if (nodes == null || nodes.length() == 0) return err(out, "批次里没有节点").toString();
+            if (rowsRaw == null || rowsRaw.length() == 0) return err(out, "rows 为空（虚拟化无意义）").toString();
+            JSONObject vp = tree.optJSONObject("viewport");
+            final float vw = vp != null ? (float) vp.optDouble("width", 1080) : 1080f;
+            final float vh = vp != null ? (float) vp.optDouble("height", 2400) : 2400f;
+
+            ensureView();
+
+            // ① specs（与全量 mount 同一条路——几何口径必须完全一致）
+            if (handle != 0L) {
+                RustLayout.destroy(handle);
+                handle = 0L;
+            }
+            if (recycleHandle != 0L) {
+                RustLayout.recycleDestroy(recycleHandle);
+                recycleHandle = 0L;
+            }
+            specs.clear();
+            indexById.clear();
+            int textCount = 0;
+            for (int i = 0; i < nodes.length(); i++) {
+                JSONObject n = nodes.getJSONObject(i);
+                specs.add(n);
+                indexById.put(n.getInt("id"), i);
+                String t = n.optString("text", null);
+                if (t != null && !t.isEmpty()) textCount++;
+            }
+            lastTextCount = textCount;
+
+            // ② 度量 → ③ 建树（★顺序不可反——见 mount 的同款注释）
+            long tm = System.nanoTime();
+            JSONObject measures = buildMeasures();
+            double measureMs = (System.nanoTime() - tm) / 1e6;
+            JSONObject request = new JSONObject();
+            JSONObject viewport = new JSONObject();
+            viewport.put("width", vw);
+            viewport.put("height", vh);
+            request.put("viewport", viewport);
+            request.put("nodes", coreNodes());
+            request.put("textMeasures", measures);
+            long tc = System.nanoTime();
+            handle = RustLayout.create(request.toString());
+            double layoutMs = (System.nanoTime() - tc) / 1e6;
+            if (handle <= 0) return err(out, "核心建树失败（handle=0）").toString();
+
+            // ④ 几何全量读一次（物化行时要用；与可见性无关）
+            JSONObject rectsAll = new JSONObject(RustLayout.readRects(handle)).getJSONObject("rects");
+            vRects.clear();
+            for (java.util.Iterator<String> it = rectsAll.keys(); it.hasNext(); ) {
+                String k = it.next();
+                vRects.put(Integer.parseInt(k), rectsAll.getJSONObject(k));
+            }
+
+            // ⑤ 行描述 + 行距（行根 y 来自**内核几何真源**）
+            final int nRows = rowsRaw.length();
+            vrowIds = new int[nRows][];
+            vrowRoots = new int[nRows];
+            final java.util.Set<Integer> rowNodeIds = new java.util.HashSet<>();
+            for (int i = 0; i < nRows; i++) {
+                JSONObject r = rowsRaw.getJSONObject(i);
+                vrowRoots[i] = r.optInt("root", -1);
+                JSONArray ids = r.optJSONArray("ids");
+                int[] arr = new int[ids != null ? ids.length() : 0];
+                for (int j = 0; j < arr.length; j++) {
+                    arr[j] = ids.optInt(j);
+                    rowNodeIds.add(arr[j]);
+                }
+                vrowIds[i] = arr;
+            }
+            rowTops = new int[nRows];
+            for (int i = 0; i < nRows; i++) {
+                JSONObject rr = vRects.get(vrowRoots[i]);
+                rowTops[i] = rr != null ? (int) Math.round(rr.optDouble("y")) : 0;
+            }
+            rowPitch = nRows >= 2 ? Math.max(1, rowTops[1] - rowTops[0]) : 100;
+            vViewportH = (int) vh;
+            vScrollY = 0;
+
+            // ⑥ 复用池句柄（核心给决策、宿主执行动作）
+            recycleHandle = RustLayout.recycleCreate(nRows, 0, 0);
+            if (recycleHandle == 0L) return err(out, "recycleCreate 失败").toString();
+
+            // ⑦ 静态部分（不属任何行的节点）全量物化——否则行会挂到根上（层序错）
+            staticCmds.clear();
+            for (int i = 0; i < specs.size(); i++) {
+                int id = specs.get(i).getInt("id");
+                if (rowNodeIds.contains(id)) continue;
+                JSONObject rc = vRects.get(id);
+                if (rc == null) continue; // 无盒（display:none）——不产生指令
+                staticCmds.add(new NodeCmd(i, mkCmd(specs.get(i), rc)));
+            }
+
+            // ⑧ 首帧：可见区 → 核心决策 → 物化（含预载区）
+            rowCmds.clear();
+            liveRows.clear();
+            builtTotal = 0;
+            releasedRowsTotal = 0;
+            rowFramesTotal = 0;
+            int[] rng = visibleRange();
+            JSONObject uo = new JSONObject(RustLayout.recycleUpdate(recycleHandle, rng[0], rng[1]));
+            int acq = applyRecycle(uo);
+            assembleAndPush();
+            rowFramesTotal += liveRows.size();
+            view.setContentScrollY(0);
+            sigTop = view.renderSignature();
+
+            out.put("ok", true);
+            out.put("node_count", specs.size());
+            out.put("row_count", nRows);
+            out.put("row_pitch", rowPitch);
+            out.put("cmds_live", lastCmdCount);
+            out.put("rows_live", liveRows.size());
+            out.put("acquired_first", acq);
+            out.put("built_total", builtTotal);
+            out.put("layout_ms", round3(layoutMs));
+            out.put("measure_ms", round3(measureMs));
+            out.put("painted_samples", sample(0));
+            out.put("sig_top_len", sigTop != null ? sigTop.length : 0);
+            return out.toString();
+        } catch (Throwable t) {
+            return err(out, t.getClass().getSimpleName() + ": " + t.getMessage()).toString();
+        }
+    }
+
+    /**
+     * **滚动一帧**（虚拟化）：`{dy, capture}` → 更新可见区 → 核心决策 → 物化/释放 → 重绘。
+     *
+     * 【为什么"行几何不动、只换行"成立】行内容坐标固定（内核算的），滚动是
+     *   `setContentScrollY` 的画布平移 ⇒ 已物化的行**零重算**，只有进出视野的行做物化/丢弃
+     *   ——这正是"滚动时不触发堆分配"的落点（判据用 built_total 有界来验它）。
+     *
+     * @param argsJson `{"dy":100}` 或 `{"dy":0,"capture":true}`（capture = 采像素签名对比顶部）
+     */
+    public String scrollRows(String argsJson) {
+        JSONObject out = new JSONObject();
+        try {
+            if (recycleHandle == 0L || vrowIds == null) return err(out, "未做虚拟化挂载").toString();
+            JSONObject a = new JSONObject(argsJson);
+            final int dy = (int) Math.round(a.optDouble("dy", 0));
+            final boolean capture = a.optBoolean("capture", false);
+
+            final int contentH = rowTops[vrowRoots.length - 1] + rowPitch;
+            final int maxScroll = Math.max(0, contentH - vViewportH);
+            final int before = vScrollY;
+            vScrollY = Math.max(0, Math.min(maxScroll, vScrollY + dy));
+
+            // ① 可见区（行根 y 来自内核真源）→ ② 核心决策
+            int[] rng = visibleRange();
+            JSONObject uo = new JSONObject(RustLayout.recycleUpdate(recycleHandle, rng[0], rng[1]));
+            // ③ 执行动作（**先 release 再 acquire**——本仓纪律，见 RustLayout 注释）
+            final int acq = applyRecycle(uo);
+            // ④ 组装（按节点序 → 绘制顺序 = 树序）+ 画布平移
+            assembleAndPush();
+            view.setContentScrollY(vScrollY);
+            rowFramesTotal += liveRows.size();
+
+            out.put("ok", true);
+            out.put("scroll_y", vScrollY);
+            out.put("moved", vScrollY != before);
+            out.put("first_visible", rng[0]);
+            out.put("last_visible", rng[1]);
+            out.put("acquired", acq);
+            out.put("released", releasedRowsTotal >= 0 ? lastReleasedN : -1);
+            out.put("live_rows", liveRows.size());
+            out.put("cmds_live", lastCmdCount);
+            out.put("built_total", builtTotal);
+            out.put("released_total", releasedRowsTotal);
+            out.put("row_frames_total", rowFramesTotal);
+            if (capture && sigTop != null) {
+                out.put("sig_diff_pct", sigDiffPct(sigTop, view.renderSignature()));
+            }
+            return out.toString();
+        } catch (Throwable t) {
+            return err(out, t.getClass().getSimpleName() + ": " + t.getMessage()).toString();
+        }
+    }
+
+    /** 最近一帧释放的行数（读数） */
+    private int lastReleasedN = 0;
+
+    /** 可见行区间（由**内核几何**推：行根 y 与行距——宿主不做第二份布局数学） */
+    private int[] visibleRange() {
+        final int n = vrowRoots.length;
+        if (n == 0) return new int[]{0, 0};
+        final int y0 = rowTops[0];
+        int first = (int) Math.floor((double) (vScrollY - y0) / rowPitch);
+        first = Math.max(0, Math.min(n - 1, first));
+        int last = (int) Math.floor((double) (vScrollY + vViewportH - y0) / rowPitch);
+        last = Math.max(first, Math.min(n - 1, last));
+        return new int[]{first, last};
+    }
+
+    /** 执行核心的 acquire/release 决策（**先 release 再 acquire**） */
+    private int applyRecycle(JSONObject uo) throws Exception {
+        int relN = 0;
+        JSONArray rel = uo.optJSONArray("release");
+        if (rel != null) {
+            for (int i = 0; i < rel.length(); i++) {
+                int r = rel.optInt(i);
+                rowCmds.remove(r);
+                liveRows.remove(r);
+                releasedRowsTotal++;
+                relN++;
+            }
+        }
+        int acqN = 0;
+        JSONArray acq = uo.optJSONArray("acquire");
+        if (acq != null) {
+            for (int i = 0; i < acq.length(); i++) {
+                int r = acq.optInt(i);
+                materializeRow(r);
+                liveRows.add(r);
+                acqN++;
+            }
+        }
+        lastReleasedN = relN;
+        return acqN;
+    }
+
+    /** 物化一行（该行全部节点 → 指令；行几何来自内核 rects） */
+    private void materializeRow(int r) throws Exception {
+        List<NodeCmd> list = new ArrayList<>();
+        for (int id : vrowIds[r]) {
+            Integer idx = indexById.get(id);
+            if (idx == null) continue;
+            JSONObject rc = vRects.get(id);
+            if (rc == null) continue;
+            list.add(new NodeCmd(idx, mkCmd(specs.get(idx), rc)));
+        }
+        rowCmds.put(r, list);
+        builtTotal++;
+    }
+
+    /** 组装存活指令（静态 + 存活行，按**节点序**排序 ⇒ 绘制顺序 = 树序）+ 上屏 */
+    private void assembleAndPush() {
+        List<NodeCmd> all = new ArrayList<>(staticCmds.size() + liveRows.size() * 2);
+        all.addAll(staticCmds);
+        for (int r : liveRows) {
+            List<NodeCmd> c = rowCmds.get(r);
+            if (c != null) all.addAll(c);
+        }
+        all.sort((a, b) -> Integer.compare(a.nodeIdx, b.nodeIdx));
+        List<ProteusHostView.Cmd> outCmds = new ArrayList<>(all.size());
+        for (NodeCmd nc : all) outCmds.add(nc.cmd);
+        cmds.clear();
+        cmds.addAll(outCmds);
+        lastCmdCount = cmds.size();
+        pushToView();
+    }
+
+    /** 两份签名的差异百分比（0..100；capture 帧用） */
+    private static double sigDiffPct(int[] a, int[] b) {
+        final int n = Math.min(a.length, b.length);
+        if (n == 0) return -1;
+        int diff = 0;
+        for (int i = 0; i < n; i++) if (a[i] != b[i]) diff++;
+        return Math.round(1000.0 * diff / n) / 10.0;
     }
 
     /* ────────────────────────── 内部：度量 / 核心键 / 指令 ────────────────────────── */
@@ -294,6 +648,20 @@ final class VaporRenderHost {
             return new ProteusHostView.Cmd(x, y, w, h, color, t, fs, textColor);
         }
         return new ProteusHostView.Cmd(x, y, w, h, color, null);
+    }
+
+    /** 同 `mkCmd(spec, rect)`，但**几何沿用既有指令**（文本改了、几何没动的情形——见 applyOps） */
+    private ProteusHostView.Cmd mkCmd(JSONObject spec, ProteusHostView.Cmd prev) throws Exception {
+        String bg = spec.optString("backgroundColor", null);
+        final int color = bg != null ? parseColor(bg) : prev.color;
+        String t = spec.optString("text", null);
+        if (t != null && !t.isEmpty()) {
+            final float fs = (float) spec.optDouble("fontSize", 14);
+            String tc = spec.optString("color", null);
+            final int textColor = tc != null ? parseColor(tc) : prev.textColor;
+            return new ProteusHostView.Cmd(prev.x, prev.y, prev.w, prev.h, color, t, fs, textColor);
+        }
+        return new ProteusHostView.Cmd(prev.x, prev.y, prev.w, prev.h, color, prev.text, prev.fontSize, prev.textColor);
     }
 
     /** 全量：几何 → 指令（矩形 + 文本 + 底色） */
