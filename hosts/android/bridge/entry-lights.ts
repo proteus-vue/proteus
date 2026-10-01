@@ -350,6 +350,8 @@ export function __proteusLightsNext(): string {
     stroke_anims: act.strokeAnims ?? 0,
     mid_sample: act.midSample === true,
     control: act.control ?? null,
+    // ★★展卷行程（长卷模式：宿主钳制手势累计——拖过头要能拖回来）
+    scroll_range: (act as { scrollRange?: number }).scrollRange ?? 0,
     issue_ms: round2(issueMs),
     note: act.note,
   })

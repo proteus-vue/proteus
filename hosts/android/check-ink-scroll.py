@@ -12,7 +12,9 @@
      （`drive=1` + `scrollFrom`——少一条 = 那条不跟随手势）
   ② **手势真的驱动了**（本判据的核心）：宿主记账的 `scroll_min/scroll_max` 必须显示
      **真实位移区间**（判据通过 adb 注入多步手势后取报告——区间覆盖 ≥60% 行程）
-  ③ **长卷真的左移**（探针真读）：终态 `root` 的 tx ≈ −行程（画随手动）
+  ③ **手卷真的展完**（探针真读）：终态**幕布揭示到位**（curtain 的 clip right ≈ 1 = 全展）·
+     **卷筒滚到左缘**（tx ≈ −(视口−筒宽)）· **画卷位置不变**（root.tx = 0——画固定居中，
+     由卷筒滚动"铺开"，不再把画整体移出屏幕：那是首版的全黑缺陷）
   ④ **沿途景象真的浮现**：滚动到中段时，早段元素（山骨线/江水）的进度已到 1、
      晚段元素（题款/印）仍在 0——**同一条滚动轴上的分段揭示**
   ⑤ **零逃生口**：全部为声明式通道
@@ -24,7 +26,7 @@ import json
 import os
 import sys
 
-SCROLL_RANGE_RATIO = 2.2  # 与节目单一致（行程 = 2.2 × 视口宽）
+SCROLL_RANGE_RATIO = 1.2  # 与节目单一致（行程 = 1.2 × 视口宽 = "展卷"的全行程）
 
 
 def main() -> int:
@@ -84,25 +86,55 @@ def main() -> int:
         print(f"  ✓ ② ★手势真的驱动了长卷：位移区间 [{smin}, {smax}] / 行程 {total:.0f}px"
               f"（覆盖 {smax / total:.0%}）")
 
-    # ── ③ 长卷真的左移（探针真读 root 的 tx）──
-    root_l = None
-    for a in (host.get("acts") or []):
-        for l in (a.get("probe_all") or []):
-            if isinstance(l, dict) and l.get("id") == 1:
-                root_l = l
-                break
-        if root_l:
-            break
-    if root_l is None:
-        fail("探针缺 root（id=1）读数（probe_all 未含？）")
+    # ── ③ 手卷真的展完（探针真读：幕布 / 卷筒 / 画卷位置）──
+    #   ★判据口径（堵首版的漏洞）：首版只读 `root.tx` 数值就判绿，而实际画**整体移出屏幕**
+    #     （收尾截图全黑）。⇒ 现在读**三个互相印证的量**：
+    #     幕布 clip right（=1 全展）· 卷筒 tx（≈ −(视口−筒宽) 滚到左缘）· root.tx（=0 画不动）。
+    def _probe_one(node_id: int):
+        for a in (host.get("acts") or []):
+            for l in (a.get("probe_all") or []):
+                if isinstance(l, dict) and l.get("id") == node_id:
+                    return l
+        return None
+
+    curtain_l = _probe_one(120)
+    roll_l = _probe_one(140)
+    root_l = _probe_one(1)
+    if curtain_l is None or roll_l is None or root_l is None:
+        fail(f"探针缺关键节点读数：curtain={curtain_l is not None} · 卷筒={roll_l is not None} · root={root_l is not None}")
         ok = False
     else:
-        tx = float(root_l.get("tx") or 0)
-        if tx > -total * 0.6:
-            fail(f"长卷未左移到位：root.tx={tx}（应 ≤ {-total * 0.6:.0f}）")
+        cs = curtain_l.get("clip") or ""
+        # 终态应 "1:0.0000,1.0000,0.0000,0.0000"（right=1 = 全展）
+        c_ok = cs.startswith("1:") and ",1.0000," in cs
+        r_tx = float(roll_l.get("tx") or 0)
+        # 卷筒应滚到左缘：tx ≈ −(视口 − 筒宽)；筒宽≈4.2% 视口
+        roll_expect = -(vw - vw * 0.042)
+        roll_ok = r_tx <= roll_expect * 0.85
+        root_tx = float(root_l.get("tx") or 0)
+        root_ok = abs(root_tx) < 1.0  # 画卷固定（不再整体平移——首版缺陷的回归锁）
+        if not c_ok:
+            fail(f"幕布未展完：clip = '{cs}'（应 '1:0.0000,1.0000,…' = right 全开）")
+            ok = False
+        elif not roll_ok:
+            fail(f"卷筒未滚到左缘：tx = {r_tx:.1f}（应 ≈ {roll_expect:.0f}）")
+            ok = False
+        elif not root_ok:
+            fail(f"画卷不应整体平移（首版全黑缺陷的回归锁）：root.tx = {root_tx:.1f}（应 = 0）")
             ok = False
         else:
-            print(f"  ✓ ③ ★长卷真的左移（探针真读）：root.tx = {tx:.1f}（行程 {total:.0f}px·画随手动）")
+            print(f"  ✓ ③ ★手卷真的展完（探针真读三项互证）：幕布 clip = '{cs}'（全展）· "
+                  f"卷筒 tx = {r_tx:.1f}（滚到左缘）· root.tx = {root_tx:.1f}（画卷固定）")
+
+    # ★③b **画看得见**（首版全黑缺陷的直接堵洞）：收尾离屏像素自检
+    ps = host.get("painted_samples")
+    pc = host.get("painted_colors")
+    if ps is None or pc is None or int(ps) < 5000:
+        fail(f"画面不可见（全黑？）：painted_samples={ps} · painted_colors={pc}"
+             f"（应有大量非透明采样点——本次修复的直接回归锁）")
+        ok = False
+    else:
+        print(f"  ✓ ③b ★画看得见：painted_samples={ps} · painted_colors={pc}")
 
     # ── ④ 沿途景象真的浮现（同一条轴上的分段揭示）──
     #   证据：滚动到后段时，"早段元素"（江水 clip 已全开）与"晚段元素"（印/题款仍在推进）

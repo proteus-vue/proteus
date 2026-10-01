@@ -919,8 +919,9 @@ public class ProteusHostView extends ViewGroup {
     public String scrollDragByX(float dx) {
         scrollDragDriveCount++;
         final int prev = scrollX;
-        // ★符号：`onScroll` 的 dx 是**滚动量**（正 = 内容左移）——与 Y 轴同款"直接相加"
-        setContentScrollX(Math.max(0, prev + (int) dx));
+        // ★符号：`onScroll` 的 dx 是**滚动量**（正 = 内容左移）——与 Y 轴同款"直接相加"；
+        // ★钳到 [0, range]（展卷进度不许拖出界——见 setHorizontalScrollRange 注释）
+        setContentScrollX(Math.max(0, Math.min(horizontalRange, prev + (int) dx)));
         if (scrollPosListener != null) scrollPosListener.onScrollPos(scrollX, scrollY);
         if (coreHandle == 0) return "{\"ok\":false,\"error\":\"未接入核心\"}";
         // 内核按位置驱动全部窗口动画（含长卷的位移/clip/描边/渐变——全在一条轴上）
@@ -1383,6 +1384,17 @@ public class ProteusHostView extends ViewGroup {
     /** 设置长卷模式（横向手势驱动；见 `scrollDragByX`） */
     public void setHorizontalScroll(boolean v) { this.horizontalScroll = v; }
 
+    /**
+     * ★★**展卷行程上限**（长卷模式）：滚动值 = 展卷进度（0..range）。
+     *   ★为什么必须有上限：无上限时拖过头（如累计 4680px）后，往回拖要先"消化"多余量
+     *     ——手指明明在动而画面不动（观感=坏了）。⇒ 上限 = 节目声明的行程（`scroll_range`）。
+     */
+    private int horizontalRange = Integer.MAX_VALUE / 4;
+
+    public void setHorizontalScrollRange(int range) {
+        if (range > 0) horizontalRange = range;
+    }
+
     /** ★★横向内容偏移（长卷探索模式：横移整幅长卷）——与 `setContentScrollY` 同语义（X 轴）。 */
     public void setContentScrollX(int x) {
         if (this.scrollX == x) return;
@@ -1775,7 +1787,13 @@ public class ProteusHostView extends ViewGroup {
         // ★滚动：自绘内容随 scrollY 平移，并**裁剪到滚动视口**
         //   （native-host 的裁剪在 applyScrollToNativeHosts 里单独做——
         //    它们不受这个 clipRect 约束，这是 Android 的固有行为）
-        final boolean scrolled = scrollY != 0 || scrollViewport != null;
+        // ★★两种滚动语义（2026-10-01 长卷实测后定案）：
+        //   · **偏移滚动**（既有：列表/长内容）：画布 `translate(-scrollX,-scrollY)`——内容比视口大；
+        //   · **展卷滚动**（手卷 `horizontalScroll`）：滚动值是**进度**不是偏移——画卷**固定居中**，
+        //     由**卷筒滚动 + 幕布揭示**铺开（内核 seek_scroll 驱动）。
+        //     ★这里绝不能 translate：那会把画整体推出屏幕（首版全黑缺陷的变体；判据已加回归锁）。
+        final boolean scrolled = !horizontalScroll
+                && (scrollX != 0 || scrollY != 0 || scrollViewport != null);
         final int save = scrolled ? canvas.save() : -1;
         if (scrolled) {
             if (scrollViewport != null) {
