@@ -190,6 +190,14 @@ export const INK_IDS = {
   reeds: [132, 133, 134, 135] as const,
   /** 幕布（最上层） */
   curtain: 120,
+  /** ★★卷轴（真·展卷/收卷）：卷筒（横向渐变做圆柱明暗）+ 上下轴头（木色圆头），
+   *   随展卷边界自右向左滚动；右端另有一组**固定轴**（画已展开端的轴）。 */
+  rollCylinder: 140,
+  rollKnobTop: 141,
+  rollKnobBottom: 142,
+  rollerRightBar: 143,
+  rollerRightKnobTop: 144,
+  rollerRightKnobBottom: 145,
 } as const
 
 /**
@@ -220,6 +228,7 @@ export const INK_SAMPLE_IDS: readonly number[] = [
   INK_IDS.fallMist[0],
   INK_IDS.banks[0],
   INK_IDS.banks[1],
+  INK_IDS.rollCylinder,
 ]
 
 /* ────────────────────────── 造型（d 的坐标系 = 节点盒 px——与 C2 内核解析同一约定） ────────────────────────── */
@@ -414,6 +423,39 @@ export const RANGES: readonly RangeDef[] = [
     puffs: [[0.2, 0.56, 0.24, 0.12], [0.66, 0.54, 0.28, 0.14]],
   },
 ]
+
+/* ────────────────────────── 卷轴几何（单一事实源：树/幕/测试共用） ────────────────────────── */
+
+/**
+ * ★★**卷轴几何**（树与幕共用——单一事实源）。
+ *
+ * 【为什么要"真卷轴"而不是"幕布平移"】用户："继续真正的画卷展开"——幕布遮蔽只是
+ *   "揭幕"，真画卷展开的观感来自：**一根卷筒（带轴头）在纸面上滚动**，纸从筒下吐出。
+ *   ⇒ 卷筒贴展卷边界移动（与幕布的裁剪边界**同一时间曲线**），筒身用**横向渐变**
+ *   做圆柱明暗（本引擎渐变能力的第一处"物理感"应用）。
+ *
+ * 坐标约定：卷筒初始**贴右缘**（闭合态——整卷只露它的外缘），展开后**落到左缘**
+ *   （展开完成——左端只剩轴）；`txOpen` 是它的 translateX 终点（负数）。
+ */
+export interface ScrollMetrics {
+  /** 卷筒宽度（px） */
+  bandW: number
+  /** 轴头宽（px；比筒身宽——两端出头） */
+  knobW: number
+  /** 轴头高（px） */
+  knobH: number
+  /** 展开完成时卷筒的 translateX（从贴右缘 → 贴左缘） */
+  txOpen: number
+}
+
+export function scrollMetrics(view: { width: number; height: number }): ScrollMetrics {
+  const bandW = Math.max(10, Math.round(view.width * 0.042))
+  const knobW = Math.round(bandW * 1.9)
+  const knobH = Math.round(view.height * 0.026)
+  // 贴右缘：left = W - bandW；贴左缘：left = 0 ⇒ tx = -(W - bandW)
+  const txOpen = -(view.width - bandW)
+  return { bandW, knobW, knobH, txOpen }
+}
 
 /* ────────────────────────── 树构造（空卷基态——见文件头"空白卷轴"基态律） ────────────────────────── */
 
@@ -861,12 +903,73 @@ export function buildInkTree(view: View): string {
     })
   })
 
-  // ⑬ 幕布（**最上层**——数组末尾；inset 基态全遮）
+  // ⑬ 右端固定轴（画"已展开端"的轴——幕布**之下**：闭合时被墨幕遮住，展开后露出）
+  const sm = scrollMetrics(view)
+  const woodDark = '#5a4530'
+  const woodKnob = '#6f523a'
+  const rBarW = Math.max(6, R(W * 0.016))
+  const rBarLeft = W - rBarW - R(W * 0.004)
+  nodes.push({
+    id: INK_IDS.rollerRightBar, parentId: INK_IDS.root, position: 'absolute',
+    left: rBarLeft, top: 0, width: rBarW, height: H,
+    backgroundColor: woodDark,
+    // 圆柱明暗（横）：暗-亮-暗 —— 与卷筒同一手法（本引擎渐变的"物理感"用法）
+    fillGradient: {
+      kind: 'linear', angle: 90,
+      stops: [
+        { offset: 0, color: '#4a3826' },
+        { offset: 0.4, color: '#8a6a48' },
+        { offset: 1, color: '#3f2f20' },
+      ],
+    },
+  })
+  const rKnobLeft = rBarLeft + Math.round(rBarW / 2) - Math.round(sm.knobW / 2)
+  nodes.push({
+    id: INK_IDS.rollerRightKnobTop, parentId: INK_IDS.root, position: 'absolute',
+    left: rKnobLeft, top: -R(sm.knobH * 0.4), width: sm.knobW, height: sm.knobH,
+    borderRadius: R(sm.knobH / 2), backgroundColor: woodKnob,
+  })
+  nodes.push({
+    id: INK_IDS.rollerRightKnobBottom, parentId: INK_IDS.root, position: 'absolute',
+    left: rKnobLeft, top: H - R(sm.knobH * 0.6), width: sm.knobW, height: sm.knobH,
+    borderRadius: R(sm.knobH / 2), backgroundColor: woodKnob,
+  })
+
+  // ⑭ 幕布（**最上层**——数组末尾；inset 基态全遮）
   nodes.push({
     id: INK_IDS.curtain, parentId: INK_IDS.root, position: 'absolute',
     left: 0, top: 0, width: W, height: H,
     backgroundColor: P.curtain,
     clipPath: { kind: 'inset', params: [0, 0, 0, 0] },
+  })
+
+  // ⑮ 卷筒组（**在幕布之上**：闭合时整卷只见它的外缘；展开时贴边界滚动）——
+  //    卷筒（横向渐变圆柱明暗）+ 上下轴头（木色圆头，两端出头）。
+  nodes.push({
+    id: INK_IDS.rollCylinder, parentId: INK_IDS.root, position: 'absolute',
+    left: W - sm.bandW, top: 0, width: sm.bandW, height: H,
+    backgroundColor: '#cdb992',
+    // ★圆柱明暗：左暗→中亮→右暗（横向线性渐变）——"纸卷成筒"的立体感
+    fillGradient: {
+      kind: 'linear', angle: 90,
+      stops: [
+        { offset: 0, color: '#8f7d5c' },
+        { offset: 0.28, color: '#eadcbc' },
+        { offset: 0.55, color: '#cdb992' },
+        { offset: 1, color: '#7f6d4d' },
+      ],
+    },
+  })
+  const kLeft = W - sm.bandW + Math.round(sm.bandW / 2) - Math.round(sm.knobW / 2)
+  nodes.push({
+    id: INK_IDS.rollKnobTop, parentId: INK_IDS.root, position: 'absolute',
+    left: kLeft, top: -R(sm.knobH * 0.4), width: sm.knobW, height: sm.knobH,
+    borderRadius: R(sm.knobH / 2), backgroundColor: woodKnob,
+  })
+  nodes.push({
+    id: INK_IDS.rollKnobBottom, parentId: INK_IDS.root, position: 'absolute',
+    left: kLeft, top: H - R(sm.knobH * 0.6), width: sm.knobW, height: sm.knobH,
+    borderRadius: R(sm.knobH / 2), backgroundColor: woodKnob,
   })
 
   return JSON.stringify({ viewport: { width: W, height: H }, nodes })
@@ -946,9 +1049,18 @@ export function createInkProgram(_env: { view: View }): InkProgram {
   // ① 展卷（unfurl）：幕布从右端向左卷走（inset right 0→1——古画展开方向）
   steps.push({
     name: 'unfurl',
-    note: '展卷：墨幕从右端卷走（幕布 inset right 0→1）——空纸显露（一切基态皆"未画"）',
+    note: '真·展卷：卷筒（带轴头）自右缘向左滚动，墨幕被卷上筒身（幕布 inset right 0→1 与卷筒 translateX 同曲线）——空纸自右向左显露',
     holdMs: 300,
-    build: () => onto(I.curtain, { kind: 'clip', from: [0, 0, 0, 0], to: [0, 1, 0, 0], durationMs: 1500, curve: 'easeInOut' }),
+    build: () => {
+      const sm2 = scrollMetrics(_env.view)
+      return [
+        ...onto(I.curtain, { kind: 'clip', from: [0, 0, 0, 0], to: [0, 1, 0, 0], durationMs: 1500, curve: 'easeInOut' }),
+        // ★卷筒组（筒身 + 上下轴头）与幕布**同一时长同一曲线**（两处不同步会"脱筒"——判据钉住同曲线）
+        ...onto(I.rollCylinder, { kind: 'translateX', from: 0, to: sm2.txOpen, durationMs: 1500, curve: 'easeInOut' }),
+        ...onto(I.rollKnobTop, { kind: 'translateX', from: 0, to: sm2.txOpen, durationMs: 1500, curve: 'easeInOut' }),
+        ...onto(I.rollKnobBottom, { kind: 'translateX', from: 0, to: sm2.txOpen, durationMs: 1500, curve: 'easeInOut' }),
+      ]
+    },
   })
 
   // ② 远山三叠（mountains）：每叠 = 椭圆晕团晕开（clip 揭现）+ 湿/骨/枯三层笔触落笔（错时）+ 点苔
@@ -1177,9 +1289,17 @@ export function createInkProgram(_env: { view: View }): InkProgram {
   // ⑬ 收卷（close）：幕布盖回满屏（right 1→0）——卷终（终态 = 基态：全遮 ⇒ 下一轮从空卷再开）
   steps.push({
     name: 'close',
-    note: '收卷：幕布盖回满屏（inset right 1→0）——卷终（终态 = 基态：全遮 ⇒ 下一轮自空卷再开）',
+    note: '真·收卷：卷筒自左缘滚回右缘，墨幕重新卷起（幕布 inset right 1→0 与卷筒 translateX 同曲线）——卷终（终态 = 基态）',
     holdMs: 1000,
-    build: () => onto(I.curtain, { kind: 'clip', from: [0, 1, 0, 0], to: [0, 0, 0, 0], durationMs: 1600, curve: 'easeInOut' }),
+    build: () => {
+      const sm2 = scrollMetrics(_env.view)
+      return [
+        ...onto(I.curtain, { kind: 'clip', from: [0, 1, 0, 0], to: [0, 0, 0, 0], durationMs: 1600, curve: 'easeInOut' }),
+        ...onto(I.rollCylinder, { kind: 'translateX', from: sm2.txOpen, to: 0, durationMs: 1600, curve: 'easeInOut' }),
+        ...onto(I.rollKnobTop, { kind: 'translateX', from: sm2.txOpen, to: 0, durationMs: 1600, curve: 'easeInOut' }),
+        ...onto(I.rollKnobBottom, { kind: 'translateX', from: sm2.txOpen, to: 0, durationMs: 1600, curve: 'easeInOut' }),
+      ]
+    },
   })
 
   let index = 0

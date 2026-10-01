@@ -257,6 +257,28 @@ def main() -> int:
             print(f"  ✓ ⑤d ★路径变形 v1 真的落地：鸟 95 幕末变形因子 = {val:.4f}"
                   f"（= 下扑位——探针真读宿主表）")
 
+    # ── ⑤e ★真·卷轴展开：卷筒（140）与幕布同曲线滚到左缘；收卷滚回右缘 ──
+    #   证据 = 探针真读卷筒的 translateX（判据按"滚到了哪"断言，不看声明）。
+    W = float((d.get("view") or {}).get("width") or 1080)
+    unfurl_act = hbyname.get("unfurl") or {}
+    close_act = hbyname.get("close") or {}
+    u_roll = _layer(unfurl_act.get("probe_all") or [], 140) or {}
+    c_roll = _layer(close_act.get("probe_all") or [], 140) or {}
+    u_tx = u_roll.get("tx")
+    c_tx = c_roll.get("tx")
+    if u_tx is None or c_tx is None:
+        fail(f"⑤e 探针缺卷筒（140）tx 读数：unfurl={u_tx} close={c_tx}")
+        ok = False
+    elif not (u_tx <= -0.9 * W):
+        fail(f"⑤e 展卷末卷筒未滚到左缘：tx={u_tx}（应 ≤ {-0.9 * W:.0f}）——卷筒没跟随边界？")
+        ok = False
+    elif abs(c_tx) > 0.05 * W:
+        fail(f"⑤e 收卷末卷筒未回右缘：tx={c_tx}（应 ≈0）——收卷没逆向回位？")
+        ok = False
+    else:
+        print(f"  ✓ ⑤e ★真·卷轴展开：卷筒 tx 展卷末={u_tx:.1f}（≤-0.9W · 滚到左缘）· "
+              f"收卷末={c_tx:.1f}（≈0 · 回到右缘）")
+
     # ── ⑥ 帧率与流畅 ──
     vsync = host.get("vsync_p50")
     p95 = host.get("work_p95")

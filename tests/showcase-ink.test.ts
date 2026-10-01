@@ -12,7 +12,7 @@
 import { describe, it, expect } from 'vitest'
 import {
   buildInkTree, createInkProgram, INK_IDS, INK_SAMPLE_IDS, INK_PALETTE,
-  blend, ink, MIST_FLAT, MIST_A, MIST_B, MIST_C, RANGES,
+  blend, ink, MIST_FLAT, MIST_A, MIST_B, MIST_C, RANGES, scrollMetrics,
 } from '../hosts/shared/bridge/showcase-ink'
 import { spanMs } from '../hosts/shared/bridge/showcase-lights'
 
@@ -389,7 +389,9 @@ describe('Morpheus 炫技场 · 第四个节目（墨绘·山水卷）', () => {
         expect(st.offset, `节点 ${n.id} 色标升序`).toBeGreaterThan(prev)
         prev = st.offset
         expect(st.color, `节点 ${n.id} 颜色六位`).toMatch(/^#[0-9a-f]{6}$/)
-        expect(typeof st.alpha === 'number' && st.alpha >= 0 && st.alpha <= 1, `节点 ${n.id} alpha`).toBe(true)
+        // ★`alpha` 是**可选**字段（缺省 = 1，见 gradient.ts 契约）——缺省与显式数值都合法
+        const alphaOk = st.alpha === undefined || (typeof st.alpha === 'number' && st.alpha >= 0 && st.alpha <= 1)
+        expect(alphaOk, `节点 ${n.id} alpha=${st.alpha}`).toBe(true)
       }
     }
   })
@@ -438,6 +440,45 @@ describe('Morpheus 炫技场 · 第四个节目（墨绘·山水卷）', () => {
     const morphs = birds.anims.filter((x) => x.kind === 33)
     expect(morphs.length, 'birds 幕 pathMorph 指令').toBe(3)
     for (const m of morphs) expect(m.alternate, '扇翅应 yoyo').toBe(true)
+  })
+
+  it('★★真·卷轴展开：卷筒（渐变圆柱 + 轴头）与幕布**同曲线**滚动，收卷逆向回位', () => {
+    const sm = scrollMetrics(VIEW)
+    // 几何：卷筒贴右缘 → 贴左缘
+    expect(sm.bandW).toBeGreaterThan(10)
+    expect(sm.txOpen).toBe(-(VIEW.width - sm.bandW))
+    const nodes = treeNodes()
+    // 卷筒：横向渐变圆柱明暗（暗-亮-暗），4 个色标
+    const cyl = nodes.get(INK_IDS.rollCylinder) as { fillGradient?: { kind: string; angle: number; stops: unknown[] } }
+    expect(cyl.fillGradient?.kind).toBe('linear')
+    expect(cyl.fillGradient?.angle).toBe(90)
+    expect(cyl.fillGradient?.stops.length).toBe(4)
+    // 轴头（卷筒上下 + 右端上下）：木色圆头（borderRadius 存在且 > 0）
+    for (const kid of [INK_IDS.rollKnobTop, INK_IDS.rollKnobBottom, INK_IDS.rollerRightKnobTop, INK_IDS.rollerRightKnobBottom]) {
+      const k = nodes.get(kid) as { borderRadius?: number }
+      expect(k.borderRadius ?? 0, `轴头 ${kid}`).toBeGreaterThan(0)
+    }
+    // 右端轴：贴右缘（left 在右 5% 内）
+    const rb = nodes.get(INK_IDS.rollerRightBar) as { left: number }
+    expect(rb.left).toBeGreaterThan(VIEW.width * 0.95)
+
+    const { acts } = walkAll()
+    const unfurl = acts.find((a) => a.name === 'unfurl')!
+    const close = acts.find((a) => a.name === 'close')!
+    // ★同曲线纪律：卷筒组三条 translateX 与幕布 clip **同时长**（不同步 = "脱筒"）——
+    const cylTxs = unfurl.anims.filter((x) => [INK_IDS.rollCylinder, INK_IDS.rollKnobTop, INK_IDS.rollKnobBottom].includes(x.nodeId as never))
+    expect(cylTxs.length, 'unfurl 卷筒组 translateX').toBe(3)
+    for (const t of cylTxs) {
+      expect(t.from).toBe(0)
+      expect(t.to).toBe(sm.txOpen)
+      expect(t.durMs, '与幕布同时长').toBe(1500)
+      expect(t.curve, '与幕布同曲线').toBe(3) // easeInOut（Curve.EASE_IN_OUT = 3）
+    }
+    // 收卷：逆向（txOpen → 0）
+    const backTxs = close.anims.filter((x) => x.nodeId === INK_IDS.rollCylinder)
+    expect(backTxs.length).toBe(1)
+    expect(backTxs[0]!.from).toBe(sm.txOpen)
+    expect(backTxs[0]!.to).toBe(0)
   })
 
   it('★工具函数契约：blend 预混（6 位）· ink 加 alpha（8 位 #RRGGBBAA）', () => {
