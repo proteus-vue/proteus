@@ -49,6 +49,8 @@ interface VaporHost {
   applyOps(opsJson: string): string
   /** 核心几何读数（判据用：**从内核真源读**，不是从我们发下去的参数复述） */
   readRects(): string
+  /** ★★绘制通道探针（读**宿主真源**：渐变/发光/遮罩/圆角/裁剪/描边建出来了没） */
+  probeChannels(idsJson: string): string
   /** ★★**虚拟化挂载**（长列表：整树在内核、宿主只物化可见区）——`{viewport,nodes,rows}` */
   mountVirtual(treeJson: string): string
   /** ★★虚拟化滚动一帧：`{dy, capture}` → 核心给决策、宿主执行动作 */
@@ -148,6 +150,8 @@ interface VaporReport {
   update_evidence: Array<{ round: number; row: number; ops: number; changed_rects: number; relayout: number; text_synced: number }>
   /** 首轮前后**几何真值对比**（readRects 读内核真源：目标行节点宽度应变） */
   geom_probe: Array<{ id: number; before: number; after: number }>
+  /** ★★绘制通道探针（逐通道：读宿主真源，不是复述我们发下去的参数） */
+  channels: Array<Record<string, unknown>>
   // —— 观测 ——
   uninstantiated_slots: number
   notes: string[]
@@ -301,7 +305,7 @@ function runShort(args: VaporArgs): string {
     inst_ms: 0, inst_nodes: 0, inst_reused_ids: 0, inst_allocated_ids: 0, inst_rows: 0,
     inst_values_filled: 0, inst_virtual_rows: 0, inst_text_filled: 0, inst_width_filled: 0,
     mount_ms: 0, mount_nodes: 0,
-    updates_run: 0, ops_bytes: 0, ops_ms: 0, apply_ms: 0, text_synced_total: 0, update_evidence: [], geom_probe: [],
+    updates_run: 0, ops_bytes: 0, ops_ms: 0, apply_ms: 0, text_synced_total: 0, update_evidence: [], geom_probe: [], channels: [],
     uninstantiated_slots: 0, notes,
   }
   try {
@@ -446,6 +450,14 @@ function runShort(args: VaporArgs): string {
     if (probeId !== undefined) {
       const after = rectsOf()[String(probeId)]?.width ?? -1
       rep.geom_probe.push({ id: probeId, before, after })
+    }
+
+    // ★★绘制通道探针（5 个通道各一个节点：2 圆角 / 3 渐变 / 4 发光 / 5 裁剪 / 6 描边）
+    try {
+      const ch = JSON.parse(proteusHost.probeChannels('[2,3,4,5,6]')) as { ok?: boolean; channels?: Array<Record<string, unknown>> }
+      if (ch.ok && ch.channels) rep.channels = ch.channels
+    } catch {
+      /* 探针失败不阻断主判据（notes 里会缺读数，判据按缺失判红） */
     }
 
     rep.ok = rep.updates_run > 0

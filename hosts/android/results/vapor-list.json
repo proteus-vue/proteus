@@ -1,6 +1,6 @@
 {
-  "bundle_chars": 48393,
-  "run_ms": 133,
+  "bundle_chars": 48584,
+  "run_ms": 100,
   "host_mount_calls": 1,
   "host_apply_calls": 0,
   "host_nodes": -1,
@@ -20,7 +20,7 @@
     "inst_nodes": 2002,
     "inst_rows": 1000,
     "inst_allocated_ids": 1998,
-    "mount_ms": 85,
+    "mount_ms": 63,
     "row_count": 1000,
     "row_pitch": 100,
     "rows_live_first": 26,

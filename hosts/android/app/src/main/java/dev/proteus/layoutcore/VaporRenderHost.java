@@ -167,7 +167,8 @@ final class VaporRenderHost {
             double layoutMs = (System.nanoTime() - tc) / 1e6;
             if (handle <= 0) return err(out, "核心建树失败（handle=0）").toString();
 
-            // ④ 几何 → 指令 → 上屏
+            // ④ 节点级绘制状态统一注入（一次遍历；C2 描边/C1 裁剪/原点）→ 几何 → 指令 → 上屏
+            injectAllNodeState();
             long te = System.nanoTime();
             emitAll();
             double emitMs = (System.nanoTime() - te) / 1e6;
@@ -273,6 +274,50 @@ final class VaporRenderHost {
             out.put("measure_ms", round3(measureMs));
             out.put("emit_cmds_ms", round3(emitMs));
             if (changed != null) out.put("rects", changed);
+            return out.toString();
+        } catch (Throwable t) {
+            return err(out, t.getClass().getSimpleName() + ": " + t.getMessage()).toString();
+        }
+    }
+
+    /**
+     * ★★**绘制通道探针**（判据用）：逐通道报"宿主真源里建出来了没"——
+     * 不读我们发下去的参数（那是复述），读**宿主侧实际持有的状态**：
+     *   · `grad`：`Cmd.gradient` 的 `kind:stops`（`drawCmds` 用的就是它）
+     *   · `glow`：`Cmd.glow` 的 `层数:首层alpha`（分层同心描边）
+     *   · `mask`：`Cmd.mask[0]`（0 = 无 / 1 = linear / 2 = radial）
+     *   · `radius`：`Cmd.radius`（>0 = 走 drawRoundRect）
+     *   · `clip`：`ProteusHostView.clipKindOf`（>0 = 画布裁剪形状就绪）
+     *   · `stroke`：宿主 `nodeSvgStroke` 表里的路径总弧长（>0 = 描边层建出来了）
+     */
+    public String probeChannels(String idsJson) {
+        JSONObject out = new JSONObject();
+        try {
+            JSONArray ids = new JSONArray(idsJson);
+            JSONArray arr = new JSONArray();
+            for (int i = 0; i < ids.length(); i++) {
+                int id = ids.optInt(i);
+                JSONObject o = new JSONObject();
+                o.put("id", id);
+                Integer at = cmdIndexById.get(id);
+                if (at != null && at < cmds.size()) {
+                    ProteusHostView.Cmd c = cmds.get(at);
+                    o.put("radius", c.radius);
+                    o.put("grad", c.gradient != null ? c.gradient.kind + ":" + c.gradient.colors.length : "");
+                    if (c.glow != null) {
+                        o.put("glow", (int) c.glow[1] + ":" + round3(c.glow[2]));
+                    }
+                    o.put("mask", c.mask != null ? (int) c.mask[0] : 0);
+                }
+                if (view != null) {
+                    o.put("clip", view.clipKindOfPublic(id));
+                    float len = view.svgStrokeLength(id);
+                    if (len > 0) o.put("stroke_len", round3(len));
+                }
+                arr.put(o);
+            }
+            out.put("ok", true);
+            out.put("channels", arr);
             return out.toString();
         } catch (Throwable t) {
             return err(out, t.getClass().getSimpleName() + ": " + t.getMessage()).toString();
@@ -392,7 +437,9 @@ final class VaporRenderHost {
             recycleHandle = RustLayout.recycleCreate(nRows, 0, 0);
             if (recycleHandle == 0L) return err(out, "recycleCreate 失败").toString();
 
-            // ⑦ 静态部分（不属任何行的节点）全量物化——否则行会挂到根上（层序错）
+            // ⑦ 节点级绘制状态统一注入（一次遍历——**不随行物化重复**）
+            injectAllNodeState();
+            //    静态部分（不属任何行的节点）全量物化——否则行会挂到根上（层序错）
             staticCmds.clear();
             for (int i = 0; i < specs.size(); i++) {
                 int id = specs.get(i).getInt("id");
@@ -571,12 +618,24 @@ final class VaporRenderHost {
 
     /* ────────────────────────── 内部：度量 / 核心键 / 指令 ────────────────────────── */
 
-    /** 几何相关键白名单（与 `JsRenderHost.LAYOUT_KEYS` 同源；绘制属性不进核心） */
+    /**
+     * 几何相关键白名单（与 `JsRenderHost.LAYOUT_KEYS` 同源；**纯绘制属性不进核心**）。
+     *
+     * ★★**内核必需的"静态基态声明"也要带**（2026-10-01 实测抓出的缺口）：
+     *   `clipPath`（裁剪形状 = 裁剪动画的基态）与 `svgPath`（路径本体 = 描边/变形的基态）
+     *   是**内核要解析**的声明——不在白名单 ⇒ 请求树不带 ⇒ 内核 `svg_nodes` 回空 ⇒
+     *   **描边层建不出来（静默）**。这正是 `LightsHost.CORE_KEYS` 早就注释过的同款教训
+     *   （"不在白名单 ⇒ 内核拒绝且静默"），本通路首版又踩了一次。
+     *   ★而 `fillGradient` / `glow` / `mask` / `borderRadius` 等**纯绘制**属性不进内核
+     *     （内核不认也不该认——它们只影响绘制）。
+     */
     private static final java.util.Set<String> LAYOUT_KEYS = new java.util.HashSet<>(java.util.Arrays.asList(
             "width", "height", "minWidth", "maxWidth", "minHeight", "maxHeight",
             "margin", "padding", "flexDirection", "justifyContent", "alignItems", "alignSelf",
             "flexGrow", "flexShrink", "flexBasis", "gap", "display", "position", "top", "left",
-            "widthRatio", "heightRatio", "overflow"));
+            "widthRatio", "heightRatio", "overflow",
+            // ★静态基态声明（内核要解析）：裁剪形状 + 路径本体（+ 描边色/宽随 svgPath 一起进）
+            "clipPath", "svgPath", "svgPathTo", "perspective"));
 
     /** 节点 → 核心请求（只带几何键；`text` 单独带，供核心记入文本叶） */
     private JSONArray coreNodes() throws Exception {
@@ -640,14 +699,131 @@ final class VaporRenderHost {
         float h = (float) r.optDouble("height");
         String bg = spec.optString("backgroundColor", null);
         int color = bg != null ? parseColor(bg) : 0;
+
+        // ★★**静态绘制的注入**（2026-10-01 · 绘制通道补齐）：裁剪与 SVG 描边是**宿主节点表**
+        //   上的状态（`drawCmds` 按节点 id 查表），不是 `Cmd` 字段 ⇒ 这里注入一次。
+        //   与 `LightsHost.emitCmds` 同一做法（同一语义一处实现：那边是节目通路、这边是 Vapor 通路）。
+        final int id = spec.getInt("id");
+        if (view != null) {
+            // ★逐节点只注入**廉价**的节点级状态（读本地 spec，零跨边界调用）；
+            //   SVG 描边要查内核（`svgNodes`）——那是**挂载后统一注入一次**（见 injectAllNodeState：
+            //   逐节点调用会让每节点付一次 JSON 解析，1000 行虚拟化直接垮）
+            injectClipPath(id, spec);
+            injectTransformOrigin(id, spec);
+        }
+
+        // ★★**Cmd 上的绘制通道**（与 LightsHost 的构造逐项对齐）：
+        //   radius（圆角）/ gradient（渐变）/ glow（发光）/ mask（软遮罩）
+        final float radius = (float) spec.optDouble("borderRadius", 0);
+        final ProteusHostView.GradSpec grad = parseGrad(spec.optJSONObject("fillGradient"));
+        final float[] glowSpec = parseGlow(spec.optJSONObject("glow"));
+        final float[] maskSpec = parseMask(spec.optJSONObject("mask"));
+
         String t = spec.optString("text", null);
         if (t != null && !t.isEmpty()) {
             float fs = (float) spec.optDouble("fontSize", 14);
             String tc = spec.optString("color", null);
             int textColor = tc != null ? parseColor(tc) : 0xFFFFFFFF;
-            return new ProteusHostView.Cmd(x, y, w, h, color, t, fs, textColor);
+            return new ProteusHostView.Cmd(x, y, w, h, color, t, fs, textColor, radius, grad, glowSpec, maskSpec);
         }
-        return new ProteusHostView.Cmd(x, y, w, h, color, null);
+        return new ProteusHostView.Cmd(x, y, w, h, color, null, 0f, 0, radius, grad, glowSpec, maskSpec);
+    }
+
+    /**
+     * ★★**挂载后统一注入节点级绘制状态**（C2 描边 / C1 裁剪 / 变换原点）——**一次遍历、一次查内核**。
+     *
+     * 【为什么不能在 `mkCmd` 里逐节点做】`svgNodes()` 是一次**全表 JSON 解析**（内核侧遍历 +
+     *   序列化）；逐节点调用 ⇒ N 次解析（1000 行虚拟化每帧物化都要付）⇒ 直接垮。
+     *   ⇒ 与 `LightsHost.injectSvgStrokes` 同一做法：挂载/重建后**统一注入一次**，
+     *     行的物化/释放只动指令（`Cmd`），不重复做节点级注入。
+     */
+    private void injectAllNodeState() throws Exception {
+        if (view == null) return;
+        // ① SVG 描边：内核一次性回带全表（`{paths: {id: {segs, strokeColor, strokeWidth, progressBase}}}`）
+        try {
+            org.json.JSONObject o = new org.json.JSONObject(RustLayout.svgNodes(handle));
+            org.json.JSONObject paths = o.optJSONObject("paths");
+            if (paths != null) {
+                for (int i = 0; i < specs.size(); i++) {
+                    JSONObject spec = specs.get(i);
+                    if (spec.opt("svgPath") == null) continue;
+                    int id = spec.getInt("id");
+                    org.json.JSONObject info = paths.optJSONObject(String.valueOf(id));
+                    if (info == null) continue;
+                    JSONArray segs = info.optJSONArray("segs");
+                    if (segs == null) continue;
+                    long packed = (long) info.optDouble("strokeColor", 4294967295.0);
+                    int col = packed >= 0 && packed < 4294967295L ? (int) packed : 0xFFFFFFFF;
+                    float sw = (float) info.optDouble("strokeWidth", 2);
+                    float pb = (float) info.optDouble("progressBase", 0);
+                    view.setNodeSvgStroke(id, segs, col, sw, pb);
+                }
+            }
+        } catch (Throwable ex) {
+            android.util.Log.w("proteus", "Vapor SVG 描边建层失败（不阻断）：" + ex);
+        }
+        // ② 裁剪形状 / 变换原点（读本地 spec，零跨边界调用）
+        for (int i = 0; i < specs.size(); i++) {
+            JSONObject spec = specs.get(i);
+            int id = spec.getInt("id");
+            injectClipPath(id, spec);
+            injectTransformOrigin(id, spec);
+        }
+    }
+
+    /** ★★裁剪形状注入（C1）：`clipPath: {kind, params}` → 宿主节点表（静态声明也必须渲染） */
+    private void injectClipPath(int id, JSONObject spec) {
+        JSONObject cpo = spec.optJSONObject("clipPath");
+        if (cpo == null) return;
+        String k = cpo.optString("kind", "");
+        JSONArray pa = cpo.optJSONArray("params");
+        final int kind = "inset".equals(k) ? 1 : "circle".equals(k) ? 2 : "polygon".equals(k) ? 3 : 0;
+        if (kind == 0 || pa == null) return;
+        float[] ps = new float[pa.length()];
+        for (int i = 0; i < pa.length(); i++) ps[i] = (float) pa.optDouble(i, 0);
+        view.setNodeClipPath(id, kind, ps);
+    }
+
+    /** ★★变换原点注入（盒分数；缺省不注入 = 中心——既有行为零变化） */
+    private void injectTransformOrigin(int id, JSONObject spec) {
+        JSONObject torig = spec.optJSONObject("transformOrigin");
+        if (torig == null) return;
+        view.setNodeTransformOrigin(id,
+                (float) torig.optDouble("x", 0.5), (float) torig.optDouble("y", 0.5));
+    }
+
+    /** 渐变声明 → `GradSpec`（`GradSpec.parse` 对非法返回 null ⇒ 退回纯色——与 LightsHost 同口径） */
+    private ProteusHostView.GradSpec parseGrad(JSONObject g) {
+        return ProteusHostView.GradSpec.parse(g);
+    }
+
+    /** 发光声明 → `[color, radius, alpha]`（坏色 ⇒ null，不静默画错色） */
+    private float[] parseGlow(JSONObject glo) {
+        if (glo == null) return null;
+        String gcolS = glo.optString("color", "");
+        if (!(gcolS.startsWith("#") && gcolS.length() == 7)) return null;
+        try {
+            int gcol = (int) (0xFF000000L | Long.parseLong(gcolS.substring(1), 16));
+            return new float[]{gcol, (float) glo.optDouble("radius", 0), (float) glo.optDouble("alpha", 0.5)};
+        } catch (NumberFormatException ignored) {
+            return null;
+        }
+    }
+
+    /** 遮罩声明 → `[kind, angle, cx, cy, r, softness, progress]`（与 LightsHost 同口径） */
+    private float[] parseMask(JSONObject mo) {
+        if (mo == null) return null;
+        String mkindS = mo.optString("kind", "");
+        int mkind = "linear".equals(mkindS) ? 1 : "radial".equals(mkindS) ? 2 : 0;
+        if (mkind == 0) return null;
+        return new float[]{
+                mkind,
+                (float) mo.optDouble("angle", 180),
+                (float) mo.optDouble("cx", 0.5),
+                (float) mo.optDouble("cy", 0.5),
+                (float) mo.optDouble("r", 0.75),
+                (float) mo.optDouble("softness", 0.25),
+                (float) mo.optDouble("progress", 1.0)};
     }
 
     /** 同 `mkCmd(spec, rect)`，但**几何沿用既有指令**（文本改了、几何没动的情形——见 applyOps） */

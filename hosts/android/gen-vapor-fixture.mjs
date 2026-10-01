@@ -45,6 +45,11 @@ const OUT_LIST = path.join(HERE, 'app/src/main/assets/vapor-list-artifacts.json'
 const SFC = `<template>
   <p-view style="width: 1080px; height: 1600px; flex-direction: column; padding-top: 24px; background-color: #14141c">
     <p-text style="font-size: 20px; color: #ffffff; margin-bottom: 12px">Vapor · 设备端</p-text>
+    <p-view style="height: 90px; margin-bottom: 8px; border-radius: 18px; background-color: #2a3f66"></p-view>
+    <p-view style="height: 90px; margin-bottom: 8px" fill-gradient='{"kind":"linear","angle":90,"stops":[{"offset":0,"color":"#7c5cff"},{"offset":1,"color":"#ff9a6c"}]}'></p-view>
+    <p-view style="height: 90px; margin-bottom: 8px; background-color: #1f2c44" glow='{"color":"#fff6d8","radius":26,"alpha":0.9}'></p-view>
+    <p-view style="height: 90px; margin-bottom: 8px; background-color: #24405e" clip-path='{"kind":"inset","params":[0,0,0.45,0]}'></p-view>
+    <p-view style="height: 80px; margin-bottom: 8px; background-color: #16203a" svg-path='{"d":"M16 64 Q 270 8 524 64","stroke":"#cfe0ff","strokeWidth":7,"progress":1}'></p-view>
     <p-view v-for="item in list" :key="item.id" style="height: 44px; margin-bottom: 6px; background-color: #285ac8">
       <p-text :width="item.w" style="font-size: 12px; color: #ffffff">{{ item.title }}</p-text>
     </p-view>

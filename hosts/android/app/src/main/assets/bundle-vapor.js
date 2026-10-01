@@ -1277,6 +1277,7 @@
       text_synced_total: 0,
       update_evidence: [],
       geom_probe: [],
+      channels: [],
       uninstantiated_slots: 0,
       notes
     };
@@ -1399,6 +1400,11 @@
       if (probeId !== void 0) {
         const after = rectsOf()[String(probeId)]?.width ?? -1;
         rep.geom_probe.push({ id: probeId, before, after });
+      }
+      try {
+        const ch = JSON.parse(proteusHost.probeChannels("[2,3,4,5,6]"));
+        if (ch.ok && ch.channels) rep.channels = ch.channels;
+      } catch {
       }
       rep.ok = rep.updates_run > 0;
       if (!rep.ok) notes.push("\u589E\u91CF\u94FE\u672A\u8DD1\u8D77\u6765\u2014\u2014\u89C1\u4E0A\u65B9 notes");
