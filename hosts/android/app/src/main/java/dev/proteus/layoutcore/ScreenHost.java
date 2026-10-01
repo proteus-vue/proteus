@@ -57,6 +57,8 @@ public final class ScreenHost {
 
     // ── 诊断记账（判据读：证明动作是真发生的，而非壳自述） ──
     private int mountCalls, visibleCalls, destroyCalls, animCalls, animCompleted, animHookMissing;
+    /** ★跨页面共享元素计数（2026-10-01；判据读它证明"这条链真的走过"） */
+    private int rectCalls, sharedCalls;
     private final List<String> callLog = new ArrayList<>();
 
     public ScreenHost(View hostView) {
@@ -74,10 +76,92 @@ public final class ScreenHost {
             case "screen.visible":  return visible(args);
             case "screen.destroy":  return destroy(args);
             case "screen.anim":     return anim(args);
+            case "screen.rect":     return rect(args);
+            case "screen.shared":   return shared(args);
             case "screen.stats":    return ok(stats());
             default:
                 throw new UnsupportedOperationException("未实现的 screen 方法：" + method);
         }
+    }
+
+    // ────────────────────────── screen.rect（★跨页面共享元素的稳态几何回传） ──────────────────────────
+
+    /**
+     * 单节点绝对矩形（内核算——与 FLIP 同一套收集/吸附，Java 侧零几何数学）。
+     * 入参 `{screenId, nodeId}`；出参原样透传内核回执（`{ok,x,y,width,height}` 或 `{ok:false,error}`）。
+     */
+    private String rect(JSONObject args) throws Exception {
+        String screenId = args.getString("screenId");
+        int nodeId = args.getInt("nodeId");
+        ScreenTree st = screens.get(screenId);
+        if (st == null) throw new IllegalStateException("screen.rect: 未知屏 " + screenId + "（未 mount？）");
+        String out = RustLayout.nodeRect(st.handle, nodeId);
+        rectCalls++;
+        JSONObject o = new JSONObject(out);
+        // ★不伪装未知字段的语义：内核说 ok:false（不在树上/display:none）就原样抛（不静默）
+        if (!o.optBoolean("ok", false)) {
+            throw new IllegalStateException("screen.rect: 内核拒绝：" + out);
+        }
+        return ok(o);
+    }
+
+    // ────────────────────────── screen.shared（★跨页面共享元素） ──────────────────────────
+
+    /**
+     * 跨页面共享元素：`{targetScreenId, targetNodeId, sourceRect{x,y,w,h}, durMs, curve, fadeIn, token}`
+     *   → 内核 `shared_element` 算几何 + 写首帧 ⇒ **同一条**帧循环完成链（token 回推）。
+     *
+     * 【与同树共享元素的差别】源几何由调用方（页面栈层）注入——跨页面的稳态起点只有它知道
+     *   （内核只认识"当前树"，另一棵树的矩形要宿主给）。这正是内核 FFI 里 `sourceRect` 分支的用途。
+     */
+    private String shared(JSONObject args) throws Exception {
+        String screenId = args.getString("targetScreenId");
+        int nodeId = args.getInt("targetNodeId");
+        ScreenTree st = screens.get(screenId);
+        if (st == null) throw new IllegalStateException("screen.shared: 未知屏 " + screenId + "（未 mount？）");
+        JSONObject sr = args.getJSONObject("sourceRect");
+        final double durMs = args.optDouble("durMs", 400);
+        final String token = args.optString("token", "");
+        JSONObject body = new JSONObject();
+        body.put("targetId", nodeId);
+        body.put("sourceRect", sr);
+        body.put("durMs", durMs);
+        body.put("curve", args.optInt("curve", 1));
+        body.put("fadeIn", args.optBoolean("fadeIn", true));
+        String out = RustLayout.sharedElement(st.handle, body.toString());
+        JSONObject ro = new JSONObject(out);
+        if (!ro.optBoolean("ok", false)) throw new IllegalStateException("screen.shared: 内核拒绝：" + out);
+        sharedCalls++;
+        // 帧循环推进（与 screen.anim **同一条**完成链）
+        final List<ScreenTree> targets = new ArrayList<>();
+        targets.add(st);
+        final long t0 = android.os.SystemClock.uptimeMillis();
+        final long budgetMs = (long) durMs + 100;
+        animHostView.post(new Runnable() {
+            @Override public void run() {
+                android.view.Choreographer.getInstance().postFrameCallback(new android.view.Choreographer.FrameCallback() {
+                    long last = 0;
+                    @Override public void doFrame(long frameTimeNanos) {
+                        long now = android.os.SystemClock.uptimeMillis();
+                        float dt = last == 0 ? 16f : (float) (now - last);
+                        last = now;
+                        for (ScreenTree t : targets) {
+                            if (t.handle > 0) RustLayout.animTickBin(t.handle, dt);
+                        }
+                        if (now - t0 >= budgetMs) {
+                            completeAnim(token, targets);
+                        } else {
+                            android.view.Choreographer.getInstance().postFrameCallback(this);
+                        }
+                    }
+                });
+            }
+        });
+        JSONObject d = new JSONObject();
+        d.put("started", 1);
+        d.put("fromRect", ro.optJSONObject("fromRect"));
+        d.put("toRect", ro.optJSONObject("toRect"));
+        return ok(d);
     }
 
     // ────────────────────────── screen.mount ──────────────────────────
@@ -129,13 +213,16 @@ public final class ScreenHost {
         JSONObject n = new JSONObject();
         n.put("id", id);
         if (parentId != null) n.put("parentId", parentId);
-        // 绝对定位（与内核 create 的 style 字段一致：left/top/width/height）
-        JSONObject style = new JSONObject();
-        if (x != 0) style.put("left", x);
-        if (y != 0) style.put("top", y);
-        style.put("width", w);
-        style.put("height", h);
-        n.put("style", style);
+        // ★★顶层几何字段（2026-10-01 修复）：内核 `create` 读的是顶层 width/height/left/top
+        //   + position（见 `MainActivity.buildKernelTree` 的既有正确形态）——
+        //   本方法**原先把它们包在 `style` 里** ⇒ 内核忽略未知的 style 包装 ⇒ 全屏树 0×0
+        //   （本轮"跨页面共享元素"判据当场抓到：`目标节点无可测尺寸（0×0）`）。
+        //   ★同源纪律：装置代码的字段形态也要对着**内核真实契约**核，不能对着"看起来合理"写。
+        n.put("position", x != 0 || y != 0 ? "absolute" : "relative");
+        if (x != 0) n.put("left", x);
+        if (y != 0) n.put("top", y);
+        n.put("width", w);
+        n.put("height", h);
         if (color != null) n.put("bg", color);
         return n;
     }
@@ -321,6 +408,8 @@ public final class ScreenHost {
         o.put("anim_calls", animCalls);
         o.put("anim_completed", animCompleted);
         o.put("anim_hook_missing", animHookMissing);
+        o.put("rect_calls", rectCalls);
+        o.put("shared_calls", sharedCalls);
         o.put("live_screens", screens.size());
         JSONArray log = new JSONArray();
         int from = Math.max(0, callLog.size() - 32);

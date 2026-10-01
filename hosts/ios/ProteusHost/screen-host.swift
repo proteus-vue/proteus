@@ -22,6 +22,12 @@
 import Foundation
 import UIKit
 
+// ★★FFI 补充声明（其余 `proteus_layout_*` 由 selfdraw-scene.swift 声明；
+//   `node_rect` 是 2026-10-01「跨页面共享元素的稳态几何回传」新增的读取口——
+//   页面栈层在目标页 mount 后取它的节点矩形，作为飞行终点基准）。
+@_silgen_name("proteus_layout_node_rect")
+func proteus_layout_node_rect(_ handle: UInt64, _ nodeId: UInt32) -> UnsafeMutablePointer<CChar>
+
 final class ScreenHost: NSObject {
     private static let TAG = "proteus-screen"
 
@@ -54,6 +60,8 @@ final class ScreenHost: NSObject {
 
     // ── 诊断记账（判据读：证明动作真发生，非壳自述） ──
     private var mountCalls = 0, visibleCalls = 0, destroyCalls = 0, animCalls = 0, animCompleted = 0, animHookMissing = 0
+    /// ★跨页面共享元素计数（2026-10-01；判据读它证明"这条链真的走过"）
+    private var rectCalls = 0, sharedCalls = 0
     private var callLog: [String] = []
 
     // ── 帧循环（CADisplayLink；一次只允许一条在飞——与"一次导航 = 一次转场"同构） ──
@@ -71,9 +79,70 @@ final class ScreenHost: NSObject {
         case "screen.visible": return visible(args)
         case "screen.destroy": return destroy(args)
         case "screen.anim": return anim(args)
+        case "screen.rect": return rect(args)
+        case "screen.shared": return shared(args)
         case "screen.stats": return ok(stats())
         default: return miss("未实现的 screen 方法：\(method)")
         }
+    }
+
+    // MARK: - screen.rect（★跨页面共享元素的稳态几何回传，2026-10-01）
+
+    /// 单节点绝对矩形（内核算——与 FLIP 同一套收集/吸附）。
+    /// 入参 `{screenId, nodeId}`；出参 `{ok, x, y, width, height}`。
+    private func rect(_ args: [String: Any]) -> String {
+        guard let screenId = args["screenId"] as? String else { return fail("screen.rect: 缺 screenId") }
+        guard let nodeId = args["nodeId"] as? Int else { return fail("screen.rect: 缺 nodeId") }
+        guard let st = screens[screenId] else { return fail("screen.rect: 未知屏 \(screenId)（未 mount？）") }
+        let ptr = proteus_layout_node_rect(st.handle, UInt32(nodeId))
+        let outStr = String(cString: ptr)
+        proteus_layout_free_string(ptr)
+        rectCalls += 1
+        // 内核回 `{ok:true,x,y,width,height}`（失败回 `{ok:false,error}`）——**原样透传**，
+        // 布局语义（含"不在树上/display:none"的报错）不在宿主层复述。
+        guard let od = outStr.data(using: .utf8),
+              let o = (try? JSONSerialization.jsonObject(with: od)) as? [String: Any] else {
+            return fail("screen.rect: 内核回执非 JSON：\(outStr.prefix(120))")
+        }
+        return ok(o)
+    }
+
+    // MARK: - screen.shared（★跨页面共享元素，2026-10-01）
+
+    /// 跨页面共享元素：`{targetScreenId, targetNodeId, sourceRect{x,y,w,h}, durMs, curve, fadeIn, token}`
+    ///   → 内核 `shared_element` 算出几何 + 写首帧 ⇒ 宿主帧循环推进（与 `screen.anim` 同一条完成链）。
+    ///
+    /// 【与同树共享元素的差别】源几何**由调用方（页面栈层）注入**——跨页面的稳态起点只有它知道
+    ///   （内核只认识"当前树"，另一棵树的矩形要宿主给）。这正是内核 FFI 里 `sourceRect` 分支的用途。
+    private func shared(_ args: [String: Any]) -> String {
+        guard let screenId = args["targetScreenId"] as? String else { return fail("screen.shared: 缺 targetScreenId") }
+        guard let nodeId = args["targetNodeId"] as? Int else { return fail("screen.shared: 缺 targetNodeId") }
+        guard let st = screens[screenId] else { return fail("screen.shared: 未知屏 \(screenId)（未 mount？）") }
+        guard let sr = args["sourceRect"] as? [String: Any] else { return fail("screen.shared: 缺 sourceRect") }
+        let durMs = (args["durMs"] as? Double) ?? 400
+        let curve = (args["curve"] as? Int) ?? 1
+        let fadeIn = (args["fadeIn"] as? Bool) ?? true
+        let token = (args["token"] as? String) ?? ""
+        let body: [String: Any] = [
+            "targetId": nodeId,
+            "sourceRect": ["x": sr["x"] ?? 0, "y": sr["y"] ?? 0, "w": sr["w"] ?? 0, "h": sr["h"] ?? 0],
+            "durMs": durMs, "curve": curve, "fadeIn": fadeIn,
+        ]
+        guard let d = try? JSONSerialization.data(withJSONObject: body),
+              let j = String(data: d, encoding: .utf8) else { return fail("screen.shared: 请求序列化失败") }
+        let out = j.withCString { proteus_layout_shared_element(st.handle, $0) }
+        let outStr = String(cString: out)
+        proteus_layout_free_string(out)
+        guard let od = outStr.data(using: .utf8),
+              let ro = (try? JSONSerialization.jsonObject(with: od)) as? [String: Any],
+              (ro["ok"] as? Bool) == true else {
+            return fail("screen.shared: 内核拒绝：\(outStr.prefix(160))")
+        }
+        sharedCalls += 1
+        // 帧循环推进（与 screen.anim **同一条**完成链——token 回推 __proteusHostScreenAnimDone）
+        let t0 = CACurrentMediaTime()
+        startFrameLoop(targets: [st], t0: t0, budgetS: durMs / 1000.0 + 0.1, token: token)
+        return ok(["started": 1, "fromRect": ro["fromRect"] ?? [:], "toRect": ro["toRect"] ?? [:]])
     }
 
     // MARK: - screen.mount
@@ -119,10 +188,16 @@ final class ScreenHost: NSObject {
     private func node(_ id: Int, _ parentId: Int?, _ x: Double, _ y: Double, _ w: Double, _ h: Double, _ color: Int?) -> [String: Any] {
         var n: [String: Any] = ["id": id]
         if let p = parentId { n["parentId"] = p }
-        var style: [String: Any] = ["width": w, "height": h]
-        if x != 0 { style["left"] = x }
-        if y != 0 { style["top"] = y }
-        n["style"] = style
+        // ★★顶层几何字段（2026-10-01 修复，与 Android 腿同批）：内核 `create` 的节点 DTO
+        //   （`ffi.rs::NodeDto`，serde camelCase）读的是**顶层** width/height/left/top + position——
+        //   本方法**原先把它们包在 `style` 里**（那是 `update` 的 patch 格式），create 侧会
+        //   静默忽略 ⇒ 全屏树 0×0（实测："跨页面共享元素：目标节点无可测尺寸（0×0）"）。
+        //   ★同源纪律：装置代码的字段形态也要对着**内核真实契约**核（本次取证 = NodeDto 定义）。
+        n["position"] = (x != 0 || y != 0) ? "absolute" : "relative"
+        if x != 0 { n["left"] = x }
+        if y != 0 { n["top"] = y }
+        n["width"] = w
+        n["height"] = h
         if let c = color { n["bg"] = c }
         return n
     }
@@ -299,6 +374,8 @@ final class ScreenHost: NSObject {
             "anim_calls": animCalls,
             "anim_completed": animCompleted,
             "anim_hook_missing": animHookMissing,
+            "rect_calls": rectCalls,
+            "shared_calls": sharedCalls,
             "live_screens": screens.count,
             "calls": Array(callLog[from...]),
             "screens": screensOut,

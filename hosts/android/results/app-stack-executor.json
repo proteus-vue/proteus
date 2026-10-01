@@ -48,6 +48,43 @@
       "firstOutTo": 800
     }
   ],
+  "e4": {
+    "ran": true,
+    "target_screen": "detail#2",
+    "source_screen": "home#1",
+    "target_node": 112,
+    "source_node": 102,
+    "source_rect": {
+      "x": 0,
+      "y": 200,
+      "w": 1080,
+      "h": 200
+    },
+    "injected_source_rect": {
+      "x": 60,
+      "y": 230,
+      "w": 540,
+      "h": 100
+    },
+    "target_rect": {
+      "x": 0,
+      "y": 200,
+      "w": 1080,
+      "h": 200
+    },
+    "from_rect": {
+      "h": 100,
+      "w": 540,
+      "x": 60,
+      "y": 230
+    },
+    "to_rect": {
+      "h": 200,
+      "w": 1080,
+      "x": 0,
+      "y": 200
+    }
+  },
   "e_mirror_ok": true,
   "e_home_id": "home#1",
   "e_detail_id": "detail#2",
@@ -77,17 +114,22 @@
     "visible_calls": 4,
     "destroy_calls": 1,
     "anim_calls": 3,
-    "anim_completed": 3,
+    "anim_completed": 4,
     "anim_hook_missing": 0,
+    "rect_calls": 2,
+    "shared_calls": 1,
     "live_screens": 1,
     "calls": [
       "screen.mount",
       "screen.visible",
       "screen.anim",
+      "screen.rect",
       "screen.mount",
       "screen.visible",
       "screen.anim",
       "screen.visible",
+      "screen.rect",
+      "screen.shared",
       "screen.visible",
       "screen.anim",
       "screen.destroy",
@@ -104,5 +146,5 @@
   },
   "e_pending_anims": 0,
   "e_anim_hook": true,
-  "e_pump_rounds": 52
+  "e_pump_rounds": 71
 }

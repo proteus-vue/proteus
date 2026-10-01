@@ -23,7 +23,7 @@ import type { ShowcaseAct, ShowcaseProgram } from './showcase-program'
 
 // ★构建标识（由 hosts/ios/bridge/inject-build-id.mjs **编译期替换**——与 entry-bench/entry-selfdraw
 //   同一机制；报告据此断言"设备上跑的是本次构建"）
-const BUILD_ID = 'adc2d3c1-103251'
+const BUILD_ID = '42b6967d-110154'
 
 /** 帧内视图参数（建树时定，后续幕复用） */
 interface ViewGeom {
@@ -80,7 +80,7 @@ const state = {
   ids: [] as number[],
   program: null as ShowcaseProgram | null,
   plan: [] as string[],
-  acts: [] as Array<{ name: string; anims: number; issue_ms: number; duration_ms: number; note: string; flip?: boolean }>,
+  acts: [] as Array<{ name: string; anims: number; issue_ms: number; span_ms: number; hold_ms: number; duration_ms: number; note: string; flip?: boolean }>,
   sampleIds: [] as number[],
 }
 const results: Record<string, unknown> = { ok: false }

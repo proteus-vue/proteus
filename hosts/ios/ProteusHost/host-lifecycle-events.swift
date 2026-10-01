@@ -166,10 +166,16 @@ final class HostLifecycleEvents: NSObject {
     }
 
     /// 尺寸变化（`SelfDrawViewController.viewWillTransition` 转发进来）——单位 pt（≈ Android dp）
+    ///
+    /// I2-ALLOW: 上报的是**窗口/设备尺寸**（`UIWindowScene` 给 CGFloat pt），不是节点几何——
+    ///   卡 I2 只约束**节点几何的吸附**（内核唯一实现）；窗口尺寸是 root 约束的**输入**，
+    ///   不参与节点求解，且它本来就只有浮点来源（平台 API）⇒ 舍入在此是量纲换算。
     func handleTransition(size: CGSize) {
         guard size != lastSize, size.width > 0, size.height > 0 else { return }
         lastSize = size
+        // I2-ALLOW: 窗口尺寸量纲换算（非节点几何——见函数注释）
         let w = Int(size.width.rounded())
+        // I2-ALLOW: 同上
         let h = Int(size.height.rounded())
         NSLog("[\(Self.TAG)] 配置变化：尺寸 → \(w)x\(h)pt")
         forwardToJs("resize", "{\"windowWidth\":\(w),\"windowHeight\":\(h)}")

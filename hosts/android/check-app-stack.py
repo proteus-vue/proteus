@@ -291,6 +291,50 @@ def main() -> int:
             else:
                 report(f"⑦ 宿主屏保留语义正确：pop 后 detail 已销毁、home 仍在册（{ids}）")
 
+        # ── ⑦.7★E4：**跨页面共享元素**（2026-10-01 收诚实边界）──
+        #   【收的是什么】边界原文"跨页面的稳态几何回传需页面栈层配合（未做）"。
+        #   本组证明页面栈层已把它接上：目标页 mount 后取节点矩形（内核算）+ 源页矩形
+        #   （**另一棵树**）作起点 → 内核 `shared_element` 算 dx/dy/scale + 写首帧 →
+        #   宿主帧循环推进（与转场同一条完成链）。
+        #   【判据侧独立复算】不押宿主自报的 dx/dy/scale——用两个矩形自己算一遍（中心差 + 宽度比）。
+        e4 = d.get("e4") or {}
+        if not isinstance(e4, dict) or not e4.get("ran"):
+            fail(f"⑦.7 跨页面共享元素未跑（e4={e4}）——页面栈层未接 screen.rect/screen.shared？")
+        else:
+            trect = e4.get("target_rect") or {}
+            # ★按**实际注入**的源矩形复算（错开后的——见 entry-app-stack 的注释：
+            #   两侧装置几何相同会让复算退化成恒等式，错开才真考验"按两个不同矩形算几何"）
+            srect = e4.get("injected_source_rect") or {}
+            frect = e4.get("from_rect") or {}
+            torect = e4.get("to_rect") or {}
+            if not (srect.get("w") and trect.get("w")):
+                fail(f"⑦.7 几何回传不全（源 {srect} / 目标 {trect}）——screen.rect 未真读几何？")
+            elif e4.get("source_screen") == e4.get("target_screen"):
+                fail(f"⑦.7 不是跨页面（源/目标同屏）：{e4.get('source_screen')}")
+            else:
+                # 独立复算：内核几何 = 中心差 + 宽度比（与 anim.rs::shared_element_plan 同式）
+                exp_dx = (srect["x"] + srect["w"] / 2) - (trect["x"] + trect["w"] / 2)
+                exp_dy = (srect["y"] + srect["h"] / 2) - (trect["y"] + trect["h"] / 2)
+                exp_scale = srect["w"] / trect["w"]
+                # ★非退化：错开后的源 ≠ 目标 ⇒ 几何必须非零（否则"复算"没测到东西）
+                degenerate = abs(exp_dx) < 0.5 and abs(exp_dy) < 0.5 and abs(exp_scale - 1) < 0.01
+                # 内核回执的 fromRect / toRect 必须等于调用方给的两个矩形（原样回，几何是内核算的）
+                fr_ok = abs((frect.get("x") or 0) - srect["x"]) < 0.51 and abs((frect.get("w") or 0) - srect["w"]) < 0.51
+                to_ok = abs((torect.get("x") or 0) - trect["x"]) < 0.51 and abs((torect.get("w") or 0) - trect["w"]) < 0.51
+                if degenerate:
+                    fail(f"⑦.7 跨页面几何退化（dx={exp_dx:.1f} dy={exp_dy:.1f} scale={exp_scale:.3f}）——复算无意义")
+                elif not fr_ok:
+                    fail(f"⑦.7 内核回的 fromRect 与注入源矩形不符：{frect} vs 注入 {srect}")
+                elif not to_ok:
+                    fail(f"⑦.7 内核回的 toRect 与目标节点矩形不符：{torect} vs 目标 {trect}")
+                else:
+                    report(
+                        f"⑦.7 ★跨页面共享元素（两棵树之间）：源 {e4.get('source_screen')}(节点 {e4.get('source_node')}, "
+                        f"{srect['w']:.0f}×{srect['h']:.0f}) → 目标 {e4.get('target_screen')}(节点 {e4.get('target_node')}, "
+                        f"{trect['w']:.0f}×{trect['h']:.0f})｜判据独立复算 dx={exp_dx:.1f} dy={exp_dy:.1f} scale={exp_scale:.3f}"
+                        f"（非退化 ✓）"
+                    )
+
     print()
     if not ok:
         print("✗ 路由虚拟栈未通过（见上方失败项）")

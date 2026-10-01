@@ -256,12 +256,75 @@ async function runExecutorScenario(): Promise<Record<string, unknown>> {
   await ePump()
   const e1 = { log: [...eLog], plays: [...ePlays] }
   const eHomeId = eStack.stack[0]?.screenId ?? ''
+
+  // ★★E4 第一步（2026-10-01 收诚实边界 · **跨页面共享元素的稳态几何回传**）：
+  //   **在源页仍可见时**捕获源矩形（这才是真实语义——新页 mount 时旧页已被 display:none，
+  //   内核按设计拒绝取隐藏节点的几何（`节点无绝对几何`）；跨页面飞行的起点本来就必须
+  //   来自"切换前的那一稳态"）。捕获后的矩形以**系统坐标**注入下一次飞行。
+  let e4Source: Record<string, unknown> = { captured: false }
+  try {
+    const homeRoot0 = eExecutor.subtreeNode(eHomeId)
+    if (homeRoot0 === undefined) throw new Error(`subtreeNode 缺 home 屏根（${eHomeId}）`)
+    const srcRect = await ePorts.shared.rect(eHomeId, homeRoot0 + 2)
+    e4Source = { captured: true, screen: eHomeId, node: homeRoot0 + 2, rect: srcRect }
+  } catch (err) {
+    e4Source = { captured: false, error: String(err) }
+  }
+
   eLog.length = 0
   ePlays.length = 0
   eStack.push('detail')
   await ePump()
   const e2 = { log: [...eLog], plays: [...ePlays] }
   const eDetailId = eStack.stack[1]?.screenId ?? ''
+
+  // ★★E4 第二步 + 飞行：目标页已 mount ⇒ 取目标节点基准 → 用**捕获的源矩形**发起跨页面飞行。
+  //
+  // 【缺的是什么（边界原文）】"跨页面的稳态几何回传需页面栈层配合（未做）"。
+  //   内核侧早已具备该通道（`shared_element` 的 `sourceRect` 分支 = 系统坐标注入），
+  //   缺的就是**这一层**：源页矩形在切换前捕获 + 目标页 mount 后取基准 + 送内核算几何。
+  // 【★时机 = push 之后、pop 之前】共享元素的自然时机（新页刚 mount）；**不改变栈状态**
+  //   ⇒ ⑦ 组的"pop 后 detail 已销毁 / 树保留"断言不受影响。
+  // 【★节点 id 一律经 `subtreeNode`】宿主 mount 的真实回执——硬编码在屏池复用下必错（实测）。
+  let e4: Record<string, unknown> = { ran: false }
+  try {
+    const top = eStack.stack[eStack.stack.length - 1]
+    const prev = eStack.stack[eStack.stack.length - 2]
+    if (!top || !prev) throw new Error(`栈上不足两屏（depth=${eStack.depth}）——无法做跨页面飞行`)
+    if (!e4Source.captured) throw new Error(`源矩形未捕获：${JSON.stringify(e4Source)}`)
+    const targetRoot = eExecutor.subtreeNode(top.screenId)
+    if (targetRoot === undefined) throw new Error(`subtreeNode 缺目标屏根（${top.screenId}）`)
+    const targetNodeId = targetRoot + 2
+    const targetRect = await ePorts.shared.rect(top.screenId, targetNodeId)
+    const srcRect = e4Source.rect as { x: number; y: number; w: number; h: number }
+    const flyOut = await ePorts.shared.fly({
+      targetScreenId: top.screenId,
+      targetNodeId,
+      // ★源矩形**人为错开**（缩略图 → 大图的真实形态）：若两侧装置几何恰好相同
+      //   （本装置两屏同构 ⇒ dx=dy=0/scale=1），判据的"独立复算"会退化成恒等式——
+      //   错开后才真正考验"内核按两个不同矩形算几何"。错开的量进报告（判据核对）。
+      sourceRect: { x: srcRect.x + 60, y: srcRect.y + 30, w: srcRect.w * 0.5, h: srcRect.h * 0.5 },
+      durMs: 200,
+      curve: 1,
+      fadeIn: false,
+    })
+    e4 = {
+      ran: true,
+      target_screen: top.screenId,
+      source_screen: e4Source.screen,
+      target_node: targetNodeId,
+      source_node: e4Source.node,
+      source_rect: srcRect,
+      /** ★实际注入的源矩形（错开后的——判据按它复算） */
+      injected_source_rect: { x: srcRect.x + 60, y: srcRect.y + 30, w: srcRect.w * 0.5, h: srcRect.h * 0.5 },
+      target_rect: targetRect,
+      from_rect: flyOut.fromRect ?? null,
+      to_rect: flyOut.toRect ?? null,
+    }
+  } catch (err) {
+    e4 = { ran: false, error: String(err), source: e4Source }
+  }
+
   eLog.length = 0
   ePlays.length = 0
   eStack.pop()
@@ -275,6 +338,7 @@ async function runExecutorScenario(): Promise<Record<string, unknown>> {
     !!e3play &&
     e2play.firstInFrom === e3play.firstOutTo &&
     e2play.firstInTo === e3play.firstOutFrom
+
   return {
     e1_log: e1.log,
     e1_plays: e1.plays,
@@ -282,6 +346,7 @@ async function runExecutorScenario(): Promise<Record<string, unknown>> {
     e2_plays: e2.plays,
     e3_log: e3.log,
     e3_plays: e3.plays,
+    e4,
     e_mirror_ok: mirrorOk,
     e_home_id: eHomeId,
     e_detail_id: eDetailId,

@@ -288,6 +288,13 @@ func physFootprintMB() -> Double {
     /// 真实产品的滚动回调（UIScrollView didScroll / 手势）走的就是这条路径，
     /// 本入口把它暴露给真机判据（否则"滚动联动"只能靠 JS 分步调用，测不到生产形态）。
     func scrollAnimSync(_ json: String) -> String
+    /// ★★**真手势滚动探针**（判据用；驱动到 pan 处理器的**同一出口**——见其实现注释）
+    ///
+    /// 返回 `{ok, recognizer_installed, wired, steps, dy, drive_count, offset_y_before/after,
+    /// changed_total, applied_total, per_step_changed}`。
+    /// 判据用它证明：① 真 `UIPanGestureRecognizer` 在视图上；② 唯一出口被驱动后
+    /// 内容偏移与内核滚动联动都真实推进。
+    func panDragProbe(_ json: String) -> String
     /// ★★**层变换探针**（判据从 CALayer 真读——覆盖"写入路径真的生效"）
     /// ★★**内核几何读数**（绝对矩形）——判据与"基于真实几何编舞"的入口
     ///
@@ -486,6 +493,15 @@ final class SelfDrawView: UIView {
         CATransaction.begin()
         CATransaction.setDisableActions(true)
         CATransaction.commit()
+        // ★★真手势滚动**接线**（2026-10-01 收诚实边界）：此前 `scrollBy`/`scrollAnimSync` 只有
+        //   **合成调用者**（判据与入口），真手指没有人接（边界原文："真机手指拖拽手势未接线"）。
+        //   ⇒ 装**平台识别器**（UIPanGestureRecognizer）：识别出拖拽 ⇒ 唯一出口
+        //     `driveScrollDrag` ⇒ 桥的生产通路（内容偏移 + 内核滚动联动 + 刷层，一次完成）。
+        //   ★与 tap 共存：点击/长按时 pan 识别**失败**⇒ 不取消 touches ⇒ `touchesEnded` 的 tap
+        //     判定照常（两条手势互不吞并）。
+        let pan = UIPanGestureRecognizer(target: self, action: #selector(handleScrollPan(_:)))
+        pan.maximumNumberOfTouches = 1
+        addGestureRecognizer(pan)
     }
 
     required init?(coder: NSCoder) { fatalError("not used") }
@@ -1367,6 +1383,42 @@ final class SelfDrawView: UIView {
     /// 发一次语义手势（内容坐标）——桥接层在此回调里做**核心命中测试 + JS 派发**
     func emitGesture(x: Double, y: Double, type: String) {
         onGesture?(x, y, type)
+    }
+
+    // ────────────────────────── ★★真手势滚动（pan 识别器） ──────────────────────────
+
+    /// 拖拽滚动回调（**真手势的唯一出口**）：pan 识别 ⇒ 交桥的生产通路
+    ///   （内容偏移 + 内核滚动联动 + 刷层在宿主内一次完成——与 `scrollAnimSync` 同一条路径）。
+    /// - Returns: 桥的应答 JSON（判据探针收读数用；pan 处理器忽略返回值）
+    var onScrollDrag: ((CGFloat, CGFloat) -> String)?
+
+    /// 拖拽出口被驱动的次数（判据读它证明"这条路径真的走过"——不区分来源）
+    private(set) var scrollDragDriveCount = 0
+
+    /// pan 识别器回调：把**增量**送进唯一出口（`setTranslation(.zero)` 后每步即增量）
+    ///
+    /// 【★符号（自然滚动方向）】pan 的 translation 是**手指位移**（向下拖 = +y）；
+    ///   而出口的参数空间是**内容位移**（+y = 内容下移 = 看到更早的内容 = 偏移减小）。
+    ///   ⇒ 取负：手指向下拖 100 ⇒ 内容位移 -100 ⇒ `contentOffset` 减小（与 UIScrollView 同向）。
+    ///   本函数是**唯一**做这个换算的地方（出口与探针都不重复换算）。
+    @objc private func handleScrollPan(_ g: UIPanGestureRecognizer) {
+        let t = g.translation(in: self)
+        g.setTranslation(.zero, in: self)
+        driveScrollDrag(dx: -t.x, dy: -t.y)
+    }
+
+    /// 拖拽出口（**唯一**）：pan 处理器与判据探针**都走这里** ⇒ 两条路径不可能分叉。
+    ///
+    /// 参数空间 = **内容位移**（与 `scrollDragBy` 同——pan 处理器负责"手指位移 → 内容位移"的换算）。
+    @discardableResult
+    func driveScrollDrag(dx: CGFloat, dy: CGFloat) -> String {
+        scrollDragDriveCount += 1
+        return onScrollDrag?(dx, dy) ?? "{\"ok\":false,\"error\":\"未接线\"}"
+    }
+
+    /// 真识别器是否已安装（判据读——"接线"的第一条证据）
+    var hasScrollPanRecognizer: Bool {
+        (gestureRecognizers ?? []).contains { $0 is UIPanGestureRecognizer }
     }
 
     /// 节点在层树中的深度（沿 `parentById` 上溯；带防环保护）
@@ -2890,24 +2942,14 @@ final class SelfDrawBridge: NSObject, SelfDrawExports {
         return "{\"ok\":true,\"flushed\":\(view.lastFlushedCount),\"offsetY\":\(Double(off.y))}"
     }
 
-    /// ★★**MA5：滚动 + 动画同步**（生产形态——宿主滚动通路里直接驱动，零 JS 参与）
+    /// ★★**真手势滚动一步**（生产通路，2026-10-01）：拖拽增量 ⇒ ① 内容偏移 ② 内核按新位置驱动
+    ///    ③ 当帧刷层 ④ 补刷滚入视野的待更新层。
     ///
-    /// 一次调用完成三件事：① 移动内容（`applyContentOffset`）② 内核按**新滚动位置**驱动
-    /// 全部窗口动画（`anim_seek_scroll`）③ 把 `updates` 当帧写层。
-    ///
-    /// 【为什么这就是生产形态】真实产品里 ① 由滚动手势/UIScrollView 触发，②③ 在同一回调里完成
-    ///   ——JS 全程不在链路上（这正是"滚动联动不占 JS 线程"的落地形式）。
-    ///   本入口把它暴露给判据（否则只能靠 JS 分步调 `scrollBy` + `animSeekScroll`，测不到真形态）。
-    ///
-    /// 入参：`{"dx":0,"dy":120}`（滚动增量，px）。出参：`{ok, offsetY, changed, applied}`
-    func scrollAnimSync(_ json: String) -> String {
+    /// 【为什么这就是生产形态】真实产品里由**手指拖拽**触发（pan 识别器 → `driveScrollDrag` →
+    ///   本方法）；JS 全程不在链路上。`scrollAnimSync` 只是它的 JSON 入口（同一实现，不分叉）。
+    @discardableResult
+    func scrollDragBy(dx: Double, dy: Double) -> String {
         guard let view = view, handle != 0 else { return "{\"ok\":false,\"error\":\"未接入\"}" }
-        guard let data = json.data(using: .utf8),
-              let o = (try? JSONSerialization.jsonObject(with: data)) as? [String: Any] else {
-            return "{\"ok\":false,\"error\":\"入参解析失败（需 {dx,dy}）\"}"
-        }
-        let dx = (o["dx"] as? NSNumber)?.doubleValue ?? 0
-        let dy = (o["dy"] as? NSNumber)?.doubleValue ?? 0
         // ① 内容偏移（与 scrollBy 同一条路径）
         let off = view.applyContentOffset(dx: CGFloat(dx), dy: CGFloat(dy))
         // ② 内核按当前位置驱动窗口动画（**宿主只报位置**——换算在内核）
@@ -2921,6 +2963,79 @@ final class SelfDrawBridge: NSObject, SelfDrawExports {
         let parsed = (try? JSONSerialization.jsonObject(with: out.data(using: .utf8) ?? Data())) as? [String: Any]
         let changed = (parsed?["changed"] as? NSNumber)?.intValue ?? 0
         return "{\"ok\":true,\"offsetY\":\(Double(off.y)),\"changed\":\(changed),\"applied\":\(applied)}"
+    }
+
+    /// ★★**MA5：滚动 + 动画同步**（生产形态——宿主滚动通路里直接驱动，零 JS 参与）
+    ///
+    /// 入参：`{"dx":0,"dy":120}`（滚动增量，px）。出参：`{ok, offsetY, changed, applied}`
+    /// （实现 = `scrollDragBy`——同一语义一处实现）。
+    func scrollAnimSync(_ json: String) -> String {
+        guard view != nil, handle != 0 else { return "{\"ok\":false,\"error\":\"未接入\"}" }
+        guard let data = json.data(using: .utf8),
+              let o = (try? JSONSerialization.jsonObject(with: data)) as? [String: Any] else {
+            return "{\"ok\":false,\"error\":\"入参解析失败（需 {dx,dy}）\"}"
+        }
+        let dx = (o["dx"] as? NSNumber)?.doubleValue ?? 0
+        let dy = (o["dy"] as? NSNumber)?.doubleValue ?? 0
+        return scrollDragBy(dx: dx, dy: dy)
+    }
+
+    /// ★★**真手势滚动探针**（判据用）——驱动到 pan 处理器的**同一条出口**（`driveScrollDrag`）。
+    ///
+    /// 【证明什么 / 不证明什么（诚实边界）】iOS 没有公开 API 合成 `UITouch` ⇒ 判据无法伪造
+    ///   "真手指"。本探针证明的是：① 真 `UIPanGestureRecognizer` **已装在视图上**
+    ///   （`recognizer_installed`）；② 它的**唯一出口**（`driveScrollDrag → onScrollDrag →
+    ///   scrollDragBy`）被驱动 N 次后，内容偏移与**内核滚动联动**都真实推进（逐次读数）。
+    ///   "手指产生 pan 事件"是 UIKit 的契约（Android 腿用**真实 MotionEvent 序列**走
+    ///   `onTouchEvent` 覆盖到触摸层——见 check-kernel-anim.py M6）。
+    ///
+    /// 入参 `{"dy":25,"steps":8}`；出参含逐次 `changed` 与端点 offset/层位读法给判据。
+    func panDragProbe(_ json: String) -> String {
+        guard let view = view, handle != 0 else { return "{\"ok\":false,\"error\":\"未接入\"}" }
+        guard let data = json.data(using: .utf8),
+              let o = (try? JSONSerialization.jsonObject(with: data)) as? [String: Any] else {
+            return "{\"ok\":false,\"error\":\"入参解析失败（需 {dy,steps}）\"}"
+        }
+        let dy = (o["dy"] as? NSNumber)?.doubleValue ?? 25
+        let steps = max(1, (o["steps"] as? NSNumber)?.intValue ?? 8)
+        let installed = view.hasScrollPanRecognizer
+        let wired = view.onScrollDrag != nil
+        let before = Double(view.contentOffset.y)
+        var changedTotal = 0
+        var appliedTotal = 0
+        var perStepChanged: [Int] = []
+        for _ in 0..<steps {
+            let stepOut = parseObject(view.driveScrollDrag(dx: 0, dy: CGFloat(dy)))
+            perStepChanged.append((stepOut?["changed"] as? NSNumber)?.intValue ?? 0)
+            changedTotal += (stepOut?["changed"] as? NSNumber)?.intValue ?? 0
+            appliedTotal += (stepOut?["applied"] as? NSNumber)?.intValue ?? 0
+        }
+        let after = Double(view.contentOffset.y)
+        return jsonString([
+            "ok": true,
+            "recognizer_installed": installed,
+            "wired": wired,
+            "steps": steps,
+            "dy": dy,
+            "drive_count": view.scrollDragDriveCount,
+            "offset_y_before": before,
+            "offset_y_after": after,
+            "changed_total": changedTotal,
+            "applied_total": appliedTotal,
+            "per_step_changed": perStepChanged,
+        ])
+    }
+
+    /// 小工具：解析对象（探针/判据读数用；非对象 ⇒ nil，不抛）
+    private func parseObject(_ s: String) -> [String: Any]? {
+        (try? JSONSerialization.jsonObject(with: s.data(using: .utf8) ?? Data())) as? [String: Any]
+    }
+
+    /// 小工具：字典 → JSON 串（探针返回用；失败 ⇒ 兜底错误串，不静默）
+    private func jsonString(_ o: [String: Any]) -> String {
+        guard let d = try? JSONSerialization.data(withJSONObject: o),
+              let s = String(data: d, encoding: .utf8) else { return "{\"ok\":false,\"error\":\"json 序列化失败\"}" }
+        return s
     }
 
     /// ★★V5：批量像素采样（渲染一次 → 读 N 个点）
@@ -4688,6 +4803,11 @@ final class SelfDrawViewController: UIViewController {
         // ★用闭包而非桥接层直持 ctx：避免「桥 ↔ ctx」循环引用（ctx 强引用桥）
         bridge.view?.onGesture = { [weak bridge] x, y, type in
             bridge?.emitGesture(x: x, y: y, type: type)
+        }
+        // ★★真手势滚动接线（2026-10-01）：pan 识别器的唯一出口 → 桥的生产通路
+        //   （内容偏移 + 内核滚动联动 + 刷层一次完成；JS 不在链路上——与 scrollAnimSync 同实现）。
+        bridge.view?.onScrollDrag = { [weak bridge] dx, dy in
+            bridge?.scrollDragBy(dx: Double(dx), dy: Double(dy)) ?? "{\"ok\":false,\"error\":\"bridge 已释放\"}"
         }
         bridge.onDispatchToJS = { [weak ctx] target, chain, type, x, y in
             guard let ctx = ctx else { return }

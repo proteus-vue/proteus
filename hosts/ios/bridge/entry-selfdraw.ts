@@ -59,6 +59,8 @@ interface SelfDrawNative {
   // ★★MA5（2026-09-30）：滚动联动——宿主只报原始位置，窗口换算在内核
   animSeekScroll(json: string): string
   scrollAnimSync(json: string): string
+  /** ★★真手势滚动探针（2026-10-01 收边界）：驱动 pan 处理器的**唯一出口**（同一生产通路） */
+  panDragProbe(json: string): string
   // ★★共享元素（跨元素飞行——几何在内核；宿主负责层级提升）
   sharedElement(json: string): string
   setLayerZ(json: string): string
@@ -86,7 +88,7 @@ const BN = { snapshot: 'selfdraw-final' }
 
 // ★构建标识（每次构建由 hosts/ios/bridge/inject-build-id.mjs 注入；与 entry-bench 同机制）
 //   —— 「设备上跑的是哪份代码」必须可**一眼判定**（报告新鲜度判据的内容锚点）。
-const BUILD_ID = 'adc2d3c1-103251'
+const BUILD_ID = '42b6967d-110154'
 
 const VP = (globalThis as unknown as { __PROTEUS_VIEWPORT__?: { width: number; height: number } })
   .__PROTEUS_VIEWPORT__ ?? { width: 390, height: 844 }
@@ -797,6 +799,15 @@ const api = {
     // ⑦ 滚动批次不得走平台零参与路径（驱动源不同）
     const platformEligible = isPlatformEligible(cBg)
 
+    // ⑦b ★★真手势滚动（2026-10-01 收边界）：从**同一生产通路**再滚回 0，
+    //   驱动 pan 处理器的唯一出口（`driveScrollDrag → scrollDragBy`）——
+    //   与真手指拖拽走的是同一条代码路径（本探针只替换**触发源**，不换实现）。
+    //   期望：识别器已装（recognizer_installed）+ 出口被驱动 N 次（drive_count）+ 逐次 changed>0
+    //   + 偏移回到 0（**内容与内核状态都真推进**）。
+    proteusSelfDraw.animSeekScroll(JSON.stringify({ scroll: 100 }))
+    const panProbe = safeParse(proteusSelfDraw.panDragProbe(JSON.stringify({ dy: -25, steps: 4 })))
+    const bgPanTy = tyOf(JSON.stringify([bg])) // 滚回 0 ⇒ 视差回 0
+
     const r = {
       nodes: [bg, fade, head],
       presets: { parallax: parallax.name, fadeIn: fadeIn.name, sticky: sticky.name },
@@ -807,6 +818,9 @@ const api = {
       bg400_ty: bg400,
       sync: syncOut,
       bgSync_ty: bgSync,
+      // ★真手势滚动读数（判据 I6 组）
+      pan: panProbe,
+      bg_pan_ty: bgPanTy,
       last_changed: (at400 as { changed?: number }).changed,
       last_active: (at400 as { active?: number }).active,
       degenerate_rejected: degenerateRejected,
@@ -816,11 +830,11 @@ const api = {
     }
 
     // ★★相位收尾（读数**已捕获**，此处只做状态清理）：
-    //   ① 恢复内容偏移（sync 已把内容滚了 100px——不恢复会污染后续相位的截图/几何）；
+    //   ① 偏移归零（真手势探针已滚回 0；此处幂等兜底——`scrollBy(0,0)` 不产生副作用）；
     //   ② `animStopAll`：滚动动画**永不自动结束**（Progress 驱动）⇒ 不清场它会一直在帧率测席里
     //      被每帧"保持写入"（污染 E 组每帧成本读数），并让层留下残姿。
     //   ★顺序不能反：先滚回去（纯内容移动，不驱动动画），再清场。
-    proteusSelfDraw.scrollBy(0, -100)
+    proteusSelfDraw.scrollBy(0, -0)
     proteusSelfDraw.animStopAll()
 
     animScrollResult = r

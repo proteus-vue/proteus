@@ -1416,6 +1416,58 @@ public class MainActivity extends Activity {
                             + "\"durMs\":100,\"curve\":1,\"fadeIn\":false}");
             out.put("shared_element", se);
 
+            // ── M6b：★真手势滚动（2026-10-01 收诚实边界）──
+            //   【与 M6 的区别】M6 只证"内核窗口映射"；本组让**真实 MotionEvent 序列**走
+            //   `GestureDetector.onScroll → scrollDragBy`（生产通路：内容偏移 + 内核 seek + 写层）。
+            //   ★不用合成调用替身：与 gestureRun 同法（真实 DOWN/MOVE/UP + 真实时间戳），
+            //     这样"手指拖拽"这一环真的被走到（不是直接调出口）。
+            try {
+                // 先起一条滚动窗口动画（复刻 M6 的视差）、滚动清零
+                hv.kernelAnimStop("{\"all\":true}");
+                hv.kernelAnimStart("{\"anims\":[{\"nodeId\":13,\"kind\":1,\"curve\":0,\"from\":0,\"to\":-160,"
+                        + "\"durMs\":1,\"scrollFrom\":0,\"scrollTo\":400}]}");
+                hv.scrollDragBy(0f, 0f);  // 归零（经生产通路——顺带证明出口可用）
+                final int dragCountBefore = hv.scrollDragDriveCount;
+                final int[] contentScrollTrace = new int[3];
+                // 真实触摸：DOWN 在 (150,600)，三次 MOVE 向上拖（手指上移 100px ⇒ 内容上移 ⇒ scrollY +100）
+                final long t0 = android.os.SystemClock.uptimeMillis();
+                android.view.MotionEvent down = android.view.MotionEvent.obtain(
+                        t0, t0, android.view.MotionEvent.ACTION_DOWN, 150f, 600f, 0);
+                hv.dispatchTouchEvent(down);
+                down.recycle();
+                final float[] moves = {560f, 530f, 500f};  // 手指 y 递减 = 上移
+                for (int i = 0; i < moves.length; i++) {
+                    android.view.MotionEvent mv = android.view.MotionEvent.obtain(
+                            t0, t0 + (i + 1) * 20L, android.view.MotionEvent.ACTION_MOVE, 150f, moves[i], 0);
+                    hv.dispatchTouchEvent(mv);
+                    mv.recycle();
+                }
+                android.view.MotionEvent up = android.view.MotionEvent.obtain(
+                        t0, t0 + 90L, android.view.MotionEvent.ACTION_UP, 150f, 500f, 0);
+                hv.dispatchTouchEvent(up);
+                up.recycle();
+                contentScrollTrace[0] = hv.getContentScrollY();
+                // 视差层位（滚 100 ⇒ ty ≈ -40）——与 iOS 判据同读法（探针 JSON 的 layers[0].ty）
+                try {
+                    org.json.JSONObject probe = new org.json.JSONObject(hv.animTxProbe("[13]"));
+                    // I2-ALLOW: 核验报告取整（值来自内核探针的读数字段，非几何换算；判据按 ±0.5 容差比对）
+                    contentScrollTrace[1] = (int) Math.round(
+                            probe.optJSONArray("layers").optJSONObject(0).optDouble("ty", 0));
+                } catch (Exception ignored) {
+                    contentScrollTrace[1] = Integer.MIN_VALUE;  // 读不到 ⇒ 哨兵（判据判红，不伪装 0）
+                }
+                contentScrollTrace[2] = hv.scrollDragDriveCount - dragCountBefore;
+                // ★必须放进 JSONArray（裸 int[] 经 JSONObject.put 会序列化成 "[I@hash"——
+                //   判据侧读不到；本仓实测踩到）
+                org.json.JSONArray gst = new org.json.JSONArray();
+                for (int v : contentScrollTrace) gst.put(v);
+                out.put("gesture_scroll_trace", gst);
+                out.put("gesture_scroll_drive_count", hv.scrollDragDriveCount);
+            } catch (Exception gse) {
+                // 不静默：异常进报告（判据据此判红）
+                out.put("gesture_scroll_error", gse.toString());
+            }
+
             // ── M4：真帧循环（500ms；跑满自停）──
             hv.kernelAnimStop("{\"all\":true}");
             hv.kernelAnimStart("{\"anims\":[{\"nodeId\":11,\"kind\":0,\"curve\":3,\"from\":-60,\"to\":60,"

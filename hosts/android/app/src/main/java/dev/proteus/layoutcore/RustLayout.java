@@ -42,6 +42,8 @@ final class RustLayout {
     private static native boolean nativeDestroy(long handle);
     private static native int nativeHandleCount();
     private static native String nativeReadRects(long handle);
+    /** ★单节点绝对矩形（跨页面共享元素的终点基准） */
+    private static native String nativeNodeRect(long handle, int nodeId);
     private static native String nativeHitTest(long handle, float x, float y);
     /** ★增量更新（样式补丁 JSON）——此前宿主只能 destroy+create（整树重建） */
     private static native String nativeUpdate(long handle, String patchesJson);
@@ -124,6 +126,16 @@ final class RustLayout {
     /** 读取句柄对应的绝对矩形（JSON；供截图回归等场景把几何映射到屏幕坐标） */
     static String readRects(long handle) {
         return loaded ? nativeReadRects(handle) : "{\"ok\":false,\"error\":\"native 未加载\"}";
+    }
+
+    /**
+     * ★★**单节点绝对矩形**（2026-10-01：跨页面共享元素的稳态几何回传）。
+     *
+     * 目标页刚 mount 后取节点矩形，作为共享元素飞行的终点基准；几何由内核算
+     * （与 FLIP 同一套偏移+吸附收集），Java 侧零几何数学。
+     */
+    static String nodeRect(long handle, int nodeId) {
+        return loaded ? nativeNodeRect(handle, nodeId) : "{\"ok\":false,\"error\":\"native 未加载\"}";
     }
 
     /** 当前存活的树数（诊断：确认 destroy 真的释放） */
