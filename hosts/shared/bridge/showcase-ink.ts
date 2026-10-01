@@ -41,7 +41,7 @@
 //   （与 showcase-flip / showcase-lights 同款——CI 与设备 import 同一份）。
 
 import { compileAnimations } from '@proteus-vue/animation'
-import type { EngineAnim } from '@proteus-vue/animation'
+import type { EngineAnim, GradientFill } from '@proteus-vue/animation'
 // ★spanMs 与灯光秀共用同一实现（"一处实现"——不复制第二份算术）
 import { spanMs } from './showcase-lights'
 
@@ -104,6 +104,41 @@ export function blend(a: string, b: string, t: number): string {
 export function ink(hex: string, alpha: number): string {
   const a = Math.round(Math.max(0, Math.min(1, alpha)) * 255)
   return `${hex}${a.toString(16).padStart(2, '0')}`
+}
+
+/**
+ * ★★**墨晕渐变**（v1 渐变的第一个真实用例——2026-10-01）："中心浓、边缘透明"的径向渐变。
+ *
+ * 【为什么是它（对"预混纯色"的根治）】椭圆 puff 用**一个纯色**填充时边缘是硬边——
+ *   放大图里读成"色块"。真径向渐变（中心 alpha 高 → 边缘 0）才是"墨在纸里晕开"。
+ *   ★这解决了 v1 之前**做不到**的事：纯色填充无法表达"边缘渐隐"。
+ *
+ * @param edge 全透明（alpha 0）——固定，避免调用方写出"边缘不透明"的假晕
+ */
+export function inkWash(hex: string, centerAlpha: number): GradientFill {
+  return {
+    kind: 'radial',
+    cx: 0.5,
+    cy: 0.5,
+    r: 0.55,
+    stops: [
+      { offset: 0, color: hex, alpha: centerAlpha },
+      { offset: 0.55, color: hex, alpha: centerAlpha * 0.55 },
+      { offset: 1, color: hex, alpha: 0 },
+    ],
+  }
+}
+
+/** ★云/雾的**竖直渐隐**（上浓下淡——云带顶缘的柔边） */
+export function mistFade(hex: string, topAlpha: number): GradientFill {
+  return {
+    kind: 'linear',
+    angle: 180, // 向下：从上（浓）到下（淡）
+    stops: [
+      { offset: 0, color: hex, alpha: topAlpha },
+      { offset: 1, color: hex, alpha: 0 },
+    ],
+  }
 }
 
 /* ────────────────────────── 节点 id（节目单与判据共用的稳定契约） ────────────────────────── */
@@ -434,7 +469,10 @@ export function buildInkTree(view: View): string {
         left: left + R(rg.wf * W * (fx - pw / 2)), top: top + R(rh * fy) - R(puffH / 2),
         width: puffW, height: puffH,
         borderRadius: R(puffH / 2),
+        // ★★真渐变（v1 · 2026-10-01）：中心浓 → 边缘全透明——**边缘渐隐**是纯色填充
+        //   做不到的（那正是"色块感"的来源）。底色同时给（渐变未挂时的兜底）。
         backgroundColor: puffFills[r],
+        fillGradient: inkWash(coreColor, [0.06, 0.09, 0.05][r]!),
         // ★基态全隐（inset top=1）：不用 scale 揭现——transform 只在动画开始时才生效，
         //   未到该幕时节点是 scale=1 **可见**的（破坏"空白卷轴"基态律）。clip 基态才是真隐藏。
         clipPath: { kind: 'inset', params: [1, 0, 0, 0] },
@@ -579,6 +617,8 @@ export function buildInkTree(view: View): string {
     left: haloCx, top: haloCy, width: haloSize, height: haloSize,
     borderRadius: R(haloSize / 2),
     backgroundColor: blend(P.paper, P.moon, 0.28),
+    // ★★真渐变（v1）：月晕的外圈（中心 alpha 0.32 → 边缘 0）——"光"必须有渐隐
+    fillGradient: inkWash(P.moon, 0.34),
     clipPath: { kind: 'circle', params: [0.5, 0.5, 0] },
   })
   const haloSize2 = R(W * 0.34)
@@ -588,6 +628,8 @@ export function buildInkTree(view: View): string {
     width: haloSize2, height: haloSize2,
     borderRadius: R(haloSize2 / 2),
     backgroundColor: blend(P.paper, P.moon, 0.5),
+    // ★★真渐变（v1）：月晕内圈（更浓）
+    fillGradient: inkWash(P.moon, 0.5),
     clipPath: { kind: 'circle', params: [0.5, 0.5, 0] },
   })
   const moonSize = R(W * 0.235)
@@ -613,6 +655,8 @@ export function buildInkTree(view: View): string {
       id: INK_IDS.clouds[i]!, parentId: INK_IDS.root, position: 'absolute',
       left: 0, top: R(H * top), width: W, height: R(H * hh),
       backgroundColor: color,
+      // ★★真渐变（v1）：云带**顶浓底淡**（竖直渐隐）——比纯色的"横贯色带"接近云
+      fillGradient: mistFade(blend(P.paper, '#b9cbdb', 0.55), i === 0 ? 0.85 : 0.7),
       clipPath: { kind: 'polygon', params: MIST_FLAT },
     })
   })
@@ -631,6 +675,8 @@ export function buildInkTree(view: View): string {
       width: puffW, height: puffH,
       borderRadius: R(puffH / 2),
       backgroundColor: blend(P.paper, '#cfdce8', tint),
+      // ★★真渐变（v1）：云团的径向渐隐（边缘不切边）
+      fillGradient: inkWash('#c3d4e4', tint + 0.15),
       clipPath: { kind: 'inset', params: [1, 0, 0, 0] }, // 基态全隐（clip 揭现）
     })
   })
