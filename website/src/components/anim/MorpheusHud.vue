@@ -8,9 +8,13 @@
 //   （每帧上报"多少条指令在推进"），而不是另写一段装饰动画。
 //   ⇒ 观众看到的不是"网站装饰"，而是**引擎自己的心跳**。
 //
+// 【★视觉语言（2026-10-01 重做——用户反馈"太线条化"）】几何/层次与 Hero 印记共用
+//   `SigilSvg.vue` 的五层（光晕盘 / 光带环 / 渐变弧 / 轨道节点 / 分层核心）；HUD 是小尺寸
+//   那份：`strokeScale` 按比例加粗（38px 下不加粗就细成发丝）+ 环带自转 + 核心随能量。
+//
 // 【三件读数（全部真实，不做假）】
-//   ① 环：外两圈按能量调转速（静止时几乎不转，演出时明显加速）——能量 = 活跃指令占比；
-//   ② 核：亮度/光晕随能量呼吸（无限循环的动效会让它一直"活着"）；
+//   ① 环带：自转周期按能量（待机 ~7s/圈 → 演出时 ~1.9s/圈）——能量 = 活跃指令占比；
+//   ② 核心：亮度/光晕随能量呼吸（无限循环的动效会让它一直"活着"）；
 //   ③ 谱：最近编译批的**曲线形状**（用与 Rust 内核 golden 对拍的 `curveEval` 现画）
 //      ——换一条曲线，谱就换一条（与工作台联动）。
 //
@@ -18,6 +22,7 @@
 import { computed, onMounted, onUnmounted, ref } from 'vue'
 import { onActivity, SITE_STATS, type ActivityReport } from '../../motion/engine-motion'
 import { curveEval } from '@proteus-vue/slot-runtime'
+import SigilSvg from './SigilSvg.vue'
 
 const report = ref<ActivityReport>({ active: 0, total: 0, energy: 0, lastBatch: null })
 let off: (() => void) | null = null
@@ -48,12 +53,29 @@ onUnmounted(() => {
   if (raf) cancelAnimationFrame(raf)
 })
 
-/** 外两圈转速（度/秒）：静止 3°/s 的"待机"，演出时按能量提到 ~90°/s */
-const spinDeg = computed(() => 3 + smooth.value * 87)
-/** 核心亮度/半径随能量（静止 0.35 的余晖，演出时到 1） */
-const coreA = computed(() => 0.35 + smooth.value * 0.65)
-const coreR = computed(() => 5.4 + smooth.value * 2.4)
-const glowPx = computed(() => 8 + smooth.value * 26)
+/** 环带自转周期（秒）：待机 7s/圈 → 演出时 1.9s/圈（值来自能量，注入 SigilSvg） */
+const durA = computed(() => `${(7 - smooth.value * 5.1).toFixed(2)}s`)
+const durB = computed(() => `${(11 - smooth.value * 7.4).toFixed(2)}s`)
+
+/** 核心（外晕 + 亮核）随能量：待机 0.4 的余晖 → 演出 1 */
+const sigil = ref<InstanceType<typeof SigilSvg>>()
+const coreEl = ref<SVGGElement | null>(null)
+let lastA = -1
+let rafCore = 0
+function paintCore(): void {
+  const el = coreEl.value
+  if (!el) return
+  const a = 0.4 + smooth.value * 0.6
+  el.style.opacity = String(a)
+  el.style.filter = `drop-shadow(0 0 ${(5 + smooth.value * 22).toFixed(1)}px rgba(124,92,255,${(0.35 + smooth.value * 0.55).toFixed(2)}))`
+}
+function coreTick(): void {
+  if (Math.abs(smooth.value - lastA) > 0.01) {
+    lastA = smooth.value
+    paintCore()
+  }
+  rafCore = requestAnimationFrame(coreTick)
+}
 
 /** 谱：最近批的曲线（静态形状；换曲线即换谱——与工作台/曲线区联动） */
 const curvePath = computed(() => {
@@ -74,30 +96,25 @@ const curveName = computed(() => {
 
 /** 展开/收起（默认收起 = 一枚徽记；点开 = 演出监视器） */
 const open = ref(false)
+
+onMounted(() => {
+  rafCore = requestAnimationFrame(coreTick)
+  // 等子组件挂载后再抓核心元素（组件 ref 的解析时机）
+  requestAnimationFrame(() => {
+    coreEl.value = sigil.value?.coreEl ?? null
+    paintCore()
+  })
+})
+onUnmounted(() => {
+  if (rafCore) cancelAnimationFrame(rafCore)
+})
 </script>
 
 <template>
   <!-- ★固定角标：徽记本体（能量驱动的环/核/谱——数据来自演出总线） -->
-  <div
-    class="hud"
-    :class="{ 'hud--open': open }"
-    :style="{ '--durA': `${(360 / spinDeg).toFixed(2)}s`, '--durB': `${(360 / Math.max(1, spinDeg * 0.62)).toFixed(2)}s` }"
-    aria-hidden="true"
-  >
+  <div class="hud" :class="{ 'hud--open': open }" aria-hidden="true">
     <button class="hud-btn" type="button" @click="open = !open" :aria-expanded="open">
-      <svg viewBox="0 0 96 96" class="hud-svg" fill="none">
-        <!-- 两圈轨道（能量调转速；CSS 动画驱动角速度——值来自总线的 --spin） -->
-        <g class="hud-ring hud-ring--a"><circle cx="48" cy="48" r="40" /></g>
-        <g class="hud-ring hud-ring--b"><circle cx="48" cy="48" r="33" /></g>
-        <!-- 核心（亮度/半径/光晕随能量） -->
-        <circle
-          cx="48"
-          cy="48"
-          :r="coreR"
-          class="hud-core"
-          :style="{ opacity: coreA, filter: `drop-shadow(0 0 ${glowPx.toFixed(1)}px rgba(124,92,255,0.9))` }"
-        />
-      </svg>
+      <SigilSvg ref="sigil" :size="38" :stroke-scale="2.1" :spin="true" :dur-a="durA" :dur-b="durB" />
       <span class="hud-tag">{{ open ? '演出监视器' : 'Morpheus' }}</span>
     </button>
 
@@ -152,20 +169,7 @@ const open = ref(false)
   cursor: pointer;
   backdrop-filter: blur(10px);
 }
-.hud-svg { width: 34px; height: 34px; flex: none; }
-.hud-ring circle {
-  fill: none;
-  stroke: rgba(124, 92, 255, 0.55);
-  stroke-width: 2.4;
-  stroke-linecap: round;
-  stroke-dasharray: 42 18;
-  transform-origin: 48px 48px;
-  animation: hud-spin var(--dur, 6s) linear infinite;
-}
-.hud-ring--a circle { --dur: var(--durA, 6s); stroke-dasharray: 52 12; }
-.hud-ring--b circle { --dur: var(--durB, 9s); stroke-dasharray: 30 22; animation-direction: reverse; opacity: 0.72; }
 @keyframes hud-spin { to { transform: rotate(360deg); } }
-.hud-core { fill: var(--brand-ink); transition: none; }
 .hud-tag { font-size: 11px; letter-spacing: 0.08em; color: var(--muted); }
 .hud-panel {
   width: 216px;
