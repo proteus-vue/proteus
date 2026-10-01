@@ -513,6 +513,16 @@ public class ProteusHostView extends ViewGroup {
      *   ★首版按臆想的 `{"t":"M","v":[…]}` 写 ⇒ 与内核不对接（iOS 侧真机抓出 strokeEnd=-1）。
      */
     public void setNodeSvgStroke(int nodeId, org.json.JSONArray segs, int strokeColor, float strokeWidth) {
+        setNodeSvgStroke(nodeId, segs, strokeColor, strokeWidth, 0f);
+    }
+
+    /**
+     * ★★**含声明基态的重载**（2026-10-01 · 手卷浏览抓出的缺口）：`progressBase` = 这条路径
+     *   在树里声明的"生来画到哪"（`svgPath.progress`；缺省 0 = 未画）——静态浏览的描边节点
+     *   声明 `progress:1`，宿主据此直接画全；无动画表项时以它为回落值。
+     */
+    public void setNodeSvgStroke(int nodeId, org.json.JSONArray segs, int strokeColor, float strokeWidth,
+                                 float progressBase) {
         android.graphics.Path path = new android.graphics.Path();
         for (int i = 0; i < segs.length(); i++) {
             Object raw = segs.opt(i);
@@ -539,17 +549,19 @@ public class ProteusHostView extends ViewGroup {
                 }
             }
         }
-        nodeSvgStroke.put(nodeId, new Object[]{path, strokeColor, strokeWidth});
+        nodeSvgStroke.put(nodeId, new Object[]{path, strokeColor, strokeWidth, progressBase});
     }
 
     /** 每帧下发的裁剪参数（16 槽；空 = 本帧该节点无裁剪更新） */
     private final Map<Integer, float[]> animClip = new HashMap<>();
 
     /**
-     * ★★**SVG 描边快照**（C2；建树时注入）——段列表 + 描边色 + 线宽。
+     * ★★**SVG 描边快照**（C2；建树时注入）——{Path, strokeColor, strokeWidth, progressBase}。
      * 段列表由**内核解析**（`svg_path` 模块）；本类只做"段 → android.graphics.Path"的翻译。
+     * ★第 4 项 = 声明基态（2026-10-01）：绘制/探针在动画表无该节点时**回落到它**
+     *   （静态 `progress:1` 的路径生来已画成——见 `svgPath.progress` 内核注释）。
      */
-    private final Map<Integer, Object[]> nodeSvgStroke = new HashMap<>(); // {Path, strokeColor(int), strokeWidth(float)}
+    private final Map<Integer, Object[]> nodeSvgStroke = new HashMap<>(); // {Path, strokeColor(int), strokeWidth(float), progressBase(float)}
     /** 每帧下发的描边进度（0..1；空 = 本帧无更新） */
     private final Map<Integer, Float> animStroke = new HashMap<>();
     /**
@@ -815,8 +827,10 @@ public class ProteusHostView extends ViewGroup {
             }
             morphCache.put(nodeId, new Object[]{factor, path});
             // 同步更新描边画的 path（否则变形不反映在线上——"变形只改了数据没改画面"）
+            // ★第 4 项（声明基态）必须**保留**（2026-10-01：这里整组重建数组，漏拷 ⇒
+            //   变形一帧后静态 `progress:1` 的鸟/山描边回落成 0 就消失了）
             Object[] sv = nodeSvgStroke.get(nodeId);
-            if (sv != null) nodeSvgStroke.put(nodeId, new Object[]{path, sv[1], sv[2]});
+            if (sv != null) nodeSvgStroke.put(nodeId, new Object[]{path, sv[1], sv[2], sv[3]});
         } catch (Throwable ignored) { /* 查询失败不阻断（下一帧再试） */ }
     }
 
@@ -920,14 +934,23 @@ public class ProteusHostView extends ViewGroup {
         scrollDragDriveCount++;
         final int prev = scrollX;
         // ★符号：`onScroll` 的 dx 是**滚动量**（正 = 内容左移）——与 Y 轴同款"直接相加"；
-        // ★钳到 [0, range]（展卷进度不许拖出界——见 setHorizontalScrollRange 注释）
-        setContentScrollX(Math.max(0, Math.min(horizontalRange, prev + (int) dx)));
-        if (scrollPosListener != null) scrollPosListener.onScrollPos(scrollX, scrollY);
-        if (coreHandle == 0) return "{\"ok\":false,\"error\":\"未接入核心\"}";
-        // 内核按位置驱动全部窗口动画（含长卷的位移/clip/描边/渐变——全在一条轴上）
-        String out = kernelAnimSeekScroll("{\"scroll\":" + scrollX + "}");
+        // ★钳到 [0, range]（不许拖出内容——见 setHorizontalScrollRange 注释）
+        String out = applyScrollX(Math.max(0, Math.min(horizontalRange, prev + (int) dx)));
         if (scrollDragListener != null) scrollDragListener.onScrollDrag(dx, 0f);
         return out;
+    }
+
+    /**
+     * ★★**应用横向滚动位置**（拖动手势 / 惯性滑动 / 判据驱动**共用唯一入口**）：
+     *   ① 内容偏移（画布平移）→ ② 内核 seek_scroll（驱动滚动窗口动画，如卷轴补偿）
+     *   → ③ 监听者记账。★三处（手指/惯性/测试）必须走同一条——否则读数与观感分叉。
+     */
+    public String applyScrollX(int x) {
+        final int clamped = Math.max(0, Math.min(horizontalRange, x));
+        setContentScrollX(clamped);
+        if (scrollPosListener != null) scrollPosListener.onScrollPos(clamped, scrollY);
+        if (coreHandle == 0) return "{\"ok\":false,\"error\":\"未接入核心\"}";
+        return kernelAnimSeekScroll("{\"scroll\":" + clamped + "}");
     }
 
     /** 当前横向偏移（判据/诊断读数） */
@@ -1026,7 +1049,9 @@ public class ProteusHostView extends ViewGroup {
                 //   ③ 连路径都没有 ⇒ **-1**（"无描边轨道"——与 iOS 找不到 CAShapeLayer 报 -1 同口径）。
                 final float strokeProg;
                 if (animStroke.containsKey(id)) strokeProg = animStroke.get(id);
-                else if (nodeSvgStroke.containsKey(id)) strokeProg = 0f;
+                // ★回落**声明基态**（2026-10-01 修正：此前硬编码 0 ⇒ 静态已画成的路径探针也报 0，
+                //   与绘制实际值不一致——"读实际值"是探针的口径）
+                else if (nodeSvgStroke.containsKey(id)) strokeProg = (Float) nodeSvgStroke.get(id)[3];
                 else strokeProg = -1f;
                 // ★★渐变（v1 · 2026-10-01）：**真读宿主绘制真源**（该 cmd 的 GradSpec——`drawCmds`
                 //   用的就是它）——判据据此断言"渐变真的挂上了"（与 iOS 读层上 type/色标数同语义）。
@@ -1380,6 +1405,60 @@ public class ProteusHostView extends ViewGroup {
 
     /** ★★**长卷模式开关**（横向手势通路——`program: 'inkScroll'` 时置 true） */
     private boolean horizontalScroll = false;
+    /**
+     * ★★**横向偏移模式**（2026-10-01 · 手卷浏览）：`true` ⇒ 画布真平移（`translate(-scrollX)`）。
+     *   · 与第一版"卷筒滚动展开"（进度模式，不平移）的区别就在这个开关；
+     *   · 偏移模式下滚动值 = **内容偏移**（0..range），手势 1:1 跟手 + 抛滑惯性。
+     */
+    private boolean offsetScroll = false;
+
+    public void setOffsetScroll(boolean v) { this.offsetScroll = v; }
+
+    /** 惯性滑动器（抛滑——`OverScroller` 是平台标准实现，零自研阈值） */
+    private android.widget.OverScroller flingScroller;
+
+    private android.widget.OverScroller scroller() {
+        if (flingScroller == null) flingScroller = new android.widget.OverScroller(getContext());
+        return flingScroller;
+    }
+
+    /** 抛滑（在 `onFling` 里调用——`vx` 是平台给的手指速度，正=向右） */
+    public void startFlingX(float vx) {
+        // ★符号：手指向右甩（vx>0）⇒ 内容向右回退（scrollX 减小）⇒ 取 −vx
+        scroller().fling(scrollX, 0, (int) (-vx), 0, 0, horizontalRange, 0, 0);
+        flingDrives++;
+        postInvalidateOnAnimation();
+    }
+
+    /**
+     * ★★**每帧推进惯性**（由 LightsHost 的 Choreographer 帧循环调用——复用同一帧驱动，
+     *   不新增第二条帧源；本仓纪律："帧驱动唯一来源"）。
+     * ★两个读数（`inertiaFrames`/`inertiaMoved`）是**"抛滑真的接线了"的机器证据**（2026-10-01）：
+     *   本仓刚抓到同族缺陷（`startFlingX` 声明了但 `onFling` 里没人调用 ⇒ 抛滑静默不存在）
+     *   ——"报告有、通路无"只能靠计数现形（判据据此判红/绿）。
+     */
+    public void stepInertia() {
+        if (flingScroller == null) return;
+        if (flingScroller.computeScrollOffset()) {
+            inertiaFrames++;
+            final int nx = flingScroller.getCurrX();
+            if (nx != scrollX) inertiaMoved++;
+            applyScrollX(nx);
+        }
+    }
+
+    /** 抛滑次数（onFling / 判据驱动都会计数）· 惯性活跃帧 · 惯性**真的推动了画布**的帧 */
+    public int flingDrives() { return flingDrives; }
+    public int inertiaFrames() { return inertiaFrames; }
+    public int inertiaMovedFrames() { return inertiaMoved; }
+    /** 惯性是否仍在推进（收尾条件等待用——"等它停"而不是"等固定时长"） */
+    public boolean flingActive() {
+        return flingScroller != null && !flingScroller.isFinished();
+    }
+
+    private int flingDrives = 0;
+    private int inertiaFrames = 0;
+    private int inertiaMoved = 0;
 
     /** 设置长卷模式（横向手势驱动；见 `scrollDragByX`） */
     public void setHorizontalScroll(boolean v) { this.horizontalScroll = v; }
@@ -1628,6 +1707,11 @@ public class ProteusHostView extends ViewGroup {
                             b.putString("direction", dir);
                             b.putFloat("speed", (float) Math.hypot(vx, vy));
                             report("fling", e2, b);
+                            // ★★手卷抛滑**接线**（2026-10-01）：横轴模式下把平台的甩速交给
+                            //   `OverScroller`（惯性由帧循环 `stepInertia` 推进）。
+                            //   ★此前只 report（"手势语义上报"）而 `startFlingX` 无人调用 ⇒
+                            //     惯性滑动**声明了但没接**（同类缺陷：报告有、通路无）。
+                            if (horizontalScroll) startFlingX(vx);
                             return true;
                         }
 
@@ -1676,6 +1760,9 @@ public class ProteusHostView extends ViewGroup {
         touchEventCount++;
         final int action = ev.getActionMasked();
         if (action == android.view.MotionEvent.ACTION_DOWN) {
+            // ★★触摸即刹停惯性（平台标准行为：上手就停）——不刹会"拖拽被旧抛滑顶掉"：
+            //   每帧 `stepInertia` 会把 scrollX 拉回抛滑时间线，拖动量被静默吞掉。
+            if (flingScroller != null && !flingScroller.isFinished()) flingScroller.forceFinished(true);
             // ★DOWN 时刻做命中 → 这一整个手势都归它（与平台语义一致）
             dispatchHit(ev.getX(), ev.getY());
             gestureTarget = lastHitTarget;
@@ -1787,13 +1874,13 @@ public class ProteusHostView extends ViewGroup {
         // ★滚动：自绘内容随 scrollY 平移，并**裁剪到滚动视口**
         //   （native-host 的裁剪在 applyScrollToNativeHosts 里单独做——
         //    它们不受这个 clipRect 约束，这是 Android 的固有行为）
-        // ★★两种滚动语义（2026-10-01 长卷实测后定案）：
-        //   · **偏移滚动**（既有：列表/长内容）：画布 `translate(-scrollX,-scrollY)`——内容比视口大；
-        //   · **展卷滚动**（手卷 `horizontalScroll`）：滚动值是**进度**不是偏移——画卷**固定居中**，
-        //     由**卷筒滚动 + 幕布揭示**铺开（内核 seek_scroll 驱动）。
-        //     ★这里绝不能 translate：那会把画整体推出屏幕（首版全黑缺陷的变体；判据已加回归锁）。
-        final boolean scrolled = !horizontalScroll
-                && (scrollX != 0 || scrollY != 0 || scrollViewport != null);
+        // ★★三种滚动语义（2026-10-01 两次实测后定案）：
+        //   · **纵向偏移**（既有：列表/长内容）：画布 `translate(0,-scrollY)`——内容比视口高；
+        //   · **横向偏移**（手卷浏览 `offsetScroll`）：画布 `translate(-scrollX,0)`——**画比屏宽**；
+        //   · 横向**进度**（第一版"卷筒展开"，已弃用）：滚动值是进度，画固定——**不平移**。
+        final boolean scrolled = offsetScroll
+                ? (scrollX != 0 || scrollY != 0 || scrollViewport != null)
+                : (!horizontalScroll && (scrollX != 0 || scrollY != 0 || scrollViewport != null));
         final int save = scrolled ? canvas.save() : -1;
         if (scrolled) {
             if (scrollViewport != null) {
@@ -2019,7 +2106,10 @@ public class ProteusHostView extends ViewGroup {
                     final android.graphics.Path sp = (android.graphics.Path) svg[0];
                     final int scol = (Integer) svg[1];
                     final float swid = (Float) svg[2];
-                    final float prog = animStroke.containsKey(ids[i]) ? animStroke.get(ids[i]) : 0f;
+                    // ★回落**声明基态**（2026-10-01）：表无该节点 ⇒ 用 `svgPath.progress` 声明的
+                    //   "生来画到哪"（缺省 0 = 未画）；此前硬编码 0 ⇒ 静态 `progress:1` 的路径永不显形。
+                    final float strokeBase = (Float) svg[3];
+                    final float prog = animStroke.containsKey(ids[i]) ? animStroke.get(ids[i]) : strokeBase;
                     if (prog > 0f) {
                         strokePaint.setColor(scol);
                         strokePaint.setStrokeWidth(swid);
@@ -2059,7 +2149,8 @@ public class ProteusHostView extends ViewGroup {
                         strokePaint.setStrokeCap(android.graphics.Paint.Cap.ROUND);
                         strokePaint.setStrokeJoin(android.graphics.Paint.Join.ROUND);
                         final Object[] svg2 = nodeSvgStroke.get(ids[i]);
-                        final float prog2 = animStroke.containsKey(ids[i]) ? animStroke.get(ids[i]) : 0f;
+                        final float strokeBase2 = svg2 != null ? (Float) svg2[3] : 0f;
+                        final float prog2 = animStroke.containsKey(ids[i]) ? animStroke.get(ids[i]) : strokeBase2;
                         // 基准线宽：有描边路径用它的 strokeWidth；否则用发光半径的一小撮（纯色块的"边缘光"）
                         final float baseW = svg2 != null ? (Float) svg2[2] : Math.max(1f, grad * 0.12f);
                         // 由内到外（同式：boost = radius×k/N · alpha = a0×(1-(k-1)/N)²）
@@ -2148,6 +2239,36 @@ public class ProteusHostView extends ViewGroup {
                 canvas.restoreToCount(maskLayer);
             }
             if (xf) canvas.restoreToCount(save);
+        }
+    }
+
+    /**
+     * ★★**视觉签名**（手卷浏览的像素级证据）：把当前画面渲染到离屏位图，按 24×48 网格采样。
+     *   起点与收尾各采一次 ⇒ 差异百分比 = "画面真的随滚动变了"（堵住"全黑也判绿"的洞）。
+     */
+    public int[] renderSignature() {
+        final int vw = getWidth() > 0 ? getWidth() : 1080;
+        final int vh = getHeight() > 0 ? getHeight() : 2400;
+        android.graphics.Bitmap bmp = null;
+        try {
+            bmp = android.graphics.Bitmap.createBitmap(vw, vh, android.graphics.Bitmap.Config.ARGB_8888);
+            measure(android.view.View.MeasureSpec.makeMeasureSpec(vw, android.view.View.MeasureSpec.EXACTLY),
+                    android.view.View.MeasureSpec.makeMeasureSpec(vh, android.view.View.MeasureSpec.EXACTLY));
+            layout(0, 0, vw, vh);
+            draw(new android.graphics.Canvas(bmp));
+            final int gx = 24, gy = 48;
+            int[] out = new int[gx * gy];
+            int k = 0;
+            for (int j = 0; j < gy; j++) {
+                for (int i = 0; i < gx; i++) {
+                    out[k++] = bmp.getPixel(vw * i / gx + vw / (2 * gx), vh * j / gy + vh / (2 * gy));
+                }
+            }
+            return out;
+        } catch (Throwable t) {
+            return new int[0];
+        } finally {
+            if (bmp != null) bmp.recycle();
         }
     }
 

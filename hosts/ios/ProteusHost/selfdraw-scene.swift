@@ -992,10 +992,11 @@ final class SelfDrawView: UIView {
                 let base = layerClipBase[id] ?? [Float](repeating: 0, count: 16)
                 applyClip(nodeId: id, layer: layer, params: base)
             }
-            // ★★C2：描边进度回**基态**（0 = 未画）——与遮罩同一条"stop 必须清值"的义务
-            //   （真机判据 W14f 抓到首版漏此步：stop 后 strokeEnd 停在 1）。
+            // ★★C2：描边进度回**声明的基态**（缺省 0 = 未画；静态已画成 = 1——2026-10-01
+            //   修正：此前硬编码 0 会把"生来已画成"的静态描边抹掉）——与遮罩同一条
+            //   "stop 必须清值"的义务（真机判据 W14f 抓到首版漏此步：stop 后 strokeEnd 停在 1）。
             if let shape = layerStrokeShapes[id] {
-                shape.strokeEnd = 0
+                shape.strokeEnd = CGFloat(layerStrokeBase[id] ?? 0)
             }
         }
         CATransaction.commit()
@@ -1031,6 +1032,13 @@ final class SelfDrawView: UIView {
      *   declared on a type` ——紧跟其后的 static 字段全报错）；删掉未用属性即恢复。
      *   本仓纪律：**未使用的声明不留**（它们不只是噪音，还会以意外方式影响编译）。
      */
+    /**
+     * ★★**描边声明基态**（2026-10-01 · 手卷浏览抓出的缺口）：`svgPath.progress`（缺省 0 = 未画；
+     *   静态浏览的路径 = 1 已画成）。建层时记下；复位（stop）与探针回落都用它——
+     *   此前两处硬编码 0 ⇒ 静态 `progress:1` 的路径**生来就画不出来**（57 条描边节点全不可见）。
+     */
+    private var layerStrokeBase: [Int: Float] = [:]
+
     /** 描边形状层（复用；每帧只改 `strokeEnd`——不重建 path） */
     private var layerStrokeShapes: [Int: CAShapeLayer] = [:]
     /**
@@ -1382,7 +1390,10 @@ final class SelfDrawView: UIView {
             shape.lineWidth = sw
             shape.lineCap = .round
             shape.lineJoin = .round
-            shape.strokeEnd = 0 // 基态 = 未画（进度 0）
+            // ★基态 = **声明的** `svgPath.progress`（缺省 0 = 未画；浏览模式 1 = 已画成）
+            let pbase = Float((info["progressBase"] as? Double) ?? 0)
+            shape.strokeEnd = CGFloat(Swift.max(0, Swift.min(1, pbase)))
+            layerStrokeBase[id] = pbase
             shape.contentsScale = UIScreen.main.scale
             layer.addSublayer(shape)
             layerStrokeShapes[id] = shape
