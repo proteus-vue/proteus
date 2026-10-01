@@ -63,7 +63,20 @@ static struct {
   jmethodID gc;
   /* ★★App 端原生能力通道（`proteusHost.invoke(method, argsJson)` —— capability-app.ts 的 invokeHost 消费） */
   jmethodID invoke;
-} g_host_methods = { NULL, NULL, NULL, NULL, NULL, NULL, NULL };
+  /* ★★动画桥（2026-10-01 · 灯光秀）：内核动画从 JS 侧驱动——逐帧 tick / 起停 / active 查询。
+   *   与 mount/update 同一"按 Java 实现条件注入"原则（宿主未实现 ⇒ 不注入 ⇒ JS 侧探测为 undefined，
+   *   走诚实降级而不是静默拿到 undefined）。 */
+  jmethodID anim_start;
+  jmethodID anim_tick;
+  jmethodID anim_stop;
+  jmethodID anim_active;
+  /* ★★灯光秀计量/几何桥（2026-10-01）：nowUs/rects/probe/report——JS 侧计时与几何现读。
+   *   同一条件注入原则（Java 未实现 ⇒ 不注入）。 */
+  jmethodID now_us;
+  jmethodID rects;
+  jmethodID probe;
+  jmethodID report;
+} g_host_methods = { NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL };
 
 /* ★前向声明：eval_impl 之后要泵 job（定义在下方；C 里调用点必须先可见） */
 static int pump_jobs_bounded(void);
@@ -288,6 +301,42 @@ static JSValue js_host_update_patches(JSContext *ctx, JSValueConst this_val, int
   return host_call_impl(ctx, g_host_methods.update_patches, 1, this_val, argc, argv);
 }
 
+/* ★★动画桥（2026-10-01 · 灯光秀）：JS 侧逐帧驱动内核动画——
+ *   `animStart(json)` 起幕 / `animTick(dtMs)` 逐帧推进 / `animStop(json)` 停 / `animActive()` 查询。
+ *   与 mount/update 同一条件注入（宿主未实现时这些属性不存在）。 */
+static JSValue js_host_anim_start(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv) {
+  return host_call_impl(ctx, g_host_methods.anim_start, 1, this_val, argc, argv);
+}
+/** `animTick(dtMs)`：数字入参经 JS_ToCString 转成字符串（"16.7"）再过桥——Java 侧解析 Double。 */
+static JSValue js_host_anim_tick(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv) {
+  return host_call_impl(ctx, g_host_methods.anim_tick, 1, this_val, argc, argv);
+}
+static JSValue js_host_anim_stop(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv) {
+  return host_call_impl(ctx, g_host_methods.anim_stop, 1, this_val, argc, argv);
+}
+static JSValue js_host_anim_active(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv) {
+  (void)this_val;
+  (void)argc;
+  (void)argv;
+  return host_call_noarg_impl(ctx, g_host_methods.anim_active, 1);
+}
+
+/* ★★灯光秀计量/几何桥：nowUs()/rects()（无参返回）· probe(idsJson)（一参返回）· report(json)（一参无返回） */
+static JSValue js_host_now_us(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv) {
+  (void)this_val; (void)argc; (void)argv;
+  return host_call_noarg_impl(ctx, g_host_methods.now_us, 1);
+}
+static JSValue js_host_rects(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv) {
+  (void)this_val; (void)argc; (void)argv;
+  return host_call_noarg_impl(ctx, g_host_methods.rects, 1);
+}
+static JSValue js_host_probe(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv) {
+  return host_call_impl(ctx, g_host_methods.probe, 1, this_val, argc, argv);
+}
+static JSValue js_host_report(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv) {
+  return host_call_impl(ctx, g_host_methods.report, 0, this_val, argc, argv);
+}
+
 /** 组装 JSON 字符串结果（转义 `"` `\` 与换行；最小实现，不引第三方） */
 static char *json_escape_alloc(const char *s) {
   if (s == NULL) return strdup("\"\"");
@@ -349,6 +398,31 @@ static jstring eval_impl(JNIEnv *env, jstring source, jboolean with_host) {
     if (g_host_methods.invoke != NULL) {
       JS_SetPropertyStr(g_ctx, host, "invoke", JS_NewCFunction(g_ctx, js_host_invoke, "invoke", 2));
       LOGI("宿主已实现 invoke ⇒ JS 侧可调 App 原生能力（update/window/worker/idle/preload…）");
+    }
+    // ★★灯光秀计量/几何桥（条件注入——同 mount 原则）
+    if (g_host_methods.now_us != NULL) {
+      JS_SetPropertyStr(g_ctx, host, "nowUs", JS_NewCFunction(g_ctx, js_host_now_us, "nowUs", 0));
+    }
+    if (g_host_methods.rects != NULL) {
+      JS_SetPropertyStr(g_ctx, host, "rects", JS_NewCFunction(g_ctx, js_host_rects, "rects", 0));
+    }
+    if (g_host_methods.probe != NULL) {
+      JS_SetPropertyStr(g_ctx, host, "probe", JS_NewCFunction(g_ctx, js_host_probe, "probe", 1));
+    }
+    if (g_host_methods.report != NULL) {
+      JS_SetPropertyStr(g_ctx, host, "report", JS_NewCFunction(g_ctx, js_host_report, "report", 1));
+    }
+    // ★★动画桥（条件注入——同 mount 原则；灯光秀的 JS 侧驱动依赖它）
+    if (g_host_methods.anim_start != NULL && g_host_methods.anim_tick != NULL) {
+      JS_SetPropertyStr(g_ctx, host, "animStart", JS_NewCFunction(g_ctx, js_host_anim_start, "animStart", 1));
+      JS_SetPropertyStr(g_ctx, host, "animTick", JS_NewCFunction(g_ctx, js_host_anim_tick, "animTick", 1));
+      if (g_host_methods.anim_stop != NULL) {
+        JS_SetPropertyStr(g_ctx, host, "animStop", JS_NewCFunction(g_ctx, js_host_anim_stop, "animStop", 1));
+      }
+      if (g_host_methods.anim_active != NULL) {
+        JS_SetPropertyStr(g_ctx, host, "animActive", JS_NewCFunction(g_ctx, js_host_anim_active, "animActive", 0));
+      }
+      LOGI("宿主已实现动画桥 ⇒ JS 侧可驱动内核动画（animStart/animTick/animStop/animActive）");
     }
     // ★★G-39：内存账本两入口（按 Java 侧是否实现条件注入——同 mount 的条件注入原则）
     if (g_host_methods.mem_usage != NULL) {
@@ -429,6 +503,8 @@ Java_dev_proteus_layoutcore_QuickJsEngine_nativeSetHostCallback(JNIEnv *env, jcl
   g_host_methods.post = g_host_methods.mount = g_host_methods.update = g_host_methods.update_patches = NULL;
   g_host_methods.mem_usage = g_host_methods.gc = NULL;
   g_host_methods.invoke = NULL;
+  g_host_methods.anim_start = g_host_methods.anim_tick = g_host_methods.anim_stop = g_host_methods.anim_active = NULL;
+  g_host_methods.now_us = g_host_methods.rects = g_host_methods.probe = g_host_methods.report = NULL;
   if (obj != NULL) {
     g_host_obj = (*env)->NewGlobalRef(env, obj);
     jclass c = (*env)->GetObjectClass(env, obj);
@@ -448,6 +524,24 @@ Java_dev_proteus_layoutcore_QuickJsEngine_nativeSetHostCallback(JNIEnv *env, jcl
     if ((*env)->ExceptionCheck(env)) (*env)->ExceptionClear(env);
     /* ★★App 端原生能力通道（两参：method + argsJson；返回 String） */
     g_host_methods.invoke = (*env)->GetMethodID(env, c, "invoke", "(Ljava/lang/String;Ljava/lang/String;)Ljava/lang/String;");
+    if ((*env)->ExceptionCheck(env)) (*env)->ExceptionClear(env);
+    /* ★★动画桥（灯光秀）：animStart/animTick/animStop 为 (String)->String；animActive 为 ()->String */
+    g_host_methods.anim_start = (*env)->GetMethodID(env, c, "animStart", "(Ljava/lang/String;)Ljava/lang/String;");
+    if ((*env)->ExceptionCheck(env)) (*env)->ExceptionClear(env);
+    g_host_methods.anim_tick = (*env)->GetMethodID(env, c, "animTick", "(Ljava/lang/String;)Ljava/lang/String;");
+    if ((*env)->ExceptionCheck(env)) (*env)->ExceptionClear(env);
+    g_host_methods.anim_stop = (*env)->GetMethodID(env, c, "animStop", "(Ljava/lang/String;)Ljava/lang/String;");
+    if ((*env)->ExceptionCheck(env)) (*env)->ExceptionClear(env);
+    g_host_methods.anim_active = (*env)->GetMethodID(env, c, "animActive", "()Ljava/lang/String;");
+    if ((*env)->ExceptionCheck(env)) (*env)->ExceptionClear(env);
+    /* ★★灯光秀计量/几何桥（nowUs/rects 无参返回串；probe 一参返回串；report 一参无返回） */
+    g_host_methods.now_us = (*env)->GetMethodID(env, c, "nowUs", "()Ljava/lang/String;");
+    if ((*env)->ExceptionCheck(env)) (*env)->ExceptionClear(env);
+    g_host_methods.rects = (*env)->GetMethodID(env, c, "rects", "()Ljava/lang/String;");
+    if ((*env)->ExceptionCheck(env)) (*env)->ExceptionClear(env);
+    g_host_methods.probe = (*env)->GetMethodID(env, c, "probe", "(Ljava/lang/String;)Ljava/lang/String;");
+    if ((*env)->ExceptionCheck(env)) (*env)->ExceptionClear(env);
+    g_host_methods.report = (*env)->GetMethodID(env, c, "report", "(Ljava/lang/String;)V");
     if ((*env)->ExceptionCheck(env)) (*env)->ExceptionClear(env);
     if (g_host_methods.post == NULL) {
       LOGE("宿主回调缺少 post(String) 方法（其余入口仍按各自实现条件注入）");

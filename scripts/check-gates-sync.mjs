@@ -96,6 +96,10 @@ const LOCAL_ONLY = {
   'check:android-platform-anim': '需真机产物（adb pull 的 platform-anim*.json）；CI 无设备',
   // ★内核驱动动画判据（曲线/序列/滚动/共享元素/真帧循环）：同族——输入是真机产物，CI 无设备。
   'check:android-kernel-anim': '需真机产物（adb pull 的 kernel-anim.json）；CI 无设备',
+  // ★★Morpheus 灯光秀（第二个炫技节目 · 800 灯颜色编舞，2026-10-01）——需真机产物
+  //   （adb pull 的 lights.json：QuickJS 节目驱动 + Choreographer 帧循环读数）；CI 无设备。
+  //   本机侧等价判据 = tests/showcase-lights.test.ts（11 幕 / 颜色链 / 7200 峰值，CI 覆盖）。
+  'check:android-lights': '需真机产物（adb pull 的 lights.json）；CI 无设备（本机侧等价判据 = tests/showcase-lights.test.ts）',
   // ★★M5 路由虚拟栈判据（2026-09-30 新增）：与 kernel-anim 同族——输入是真机产物 app-stack.json。
   //   端上读数（在 QuickJS 上跑**真实 app-stack.ts**：2 万层深栈 / 预算冻结 / 命令守恒）无法在 CI 复现
   //   （CI 无设备、无宿主 APK）；本机侧的等价逻辑判据已在 tests/app-stack.test.ts（34 条，CI 覆盖）。

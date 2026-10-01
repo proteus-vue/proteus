@@ -380,6 +380,13 @@ public class MainActivity extends Activity {
             String hr = appHostRun();
             sb.append(hr).append('\n');
             writeReport("host-runtime.json", hr);
+        } else if ("lights".equals(testPath)) {
+            // ★★Morpheus 炫技场 · **第二个节目（灯光秀）**：800 灯颜色编舞（QuickJS + 内核动画桥）
+            //   与 kernel-anim 同一时序纪律：重活让出主线程后再开演（见上一分支的注释）
+            sb.append("【Morpheus 灯光秀（800 灯颜色编舞 · QuickJS 驱动内核动画）】\n");
+            new android.os.Handler(android.os.Looper.getMainLooper())
+                    .postDelayed(new Runnable() { public void run() { lightsRun(); } }, 300);
+            sb.append("  读数见 lights.json（异步演出；帧循环由宿主 Choreographer 拥有）\n");
         } else if ("shot-scroll-native".equals(testPath)) {
             // ★★z-order 约束下的**滚动同步**验证（方案坑位 #4）
             //   场景：20 行列表，**第 5 行是 native-host（WebView）**；程序驱动滚动到若干位置，
@@ -1317,6 +1324,86 @@ public class MainActivity extends Activity {
             return "{\"ok\":false,\"error\":\"报告序列化失败\"}";
         }
     }
+
+    /**
+     * ★★**Morpheus 灯光秀**场景入口（第二个炫技节目 · 800 灯颜色编舞）。
+     *
+     * 【链路】assets `bundle-lights.js`（真实 `showcase-lights.ts` 节目单打进 QuickJS）
+     *   → `evalWithHost` 注入 `LightsHost`（动画桥）→ `__proteusLightsRun` 建树 + 建节目单
+     *   → 宿主启动 Choreographer 帧循环 → 逐幕：`__proteusLightsNext()` 取幕发令 + 逐帧 tick
+     *   → 演完 `__proteusLightsFinalize` 合并统计写 `lights.json`。
+     *
+     * 【★时序纪律（与 kernel-anim 同款）】整个流程排在 `postDelayed(300)` 里
+     *   —— `runAll()` 广播栈退出、主线程空闲后再开演（否则帧循环 vsync 回调被饿死）。
+     */
+    private void lightsRun() {
+        try {
+            clearSceneViews();
+            if (!QuickJsEngine.isAvailable()) {
+                writeReport("lights.json", "{\"ok\":false,\"error\":"
+                        + org.json.JSONObject.quote("JS 引擎未加载：" + QuickJsEngine.getLoadError()) + "}");
+                return;
+            }
+            String bundle;
+            try (java.io.InputStream is = getAssets().open("bundle-lights.js")) {
+                java.io.ByteArrayOutputStream bos = new java.io.ByteArrayOutputStream();
+                byte[] buf = new byte[8192];
+                int n;
+                while ((n = is.read(buf)) > 0) bos.write(buf, 0, n);
+                bundle = new String(bos.toByteArray(), "UTF-8");
+            }
+            final android.util.DisplayMetrics dm = getResources().getDisplayMetrics();
+            final LightsHost host = new LightsHost(this, root, dm.density);
+            this.lightsHost = host;
+
+            QuickJsEngine.EvalResult load = QuickJsEngine.evalWithHost(bundle, host);
+            if (!load.ok) {
+                writeReport("lights.json", "{\"ok\":false,\"error\":"
+                        + org.json.JSONObject.quote("bundle eval 失败：" + load.error) + "}");
+                return;
+            }
+            // ★诊断探针（2026-10-01 · 首跑排障）：bundle 装载后全局状态——确认灯 bundle 是否真的挂上全局
+            try {
+                QuickJsEngine.EvalResult t1 = QuickJsEngine.eval("typeof globalThis.__proteusLightsRun");
+                QuickJsEngine.EvalResult t2 = QuickJsEngine.eval(
+                        "Object.getOwnPropertyNames(globalThis).filter(function(k){return k.indexOf('proteus')>=0}).join(',')");
+                android.util.Log.i("proteus", "lights 探针: bundle_chars=" + bundle.length()
+                        + " load.raw=" + String.valueOf(load.raw).substring(0, Math.min(200, String.valueOf(load.raw).length()))
+                        + " | typeof=" + t1.value + " | globals=[" + t2.value + "]");
+            } catch (Throwable ignored) { /* 诊断不阻演出 */ }
+            // 建树 + 节目单（视口 = 设备屏幕——与既有场景同坐标系）
+            org.json.JSONObject args = new org.json.JSONObject();
+            args.put("tiles", 800);
+            args.put("cols", 20);
+            args.put("viewport", new org.json.JSONObject()
+                    .put("width", dm.widthPixels).put("height", dm.heightPixels));
+            QuickJsEngine.EvalResult run = QuickJsEngine.eval(
+                    "__proteusLightsRun(" + org.json.JSONObject.quote(args.toString()) + ")");
+            if (!run.ok) {
+                writeReport("lights.json", "{\"ok\":false,\"error\":"
+                        + org.json.JSONObject.quote("入口调用失败：" + run.error) + "}");
+                return;
+            }
+            // plan 转交宿主（报告里"计划 vs 实际"逐项对账）
+            try {
+                org.json.JSONObject ro = new org.json.JSONObject(run.value);
+                host.notePlan(ro.optJSONArray("plan") != null ? ro.getJSONArray("plan").toString() : "[]");
+                android.util.Log.i("proteus", "灯光秀已建树：tiles=" + ro.optInt("tiles")
+                        + " mount_ms=" + ro.optDouble("mount_ms") + " plan=" + ro.optJSONArray("plan"));
+            } catch (Throwable ignored) { /* 解析失败 ⇒ plan 空 ⇒ 判据按缺失判红（如实暴露） */ }
+            // 开演（宿主 = 唯一帧驱动）
+            host.startShow();
+        } catch (Throwable t) {
+            try {
+                writeReport("lights.json", "{\"ok\":false,\"error\":"
+                        + org.json.JSONObject.quote(t.getClass().getSimpleName() + ": " + t.getMessage()) + "}");
+            } catch (Throwable ignored) { /* 保底 */ }
+            android.util.Log.e("proteus", "灯光秀启动失败", t);
+        }
+    }
+
+    /** 灯光秀宿主（诊断/生命周期用） */
+    private LightsHost lightsHost = null;
 
     /**
      * 摘掉上一次场景挂在 root 上的**场景 View**（保留按钮并隐藏它）。

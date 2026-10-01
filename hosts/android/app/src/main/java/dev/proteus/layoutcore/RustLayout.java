@@ -74,6 +74,8 @@ final class RustLayout {
     private static native byte[] nativeAnimTickBin(long handle, float dtMs);
     /** 停动画（`{"nodeIds":[…]}` / `{"all":true}`） */
     private static native String nativeAnimStop(long handle, String json);
+    /** ★仍在推进的动画条数（0 = 全结束）——幕切换的权威判据（灯光秀幕驱动用；见 JNI lib.rs 注释） */
+    private static native String nativeAnimActive(long handle);
     /** ★MA5：滚动驱动（滚动位置 → 全部窗口动画；换算在内核） */
     private static native String nativeAnimSeekScroll(long handle, String json);
     /** ★共享元素（几何原语：源矩形 + 目标节点 ⇒ dx/dy/scale，内核算） */
@@ -233,7 +235,7 @@ final class RustLayout {
         return loaded ? nativeAnimStart(handle, json) : NOT_LOADED;
     }
 
-    /** 每帧推进（空数组 = 本帧无变化；步长 24B 见 native 声明） */
+    /** 每帧推进（空数组 = 本帧无变化；步长 32B 见 native 声明） */
     static byte[] animTickBin(long handle, float dtMs) {
         return loaded ? nativeAnimTickBin(handle, dtMs) : new byte[0];
     }
@@ -246,6 +248,11 @@ final class RustLayout {
     /** ★MA5：滚动驱动 */
     static String animSeekScroll(long handle, String json) {
         return loaded ? nativeAnimSeekScroll(handle, json) : NOT_LOADED;
+    }
+
+    /** ★仍在推进的动画条数（0 = 全结束）——幕切换的权威判据 */
+    static String animActive(long handle) {
+        return loaded ? nativeAnimActive(handle) : NOT_LOADED;
     }
 
     /** ★共享元素（几何原语） */

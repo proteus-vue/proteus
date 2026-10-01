@@ -663,4 +663,513 @@ export const choreograph = {
       }),
     )
   },
+
+  /* ────────────────────────── 颜色编排（2026-10-01 · 灯光秀抽出） ──────────────────────────
+   *
+   * 【为什么这批是**通用预设**（而不是节目单私有的循环）】它们全部走 `compileChoreography`
+   *   的 make 回调——与 wave/ripple 同一形态、同一编译链（同一份校验/线格式）。
+   *   灯光秀是第一个消费面，但"颜色 + 相位编排"是通用需求（霓虹标题/状态灯/节奏带），
+   *   收敛到本包 = 一份实现（纪律 #22：第 N 份手写相位循环 = 下一个静默缺陷）。
+   *   ★颜色声明按通道展开（一次声明 → 4 条标量指令）由 `compileAnimations` 保证。 */
+
+  /**
+   * **闪烁**：`from →（峰值闪）→ to` 一次往返，附 scale 脉冲（"灯亮起"的物理感）。
+   *
+   * 相位错峰由 `order × staggerMs` 决定——`radialOut` = 从中心向外逐个点亮（点火），
+   * `serpentine` = 蛇形扫过（斜扫）。
+   */
+  flash(
+    scene: ChoreoScene & {
+      from: string
+      to: string
+      /** 峰值色（缺省 = `#ffffff` 纯白闪） */
+      peak?: string
+      /** 闪到峰值的时长（缺省 160ms） */
+      flashMs?: number
+      /** 从峰值落回 to 的时长（缺省 620ms） */
+      fallMs?: number
+      /** scale 脉冲峰值（缺省 1.18 = 亮起时胀一下；1 = 不要脉冲） */
+      pulse?: number
+    },
+  ): EngineAnim[] {
+    const peak = scene.peak ?? '#ffffff'
+    const flashMs = scene.flashMs ?? 160
+    const fallMs = scene.fallMs ?? 620
+    const pulse = scene.pulse ?? 1.18
+    const dur = flashMs + fallMs
+    return compileChoreography(
+      specOf(scene)(() => {
+        const decls: AnimDecl[] = [
+          {
+            kind: 'color',
+            from: scene.from,
+            to: scene.to,
+            durationMs: dur,
+            keyframes: [
+              { to: peak, durationMs: flashMs, curve: 'easeOut' },
+              { to: scene.to, durationMs: fallMs, curve: 'easeInOut' },
+            ],
+          },
+        ]
+        if (pulse !== 1) {
+          decls.push({
+            kind: 'scale',
+            from: 1,
+            to: 1,
+            durationMs: dur,
+            keyframes: [
+              { to: pulse, durationMs: flashMs, curve: 'easeOut' },
+              { to: 1, durationMs: fallMs, curve: 'easeInOut' },
+            ],
+          })
+        }
+        return decls
+      }),
+    )
+  },
+
+  /**
+   * **色环**：每片走同一个多段色序列（`from → colors… → to`），相位错峰形成流动色带。
+   *
+   * `staggerMs = 0` 时全场同步（"呼吸"：`colors = [亮, 暗, 亮, 暗]`）；
+   * 错峰时是流动的彩虹（灯光秀 rainbow 幕）。
+   */
+  cycle(
+    scene: ChoreoScene & {
+      from: string
+      to: string
+      /** 色序列（每项一段；末项必须 = `to`，否则编译期拒绝——与标量 keyframes 同一契约） */
+      colors: readonly string[]
+      /** 每段时长（缺省 240ms） */
+      segMs?: number
+    },
+  ): EngineAnim[] {
+    const segMs = scene.segMs ?? 240
+    return compileChoreography(
+      specOf(scene)(() => [
+        {
+          kind: 'color',
+          from: scene.from,
+          to: scene.to,
+          durationMs: segMs * scene.colors.length,
+          keyframes: scene.colors.map((c) => ({ to: c, durationMs: segMs, curve: 'easeInOut' as const })),
+        },
+      ]),
+    )
+  },
+
+  /**
+   * **极光带**：整行同色、行间错峰（行内 0 相位）——横向光带自上而下流过。
+   *
+   * 与 `cycle` 的差别：相位**按行**（同一行的灯严格同拍）而不是按片的 `order` 名次——
+   * 行内错峰会打散"光带"的横线形态。行色缺省是 青→蓝→紫 三角波（冷色调）。
+   */
+  aurora(
+    scene: ChoreoScene & {
+      from: string
+      /** 行数（相位空间） */
+      rows: number
+      /** 行间错峰（ms；缺省 40） */
+      rowMs?: number
+      /** 单程时长（缺省 900ms） */
+      holdMs?: number
+      /** 行色（缺省：青→蓝→紫三角波；给回调可自定义） */
+      colorAt?: (row: number, rows: number) => string
+    },
+  ): EngineAnim[] {
+    const rowMs = scene.rowMs ?? 40
+    const hold = scene.holdMs ?? 900
+    const rows = Math.max(1, scene.rows)
+    const colorAt = scene.colorAt ?? defaultAuroraColor
+    return compileChoreography({
+      ids: scene.ids,
+      canvas: scene.canvas,
+      order: 'index',
+      staggerMs: 0,
+      make: (c) => {
+        // ★本预设的相位是"行"而不是名次 ⇒ delayMs 由 make 直接给出（staggerMs=0 不叠加）
+        const d = c.row * rowMs
+        const rowColor = colorAt(c.row, rows)
+        return [
+          {
+            kind: 'color',
+            from: scene.from,
+            to: scene.from,
+            durationMs: hold * 2,
+            delayMs: d,
+            keyframes: [
+              { to: rowColor, durationMs: hold, curve: 'easeInOut' },
+              { to: scene.from, durationMs: hold, curve: 'easeInOut' },
+            ],
+          },
+        ]
+      },
+    })
+  },
+
+  /**
+   * **染色**：纯颜色补间（`from → to`），相位错峰——"全场变某色"的一句话。
+   * 聚字/归位幕常与位置预设**同批**使用（各自独立声明，颜色与位置互不干扰）。
+   */
+  paint(
+    scene: ChoreoScene & {
+      from: string
+      to: string
+      durationMs?: number
+      curve?: CurveName
+    },
+  ): EngineAnim[] {
+    const durationMs = scene.durationMs ?? 700
+    const curve = scene.curve ?? 'easeInOut'
+    return compileChoreography(
+      specOf(scene)(() => [{ kind: 'color', from: scene.from, to: scene.to, durationMs, curve }]),
+    )
+  },
+
+  /* ────────────────────────── 灯阵模式（2026-10-01 · 灯光秀重构抽出） ──────────────────────────
+   *
+   * 【与上面"颜色编排"的本质差别】那批是"每片同一种色变化"（靠 `order` 相位错峰）；
+   *   这批是**灯阵语义**：每颗灯的亮/灭/色由它的**位置**（行/列/角度）决定，灯**一颗不动**——
+   *   整场演出只是"亮灯和灭灯"（真实灯光秀与 LED 矩阵屏的工作方式，用户语义修正的落点）。
+   *   ★所有预设只产出**颜色指令**（kind 5..8），不产出任何位移/缩放/旋转/透明度。
+   *   ★仍走 `compileChoreography` 同一编译链（同一份校验/线格式）。 */
+
+  /**
+   * ★★**灯阵点字**（"亮灯成字"——LED 矩阵屏的经典节目）：
+   *   把 `text`（5×7 点阵）渲染到灯阵上——**亮的灯** = `on` 色，**灭的灯** = `off` 色（暗盘）。
+   *   灯位保持不变，全靠亮灭组成文字。
+   *
+   * 布局：点阵水平居中；`\n` 多行纵向堆叠。每行最多 `floor((cols+1)/6)` 个字（5 列字宽 + 1 列间隔）。
+   * `blinks` > 0 时亮灯先闪烁（灭→亮交替）再定格——"霓虹招牌"的观感。
+   */
+  matrixText(
+    scene: ChoreoScene & {
+      text: string
+      /** 灭灯色（暗盘——调用方传入，包内无色板） */
+      off: string
+      /** 亮灯色（缺省 `#ffffff`） */
+      on?: string
+      /**
+       * ★★**每颗灯的当前色**（上一幕终态；缺省 = `off`）——**杜绝跳变的关键**。
+       *
+       * 【为什么必须逐灯给（2026-10-01 真机观感修正）】上一幕结束时灯阵是**混合态**
+       *   （例：上一幕灯字的"亮盘白、灭盘暗"）——用统一 `from` 会让本该是暗的灯
+       *   在动画起点**跳到 from 色再变**（观感 = "突然闪出来"）。逐灯给 `from` =
+       *   每颗灯从**它此刻真实的颜色**出发，随相位波解析成新图案（旧图象溶解、新文字浮现）。
+       */
+      currentOf?: (i: number) => string
+      /** 统一起点色（仅当 `currentOf` 未给时使用；缺省 = `off`） */
+      from?: string
+      /** 每颗灯的解析时长（缺省 420ms） */
+      resolveMs?: number
+      /** 相位错峰（缺省 6ms：波形"写"上去——0 = 整屏同闪，观感生硬） */
+      staggerMs?: number
+      /** 相位序（缺省 `diagonal`） */
+      order?: StaggerOrder
+    },
+  ): EngineAnim[] {
+    const on = scene.on ?? '#ffffff'
+    const resolveMs = scene.resolveMs ?? 420
+    const bm = textBitmap(scene.text)
+    const cols = Math.max(1, scene.canvas.cols)
+    const rows = Math.max(1, Math.ceil(scene.ids.length / cols))
+    const x0 = Math.floor((cols - bm.width) / 2)
+    const y0 = Math.floor((rows - bm.height) / 2)
+    const cells = new Set<number>()
+    for (const pt of bm.lit) cells.add(pt.y * 4096 + pt.x)
+    const litOf = (i: number): boolean => {
+      const gx = (i % cols) - x0
+      const gy = Math.floor(i / cols) - y0
+      return gx >= 0 && gy >= 0 && gx < bm.width && gy < bm.height && cells.has(gy * 4096 + gx)
+    }
+    const cur = (i: number): string => scene.currentOf?.(i) ?? scene.from ?? scene.off
+    return compileChoreography({
+      ids: scene.ids,
+      canvas: scene.canvas,
+      // ★相位错峰由 order × staggerMs 推出（compileChoreography 自动叠加 delayMs）——
+      //   波形扫过：灯一颗颗（按对角名次）解析成字，而不是整屏同时跳变
+      order: scene.order ?? 'diagonal',
+      staggerMs: scene.staggerMs ?? 6,
+      make: (c) => [
+        {
+          kind: 'color',
+          from: cur(c.i),
+          to: litOf(c.i) ? on : scene.off,
+          durationMs: resolveMs,
+          curve: 'easeInOut',
+        },
+      ],
+    })
+  },
+
+  /**
+   * ★★**灯阵图案帧**（纯计算，不产出指令）：给定文本与网格，返回**每颗灯的目标色**数组——
+   *   亮盘 = `on`、灭盘 = `off`。调用方用它算下一幕的 `currentOf`（逐灯起点色）：
+   *   `matrixFrame('800', cols, n, {on, off})` 的终态 = 下一幕（如 `matrixText('LIG\nHTS')`）
+   *   `currentOf` 的输入 ⇒ **串幕零跳变**（灯从"它此刻真实的颜色"出发）。
+   */
+  matrixFrame(
+    text: string,
+    cols: number,
+    n: number,
+    colors: { on: string; off: string },
+  ): string[] {
+    const bm = textBitmap(text)
+    const cc = Math.max(1, cols)
+    const rows = Math.max(1, Math.ceil(n / cc))
+    const x0 = Math.floor((cc - bm.width) / 2)
+    const y0 = Math.floor((rows - bm.height) / 2)
+    const cells = new Set<number>()
+    for (const pt of bm.lit) cells.add(pt.y * 4096 + pt.x)
+    const out: string[] = []
+    for (let i = 0; i < n; i++) {
+      const gx = (i % cc) - x0
+      const gy = Math.floor(i / cc) - y0
+      const lit = gx >= 0 && gy >= 0 && gx < bm.width && gy < bm.height && cells.has(gy * 4096 + gx)
+      out.push(lit ? colors.on : colors.off)
+    }
+    return out
+  },
+
+  /**
+   * **跑马灯**（边框追逐——灯会实景最常见的节目）：灯阵**外圈**的灯按顺时针次序
+   * 逐颗点亮（亮白 → 回落），内部灯保持灭。相位名次 = 沿边框的序号。
+   */
+  perimeterChase(
+    scene: ChoreoScene & {
+      off: string
+      on?: string
+      from?: string
+      /** 相邻灯的错峰（缺省 16ms；一圈 ≈ (2(cols+rows)-4) × 此值） */
+      staggerMs?: number
+      /** 每颗灯亮住的时长（缺省 260ms） */
+      holdMs?: number
+    },
+  ): EngineAnim[] {
+    const on = scene.on ?? '#ffffff'
+    const staggerMs = scene.staggerMs ?? 16
+    const holdMs = scene.holdMs ?? 260
+    const from = scene.from ?? scene.off
+    const cols = Math.max(1, scene.canvas.cols)
+    const rows = Math.max(1, Math.ceil(scene.ids.length / cols))
+    const rankOf = (i: number): number => {
+      const r = Math.floor(i / cols)
+      const c = i % cols
+      if (r === 0) return c
+      if (c === cols - 1) return cols - 1 + r
+      if (r === rows - 1) return cols - 1 + rows - 1 + (cols - 1 - c)
+      if (c === 0) return cols - 1 + rows - 1 + cols - 1 + (rows - 1 - r)
+      return -1 // 内部
+    }
+    return compileChoreography(
+      specOf(scene)((c) => {
+        const rank = rankOf(c.i)
+        if (rank < 0) {
+          return [{ kind: 'color', from, to: scene.off, durationMs: staggerMs, curve: 'linear' }]
+        }
+        return [
+          {
+            kind: 'color',
+            from,
+            to: scene.off,
+            durationMs: rank * staggerMs + holdMs,
+            // 等到自己那一棒：先灭着（或保持起点色），轮到时亮白，再回落
+            keyframes: [
+              { to: scene.off, durationMs: Math.max(1, rank * staggerMs), curve: 'linear' },
+              { to: on, durationMs: holdMs, curve: 'easeOut' },
+              { to: scene.off, durationMs: 1, curve: 'linear' },
+            ],
+          },
+        ]
+      }),
+    )
+  },
+
+  /**
+   * **光扇**（旋转光束——灯会实景的另一招牌）：一束光绕屏心**旋转扫过**，
+   * 被扫到的灯亮白、扫过即灭（角度由灯在阵中的位置推出）。
+   *
+   * 每颗灯的关键帧 = **按"该灯被光束照到的时间区间"归并**（通常 2–4 段，不是 steps 段）——
+   * 800 颗灯的总指令仍是每灯 4 条颜色通道（四通道展开）。`steps` × `stepMs` = 转一整圈的时长。
+   */
+  fan(
+    scene: ChoreoScene & {
+      off: string
+      on?: string
+      from?: string
+      /** 一圈分成几步（缺省 12 = 每步 30°） */
+      steps?: number
+      /** 光束角宽（度；缺省 60） */
+      widthDeg?: number
+      /** 每步时长（缺省 150ms） */
+      stepMs?: number
+    },
+  ): EngineAnim[] {
+    const on = scene.on ?? '#ffffff'
+    const steps = Math.max(3, scene.steps ?? 12)
+    const widthDeg = scene.widthDeg ?? 60
+    const stepMs = scene.stepMs ?? 150
+    const from = scene.from ?? scene.off
+    const cols = Math.max(1, scene.canvas.cols)
+    const rows = Math.max(1, Math.ceil(scene.ids.length / cols))
+    const angOf = (i: number): number => {
+      const r = Math.floor(i / cols)
+      const c = i % cols
+      const x = c + 0.5 - cols / 2
+      const y = r + 0.5 - rows / 2
+      // 0..360（0° 指向右侧，顺时针增长——屏幕坐标 y 向下）
+      const a = (Math.atan2(y, x) * 180) / Math.PI
+      return (a + 360) % 360
+    }
+    const diff = (a: number, b: number): number => {
+      const d = Math.abs(a - b) % 360
+      return d > 180 ? 360 - d : d
+    }
+    return compileChoreography(
+      specOf(scene)((c) => {
+        const ang = angOf(c.i)
+        // 每步的亮灭状态
+        const status: boolean[] = []
+        for (let k = 0; k < steps; k++) {
+          const beam = (k * 360) / steps
+          status.push(diff(ang, beam) <= widthDeg / 2)
+        }
+        // 归并连续同态 → 关键帧（每灯 2–4 段）
+        const kf: Array<{ to: string; durationMs: number; curve: CurveName }> = []
+        let k = 0
+        while (k < steps) {
+          const s0 = status[k]!
+          let j = k
+          while (j < steps && status[j] === s0) j++
+          kf.push({ to: s0 ? on : scene.off, durationMs: (j - k) * stepMs, curve: 'linear' })
+          k = j
+        }
+        // 终态回落灭（扫过去就灭）
+        if (kf.length === 0 || kf[kf.length - 1]!.to !== scene.off) {
+          kf.push({ to: scene.off, durationMs: stepMs, curve: 'linear' })
+        }
+        const dur = kf.reduce((acc, x) => acc + x.durationMs, 0)
+        return [{ kind: 'color', from, to: scene.off, durationMs: dur, keyframes: kf }]
+      }),
+    )
+  },
+
+  /**
+   * **棋盘翻转**（矩阵屏经典）：亮灭按 (行+列) 的奇偶交替成棋盘格，整体**翻转 `flips` 次**
+   * 后收为全灭。
+   */
+  checker(
+    scene: ChoreoScene & {
+      off: string
+      on?: string
+      from?: string
+      /** 翻转段数（缺省 4） */
+      flips?: number
+      /** 每段时长（缺省 240ms） */
+      segMs?: number
+    },
+  ): EngineAnim[] {
+    const on = scene.on ?? '#ffffff'
+    const flips = Math.max(1, scene.flips ?? 4)
+    const segMs = scene.segMs ?? 240
+    const from = scene.from ?? scene.off
+    const cols = Math.max(1, scene.canvas.cols)
+    return compileChoreography(
+      specOf(scene)((c) => {
+        const kf: Array<{ to: string; durationMs: number; curve: CurveName }> = []
+        for (let k = 0; k < flips; k++) {
+          const onPhase = (c.row + c.col + k) % 2 === 0
+          kf.push({ to: onPhase ? on : scene.off, durationMs: segMs, curve: 'linear' })
+        }
+        // 收为全灭（谢幕：灯仍在，暗盘）
+        kf.push({ to: scene.off, durationMs: segMs, curve: 'linear' })
+        const dur = kf.reduce((acc, x) => acc + x.durationMs, 0)
+        return [{ kind: 'color', from, to: scene.off, durationMs: dur, keyframes: kf }]
+      }),
+    )
+  },
+
+  /**
+   * **星火**（确定性闪烁）：每颗灯按确定性伪随机走 `segments` 段霓虹色，
+   * 最后收灭——"满屏灯在闪"的压力形态（800 灯 × 多段 keyframes）。
+   */
+  sparkle(
+    scene: ChoreoScene & {
+      off: string
+      /** 霓虹色池（至少 2 个色） */
+      palette: readonly string[]
+      from?: string
+      /** 色段数（缺省 6） */
+      segments?: number
+      /** 每段时长（缺省 200ms） */
+      segMs?: number
+    },
+  ): EngineAnim[] {
+    const palette = scene.palette.length > 0 ? scene.palette : ['#ffffff']
+    const segments = Math.max(2, scene.segments ?? 6)
+    const segMs = scene.segMs ?? 200
+    const from = scene.from ?? scene.off
+    return compileChoreography(
+      specOf(scene)((c) => {
+        const kf: Array<{ to: string; durationMs: number; curve: CurveName }> = []
+        for (let k = 0; k < segments; k++) {
+          const pick = palette[Math.floor(hash01(c.i * 31.7 + k * 7.3) * palette.length) % palette.length]!
+          kf.push({ to: pick, durationMs: segMs, curve: 'linear' })
+        }
+        kf.push({ to: scene.off, durationMs: segMs, curve: 'linear' })
+        const dur = kf.reduce((acc, x) => acc + x.durationMs, 0)
+        return [{ kind: 'color', from, to: scene.off, durationMs: dur, keyframes: kf }]
+      }),
+    )
+  },
+
+  /**
+   * **扫描光幕**：一条"暗带"先自上而下压过（灯逐行暗下），紧接着"亮带"再自下而上
+   * 点亮（灯逐行亮起）——真实舞台常见的"灯光窗帘"。每行整行同拍、行间错峰 `rowMs`。
+   */
+  rowSweep(
+    scene: ChoreoScene & {
+      /** 起点/终点的亮色（= 上一幕结束色；扫描后回到它） */
+      from: string
+      /** 暗带色（暗盘） */
+      dim: string
+      /** 行间错峰（缺省 30ms） */
+      rowMs?: number
+      /** 亮带住留（缺省 240ms） */
+      holdMs?: number
+    },
+  ): EngineAnim[] {
+    const rowMs = scene.rowMs ?? 30
+    const holdMs = scene.holdMs ?? 240
+    const cols = Math.max(1, scene.canvas.cols)
+    return compileChoreography(
+      specOf(scene)((c) => [
+        {
+          kind: 'color',
+          from: scene.from,
+          to: scene.from,
+          durationMs: c.row * rowMs + holdMs,
+          delayMs: 1,
+          keyframes: [
+            { to: scene.dim, durationMs: Math.max(1, c.row * rowMs), curve: 'linear' },
+            { to: scene.from, durationMs: holdMs, curve: 'easeOut' },
+          ],
+        },
+      ]),
+    )
+  },
 } as const
+
+/** 极光带缺省行色：青→蓝→紫三角波（冷色调）——两段线性插值 */
+function defaultAuroraColor(row: number, rows: number): string {
+  const t = row / Math.max(1, rows - 1)
+  const tri = t < 0.5 ? t * 2 : (1 - t) * 2
+  const a: [number, number, number] = [0x22, 0xd3, 0xee] // cyan
+  const b: [number, number, number] = [0x3b, 0x82, 0xf6] // blue
+  const c: [number, number, number] = [0xa8, 0x55, 0xf7] // purple
+  const mix = (x: [number, number, number], y: [number, number, number], u: number): string => {
+    const f = (p: number, q: number): string => Math.round(p + (q - p) * u).toString(16).padStart(2, '0')
+    return `#${f(x[0], y[0])}${f(x[1], y[1])}${f(x[2], y[2])}`
+  }
+  return tri < 0.5 ? mix(a, b, tri * 2) : mix(b, c, (tri - 0.5) * 2)
+}

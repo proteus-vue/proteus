@@ -56,16 +56,27 @@ public class ProteusHostView extends ViewGroup {
          *   ★与内核树里该节点的 `color` 声明**必须一致**（由场景构造方保证；判据断言自洽）。
          */
         final int textColor;
+        /**
+         * ★★圆角半径（px；0 = 直角）——纯绘制属性（内核不收，只影响观感）。
+         *
+         * 【为什么加（2026-10-01 · 灯光秀）】灯光秀的 800 颗灯珠用 4px 圆角（圆点观感）；
+         *   既有 `drawCmds` 只有直角 `drawRect`。默认 0 ⇒ **既有全部路径零行为变化**。
+         */
+        final float radius;
         Cmd(float x, float y, float w, float h, int color, String text) {
-            this(x, y, w, h, color, text, 0f, 0);
+            this(x, y, w, h, color, text, 0f, 0, 0f);
         }
         Cmd(float x, float y, float w, float h, int color, String text, float fontSize) {
-            this(x, y, w, h, color, text, fontSize, 0);
+            this(x, y, w, h, color, text, fontSize, 0, 0f);
         }
         Cmd(float x, float y, float w, float h, int color, String text, float fontSize, int textColor) {
+            this(x, y, w, h, color, text, fontSize, textColor, 0f);
+        }
+        Cmd(float x, float y, float w, float h, int color, String text, float fontSize, int textColor, float radius) {
             this.x = x; this.y = y; this.w = w; this.h = h; this.color = color; this.text = text;
             this.fontSize = fontSize;
             this.textColor = textColor;
+            this.radius = radius;
         }
     }
 
@@ -1284,7 +1295,9 @@ public class ProteusHostView extends ViewGroup {
                 int base = animBg != null ? animBg : c.color;
                 bgPaint.setAlpha(Math.max(0, Math.min(255, (int) (Color.alpha(base) * op))));
             }
-            canvas.drawRect(c.x, c.y, c.x + c.w, c.y + c.h, bgPaint);
+            // ★圆角（灯光秀的灯珠）：radius > 0 走 drawRoundRect——纯绘制属性，默认 0 零行为变化
+            if (c.radius > 0f) canvas.drawRoundRect(c.x, c.y, c.x + c.w, c.y + c.h, c.radius, c.radius, bgPaint);
+            else canvas.drawRect(c.x, c.y, c.x + c.w, c.y + c.h, bgPaint);
             if (c.text != null) {
                 if (c.fontSize > 0 && c.fontSize != lastSize) {
                     textPaint.setTextSize(c.fontSize);
