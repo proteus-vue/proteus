@@ -117,6 +117,18 @@ if ! node "$HERE/gen-app4050-fixture.mjs" > "$BUILD/gen-app4050.log" 2>&1; then
 fi
 tail -2 "$BUILD/gen-app4050.log" | sed 's/^/    /'
 
+# ★★Vapor 编译产物（2026-10-01）：真实 SFC → 编译器两件产物（模板 + 订阅表）→ assets
+#   【为什么必须在构建路径上】与上面两条同一条纪律：产物由 TS 编译器产出；
+#   若不在构建时刷新，改了夹具 SFC 后构建照样成功、设备却跑**旧产物**（陈旧产物陷阱）。
+#   ★编译在构建期（不是设备端）：编译器依赖 @babel + @vue/compiler-sfc（引用 Node API）
+#     ⇒ 进不了 QuickJS；实例化 + 订阅更新只依赖 slot-runtime ⇒ 进 bundle（见 entry-vapor.ts 头注）。
+if ! node "$HERE/gen-vapor-fixture.mjs" > "$BUILD/gen-vapor.log" 2>&1; then
+  echo "✗ Vapor 编译产物生成失败 —— 完整输出见 $BUILD/gen-vapor.log："
+  tail -20 "$BUILD/gen-vapor.log"
+  exit 3
+fi
+tail -1 "$BUILD/gen-vapor.log" | sed 's/^/    /'
+
 echo "==> ② 编译 Java 宿主（javac → .class）"
 CLASSES="$BUILD/classes"; rm -rf "$CLASSES"; mkdir -p "$CLASSES"
 find "$APP/src/main/java" -name '*.java' > "$BUILD/java-sources.txt"
@@ -266,6 +278,29 @@ else
   echo "    ⚠ 未见 $BUNDLE_LT —— 缺它只影响 lights 测试路径"
 fi
 
+# ★★Vapor 设备端 bundle（第五个 entry，同一构建脚本产出）——真实 SFC 编译产物驱动
+BUNDLE_VP="$HERE/bridge/dist/bundle-vapor.js"
+ENTRY_VP="$HERE/bridge/entry-vapor.ts"
+NEED_BUILD_VP=0
+if [ ! -f "$BUNDLE_VP" ]; then NEED_BUILD_VP=1; fi
+if [ -f "$ENTRY_VP" ] && [ -f "$BUNDLE_VP" ] && [ "$ENTRY_VP" -nt "$BUNDLE_VP" ]; then NEED_BUILD_VP=1; fi
+# slot-runtime dist 更新也要重建（实例化/订阅的表征在那里）
+if [ -f "$BUNDLE_VP" ] && [ "$HERE/../../packages/slot-runtime/dist/index.js" -nt "$BUNDLE_VP" ]; then NEED_BUILD_VP=1; fi
+if [ "$NEED_BUILD_VP" = "1" ]; then
+  echo "    构建 vapor bundle（缺产物 或 入口/slot-runtime 更新）…"
+  if ! node "$HERE/bridge/build-batch.mjs" 2>&1 | sed 's/^/    /'; then
+    echo "✗ vapor bundle 构建失败（含类型检查）—— 不静默跳过"
+    exit 3
+  fi
+fi
+if [ -f "$BUNDLE_VP" ]; then
+  mkdir -p "$APP/src/main/assets"
+  cp "$BUNDLE_VP" "$APP/src/main/assets/bundle-vapor.js"
+  echo "    bundle-vapor.js 已入 assets（$(du -h "$BUNDLE_VP" | awk '{print $1}')）"
+else
+  echo "    ⚠ 未见 $BUNDLE_VP —— 缺它只影响 vapor 测试路径"
+fi
+
 echo "==> ③ 打包资源与清单（aapt2）"
 MANIFEST="$APP/src/main/AndroidManifest.xml"
 if [ "$LIGHTS" = "1" ]; then
@@ -376,6 +411,16 @@ fi
 #   【为什么可选】引擎缺失时 QuickJsEngine.isAvailable()=false，宿主给出明确提示（不崩）
 #   —— 与 Rust .so 不同：JS 引擎是**新增能力**（此前 Android 无 JS），缺它不影响既有测试路径
 JS_SO="$HERE/build/js-engine/libquickjs_jni.so"
+# ★★陈旧产物判定（2026-10-01 实测踩到）：`.so` 是**预编译产物**，此前构建只 copy——
+#   改了 `quickjs_jni.c` 后构建照样成功、APK 里却是**旧二进制**
+#   （症状：新加的 JS 桥入口在设备上报 `not a function`，而源码里明明有）。
+#   ⇒ 与 bundle/夹具同一条纪律：**源比产物新 ⇒ 必须重编**。
+if [ -f "$JS_SO" ] && [ "$HERE/js-engine/quickjs_jni.c" -nt "$JS_SO" ]; then
+  echo "    quickjs_jni.c 比 .so 新 ⇒ 重编 JS 引擎（源变更必须真重生成）"
+  bash "$ROOT/scripts/setup-android-js-engine.sh" > "$BUILD/js-engine-rebuild.log" 2>&1 \
+    || { echo "✗ JS 引擎重编失败 —— 见 $BUILD/js-engine-rebuild.log"; tail -20 "$BUILD/js-engine-rebuild.log"; exit 3; }
+  tail -2 "$BUILD/js-engine-rebuild.log" | sed 's/^/    /'
+fi
 if [ -f "$JS_SO" ]; then
   cp "$JS_SO" "$BUILD/lib/arm64-v8a/libquickjs_jni.so"
   (cd "$BUILD" && zip -q -0 "$APK" lib/arm64-v8a/libquickjs_jni.so)

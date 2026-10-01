@@ -182,3 +182,32 @@ console.log(`[android-bundle] ✅ ${path.relative(ROOT, OUT_LIGHTS)}（${(bytesL
 if (resultLights.warnings.length) {
   for (const w of resultLights.warnings) console.warn(`  ⚠ ${w.text}`)
 }
+
+// ══════════════════════════════════════════════════════════════════
+// ★★第五个 entry —— **Vapor 设备端**（真实 SFC 编译产物 → 设备端实例化 → 订阅驱动增量）
+//
+// 【它补的缺口（2026-10-01 核实）】Android 侧此前跑的是**构建期预实例化的静态树**
+//   （`entry-batch.ts` 注释明写「不接 Vue」）。本 entry 把"编译器产出的两件产物"
+//   在**设备端**跑起来：实例化 + 订阅驱动的二进制指令更新（见 entry-vapor.ts 头注）。
+//   ★依赖 `@proteus-vue/slot-runtime`（纯 TS 零 Node API）——**不是**编译器
+//     （编译器依赖 @babel + @vue/compiler-sfc，进不了 QuickJS；故编译在构建期）。
+const OUT_VAPOR = path.join(HERE, 'dist', 'bundle-vapor.js')
+const resultVapor = await build({
+  entryPoints: [path.join(HERE, 'entry-vapor.ts')],
+  outfile: OUT_VAPOR,
+  bundle: true,
+  format: 'iife',
+  platform: 'neutral',
+  target: 'es2020',
+  define: { 'process.env.NODE_ENV': '"production"', __DEV__: 'false' },
+  alias: {
+    '@proteus-vue/slot-runtime': path.join(ROOT, 'packages/slot-runtime/dist/index.js'),
+  },
+  legalComments: 'none',
+})
+
+const bytesVapor = fs.statSync(OUT_VAPOR).size
+console.log(`[android-bundle] ✅ ${path.relative(ROOT, OUT_VAPOR)}（${(bytesVapor / 1024).toFixed(1)} KB）`)
+if (resultVapor.warnings.length) {
+  for (const w of resultVapor.warnings) console.warn(`  ⚠ ${w.text}`)
+}

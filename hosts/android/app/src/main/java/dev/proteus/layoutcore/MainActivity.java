@@ -356,6 +356,15 @@ public class MainActivity extends Activity {
             String jsr = jsRenderRun();
             sb.append(jsr).append('\n');
             writeReport("js-render.json", jsr);
+        } else if ("vapor".equals(testPath)) {
+            // ★★★**真实 SFC 编译产物 → 设备端实例化 → 自研渲染体系**（2026-10-01）
+            //   此前 Android 跑的是**构建期预实例化的静态树**（见 entry-batch.ts「不接 Vue」）。
+            //   本通路把编译器两件产物（模板 + 订阅表）在**设备端**跑起来：
+            //   实例化 → 宿主建树（Rust 几何）→ 订阅驱动的**二进制指令**增量更新。
+            sb.append("【Vapor 设备端（真实 SFC → 编译产物 → 实例化 → 订阅驱动增量）】\n");
+            String vp = vaporRun();
+            sb.append(vp).append('\n');
+            writeReport("vapor.json", vp);
         } else if ("platform-anim".equals(testPath)) {
             // ★★MA0-RT：平台零参与动画（**独立路径**——见 platformAnimRun 的注释：
             //   混在重活路径里会被主线程 Choreographer 饿死）
@@ -614,7 +623,7 @@ public class MainActivity extends Activity {
         //   （实测：overlap 行采到 #787A84 —— 那是文字抗锯齿像素，不是场景内容）
         //   ★`js-render` 同理：它的证据就是"屏幕上真的画出来了"；
         //    报告从 JSON 文件读（不上屏不影响任何判据）。
-        if (!testPath.startsWith("shot") && !"js-render".equals(testPath)) {
+        if (!testPath.startsWith("shot") && !"js-render".equals(testPath) && !"vapor".equals(testPath)) {
             TextView tv = new TextView(this);
             tv.setText(text);
             tv.setTextSize(9f);
@@ -1256,6 +1265,101 @@ public class MainActivity extends Activity {
      *   ⑤ 宿主侧 `cmds > 0` 且 `painted_samples > 0` —— ★**真的画出了像素**（不是"我发了指令"）
      *   ⑥ `tree_shape` 与 JS 侧节点数一致 —— 两侧对同一棵树的理解一致
      */
+    /**
+     * ★★★**Vapor 设备端通路**（2026-10-01）：真实 SFC 的编译产物 → 设备端实例化 → 订阅驱动增量。
+     *
+     * 【与 `jsRenderRun` 的本质差别】那条（S5）跑的是「JS 手拼语义树 → 宿主渲染」；
+     *   本通路跑的是「**编译器产物**（LayoutTemplate + 订阅表）→ 设备端实例化 → 订阅驱动更新」
+     *   ——即"从真实 vue 模板经编译器由自研体系落地"那条链的 Android 段。
+     *
+     * 【编译产物从哪来】构建期（`gen-vapor-fixture.mjs`）生成、随 assets 下发：
+     *   编译器依赖 @babel + @vue/compiler-sfc（引用 Node API）⇒ 进不了 QuickJS；
+     *   而实例化 + 订阅更新只依赖 slot-runtime（纯 TS）⇒ 可以进 bundle。
+     *   ★这正是产品形态：`proteus build` 编译、App 运行时实例化 + 更新。
+     */
+    private String vaporRun() {
+        org.json.JSONObject out = new org.json.JSONObject();
+        try {
+            if (!QuickJsEngine.isAvailable()) {
+                out.put("ok", false);
+                out.put("error", "引擎未加载：" + QuickJsEngine.getLoadError());
+                return out.toString(2);
+            }
+            clearSceneViews();
+
+            final android.util.DisplayMetrics dm = getResources().getDisplayMetrics();
+            VaporRenderHost host = new VaporRenderHost(this, root);
+
+            String bundle;
+            try (java.io.InputStream is = getAssets().open("bundle-vapor.js")) {
+                java.io.ByteArrayOutputStream bos = new java.io.ByteArrayOutputStream();
+                byte[] buf = new byte[8192];
+                int n;
+                while ((n = is.read(buf)) > 0) bos.write(buf, 0, n);
+                bundle = new String(bos.toByteArray(), "UTF-8");
+            }
+            out.put("bundle_chars", bundle.length());
+
+            QuickJsEngine.EvalResult load = QuickJsEngine.evalWithHost(bundle, host);
+            if (!load.ok) {
+                out.put("ok", false);
+                out.put("error", "bundle eval 失败：" + load.error);
+                return out.toString(2);
+            }
+
+            String artifacts = readAsset("vapor-artifacts.json");
+            if (artifacts == null) {
+                out.put("ok", false);
+                out.put("error", "缺 assets/vapor-artifacts.json（构建时应由 gen-vapor-fixture.mjs 产出）");
+                return out.toString(2);
+            }
+            org.json.JSONObject args = new org.json.JSONObject();
+            args.put("artifacts", artifacts);
+            args.put("rows", 8);
+            args.put("updates", 3);
+            args.put("viewport", new org.json.JSONObject()
+                    .put("width", dm.widthPixels).put("height", dm.heightPixels));
+
+            long t0 = System.nanoTime();
+            QuickJsEngine.EvalResult run = QuickJsEngine.eval(
+                    "__proteusVaporRun(" + org.json.JSONObject.quote(args.toString()) + ")");
+            out.put("run_ms", (System.nanoTime() - t0) / 1000000);
+            if (!run.ok) {
+                out.put("ok", false);
+                out.put("error", "入口调用失败：" + run.error);
+                return out.toString(2);
+            }
+            org.json.JSONObject r = new org.json.JSONObject(run.value);
+
+            // ③ 宿主侧读数（**真实消费的证据**——与 JS 侧读数独立）
+            out.put("host_mount_calls", host.mountCalls);
+            out.put("host_apply_calls", host.applyCalls);
+            out.put("host_nodes", host.lastNodeCount);
+            out.put("host_text_nodes", host.lastTextCount);
+            out.put("host_cmds", host.lastCmdCount);
+            out.put("host_layout_ms", host.lastLayoutMs);
+            out.put("host_measure_ms", host.lastMeasureMs);
+            out.put("host_painted_samples", host.lastPaintedSamples);
+            out.put("host_painted_colors", host.lastPaintedColors);
+            out.put("host_applied", host.lastApplied);
+            out.put("host_changed_nodes", host.lastChangedNodes);
+            out.put("host_view_on_draw", host.view() != null ? host.view().onDrawCount() : -1);
+
+            // ④ JS 侧报告（原样嵌入——判据读它，与宿主读数互为印证）
+            out.put("report", r);
+            out.put("ok", r.optBoolean("ok"));
+            if (!r.optBoolean("ok")) out.put("error", r.optString("error"));
+            return out.toString(2);
+        } catch (Throwable t) {
+            try {
+                out.put("ok", false);
+                out.put("error", t.getClass().getSimpleName() + ": " + t.getMessage());
+            } catch (Throwable ignored) {
+            }
+            return out.toString();
+        }
+    }
+
     private String jsRenderRun() {
         org.json.JSONObject out = new org.json.JSONObject();
         try {
