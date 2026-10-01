@@ -163,6 +163,20 @@ else
   echo "      （不阻断构建：缺它只影响 js-batch 测试路径）"
 fi
 
+# ★★golden **单一来源**同步（2026-10-01 修复，收"双端几何一致性"判据的一环）
+#   【真缺陷（本轮实测抓到）】本目录的 `browser-layout.json` 是**静态入库**的副本，
+#   canonical 在 `packages/layout-core-rust/tests/golden/browser-layout.json`（浏览器 e2e 生成）。
+#   两者**从不同步** ⇒ 实测 assets 里是 09-27 的（17 case / 68 节点），canonical 已是
+#   09-30 的（25 case / 97 节点）⇒ 双端跑 conformance 覆盖面都对不上（iOS 96 vs Android 67 节点），
+#   跨端指纹比对当场判红。⇒ 构建时从 canonical 同步；漂移由 `check:cross-end-golden` 门禁守。
+GOLDEN_CANON="$HERE/../../packages/layout-core-rust/tests/golden/browser-layout.json"
+if [ -f "$GOLDEN_CANON" ]; then
+  if ! cmp -s "$GOLDEN_CANON" "$APP/src/main/assets/browser-layout.json"; then
+    cp "$GOLDEN_CANON" "$APP/src/main/assets/browser-layout.json"
+    echo "    browser-layout.json 已从 canonical 同步（此前与源不同步 ⇒ 双端覆盖面会不一致）"
+  fi
+fi
+
 # ★★M5：路由虚拟栈 bundle（同一构建脚本产出第二个 entry，见 build-batch.mjs）
 #   与 bundle-batch 分开：app-stack 是**零依赖纯逻辑**，单独产物让渲染链路的回归面不变。
 BUNDLE_AS="$HERE/bridge/dist/bundle-app-stack.js"

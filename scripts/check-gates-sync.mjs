@@ -103,6 +103,13 @@ const LOCAL_ONLY = {
   // ★Morpheus 炫技场（800 瓦片三段编舞）——需**真机**产物（iOS 宿主帧循环 + CADisplayLink 读数）；
   //   CI 无设备。本机侧等价判据 = 单测（tests/showcase-*.test.ts，校验编舞指令的真编译产物）。
   'check:showcase': '需真机产物（iOS showcase.json + 收尾截图）；CI 无设备、无 Xcode',
+  // ★★双端几何一致性判据（2026-10-01 新增，收「跨端视觉一致性」边界的可判定部分）：
+  //   输入是**两端真机产物**（iOS layout-core-conformance.json + Android layout-conformance.json，
+  //   各含内核算出的 `geometry_digest`）——CI 无设备 ⇒ 跑不了。
+  //   ★本机侧等价保护（都在 CI）：内核单测 `geometry_digest_is_deterministic_and_sensitive`
+  //   （确定性 + 敏感性 + 破坏性验证）+ `check:cross-end-golden`（纯静态，守两端 golden 同源）。
+  'check:cross-end-geometry':
+    '需两端真机产物（各跑 conformance 后取回）；CI 无设备（本机侧等价 = 内核单测 geometry_digest_* + check:cross-end-golden）',
   // ★★G-39 宿主运行时判据（2026-09-30 新增）：与上两条同族——输入是真机产物
   //   （host-runtime.json + host-shell.json）。端上读数（QuickJS 上跑真实 quickjs-host.ts：
   //   生命周期状态机 / 真实 Activity 壳转发 / job 泵 / 引擎 JS 堆内存账本 / G-41 conformance

@@ -1530,6 +1530,32 @@ struct ConformanceReport {
     max_delta_dp: f32,
     tolerance_dp: f32,
     failures: Vec<String>,
+    /// ★★**几何指纹**（2026-10-01 加：跨端一致性的机器判据）
+    ///
+    /// 【为什么需要它（收"跨端视觉一致性"这条诚实边界的可判定部分）】此前双端各自跑
+    ///   `run_conformance` 对**浏览器基准**（`max_delta_dp ≤ 0.375`），但那是**两条独立的
+    ///   对基准的距离**——"A 距基准 0.3、B 距基准 0.3"**不能推出"A 与 B 相同"**
+    ///   （两者可以朝相反方向偏）。⇒ 加本字段：对**同一份 golden**，双端各自算一个
+    ///   覆盖全部 compared 矩形（x/y/w/h 的 **f32 位模式**）的 FNV-1a 哈希；
+    ///   两端**指纹相同** ⇔ 它们的几何逐字节一致（比"距基准各自达标"强得多）。
+    ///
+    /// 【为什么用位模式而不是格式化数值】响应"三端差 1px"的关键在于**没有任何一处再做舍入**；
+    ///   位模式比对连 `0.1 + 0.2` 级别的末位差异也能抓到（格式化会掩盖它）。
+    ///   ★诚实边界：本指纹只覆盖**布局几何**（rects）——"画出来一样"还取决于光栅化
+    ///   （圆角裁剪/阴影/文本基线），那部分靠 conformance + 浏览器真值兜底，不在本字段声称内。
+    geometry_digest: String,
+}
+
+/// 几何指纹：FNV-1a 64 位，逐值吃 **f32 小端字节**（顺序 = 遍历顺序：case → 节点 → x/y/w/h）
+///
+/// 【为什么自实现而不引哈希库】内核不引新依赖（体积/审计面）；FNV-1a 十行即可，
+///   且这里只要**稳定 + 敏感**（非抗碰撞）——两端跑同一段代码，不需要抗碰撞强度。
+fn geometry_digest_update(hash: &mut u64, v: f32) {
+    const FNV_PRIME: u64 = 0x100000001b3;
+    for b in v.to_le_bytes() {
+        *hash ^= b as u64;
+        *hash = hash.wrapping_mul(FNV_PRIME);
+    }
 }
 
 pub fn run_conformance(raw: &str) -> Result<String, String> {
@@ -1539,6 +1565,8 @@ pub fn run_conformance(raw: &str) -> Result<String, String> {
     let mut compared = 0usize;
     let mut max_delta = 0f32;
     let mut failures: Vec<String> = Vec::new();
+    // ★指纹累积（顺序确定：golden.cases 的顺序 × 每 case 内 tree.nodes 的顺序 × x/y/w/h）
+    let mut digest: u64 = 0xcbf29ce484222325; // FNV-1a offset basis
 
     for case in &golden.cases {
         let req = LayoutRequest { viewport: ViewportDto { width: golden.viewport.width, height: golden.viewport.height }, nodes: case.nodes.clone(), text_measures: case.text_measures.clone() };
@@ -1558,6 +1586,10 @@ pub fn run_conformance(raw: &str) -> Result<String, String> {
                 continue;
             };
             compared += 1;
+            // ★指纹只吃**引擎算出**的值（不含浏览器期望值——那才代表"本端几何"）
+            for v in [actual.x, actual.y, actual.width, actual.height] {
+                geometry_digest_update(&mut digest, v);
+            }
             for (prop, a, e) in [
                 ("x", actual.x, expect.x),
                 ("y", actual.y, expect.y),
@@ -1582,6 +1614,7 @@ pub fn run_conformance(raw: &str) -> Result<String, String> {
         max_delta_dp: max_delta,
         tolerance_dp: tolerance,
         failures: failures.iter().take(20).cloned().collect(),
+        geometry_digest: format!("{digest:016x}"),
     };
     serde_json::to_string(&report).map_err(|e| format!("报告序列化失败：{e}"))
 }
@@ -3071,6 +3104,54 @@ mod tests {
         assert_eq!(v["ok"], true, "真机/本机一致性入口应报 ok：{out}");
         assert!(v["compared_nodes"].as_u64().unwrap() >= 60, "比对节点数应 ≥ 60");
         assert!(v["max_delta_dp"].as_f64().unwrap() <= 0.5, "最大偏差应 ≤ 容差");
+    }
+
+    /// ★★几何指纹：**确定性**（同输入两次跑必须同值）+ **敏感性**（改一点点几何必须变）
+    ///
+    /// 【为什么钉这两条（2026-10-01 新增，跨端一致性的机器判据）】
+    ///   ① 确定性是"双端指纹可比"的前提——若同端两次跑都不同，跨端比对毫无意义；
+    ///   ② 敏感性是判据**有牙**的前提——若改几何指纹不变，那"两端一致"就是自证清白
+    ///      （本仓纪律：判据要能被破坏；无牙的判据比没有更糟，它给人通过感）。
+    #[test]
+    fn geometry_digest_is_deterministic_and_sensitive() {
+        let path = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/golden/browser-layout.json");
+        let raw = std::fs::read_to_string(path).expect("golden 应存在");
+        let a = run_conformance(&raw).expect("conformance 应成功");
+        let b = run_conformance(&raw).expect("conformance 应成功");
+        let va: serde_json::Value = serde_json::from_str(&a).unwrap();
+        let vb: serde_json::Value = serde_json::from_str(&b).unwrap();
+        let da = va["geometry_digest"].as_str().expect("报告应含 geometry_digest").to_string();
+        let db = vb["geometry_digest"].as_str().unwrap().to_string();
+        assert_eq!(da, db, "同输入两次跑指纹必须相同（否则跨端比对无意义）");
+        assert_eq!(da.len(), 16, "指纹应为 16 位十六进制：{da}");
+        assert!(da.chars().all(|c| c.is_ascii_hexdigit()), "指纹应为十六进制：{da}");
+
+        // ★敏感性（破坏性）：把 golden 的一个期望值**挪一点点**，引擎几何不变 ⇒ 指纹必须不变
+        //   （指纹吃的是**引擎算出**的值，不是 golden 期望值——这条同时验证了这一点）；
+        //   再把**输入**改一点点（节点宽度）⇒ 引擎几何变化 ⇒ 指纹必须变。
+        let tweaked_expect = raw.replacen("\"tolerance\": 0.5", "\"tolerance\": 0.4", 1);
+        let c = run_conformance(&tweaked_expect).expect("conformance 应成功");
+        let vc: serde_json::Value = serde_json::from_str(&c).unwrap();
+        assert_eq!(
+            vc["geometry_digest"].as_str().unwrap(),
+            da,
+            "指纹只吃引擎几何——golden 期望值改变不应影响它"
+        );
+
+        // 输入敏感性：构造一个最小 golden，改一个节点宽度，指纹必须变
+        let mini = |w: f32| {
+            format!(
+                r#"{{"generatedBy":"test","note":"","viewport":{{"width":100.0,"height":100.0}},"tolerance":0.5,"cases":[{{"name":"m","nodes":[{{"id":1,"parentId":null,"width":{w},"height":50.0}}],"rects":{{"1":{{"x":0.0,"y":0.0,"width":{w},"height":50.0}}}},"textMeasures":{{}}}}]}}"#
+            )
+        };
+        let d1 = run_conformance(&mini(60.0)).unwrap();
+        let d2 = run_conformance(&mini(61.0)).unwrap();
+        let v1: serde_json::Value = serde_json::from_str(&d1).unwrap();
+        let v2: serde_json::Value = serde_json::from_str(&d2).unwrap();
+        assert_ne!(
+            v1["geometry_digest"], v2["geometry_digest"],
+            "输入改 1dp 指纹必须变（否则判据无牙——本仓纪律：假绿比红更糟）"
+        );
     }
 
     #[test]

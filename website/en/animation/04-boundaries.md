@@ -26,6 +26,7 @@ Every reading points to a **re-runnable assertion script**; every “not done ye
 | Animation **does not finish early** (the 1×-speed assertion) | per act `anim_end/nominal span ≥ 0.84` (curve acts ≈1.00; ≈0.5 at 2× speed — this is the assertion that catches it) | `check-showcase.py` ②d · self-tested by `selftest-showcase-judge.py` 15/15 |
 | **Real-gesture scrolling** (both targets) | iOS: pan recogniser installed · sole outlet driven 4× · offset returns to 0 · kernel changed=5 · layer writes 5 · Android: **real MotionEvents** → `scrollY=100` · parallax `ty=-40` (≈-0.4× scroll amount) | `check-anim-rt2.py` I6 · `check-kernel-anim.py` M6b |
 | **Cross-page shared element** (both targets) | source-page rect captured before the switch (1080×200) → target-page node (a different screen) → kernel computes geometry + writes the first frame → frame loop completes it; dx/dy/scale recomputed independently by the judge | `check-app-stack.py` ⑦.7 |
+| **Cross-target geometry** (both targets, on device) | same golden (25 cases / 96 nodes): both digests are `f5550ca5f41dfa9c` — **identical**, byte for byte · 0.46875dp from the browser baseline on each | `hosts/shared/check-cross-end-geometry.py` |
 
 > **Why “zero wake-ups” uses OS-level CPU accounting instead of Instruments**: `xctrace` on this machine cannot record from the device (DeviceSupport version lags), so the measurement uses the difference of two `thread_info` samples — machine-judgeable, and paired with a **positive control** (the tick path must show significant cost; below 5ms the probe is declared broken and must not pass) — a negative assertion is only trustworthy with a control.
 
@@ -36,7 +37,7 @@ Every reading points to a **re-runnable assertion script**; every “not done ye
 | 120 FPS | The target needs a ProMotion device; iPhone 12 is 60Hz — **honestly noted, not claimed** |
 | Gesture negotiation | Nested-scroll conflicts / multi-touch: by design **not part of this engine**, tracked separately |
 | Escape-hatch ratio | Instrumentation ready (`escapes.format()`); **showcase surface now sampled**: 31,200 declarative instructions / 0 escape hatches = **0%** (asserted every run by judge ⑥) — the wider business surface is **still pending** (a demo surface ≠ a business surface; stated honestly) |
-| Cross-target visual identity | The instruction stream guarantees “what to draw”, **not “it looks identical”** (corner clipping / shadows / text baselines differ) — backstopped by conformance and browser-truth baselines |
+| Cross-target visual identity | ✅ **The geometry half is closed (2026-10-01)**: under the same golden, the layout geometry both targets compute **is byte-identical** (a `geometry_digest` compared on device, 96 nodes, same value; judge `hosts/shared/check-cross-end-geometry.py`). **Beyond geometry** (rasterisation: corner clipping / shadows / text baselines) “it looks identical” is still **not guaranteed** — backstopped by conformance and browser-truth baselines |
 | Cross-page shared-element **visual compositing** | Choreography / geometry / completion chain are device-verified on both targets (see the evidence table); **compositing several kernel trees on screen** (both pages visible mid-flight) is outside this harness — same boundary as the existing ScreenHost note |
 
 ## Destructive verification (the assertions have teeth)
@@ -76,6 +77,12 @@ python3 hosts/ios/check-showcase.py hosts/ios/results/showcase.json
 # it does not overwrite the single-pass report above)
 PROTEUS_SHOWCASE_SOAK_MS=300000 bash hosts/ios/run-selfdraw.sh --showcase
 python3 hosts/ios/check-showcase.py hosts/ios/results/showcase-soak.json
+
+# Cross-target geometry (run conformance once per target, then compare the kernel digests)
+bash hosts/ios/experiments/device/run-layout-core.sh      # iOS (auto-pulls the report)
+bash hosts/android/build-and-run.sh --no-install          # Android (golden synced during build)
+#   Android trigger: adb shell am broadcast -a dev.proteus.RUN -p dev.proteus.layoutcore
+python3 hosts/shared/check-cross-end-geometry.py
 ```
 
 ## Back to the start
