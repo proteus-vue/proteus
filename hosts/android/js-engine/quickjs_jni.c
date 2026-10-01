@@ -87,6 +87,8 @@ static struct {
    *   同一条件注入原则（Java 未实现 ⇒ 不注入 ⇒ JS 侧探测为 undefined）。 */
   jmethodID mount_virtual;
   jmethodID scroll_rows;
+  /* ★★绘制通道探针（2026-10-01）：逐通道报「宿主真源里建出来了没」（判据用） */
+  jmethodID probe_channels;
 } g_host_methods = { NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL };
 
 /* ★前向声明：eval_impl 之后要泵 job（定义在下方；C 里调用点必须先可见） */
@@ -376,6 +378,11 @@ static JSValue js_host_scroll_rows(JSContext *ctx, JSValueConst this_val, int ar
   return host_call_impl(ctx, g_host_methods.scroll_rows, 1, this_val, argc, argv);
 }
 
+/** `proteusHost.probeChannels(idsJson)` —— ★★绘制通道探针（读宿主真源） */
+static JSValue js_host_probe_channels(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv) {
+  return host_call_impl(ctx, g_host_methods.probe_channels, 1, this_val, argc, argv);
+}
+
 /** 组装 JSON 字符串结果（转义 `"` `\` 与换行；最小实现，不引第三方） */
 static char *json_escape_alloc(const char *s) {
   if (s == NULL) return strdup("\"\"");
@@ -470,6 +477,9 @@ static jstring eval_impl(JNIEnv *env, jstring source, jboolean with_host) {
     }
     if (g_host_methods.scroll_rows != NULL) {
       JS_SetPropertyStr(g_ctx, host, "scrollRows", JS_NewCFunction(g_ctx, js_host_scroll_rows, "scrollRows", 1));
+    }
+    if (g_host_methods.probe_channels != NULL) {
+      JS_SetPropertyStr(g_ctx, host, "probeChannels", JS_NewCFunction(g_ctx, js_host_probe_channels, "probeChannels", 1));
     }
     // ★★动画桥（条件注入——同 mount 原则；灯光秀的 JS 侧驱动依赖它）
     if (g_host_methods.anim_start != NULL && g_host_methods.anim_tick != NULL) {
@@ -567,6 +577,7 @@ Java_dev_proteus_layoutcore_QuickJsEngine_nativeSetHostCallback(JNIEnv *env, jcl
   g_host_methods.anim_control = NULL;
   g_host_methods.apply_ops = g_host_methods.read_rects = NULL;
   g_host_methods.mount_virtual = g_host_methods.scroll_rows = NULL;
+  g_host_methods.probe_channels = NULL;
   if (obj != NULL) {
     g_host_obj = (*env)->NewGlobalRef(env, obj);
     jclass c = (*env)->GetObjectClass(env, obj);
@@ -617,6 +628,8 @@ Java_dev_proteus_layoutcore_QuickJsEngine_nativeSetHostCallback(JNIEnv *env, jcl
     g_host_methods.mount_virtual = (*env)->GetMethodID(env, c, "mountVirtual", "(Ljava/lang/String;)Ljava/lang/String;");
     if ((*env)->ExceptionCheck(env)) (*env)->ExceptionClear(env);
     g_host_methods.scroll_rows = (*env)->GetMethodID(env, c, "scrollRows", "(Ljava/lang/String;)Ljava/lang/String;");
+    if ((*env)->ExceptionCheck(env)) (*env)->ExceptionClear(env);
+    g_host_methods.probe_channels = (*env)->GetMethodID(env, c, "probeChannels", "(Ljava/lang/String;)Ljava/lang/String;");
     if ((*env)->ExceptionCheck(env)) (*env)->ExceptionClear(env);
     if (g_host_methods.post == NULL) {
       LOGE("宿主回调缺少 post(String) 方法（其余入口仍按各自实现条件注入）");

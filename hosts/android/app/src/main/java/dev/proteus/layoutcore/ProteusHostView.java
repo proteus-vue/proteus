@@ -499,6 +499,23 @@ public class ProteusHostView extends ViewGroup {
         }
     }
     /** 裁剪类型（0 = 无）——宿主内用（探针/绘制判定） */
+    /** 裁剪形状类型（探针/判据用——公开只读视图，不改变任何行为） */
+    public int clipKindOfPublic(int nodeId) {
+        return clipKindOf(nodeId);
+    }
+
+    /** 描边路径总弧长（探针/判据用；0 = 无描边层）——读**宿主真源** `nodeSvgStroke` */
+    public float svgStrokeLength(int nodeId) {
+        Object[] svg = nodeSvgStroke.get(nodeId);
+        if (svg == null) return 0f;
+        try {
+            android.graphics.Path p = (android.graphics.Path) svg[0];
+            return new android.graphics.PathMeasure(p, false).getLength();
+        } catch (Throwable t) {
+            return 0f;
+        }
+    }
+
     private int clipKindOf(int nodeId) {
         final float[] v = nodeClipKindAndBase.get(nodeId);
         return v == null ? 0 : (int) v[0];

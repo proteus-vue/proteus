@@ -180,6 +180,41 @@ def main() -> int:
     else:
         print(f"  ✓ ⑥ ★文本同步落到了绘制真源：累计 {ts_total} 处（逐轮 {ts_rounds}）")
 
+    # ── ⑦ ★绘制通道真的建出来了（逐通道读**宿主真源**——2026-10-01 绘制通道补齐）──
+    #   【为什么单独判】模板侧的绘制声明（fill-gradient / glow / clip-path / svg-path / border-radius）
+    #     走到宿主才算数：任何一环丢了都是"声明了但画不出来"（静默）。
+    #     夹具里 5 个节点各用一条通道（id 2 圆角 / 3 渐变 / 4 发光 / 5 裁剪 / 6 描边）。
+    chans = {int(c.get("id", -1)): c for c in (rep.get("channels") or [])}
+    if not chans:
+        fail("绘制通道探针无读数（宿主 probeChannels 没接线？）")
+        ok = False
+    else:
+        want = [
+            (2, "radius", lambda v: float(v) > 0, "圆角（border-radius → drawRoundRect）"),
+            (3, "grad", lambda v: isinstance(v, str) and v.startswith("1:") and int(v.split(":")[1]) >= 2,
+             "渐变（fill-gradient → shader，kind1=linear 且 ≥2 色标）"),
+            (4, "glow", lambda v: isinstance(v, str) and int(v.split(":")[0]) >= 3, "发光（glow → 分层同心描边）"),
+            (5, "clip", lambda v: int(v) > 0, "裁剪（clip-path → 画布裁剪形状）"),
+            (6, "stroke_len", lambda v: float(v) > 0, "描边（svg-path → 路径层，弧长 > 0）"),
+        ]
+        flat = []
+        bad = []
+        for nid, key, pred, label in want:
+            c = chans.get(nid)
+            v = (c or {}).get(key)
+            try:
+                if c is not None and pred(v):
+                    flat.append(f"{label.split('（')[0]}({v})")
+                    continue
+            except Exception:
+                pass
+            bad.append(f"{label}（节点 {nid} 的 {key}={v!r}）")
+        if bad:
+            fail("★绘制通道未建出来：" + " · ".join(bad) + " —— 模板声明到了但宿主没建（静默丢通道）")
+            ok = False
+        else:
+            print("  ✓ ⑦ ★绘制通道全部落到宿主真源：" + " · ".join(flat))
+
     # 附加观测（不判红，只如实报）
     una = rep.get("uninstantiated_slots", 0)
     if una:

@@ -1,21 +1,21 @@
 {
-  "bundle_chars": 48393,
-  "run_ms": 30,
+  "bundle_chars": 48584,
+  "run_ms": 19,
   "host_mount_calls": 1,
   "host_apply_calls": 3,
-  "host_nodes": 18,
+  "host_nodes": 23,
   "host_text_nodes": 9,
-  "host_cmds": 18,
-  "host_layout_ms": 1.517813,
-  "host_measure_ms": 0.769375,
+  "host_cmds": 23,
+  "host_layout_ms": 0.32125,
+  "host_measure_ms": 0.336302,
   "host_painted_samples": 12060,
-  "host_painted_colors": 13,
+  "host_painted_colors": 17,
   "host_applied": 2,
   "host_changed_nodes": 2,
   "host_view_on_draw": 2,
   "report": {
     "ok": true,
-    "tpl_nodes": 4,
+    "tpl_nodes": 9,
     "tpl_ok": true,
     "sub_l1": 3,
     "sub_l0": 0,
@@ -24,16 +24,16 @@
       "list"
     ],
     "inst_ms": 0,
-    "inst_nodes": 18,
+    "inst_nodes": 23,
     "inst_reused_ids": 2,
     "inst_allocated_ids": 14,
-    "inst_rows": 18,
+    "inst_rows": 23,
     "inst_values_filled": 16,
     "inst_virtual_rows": 8,
     "inst_text_filled": 9,
     "inst_width_filled": 9,
-    "mount_ms": 25,
-    "mount_nodes": 18,
+    "mount_ms": 17,
+    "mount_nodes": 23,
     "updates_run": 3,
     "ops_bytes": 183,
     "ops_ms": 0,
@@ -67,17 +67,56 @@
     ],
     "geom_probe": [
       {
-        "id": 5,
+        "id": 10,
         "before": 52,
         "after": 80
       }
     ],
+    "channels": [
+      {
+        "id": 2,
+        "radius": 18,
+        "grad": "",
+        "mask": 0,
+        "clip": 0
+      },
+      {
+        "id": 3,
+        "radius": 0,
+        "grad": "1:2",
+        "mask": 0,
+        "clip": 0
+      },
+      {
+        "id": 4,
+        "radius": 0,
+        "grad": "",
+        "glow": "26:0.9",
+        "mask": 0,
+        "clip": 0
+      },
+      {
+        "id": 5,
+        "radius": 0,
+        "grad": "",
+        "mask": 0,
+        "clip": 1
+      },
+      {
+        "id": 6,
+        "radius": 0,
+        "grad": "",
+        "mask": 0,
+        "clip": 0,
+        "stroke_len": 512.023
+      }
+    ],
     "uninstantiated_slots": 0,
     "notes": [
-      "实例树 18 节点 \/ 行 18 \/ 虚拟化行 8 \/ 增量 3 轮"
+      "实例树 23 节点 \/ 行 23 \/ 虚拟化行 8 \/ 增量 3 轮"
     ],
-    "host_layout_ms": 1.518,
-    "host_cmds": 18
+    "host_layout_ms": 0.321,
+    "host_cmds": 23
   },
   "ok": true
 }

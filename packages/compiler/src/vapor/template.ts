@@ -37,6 +37,32 @@ const LAYOUT_FIELDS = new Set([
 ])
 /** 绘制字段（宿主自绘读这些键；模板照样要带上，否则挂载后无底色/无字色） */
 const PAINT_FIELDS = new Set(['backgroundColor', 'color', 'fontSize', 'borderRadius', 'borderColor', 'borderWidth', 'opacity'])
+
+/**
+ * ★★**结构化绘制声明**（2026-10-01 · 绘制通道补齐）——`style="{...}"` 装不下的那些通道，
+ * 用**属性**声明（与 CSS 语义同名，kebab 形式）：
+ *   · `fill-gradient='{"kind":"linear","angle":90,"stops":[…] }'`（JSON 串；也接受 `fill-gradient-to`）
+ *   · `clip-path='{"kind":"inset","params":[0,0,0.5,0]}'`
+ *   · `glow='{"color":"#fff6d8","radius":60,"alpha":0.5}'`
+ *   · `mask='{"kind":"linear","angle":180,"softness":0.5,"progress":0}'`
+ *   · `svg-path='{"d":"M0 0 L10 10","stroke":"#333","strokeWidth":3}'`（描边路径，内核解析 segs）
+ *
+ * 【为什么用 JSON 串而不是拆成多个属性】这些规格是**嵌套结构**（色标数组 / 16 个裁剪参数 /
+ *   五元 mask 规格）——拆成扁平属性会把"一份声明"打散成十几个键，且无法表达数组。
+ *   JSON 串是**编译期可校验**的最小形态（解析失败 ⇒ 诊断，不静默丢）。
+ */
+const PAINT_DECL_ATTRS = new Set(['fill-gradient', 'fill-gradient-to', 'clip-path', 'glow', 'mask', 'svg-path', 'svg-path-to'])
+
+/** kebab 属性名 → 引擎字段名 */
+const PAINT_DECL_KEY: Record<string, string> = {
+  'fill-gradient': 'fillGradient',
+  'fill-gradient-to': 'fillGradientTo',
+  'clip-path': 'clipPath',
+  glow: 'glow',
+  mask: 'mask',
+  'svg-path': 'svgPath',
+  'svg-path-to': 'svgPathTo',
+}
 /** 四边缩写属性（`margin-left` ⇒ `margin.left`） */
 const EDGE_FIELDS = new Set(['margin', 'padding'])
 
@@ -213,6 +239,23 @@ export function buildLayoutTemplate(
         }
         if (p.type === 7 /* DIRECTIVE */ && p.name === 'bind' && p.arg?.content === 'style') {
           hasDynamicStyle = true
+        }
+        // ★★结构化绘制声明（见 PAINT_DECL_ATTRS 头注）：JSON 串 → 结构字段（解析失败 ⇒ 诊断）
+        if (p.type === 6 /* ATTRIBUTE */ && PAINT_DECL_ATTRS.has(p.name) && p.value?.content) {
+          const field = PAINT_DECL_KEY[p.name]!
+          const raw = p.value.content
+          try {
+            const parsed = JSON.parse(raw) as unknown
+            // svgPath 允许纯 `d` 字符串简写（`svg-path="M0 0 L10 10"`）——那是常见写法
+            style[field] = field.startsWith('svgPath') && typeof parsed === 'string' ? { d: parsed } : parsed
+          } catch {
+            // ★也接受纯字符串简写（svgPath 的 `d`；渐变等结构属性则必须 JSON）
+            if (field.startsWith('svgPath')) {
+              style[field] = { d: raw }
+            } else {
+              diag(`${tag}(id=${id}) 属性 \`${p.name}\` 不是合法 JSON（已忽略）`, '例：fill-gradient=\'{"kind":"linear","angle":90,"stops":[{"offset":0,"color":"#fff"},{"offset":1,"color":"#000"}]}\'')
+            }
+          }
         }
       }
 
