@@ -73,6 +73,9 @@ func proteus_layout_clip_nodes(_ handle: UInt64) -> UnsafeMutablePointer<CChar>
 /// ★★C2：带 SVG 路径的节点清单（描边动画的取样入口——同取样纪律）
 @_silgen_name("proteus_layout_svg_nodes")
 func proteus_layout_svg_nodes(_ handle: UInt64) -> UnsafeMutablePointer<CChar>
+/// ★★路径变形 v1：按当前因子**算好**的变形段列表（宿主零插值——见内核 `SvgPath::morphed`）
+@_silgen_name("proteus_layout_svg_morph_path")
+func proteus_layout_svg_morph_path(_ handle: UInt64, _ json: UnsafePointer<CChar>) -> UnsafeMutablePointer<CChar>
 @_silgen_name("proteus_layout_text_color_nodes")
 func proteus_layout_text_color_nodes(_ handle: UInt64) -> UnsafeMutablePointer<CChar>
 @_silgen_name("proteus_layout_shared_element")
@@ -1300,6 +1303,16 @@ final class SelfDrawView: UIView {
         g.locations = locations
     }
 
+    /// ★★**接收内核已变形的段列表**（路径变形 v1）——**只设 path**（查内核在桥类：
+    ///   本类没有 tree handle）。因子缓存/去重在桥类（见 `applyPathMorphTick`）。
+    func setMorphedPath(nodeId: Int, segs: [Any]) {
+        guard let shape = layerStrokeShapes[nodeId] else { return }
+        CATransaction.begin()
+        CATransaction.setDisableActions(true)
+        shape.path = cgPathFromSegs(segs)
+        CATransaction.commit()
+    }
+
     private func applyClip(nodeId: Int, layer: CALayer, params: [Float]) {
         guard let shape = layerClipShape[nodeId] else { return } // 无声明 ⇒ 不裁剪（内核也会拒）
         let b = layer.bounds
@@ -2403,6 +2416,8 @@ final class SelfDrawView: UIView {
         if let fg2 = n["fillGradientTo"] as? [String: Any] { style["fillGradientTo"] = fg2 }
         // ★★C2：SVG 描边三键（路径段列表 / 描边色 / 线宽）——同"必须透传"纪律
         if let sp = n["svgPath"] as? [String: Any] { style["svgPath"] = sp }
+        // ★★路径变形 v1：B 态（`svgPathTo`）——同"必须透传"纪律（漏 ⇒ 内核拒变形且静默）
+        if let sp2 = n["svgPathTo"] as? [String: Any] { style["svgPathTo"] = sp2 }
         if let sc = n["strokeColor"] as? NSNumber { style["strokeColor"] = sc }
         if let sw = n["strokeWidth"] as? Double { style["strokeWidth"] = CGFloat(sw) }
         return style
@@ -4002,13 +4017,13 @@ final class SelfDrawBridge: NSObject, SelfDrawExports {
     /// `id u32 + tx/ty/scale/rotate/opacity（五个 f32）+ bg u32 + textColor u32`
     ///
     /// ★★2026-10-01 由 **24B → 28B（底色）→ 32B（文字色）→ 40B（3D 旋转）→ 108B（裁剪）**
-    ///   **→ 112B（描边）→ 184B（渐变 v2）**：末两个 u32 都是**打包色**
+    ///   **→ 112B（描边）→ 184B（渐变 v2）→ 188B（路径变形 v1）**：末两个 u32 都是**打包色**
     ///   `0xAARRGGBB`，值 `0xFFFFFFFF` = **本节点无该基色**（忽略该字段，保持静态绘制）。
     ///   ★唯一事实源 = 内核 `ffi.rs::proteus_layout_anim_tick_bin` 的 8 个 `extend_from_slice`；
     ///     两端宿主 / SDK / embed-demo 的常量必须与它同批更新（本仓历史上因两处各写步长
     ///     而错位解析过：24B 记录被按 16B 读 ⇒ 层上留下错位残值）。
     ///     `scripts/check-anim-record-bytes.mjs` 从内核推出宽度并与各消费端对账。
-    private static let animUpdateRecordBytes = 184
+    private static let animUpdateRecordBytes = 188
 
     /// ★★**每帧推进的唯一解析点**（探针 / 帧循环两条入口共用）
     ///
@@ -4045,6 +4060,13 @@ final class SelfDrawBridge: NSObject, SelfDrawExports {
             // ★★C2（2026-10-01）：描边进度（@108 的 f32；NaN/非有限 = 无描边路径——112B 记录）
             let strokeRaw = buf.loadUnaligned(fromByteOffset: base + 108, as: Float.self)
             let strokeProgress: Float? = strokeRaw.isFinite ? strokeRaw : nil
+            // ★★路径变形 v1（2026-10-01）：当前因子（@184 的 f32；NaN = 无 B 态——188B 记录）。
+            //   因子变化时向内核要**变形后的段列表**（按需查询：段是变长数据，不进定长记录），
+            //   然后重建该节点的描边 shape path（"变形真的落到画面上"）。
+            let morphRaw = buf.loadUnaligned(fromByteOffset: base + 184, as: Float.self)
+            if morphRaw.isFinite {
+                applyPathMorphTick(nodeId: Int(nodeId), factor: morphRaw)
+            }
             // ★★渐变 v2（2026-10-01）：混合后的色标（@112 起：kind u32 + n u32 + 8×colors u32
             //   + 8×offsets f32——184B 记录）。`kind=0` = 本节点无渐变/未变化（忽略）。
             //   ★这些是**内核已混合**的结果（唯一 lerp 实现在内核——宿主零插值数学）。
@@ -4085,6 +4107,26 @@ final class SelfDrawBridge: NSObject, SelfDrawExports {
         }
         CATransaction.commit()
         return (applied, Int(outLen))
+    }
+
+    /// ★★**每帧路径变形**（路径变形 v1）——因子变化时向内核取**已变形**的段列表
+    ///   （唯一 lerp 实现在内核 `SvgPath::morphed`），交给 view 重建描边 path。
+    ///   ★按需查询 + 因子缓存（段是变长数据：因子不变时不重复搬运）。
+    ///   ★查询失败静默跳过（下一帧再试）——变形是视觉增强，不阻断帧循环。
+    private var layerMorphFactor: [Int: Float] = [:]
+    private func applyPathMorphTick(nodeId: Int, factor: Float) {
+        if let cached = layerMorphFactor[nodeId], cached == factor { return }
+        layerMorphFactor[nodeId] = factor
+        guard handle != 0, let view else { return }
+        let json = "{\"nodeId\":\(nodeId)}"
+        let out: String = json.withCString { cs in
+            takeCString(proteus_layout_svg_morph_path(handle, cs))
+        }
+        guard let data = out.data(using: .utf8),
+              let o = (try? JSONSerialization.jsonObject(with: data)) as? [String: Any],
+              (o["ok"] as? Bool) == true,
+              let segs = o["segs"] as? [Any] else { return }
+        view.setMorphedPath(nodeId: nodeId, segs: segs)
     }
 
     /// ★★**每帧推进（探针入口）**：内核 tick → 写层 → 返回可读 JSON（JS 探针用；帧循环走 `animTickLean`）

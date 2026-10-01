@@ -341,6 +341,21 @@ function bird(w: number, h: number): string {
     + ` Q ${Math.round(w * 0.75)} 0 ${w} ${y}`
 }
 
+/**
+ * ★★**鸟的扑翼态**（路径变形 v1 的第一处用法）——与 `bird` **同结构**（`M Q Q`，
+ *   两点坐标一致）而控制点**下压**（`down` 分数）⇒ 两态之间逐点插值 = 翅膀上下拍。
+ *
+ * 【为什么这是"别人不敢试"的】**CSS 完全不能做**：`d` 属性不可过渡（网页端要靠
+ *   GSAP MorphSVG / flubber 这类库逐点重算）。这里两态声明在树里，一条 `pathMorph`
+ *   通道驱动，内核逐帧插值（唯一 lerp 实现），宿主只翻译结果。
+ */
+function birdFlap(w: number, h: number, down: number): string {
+  const y = Math.round(h * 0.8)
+  const ctl = Math.round(h * down)
+  return `M0 ${y} Q ${Math.round(w * 0.25)} ${ctl} ${Math.round(w * 0.5)} ${y}`
+    + ` Q ${Math.round(w * 0.75)} ${ctl} ${w} ${y}`
+}
+
 /* ────────────────────────── 云海顶点（树与幕共用同一份——单一事实源） ────────────────────────── */
 
 /** 压扁态（零面积——"未起云"基态）：8 点，顶缘全在底边 */
@@ -766,6 +781,9 @@ export function buildInkTree(view: View): string {
       id: INK_IDS.birds[i]!, parentId: INK_IDS.root, position: 'absolute',
       left: R(W * lf), top: R(H * tf), width: bw2, height: bh2,
       svgPath: { d: bird(bw2, bh2), stroke: ink(P.bird, 0.85 - i * 0.1), strokeWidth: sw(0.0048 - i * 0.001) },
+      // ★★路径变形 v1（两态）：翅膀由"平展"到"下扑"——`pathMorph` 通道驱动逐点插值
+      //   （同结构 `M Q Q`；控制点下压 = 拍翅）。三只错时（队形感）。
+      svgPathTo: { d: birdFlap(bw2, bh2, 1.65) },
     })
   })
 
@@ -1075,7 +1093,7 @@ export function createInkProgram(_env: { view: View }): InkProgram {
   // ⑨ 飞鸟掠水（birds）：三只依次落笔 · 掠向下游（X 右移 + Y 下探——队形错时）
   steps.push({
     name: 'birds',
-    note: '飞鸟掠水：三只依次落笔（错时）· 掠向下游（translateX 右移 · translateY 下探 · 队形错时）',
+    note: '飞鸟掠水：三只依次落笔（错时）· 掠向下游 · **扇翅（路径变形：两态逐点插值 · yoyo）**',
     holdMs: 300,
     build: () => {
       const out: EngineAnim[] = []
@@ -1083,6 +1101,11 @@ export function createInkProgram(_env: { view: View }): InkProgram {
         out.push(...onto(id, { kind: 'strokeProgress', from: 0, to: 1, durationMs: 650, delayMs: i * 300, curve: 'easeOut' }))
         out.push(...onto(id, { kind: 'translateX', from: -W0(_env, 0.1), to: W0(_env, 0.12), durationMs: 1800, delayMs: i * 300, curve: 'easeInOut' }))
         out.push(...onto(id, { kind: 'translateY', from: -H0(_env, 0.02), to: H0(_env, 0.03), durationMs: 1800, delayMs: i * 300, curve: 'easeInOut' }))
+        // ★★路径变形 v1：**扇翅**（两态逐点插值 · yoyo 3 次）——线与掠飞同时进行。
+        //   ★这是 CSS 做不到的（`d` 不可过渡）——见 birdFlap 注释。
+        //   ★遍数取 **3（奇数）**：末态 = `to`（下扑位）——判据在逐幕末态探针上读得到**非零**
+        //     因子（"通道通"与"翅膀真的停在扑位"是两件事；偶数遍会 yoyo 回 0，看不出动过）。
+        out.push(...onto(id, { kind: 'pathMorph', from: 0, to: 1, durationMs: 380, delayMs: i * 300 + 500, repeat: 3, direction: 'alternate', curve: 'easeInOut' }))
       })
       return out
     },

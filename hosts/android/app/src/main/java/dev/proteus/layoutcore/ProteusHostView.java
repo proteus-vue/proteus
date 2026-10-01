@@ -668,6 +668,15 @@ public class ProteusHostView extends ViewGroup {
             } else {
                 animGrad.remove(id);
             }
+            // ★★路径变形 v1（@184 的 f32；NaN = 本节点无 B 态——188B 记录）
+            float morphRaw = bb.getFloat();
+            if (!Float.isNaN(morphRaw)) {
+                animMorphFactor.put(id, morphRaw);
+                refreshMorphPath(id, morphRaw);   // 因子变化才真查（内部有缓存判断）
+            } else {
+                animMorphFactor.remove(id);
+                morphCache.remove(id);
+            }
             // ★颜色（2026-10-01）：0xFFFFFFFF = 无该基色 ⇒ 不入覆盖表（保持静态绘制）
             if (rgba != 0xFFFFFFFF) animColor.put(id, rgba);
             if (textRgba != 0xFFFFFFFF) animTextColor.put(id, textRgba);
@@ -681,14 +690,69 @@ public class ProteusHostView extends ViewGroup {
      * 每帧记录长度（与 Rust 侧 `proteus_layout_anim_tick_bin` 对齐——**只在本处定义**）
      *
      * ★★2026-10-01 由 **24B → 28B（底色）→ 32B（文字色）→ 40B（3D）→ 108B（裁剪）
-     *   → 112B（描边）→ 184B（渐变 v2）**：
+     *   → 112B（描边）→ 184B（渐变 v2）→ 188B（路径变形 v1）**：
      *   `id u32 + 五值 f32 + bg u32 + textColor u32`。
      *   末两个 u32 都是打包色 `0xAARRGGBB`；`0xFFFFFFFF` = **无该基色**（忽略该字段）。
      *   ★唯一事实源 = 内核 `ffi.rs` 的 8 个 `extend_from_slice`；iOS / SDK / embed-demo
      *     的常量必须与它同批更新（历史上因两处各写步长而错位解析过）。
      *     `scripts/check-anim-record-bytes.mjs` 从内核推出宽度并与各消费端对账。
      */
-    private static final int ANIM_RECORD_BYTES = 184;
+    private static final int ANIM_RECORD_BYTES = 188;
+
+    /** ★★每帧变形覆盖表（路径变形 v1）：节点 id → 当前因子（NaN 缺省 = 无 B 态） */
+    private final Map<Integer, Float> animMorphFactor = new HashMap<>();
+    /** 变形段的缓存（key = 节点 id；值 = [factor, Path]）——只在因子变化时重取（避免每帧搬运） */
+    private final Map<Integer, Object[]> morphCache = new HashMap<>();
+
+    /**
+     * ★★路径变形 v1：内核按当前因子**算好**的段列表 → 平台 Path（宿主零插值）。
+     *  仅在因子变化时调用（内核 `proteus_layout_svg_morph_path`）。
+     *
+     * 【契约键名（`scripts/check-svg-path-shape.mjs` 门禁覆盖）】两态在树里声明：
+     *  A 态 **`"svgPath"`** · B 态 **`"svgPathTo"`**（同命令序列——内核建树时校验签名）。
+     *  本类负责"变形后的段 → Path"的翻译与描边路径同步；键名透传在 LightsHost CORE_KEYS
+     *  与自绘适配器 LAYOUT_KEYS（两处都必须带上，否则请求树不带 B 态 ⇒ 变形被拒且静默）。
+     */
+    private void refreshMorphPath(int nodeId, float factor) {
+        Object[] cached = morphCache.get(nodeId);
+        if (cached != null && ((Float) cached[0]) == factor) return;
+        try {
+            org.json.JSONObject q = new org.json.JSONObject();
+            q.put("nodeId", nodeId);
+            org.json.JSONObject r = new org.json.JSONObject(RustLayout.svgMorphPath(coreHandle, q.toString()));
+            if (r.optBoolean("ok") != true) return;
+            org.json.JSONArray segs = r.optJSONArray("segs");
+            if (segs == null) return;
+            android.graphics.Path path = new android.graphics.Path();
+            // 与 setNodeSvgStroke 同一翻译规则（键名见 check-svg-path-shape 门禁）
+            for (int i = 0; i < segs.length(); i++) {
+                Object raw = segs.opt(i);
+                if ("Close".equals(raw)) { path.close(); continue; }
+                if (!(raw instanceof org.json.JSONObject)) continue;
+                org.json.JSONObject seg = (org.json.JSONObject) raw;
+                if (seg.has("MoveTo")) {
+                    org.json.JSONArray a = seg.optJSONArray("MoveTo");
+                    path.moveTo((float) a.optDouble(0), (float) a.optDouble(1));
+                } else if (seg.has("LineTo")) {
+                    org.json.JSONArray a = seg.optJSONArray("LineTo");
+                    path.lineTo((float) a.optDouble(0), (float) a.optDouble(1));
+                } else if (seg.has("CubicTo")) {
+                    org.json.JSONArray a = seg.optJSONArray("CubicTo");
+                    path.cubicTo((float) a.optDouble(0), (float) a.optDouble(1),
+                            (float) a.optDouble(2), (float) a.optDouble(3),
+                            (float) a.optDouble(4), (float) a.optDouble(5));
+                } else if (seg.has("QuadTo")) {
+                    org.json.JSONArray a = seg.optJSONArray("QuadTo");
+                    path.quadTo((float) a.optDouble(0), (float) a.optDouble(1),
+                            (float) a.optDouble(2), (float) a.optDouble(3));
+                }
+            }
+            morphCache.put(nodeId, new Object[]{factor, path});
+            // 同步更新描边画的 path（否则变形不反映在线上——"变形只改了数据没改画面"）
+            Object[] sv = nodeSvgStroke.get(nodeId);
+            if (sv != null) nodeSvgStroke.put(nodeId, new Object[]{path, sv[1], sv[2]});
+        } catch (Throwable ignored) { /* 查询失败不阻断（下一帧再试） */ }
+    }
 
     /** ★★每帧渐变覆盖表（渐变 v2）：节点 id → 内核**已混合**的色标（绘制优先用它） */
     private final Map<Integer, TickGrad> animGrad = new HashMap<>();
@@ -798,6 +862,8 @@ public class ProteusHostView extends ViewGroup {
         animClip.clear();      // ★C1 裁剪同（清表 ⇒ 回树里声明的基态形状）
         animStroke.clear();    // ★C2 描边同（清表 ⇒ 回基态：未画）
         animGrad.clear();      // ★渐变 v2 同（清表 ⇒ 回树里声明的 A 态渐变）
+        animMorphFactor.clear(); // ★路径变形 v1 同（清表 ⇒ 回 A 态路径）
+        morphCache.clear();
         invalidate();
         return out;
     }
@@ -861,6 +927,11 @@ public class ProteusHostView extends ViewGroup {
                 // ★★渐变（v1 · 2026-10-01）：**真读宿主绘制真源**（该 cmd 的 GradSpec——`drawCmds`
                 //   用的就是它）——判据据此断言"渐变真的挂上了"（与 iOS 读层上 type/色标数同语义）。
                 //   形态 "linear:2" / "radial:3"；无 ⇒ 空串。
+                String morphStr = "";
+                {
+                    final Float mf = animMorphFactor.get(id);
+                    if (mf != null) morphStr = String.format("%.4f", mf);
+                }
                 String gradStr = "";
                 {
                     // ★v2：每帧覆盖优先（内核已混合 ⇒ 报实时色标数——判据据此断言"动画中色标在变"）
@@ -900,6 +971,7 @@ public class ProteusHostView extends ViewGroup {
                       .append(",\"rotateX\":0,\"rotateY\":0")
                       .append(",\"strokeProgress\":").append(strokeProg)
                       .append(",\"gradient\":\"").append(gradStr).append("\"")
+                      .append(",\"pathMorph\":\"").append(morphStr).append("\"")
                       .append(",\"bg\":\"").append(bgHex)
                       .append("\",\"textColor\":\"").append(textHex).append("\"}");
                 } else {
@@ -911,6 +983,7 @@ public class ProteusHostView extends ViewGroup {
                       .append(",\"clip\":\"").append(clipStr).append("\"")
                       .append(",\"strokeProgress\":").append(strokeProg)
                       .append(",\"gradient\":\"").append(gradStr).append("\"")
+                      .append(",\"pathMorph\":\"").append(morphStr).append("\"")
                       .append(",\"bg\":\"").append(bgHex)
                       .append("\",\"textColor\":\"").append(textHex).append("\"}");
                 }
