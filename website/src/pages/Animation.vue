@@ -15,6 +15,12 @@ import { locale } from '../i18n'
 import FeatureIcon from '../components/FeatureIcon.vue'
 import MobileStage from '../components/anim/MobileStage.vue'
 import PresetPreview from '../components/anim/PresetPreview.vue'
+// ★★产品页即炫技场：页面自己的动效也由**引擎真包**驱动（真编译 + 真求值 + 声明式编排）
+//   见 src/motion/engine-motion.ts 的文件头（映射表与诚实边界都在那里）
+import EngineMark from '../components/anim/EngineMark.vue'
+import MotionFlow from '../components/anim/MotionFlow.vue'
+import { useMotion, useChoreography, MOTION } from '../motion/use-motion'
+import { SITE_STATS, asElement, compile, countUp, createRunner, motionAllowed, settle } from '../motion/engine-motion'
 import { highlight } from '@proteus-vue/docs'
 // ★真引擎：批次/规格/预设目录/跨语言契约常量
 import { ANIM_KIND_ID, CURVE_ID, appTransitions, listAnimRules, routeTransitionBatches } from '@proteus-vue/animation'
@@ -39,6 +45,8 @@ const T = {
     ctaDocs: '读文档',
     ctaDemo: '看真机演示',
     heroPills: ['Rust 内核求值', '零主线程参与', '编译期拦截'],
+    proofLabel: '本页自己的动效 = 引擎真包驱动',
+    proofDetail: '条声明式指令已编译（其中 {loops} 条循环）· 曲线求值走与内核对拍的 TS 镜像',
     stageCaption: '真指令驱动 · 非示意图',
     pillars: [
       {
@@ -69,8 +77,8 @@ const T = {
         title: '编译期拦截，零静默降级',
         desc: '合成属性（transform / opacity）在编译期判定；转场里误改布局属性编译报错、宿主明确拒绝——「会不会掉帧」不再靠调参赌。',
         metrics: [
-          ['5', '约束被编译期拦下'],
-          ['26', '条 AI 说明书'],
+          ['6', '约束被编译期拦下'],
+          ['48', '条 AI 说明书'],
           ['11/12', '验收项达标'],
         ],
       },
@@ -136,6 +144,8 @@ const T = {
     ctaDocs: 'Read the docs',
     ctaDemo: 'See it on a device',
     heroPills: ['Kernel-evaluated', 'Zero main-thread', 'Compile-time gates'],
+    proofLabel: "This page's own motion is driven by the real engine package",
+    proofDetail: 'declarative instructions compiled (including {loops} looping) · curves evaluated by the TS mirror golden-tested against the kernel',
     stageCaption: 'Real instructions · not a mockup',
     pillars: [
       {
@@ -166,8 +176,8 @@ const T = {
         title: 'Compile-time gates, no silent downgrade',
         desc: 'Composited properties (transform / opacity) are decided at compile time; touching layout properties inside a transition fails compilation and is rejected by the host — jank stops being a tuning gamble.',
         metrics: [
-          ['5', 'constraints gated'],
-          ['26', 'AI manual entries'],
+          ['6', 'constraints gated'],
+          ['48', 'AI manual entries'],
           ['11/12', 'acceptance items met'],
         ],
       },
@@ -311,10 +321,77 @@ const compiledReadout = computed(() =>
   ),
 )
 
+/* ── ★指令时间轴：每条动画条由**引擎编排**逐条推入（换转场 ⇒ 重演一次——"演示区也是演出"） ── */
+const tlRowsEl = ref<HTMLElement>()
+const tlChoreo = useChoreography(
+  tlRowsEl,
+  '.tl-row',
+  () => [
+    { kind: 'translateX', from: 30, to: 0, durationMs: 520, curve: 'easeOut' },
+    { kind: 'opacity', from: 0, to: 1, durationMs: 380, curve: 'easeOut' },
+  ],
+  { order: 'index', staggerMs: 42 },
+)
+watch([picked, direction], () => {
+  requestAnimationFrame(() => tlChoreo.replay())
+})
+
+/* ── ★曲线自画：曲线 SVG 的 path 由 **strokeProgress** 逐点画出（每次换曲线/拖动后重画） ── */
+const curveDrawEl = ref<SVGPathElement>()
+const curveDotEl = ref<SVGCircleElement>()
+const curveStrokeLen = ref(0)
+/** 曲线重画一次（切曲线 / 进入视口时）——声明就是"从 0 画到 1" */
+function replayCurveDraw(): void {
+  const el = curveDrawEl.value
+  if (!el) return
+  const len = typeof el.getTotalLength === 'function' ? el.getTotalLength() : 300
+  curveStrokeLen.value = len
+  const anims = compile([{ kind: 'strokeProgress', from: 0, to: 1, durationMs: 780, curve: 'easeInOut' }], 1)
+  const slots = new Map<number, SVGElement>([[1, el]])
+  if (!motionAllowed()) {
+    settle(anims, slots)
+    return
+  }
+  const r = createRunner(anims, slots, { strokeLens: new Map([[1, len]]) })
+  r.play()
+  curveRunner?.stop()
+  curveRunner = r
+}
+let curveRunner: { stop: () => void } | null = null
+
+/* ── ★CTA 光晕呼吸（glowIntensity 无限循环——与真机月光晕同一条声明） ── */
+const ctaGlowEl = ref<HTMLElement>()
+const ctaTitleEl = ref<HTMLElement>()
+onMounted(() => {
+  const glow = asElement(ctaGlowEl.value) as HTMLElement | null
+  if (glow) {
+    const anims = compile(
+      [
+        { kind: 'glowIntensity', from: 0.25, to: 1, durationMs: 2600, repeat: 'infinite', direction: 'alternate', curve: 'easeInOut' },
+        { kind: 'opacity', from: 0.55, to: 1, durationMs: 2600, repeat: 'infinite', direction: 'alternate', curve: 'easeInOut' },
+      ],
+      1,
+    )
+    const slots = new Map<number, HTMLElement>([[1, glow]])
+    if (motionAllowed()) {
+      const r = createRunner(anims, slots)
+      r.play()
+      ctaRunner = r
+    } else {
+      settle(anims, slots)
+    }
+  }
+})
+let ctaRunner: { stop: () => void } | null = null
+
 /* ── 曲线区 ── */
 const CURVES = Object.entries(CURVE_ID) as Array<[string, number]>
 const curveId = ref<number>(CURVE_ID.easeOut)
 const curveU = ref(0.5)
+// ★切换曲线 ⇒ 曲线重画（观感是"这条曲线被重新演算出来"——同一条 strokeProgress 声明）
+watch(curveId, () => {
+  requestAnimationFrame(replayCurveDraw)
+})
 const curveValue = computed(() => curveEval(curveId.value, curveU.value))
 const curvePath = computed(() => {
   const N = 64
@@ -364,7 +441,9 @@ const ruleCounts = computed(() => ({
 }))
 
 /* ── 证据区（数据卡） ── */
-const EVIDENCE = computed<Array<{ v: string; u: string; l: string; src: string }>>(() =>
+const EVIDENCE = computed<
+  Array<{ v: string; u: string; l: string; src: string; count?: number; decimals?: number; unitSuffix?: string }>
+>(() =>
   isEn.value
     ? [
         { v: '59.3', u: 'FPS', l: 'Transition frame rate (iPhone 12 · at the 60Hz ceiling)', src: 'check-anim-rt2.py' },
@@ -379,16 +458,16 @@ const EVIDENCE = computed<Array<{ v: string; u: string; l: string; src: string }
         { v: '4', u: 'channels', l: 'Colour: one declaration → four kernel channels (verified on device, both targets)', src: 'check-anim-rt2.py' },
       ]
     : [
-        { v: '59.3', u: 'FPS', l: '转场帧率（iPhone 12 · 已达 60Hz 上限）', src: 'check-anim-rt2.py' },
-        { v: '0.679', u: 'ms', l: '帧耗时 p95（预算 8.33ms）', src: 'check-anim-rt2.py' },
+        { v: '59.3', u: 'FPS', l: '转场帧率（iPhone 12 · 已达 60Hz 上限）', src: 'check-anim-rt2.py', count: 59.3, decimals: 1 },
+        { v: '0.679', u: 'ms', l: '帧耗时 p95（预算 8.33ms）', src: 'check-anim-rt2.py', count: 0.679, decimals: 3 },
         { v: '0', u: '/ 179', l: '3.0s 持续测量零掉帧', src: 'check-anim-rt2.py' },
-        { v: '1.0', u: 'ms', l: '600ms 窗口主线程 CPU（tick 对照 17.4ms）', src: 'MA0-RT' },
+        { v: '1.0', u: 'ms', l: '600ms 窗口主线程 CPU（tick 对照 17.4ms）', src: 'MA0-RT', count: 1, decimals: 1 },
         { v: '0', u: 'delta', l: '动画期主线程绘制增量（Android）', src: 'check-platform-anim.py' },
-        { v: '215', u: '节点', l: 'FLIP 布局动画 · p95 0.713ms', src: 'check-anim-rt2.py' },
-        { v: '84.5', u: '×', l: '指令路径 vs JS 路径（N=1000）', src: 'rt0-anim-spike.md' },
+        { v: '215', u: '节点', l: 'FLIP 布局动画 · p95 0.713ms', src: 'check-anim-rt2.py', count: 215, decimals: 0 },
+        { v: '84.5', u: '×', l: '指令路径 vs JS 路径（N=1000）', src: 'rt0-anim-spike.md', count: 84.5, decimals: 1 },
         { v: '1:1', u: '镜像', l: '路由转场双向 · 双端', src: 'check-app-stack.py' },
-        { v: '115.8', u: 'FPS', l: '120Hz 安卓设备内核帧循环（vsync p50 8.328ms ≈ 预算）', src: 'check-kernel-anim.py' },
-        { v: '4', u: '通道', l: '颜色 = 一个声明 → 四条内核通道（双端真读层验证）', src: 'check-anim-rt2.py' },
+        { v: '115.8', u: 'FPS', l: '120Hz 安卓设备内核帧循环（vsync p50 8.328ms ≈ 预算）', src: 'check-kernel-anim.py', count: 115.8, decimals: 1 },
+        { v: '4', u: '通道', l: '颜色 = 一个声明 → 四条内核通道（双端真读层验证）', src: 'check-anim-rt2.py', count: 4, decimals: 0 },
       ],
 )
 
@@ -479,6 +558,26 @@ const batch = compileRoute(spec, { enter: a, exit: b })
   ),
 )
 
+/* ── ★产品页自证：站内指令计数（Hero 徽标 + 证据区） ── */
+/** 每张证据卡的 DOM 查询式（数字生长用；挂载后按 selector 查——v-for 的 ref 数组顺序不保证） */
+const evNodes = { value: [] as HTMLElement[] }
+/** 证据区编排容器（保留句柄：将来可重播/联动；当前由 MotionFlow 自行驱动） */
+const evFlow = ref<{ replay: () => void; stop: () => void } | null>(null)
+const siteAnims = ref(0)
+const siteLoops = ref(0)
+/** Hero 徽标读数（挂载后从引擎计数取；reduced-motion 时也照常显示真实计数） */
+function readSiteStats(): void {
+  siteAnims.value = SITE_STATS.declarative
+  siteLoops.value = SITE_STATS.loops
+}
+/** 大标题两行的入场（引擎编译的声明；逐行错峰由 delayMs 编排） */
+const h1a = ref<HTMLElement>()
+const h1b = ref<HTMLElement>()
+const leadEl = ref<HTMLElement>()
+useMotion(h1a, MOTION.riseIn(30, 820), { whenVisible: false })
+useMotion(h1b, MOTION.riseIn(30, 820).map((d) => ({ ...d, delayMs: 120 })), { whenVisible: false })
+useMotion(leadEl, MOTION.riseIn(20, 900).map((d) => ({ ...d, delayMs: 260 })), { whenVisible: false })
+
 /* ── 滚动显现（与首页同机制） ── */
 const rootEl = ref<{ $el?: HTMLElement } | null>(null)
 const motionOk = !(typeof matchMedia === 'function' && matchMedia('(prefers-reduced-motion: reduce)').matches)
@@ -486,22 +585,87 @@ let io: IntersectionObserver | null = null
 onMounted(() => {
   const el = rootEl.value?.$el
   const nodes = el ? Array.from(el.querySelectorAll('[data-reveal]')) : []
+  // ★reduced-motion / 无 IO ⇒ 直达终态，但**不 return**（后续 setup 仍要跑——
+  //   此前这里早退 ⇒ 计数器/曲线自画的 setup 在降级环境里从不执行，是实测缺陷）
   if (!motionOk || typeof IntersectionObserver !== 'function') {
     nodes.forEach((n) => n.classList.add('revealed'))
-    return
-  }
-  io = new IntersectionObserver(
-    (entries) => {
-      for (const e of entries) {
-        if (e.isIntersecting) {
-          ;(e.target as HTMLElement).classList.add('revealed')
-          io?.unobserve(e.target)
+  } else {
+    io = new IntersectionObserver(
+      (entries) => {
+        for (const e of entries) {
+          if (e.isIntersecting) {
+            ;(e.target as HTMLElement).classList.add('revealed')
+            io?.unobserve(e.target)
+          }
         }
+      },
+      { rootMargin: '0px 0px -8% 0px', threshold: 0.08 },
+    )
+    nodes.forEach((n) => io?.observe(n))
+  }
+  // ★曲线自画：进入视口时演一次（与印记同一套"画出来"的语言）
+  const curveEl = curveDrawEl.value
+  if (curveEl) {
+    const curveIO = new IntersectionObserver(
+      (entries) => {
+        for (const e of entries) {
+          if (e.isIntersecting) {
+            replayCurveDraw()
+            curveIO.disconnect()
+          }
+        }
+      },
+      { threshold: 0.4 },
+    )
+    curveIO.observe(curveEl)
+    onUnmounted(() => curveIO.disconnect())
+  }
+  // ★自证读数：等子组件（EngineMark / MotionFlow）挂载完成后再统计（下一帧）
+  requestAnimationFrame(() => {
+    readSiteStats()
+    // ★数字生长：**证据区进入视口**才计（挂载即计是缺陷——用户滚到时数字早已跳完）
+    const rootElResolved = asElement(rootEl.value) as HTMLElement | null
+    const cards = rootElResolved
+      ? Array.from(rootElResolved.querySelectorAll<HTMLElement>('.ev[data-count]'))
+      : []
+    if (!cards.length) return
+    // ★观察器统一建（**与动效开关无关**）：没有它，reduced-motion/无 IO 的环境里
+    //   卡片滚进视口也永远停在 0（实测缺陷）——降级只在"回调里怎么写"这一层分叉。
+    if (typeof IntersectionObserver !== 'function') {
+      for (const el of cards) {
+        const target = el.querySelector<HTMLElement>('[data-count-target]')
+        if (target) target.textContent = el.dataset.count ?? target.textContent
       }
-    },
-    { rootMargin: '0px 0px -8% 0px', threshold: 0.08 },
-  )
-  nodes.forEach((n) => io?.observe(n))
+      return
+    }
+    const counterIO = new IntersectionObserver(
+      (entries) => {
+        for (const e of entries) {
+          if (!e.isIntersecting) continue
+          const el = e.target as HTMLElement
+          counterIO.unobserve(el)
+          const target = el.querySelector<HTMLElement>('[data-count-target]')
+          const n = Number(el.dataset.count)
+          if (!target || !Number.isFinite(n)) continue
+          if (!motionOk) {
+            // reduced-motion：直达终值（countUp 内部也会判，但这里显式写更直观）
+            target.textContent = `${el.dataset.prefix ?? ''}${n.toFixed(Number(el.dataset.decimals ?? '0'))}${el.dataset.suffix ?? ''}`
+            continue
+          }
+          countUp(target, n, {
+            durationMs: 1200,
+            decimals: Number(el.dataset.decimals ?? '0'),
+            prefix: el.dataset.prefix ?? '',
+            suffix: el.dataset.suffix ?? '',
+            curve: 1,
+          })
+        }
+      },
+      { threshold: 0.35 },
+    )
+    for (const el of cards) counterIO.observe(el)
+    onUnmounted(() => counterIO.disconnect())
+  })
 })
 onUnmounted(() => {
   io?.disconnect()
@@ -520,11 +684,11 @@ onUnmounted(() => {
         <p-stack direction="column" :gap="22" class="hero-copy">
           <p-text class="chip"><FeatureIcon name="bolt" /><span>{{ C.chip }}</span></p-text>
           <p-heading :level="1" v-p-fluid="'font-size(36, 58)'" class="hero-h1">
-            <span class="h1-l1">{{ C.h1line1 }}</span>
-            <em class="h1-l2">{{ C.h1line2 }}</em>
+            <span ref="h1a" class="h1-l1">{{ C.h1line1 }}</span>
+            <em ref="h1b" class="h1-l2">{{ C.h1line2 }}</em>
           </p-heading>
           <p-text v-p-fluid="'font-size(17, 21)'" class="hero-tag">{{ C.tagline }}</p-text>
-          <p-text class="hero-lead">{{ C.lead }}</p-text>
+          <p-text ref="leadEl" class="hero-lead">{{ C.lead }}</p-text>
           <p-stack direction="row" :gap="14" wrap class="hero-cta">
             <router-link to="/docs/animation/00-overview" class="btn btn-primary">{{ C.ctaDocs }}</router-link>
             <a href="#demo" class="btn btn-ghost">{{ C.ctaDemo }}</a>
@@ -532,8 +696,16 @@ onUnmounted(() => {
           <p-stack direction="row" :gap="10" wrap class="hero-pills">
             <span v-for="p in C.heroPills" :key="p" class="pill">{{ p }}</span>
           </p-stack>
+          <!-- ★★产品页自证：本页动效由引擎真包编译（数字真实统计——不是装饰文案） -->
+          <p-view class="proof">
+            <span class="proof-dot" aria-hidden="true" />
+            <span class="proof-label">{{ C.proofLabel }}</span>
+            <span class="proof-num">{{ siteAnims }}</span>
+            <span class="proof-detail">{{ C.proofDetail.replace('{loops}', String(siteLoops)) }}</span>
+          </p-view>
         </p-stack>
         <p-view class="hero-stage">
+          <EngineMark class="hero-mark" />
           <MobileStage
             :incoming="plan.incoming.anims"
             :outgoing="plan.outgoing.anims"
@@ -546,9 +718,21 @@ onUnmounted(() => {
         </p-view>
       </p-grid>
 
-      <!-- ═══════════ 三个杀手锏 ═══════════ -->
+      <!-- ═══════════ 三个杀手锏（★引擎编排驱动：diagonal 错峰入场 + 指针微视差） ═══════════ -->
       <p-view data-reveal class="sec">
-        <p-grid :min-col-width="300" :gap="22">
+        <MotionFlow
+          :order="'diagonal'"
+          :stagger-ms="110"
+          :cols="3"
+          :min-col-width="300"
+          :gap="22"
+          drive="pointer"
+          :make="() => [
+            { kind: 'translateY', from: 46, to: 0, durationMs: 420, curve: 'easeOut' },
+            { kind: 'rotate', from: -2.2, to: 0, durationMs: 420, curve: 'easeOut' },
+            { kind: 'opacity', from: 0.55, to: 1, durationMs: 320, curve: 'easeOut' },
+          ]"
+        >
           <p-view v-for="p in C.pillars" :key="p.n" class="pcard">
             <p-stack direction="row" align="center" :gap="12" class="pcard-head">
               <span class="pcard-no">{{ p.n }}</span>
@@ -563,7 +747,7 @@ onUnmounted(() => {
               </p-view>
             </p-view>
           </p-view>
-        </p-grid>
+        </MotionFlow>
       </p-view>
 
       <!-- ═══════════ 演示 ═══════════ -->
@@ -614,7 +798,7 @@ onUnmounted(() => {
                 <span class="tl-title">{{ C.timeline }}</span>
                 <span class="tl-total">{{ totalMs }}ms</span>
               </p-stack>
-              <p-view class="tl-rows">
+              <p-view ref="tlRowsEl" class="tl-rows">
                 <p-view v-for="(b, i) in bars" :key="i" class="tl-row" :class="`tl-row--${b.pane}`">
                   <span class="tl-pane">{{ b.pane === 'in' ? 'A' : 'B' }}</span>
                   <span class="tl-bar" :style="{ marginLeft: b.left + '%', width: b.width + '%' }">
@@ -654,7 +838,7 @@ onUnmounted(() => {
               <line x1="0" y1="0" x2="0" y2="100" class="axis" />
               <line :x1="marker.x" :y1="100" :x2="marker.x" :y2="marker.y" class="guide" />
               <line x1="0" :y1="marker.y" :x2="marker.x" :y2="marker.y" class="guide" />
-              <path :d="curvePath" class="curve" />
+              <path ref="curveDrawEl" :d="curvePath" class="curve" :style="{ strokeDasharray: curveStrokeLen || undefined, strokeDashoffset: curveStrokeLen ? 0 : undefined }" />
               <circle :cx="marker.x" :cy="marker.y" r="3.4" class="dot" />
               <circle cx="0" cy="100" r="2.4" class="anchor" />
               <circle cx="200" cy="0" r="2.4" class="anchor" />
@@ -871,15 +1055,34 @@ onUnmounted(() => {
           <span class="sec-rule" />
         </p-stack>
         <p-text class="sec-note">{{ C.evidenceNote }}</p-text>
-        <p-grid :min-col-width="204" :gap="18">
-          <p-view v-for="(e, i) in EVIDENCE" :key="i" class="ev">
+        <!-- ★引擎编排入场（serpentine 错峰）+ 数字由引擎曲线**生长**到真机读数 -->
+        <MotionFlow
+          ref="evFlow"
+          :order="'serpentine'"
+          :stagger-ms="64"
+          :cols="4"
+          :min-col-width="204"
+          :gap="18"
+          :make="() => [
+            { kind: 'translateY', from: 34, to: 0, durationMs: 620, curve: 'easeOut' },
+            { kind: 'opacity', from: 0, to: 1, durationMs: 460, curve: 'easeOut' },
+          ]"
+        >
+          <p-view
+            v-for="(e, i) in EVIDENCE"
+            :key="i"
+            class="ev"
+            :data-count="e.count ?? ''"
+            :data-decimals="e.decimals ?? 0"
+            :data-suffix="e.unitSuffix ?? ''"
+          >
             <p-stack direction="row" align="baseline" :gap="6" class="ev-num">
-              <span class="ev-v">{{ e.v }}</span><span class="ev-u">{{ e.u }}</span>
+              <span class="ev-v" data-count-target>{{ e.count !== undefined ? '0' : e.v }}</span><span class="ev-u">{{ e.u }}</span>
             </p-stack>
             <p-text class="ev-l">{{ e.l }}</p-text>
             <code class="ev-src">{{ e.src }}</code>
           </p-view>
-        </p-grid>
+        </MotionFlow>
       </p-view>
 
       <!-- ═══════════ 怎么写 ═══════════ -->
@@ -906,8 +1109,8 @@ onUnmounted(() => {
 
       <!-- ═══════════ CTA ═══════════ -->
       <p-view data-reveal class="cta">
-        <p-view class="cta-glow" aria-hidden="true" />
-        <p-heading :level="3" v-p-fluid="'font-size(20, 26)'" class="cta-title">Morpheus</p-heading>
+        <p-view ref="ctaGlowEl" class="cta-glow" aria-hidden="true" />
+        <p-heading ref="ctaTitleEl" :level="3" v-p-fluid="'font-size(20, 26)'" class="cta-title">Morpheus</p-heading>
         <p-text class="cta-sub">{{ isEn ? 'Declarative animation engine' : '声明式动画引擎' }} · v0.3</p-text>
         <router-link to="/docs/animation/00-overview" class="btn btn-primary cta-btn">{{ C.docCta }}</router-link>
       </p-view>
@@ -1002,7 +1205,43 @@ onUnmounted(() => {
 .btn-ghost:hover { border-color: var(--brand); }
 .hero-pills { margin-top: 10px; }
 .pill { font-size: 12px; color: var(--muted); border: 1px solid var(--line); background: rgba(20, 20, 25, 0.7); border-radius: var(--radius-pill); padding: 4px 11px; }
-.hero-stage { display: flex; justify-content: center; }
+.hero-stage { display: flex; flex-direction: column; align-items: center; gap: 18px; }
+/* ★Hero 印记：引擎自己"画"出来的标志（strokeProgress + glowIntensity——见 EngineMark.vue） */
+.hero-mark { display: block; }
+/* ★产品页自证徽标：本页动效由引擎真包编译（数字真实统计） */
+.proof {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  flex-wrap: wrap;
+  margin-top: 6px;
+  padding: 9px 14px;
+  border: 1px solid rgba(124, 92, 255, 0.28);
+  border-radius: var(--radius-md);
+  background: rgba(124, 92, 255, 0.06);
+  width: fit-content;
+}
+.proof-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--brand);
+  box-shadow: 0 0 10px rgba(124, 92, 255, 0.9);
+  animation: proof-pulse 2.4s ease-in-out infinite;
+}
+@keyframes proof-pulse {
+  0%, 100% { opacity: 0.45; }
+  50% { opacity: 1; }
+}
+.proof-label { font-size: 12px; color: var(--muted); }
+.proof-num {
+  font-family: var(--mono);
+  font-size: 15px;
+  font-weight: 700;
+  color: var(--brand-ink);
+  letter-spacing: -0.01em;
+}
+.proof-detail { font-size: 11.5px; color: var(--dim); }
 /* ═══════════ 分节通式 ═══════════ */
 .sec { margin-top: 128px; }
 .sec-head { margin-bottom: 12px; }
@@ -1108,6 +1347,8 @@ onUnmounted(() => {
 .axis { stroke: var(--line); stroke-width: 0.7; }
 .guide { stroke: rgba(255, 138, 92, 0.4); stroke-width: 0.7; stroke-dasharray: 3 3; }
 .curve { fill: none; stroke: url(#curveStroke); stroke-width: 2; stroke-linecap: round; }
+/* ★初值"未画"（引擎写入 dash 之前不露整条线；JS 就绪后被 strokeProgress 接管） */
+.curve[style] { stroke-dasharray: var(--len, 400); }
 .dot { fill: var(--accent); }
 .anchor { fill: var(--brand-ink); }
 .curve-facts { margin-top: 20px; }
