@@ -424,13 +424,18 @@ public class MainActivity extends Activity {
                     .postDelayed(new Runnable() { public void run() { lightsRun(prog, rep, false); } }, 300);
             // ★★长卷探索：**自驱动**（手势 + 收尾都在进程内——不依赖 `adb input` 注入，
             //   那条路在本机被 INJECT_EVENTS 权限拒（见 LightsHost.driveHorizontalGestures 注释）。
-            //   时序：建树（~几十 ms）→ 等演出就绪 → 横挥 6 步 → 收尾出报告。
+            //   时序：建树（~几十 ms）→ 等演出就绪 → 横挥 3 步（留出抛滑余量）→ **等惯性停稳** → 收尾出报告。
             if (isInkScroll) {
                 new android.os.Handler(android.os.Looper.getMainLooper()).postDelayed(new Runnable() {
                     public void run() {
                         if (lightsHost == null) { sb.append("  ⚠ 长卷驱动：无宿主\n"); return; }
-                        lightsHost.driveHorizontalGestures(6);
-                        lightsHost.finishScrollShow();
+                        // ★先采**起点视觉签名**（收尾时对比 ⇒ "画面真的随滚动变了"）
+                        lightsHost.captureScrollStartSignature();
+                        // ★3 步（2340px）留 ~300px 余量给**抛滑**吃满——若 6 步会先拖到上限，
+                        //   末次 UP 的 fling 无路可走 ⇒ "惯性真的推动了画布"就无从证明（判据 ③d）。
+                        lightsHost.driveHorizontalGestures(3);
+                        // ★条件等待：等惯性自然停稳再收尾（"等它停"而不是"等固定时长"——零盲等）
+                        lightsHost.finishScrollShowWhenSettled(0);
                     }
                 }, 2500);
             }
@@ -1413,7 +1418,9 @@ public class MainActivity extends Activity {
      *   测试壳（MainActivity）与两个演示壳（LightsDemoActivity / FlipDemoActivity）都走这里——
      *   差别只在三个参数（节目名 / 报告名 / 是否循环）。**同一份驱动逻辑，不在壳里复制**。
      */
-    static void startProgramShow(final android.app.Activity act, final android.view.ViewGroup root,
+    // ★★返回值 = 建成的宿主（2026-10-01：演示壳**旋转重挂**需要停旧帧循环——见
+    //   InkScrollDemoActivity.onConfigurationChanged；失败路径返回 null，调用方可判空）。
+    static LightsHost startProgramShow(final android.app.Activity act, final android.view.ViewGroup root,
                                  final String programKind, final String reportFile, final boolean loop) {
         try {
             // 演示壳没有场景清理（它们是全新 Activity，root 本就空）
@@ -1421,7 +1428,7 @@ public class MainActivity extends Activity {
             if (!QuickJsEngine.isAvailable()) {
                 writeReportStatic(act, reportFile, "{\"ok\":false,\"error\":"
                         + org.json.JSONObject.quote("JS 引擎未加载：" + QuickJsEngine.getLoadError()) + "}");
-                return;
+                return null;
             }
             String bundle;
             try (java.io.InputStream is = act.getAssets().open("bundle-lights.js")) {
@@ -1443,7 +1450,7 @@ public class MainActivity extends Activity {
             if (!load.ok) {
                 writeReportStatic(act, reportFile, "{\"ok\":false,\"error\":"
                         + org.json.JSONObject.quote("bundle eval 失败：" + load.error) + "}");
-                return;
+                return null;
             }
             org.json.JSONObject args = new org.json.JSONObject();
             args.put("tiles", 800);
@@ -1456,7 +1463,7 @@ public class MainActivity extends Activity {
             if (!run.ok) {
                 writeReportStatic(act, reportFile, "{\"ok\":false,\"error\":"
                         + org.json.JSONObject.quote("入口调用失败：" + run.error) + "}");
-                return;
+                return null;
             }
             // ★★回执 `ok=false`（如建树失败/参数被拒）必须**当场暴露**——2026-10-01 真机教训：
             //   此前只查 eval 是否成功（run.ok），而入口**内部**失败时回执是 `{"ok":false,...}`——
@@ -1468,7 +1475,7 @@ public class MainActivity extends Activity {
                     writeReportStatic(act, reportFile, "{\"ok\":false,\"error\":"
                             + org.json.JSONObject.quote("入口回执非 ok：" + run.value) + "}");
                     android.util.Log.e("proteus", "节目入口回执非 ok（" + programKind + "）：" + run.value);
-                    return;
+                    return null;
                 }
             } catch (Throwable ignored) { /* 回执非 JSON ⇒ 下面 notePlan 会按缺失判红 */ }
             // ★★滚动模式：把**手势位置**接到宿主记账（判据从报告读 scroll_min/max——
@@ -1493,10 +1500,12 @@ public class MainActivity extends Activity {
                         + " mount_ms=" + ro.optDouble("mount_ms") + " plan=" + ro.optJSONArray("plan"));
             } catch (Throwable ignored) { /* 解析失败 ⇒ plan 空 ⇒ 判据按缺失判红（如实暴露） */ }
             host.startShow();
+            return host;
         } catch (Throwable t) {
             writeReportStatic(act, reportFile, "{\"ok\":false,\"error\":"
                     + org.json.JSONObject.quote(t.getClass().getSimpleName() + ": " + t.getMessage()) + "}");
             android.util.Log.e("proteus", "节目启动失败(" + programKind + ")", t);
+            return null;
         }
     }
 

@@ -11,8 +11,9 @@
 //   （三层笔触色阶与宽度关系）· **多边形 16 参数契约**（内核 ≤8 点）· 确定性。
 import { describe, it, expect } from 'vitest'
 import {
-  buildInkTree, createInkProgram, createInkScrollProgram, INK_IDS, INK_SAMPLE_IDS, INK_PALETTE,
-  blend, ink, MIST_FLAT, MIST_A, MIST_B, MIST_C, RANGES, scrollMetrics,
+  buildInkTree, buildInkScrollTree, createInkProgram, createInkScrollProgram, INK_IDS,
+  INK_SAMPLE_IDS, INK_PALETTE, blend, ink, MIST_FLAT, MIST_A, MIST_B, MIST_C, RANGES,
+  scrollMetrics, scrollCanvasWidth,
 } from '../hosts/shared/bridge/showcase-ink'
 import { spanMs } from '../hosts/shared/bridge/showcase-lights'
 
@@ -599,33 +600,54 @@ describe('Morpheus 炫技场 · 第四个节目（墨绘·山水卷）', () => {
     expect(river.anims.filter((x) => x.kind === 36).length, 'river 幕水草 skewX').toBe(4)
   })
 
-  it('★★手卷探索（滚动驱动）：100 条通道同一条轴 —— 卷筒滚动展卷（画固定、不再整体平移）', () => {
+  it('★★手卷浏览（宽卷 + 滚动偏移）：3.2 屏宽画布 · 卷轴补偿 6 条 · 环境动效无限循环', () => {
+    const total = scrollCanvasWidth(VIEW)
+    const range = total - VIEW.width
     const prog = createInkScrollProgram({ view: VIEW })
     expect(prog.plan()).toEqual(['scroll'])
     const act = prog.next()!
     expect(prog.next(), '手卷只有一幕').toBeNull()
-    // ★规模与构成：卷筒/幕布位移 + clip（幕布/江水/月/云/题款/印）+ stroke（山/瀑/水纹/竹/舟/鸟）
-    expect(act.anims.length).toBeGreaterThan(90)
-    expect(act.clipAnims).toBeGreaterThan(40)
-    expect(act.strokeAnims).toBeGreaterThan(20)
-    // ★★**全部通道都挂在滚动窗口上**（`drive:'progress'` + scrollFrom/scrollTo）
-    const scrollDriven = act.anims.filter((x) => x.drive === 1 && x.scrollFrom !== undefined)
-    expect(scrollDriven.length, '滚动驱动通道数').toBe(act.anims.length)
-    // ★★**回归锁（首版全黑缺陷）**：root（id=1）**不得有任何平移通道**——画固定居中，
-    //   由卷筒滚动"铺开"；整体平移会把画推出屏幕（收尾截图全黑，判据漏检）
-    expect(
-      act.anims.filter((x) => x.nodeId === INK_IDS.root && (x.kind === 0 || x.kind === 1)).length,
-      'root 不应有平移（画固定）',
-    ).toBe(0)
-    // 卷筒：滚动 0 → 展完（txOpen）——与幕布同窗口（0..1 全程）
-    const roll = act.anims.find((x) => x.nodeId === INK_IDS.rollCylinder && x.kind === 0)!
-    expect(roll.from).toBe(0)
-    expect(roll.to).toBe(scrollMetrics(VIEW).txOpen)
-    expect(roll.scrollFrom, '卷筒窗口起点').toBe(0)
-    // 幕布：同窗口（边卷边露）
-    const curtain = act.anims.find((x) => x.nodeId === INK_IDS.curtain)!
-    expect(curtain.scrollFrom).toBe(roll.scrollFrom)
-    expect(curtain.scrollTo).toBe(roll.scrollTo)
+    // 行程 = 画布宽 − 视口宽（浏览器的横向滚动口径）
+    expect(act.scrollRange).toBe(range)
+    // ★卷轴补偿：6 条（两轴 × 筒身+上下轴头）——`drive=1` + **linear**（恒等映射；线性是硬要求）
+    const rollerIds = [
+      INK_IDS.rollCylinder, INK_IDS.rollKnobTop, INK_IDS.rollKnobBottom,
+      INK_IDS.rollerRightBar, INK_IDS.rollerRightKnobTop, INK_IDS.rollerRightKnobBottom,
+    ] as const
+    const comp = act.anims.filter((x) => (rollerIds as readonly number[]).includes(x.nodeId))
+    expect(comp.length, '卷轴补偿通道数').toBe(6)
+    for (const c of comp) {
+      expect(c.drive, '补偿必须滚动驱动').toBe(1)
+      expect(c.curve, '补偿必须 linear（恒等映射）').toBe(0)
+      expect(c.from).toBe(0)
+      expect(c.to).toBe(range)
+      expect(c.scrollFrom).toBe(0)
+      expect(c.scrollTo).toBe(range)
+    }
+    // ★环境动效：无限循环 ≥ 20（月辉/风摆/荡漾/扇翅/云漂/水纹）
+    expect(act.anims.filter((x) => x.repeat === -1).length).toBeGreaterThanOrEqual(20)
+    // ★树：纸面 = 3.2 屏宽；两端卷轴在**视口坐标**（左轴贴左缘 / 右轴贴右缘）
+    const tree = JSON.parse(buildInkScrollTree(VIEW)) as {
+      nodes: Array<{ id: number; left?: number; width?: number }>
+    }
+    const paper = tree.nodes.find((n) => n.id === INK_IDS.paper)!
+    expect(paper.width, '纸面宽').toBe(total)
+    const leftRoll = tree.nodes.find((n) => n.id === INK_IDS.rollCylinder)!
+    expect(leftRoll.left, '左轴贴左缘').toBe(0)
+    const rightRoll = tree.nodes.find((n) => n.id === INK_IDS.rollerRightBar)!
+    expect((rightRoll.left ?? 0) + (rightRoll.width ?? 0), '右轴贴右缘').toBe(VIEW.width)
+    // ★★静态描边**必须声明 `progress:1`**（2026-10-01 真机目视抓出：缺省基态 0 = 未画 ⇒
+    //   57 条描边节点全不可见、整幅画像空白纸）——浏览模式是"看一幅已画成的画"。
+    const svgNodes = tree.nodes.filter((n) => n.svgPath) as Array<{
+      id: number
+      svgPath: { progress?: number }
+    }>
+    expect(svgNodes.length, '宽卷应有大量描边节点').toBeGreaterThan(40)
+    for (const n of svgNodes) {
+      expect(n.svgPath.progress, `节点 ${n.id} 的 svgPath 缺 progress:1（会画不出来）`).toBe(1)
+    }
+    // ★回归锁：画卷**不整体平移**（平移是宿主画布层的事；内核通道里不得有 paper 的位移）
+    expect(act.anims.filter((x) => x.nodeId === INK_IDS.paper).length, 'paper 不应有通道').toBe(0)
   })
 
   it('★工具函数契约：blend 预混（6 位）· ink 加 alpha（8 位 #RRGGBBAA）', () => {

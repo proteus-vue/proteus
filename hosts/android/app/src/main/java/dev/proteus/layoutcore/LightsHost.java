@@ -115,6 +115,20 @@ final class LightsHost {
     void setScrollMode(boolean v) { this.scrollMode = v; }
 
     /**
+     * ★★**视觉签名**（手卷浏览的"画面真的随滚动变化"证据 · 2026-10-01）：
+     *   在滚动起点采一次；收尾时再采一次并算差异百分比 ⇒ 进报告 `scroll_visual_diff`。
+     *   ★为什么需要（本仓两次实证）：纯数值判据读过"全黑画面"当绿（首版长卷把画推出屏幕，
+     *     而判据只读 `root.tx`）——**像素级证据才能证明"用户看到的东西真的变了"**。
+     */
+    private int[] scrollSigStart = null;
+
+    void captureScrollStartSignature() {
+        if (view == null) return;
+        scrollSigStart = view.renderSignature();
+        android.util.Log.i("proteus", "手卷：起点视觉签名已采（" + scrollSigStart.length + " 点）");
+    }
+
+    /**
      * 滚动模式收尾（判据/测试显式调用：记录末态 + 截屏 + 统计 + 写报告）。
      * ★必须**先记录末态**（`recordAct`）——滚动模式下幕永不结束（这是设计），
      *   若不记录 ⇒ 报告里 `acts` 为空 ⇒ 探针（root.tx / 江水 clip）全部丢失。
@@ -122,6 +136,26 @@ final class LightsHost {
     void finishScrollShow() {
         if (act != null) recordAct(activeCount());
         finishShow();
+    }
+
+    /**
+     * ★★**等惯性停稳再收尾**（条件等待：每 16ms 检查 `flingActive()`，非盲等；上限防死等）。
+     *
+     * 【为什么必须等（2026-10-01 反射到判据设计）】自驱动时序是"横挥 → 收尾"，
+     *   而抛滑是**异步的**（OverScroller 的时间线由帧循环推进）——若横挥后立刻收尾，
+     *   惯性一帧都没跑，读到的 `scroll_max` 只是拖动终点、"惯性真的推动了画布"无证据。
+     *   ⇒ 收尾条件 = 惯性自然结束（或 10s 上限兜底，防 OverScroller 极端情形卡住）。
+     */
+    void finishScrollShowWhenSettled(final int attempt) {
+        final boolean active = view != null && view.flingActive();
+        if (active && attempt < 600) {
+            new android.os.Handler(android.os.Looper.getMainLooper()).postDelayed(new Runnable() {
+                public void run() { finishScrollShowWhenSettled(attempt + 1); }
+            }, 16);
+            return;
+        }
+        android.util.Log.i("proteus", "长卷收尾：惯性停稳（探测 " + attempt + " 次 · 仍在滑=" + active + "）");
+        finishScrollShow();
     }
 
     /**
@@ -133,7 +167,8 @@ final class LightsHost {
      *   ⇒ 进程内 `dispatchTouchEvent` 注入**真 MotionEvent**（走完整 GestureDetector →
      *     生产通路链），与 M6b 的"真手势滚动"同一形态（本仓已接受该先例为验收级）。
      *
-     * @param steps 横挥步数（每步从右往左 ~780px ⇒ 6 步覆盖 2.2×视口的行程）
+     * @param steps 横挥步数（每步从右往左 780px）——★2026-10-01 自驱动取 **3 步**
+     *   （2340px）而非拖满：留余量给末次 UP 的**抛滑**吃满，"惯性真的推动画布"才有证据。
      */
     void driveHorizontalGestures(int steps) {
         if (view == null) return;
@@ -227,7 +262,19 @@ final class LightsHost {
         return "{\"ok\":true,\"horizontal\":" + on + "}";
     }
 
+    /**
+     * ★★**横向偏移模式**（手卷浏览：画布 3.2 屏宽——`proteusHost.offsetScroll(true)`）：
+     *   与 `horizontalScroll`（手势轴）配套：前者选轴、本条选语义（**平移画布** vs 进度）。
+     */
+    public String offsetScroll(String onJson) {
+        boolean on = onJson == null || onJson.trim().isEmpty() || !onJson.trim().startsWith("f");
+        offsetScrollOn = on;
+        if (view != null) view.setOffsetScroll(on);
+        return "{\"ok\":true,\"offset\":" + on + "}";
+    }
+
     private boolean horizontalScrollOn = false;
+    private boolean offsetScrollOn = false;
 
     /** JS 侧上报（计数；不作为消费证据——与 JsRenderHost.post 同口径） */
     @SuppressWarnings("unused")
@@ -431,7 +478,21 @@ final class LightsHost {
                         return;
                     }
                     if (!o.optBoolean("ok")) {
-                        failShow("取幕回执非 ok：" + o.optString("error", nextOut.substring(0, Math.min(160, nextOut.length()))));
+                        // ★★内核拒绝原因**必须带上**（2026-10-01 手卷浏览实测）：
+                        //   发令失败的形态是 `{ok:false, error:"幕「x」发令失败", detail:{error:"节点 N 的 …"}}`
+                        //   ——detail 里才是**内核的精确原因**（"repeat 非法 / 节点不在树上"）。
+                        //   只读 error ⇒ 失败报告只有一句"发令失败"，真因丢失，排查得重放内核一轮。
+                        //   （与"不静默"同源：错误必须写在它发生的地方，且要带到人能看到的地方。）
+                        String detail = "";
+                        try {
+                            org.json.JSONObject d = o.optJSONObject("detail");
+                            if (d != null && d.optString("error", "").length() > 0) {
+                                detail = " ▸ " + d.optString("error");
+                            }
+                        } catch (Throwable ignored) { /* detail 非对象 ⇒ 维持原消息 */ }
+                        failShow("取幕回执非 ok："
+                                + o.optString("error", nextOut.substring(0, Math.min(160, nextOut.length())))
+                                + detail);
                         return;
                     }
                     act = o;
@@ -452,6 +513,8 @@ final class LightsHost {
 
             // ② 逐帧推进（计时只包"内核 tick + 写层"这一段——与 iOS 同口径）
             long t0 = System.nanoTime();
+            // ★★惯性推进（手卷浏览的抛滑——与内核 tick 同一帧驱动，不新增第二条帧源）
+            if (view != null) view.stepInertia();
             if (view != null) view.kernelAnimTick((float) dtMs);
             double work = (System.nanoTime() - t0) / 1e6;
             actWork.add(work);
@@ -611,6 +674,22 @@ final class LightsHost {
             // ★★滚动模式读数（长卷探索判据用）：手势驱动到的范围
             stats.put("scroll_min", scrollMinSeen == Integer.MAX_VALUE ? -1 : scrollMinSeen);
             stats.put("scroll_max", scrollMaxSeen == Integer.MIN_VALUE ? -1 : scrollMaxSeen);
+            // ★★视觉差异（"画面真的随滚动变了"——像素级证据，堵"全黑也判绿"的洞）
+            if (view != null && scrollSigStart != null) {
+                int[] end = view.renderSignature();
+                int diff = 0;
+                final int n = Math.min(scrollSigStart.length, end.length);
+                for (int i = 0; i < n; i++) {
+                    if (scrollSigStart[i] != end[i]) diff++;
+                }
+                stats.put("scroll_visual_diff", round1(100.0 * diff / Math.max(1, n)));
+                android.util.Log.i("proteus", "手卷：视觉差异 " + round1(100.0 * diff / Math.max(1, n)) + "%");
+            }
+            // ★★抛滑证据（2026-10-01）：本仓刚抓到"`startFlingX` 声明了但 `onFling` 里没人调用
+            //   ⇒ 惯性静默不存在"——同族缺陷只有计数能现形（判据据此判 ③d）
+            stats.put("fling_drives", view != null ? view.flingDrives() : -1);
+            stats.put("inertia_frames", view != null ? view.inertiaFrames() : -1);
+            stats.put("inertia_moved", view != null ? view.inertiaMovedFrames() : -1);
             // ★幕中探针（C1/C2 的"进行中"证据——幕 45% 处采的真实宿主表读数）
             if (midProbe != null) stats.put("mid_probe", new JSONObject(midProbe));
             if (midProbeAct != null) stats.put("mid_probe_act", midProbeAct);
@@ -644,6 +723,15 @@ final class LightsHost {
 
     /** 供 MainActivity 读（诊断） */
     boolean isRunning() { return running; }
+
+    /**
+     * ★★**停帧循环**（演示壳旋转重挂用 · 2026-10-01）：`running=false` ⇒ 下一帧回调自然退出
+     *   （帧循环唯一驱动，无第二条定时源要清）。不写报告（旋转不是"演完"）。
+     */
+    void markStop() {
+        running = false;
+        finished = true;
+    }
 
     // ── 统计工具 ──
 
@@ -760,7 +848,9 @@ final class LightsHost {
                 long packed = (long) info.optDouble("strokeColor", 4294967295.0);
                 int col = packed >= 0 && packed < 4294967295L ? (int) packed : 0xFFFFFFFF;
                 float sw = (float) info.optDouble("strokeWidth", 2);
-                view.setNodeSvgStroke(Integer.parseInt(idS), segs, col, sw);
+                // ★声明基态（2026-10-01）：`svgPath.progress`（缺省 0 = 未画；浏览模式 = 1 已画成）
+                float pb = (float) info.optDouble("progressBase", 0);
+                view.setNodeSvgStroke(Integer.parseInt(idS), segs, col, sw, pb);
             }
         } catch (Throwable t) {
             android.util.Log.w("proteus", "SVG 描边建层失败（不阻断）：" + t);
@@ -871,8 +961,9 @@ final class LightsHost {
     private void ensureView() {
         if (view != null) return;
         view = new ProteusHostView(ctx);
-        // ★长卷模式：建视图时即接上横向手势（JS 的 horizontalScroll 可能在视图建立前调用）
+        // ★长卷模式：建视图时即接上横向手势/偏移语义（JS 的调用可能在视图建立前发生）
         if (horizontalScrollOn) view.setHorizontalScroll(true);
+        if (offsetScrollOn) view.setOffsetScroll(true);
         android.widget.FrameLayout.LayoutParams lp = new android.widget.FrameLayout.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT);
         view.setLayoutParams(lp);

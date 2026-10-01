@@ -380,6 +380,15 @@ pub struct LStyle {
     /// ★★**SVG 描边进度**（2026-10-01 · C2；0..1 = 画到哪——内核只存；路径本体见 `svg_d`）
     #[serde(default)]
     pub stroke_progress: f32,
+    /// ★★**描边进度的声明基态**（2026-10-01 · 手卷浏览抓出的缺口）：
+    ///   `svgPath: {d, stroke, strokeWidth, progress: 1}` 声明"这条路径是**已画成**的
+    ///   （静态插图/浏览一幅完成的画）——没有它，静态声明的路径**永远画不出来**
+    ///   （此前基态硬编码 0 = 未画，只有动画通道能把值抬上去；真机实测：手卷 57 条静态
+    ///   描边节点全部不可见 ⇒ 整幅画只剩色块=空白纸）。
+    ///   ★与 `mask.progress` 是**同一条纪律**（静态声明的基态参与复位——`stop_all` 回它，
+    ///   不回 0）；缺省 0（向后兼容：既有"声明 + 动画 0→1"路径零行为变化）。
+    #[serde(default)]
+    pub stroke_progress_base: f32,
     /// ★★**SVG 路径声明**（C2）：归一化后的段列表（由 `svg_path::parse_svg_path` 解析——
     ///   **单一实现**：宿主不做第二份 SVG 解析器，只把段列表翻译成平台 path）
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -552,6 +561,7 @@ impl Default for LStyle {
             clip_base: [0.0; 16],
             grad: None,
             stroke_progress: 0.0,
+            stroke_progress_base: 0.0,
             svg_path: None,
             svg_path_to: None,
             path_morph: 0.0,

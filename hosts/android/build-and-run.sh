@@ -245,7 +245,11 @@ NEED_BUILD_LT=0
 if [ ! -f "$BUNDLE_LT" ]; then NEED_BUILD_LT=1; fi
 if [ -f "$ENTRY_LT" ] && [ -f "$BUNDLE_LT" ] && [ "$ENTRY_LT" -nt "$BUNDLE_LT" ]; then NEED_BUILD_LT=1; fi
 # ★节目单与编排包更新也要重建（否则真机测旧节目——与 app-stack 同款纪律）
-if [ -f "$BUNDLE_LT" ] && [ "$HERE/../shared/bridge/showcase-lights.ts" -nt "$BUNDLE_LT" ]; then NEED_BUILD_LT=1; fi
+# ★★2026-10-01 修正：原来是**逐个文件**列（只盯 showcase-lights.ts）——改了同目录的
+#   `showcase-ink.ts`（墨绘/手卷节目）时门禁**看不见** ⇒ 真机跑旧节目单（陈旧产物陷阱的
+#   同族形态：覆盖面没跟着实际形态走）。⇒ 改为**整目录**判据：shared/bridge 下任何 .ts
+#   比 bundle 新就重建（flip/ink/inkScroll 全被覆盖，加新节目文件不用再改这里）。
+if [ -f "$BUNDLE_LT" ] && [ -n "$(find "$HERE/../shared/bridge" -name '*.ts' -newer "$BUNDLE_LT" -print -quit)" ]; then NEED_BUILD_LT=1; fi
 if [ -f "$BUNDLE_LT" ] && [ "$HERE/../../packages/animation/dist/index.js" -nt "$BUNDLE_LT" ]; then NEED_BUILD_LT=1; fi
 if [ "$NEED_BUILD_LT" = "1" ]; then
   echo "    构建 lights bundle（缺产物 或 入口/节目单更新）…"

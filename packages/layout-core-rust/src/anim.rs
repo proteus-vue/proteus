@@ -1154,7 +1154,10 @@ pub fn reset_visuals(tree: &mut LayoutTree, node_ids: &[u32]) -> usize {
             // ★C1：clip 参数也要判脏（有裁剪且参数偏离基态 = 脏）
             let clip_dirty = s.clip_kind != 0 && s.clip != s.clip_base;
             // ★C2：描边进度回 0（基态 = 未画）
-            let stroke_dirty = s.svg_path.is_some() && s.stroke_progress != 0.0;
+            // ★C2 基态：偏离**声明基态**才算脏（2026-10-01——静态声明 `progress:1` 的路径
+            //   不参与复位；此前硬编码 0 ⇒ 复位会把"生来已画成"的静态描边**抹掉**）
+            let stroke_base = if s.svg_path.is_some() { s.stroke_progress_base } else { 0.0 };
+            let stroke_dirty = s.svg_path.is_some() && s.stroke_progress != stroke_base;
             // ★渐变 v2：混合因子回 0（基态 = 全 A——与"解绑必须含清值"同一义务）
             let grad_dirty = s.grad.as_ref().is_some_and(|g| g.mix != 0.0);
             // ★路径变形 v1：变形因子回 0（基态 = 全 A）
@@ -1192,7 +1195,7 @@ pub fn reset_visuals(tree: &mut LayoutTree, node_ids: &[u32]) -> usize {
                 s.skew_x = 0.0;     // ★skew v1：同义务
                 s.skew_y = 0.0;
                 s.clip = s.clip_base; // ★C1：裁剪参数回基态（与颜色回底色同一条"解绑含清值"）
-                s.stroke_progress = 0.0; // ★C2：描边进度回 0（未画）
+                s.stroke_progress = stroke_base; // ★C2：回**声明基态**（缺省 0 = 未画；静态已画成 = 1）
                 if let Some(g) = s.grad.as_mut() {
                     g.mix = 0.0; // ★渐变 v2：混合因子回 0（全 A）
                 }
@@ -1806,7 +1809,10 @@ impl AnimEngine {
             let s = &mut node.style;
             let color_dirty = s.bg != s.bg_base || s.text_color != s.text_color_base;
             let clip_dirty = s.clip_kind != 0 && s.clip != s.clip_base;
-            let stroke_dirty = s.svg_path.is_some() && s.stroke_progress != 0.0;
+            // ★C2 基态：偏离**声明基态**才算脏（2026-10-01——静态声明 `progress:1` 的路径
+            //   不参与复位；此前硬编码 0 ⇒ 复位会把"生来已画成"的静态描边**抹掉**）
+            let stroke_base = if s.svg_path.is_some() { s.stroke_progress_base } else { 0.0 };
+            let stroke_dirty = s.svg_path.is_some() && s.stroke_progress != stroke_base;
             let grad_dirty = s.grad.as_ref().is_some_and(|g| g.mix != 0.0);
             let morph_dirty = s.svg_path_to.is_some() && s.path_morph != 0.0;
             let glow_dirty = s.glow.is_some() && s.glow_intensity != 1.0;
@@ -1840,7 +1846,7 @@ impl AnimEngine {
                 s.skew_x = 0.0;        // ★skew v1
                 s.skew_y = 0.0;
                 s.clip = s.clip_base; // ★C1：裁剪参数回基态
-                s.stroke_progress = 0.0; // ★C2：描边进度回 0
+                s.stroke_progress = stroke_base; // ★C2：回**声明基态**（见上——静态已画成不被抹掉）
                 if let Some(g) = s.grad.as_mut() {
                     g.mix = 0.0; // ★渐变 v2：混合因子回 0（全 A）
                 }
@@ -3401,6 +3407,34 @@ mod tests {
         e3.start(&t3, a3).unwrap();
         e3.tick(&mut t3, 200.0);
         assert!(t3.nodes[0].style.stroke_progress <= 1.0, "写入必须 clamp 到 1.0");
+    }
+
+    /// ★★**静态声明基态**（2026-10-01 · 手卷浏览真机目视抓出）：`progress:1` 声明的路径
+    ///   （浏览一幅已画成的画）**生来已画成**，且 `stop_all` 复位回**声明基态**而非 0——
+    ///   缺省（未声明 progress）的节点行为不变（基态 0 = 未画，动画 0→1 照旧）。
+    #[test]
+    fn stroke_declared_base_survives_reset() {
+        let mut t = tree_with(1);
+        t.nodes[0].style.svg_path = Some(crate::svg_path::parse_svg_path("M0 0 L10 0").unwrap());
+        t.nodes[0].style.stroke_progress = 1.0; // 建树时按 svgPath.progress 落（见 ffi 解析）
+        t.nodes[0].style.stroke_progress_base = 1.0;
+        let mut e = AnimEngine::new();
+        // ① 驱动一条进度动画（1→0.5 之类）后 stop ⇒ 回 1（声明基态），**不是** 0
+        let mut a = Anim::curve_anim(1, AnimKind::StrokeProgress, 1.0, 0.2, 100.0);
+        a.takeover = false;
+        e.start(&t, a).unwrap();
+        e.tick(&mut t, 200.0);
+        assert!(t.nodes[0].style.stroke_progress < 0.5, "动画应把进度压下去");
+        e.stop_all(&mut t);
+        assert_eq!(
+            t.nodes[0].style.stroke_progress, 1.0,
+            "stop 后必须回**声明基态**（静态已画成不被抹掉——缺省基态 0 的行为由上一个测试钉住）"
+        );
+        // ② 复位后不"脏"（基态自身不算偏离——否则每帧都被判脏，白白重发更新）
+        let mut touched = std::collections::HashSet::new();
+        let updates = AnimEngine::collect_updates(&mut t, &touched);
+        touched.clear();
+        assert!(updates.is_empty(), "基态自身不应产生更新");
     }
 
     #[test]

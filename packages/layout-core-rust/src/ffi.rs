@@ -408,6 +408,21 @@ pub(crate) fn style_from_dto(dto: &NodeDto) -> Result<LStyle, String> {
             }
             style.stroke_width = w;
         }
+        // ★★**声明基态**（2026-10-01 · 手卷浏览抓出的缺口）：`progress` = 这条路径"生来
+        //   画到哪"。缺省 0（未画——"声明 + 动画 0→1"的既有路径零行为变化）；
+        //   `progress: 1` = 已画成（浏览/静态插图——见 `LStyle::stroke_progress_base`）。
+        //   非法值**明确拒绝**（越界静默钳 ⇒ 用户以为声明生效、实际画不出来）。
+        if let Some(p) = sp.get("progress") {
+            let p = p
+                .as_f64()
+                .ok_or_else(|| "svgPath.progress 应为 0..1 的数字".to_string())?
+                as f32;
+            if !p.is_finite() || !(0.0..=1.0).contains(&p) {
+                return Err(format!("svgPath.progress 非法：{p}（应为 0..1）"));
+            }
+            style.stroke_progress = p;
+            style.stroke_progress_base = p;
+        }
     }
     // ★★路径变形的 B 态（在 A 态**之后**解析——同构校验要拿 A 的签名比对）。
     //   校验失败 ⇒ **明确拒绝**（异型之间插值无定义；本引擎不做"猜测对齐"这类静默行为）。
@@ -2835,9 +2850,18 @@ fn parse_curve_bezier(a: &serde_json::Value, node_id: u32) -> Result<Option<std:
 /// ★★**解析循环声明**（`repeat` / `direction`，2026-10-01 · A2）——两处 anim 入口共用
 ///
 /// 契约（与 CSS `animation-iteration-count` / `animation-direction` 对齐）：
-///   · `repeat`: 正数 = 播 n 遍；`"infinite"`（字符串）= 无限；缺省 1。**0 / 负数 / NaN 拒绝**。
+///   · `repeat`: 正数 = 播 n 遍；`"infinite"`（字符串）**或数字 `-1`** = 无限；缺省 1。
+///     **0 / 其他负数 / NaN 拒绝**。
 ///   · `direction`: `"normal"`（缺省）/ `"alternate"`（yoyo——奇偶轮反向）。
 /// 返回 `(iterations, alternate)`；`iterations = -1.0` 是**无限**的内部哨兵。
+///
+/// ★★数字 `-1` 为什么必须认（2026-10-01 手卷浏览真机抓出的跨语言分叉修正）：
+///   TS 编译产物对 `repeat:'infinite'` 下发的是**数字 -1**（`compile.ts` 的
+///   `repeat: d.repeat === 'infinite' ? -1 : d.repeat`，由 `anim-repeat-golden` 钉住），
+///   而本函数首版只认字符串 `"infinite"` ⇒ 数字 -1 被当作"非法 repeat"**拒绝**
+///   ⇒ 手卷节目 41 条环境动效整批被拒（真机报告：`幕「scroll」发令失败`，画布却已平移
+///   ——半批生效的假象）。与 `alternate: true` 那次**同一形态**：两侧各自的单测都绿、
+///   只有对接层分叉。⇒ 修复 = 哨兵数字与字符串**都认**（向后兼容字符串形态）。
 fn parse_repeat(a: &serde_json::Value, node_id: u32) -> Result<(f32, bool), String> {
     let iterations = match a.get("repeat") {
         None => 1.0f32,
@@ -2853,12 +2877,16 @@ fn parse_repeat(a: &serde_json::Value, node_id: u32) -> Result<(f32, bool), Stri
             let n = v
                 .as_f64()
                 .ok_or_else(|| format!("节点 {node_id} 的 repeat 不是数字/\"infinite\"：{v}"))? as f32;
-            if !(n.is_finite()) || n < 1.0 {
+            // ★数字 -1 = TS 编译产物的"无限"哨兵（见上方注释；与字符串形态等价）
+            if n == -1.0 {
+                -1.0
+            } else if !(n.is_finite()) || n < 1.0 {
                 return Err(format!(
-                    "节点 {node_id} 的 repeat 非法：{n}（应 ≥ 1 的数字，或 \"infinite\"）"
+                    "节点 {node_id} 的 repeat 非法：{n}（应 ≥ 1 的数字，或 \"infinite\" / -1）"
                 ));
+            } else {
+                n
             }
-            n
         }
     };
     // ★★yoyo 方向：**两种字段形态都认**（2026-10-01 真机抓出的跨语言分叉修正）——
@@ -3997,6 +4025,9 @@ pub unsafe extern "C" fn proteus_layout_svg_nodes(handle: u64) -> *mut c_char {
                         "strokeColor": n.style.stroke_color,
                         "strokeWidth": n.style.stroke_width,
                         "totalLen": sp.total_len,
+                        // ★声明基态（2026-10-01）：宿主建层时按它初始化描边进度
+                        //   （`progress:1` 的静态路径生来已画成——见 LStyle::stroke_progress_base）
+                        "progressBase": n.style.stroke_progress_base,
                     }),
                 );
             }
@@ -4411,6 +4442,16 @@ mod tests {
         let (it4, alt4) = parse_repeat(&inf, 7).unwrap();
         assert_eq!(it4, -1.0);
         assert!(alt4);
+        // ★★数字 -1 = TS 编译产物的无限哨兵（2026-10-01 手卷浏览真机抓出的分叉修正；
+        //   TS 侧由 anim-repeat-golden 钉死 `repeat:'infinite' ⇒ -1`——本断言是它的对拍半边，
+        //   任一侧改形态而另一侧没跟 ⇒ Rust 单测当场红）
+        let num_inf = serde_json::json!({ "repeat": -1, "alternate": true });
+        let (it5, alt5) = parse_repeat(&num_inf, 7).unwrap();
+        assert_eq!(it5, -1.0, "TS 编译产物的数字 -1 必须被识别为无限（否则整批环境动效被拒）");
+        assert!(alt5);
+        // 其他负数/0 仍拒绝（哨兵只有 -1；-2 / 0 是声明错误）
+        assert!(parse_repeat(&serde_json::json!({ "repeat": -2 }), 7).is_err());
+        assert!(parse_repeat(&serde_json::json!({ "repeat": 0 }), 7).is_err());
     }
 
     /// ★★**anim_start 全链路**：JSON（含 curveBezier）→ Anim（curve_pts 生效）——

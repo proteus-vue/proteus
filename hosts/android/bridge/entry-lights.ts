@@ -24,7 +24,7 @@ import type { LightsAct, LightsProgram } from '../../shared/bridge/showcase-ligh
 import { createFlipProgram } from '../../shared/bridge/showcase-flip'
 import type { FlipAct, FlipControl } from '../../shared/bridge/showcase-flip'
 // ★第四个节目（墨绘·山水卷）：验收 C1 裁剪形变 × C2 SVG 描边
-import { buildInkTree, createInkProgram, createInkScrollProgram, INK_SAMPLE_IDS, INK_IDS } from '../../shared/bridge/showcase-ink'
+import { buildInkTree, buildInkScrollTree, createInkProgram, createInkScrollProgram, INK_SAMPLE_IDS, INK_SCROLL_SAMPLE_IDS, INK_IDS } from '../../shared/bridge/showcase-ink'
 import type { InkAct } from '../../shared/bridge/showcase-ink'
 
 /** 三个节目的幕的**公共形状**（entry 只依赖这个——节目单各自扩展） */
@@ -44,6 +44,8 @@ interface LightsHostBridge {
   mount(treeJson: string): string
   /** ★★长卷模式（横向手势通路——宿主据此把 onScroll 接到 X 轴；可选（老宿主无此方法）） */
   horizontalScroll?(on: boolean): string
+  /** ★★横向**偏移**语义（手卷浏览：画布真平移；可选（老宿主无此方法）） */
+  offsetScroll?(on: boolean): string
   animStart(json: string): string
   animStop(json: string): string
   /** ★A3 播放控制（时间因子/暂停）：可选（宿主未实现时跳过——保持向后兼容） */
@@ -207,9 +209,12 @@ export function __proteusLightsRun(argsJson?: string): string {
 
   const t0 = Number(proteusHost.nowUs()) / 1000
   // ★墨绘·山水卷：**另一棵树**（水墨长卷——绝对定位的路径/裁剪节点，不是 800 灯珠网格）
-  const tree = (state.programKind === 'ink' || state.programKind === 'inkScroll')
-    ? buildInkTree(state.view)
-    : buildTree(state.view.width, state.view.height, a.tiles, a.cols)
+  // ★★手卷浏览用**宽卷树**（3.2 屏宽——画比屏幕宽，横向滚动浏览）；幕序用原树。
+  const tree = state.programKind === 'inkScroll'
+    ? buildInkScrollTree(state.view)
+    : (state.programKind === 'ink')
+      ? buildInkTree(state.view)
+      : buildTree(state.view.width, state.view.height, a.tiles, a.cols)
   const mountOut = proteusHost.mount(tree)
   const mountMs = Number(proteusHost.nowUs()) / 1000 - t0
   const mounted = safeParse(mountOut)
@@ -235,7 +240,9 @@ export function __proteusLightsRun(argsJson?: string): string {
     const isp = createInkScrollProgram({ view: state.view })
     state.programAny = isp as unknown as { next(): AnyAct | null; plan(): string[] }
     state.program = null
+    // ★★横向**偏移**模式（画比屏幕宽——画布真平移；卷轴靠补偿通道固定）
     if (typeof proteusHost.horizontalScroll === 'function') proteusHost.horizontalScroll(true)
+    if (typeof proteusHost.offsetScroll === 'function') proteusHost.offsetScroll(true)
   } else if (state.programKind === 'ink') {
     const ip = createInkProgram({ view: state.view })
     state.programAny = ip as unknown as { next(): AnyAct | null; plan(): string[] }
@@ -250,9 +257,11 @@ export function __proteusLightsRun(argsJson?: string): string {
   //   首版只判了 `=== 'ink'` ⇒ inkScroll 落在灯珠样本（[1000,…]）上 ⇒ 判据读不到
   //   root/江水（真机实证：probe ids = [1000,1400,1799,2000]）。同源纪律：新增模式
   //   必须逐处检查"按模式分叉"的每一处（这类遗漏是静默的）。
-  state.sampleIds = (state.programKind === 'ink' || state.programKind === 'inkScroll')
-    ? [...INK_SAMPLE_IDS]
-    : [1000, 1000 + Math.floor(a.tiles / 2), 1000 + a.tiles - 1, state.titleId]
+  state.sampleIds = state.programKind === 'inkScroll'
+    ? [...INK_SCROLL_SAMPLE_IDS]
+    : state.programKind === 'ink'
+      ? [...INK_SAMPLE_IDS]
+      : [1000, 1000 + Math.floor(a.tiles / 2), 1000 + a.tiles - 1, state.titleId]
 
   results.program = state.programKind
   results.tiles = a.tiles
@@ -322,6 +331,11 @@ export function __proteusLightsNext(): string {
   state.acts.push({
     name: act.name,
     anims: act.anims.length,
+    // ★手卷浏览（2026-10-01）：行程 + **驱动构成**（判据据此断言"补偿真的挂滚动轴"）——
+    //   `scroll_driven` = 滚动驱动条数（应=6 卷轴补偿）· `infinite` = 无限循环条数（环境动效）。
+    scroll_range: (act as { scrollRange?: number }).scrollRange ?? 0,
+    scroll_driven_anims: act.anims.filter((x) => x.drive === 1).length,
+    infinite_anims: act.anims.filter((x) => x.repeat === -1).length,
     color_anims: act.colorAnims,
     rotate3d_anims: act.rotate3dAnims ?? 0,
     curve_bezier_anims: act.curveBezierAnims ?? 0,
@@ -386,6 +400,9 @@ export function __proteusLightsFinalize(hostStatsJson?: string): string {
   results.repeat_anims_total = state.repeatAnims
   results.clip_anims_total = state.clipAnims
   results.stroke_anims_total = state.strokeAnims
+  // ★手卷浏览（2026-10-01）：滚动驱动 / 无限循环 总条数（宽卷判据的机器证据）
+  results.scroll_driven_anims_total = state.acts.reduce((n, a) => n + ((a.scroll_driven_anims as number) ?? 0), 0)
+  results.infinite_anims_total = state.acts.reduce((n, a) => n + ((a.infinite_anims as number) ?? 0), 0)
   results.controls = state.controls
   results.ok = true
   const json = JSON.stringify(results)
@@ -427,7 +444,9 @@ export function __proteusLightsRestart(): string {
   } else if (state.programKind === 'inkScroll') {
     state.programAny = createInkScrollProgram({ view: state.view }) as unknown as { next(): AnyAct | null; plan(): string[] }
     state.program = null
+    // ★★横向**偏移**模式（画比屏幕宽——画布真平移；卷轴靠补偿通道固定）
     if (typeof proteusHost.horizontalScroll === 'function') proteusHost.horizontalScroll(true)
+    if (typeof proteusHost.offsetScroll === 'function') proteusHost.offsetScroll(true)
   } else if (state.programKind === 'ink') {
     state.programAny = createInkProgram({ view: state.view }) as unknown as { next(): AnyAct | null; plan(): string[] }
     state.program = null

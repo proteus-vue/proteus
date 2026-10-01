@@ -207,6 +207,14 @@ export const INK_IDS = {
   /** 前景坡岸（两坡——补底部留白）+ 水草（四笔） */
   banks: [130, 131] as const,
   reeds: [132, 133, 134, 135] as const,
+  /** ★★宽卷（手卷浏览模式）新增：加宽纸面 + 第二组竹/水草/舟 + 额外水纹/云带 */
+  paper: 200,
+  /** 第二簇竹（与 `bamboo` 同形：3 棵 × 3 笔触） */
+  bambooB: [[220, 221, 222], [223, 224, 225], [226, 227, 228]] as const,
+  reedsB: [204, 205, 206] as const,
+  boatB: [207, 208, 209] as const,
+  ripplesB: [210, 211, 212, 213, 214, 215] as const,
+  mistsB: [216, 217] as const,
   /** 幕布（最上层） */
   curtain: 120,
   /** ★★卷轴（真·展卷/收卷）：卷筒（横向渐变做圆柱明暗）+ 上下轴头（木色圆头），
@@ -224,6 +232,23 @@ export const INK_IDS = {
  * ★首个 = **幕中采样的主断言目标**（`mid_probe`）：山二骨线（id 22）在 mountains 幕 45% 处
  *   进度应**严格居中**——"真的在画"（不是 0 瞬现、也不是 1 早已画完）的机器证据。
  */
+/**
+ * ★★**手卷浏览模式的探针样本**（宽卷树专用——与幕序模式的样本不同）：
+ *   左右卷轴（140·143——补偿读数：终态 tx 应 ≈ scroll_max）· 印（110）· 江水（50）·
+ *   月（62）· 竹B（220）· 舟A（90）。
+ */
+export const INK_SCROLL_SAMPLE_IDS: readonly number[] = [
+  INK_IDS.rollCylinder,
+  // ★右卷轴也必须在内（2026-10-01 真机抓出）：判据要**两轴互证**（只看左轴 ⇒
+  //   右轴补偿挂没挂上无人知道），而探针只读声明的样本 ⇒ 漏声明 = 判据读不到。
+  INK_IDS.rollerRightBar,
+  INK_IDS.sealFill,
+  INK_IDS.water,
+  INK_IDS.moon,
+  INK_IDS.bambooB[0][0],
+  INK_IDS.boat[0],
+]
+
 export const INK_SAMPLE_IDS: readonly number[] = [
   // ★root（id=1）必须在内：长卷探索判据读它的 tx（"画随手动"的探针证据）
   INK_IDS.root,
@@ -488,6 +513,386 @@ export function scrollMetrics(view: { width: number; height: number }): ScrollMe
   // 贴右缘：left = W - bandW；贴左缘：left = 0 ⇒ tx = -(W - bandW)
   const txOpen = -(view.width - bandW)
   return { bandW, knobW, knobH, txOpen }
+}
+
+/* ────────────────────────── ★★宽卷（手卷浏览模式 · 2026-10-01） ────────────────────────── */
+
+/**
+ * 宽卷的**画布总宽**（= 3.2 × 视口宽）——树与节目单共用（一份算术，不写两遍）。
+ *
+ * 【为什么是"宽卷"（用户实问"怎么测试"后的第二版设计）】
+ *   第一版把画做成一屏宽、用"卷筒滚动"表达展开——横向拖动的**行程极短**（1.2 屏），
+ *   手感接近"拨一个开关"而不是"看长卷"。用户要的是**画比屏幕宽、手指扫过千山万水**
+ *   （真正的横向偏移滚动）。
+ *   ⇒ 画布 3.2 屏宽：远山/飞瀑/江水/明月/云海/竹/舟/题款**横向铺开**，
+ *     手指 1:1 跟手 + 抛滑惯性；两端**固定卷轴**（画面从轴下穿过——轴在视口级不动，
+ *     由"滚动驱动的反向平移"抵消画布平移，见节目单的补偿通道）。
+ */
+export function scrollCanvasWidth(view: View): number {
+  return Math.round(view.width * 3.2)
+}
+
+/**
+ * ★★**宽卷树**（手卷浏览模式）：画布 `scrollCanvasWidth(view)` 宽，元素横向铺开；
+ *   两端卷轴固定在**视口坐标**（由节目单的滚动补偿通道保持不动）。
+ */
+export function buildInkScrollTree(view: View): string {
+  const W = Math.round(view.width)
+  const H = Math.round(view.height)
+  const T = scrollCanvasWidth(view)
+  const P = INK_PALETTE
+  const R = (v: number): number => Math.round(v)
+  const sw = (f: number): number => Math.max(2, R(W * f))
+  const sm = scrollMetrics(view)
+  const nodes: Array<Record<string, unknown>> = []
+
+  // ① 视口根（W×H——**必须存在**：其他节点的 `parentId` 都指向它；内核校验"parentId 必须在树上"）
+  nodes.push({ id: INK_IDS.root, width: W, height: H })
+  // ② 加宽纸面（**挂在根下**：铺满整个画布——宽卷的"纸"）
+  nodes.push({ id: INK_IDS.paper, parentId: INK_IDS.root, width: T, height: H, backgroundColor: P.paper })
+  // 纸渍（沿卷分布三处——"旧纸的呼吸"；★id 用 corners 两个 + specks 一个，**不重复**）
+  const cornerCol = blend(P.paper, '#c9b98f', 0.04)
+  const blotchIds = [INK_IDS.corners[0], INK_IDS.corners[1], INK_IDS.specks[0]]
+  ;[[0.03, 0.72], [0.5, -0.04], [0.93, 0.7]].forEach(([fx, fy], i) => {
+    const bid = blotchIds[i]
+    if (bid === undefined) return
+    nodes.push({
+      id: bid, parentId: INK_IDS.root, position: 'absolute',
+      left: R(T * fx - W * 0.2), top: R(H * fy), width: R(W * 0.42), height: R(W * 0.42),
+      borderRadius: R(W * 0.21), backgroundColor: cornerCol,
+    })
+  })
+
+  // ② 远山三叠（横向铺开：占画布 0 ~ 1.7 屏宽；第三叠最宽——"长卷起手一段山"）
+  const mts: Array<[number, number, number]> = [
+    // [leftT, wT, rangeIdx]
+    [0.02, 0.34, 0],
+    [0.14, 0.32, 1],
+    [-0.02, 0.5, 2],
+  ]
+  const mtColors = [P.mtFar, P.mtMid, P.mtNear]
+  const puffFillsW = [blend(P.paper, P.washTint, 0.1), blend(P.paper, P.washTint, 0.15), blend(P.paper, P.washTint, 0.07)]
+  mts.forEach(([lf, wf, r]) => {
+    const rg = RANGES[r]!
+    const mw = R(T * wf)
+    const mh = R(H * rg.hh)
+    const left = R(T * lf)
+    const top = R(H * rg.top)
+    const dCore = ridge(mw, mh, rg.peaks, rg.y0, rg.seed)
+    nodes.push({
+      id: INK_IDS.rangeWet[r]!, parentId: INK_IDS.root, position: 'absolute',
+      left, top: top + R(mh * 0.02), width: mw, height: mh,
+      svgPath: { d: dCore, stroke: ink(mtColors[r]!, r === 0 ? 0.22 : 0.26), strokeWidth: [0.0042, 0.0058, 0.0078][r]! * W * 2.3 },
+    })
+    nodes.push({
+      id: INK_IDS.rangeCore[r]!, parentId: INK_IDS.root, position: 'absolute',
+      left, top, width: mw, height: mh,
+      svgPath: { d: dCore, stroke: ink(mtColors[r]!, r === 0 ? 0.82 : 0.94), strokeWidth: [0.0042, 0.0058, 0.0078][r]! * W },
+    })
+    nodes.push({
+      id: INK_IDS.rangeDry[r]!, parentId: INK_IDS.root, position: 'absolute',
+      left, top: top + R(mh * 0.008), width: mw, height: mh,
+      svgPath: { d: dCore, stroke: ink(mtColors[r]!, r === 0 ? 0.4 : 0.5), strokeWidth: [0.0042, 0.0058, 0.0078][r]! * W * 0.42 },
+    })
+    // 晕团（椭圆柔边）
+    rg.puffs.forEach(([fx, fy, pw, ph], k) => {
+      const puffW = R(W * pw * 1.4)
+      const puffH = R(W * ph * 1.4)
+      nodes.push({
+        id: INK_IDS.rangePuffs[r]![k]!, parentId: INK_IDS.root, position: 'absolute',
+        left: R(left + (T * wf) * (fx - pw / 2) * 1.4), top: R(top + mh * fy - puffH / 2),
+        width: puffW, height: puffH, borderRadius: R(puffH / 2),
+        backgroundColor: puffFillsW[r]!,
+        fillGradient: inkWash(mtColors[r]!, [0.06, 0.09, 0.05][r]!),
+      })
+    })
+    // 点苔
+    const dotR2 = [0.008, 0.0095, 0.011][r]!
+    ;[[0.3, 0.55], [0.62, 0.42]].forEach(([fx, fy], k) => {
+      const dr = R(W * dotR2)
+      nodes.push({
+        id: INK_IDS.rangeDots[r]![k]!, parentId: INK_IDS.root, position: 'absolute',
+        left: R(left + mw * fx) - dr / 2, top: R(top + mh * fy) - dr / 2,
+        width: dr, height: dr, borderRadius: dr,
+        backgroundColor: blend(P.paper, mtColors[r]!, 0.55),
+      })
+    })
+  })
+
+  // ③ 云海（两条长云带铺满画布 + 雾团——"长卷的天"）
+  ;[[0.085, 0.12, 0.3 as const], [0.175, 0.1, 0.2 as const]].forEach(([top, hh, tint], i) => {
+    nodes.push({
+      id: i === 0 ? INK_IDS.clouds[0]! : INK_IDS.mistsB[0]!, parentId: INK_IDS.root, position: 'absolute',
+      left: 0, top: R(H * top), width: T, height: R(H * hh),
+      backgroundColor: blend(P.paper, '#cfdce8', tint),
+      fillGradient: mistFade(blend(P.paper, '#b9cbdb', 0.55), i === 0 ? 0.85 : 0.7),
+    })
+  })
+  ;[[0.2, 0.115, 0.34], [0.55, 0.15, 0.28], [0.84, 0.1, 0.3]].forEach(([fx, fy, tint], i) => {
+    const pw = R(W * 0.62)
+    const ph = R(W * 0.15)
+    nodes.push({
+      id: i === 0 ? INK_IDS.cloudPuffs[0]! : (i === 1 ? INK_IDS.cloudPuffs[1]! : INK_IDS.mistsB[1]!), parentId: INK_IDS.root,
+      position: 'absolute', left: R(T * fx - pw / 2), top: R(H * fy - ph / 2),
+      width: pw, height: ph, borderRadius: R(ph / 2),
+      backgroundColor: blend(P.paper, '#cfdce8', tint as number),
+      fillGradient: inkWash('#c3d4e4', (tint as number) + 0.15),
+    })
+  })
+
+  // ④ 飞瀑（远山中段） + 明月（画布 2/3 处） + 月晕
+  const fallLeft = R(T * 0.415)
+  const fallTop = R(H * 0.255)
+  const fallH = R(H * 0.2)
+  const fallW = R(W * 0.1)
+  nodes.push({
+    id: INK_IDS.fallGate, parentId: INK_IDS.root, position: 'absolute',
+    left: fallLeft - R(fallW * 0.3), top: fallTop - R(fallH * 0.035),
+    width: R(fallW * 1.6), height: R(fallH * 0.16),
+    svgPath: { d: fallGate(R(fallW * 1.6), R(fallH * 0.16)), stroke: ink('#43535f', 0.8), strokeWidth: sw(0.005) },
+  })
+  ;[[0.3, 0.06, '#7d8ea6', 0.55, 0.006], [0.5, -0.04, '#43535f', 0.9, 0.0035], [0.7, 0.05, '#7d8ea6', 0.4, 0.0045]]
+    .forEach(([x, bow, col, a, w], i) => {
+      nodes.push({
+        id: INK_IDS.waterfall[i]!, parentId: INK_IDS.root, position: 'absolute',
+        left: fallLeft, top: fallTop, width: fallW, height: fallH,
+        svgPath: { d: fallLine(fallW, fallH, x as number, bow as number), stroke: ink(col as string, a as number), strokeWidth: sw(w as number) },
+      })
+    })
+  const moonSize = R(W * 0.24)
+  const moonLeft = R(T * 0.66)
+  const haloSize = R(W * 0.44)
+  nodes.push({
+    id: INK_IDS.haloOuter, parentId: INK_IDS.root, position: 'absolute',
+    left: moonLeft - R((haloSize - moonSize) / 2), top: R(H * 0.095) - R((haloSize - moonSize) / 2),
+    width: haloSize, height: haloSize, borderRadius: R(haloSize / 2),
+    backgroundColor: blend(P.paper, P.moon, 0.28),
+    fillGradient: inkWash(P.moon, 0.34),
+  })
+  nodes.push({
+    id: INK_IDS.moon, parentId: INK_IDS.root, position: 'absolute',
+    left: moonLeft, top: R(H * 0.095), width: moonSize, height: moonSize,
+    borderRadius: R(moonSize / 2), backgroundColor: P.moon,
+    glow: { color: '#fff6d8', radius: R(moonSize * 0.55), alpha: 0.5 },
+  })
+
+  // ⑤ 江水（铺满画布的水带 + 深水 + 月影 + 九道水纹【三行 × 三片】）
+  const waterTop = 0.6
+  const waterH = 0.21
+  nodes.push({
+    id: INK_IDS.water, parentId: INK_IDS.root, position: 'absolute',
+    left: 0, top: R(H * waterTop), width: T, height: R(H * waterH),
+    backgroundColor: P.water,
+  })
+  nodes.push({
+    id: INK_IDS.waterDeep, parentId: INK_IDS.root, position: 'absolute',
+    left: 0, top: R(H * (waterTop + 0.085)), width: T, height: R(H * (waterH - 0.085)),
+    backgroundColor: P.waterDeep,
+  })
+  const reflW = R(W * 0.16)
+  nodes.push({
+    id: INK_IDS.reflection, parentId: INK_IDS.root, position: 'absolute',
+    left: moonLeft + R((moonSize - reflW) / 2), top: R(H * 0.69), width: reflW, height: R(reflW * 0.34),
+    borderRadius: R(reflW * 0.17), backgroundColor: blend(P.waterDeep, P.moon, 0.42),
+  })
+  const rippleRows: Array<[number, number, number]> = [[0.635, 0, 0.0028], [0.70, 1, 0.0034], [0.755, 0, 0.004]]
+  let ripIdx = 0
+  const ripIds = [...INK_IDS.ripples, ...INK_IDS.ripplesB]
+  rippleRows.forEach(([top, ph, wfac]) => {
+    ;[0.0, 0.34, 0.68].forEach((fx) => {
+      const lw = R(T * 0.3)
+      const lh = R(H * 0.032)
+      nodes.push({
+        id: ripIds[ripIdx++]!, parentId: INK_IDS.root, position: 'absolute',
+        left: R(T * fx), top: R(H * top), width: lw, height: lh,
+        svgPath: { d: wave(lw, lh, ph), stroke: ink('#41616c', 0.34 + 0.1 * (ripIdx % 3)), strokeWidth: sw(wfac) },
+      })
+    })
+  })
+
+  // ⑥ 水草（两簇）+ 竹（两簇 · 从根部弯折）+ 舟（两条）+ 飞鸟（三只）
+  const reedSets: Array<[readonly number[], number, number]> = [
+    [INK_IDS.reeds, 0.05, 1.0],
+    [INK_IDS.reedsB, 0.5, 0.85],
+  ]
+  reedSets.forEach(([ids, fx, scale]) => {
+    ;[[0, 0.845, 0.06, 0.085, 0.4], [1, 0.855, 0.05, 0.075, -0.3], [2, 0.848, 0.055, 0.09, 0.35], [3, 0.858, 0.045, 0.07, -0.4]]
+      .forEach(([k, tf, wf, hf, bow], i) => {
+        if (ids[i] === undefined) return
+        const rw2 = R(W * (wf as number) * scale)
+        const rh2 = R(H * (hf as number) * scale)
+        const bx = R(T * fx + W * 0.04 * k!)
+        const P2 = (x: number, y: number): string => `${Math.round(x)} ${Math.round(y)}`
+        const d = `M${P2(rw2 * (0.5 - (bow as number) * 0.24), rh2)} Q ${P2(rw2 * (0.5 + (bow as number) * 0.3), rh2 * 0.42)} ${P2(rw2 * (0.5 + (bow as number) * 0.52), 0)}`
+        nodes.push({
+          id: ids[i]!, parentId: INK_IDS.root, position: 'absolute',
+          left: bx, top: R(H * (tf as number)), width: rw2, height: rh2,
+          svgPath: { d, stroke: ink('#4a6448', 0.55), strokeWidth: sw(0.003) },
+          transformOrigin: { x: 0.5, y: 1.0 },
+        })
+      })
+  })
+  const bamSets: Array<[ReadonlyArray<readonly number[]>, number]> = [
+    [INK_IDS.bamboo, 0.1],
+    [INK_IDS.bambooB, 0.74],
+  ]
+  bamSets.forEach(([triples, fx]) => {
+    ;[[0, 0.4, 0.19, 0.3], [1, 0.45, 0.15, 0.245], [2, 0.485, 0.12, 0.2]].forEach(([i, tf, wf, hf], k) => {
+      const bw = R(W * (wf as number))
+      const bh = R(H * (hf as number))
+      const left = R(T * fx + W * 0.1 * k)
+      const top = R(H * (tf as number))
+      const a = 0.9 - i! * 0.08
+      const triple = triples[k]!
+      nodes.push({
+        id: triple[0]!, parentId: INK_IDS.root, position: 'absolute',
+        left, top, width: bw, height: bh,
+        svgPath: { d: bambooStem(bw, bh), stroke: ink(P.bamboo, a), strokeWidth: sw(0.0062 - i! * 0.0012) },
+        transformOrigin: { x: 0.5, y: 1.0 },
+      })
+      nodes.push({
+        id: triple[1]!, parentId: INK_IDS.root, position: 'absolute',
+        left, top, width: bw, height: bh,
+        svgPath: { d: bambooLeaves(bw, bh), stroke: ink(P.bamboo, a * 0.72), strokeWidth: sw(0.0048 - i! * 0.001) },
+        transformOrigin: { x: 0.5, y: 1.0 },
+      })
+      nodes.push({
+        id: triple[2]!, parentId: INK_IDS.root, position: 'absolute',
+        left, top: R(top + H * 0.012), width: bw, height: bh,
+        svgPath: { d: bambooLeaves(bw, bh), stroke: ink(P.bamboo, a * 0.4), strokeWidth: sw(0.0022) },
+        transformOrigin: { x: 0.5, y: 1.0 },
+      })
+    })
+  })
+  const boatSets: Array<[readonly number[], number, number]> = [
+    [INK_IDS.boat, 0.3, 0.63],
+    [INK_IDS.boatB, 0.87, 0.64],
+  ]
+  boatSets.forEach(([ids, fx, fy]) => {
+    const boatW = R(W * 0.19)
+    const boatH = R(H * 0.052)
+    const boatLeft = R(T * fx)
+    const boatTop = R(H * fy)
+    nodes.push({
+      id: ids[0]!, parentId: INK_IDS.root, position: 'absolute',
+      left: boatLeft, top: boatTop, width: boatW, height: boatH,
+      svgPath: { d: boatHull(boatW, boatH), stroke: ink(P.boatHull, 0.92), strokeWidth: sw(0.0052) },
+    })
+    nodes.push({
+      id: ids[1]!, parentId: INK_IDS.root, position: 'absolute',
+      left: boatLeft, top: boatTop - R(boatH * 0.95), width: boatW, height: boatH,
+      svgPath: { d: boatSail(boatW, boatH), stroke: ink(P.boatMast, 0.7), strokeWidth: sw(0.0035) },
+    })
+    nodes.push({
+      id: ids[2]!, parentId: INK_IDS.root, position: 'absolute',
+      left: boatLeft, top: boatTop - R(boatH * 0.55), width: boatW, height: boatH,
+      svgPath: { d: boatMan(boatW, boatH), stroke: ink(P.boatHull, 0.85), strokeWidth: sw(0.0032) },
+    })
+  })
+  ;[[0.08, 0.065, 0.085, 0.02], [0.16, 0.1, 0.06, 0.015], [0.5, 0.13, 0.05, 0.013]].forEach(([fx, fy, wf, hf], i) => {
+    const bw2 = R(W * wf)
+    const bh2 = R(H * hf)
+    nodes.push({
+      id: INK_IDS.birds[i]!, parentId: INK_IDS.root, position: 'absolute',
+      left: R(T * fx), top: R(H * fy), width: bw2, height: bh2,
+      svgPath: { d: bird(bw2, bh2), stroke: ink(P.bird, 0.85 - i * 0.1), strokeWidth: sw(0.0048 - i * 0.001) },
+      svgPathTo: { d: birdFlap(bw2, bh2, 1.65) },
+    })
+  })
+
+  // ⑦ 题款（竖排四字，近卷尾）+ 印章
+  const charSize = R(W * 0.082)
+  const colX = R(T * 0.93)
+  const colY0 = R(H * 0.05)
+  ;['山', '水', '清', '音'].forEach((ch, i) => {
+    nodes.push({
+      id: INK_IDS.titleChars[i]!, parentId: INK_IDS.root, position: 'absolute',
+      left: colX, top: colY0 + i * R(charSize * 1.32),
+      width: R(charSize * 1.15), height: R(charSize * 1.3),
+      text: ch, color: P.ink, fontSize: charSize,
+    })
+  })
+  const sealSize = R(W * 0.088)
+  nodes.push({
+    id: INK_IDS.sealFill, parentId: INK_IDS.root, position: 'absolute',
+    left: R(T * 0.905), top: colY0, width: sealSize, height: sealSize,
+    backgroundColor: P.seal,
+  })
+  const inset = R(sealSize * 0.16)
+  nodes.push({
+    id: INK_IDS.sealInner, parentId: INK_IDS.root, position: 'absolute',
+    left: R(T * 0.905), top: colY0, width: sealSize, height: sealSize,
+    svgPath: {
+      d: `M${inset} ${inset} L${sealSize - inset} ${inset} L${sealSize - inset} ${sealSize - inset} L${inset} ${sealSize - inset} Z`,
+      stroke: ink('#f6f0d8', 0.85), strokeWidth: sw(0.0035),
+    },
+  })
+
+  // ⑧ 两端**固定卷轴**（视口坐标——画布平移由节目单的滚动补偿抵消，轴在屏上不动）
+  const woodKnob = '#6f523a'
+  nodes.push({
+    id: INK_IDS.rollCylinder, parentId: INK_IDS.root, position: 'absolute',
+    left: 0, top: 0, width: sm.bandW, height: H,
+    backgroundColor: '#cdb992',
+    fillGradient: {
+      kind: 'linear', angle: 90,
+      stops: [
+        { offset: 0, color: '#8f7d5c' },
+        { offset: 0.28, color: '#eadcbc' },
+        { offset: 0.55, color: '#cdb992' },
+        { offset: 1, color: '#7f6d4d' },
+      ],
+    },
+  })
+  const kLeft = Math.round(sm.bandW / 2) - Math.round(sm.knobW / 2)
+  nodes.push({
+    id: INK_IDS.rollKnobTop, parentId: INK_IDS.root, position: 'absolute',
+    left: kLeft, top: -R(sm.knobH * 0.4), width: sm.knobW, height: sm.knobH,
+    borderRadius: R(sm.knobH / 2), backgroundColor: woodKnob,
+  })
+  nodes.push({
+    id: INK_IDS.rollKnobBottom, parentId: INK_IDS.root, position: 'absolute',
+    left: kLeft, top: H - R(sm.knobH * 0.6), width: sm.knobW, height: sm.knobH,
+    borderRadius: R(sm.knobH / 2), backgroundColor: woodKnob,
+  })
+  const rLeft = W - sm.bandW
+  nodes.push({
+    id: INK_IDS.rollerRightBar, parentId: INK_IDS.root, position: 'absolute',
+    left: rLeft, top: 0, width: sm.bandW, height: H,
+    backgroundColor: '#cdb992',
+    fillGradient: {
+      kind: 'linear', angle: 90,
+      stops: [
+        { offset: 0, color: '#8f7d5c' },
+        { offset: 0.28, color: '#eadcbc' },
+        { offset: 0.55, color: '#cdb992' },
+        { offset: 1, color: '#7f6d4d' },
+      ],
+    },
+  })
+  const kRight = rLeft + Math.round(sm.bandW / 2) - Math.round(sm.knobW / 2)
+  nodes.push({
+    id: INK_IDS.rollerRightKnobTop, parentId: INK_IDS.root, position: 'absolute',
+    left: kRight, top: -R(sm.knobH * 0.4), width: sm.knobW, height: sm.knobH,
+    borderRadius: R(sm.knobH / 2), backgroundColor: woodKnob,
+  })
+  nodes.push({
+    id: INK_IDS.rollerRightKnobBottom, parentId: INK_IDS.root, position: 'absolute',
+    left: kRight, top: H - R(sm.knobH * 0.6), width: sm.knobW, height: sm.knobH,
+    borderRadius: R(sm.knobH / 2), backgroundColor: woodKnob,
+  })
+
+  // ★★**静态描边补 `progress: 1`**（2026-10-01 真机目视抓出的缺口）：
+  //   本模式是"**浏览一幅已画成的画**"——而描边基态缺省 0（未画）⇒ 57 条描边节点
+  //   （山骨/竹/舟/鸟/水纹/苇草）在屏上**一条都看不见**（整幅画只剩色块，像空白纸）。
+  //   ⇒ 逐节点补 `progress:1`（画成的静态路径）；幕序模式（`buildInkTree`）**不动**——
+  //   那里靠"声明 + 动画 0→1"落笔，基态必须保持 0。
+  for (const n of nodes) {
+    const sp = n.svgPath as { d: string; stroke: string; strokeWidth: number; progress?: number } | undefined
+    if (sp && sp.progress === undefined) sp.progress = 1
+  }
+
+  return JSON.stringify({ viewport: { width: W, height: H }, nodes })
 }
 
 /* ────────────────────────── 树构造（空卷基态——见文件头"空白卷轴"基态律） ────────────────────────── */
@@ -1437,118 +1842,100 @@ export function createInkProgram(_env: { view: View }): InkProgram {
 /* ────────────────────────── ★★长卷探索模式（滚动驱动） ────────────────────────── */
 
 /**
- * ★★**长卷探索**（scroll-driven）——把整幅山水卷变成一条**可用手势横移的长卷**。
+ * ★★**手卷浏览**（scroll-driven · 第二版设计："画比屏幕宽，手指扫过千山万水"）
  *
- * 【与幕序演出的差别（为什么要单立一个模式）】
- *   · 幕序模式（`createInkProgram`）：**时间驱动**——13 幕依次演出，观众看"画卷自己画出来"；
- *   · 长卷模式（本函数）：**滚动驱动**——所有元素一次性声明为"滚动位置的函数"，
- *     观众**拖动手势**横移长卷：画卷往左移，右侧的景象"随着进入视野"逐段浮现、
- *     卷轴的墨幕随滚动位置揭开。**同一条滚动位置驱动几十条通道**（位移/裁剪/描边/渐变/发光）。
- *   ★这是本引擎"滚动驱动"能力的压力测试：`scrollFrom`/`scrollTo` 窗口 + `drive:'progress'`
- *     让**全部**能力（含 clip/渐变/变形/发光/遮罩）都在同一条轴上联动——
- *     传统跨端框架的滚动联动通常只敢做 translate/opacity。
+ * 【与第一版的差别（用户实测反馈："现在测试横屏体验有些差"）】
+ *   · 第一版：画只有一屏宽，用"卷筒滚动"表达展开——横向行程 ≈1.2 屏，手感像"拨开关"；
+ *   · 本版：画布 **3.2 屏宽**（`scrollCanvasWidth`），元素横向铺开——手指 1:1 跟手、
+ *     抛滑惯性（宿主 `OverScroller`）、两端**固定卷轴**（画面从轴下穿过）。
  *
- * 【编排（滚动窗 [0, SCROLL_RANGE] 映射到整场）】
- *   · 长卷整体左移（`translateX` 0 → -(总宽-视口)）：**画随手动**；
- *   · 卷轴墨幕（curtain）随进度揭开（clip right）：**"边看边展"**；
- *   · 每叠山/每条水纹/竹/舟/鸟：各自的**入场窗**（分段窗口 ⇒ 依次进入视野时"落笔"）；
- *   · 远景巡游：远山组反向微移（视差）——"长卷有纵深"。
+ * 【本节目单做什么（两条轴）】
+ *   ① **滚动补偿**（scroll-driven）：两端卷轴各 3 条 `translateX`（0 → +range），
+ *      与宿主画布的 `-scrollX` 平移**正好抵消** ⇒ 卷轴在屏幕上**纹丝不动**（视口级固定装饰）。
+ *      ★这是"视图级固定元素 + 滚动画布"的声明式表达（补偿量由滚动位置驱动，无命令式 JS）。
+ *   ② **环境动效**（time-driven · repeat infinite）：月辉呼吸 / 竹与水草的风摆（从根部弯折）/
+ *      舟荡漾 / 鸟扇翅 / 云带漂移 / 水纹起伏——浏览静态长卷时画面"活着"。
  */
 export function createInkScrollProgram(env: { view: View }): InkProgram {
   const P = INK_PALETTE
   const I = INK_IDS
-  const vw = env.view.width
-  /** 总滚动行程：手指从头滑到尾 = 整卷展完（再卷回）——行程取 1.2×视口（顺手） */
-  const SCROLL_RANGE = Math.round(vw * 1.2)
+  const total = scrollCanvasWidth(env.view)
+  /** 滚动行程 = 画布宽 − 视口宽（浏览器口径：可横向滚动的余量） */
+  const range = total - Math.round(env.view.width)
 
-  /**
-   * 窗口辅助：把 `[a, b]`（0..1 全局分段）映射到滚动窗。
-   * ★★形态纪律（本仓第 N 次"形态假设"教训）：声明面用的是**嵌套 `scroll: {from, to}`**
-   *   （与 `ScalarAnimDecl.scroll` 一致——编译期再展成平铺的 `scrollFrom/scrollTo`）。
-   *   首版写成平铺 `{scrollFrom, scrollTo}` ⇒ 编译期读 `d.scroll` 为 undefined ⇒
-   *   **101 条通道全部退化成时间驱动**（测试当场抓到——`drive=1 且有窗口` 的条数 = 0）。
-   */
-  const win = (a: number, b: number): { scroll: { from: number; to: number } } => ({
-    scroll: { from: Math.round(SCROLL_RANGE * a), to: Math.round(SCROLL_RANGE * b) },
-  })
+  /** 滚动窗（补偿通道用：scroll 0..range ⇒ progress 0..1） */
+  const rollWin = (): { scroll: { from: number; to: number } } => ({ scroll: { from: 0, to: range } })
 
   const decls: EngineAnim[] = []
-  const sm = scrollMetrics(env.view)
 
-  // ★★**设计修正（2026-10-01 用户实问"怎么测"时暴露的真缺陷）**：
-  //   首版把**整幅画**（本就只有一个视口宽）向左平移 2.2 个视口 ⇒ 画全部移出屏幕
-  //   （收尾截图**全黑** = 直接证据；而判据只读 `root.tx` 数值、没查"看不看得见"⇒ 判绿）。
-  //   ⇒ 改为**手卷的物理语义**：画卷**固定居中**，**卷筒**随滚动位置从左往右滚，
-  //     墨幕（curtain）随之"卷开/卷回"——"手指拖动 = 卷筒滚动展开手卷"。
-  //     · 滚动 0 → 全卷收拢（幕布全遮，只见卷筒在最左）；
-  //     · 滚动满 → 全卷展开（幕布全开，画卷完整显现）；
-  //     · 中途 → 卷筒在中途，**左半边已展（可见）、右半边仍被幕布卷着**（真实手卷形态）。
-  //   各元素（山/水/月/云/竹/舟/鸟/题款）随"卷筒扫过"逐段落笔——与幕布同一条滚动轴。
+  // ── ① 卷轴补偿（6 条：两轴 × 筒身+上下轴头）——滚动驱动的 **+range 平移**，抵消画布 -scrollX ──
+  //   ★必须 `curve:'linear'`（补偿是**恒等映射**；easeOut 会让轴随滚动"漂移"——判据钉住）
+  const rollerIds = [
+    I.rollCylinder, I.rollKnobTop, I.rollKnobBottom,
+    I.rollerRightBar, I.rollerRightKnobTop, I.rollerRightKnobBottom,
+  ]
+  for (const id of rollerIds) {
+    decls.push(...onto(id, {
+      kind: 'translateX', from: 0, to: range, durationMs: 1000,
+      curve: 'linear', drive: 'progress', ...rollWin(),
+    }))
+  }
 
-  // ① 墨幕：随滚动从**右往左卷开**（right 0→1 = 左侧先露出——展卷方向）
-  //    ★幕布揭示与卷筒位置**同一窗口**（两处不同步会"脱筒"——判据钉住同曲线）
-  decls.push(
-    ...onto(I.curtain, { kind: 'clip', from: [0, 0, 0, 0], to: [0, 1, 0, 0], durationMs: 1000, drive: 'progress', ...win(0, 1) }),
-    // ② 卷筒（带轴头）：**从右缘滚到左缘**（与幕布同窗口——"边卷边露"）。
-    //   ★方向（真机取证定案）：滚动 0 = 闭合（卷筒贴**右缘**，translateX=0）→
-    //     滚动满 = 展完（卷筒到**左缘**，translateX=txOpen）。与幕布"右裁渐开"同向
-    //     （幕布可见区向左收缩 ⇒ 画面自右向左显露 ⇒ 揭开前沿跟着卷筒走）。
-    ...onto(I.rollCylinder, { kind: 'translateX', from: 0, to: sm.txOpen, durationMs: 1000, drive: 'progress', ...win(0, 1) }),
-    ...onto(I.rollKnobTop, { kind: 'translateX', from: 0, to: sm.txOpen, durationMs: 1000, drive: 'progress', ...win(0, 1) }),
-    ...onto(I.rollKnobBottom, { kind: 'translateX', from: 0, to: sm.txOpen, durationMs: 1000, drive: 'progress', ...win(0, 1) }),
-  )
-  // ③ 山：随卷筒扫过逐叠落笔（0.15 → 0.55 之间的三段窗）
-  const mtWins: Array<[number, number]> = [[0.1, 0.32], [0.18, 0.42], [0.26, 0.52]]
-  I.rangeCore.forEach((id, r) => {
-    decls.push(...onto(id, { kind: 'strokeProgress', from: 0, to: 1, durationMs: 1000, drive: 'progress', ...win(mtWins[r]![0]!, mtWins[r]![1]!) }))
-  })
-  // ④ 瀑/江/月/云：接着卷筒的行程逐段（山的后半 → 水 → 月 → 云）
-  decls.push(
-    ...I.waterfall.flatMap((id, i) => onto(id, { kind: 'strokeProgress', from: 0, to: 1, durationMs: 1000, drive: 'progress', ...win(0.3 + i * 0.02, 0.5) })),
-    ...onto(I.water, { kind: 'clip', from: [1, 0, 0, 0], to: [0.3, 0, 0, 0], durationMs: 1000, drive: 'progress', ...win(0.34, 0.56) }),
-    ...onto(I.waterDeep, { kind: 'clip', from: [1, 0, 0, 0], to: [0.34, 0, 0, 0], durationMs: 1000, drive: 'progress', ...win(0.38, 0.6) }),
-    ...onto(I.moon, { kind: 'clip', from: [0.5, 1.9, 0.5], to: [0.5, 0.5, 0.5], durationMs: 1000, drive: 'progress', ...win(0.42, 0.64) }),
-    ...onto(I.haloOuter, { kind: 'clip', from: [0.5, 0.5, 0], to: [0.5, 0.5, 0.5], durationMs: 1000, drive: 'progress', ...win(0.44, 0.66) }),
-  )
-  I.ripples.forEach((id, i) => {
-    decls.push(...onto(id, { kind: 'strokeProgress', from: 0, to: 1, durationMs: 1000, drive: 'progress', ...win(0.42 + i * 0.025, 0.62 + i * 0.02) }))
-  })
-  I.clouds.forEach((id, i) => {
-    decls.push(...onto(id, { kind: 'clip', from: [...MIST_FLAT], to: [...MIST_A], durationMs: 1000, drive: 'progress', ...win(0.5 + i * 0.04, 0.7 + i * 0.04) }))
-  })
-  // ⑤ 竹/舟/鸟/题款/印：卷筒扫到近端时依次（末端收笔）
-  I.bamboo.forEach((triple, i) => {
-    triple.forEach((id, k) => {
-      decls.push(...onto(id, { kind: 'strokeProgress', from: 0, to: 1, durationMs: 1000, drive: 'progress', ...win(0.52 + i * 0.04 + k * 0.02, 0.74 + i * 0.03) }))
+  // ── ② 环境动效（time-driven · 无限循环——"活着的一幅画"） ──
+  const amb = (nodeId: number, d: Parameters<typeof compileAnimations>[0][number]): void => {
+    decls.push(...onto(nodeId, d))
+  }
+  // 月辉呼吸 + 月晕呼吸
+  amb(I.moon, { kind: 'glowIntensity', from: 0.55, to: 1, durationMs: 2600, repeat: 'infinite', direction: 'alternate', curve: 'easeInOut' })
+  amb(I.haloOuter, { kind: 'scale', from: 1, to: 1.05, durationMs: 2600, repeat: 'infinite', direction: 'alternate', curve: 'easeInOut' })
+  // 竹（两簇 6 棵）从根部弯折（skew + origin 底部）
+  const stalks = [...I.bamboo.flat(), ...I.bambooB.flat()]
+  stalks.forEach((id, i) => {
+    amb(id, {
+      kind: 'skewX', from: 0, to: (i % 2 === 0 ? 1 : -1) * (2.5 + (i % 3)),
+      durationMs: 1700 + (i % 4) * 130, repeat: 'infinite', direction: 'alternate', curve: 'easeInOut',
     })
   })
-  decls.push(
-    ...I.boat.flatMap((id, i) => onto(id, { kind: 'strokeProgress', from: 0, to: 1, durationMs: 1000, drive: 'progress', ...win(0.62 + i * 0.03, 0.8) })),
-    ...I.birds.flatMap((id, i) => onto(id, { kind: 'strokeProgress', from: 0, to: 1, durationMs: 1000, drive: 'progress', ...win(0.68 + i * 0.03, 0.84) })),
-  )
-  I.titleChars.forEach((id, i) => {
-    decls.push(...onto(id, { kind: 'clip', from: [0, 1, 0, 0], to: [0, 0, 0, 0], durationMs: 1000, drive: 'progress', ...win(0.78 + i * 0.02, 0.9 + i * 0.01) }))
+  // 水草（两簇）从根部弯折
+  ;[...I.reeds, ...I.reedsB].forEach((id, i) => {
+    amb(id, {
+      kind: 'skewX', from: 0, to: (i % 2 === 0 ? 1 : -1) * (3 + (i % 3)),
+      durationMs: 1800 + (i % 3) * 160, repeat: 'infinite', direction: 'alternate', curve: 'easeInOut',
+    })
   })
-  decls.push(
-    ...onto(I.sealFill, { kind: 'clip', from: [0.5, 0.5, 0.5, 0.5], to: [0, 0, 0, 0], durationMs: 1000, drive: 'progress', ...win(0.88, 0.96) }),
-  )
+  // 舟荡漾（两条 × 三笔 = 6 节点：整体同相）
+  ;[...I.boat, ...I.boatB].forEach((id, i) => {
+    amb(id, { kind: 'translateY', from: 0, to: 3, durationMs: 1500 + (i % 3) * 120, repeat: 'infinite', direction: 'alternate', curve: 'easeInOut' })
+  })
+  // 鸟扇翅（pathMorph 两态）
+  I.birds.forEach((id, i) => {
+    amb(id, { kind: 'pathMorph', from: 0, to: 1, durationMs: 420, delayMs: i * 160, repeat: 'infinite', direction: 'alternate', curve: 'easeInOut' })
+  })
+  // 云带漂移（两条长云带 + 雾团）
+  ;[I.clouds[0]!, I.mistsB[0]!].forEach((id, i) => {
+    amb(id, { kind: 'translateX', from: 0, to: i === 0 ? 18 : -14, durationMs: 4200, repeat: 'infinite', direction: 'alternate', curve: 'easeInOut' })
+  })
+  // 水纹起伏（三行各一条代表——整行同步起伏）
+  ;[I.ripples[0]!, I.ripples[3]!, I.ripplesB[0]!].forEach((id, i) => {
+    amb(id, { kind: 'translateY', from: 0, to: i % 2 === 0 ? -2.5 : 2.5, durationMs: 1600 + i * 200, repeat: 'infinite', direction: 'alternate', curve: 'easeInOut' })
+  })
 
-  /** 拆成"幕"：一条滚动驱动的长卷 = 单幕（宿主只发一次令，之后全靠 seek_scroll） */
   const act: InkAct = {
     name: 'scroll',
-    spanMs: 1000,   // 名义跨度（滚动驱动不按时间走——由 seek 推进）
+    spanMs: 1000,
     holdMs: 0,
     durationMs: 1000,
     anims: decls,
-    note: `手卷展开（滚动驱动）：${decls.length} 条通道同一条滚动轴——` +
-      `手指拖动 = 卷筒滚动展卷（行程 ${SCROLL_RANGE}px），沿途景象随卷筒扫过逐段落笔`,
-    scrollRange: SCROLL_RANGE,
+    note: `手卷浏览：画布 ${total}px（3.2 屏宽）· 行程 ${range}px——手指 1:1 跟手 + 抛滑惯性 · ` +
+      `两端卷轴固定（6 条滚动补偿通道）· ${decls.length - rollerIds.length} 条环境动效（月辉/风摆/荡漾/扇翅）`,
     colorAnims: decls.filter((x) => isColorKind(x.kind)).length,
     clipAnims: decls.filter((x) => isClipKind(x.kind)).length,
     strokeAnims: decls.filter((x) => isStrokeKind(x.kind)).length,
     rotate3dAnims: 0,
     curveBezierAnims: decls.filter((x) => x.curveBezier !== undefined).length,
-    repeatAnims: 0,
+    repeatAnims: decls.filter((x) => x.repeat !== undefined).length,
+    midSample: false,
+    scrollRange: range,
   }
   let served = false
   return {
