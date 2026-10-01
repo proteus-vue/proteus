@@ -53,18 +53,24 @@ if fps_eq < 52:
     print(f"✗ 源片等效帧率 {fps_eq:.1f} < 52——演出存在长静帧或录屏丢帧；先修演出/录制再转码（不要转一个'静止为主'的片子）")
     sys.exit(1)
 PY
+# ★★转码到**临时件**、自检过了才发布（2026-10-01 实测教训）：
+#   此前先写 canonical 再自检 ⇒ 自检判红时**坏视频已经覆盖了站点资产**
+#   （本轮实录：录屏晚点 5.5s 的 26.8s 版本覆盖了 31s 好版本，等判据报错时已经晚了）。
+#   ⇒ 改为"临时件 → 自检 → mv 发布"；判红时 canonical **零接触**（同款纪律：能靠隔离消除的
+#     副作用，不要靠"记得还原"来管理）。
+OUT_TMP="${OUT%.mp4}.tmp.mp4"
 ffmpeg -y -loglevel error -i "$SRC" \
   -vf "scale=586:-2:flags=lanczos" \
   -c:v libx264 -preset slow -crf 27 -pix_fmt yuv420p \
   -r 60 -movflags +faststart -an \
-  "$OUT"
+  "$OUT_TMP"
 
 echo "==> 自检"
-DUR="$(ffprobe -v error -show_entries format=duration -of csv=p=0 "$OUT")"
-SIZE_BYTES="$(stat -f%z "$OUT")"
+DUR="$(ffprobe -v error -show_entries format=duration -of csv=p=0 "$OUT_TMP")"
+SIZE_BYTES="$(stat -f%z "$OUT_TMP")"
 SIZE_MB=$(( SIZE_BYTES / 1024 / 1024 ))
-WIDTH="$(ffprobe -v error -select_streams v:0 -show_entries stream=width,height,r_frame_rate -of csv=p=0 "$OUT")"
-echo "    产物：${OUT} · ${SIZE_MB}MB · 时长 ${DUR}s · ${WIDTH}（宽,高,帧率）"
+WIDTH="$(ffprobe -v error -select_streams v:0 -show_entries stream=width,height,r_frame_rate -of csv=p=0 "$OUT_TMP")"
+echo "    产物（临时件）：${OUT_TMP} · ${SIZE_MB}MB · 时长 ${DUR}s · ${WIDTH}（宽,高,帧率）"
 RC=0
 # ★★判据（不只是"够长"）：视频时长必须与**真机报告里那一轮的 elapsed_ms 对账**——
 #   "网站上的视频 = 被测的那次运行"要靠这个等式成立，而不是靠人眼看。
@@ -98,5 +104,10 @@ if bad:
     print("✗ " + "；".join(bad))
     sys.exit(1)
 PY
-[ "$RC" = "0" ] || exit 1
+if [ "$RC" != "0" ]; then
+  rm -f "$OUT_TMP"
+  echo "✗ 自检未过——canonical 视频**未被覆盖**（${OUT} 保持原样）；修好源片后重跑本脚本"
+  exit 1
+fi
+mv -f "$OUT_TMP" "$OUT"
 echo "✅ 网页视频就绪：website/public/morpheus-showcase.mp4"

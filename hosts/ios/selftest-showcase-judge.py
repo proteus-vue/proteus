@@ -112,6 +112,13 @@ def compliant_report(plan: list, soak_cycles: int) -> dict:
             'patch': {'ok': True, 'patch_count': 800, 'relayout_count': 840, 'relayout_ms': 2.86, 'update_ms': 15.2},
             'start': {'ok': True, 'animated': 760, 'maxDeltaPx': 361, 'updates_len': 760},
         },
+        # ★逃生口率（真实消费面采集）：合规基线 = 31200 条声明式 · 0 条逃生口
+        'escapes': {
+            'total': 0, 'declaratives': 31200, 'ratio': 0.0,
+            'byKind': {'custom-easing': 0, 'external-driver': 0, 'layout-property': 0,
+                       'cross-property-timeline': 0, 'platform-mixing': 0, 'other': 0},
+            'degraded': [],
+        },
         'soak_mem': {'samples': 30, 'head_mb': 42.0, 'tail_mb': 43.1, 'growth_mb': 1.1},
         'thermal': {'start': 'nominal', 'end': 'nominal'},
         'mem_start_mb': 40.0,
@@ -201,6 +208,23 @@ def main() -> int:
     inject(lambda d: [a.update(anim_end_ms=a['span_ms'] * 0.5) for a in d['acts_perf']], '动画 2× 速播完（anim_end = 0.5×跨度）')
     # ⑩c ★缺动画结束取证（宿主未记录 active 归零时刻）——判据不许"没数据就是绿"
     inject(lambda d: [a.pop('anim_end_ms', None) for a in d['acts_perf']], '缺 anim_end_ms 取证（全幕）')
+    # ⑩d ★逃生口率超标（登记 >5%：说明封闭集覆盖不足——§11 验收线）
+    inject(lambda d: d['escapes'].update(total=1800, ratio=1800 / (31200 + 1800)), '逃生口率 5.5%（超 5% 目标）')
+    # ⑩e ★逃生口取证缺失（工程侧未接入 escapes.summary()）
+    inject(lambda d: d.pop('escapes', None), '缺 escapes 取证（逃生口率未采数）')
+    # ⑩f ★长跑形态的预算线（12ms）：10ms 应**绿**（那是热化 × 最大并发的真实边际——
+    #      2026-10-01 实测标定，见 SOAK_FRAME_BUDGET_MS），13ms 应**红**（真回归）。
+    def soak_act_p95(v):
+        def fn(d):
+            d['soak'].update(ms=300000, cycles=160)
+            for a in d['acts_perf']:
+                if a['name'] == 'spiral':
+                    a.update(work_p95_ms=v)
+        return fn
+    soak_ok = copy.deepcopy(base)
+    soak_act_p95(10.0)(soak_ok)
+    cases.append(('长跑形态：单幕 p95 10ms（12ms 线内，应绿）', soak_ok, big_png, 0))
+    inject(soak_act_p95(13.0), '长跑形态：单幕 p95 13ms（超 12ms 线）')
     # ⑪ 四条路径有幕缺失（把 spiral 改名）
     inject(lambda d: [d['acts'].__setitem__(i, {**a, 'name': 'x-spiral'}) for i, a in enumerate(d['acts']) if a['name'] == 'spiral'], '四条路径缺"螺旋"幕')
 

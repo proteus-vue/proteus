@@ -93,7 +93,16 @@ export const SHOWCASE_ACT_MARGIN_MS = 0
 /** 长跑（压力幕）一循环：风暴 + 归位 */
 export const SOAK_STORM_MS = 1100
 export const SOAK_SETTLE_MS = 600
-/** 一循环的**幕时长**（含余量） */
+/**
+ * ①（历史常量，**不再用于展开计算**）一循环的**名义**时长 = 两个 durationMs 相加。
+ *
+ * 【为什么弃用（2026-10-01 真机实测抓出的真缺陷）】storm 的幕时长不是 `durationMs`，
+ *   而是 `span = maxRank × staggerMs + durationMs`（相位错峰的**最大延迟**也要算进去）：
+ *   800 片 / `alternate` 相位序下 maxRank ≈ 799 ⇒ 真实 span **3497ms**，是 durationMs 的 3.2×。
+ *   ⇒ 用名义常量算循环数 `ceil(soakMs / 1700)` 会让"5 分钟长跑"实际跑 **12.6 分钟**（实测）。
+ *   正确口径 = 用**同一编译链的真产物** span 展开（见 `createShowcaseProgram` 里的
+ *   `soakCycleDurations`）——不手算、不再引入第二个数字来源。
+ */
 export const SOAK_CYCLE_MS = SOAK_STORM_MS + SOAK_SETTLE_MS + SHOWCASE_ACT_MARGIN_MS * 2
 
 /** 基线姿态（布局位：无位移/无旋转/原尺寸/全不透明） */
@@ -305,30 +314,46 @@ export function createShowcaseProgram(env: ShowcaseEnv): ShowcaseProgram {
   // ⑫ 长跑（**默认不跑**；`soakMs > 0` 才展开）——评审点名的"泄漏/热节流"压力测量，
   //    用户明确要求"不用为了时长去一直重复" ⇒ 默认演出一遍到底，压力测量按需开启：
   //    `PROTEUS_SHOWCASE_SOAK_MS=300000 bash hosts/ios/run-selfdraw.sh --showcase`
-  const soakCycles = env.soakMs > 0 ? Math.max(1, Math.ceil(env.soakMs / SOAK_CYCLE_MS)) : 0
+  //
+  //    ★★循环数按**真编译产物的 span** 展开（2026-10-01 修复，见 SOAK_CYCLE_MS 注释）：
+  //      奇偶轮相位序不同（alternate span 3497ms / diagonal 更短）⇒ 两个真实循环时长都量出来，
+  //      交替累计到 ≥ 目标为止——保证"soakMs=300000 真的跑约 5 分钟"，而不是名义 1.7s×N 的 12.6 分钟。
+  const buildSoakStorm = (k: number): ReturnType<typeof choreograph.storm> =>
+    choreograph.storm({
+      ids,
+      canvas: { cols, view },
+      order: k % 2 === 0 ? 'alternate' : 'diagonal',
+      staggerMs: 3,
+      durationMs: SOAK_STORM_MS,
+    })
+  const buildSoakSettle = (): ReturnType<typeof choreograph.settle> =>
+    choreograph.settle({ ids, canvas: cSettle(), durationMs: SOAK_SETTLE_MS })
+  let soakCycles = 0
+  if (env.soakMs > 0) {
+    // 一轮（风暴 + 归位）的真实时长；两种相位序各量一次（纯编译，不碰设备）
+    const cycleEven = spanMs(buildSoakStorm(0)) + spanMs(buildSoakSettle())
+    const cycleOdd = spanMs(buildSoakStorm(1)) + spanMs(buildSoakSettle())
+    let acc = 0
+    while (acc < env.soakMs) {
+      acc += soakCycles % 2 === 0 ? cycleEven : cycleOdd
+      soakCycles++
+    }
+    soakCycles = Math.max(1, soakCycles)
+  }
   for (let k = 0; k < soakCycles; k++) {
     steps.push({
       name: `soak-storm#${k + 1}`,
       expects: 'baseline',
       endsAtBaseline: false,
       note: `长跑 ${k + 1}/${soakCycles}：风暴（五属性并发）`,
-      build: () => ({
-        // 奇偶轮换相位序：视觉有变化，同时让"相位序"这条路径在长跑里也被反复走
-        anims: choreograph.storm({
-          ids,
-          canvas: { cols, view },
-          order: k % 2 === 0 ? 'alternate' : 'diagonal',
-          staggerMs: 3,
-          durationMs: SOAK_STORM_MS,
-        }),
-      }),
+      build: () => ({ anims: buildSoakStorm(k) }),
     })
     steps.push({
       name: `soak-settle#${k + 1}`,
       expects: 'current',
       endsAtBaseline: true,
       note: `长跑 ${k + 1}/${soakCycles}：归位（幕间清理）`,
-      build: () => ({ anims: choreograph.settle({ ids, canvas: cSettle(), durationMs: SOAK_SETTLE_MS }) }),
+      build: () => ({ anims: buildSoakSettle() }),
     })
   }
 

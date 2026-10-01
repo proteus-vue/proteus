@@ -17,12 +17,13 @@
 //   · `plan`/`acts`（节目单 vs 实际演出——两清单必须逐项一致）
 //   · 每幕指令数、发令耗时、幕时长；FLIP 幕的三段回执（capture/patch/start，去掉巨型数组只留摘要）
 //   · 终值探针（真读层）+ 帧循环统计（帧数）+ 收尾截图
-import { createShowcaseProgram, SOAK_CYCLE_MS } from './showcase-program'
+import { escapes } from '@proteus-vue/animation'
+import { createShowcaseProgram } from './showcase-program'
 import type { ShowcaseAct, ShowcaseProgram } from './showcase-program'
 
 // ★构建标识（由 hosts/ios/bridge/inject-build-id.mjs **编译期替换**——与 entry-bench/entry-selfdraw
 //   同一机制；报告据此断言"设备上跑的是本次构建"）
-const BUILD_ID = 'b002ef4f-094359'
+const BUILD_ID = 'adc2d3c1-103251'
 
 /** 帧内视图参数（建树时定，后续幕复用） */
 interface ViewGeom {
@@ -218,7 +219,11 @@ export function __proteusShowcaseRun(argsJson?: string): string {
   results.mount = mounted
   results.mount_ms = round2(mountMs)
   results.plan = state.plan
-  results.soak = { ms: a.soakMs, cycles: a.soakMs > 0 ? Math.max(1, Math.ceil(a.soakMs / SOAK_CYCLE_MS)) : 0 }
+  // ★循环数**从节目单数**（2026-10-01 修正：不再用名义常量 `SOAK_CYCLE_MS` 反推——
+  //   storm 的真实跨度 = maxRank×stagger + duration，是名义值的 2.4×，旧算法会把
+  //   "5 分钟"展开成 12.6 分钟；节目单自己按真编译产物展开，这里数它就是权威值）。
+  const soakCycles = state.plan.filter((n) => n.startsWith('soak-storm#')).length
+  results.soak = { ms: a.soakMs, cycles: soakCycles }
   return JSON.stringify({ ok: true, tiles: a.tiles, mount_ms: round2(mountMs), acts: state.plan.length })
 }
 
@@ -260,6 +265,12 @@ export function __proteusShowcaseNext(): string {
   }
 
   const issueMs = Number(proteusSelfDraw.nowUs()) / 1000 - t0
+  // ★★逃生口记账（2026-10-01）：把本幕**编译产物条数**记入全局注册表——
+  //   这正是 `compileAnimations(..., { escapes })` 在编译期会做的记账（每声明 1 条动画，1:1；
+  //   `compileChoreography` 内部逐片调它）。炫技场是**首个真实消费面**：登记数进报告 ⇒
+  //   「逃生口率」从"装置就绪、待采数"变成**每轮真机断言**（判据 check-showcase.py ⑥）。
+  //   ★FLIP 幕的补间由内核 `flip_start` 内生（不经 compileAnimations）⇒ 不进分母（声明式为 0）。
+  escapes.noteDeclarative(act.anims.length)
   state.acts.push({
     name: act.name,
     anims: act.anims.length,
@@ -301,6 +312,11 @@ export function __proteusShowcaseFinalize(): string {
   results.acts = state.acts
   results.acts_complete = state.acts.length === state.plan.length
     && state.acts.every((a, i) => a.name === state.plan[i])
+  // ★★逃生口率（真实消费面的首个采集点，2026-10-01）：整场是 31200 条声明式指令
+  //   （12 幕 × 每幕 compileAnimations 产物）＋ 0 条逃生口登记 ⇒ 率 = 0%，
+  //   由判据（check-showcase.py ⑥）对目标 5% 做机器判定——把「装置就绪、待采数」
+  //   落成「已采数」。★这只是**本演示**的用量，不等于全业务面（诚实标注）。
+  results.escapes = escapes.summary()
   results.ok = true
   const json = JSON.stringify(results)
   proteusSelfDraw.report(json)

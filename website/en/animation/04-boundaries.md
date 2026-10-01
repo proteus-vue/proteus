@@ -20,6 +20,10 @@ Every reading points to a **re-runnable assertion script**; every “not done ye
 | Layout animation (FLIP) | 215 nodes tweening on screen · frame cost p95 0.713ms | `check-anim-rt2.py` groups F/H |
 | Instruction path vs JS path | 10.5× – 84.5× (N=50 → 1000; host-side lower bound) | `rt0-anim-spike.md` |
 | Route transition (both targets) | Mirror pair exactly inverse · host actions complete | `check-app-stack.py` group ⑦ |
+| Showcase (800 tiles · 12 acts · single pass) | 58.4 FPS · p50 2.31 / p95 5.53ms per frame · 17/1887 dropped (0.90%) · FLIP full re-layout of 841 tiles (kernel 2ms) | `check-showcase.py` (device `showcase.json`) |
+| Showcase · **soak stress** (160 acts · 5.6 min) | 57.9 FPS · 0.95% dropped · **memory +0.2MB** (148 samples) · no thermal throttling (fair→fair) · 623,200 declarative instructions | `check-showcase.py` (device `showcase-soak.json`) |
+| Soak thermal edge (stated honestly) | In zero-stagger full-concurrency acts (3200 simultaneous), tail frames sit at 8.2–9.6ms once the device warms up (p50 actually drops to ~3.7ms); staggered acts stay ≤4ms — far below the 16.7ms budget; the soak budget is a 12ms line | `check-showcase.py` (`SOAK_FRAME_BUDGET_MS`) |
+| Animation **does not finish early** (the 1×-speed assertion) | per act `anim_end/nominal span ≥ 0.84` (curve acts ≈1.00; ≈0.5 at 2× speed — this is the assertion that catches it) | `check-showcase.py` ②d · self-tested by `selftest-showcase-judge.py` 15/15 |
 
 > **Why “zero wake-ups” uses OS-level CPU accounting instead of Instruments**: `xctrace` on this machine cannot record from the device (DeviceSupport version lags), so the measurement uses the difference of two `thread_info` samples — machine-judgeable, and paired with a **positive control** (the tick path must show significant cost; below 5ms the probe is declared broken and must not pass) — a negative assertion is only trustworthy with a control.
 
@@ -31,7 +35,7 @@ Every reading points to a **re-runnable assertion script**; every “not done ye
 | Scroll-linked (real gesture) | Driver interface decoupled from the input source (the callback just reports the position); **real finger-drag** not wired |
 | 120 FPS | The target needs a ProMotion device; iPhone 12 is 60Hz — **honestly noted, not claimed** |
 | Gesture negotiation | Nested-scroll conflicts / multi-touch: by design **not part of this engine**, tracked separately |
-| Escape-hatch ratio | Instrumentation ready (`escapes.format()`); business usage **pending** |
+| Escape-hatch ratio | Instrumentation ready (`escapes.format()`); **showcase surface now sampled**: 31,200 declarative instructions / 0 escape hatches = **0%** (asserted every run by judge ⑥) — the wider business surface is **still pending** (a demo surface ≠ a business surface; stated honestly) |
 | Cross-target visual identity | The instruction stream guarantees “what to draw”, **not “it looks identical”** (corner clipping / shadows / text baselines differ) — backstopped by conformance and browser-truth baselines |
 
 ## Destructive verification (the assertions have teeth)
@@ -45,6 +49,7 @@ Assertions are not “green once, done” — every critical assertion has been 
 | Platform animation (Android) | Tight-fit check / same-colour check / clip awareness removed | each case fails |
 | Route transition (both targets) | Mirror pair broken / direction flipped / tree retention broken / timing inconsistent | all 6 variants fail |
 | Executor host actions | Animation not completed / tree ops not performed / hook missing | all 5 variants fail |
+| Showcase judge (19 cases) | Faked frame counts / an act over budget / 5% drops / memory leak / missing acts / finale not applied / FLIP not run / thermal throttling / tail pauses / **animation at 2× speed** / **missing end-of-animation evidence** / **escape ratio over target / missing evidence** / soak budget line both ways | 15 fail + 2 pass (inside the budget line), all as expected |
 
 ## How to re-run
 
@@ -60,6 +65,16 @@ python3 hosts/android/check-kernel-anim.py hosts/android/results/kernel-anim.jso
 # Route transition executor (both targets)
 bash hosts/android/run-app-stack.sh
 python3 hosts/android/check-app-stack.py hosts/android/results/app-stack.json
+
+# Showcase (800 tiles · 12 acts) — the single-pass run the website video and numbers come from
+bash hosts/ios/run-selfdraw.sh --showcase --record
+bash hosts/ios/make-showcase-video.sh     # web video (with a source-frame-rate assertion)
+python3 hosts/ios/check-showcase.py hosts/ios/results/showcase.json
+
+# Showcase · soak stress measurement (memory leak + thermal throttling; saved as showcase-soak.json,
+# it does not overwrite the single-pass report above)
+PROTEUS_SHOWCASE_SOAK_MS=300000 bash hosts/ios/run-selfdraw.sh --showcase
+python3 hosts/ios/check-showcase.py hosts/ios/results/showcase-soak.json
 ```
 
 ## Back to the start

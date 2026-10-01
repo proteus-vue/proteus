@@ -4,7 +4,7 @@
       "anims" : 2400,
       "duration_ms" : 1958.8,
       "hold_ms" : 0,
-      "issue_ms" : 24.91,
+      "issue_ms" : 25.039999999999999,
       "name" : "gather",
       "note" : "星尘凝聚：800 片从屏外径向飞回布局位（spring 物理）",
       "span_ms" : 1958.8
@@ -13,7 +13,7 @@
       "anims" : 3200,
       "duration_ms" : 2698,
       "hold_ms" : 0,
-      "issue_ms" : 50.130000000000003,
+      "issue_ms" : 49.159999999999997,
       "name" : "title",
       "note" : "开场语：整屏元素聚成点阵文字 MORPHEUS",
       "span_ms" : 2698
@@ -22,7 +22,7 @@
       "anims" : 4000,
       "duration_ms" : 1898.5,
       "hold_ms" : 0,
-      "issue_ms" : 58.740000000000002,
+      "issue_ms" : 57.289999999999999,
       "name" : "settle-title",
       "note" : "收网格：从文字构型收归布局位（起点 = 上一幕终态，无跳变）",
       "span_ms" : 1898.5
@@ -31,7 +31,7 @@
       "anims" : 1600,
       "duration_ms" : 7392,
       "hold_ms" : 0,
-      "issue_ms" : 40.380000000000003,
+      "issue_ms" : 38.740000000000002,
       "name" : "ripple",
       "note" : "涟漪：从中心向外逐圈脉冲（scale\/opacity 两段序列）",
       "span_ms" : 7392
@@ -40,7 +40,7 @@
       "anims" : 1600,
       "duration_ms" : 4575,
       "hold_ms" : 0,
-      "issue_ms" : 35.030000000000001,
+      "issue_ms" : 35.68,
       "name" : "domino",
       "note" : "多米诺：翻转再弹回（奇偶反向，蛇形掠过）",
       "span_ms" : 4575
@@ -49,7 +49,7 @@
       "anims" : 4000,
       "duration_ms" : 4296,
       "hold_ms" : 0,
-      "issue_ms" : 57.039999999999999,
+      "issue_ms" : 56.840000000000003,
       "name" : "storm-peak",
       "note" : "风暴：五属性并发（800×5 = 4000 条指令）——单帧负载峰值",
       "span_ms" : 4296
@@ -58,7 +58,7 @@
       "anims" : 4000,
       "duration_ms" : 1898.5,
       "hold_ms" : 0,
-      "issue_ms" : 58.460000000000001,
+      "issue_ms" : 58.82,
       "name" : "settle-storm",
       "note" : "收风：从风暴姿态收归布局位（径向错峰收回）",
       "span_ms" : 1898.5
@@ -68,7 +68,7 @@
       "duration_ms" : 900,
       "flip" : true,
       "hold_ms" : 0,
-      "issue_ms" : 37.399999999999999,
+      "issue_ms" : 35.340000000000003,
       "name" : "flip-condense",
       "note" : "全量重排①：整个网格缩略（840 个节点几何全变，内核重排）",
       "span_ms" : 900
@@ -78,7 +78,7 @@
       "duration_ms" : 900,
       "flip" : true,
       "hold_ms" : 0,
-      "issue_ms" : 28.050000000000001,
+      "issue_ms" : 28.859999999999999,
       "name" : "flip-restore",
       "note" : "全量重排②：网格展开回原尺寸（再一轮全量重排）",
       "span_ms" : 900
@@ -87,7 +87,7 @@
       "anims" : 3200,
       "duration_ms" : 900,
       "hold_ms" : 0,
-      "issue_ms" : 34.210000000000001,
+      "issue_ms" : 36.420000000000002,
       "name" : "spiral",
       "note" : "漩涡：沿渐开线收向屏心（四属性并发，构图锚点=视口中心）",
       "span_ms" : 900
@@ -96,7 +96,7 @@
       "anims" : 4000,
       "duration_ms" : 1279.4000000000001,
       "hold_ms" : 0,
-      "issue_ms" : 19.239999999999998,
+      "issue_ms" : 19.649999999999999,
       "name" : "settle-spiral",
       "note" : "收漩涡：从漩涡姿态收归布局位",
       "span_ms" : 1279.4000000000001
@@ -105,7 +105,7 @@
       "anims" : 3200,
       "duration_ms" : 3798.5,
       "hold_ms" : 1400,
-      "issue_ms" : 51.079999999999998,
+      "issue_ms" : 50.710000000000001,
       "name" : "finale",
       "note" : "谢幕语：整屏元素聚成 800 TILES（本场的机器读数）",
       "span_ms" : 2398.5
@@ -114,24 +114,24 @@
   "acts_complete" : true,
   "acts_perf" : [
     {
-      "act_ms" : 1653,
-      "anim_end_ms" : 1653,
-      "dropped" : 0,
-      "dropped_ratio" : 0,
-      "fps" : 59.899999999999999,
+      "act_ms" : 1663.5,
+      "anim_end_ms" : 1663.5,
+      "dropped" : 1,
+      "dropped_ratio" : 0.0101,
+      "fps" : 59.5,
       "frames" : 99,
       "hold_ms" : 0,
       "name" : "gather",
       "span_ms" : 1958.8,
       "tail_wait_ms" : 0,
-      "work_max_ms" : 6.0949999999999998,
-      "work_p50_ms" : 2.4399999999999999,
-      "work_p95_ms" : 5.6239999999999997,
-      "work_p99_ms" : 5.8280000000000003
+      "work_max_ms" : 6.1449999999999996,
+      "work_p50_ms" : 2.2690000000000001,
+      "work_p95_ms" : 5.7270000000000003,
+      "work_p99_ms" : 5.915
     },
     {
-      "act_ms" : 2698,
-      "anim_end_ms" : 2698,
+      "act_ms" : 2698.1999999999998,
+      "anim_end_ms" : 2698.1999999999998,
       "dropped" : 0,
       "dropped_ratio" : 0,
       "fps" : 59.700000000000003,
@@ -139,27 +139,27 @@
       "hold_ms" : 0,
       "name" : "title",
       "span_ms" : 2698,
-      "tail_wait_ms" : 0,
-      "work_max_ms" : 6.3849999999999998,
-      "work_p50_ms" : 4.5359999999999996,
-      "work_p95_ms" : 5.9489999999999998,
-      "work_p99_ms" : 6.3129999999999997
+      "tail_wait_ms" : 0.20000000000000001,
+      "work_max_ms" : 6.7859999999999996,
+      "work_p50_ms" : 4.4059999999999997,
+      "work_p95_ms" : 5.9720000000000004,
+      "work_p99_ms" : 6.4039999999999999
     },
     {
       "act_ms" : 1905.5999999999999,
       "anim_end_ms" : 1905.5999999999999,
-      "dropped" : 0,
-      "dropped_ratio" : 0,
+      "dropped" : 1,
+      "dropped_ratio" : 0.0091000000000000004,
       "fps" : 59.600000000000001,
       "frames" : 110,
       "hold_ms" : 0,
       "name" : "settle-title",
       "span_ms" : 1898.5,
       "tail_wait_ms" : 7.0999999999999996,
-      "work_max_ms" : 6.3109999999999999,
-      "work_p50_ms" : 4.2130000000000001,
-      "work_p95_ms" : 5.891,
-      "work_p99_ms" : 6.0350000000000001
+      "work_max_ms" : 6.2930000000000001,
+      "work_p50_ms" : 4.3789999999999996,
+      "work_p95_ms" : 5.9980000000000002,
+      "work_p99_ms" : 6.2599999999999998
     },
     {
       "act_ms" : 7402.8999999999996,
@@ -172,10 +172,10 @@
       "name" : "ripple",
       "span_ms" : 7392,
       "tail_wait_ms" : 10.9,
-      "work_max_ms" : 4.1689999999999996,
-      "work_p50_ms" : 2.1899999999999999,
-      "work_p95_ms" : 2.5270000000000001,
-      "work_p99_ms" : 2.7589999999999999
+      "work_max_ms" : 3.9289999999999998,
+      "work_p50_ms" : 2.1499999999999999,
+      "work_p95_ms" : 2.5470000000000002,
+      "work_p99_ms" : 2.6920000000000002
     },
     {
       "act_ms" : 4586.6999999999998,
@@ -188,14 +188,14 @@
       "name" : "domino",
       "span_ms" : 4575,
       "tail_wait_ms" : 11.699999999999999,
-      "work_max_ms" : 2.2909999999999999,
-      "work_p50_ms" : 1.8580000000000001,
-      "work_p95_ms" : 2.1120000000000001,
-      "work_p99_ms" : 2.2120000000000002
+      "work_max_ms" : 2.1720000000000002,
+      "work_p50_ms" : 1.8280000000000001,
+      "work_p95_ms" : 2.0800000000000001,
+      "work_p99_ms" : 2.1419999999999999
     },
     {
-      "act_ms" : 4300.1000000000004,
-      "anim_end_ms" : 4300.1000000000004,
+      "act_ms" : 4300.1999999999998,
+      "anim_end_ms" : 4300.1999999999998,
       "dropped" : 1,
       "dropped_ratio" : 0.0040000000000000001,
       "fps" : 59.399999999999999,
@@ -203,11 +203,11 @@
       "hold_ms" : 0,
       "name" : "storm-peak",
       "span_ms" : 4296,
-      "tail_wait_ms" : 4.0999999999999996,
-      "work_max_ms" : 4.992,
-      "work_p50_ms" : 4.1449999999999996,
-      "work_p95_ms" : 4.75,
-      "work_p99_ms" : 4.907
+      "tail_wait_ms" : 4.2000000000000002,
+      "work_max_ms" : 5.085,
+      "work_p50_ms" : 4.0179999999999998,
+      "work_p95_ms" : 4.6689999999999996,
+      "work_p99_ms" : 5.0110000000000001
     },
     {
       "act_ms" : 1905.5,
@@ -220,26 +220,26 @@
       "name" : "settle-storm",
       "span_ms" : 1898.5,
       "tail_wait_ms" : 7,
-      "work_max_ms" : 6.3449999999999998,
-      "work_p50_ms" : 4.6210000000000004,
-      "work_p95_ms" : 5.9370000000000003,
-      "work_p99_ms" : 6.1020000000000003
+      "work_max_ms" : 6.2460000000000004,
+      "work_p50_ms" : 4.3840000000000003,
+      "work_p95_ms" : 5.9189999999999996,
+      "work_p99_ms" : 6.1669999999999998
     },
     {
       "act_ms" : 910.60000000000002,
       "anim_end_ms" : 910.60000000000002,
-      "dropped" : 1,
-      "dropped_ratio" : 0.019199999999999998,
-      "fps" : 59.600000000000001,
+      "dropped" : 0,
+      "dropped_ratio" : 0,
+      "fps" : 60.5,
       "frames" : 52,
       "hold_ms" : 0,
       "name" : "flip-condense",
       "span_ms" : 900,
       "tail_wait_ms" : 10.6,
-      "work_max_ms" : 5.923,
-      "work_p50_ms" : 5.0949999999999998,
-      "work_p95_ms" : 5.6040000000000001,
-      "work_p99_ms" : 5.8840000000000003
+      "work_max_ms" : 5.5869999999999997,
+      "work_p50_ms" : 5.0990000000000002,
+      "work_p95_ms" : 5.431,
+      "work_p99_ms" : 5.5529999999999999
     },
     {
       "act_ms" : 910.60000000000002,
@@ -252,42 +252,42 @@
       "name" : "flip-restore",
       "span_ms" : 900,
       "tail_wait_ms" : 10.6,
-      "work_max_ms" : 5.3380000000000001,
-      "work_p50_ms" : 4.024,
-      "work_p95_ms" : 4.9299999999999997,
-      "work_p99_ms" : 5.1680000000000001
+      "work_max_ms" : 6.1050000000000004,
+      "work_p50_ms" : 4.1509999999999998,
+      "work_p95_ms" : 5.343,
+      "work_p99_ms" : 6.0410000000000004
     },
     {
       "act_ms" : 910.60000000000002,
       "anim_end_ms" : 910.60000000000002,
       "dropped" : 1,
       "dropped_ratio" : 0.019199999999999998,
-      "fps" : 59.700000000000003,
+      "fps" : 59.799999999999997,
       "frames" : 52,
       "hold_ms" : 0,
       "name" : "spiral",
       "span_ms" : 900,
       "tail_wait_ms" : 10.6,
-      "work_max_ms" : 5.8449999999999998,
-      "work_p50_ms" : 4.9050000000000002,
-      "work_p95_ms" : 5.633,
-      "work_p99_ms" : 5.7869999999999999
+      "work_max_ms" : 5.7729999999999997,
+      "work_p50_ms" : 5.0119999999999996,
+      "work_p95_ms" : 5.4660000000000002,
+      "work_p99_ms" : 5.6399999999999997
     },
     {
-      "act_ms" : 1281.7,
-      "anim_end_ms" : 1281.7,
+      "act_ms" : 1281.5999999999999,
+      "anim_end_ms" : 1281.5999999999999,
       "dropped" : 0,
       "dropped_ratio" : 0,
-      "fps" : 59.899999999999999,
-      "frames" : 69,
+      "fps" : 60,
+      "frames" : 70,
       "hold_ms" : 0,
       "name" : "settle-spiral",
       "span_ms" : 1279.4000000000001,
-      "tail_wait_ms" : 2.2999999999999998,
-      "work_max_ms" : 5.5099999999999998,
-      "work_p50_ms" : 4.3079999999999998,
-      "work_p95_ms" : 5.2240000000000002,
-      "work_p99_ms" : 5.4059999999999997
+      "tail_wait_ms" : 2.2000000000000002,
+      "work_max_ms" : 5.6890000000000001,
+      "work_p50_ms" : 4.4530000000000003,
+      "work_p95_ms" : 5.5300000000000002,
+      "work_p99_ms" : 5.6669999999999998
     },
     {
       "act_ms" : 3827.9000000000001,
@@ -300,18 +300,34 @@
       "name" : "finale",
       "span_ms" : 2398.5,
       "tail_wait_ms" : 29.399999999999999,
-      "work_max_ms" : 6.1079999999999997,
-      "work_p50_ms" : 2.6019999999999999,
-      "work_p95_ms" : 5.8049999999999997,
-      "work_p99_ms" : 6.0439999999999996
+      "work_max_ms" : 6.1660000000000004,
+      "work_p50_ms" : 2.6539999999999999,
+      "work_p95_ms" : 5.6950000000000003,
+      "work_p99_ms" : 6.0289999999999999
     }
   ],
-  "build_id" : "b002ef4f-094359",
+  "build_id" : "adc2d3c1-103251",
   "cols" : 20,
   "device" : {
     "model" : "iPhone13,2",
     "os" : "Version 26.7 (Build 23H24)",
     "screen_max_fps" : 60
+  },
+  "escapes" : {
+    "byKind" : {
+      "cross-property-timeline" : 0,
+      "custom-easing" : 0,
+      "external-driver" : 0,
+      "layout-property" : 0,
+      "other" : 0,
+      "platform-mixing" : 0
+    },
+    "declaratives" : 31200,
+    "degraded" : [
+
+    ],
+    "ratio" : 0,
+    "total" : 0
   },
   "flip_flip-condense" : {
     "capture" : {
@@ -321,8 +337,8 @@
     "note" : "全量重排①：整个网格缩略（840 个节点几何全变，内核重排）",
     "patch" : {
       "_timing" : {
-        "collect_changed_ms" : 1.6299999999999999,
-        "engine_and_relayout_ms" : 2,
+        "collect_changed_ms" : 1.3400000000000001,
+        "engine_and_relayout_ms" : 1.6499999999999999,
         "engine_diag" : {
           "cache_len" : 0,
           "has_persistent" : true,
@@ -334,21 +350,21 @@
         "lock_ms" : 0,
         "phases" : {
           "cached_ensure_ms" : 0,
-          "cached_run_ms" : 1.3899999999999999,
-          "cached_sync_ms" : 0.19,
-          "cached_writeback_ms" : 0,
+          "cached_run_ms" : 1.03,
+          "cached_sync_ms" : 0.14000000000000001,
+          "cached_writeback_ms" : 0.01,
           "dedup_ms" : 0,
-          "full_build_ms" : 0.59999999999999998,
-          "full_run_ms" : 0.92000000000000004,
+          "full_build_ms" : 0.19,
+          "full_run_ms" : 0.28999999999999998,
           "full_writeback_ms" : 0,
-          "loop_ms" : 1.95,
-          "prologue_ms" : 0.35999999999999999,
-          "scope_derive_ms" : 0.040000000000000001
+          "loop_ms" : 1.5900000000000001,
+          "prologue_ms" : 0.39000000000000001,
+          "scope_derive_ms" : 0.050000000000000003
         },
-        "total_ms" : 5.3600000000000003
+        "total_ms" : 4.8600000000000003
       },
       "changed_rects" : 841,
-      "collect_ms" : 1.6299999999999999,
+      "collect_ms" : 1.3400000000000001,
       "engine_diag" : {
         "cache_len" : 0,
         "has_persistent" : true,
@@ -358,22 +374,22 @@
       },
       "engine_phases" : {
         "cached_ensure_ms" : 0,
-        "cached_run_ms" : 1.3899999999999999,
-        "cached_sync_ms" : 0.19,
-        "cached_writeback_ms" : 0,
+        "cached_run_ms" : 1.03,
+        "cached_sync_ms" : 0.14000000000000001,
+        "cached_writeback_ms" : 0.01,
         "dedup_ms" : 0,
-        "full_build_ms" : 0.59999999999999998,
-        "full_run_ms" : 0.92000000000000004,
+        "full_build_ms" : 0.19,
+        "full_run_ms" : 0.28999999999999998,
         "full_writeback_ms" : 0,
-        "loop_ms" : 1.95,
-        "prologue_ms" : 0.35999999999999999,
-        "scope_derive_ms" : 0.040000000000000001
+        "loop_ms" : 1.5900000000000001,
+        "prologue_ms" : 0.39000000000000001,
+        "scope_derive_ms" : 0.050000000000000003
       },
-      "host_total_ms" : 21.27,
+      "host_total_ms" : 20.390000000000001,
       "idmap_ms" : 0,
       "in_bytes" : 34401,
       "incremental" : true,
-      "layers_ms" : 2.3799999999999999,
+      "layers_ms" : 1.71,
       "measure_calls" : 0,
       "measure_hits" : 0,
       "measures_injected" : 0,
@@ -381,10 +397,10 @@
       "patch_count" : 800,
       "path" : "updatePatches",
       "relayout_count" : 841,
-      "relayout_ms" : 2,
+      "relayout_ms" : 1.6499999999999999,
       "text_layers_applied" : 0,
       "text_updates" : 0,
-      "update_ms" : 13,
+      "update_ms" : 12.94,
       "updated_layers" : 841
     },
     "start" : {
@@ -402,8 +418,8 @@
     "note" : "全量重排②：网格展开回原尺寸（再一轮全量重排）",
     "patch" : {
       "_timing" : {
-        "collect_changed_ms" : 0.92000000000000004,
-        "engine_and_relayout_ms" : 1.1299999999999999,
+        "collect_changed_ms" : 0.83999999999999997,
+        "engine_and_relayout_ms" : 1.0600000000000001,
         "engine_diag" : {
           "cache_len" : 0,
           "has_persistent" : true,
@@ -415,18 +431,18 @@
         "lock_ms" : 0,
         "phases" : {
           "cached_ensure_ms" : 0,
-          "cached_run_ms" : 0.80000000000000004,
+          "cached_run_ms" : 0.66000000000000003,
           "cached_sync_ms" : 0.089999999999999997,
           "cached_writeback_ms" : 0,
           "dedup_ms" : 0,
-          "loop_ms" : 1.0800000000000001,
-          "prologue_ms" : 0.17000000000000001,
+          "loop_ms" : 0.98999999999999999,
+          "prologue_ms" : 0.22,
           "scope_derive_ms" : 0.040000000000000001
         },
-        "total_ms" : 3.4199999999999999
+        "total_ms" : 3.29
       },
       "changed_rects" : 841,
-      "collect_ms" : 0.92000000000000004,
+      "collect_ms" : 0.83999999999999997,
       "engine_diag" : {
         "cache_len" : 0,
         "has_persistent" : true,
@@ -436,19 +452,19 @@
       },
       "engine_phases" : {
         "cached_ensure_ms" : 0,
-        "cached_run_ms" : 0.80000000000000004,
+        "cached_run_ms" : 0.66000000000000003,
         "cached_sync_ms" : 0.089999999999999997,
         "cached_writeback_ms" : 0,
         "dedup_ms" : 0,
-        "loop_ms" : 1.0800000000000001,
-        "prologue_ms" : 0.17000000000000001,
+        "loop_ms" : 0.98999999999999999,
+        "prologue_ms" : 0.22,
         "scope_derive_ms" : 0.040000000000000001
       },
-      "host_total_ms" : 17.530000000000001,
+      "host_total_ms" : 17.449999999999999,
       "idmap_ms" : 0,
       "in_bytes" : 36001,
       "incremental" : true,
-      "layers_ms" : 2.8599999999999999,
+      "layers_ms" : 2.7200000000000002,
       "measure_calls" : 0,
       "measure_hits" : 0,
       "measures_injected" : 0,
@@ -456,10 +472,10 @@
       "patch_count" : 800,
       "path" : "updatePatches",
       "relayout_count" : 841,
-      "relayout_ms" : 1.1299999999999999,
+      "relayout_ms" : 1.0600000000000001,
       "text_layers_applied" : 0,
       "text_updates" : 0,
-      "update_ms" : 9.5199999999999996,
+      "update_ms" : 9.1999999999999993,
       "updated_layers" : 841
     },
     "start" : {
@@ -481,108 +497,108 @@
     "tile" : 15
   },
   "host_perf" : {
-    "dropped" : 15,
-    "dropped_ratio" : 0.0080000000000000002,
-    "elapsed_ms" : 32293.200000000001,
+    "dropped" : 16,
+    "dropped_ratio" : 0.0085000000000000006,
+    "elapsed_ms" : 32303.900000000001,
     "fps" : 58.399999999999999,
-    "frames" : 1886,
+    "frames" : 1887,
     "vsync_p50_ms" : 16.863,
-    "work_max_ms" : 6.3849999999999998,
-    "work_p50_ms" : 2.3700000000000001,
-    "work_p95_ms" : 5.5940000000000003,
-    "work_p99_ms" : 5.9900000000000002
+    "work_max_ms" : 6.7859999999999996,
+    "work_p50_ms" : 2.359,
+    "work_p95_ms" : 5.548,
+    "work_p99_ms" : 6.0570000000000004
   },
-  "mem_end_mb" : 11.4,
+  "mem_end_mb" : 11.6,
   "mem_samples" : [
     {
       "act" : "gather",
-      "elapsed_ms" : 1680.5999999999999,
-      "mem_mb" : 12,
+      "elapsed_ms" : 1690.7,
+      "mem_mb" : 12.1,
       "n" : 1
     },
     {
       "act" : "title",
-      "elapsed_ms" : 4378.6000000000004,
-      "mem_mb" : 11.300000000000001,
+      "elapsed_ms" : 4388.6999999999998,
+      "mem_mb" : 11.5,
       "n" : 2
     },
     {
       "act" : "settle-title",
-      "elapsed_ms" : 6283.8999999999996,
-      "mem_mb" : 11.199999999999999,
+      "elapsed_ms" : 6294.1000000000004,
+      "mem_mb" : 11.4,
       "n" : 3
     },
     {
       "act" : "ripple",
-      "elapsed_ms" : 13687.200000000001,
-      "mem_mb" : 11,
+      "elapsed_ms" : 13697.200000000001,
+      "mem_mb" : 11.199999999999999,
       "n" : 4
     },
     {
       "act" : "domino",
-      "elapsed_ms" : 18274,
-      "mem_mb" : 11,
+      "elapsed_ms" : 18283.900000000001,
+      "mem_mb" : 11.199999999999999,
       "n" : 5
     },
     {
       "act" : "storm-peak",
-      "elapsed_ms" : 22573.900000000001,
-      "mem_mb" : 11,
+      "elapsed_ms" : 22584,
+      "mem_mb" : 11.199999999999999,
       "n" : 6
     },
     {
       "act" : "settle-storm",
-      "elapsed_ms" : 24479.400000000001,
-      "mem_mb" : 11,
+      "elapsed_ms" : 24489.5,
+      "mem_mb" : 11.199999999999999,
       "n" : 7
     },
     {
       "act" : "flip-condense",
-      "elapsed_ms" : 25393.599999999999,
-      "mem_mb" : 11,
+      "elapsed_ms" : 25403.400000000001,
+      "mem_mb" : 11.199999999999999,
       "n" : 8
     },
     {
       "act" : "flip-restore",
-      "elapsed_ms" : 26303.900000000001,
-      "mem_mb" : 11,
+      "elapsed_ms" : 26314.5,
+      "mem_mb" : 11.199999999999999,
       "n" : 9
     },
     {
       "act" : "spiral",
-      "elapsed_ms" : 27215,
-      "mem_mb" : 11,
+      "elapsed_ms" : 27225.400000000001,
+      "mem_mb" : 11.300000000000001,
       "n" : 10
     },
     {
       "act" : "settle-spiral",
-      "elapsed_ms" : 28492.700000000001,
-      "mem_mb" : 11.4,
+      "elapsed_ms" : 28502.900000000001,
+      "mem_mb" : 11.6,
       "n" : 11
     },
     {
       "act" : "finale",
-      "elapsed_ms" : 32320.400000000001,
-      "mem_mb" : 11.4,
+      "elapsed_ms" : 32330.400000000001,
+      "mem_mb" : 11.6,
       "n" : 12
     }
   ],
-  "mem_start_mb" : 16.100000000000001,
+  "mem_start_mb" : 13.9,
   "mount" : {
-    "build_layers_ms" : 4.75,
+    "build_layers_ms" : 4.3200000000000003,
     "cgfont_failure" : "",
     "cgfont_fallbacks" : 0,
     "changed_rects" : 0,
     "font_family_fallbacks" : 0,
-    "host_total_ms" : 18.640000000000001,
+    "host_total_ms" : 12.970000000000001,
     "incremental" : false,
     "layer_count" : 841,
-    "layout_ms" : 7.1699999999999999,
+    "layout_ms" : 2.3999999999999999,
     "measure_cache_hits" : 0,
     "measure_cache_misses" : 0,
-    "measure_ms" : 0.029999999999999999,
-    "mem_mb" : 11.6,
-    "mem_peak_mb" : 9.1999999999999993,
+    "measure_ms" : 0.040000000000000001,
+    "mem_mb" : 11.800000000000001,
+    "mem_peak_mb" : 9.4000000000000004,
     "node_count" : 841,
     "ok" : true,
     "paint_hint_compact" : 0,
@@ -596,7 +612,7 @@
     "unknown_font_family" : "",
     "updated_layers" : 0
   },
-  "mount_ms" : 23.309999999999999,
+  "mount_ms" : 15.74,
   "ok" : true,
   "plan" : [
     "gather",
@@ -643,14 +659,14 @@
     "ok" : true
   },
   "recording" : {
-    "appended" : 1806,
+    "appended" : 1805,
     "dropped" : 0,
     "enabled" : true
   },
-  "run_ts" : 1790819101.515986,
+  "run_ts" : 1790822035.56201,
   "snapshot" : {
     "ok" : true,
-    "path" : "\/var\/mobile\/Containers\/Data\/Application\/27B1F577-3123-4C33-B4E5-BCA771A133FD\/Documents\/showcase-final.png"
+    "path" : "\/var\/mobile\/Containers\/Data\/Application\/A6B59EBC-407E-4401-B53E-54C9AA6C3A62\/Documents\/showcase-final.png"
   },
   "soak" : {
     "cycles" : 0,
@@ -662,14 +678,14 @@
   },
   "spiral_snapshot" : {
     "ok" : true,
-    "path" : "\/var\/mobile\/Containers\/Data\/Application\/27B1F577-3123-4C33-B4E5-BCA771A133FD\/Documents\/showcase-spiral.png"
+    "path" : "\/var\/mobile\/Containers\/Data\/Application\/A6B59EBC-407E-4401-B53E-54C9AA6C3A62\/Documents\/showcase-spiral.png"
   },
   "tail_waits" : [
 
   ],
   "thermal" : {
-    "end" : "nominal",
-    "start" : "nominal"
+    "end" : "fair",
+    "start" : "fair"
   },
   "tiles" : 800,
   "view" : {

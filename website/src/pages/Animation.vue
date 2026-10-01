@@ -78,7 +78,7 @@ const T = {
     showcaseTitle: '炫技场 · 真机跑给你看（录屏）',
     showcaseLead:
       '800 片瓦片同屏编舞的**整场演出**：星尘凝聚 → 聚字开场语 → 涟漪 → 多米诺 → 风暴（800×5 条指令并发）→ 全量重排 ×2 → 漩涡 → 聚字谢幕语，共 12 幕一幕到底、幕间零停顿。**全部由一句句声明式编排写出来**（相位序 + 构型预设，无一行手写循环），曲线与物理在 Rust 内核求值。这不是录屏特效，是 iPhone 12 上一次跑完的真实读数。',
-    showcaseNote: '★为什么"别人不敢试"：Web/VDOM 框架 800 节点逐节点动画 = 每帧 800 次样式写入 + 布局失效；RN/小程序每个节点是原生视图，800 视图同屏是内存与桥接的双重灾难；Flutter 能跑但走 Dart 层求值。我们把曲线/物理放在内核，每帧只跨一次边界。',
+    showcaseNote: '★为什么"别人不敢试"：Web/VDOM 框架 800 节点逐节点动画 = 每帧 800 次样式写入 + 布局失效；RN/小程序每个节点是原生视图，800 视图同屏是内存与桥接的双重灾难；Flutter 能跑但走 Dart 层求值。我们把曲线/物理放在内核，每帧只跨一次边界。★**路径披露**：整场走**内核驱动路径**（宿主帧循环 → 一次跨边界 tick → 曲线求值与写层全在内核；800×5 条并发指令下每帧 p50 2.37ms）；**平台零参与路径**（提交一条系统动画后主线程脱手）在路由转场与自绘场景单独验证——炫技场选前者，因为逐幕编舞需要每帧可接管与幕间连续，这里如实标注。',
     showcaseImgAlt: 'Morpheus 炫技场真机录屏：800 片瓦片编排成 12 幕演出，收于点阵文字 800 TILES',
     showcaseCaption:
       '真机录屏（iPhone 12 · 60fps · 12 幕一遍到底，循环播放）：聚字开场 → 涟漪 → 风暴 → 全量重排 → 漩涡 → 谢幕语',
@@ -154,7 +154,7 @@ const T = {
     showcaseTitle: 'Showcase · recorded on a device',
     showcaseLead:
       'A full 12-act show on 800 tiles at once: stardust gathering → a clocked opening title → ripples → dominoes → a storm (800×5 concurrent instructions) → two full re-layouts → a spiral → a clocked finale, running end to end with no pause between acts. Every act is written as one declarative choreography (phase order + formation presets, zero hand-written loops), with curves and physics evaluated in the Rust kernel. Not a filmed effect: these are readings from one run on an iPhone 12.',
-    showcaseNote: '★Why others do not attempt it: in Web/VDOM frameworks, animating 800 nodes means 800 style writes and a layout invalidation every frame; in RN/mini-programs every node is a native view, so 800 views on screen is a memory and bridge disaster; Flutter can do it but evaluates in Dart. We keep curves and physics in the kernel and cross the boundary once per frame.',
+    showcaseNote: '★Why others do not attempt it: in Web/VDOM frameworks, animating 800 nodes means 800 style writes and a layout invalidation every frame; in RN/mini-programs every node is a native view, so 800 views on screen is a memory and bridge disaster; Flutter can do it but evaluates in Dart. We keep curves and physics in the kernel and cross the boundary once per frame. ★**Path disclosure**: the show runs on the **kernel-driven path** (host frame loop → one boundary crossing per tick → curve evaluation and layer writes all inside the kernel; p50 2.37ms per frame even with 800×5 concurrent instructions). The **platform zero-involvement path** (one system animation committed, main thread disengages) is verified separately in route transitions and the self-drawn scene — the showcase picks the former because per-act choreography needs per-frame takeover and seamless act hand-off. Stated honestly.',
     showcaseImgAlt: 'Morpheus showcase device recording: 800 tiles choreographed through 12 acts, ending as the pixel text 800 TILES',
     showcaseCaption:
       'Device recording (iPhone 12 · 60fps · 12 acts in one pass, looping): clocked title → ripples → storm → full re-layout → spiral → finale',
@@ -361,14 +361,14 @@ const BOUNDARIES = computed(() =>
         'Scroll-linked: driver interface decoupled from input; real finger-drag gesture not wired',
         '120 FPS needs a ProMotion device (iPhone 12 is 60Hz — honestly noted, not claimed)',
         'Gesture negotiation (nested scroll / multi-touch) is by design not part of this engine, tracked separately',
-        'Escape-hatch ratio: instrumentation ready (escapes.format()), business usage pending',
+        'Escape-hatch ratio: showcase surface sampled (31,200 declarative / 0 escape hatches = 0%, asserted every run); wider business surface pending',
       ]
     : [
         '共享元素：同视图树形态已落地；跨页面的稳态几何回传需页面栈层配合（未做）',
         '滚动联动：驱动接口与输入源解耦；真机手指拖拽手势未接线',
         '120 FPS 目标需 ProMotion 设备（iPhone 12 为 60Hz——如实标注，未声称）',
         '手势协商（嵌套滚动冲突 / 多指）：按方案设计不属本引擎，独立立项',
-        '逃生口率：统计装置就绪（escapes.format()），业务用量待采数',
+        '逃生口率：演示面已采数（炫技场 31200 条声明式 / 0 条逃生口 = 0%，每轮判据机器断言）；全业务面待采',
       ],
 )
 
