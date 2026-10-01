@@ -363,8 +363,18 @@ public class ProteusHostView extends ViewGroup {
      *   ⇒ 映射在宿主侧；绘制时按下标查表套变换。
      */
     private int[] cmdNodeIds = null;
-    /** 节点 id → [tx, ty, scale, rotate, opacity]（**宿主侧真源**：探针从这里读） */
+    /** 节点 id → [tx, ty, scale, rotate, opacity, rotateX, rotateY]（**宿主侧真源**：探针从这里读） */
     private final Map<Integer, float[]> animTx = new HashMap<>();
+    /**
+     * ★★节点 id → **透视距离**（px；B 批 3D）——场景建树时注入（`setNodePerspective`）。
+     * 语义与 iOS `layerPerspective` / CSS `perspective` 同：rotateX/Y ≠ 0 时 d 参与投影。
+     */
+    private final Map<Integer, Float> nodePerspective = new HashMap<>();
+
+    /** 场景注入某节点的透视距离（B 批 3D；缺省无透视 = 正交投影） */
+    public void setNodePerspective(int nodeId, float d) {
+        if (d > 0) nodePerspective.put(nodeId, d);
+    }
     /**
      * ★★节点 id → **动画颜色**（打包 `0xAARRGGBB`）——内核颜色通道的绘制落点（2026-10-01）
      *
@@ -413,8 +423,11 @@ public class ProteusHostView extends ViewGroup {
                 int id = u.optInt(0);
                 float rot = u.length() >= 6 ? (float) u.optDouble(4) : 0f;
                 float op = u.length() >= 6 ? (float) u.optDouble(5) : 1f;
+                // ★B 批 3D：第 9/10 项（40B 记录的 JSON 形态）
+                float rotX = u.length() >= 10 ? (float) u.optDouble(8) : 0f;
+                float rotY = u.length() >= 10 ? (float) u.optDouble(9) : 0f;
                 animTx.put(id, new float[]{
-                        (float) u.optDouble(1), (float) u.optDouble(2), (float) u.optDouble(3), rot, op});
+                        (float) u.optDouble(1), (float) u.optDouble(2), (float) u.optDouble(3), rot, op, rotX, rotY});
                 // ★颜色（2026-10-01）：第 7/8 项是打包色（底色 / 文字色）；
                 //   **越界或 u32::MAX 哨兵**（JSON 形态 4294967295 = "无该基色"）⇒ 清出表。
                 //   ★哨兵必须**排除**（与 iOS `packedOpt` 同一处口径缺陷的修复）：
@@ -451,7 +464,9 @@ public class ProteusHostView extends ViewGroup {
             float rot = bb.getFloat(), op = bb.getFloat();
             int rgba = bb.getInt();
             int textRgba = bb.getInt();
-            animTx.put(id, new float[]{tx, ty, sc, rot, op});
+            // ★B 批 3D（40B 记录末尾追加）——在 bg/textColor 之后
+            float rotX = bb.getFloat(), rotY = bb.getFloat();
+            animTx.put(id, new float[]{tx, ty, sc, rot, op, rotX, rotY});
             // ★颜色（2026-10-01）：0xFFFFFFFF = 无该基色 ⇒ 不入覆盖表（保持静态绘制）
             if (rgba != 0xFFFFFFFF) animColor.put(id, rgba);
             if (textRgba != 0xFFFFFFFF) animTextColor.put(id, textRgba);
@@ -471,7 +486,7 @@ public class ProteusHostView extends ViewGroup {
      *     的常量必须与它同批更新（历史上因两处各写步长而错位解析过）。
      *     `scripts/check-anim-record-bytes.mjs` 从内核推出宽度并与各消费端对账。
      */
-    private static final int ANIM_RECORD_BYTES = 32;
+    private static final int ANIM_RECORD_BYTES = 40;
 
     /** 直接推进一帧（确定性步进：判据用它做"固定 dt"读数，与 iOS 的 JS 驱动 probe 同形） */
     public int kernelAnimTick(float dtMs) {
@@ -554,6 +569,11 @@ public class ProteusHostView extends ViewGroup {
         return RustLayout.animControl(coreHandle, json);
     }
 
+    /** ★B 批：平台零参与路径的提交规格（判据用它做"3D 被拒绝"的机器断言） */
+    public String kernelAnimCommitSpec(String json) {
+        return RustLayout.animCommitSpec(coreHandle, json);
+    }
+
     public String kernelAnimStop(String json) {
         String out = RustLayout.animStop(coreHandle, json);
         animTx.clear();
@@ -610,10 +630,14 @@ public class ProteusHostView extends ViewGroup {
                 }
                 final String textHex = tcv == null ? "" : String.format("%08X", tcv);
                 final String bgHex = bgv == null ? "" : String.format("%08X", bgv);
+                // ★B 批 3D：rotateX/rotateY（v[5]/v[6]；旧 5 元素记录缺省 0——向后兼容）
+                final float rX = v != null && v.length >= 7 ? v[5] : 0f;
+                final float rY = v != null && v.length >= 7 ? v[6] : 0f;
                 if (v == null) {
                     // 无记录 ⇒ 恒等（未被动过）——与"层上是 identity"语义一致
                     sb.append("{\"id\":").append(id)
                       .append(",\"tx\":0,\"ty\":0,\"scale\":1,\"rotate\":0,\"opacity\":1")
+                      .append(",\"rotateX\":0,\"rotateY\":0")
                       .append(",\"bg\":\"").append(bgHex)
                       .append("\",\"textColor\":\"").append(textHex).append("\"}");
                 } else {
@@ -621,6 +645,7 @@ public class ProteusHostView extends ViewGroup {
                       .append(",\"tx\":").append(v[0]).append(",\"ty\":").append(v[1])
                       .append(",\"scale\":").append(v[2]).append(",\"rotate\":").append(v[3])
                       .append(",\"opacity\":").append(v[4])
+                      .append(",\"rotateX\":").append(rX).append(",\"rotateY\":").append(rY)
                       .append(",\"bg\":\"").append(bgHex)
                       .append("\",\"textColor\":\"").append(textHex).append("\"}");
                 }
@@ -1287,7 +1312,10 @@ public class ProteusHostView extends ViewGroup {
             // ★★逐节点变换（内核动画的**绘制落点**）：按并行表查该指令的节点变换
             //   变换语义与 iOS `applyTransform` **同构**：平移 → 以**元素中心**为锚旋转/缩放。
             float[] tf = (ids != null && i < ids.length && ids[i] >= 0) ? animTx.get(ids[i]) : null;
-            final boolean xf = tf != null && (tf[0] != 0f || tf[1] != 0f || tf[2] != 1f || tf[3] != 0f);
+            final float rotX = tf != null && tf.length >= 7 ? tf[5] : 0f;
+            final float rotY = tf != null && tf.length >= 7 ? tf[6] : 0f;
+            final boolean has3d = rotX != 0f || rotY != 0f;
+            final boolean xf = tf != null && (tf[0] != 0f || tf[1] != 0f || tf[2] != 1f || tf[3] != 0f || has3d);
             final int save = xf ? canvas.save() : -1;
             float op = 1f;
             if (tf != null) op = tf[4];
@@ -1296,6 +1324,24 @@ public class ProteusHostView extends ViewGroup {
                 float cx = c.x + c.w * 0.5f, cy = c.y + c.h * 0.5f;
                 if (tf[3] != 0f) canvas.rotate(tf[3], cx, cy);
                 if (tf[2] != 1f) canvas.scale(tf[2], tf[2], cx, cy);
+                // ★★B 批 3D（2026-10-01）：rotateX/rotateY 用 `android.graphics.Camera` 生成
+                //   **投影矩阵**（本质 = 平移-旋转-平移 + 透视除法；d = 节点 perspective）。
+                //   ★锚点 = 元素中心（与 iOS `CATransform3DRotate` 同语义——先在中心建变换再平移回去）。
+                //   ★无 perspective 的节点 = 相机无限远 ⇒ 正交投影（与 iOS 无透视一致）。
+                if (has3d) {
+                    final Float dObj = nodePerspective.get(ids[i]);
+                    android.graphics.Camera cam = new android.graphics.Camera();
+                    if (dObj != null && dObj > 0f) cam.setLocation(0, 0, -dObj);
+                    cam.save();
+                    if (rotX != 0f) cam.rotateX(rotX);
+                    if (rotY != 0f) cam.rotateY(rotY);
+                    android.graphics.Matrix m3d = new android.graphics.Matrix();
+                    cam.getMatrix(m3d);
+                    cam.restore();
+                    canvas.translate(cx, cy);
+                    canvas.concat(m3d);
+                    canvas.translate(-cx, -cy);
+                }
             }
             // ★★颜色覆盖（2026-10-01）：该节点参与颜色动画时用内核值，否则用静态 `Cmd.color`
             //   （表里没有 ⇒ 零额外开销；与 `animTx` 的查表同一形态）

@@ -35,7 +35,25 @@ export const COMPOSITED_KINDS: readonly AnimKindName[] = [
  *   ⇒ 它是**第三种**：paint-only 且必须走 tick 路径。故从红线里**排除**，
  *     但走 `CompiledBatch.composited=false` 如实反映（不静默当成合成）。
  */
-export const PAINT_ONLY_KINDS: readonly AnimKindName[] = ['color']
+export const PAINT_ONLY_KINDS: readonly AnimKindName[] = ['color', 'textColor']
+
+/**
+ * ★★**tick-only 的几何属性**（2026-10-01 · B 批 3D：`rotateX` / `rotateY`）
+ *
+ * 【与合成属性/PAINT_ONLY 的三方关系】
+ *   · **合成属性**：平台渲染线程自主插值（translate/scale/rotate/opacity）——主线程零参与；
+ *   · **paint-only**（color/textColor）：不触发布局，但 Android RenderNode 插不了色 ⇒ 走 tick；
+ *   · **tick-only**（rotateX/rotateY）：**是几何变换**（不触发布局），但两端的平台插值器对
+ *     3D 的语义不同（iOS CALayer 4×4 矩阵 vs Android rotationX/Y + Camera 组合）
+ *     ⇒ 单边放行就是两端分档 ⇒ v1 统一走 **tick 路径**（跨端一致优先，与 color 同源决策）。
+ *   ★实测余量：120Hz、800 节点、每帧工作 p95 2ms（预算 8.3ms）——3D 走 tick 完全在预算内。
+ */
+export const TICK_ONLY_KINDS: readonly AnimKindName[] = ['rotateX', 'rotateY']
+
+/** 该属性是否 tick-only（受支持、走内核逐帧路径，但不进平台零参与） */
+export function isTickOnly(kind: AnimKindName): boolean {
+  return TICK_ONLY_KINDS.includes(kind)
+}
 
 /** 该属性是否合成（编译期可查——上层可在**写代码时**就得到答案） */
 export function isComposited(kind: AnimKindName): boolean {
@@ -437,7 +455,7 @@ export function validateAnimations(decls: readonly AnimDecl[]): ValidationIssue[
         })
       }
     }
-    if (!isComposited(d.kind)) {
+    if (!isComposited(d.kind) && !isTickOnly(d.kind)) {
       issues.push({
         index: i,
         code: 'non-composited',

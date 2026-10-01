@@ -198,6 +198,23 @@ pub struct LStyle {
     /// ★RT2 追加：旋转（**度**，正 = 顺时针；锚点 = 层中心，与 CSS `rotate` 同语义）
     #[serde(default)]
     pub rotate: f32,
+    /// ★★**绕 X 轴旋转**（2026-10-01 · B 批 3D；度；锚点 = 层中心）——翻牌/立方体的轴
+    ///   【为什么与 `rotate`（Z 轴）分开三个字段而不是一个 vec3】三个旋转轴各自独立
+    ///   参与动画（同 (节点,属性) 替换语义要求"每轴一个槽"）；合一个 = 谁先写谁被覆盖。
+    #[serde(default)]
+    pub rotate_x: f32,
+    /// ★★**绕 Y 轴旋转**（度；锚点 = 层中心）——翻转/翻牌的轴
+    #[serde(default)]
+    pub rotate_y: f32,
+    /// ★★**透视距离**（px；CSS `perspective` 语义；`None` = 无透视（正交投影））
+    ///
+    /// 【为什么在**节点**上（而不是父容器）】本仓当前没有"父风格继承"链路（父的 perspective
+    ///   影响子渲染需要渲染期查询祖先——会增加每帧查询）。⇒ v1 落在节点自身：
+    ///   `perspective: 1200` = 该节点自己的 3D 旋转带透视（视觉上等价"以自身中心为视点"）。
+    ///   ★诚实边界：CSS 的"父 perspective 作用于所有子"（共享视点）暂不支持——多子立体场景
+    ///   需要它时再评估（不在 v1 假装有）。
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub perspective: Option<f32>,
     /// ★RT2 追加：不透明度（0..1，缺省 = 1）——复杂动效的标配（淡入淡出）
     #[serde(default = "default_scale")]
     pub opacity: f32,
@@ -278,6 +295,9 @@ impl Default for LStyle {
             translate_y: 0.0,
             scale: 1.0,
             rotate: 0.0,
+            rotate_x: 0.0,
+            rotate_y: 0.0,
+            perspective: None,
             opacity: 1.0,
             bg: None,
             bg_base: None,

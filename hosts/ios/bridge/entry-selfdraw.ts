@@ -92,7 +92,7 @@ const BN = { snapshot: 'selfdraw-final' }
 
 // ★构建标识（每次构建由 hosts/ios/bridge/inject-build-id.mjs 注入；与 entry-bench 同机制）
 //   —— 「设备上跑的是哪份代码」必须可**一眼判定**（报告新鲜度判据的内容锚点）。
-const BUILD_ID = '9151718d-142019'
+const BUILD_ID = 'cd9c4c8f-143645'
 
 const VP = (globalThis as unknown as { __PROTEUS_VIEWPORT__?: { width: number; height: number } })
   .__PROTEUS_VIEWPORT__ ?? { width: 390, height: 844 }
@@ -733,6 +733,19 @@ const api = {
     const pauseAfter = tyOf()
     const ctrlBad = safeParse(proteusSelfDraw.animControl(JSON.stringify({ timeScale: -1 })))
     proteusSelfDraw.animStopAll()
+    // ⑤ T：3D 旋转（rotateY 0→180）——真读层（探针 rotateY 通道）
+    const t3Start = safeParse(
+      proteusSelfDraw.animStart(
+        JSON.stringify({ anims: [{ nodeId: target, kind: 14, curve: 3, from: 0, to: 180, durMs: 400, takeover: false }] }),
+      ),
+    )
+    proteusSelfDraw.animTick(200)
+    const t3MidP = safeParse(proteusSelfDraw.layerTransformProbe(JSON.stringify([target])))
+    const t3Mid = ((t3MidP as { layers?: Array<{ rotateY?: number }> }).layers ?? [])[0]?.rotateY ?? -9999
+    proteusSelfDraw.animTick(200)
+    const t3EndP = safeParse(proteusSelfDraw.layerTransformProbe(JSON.stringify([target])))
+    const t3End = ((t3EndP as { layers?: Array<{ rotateY?: number }> }).layers ?? [])[0]?.rotateY ?? -9999
+    proteusSelfDraw.animStopAll()
     const r = {
       node: target,
       mid2,
@@ -747,6 +760,9 @@ const api = {
       pause_during: pauseDuring,
       pause_after: pauseAfter,
       ctrl_rejected: String((ctrlBad as { error?: string }).error ?? ''),
+      t3d_started: (t3Start as { started?: number }).started ?? 0,
+      t3d_mid: t3Mid,
+      t3d_end: t3End,
     }
     animRepeatResult = r
     return JSON.stringify(r)

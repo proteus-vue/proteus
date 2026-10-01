@@ -582,6 +582,10 @@ final class SelfDrawView: UIView {
             layer.cornerRadius = r
             layer.masksToBounds = true
         }
+        // ★B 批 3D：透视快照（建层时读一次——动画期 applyTransform 只查表，不回读树样式）
+        if let d = style["perspective"] as? CGFloat, d > 0 {
+            layerPerspective[nodeId] = d
+        }
         return layer
     }
 
@@ -713,6 +717,12 @@ final class SelfDrawView: UIView {
             let t = layer.transform
             // ★RT2 扩展：rotate 从变换矩阵反解（`atan2(m12, m11)`——对本仓的"中心旋转+缩放"构造成立）
             let rotateDeg = atan2(t.m12, t.m11) * 180 / .pi
+            // ★★B 批 3D：rotateX/rotateY 同样**从层矩阵真读反解**（不用"我写入的值"）。
+            //   纯 X 轴旋转：m22=cosθ, m23=sinθ ⇒ θ=atan2(m23, m22)；
+            //   纯 Y 轴旋转：m33=cosθ, m31=sinθ ⇒ θ=atan2(m31, m33)。
+            //   ★诚实边界：多轴+Z 旋转复合时读数会耦合（数值如实，不做伪单轴分解）。
+            let rotateXDeg = atan2(t.m23, t.m22) * 180 / .pi
+            let rotateYDeg = atan2(t.m31, t.m33) * 180 / .pi
             // ★★颜色（2026-10-01）：从 **CALayer 真读** `backgroundColor` 反解打包色
             //   （判据纪律：真读层上状态，不回显我们写入的参数）
             let bgStr = Self.packedHexFromCGColor(layer.backgroundColor)
@@ -720,7 +730,8 @@ final class SelfDrawView: UIView {
             let textStr = Self.packedHexFromCGColor((layer as? CATextLayer)?.foregroundColor)
             parts.append(
                 "{\"id\":\(id),\"tx\":\(t.m41),\"ty\":\(t.m42),\"scale\":\(t.m11),"
-                    + "\"rotate\":\(rotateDeg),\"opacity\":\(layer.opacity),\"bg\":\"\(bgStr)\","
+                    + "\"rotate\":\(rotateDeg),\"rotateX\":\(rotateXDeg),\"rotateY\":\(rotateYDeg),"
+                    + "\"opacity\":\(layer.opacity),\"bg\":\"\(bgStr)\","
                     + "\"textColor\":\"\(textStr)\"}"
             )
         }
@@ -758,6 +769,8 @@ final class SelfDrawView: UIView {
     private(set) var layerOriginalBg: [Int: CGColor] = [:]
     /// 建层时的**文字色快照**（复位目标；与 `layerOriginalBg` 同一条约定，只是落到文字）
     private(set) var layerOriginalTextColor: [Int: CGColor] = [:]
+    /// ★★**透视距离快照**（B 批 3D；建层时从树样式读一次——动画期只读不查树）
+    private(set) var layerPerspective: [Int: CGFloat] = [:]
 
     /* ────────────────── ★★MA0-RT：平台渲染线程零参与路径（§5-bis） ────────────────── */
 
@@ -927,22 +940,36 @@ final class SelfDrawView: UIView {
     @discardableResult
     func applyTransform(
         nodeId: Int, tx: CGFloat, ty: CGFloat, scale: CGFloat,
-        rotate: CGFloat = 0, opacity: CGFloat = 1,
+        rotate: CGFloat = 0, rotateX: CGFloat = 0, rotateY: CGFloat = 0,
+        opacity: CGFloat = 1,
         rgba: UInt32? = nil, textRgba: UInt32? = nil
     ) -> Bool {
         guard let layer = layersById[nodeId] else { return false }
         // ★RT2 扩展：位移 + 缩放 + 旋转（**以层中心为锚点**——等价 CSS transform 默认 origin）
+        // ★B 批 3D（2026-10-01）：rotateX/rotateY 与 Z 旋转同栈、同锚点；透视来自节点
+        //   `perspective`（建层时快照在 `layerPerspective`——见 makeLayer）。
         var t = CATransform3DTranslate(CATransform3DIdentity, tx, ty, 0)
         let b = layer.bounds
-        if scale != 1.0 || rotate != 0 {
+        if scale != 1.0 || rotate != 0 || rotateX != 0 || rotateY != 0 {
             t = CATransform3DTranslate(t, b.midX, b.midY, 0)
             if rotate != 0 {
                 t = CATransform3DRotate(t, rotate * .pi / 180, 0, 0, 1) // 度 → 弧度
+            }
+            // ★3D 轴（度 → 弧度）。顺序与 CSS transform 列表一致（X → Y → Z 逐轴叠加）。
+            if rotateX != 0 {
+                t = CATransform3DRotate(t, rotateX * .pi / 180, 1, 0, 0)
+            }
+            if rotateY != 0 {
+                t = CATransform3DRotate(t, rotateY * .pi / 180, 0, 1, 0)
             }
             if scale != 1.0 {
                 t = CATransform3DScale(t, scale, scale, 1)
             }
             t = CATransform3DTranslate(t, -b.midX, -b.midY, 0)
+            // ★透视（CSS `perspective(d)` 语义：m34 = -1/d；只有带透视的层才不是正交投影）
+            if let d = layerPerspective[nodeId], rotateX != 0 || rotateY != 0 {
+                t.m34 = -1.0 / d
+            }
         }
         layer.transform = t
         // ★opacity 只在非 1 时设（避免对无谓层写属性；且 1 是 CALayer 缺省）
@@ -3586,13 +3613,13 @@ final class SelfDrawBridge: NSObject, SelfDrawExports {
     /// 每帧动画更新记录的字节长度：
     /// `id u32 + tx/ty/scale/rotate/opacity（五个 f32）+ bg u32 + textColor u32`
     ///
-    /// ★★2026-10-01 由 **24B → 28B（底色）→ 32B（文字色）**：末两个 u32 都是**打包色**
+    /// ★★2026-10-01 由 **24B → 28B（底色）→ 32B（文字色）→ 40B（3D 旋转）**：末两个 u32 都是**打包色**
     ///   `0xAARRGGBB`，值 `0xFFFFFFFF` = **本节点无该基色**（忽略该字段，保持静态绘制）。
     ///   ★唯一事实源 = 内核 `ffi.rs::proteus_layout_anim_tick_bin` 的 8 个 `extend_from_slice`；
     ///     两端宿主 / SDK / embed-demo 的常量必须与它同批更新（本仓历史上因两处各写步长
     ///     而错位解析过：24B 记录被按 16B 读 ⇒ 层上留下错位残值）。
     ///     `scripts/check-anim-record-bytes.mjs` 从内核推出宽度并与各消费端对账。
-    private static let animUpdateRecordBytes = 32
+    private static let animUpdateRecordBytes = 40
 
     /// ★★**每帧推进的唯一解析点**（探针 / 帧循环两条入口共用）
     ///
@@ -3623,9 +3650,13 @@ final class SelfDrawBridge: NSObject, SelfDrawExports {
             //   `UInt32.max` = 无该基色（保持静态绘制）
             let rgba = buf.loadUnaligned(fromByteOffset: base + 24, as: UInt32.self)
             let textRgba = buf.loadUnaligned(fromByteOffset: base + 28, as: UInt32.self)
+            // ★B 批 3D（2026-10-01）：末尾追加 rotateX/rotateY（@32/@36——40B 记录）
+            let rotateX = buf.loadUnaligned(fromByteOffset: base + 32, as: Float.self)
+            let rotateY = buf.loadUnaligned(fromByteOffset: base + 36, as: Float.self)
             if view?.applyTransform(
                 nodeId: Int(nodeId), tx: CGFloat(tx), ty: CGFloat(ty), scale: CGFloat(sc),
-                rotate: CGFloat(rot), opacity: CGFloat(op),
+                rotate: CGFloat(rot), rotateX: CGFloat(rotateX), rotateY: CGFloat(rotateY),
+                opacity: CGFloat(op),
                 rgba: rgba == UInt32.max ? nil : rgba,
                 textRgba: textRgba == UInt32.max ? nil : textRgba
             ) == true {
@@ -3654,6 +3685,8 @@ final class SelfDrawBridge: NSObject, SelfDrawExports {
 
     /* ────────────────── ★★RT2：持续帧率测席（§9 帧率/帧耗时指标的测量装置） ────────────────── */
 
+    /// E4 诊断：末次 seek 的原始回执（见 finishBench）
+    private var benchSeekRaw: String?
     /// 帧率测席的运行状态（跨帧累积；由 CADisplayLink 驱动）
     private struct AnimBenchRun {
         let durationMs: Double
@@ -3795,7 +3828,12 @@ final class SelfDrawBridge: NSObject, SelfDrawExports {
         view.stopFrameLoop()
         view.onFrame = nil
         // ★终值：把手势驱动显式 seek 到 1.0（端点钉死）⇒ 判据可断言"精确等于 to"
-        _ = seekLean(nodeId: b.gestureNodeId, kind: 0, progress: 1.0)
+        //   ★诊断（2026-10-01 · E4 间歇红取证）：把 seek 回执留下——若 updates 为空
+        //     说明**没命中动画**（层上残留的是别处的值），不是"求值错"。
+        let seekJson = "{\"nodeId\":\(b.gestureNodeId),\"kind\":0,\"progress\":1.0}"
+        let seekRaw = seekJson.withCString { takeCString(proteus_layout_anim_seek(handle, $0)) }
+        _ = applyAnimUpdates(fromJson: seekRaw)
+        self.benchSeekRaw = String(seekRaw.prefix(300))
         let gLayer = safeJsonLayers(view.layerTransformProbe("[\(b.gestureNodeId)]")).first
         let yId = b.yNodeIds.first ?? 0
         let yLayer = yId != 0 ? safeJsonLayers(view.layerTransformProbe("[\(yId)]")).first : nil
@@ -3831,6 +3869,9 @@ final class SelfDrawBridge: NSObject, SelfDrawExports {
             "gesture_to": b.gestureTo,
             "y_to": b.yTo,
             "timed_out": b.timedOut,
+            // ★诊断（2026-10-01 · E4 间歇红取证）：seek 回执 + 目标节点
+            "seek_raw": benchSeekRaw ?? "",
+            "gesture_node": b.gestureNodeId,
         ]
         if let g = gLayer { out["gesture_tx"] = (g["tx"] as? Double).map { ($0 * 10000).rounded() / 10000 } ?? 0 }
         if let y = yLayer { out["y_ty"] = (y["ty"] as? Double).map { ($0 * 10000).rounded() / 10000 } ?? 0 }
@@ -4264,9 +4305,13 @@ final class SelfDrawBridge: NSObject, SelfDrawExports {
                 let raw = u[idx]
                 return (raw >= 0 && raw < 4_294_967_295) ? UInt32(raw) : nil
             }
+            // ★B 批 3D：第 9/10 项是 rotateX/rotateY（40B 记录的 JSON 形态）
+            let rx: CGFloat = u.count >= 10 ? CGFloat(u[8]) : 0
+            let ry: CGFloat = u.count >= 10 ? CGFloat(u[9]) : 0
             if view?.applyTransform(
                 nodeId: Int(u[0]), tx: CGFloat(u[1]), ty: CGFloat(u[2]), scale: CGFloat(u[3]),
-                rotate: rot, opacity: op, rgba: packedOpt(6), textRgba: packedOpt(7)
+                rotate: rot, rotateX: rx, rotateY: ry,
+                opacity: op, rgba: packedOpt(6), textRgba: packedOpt(7)
             ) == true {
                 applied += 1
             }

@@ -411,10 +411,10 @@ describe('MA5 · 滚动联动（吸顶 / 视差 / 渐显）', () => {
 
 describe('MA1 · 编号映射表（名字写错的类型级防线）', () => {
   it('ANIM_KIND_ID / CURVE_ID 覆盖全部名字', () => {
-    // ★契约变更（2026-10-01）：封闭集由 5 个扩到 **6 个**（新增 `color`），再扩到 **7 个**
-    //   （新增 `textColor`——文字色与底色**两条独立轨道**）。计数从 5 → 6 → 7 是
-    //   **如实反映契约**，不是放宽断言——下面逐条钉住编号（含 color / textColor）。
-    expect(Object.keys(ANIM_KIND_ID)).toHaveLength(7)
+    // ★契约变更（2026-10-01）：封闭集由 5 个扩到 **6 个**（`color`）→ **7 个**（`textColor`）
+    //   → **9 个**（B 批 3D：`rotateX` / `rotateY`）。计数变化是**如实反映契约**，
+    //   不是放宽断言——下面逐条钉住编号（含 color / textColor / rotateX / rotateY）。
+    expect(Object.keys(ANIM_KIND_ID)).toHaveLength(9)
     expect(Object.keys(CURVE_ID)).toHaveLength(5)
     expect(ANIM_KIND_ID.translateX).toBe(0)
     expect(ANIM_KIND_ID.translateY).toBe(1)
@@ -426,6 +426,9 @@ describe('MA1 · 编号映射表（名字写错的类型级防线）', () => {
     expect(ANIM_KIND_ID.color).toBe(5)
     // ★`textColor` 同理是名义值（= 文字色通道 R 的 9；5..8 是底色四通道）——独立轨道，不共用槽位。
     expect(ANIM_KIND_ID.textColor).toBe(9)
+    // ★B 批 3D：rotateX/rotateY 是**单通道**（无数值展开）；13/14 与内核一致
+    expect(ANIM_KIND_ID.rotateX).toBe(13)
+    expect(ANIM_KIND_ID.rotateY).toBe(14)
     expect(CURVE_ID.easeOut).toBe(1)
   })
 })

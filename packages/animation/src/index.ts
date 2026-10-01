@@ -45,7 +45,7 @@ export type {
   ValidationIssue,
 } from './types'
 
-export { COMPOSITED_KINDS, PAINT_ONLY_KINDS, isComposited, isPaintOnly, validateAnimations, formatIssues } from './validate'
+export { COMPOSITED_KINDS, PAINT_ONLY_KINDS, TICK_ONLY_KINDS, isComposited, isPaintOnly, isTickOnly, validateAnimations, formatIssues } from './validate'
 export {
   compileAnimations,
   compileOne,

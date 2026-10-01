@@ -38,6 +38,8 @@ Morpheus exposes exactly one package: **`@proteus-vue/animation`** (declare + va
 | `easeInOut` | 3 |
 | `springApprox` | 4 |
 
+**3D rotation (`rotateX` / `rotateY`, 2026-10-01)**: rotation about the X/Y axes (degrees; anchor = layer centre), with perspective declared on the node's style (`perspective: 1200`, CSS semantics). It **runs on the tick path** — the two platforms' interpolators differ in 3D semantics, so evaluation is unified in the kernel with the host assembling the matrix (cross-target consistency first, the same decision as `color`). Presets: `presets.element.flipIn` / `flip3D` (combine with `repeat: 'infinite'` for endless flipping).
+
 **Loops & yoyo (`repeat` / `direction`, 2026-10-01)**: `repeat: 3 | 'infinite'` (= CSS `animation-iteration-count`) plus `direction: 'alternate'` (= yoyo — every other round runs backwards, **net displacement 0**). "Breathing lamps / infinite pulses" no longer need the "stretch the duration" hack (which distorts the curve). Colour animations support it too (all four channels loop together — anything less is a colour split).
 
 **Playback control (`animControl`, 2026-10-01)**: global `timeScale` (`0.25` slow-motion / `2` fast-forward) and `paused` (freeze; resuming continues from the frozen point, not a reset). It **only affects time advance** — `seek` and scroll-driven progress come from outside, so pausing/slowing never breaks gesture-following.

@@ -12,7 +12,7 @@
 //   · `route.*`  —— **页面级转场**（进场页 + 出场页两个"节点"）；对应 §5-bis 的合成属性路径；
 //   · `list.*`   —— **布局动画**（FLIP：几何在内核，零跨边界；对应 §5 的招牌能力）；
 //   · `easing.*` —— **手感预设**（弹簧参数；避免开发者手调）。
-import type { AnimDecl, CurveName } from './types'
+import type { AnimDecl, CurveName, RepeatCount, RepeatDirection } from './types'
 // ★手感预设的**单一事实来源**已抽到 `easing.ts`（原因见该文件头：编排层与预设库都要用它，
 //   留在本文件会与 choreography 形成循环依赖）——本处重导出，既有 `import { easing }` 不变。
 import { easing } from './easing'
@@ -250,6 +250,75 @@ export const element = {
       decls.push({ kind: 'translateY', from: rise, to: 0, curve: 'easeOut', durationMs: dur, delayMs: opts.delayMs })
     }
     return { name: 'fadeIn', decls, durationMs: dur }
+  },
+
+  /**
+   * ★★**翻牌 / 3D 旋入**（2026-10-01 · B 批）——`rotateX` / `rotateY` + 透视。
+   *
+   * `axis: 'x' | 'y'` 决定绕哪个轴翻；`from` 是起始角度（度，正 = 朝观察者翻起/右缘向内）。
+   * 常配 `perspective`（在**节点样式**上声明：`perspective: 1200`——CSS 语义）。
+   *
+   * ★**为什么走 tick 路径（诚实标注）**：两端平台插值器的 3D 语义不同（iOS 完整 4×4
+   *   矩阵 vs Android rotationX/Y + Camera）⇒ 统一走内核逐帧求值（跨端一致优先，与 color 同源）。
+   *   实测余量充足（120Hz p95 2ms / 预算 8.3ms）。
+   */
+  flipIn(opts: {
+    axis?: 'x' | 'y'
+    fromDeg?: number
+    durationMs?: number
+    delayMs?: number
+    curve?: CurveName
+  } = {}): ElementSpec {
+    const axis = opts.axis ?? 'y'
+    const from = opts.fromDeg ?? -90
+    const dur = opts.durationMs ?? 420
+    const decls: AnimDecl[] = [
+      {
+        kind: axis === 'x' ? 'rotateX' : 'rotateY',
+        from,
+        to: 0,
+        curve: opts.curve ?? 'easeOut',
+        durationMs: dur,
+        delayMs: opts.delayMs,
+      },
+      // ★翻入常配淡入（纯旋转在无背面的元素上观感单调）——与 3D 同批下发（不同属性不冲突）
+      { kind: 'opacity', from: 0.6, to: 1, curve: 'easeOut', durationMs: dur, delayMs: opts.delayMs },
+    ]
+    return { name: `flipIn-${axis}`, decls, durationMs: dur }
+  },
+
+  /**
+   * ★★**3D 翻面**（`rotateY` 0→180 或 `rotateX`）——卡片翻到"背面"。
+   *
+   * `flips: 1` 翻一次停住；与 `repeat`/`direction` 组合可做"持续翻转"
+   * （`{ kind: 'rotateY', repeat: 'infinite', direction: 'alternate' }` 一句话 = 来回翻转）。
+   */
+  flip3D(opts: {
+    axis?: 'x' | 'y'
+    toDeg?: number
+    durationMs?: number
+    curve?: CurveName
+    repeat?: RepeatCount
+    direction?: RepeatDirection
+  } = {}): ElementSpec {
+    const axis = opts.axis ?? 'y'
+    const to = opts.toDeg ?? 180
+    const dur = opts.durationMs ?? 500
+    return {
+      name: `flip3D-${axis}`,
+      decls: [
+        {
+          kind: axis === 'x' ? 'rotateX' : 'rotateY',
+          from: 0,
+          to,
+          curve: opts.curve ?? 'easeInOut',
+          durationMs: dur,
+          ...(opts.repeat !== undefined ? { repeat: opts.repeat } : {}),
+          ...(opts.direction !== undefined ? { direction: opts.direction } : {}),
+        },
+      ],
+      durationMs: dur,
+    }
   },
 
   /**

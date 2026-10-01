@@ -12,7 +12,7 @@
 //      与内核单测 `custom_bezier_table_matches_live_eval_and_pins_endpoints` 的钉值同源——
 //      任一侧改了数学，两侧测试必有一侧红。
 import { describe, it, expect } from 'vitest'
-import { compileAnimations, parseCubicBezier, validateAnimations, formatIssues, Curve } from '@proteus-vue/animation'
+import { compileAnimations, parseCubicBezier, validateAnimations, formatIssues, Curve, presets } from '@proteus-vue/animation'
 import type { ScalarAnimDecl, ColorAnimDecl } from '@proteus-vue/animation'
 
 /** 与内核 `bezier_eval` 同一数学的独立实现（测试用期望值——不 import 生产代码） */
@@ -165,5 +165,48 @@ describe('A1 · 自定义三次贝塞尔（转正）', () => {
       const peak = Math.max(...Array.from({ length: 65 }, (_, i) => bezierEvalRef(c, i / 64)))
       expect(peak).toBeGreaterThan(1.05)
     })
+  })
+})
+
+// ══════════════ B 批（2026-10-01）：3D 旋转 ══════════════
+
+describe('B · 3D 旋转（rotateX / rotateY）', () => {
+  it('编译产物：kind 13/14（与内核同号），单通道（无数值展开）', () => {
+    const b = compileAnimations(
+      [
+        { kind: 'rotateX', from: -90, to: 0, durationMs: 400 },
+        { kind: 'rotateY', from: 0, to: 180, durationMs: 500 },
+      ],
+      { nodeId: 1 },
+    )
+    expect(b.anims).toHaveLength(2)
+    expect(b.anims[0]!.kind).toBe(13)
+    expect(b.anims[1]!.kind).toBe(14)
+    expect(b.anims[1]!.to).toBe(180)
+  })
+  it('★3D 走 tick 路径：编译期判定 composited=false 且 nonComposited 点名 rotateY', () => {
+    const b = compileAnimations([{ kind: 'rotateY', from: 0, to: 180, durationMs: 500 }], { nodeId: 1 })
+    expect(b.composited).toBe(false)
+    expect(b.nonComposited).toContain('rotateY')
+  })
+  it('★校验：3D 是受支持的 tick-only（不落 non-composited 红线）', () => {
+    expect(validateAnimations([{ kind: 'rotateX', from: 0, to: -90, durationMs: 300 }])).toHaveLength(0)
+    expect(validateAnimations([{ kind: 'rotateY', from: 0, to: 180, durationMs: 300 }])).toHaveLength(0)
+  })
+  it('3D + repeat/yoyo 组合（持续翻转）', () => {
+    const b = compileAnimations(
+      [{ kind: 'rotateY', from: 0, to: 180, durationMs: 900, repeat: 'infinite', direction: 'alternate' }],
+      { nodeId: 1 },
+    )
+    expect(b.anims[0]!.repeat).toBe(-1)
+    expect(b.anims[0]!.alternate).toBe(true)
+  })
+  it('预设：flipIn / flip3D 产出正确轴与角度', () => {
+    const fin = presets.element.flipIn({ axis: 'x', fromDeg: -90 })
+    expect(fin.decls.some((d) => d.kind === 'rotateX' && d.from === -90)).toBe(true)
+    const f3 = presets.element.flip3D({ axis: 'y', toDeg: 180, repeat: 'infinite', direction: 'alternate' })
+    const d = f3.decls[0] as { kind: string; repeat?: unknown }
+    expect(d.kind).toBe('rotateY')
+    expect(d.repeat).toBe('infinite')
   })
 })
