@@ -110,6 +110,12 @@ for (const rel of TARGETS) {
       if (/^[A-Za-z_$][\w$]*:\s*`/.test(t) || t.startsWith('`')) continue // 模板字符串起始行（文档示例）
       if (t.includes('@proteus/container') || t.includes('@proteus/core') || t.includes('<相对产物路径>')) continue // 文档/断言示例文本
       for (const m of line.matchAll(BARE_RE)) {
+        // ★★2026-10-01 修复（实测误报）：**文档文本里的 `"from"`** 会被正则当成"import from 后跟模块名"
+        //   捕获（形态：`` `num(a, "from")?` `` ⇒ 正则从 `from"` 起吃到下一个引号，
+        //   报出一个含 CJK/括号/空格的"依赖"）。规则对着**实际形态**看住引号内容——
+        //   合法模块名只含 `[@A-Za-z0-9/._~:-]`；含其它字符（空格/中文/括号/问号/反引号）即文档文本，跳过。
+        //   （同源纪律：跳过规则要跟着"实际形态"走，不是跟着想象——见上方 2026-09-30 注释。）
+        if (!/^[@A-Za-z0-9/._~:-]+$/.test(m[1])) continue
         const mod = extractBare(m[1])
         if (!mod || mod.length <= 1 || /^[\s|:;,.'"]+$/.test(mod) || ALIAS_VIRTUAL.has(mod)) continue
         if (mod.startsWith('@types/')) continue
@@ -145,6 +151,7 @@ for (const tt of TPL_TARGETS) {
       if (/["']import \{|\\nimport/.test(t)) continue
       if (t.includes('@proteus/container') || t.includes('@proteus/core') || t.includes('<相对产物路径>')) continue
       for (const m of line.matchAll(BARE_RE)) {
+        if (!/^[@A-Za-z0-9/._~:-]+$/.test(m[1])) continue // 模板目标同款守卫（见上：文档文本 ≠ 依赖）
         const mod = extractBare(m[1])
         if (!mod || mod.length <= 1 || /^[\s|:;,.'"]+$/.test(mod) || ALIAS_VIRTUAL.has(mod)) continue
         if (mod.startsWith('@types/')) continue
