@@ -591,7 +591,9 @@ final class LightsHost {
             //   不在白名单 ⇒ 请求树不带声明 ⇒ 宿主读不到 ⇒ **静默不渲染**。
             "fillGradient",
             // ★★渐变 v2：B 态（两态混合的终点）——同"必须在白名单"纪律
-            "fillGradientTo"));
+            "fillGradientTo",
+            // ★★路径变形 v1：B 态（变形终点）——同款纪律（漏 ⇒ 内核拒绝变形动画）
+            "svgPathTo"));
 
     /** 缺省字号（**布局单位** = px，与本场景 viewport 同坐标系） */
     private static final double DEFAULT_FONT_UNITS = 14.0;

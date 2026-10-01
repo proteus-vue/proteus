@@ -80,6 +80,8 @@ final class RustLayout {
     private static native String nativeAnimControl(long handle, String json);
     /** ★★C2：带 SVG 路径的节点清单 + 段列表（宿主建平台 path 用） */
     private static native String nativeSvgNodes(long handle);
+    /** ★★路径变形 v1：按当前因子**算好**的变形段列表（宿主零插值——见内核 `SvgPath::morphed`） */
+    private static native String nativeSvgMorphPath(long handle, String json);
     /** ★MA5：滚动驱动（滚动位置 → 全部窗口动画；换算在内核） */
     private static native String nativeAnimSeekScroll(long handle, String json);
     /** ★共享元素（几何原语：源矩形 + 目标节点 ⇒ dx/dy/scale，内核算） */
@@ -267,6 +269,11 @@ final class RustLayout {
     /** ★★C2：SVG 路径清单（含段列表） */
     static String svgNodes(long handle) {
         return loaded ? nativeSvgNodes(handle) : NOT_LOADED;
+    }
+
+    /** ★★路径变形 v1：当前变形后的段列表（`{"nodeId":N}`） */
+    static String svgMorphPath(long handle, String json) {
+        return loaded ? nativeSvgMorphPath(handle, json) : NOT_LOADED;
     }
 
     /** ★共享元素（几何原语） */

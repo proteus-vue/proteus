@@ -646,6 +646,33 @@ pub extern "system" fn Java_dev_proteus_layoutcore_RustLayout_nativeSvgNodes<'lo
     into_java_string(&mut env, out)
 }
 
+/// ★★**路径变形后的段列表**（路径变形 v1）——入参 `{"nodeId":N}`；
+///   返回 `{"ok":true,"segs":[…],"totalLen":x,"morph":t}`（与 `nativeSvgNodes` 同形）。
+#[no_mangle]
+pub extern "system" fn Java_dev_proteus_layoutcore_RustLayout_nativeSvgMorphPath<'local>(
+    mut env: JNIEnv<'local>,
+    _class: JClass<'local>,
+    handle: jni::sys::jlong,
+    json: JString<'local>,
+) -> jstring {
+    let raw: String = match env.get_string(&json) {
+        Ok(s) => s.into(),
+        Err(_) => "{\"ok\":false,\"error\":\"json 参数非法\"}".to_string(),
+    };
+    let out = std::panic::catch_unwind(|| {
+        let c = std::ffi::CString::new(raw).unwrap_or_default();
+        let p = unsafe { ffi::proteus_layout_svg_morph_path(handle as u64, c.as_ptr()) };
+        if p.is_null() {
+            return "{\"ok\":false,\"error\":\"null\"}".to_string();
+        }
+        let s = unsafe { std::ffi::CStr::from_ptr(p) }.to_string_lossy().into_owned();
+        unsafe { ffi::proteus_layout_free_string(p) };
+        s
+    })
+    .unwrap_or_else(|_| "{\"ok\":false,\"error\":\"panic（已捕获）\"}".to_string());
+    into_java_string(&mut env, out)
+}
+
 /// ★★**仍在推进的动画条数**（0 = 全部结束）——幕切换的权威判据（与 iOS 同源）。
 ///
 /// 【为什么单列这个入口（灯光秀幕驱动需要它）】节目单的幕时长是**名义**跨度；

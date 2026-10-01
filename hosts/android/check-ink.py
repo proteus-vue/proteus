@@ -232,6 +232,31 @@ def main() -> int:
             print(f"  ✓ ⑤c ★渐变 v2（两态混合）在场：moonGlow 幕 {n_anims} 条指令"
                   f"（含云带/云团的 gradientMix · 内核受理见三方一致）")
 
+    # ── ⑤d ★路径变形 v1：探针真读**当前变形因子**（鸟在扇翅的机器证据）──
+    #   birds 幕末态：扇翅 yoyo 4 次（偶数）⇒ 回 from=0 ⇒ 末态因子应 ≈0；
+    #   ★更可靠的证据：幕中采样若落在 birds 幕则读中值，否则读 ink.json 的 acts 里 birds 的探针
+    birds_act = hbyname.get("birds") or {}
+    bl = [l for l in (birds_act.get("probe_all") or []) if isinstance(l, dict) and l.get("id") == 95]
+    pm = (bl[0] if bl else {}).get("pathMorph") if bl else None
+    if pm is None or pm == "":
+        # 探针缺字段：判红（不许"没数据就是绿"）
+        fail("⑤d 探针缺 pathMorph 读数（路径变形未落到宿主表——段查询/通道可能没接通）")
+        ok = False
+    else:
+        val = float(pm)
+        if not (0.0 <= val <= 1.0):
+            fail(f"⑤d 变形因子越界：{val}（应 0..1）")
+            ok = False
+        elif val < 0.5:
+            # ★判据口径（"通道通"≠"翅膀真的动了"）：扇翅取 **3 遍（奇数）** ⇒ yoyo 末态 = to = 1
+            #   ⇒ 幕末应读到**下扑位**（≈1）。读到 0 只有两种可能：没受理 / 没落表。
+            fail(f"⑤d 变形末态异常：鸟 95 因子 = {val:.4f}（3 遍 yoyo 末态应为 to≈1——"
+                 f"读到 0 说明通道没落地或动画没被受理）")
+            ok = False
+        else:
+            print(f"  ✓ ⑤d ★路径变形 v1 真的落地：鸟 95 幕末变形因子 = {val:.4f}"
+                  f"（= 下扑位——探针真读宿主表）")
+
     # ── ⑥ 帧率与流畅 ──
     vsync = host.get("vsync_p50")
     p95 = host.get("work_p95")
