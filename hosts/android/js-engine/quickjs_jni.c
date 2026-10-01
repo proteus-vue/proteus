@@ -41,6 +41,20 @@ static JSRuntime *g_rt = NULL;
 static JSContext *g_ctx = NULL;
 /** Java 侧宿主回调（全局引用——跨调用存活；`proteusHost.*` 调用它） */
 static jobject g_host_obj = NULL;
+
+/**
+ * ★★★**反向调用通道**（Java → JS；2026-10-01 交互闭环）。
+ *
+ * 【为什么需要（本仓此前的形态全是单向）】既有全部桥入口都是 **JS → Java**（`proteusHost.xxx()`
+ *   同步取返回值）。而"宿主手势 → 通知 JS 跑 handler"必须**反向**：宿主先拿到手势，
+ *   JS 才知道该跑哪个 handler。
+ *
+ * 【为什么用"注册函数名 + 全局查函数"而不是保存 JSValue 引用】QuickJS 的 `JSValue`
+ *   在 `JS_FreeContext` 前必须显式释放，跨 eval 保存需要自建引用计数（易泄漏）；
+ *   而"JS 侧注册一个**全局函数名**，宿主按名查"是零引用计数的形态
+ *   （函数挂在 globalThis 上，随上下文生命周期管理）——与"声明与实现分离"同一取向。
+ */
+static char g_gesture_cb[128] = {0};   /* JS 侧注册的回调名（空 = 未注册） */
 static JavaVM *g_vm = NULL;
 
 /**
@@ -89,6 +103,9 @@ static struct {
   jmethodID scroll_rows;
   /* ★★绘制通道探针（2026-10-01）：逐通道报「宿主真源里建出来了没」（判据用） */
   jmethodID probe_channels;
+  /* ★★交互闭环（2026-10-01）：手势探针 + 进程内注入 tap（判据驱动；真机 input tap 无权限） */
+  jmethodID probe_gesture;
+  jmethodID tap_at;
 } g_host_methods = { NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL };
 
 /* ★前向声明：eval_impl 之后要泵 job（定义在下方；C 里调用点必须先可见） */
@@ -362,6 +379,28 @@ static JSValue js_host_apply_ops(JSContext *ctx, JSValueConst this_val, int argc
   return host_call_impl(ctx, g_host_methods.apply_ops, 1, this_val, argc, argv);
 }
 
+/**
+ * `proteusHost.onGesture(cbName)` —— ★★**注册手势回调**（反向通道的注册端，JS 调）。
+ * 记录函数名（≤127 字符）；宿主分发时按名查全局函数并调用。
+ */
+static JSValue js_host_on_gesture(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv) {
+  (void)this_val;
+  if (argc < 1 || !JS_IsString(argv[0])) {
+    return JS_ThrowTypeError(ctx, "proteusHost.onGesture 需要 (cbName: string)");
+  }
+  const char *n = JS_ToCString(ctx, argv[0]);
+  if (n == NULL) return JS_UNDEFINED;
+  size_t len = strlen(n);
+  if (len >= sizeof(g_gesture_cb)) {
+    JS_FreeCString(ctx, n);
+    return JS_ThrowRangeError(ctx, "回调名过长");
+  }
+  memcpy(g_gesture_cb, n, len + 1);
+  JS_FreeCString(ctx, n);
+  LOGI("反向通道就绪：手势回调已注册为 %s", g_gesture_cb);
+  return JS_NewBool(ctx, 1);
+}
+
 /** `proteusHost.readRects()` —— **内核几何真源**读（判据用；不是从参数复述） */
 static JSValue js_host_read_rects(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv) {
   (void)this_val; (void)argc; (void)argv;
@@ -381,6 +420,17 @@ static JSValue js_host_scroll_rows(JSContext *ctx, JSValueConst this_val, int ar
 /** `proteusHost.probeChannels(idsJson)` —— ★★绘制通道探针（读宿主真源） */
 static JSValue js_host_probe_channels(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv) {
   return host_call_impl(ctx, g_host_methods.probe_channels, 1, this_val, argc, argv);
+}
+
+/** `proteusHost.probeGesture()` —— 交互探针（手势真的到宿主了吗） */
+static JSValue js_host_probe_gesture(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv) {
+  (void)this_val; (void)argc; (void)argv;
+  return host_call_noarg_impl(ctx, g_host_methods.probe_gesture, 1);
+}
+
+/** `proteusHost.tapAt({x,y})` —— 进程内注入一次 tap（判据驱动） */
+static JSValue js_host_tap_at(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv) {
+  return host_call_impl(ctx, g_host_methods.tap_at, 1, this_val, argc, argv);
 }
 
 /** 组装 JSON 字符串结果（转义 `"` `\` 与换行；最小实现，不引第三方） */
@@ -481,6 +531,16 @@ static jstring eval_impl(JNIEnv *env, jstring source, jboolean with_host) {
     if (g_host_methods.probe_channels != NULL) {
       JS_SetPropertyStr(g_ctx, host, "probeChannels", JS_NewCFunction(g_ctx, js_host_probe_channels, "probeChannels", 1));
     }
+    // ★★交互闭环（条件注入——同 mount 原则）：手势探针 + 进程内 tap
+    if (g_host_methods.probe_gesture != NULL) {
+      JS_SetPropertyStr(g_ctx, host, "probeGesture", JS_NewCFunction(g_ctx, js_host_probe_gesture, "probeGesture", 0));
+    }
+    if (g_host_methods.tap_at != NULL) {
+      JS_SetPropertyStr(g_ctx, host, "tapAt", JS_NewCFunction(g_ctx, js_host_tap_at, "tapAt", 1));
+      LOGI("宿主已实现 tapAt ⇒ JS 侧可在进程内注入真触摸（交互闭环判据）");
+    }
+    // ★★★反向通道注册端（交互闭环）：无条件注入（它只写一个全局名，不需要宿主实现什么）
+    JS_SetPropertyStr(g_ctx, host, "onGesture", JS_NewCFunction(g_ctx, js_host_on_gesture, "onGesture", 1));
     // ★★动画桥（条件注入——同 mount 原则；灯光秀的 JS 侧驱动依赖它）
     if (g_host_methods.anim_start != NULL && g_host_methods.anim_tick != NULL) {
       JS_SetPropertyStr(g_ctx, host, "animStart", JS_NewCFunction(g_ctx, js_host_anim_start, "animStart", 1));
@@ -578,6 +638,7 @@ Java_dev_proteus_layoutcore_QuickJsEngine_nativeSetHostCallback(JNIEnv *env, jcl
   g_host_methods.apply_ops = g_host_methods.read_rects = NULL;
   g_host_methods.mount_virtual = g_host_methods.scroll_rows = NULL;
   g_host_methods.probe_channels = NULL;
+  g_host_methods.probe_gesture = g_host_methods.tap_at = NULL;
   if (obj != NULL) {
     g_host_obj = (*env)->NewGlobalRef(env, obj);
     jclass c = (*env)->GetObjectClass(env, obj);
@@ -631,6 +692,11 @@ Java_dev_proteus_layoutcore_QuickJsEngine_nativeSetHostCallback(JNIEnv *env, jcl
     if ((*env)->ExceptionCheck(env)) (*env)->ExceptionClear(env);
     g_host_methods.probe_channels = (*env)->GetMethodID(env, c, "probeChannels", "(Ljava/lang/String;)Ljava/lang/String;");
     if ((*env)->ExceptionCheck(env)) (*env)->ExceptionClear(env);
+    /* ★★交互闭环：probeGesture 无参返串；tapAt 一参返串 */
+    g_host_methods.probe_gesture = (*env)->GetMethodID(env, c, "probeGesture", "()Ljava/lang/String;");
+    if ((*env)->ExceptionCheck(env)) (*env)->ExceptionClear(env);
+    g_host_methods.tap_at = (*env)->GetMethodID(env, c, "tapAt", "(Ljava/lang/String;)Ljava/lang/String;");
+    if ((*env)->ExceptionCheck(env)) (*env)->ExceptionClear(env);
     if (g_host_methods.post == NULL) {
       LOGE("宿主回调缺少 post(String) 方法（其余入口仍按各自实现条件注入）");
     }
@@ -674,6 +740,55 @@ static int pump_jobs_bounded(void) {
 }
 
 /** 泵掉全部可跑 job（含 eval 之后的续体）——返回执行数；未初始化 -1 */
+/**
+ * ★★★**分发手势到 JS**（Java 调；反向通道的分发端）——`nativeDispatchGesture(type, nodeId)`。
+ *
+ * 出参：JS 回调的返回串（宿主记账用）；未注册 / 异常 ⇒ `{"ok":false,"reason":…}`。
+ * ★**必须在同一线程调用**（QuickJS 非线程安全；宿主从主线程的 GestureListener 调）。
+ */
+JNIEXPORT jstring JNICALL
+Java_dev_proteus_layoutcore_QuickJsEngine_nativeDispatchGesture(JNIEnv *env, jclass cls,
+                                                                jstring type, jint node_id) {
+  (void)cls;
+  if (g_ctx == NULL) return (*env)->NewStringUTF(env, "{\"ok\":false,\"reason\":\"ctx 未就绪\"}");
+  if (g_gesture_cb[0] == 0) return (*env)->NewStringUTF(env, "{\"ok\":false,\"reason\":\"未注册回调\"}");
+  const char *t = (*env)->GetStringUTFChars(env, type, NULL);
+  if (t == NULL) return (*env)->NewStringUTF(env, "{\"ok\":false,\"reason\":\"type 转码失败\"}");
+  JSValue global = JS_GetGlobalObject(g_ctx);
+  JSValue fn = JS_GetPropertyStr(g_ctx, global, g_gesture_cb);
+  JSValue out = JS_UNDEFINED;
+  if (JS_IsFunction(g_ctx, fn)) {
+    JSValue args[2] = {JS_NewString(g_ctx, t), JS_NewInt32(g_ctx, node_id)};
+    out = JS_Call(g_ctx, fn, global, 2, args);
+    JS_FreeValue(g_ctx, args[0]);
+    JS_FreeValue(g_ctx, args[1]);
+    if (JS_IsException(out)) {
+      JSValue exc = JS_GetException(g_ctx);
+      const char *em = JS_ToCString(g_ctx, exc);
+      LOGE("手势回调抛异常：%s", em ? em : "?");
+      JS_FreeCString(g_ctx, em);
+      JS_FreeValue(g_ctx, exc);
+      JS_FreeValue(g_ctx, out);
+      out = JS_UNDEFINED;
+    }
+  }
+  // 泵掉回调里产生的微任务（宿主侧同步执行语义——与 eval 后同一纪律）
+  pump_jobs_bounded();
+  jstring ret;
+  if (JS_IsString(out)) {
+    const char *r = JS_ToCString(g_ctx, out);
+    ret = (*env)->NewStringUTF(env, r ? r : "{\"ok\":false,\"reason\":\"空返回\"}");
+    JS_FreeCString(g_ctx, r);
+  } else {
+    ret = (*env)->NewStringUTF(env, "{\"ok\":true,\"reason\":\"回调已调用（无返回串）\"}");
+  }
+  JS_FreeValue(g_ctx, out);
+  JS_FreeValue(g_ctx, fn);
+  JS_FreeValue(g_ctx, global);
+  (*env)->ReleaseStringUTFChars(env, type, t);
+  return ret;
+}
+
 JNIEXPORT jint JNICALL
 Java_dev_proteus_layoutcore_QuickJsEngine_nativeRunPendingJobs(JNIEnv *env, jclass cls) {
   (void)env;

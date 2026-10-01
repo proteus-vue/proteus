@@ -1305,6 +1305,15 @@ public class MainActivity extends Activity {
 
             final android.util.DisplayMetrics dm = getResources().getDisplayMetrics();
             VaporRenderHost host = new VaporRenderHost(this, root);
+            // ★★★交互闭环（2026-10-01）：宿主手势 → **反向调用 JS**（跑 handler → 触发订阅）
+            host.setGestureSink(new VaporRenderHost.GestureSink() {
+                @Override
+                public void onGesture(String type, int targetId) {
+                    String out = QuickJsEngine.dispatchGesture(type, targetId);
+                    android.util.Log.i("proteus", "交互闭环：手势 " + type + " @ 节点 " + targetId
+                            + " → JS 返回 " + (out != null ? out.substring(0, Math.min(140, out.length())) : "null"));
+                }
+            });
 
             String bundle;
             try (java.io.InputStream is = getAssets().open("bundle-vapor.js")) {

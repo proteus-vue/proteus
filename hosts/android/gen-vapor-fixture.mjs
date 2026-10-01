@@ -53,11 +53,15 @@ const SFC = `<template>
     <p-view v-for="item in list" :key="item.id" style="height: 44px; margin-bottom: 6px; background-color: #285ac8">
       <p-text :width="item.w" style="font-size: 12px; color: #ffffff">{{ item.title }}</p-text>
     </p-view>
+    <p-view style="height: 30px; margin-top: 10px; background-color: #6a4bf0"></p-view>
+    <p-view :width="boxW" @click="boxW += 30" style="height: 56px; margin-top: 8px; background-color: #2f6fed"></p-view>
   </p-view>
 </template>
 
 <script setup lang="ts">
 const list = ref([{ id: 1, w: 40, title: 'a' }])
+const boxW = ref(120)
+const tapCount = ref(0)
 </script>
 `
 
@@ -80,15 +84,20 @@ const list = ref([{ id: 1, w: 120, title: 'row' }])
 
 // 用 tsx 跑编译器（与 gen-app4050-fixture.mjs 同一手法：临时脚本 + 真包）——**两份 SFC 一次跑完**
 const script = `
-import { buildLayoutTemplate, buildVaporSubscriptions } from ${JSON.stringify(path.join(ROOT, 'packages/compiler/src/index.ts'))}
+import { buildLayoutTemplate, buildVaporSubscriptions, compileEvents } from ${JSON.stringify(path.join(ROOT, 'packages/compiler/src/index.ts'))}
 const build = (sfc, name) => {
   const tplRes = buildLayoutTemplate(sfc, name)
   const subRes = buildVaporSubscriptions(sfc, name)
+  const evRes = compileEvents(sfc)
   return {
     ok: tplRes.ok,
     diagnostics: tplRes.diagnostics.map((d) => d.message),
     tpl: tplRes.template,
     table: subRes.table,
+    // ★★交互闭环（2026-10-01）：事件绑定 + handler 动作表（纯数据）
+    events: evRes.events,
+    handlers: evRes.handlers,
+    eventDiagnostics: evRes.diagnostics.map((d) => d.message),
     sfc,
   }
 }
@@ -129,6 +138,15 @@ const check = (label, out) => {
 }
 
 const smallInfo = check('短列表产物', parsed.small)
+// ★★交互闭环断言：短列表夹具必须编出事件（否则真机上"点不动"——本次要验的就是这个）
+if (!parsed.small.events || parsed.small.events.length < 1) {
+  console.error(`[gen-vapor-fixture] ✗ 交互闭环：夹具没有编出事件（应 ≥1）`)
+  process.exit(1)
+}
+if (Object.keys(parsed.small.handlers || {}).length < 1) {
+  console.error('[gen-vapor-fixture] ✗ 交互闭环：handler 表为空（应 ≥1）')
+  process.exit(1)
+}
 fs.writeFileSync(OUT, JSON.stringify(parsed.small))
 const kb = (fs.statSync(OUT).size / 1024).toFixed(1)
 
@@ -139,6 +157,9 @@ const kb2 = (fs.statSync(OUT_LIST).size / 1024).toFixed(1)
 console.log(
   `[gen-vapor-fixture] ✅ ${path.relative(ROOT, OUT)}（${kb} KB）· 模板 ${smallInfo.tplNodes} 节点 · ` +
     `L1 ${smallInfo.l1}（覆盖率 ${(parsed.small.table.stats.l1Rate * 100).toFixed(1)}%）· 源 [${smallInfo.srcNames.join(', ')}]`,
+)
+console.log(
+  `[gen-vapor-fixture] ✅ 交互：${parsed.small.events.length} 条事件绑定 · ${Object.keys(parsed.small.handlers).length} 个 handler（纯数据，设备端执行）`,
 )
 console.log(
   `[gen-vapor-fixture] ✅ ${path.relative(ROOT, OUT_LIST)}（${kb2} KB）· 长列表模板 ${listInfo.tplNodes} 节点 · ` +

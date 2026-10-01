@@ -82,6 +82,7 @@ export {
   slotKindOf,
   buildLayoutTemplate,
   parseStaticStyle,
+  compileEvents,
 } from './vapor'
 export type {
   ReactiveSource,
@@ -100,6 +101,10 @@ export type {
   LayoutTemplate,
   LayoutNode,
   ListTemplate,
+  EventBinding,
+  HandlerAction,
+  EventHandlers,
+  EventCompileResult,
 } from './vapor'
 export type { SfcMacros, MacroModelRef } from './sfc-macros'
 

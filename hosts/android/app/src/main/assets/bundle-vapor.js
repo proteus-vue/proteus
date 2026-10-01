@@ -1126,7 +1126,11 @@
   // hosts/android/bridge/entry-vapor.ts
   function makeData(rows) {
     return {
-      list: Array.from({ length: rows }, (_, i) => ({ id: i + 1, w: 40 + i % 5 * 12, title: `row ${i + 1}` }))
+      list: Array.from({ length: rows }, (_, i) => ({ id: i + 1, w: 40 + i % 5 * 12, title: `row ${i + 1}` })),
+      // ★与夹具 script 的 `ref(120)` 一致：**初始数据必须给全**，否则 `:width="boxW"` 首帧是 0，
+      //   tap 后变 30 的"对比基线"是零宽（几何差异虽真但语义不清——数据与声明要对齐）
+      boxW: 120,
+      tapCount: 0
     };
   }
   function __proteusVaporRun(argsJson) {
@@ -1278,6 +1282,10 @@
       update_evidence: [],
       geom_probe: [],
       channels: [],
+      ev_bindings: 0,
+      ev_handlers: 0,
+      taps: 0,
+      tap_evidence: [],
       uninstantiated_slots: 0,
       notes
     };
@@ -1339,6 +1347,71 @@
       slotRt.flush();
       captured.length = 0;
       rep.uninstantiated_slots = vapor.uninstantiatedSlots.length;
+      const handlers = artifacts.handlers ?? {};
+      const events = artifacts.events ?? [];
+      rep.ev_bindings = events.length;
+      rep.ev_handlers = Object.keys(handlers).length;
+      const byNodeEvent = /* @__PURE__ */ new Map();
+      for (const e of events) byNodeEvent.set(`${e.nodeId}:${e.event}`, e.handler);
+      const runHandler = (name) => {
+        const acts = handlers[name];
+        if (!acts) return false;
+        for (const a of acts) {
+          const ctx2 = { read: (n) => data[n] };
+          const v = evalExpr(a.program, ctx2);
+          const cur = data[a.source];
+          if (a.op === "set") {
+            data[a.source] = v;
+          } else {
+            const base = typeof cur === "number" && Number.isFinite(cur) ? cur : 0;
+            const delta = typeof v === "number" && Number.isFinite(v) ? v : 0;
+            data[a.source] = base + delta;
+          }
+        }
+        return true;
+      };
+      const gestureHits = [];
+      globalThis.__proteusVaporGesture = (type, nodeId) => {
+        const handler = byNodeEvent.get(`${nodeId}:${type}`) ?? byNodeEvent.get(`${nodeId}:tap`) ?? "";
+        if (!handler) return JSON.stringify({ ok: false, reason: `\u8282\u70B9 ${nodeId} \u4E0A\u6CA1\u6709 ${type} \u7684 handler` });
+        const before2 = { ...data };
+        const ran = runHandler(handler);
+        const fire = triggers.get("list");
+        if (fire) fire();
+        vapor.relink(ctx);
+        slotRt.flush();
+        const payload = captured.length ? captured[captured.length - 1] : new Uint8Array(0);
+        const changedSources = {};
+        for (const k of Object.keys(data)) {
+          if (before2[k] !== data[k]) changedSources[k] = data[k];
+        }
+        let applied = -1;
+        let relayout = -1;
+        let changedN = 0;
+        if (payload.length > 0) {
+          try {
+            const ao = JSON.parse(proteusHost.applyOps(JSON.stringify(Array.from(payload))));
+            applied = ao.ok ? ao.applied ?? -1 : -2;
+            relayout = ao.relayout_count ?? -1;
+            changedN = ao.rects ? Object.keys(ao.rects).length : 0;
+          } catch {
+            applied = -3;
+          }
+        }
+        gestureHits.push({ tap: gestureHits.length + 1, hit: nodeId, handler, source_after: changedSources });
+        return JSON.stringify({
+          ok: ran,
+          handler,
+          changed: changedSources,
+          ops: payload.length,
+          applied,
+          relayout,
+          changed_rects: changedN
+        });
+      };
+      if (typeof proteusHost.onGesture === "function") {
+        proteusHost.onGesture("__proteusVaporGesture");
+      }
       const itemSlots = table.sources.flatMap((s2) => s2.slots).filter((x) => x.kind === "list-item");
       const widthSlot = itemSlots.find((x) => x.propKey === "layout.width");
       const probeId = widthSlot ? registry.resolveNode(widthSlot.listId, "2", widthSlot.itemSlotId) : void 0;
@@ -1397,6 +1470,63 @@
         rep.updates_run++;
       }
       rep.update_evidence = evidence;
+      const tapButtons = events.filter((e) => e.event === "tap");
+      if (typeof proteusHost.tapAt === "function" && tapButtons.length > 0) {
+        for (const btn of tapButtons) {
+          const rAll = JSON.parse(proteusHost.readRects());
+          const r = rAll.rects?.[String(btn.nodeId)];
+          if (!r) continue;
+          const cx = r.x + r.width / 2;
+          const cy = r.y + r.height / 2;
+          const before2 = { ...data };
+          const geomBefore = r.height;
+          let rectsBeforeTap = {};
+          try {
+            const rb = JSON.parse(proteusHost.readRects());
+            rectsBeforeTap = rb.rects ?? {};
+          } catch {
+          }
+          const tapOut = JSON.parse(proteusHost.tapAt(JSON.stringify({ x: cx, y: cy })));
+          rep.taps++;
+          const changedSources = {};
+          for (const k of Object.keys(data)) if (before2[k] !== data[k]) changedSources[k] = data[k];
+          let geomChanged = 0;
+          let geomAfter = 0;
+          let geomDiffIds = [];
+          try {
+            const afterAll = JSON.parse(proteusHost.readRects());
+            const after = afterAll.rects ?? {};
+            geomAfter = Object.keys(after).length;
+            const before3 = rectsBeforeTap;
+            geomDiffIds = Object.keys(after).filter((k) => {
+              const a = after[k];
+              const b = before3[k];
+              if (!b || !a) return true;
+              return a.width !== b.width || a.height !== b.height || a.x !== b.x || a.y !== b.y;
+            }).map((k) => Number(k));
+            const selfBefore = before3[String(btn.nodeId)]?.width;
+            const selfAfter = after[String(btn.nodeId)]?.width;
+            if (selfBefore !== void 0 || selfAfter !== void 0) {
+              notes.push(`tap@${btn.nodeId} \u81EA\u8EAB\u5BBD\u5EA6 ${selfBefore} \u2192 ${selfAfter}` + (geomDiffIds.length === 0 ? "\uFF08\u51E0\u4F55\u65E0\u5DEE\u5F02\u2014\u2014\u53EF\u7591\uFF09" : ""));
+            }
+            geomChanged = geomDiffIds.length;
+          } catch {
+          }
+          const lastHit = gestureHits.length > 0 ? gestureHits[gestureHits.length - 1] : null;
+          rep.tap_evidence.push({
+            tap: rep.taps,
+            hit: tapOut.last?.target ?? -1,
+            handler: lastHit?.handler ?? "",
+            source_after: lastHit?.source_after ?? null,
+            ops: tapOut.ok ? 1 : 0,
+            changed_rects: geomChanged,
+            geom_before: geomBefore,
+            geom_after: geomAfter,
+            geom_diff_ids: geomDiffIds
+          });
+          void changedSources;
+        }
+      }
       if (probeId !== void 0) {
         const after = rectsOf()[String(probeId)]?.width ?? -1;
         rep.geom_probe.push({ id: probeId, before, after });
