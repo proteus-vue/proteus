@@ -27,6 +27,7 @@ Morpheus 的对外表面只有一个包：**`@proteus-vue/animation`**（声明 
 | `scale` | 2 | ✅ |
 | `rotate` | 3 | ✅ |
 | `opacity` | 4 | ✅ |
+| `color` | 5..8（R/G/B/A 四通道） | ❌ **paint-only**（不触发布局，但不进平台零参与路径——见架构页） |
 
 | 曲线 | 契约编号 |
 |---|---|
@@ -36,7 +37,13 @@ Morpheus 的对外表面只有一个包：**`@proteus-vue/animation`**（声明 
 | `easeInOut` | 3 |
 | `springApprox` | 4 |
 
-**合成属性 = 可以走平台零参与路径**。当前五项全部是合成属性——但注意：**修改布局属性（宽度/边距）不是动画，是重排**，编译期会直接拦下。
+**合成属性 = 可以走平台零参与路径**。五个标量属性是合成属性；**`color` 是 paint-only 但非合成**（不触发布局，但 Android 的 RenderNode 无法插值背景色 ⇒ 两端一致走 tick 路径）。另注意：**修改布局属性（宽度/边距）不是动画，是重排**，编译期会直接拦下。
+
+```ts
+// 颜色是**一个声明**——编译成内核的**四条通道**
+compileAnimations([{ kind: 'color', from: '#2f6fed', to: '#ff5533', durationMs: 200 }], { nodeId: 7 })
+// ⇒ 4 条指令（kind 5/6/7/8）· batch.composited === false（paint-only——见架构页）
+```
 
 ## 预设库（13 条）
 

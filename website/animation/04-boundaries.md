@@ -28,6 +28,7 @@ group: 边界
 | **跨页面共享元素**（双端） | 源页矩形切换前捕获（1080×200）→ 目标页节点（不同屏）→ 内核算几何 + 写首帧 → 帧循环完成；判据侧独立复算 dx/dy/scale | `check-app-stack.py` ⑦.7 |
 | **跨端几何一致**（双端真机） | 同一 golden（25 case / 96 节点）：两端指纹 `f5550ca5f41dfa9c` **同值**（逐字节一致）· 距浏览器基准各 0.46875dp | `hosts/shared/check-cross-end-geometry.py` |
 | **120 FPS**（Android · 120Hz 设备） | **115.8 FPS** · vsync p50 8.328ms（预算 8.33ms）· 每帧工作 p50 0.119ms · 动画期零布局 | `check-kernel-anim.py` M4e |
+| **颜色通道**（双端真机） | iOS：`FF101020 → FF204087 → FF2F6FED`（**真读 CALayer.backgroundColor**）→ 复位回底色 · Android：`FF3366CC → FF993366 → FFFF0000` 同款 | `check-anim-rt2.py` P 组 · `check-kernel-anim.py` P 组 |
 
 > **为什么"零唤醒"用 OS 级 CPU 会计而不是 Instruments**：本机 `xctrace` 无法录制设备（DeviceSupport 版本滞后），改用 `thread_info` 两次采样差 → 可机器判定，且配了**阳性对照**（tick 路径必须有显著开销，< 5ms 即判"探针失效"不得判绿）——否定性断言必须有对照才可信。
 
@@ -40,6 +41,8 @@ group: 边界
 | 逃生口率 | 装置就绪（`escapes.format()`）；**演示面已采数**：炫技场 31200 条声明式指令 / 0 条逃生口 = **0%**（判据 ⑥ 每轮机器断言）——全业务面**待采**（演示面 ≠ 业务面，如实标注） |
 | 跨端视觉一致性 | ✅ **几何部分已收口（2026-10-01）**：同一份 golden 下，两端内核算出的布局几何**逐字节一致**（`geometry_digest` 双端真机比对，96 节点同值；判据 `hosts/shared/check-cross-end-geometry.py`）。**几何之外**（圆角裁剪/阴影/文本基线等光栅化差异）仍**不保证"画出来一样"**——靠 conformance 与浏览器真值基准兜底 |
 | 跨页面共享元素的**视觉合成** | 编排/几何/完成链已双端真机验证（见真机证据表）；**多棵内核树叠放渲染**（飞行途中两页同屏）不在本装置范围——与 ScreenHost 既有边界同源 |
+| 颜色的**平台零参与路径** | 颜色是 paint-only 但**非合成** ⇒ 两端一致走 tick 路径。原因不是成本（它零布局），是 **Android RenderNode 无法插值背景色**——若 iOS 单边放行就会两端分档（**跨端一致优先**，如实标注） |
+| 颜色的 v1 范围 | 只做**背景色**；文字色（`foregroundColor`/`textPaint`，涉及文本重绘）与颜色 `keyframes`（多段序列）**未做**——后者编译期明确拦下（不静默忽略） |
 
 ## 破坏性验证（判据自身也有牙）
 

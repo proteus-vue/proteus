@@ -108,6 +108,9 @@ const LOCAL_ONLY = {
   //   各含内核算出的 `geometry_digest`）——CI 无设备 ⇒ 跑不了。
   //   ★本机侧等价保护（都在 CI）：内核单测 `geometry_digest_is_deterministic_and_sensitive`
   //   （确定性 + 敏感性 + 破坏性验证）+ `check:cross-end-golden`（纯静态，守两端 golden 同源）。
+  // ★颜色跨语言 golden（2026-10-01）：它**就是** `npx vitest run tests/anim-color-golden.test.ts`
+  //   ——已由 CI 的 `pnpm test`（全量 vitest）覆盖，故不必再单独接一条（接了是重复执行）。
+  'check:anim-color-golden': 'vitest 定向跑的包装（同一文件已在 CI 的 pnpm test 全量覆盖）⇒ 无需单独接线',
   'check:cross-end-geometry':
     '需两端真机产物（各跑 conformance 后取回）；CI 无设备（本机侧等价 = 内核单测 geometry_digest_* + check:cross-end-golden）',
   // ★★G-39 宿主运行时判据（2026-09-30 新增）：与上两条同族——输入是真机产物

@@ -95,6 +95,10 @@ jobs:
               覆盖面不一致，收「双端几何一致性」判据时变成**装置性判红**）
         run: pnpm run check:cross-end-golden
 
+      - name: 每帧动画记录线格式（★2026-10-01 颜色通道扩到 28B：内核产出的宽度必须与三处
+              消费端常量一致——历史上错位解析过，本门禁从内核写入序列**推出**宽度再比对）
+        run: pnpm run check:anim-record-bytes
+
       - name: 依赖声明完整性审计（#422：pnpm 严格解析——import vs package.json 零缺失）
         run: node scripts/check-deps.mjs
 
