@@ -163,6 +163,15 @@ pub struct GradState {
     pub has_b: bool,
     pub colors_b: [u32; 8],
     pub offsets_b: [f32; 8],
+    /// ★★**B 态几何**（2026-10-01 · 渐变 v2 扩展）：线性 = `angle_b`；径向 = `cx_b/cy_b/r_b`。
+    ///   【为什么要动画几何】色标动画解决"颜色在变"，几何动画解决**"光本身在动"**：
+    ///   月晕扩散（`r` 变大）/ 光的角度转向（`angle` 旋转）/ 光斑移动（`cx/cy`）——
+    ///   仍是同一个 `gradientMix` 通道驱动（**零新通道**：几何与色标是同一个"两态混合"语义）。
+    ///   ★CSS 同样不能过渡渐变几何（`background-image` 不可插值；要 Houdini）。
+    pub angle_b: f32,
+    pub cx_b: f32,
+    pub cy_b: f32,
+    pub r_b: f32,
     /// ★★**混合因子**（`gradientMix` 通道的当前值；0 = 全 A / 1 = 全 B）
     pub mix: f32,
 }
@@ -188,6 +197,22 @@ impl GradState {
             }
         }
         (colors, offsets)
+    }
+
+    /// ★★**混合后的几何**：`(angle, cx, cy, r)`——与 `mixed()` 同一 `mix` 因子（同一语义的两个面）。
+    ///   线性只用 `angle`；径向只用 `cx/cy/r`（另一端字段原样透传=不产生无意义插值）。
+    pub fn mixed_geometry(&self) -> (f32, f32, f32, f32) {
+        let t = self.mix.clamp(0.0, 1.0);
+        if !self.has_b {
+            return (self.angle, self.cx, self.cy, self.r);
+        }
+        let lerp = |a: f32, b: f32| a + (b - a) * t;
+        (
+            lerp(self.angle, self.angle_b),
+            lerp(self.cx, self.cx_b),
+            lerp(self.cy, self.cy_b),
+            lerp(self.r, self.r_b),
+        )
     }
 }
 

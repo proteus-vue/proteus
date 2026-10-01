@@ -851,7 +851,21 @@ final class SelfDrawView: UIView {
             var gradStr = ""
             if let g = layerGradients[id] {
                 let t = g.type == .radial ? "radial" : g.type == .axial ? "linear" : "?"
-                gradStr = "\(t):\(g.colors?.count ?? 0)"
+                // ★几何也真读（判据据此断言"光的几何真的在动"）：径向报 r（start→end 距离）、
+                //   线性报角度（由 startPoint→endPoint 反解）——与 Kotlin 同口径
+                var geo = ""
+                if let sp = g.startPoint as CGPoint?, let ep = g.endPoint as CGPoint? {
+                    if g.type == .radial {
+                        let rr = hypot(Double(ep.x - sp.x), Double(ep.y - sp.y))
+                        geo = String(format: "%.4f", rr)
+                    } else {
+                        let dx = Double(ep.x - sp.x)
+                        let dy = Double(ep.y - sp.y)
+                        let ang = atan2(dx, -dy) * 180 / .pi
+                        geo = String(format: "%.2f", ang)
+                    }
+                }
+                gradStr = "\(t):\(g.colors?.count ?? 0):\(geo)"
             }
             // ★★发光（v1）：**真读**子层数与首层 alpha（判据据此断言"发光真的建出来了/真的在变"）
             var glowStr = ""
@@ -1353,10 +1367,23 @@ final class SelfDrawView: UIView {
     /// ★★**每帧渐变更新**（渐变 v2 · 2026-10-01）——把内核**已混合**的色标写进 `CAGradientLayer`。
     ///   ★只更新已存在的层（静态声明时建；没有 ⇒ 忽略——内核不会再拒绝过"无渐变节点"的混合动画）。
     ///   ★`CATransaction` 已在调用方（`animTickApply`）的批量事务里——此处不再自建。
-    func applyGradientTick(nodeId: Int, colors: [CGColor], locations: [NSNumber]) {
+    func applyGradientTick(nodeId: Int, colors: [CGColor], locations: [NSNumber],
+                           kind: Int, angle: Float, cx: Float, cy: Float, r: Float) {
         guard let g = layerGradients[nodeId] else { return }
         g.colors = colors
         g.locations = locations
+        // ★★几何（渐变 v2 扩展——"光本身在动"）：与建树时的 `applyGradient` **同式**
+        //   （线性：端点 = 中心 ± 半程方向；径向：半径 = r（start→end 距离））
+        if kind == 1 {
+            let rad = Double(angle) * .pi / 180
+            let dx = sin(rad)
+            let dy = -cos(rad)
+            g.startPoint = CGPoint(x: 0.5 - dx / 2, y: 0.5 - dy / 2)
+            g.endPoint = CGPoint(x: 0.5 + dx / 2, y: 0.5 + dy / 2)
+        } else if kind == 2, r > 0 {
+            g.startPoint = CGPoint(x: CGFloat(cx), y: CGFloat(cy))
+            g.endPoint = CGPoint(x: CGFloat(cx) + CGFloat(r), y: CGFloat(cy))
+        }
     }
 
     /// ★★**接收内核已变形、已翻译的 CGPath**（路径变形 v1/v2）——**只设 path**
@@ -4091,13 +4118,13 @@ final class SelfDrawBridge: NSObject, SelfDrawExports {
     /// `id u32 + tx/ty/scale/rotate/opacity（五个 f32）+ bg u32 + textColor u32`
     ///
     /// ★★2026-10-01 由 **24B → 28B（底色）→ 32B（文字色）→ 40B（3D 旋转）→ 108B（裁剪）**
-    ///   **→ 112B（描边）→ 184B（渐变 v2）→ 188B（路径变形 v1）→ 192B（发光 v1）**：末两个 u32 都是**打包色**
+    ///   **→ 112B（描边）→ 184B（渐变 v2）→ 188B（路径变形 v1）→ 192B（发光 v1）→ 208B（渐变几何）**：末两个 u32 都是**打包色**
     ///   `0xAARRGGBB`，值 `0xFFFFFFFF` = **本节点无该基色**（忽略该字段，保持静态绘制）。
     ///   ★唯一事实源 = 内核 `ffi.rs::proteus_layout_anim_tick_bin` 的 8 个 `extend_from_slice`；
     ///     两端宿主 / SDK / embed-demo 的常量必须与它同批更新（本仓历史上因两处各写步长
     ///     而错位解析过：24B 记录被按 16B 读 ⇒ 层上留下错位残值）。
     ///     `scripts/check-anim-record-bytes.mjs` 从内核推出宽度并与各消费端对账。
-    private static let animUpdateRecordBytes = 192
+    private static let animUpdateRecordBytes = 208
 
     /// ★★**每帧推进的唯一解析点**（探针 / 帧循环两条入口共用）
     ///
@@ -4160,7 +4187,13 @@ final class SelfDrawBridge: NSObject, SelfDrawExports {
                     let off = buf.loadUnaligned(fromByteOffset: base + 152 + gi * 4, as: Float.self)
                     gLocs.append(NSNumber(value: off))
                 }
-                view?.applyGradientTick(nodeId: Int(nodeId), colors: gColors, locations: gLocs)
+                // ★★渐变几何（@192 起 4×f32 = angle/cx/cy/r——渐变 v2 扩展）："光本身在动"
+                let gAngle = buf.loadUnaligned(fromByteOffset: base + 192, as: Float.self)
+                let gCx = buf.loadUnaligned(fromByteOffset: base + 196, as: Float.self)
+                let gCy = buf.loadUnaligned(fromByteOffset: base + 200, as: Float.self)
+                let gR = buf.loadUnaligned(fromByteOffset: base + 204, as: Float.self)
+                view?.applyGradientTick(nodeId: Int(nodeId), colors: gColors, locations: gLocs,
+                                        kind: Int(gradKind), angle: gAngle, cx: gCx, cy: gCy, r: gR)
             }
             // ★★C1（2026-10-01）：裁剪形状（@40 起：kind u32 + 16×f32——108B 记录）
             let clipKindRaw = buf.loadUnaligned(fromByteOffset: base + 40, as: UInt32.self)

@@ -496,6 +496,11 @@ pub(crate) fn style_from_dto(dto: &NodeDto) -> Result<LStyle, String> {
                 crate::style::GradState {
                     colors_b: b.colors_a,
                     offsets_b: b.offsets_a,
+                    // ★B 态几何（渐变 v2 扩展——"光本身在动"：r 扩散 / angle 转向 / cx 移动）
+                    angle_b: b.angle,
+                    cx_b: b.cx,
+                    cy_b: b.cy,
+                    r_b: b.r,
                     has_b: true,
                     ..a
                 }
@@ -2647,6 +2652,11 @@ fn parse_gradient(v: &serde_json::Value, field: &str) -> Result<crate::style::Gr
         has_b: false,
         colors_b: [0u32; 8],
         offsets_b: [0f32; 8],
+        // B 态几何缺省 = A 的几何（"只动颜色不动几何"是最常见用法——缺省即此）
+        angle_b: angle,
+        cx_b: cx,
+        cy_b: cy,
+        r_b: r,
         mix: 0.0,
     })
 }
@@ -3528,7 +3538,7 @@ pub unsafe extern "C" fn proteus_layout_anim_tick_bin(handle: u64, dt_ms: f32, o
         //     （iOS `animUpdateRecordBytes` / Android `ANIM_RECORD_BYTES` / SDK `FRAME_UPDATE_BYTES` /
         //     embed-demo 与 `proteus-jni::host`）必须**同批改**——
         //     ★`scripts/check-anim-record-bytes.mjs` 会从本处的写入序列**推出**宽度并与各消费端对账。
-        let mut buf = Vec::with_capacity(out.updates.len() * 192);
+        let mut buf = Vec::with_capacity(out.updates.len() * 208);
         for v in out.updates {
             buf.extend_from_slice(&v.id.to_le_bytes());
             buf.extend_from_slice(&v.tx.to_le_bytes());
@@ -3553,7 +3563,7 @@ pub unsafe extern "C" fn proteus_layout_anim_tick_bin(handle: u64, dt_ms: f32, o
             //   （kind=0 = 无渐变/未变化 ⇒ 宿主忽略；kind≠0 时 colors/offsets 是**已混合**结果）
             let (gk, gn, gc, go) = v
                 .grad
-                .map(|(k, n, c, o)| (k as u32, n as u32, c, o))
+                .map(|(k, n, c, o, _geo)| (k as u32, n as u32, c, o))
                 .unwrap_or((0, 0, [0u32; 8], [0f32; 8]));
             buf.extend_from_slice(&gk.to_le_bytes());
             buf.extend_from_slice(&gn.to_le_bytes());
@@ -3569,6 +3579,12 @@ pub unsafe extern "C" fn proteus_layout_anim_tick_bin(handle: u64, dt_ms: f32, o
             buf.extend_from_slice(&v.path_morph.unwrap_or(f32::NAN).to_le_bytes());
             // ★★发光强度（glow v1，末尾追加——偏移 @188；NaN = 本节点无发光，宿主保持静态）
             buf.extend_from_slice(&v.glow_intensity.unwrap_or(f32::NAN).to_le_bytes());
+            // ★★渐变几何（渐变 v2 扩展，末尾追加——偏移 @192 起：4×f32 = angle/cx/cy/r；
+            //   渐变段的**续写**：kind=0 时写 0（宿主忽略）。★"光本身在动"的数据就在这）
+            let geo = v.grad.map(|(_, _, _, _, g)| g).unwrap_or([0f32; 4]);
+            for i in 0..4 {
+                buf.extend_from_slice(&geo[i].to_le_bytes());
+            }
         }
         Ok(buf)
     });
