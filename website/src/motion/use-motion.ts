@@ -217,22 +217,30 @@ export function usePointerMotion(
   })
 }
 
-/** 元素 + 一组声明 ⇒ 手动控制（用于"按钮触发一次演示"这类形态） */
-export function motionController(target: Ref<HTMLElement | undefined | null>, decls: readonly AnimDecl[]): { play: () => void; stop: () => void } {
+/**
+ * ★**手动控制**（用于"按钮/时机触发一次演示"这类形态——如开幕结束后再放 Hero 入场）：
+ *   返回 `{ play, stop }`；`play` 幂等（重复调用 = 从头再演一次）。
+ *   ★reduced-motion ⇒ 直接终态（与自动入口同一口径）。
+ */
+export function motionController(
+  target: Ref<HTMLElement | undefined | null>,
+  decls: readonly AnimDecl[],
+): { play: () => void; stop: () => void } {
   let runner: Runner | null = null
-  const make = (): Runner | null => {
-    const el = target.value
-    if (!el) return null
-    return createRunner(compile(decls, 1), new Map<number, HTMLElement>([[1, el]]))
-  }
-  watch(target, () => {
-    runner = null
-  })
   return {
     play: (): void => {
-      runner = runner ?? make()
-      runner?.seek(0)
-      runner?.play()
+      const el = asElement(target.value)
+      if (!el) return
+      const anims = compile(decls, 1)
+      const slots = new Map<number, HTMLElement>([[1, el as HTMLElement]])
+      if (!motionAllowed()) {
+        settle(anims, slots)
+        return
+      }
+      runner?.stop()
+      runner = createRunner(anims, slots)
+      runner.seek(0)
+      runner.play()
     },
     stop: (): void => runner?.stop(),
   }
