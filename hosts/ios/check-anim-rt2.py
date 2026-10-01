@@ -792,6 +792,42 @@ def main() -> int:
                     print(f"  ✓ V13 ★裁剪形变（真读 mask 包围盒）：半程 {vmid} → 终值 {vend}"
                           f" · stop 后回基态 {vstop} · 拒绝分支可定位")
 
+        # ★W14（2026-10-01 · C2）：**SVG 描边**——真读 `CAShapeLayer.strokeEnd`（不回显参数）
+        ws = d.get("anim_stroke") or js.get("anim_stroke") or {}
+        if not ws:
+            print("  · W14 跳过（anim_stroke 读数缺失——相位未跑？）")
+        else:
+            wst = ws.get("started")
+            wmid = ws.get("mid_stroke_end")
+            wend = ws.get("end_stroke_end")
+            wstop2 = ws.get("after_stop_stroke_end")
+            wids = ws.get("svg_ids_from_kernel") or []
+            wrej = str(ws.get("rejected") or "")
+            if not wids:
+                fail("W14a 内核未报任何带 svgPath 的节点（场景树应有 SVG 标记节点）")
+                ok = False
+            elif wst != 1:
+                fail(f"W14b 描边进度动画未被内核受理：started={wst}")
+                ok = False
+            elif not all(isinstance(v, (int, float)) for v in (wmid, wend, wstop2)):
+                fail(f"W14c strokeEnd 真读缺失：mid={wmid} end={wend} stop={wstop2}")
+                ok = False
+            elif not (0.3 <= float(wmid) <= 0.7):
+                fail(f"W14d 半程画线进度异常：strokeEnd={wmid}（linear 半程应 ≈ 0.5）")
+                ok = False
+            elif abs(float(wend) - 1.0) > 0.02:
+                fail(f"W14e 终点未钉死：strokeEnd={wend}（应 = 1，整条路径画完）")
+                ok = False
+            elif abs(float(wstop2)) > 0.02:
+                fail(f"W14f stop 后未回基态：strokeEnd={wstop2}（应 = 0 = 未画）")
+                ok = False
+            elif "没有 SVG 路径" not in wrej or "svgPath" not in wrej:
+                fail(f"W14g 无路径节点未被明确拒绝：{wrej[:140]}")
+                ok = False
+            else:
+                print(f"  ✓ W14 ★SVG 描边（真读 strokeEnd）：半程 {wmid} → 终值 {wend}（画完）"
+                      f" · stop 回 {wstop2}（未画）· 拒绝分支可定位")
+
         # P6：拒绝分支——无底色节点上的颜色动画必须**明确拒绝**（不静默）
         rej = c.get("rejected_no_bg") or ""
         if c.get("no_bg_nodes") and ("底色" not in rej):

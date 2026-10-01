@@ -230,6 +230,9 @@ const LAYOUT_KEYS = new Set([
   //   ★若漏放：请求里不带声明 ⇒ 内核拒绝裁剪动画 / 3D 无透视，且**静默**
   //     （首次接通时真机实测：`clip_rejected` 的原因正是"树里未声明 clipPath"）。
   'clipPath', 'perspective',
+  // ★★C2（2026-10-01）：SVG 描边三键同属"内核动画的静态基态"（路径本体 / 描边色 / 线宽）。
+  //   ★与 clipPath 同款教训：不在本集合 ⇒ 请求不带声明 ⇒ 描边动画被拒且静默。
+  'svgPath', 'strokeColor', 'strokeWidth',
 ])
 
 /**
@@ -280,7 +283,8 @@ function layoutStyleOf(props: Record<string, unknown>): Record<string, unknown> 
     if (!LAYOUT_KEYS.has(key)) continue
     // ★★C1/B：两个键是**复合/非长度值**（clipPath 是对象、perspective 是数）——
     //   原样透传给内核（不经过下面的长度折叠：它们不是长度）。
-    if (key === 'clipPath' || key === 'perspective') {
+    if (key === 'clipPath' || key === 'perspective' || key === 'svgPath'
+        || key === 'strokeColor' || key === 'strokeWidth') {
         out[key] = value
         continue
     }

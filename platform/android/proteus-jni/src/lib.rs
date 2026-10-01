@@ -625,6 +625,27 @@ pub extern "system" fn Java_dev_proteus_layoutcore_RustLayout_nativeAnimControl<
     forward_cstr(env, json, move |p| unsafe { ffi::proteus_layout_anim_control(handle as u64, p) })
 }
 
+/// ★★**带 SVG 路径的节点清单 + 解析后的段列表**（C2）——宿主建平台 path 用
+///   （解析在内核；宿主只翻译——见内核 `svg_path` 与 `proteus_layout_svg_nodes` 注释）
+#[no_mangle]
+pub extern "system" fn Java_dev_proteus_layoutcore_RustLayout_nativeSvgNodes<'local>(
+    mut env: JNIEnv<'local>,
+    _class: JClass<'local>,
+    handle: jni::sys::jlong,
+) -> jstring {
+    let out = std::panic::catch_unwind(|| {
+        let p = unsafe { ffi::proteus_layout_svg_nodes(handle as u64) };
+        if p.is_null() {
+            return "{\"ok\":false,\"error\":\"null\"}".to_string();
+        }
+        let s = unsafe { std::ffi::CStr::from_ptr(p) }.to_string_lossy().into_owned();
+        unsafe { ffi::proteus_layout_free_string(p) };
+        s
+    })
+    .unwrap_or_else(|_| "{\"ok\":false,\"error\":\"panic（已捕获）\"}".to_string());
+    into_java_string(&mut env, out)
+}
+
 /// ★★**仍在推进的动画条数**（0 = 全部结束）——幕切换的权威判据（与 iOS 同源）。
 ///
 /// 【为什么单列这个入口（灯光秀幕驱动需要它）】节目单的幕时长是**名义**跨度；

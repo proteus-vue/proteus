@@ -347,6 +347,52 @@ def main() -> int:
     else:
         print(f"  ✓ Q3 非法控制点明确拒绝（可定位）：{rej_s[:90]}…")
 
+    # ── X 组（★★C2 SVG 描边 strokeProgress，2026-10-01）：画线端到端 + 拒绝 + 绘制侧真读 ──
+    se2 = d.get("svg_error")
+    if se2:
+        fail(f"X SVG 场景抛异常：{se2}")
+        ok = False
+    else:
+        xs = _j(d.get("svg_start"))
+        xs_started = xs.get("started") if isinstance(xs, dict) else None
+        xm = _layers(_j(d.get("svg_mid"))).get("strokeProgress")
+        xp = d.get("svg_paths_from_kernel")
+        if xp is None or int(xp) < 1:
+            fail(f"X1 内核未报 svgPath 段列表：paths={xp}（宿主 attach 失败？）")
+            ok = False
+        elif xs_started != 1:
+            fail(f"X1 描边进度未被内核受理：{xs}")
+            ok = False
+        elif not isinstance(xm, (int, float)) or not (0.3 <= float(xm) <= 0.7):
+            fail(f"X1 半程进度异常：strokeProgress={xm}（linear 半程应 ≈ 0.5）")
+            ok = False
+        else:
+            print(f"  ✓ X1 ★描边进度端到端（探针真读宿主表）：半程 {xm}")
+        # X3：绘制侧真读（半程时前半已画、后半未画；走完后半也画上）
+        lpx, rpx, rEnd = d.get("svg_left_px"), d.get("svg_right_px"), d.get("svg_right_end_px")
+        if lpx is None or rpx is None or rEnd is None:
+            fail(f"X3 绘制侧读数缺失：left={lpx} right={rpx} right_end={rEnd}")
+            ok = False
+        elif lpx == 0:
+            fail(f"X3 半程时前半段未画：left alpha={lpx}（应 > 0）")
+            ok = False
+        elif rpx != 0:
+            fail(f"X3 半程时后半段已画（进度未生效）：right alpha={rpx}（应 = 0）")
+            ok = False
+        elif rEnd == 0:
+            fail(f"X3 走完后后半段仍未画：right_end alpha={rEnd}（应 > 0）")
+            ok = False
+        else:
+            print(f"  ✓ X3 ★描边落到绘制侧（离屏真读）：半程左 {lpx}/右 {rpx}（未到）· 走完右 {rEnd}（画上）")
+        # X2：无声明 ⇒ 拒绝
+        rej3 = _j(d.get("svg_rejected"))
+        rej3_s = json.dumps(rej3, ensure_ascii=False) if isinstance(rej3, dict) else str(rej3)
+        if "没有 SVG 路径" not in rej3_s or "svgPath" not in rej3_s:
+            fail(f"X2 无路径节点未被明确拒绝：{rej3_s[:150]}")
+            ok = False
+        else:
+            print(f"  ✓ X2 无 SVG 路径明确拒绝（可定位）：{rej3_s[:80]}…")
+
     # ── U 组（★★C1 裁剪形变 clip-path，2026-10-01）：inset 端到端 + 拒绝 + 绘制侧真读 ──
     ce2 = d.get("clip_error")
     if ce2:
