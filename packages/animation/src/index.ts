@@ -31,6 +31,11 @@ export type {
   ScrollWindow,
   KeyframeSeg,
   AnimDecl,
+  // ★★颜色/文字色（2026-10-01）：判别联合的两个成员必须导出——
+  //   否则外部无法写 `const d: ColorAnimDecl = …`（CI 类型检查曾因此红：tests 引了它但包没导出）。
+  ScalarAnimDecl,
+  ColorAnimDecl,
+  ColorKeyframeSeg,
   AnimTargets,
   EngineAnim,
   CompiledBatch,
