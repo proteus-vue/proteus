@@ -19,8 +19,12 @@ import PresetPreview from '../components/anim/PresetPreview.vue'
 //   见 src/motion/engine-motion.ts 的文件头（映射表与诚实边界都在那里）
 import EngineMark from '../components/anim/EngineMark.vue'
 import MotionFlow from '../components/anim/MotionFlow.vue'
+import OpeningCeremony from '../components/anim/OpeningCeremony.vue'
+import AnimWorkbench from '../components/anim/AnimWorkbench.vue'
 import { useMotion, useChoreography, MOTION } from '../motion/use-motion'
 import { SITE_STATS, asElement, compile, countUp, createRunner, motionAllowed, settle } from '../motion/engine-motion'
+import { motionController } from '../motion/use-motion'
+import { openingEligible } from '../motion/opening'
 import { highlight } from '@proteus-vue/docs'
 // ★真引擎：批次/规格/预设目录/跨语言契约常量
 import { ANIM_KIND_ID, CURVE_ID, appTransitions, listAnimRules, routeTransitionBatches } from '@proteus-vue/animation'
@@ -129,6 +133,9 @@ const T = {
     presetsMore: '另有',
     evidenceTitle: '真机证据',
     evidenceNote: '每一项都可复跑；数字来自真机读数，不是估算。',
+    wbTitle: '亲手试（这个页面里就有引擎）',
+    wbNote:
+      '下面的控件不是播放器：每次改动都会当场调用引擎的编译链（与真机同一份代码、同一套校验），产出的指令同时驱动三个宿主。想验证「编译期拦截」？按那个橙色的按钮，让引擎当场拒绝你。',
     codeTitle: '怎么写',
     codeNote: '路由级一行声明，三端各自兑现；元素级一句话演出。',
     boundaryTitle: '诚实边界',
@@ -229,6 +236,9 @@ const T = {
     presetsMore: 'Plus',
     evidenceTitle: 'Device evidence',
     evidenceNote: 'Every reading is re-runnable; numbers come from devices, not estimates.',
+    wbTitle: 'Try it yourself (the engine is in this page)',
+    wbNote:
+      'These controls are not a player: every change calls the engine\'s real compile chain (same code, same validation as on device) and the resulting instructions drive three hosts at once. Want to see the compile-time gate? Press the orange button and let the engine refuse you.',
     codeTitle: 'How you write it',
     codeNote: 'One declaration per route, honoured per target; one line per element motion.',
     boundaryTitle: 'Honest boundaries',
@@ -574,9 +584,27 @@ function readSiteStats(): void {
 const h1a = ref<HTMLElement>()
 const h1b = ref<HTMLElement>()
 const leadEl = ref<HTMLElement>()
-useMotion(h1a, MOTION.riseIn(30, 820), { whenVisible: false })
-useMotion(h1b, MOTION.riseIn(30, 820).map((d) => ({ ...d, delayMs: 120 })), { whenVisible: false })
-useMotion(leadEl, MOTION.riseIn(20, 900).map((d) => ({ ...d, delayMs: 260 })), { whenVisible: false })
+// ★开幕期间 Hero 文案**不抢戏**（等帷幕拉起后再逐行入场——见 heroCtl 与 onOpeningDone）
+const heroCtl1 = motionController(h1a, MOTION.riseIn(30, 820))
+const heroCtl2 = motionController(h1b, MOTION.riseIn(30, 820).map((d) => ({ ...d, delayMs: 120 })))
+const heroCtl3 = motionController(leadEl, MOTION.riseIn(20, 900).map((d) => ({ ...d, delayMs: 260 })))
+/** 开幕（仅本页、仅首次加载；reduced-motion 或已播过 ⇒ 直接进场） */
+const showOpening = ref(openingEligible())
+if (!showOpening.value) {
+  // 无开幕：Hero 立即入场（与降级路径同一口径——reduced-motion 下 motionController 直达终态）
+  requestAnimationFrame(() => {
+    heroCtl1.play()
+    heroCtl2.play()
+    heroCtl3.play()
+  })
+}
+function onOpeningDone(): void {
+  showOpening.value = false
+  // 帷幕拉起（引擎的 clip 扫除）同时，Hero 三行错峰入场
+  heroCtl1.play()
+  window.setTimeout(() => heroCtl2.play(), 90) // d2-exempt: 仅作入场错峰的时序编排（无框架原语；值即声明里的 delayMs）
+  window.setTimeout(() => heroCtl3.play(), 210) // d2-exempt: 同上
+}
 
 /* ── 滚动显现（与首页同机制） ── */
 const rootEl = ref<{ $el?: HTMLElement } | null>(null)
@@ -675,6 +703,8 @@ onUnmounted(() => {
 
 <template>
   <p-page ref="rootEl" class="ap">
+    <!-- ★★开幕仪式：引擎把自己的产品页"打开"（徽记落笔 → 软遮罩渗字 → 帷幕上抽） -->
+    <OpeningCeremony v-if="showOpening" @done="onOpeningDone" />
     <!-- 背景层（品牌光晕 + 细网格；纯装饰） -->
     <p-view class="ap-bg" aria-hidden="true"><span class="ap-grid" /></p-view>
 
@@ -1083,6 +1113,16 @@ onUnmounted(() => {
             <code class="ev-src">{{ e.src }}</code>
           </p-view>
         </MotionFlow>
+      </p-view>
+
+      <!-- ═══════════ ★亲手试（引擎在这个浏览器里当场编译并跑给访客看）═══════════ -->
+      <p-view data-reveal class="sec">
+        <p-stack direction="row" align="center" :gap="12" class="sec-head" wrap>
+          <p-heading :level="2" v-p-fluid="'font-size(24, 32)'" class="sec-title">{{ C.wbTitle }}</p-heading>
+          <span class="sec-rule" />
+        </p-stack>
+        <p-text class="sec-note">{{ C.wbNote }}</p-text>
+        <AnimWorkbench />
       </p-view>
 
       <!-- ═══════════ 怎么写 ═══════════ -->

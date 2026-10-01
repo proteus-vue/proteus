@@ -8,6 +8,8 @@
 // ★#389c 滚动上下文：顶部渐变进度条（scaleX 合成器）+ 导航滚动态（scrolled 投影）
 import { computed, onUnmounted, ref, watch } from 'vue'
 import { useRoute } from 'vue-router'
+// ★活的徽记：全站常驻的 Morpheus HUD（与页面动效**共演**同一批编译产物——见组件头注）
+import MorpheusHud from './components/anim/MorpheusHud.vue'
 import DocSearch from './DocSearch.vue'
 import BrandMark from './components/BrandMark.vue'
 // ★#449 desktop 原语（豁免回收）：滚动进度/滚动态 = p-scroll-observer
@@ -135,6 +137,8 @@ watch(() => route.fullPath, () => {
 
     <main id="main-content" tabindex="-1" v-p-fluid="'padding(12, 24)'" class="main" :class="{ 'is-docs': isDocs, 'is-wide': isWide }">
       <router-view />
+      <!-- ★全站常驻：活的徽记（演出监视器；点开看真实读数） -->
+      <MorpheusHud />
     </main>
 
     <p-view v-p-fluid="'padding(20, 28)'" class="footer">

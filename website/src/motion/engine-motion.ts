@@ -189,11 +189,18 @@ export function applyPose(
   if (p.scale !== 1) tf.push(`scale(${p.scale.toFixed(4)})`)
   if (p.rotate) tf.push(`rotate(${p.rotate.toFixed(3)}deg)`)
   // 3D：透视来自节点样式声明（`perspective`——与内核/两端宿主同一语义）
-  if (p.rotateX || p.rotateY || opts?.perspective) {
+  //   ★只在**真有 3D 旋转**时挂 perspective/transform-style（2026-10-01 实测清理）：
+  //     无条件挂着会让元素带一个永久的 stacking context / 3D 渲染上下文
+  //     （静止后仍留在 inline style 上——观感无碍但污染布局语义）。
+  const has3d = p.rotateX !== 0 || p.rotateY !== 0
+  if (has3d) {
     if (opts?.perspective) el.style.perspective = `${opts.perspective}px`
     if (p.rotateX) tf.push(`rotateX(${p.rotateX.toFixed(3)}deg)`)
     if (p.rotateY) tf.push(`rotateY(${p.rotateY.toFixed(3)}deg)`)
     el.style.transformStyle = 'preserve-3d'
+  } else {
+    el.style.removeProperty('perspective')
+    el.style.removeProperty('transform-style')
   }
   if (p.skewX) tf.push(`skewX(${p.skewX.toFixed(3)}deg)`)
   if (p.skewY) tf.push(`skewY(${p.skewY.toFixed(3)}deg)`)
@@ -241,7 +248,68 @@ export function applyPose(
   }
 }
 
-/* ═══════════════════════ 运行时（唯一帧源 + 外部 seek） ═══════════════════════ */
+/* ═══════════════════════ 演出总线（Morpheus 徽记的"共演"通道） ═══════════════════════ */
+
+/**
+ * ★★**演出总线**：引擎每推进一帧，就把"这一帧有多少条指令在动"广播出去。
+ *
+ * 【为什么需要它（"灵魂元素"的机制基础）】产品页右上角的 Morpheus 徽记要能**共演**：
+ *   页面上任何一处动效在跑，徽记就跟着演——不是另写一段装饰动画，而是**同一个编译产物、
+ *   同一台求值机器、第二个宿主**。这正是本引擎的主张（一份声明 → 任意宿主）的字面实现；
+ *   ⇒ 总线只传递**真实运行数据**（活跃条数 / 能量 / 最近曲线），徽记不做任何自演。
+ *
+ * 【口径】`energy` = 本帧仍在推进的指令占比（无限循环恒计活）——0 = 全静止、1 = 全在动。
+ */
+export interface ActivityReport {
+  /** 本帧在推进的指令条数（跨全部 runner 汇总） */
+  active: number
+  /** 全部指令条数 */
+  total: number
+  /** 能量（active / total；无 runner 时 0） */
+  energy: number
+  /** 最近一次编译的批（徽记读数：条数 + 曲线） */
+  lastBatch: { count: number; curve: CurveId; kind: number } | null
+}
+type ActivityListener = (r: ActivityReport) => void
+const listeners = new Set<ActivityListener>()
+const perRunner = new Map<number, { active: number; total: number }>()
+let lastBatch: ActivityReport['lastBatch'] = null
+let runnerSeq = 0
+
+const aggregate: ActivityReport = { active: 0, total: 0, energy: 0, lastBatch: null }
+
+/** 订阅演出数据（返回退订函数） */
+export function onActivity(fn: ActivityListener): () => void {
+  listeners.add(fn)
+  fn(aggregate)
+  return () => listeners.delete(fn)
+}
+
+/** 广播（帧内聚合：一帧只通知一次——由 runner 在写层末尾调用） */
+function flush(): void {
+  let active = 0
+  let total = 0
+  for (const r of perRunner.values()) {
+    active += r.active
+    total += r.total
+  }
+  aggregate.active = active
+  aggregate.total = total
+  aggregate.energy = total > 0 ? active / total : 0
+  aggregate.lastBatch = lastBatch
+  for (const l of listeners) l(aggregate)
+}
+
+/** 徽记读数用：登记一批新编译的指令 */
+export function noteBatch(anims: readonly EngineAnim[]): void {
+  if (!anims.length) return
+  const a = anims[0]!
+  lastBatch = { count: anims.length, curve: a.curve, kind: a.kind }
+  // 下一帧汇总时带给订阅者（这里不直接 flush：避免同步里套通知）
+}
+
+/*
+ * ═══════════════════════ 运行时（唯一帧源 + 外部 seek） ═══════════════════════ */
 
 export interface RunnerOptions {
   /** 名义时长（ms）；缺省由指令推出（max(delayMs + durMs)） */
@@ -327,8 +395,28 @@ export function createRunner(
   let running = false
   let raf = 0
   let start = 0
+  const rid = ++runnerSeq
 
   const write = (tMs: number): void => {
+    // ★演出总线：把"本帧仍有多少条在推进"报给订阅者（徽记共演的数据来源）
+    let live = 0
+    for (const a of anims) {
+      const reps = a.repeat ?? 1
+      if (reps < 0) {
+        live += 1
+        continue
+      }
+      const dur = (a.durMs ?? 0) > 0 ? (a.durMs as number) : 1
+      const local = tMs - (a.delayMs ?? 0)
+      if (local <= 0) {
+        live += 1
+        continue
+      }
+      const cycles = local / dur
+      if (reps > 1 ? cycles < reps : cycles < 1) live += 1
+    }
+    perRunner.set(rid, { active: live, total: anims.length })
+    flush()
     const poses = evalBatch(anims, tMs)
     for (const [id, p] of poses) {
       const el = slots.get(id)
@@ -379,6 +467,8 @@ export function createRunner(
       running = false
       if (raf) cancelAnimationFrame(raf)
       raf = 0
+      perRunner.delete(rid)
+      flush()
     },
     seek(p: number): void {
       if (opts?.seekSource) return
@@ -425,6 +515,7 @@ export function countUp(
 export function compile(decls: readonly AnimDecl[], nodeId = 1): EngineAnim[] {
   const anims = compileAnimations(decls, { nodeId }).anims
   SITE_STATS.declarative += anims.length
+  noteBatch(anims)
   for (const a of anims) {
     if (a.repeat === undefined) continue
     SITE_STATS.loops += 1
