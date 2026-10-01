@@ -111,6 +111,18 @@ pub(crate) struct NodeDto {
     pub(crate) left: Option<f32>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub(crate) overflow: Option<String>,
+    /// ★★**背景色**（2026-10-01，颜色动画的**底色**来源）——接受 CSS 形态：
+    ///   `#RGB` / `#RRGGBB` / `#AARRGGBB` / `#RRGGBBAA`（后两者靠长度区分）。
+    ///
+    /// 【为什么在这里解析】`bg_base` 是**内核状态**（复位目标 + 颜色动画的起点基准），
+    ///   必须在建树时从请求里取得。宿主侧的 `style["backgroundColor"]` 文本形态是历史路径
+    ///   （iOS 建层用）；内核这一份是**动画轨道**用的（打包 u32）。
+    /// 【未声明 ⇒ `None`】该节点不进颜色轨道（`start` 会明确拒绝给它的颜色动画，见 `AnimEngine::start`）。
+    ///
+    /// ★注意：`NodeDto` 是 `rename_all = "camelCase"` ⇒ 线上键名是 **`backgroundColor`**
+    ///   （与适配器/宿主既有键名一致——不需要新的字段名）。
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub(crate) background_color: Option<String>,
     /// 文本字面量（有此字段即为文本叶子，走宿主注入的度量）
     #[serde(skip_serializing_if = "Option::is_none")]
     pub(crate) text: Option<String>,
@@ -178,6 +190,8 @@ impl NodeDto {
             top: None,
             left: None,
             overflow: None,
+            // ★颜色：blob 形态暂无该字段（按位图解码；未提供 ⇒ 该节点不进颜色轨道）
+            background_color: None,
             text: None,
             is_text: false,
             native_host: false,
@@ -212,6 +226,43 @@ fn default_viewport() -> ViewportDto {
     ViewportDto { width: 375.0, height: 812.0 }
 }
 
+/// ★★**CSS 颜色 → `0xAARRGGBB`**（2026-10-01，颜色动画的底色解析唯一实现）
+///
+/// 支持（够用的封闭集；未知形态**明确报错**——不静默落黑）：
+///   `#RGB`（简写，各通道重复一位）· `#RRGGBB`（不透明）· `#RRGGBBAA`（CSS4 序）·
+///   `#AARRGGBB`（Android 惯例序；与前者**同为 8 位**，按调用方场景区分——
+///   本函数取 **CSS4 序**（`#RRGGBBAA`，与 Web 一致），因为底色的来源是 CSS 风格声明）。
+///
+/// 【为什么放内核（而不是让宿主各解析一份）】颜色动画的**起点/复位**需要这个值在**内核状态**里
+///   ⇒ 解析必须发生在建树时（内核侧）。宿主已有的 `parseHexColor`（iOS）/`Cmd.color`（Android）
+///   是**绘制**用途的另一条路（不受本函数影响）。
+///
+/// 【与 TS 侧的分工】TS 侧的 `parseColorToChannels`（`@proteus-vue/animation`）是**跨语言契约的
+///   编译期半边**：它把用户声明的颜色拆成 4 个通道值（下发 4 条指令）。两者不重复——
+///   内核这一份只解析**底色**（树 DTO 的字符串），TS 那一份解析**动画的 from/to**。
+///   判据 `tests/anim-color-golden.test.ts` 以内核实测值为期望比对 TS 半边（防分叉）。
+pub(crate) fn parse_css_color(raw: &str) -> Result<u32, String> {
+    let s = raw.trim();
+    let hex = s.strip_prefix('#').ok_or_else(|| {
+        format!("颜色 \"{s}\" 不支持：本引擎只接受 #RGB / #RRGGBB / #RRGGBBAA 十六进制形态")
+    })?;
+    let bad = || format!("颜色 \"{s}\" 不是合法十六进制（应为 #RGB / #RRGGBB / #RRGGBBAA）");
+    let v = u32::from_str_radix(hex, 16).map_err(|_| bad())?;
+    Ok(match hex.len() {
+        3 => {
+            // #RGB：各通道重复一位（#f0a → #ff00aa，alpha = FF）
+            let r = ((v >> 8) & 0xF) as u32;
+            let g = ((v >> 4) & 0xF) as u32;
+            let b = (v & 0xF) as u32;
+            (0xFF00_0000) | ((r * 17) << 16) | ((g * 17) << 8) | (b * 17)
+        }
+        6 => 0xFF00_0000 | v,
+        // ★8 位取 **CSS4 序** `#RRGGBBAA`（与 Web 一致）：低 8 位是 alpha
+        8 => ((v & 0xFF) << 24) | ((v >> 8) & 0x00FF_FFFF),
+        _ => return Err(bad()),
+    })
+}
+
 #[derive(serde::Deserialize, serde::Serialize, Clone, Copy)]
 pub(crate) struct SizeDto {
     pub(crate) width: f32,
@@ -225,6 +276,12 @@ pub(crate) struct SizeDto {
 ///   （结构变更插子树）都要做这件事；两份实现必然分叉——**样式字段漏一个 = 静默丢样式**。
 pub(crate) fn style_from_dto(dto: &NodeDto) -> Result<LStyle, String> {
     let mut style = LStyle::default();
+    // ★★底色（2026-10-01）：颜色动画的复位目标 + 起点基准（见 `LStyle.bg_base`）
+    if let Some(raw) = dto.background_color.as_deref() {
+        let packed = parse_css_color(raw)?;
+        style.bg = Some(packed);
+        style.bg_base = Some(packed);
+    }
     style.width = dto.width;
     style.height = dto.height;
     style.width_ratio = dto.width_ratio;
@@ -2964,16 +3021,22 @@ pub unsafe extern "C" fn proteus_layout_anim_tick_bin(handle: u64, dt_ms: f32, o
         let mut eng = std::mem::take(&mut entry.anim);
         let out = eng.tick(&mut entry.tree, dt_ms);
         entry.anim = eng;
-        // ★每帧通道：**24B/条**定长 = id u32 + 五值 f32（tx/ty/scale/rotate/opacity）
-        //   （RT2 扩展属性后由 16B 增至 24B；判据在 hosts/ios/check-anim-rt2.py）
-        let mut buf = Vec::with_capacity(out.updates.len() * 24);
-        for v in &out.updates {
+        // ★每帧通道：**28B/条**定长 = id u32 + 五值 f32（tx/ty/scale/rotate/opacity）+ rgba u32
+        //   ★2026-10-01 由 24B 增至 28B（颜色）：`rgba` 是**打包色**（0xAARRGGBB）；
+        //     `u32::MAX` = **本节点无内核底色**（宿主忽略该字段——见 `NodeVisual.color_valid`）。
+        //   ★改动须知：记录宽度是**跨语言契约**，两端宿主 + SDK + demo 的解析常量
+        //     （iOS `animUpdateRecordBytes` / Android `ANIM_RECORD_BYTES` / SDK `FRAME_UPDATE_BYTES` /
+        //     embed-demo 与 `proteus-jni::host`）必须**同批改**——本仓 iOS 曾因两处各写步长
+        //     而错位解析（`24B` 记录的探针按 `16B` 读），本轮把"唯一事实源"写在此处。
+        let mut buf = Vec::with_capacity(out.updates.len() * 28);
+        for v in out.updates {
             buf.extend_from_slice(&v.id.to_le_bytes());
             buf.extend_from_slice(&v.tx.to_le_bytes());
             buf.extend_from_slice(&v.ty.to_le_bytes());
             buf.extend_from_slice(&v.scale.to_le_bytes());
             buf.extend_from_slice(&v.rotate.to_le_bytes());
             buf.extend_from_slice(&v.opacity.to_le_bytes());
+            buf.extend_from_slice(&v.bg.unwrap_or(u32::MAX).to_le_bytes());
         }
         Ok(buf)
     });
@@ -2994,6 +3057,37 @@ pub unsafe extern "C" fn proteus_layout_anim_tick_bin(handle: u64, dt_ms: f32, o
             eprintln!("[proteus] anim_tick_bin 内部 panic（已捕获）");
             std::ptr::null_mut()
         }
+    }
+}
+
+/// ★★**带底色的节点清单**（2026-10-01，颜色通道的取样入口）
+///
+/// 【为什么需要它（真机判据抓出的取样缺陷）】颜色动画要求目标节点在内核里有**底色**
+///   （`bg_base`——起点与复位基准）。而帧内节点的 id 由适配器/Vue 渲染动态分配，
+///   调用方**无法事先知道**哪个 id 有底色 ⇒ 只能盲试（真机实测：逐个试启动颜色动画，
+///   全被拒，最后落回 `?? 2` 这个不存在的兜底 ⇒ 判据判红**且原因误导**）。
+///   ⇒ 暴露本查询：调用方（相位/判据）先问"哪些节点有底色"，再选目标。
+///
+/// 入参：无。返回：`{"ok":true,"ids":[…],"count":N}`（最多 64 个，按节点顺序）。
+#[no_mangle]
+pub unsafe extern "C" fn proteus_layout_bg_nodes(handle: u64) -> *mut c_char {
+    let r = std::panic::catch_unwind(|| -> Result<String, String> {
+        let reg = registry().lock().map_err(|_| "注册表锁失败".to_string())?;
+        let entry = reg.get(&handle).ok_or_else(|| format!("句柄 {handle} 不存在"))?;
+        let ids: Vec<u32> = entry
+            .tree
+            .nodes
+            .iter()
+            .filter(|n| n.style.bg_base.is_some())
+            .map(|n| n.id)
+            .take(64)
+            .collect();
+        Ok(serde_json::json!({"ok": true, "ids": ids, "count": ids.len()}).to_string())
+    });
+    match r {
+        Ok(Ok(s)) => into_c_string(s),
+        Ok(Err(e)) => into_c_string(format!("{{\"ok\":false,\"error\":{}}}", json_str(&e))),
+        Err(_) => into_c_string("{\"ok\":false,\"error\":\"panic（已捕获）\"}".to_string()),
     }
 }
 
@@ -3095,6 +3189,44 @@ pub unsafe extern "C" fn proteus_rects_free(ptr: *mut u8, len: u32) {
 mod tests {
     use super::*;
 
+    /// ★★**颜色解析的钉值表**（2026-10-01）——TS 侧 golden 的**期望值来源**
+    ///
+    /// 【为什么钉成表（而不是各写各的公式）】颜色解析是**跨语言契约**：TS 侧
+    ///   `parseColorToChannels`（`@proteus-vue/animation`）与内核实现在同一批输入上
+    ///   必须给出**同一个打包值**。本测试把 Rust 侧的实测输出钉死；
+    ///   `tests/anim-color-golden.test.ts` 断言 TS 侧产出同一批值 ⇒ 任一侧改规则 ⇒ 当场红。
+    ///   ★新增/修改颜色形态（如将来支持 `rgb()` / 8 位 AARRGGBB）必须**同批**改这两处。
+    ///
+    /// 表格式：`(输入, 期望打包值 0xAARRGGBB, 是否合法)`
+    const COLOR_CASES: &[(&str, u32, bool)] = &[
+        ("#f0a", 0xFF_FF00AA, true),      // 3 位简写：各通道重复一位，alpha = FF
+        ("#33", 0, false),                // 位数非法（2）
+        ("#12345", 0, false),             // 位数非法（5）
+        ("#ff5533", 0xFF_FF5533, true),   // 6 位：不透明
+        ("#2f6fed", 0xFF_2F6FED, true),
+        ("#11223344", 0x44_112233, true), // 8 位：CSS4 序（低 8 位 = alpha）
+        ("#00000000", 0x00_000000, true), // 全透明黑（合法，不是"未设置"）
+        ("#ffffffff", 0xFF_FFFFFF, true),
+        ("ff5533", 0, false),             // 缺 '#'
+        ("#gggggg", 0, false),            // 非十六进制
+        ("#ABC", 0xFF_AABBCC, true),      // 大写 + 简写
+    ];
+
+    #[test]
+    fn parse_css_color_matches_pinned_table() {
+        for (input, expect, legal) in COLOR_CASES {
+            let got = parse_css_color(input);
+            if *legal {
+                match got {
+                    Ok(v) => assert_eq!(v, *expect, "颜色 {input}：解析 {v:#010X} ≠ 期望 {expect:#010X}"),
+                    Err(e) => panic!("颜色 {input} 应合法，但被拒：{e}"),
+                }
+            } else {
+                assert!(got.is_err(), "颜色 {input} 应被拒绝，却解析出 {:#010X}", got.unwrap());
+            }
+        }
+    }
+
     #[test]
     fn conformance_entry_reports_ok_on_golden() {
         let path = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/golden/browser-layout.json");
@@ -3106,8 +3238,7 @@ mod tests {
         assert!(v["max_delta_dp"].as_f64().unwrap() <= 0.5, "最大偏差应 ≤ 容差");
     }
 
-    /// ★★几何指纹：**确定性**（同输入两次跑必须同值）+ **敏感性**（改一点点几何必须变）
-    ///
+    /// ★★几何指纹：**确定性**（同输入两次跑必须同值）+ **敏感性**（改一点点几何必须变）    ///
     /// 【为什么钉这两条（2026-10-01 新增，跨端一致性的机器判据）】
     ///   ① 确定性是"双端指纹可比"的前提——若同端两次跑都不同，跨端比对毫无意义；
     ///   ② 敏感性是判据**有牙**的前提——若改几何指纹不变，那"两端一致"就是自证清白

@@ -273,7 +273,8 @@ pub extern "system" fn Java_dev_proteus_sdk_ProteusEngine_nativeFrame(
     .unwrap_or(abi::PROTEUS_ERR_INTERNAL)
 }
 
-/// 本帧视觉更新（24B/条：`id u32 + tx/ty/scale/rotate/opacity f32`，小端）
+/// 本帧视觉更新（**28B/条**：`id u32 + 五值 f32 + rgba u32`，小端；2026-10-01 由 24B 扩至 28B——
+///   末 4 字节为打包色 `0xAARRGGBB`，`0xFFFFFFFF` = 无内核底色。本层**只透传字节**，不解析)
 ///
 /// 【为什么是 `byte[]` 而不是让 Java 侧读指针】引擎的内部缓冲**有效期到下次同类调用**；
 ///   跨 JNI 传指针会让 Java 侧持有失效引用（"看起来能用、某天崩"）。

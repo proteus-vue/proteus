@@ -877,6 +877,15 @@ export function createSelfDrawAdapter(): SelfDrawAdapter {
 
     // ── 布局属性 → 引擎就绪形态（★与 takePatches 共用同一实现）──
     Object.assign(spec, layoutStyleOf(props))
+    // ★★**底色进内核请求**（2026-10-01，颜色动画的前提）：
+    //   内核 `NodeDto.backgroundColor` → `LStyle.bg_base`（颜色动画的起点与**复位目标**）。
+    //   【为什么必须单独加（真机判据抓出的缺口）】`backgroundColor` 此前只进 **paint 快照**
+    //   （供宿主建层用），**不进内核** ⇒ 颜色动画在真机上被内核拒绝（"目标节点没有底色"）。
+    //   ★布局语义不受影响：底色是 paint-only 字段，内核只用它做颜色轨道（不参与求解）。
+    {
+      const bgRaw = styleValue(pStyleObj, 'backgroundColor') ?? props.backgroundColor
+      if (typeof bgRaw === 'string' && bgRaw.length > 0) spec.backgroundColor = bgRaw
+    }
     // 绘制属性透传（不进核心）
     for (const key of PAINT_KEYS) {
       // ★两形状兼容（模板静态 style 是 kebab、`:style`/`h()` 是 camel）——见 `styleValue` 注释

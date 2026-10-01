@@ -183,6 +183,57 @@ def main() -> int:
             print(f"  ✓ M6b ★真手势滚动（真实 MotionEvent → GestureDetector → 生产通路）："
                   f"手指上移 ⇒ scrollY={scroll_y} · 视差 ty={ty}（≈-0.4×{scroll_y}）· 出口驱动 {drive_delta} 次")
 
+    # ── P 组（★★颜色通道，2026-10-01）：一个声明 → 四条内核通道 → 宿主写色 → 复位回底色 ──
+    #
+    # 【与 iOS 腿同一条链、同一套判据】声明面（kind 5..8）→ 内核算值 → 28B 记录 →
+    #   宿主颜色覆盖表；本端"真读"= 宿主真源 `animColor`（经 `animTxProbe` 的 `bg` 字段报出）。
+    ce = d.get("color_error")
+    if ce:
+        fail(f"P 颜色场景抛异常：{ce}")
+        ok = False
+    else:
+        cs = d.get("color_start") or {}
+        start_result = cs.get("data") if isinstance(cs, dict) and "data" in cs else cs
+        started = (start_result or {}).get("started") if isinstance(start_result, dict) else None
+        if started != 4:
+            fail(f"P1 颜色指令未被内核受理：{start_result}（应 started=4——四条通道）")
+            ok = False
+        else:
+            print(f"  ✓ P1 一个声明 → 四条通道指令（kind 5..8）· 内核受理 started={started}")
+
+        mid = _layers(d.get("color_mid"))
+        end = _layers(d.get("color_end"))
+        stop = _layers(d.get("color_after_stop"))
+        bg_mid = (mid.get("bg") or "").upper()
+        bg_end = (end.get("bg") or "").upper()
+        bg_stop = (stop.get("bg") or "").upper()
+        # ② 端到端：真读宿主真源。#3366CC → #FF0000（linear）
+        if not bg_mid or not bg_end:
+            fail(f"P2 颜色读数缺失：mid={bg_mid!r} end={bg_end!r}（宿主未报 bg？）")
+            ok = False
+        elif bg_end != "FFFF0000":
+            fail(f"P2 终点不精确：宿主 bg={bg_end}（应 FFFF0000 = #FF0000）")
+            ok = False
+        elif bg_mid == bg_end or bg_mid == "FF3366CC":
+            fail(f"P2b 半程未见中间色：mid={bg_mid}（三层值应互不相同）")
+            ok = False
+        else:
+            print(f"  ✓ P2 ★颜色端到端（真读宿主真源）：FF3366CC → {bg_mid} → {bg_end}")
+        # ③ 复位回底色（不是停在末帧）
+        if bg_stop != "FF3366CC":
+            fail(f"P3 stop 后未回底色：bg={bg_stop}（应回 FF3366CC）——残留颜色会污染后续相位")
+            ok = False
+        else:
+            print(f"  ✓ P3 复位回底色：{bg_stop}（stop 后不留末帧颜色）")
+        # ④ 拒绝分支：无底色节点（节点 12）必须明确拒绝
+        rej = d.get("color_rejected") or ""
+        rej_s = json.dumps(rej, ensure_ascii=False) if isinstance(rej, dict) else str(rej)
+        if "底色" not in rej_s:
+            fail(f"P4 无底色节点上的颜色动画未被明确拒绝：{rej_s[:140]}")
+            ok = False
+        else:
+            print(f"  ✓ P4 无底色节点明确拒绝：{rej_s[:80]}…")
+
     # ── M7：共享元素（内核几何） ──
     se = d.get("shared_element")
     if isinstance(se, str):

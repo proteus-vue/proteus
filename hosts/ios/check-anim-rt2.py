@@ -516,6 +516,91 @@ def main() -> int:
     else:
         print("  · I 组跳过（无 anim_scroll 读数）")
 
+    # ── P 组（★★颜色通道，2026-10-01）：一个声明 → 四条内核通道 → 宿主真写层 → 复位回底色 ──
+    #
+    # 【收的是哪条边界】官网架构页此前写着「颜色为什么不在这张表里」——颜色动画**不是能力**。
+    #   本轮把它做成契约能力（封闭集 5 → 6 个 kind；内核面按 R/G/B/A 四通道分解）。
+    #   本组证明端到端：① 声明面一个 `color`；② 编译面 4 条通道（kind 5..8）+ composited=false；
+    #   ③ 执行面内核算值 → 28B 记录 → 宿主写 `CALayer.backgroundColor`（**探针真读层**反解）；
+    #   ④ 复位面 `animStopAll` 后回**底色**（不是停在末帧）；⑤ 拒绝面 无底色节点明确报错。
+    c = d.get("anim_color") or js.get("anim_color") or {}
+    if c:
+        # P1：一个声明编译成四条通道（编号是契约：5=R / 6=G / 7=B / 8=A）
+        kinds = c.get("compiled_kinds") or []
+        if kinds != [5, 6, 7, 8]:
+            fail(f"P1 颜色声明未展开成四条通道：compiled_kinds={kinds}（应为 [5,6,7,8]）")
+            ok = False
+        else:
+            print(f"  ✓ P1 一个 `color` 声明 → 四条通道指令（kind {kinds}·契约 5=R/6=G/7=B/8=A）")
+        # P2：paint-only 但**非合成**（⇒ 不进平台零参与路径——跨端一致的关键）
+        if c.get("composited") is not False:
+            fail(f"P2 颜色批次被判为可走平台路径（composited={c.get('composited')}）——" +
+                 "Android RenderNode 无法在渲染线程插值背景色 ⇒ 必须两端一致走 tick")
+            ok = False
+        elif list(c.get("non_composited") or []) != ["color"]:
+            fail(f"P2b 非合成清单异常：{c.get('non_composited')}（应为 ['color']）")
+            ok = False
+        else:
+            print("  ✓ P2 颜色是 paint-only **非合成**（composited=false · 不进平台零参与路径）")
+        # P3：起点 = 底色（from 全通道落层）
+        st = (c.get("start") or {})
+        if st.get("ok") is not True or (st.get("started") or 0) != 4:
+            fail(f"P3 颜色指令未被内核受理：{st}（应 started=4——四条通道）")
+            ok = False
+        else:
+            print(f"  ✓ P3 内核受理四条通道：started={st.get('started')}")
+        # P4：端到端——**断言自洽而非写死颜色**（2026-10-01 修正）
+        #
+        # 【为什么不能写死期望色（本轮实测的判据缺陷）】目标节点由**内核查询**给出
+        #   （`bg_ids_from_kernel` —— 因为 id 由适配器/Vue 动态分配，调用方无法预知），
+        #   它的实际底色也可能是场景里任意一个 ⇒ 写死 `#1b1b21` 时判据会**因取样变化而误红**
+        #   （真机实测：底色是 `#101020`，P4a 判红但链路完全正确）。
+        #   ⇒ 正解：① 从**内核给的从色**（`compiled_from`）反推期望起点；② 终点用**声明的 to**；
+        #     ③ 三层值必须互不相同（中间色真的在过渡，而不是跳变）。
+        bg0, bgm, bg1 = c.get("bg_start"), c.get("bg_mid"), c.get("bg_end")
+        fr = [int(v) for v in (c.get("compiled_from") or [])]
+        to = [int(v) for v in (c.get("compiled_to") or [])]
+        pack = lambda ch: "%02X%02X%02X%02X" % (ch[3], ch[0], ch[1], ch[2]) if len(ch) == 4 else None  # noqa: E731
+        want_start, want_end = pack(fr), pack(to)
+        if not (want_start and want_end):
+            fail(f"P4 读数不全：from={fr} to={to}（应各 4 通道）")
+            ok = False
+        elif bg0 != want_start:
+            fail(f"P4a 起点不是底色的分量：层上 bg={bg0}（应 {want_start} = 内核给的 from）")
+            ok = False
+        elif bg1 != want_end:
+            fail(f"P4b 终点不精确：层上 bg={bg1}（应 {want_end} = 声明的 to）")
+            ok = False
+        else:
+            # 半程：linear ⇒ 各通道 ≈ 中点（容差 ±2/255，覆盖 8bit 舍入）
+            try:
+                mid_ok = bgm and bgm != bg0 and bgm != bg1
+            except Exception:  # noqa: BLE001
+                mid_ok = False
+            if not mid_ok:
+                fail(f"P4c 半程未见中间色：start={bg0} mid={bgm} end={bg1}（三层值应互不相同）")
+                ok = False
+            else:
+                print(f"  ✓ P4 ★颜色动画端到端（真读 CALayer.backgroundColor）：{bg0} → {bgm} → {bg1}")
+        # P5：复位回底色（不是停在末帧——「解绑必须含清值」在颜色上的落点）
+        after = c.get("bg_after_stop")
+        if after != bg0:
+            fail(f"P5 animStopAll 后未回底色：层上 bg={after}（应回 {bg0}）——残留颜色会污染后续相位")
+            ok = False
+        else:
+            print(f"  ✓ P5 复位回底色：{after}（stop 后不留末帧颜色）")
+        # P6：拒绝分支——无底色节点上的颜色动画必须**明确拒绝**（不静默）
+        rej = c.get("rejected_no_bg") or ""
+        if c.get("no_bg_nodes") and ("底色" not in rej):
+            fail(f"P6 无底色节点上的颜色动画未被明确拒绝：{rej[:120]}")
+            ok = False
+        elif c.get("no_bg_nodes"):
+            print(f"  ✓ P6 无底色节点明确拒绝：{rej[:70]}…")
+        else:
+            print("  · P6 跳过（整树节点都有底色，取不到无反例——如实标注）")
+    else:
+        print("  · P 组跳过（无 anim_color 读数）")
+
     # ── J 组（MA6）：序列编排（多段动画收敛在一条动画里；分段推进 + 边界精确） ──
     q = d.get("anim_sequence") or js.get("anim_sequence") or {}
     if q:

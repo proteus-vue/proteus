@@ -37,7 +37,7 @@ export type {
   ValidationIssue,
 } from './types'
 
-export { COMPOSITED_KINDS, isComposited, validateAnimations, formatIssues } from './validate'
+export { COMPOSITED_KINDS, PAINT_ONLY_KINDS, isComposited, isPaintOnly, validateAnimations, formatIssues } from './validate'
 export {
   compileAnimations,
   compileOne,
@@ -46,6 +46,10 @@ export {
   isPlatformEligible,
   isScrollDriven,
 } from './compile'
+// ★★颜色（2026-10-01）：CSS 颜色 → 通道（跨语言契约的 TS 半边；与内核 `parse_css_color` 同规则）
+//   golden：`tests/anim-color-golden.test.ts`（期望值来自内核钉值表 `parse_css_color_matches_pinned_table`）
+export { parseColorToChannels, packChannels, channelsToHex } from './color'
+export type { ColorChannels } from './color'
 export { presets, route, list, element, easing, scroll } from './presets'
 // ★★声明式编排层（"几百个元素谁先动、各自去哪"的一句话入口）
 //   —— 抽出的 `easing.ts` 是它与预设库共享的手感常量（避免循环依赖，见该文件头）

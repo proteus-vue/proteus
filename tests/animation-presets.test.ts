@@ -411,9 +411,18 @@ describe('MA5 · 滚动联动（吸顶 / 视差 / 渐显）', () => {
 
 describe('MA1 · 编号映射表（名字写错的类型级防线）', () => {
   it('ANIM_KIND_ID / CURVE_ID 覆盖全部名字', () => {
-    expect(Object.keys(ANIM_KIND_ID)).toHaveLength(5)
+    // ★契约变更（2026-10-01）：封闭集由 5 个扩到 **6 个**（新增 `color`）。
+    //   计数从 5 改成 6 是**如实反映契约**，不是放宽断言——下面逐条钉住编号（含 color）。
+    expect(Object.keys(ANIM_KIND_ID)).toHaveLength(6)
     expect(Object.keys(CURVE_ID)).toHaveLength(5)
     expect(ANIM_KIND_ID.translateX).toBe(0)
+    expect(ANIM_KIND_ID.translateY).toBe(1)
+    expect(ANIM_KIND_ID.scale).toBe(2)
+    expect(ANIM_KIND_ID.rotate).toBe(3)
+    expect(ANIM_KIND_ID.opacity).toBe(4)
+    // ★`color` 的编号是**名义值**（= 通道 R 的 5）：编译期会把它展开成 4 条通道指令
+    //   （见 `compileOne`）。这条断言钉住"名义值没变"，避免有人误当单条指令用。
+    expect(ANIM_KIND_ID.color).toBe(5)
     expect(CURVE_ID.easeOut).toBe(1)
   })
 })

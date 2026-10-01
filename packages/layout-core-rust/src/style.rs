@@ -201,6 +201,26 @@ pub struct LStyle {
     /// ★RT2 追加：不透明度（0..1，缺省 = 1）——复杂动效的标配（淡入淡出）
     #[serde(default = "default_scale")]
     pub opacity: f32,
+    /// ★★Color（2026-10-01）：**背景色**（`0xAARRGGBB` 打包）——颜色动画的当前值槽位
+    ///
+    /// 【为什么必须有这个槽位】颜色动画要**每帧求值并写入内核状态**，宿主直接消费、
+    ///   全链**不经 JS**（与 translate/scale 同一纪律）。此前内核**完全没有颜色字段**
+    ///   （背景色是各宿主的本地数据：iOS 读树 JSON 的 `style["backgroundColor"]`、
+    ///   Android 用 Java 侧 `Cmd.color`）⇒ 动画的值无处可落。
+    ///
+    /// 【`None` 的语义】= "本节点没有内核底色" ⇒ 报告里 `color_valid=false`，宿主**保持自己的
+    ///   静态绘制**（不覆盖）。这正是为了不打扰"宿主自有颜色源"（如 Android 的 `Cmd.color`）：
+    ///   只有**树里声明了底色**的节点才进内核颜色轨道。
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub bg: Option<u32>,
+    /// 底色（**复位目标**；来自树 DTO 的 `backgroundColor`，建树时定，动画不改它）
+    ///
+    /// 【为什么需要它（本仓「解绑必须含清值」纪律的又一次应用）】动画跑完/被 stop 后，
+    ///   若只把动画项移出列表，`bg` 会**停在最后一帧**（残留颜色污染后续相位）。
+    ///   ⇒ 复位语义 = `bg = bg_base`。这也是"颜色动画要求节点有底色"的原因：
+    ///     没有复位目标就不能安全清场（内核在 `start` 处**明确拒绝**，不静默）。
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub bg_base: Option<u32>,
 }
 
 fn default_scale() -> f32 {
@@ -249,6 +269,8 @@ impl Default for LStyle {
             scale: 1.0,
             rotate: 0.0,
             opacity: 1.0,
+            bg: None,
+            bg_base: None,
         }
     }
 }
