@@ -59,6 +59,8 @@ export const AnimKind = {
   STROKE_PROGRESS: 31,
   /** ★★渐变混合因子（2026-10-01 · 渐变 v2）：0..1 = A 态（fillGradient）→ B 态（fillGradientTo） */
   GRADIENT_MIX: 32,
+  /** ★★路径变形因子（2026-10-01 · 路径变形 v1）：0..1 = A 态（svgPath）→ B 态（svgPathTo） */
+  PATH_MORPH: 33,
 } as const
 export type AnimKindId = (typeof AnimKind)[keyof typeof AnimKind]
 export type AnimKindName =
@@ -82,6 +84,9 @@ export type AnimKindName =
   /** ★★渐变混合因子（2026-10-01 · 渐变 v2；两态在树里声明为 fillGradient/fillGradientTo；走 tick 路径）
    *  ★CSS 没有这个能力（背景渐变不可过渡）——见 `gradient.ts` 文件头 */
   | 'gradientMix'
+  /** ★★路径变形因子（2026-10-01 · 路径变形 v1；两态在树里声明为 svgPath/svgPathTo；走 tick 路径）
+   *  ★CSS 完全不能做（`d` 属性不可过渡）——见内核 `svg_path::SvgPath::morphed` */
+  | 'pathMorph'
 
 /** 名称 → 编号（编译期用；也是"名字写错"的**类型级**防线） */
 export const ANIM_KIND_ID: Record<AnimKindName, AnimKindId> = {
@@ -106,6 +111,8 @@ export const ANIM_KIND_ID: Record<AnimKindName, AnimKindId> = {
   strokeProgress: AnimKind.STROKE_PROGRESS,
   // ★渐变混合是**单通道**（32——与内核同号）
   gradientMix: AnimKind.GRADIENT_MIX,
+  // ★路径变形是**单通道**（33——与内核同号）
+  pathMorph: AnimKind.PATH_MORPH,
 }
 
 /** 曲线（与内核 `CURVE_*` 一一对应——**不得改号**） */

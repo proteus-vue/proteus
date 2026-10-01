@@ -41,6 +41,72 @@ pub struct SvgPath {
     pub total_len: f32,
 }
 
+impl SvgPath {
+    /// ★★**结构签名**（路径变形的前提）：段序列的"命令指纹"——
+    ///   同签名的两条路径才能逐点插值（异签名 ⇒ 无定义；本引擎**明确拒绝**，不做"猜测对齐"）。
+    ///
+    /// 形态：每段一个字符（M/L/C/Q/Z）——例：`"MLLQZ"`
+    pub fn structure_signature(&self) -> String {
+        self.segs
+            .iter()
+            .map(|sg| match sg {
+                PathSeg::MoveTo(..) => 'M',
+                PathSeg::LineTo(..) => 'L',
+                PathSeg::CubicTo(..) => 'C',
+                PathSeg::QuadTo(..) => 'Q',
+                PathSeg::Close => 'Z',
+            })
+            .collect()
+    }
+
+    /// ★★**逐点插值**（路径变形的**唯一 lerp 实现**——宿主零插值数学，只翻译结果）。
+    ///
+    /// 【语义】`self` = A 态（t=0）· `other` = B 态（t=1）；每段的每个坐标各自线性插值
+    ///   （与颜色通道动画同一数学：直插）。`Close` 无坐标 ⇒ 原样。
+    /// 【前提】两条路径**结构签名相同**（调用方负责校验——本函数只做数学；
+    ///   签名不同时按"能插到什么就插什么"会产出无意义几何 ⇒ 上游必须拒绝）。
+    /// 【为什么实时重算弧长】变形改变几何 ⇒ `total_len`/`prefix_len` 必须跟着变
+    ///   （否则 `strokeProgress` 的"画到哪"仍按旧长度换算 ⇒ 画线进度与几何不同步）。
+    pub fn morphed(&self, other: &SvgPath, t: f32) -> SvgPath {
+        let t = t.clamp(0.0, 1.0);
+        let lerp = |a: f32, b: f32| a + (b - a) * t;
+        let segs: Vec<PathSeg> = self
+            .segs
+            .iter()
+            .zip(other.segs.iter())
+            .map(|(a, b)| match (a, b) {
+                (PathSeg::MoveTo(x0, y0), PathSeg::MoveTo(x1, y1)) => {
+                    PathSeg::MoveTo(lerp(*x0, *x1), lerp(*y0, *y1))
+                }
+                (PathSeg::LineTo(x0, y0), PathSeg::LineTo(x1, y1)) => {
+                    PathSeg::LineTo(lerp(*x0, *x1), lerp(*y0, *y1))
+                }
+                (
+                    PathSeg::CubicTo(x0, y0, x1, y1, x2, y2),
+                    PathSeg::CubicTo(x3, y3, x4, y4, x5, y5),
+                ) => PathSeg::CubicTo(
+                    lerp(*x0, *x3),
+                    lerp(*y0, *y3),
+                    lerp(*x1, *x4),
+                    lerp(*y1, *y4),
+                    lerp(*x2, *x5),
+                    lerp(*y2, *y5),
+                ),
+                (PathSeg::QuadTo(x0, y0, x1, y1), PathSeg::QuadTo(x2, y2, x3, y3)) => {
+                    PathSeg::QuadTo(lerp(*x0, *x2), lerp(*y0, *y2), lerp(*x1, *x3), lerp(*y1, *y3))
+                }
+                _ => PathSeg::Close, // Close↔Close（签名校验已保证；此处兜底为 Close）
+            })
+            .collect();
+        // ★弧长重算**复用 parse 的同一套函数与口径**（`seg_len_line`/`seg_len_cubic` +
+        //   Quad→Cubic 转换）——本仓纪律：同一语义一处实现（首版这里又写了一份"自己的折线近似"，
+        //   两处口径一旦分叉 ⇒ `strokeProgress` 在"变形 + 画线"同开时按不同长度换算，
+        //   而单看任何一条都"对"。⇒ 抽为共享的 `compute_arc_lengths`）。
+        let (prefix_len, total) = compute_arc_lengths(&segs);
+        SvgPath { segs, prefix_len, total_len: total }
+    }
+}
+
 /// 把 `d` 字符串解析为归一化路径
 ///
 /// 支持：`M/m L/l H/h V/v C/c Q/q Z/z`（绝对与相对、隐含重复命令）
@@ -170,16 +236,34 @@ pub fn parse_svg_path(d: &str) -> Result<SvgPath, String> {
     if segs.is_empty() {
         return Err("SVG 路径为空（`d` 里没有任何绘图命令）".to_string());
     }
-    // 弧长（贝塞尔 16 段折线近似；MoveTo/Close 的处理见下）
+    // 弧长（**共享实现**：见 `compute_arc_lengths`——变形路径也用它，口径必然一致）
+    let (prefix_len, acc) = compute_arc_lengths(&segs);
+    Ok(SvgPath { segs, prefix_len, total_len: acc })
+}
+
+/// ★★**弧长计算**（段列表 → 前缀表 + 总长）——**唯一实现**：
+///   解析路径与**变形后的**路径都走它（口径必然一致：`strokeProgress` 在两种情况下
+///   都按同一精度换算"画到哪"）。
+///
+/// 口径：线段精确；贝塞尔用 16 段折线近似（与 CSS `stroke-dasharray` 同量级，
+///   误差 ~1e-3 相对量、视觉不可辨）；Quad 转 Cubic 后同法（同一形状：
+///   `C1 = P0 + 2/3(Q-P0)`、`C2 = P2 + 2/3(Q-P2)`）。
+fn compute_arc_lengths(segs: &[PathSeg]) -> (Vec<f32>, f32) {
     let mut prefix_len = Vec::with_capacity(segs.len());
     let mut acc = 0.0f32;
     let (mut px, mut py) = (0.0f32, 0.0f32);
-    for s in &segs {
+    // 子路径起点（Z 的落点）——从首段 MoveTo 记起（与解析器同规）
+    let (mut sx, mut sy) = (0.0f32, 0.0f32);
+    let mut seen_move = false;
+    for s in segs {
         match *s {
             PathSeg::MoveTo(x, y) => {
-                // ★MoveTo 不贡献弧长（但更新"当前点"——后续 L/C 的长度从它算）
+                // ★MoveTo 不贡献弧长（但更新"当前点"与子路径起点）
                 px = x;
                 py = y;
+                sx = x;
+                sy = y;
+                seen_move = true;
             }
             PathSeg::LineTo(x, y) => {
                 acc += seg_len_line(px, py, x, y);
@@ -192,7 +276,6 @@ pub fn parse_svg_path(d: &str) -> Result<SvgPath, String> {
                 py = y;
             }
             PathSeg::QuadTo(x1, y1, x, y) => {
-                // 二次 → 三次（同一形状：C1 = P0 + 2/3(Q-P0)，C2 = P2 + 2/3(Q-P2)）
                 let c1x = px + (2.0 / 3.0) * (x1 - px);
                 let c1y = py + (2.0 / 3.0) * (y1 - py);
                 let c2x = x + (2.0 / 3.0) * (x1 - x);
@@ -202,14 +285,16 @@ pub fn parse_svg_path(d: &str) -> Result<SvgPath, String> {
                 py = y;
             }
             PathSeg::Close => {
-                acc += seg_len_line(px, py, sx, sy);
-                px = sx;
-                py = sy;
+                if seen_move {
+                    acc += seg_len_line(px, py, sx, sy);
+                    px = sx;
+                    py = sy;
+                }
             }
         }
         prefix_len.push(acc);
     }
-    Ok(SvgPath { segs, prefix_len, total_len: acc })
+    (prefix_len, acc)
 }
 
 /// 词法：命令字母（单字符）与数字（含负号 / 小数 / 科学计数）
@@ -362,6 +447,46 @@ mod tests {
         assert!(parse_svg_path("M0 0 X10 10").unwrap_err().contains("未知命令"));
         assert!(parse_svg_path("   ").unwrap_err().contains("为空"));
         assert!(parse_svg_path("5 5").unwrap_err().contains("缺少命令"));
+    }
+
+    /// ★★路径变形（v1）：**插值数学钉值** + 同构校验 + 弧长随几何重算。
+    #[test]
+    fn morph_interpolates_coordinates_and_recomputes_arc_length() {
+        // A：一条 10px 水平线；B：同结构但终点 (20, 10)（斜线）
+        let a = parse_svg_path("M0 0 L10 0").unwrap();
+        let b = parse_svg_path("M0 0 L20 10").unwrap();
+        assert_eq!(a.structure_signature(), b.structure_signature(), "同构");
+        // t=0.5：终点 = (15, 5)
+        let m = a.morphed(&b, 0.5);
+        match m.segs[1] {
+            PathSeg::LineTo(x, y) => {
+                assert!((x - 15.0).abs() < 1e-4, "x={x}");
+                assert!((y - 5.0).abs() < 1e-4, "y={y}");
+            }
+            other => panic!("段型不符：{other:?}"),
+        }
+        // 弧长 = |(15,5) - (0,0)| ≈ 15.811
+        assert!((m.total_len - 15.8114).abs() < 0.01, "len={}", m.total_len);
+        // t=0 / t=1 端点钉死（与其余通道同一"端点精确"语义）
+        let at0 = a.morphed(&b, 0.0);
+        assert!((at0.total_len - a.total_len).abs() < 1e-4, "t=0 应等于 A");
+        let at1 = a.morphed(&b, 1.0);
+        assert!((at1.total_len - b.total_len).abs() < 0.01, "t=1 应等于 B");
+        // 越界钳位（与 progress 通道同一纪律）
+        assert!((a.morphed(&b, 5.0).total_len - b.total_len).abs() < 0.01, "t>1 钳到 1");
+    }
+
+    /// ★★同构校验：异结构（命令序列不同 / 段数不同）的**签名必须不同**——
+    ///   这是上游拒绝"异型变形"的依据（签名相同才允许插值；本引擎不做"猜测对齐"）。
+    #[test]
+    fn morph_signature_distinguishes_structures() {
+        let l = parse_svg_path("M0 0 L10 0").unwrap();
+        let c = parse_svg_path("M0 0 C1 1 2 2 10 0").unwrap();
+        let two = parse_svg_path("M0 0 L5 0 L10 0").unwrap();
+        assert_ne!(l.structure_signature(), c.structure_signature(), "L vs C");
+        assert_ne!(l.structure_signature(), two.structure_signature(), "段数不同");
+        let same = parse_svg_path("M0 0 L0 10").unwrap();
+        assert_eq!(l.structure_signature(), same.structure_signature(), "同构（只是坐标不同）");
     }
 
     #[test]
