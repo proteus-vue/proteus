@@ -198,6 +198,24 @@ def main() -> int:
     else:
         print(f"  ✓ ⑤ 空纸基线：展卷终态时山一骨线 strokeProgress={s11}（画卷先展开、落笔尚未发生）")
 
+    # ── ⑤b ★渐变"真的挂上了"（探针真读宿主绘制真源——v1 渐变的机器证据）──
+    #   样本：远山晕团 17（radial）/ 月晕 60（radial）/ 云带 70（linear）。
+    #   ★这是"渐变节点真的建出渐变"的证据（不是"声明了"——声明在树里，读的是宿主侧）。
+    grad_checks = []
+    m17 = _layer((hbyname.get("mountains") or {}).get("probe_all") or [], 17)
+    m60 = _layer((hbyname.get("moonrise") or {}).get("probe_all") or [], 60)
+    m70 = _layer((hbyname.get("clouds") or {}).get("probe_all") or [], 70)
+    for label, lay, want in (("晕团 17", m17, "radial"), ("月晕 60", m60, "radial"), ("云带 70", m70, "linear")):
+        g = (lay or {}).get("gradient") or ""
+        if not g.startswith(want + ":"):
+            grad_checks.append(f"{label} gradient='{g}'（应 '{want}:N'）")
+    if grad_checks:
+        fail(f"⑤b 渐变未落到绘制侧：{grad_checks}")
+        ok = False
+    else:
+        print(f"  ✓ ⑤b ★渐变真的挂上了（探针真读）：晕团 17={m17.get('gradient')} · "
+              f"月晕 60={m60.get('gradient')} · 云带 70={m70.get('gradient')}")
+
     # ── ⑥ 帧率与流畅 ──
     vsync = host.get("vsync_p50")
     p95 = host.get("work_p95")

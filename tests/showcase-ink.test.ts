@@ -362,6 +362,38 @@ describe('Morpheus 炫技场 · 第四个节目（墨绘·山水卷）', () => {
     expect(() => check('M0 0 39 Q 38 14 69 0 M173 39 Q 135 14 104 0', -1)).toThrow()
   })
 
+  it('★★渐变（v1）：晕团/云带/月晕声明真渐变（边缘渐隐——纯色做不到的那一半）', () => {
+    const nodes = treeNodes()
+    // 山体晕团 6 个（3 叠 × 2）全部带径向渐变
+    for (const pid of INK_IDS.rangePuffs.flat()) {
+      const g = (nodes.get(pid) as { fillGradient?: { kind?: string; stops?: unknown[] } }).fillGradient
+      expect(g?.kind, `晕团 ${pid} 渐变类型`).toBe('radial')
+      expect(g?.stops?.length ?? 0, `晕团 ${pid} 色标数`).toBeGreaterThanOrEqual(3)
+    }
+    // 云带 2 条：竖直渐隐（linear + 角度 90/270）
+    for (const cid of INK_IDS.clouds) {
+      const g = (nodes.get(cid) as { fillGradient?: { kind?: string; angle?: number } }).fillGradient
+      expect(g?.kind, `云带 ${cid}`).toBe('linear')
+    }
+    // 月晕两圈：径向
+    for (const hid of [INK_IDS.haloOuter, INK_IDS.haloInner]) {
+      const g = (nodes.get(hid) as { fillGradient?: { kind?: string } }).fillGradient
+      expect(g?.kind, `月晕 ${hid}`).toBe('radial')
+    }
+    // ★所有渐变都满足 v1 契约：色标 offset 升序 + 颜色六位 + alpha 数值
+    for (const n of nodes.values()) {
+      const g = (n as { fillGradient?: { kind: string; stops: Array<{ offset: number; color: string; alpha?: number }> } }).fillGradient
+      if (!g) continue
+      let prev = -1
+      for (const st of g.stops) {
+        expect(st.offset, `节点 ${n.id} 色标升序`).toBeGreaterThan(prev)
+        prev = st.offset
+        expect(st.color, `节点 ${n.id} 颜色六位`).toMatch(/^#[0-9a-f]{6}$/)
+        expect(typeof st.alpha === 'number' && st.alpha >= 0 && st.alpha <= 1, `节点 ${n.id} alpha`).toBe(true)
+      }
+    }
+  })
+
   it('★工具函数契约：blend 预混（6 位）· ink 加 alpha（8 位 #RRGGBBAA）', () => {
     expect(blend('#000000', '#ffffff', 0.5)).toBe('#808080')
     expect(blend('#f2ead6', '#f2ead6', 0.3)).toBe('#f2ead6')
