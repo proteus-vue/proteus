@@ -1066,6 +1066,11 @@ export interface InkAct {
   repeatAnims: number
   /** 判据的"进行中采样"标记（宿主在幕 45% 处采探针——"描边真的在进程中"的证据） */
   midSample?: boolean
+  /**
+   * ★★**展卷行程**（长卷模式专用）：滚动值 = 展卷进度（0..range）。
+   *   宿主据此**钳制**手势累计（拖过头要能拖回来——见 `setHorizontalScrollRange` 注释）。
+   */
+  scrollRange?: number
 }
 
 export interface InkProgram {
@@ -1453,8 +1458,8 @@ export function createInkScrollProgram(env: { view: View }): InkProgram {
   const P = INK_PALETTE
   const I = INK_IDS
   const vw = env.view.width
-  /** 总滚动行程（= 长卷长度 − 视口）——各窗按它分段 */
-  const SCROLL_RANGE = Math.round(vw * 2.2)
+  /** 总滚动行程：手指从头滑到尾 = 整卷展完（再卷回）——行程取 1.2×视口（顺手） */
+  const SCROLL_RANGE = Math.round(vw * 1.2)
 
   /**
    * 窗口辅助：把 `[a, b]`（0..1 全局分段）映射到滚动窗。
@@ -1468,72 +1473,76 @@ export function createInkScrollProgram(env: { view: View }): InkProgram {
   })
 
   const decls: EngineAnim[] = []
-
-  // ① 长卷整体左移（画随手动）——位移量 = 全程 −(总宽−视口)
-  decls.push(
-    ...onto(I.root, {
-      kind: 'translateX', from: 0, to: -(SCROLL_RANGE), durationMs: 1000,
-      drive: 'progress', ...win(0, 1),
-    }),
-  )
-  // ② 卷轴墨幕：随滚动揭开（0..0.35 段）——"边看边展"；卷筒同步滚动
   const sm = scrollMetrics(env.view)
+
+  // ★★**设计修正（2026-10-01 用户实问"怎么测"时暴露的真缺陷）**：
+  //   首版把**整幅画**（本就只有一个视口宽）向左平移 2.2 个视口 ⇒ 画全部移出屏幕
+  //   （收尾截图**全黑** = 直接证据；而判据只读 `root.tx` 数值、没查"看不看得见"⇒ 判绿）。
+  //   ⇒ 改为**手卷的物理语义**：画卷**固定居中**，**卷筒**随滚动位置从左往右滚，
+  //     墨幕（curtain）随之"卷开/卷回"——"手指拖动 = 卷筒滚动展开手卷"。
+  //     · 滚动 0 → 全卷收拢（幕布全遮，只见卷筒在最左）；
+  //     · 滚动满 → 全卷展开（幕布全开，画卷完整显现）；
+  //     · 中途 → 卷筒在中途，**左半边已展（可见）、右半边仍被幕布卷着**（真实手卷形态）。
+  //   各元素（山/水/月/云/竹/舟/鸟/题款）随"卷筒扫过"逐段落笔——与幕布同一条滚动轴。
+
+  // ① 墨幕：随滚动从**右往左卷开**（right 0→1 = 左侧先露出——展卷方向）
+  //    ★幕布揭示与卷筒位置**同一窗口**（两处不同步会"脱筒"——判据钉住同曲线）
   decls.push(
-    ...onto(I.curtain, { kind: 'clip', from: [0, 0, 0, 0], to: [0, 1, 0, 0], durationMs: 1000, drive: 'progress', ...win(0, 0.32) }),
-    ...onto(I.rollCylinder, { kind: 'translateX', from: 0, to: sm.txOpen, durationMs: 1000, drive: 'progress', ...win(0, 0.32) }),
-    ...onto(I.rollKnobTop, { kind: 'translateX', from: 0, to: sm.txOpen, durationMs: 1000, drive: 'progress', ...win(0, 0.32) }),
-    ...onto(I.rollKnobBottom, { kind: 'translateX', from: 0, to: sm.txOpen, durationMs: 1000, drive: 'progress', ...win(0, 0.32) }),
+    ...onto(I.curtain, { kind: 'clip', from: [0, 0, 0, 0], to: [0, 1, 0, 0], durationMs: 1000, drive: 'progress', ...win(0, 1) }),
+    // ② 卷筒（带轴头）：**从右缘滚到左缘**（与幕布同窗口——"边卷边露"）。
+    //   ★方向（真机取证定案）：滚动 0 = 闭合（卷筒贴**右缘**，translateX=0）→
+    //     滚动满 = 展完（卷筒到**左缘**，translateX=txOpen）。与幕布"右裁渐开"同向
+    //     （幕布可见区向左收缩 ⇒ 画面自右向左显露 ⇒ 揭开前沿跟着卷筒走）。
+    ...onto(I.rollCylinder, { kind: 'translateX', from: 0, to: sm.txOpen, durationMs: 1000, drive: 'progress', ...win(0, 1) }),
+    ...onto(I.rollKnobTop, { kind: 'translateX', from: 0, to: sm.txOpen, durationMs: 1000, drive: 'progress', ...win(0, 1) }),
+    ...onto(I.rollKnobBottom, { kind: 'translateX', from: 0, to: sm.txOpen, durationMs: 1000, drive: 'progress', ...win(0, 1) }),
   )
-  // ③ 视差：远山组反向微移（0 → +18px——"长卷有纵深"）
-  decls.push(
-    ...I.rangeWet.flatMap((id, i) => onto(id, {
-      kind: 'translateX', from: 0, to: 14 + i * 4, durationMs: 1000, drive: 'progress', ...win(0, 1),
-    })),
-  )
-  // ④ 山的"落笔"随进入视野（三叠各占一段窗口：0.2–0.5 / 0.3–0.6 / 0.4–0.7）
-  const mtWins = [[0.2, 0.5], [0.3, 0.6], [0.4, 0.7]]
+  // ③ 山：随卷筒扫过逐叠落笔（0.15 → 0.55 之间的三段窗）
+  const mtWins: Array<[number, number]> = [[0.1, 0.32], [0.18, 0.42], [0.26, 0.52]]
   I.rangeCore.forEach((id, r) => {
     decls.push(...onto(id, { kind: 'strokeProgress', from: 0, to: 1, durationMs: 1000, drive: 'progress', ...win(mtWins[r]![0]!, mtWins[r]![1]!) }))
   })
-  // ⑤ 江水/月/云/竹/舟/鸟：各自窗口（滚动到哪、哪一幕"长出来"）
+  // ④ 瀑/江/月/云：接着卷筒的行程逐段（山的后半 → 水 → 月 → 云）
   decls.push(
-    ...onto(I.water, { kind: 'clip', from: [1, 0, 0, 0], to: [0.3, 0, 0, 0], durationMs: 1000, drive: 'progress', ...win(0.42, 0.62) }),
-    ...onto(I.waterDeep, { kind: 'clip', from: [1, 0, 0, 0], to: [0.34, 0, 0, 0], durationMs: 1000, drive: 'progress', ...win(0.44, 0.64) }),
-    ...onto(I.moon, { kind: 'clip', from: [0.5, 1.9, 0.5], to: [0.5, 0.5, 0.5], durationMs: 1000, drive: 'progress', ...win(0.5, 0.72) }),
-    ...onto(I.haloOuter, { kind: 'clip', from: [0.5, 0.5, 0], to: [0.5, 0.5, 0.5], durationMs: 1000, drive: 'progress', ...win(0.5, 0.72) }),
+    ...I.waterfall.flatMap((id, i) => onto(id, { kind: 'strokeProgress', from: 0, to: 1, durationMs: 1000, drive: 'progress', ...win(0.3 + i * 0.02, 0.5) })),
+    ...onto(I.water, { kind: 'clip', from: [1, 0, 0, 0], to: [0.3, 0, 0, 0], durationMs: 1000, drive: 'progress', ...win(0.34, 0.56) }),
+    ...onto(I.waterDeep, { kind: 'clip', from: [1, 0, 0, 0], to: [0.34, 0, 0, 0], durationMs: 1000, drive: 'progress', ...win(0.38, 0.6) }),
+    ...onto(I.moon, { kind: 'clip', from: [0.5, 1.9, 0.5], to: [0.5, 0.5, 0.5], durationMs: 1000, drive: 'progress', ...win(0.42, 0.64) }),
+    ...onto(I.haloOuter, { kind: 'clip', from: [0.5, 0.5, 0], to: [0.5, 0.5, 0.5], durationMs: 1000, drive: 'progress', ...win(0.44, 0.66) }),
   )
   I.ripples.forEach((id, i) => {
-    decls.push(...onto(id, { kind: 'strokeProgress', from: 0, to: 1, durationMs: 1000, drive: 'progress', ...win(0.48 + i * 0.03, 0.68 + i * 0.03) }))
+    decls.push(...onto(id, { kind: 'strokeProgress', from: 0, to: 1, durationMs: 1000, drive: 'progress', ...win(0.42 + i * 0.025, 0.62 + i * 0.02) }))
   })
   I.clouds.forEach((id, i) => {
-    decls.push(...onto(id, { kind: 'clip', from: [...MIST_FLAT], to: [...MIST_A], durationMs: 1000, drive: 'progress', ...win(0.55 + i * 0.05, 0.75 + i * 0.05) }))
+    decls.push(...onto(id, { kind: 'clip', from: [...MIST_FLAT], to: [...MIST_A], durationMs: 1000, drive: 'progress', ...win(0.5 + i * 0.04, 0.7 + i * 0.04) }))
   })
-  ;[...I.bamboo].forEach((triple, i) => {
+  // ⑤ 竹/舟/鸟/题款/印：卷筒扫到近端时依次（末端收笔）
+  I.bamboo.forEach((triple, i) => {
     triple.forEach((id, k) => {
-      decls.push(...onto(id, { kind: 'strokeProgress', from: 0, to: 1, durationMs: 1000, drive: 'progress', ...win(0.6 + i * 0.04 + k * 0.02, 0.8 + i * 0.04) }))
+      decls.push(...onto(id, { kind: 'strokeProgress', from: 0, to: 1, durationMs: 1000, drive: 'progress', ...win(0.52 + i * 0.04 + k * 0.02, 0.74 + i * 0.03) }))
     })
   })
   decls.push(
-    ...I.boat.flatMap((id, i) => onto(id, { kind: 'strokeProgress', from: 0, to: 1, durationMs: 1000, drive: 'progress', ...win(0.7 + i * 0.03, 0.88) })),
-    ...I.birds.flatMap((id, i) => onto(id, { kind: 'strokeProgress', from: 0, to: 1, durationMs: 1000, drive: 'progress', ...win(0.75 + i * 0.04, 0.92) })),
+    ...I.boat.flatMap((id, i) => onto(id, { kind: 'strokeProgress', from: 0, to: 1, durationMs: 1000, drive: 'progress', ...win(0.62 + i * 0.03, 0.8) })),
+    ...I.birds.flatMap((id, i) => onto(id, { kind: 'strokeProgress', from: 0, to: 1, durationMs: 1000, drive: 'progress', ...win(0.68 + i * 0.03, 0.84) })),
   )
-  // ⑥ 题款与落印：长卷末端（最后 15% 行程里"写"出来）
   I.titleChars.forEach((id, i) => {
-    decls.push(...onto(id, { kind: 'clip', from: [0, 1, 0, 0], to: [0, 0, 0, 0], durationMs: 1000, drive: 'progress', ...win(0.82 + i * 0.02, 0.94 + i * 0.01) }))
+    decls.push(...onto(id, { kind: 'clip', from: [0, 1, 0, 0], to: [0, 0, 0, 0], durationMs: 1000, drive: 'progress', ...win(0.78 + i * 0.02, 0.9 + i * 0.01) }))
   })
   decls.push(
-    ...onto(I.sealFill, { kind: 'clip', from: [0.5, 0.5, 0.5, 0.5], to: [0, 0, 0, 0], durationMs: 1000, drive: 'progress', ...win(0.92, 0.99) }),
+    ...onto(I.sealFill, { kind: 'clip', from: [0.5, 0.5, 0.5, 0.5], to: [0, 0, 0, 0], durationMs: 1000, drive: 'progress', ...win(0.88, 0.96) }),
   )
 
   /** 拆成"幕"：一条滚动驱动的长卷 = 单幕（宿主只发一次令，之后全靠 seek_scroll） */
   const act: InkAct = {
     name: 'scroll',
-    spanMs: 1000,   // 名义跨度（滚动驱动不按时间走——宿主用 seek 推进）
+    spanMs: 1000,   // 名义跨度（滚动驱动不按时间走——由 seek 推进）
     holdMs: 0,
     durationMs: 1000,
     anims: decls,
-    note: `长卷探索：${decls.length} 条滚动驱动通道（位移/裁剪/描边/渐变/发光全联动）——` +
-      `拖动手势即横移（行程 ${SCROLL_RANGE}px），沿途景象依次浮现`,
+    note: `手卷展开（滚动驱动）：${decls.length} 条通道同一条滚动轴——` +
+      `手指拖动 = 卷筒滚动展卷（行程 ${SCROLL_RANGE}px），沿途景象随卷筒扫过逐段落笔`,
+    scrollRange: SCROLL_RANGE,
     colorAnims: decls.filter((x) => isColorKind(x.kind)).length,
     clipAnims: decls.filter((x) => isClipKind(x.kind)).length,
     strokeAnims: decls.filter((x) => isStrokeKind(x.kind)).length,

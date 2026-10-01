@@ -599,25 +599,33 @@ describe('Morpheus 炫技场 · 第四个节目（墨绘·山水卷）', () => {
     expect(river.anims.filter((x) => x.kind === 36).length, 'river 幕水草 skewX').toBe(4)
   })
 
-  it('★★长卷探索（滚动驱动）：单幕 100+ 条通道全在一条滚动轴上（位移/裁剪/描边/渐变联动）', () => {
+  it('★★手卷探索（滚动驱动）：100 条通道同一条轴 —— 卷筒滚动展卷（画固定、不再整体平移）', () => {
     const prog = createInkScrollProgram({ view: VIEW })
     expect(prog.plan()).toEqual(['scroll'])
     const act = prog.next()!
-    expect(prog.next(), '长卷只有一幕').toBeNull()
-    // ★规模与构成：位移（长卷左移 + 视差）+ clip（幕布/江水/月/云/题款/印）+ stroke（山/水纹/竹/舟/鸟）
+    expect(prog.next(), '手卷只有一幕').toBeNull()
+    // ★规模与构成：卷筒/幕布位移 + clip（幕布/江水/月/云/题款/印）+ stroke（山/瀑/水纹/竹/舟/鸟）
     expect(act.anims.length).toBeGreaterThan(90)
-    expect(act.clipAnims).toBeGreaterThan(50)
-    expect(act.strokeAnims).toBeGreaterThan(15)
-    // ★★**全部通道都挂在滚动窗口上**（`drive:'progress'` + scrollFrom/scrollTo）——
-    //   这是"滚动驱动"的机器证据（少一条 = 那条不跟随手势）
+    expect(act.clipAnims).toBeGreaterThan(40)
+    expect(act.strokeAnims).toBeGreaterThan(20)
+    // ★★**全部通道都挂在滚动窗口上**（`drive:'progress'` + scrollFrom/scrollTo）
     const scrollDriven = act.anims.filter((x) => x.drive === 1 && x.scrollFrom !== undefined)
     expect(scrollDriven.length, '滚动驱动通道数').toBe(act.anims.length)
-    // 窗口单调递增（分段窗口按进入视野顺序——乱序会让"后面的先出现"）
-    const starts = scrollDriven.map((x) => x.scrollFrom!).sort((a, b) => a - b)
-    expect(starts[starts.length - 1]!).toBeGreaterThan(starts[0]!)
-    // 长卷左移：位移终点 = -2.2×视口宽
-    const move = act.anims.find((x) => x.nodeId === INK_IDS.root && x.kind === 0)!
-    expect(move.to).toBe(-Math.round(VIEW.width * 2.2))
+    // ★★**回归锁（首版全黑缺陷）**：root（id=1）**不得有任何平移通道**——画固定居中，
+    //   由卷筒滚动"铺开"；整体平移会把画推出屏幕（收尾截图全黑，判据漏检）
+    expect(
+      act.anims.filter((x) => x.nodeId === INK_IDS.root && (x.kind === 0 || x.kind === 1)).length,
+      'root 不应有平移（画固定）',
+    ).toBe(0)
+    // 卷筒：滚动 0 → 展完（txOpen）——与幕布同窗口（0..1 全程）
+    const roll = act.anims.find((x) => x.nodeId === INK_IDS.rollCylinder && x.kind === 0)!
+    expect(roll.from).toBe(0)
+    expect(roll.to).toBe(scrollMetrics(VIEW).txOpen)
+    expect(roll.scrollFrom, '卷筒窗口起点').toBe(0)
+    // 幕布：同窗口（边卷边露）
+    const curtain = act.anims.find((x) => x.nodeId === INK_IDS.curtain)!
+    expect(curtain.scrollFrom).toBe(roll.scrollFrom)
+    expect(curtain.scrollTo).toBe(roll.scrollTo)
   })
 
   it('★工具函数契约：blend 预混（6 位）· ink 加 alpha（8 位 #RRGGBBAA）', () => {

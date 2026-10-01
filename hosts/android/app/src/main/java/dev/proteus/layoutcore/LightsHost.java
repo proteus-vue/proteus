@@ -435,6 +435,9 @@ final class LightsHost {
                         return;
                     }
                     act = o;
+                    // ★★展卷行程（长卷模式）：交给视图钳制手势累计（见 setHorizontalScrollRange）
+                    int srange = o.optInt("scroll_range", 0);
+                    if (srange > 0 && view != null) view.setHorizontalScrollRange(srange);
                     actElapsed = 0;
                     actFrames = 0;
                     actAnimEndMs = -1;

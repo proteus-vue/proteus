@@ -55,13 +55,15 @@ MODE="debug"
 LIGHTS=0
 FLIP=0
 INK=0
+INKSCROLL=0
 for arg in "$@"; do
   [ "$arg" = "--release" ] && MODE="release"
   [ "$arg" = "--lights" ] && LIGHTS=1
   [ "$arg" = "--flip" ] && FLIP=1
   [ "$arg" = "--ink" ] && INK=1
+  [ "$arg" = "--inkscroll" ] && INKSCROLL=1
 done
-echo "    构建模式：$MODE$([ "$MODE" = "release" ] && echo "（§9.2 正式验收口径）" || echo "（冒烟用；debug 数据不可作验收）")$([ "$LIGHTS" = "1" ] && echo " · 灯光秀独立应用（dev.proteus.lights）")$([ "$FLIP" = "1" ] && echo " · 翻牌剧场独立应用（dev.proteus.flip）")$([ "$INK" = "1" ] && echo " · 墨绘山水卷独立应用（dev.proteus.ink）")"
+echo "    构建模式：$MODE$([ "$MODE" = "release" ] && echo "（§9.2 正式验收口径）" || echo "（冒烟用；debug 数据不可作验收）")$([ "$LIGHTS" = "1" ] && echo " · 灯光秀独立应用（dev.proteus.lights）")$([ "$FLIP" = "1" ] && echo " · 翻牌剧场独立应用（dev.proteus.flip）")$([ "$INK" = "1" ] && echo " · 墨绘山水卷独立应用（dev.proteus.ink）")$([ "$INKSCROLL" = "1" ] && echo " · 手卷探索独立应用（dev.proteus.inkscroll）")"
 
 mkdir -p "$BUILD"
 
@@ -277,6 +279,13 @@ if [ "$FLIP" = "1" ]; then
   grep -q 'dev.proteus.flip' "$MANIFEST" || { echo "✗ flip 清单生成失败（包名没换）"; exit 3; }
   grep -q 'FlipDemoActivity' "$MANIFEST" || { echo "✗ flip 清单生成失败（Activity 没换）"; exit 3; }
 fi
+if [ "$INKSCROLL" = "1" ]; then
+  # ★★手卷探索独立应用（2026-10-01 · 长卷模式）：同 sed 生成法（点开即手指拖动展开）。
+  MANIFEST="$BUILD/AndroidManifest.inkscroll.xml"
+  sed -e 's/package="dev.proteus.layoutcore"/package="dev.proteus.inkscroll"/'       -e 's/android:label="Proteus LayoutCore"/android:label="Morpheus Hand Scroll"/'       -e 's/android:name="\.MainActivity"/android:name="dev.proteus.layoutcore.InkScrollDemoActivity" android:theme="@android:style\/Theme.NoTitleBar.Fullscreen"/'       "$APP/src/main/AndroidManifest.xml" > "$MANIFEST"
+  grep -q 'dev.proteus.inkscroll' "$MANIFEST" || { echo "✗ inkscroll 清单生成失败（包名没换）"; exit 3; }
+  grep -q 'InkScrollDemoActivity' "$MANIFEST" || { echo "✗ inkscroll 清单生成失败（Activity 没换）"; exit 3; }
+fi
 if [ "$INK" = "1" ]; then
   # ★★墨绘·山水卷独立应用（2026-10-01 · 第四个节目）：同 sed 生成法。
   MANIFEST="$BUILD/AndroidManifest.ink.xml"
@@ -294,6 +303,10 @@ if [ "$MODE" = "release" ]; then
     _M="$BUILD/AndroidManifest.flip.release.xml"
     sed 's/ *android:debuggable="true"//' "$MANIFEST" > "$_M"
     MANIFEST="$_M"
+  elif [ "$INKSCROLL" = "1" ]; then
+    _M="$BUILD/AndroidManifest.inkscroll.release.xml"
+    sed 's/ *android:debuggable="true"//' "$MANIFEST" > "$_M"
+    MANIFEST="$_M"
   elif [ "$INK" = "1" ]; then
     _M="$BUILD/AndroidManifest.ink.release.xml"
     sed 's/ *android:debuggable="true"//' "$MANIFEST" > "$_M"
@@ -308,6 +321,8 @@ if [ "$LIGHTS" = "1" ]; then
   APK="$BUILD/proteus-lights.apk"
 elif [ "$FLIP" = "1" ]; then
   APK="$BUILD/proteus-flip.apk"
+elif [ "$INKSCROLL" = "1" ]; then
+  APK="$BUILD/proteus-ink-scroll.apk"
 elif [ "$INK" = "1" ]; then
   APK="$BUILD/proteus-ink.apk"
 else
@@ -445,6 +460,7 @@ if [ "$NO_INSTALL" = "1" ]; then
 fi
 if [ "$LIGHTS" = "1" ]; then PKG="dev.proteus.lights"; ACTIVITY="dev.proteus.lights/dev.proteus.layoutcore.LightsDemoActivity"
 elif [ "$FLIP" = "1" ]; then PKG="dev.proteus.flip"; ACTIVITY="dev.proteus.flip/dev.proteus.layoutcore.FlipDemoActivity"
+elif [ "$INKSCROLL" = "1" ]; then PKG="dev.proteus.inkscroll"; ACTIVITY="dev.proteus.inkscroll/dev.proteus.layoutcore.InkScrollDemoActivity"
 elif [ "$INK" = "1" ]; then PKG="dev.proteus.ink"; ACTIVITY="dev.proteus.ink/dev.proteus.layoutcore.InkDemoActivity"
 else PKG="dev.proteus.layoutcore"; ACTIVITY="dev.proteus.layoutcore/.MainActivity"; fi
 "$ADB" wait-for-device
