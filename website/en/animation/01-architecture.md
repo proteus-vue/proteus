@@ -48,16 +48,44 @@ The closed set of the compile layer **deliberately does not try to cover everyth
 
 > Design stance: **an explicitly registered escape hatch is better than a silently introduced second implementation** — the former is countable and convergent, the latter always diverges.
 
-## Why colour is not in this table (an explicit boundary)
+## Colour is in the closed set (since 2026-10-01; with new boundaries)
 
-The closed set is `translateX / translateY / scale / rotate / opacity` — **five properties, no colour**. That is not an omission; it is a boundary of the current design, written down so it cannot be misread as “there is a hidden second channel”:
+The closed set went from **five to six**: `translateX / translateY / scale / rotate / opacity` **+ `color`**.
 
-- **Colour is not an animatable property here**: this engine is a *paint-layer transform* engine (the direct payoff of the `is_composited()` judgement). Interpolating colour would drag in colour-space choices (sRGB / linear / P3), interactions with platform blend modes, and per-platform `color`-animation semantics — a **separate capability line**, not a goal of this engine.
-- **Static colour is unaffected**: a node's colour in its style is **build-time data**; it travels the layout/paint chain (never through the animation channel, never touched by `tick`).
-- **Need to animate colour?** Use an **explicit escape hatch** (`escapes.register({ kind: 'other' | 'platform-mixing', ... })`) — it is possible (e.g. a platform-side `CALayer.backgroundColor` translation), but it must be registered, it is counted as `degraded`, and it is **outside the engine's consistency guarantee**. This is precisely the “explicitly registered escape hatch beats a silent second implementation” case.
-- **If it is ever adopted**: step one is extending the cross-language contract (a new `kind` id + Rust-side colour interpolation + host translation) plus conformance coverage — **not** quietly hand-writing a copy inside a demo.
+**One declaration on the surface, four channels in the kernel** — `{ kind: 'color', from: '#2f6fed', to: '#ff5533' }`
+compiles into four scalar `R/G/B/A` instructions (contract ids 5/6/7/8).
 
-> ★ **Test**: if a demo ever shows colour moving, check whether it is registered in `escapes`. Unregistered = a violation of rule #22 (hand-written copies), not “a new capability”. In the Morpheus showcase the colour is a **static palette** (generated once at build time); no colour participates in the animation.
+> **Why decompose this way (an architectural payoff, not a stopgap)**: every evaluation machine in the engine
+> (curve lookup / spring integration / sequence segments / scroll windows / seek / takeover velocity handoff /
+> endpoint pinning) is **scalar**. Four scalar channels therefore **reuse all of them unchanged** — no second
+> “multi-channel evaluation” implementation (rule #22). The cost is stated honestly: one colour animation
+> is 4 instructions.
+
+| Item | Notes |
+|---|---|
+| Value forms | `#RGB` (shorthand, each channel doubled) / `#RRGGBB` / `#RRGGBBAA` (**CSS4 order**, low 8 bits = alpha). Parsing rules are pinned against **one table shared by kernel and TS** (`tests/anim-color-golden.test.ts`) |
+| `from` | **Required** — the kernel has **no** “defaults to the current colour” semantics (same discipline as scalar properties) |
+| Precondition | The target node must declare `backgroundColor` (it is the **start basis and the reset target**); otherwise the kernel **rejects explicitly** (never silently) |
+| Reset | `animStopAll` / node-recycle unbinding / phase cleanup all **restore the base colour** (not the last frame — another application of “unbinding must include clearing”) |
+
+**★New boundaries (two, stated honestly)**:
+
+1. **Colour is paint-only but “non-composited” ⇒ it does not take the platform zero-involvement path.**
+   Not because it triggers layout (it does not — same cost class as `opacity`, **zero layout** during the
+   animation) but for **cross-target consistency**: Android's `RenderNode` has **no background colour** in its
+   interpolatable set (`setBackgroundColor` is not a RenderThread animation property), so if iOS were allowed
+   through unilaterally (a `CALayer.backgroundColor` could in principle be interpolated by the CA render server),
+   the two targets would **diverge in path** — a single source running different paths per target, which this
+   repository treats as the worst kind of fork. ⇒ v1 uses the **tick path** on both targets.
+2. **v1 animates background colour only.** Text colour (iOS `CATextLayer.foregroundColor` / Android `textPaint`)
+   is a different cost class (text redraw) and comes in a later batch. Colour `keyframes` (multi-segment
+   sequences) are also unavailable — and are **rejected at compile time**, not silently ignored.
+
+> **Relation to escape hatches (this boundary has changed meaning)**: `color` is now a **contract capability**
+> and no longer needs `escapes.register`. The discipline itself is unchanged: **if colour moves on screen,
+> it must be traceable to instructions** (judge: the P groups on both targets assert the whole chain —
+> declaration → four channels → the host really writes the layer → reset to base — and the probe **truly reads**
+> `CALayer.backgroundColor` / the Android host's colour table).
 
 ## Relation to “a second JS runtime”
 

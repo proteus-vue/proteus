@@ -27,6 +27,7 @@ Morpheus exposes exactly one package: **`@proteus-vue/animation`** (declare + va
 | `scale` | 2 | ✅ |
 | `rotate` | 3 | ✅ |
 | `opacity` | 4 | ✅ |
+| `color` | 5..8（R/G/B/A 四通道） | ❌ **paint-only**（不触发布局，但不进平台零参与路径——见架构页） |
 
 | Curve | Contract id |
 |---|---|
@@ -36,7 +37,13 @@ Morpheus exposes exactly one package: **`@proteus-vue/animation`** (declare + va
 | `easeInOut` | 3 |
 | `springApprox` | 4 |
 
-**Composited = eligible for the platform zero-involvement path.** All five are composited today — but note: **changing layout properties (width / margin) is not animation, it is relayout**, and compilation rejects it outright.
+**Composited = eligible for the platform zero-involvement path.** The five scalar properties are composited; **`color` is paint-only but non-composited** (it does not trigger layout, but Android's RenderNode cannot interpolate a background colour, so both targets use the tick path for consistency). Note also: **changing layout properties (width / margin) is not animation, it is relayout**, and compilation rejects it outright.
+
+```ts
+// colour is one declaration — compiled into four kernel channels
+compileAnimations([{ kind: 'color', from: '#2f6fed', to: '#ff5533', durationMs: 200 }], { nodeId: 7 })
+// ⇒ 4 instructions (kinds 5/6/7/8) · batch.composited === false（paint-only —— 见架构页）
+```
 
 ## Preset library (13 entries)
 

@@ -329,6 +329,7 @@ const EVIDENCE = computed<Array<{ v: string; u: string; l: string; src: string }
         { v: '84.5', u: '×', l: 'Instruction path vs JS path at N=1000', src: 'rt0-anim-spike.md' },
         { v: '1:1', u: 'mirror', l: 'Route transition, both directions, both targets', src: 'check-app-stack.py' },
         { v: '115.8', u: 'FPS', l: 'Kernel loop on a 120Hz Android device (vsync p50 8.328ms ≈ budget)', src: 'check-kernel-anim.py' },
+        { v: '4', u: 'channels', l: 'Colour: one declaration → four kernel channels (verified on device, both targets)', src: 'check-anim-rt2.py' },
       ]
     : [
         { v: '59.3', u: 'FPS', l: '转场帧率（iPhone 12 · 已达 60Hz 上限）', src: 'check-anim-rt2.py' },
@@ -340,6 +341,7 @@ const EVIDENCE = computed<Array<{ v: string; u: string; l: string; src: string }
         { v: '84.5', u: '×', l: '指令路径 vs JS 路径（N=1000）', src: 'rt0-anim-spike.md' },
         { v: '1:1', u: '镜像', l: '路由转场双向 · 双端', src: 'check-app-stack.py' },
         { v: '115.8', u: 'FPS', l: '120Hz 安卓设备内核帧循环（vsync p50 8.328ms ≈ 预算）', src: 'check-kernel-anim.py' },
+        { v: '4', u: '通道', l: '颜色 = 一个声明 → 四条内核通道（双端真读层验证）', src: 'check-anim-rt2.py' },
       ],
 )
 
