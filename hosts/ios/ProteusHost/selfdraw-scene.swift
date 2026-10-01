@@ -1291,6 +1291,15 @@ final class SelfDrawView: UIView {
     /// 【性能】遮罩层**复用**（首次建、之后只改 `path`）——每帧只重建贝塞尔路径
     ///   （与 Android `canvas.clipPath` 的重建成本同量级：几十个点到 Path 的构建）。
     /// 【坐标系】参数是**盒分数** ⇒ 用 `layer.bounds`（局部坐标）换算成 px。
+    /// ★★**每帧渐变更新**（渐变 v2 · 2026-10-01）——把内核**已混合**的色标写进 `CAGradientLayer`。
+    ///   ★只更新已存在的层（静态声明时建；没有 ⇒ 忽略——内核不会再拒绝过"无渐变节点"的混合动画）。
+    ///   ★`CATransaction` 已在调用方（`animTickApply`）的批量事务里——此处不再自建。
+    func applyGradientTick(nodeId: Int, colors: [CGColor], locations: [NSNumber]) {
+        guard let g = layerGradients[nodeId] else { return }
+        g.colors = colors
+        g.locations = locations
+    }
+
     private func applyClip(nodeId: Int, layer: CALayer, params: [Float]) {
         guard let shape = layerClipShape[nodeId] else { return } // 无声明 ⇒ 不裁剪（内核也会拒）
         let b = layer.bounds
@@ -1342,7 +1351,8 @@ final class SelfDrawView: UIView {
     ///
     /// 【为什么不用 `parseHexColor`（那是对字符串的）】内核通道以 **u32** 下发（每帧二进制），
     ///   再转成字符串解析一遍纯属白付（本仓每帧通道的纪律：不做可避免的编解码）。
-    private static func cgColorFromPacked(_ v: UInt32) -> CGColor {
+    /// ★访问级别：internal（`SelfDrawBridge` 的每帧渐变段解析要用它——同文件跨类型）
+    static func cgColorFromPacked(_ v: UInt32) -> CGColor {
         CGColor(
             red: CGFloat((v >> 16) & 0xFF) / 255.0,
             green: CGFloat((v >> 8) & 0xFF) / 255.0,
@@ -2389,6 +2399,8 @@ final class SelfDrawView: UIView {
         // ★★渐变（v1 静态 paint——2026-10-01）：同"必须透传"纪律（本函数是建层必经之路）
         //   ★漏透传的后果与 clipPath 同款：声明在请求树里而宿主读不到 ⇒ **静默不渲染**。
         if let fg = n["fillGradient"] as? [String: Any] { style["fillGradient"] = fg }
+        // ★v2：B 态（两态混合的终点）——同"必须透传"纪律
+        if let fg2 = n["fillGradientTo"] as? [String: Any] { style["fillGradientTo"] = fg2 }
         // ★★C2：SVG 描边三键（路径段列表 / 描边色 / 线宽）——同"必须透传"纪律
         if let sp = n["svgPath"] as? [String: Any] { style["svgPath"] = sp }
         if let sc = n["strokeColor"] as? NSNumber { style["strokeColor"] = sc }
@@ -3989,13 +4001,14 @@ final class SelfDrawBridge: NSObject, SelfDrawExports {
     /// 每帧动画更新记录的字节长度：
     /// `id u32 + tx/ty/scale/rotate/opacity（五个 f32）+ bg u32 + textColor u32`
     ///
-    /// ★★2026-10-01 由 **24B → 28B（底色）→ 32B（文字色）→ 40B（3D 旋转）**：末两个 u32 都是**打包色**
+    /// ★★2026-10-01 由 **24B → 28B（底色）→ 32B（文字色）→ 40B（3D 旋转）→ 108B（裁剪）**
+    ///   **→ 112B（描边）→ 184B（渐变 v2）**：末两个 u32 都是**打包色**
     ///   `0xAARRGGBB`，值 `0xFFFFFFFF` = **本节点无该基色**（忽略该字段，保持静态绘制）。
     ///   ★唯一事实源 = 内核 `ffi.rs::proteus_layout_anim_tick_bin` 的 8 个 `extend_from_slice`；
     ///     两端宿主 / SDK / embed-demo 的常量必须与它同批更新（本仓历史上因两处各写步长
     ///     而错位解析过：24B 记录被按 16B 读 ⇒ 层上留下错位残值）。
     ///     `scripts/check-anim-record-bytes.mjs` 从内核推出宽度并与各消费端对账。
-    private static let animUpdateRecordBytes = 112
+    private static let animUpdateRecordBytes = 184
 
     /// ★★**每帧推进的唯一解析点**（探针 / 帧循环两条入口共用）
     ///
@@ -4032,6 +4045,22 @@ final class SelfDrawBridge: NSObject, SelfDrawExports {
             // ★★C2（2026-10-01）：描边进度（@108 的 f32；NaN/非有限 = 无描边路径——112B 记录）
             let strokeRaw = buf.loadUnaligned(fromByteOffset: base + 108, as: Float.self)
             let strokeProgress: Float? = strokeRaw.isFinite ? strokeRaw : nil
+            // ★★渐变 v2（2026-10-01）：混合后的色标（@112 起：kind u32 + n u32 + 8×colors u32
+            //   + 8×offsets f32——184B 记录）。`kind=0` = 本节点无渐变/未变化（忽略）。
+            //   ★这些是**内核已混合**的结果（唯一 lerp 实现在内核——宿主零插值数学）。
+            let gradKind = buf.loadUnaligned(fromByteOffset: base + 112, as: UInt32.self)
+            if gradKind != 0 {
+                let gn = Int(buf.loadUnaligned(fromByteOffset: base + 116, as: UInt32.self))
+                var gColors = [CGColor]()
+                var gLocs = [NSNumber]()
+                for gi in 0..<min(gn, 8) {
+                    let c = buf.loadUnaligned(fromByteOffset: base + 120 + gi * 4, as: UInt32.self)
+                    gColors.append(SelfDrawView.cgColorFromPacked(c))
+                    let off = buf.loadUnaligned(fromByteOffset: base + 152 + gi * 4, as: Float.self)
+                    gLocs.append(NSNumber(value: off))
+                }
+                view?.applyGradientTick(nodeId: Int(nodeId), colors: gColors, locations: gLocs)
+            }
             // ★★C1（2026-10-01）：裁剪形状（@40 起：kind u32 + 16×f32——108B 记录）
             let clipKindRaw = buf.loadUnaligned(fromByteOffset: base + 40, as: UInt32.self)
             var clipParams: [Float]? = nil

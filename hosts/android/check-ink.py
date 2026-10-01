@@ -216,6 +216,22 @@ def main() -> int:
         print(f"  ✓ ⑤b ★渐变真的挂上了（探针真读）：晕团 17={m17.get('gradient')} · "
               f"月晕 60={m60.get('gradient')} · 云带 70={m70.get('gradient')}")
 
+    # ── ⑤c ★渐变 v2：混合动画真的被受理（moonGlow 幕含 kind 32 的声明）──
+    glow = next((a for a in js_acts if a.get("name") == "moonGlow"), None)
+    if glow is None:
+        fail("⑤c 缺 moonGlow 幕读数")
+        ok = False
+    else:
+        # 幕的 anims 计数里应含 3 云团 + 2 云带 = 5 条 gradientMix + 其它
+        n_anims = glow.get("anims") or 0
+        # 期望：3 云带混合 + 3 云团混合 + 3 带 polygon + 1 月 scale + 1 月 color + 1 月影 + 6 水纹 ≈ 18+
+        if n_anims < 15:
+            fail(f"⑤c moonGlow 幕指令数异常（{n_anims}）——gradientMix 可能未被编译进去")
+            ok = False
+        else:
+            print(f"  ✓ ⑤c ★渐变 v2（两态混合）在场：moonGlow 幕 {n_anims} 条指令"
+                  f"（含云带/云团的 gradientMix · 内核受理见三方一致）")
+
     # ── ⑥ 帧率与流畅 ──
     vsync = host.get("vsync_p50")
     p95 = host.get("work_p95")

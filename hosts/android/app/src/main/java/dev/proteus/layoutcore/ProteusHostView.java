@@ -653,6 +653,21 @@ public class ProteusHostView extends ViewGroup {
             float strokeRaw = bb.getFloat();
             if (!Float.isNaN(strokeRaw)) animStroke.put(id, strokeRaw);
             else animStroke.remove(id);
+            // ★★渐变 v2（2026-10-01）：混合后的色标（@112 起：kind u32 + n u32 + 8×colors u32
+            //   + 8×offsets f32——184B 记录）。`kind=0` = 无渐变/未变化（忽略）。
+            //   ★这些是**内核已混合**的结果（唯一 lerp 实现在内核——宿主零插值数学）；
+            //     直接更新该节点的 shader 规格（绘制侧下一帧自然用新色标）。
+            int gradKind = bb.getInt();
+            int gradN = bb.getInt();
+            int[] gColors = new int[8];
+            float[] gOffsets = new float[8];
+            for (int k = 0; k < 8; k++) gColors[k] = bb.getInt();
+            for (int k = 0; k < 8; k++) gOffsets[k] = bb.getFloat();
+            if (gradKind != 0) {
+                animGrad.put(id, new ProteusHostView.TickGrad(gradKind, Math.min(gradN, 8), gColors, gOffsets));
+            } else {
+                animGrad.remove(id);
+            }
             // ★颜色（2026-10-01）：0xFFFFFFFF = 无该基色 ⇒ 不入覆盖表（保持静态绘制）
             if (rgba != 0xFFFFFFFF) animColor.put(id, rgba);
             if (textRgba != 0xFFFFFFFF) animTextColor.put(id, textRgba);
@@ -665,14 +680,29 @@ public class ProteusHostView extends ViewGroup {
     /**
      * 每帧记录长度（与 Rust 侧 `proteus_layout_anim_tick_bin` 对齐——**只在本处定义**）
      *
-     * ★★2026-10-01 由 **24B → 28B（底色）→ 32B（文字色）**：
+     * ★★2026-10-01 由 **24B → 28B（底色）→ 32B（文字色）→ 40B（3D）→ 108B（裁剪）
+     *   → 112B（描边）→ 184B（渐变 v2）**：
      *   `id u32 + 五值 f32 + bg u32 + textColor u32`。
      *   末两个 u32 都是打包色 `0xAARRGGBB`；`0xFFFFFFFF` = **无该基色**（忽略该字段）。
      *   ★唯一事实源 = 内核 `ffi.rs` 的 8 个 `extend_from_slice`；iOS / SDK / embed-demo
      *     的常量必须与它同批更新（历史上因两处各写步长而错位解析过）。
      *     `scripts/check-anim-record-bytes.mjs` 从内核推出宽度并与各消费端对账。
      */
-    private static final int ANIM_RECORD_BYTES = 112;
+    private static final int ANIM_RECORD_BYTES = 184;
+
+    /** ★★每帧渐变覆盖表（渐变 v2）：节点 id → 内核**已混合**的色标（绘制优先用它） */
+    private final Map<Integer, TickGrad> animGrad = new HashMap<>();
+
+    /** 每帧渐变覆盖（kind + n + 色标——与内核 `NodeVisual.grad` 同形） */
+    static final class TickGrad {
+        final int kind;
+        final int n;
+        final int[] colors;
+        final float[] offsets;
+        TickGrad(int kind, int n, int[] colors, float[] offsets) {
+            this.kind = kind; this.n = n; this.colors = colors; this.offsets = offsets;
+        }
+    }
 
     /** 直接推进一帧（确定性步进：判据用它做"固定 dt"读数，与 iOS 的 JS 驱动 probe 同形） */
     public int kernelAnimTick(float dtMs) {
@@ -767,6 +797,7 @@ public class ProteusHostView extends ViewGroup {
         animTextColor.clear(); // ★文字色同（两条轨道同一生命周期）
         animClip.clear();      // ★C1 裁剪同（清表 ⇒ 回树里声明的基态形状）
         animStroke.clear();    // ★C2 描边同（清表 ⇒ 回基态：未画）
+        animGrad.clear();      // ★渐变 v2 同（清表 ⇒ 回树里声明的 A 态渐变）
         invalidate();
         return out;
     }
@@ -832,10 +863,16 @@ public class ProteusHostView extends ViewGroup {
                 //   形态 "linear:2" / "radial:3"；无 ⇒ 空串。
                 String gradStr = "";
                 {
-                    final int ci = indexOfNode(id);
-                    if (ci >= 0 && cmds != null && ci < cmds.size() && cmds.get(ci).gradient != null) {
-                        final GradSpec g = cmds.get(ci).gradient;
-                        gradStr = (g.kind == 2 ? "radial:" : "linear:") + g.colors.length;
+                    // ★v2：每帧覆盖优先（内核已混合 ⇒ 报实时色标数——判据据此断言"动画中色标在变"）
+                    final TickGrad tg0 = animGrad.get(id);
+                    if (tg0 != null) {
+                        gradStr = (tg0.kind == 2 ? "radial:" : "linear:") + tg0.n;
+                    } else {
+                        final int ci = indexOfNode(id);
+                        if (ci >= 0 && cmds != null && ci < cmds.size() && cmds.get(ci).gradient != null) {
+                            final GradSpec g = cmds.get(ci).gradient;
+                            gradStr = (g.kind == 2 ? "radial:" : "linear:") + g.colors.length;
+                        }
                     }
                 }
                 // ★★C1：裁剪参数真读（动画表优先，否则基态）——判据据此断言形变真的落到绘制侧
@@ -1633,7 +1670,26 @@ public class ProteusHostView extends ViewGroup {
             //   ★用完即清 shader（paint 是复用的——不清会漏到后续所有指令，与"裁剪不 restore"
             //     同一类画布状态泄漏）。
             android.graphics.Shader gradShader = null;
-            if (c.gradient != null) {
+            // ★★渐变 v2：**每帧覆盖优先**（内核已混合的色标——动画期用它；否则用静态声明）
+            final TickGrad tg = (ids != null && i < ids.length && ids[i] >= 0) ? animGrad.get(ids[i]) : null;
+            if (tg != null) {
+                if (tg.kind == 1 && c.gradient != null) {
+                    final double rad = Math.toRadians(c.gradient.angleDeg);
+                    final float dx = (float) Math.sin(rad);
+                    final float dy = (float) -Math.cos(rad);
+                    gradShader = new android.graphics.LinearGradient(
+                            c.x + (0.5f - dx / 2f) * c.w, c.y + (0.5f - dy / 2f) * c.h,
+                            c.x + (0.5f + dx / 2f) * c.w, c.y + (0.5f + dy / 2f) * c.h,
+                            java.util.Arrays.copyOf(tg.colors, tg.n), java.util.Arrays.copyOf(tg.offsets, tg.n),
+                            android.graphics.Shader.TileMode.CLAMP);
+                } else if (tg.kind == 2 && c.gradient != null && c.gradient.r > 0f) {
+                    gradShader = new android.graphics.RadialGradient(
+                            c.x + c.gradient.cx * c.w, c.y + c.gradient.cy * c.h, c.gradient.r * c.w,
+                            java.util.Arrays.copyOf(tg.colors, tg.n), java.util.Arrays.copyOf(tg.offsets, tg.n),
+                            android.graphics.Shader.TileMode.CLAMP);
+                }
+            }
+            if (gradShader == null && c.gradient != null) {
                 final GradSpec g = c.gradient;
                 if (g.kind == 1) {
                     final double rad = Math.toRadians(g.angleDeg);
