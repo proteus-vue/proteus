@@ -343,6 +343,77 @@ export function validateAnimations(decls: readonly AnimDecl[]): ValidationIssue[
       return // ★颜色分支到此为止（不落进标量路径的数值校验）
     }
 
+    // ★★裁剪形变（C1）：参数数组的三重校验（数量 / 有限性 / from-to 对齐）+ 贝塞尔互斥
+    if (d.kind === 'clip') {
+      const cd = d as { from: readonly number[]; to: readonly number[]; keyframes?: Array<{ to: readonly number[]; durationMs: number; curve?: string }> }
+      const n = cd.to?.length ?? 0
+      if (!Array.isArray(cd.to) || n === 0) {
+        issues.push({
+          index: i,
+          code: 'empty',
+          message: '`clip` 声明的 `to` 为空——至少给一个参数',
+          hint: 'inset 4 个（top/right/bottom/left）· circle 3 个（cx/cy/r）· polygon 偶数个（≤16，最多 8 点）',
+        })
+      } else if (n > 16) {
+        issues.push({
+          index: i,
+          code: 'invalid-range',
+          message: `\`clip\` 参数过多：${n} 个（最多 16 = 8 个顶点）——内核只有 16 个参数槽`,
+          hint: 'polygon 最多 8 个顶点（16 个数）；更复杂的形状请拆成多个节点或走逃生口登记',
+        })
+      }
+      if (!Array.isArray(cd.from) || cd.from.length < n) {
+        issues.push({
+          index: i,
+          code: 'invalid-range',
+          message: `\`clip\` 的 \`from\` 参数不足：需要 ${n} 个（与 \`to\` 对齐），收到 ${cd.from?.length ?? 0} 个`,
+          hint: '内核没有"缺省 = 当前值"语义（与颜色同一条纪律）——起点必须显式给出',
+        })
+      }
+      const badNum = (arr: readonly number[] | undefined): boolean =>
+        Array.isArray(arr) && arr.some((v) => typeof v !== 'number' || !Number.isFinite(v))
+      if (badNum(cd.from) || badNum(cd.to)) {
+        issues.push({
+          index: i,
+          code: 'invalid-range',
+          message: '`clip` 参数含非有限数（NaN / Infinity）',
+          hint: '参数是盒分数（0..1 常见，可负 = 外扩）——给具体数值',
+        })
+      }
+      // 序列：每段 to 与声明 to 对齐（段数按参数个数）
+      if (cd.keyframes) {
+        for (const [j, seg] of cd.keyframes.entries()) {
+          if (!Array.isArray(seg.to) || seg.to.length < n) {
+            issues.push({
+              index: i,
+              code: 'invalid-range',
+              message: `\`clip\` 序列第 ${j} 段参数不足：需要 ${n} 个，收到 ${seg.to?.length ?? 0} 个`,
+              hint: '每段 `to` 都是完整的参数数组（与声明 `to` 对齐）',
+            })
+          }
+        }
+      }
+      checkCurveBezier(d as { curveBezier?: readonly number[]; curve?: unknown; spring?: unknown; keyframes?: unknown }, i, issues)
+      // ★`curve` 与 `spring` 互斥（标量路径有同一条——clip 不经过它，必须自备）
+      if (d.curve !== undefined && d.spring !== undefined) {
+        issues.push({
+          index: i,
+          code: 'conflicting-easing',
+          message: '`clip` 的 `curve` 与 `spring` 并存 —— 求值模式必须唯一',
+          hint: '二选一：要物理手感用 `spring`，要确定曲线用 `curve`',
+        })
+      }
+      if (cd.keyframes && d.spring !== undefined) {
+        issues.push({
+          index: i,
+          code: 'conflicting-easing',
+          message: '`clip` 的 `keyframes` 与 `spring` 并存 —— 求值模式必须唯一',
+          hint: '二选一（与标量/颜色同规则）',
+        })
+      }
+      return // ★裁剪分支到此为止
+    }
+
     // ★自定义贝塞尔（标量路径）
     checkCurveBezier(d, i, issues)
 

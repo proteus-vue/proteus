@@ -35,19 +35,48 @@ function kernelRecordBytes() {
   //   `v.id`、`&v.bg.unwrap_or(u32::MAX)` 这类**含括号/逗号**的表达式 ⇒ 用非贪婪吃到 `)` 前
   //   （首版写死 `&?([a-z_]+)` ⇒ 遇到 `unwrap_or(u32::MAX)` 恒不匹配 ⇒ 解析失效；本仓纪律：
   //    解析器要对着**实际形态**写，写完必须用一个真实样本验一次）。
-  const writes = [...body.matchAll(/\.extend_from_slice\(&?([\s\S]*?)\.to_le_bytes\(\)\)/g)].map((m) =>
-    m[1].trim(),
-  )
-  if (writes.length === 0) {
+  const RE_WRITE_G = /\.extend_from_slice\(&?([\s\S]*?)\.to_le_bytes\(\)\)/g
+  /**
+   * ★★**认识"计数循环写入"**（2026-10-01 · C1 clip 16 槽）：
+   *   内核里 16 个裁剪参数写成 `for i in 0..16 { buf.extend_from_slice(&cp[i].to_le_bytes()) }`
+   *   ⇒ 正则只捕获 **1 次调用**，但实际写入 **16 个字段**。
+   *   【为什么门禁必须跟着实际形态走（本仓纪律）】不识别循环 ⇒ 墙钟上"内核 48B"而消费端
+   *   104B ⇒ 门禁判红；若为了让门禁变绿把消费端改成 48B，就会**真错位**。
+   *   ⇒ 正解：读出循环次数（`for … in 0..N` 的 N），把该写入行按 N 倍计。
+   */
+  const loopMultiplier = (() => {
+    const m = body.match(/for\s+\w+\s+in\s+0\.\.(\d+)\s*\{/)
+    return m ? Number(m[1]) : 1
+  })()
+  // ★用**匹配位置**（m.index）判定"是否在循环体内"——不能用 indexOf（重复表达式会定位到首处，
+  //   首版把它算成 108B（多算 1 条）；本仓纪律：解析器要对着实际形态写）
+  const writesWithPos = [...body.matchAll(RE_WRITE_G)].map((m) => ({ expr: m[1].trim(), pos: m.index ?? 0 }))
+  const writesRaw = writesWithPos.map((w) => w.expr)
+  if (writesRaw.length === 0) {
     return {
       error:
         '未找到 extend_from_slice 写入序列——若内核改了写入形态（如改用 `copy_from_slice`），' +
         '请同步更新本门禁的解析（否则门禁会静默失效：它自己也得跟着"实际形态"走）',
     }
   }
+  // ★循环内的写入行按循环次数展开（仅当那一行确实是"循环体"里的——此处按"出现在 for 之后的
+  //   第一条写入"近似；本仓当前只有 cp[i] 一条在循环内，形态可控）
+  const forIdx = body.search(/for\s+\w+\s+in\s+0\.\.\d+\s*\{/)
+  let fields = []
+  if (forIdx >= 0 && loopMultiplier > 1) {
+    // 循环体：for 行之后的写入（用匹配位置判定，精确）
+    const inLoop = writesWithPos.filter((w) => w.pos > forIdx).map((w) => w.expr)
+    const outside = writesWithPos.filter((w) => w.pos <= forIdx).map((w) => w.expr)
+    fields = [...outside]
+    for (let k = 0; k < loopMultiplier; k++) {
+      for (const w of inLoop) fields.push(`${w}#${k}`)
+    }
+  } else {
+    fields = writesRaw
+  }
   // u32/f32 都是 4 字节（见内核注释：全小端定长）
-  const width = writes.length * 4
-  return { width, fields: writes }
+  const width = fields.length * 4
+  return { width, fields: fields.map((f) => f.replace(/#\d+$/, '')) }
 }
 
 /** 各消费端声明：文件、正则（捕获组 1 = 宽度）、人类可读名 */

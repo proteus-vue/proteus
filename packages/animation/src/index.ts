@@ -39,6 +39,9 @@ export type {
   BezierPoints,
   RepeatCount,
   RepeatDirection,
+  ClipShape,
+  ClipParams,
+  ClipAnimDecl,
   AnimTargets,
   EngineAnim,
   CompiledBatch,
@@ -53,6 +56,8 @@ export {
   toWireBatch,
   isPlatformEligible,
   isScrollDriven,
+  // ★C1：判别的裁剪声明（类型窄化用——与 isColorDecl 同一取向）
+  isClipDecl,
 } from './compile'
 // ★★颜色（2026-10-01）：CSS 颜色 → 通道（跨语言契约的 TS 半边；与内核 `parse_css_color` 同规则）
 //   golden：`tests/anim-color-golden.test.ts`（期望值来自内核钉值表 `parse_css_color_matches_pinned_table`）

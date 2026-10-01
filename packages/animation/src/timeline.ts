@@ -56,8 +56,10 @@ export interface TimelineSpec {
    *   颜色要"多属性同拍"，把它的 4 条通道当独立动画另发即可
    *   （`compileAnimations([{ kind: 'color', … }])`），时间轴暂不承载颜色。
    *   ★颜色自身要"多段同拍"用 `ColorAnimDecl.keyframes`（那条已支持）。
+   *   ★**C1（2026-10-01）同理排除 `clip`**：它的值是**参数数组**（不是数字）⇒ 类型不过。
+   *     裁剪要"多参数同拍"用 `ClipAnimDecl.keyframes`（每段是参数数组，那条已支持）。
    */
-  kinds: readonly Exclude<AnimKindName, 'color' | 'textColor'>[]
+  kinds: readonly Exclude<AnimKindName, 'color' | 'textColor' | 'clip'>[]
   /** 停靠点（**按 `at` 严格升序**；首点 `at === 0`） */
   stops: readonly TimelineStop[]
 }

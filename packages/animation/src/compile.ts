@@ -7,7 +7,16 @@
 //   ② **编译期校验**：非法/非合成属性在这里被拦下（§5-bis.2），不等到运行时掉帧；
 //   ③ **默认值归一**：曲线/时长的缺省在编译期落定 ⇒ 下发给内核的指令**没有歧义**。
 import { ANIM_KIND_ID, AnimKind, CURVE_ID } from './types'
-import type { AnimDecl, AnimKindId, AnimTargets, ColorAnimDecl, CompiledBatch, CurveId, EngineAnim } from './types'
+import type {
+  AnimDecl,
+  AnimKindId,
+  AnimTargets,
+  ClipAnimDecl,
+  ColorAnimDecl,
+  CompiledBatch,
+  CurveId,
+  EngineAnim,
+} from './types'
 import { validateAnimations, isComposited } from './validate'
 import { parseColorToChannels } from './color'
 
@@ -55,6 +64,7 @@ export function compileAnimations(
   //   ⇒ `composited` 必须如实反映，否则上层会把它当平台路径可用（`isPlatformEligible` 会放行，
   //     而内核 `anim_commit_spec` 侧会**整批拒绝**——两处结论不一致就是"静默分档"）。
   const kindNames = new Set(decls.map((d) => d.kind))
+  // ★C1：clip / rotateX/Y / color 等 tick-only 属性同样计入 nonComposited（如实反映）
   const composited = [...kindNames].every((k) => isComposited(k))
   return {
     anims,
@@ -80,8 +90,70 @@ export function isColorDecl(d: AnimDecl): d is ColorAnimDecl {
   return d.kind === 'color' || d.kind === 'textColor'
 }
 
+/**
+ * 判别裁剪声明（`clip`）——**类型窄化用**（与 `isColorDecl` 同一取向）
+ *
+ * ★C1（2026-10-01）：`clip` 的 to/from 是**参数数组** ⇒ 与标量（数字）/颜色（字符串）
+ *   三方形态各异，必须各自窄化（否则 compileOne 里处处是联合类型错误）。
+ */
+export function isClipDecl(d: AnimDecl): d is ClipAnimDecl {
+  return d.kind === 'clip'
+}
+
 export function compileOne(d: AnimDecl, targets: AnimTargets): EngineAnim[] {
   const easing = resolveEasing(d)
+  // ★★裁剪形变（C1）：一个声明 → **每参数一条通道**（CLIP0..N），共用曲线/时长/延迟/弹簧。
+  //   与颜色同源的分解法：内核求值机器全是标量的 ⇒ 零改动复用（曲线/弹簧/序列/接管全可用）。
+  if (isClipDecl(d)) {
+    const n = Math.min(16, d.to.length)
+    if (n === 0) {
+      throw new Error('裁剪声明 `to` 为空——至少给一个参数（inset≥4 / circle≥3 / polygon 偶数个）')
+    }
+    const from = d.from
+    if (from.length < n) {
+      throw new Error(
+        `裁剪声明 \`from\` 参数不足：需要 ${n} 个（与 \`to\` 对齐），收到 ${from.length} 个` +
+          '（内核没有"缺省 = 当前值"语义——起点必须显式给出）',
+      )
+    }
+    const kf = d.keyframes?.map((seg) => ({ seg, to: seg.to.length >= n ? seg.to : seg.to }))
+    const mkClip = (slot: number): EngineAnim => ({
+      nodeId: targets.nodeId,
+      // ★通道编号 = 15 + 槽位（契约：CLIP0 = 15，见 types.ts AnimKind）
+      kind: (15 + slot) as AnimKindId,
+      curve: easing.curve,
+      clipSlot: slot,
+      ...(d.curveBezier ? { curveBezier: d.curveBezier as [number, number, number, number] } : {}),
+      from: from[slot] ?? 0,
+      to: d.to[slot] ?? 0,
+      durMs: easing.durMs,
+      delayMs: d.delayMs ?? 0,
+      drive: 0,
+      takeover: d.takeover !== false,
+      ...(d.spring
+        ? { spring: { stiffness: d.spring.stiffness, damping: d.spring.damping, mass: d.spring.mass ?? 1 } }
+        : {}),
+      ...(kf
+        ? {
+            keyframes: kf.map(({ seg }) => ({
+              to: seg.to[slot] ?? 0,
+              durMs: seg.durationMs,
+              curve: CURVE_ID[seg.curve ?? 'easeOut'],
+            })),
+          }
+        : {}),
+      ...(d.repeat !== undefined
+        ? {
+            repeat: d.repeat === 'infinite' ? -1 : d.repeat,
+            ...(d.direction === 'alternate' ? { alternate: true } : {}),
+          }
+        : {}),
+    })
+    const out: EngineAnim[] = []
+    for (let slot = 0; slot < n; slot++) out.push(mkClip(slot))
+    return out
+  }
+
   // ★★颜色：一个声明 → 四条标量通道（R/G/B/A），共用同一曲线/时长/延迟/弹簧
   // ★判别式（判别联合的真窄化）：`'color' in ...` 这种写法 TS 收不紧，故用显式函数
   if (isColorDecl(d)) {
@@ -181,6 +253,8 @@ function resolveEasing(d: AnimDecl): { curve: CurveId; durMs: number } {
   // ★MA6：序列模式的时长 = 各段之和（**不是**缺省 300——否则内核的 time→progress 换算会错）
   //   ★颜色序列（2026-10-01）同此规则：四条通道共用段表 ⇒ 时长也必须一致
   if (d.keyframes) {
+    // ★keyframes 的 `durationMs` 在标量/颜色/裁剪三类里都是数字（只有 `to` 形态不同——
+    //   裁剪的 `to` 是参数数组）。⇒ 这里的求和逻辑三类共用（`s.durationMs` 恒为 number）。
     const sum = d.keyframes.reduce((acc, s) => acc + s.durationMs, 0)
     return { curve: CURVE_ID[d.curve ?? 'easeOut'], durMs: d.durationMs ?? sum }
   }

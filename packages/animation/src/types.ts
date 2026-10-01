@@ -37,6 +37,24 @@ export const AnimKind = {
   //   见内核 is_composited 注释）。
   ROTATE_X: 13,
   ROTATE_Y: 14,
+  // ★★裁剪形状参数（2026-10-01 · C1）：最多 16 条标量通道（与颜色同源的分解法）。
+  //   含义按节点声明的**形状类型**解释（见 `ClipShape`）；类型静态、参数可动画（CSS 同规）。
+  CLIP0: 15,
+  CLIP1: 16,
+  CLIP2: 17,
+  CLIP3: 18,
+  CLIP4: 19,
+  CLIP5: 20,
+  CLIP6: 21,
+  CLIP7: 22,
+  CLIP8: 23,
+  CLIP9: 24,
+  CLIP10: 25,
+  CLIP11: 26,
+  CLIP12: 27,
+  CLIP13: 28,
+  CLIP14: 29,
+  CLIP15: 30,
 } as const
 export type AnimKindId = (typeof AnimKind)[keyof typeof AnimKind]
 export type AnimKindName =
@@ -53,6 +71,8 @@ export type AnimKindName =
   | 'rotateX'
   /** ★绕 Y 轴旋转（度；3D——翻转/翻牌；走 tick 路径） */
   | 'rotateY'
+  /** ★★裁剪形状形变（2026-10-01 · C1；一个声明 → 最多 16 条参数通道；走 tick 路径） */
+  | 'clip'
 
 /** 名称 → 编号（编译期用；也是"名字写错"的**类型级**防线） */
 export const ANIM_KIND_ID: Record<AnimKindName, AnimKindId> = {
@@ -70,6 +90,9 @@ export const ANIM_KIND_ID: Record<AnimKindName, AnimKindId> = {
   // ★3D 旋转（单通道——无数值展开）
   rotateX: AnimKind.ROTATE_X,
   rotateY: AnimKind.ROTATE_Y,
+  // ★`clip` 的编号是**名义值**（= 参数槽 0 的 15）：编译期按参数个数展开成 N 条参数通道
+  //   （见 `isClipDecl` 分支——它不读这个值）。给名义值是为了 `ANIM_KIND_ID` 的完备形状。
+  clip: AnimKind.CLIP0,
 }
 
 /** 曲线（与内核 `CURVE_*` 一一对应——**不得改号**） */
@@ -94,6 +117,35 @@ export type RepeatCount = number | 'infinite'
 
 /** ★★**交替方向**（A2）——与 CSS `animation-direction` 对齐：`'normal'`（缺省）/ `'alternate'`（yoyo） */
 export type RepeatDirection = 'normal' | 'alternate'
+
+/**
+ * ★★**裁剪形状**（2026-10-01 · C1：`clip-path` 形变）——与 CSS `clip-path` 同语义的**结构形态**
+ *
+ * 【三种形状（v1 子集，参数为**盒分数** 0..1）】
+ *   · `inset(top, right, bottom, left)`：四边内缩（可负 = 外扩，CSS 同规）；
+ *   · `circle(cx, cy, r)`：圆形（`r` 相对 **min(w,h)**——圆在非方形盒里仍是圆）；
+ *   · `polygon([x0,y0, x1,y1, …])`：最多 **8 个顶点**（分数坐标；顺序即多边形顺序）。
+ *
+ * 【与动画的关系（CSS 同规）】形状**类型静态**（树里声明）、**参数可动画**——
+ *   异型间不插值（inset→circle 无意义）。动画锚点在参数的对应槽位上（见内核 `AnimKind::ClipN`）。
+ */
+export type ClipShape =
+  | { kind: 'inset'; params: [number, number, number, number] }
+  | { kind: 'circle'; params: [number, number, number] }
+  | { kind: 'polygon'; params: number[] } // 最多 8 点（16 个数）
+
+/**
+ * ★★**裁剪形状参数的动画声明**
+ *
+ * 语义与形状类型绑定：inset 至少 4 个数 / circle 3 个 / polygon 偶数个（≤16）。
+ * 编译期会把它展开成 `CLIP0..N` 的参数通道（**一个声明 → N 条标量通道**——与颜色同源）。
+ */
+export interface ClipParams {
+  /** 起点参数（**必填**——与颜色同一条纪律：内核没有"缺省 = 当前值"语义） */
+  from: readonly number[]
+  /** 终点参数 */
+  to: readonly number[]
+}
 
 /**
  * ★★**自定义三次贝塞尔曲线的控制点**（`[x1, y1, x2, y2]`——CSS `cubic-bezier()` 同一参数化）
@@ -169,7 +221,7 @@ export interface ScalarAnimDecl {
    * ★2026-10-01：排除集加上 `textColor`（文字色落地时，只排 `color` 会让
    *   `ScalarAnimDecl` 声称支持 `textColor` 却带数字值 ⇒ 联合判别失效、类型检查报错）。
    */
-  kind: Exclude<AnimKindName, 'color' | 'textColor'>
+  kind: Exclude<AnimKindName, 'color' | 'textColor' | 'clip'>
   /** 起点（缺省 = 节点当前值，由内核在启动时解析） */
   from?: number
   /** 终点（**必填**——动画必须有确定目标；序列模式下 = 末段 `to`） */
@@ -279,8 +331,41 @@ export interface ColorAnimDecl {
   takeover?: boolean
 }
 
-/** ★**单条动画声明**（封闭集的全部字段；`ScalarAnimDecl | ColorAnimDecl` 的联合） */
-export type AnimDecl = ScalarAnimDecl | ColorAnimDecl
+/**
+ * ★★**裁剪形变动画声明**（2026-10-01 · C1）
+ *
+ * 【为什么独立类型】`clip` 的 to/from 是**参数数组**（不是数字也不是颜色串）——
+ *   与颜色同理：让"裁剪声明必须是参数数组"成为**类型级保证**。
+ *
+ * 【前提】目标节点必须声明了 `clipPath`（静态形状类型 + 基态参数）——
+ *   没声明的节点上启动会被内核**明确拒绝**（与颜色需要底色同源）。
+ */
+export interface ClipAnimDecl {
+  kind: 'clip'
+  /** 起点参数（**必填**） */
+  from: readonly number[]
+  /** 终点参数（必填；序列模式下 = 末段 `to`） */
+  to: readonly number[]
+  durationMs?: number
+  delayMs?: number
+  /** 查表曲线（与 spring / keyframes / curveBezier 四选一；缺省 easeOut） */
+  curve?: CurveName
+  /** ★自定义三次贝塞尔（与 curve 互斥） */
+  curveBezier?: BezierPoints
+  /** 弹簧物理（逐参数独立积分） */
+  spring?: SpringConfig
+  /** ★序列编排（每段 `to` 是参数数组；末段必须等于声明 `to`） */
+  keyframes?: Array<{ to: readonly number[]; durationMs: number; curve?: CurveName }>
+  /** ★A2 循环（与标量同语义） */
+  repeat?: RepeatCount
+  /** ★A2 交替方向 */
+  direction?: RepeatDirection
+  /** 接管（缺省 true） */
+  takeover?: boolean
+}
+
+/** ★**单条动画声明**（封闭集的全部字段；三类声明的联合） */
+export type AnimDecl = ScalarAnimDecl | ColorAnimDecl | ClipAnimDecl
 
 /**
  * ★**动画目标**（"对谁做"——声明与目标解耦的理由）
@@ -317,6 +402,8 @@ export interface EngineAnim {
   repeat?: number
   /** ★A2：交替方向（仅 `repeat` 出现时给；true = yoyo） */
   alternate?: boolean
+  /** ★C1：**裁剪参数通道**（`clip` 声明展开后出现；每通道一个 `clipSlot`） */
+  clipSlot?: number
 }
 
 /** 编译产物：一次"提交"（可整批喂给 `anim_start` 或 `anim_commit_spec`） */
