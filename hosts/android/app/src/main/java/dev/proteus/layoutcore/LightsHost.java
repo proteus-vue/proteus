@@ -595,7 +595,9 @@ final class LightsHost {
             // ★★路径变形 v1：B 态（变形终点）——同款纪律（漏 ⇒ 内核拒绝变形动画）
             "svgPathTo",
             // ★★发光 v1（glow）：静态规格（色/半径/强度）——漏 ⇒ 宿主不发光（内核照常收）
-            "glow"));
+            "glow",
+            // ★★软边遮罩 v1（mask）：静态规格（类型/几何/柔度/基态）——漏 ⇒ 宿主无遮罩
+            "mask"));
 
     /** 缺省字号（**布局单位** = px，与本场景 viewport 同坐标系） */
     private static final double DEFAULT_FONT_UNITS = 14.0;
@@ -732,10 +734,31 @@ final class LightsHost {
                     } catch (NumberFormatException ignored) { /* 坏色 ⇒ 不发光（不静默画错色） */ }
                 }
             }
+            // ★★软边遮罩 v1：静态规格 → `[kind, angle, cx, cy, r, softness]`（缺省 null = 无遮罩）
+            float[] maskSpec = null;
+            org.json.JSONObject mo = spec.optJSONObject("mask");
+            if (mo != null) {
+                String mkindS = mo.optString("kind", "");
+                int mkind = "linear".equals(mkindS) ? 1 : "radial".equals(mkindS) ? 2 : 0;
+                if (mkind != 0) {
+                    // 契约键名（与 TS `GRADIENT_CONTRACT_KEYS` 同表）：`mask`/`softness`/`progress`
+                    //   ——`progress` 是声明的**基态进度**（帧通道 `maskProgress` 由内核下发）。
+                    //   ★基态：本端不参与揭示数学（内核算好逐帧下发）——但**必须读进来**：
+                    //     建树初值与 stop 复位时宿主需要它（否则帧循环启动前的一瞬是"全显"）。
+                    maskSpec = new float[]{
+                            mkind,
+                            (float) mo.optDouble("angle", 180),
+                            (float) mo.optDouble("cx", 0.5),
+                            (float) mo.optDouble("cy", 0.5),
+                            (float) mo.optDouble("r", 0.75),
+                            (float) mo.optDouble("softness", 0.25),
+                            (float) mo.optDouble("progress", 1.0)};
+                }
+            }
             cmds.add(new ProteusHostView.Cmd(
                     (float) r.getDouble("x"), (float) r.getDouble("y"),
                     (float) r.getDouble("width"), (float) r.getDouble("height"),
-                    color, isText ? text : null, fs, textColor, radius, grad, glow));
+                    color, isText ? text : null, fs, textColor, radius, grad, glow, maskSpec));
             cmdIds.add(id);
         }
         int[] ids = new int[cmdIds.size()];

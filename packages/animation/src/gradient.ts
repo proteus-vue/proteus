@@ -178,6 +178,73 @@ export function validateGlowSpec(g: unknown): Array<{ path: string; message: str
   return out
 }
 
+/**
+ * ★★**软边遮罩规格**（mask v1 · 2026-10-01）——**进度驱动的双色标柔化揭示**。
+ *
+ * 【与 clip-path 的分工】clip = **硬边**裁剪（边界一刀切）；mask = **软边**渐隐
+ *   （内容按渐变 alpha 淡出）——"柔柔显出 / 从雾里渗开"只有遮罩能做。
+ *   ★与前缀生态对比：CSS `mask-image` 动它是重绘雷区（且 `-webkit-mask` 前缀碎片化）；
+ *     本引擎把它做成内核逐帧求值的一个标量通道（曲线/弹簧/序列/循环全复用）。
+ */
+export interface MaskSpec {
+  /** `'linear'`（沿 `angle`）· `'radial'`（自圆心向外） */
+  kind: 'linear' | 'radial'
+  /** 线性：方向角（度；CSS 语义 0=向上 90=向右——与渐变同一套端点换算） */
+  angle?: number
+  /** 径向：圆心（单位空间） */
+  cx?: number
+  cy?: number
+  /** 径向：半径（相对盒宽） */
+  r?: number
+  /** 过渡带宽度（0..1；0 = 硬边） */
+  softness: number
+  /** 声明的**基态进度**（0..1；缺省 1 = 初始全显。★"未演出"元素声明 0 = 基态全隐） */
+  progress?: number
+}
+
+/**
+ * ★★**揭示色标**（参考实现——**与内核 `MaskSpec::reveal_stops` 逐式对应**；单测钉值）。
+ *   ★端点用**显式短路**（不靠浮点比较：`1.0×1.4−0.4` 在 f32 下是 0.99999994
+ *   ⇒ `>= 1.0` 判否 ⇒ 终帧留一条软边——"进度到底了没全显"的端点漂移）。
+ */
+export function maskRevealStops(m: MaskSpec, progress: number): { offsets: [number, number]; alphas: [number, number] } {
+  const p = Math.max(0, Math.min(1, progress))
+  const s = Math.max(0, Math.min(1, m.softness))
+  const front = p * (1 + s) - s * 0.5
+  if (p <= 0) return { offsets: [0, 1], alphas: [0, 0] }
+  if (p >= 1) return { offsets: [0, 1], alphas: [1, 1] }
+  if (front + s * 0.5 <= 0) return { offsets: [0, 1], alphas: [0, 0] }
+  if (front - s * 0.5 >= 1) return { offsets: [0, 1], alphas: [1, 1] }
+  const oa = Math.max(0, Math.min(1, front - s * 0.5))
+  const ob = Math.max(0, Math.min(1, front + s * 0.5))
+  return { offsets: [oa, ob], alphas: [1, 0] }
+}
+
+/** 校验遮罩声明（作者面：错误当场报，消息含修法） */
+export function validateMaskSpec(m: unknown): Array<{ path: string; message: string; hint: string }> {
+  const out: Array<{ path: string; message: string; hint: string }> = []
+  if (m == null || typeof m !== 'object') {
+    return [{ path: 'mask', message: '不是对象', hint: "应为 { kind: 'linear'|'radial', softness, … }" }]
+  }
+  const o = m as Record<string, unknown>
+  const kind = o['kind']
+  if (kind !== 'linear' && kind !== 'radial') {
+    out.push({ path: 'mask.kind', message: `未知类型 ${JSON.stringify(kind)}`, hint: "支持 'linear'（angle）与 'radial'（cx/cy/r）" })
+  }
+  if (kind === 'linear' && typeof o['angle'] !== 'number') {
+    out.push({ path: 'mask.angle', message: `angle 非法：${JSON.stringify(o['angle'])}`, hint: 'linear 遮罩必须给 angle（度；0 = 向上，90 = 向右）' })
+  }
+  const soff = o['softness']
+  if (typeof soff !== 'number' || !Number.isFinite(soff) || soff < 0 || soff > 1) {
+    out.push({ path: 'mask.softness', message: `softness 非法：${JSON.stringify(soff)}`, hint: '应为 0..1（0 = 硬边，1 = 最柔）' })
+  }
+  const pr = o['progress']
+  if (pr !== undefined && (typeof pr !== 'number' || !Number.isFinite(pr) || pr < 0 || pr > 1)) {
+    out.push({ path: 'mask.progress', message: `progress 非法：${JSON.stringify(pr)}`, hint: '应为 0..1（0 = 基态全隐）' })
+  }
+  return out
+}
+
 export const GRADIENT_CONTRACT_KEYS = [
   'fillGradient',
   'fillGradientTo',
@@ -196,6 +263,10 @@ export const GRADIENT_CONTRACT_KEYS = [
   //     把它列进"树键契约"会让门禁要求宿主解析一个树里没有的键（假要求）。
   'glow',
   'radius',
+  // ★★软边遮罩（mask v1）：树里的静态键（两端宿主必须都引用——漏一个 = 该端不生效）
+  'mask',
+  'softness',
+  'progress',
 ] as const
 
 /**

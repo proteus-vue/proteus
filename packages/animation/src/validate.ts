@@ -64,6 +64,8 @@ export const TICK_ONLY_KINDS: readonly AnimKindName[] = [
   'pathMorph',
   // ★★发光强度（glow v1）：改的是 paint 状态（分层描边 alpha）——非合成，走 tick。
   'glowIntensity',
+  // ★★遮罩进度（mask v1）：改的是**合成状态**（layer.mask / saveLayer+DST_IN）——非合成，走 tick。
+  'maskProgress',
 ]
 
 /** 该属性是否 tick-only（受支持、走内核逐帧路径，但不进平台零参与） */

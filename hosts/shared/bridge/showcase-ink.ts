@@ -250,6 +250,7 @@ export const INK_SAMPLE_IDS: readonly number[] = [
   INK_IDS.rollCylinder,
   INK_IDS.moon,
   INK_IDS.bamboo[0][0],
+  INK_IDS.rangePuffs[0][0],
 ]
 
 /* ────────────────────────── 造型（d 的坐标系 = 节点盒 px——与 C2 内核解析同一约定） ────────────────────────── */
@@ -546,6 +547,13 @@ export function buildInkTree(view: View): string {
     const core = rangeBase[r]!
     const coreColor = [P.mtFar, P.mtMid, P.mtNear][r]!
 
+    // ★★软边遮罩（mask v1）：远山**整叠**从下方的"雾"里渗出来（线性遮罩 · 自下而上 · 软边 0.5）
+    //   ——clip 的硬边做不到这个（"渗开"必须软边）。与逐笔落笔**并行**：一边渗、一边画。
+    //   ★只给远山（r === 0）：近/中山由逐笔落笔承担"骨架"，远山要的是"若有若无"。
+    const rangeMask = r === 0
+      ? { kind: 'linear' as const, angle: 180, softness: 0.5, progress: 0 }
+      : null
+
     // 椭圆晕团 ×2（山腰的墨晕——`borderRadius` 天然柔边；基态 scale≈0.15 由节目单涨起）
     rg.puffs.forEach(([fx, fy, pw, ph], k) => {
       const puffW = R(W * pw)
@@ -562,6 +570,8 @@ export function buildInkTree(view: View): string {
         // ★基态全隐（inset top=1）：不用 scale 揭现——transform 只在动画开始时才生效，
         //   未到该幕时节点是 scale=1 **可见**的（破坏"空白卷轴"基态律）。clip 基态才是真隐藏。
         clipPath: { kind: 'inset', params: [1, 0, 0, 0] },
+        // ★软边遮罩（mask v1）：远山晕团从下往上"渗开"（progress 0→1 由 mountains 幕驱动）
+        ...(rangeMask ? { mask: rangeMask } : {}),
       })
     })
 
@@ -1121,6 +1131,14 @@ export function createInkProgram(_env: { view: View }): InkProgram {
       RANGES.forEach((rg, r) => {
         const dly = r * 420
         out.push(...onto(I.rangeWet[r], { kind: 'strokeProgress', from: 0, to: 1, durationMs: 1500, delayMs: dly + 150, curve: 'easeOut' }))
+        // ★★软边遮罩（mask v1）：远山（r=0）的**两个晕团**在"落笔"之前先"从雾里渗开"——
+        //   与 strokeProgress（硬边画线）**并行互补**：这是 clip 做不到的"柔柔显出"。
+        if (r === 0) {
+          I.rangePuffs[0]!.forEach((puffId, k) => {
+            out.push(...onto(puffId, { kind: 'maskProgress', from: 0, to: 1,
+              durationMs: 1600, delayMs: dly + k * 200, curve: 'easeOut' }))
+          })
+        }
         out.push(...onto(I.rangeCore[r], { kind: 'strokeProgress', from: 0, to: 1, durationMs: 2000, delayMs: dly + 320, keyframes: brush(2000) }))
         out.push(...onto(I.rangeDry[r], { kind: 'strokeProgress', from: 0, to: 1, durationMs: 1100, delayMs: dly + 720, curve: 'easeOut' }))
         // 椭圆晕团随落笔晕开（clip 揭现——"墨在纸里晕开"）

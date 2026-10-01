@@ -57,6 +57,9 @@ export type { GradientStop, GradientFill, LinearGradientFill, RadialGradientFill
 // ★★发光（glow v1）：规格 + 分层参考实现（Swift/Kotlin 同式——门禁保证键名覆盖）
 export { validateGlowSpec, glowLayers, GLOW_LAYERS } from './gradient'
 export type { GlowSpec } from './gradient'
+// ★★软边遮罩（mask v1）：规格 + 揭示参考实现（与内核逐式对应——单测钉值）
+export { validateMaskSpec, maskRevealStops } from './gradient'
+export type { MaskSpec } from './gradient'
 export {
   compileAnimations,
   compileOne,

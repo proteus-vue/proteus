@@ -343,6 +343,34 @@ def main() -> int:
             print(f"  ✓ ⑤g ★渐变几何动画真的落地（探针真读光的半径）：月晕 r = {gr:.4f}"
                   f"（收拢态 0.55 → 扩散态 0.95 —— 光本身在动）")
 
+    # ── ⑤h ★软边遮罩（mask v1）：探针真读晕团的揭示位置（"从雾里渗开"）──
+    #   mountains 末态：maskProgress 应到 1 ⇒ 揭示色标 = 端点（全显：oA=0/aA=1/oB=1/aB=1）
+    mt_act = hbyname.get("mountains") or {}
+    puff_l = _layer(mt_act.get("probe_all") or [], 17)
+    m_str = (puff_l or {}).get("mask") if puff_l else None
+    if not m_str or m_str == "":
+        fail(f"⑤h 探针缺遮罩读数（mask='{m_str}'——晕团 17 应有 soft mask）")
+        ok = False
+    elif not m_str.startswith("linear:"):
+        fail(f"⑤h 遮罩类型异常：'{m_str}'（应 'linear:oA,oB'）")
+        ok = False
+    else:
+        loc = m_str.split(":", 1)[1]
+        try:
+            parts3 = [float(x) for x in loc.split(",")]
+        except ValueError:
+            parts3 = []
+        # 末态（progress=1）⇒ 端点短路 ⇒ 位置回 [0,1]（全显）
+        if len(parts3) != 2:
+            fail(f"⑤h 揭示位置不可解析：'{loc}'")
+            ok = False
+        elif abs(parts3[0]) > 0.02 or abs(parts3[1] - 1.0) > 0.02:
+            fail(f"⑤h 遮罩末态非全显：locations={parts3}（progress=1 应回端点 [0,1]）")
+            ok = False
+        else:
+            print(f"  ✓ ⑤h ★软边遮罩真的落地（探针真读揭示位置）：晕团 17 = {loc}"
+                  f"（末态全显——软边在过程中推动，clip 的硬边做不到这种渗开）")
+
     # ── ⑥ 帧率与流畅 ──
     vsync = host.get("vsync_p50")
     p95 = host.get("work_p95")

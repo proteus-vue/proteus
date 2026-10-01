@@ -331,6 +331,11 @@ pub enum AnimKind {
     ///   （实测：见墨绘节目 moonGlow 幕读数）。
     ///   ★与 `opacity` 同级的**标量通道** ⇒ 曲线/弹簧/序列/循环/接管/播放控制零改动复用。
     GlowIntensity = 34,
+    /// ★★**遮罩进度**（2026-10-01 · mask v1）：`0..1` = 软边揭示的进度（0=全隐 / 1=全显）。
+    ///   揭示色标由内核 `MaskSpec::reveal_stops` **唯一实现**（宿主只翻译结果）。
+    ///   ★与 clip 互补：clip 是硬边裁剪、遮罩是软边渐隐——两者**可组合**（内核不管组合，
+    ///     宿主各自实现：iOS 嵌套 mask / Android saveLayer+DST_IN ⇄ clipPath 天然叠加）。
+    MaskProgress = 35,
 }
 
 impl AnimKind {
@@ -371,6 +376,7 @@ impl AnimKind {
             32 => AnimKind::GradientMix,
             33 => AnimKind::PathMorph,
             34 => AnimKind::GlowIntensity,
+            35 => AnimKind::MaskProgress,
             other => {
                 return Err(format!(
                     "未知动画属性 kind={other}（0=translateX/1=translateY/2=scale/3=rotate/4=opacity/\
@@ -419,6 +425,7 @@ impl AnimKind {
             AnimKind::GradientMix => "gradientMix",
             AnimKind::PathMorph => "pathMorph",
             AnimKind::GlowIntensity => "glowIntensity",
+            AnimKind::MaskProgress => "maskProgress",
         }
     }
 
@@ -440,6 +447,11 @@ impl AnimKind {
     /// 是否 **发光强度通道**（glow v1，34）
     pub fn is_glow_intensity(self) -> bool {
         matches!(self, AnimKind::GlowIntensity)
+    }
+
+    /// 是否 **遮罩进度通道**（mask v1，35）
+    pub fn is_mask_progress(self) -> bool {
+        matches!(self, AnimKind::MaskProgress)
     }
 
     /// 是否 **clip 形状参数通道**（15..30）——对应槽位 = kind - 15
@@ -537,7 +549,8 @@ impl AnimKind {
             | AnimKind::StrokeProgress
             | AnimKind::GradientMix
             | AnimKind::PathMorph
-            | AnimKind::GlowIntensity => 0,
+            | AnimKind::GlowIntensity
+            | AnimKind::MaskProgress => 0,
         }
     }
 
@@ -576,6 +589,8 @@ impl AnimKind {
             AnimKind::PathMorph => (0.002, 0.04),
             // ★发光强度同为 0..1 量纲
             AnimKind::GlowIntensity => (0.002, 0.04),
+            // ★遮罩进度同为 0..1 量纲
+            AnimKind::MaskProgress => (0.002, 0.04),
             AnimKind::Opacity => (0.003, 0.06),                         // 1, 1/s
             // ★颜色通道：0.5/255 的通道步 ≈ 视觉不可辨（与 translate 的 0.5px 同量级取法）
             AnimKind::ColorR | AnimKind::ColorG | AnimKind::ColorB | AnimKind::ColorA => (0.5, 10.0),
@@ -640,6 +655,9 @@ impl AnimKind {
             AnimKind::PathMorph => false,
             // ★★发光强度（glow v1）：改的是 paint 状态（分层描边 alpha）——非合成，走 tick。
             AnimKind::GlowIntensity => false,
+            // ★★遮罩进度（mask v1）：改的是**合成状态**（layer.mask / saveLayer+DST_IN）——
+            //   非合成，走 tick。
+            AnimKind::MaskProgress => false,
             AnimKind::ColorR
             | AnimKind::ColorG
             | AnimKind::ColorB
@@ -662,6 +680,15 @@ impl AnimKind {
         if let Some(slot) = self.clip_slot() {
             if node.style.clip[slot] != v {
                 node.style.clip[slot] = v;
+                return true;
+            }
+            return false;
+        }
+        // ★★遮罩进度（mask v1）：一个标量槽（0..1 钳位）
+        if self.is_mask_progress() {
+            let v = v.clamp(0.0, 1.0);
+            if node.style.mask.is_some() && node.style.mask_progress != v {
+                node.style.mask_progress = v;
                 return true;
             }
             return false;
@@ -761,6 +788,8 @@ impl AnimKind {
                 AnimKind::PathMorph => return false,
                 // 发光强度走上面的早退分支（见 write 开头）
                 AnimKind::GlowIntensity => return false,
+                // 遮罩进度走上面的早退分支（见 write 开头）
+                AnimKind::MaskProgress => return false,
                 // 颜色走上面的分支（此处不可达——`is_color` 已分流）
                 AnimKind::ColorR
                 | AnimKind::ColorG
@@ -1106,6 +1135,11 @@ pub fn reset_visuals(tree: &mut LayoutTree, node_ids: &[u32]) -> usize {
             let morph_dirty = s.svg_path_to.is_some() && s.path_morph != 0.0;
             // ★发光 v1：强度回 1（基态 = 按声明全额发光）
             let glow_dirty = s.glow.is_some() && s.glow_intensity != 1.0;
+            // ★遮罩 v1：进度回**声明的基态**（可能是 0——如"未显出"的基态律）
+            let mask_dirty = s
+                .mask
+                .as_ref()
+                .is_some_and(|m| s.mask_progress != m.progress_base);
             let dirty = s.translate_x != 0.0
                 || s.translate_y != 0.0
                 || s.scale != 1.0
@@ -1118,7 +1152,8 @@ pub fn reset_visuals(tree: &mut LayoutTree, node_ids: &[u32]) -> usize {
                 || stroke_dirty
                 || grad_dirty
                 || morph_dirty
-                || glow_dirty;
+                || glow_dirty
+                || mask_dirty;
             if dirty {
                 s.translate_x = 0.0;
                 s.translate_y = 0.0;
@@ -1133,6 +1168,9 @@ pub fn reset_visuals(tree: &mut LayoutTree, node_ids: &[u32]) -> usize {
                 }
                 s.path_morph = 0.0; // ★路径变形 v1：变形因子回 0（全 A）
                 s.glow_intensity = 1.0; // ★发光 v1：强度回 1（全额）
+                if let Some(m) = s.mask.as_ref() {
+                    s.mask_progress = m.progress_base; // ★遮罩 v1：回声明基态
+                }
                 s.opacity = 1.0;
                 // ★复位 = 回底色 / 回原文字色（不是清成 None：那会丢掉"本节点有基色"的事实）
                 s.bg = s.bg_base;
@@ -1307,9 +1345,11 @@ pub fn commit_specs(tree: &LayoutTree, anims: &[Anim]) -> Vec<CommitSpec> {
                     //   入口 `anim_commit_spec` 已按 `plan_animations` 整批拒绝非合成属性）。
                     // ★路径变形（v1）：同理不可达。
                     // ★发光强度（glow v1）：同理不可达。
+                    // ★遮罩进度（mask v1）：同理不可达。
                     | AnimKind::GradientMix
                     | AnimKind::PathMorph
-                    | AnimKind::GlowIntensity => {}
+                    | AnimKind::GlowIntensity
+                    | AnimKind::MaskProgress => {}
                 }
             }
             samples.push(v);
@@ -1356,9 +1396,11 @@ pub fn commit_specs(tree: &LayoutTree, anims: &[Anim]) -> Vec<CommitSpec> {
                     //   入口 `anim_commit_spec` 已按 `plan_animations` 整批拒绝非合成属性）。
                     // ★路径变形（v1）：同理不可达。
                     // ★发光强度（glow v1）：同理不可达。
+                    // ★遮罩进度（mask v1）：同理不可达。
                     | AnimKind::GradientMix
                     | AnimKind::PathMorph
-                    | AnimKind::GlowIntensity => {}
+                    | AnimKind::GlowIntensity
+                    | AnimKind::MaskProgress => {}
                 }
             }
             let n = samples.len();
@@ -1464,6 +1506,9 @@ pub struct NodeVisual {
     pub path_morph: Option<f32>,
     /// ★★**发光强度**（glow v1）：`None` = 本节点无发光声明；`Some(v)` = 当前强度（0..1）。
     pub glow_intensity: Option<f32>,
+    /// ★★**遮罩揭示色标**（mask v1）：`None` = 本节点无遮罩；
+    ///   `Some((kind, [oA,oB], [aA,aB]))` = **内核已算好**的双色标（宿主只翻译）。
+    pub mask: Option<(u8, [f32; 2], [f32; 2])>,
 }
 
 /// 一次 tick（或 seek）的结果（供宿主刷新层 / 测试观测）
@@ -1604,6 +1649,15 @@ impl AnimEngine {
         }
         // ★★渐变混合**要求节点声明了 `fillGradient` + `fillGradientTo` 两态**（v2）：
         //   单态渐变没有"混合"可言（缺 B ⇒ 明确拒绝，不静默当 0/1）——与 clip 需要形状同一条纪律。
+        // ★★遮罩进度**要求节点声明了 `mask`**（v1）：没有遮罩可言时驱动它 = 静默无效。
+        if a.kind.is_mask_progress() && tree.nodes[idx].style.mask.is_none() {
+            return Err(format!(
+                "遮罩动画的目标节点 {} 没有遮罩声明（树里未声明 `mask`）——遮罩进度需要一个静态\
+                 遮罩规格（类型/几何/柔度）作为基准；请先给该节点声明\
+                 `mask: {{ kind, angle|cx/cy/r, softness }}`，或去掉这条遮罩动画",
+                a.node_id
+            ));
+        }
         // ★★发光强度**要求节点声明了 `glow`**（v1）：没有发光可言时驱动它 = 静默无效。
         if a.kind.is_glow_intensity() && tree.nodes[idx].style.glow.is_none() {
             return Err(format!(
@@ -1717,6 +1771,10 @@ impl AnimEngine {
             let grad_dirty = s.grad.as_ref().is_some_and(|g| g.mix != 0.0);
             let morph_dirty = s.svg_path_to.is_some() && s.path_morph != 0.0;
             let glow_dirty = s.glow.is_some() && s.glow_intensity != 1.0;
+            let mask_dirty = s
+                .mask
+                .as_ref()
+                .is_some_and(|m| s.mask_progress != m.progress_base);
             if s.translate_x != 0.0
                 || s.translate_y != 0.0
                 || s.scale != 1.0
@@ -1730,6 +1788,7 @@ impl AnimEngine {
                 || grad_dirty
                 || morph_dirty
                 || glow_dirty
+                || mask_dirty
             {
                 s.translate_x = 0.0;
                 s.translate_y = 0.0;
@@ -1744,6 +1803,9 @@ impl AnimEngine {
                 }
                 s.path_morph = 0.0; // ★路径变形 v1：变形因子回 0（全 A）
                 s.glow_intensity = 1.0; // ★发光 v1：强度回 1（全额）
+                if let Some(m) = s.mask.as_ref() {
+                    s.mask_progress = m.progress_base; // ★遮罩 v1：回声明基态
+                }
                 s.opacity = 1.0;
                 s.bg = s.bg_base; // ★颜色回底色 / 回原文字色（见 reset_visuals 注释）
                 s.text_color = s.text_color_base;
@@ -2145,6 +2207,11 @@ impl AnimEngine {
                 } else {
                     None
                 },
+                // ★遮罩 v1：带上**已算好**的揭示色标（`None` = 无遮罩；唯一实现在内核）
+                mask: node.style.mask.as_ref().map(|m| {
+                    let (offs, alphas) = m.reveal_stops(node.style.mask_progress);
+                    (m.kind, offs, alphas)
+                }),
             });
         }
         out

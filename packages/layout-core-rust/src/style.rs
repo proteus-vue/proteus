@@ -120,6 +120,66 @@ impl Default for Overflow {
     }
 }
 
+/// ★★**软边遮罩规格**（mask v1 · 2026-10-01）：**进度驱动的双色标柔化揭示**。
+///
+/// 【与 clip-path 的分工（互补而非重复）】clip = **硬边**裁剪（形状边界一刀切）；
+///   遮罩 = **软边**渐隐（内容按渐变 alpha 淡出）——"柔柔显出 / 从雾里渗开 / 边缘化开"
+///   这类观感只有遮罩能做（clip 的边界永远是硬的）。
+///
+/// 【语义（唯一实现 = 本结构体的 `reveal_stops`——两端宿主只翻译它算好的结果）】
+///   `progress` 0 ⇒ 全隐（alpha 处处 0）；1 ⇒ 全显；`softness` = 过渡带宽度（0 = 硬边）。
+///   **揭示前沿** `front = progress×(1+softness) − softness/2`：
+///     · 线性：沿 `angle` 方向（offset 0 在起点侧）——"从下往上渗"之类；
+///     · 径向：从圆心向外——"月光从一点渗开"。
+///   ★CSS 对照：`mask-image` 可声明但**动它是重绘雷区**（且 `-webkit-mask` 前缀生态混乱）；
+///     本引擎把它做成内核逐帧求值的一个标量通道（曲线/弹簧/序列/循环全复用）。
+///
+/// 【诚实边界】v1 是**进度驱动的两色标**形态（表达"揭示"）；任意多色标静态遮罩
+///   （如"中央椭圆+四周渐隐"的三色标形态）不在 v1——那需要独立的静态遮罩规格类型。
+#[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
+pub struct MaskSpec {
+    /// 1=linear（沿 angle）· 2=radial（自圆心向外）
+    pub kind: u8,
+    /// 线性：方向角（度；CSS 语义 0=向上 90=向右——与渐变的角度同一套端点换算）
+    pub angle: f32,
+    /// 径向：圆心（单位空间）与半径（相对盒宽）
+    pub cx: f32,
+    pub cy: f32,
+    pub r: f32,
+    /// 过渡带宽度（0..1；0 = 硬边，1 = 最柔）
+    pub softness: f32,
+    /// 声明的**基态进度**（0..1）——建树初值与 reset 目标（"解绑必须含清值"的基态）
+    pub progress_base: f32,
+}
+
+impl MaskSpec {
+    /// ★★**揭示色标**（`([oA,oB], [aA,aB])`）——遮罩 v1 的**唯一实现**（宿主零数学）。
+    ///
+    /// 三态：全隐（前沿未进入）· 全显（前沿已越出）· 过渡（双标 soft edge）。
+    /// 端点与数值都精确（便于单测钉值）：`progress=0 ⇒ 全隐`、`1 ⇒ 全显`。
+    pub fn reveal_stops(&self, progress: f32) -> ([f32; 2], [f32; 2]) {
+        let p = progress.clamp(0.0, 1.0);
+        let s = self.softness.clamp(0.0, 1.0);
+        let front = p * (1.0 + s) - s * 0.5;
+        // ★边界判定用显式的 p **端点短路**（不靠浮点比较——`1.0×1.4 − 0.4` 在 f32 下
+        //   是 0.99999994：`>= 1.0` 判否 ⇒ 端点本应"全显"却落进过渡分支，**终帧留一条软边**
+        //   （"进度到底了但画面没全显"——这类端点漂移必须用短路根除，与"端点钉死"同一条纪律）。
+        if p <= 0.0 {
+            ([0.0, 1.0], [0.0, 0.0]) // 全隐（端点短路）
+        } else if p >= 1.0 {
+            ([0.0, 1.0], [1.0, 1.0]) // 全显（端点短路）
+        } else if front + s * 0.5 <= 0.0 {
+            ([0.0, 1.0], [0.0, 0.0]) // 全隐（前沿尚未进入）
+        } else if front - s * 0.5 >= 1.0 {
+            ([0.0, 1.0], [1.0, 1.0]) // 全显（前沿已越出）
+        } else {
+            let oa = (front - s * 0.5).clamp(0.0, 1.0);
+            let ob = (front + s * 0.5).clamp(0.0, 1.0);
+            ([oa, ob], [1.0, 0.0])
+        }
+    }
+}
+
 /// ★★**发光规格**（glow v1）：颜色 + 半径 + 强度（见 `LStyle.glow` 的分层描边说明）。
 #[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
 pub struct GlowSpec {
@@ -132,6 +192,10 @@ pub struct GlowSpec {
 }
 
 fn default_glow_intensity() -> f32 {
+    1.0
+}
+
+fn default_mask_progress() -> f32 {
     1.0
 }
 
@@ -325,6 +389,12 @@ pub struct LStyle {
     ///   与原 `d` 有 <3% 的弧长差"（本仓纪律：静默的行为改变是最贵的缺陷）。
     #[serde(default)]
     pub svg_morph_resampled: bool,
+    /// ★★**软边遮罩**（2026-10-01 · mask v1）：见 `MaskSpec`（进度驱动的双色标柔化揭示）。
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub mask: Option<MaskSpec>,
+    /// ★★**遮罩当前进度**（0=全隐 / 1=全显；`maskProgress` 通道驱动）
+    #[serde(default = "default_mask_progress")]
+    pub mask_progress: f32,
     /// ★★**发光声明**（2026-10-01 · glow v1）：`{color, radius, alpha}` ——
     ///   渲染 = **N 层同心描边**（`boost_k = radius×k/N`，`alpha_k = alpha×(1-(k-1)/N)²`）。
     ///   【为什么不用平台原生（iOS `CALayer.shadow` / Android `Paint.setShadowLayer`）】
@@ -467,6 +537,8 @@ impl Default for LStyle {
             path_morph: 0.0,
             glow: None,
             glow_intensity: 1.0,
+            mask: None,
+            mask_progress: 1.0,
             svg_morph_resampled: false,
             stroke_color: 0,
             stroke_width: 0.0,
@@ -484,5 +556,139 @@ impl LStyle {
     /// ★这是**必要条件**而非充分条件：完全显式的宽高才让「内部变更不外溢」成立。
     pub fn is_layout_boundary(&self) -> bool {
         self.width.is_some() && self.height.is_some() && self.display == Display::Flex
+    }
+}
+
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// ★★遮罩揭示数学（mask v1）：**唯一实现**的三态钉值（全隐 / 过渡 / 全显）。
+    #[test]
+    fn mask_reveal_stops_pins_three_states() {
+        let m = MaskSpec {
+            kind: 1,
+            angle: 180.0,
+            cx: 0.5,
+            cy: 0.5,
+            r: 0.75,
+            softness: 0.4,
+            progress_base: 0.0,
+        };
+        // progress=0 ⇒ 全隐（两标 alpha 均 0）
+        let (o, a) = m.reveal_stops(0.0);
+        assert_eq!(a, [0.0, 0.0], "progress=0 应全隐（alpha 处处 0）");
+        assert_eq!(o, [0.0, 1.0]);
+        // progress=1 ⇒ 全显
+        let (o2, a2) = m.reveal_stops(1.0);
+        assert_eq!(a2, [1.0, 1.0], "progress=1 应全显");
+        assert_eq!(o2, [0.0, 1.0]);
+        // progress=0.5 ⇒ 过渡：front = 0.5×1.4 − 0.2 = 0.5 ⇒ oA=0.3 / oB=0.7（精确值）
+        let (o3, a3) = m.reveal_stops(0.5);
+        assert!((o3[0] - 0.3).abs() < 1e-6, "oA 应 = 0.3（实际 {}）", o3[0]);
+        assert!((o3[1] - 0.7).abs() < 1e-6, "oB 应 = 0.7（实际 {}）", o3[1]);
+        assert_eq!(a3, [1.0, 0.0], "过渡态：前沿前 1、前沿后 0");
+        // softness=0 ⇒ 硬边（过渡带宽度 0——仍是合法的"一刀切"）
+        let hard = MaskSpec { softness: 0.0, ..m };
+        let (o4, a4) = hard.reveal_stops(0.3);
+        assert!((o4[0] - 0.3).abs() < 1e-6 && (o4[1] - 0.3).abs() < 1e-6, "硬边：两标同位置");
+        assert_eq!(a4, [1.0, 0.0]);
+        // 越界钳位（与全部通道同一纪律）
+        assert_eq!(m.reveal_stops(-5.0).1, [0.0, 0.0]);
+        assert_eq!(m.reveal_stops(9.0).1, [1.0, 1.0]);
+    }
+
+    /// ★★遮罩端到端（建树 → 通道 → 逐帧色标）：`progress` 0.5 时 tick 段里读到
+    ///   oA=0.3/aA=1（内核已算好——宿主零数学）。
+    #[test]
+    fn mask_progress_writes_and_reports_stops() {
+        use crate::ffi::{
+            proteus_layout_anim_start, proteus_layout_anim_tick_bin, proteus_layout_create,
+            proteus_layout_free_string, proteus_layout_mask_stops,
+        };
+        let req = serde_json::json!({
+            "viewport": {"width": 100.0, "height": 100.0},
+            "nodes": [
+                {"id": 1, "width": 100.0, "height": 100.0},
+                {"id": 9, "parentId": 1, "width": 100.0, "height": 100.0,
+                 "backgroundColor": "#224466",
+                 "mask": {"kind": "linear", "angle": 180.0, "softness": 0.4, "progress": 0.0}}
+            ]
+        });
+        let h = unsafe {
+            proteus_layout_create(std::ffi::CString::new(req.to_string()).unwrap().as_ptr())
+        };
+        assert!(h > 0, "带遮罩声明应建树成功");
+        // 初始（progress_base=0）⇒ 遮罩全隐：查询入口应回 alpha 全 0
+        let q = serde_json::json!({"nodeId": 9});
+        let r = unsafe {
+            proteus_layout_mask_stops(h, std::ffi::CString::new(q.to_string()).unwrap().as_ptr())
+        };
+        let js = unsafe { std::ffi::CStr::from_ptr(r) }.to_string_lossy().to_string();
+        unsafe { proteus_layout_free_string(r) };
+        let v: serde_json::Value = serde_json::from_str(&js).expect("查询应回 JSON");
+        assert_eq!(v["ok"], true, "{js}");
+        assert_eq!(v["stops"][1].as_f64().unwrap(), 0.0, "基态 alpha 应 0（全隐）");
+        // 启动遮罩动画到半程
+        let start = serde_json::json!({
+            "anims": [{"nodeId": 9, "kind": 35, "from": 0.0, "to": 1.0, "durMs": 100, "curve": 0}]
+        });
+        let r2 = unsafe {
+            proteus_layout_anim_start(h, std::ffi::CString::new(start.to_string()).unwrap().as_ptr())
+        };
+        let m2 = unsafe { std::ffi::CStr::from_ptr(r2) }.to_string_lossy().to_string();
+        assert!(m2.contains("\"ok\":true"), "遮罩动画应被受理：{m2}");
+        let mut n: u32 = 0;
+        let p = unsafe { proteus_layout_anim_tick_bin(h, 50.0, &mut n) };
+        assert!(n >= 228, "记录应 ≥228B（含遮罩段）：实际 {n}");
+        let sl = unsafe { std::slice::from_raw_parts(p, n as usize) }.to_vec();
+        unsafe { crate::ffi::proteus_rects_free(p, n) };
+        // 遮罩段固定在 @208：kind u32 + oA/aA/oB/aB
+        let mk = u32::from_le_bytes([sl[208], sl[209], sl[210], sl[211]]);
+        assert_eq!(mk, 1, "遮罩 kind=1（linear）");
+        let oa = f32::from_le_bytes([sl[212], sl[213], sl[214], sl[215]]);
+        let aa = f32::from_le_bytes([sl[216], sl[217], sl[218], sl[219]]);
+        assert!((oa - 0.3).abs() < 0.02, "半程 oA 应 ≈0.3（实际 {oa}）");
+        assert!((aa - 1.0).abs() < 1e-4, "半程 aA 应 = 1（实际 {aa}）");
+        // stop ⇒ 回声明基态（0 = 全隐）
+        let stop = "{\"all\":true}";
+        unsafe {
+            crate::ffi::proteus_layout_anim_stop(h, std::ffi::CString::new(stop).unwrap().as_ptr())
+        };
+        let r3 = unsafe {
+            proteus_layout_mask_stops(h, std::ffi::CString::new(q.to_string()).unwrap().as_ptr())
+        };
+        let js3 = unsafe { std::ffi::CStr::from_ptr(r3) }.to_string_lossy().to_string();
+        unsafe { proteus_layout_free_string(r3) };
+        let v3: serde_json::Value = serde_json::from_str(&js3).unwrap();
+        assert_eq!(v3["stops"][1].as_f64().unwrap(), 0.0, "stop 后应回基态（全隐）");
+        unsafe { crate::ffi::proteus_layout_destroy(h) };
+    }
+
+    /// 拒绝分支：无遮罩声明时驱动遮罩进度 ⇒ 明确拒绝（含修法）。
+    #[test]
+    fn mask_progress_rejects_without_declaration() {
+        use crate::ffi::{proteus_layout_anim_start, proteus_layout_create};
+        let req = serde_json::json!({
+            "viewport": {"width": 100.0, "height": 100.0},
+            "nodes": [
+                {"id": 1, "width": 100.0, "height": 100.0},
+                {"id": 9, "parentId": 1, "width": 100.0, "height": 100.0}
+            ]
+        });
+        let h = unsafe {
+            proteus_layout_create(std::ffi::CString::new(req.to_string()).unwrap().as_ptr())
+        };
+        let start = serde_json::json!({
+            "anims": [{"nodeId": 9, "kind": 35, "from": 0.0, "to": 1.0, "durMs": 100}]
+        });
+        let r = unsafe {
+            proteus_layout_anim_start(h, std::ffi::CString::new(start.to_string()).unwrap().as_ptr())
+        };
+        let m = unsafe { std::ffi::CStr::from_ptr(r) }.to_string_lossy().to_string();
+        assert!(m.contains("没有遮罩声明"), "应明确拒绝并指原因：{m}");
+        assert!(m.contains("mask"), "应给修法（声明 mask）：{m}");
+        unsafe { crate::ffi::proteus_layout_destroy(h) };
     }
 }

@@ -149,6 +149,10 @@ pub(crate) struct NodeDto {
     /// ★★**渐变填充 B 态**（可选）：与 A 同 kind、同色标个数——两态之间由 `gradientMix` 通道混合。
     #[serde(skip_serializing_if = "Option::is_none")]
     pub(crate) fill_gradient_to: Option<serde_json::Value>,
+    /// ★★**软边遮罩**（2026-10-01 · mask v1）：`{kind, angle|cx/cy/r, softness, progress?}`——
+    ///   见 `style::MaskSpec`（进度驱动的双色标柔化揭示）。
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub(crate) mask: Option<serde_json::Value>,
     /// ★★**发光声明**（2026-10-01 · glow v1）：`{color, radius, alpha}`——分层描边实现
     ///   （见 `style::GlowSpec` 的"为什么不用平台原生"论证）。
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -239,6 +243,7 @@ impl NodeDto {
             fill_gradient_to: None,
             svg_path_to: None,
             glow: None,
+            mask: None,
             text: None,
             is_text: false,
             native_host: false,
@@ -445,6 +450,63 @@ pub(crate) fn style_from_dto(dto: &NodeDto) -> Result<LStyle, String> {
         style.svg_path = Some(final_a);
         style.svg_path_to = Some(final_b);
         style.svg_morph_resampled = resampled;
+    }
+    // ★★软边遮罩（mask v1）：`{kind, angle|cx/cy/r, softness, progress?}`。
+    //   校验失败**明确拒绝**（含修法）——静默的"遮罩不生效"是最难查的一类。
+    if let Some(m) = dto.mask.as_ref() {
+        let kind_s = m
+            .get("kind")
+            .and_then(|x| x.as_str())
+            .ok_or_else(|| "mask 缺少 `kind`（应为 'linear' 或 'radial'）".to_string())?;
+        let kind = match kind_s {
+            "linear" => 1u8,
+            "radial" => 2u8,
+            other => {
+                return Err(format!(
+                    "mask.kind 未知：{other:?}（支持 'linear'（angle）与 'radial'（cx/cy/r））"
+                ))
+            }
+        };
+        let angle = if kind == 1 {
+            m.get("angle")
+                .and_then(|x| x.as_f64())
+                .map(|f| f as f32)
+                .ok_or_else(|| "mask 是 linear 但缺 angle（度；0=向上 90=向右）".to_string())?
+        } else {
+            0.0
+        };
+        let (cx, cy, r) = if kind == 2 {
+            let cx = m.get("cx").and_then(|x| x.as_f64()).unwrap_or(0.5) as f32;
+            let cy = m.get("cy").and_then(|x| x.as_f64()).unwrap_or(0.5) as f32;
+            let r = m.get("r").and_then(|x| x.as_f64()).unwrap_or(0.75) as f32;
+            if !(r > 0.0) {
+                return Err(format!("mask.r 必须为正：{r}（r=0 的径向遮罩不可见）"));
+            }
+            (cx, cy, r)
+        } else {
+            (0.5, 0.5, 0.75)
+        };
+        let softness = m.get("softness").and_then(|x| x.as_f64()).unwrap_or(0.25) as f32;
+        if !softness.is_finite() || !(0.0..=1.0).contains(&softness) {
+            return Err(format!("mask.softness 非法：{softness}（应为 0..1；0 = 硬边）"));
+        }
+        let progress_base = m.get("progress").and_then(|x| x.as_f64()).unwrap_or(1.0) as f32;
+        if !progress_base.is_finite() || !(0.0..=1.0).contains(&progress_base) {
+            return Err(format!(
+                "mask.progress 非法：{progress_base}（应为 0..1；0 = 基态全隐——'未演出'元素的常用声明）"
+            ));
+        }
+        style.mask = Some(crate::style::MaskSpec {
+            kind,
+            angle,
+            cx,
+            cy,
+            r,
+            softness,
+            progress_base,
+        });
+        // ★初值 = 声明基态（此后由 `maskProgress` 通道驱动）
+        style.mask_progress = progress_base;
     }
     // ★★发光（glow v1）：`{color, radius, alpha}` —— 全部字段必填且各自校验（不静默用默认值：
     //   "写了 glow 但少了 radius" 应该报错而不是渲染一个半径为 0 的隐形发光）。
@@ -3538,7 +3600,7 @@ pub unsafe extern "C" fn proteus_layout_anim_tick_bin(handle: u64, dt_ms: f32, o
         //     （iOS `animUpdateRecordBytes` / Android `ANIM_RECORD_BYTES` / SDK `FRAME_UPDATE_BYTES` /
         //     embed-demo 与 `proteus-jni::host`）必须**同批改**——
         //     ★`scripts/check-anim-record-bytes.mjs` 会从本处的写入序列**推出**宽度并与各消费端对账。
-        let mut buf = Vec::with_capacity(out.updates.len() * 208);
+        let mut buf = Vec::with_capacity(out.updates.len() * 228);
         for v in out.updates {
             buf.extend_from_slice(&v.id.to_le_bytes());
             buf.extend_from_slice(&v.tx.to_le_bytes());
@@ -3585,6 +3647,17 @@ pub unsafe extern "C" fn proteus_layout_anim_tick_bin(handle: u64, dt_ms: f32, o
             for i in 0..4 {
                 buf.extend_from_slice(&geo[i].to_le_bytes());
             }
+            // ★★遮罩（mask v1，末尾追加——偏移 @208：kind u32 + [oA,aA,oB,aB] 4×f32 = 20B）
+            //   ★色标是**内核已算好**的揭示结果（`MaskSpec::reveal_stops` 唯一实现）
+            let (mk, mo, ma) = v
+                .mask
+                .map(|(k, o, a)| (k as u32, o, a))
+                .unwrap_or((0, [0.0f32; 2], [0.0f32; 2]));
+            buf.extend_from_slice(&mk.to_le_bytes());
+            buf.extend_from_slice(&mo[0].to_le_bytes());
+            buf.extend_from_slice(&ma[0].to_le_bytes());
+            buf.extend_from_slice(&mo[1].to_le_bytes());
+            buf.extend_from_slice(&ma[1].to_le_bytes());
         }
         Ok(buf)
     });
@@ -3669,6 +3742,61 @@ pub unsafe extern "C" fn proteus_layout_svg_morph_path(
     match r {
         Ok(Ok(s)) => into_c_string(s),
         Ok(Err(e)) => into_c_string(format!("{{\"ok\":false,\"error\":{}}}", serde_json::to_string(&e).unwrap_or_else(|_| "\"?\"".into()))),
+        Err(_) => into_c_string("{\"ok\":false,\"error\":\"内部 panic（已捕获）\"}".to_string()),
+    }
+}
+
+/// ★★**遮罩的当前揭示色标**（mask v1）——入参 `{"nodeId":N}`；
+///   返回 `{"ok":true,"kind":1|2,"stops":[oA,aA,oB,aB]}`。
+///
+/// 【为什么单列一个入口（而不是让宿主自己算）】揭示数学（`MaskSpec::reveal_stops`）
+///   是**唯一实现**——宿主在"建树初值"与"stop 复位"两个时机需要色标，但不该重写那份公式
+///   （本仓铁律：第 N 份手写副本 = 下一个静默缺陷）。逐帧路径仍走 tick（不额外往返）。
+///
+/// # Safety
+/// 返回指针须用 `proteus_layout_free_string` 释放。
+#[no_mangle]
+pub unsafe extern "C" fn proteus_layout_mask_stops(handle: u64, json: *const c_char) -> *mut c_char {
+    let r = std::panic::catch_unwind(|| -> Result<String, String> {
+        if json.is_null() {
+            return Err("入参为空指针".into());
+        }
+        let raw = unsafe { CStr::from_ptr(json) }
+            .to_str()
+            .map_err(|e| format!("入参非 UTF-8：{e}"))?;
+        let v: serde_json::Value =
+            serde_json::from_str(raw).map_err(|e| format!("入参解析失败：{e}"))?;
+        let node_id = v
+            .get("nodeId")
+            .and_then(|x| x.as_u64())
+            .ok_or_else(|| "缺少 nodeId".to_string())? as u32;
+        let reg = registry().lock().map_err(|_| "注册表锁失败".to_string())?;
+        let entry = reg.get(&handle).ok_or_else(|| format!("句柄 {handle} 不存在"))?;
+        let node = entry
+            .tree
+            .nodes
+            .iter()
+            .find(|n| n.id == node_id)
+            .ok_or_else(|| format!("节点 {node_id} 不在树上"))?;
+        let m = node
+            .style
+            .mask
+            .as_ref()
+            .ok_or_else(|| format!("节点 {node_id} 没有遮罩声明（mask）"))?;
+        let (offs, alphas) = m.reveal_stops(node.style.mask_progress);
+        Ok(serde_json::json!({
+            "ok": true,
+            "kind": m.kind,
+            "stops": [offs[0], alphas[0], offs[1], alphas[1]],
+        })
+        .to_string())
+    });
+    match r {
+        Ok(Ok(s)) => into_c_string(s),
+        Ok(Err(e)) => into_c_string(format!(
+            "{{\"ok\":false,\"error\":{}}}",
+            serde_json::to_string(&e).unwrap_or_else(|_| "\"?\"".into())
+        )),
         Err(_) => into_c_string("{\"ok\":false,\"error\":\"内部 panic（已捕获）\"}".to_string()),
     }
 }
