@@ -380,13 +380,18 @@ public class MainActivity extends Activity {
             String hr = appHostRun();
             sb.append(hr).append('\n');
             writeReport("host-runtime.json", hr);
-        } else if ("lights".equals(testPath)) {
-            // ★★Morpheus 炫技场 · **第二个节目（灯光秀）**：800 灯颜色编舞（QuickJS + 内核动画桥）
+        } else if ("lights".equals(testPath) || "flip".equals(testPath)) {
+            // ★★Morpheus 炫技场：第二个节目（灯光秀）/ 第三个节目（翻牌剧场）——同一宿主
             //   与 kernel-anim 同一时序纪律：重活让出主线程后再开演（见上一分支的注释）
-            sb.append("【Morpheus 灯光秀（800 灯颜色编舞 · QuickJS 驱动内核动画）】\n");
+            final boolean isFlip = "flip".equals(testPath);
+            final String prog = isFlip ? "flip" : "lights";
+            final String rep = isFlip ? "flip.json" : "lights.json";
+            sb.append(isFlip
+                    ? "【Morpheus 翻牌剧场（任意缓动 × 3D 翻转 × 循环 × 慢动作）】\n"
+                    : "【Morpheus 灯光秀（800 灯颜色编舞 · QuickJS 驱动内核动画）】\n");
             new android.os.Handler(android.os.Looper.getMainLooper())
-                    .postDelayed(new Runnable() { public void run() { lightsRun(); } }, 300);
-            sb.append("  读数见 lights.json（异步演出；帧循环由宿主 Choreographer 拥有）\n");
+                    .postDelayed(new Runnable() { public void run() { lightsRun(prog, rep, false); } }, 300);
+            sb.append("  读数见 ").append(rep).append("（异步演出；帧循环由宿主 Choreographer 拥有）\n");
         } else if ("shot-scroll-native".equals(testPath)) {
             // ★★z-order 约束下的**滚动同步**验证（方案坑位 #4）
             //   场景：20 行列表，**第 5 行是 native-host（WebView）**；程序驱动滚动到若干位置，
@@ -1336,71 +1341,95 @@ public class MainActivity extends Activity {
      * 【★时序纪律（与 kernel-anim 同款）】整个流程排在 `postDelayed(300)` 里
      *   —— `runAll()` 广播栈退出、主线程空闲后再开演（否则帧循环 vsync 回调被饿死）。
      */
-    private void lightsRun() {
+    private void lightsRun() { lightsRun("lights", "lights.json", false); }
+
+    /**
+     * ★★节目驱动（2026-10-01 · 第三节目）：同一套宿主跑多个节目单。
+     * @param programKind 'lights'（灯光秀）/ 'flip'（翻牌剧场）
+     * @param reportFile  报告名（lights.json / flip.json）
+     * @param loop        循环演出（独立 APK 演示壳用）
+     */
+    private void lightsRun(String programKind, String reportFile, boolean loop) {
+        startProgramShow(this, root, programKind, reportFile, loop);
+    }
+
+    /**
+     * ★★**节目驱动的静态入口**（2026-10-01 · 三个壳共用）：
+     *   测试壳（MainActivity）与两个演示壳（LightsDemoActivity / FlipDemoActivity）都走这里——
+     *   差别只在三个参数（节目名 / 报告名 / 是否循环）。**同一份驱动逻辑，不在壳里复制**。
+     */
+    static void startProgramShow(final android.app.Activity act, final android.view.ViewGroup root,
+                                 final String programKind, final String reportFile, final boolean loop) {
         try {
-            clearSceneViews();
+            // 演示壳没有场景清理（它们是全新 Activity，root 本就空）
+            if (act instanceof MainActivity) ((MainActivity) act).clearSceneViews();
             if (!QuickJsEngine.isAvailable()) {
-                writeReport("lights.json", "{\"ok\":false,\"error\":"
+                writeReportStatic(act, reportFile, "{\"ok\":false,\"error\":"
                         + org.json.JSONObject.quote("JS 引擎未加载：" + QuickJsEngine.getLoadError()) + "}");
                 return;
             }
             String bundle;
-            try (java.io.InputStream is = getAssets().open("bundle-lights.js")) {
+            try (java.io.InputStream is = act.getAssets().open("bundle-lights.js")) {
                 java.io.ByteArrayOutputStream bos = new java.io.ByteArrayOutputStream();
                 byte[] buf = new byte[8192];
                 int n;
                 while ((n = is.read(buf)) > 0) bos.write(buf, 0, n);
                 bundle = new String(bos.toByteArray(), "UTF-8");
             }
-            final android.util.DisplayMetrics dm = getResources().getDisplayMetrics();
-            final LightsHost host = new LightsHost(this, root, dm.density);
-            this.lightsHost = host;
+            final android.util.DisplayMetrics dm = act.getResources().getDisplayMetrics();
+            final LightsHost host = new LightsHost(act, root, dm.density);
+            host.setReportName(reportFile);
+            if (loop) host.setLoopMode(true);
+            if (act instanceof MainActivity) ((MainActivity) act).lightsHost = host;
 
             QuickJsEngine.EvalResult load = QuickJsEngine.evalWithHost(bundle, host);
             if (!load.ok) {
-                writeReport("lights.json", "{\"ok\":false,\"error\":"
+                writeReportStatic(act, reportFile, "{\"ok\":false,\"error\":"
                         + org.json.JSONObject.quote("bundle eval 失败：" + load.error) + "}");
                 return;
             }
-            // ★诊断探针（2026-10-01 · 首跑排障）：bundle 装载后全局状态——确认灯 bundle 是否真的挂上全局
-            try {
-                QuickJsEngine.EvalResult t1 = QuickJsEngine.eval("typeof globalThis.__proteusLightsRun");
-                QuickJsEngine.EvalResult t2 = QuickJsEngine.eval(
-                        "Object.getOwnPropertyNames(globalThis).filter(function(k){return k.indexOf('proteus')>=0}).join(',')");
-                android.util.Log.i("proteus", "lights 探针: bundle_chars=" + bundle.length()
-                        + " load.raw=" + String.valueOf(load.raw).substring(0, Math.min(200, String.valueOf(load.raw).length()))
-                        + " | typeof=" + t1.value + " | globals=[" + t2.value + "]");
-            } catch (Throwable ignored) { /* 诊断不阻演出 */ }
-            // 建树 + 节目单（视口 = 设备屏幕——与既有场景同坐标系）
             org.json.JSONObject args = new org.json.JSONObject();
             args.put("tiles", 800);
             args.put("cols", 20);
+            args.put("program", programKind);
             args.put("viewport", new org.json.JSONObject()
                     .put("width", dm.widthPixels).put("height", dm.heightPixels));
             QuickJsEngine.EvalResult run = QuickJsEngine.eval(
                     "__proteusLightsRun(" + org.json.JSONObject.quote(args.toString()) + ")");
             if (!run.ok) {
-                writeReport("lights.json", "{\"ok\":false,\"error\":"
+                writeReportStatic(act, reportFile, "{\"ok\":false,\"error\":"
                         + org.json.JSONObject.quote("入口调用失败：" + run.error) + "}");
                 return;
             }
-            // plan 转交宿主（报告里"计划 vs 实际"逐项对账）
             try {
                 org.json.JSONObject ro = new org.json.JSONObject(run.value);
                 host.notePlan(ro.optJSONArray("plan") != null ? ro.getJSONArray("plan").toString() : "[]");
-                android.util.Log.i("proteus", "灯光秀已建树：tiles=" + ro.optInt("tiles")
+                android.util.Log.i("proteus", "节目已建树：" + programKind + " tiles=" + ro.optInt("tiles")
                         + " mount_ms=" + ro.optDouble("mount_ms") + " plan=" + ro.optJSONArray("plan"));
             } catch (Throwable ignored) { /* 解析失败 ⇒ plan 空 ⇒ 判据按缺失判红（如实暴露） */ }
-            // 开演（宿主 = 唯一帧驱动）
             host.startShow();
         } catch (Throwable t) {
-            try {
-                writeReport("lights.json", "{\"ok\":false,\"error\":"
-                        + org.json.JSONObject.quote(t.getClass().getSimpleName() + ": " + t.getMessage()) + "}");
-            } catch (Throwable ignored) { /* 保底 */ }
-            android.util.Log.e("proteus", "灯光秀启动失败", t);
+            writeReportStatic(act, reportFile, "{\"ok\":false,\"error\":"
+                    + org.json.JSONObject.quote(t.getClass().getSimpleName() + ": " + t.getMessage()) + "}");
+            android.util.Log.e("proteus", "节目启动失败(" + programKind + ")", t);
         }
     }
+
+    /** 静态版写报告（演示壳没有实例成员） */
+    static void writeReportStatic(android.content.Context ctx, String name, String content) {
+        try {
+            java.io.File d = ctx.getExternalFilesDir(null);
+            java.io.File dir = d != null ? d : ctx.getFilesDir();
+            java.io.File f = new java.io.File(dir, name);
+            java.io.FileOutputStream fos = new java.io.FileOutputStream(f);
+            fos.write(content.getBytes("UTF-8"));
+            fos.close();
+        } catch (Exception e) {
+            android.util.Log.e("proteus", "写报告失败 " + name, e);
+        }
+    }
+
+
 
     /** 灯光秀宿主（诊断/生命周期用） */
     private LightsHost lightsHost = null;

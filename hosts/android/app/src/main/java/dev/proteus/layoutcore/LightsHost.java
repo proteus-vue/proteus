@@ -83,6 +83,13 @@ final class LightsHost {
     private boolean finished = false;
     private long lastFrameNs = 0;
     /**
+     * ★报告名（缺省 lights.json）；翻牌剧场用 flip.json——同一驱动、两个节目
+     *   （2026-10-01：第二个节目把"节目单驱动"做成了可复用宿主，第三个节目直接复用）。
+     */
+    private String reportName = "lights.json";
+
+    void setReportName(String name) { this.reportName = name; }
+    /**
      * ★★**循环演出**（独立 APK 演示模式，2026-10-01）：true ⇒ 演完不 finalize，
      *   调 `__proteusLightsRestart` 重建节目单并从头再演（"点开就一直演"）。
      *   判据模式（广播触发）保持 false ⇒ 演完出报告。
@@ -222,15 +229,24 @@ final class LightsHost {
         return RustLayout.readRects(handle);
     }
 
+    /**
+     * ★★A3 播放控制（2026-10-01 · 第三节目）：`{"timeScale":0.25,"paused":false}` → 回显生效值。
+     * 透传内核 FFI（全局时间因子只影响时间推进——seek/滚动不走全局时钟）。
+     */
+    public String animControl(String json) {
+        if (handle == 0L) return "{\"ok\":false,\"error\":\"未接入核心\"}";
+        return RustLayout.animControl(handle, json == null ? "{}" : json);
+    }
+
     /** 探针（判据"真读宿主真源"）：`[id,…]` → 变换 + 底色 + 文字色（ProteusHostView.animTxProbe） */
     public String probe(String idsJson) {
         if (view == null) return "{\"ok\":false,\"error\":\"未接入视图\"}";
         return view.animTxProbe(idsJson);
     }
 
-    /** 报告落盘（`lights.json`）——由 JS `__proteusLightsFinalize` 调 */
+    /** 报告落盘（`lights.json` / `flip.json`）——由 JS `__proteusLightsFinalize` 调 */
     public void report(String json) {
-        writeReport("lights.json", json);
+        writeReport(reportName, json);
     }
 
     private void writeReport(String name, String content) {
@@ -337,7 +353,7 @@ final class LightsHost {
 
             // ②b ★中途颜色采样（rainbow 幕**进行中** 45% 处——色带最盛；
             //   若放在幕尾，色带已回归基线色 ⇒ 色数偏低，证据变弱）
-            if (act != null && midColors < 0 && "rainbow".equals(act.optString("name"))) {
+            if (act != null && midColors < 0 && act.optBoolean("mid_sample")) {
                 double span = act.optDouble("spanMs", 0);
                 if (span > 0 && actElapsed >= span * 0.45) {
                     int[] s2 = samplePaintedOnly();
@@ -350,7 +366,15 @@ final class LightsHost {
             int active = activeCount();
             if (actAnimEndMs < 0 && active == 0 && actFrames > 1) actAnimEndMs = actElapsed;
             boolean natural = actAnimEndMs >= 0 && actElapsed >= actAnimEndMs + act.optDouble("holdMs", 0);
-            boolean cap = actElapsed > act.optDouble("spanMs", 0) + act.optDouble("holdMs", 0) + 3000;
+            // ★★安全上限**必须感知 timeScale**（2026-10-01 真机抓出）：慢动作幕（timeScale 0.25）
+            //   的墙钟时长是名义的 4×——固定 +3000ms 的窗口会把慢动作幕**强制切走**
+            //   （真机实测：slowmo 被 forced，anim_end 永远到不了）。⇒ 兜底窗口按 1/timeScale 放大。
+            double ts = 1.0;
+            if (act != null && act.optJSONObject("control") != null) {
+                ts = act.optJSONObject("control").optDouble("timeScale", 1.0);
+            }
+            double wallBudget = (act.optDouble("spanMs", 0) + act.optDouble("holdMs", 0)) / Math.max(0.05, ts) + 3000;
+            boolean cap = actElapsed > wallBudget;
             if (natural || cap) {
                 if (cap && !natural) forced = true;
                 recordAct(active);
@@ -390,9 +414,18 @@ final class LightsHost {
             r.put("work_p99", round3(pct(actWork, 99)));
             r.put("work_max", round3(maxOf(actWork)));
             r.put("vsync_p50", round3(pct(actVsync, 50)));
+            // ★逐幕末态探针（2026-10-01 · 第三节目）：把样本牌的变换记进幕读数——
+            //   判据据此断言"翻面终值 180° / 展开终值 -120° / 谢幕回暗"（真读宿主真源）。
+            try {
+                final org.json.JSONObject probe =
+                        new org.json.JSONObject(view != null ? view.animTxProbe("[1000,1001]") : "{}");
+                final org.json.JSONArray ls = probe.optJSONArray("layers");
+                if (ls != null && ls.length() > 0) r.put("probe", ls.optJSONObject(0));
+            } catch (Throwable ignored) { /* 探针失败不阻断演出 */ }
             actsPerf.add(r);
-            // ★中途颜色采样（rainbow = 色带最盛的一幕；此时灯全亮且各色）
-            if ("rainbow".equals(r.optString("name")) && midColors < 0) {
+            // ★中途颜色采样（**节目单显式声明的 midSample 幕**——不再按幕名硬编码；
+            //   翻牌剧场用 reveal 幕、灯光秀用 rainbow 幕，各自都是"颜色最丰富"的一帧）
+            if (act != null && act.optBoolean("mid_sample") && midColors < 0) {
                 int[] sample = samplePaintedOnly();
                 midPainted = sample[0];
                 midColors = sample[1];
@@ -637,7 +670,7 @@ final class LightsHost {
             // ★顺带把定格帧存成 PNG（官网配图 + 目视证据）——失败不影响判定
             if (writePng) {
                 try {
-                    java.io.File png = new java.io.File(reportDir(), "lights-final.png");
+                    java.io.File png = new java.io.File(reportDir(), reportName.replace(".json", "-final.png"));
                     java.io.FileOutputStream fos = new java.io.FileOutputStream(png);
                     bmp.compress(android.graphics.Bitmap.CompressFormat.PNG, 100, fos);
                     fos.close();
