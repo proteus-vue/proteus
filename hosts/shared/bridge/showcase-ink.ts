@@ -251,6 +251,7 @@ export const INK_SAMPLE_IDS: readonly number[] = [
   INK_IDS.moon,
   INK_IDS.bamboo[0][0],
   INK_IDS.rangePuffs[0][0],
+  INK_IDS.reeds[0],
 ]
 
 /* ────────────────────────── 造型（d 的坐标系 = 节点盒 px——与 C2 内核解析同一约定） ────────────────────────── */
@@ -826,21 +827,27 @@ export function buildInkTree(view: View): string {
     const left = R(W * lf)
     const top = R(H * tf)
     const a = 0.9 - i * 0.08
+    // ★★变换原点（transform-origin v1）：**底部中点**（"从根部弯折"——竹的物理直觉：
+    //   根扎在地里不动，梢随风摆）。此前只能绕层中心转（像"凭空旋转"）。
+    const bmbOrigin = { x: 0.5, y: 1.0 }
     nodes.push({
       id: INK_IDS.bamboo[i]![0]!, parentId: INK_IDS.root, position: 'absolute',
       left, top, width: bw, height: bh,
       svgPath: { d: bambooStem(bw, bh), stroke: ink(P.bamboo, a), strokeWidth: sw(0.0062 - i * 0.0012) },
+      transformOrigin: bmbOrigin,
     })
     nodes.push({
       id: INK_IDS.bamboo[i]![1]!, parentId: INK_IDS.root, position: 'absolute',
       left, top, width: bw, height: bh,
       svgPath: { d: bambooLeaves(bw, bh), stroke: ink(P.bamboo, a * 0.72), strokeWidth: sw(0.0048 - i * 0.001) },
+      transformOrigin: bmbOrigin,
     })
     // 第三条 = 竹节的小横（同节点占位——用叶簇 d 的短横变体保持三段式计数）
     nodes.push({
       id: INK_IDS.bamboo[i]![2]!, parentId: INK_IDS.root, position: 'absolute',
       left, top: R(top + H * 0.012), width: bw, height: bh,
       svgPath: { d: bambooLeaves(bw, bh), stroke: ink(P.bamboo, a * 0.4), strokeWidth: sw(0.0022) },
+      transformOrigin: bmbOrigin,
     })
   })
 
@@ -956,6 +963,8 @@ export function buildInkTree(view: View): string {
       id: INK_IDS.reeds[i]!, parentId: INK_IDS.root, position: 'absolute',
       left: R(W * lf), top: R(H * tf), width: rw2, height: rh2,
       svgPath: { d, stroke: ink('#4a6448', 0.55), strokeWidth: sw(0.003) },
+      // ★★变换原点：水草也"从根部弯折"（与竹同一物理直觉）
+      transformOrigin: { x: 0.5, y: 1.0 },
     })
   })
 
@@ -1192,6 +1201,8 @@ export function createInkProgram(_env: { view: View }): InkProgram {
       })
       I.reeds.forEach((id, i) => {
         out.push(...onto(id, { kind: 'strokeProgress', from: 0, to: 1, durationMs: 700, delayMs: 1000 + i * 180, curve: 'easeOut' }))
+        // ★★水草"从根部弯折"（skew v1 + origin 在底部）：与竹同一物理语言
+        out.push(...onto(id, { kind: 'skewX', from: 0, to: (i % 2 === 0 ? 1 : -1) * (5 - i), durationMs: 1600, delayMs: 1200 + i * 180, repeat: 2, direction: 'alternate', curve: 'easeInOut' }))
       })
       return out
     },
@@ -1239,10 +1250,14 @@ export function createInkProgram(_env: { view: View }): InkProgram {
         out.push(...onto(triple[0], { kind: 'strokeProgress', from: 0, to: 1, durationMs: 900, delayMs: dly, curve: 'easeOut' }))
         out.push(...onto(triple[1], { kind: 'strokeProgress', from: 0, to: 1, durationMs: 700, delayMs: dly + 380, curve: 'easeOut' }))
         out.push(...onto(triple[2], { kind: 'strokeProgress', from: 0, to: 1, durationMs: 600, delayMs: dly + 620, curve: 'easeOut' }))
-        // 风摆：同一棵的三条笔触**同相**（整体轻摆——不同相会把竹"撕开"）
+        // ★★风摆（skew v1 的第一处真实用法）：**从根部弯折**（transformOrigin 在底部）——
+        //   倾斜角 ±(4−i)°（外棵弯得多）+ 轻微平移（±2px，梢头位移感）——
+        //   此前只有整体平移（"竹在滑"而不是"竹在弯"，物理直觉差最明显的一处）。
+        //   ★同一棵的三条笔触**同相**（不同相会把竹"撕开"）。
         const dir = i % 2 === 0 ? 1 : -1
         for (const id of triple) {
-          out.push(...onto(id, { kind: 'translateX', from: 0, to: dir * (5 - i), durationMs: 1500, delayMs: 1100, repeat: 2, direction: 'alternate', curve: 'easeInOut' }))
+          out.push(...onto(id, { kind: 'skewX', from: 0, to: dir * (4 - i), durationMs: 1500, delayMs: 1100, repeat: 2, direction: 'alternate', curve: 'easeInOut' }))
+          out.push(...onto(id, { kind: 'translateX', from: 0, to: dir * (2 - i * 0.5), durationMs: 1500, delayMs: 1100, repeat: 2, direction: 'alternate', curve: 'easeInOut' }))
         }
       })
       return out

@@ -570,6 +570,7 @@ final class SelfDrawView: UIView {
         layerGlowSpec.removeAll(keepingCapacity: true)
         // ★★遮罩层同款成对清理（与描边/渐变/发光同一教训）
         layerMasks.removeAll(keepingCapacity: true)
+        layerTransformOrigin.removeAll(keepingCapacity: true)
         parentById.removeAll(keepingCapacity: true)
         childrenById.removeAll(keepingCapacity: true)
         builtFrames.removeAll(keepingCapacity: true)
@@ -625,6 +626,12 @@ final class SelfDrawView: UIView {
         // ★B 批 3D：透视快照（建层时读一次——动画期 applyTransform 只查表，不回读树样式）
         if let d = style["perspective"] as? CGFloat, d > 0 {
             layerPerspective[nodeId] = d
+        }
+        // ★★变换原点快照（transform-origin v1：同款"建层读一次"纪律）
+        if let o = style["transformOrigin"] as? [String: Any],
+           let ox = (o["x"] as? Double) ?? (o["x"] as? CGFloat).map(Double.init),
+           let oy = (o["y"] as? Double) ?? (o["y"] as? CGFloat).map(Double.init) {
+            layerTransformOrigin[nodeId] = CGPoint(x: ox, y: oy)
         }
         // ★★C2：SVG 描边的**建层**走 `attachSvgStroke(fromKernelPaths:)`（全量挂载后调用）——
         //   段列表**只能从内核拿**（解析在内核；请求树里只有 `d` 字符串——见内核
@@ -875,6 +882,10 @@ final class SelfDrawView: UIView {
             //   ★诚实边界：多轴+Z 旋转复合时读数会耦合（数值如实，不做伪单轴分解）。
             let rotateXDeg = atan2(t.m23, t.m22) * 180 / .pi
             let rotateYDeg = atan2(t.m31, t.m33) * 180 / .pi
+            // ★★倾斜（skew v1）：**层矩阵反解**（m21 = tan(skewX) / m12 = tan(skewY)——
+            //   与 Android Canvas.skew 同式）——判据据此断言"倾斜真的落到层上"
+            let skewXDeg = atan(Double(t.m21)) * 180 / .pi
+            let skewYDeg = atan(Double(t.m12)) * 180 / .pi
             // ★★C1：**真读**裁剪遮罩的路径包围盒（判据据此断言"形变真的落到层上"——
             //   不回显我们写入的参数；bbox 是 CoreGraphics 对 path 的实际计算结果）。
             var clipBox = ""
@@ -943,6 +954,7 @@ final class SelfDrawView: UIView {
             parts.append(
                 "{\"id\":\(id),\"tx\":\(t.m41),\"ty\":\(t.m42),\"scale\":\(t.m11),"
                     + "\"rotate\":\(rotateDeg),\"rotateX\":\(rotateXDeg),\"rotateY\":\(rotateYDeg),"
+                    + "\"skewX\":\(skewXDeg),\"skewY\":\(skewYDeg),"
                     + "\"opacity\":\(layer.opacity),\"bg\":\"\(bgStr)\","
                     + "\"textColor\":\"\(textStr)\",\"clipBox\":\"\(clipBox)\","
                     + "\"strokeEnd\":\(strokeEndV),\"subLayers\":\(subCount),"
@@ -999,6 +1011,8 @@ final class SelfDrawView: UIView {
     private(set) var layerOriginalTextColor: [Int: CGColor] = [:]
     /// ★★**透视距离快照**（B 批 3D；建层时从树样式读一次——动画期只读不查树）
     private(set) var layerPerspective: [Int: CGFloat] = [:]
+    /// ★★**变换原点快照**（transform-origin v1）：盒分数（缺省 0.5/0.5 = 层中心）
+    private(set) var layerTransformOrigin: [Int: CGPoint] = [:]
     /**
      * ★★**裁剪形状快照**（C1；建层时从树样式读一次）——`(kind, params16)`。
      * kind：1=inset 2=circle 3=polygon（与内核 `LStyle.clip_kind` 同编码）；
@@ -1240,6 +1254,8 @@ final class SelfDrawView: UIView {
     func applyTransform(
         nodeId: Int, tx: CGFloat, ty: CGFloat, scale: CGFloat,
         rotate: CGFloat = 0, rotateX: CGFloat = 0, rotateY: CGFloat = 0,
+        // ★★skew v1（2026-10-01）：倾斜（度；`x' = x + tan(skewX)·y`——CSS skewX 同式）
+        skewX: CGFloat = 0, skewY: CGFloat = 0,
         opacity: CGFloat = 1,
         rgba: UInt32? = nil, textRgba: UInt32? = nil,
         // ★★C1：裁剪参数（16 槽；nil = 本节点无裁剪声明 —— 不做任何遮罩操作）
@@ -1253,8 +1269,15 @@ final class SelfDrawView: UIView {
         //   `perspective`（建层时快照在 `layerPerspective`——见 makeLayer）。
         var t = CATransform3DTranslate(CATransform3DIdentity, tx, ty, 0)
         let b = layer.bounds
-        if scale != 1.0 || rotate != 0 || rotateX != 0 || rotateY != 0 {
-            t = CATransform3DTranslate(t, b.midX, b.midY, 0)
+        if scale != 1.0 || rotate != 0 || rotateX != 0 || rotateY != 0 || skewX != 0 || skewY != 0 {
+            // ★★变换原点（transform-origin v1）：旋转/缩放/倾斜/3D **全部**绕它——
+            //   缺省 (0.5, 0.5) = 层中心（既有行为零变化）；放底部（0.5, 1.0）= "从根部弯折"。
+            //   ★为什么在宿主解：宿主是**执行变换的那一端**（内核只透传语义——它不算矩阵）。
+            //   ★快照在 `layerTransformOrigin`（建层时从树样式读一次——与 perspective 同一形态）。
+            let org = layerTransformOrigin[nodeId] ?? CGPoint(x: 0.5, y: 0.5)
+            let px = b.width * org.x
+            let py = b.height * org.y
+            t = CATransform3DTranslate(t, px, py, 0)
             if rotate != 0 {
                 t = CATransform3DRotate(t, rotate * .pi / 180, 0, 0, 1) // 度 → 弧度
             }
@@ -1265,10 +1288,23 @@ final class SelfDrawView: UIView {
             if rotateY != 0 {
                 t = CATransform3DRotate(t, rotateY * .pi / 180, 0, 1, 0)
             }
+            // ★★倾斜（skew v1）：CGAffineTransform 的 shear 语义（`x' = x + tan·y`）——
+            //   CATransform3D 没有现成 skew ⇒ 自组 shear 矩阵（m21 = tan(skewX) / m12 = tan(skewY)）。
+            //   ★与 Android `Canvas.skew(tan(sx), tan(sy))` **同式**（跨端一致的依据：数学同式）。
+            if skewX != 0 || skewY != 0 {
+                var sh = CATransform3DIdentity
+                if skewX != 0 {
+                    sh.m21 = tan(skewX * .pi / 180)
+                }
+                if skewY != 0 {
+                    sh.m12 = tan(skewY * .pi / 180)
+                }
+                t = CATransform3DConcat(t, sh)
+            }
             if scale != 1.0 {
                 t = CATransform3DScale(t, scale, scale, 1)
             }
-            t = CATransform3DTranslate(t, -b.midX, -b.midY, 0)
+            t = CATransform3DTranslate(t, -px, -py, 0)
             // ★透视（CSS `perspective(d)` 语义：m34 = -1/d；只有带透视的层才不是正交投影）
             if let d = layerPerspective[nodeId], rotateX != 0 || rotateY != 0 {
                 t.m34 = -1.0 / d
@@ -4212,7 +4248,7 @@ final class SelfDrawBridge: NSObject, SelfDrawExports {
     ///     两端宿主 / SDK / embed-demo 的常量必须与它同批更新（本仓历史上因两处各写步长
     ///     而错位解析过：24B 记录被按 16B 读 ⇒ 层上留下错位残值）。
     ///     `scripts/check-anim-record-bytes.mjs` 从内核推出宽度并与各消费端对账。
-    private static let animUpdateRecordBytes = 228
+    private static let animUpdateRecordBytes = 236
 
     /// ★★**每帧推进的唯一解析点**（探针 / 帧循环两条入口共用）
     ///
@@ -4261,7 +4297,11 @@ final class SelfDrawBridge: NSObject, SelfDrawExports {
             if glowRaw.isFinite {
                 view?.applyGlowTick(nodeId: Int(nodeId), intensity: glowRaw)
             }
-            // ★★软边遮罩（mask v1，@208：kind u32 + oA/aA/oB/aB 4×f32——228B 记录）：
+            // ★★倾斜（skew v1，@228/@232：2×f32——236B 记录，在遮罩段**之后**）
+            //   ★顺序纪律（见下方遮罩段的注释）：读取顺序必须与内核写入顺序逐字节一致。
+            let skewX = buf.loadUnaligned(fromByteOffset: base + 228, as: Float.self)
+            let skewY = buf.loadUnaligned(fromByteOffset: base + 232, as: Float.self)
+            // ★★软边遮罩（mask v1，@208：kind u32 + oA/aA/oB/aB 4×f32——236B 记录）：
             //   揭示色标是**内核已算好**的结果（宿主零数学）；变化时重建 mask 层的渐变。
             let mKind = buf.loadUnaligned(fromByteOffset: base + 208, as: UInt32.self)
             if mKind != 0 {
@@ -4307,6 +4347,7 @@ final class SelfDrawBridge: NSObject, SelfDrawExports {
             if view?.applyTransform(
                 nodeId: Int(nodeId), tx: CGFloat(tx), ty: CGFloat(ty), scale: CGFloat(sc),
                 rotate: CGFloat(rot), rotateX: CGFloat(rotateX), rotateY: CGFloat(rotateY),
+                skewX: CGFloat(skewX), skewY: CGFloat(skewY),
                 opacity: CGFloat(op),
                 rgba: rgba == UInt32.max ? nil : rgba,
                 textRgba: textRgba == UInt32.max ? nil : textRgba,

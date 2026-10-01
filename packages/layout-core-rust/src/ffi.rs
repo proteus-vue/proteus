@@ -149,6 +149,10 @@ pub(crate) struct NodeDto {
     /// ★★**渐变填充 B 态**（可选）：与 A 同 kind、同色标个数——两态之间由 `gradientMix` 通道混合。
     #[serde(skip_serializing_if = "Option::is_none")]
     pub(crate) fill_gradient_to: Option<serde_json::Value>,
+    /// ★★**变换原点**（2026-10-01 · transform-origin v1）：`{x, y}`——**盒分数**（0.5,0.5 = 中心）。
+    ///   旋转/缩放/倾斜/3D 全部绕它发生（宿主是执行变换的一端——内核只透传语义）。
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub(crate) transform_origin: Option<serde_json::Value>,
     /// ★★**软边遮罩**（2026-10-01 · mask v1）：`{kind, angle|cx/cy/r, softness, progress?}`——
     ///   见 `style::MaskSpec`（进度驱动的双色标柔化揭示）。
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -244,6 +248,7 @@ impl NodeDto {
             svg_path_to: None,
             glow: None,
             mask: None,
+            transform_origin: None,
             text: None,
             is_text: false,
             native_host: false,
@@ -450,6 +455,18 @@ pub(crate) fn style_from_dto(dto: &NodeDto) -> Result<LStyle, String> {
         style.svg_path = Some(final_a);
         style.svg_path_to = Some(final_b);
         style.svg_morph_resampled = resampled;
+    }
+    // ★★变换原点（transform-origin v1）：`{x, y}` 盒分数。非有限 ⇒ 明确拒绝（不静默用中心）。
+    if let Some(o) = dto.transform_origin.as_ref() {
+        let ox = o.get("x").and_then(|v| v.as_f64()).unwrap_or(0.5) as f32;
+        let oy = o.get("y").and_then(|v| v.as_f64()).unwrap_or(0.5) as f32;
+        if !ox.is_finite() || !oy.is_finite() {
+            return Err(format!(
+                "transformOrigin 非法：x={ox}, y={oy}（应为有限的**盒分数**，如 {{x:0.5,y:1.0}} = 底部中点）"
+            ));
+        }
+        style.transform_origin_x = ox;
+        style.transform_origin_y = oy;
     }
     // ★★软边遮罩（mask v1）：`{kind, angle|cx/cy/r, softness, progress?}`。
     //   校验失败**明确拒绝**（含修法）——静默的"遮罩不生效"是最难查的一类。
@@ -3600,7 +3617,7 @@ pub unsafe extern "C" fn proteus_layout_anim_tick_bin(handle: u64, dt_ms: f32, o
         //     （iOS `animUpdateRecordBytes` / Android `ANIM_RECORD_BYTES` / SDK `FRAME_UPDATE_BYTES` /
         //     embed-demo 与 `proteus-jni::host`）必须**同批改**——
         //     ★`scripts/check-anim-record-bytes.mjs` 会从本处的写入序列**推出**宽度并与各消费端对账。
-        let mut buf = Vec::with_capacity(out.updates.len() * 228);
+        let mut buf = Vec::with_capacity(out.updates.len() * 236);
         for v in out.updates {
             buf.extend_from_slice(&v.id.to_le_bytes());
             buf.extend_from_slice(&v.tx.to_le_bytes());
@@ -3658,6 +3675,9 @@ pub unsafe extern "C" fn proteus_layout_anim_tick_bin(handle: u64, dt_ms: f32, o
             buf.extend_from_slice(&ma[0].to_le_bytes());
             buf.extend_from_slice(&mo[1].to_le_bytes());
             buf.extend_from_slice(&ma[1].to_le_bytes());
+            // ★★倾斜（skew v1，末尾追加——偏移 @228/@232：2×f32 = skewX/skewY 度）
+            buf.extend_from_slice(&v.skew_x.to_le_bytes());
+            buf.extend_from_slice(&v.skew_y.to_le_bytes());
         }
         Ok(buf)
     });

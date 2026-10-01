@@ -597,7 +597,9 @@ final class LightsHost {
             // ★★发光 v1（glow）：静态规格（色/半径/强度）——漏 ⇒ 宿主不发光（内核照常收）
             "glow",
             // ★★软边遮罩 v1（mask）：静态规格（类型/几何/柔度/基态）——漏 ⇒ 宿主无遮罩
-            "mask"));
+            "mask",
+            // ★★变换原点 v1（transformOrigin）：漏 ⇒ 所有旋转绕中心（"绕错点转"是最难查的一类）
+            "transformOrigin"));
 
     /** 缺省字号（**布局单位** = px，与本场景 viewport 同坐标系） */
     private static final double DEFAULT_FONT_UNITS = 14.0;
@@ -754,6 +756,12 @@ final class LightsHost {
                             (float) mo.optDouble("softness", 0.25),
                             (float) mo.optDouble("progress", 1.0)};
                 }
+            }
+            // ★★变换原点 v1：注入宿主（盒分数；缺省不注入 = 中心——既有行为零变化）
+            org.json.JSONObject torig = spec.optJSONObject("transformOrigin");
+            if (torig != null) {
+                view.setNodeTransformOrigin(id,
+                        (float) torig.optDouble("x", 0.5), (float) torig.optDouble("y", 0.5));
             }
             cmds.add(new ProteusHostView.Cmd(
                     (float) r.getDouble("x"), (float) r.getDouble("y"),

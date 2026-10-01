@@ -336,6 +336,14 @@ pub enum AnimKind {
     ///   ★与 clip 互补：clip 是硬边裁剪、遮罩是软边渐隐——两者**可组合**（内核不管组合，
     ///     宿主各自实现：iOS 嵌套 mask / Android saveLayer+DST_IN ⇄ clipPath 天然叠加）。
     MaskProgress = 35,
+    /// ★★**倾斜 X**（2026-10-01 · skew v1；度）：`x' = x + tan(skewX)·y`（CSS `skewX` 同式）。
+    ///   【为什么走 tick 而不是合成】（与 rotateX/Y 同一条推理）两端的"倾斜"都不是**一等属性**：
+    ///   Android `View` 没有 `setSkewX`（只能走 `Matrix`）、iOS `CALayer` 也没有倾斜属性
+    ///   （只能自组 shear 矩阵）⇒ 平台插值器无从谈起 ⇒ 统一内核逐帧求值 + 宿主组矩阵。
+    ///   ★锚点 = `transform_origin`（默认层中心）——"从根部弯折"= origin 放底部。
+    SkewX = 36,
+    /// ★★**倾斜 Y**（度）：`y' = y + tan(skewY)·x`（CSS `skewY` 同式）
+    SkewY = 37,
 }
 
 impl AnimKind {
@@ -377,6 +385,8 @@ impl AnimKind {
             33 => AnimKind::PathMorph,
             34 => AnimKind::GlowIntensity,
             35 => AnimKind::MaskProgress,
+            36 => AnimKind::SkewX,
+            37 => AnimKind::SkewY,
             other => {
                 return Err(format!(
                     "未知动画属性 kind={other}（0=translateX/1=translateY/2=scale/3=rotate/4=opacity/\
@@ -426,6 +436,8 @@ impl AnimKind {
             AnimKind::PathMorph => "pathMorph",
             AnimKind::GlowIntensity => "glowIntensity",
             AnimKind::MaskProgress => "maskProgress",
+            AnimKind::SkewX => "skewX",
+            AnimKind::SkewY => "skewY",
         }
     }
 
@@ -452,6 +464,11 @@ impl AnimKind {
     /// 是否 **遮罩进度通道**（mask v1，35）
     pub fn is_mask_progress(self) -> bool {
         matches!(self, AnimKind::MaskProgress)
+    }
+
+    /// 是否 **倾斜通道**（skew v1，36/37）
+    pub fn is_skew(self) -> bool {
+        matches!(self, AnimKind::SkewX | AnimKind::SkewY)
     }
 
     /// 是否 **clip 形状参数通道**（15..30）——对应槽位 = kind - 15
@@ -550,7 +567,9 @@ impl AnimKind {
             | AnimKind::GradientMix
             | AnimKind::PathMorph
             | AnimKind::GlowIntensity
-            | AnimKind::MaskProgress => 0,
+            | AnimKind::MaskProgress
+            | AnimKind::SkewX
+            | AnimKind::SkewY => 0,
         }
     }
 
@@ -564,6 +583,8 @@ impl AnimKind {
             AnimKind::Rotate => (0.05, 1.0),                            // 度, 度/s
             // ★3D 旋转与 Z 旋转同量纲（度）——同一阈值
             AnimKind::RotateX | AnimKind::RotateY => (0.05, 1.0),       // 度, 度/s
+            // ★倾斜同为"度"量纲（tan 前的角度）——同一阈值
+            AnimKind::SkewX | AnimKind::SkewY => (0.05, 1.0),           // 度, 度/s
             // ★clip 参数是**盒分数**（0..1 量纲）——与 scale 同量纲，同阈值
             AnimKind::Clip0
             | AnimKind::Clip1
@@ -658,6 +679,9 @@ impl AnimKind {
             // ★★遮罩进度（mask v1）：改的是**合成状态**（layer.mask / saveLayer+DST_IN）——
             //   非合成，走 tick。
             AnimKind::MaskProgress => false,
+            // ★★倾斜（skew v1）：两端都不是"一等属性"（Android 无 setSkewX / iOS 无倾斜属性
+            //   ——只能自组 shear 矩阵）⇒ 平台插值器无从谈起 ⇒ 统一 tick（见 enum 注释）。
+            AnimKind::SkewX | AnimKind::SkewY => false,
             AnimKind::ColorR
             | AnimKind::ColorG
             | AnimKind::ColorB
@@ -763,6 +787,8 @@ impl AnimKind {
                 AnimKind::Opacity => &mut node.style.opacity,
                 AnimKind::RotateX => &mut node.style.rotate_x,
                 AnimKind::RotateY => &mut node.style.rotate_y,
+                AnimKind::SkewX => &mut node.style.skew_x,
+                AnimKind::SkewY => &mut node.style.skew_y,
                 // clip 通道走上面的早退分支（见 write 开头）；此处不可达
                 AnimKind::Clip0
                 | AnimKind::Clip1
@@ -1146,6 +1172,8 @@ pub fn reset_visuals(tree: &mut LayoutTree, node_ids: &[u32]) -> usize {
                 || s.rotate != 0.0
                 || s.rotate_x != 0.0
                 || s.rotate_y != 0.0
+                || s.skew_x != 0.0
+                || s.skew_y != 0.0
                 || s.opacity != 1.0
                 || color_dirty
                 || clip_dirty
@@ -1161,6 +1189,8 @@ pub fn reset_visuals(tree: &mut LayoutTree, node_ids: &[u32]) -> usize {
                 s.rotate = 0.0;
                 s.rotate_x = 0.0;   // ★B 批 3D：与 rotate 同一义务
                 s.rotate_y = 0.0;
+                s.skew_x = 0.0;     // ★skew v1：同义务
+                s.skew_y = 0.0;
                 s.clip = s.clip_base; // ★C1：裁剪参数回基态（与颜色回底色同一条"解绑含清值"）
                 s.stroke_progress = 0.0; // ★C2：描边进度回 0（未画）
                 if let Some(g) = s.grad.as_mut() {
@@ -1346,10 +1376,13 @@ pub fn commit_specs(tree: &LayoutTree, anims: &[Anim]) -> Vec<CommitSpec> {
                     // ★路径变形（v1）：同理不可达。
                     // ★发光强度（glow v1）：同理不可达。
                     // ★遮罩进度（mask v1）：同理不可达。
+                    // ★倾斜（skew v1）：commit 是"五元组平台路径"——同理不可达。
                     | AnimKind::GradientMix
                     | AnimKind::PathMorph
                     | AnimKind::GlowIntensity
-                    | AnimKind::MaskProgress => {}
+                    | AnimKind::MaskProgress
+                    | AnimKind::SkewX
+                    | AnimKind::SkewY => {}
                 }
             }
             samples.push(v);
@@ -1397,10 +1430,13 @@ pub fn commit_specs(tree: &LayoutTree, anims: &[Anim]) -> Vec<CommitSpec> {
                     // ★路径变形（v1）：同理不可达。
                     // ★发光强度（glow v1）：同理不可达。
                     // ★遮罩进度（mask v1）：同理不可达。
+                    // ★倾斜（skew v1）：commit 是"五元组平台路径"——同理不可达。
                     | AnimKind::GradientMix
                     | AnimKind::PathMorph
                     | AnimKind::GlowIntensity
-                    | AnimKind::MaskProgress => {}
+                    | AnimKind::MaskProgress
+                    | AnimKind::SkewX
+                    | AnimKind::SkewY => {}
                 }
             }
             let n = samples.len();
@@ -1470,6 +1506,9 @@ pub struct NodeVisual {
     /// ★★3D 旋转（2026-10-01 · B 批；度）——走 tick 路径（见 `is_composited` 注释）
     pub rotate_x: f32,
     pub rotate_y: f32,
+    /// ★★倾斜（skew v1；度）——走 tick（见 `AnimKind::SkewX` 注释）
+    pub skew_x: f32,
+    pub skew_y: f32,
     pub opacity: f32,
     /// ★颜色（2026-10-01）：打包 `0xAARRGGBB`；`None` = 本节点无内核底色
     ///   （宿主保持自己的静态绘制——见 `LStyle.bg` 注释）
@@ -1781,6 +1820,8 @@ impl AnimEngine {
                 || s.rotate != 0.0
                 || s.rotate_x != 0.0   // ★B 批 3D：与 rotate 同一义务（见 reset_visuals 注释）
                 || s.rotate_y != 0.0
+                || s.skew_x != 0.0     // ★skew v1：同义务
+                || s.skew_y != 0.0
                 || s.opacity != 1.0
                 || color_dirty
                 || clip_dirty
@@ -1796,6 +1837,8 @@ impl AnimEngine {
                 s.rotate = 0.0;
                 s.rotate_x = 0.0;
                 s.rotate_y = 0.0;
+                s.skew_x = 0.0;        // ★skew v1
+                s.skew_y = 0.0;
                 s.clip = s.clip_base; // ★C1：裁剪参数回基态
                 s.stroke_progress = 0.0; // ★C2：描边进度回 0
                 if let Some(g) = s.grad.as_mut() {
@@ -2170,6 +2213,8 @@ impl AnimEngine {
                 rotate: node.style.rotate,
                 rotate_x: node.style.rotate_x,
                 rotate_y: node.style.rotate_y,
+                skew_x: node.style.skew_x,
+                skew_y: node.style.skew_y,
                 opacity: node.style.opacity,
                 // ★颜色：`bg` 优先（动画写过），否则回底色（未被动过的节点也报得出真值）
                 bg: node.style.bg.or(node.style.bg_base),
@@ -3161,6 +3206,86 @@ mod tests {
             ch(c0c, 16)
         );
         unsafe { crate::ffi::proteus_layout_destroy(h) };
+    }
+
+    /// ★★倾斜（skew v1）：写入/复位 + 记录段（@228）——"从根部弯折"的数据通路。
+    #[test]
+    fn skew_writes_reports_and_resets() {
+        use crate::ffi::{proteus_layout_create, proteus_layout_anim_start, proteus_layout_anim_tick_bin};
+        let req = serde_json::json!({
+            "viewport": {"width": 100.0, "height": 100.0},
+            "nodes": [
+                {"id": 1, "width": 100.0, "height": 100.0},
+                // 从根部弯折的典型声明：origin 在底部中点
+                {"id": 9, "parentId": 1, "width": 20.0, "height": 60.0,
+                 "transformOrigin": {"x": 0.5, "y": 1.0},
+                 "backgroundColor": "#335544"}
+            ]
+        });
+        let h = unsafe {
+            proteus_layout_create(std::ffi::CString::new(req.to_string()).unwrap().as_ptr())
+        };
+        assert!(h > 0, "带 transformOrigin 应建树成功");
+        let start = serde_json::json!({
+            "anims": [
+                {"nodeId": 9, "kind": 36, "from": 0.0, "to": 12.0, "durMs": 100, "curve": 0},
+                {"nodeId": 9, "kind": 37, "from": 0.0, "to": 3.0, "durMs": 100, "curve": 0}
+            ]
+        });
+        let r = unsafe {
+            proteus_layout_anim_start(h, std::ffi::CString::new(start.to_string()).unwrap().as_ptr())
+        };
+        let msg = unsafe { std::ffi::CStr::from_ptr(r) }.to_string_lossy().to_string();
+        assert!(msg.contains("\"ok\":true"), "倾斜动画应被受理：{msg}");
+        let mut n: u32 = 0;
+        let p = unsafe { proteus_layout_anim_tick_bin(h, 50.0, &mut n) };
+        assert!(n >= 236, "记录应 ≥236B（含倾斜段）：实际 {n}");
+        let sl = unsafe { std::slice::from_raw_parts(p, n as usize) }.to_vec();
+        unsafe { crate::ffi::proteus_rects_free(p, n) };
+        // 倾斜段固定在 @228/@232（末尾追加——既有偏移全不变）
+        let sx = f32::from_le_bytes([sl[228], sl[229], sl[230], sl[231]]);
+        let sy = f32::from_le_bytes([sl[232], sl[233], sl[234], sl[235]]);
+        assert!((sx - 6.0).abs() < 0.05, "半程 skewX 应 ≈6（0→12 中点），实际 {sx}");
+        assert!((sy - 1.5).abs() < 0.05, "半程 skewY 应 ≈1.5，实际 {sy}");
+        // stop ⇒ 回 0（"解绑必须含清值"）
+        let stop = "{\"all\":true}";
+        unsafe {
+            crate::ffi::proteus_layout_anim_stop(h, std::ffi::CString::new(stop).unwrap().as_ptr())
+        };
+        // 复位后再起一条恒 0 的动画读回（无更新 = 已是 0：与渐变同款判据设计）
+        let keep = serde_json::json!({
+            "anims": [{"nodeId": 9, "kind": 36, "from": 0.0, "to": 1.0, "durMs": 100,
+                       "curve": 0, "takeover": false}]
+        });
+        unsafe {
+            proteus_layout_anim_start(h, std::ffi::CString::new(keep.to_string()).unwrap().as_ptr())
+        };
+        let mut n0: u32 = 0;
+        let p0 = unsafe { proteus_layout_anim_tick_bin(h, 0.0, &mut n0) };
+        if !p0.is_null() {
+            unsafe { crate::ffi::proteus_rects_free(p0, n0) };
+        }
+        assert_eq!(n0, 0, "stop 后 skewX 应已回 0（写 from=0 不应产生更新）");
+        unsafe { crate::ffi::proteus_layout_destroy(h) };
+    }
+
+    /// ★★transformOrigin 拒绝分支：非有限 ⇒ 明确拒绝（不静默用中心——那会"看起来能跑但绕错点转"）。
+    #[test]
+    fn transform_origin_rejects_non_finite() {
+        use crate::ffi::proteus_layout_create;
+        let bad = serde_json::json!({
+            "viewport": {"width": 100.0, "height": 100.0},
+            "nodes": [
+                {"id": 1, "width": 100.0, "height": 100.0},
+                {"id": 9, "parentId": 1, "width": 20.0, "height": 20.0,
+                 "transformOrigin": {"x": 0.5, "y": 1e40}}
+            ]
+        });
+        // 1e40 as f64 → f32 溢出为 inf ⇒ 应拒绝
+        let h = unsafe {
+            proteus_layout_create(std::ffi::CString::new(bad.to_string()).unwrap().as_ptr())
+        };
+        assert_eq!(h, 0, "非有限 origin 应拒绝建树");
     }
 
     /// ★★渐变**几何**动画（v2 扩展）：径向 `r` 扩散的**混合数学钉值**（"光本身在动"）。

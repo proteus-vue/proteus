@@ -65,6 +65,10 @@ export const AnimKind = {
   GLOW_INTENSITY: 34,
   /** ★★遮罩进度（2026-10-01 · mask v1）：0..1 = 软边揭示的进度（0=全隐 / 1=全显） */
   MASK_PROGRESS: 35,
+  /** ★★倾斜 X（2026-10-01 · skew v1；度） */
+  SKEW_X: 36,
+  /** ★★倾斜 Y（2026-10-01 · skew v1；度） */
+  SKEW_Y: 37,
 } as const
 export type AnimKindId = (typeof AnimKind)[keyof typeof AnimKind]
 export type AnimKindName =
@@ -97,6 +101,11 @@ export type AnimKindName =
   /** ★★遮罩进度（2026-10-01 · mask v1；规格在树里声明为 `mask`；走 tick 路径）
    *  ★与 clip 互补：clip 是硬边裁剪、遮罩是软边渐隐（"从雾里渗开"） */
   | 'maskProgress'
+  /** ★★倾斜 X（2026-10-01 · skew v1；`x' = x + tan(skewX)·y`；走 tick 路径）
+   *  ★配 `transformOrigin`（默认 0.5,0.5）——放底部 = "从根部弯折" */
+  | 'skewX'
+  /** ★★倾斜 Y（2026-10-01 · skew v1；`y' = y + tan(skewY)·x`） */
+  | 'skewY'
 
 /** 名称 → 编号（编译期用；也是"名字写错"的**类型级**防线） */
 export const ANIM_KIND_ID: Record<AnimKindName, AnimKindId> = {
@@ -127,6 +136,9 @@ export const ANIM_KIND_ID: Record<AnimKindName, AnimKindId> = {
   glowIntensity: AnimKind.GLOW_INTENSITY,
   // ★遮罩进度是**单通道**（35——与内核同号）
   maskProgress: AnimKind.MASK_PROGRESS,
+  // ★倾斜是**两条单通道**（36/37——与内核同号；X/Y 各一条：可独立动或一起动）
+  skewX: AnimKind.SKEW_X,
+  skewY: AnimKind.SKEW_Y,
 }
 
 /** 曲线（与内核 `CURVE_*` 一一对应——**不得改号**） */
@@ -200,6 +212,20 @@ export const CURVE_ID: Record<CurveName, CurveId> = {
   easeIn: Curve.EASE_IN,
   easeInOut: Curve.EASE_IN_OUT,
   springApprox: Curve.SPRING_APPROX,
+}
+
+/**
+ * ★★**变换原点**（transform-origin v1 · 2026-10-01）：**盒分数**——
+ * `{x: 0.5, y: 1.0}` = 底部中点（"从根部弯折"）；缺省 `{0.5, 0.5}` = 层中心（CSS 同规）。
+ *
+ * 【它解决什么】此前旋转/缩放**只能绕层中心**——"门轴旋转""从根部弯折""从角落放大"
+ *   这类演出做不到。CSS 有 `transform-origin`，而不少跨端框架对它的边界处理有坑
+ *   （负值/超界/与缩放组合）——本引擎把它作为**内核透传的静态样式**（宿主是执行变换的一端）。
+ * ★诚实边界：v1 **不可动画**（CSS 允许 —— 但极少用；要动它请另立需求）。
+ */
+export interface TransformOrigin {
+  x: number
+  y: number
 }
 
 /** 弹簧参数（与内核 `SpringParams` 同参数化：Flutter `SpringDescription` 家族） */

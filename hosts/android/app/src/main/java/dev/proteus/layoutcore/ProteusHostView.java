@@ -174,6 +174,14 @@ public class ProteusHostView extends ViewGroup {
 
     /** 节点 id → 原生 View */
     private final Map<Integer, View> nativeHosts = new HashMap<>();
+    /** ★★**变换原点表**（transform-origin v1）：节点 id → `[x, y]` 盒分数（缺省不存 = 中心） */
+    private final Map<Integer, float[]> nodeTransformOrigin = new HashMap<>();
+
+    /** 场景注入某节点的变换原点（`[x, y]` 盒分数）——建树时由 LightsHost/MainActivity 调用 */
+    public void setNodeTransformOrigin(int nodeId, float ox, float oy) {
+        nodeTransformOrigin.put(nodeId, new float[]{ox, oy});
+    }
+
     /** 节点 id → Rust 几何（**位置/尺寸的唯一来源**；子 View 的 measure/layout 都用它） */
     private final Map<Integer, RectF> nativeRects = new HashMap<>();
 
@@ -655,7 +663,8 @@ public class ProteusHostView extends ViewGroup {
             int textRgba = bb.getInt();
             // ★B 批 3D（40B 记录末尾追加）——在 bg/textColor 之后
             float rotX = bb.getFloat(), rotY = bb.getFloat();
-            animTx.put(id, new float[]{tx, ty, sc, rot, op, rotX, rotY});
+            // ★长度 7 → 9（追加 skewX/skewY 两槽——下标 7/8；既有下标 0..6 语义不变）
+            animTx.put(id, new float[]{tx, ty, sc, rot, op, rotX, rotY, 0f, 0f});
             // ★★C1：裁剪段（@40 起：kind u32 + 16×f32——108B 记录）
             int clipKind = bb.getInt();
             if (clipKind != 0) {
@@ -722,6 +731,14 @@ public class ProteusHostView extends ViewGroup {
             float mOB = bb.getFloat(), mAB = bb.getFloat();
             if (mk != 0) animMask.put(id, new float[]{mk, mOA, mAA, mOB, mAB});
             else animMask.remove(id);
+            // ★★倾斜（skew v1，@228/@232：2×f32——236B 记录，在遮罩段**之后**）
+            //   ★顺序纪律：读取顺序必须与内核写入顺序逐字节一致（见上方注释；错位曾致真机崩溃）
+            float skewX = bb.getFloat(), skewY = bb.getFloat();
+            float[] txArr = animTx.get(id);
+            if (txArr != null && txArr.length >= 9) {
+                txArr[7] = skewX;
+                txArr[8] = skewY;
+            }
             // ★颜色（2026-10-01）：0xFFFFFFFF = 无该基色 ⇒ 不入覆盖表（保持静态绘制）
             if (rgba != 0xFFFFFFFF) animColor.put(id, rgba);
             if (textRgba != 0xFFFFFFFF) animTextColor.put(id, textRgba);
@@ -736,14 +753,14 @@ public class ProteusHostView extends ViewGroup {
      *
      * ★★2026-10-01 由 **24B → 28B（底色）→ 32B（文字色）→ 40B（3D）→ 108B（裁剪）
      *   → 112B（描边）→ 184B（渐变 v2）→ 188B（路径变形 v1）→ 192B（发光 v1）
-     *   → 208B（渐变几何）→ 228B（软边遮罩）**：
+     *   → 208B（渐变几何）→ 228B（软边遮罩）→ 236B（倾斜）**：
      *   `id u32 + 五值 f32 + bg u32 + textColor u32`。
      *   末两个 u32 都是打包色 `0xAARRGGBB`；`0xFFFFFFFF` = **无该基色**（忽略该字段）。
      *   ★唯一事实源 = 内核 `ffi.rs` 的 8 个 `extend_from_slice`；iOS / SDK / embed-demo
      *     的常量必须与它同批更新（历史上因两处各写步长而错位解析过）。
      *     `scripts/check-anim-record-bytes.mjs` 从内核推出宽度并与各消费端对账。
      */
-    private static final int ANIM_RECORD_BYTES = 228;
+    private static final int ANIM_RECORD_BYTES = 236;
 
     /**
      * ★★每帧发光**强度**表（glow v1）：节点 id → `intensity`（0..1 乘子，乘在静态 alpha 上）。
@@ -1056,6 +1073,9 @@ public class ProteusHostView extends ViewGroup {
                 // ★B 批 3D：rotateX/rotateY（v[5]/v[6]；旧 5 元素记录缺省 0——向后兼容）
                 final float rX = v != null && v.length >= 7 ? v[5] : 0f;
                 final float rY = v != null && v.length >= 7 ? v[6] : 0f;
+                // ★★倾斜（skew v1）：真读宿主当前值（判据据此断言"倾斜真的落地"）
+                final float skX = v != null && v.length >= 9 ? v[7] : 0f;
+                final float skY = v != null && v.length >= 9 ? v[8] : 0f;
                 if (v == null) {
                     // 无记录 ⇒ 恒等（未被动过）——与"层上是 identity"语义一致
                     sb.append("{\"id\":").append(id)
@@ -1077,6 +1097,7 @@ public class ProteusHostView extends ViewGroup {
                       .append(",\"scale\":").append(v[2]).append(",\"rotate\":").append(v[3])
                       .append(",\"opacity\":").append(v[4])
                       .append(",\"rotateX\":").append(rX).append(",\"rotateY\":").append(rY)
+                      .append(",\"skewX\":").append(skX).append(",\"skewY\":").append(skY)
                       .append(",\"clip\":\"").append(clipStr).append("\"")
                       .append(",\"strokeProgress\":").append(strokeProg)
                       .append(",\"gradient\":\"").append(gradStr).append("\"")
@@ -1776,12 +1797,28 @@ public class ProteusHostView extends ViewGroup {
                     ? canvas.saveLayer(c.x, c.y, c.x + c.w, c.y + c.h, null) : -1;
             float op = 1f;
             if (tf != null) op = tf[4];
+            // ★★倾斜（skew v1）：取出本节点的倾斜角（画布变换用——见下）
+            final float tfSkewX = tf != null && tf.length >= 9 ? tf[7] : 0f;
+            final float tfSkewY = tf != null && tf.length >= 9 ? tf[8] : 0f;
             if (xf) {
                 // ★tf 可能为 null 而仅因裁剪进入本分支（C1）——兜底为零变换
                 canvas.translate(tf != null ? tf[0] : 0f, tf != null ? tf[1] : 0f);
-                float cx = c.x + c.w * 0.5f, cy = c.y + c.h * 0.5f;
+                // ★★变换原点（transform-origin v1）：缺省 (0.5, 0.5) = 元素中心（既有行为零变化）——
+                //   放底部（0.5, 1.0）= "从根部弯折"（与水草/旗帜的物理直觉一致）。
+                final float[] org = nodeTransformOrigin.get(ids != null && i < ids.length ? ids[i] : -1);
+                final float ox = org != null ? org[0] : 0.5f;
+                final float oy = org != null ? org[1] : 0.5f;
+                float cx = c.x + c.w * ox, cy = c.y + c.h * oy;
                 if (tf != null && tf[3] != 0f) canvas.rotate(tf[3], cx, cy);
                 if (tf != null && tf[2] != 1f) canvas.scale(tf[2], tf[2], cx, cy);
+                // ★★倾斜（skew v1）：`canvas.skew(tanSkewX, tanSkewY)` —— 与 iOS 的 shear 矩阵同式。
+                //   ★花括号包裹（本仓纪律：变量声明必须自带块——否则作用域会漏到外层）
+                if (tfSkewX != 0f || tfSkewY != 0f) {
+                    canvas.translate(cx, cy);
+                    canvas.skew((float) Math.tan(Math.toRadians(tfSkewX)),
+                            (float) Math.tan(Math.toRadians(tfSkewY)));
+                    canvas.translate(-cx, -cy);
+                }
                 // ★★B 批 3D（2026-10-01）：rotateX/rotateY 用 `android.graphics.Camera` 生成
                 //   **投影矩阵**（本质 = 平移-旋转-平移 + 透视除法；d = 节点 perspective）。
                 //   ★锚点 = 元素中心（与 iOS `CATransform3DRotate` 同语义——先在中心建变换再平移回去）。

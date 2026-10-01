@@ -66,6 +66,10 @@ export const TICK_ONLY_KINDS: readonly AnimKindName[] = [
   'glowIntensity',
   // ★★遮罩进度（mask v1）：改的是**合成状态**（layer.mask / saveLayer+DST_IN）——非合成，走 tick。
   'maskProgress',
+  // ★★倾斜（skew v1）：两端都不是"一等属性"（Android 无 setSkewX / iOS 无倾斜属性）
+  //   ⇒ 平台插值器无从谈起 ⇒ 统一 tick（与 rotateX/Y 同一推理）。
+  'skewX',
+  'skewY',
 ]
 
 /** 该属性是否 tick-only（受支持、走内核逐帧路径，但不进平台零参与） */

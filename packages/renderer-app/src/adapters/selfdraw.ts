@@ -245,6 +245,8 @@ const LAYOUT_KEYS = new Set([
   'glow',
   // ★★软边遮罩 v1（mask）：静态规格——漏放 ⇒ 宿主无遮罩且静默
   'mask',
+  // ★★变换原点 v1（transformOrigin）：漏放 ⇒ 所有旋转绕中心（"绕错点转"最难查）
+  'transformOrigin',
 ])
 
 /**
@@ -297,7 +299,8 @@ function layoutStyleOf(props: Record<string, unknown>): Record<string, unknown> 
     //   原样透传给内核（不经过下面的长度折叠：它们不是长度）。
     if (key === 'clipPath' || key === 'perspective' || key === 'svgPath'
         || key === 'strokeColor' || key === 'strokeWidth' || key === 'fillGradient'
-        || key === 'fillGradientTo' || key === 'svgPathTo' || key === 'glow' || key === 'mask') {
+        || key === 'fillGradientTo' || key === 'svgPathTo' || key === 'glow' || key === 'mask'
+        || key === 'transformOrigin') {
         out[key] = value
         continue
     }
