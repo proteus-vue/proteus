@@ -184,7 +184,16 @@ cp "$PROFILE" "$APP/embedded.mobileprovision"
 [ -s "$PLIST_TMP/entitlements.plist" ] && cp "$PLIST_TMP/entitlements.plist" "$PLIST_TMP/ent.plist"
 
 echo "==> ⑥ 签名"
-IDENTITY="$(security find-identity -v -p codesigning 2>/dev/null | awk -F'"' '/Apple Development|iPhone Developer/ {print $2; exit}')"
+# ★★按 **SHA-1** 选身份（2026-10-01 修复）：证书被吊销后重签会**同名两张**（同一 Apple ID、CN 相同），
+#   按名称选会命中任一张（实测：选到吊销的那张 ⇒ 装机报
+#   `0xe8008018 The identity used to sign the executable is no longer valid`）。
+#   ⇒ 显式排除带 `CSSMERR`（已吊销）的条目，取第一张有效证书的 SHA-1；回退才用名称。
+IDENTITY="$(security find-identity -v -p codesigning 2>/dev/null \
+  | grep -v CSSMERR | grep -E 'Apple Development|iPhone Developer' \
+  | grep -oE '[0-9A-F]{40}' | head -1)"
+if [ -z "$IDENTITY" ]; then
+  IDENTITY="$(security find-identity -v -p codesigning 2>/dev/null | awk -F'"' '/Apple Development|iPhone Developer/ {print $2; exit}')"
+fi
 [ -n "$IDENTITY" ] || { echo "✗ 无签名身份"; exit 3; }
 # ★从可用的描述文件里挑一个与 BUNDLE_ID 匹配的（本仓 iOS 竖切实测的两条纪律：
 #   ① entitlements 必须用 `PlistBuddy -x` 导出为 **XML**（只 Print 会得到"描述"而非 plist

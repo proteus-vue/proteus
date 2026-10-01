@@ -347,11 +347,11 @@ const EVIDENCE = computed<Array<{ v: string; u: string; l: string; src: string }
  */
 const SHOWCASE_STATS = [
   { v: '800', u: isEn.value ? 'tiles' : '片瓦片', l: isEn.value ? 'On screen at once · 20×40 grid, centred' : '同屏编舞 · 20×40 网格居中', lEn: 'On screen at once · 20×40 grid, centred' },
-  { v: '58.3', u: 'FPS', l: 'iPhone 12（60Hz 上限）', lEn: 'iPhone 12 (60Hz ceiling)' },
-  { v: '2.509', u: 'ms', l: '每帧成本 p95（预算 16.7ms）', lEn: 'Frame cost p95 (budget 16.7ms)' },
-  { v: '0.135', u: 'ms', l: '每帧成本 p50', lEn: 'Frame cost p50' },
-  { v: '17', u: isEn.value ? '/ 1900' : '/ 1900 帧', l: isEn.value ? 'Dropped frames (0.89%)' : '掉帧（0.89%）', lEn: 'Dropped frames (0.89%)' },
-  { v: '800', u: isEn.value ? 'tiles' : '片全量重排', l: isEn.value ? 'FLIP full re-layout (kernel 1.64ms)' : 'FLIP 全量重排（内核 1.64ms）', lEn: 'FLIP full re-layout (kernel 1.64ms)' },
+  { v: '58.4', u: 'FPS', l: 'iPhone 12（60Hz 上限）', lEn: 'iPhone 12 (60Hz ceiling)' },
+  { v: '5.594', u: 'ms', l: '每帧成本 p95（预算 16.7ms）', lEn: 'Frame cost p95 (budget 16.7ms)' },
+  { v: '2.37', u: 'ms', l: '每帧成本 p50', lEn: 'Frame cost p50' },
+  { v: '15', u: isEn.value ? '/ 1886' : '/ 1886 帧', l: isEn.value ? 'Dropped frames (0.80%)' : '掉帧（0.80%）', lEn: 'Dropped frames (0.80%)' },
+  { v: '800', u: isEn.value ? 'tiles' : '片全量重排', l: isEn.value ? 'FLIP full re-layout (kernel 2ms)' : 'FLIP 全量重排（内核 2ms）', lEn: 'FLIP full re-layout (kernel 2ms)' },
 ] as Array<{ v: string; u: string; l: string; lEn?: string }>
 
 const BOUNDARIES = computed(() =>

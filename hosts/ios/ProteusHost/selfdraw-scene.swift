@@ -3406,10 +3406,16 @@ final class SelfDrawBridge: NSObject, SelfDrawExports {
     ///
     /// 【为什么二进制而不复用 JSON 通道】每帧 O(N) 条走 JSON 的编解码是白付；记录格式见
     ///   `animUpdateRecordBytes`（定长，全小端）。
+    ///
+    /// 【★回执里的 `active`（2026-10-01）】= tick 后仍在推进的动画条数（内核 `anim_active`）——
+    ///   调用方（炫技场幕调度）据此**逐帧**判定"本幕动画结束于何时"⇒ 与名义跨度对账可抓
+    ///   "动画提前结束 / 加速播放"（当时真机实证的"双帧驱动 ⇒ 2× 速"缺陷就靠这一项现形；
+    ///   见 showcase-scene.swift 的 `actAnimEndMs`）。
     func animTick(_ dtMs: Double) -> String {
         guard handle != 0 else { return "{\"ok\":false,\"error\":\"未接入核心\"}" }
         let r = animTickApply(dtMs)
-        return "{\"ok\":true,\"applied\":\(r.applied),\"bytes\":\(r.bytes)}"
+        let active = proteus_layout_anim_active(handle)
+        return "{\"ok\":true,\"applied\":\(r.applied),\"bytes\":\(r.bytes),\"active\":\(active)}"
     }
 
     /* ────────────────── ★★RT2：持续帧率测席（§9 帧率/帧耗时指标的测量装置） ────────────────── */

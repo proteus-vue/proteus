@@ -44,6 +44,14 @@ final class ShowcaseScene: NSObject {
     private static var actFrames = 0
     private static var actWork: [Double] = []
     private static var actVsync: [Double] = []
+    /// ★本幕动画**结束**的墙钟时刻（ms，本幕起算；内核首次报 active=0 时记一次；-1 = 未观测到）
+    ///
+    /// 【为什么必须逐帧记（2026-10-01 双驱动缺陷的机器判据来源）】宿主曾同时挂**两条**帧驱动
+    ///   （view 自带 CADisplayLink + 宿主 CADisplayLink）⇒ 每个 vsync 推进**两个 dt** ⇒
+    ///   动画以 2× 实速播完、后半幕是静止画面，而当时只测 `tail_wait`（动画**晚于**名义结束的等待）
+    ///   ⇒ 提前结束完全测不到。现在逐帧读内核 active（随 tick 回执带回）⇒
+    ///   `anim_end_ms` 与名义 `span_ms` 对账，"提前跑完"当场现形。
+    private static var actAnimEndMs = -1.0
 
     /* ── 全程统计 ── */
     private static var totalFrames = 0
@@ -69,12 +77,22 @@ final class ShowcaseScene: NSObject {
     private static var assetWriter: AVAssetWriter?
     private static var videoInput: AVAssetWriterInput?
     private static var sessionStarted = false
+    /// ★录屏帧计数（2026-10-01 加）：`appended` = 真写入的帧；`dropped` = 编码器背压丢的帧。
+    ///   【为什么要计】旧版录屏 29.06s 只有 896 真实帧（≈30.8fps 等效）——**静默丢帧**：
+    ///   回调里的 `if input.isReadyForMoreMediaData` 没有 else 分支。现在计数并进报告，
+    ///   让"录屏到底丢了多少帧"变成可查数字（转码脚本另有源片帧率判据兜底）。
+    private static var recordedFrames = 0
+    private static var droppedFrames = 0
     private static let videoURLName = "showcase.mp4"
 
     /// 中途截图（漩涡定格）
     private static var spiralSnap: [String: Any] = [:]
     private static var startThermal = ""
     private static var startMemMB = 0.0
+    /// ★开演门槛（2026-10-01）：录屏模式下等"首帧已写入"再开演（见 run() ⑤b）——
+    ///   否则 ReplayKit 冷启动 ≈2s 会把开场幕整段丢掉（上一版实录）。兜底：3s 超时照常开演。
+    private static var pendingShowStart = false
+    private static var showStarted = false
 
     static func run(ctx: JSContext, bundleURL: URL) {
         evalJs = { expr in ctx.evaluateScript(expr)?.toString() ?? "null" }
@@ -118,12 +136,34 @@ final class ShowcaseScene: NSObject {
             return
         }
 
-        // ⑤b ★录屏（可选）：必须在第一幕**之前**开始（否则开场语会被切掉）
-        //   失败不致命：如实记日志并继续（报告照写——录屏是"更好的展示"，不是判据前提）
+        // ⑤b ★录屏（可选）：必须在第一幕**之前**开始（否则开场语会被切掉）。
+        //   失败不致命：如实记日志并继续（报告照写——录屏是"更好的展示"，不是判据前提）。
+        //
+        //   ★★2026-10-01 加「等首帧」：ReplayKit 从 startCapture 到**首批 buffer 到达**有
+        //   实测 ≈2s 的冷启动延迟（上一版录屏的第一帧 = 开演后 ~1.9s —— 星尘凝聚整个丢了）。
+        //   ⇒ 录屏模式下**开演推迟到首个视频帧已写入**（`pendingShowStart` →
+        //   `startShowIfPending`）；同时给 3s 有界兜底（捕获不可用时照常开演，不挂死）。
         if ProcessInfo.processInfo.environment["PROTEUS_SHOWCASE_RECORD"] == "1" {
+            pendingShowStart = true
             startCaptureRecording()
+            DispatchQueue.main.asyncAfter(deadline: .now() + 3.0) {
+                if pendingShowStart {
+                    NSLog("[proteus] SHOWCASE_RECORD_WARMUP_TIMEOUT：3s 内未拿到首帧（捕获不可用？）——照常开演")
+                    startShow()
+                }
+            }
+            return
         }
+        startShow()
+    }
 
+    /// 开演（帧循环 + 第一幕；录屏模式下等首帧到达后调用——见 ⑤b）
+    ///
+    /// 要求在主线程调用（启动 CADisplayLink、推进 JS 场景）。
+    private static func startShow() {
+        guard !showStarted else { return }
+        showStarted = true
+        pendingShowStart = false
         // ⑥ 启动帧循环 + 第一幕
         totalFrames = 0
         lastTs = 0
@@ -135,14 +175,26 @@ final class ShowcaseScene: NSObject {
         startThermal = thermalStateName()
         startMemMB = round1(physFootprintMB())
         showStartTs = CACurrentMediaTime()
-        _ = evalJs?("__proteusShowcaseFrameLoop('on')")
-
+        // ★★帧驱动**唯一来源 = 这条宿主 CADisplayLink**（下面那行）——
+        //   【2026-10-01 修复的双驱动缺陷】这里此前还有一句
+        //   `__proteusShowcaseFrameLoop('on')`（启动 **view 自带的** CADisplayLink，
+        //   回调同样调 animTick）⇒ 两条驱动各自推进一个 dt ⇒ **动画以 2× 实速播放**
+        //   （真机录屏取证：11/11 幕的静止窗口与"2× 播完 + 名义时间切幕"模型逐帧吻合）。
+        //   生产形态是"宿主拥有帧循环、JS 只交指令"（见文件头）⇒ 删除 view 侧驱动，只留宿主这条。
+        //   ★勿再加回：JS 侧 `__proteusShowcaseFrameLoop` 已随之删除（entry-showcase.ts），
+        //   若将来需要恢复，必须保证**全链路只有一条**驱动（判据：check-showcase.py「动画不提前结束」）。
         let link = CADisplayLink(target: self, selector: #selector(onFrame(_:)))
         link.add(to: .main, forMode: .common) // .common：滚动/手势期间不掐停
         frameLink = link
         // 第一幕取用（失败 ⇒ 走失败路径，不留挂起进程）
         if !advance() { return }
-        NSLog("[proteus] showcase 启动：800 瓦片 · %@", String((runOut.prefix(200))))
+        NSLog("[proteus] showcase 启动（帧驱动唯一来源=宿主 CADisplayLink）")
+    }
+
+    /// 录屏首帧到达 ⇒ 开演（幂等；由捕获回调在主线程调用）
+    static func startShowIfPending() {
+        guard pendingShowStart else { return }
+        startShow()
     }
 
     /// 幕边界推进：取下一幕 → 发令。返回 false = 场景结束或失败（已处理收尾）
@@ -168,6 +220,7 @@ final class ShowcaseScene: NSObject {
         actFrames = 0
         actWork = []
         actVsync = []
+        actAnimEndMs = -1
         return true
     }
 
@@ -182,40 +235,54 @@ final class ShowcaseScene: NSObject {
 
         // ★被测工作：每帧一次 tick（内核求值 + 写层）——计时只包这一段
         let t0 = CACurrentMediaTime()
-        _ = evalJs?("__proteusShowcaseTick(\(dtMs))")
+        let tickOut = evalJs?("__proteusShowcaseTick(\(dtMs))") ?? "null"
         let work = (CACurrentMediaTime() - t0) * 1000
         actWork.append(work)
         allWork.append(work)
 
         actElapsed += dtMs
-        // ★幕边界判据 = ① 名义时间（span + 定型）到 ② **内核报"没有动画在动"**
+        // ★「动画提前结束」取证（2026-10-01）：tick 回执带回内核 active 数 ⇒ 首次归零的时刻
+        //   即本幕动画真正结束的时刻（与名义 span_ms 对账；见 actAnimEndMs 注释）。
+        //   ★放在计时窗口**之外**（解析属取证，不属于被测的 tick 成本）。
+        if actAnimEndMs < 0, let active = parseActiveFromTick(tickOut), active == 0 {
+            actAnimEndMs = actElapsed
+        }
+        // ★★幕边界判据（2026-10-01 重写）= **内核报"动画全部结束"**（`anim_end`）+ 定型时间
         //
-        // 【为什么必须问内核（2026-09-30 真机取证）】弹簧的结束时刻由**物理**决定
-        //   （`settle_eps` 内静止才结束），名义 `durMs` 只是采样窗口 ⇒ 只按时间切会
-        //   留下"动画早已静止、幕却还在等"的**可见停顿**（用户原话：「每一幕结束等会儿开始下一幕」）。
-        //   内核 tick 只回"变化记录"，静止项不在里面 ⇒ 时长只能由内核回答（`animActiveCount`）。
-        guard actElapsed >= actSpan + actHold else { return }
-        let activeOut = evalJs?("__proteusShowcaseActive()") ?? "null"
-        let active = parseActiveCount(activeOut)
-        if active > 0 {
-            // 安全上限（防止某条动画永不结束——如 Progress 驱动；3s 后强制切幕并留证）
-            guard actElapsed < actSpan + actHold + 3000 else {
-                tailWaits.append(["act": actName, "forced": true, "active": active])
-                finishAct()
-                advance()
-                return
-            }
+        // 【为什么从"名义时间到 且 内核静止"改为"内核静止即切"】
+        //   ① 旧口径能防"动画没跑完就切"，但**防不了"动画提前跑完、幕还在等名义时间"**——
+        //      弹簧的自然静止时间（实测 ~0.72s@最大位移）比名义窗口（1s）短 ⇒
+        //      每幕尾部留下可见静帧（真机录屏实测 55% 时间画面静止）；
+        //   ② 且旧口径测不到"动画以 2× 速播完"这类几何级缺陷（双驱动 bug：两条 CADisplayLink
+        //      各推进一个 dt）——它在旧口径下表现为"静止更久"，被判据当成"无缝"放过去；
+        //   ③ 新口径下 `anim_end_ms`（内核首次报 active=0 的时刻）成为**机器可判的量**：
+        //      与名义 `span_ms` 对账 ⇒ 提前结束 / 加速播放当场现形（judge 判据见 check-showcase.py）。
+        //
+        // 【定型语义】`hold` 从**动画结束**起算（不是从开幕起算）：谢幕语聚字完成后停住 hold_ms
+        //   供观看/截图，其余幕 hold=0 ⇒ 动画完成那一帧即切幕（真无缝）。
+        if actAnimEndMs >= 0, actElapsed >= actAnimEndMs + actHold {
+            // 幕边界：先记账（本幕读数 + 内存采样 + 尾等待），再取下一幕
+            finishAct()
+            advance()
             return
         }
-        // 幕边界：先记账（本幕读数 + 内存采样 + 尾等待），再取下一幕
-        finishAct()
-        advance()
+        // 安全上限（防止某条动画永不结束——如 Progress 驱动；3s 后强制切幕并留证）
+        guard actElapsed < actSpan + actHold + 3000 else {
+            tailWaits.append(["act": actName, "forced": true, "active": parseActiveFromTick(tickOut) ?? -1])
+            finishAct()
+            advance()
+            return
+        }
     }
 
-    private static func parseActiveCount(_ raw: String) -> Int {
-        guard let d = raw.data(using: .utf8),
-              let o = (try? JSONSerialization.jsonObject(with: d)) as? [String: Any] else { return 0 }
-        return (o["active"] as? Int) ?? 0
+    /// 从 tick 回执里取 active（`{"ok":true,"applied":N,"bytes":M,"active":K}`）
+    ///
+    /// 【为什么不用 JSONSerialization】每帧都跑（60×/s × 整场数千帧）——固定形状的小串，
+    ///   字符串扫描足够且不产生每帧的解析对象。
+    private static func parseActiveFromTick(_ raw: String) -> Int? {
+        guard let r = raw.range(of: "\"active\":") else { return nil }
+        let digits = raw[r.upperBound...].prefix { $0.isNumber }
+        return Int(digits)
     }
 
     private static func finishAct() {
@@ -239,6 +306,9 @@ final class ShowcaseScene: NSObject {
             "dropped_ratio": round4(Double(dropped) / Double(denom)),
             // ★尾等待（ms）：名义时间到 → 内核报告静止的真实等待。≈0 = 无缝
             "tail_wait_ms": round1(max(0, actElapsed - (actSpan + actHold))),
+            // ★动画结束时刻（ms；内核首次报 active=0）——与 span_ms 对账可抓「提前结束」
+            //   （2026-10-01 双驱动 2× 速缺陷就是被这一项现形的）。未观测到 ⇒ null（判据如实判红）。
+            "anim_end_ms": actAnimEndMs >= 0 ? round1(actAnimEndMs) : NSNull(),
         ])
         memSamples.append([
             "act": actName,
@@ -275,8 +345,8 @@ final class ShowcaseScene: NSObject {
         memSamples = []
         spiralSnap = [:]
         showStartTs = CACurrentMediaTime()
-        // ★帧循环也要重启（finish 的 demo 分支把它停了——不停会让 act 推进逻辑空转）
-        _ = evalJs?("__proteusShowcaseFrameLoop('on')")
+        // ★帧驱动仍只有**宿主这一条**（见 `restartForDemo` 与首轮启动处的注释——
+        //   2026-10-01 修复的"双驱动 = 2× 速"缺陷：这里不再启动 view 自带帧循环）
         let link = CADisplayLink(target: self, selector: #selector(onFrame(_:)))
         link.add(to: .main, forMode: .common)
         frameLink = link
@@ -290,14 +360,12 @@ final class ShowcaseScene: NSObject {
             // ★必须先停帧循环：否则 onFrame 的"幕推进"会在 finish 返回后继续触发（每帧重复 finish）
             frameLink?.invalidate()
             frameLink = nil
-            _ = evalJs?("__proteusShowcaseFrameLoop('off')")
             // 谢幕语是"聚成 800 TILES"——停一拍让观众看清，然后从基线重演
             DispatchQueue.main.asyncAfter(deadline: .now() + 2.2) { restartForDemo() }
             return
         }
         frameLink?.invalidate()
         frameLink = nil
-        _ = evalJs?("__proteusShowcaseFrameLoop('off')")
 
         // ★全程读数（与 animBench 同一算法：中位数/百分位/掉帧率）
         let nominal = pct(allVsync, 0.5)
@@ -342,6 +410,12 @@ final class ShowcaseScene: NSObject {
             merged = ["ok": false, "parse_error": String(fin.prefix(200))]
         }
         merged["host_perf"] = perf
+        // ★录屏帧账（2026-10-01）：进报告供核（"录屏丢了多少帧"不再靠猜——旧版静默丢帧）
+        merged["recording"] = [
+            "enabled": ProcessInfo.processInfo.environment["PROTEUS_SHOWCASE_RECORD"] == "1",
+            "appended": recordedFrames,
+            "dropped": droppedFrames,
+        ]
         for (k, v) in host { merged[k] = v }
         // ★本轮报告写出时刻（Unix 秒）——脚本侧「报告确系本轮写出」的内容级新鲜度判据
         //   （缺它 ⇒ check-report-freshness 直接 exit 3：判据根本没机会跑。2026-09-30 实测踩到）
@@ -400,6 +474,8 @@ final class ShowcaseScene: NSObject {
         assetWriter = writer
         videoInput = nil
         sessionStarted = false
+        recordedFrames = 0
+        droppedFrames = 0
         rec.startCapture { sampleBuffer, type, error in
             if let error {
                 NSLog("[proteus] SHOWCASE_RECORDING_FAILED 捕获错误：%@", "\(error)")
@@ -438,6 +514,18 @@ final class ShowcaseScene: NSObject {
             guard sessionStarted, writer.status == .writing, let input = videoInput else { return }
             if input.isReadyForMoreMediaData {
                 input.append(sb)
+                recordedFrames += 1
+                // ★首帧已写入 ⇒ 唤醒开演（录屏模式的门槛；主线程执行——见 startShowIfPending）
+                if recordedFrames == 1 {
+                    DispatchQueue.main.async { ShowcaseScene.startShowIfPending() }
+                }
+            } else {
+                // ★不再静默（2026-10-01）：背压丢帧计数 + 里程碑日志（前 3 次每次报，之后每 120 帧报一次）
+                droppedFrames += 1
+                if droppedFrames <= 3 || droppedFrames % 120 == 0 {
+                    NSLog("[proteus] SHOWCASE_RECORDING_DROP 编码器背压丢帧（累计 %d；已写 %d）",
+                          droppedFrames, recordedFrames)
+                }
             }
         } completionHandler: { err in
             if let err {
@@ -477,7 +565,8 @@ final class ShowcaseScene: NSObject {
                 let url = reportDir.appendingPathComponent(videoURLName)
                 let size = (try? FileManager.default.attributesOfItem(atPath: url.path)[.size] as? Int) ?? 0
                 if writer.status == .completed {
-                    NSLog("[proteus] SHOWCASE_RECORDING_READY %@ bytes=%d", url.path, size)
+                    NSLog("[proteus] SHOWCASE_RECORDING_READY %@ bytes=%d appended=%d dropped=%d",
+                          url.path, size, recordedFrames, droppedFrames)
                 } else {
                     NSLog("[proteus] SHOWCASE_RECORDING_FAILED finishWriting：%@", "\(writer.error?.localizedDescription ?? "?")")
                 }

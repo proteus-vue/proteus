@@ -3,14 +3,14 @@
 <plist version="1.0">
 <dict>
 	<key>application-identifier</key>
-	<string>XKH568R7A5.cn.shxuxi.proteus.experiments</string>
+	<string>F4R3P3L477.dev.proteus.experiments</string>
 	<key>com.apple.developer.team-identifier</key>
-	<string>XKH568R7A5</string>
+	<string>F4R3P3L477</string>
 	<key>get-task-allow</key>
 	<true/>
 	<key>keychain-access-groups</key>
 	<array>
-		<string>XKH568R7A5.*</string>
+		<string>F4R3P3L477.*</string>
 	</array>
 </dict>
 </plist>

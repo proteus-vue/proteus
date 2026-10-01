@@ -22,7 +22,7 @@ import type { ShowcaseAct, ShowcaseProgram } from './showcase-program'
 
 // ★构建标识（由 hosts/ios/bridge/inject-build-id.mjs **编译期替换**——与 entry-bench/entry-selfdraw
 //   同一机制；报告据此断言"设备上跑的是本次构建"）
-const BUILD_ID = '5222d0c2-231431'
+const BUILD_ID = 'b002ef4f-094359'
 
 /** 帧内视图参数（建树时定，后续幕复用） */
 interface ViewGeom {
@@ -45,8 +45,6 @@ interface ShowcaseHost {
   animTick(dtMs: number): string
   animFlip(json: string): string
   animStopAll(): string
-  animStartFrameLoop(): string
-  animStopFrameLoop(): string
   animFrameStats(): string
   /** 仍在推进的动画条数（0 = 全部结束）——幕切换的权威判据（弹簧时长由物理决定） */
   animActiveCount(): string
@@ -351,11 +349,6 @@ export function __proteusShowcaseRestart(): string {
   return JSON.stringify({ ok: true, stop, acts: state.plan.length })
 }
 
-/** 启动/停止帧循环（宿主侧 CADisplayLink） */
-export function __proteusShowcaseFrameLoop(on: string): string {
-  return on === 'on' ? proteusSelfDraw.animStartFrameLoop() : proteusSelfDraw.animStopFrameLoop()
-}
-
 /* ────────────────── 工具 ────────────────── */
 
 function safeParse(s: string): unknown {
@@ -377,8 +370,11 @@ function round2(v: number): number {
 ;(globalThis as unknown as { __proteusShowcaseRestart: typeof __proteusShowcaseRestart }).__proteusShowcaseRestart = __proteusShowcaseRestart
 ;(globalThis as unknown as { __proteusShowcaseActive: typeof __proteusShowcaseActive }).__proteusShowcaseActive = __proteusShowcaseActive
 ;(globalThis as unknown as { __proteusShowcaseReset: typeof __proteusShowcaseReset }).__proteusShowcaseReset = __proteusShowcaseReset
-;(globalThis as unknown as { __proteusShowcaseFrameLoop: typeof __proteusShowcaseFrameLoop }).__proteusShowcaseFrameLoop = __proteusShowcaseFrameLoop
+// ★`__proteusShowcaseFrameLoop` 已**删除**（2026-10-01）：它启动的 view 自带 CADisplayLink
+//   与宿主自己的帧循环构成**双驱动** ⇒ 动画以 2× 实速播放（真机录屏取证）。
+//   帧驱动唯一来源 = 宿主的 CADisplayLink（见 showcase-scene.swift ⑥ 处注释）——勿再加回。
 // ★逐帧推进（宿主帧循环里调；与 entry-selfdraw 的 animTick 同源——但这里由**宿主**驱动而非脚本）
+//   回执含 `active`（内核仍在推进的动画条数）——宿主据此记录每幕动画的真正结束时刻。
 ;(globalThis as unknown as { __proteusShowcaseTick: (dtMs: number) => string }).__proteusShowcaseTick = (
   dtMs: number,
 ): string => proteusSelfDraw.animTick(dtMs)

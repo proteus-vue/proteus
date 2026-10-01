@@ -61,6 +61,8 @@ def compliant_report(plan: list, soak_cycles: int) -> dict:
         {
             'name': name,
             'frames': 120,
+            'span_ms': 2000.0,
+            'hold_ms': 0.0,
             'act_ms': 2000.0,
             'fps': 59.5,
             'work_p50_ms': 0.2,
@@ -70,6 +72,10 @@ def compliant_report(plan: list, soak_cycles: int) -> dict:
             'dropped': 1,
             'dropped_ratio': 0.008,
             'tail_wait_ms': 8.0,
+            # ★动画结束时刻（内核 active 首次归零）——合规基线 = 名义跨度（1× 速）。
+            #   gather 是弹簧幕（自然静止 ≈0.86×窗口）这是**允许下限 0.75×**
+            #   仍留出的余量；基线取 1.0× 表示"曲线幕满窗"的最健康形态。
+            'anim_end_ms': 2000.0,
         }
         for name in plan
     ]
@@ -191,6 +197,10 @@ def main() -> int:
     inject(lambda d: d['acts_perf'][2].update(tail_wait_ms=180.0), '幕尾空等 180ms（非无缝）')
     # ⑩ 某幕帧数过少（幕边界与帧循环脱节）
     inject(lambda d: d['acts_perf'][3].update(frames=3), '某幕帧数过少（3 帧）')
+    # ⑩b ★帧驱动重复 ⇒ 播放 2× 速（anim_end ≈ 0.5×跨度）——2026-10-01 真机实证的缺陷形态
+    inject(lambda d: [a.update(anim_end_ms=a['span_ms'] * 0.5) for a in d['acts_perf']], '动画 2× 速播完（anim_end = 0.5×跨度）')
+    # ⑩c ★缺动画结束取证（宿主未记录 active 归零时刻）——判据不许"没数据就是绿"
+    inject(lambda d: [a.pop('anim_end_ms', None) for a in d['acts_perf']], '缺 anim_end_ms 取证（全幕）')
     # ⑪ 四条路径有幕缺失（把 spiral 改名）
     inject(lambda d: [d['acts'].__setitem__(i, {**a, 'name': 'x-spiral'}) for i, a in enumerate(d['acts']) if a['name'] == 'spiral'], '四条路径缺"螺旋"幕')
 

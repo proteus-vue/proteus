@@ -30,8 +30,29 @@ command -v ffmpeg >/dev/null || { echo "✗ 缺 ffmpeg（brew install ffmpeg）"
 command -v ffprobe >/dev/null || { echo "✗ 缺 ffprobe"; exit 2; }
 [ -f "$SRC" ] || { echo "✗ 找不到录屏原片：$SRC"; echo "  ⇒ 先录：bash hosts/ios/run-selfdraw.sh --showcase --record"; exit 2; }
 
-echo "==> 转码（60fps 保留 · 宽 585 · crf 27 · faststart）"
+echo "==> 转码（60fps 保留 · 宽 586 · crf 27 · faststart）"
 echo "    输入：${SRC}（$(du -h "$SRC" | cut -f1)）"
+# ★★源片判据（2026-10-01 加）：录屏原片必须**接近满帧**——上一版全场 55% 时间静止、
+#   29.06s 里只有 896 真实帧（≈30.8fps 等效，含 19 段 200ms–1.45s 的空洞）：
+#   根因是"静止时 ReplayKit 不产帧 + 双帧驱动 ⇒ 动画 2× 速播完"。
+#   ⇒ 转码前先量源片等效帧率：低于 52 ⇒ 判红（说明演出有长静帧或录屏丢帧，先修再转）。
+python3 - "$SRC" <<'PY'
+import subprocess, sys, json
+src = sys.argv[1]
+def probe(args):
+    r = subprocess.run(['ffprobe', '-v', 'error'] + args + [src], capture_output=True, text=True)
+    return r.stdout
+info = json.loads(probe(['-select_streams', 'v:0', '-show_entries', 'stream=nb_frames', '-of', 'json']))
+nb = int(info['streams'][0].get('nb_frames') or 0)
+dur = float(probe(['-show_entries', 'format=duration', '-of', 'csv=p=0']).strip() or 0)
+fps_eq = nb / dur if dur > 0 else 0
+pts = [float(x) for x in probe(['-select_streams', 'v:0', '-show_entries', 'frame=pts_time', '-of', 'csv=p=0']).replace(',', ' ').split() if x.strip()]
+gaps = [round((pts[i+1]-pts[i])*1000, 1) for i in range(len(pts)-1) if pts[i+1]-pts[i] > 0.05]
+print(f"    源片：{nb} 帧 / {dur:.1f}s ⇒ 等效 {fps_eq:.1f} fps · >50ms 空洞 {len(gaps)} 段（合计 {sum(gaps)/1000:.1f}s）")
+if fps_eq < 52:
+    print(f"✗ 源片等效帧率 {fps_eq:.1f} < 52——演出存在长静帧或录屏丢帧；先修演出/录制再转码（不要转一个'静止为主'的片子）")
+    sys.exit(1)
+PY
 ffmpeg -y -loglevel error -i "$SRC" \
   -vf "scale=586:-2:flags=lanczos" \
   -c:v libx264 -preset slow -crf 27 -pix_fmt yuv420p \
