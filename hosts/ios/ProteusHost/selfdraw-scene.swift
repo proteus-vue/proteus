@@ -568,6 +568,8 @@ final class SelfDrawView: UIView {
         // ★★发光子层同款成对清理（与描边/渐变同一教训：只清一份簿记 ⇒ 重建后命中旧层）
         layerGlowShapes.removeAll(keepingCapacity: true)
         layerGlowSpec.removeAll(keepingCapacity: true)
+        // ★★遮罩层同款成对清理（与描边/渐变/发光同一教训）
+        layerMasks.removeAll(keepingCapacity: true)
         parentById.removeAll(keepingCapacity: true)
         childrenById.removeAll(keepingCapacity: true)
         builtFrames.removeAll(keepingCapacity: true)
@@ -638,6 +640,54 @@ final class SelfDrawView: UIView {
             if Self.applyGradient(g, spec: fg, bounds: layer.bounds) {
                 layer.addSublayer(g)
                 layerGradients[nodeId] = g
+            }
+        }
+        // ★★软边遮罩（mask v1）：`CAGradientLayer` 作 `layer.mask`（软边渐隐的通用原语）。
+        //   ★揭示色标由**内核唯一实现**（这里是**静态基态的初值**；动画期由 `applyMaskTick` 更新）。
+        //   ★与 clip 的 mask 冲突处理：**嵌套**——clip 的 CAShapeLayer 也是 mask，两者不能同层共存
+        //     ⇒ 本引擎 v1 约定：同节点同时声明 clip 与 mask 时，**clip 优先、遮罩退化**（诚实边界，
+        //       列在文档）。多遮罩合成（shape+gradient 串联）不在 v1。
+        if let mk = style["mask"] as? [String: Any],
+           let kindS = mk["kind"] as? String {
+            let mkind = kindS == "linear" ? 1 : kindS == "radial" ? 2 : 0
+            if mkind != 0 {
+                if layerClipShape[nodeId] != nil {
+                    // ★clip 优先（诚实边界：见上）
+                    NSLog("[proteus] 节点 %d 同时声明 clip 与 mask——v1 约定 clip 优先（遮罩退化）", nodeId)
+                } else {
+                    let gm = CAGradientLayer()
+                    gm.frame = layer.bounds
+                    gm.contentsScale = UIScreen.main.scale
+                    if mkind == 1 {
+                        let angle = (mk["angle"] as? Double) ?? 180
+                        let rad = angle * .pi / 180
+                        let dx = sin(rad), dy = -cos(rad)
+                        gm.startPoint = CGPoint(x: 0.5 - dx / 2, y: 0.5 - dy / 2)
+                        gm.endPoint = CGPoint(x: 0.5 + dx / 2, y: 0.5 + dy / 2)
+                        gm.type = .axial
+                    } else {
+                        let cx = (mk["cx"] as? Double) ?? 0.5
+                        let cy = (mk["cy"] as? Double) ?? 0.5
+                        let r = (mk["r"] as? Double) ?? 0.75
+                        gm.type = .radial
+                        gm.startPoint = CGPoint(x: cx, y: cy)
+                        gm.endPoint = CGPoint(x: cx + r, y: cy)
+                    }
+                    // 基态揭示色标（与内核 `reveal_stops` 同式——静态初值；动画期由内核逐帧下发）
+                    let soft = (mk["softness"] as? Double) ?? 0.25
+                    let p0 = (mk["progress"] as? Double) ?? 1.0
+                    let (oa, aa, ob, ab) = Self.maskStopsLocal(softness: soft, progress: p0)
+                    gm.colors = [
+                        UIColor.white.withAlphaComponent(CGFloat(aa)).cgColor,
+                        UIColor.white.withAlphaComponent(CGFloat(ab)).cgColor,
+                    ]
+                    gm.locations = [NSNumber(value: oa), NSNumber(value: ob)]
+                    CATransaction.begin()
+                    CATransaction.setDisableActions(true)
+                    layer.mask = gm
+                    CATransaction.commit()
+                    layerMasks[nodeId] = gm
+                }
             }
         }
         // ★★发光（glow v1）：**分层描边子层**——N 层（宽度梯度 + alpha 平方衰减，见 TS `glowLayers`）。
@@ -867,6 +917,14 @@ final class SelfDrawView: UIView {
                 }
                 gradStr = "\(t):\(g.colors?.count ?? 0):\(geo)"
             }
+            // ★★遮罩（mask v1）：**真读**层上真源（mask 的 type/位置/色标数）——判据据此断言揭示在变
+            var maskStr = ""
+            if let gm = layerMasks[id] {
+                let t = gm.type == .radial ? "radial" : "linear"
+                let offs = (gm.locations ?? []).map { ($0 as? NSNumber)?.doubleValue ?? 0 }
+                let locStr = offs.count >= 2 ? String(format: "%.3f,%.3f", offs[0], offs[1]) : "?"
+                maskStr = "\(t):\(locStr)"
+            }
             // ★★发光（v1）：**真读**子层数与首层 alpha（判据据此断言"发光真的建出来了/真的在变"）
             var glowStr = ""
             if let shapes = layerGlowShapes[id], let first = shapes.first,
@@ -890,6 +948,7 @@ final class SelfDrawView: UIView {
                     + "\"strokeEnd\":\(strokeEndV),\"subLayers\":\(subCount),"
                     + "\"gradient\":\"\(gradStr)\","
                     + "\"glow\":\"\(glowStr)\","
+                    + "\"mask\":\"\(maskStr)\","
                     + "\"svgDiag\":\"\(diagStr)\"}"
             )
         }
@@ -976,6 +1035,35 @@ final class SelfDrawView: UIView {
     /// 发光的**声明规格快照**（色 + alpha）——每帧强度变化时从它重算（★不从"当前层值"反推：
     /// 那会随每次写入累积失真——"读回自己写的值"是本仓既有教训）。
     private var layerGlowSpec: [Int: (color: UIColor, alpha: CGFloat)] = [:]
+    /** ★★软边遮罩层（mask v1）：节点 id → CAGradientLayer（作 `layer.mask`；动画期只改 colors/locations） */
+    private var layerMasks: [Int: CAGradientLayer] = [:]
+
+    /// ★★本地揭示色标（**仅用于建层静态初值**——动画期由内核逐帧下发；与内核 `reveal_stops` 同式）
+    static func maskStopsLocal(softness: Double, progress: Double) -> (Double, Double, Double, Double) {
+        let p = max(0, min(1, progress))
+        let s = max(0, min(1, softness))
+        if p <= 0 { return (0, 0, 1, 0) }
+        if p >= 1 { return (0, 1, 1, 1) }
+        let front = p * (1 + s) - s * 0.5
+        if front + s * 0.5 <= 0 { return (0, 0, 1, 0) }
+        if front - s * 0.5 >= 1 { return (0, 1, 1, 1) }
+        let oa = max(0, min(1, front - s * 0.5))
+        let ob = max(0, min(1, front + s * 0.5))
+        return (oa, 1, ob, 0)
+    }
+
+    /// ★★**每帧遮罩揭示**（mask v1）——把内核**已算好**的色标写给 `CAGradientLayer` 的 colors/locations
+    func applyMaskTick(nodeId: Int, kind: Int, oA: Float, aA: Float, oB: Float, aB: Float) {
+        guard let gm = layerMasks[nodeId] else { return }
+        CATransaction.begin()
+        CATransaction.setDisableActions(true)
+        gm.colors = [
+            UIColor.white.withAlphaComponent(CGFloat(max(0, min(1, aA)))).cgColor,
+            UIColor.white.withAlphaComponent(CGFloat(max(0, min(1, aB)))).cgColor,
+        ]
+        gm.locations = [NSNumber(value: oA), NSNumber(value: oB)]
+        CATransaction.commit()
+    }
     /// ★跨语言常数（glow v1）：与 TS `GLOW_LAYERS` / Kotlin `GLOW_LAYERS` 同值——改必须三处同批
     static let glowLayerCount = 5
     // ★诊断计数改为**文件级全局**（真机接通排查用；见文件尾 `SvgDiag`）：
@@ -4124,7 +4212,7 @@ final class SelfDrawBridge: NSObject, SelfDrawExports {
     ///     两端宿主 / SDK / embed-demo 的常量必须与它同批更新（本仓历史上因两处各写步长
     ///     而错位解析过：24B 记录被按 16B 读 ⇒ 层上留下错位残值）。
     ///     `scripts/check-anim-record-bytes.mjs` 从内核推出宽度并与各消费端对账。
-    private static let animUpdateRecordBytes = 208
+    private static let animUpdateRecordBytes = 228
 
     /// ★★**每帧推进的唯一解析点**（探针 / 帧循环两条入口共用）
     ///
@@ -4172,6 +4260,17 @@ final class SelfDrawBridge: NSObject, SelfDrawExports {
             let glowRaw = buf.loadUnaligned(fromByteOffset: base + 188, as: Float.self)
             if glowRaw.isFinite {
                 view?.applyGlowTick(nodeId: Int(nodeId), intensity: glowRaw)
+            }
+            // ★★软边遮罩（mask v1，@208：kind u32 + oA/aA/oB/aB 4×f32——228B 记录）：
+            //   揭示色标是**内核已算好**的结果（宿主零数学）；变化时重建 mask 层的渐变。
+            let mKind = buf.loadUnaligned(fromByteOffset: base + 208, as: UInt32.self)
+            if mKind != 0 {
+                let mOA = buf.loadUnaligned(fromByteOffset: base + 212, as: Float.self)
+                let mAA = buf.loadUnaligned(fromByteOffset: base + 216, as: Float.self)
+                let mOB = buf.loadUnaligned(fromByteOffset: base + 220, as: Float.self)
+                let mAB = buf.loadUnaligned(fromByteOffset: base + 224, as: Float.self)
+                view?.applyMaskTick(nodeId: Int(nodeId), kind: Int(mKind),
+                                    oA: mOA, aA: mAA, oB: mOB, aB: mAB)
             }
             // ★★渐变 v2（2026-10-01）：混合后的色标（@112 起：kind u32 + n u32 + 8×colors u32
             //   + 8×offsets f32——184B 记录）。`kind=0` = 本节点无渐变/未变化（忽略）。

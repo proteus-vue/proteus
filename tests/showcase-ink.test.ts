@@ -549,6 +549,30 @@ describe('Morpheus 炫技场 · 第四个节目（墨绘·山水卷）', () => {
     expect(glowMix[0]!.alternate, '呼吸应 yoyo').toBe(true)
   })
 
+  it('★★软边遮罩（mask v1）：远山晕团"从雾里渗开"（线性 · 软边 0.5 · 基态全隐）', () => {
+    const nodes = treeNodes()
+    // 只远山两个晕团有遮罩（近/中由落笔承担骨架——构图选择）
+    for (const pid of INK_IDS.rangePuffs[0]) {
+      const m = (nodes.get(pid) as { mask?: { kind: string; softness: number; progress: number; angle: number } }).mask
+      expect(m?.kind, `晕团 ${pid} 遮罩类型`).toBe('linear')
+      expect(m?.softness, `晕团 ${pid} 软边`).toBe(0.5)
+      expect(m?.progress, `晕团 ${pid} 基态 = 全隐（未演出）`).toBe(0)
+      expect(m?.angle, `晕团 ${pid} 自下而上`).toBe(180)
+    }
+    expect((nodes.get(INK_IDS.rangePuffs[1][0]) as { mask?: unknown }).mask, '中山不应有遮罩').toBeUndefined()
+    // mountains 幕：两条 maskProgress（远山两晕团）——与 strokeProgress 并行
+    const { acts } = walkAll()
+    const mt = acts.find((a) => a.name === 'mountains')!
+    const mps = mt.anims.filter((x) => x.kind === 35)
+    expect(mps.length, 'mountains 幕 maskProgress 条数').toBe(2)
+    for (const m of mps) {
+      expect(m.from).toBe(0)
+      expect(m.to).toBe(1)
+    }
+    // 与描边并行（同一幕里两类通道都在——"一边渗、一边画"）
+    expect(mt.anims.filter((x) => x.kind === 31).length).toBeGreaterThan(0)
+  })
+
   it('★工具函数契约：blend 预混（6 位）· ink 加 alpha（8 位 #RRGGBBAA）', () => {
     expect(blend('#000000', '#ffffff', 0.5)).toBe('#808080')
     expect(blend('#f2ead6', '#f2ead6', 0.3)).toBe('#f2ead6')

@@ -243,6 +243,8 @@ const LAYOUT_KEYS = new Set([
   'svgPathTo',
   // ★★发光 v1（glow）：静态规格（色/半径/强度）——漏放 ⇒ 宿主不发光且静默
   'glow',
+  // ★★软边遮罩 v1（mask）：静态规格——漏放 ⇒ 宿主无遮罩且静默
+  'mask',
 ])
 
 /**
@@ -295,7 +297,7 @@ function layoutStyleOf(props: Record<string, unknown>): Record<string, unknown> 
     //   原样透传给内核（不经过下面的长度折叠：它们不是长度）。
     if (key === 'clipPath' || key === 'perspective' || key === 'svgPath'
         || key === 'strokeColor' || key === 'strokeWidth' || key === 'fillGradient'
-        || key === 'fillGradientTo' || key === 'svgPathTo' || key === 'glow') {
+        || key === 'fillGradientTo' || key === 'svgPathTo' || key === 'glow' || key === 'mask') {
         out[key] = value
         continue
     }

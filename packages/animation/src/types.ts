@@ -63,6 +63,8 @@ export const AnimKind = {
   PATH_MORPH: 33,
   /** ★★发光强度（2026-10-01 · glow v1）：0..1 乘子（1 = 按声明全额发光） */
   GLOW_INTENSITY: 34,
+  /** ★★遮罩进度（2026-10-01 · mask v1）：0..1 = 软边揭示的进度（0=全隐 / 1=全显） */
+  MASK_PROGRESS: 35,
 } as const
 export type AnimKindId = (typeof AnimKind)[keyof typeof AnimKind]
 export type AnimKindName =
@@ -92,6 +94,9 @@ export type AnimKindName =
   /** ★★发光强度（2026-10-01 · glow v1；规格在树里声明为 `glow`；走 tick 路径）
    *  ★web 上发光动画是性能雷区（box-shadow/blur 每帧全量重绘）——本引擎用分层描边 */
   | 'glowIntensity'
+  /** ★★遮罩进度（2026-10-01 · mask v1；规格在树里声明为 `mask`；走 tick 路径）
+   *  ★与 clip 互补：clip 是硬边裁剪、遮罩是软边渐隐（"从雾里渗开"） */
+  | 'maskProgress'
 
 /** 名称 → 编号（编译期用；也是"名字写错"的**类型级**防线） */
 export const ANIM_KIND_ID: Record<AnimKindName, AnimKindId> = {
@@ -120,6 +125,8 @@ export const ANIM_KIND_ID: Record<AnimKindName, AnimKindId> = {
   pathMorph: AnimKind.PATH_MORPH,
   // ★发光强度是**单通道**（34——与内核同号）
   glowIntensity: AnimKind.GLOW_INTENSITY,
+  // ★遮罩进度是**单通道**（35——与内核同号）
+  maskProgress: AnimKind.MASK_PROGRESS,
 }
 
 /** 曲线（与内核 `CURVE_*` 一一对应——**不得改号**） */

@@ -71,6 +71,9 @@ public class ProteusHostView extends ViewGroup {
          *     每帧 `JSONObject` 解析会让绘制路径带上解析开销（本仓绘制纪律：零分配/零解析）。
          */
         final GradSpec gradient;
+        /** ★★遮罩规格（mask v1）：`[kind(int), angle, cx, cy, r, softness]`；null = 无遮罩。
+         *   揭示色标由**内核算好**（`MaskSpec::reveal_stops`）——宿主只翻译（零数学）。 */
+        final float[] mask;
         /** ★★发光规格（glow v1）：`[color(int), radius, alpha]`；null = 无发光。
          *   渲染 = **分层同心描边**（N 层宽度梯度 + alpha 平方衰减——见 TS `glowLayers`）。 */
         final float[] glow;
@@ -88,16 +91,21 @@ public class ProteusHostView extends ViewGroup {
         }
         Cmd(float x, float y, float w, float h, int color, String text, float fontSize, int textColor, float radius,
             GradSpec gradient) {
-            this(x, y, w, h, color, text, fontSize, textColor, radius, gradient, null);
+            this(x, y, w, h, color, text, fontSize, textColor, radius, gradient, null, null);
         }
         Cmd(float x, float y, float w, float h, int color, String text, float fontSize, int textColor, float radius,
             GradSpec gradient, float[] glow) {
+            this(x, y, w, h, color, text, fontSize, textColor, radius, gradient, glow, null);
+        }
+        Cmd(float x, float y, float w, float h, int color, String text, float fontSize, int textColor, float radius,
+            GradSpec gradient, float[] glow, float[] mask) {
             this.x = x; this.y = y; this.w = w; this.h = h; this.color = color; this.text = text;
             this.fontSize = fontSize;
             this.textColor = textColor;
             this.radius = radius;
             this.gradient = gradient;
             this.glow = glow;
+            this.mask = mask;
         }
     }
 
@@ -284,6 +292,8 @@ public class ProteusHostView extends ViewGroup {
     private final android.text.TextPaint textPaint = new android.text.TextPaint(android.graphics.Paint.ANTI_ALIAS_FLAG);
     /** ★★C2：描边笔（STROKE 风格——与填充用的 bgPaint 分开；圆头圆角与 iOS 一致） */
     private final android.graphics.Paint strokePaint = new android.graphics.Paint(android.graphics.Paint.ANTI_ALIAS_FLAG);
+    /** ★★软边遮罩合成用（mask v1）：`渐变 shader + DST_IN`（见 drawCmds 的遮罩合成段） */
+    private final android.graphics.Paint maskPaint = new android.graphics.Paint(android.graphics.Paint.ANTI_ALIAS_FLAG);
 
     /* ══════════ ★★逐节点平台动画（Android：载体 View + ViewPropertyAnimator）══════════ */
 
@@ -705,6 +715,13 @@ public class ProteusHostView extends ViewGroup {
             } else {
                 animGrad.remove(id);
             }
+            // ★★遮罩（mask v1，@208：kind u32 + oA/aA/oB/aB 4×f32——228B 记录）
+            //   ★色标是**内核已算好**的揭示结果（宿主零数学——与"渐变/变形只翻译结果"同一分工）
+            int mk = bb.getInt();
+            float mOA = bb.getFloat(), mAA = bb.getFloat();
+            float mOB = bb.getFloat(), mAB = bb.getFloat();
+            if (mk != 0) animMask.put(id, new float[]{mk, mOA, mAA, mOB, mAB});
+            else animMask.remove(id);
             // ★颜色（2026-10-01）：0xFFFFFFFF = 无该基色 ⇒ 不入覆盖表（保持静态绘制）
             if (rgba != 0xFFFFFFFF) animColor.put(id, rgba);
             if (textRgba != 0xFFFFFFFF) animTextColor.put(id, textRgba);
@@ -718,14 +735,15 @@ public class ProteusHostView extends ViewGroup {
      * 每帧记录长度（与 Rust 侧 `proteus_layout_anim_tick_bin` 对齐——**只在本处定义**）
      *
      * ★★2026-10-01 由 **24B → 28B（底色）→ 32B（文字色）→ 40B（3D）→ 108B（裁剪）
-     *   → 112B（描边）→ 184B（渐变 v2）→ 188B（路径变形 v1）→ 192B（发光 v1）→ 208B（渐变几何）**：
+     *   → 112B（描边）→ 184B（渐变 v2）→ 188B（路径变形 v1）→ 192B（发光 v1）
+     *   → 208B（渐变几何）→ 228B（软边遮罩）**：
      *   `id u32 + 五值 f32 + bg u32 + textColor u32`。
      *   末两个 u32 都是打包色 `0xAARRGGBB`；`0xFFFFFFFF` = **无该基色**（忽略该字段）。
      *   ★唯一事实源 = 内核 `ffi.rs` 的 8 个 `extend_from_slice`；iOS / SDK / embed-demo
      *     的常量必须与它同批更新（历史上因两处各写步长而错位解析过）。
      *     `scripts/check-anim-record-bytes.mjs` 从内核推出宽度并与各消费端对账。
      */
-    private static final int ANIM_RECORD_BYTES = 208;
+    private static final int ANIM_RECORD_BYTES = 228;
 
     /**
      * ★★每帧发光**强度**表（glow v1）：节点 id → `intensity`（0..1 乘子，乘在静态 alpha 上）。
@@ -735,6 +753,8 @@ public class ProteusHostView extends ViewGroup {
     // intensity 语义见上（表名即键名；门禁 check-gradient-contract 要求本端引用该键）
 
     private final Map<Integer, Float> animGlow = new HashMap<>();
+    /** ★★每帧遮罩揭示表（mask v1）：节点 id → `[kind, oA, aA, oB, aB]`（**内核已算好**） */
+    private final Map<Integer, float[]> animMask = new HashMap<>();
 
     /** ★★每帧变形覆盖表（路径变形 v1）：节点 id → 当前因子（NaN 缺省 = 无 B 态） */
     private final Map<Integer, Float> animMorphFactor = new HashMap<>();
@@ -902,6 +922,7 @@ public class ProteusHostView extends ViewGroup {
         animMorphFactor.clear(); // ★路径变形 v1 同（清表 ⇒ 回 A 态路径）
         morphCache.clear();
         animGlow.clear();        // ★发光 v1 同（清表 ⇒ 回声明强度 1.0）
+        animMask.clear();        // ★遮罩 v1 同（清表 ⇒ 回声明基态揭示）
         invalidate();
         return out;
     }
@@ -977,6 +998,22 @@ public class ProteusHostView extends ViewGroup {
                         glowStr = String.format("%d:%.3f", GLOW_LAYERS, a0);
                     }
                 }
+                // ★★遮罩（mask v1）：**真读宿主合成真源**（animMask 覆盖 or 静态声明）——
+                //   形态 "linear:0.300,1.000"（kind:oA,aA）——判据据此断言"揭示真的在变"
+                String maskStr = "";
+                {
+                    final float[] mr = animMask.get(id);
+                    if (mr != null) {
+                        maskStr = (mr[0] == 2 ? "radial:" : "linear:")
+                                + String.format(java.util.Locale.US, "%.3f,%.3f", mr[1], mr[2]);
+                    } else {
+                        final int ci = indexOfNode(id);
+                        if (ci >= 0 && cmds != null && ci < cmds.size() && cmds.get(ci).mask != null) {
+                            final float[] mspec = cmds.get(ci).mask;
+                            maskStr = (mspec[0] == 2 ? "radial:" : "linear:") + "static";
+                        }
+                    }
+                }
                 String morphStr = "";
                 {
                     final Float mf = animMorphFactor.get(id);
@@ -1027,8 +1064,11 @@ public class ProteusHostView extends ViewGroup {
                       .append(",\"strokeProgress\":").append(strokeProg)
                       .append(",\"gradient\":\"").append(gradStr).append("\"")
                       .append(",\"glow\":\"").append(glowStr).append("\"")
+                      .append(",\"mask\":\"").append(maskStr).append("\"")
+                      .append(",\"mask\":\"").append(maskStr).append("\"")
                       .append(",\"pathMorph\":\"").append(morphStr).append("\"")
                       .append(",\"glow\":\"").append(glowStr).append("\"")
+                      .append(",\"mask\":\"").append(maskStr).append("\"")
                       .append(",\"bg\":\"").append(bgHex)
                       .append("\",\"textColor\":\"").append(textHex).append("\"}");
                 } else {
@@ -1042,6 +1082,7 @@ public class ProteusHostView extends ViewGroup {
                       .append(",\"gradient\":\"").append(gradStr).append("\"")
                       .append(",\"pathMorph\":\"").append(morphStr).append("\"")
                       .append(",\"glow\":\"").append(glowStr).append("\"")
+                      .append(",\"mask\":\"").append(maskStr).append("\"")
                       .append(",\"bg\":\"").append(bgHex)
                       .append("\",\"textColor\":\"").append(textHex).append("\"}");
                 }
@@ -1721,6 +1762,18 @@ public class ProteusHostView extends ViewGroup {
             final boolean xf = (tf != null && (tf[0] != 0f || tf[1] != 0f || tf[2] != 1f || tf[3] != 0f || has3d))
                     || hasClip;
             final int save = xf ? canvas.save() : -1;
+            // ★★软边遮罩（mask v1）：**saveLayer 包裹**（开层 → 画内容 → 用 DST_IN 叠渐变 → 还原）。
+            //   揭示色标来自 `animMask`（内核已算好）或建树静态声明——宿主零揭示数学。
+            //   ★与 clipPath 的差异：clip 是"硬边裁剪"（直接改画布状态），遮罩是"软边合成"
+            //     （必须开层做 DST_IN——两者在同一节点上**天然可叠加**：先 clip 后遮罩）。
+            float[] maskSpec = (ids != null && i < ids.length && ids[i] >= 0 && cmds != null && i < cmds.size())
+                    ? cmds.get(i).mask : null;
+            float[] maskReveal = (ids != null && i < ids.length) ? animMask.get(ids[i]) : null;
+            final boolean hasMask = maskSpec != null && (maskReveal != null
+                    ? (maskReveal[2] > 0.001f || maskReveal[4] > 0.001f)  // 未全隐才开层（省性能）
+                    : true);
+            final int maskLayer = hasMask
+                    ? canvas.saveLayer(c.x, c.y, c.x + c.w, c.y + c.h, null) : -1;
             float op = 1f;
             if (tf != null) op = tf[4];
             if (xf) {
@@ -1954,6 +2007,42 @@ public class ProteusHostView extends ViewGroup {
                         ? Color.alpha(animTc != null ? animTc : c.textColor) : 255;
                 textPaint.setAlpha(op < 1f ? Math.max(0, Math.min(255, (int) (alphaBase * op))) : alphaBase);
                 canvas.drawText(c.text, c.x + 1f, c.y + c.h * 0.8f, textPaint);
+            }
+            // ★★软边遮罩合成（mask v1）：**在全部内容（含文字/描边/发光）之后**用
+            //   `渐变 shader + DST_IN` 把本层按揭示色标"擦"出来——
+            //   ★必须放最后（放中间会让之后画的东西"逃出遮罩"——文字逃出是最容易被忽略的）。
+            if (hasMask) {
+                final float[] rev = maskReveal != null
+                        ? maskReveal
+                        : new float[]{maskSpec[0], 0f, 1f, 1f, 1f}; // 静态：无每帧覆盖 ⇒ 全显兜底
+                final int mk = (int) rev[0];
+                // 端点钉死（与内核同一纪律）：alpha 由 [aA, aB] 两标编码（白 + alpha）
+                final int aA = (int) (Math.max(0f, Math.min(1f, rev[2])) * 255f + 0.5f);
+                final int aB = (int) (Math.max(0f, Math.min(1f, rev[4])) * 255f + 0.5f);
+                final int[] mcols = {(aA << 24) | 0x00FFFFFF, (aB << 24) | 0x00FFFFFF};
+                final float[] mpos = {rev[1], rev[3]};
+                android.graphics.Shader mshader;
+                if (mk == 1) {
+                    // 线性：沿 angle（与渐变同一套端点换算：0°=向上）
+                    final double rad = Math.toRadians(maskSpec[1]);
+                    final float dx = (float) Math.sin(rad);
+                    final float dy = (float) -Math.cos(rad);
+                    mshader = new android.graphics.LinearGradient(
+                            c.x + (0.5f - dx / 2f) * c.w, c.y + (0.5f - dy / 2f) * c.h,
+                            c.x + (0.5f + dx / 2f) * c.w, c.y + (0.5f + dy / 2f) * c.h,
+                            mcols, mpos, android.graphics.Shader.TileMode.CLAMP);
+                } else {
+                    // 径向：自圆心向外
+                    mshader = new android.graphics.RadialGradient(
+                            c.x + maskSpec[2] * c.w, c.y + maskSpec[3] * c.h, maskSpec[4] * c.w,
+                            mcols, mpos, android.graphics.Shader.TileMode.CLAMP);
+                }
+                maskPaint.setShader(mshader);
+                maskPaint.setXfermode(new android.graphics.PorterDuffXfermode(
+                        android.graphics.PorterDuff.Mode.DST_IN));
+                canvas.drawRect(c.x, c.y, c.x + c.w, c.y + c.h, maskPaint);
+                maskPaint.setShader(null);
+                canvas.restoreToCount(maskLayer);
             }
             if (xf) canvas.restoreToCount(save);
         }
