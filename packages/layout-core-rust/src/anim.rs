@@ -277,6 +277,11 @@ pub enum AnimKind {
     TextColorB = 11,
     /// ★文字色通道 A（0..255 → 第 24..31 位）
     TextColorA = 12,
+    /// ★★**绕 X 轴旋转**（2026-10-01 · B 批 3D；**度**；锚点 = 层中心）——
+    ///   翻牌 / 立方体 / 卡片 3D 旋入的轴。透视由节点的 `perspective`（CSS 语义）给出。
+    RotateX = 13,
+    /// ★★**绕 Y 轴旋转**（度；锚点 = 层中心）——翻牌/翻转的轴
+    RotateY = 14,
 }
 
 impl AnimKind {
@@ -295,10 +300,12 @@ impl AnimKind {
             10 => AnimKind::TextColorG,
             11 => AnimKind::TextColorB,
             12 => AnimKind::TextColorA,
+            13 => AnimKind::RotateX,
+            14 => AnimKind::RotateY,
             other => {
                 return Err(format!(
                     "未知动画属性 kind={other}（0=translateX/1=translateY/2=scale/3=rotate/4=opacity/\
-5..8=color 的 R/G/B/A 通道/9..12=textColor 的 R/G/B/A 通道）"
+5..8=color 的 R/G/B/A 通道/9..12=textColor 的 R/G/B/A 通道/13=rotateX/14=rotateY）"
                 ))
             }
         })
@@ -320,6 +327,8 @@ impl AnimKind {
             | AnimKind::TextColorG
             | AnimKind::TextColorB
             | AnimKind::TextColorA => "textColor",
+            AnimKind::RotateX => "rotateX",
+            AnimKind::RotateY => "rotateY",
         }
     }
 
@@ -361,7 +370,9 @@ impl AnimKind {
             | AnimKind::TranslateY
             | AnimKind::Scale
             | AnimKind::Rotate
-            | AnimKind::Opacity => 0,
+            | AnimKind::Opacity
+            | AnimKind::RotateX
+            | AnimKind::RotateY => 0,
         }
     }
 
@@ -373,6 +384,8 @@ impl AnimKind {
             AnimKind::TranslateX | AnimKind::TranslateY => (0.5, 10.0), // px, px/s
             AnimKind::Scale => (0.002, 0.04),                           // 倍, 倍/s
             AnimKind::Rotate => (0.05, 1.0),                            // 度, 度/s
+            // ★3D 旋转与 Z 旋转同量纲（度）——同一阈值
+            AnimKind::RotateX | AnimKind::RotateY => (0.05, 1.0),       // 度, 度/s
             AnimKind::Opacity => (0.003, 0.06),                         // 1, 1/s
             // ★颜色通道：0.5/255 的通道步 ≈ 视觉不可辨（与 translate 的 0.5px 同量级取法）
             AnimKind::ColorR | AnimKind::ColorG | AnimKind::ColorB | AnimKind::ColorA => (0.5, 10.0),
@@ -401,6 +414,13 @@ impl AnimKind {
         match self {
             AnimKind::TranslateX | AnimKind::TranslateY | AnimKind::Scale | AnimKind::Rotate
             | AnimKind::Opacity => true,
+            // ★★3D 旋转**不进平台零参与路径**（2026-10-01 · B 批，与 color 同源的决策）：
+            //   两端的平台插值器对 3D 的语义**不同**（iOS CALayer.transform 是完整 4×4 矩阵可由
+            //   CA 插值；Android 的 rotationX/Y 是 View 属性、RenderNode 侧支持面窄且与
+            //   Matrix+Camera 的组合行为有差异）⇒ 若单边放行就是两端分档。
+            //   ⇒ v1 统一走 **tick 路径**（每帧内核求值 + 宿主组矩阵写层），跨端一致。
+            //   ★实测余量：120Hz 下每帧工作 p95 2ms（预算 8.3ms）——3D 走 tick 完全在预算内。
+            AnimKind::RotateX | AnimKind::RotateY => false,
             AnimKind::ColorR
             | AnimKind::ColorG
             | AnimKind::ColorB
@@ -447,6 +467,8 @@ impl AnimKind {
                 AnimKind::Scale => &mut node.style.scale,
                 AnimKind::Rotate => &mut node.style.rotate,
                 AnimKind::Opacity => &mut node.style.opacity,
+                AnimKind::RotateX => &mut node.style.rotate_x,
+                AnimKind::RotateY => &mut node.style.rotate_y,
                 // 颜色走上面的分支（此处不可达——`is_color` 已分流）
                 AnimKind::ColorR
                 | AnimKind::ColorG
@@ -777,10 +799,17 @@ pub fn reset_visuals(tree: &mut LayoutTree, node_ids: &[u32]) -> usize {
             // ★颜色也要判脏（2026-10-01）：`bg` 与底色的差即"颜色被动画改过"；
             //   文字色（`text_color`）同理——两组通道各自判、各自复位
             let color_dirty = s.bg != s.bg_base || s.text_color != s.text_color_base;
+            // ★B 批 3D（2026-10-01）：`rotate_x/rotate_y` 必须参与"脏判定 + 复位"——
+            //   ★这是真机判据抓出的**真缺陷**（E4 间歇红）：3D 测试的 rotateY=180 残留在
+            //   节点样式里 ⇒ 后续 seek 驱动的层带上"绕 Y 翻转"⇒ 探针读 tx 得到
+            //   `470 = 80 + 视口宽 390`（透视投影偏移）而非 80。**"解绑必须含清值"**
+            //   的新字段版：新加可动画字段时必须进这里（漏一个 = 静默残留）。
             let dirty = s.translate_x != 0.0
                 || s.translate_y != 0.0
                 || s.scale != 1.0
                 || s.rotate != 0.0
+                || s.rotate_x != 0.0
+                || s.rotate_y != 0.0
                 || s.opacity != 1.0
                 || color_dirty;
             if dirty {
@@ -788,6 +817,8 @@ pub fn reset_visuals(tree: &mut LayoutTree, node_ids: &[u32]) -> usize {
                 s.translate_y = 0.0;
                 s.scale = 1.0;
                 s.rotate = 0.0;
+                s.rotate_x = 0.0;   // ★B 批 3D：与 rotate 同一义务
+                s.rotate_y = 0.0;
                 s.opacity = 1.0;
                 // ★复位 = 回底色 / 回原文字色（不是清成 None：那会丢掉"本节点有基色"的事实）
                 s.bg = s.bg_base;
@@ -928,8 +959,8 @@ pub fn commit_specs(tree: &LayoutTree, anims: &[Anim]) -> Vec<CommitSpec> {
                     AnimKind::Scale => v.2 = val,
                     AnimKind::Rotate => v.3 = val,
                     AnimKind::Opacity => v.4 = val,
-                    // ★颜色不可达（`anim_commit_spec` 入口已按 `plan_animations` 整批拒绝）——
-                    //   这里显式 match 而非 `_` 通配，是为了**编译期**就提醒：将来若放行颜色，
+                    // ★颜色与 3D 不可达（`anim_commit_spec` 入口已按 `plan_animations` 整批拒绝）——
+                    //   这里显式 match 而非 `_` 通配，是为了**编译期**就提醒：将来若放行它们，
                     //   必须同时扩展 `CommitSpec` 的采样元组（现在只有五元组）。
                     AnimKind::ColorR
                     | AnimKind::ColorG
@@ -938,7 +969,9 @@ pub fn commit_specs(tree: &LayoutTree, anims: &[Anim]) -> Vec<CommitSpec> {
                     | AnimKind::TextColorR
                     | AnimKind::TextColorG
                     | AnimKind::TextColorB
-                    | AnimKind::TextColorA => {}
+                    | AnimKind::TextColorA
+                    | AnimKind::RotateX
+                    | AnimKind::RotateY => {}
                 }
             }
             samples.push(v);
@@ -953,7 +986,7 @@ pub fn commit_specs(tree: &LayoutTree, anims: &[Anim]) -> Vec<CommitSpec> {
                     AnimKind::Scale => last.2 = a.to,
                     AnimKind::Rotate => last.3 = a.to,
                     AnimKind::Opacity => last.4 = a.to,
-                    // ★颜色不可达（见上）
+                    // ★颜色与 3D 不可达（见上）
                     AnimKind::ColorR
                     | AnimKind::ColorG
                     | AnimKind::ColorB
@@ -961,7 +994,9 @@ pub fn commit_specs(tree: &LayoutTree, anims: &[Anim]) -> Vec<CommitSpec> {
                     | AnimKind::TextColorR
                     | AnimKind::TextColorG
                     | AnimKind::TextColorB
-                    | AnimKind::TextColorA => {}
+                    | AnimKind::TextColorA
+                    | AnimKind::RotateX
+                    | AnimKind::RotateY => {}
                 }
             }
             let n = samples.len();
@@ -1028,6 +1063,9 @@ pub struct NodeVisual {
     pub ty: f32,
     pub scale: f32,
     pub rotate: f32,
+    /// ★★3D 旋转（2026-10-01 · B 批；度）——走 tick 路径（见 `is_composited` 注释）
+    pub rotate_x: f32,
+    pub rotate_y: f32,
     pub opacity: f32,
     /// ★颜色（2026-10-01）：打包 `0xAARRGGBB`；`None` = 本节点无内核底色
     ///   （宿主保持自己的静态绘制——见 `LStyle.bg` 注释）
@@ -1222,6 +1260,8 @@ impl AnimEngine {
                 || s.translate_y != 0.0
                 || s.scale != 1.0
                 || s.rotate != 0.0
+                || s.rotate_x != 0.0   // ★B 批 3D：与 rotate 同一义务（见 reset_visuals 注释）
+                || s.rotate_y != 0.0
                 || s.opacity != 1.0
                 || color_dirty
             {
@@ -1229,6 +1269,8 @@ impl AnimEngine {
                 s.translate_y = 0.0;
                 s.scale = 1.0;
                 s.rotate = 0.0;
+                s.rotate_x = 0.0;
+                s.rotate_y = 0.0;
                 s.opacity = 1.0;
                 s.bg = s.bg_base; // ★颜色回底色 / 回原文字色（见 reset_visuals 注释）
                 s.text_color = s.text_color_base;
@@ -1591,6 +1633,8 @@ impl AnimEngine {
                 ty: node.style.translate_y,
                 scale: node.style.scale,
                 rotate: node.style.rotate,
+                rotate_x: node.style.rotate_x,
+                rotate_y: node.style.rotate_y,
                 opacity: node.style.opacity,
                 // ★颜色：`bg` 优先（动画写过），否则回底色（未被动过的节点也报得出真值）
                 bg: node.style.bg.or(node.style.bg_base),
@@ -2420,6 +2464,25 @@ mod tests {
             assert!((bezier_eval(c, 0.0) - 0.0).abs() < 1e-5, "曲线 {curve} 的贝塞尔 f(0) 应为 0");
             assert!((bezier_eval(c, 1.0) - 1.0).abs() < 1e-5, "曲线 {curve} 的贝塞尔 f(1) 应为 1");
         }
+    }
+
+    #[test]
+    fn reset_visuals_clears_3d_rotation() {
+        // ★真机 E4 抓出的真缺陷（2026-10-01）：3D 旋转字段漏进"清场"⇒ 残留让后续 seek 的
+        //   层带 180° 翻转 ⇒ 探针读 tx 得 470（= 80 + 视口宽 390 的透视投影偏移）。
+        let mut t = tree_with(1);
+        t.nodes[0].style.rotate_y = 180.0;
+        t.nodes[0].style.rotate_x = -90.0;
+        let n = reset_visuals(&mut t, &[1]);
+        assert_eq!(n, 1, "带 3D 残留的节点应被判脏并复位");
+        assert_eq!(t.nodes[0].style.rotate_y, 0.0);
+        assert_eq!(t.nodes[0].style.rotate_x, 0.0);
+        // stop_all 同一条义务
+        t.nodes[0].style.rotate_y = 45.0;
+        let mut e = AnimEngine::new();
+        let n2 = e.stop_all(&mut t);
+        assert_eq!(n2, 1);
+        assert_eq!(t.nodes[0].style.rotate_y, 0.0);
     }
 
     #[test]

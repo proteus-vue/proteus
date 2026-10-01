@@ -1672,6 +1672,24 @@ public class MainActivity extends Activity {
                     "{\"anims\":[{\"nodeId\":11,\"kind\":0,\"curveBezier\":[-0.2,0,0.64,1],"
                             + "\"from\":0,\"to\":100,\"durMs\":200}]}"));
 
+            // ── T 组（★★3D 旋转 rotateX/rotateY，2026-10-01 · B 批）──
+            //   判据（check-kernel-anim.py T 组）：
+            //     T1 rotateY 0→180 的动画被内核受理（kind 14），探针能真读 rotateY 通道
+            //     T2 终值精确（= 180）——端点钉死的 3D 版
+            //     T3 3D 不进平台零参与路径（内核 plan 明确拒绝——跨端一致决策的机器证据）
+            hv.kernelAnimStop("{\"all\":true}");
+            out.put("t3d_start", hv.kernelAnimStart(
+                    "{\"anims\":[{\"nodeId\":11,\"kind\":14,\"curve\":3,\"from\":0,\"to\":180,"
+                            + "\"durMs\":400,\"takeover\":false}]}"));
+            hv.kernelAnimTick(200f);
+            out.put("t3d_mid", new org.json.JSONObject(hv.animTxProbe("[11]")));
+            hv.kernelAnimTick(200f);
+            out.put("t3d_end", new org.json.JSONObject(hv.animTxProbe("[11]")));
+            // T3：3D 声明提交到平台零参与路径 ⇒ 内核必须拒绝（非合成）
+            out.put("t3d_commit_rejected", hv.kernelAnimCommitSpec(
+                    "{\"anims\":[{\"nodeId\":11,\"kind\":14,\"from\":0,\"to\":180,\"durMs\":400}]}"));
+            hv.kernelAnimStop("{\"all\":true}");
+
             // ── S 组（★★播放控制 timeScale/pause，2026-10-01 · A3）──
             //   判据（check-kernel-anim.py S 组）：
             //     S1 timeScale:0.25 的动画在同样 dt 下**只走到 1/4 进度**（慢动作生效）

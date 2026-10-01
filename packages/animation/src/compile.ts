@@ -51,7 +51,7 @@ export function compileAnimations(
   // ★§4.2：声明式使用量记账（仅在显式注入注册表时——纯函数性质不变）
   opts?.escapes?.noteDeclarative(anims.length)
   // ★★**合成属性判定**（2026-10-01 修正：此前恒 `true`）
-  //   颜色（kind 5..8）是 paint-only 但**非合成**（见 validate.ts 的 PAINT_ONLY_KINDS 注释）
+  //   颜色与 3D 旋转非合成但受支持（见 validate.ts 的 PAINT_ONLY_KINDS / TICK_ONLY_KINDS 注释）
   //   ⇒ `composited` 必须如实反映，否则上层会把它当平台路径可用（`isPlatformEligible` 会放行，
   //     而内核 `anim_commit_spec` 侧会**整批拒绝**——两处结论不一致就是"静默分档"）。
   const kindNames = new Set(decls.map((d) => d.kind))

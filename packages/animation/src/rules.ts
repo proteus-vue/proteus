@@ -339,6 +339,30 @@ compileAnimations([{ kind: 'textColor', from: '#ffffff', to: '#00ff00',
     source: 'packages/animation/src/types.ts:BezierPoints + easing.ts:parseCubicBezier（内核 anim.rs:bezier_table + ffi.rs:parse_curve_bezier）',
   },
   {
+    id: 'primitive/rotate3d',
+    kind: 'primitive',
+    title: '3D 旋转（rotateX / rotateY —— 2026-10-01 · B 批）',
+    description: '`rotateX`(13) / `rotateY`(14)——绕 X/Y 轴旋转（度；锚点 = 层中心）。'
+      + '透视在**节点样式**上声明：`perspective: 1200`（CSS 语义；越大越弱）。',
+    why: '★**走 tick 路径，不进平台零参与**（与 color 同源的"跨端一致优先"决策）：'
+      + '两端的平台插值器对 3D 的语义不同（iOS CALayer 完整 4×4 矩阵可由 CA 插值；'
+      + 'Android 的 rotationX/Y 是 View 属性、与 Matrix+Camera 组合行为有差异）⇒ '
+      + '单边放行就是两端分档 ⇒ 统一内核逐帧求值 + 宿主组矩阵（iOS `CATransform3DRotate` / '
+      + 'Android `Camera.getMatrix`）。实测余量充足（120Hz p95 2ms / 预算 8.3ms）。'
+      + '★诚实边界：CSS 的"父 `perspective` 作用于所有子"（共享视点）暂不支持——'
+      + '透视落在**节点自身**（多子立体场景需要共享视点时再评估）。',
+    when: '翻牌 / 立方体转场 / 卡片 3D 旋入 / 任何立体感动效',
+    example: `import { presets } from '@proteus-vue/animation'
+// 翻入（轴 + 起始角度可配；节点样式里给 perspective: 1200）
+const spec = presets.element.flipIn({ axis: 'y', fromDeg: -90 })
+// 持续翻转（一句话 = 来回翻）
+const forever = presets.element.flip3D({ axis: 'y', repeat: 'infinite', direction: 'alternate' })`,
+    verify: 'tests/anim-bezier-golden.test.ts 的 B 批段（kind 13/14 · composited=false · tick-only 不落红线 · 预设形态）；'
+      + '真机：check-anim-rt2.py T12（iOS 层矩阵真读反解）× check-kernel-anim.py T 组（Android）',
+    status: 'implemented',
+    source: 'packages/animation/src/types.ts:AnimKind（内核 anim.rs:AnimKind 13/14 + style.rs:rotate_x/rotate_y/perspective）',
+  },
+  {
     id: 'primitive/repeat',
     kind: 'primitive',
     title: '循环与往复（repeat / direction —— 2026-10-01 · A2）',

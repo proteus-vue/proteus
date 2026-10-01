@@ -38,6 +38,11 @@ Morpheus 的对外表面只有一个包：**`@proteus-vue/animation`**（声明 
 | `easeInOut` | 3 |
 | `springApprox` | 4 |
 
+**3D 旋转（`rotateX` / `rotateY`，2026-10-01）**：绕 X/Y 轴旋转（度；锚点 = 层中心），
+透视在节点样式上声明（`perspective: 1200`，CSS 语义）。**走 tick 路径**——
+两端平台插值器的 3D 语义不同，统一内核逐帧求值 + 宿主组矩阵（跨端一致优先，与 `color` 同源决策）。
+预设：`presets.element.flipIn`（翻入）/ `flip3D`（翻面，可与 `repeat: 'infinite'` 组合成持续翻转）。
+
 **循环与往复（`repeat` / `direction`，2026-10-01）**：`repeat: 3 | 'infinite'`
 （= CSS `animation-iteration-count`）＋ `direction: 'alternate'`（= yoyo——奇偶轮反向、
 **净位移 0**）。"呼吸灯/无限脉冲"不再需要"把时长写长"（那会把曲线拉伸变形）。

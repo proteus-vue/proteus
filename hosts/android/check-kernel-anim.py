@@ -36,6 +36,16 @@ def fail(msg):
     print(f"  ✗ {msg}")
 
 
+def _j(x):
+    """把"可能是 JSON 字符串"的读数统一成 dict（宿主有时把结果放成字符串形态）"""
+    if isinstance(x, str):
+        try:
+            return json.loads(x)
+        except Exception:
+            return {}
+    return x or {}
+
+
 def _layers(probe):
     """把 `{"ok":true,"layers":[…]}` 或裸 dict 统一成首元素（宿主探针可能被包在 JSONObject 里）"""
     if isinstance(probe, dict) and "layers" in probe:
@@ -337,13 +347,37 @@ def main() -> int:
     else:
         print(f"  ✓ Q3 非法控制点明确拒绝（可定位）：{rej_s[:90]}…")
 
+    # ── T 组（★★3D 旋转，2026-10-01 · B 批）：rotateX/rotateY 端到端 ──
+    t3s = _j(d.get("t3d_start"))
+    t3_started = t3s.get("started") if isinstance(t3s, dict) else None
+    t3m = _layers(_j(d.get("t3d_mid")))
+    t3e = _layers(_j(d.get("t3d_end")))
+    ry_mid = t3m.get("rotateY")
+    ry_end = t3e.get("rotateY")
+    if t3_started != 1:
+        fail(f"T1 3D 动画未被内核受理：{t3s}（kind=14 应被接受）")
+        ok = False
+    elif not isinstance(ry_mid, (int, float)) or not isinstance(ry_end, (int, float)):
+        fail(f"T1/T2 rotateY 读数缺失（探针未报 3D 通道？）：mid={ry_mid} end={ry_end}")
+        ok = False
+    elif not (60.0 <= ry_mid <= 140.0):
+        fail(f"T2a 半程 rotateY 异常：{ry_mid:.1f}（应约 90——中途值）")
+        ok = False
+    elif abs(ry_end - 180.0) > 0.01:
+        fail(f"T2b 终值未钉死：rotateY={ry_end}（应精确 = 180）")
+        ok = False
+    else:
+        print(f"  ✓ T1/T2 ★3D 旋转端到端（真读宿主表）：rotateY 半程 {ry_mid:.1f} → 终值 {ry_end:.1f}（钉死）")
+    trej = _j(d.get("t3d_commit_rejected"))
+    trej_s = json.dumps(trej, ensure_ascii=False) if isinstance(trej, dict) else str(trej)
+    if "非合成" not in trej_s and "nonComposited" not in trej_s and "rotateY" not in trej_s:
+        fail(f"T3 3D 未被平台零参与路径拒绝（跨端一致决策的证据）：{trej_s[:160]}")
+        ok = False
+    else:
+        print(f"  ✓ T3 3D 不进平台零参与路径（内核明确拒绝——跨端一致决策的机器证据）：{trej_s[:70]}…")
+
     # ── S 组（★★播放控制，2026-10-01 · A3）：timeScale / pause ──
-    def _j(x):
-        if isinstance(x, str):
-            try: return json.loads(x)
-            except Exception: return {}
-        return x or {}
-    s1 = _j(d.get("slow_tick") and d.get("slow_tick") or d.get("slow_tick"))
+    s1 = _j(d.get("slow_tick"))
     slow = _layers(s1).get("tx")
     reset = _j(d.get("control_reset"))
     if not isinstance(slow, (int, float)):

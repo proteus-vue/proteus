@@ -132,6 +132,10 @@ pub(crate) struct NodeDto {
     ///   （见其 `render/fullRequest` 注释）；它现在是内核字段 ⇒ 必须放行。
     #[serde(skip_serializing_if = "Option::is_none")]
     pub(crate) color: Option<String>,
+    /// ★★**透视距离**（2026-10-01 · B 批 3D；CSS `perspective` 语义，px）——
+    ///   静态样式（非动画属性）：宿主建层时读取用于组 3D 矩阵。
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub(crate) perspective: Option<f32>,
     /// 文本字面量（有此字段即为文本叶子，走宿主注入的度量）
     #[serde(skip_serializing_if = "Option::is_none")]
     pub(crate) text: Option<String>,
@@ -202,6 +206,7 @@ impl NodeDto {
             // ★颜色：blob 形态暂无这两个字段（按位图解码；未提供 ⇒ 该节点不进颜色轨道）
             background_color: None,
             color: None,
+            perspective: None,
             text: None,
             is_text: false,
             native_host: false,
@@ -260,6 +265,8 @@ fn default_viewport() -> ViewportDto {
 ///   颜色落地时若要逐个改，就是"改 5 处、漏 1 处"的经典形态（二进制通道已经因为漏改
 ///   出过错位解析）。⇒ 抽出本函数，5 个入口共用；`u32::MAX` = 该基色不存在。
 fn visual_to_json(v: &crate::anim::NodeVisual) -> serde_json::Value {
+    // ★★B 批（2026-10-01）：末尾追加 rotateX/rotateY（第 9/10 项）——**既有索引全不变**
+    //   （旧消费端读前 8 项照常工作；新消费端读 9/10——向后兼容的线格式演进）。
     serde_json::json!([
         v.id,
         v.tx,
@@ -268,7 +275,9 @@ fn visual_to_json(v: &crate::anim::NodeVisual) -> serde_json::Value {
         v.rotate,
         v.opacity,
         v.bg.unwrap_or(u32::MAX),
-        v.text_color.unwrap_or(u32::MAX)
+        v.text_color.unwrap_or(u32::MAX),
+        v.rotate_x,
+        v.rotate_y
     ])
 }
 
@@ -318,6 +327,13 @@ pub(crate) fn style_from_dto(dto: &NodeDto) -> Result<LStyle, String> {
         let packed = parse_css_color(raw)?;
         style.text_color = Some(packed);
         style.text_color_base = Some(packed);
+    }
+    // ★★透视（B 批 3D）：静态样式——正值有效；非正/非有限 ⇒ 明确拒绝（不静默当无透视）
+    if let Some(p) = dto.perspective {
+        if !p.is_finite() || p <= 0.0 {
+            return Err(format!("perspective 非法：{p}（应为正数 px——越大越弱，如 1200）"));
+        }
+        style.perspective = Some(p);
     }
     style.width = dto.width;
     style.height = dto.height;
@@ -3146,8 +3162,10 @@ pub unsafe extern "C" fn proteus_layout_anim_tick_bin(handle: u64, dt_ms: f32, o
         let mut eng = std::mem::take(&mut entry.anim);
         let out = eng.tick(&mut entry.tree, dt_ms);
         entry.anim = eng;
-        // ★每帧通道：**32B/条**定长 = id u32 + 五值 f32（tx/ty/scale/rotate/opacity）
+        // ★每帧通道：**40B/条**定长 = id u32 + 七值 f32（tx/ty/scale/rotate/opacity/**rotateX/rotateY**）
         //   + bg u32 + textColor u32
+        //   ★B 批（2026-10-01）：3D 旋转在**末尾追加**（bg/textColor 的偏移保持不变——
+        //     5 处消费端的既有字段读取零改动，只改宽度常量 + 追加读末尾 8 字节）
         //   ★2026-10-01 由 24B → 28B（底色）→ **32B**（文字色）：两个 u32 都是**打包色**
         //     （0xAARRGGBB）；`u32::MAX` = **本节点无该基色**（宿主忽略该字段——
         //     见 `NodeVisual.color_valid` / `text_color_valid`）。
@@ -3155,7 +3173,7 @@ pub unsafe extern "C" fn proteus_layout_anim_tick_bin(handle: u64, dt_ms: f32, o
         //     （iOS `animUpdateRecordBytes` / Android `ANIM_RECORD_BYTES` / SDK `FRAME_UPDATE_BYTES` /
         //     embed-demo 与 `proteus-jni::host`）必须**同批改**——
         //     ★`scripts/check-anim-record-bytes.mjs` 会从本处的写入序列**推出**宽度并与各消费端对账。
-        let mut buf = Vec::with_capacity(out.updates.len() * 32);
+        let mut buf = Vec::with_capacity(out.updates.len() * 40);
         for v in out.updates {
             buf.extend_from_slice(&v.id.to_le_bytes());
             buf.extend_from_slice(&v.tx.to_le_bytes());
@@ -3165,6 +3183,9 @@ pub unsafe extern "C" fn proteus_layout_anim_tick_bin(handle: u64, dt_ms: f32, o
             buf.extend_from_slice(&v.opacity.to_le_bytes());
             buf.extend_from_slice(&v.bg.unwrap_or(u32::MAX).to_le_bytes());
             buf.extend_from_slice(&v.text_color.unwrap_or(u32::MAX).to_le_bytes());
+            // ★B 批：3D 旋转（末尾追加——偏移 @32/@36）
+            buf.extend_from_slice(&v.rotate_x.to_le_bytes());
+            buf.extend_from_slice(&v.rotate_y.to_le_bytes());
         }
         Ok(buf)
     });

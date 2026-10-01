@@ -32,6 +32,11 @@ export const AnimKind = {
   TEXT_COLOR_G: 10,
   TEXT_COLOR_B: 11,
   TEXT_COLOR_A: 12,
+  // ★★3D 旋转（2026-10-01 · B 批）：与 `rotate`（Z 轴）并列的两个轴。
+  //   走 tick 路径（不进平台零参与——iOS/Android 的 3D 插值语义不同，跨端一致优先；
+  //   见内核 is_composited 注释）。
+  ROTATE_X: 13,
+  ROTATE_Y: 14,
 } as const
 export type AnimKindId = (typeof AnimKind)[keyof typeof AnimKind]
 export type AnimKindName =
@@ -44,6 +49,10 @@ export type AnimKindName =
   | 'color'
   /** 文字色（内核四通道 9..12） */
   | 'textColor'
+  /** ★绕 X 轴旋转（度；3D——翻牌/立方体；走 tick 路径） */
+  | 'rotateX'
+  /** ★绕 Y 轴旋转（度；3D——翻转/翻牌；走 tick 路径） */
+  | 'rotateY'
 
 /** 名称 → 编号（编译期用；也是"名字写错"的**类型级**防线） */
 export const ANIM_KIND_ID: Record<AnimKindName, AnimKindId> = {
@@ -58,6 +67,9 @@ export const ANIM_KIND_ID: Record<AnimKindName, AnimKindId> = {
   color: AnimKind.COLOR_R,
   // ★`textColor` 同理（名义值 = 文字色 R 通道 9；编译期展开成 4 条）
   textColor: AnimKind.TEXT_COLOR_R,
+  // ★3D 旋转（单通道——无数值展开）
+  rotateX: AnimKind.ROTATE_X,
+  rotateY: AnimKind.ROTATE_Y,
 }
 
 /** 曲线（与内核 `CURVE_*` 一一对应——**不得改号**） */

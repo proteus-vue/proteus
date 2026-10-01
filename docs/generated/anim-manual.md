@@ -8,7 +8,7 @@ generated: true
 # Morpheus 动画声明项 AI 说明书
 
 > **生成物，勿手改**：`node scripts/gen-anim-manual.mjs`（`--check` 接 CI，漂移即红）
-> **单一事实来源**：`packages/animation/src/rules.ts` 的 `ANIM_RULES`（39 条）
+> **单一事实来源**：`packages/animation/src/rules.ts` 的 `ANIM_RULES`（40 条）
 >
 > 本表与编译器的 111 条规则**同构**（Morpheus §13 第 11 条硬性要求）——
 > 每条含 what / why / when / 示例 / 如何验证 / 实现位置，AI 可单独消费一条。
@@ -338,7 +338,7 @@ presets.choreograph.gather({ ids, canvas, spread: 2.6 })
 presets.choreograph.storm({ ids, canvas, order: 'alternate', staggerMs: 8, durationMs: 900 })
 ```
 
-## 声明面原语（字段/取值）（10 条）
+## 声明面原语（字段/取值）（11 条）
 
 ### `primitive/route-transition-bridge`
 
@@ -425,6 +425,24 @@ import { parseCubicBezier } from '@proteus-vue/animation'
 // 直接粘贴 CSS 值（字符串助手）或手写四元组：
 { kind: 'translateY', from: -40, to: 0, durationMs: 400,
   curveBezier: parseCubicBezier('cubic-bezier(.34,1.56,.64,1)') }  // 回弹：中途过冲到终点之上
+```
+
+### `primitive/rotate3d`
+
+**3D 旋转（rotateX / rotateY —— 2026-10-01 · B 批）** `[implemented]`
+
+- **是什么**：`rotateX`(13) / `rotateY`(14)——绕 X/Y 轴旋转（度；锚点 = 层中心）。透视在**节点样式**上声明：`perspective: 1200`（CSS 语义；越大越弱）。
+- **为什么**：★**走 tick 路径，不进平台零参与**（与 color 同源的"跨端一致优先"决策）：两端的平台插值器对 3D 的语义不同（iOS CALayer 完整 4×4 矩阵可由 CA 插值；Android 的 rotationX/Y 是 View 属性、与 Matrix+Camera 组合行为有差异）⇒ 单边放行就是两端分档 ⇒ 统一内核逐帧求值 + 宿主组矩阵（iOS `CATransform3DRotate` / Android `Camera.getMatrix`）。实测余量充足（120Hz p95 2ms / 预算 8.3ms）。★诚实边界：CSS 的"父 `perspective` 作用于所有子"（共享视点）暂不支持——透视落在**节点自身**（多子立体场景需要共享视点时再评估）。
+- **何时用**：翻牌 / 立方体转场 / 卡片 3D 旋入 / 任何立体感动效
+- **如何验证**：tests/anim-bezier-golden.test.ts 的 B 批段（kind 13/14 · composited=false · tick-only 不落红线 · 预设形态）；真机：check-anim-rt2.py T12（iOS 层矩阵真读反解）× check-kernel-anim.py T 组（Android）
+- **实现位置**：`packages/animation/src/types.ts:AnimKind（内核 anim.rs:AnimKind 13/14 + style.rs:rotate_x/rotate_y/perspective）`
+
+```ts
+import { presets } from '@proteus-vue/animation'
+// 翻入（轴 + 起始角度可配；节点样式里给 perspective: 1200）
+const spec = presets.element.flipIn({ axis: 'y', fromDeg: -90 })
+// 持续翻转（一句话 = 来回翻）
+const forever = presets.element.flip3D({ axis: 'y', repeat: 'infinite', direction: 'alternate' })
 ```
 
 ### `primitive/repeat`

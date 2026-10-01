@@ -731,6 +731,24 @@ def main() -> int:
             else:
                 print(f"  ✓ S11 ★播放控制（真读层）：慢动作 tx={stx:.1f} · 暂停冻结 {pd2:.1f}（200ms 不变）"
                       f" · 恢复继续到 {pa2:.1f} · 非法拒绝可定位")
+            # ★T12（B 批 3D）：rotateY 0→180 端到端（探针从**层矩阵真读反解**）
+            t3s = rp.get("t3d_started")
+            t3m2 = rp.get("t3d_mid")
+            t3e2 = rp.get("t3d_end")
+            if t3s != 1:
+                fail(f"T12a 3D 动画未被内核受理：started={t3s}")
+                ok = False
+            elif not all(isinstance(v, (int, float)) for v in (t3m2, t3e2)):
+                fail(f"T12b rotateY 真读缺失：mid={t3m2} end={t3e2}（探针未报 3D 通道？）")
+                ok = False
+            elif not (60.0 <= t3m2 <= 140.0):
+                fail(f"T12c 半程 rotateY 异常：{t3m2:.1f}（应约 90）")
+                ok = False
+            elif abs(t3e2 - 180.0) > 0.5:
+                fail(f"T12d 终值未钉死：rotateY={t3e2:.2f}（应 ≈ 180）")
+                ok = False
+            else:
+                print(f"  ✓ T12 ★3D 旋转（层矩阵真读反解）：rotateY 半程 {t3m2:.1f} → 终值 {t3e2:.1f}（钉死）")
 
         # P6：拒绝分支——无底色节点上的颜色动画必须**明确拒绝**（不静默）
         rej = c.get("rejected_no_bg") or ""
