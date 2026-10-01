@@ -8,6 +8,8 @@
 【判据口径（B7：评审点名的四子项分报 —— 按 B1 口径报数，不报单一 FPS）】
   ① **节目单真演完**：`acts` 与 `plan` 逐项一致（整场：开场语 → 演出 → 长跑 → 谢幕语）
   ② **逐幕读数**：每幕的 work p50/p95/p99 + 掉帧率（单幕异常会被全程平均掩盖）
+     ＋ **无缝衔接**（tail_wait ≈ 0）＋ **动画不提前结束**（anim_end ≥ 0.75×跨度——
+     防"帧驱动重复 ⇒ 2× 速"这类几何缺陷；2026-10-01 真机实证后新增）
   ③ **四条路径各报一项**（评审点名的"四项挑战全覆盖"）：
      · 弹簧（物理求值）· 波浪（相位编排）· **FLIP 全量重排**（架构差异项，单列）· 螺旋（复合变换）
   ④ **长跑**：内存采样首尾对比（泄漏的机器判据）+ 热状态
@@ -125,7 +127,8 @@ def main() -> int:
             fail(f"有幕帧数过少（幕长与帧循环脱节？）：{names}")
 
     # ── ②c 无缝衔接（用户要求"每一幕丝滑衔接，不要每幕结束等会儿再开始"）──
-    #   机制：幕边界 = 名义时间到 **且** 内核报"没有动画在动"（弹簧时长由物理决定）
+    #   机制：宿主逐帧问内核"还有动画在动吗"（tick 回执的 `active`）——
+    #   动画全部结束那一帧即切幕（`hold` 从**动画结束**起算；见 showcase-scene.swift onFrame）
     #   判据：每幕的"尾等待"≈ 零（一帧内）——即动画完成那一帧就切幕
     if perf:
         tails = [(a.get("name"), a.get("tail_wait_ms") or 0) for a in perf]
@@ -136,6 +139,33 @@ def main() -> int:
         else:
             worst_tail = max(tails, key=lambda x: x[1])
             report(f"无缝衔接：每幕尾等待 ≤ {worst_tail[1]}ms（最坏 {worst_tail[0]}；一帧 16.7ms）")
+
+    # ── ②d 动画**不提前结束**（★2026-10-01 新增：帧驱动重复 ⇒ 2× 速的机器判据）──
+    #   机制：宿主记录**内核报"没有动画在动"的真实时刻**（`anim_end_ms`，随 tick 回执取证）。
+    #   1× 速下的期望：曲线/序列幕的 anim_end ≈ 名义跨度（≤ 一帧误差）；弹簧幕（gather）
+    #    = 自然静止时间（最大位移 · smooth 弹簧 ≈ 0.86×窗口）⇒ 下限取 **0.75×span**：
+    #      · 2× 速（双帧驱动各推进一个 dt）⇒ ≈0.5×span ⇒ **判红**；
+    #      · 1.5× 速 ⇒ ≈0.67×span ⇒ **判红**；
+    #      · 缺 `anim_end_ms`（宿主未接入该取证）⇒ **判红**（判据不许"没有数据就是绿"）。
+    #   ★背景：旧口径（只测 tail_wait）对"提前结束"**完全不可见**——双驱动 bug 就是这样
+    #     在"✅ 无缝衔接"下放过了一整轮（真机录屏 55% 时间静止、11/11 幕逐帧吻合 2× 模型）。
+    if perf:
+        bad_early, missing_end = [], []
+        for a in perf:
+            span = a.get("span_ms") or 0
+            end = a.get("anim_end_ms")
+            if end is None:
+                missing_end.append(a.get("name"))
+            elif span > 0 and end < span * 0.75:
+                bad_early.append(f"{a.get('name')}(结束于 {end}ms = {end / span:.2f}×跨度 {span}ms)")
+        if missing_end:
+            fail(f"缺动画结束取证 `anim_end_ms`：{missing_end[:4]}（宿主未记录内核 active 归零时刻）")
+        if bad_early:
+            fail("动画提前结束（疑帧驱动重复 ⇒ 播放加速）：" + "、".join(bad_early[:4]))
+        if not missing_end and not bad_early:
+            ratios = [a["anim_end_ms"] / a["span_ms"] for a in perf if a.get("span_ms") and a.get("anim_end_ms") is not None]
+            worst_ratio = min(ratios) if ratios else float("nan")
+            report(f"动画不提前结束：逐幕 anim_end/名义跨度 ≥ {worst_ratio:.2f}（1× 速；2× 速约 0.5）")
 
     # ── ③ 四条路径各报一项（评审点名的"四项挑战全覆盖"）──
     seg_names = {a.get("name"): a for a in acts if isinstance(a, dict)}
