@@ -92,7 +92,7 @@ const BN = { snapshot: 'selfdraw-final' }
 
 // ★构建标识（每次构建由 hosts/ios/bridge/inject-build-id.mjs 注入；与 entry-bench 同机制）
 //   —— 「设备上跑的是哪份代码」必须可**一眼判定**（报告新鲜度判据的内容锚点）。
-const BUILD_ID = '2731ae5a-141001'
+const BUILD_ID = '9151718d-142019'
 
 const VP = (globalThis as unknown as { __PROTEUS_VIEWPORT__?: { width: number; height: number } })
   .__PROTEUS_VIEWPORT__ ?? { width: 390, height: 844 }
@@ -214,6 +214,7 @@ let animRt2Result: Record<string, unknown> = {}
 /** ★★RT2 复杂动效读数（弹簧/接管/FLIP/rotate+opacity） */
 let animComplexResult: Record<string, unknown> = {}
 let animBezierResult: Record<string, unknown> = {}
+let animRepeatResult: Record<string, unknown> = {}
 /** ★★MA0-RT 平台零参与路径读数 */
 let animPlatformResult: Record<string, unknown> = {}
 /** ★★MA1 预设库读数 */
@@ -655,6 +656,99 @@ const api = {
       compiled_curve_bezier: batch.anims[0]?.curveBezier ?? null,
     }
     animBezierResult = r
+    return JSON.stringify(r)
+  },
+
+  /**
+   * ★★**R10：循环与往复**（2026-10-01 · A2）——`repeat` / `direction:'alternate'` 真机验证。
+   *
+   * 判据（check-anim2 R10）：① repeat:2 中途仍在第 2 遍推进、两遍到点精确落终点；
+   * ② yoyo 第 2 遍**回程**（值朝 from 走）、结束**净位移 0**（往复的数学本质）；
+   * ③ `'infinite'` 推进很久后 active 仍 > 0（内核 authoritative count）。
+   */
+  animRepeat(): string {
+    const probe0 = safeParse(proteusSelfDraw.layerTransformProbe(JSON.stringify([2, 3, 4])))
+    const present = ((probe0 as { layers?: Array<{ id: number; missing?: boolean }> }).layers ?? [])
+      .filter((l) => !l.missing)
+      .map((l) => l.id)
+    const target = present[0] ?? 2
+    const tyOf = (): number => {
+      const p = safeParse(proteusSelfDraw.layerTransformProbe(JSON.stringify([target])))
+      const ty = ((p as { layers?: Array<{ ty?: number }> }).layers ?? [])[0]?.ty
+      return typeof ty === 'number' ? ty : -9999
+    }
+    proteusSelfDraw.animStopAll()
+    // ① repeat: 2（linear 便于算术）——300ms 在第 2 遍半程（值应远离终点）；400ms 到点 = 100
+    proteusSelfDraw.animStart(
+      JSON.stringify({
+        anims: [{ nodeId: target, kind: 1, curve: 0, from: 0, to: 100, durMs: 200, repeat: 2, takeover: false }],
+      }),
+    )
+    proteusSelfDraw.animTick(300)
+    const mid2 = tyOf()
+    proteusSelfDraw.animTick(100)
+    const endRepeat = tyOf()
+    // ② yoyo（alternate）：250ms = 第 2 遍 25% 反向 ⇒ 75；400ms ⇒ 0（净位移 0）
+    proteusSelfDraw.animStopAll()
+    proteusSelfDraw.animStart(
+      JSON.stringify({
+        anims: [
+          { nodeId: target, kind: 1, curve: 0, from: 0, to: 100, durMs: 200, repeat: 2, direction: 'alternate', takeover: false },
+        ],
+      }),
+    )
+    proteusSelfDraw.animTick(250)
+    const yoyoBack = tyOf()
+    proteusSelfDraw.animTick(150)
+    const yoyoEnd = tyOf()
+    // ③ infinite：推进 2000ms 后 active 仍 > 0
+    proteusSelfDraw.animStopAll()
+    proteusSelfDraw.animStart(
+      JSON.stringify({
+        anims: [{ nodeId: target, kind: 2, curve: 1, from: 1, to: 1.1, durMs: 100, repeat: 'infinite', takeover: false }],
+      }),
+    )
+    proteusSelfDraw.animTick(2000)
+    const infActive = safeParse(proteusSelfDraw.animActiveCount()) as { active?: number }
+    proteusSelfDraw.animStopAll()
+    // ④ 播放控制（A3）：timeScale:0.25 慢动作 ⇒ 名义 25% 只走 6.25%；暂停冻结；恢复继续
+    const ctrl0 = safeParse(proteusSelfDraw.animControl(JSON.stringify({ timeScale: 0.25 })))
+    proteusSelfDraw.animStart(
+      JSON.stringify({ anims: [{ nodeId: target, kind: 1, curve: 0, from: 0, to: 400, durMs: 400, takeover: false }] }),
+    )
+    proteusSelfDraw.animTick(100)   // 名义 25% / 4× 慢 ⇒ tx ≈ 25
+    const slowTx = tyOf()
+    proteusSelfDraw.animControl(JSON.stringify({ timeScale: 1 }))
+    proteusSelfDraw.animStopAll()
+    proteusSelfDraw.animStart(
+      JSON.stringify({ anims: [{ nodeId: target, kind: 1, curve: 0, from: 0, to: 400, durMs: 400, takeover: false }] }),
+    )
+    proteusSelfDraw.animTick(100)
+    const pauseBefore = tyOf()
+    const ctrlP = safeParse(proteusSelfDraw.animControl(JSON.stringify({ paused: true })))
+    proteusSelfDraw.animTick(200)
+    const pauseDuring = tyOf()
+    proteusSelfDraw.animControl(JSON.stringify({ paused: false }))
+    proteusSelfDraw.animTick(50)
+    const pauseAfter = tyOf()
+    const ctrlBad = safeParse(proteusSelfDraw.animControl(JSON.stringify({ timeScale: -1 })))
+    proteusSelfDraw.animStopAll()
+    const r = {
+      node: target,
+      mid2,
+      end_repeat: endRepeat,
+      yoyo_back: yoyoBack,
+      yoyo_end: yoyoEnd,
+      infinite_active: infActive?.active ?? -1,
+      slow_tx: slowTx,
+      ctrl_echo: (ctrl0 as { timeScale?: number }).timeScale ?? -1,
+      ctrl_paused_echo: (ctrlP as { paused?: boolean }).paused ?? null,
+      pause_before: pauseBefore,
+      pause_during: pauseDuring,
+      pause_after: pauseAfter,
+      ctrl_rejected: String((ctrlBad as { error?: string }).error ?? ''),
+    }
+    animRepeatResult = r
     return JSON.stringify(r)
   },
 
@@ -1311,6 +1405,7 @@ const api = {
       // ★★RT2 复杂动效（弹簧 / 打断接管 / FLIP / rotate+opacity）
       anim_complex: animComplexResult,
       anim_bezier: animBezierResult,
+      anim_repeat: animRepeatResult,
       // ★★RT2 帧率测席（§9 指标；宿主跑满时长后写入）
       anim_bench: safeParse(proteusSelfDraw.animBenchResults()),
       js_only_throughput: {

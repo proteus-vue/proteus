@@ -37,6 +37,8 @@ export type {
   ColorAnimDecl,
   ColorKeyframeSeg,
   BezierPoints,
+  RepeatCount,
+  RepeatDirection,
   AnimTargets,
   EngineAnim,
   CompiledBatch,

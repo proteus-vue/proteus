@@ -80,6 +80,9 @@ func proteus_layout_anim_stop(_ handle: UInt64, _ json: UnsafePointer<CChar>) ->
 // ★仍在动的动画条数（0 = 全部结束）——幕切换的权威判据（见内核 anim_active 注释）
 @_silgen_name("proteus_layout_anim_active")
 func proteus_layout_anim_active(_ handle: UInt64) -> UInt64
+/// ★★A3 播放控制（时间因子/暂停）
+@_silgen_name("proteus_layout_anim_control")
+func proteus_layout_anim_control(_ handle: UInt64, _ json: UnsafePointer<CChar>) -> UnsafeMutablePointer<CChar>
 @_silgen_name("proteus_layout_anim_tick_bin")
 func proteus_layout_anim_tick_bin(_ handle: UInt64, _ dtMs: Float, _ outLen: UnsafeMutablePointer<UInt32>) -> UnsafeMutablePointer<UInt8>?
 /// ★Vapor IR V4：**不带 rects 的 apply**（二进制通道场景——省掉 JSON 序列化与宿主解析）
@@ -346,6 +349,8 @@ func physFootprintMB() -> Double {
     /// ★仍在推进的动画条数（0 = 全部结束）——"这一幕演完了吗"的权威判据（弹簧时长由物理决定，
     ///   调用方按名义 durMs 推算会早切或多等，见内核 `proteus_layout_anim_active` 注释）
     func animActiveCount() -> String
+    /// ★★A3 播放控制：`{"timeScale":1.0,"paused":false}`（回显生效值；见内核 anim_control 注释）
+    func animControl(_ json: String) -> String
     /// ★★**高分辨率单调时钟**（微秒，十进制字符串）——供 JS 侧做可靠计时
     ///
     /// 【为什么必须由宿主提供（本仓实测的第六个测量装置缺陷）】
@@ -3483,6 +3488,11 @@ final class SelfDrawBridge: NSObject, SelfDrawExports {
     }
 
     /// ★仍在推进的动画条数（0 = 全部结束）——**幕切换的权威判据**
+    func animControl(_ json: String) -> String {
+        guard handle != 0 else { return "{\"ok\":false,\"error\":\"未接入核心\"}" }
+        return json.withCString { takeCString(proteus_layout_anim_control(handle, $0)) }
+    }
+
     func animActiveCount() -> String {
         guard handle != 0 else { return "{\"ok\":false,\"error\":\"未接入核心\"}" }
         return "{\"ok\":true,\"active\":\(proteus_layout_anim_active(handle))}"
@@ -5218,6 +5228,8 @@ final class SelfDrawViewController: UIViewController {
             ("__proteus.animColor()", 2),
             // ★★自定义贝塞尔（2026-10-01 转正）：回弹过冲 + 拒绝分支（判据 check-anim-rt2.py P9）
             ("__proteus.animBezier()", 2),
+            // ★★循环与往复（2026-10-01 · A2）：repeat/yoyo/infinite（判据 check-anim-rt2.py R10）
+            ("__proteus.animRepeat()", 2),
             // ★★主线程零唤醒实测（OS 级 CPU 会计 + 阳性对照）：**异步**两段各 600ms
             ("__proteus.animCpuProbe()", 0),
             // ★★RT2 帧率测席（§9 指标）：**异步**——由 CADisplayLink 跑满时长后回调续链
@@ -5258,7 +5270,7 @@ final class SelfDrawViewController: UIViewController {
             }
             let out = js(expr)
             // 只记关键读数（避免日志爆炸——本仓「输出控制」纪律）
-            if expr.hasPrefix("__proteus.mount") || expr.hasPrefix("__proteus.finalize2") || expr.hasPrefix("__proteus.animProbe") || expr.hasPrefix("__proteus.animComplex") || expr.hasPrefix("__proteus.animPlatform") || expr.hasPrefix("__proteus.animPreset") || expr.hasPrefix("__proteus.animScroll") || expr.hasPrefix("__proteus.animSequence") || expr.hasPrefix("__proteus.animShared") || expr.hasPrefix("__proteus.animColor") || expr.hasPrefix("__proteus.animBezier") || expr.hasPrefix("__proteus.animCpu") {
+            if expr.hasPrefix("__proteus.mount") || expr.hasPrefix("__proteus.finalize2") || expr.hasPrefix("__proteus.animProbe") || expr.hasPrefix("__proteus.animComplex") || expr.hasPrefix("__proteus.animPlatform") || expr.hasPrefix("__proteus.animPreset") || expr.hasPrefix("__proteus.animScroll") || expr.hasPrefix("__proteus.animSequence") || expr.hasPrefix("__proteus.animShared") || expr.hasPrefix("__proteus.animColor") || expr.hasPrefix("__proteus.animBezier") || expr.hasPrefix("__proteus.animRepeat") || expr.hasPrefix("__proteus.animCpu") {
                 NSLog("[proteus] %@ → %@", expr, String(out.prefix(400)))
             }
             // ★让出主线程 pump 轮：每轮一次 runloop 循环 ⇒ 微任务队列被排空

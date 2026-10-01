@@ -73,6 +73,17 @@ export type CurveId = (typeof Curve)[keyof typeof Curve]
 export type CurveName = 'linear' | 'easeOut' | 'easeIn' | 'easeInOut' | 'springApprox'
 
 /**
+ * ★★**循环次数**（2026-10-01 · A2）——与 CSS `animation-iteration-count` 对齐：
+ *   正数 = 播 n 遍；`'infinite'` = 无限（呼吸灯/无限脉冲）。
+ *   ★为什么进封闭集（而不是"把时长写长"）：一遍的时长决定**每轮的节奏**；
+ *   "时长写长"会让曲线在整段上被拉伸（呼吸变成慢速单摆），且无限时根本写不出来。
+ */
+export type RepeatCount = number | 'infinite'
+
+/** ★★**交替方向**（A2）——与 CSS `animation-direction` 对齐：`'normal'`（缺省）/ `'alternate'`（yoyo） */
+export type RepeatDirection = 'normal' | 'alternate'
+
+/**
  * ★★**自定义三次贝塞尔曲线的控制点**（`[x1, y1, x2, y2]`——CSS `cubic-bezier()` 同一参数化）
  *
  * 【与 `CurveName` 封闭集的关系（2026-10-01 转正）】封闭集是"常用曲线"的快捷名；
@@ -175,6 +186,16 @@ export interface ScalarAnimDecl {
    * ★整段序列仍是**一条**平台动画（`CAKeyframeAnimation` 采样整段），不额外增加提交次数。
    */
   keyframes?: KeyframeSeg[]
+  /**
+   * ★★**循环次数**（A2；缺省 1 = 播一遍）
+   *
+   * `repeat: 3` 播三遍；`repeat: 'infinite'` 无限循环（直到显式 stop）。
+   * 语义与 CSS `animation-iteration-count` 对齐；`direction: 'alternate'` 时奇偶轮反向（yoyo）。
+   * ★与 `scroll`（外部驱动）互斥——滚动驱动的进度来自位置，没有"轮"的概念。
+   */
+  repeat?: RepeatCount
+  /** ★★**交替方向**（A2；缺省 `'normal'`）：`'alternate'` = yoyo（去程回来程，净位移 0） */
+  direction?: RepeatDirection
   /** 驱动方式（缺省 `time`；给了 `scroll` 时本字段被忽略——窗口存在即说明进度来自滚动位置） */
   drive?: DriveName
   /**
@@ -235,6 +256,10 @@ export interface ColorAnimDecl {
    *   内核侧：每通道各得一条 `AnimMode::Keyframes`（4 条通道共用同一段时长表）。
    */
   keyframes?: ColorKeyframeSeg[]
+  /** ★A2：循环次数（颜色同样支持——呼吸灯的底色循环；语义同标量） */
+  repeat?: RepeatCount
+  /** ★A2：交替方向（`'alternate'` = yoyo） */
+  direction?: RepeatDirection
   /** 滚动驱动的颜色（窗口换算在内核，与标量属性同一套） */
   scroll?: ScrollWindow
   /** 驱动方式（缺省 `time`；`progress` = 外部设进度，与标量属性同一语义） */
@@ -276,6 +301,10 @@ export interface EngineAnim {
   /** ★MA5：仅滚动驱动出现（内核据此按滚动位置求值；两者都给且 `scrollTo > scrollFrom` 才生效） */
   scrollFrom?: number
   scrollTo?: number
+  /** ★A2：循环次数（缺省不出现 = 1 遍；`-1` = 无限——内核哨兵） */
+  repeat?: number
+  /** ★A2：交替方向（仅 `repeat` 出现时给；true = yoyo） */
+  alternate?: boolean
 }
 
 /** 编译产物：一次"提交"（可整批喂给 `anim_start` 或 `anim_commit_spec`） */

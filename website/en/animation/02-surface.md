@@ -38,6 +38,10 @@ Morpheus exposes exactly one package: **`@proteus-vue/animation`** (declare + va
 | `easeInOut` | 3 |
 | `springApprox` | 4 |
 
+**Loops & yoyo (`repeat` / `direction`, 2026-10-01)**: `repeat: 3 | 'infinite'` (= CSS `animation-iteration-count`) plus `direction: 'alternate'` (= yoyo — every other round runs backwards, **net displacement 0**). "Breathing lamps / infinite pulses" no longer need the "stretch the duration" hack (which distorts the curve). Colour animations support it too (all four channels loop together — anything less is a colour split).
+
+**Playback control (`animControl`, 2026-10-01)**: global `timeScale` (`0.25` slow-motion / `2` fast-forward) and `paused` (freeze; resuming continues from the frozen point, not a reset). It **only affects time advance** — `seek` and scroll-driven progress come from outside, so pausing/slowing never breaks gesture-following.
+
 **Arbitrary easing (`curveBezier`, promoted 2026-10-01)**: design-handoff curves outside the closed set no longer need an escape hatch — `curveBezier: [x1,y1,x2,y2]` (or paste the CSS value with `parseCubicBezier('cubic-bezier(…)')`) runs on the **same kernel evaluation machine** (65-point table + interpolation; the control-point table is generated once and cached). Constraint: `x1/x2 ∈ [0,1]` (monotonic time axis); `y1/y2` are free (> 1 = overshoot, < 0 = anticipation), and it is mutually exclusive with `curve` / `spring` / `keyframes` (the evaluation mode must be unique).
 
 **Composited = eligible for the platform zero-involvement path.** The five scalar properties are composited; **`color` / `textColor` are paint-only but non-composited** (they do not trigger layout, but Android's RenderNode cannot interpolate colours, so both targets use the tick path for consistency). Note also: **changing layout properties (width / margin) is not animation, it is relayout**, and compilation rejects it outright.

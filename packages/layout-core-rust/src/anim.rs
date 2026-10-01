@@ -97,6 +97,45 @@ fn table_eval(row: &[f32; TABLE_N], u: f32) -> f32 {
     a + (b - a) * frac
 }
 
+/// ★★**循环相位映射**（2026-10-01 · A2）——"已经过时间 → 本轮进度 + 是否播完"
+///
+/// 语义（与 CSS `animation-iteration-count` / `-direction` 对齐）：
+///   · `total = dur_ms`（含 delay 之外的动画本体时长）；`elapsed = t_ms - delay_ms`
+///   · `iterations`：`1` = 一遍；`n` = n 遍；`-1`（哨兵）= **无限**
+///   · `alternate`：奇偶轮反向（yoyo——第 2 轮 u 从 1→0）
+///
+/// 返回 `(u, finished)`；`u ∈ [0,1]` **已是"本轮方向"下的进度**（调用方直接喂曲线）。
+/// ★为什么收敛成一处：时间推进（step）与进度求值（seek/滚动）都要它——各写一份必分叉。
+#[inline]
+pub fn loop_phase(t_ms: f32, delay_ms: f32, dur_ms: f32, iterations: f32, alternate: bool) -> (f32, bool) {
+    let elapsed = t_ms - delay_ms;
+    if elapsed <= 0.0 {
+        return (0.0, false);
+    }
+    if dur_ms <= 0.0 {
+        // 零时长：立即完成（与单遍语义一致）；无限循环时语义退化——按"永远停在终点"处理
+        return (1.0, iterations >= 0.0);
+    }
+    let raw = elapsed / dur_ms; // 含"第几轮"
+    if iterations >= 0.0 && raw >= iterations {
+        // ★播完。**末轮端点**（方向决定停在 0 还是 to——yoyo 偶数轮停在 from！）
+        //   【为什么必须按方向判（首版写死的 (1.0,true) 被测试抓出）】yoyo 的第 2 轮
+        //   是"从 to 回 from"⇒ 播完时值在 **from**（净位移 0——呼吸/往复的数学本质）；
+        //   一律返回 u=1 ⇒ 值又跳回 to ⇒ 往复动画每轮末尾跳变。
+        let last_cycle = (iterations - 1.0).max(0.0) as i64;
+        let u = if alternate && last_cycle % 2 == 1 { 0.0 } else { 1.0 };
+        return (u, true);
+    }
+    let cycle = raw.floor();
+    let u_round = raw - cycle;
+    let u = if alternate && (cycle as i64) % 2 == 1 {
+        1.0 - u_round
+    } else {
+        u_round
+    };
+    (u, false)
+}
+
 /// 曲线求值：查表 + 线性插值（`u` 先 clamp 到 [0,1]；未知曲线 id 落表尾兜底——不 panic）
 pub fn curve_eval(curve: u8, u: f32) -> f32 {
     let tables = TABLES.get_or_init(build_tables);
@@ -541,6 +580,14 @@ pub struct Anim {
     ///   求值走 `BezierTable`（查表+插值），与内置曲线同一台机器。
     ///   `x1/x2 ∈ [0,1]` 的校验在解析层（FFI）做；`y1/y2` 任意（回弹来源）。
     pub curve_pts: Option<Arc<BezierTable>>,
+    /// ★★**循环次数**（2026-10-01 · A2）：`1` = 播一遍（缺省）；`>1` = 播 n 遍；
+    ///   **`-1` = 无限循环**（呼吸灯/无限脉冲——"把时长写长"的土办法由此退役）。
+    ///   ★语义与 CSS `animation-iteration-count` 对齐（数字 / infinite）。
+    pub iterations: f32,
+    /// ★★**交替方向**（2026-10-01 · A2）：`false` = 每轮都从 `from` 重跑（normal）；
+    ///   `true` = 奇偶轮反向（**yoyo**——去程回来程，净位移为 0，天然适合往复呼吸）。
+    ///   与 CSS `animation-direction: alternate` 同义。
+    pub alternate: bool,
 }
 
 impl Anim {
@@ -564,6 +611,8 @@ impl Anim {
             vel: 0.0,
             takeover: true,
             curve_pts: None,
+            iterations: 1.0,
+            alternate: false,
         }
     }
 
@@ -585,8 +634,12 @@ impl Anim {
         }
     }
 
-    pub fn value_at_progress(&self, p: f32) -> f32 {
-        let p = p.clamp(0.0, 1.0);
+    /// ★**轮内求值（不做循环映射）**——`p_round` 已是"本轮 + 方向"下的进度。
+    ///
+    /// 【谁调它】时间推进（`step` 用 `loop_phase` 算出轮内进度后直接喂这里——
+    ///   若再映射一次就是**双重映射**：多轮动画会跳帧）。
+    pub fn value_at_round_progress(&self, p_round: f32) -> f32 {
+        let p = p_round.clamp(0.0, 1.0);
         match &self.mode {
             AnimMode::Keyframes(segs) if !segs.is_empty() => {
                 let total: f32 = segs.iter().map(|s| s.dur_ms.max(0.0)).sum();
@@ -597,6 +650,27 @@ impl Anim {
             }
             _ => self.from + (self.to - self.from) * self.curve_at(p),
         }
+    }
+
+    /// ★**整程进度求值**（公开 API：`seek` / 滚动 / 探针）——`p ∈ [0,1]` 是**整条动画**的
+    ///   归一化进度（含全部循环轮）。多轮时先折算到"第几轮 + 轮内进度"（alternate 时奇偶反向），
+    ///   再走轮内求值。
+    pub fn value_at_progress(&self, p: f32) -> f32 {
+        let p = p.clamp(0.0, 1.0);
+        let p_round = if self.iterations > 1.0 {
+            // 多轮：把整程进度折算到本轮（seek 0.7 且 3 轮 ⇒ 第 2.1 轮的第一轮内 0.1... 依 yoyo 反向）
+            let raw = p * self.iterations;
+            let c = raw.floor().min(self.iterations - 1.0);
+            let u = raw - c.min(raw); // 保护：raw 恰为整数时 u = 0
+            if self.alternate && (c as i64) % 2 == 1 {
+                1.0 - u
+            } else {
+                u
+            }
+        } else {
+            p
+        };
+        self.value_at_round_progress(p_round)
     }
 }
 
@@ -1011,11 +1085,18 @@ pub struct AnimEngine {
     anims: Vec<(Anim, usize)>,
     /// FLIP 快照（`flip_capture` 存入；`flip_start` 消费并清空）
     flip_snap: Option<Vec<(u32, Rect)>>,
+    /// ★★**时间因子**（2026-10-01 · A3 播放控制）：`dt` 全局缩放——
+    ///   `1.0` = 实时；`0.25` = 慢动作；`2.0` = 快进。只影响**时间推进**，
+    ///   不影响 seek/滚动（那两个的进度由外部给，本就与全局时钟无关）。
+    pub time_scale: f32,
+    /// ★★**暂停**（A3）：`true` ⇒ 时间不推进（`dt` 视作 0——**但仍写值**：
+    ///   层被重建时不丢当前姿态，与 Progress 驱动的"保持写入"同款理由）。
+    pub paused: bool,
 }
 
 impl AnimEngine {
     pub fn new() -> Self {
-        Self { anims: Vec::new(), flip_snap: None }
+        Self { anims: Vec::new(), flip_snap: None, time_scale: 1.0, paused: false }
     }
 
     pub fn len(&self) -> usize {
@@ -1197,8 +1278,11 @@ impl AnimEngine {
         let mut out = TickOutcome::default();
         let mut touched: std::collections::HashSet<u32> = std::collections::HashSet::new();
         let mut keep: Vec<(Anim, usize)> = Vec::with_capacity(self.anims.len());
+        // ★A3：全局时间因子与暂停在**唯一的时间入口**生效（step 本身保持"纯 dt"——
+        //   与 seek/滚动解耦：它们的进度不走时间）
+        let eff_dt = if self.paused { 0.0 } else { dt_ms * self.time_scale.max(0.0) };
         for (mut a, idx) in self.anims.drain(..) {
-            let (new_x, new_vel, finished) = step(&mut a, dt_ms);
+            let (new_x, new_vel, finished) = step(&mut a, eff_dt);
             a.x = new_x;
             a.vel = new_vel;
             // 索引越界（树被压实过）⇒ 丢弃并计数（不 panic；生产应挂失效回调，见文件头边界①）
@@ -1384,6 +1468,8 @@ impl AnimEngine {
             vel: 0.0,
             takeover: false, // ★硬重启：起点 = 算出的几何（见注释）
             curve_pts: None,
+            iterations: 1.0,
+            alternate: false,
         };
         self.start(tree, mk(AnimKind::TranslateX, plan.dx, 0.0))?;
         self.start(tree, mk(AnimKind::TranslateY, plan.dy, 0.0))?;
@@ -1556,15 +1642,16 @@ fn step(a: &mut Anim, dt_ms: f32) -> (f32, f32, bool) {
         }
         // Curve / Keyframes 统一：时间 → 进度 → 求值（同一入口 ⇒ 不会"seek 对、滚动错"）
         _ => {
-            let u = if a.dur_ms <= 0.0 {
-                1.0
-            } else {
-                ((a.t_ms - a.delay_ms) / a.dur_ms).min(1.0)
-            };
-            if u >= 1.0 {
-                return (a.to, 0.0, true); // ★端点钉死（序列的 to = 末段 to）
+            // ★A2 循环：相位映射（含 yoyo 反向）——一遍的旧语义是 loop_phase 在 iterations=1 的特例
+            let (u, finished) = loop_phase(a.t_ms, a.delay_ms, a.dur_ms, a.iterations, a.alternate);
+            if finished {
+                // ★端点钉死（**按末轮方向**——yoyo 偶数轮停在 from，见 loop_phase 注释）；
+                //   序列的端点由 value_at_round_progress（u=0/1）给出（末段 to / 首段 from）
+                let x = a.value_at_round_progress(u);
+                return (x, 0.0, true);
             }
-            let x = a.value_at_progress(u);
+            // ★轮内求值（u 已含 yoyo 方向）——不能走 value_at_progress（那会再映射一次 ⇒ 双重映射）
+            let x = a.value_at_round_progress(u);
             let dt_s = dt_ms / 1000.0;
             let vel = if dt_s > 0.0 { (x - a.x) / dt_s } else { a.vel };
             (x, vel, false)
@@ -1605,6 +1692,8 @@ mod tests {
             vel: 0.0,
             takeover: true,
             curve_pts: None,
+            iterations: 1.0,
+            alternate: false,
         }
     }
 
@@ -2331,6 +2420,67 @@ mod tests {
             assert!((bezier_eval(c, 0.0) - 0.0).abs() < 1e-5, "曲线 {curve} 的贝塞尔 f(0) 应为 0");
             assert!((bezier_eval(c, 1.0) - 1.0).abs() < 1e-5, "曲线 {curve} 的贝塞尔 f(1) 应为 1");
         }
+    }
+
+    #[test]
+    fn loop_phase_maps_rounds_and_finishes_exactly() {
+        // 单遍（iterations=1）：旧语义不变——t ∈ [0,dur] 内 u=t/dur，至 dur 完成
+        let (u, fin) = loop_phase(150.0, 0.0, 400.0, 1.0, false);
+        assert!((u - 0.375).abs() < 1e-6 && !fin);
+        let (_, fin) = loop_phase(400.0, 0.0, 400.0, 1.0, false);
+        assert!(fin, "单遍到 dur 应完成");
+        // n 遍：第 2 遍中段 u ≈ 0.5（3 遍 × 400ms；t=1000ms ⇒ 第 2.5 轮 = 第 2 遍中段 0.5）
+        let (u, fin) = loop_phase(1000.0, 0.0, 400.0, 3.0, false);
+        assert!((u - 0.5).abs() < 1e-6 && !fin, "3 遍中 t=1000 应落在第 3 轮... {u}");
+        let (_, fin) = loop_phase(1200.0, 0.0, 400.0, 3.0, false);
+        assert!(fin, "3 遍到 1200ms 应完成");
+        // ★yoyo：第 2 轮反向（t=400..800 区间 u 从 1→0）
+        let (u1, _) = loop_phase(500.0, 0.0, 400.0, -1.0, false); // 无限 normal 第 2 轮 u=0.25
+        let (u2, _) = loop_phase(500.0, 0.0, 400.0, -1.0, true); // 无限 yoyo 第 2 轮 u=0.75
+        assert!((u1 - 0.25).abs() < 1e-6 && (u2 - 0.75).abs() < 1e-6, "yoyo 第二遍应反向：{u1} vs {u2}");
+        // 无限：永不 finished
+        let (_, fin) = loop_phase(1_000_000.0, 0.0, 400.0, -1.0, true);
+        assert!(!fin, "无限循环不应完成");
+        // 延迟期：钉在起点
+        let (u, fin) = loop_phase(50.0, 100.0, 400.0, 2.0, false);
+        assert_eq!(u, 0.0);
+        assert!(!fin);
+    }
+
+    #[test]
+    fn repeat_anim_runs_to_end_and_yoyo_returns_home() {
+        // 3 遍：t=1200 前不结束；到点精确落 to
+        let mut a = Anim::curve_anim(1, AnimKind::TranslateY, 0.0, 100.0, 400.0);
+        a.iterations = 3.0;
+        // 推 1199ms：应未结束（值在最后一遍）
+        let mut done = false;
+        for _ in 0..1199 {
+            let (x, _, d) = step(&mut a, 1.0);
+            a.x = x;
+            done = d;
+        }
+        assert!(!done, "3 遍未到 1200ms 不应结束");
+        let (x, _, d) = step(&mut a, 1.0);
+        assert!(d, "到 1200ms 应结束");
+        assert_eq!(x, 100.0, "末轮终点钉死");
+        // ★yoyo 2 遍：净位移 = 0（第 2 遍从 100 回 0）——呼吸的数学本质
+        let mut b = Anim::curve_anim(1, AnimKind::TranslateY, 0.0, 100.0, 400.0);
+        b.iterations = 2.0;
+        b.alternate = true;
+        let mut x = b.x;
+        for _ in 0..400 {
+            let (v, _, _) = step(&mut b, 1.0);
+            b.x = v;
+            x = v;
+        }
+        // 第 1 遍结束：x = 100（到 to）
+        assert!((x - 100.0).abs() < 1e-3, "yoyo 第 1 遍应到 100，实得 {x}");
+        for _ in 0..400 {
+            let (v, _, _) = step(&mut b, 1.0);
+            b.x = v;
+            x = v;
+        }
+        assert!(x.abs() < 1e-3, "yoyo 第 2 遍应回到 0（净位移 0），实得 {x}");
     }
 
     #[test]

@@ -38,6 +38,15 @@ Morpheus 的对外表面只有一个包：**`@proteus-vue/animation`**（声明 
 | `easeInOut` | 3 |
 | `springApprox` | 4 |
 
+**循环与往复（`repeat` / `direction`，2026-10-01）**：`repeat: 3 | 'infinite'`
+（= CSS `animation-iteration-count`）＋ `direction: 'alternate'`（= yoyo——奇偶轮反向、
+**净位移 0**）。"呼吸灯/无限脉冲"不再需要"把时长写长"（那会把曲线拉伸变形）。
+颜色动画同样支持（四条通道一起循环——少一条就是颜色分叉）。
+
+**播放控制（`animControl`，2026-10-01）**：全局 `timeScale`（`0.25` 慢动作 / `2` 快进）
+与 `paused`（冻结；恢复从冻结处继续，不是重置）。**只影响时间推进**——
+`seek` 与滚动驱动的进度由外部给，暂停/慢放不破坏手势跟随语义。
+
 **任意缓动（`curveBezier`，2026-10-01 转正）**：封闭集之外的设计稿曲线不再需要走逃生口——
 `curveBezier: [x1,y1,x2,y2]`（或 `parseCubicBezier('cubic-bezier(…)')` 直接粘贴 CSS 值）
 走**内核同一台求值机器**（65 点表 + 插值，控制点表生成一次并缓存）。

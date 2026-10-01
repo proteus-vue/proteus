@@ -8,7 +8,7 @@ generated: true
 # Morpheus 动画声明项 AI 说明书
 
 > **生成物，勿手改**：`node scripts/gen-anim-manual.mjs`（`--check` 接 CI，漂移即红）
-> **单一事实来源**：`packages/animation/src/rules.ts` 的 `ANIM_RULES`（37 条）
+> **单一事实来源**：`packages/animation/src/rules.ts` 的 `ANIM_RULES`（39 条）
 >
 > 本表与编译器的 111 条规则**同构**（Morpheus §13 第 11 条硬性要求）——
 > 每条含 what / why / when / 示例 / 如何验证 / 实现位置，AI 可单独消费一条。
@@ -338,7 +338,7 @@ presets.choreograph.gather({ ids, canvas, spread: 2.6 })
 presets.choreograph.storm({ ids, canvas, order: 'alternate', staggerMs: 8, durationMs: 900 })
 ```
 
-## 声明面原语（字段/取值）（8 条）
+## 声明面原语（字段/取值）（10 条）
 
 ### `primitive/route-transition-bridge`
 
@@ -425,6 +425,40 @@ import { parseCubicBezier } from '@proteus-vue/animation'
 // 直接粘贴 CSS 值（字符串助手）或手写四元组：
 { kind: 'translateY', from: -40, to: 0, durationMs: 400,
   curveBezier: parseCubicBezier('cubic-bezier(.34,1.56,.64,1)') }  // 回弹：中途过冲到终点之上
+```
+
+### `primitive/repeat`
+
+**循环与往复（repeat / direction —— 2026-10-01 · A2）** `[implemented]`
+
+- **是什么**：`repeat: 3 | 'infinite'`（= CSS animation-iteration-count）＋ `direction: 'normal' | 'alternate'`（= animation-direction，alternate = **yoyo** 往复）。
+- **为什么**：★**"把时长写长"的土办法退役**：一遍的时长决定**每轮节奏**——写长会把曲线在整段上拉伸（呼吸变慢速单摆），无限循环更写不出来。内核 `loop_phase` 做"已过时间 → 第几轮 + 轮内进度"映射（alternate 奇偶轮反向），**末轮端点按方向钉死**（yoyo 偶数轮停在 `from`——净位移 0）。
+- **何时用**：呼吸灯 / 无限脉冲 / 来回摆动（yoyo）/ 多次播放入场
+- **如何验证**：tests/anim-repeat-golden.test.ts（编译/校验/颜色四通道一致性）+ 内核单测 `loop_phase_maps_rounds_and_finishes_exactly` / `repeat_anim_runs_to_end_and_yoyo_returns_home`；真机：check-anim-rt2.py R10（iOS）× check-kernel-anim.py R 组（Android）
+- **实现位置**：`packages/animation/src/types.ts:RepeatCount/RepeatDirection（内核 anim.rs:loop_phase）`
+
+```ts
+// 呼吸：1→1.08 往复，无限（净位移 0——每轮回到原位）
+{ kind: 'scale', from: 1, to: 1.08, durationMs: 900,
+  repeat: 'infinite', direction: 'alternate' }
+// 播三遍（每遍从起点重跑）
+{ kind: 'translateY', from: -40, to: 0, durationMs: 300, repeat: 3 }
+```
+
+### `primitive/playback`
+
+**播放控制（timeScale / pause —— 2026-10-01 · A3）** `[implemented]`
+
+- **是什么**：`animControl({ timeScale, paused })`——全局时间因子（`0.25` 慢动作 / `2` 快进）与暂停/恢复。
+- **为什么**：★**只影响时间推进**：seek 与滚动驱动的进度由外部给（不走全局时钟）⇒ 暂停/慢放不破坏手势跟随语义。暂停时 **dt 视作 0 但仍写值**（层重建不丢姿态——与 Progress 驱动同款）。★内核单一入口（`tick` 里缩放 dt），不是每个动画各自缩放（那会出现"有的慢有的不慢"）。
+- **何时用**：演示慢镜头 / 批量调试动画 / 页面不可见时冻结（省电）；用户手势期间暂停自动播放
+- **如何验证**：内核 FFI `proteus_layout_anim_control`（含非法值拒绝）；真机：check-anim-rt2.py S11（iOS）× check-kernel-anim.py S 组（Android）——S1 慢动作 4× / S2 冻结 200ms 不变且恢复继续 / S3 非法拒绝
+- **实现位置**：`packages/layout-core-rust/src/anim.rs:AnimEngine.time_scale/paused（ffi.rs:proteus_layout_anim_control）`
+
+```ts
+animControl({ timeScale: 0.25 })   // 全场慢动作（演示/讲解）
+animControl({ paused: true })     // 冻结（值保持）
+animControl({ paused: false })    // 恢复——从冻结处继续（不是重置）
 ```
 
 ### `primitive/keyframes`
