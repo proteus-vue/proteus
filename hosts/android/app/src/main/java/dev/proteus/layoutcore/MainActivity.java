@@ -1672,6 +1672,63 @@ public class MainActivity extends Activity {
                     "{\"anims\":[{\"nodeId\":11,\"kind\":0,\"curveBezier\":[-0.2,0,0.64,1],"
                             + "\"from\":0,\"to\":100,\"durMs\":200}]}"));
 
+            // ── S 组（★★播放控制 timeScale/pause，2026-10-01 · A3）──
+            //   判据（check-kernel-anim.py S 组）：
+            //     S1 timeScale:0.25 的动画在同样 dt 下**只走到 1/4 进度**（慢动作生效）
+            //     S2 paused:true 期间 dt 推进但**值不变**（冻结）；resume 后继续（不是重置）
+            //     S3 非法 timeScale（负数）⇒ 明确拒绝
+            hv.kernelAnimStop("{\"all\":true}");
+            out.put("control_set", hv.kernelAnimControl("{\"timeScale\":0.25}"));
+            hv.kernelAnimStart("{\"anims\":[{\"nodeId\":11,\"kind\":0,\"curve\":0,\"from\":0,\"to\":400,"
+                    + "\"durMs\":400,\"takeover\":false}]}");
+            hv.kernelAnimTick(100f); // 名义 25% ⇒ 慢动作 1/4 ⇒ 实际 ≈ 6.25% ⇒ tx ≈ 25
+            out.put("slow_tick", new org.json.JSONObject(hv.animTxProbe("[11]")));
+            out.put("control_reset", hv.kernelAnimControl("{\"timeScale\":1.0}"));
+            hv.kernelAnimStop("{\"all\":true}");
+            // S2 暂停：推进 100ms（值应前进），暂停后推进 200ms（值不变），恢复后推进（继续）
+            hv.kernelAnimStart("{\"anims\":[{\"nodeId\":11,\"kind\":0,\"curve\":0,\"from\":0,\"to\":400,"
+                    + "\"durMs\":400,\"takeover\":false}]}");
+            hv.kernelAnimTick(100f);
+            out.put("pause_before", new org.json.JSONObject(hv.animTxProbe("[11]")));
+            out.put("control_pause", hv.kernelAnimControl("{\"paused\":true}"));
+            hv.kernelAnimTick(200f);
+            out.put("pause_during", new org.json.JSONObject(hv.animTxProbe("[11]")));
+            out.put("control_resume", hv.kernelAnimControl("{\"paused\":false}"));
+            hv.kernelAnimTick(50f);
+            out.put("pause_after", new org.json.JSONObject(hv.animTxProbe("[11]")));
+            hv.kernelAnimControl("{\"timeScale\":1.0}");
+            hv.kernelAnimStop("{\"all\":true}");
+            out.put("control_rejected", hv.kernelAnimControl("{\"timeScale\":-1}"));
+
+            // ── R 组（★★循环/往复，2026-10-01 · A2）──
+            //   判据（check-kernel-anim.py R 组）：
+            //     R1 repeat:2 的动画在两遍时长内**不结束**、到点**精确落终点**（一遍就结束=repeat 未生效）
+            //     R2 yoyo（alternate）第 2 遍**回程**：中途值**大于**终点（朝 from 走）——净位移 0 的指纹
+            //     R3 repeat:'infinite' 长时间推进**永不结束**（内核 active 恒 > 0）
+            hv.kernelAnimStop("{\"all\":true}");
+            out.put("repeat_start", hv.kernelAnimStart(
+                    "{\"anims\":[{\"nodeId\":11,\"kind\":0,\"curve\":3,\"from\":0,\"to\":100,"
+                            + "\"durMs\":200,\"repeat\":2,\"takeover\":false}]}"));
+            // 第 1 遍结束点（200ms）：若 repeat 生效 ⇒ 不停在 100 而是继续；300ms（= 第 2 遍半程）
+            hv.kernelAnimTick(100f);
+            out.put("repeat_mid1", new org.json.JSONObject(hv.animTxProbe("[11]")));
+            hv.kernelAnimTick(300f);   // 累计 400ms（2 遍整）
+            out.put("repeat_end", new org.json.JSONObject(hv.animTxProbe("[11]")));
+            // R2：yoyo —— 第 1 遍到 100；第 2 遍回程中途（累计 300ms）应 > 100 且朝 0 走
+            hv.kernelAnimStop("{\"all\":true}");
+            hv.kernelAnimStart("{\"anims\":[{\"nodeId\":11,\"kind\":0,\"curve\":0,\"from\":0,\"to\":100,"
+                    + "\"durMs\":200,\"repeat\":2,\"direction\":\"alternate\",\"takeover\":false}]}");
+            hv.kernelAnimTick(250f);   // 第 2 遍 25%：u=0.25 反向 ⇒ 值 = 75（回程）
+            out.put("yoyo_back", new org.json.JSONObject(hv.animTxProbe("[11]")));
+            hv.kernelAnimTick(150f);   // 累计 400ms：到点（末轮 from = 0）
+            out.put("yoyo_end", new org.json.JSONObject(hv.animTxProbe("[11]")));
+            // R3：infinite —— 推进很久也不结束
+            hv.kernelAnimStop("{\"all\":true}");
+            hv.kernelAnimStart("{\"anims\":[{\"nodeId\":11,\"kind\":2,\"curve\":1,\"from\":1,\"to\":1.1,"
+                    + "\"durMs\":100,\"repeat\":\"infinite\",\"takeover\":false}]}");
+            hv.kernelAnimTick(2000f);
+            out.put("infinite_after_2000ms", hv.kernelAnimActive());
+
             // ── M4：真帧循环（500ms；跑满自停）──
             hv.kernelAnimStop("{\"all\":true}");
             hv.kernelAnimStart("{\"anims\":[{\"nodeId\":11,\"kind\":0,\"curve\":3,\"from\":-60,\"to\":60,"

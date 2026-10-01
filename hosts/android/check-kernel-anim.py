@@ -337,6 +337,97 @@ def main() -> int:
     else:
         print(f"  ✓ Q3 非法控制点明确拒绝（可定位）：{rej_s[:90]}…")
 
+    # ── S 组（★★播放控制，2026-10-01 · A3）：timeScale / pause ──
+    def _j(x):
+        if isinstance(x, str):
+            try: return json.loads(x)
+            except Exception: return {}
+        return x or {}
+    s1 = _j(d.get("slow_tick") and d.get("slow_tick") or d.get("slow_tick"))
+    slow = _layers(s1).get("tx")
+    reset = _j(d.get("control_reset"))
+    if not isinstance(slow, (int, float)):
+        fail(f"S1 慢动作读数缺失：{s1}")
+        ok = False
+    elif not (15.0 <= slow <= 35.0):
+        fail(f"S1 timeScale:0.25 未生效：推进 100ms/400ms 后 tx={slow:.1f}（慢 4× 应 ≈ 25；无效果会是 100）")
+        ok = False
+    else:
+        print(f"  ✓ S1 timeScale:0.25 慢动作：名义 25% 进度实际 tx={slow:.1f}（≈ 6.25% ⇒ 4× 慢）")
+    pb = _layers(_j(d.get("pause_before"))).get("tx")
+    pd = _layers(_j(d.get("pause_during"))).get("tx")
+    pa = _layers(_j(d.get("pause_after"))).get("tx")
+    if not all(isinstance(v, (int, float)) for v in (pb, pd, pa)):
+        fail(f"S2 暂停读数缺失：before={pb} during={pd} after={pa}")
+        ok = False
+    elif abs(pd - pb) > 0.5:
+        fail(f"S2 暂停期间值仍在变：{pb:.1f} → {pd:.1f}（应冻结）")
+        ok = False
+    elif not (pa > pd + 10.0):
+        fail(f"S2 恢复后未继续：{pd:.1f} → {pa:.1f}（应前进 50ms ≈ +50）")
+        ok = False
+    else:
+        print(f"  ✓ S2 暂停/恢复：冻结在 tx={pd:.1f}（200ms 不变）· 恢复后继续到 {pa:.1f}（不重置）")
+    rej_s = json.dumps(_j(d.get("control_rejected")), ensure_ascii=False)
+    if "timeScale" not in rej_s or "非法" not in rej_s:
+        fail(f"S3 非法 timeScale 未被明确拒绝：{rej_s[:140]}")
+        ok = False
+    else:
+        print(f"  ✓ S3 非法 timeScale 明确拒绝：{rej_s[:80]}…")
+
+    # ── R 组（★★循环/往复，2026-10-01 · A2）──
+    #   【为什么这组能在真机上判定"循环真的生效"】repeat:2 的单遍结束点（200ms）与两遍
+    #   结束点（400ms）值相同（都是 to）⇒ 用**中途值**判定：单遍在 300ms 后已静止，
+    #   两遍在 300ms 仍在第 2 遍推进（值随曲线变）。yoyo 的指纹 = 第 2 遍回程（值朝 from 走）。
+    rs = d.get("repeat_start") or {}
+    if isinstance(rs, str):
+        try: rs = json.loads(rs)
+        except Exception: rs = {}
+    started_r = (rs or {}).get("started") if isinstance(rs, dict) else None
+    m1 = _layers(d.get("repeat_mid1")).get("tx")
+    rend = _layers(d.get("repeat_end")).get("tx")
+    yb = _layers(d.get("yoyo_back")).get("tx")
+    ye = _layers(d.get("yoyo_end")).get("tx")
+    inf = d.get("infinite_after_2000ms") or {}
+    if isinstance(inf, str):
+        try: inf = json.loads(inf)
+        except Exception: inf = {}
+    if started_r != 1:
+        fail(f"R1 repeat 动画未被内核受理：{rs}")
+        ok = False
+    elif not isinstance(m1, (int, float)) or not isinstance(rend, (int, float)):
+        fail(f"R1 读数缺失：mid1={m1} end={rend}")
+        ok = False
+    else:
+        # 300ms 时（第 2 遍半程）值应**远离终点**（在 0..100 中间段）；400ms 精确到 100
+        if abs(m1 - rend) < 5:
+            fail(f"R1a repeat:2 疑似未生效：第 2 遍中途值 {m1:.1f} ≈ 终点 {rend:.1f}（单遍会已静止）")
+            ok = False
+        elif abs(rend - 100.0) > 0.01:
+            fail(f"R1b 两遍结束点未钉死：{rend}（应 = 100）")
+            ok = False
+        else:
+            print(f"  ✓ R1 repeat:2：第 2 遍中途 tx={m1:.1f}（仍在推进）· 两遍结束钉死 {rend:.1f}")
+    if not isinstance(yb, (int, float)) or not isinstance(ye, (int, float)):
+        fail(f"R2 yoyo 读数缺失：back={yb} end={ye}")
+        ok = False
+    else:
+        # 第 2 遍 25%（250ms，linear 反向）⇒ 75；结束 ⇒ 0（回 from——净位移 0 的指纹）
+        if not (60.0 <= yb <= 90.0):
+            fail(f"R2a yoyo 第 2 遍未回程：tx={yb:.1f}（应 ≈ 75 = 从 100 向 0 走）")
+            ok = False
+        elif abs(ye) > 0.5:
+            fail(f"R2b yoyo 结束未回到 from：tx={ye:.1f}（应 ≈ 0——往复的净位移 0）")
+            ok = False
+        else:
+            print(f"  ✓ R2 yoyo：第 2 遍回程 tx={yb:.1f}（应向 0 走）· 结束回 from tx={ye:.1f}（净位移 0）")
+    act_inf = inf.get("active") if isinstance(inf, dict) else None
+    if act_inf is None or act_inf <= 0:
+        fail(f"R3 infinite 循环在 2000ms 后不应结束：active={act_inf}（应 > 0）")
+        ok = False
+    else:
+        print(f"  ✓ R3 repeat:'infinite'：推进 2000ms 后仍在跑（active={act_inf}）")
+
     # ── M7：共享元素（内核几何） ──
     se = d.get("shared_element")
     if isinstance(se, str):

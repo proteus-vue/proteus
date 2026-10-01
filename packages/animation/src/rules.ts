@@ -339,6 +339,45 @@ compileAnimations([{ kind: 'textColor', from: '#ffffff', to: '#00ff00',
     source: 'packages/animation/src/types.ts:BezierPoints + easing.ts:parseCubicBezier（内核 anim.rs:bezier_table + ffi.rs:parse_curve_bezier）',
   },
   {
+    id: 'primitive/repeat',
+    kind: 'primitive',
+    title: '循环与往复（repeat / direction —— 2026-10-01 · A2）',
+    description: '`repeat: 3 | \'infinite\'`（= CSS animation-iteration-count）＋ '
+      + '`direction: \'normal\' | \'alternate\'`（= animation-direction，alternate = **yoyo** 往复）。',
+    why: '★**"把时长写长"的土办法退役**：一遍的时长决定**每轮节奏**——写长会把曲线在整段上拉伸'
+      + '（呼吸变慢速单摆），无限循环更写不出来。内核 `loop_phase` 做"已过时间 → 第几轮 + 轮内进度"'
+      + '映射（alternate 奇偶轮反向），**末轮端点按方向钉死**（yoyo 偶数轮停在 `from`——净位移 0）。',
+    when: '呼吸灯 / 无限脉冲 / 来回摆动（yoyo）/ 多次播放入场',
+    example: `// 呼吸：1→1.08 往复，无限（净位移 0——每轮回到原位）
+{ kind: 'scale', from: 1, to: 1.08, durationMs: 900,
+  repeat: 'infinite', direction: 'alternate' }
+// 播三遍（每遍从起点重跑）
+{ kind: 'translateY', from: -40, to: 0, durationMs: 300, repeat: 3 }`,
+    verify: 'tests/anim-repeat-golden.test.ts（编译/校验/颜色四通道一致性）+ 内核单测 '
+      + '`loop_phase_maps_rounds_and_finishes_exactly` / `repeat_anim_runs_to_end_and_yoyo_returns_home`；'
+      + '真机：check-anim-rt2.py R10（iOS）× check-kernel-anim.py R 组（Android）',
+    status: 'implemented',
+    source: 'packages/animation/src/types.ts:RepeatCount/RepeatDirection（内核 anim.rs:loop_phase）',
+  },
+  {
+    id: 'primitive/playback',
+    kind: 'primitive',
+    title: '播放控制（timeScale / pause —— 2026-10-01 · A3）',
+    description: '`animControl({ timeScale, paused })`——全局时间因子（`0.25` 慢动作 / `2` 快进）与暂停/恢复。',
+    why: '★**只影响时间推进**：seek 与滚动驱动的进度由外部给（不走全局时钟）⇒ 暂停/慢放不破坏'
+      + '手势跟随语义。暂停时 **dt 视作 0 但仍写值**（层重建不丢姿态——与 Progress 驱动同款）。'
+      + '★内核单一入口（`tick` 里缩放 dt），不是每个动画各自缩放（那会出现"有的慢有的不慢"）。',
+    when: '演示慢镜头 / 批量调试动画 / 页面不可见时冻结（省电）；用户手势期间暂停自动播放',
+    example: `animControl({ timeScale: 0.25 })   // 全场慢动作（演示/讲解）
+animControl({ paused: true })     // 冻结（值保持）
+animControl({ paused: false })    // 恢复——从冻结处继续（不是重置）`,
+    verify: '内核 FFI `proteus_layout_anim_control`（含非法值拒绝）；'
+      + '真机：check-anim-rt2.py S11（iOS）× check-kernel-anim.py S 组（Android）——'
+      + 'S1 慢动作 4× / S2 冻结 200ms 不变且恢复继续 / S3 非法拒绝',
+    status: 'implemented',
+    source: 'packages/layout-core-rust/src/anim.rs:AnimEngine.time_scale/paused（ffi.rs:proteus_layout_anim_control）',
+  },
+  {
     id: 'primitive/keyframes',
     kind: 'primitive',
     title: '序列编排（一条动画内多段）',

@@ -128,6 +128,13 @@ export function compileOne(d: AnimDecl, targets: AnimTargets): EngineAnim[] {
             }
           : {}),
         ...(d.scroll ? { scrollFrom: d.scroll.from, scrollTo: d.scroll.to } : {}),
+        // ★A2 循环：四条通道**都要带**（少一条通道不循环 = 颜色分叉——经典静默缺陷）
+        ...(d.repeat !== undefined
+          ? {
+              repeat: d.repeat === 'infinite' ? -1 : d.repeat,
+              ...(d.direction === 'alternate' ? { alternate: true } : {}),
+            }
+          : {}),
       }
     }
     return [mk(base[0]!, 0), mk(base[1]!, 1), mk(base[2]!, 2), mk(base[3]!, 3)]
@@ -158,6 +165,13 @@ export function compileOne(d: AnimDecl, targets: AnimTargets): EngineAnim[] {
         : {}),
       // ★MA5：滚动窗口（内核据 scrollTo > scrollFrom 判定为滚动驱动）
       ...(d.scroll ? { scrollFrom: d.scroll.from, scrollTo: d.scroll.to } : {}),
+      // ★A2 循环（`'infinite'` → -1 哨兵；`direction` 只在有 repeat 时下发——不污染线格式）
+      ...(d.repeat !== undefined
+        ? {
+            repeat: d.repeat === 'infinite' ? -1 : d.repeat,
+            ...(d.direction === 'alternate' ? { alternate: true } : {}),
+          }
+        : {}),
     },
   ]
 }

@@ -612,6 +612,19 @@ pub extern "system" fn Java_dev_proteus_layoutcore_RustLayout_nativeSharedElemen
     forward_cstr(env, json, move |p| unsafe { ffi::proteus_layout_shared_element(handle as u64, p) })
 }
 
+/// ★★**播放控制**（2026-10-01 · A3）：`{"timeScale":1.0,"paused":false}` → 回显生效值。
+///   内核 `proteus_layout_anim_control` 的透传（全局时间因子/暂停；只影响时间推进——
+///   seek 与滚动驱动不受影响，它们本就不走全局时钟）。
+#[no_mangle]
+pub extern "system" fn Java_dev_proteus_layoutcore_RustLayout_nativeAnimControl<'local>(
+    env: JNIEnv<'local>,
+    _class: JClass<'local>,
+    handle: jni::sys::jlong,
+    json: JString<'local>,
+) -> jstring {
+    forward_cstr(env, json, move |p| unsafe { ffi::proteus_layout_anim_control(handle as u64, p) })
+}
+
 /// ★★**仍在推进的动画条数**（0 = 全部结束）——幕切换的权威判据（与 iOS 同源）。
 ///
 /// 【为什么单列这个入口（灯光秀幕驱动需要它）】节目单的幕时长是**名义**跨度；

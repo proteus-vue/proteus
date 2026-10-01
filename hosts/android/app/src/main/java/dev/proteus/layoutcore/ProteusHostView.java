@@ -544,6 +544,16 @@ public class ProteusHostView extends ViewGroup {
     }
 
     /** 停动画（`{"all":true}` 或 `{"nodeIds":[…]}`）——含**清值**（与 iOS `animStopAll` 同语义） */
+    /** ★A2：仍在推进的动画条数（0 = 全结束）——循环语义的判据（infinite 应恒 > 0） */
+    public String kernelAnimActive() {
+        return RustLayout.animActive(coreHandle);
+    }
+
+    /** ★A3：播放控制（时间因子/暂停；回显生效值） */
+    public String kernelAnimControl(String json) {
+        return RustLayout.animControl(coreHandle, json);
+    }
+
     public String kernelAnimStop(String json) {
         String out = RustLayout.animStop(coreHandle, json);
         animTx.clear();

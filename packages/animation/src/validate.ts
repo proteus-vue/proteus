@@ -291,11 +291,74 @@ export function validateAnimations(decls: readonly AnimDecl[]): ValidationIssue[
       }
       // ★自定义贝塞尔（颜色路径同支持——四条通道共用同一曲线）
       checkCurveBezier(d, i, issues)
+      // ★A2 循环（颜色路径同规则：repeat 合法性 + 与 scroll 互斥）
+      {
+        const dd = d as { repeat?: number | 'infinite'; direction?: string; scroll?: unknown }
+        if (dd.repeat !== undefined) {
+          const badNum = typeof dd.repeat === 'number' && (!Number.isFinite(dd.repeat) || dd.repeat < 1)
+          if (dd.repeat !== 'infinite' && (typeof dd.repeat !== 'number' || badNum)) {
+            issues.push({
+              index: i,
+              code: 'invalid-range',
+              message: `\`repeat\` 非法：${JSON.stringify(dd.repeat)}（应 ≥ 1 的数字，或 'infinite'）`,
+              hint: "例：repeat: 3 · repeat: 'infinite'（呼吸灯的底色循环）",
+            })
+          }
+          if ((dd.repeat === 'infinite' || (typeof dd.repeat === 'number' && dd.repeat > 1)) && dd.scroll) {
+            issues.push({
+              index: i,
+              code: 'conflicting-easing',
+              message: '`repeat` 与 `scroll` 并存 —— 滚动驱动的进度来自位置，没有"轮"的概念',
+              hint: '去掉 `repeat`',
+            })
+          }
+        }
+        if (dd.direction !== undefined && dd.direction !== 'normal' && dd.direction !== 'alternate') {
+          issues.push({
+            index: i,
+            code: 'invalid-range',
+            message: `\`direction\` 非法：${JSON.stringify(dd.direction)}`,
+            hint: "yoyo 往复用 direction: 'alternate'",
+          })
+        }
+      }
       return // ★颜色分支到此为止（不落进标量路径的数值校验）
     }
 
     // ★自定义贝塞尔（标量路径）
     checkCurveBezier(d, i, issues)
+
+    // ★A2 循环合法性与互斥（滚动驱动没有"轮"的概念）
+    {
+      const dd = d as { repeat?: number | 'infinite'; direction?: string; scroll?: unknown }
+      if (dd.repeat !== undefined) {
+        const badNum = typeof dd.repeat === 'number' && (!Number.isFinite(dd.repeat) || dd.repeat < 1)
+        if (dd.repeat !== 'infinite' && (typeof dd.repeat !== 'number' || badNum)) {
+          issues.push({
+            index: i,
+            code: 'invalid-range',
+            message: `\`repeat\` 非法：${JSON.stringify(dd.repeat)}（应 ≥ 1 的数字，或 'infinite'）`,
+            hint: "例：repeat: 3（播三遍）· repeat: 'infinite'（无限）",
+          })
+        }
+        if ((dd.repeat === 'infinite' || (typeof dd.repeat === 'number' && dd.repeat > 1)) && dd.scroll) {
+          issues.push({
+            index: i,
+            code: 'conflicting-easing',
+            message: '`repeat` 与 `scroll` 并存 —— 滚动驱动的进度来自位置，没有"轮"的概念',
+            hint: '去掉 `repeat`（滚动联动天然随位置往复）',
+          })
+        }
+      }
+      if (dd.direction !== undefined && dd.direction !== 'normal' && dd.direction !== 'alternate') {
+        issues.push({
+          index: i,
+          code: 'invalid-range',
+          message: `\`direction\` 非法：${JSON.stringify(dd.direction)}（应 'normal' / 'alternate'）`,
+          hint: "yoyo 往复用 direction: 'alternate'",
+        })
+      }
+    }
 
     // ★★**同属性重复声明**（真陷阱，本轮写预设时自己踩到）：内核语义是「同 (节点,属性) = 替换」
     //   ⇒ 一个批次里出现两条 `scale`，**后者静默替换前者**——用户以为"按下再弹回"，

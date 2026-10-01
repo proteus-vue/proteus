@@ -76,6 +76,8 @@ final class RustLayout {
     private static native String nativeAnimStop(long handle, String json);
     /** ★仍在推进的动画条数（0 = 全结束）——幕切换的权威判据（灯光秀幕驱动用；见 JNI lib.rs 注释） */
     private static native String nativeAnimActive(long handle);
+    /** ★★A3 播放控制：`{"timeScale":1.0,"paused":false}`（回显生效值） */
+    private static native String nativeAnimControl(long handle, String json);
     /** ★MA5：滚动驱动（滚动位置 → 全部窗口动画；换算在内核） */
     private static native String nativeAnimSeekScroll(long handle, String json);
     /** ★共享元素（几何原语：源矩形 + 目标节点 ⇒ dx/dy/scale，内核算） */
@@ -253,6 +255,11 @@ final class RustLayout {
     /** ★仍在推进的动画条数（0 = 全结束）——幕切换的权威判据 */
     static String animActive(long handle) {
         return loaded ? nativeAnimActive(handle) : NOT_LOADED;
+    }
+
+    /** ★★A3：播放控制（时间因子/暂停） */
+    static String animControl(long handle, String json) {
+        return loaded ? nativeAnimControl(handle, json) : NOT_LOADED;
     }
 
     /** ★共享元素（几何原语） */

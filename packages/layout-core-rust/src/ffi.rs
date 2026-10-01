@@ -2385,6 +2385,47 @@ fn parse_curve_bezier(a: &serde_json::Value, node_id: u32) -> Result<Option<std:
     Ok(Some(crate::anim::bezier_table(c)))
 }
 
+/// ★★**解析循环声明**（`repeat` / `direction`，2026-10-01 · A2）——两处 anim 入口共用
+///
+/// 契约（与 CSS `animation-iteration-count` / `animation-direction` 对齐）：
+///   · `repeat`: 正数 = 播 n 遍；`"infinite"`（字符串）= 无限；缺省 1。**0 / 负数 / NaN 拒绝**。
+///   · `direction`: `"normal"`（缺省）/ `"alternate"`（yoyo——奇偶轮反向）。
+/// 返回 `(iterations, alternate)`；`iterations = -1.0` 是**无限**的内部哨兵。
+fn parse_repeat(a: &serde_json::Value, node_id: u32) -> Result<(f32, bool), String> {
+    let iterations = match a.get("repeat") {
+        None => 1.0f32,
+        Some(v) if v.is_string() => match v.as_str() {
+            Some("infinite") => -1.0,
+            other => {
+                return Err(format!(
+                    "节点 {node_id} 的 repeat 字符串只支持 \"infinite\"，收到 {other:?}（数字直接写数字）"
+                ))
+            }
+        },
+        Some(v) => {
+            let n = v
+                .as_f64()
+                .ok_or_else(|| format!("节点 {node_id} 的 repeat 不是数字/\"infinite\"：{v}"))? as f32;
+            if !(n.is_finite()) || n < 1.0 {
+                return Err(format!(
+                    "节点 {node_id} 的 repeat 非法：{n}（应 ≥ 1 的数字，或 \"infinite\"）"
+                ));
+            }
+            n
+        }
+    };
+    let alternate = match a.get("direction").and_then(|x| x.as_str()) {
+        None | Some("normal") => false,
+        Some("alternate") => true,
+        Some(other) => {
+            return Err(format!(
+                "节点 {node_id} 的 direction 只支持 \"normal\" / \"alternate\"，收到 {other:?}"
+            ))
+        }
+    };
+    Ok((iterations, alternate))
+}
+
 /// 入参 JSON：`{"anims":[{"nodeId":1,"kind":0,"curve":1,"from":0,"to":200,"durMs":1000}]}`
 ///   kind: 0=translateX / 1=translateY / 2=scale（与 `AnimKind` 一致）
 ///   返回：`{"ok":true,"started":N}` 或 `{"ok":false,"error":...}`
@@ -2430,6 +2471,9 @@ pub unsafe extern "C" fn proteus_layout_anim_start(handle: u64, json: *const c_c
             let curve = a.get("curve").and_then(|x| x.as_u64()).unwrap_or(0) as u8;
             // ★自定义贝塞尔（可选；Some 时求值优先于内置 curve id——见 Anim::curve_at）
             let curve_pts = parse_curve_bezier(a, node_id)?;
+            // ★A2 循环（可选）：`repeat` 数字 / `'infinite'`（JSON 里是字符串）
+            //   `direction: 'alternate'` = yoyo（奇偶轮反向）
+            let (iterations, alternate) = parse_repeat(a, node_id)?;
             // ★RT2：驱动方式（缺省 time ⇒ 向后兼容 RT0 的启动报文）
             let drive = crate::anim::AnimDrive::from_u8(a.get("drive").and_then(|x| x.as_u64()).unwrap_or(0) as u8)?;
             // ★RT2 追加：弹簧（`spring:{stiffness,damping,mass}` 提供时用物理模式）
@@ -2490,6 +2534,8 @@ pub unsafe extern "C" fn proteus_layout_anim_start(handle: u64, json: *const c_c
                 vel: 0.0,
                 takeover,
                 curve_pts,
+                iterations,
+                alternate,
             };
             // ★错误必须冒泡（节点不在树上 / 曲线越界）——静默会变成"动画不生效"难查
             // ★MA5：带滚动窗口的动画走 `start_scroll`（drive 切 Progress——时间 tick 不再推进它，
@@ -2724,6 +2770,8 @@ pub unsafe extern "C" fn proteus_layout_anim_commit_spec(handle: u64, json: *con
                 vel: 0.0,
                 takeover: false,
                 curve_pts,
+                iterations: 1.0, // ★平台零参与路径按"单遍"提交（循环归 tick 路径——见 commit_spec 注释）
+                alternate: false,
             });
         }
 
@@ -3195,6 +3243,56 @@ pub unsafe extern "C" fn proteus_layout_bg_nodes(handle: u64) -> *mut c_char {
         Ok(Ok(s)) => into_c_string(s),
         Ok(Err(e)) => into_c_string(format!("{{\"ok\":false,\"error\":{}}}", json_str(&e))),
         Err(_) => into_c_string("{\"ok\":false,\"error\":\"panic（已捕获）\"}".to_string()),
+    }
+}
+
+/// ★★**播放控制**（2026-10-01 · A3）：全局时间因子 / 暂停 / 恢复。
+///
+/// 入参 JSON：`{"timeScale": 1.0, "paused": false}`（两键都可省——只改给出的那个）
+///   · `timeScale`：全局时间缩放（`0.25` 慢动作 / `2.0` 快进；**只影响时间推进**——
+///     seek/滚动驱动的进度由外部给，与全局时钟无关，不受影响）；
+///   · `paused`：暂停（时间不推进；**仍写值**——层重建不丢姿态，与 Progress 驱动同款）。
+///
+/// 返回：`{"ok":true,"timeScale":<当前>,"paused":<当前>}`（回显生效值，便于判据断言）。
+/// ★为什么是"设置并回显"而不是 set/get 两个入口：一次跨边界拿到权威状态（判据一条调用即可）。
+///
+/// # Safety
+/// `json` 须为有效 NUL 结尾 C 字符串。返回指针须用 `proteus_string_free` 释放。
+#[no_mangle]
+pub unsafe extern "C" fn proteus_layout_anim_control(handle: u64, json: *const c_char) -> *mut c_char {
+    let f = || -> Result<String, String> {
+        let raw = unsafe { std::ffi::CStr::from_ptr(json) }.to_string_lossy();
+        let v: serde_json::Value =
+            serde_json::from_str(&raw).map_err(|e| format!("播放控制入参不是 JSON：{e}"))?;
+        let mut reg = registry().lock().map_err(|_| "注册表锁失败".to_string())?;
+        let entry = reg.get_mut(&handle).ok_or_else(|| format!("句柄 {handle} 不存在"))?;
+        if let Some(ts) = v.get("timeScale").and_then(|x| x.as_f64()) {
+            let ts = ts as f32;
+            if !ts.is_finite() || ts < 0.0 {
+                return Err(format!(
+                    "timeScale 非法：{ts}（应 ≥ 0 的有限数；0 = 冻结，0.25 = 慢动作，2 = 快进）"
+                ));
+            }
+            entry.anim.time_scale = ts;
+        }
+        if let Some(p) = v.get("paused").and_then(|x| x.as_bool()) {
+            entry.anim.paused = p;
+        }
+        Ok(serde_json::json!({
+            "ok": true,
+            "timeScale": entry.anim.time_scale,
+            "paused": entry.anim.paused,
+        })
+        .to_string())
+    };
+    match std::panic::catch_unwind(f) {
+        Ok(Ok(s)) => CString::new(s).map(|c| c.into_raw()).unwrap_or(std::ptr::null_mut()),
+        Ok(Err(e)) => CString::new(serde_json::json!({"ok": false, "error": e}).to_string())
+            .map(|c| c.into_raw())
+            .unwrap_or(std::ptr::null_mut()),
+        Err(_) => CString::new("{\"ok\":false,\"error\":\"内部 panic（已捕获）\"}")
+            .map(|c| c.into_raw())
+            .unwrap_or(std::ptr::null_mut()),
     }
 }
 
