@@ -83,6 +83,13 @@ const T = {
     showcaseCaption:
       '真机录屏（iPhone 12 · 60fps · 12 幕一遍到底，循环播放）：聚字开场 → 涟漪 → 风暴 → 全量重排 → 漩涡 → 谢幕语',
     showcaseCmd: '复跑：bash hosts/ios/run-selfdraw.sh --showcase --record ｜ 演示 App：iPhone 上点开 Morpheus 即循环演出',
+    lightsTitle: '第二个节目 · 舞台灯光秀（800 彩灯 · 安卓真机）',
+    lightsLead:
+      '第二个炫技节目：**黑舞台上的 800 颗实体彩灯**——一颗不动，整场演出**只有亮灯与灭灯**（含文字：亮的灯组成字，灭的灯仍是可见暗盘）。15 幕：点火 → 跑马灯 → 彩虹流 → 呼吸 → 极光 → 光幕扫描 → 旋转光扇 → 棋盘翻转 → 星火 → 灯阵点字「800」「LIGHTS」→ 熄灯 → 全场亮灯 → 谢幕熄灯（可循环）。整场 **48004 条指令 100% 是颜色通道**——这是刚收口的颜色能力（底色四通道 + 多段 keyframes + 文字色轨道）被推到极限。Redmi（120Hz 屏）上 5187 帧 · vsync p50 8.333ms · 每帧 p95 2.03ms。',
+    lightsNote: '★为什么"别人不敢试"：用 800 个节点做**逐灯颜色动画**（每颗灯独立多段色序列），意味着每帧要对 800 盏灯做通道求值 + 写层——曲线/插值全在 Rust 内核，每帧只跨一次边界（p95 2.03ms，帧预算 8.33ms 的 24%）。★**诚实口径**：节目标称"800 灯全可达"；文字幕的亮盘数由点阵字形决定（「800」= 41 颗亮盘），其余灯全部是可见的灭灯暗盘——这是"灯阵"语义，不是"隐藏"语义（判据逐帧断言 0 条 opacity 指令）。',
+    lightsImgAlt: 'Morpheus 灯光秀真机录屏：800 颗彩灯在黑舞台上完成 15 幕亮灭演出，中间灯阵点字 800 与 LIGHTS',
+    lightsCaption: '真机录屏（Redmi · 120Hz · 15 幕一遍到底，循环播放）：点火 → 跑马灯 → 彩虹流 → 光扇 → 灯阵点字 → 熄灯谢幕',
+    lightsCmd: '复跑：bash hosts/android/build-and-run.sh --release --lights ｜ 分享版 APK：proteus-lights.apk（点开即循环演出）',
     demoTitle: '真机演示',
     demoNote: '演示播放的是引擎交给执行器的同一份指令（routeTransitionBatches）；曲线求值走与 Rust 内核 golden 对拍过的 TS 镜像。',
     dirLabel: '方向',
@@ -159,6 +166,14 @@ const T = {
     showcaseCaption:
       'Device recording (iPhone 12 · 60fps · 12 acts in one pass, looping): clocked title → ripples → storm → full re-layout → spiral → finale',
     showcaseCmd: 'Re-run: bash hosts/ios/run-selfdraw.sh --showcase --record | Demo app: tap Morpheus on iPhone for a looping show',
+    lightsTitle: 'Second show · Stage Light Show (800 lamps · Android device)',
+    lightsLead:
+      'The second showcase: **800 physical lamps on a black stage** — not one of them moves; the entire show is **lamps switching on and off** (text included: lit lamps form the letters, unlit lamps stay visible as dim discs). 15 acts: ignition → marquee chase → rainbow flow → breathing → aurora → light-curtain sweep → rotating fan → checkerboard → sparkle → matrix text "800" / "LIGHTS" → blackout → full-on finale → curtain call (loopable). All **48,004 instructions are 100% colour channels** — the freshly landed colour capability (four background channels + multi-segment keyframes + a text-colour track) pushed to its limit. On a 120 Hz Redmi: 5,187 frames · vsync p50 8.333 ms · per-frame p95 2.03 ms.',
+    lightsNote: '★Why others hesitate: per-lamp colour animation across 800 nodes (each lamp its own multi-segment colour sequence) means evaluating 800 lamps every frame — curve and interpolation live in the Rust kernel, one boundary crossing per frame (p95 2.03 ms = 24% of the 8.33 ms budget). ★Honest note: the show is titled "800 lamps reachable"; the lit count in text acts follows the glyph bitmap ("800" = 41 lit), and every other lamp stays as a visible unlit disc — that is the lamp-matrix semantic, not hiding (the judge asserts 0 opacity instructions frame by frame).',
+    lightsImgAlt: 'Morpheus light-show device recording: 800 lamps on a black stage perform a 15-act on/off show, including the matrix texts 800 and LIGHTS',
+    lightsCaption: 'Device recording (Redmi · 120 Hz · 15 acts in one pass, looping): ignition → marquee → rainbow → fan → matrix text → curtain',
+    lightsCmd:
+      'Re-run: bash hosts/android/build-and-run.sh --release --lights | Shareable APK: proteus-lights.apk (tap to loop the show)',
     demoTitle: 'Device demo',
     demoNote: 'The demo plays the very same instructions the engine hands to the executor (routeTransitionBatches); curve evaluation uses the TS mirror golden-tested against the Rust kernel.',
     dirLabel: 'Direction',
@@ -360,6 +375,17 @@ const SHOWCASE_STATS = [
   { v: '2.37', u: 'ms', l: '每帧成本 p50', lEn: 'Frame cost p50' },
   { v: '15', u: isEn.value ? '/ 1886' : '/ 1886 帧', l: isEn.value ? 'Dropped frames (0.80%)' : '掉帧（0.80%）', lEn: 'Dropped frames (0.80%)' },
   { v: '800', u: isEn.value ? 'tiles' : '片全量重排', l: isEn.value ? 'FLIP full re-layout (kernel 2ms)' : 'FLIP 全量重排（内核 2ms）', lEn: 'FLIP full re-layout (kernel 2ms)' },
+] as Array<{ v: string; u: string; l: string; lEn?: string }>
+
+// ★★第二个节目（舞台灯光秀）的机器读数——来自 check-lights.py 全绿的那一轮真机报告
+//   （hosts/android/results/lights.json：5187 帧 / p95 2.03ms / 48004 条 100% 颜色通道）
+const LIGHTS_STATS = [
+  { v: '800', u: isEn.value ? 'lamps' : '颗彩灯', l: isEn.value ? 'On a black stage · 20×40, none of them ever moves' : '黑舞台上 · 20×40，一颗不动', lEn: 'On a black stage · 20×40, none of them ever moves' },
+  { v: '100%', u: isEn.value ? 'on/off' : '亮灭指令', l: isEn.value ? '48,004 instructions, all colour channels (0 displacement)' : '48004 条指令全为颜色通道（0 条位移/透明度）', lEn: '48,004 instructions, all colour channels (0 displacement)' },
+  { v: '5187', u: isEn.value ? 'frames' : '帧', l: 'Redmi 120Hz · 15 幕一遍到底', lEn: 'Redmi 120Hz · 15 acts in one pass' },
+  { v: '8.333', u: 'ms', l: isEn.value ? 'vsync p50 (= the 120Hz budget)' : 'vsync p50（= 120Hz 预算）', lEn: 'vsync p50 (= the 120Hz budget)' },
+  { v: '2.03', u: 'ms', l: isEn.value ? 'Per-frame p95 (24% of budget)' : '每帧 p95（预算的 24%）', lEn: 'Per-frame p95 (24% of budget)' },
+  { v: '1160', u: isEn.value ? 'colours' : '种颜色', l: isEn.value ? 'Sampled mid-show (colour really flows)' : '演出中途采样（颜色真的在流动）', lEn: 'Sampled mid-show (colour really flows)' },
 ] as Array<{ v: string; u: string; l: string; lEn?: string }>
 
 const BOUNDARIES = computed(() =>
@@ -673,6 +699,45 @@ onUnmounted(() => {
         </p-grid>
       </p-view>
 
+      <!-- ═══════════ 第二个节目 · 舞台灯光秀（安卓真机录屏） ═══════════ -->
+      <p-view data-reveal class="sec">
+        <p-stack direction="row" align="center" :gap="12" class="sec-head" wrap>
+          <p-heading :level="2" v-p-fluid="'font-size(24, 32)'" class="sec-title">{{ C.lightsTitle }}</p-heading>
+          <span class="sec-rule" />
+        </p-stack>
+        <p-text class="sec-note">{{ C.lightsLead }}</p-text>
+        <p-grid :min-col-width="320" :gap="22" class="sc-grid">
+          <p-view class="sc-shot">
+            <video
+              v-if="motionOk"
+              class="sc-img sc-video sc-video-tall"
+              :src="`${base}morpheus-lights.mp4`"
+              :poster="`${base}morpheus-lights.png`"
+              :aria-label="C.lightsImgAlt"
+              autoplay
+              muted
+              loop
+              playsinline
+              preload="metadata"
+            />
+            <img v-else :src="`${base}morpheus-lights.png`" :alt="C.lightsImgAlt" class="sc-img" loading="lazy" />
+            <p-text class="sc-cap">{{ C.lightsCaption }}</p-text>
+          </p-view>
+          <p-stack direction="column" :gap="14" class="sc-side">
+            <p-grid :min-col-width="132" :gap="12">
+              <p-view v-for="(e, i) in LIGHTS_STATS" :key="i" class="sc-stat">
+                <p-stack direction="row" align="baseline" :gap="5" class="ev-num">
+                  <span class="ev-v sc-v">{{ e.v }}</span><span class="ev-u">{{ e.u }}</span>
+                </p-stack>
+                <p-text class="ev-l">{{ isEn ? e.lEn : e.l }}</p-text>
+              </p-view>
+            </p-grid>
+            <p-text class="sc-note">{{ C.lightsNote }}</p-text>
+            <code class="ev-src">{{ C.lightsCmd }}</code>
+          </p-stack>
+        </p-grid>
+      </p-view>
+
       <!-- ═══════════ 证据 ═══════════ -->
       <p-view data-reveal class="sec">
         <p-stack direction="row" align="center" :gap="12" class="sec-head" wrap>
@@ -976,6 +1041,10 @@ onUnmounted(() => {
   aspect-ratio: 586 / 1268;
   object-fit: cover;
   background: #06060a;
+}
+.sc-video-tall {
+  /* ★灯光秀源片 540×1080 = 1:2（安卓 1200×2608 裁去系统栏后）——同"不留空白跳变"口径 */
+  aspect-ratio: 1 / 2;
 }
 .sc-img {
   display: block;
