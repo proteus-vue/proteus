@@ -29,6 +29,9 @@ import fs from 'node:fs'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { execFileSync } from 'node:child_process'
+// ★★A/B（第二份产物）需要的 import——**文件级**（不能放生成器的 tsx 模板字符串里）
+import { parseStaticStyle, parsePaintDeclAttr, isPaintDeclAttr } from '../../packages/compiler/dist/index.js'
+import { parse as sfcParse, compileTemplate } from '@vue/compiler-sfc'
 
 const HERE = path.dirname(fileURLToPath(import.meta.url))
 const ROOT = path.resolve(HERE, '../..')
@@ -83,6 +86,68 @@ const list = ref([{ id: 1, w: 120, title: 'row' }])
 `
 
 // 用 tsx 跑编译器（与 gen-app4050-fixture.mjs 同一手法：临时脚本 + 真包）——**两份 SFC 一次跑完**
+const buildAb = (src, name) => {
+  const { descriptor } = sfcParse(src)
+  const tpl = descriptor.template
+  if (!tpl) throw new Error('无 <template>')
+  const diags = []
+  // 改写策略：文本级属性重写（不做 AST 变换）
+  // 为什么不用 nodeTransforms：AST 上 push 一个 :style bind 会被 Vue 编译器按
+  // "已有静态 style + 新绑定"合并成 normalizeStyle([...])，而且形状会错
+  // （键名还是 kebab，适配器要 camel）——首版实测踩到。
+  // 改用文本级重写：把 style="..." 与各绘制声明属性替换成单个 :style="{...}"。
+  const kebabToCamel = (x) => x.replace(/-([a-z])/g, (_, c) => c.toUpperCase())
+  const camelize = (o) => {
+    const out = {}
+    for (const [k, v] of Object.entries(o)) {
+      if (k === 'margin' || k === 'padding') {
+        const e = {}
+        for (const [sk, sv] of Object.entries(v)) e[kebabToCamel(sk)] = sv
+        out[k] = e
+      } else out[kebabToCamel(k)] = v
+    }
+    return out
+  }
+  const rewritten = tpl.content.replace(/<([A-Za-z][\w-]*)((?:"[^"]*"|'[^']*'|[^>"'])*?)(\/?)>/g, (full, tag, attrs, slash) => {
+    const keep = []
+    const merged = {}
+    let has = false
+    const attrRe = /([@:a-zA-Z][\w:.-]*)\s*=\s*("[^"]*"|'[^']*')/g
+    let am
+    while ((am = attrRe.exec(attrs)) !== null) {
+      const name = am[1]
+      const rawVal = am[2].slice(1, -1)
+      if (name === 'style') {
+        Object.assign(merged, parseStaticStyle(rawVal, (m) => diags.push(m)))
+        has = true
+        continue
+      }
+      if (isPaintDeclAttr(name)) {
+        const r = parsePaintDeclAttr(name, rawVal)
+        if (r.ok) { merged[r.key] = r.value; has = true; continue }
+        diags.push(r.hint)
+        continue
+      }
+      keep.push(am[0])
+    }
+    if (!has) return full
+    const styleObj = JSON.stringify(camelize(merged))
+    // 单引号包裹（值里可能有双引号）
+    const bind = `:style='${styleObj.replace(/'/g, "&#39;")}'`
+    return `<${tag}${keep.length ? ' ' + keep.join(' ') : ''} ${bind}${slash}>`
+  })
+  const nodeTransforms = []
+  void rewritten
+  const r = compileTemplate({
+    source: rewritten, filename: name, id: 'vapor-ab', mode: 'module',
+    compilerOptions: { runtimeModuleName: '@vue/runtime-core', nodeTransforms },
+  })
+  return { code: r.code, errors: (r.errors || []).map(String), diags }
+}
+
+// 父进程算 AB（同一份 SFC 的 Vue 官方编译产物）
+const AB_RESULT = buildAb(SFC, 'vapor-ab.vue')
+
 const script = `
 import { buildLayoutTemplate, buildVaporSubscriptions, compileEvents } from ${JSON.stringify(path.join(ROOT, 'packages/compiler/src/index.ts'))}
 const build = (sfc, name) => {
@@ -101,11 +166,16 @@ const build = (sfc, name) => {
     sfc,
   }
 }
+
 process.stdout.write(JSON.stringify({
   small: build(${JSON.stringify(SFC)}, 'vapor-device.vue'),
   list: build(${JSON.stringify(LIST_SFC)}, 'vapor-list.vue'),
+  ab: ${JSON.stringify(AB_RESULT)},
 }))
 `
+
+/** 生成物：Vue 官方编译器编同一份 SFC（见文件头注的 A/B 说明） */
+
 
 const tmpDir = fs.mkdtempSync(path.join(ROOT, '.tmp-vapor-'))
 const tmpScript = path.join(tmpDir, 'gen.ts')
@@ -137,6 +207,31 @@ const check = (label, out) => {
   return { tplNodes, l1, srcNames, itemSlots }
 }
 
+// 生成物：Vue 官方编译器产出的 render（A/B 的第二份产物）
+if (!parsed.ab || !parsed.ab.code) {
+  console.error('[gen-vapor-fixture] X A/B: Vue compiler produced no render function')
+  process.exit(1)
+}
+if ((parsed.ab.errors || []).length > 0) {
+  console.error('[gen-vapor-fixture] X A/B: Vue compiler errors: ' + parsed.ab.errors.join(' | '))
+  process.exit(1)
+}
+const AB_OUT = path.join(HERE, 'bridge/vapor-ab-render.generated.ts')
+fs.writeFileSync(
+  AB_OUT,
+  '// GENERATED - do not edit (gen-vapor-fixture.mjs from the same SFC)\n' +
+    '// source: @vue/compiler-sfc (mode=module, runtimeModuleName=@vue/runtime-core)\n' +
+    // ★@ts-nocheck：**生成物不做类型检查**（Vue 编译器的 render 无类型注解，补注解很脆；
+    //   而"手写入口要严格检查"这条纪律由 tsconfig.bridge.json 的 include 范围保证——
+    //   这个文件是特例且理由明确，与"global.d.ts 类声明"同属常规做法）
+    '// @ts-nocheck\n' +
+    '/* eslint-disable */\n' +
+    parsed.ab.code + '\nexport { render as abRender }\n',
+)
+console.log(
+  `[gen-vapor-fixture] OK A/B: Vue official compiler render (${parsed.ab.code.length} bytes) -> ${path.relative(ROOT, AB_OUT)}`,
+)
+
 const smallInfo = check('短列表产物', parsed.small)
 // ★★交互闭环断言：短列表夹具必须编出事件（否则真机上"点不动"——本次要验的就是这个）
 if (!parsed.small.events || parsed.small.events.length < 1) {
@@ -144,7 +239,7 @@ if (!parsed.small.events || parsed.small.events.length < 1) {
   process.exit(1)
 }
 if (Object.keys(parsed.small.handlers || {}).length < 1) {
-  console.error('[gen-vapor-fixture] ✗ 交互闭环：handler 表为空（应 ≥1）')
+
   process.exit(1)
 }
 fs.writeFileSync(OUT, JSON.stringify(parsed.small))

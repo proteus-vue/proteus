@@ -53,6 +53,38 @@ const PAINT_FIELDS = new Set(['backgroundColor', 'color', 'fontSize', 'borderRad
  */
 const PAINT_DECL_ATTRS = new Set(['fill-gradient', 'fill-gradient-to', 'clip-path', 'glow', 'mask', 'svg-path', 'svg-path-to'])
 
+/**
+ * ★★**解析绘制声明属性**（`fill-gradient` / `clip-path` / `glow` / `mask` / `svg-path`…）——
+ * **唯一实现**：`buildLayoutTemplate` 的模板扫描与 A/B 对照的 Vue 路径改写**共用本函数**
+ * （本仓纪律：同一语义一处实现；两处各写一份 ⇒ 迟早分叉）。
+ *
+ * @returns `{ok:true, key, value}` 或 `{ok:false, hint}`（hint 为修法，调用方自行诊断）
+ */
+export function parsePaintDeclAttr(
+  name: string,
+  raw: string,
+): { ok: true; key: string; value: unknown } | { ok: false; hint: string } {
+  const field = PAINT_DECL_KEY[name]
+  if (!field) return { ok: false, hint: `\`${name}\` 不是绘制声明属性` }
+  try {
+    const parsed = JSON.parse(raw) as unknown
+    return {
+      ok: true,
+      key: field,
+      value: field.startsWith('svgPath') && typeof parsed === 'string' ? { d: parsed } : parsed,
+    }
+  } catch {
+    // ★纯字符串简写（只有 svgPath 的 `d` 有这个语义——`svg-path="M0 0 L10 10"`）
+    if (field.startsWith('svgPath')) return { ok: true, key: field, value: { d: raw } }
+    return { ok: false, hint: '例：fill-gradient=\'{"kind":"linear","angle":90,"stops":[…]}\'' }
+  }
+}
+
+/** 该属性名是否是绘制声明属性（A/B 的 Vue 路径改写用同一判据） */
+export function isPaintDeclAttr(name: string): boolean {
+  return PAINT_DECL_ATTRS.has(name)
+}
+
 /** kebab 属性名 → 引擎字段名 */
 const PAINT_DECL_KEY: Record<string, string> = {
   'fill-gradient': 'fillGradient',
@@ -241,20 +273,12 @@ export function buildLayoutTemplate(
           hasDynamicStyle = true
         }
         // ★★结构化绘制声明（见 PAINT_DECL_ATTRS 头注）：JSON 串 → 结构字段（解析失败 ⇒ 诊断）
-        if (p.type === 6 /* ATTRIBUTE */ && PAINT_DECL_ATTRS.has(p.name) && p.value?.content) {
-          const field = PAINT_DECL_KEY[p.name]!
-          const raw = p.value.content
-          try {
-            const parsed = JSON.parse(raw) as unknown
-            // svgPath 允许纯 `d` 字符串简写（`svg-path="M0 0 L10 10"`）——那是常见写法
-            style[field] = field.startsWith('svgPath') && typeof parsed === 'string' ? { d: parsed } : parsed
-          } catch {
-            // ★也接受纯字符串简写（svgPath 的 `d`；渐变等结构属性则必须 JSON）
-            if (field.startsWith('svgPath')) {
-              style[field] = { d: raw }
-            } else {
-              diag(`${tag}(id=${id}) 属性 \`${p.name}\` 不是合法 JSON（已忽略）`, '例：fill-gradient=\'{"kind":"linear","angle":90,"stops":[{"offset":0,"color":"#fff"},{"offset":1,"color":"#000"}]}\'')
-            }
+        if (p.type === 6 /* ATTRIBUTE */ && isPaintDeclAttr(p.name) && p.value?.content) {
+          const r = parsePaintDeclAttr(p.name, p.value.content)
+          if (r.ok) {
+            style[r.key] = r.value
+          } else {
+            diag(`${tag}(id=${id}) 属性 \`${p.name}\` 不是合法 JSON（已忽略）`, r.hint)
           }
         }
       }

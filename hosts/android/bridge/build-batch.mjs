@@ -192,6 +192,12 @@ if (resultLights.warnings.length) {
 //   ★依赖 `@proteus-vue/slot-runtime`（纯 TS 零 Node API）——**不是**编译器
 //     （编译器依赖 @babel + @vue/compiler-sfc，进不了 QuickJS；故编译在构建期）。
 const OUT_VAPOR = path.join(HERE, 'dist', 'bundle-vapor.js')
+// ★★A/B 对照（2026-10-01）：Vue 运行时 + 自绘适配器需要显式 alias
+//   ——与 iOS `build-selfdraw.mjs` 同一套解析策略（pnpm 布局下根 node_modules 无 link）
+import { createRequire } from 'node:module'
+const require_ = createRequire(path.join(ROOT, 'packages/renderer-app/package.json'))
+const aliasRuntimeCore = path.dirname(require_.resolve('@vue/runtime-core/package.json'))
+const APP_DIST = path.join(ROOT, 'packages/renderer-app/dist')
 const resultVapor = await build({
   entryPoints: [path.join(HERE, 'entry-vapor.ts')],
   outfile: OUT_VAPOR,
@@ -201,6 +207,10 @@ const resultVapor = await build({
   target: 'es2020',
   define: { 'process.env.NODE_ENV': '"production"', __DEV__: 'false' },
   alias: {
+    // ★子路径必须排在包名之前（esbuild 按 alias 键顺序匹配前缀——iOS 同款注释）
+    '@proteus-vue/renderer-app/adapters/selfdraw': path.join(APP_DIST, 'adapters/selfdraw.js'),
+    '@proteus-vue/renderer-app': path.join(APP_DIST, 'index.js'),
+    '@vue/runtime-core': aliasRuntimeCore,
     '@proteus-vue/slot-runtime': path.join(ROOT, 'packages/slot-runtime/dist/index.js'),
   },
   legalComments: 'none',
