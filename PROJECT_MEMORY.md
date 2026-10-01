@@ -137,7 +137,23 @@ FLIP 841 片（内核 2ms）。官网数字与视频已同步替换（60fps 零�
 · **产品页与文档页同步**：`Animation.vue` 的边界文案此前陈旧（截图所见仍是"未做"）⇒ 本轮同步为
   当前状态（跨端几何已一致 / 共享元素已落地 / 手势协商标注为设计文档排的独立工作流 RT5）。
 
-**九、签名链修复（顺带）**：旧证书被吊销导致描述文件消失 ⇒ Xcode 自动重签（`provision.sh`）+
+**九、★★「120 FPS」边界收口（2026-10-01 第四轮：用户「安卓本身就是超高帧设备」）**——
+★**先取证再断言**：`dumpsys display` 实测本机 Redmi M098FE **支持 120/144/165/185Hz**
+（`peak_refresh_rate=120`，应用渲染上限 120）⇒ 用户判断正确，这条在 Android 腿上**真能收**。
+· **装置**：`kernelTickStats` 新增 `fps` / `vsync_p50_ms` / `vsync_p95_ms` / `display_refresh_hz`
+  （vsync 间隔取 **Choreographer 的 `frameTimeNanos` 差**——真实 vsync 时刻，不是调用时刻；
+  与 iOS `allVsync` 同口径）。
+· **判据**：Android `check-kernel-anim.py` **M4e**（`fps ≥ refresh×0.90` **且** `vsync p50 ≤
+  (1000/refresh)×1.15`——两条都查，因均值会被"前半满帧后半掉帧"骗过）；iOS `check-anim-rt2.py`
+  E1 改为**设备感知**（按 `screen_max_fps` 算门槛，换 ProMotion 自动变严，不再硬编码 58）。
+· **真机读数（Redmi · 120Hz）**：**115.8 FPS** · vsync p50 **8.328ms**（预算 8.33ms）·
+  每帧工作 p50 **0.119ms** · 动画期**零布局** · 58 采样。
+· **破坏性验证**：低帧率（57@120Hz）红 · "均值合格但中位不合格"（112 FPS / p50 16ms）红 ·
+  无刷新率基线**如实跳过**（不假装达标）· iOS 侧"120Hz 设备但 59.3 FPS"红。
+· **诚实分端**：iOS 腿仍受硬件限制（iPhone 12 = 60Hz）⇒ 仍标注"不声称 120"，但**同款断言已就位**
+  （换 ProMotion 即自动生效）。
+
+**十、签名链修复（顺带）**：旧证书被吊销导致描述文件消失 ⇒ Xcode 自动重签（`provision.sh`）+
 脚本按 SHA 选身份 + 腾免费名额（卸载旧 cn.shxuxi 版）= 真机链路恢复。团队从 XKH568R7A5 回 F4R3P3L477。
 
 **诚实边界**：① 长跑（soak）默认仍不跑（用户要求"不用为时长重复"）；② 上述 p50/p95 是**1× 速**

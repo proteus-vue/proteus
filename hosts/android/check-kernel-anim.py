@@ -17,6 +17,8 @@
   M6 滚动联动：窗口映射（0→0 / 200→-80 / 400→-160）
   M7 共享元素：内核几何齐备（dx/dy/scale）
   M4 真帧循环：帧数 > 0 + 每帧工作 p50 有值 + **动画期间 measure/layout 增量为 0**
+  M4e ★帧率达到显示器刷新率（2026-10-01 加：120Hz 设备上「120 FPS」可断言——
+       fps ≥ refresh×0.90 且 vsync p50 ≤ (1000/refresh)×1.15；无刷新率基线则如实跳过）
 
 用法：python3 hosts/android/check-kernel-anim.py <kernel-anim.json>
 退出码：0 全过 / 1 有失败 / 0（产物缺失时诚实跳过）
@@ -235,6 +237,44 @@ def main() -> int:
         if fl.get("boot_measure_delta") or fl.get("boot_layout_delta"):
             print(f"     ★如实记录：接入 View 的一次性 traversal = measure {fl.get('boot_measure_delta')}"
                   f" / layout {fl.get('boot_layout_delta')}（不计入动画期）")
+
+        # ── M4e：★★帧率**达到显示器刷新率**（2026-10-01 加：把「120 FPS」变成机器判据）──
+        #
+        # 【收的是哪条边界】官网原文「120 FPS 目标需 ProMotion 设备（iPhone 12 为 60Hz——
+        #   如实标注，未声称）」。iOS 侧受硬件限制（iPhone 12 = 60Hz）确实达不到；
+        #   但**Android 测试机是 120Hz 设备**（Redmi M098FE，支持 120/144/165/185Hz）——
+        #   取证：`dumpsys display` 的 supportedRefreshRates + peak_refresh_rate=120。
+        #   ⇒ 在 Android 这条腿上，"120 FPS"**可以真收**：帧率必须达到**显示器刷新率**
+        #     在容差内（不是硬编码 120——报告带 `display_refresh_hz`，判据按它算）。
+        #
+        # 【口径】FPS 由 `vsync 间隔之和` 算（真实 vsync 帧节拍，与 iOS 侧同法）；
+        #   判据：`fps ≥ refresh × 0.90` **且** `vsync_p50 ≤ (1000/refresh) × 1.15`——
+        #   两条都查（fps 是均值、p50 是中位：前者会被"前半满帧后半掉帧"骗过，后者不会）。
+        # 【诚实分支】取不到刷新率（`display_refresh_hz ≤ 0`）⇒ **不判红**，只如实提示
+        #   （不静默假装达标；也不因装置缺字段而误伤）。
+        fps_m = fl.get("fps", -1)
+        vp50 = fl.get("vsync_p50_ms", -1)
+        refresh = fl.get("display_refresh_hz", -1)
+        if isinstance(fps_m, (int, float)) and isinstance(refresh, (int, float)) and refresh > 0:
+            fps_floor = refresh * 0.90
+            vp50_ceil = (1000.0 / refresh) * 1.15
+            if fps_m < fps_floor or (isinstance(vp50, (int, float)) and vp50 > vp50_ceil):
+                fail(
+                    f"M4e 帧率未达显示器刷新率：{fps_m:.1f} FPS（应 ≥ {fps_floor:.1f} = {refresh:.0f}Hz×0.90）"
+                    f" · vsync p50={vp50}ms（应 ≤ {vp50_ceil:.2f}ms）"
+                    f"——检查：帧回调是否被饿死/掉帧，或应用未获高刷模式"
+                )
+                ok = False
+            else:
+                print(
+                    f"  ✓ M4e ★帧率达到显示器刷新率：{fps_m:.1f} FPS（显示器 {refresh:.0f}Hz · "
+                    f"vsync p50={vp50}ms ≈ {1000.0 / refresh:.2f}ms 预算 · {fl.get('vsync_samples')} 采样）"
+                )
+        else:
+            print(
+                f"  ⚠ M4e 跳过（无刷新率基线：fps={fps_m} display_refresh_hz={refresh}）"
+                f"——装置需带 display_refresh_hz 字段才能断言（如实跳过，不假装达标）"
+            )
 
     print()
     if ok:

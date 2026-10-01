@@ -517,6 +517,18 @@ public class ProteusHostView extends ViewGroup {
     private long ktStartNs = 0, ktLastNs = 0, ktStopAtNs = 0, ktFirstFrameNs = 0;
     private final float[] ktWorkMs = new float[8192];
     private int ktWorkN = 0;
+    /**
+     * ★★**vsync 间隔**（2026-10-01 加：把「120 FPS」从"未声称"变成机器判据）
+     *
+     * 【为什么必须单独记（取证结论）】此前只记 `frames`，而"500ms 出 59 帧"只能反推 ≈118 FPS——
+     *   反推值不能区分三种情况：① 真在 120Hz 满帧；② 前半段掉帧后半段满帧；③ 帧回调被节流。
+     *   ⇒ 记**每个 vsync 的真实间隔**（`Choreographer` 的 `frameTimeNanos` 差，不是我们自己
+     *   调用的时间差），判据据此算 p50/p95 与"是否达到显示器刷新率"。
+     *   ★与 iOS 侧的 `allVsync` 同一口径（两端判据可互相参照）。
+     */
+    private final float[] ktVsyncMs = new float[8192];
+    private int ktVsyncN = 0;
+    private long ktLastFrameTimeNanos = 0;
     /** 稳态窗口基线（启动后 80ms 重拍；见 `kernelTickStats` 的口径注释） */
     private int ktMeasureBefore = 0, ktLayoutBefore = 0;
     private int ktMeasureBoot = 0, ktLayoutBoot = 0;
@@ -527,6 +539,13 @@ public class ProteusHostView extends ViewGroup {
             if (!ktRunning) return;
             long t0 = System.nanoTime();
             if (ktFirstFrameNs == 0) ktFirstFrameNs = t0;
+            // ★★vsync 间隔取 **Choreographer 的 frameTimeNanos 差**（真实 vsync 时刻，
+            //   不是我们自己调用的时刻——后者混入调度延迟，会把"渲染节拍"测成"回调节拍"；
+            //   本仓在 scrollListRun 的注释里记过同一个坑："初版测到的只是调回节拍，与渲染无关"）。
+            if (ktLastFrameTimeNanos != 0 && ktVsyncN < ktVsyncMs.length) {
+                ktVsyncMs[ktVsyncN++] = (frameTimeNanos - ktLastFrameTimeNanos) / 1e6f;
+            }
+            ktLastFrameTimeNanos = frameTimeNanos;
             float dtMs = (t0 - ktLastNs) / 1e6f;
             ktLastNs = t0;
             // ★首帧/卡顿保护：dt 上限 100ms（否则一步跳完整段动画——真机首帧常见）
@@ -559,6 +578,7 @@ public class ProteusHostView extends ViewGroup {
     public String kernelTickStart(long durationMs) {
         if (coreHandle == 0) return "{\"ok\":false,\"error\":\"未接入核心\"}";
         ktRunning = true; ktFrames = 0; ktWorkN = 0; ktFirstFrameNs = 0;
+        ktVsyncN = 0; ktLastFrameTimeNanos = 0;
         ktMeasureBoot = onMeasureCount; ktLayoutBoot = onLayoutCount;
         ktMeasureBefore = onMeasureCount; ktLayoutBefore = onLayoutCount;
         ktLastNs = System.nanoTime();
@@ -588,7 +608,8 @@ public class ProteusHostView extends ViewGroup {
 
     /**
      * 帧循环读数：帧数 / 每帧工作 p50·p95·max / **稳态窗口内是否发生 measure·layout**（应恒为 0）
-     *   / 首帧延迟（诊断"runnable 被排队"这类装置缺陷）。
+     *   / 首帧延迟（诊断"runnable 被排队"这类装置缺陷）
+     *   ★★2026-10-01 加：**vsync 间隔分布 + FPS + 显示器刷新率**（把"120 FPS"变成可断言量）
      */
     public String kernelTickStats() {
         float[] w = java.util.Arrays.copyOf(ktWorkMs, ktWorkN);
@@ -597,9 +618,30 @@ public class ProteusHostView extends ViewGroup {
         float p95 = w.length == 0 ? -1 : w[Math.min(w.length - 1, (int) (w.length * 0.95))];
         float mx = w.length == 0 ? -1 : w[w.length - 1];
         double firstDelayMs = ktFirstFrameNs > 0 ? (ktFirstFrameNs - ktStartNs) / 1e6 : -1;
+        // ★vsync 间隔分布（判据据此算 FPS 与"是否达到显示器刷新率"）——见 ktVsyncMs 注释
+        float[] vs = java.util.Arrays.copyOf(ktVsyncMs, ktVsyncN);
+        java.util.Arrays.sort(vs);
+        float vp50 = vs.length == 0 ? -1 : vs[(int) (vs.length * 0.50)];
+        float vp95 = vs.length == 0 ? -1 : vs[Math.min(vs.length - 1, (int) (vs.length * 0.95))];
+        // FPS 用 **vsync 间隔之和**算（真实帧节拍，不含首帧前的空档——与 iOS 侧同一口径）
+        double vsSumMs = 0;
+        for (float v : vs) vsSumMs += v;
+        double fps = vsSumMs > 0 ? (vs.length * 1000.0) / vsSumMs : -1;
+        // 显示器刷新率（报告里如实带上：判据据此判断"是否满帧"，不硬编码 60/120）
+        double refreshHz = -1;
+        try {
+            android.view.Display disp = getDisplay();
+            if (disp != null) refreshHz = disp.getRefreshRate();
+        } catch (Throwable ignored) {
+            // 取不到就如实留 -1（判据会据此走"无刷新率基线"分支，不静默假装）
+        }
         return "{\"running\":" + ktRunning + ",\"frames\":" + ktFrames
                 + ",\"work_p50_ms\":" + p50 + ",\"work_p95_ms\":" + p95 + ",\"work_max_ms\":" + mx
                 + ",\"first_frame_delay_ms\":" + firstDelayMs
+                + ",\"fps\":" + fps
+                + ",\"vsync_p50_ms\":" + vp50 + ",\"vsync_p95_ms\":" + vp95
+                + ",\"vsync_samples\":" + ktVsyncN
+                + ",\"display_refresh_hz\":" + refreshHz
                 // 稳态窗口内增量（口径见 kernelTickStart 注释）
                 + ",\"measure_delta\":" + (onMeasureCount - ktMeasureBefore)
                 + ",\"layout_delta\":" + (onLayoutCount - ktLayoutBefore)

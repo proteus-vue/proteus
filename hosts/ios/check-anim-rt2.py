@@ -194,21 +194,35 @@ def main() -> int:
     # ── E 组（§9 指标）：帧率测席——转场帧率 / 帧耗时 P95 / 掉帧率 ──
     #
     # 【口径（方案 §9）】转场动画帧率 ≥60 FPS（目标 120）· 帧耗时 P95 ≤8.33ms（目标 ≤4ms）。
-    # ★诚实边界：帧率上限 = 设备刷新率（iPhone 12 为 **60Hz**）⇒ 本轮验证「60 FPS 不掉帧」，
-    #   「120 FPS」需 ProMotion 设备（如实标注，不声称）。
+    # ★★2026-10-01 改：帧率门槛**跟着设备刷新率走**（与 Android 侧 `check-kernel-anim.py` M4e 同一口径）
+    #   ——此前硬编码 58（"60Hz 设备应 ≈60"），换 ProMotion 设备时判据**不会自动变严**。
+    #   现取 `screen_max_fps`（宿主上报）算门槛：`refresh × 0.90`，且 60Hz 设备不低于既有 58
+    #   （不放松已验收的口径）。无该字段（旧产物）⇒ 回退 60Hz 口径。
+    #   ★诚实边界：本机 iPhone 12 = 60Hz ⇒ 此处只能验"60 FPS 不掉帧"；120 FPS 的**同款断言**
+    #     会在 ProMotion 设备上自动生效（Android 腿已在 120Hz 设备上实测通过，见 M4e）。
     bench = d.get("anim_bench") or js.get("anim_bench") or {}
+    dev_fps = d.get("screen_max_fps") or (d.get("device") or {}).get("screen_max_fps") or 60
+    try:
+        refresh_hz = float(dev_fps)
+    except (TypeError, ValueError):
+        refresh_hz = 60.0
+    fps_floor = refresh_hz * 0.90
+    if refresh_hz <= 65:
+        fps_floor = max(fps_floor, 58.0)  # 保持既有 60Hz 口径（57.3 → 58）
     if bench and bench.get("ok"):
         if bench.get("timed_out"):
             fail(f"E0 测席超时（看门狗触发——DisplayLink 停摆？屏幕熄灭/后台？）：{bench}")
             ok = False
         else:
-            print(f"  ✓ E0 测席完成：{bench.get('frames')} 帧 / {bench.get('elapsed_ms')}ms")
+            print(f"  ✓ E0 测席完成：{bench.get('frames')} 帧 / {bench.get('elapsed_ms')}ms"
+                  f"（设备刷新率 {refresh_hz:.0f}Hz）")
         fps = bench.get("fps", 0) or 0
-        if fps < 58:
-            fail(f"E1 帧率不达标：{fps} FPS（60Hz 设备应 ≈60；§9 合格线 ≥60）")
+        if fps < fps_floor:
+            fail(f"E1 帧率不达标：{fps} FPS（设备 {refresh_hz:.0f}Hz ⇒ 门槛 {fps_floor:.1f}）")
             ok = False
         else:
-            print(f"  ✓ E1 帧率：**{fps} FPS**（vsync 间隔 p50 {bench.get('vsync_p50_ms')}ms）")
+            print(f"  ✓ E1 帧率：**{fps} FPS**（vsync 间隔 p50 {bench.get('vsync_p50_ms')}ms"
+                  f" · 设备 {refresh_hz:.0f}Hz ⇒ 门槛 {fps_floor:.1f}）")
         dr = bench.get("dropped_ratio", 1) or 0
         if dr > 0.02:
             fail(f"E2 掉帧率过高：{dr}（{bench.get('dropped')} 帧超标称 1.5×——上限 2%）")

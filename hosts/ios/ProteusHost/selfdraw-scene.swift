@@ -4554,6 +4554,10 @@ final class SelfDrawBridge: NSObject, SelfDrawExports {
         out["host_node_count"] = lastNodeCount
         out["tree_hash"] = lastTreeHash
         out["layer_count"] = view?.builtLayerCount ?? -1
+        // ★★设备刷新率（2026-10-01 加：与 Android 侧 M4e 同一口径）
+        //   判据据此断言"帧率是否达到显示器刷新率"——本机 iPhone 12 为 60Hz（受硬件限制），
+        //   换 ProMotion 设备后**自动变严**（无需改判据；不硬编码 60/120）。
+        out["screen_max_fps"] = UIScreen.main.maximumFramesPerSecond
         // ★白屏诊断（见 SelfDrawViewController.launchDiag 注释）
         out["launch_diag"] = SelfDrawViewController.launchDiag
         // ★本轮报告写出时刻（Unix 秒）——A/B 测量脚本的**内容级新鲜度判据**：
