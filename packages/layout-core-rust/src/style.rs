@@ -206,6 +206,17 @@ pub struct LStyle {
     /// ★★**绕 Y 轴旋转**（度；锚点 = 层中心）——翻转/翻牌的轴
     #[serde(default)]
     pub rotate_y: f32,
+    /// ★★**裁剪形状类型**（2026-10-01 · C1；0=无 1=inset 2=circle 3=polygon）
+    ///   【为什么类型静态】CSS 同规：异型形状间不插值（inset→circle 无意义）——
+    ///   类型在建树时定死，**参数**参与动画（`clip: [f32; 16]`）。
+    #[serde(default)]
+    pub clip_kind: u8,
+    /// ★★**裁剪形状的当前参数**（16 槽；含义按 `clip_kind` 解释——见内核 `AnimKind::ClipN` 注释）
+    #[serde(default)]
+    pub clip: [f32; 16],
+    /// ★★**裁剪形状的基态**（复位目标；建树时从节点声明取——与 `bg_base`/`text_color_base` 同义务）
+    #[serde(default)]
+    pub clip_base: [f32; 16],
     /// ★★**透视距离**（px；CSS `perspective` 语义；`None` = 无透视（正交投影））
     ///
     /// 【为什么在**节点**上（而不是父容器）】本仓当前没有"父风格继承"链路（父的 perspective
@@ -298,6 +309,9 @@ impl Default for LStyle {
             rotate_x: 0.0,
             rotate_y: 0.0,
             perspective: None,
+            clip_kind: 0,
+            clip: [0.0; 16],
+            clip_base: [0.0; 16],
             opacity: 1.0,
             bg: None,
             bg_base: None,

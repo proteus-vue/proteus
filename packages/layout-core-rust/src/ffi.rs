@@ -136,6 +136,11 @@ pub(crate) struct NodeDto {
     ///   静态样式（非动画属性）：宿主建层时读取用于组 3D 矩阵。
     #[serde(skip_serializing_if = "Option::is_none")]
     pub(crate) perspective: Option<f32>,
+    /// ★★**裁剪形状**（2026-10-01 · C1）：CSS `clip-path` 的**结构化形态**——
+    ///   `{kind: 'inset'|'circle'|'polygon', params: number[]}`（params 按形状类型解释，
+    ///   分数/px 混合见 `clip_params_from_decl`）。类型静态、参数可动画（CSS 同规）。
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub(crate) clip_path: Option<serde_json::Value>,
     /// 文本字面量（有此字段即为文本叶子，走宿主注入的度量）
     #[serde(skip_serializing_if = "Option::is_none")]
     pub(crate) text: Option<String>,
@@ -207,6 +212,7 @@ impl NodeDto {
             background_color: None,
             color: None,
             perspective: None,
+            clip_path: None,
             text: None,
             is_text: false,
             native_host: false,
@@ -267,6 +273,9 @@ fn default_viewport() -> ViewportDto {
 fn visual_to_json(v: &crate::anim::NodeVisual) -> serde_json::Value {
     // ★★B 批（2026-10-01）：末尾追加 rotateX/rotateY（第 9/10 项）——**既有索引全不变**
     //   （旧消费端读前 8 项照常工作；新消费端读 9/10——向后兼容的线格式演进）。
+    // ★★C1（2026-10-01）：末尾再追加 clip 段——第 11 项 = 形状类型（0 = 无），
+    //   第 12..28 项 = 16 个形状参数。**既有索引全不变**（向后兼容的线格式演进）。
+    let (ck, cp) = v.clip.map(|(k, p)| (k as u32, p)).unwrap_or((0, [0.0; 16]));
     serde_json::json!([
         v.id,
         v.tx,
@@ -277,7 +286,10 @@ fn visual_to_json(v: &crate::anim::NodeVisual) -> serde_json::Value {
         v.bg.unwrap_or(u32::MAX),
         v.text_color.unwrap_or(u32::MAX),
         v.rotate_x,
-        v.rotate_y
+        v.rotate_y,
+        ck,
+        cp[0], cp[1], cp[2], cp[3], cp[4], cp[5], cp[6], cp[7],
+        cp[8], cp[9], cp[10], cp[11], cp[12], cp[13], cp[14], cp[15]
     ])
 }
 
@@ -334,6 +346,13 @@ pub(crate) fn style_from_dto(dto: &NodeDto) -> Result<LStyle, String> {
             return Err(format!("perspective 非法：{p}（应为正数 px——越大越弱，如 1200）"));
         }
         style.perspective = Some(p);
+    }
+    // ★★裁剪形状（C1）：结构形态 → (kind, [f32; 16])。类型静态、参数进基态（复位目标）。
+    if let Some(cp) = dto.clip_path.as_ref() {
+        let (kind, params) = parse_clip_path(cp)?;
+        style.clip_kind = kind;
+        style.clip = params;
+        style.clip_base = params;
     }
     style.width = dto.width;
     style.height = dto.height;
@@ -2367,6 +2386,73 @@ pub unsafe extern "C" fn proteus_layout_apply_ops(handle: u64, ptr: *const u8, l
 ///   好不容易省下的字节又花回去；而 **1 次函数调用 + 1 个 f32** 已是最小跨边界形态。
 ///   （这就是 RT0 要验证的"最小协议"设计——数字见 examples/rt0_anim_spike.rs 的对照。）
 ///
+/// ★★**解析裁剪形状声明**（C1：`{kind:'inset'|'circle'|'polygon', params:[…]}`）→ (kind, 16 槽)
+///
+/// 槽位约定（与内核 `AnimKind::ClipN` 注释一致——**跨语言契约**）：
+///   · inset（kind=1）：slot0..3 = top/right/bottom/left（**盒分数** 0..1，可负 = 外扩）
+///   · circle（kind=2）：slot0..2 = cx/cy/r（分数；r 相对 **min(w,h)**）
+///   · polygon（kind=3）：slot0..15 = 最多 8 顶点 (x,y) 展平（分数；顺序即多边形顺序）
+///
+/// 校验：未知类型 / 参数数量不符 / 非有限数 ⇒ **明确拒绝**（不静默截断——截断会让
+/// "写错的形状"悄悄变成另一个形状，本仓纪律：静默失败最致命）。
+fn parse_clip_path(v: &serde_json::Value) -> Result<(u8, [f32; 16]), String> {
+    let kind_s = v
+        .get("kind")
+        .and_then(|x| x.as_str())
+        .ok_or_else(|| "clipPath 缺少 kind（应为 'inset'/'circle'/'polygon'）".to_string())?;
+    let kind = match kind_s {
+        "inset" => 1u8,
+        "circle" => 2u8,
+        "polygon" => 3u8,
+        other => {
+            return Err(format!(
+                "clipPath.kind 未知：{other:?}（支持 'inset' 4 参 / 'circle' 3 参 / 'polygon' 最多 8 点）"
+            ))
+        }
+    };
+    let arr = v
+        .get("params")
+        .and_then(|x| x.as_array())
+        .ok_or_else(|| "clipPath 缺少 params 数组".to_string())?;
+    let nums: Result<Vec<f32>, String> = arr
+        .iter()
+        .map(|x| {
+            x.as_f64()
+                .map(|f| f as f32)
+                .ok_or_else(|| format!("clipPath.params 含非数字：{x}"))
+        })
+        .collect();
+    let nums = nums?;
+    for f in &nums {
+        if !f.is_finite() {
+            return Err(format!("clipPath.params 含非有限数：{f}"));
+        }
+    }
+    let (need_min, need_max, slot_n) = match kind {
+        1 => (4usize, 4usize, 4usize),
+        2 => (3, 3, 3),
+        _ => (6, 16, 16), // polygon：至少 3 个点（6 个数）
+    };
+    if nums.len() < need_min || nums.len() > need_max {
+        return Err(format!(
+            "clipPath.params 数量不符（kind={kind_s}）：收到 {}，应为 {}..={}",
+            nums.len(),
+            need_min,
+            need_max
+        ));
+    }
+    // ★成对检查（polygon 且数量在合法区间内但为奇数——如 7 个：数量合法但不成对，
+    //   错误应精确指向"成对"而不是笼统的"数量不符"）
+    if kind == 3 && nums.len() % 2 != 0 {
+        return Err(format!("clipPath polygon 参数必须成对（x,y）：收到 {} 个", nums.len()));
+    }
+    let mut out = [0f32; 16];
+    for (i, f) in nums.iter().enumerate().take(slot_n) {
+        out[i] = *f;
+    }
+    Ok((kind, out))
+}
+
 /// ★★**解析自定义贝塞尔控制点**（`curveBezier:[x1,y1,x2,y2]`）——两处 anim 入口共用
 ///
 /// 【契约（CSS `cubic-bezier` 同规）】`x1/x2 ∈ [0,1]`（时间轴必须单调，否则求值不唯一）；
@@ -3172,10 +3258,13 @@ pub unsafe extern "C" fn proteus_layout_anim_tick_bin(handle: u64, dt_ms: f32, o
         let mut eng = std::mem::take(&mut entry.anim);
         let out = eng.tick(&mut entry.tree, dt_ms);
         entry.anim = eng;
-        // ★每帧通道：**40B/条**定长 = id u32 + 七值 f32（tx/ty/scale/rotate/opacity/**rotateX/rotateY**）
-        //   + bg u32 + textColor u32
-        //   ★B 批（2026-10-01）：3D 旋转在**末尾追加**（bg/textColor 的偏移保持不变——
-        //     5 处消费端的既有字段读取零改动，只改宽度常量 + 追加读末尾 8 字节）
+        // ★每帧通道：**108B/条**定长 = id u32 + 七值 f32（tx/ty/scale/rotate/opacity/rotateX/rotateY）
+        //   + bg u32 + textColor u32 + **clipKind u32 + 16 个 clip 参数 f32**（0 值 = 无裁剪）
+        //   ★C1（2026-10-01）：裁剪形状在**末尾追加**（一切既有偏移保持不变——
+        //     消费端既有字段读取零改动；clipKind=0 = 无裁剪，参数全 0）。
+        //   ★为什么不量化：clip 参数含**负值语义**（inset 可负 = 外扩；polygon 顶点可越界）——
+        //     量化会引入符号/范围妥协，且 16 槽只有 64B（相对 800 节点 × 每帧仍是 MB/s 级可接受）。
+        //     如实标注：将来若要压带宽，可在**不动语义**的前提下把 f32 换成带偏移的定点。
         //   ★2026-10-01 由 24B → 28B（底色）→ **32B**（文字色）：两个 u32 都是**打包色**
         //     （0xAARRGGBB）；`u32::MAX` = **本节点无该基色**（宿主忽略该字段——
         //     见 `NodeVisual.color_valid` / `text_color_valid`）。
@@ -3183,7 +3272,7 @@ pub unsafe extern "C" fn proteus_layout_anim_tick_bin(handle: u64, dt_ms: f32, o
         //     （iOS `animUpdateRecordBytes` / Android `ANIM_RECORD_BYTES` / SDK `FRAME_UPDATE_BYTES` /
         //     embed-demo 与 `proteus-jni::host`）必须**同批改**——
         //     ★`scripts/check-anim-record-bytes.mjs` 会从本处的写入序列**推出**宽度并与各消费端对账。
-        let mut buf = Vec::with_capacity(out.updates.len() * 40);
+        let mut buf = Vec::with_capacity(out.updates.len() * 108);
         for v in out.updates {
             buf.extend_from_slice(&v.id.to_le_bytes());
             buf.extend_from_slice(&v.tx.to_le_bytes());
@@ -3196,6 +3285,12 @@ pub unsafe extern "C" fn proteus_layout_anim_tick_bin(handle: u64, dt_ms: f32, o
             // ★B 批：3D 旋转（末尾追加——偏移 @32/@36）
             buf.extend_from_slice(&v.rotate_x.to_le_bytes());
             buf.extend_from_slice(&v.rotate_y.to_le_bytes());
+            // ★C1：裁剪形状（末尾追加——偏移 @40 起：kind u32 + 16×f32）
+            let (ck, cp) = v.clip.map(|(k, p)| (k as u32, p)).unwrap_or((0, [0.0; 16]));
+            buf.extend_from_slice(&ck.to_le_bytes());
+            for i in 0..16 {
+                buf.extend_from_slice(&cp[i].to_le_bytes());
+            }
         }
         Ok(buf)
     });
@@ -3470,6 +3565,39 @@ mod tests {
             let err = parse_curve_bezier(&bad, 7).expect_err("非法输入必须被拒绝");
             assert!(err.contains(needle) || err.contains("节点 7"), "错误消息应可定位：{err}");
             assert!(err.contains("节点 7"), "错误消息应含 nodeId：{err}");
+        }
+    }
+
+    /// ★★**clipPath 声明解析**（C1）——三种形状 + 全部拒绝分支（消息可定位）
+    #[test]
+    fn parse_clip_path_shapes_and_rejects() {
+        // inset：4 参 → kind 1，槽 0..3
+        let (k, p) = parse_clip_path(&serde_json::json!({ "kind": "inset", "params": [0.1, 0.2, 0.3, 0.4] })).unwrap();
+        assert_eq!(k, 1);
+        assert_eq!([p[0], p[1], p[2], p[3]], [0.1, 0.2, 0.3, 0.4]);
+        // circle：3 参 → kind 2
+        let (k, p) = parse_clip_path(&serde_json::json!({ "kind": "circle", "params": [0.5, 0.5, 0.3] })).unwrap();
+        assert_eq!(k, 2);
+        assert_eq!(p[2], 0.3);
+        // polygon：6 参（3 点）→ kind 3；8 点（16 参）边界
+        let (k, p) = parse_clip_path(&serde_json::json!({ "kind": "polygon", "params": [0.0, 0.0, 1.0, 0.0, 0.5, 1.0] })).unwrap();
+        assert_eq!(k, 3);
+        assert_eq!([p[0], p[1], p[4], p[5]], [0.0, 0.0, 0.5, 1.0]);
+        let pts8: Vec<f32> = (0..16).map(|i| i as f32 / 16.0).collect();
+        assert!(parse_clip_path(&serde_json::json!({ "kind": "polygon", "params": pts8 })).is_ok(), "8 点应放行");
+        // 全部拒绝分支（消息可定位）
+        for (bad, needle) in [
+            (serde_json::json!({ "kind": "ellipse", "params": [1.0] }), "未知"),
+            (serde_json::json!({ "kind": "inset", "params": [0.1, 0.2] }), "数量不符"),
+            // ★polygon 3 参：先撞"数量不符"（6..=16）；成对检查是第二道（5 参时才触发）
+            (serde_json::json!({ "kind": "polygon", "params": [0.0, 0.0, 1.0] }), "数量不符"),
+            // 7 参：数量在 6..=16 内但为奇数 ⇒ 精确指向"成对"
+            (serde_json::json!({ "kind": "polygon", "params": [0.0, 0.0, 1.0, 0.0, 0.5, 1.0, 0.1] }), "成对"),
+            (serde_json::json!({ "kind": "inset", "params": [0.1, 0.2, 0.3, "x"] }), "非数字"),
+            (serde_json::json!({ "params": [1.0] }), "缺少 kind"),
+        ] {
+            let err = parse_clip_path(&bad).expect_err("非法输入必须拒绝");
+            assert!(err.contains(needle), "错误消息含 {needle}：{err}");
         }
     }
 

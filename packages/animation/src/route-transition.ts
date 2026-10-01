@@ -26,7 +26,7 @@ import type { RouteTransition } from '@proteus-vue/contracts'
 import type { AnimDecl, CompiledBatch } from './types'
 import type { RouteTransitionSpec } from './presets'
 import { presets } from './presets'
-import { compileAnimations, isColorDecl } from './compile'
+import { compileAnimations, isClipDecl, isColorDecl } from './compile'
 
 /**
  * ★**统一枚举 → Morpheus 转场规格**（App 腿；穷尽映射——枚举增员时本表编译报错）
@@ -119,6 +119,12 @@ export function reverseDecls(decls: readonly AnimDecl[]): AnimDecl[] {
     //   （那条兜底存在是因为标量的 `from` 可省；颜色省不了——类型系统已保证，故此处不做兜底，
     //    也就不会把 `0`（数字）塞进颜色字段造成类型错误）。
     if (isColorDecl(d)) {
+      const { from, ...rest } = d
+      return { ...rest, from: d.to, to: from }
+    }
+    // ★★裁剪声明（C1）：`from` 亦是**类型必填**（参数数组）——同颜色，端点互换即可。
+    //   ★若漏此分支：clip 会落进标量路径 ⇒ `from: from ?? 0` 把**数组换成数字**（类型错）。
+    if (isClipDecl(d)) {
       const { from, ...rest } = d
       return { ...rest, from: d.to, to: from }
     }
