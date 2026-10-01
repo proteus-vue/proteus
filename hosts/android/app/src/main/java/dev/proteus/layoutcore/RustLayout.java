@@ -64,7 +64,9 @@ final class RustLayout {
     /** 启动动画（封闭集声明：curve/spring/keyframes/scroll 窗口） */
     private static native String nativeAnimStart(long handle, String json);
     /**
-     * 每帧推进：返回 **24B/条**定长记录（`id u32 + tx/ty/scale/rotate/opacity f32`，全小端）。
+     * 每帧推进：返回 **32B/条**定长记录
+     * （`id u32 + tx/ty/scale/rotate/opacity f32 + bg u32 + textColor u32`，全小端；
+     *   末两个 u32 为打包色 `0xAARRGGBB`，`0xFFFFFFFF` = 无该基色）。
      *
      * ★为什么走 byte[]：每帧 O(N) 条走 JSON 的编解码是白付（与 iOS 的二进制通道同一条纪律）；
      *   Java 侧用 `ByteBuffer.order(LITTLE_ENDIAN)` 按偏移直读。

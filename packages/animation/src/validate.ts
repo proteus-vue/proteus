@@ -71,10 +71,10 @@ export function validateAnimations(decls: readonly AnimDecl[]): ValidationIssue[
   }
 
   decls.forEach((d, i) => {
-    // ★★**颜色声明走独立分支**（2026-10-01）：值为颜色字符串、形态规则与标量不同
-    //   （`from` 必填 / `keyframes` 暂不可用 / `spring` 逐通道），故不与标量路径混判
-    //   （混判的典型错法是拿 `Number.isFinite` 去查一个字符串 ⇒ 恒假 ⇒ 误报）。
-    if (d.kind === 'color') {
+    // ★★**颜色声明走独立分支**（2026-10-01：`color` 底色 / `textColor` 文字色）：
+    //   值为颜色字符串、形态规则与标量不同（`from` 必填 / 段终点是颜色 / `spring` 逐通道），
+    //   故不与标量路径混判（混判的典型错法是拿 `Number.isFinite` 去查字符串 ⇒ 恒假 ⇒ 误报）。
+    if (d.kind === 'color' || d.kind === 'textColor') {
       // 起点必填（内核无"缺省 = 当前值"语义——见 constraint/from-is-mandatory）
       if (d.from === undefined) {
         issues.push({
@@ -100,14 +100,81 @@ export function validateAnimations(decls: readonly AnimDecl[]): ValidationIssue[
           })
         }
       }
-      // v1 边界：多段颜色暂不可用（`KeyframeSeg.to` 是数字）——明确拦下，不静默忽略
-      if (d.keyframes !== undefined) {
-        issues.push({
-          index: i,
-          code: 'invalid-range',
-          message: '`color` 暂不支持 `keyframes` 序列（多段颜色的每段终点得是颜色，v1 未开放）',
-          hint: '拆成多条颜色声明（分次调用），或等序列支持颜色值；单段颜色用 `curve` 即可',
+      // ★★颜色序列（2026-10-01 起支持）：逐段校验（形态 / 时长 / 末段与声明 to 一致）
+      //   语义与标量序列同构（"多段收敛在一条动画/每通道"，段边界精确、末段端点钉死）
+      if (d.keyframes) {
+        const kf = d.keyframes
+        if (kf.length === 0) {
+          issues.push({
+            index: i,
+            code: 'empty',
+            message: '`keyframes` 为空数组（序列至少要一段；单段请直接用 `curve`）',
+            hint: '去掉 `keyframes` 用单段声明，或补上至少一段 `{ to, durationMs }`',
+          })
+        }
+        const sum = kf.reduce((acc, seg) => acc + (Number.isFinite(seg.durationMs) ? seg.durationMs : 0), 0)
+        kf.forEach((seg, j) => {
+          try {
+            parseColorToChannels(seg.to)
+          } catch (e) {
+            issues.push({
+              index: i,
+              code: 'invalid-range',
+              message: `颜色序列第 ${j} 段 \`to\` 非法：${(e as Error).message}`,
+              hint: "每段终点都要是颜色：'#RGB' / '#RRGGBB' / '#RRGGBBAA'",
+            })
+          }
+          if (!Number.isFinite(seg.durationMs) || seg.durationMs < 0) {
+            issues.push({
+              index: i,
+              code: 'invalid-range',
+              message: `颜色序列第 ${j} 段 \`durationMs\` 非法：${seg.durationMs}`,
+              hint: '给非负毫秒数（0 = 该段瞬变，合法但通常不是本意）',
+            })
+          }
+          if (seg.curve !== undefined && !(seg.curve in CURVE_ID)) {
+            issues.push({
+              index: i,
+              code: 'invalid-range',
+              message: `颜色序列第 ${j} 段曲线未知：${seg.curve}`,
+              hint: '用 Curve 封闭集里的名字',
+            })
+          }
         })
+        if (sum <= 0) {
+          issues.push({
+            index: i,
+            code: 'invalid-range',
+            message: '颜色序列总时长为 0 —— 动画会**瞬间跳到末段终点**',
+            hint: '至少给一段正时长；零时长序列在真机上看起来就是"没做动画"',
+          })
+        }
+        if (d.spring !== undefined) {
+          issues.push({
+            index: i,
+            code: 'conflicting-easing',
+            message: '`keyframes` 与 `spring` 并存 —— 求值模式必须唯一',
+            hint: '序列里要弹性手感，把某一段用曲线近似（如 springApprox），或整条改用 spring',
+          })
+        }
+        if (d.curve !== undefined) {
+          issues.push({
+            index: i,
+            code: 'conflicting-easing',
+            message: '`keyframes` 与 `curve` 并存 —— 段内曲线由每段自己的 `curve` 决定',
+            hint: '删掉外层的 `curve`（它只对单段模式有意义）',
+          })
+        }
+        // ★末段终点必须与声明的 `to` 一致（与标量序列同一条纪律：两处都描述"终点"）
+        const last = kf[kf.length - 1]
+        if (last && last.to.toLowerCase() !== d.to.toLowerCase()) {
+          issues.push({
+            index: i,
+            code: 'invalid-range',
+            message: `末段 \`to\`(${last.to}) 与声明 \`to\`(${d.to}) 不一致 —— 两处都描述"终点"`,
+            hint: '让二者相等（编译器以声明 `to` 为准做端点钉死，不一致会让终值与你写的不符）',
+          })
+        }
       }
       if (d.curve !== undefined && d.spring !== undefined) {
         issues.push({

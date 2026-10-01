@@ -19,6 +19,10 @@
   M4 真帧循环：帧数 > 0 + 每帧工作 p50 有值 + **动画期间 measure/layout 增量为 0**
   M4e ★帧率达到显示器刷新率（2026-10-01 加：120Hz 设备上「120 FPS」可断言——
        fps ≥ refresh×0.90 且 vsync p50 ≤ (1000/refresh)×1.15；无刷新率基线则如实跳过）
+  P1-P4 颜色通道（底色）：一个声明 → 四条内核通道 → 宿主写色 → 复位回底色 → 拒绝分支
+  P5 ★颜色序列（keyframes 多段）：段边界精确（绿）+ 端点钉死（红）
+  P6 ★文字色（独立轨道）：终值精确 + stop 回原值 + **底色未被动**
+  P7 文字色拒绝分支（无 `color` 声明的节点）
 
 用法：python3 hosts/android/check-kernel-anim.py <kernel-anim.json>
 退出码：0 全过 / 1 有失败 / 0（产物缺失时诚实跳过）
@@ -185,7 +189,7 @@ def main() -> int:
 
     # ── P 组（★★颜色通道，2026-10-01）：一个声明 → 四条内核通道 → 宿主写色 → 复位回底色 ──
     #
-    # 【与 iOS 腿同一条链、同一套判据】声明面（kind 5..8）→ 内核算值 → 28B 记录 →
+    # 【与 iOS 腿同一条链、同一套判据】声明面（kind 5..8）→ 内核算值 → 32B 记录 →
     #   宿主颜色覆盖表；本端"真读"= 宿主真源 `animColor`（经 `animTxProbe` 的 `bg` 字段报出）。
     ce = d.get("color_error")
     if ce:
@@ -233,6 +237,57 @@ def main() -> int:
             ok = False
         else:
             print(f"  ✓ P4 无底色节点明确拒绝：{rej_s[:80]}…")
+
+        # ⑤ 颜色序列（keyframes 多段）：段边界精确 + 端点钉死（与 iOS P7 同源）
+        seq_mid = _layers(d.get("color_seq_mid"))
+        seq_end = _layers(d.get("color_seq_end"))
+        sm = (seq_mid.get("bg") or "").upper()
+        se = (seq_end.get("bg") or "").upper()
+        if not sm or not se:
+            fail(f"P5 颜色序列读数缺失：mid={sm!r} end={se!r}")
+            ok = False
+        elif sm != "FF00FF00":
+            fail(f"P5a 颜色序列段边界不精确：半程 bg={sm}（应 FF00FF00 = #00ff00，linear 段边界）")
+            ok = False
+        elif se != "FFFF0000":
+            fail(f"P5b 颜色序列终点不精确：bg={se}（应 FFFF0000 = #ff0000，端点钉死）")
+            ok = False
+        else:
+            print(f"  ✓ P5 ★颜色序列（多段收敛在每通道一条动画）：黑 → {sm}（段边界）→ {se}（端点钉死）")
+
+        # ⑥ 文字色（与底色**两条独立轨道**）：终值精确 + stop 回原值 + 底色未被动（与 iOS P8 同源）
+        ts = _layers(d.get("color_text_start"))
+        te = _layers(d.get("color_text_end"))
+        tst = _layers(d.get("color_text_after_stop"))
+        t0 = (ts.get("textColor") or "").upper()
+        t1 = (te.get("textColor") or "").upper()
+        tstopv = (tst.get("textColor") or "").upper()
+        if not t0 or not t1:
+            fail(f"P6 文字色读数缺失：start={t0!r} end={t1!r}（宿主未报 textColor？）")
+            ok = False
+        elif t1 != "FF00FF00":
+            fail(f"P6a 文字色终值不精确：宿主 textColor={t1}（应 FF00FF00 = #00ff00）")
+            ok = False
+        elif tstopv != t0:
+            fail(f"P6b 文字色 stop 后未回原值：{tstopv}（应回 {t0}）")
+            ok = False
+        else:
+            bg0 = (ts.get("bg") or "").upper()
+            bg1 = (tst.get("bg") or "").upper()
+            if bg0 and bg1 and bg0 != bg1:
+                fail(f"P6c 文字色动画**改动了底色**（两条轨道必须独立）：{bg0} → {bg1}")
+                ok = False
+            else:
+                print(f"  ✓ P6 ★文字色（独立轨道）：{t0} → {t1}（终值精确）· stop 回原值 · 底色未被动")
+
+        # ⑦ 文字色拒绝分支：无 `color` 声明的节点（节点 12）必须明确拒绝
+        trej = d.get("color_text_rejected") or ""
+        trej_s = json.dumps(trej, ensure_ascii=False) if isinstance(trej, dict) else str(trej)
+        if "文字色" not in trej_s:
+            fail(f"P7 无文字色节点上的文字色动画未被明确拒绝：{trej_s[:140]}")
+            ok = False
+        else:
+            print(f"  ✓ P7 无文字色节点明确拒绝：{trej_s[:80]}…")
 
     # ── M7：共享元素（内核几何） ──
     se = d.get("shared_element")

@@ -147,8 +147,10 @@ pub fn bezier_eval(c: (f32, f32, f32, f32), u: f32) -> f32 {
 
 /// 动画属性种类（与 TS 侧 `AnimKind` 一一对应——**跨语言契约，不得改号**）
 ///
-/// ★★**颜色通道分解（2026-10-01）**：用户面是**一个** `color` 声明，内核面是**四个标量通道**
-///   （`ColorR/G/B/A`，各占一个 kind 号）。
+/// ★★**颜色通道分解（2026-10-01）**：用户面是**一个** `color` / `textColor` 声明，
+///   内核面是**四个标量通道**（背景色 `ColorR/G/B/A` = 5..8；文字色 `TextColorR/G/B/A` = 9..12）。
+///   ★文字色与底色是**两组独立通道**（写不同样式槽：`bg` / `text_color`）——
+///     同一条求值机器、同一套写值纪律，只是落点不同（"同一语义一处实现"的又一次应用）。
 ///
 /// 【为什么这样分解（架构收益，不是权宜）】引擎的求值机器（曲线查表 / 弹簧积分 / 序列分段 /
 ///   滚动窗口 / seek / 接管速度移交 / 端点钉死）**全部是标量的**。拆成 4 条标量通道 ⇒
@@ -174,6 +176,14 @@ pub enum AnimKind {
     ColorB = 7,
     /// ★颜色通道 A（0..255 → 第 24..31 位）
     ColorA = 8,
+    /// ★★文字色通道 R（0..255 → `text_color` 的第 16..23 位；2026-10-01）
+    TextColorR = 9,
+    /// ★文字色通道 G（0..255 → 第 8..15 位）
+    TextColorG = 10,
+    /// ★文字色通道 B（0..255 → 第 0..7 位）
+    TextColorB = 11,
+    /// ★文字色通道 A（0..255 → 第 24..31 位）
+    TextColorA = 12,
 }
 
 impl AnimKind {
@@ -188,10 +198,14 @@ impl AnimKind {
             6 => AnimKind::ColorG,
             7 => AnimKind::ColorB,
             8 => AnimKind::ColorA,
+            9 => AnimKind::TextColorR,
+            10 => AnimKind::TextColorG,
+            11 => AnimKind::TextColorB,
+            12 => AnimKind::TextColorA,
             other => {
                 return Err(format!(
                     "未知动画属性 kind={other}（0=translateX/1=translateY/2=scale/3=rotate/4=opacity/\
-5..8=color 的 R/G/B/A 通道）"
+5..8=color 的 R/G/B/A 通道/9..12=textColor 的 R/G/B/A 通道）"
                 ))
             }
         })
@@ -209,6 +223,10 @@ impl AnimKind {
             AnimKind::Rotate => "rotate",
             AnimKind::Opacity => "opacity",
             AnimKind::ColorR | AnimKind::ColorG | AnimKind::ColorB | AnimKind::ColorA => "color",
+            AnimKind::TextColorR
+            | AnimKind::TextColorG
+            | AnimKind::TextColorB
+            | AnimKind::TextColorA => "textColor",
         }
     }
 
@@ -216,18 +234,41 @@ impl AnimKind {
     pub fn is_color(self) -> bool {
         matches!(
             self,
-            AnimKind::ColorR | AnimKind::ColorG | AnimKind::ColorB | AnimKind::ColorA
+            AnimKind::ColorR
+                | AnimKind::ColorG
+                | AnimKind::ColorB
+                | AnimKind::ColorA
+                | AnimKind::TextColorR
+                | AnimKind::TextColorG
+                | AnimKind::TextColorB
+                | AnimKind::TextColorA
+        )
+    }
+
+    /// 是否**文字色**通道（9..12）——与底色通道（5..8）区分：两者写**不同的样式槽**
+    pub fn is_text_color(self) -> bool {
+        matches!(
+            self,
+            AnimKind::TextColorR | AnimKind::TextColorG | AnimKind::TextColorB | AnimKind::TextColorA
         )
     }
 
     /// 该通道在打包色里的位移（R→16 / G→8 / B→0 / A→24）；非颜色通道返回 0
+    /// ★**必须穷尽**（不用 `_` 通配）：文字色通道落地时，通配把 R 静默当成 B
+    ///   （真机前就被单测抓住：白字改 R 得到 `0xFFFFFF00` 而不是 `0xFF00FFFF`）——
+    ///   与"喂给 `write()` 的六个槽"同一套"不写通配、让编译器提醒"的纪律。
     pub fn color_shift(self) -> u32 {
         match self {
-            AnimKind::ColorR => 16,
-            AnimKind::ColorG => 8,
-            AnimKind::ColorB => 0,
-            AnimKind::ColorA => 24,
-            _ => 0,
+            AnimKind::ColorR | AnimKind::TextColorR => 16,
+            AnimKind::ColorG | AnimKind::TextColorG => 8,
+            AnimKind::ColorB | AnimKind::TextColorB => 0,
+            AnimKind::ColorA | AnimKind::TextColorA => 24,
+            // 非颜色通道：位移无意义（调用方先判 `is_color()`——此处返回 0 是"中性值"）
+            AnimKind::TranslateX
+            | AnimKind::TranslateY
+            | AnimKind::Scale
+            | AnimKind::Rotate
+            | AnimKind::Opacity => 0,
         }
     }
 
@@ -242,6 +283,10 @@ impl AnimKind {
             AnimKind::Opacity => (0.003, 0.06),                         // 1, 1/s
             // ★颜色通道：0.5/255 的通道步 ≈ 视觉不可辨（与 translate 的 0.5px 同量级取法）
             AnimKind::ColorR | AnimKind::ColorG | AnimKind::ColorB | AnimKind::ColorA => (0.5, 10.0),
+            AnimKind::TextColorR
+            | AnimKind::TextColorG
+            | AnimKind::TextColorB
+            | AnimKind::TextColorA => (0.5, 10.0),
         }
     }
 
@@ -263,7 +308,14 @@ impl AnimKind {
         match self {
             AnimKind::TranslateX | AnimKind::TranslateY | AnimKind::Scale | AnimKind::Rotate
             | AnimKind::Opacity => true,
-            AnimKind::ColorR | AnimKind::ColorG | AnimKind::ColorB | AnimKind::ColorA => false,
+            AnimKind::ColorR
+            | AnimKind::ColorG
+            | AnimKind::ColorB
+            | AnimKind::ColorA
+            | AnimKind::TextColorR
+            | AnimKind::TextColorG
+            | AnimKind::TextColorB
+            | AnimKind::TextColorA => false,
         }
     }
 
@@ -274,13 +326,23 @@ impl AnimKind {
     ///   因此在一次 tick 内 4 条通道依次写入后即收敛到完整颜色。
     fn write(self, node: &mut crate::node::LNode, v: f32) -> bool {
         if self.is_color() {
-            let cur = node.style.bg.or(node.style.bg_base).unwrap_or(0);
+            // ★底色 / 文字色走**不同的样式槽**（同一套通道数学，只是落点不同）
+            let is_text = self.is_text_color();
+            let cur = if is_text {
+                node.style.text_color.or(node.style.text_color_base).unwrap_or(0)
+            } else {
+                node.style.bg.or(node.style.bg_base).unwrap_or(0)
+            };
             let ch = v.round().clamp(0.0, 255.0) as u32;
             let shift = self.color_shift();
             let mask = 0xFFu32 << shift;
             let next = (cur & !mask) | (ch << shift);
             if next != cur {
-                node.style.bg = Some(next);
+                if is_text {
+                    node.style.text_color = Some(next);
+                } else {
+                    node.style.bg = Some(next);
+                }
                 true
             } else {
                 false
@@ -293,9 +355,14 @@ impl AnimKind {
                 AnimKind::Rotate => &mut node.style.rotate,
                 AnimKind::Opacity => &mut node.style.opacity,
                 // 颜色走上面的分支（此处不可达——`is_color` 已分流）
-                AnimKind::ColorR | AnimKind::ColorG | AnimKind::ColorB | AnimKind::ColorA => {
-                    return false
-                }
+                AnimKind::ColorR
+                | AnimKind::ColorG
+                | AnimKind::ColorB
+                | AnimKind::ColorA
+                | AnimKind::TextColorR
+                | AnimKind::TextColorG
+                | AnimKind::TextColorB
+                | AnimKind::TextColorA => return false,
             };
             if *slot != v {
                 *slot = v;
@@ -561,8 +628,9 @@ pub fn reset_visuals(tree: &mut LayoutTree, node_ids: &[u32]) -> usize {
     for id in node_ids {
         if let Some(node) = tree.nodes.iter_mut().find(|x| x.id == *id) {
             let s = &mut node.style;
-            // ★颜色也要判脏（2026-10-01）：`bg` 与底色的差即"颜色被动画改过"
-            let color_dirty = s.bg != s.bg_base;
+            // ★颜色也要判脏（2026-10-01）：`bg` 与底色的差即"颜色被动画改过"；
+            //   文字色（`text_color`）同理——两组通道各自判、各自复位
+            let color_dirty = s.bg != s.bg_base || s.text_color != s.text_color_base;
             let dirty = s.translate_x != 0.0
                 || s.translate_y != 0.0
                 || s.scale != 1.0
@@ -575,8 +643,9 @@ pub fn reset_visuals(tree: &mut LayoutTree, node_ids: &[u32]) -> usize {
                 s.scale = 1.0;
                 s.rotate = 0.0;
                 s.opacity = 1.0;
-                // ★复位 = 回底色（不是清成 None：那会丢掉"本节点有底色"的事实）
+                // ★复位 = 回底色 / 回原文字色（不是清成 None：那会丢掉"本节点有基色"的事实）
                 s.bg = s.bg_base;
+                s.text_color = s.text_color_base;
                 n += 1;
             }
         }
@@ -716,7 +785,14 @@ pub fn commit_specs(tree: &LayoutTree, anims: &[Anim]) -> Vec<CommitSpec> {
                     // ★颜色不可达（`anim_commit_spec` 入口已按 `plan_animations` 整批拒绝）——
                     //   这里显式 match 而非 `_` 通配，是为了**编译期**就提醒：将来若放行颜色，
                     //   必须同时扩展 `CommitSpec` 的采样元组（现在只有五元组）。
-                    AnimKind::ColorR | AnimKind::ColorG | AnimKind::ColorB | AnimKind::ColorA => {}
+                    AnimKind::ColorR
+                    | AnimKind::ColorG
+                    | AnimKind::ColorB
+                    | AnimKind::ColorA
+                    | AnimKind::TextColorR
+                    | AnimKind::TextColorG
+                    | AnimKind::TextColorB
+                    | AnimKind::TextColorA => {}
                 }
             }
             samples.push(v);
@@ -732,7 +808,14 @@ pub fn commit_specs(tree: &LayoutTree, anims: &[Anim]) -> Vec<CommitSpec> {
                     AnimKind::Rotate => last.3 = a.to,
                     AnimKind::Opacity => last.4 = a.to,
                     // ★颜色不可达（见上）
-                    AnimKind::ColorR | AnimKind::ColorG | AnimKind::ColorB | AnimKind::ColorA => {}
+                    AnimKind::ColorR
+                    | AnimKind::ColorG
+                    | AnimKind::ColorB
+                    | AnimKind::ColorA
+                    | AnimKind::TextColorR
+                    | AnimKind::TextColorG
+                    | AnimKind::TextColorB
+                    | AnimKind::TextColorA => {}
                 }
             }
             let n = samples.len();
@@ -803,12 +886,17 @@ pub struct NodeVisual {
     /// ★颜色（2026-10-01）：打包 `0xAARRGGBB`；`None` = 本节点无内核底色
     ///   （宿主保持自己的静态绘制——见 `LStyle.bg` 注释）
     pub bg: Option<u32>,
+    /// ★★**文字色**（2026-10-01）：打包 `0xAARRGGBB`；`None` = 本节点无内核文字色
+    ///   （宿主保持自己的静态绘制——与 `bg` 同一条约定，只是落到文字而不是底色）
+    pub text_color: Option<u32>,
     /// 该值是否**有效可消费**（颜色轨道专用；`false` ⇒ 宿主忽略本字段）
     ///
     /// 【为什么要显式布尔而不是靠 `None` 判断】`bg: None` 有两义：① 节点无底色；
     ///   ② 宿主拿到的记录里"本条更新没带颜色"。显式布尔让两端宿主与判据**不必猜**
     ///   （本仓纪律：不静默、不靠约定——判据要能区分"没做"与"做了值为 0"）。
     pub color_valid: bool,
+    /// ★文字色是否**有效可消费**（与 `color_valid` 同一语义，分别对应两组通道）
+    pub text_color_valid: bool,
 }
 
 /// 一次 tick（或 seek）的结果（供宿主刷新层 / 测试观测）
@@ -907,12 +995,26 @@ impl AnimEngine {
         // ★★颜色动画**要求节点有底色**（2026-10-01）：底色既是"从哪开始"的基准，
         //   也是复位目标（见 `LStyle.bg_base`）。没有它 ⇒ 无法安全清场（stop 后无处可回）。
         //   ⇒ **明确拒绝**（不静默：静默会变成"动画不生效"这类难查现象）。
-        if a.kind.is_color() && tree.nodes[idx].style.bg_base.is_none() {
-            return Err(format!(
-                "COLOR 动画的目标节点 {} 没有底色（树里未声明 `backgroundColor`）——\
-颜色动画需要底色作为起点与复位目标；请先给该节点设 backgroundColor，或去掉这条颜色动画",
-                a.node_id
-            ));
+        if a.kind.is_color() {
+            let (ok_base, what, fix) = if a.kind.is_text_color() {
+                (
+                    tree.nodes[idx].style.text_color_base.is_some(),
+                    "没有文字色（树里未声明 `color`）",
+                    "请先给该节点的 style 设 `color`",
+                )
+            } else {
+                (
+                    tree.nodes[idx].style.bg_base.is_some(),
+                    "没有底色（树里未声明 `backgroundColor`）",
+                    "请先给该节点设 backgroundColor",
+                )
+            };
+            if !ok_base {
+                return Err(format!(
+                    "颜色动画的目标节点 {} {what}——颜色动画需要基色作为起点与复位目标；{fix}，或去掉这条颜色动画",
+                    a.node_id
+                ));
+            }
         }
         if let Some(slot) = self
             .anims
@@ -962,7 +1064,7 @@ impl AnimEngine {
         let mut n = 0;
         for node in tree.nodes.iter_mut() {
             let s = &mut node.style;
-            let color_dirty = s.bg != s.bg_base;
+            let color_dirty = s.bg != s.bg_base || s.text_color != s.text_color_base;
             if s.translate_x != 0.0
                 || s.translate_y != 0.0
                 || s.scale != 1.0
@@ -975,7 +1077,8 @@ impl AnimEngine {
                 s.scale = 1.0;
                 s.rotate = 0.0;
                 s.opacity = 1.0;
-                s.bg = s.bg_base; // ★颜色回底色（见 reset_visuals 注释）
+                s.bg = s.bg_base; // ★颜色回底色 / 回原文字色（见 reset_visuals 注释）
+                s.text_color = s.text_color_base;
                 n += 1;
             }
         }
@@ -1332,7 +1435,9 @@ impl AnimEngine {
                 opacity: node.style.opacity,
                 // ★颜色：`bg` 优先（动画写过），否则回底色（未被动过的节点也报得出真值）
                 bg: node.style.bg.or(node.style.bg_base),
+                text_color: node.style.text_color.or(node.style.text_color_base),
                 color_valid: node.style.bg.is_some() || node.style.bg_base.is_some(),
+                text_color_valid: node.style.text_color.is_some() || node.style.text_color_base.is_some(),
             });
         }
         out
@@ -1616,6 +1721,70 @@ mod tests {
         let n2 = reset_visuals(&mut t, &[1]);
         assert_eq!(n2, 1);
         assert_eq!(t.nodes[0].style.bg, Some(0xFF33_55AA));
+    }
+
+    // ══════════════════════════════════════════════════════════════════
+    // ★★文字色通道（2026-10-01）：与底色**同一条数学、不同的槽**
+    // ══════════════════════════════════════════════════════════════════
+
+    /// 带**文字色**的节点树（`0xFFFFFFFF` 白字）
+    fn tree_with_text_color(bg: u32, text: u32) -> LayoutTree {
+        let mut t = tree_with(1);
+        t.nodes[0].style.bg = Some(bg);
+        t.nodes[0].style.bg_base = Some(bg);
+        t.nodes[0].style.text_color = Some(text);
+        t.nodes[0].style.text_color_base = Some(text);
+        t
+    }
+
+    #[test]
+    fn text_color_channels_write_into_text_slot_not_bg() {
+        // ★核心不变量：文字色通道写 `text_color`，**不碰** `bg`（两条轨道的分界）
+        let mut t = tree_with_text_color(0xFF33_55AA, 0xFFFF_FFFF);
+        let mut e = AnimEngine::new();
+        e.start(&t, color_anim(1, AnimKind::TextColorR, 0xFF as f32, 0x00 as f32)).unwrap();
+        let o = e.tick(&mut t, 100.0);
+        assert_eq!(o.finished, 1);
+        assert_eq!(t.nodes[0].style.text_color, Some(0xFF00_FFFF), "文字色 R 通道应改：白 → 青");
+        assert_eq!(t.nodes[0].style.bg, Some(0xFF33_55AA), "★底色必须**原样不动**（两条轨道独立）");
+        // 报告里两组都带（各自 valid 标记）
+        assert_eq!(o.updates.len(), 1);
+        assert_eq!(o.updates[0].text_color, Some(0xFF00_FFFF));
+        assert!(o.updates[0].text_color_valid);
+        assert_eq!(o.updates[0].bg, Some(0xFF33_55AA), "报告同时带底色（供宿主两组都刷新）");
+    }
+
+    #[test]
+    fn text_color_requires_base_and_restores_it() {
+        // ① 无文字色基色 ⇒ 明确拒绝（与底色同一条纪律）
+        let t = tree_with(1); // 只有默认样式（无 bg / 无 text_color）
+        let mut e = AnimEngine::new();
+        let err = e.start(&t, anim(1, AnimKind::TextColorR)).unwrap_err();
+        assert!(err.contains("文字色") && err.contains("`color`"), "错误须点名文字色与修法：{err}");
+
+        // ② 有基色 ⇒ 受理；stop 后回原文字色（不是停在末帧）
+        let mut t2 = tree_with_text_color(0xFF00_0000, 0xFFFF_FFFF);
+        let mut e2 = AnimEngine::new();
+        e2.start(&t2, color_anim(1, AnimKind::TextColorR, 0xFF as f32, 0x00 as f32)).unwrap();
+        e2.tick(&mut t2, 50.0);
+        assert_ne!(t2.nodes[0].style.text_color, Some(0xFFFF_FFFF));
+        e2.stop_all(&mut t2);
+        assert_eq!(t2.nodes[0].style.text_color, Some(0xFFFF_FFFF), "stop_all 回原文字色");
+        assert_eq!(t2.nodes[0].style.bg, Some(0xFF00_0000), "底色不受文字色动画影响");
+    }
+
+    #[test]
+    fn both_color_tracks_can_run_together() {
+        // 底色与文字色**同时**动画：互不干扰（两条轨道各自写各自的槽）
+        let mut t = tree_with_text_color(0xFF00_0000, 0xFFFF_FFFF);
+        let mut e = AnimEngine::new();
+        e.start(&t, color_anim(1, AnimKind::ColorR, 0x00 as f32, 0xEE as f32)).unwrap();
+        e.start(&t, color_anim(1, AnimKind::TextColorB, 0xFF as f32, 0x00 as f32)).unwrap();
+        assert_eq!(e.len(), 2);
+        let o = e.tick(&mut t, 100.0);
+        assert_eq!(o.finished, 2);
+        assert_eq!(t.nodes[0].style.bg, Some(0xFFEE_0000), "底色 R → EE");
+        assert_eq!(t.nodes[0].style.text_color, Some(0xFFFF_FF00), "文字色 B → 00");
     }
 
     #[test]

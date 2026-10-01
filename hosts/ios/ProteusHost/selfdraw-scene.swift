@@ -67,6 +67,8 @@ func proteus_layout_anim_seek_scroll(_ handle: UInt64, _ json: UnsafePointer<CCh
 /// ★共享元素（跨元素飞行；几何原语——中心差 + 宽度比在内核）
 @_silgen_name("proteus_layout_bg_nodes")
 func proteus_layout_bg_nodes(_ handle: UInt64) -> UnsafeMutablePointer<CChar>
+@_silgen_name("proteus_layout_text_color_nodes")
+func proteus_layout_text_color_nodes(_ handle: UInt64) -> UnsafeMutablePointer<CChar>
 @_silgen_name("proteus_layout_shared_element")
 func proteus_layout_shared_element(_ handle: UInt64, _ json: UnsafePointer<CChar>) -> UnsafeMutablePointer<CChar>
 @_silgen_name("proteus_layout_anim_commit_spec")
@@ -310,6 +312,8 @@ func physFootprintMB() -> Double {
     func animStopAll() -> String
     /// ★★带底色的节点清单（颜色动画的取样入口——见实现处注释）
     func bgNodes() -> String
+    /// ★★带文字色的节点清单（文字色动画的取样入口——与 `bgNodes` 对称）
+    func textColorNodes() -> String
     /// ★★**MA0-RT 平台零参与路径**：提交一次（CAKeyframeAnimation）/ presentation 探针 / 撤销
     func animCommit(_ json: String) -> String
     func layerPresentedProbe(_ idsJson: String) -> String
@@ -550,7 +554,10 @@ final class SelfDrawView: UIView {
                                             family: (style["fontFamily"] as? String) ?? "system")
             tl.font = ProteusTextAdapter.cgFont(of: ufont)
             tl.fontSize = fs
-            tl.foregroundColor = (style["color"] as? String).flatMap(parseHexColor)?.cgColor ?? UIColor.white.cgColor
+            let textCg = (style["color"] as? String).flatMap(parseHexColor)?.cgColor ?? UIColor.white.cgColor
+            tl.foregroundColor = textCg
+            // ★记文字色快照（复位目标；见 `layerOriginalTextColor` 注释）
+            layerOriginalTextColor[nodeId] = textCg
             tl.alignmentMode = .left
             tl.truncationMode = .end
             // ★contentsScale 必须显式设置：否则 Retina 上文本模糊（CATextLayer 不继承自动缩放）
@@ -704,9 +711,12 @@ final class SelfDrawView: UIView {
             // ★★颜色（2026-10-01）：从 **CALayer 真读** `backgroundColor` 反解打包色
             //   （判据纪律：真读层上状态，不回显我们写入的参数）
             let bgStr = Self.packedHexFromCGColor(layer.backgroundColor)
+            // ★文字色（2026-10-01）：CATextLayer 才有 `foregroundColor`；非文本层报空串
+            let textStr = Self.packedHexFromCGColor((layer as? CATextLayer)?.foregroundColor)
             parts.append(
                 "{\"id\":\(id),\"tx\":\(t.m41),\"ty\":\(t.m42),\"scale\":\(t.m11),"
-                    + "\"rotate\":\(rotateDeg),\"opacity\":\(layer.opacity),\"bg\":\"\(bgStr)\"}"
+                    + "\"rotate\":\(rotateDeg),\"opacity\":\(layer.opacity),\"bg\":\"\(bgStr)\","
+                    + "\"textColor\":\"\(textStr)\"}"
             )
         }
         return "{\"ok\":true,\"layers\":[\(parts.joined(separator: ","))]}"
@@ -727,6 +737,10 @@ final class SelfDrawView: UIView {
             if let orig = layerOriginalBg[id] {
                 layer.backgroundColor = orig
             }
+            // ★回原文字色（与底色同一义务——见 `layerOriginalTextColor`）
+            if let tl = layer as? CATextLayer, let orig = layerOriginalTextColor[id] {
+                tl.foregroundColor = orig
+            }
         }
         CATransaction.commit()
     }
@@ -737,6 +751,8 @@ final class SelfDrawView: UIView {
     ///   （`makeLayer` 只把值写进 CALayer）；而复位需要"原始值" ⇒ 建层时记一份。
     ///   ★与内核 `bg_base` 的一致性由判据守（同一条 stop 语义两端都要回底色）。
     private(set) var layerOriginalBg: [Int: CGColor] = [:]
+    /// 建层时的**文字色快照**（复位目标；与 `layerOriginalBg` 同一条约定，只是落到文字）
+    private(set) var layerOriginalTextColor: [Int: CGColor] = [:]
 
     /* ────────────────── ★★MA0-RT：平台渲染线程零参与路径（§5-bis） ────────────────── */
 
@@ -907,7 +923,7 @@ final class SelfDrawView: UIView {
     func applyTransform(
         nodeId: Int, tx: CGFloat, ty: CGFloat, scale: CGFloat,
         rotate: CGFloat = 0, opacity: CGFloat = 1,
-        rgba: UInt32? = nil
+        rgba: UInt32? = nil, textRgba: UInt32? = nil
     ) -> Bool {
         guard let layer = layersById[nodeId] else { return false }
         // ★RT2 扩展：位移 + 缩放 + 旋转（**以层中心为锚点**——等价 CSS transform 默认 origin）
@@ -928,9 +944,14 @@ final class SelfDrawView: UIView {
         if opacity != 1 {
             layer.opacity = Float(opacity)
         }
-        // ★★颜色（2026-10-01）：`nil` = 该节点无内核底色 ⇒ **保持本层静态绘制**（不动）
+        // ★★颜色（2026-10-01）：`nil` = 该节点无内核基色 ⇒ **保持本层静态绘制**（不动）
         if let packed = rgba {
             layer.backgroundColor = Self.cgColorFromPacked(packed)
+        }
+        // ★★文字色（2026-10-01）：落到 CATextLayer 的 `foregroundColor`
+        //   （与底色两条独立轨道——同一条记录里各占一个 u32）
+        if let packed = textRgba, let tl = layer as? CATextLayer {
+            tl.foregroundColor = Self.cgColorFromPacked(packed)
         }
         return true
     }
@@ -954,9 +975,15 @@ final class SelfDrawView: UIView {
     ///   而不是伪装成某个颜色（本仓纪律：判据要能区分"没做"与"做了值为 0"）。
     private static func packedHexFromCGColor(_ c: CGColor?) -> String {
         guard let c, let comps = c.components, comps.count >= 3 else { return "" }
+        // I2-ALLOW: 颜色通道量化（0..1 浮点 → 0..255 整数）——不是几何舍入；
+        //   CGColor 分量天然是归一化浮点，进位到 8 位色深的最近整数是**格式定义**（探针报色用），
+        //   与卡 I2（几何坐标吸附只在内核发生）无关。
         let r = UInt32((comps[0] * 255).rounded())
+        // I2-ALLOW: 同上（颜色通道量化，非几何）
         let g = UInt32((comps[1] * 255).rounded())
+        // I2-ALLOW: 同上（颜色通道量化，非几何）
         let b = UInt32((comps[2] * 255).rounded())
+        // I2-ALLOW: 同上（alpha 通道量化，非几何）
         let a = comps.count >= 4 ? UInt32((comps[3] * 255).rounded()) : 255
         return String(format: "%08X", (a << 24) | (r << 16) | (g << 8) | b)
     }
@@ -3449,6 +3476,12 @@ final class SelfDrawBridge: NSObject, SelfDrawExports {
         return takeCString(proteus_layout_bg_nodes(handle))
     }
 
+    /// ★★带文字色的节点清单（与 `bgNodes` 对称：两条轨道各自的取样入口）
+    func textColorNodes() -> String {
+        guard handle != 0 else { return "{\"ok\":false,\"error\":\"未接入核心\"}" }
+        return takeCString(proteus_layout_text_color_nodes(handle))
+    }
+
     /// ★仍在推进的动画条数（0 = 全部结束）——**幕切换的权威判据**
     func animActiveCount() -> String {
         guard handle != 0 else { return "{\"ok\":false,\"error\":\"未接入核心\"}" }
@@ -3540,14 +3573,16 @@ final class SelfDrawBridge: NSObject, SelfDrawExports {
         return view.layerZProbe(idsJson)
     }
 
-    /// 每帧动画更新记录的字节长度：`id u32 + tx/ty/scale/rotate/opacity（五个 f32）+ rgba u32`
+    /// 每帧动画更新记录的字节长度：
+    /// `id u32 + tx/ty/scale/rotate/opacity（五个 f32）+ bg u32 + textColor u32`
     ///
-    /// ★★2026-10-01 由 **24B 增至 28B**（颜色通道）：末 4 字节是**打包色** `0xAARRGGBB`，
-    ///   值 `0xFFFFFFFF` = **本节点无内核底色**（忽略该字段，保持本层静态绘制）。
-    ///   ★唯一事实源 = 内核 `ffi.rs::proteus_layout_anim_tick_bin` 的 7 个 `extend_from_slice`；
+    /// ★★2026-10-01 由 **24B → 28B（底色）→ 32B（文字色）**：末两个 u32 都是**打包色**
+    ///   `0xAARRGGBB`，值 `0xFFFFFFFF` = **本节点无该基色**（忽略该字段，保持静态绘制）。
+    ///   ★唯一事实源 = 内核 `ffi.rs::proteus_layout_anim_tick_bin` 的 8 个 `extend_from_slice`；
     ///     两端宿主 / SDK / embed-demo 的常量必须与它同批更新（本仓历史上因两处各写步长
     ///     而错位解析过：24B 记录被按 16B 读 ⇒ 层上留下错位残值）。
-    private static let animUpdateRecordBytes = 28
+    ///     `scripts/check-anim-record-bytes.mjs` 从内核推出宽度并与各消费端对账。
+    private static let animUpdateRecordBytes = 32
 
     /// ★★**每帧推进的唯一解析点**（探针 / 帧循环两条入口共用）
     ///
@@ -3574,12 +3609,15 @@ final class SelfDrawBridge: NSObject, SelfDrawExports {
             let sc = buf.loadUnaligned(fromByteOffset: base + 12, as: Float.self)
             let rot = buf.loadUnaligned(fromByteOffset: base + 16, as: Float.self)
             let op = buf.loadUnaligned(fromByteOffset: base + 20, as: Float.self)
-            // ★颜色（2026-10-01）：末 4 字节打包色 `0xAARRGGBB`；`UInt32.max` = 无内核底色
+            // ★颜色（2026-10-01）：末两个 u32 = 底色 + 文字色（均打包 `0xAARRGGBB`）；
+            //   `UInt32.max` = 无该基色（保持静态绘制）
             let rgba = buf.loadUnaligned(fromByteOffset: base + 24, as: UInt32.self)
+            let textRgba = buf.loadUnaligned(fromByteOffset: base + 28, as: UInt32.self)
             if view?.applyTransform(
                 nodeId: Int(nodeId), tx: CGFloat(tx), ty: CGFloat(ty), scale: CGFloat(sc),
                 rotate: CGFloat(rot), opacity: CGFloat(op),
-                rgba: rgba == UInt32.max ? nil : rgba
+                rgba: rgba == UInt32.max ? nil : rgba,
+                textRgba: textRgba == UInt32.max ? nil : textRgba
             ) == true {
                 applied += 1
             }
@@ -3855,10 +3893,18 @@ final class SelfDrawBridge: NSObject, SelfDrawExports {
             "anims": [["nodeId": targetId, "kind": 0, "curve": 1, "from": 0.0, "to": 120.0, "durMs": windowMs]],
         ]))
         out["commit"] = commitOut
+        // ★窗口二分（2026-10-01，L2 回归诊断后固化）：提交自身 vs 提交后空闲——
+        //   平台路径的"零参与"承诺指的是**空闲段**（窗口内主线程应无工作）；
+        //   提交段是一次性的调用成本，二者混在一根读数里无法区分"路径变慢"与"提交变贵"。
+        let c1 = threadCpuUs()
+        out["commit_cpu_us"] = c1 - c0
         let committedOk = commitOut.contains("\"committed\":1")
         DispatchQueue.main.asyncAfter(deadline: .now() + windowMs / 1000.0) { [weak self] in
             guard let self else { return }
-            out["platform_cpu_us"] = self.threadCpuUs() - c0
+            let c2 = self.threadCpuUs()
+            out["platform_cpu_us"] = c2 - c0
+            out["idle_cpu_us"] = c2 - c1
+            out["frame_loop_running"] = self.view?.frameLoopRunning ?? false
             out["committed_ok"] = committedOk
             self.view?.removePlatformAnimations([targetId])
             _ = self.animStopAll()
@@ -4171,15 +4217,18 @@ final class SelfDrawBridge: NSObject, SelfDrawExports {
             // 兼容 4 值（RT0 形态）/ 6 值（RT2：rotate/opacity）/ 7 值（2026-10-01：+ 打包色）
             let rot: CGFloat = u.count >= 6 ? CGFloat(u[4]) : 0
             let op: CGFloat = u.count >= 6 ? CGFloat(u[5]) : 1
-            // ★颜色：第 7 项是打包色；缺省/`-1`（内核用 u32::MAX 表示"无底色"经 JSON 变成 4294967295）
-            var rgba: UInt32? = nil
-            if u.count >= 7 {
-                let raw = u[6]
-                if raw >= 0 && raw < 4_294_967_296 { rgba = UInt32(raw) }
+            // ★颜色：第 7/8 项是打包色（底色 / 文字色）；缺省 / 越界 / **u32::MAX 哨兵**
+            //   （JSON 形态 4294967295 = "无该基色"）⇒ nil（保持静态绘制）。
+            //   ★哨兵必须**排除**（2026-10-01 判据抓出的口径缺陷）：写成 `raw < 4_294_967_296`
+            //     会把 4294967295 当合法色 ⇒ 层上被涂成**不透明白**（该节点本来保持静态色）。
+            let packedOpt = { (idx: Int) -> UInt32? in
+                guard u.count > idx else { return nil }
+                let raw = u[idx]
+                return (raw >= 0 && raw < 4_294_967_295) ? UInt32(raw) : nil
             }
             if view?.applyTransform(
                 nodeId: Int(u[0]), tx: CGFloat(u[1]), ty: CGFloat(u[2]), scale: CGFloat(u[3]),
-                rotate: rot, opacity: op, rgba: rgba
+                rotate: rot, opacity: op, rgba: packedOpt(6), textRgba: packedOpt(7)
             ) == true {
                 applied += 1
             }
@@ -4400,10 +4449,11 @@ final class SelfDrawBridge: NSObject, SelfDrawExports {
         //   （`LStyle.bg_base`）= 起点基准 + 复位目标（见内核 `style_from_dto`）。
         //   此前它被当作"纯绘制字段"删掉 ⇒ 内核收不到底色 ⇒ **所有颜色动画被内核拒绝**
         //   （真机现象：`bg_ids_from_kernel: []` 而请求里明明有 8 个节点带底色）。
-        //   其余三项（color/fontSize/borderRadius）确实只用于宿主绘制与度量，仍然删。
+        //   其余两项（fontSize/borderRadius）确实只用于宿主度量与绘制，仍然删。
+        //   ★★`color`（文字色）**同样不再删**（2026-10-01）：它也是内核字段了
+        //     （文字色动画的基色 `text_color_base`）——与 `backgroundColor` 同源的理由。
         if var ns = req["nodes"] as? [[String: Any]] {
             for i in ns.indices {
-                ns[i].removeValue(forKey: "color")
                 ns[i].removeValue(forKey: "fontSize")
                 ns[i].removeValue(forKey: "borderRadius")
             }
@@ -4714,10 +4764,10 @@ func buildFullRequest(nodes: [[String: Any]], textMeasures: [String: [String: Do
                              "nodes": nodes, "textMeasures": textMeasures]
     if var ns = req["nodes"] as? [[String: Any]] {
         for i in ns.indices {
-            // ★★`backgroundColor` **不删**（2026-10-01）：它已是内核字段（颜色动画的底色）。
-            //   与 `render(treeJson:)` 里的同类过滤**同源**——两处都要放行，否则
-            //   "首帧全量路径"与"结构变更后的全量路径"行为不同（一有一无底色 ⇒ 颜色动画时灵时不灵）。
-            ns[i].removeValue(forKey: "color")
+            // ★★`backgroundColor` / `color` **都不删**（2026-10-01）：两者都已是内核字段
+            //   （底色 / 文字色的基色）。与 `render(treeJson:)` 里的同类过滤**同源**——
+            //   两处都要放行，否则"首帧全量路径"与"结构变更后的全量路径"行为不同
+            //   （一有一无基色 ⇒ 颜色动画时灵时不灵）。
             ns[i].removeValue(forKey: "fontSize")
             ns[i].removeValue(forKey: "borderRadius")
         }

@@ -548,8 +548,10 @@ pub extern "system" fn Java_dev_proteus_layoutcore_RustLayout_nativeAnimStart<'l
     forward_cstr(env, json, move |p| unsafe { ffi::proteus_layout_anim_start(handle as u64, p) })
 }
 
-/// ★★**每帧推进（二进制通道）**——返回 **28B/条**定长记录（`id u32 + 五值 f32 + rgba u32`，全小端）
-///   （2026-10-01 由 24B 扩至 28B：颜色。末 4 字节 `0xAARRGGBB`，`0xFFFFFFFF` = 无内核底色）
+/// ★★**每帧推进（二进制通道）**——返回 **32B/条**定长记录
+///   （`id u32 + 五值 f32 + bg u32 + textColor u32`，全小端）
+///   （2026-10-01 由 24B → 28B（底色）→ 32B（文字色）：末两个 u32 都是打包色 `0xAARRGGBB`，
+///    `0xFFFFFFFF` = 无该基色）
 ///
 /// 空数组 = 本帧无变化。★宿主按偏移直读、**无 JSON 解析**（与 iOS 同一条性能纪律；
 /// 记录长度**只在本处定义**，Java 侧以常量对齐——iOS 曾因两处各写步长而错位，本端从简：单入口）。
