@@ -444,42 +444,65 @@ pub fn relayout_multi_in(engine: &mut TaffyEngine, tree: &mut LayoutTree, dirty:
     //     范围的祖先链写进去（写的是"节点 id"不是"范围 id"——祖先链上的任意节点
     //     被覆盖都意味着"这条链上已有外层范围"）。
     // ★算法：先收集全部范围 id；再对每个范围**上溯其祖先链**，
-    //   若链上撞见另一个范围 ⇒ 它是内层，丢弃（保留最外层）。
+    //   若链上撞见另一个范围 ⇒ 它是内层，**并入最外层组**（不是丢弃——见下方修复记录）。
     //   ★不能用"先接受再标记祖先"的写法（本仓实测：顺序敏感 ⇒ 内层先被处理时
     //     外层会被误判为内层。首次实现即因此挂掉 `nested_dirty_nodes_collapse_to_outer_scope`）。
     let t_dedup0 = std::time::Instant::now();
-    let scope_ids: std::collections::HashSet<u32> = pairs.iter().map(|(sc, _)| tree.get(*sc).id).collect();
-    let mut kept: Vec<u32> = Vec::with_capacity(pairs.len());
-    for &(sc, _) in &pairs {
-        let mut cur = tree.get(sc).parent;
-        let mut inner = false;
-        let mut guard = 0usize;
-        while cur != crate::node::NO_PARENT && guard <= tree.len() {
-            if scope_ids.contains(&tree.get(cur).id) {
-                inner = true;
-                break;
+    // ★★范围 → **最外层范围**映射（2026-10-01 跨范围缺陷修复）
+    //
+    // 【旧实现错在哪（真机 A/B 更新路径实测的静默错几何）】去嵌套对**内层范围的脏节点组
+    //   直接丢弃**——而外层范围走持久树路径（`layout_cached` / `covers_whole`）时
+    //   `sync_styles` 只同步**该组里的**脏节点 ⇒ 内层脏节点的新样式**永远进不了持久 taffy**
+    //   ⇒ 几何静默停在旧值（内核 `relayout/changed` 读数却看着"动了"，比无声更迷惑）。
+    //   真机形态：一轮更新同时改「行内宽度（内层行范围）+ 根级按钮宽（外层根范围）」
+    //   ⇒ 行宽 40→60 从未生效。回归见 `inner_scope_dirty_survives_outer_scope_relayout`。
+    //
+    // 【为什么并入是正确的】内层脏节点在**外层范围的子树内** ⇒ 外层重排本就覆盖它；
+    //   拷贝法路径（`layout_subtree_cached`）自带完整 style、不受影响；只有持久树路径
+    //   依赖这个组 ⇒ 保证"组 = 该范围子树内全部脏节点"即可让所有路径一致正确。
+    //
+    // ★顺序契约：合并组内**外层自身的脏节点必须在前**——`layout_incremental` 按**首个**
+    //   脏节点推范围；若内层节点排在首位，范围会被推成内层边界 ⇒ 外层改动（如根级兄弟）
+    //   落在范围外 ⇒ 同样丢件。（`dirty[0]` 推范围的安全性建立在"同组同范围"上。）
+    let scope_to_top: std::collections::HashMap<u32, u32> = {
+        let scope_set: std::collections::HashSet<u32> = pairs.iter().map(|(sc, _)| *sc).collect();
+        let mut m = std::collections::HashMap::with_capacity(scope_set.len());
+        for &(sc, _) in &pairs {
+            let mut top = sc;
+            let mut cur = tree.get(sc).parent;
+            let mut guard = 0usize;
+            while cur != crate::node::NO_PARENT && guard <= tree.len() {
+                if scope_set.contains(&cur) {
+                    top = cur;
+                }
+                cur = tree.get(cur).parent;
+                guard += 1;
             }
-            cur = tree.get(cur).parent;
-            guard += 1;
+            m.insert(sc, top);
         }
-        if !inner {
-            kept.push(sc);
+        m
+    };
+    // ① 先放**最外层自身**的脏节点组（保持组内原顺序）② 再按范围升序并入内层组（追加在后）
+    let mut merged: std::collections::BTreeMap<u32, Vec<u32>> = std::collections::BTreeMap::new();
+    for (sc, dirt) in &pairs {
+        if *scope_to_top.get(sc).unwrap_or(sc) == *sc {
+            merged.insert(*sc, dirt.clone());
         }
     }
-    kept.sort_unstable();
+    for (sc, dirt) in &pairs {
+        let top = *scope_to_top.get(sc).unwrap_or(sc);
+        if top != *sc {
+            merged.entry(top).or_default().extend_from_slice(dirt);
+        }
+    }
+    let kept: Vec<u32> = merged.keys().copied().collect();
     let t_dedup = t_dedup0.elapsed().as_secs_f64() * 1000.0;
 
     let mut out = MultiRelayout { scopes: kept.clone(), ..Default::default() };
     let t_loop0 = std::time::Instant::now();
     let mut last_nonempty_phases: Option<std::collections::BTreeMap<String, f64>> = None;
-    for sc in kept {
-        // ★`pairs` 已按 scope 分组且排序 ⇒ 二分查找该范围的**整组**脏节点
-        //   （O(log n)，不再是 O(范围数) 扫描；★必须是整组——见上方分组注释的缺陷记录）
-        let d = match pairs.binary_search_by_key(&sc, |(s, _)| *s) {
-            Ok(i) => pairs[i].1.as_slice(),
-            Err(_) => continue,
-        };
-        let r = engine.layout_incremental(tree, d);
+    for dirt in merged.values() {
+        let r = engine.layout_incremental(tree, dirt);
         // ★★记录引擎分段的**最后一次非空**（本仓实测的性能缺陷：此前在循环内直接写全局
         //   `LAST_PHASES` ⇒ **每个范围**都要 Mutex 加锁 + `BTreeMap<String,f64>` 克隆
         //   （String 键 ⇒ 每条都是堆分配）。300 个范围实测白付 **0.32ms**（占多范围总耗时 20%）。
@@ -603,6 +626,80 @@ mod tests {
 
         assert_eq!(tree.nodes[a_idx as usize].rect.width, 90.0, "第 1 个脏节点的新样式必须生效");
         assert_eq!(tree.nodes[b_idx as usize].rect.height, 70.0, "第 2 个脏节点的新样式必须生效（旧实现静默丢它）");
+    }
+
+    /// ★★决定性回归：**内层范围的脏节点与外层范围同批时也必须生效**（跨范围变体）
+    ///
+    /// 【为什么单列（2026-10-01 更新路径 A/B 真机实测的静默错几何）】
+    ///   `relayout_multi_in` 的"去嵌套"按祖先后代保留最外层范围——但**连同内层范围的
+    ///   脏节点组一起丢弃**。而外层范围（如根）的持久树路径只把**自己组里的**脏节点
+    ///   同步进 taffy（`sync_styles(changed)`）⇒ 内层脏节点的新样式**永远进不了 taffy**
+    ///   ⇒ 几何静默停在旧值。
+    ///
+    ///   真机形态（A/B 更新路径，2026-10-01）：一轮更新同时改**行内文本/宽度**（内层行范围）
+    ///   + **根级按钮宽**（外层根范围）⇒ 内层行宽 40→60 从未生效（逐轮 `moved=0`），
+    ///   而内核自报 `relayout=25 / changed=25`——**读数看着"动了"，实际没动**（比无声更迷惑）。
+    ///
+    ///   ★与 `root_scope_multi_dirty_applies_every_node` 同族，但那次是**同范围多脏节点**；
+    ///     这次是**跨范围（内外嵌套）**——同范围用例、单脏用例都抓不到。
+    #[test]
+    fn inner_scope_dirty_survives_outer_scope_relayout() {
+        use crate::engine::{LayoutEngine, NullTextMeasurer, RootConstraint};
+
+        let mut tree = LayoutTree::new();
+        let root_style = LStyle {
+            display: crate::style::Display::Flex,
+            flex_direction: crate::style::FlexDirection::Column,
+            width: Some(300.0),
+            height: Some(300.0),
+            ..Default::default()
+        };
+        let root_idx = tree.push(node(1, crate::node::NO_PARENT, root_style));
+        tree.roots.push(root_idx);
+        // 行：只有 height（真实 SFC 形态）⇒ 是边界（**内层范围**）
+        let row_style = LStyle {
+            display: crate::style::Display::Flex,
+            flex_direction: crate::style::FlexDirection::Row,
+            height: Some(30.0),
+            flex_shrink: 0.0,
+            ..Default::default()
+        };
+        let row_idx = tree.push(node(2, root_idx, row_style));
+        tree.nodes[root_idx as usize].children.push(row_idx);
+        let dot_style = LStyle { width: Some(20.0), height: Some(20.0), ..Default::default() };
+        let dot_idx = tree.push(node(3, row_idx, dot_style));
+        tree.nodes[row_idx as usize].children.push(dot_idx);
+        // 根的直接子（改它 ⇒ 范围塌到根 = **外层范围**）
+        let box_style = LStyle { width: Some(120.0), height: Some(56.0), ..Default::default() };
+        let box_idx = tree.push(node(4, root_idx, box_style));
+        tree.nodes[root_idx as usize].children.push(box_idx);
+
+        let mut eng = TaffyEngine::new().with_measurer(Box::new(NullTextMeasurer));
+        eng.layout(&mut tree, RootConstraint::definite(300.0, 300.0));
+        // 前置：两个范围确实内外嵌套（否则本用例考不到跨范围丢弃）
+        assert_eq!(eng.relayout_scope_of(&tree, dot_idx), row_idx, "dot 的范围应是行（内层）");
+        assert_eq!(eng.relayout_scope_of(&tree, box_idx), root_idx, "box 的范围应是根（外层）");
+
+        // 同一批改两处：内层（行内 dot 宽 20→60）+ 外层（根级 box 宽 120→150）
+        tree.nodes[dot_idx as usize].style.width = Some(60.0);
+        tree.nodes[dot_idx as usize].dirty = true;
+        tree.nodes[box_idx as usize].style.width = Some(150.0);
+        tree.nodes[box_idx as usize].dirty = true;
+
+        let multi = relayout_multi_in(&mut eng, &mut tree, &[dot_idx, box_idx]);
+
+        assert_eq!(
+            tree.nodes[dot_idx as usize].rect.width, 60.0,
+            "内层脏节点（行内 dot 宽）必须生效——旧实现被外层范围静默丢弃（样式从未同步进持久 taffy）。scopes={:?}",
+            multi.scopes
+        );
+        assert_eq!(
+            tree.nodes[box_idx as usize].rect.width, 150.0,
+            "外层脏节点（根级 box 宽）必须生效。scopes={:?}",
+            multi.scopes
+        );
+        // ★范围仍应收敛为最外层（去嵌套的本意：不重复算同一子树）
+        assert_eq!(multi.scopes, vec![root_idx], "嵌套范围应收敛为最外层单范围");
     }
 
     /// 嵌套情形：父子都脏 ⇒ 只保留最外层（不重复算同一子树）

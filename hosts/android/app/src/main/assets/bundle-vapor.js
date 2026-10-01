@@ -2882,7 +2882,7 @@
         }
       }
       function inject(key, defaultValue, treatDefaultAsFactory = false) {
-        const instance = getCurrentInstance();
+        const instance = getCurrentInstance2();
         if (instance || currentApp) {
           let provides = currentApp ? currentApp._context.provides : instance ? instance.parent == null || instance.ce ? instance.vnode.appContext && instance.vnode.appContext.provides : instance.parent.provides : void 0;
           if (provides && key in provides) {
@@ -2893,7 +2893,7 @@
         }
       }
       function hasInjectionContext() {
-        return !!(getCurrentInstance() || currentApp);
+        return !!(getCurrentInstance2() || currentApp);
       }
       var ssrContextKey = /* @__PURE__ */ Symbol.for("v-scx");
       var useSSRContext = () => {
@@ -3398,7 +3398,7 @@
         name: `BaseTransition`,
         props: BaseTransitionPropsValidators,
         setup(props, { slots }) {
-          const instance = getCurrentInstance();
+          const instance = getCurrentInstance2();
           const state = useTransitionState();
           return () => {
             const children = slots.default && getTransitionRawChildren(slots.default(), true);
@@ -3719,7 +3719,7 @@
         ) : options;
       }
       function useId() {
-        const i = getCurrentInstance();
+        const i = getCurrentInstance2();
         if (i) {
           return (i.appContext.config.idPrefix || "v") + "-" + i.ids[0] + i.ids[1]++;
         }
@@ -3729,7 +3729,7 @@
         instance.ids = [instance.ids[0] + instance.ids[2]++ + "-", 0, 0];
       }
       function useTemplateRef(key) {
-        const i = getCurrentInstance();
+        const i = getCurrentInstance2();
         const r = reactivity.shallowRef(null);
         if (i) {
           const refs = i.refs === shared.EMPTY_OBJ ? i.refs = {} : i.refs;
@@ -4687,7 +4687,7 @@
           max: [String, Number]
         },
         setup(props, { slots }) {
-          const instance = getCurrentInstance();
+          const instance = getCurrentInstance2();
           const sharedContext = instance.ctx;
           if (!sharedContext.renderer) {
             return () => {
@@ -5307,7 +5307,7 @@
         return getContext().attrs;
       }
       function getContext(calledFunctionName) {
-        const i = getCurrentInstance();
+        const i = getCurrentInstance2();
         return i.setupContext || (i.setupContext = createSetupContext(i));
       }
       function normalizePropsOrEmits(props) {
@@ -5354,7 +5354,7 @@
         return ret;
       }
       function withAsyncContext(getAwaitable) {
-        const ctx = getCurrentInstance();
+        const ctx = getCurrentInstance2();
         const inSSRSetup = isInSSRComponentSetup;
         let awaitable = getAwaitable();
         unsetCurrentInstance();
@@ -5368,7 +5368,7 @@
           }
         };
         const cleanup = () => {
-          if (getCurrentInstance() !== ctx) ctx.scope.off();
+          if (getCurrentInstance2() !== ctx) ctx.scope.off();
           unsetCurrentInstance();
           if (inSSRSetup) {
             setInSSRSetupState(false);
@@ -5861,7 +5861,7 @@
       }
       var currentApp = null;
       function useModel(props, name, options = shared.EMPTY_OBJ) {
-        const i = getCurrentInstance();
+        const i = getCurrentInstance2();
         const camelizedName = shared.camelize(name);
         const hyphenatedName = shared.hyphenate(name);
         const modifiers = getModelModifiers(props, camelizedName);
@@ -9052,7 +9052,7 @@
         return instance;
       }
       var currentInstance = null;
-      var getCurrentInstance = () => currentInstance || currentRenderingInstance;
+      var getCurrentInstance2 = () => currentInstance || currentRenderingInstance;
       var internalSetCurrentInstance;
       var setInSSRSetupState;
       {
@@ -9408,7 +9408,7 @@
       exports.defineProps = defineProps;
       exports.defineSlots = defineSlots;
       exports.devtools = devtools;
-      exports.getCurrentInstance = getCurrentInstance;
+      exports.getCurrentInstance = getCurrentInstance2;
       exports.getTransitionRawChildren = getTransitionRawChildren;
       exports.guardReactiveProps = guardReactiveProps;
       exports.h = h;
@@ -11088,7 +11088,10 @@
         return { __kind: "comment" };
       },
       setText(node, text) {
-        node.text = text;
+        if (node.text !== text) {
+          node.text = text;
+          textDirty.set(node, text);
+        }
         patches++;
       },
       setElementText(el, text) {
@@ -11461,6 +11464,16 @@
       layout_ms_b: -1,
       channels_a: -1,
       channels_b: -1,
+      upd_rounds: 0,
+      upd_a: [],
+      upd_b: [],
+      upd_samples: 0,
+      upd_max_delta: -1,
+      upd_mismatches: -1,
+      upd_first_mismatch: null,
+      upd_geom_rounds: [],
+      upd_a_text_synced: 0,
+      upd_b_text_applied: 0,
       notes
     };
     try {
@@ -11469,7 +11482,9 @@
         rep.error = "\u6A21\u677F\u4E0D\u53EF\u7528\uFF08\u6784\u5EFA\u671F\u8BCA\u65AD\uFF09";
         return JSON.stringify(rep);
       }
-      const read = (n2) => abData[n2];
+      const data = JSON.parse(JSON.stringify(abData));
+      const dataB = JSON.parse(JSON.stringify(abData));
+      const read = (n2) => data[n2];
       const registry = new ListRegistry();
       const tA0 = t();
       const inst = instantiateTemplate(artifacts.tpl, { viewport: args.viewport, read, table: artifacts.table, registry });
@@ -11490,16 +11505,83 @@
       const semIdsA = textNodesAForAb.map((n2) => n2.id);
       const rectsA = readRectsByOrder(semIdsA);
       const chA = probeChannelsFor(inst.nodes.map((n2) => n2.id));
+      const updRounds = Math.max(0, args.updates ?? 2);
+      const updA = [];
+      const geomsA = [];
+      if (updRounds > 0) {
+        const keys = new PropKeyTable();
+        const strings = new StringPool();
+        const captured = [];
+        const slotRt = new SlotRuntime(keys, strings, (bytes) => captured.push(bytes));
+        const evals = VaporRuntime.buildEvaluators(artifacts.table.evaluators);
+        const vapor = new VaporRuntime(artifacts.table, slotRt, evals, registry);
+        const ctx = { read };
+        const triggers = /* @__PURE__ */ new Map();
+        vapor.load(ctx, (name, cb) => triggers.set(name, cb));
+        vapor.relink(ctx);
+        slotRt.flush();
+        captured.length = 0;
+        for (let r = 0; r < updRounds; r++) {
+          const list = data.list;
+          if (!Array.isArray(list) || list.length === 0) break;
+          const at = r % Math.min(list.length, rows);
+          list[at].title = `upd ${r}`;
+          list[at].w = 60 + r % 4 * 20;
+          data.boxW = 150 + 30 * r;
+          const to = t();
+          triggers.get("list")?.();
+          triggers.get("boxW")?.();
+          slotRt.flush();
+          const opsMs = t() - to;
+          const payload = captured.length ? captured[captured.length - 1] : new Uint8Array(0);
+          captured.length = 0;
+          let changedN = 0;
+          let relayout = -1;
+          let tsyn = 0;
+          let layoutMs = -1;
+          const ta = t();
+          if (payload.length > 0) {
+            const ao = JSON.parse(proteusHost.applyOps(JSON.stringify(Array.from(payload))));
+            if (ao.ok === true) {
+              changedN = ao.rects ? Object.keys(ao.rects).length : ao.changed ?? 0;
+              relayout = ao.relayout ?? -1;
+              tsyn = ao.text_synced ?? 0;
+              layoutMs = ao.layout_ms ?? -1;
+            }
+            if (ao.unsupported && ao.unsupported.length > 0) {
+              notes.push(`A \u8F6E ${r}\uFF1A\u5185\u6838\u62D2\u6536 ${ao.unsupported.length} \u6761\uFF1A${JSON.stringify(ao.unsupported).slice(0, 200)}`);
+            }
+          }
+          const applyMs = t() - ta;
+          const geom = readRectsByOrder(semIdsA);
+          geomsA.push(geom);
+          const prevGeom = r === 0 ? rectsA : geomsA[r - 1];
+          updA.push({
+            round: r,
+            ops_bytes: payload.length,
+            ops_ms: opsMs,
+            apply_ms: applyMs,
+            changed_rects: changedN,
+            relayout,
+            layout_ms: layoutMs,
+            text_synced: tsyn,
+            moved: maxGeomDelta(prevGeom, geom)
+          });
+          rep.upd_a_text_synced += tsyn;
+        }
+      }
       const adapter = createSelfDrawAdapter();
       const renderer = createAppRenderer(adapter);
       const container = adapter.createElement("p-view");
       adapter.root.children.push(container);
       container.parent = adapter.root;
-      const abList = (0, import_runtime_core3.ref)(abData.list);
-      const abBoxW = (0, import_runtime_core3.ref)(abData.boxW);
+      const abList = (0, import_runtime_core3.ref)(dataB.list);
+      const abBoxW = (0, import_runtime_core3.ref)(dataB.boxW);
+      let abRootInst = null;
       const AbApp = {
         name: "VaporAbApp",
         setup() {
+          abRootInst = (0, import_runtime_core3.getCurrentInstance)();
           return { list: abList, boxW: abBoxW };
         },
         render
@@ -11525,6 +11607,7 @@
         rep.error = "B \u8DEF mount \u5931\u8D25\uFF1A" + (mountB.error ?? "");
         return JSON.stringify(rep);
       }
+      adapter.markFullSync();
       const textNodesA = textNodesAForAb;
       const textNodesBAll = req.nodes.filter(
         (n2) => typeof n2.text === "string" && n2.text.length > 0
@@ -11591,6 +11674,83 @@
       rep.first_mismatch = first;
       rep.channels_a = chA.filter((c) => c.nonEmpty > 0).length;
       rep.channels_b = chB.filter((c) => c.nonEmpty > 0).length;
+      const updB = [];
+      const geomsB = [];
+      if (updRounds > 0) {
+        const listB = abList.value;
+        for (let r = 0; r < updRounds; r++) {
+          if (!Array.isArray(listB) || listB.length === 0) break;
+          const at = r % Math.min(listB.length, rows);
+          listB[at].title = `upd ${r}`;
+          listB[at].w = 60 + r % 4 * 20;
+          abBoxW.value = 150 + 30 * r;
+          const t0 = t();
+          const rootInst = abRootInst;
+          rootInst?.update?.();
+          const patched = adapter.takePatches();
+          const tPatch = t();
+          let hostMs = -1;
+          let applied = -1;
+          let changedN = 0;
+          let relayout = -1;
+          let textLayers = 0;
+          if (patched === null) {
+            notes.push(`\u7B2C ${r} \u8F6E B \u8DEF takePatches() === null\uFF08\u7ED3\u6784\u6027\u53D8\u5316\uFF09\u2014\u2014\u5939\u5177\u7684\u6587\u672C/\u5BBD\u5EA6\u53D8\u66F4\u4E0D\u8BE5\u89E6\u53D1\u7ED3\u6784`);
+          } else {
+            const hu = t();
+            const ho = JSON.parse(proteusHost.updatePatches(JSON.stringify(patched)));
+            hostMs = t() - hu;
+            if (ho.ok === true) {
+              applied = ho.applied ?? -1;
+              changedN = ho.changed_rects ?? 0;
+              relayout = ho.relayout ?? -1;
+              textLayers = ho.text_layers_applied ?? 0;
+            } else {
+              notes.push(`\u7B2C ${r} \u8F6E B \u8DEF updatePatches \u5931\u8D25\uFF1A${ho.error ?? ""}`);
+            }
+            if (ho.unsupported && ho.unsupported.length > 0) {
+              notes.push(`B \u8F6E ${r}\uFF1A\u5185\u6838\u62D2\u6536 ${ho.unsupported.length} \u6761\uFF1A${JSON.stringify(ho.unsupported).slice(0, 200)}`);
+            }
+          }
+          const geom = readRectsByOrder(semIdsB);
+          geomsB.push(geom);
+          const prevGeom = r === 0 ? rectsB : geomsB[r - 1];
+          updB.push({
+            round: r,
+            patches: patched === null ? -1 : patched.length,
+            applied,
+            changed_rects: changedN,
+            relayout,
+            host_ms: hostMs,
+            text_layers: textLayers,
+            moved: maxGeomDelta(prevGeom, geom),
+            driver_ms: tPatch - t0
+          });
+          rep.upd_b_text_applied += textLayers;
+          const gA = geomsA[r];
+          if (gA) {
+            const { delta: dR, mismatches: mR, samples: sR } = geomDiff(gA, geom);
+            rep.upd_geom_rounds.push({ round: r, delta: dR, mismatches: mR, samples: sR });
+            if (!rep.upd_first_mismatch && mR > 0) {
+              rep.upd_first_mismatch = { round: r, delta: dR };
+            }
+          }
+        }
+        rep.upd_rounds = updB.length;
+        rep.upd_b = updB;
+        let umax = 0;
+        let umism = 0;
+        let usamples = 0;
+        for (const g of rep.upd_geom_rounds) {
+          if (g.delta > umax) umax = g.delta;
+          umism += g.mismatches;
+          usamples += g.samples;
+        }
+        rep.upd_samples = usamples;
+        rep.upd_max_delta = Math.round(umax * 1e3) / 1e3;
+        rep.upd_mismatches = umism;
+      }
+      rep.upd_a = updA;
       rep.ok = true;
       notes.push(`A \u8DEF ${rep.cost_a.total_ms.toFixed(1)}ms\uFF08\u5B9E\u4F8B\u5316 ${rep.cost_a.instantiate_ms} + \u5BBF\u4E3B ${rep.cost_a.host_ms}\uFF09`);
       notes.push(`B \u8DEF ${rep.cost_b.total_ms.toFixed(1)}ms\uFF08Vue mount ${rep.cost_b.vue_ms} + \u8BF7\u6C42 ${rep.cost_b.request_ms} + \u5E8F\u5217\u5316 ${rep.cost_b.serialize_ms} + \u5BBF\u4E3B ${rep.cost_b.host_ms}\uFF09`);
@@ -11613,6 +11773,30 @@
     } catch {
     }
     return out;
+  }
+  function maxGeomDelta(a, b) {
+    let m = 0;
+    const n = Math.min(a.length, b.length);
+    for (let i = 0; i < n; i++) {
+      const x = a[i];
+      const y = b[i];
+      const d = Math.max(Math.abs(x.x - y.x), Math.abs(x.y - y.y), Math.abs(x.width - y.width), Math.abs(x.height - y.height));
+      if (d > m) m = d;
+    }
+    return Math.round(m * 1e3) / 1e3;
+  }
+  function geomDiff(a, b) {
+    const n = Math.min(a.length, b.length);
+    let delta = 0;
+    let mismatches = 0;
+    for (let i = 0; i < n; i++) {
+      const x = a[i];
+      const y = b[i];
+      const d = Math.max(Math.abs(x.x - y.x), Math.abs(x.y - y.y), Math.abs(x.width - y.width), Math.abs(x.height - y.height));
+      if (d > delta) delta = d;
+      if (d > 0.01) mismatches++;
+    }
+    return { delta: Math.round(delta * 1e3) / 1e3, mismatches, samples: n };
   }
   function probeChannelsFor(ids) {
     try {

@@ -315,9 +315,161 @@ final class VaporRenderHost {
             // ★字段名对着内核回执核过（内核回的是 `relayout_count`——首版读 `relayout` ⇒ 恒 -1，
             //   读数静默失效。本仓纪律：判据/读数取数要对实现核一遍。）
             out.put("relayout", uo.optInt("relayout_count", -1));
+            // ★★内核拒收明细必须**透传**（取证纪律：取证盲区会把"指令被拒"伪装成"指令生效"）
+            //   内核 `unsupported` = 逐条指令的拒收原因（keyId 越界 / 节点不在树上 / LIST_UPDATE 需映射…）。
+            //   宿主此前不读它 ⇒ 判据只能看到 applied/changed 数字，看不到"这条根本没执行"。
+            JSONArray unsupported = uo.optJSONArray("unsupported");
+            if (unsupported != null && unsupported.length() > 0) {
+                out.put("unsupported", unsupported);
+            }
             out.put("layout_ms", round3(layoutMs));
             out.put("measure_ms", round3(measureMs));
             out.put("emit_cmds_ms", round3(emitMs));
+            if (changed != null) out.put("rects", changed);
+            return out.toString();
+        } catch (Throwable t) {
+            return err(out, t.getClass().getSimpleName() + ": " + t.getMessage()).toString();
+        }
+    }
+
+    /** `updatePatches` 调用次数（判据读它确认 B 路补丁真的过了宿主——不是只看 JS 侧自报） */
+    int updatePatchCalls = 0;
+
+    /**
+     * ★★★**样式/文本增量补丁**（2026-10-01 · 更新路径 A/B）：**Vue 运行时路（B）的宿主入口**。
+     *
+     * 【它补的缺口】A 路（Vapor）的更新走二进制指令流（`applyOps`）；B 路（Vue 运行时）的
+     *   适配器产出 `[{id, style}]` 形态的**样式补丁**（`takePatches()`）——此前宿主没有这个端口
+     *   ⇒ B 路的更新**发不出来**（`entry-vapor.ts` 头注如实写着"属后续批次"）。本方法是那条链的落点。
+     *
+     * 【与 applyOps 的分工（同一个内核入口，两种形态）】
+     *   · `applyOps`：**二进制**指令流（A 路；订阅表的紧凑编码——顺序读 + 定长字段）；
+     *   · `updatePatches`：**JSON 补丁**（B 路；适配器直出）→ `RustLayout.update`（形状 `{id, style}`）。
+     *   二者最终都落到"核心重排 → 只回变化集 → 增量更新绘制指令"，**同一条下游**（一处实现）。
+     *
+     * 【与 iOS `selfdraw-scene.updatePatches` 逐条对齐（本仓纪律：两端同构）】
+     *   · 文本补丁要先**重度量再注入**（`{id, style:{text}}`——文本在 style 内，与 Rust `StylePatch`
+     *     三处同形状）：核心的度量器按 nodeId 查快照，漏掉这步 ⇒ 按旧尺寸算几何（字被裁），
+     *     **且没有任何报错**（iOS 侧实测过同款静默形状分叉）。
+     *   · 返回读数与 iOS 同名同义：`applied` / `relayout_count` / `changed_rects` / `text_layers_applied`。
+     */
+    public String updatePatches(String patchesJson) {
+        updatePatchCalls++;
+        long t0 = System.nanoTime();
+        JSONObject out = new JSONObject();
+        try {
+            if (handle == 0L) return err(out, "尚未 mount（补丁无树可改）").toString();
+            JSONArray patches = new JSONArray(patchesJson);
+            if (patches.length() == 0) {
+                out.put("ok", true);
+                out.put("applied", 0);
+                out.put("changed_rects", 0);
+                return out.toString();
+            }
+            JSONArray corePatches = new JSONArray();
+            int applied = 0;
+            /** 改过文本的 id（重度量 + 文本落层两处都要） */
+            java.util.List<Integer> textIds = new java.util.ArrayList<>();
+            int paintOnly = 0;
+            for (int i = 0; i < patches.length(); i++) {
+                JSONObject p = patches.getJSONObject(i);
+                int id = p.getInt("id");
+                JSONObject style = p.optJSONObject("style");
+                if (style == null) continue;
+                Integer idx = indexById.get(id);
+                if (idx == null) continue;
+                JSONObject spec = specs.get(idx);
+                // ① 合并进 spec：几何键 + 文本进核心补丁；绘制键只留 spec（绘制用，核心不认）
+                JSONObject coreStyle = new JSONObject();
+                boolean hasGeometryKey = false;
+                for (java.util.Iterator<String> it = style.keys(); it.hasNext(); ) {
+                    String k = it.next();
+                    Object v = style.get(k);
+                    spec.put(k, v);
+                    if ("text".equals(k)) {
+                        coreStyle.put(k, v);
+                        textIds.add(id);
+                        hasGeometryKey = true;
+                    } else if (LAYOUT_KEYS.contains(k)) {
+                        coreStyle.put(k, v);
+                        hasGeometryKey = true;
+                    }
+                }
+                if (hasGeometryKey) {
+                    JSONObject cp = new JSONObject();
+                    cp.put("id", id);
+                    cp.put("style", coreStyle);
+                    corePatches.put(cp);
+                    applied++;
+                } else {
+                    paintOnly++;
+                }
+            }
+            // ② 文本先重度量（顺序不可反：核心的度量器是快照——见 iOS updatePatches 同款注释）
+            double measureMs = remeasureChanged();
+            // ③ 核心增量重排（只发改动节点——不重发整树）。无几何键 ⇒ 不必进核心（如只改颜色）
+            double layoutMs = 0;
+            JSONObject changed = null;
+            int relayout = -1;
+            if (corePatches.length() > 0) {
+                long tl = System.nanoTime();
+                String upd = RustLayout.update(handle, corePatches.toString());
+                layoutMs = (System.nanoTime() - tl) / 1e6;
+                JSONObject uo = new JSONObject(upd);
+                if (!uo.optBoolean("ok")) {
+                    out.put("ok", false);
+                    out.put("error", uo.optString("error", "update 失败"));
+                    return out.toString();
+                }
+                changed = uo.optJSONObject("rects");
+                relayout = uo.optInt("relayout_count", -1);
+                lastApplied = uo.optInt("applied", -1);
+                lastChangedNodes = changed != null ? changed.length() : 0;
+                // ★★内核拒收明细透传（同 applyOps：取证盲区会把"补丁被拒"伪装成"补丁生效"）
+                JSONArray unsupported2 = uo.optJSONArray("unsupported");
+                if (unsupported2 != null && unsupported2.length() > 0) {
+                    out.put("unsupported", unsupported2);
+                }
+                // ★文本落层（与 applyOps 同一条路；不落层 = 屏幕文字停留旧值——iOS 侧实测）
+                JSONObject tu = uo.optJSONObject("text_updates");
+                if (tu != null && tu.length() > 0) {
+                    for (java.util.Iterator<String> it = tu.keys(); it.hasNext(); ) {
+                        String k = it.next();
+                        String t = tu.optString(k, null);
+                        Integer ix = indexById.get(Integer.parseInt(k));
+                        if (ix == null || t == null) continue;
+                        specs.get(ix).put("text", t);
+                        textSyncedTotal++;
+                        lastTextProbe = "{\"id\":" + k + ",\"text\":" + JSONObject.quote(t) + "}";
+                    }
+                }
+            }
+            // ④ 增量更新绘制指令：几何变化集 + 文本变更（文本改了但几何没动 ⇒ 不在变化集里）
+            long te = System.nanoTime();
+            patchedCmdsFor(changed);
+            int textApplied = 0;
+            for (int id : textIds) {
+                Integer at = cmdIndexById.get(id);
+                Integer idx2 = indexById.get(id);
+                if (at == null || idx2 == null) continue;
+                cmds.set(at, mkCmd(specs.get(idx2), cmds.get(at)));
+                textApplied++;
+            }
+            if (textApplied > 0) pushToView();
+            else if (paintOnly > 0 && corePatches.length() == 0) pushToView(); // 纯绘制补丁也要重绘
+            double emitMs = (System.nanoTime() - te) / 1e6;
+            double totalMs = (System.nanoTime() - t0) / 1e6;
+            out.put("ok", true);
+            out.put("applied", applied);
+            out.put("relayout", relayout);
+            out.put("changed_rects", lastChangedNodes);
+            out.put("measure_ms", round3(measureMs));
+            out.put("layout_ms", round3(layoutMs));
+            out.put("emit_cmds_ms", round3(emitMs));
+            out.put("total_ms", round3(totalMs));
+            out.put("text_layers_applied", textApplied);
+            out.put("text_synced_total", textSyncedTotal);
+            if (lastTextProbe != null) out.put("text_probe", new JSONObject(lastTextProbe));
             if (changed != null) out.put("rects", changed);
             return out.toString();
         } catch (Throwable t) {

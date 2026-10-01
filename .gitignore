@@ -75,3 +75,6 @@ hosts/ios/results/paint-hint-*.log
 # ★炫技场录屏**原片**（ReplayKit 逐帧无损，~40MB）——只是转码中间物；
 #   网页交付物是 website/public/morpheus-showcase.mp4（3MB，见 hosts/ios/make-showcase-video.sh）
 hosts/ios/results/showcase.mp4
+
+# Python 字节码缓存（脚本自测产生；不入库）
+__pycache__/
