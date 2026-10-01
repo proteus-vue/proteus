@@ -215,6 +215,43 @@ def main() -> int:
         else:
             print("  ✓ ⑦ ★绘制通道全部落到宿主真源：" + " · ".join(flat))
 
+    # ── ⑧ ★交互闭环：tap → handler → 数据变 → 订阅 → 指令 → **几何真的变**（2026-10-01）──
+    #   【为什么单独判】这是"能跑真实业务页面"的分水岭：此前只有数据驱动（订阅表改值就能更新），
+    #     而"用户点了没反应"在数据驱动视角下**完全看不出来**（链路本身是通的）。
+    #     判据要打在：命中节点正确 / handler 真的跑了（数据变了）/ 几何（内核真源）真的跟着变。
+    ev_b = rep.get("ev_bindings", 0)
+    ev_h = rep.get("ev_handlers", 0)
+    taps = rep.get("taps", 0)
+    evd = rep.get("tap_evidence") or []
+    if ev_b < 1 or ev_h < 1:
+        fail(f"编译产物里的交互缺失：事件绑定 {ev_b} · handler {ev_h}（夹具应有各 ≥1——'点不动'的根因）")
+        ok = False
+    elif taps < 1:
+        fail(f"注入的 tap 不足：{taps}（应 ≥1）")
+        ok = False
+    elif not evd or any((e.get("hit", -1) < 0) for e in evd):
+        fail(f"tap 没有命中任何节点（hitTest 链断了？）：{evd}")
+        ok = False
+    elif any(not e.get("handler") for e in evd):
+        fail(f"命中节点上没有跑起 handler：{evd}")
+        ok = False
+    elif any(not e.get("source_after") for e in evd):
+        fail(f"handler 跑了但**数据没变**：{evd}")
+        ok = False
+    elif any(len(e.get("geom_diff_ids") or []) == 0 for e in evd):
+        # ★最强的一条：**内核几何真源**在 tap 前后真的变了吗（"点一下屏幕真的变了"）
+        #   ——数据变了但几何没变 = 链路某环断了（订阅没触发 / 指令没下发 / 内核没重排）
+        fail(f"tap 前后**内核几何没变**：{[e.get('geom_diff_ids') for e in evd]}"
+             f"—— 数据变了但屏幕没变（订阅/指令/重排哪一环断了）")
+        ok = False
+    else:
+        detail = " · ".join(
+            f"tap{e['tap']}→节点{e['hit']}（{e['handler']}）源变 {e['source_after']} · "
+            f"内核几何变 {len(e.get('geom_diff_ids') or [])} 节点 {e.get('geom_diff_ids')}"
+            for e in evd
+        )
+        print(f"  ✓ ⑧ ★交互闭环跑通（tap → handler → 数据变 → **几何变**）：{detail}")
+
     # 附加观测（不判红，只如实报）
     una = rep.get("uninstantiated_slots", 0)
     if una:

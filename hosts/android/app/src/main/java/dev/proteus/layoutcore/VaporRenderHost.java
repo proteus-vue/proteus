@@ -97,12 +97,49 @@ final class VaporRenderHost {
     /** 顶部签名（mount 时采；`capture` 帧对比——"滚动真的动了 / 回顶恒等"的像素证据） */
     private int[] sigTop = null;
 
-    /** 一条指令 + 它的节点序（组装时按节点序排序 ⇒ 绘制顺序 = 树序，与既有一致） */
+    /* ── ★★交互闭环（2026-10-01）：事件 → 回调 → 改数据 → 订阅触发 → 指令 → 内核 ── */
+
+    /** 命中回调（JS 侧注册：`proteusHost.onGesture` 的转发目标）——由 JNI 桥注入 */
+    interface GestureSink {
+        void onGesture(String type, int targetId);
+    }
+    private GestureSink gestureSink;
+    /** 读数：累计分发的语义手势数（判据"事件真的到了宿主"的机器证据） */
+    int gestureDispatched = 0;
+    /** 最近一次手势（探针：`{type,target}`——判据读它确认"点在了哪个节点上"） */
+    String lastGestureProbe = null;
+
+    void setGestureSink(GestureSink sink) {
+        this.gestureSink = sink;
+        if (view != null) attachGestureListener();
+    }
+
+    /**
+     * ★★把手势接到**命中链**上：`ProteusHostView.onTouchEvent` 已在 DOWN 时刻用内核
+     *   `hitTest` 定下目标节点（`gestureTarget`）⇒ 这里只消费语义手势 + 目标 id，
+     *   转发给 JS 侧执行 handler。**宿主不做任何"哪个节点响应了"的判断**（那是内核的活）。
+     */
+    private void attachGestureListener() {
+        if (view == null) return;
+        view.setGestureListener(new ProteusHostView.GestureListener() {
+            @Override
+            public void onGesture(String type, int targetId, int[] chain, float x, float y, android.os.Bundle extra) {
+                if (!"tap".equals(type) && !"longpress".equals(type)) return;
+                gestureDispatched++;
+                lastGestureProbe = "{\"type\":" + JSONObject.quote(type) + ",\"target\":" + targetId + "}";
+                if (gestureSink != null) gestureSink.onGesture(type, targetId);
+            }
+        });
+    }
+
+    /** 一条指令 + 它的节点序与节点 id（组装时按节点序排序 ⇒ 绘制顺序 = 树序，与既有一致） */
     private static final class NodeCmd {
         final int nodeIdx;
+        final int nodeId;
         final ProteusHostView.Cmd cmd;
-        NodeCmd(int nodeIdx, ProteusHostView.Cmd cmd) {
+        NodeCmd(int nodeIdx, int nodeId, ProteusHostView.Cmd cmd) {
             this.nodeIdx = nodeIdx;
+            this.nodeId = nodeId;
             this.cmd = cmd;
         }
     }
@@ -166,6 +203,14 @@ final class VaporRenderHost {
             handle = RustLayout.create(request.toString());
             double layoutMs = (System.nanoTime() - tc) / 1e6;
             if (handle <= 0) return err(out, "核心建树失败（handle=0）").toString();
+            // ★★**把句柄接给视图**（2026-10-01 交互闭环实测抓出）：
+            //   视图的命中测试（`dispatchHit`）走 `RustLayout.hitTest(coreHandle, …)`——
+            //   而 **`coreHandle` 是视图自持的字段**，只有 `attachCore(handle)` 才会设上。
+            //   本类此前从未调用 ⇒ `coreHandle=0` ⇒ **命中恒返回 -1** ⇒ 点哪儿都没反应。
+            //   ★症状极具迷惑性：手势识别正常上报（logcat 有 tap）、`cmds`/`id 表` 也都对，
+            //     唯独"目标节点"恒空——查了三轮才定位到"少了这根线"。
+            //   ★句柄每次重建都变（destroy→create）⇒ 每次建树后都要重新接。
+            view.attachCore(handle);
 
             // ④ 节点级绘制状态统一注入（一次遍历；C2 描边/C1 裁剪/原点）→ 几何 → 指令 → 上屏
             injectAllNodeState();
@@ -324,6 +369,51 @@ final class VaporRenderHost {
         }
     }
 
+    /** ★★交互探针（判据用）：手势真的到了宿主吗 / 点在了哪个节点上 */
+    public String probeGesture() {
+        JSONObject o = new JSONObject();
+        try {
+            o.put("ok", true);
+            o.put("dispatched", gestureDispatched);
+            o.put("last", lastGestureProbe != null ? new JSONObject(lastGestureProbe) : JSONObject.NULL);
+        } catch (Throwable ignored) {
+        }
+        return o.toString();
+    }
+
+    /**
+     * ★★**进程内注入一次 tap**（判据用；与 M6b / 长卷同一先例）——
+     * 真机 `adb shell input tap` 需 INJECT_EVENTS 权限（**静默失败**，本仓已实测多次），
+     * 故由宿主自己 `dispatchTouchEvent` 注入真 MotionEvent：走完整 `GestureDetector` →
+     * `hitTest` → 语义手势 → 回调链，与真实触摸**同一条代码路径**。
+     */
+    public String tapAt(String argsJson) {
+        JSONObject out = new JSONObject();
+        try {
+            if (view == null) return err(out, "视图未建").toString();
+            JSONObject a = new JSONObject(argsJson);
+            final float x = (float) a.optDouble("x", 0);
+            final float y = (float) a.optDouble("y", 0);
+            long t0 = android.os.SystemClock.uptimeMillis();
+            android.view.MotionEvent down = android.view.MotionEvent.obtain(t0, t0,
+                    android.view.MotionEvent.ACTION_DOWN, x, y, 0);
+            view.dispatchTouchEvent(down);
+            down.recycle();
+            android.view.MotionEvent up = android.view.MotionEvent.obtain(t0, t0 + 40,
+                    android.view.MotionEvent.ACTION_UP, x, y, 0);
+            view.dispatchTouchEvent(up);
+            up.recycle();
+            out.put("ok", true);
+            out.put("x", x);
+            out.put("y", y);
+            out.put("dispatched", gestureDispatched);
+            out.put("last", lastGestureProbe != null ? new JSONObject(lastGestureProbe) : JSONObject.NULL);
+            return out.toString();
+        } catch (Throwable t) {
+            return err(out, t.getClass().getSimpleName() + ": " + t.getMessage()).toString();
+        }
+    }
+
     /** 几何真源（判据用）：直接读内核（`{"ok":true,"rects":{id:{x,y,width,height}}}`） */
     public String readRects() {
         if (handle == 0L) return "{\"ok\":false,\"error\":\"尚未 mount\"}";
@@ -399,6 +489,7 @@ final class VaporRenderHost {
             handle = RustLayout.create(request.toString());
             double layoutMs = (System.nanoTime() - tc) / 1e6;
             if (handle <= 0) return err(out, "核心建树失败（handle=0）").toString();
+            view.attachCore(handle);   // ★句柄每次重建都变 ⇒ 每次都要接（见 mount 的同款注释）
 
             // ④ 几何全量读一次（物化行时要用；与可见性无关）
             JSONObject rectsAll = new JSONObject(RustLayout.readRects(handle)).getJSONObject("rects");
@@ -446,7 +537,7 @@ final class VaporRenderHost {
                 if (rowNodeIds.contains(id)) continue;
                 JSONObject rc = vRects.get(id);
                 if (rc == null) continue; // 无盒（display:none）——不产生指令
-                staticCmds.add(new NodeCmd(i, mkCmd(specs.get(i), rc)));
+                staticCmds.add(new NodeCmd(i, specs.get(i).getInt("id"), mkCmd(specs.get(i), rc)));
             }
 
             // ⑧ 首帧：可见区 → 核心决策 → 物化（含预载区）
@@ -584,7 +675,7 @@ final class VaporRenderHost {
             if (idx == null) continue;
             JSONObject rc = vRects.get(id);
             if (rc == null) continue;
-            list.add(new NodeCmd(idx, mkCmd(specs.get(idx), rc)));
+            list.add(new NodeCmd(idx, id, mkCmd(specs.get(idx), rc)));
         }
         rowCmds.put(r, list);
         builtTotal++;
@@ -600,9 +691,13 @@ final class VaporRenderHost {
         }
         all.sort((a, b) -> Integer.compare(a.nodeIdx, b.nodeIdx));
         List<ProteusHostView.Cmd> outCmds = new ArrayList<>(all.size());
-        for (NodeCmd nc : all) outCmds.add(nc.cmd);
         cmds.clear();
-        cmds.addAll(outCmds);
+        cmdIdsOf.clear();
+        for (NodeCmd nc : all) {
+            outCmds.add(nc.cmd);
+            cmds.add(nc.cmd);
+            cmdIdsOf.add(nc.nodeId);
+        }
         lastCmdCount = cmds.size();
         pushToView();
     }
@@ -844,6 +939,7 @@ final class VaporRenderHost {
     private void emitAll() throws Exception {
         JSONObject rects = new JSONObject(RustLayout.readRects(handle)).getJSONObject("rects");
         cmds.clear();
+        cmdIdsOf.clear();
         cmdIndexById.clear();
         for (int i = 0; i < specs.size(); i++) {
             JSONObject spec = specs.get(i);
@@ -852,6 +948,7 @@ final class VaporRenderHost {
             if (r == null) continue; // 无盒（display:none）——不产生指令（本仓实测的语义）
             cmdIndexById.put(id, cmds.size());
             cmds.add(mkCmd(spec, r));
+            cmdIdsOf.add(id);
         }
         lastCmdCount = cmds.size();
         pushToView();
@@ -875,15 +972,40 @@ final class VaporRenderHost {
         pushToView();
     }
 
+    /**
+     * 上屏：指令 + **并行节点 id 表**。
+     *
+     * ★★**为什么 id 表必须设**（2026-10-01 交互闭环实测抓出）：`ProteusHostView` 的命中测试
+     *   走 `dispatchHit` → 内核 `hitTest`（它按**节点树**算）+ `cmdNodeIds`（把命中节点映回
+     *   指令）。只设 `cmds` 不设 id 表 ⇒ 命中链断 ⇒ `gestureTarget = -1` ⇒ **点哪儿都没反应**。
+     *   ★症状极具迷惑性：手势识别**正常上报**（logcat 有 `tap`），只是目标恒为 -1。
+     */
     private void pushToView() {
+        pushToView(null);
+    }
+
+    private void pushToView(int[] ids) {
         if (view == null) return;
         view.setCmds(cmds);
+        if (ids != null) {
+            view.setCmdNodeIds(ids);
+        } else if (cmdIdsOf != null && cmdIdsOf.size() == cmds.size()) {
+            // 组装时记录了并行 id 表（虚拟化路径 / 全量路径都记）
+            int[] a = new int[cmdIdsOf.size()];
+            for (int i = 0; i < a.length; i++) a[i] = cmdIdsOf.get(i);
+            view.setCmdNodeIds(a);
+        }
         view.invalidate();
     }
+
+    /** 与 `cmds` **逐条并行**的节点 id（每次重建指令时一起重建——顺序即绘制顺序） */
+    private final List<Integer> cmdIdsOf = new ArrayList<>();
 
     private void ensureView() {
         if (view != null) return;
         view = new ProteusHostView(ctx);
+        // ★交互闭环：视图建好即接手势（setGestureSink 可能先于 ensureView 发生）
+        attachGestureListener();
         android.widget.FrameLayout.LayoutParams lp = new android.widget.FrameLayout.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT);
         view.setLayoutParams(lp);

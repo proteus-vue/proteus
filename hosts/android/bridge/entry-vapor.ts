@@ -37,7 +37,7 @@
 //
 // 【产物】hosts/android/bridge/dist/bundle-vapor.js（IIFE，QuickJS 直接 eval）
 // 【调用】Java：`__proteusVaporRun(argsJson)`（见 MainActivity 的 `vapor` 通路）
-import { instantiateTemplate, ListRegistry, PropKeyTable, StringPool, SlotRuntime, VaporRuntime } from '@proteus-vue/slot-runtime'
+import { instantiateTemplate, ListRegistry, PropKeyTable, StringPool, SlotRuntime, VaporRuntime, evalExpr } from '@proteus-vue/slot-runtime'
 import type { LayoutTemplate, SubscriptionTable } from '@proteus-vue/slot-runtime'
 
 /* ══════════════════ 宿主桥（Java 经 JNI 注入；与 JsRenderHost 的三个入口同形） ══════════════════ */
@@ -51,6 +51,17 @@ interface VaporHost {
   readRects(): string
   /** ★★绘制通道探针（读**宿主真源**：渐变/发光/遮罩/圆角/裁剪/描边建出来了没） */
   probeChannels(idsJson: string): string
+  /**
+   * ★★**注册手势回调**（交互闭环的反向通道：**宿主 → JS**）——传函数名，JS 侧注册后由
+   *   宿主在"语义手势 + 命中节点"时回调 `__proteusVaporGesture(type, nodeId)`。
+   *   ★与其余入口的差别：那些是 JS→Java（同步取返回值）；这条是 Java→JS（宿主驱动），
+   *     故用**注册函数名 + 全局回调**的形态（QuickJS 侧唯一可行的同步反向调用）。
+   */
+  onGesture?(jsCallbackName: string): string
+  /** ★进程内注入一次 tap（判据驱动；真机 `adb input tap` 无权限——见宿主注释） */
+  tapAt?(argsJson: string): string
+  /** 手势探针（判据：手势真的到宿主了吗 / 点在哪） */
+  probeGesture?(): string
   /** ★★**虚拟化挂载**（长列表：整树在内核、宿主只物化可见区）——`{viewport,nodes,rows}` */
   mountVirtual(treeJson: string): string
   /** ★★虚拟化滚动一帧：`{dy, capture}` → 核心给决策、宿主执行动作 */
@@ -152,6 +163,25 @@ interface VaporReport {
   geom_probe: Array<{ id: number; before: number; after: number }>
   /** ★★绘制通道探针（逐通道：读宿主真源，不是复述我们发下去的参数） */
   channels: Array<Record<string, unknown>>
+  /* ── ★★交互闭环（2026-10-01）：事件 → 回调 → 改数据 → 订阅 → 指令 → 内核 ── */
+  /** 编译产物里的事件绑定数 / handler 数 */
+  ev_bindings: number
+  ev_handlers: number
+  /** 注入的 tap 次数（本判据夹具体验：点"计数按钮"与"宽度按钮"各一次） */
+  taps: number
+  /** 每次 tap 的逐帧读数：命中节点 / handler 跑了吗 / 源变化 / 内核变更集 / 几何真值 */
+  tap_evidence: Array<{
+    tap: number
+    hit: number
+    handler: string
+    source_after: unknown
+    ops: number
+    changed_rects: number
+    geom_before: number
+    geom_after: number
+    /** ★tap 前后**内核几何真源**里真的变了的节点 id（"点一下屏幕真的变了"的证据） */
+    geom_diff_ids: number[]
+  }>
   // —— 观测 ——
   uninstantiated_slots: number
   notes: string[]
@@ -161,6 +191,10 @@ interface VaporReport {
 function makeData(rows: number): Record<string, unknown> {
   return {
     list: Array.from({ length: rows }, (_, i) => ({ id: i + 1, w: 40 + (i % 5) * 12, title: `row ${i + 1}` })),
+    // ★与夹具 script 的 `ref(120)` 一致：**初始数据必须给全**，否则 `:width="boxW"` 首帧是 0，
+    //   tap 后变 30 的"对比基线"是零宽（几何差异虽真但语义不清——数据与声明要对齐）
+    boxW: 120,
+    tapCount: 0,
   }
 }
 
@@ -306,6 +340,7 @@ function runShort(args: VaporArgs): string {
     inst_values_filled: 0, inst_virtual_rows: 0, inst_text_filled: 0, inst_width_filled: 0,
     mount_ms: 0, mount_nodes: 0,
     updates_run: 0, ops_bytes: 0, ops_ms: 0, apply_ms: 0, text_synced_total: 0, update_evidence: [], geom_probe: [], channels: [],
+    ev_bindings: 0, ev_handlers: 0, taps: 0, tap_evidence: [],
     uninstantiated_slots: 0, notes,
   }
   try {
@@ -382,6 +417,94 @@ function runShort(args: VaporArgs): string {
     captured.length = 0    // ★丢掉首帧指令：初始值已由 instantiateTemplate 回填进树
     rep.uninstantiated_slots = vapor.uninstantiatedSlots.length
 
+    /* ═══════════════ ★★交互闭环（2026-10-01）═══════════════
+     *
+     * 链路：宿主 tap → hitTest 命中节点 → `GestureListener` → JNI 反向回调
+     *       → 本函数（`__proteusVaporGesture`）→ 跑 handler（改数据）→ 触发订阅
+     *       → 二进制指令 → 内核重排 → 几何真的变。
+     *
+     * 【为什么 handler 是"动作列表"而不是代码】见 `compileEvents` 头注：模板里的赋值/自增
+     *   是**语句**（表达式编译器明确拒绝赋值），编译成 `{op:'set'|'add', source, program}`
+     *   之后设备端只做**执行**（`evalExpr` 求值 + 写数据）——无 eval、无字符串解析。
+     */
+    const handlers = (artifacts as unknown as { handlers?: Record<string, Array<{ op: string; source: string; program: unknown }>> }).handlers ?? {}
+    const events = (artifacts as unknown as { events?: Array<{ nodeId: number; event: string; handler: string }> }).events ?? []
+    rep.ev_bindings = events.length
+    rep.ev_handlers = Object.keys(handlers).length
+
+    // 节点 → (事件 → handler)：宿主回来的 `(type, nodeId)` 据此找到该跑哪个 handler
+    const byNodeEvent = new Map<string, string>()
+    for (const e of events) byNodeEvent.set(`${e.nodeId}:${e.event}`, e.handler)
+
+    /** 跑一个 handler：按序执行动作（先算后写 ⇒ 顺序语义保留） */
+    const runHandler = (name: string): boolean => {
+      const acts = handlers[name]
+      if (!acts) return false
+      for (const a of acts) {
+        const ctx2 = { read: (n: string) => data[n] }
+        const v = evalExpr(a.program as never, ctx2 as never)
+        const cur = data[a.source]
+        if (a.op === 'set') {
+          data[a.source] = v
+        } else {
+          // add：数值累加（非数以 0 起——与 JS 的 `+` 语义不同，这里刻意收窄到数值：见 compileEvents 的形态说明）
+          const base = typeof cur === 'number' && Number.isFinite(cur) ? cur : 0
+          const delta = typeof v === 'number' && Number.isFinite(v) ? v : 0
+          data[a.source] = base + delta
+        }
+      }
+      return true
+    }
+
+    /**
+     * ★★**手势回调**（宿主 → JS 的反向通道）：注册到全局供 JNI 调用。
+     * 返回本帧变化读数（指令字节数 + 源变化后的值），供宿主/判据记账。
+     */
+    const gestureHits: Array<{ tap: number; hit: number; handler: string; source_after: unknown }> = []
+    ;(globalThis as unknown as Record<string, unknown>).__proteusVaporGesture = (type: string, nodeId: number): string => {
+      const handler = byNodeEvent.get(`${nodeId}:${type}`) ?? byNodeEvent.get(`${nodeId}:tap`) ?? ''
+      if (!handler) return JSON.stringify({ ok: false, reason: `节点 ${nodeId} 上没有 ${type} 的 handler` })
+      const before = { ...data }
+      const ran = runHandler(handler)
+      // 触发订阅（源变化 → 按行/标量 diff → 二进制指令）
+      const fire = triggers.get('list')
+      // 本夹具的 tap 源（tapCount / boxW）不在 `list`，故**全源 relink**（参考实现形态：
+      //   生产可按下标订源——`relink` 是"全量重算 + diff"，正确性优先）
+      if (fire) fire()
+      vapor.relink(ctx)
+      slotRt.flush()
+      const payload = captured.length ? captured[captured.length - 1]! : new Uint8Array(0)
+      const changedSources: Record<string, unknown> = {}
+      for (const k of Object.keys(data)) {
+        if (before[k] !== data[k]) changedSources[k] = data[k]
+      }
+      // ★★**把指令真的发给内核**并读回执（2026-10-01 修正：此前只报 JS 侧字节数 = 弱证据，
+      //   而"数据变了屏幕没变"正是弱证据掩盖的形态——宿主回执才有 applied/relayout/changed）
+      let applied = -1
+      let relayout = -1
+      let changedN = 0
+      if (payload.length > 0) {
+        try {
+          const ao = JSON.parse(proteusHost.applyOps(JSON.stringify(Array.from(payload)))) as {
+            ok?: boolean; applied?: number; relayout_count?: number; rects?: Record<string, unknown>; error?: string
+          }
+          applied = ao.ok ? (ao.applied ?? -1) : -2
+          relayout = ao.relayout_count ?? -1
+          changedN = ao.rects ? Object.keys(ao.rects).length : 0
+        } catch {
+          applied = -3
+        }
+      }
+      gestureHits.push({ tap: gestureHits.length + 1, hit: nodeId, handler, source_after: changedSources })
+      return JSON.stringify({
+        ok: ran, handler, changed: changedSources, ops: payload.length,
+        applied, relayout, changed_rects: changedN,
+      })
+    }
+    if (typeof proteusHost.onGesture === 'function') {
+      proteusHost.onGesture('__proteusVaporGesture')
+    }
+
     // 几何真值探针：挑**第 2 行**的宽度槽位节点（首行是模板 id，命中它证明不了什么）
     const itemSlots = table.sources.flatMap((s2) => s2.slots).filter((x) => x.kind === 'list-item')
     const widthSlot = itemSlots.find((x) => x.propKey === 'layout.width')
@@ -445,6 +568,87 @@ function runShort(args: VaporArgs): string {
       rep.updates_run++
     }
     rep.update_evidence = evidence
+
+    /* ═══════════════ ★★交互闭环：注入 tap → 跑 handler → 几何真值对比 ═══════════════ */
+    //
+    // 【为什么由宿主注入 tap（不是 `adb shell input tap`）】真机 `input` 需 INJECT_EVENTS
+    //   权限（本仓实测多次静默失败）⇒ 宿主 `dispatchTouchEvent` 注入真 MotionEvent，
+    //   走完整 GestureDetector → hitTest → 语义手势 → 回调链（与真实触摸同一条路）。
+    //
+    // 【夹具体的按钮几何】宿主按**内核真值**取按钮节点的 rect（判据侧不在 JS 里算坐标——
+    //   "几何只在核心里算"的纪律）。
+    const tapButtons = events.filter((e) => e.event === 'tap')
+    if (typeof proteusHost.tapAt === 'function' && tapButtons.length > 0) {
+      for (const btn of tapButtons) {
+        const rAll = JSON.parse(proteusHost.readRects()) as { rects?: Record<string, { x: number; y: number; width: number; height: number }> }
+        const r = rAll.rects?.[String(btn.nodeId)]
+        if (!r) continue
+        const cx = r.x + r.width / 2
+        const cy = r.y + r.height / 2
+        // ① 点前：本次 handler 关心的源 + 全部几何签名（真值）
+        const before = { ...data }
+        const geomBefore = r.height  // 按钮自身高度（tap 不改它；用**被改节点的几何**更有意义）
+        // ①b 采集"改前"的内核几何全表（逐 id —— 与改后比"哪几个节点真的动了"）
+        let rectsBeforeTap: Record<string, { x: number; y: number; width: number; height: number }> = {}
+        try {
+          const rb = JSON.parse(proteusHost.readRects()) as { rects?: Record<string, { x: number; y: number; width: number; height: number }> }
+          rectsBeforeTap = rb.rects ?? {}
+        } catch {
+          /* 缺读数 ⇒ 下面按 0 差异判（判据会红） */
+        }
+        // ② 注入 tap（宿主机内 → 命中 → 回调 → handler 已跑完，返回时数据已变）
+        const tapOut = JSON.parse(proteusHost.tapAt(JSON.stringify({ x: cx, y: cy }))) as {
+          ok?: boolean; dispatched?: number; last?: { type?: string; target?: number }
+        }
+        // ★tapAt 是同步的：返回时 JS 回调（handler + applyOps）已跑完——回执在 gestureHits 末条
+        rep.taps++
+        // ③ 本次变化
+        const changedSources: Record<string, unknown> = {}
+        for (const k of Object.keys(data)) if (before[k] !== data[k]) changedSources[k] = data[k]
+        // ④ ★几何真值（内核真源）：**被 handler 改的那个源，对应的节点几何变了吗**
+        //    夹具的两个按钮的 handler 分别改 `tapCount`（文本源）与 `boxW`（宽度源）——
+        //    `boxW` 改的是**行内 :width 绑定**（节点 12 一类），故这里比对"全表矩形签名"
+        //    （改前/改后各读一次内核真源，逐 id 比 width/height/x/y）。
+        let geomChanged = 0
+        let geomAfter = 0
+        let geomDiffIds: number[] = []
+        try {
+          const afterAll = JSON.parse(proteusHost.readRects()) as { rects?: Record<string, { x: number; y: number; width: number; height: number }> }
+          const after = afterAll.rects ?? {}
+          geomAfter = Object.keys(after).length
+          const before = rectsBeforeTap
+          geomDiffIds = Object.keys(after)
+            .filter((k) => {
+              const a = after[k]; const b = before[k]
+              if (!b || !a) return true
+              return a.width !== b.width || a.height !== b.height || a.x !== b.x || a.y !== b.y
+            })
+            .map((k) => Number(k))
+          // ★诊断：把"被点节点自身"的宽度也记下来（判定"几何变的是不是它"）
+          const selfBefore = before[String(btn.nodeId)]?.width
+          const selfAfter = after[String(btn.nodeId)]?.width
+          if (selfBefore !== undefined || selfAfter !== undefined) {
+            notes.push(`tap@${btn.nodeId} 自身宽度 ${selfBefore} → ${selfAfter}` + (geomDiffIds.length === 0 ? '（几何无差异——可疑）' : ''))
+          }
+          geomChanged = geomDiffIds.length
+        } catch {
+          /* 读数失败 ⇒ 判据按缺失判红 */
+        }
+        const lastHit = gestureHits.length > 0 ? gestureHits[gestureHits.length - 1]! : null
+        rep.tap_evidence.push({
+          tap: rep.taps,
+          hit: tapOut.last?.target ?? -1,
+          handler: lastHit?.handler ?? '',
+          source_after: lastHit?.source_after ?? null,
+          ops: tapOut.ok ? 1 : 0,
+          changed_rects: geomChanged,
+          geom_before: geomBefore,
+          geom_after: geomAfter,
+          geom_diff_ids: geomDiffIds,
+        })
+        void changedSources
+      }
+    }
 
     // 几何真值对比（内核真源：探针节点的宽度应随数据变——第 2 行参与每轮更新）
     if (probeId !== undefined) {

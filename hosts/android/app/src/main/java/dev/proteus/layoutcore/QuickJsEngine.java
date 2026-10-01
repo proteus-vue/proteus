@@ -103,6 +103,20 @@ final class QuickJsEngine {
     }
 
     /** 同上，但注入宿主桩 */
+    /**
+     * ★★★**分发手势到 JS**（反向通道：Java → JS；2026-10-01 交互闭环）。
+     *
+     * @return JS 回调的返回串（宿主记账/判据用）；未注册或异常 ⇒ `{"ok":false,…}`
+     * ★**必须在主线程调用**（QuickJS 非线程安全——宿主从 GestureListener 的同一线程调）。
+     */
+    static String dispatchGesture(String type, int nodeId) {
+        if (!loaded) return "{\"ok\":false,\"reason\":\"引擎未加载\"}";
+        String out = nativeDispatchGesture(type, nodeId);
+        return out != null ? out : "{\"ok\":false,\"reason\":\"native 返回 null\"}";
+    }
+
+    static native String nativeDispatchGesture(String type, int nodeId);
+
     static EvalResult evalWithHost(String source, Object host) {
         if (!loaded) return new EvalResult(false, null, "引擎未加载：" + loadError, "{}");
         nativeSetHostCallback(host);

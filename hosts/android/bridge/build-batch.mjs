@@ -211,3 +211,26 @@ console.log(`[android-bundle] ✅ ${path.relative(ROOT, OUT_VAPOR)}（${(bytesVa
 if (resultVapor.warnings.length) {
   for (const w of resultVapor.warnings) console.warn(`  ⚠ ${w.text}`)
 }
+
+// ══════════════════════════════════════════════════════════════════
+// ★★**产物同步到 assets**（2026-10-01 实测抓出的陈旧产物陷阱）
+//
+// 【为什么同步放在这里（而不是只靠 build-and-run.sh）】本脚本有**两个调用方**：
+//   ① `build-and-run.sh`（它会 cp 到 assets）；② 开发者/Agent **直接跑本脚本**（只重编 dist）。
+//   而设备侧读的是 **assets** ⇒ 只跑②时 assets 是旧的、**真机跑旧 bundle**
+//   （实测症状：bundle-vapor.js 里明明有新字段，设备报告里却没有——查了三轮）。
+//   ★纪律（本仓原话）：**生成物必须在构建路径上**——那就意味着"构建产物生成的那一刻"
+//     它就该同步到位，而不是指望调用方记得多做一步。
+for (const [src, dstName] of [
+  [OUT, 'bundle-batch.js'],
+  [OUT_APP_STACK, 'bundle-app-stack.js'],
+  [OUT_HOST_RT, 'bundle-host-runtime.js'],
+  [OUT_LIGHTS, 'bundle-lights.js'],
+  [OUT_VAPOR, 'bundle-vapor.js'],
+]) {
+  if (!fs.existsSync(src)) continue
+  const dst = path.join(ROOT, 'hosts/android/app/src/main/assets', dstName)
+  fs.mkdirSync(path.dirname(dst), { recursive: true })
+  fs.copyFileSync(src, dst)
+}
+console.log('[android-bundle] ✅ 5 个产物已同步到 assets（设备读的是 assets——同步即构建的一部分）')
