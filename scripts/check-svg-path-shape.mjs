@@ -27,15 +27,22 @@ function variantNames() {
   return { names }
 }
 
+// ★★路径变形 v1（2026-10-01）：树里新增 **`svgPathTo`**（B 态）——两端 + 适配器都必须
+//   引用该键名（漏一个 = 该端读不到 B 态 ⇒ 变形动画被内核拒且**静默**）。
+const MORPH_KEY = 'svgPathTo'
 const CONSUMERS = [
   {
-    label: 'iOS 宿主（cgPathFromSegs）',
+    label: 'iOS 宿主（cgPathFromSegs + styleOf 透传）',
     file: 'hosts/ios/ProteusHost/selfdraw-scene.swift',
   },
   {
-    label: 'Android 宿主（setNodeSvgStroke）',
+    label: 'Android 宿主（setNodeSvgStroke + CORE_KEYS）',
     file: 'hosts/android/app/src/main/java/dev/proteus/layoutcore/ProteusHostView.java',
   },
+  // 适配器只透传顶层键（子键由宿主解析）
+  { label: '自绘适配器（LAYOUT_KEYS）', file: 'packages/renderer-app/src/adapters/selfdraw.ts', onlyMorph: true },
+  // Android 节目宿主的 CORE_KEYS 也要带（否则请求树不带 B 态）
+  { label: 'Android 节目宿主（CORE_KEYS）', file: 'hosts/android/app/src/main/java/dev/proteus/layoutcore/LightsHost.java', onlyMorph: true },
 ]
 
 const { names, error } = variantNames()
@@ -54,16 +61,27 @@ for (const c of CONSUMERS) {
     continue
   }
   const src = fs.readFileSync(p, 'utf8')
+  if (c.onlyMorph) {
+    // 只要求 B 态键名（段形态翻译在宿主；适配器/节目宿主只做透传）
+    if (!src.includes(`'${MORPH_KEY}'`) && !src.includes(`"${MORPH_KEY}"`)) {
+      console.error(`  ❌ ${c.label}：缺 ${MORPH_KEY}（透传面）——请求树不带 B 态 ⇒ 变形被拒且静默`)
+      bad++
+    } else {
+      console.log(`  ✅ ${c.label}：含 ${MORPH_KEY}（透传面）`)
+    }
+    continue
+  }
   const missing = names.filter((n) => !src.includes(`"${n}"`))
   const closeOk = src.includes('"Close"')
-  if (missing.length > 0 || !closeOk) {
+  const morphOk = src.includes(`"${MORPH_KEY}"`) || src.includes(`'${MORPH_KEY}'`)
+  if (missing.length > 0 || !closeOk || !morphOk) {
     console.error(
-      `  ❌ ${c.label}：翻译器缺键名 ${missing.join(', ')}${closeOk ? '' : ' + "Close"'}` +
-        '——与内核序列化形态不一致（层会建不出来：真机表现为读不到 path/进度）',
+      `  ❌ ${c.label}：翻译器缺键名 ${missing.join(', ')}${closeOk ? '' : ' + "Close"'}${morphOk ? '' : ` + "${MORPH_KEY}"`}` +
+        '——与内核序列化形态不一致（层会建不出来：真机表现为读不到 path/进度/变形）',
     )
     bad++
   } else {
-    console.log(`  ✅ ${c.label}：翻译器覆盖全部键名（含 "Close"）`)
+    console.log(`  ✅ ${c.label}：翻译器覆盖全部键名（含 "Close" + ${MORPH_KEY}）`)
   }
 }
 

@@ -270,6 +270,17 @@ pub struct LStyle {
     ///   **单一实现**：宿主不做第二份 SVG 解析器，只把段列表翻译成平台 path）
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub svg_path: Option<crate::svg_path::SvgPath>,
+    /// ★★**路径变形的 B 态**（2026-10-01 · 路径变形 v1）：`svgPathTo` 的解析结果。
+    ///   【能力本质】CSS **完全不能做**这件事（`d` 属性不可过渡——网页端要靠 GSAP MorphSVG /
+    ///   flubber 这类库逐点重算）。本引擎把它做进内核：`pathMorph` 通道 0..1 驱动
+    ///   **逐点插值**（`SvgPath::morphed` 是唯一 lerp 实现），宿主只翻译结果。
+    ///   【结构约束】与 `svg_path` 必须**同构**（同命令序列——`structure_signature()` 相同），
+    ///   否则建树时明确拒绝（异型之间插值无定义；不做"猜测对齐"）。
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub svg_path_to: Option<crate::svg_path::SvgPath>,
+    /// ★★**路径变形的当前因子**（0 = 全 A / 1 = 全 B；`pathMorph` 通道写入）
+    #[serde(default)]
+    pub path_morph: f32,
     /// ★★**描边颜色**（打包 `0xAARRGGBB`；0 = 未声明）
     #[serde(default)]
     pub stroke_color: u32,
@@ -393,6 +404,8 @@ impl Default for LStyle {
             grad: None,
             stroke_progress: 0.0,
             svg_path: None,
+            svg_path_to: None,
+            path_morph: 0.0,
             stroke_color: 0,
             stroke_width: 0.0,
             opacity: 1.0,

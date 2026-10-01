@@ -316,6 +316,12 @@ pub enum AnimKind {
     ///   ⇒ 与 `opacity` 同级的标量：曲线/弹簧/序列/循环/接管/播放控制**全部零改动复用**。
     ///   ★CSS 没有这个能力（`background-image` 不可过渡）——见 `style::GradState` 注释。
     GradientMix = 32,
+    /// ★★**路径变形因子**（2026-10-01 · 路径变形 v1）：`0..1` = A 态（`svgPath`）与
+    ///   B 态（`svgPathTo`）的**逐点插值**（每段每个坐标 + 弧长随几何重算）。
+    ///   【与描边进度的关系】两者**正交可同开**：变形改几何、进度沿"当前几何的弧长"画到哪
+    ///   （弧长表随变形重算——见 `SvgPath::morphed`）。
+    ///   ★CSS 完全不能做这件事（`d` 属性不可过渡）——网页端要靠 MorphSVG/flubber 这类库。
+    PathMorph = 33,
 }
 
 impl AnimKind {
@@ -354,6 +360,7 @@ impl AnimKind {
             30 => AnimKind::Clip15,
             31 => AnimKind::StrokeProgress,
             32 => AnimKind::GradientMix,
+            33 => AnimKind::PathMorph,
             other => {
                 return Err(format!(
                     "未知动画属性 kind={other}（0=translateX/1=translateY/2=scale/3=rotate/4=opacity/\
@@ -400,6 +407,7 @@ impl AnimKind {
             | AnimKind::Clip15 => "clip",
             AnimKind::StrokeProgress => "strokeProgress",
             AnimKind::GradientMix => "gradientMix",
+            AnimKind::PathMorph => "pathMorph",
         }
     }
 
@@ -411,6 +419,11 @@ impl AnimKind {
     /// 是否 **渐变混合通道**（渐变 v2，32）
     pub fn is_gradient_mix(self) -> bool {
         matches!(self, AnimKind::GradientMix)
+    }
+
+    /// 是否 **路径变形通道**（路径变形 v1，33）
+    pub fn is_path_morph(self) -> bool {
+        matches!(self, AnimKind::PathMorph)
     }
 
     /// 是否 **clip 形状参数通道**（15..30）——对应槽位 = kind - 15
@@ -506,7 +519,8 @@ impl AnimKind {
             | AnimKind::Clip14
             | AnimKind::Clip15
             | AnimKind::StrokeProgress
-            | AnimKind::GradientMix => 0,
+            | AnimKind::GradientMix
+            | AnimKind::PathMorph => 0,
         }
     }
 
@@ -541,6 +555,8 @@ impl AnimKind {
             AnimKind::StrokeProgress => (0.002, 0.04),
             // ★渐变混合因子同为 0..1 量纲
             AnimKind::GradientMix => (0.002, 0.04),
+            // ★路径变形因子同为 0..1 量纲
+            AnimKind::PathMorph => (0.002, 0.04),
             AnimKind::Opacity => (0.003, 0.06),                         // 1, 1/s
             // ★颜色通道：0.5/255 的通道步 ≈ 视觉不可辨（与 translate 的 0.5px 同量级取法）
             AnimKind::ColorR | AnimKind::ColorG | AnimKind::ColorB | AnimKind::ColorA => (0.5, 10.0),
@@ -600,6 +616,9 @@ impl AnimKind {
             // ★★渐变混合同样非合成（2026-10-01 · v2）：色标是 paint 状态（改 shader/gradient 层
             //   ——与颜色同类）；且 lerp 数学只在**内核**一处（宿主零插值）⇒ 必走 tick。
             AnimKind::GradientMix => false,
+            // ★★路径变形（v1）：改的是**几何**（宿主每帧重建平台 path——与描边同族但更重）
+            //   ⇒ 必走 tick；且 lerp 只在内核一处（宿主只翻译变形后的段列表）。
+            AnimKind::PathMorph => false,
             AnimKind::ColorR
             | AnimKind::ColorG
             | AnimKind::ColorB
@@ -622,6 +641,15 @@ impl AnimKind {
         if let Some(slot) = self.clip_slot() {
             if node.style.clip[slot] != v {
                 node.style.clip[slot] = v;
+                return true;
+            }
+            return false;
+        }
+        // ★★路径变形（v1）：一个标量槽（0..1 钳位——与描边/混合同款"内核只管存"）
+        if self.is_path_morph() {
+            let v = v.clamp(0.0, 1.0);
+            if node.style.path_morph != v {
+                node.style.path_morph = v;
                 return true;
             }
             return false;
@@ -699,6 +727,8 @@ impl AnimKind {
                 AnimKind::StrokeProgress => return false,
                 // 渐变混合走上面的早退分支（见 write 开头）
                 AnimKind::GradientMix => return false,
+                // 路径变形走上面的早退分支（见 write 开头）
+                AnimKind::PathMorph => return false,
                 // 颜色走上面的分支（此处不可达——`is_color` 已分流）
                 AnimKind::ColorR
                 | AnimKind::ColorG
@@ -1040,6 +1070,8 @@ pub fn reset_visuals(tree: &mut LayoutTree, node_ids: &[u32]) -> usize {
             let stroke_dirty = s.svg_path.is_some() && s.stroke_progress != 0.0;
             // ★渐变 v2：混合因子回 0（基态 = 全 A——与"解绑必须含清值"同一义务）
             let grad_dirty = s.grad.as_ref().is_some_and(|g| g.mix != 0.0);
+            // ★路径变形 v1：变形因子回 0（基态 = 全 A）
+            let morph_dirty = s.svg_path_to.is_some() && s.path_morph != 0.0;
             let dirty = s.translate_x != 0.0
                 || s.translate_y != 0.0
                 || s.scale != 1.0
@@ -1050,7 +1082,8 @@ pub fn reset_visuals(tree: &mut LayoutTree, node_ids: &[u32]) -> usize {
                 || color_dirty
                 || clip_dirty
                 || stroke_dirty
-                || grad_dirty;
+                || grad_dirty
+                || morph_dirty;
             if dirty {
                 s.translate_x = 0.0;
                 s.translate_y = 0.0;
@@ -1063,6 +1096,7 @@ pub fn reset_visuals(tree: &mut LayoutTree, node_ids: &[u32]) -> usize {
                 if let Some(g) = s.grad.as_mut() {
                     g.mix = 0.0; // ★渐变 v2：混合因子回 0（全 A）
                 }
+                s.path_morph = 0.0; // ★路径变形 v1：变形因子回 0（全 A）
                 s.opacity = 1.0;
                 // ★复位 = 回底色 / 回原文字色（不是清成 None：那会丢掉"本节点有基色"的事实）
                 s.bg = s.bg_base;
@@ -1235,7 +1269,9 @@ pub fn commit_specs(tree: &LayoutTree, anims: &[Anim]) -> Vec<CommitSpec> {
                     | AnimKind::StrokeProgress
                     // ★渐变混合（v2）：与颜色/裁剪同类——**不可达**（commit 是"五元组平台路径"，
                     //   入口 `anim_commit_spec` 已按 `plan_animations` 整批拒绝非合成属性）。
-                    | AnimKind::GradientMix => {}
+                    // ★路径变形（v1）：同理不可达。
+                    | AnimKind::GradientMix
+                    | AnimKind::PathMorph => {}
                 }
             }
             samples.push(v);
@@ -1280,7 +1316,9 @@ pub fn commit_specs(tree: &LayoutTree, anims: &[Anim]) -> Vec<CommitSpec> {
                     | AnimKind::StrokeProgress
                     // ★渐变混合（v2）：与颜色/裁剪同类——**不可达**（commit 是"五元组平台路径"，
                     //   入口 `anim_commit_spec` 已按 `plan_animations` 整批拒绝非合成属性）。
-                    | AnimKind::GradientMix => {}
+                    // ★路径变形（v1）：同理不可达。
+                    | AnimKind::GradientMix
+                    | AnimKind::PathMorph => {}
                 }
             }
             let n = samples.len();
@@ -1379,6 +1417,10 @@ pub struct NodeVisual {
     ///   · `n`：有效色标数（2..8）
     ///   · `colors`/`offsets`：**已含 `mix` 混合**的 8 槽数组（只用前 n 个）
     pub grad: Option<(u8, u8, [u32; 8], [f32; 8])>,
+    /// ★★**路径变形因子**（路径变形 v1）：`None` = 本节点无 B 态（不可变形）；
+    ///   `Some(t)` = 当前因子（宿主见它变化时向内核要**变形后的段列表**——
+    ///   段是变长数据，不进定长记录；见 FFI `proteus_layout_svg_morph_path`）。
+    pub path_morph: Option<f32>,
 }
 
 /// 一次 tick（或 seek）的结果（供宿主刷新层 / 测试观测）
@@ -1519,6 +1561,30 @@ impl AnimEngine {
         }
         // ★★渐变混合**要求节点声明了 `fillGradient` + `fillGradientTo` 两态**（v2）：
         //   单态渐变没有"混合"可言（缺 B ⇒ 明确拒绝，不静默当 0/1）——与 clip 需要形状同一条纪律。
+        // ★★路径变形**要求节点声明了 svgPath + svgPathTo 两态**（v1）：单态没有"变形"可言。
+        if a.kind.is_path_morph() {
+            let (has_a, has_b) = {
+                let st = &tree.nodes[idx].style;
+                (st.svg_path.is_some(), st.svg_path_to.is_some())
+            };
+            let reason = match (has_a, has_b) {
+                (false, _) => Some((
+                    "没有 SVG 路径（树里未声明 `svgPath`）",
+                    "请先给该节点声明 `svgPath`（A 态）与 `svgPathTo`（B 态）",
+                )),
+                (true, false) => Some((
+                    "只有 A 态（树里未声明 `svgPathTo`）",
+                    "变形需要两态：再声明 `svgPathTo`（与 A **同命令序列**——同段数、同段型）",
+                )),
+                _ => None,
+            };
+            if let Some((what, fix)) = reason {
+                return Err(format!(
+                    "路径变形动画的目标节点 {} {what}——变形需要一个可插值的两态；{fix}，或去掉这条变形动画",
+                    a.node_id
+                ));
+            }
+        }
         if a.kind.is_gradient_mix() {
             let g = tree.nodes[idx].style.grad.as_ref();
             let reason = match g {
@@ -1597,6 +1663,7 @@ impl AnimEngine {
             let clip_dirty = s.clip_kind != 0 && s.clip != s.clip_base;
             let stroke_dirty = s.svg_path.is_some() && s.stroke_progress != 0.0;
             let grad_dirty = s.grad.as_ref().is_some_and(|g| g.mix != 0.0);
+            let morph_dirty = s.svg_path_to.is_some() && s.path_morph != 0.0;
             if s.translate_x != 0.0
                 || s.translate_y != 0.0
                 || s.scale != 1.0
@@ -1608,6 +1675,7 @@ impl AnimEngine {
                 || clip_dirty
                 || stroke_dirty
                 || grad_dirty
+                || morph_dirty
             {
                 s.translate_x = 0.0;
                 s.translate_y = 0.0;
@@ -1620,6 +1688,7 @@ impl AnimEngine {
                 if let Some(g) = s.grad.as_mut() {
                     g.mix = 0.0; // ★渐变 v2：混合因子回 0（全 A）
                 }
+                s.path_morph = 0.0; // ★路径变形 v1：变形因子回 0（全 A）
                 s.opacity = 1.0;
                 s.bg = s.bg_base; // ★颜色回底色 / 回原文字色（见 reset_visuals 注释）
                 s.text_color = s.text_color_base;
@@ -2007,6 +2076,13 @@ impl AnimEngine {
                     let (colors, offsets) = g.mixed();
                     (g.kind, g.n, colors, offsets)
                 }),
+                // ★路径变形 v1：带上当前变形因子（`None` = 本节点无 B 态；宿主据此决定
+                //   是否向内核要"变形后的段列表"——**段本身按需查询**，不进定长记录）。
+                path_morph: if node.style.svg_path_to.is_some() {
+                    Some(node.style.path_morph)
+                } else {
+                    None
+                },
             });
         }
         out

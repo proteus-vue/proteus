@@ -149,6 +149,10 @@ pub(crate) struct NodeDto {
     /// ★★**渐变填充 B 态**（可选）：与 A 同 kind、同色标个数——两态之间由 `gradientMix` 通道混合。
     #[serde(skip_serializing_if = "Option::is_none")]
     pub(crate) fill_gradient_to: Option<serde_json::Value>,
+    /// ★★**路径变形的 B 态**（2026-10-01 · 路径变形 v1）：与 `svg_path` 同形
+    ///   （`{d, stroke, strokeWidth}`）；两态必须**同构**（同命令序列）才能逐点插值。
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub(crate) svg_path_to: Option<serde_json::Value>,
     /// ★★**裁剪形状**（2026-10-01 · C1）：CSS `clip-path` 的**结构化形态**——
     ///   `{kind: 'inset'|'circle'|'polygon', params: number[]}`（params 按形状类型解释，
     ///   分数/px 混合见 `clip_params_from_decl`）。类型静态、参数可动画（CSS 同规）。
@@ -229,6 +233,7 @@ impl NodeDto {
             svg_path: None,
             fill_gradient: None,
             fill_gradient_to: None,
+            svg_path_to: None,
             text: None,
             is_text: false,
             native_host: false,
@@ -388,6 +393,29 @@ pub(crate) fn style_from_dto(dto: &NodeDto) -> Result<LStyle, String> {
             }
             style.stroke_width = w;
         }
+    }
+    // ★★路径变形的 B 态（在 A 态**之后**解析——同构校验要拿 A 的签名比对）。
+    //   校验失败 ⇒ **明确拒绝**（异型之间插值无定义；本引擎不做"猜测对齐"这类静默行为）。
+    if let Some(sp2) = dto.svg_path_to.as_ref() {
+        let d2 = sp2
+            .get("d")
+            .and_then(|x| x.as_str())
+            .ok_or_else(|| "svgPathTo 缺少 `d`（路径数据字符串）".to_string())?;
+        let parsed2 = crate::svg_path::parse_svg_path(d2)?;
+        let Some(a) = style.svg_path.as_ref() else {
+            return Err(
+                "只声明了 `svgPathTo`（B 态）而没有 `svgPath`（A 态）——路径变形需要起点与终点                 两态；请补 A 态或删掉 B 态"
+                    .to_string(),
+            );
+        };
+        let sa = a.structure_signature();
+        let sb = parsed2.structure_signature();
+        if sa != sb {
+            return Err(format!(
+                "svgPath 与 svgPathTo 结构不同（{sa} vs {sb}）——逐点插值要求**同命令序列**                 （同段数、同段型）；异型之间没有'变形'的定义。请把两条路径改成同构                 （设计工具里复制一份再改坐标），或去掉 svgPathTo"
+            ));
+        }
+        style.svg_path_to = Some(parsed2);
     }
     // ★★裁剪形状（C1）：结构形态 → (kind, [f32; 16])。类型静态、参数进基态（复位目标）。
     // ★★渐变（v2）：A 态必需配套 B 态才有"混合"——两态都在时校验结构一致（kind/色标数）。
@@ -3445,7 +3473,7 @@ pub unsafe extern "C" fn proteus_layout_anim_tick_bin(handle: u64, dt_ms: f32, o
         //     （iOS `animUpdateRecordBytes` / Android `ANIM_RECORD_BYTES` / SDK `FRAME_UPDATE_BYTES` /
         //     embed-demo 与 `proteus-jni::host`）必须**同批改**——
         //     ★`scripts/check-anim-record-bytes.mjs` 会从本处的写入序列**推出**宽度并与各消费端对账。
-        let mut buf = Vec::with_capacity(out.updates.len() * 184);
+        let mut buf = Vec::with_capacity(out.updates.len() * 188);
         for v in out.updates {
             buf.extend_from_slice(&v.id.to_le_bytes());
             buf.extend_from_slice(&v.tx.to_le_bytes());
@@ -3480,6 +3508,10 @@ pub unsafe extern "C" fn proteus_layout_anim_tick_bin(handle: u64, dt_ms: f32, o
             for i in 0..8 {
                 buf.extend_from_slice(&go[i].to_le_bytes());
             }
+            // ★★路径变形 v1（末尾追加——偏移 @184）：当前变形因子（NaN = 本节点无 B 态）。
+            //   ★**只带因子**（4B）——段列表是变长数据、且只在因子变化时需要 ⇒ 宿主按需
+            //     调 `proteus_layout_svg_morph_path` 取（避免每帧搬运整条路径）。
+            buf.extend_from_slice(&v.path_morph.unwrap_or(f32::NAN).to_le_bytes());
         }
         Ok(buf)
     });
@@ -3500,6 +3532,68 @@ pub unsafe extern "C" fn proteus_layout_anim_tick_bin(handle: u64, dt_ms: f32, o
             eprintln!("[proteus] anim_tick_bin 内部 panic（已捕获）");
             std::ptr::null_mut()
         }
+    }
+}
+
+/// ★★**当前变形后的段列表**（路径变形 v1）——入参 `{"nodeId":N}`；返回
+///   `{"ok":true,"segs":[…],"totalLen":x,"morph":t}`（段形态与 `svg_nodes` 的 `segs` **同构**——
+///   同一份 `PathSeg` serde 序列化，宿主翻译器零改动复用）。
+///
+/// 【为什么按需查询（而不是每帧进定长记录）】段列表是**变长**数据（一条路径几十到几百段）——
+///   塞进每帧记录会把 188B 的定长块吹成 KB 级；而它只在**变形因子变化**时才需要重取
+///   （宿主见 `path_morph` 值变 ⇒ 调本入口；值不变 ⇒ 沿用上次的 path）。
+///
+/// 语义：`morphed(A, B, path_morph)` —— A/B 两态与因子都在内核（唯一 lerp 实现）。
+///
+/// # Safety
+/// 返回指针须用 `proteus_layout_free_string` 释放。
+#[no_mangle]
+pub unsafe extern "C" fn proteus_layout_svg_morph_path(
+    handle: u64,
+    json: *const c_char,
+) -> *mut c_char {
+    let r = std::panic::catch_unwind(|| -> Result<String, String> {
+        if json.is_null() {
+            return Err("入参为空指针".into());
+        }
+        let raw = unsafe { CStr::from_ptr(json) }.to_str().map_err(|e| format!("入参非 UTF-8：{e}"))?;
+        let v: serde_json::Value = serde_json::from_str(raw).map_err(|e| format!("入参解析失败：{e}"))?;
+        let node_id = v
+            .get("nodeId")
+            .and_then(|x| x.as_u64())
+            .ok_or_else(|| "缺少 nodeId（应为本节点 id）".to_string())? as u32;
+        let reg = registry().lock().map_err(|_| "注册表锁失败".to_string())?;
+        let entry = reg.get(&handle).ok_or_else(|| format!("句柄 {handle} 不存在"))?;
+        let node = entry
+            .tree
+            .nodes
+            .iter()
+            .find(|n| n.id == node_id)
+            .ok_or_else(|| format!("节点 {node_id} 不在树上"))?;
+        let a = node
+            .style
+            .svg_path
+            .as_ref()
+            .ok_or_else(|| format!("节点 {node_id} 没有 svgPath（A 态）——变形需要两态"))?;
+        let b = node
+            .style
+            .svg_path_to
+            .as_ref()
+            .ok_or_else(|| format!("节点 {node_id} 没有 svgPathTo（B 态）——变形需要两态"))?;
+        let t = node.style.path_morph;
+        let morphed = a.morphed(b, t);
+        Ok(serde_json::json!({
+            "ok": true,
+            "segs": morphed.segs,
+            "totalLen": morphed.total_len,
+            "morph": t,
+        })
+        .to_string())
+    });
+    match r {
+        Ok(Ok(s)) => into_c_string(s),
+        Ok(Err(e)) => into_c_string(format!("{{\"ok\":false,\"error\":{}}}", serde_json::to_string(&e).unwrap_or_else(|_| "\"?\"".into()))),
+        Err(_) => into_c_string("{\"ok\":false,\"error\":\"内部 panic（已捕获）\"}".to_string()),
     }
 }
 
@@ -3829,6 +3923,78 @@ mod tests {
 
     /// ★★**clipPath 声明解析**（C1）——三种形状 + 全部拒绝分支（消息可定位）
     #[test]
+    /// ★★路径变形（v1）：端到端（建树 → 通道 → 查询入口返回**变形后**的段）+ 拒绝分支。
+    #[test]
+    fn svg_path_morph_end_to_end_and_rejects() {
+        // 同构两态：一条水平线 → 一条斜线
+        let req = serde_json::json!({
+            "viewport": {"width": 100.0, "height": 100.0},
+            "nodes": [
+                {"id": 1, "width": 100.0, "height": 100.0},
+                {"id": 9, "parentId": 1, "width": 100.0, "height": 100.0,
+                 "svgPath": {"d": "M0 0 L10 0", "stroke": "#112233", "strokeWidth": 2},
+                 "svgPathTo": {"d": "M0 0 L20 10"}}
+            ]
+        });
+        let h = unsafe {
+            proteus_layout_create(std::ffi::CString::new(req.to_string()).unwrap().as_ptr())
+        };
+        assert!(h > 0, "同构两态应建树成功");
+        // 启动变形动画（通道 33）到半程
+        let start = serde_json::json!({
+            "anims": [{"nodeId": 9, "kind": 33, "from": 0.0, "to": 1.0, "durMs": 100, "curve": 0}]
+        });
+        unsafe {
+            proteus_layout_anim_start(h, std::ffi::CString::new(start.to_string()).unwrap().as_ptr())
+        };
+        let mut n: u32 = 0;
+        let p = unsafe { proteus_layout_anim_tick_bin(h, 50.0, &mut n) };
+        assert_eq!(n, 188, "记录应为 188B（含 morph 因子）");
+        let sl = unsafe { std::slice::from_raw_parts(p, n as usize) }.to_vec();
+        unsafe { proteus_rects_free(p, n) };
+        let morph = f32::from_le_bytes([sl[184], sl[185], sl[186], sl[187]]);
+        assert!((morph - 0.5).abs() < 0.05, "半程因子应 ≈0.5，实际 {morph}");
+        // 查询变形后的段：终点应 ≈(15, 5)
+        let q = serde_json::json!({"nodeId": 9});
+        let r = unsafe {
+            proteus_layout_svg_morph_path(h, std::ffi::CString::new(q.to_string()).unwrap().as_ptr())
+        };
+        let js = unsafe { std::ffi::CStr::from_ptr(r) }.to_string_lossy().to_string();
+        unsafe { proteus_layout_free_string(r) };
+        let v: serde_json::Value = serde_json::from_str(&js).expect("查询应返回 JSON");
+        assert_eq!(v["ok"], true, "查询应成功：{js}");
+        let end = &v["segs"][1]["LineTo"];
+        let ex = end[0].as_f64().unwrap();
+        let ey = end[1].as_f64().unwrap();
+        assert!((ex - 15.0).abs() < 0.5, "半程终点 x≈15，实际 {ex}");
+        assert!((ey - 5.0).abs() < 0.5, "半程终点 y≈5，实际 {ey}");
+        unsafe { proteus_layout_destroy(h) };
+    }
+
+    /// 拒绝分支：异结构（L vs C）/ 只在 B 态 —— 都必须明确拒绝（含修法）。
+    #[test]
+    fn svg_path_morph_rejects_hetero_and_missing_a() {
+        let mk = |a: Option<&str>, b: Option<&str>| -> u64 {
+            let mut node = serde_json::json!({"id": 9, "parentId": 1, "width": 100.0, "height": 100.0});
+            if let Some(ad) = a {
+                node["svgPath"] = serde_json::json!({"d": ad, "strokeWidth": 2});
+            }
+            if let Some(bd) = b {
+                node["svgPathTo"] = serde_json::json!({"d": bd});
+            }
+            let req = serde_json::json!({
+                "viewport": {"width": 100.0, "height": 100.0},
+                "nodes": [{"id": 1, "width": 100.0, "height": 100.0}, node]
+            });
+            unsafe { proteus_layout_create(std::ffi::CString::new(req.to_string()).unwrap().as_ptr()) }
+        };
+        assert_eq!(mk(Some("M0 0 L10 0"), Some("M0 0 C1 1 2 2 10 0")), 0, "L vs C 应拒绝");
+        assert_eq!(mk(Some("M0 0 L10 0"), Some("M0 0 L5 0 L10 0")), 0, "段数不同应拒绝");
+        assert_eq!(mk(None, Some("M0 0 L10 0")), 0, "只有 B 态应拒绝");
+        assert!(mk(Some("M0 0 L10 0"), Some("M0 0 L20 10")) > 0, "同构两态应成功");
+        assert!(mk(Some("M0 0 L10 0"), None) > 0, "只有 A 态应成功（只是不可变形）");
+    }
+
     fn parse_clip_path_shapes_and_rejects() {
         // inset：4 参 → kind 1，槽 0..3
         let (k, p) = parse_clip_path(&serde_json::json!({ "kind": "inset", "params": [0.1, 0.2, 0.3, 0.4] })).unwrap();
