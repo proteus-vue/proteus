@@ -375,6 +375,35 @@ public class ProteusHostView extends ViewGroup {
     public void setNodePerspective(int nodeId, float d) {
         if (d > 0) nodePerspective.put(nodeId, d);
     }
+
+    /**
+     * ★★**裁剪形状快照**（C1；建树时注入）——kind 1=inset 2=circle 3=polygon；
+     * params 是**盒分数**。动画期只改参数（由 108B 记录携带），不动类型。
+     */
+    private final Map<Integer, float[]> nodeClipKindAndBase = new HashMap<>();
+
+    /**
+     * 场景注入某节点的裁剪形状（C1；kind 0 = 不注入）。
+     * ★同时记**基态参数**（16 槽；不足补 0）——静态裁剪（声明了但未动画）靠它渲染：
+     *   内核只上报"值变化"的节点 ⇒ 未动的裁剪节点不会出现在每帧记录里
+     *   （首版只从每帧记录取参数 ⇒ **静态裁剪完全不生效**——由红蓝对比测试抓出）。
+     */
+    public void setNodeClipPath(int nodeId, int kind, float[] params) {
+        if (kind > 0 && params != null) {
+            float[] full = new float[17]; // [0] = kind，[1..16] = 参数
+            full[0] = kind;
+            for (int i = 0; i < Math.min(16, params.length); i++) full[i + 1] = params[i];
+            nodeClipKindAndBase.put(nodeId, full);
+        }
+    }
+    /** 裁剪类型（0 = 无）——宿主内用（探针/绘制判定） */
+    private int clipKindOf(int nodeId) {
+        final float[] v = nodeClipKindAndBase.get(nodeId);
+        return v == null ? 0 : (int) v[0];
+    }
+
+    /** 每帧下发的裁剪参数（16 槽；空 = 本帧该节点无裁剪更新） */
+    private final Map<Integer, float[]> animClip = new HashMap<>();
     /**
      * ★★节点 id → **动画颜色**（打包 `0xAARRGGBB`）——内核颜色通道的绘制落点（2026-10-01）
      *
@@ -428,6 +457,17 @@ public class ProteusHostView extends ViewGroup {
                 float rotY = u.length() >= 10 ? (float) u.optDouble(9) : 0f;
                 animTx.put(id, new float[]{
                         (float) u.optDouble(1), (float) u.optDouble(2), (float) u.optDouble(3), rot, op, rotX, rotY});
+                // ★C1：第 11 项 = 裁剪类型；第 12..27 项 = 16 参数
+                if (u.length() >= 27) {
+                    final boolean hasClip = u.optDouble(10, 0) != 0;
+                    if (hasClip) {
+                        float[] ps = new float[16];
+                        for (int k = 0; k < 16; k++) ps[k] = (float) u.optDouble(11 + k, 0);
+                        animClip.put(id, ps);
+                    } else {
+                        animClip.remove(id);
+                    }
+                }
                 // ★颜色（2026-10-01）：第 7/8 项是打包色（底色 / 文字色）；
                 //   **越界或 u32::MAX 哨兵**（JSON 形态 4294967295 = "无该基色"）⇒ 清出表。
                 //   ★哨兵必须**排除**（与 iOS `packedOpt` 同一处口径缺陷的修复）：
@@ -467,6 +507,17 @@ public class ProteusHostView extends ViewGroup {
             // ★B 批 3D（40B 记录末尾追加）——在 bg/textColor 之后
             float rotX = bb.getFloat(), rotY = bb.getFloat();
             animTx.put(id, new float[]{tx, ty, sc, rot, op, rotX, rotY});
+            // ★★C1：裁剪段（@40 起：kind u32 + 16×f32——108B 记录）
+            int clipKind = bb.getInt();
+            if (clipKind != 0) {
+                float[] ps = new float[16];
+                for (int k = 0; k < 16; k++) ps[k] = bb.getFloat();
+                animClip.put(id, ps);
+            } else {
+                // 类型 0 = 本节点无裁剪 —— 保险清掉（与"解绑含清值"同源）
+                animClip.remove(id);
+                for (int k = 0; k < 16; k++) bb.getFloat();
+            }
             // ★颜色（2026-10-01）：0xFFFFFFFF = 无该基色 ⇒ 不入覆盖表（保持静态绘制）
             if (rgba != 0xFFFFFFFF) animColor.put(id, rgba);
             if (textRgba != 0xFFFFFFFF) animTextColor.put(id, textRgba);
@@ -579,6 +630,7 @@ public class ProteusHostView extends ViewGroup {
         animTx.clear();
         animColor.clear();     // ★颜色与变换同一生命周期（2026-10-01）
         animTextColor.clear(); // ★文字色同（两条轨道同一生命周期）
+        animClip.clear();      // ★C1 裁剪同（清表 ⇒ 回树里声明的基态形状）
         invalidate();
         return out;
     }
@@ -630,6 +682,21 @@ public class ProteusHostView extends ViewGroup {
                 }
                 final String textHex = tcv == null ? "" : String.format("%08X", tcv);
                 final String bgHex = bgv == null ? "" : String.format("%08X", bgv);
+                // ★★C1：裁剪参数真读（动画表优先，否则基态）——判据据此断言形变真的落到绘制侧
+                final float[] clipDisp;
+                if (animClip.containsKey(id)) clipDisp = animClip.get(id);
+                else {
+                    final float[] base17 = nodeClipKindAndBase.get(id);
+                    if (base17 != null) {
+                        float[] ps = new float[16];
+                        for (int k = 0; k < 16; k++) ps[k] = base17[k + 1];
+                        clipDisp = ps;
+                    } else clipDisp = null;
+                }
+                final String clipStr = (clipDisp == null || clipKindOf(id) == 0)
+                        ? ""
+                        : String.format("%d:%.4f,%.4f,%.4f,%.4f", clipKindOf(id),
+                                clipDisp[0], clipDisp[1], clipDisp[2], clipDisp[3]);
                 // ★B 批 3D：rotateX/rotateY（v[5]/v[6]；旧 5 元素记录缺省 0——向后兼容）
                 final float rX = v != null && v.length >= 7 ? v[5] : 0f;
                 final float rY = v != null && v.length >= 7 ? v[6] : 0f;
@@ -646,6 +713,7 @@ public class ProteusHostView extends ViewGroup {
                       .append(",\"scale\":").append(v[2]).append(",\"rotate\":").append(v[3])
                       .append(",\"opacity\":").append(v[4])
                       .append(",\"rotateX\":").append(rX).append(",\"rotateY\":").append(rY)
+                      .append(",\"clip\":\"").append(clipStr).append("\"")
                       .append(",\"bg\":\"").append(bgHex)
                       .append("\",\"textColor\":\"").append(textHex).append("\"}");
                 }
@@ -1315,15 +1383,20 @@ public class ProteusHostView extends ViewGroup {
             final float rotX = tf != null && tf.length >= 7 ? tf[5] : 0f;
             final float rotY = tf != null && tf.length >= 7 ? tf[6] : 0f;
             final boolean has3d = rotX != 0f || rotY != 0f;
-            final boolean xf = tf != null && (tf[0] != 0f || tf[1] != 0f || tf[2] != 1f || tf[3] != 0f || has3d);
+            // ★C1：有裁剪也必须 save/restore（clipPath 是画布状态，不 restore 会**泄漏到后面所有指令**）
+            // ★C1：有裁剪声明就必须 save/restore（**含静态裁剪**——首版只认动画中的 ⇒ 静态漏 restore）
+            final boolean hasClip = ids != null && i < ids.length && clipKindOf(ids[i]) > 0;
+            final boolean xf = (tf != null && (tf[0] != 0f || tf[1] != 0f || tf[2] != 1f || tf[3] != 0f || has3d))
+                    || hasClip;
             final int save = xf ? canvas.save() : -1;
             float op = 1f;
             if (tf != null) op = tf[4];
             if (xf) {
-                canvas.translate(tf[0], tf[1]);
+                // ★tf 可能为 null 而仅因裁剪进入本分支（C1）——兜底为零变换
+                canvas.translate(tf != null ? tf[0] : 0f, tf != null ? tf[1] : 0f);
                 float cx = c.x + c.w * 0.5f, cy = c.y + c.h * 0.5f;
-                if (tf[3] != 0f) canvas.rotate(tf[3], cx, cy);
-                if (tf[2] != 1f) canvas.scale(tf[2], tf[2], cx, cy);
+                if (tf != null && tf[3] != 0f) canvas.rotate(tf[3], cx, cy);
+                if (tf != null && tf[2] != 1f) canvas.scale(tf[2], tf[2], cx, cy);
                 // ★★B 批 3D（2026-10-01）：rotateX/rotateY 用 `android.graphics.Camera` 生成
                 //   **投影矩阵**（本质 = 平移-旋转-平移 + 透视除法；d = 节点 perspective）。
                 //   ★锚点 = 元素中心（与 iOS `CATransform3DRotate` 同语义——先在中心建变换再平移回去）。
@@ -1341,6 +1414,44 @@ public class ProteusHostView extends ViewGroup {
                     canvas.translate(cx, cy);
                     canvas.concat(m3d);
                     canvas.translate(-cx, -cy);
+                }
+            }
+            // ★★C1 裁剪（2026-10-01）：该节点有裁剪形状时，在**绘制内容之前**设 clipPath——
+            //   参数由内核每帧下发（盒分数 → px 用 c.w/c.h 换算；与 iOS mask 同一套语义）。
+            //   ★save/restore 已由上面的变换块统一管理（xf 为真时必有 save；裁剪也搭这一趟车）。
+            final int clipNodeId = (ids != null && i < ids.length) ? ids[i] : -1;
+            if (clipNodeId >= 0) {
+                // ★参数：每帧值优先（动画中），否则**树里声明的基态**（静态裁剪也必须渲染）
+                final float[] base = nodeClipKindAndBase.get(clipNodeId);
+                final float[] clipP = animClip.containsKey(clipNodeId)
+                        ? animClip.get(clipNodeId)
+                        : base; // base[0] 是 kind，参数从 base[1] 起 —— 见下面的读取偏移
+                final int ck = clipKindOf(clipNodeId);
+                final boolean fromBase = !animClip.containsKey(clipNodeId);
+                if (clipP != null && ck > 0) {
+                    // ★偏移：基态形态是 [kind, p0..p15]（+1）；每帧形态是 [p0..p15]（+0）
+                    final int off = fromBase ? 1 : 0;
+                    final float[] P = clipP;
+                    android.graphics.Path cp = new android.graphics.Path();
+                    if (ck == 1) { // inset
+                        float top = P[off + 0] * c.h, right = P[off + 1] * c.w;
+                        float bottom = P[off + 2] * c.h, left = P[off + 3] * c.w;
+                        cp.addRect(c.x + left, c.y + top, c.x + c.w - right, c.y + c.h - bottom,
+                                android.graphics.Path.Direction.CW);
+                    } else if (ck == 2) { // circle（r 相对 min(w,h)）
+                        float r = P[off + 2] * Math.min(c.w, c.h);
+                        cp.addCircle(c.x + P[off + 0] * c.w, c.y + P[off + 1] * c.h, r, android.graphics.Path.Direction.CW);
+                    } else { // polygon
+                        final int n = Math.min((P.length - off) / 2, 8);
+                        if (n >= 3) {
+                            cp.moveTo(c.x + P[off + 0] * c.w, c.y + P[off + 1] * c.h);
+                            for (int k = 1; k < n; k++) {
+                                cp.lineTo(c.x + P[off + 2 * k] * c.w, c.y + P[off + 2 * k + 1] * c.h);
+                            }
+                            cp.close();
+                        }
+                    }
+                    canvas.clipPath(cp);
                 }
             }
             // ★★颜色覆盖（2026-10-01）：该节点参与颜色动画时用内核值，否则用静态 `Cmd.color`

@@ -750,6 +750,48 @@ def main() -> int:
             else:
                 print(f"  ✓ T12 ★3D 旋转（层矩阵真读反解）：rotateY 半程 {t3m2:.1f} → 终值 {t3e2:.1f}（钉死）")
 
+        # ★V13（2026-10-01 · C1）：**裁剪形变**——真读 mask 路径包围盒（不回显参数）
+        vc = d.get("anim_clip") or js.get("anim_clip") or {}
+        if not vc:
+            print("  · V13 跳过（anim_clip 读数缺失——相位未跑？）")
+        else:
+            vstarted = vc.get("started")
+            vmid = str(vc.get("mid_box") or "")
+            vend = str(vc.get("end_box") or "")
+            vstop = str(vc.get("after_stop_box") or "")
+            vrej = str(vc.get("rejected") or "")
+            kinds = vc.get("compiled_kinds") or []
+            if vstarted != 4:
+                fail(f"V13a 裁剪动画未被内核受理：started={vstarted}（应 4——四边参数通道）")
+                ok = False
+            elif kinds != [15, 16, 17, 18]:
+                fail(f"V13b 编译产物通道号不符：{kinds}（应 [15,16,17,18] = clip 槽 0..3）")
+                ok = False
+            elif not vmid or not vend:
+                fail(f"V13c 裁剪遮罩包围盒读数缺失：mid={vmid!r} end={vend!r}（探针未报 clipBox？）")
+                ok = False
+            else:
+                def box_w(s2):
+                    try:
+                        parts = [float(x) for x in s2.split(",")]
+                        return parts[2], parts[3]
+                    except Exception:
+                        return -1.0, -1.0
+                mw, mh = box_w(vmid)
+                ew, eh = box_w(vend)
+                # ★形变方向（内缩 ⇒ 宽度**递减**）：半程（12.5%）应 **大于** 终值（25% 内缩）。
+                #   ★首版判据写反了方向（当场被真机读数抓住：mid=90 / end=60 —— 形变本身完全正确，
+                #     是断言把"递减"当成了"递增"）。本仓纪律：判据的方向语义要用真值验一次。
+                if not (mw > 0 and ew > 0 and mw > ew):
+                    fail(f"V13d 形变方向错：半程宽 {mw} 应大于终值宽 {ew}（内缩 ⇒ 递减）")
+                    ok = False
+                elif not ("没有裁剪形状" in vrej and "clipPath" in vrej):
+                    fail(f"V13e 无声明节点未被明确拒绝：{vrej[:150]}")
+                    ok = False
+                else:
+                    print(f"  ✓ V13 ★裁剪形变（真读 mask 包围盒）：半程 {vmid} → 终值 {vend}"
+                          f" · stop 后回基态 {vstop} · 拒绝分支可定位")
+
         # P6：拒绝分支——无底色节点上的颜色动画必须**明确拒绝**（不静默）
         rej = c.get("rejected_no_bg") or ""
         if c.get("no_bg_nodes") and ("底色" not in rej):

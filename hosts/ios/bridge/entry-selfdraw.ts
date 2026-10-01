@@ -56,6 +56,8 @@ interface SelfDrawNative {
   bgNodes(): string
   /** ★★带文字色的节点清单（文字色动画的取样入口——与 `bgNodes` 对称） */
   textColorNodes(): string
+  /** ★★C1：带裁剪形状的节点清单（裁剪形变动画的取样入口——与 `bgNodes` 对称） */
+  clipNodes(): string
   /** ★V4 滚动（纯内容偏移，像素）——不驱动动画；与 scrollAnimSync 的区别是它不碰动画 */
   scrollBy(dx: number, dy: number): string
   animStart(json: string): string
@@ -92,7 +94,7 @@ const BN = { snapshot: 'selfdraw-final' }
 
 // ★构建标识（每次构建由 hosts/ios/bridge/inject-build-id.mjs 注入；与 entry-bench 同机制）
 //   —— 「设备上跑的是哪份代码」必须可**一眼判定**（报告新鲜度判据的内容锚点）。
-const BUILD_ID = 'cd9c4c8f-143645'
+const BUILD_ID = '8be8744b-154249'
 
 const VP = (globalThis as unknown as { __PROTEUS_VIEWPORT__?: { width: number; height: number } })
   .__PROTEUS_VIEWPORT__ ?? { width: 390, height: 844 }
@@ -153,6 +155,16 @@ const App = {
       h('p-text', { style: { fontSize: 28, color: '#ffffff', margin: { bottom: 4 } } }, 'Proteus · 自绘管线'),
       h('p-text', { style: { fontSize: 14, color: '#9aa3b2', margin: { bottom: 20 } } },
         `Vue → 自定义渲染器 → Rust 核心 → CALayer（${n} 项）`),
+      // ★★C1（2026-10-01）：**带裁剪声明的标记节点**——V13 判据的目标（inset 基态=不裁）。
+      //   它不参与视觉演示（纯色块，尺寸小）；作用是让"裁剪动画的静态前提"在树里存在。
+      h('p-view', {
+        key: 'clip-marker',
+        style: {
+          width: 120, height: 60, flexShrink: 0, margin: { bottom: 8 },
+          backgroundColor: '#3a3a52',
+          clipPath: { kind: 'inset', params: [0, 0, 0, 0] },
+        },
+      }),
       ...rows,
     ])
   },
@@ -215,6 +227,7 @@ let animRt2Result: Record<string, unknown> = {}
 let animComplexResult: Record<string, unknown> = {}
 let animBezierResult: Record<string, unknown> = {}
 let animRepeatResult: Record<string, unknown> = {}
+let animClipResult: Record<string, unknown> = {}
 /** ★★MA0-RT 平台零参与路径读数 */
 let animPlatformResult: Record<string, unknown> = {}
 /** ★★MA1 预设库读数 */
@@ -765,6 +778,70 @@ const api = {
       t3d_end: t3End,
     }
     animRepeatResult = r
+    return JSON.stringify(r)
+  },
+
+  /**
+   * ★★**V：裁剪形变**（2026-10-01 · C1）——`clip-path` 端到端（真读层上 mask 的路径包围盒）。
+   *
+   * 判据（check-anim-rt2.py V13）：① inset 四边 0→0.25 的形变被受理、终值精确
+   *   （探针**真读** `CAShapeLayer.path.boundingBox`——不回显我们写入的参数）；
+   *   ② 无 `clipPath` 声明的节点上启动 ⇒ 明确拒绝（含修法）。
+   */
+  animClip(): string {
+    // ★★取样纪律（与颜色通道同源的真机教训）：**问内核**哪些节点声明了 clipPath——
+    //   id 由适配器/Vue 动态分配，盲取 targets[0] 会打到无声明的节点上
+    //   （首次接通真机实测：started=0 且报错原因误导 —— 见内核 `proteus_layout_clip_nodes`）。
+    const clipProbe = safeParse(proteusSelfDraw.clipNodes())
+    const clipIds = ((clipProbe as { ids?: number[] }).ids ?? [])
+    const target = clipIds[0] ?? 2
+    const hasDecl = clipIds.length > 0
+    proteusSelfDraw.animStopAll()
+    const decl = {
+      kind: 'clip' as const,
+      from: [0, 0, 0, 0],
+      to: [0.25, 0.25, 0.25, 0.25],
+      durationMs: 100,
+      curve: 'linear' as const,
+    }
+    const batch = compileAnimations([decl], { nodeId: target })
+    const startOut = safeParse(proteusSelfDraw.animStart(JSON.stringify({ anims: batch.anims })))
+    const boxOf = (): string => {
+      const p = safeParse(proteusSelfDraw.layerTransformProbe(JSON.stringify([target])))
+      return (((p as { layers?: Array<{ clipBox?: string }> }).layers ?? [])[0]?.clipBox ?? '')
+    }
+    proteusSelfDraw.animTick(50)
+    const mid = boxOf()
+    proteusSelfDraw.animTick(60)
+    const end = boxOf()
+    proteusSelfDraw.animStopAll()
+    proteusSelfDraw.animTick(1)   // 让复位落到层上
+    const afterStop = boxOf()
+    // 拒绝分支：无 clipPath 声明的节点（取一个不在目标里的常见 id）
+    const noClip = [3, 4, 5, 6, 7, 8].filter((id) => id !== target).slice(0, 1)
+    let rejected = ''
+    if (noClip.length > 0) {
+      const bad = safeParse(
+        proteusSelfDraw.animStart(
+          JSON.stringify({ anims: [{ nodeId: noClip[0]!, kind: 15, from: 0, to: 0.5, durMs: 50 }] }),
+        ),
+      )
+      rejected = String((bad as { error?: string }).error ?? '').slice(0, 160)
+    }
+    const r = {
+      node: target,
+      // ★取样来源（内核权威清单——id 动态分配，盲取会打错节点）
+      clip_ids_from_kernel: clipIds.slice(0, 8),
+      has_decl: hasDecl,
+      started: (startOut as { started?: number }).started ?? 0,
+      compiled_kinds: batch.anims.map((a) => a.kind),
+      compiled_slots: batch.anims.map((a) => a.clipSlot),
+      mid_box: mid,
+      end_box: end,
+      after_stop_box: afterStop,
+      rejected,
+    }
+    animClipResult = r
     return JSON.stringify(r)
   },
 
@@ -1422,6 +1499,7 @@ const api = {
       anim_complex: animComplexResult,
       anim_bezier: animBezierResult,
       anim_repeat: animRepeatResult,
+      anim_clip: animClipResult,
       // ★★RT2 帧率测席（§9 指标；宿主跑满时长后写入）
       anim_bench: safeParse(proteusSelfDraw.animBenchResults()),
       js_only_throughput: {

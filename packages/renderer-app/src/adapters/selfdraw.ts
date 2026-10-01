@@ -213,7 +213,10 @@ export interface SelfDrawAdapter extends NativeAdapter {
   takeSplice(): { removes: number[]; inserts: Array<{ parentId: number; index: number; nodes: SelfDrawNodeSpec[] }> } | 'full-required' | null
 }
 
-/** 绘制相关的键（**不进布局核心**——核心只管几何；绘制由宿主的指令流消费） */
+/**
+ * 绘制相关的键（**不进布局核心**——核心只管几何；绘制由宿主的指令流消费）。
+ *
+ */
 const PAINT_KEYS = new Set(['backgroundColor', 'color', 'fontSize', 'fontWeight', 'fontFamily', 'borderRadius', 'borderColor', 'borderWidth', 'opacity'])
 
 /** 布局相关的键（进核心；其余键既非布局也非绘制 → 忽略并计数，便于发现「静默丢失」） */
@@ -221,6 +224,12 @@ const LAYOUT_KEYS = new Set([
   'width', 'height', 'minWidth', 'maxWidth', 'minHeight', 'maxHeight',
   'margin', 'padding', 'flexDirection', 'justifyContent', 'alignItems', 'alignSelf',
   'flexGrow', 'flexShrink', 'flexBasis', 'gap', 'display', 'position', 'top', 'left', 'overflow',
+  // ★★2026-10-01：**内核动画的静态基态**（C1 `clipPath` / B 批 `perspective`）——
+  //   它们不改几何（不是"布局属性"），但**必须随请求进内核**：裁剪形状是复位目标、
+  //   透视距离是 3D 参数。⇒ 放进"进核心"的键集（请求构造按本集合过滤）。
+  //   ★若漏放：请求里不带声明 ⇒ 内核拒绝裁剪动画 / 3D 无透视，且**静默**
+  //     （首次接通时真机实测：`clip_rejected` 的原因正是"树里未声明 clipPath"）。
+  'clipPath', 'perspective',
 ])
 
 /**
@@ -269,6 +278,12 @@ function layoutStyleOf(props: Record<string, unknown>): Record<string, unknown> 
   const out: Record<string, unknown> = {}
   for (const [key, value] of Object.entries(flat)) {
     if (!LAYOUT_KEYS.has(key)) continue
+    // ★★C1/B：两个键是**复合/非长度值**（clipPath 是对象、perspective 是数）——
+    //   原样透传给内核（不经过下面的长度折叠：它们不是长度）。
+    if (key === 'clipPath' || key === 'perspective') {
+        out[key] = value
+        continue
+    }
     if (key === 'margin' || key === 'padding') {
       const e = foldEdges(value)
       if (e) out[key] = e

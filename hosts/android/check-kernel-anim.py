@@ -347,6 +347,69 @@ def main() -> int:
     else:
         print(f"  ✓ Q3 非法控制点明确拒绝（可定位）：{rej_s[:90]}…")
 
+    # ── U 组（★★C1 裁剪形变 clip-path，2026-10-01）：inset 端到端 + 拒绝 + 绘制侧真读 ──
+    ce2 = d.get("clip_error")
+    if ce2:
+        fail(f"U 裁剪场景抛异常：{ce2}")
+        ok = False
+    else:
+        cs2 = _j(d.get("clip_start"))
+        cstarted = cs2.get("started") if isinstance(cs2, dict) else None
+        cm = _j(d.get("clip_mid"))
+        cend = _j(d.get("clip_end"))
+        cmid_clip = (_layers(cm).get("clip") or "") if cm else ""
+        cend_clip = (_layers(cend).get("clip") or "") if cend else ""
+        if cstarted != 4:
+            fail(f"U1 裁剪动画未被内核受理：{cs2}（四条参数通道应全受理）")
+            ok = False
+        elif not cmid_clip or not cend_clip:
+            fail(f"U1 裁剪探针读数缺失：mid={cmid_clip!r} end={cend_clip!r}")
+            ok = False
+        else:
+            # 半程 ≈0.125、终值 0.25（linear）
+            try:
+                mid_v = float(cmid_clip.split(",")[0].split(":")[1])
+                end_v = float(cend_clip.split(",")[0].split(":")[1])
+            except Exception:
+                mid_v, end_v = -1.0, -1.0
+            if abs(end_v - 0.25) > 0.001:
+                fail(f"U1 裁剪终值未精确（探针真读）：{cend_clip}（top 应 = 0.25）")
+                ok = False
+            elif not (0.10 <= mid_v <= 0.15):
+                fail(f"U1 裁剪半程异常：{cmid_clip}（top 应 ≈ 0.125）")
+                ok = False
+            else:
+                print(f"  ✓ U1 ★裁剪形变端到端（探针真读宿主表）：半程 {cmid_clip} → 终值 {cend_clip}")
+        # U3：绘制侧真读（**裁/不裁对照**——内缩 25% 后四角被裁、中心保留；无裁剪时四角不透明）
+        cCorner, cInside, nCorner = (
+            d.get("clip_corner_alpha"),
+            d.get("clip_inside_alpha"),
+            d.get("noclip_corner_alpha"),
+        )
+        if cCorner is None or cInside is None or nCorner is None:
+            fail(f"U3 绘制侧读数缺失：corner={cCorner} inside={cInside} noclip={nCorner}")
+            ok = False
+        elif cCorner != 0:
+            fail(f"U3 裁剪未落到绘制：带裁剪的左上角 alpha={cCorner}（内缩 25% 应裁掉 = 0）")
+            ok = False
+        elif cInside == 0:
+            fail(f"U3 裁剪过度：中心 alpha={cInside}（裁剪是内缩不是挖洞——中心应保留）")
+            ok = False
+        elif nCorner == 0:
+            fail(f"U3 对照组异常：无裁剪时左上角 alpha={nCorner}（应不透明——否则对照无效）")
+            ok = False
+        else:
+            print(f"  ✓ U3 ★裁剪落到绘制侧（离屏真读·裁/不裁对照）：带裁剪角落 alpha={cCorner}（裁掉）"
+                  f" vs 无裁剪 alpha={nCorner}（保留）· 中心保留 alpha={cInside}")
+        # U2：无声明 ⇒ 拒绝
+        rej2 = _j(d.get("clip_rejected"))
+        rej2_s = json.dumps(rej2, ensure_ascii=False) if isinstance(rej2, dict) else str(rej2)
+        if "没有裁剪形状" not in rej2_s or "clipPath" not in rej2_s:
+            fail(f"U2 无裁剪声明的节点未被明确拒绝（应含原因与修法）：{rej2_s[:160]}")
+            ok = False
+        else:
+            print(f"  ✓ U2 无裁剪声明明确拒绝（可定位）：{rej2_s[:90]}…")
+
     # ── T 组（★★3D 旋转，2026-10-01 · B 批）：rotateX/rotateY 端到端 ──
     t3s = _j(d.get("t3d_start"))
     t3_started = t3s.get("started") if isinstance(t3s, dict) else None
