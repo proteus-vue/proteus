@@ -104,6 +104,10 @@ const LOCAL_ONLY = {
   //   （adb pull 的 flip.json：慢动作 wall/span 比值 + 3D 逐幕终态，CI 无设备无法复现）。
   //   本机侧等价判据 = tests/showcase-flip.test.ts（8 幕 / 能力计数 / 控制链，CI 覆盖）。
   'check:android-flip': '需真机产物（adb pull 的 flip.json）；CI 无设备（本机侧等价判据 = tests/showcase-flip.test.ts）',
+  // ★★Morpheus 墨绘·山水卷（第四个节目 · C1 裁剪揭示 × C2 SVG 描边，2026-10-01）——需真机产物
+  //   （adb pull 的 ink.json：幕中描边"进行中"探针 + 裁剪逐幕揭示终态，CI 无设备无法复现）。
+  //   本机侧等价判据 = tests/showcase-ink.test.ts（11 幕 / 双能力计数 / 裁剪链 / 构建态律，CI 覆盖）。
+  'check:android-ink': '需真机产物（adb pull 的 ink.json）；CI 无设备（本机侧等价判据 = tests/showcase-ink.test.ts）',
   // ★★M5 路由虚拟栈判据（2026-09-30 新增）：与 kernel-anim 同族——输入是真机产物 app-stack.json。
   //   端上读数（在 QuickJS 上跑**真实 app-stack.ts**：2 万层深栈 / 预算冻结 / 命令守恒）无法在 CI 复现
   //   （CI 无设备、无宿主 APK）；本机侧的等价逻辑判据已在 tests/app-stack.test.ts（34 条，CI 覆盖）。

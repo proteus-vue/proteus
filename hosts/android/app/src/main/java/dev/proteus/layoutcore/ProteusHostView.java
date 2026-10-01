@@ -1545,6 +1545,11 @@ public class ProteusHostView extends ViewGroup {
             // ★★C2 描边（2026-10-01）：该节点有 SVG 路径时**画线**——用 PathMeasure 按进度截取
             //   （`getSegment(0, progress×len)` 的原生等价物；与 iOS `strokeEnd` 同一语义）。
             //   ★画在内容之后（描边叠在色块上——与 iOS 子层顺序一致）。
+            //   ★★**必须平移到节点绝对位置**（2026-10-01 真机截图目视抓出的真缺陷）：
+            //     段坐标是**节点局部坐标**（d 的坐标系 = 节点盒，与内核解析约定一致），
+            //     首版直接 `drawPath` ⇒ 所有描边都画在**画布原点**（山/水纹/竹/鸟在左上角聚成一团）。
+            //     ★为什么判据没抓到：X 组的测试节点恰好在 (0,0)（局部 == 绝对 ⇒ 恒等通过）——
+            //       "判据的坐标系不覆盖平移"是判据盲区，这回由**目视核对**兜住（多一道证据形态的价值）。
             if (ids != null && i < ids.length && ids[i] >= 0) {
                 final Object[] svg = nodeSvgStroke.get(ids[i]);
                 if (svg != null) {
@@ -1555,6 +1560,8 @@ public class ProteusHostView extends ViewGroup {
                     if (prog > 0f) {
                         strokePaint.setColor(scol);
                         strokePaint.setStrokeWidth(swid);
+                        final int svgSave = canvas.save();
+                        canvas.translate(c.x, c.y);
                         if (prog >= 1f) {
                             canvas.drawPath(sp, strokePaint);
                         } else {
@@ -1564,6 +1571,7 @@ public class ProteusHostView extends ViewGroup {
                             pm.getSegment(0f, pm.getLength() * prog, seg, true);
                             canvas.drawPath(seg, strokePaint);
                         }
+                        canvas.restoreToCount(svgSave);
                     }
                 }
             }

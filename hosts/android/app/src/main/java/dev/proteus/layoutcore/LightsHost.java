@@ -105,6 +105,26 @@ final class LightsHost {
      */
     private int midPainted = -1;
     private int midColors = -1;
+    /** ★★幕中探针（墨绘节目 C1/C2 的"进行中"证据）：幕 45% 处按节目声明的样本 id 采一次 */
+    private String midProbe = null;
+    private String midProbeAct = null;
+
+    /** 节目声明的探针样本 id（JS `__proteusLightsRun` 回执里的 `sample_ids`；
+     *  缺省 [1000,1001] = 既有两节目（灯珠/牌面）的行为不变） */
+    private int[] sampleIds = new int[]{1000, 1001};
+
+    void setSampleIds(int[] ids) {
+        if (ids != null && ids.length > 0) sampleIds = ids;
+    }
+
+    private String sampleIdsJson() {
+        StringBuilder sb = new StringBuilder("[");
+        for (int i = 0; i < sampleIds.length; i++) {
+            if (i > 0) sb.append(',');
+            sb.append(sampleIds[i]);
+        }
+        return sb.append(']').toString();
+    }
 
     LightsHost(android.content.Context ctx, ViewGroup root, float density) {
         this.ctx = ctx;
@@ -362,6 +382,13 @@ final class LightsHost {
                     int[] s2 = samplePaintedOnly();
                     midPainted = s2[0];
                     midColors = s2[1];
+                    // ★★C1/C2（墨绘节目）：同时采一次**探针**（描边进度 / 裁剪参数在幕中段的值）——
+                    //   判据据此断言"真的在画"（0<p<1），而不是只看终值（终值 1 不能区分
+                    //   "逐笔画出"与"瞬间出现"——那正是用户对前作提出的问题）。
+                    try {
+                        midProbe = view != null ? view.animTxProbe(sampleIdsJson()) : null;
+                        midProbeAct = act.optString("name", null);
+                    } catch (Throwable ignored) { /* 探针失败不阻断演出 */ }
                 }
             }
 
@@ -417,21 +444,33 @@ final class LightsHost {
             r.put("work_p99", round3(pct(actWork, 99)));
             r.put("work_max", round3(maxOf(actWork)));
             r.put("vsync_p50", round3(pct(actVsync, 50)));
-            // ★逐幕末态探针（2026-10-01 · 第三节目）：把样本牌的变换记进幕读数——
+            // ★逐幕末态探针（2026-10-01 · 第三节目）：把样本节点的变换记进幕读数——
             //   判据据此断言"翻面终值 180° / 展开终值 -120° / 谢幕回暗"（真读宿主真源）。
+            //   ★样本 id 由**节目自己声明**（灯火两节目缺省 [1000,1001]；墨绘节目声明关键节点）——
+            //   盲取固定 id 会把探针打到不存在的节点上（探针会以恒等值返回，看似正常实则无功）。
             try {
                 final org.json.JSONObject probe =
-                        new org.json.JSONObject(view != null ? view.animTxProbe("[1000,1001]") : "{}");
+                        new org.json.JSONObject(view != null ? view.animTxProbe(sampleIdsJson()) : "{}");
                 final org.json.JSONArray ls = probe.optJSONArray("layers");
-                if (ls != null && ls.length() > 0) r.put("probe", ls.optJSONObject(0));
+                if (ls != null && ls.length() > 0) {
+                    r.put("probe", ls.optJSONObject(0));
+                    // ★墨绘节目要**多个**样本的逐幕末态（幕布/月亮/题字/山/印/云）——
+                    //   首个进 `probe`（两节目兼容），全量进 `probe_all`（新节目判据用）。
+                    r.put("probe_all", ls);
+                }
             } catch (Throwable ignored) { /* 探针失败不阻断演出 */ }
             actsPerf.add(r);
             // ★中途颜色采样（**节目单显式声明的 midSample 幕**——不再按幕名硬编码；
             //   翻牌剧场用 reveal 幕、灯光秀用 rainbow 幕，各自都是"颜色最丰富"的一帧）
+            //   ★兜底：若 45% 处没赶上（幕被强切），这里补一次（探针同样补）
             if (act != null && act.optBoolean("mid_sample") && midColors < 0) {
                 int[] sample = samplePaintedOnly();
                 midPainted = sample[0];
                 midColors = sample[1];
+                try {
+                    midProbe = view != null ? view.animTxProbe(sampleIdsJson()) : midProbe;
+                    midProbeAct = act.optString("name", midProbeAct);
+                } catch (Throwable ignored) { /* 探针失败不阻断演出 */ }
             }
         } catch (Throwable t) {
             /* JSONObject.put 不会失败；保底不中断演出 */
@@ -481,6 +520,9 @@ final class LightsHost {
             stats.put("painted_colors", painted[1]);
             stats.put("mid_painted", midPainted);
             stats.put("mid_colors", midColors);
+            // ★幕中探针（C1/C2 的"进行中"证据——幕 45% 处采的真实宿主表读数）
+            if (midProbe != null) stats.put("mid_probe", new JSONObject(midProbe));
+            if (midProbeAct != null) stats.put("mid_probe_act", midProbeAct);
             stats.put("finished_at_ms", System.currentTimeMillis());
         } catch (Throwable t) {
             try { stats.put("stats_error", String.valueOf(t)); } catch (Throwable ignored) {}
@@ -540,7 +582,11 @@ final class LightsHost {
             "flexGrow", "flexShrink", "flexBasis", "gap", "display", "position", "top", "left",
             "overflow", "isText", "textStyleKey",
             // ★★颜色（灯光秀的命脉）：底色 = 颜色动画的起点与复位目标；color = 文字色基色
-            "backgroundColor", "color"));
+            "backgroundColor", "color",
+            // ★★C1/C2（2026-10-01 · 墨绘节目）：裁剪形状与 SVG 路径是内核动画的**静态基态声明**——
+            //   不在白名单 ⇒ 请求不带声明 ⇒ 内核拒绝 clip/stroke 动画且**静默**
+            //   （与适配器白名单漏键同款教训；真机判据会以"拒绝消息"暴露，但那时已白跑一轮）。
+            "clipPath", "svgPath", "perspective"));
 
     /** 缺省字号（**布局单位** = px，与本场景 viewport 同坐标系） */
     private static final double DEFAULT_FONT_UNITS = 14.0;
@@ -619,6 +665,12 @@ final class LightsHost {
 
     /** 几何 → 绘制指令（★几何只来自内核；本方法不含任何布局计算） */
     private int emitCmds() throws Exception {
+        // ★★**先备好视图再注入节点级状态**（2026-10-01 真机抓出的顺序缺陷）：
+        //   `setNodeClipPath`/`setNodeSvgStroke` 是**实例方法**（节点表在 view 上）——
+        //   而首版把 `ensureView()` 放在方法**末尾**（只因老节目没有 clip/svg 声明，
+        //   注入代码是新加的 ⇒ 新路径一上真机就 NullPointerException 建树失败）。
+        //   ⇒ 视图创建前置到方法入口（幂等，老路径零行为变化）。
+        ensureView();
         JSONObject rects = new JSONObject(RustLayout.readRects(handle)).getJSONObject("rects");
         List<ProteusHostView.Cmd> cmds = new ArrayList<>(specs.size());
         List<Integer> cmdIds = new ArrayList<>(specs.size());
@@ -630,7 +682,11 @@ final class LightsHost {
             String text = spec.optString("text", null);
             boolean isText = text != null && !text.isEmpty();
             int color = bg == null || bg.isEmpty() ? 0 : MainActivity.parseHex(bg);
-            if (!isText && color == 0) continue;
+            // ★★C1/C2（墨绘节目）：**纯描边节点**（无底色/无文字但有 svgPath）也必须进指令表——
+            //   它的 svg 路径画在 `drawCmds` 里（按 cmd 节点 id 查 `nodeSvgStroke`）；
+            //   首版 `color==0 && !isText ⇒ continue` 会把它整个丢掉 ⇒ 描边永远不画（静默）。
+            boolean hasSvg = spec.optJSONObject("svgPath") != null;
+            if (!isText && color == 0 && !hasSvg) continue;
             float fs = isText ? (float) spec.optDouble("fontSize", DEFAULT_FONT_UNITS) : 0f;
             // 文字静态色（探针回落 + 绘制兜底都与它同源）
             String tc = spec.optString("color", null);
@@ -657,7 +713,6 @@ final class LightsHost {
         }
         int[] ids = new int[cmdIds.size()];
         for (int i = 0; i < ids.length; i++) ids[i] = cmdIds.get(i);
-        ensureView();
         view.setCmds(cmds);
         view.setCmdNodeIds(ids);
         view.invalidate();

@@ -380,15 +380,18 @@ public class MainActivity extends Activity {
             String hr = appHostRun();
             sb.append(hr).append('\n');
             writeReport("host-runtime.json", hr);
-        } else if ("lights".equals(testPath) || "flip".equals(testPath)) {
-            // ★★Morpheus 炫技场：第二个节目（灯光秀）/ 第三个节目（翻牌剧场）——同一宿主
-            //   与 kernel-anim 同一时序纪律：重活让出主线程后再开演（见上一分支的注释）
+        } else if ("lights".equals(testPath) || "flip".equals(testPath) || "ink".equals(testPath)) {
+            // ★★Morpheus 炫技场：第二个节目（灯光秀）/ 第三个节目（翻牌剧场）/ 第四个（墨绘·山水卷）
+            //   ——同一宿主与 kernel-anim 同一时序纪律：重活让出主线程后再开演（见上一分支的注释）
             final boolean isFlip = "flip".equals(testPath);
-            final String prog = isFlip ? "flip" : "lights";
-            final String rep = isFlip ? "flip.json" : "lights.json";
+            final boolean isInk = "ink".equals(testPath);
+            final String prog = isFlip ? "flip" : isInk ? "ink" : "lights";
+            final String rep = isFlip ? "flip.json" : isInk ? "ink.json" : "lights.json";
             sb.append(isFlip
                     ? "【Morpheus 翻牌剧场（任意缓动 × 3D 翻转 × 循环 × 慢动作）】\n"
-                    : "【Morpheus 灯光秀（800 灯颜色编舞 · QuickJS 驱动内核动画）】\n");
+                    : isInk
+                        ? "【Morpheus 墨绘·山水卷（C1 裁剪揭示 × C2 SVG 描边——水墨长卷自己画出来）】\n"
+                        : "【Morpheus 灯光秀（800 灯颜色编舞 · QuickJS 驱动内核动画）】\n");
             new android.os.Handler(android.os.Looper.getMainLooper())
                     .postDelayed(new Runnable() { public void run() { lightsRun(prog, rep, false); } }, 300);
             sb.append("  读数见 ").append(rep).append("（异步演出；帧循环由宿主 Choreographer 拥有）\n");
@@ -1401,9 +1404,29 @@ public class MainActivity extends Activity {
                         + org.json.JSONObject.quote("入口调用失败：" + run.error) + "}");
                 return;
             }
+            // ★★回执 `ok=false`（如建树失败/参数被拒）必须**当场暴露**——2026-10-01 真机教训：
+            //   此前只查 eval 是否成功（run.ok），而入口**内部**失败时回执是 `{"ok":false,...}`——
+            //   流程照样 startShow ⇒ 取幕时"节目单未初始化" ⇒ 真实错误（建树失败原因）被丢弃，
+            //   排查一轮才拿回来。与"不静默"同源：错误必须写在它发生的地方。
+            try {
+                org.json.JSONObject ro = new org.json.JSONObject(run.value);
+                if (ro.optBoolean("ok") != true) {
+                    writeReportStatic(act, reportFile, "{\"ok\":false,\"error\":"
+                            + org.json.JSONObject.quote("入口回执非 ok：" + run.value) + "}");
+                    android.util.Log.e("proteus", "节目入口回执非 ok（" + programKind + "）：" + run.value);
+                    return;
+                }
+            } catch (Throwable ignored) { /* 回执非 JSON ⇒ 下面 notePlan 会按缺失判红 */ }
             try {
                 org.json.JSONObject ro = new org.json.JSONObject(run.value);
                 host.notePlan(ro.optJSONArray("plan") != null ? ro.getJSONArray("plan").toString() : "[]");
+                // ★节目声明的探针样本 id（墨绘节目用关键节点；两老节目无此字段 ⇒ 缺省不变）
+                org.json.JSONArray sids = ro.optJSONArray("sample_ids");
+                if (sids != null && sids.length() > 0) {
+                    int[] arr = new int[sids.length()];
+                    for (int i = 0; i < arr.length; i++) arr[i] = sids.optInt(i);
+                    host.setSampleIds(arr);
+                }
                 android.util.Log.i("proteus", "节目已建树：" + programKind + " tiles=" + ro.optInt("tiles")
                         + " mount_ms=" + ro.optDouble("mount_ms") + " plan=" + ro.optJSONArray("plan"));
             } catch (Throwable ignored) { /* 解析失败 ⇒ plan 空 ⇒ 判据按缺失判红（如实暴露） */ }
