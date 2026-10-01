@@ -38,6 +38,12 @@ Morpheus 的对外表面只有一个包：**`@proteus-vue/animation`**（声明 
 | `easeInOut` | 3 |
 | `springApprox` | 4 |
 
+**任意缓动（`curveBezier`，2026-10-01 转正）**：封闭集之外的设计稿曲线不再需要走逃生口——
+`curveBezier: [x1,y1,x2,y2]`（或 `parseCubicBezier('cubic-bezier(…)')` 直接粘贴 CSS 值）
+走**内核同一台求值机器**（65 点表 + 插值，控制点表生成一次并缓存）。
+约束：`x1/x2 ∈ [0,1]`（时间轴单调）；`y1/y2` 任意（> 1 = 回弹、< 0 = 预期），
+与 `curve` / `spring` / `keyframes` 互斥（求值模式必须唯一）。
+
 **合成属性 = 可以走平台零参与路径**。五个标量属性是合成属性；**`color` / `textColor` 是 paint-only 但非合成**（不触发布局，但 Android 的 RenderNode 无法插值颜色 ⇒ 两端一致走 tick 路径）。另注意：**修改布局属性（宽度/边距）不是动画，是重排**，编译期会直接拦下。
 
 ```ts

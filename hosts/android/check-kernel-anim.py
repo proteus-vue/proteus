@@ -289,6 +289,54 @@ def main() -> int:
         else:
             print(f"  ✓ P7 无文字色节点明确拒绝：{trej_s[:80]}…")
 
+    # ── Q 组（★★自定义贝塞尔曲线，2026-10-01 转正）：回弹过冲 + 拒绝分支 ──
+    #   【为什么这组能在真机上判定"曲线真的接上了"】回弹曲线（y1=1.56 > 1）的**特征**是
+    #   中点过冲：值冲到终点之上再回落。内置 easeOut 单调不过冲 ⇒ 只要观察到过冲，
+    #   就证明"自定义控制点真的驱动了求值"（不是被静默忽略、退回内置曲线）。
+    bs = d.get("bezier_start") or {}
+    # ★形态宽容（真机实测：宿主把它放成**字符串**——未包 JSONObject；两种形态都要认）
+    if isinstance(bs, str):
+        try:
+            bs = json.loads(bs)
+        except Exception:
+            bs = {}
+    bs_result = bs.get("data") if isinstance(bs, dict) and "data" in bs else bs
+    started_q = (bs_result or {}).get("started") if isinstance(bs_result, dict) else None
+    if started_q != 1:
+        fail(f"Q1 自定义曲线动画未被内核受理：{bs_result}（应 started=1）")
+        ok = False
+    else:
+        print("  ✓ Q1 自定义贝塞尔声明被内核受理（started=1）")
+    trace = d.get("bezier_trace") or []
+    xs = []
+    for t in trace:
+        l = _layers(t)
+        xs.append(l.get("tx"))
+    xs = [x for x in xs if isinstance(x, (int, float))]
+    if len(xs) < 5:
+        fail(f"Q2 自定义曲线轨迹读数不齐：{xs}")
+        ok = False
+    else:
+        peak = max(xs)
+        end = xs[-1]
+        # ① 过冲：中点冲到终点（100）之上——回弹曲线的灵魂，也证明自定义真的生效
+        if peak <= 100.0 + 1.0:
+            fail(f"Q2a 未见过冲：轨迹峰值 {peak:.2f} 应 > 101（回弹曲线 y1=1.56；不过冲=自定义未生效）")
+            ok = False
+        # ② 终点钉死（与内置同一条纪律）
+        elif abs(end - 100.0) > 0.01:
+            fail(f"Q2b 终点未钉死：末值 {end}（应精确 = 100）")
+            ok = False
+        else:
+            print(f"  ✓ Q2 ★回弹曲线在真机生效：过冲到 {peak:.2f}（> 终点 100）后回落，终点钉死 {end:.2f}")
+    rej = d.get("bezier_rejected") or ""
+    rej_s = json.dumps(rej, ensure_ascii=False) if isinstance(rej, dict) else str(rej)
+    if "[0,1]" not in rej_s or "节点" not in rej_s:
+        fail(f"Q3 非法控制点未被明确拒绝（应含 [0,1] 与节点 id，便于定位）：{rej_s[:160]}")
+        ok = False
+    else:
+        print(f"  ✓ Q3 非法控制点明确拒绝（可定位）：{rej_s[:90]}…")
+
     # ── M7：共享元素（内核几何） ──
     se = d.get("shared_element")
     if isinstance(se, str):

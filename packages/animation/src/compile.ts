@@ -98,6 +98,8 @@ export function compileOne(d: AnimDecl, targets: AnimTargets): EngineAnim[] {
       const ch = parseColorToChannels(seg.to)
       return { ch, durMs: seg.durationMs, curve: CURVE_ID[seg.curve ?? 'easeOut'] }
     })
+    // ★控制点收成普通元组（类型上是 readonly 四元组；线格式用可变数组）
+    const mc = d as { curveBezier?: [number, number, number, number] }
     const mk = (kind: AnimKindId, idx: 0 | 1 | 2 | 3): EngineAnim => {
       const f = [from.r, from.g, from.b, from.a][idx]!
       const t = [to.r, to.g, to.b, to.a][idx]!
@@ -105,6 +107,8 @@ export function compileOne(d: AnimDecl, targets: AnimTargets): EngineAnim[] {
         nodeId: targets.nodeId,
         kind,
         curve: easing.curve,
+        // ★自定义贝塞尔：**展开到四条通道**（同一控制点 ⇒ 同一条曲线——颜色不能分通道变缓动）
+        ...(mc.curveBezier ? { curveBezier: mc.curveBezier } : {}),
         from: f,
         to: t,
         durMs: easing.durMs,
@@ -133,6 +137,8 @@ export function compileOne(d: AnimDecl, targets: AnimTargets): EngineAnim[] {
       nodeId: targets.nodeId,
       kind: ANIM_KIND_ID[d.kind],
       curve: easing.curve,
+      // ★自定义贝塞尔（给了它内核求值优先于 `curve` id——见内核 `Anim::curve_at`）
+      ...(d.curveBezier ? { curveBezier: d.curveBezier as [number, number, number, number] } : {}),
       from: d.from ?? 0,
       to: d.to,
       durMs: easing.durMs,

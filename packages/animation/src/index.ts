@@ -36,6 +36,7 @@ export type {
   ScalarAnimDecl,
   ColorAnimDecl,
   ColorKeyframeSeg,
+  BezierPoints,
   AnimTargets,
   EngineAnim,
   CompiledBatch,
@@ -56,6 +57,8 @@ export {
 export { parseColorToChannels, packChannels, channelsToHex } from './color'
 export type { ColorChannels } from './color'
 export { presets, route, list, element, easing, scroll } from './presets'
+// ★自定义贝塞尔曲线（2026-10-01 转正）：字符串助手——可直接粘贴 CSS 值
+export { parseCubicBezier } from './easing'
 // ★★声明式编排层（"几百个元素谁先动、各自去哪"的一句话入口）
 //   —— 抽出的 `easing.ts` 是它与预设库共享的手感常量（避免循环依赖，见该文件头）
 export { compileChoreography, staggerRanks, choreograph, STAGGER_ORDERS, terminalAttitudes } from './choreography'

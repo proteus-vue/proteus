@@ -33,7 +33,8 @@
 
 use crate::node::LayoutTree;
 use crate::style::Rect;
-use std::sync::OnceLock;
+use std::collections::HashMap;
+use std::sync::{Arc, Mutex, OnceLock};
 
 /// 曲线 id（与 TS 侧 `AnimCurve` 一一对应——**跨语言契约，不得改号**）
 pub const CURVE_LINEAR: u8 = 0;
@@ -80,10 +81,13 @@ fn build_tables() -> [[f32; TABLE_N]; CURVE_COUNT] {
     t
 }
 
-/// 曲线求值：查表 + 线性插值（`u` 先 clamp 到 [0,1]；未知曲线 id 落表尾兜底——不 panic）
-pub fn curve_eval(curve: u8, u: f32) -> f32 {
-    let tables = TABLES.get_or_init(build_tables);
-    let row = &tables[(curve as usize).min(CURVE_COUNT - 1)];
+/// **查表 + 线性插值**（65 点表；内置曲线与自定义曲线**共用这一台机器**）
+///
+/// 【为什么提取成一处（2026-10-01 自定义曲线转正）】内置曲线走 `curve_eval(curve_id, u)`，
+///   自定义贝塞尔走它的采样表——两条路的求值语义必须**逐位一致**（同 clamp、同插值）。
+///   各写一份 = "内置曲线改了、自定义没跟"的静默分叉（本仓纪律 #22）。
+#[inline]
+fn table_eval(row: &[f32; TABLE_N], u: f32) -> f32 {
     let u = u.clamp(0.0, 1.0);
     let x = u * (TABLE_N - 1) as f32;
     let i0 = x.floor() as usize;
@@ -91,6 +95,56 @@ pub fn curve_eval(curve: u8, u: f32) -> f32 {
     let frac = x - i0 as f32;
     let (a, b) = (row[i0], row[i1]);
     a + (b - a) * frac
+}
+
+/// 曲线求值：查表 + 线性插值（`u` 先 clamp 到 [0,1]；未知曲线 id 落表尾兜底——不 panic）
+pub fn curve_eval(curve: u8, u: f32) -> f32 {
+    let tables = TABLES.get_or_init(build_tables);
+    let row = &tables[(curve as usize).min(CURVE_COUNT - 1)];
+    table_eval(row, u)
+}
+
+/* ══════════════ ★★自定义三次贝塞尔曲线（2026-10-01 转正） ══════════════ */
+
+/// 自定义三次贝塞尔的 65 点采样表（与内置曲线**同一形态**——求值零迭代）
+///
+/// 【为什么做成表（而不是每次求值现解贝塞尔方程）】`bezier_eval` 每次要 24 次二分迭代；
+///   直接现算会让自定义曲线的求值成本与内置曲线**差两个量级**（内置是一次插值）。
+///   ⇒ 生成一次 65 点表（与内置曲线同机器），之后**逐位同路**——性能与语义都不分叉。
+///   表按控制点缓存（见 `bezier_table`），同一条声明（如 800 片同曲线）只生成一次。
+#[derive(Debug, Clone, PartialEq)]
+pub struct BezierTable(pub [f32; TABLE_N]);
+
+/// 控制点 → 采样表的全局缓存（键 = 4 个 f32 的位模式；Arc 共享 ⇒ 生成一次全片复用）
+fn bezier_cache() -> &'static Mutex<HashMap<[u32; 4], Arc<BezierTable>>> {
+    static CACHE: OnceLock<Mutex<HashMap<[u32; 4], Arc<BezierTable>>>> = OnceLock::new();
+    CACHE.get_or_init(|| Mutex::new(HashMap::new()))
+}
+
+/// 控制点 `[x1,y1,x2,y2]` → `Arc<BezierTable>`（缓存命中直接克隆指针）
+///
+/// ★`x1/x2` 必须是 [0,1]（时间轴单调——否则求值不唯一）；`y1/y2` **任意**
+///   （> 1 或 < 0 是回弹/预期效果的来源，CSS 同规）。范围校验在调用方（FFI 解析处）做，
+///   本函数只负责生成（解析层的错误消息能带 nodeId——可定位）。
+pub fn bezier_table(c: [f32; 4]) -> Arc<BezierTable> {
+    let key = [c[0].to_bits(), c[1].to_bits(), c[2].to_bits(), c[3].to_bits()];
+    if let Ok(g) = bezier_cache().lock() {
+        if let Some(t) = g.get(&key) {
+            return Arc::clone(t);
+        }
+    }
+    let mut t = [0f32; TABLE_N];
+    for (i, v) in t.iter_mut().enumerate() {
+        *v = bezier_eval((c[0], c[1], c[2], c[3]), i as f32 / (TABLE_N - 1) as f32);
+    }
+    // ★端点钉死（与内置曲线同一条纪律：动画必须精确落在起止值上）
+    t[0] = 0.0;
+    t[TABLE_N - 1] = 1.0;
+    let arc = Arc::new(BezierTable(t));
+    if let Ok(mut g) = bezier_cache().lock() {
+        g.insert(key, Arc::clone(&arc));
+    }
+    arc
 }
 
 /// ★★**曲线的三次贝塞尔近似**（供平台插值器用——Android `PathInterpolator` 只收贝塞尔控制点）
@@ -483,6 +537,10 @@ pub struct Anim {
     pub vel: f32,
     /// 遇同 `(node,kind)` 已有动画时是否**接管**（默认 `true`：位置连续 + 速度移交）
     pub takeover: bool,
+    /// ★★**自定义贝塞尔曲线**（2026-10-01 转正）：`Some` 时**优先于** `curve` 内置 id——
+    ///   求值走 `BezierTable`（查表+插值），与内置曲线同一台机器。
+    ///   `x1/x2 ∈ [0,1]` 的校验在解析层（FFI）做；`y1/y2` 任意（回弹来源）。
+    pub curve_pts: Option<Arc<BezierTable>>,
 }
 
 impl Anim {
@@ -505,6 +563,7 @@ impl Anim {
             x: from,
             vel: 0.0,
             takeover: true,
+            curve_pts: None,
         }
     }
 
@@ -513,6 +572,19 @@ impl Anim {
     /// 【为什么必须收敛成一个入口】此前三处各写 `from + (to-from)*curve_eval(p)`；
     ///   本轮加入 `Keyframes` 后，多段序列要按 `p × 总时长` **分段定位**——
     ///   若三个调用点各写一份，就会有"seek 对、滚动错"这类静默分叉。
+    /// ★**实例感知的曲线求值**（自定义贝塞尔优先，否则内置表）
+    ///
+    /// 【为什么是方法而不是全局函数（2026-10-01 自定义曲线转正）】曲线从"一条 u8"变成
+    ///   "u8 或控制点表"两态 ⇒ 求值必须看**这条动画自己**的曲线。收敛成实例方法后，
+    ///   所有求值点（时间推进 / 进度求值 / commit 采样）都走它——不会漏改一处。
+    #[inline]
+    pub fn curve_at(&self, u: f32) -> f32 {
+        match &self.curve_pts {
+            Some(t) => table_eval(&t.0, u),
+            None => curve_eval(self.curve, u),
+        }
+    }
+
     pub fn value_at_progress(&self, p: f32) -> f32 {
         let p = p.clamp(0.0, 1.0);
         match &self.mode {
@@ -523,7 +595,7 @@ impl Anim {
                 }
                 eval_keyframes(self.from, segs, p * total).0
             }
-            _ => self.from + (self.to - self.from) * curve_eval(self.curve, p),
+            _ => self.from + (self.to - self.from) * self.curve_at(p),
         }
     }
 }
@@ -768,7 +840,7 @@ pub fn commit_specs(tree: &LayoutTree, anims: &[Anim]) -> Vec<CommitSpec> {
             for a in &items {
                 let local = if a.dur_ms <= 0.0 { 1.0 } else { (u * dur / a.dur_ms).min(1.0) };
                 let val = match &a.mode {
-                    AnimMode::Curve => a.from + (a.to - a.from) * curve_eval(a.curve, local),
+                    AnimMode::Curve => a.from + (a.to - a.from) * a.curve_at(local),
                     // ★弹簧的解析采样：用同一套物理积分（**不是**平台 spring——保证与 tick 路径同形）
                     AnimMode::Spring(p) => spring_sample(a, *p, u * dur),
                     AnimMode::Keyframes(segs) => {
@@ -1311,6 +1383,7 @@ impl AnimEngine {
             x: from,
             vel: 0.0,
             takeover: false, // ★硬重启：起点 = 算出的几何（见注释）
+            curve_pts: None,
         };
         self.start(tree, mk(AnimKind::TranslateX, plan.dx, 0.0))?;
         self.start(tree, mk(AnimKind::TranslateY, plan.dy, 0.0))?;
@@ -1531,6 +1604,7 @@ mod tests {
             x: 0.0,
             vel: 0.0,
             takeover: true,
+            curve_pts: None,
         }
     }
 
@@ -2257,6 +2331,44 @@ mod tests {
             assert!((bezier_eval(c, 0.0) - 0.0).abs() < 1e-5, "曲线 {curve} 的贝塞尔 f(0) 应为 0");
             assert!((bezier_eval(c, 1.0) - 1.0).abs() < 1e-5, "曲线 {curve} 的贝塞尔 f(1) 应为 1");
         }
+    }
+
+    #[test]
+    fn custom_bezier_table_matches_live_eval_and_pins_endpoints() {
+        // ★★自定义曲线转正（2026-10-01）：采样表必须与"现算贝塞尔"逐点一致（表只是加速，不是第二条数学）
+        let c = [0.34f32, 1.56, 0.64, 1.0]; // "回弹"曲线（y 过冲 > 1）
+        let t = bezier_table(c);
+        for i in 0..TABLE_N {
+            let u = i as f32 / (TABLE_N - 1) as f32;
+            let live = bezier_eval((c[0], c[1], c[2], c[3]), u);
+            assert!(
+                (t.0[i] - live).abs() < 1e-5,
+                "u={u}: 表 {} vs 现算 {live}",
+                t.0[i]
+            );
+        }
+        // 端点钉死（动画必须精确落在起止值上）
+        assert_eq!(t.0[0], 0.0);
+        assert_eq!(t.0[TABLE_N - 1], 1.0);
+        // ★过冲存在（回弹曲线的灵魂：中途超过 1）——这也是"转正"要提供的能力
+        assert!(t.0.iter().any(|&v| v > 1.05), "回弹曲线应有过冲（>1）");
+        // 缓存：同一控制点两次取到同一个 Arc（800 片共享一份表）
+        let t2 = bezier_table(c);
+        assert!(Arc::ptr_eq(&t, &t2), "同控制点应命中缓存");
+    }
+
+    #[test]
+    fn custom_bezier_drives_anim_value_and_overshoots() {
+        // 端到端：curve_pts 提供时 value_at_progress 走自定义表（含过冲）
+        let mut a = Anim::curve_anim(1, AnimKind::TranslateY, 0.0, 100.0, 400.0);
+        a.curve_pts = Some(bezier_table([0.34, 1.56, 0.64, 1.0]));
+        let v50 = a.value_at_progress(0.5);
+        assert!(v50 > 100.0, "回弹曲线中点应过冲（>100），实际 {v50}");
+        assert_eq!(a.value_at_progress(0.0), 0.0, "起点精确");
+        assert_eq!(a.value_at_progress(1.0), 100.0, "终点钉死");
+        // ★与自定义无关的旧行为不受影响：不给 curve_pts ⇒ 走内置（easeOut 中点 < 100）
+        let b = Anim::curve_anim(1, AnimKind::TranslateY, 0.0, 100.0, 400.0);
+        assert!(b.value_at_progress(0.5) < 100.0);
     }
 
     #[test]

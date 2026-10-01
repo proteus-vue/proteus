@@ -8,7 +8,7 @@ generated: true
 # Morpheus 动画声明项 AI 说明书
 
 > **生成物，勿手改**：`node scripts/gen-anim-manual.mjs`（`--check` 接 CI，漂移即红）
-> **单一事实来源**：`packages/animation/src/rules.ts` 的 `ANIM_RULES`（36 条）
+> **单一事实来源**：`packages/animation/src/rules.ts` 的 `ANIM_RULES`（37 条）
 >
 > 本表与编译器的 111 条规则**同构**（Morpheus §13 第 11 条硬性要求）——
 > 每条含 what / why / when / 示例 / 如何验证 / 实现位置，AI 可单独消费一条。
@@ -338,7 +338,7 @@ presets.choreograph.gather({ ids, canvas, spread: 2.6 })
 presets.choreograph.storm({ ids, canvas, order: 'alternate', staggerMs: 8, durationMs: 900 })
 ```
 
-## 声明面原语（字段/取值）（7 条）
+## 声明面原语（字段/取值）（8 条）
 
 ### `primitive/route-transition-bridge`
 
@@ -402,12 +402,29 @@ compileAnimations([{ kind: 'textColor', from: '#ffffff', to: '#00ff00',
 
 - **是什么**：`linear`(0) / `easeOut`(1) / `easeIn`(2) / `easeInOut`(3) / `springApprox`(4)——编号与内核 `CURVE_*` 同号。
 - **为什么**：`springApprox` 是**阻尼振荡的查表近似**（与真弹簧不同）——需要物理语义时用 `spring` 字段而非这条曲线；内核另有 `curve_bezier_approx` 供 Android `PathInterpolator`（弹簧**诚实返回 None**：非单调，无贝塞尔近似）。
-- **何时用**：声明 `curve` 字段时（与 `spring` 二选一）
+- **何时用**：声明 `curve` 字段时（与 `spring` / `curveBezier` / `keyframes` 四选一）
 - **如何验证**：tests/animation-presets.test.ts「Curve 编号与内核一致（0..4）」；packages/layout-core-rust/src/anim.rs 的 `table_matches_exact_formula`
 - **实现位置**：`packages/animation/src/types.ts:Curve（内核 anim.rs:CURVE_*）`
 
 ```ts
 { kind: 'translateX', from: 0, to: 100, curve: 'easeOut', durationMs: 300 }
+```
+
+### `primitive/curveBezier`
+
+**自定义三次贝塞尔（任意缓动 —— 2026-10-01 转正）** `[implemented]`
+
+- **是什么**：`curveBezier: [x1,y1,x2,y2]`——CSS `cubic-bezier()` 同一参数化；给了它 ⇒ 求值走该曲线的 65 点采样表（内核生成并**缓存**——800 片同曲线只生成一次）。
+- **为什么**：★**从逃生口转正**：设计稿里任意一条缓动此前只能走 `custom-easing` 逃生口（degraded、要登记）；现在是契约能力——与内置曲线走**同一台求值机器**（同表机器/同端点钉死），跨端逐位一致。★约束：`x1/x2 ∈ [0,1]`（时间轴单调——否则给定进度求值不唯一）；`y1/y2` 任意（> 1 = 回弹、< 0 = 预期）。★与 `curve`/`spring`/`keyframes` 互斥（求值模式必须唯一；段级自定义曲线暂不支持——诚实边界）。
+- **何时用**："设计稿给了具体缓动曲线" / 回弹（back-out）/ 预期（anticipate）/ 弹性缓动——封闭集 5 条不够用时
+- **如何验证**：tests/anim-bezier-golden.test.ts（解析/校验/编译/跨语言钉值）+ 内核单测 `custom_bezier_table_matches_live_eval_and_pins_endpoints`；真机：check-anim-rt2.py P9（iOS 真读层过冲）× check-kernel-anim.py Q 组（Android）
+- **实现位置**：`packages/animation/src/types.ts:BezierPoints + easing.ts:parseCubicBezier（内核 anim.rs:bezier_table + ffi.rs:parse_curve_bezier）`
+
+```ts
+import { parseCubicBezier } from '@proteus-vue/animation'
+// 直接粘贴 CSS 值（字符串助手）或手写四元组：
+{ kind: 'translateY', from: -40, to: 0, durationMs: 400,
+  curveBezier: parseCubicBezier('cubic-bezier(.34,1.56,.64,1)') }  // 回弹：中途过冲到终点之上
 ```
 
 ### `primitive/keyframes`
@@ -596,10 +613,13 @@ view.onRowDematerialized = { ids in animStopNodes({ nodeIds: ids }) }
 - **实现位置**：`packages/animation/src/types.ts（封闭集定义）`
 
 ```ts
-// 显式逃生口（§4.2）：能用，但必须登记三要素并被计入 degraded
+// ★先看有没有内建替代（2026-10-01 起多数缓动不用再走逃生口）：
+//   任意 cubic-bezier → curveBezier（见 primitive/curveBezier）；
+//   循环/往复 → 查看 repeat 语义（若你读到的文档还没有它，说明你的版本较旧）。
+// 真需要逃生口时（§4.2）：能用，但必须登记三要素并被计入 degraded
 escapes.register({
-  kind: 'custom-easing', detail: 'cubic-bezier(.1,.9,.2,1)',
-  reason: '品牌曲线不在封闭集 5 条里',
+  kind: 'custom-easing', detail: '分段自定义曲线：前 40% 用 cubic-bezier(.1,.9,.2,1)，后段换另一条',
+  reason: '段级自定义控制点当前不在封闭集（整段级可用 curveBezier）',
   behaviorRisk: '不进内核曲线表 ⇒ 无法走平台零参与路径',
 })
 ```

@@ -92,7 +92,7 @@ const BN = { snapshot: 'selfdraw-final' }
 
 // ★构建标识（每次构建由 hosts/ios/bridge/inject-build-id.mjs 注入；与 entry-bench 同机制）
 //   —— 「设备上跑的是哪份代码」必须可**一眼判定**（报告新鲜度判据的内容锚点）。
-const BUILD_ID = '8a4702f2-123959'
+const BUILD_ID = '2731ae5a-141001'
 
 const VP = (globalThis as unknown as { __PROTEUS_VIEWPORT__?: { width: number; height: number } })
   .__PROTEUS_VIEWPORT__ ?? { width: 390, height: 844 }
@@ -213,6 +213,7 @@ const phaseErrors: Record<string, string> = {}
 let animRt2Result: Record<string, unknown> = {}
 /** ★★RT2 复杂动效读数（弹簧/接管/FLIP/rotate+opacity） */
 let animComplexResult: Record<string, unknown> = {}
+let animBezierResult: Record<string, unknown> = {}
 /** ★★MA0-RT 平台零参与路径读数 */
 let animPlatformResult: Record<string, unknown> = {}
 /** ★★MA1 预设库读数 */
@@ -599,6 +600,61 @@ const api = {
 
     }
     animColorResult = r
+    return JSON.stringify(r)
+  },
+
+  /**
+   * ★★**P9：自定义三次贝塞尔曲线**（2026-10-01 转正）——真机端到端验证。
+   *
+   * 【判据设计（iOS check-anim-rt2.py P9）】回弹曲线（y1=1.56 > 1）的**特征**是
+   *   中点过冲：值冲到终点之上再回落、终点精确钉死。内置曲线单调不过冲 ⇒
+   *   观察到过冲 = 自定义控制点真的驱动了求值（不是被静默忽略退回内置）。
+   *   真读层（`layerTransformProbe` 的 ty），不是回显我们传下去的参数。
+   *   附拒绝分支：x 越界 ⇒ 内核明确拒绝（含节点 id 与 [0,1]，可定位）。
+   */
+  animBezier(): string {
+    const probe0 = safeParse(proteusSelfDraw.layerTransformProbe(JSON.stringify([2, 3, 4])))
+    const present = ((probe0 as { layers?: Array<{ id: number; missing?: boolean }> }).layers ?? [])
+      .filter((l) => !l.missing)
+      .map((l) => l.id)
+    const target = present[0] ?? 2
+    proteusSelfDraw.animStopAll()
+
+    const decl = {
+      kind: 'translateY' as const,
+      from: 0,
+      to: 100,
+      durationMs: 400,
+      // 回弹（back-out）：y1 = 1.56 > 1 ⇒ 过冲是它可判定的"指纹"
+      curveBezier: [0.34, 1.56, 0.64, 1] as [number, number, number, number],
+    }
+    const batch = compileAnimations([decl], { nodeId: target })
+    const startOut = safeParse(proteusSelfDraw.animStart(JSON.stringify({ anims: batch.anims })))
+    const trace: number[] = []
+    for (const dt of [100, 100, 100, 100, 200]) {
+      proteusSelfDraw.animTick(dt)
+      const p = safeParse(proteusSelfDraw.layerTransformProbe(JSON.stringify([target])))
+      const ty = ((p as { layers?: Array<{ ty?: number }> }).layers ?? [])[0]?.ty
+      trace.push(typeof ty === 'number' ? ty : -9999)
+    }
+    // 拒绝分支：x1 越界
+    const bad = safeParse(
+      proteusSelfDraw.animStart(
+        JSON.stringify({ anims: [{ nodeId: target, kind: 1, curveBezier: [-0.2, 0, 0.64, 1], from: 0, to: 100, durMs: 200 }] }),
+      ),
+    )
+    const rejected = String((bad as { error?: string }).error ?? '').slice(0, 160)
+    proteusSelfDraw.animStopAll()
+    const r = {
+      node: target,
+      started: (startOut as { started?: number }).started ?? 0,
+      trace,
+      peak: Math.max(...trace),
+      end: trace[trace.length - 1],
+      rejected,
+      compiled_curve_bezier: batch.anims[0]?.curveBezier ?? null,
+    }
+    animBezierResult = r
     return JSON.stringify(r)
   },
 
@@ -1254,6 +1310,7 @@ const api = {
       anim_platform: animPlatformResult,
       // ★★RT2 复杂动效（弹簧 / 打断接管 / FLIP / rotate+opacity）
       anim_complex: animComplexResult,
+      anim_bezier: animBezierResult,
       // ★★RT2 帧率测席（§9 指标；宿主跑满时长后写入）
       anim_bench: safeParse(proteusSelfDraw.animBenchResults()),
       js_only_throughput: {

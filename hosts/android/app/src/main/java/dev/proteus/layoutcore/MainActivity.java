@@ -1650,6 +1650,28 @@ public class MainActivity extends Activity {
             // 恢复原树（后续 M4 真帧循环用）
             hv.attachCore(buildKernelTree(W, H));
 
+            // ── Q 组（★★自定义贝塞尔曲线，2026-10-01 转正）：回弹过冲 + 拒绝分支 ──
+            //   判据（check-kernel-anim.py Q 组）：
+            //     Q1 固定 dt 推进的轨迹**过冲**（回弹曲线 y>1 ⇒ 中点值超终点，随后回落）
+            //     Q2 终点精确钉死（= to，与内置曲线同一条纪律）
+            //     Q3 非法控制点（x 越界）⇒ 内核**明确拒绝**（消息可定位：含节点 id 与 [0,1]）
+            hv.kernelAnimStop("{\"all\":true}");
+            String bezStart = hv.kernelAnimStart("{\"anims\":[{\"nodeId\":11,\"kind\":0,\"curve\":1,"
+                    + "\"curveBezier\":[0.34,1.56,0.64,1.0],\"from\":0,\"to\":100,"
+                    + "\"durMs\":400,\"takeover\":false}]}");
+            out.put("bezier_start", bezStart);
+            final org.json.JSONArray bezTrace = new org.json.JSONArray();
+            float[] bezSteps = {100f, 100f, 100f, 100f, 200f};
+            for (float bt : bezSteps) {
+                hv.kernelAnimTick(bt);
+                bezTrace.put(new org.json.JSONObject(hv.animTxProbe("[11]")));
+            }
+            out.put("bezier_trace", bezTrace);
+            // Q3 拒绝分支：x1 越界（内核必须拒绝——与 TS 侧校验同一条规则）
+            out.put("bezier_rejected", hv.kernelAnimStart(
+                    "{\"anims\":[{\"nodeId\":11,\"kind\":0,\"curveBezier\":[-0.2,0,0.64,1],"
+                            + "\"from\":0,\"to\":100,\"durMs\":200}]}"));
+
             // ── M4：真帧循环（500ms；跑满自停）──
             hv.kernelAnimStop("{\"all\":true}");
             hv.kernelAnimStart("{\"anims\":[{\"nodeId\":11,\"kind\":0,\"curve\":3,\"from\":-60,\"to\":60,"

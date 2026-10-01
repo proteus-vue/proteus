@@ -48,6 +48,25 @@ The closed set of the compile layer **deliberately does not try to cover everyth
 
 > Design stance: **an explicitly registered escape hatch is better than a silently introduced second implementation** — the former is countable and convergent, the latter always diverges.
 
+## Arbitrary easing curves (promoted 2026-10-01 — from escape hatch to contract capability)
+
+The five curves in the closed set are shortcuts for common cases; a concrete design-handoff easing
+(`cubic-bezier(.34,1.56,.64,1)`) previously had to go through the **escape hatch** (`custom-easing`,
+registered + degraded). It is now a **contract capability**: `curveBezier: [x1,y1,x2,y2]` runs on the
+**same evaluation machine** as the built-ins — the kernel builds a 65-point sample table from the control
+points (built once, cached per control point; 800 tiles on the same curve share one table), after which
+every frame is one table lookup with interpolation, **zero iteration**; pinned endpoints, byte-identical
+across targets, indistinguishable from a built-in.
+
+> **Why this is part of the "strongest" story**: Reanimated / Framer / Web Animations all accept arbitrary
+> cubic-bezier, but each solves it in **its own runtime**; we collapse it into a **cross-language contract
+> with a single kernel implementation** — the same control point evaluates bit-identically on all targets,
+> and it can flow through the platform zero-involvement sampling path.
+
+**Boundaries (honest)**: (1) `x1/x2 ∈ [0,1]` (monotonic time axis; `y` is free); (2) mutually exclusive
+with `curve`/`spring`/`keyframes`; (3) **segment-level** custom curves are not supported yet
+(each `keyframes` segment still uses the closed set — see the surface page).
+
 ## Colour is in the closed set (since 2026-10-01; with new boundaries)
 
 The closed set went from **five to seven**: `translateX / translateY / scale / rotate / opacity`
