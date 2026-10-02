@@ -25,6 +25,7 @@
 #include <cstdlib>
 #include <chrono>
 #include <unordered_map>
+#include <set>
 #include <hilog/log.h>
 
 #include <napi/native_api.h>
@@ -1962,6 +1963,286 @@ static JSVM_Value VaporTapAtCb(JSVM_Env env, JSVM_CallbackInfo info) {
     return r;
 }
 
+
+/* ═══════ 矩阵 #14 续 · #5：Vapor 路**虚拟化列表**（bundle `mode:'list'` 所需宿主桥）═══════
+ *
+ * 【与 Android `VaporRenderHost.mountVirtual/scrollRows` 同一语义】（蓝本读实现）
+ *   · `mountVirtual({viewport, nodes, rows})`：**整树进核**（几何正确）+ 行表落状态 +
+ *     首帧物化可见区（复用池决策来自核心 `proteus_recycle_update`）。
+ *   · `scrollRows({dy, capture?})`：滚动 → 核心给 acquire/release 决策 → 宿主**先释放后获取**
+ *     （RenderNode 句柄复用）→ 返回判据读数。
+ *
+ * 【为什么"虚拟化省的是层不是树"】几何/命中口径要保持全树正确（`proteus_layout_hit_test` 打全树），
+ *   虚拟化只减少**实际存在的渲染节点**（本仓 #12 已验：live 23 / 500 行）。
+ */
+static uint64_t g_vlHandle = 0;      // 内核句柄（持久，跨 scrollRows）
+static uint64_t g_vlPool = 0;        // 复用池（核心决策）
+static std::vector<std::pair<int, std::vector<int>>> g_vlRows;  // 行表（root + ids）
+static std::unordered_map<int, Rect> g_vlRects;                 // 几何（内核真源缓存）
+static std::unordered_map<int, ArkUI_RenderNodeHandle> g_vlLive; // 行 → RenderNode
+static std::vector<ArkUI_RenderNodeHandle> g_vlFree;             // 空闲句柄池
+static double g_vlScrollY = 0;       // 累计滚动
+static double g_vlRowH = 56;
+static double g_vlVpH = 844;
+static int g_vlBuilt = 0, g_vlReleased = 0, g_vlCreated = 0, g_vlReused = 0;
+static int g_vlRowFrames = 0;
+static std::vector<int> g_vlFirstSig;   // 首帧可见行集合（回顶签名对照用）
+
+/** 当前可见行（由 scrollY 与行高算——★几何取自内核 rects，不手算） */
+static void vlVisibleRange(int* first, int* last) {
+    int n = (int)g_vlRows.size();
+    if (n == 0) { *first = 0; *last = -1; return; }
+    // 用行根的**核心 y** 二分（滚动位置 → 首可见行）
+    int f = 0;
+    for (int i = 0; i < n; i++) {
+        auto it = g_vlRects.find(g_vlRows[i].first);
+        double y = (it != g_vlRects.end()) ? it->second.y : i * g_vlRowH;
+        double yBottom = y + ((it != g_vlRects.end()) ? it->second.h : g_vlRowH);
+        if (yBottom > g_vlScrollY) { f = i; break; }
+    }
+    // ★局部变量改名（`last` 与参数 `int* last` 撞名——编译错：redefinition with a different type）
+    int lastIdx = f;
+    for (int i = f; i < n; i++) {
+        auto it = g_vlRects.find(g_vlRows[i].first);
+        double y = (it != g_vlRects.end()) ? it->second.y : i * g_vlRowH;
+        if (y >= g_vlScrollY + g_vlVpH) break;
+        lastIdx = i;
+    }
+    // 预载边距（±2 行——与核心方向敏感预载同量级）
+    *first = std::max(0, f - 2);
+    *last = std::min(n - 1, lastIdx + 2);
+}
+
+/**
+ * 本帧**实际存活行**集合 vs 首帧的对称差百分比（判据 `sig_diff_pct`）。
+ *
+ * ★★口径修正（本轮实测抓出）：首版拿"**我算的可见窗口**"去比首帧的"**实际存活行**"——
+ *   而核心会在窗口之外**额外预载**（它的 `first_preload/last_preload` 策略）⇒ 两个集合
+ *   天然不同（实测 first=0..12 共 13 行 / cur=0..10 共 11 行 ⇒ 8.33% 假差异，把正确的
+ *   虚拟化判成"累积漂移"）。
+ *   ⇒ 正解：**两侧都取实际存活行**（`g_vlLive` 的键 = 物化真源，与首帧记录同源）。
+ */
+static double vlSigDiffPct() {
+    std::vector<int> cur;
+    for (const auto& kv : g_vlLive) cur.push_back(kv.first);
+    if (g_vlFirstSig.empty()) return 0;
+    std::set<int> a(g_vlFirstSig.begin(), g_vlFirstSig.end()), b(cur.begin(), cur.end());
+    int diff = 0;
+    for (int x : a) if (!b.count(x)) diff++;
+    for (int x : b) if (!a.count(x)) diff++;
+    int denom = (int)(a.size() + b.size());
+    return denom > 0 ? (100.0 * diff / denom) : 0;
+}
+
+/** 物化/回收一轮（核心给决策 → 宿主执行——与 mountVirtualProbe 同一条路） */
+static void vlApplyFrame(bool recordFirst) {
+    if (g_vlPool == 0) return;
+    // ★★CAPI 初始化（本仓已知坑第 N 次复现）：`OH_ArkUI_RenderNodeUtils_CreateNode` 在 CAPI
+    //   未初始化时**返回 null**（同 proteus_render.cpp 的 attach 注释：首次 GetModuleInterface
+    //   触发 CAPI 初始化，必须先于任何 RenderNode API 调用）。
+    //   ★症状链：CreateNode 全 null ⇒ `continue` 掉所有 acquire ⇒ `rows_live=0`
+    //     （表面像"核心没给行"，实际是**宿主建不出渲染节点**）——加了 `VL_CREATE_FAIL` 日志才看到。
+    {
+        static bool capiReady = false;
+        if (!capiReady) {
+            ArkUI_NativeNodeAPI_1* api = nullptr;
+            OH_ArkUI_GetModuleInterface(ARKUI_NATIVE_NODE, ArkUI_NativeNodeAPI_1, api);
+            capiReady = true;
+        }
+    }
+    int f = 0, l = -1;
+    vlVisibleRange(&f, &l);
+    if (l < f) return;
+    char* raw = proteus_recycle_update(g_vlPool, (uint32_t)f, (uint32_t)l);
+    std::string dec = raw ? raw : "{}";
+    if (raw) proteus_layout_free_string(raw);
+    std::vector<int> acquire, release;
+    parseIntArray(dec, "acquire", acquire);
+    parseIntArray(dec, "release", release);
+    // ★帧级诊断（前 3 帧——定位"窗口对但物化 0"）
+    if (g_vlRowFrames < 3) {
+        std::string line = "PROTEUS_VAPOR_VL_FRAME n=" + std::to_string(g_vlRowFrames) +
+                           " f=" + std::to_string(f) + " l=" + std::to_string(l) +
+                           " acquire=" + std::to_string((int)acquire.size()) +
+                           " release=" + std::to_string((int)release.size()) +
+                           " dec=" + dec.substr(0, 160);
+        OH_LOG_Print(LOG_APP, LOG_INFO, PROTEUS_BENCH_DOMAIN, PROTEUS_BENCH_TAG, "%{public}s", line.c_str());
+    }
+    for (int r : release) {
+        auto it = g_vlLive.find(r);
+        if (it != g_vlLive.end()) {
+            g_vlFree.push_back(it->second);
+            g_vlLive.erase(it);
+            g_vlReleased++;
+        }
+    }
+    for (int r : acquire) {
+        ArkUI_RenderNodeHandle node = nullptr;
+        if (!g_vlFree.empty()) { node = g_vlFree.back(); g_vlFree.pop_back(); g_vlReused++; }
+        else {
+            node = OH_ArkUI_RenderNodeUtils_CreateNode();
+            if (node == nullptr) {
+                OH_LOG_Print(LOG_APP, LOG_ERROR, PROTEUS_BENCH_DOMAIN, PROTEUS_BENCH_TAG,
+                             "PROTEUS_VAPOR_VL_CREATE_FAIL r=%{public}d（CreateNode 返回 null）", r);
+                continue;
+            }
+            OH_ArkUI_RenderNodeUtils_SetSize(node, (int32_t)400, (int32_t)g_vlRowH);
+            g_vlCreated++;
+        }
+        double y = r * g_vlRowH;
+        auto it = g_vlRects.find(g_vlRows[r].first);
+        if (it != g_vlRects.end()) y = it->second.y;
+        // 屏幕坐标 = 内容 y − 滚动偏移（分层：轨道在动，行在固定内容坐标——等价效果）
+        OH_ArkUI_RenderNodeUtils_SetPosition(node, 0, (int32_t)(y - g_vlScrollY));
+        OH_ArkUI_RenderNodeUtils_SetBackgroundColor(node, 0xFF1B1B21u);
+        g_vlLive[r] = node;
+        g_vlBuilt++;
+    }
+    g_vlRowFrames++;
+    if (recordFirst && g_vlFirstSig.empty()) {
+        for (const auto& kv : g_vlLive) g_vlFirstSig.push_back(kv.first);
+    }
+}
+
+/** mountVirtual({viewport, nodes, rows}) → {ok, node_count, row_count, row_pitch, rows_live, cmds_live} */
+static std::string vaporMountVirtualImpl(const std::string& reqJson) {
+    // 清理旧状态（幂等重入）
+    if (g_vlHandle != 0) { proteus_layout_destroy(g_vlHandle); g_vlHandle = 0; }
+    if (g_vlPool != 0) { proteus_recycle_destroy(g_vlPool); g_vlPool = 0; }
+    for (auto& kv : g_vlLive) OH_ArkUI_RenderNodeUtils_DisposeNode(kv.second);
+    g_vlLive.clear(); g_vlFree.clear(); g_vlRows.clear(); g_vlRects.clear();
+    g_vlScrollY = 0; g_vlBuilt = g_vlReleased = g_vlCreated = g_vlReused = 0;
+    g_vlRowFrames = 0; g_vlFirstSig.clear();
+
+    std::string vpObj = extractValueAfterKey(reqJson, "viewport", '{', '}');
+    double vpW = 1080, vpH = 2400;
+    if (!vpObj.empty()) {
+        jnum(vpObj.c_str(), vpObj.size(), "width", &vpW);
+        jnum(vpObj.c_str(), vpObj.size(), "height", &vpH);
+    }
+    g_vlVpH = vpH;
+    std::string nodesArr = extractNodesArray(reqJson);
+    if (nodesArr.empty()) return "{\"ok\":false,\"error\":\"mountVirtual: 无 nodes\"}";
+    // 行表
+    std::string rowsArr = extractValueAfterKey(reqJson, "rows", '[', ']');
+    {
+        std::vector<std::string> items = splitJsonObjects(rowsArr);
+        for (const auto& it : items) {
+            double root = -1;
+            jnum(it.c_str(), it.size(), "root", &root);
+            std::vector<int> ids = parseIntArrayBare(extractValueAfterKey(it, "ids", '[', ']'));
+            if (root >= 0) g_vlRows.emplace_back((int)root, ids);
+        }
+    }
+    if (g_vlRows.empty()) return "{\"ok\":false,\"error\":\"mountVirtual: 无 rows\"}";
+    // 整树进核（★不裁剪节点树——几何/命中保持全树口径）
+    char vpb[128];
+    snprintf(vpb, sizeof(vpb), "{\"viewport\":{\"width\":%.2f,\"height\":%.2f}}", vpW, vpH);
+    std::string req = std::string("{\"viewport\":{\"width\":") + std::to_string((int)vpW) +
+        ",\"height\":" + std::to_string((int)vpH) + "},\"nodes\":" + nodesArr + ",\"textMeasures\":{}}";
+    g_vlHandle = proteus_layout_create(req.c_str());
+    if (g_vlHandle == 0) return "{\"ok\":false,\"error\":\"mountVirtual: 建树失败\"}";
+    char* rp = proteus_layout_rects(g_vlHandle);
+    std::string rectsStr = rp ? rp : "{}";
+    if (rp) proteus_layout_free_string(rp);
+    parseRects(rectsStr, g_vlRects);
+    {
+        auto it = g_vlRects.find(g_vlRows[0].first);
+        if (it != g_vlRects.end() && it->second.h > 1) g_vlRowH = it->second.h;
+    }
+    g_vlPool = proteus_recycle_create((uint32_t)g_vlRows.size(), 0, 0);
+    if (g_vlPool == 0) return "{\"ok\":false,\"error\":\"mountVirtual: recycle_create 失败\"}";
+    int f0 = 0, l0 = -1;
+    vlVisibleRange(&f0, &l0);
+    // ★窗口诊断（本仓纪律：读数异常时先看输入——首版 rows_live=0 时靠它定位）
+    {
+        char dbg[200];
+        snprintf(dbg, sizeof(dbg),
+                 "PROTEUS_VAPOR_VL_WINDOW rows=%d f=%d l=%d scroll=%.1f rowH=%.1f vpH=%.1f pool=%d",
+                 (int)g_vlRows.size(), f0, l0, g_vlScrollY, g_vlRowH, g_vlVpH, g_vlPool != 0 ? 1 : 0);
+        OH_LOG_Print(LOG_APP, LOG_INFO, PROTEUS_BENCH_DOMAIN, PROTEUS_BENCH_TAG, "%{public}s", dbg);
+    }
+    vlApplyFrame(true);
+    int f = 0, l = -1;
+    vlVisibleRange(&f, &l);
+    // ★注意（本轮实测教训）：**不要**在这里额外调一次 `proteus_recycle_update` 做"诊断"——
+    //   它是**有状态**的（第二次同窗口调用返回空 acquire，还会推高 `updates` 计数）。
+    //   首版为"看回执"多调了一次 ⇒ 物化计数被污染。诊断要看就读 `vlApplyFrame` 内的回执。
+    char out[320];
+    snprintf(out, sizeof(out),
+             "{\"ok\":true,\"node_count\":%d,\"row_count\":%d,\"row_pitch\":%.1f,"
+             "\"rows_live\":%d,\"cmds_live\":%d}",
+             (int)((double)g_vlRows.size() * 3), (int)g_vlRows.size(), g_vlRowH,
+             (int)g_vlLive.size(), (int)g_vlLive.size());
+    OH_LOG_Print(LOG_APP, LOG_INFO, PROTEUS_BENCH_DOMAIN, PROTEUS_BENCH_TAG,
+                 "PROTEUS_VAPOR_MOUNTVIRT rows=%{public}d live=%{public}d pitch=%.1f",
+                 (int)g_vlRows.size(), (int)g_vlLive.size(), g_vlRowH);
+    return out;
+}
+
+/** scrollRows({dy, capture?}) → 滚动 + 决策 + 读数（与 Android 同字段） */
+static std::string vaporScrollRowsImpl(const std::string& args) {
+    if (g_vlHandle == 0) return "{\"ok\":false,\"error\":\"scrollRows: 未 mountVirtual\"}";
+    double dy = 0;
+    jnum(args.c_str(), args.size(), "dy", &dy);
+    double maxScroll = 0;
+    {
+        double maxH = 0;
+        if (!g_vlRows.empty()) {
+            auto it = g_vlRects.find(g_vlRows.back().first);
+            maxH = (it != g_vlRects.end()) ? (it->second.y + it->second.h) : 0;
+        }
+        maxScroll = std::max(0.0, maxH - g_vlVpH);
+    }
+    g_vlScrollY = std::max(0.0, std::min(maxScroll, g_vlScrollY + dy));
+    vlApplyFrame(false);
+    double sigDiff = vlSigDiffPct();
+    // ★签名诊断（对比集合内容——8.33% 差异时看"到底哪几行不同"）
+    {
+        std::vector<int> cur;
+        int cf = 0, cl = -1;
+        vlVisibleRange(&cf, &cl);
+        for (int i = cf; i <= cl && i < (int)g_vlRows.size(); i++) cur.push_back(i);
+        std::string a, b;
+        for (int x : g_vlFirstSig) a += std::to_string(x) + ",";
+        for (int x : cur) b += std::to_string(x) + ",";
+        std::string line = "PROTEUS_VAPOR_VL_SIG first=[" + a + "] cur=[" + b + "]";
+        OH_LOG_Print(LOG_APP, LOG_INFO, PROTEUS_BENCH_DOMAIN, PROTEUS_BENCH_TAG, "%{public}s", line.c_str());
+    }
+    char out[400];
+    snprintf(out, sizeof(out),
+             "{\"ok\":true,\"scroll_y\":%.1f,\"live_rows\":%d,\"cmds_live\":%d,"
+             "\"built_total\":%d,\"released_total\":%d,\"sig_diff_pct\":%.2f,\"row_frames_total\":%d}",
+             g_vlScrollY, (int)g_vlLive.size(), (int)g_vlLive.size(),
+             g_vlBuilt, g_vlReleased, sigDiff, g_vlRowFrames);
+    return out;
+}
+
+/** JSVM 回调：mountVirtual / scrollRows */
+static JSVM_Value VaporMountVirtualCb(JSVM_Env env, JSVM_CallbackInfo info) {
+    size_t argc = 1;
+    JSVM_Value args[1] = {nullptr};
+    OH_JSVM_GetCbInfo(env, info, &argc, args, nullptr, nullptr);
+    std::string req;
+    if (argc > 0) jsvmStr(env, args[0], &req);
+    std::string out = vaporMountVirtualImpl(req);
+    JSVM_Value r = nullptr;
+    OH_JSVM_CreateStringUtf8(env, out.c_str(), out.size(), &r);
+    return r;
+}
+
+static JSVM_Value VaporScrollRowsCb(JSVM_Env env, JSVM_CallbackInfo info) {
+    size_t argc = 1;
+    JSVM_Value args[1] = {nullptr};
+    OH_JSVM_GetCbInfo(env, info, &argc, args, nullptr, nullptr);
+    std::string a;
+    if (argc > 0) jsvmStr(env, args[0], &a);
+    std::string out = vaporScrollRowsImpl(a);
+    JSVM_Value r = nullptr;
+    OH_JSVM_CreateStringUtf8(env, out.c_str(), out.size(), &r);
+    return r;
+}
+
 /* ── JSVM 回调（宿主桥的四个方法；全部返回 JSON 字符串） ── */
 
 static JSVM_Value VaporMountCb(JSVM_Env env, JSVM_CallbackInfo info) {
@@ -2123,6 +2404,9 @@ static napi_value VaporProbe(napi_env env, napi_callback_info info) {
             // ★A/B ⑦ 事件路径：注入 + 反向调 JS（与 Android JNI 同语义）
             {"onGesture", {VaporOnGestureCb, nullptr}},
             {"tapAt", {VaporTapAtCb, nullptr}},
+            // ★#5 虚拟化列表（bundle mode:'list'）
+            {"mountVirtual", {VaporMountVirtualCb, nullptr}},
+            {"scrollRows", {VaporScrollRowsCb, nullptr}},
         };
         for (auto& f : fns) {
             JSVM_Value fn = nullptr;
@@ -2164,8 +2448,19 @@ static napi_value VaporProbe(napi_env env, napi_callback_info info) {
                     char vpb[128];
                     snprintf(vpb, sizeof(vpb), "{\"width\":%.4f,\"height\":%.4f}", vpW, vpH);
                     std::string modePart = vaporMode.empty() ? "" : (",\"mode\":\"" + jsonEscape(vaporMode) + "\"");
+                    // ★rows：list 模式要 1000 行（与 Android runVirtualList 默认同）；其余 8 行
+                    //   （runShort/ab 的夹具是 8 行小列表——行数不符会让 A/B 对齐失败）
+                    const char* rowsPart = (vaporMode == "list") ? ",\"rows\":1000" : ",\"rows\":8";
                     std::string jsArgs = "{\"artifacts\":\"" + jsonEscape(artifacts) +
-                                         "\",\"viewport\":" + vpb + ",\"rows\":8,\"updates\":3" + modePart + "}";
+                                         "\",\"viewport\":" + vpb + rowsPart + ",\"updates\":3" + modePart + "}";
+                    // ★入参取证（本轮靠它证实 `rows:1000` 真的传到了 JS——排除了"参数没传对"
+                    //   的嫌疑，把排查引向真正的根因）。保留为**调试开关**（默认关）：
+                    if (getenv("PROTEUS_VAPOR_DUMP_ARGS") != nullptr) {
+                        std::string line = "PROTEUS_VAPOR_ARGS_TAIL " +
+                            jsArgs.substr(jsArgs.size() > 200 ? jsArgs.size() - 200 : 0);
+                        OH_LOG_Print(LOG_APP, LOG_INFO, PROTEUS_BENCH_DOMAIN, PROTEUS_BENCH_TAG,
+                                     "%{public}s", line.c_str());
+                    }
                     JSVM_Value arg = nullptr;
                     OH_JSVM_CreateStringUtf8(jenv, jsArgs.c_str(), jsArgs.size(), &arg);
                     JSVM_Value undef = nullptr;

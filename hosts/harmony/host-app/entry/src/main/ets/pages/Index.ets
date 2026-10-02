@@ -335,6 +335,9 @@ struct Index {
   /** ★Vapor A/B 场景（`--ps scene vapor-ab`，矩阵 #14 续）：Vapor vs Vue 运行时逐节点几何对照
    *  ——落独立报告 `vapor-ab.json`（不覆盖 runShort 的 vapor.json 证据） */
   private vaporAbScene: boolean = (AppStorage.get<string>('proteusScene') ?? '') === 'vapor-ab';
+
+  /** Vapor 虚拟化列表场景（`--ps scene vapor-list`，矩阵 #14 续 · #5）——落 vapor-list.json */
+  private vaporListScene: boolean = (AppStorage.get<string>('proteusScene') ?? '') === 'vapor-list';
   /** ★原生混用场景（`--ps scene native-mix`，矩阵 #10）：SFC 夹具自绘 + **ArkUI 原生组件**
    *  按核心几何定位（重叠在锚块上——z-order 像素实测） */
   private nativeMixScene: boolean = (AppStorage.get<string>('proteusScene') ?? '') === 'native-mix';
@@ -664,6 +667,32 @@ struct Index {
             'PROTEUS_GESTURE_SCENE rendered=%{public}d install=%{public}s hitprep=%{public}s', gn, gi, gh);
         } catch (gse) {
           hilog.error(DOMAIN, BENCH_TAG, 'PROTEUS_GESTURE_SCENE_ERROR %{public}s', JSON.stringify(gse) ?? '');
+        }
+        return;
+      }
+      // ── ⓪''' ★★Vapor 虚拟化列表场景（矩阵 #14 续 · #5）：mode:'list' ──
+      if (this.vaporListScene) {
+        try {
+          const ctxL = getContext(this);
+          const bL: Uint8Array = ctxL.resourceManager.getRawFileContentSync('bundle-vapor.js');
+          const bLStr: string = util.TextDecoder.create('utf-8').decodeToString(bL);
+          const aL: Uint8Array = ctxL.resourceManager.getRawFileContentSync('vapor-list-artifacts.json');
+          const aLStr: string = util.TextDecoder.create('utf-8').decodeToString(aL);
+          const dL = display.getDefaultDisplaySync();
+          const lArgs: VaporAbArgs = {
+            bundle: bLStr,
+            artifacts: aLStr,
+            vpW: px2vp(dL.width),
+            vpH: px2vp(dL.height),
+            density: DENSITY,
+            filesDir: ctxL.filesDir,
+            mode: 'list',
+            outName: 'vapor-list.json',
+          };
+          const lOut: string = vaporProbe(JSON.stringify(lArgs));
+          hilog.info(DOMAIN, BENCH_TAG, 'PROTEUS_VAPOR_LIST %{public}s', lOut.substring(0, 900));
+        } catch (le) {
+          hilog.error(DOMAIN, BENCH_TAG, 'PROTEUS_VAPOR_LIST_ERROR %{public}s', JSON.stringify(le) ?? '');
         }
         return;
       }
