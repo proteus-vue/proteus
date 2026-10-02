@@ -23,14 +23,14 @@
 | 14 | **Vapor 指令流** | ✅ `vapor`/`vaporAb`/`vaporList` | ✅（vapor 场景） | ⛔ **缺** | 鸿蒙待补 |
 | 15 | **平台零参与动画（MA0-RT）** | ✅ `platform-anim`/`platform-anim-node` | ✅（CA 动画） | ⛔ **缺** | 鸿蒙待补 |
 | 16 | **内核驱动动画（kernel-anim）** | ✅ `kernel-anim` | ✅ | ⛔ **缺** | 鸿蒙待补 |
-| 17 | **App 路由栈（M5）** | ✅ `app-stack` | ✅ `app-stack` | ⛔ **缺** | 三端语义已对齐（`check-app-stack.py`），鸿蒙腿待接 |
+| 17 | **App 路由栈（M5）** | ✅ `app-stack` | ✅ `app-stack` | ✅ **已补（真机判据绿）** | 鸿蒙：`app-stack.ts` **移植副本**（零运行时依赖；逐字节同步校验 `sync-core.sh`，验收自动跑）+ 场景探针（与两端同口径 depth=20000）；`check-app-stack.py` 三端共用——①–⑥ 组全绿（**真机 ArkTS 证据**），⑦ 组如实跳过（未接 ScreenExecutor） |
 | 18 | **宿主运行时（G-39）** | ✅ `host-runtime` | ✅ `host-runtime` | ⛔ **缺** | 鸿蒙待补 |
 | 19 | **内存读数** | ✅ `proteus-mem` | ✅ `delta_mb` | ⛔ **缺** | 鸿蒙待补 |
 | 20 | **截图回归** | ✅ `shot`/`shot-native` | ✅（L4/sim-selfdraw） | ◐ 截图（人工取回） | 鸿蒙：**渲染树架构修正后**色块+文字双可见（`results/render-root-arch.jpeg`）；自动化像素判据待接 |
 | 21 | **一致性快照（L2-L4）** | ✅ | ✅ | ⛔ **缺** | 鸿蒙待补 |
 | 22 | **Perfetto / 帧率** | ✅（Perfetto 接入） | ◐（帧统计） | ⛔ **缺** | |
 
-**统计**：Android 22/22 · iOS **16/22** · 鸿蒙 **9/22**（本轮：鸿蒙 4→9 + iOS 15→16「结构变更」三端齐平）。
+**统计**：Android 22/22 · iOS **16/22** · 鸿蒙 **10/22**（持续推进：鸿蒙 4→10 · iOS 15→16）。
 
 ## 2. 缺口归因（为什么鸿蒙最少）
 
