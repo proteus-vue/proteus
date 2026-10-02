@@ -30,6 +30,8 @@ export interface AppScreenEntry {
   isTab: boolean
   /** ★M5 内存治理：该屏的节点预算估算（可选；`budgetNodes` 未声明时用栈级 defaultScreenNodes） */
   budgetNodes?: number
+  /** ★NB3：分支保活档（`meta.branch.keepAlive`；仅 tab 根有意义，缺省 active） */
+  keepAlive?: 'none' | 'active' | 'all'
 }
 
 /** RouteNode → 屏条目（去除 loc 等编译期字段，只留运行时需要的） */
@@ -45,6 +47,9 @@ export function toScreenEntry(node: RouteNode): AppScreenEntry {
   if (node.meta.transition) entry.transition = node.meta.transition
   const budget = node.meta.budgetNodes
   if (typeof budget === 'number' && budget > 0) entry.budgetNodes = budget
+  // ★NB3：分支保活档（与 screensFromRoutes 同源——两处转换不得漂移）
+  const ka = (node.meta.branch as { keepAlive?: unknown } | undefined)?.keepAlive
+  if (ka === 'none' || ka === 'active' || ka === 'all') entry.keepAlive = ka
   return entry
 }
 
@@ -96,6 +101,7 @@ export function generateAppScreens(nodes: RouteNode[]): string {
         `    children: ${JSON.stringify(e.children)},`,
         e.isTab ? `    isTab: true,` : '',
         e.budgetNodes ? `    budgetNodes: ${e.budgetNodes},` : '',
+        e.keepAlive ? `    keepAlive: ${JSON.stringify(e.keepAlive)},` : '',
         `  },`,
       ]
       return lines.filter(Boolean).join('\n')

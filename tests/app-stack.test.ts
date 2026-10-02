@@ -495,3 +495,97 @@ describe('⑨ 栈原语补全：removeByName / moveToTop（启示 3）', () => {
     expect(() => s.moveToTop('ghost')).toThrow(/moveToTop\("ghost"\)：栈中不存在/)
   })
 })
+
+// ══════════════════════════════════════════════════════════════════
+// ★★NB3（导航体系，2026-10-02）：分支化所需原语 —— suspend / resume / releaseTrees / frames
+//   （分支导航器消费这些原语；本组证明它们在**栈层**的语义独立成立）
+// ══════════════════════════════════════════════════════════════════
+describe('⑩ 分支原语：suspend/resume/releaseTrees/frames（NB3）', () => {
+  it('suspend：栈顶退场（exit + 树保留）；幂等（重复 suspend 零命令）', () => {
+    const s = createAppStack({ screens: SPECS })
+    s.push('home'); s.push('detail')
+    s.drainCommands()
+    s.suspend()
+    const cmds = s.drainCommands()
+    expect(cmds.map((c) => c.op)).toEqual(['exit']) // 只退场，不 unmount（树保留）
+    expect(s.stats().hidden).toBe(2) // 栈顶转 hidden（home 在 push 时已 hidden ⇒ 共 2）
+    s.suspend() // 重复：已是挂起态
+    expect(s.drainCommands().length).toBe(0)
+  })
+
+  it('resume：栈顶回到可见（enter）；幂等；空栈零命令', () => {
+    const s = createAppStack({ screens: SPECS })
+    s.push('home'); s.push('detail')
+    s.drainCommands()
+    s.suspend(); s.drainCommands()
+    s.resume()
+    const cmds = s.drainCommands()
+    expect(cmds.map((c) => c.op)).toEqual(['enter'])
+    expect(s.current()!.state).toBe('mounted')
+    s.resume() // 已可见
+    expect(s.drainCommands().length).toBe(0)
+    const empty = createAppStack({ screens: SPECS })
+    empty.resume()
+    expect(empty.drainCommands().length).toBe(0)
+  })
+
+  it('releaseTrees：整栈视图释放（unmount freeze ×每屏）+ 栈位/状态全保留 + 幂等', () => {
+    const s = createAppStack({ screens: SPECS })
+    s.push('home'); s.push('user'); s.push('detail')
+    s.drainCommands()
+    expect(s.releaseTrees()).toBe(3)
+    const cmds = s.drainCommands()
+    expect(cmds.map((c) => c.op)).toEqual(['unmount', 'unmount', 'unmount'])
+    expect(cmds.every((c) => c.op === 'unmount' && c.reason === 'freeze')).toBe(true)
+    // ★状态保留：深度/顺序/params 全在（与"清栈"的本质差别）
+    expect(s.depth).toBe(3)
+    expect(s.frames()).toEqual([
+      { name: 'home', transition: 'slideUp' }, // ★声明在 spec 上的 transition 随快照携带（不丢）
+      { name: 'user' },
+      { name: 'detail' },
+    ])
+    expect(s.stats().frozen).toBe(3)
+    expect(s.stats().activeNodes).toBe(0) // 活跃节点归零（内存读数）
+    expect(s.releaseTrees(), '重复释放 = 幂等 0').toBe(0)
+    expect(s.drainCommands().length).toBe(0)
+  })
+
+  it('releaseTrees 后 resume：重建**原栈顶**（mount rebuild=true + enter），不是根屏', () => {
+    const s = createAppStack({ screens: SPECS })
+    s.push('home'); s.push('user'); s.push('detail', { id: '7' })
+    s.drainCommands()
+    s.releaseTrees(); s.drainCommands()
+    s.resume()
+    const cmds = s.drainCommands()
+    expect(cmds.map((c) => c.op)).toEqual(['mount', 'enter'])
+    const m = cmds[0] as Extract<ScreenCommand, { op: 'mount' }>
+    expect(m.rebuild).toBe(true)
+    expect(m.name).toBe('detail')
+    expect(m.params).toEqual({ id: '7' })
+    expect(s.current()!.name).toBe('detail')
+  })
+
+  it('frames：快照含 params 与 transition（往返不丢声明）；navigate(frames) 直接消费', () => {
+    const s = createAppStack({ screens: SPECS })
+    s.push('home'); s.push('detail', { id: '5' })
+    const snap = s.frames()
+    expect(snap[0]).toEqual({ name: 'home', transition: 'slideUp' }) // spec 声明的转场原样携带
+    expect(snap[1]).toEqual({ name: 'detail', params: { id: '5' } }) // detail 未声明 transition ⇒ 不携带
+
+    const s2 = createAppStack({ screens: SPECS })
+    s2.navigate(snap)
+    expect(s2.frames()).toEqual(snap)
+  })
+
+  it('内存读数：release 后 activeNodes=0；resume 重建后回到单屏预算', () => {
+    const s = createAppStack({ screens: SPECS })
+    s.push('home') // 64（defaultScreenNodes）
+    s.push('profile') // 100（spec 声明）
+    s.drainCommands()
+    expect(s.stats().activeNodes).toBe(164)
+    s.releaseTrees()
+    expect(s.stats().activeNodes).toBe(0)
+    s.resume()
+    expect(s.stats().activeNodes).toBe(100) // 重建的只有栈顶
+  })
+})

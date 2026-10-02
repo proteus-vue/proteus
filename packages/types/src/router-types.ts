@@ -7,6 +7,8 @@ export type { RouteTransition } from './index-shared'
 // ★跨层 DTO 收口（架构规约 L0 / types-plan §07）：RouteRecord/RouteMeta 单一来源 @proteus-vue/contracts
 import type { RouteMeta } from '@proteus-vue/contracts'
 export type { RouteMeta, RouteRecord } from '@proteus-vue/contracts'
+// ★NB3（导航体系）：分支保活契约（KeepAliveTier/BranchMeta——同一单一来源）
+export type { KeepAliveTier, BranchMeta } from '@proteus-vue/contracts'
 
 /**
  * 路由参数类型表：基类为空接口，应用侧 auto-routes.ts 用模块扩充注入具体路由

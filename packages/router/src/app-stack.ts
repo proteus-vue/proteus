@@ -28,6 +28,17 @@
 //   纯逻辑（无 wx / DOM / native / 内核依赖），三端可单测；宿主接线见 runtime/执行器。
 import type { RouteParams } from './types'
 import type { RouteTransition } from './transforms/transform-transition'
+import type { KeepAliveTier } from './types'
+
+/**
+ * ★NB3 保活档**运行时全集**（分支 = isTab 页；语义见 `@proteus-vue/contracts` 的 `KeepAliveTier`）。
+ * ★穷尽接线：contracts 增删档位而此处不同步 ⇒ **本行编译报错**（不靠记忆——与门禁同纪律）。
+ */
+export const KEEP_ALIVE_TIERS: Readonly<Record<KeepAliveTier, true>> = {
+  none: true,
+  active: true,
+  all: true,
+}
 
 /**
  * 屏状态
@@ -45,6 +56,11 @@ export interface AppScreenSpec {
   transition?: RouteTransition
   /** 该屏的节点预算估算（内存治理用；缺省 policy.defaultScreenNodes） */
   budgetNodes?: number
+  /**
+   * ★NB3：该屏所属分支的保活档（来自 `meta.branch.keepAlive`；仅 tab 根页有意义）。
+   * 缺省 `active`——由 `createBranchNavigator` 物化（本字段只携带声明值）。
+   */
+  keepAlive?: KeepAliveTier
 }
 
 /**
@@ -124,6 +140,8 @@ export type AppStackEvent =
   | { type: 'freeze'; screenId: string; name: string; depth: number }
   | { type: 'restore'; screenId: string; name: string; depth: number }
   | { type: 'over-budget'; activeNodes: number; nodeBudget: number }
+  /** ★NB3：整栈视图释放（分支保活 `none` 档切走；栈位/状态保留，切回重建） */
+  | { type: 'release'; screens: number; depth: number }
 
 export interface AppStack {
   push(name: string, params?: RouteParams, opts?: { transition?: RouteTransition }): void
@@ -159,6 +177,23 @@ export interface AppStack {
   markRebuilt(screenId: string): void
   /** 取出并清空命令缓冲（执行器每帧消费一次） */
   drainCommands(): ScreenCommand[]
+  /**
+   * ★NB3 分支挂起（切走该分支的栈）：栈顶退场（exit），整栈置 hidden——**树全保留**。
+   * 与 `releaseTrees` 的区别：挂起 ≈ 平台"后台存活"（内存仍占），释放 = 视图销毁（对齐
+   * Android `saveBackStack` 的 "instances no longer exist in memory"）。
+   */
+  suspend(opts?: { transition?: RouteTransition }): void
+  /** ★NB3 分支恢复（切回）：栈顶（若被释放则重建）进入可见态 */
+  resume(): void
+  /**
+   * ★NB3 整栈**视图释放**（`keepAlive: 'none'` 分支切走时调用）：全栈按冻结语义销毁
+   * （`unmount(reason:'freeze')`），**栈位与状态保留** ⇒ `stackOf(name)` 仍返回完整栈，
+   * 切回 `resume()` 重建（`mount(rebuild:true)`）。对齐 Android `saveBackStack`。
+   * @returns 实际释放的屏数（0 = 已全部释放/空栈——幂等）
+   */
+  releaseTrees(): number
+  /** ★NB2 序列化：栈帧快照（`ScreenFrame[]`，与 `navigate` 输入同形）——深链/持久化往返用 */
+  frames(): ScreenFrame[]
   current(): AppScreen | null
   readonly stack: readonly AppScreen[]
   readonly depth: number
@@ -305,6 +340,59 @@ export function createAppStack(opts: { screens: Record<string, AppScreenSpec>; p
     if (!oldTop || oldTop.state !== 'mounted') return
     oldTop.state = 'hidden'
     commands.push({ op: 'exit', screenId: oldTop.screenId, transition })
+  }
+
+  /**
+   * ★NB3 分支挂起（切走）：栈顶退场；**整栈树保留**（对齐原生"后台存活"）。
+   * 幂等：无可见屏时为零命令（重复挂起不产生噪声）。
+   */
+  function suspend(opts?: { transition?: RouteTransition }): void {
+    const top = stack[stack.length - 1] ?? null
+    deactivate(top, opts?.transition)
+  }
+
+  /**
+   * ★NB3 分支恢复（切回）：栈顶进入可见态；被释放（frozen）的屏在此重建
+   * （`mount(rebuild:true)` + `enter`——重建语义与冻结一致，执行器无需新分支）。
+   * 幂等：已可见时为零命令（重复恢复不打扰）。
+   */
+  function resume(): void {
+    if (stack.length === 0) return
+    activateTop()
+  }
+
+  /**
+   * ★NB3 整栈视图释放（`keepAlive:'none'` 切走）：全栈按冻结语义销毁、栈位保留。
+   * 与 `applyMemoryPolicy` 的冻结**共用命令形态**（`unmount(reason:'freeze')`）——
+   * 差别只在触发方：那里是预算驱动的"最旧若干屏"，这里是分支策略驱动的"整栈"。
+   * ★不动 `frozenPrefix` 之外的屏序：栈状态（depth/顺序/params）全部原样可读。
+   */
+  function releaseTrees(): number {
+    let released = 0
+    for (const r of stack) {
+      if (r.state === 'frozen') continue
+      if (r.state === 'mounted') r.state = 'hidden' // 防御：调用方应先 suspend（此处不产生 exit——切换事务由分支导航器编排）
+      activeNodeCount -= r.budgetNodes
+      r.state = 'frozen'
+      r.needsRebuild = true
+      freezeCount++
+      commands.push({ op: 'unmount', screenId: r.screenId, reason: 'freeze' })
+      released++
+    }
+    // 冻结游标推进（底部连续冻结段）
+    while (frozenPrefix < stack.length && stack[frozenPrefix].state === 'frozen') frozenPrefix++
+    if (released > 0) emit({ type: 'release', screens: released, depth: stack.length })
+    return released
+  }
+
+  /** ★NB2 栈帧快照（含 transition——往返后转场声明不丢） */
+  function frames(): ScreenFrame[] {
+    return stack.map((r) => {
+      const f: ScreenFrame = { name: r.name }
+      if (Object.keys(r.params).length > 0) f.params = { ...r.params }
+      if (r.transition) f.transition = r.transition
+      return f
+    })
   }
 
   function push(name: string, params?: RouteParams, o?: { transition?: RouteTransition }): void {
@@ -596,6 +684,10 @@ export function createAppStack(opts: { screens: Record<string, AppScreenSpec>; p
       commands.length = 0
       return out
     },
+    suspend,
+    resume,
+    releaseTrees,
+    frames,
     current(): AppScreen | null {
       return stack[stack.length - 1] ?? null
     },

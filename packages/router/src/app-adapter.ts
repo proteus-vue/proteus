@@ -162,7 +162,7 @@ export function createAppNavigationAdapter(
 /**
  * 从**同一份路由表**（`RouteRecord[]`，即 auto-routes 的产物）推导 App 屏注册表。
  *
- * 【为什么必须有（消灭最后一段胶水）】`createAppStack` 需要 `screens`（name/path/transition/budget），
+ * 【为什么必须有（消灭最后一段胶水）】`createAppStack` 需要 `screens`（name/path/transition/budget/keepAlive），
  *   而 App 工程手上只有路由表；若不提供本函数，每个工程要手抄一份屏注册表 —— 正是"手动胶水"。
  *   本函数与 `codegen/app.ts` 的 `generateAppScreens` **同一语义**（那边是代码产物形态，
  *   这边是运行时可调形态；两处的 name/path/transition 规则一致——见 generateAppScreens 头注）。
@@ -171,7 +171,7 @@ export function screensFromRoutes(
   routes: Array<{
     name: string
     path: string
-    meta?: { transition?: unknown; isTab?: unknown; budgetNodes?: unknown }
+    meta?: { transition?: unknown; isTab?: unknown; budgetNodes?: unknown; branch?: unknown }
   }>,
 ): Record<string, AppScreenSpec> {
   const out: Record<string, AppScreenSpec> = {}
@@ -185,6 +185,9 @@ export function screensFromRoutes(
     if (typeof t === 'string') spec.transition = t as AppScreenSpec['transition']
     const b = r.meta?.budgetNodes
     if (typeof b === 'number' && b > 0) spec.budgetNodes = b
+    // ★NB3：分支保活档（meta.branch.keepAlive——仅 tab 根有意义；与 codegen/app.ts 同源）
+    const ka = (r.meta?.branch as { keepAlive?: unknown } | undefined)?.keepAlive
+    if (ka === 'none' || ka === 'active' || ka === 'all') spec.keepAlive = ka
     out[r.name] = spec
   }
   return out

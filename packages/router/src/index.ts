@@ -55,6 +55,22 @@ export type {
 export { generateAppScreens, toScreenEntry, flattenScreenEntries, tabStacks } from './codegen'
 export type { AppScreenEntry } from './codegen'
 
+// ★★NB1/NB3/NB6（导航体系，2026-10-02）：多分支独立栈（分支 = meta.isTab 页，零新增配置源）
+//   + 保活三档（none/active/all）+ 返回归属（back 只作用于活跃分支；到根交外层/系统信号）。
+//   纯逻辑、零端依赖——装配与用法见 branch-navigator.ts 头注。
+export { createBranchNavigator, KEEP_ALIVE_TIERS, OUTER_BRANCH } from './branch-navigator'
+export type {
+  BranchNavigator,
+  BranchNavigatorOptions,
+  BranchSpec,
+  BranchCommand,
+  BranchEvent,
+  BranchClock,
+  BranchStackSnapshot,
+  KeepAliveDecision,
+  BackOutcome,
+} from './branch-navigator'
+
 // ★G-32 B6（2026-09-19）：路由名推导是**跨包公开契约**——迁移工具链（compat-miniprogram 路由名表
 //   `routeNameFromPath`）必须与 derivePath 模式下的真实产物同名，否则 codemod 建议的
 //   `router.push({ name })` 在 routeMap 中查不到（死引用）。导出供 tests/route-table.test.ts 跨包一致性断言。
