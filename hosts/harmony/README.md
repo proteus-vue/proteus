@@ -74,7 +74,12 @@ chmod 600 ~/.harmony/hdckey ~/.harmony/hdckey.pub
 
 ---
 
-## 宿主工程（host-app/）—— 第一里程碑：装机链路
+## 宿主工程（host-app/）—— ✅ 第一里程碑达成：装机 + 启动（真机证据）
+
+> **2026-10-02 实测结果**：`entry-default-signed.hap`（155KB）→ `bm install` **成功** →
+> `aa start` **成功** → 宿主主动上报 `PROTEUS_HOST_READY model=KLE-AL00U os=OpenHarmony-7.0.0.105 api=26`
+> → **界面完整渲染**（截图 `results/host-app-launch.jpeg`，1320×2856）。
+> 全链纯 CLI（用户仅需在 DevEco 登录华为账号生成签名一次）。
 
 ```bash
 bash hosts/harmony/build-host-app.sh          # 构建（离线 CLI，7~12 秒；自动提示签名状态）
@@ -88,7 +93,11 @@ bash hosts/harmony/run-host-app.sh            # 装机 + 启动 + 机器验证�
 **构建链已实测打通（2026-10-02）**：DevEco 自带全套工具（hvigor 6.24.4 + node 18 + JDK 21 + SDK API 24），
 三个环境变量（`NODE_HOME` / `DEVECO_SDK_HOME` / `JAVA_HOME`，脚本已自动设置）即可纯 CLI 构建。
 
-### ★★★ 签名：本设备需要华为账号（唯一一次 IDE 介入）
+### ★★★ 签名：本设备需要华为账号（✅ 已完成一次——2026-10-02）
+
+> **现状**：华为账号签名已生成（`~/.ohos/config/default_host-app_*.{p12,cer,p7b}`，profile 白名单含本机 UDID），
+> `build-profile.json5` 已带 signingConfigs（machine-local）——之后全程 CLI（build→install→run）。
+> 下方是踩坑记录（为何社区签名不可用），供换机/换设备时重读。
 
 **实测结论（两层证据）**：
 1. 用 SDK 自带 **OpenHarmony 社区调试材料**（p12 + profile 模板，含写入本机 UDID 的 profile）
@@ -97,7 +106,7 @@ bash hosts/harmony/run-host-app.sh            # 装机 + 启动 + 机器验证�
 2. 设备是**华为商业版 HarmonyOS 7**（系统应用全为 `com.huawei.hmos.*`）——
    其 `bm install` 的 pkcs7 校验链只认**华为 CA** 签发的调试证书。
 
-**⇒ 需要你做一次（约 2 分钟）**：
+**⇒ 换设备/重装时需做一次（约 2 分钟，本机已做完）**：
 1. 打开 DevEco Studio（本机：`/Volumes/data1/work/office-applications/DevEco-Studio.app`），
    用**华为开发者账号**登录（右上角头像 → 登录）；
 2. 打开本项目：`File → Open → /Volumes/data1/work/office/debug/proteus/hosts/harmony/host-app`；
@@ -106,9 +115,14 @@ bash hosts/harmony/run-host-app.sh            # 装机 + 启动 + 机器验证�
 4. 之后回到命令行：`bash hosts/harmony/build-host-app.sh && bash hosts/harmony/run-host-app.sh`
    —— 全程 CLI，不再需要 IDE。
 
-> `build-profile.json5` 里的 signingConfigs 含**本机凭据**（路径 + 加密口令），属 machine-local
-> 状态——**不要提交**（该文件已在 `.gitignore` 里排除对本机敏感内容的提交策略：
-> 若提交请只保留空 `signingConfigs` 模板形态）。
+> **纪律（已落地为 git 机制）**：`build-profile.json5` 里的 signingConfigs 含**本机凭据**
+> （本机路径 + DevEco 加密口令）——属 machine-local，**不入库**。机制 = 本文件在仓库里保持
+> **空 signingConfigs 模板**，本机改动用 `git update-index --skip-worktree` 隔离：
+> · 本机构建正常（DevEco 写入的签名配置在本地文件里）；
+> · git status 不显示该文件改动、提交不受影响。
+> 换机/重克隆后：在 DevEco 重做一次自动签名，然后跑
+> `git update-index --skip-worktree hosts/harmony/host-app/build-profile.json5`。
+> （撤销隔离：`git update-index --no-skip-worktree <该文件>`）
 
 ### 已排除的路线（实测，勿重走）
 

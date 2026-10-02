@@ -87,6 +87,32 @@ check-consistency-snapshot 七段全绿 · check:no-blind-wait ✅（新 .sh 零
 ① L2/L3/L2.5/L2.6 算子用**合成快照**——证明的是"比对引擎敏不敏感"，不是"真机数据一定对"；
 ② L4 算子用真截图但取同端注入（跨端噪声底含 AA，无区分度）；L4 的价值形态是**定位**。
 
+### ★★★2026-10-02（六十）· 鸿蒙宿主 **装机 + 启动 + 界面渲染 —— 第一里程碑达成（真机）**
+
+**用户「签名已生成」→ 立即全链验证**（承接五十九的"装机待华为账号一次介入"）：
+
+**全链实测（每一环都有机器证据）**：
+1. **签名材料核验**：`~/.ohos/config/default_host-app_*.{p12,cer,p7b}`（华为 CA 签发）；
+   profile 白名单**含本机 UDID**（`1F8CD143...`，首位）、bundle-name = `dev.proteus.host`；
+2. **构建**：`hvigorw assembleHap` 9.2 秒 → `entry-default-signed.hap`（155KB，含签名）；
+3. **装机**：`bm install` → `install bundle successfully`；
+4. **启动**：`aa start` → `start ability successfully`；进程 `dev.proteus.host` pid 52826 运行；
+5. **宿主主动上报**：`PROTEUS_HOST_READY model=KLE-AL00U os=OpenHarmony-7.0.0.105 api=26
+   display=KLE-AL00 7.0.0.109(SP6C00E105R3P3)`（hilog；`run-host-app.sh` 条件等待 1 秒抓到——零盲等）；
+6. **★界面完整渲染**：真机截图 `results/host-app-launch.jpeg`（1320×2856）——标题/设备档案/API 26
+   全部显示（本仓惯例：装机类产出必须目视/截图双重确认，不只看 exit code）。
+
+**工具链完备性（本轮实证）**：`aa`（启动）+ `bm`（安装）+ `snapshot_display`（截图，**须 .jpeg 后缀**）
++ `hilog`（日志/主动上报）+ `uitest`（未用，下一批 UI 自动化候选）——**鸿蒙 E2E 四件套全部可用**。
+
+**工程侧遗留（下一批）**：
+① **RenderNode 直绘接入**（方案 §2.2 路径 B；本机 API 26 ≥ 20 满足）——宿主当前是"显示设备档案的空壳"；
+② 鸿蒙腿接 `check-app-stack.py`（真机导航判据）；
+③ 上游 §13 的鸿蒙待核实项（NavPathStack 生命周期）现在有设备可核实。
+
+**诚实边界**：① 本里程碑证明的是"**装得上、跑得起来、画得出**"（渲染走的是标准 ArkUI 声明式 UI，
+**尚未接 Proteus 指令流**）；② 截图是人工取回确认（未接 L4 像素装置）；③ RenderNode 侦查未开始。
+
 ### ★★★2026-10-02（五十九）· 鸿蒙宿主：**最小 hap 工程落地 + 构建链打通**（装机待华为账号一次介入）
 
 **用户「好的」→ 开工**（承接五十八的"宿主落地路线"，完成其中前两步的工程侧）。
@@ -117,9 +143,9 @@ SDK **API 24**；设置三个环境变量（`NODE_HOME`/`DEVECO_SDK_HOME`/`JAVA_
   勾 **Automatically generate signature**（自动注册 UDID + 生成 p12/cer/p7b）→ 之后 CLI 全程可用。
   步骤已写入 `hosts/harmony/README.md`（含设备 UDID 与已排除路线表，防重走）。
 
-**诚实边界**：① **装机+启动未完成**（等用户登录华为账号一次）——"构建链打通"是工程侧事实，
-  不等于"跑上设备"；② 宿主目前只是"能显示设备档案的空壳"——RenderNode 直绘接入（方案 §2.2 路径 B）
-  尚未开始；③ 鸿蒙腿未接 `check-app-stack.py`。
+**诚实边界（当时）**：① ~~装机+启动未完成~~ → **同日（六十）已达成**（用户登录华为账号后全链验证通过）；
+   ② 宿主目前只是"能显示设备档案的空壳"——RenderNode 直绘接入（方案 §2.2 路径 B）尚未开始；
+   ③ 鸿蒙腿未接 `check-app-stack.py`。
 
 ### ★★★2026-10-02（五十八）· **鸿蒙真机接入打通**（用户：「鸿蒙一直连着的」——我此前误判"无设备"，用户当场纠正）
 
@@ -969,7 +995,7 @@ check-consistency-snapshot 七段全绿 · script-compile ✅ · no-blind-wait �
 "位置是否正确"由 L2 几何数值比对承担；L4 只管"画出来像不像"（已写入注记与文档）。
 ④ 仍未接入：iOS/Android 真机截图（当前 Web=Playwright、MP=模拟器，均非真机）。
 
-## 当前状态速览（最近一次更新：**2026-10-02·（五十九）· 鸿蒙宿主：**最小 hap 工程入仓 + 构建链纯 CLI 打通**（hvigor 6.24.4 + SDK API 24，7~12 秒构建）；**装机待华为账号一次介入**（本设备只认华为 CA 调试签名——社区签名实测被拒 `fail to verify pkcs7`，替代路线已排除并记录）**）★新会话以此为准
+## 当前状态速览（最近一次更新：**2026-10-02·（六十）· 鸿蒙宿主 **第一里程碑达成（真机）**：华为签名 → `bm install` 成功 → `aa start` 成功 → 宿主主动上报 `PROTEUS_HOST_READY api=26` → **界面完整渲染**（截图存证）；全链纯 CLI（构建 9.2s）；下一批 = RenderNode 直绘接入**）★新会话以此为准
 ### ★★★2026-10-02（三十八）· 交互两层（离散 + 连续）—— 标准 §10.1 的最后两个"未布点"
 
 **交付**
