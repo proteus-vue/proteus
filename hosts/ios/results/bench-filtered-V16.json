@@ -6367,51 +6367,91 @@
   },
   "host_node_count" : 707,
   "host_timing_last" : {
-    "build_layers_ms" : 54.558038711547852,
-    "host_total_ms" : 83.567976951599121,
-    "layout_ms" : 3.3620595932006836,
-    "measure_ms" : 18.343091011047363
+    "build_layers_ms" : 54.937005043029785,
+    "host_total_ms" : 81.761002540588379,
+    "layout_ms" : 3.1850337982177734,
+    "measure_ms" : 16.165971755981445
   },
   "js_completed" : 1,
   "js_ok" : true,
   "js_report" : {
-    "build_id" : "6fbaa4d8-001003",
+    "build_id" : "d7c580dc-021616",
     "case_filter" : [
       "V16"
     ],
     "case_timings_ms" : {
-      "V16_gesture_split" : 134
+      "V16_gesture_split" : 124
     },
     "cases" : [
       {
         "case" : "V16_gesture_split",
         "extra" : {
+          "base_idx" : 1,
+          "base_row_id" : 15,
           "checks" : {
             "coordOk" : true,
             "lpCountOk" : true,
-            "lpTargetsOk" : false,
+            "lpTargetsOk" : true,
             "tapCountOk" : true,
-            "tapTargetsOk" : false,
+            "tapTargetsOk" : true,
             "totalOk" : true
           },
           "covered" : "core-hit + shell-dispatch + type-routing",
           "expected_rows" : [
-            6,
             15,
             22,
-            29
+            29,
+            36
+          ],
+          "full_log" : [
+            {
+              "id" : 15,
+              "target" : 19,
+              "title" : "row-tap",
+              "x" : 120,
+              "y" : 152
+            },
+            {
+              "id" : 22,
+              "target" : 26,
+              "title" : "row-tap",
+              "x" : 120,
+              "y" : 216
+            },
+            {
+              "id" : 29,
+              "target" : 33,
+              "title" : "row-longpress",
+              "x" : 120,
+              "y" : 280
+            },
+            {
+              "id" : 36,
+              "target" : 40,
+              "title" : "row-longpress",
+              "x" : 120,
+              "y" : 344
+            }
           ],
           "got_length" : 4,
-          "lp_targets" : [
+          "lp_current_targets" : [
+            29,
+            36
+          ],
+          "lp_deep_hits" : [
             33,
             40
           ],
           "not_covered" : "UITouch->duration-classification",
-          "tap_targets" : [
+          "tap_current_targets" : [
+            15,
+            22
+          ],
+          "tap_deep_hits" : [
             19,
             26
           ],
-          "verdict" : "FAIL"
+          "verdict" : "PASS"
         },
         "host_ms" : 0,
         "items" : 100,
@@ -6436,7 +6476,7 @@
       ],
       "stages" : [
         "before-S2:15",
-        "after-S:34"
+        "after-S:35"
       ]
     },
     "kind" : "logic-bench",
@@ -6457,8 +6497,8 @@
   },
   "js_total" : 1,
   "launch_diag" : {
-    "bootstrap_ms" : 102.04000000000001,
-    "first_frame_ms" : 109.73999999999999,
+    "bootstrap_ms" : 178.94999999999999,
+    "first_frame_ms" : 200.37,
     "first_frame_source" : "kernel:p_starttime",
     "forced_style" : "Dark",
     "interface_style" : "Dark",
@@ -11418,7 +11458,7 @@
       "y" : 0
     }
   },
-  "run_ts" : 1790957441.934562,
+  "run_ts" : 1790965013.7452159,
   "screen_max_fps" : 60,
-  "tree_hash" : "e8949ae8"
+  "tree_hash" : "73505762"
 }

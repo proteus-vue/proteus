@@ -67,11 +67,14 @@ export function buildBenchRow(
   onTap?: (e: { currentTarget: number; target: number; x: number; y: number }) => void,
   /** ★V10：行级 longpress 处理器（同链；adapter 把 onLongpress 归一为语义名 `longpress`） */
   onLongPress?: (e: { currentTarget: number; target: number; x: number; y: number }) => void,
+  /** ★矩阵 #7：行级 swipe 处理器（语义名 `swipe`；方向在 `e.direction`——见 V17 用例） */
+  onSwipe?: (e: { currentTarget: number; target: number; x: number; y: number; direction?: string }) => void,
 ): ReturnType<typeof h> {
   return h('p-view', {
     key: it.id,
     ...(onTap ? { onClick: onTap } : {}),
     ...(onLongPress ? { onLongpress: onLongPress } : {}),
+    ...(onSwipe ? { onSwipe: onSwipe } : {}),
     style: {
       flexDirection: 'row', alignItems: 'center',
       height: 56, flexShrink: 0, margin: { bottom: margin }, padding: { left: 16, right: 16 },
@@ -160,6 +163,17 @@ export function makeApp(initial: number, strategy: BenchStrategy = 'plain'): Ben
       title: 'row-longpress',
     })
   }
+  // ★矩阵 #7：swipe 探针（方向读 `e.direction`——Swift 触摸链编码 `swipe:<dir>`，
+  //   由 `__proteus_dispatch` 解码后并入事件对象；见 entry-bench 的注释）
+  const onRowSwipeProbe = (e: { currentTarget: number; target: number; x: number; y: number; direction?: string }) => {
+    tapLog.push({
+      id: e.currentTarget,
+      target: e.target,
+      x: Math.round(e.x * 100) / 100,
+      y: Math.round(e.y * 100) / 100,
+      title: 'row-swipe-' + (e.direction ?? 'unknown'),
+    })
+  }
   const container = adapter.createElement('p-view')
   adapter.root.children.push(container)
   container.parent = adapter.root
@@ -200,7 +214,7 @@ export function makeApp(initial: number, strategy: BenchStrategy = 'plain'): Ben
         if (strategy === 'comp') {
           return h(V0Row, { key: it.id, row: it, dot, margin, accent: c, extra })
         }
-        return buildBenchRow(it, dot, margin, c, extra, onRowTapProbe, onRowLongPressProbe)
+        return buildBenchRow(it, dot, margin, c, extra, onRowTapProbe, onRowLongPressProbe, onRowSwipeProbe)
       })
       return h('p-view', {
         style: {

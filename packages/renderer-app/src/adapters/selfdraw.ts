@@ -199,6 +199,8 @@ export interface SelfDrawAdapter extends NativeAdapter {
     type: string,
     x: number,
     y: number,
+    /** ★矩阵 #7：语义附加字段（如 `swipe` 的 `direction`）——并入事件对象（`e.direction`） */
+    extra?: Record<string, unknown>,
   ): { fired: number[]; stoppedAt: number | null; errors: string[] }
   /**
    * ★★取走本批次的**结构变更请求**（增删行的增量路径——供 `proteus_layout_splice`）。
@@ -1252,6 +1254,7 @@ export function createSelfDrawAdapter(): SelfDrawAdapter {
       type: string,
       x: number,
       y: number,
+      extra?: Record<string, unknown>,
     ): { fired: number[]; stoppedAt: number | null; errors: string[] } {
       const fired: number[] = []
       const errors: string[] = []
@@ -1267,6 +1270,8 @@ export function createSelfDrawAdapter(): SelfDrawAdapter {
           currentTarget: id,
           x,
           y,
+          // ★语义附加字段（swipe.direction 等——与 packages/gesture 的 GestureEvent 同形状）
+          ...(extra ?? {}),
           _stopped: false,
           stopPropagation(): void {
             ev._stopped = true

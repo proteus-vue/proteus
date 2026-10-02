@@ -59,10 +59,10 @@ if [ -z "${PROTEUS_BUNDLE_ID:-}" ]; then
   done
   if [ -n "$_AUTO_ID" ]; then
     BUNDLE_ID="$_AUTO_ID"
-    echo "    [auto] 自动选中可用描述文件的 bundle id：$BUNDLE_ID"
+    echo "    [auto] 自动选中可用描述文件的 bundle id：${BUNDLE_ID}"
   else
     BUNDLE_ID="dev.proteus.experiments"   # 兜底（后续签名段会给出明确报错与指引）
-    echo "    [auto] ⚠ 未找到有效描述文件——用兜底 $BUNDLE_ID（签名段会报错时按提示 provision）"
+    echo "    [auto] ⚠ 未找到有效描述文件——用兜底 ${BUNDLE_ID}（签名段会报错时按提示 provision）"
   fi
 else
   BUNDLE_ID="$PROTEUS_BUNDLE_ID"

@@ -463,6 +463,8 @@ func physFootprintMB() -> Double {
     ///   需人手或 XCUITest 覆盖）。
     /// - Parameters: x/y 为**内容坐标**（与核心 rects 同口径）
     func tapAt(_ x: Double, _ y: Double) -> String
+    /// ★矩阵 #7：**注入一次 swipe**（类型 = `swipe:<dir>`；dx/dy 用于方向推导）
+    func swipeAt(_ x: Double, _ y: Double, _ dx: Double, _ dy: Double) -> String
     /// ★V10：**注入一次 longpress**（同 `tapAt` 的链；类型 = `longpress`）
     ///
     /// 【与手势层阈值对齐】`packages/gesture` 的 `longpressDuration` 默认 **500ms**；
@@ -2102,6 +2104,8 @@ final class SelfDrawView: UIView {
     private let tapMaxDuration: Double = 0.5
     /// longpress 的最短时长（与 `packages/gesture` 的 longpressDuration 默认 500ms 对齐）
     private let longpressMinDuration: Double = 0.5
+    /// swipe 的最小释放速度（px/ms——与 `packages/gesture` 的 swipeVelocity 默认 0.3 同口径）
+    private let swipeMinVelocity: Double = 0.3
 
     override func touchesBegan(_ touches: Set<UITouch>, with event: UIEvent?) {
         guard let t = touches.first else { return }
@@ -2117,13 +2121,28 @@ final class SelfDrawView: UIView {
         let dy = Double(p.y) - start.y
         let dist = (dx * dx + dy * dy).squareRoot()
         let dt = CFAbsoluteTimeGetCurrent() - start.t
-        // ★★V10（2026-10-02）：按「位移 + 时长」**分流**（此前只区分 tap，长按被静默丢弃）：
+        // ★★V10/V17：按「位移 + 时长 + 速度」**三分流**（此前大位移被静默丢弃）：
         //   · 小位移 + 短时（≤ tapMaxDuration）      → tap
         //   · 小位移 + 长时（≥ longpressMinDuration） → longpress
-        //   · 大位移（拖动）                          → 不派发（滚动由 pan 识别器负责）
-        //   ★阈值与 `packages/gesture` 对齐：longpressDuration 默认 500ms；
-        //     两阈值间（0.5s 以下均算 tap）不留空档：tapMaxDuration == longpressMinDuration。
-        guard dist <= tapSlop else { return }
+        //   · **大位移 + 高速（≥ swipeMinVelocity）**  → **swipe**（矩阵 #7 补齐：此前只到
+        //     "不派发（滚动由 pan 识别器负责）"——swipe 语义事件从未产生）
+        //   ★阈值与 `packages/gesture` 对齐：longpressDuration 默认 500ms ·
+        //     swipeVelocity 默认 **0.3 px/ms**（本处同口径换算 px/s：300 px/s）；
+        //     两时长阈值相等不留空档：tapMaxDuration == longpressMinDuration。
+        // ★用**绝对内容坐标**（核心的 rects 是内容坐标；self.bounds 是视口）
+        //   ⇒ 加上滚动偏移（内容被移了，但核心坐标不动）
+        let ax = Double(p.x) + Double(contentOffset.x)
+        let ay = Double(p.y) + Double(contentOffset.y)
+        if dist > tapSlop {
+            // 大位移：按**释放速度**判 swipe（px/ms，与 gesture 层同量纲）
+            let speed = dt > 0 ? dist / (dt * 1000) : 0
+            guard speed >= swipeMinVelocity else { return }   // 慢拖 = 拖动（pan 负责），不派发
+            let dir: String
+            if abs(dx) > abs(dy) { dir = dx > 0 ? "right" : "left" }
+            else { dir = dy > 0 ? "down" : "up" }
+            emitGesture(x: ax, y: ay, type: "swipe:" + dir)
+            return
+        }
         let type: String
         if dt <= tapMaxDuration {
             type = "tap"
@@ -2132,10 +2151,6 @@ final class SelfDrawView: UIView {
         } else {
             return   // 理论不可达（两阈值相等）；保留以免将来改阈值时静默
         }
-        // ★用**绝对内容坐标**（核心的 rects 是内容坐标；self.bounds 是视口）
-        //   ⇒ 加上滚动偏移（内容被移了，但核心坐标不动）
-        let ax = Double(p.x) + Double(contentOffset.x)
-        let ay = Double(p.y) + Double(contentOffset.y)
         emitGesture(x: ax, y: ay, type: type)
     }
 
@@ -3710,6 +3725,24 @@ final class SelfDrawBridge: NSObject, SelfDrawExports {
         let lastTarget = gestureStats["last_target"] ?? -1
         let lastChain = gestureStats["last_chain_len"] ?? 0
         return jsonString(["ok": true, "x": x, "y": y, "target": lastTarget,
+                           "chain_len": lastChain, "stats": gestureStats])
+    }
+
+    /// ★矩阵 #7：**注入一次 swipe**（类型 = `swipe:<dir>`——与真实触摸路径的编码同形）。
+    ///
+    /// 【为什么不注入"down→moves→up"序列】本入口与 iOS/Android 的注入族同构（注入即声明类型，
+    ///   见 `tapAt` 的诚实边界注释）；**真实时长/速度分流**由 `touchesEnded` 三分支承担
+    ///   （真实触摸时按位移+速度判型）。参数 `dx/dy` 用于**方向推导**（与用户手势语义一致）。
+    func swipeAt(_ x: Double, _ y: Double, _ dx: Double, _ dy: Double) -> String {
+        guard handle != 0 else { return "{\"ok\":false,\"error\":\"未建树\"}" }
+        let dir: String
+        if abs(dx) > abs(dy) { dir = dx > 0 ? "right" : "left" }
+        else { dir = dy > 0 ? "down" : "up" }
+        emitGesture(x: x, y: y, type: "swipe:" + dir)
+        let lastTarget = gestureStats["last_target"] ?? -1
+        let lastChain = gestureStats["last_chain_len"] ?? 0
+        return jsonString(["ok": true, "x": x, "y": y, "dx": dx, "dy": dy,
+                           "direction": dir, "target": lastTarget,
                            "chain_len": lastChain, "stats": gestureStats])
     }
 
