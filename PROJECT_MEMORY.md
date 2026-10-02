@@ -87,6 +87,50 @@ check-consistency-snapshot 七段全绿 · check:no-blind-wait ✅（新 .sh 零
 ① L2/L3/L2.5/L2.6 算子用**合成快照**——证明的是"比对引擎敏不敏感"，不是"真机数据一定对"；
 ② L4 算子用真截图但取同端注入（跨端噪声底含 AA，无区分度）；L4 的价值形态是**定位**。
 
+### ★★★2026-10-02（五十三）· **路由主线：调研 + 项目驱动落地 + 启示 3/6 落地**（用户点名"从项目配置出发，不是夹具绕开"）
+
+**用户原话**：「滚动停靠先不急，回到页面路由主线，**调研现在所有主流框架的页面路由痛点和优点**，
+进一步落地我们的页面路由，记住开发者是写标准 vue 文件的，我们的页面都是 pages 下面的 vue 文件形式，
+所以页面路由的各种配置也都是**项目上面出发落地**，不是我们夹具手写实现绕开」。
+
+**① 调研（子代理执行，`docs/Proteus_主流框架路由调研与启示.md` 42KB）**
+· 9 框架 × 7 问（uni-app / Taro / React Navigation / Flutter+go_router / Next.js App Router /
+  Nuxt 3 / Vue Router / 微信原生 / 鸿蒙 ArkUI），**6 条可执行启示**（标注抄/避/超越）
+  + **9 条「未核实」如实单列**（搜索引擎全被人机验证拦，未采信任何摘要）。
+· 方法：官方文档逐页抓取为主，社区证据走 GitHub REST API issue 元数据（无 gh CLI）。
+· 硬事实：Taro 官方「小程序页面栈最多十层」（微信官方正文无该数字——来源差异已标注）·
+  uni-app「onBackPress 不可 async / iOS 侧滑不触发」· RN「params 必须 JSON-serializable」·
+  Flutter 官方「命名路由多数不推荐」· 鸿蒙 `router` API 18 废弃改 `Navigation`/`NavPathStack`。
+
+**② 断链修复：项目 → App（用户点名的"夹具绕开"实证）**
+· **实测确认**：`codegen/app.ts` 的 `generateAppScreens` **全仓零调用**；App 两端只能靠
+  `entry-app-stack.ts` 的 `buildNodes(fans)` 手搓合成屏池 ⇒ 项目 pages/ 与 router.meta 到不了 App。
+· 修三处：配置面 `RouterSection.appNavigationOutput`（缺省 = 与 routesOutput 同目录的
+  navigation.generated.ts；5 条派生规则锁进测试）· `gen-routes.writeAppNavigation()`（从同一棵路由树
+  产出 App 屏注册表，**复用 app-adapter 的 screensFromRoutes** 同一转换；带平台门控）·
+  新入口 `entry-app-project.ts`（`__proteusAppProjectRun`，两端宿主把读数以 `p_` 前缀并入 app-stack.json）。
+· **两端真机证据（判据新增 ⑨ 组，同一脚本读两端）**：
+  `屏 37 = 路由 37（同源）· tab 2 · 携带项目转场 2 · 入口 index → push [3 个真实页面] → back 正确`
+  （Android QuickJS + iOS JSC 均为 True）。
+
+**③ 启示 6「路由不存在 = 编译错误」落地**：`gen-routes.validate()` 新增跨路由引用闭合——
+`meta.redirectTo` / `meta.parent` / `router.tabBar.list[].name` 目标必须存在，否则**构建期抛错**
+（附可用路由名 + 修法）。★破坏性验证：注入 `redirectTo:'no-such-page'` ⇒ 当场红（且报**两条**
+——`user-profile` 受目录级 meta 继承，证明覆盖集中式 meta 继承链）。
+
+**④ 启示 3「栈原语补全」落地**：`AppStack` 新增 `removeByName`（只移除自己、上面屏补位——
+**不做级联弹出**，语义决策写进注释；幂等 no-op）+ `moveToTop`（保栈深、中间屏原位保留）；
+上到**统一 API**（`router.popTo/removeByName/moveToTop`，三端同签名；Web/MP 受平台限制 ⇒
+不支持时**明确报错**不静默降级）。
+
+**★过程中的门禁价值（两次）**：① `check:docs-stats` 抓出滚动文档"183 原语"过期（实为 187）；
+② `router-purity` 抓出我 `router-core.ts` **注释里**写了 `wx.navigateBack`（字符串匹配门禁不认注释）
+⇒ 改注释措辞（**门禁是硬边界，不因"只是注释"绕过**）。
+
+**验证**：全量单测 **4538/4538**（+9；362 文件）· 两端真机 ⑨ 组全绿 · check:script-compile /
+gates-sync / deps 全绿 · app-stack 判据全绿。**启示 2（go/push 双通道）/ 5（返回意图统一拦截）未做**
+——留待下批（5 依赖宿主 onBackPressed 接线，capability-app 已登记 roadmap）。
+
 ### ★★★2026-10-02（五十二）· **可停靠滚动容器方案落地（SC2）：声明式封闭集 + 编译期五条硬约束 + 门禁**
 
 **用户要求**：「对我刚才发的文档（《Proteus_可停靠滚动容器与滚动编排能力方案》）也要做成正式落地方案」。
@@ -703,7 +747,7 @@ check-consistency-snapshot 七段全绿 · script-compile ✅ · no-blind-wait �
 "位置是否正确"由 L2 几何数值比对承担；L4 只管"画出来像不像"（已写入注记与文档）。
 ④ 仍未接入：iOS/Android 真机截图（当前 Web=Playwright、MP=模拟器，均非真机）。
 
-## 当前状态速览（最近一次更新：**2026-10-02·（五十二）· 可停靠滚动容器 SC2 落地：声明式封闭集 + 编译期五条硬约束 + check:scroll-safety 接 CI/verify**）★新会话以此为准
+## 当前状态速览（最近一次更新：**2026-10-02·（五十三）· 路由主线：主流框架调研 + 项目驱动 App 导航注册表（两端真机 ⑨ 组）+ 启示 3/6 落地**）★新会话以此为准
 ### ★★★2026-10-02（三十八）· 交互两层（离散 + 连续）—— 标准 §10.1 的最后两个"未布点"
 
 **交付**
