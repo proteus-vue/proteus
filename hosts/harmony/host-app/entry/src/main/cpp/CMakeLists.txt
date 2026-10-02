@@ -1,22 +1,30 @@
 # entry/src/main/cpp/CMakeLists.txt
-# Proteus 鸿蒙宿主 —— 原生渲染模块（RenderNode 直绘）
-#
-# 【为什么是 native】方案 §2.2 路径 B：**RenderNode（API 20+）直绘**——绕过 ArkUI 的
-#   measure/layout，把 Proteus 指令流直接建成渲染节点树。这就是"不自绘"路线下
-#   性能收益的核心落点（本机设备 API 26，满足）。
-#
-# 【构建】由 hvigor 自动调用（entry/build-profile.json5 的 externalNativeOptions）；
-#   工具链与 sysroot 由 DevEco SDK 注入（OHOS_SDK_NATIVE），此处无需手写路径。
+# Proteus 鸿蒙宿主 —— 原生渲染模块（RenderNode 直绘）+ 4050 基准（Rust 排版核）
 cmake_minimum_required(VERSION 3.5.0)
-project(proteus_render)
+project(proteus_host)
 
 set(NATIVERENDER_ROOT_PATH ${CMAKE_CURRENT_SOURCE_DIR})
-
 include_directories(${NATIVERENDER_ROOT_PATH})
 
-add_library(proteus_render SHARED proteus_render.cpp)
+# ★4050 基准需要 Rust 核（hosts/harmony/build-rust-core.sh 交叉编译产物）
+set(RUST_LIB ${CMAKE_CURRENT_SOURCE_DIR}/thirdparty/libproteus_layout_core.a)
+if(EXISTS ${RUST_LIB})
+  add_library(proteus_rust_layout STATIC IMPORTED)
+  set_target_properties(proteus_rust_layout PROPERTIES IMPORTED_LOCATION ${RUST_LIB})
+  message(STATUS "proteus: Rust 排版核已就位")
+  set(HAVE_RUST_CORE TRUE)
+else()
+  message(WARNING "proteus: 缺 Rust 核 —— 4050 基准不参与构建（先跑 hosts/harmony/build-rust-core.sh）")
+  set(HAVE_RUST_CORE FALSE)
+endif()
 
-# libace_napi.z.so  : NAPI 桥（ArkTS ↔ C++）
-# libace_ndk.z.so   : ArkUI NDK（NodeContent / NativeNodeAPI / RenderNode）
-# libhilog_ndk.z.so : 日志（宿主主动上报——本仓零盲等纪律的落点）
+# 渲染模块（直绘）
+add_library(proteus_render SHARED proteus_render.cpp)
 target_link_libraries(proteus_render PUBLIC libace_napi.z.so libace_ndk.z.so libhilog_ndk.z.so)
+
+# 4050 基准模块（Rust 核 + RenderNode）
+if(HAVE_RUST_CORE)
+  add_library(proteus_bench SHARED proteus_bench.cpp)
+  target_link_libraries(proteus_bench PUBLIC libace_napi.z.so libace_ndk.z.so libhilog_ndk.z.so)
+  target_link_libraries(proteus_bench PUBLIC proteus_rust_layout)
+endif()

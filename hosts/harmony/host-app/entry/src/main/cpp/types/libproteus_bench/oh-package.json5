@@ -1,0 +1,6 @@
+{
+  "name": "libproteus_bench.so",
+  "types": "./index.d.ts",
+  "version": "1.0.0",
+  "description": "Proteus 鸿蒙 4050 基准模块（Rust 排版核 + RenderNode）"
+}

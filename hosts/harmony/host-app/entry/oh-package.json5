@@ -6,6 +6,7 @@
   "author": "",
   "license": "",
   "dependencies": {
-    "libproteus_render.so": "file:./src/main/cpp/types/libproteus_render"
+    "libproteus_render.so": "file:./src/main/cpp/types/libproteus_render",
+    "libproteus_bench.so": "file:./src/main/cpp/types/libproteus_bench"
   }
 }

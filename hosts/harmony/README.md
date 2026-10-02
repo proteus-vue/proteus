@@ -74,6 +74,33 @@ chmod 600 ~/.harmony/hdckey ~/.harmony/hdckey.pub
 
 ---
 
+## 宿主工程（host-app/）—— ✅ 第三里程碑：**4050 应用级基准（M5）· 三端数据齐**（真机）
+
+> **2026-10-02 实测**（HUAWEI KLE-AL00U · API 26 · 与 Android **同一份夹具** `app-4050-tree.json`）：
+
+| 路径 | 实测（3 次一致） | 备注 |
+|---|---|---|
+| **Proteus**（Rust 核 + RenderNode） | **66~67ms**（排版 10ms + 直绘树 48ms） | 「提交级」：建树→排版→4000 RenderNode 构建（未上屏） |
+| **原生 ArkUI**（声明式 4050 元素） | **539~549ms** | 「渲染级」：onAppear 全触发（含首帧构建+挂载） |
+| 比值 | **0.12** | ★口径不对称——原生含更多工作（见报告 caveats，不反推等口径倍数） |
+
+**一键复跑**：`bash hosts/harmony/run-host-app.sh`（装机→启动→RenderNode 直绘→4050 基准，全自动零盲等）。
+**报告**：`results/bench-4050.json`（含三端对照与诚实边界）· `results/host-app-run.txt`（原始日志行）。
+
+**跨端布局核一致性**：同一份 `packages/layout-core-rust`（taffy-0.14）——
+Android 走 JNI、iOS 走 staticlib、**鸿蒙走 `aarch64-unknown-linux-ohos` 交叉编译 + C ABI**（无绑定层）。
+交叉编译脚本：`bash hosts/harmony/build-rust-core.sh`（产物 `cpp/thirdparty/libproteus_layout_core.a`，gitignore）。
+
+### ★ 本轮实测坑（鸿蒙 UI 线程看门狗）
+
+| # | 坑 | 现象 | 修法 |
+|---|---|---|---|
+| 1 | **THREAD_BLOCK_6S** | 主线程卡 6 秒被系统杀进程（`will exit because THREAD_BLOCK_6S`）——首版 `readFixture` 逐字符 `out += String.fromCharCode()`（435KB ⇒ O(n²)） | `util.TextDecoder` 一次解码（2ms） |
+| 2 | 基准必须分档 | 4050 全量单次调用可能长时独占 UI 线程 | 分档（500/2000/4050）+ 档间 `setTimeout(16)` 让出 |
+| 3 | hilog 浮点格式 | `%{public}.2f` 显示 `<private>` | 用 `%.2f`（不带隐私标记）；或只看 JSON 字段 |
+
+---
+
 ## 宿主工程（host-app/）—— ✅ 第二里程碑达成：**RenderNode 直绘**（真机证据）
 
 > **2026-10-02 实测**：Proteus 指令流（RenderCmd 同形 JSON）→ NAPI → C++ →

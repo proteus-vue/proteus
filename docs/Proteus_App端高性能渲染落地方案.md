@@ -698,11 +698,25 @@ export default defineConfig({
 - [x] 拍平 + 离屏渲染规避 —— ✅ `hosts/ios/README-BENCH.md` + `docs/proteus-performance-plan/10-ios-memory.md`（**真/假拍平辨析**：50 块位图 vs 4000 块）
 - [ ] 与 Android 端一致性 conformance 门禁 —— ◐ `hosts/cross-device-hit.py` 已有跨端命中测试，**但无 CI script 挂载**
 
-### M5 · 鸿蒙端 + 收尾（≈4 人周）—— ❌ **未做**（核实于 2026-09-28）
+### M5 · 鸿蒙端 + 收尾（≈4 人周）—— ◐ **绘制层已接入 + 4050 数据已齐**（2026-10-02）
 
-- [ ] 鸿蒙绘制层接入 —— ❌ 无代码（全仓仅 `.md`）
+- [x] **鸿蒙绘制层接入** —— ✅ **已落地（真机）**：`hosts/harmony/host-app/`（DevEco Stage 工程，
+  `dev.proteus.host`）—— Rust 排版核 **交叉编译到 aarch64-unknown-linux-ohos**（`build-rust-core.sh`，
+  与 Android/iOS 同一份 Rust 源码）+ **RenderNode 直绘（API 20+，方案 §2.2 路径 B）**：
+  `proteus_render.cpp`（NAPI + `OH_ArkUI_RenderNodeUtils_*`）+ `proteus_bench.cpp`（4050 基准）。
+  验收入口：`bash hosts/harmony/run-host-app.sh`（装机→启动→RenderNode 直绘→4050 基准全自动）。
+- [x] **4050 应用级数据（鸿蒙腿）** —— ✅ **已跑**（2026-10-02 · HUAWEI KLE-AL00U · API 26）：
+
+  | 指标 | 实测（3 次一致） | 说明 |
+  |---|---|---|
+  | **Proteus 路径（提交级）** | **66~67ms** | Rust 核排版 10ms + 4000 RenderNode 构建 48ms |
+  | **原生 ArkUI 对照（渲染级）** | **539~549ms** | 4050 声明式元素 onAppear 全触发 |
+  | 比值 | **0.12** | ★口径不对称（见 `results/bench-4050.json` 的 caveats——原生含首帧上屏，我们不含） |
+
+  报告：`hosts/harmony/results/bench-4050.json` · 截图：`results/render-node-demo.jpeg`。
+  **三端数据齐**：Android 0.527（5 轮）· iOS 2.58（CALayer 绘制/原生 UILabel，不同口径）· 鸿蒙 0.12（口径见注）。
 - [ ] 无障碍 / Semantics 语义树（合规必需，见 §10）—— ❌ 无证据（`component-ir` 无 semantics 字段）
-- [ ] 性能棘轮门禁常态化 —— ◐ **门禁已存在**（`scripts/check-vapor-perf.mjs`，两层判据：性能上限 + **优化路径生效证明**），**但未接入 `pnpm verify` 链** ⇒ 待接线
+- [ ] 性能棘轮门禁常态化 —— ◐ 门禁已存在（`check:vapor-perf`）且**已接入 verify**（2026-09-28）；鸿蒙腿的棘轮到「有可复跑数据」阶段（本卡）——纳入基线待下一批。
 
 > ⚠ **§9.4 的一处不实**：文中称新增包 `@proteus-vue/perf-ratchet` —— **该包不存在**；
 > 实际落地形式是 `scripts/check-vapor-perf.mjs` + `package.json` 的 `check:vapor-perf`。

@@ -1,0 +1,2 @@
+# Rust 核交叉编译产物（由 hosts/harmony/build-rust-core.sh 生成——32MB，不入库）
+libproteus_layout_core.a
