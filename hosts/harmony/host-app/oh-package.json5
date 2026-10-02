@@ -1,0 +1,6 @@
+{
+  "modelVersion": "5.0.0",
+  "description": "Proteus HarmonyOS 宿主（最小工程——装机链路 + 方舟能力侦查基座）",
+  "dependencies": {},
+  "devDependencies": {}
+}

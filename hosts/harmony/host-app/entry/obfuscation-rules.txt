@@ -1,0 +1,5 @@
+# Proteus 鸿蒙宿主——混淆规则（默认：不开属性混淆，保宿主调试可读性）
+-enable-property-obfuscation
+-enable-toplevel-obfuscation
+-enable-filename-obfuscation
+-enable-export-obfuscation

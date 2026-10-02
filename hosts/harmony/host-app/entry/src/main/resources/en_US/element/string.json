@@ -1,0 +1,7 @@
+{
+  "string": [
+    { "name": "module_desc", "value": "Proteus HarmonyOS host (entry)" },
+    { "name": "EntryAbility_desc", "value": "Proteus host entry ability" },
+    { "name": "EntryAbility_label", "value": "ProteusHost" }
+  ]
+}

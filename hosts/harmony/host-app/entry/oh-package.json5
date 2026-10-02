@@ -1,0 +1,9 @@
+{
+  "name": "entry",
+  "version": "1.0.0",
+  "description": "Proteus 鸿蒙宿主入口模块",
+  "main": "",
+  "author": "",
+  "license": "",
+  "dependencies": {}
+}
