@@ -19,7 +19,7 @@ export const routes: RouteRecord[] = [
   { name: "glass-demo", path: "pages/glass-demo", component: "../pages/glass-demo.vue", parent: "index", meta: {"title":"液态玻璃（G-07）"} },
   { name: "i18n-demo", path: "pages/i18n-demo", component: "../pages/i18n-demo.vue", parent: "index", meta: {"title":"国际化"} },
   { name: "index", path: "pages/index", component: "../pages/index.vue", meta: {"title":"首页","isTab":true} },
-  { name: "mine", path: "pages/mine", component: "../pages/mine.vue", parent: "index", meta: {"title":"我的","isTab":true} },
+  { name: "mine", path: "pages/mine", component: "../pages/mine.vue", parent: "index", meta: {"title":"我的","isTab":true,"branch":{"keepAlive":"none"}} },
   { name: "mp-semantics-demo", path: "pages/mp-semantics-demo", component: "../pages/mp-semantics-demo.vue", parent: "index" },
   { name: "native-components-demo", path: "pages/native-components-demo", component: "../pages/native-components-demo.vue", parent: "index", meta: {"title":"原生能力组件"} },
   { name: "pinia-demo", path: "pages/pinia-demo", component: "../pages/pinia-demo.vue", parent: "index", meta: {"title":"状态管理"} },
@@ -105,7 +105,8 @@ export const screens: Record<string, AppScreenSpec> = {
   },
   "mine": {
     "name": "mine",
-    "path": "pages/mine"
+    "path": "pages/mine",
+    "keepAlive": "none"
   },
   "mp-semantics-demo": {
     "name": "mp-semantics-demo",

@@ -18,7 +18,7 @@
 // 【与夹具的关系（诚实边界）】本入口**不压测**（不做 20000 层/冻结读数——那是 entry-app-stack 的职责）；
 //   它只跑"真实导航操作"，用于证明**项目配置驱动**与**两端一致**。
 import { createAppStack } from '@proteus-vue/router/app-stack'
-import { createRouter } from '@proteus-vue/router/app-route'
+import { createRouter, createBranchNavigator } from '@proteus-vue/router/app-route'
 import { createAppNavigation } from '@proteus-vue/render-backend/app-navigation'
 
 // ★项目产物（gen-routes 生成）：**一个文件承载三份投影**（2026-10-02 统一后）
@@ -116,6 +116,114 @@ export function __proteusAppProjectRun(argsJson?: string): string {
     apiResult = { adapter_ready: false, error: String(e) }
   }
 
+  // ⑤ ★★★NB1/NB3/NB6（导航体系，2026-10-02）：**分支导航器在真机上跑**（项目产物装配，零新增配置源）
+  //   证明四件（对应落地方案 §4 判据 2/4/5/8）：
+  //     · 切分支**保留各自栈**（切回栈深不变——与小程序"切 tab 清栈"的本质差别）；
+  //     · `keepAlive:'none'` 分支切走 ⇒ 视图释放（unmount freeze）但**栈状态可读**，切回重建原栈顶；
+  //     · `back()` 只作用于活跃分支（另一分支分毫未动）+ 栈空交外层（暴露为 `g_back_system`）；
+  //     · 命令流带 `branch` 标记（执行器按分支隔离）。
+  //   ★装配源 = **统一产物**：`tabNames`（分支清单）+ `screens`（含 keepAlive 物化）——
+  //     examples 配置里 `router.pages['mine'].branch.keepAlive='none'` 一路流到这里，无需二次转换。
+  const branchResult: Record<string, unknown> = (() => {
+    try {
+      const nav = createBranchNavigator({ screens: projectScreens, tabNames })
+      const branches = nav.branches.map((b) => b.name)
+      const branchKeep = nav.branches.map((b) => `${b.name}:${b.keepAlive}`)
+      if (branches.length === 0) {
+        return { g_ok: false, g_error: '项目产物无分支（tabNames 为空——检查 router.pages 的 isTab）' }
+      }
+      const first = branches[0]!
+      const second = branches[1] ?? branches[0]!
+      if (branches.length < 2) {
+        return {
+          g_ok: false,
+          g_error: `项目产物只有 ${branches.length} 个分支（判据需要 ≥2——切分支保栈需要两个）`,
+          g_branches: branches,
+        }
+      }
+      // ① 分支 A 内推真实项目子屏（从 screenNames 取非分支名的屏），记栈深
+      const subA = names.find((n) => !branches.includes(n) && projectScreens[n]) ?? null
+      const subB = names.filter((n) => !branches.includes(n) && projectScreens[n] && n !== subA)[0] ?? null
+      const a = nav.stackOf(first)
+      if (subA) a.push(subA)
+      if (subB) a.push(subB)
+      const depthA0 = a.depth
+      // ② 切到分支 B（B 懒建根），再切回 A ⇒ **A 栈深不变**（保栈判据）
+      nav.switchTo(second)
+      const bRoot = nav.stackOf(second).depth
+      const depthAAfterBack = (nav.switchTo(first), nav.stackOf(first).depth)
+      // ③ keepAlive 决策（none 档 = 非活跃分支 keep:false）+ 切走释放（mine 为 none 时）
+      const kaPolicy = nav.keepAlivePolicy().map((p) => `${p.branch}:${p.keep ? 'keep' : 'drop'}`)
+      // ④ 在 none 档分支上：推子屏 → 切走（释放）→ 栈状态仍可读 → 切回（重建）
+      const noneBranch = nav.branches.find((b) => b.keepAlive === 'none')?.name ?? null
+      let noneFrames: string[] = []
+      let noneFrozen = 0
+      let noneRebuilds = 0
+      let noneDepth = 0
+      if (noneBranch && noneBranch !== nav.active()) {
+        nav.switchTo(noneBranch)
+        const ns = nav.stackOf(noneBranch)
+        if (subA && subA !== noneBranch) ns.push(subA)
+        noneDepth = ns.depth
+        nav.switchTo(branches.find((b) => b !== noneBranch)!)
+        nav.drainCommands() // 丢掉释放命令（端上行为已由 AppStack 单测覆盖；此处读状态）
+        noneFrames = nav.stackOf(noneBranch).frames().map((f) => f.name)
+        noneFrozen = nav.stackOf(noneBranch).stats().frozen
+        nav.switchTo(noneBranch) // 切回 ⇒ 重建原栈顶
+        noneRebuilds = nav.stackOf(noneBranch).stats().rebuildCount
+      }
+      // ⑤ 返回归属：在活跃分支内 back（不影响他分支）；连按到根 ⇒ 交外层信号
+      const beforeBack = {
+        active: nav.active(),
+        activeDepth: nav.activeStack().depth,
+        otherDepth: nav.stackOf(branches.find((b) => b !== nav.active())!).depth,
+      }
+      const back1 = nav.back()
+      const otherAfter = nav.stackOf(branches.find((b) => b !== nav.active())!).depth
+      // 连按到根（有界：栈深 +1 次）——到根即交外层，`system` = 无外层（宿主据此不消费平台返回）
+      let backSystem = false
+      for (let i = 0; i < 8; i++) {
+        const o = nav.back()
+        if (o.action === 'pop') continue
+        if (o.action === 'system') backSystem = true
+        break
+      }
+      // ⑥ 命令流带 branch 标记（执行器按分支隔离的证据）
+      const cmds = nav.drainCommands()
+      const cmdBranches = [...new Set(cmds.map((c) => c.branch))]
+
+      const g_ok =
+        depthAAfterBack === depthA0 && // 切分支保栈（核心判据）
+        depthA0 >= 2 && // 真的推过屏（>=2 层）
+        bRoot >= 1 && // B 懒建根
+        noneFrozen === noneDepth && noneDepth >= 2 && noneFrames.length === noneDepth && noneRebuilds >= 1 && // none 档：释放 + 状态保留 + 重建
+        back1.action === 'pop' && otherAfter === beforeBack.otherDepth && // 返回只作用于活跃分支
+        backSystem // 到根交系统（不静默吞掉）
+
+      return {
+        g_ok,
+        g_branches: branches,
+        g_keep_alive: branchKeep,
+        g_policy: kaPolicy,
+        g_none_branch: noneBranch,
+        g_none_depth: noneDepth,
+        g_none_frozen: noneFrozen,
+        g_none_frames: noneFrames,
+        g_none_rebuilds: noneRebuilds,
+        g_switch_kept_depth: depthAAfterBack, // = depthA0 时保栈成立
+        g_switch_depth_before: depthA0,
+        g_b_root_depth: bRoot,
+        g_back_action: back1.action,
+        g_back_other_untouched: otherAfter === beforeBack.otherDepth,
+        g_back_system: backSystem,
+        g_cmd_branches: cmdBranches,
+        g_note: '分支导航器（NB1/NB3/NB6）——切分支保栈 + none 档释放重建 + 返回归属（真机）',
+      }
+    } catch (e) {
+      return { g_ok: false, g_error: String(e) }
+    }
+  })()
+
   return JSON.stringify({
     ...base,
     after_entry: afterEntry,
@@ -123,6 +231,7 @@ export function __proteusAppProjectRun(argsJson?: string): string {
     after_back: afterBack,
     back_ops: backOps,
     ...apiResult,
+    ...branchResult,
   })
 }
 
