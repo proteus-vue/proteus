@@ -26,5 +26,12 @@ export const jsvmProbe: (script?: string) => string;
 export const vaporProbe: (argsJson: string) => string;
 /** ★内核曲线采样（矩阵 #15 A1："贝塞尔来自内核"）——id 缺省 1 */
 export const animCurveBezier: (curveId?: number) => string;
+/** ★★宿主运行时（矩阵 #18，G-39）：JSVM eval 同一份 bundle-host-runtime.js；
+ *  argsJson = { bundle, filesDir? }；返回同形报告（可用 check-host-runtime.py 判） */
+export const hostRuntimeProbe: (argsJson: string) => string;
+/** ★C 组：持久壳 VM 安装（跨事件存活；幂等）—— argsJson = { bundle, filesDir? } */
+export const hostRtShellInstall: (argsJson: string) => string;
+/** ★C 组：真生命周期转发（pause/resume）→ JS 钩子 → 泵 job → 写 host-shell.json */
+export const hostRtShellEvent: (evt: string) => string;
 /** Rust 排版核版本（仪器自检） */
 export const version: () => string;

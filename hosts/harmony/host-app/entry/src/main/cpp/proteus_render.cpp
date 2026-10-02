@@ -76,6 +76,21 @@ static double g_density = 1.0;
  *   · 鸿蒙宿主**无 CPU onDraw 通路**（光栅在 RS 进程）⇒ "主线程零参与绘制"以
  *     **宿主指令构建次数**（g_cmdBuildCount）为口径（Android 用 onDraw 计数）。
  */
+/* ── 矩阵 #18：宿主运行时（G-39）的壳侧状态（真事件源 + 壳转发记录） ──
+ *
+ * 【分工】JS 侧（bundle）的 `__proteusHostShellLifecycle(evt)` 负责**运行时语义**（状态机 +
+ *   能力总线）；本侧负责**真事件源**（Ability 的 onBackground/onForeground → 调 JS 钩子）
+ *   与**独立记账**（attempts/pushes——"JS 说收到了"可伪造，宿主进程内的记录才是证据源）。
+ *   取证形态与 Android 一致：真实系统事件触发（本仓用 `uinput -K -d 1 -u 1` = HOME 键，
+ *   与 Android 的 `input keyevent HOME` 同法；脚本驱动、可复现）。
+ */
+static int g_shellAttempts = 0;      // 真事件回调次数（pause/resume 各计）
+static int g_shellPushes = 0;        // 成功推入 JS 次数（钩子返回非空）
+static std::string g_shellLastPayload;   // 最近一次载荷（{evt, applied, state, cap_phase}）
+static std::string g_shellHistory;       // 逐条历史（JSON 数组文本）
+static std::string g_hostRtDir;          // 报告目录（ArkTS 注入）
+static napi_env g_napiEnv = nullptr;     // 保存 env（Ability 回调经 ArkTS 调 napi 出口）
+
 static int g_cmdBuildCount = 0;          // RenderCommands 被调用的次数（指令构建）
 static int g_cmdBuildBaseline = -1;      // 动画窗口起点
 static ArkUI_RenderNodeHandle g_animTarget = nullptr;  // 目标节点（根的第一个子节点）
