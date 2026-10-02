@@ -349,13 +349,26 @@ TS 镜像 `slot-runtime/src/anim-curve.ts` + 跨语言 golden `tests/anim-curve-
 启动参数走一次性 JSON（N 条动画一次调用）+ 每帧 `tick(dt)` 最小协议。
 完整指令集（`ANIM_BIND` / `ANIM_SEEK` / `ANIM_PROGRESS`）是否编入流，归 RT2 决策。
 
-### RT1 · 路由框架（≈2.5 人周）—— ◐ **部分完成**（核实于 2026-09-28）
+### RT1 · 路由框架（≈2.5 人周）—— ✅ **核心价值已收口**（2026-10-02 更新）
 
 - [x] 统一路由 API（上层与现有 `proteus.config.ts` 配置兼容）—— ✅ `packages/router/src/{navigation,merge,rules,schema,skyline}.ts` + `tests/router*.test.ts`（20+ 测试文件）
 - [x] routeType 映射表（§3.2）—— ✅ `router/src/rules.ts:131` + `schema.ts:28` + `presets/{halfScreen,scaleDown,slideUp}.ts`
-- [ ] App 端路由实现（解除 §3.3 五条限制）—— ❌ 无证据（**这是 RT1 的核心价值，仍待做**）
+- [x] **App 端路由实现（解除 §3.3 五条限制）—— ✅ 已收口（2026-10-02）**：
+      · **统一 API 直通 App 端**：`router-core.ts`（平台中立核心，adapter 注入）+ `app-route.ts`
+        （App 入口，不 import shared ⇒ 无 window/wx 环境可运行）+ `app-adapter.ts`
+        （栈 → RouterAdapter）+ `render-backend/app-navigation.ts`（`createAppNavigation` 一步装配）
+      · **开发者零胶水**：`createRouter(routes, { adapter: nav.adapter })` → `router.push({ name })`
+        —— 与 Web/MP 同一个 API（此前 App 必须手写 stack+executor+ports+泵 五段胶水）
+      · **真机证据**（Android QuickJS，`check-app-stack.py` ⑧ 组）：
+        `push→2层(r-detail · params={'id':'42'}) · back→1层(r-home) · replace→1层(r-user)`
+      · **无 DOM 环境实测**：裸 Node（显式断言无 window）跑通全链 + 参数保留
 - [x] Skyline 端映射验证 —— ✅ `router/src/skyline.ts` + `tests/platform-variant-router.test.ts`
-- [ ] 页面栈层数实测 —— ❌ 无证据
+- [x] **页面栈层数实测 —— ✅ 无上限**：真机 **20000 层 push/pop 全成**（`a_depth_reached=20000`，
+      对照小程序第 10 层 `navigateTo` 直接失败）；内存靠**预算冻结**（`b_frozen_count=19985`，
+      `active_nodes 960 ≤ budget 1000`，`over_budget=false`）—— §3.4 的"红利"已用真机数字兑现。
+
+> ★**RT1 剩余（非核心价值）**：`ANIM_BIND`/`ANIM_PROGRESS`（属 RT2 范围）、跨端 conformance
+>   （App ⇄ Skyline 转场视觉对照表）。核心价值（统一 API + App 实现 + 解除限制 + 层数实测）**已齐**。
 
 ### RT2 · 动画指令（≈3 人周，依赖 RT0 结论）—— ◐ **骨架 + 真机验证通过**（2026-09-30）
 
