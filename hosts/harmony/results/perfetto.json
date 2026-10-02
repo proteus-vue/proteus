@@ -1,0 +1,29 @@
+{
+ "ok": true,
+ "path": "perfetto",
+ "host_id": "harmony",
+ "tool": "hitrace（OpenHarmony ftrace 前端——Perfetto 同族）",
+ "note": "鸿蒙腿：系统级 trace 采活动期帧标记（FrameS-BeginScene）→ 帧区间统计（与 iOS 帧统计同口径）；★与 Android Perfetto 的差异：Android 由系统直接给帧区间，本腿从 ftrace 标记序列算——量纲同、来源同族",
+ "frames": 166,
+ "gaps_ms": {
+  "avg": 50.91,
+  "p50": 16.67,
+  "p95": 216.58,
+  "p99": 1078.86,
+  "min": 0.01,
+  "max": 1415.09
+ },
+ "fps_avg": 19.64,
+ "active_gaps_ms": {
+  "count": 151,
+  "avg": 18.02,
+  "fps": 55.5
+ },
+ "total_span_ms": 8400.64,
+ "checks": {
+  "frames_enough": true,
+  "p50_in_band": true,
+  "fps_ok": true
+ },
+ "verdict": "PASS"
+}
