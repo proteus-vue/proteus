@@ -41,6 +41,14 @@
       "reason": "系统光栅化实现不同（RenderThread / CoreAnimation / RS / 浏览器）",
       "scope": "L4 像素观察（非门禁）中的圆角/阴影类目",
       "evidence": "标准 §9.3 / §8.1"
+    },
+    {
+      "id": "A-6",
+      "category": "text-metrics",
+      "title": "字族解析结果不同（system-ui → 平台具体字族）",
+      "reason": "Web 浏览器把 `system-ui` 作为**字族标识**返回（getComputedStyle 原样回显），而微信容器（WebView/Skyline）**解析为具体平台字族**（如 `PingFang SC`）——同一份声明的不同解析深度，属平台字体栈实现差异，不可消除。",
+      "scope": "L3 计算样式比对中 `fontFamily` 键；**仅该键**（fontSize/fontWeight 仍严格相等——它们无平台解析歧义）",
+      "evidence": "2026-10-02 实测：Web 端 golden `fontFamily` = 'system-ui' vs WebView `fields({computedStyle})` = 'PingFang SC'（5/5 节点一致地出现该差异）"
     }
   ]
 }

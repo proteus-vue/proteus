@@ -83,7 +83,12 @@
   · 18 单测（含 §7.4 按钮变色必过项）
 - [x] **VC5-d** 允许差异清单 v1（《多端一致性标准方案》§9 / CS2）——✅（2026-10-02）机读清单入库
   `docs/allow-differences.json`（5 条，含 A-4；schema 门禁随 `check:consistency-metrics`）
-- [ ] **VC6** L3 计算样式比对
+- [x] **VC6** L3 计算样式比对 —— ✅（2026-10-02）：**实测比对落地**（Web 真值 ⇄ WebView
+  `fields({computedStyle})`，25 个可比键）· **硬门禁**（豁免外差异判失败）·
+  允许差异豁免：A-6 字族解析（Web `system-ui` vs 微信 `PingFang SC`——同声明的不同解析深度，
+  登记进 CS2 清单并留痕 `allowedBy`）· 破坏性验证：注入颜色差异 ⇒ 精确报
+  `:backgroundColor {...} → {...}（容差 0，类 color）` 并阻断
+  · ★Skyline 端**不参与** L3（VC1 实测 computedStyle 不可用）——产出式样式如实标注 `measured: false`
 - [x] **VC7** L4 像素兜底 —— ✅（2026-10-02）：感知算法（pHash DCT）+ 差异区域定位 +
   样本量记录（卡片硬性）+ 噪声基线 schema（带留痕字段）+ 最小 PNG 编解码（零依赖、平台中立）
   · 🔴 **非门禁**（`gate: false` 显式字段 + 退出码语义：只有 schema 违规才红）

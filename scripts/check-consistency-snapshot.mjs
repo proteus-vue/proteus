@@ -15,6 +15,9 @@ import { validateGeometrySnapshot, validateStyleSnapshot } from '../packages/con
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..')
 const fails = []
 const note = (m) => console.log('  · ' + m)
+/** 小程序各端的样式快照（读取产物时填充——供 L3 比对） */
+const mpStyles = {}
+const mpStyleOf = (end) => mpStyles[end] ?? null
 
 // ① Web golden（Playwright 实测产物，入库）
 const webGolden = path.join(ROOT, 'tests/__snapshots__/consistency/web-home.geometry.json')
@@ -94,7 +97,8 @@ for (const [end, f] of Object.entries(mpFiles)) {
   if (geo.end !== end) fails.push(`小程序 ${end} 快照 end 应为 ${end}，实际 ${geo.end}`)
   if (geo.collectionErrors) fails.push(`小程序 ${end} 采集有错误：${JSON.stringify(geo.collectionErrors)}`)
   mpGeos[end] = geo
-  note(`小程序 ${end}：几何 ${rg.nodeCount} 节点 —— 校验器 ✅`)
+  if (style) mpStyles[end] = style
+  note(`小程序 ${end}：几何 ${rg.nodeCount} 节点${style ? ` · 样式 ${style.nodes.length} 节点（${style.boundaries?.measured ? '实测' : '产出式'}）` : ''} —— 校验器 ✅`)
 }
 
 // ④ skyline ⇄ webview 一致（同夹具同声明）
@@ -149,6 +153,50 @@ if (mpGeos.skyline && mpGeos.webview) {
   //   · skyline ⇄ webview：**硬门禁**（同夹具同声明，须一致——上文 ④ 已判，且 VC5-b 复核）；
   //   · 小程序 ⇄ App 内核：**报告**（两端 renderer 不同：微信容器 vs 自研内核；当前差异如实列出，
   //     待 L2 覆盖扩到 App 端后按允许差异清单评估）。这不是"放水"——是"差异必须先被看见"。
+}
+
+// ⑤b ★★L3 实测样式比对（Web 真值 ⇄ WebView）——M1 的 L3 覆盖落地
+//   前提：两端都走 `fields/getComputedStyle` **实测**（Skyline 端不可用 ⇒ 不参与——见下）
+if (mpGeos.webview) {
+  const { compareStyle, buildStyleReport, formatReport } = await import('../packages/consistency/dist/index.js')
+  const { resolveTolerance } = await import('../packages/consistency/dist/index.js')
+  const cfg = resolveTolerance(JSON.parse(fs.readFileSync(path.join(ROOT, 'docs/consistency-tolerance.json'), 'utf-8')))
+  // Web golden 里带 style（tests/consistency-web-probe.test.ts 产出）
+  const webGolden = path.join(ROOT, 'tests/__snapshots__/consistency/web-home.geometry.json')
+  let webStyle = null
+  if (fs.existsSync(webGolden)) {
+    const g = JSON.parse(fs.readFileSync(webGolden, 'utf-8'))
+    webStyle = g.style ?? null
+    // 统一 end 字段（Web 探针产 'web'）
+    if (webStyle) webStyle = { ...webStyle, end: 'web' }
+  }
+  const wvStyle = mpStyleOf('webview')
+  if (webStyle && wvStyle) {
+    // ★允许差异豁免（CS2 清单 → 比对引擎；键名映射写在门禁里——清单是**语义条目**，
+    //   映射到具体键是"判定实现"的职责，两者分离：清单变了不必改引擎，映射变了不必改清单）
+    const allowDifferences = [{ id: 'A-6', key: 'fontFamily' }]
+    const r = compareStyle(webStyle, wvStyle, { tolerance: cfg, allowDifferences })
+    const over = r.diffs.filter((d) => d.overTolerance)
+    const allowedN = r.diffs.filter((d) => d.allowedBy).length
+    note(`L3 样式比对（Web 真值 ⇄ webview 实测，${r.summary.compared} 节点 · 跳过 ${r.summary.skipped} 键）：
+         ${r.ok ? '✅ 全部在容差内' : `❌ ${over.length} 条超容差`}${allowedN > 0 ? ` · 允许差异豁免 ${allowedN} 条（${[...new Set(r.diffs.filter((d) => d.allowedBy).map((d) => d.allowedBy))].join(',')}）` : ''}`)
+    for (const d of over.slice(0, 8)) {
+      note(`    · path=${d.path} ${d.key} ${JSON.stringify(d.aValue)} → ${JSON.stringify(d.bValue)}（容差 ${d.tolerance ?? '-'}，类 ${d.class}）`)
+    }
+    // ★★L3 已转**硬门禁**（2026-10-02）：豁免（A-6 字族解析）之外的差异一律判失败。
+    //   依据：夹具同声明（同构要求已满足）+ 分级容差已落地 + 豁免走 CS2 清单留痕。
+    //   ⇒ "清单内不判失败；清单外一律当 bug"（标准 §9.1）——本行是该纪律的执行点。
+    if (!r.ok) {
+      fails.push(
+        `L3 样式比对（Web ⇄ webview）有 ${over.length} 条超容差（豁免外）：` +
+          over.map((d) => `${d.path}:${d.key}`).slice(0, 4).join(' · '),
+      )
+    } else {
+      note('    ★L3 硬门禁：豁免外全部在容差内')
+    }
+  } else {
+    note('L3 样式比对跳过：Web golden 无 style 或 webview 无样式快照')
+  }
 }
 
 // ⑥ ★App 内核 ⇄ 小程序（跨 renderer 比对，如实报告）

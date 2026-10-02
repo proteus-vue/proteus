@@ -22,30 +22,32 @@ Page({
     } catch (e) {
       console.log('[VC0-INJECT-ERR] ' + String(e))
     }
-    // ★VC4-c/d：一致性快照采集（**页面级触发**——组件 ready 跨页复用不可靠，实测抓出）
+    // ★VC4-c/d + L3：一致性快照采集（**页面级触发**——组件 ready 跨页复用不可靠，实测抓出）
+    //   样式优先**实测**（fields computedStyle，WebView 可用）、失败回退产出式（Skyline 实测不可用）
     var self2 = this
     setTimeout(function () {
       var collect = require('../../utils/collect-consistency.js')
       var comp = self2.selectComponent('#cssprobe')
       collect.collectComponentFromPage(self2, comp, 'p1', 'webview', function (geo) {
         var selftest = collect.snap.assertSnapshotSelfCheck()
-        var style = collect.styleDeclared('webview')
-        var app = getApp()
-        if (!app.globalData.__VC0__) app.globalData.__VC0__ = { env: null, runs: [] }
-        var bucket = app.globalData.__VC0__.consistency = { geometry: [], style: [], selftest: [] }
-        bucket.geometry.push(geo)
-        bucket.style.push(style)
-        bucket.selftest.push(selftest)
-        // ★账本瘦身（实测：完整账本经 automation_evaluate 读会超时）——另存一份"门禁只读区"：
-        //   几何全量（门禁的核心比较对象）+ 样式摘要（节点数与首节点键集）——足够 schema+几何判据
-        bucket.gateView = {
-          geo: geo,   // 完整几何快照（含 format/version/end/viewport/boundaries——校验器需要全部字段）
-          style: style,
-          styleSummary: { nodes: style.nodes.length, firstKeys: style.nodes.length ? Object.keys(style.nodes[0].styles).sort() : [] },
-          selftest: selftest,
-        }
-        console.log('[VC4-CONSISTENCY] end=webview selftest=' + (selftest.ok ? 'ok' : JSON.stringify(selftest.problems)) + (geo.collectionErrors ? ' ERRORS=' + JSON.stringify(geo.collectionErrors) : ''))
+        collect.collectStyle(comp, 'webview', function (style) {
+          var app = getApp()
+          if (!app.globalData.__VC0__) app.globalData.__VC0__ = { env: null, runs: [] }
+          var bucket = app.globalData.__VC0__.consistency = { geometry: [], style: [], selftest: [] }
+          bucket.geometry.push(geo)
+          bucket.style.push(style)
+          bucket.selftest.push(selftest)
+          bucket.gateView = {
+            geo: geo,     // 完整几何快照
+            style: style, // 完整样式快照（含 boundaries.measured 标注语义）
+            selftest: selftest,
+          }
+          console.log('[VC4-CONSISTENCY] end=webview styleMeasured=' + !!(style && style.boundaries && style.boundaries.measured) +
+            ' selftest=' + (selftest.ok ? 'ok' : JSON.stringify(selftest.problems)) +
+            (geo.collectionErrors ? ' ERRORS=' + JSON.stringify(geo.collectionErrors) : ''))
+        })
       })
     }, 600)
+
   }
 })

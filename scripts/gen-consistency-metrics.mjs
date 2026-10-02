@@ -108,6 +108,24 @@ async function build() {
   const mutation = await runL1Mutation()
   const m4Rate = mutation.injected > 0 ? mutation.captured / mutation.injected : 0
 
+  // ★M1 折算表（同源口径——见 M1 的注释）：样式键 → CSS 字段（四角/四边归并）
+  const L3_FIELD_MAP = {
+    backgroundColor: 'backgroundColor', color: 'color', display: 'display', fontSize: 'fontSize',
+    opacity: 'opacity', position: 'position',
+    borderTopLeftRadius: 'borderRadius', borderTopRightRadius: 'borderRadius',
+    borderBottomRightRadius: 'borderRadius', borderBottomLeftRadius: 'borderRadius',
+    borderTopWidth: 'borderWidth', borderRightWidth: 'borderWidth', borderBottomWidth: 'borderWidth', borderLeftWidth: 'borderWidth',
+    borderTopColor: 'borderColor', borderRightColor: 'borderColor', borderBottomColor: 'borderColor', borderLeftColor: 'borderColor',
+    marginTop: 'margin', marginRight: 'margin', marginBottom: 'margin', marginLeft: 'margin',
+    paddingTop: 'padding', paddingRight: 'padding', paddingBottom: 'padding', paddingLeft: 'padding',
+    // fontFamily / fontWeight / visibility：不在 28 字段集内 ⇒ 不计（宁少算）
+  }
+  const l3Fields = new Set(Object.values(L3_FIELD_MAP))
+  /** 几何四量 → 字段（x/y 是位置，不是 CSS 字段——保守只算 width/height） */
+  const L2_FIELDS = new Set(['width', 'height'])
+  const l1Fields = new Set(rows.map((r) => r.field))
+  const coveredFields = new Set([...l1Fields, ...L2_FIELDS, ...l3Fields])
+
   return {
     version: 1,
     note: 'M1–M4 机器生成（scripts/gen-consistency-metrics.mjs）——每项都指向已入库产物；标准 §6.2 要求公开含不好看的数',
@@ -119,23 +137,36 @@ async function build() {
     },
     M1: {
       name: '数值一致性覆盖率',
-      // ★★口径修正（本仓"标尺虚高"纪律——首版算出的 100% 是把"L1 完成"说成"一致性完成"）：
-      //   标准 §6.1 的"L1+L2+L3 覆盖的属性数 / 全部可表达属性数"按**分层加总**理解：
-      //   一个字段要在 L1/L2/L3 三层都被机器校验才算"完全覆盖"⇒ 分母 = N × 3。
-      //   同时给 byLayer 分解（这是"逐阶段提升"的可见轨迹，也是公开的"不好看的数"）。
-      definition: 'Σ(L1|L2|L3 各层已机器化字段数) / (可表达字段数 × 3)（分层加总——单层完成不代表一致）',
-      // ★分子 = Σ(各层 covered)（分层加总口径的实际实现——L1 按 CSS 字段数、L2 按几何四量、
-      //   L3 待布点；各层口径不同源，故 note 里逐层写明，避免"混算成一个大数"的虚高）
-      value: m1Total > 0 ? Number(((m1Covered + 4) / (m1Total * 3)).toFixed(4)) : 0,
+      // ★★口径（本仓"标尺不虚高"纪律，两轮修正后的定稿）：
+      //   标准 §6.1「L1+L2+L3 覆盖的属性数 / 全部可表达属性数」⇒ 分母 = **编译器 CSS 字段数 × 3**。
+      //   ★★三层必须先**折算到同一字段集**再相加（首版直接把"几何量 4 + 样式键 25"当字段 =
+      //     67.9% **虚高**——几何量不是 CSS 字段、样式键有 4 角/4 边重复与集外键）。
+      //   折算规则（保守：宁可少算）：
+      //     · L1：直接按字段（矩阵逐字段）——全部 28
+      //     · L2：几何四量（x/y/w/h）→ 只映射 width/height **2 个字段**（x/y 是位置不是字段）
+      //     · L3：实测样式键 → 映射回字段（四角归 borderRadius、四边归 margin/padding、
+      //       四向归 borderWidth/borderColor；fontFamily/fontWeight/visibility **不在 28 字段集内 ⇒ 不计**）
+      //   另给 `union`（并集口径：该字段是否被**任一**层机器校验）——对外更好理解的那一个数。
+      definition: 'Σ(L1|L2|L3 各层**折算到同一 CSS 字段集**后的覆盖数) / (可表达字段数 × 3)（分层加总 · 折算口径）',
+      value: m1Total > 0 ? Number(((m1Covered + L2_FIELDS.size + l3Fields.size) / (m1Total * 3)).toFixed(4)) : 0,
+      /** ★并集口径：任一层的机器校验覆盖到的字段数 / 字段总数 */
+      union: {
+        covered: coveredFields.size,
+        total: m1Total,
+        value: m1Total > 0 ? Number((coveredFields.size / m1Total).toFixed(4)) : 0,
+      },
       byLayer: {
-        L1: { covered: m1Covered, total: m1Total, note: '支持度矩阵 + 边界门禁 + 棘轮基线（已落地）' },
-        // ★L2 口径（2026-10-02 VC5-b 落地后）：**比对引擎已就绪且三端实测通过**
-        //   （App 内核 ⇄ skyline ⇄ webview 逐节点在容差内；破坏性验证：2px 漂移精确检出）。
-        //   覆盖数按"快照链路覆盖的字段"计：几何 4 字段（x/y/w/h）× 三端比对已通 ⇒ 记 4。
-        //   ★注意分母口径：本表 total 是**CSS 字段数**（28），而几何比对覆盖的是 x/y/w/h 四量，
-        //   两者不同源 ⇒ 这里如实记 4 并在 note 写明口径（不混算、不虚报）。
-        L2: { covered: 4, total: m1Total, note: '比对引擎已落地（VC5-b/VC6）：三端实测逐节点在容差内 + 破坏性验证通过；覆盖口径 = 几何 x/y/w/h 四量（不同于本表 total 的 CSS 字段集，故单列说明）' },
-        L3: { covered: 0, total: m1Total, note: '计算样式快照格式已定（VC3-b）+ 采集已通；逐字段比对（VC6）未做 ⇒ 记 0' },
+        L1: { covered: m1Covered, total: m1Total, note: '支持度矩阵 + 边界门禁 + 棘轮基线（逐字段，已落地）' },
+        L2: {
+          covered: L2_FIELDS.size,
+          total: m1Total,
+          note: '比对引擎已落地 + 三端实测通过；**折算口径**：几何 w/h → 字段 width/height（x/y 是位置不是字段——保守计 2）',
+        },
+        L3: {
+          covered: l3Fields.size,
+          total: m1Total,
+          note: `实测比对已落地（VC6：Web ⇄ WebView，硬门禁 + A-6 豁免）；**折算口径**：25 个可比样式键 → ${l3Fields.size} 个字段（四角/四边归并；fontFamily/fontWeight/visibility 不在字段集内不计）`,
+        },
       },
       covered: m1Covered,
       total: m1Total,
@@ -195,7 +226,7 @@ async function main() {
     const prev = fs.existsSync(OUT) ? fs.readFileSync(OUT, 'utf-8') : ''
     const ok = prev === json
     console.log(`  consistency-metrics --check → docs/generated/consistency-metrics.json${ok ? ' ✅ 一致' : ' ❌ 漂移'}`)
-    console.log(`  ▸ M1 ${(metrics.M1.value * 100).toFixed(1)}%（分层加总；L1 ${metrics.M1.byLayer.L1.covered}/${metrics.M1.byLayer.L1.total} · L2 未布点 · L3 未布点）· M2 ${metrics.M2.value} 条 · M4 ${(metrics.M4.value * 100).toFixed(0)}%（${metrics.M4.captured}/${metrics.M4.injected}）· 存量 ${metrics.debt.baselines.map((b) => b.count).join('+')}`)
+    console.log(`  ▸ M1 ${(metrics.M1.value * 100).toFixed(1)}%（分层加总：L1 ${metrics.M1.byLayer.L1.covered} · L2 ${metrics.M1.byLayer.L2.covered} · L3 ${metrics.M1.byLayer.L3.covered}｜并集 ${(metrics.M1.union.value * 100).toFixed(1)}%）· M2 ${metrics.M2.value} 条 · M4 ${(metrics.M4.value * 100).toFixed(0)}%（${metrics.M4.captured}/${metrics.M4.injected}）· 存量 ${metrics.debt.baselines.map((b) => b.count).join('+')}`)
     // ★M4 自检（防"零运算符假绿"）：注入数必须 > 0 且捕获率必须为 1（L1 算子必须全捕获）
     if (metrics.M4.injected === 0 || metrics.M4.value < 1) {
       console.error('  ✗ M4 自检失败：L1 变异算子必须全部被捕获（当前 %d/%d）——校验机制失效', metrics.M4.captured, metrics.M4.injected)
@@ -207,7 +238,7 @@ async function main() {
   }
   fs.writeFileSync(OUT, json)
   console.log(`[consistency-metrics] ✅ ${path.relative(ROOT, OUT)}`)
-  console.log(`  M1 ${(metrics.M1.value * 100).toFixed(1)}%（分层加总：L1 ${metrics.M1.byLayer.L1.covered}/${metrics.M1.byLayer.L1.total} · L2/L3 未布点）`)
+  console.log(`  M1 ${(metrics.M1.value * 100).toFixed(1)}%（分层加总：L1 ${metrics.M1.byLayer.L1.covered} · L2 ${metrics.M1.byLayer.L2.covered} · L3 ${metrics.M1.byLayer.L3.covered}｜并集口径 ${(metrics.M1.union.value * 100).toFixed(1)}%）`)
   console.log(`  M2 ${metrics.M2.value} 条（${metrics.M2.ids.join(' / ')}）`)
   console.log(`  M4 ${(metrics.M4.value * 100).toFixed(0)}%（${metrics.M4.captured}/${metrics.M4.injected}，pending ${metrics.M4.pendingOperators.length} 个算子）`)
   console.log(`  存量债务：${metrics.debt.baselines.map((b) => `${b.file.split('/')[0]} ${b.count}`).join(' · ')}`)

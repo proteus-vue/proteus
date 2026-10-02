@@ -100,8 +100,29 @@ function styleDeclared(end) {
   })
 }
 
+/**
+ * ★L3 样式采集（优先**实测**、失败回退产出式）：
+ *   · WebView：`fields({computedStyle})` 可用（VC1 实测 37/37）⇒ 走实测 —— 真·样式一致性证据；
+ *   · Skyline：读回空 ⇒ 回退产出式（声明 → 归一化）——**语义不同**，由 snap.boundaries.measured 标注，
+ *     比对/指标消费方据此区分（避免把"管线一致"当"渲染一致"）。
+ */
+function collectStyle(scope, end, done) {
+  snap.collectStyleFromComputed(scope, FIXTURE, end, function (measured) {
+    if (measured) {
+      if (done) done(measured)
+      return
+    }
+    var declared = styleDeclared(end)
+    declared.boundaries = declared.boundaries || {}
+    declared.boundaries.measured = false
+    declared.boundaries.note = (declared.boundaries.note || '') + '｜★产出式（声明 → 归一化）——本端 computedStyle 不可用（VC1 实测）；"渲染是否接受"归 L1 矩阵 + L4 观察'
+    if (done) done(declared)
+  })
+}
+
 module.exports = {
   collectComponent: collectComponent,
+  collectStyle: collectStyle,
   collectComponentFromPage: collectComponentFromPage,
   styleDeclared: styleDeclared,
   snap: snap,
