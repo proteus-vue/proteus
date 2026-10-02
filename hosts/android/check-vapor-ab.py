@@ -24,21 +24,23 @@
      · 判据 ⑥d：**文本通道两条路都消费**（A：`text_synced` 累计 > 0；B：`text_layers` 累计 > 0）
        —— 文本不落层 = 屏幕停留旧值，是几何断言发现不了的一类静默缺陷
      · 判据 ⑥e：B 路补丁**真的到了宿主**（宿主侧读数 `host_update_patch_calls > 0`，不是只看 JS 自报）
-  ⑦ ★★**事件路径对照（2026-10-01 第二批新增）**：宿主注入 tap（真 MotionEvent → 内核 hitTest →
-     JNI 反向调用），两条路各自跑 handler：
+  ⑦ ★★**事件路径对照（2026-10-01 第二批新增；2026-10-02 补冒泡链）**：宿主注入 tap（真 MotionEvent → 内核 hitTest →
+     JNI 反向调用，**带内核的冒泡链**），两条路各自沿链派发：
      · A：`__proteusVaporGesture` → 编译产物的动作表 → 订阅触发 → 二进制指令 → 内核
-     · B：`__proteusVaporGesture` → 适配器 `dispatchEvent`（Vue onClick）→ ref 变 → node update
+     · B：`__proteusVaporGesture` → 适配器 `dispatchEvent`（Vue onClick，沿链）→ ref 变 → node update
        → `takePatches()` → 宿主 `updatePatches` → 内核
      · 判据 ⑦a：两路 tap 都**命中**（`hit > 0`）且都**真的跑了 handler**（A `handler` 非空 / B `fired` 非空）
      · 判据 ⑦b：两路按钮几何 **tap 前一致**（`ev_before_delta ≤ 0.01`）——同语义锚点前提
      · 判据 ⑦c：两路**宽度位移一致**（|ΔA − ΔB| ≤ 0.01）且都 **> 0**（数据变更真的落到几何）
      · 判据 ⑦d：两路按钮几何 **tap 后一致**（`ev_after_delta ≤ 0.01`）——同一语义同结果
      · 判据 ⑦e：B 路 tap 后**有补丁且补丁到了宿主**（`patches ≥ 0` · `applied ≥ 0`）
-       ★诚实边界（JS 侧已标注）：B 的冒泡链按"只派发 target"（宿主 GestureSink 不传 chain）——
-       单节点 handler 场景等价；**祖先冒泡等价属后续批次**。
+     · 判据 ⑦f：**冒泡链没断**——两路链都含祖先（len ≥ 2）· 链首 = 命中节点 · 逐跳派发（fired ≥ 2）
+     · 判据 ⑦g：**逐跳位移两路一致且都 > 0**（祖先 handler 真的改到祖先几何上；
+       `fired_width_deltas` 与 fired 同序）
 
 【诚实边界（本档不覆盖）】
-  · B 侧事件的**祖先冒泡链**（见 ⑦ 的边界说明）；
+  · A 路 handler 是**动作列表**（无事件对象）⇒ 不支持 `stopPropagation` 的**终止语义**等价
+    （B 路适配器支持；本判据覆盖"非终止冒泡"两路等价）；
 
 用法：python3 hosts/android/check-vapor-ab.py <vapor-ab.json>
 退出码：0 全过 / 1 有失败 / 2 用法错（产物缺失时诚实跳过，返回 0）
@@ -380,12 +382,64 @@ def main() -> int:
             print(f"  ✓ ⑦e B 路 tap 后补丁经宿主落内核：patches={pb} · applied={apb} · "
                   f"changed={ev_b.get('changed_rects')} · 驱动 {ev_b.get('driver_ms')}ms")
 
+        # ⑦f ★冒泡链没断（2026-10-02）：两路的链都应含**祖先**（len ≥ 2）、链首 = 命中节点、
+        #   且真的**逐跳派发**（fired len ≥ 2 —— "祖先 handler 真的跑了"）。
+        #   ★这条打在"链在最后一环被丢"的形态上：chain 缺失/被丢时 parseChain 退化成 [nodeId]
+        #     （len 1）；只派 target 时 fired 只有 1 跳 —— 两者都会在此判红。
+        bubble_ok = True
+        for label, ev in (("A", ev_a), ("B", ev_b)):
+            chain = ev.get("chain") or []
+            fired = ev.get("fired") or []
+            hit = ev.get("hit", -1)
+            if len(chain) < 2:
+                fail(f"★{label} 路 tap 的冒泡链只有 {len(chain)} 跳（[{chain}]）——"
+                     f"内核给了链却没传到位（宿主/JNI 丢链 ⇒ 祖先 handler 永不触发）")
+                ok = False
+                bubble_ok = False
+            elif chain[0] != hit:
+                fail(f"★{label} 路链首 {chain[0]} ≠ 命中节点 {hit}（链与命中不一致）")
+                ok = False
+                bubble_ok = False
+            elif len(fired) < 2:
+                fail(f"★{label} 路只派发了 {len(fired)} 跳（[{fired}]）——冒泡没到祖先"
+                     f"（链 [{chain}] 上的祖先 handler 应一起跑：夹具容器上挂了 @click）")
+                ok = False
+                bubble_ok = False
+        if bubble_ok:
+            chain_a = (ev_a.get("chain") or [])
+            fired_a = (ev_a.get("fired") or [])
+            chain_b = (ev_b.get("chain") or [])
+            fired_b2 = (ev_b.get("fired") or [])
+            print(f"  ✓ ⑦f ★冒泡链两路都逐跳派发：A 链 [{'>'.join(map(str, chain_a))}] → fired [{'>'.join(map(str, fired_a))}] · "
+                  f"B 链 [{'>'.join(map(str, chain_b))}] → fired [{'>'.join(map(str, fired_b2))}]")
+
+        # ⑦g ★逐跳位移两路一致（祖先 handler 真的改了**祖先几何**）：
+        #   `fired_width_deltas` 与 fired 同序（target 在前、祖先在后）——两路逐项比对且都 > 0。
+        dw_a = ev_a.get("fired_width_deltas") or []
+        dw_b = ev_b.get("fired_width_deltas") or []
+        if len(dw_a) < 2 or len(dw_b) < 2:
+            fail(f"★逐跳位移读数不足：A={dw_a} · B={dw_b}（应各有 ≥2 跳——按钮 + 容器）")
+            ok = False
+        elif len(dw_a) != len(dw_b):
+            fail(f"★逐跳位移跳数不同：A={dw_a} · B={dw_b}")
+            ok = False
+        elif any(abs(dw_a[i] - dw_b[i]) > GEOM_TOL for i in range(len(dw_a))):
+            fail(f"★逐跳位移不一致：A={dw_a} vs B={dw_b}"
+                 f"—— 同一语义的冒泡在两路上改了不同的几何")
+            ok = False
+        elif any(v <= 0 for v in dw_a):
+            fail(f"★A 路有跳没有几何变化：{dw_a}（每一跳的 handler 都应改到几何上）")
+            ok = False
+        else:
+            print(f"  ✓ ⑦g ★逐跳位移两路一致且都落到几何：A={dw_a} · B={dw_b}"
+                  f"（首跳=按钮 +30 · 次跳=容器 +5）")
+
     for n in (d.get("notes") or []):
         print(f"      · {n}")
 
     if ok:
         print("\n✅ A/B 判据全过（mount 几何逐节点一致 + 更新路径两路等价 + 文本通道双消费"
-              " + 绘制通道逐项等价 + 事件路径两路等价）"
+              " + 绘制通道逐项等价 + 事件路径两路等价（含冒泡链逐跳））"
               "—— 「Vapor 能替换 Vue 运行时」有了**量化等价证据**（mount / 更新 / 绘制 / 事件四条）")
         return 0
     print("\n✗ A/B 判据有失败项（见上）")

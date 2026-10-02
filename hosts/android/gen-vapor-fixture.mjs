@@ -57,13 +57,16 @@ const SFC = `<template>
       <p-text :width="item.w" style="font-size: 12px; color: #ffffff">{{ item.title }}</p-text>
     </p-view>
     <p-view style="height: 30px; margin-top: 10px; background-color: #6a4bf0"></p-view>
-    <p-view :width="boxW" @click="boxW += 30" style="height: 56px; margin-top: 8px; background-color: #2f6fed"></p-view>
+    <p-view :width="padW" @click="padW += 5" style="height: 96px; margin-top: 8px; background-color: #1c2b3f">
+      <p-view :width="boxW" @click="boxW += 30" style="height: 56px; margin-top: 8px; background-color: #2f6fed"></p-view>
+    </p-view>
   </p-view>
 </template>
 
 <script setup lang="ts">
 const list = ref([{ id: 1, w: 40, title: 'a' }])
 const boxW = ref(120)
+const padW = ref(300)
 const tapCount = ref(0)
 </script>
 `
@@ -234,12 +237,14 @@ console.log(
 
 const smallInfo = check('短列表产物', parsed.small)
 // ★★交互闭环断言：短列表夹具必须编出事件（否则真机上"点不动"——本次要验的就是这个）
-if (!parsed.small.events || parsed.small.events.length < 1) {
-  console.error(`[gen-vapor-fixture] ✗ 交互闭环：夹具没有编出事件（应 ≥1）`)
+// ★2026-10-02 扩容（冒泡锚）：夹具现有**两个** tap 绑定（按钮 + 外层容器）——
+//   断言 ≥2，否则"链上两跳"的判据（⑦f/⑦g）没东西可判。
+if (!parsed.small.events || parsed.small.events.length < 2) {
+  console.error(`[gen-vapor-fixture] ✗ 交互闭环：夹具编出的事件不足（应 ≥2——按钮 + 容器各一；实际 ${parsed.small.events?.length ?? 0}）`)
   process.exit(1)
 }
-if (Object.keys(parsed.small.handlers || {}).length < 1) {
-
+if (Object.keys(parsed.small.handlers || {}).length < 2) {
+  console.error(`[gen-vapor-fixture] ✗ 交互闭环：handler 不足（应 ≥2——boxW 与 padW 各一；实际 ${Object.keys(parsed.small.handlers || {}).length}）`)
   process.exit(1)
 }
 fs.writeFileSync(OUT, JSON.stringify(parsed.small))

@@ -101,12 +101,18 @@ final class VaporRenderHost {
 
     /** 命中回调（JS 侧注册：`proteusHost.onGesture` 的转发目标）——由 JNI 桥注入 */
     interface GestureSink {
-        void onGesture(String type, int targetId);
+        /**
+         * @param type     语义手势（tap / longpress）
+         * @param targetId 命中节点
+         * @param chain    冒泡链（**target 自身 + 全部祖先**，自深到浅）——2026-10-02 起随回调下发；
+         *                 此前这里只转发 target ⇒ 冒泡链在这最后一环被丢弃（祖先 handler 永不触发）
+         */
+        void onGesture(String type, int targetId, int[] chain);
     }
     private GestureSink gestureSink;
     /** 读数：累计分发的语义手势数（判据"事件真的到了宿主"的机器证据） */
     int gestureDispatched = 0;
-    /** 最近一次手势（探针：`{type,target}`——判据读它确认"点在了哪个节点上"） */
+    /** 最近一次手势（探针：`{type,target,chain}`——判据读它确认"点在了哪个节点上 + 冒泡链"） */
     String lastGestureProbe = null;
 
     void setGestureSink(GestureSink sink) {
@@ -116,8 +122,9 @@ final class VaporRenderHost {
 
     /**
      * ★★把手势接到**命中链**上：`ProteusHostView.onTouchEvent` 已在 DOWN 时刻用内核
-     *   `hitTest` 定下目标节点（`gestureTarget`）⇒ 这里只消费语义手势 + 目标 id，
-     *   转发给 JS 侧执行 handler。**宿主不做任何"哪个节点响应了"的判断**（那是内核的活）。
+     *   `hitTest` 定下目标节点与冒泡链（`gestureTarget` / `gestureChain`）⇒ 这里只消费
+     *   语义手势 + 目标 id + 链，转发给 JS 侧执行 handler。**宿主不做任何"哪个节点响应了"的
+     *   判断**（那是内核的活）。
      */
     private void attachGestureListener() {
         if (view == null) return;
@@ -126,8 +133,18 @@ final class VaporRenderHost {
             public void onGesture(String type, int targetId, int[] chain, float x, float y, android.os.Bundle extra) {
                 if (!"tap".equals(type) && !"longpress".equals(type)) return;
                 gestureDispatched++;
-                lastGestureProbe = "{\"type\":" + JSONObject.quote(type) + ",\"target\":" + targetId + "}";
-                if (gestureSink != null) gestureSink.onGesture(type, targetId);
+                // ★探针带上冒泡链（判据核对"链真的过宿主"——不是只信 JS 侧自报）
+                StringBuilder cb = new StringBuilder("[");
+                if (chain != null) {
+                    for (int i = 0; i < chain.length; i++) {
+                        if (i > 0) cb.append(',');
+                        cb.append(chain[i]);
+                    }
+                }
+                cb.append(']');
+                lastGestureProbe = "{\"type\":" + JSONObject.quote(type) + ",\"target\":" + targetId
+                        + ",\"chain\":" + cb + "}";
+                if (gestureSink != null) gestureSink.onGesture(type, targetId, chain);
             }
         });
     }
@@ -539,10 +556,24 @@ final class VaporRenderHost {
 
     /**
      * ★★**进程内注入一次 tap**（判据用；与 M6b / 长卷同一先例）——
-     * 真机 `adb shell input tap` 需 INJECT_EVENTS 权限（**静默失败**，本仓已实测多次），
+     * 真机 `adb shell tap` 需 INJECT_EVENTS 权限（**静默失败**，本仓已实测多次），
      * 故由宿主自己 `dispatchTouchEvent` 注入真 MotionEvent：走完整 `GestureDetector` →
      * `hitTest` → 语义手势 → 回调链，与真实触摸**同一条代码路径**。
+     *
+     * ★★**时间戳逐次前推 1 秒**（2026-10-02 实测抓出的注入缺陷；**不是 sleep**——零等待）：
+     *   `GestureDetector` 把「上一次 UP 后 300ms 内的 DOWN」判为**双击**，那时
+     *   `onSingleTapUp` **不触发**。而判据注入是同步连发（A 相位 tap 后 B 相位 tap
+     *   间隔 ≪ 300ms）⇒ 第二次 tap 被吞（真机实测：B 相位没有任何手势记录，
+     *   而判据读到的 `last` 是 A 相位的**陈旧探针**——双重陷阱：事件没触发 + 读数不像缺失）。
+     *   修复：事件时间戳是**纯属性**，把每次注入的 down/up 时间戳较上次**前推 1 秒**
+     *   （`age = 1000ms × seq`）⇒ 相邻注入的 down−prev.up 间隔恒为 ~960ms > 300ms，
+     *   **任何实现版本**都不会判成双击（含无 `DOUBLE_TAP_MIN_TIME` 下界检查的旧实现）；
+     *   tap 判定只看 down→up 差值（40ms）不受影响。
+     *   ★方向为什么选**前推**而不是回推：回推产生负的 down−up 差，旧实现缺下界检查时
+     *     仍会落进双击分支（正值 >300ms 才在两版实现下都安全）。
+     *   ★为什么不 sleep 隔开：盲等是红线，且会让判据注入付出真实墙钟代价。
      */
+    private int tapInjectSeq = 0;
     public String tapAt(String argsJson) {
         JSONObject out = new JSONObject();
         try {
@@ -550,7 +581,11 @@ final class VaporRenderHost {
             JSONObject a = new JSONObject(argsJson);
             final float x = (float) a.optDouble("x", 0);
             final float y = (float) a.optDouble("y", 0);
-            long t0 = android.os.SystemClock.uptimeMillis();
+            // ★事件时间戳前推（见方法注释）：seq 递增，down/up 相对真实时钟逐次更晚 1 秒
+            long age = 1000L * tapInjectSeq;
+            tapInjectSeq++;
+            long t0 = android.os.SystemClock.uptimeMillis() + age;
+            int before = gestureDispatched;
             android.view.MotionEvent down = android.view.MotionEvent.obtain(t0, t0,
                     android.view.MotionEvent.ACTION_DOWN, x, y, 0);
             view.dispatchTouchEvent(down);
@@ -563,6 +598,9 @@ final class VaporRenderHost {
             out.put("x", x);
             out.put("y", y);
             out.put("dispatched", gestureDispatched);
+            // ★★本次注入**真的触发了几次手势**（防"陈旧探针被读成新读数"——本仓实测过：
+            //   B 相位 tap 没触发手势，而判据把 A 相位的 last 读成 B 的 hit；有本字段即可判定）
+            out.put("gestures_fired", gestureDispatched - before);
             out.put("last", lastGestureProbe != null ? new JSONObject(lastGestureProbe) : JSONObject.NULL);
             return out.toString();
         } catch (Throwable t) {

@@ -20,17 +20,19 @@ import { describe, it, expect } from 'vitest'
 import fs from 'node:fs'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
-import { buildVaporSubscriptions } from '@proteus-vue/compiler'
-import { instantiateTemplate, ListRegistry } from '@proteus-vue/slot-runtime'
+import { buildVaporSubscriptions, buildLayoutTemplate } from '@proteus-vue/compiler'
+import { instantiateTemplate, ListRegistry, PropKeyTable, StringPool, SlotRuntime, VaporRuntime } from '@proteus-vue/slot-runtime'
 import type { SubscriptionTable } from '@proteus-vue/slot-runtime'
 
 const HERE = path.dirname(fileURLToPath(import.meta.url))
 const RUNTIME_SRC = path.join(HERE, '../packages/slot-runtime/src/runtime.ts')
 
-/** 生成含 N 个绑定的 SFC（每个绑定一个独立源 ⇒ 改一个只影响一个） */
+/** 生成含 N 个绑定的 SFC（每个绑定一个独立源 ⇒ 改一个只影响一个）
+ *  ★绑定用**数值**（`:width="wN"`）——style 槽位的值域是 number/boolean
+ *  （字符串会走 `toF32` 抛错：文本语义应声明为 text 槽位；见 slot.ts）。 */
 function sfcWithBindings(n: number): string {
-  const rows = Array.from({ length: n }, (_, i) => `    <text :class="c${i}">{{ v${i} }}</text>`).join('\n')
-  const decls = Array.from({ length: n }, (_, i) => `const c${i} = ref('k${i}'); const v${i} = ref(${i})`).join('\n')
+  const rows = Array.from({ length: n }, (_, i) => `    <text :width="w${i}">{{ v${i} }}</text>`).join('\n')
+  const decls = Array.from({ length: n }, (_, i) => `const w${i} = ref(${i}); const v${i} = ref(${i})`).join('\n')
   return `<template>\n  <view>\n${rows}\n  </view>\n</template>\n<script setup>\nimport { ref } from 'vue'\n${decls}\n</script>`
 }
 
@@ -54,18 +56,32 @@ describe('★卡 V2 · 槽位 O(1)（结构判据，非绝对秒数）', () => {
   it('② 10× 绑定数 ⇒ 单节点更新耗时比 ≤ 3（线性退化会是 ~10）', () => {
     const measureOnce = (n: number): number => {
       const table = tableOf(n)
-      const { tpl, read } = buildTpl(table)
-      const reg = new ListRegistry()
-      const inst = instantiateTemplate(tpl, { viewport: { width: 390, height: 844 }, read, table, registry: reg })
-      expect(inst.nodes.length, `${n} 绑定应产出节点`).toBeGreaterThan(0)
-      // 改**同一个**源（v0）——与 n 无关的单点更新
+      const { read } = buildTpl(table)
+      // ★★口径修正（2026-10-02，真实信号驱动）：原实现用「反复 `instantiateTemplate`」当
+      //   "单节点更新"的代理——**实例化是挂载成本，不是更新成本**，且 V4 契约（instantiate.ts
+      //   ④/④'）要求它把**全部源值**灌进树 ⇒ 它随绑定数线性增长是**设计使然**。
+      //   （背景：修 ④' 标量回填后本用例曾以 11.59 假红——而真实更新路径仍 O(1)：实测
+      //     trigger+flush 在 20→200 绑定下 2.9ns vs 2.3ns。）
+      //   ⇒ 正解：直接测**更新路径本体**——订阅触发（该源槽位求值）+ `SlotRuntime.flush()`。
+      const keys = new PropKeyTable()
+      const strings = new StringPool()
+      const rt = new SlotRuntime(keys, strings, () => {})
+      const evals = VaporRuntime.buildEvaluators(table.evaluators)
+      const vapor = new VaporRuntime(table, rt, evals)
       const data: Record<string, unknown> = {}
-      for (let i = 0; i < 40; i++) data[`v0`] = i
+      const readUpd = (k: string): unknown => (k === 'v0' ? data['v0'] : read(k))
+      const ctxUpd = { read: readUpd }
+      const triggers = new Map<string, () => void>()
+      vapor.load(ctxUpd, (name, cb) => triggers.set(name, cb))
+      vapor.relink(ctxUpd)
+      rt.flush()
+      const fire = triggers.get('v0')
+      if (!fire) throw new Error('订阅表缺 v0 源（夹具生成失败）')
       const t0 = performance.now()
       for (let i = 0; i < 40; i++) {
         data['v0'] = i
-        // 走"该源求值 → 其槽位直写"的同一路径（read 取新值）
-        instantiateTemplate(tpl, { viewport: { width: 390, height: 844 }, read: (k) => (k === 'v0' ? data['v0'] : read(k)), table, registry: reg })
+        fire()                    // 源变化 → 只求值该源槽位
+        rt.flush()                // 脏槽位提交（该源 1 个槽位）
       }
       return performance.now() - t0
     }
@@ -85,11 +101,38 @@ describe('★卡 V2 · 槽位 O(1)（结构判据，非绝对秒数）', () => {
     const big = measure(200)
     const ratio = big / Math.max(small, 0.01)
     // eslint-disable-next-line no-console
-    console.log(`[V2 O(1) 读数] 20 绑定=${small.toFixed(2)}ms · 200 绑定=${big.toFixed(2)}ms · 比=${ratio.toFixed(2)}`)
+    console.log(`[V2 O(1) 读数] 更新路径（trigger+flush） 20 绑定=${small.toFixed(2)}ms · 200 绑定=${big.toFixed(2)}ms · 比=${ratio.toFixed(2)}`)
     expect(
       ratio,
-      `★10× 绑定数下耗时比 ${ratio.toFixed(2)}（O(1) 应接近 1；线性退化约 10）`,
+      `★10× 绑定数下更新耗时比 ${ratio.toFixed(2)}（O(1) 应接近 1；线性退化约 10）`,
     ).toBeLessThanOrEqual(3)
+    // ★反向锁（本仓"空测假绿"纪律）：两段都必须真的产生读数（> 0），否则比值无意义
+    expect(small, '小规模读数应 > 0（测量未生效 = 空测）').toBeGreaterThan(0)
+    expect(big, '大规模读数应 > 0（测量未生效 = 空测）').toBeGreaterThan(0)
+  })
+
+  it('②b 实例化必须把**全部源值**灌进树（V4 契约；标量绑定也要回填）', () => {
+    // 【这条防什么（2026-10-02 修 ④' 标量回填时立的回归锁）】`instantiateTemplate` 此前
+    //   只回填 v-for 行内槽位，非行内标量绑定（`:width="boxW"` 这类）的首帧值**从不回填**
+    //   ⇒ A 路（Vapor）树里这些节点从"无宽度"开始，直到某次 relink 才被写上
+    //   （真机表现：A/B 冒泡判据 ⑦g 逐跳位移 A=[30,-775] vs B=[30,5]——容器宽度坏值）。
+    // ★用**真实编译模板**（与订阅表同源的 SFC）——桩模板的 nodeId 与表不一致 ⇒ 会空比假绿。
+    const N = 20
+    const src = sfcWithBindings(N)
+    const table = buildVaporSubscriptions(src, `gen-${N}.vue`).table
+    const { template: tpl } = buildLayoutTemplate(src, `gen-${N}.vue`)
+    const data: Record<string, unknown> = {}
+    for (const s of table.sources) data[s.sourceName] = s.sourceName.startsWith('v') ? 0 : 'cls'
+    const inst = instantiateTemplate(tpl, {
+      viewport: { width: 390, height: 844 }, read: (k) => data[k], table, registry: new ListRegistry(),
+    })
+    // 每个标量槽位都必须命中一次回填（行内/数据源/组件边界除外）
+    const scalarSlots = table.sources
+      .flatMap((s) => s.slots)
+      .filter((x) => x.kind !== 'list-item' && x.kind !== 'list-data' && x.kind !== 'component-prop')
+    expect(scalarSlots.length, '本夹具应有标量槽位').toBeGreaterThan(0)
+    expect(inst.stats.valuesFilled, `标量槽位应全部回填（实际 ${inst.stats.valuesFilled}/${scalarSlots.length}——缺 ⇒ 首帧几何错）`)
+      .toBeGreaterThanOrEqual(scalarSlots.length)
   })
 
   it('③ 槽位数随绑定数增长，但**受影响**的只有单源的槽位', () => {
@@ -110,7 +153,8 @@ function buildTpl(table: SubscriptionTable): { tpl: ReturnType<typeof layoutTpl>
   const tpl = layoutTpl()
   const values: Record<string, unknown> = {}
   for (const src of table.sources) {
-    if (src.sourceName.startsWith('c')) values[src.sourceName] = 'cls'
+    // ★数值绑定（w* 是 style 槽位：值域 number/boolean）；v* 用数字兜底
+    if (src.sourceName.startsWith('w')) values[src.sourceName] = 0
     else if (src.sourceName.startsWith('v')) values[src.sourceName] = 0
     else values[src.sourceName] = undefined
   }
