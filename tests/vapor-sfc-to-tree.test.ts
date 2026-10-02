@@ -82,14 +82,31 @@ describe('V4 · ★全量 SFC → 模板产物', () => {
     expect(meta.subtreeIds.length).toBeGreaterThanOrEqual(2)
   })
 
-  it('★④ 不支持的模板形态 ⇒ **诊断而非静默**（嵌套 v-for / 混合文本）', () => {
+  it('★④ 不支持的模板形态 ⇒ **诊断而非静默**（混合文本）+ ★嵌套 v-for **已支持**（P2 批次）', () => {
+    // ★★2026-10-03 能力提升（P2 批次）：嵌套 v-for 从"诊断拒绝"改为**真支持**——
+    //   本用例随之改判：**零诊断 + 产物含 parentListId/outerScope 的嵌套结构**。
     const nested = sfc(
       `const l1 = ref([{ id: 1, l2: [{ id: 2, name: 'x' }] }])\n`,
       `<p-view v-for="a in l1" :key="a.id"><p-text v-for="b in a.l2" :key="b.id">{{ b.name }}</p-text></p-view>`,
     )
     const r1 = buildLayoutTemplate(nested, 'n.vue')
-    expect(r1.diagnostics.some((d) => d.message.includes('嵌套 v-for')), '嵌套 v-for 必须上报（本版不支持）').toBe(true)
+    expect(
+      r1.diagnostics.some((d) => d.message.includes('嵌套 v-for')),
+      '嵌套 v-for 已支持（P2）——不应再报"未支持"诊断',
+    ).toBe(false)
+    const inner = (r1.template.lists || []).find((l) => l.parentListId !== undefined)
+    expect(inner, '内层列表必须带 parentListId（运行时按外层行递归实例化）').toBeDefined()
+    expect(inner!.outerScope, '内层必须记录外层作用域名（嵌套求值 `a.l2` 的 `a`）').toBe('a')
+    expect(inner!.sourceField, '内层行集从外层行字段下钻（a.l2 ⇒ l2）').toBe('l2')
+    const outer = (r1.template.lists || []).find((l) => l.parentListId === undefined)
+    expect(outer!.listId, '内层 parentListId 必须指到外层（同源分配）').toBe(inner!.parentListId)
+    // ★★子树**不合并**（本仓实测的纠正）：若外层 subtreeIds 含内层节点，外层克隆会为它
+    //   分配一个"占位实例"、内层递归再分配真实实例 ⇒ 重复 id / 假节点。
+    //   内层节点的产出者**唯一**：内层自己的 cloneRow（经 parentListId 递归触发）。
+    expect(outer!.subtreeIds, '外层子树只含行根自身（内层节点归内层列表）').toEqual([outer!.rowRootId])
+    expect(inner!.subtreeIds).toContain(inner!.rowRootId)
 
+    // 反向：混合文本**仍必须**上报（本批未做）
     const mixed = sfc(`const n = ref(1)\n`, `<p-text style="color: #fff">前缀{{ n }}</p-text>`)
     const r2 = buildLayoutTemplate(mixed, 'm.vue')
     expect(r2.diagnostics.some((d) => d.message.includes('文本/插值')), '纯静态+插值混合必须上报').toBe(true)
@@ -242,5 +259,142 @@ describe('V4 · ★★SFC 产物 → 实例化成端上节点树', () => {
     expect(inst.nodes.some((n) => n.id === meta.rowRootId)).toBe(false)
     // 静态部分仍在
     expect(inst.nodes.length).toBeGreaterThanOrEqual(2)
+  })
+})
+
+describe('V4 · ★★嵌套 v-for 递归实例化（P2 批次，2026-10-03）', () => {
+  // 【这一组防什么（三处实测缺陷的回归锁）】
+  //   ① 外层列表**行内无绑定**时（只有内层 v-for）⇒ 订阅表里只有 list-data 槽位
+  //      ⇒ 首版 `rowsOfList` 找不到 spec 直接返回 [] ⇒ **外层行整行不展开**（实测只剩内层 i）。
+  //   ② 内层行根的父在**外层行实例**上（模板 id 属于外层子树，内层 idMap 翻译不到）
+  //      ⇒ 不传 parentOverrideId 时，第 2 行起内层节点全挂到第一行（实测"都挤在第一个 li"）。
+  //   ③ 两层都从主循环展开 ⇒ 内层按"全局扁平行集"扩一次、父行克隆又扩一次 ⇒ 重复 + 撞 id。
+  const NESTED_SFC = sfc(
+    `const gs = ref([{ id: 1, t: 'G1', items: [{ id: 10, n: 'a' }, { id: 11, n: 'b' }] }, { id: 2, t: 'G2', items: [{ id: 20, n: 'c' }] }])\n`,
+    `<ul>\n` +
+      `  <li v-for="g in gs" :key="g.id">\n` +
+      `    <span>{{ g.t }}</span>\n` +
+      `    <i v-for="x in g.items" :key="x.id">{{ x.n }}</i>\n` +
+      `  </li>\n` +
+      `</ul>`,
+  )
+  const data = {
+    gs: [
+      { id: 1, t: 'G1', items: [{ id: 10, n: 'a' }, { id: 11, n: 'b' }] },
+      { id: 2, t: 'G2', items: [{ id: 20, n: 'c' }] },
+    ],
+  }
+  const read = (n: string): unknown => (data as Record<string, unknown>)[n]
+
+  function build() {
+    const tpl = buildLayoutTemplate(NESTED_SFC, 'nested.vue').template
+    const { table } = buildVaporSubscriptions(NESTED_SFC, 'nested.vue')
+    return { tpl, table }
+  }
+
+  it('★★① 三层结构齐备：ul → 2×li → (span + i×n)；内层 i 挂**自己那一行的 li**', () => {
+    const { tpl, table } = build()
+    const inst = instantiateTemplate(tpl, { viewport: { width: 390, height: 844 }, read, table })
+    const tagOf = (n: { id: number }): string => {
+      const node = tpl.nodes.find((t) => t.id === n.id)
+      return node?.tag ?? ''
+    }
+    const byId = new Map(inst.nodes.map((n) => [n.id, n]))
+    // 全部节点（tag 从模板查——实例节点带 tag 透传，此处双路核对）
+    const tags = inst.nodes.map((n) => (n as { tag?: string }).tag)
+    expect(tags.filter((t) => t === 'li').length, '2 个外层行根').toBe(2)
+    expect(tags.filter((t) => t === 'i').length, '3 个内层行（2+1）').toBe(3)
+    expect(tags.filter((t) => t === 'span').length, '每行一个 span').toBe(2)
+    // ★层级：每个 i 的父必须是 li（不是别的 i / 不是 ul）
+    for (const n of inst.nodes) {
+      if ((n as { tag?: string }).tag === 'i') {
+        const parent = byId.get(n.parentId!)
+        expect((parent as { tag?: string } | undefined)?.tag, `i(${n.id}) 的父必须是 li`).toBe('li')
+      }
+    }
+    // ★文本回填：a/b/c 三条 + G1/G2
+    const texts = inst.nodes.map((n) => (n as { text?: string }).text).filter(Boolean)
+    expect(texts).toEqual(expect.arrayContaining(['G1', 'a', 'b', 'G2', 'c']))
+    // id 唯一 + 父子完整
+    const ids = inst.nodes.map((n) => n.id)
+    expect(new Set(ids).size).toBe(ids.length)
+    const idSet = new Set(ids)
+    for (const n of inst.nodes) if (n.parentId !== null) expect(idSet.has(n.parentId)).toBe(true)
+    void tagOf
+  })
+
+  it('★★② 无行内绑定的外层列表也能展开（list-data 兜底——实测缺陷①的回归锁）', () => {
+    // 外层 li 只有 :key + 内层 v-for ⇒ 无 list-item 槽位 ⇒ 必须靠 list-data 槽位取行集
+    const sfcNoBind = sfc(
+      `const gs = ref([{ id: 1, items: [{ id: 10, n: 'a' }] }, { id: 2, items: [{ id: 20, n: 'c' }] }])\n`,
+      `<ul><li v-for="g in gs" :key="g.id"><i v-for="x in g.items" :key="x.id">{{ x.n }}</i></li></ul>`,
+    )
+    const tpl = buildLayoutTemplate(sfcNoBind, 'nb.vue').template
+    const { table } = buildVaporSubscriptions(sfcNoBind, 'nb.vue')
+    // 前提：外层确实没有 list-item 槽位（否则这条用例没有测到兜底路径）
+    const outerListId = tpl.lists.find((l) => l.parentListId === undefined)!.listId
+    const hasOuterItem = table.sources.flatMap((s) => s.slots).some((x) => x.kind === 'list-item' && x.listId === outerListId)
+    expect(hasOuterItem, '前提：外层无 list-item 槽位').toBe(false)
+    const inst = instantiateTemplate(tpl, { viewport: { width: 390, height: 844 }, read, table })
+    const tags = inst.nodes.map((n) => (n as { tag?: string }).tag)
+    expect(tags.filter((t) => t === 'li').length, '外层 2 行必须展开').toBe(2)
+    // 共享数据里内层是 2+1 = 3 行（a,b 在第 1 行；c 在第 2 行）
+    expect(tags.filter((t) => t === 'i').length, '内层行数 = 数据里的 items 总数').toBe(3)
+  })
+
+  it('★★③ 内层行挂到**自己那一行**的 li（parentOverrideId——实测缺陷②的回归锁）', () => {
+    const { tpl, table } = build()
+    const inst = instantiateTemplate(tpl, { viewport: { width: 390, height: 844 }, read, table })
+    const byId = new Map(inst.nodes.map((n) => [n.id, n as Record<string, unknown>]))
+    const lis = inst.nodes.filter((n) => (n as { tag?: string }).tag === 'li')
+    // 每个 li 下必须有且只有属于它的 i（第 1 行 2 个、第 2 行 1 个）
+    const innerCounts = lis.map((li) => inst.nodes.filter((n) => n.parentId === li.id && (n as { tag?: string }).tag === 'i').length)
+    expect(innerCounts.sort(), '各行内层数应为 [1, 2]（不是全挤在第一行）').toEqual([1, 2])
+    // 内层文本与所属行匹配：li#1 → a,b；li#2 → c
+    const textUnder = (liId: number): string[] =>
+      inst.nodes.filter((n) => n.parentId === liId).map((n) => String((n as { text?: string }).text ?? ''))
+    const rowTexts = lis.map((li) => textUnder(li.id))
+    expect(rowTexts.some((t) => t.includes('a') && t.includes('b'))).toBe(true)
+    expect(rowTexts.some((t) => t.includes('c'))).toBe(true)
+    void byId
+  })
+
+  it('★★④ 三层嵌套 2×2×2 ⇒ 15 节点、id 唯一、层级正确（任意层递归）', () => {
+    const sfc3 = sfc(
+      `const as_ = ref([])\n`,
+      `<ul><li v-for="a in as_" :key="a.id"><div v-for="b in a.l2" :key="b.id"><i v-for="c in b.l3" :key="c.id">{{ c.n }}</i></div></li></ul>`,
+    )
+    // 构造 2×2×2 数据
+    const as_: unknown[] = []
+    let id = 1
+    for (let i = 0; i < 2; i++) {
+      const r: Record<string, unknown> = { id: id++, l2: [] }
+      for (let j = 0; j < 2; j++) {
+        const r2: Record<string, unknown> = { id: id++, l3: [] }
+        for (let k = 0; k < 2; k++) (r2.l3 as unknown[]).push({ id: id++, n: `t${i}${j}${k}` })
+        ;(r.l2 as unknown[]).push(r2)
+      }
+      as_.push(r)
+    }
+    const tpl = buildLayoutTemplate(sfc3, 'l3.vue').template
+    const { table } = buildVaporSubscriptions(sfc3, 'l3.vue')
+    const inst = instantiateTemplate(tpl, {
+      viewport: { width: 390, height: 844 }, read: (n) => (n === 'as_' ? as_ : undefined), table,
+    })
+    // 1 ul + 2 li + 4 div + 8 i = 15
+    expect(inst.nodes.length).toBe(15)
+    const ids = inst.nodes.map((n) => n.id)
+    expect(new Set(ids).size).toBe(ids.length)
+    // 层级：div 的父是 li、i 的父是 div
+    const byId = new Map(inst.nodes.map((n) => [n.id, n as Record<string, unknown>]))
+    for (const n of inst.nodes) {
+      const tag = (n as { tag?: string }).tag
+      const pt = n.parentId === null ? '' : String((byId.get(n.parentId) as Record<string, unknown> | undefined)?.tag)
+      if (tag === 'div') expect(pt).toBe('li')
+      if (tag === 'i') expect(pt).toBe('div')
+    }
+    // 8 条文本全部回填（层级 × 路径都正确才可能全对）
+    const texts = inst.nodes.map((n) => (n as { text?: string }).text).filter(Boolean).sort()
+    expect(texts).toEqual(['t000', 't001', 't010', 't011', 't100', 't101', 't110', 't111'])
   })
 })

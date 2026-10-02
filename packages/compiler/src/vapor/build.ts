@@ -305,7 +305,20 @@ export function buildVaporSubscriptions(source: string, filename = 'anonymous.vu
       continue
     }
 
-    const slot: SlotSubscription = { slotId: mySlot, nodeId: myNode, evaluatorId, tier: decision.tier, kind, propKey: ref.propKey }
+    // ★★`list-data` 槽位必须带 `listId`（2026-10-03 嵌套批次实测修正）：
+    //   运行时 `rowsOfList(listId, ...)` 按它找数据源——缺它 ⇒ 一律 `undefined` ⇒
+    //   嵌套列表（以及"行内无绑定的外层列表"）**整行不展开**（实测：外层 li 全丢）。
+    //   ★单层列表既有行为不变：listId 本就是该列表自己的 id。
+    const slot: SlotSubscription = {
+      slotId: mySlot,
+      nodeId: myNode,
+      evaluatorId,
+      tier: decision.tier,
+      kind,
+      propKey: ref.propKey,
+      // ★list-data（v-for 源绑定）用 **ownListId**；行内绑定用 listContext.listId
+      ...(kind === 'list-data' ? { listId: ref.ownListId ?? ref.listContext?.listId } : {}),
+    }
     slotRecords.push({ slot, deps, ref })
 
     const snippet = `${ref.where}="${ref.code}"`

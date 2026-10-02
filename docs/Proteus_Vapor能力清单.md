@@ -126,7 +126,8 @@ Teleport / KeepAlive / Suspense / Transition / TransitionGroup / v-memo / 自定
 | P0-4 | **动态事件 `@[ev]`**：正则解析器看不到方括号形态 ⇒ 既不进产物也不进诊断 | **静默丢失**（比"诊断拒绝"更危险） | ✅ **已补诊断**（`events.ts` 前置探测方括号形态） |
 
 **验证**：`tests/vapor-events.test.ts` 新增 6 组 P0 判据（含**反向判据**：已支持形态不得误报）；
-`scripts/vapor-capability-probe.mts`（调研探针转正，可复现）。**159 + 6 = 165 项 Vapor 测试全过**。
+`scripts/vapor-capability-probe.mts`（调研探针转正，可复现）。P2-1 新增 4 组嵌套判据
+（`tests/vapor-sfc-to-tree.test.ts`）。**172 项 Vapor 测试全过**（11 文件）。
 
 ### P1 · 组件系统（**"写页面组件"的核心**）
 
@@ -153,9 +154,9 @@ Teleport / KeepAlive / Suspense / Transition / TransitionGroup / v-memo / 自定
 
 ### P2 · 语法完整性（对标官方 24 个 transform）
 
-| # | 缺口 | 官方支持 | 建议 |
+| # | 缺口 | 官方支持 | 建议 / 状态 |
 |---|---|---|---|
-| P2-1 | **v-for 嵌套** | ✅ | 模板递归展开（我方已具备单层机制，扩为递归） |
+| P2-1 | **v-for 嵌套** | ✅ | ✅ **已完成（2026-10-03）**：模板递归展开（`parentListId`/`outerScope`/`sourceField`）+ 运行时递归实例化（`cloneRow` 递归 + `parentOverrideId` + list-data 兜底）。任意层（含 3 层）实测通过，见 `tests/vapor-sfc-to-tree.test.ts` 嵌套块 4 组判据 |
 | P2-2 | **混合文本** `a{{x}}b` | ✅ | 文本节点拆分（编译期切三段） |
 | P2-3 | **事件修饰符** `.stop/.prevent/.self/.once/.capture/.passive` + 按键修饰符 | ✅ | 修饰符语义 → 内核/宿主侧实现（`.stop` 已在 Vue 路径有先例） |
 | P2-4 | **v-model 修饰符** `.lazy/.number/.trim` | ✅ | 文本通道加修饰符选项 |
@@ -209,8 +210,24 @@ Teleport / KeepAlive / Suspense / Transition / TransitionGroup / v-memo / 自定
 2. **组件系统（P1）—— 待做**："用标准 Vue 写**页面组件**"的基座要素，目前 Vapor 路完全没有
    （Vue 路径有 `renderer-app` 可复用设计）。
 
-**建议顺序（更新）**：~~P0~~ ✅ → **P1-1/P1-2/P1-3（组件+插槽+props 响应式，~3-5 天）** →
-P2-1/P2-2（嵌套 v-for / 混合文本，~1 天）→ P2-3/P2-4（修饰符，~1 天）→ 其余按需。
+**建议顺序（更新）**：~~P0~~ ✅ → ~~P1-1/P1-2（组件边界+props 通道）~~ ✅ →
+~~P2-1（嵌套 v-for）~~ ✅ → P2-2/P2-3（混合文本 / 事件修饰符，~1 天）→ 其余按需。
+
+### ★P2-1 增量说明（2026-10-03，做/不做如实标注）
+
+| 做 | 依据 |
+|---|---|
+| 模板侧：`pendingCollectors` 收集器**栈**（替换单变量——内层一压就覆盖外层）+ `parentListId`/`outerScope`/`sourceField` 三字段 | 单变量版嵌套直接错乱（本仓实测）；三字段是运行时递归求值的全部输入 |
+| 模板侧：行子树**不合并**（各列表管各自的子树） | 首版把内层后代并入外层 `subtreeIds` ⇒ 外层克隆与内层展开对同一批模板 id **撞车**（实测：外层 li 全丢只剩 i） |
+| 运行时侧：`cloneRow` **递归展开**内层列表（行根经 `parentOverrideId` 挂到外层行实例） | 内层行根的"模板父"在外层子树里 ⇒ 不 override 时第 2 行起内层节点全挂到第一行（实测"都挤在第一个 li"） |
+| 运行时侧：主循环**跳过**带 `parentListId` 的列表（只由父行克隆递归展开） | 两层都从主循环展开 ⇒ 内层按全局扁平行集扩一次、父行克隆又扩一次 ⇒ 重复 + 撞 id |
+| 运行时侧：行集解析**兜底 `list-data` 槽位**（外层行内无绑定时唯一线索）+ `sourceField` 逐段下钻 | 外层行只有 `:key` + 内层 v-for 时无 `list-item` 槽位 ⇒ 行集空 ⇒ 外层 li 整行不展开（实测） |
+| 判据 4 组（结构齐备 / list-data 兜底 / parentOverride 归属 / 3 层 2×2×2 全对） | 本仓"能力 + 判据 + 端上验证"三件套；每组对应一个实测缺陷 |
+
+| 不做（后续） | 原因 |
+|---|---|
+| 嵌套 + 虚拟化描述（`virtual.rows` 现只在单列表给出） | 多列表行号空间不同源 ⇒ 宿主按行号二分会错配；宿主应退回全量物化（宁可多建不可错配） |
+| 嵌套列表的**动态增删递归更新**（relink 路径） | 运行时的嵌套行集解析已支持（`vapor-list-e2e` V4 块已验更新指令）；「行结构变化 ⇒ 整棵子树重建」归 L2 结构变更通道，独立批次 |
 
 ★**纪律**：每一批都要**同时**补「能力 + 判据 + 端上验证」（本仓既有三件套），
 且**先让不支持可见**（P0）**再谈补齐**——否则开发者会在"以为支持"的前提下踩坑。

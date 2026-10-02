@@ -46,6 +46,25 @@ export interface ListTemplate {
   subtreeIds: number[]
   /** v-for 别名（诊断/对账用） */
   scope: string
+  /**
+   * ★★**外层列表 id**（嵌套 v-for，2026-10-03 P2 批次）——该行模板位于哪个外层列表的行内。
+   *
+   * 【为什么必须有（本仓实测的架构约束）】嵌套 v-for（`<li v-for="g in gs"><i v-for="x in g.x">`）
+   *   的内层列表**每个外层行都要展开一份**（外层 3 行 × 内层 2 项 = 6 个内层实例）。
+   *   ⇒ 内层 `ListTemplate` 必须知道自己"寄生"在哪个外层行里（运行时按外层 item 递归实例化），
+   *     否则内层行会挂到**模板的固定位置**上（所有外层行共用一份内层——几何与数据全错）。
+   *   ★单层 v-for 时为 `undefined`（既有行为逐字节不变）。
+   */
+  parentListId?: number
+  /** 本行模板引用的**外层作用域名**（嵌套求值：`g.x` 里的 `g` 由外层行绑定） */
+  outerScope?: string
+  /**
+   * ★**数据源字段名**（嵌套列表用）——源表达式去掉外层作用域前缀后的部分。
+   *   例：`<i v-for="x in g.items">` ⇒ `outerScope='g'`、`sourceField='items'`。
+   *   运行时按 `row['items']` 取内层行数组（见 instantiate 的递归展开）。
+   *   ★单层 v-for 时 = 源表达式本身（运行时既有 rowsOfList 走 table 解析，本字段不影响）。
+   */
+  sourceField?: string
 }
 
 /** 布局模板（编译器产物之一；序列化后即可跨端传输） */
@@ -67,6 +86,10 @@ export interface LayoutTemplate {
 export interface InstantiatedNode {
   id: number
   parentId: number | null
+  /** ★节点标签（原生标签名 or 组件名；2026-10-03 起透传——此前被 emit 丢弃） */
+  tag?: string
+  /** ★组件边界标记（见 LayoutNode.component；P1 组件系统） */
+  component?: string
   text?: string
   /** 样式字段（width / height / flexDirection / margin / …）——**平铺在节点顶层** */
   [styleKey: string]: unknown

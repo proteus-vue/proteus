@@ -81,3 +81,6 @@ hosts/ios/results/showcase.mp4
 
 # Python 字节码缓存（脚本自测产生；不入库）
 __pycache__/
+
+# 临时探针目录（调试用；断言已固化进 tests/ 与 scripts/vapor-capability-probe.mts）
+.tmp-probe/

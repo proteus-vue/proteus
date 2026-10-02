@@ -259,6 +259,17 @@ export interface TemplateBindingRef {
   }
 
   /**
+   * ★本绑定**所属列表**的 listId（v-for 源绑定专用；2026-10-03 嵌套批次）
+   *
+   * 【为什么不是 listContext.listId】v-for 的**源绑定**（`list.items` 那条）描述的是
+   *   "本列表的数据源"——它自己的列表 id；而它的 `listContext` 是**外层**的（源表达式用外层
+   *   作用域解析）。运行时 `rowsOfList(listId, ...)` 要按它取行数组：缺它 ⇒ 一律 undefined
+   *   ⇒ 嵌套列表（以及"行内无绑定的外层列表"）整行不展开（实测：外层 li 全丢）。
+   * ★注意用**绑定元素自己的** listId（rowCtxOfElement），不是 listContext（那是外层）。
+   */
+  ownListId?: number
+
+  /**
    * ★作用域别名 → 其**所属列表的源表达式根名**（`item` → `list`）
    *
    * 【为什么必须有（本仓实测：首版漏了它）】`{{ item.title }}` 的依赖是"列表某项的字段"，
@@ -425,9 +436,26 @@ export function collectTemplateBindings(
             isKeyBinding: false,
           }
           // v-for 的**源表达式**绑定（`list.items`）用**外层** scopeSources（它不属行内）
+          //   ★★带上**本列表自己的 listId**（2026-10-03 嵌套批次修正）：该绑定描述的是
+          //     "本列表的数据源"——运行时 `rowsOfList(listId, ...)` 要按它取行数组；
+          //     首版没传 ⇒ `listId` 丢失 ⇒ **整行不展开**（实测：外层 li 全丢、只剩内层 i）。
+          //   ★注意用的是 `listIds.get(...)` 分配的 id（即 rowCtxOfElement.listId），不是 `listCtx`（那是外层）。
           if (exprText) {
             out.push(
-              binding(exprText, 'v-for', 'list.items', tag, line, scopes, inBranch, scopeSources, myElementIndex),
+              binding(
+                exprText,
+                'v-for',
+                'list.items',
+                tag,
+                line,
+                scopes,
+                inBranch,
+                scopeSources,
+                myElementIndex,
+                undefined,
+                false,
+                rowCtxOfElement.listId,
+              ),
             )
           }
         }
@@ -632,6 +660,8 @@ function binding(
   elementIndex = 0,
   listContext: ListCtxArg = undefined,
   isKeyBinding = false,
+  /** ★本绑定**所属列表**的 listId（v-for 源绑定专用；2026-10-03 嵌套批次） */
+  ownListId?: number,
 ): TemplateBindingRef {
   return {
     code: code.trim(),
@@ -645,6 +675,8 @@ function binding(
     elementIndex,
     // ★`isKeyBinding` 只在该绑定自身是 `:key` 时为真（其余继承上下文）
     listContext: listContext ? { ...listContext, isKeyBinding } : undefined,
+    // ★v-for 源绑定自带的本列表 listId（见 binding 签名注释；其余绑定为 undefined）
+    ownListId,
   }
 }
 
