@@ -1,0 +1,233 @@
+{
+  "provenance": {
+    "kind": "wechatide-computedStyle",
+    "tool": "wechatide automation_evaluate + fields({computedStyle})",
+    "page": "computed-pages/webview-geom/index",
+    "collectedAt": "2026-10-02",
+    "raw": "spike/vc0-skyline-geom/results/computed-webview.txt"
+  },
+  "rows": [
+    {
+      "prop": "display",
+      "wrote": "block",
+      "read": "block",
+      "verdict": "supported"
+    },
+    {
+      "prop": "display",
+      "wrote": "flex",
+      "read": "flex",
+      "verdict": "supported"
+    },
+    {
+      "prop": "position",
+      "wrote": "relative",
+      "read": "relative",
+      "verdict": "supported"
+    },
+    {
+      "prop": "position",
+      "wrote": "absolute",
+      "read": "absolute",
+      "verdict": "supported"
+    },
+    {
+      "prop": "box-sizing",
+      "wrote": "content-box",
+      "read": "content-box",
+      "verdict": "supported"
+    },
+    {
+      "prop": "opacity",
+      "wrote": "0.5",
+      "read": "0.5",
+      "verdict": "supported"
+    },
+    {
+      "prop": "color",
+      "wrote": "rgb(1, 2, 3)",
+      "read": "rgb(1, 2, 3)",
+      "verdict": "supported"
+    },
+    {
+      "prop": "background-color",
+      "wrote": "rgb(4, 5, 6)",
+      "read": "rgb(4, 5, 6)",
+      "verdict": "supported"
+    },
+    {
+      "prop": "width",
+      "wrote": "123px",
+      "read": "123px",
+      "verdict": "supported"
+    },
+    {
+      "prop": "height",
+      "wrote": "45px",
+      "read": "45px",
+      "verdict": "supported"
+    },
+    {
+      "prop": "margin-top",
+      "wrote": "7px",
+      "read": "7px",
+      "verdict": "supported"
+    },
+    {
+      "prop": "padding-top",
+      "wrote": "9px",
+      "read": "9px",
+      "verdict": "supported"
+    },
+    {
+      "prop": "border-radius",
+      "wrote": "11px",
+      "read": "11px",
+      "verdict": "supported"
+    },
+    {
+      "prop": "border-width",
+      "wrote": "3px",
+      "read": "3px",
+      "verdict": "supported"
+    },
+    {
+      "prop": "flex-direction",
+      "wrote": "row",
+      "read": "row",
+      "verdict": "supported"
+    },
+    {
+      "prop": "justify-content",
+      "wrote": "center",
+      "read": "center",
+      "verdict": "supported"
+    },
+    {
+      "prop": "align-items",
+      "wrote": "center",
+      "read": "center",
+      "verdict": "supported"
+    },
+    {
+      "prop": "flex-grow",
+      "wrote": "2",
+      "read": "2",
+      "verdict": "supported"
+    },
+    {
+      "prop": "flex-shrink",
+      "wrote": "0",
+      "read": "0",
+      "verdict": "supported"
+    },
+    {
+      "prop": "gap",
+      "wrote": "5px",
+      "read": "5px",
+      "verdict": "supported"
+    },
+    {
+      "prop": "overflow",
+      "wrote": "hidden",
+      "read": "hidden",
+      "verdict": "supported"
+    },
+    {
+      "prop": "top",
+      "wrote": "13px",
+      "read": "13px",
+      "verdict": "supported"
+    },
+    {
+      "prop": "left",
+      "wrote": "17px",
+      "read": "17px",
+      "verdict": "supported"
+    },
+    {
+      "prop": "transform",
+      "wrote": "translateX(10px)",
+      "read": "matrix(1, 0, 0, 1, 10, 0)",
+      "verdict": "supported"
+    },
+    {
+      "prop": "font-size",
+      "wrote": "23px",
+      "read": "23px",
+      "verdict": "supported"
+    },
+    {
+      "prop": "font-weight",
+      "wrote": "700",
+      "read": "700",
+      "verdict": "supported"
+    },
+    {
+      "prop": "line-height",
+      "wrote": "31px",
+      "read": "31px",
+      "verdict": "supported"
+    },
+    {
+      "prop": "text-align",
+      "wrote": "center",
+      "read": "center",
+      "verdict": "supported"
+    },
+    {
+      "prop": "visibility",
+      "wrote": "hidden",
+      "read": "hidden",
+      "verdict": "supported"
+    },
+    {
+      "prop": "z-index",
+      "wrote": "7",
+      "read": "7",
+      "verdict": "supported"
+    },
+    {
+      "prop": "min-width",
+      "wrote": "123px",
+      "read": "123px",
+      "verdict": "supported"
+    },
+    {
+      "prop": "max-width",
+      "wrote": "321px",
+      "read": "321px",
+      "verdict": "supported"
+    },
+    {
+      "prop": "min-height",
+      "wrote": "55px",
+      "read": "55px",
+      "verdict": "supported"
+    },
+    {
+      "prop": "max-height",
+      "wrote": "77px",
+      "read": "77px",
+      "verdict": "supported"
+    },
+    {
+      "prop": "align-self",
+      "wrote": "center",
+      "read": "center",
+      "verdict": "supported"
+    },
+    {
+      "prop": "flex-basis",
+      "wrote": "44px",
+      "read": "44px",
+      "verdict": "supported"
+    },
+    {
+      "prop": "border-color",
+      "wrote": "rgb(7, 8, 9)",
+      "read": "rgb(7, 8, 9)",
+      "verdict": "supported"
+    }
+  ]
+}

@@ -1,0 +1,417 @@
+{
+  "provenance": {
+    "kind": "playwright-css-supports",
+    "engine": "chromium",
+    "collectedAt": "2026-10-02",
+    "browserVersion": "151.0.7922.34"
+  },
+  "properties": {
+    "width": {
+      "recognized": true,
+      "valueProbe": "10px",
+      "valueOk": true,
+      "supported": true
+    },
+    "height": {
+      "recognized": true,
+      "valueProbe": "10px",
+      "valueOk": true,
+      "supported": true
+    },
+    "min-width": {
+      "recognized": true,
+      "valueProbe": "10px",
+      "valueOk": true,
+      "supported": true
+    },
+    "max-width": {
+      "recognized": true,
+      "valueProbe": "10px",
+      "valueOk": true,
+      "supported": true
+    },
+    "min-height": {
+      "recognized": true,
+      "valueProbe": "10px",
+      "valueOk": true,
+      "supported": true
+    },
+    "max-height": {
+      "recognized": true,
+      "valueProbe": "10px",
+      "valueOk": true,
+      "supported": true
+    },
+    "margin-top": {
+      "recognized": true,
+      "valueProbe": "10px",
+      "valueOk": true,
+      "supported": true
+    },
+    "padding-top": {
+      "recognized": true,
+      "valueProbe": "10px",
+      "valueOk": true,
+      "supported": true
+    },
+    "flex-direction": {
+      "recognized": true,
+      "valueProbe": "row",
+      "valueOk": true,
+      "supported": true
+    },
+    "justify-content": {
+      "recognized": true,
+      "valueProbe": "center",
+      "valueOk": true,
+      "supported": true
+    },
+    "align-items": {
+      "recognized": true,
+      "valueProbe": "center",
+      "valueOk": true,
+      "supported": true
+    },
+    "align-self": {
+      "recognized": true,
+      "valueProbe": "center",
+      "valueOk": true,
+      "supported": true
+    },
+    "flex-grow": {
+      "recognized": true,
+      "valueProbe": "1",
+      "valueOk": true,
+      "supported": true
+    },
+    "flex-shrink": {
+      "recognized": true,
+      "valueProbe": "0",
+      "valueOk": true,
+      "supported": true
+    },
+    "flex-basis": {
+      "recognized": true,
+      "valueProbe": "10px",
+      "valueOk": true,
+      "supported": true
+    },
+    "gap": {
+      "recognized": true,
+      "valueProbe": "5px",
+      "valueOk": true,
+      "supported": true
+    },
+    "display": {
+      "recognized": true,
+      "valueProbe": "flex",
+      "valueOk": true,
+      "supported": true
+    },
+    "position": {
+      "recognized": true,
+      "valueProbe": "relative",
+      "valueOk": true,
+      "supported": true
+    },
+    "top": {
+      "recognized": true,
+      "valueProbe": "1px",
+      "valueOk": true,
+      "supported": true
+    },
+    "left": {
+      "recognized": true,
+      "valueProbe": "1px",
+      "valueOk": true,
+      "supported": true
+    },
+    "overflow": {
+      "recognized": true,
+      "valueProbe": "hidden",
+      "valueOk": true,
+      "supported": true
+    },
+    "background-color": {
+      "recognized": true,
+      "valueProbe": "#fff",
+      "valueOk": true,
+      "supported": true
+    },
+    "color": {
+      "recognized": true,
+      "valueProbe": "#000",
+      "valueOk": true,
+      "supported": true
+    },
+    "font-size": {
+      "recognized": true,
+      "valueProbe": "16px",
+      "valueOk": true,
+      "supported": true
+    },
+    "border-radius": {
+      "recognized": true,
+      "valueProbe": "10px",
+      "valueOk": true,
+      "supported": true
+    },
+    "border-color": {
+      "recognized": true,
+      "valueProbe": "#000",
+      "valueOk": true,
+      "supported": true
+    },
+    "border-width": {
+      "recognized": true,
+      "valueProbe": "1px",
+      "valueOk": true,
+      "supported": true
+    },
+    "opacity": {
+      "recognized": true,
+      "valueProbe": "0.5",
+      "valueOk": true,
+      "supported": true
+    },
+    "transform": {
+      "recognized": true,
+      "valueProbe": "translateX(10px)",
+      "valueOk": true,
+      "supported": true
+    },
+    "transform-origin": {
+      "recognized": true,
+      "valueProbe": "center",
+      "valueOk": true,
+      "supported": true
+    },
+    "box-sizing": {
+      "recognized": true,
+      "valueProbe": "border-box",
+      "valueOk": true,
+      "supported": true
+    },
+    "z-index": {
+      "recognized": true,
+      "valueProbe": "1",
+      "valueOk": true,
+      "supported": true
+    },
+    "visibility": {
+      "recognized": true,
+      "valueProbe": "hidden",
+      "valueOk": true,
+      "supported": true
+    },
+    "line-height": {
+      "recognized": true,
+      "valueProbe": "1.5",
+      "valueOk": true,
+      "supported": true
+    },
+    "letter-spacing": {
+      "recognized": true,
+      "valueProbe": "1px",
+      "valueOk": true,
+      "supported": true
+    },
+    "white-space": {
+      "recognized": true,
+      "valueProbe": "nowrap",
+      "valueOk": true,
+      "supported": true
+    },
+    "text-overflow": {
+      "recognized": true,
+      "valueProbe": "ellipsis",
+      "valueOk": true,
+      "supported": true
+    },
+    "word-break": {
+      "recognized": true,
+      "valueProbe": "break-all",
+      "valueOk": true,
+      "supported": true
+    },
+    "word-spacing": {
+      "recognized": true,
+      "valueProbe": "1px",
+      "valueOk": true,
+      "supported": true
+    },
+    "font-style": {
+      "recognized": true,
+      "valueProbe": "italic",
+      "valueOk": true,
+      "supported": true
+    },
+    "font-family": {
+      "recognized": true,
+      "valueProbe": "system-ui",
+      "valueOk": true,
+      "supported": true
+    },
+    "text-decoration": {
+      "recognized": true,
+      "valueProbe": "underline",
+      "valueOk": true,
+      "supported": true
+    },
+    "box-shadow": {
+      "recognized": true,
+      "valueProbe": "0 0 2px #000",
+      "valueOk": true,
+      "supported": true
+    },
+    "filter": {
+      "recognized": true,
+      "valueProbe": "blur(2px)",
+      "valueOk": true,
+      "supported": true
+    },
+    "backdrop-filter": {
+      "recognized": true,
+      "valueProbe": "blur(2px)",
+      "valueOk": true,
+      "supported": true
+    },
+    "will-change": {
+      "recognized": true,
+      "valueProbe": "transform",
+      "valueOk": true,
+      "supported": true
+    },
+    "align-content": {
+      "recognized": true,
+      "valueProbe": "center",
+      "valueOk": true,
+      "supported": true
+    },
+    "flex-wrap": {
+      "recognized": true,
+      "valueProbe": "wrap",
+      "valueOk": true,
+      "supported": true
+    },
+    "order": {
+      "recognized": true,
+      "valueProbe": "1",
+      "valueOk": true,
+      "supported": true
+    },
+    "padding-left": {
+      "recognized": true,
+      "valueProbe": null,
+      "valueOk": null,
+      "supported": true
+    },
+    "padding-right": {
+      "recognized": true,
+      "valueProbe": null,
+      "valueOk": null,
+      "supported": true
+    },
+    "padding-bottom": {
+      "recognized": true,
+      "valueProbe": null,
+      "valueOk": null,
+      "supported": true
+    },
+    "margin-left": {
+      "recognized": true,
+      "valueProbe": null,
+      "valueOk": null,
+      "supported": true
+    },
+    "margin-right": {
+      "recognized": true,
+      "valueProbe": null,
+      "valueOk": null,
+      "supported": true
+    },
+    "margin-bottom": {
+      "recognized": true,
+      "valueProbe": null,
+      "valueOk": null,
+      "supported": true
+    },
+    "border-style": {
+      "recognized": true,
+      "valueProbe": "solid",
+      "valueOk": true,
+      "supported": true
+    },
+    "right": {
+      "recognized": true,
+      "valueProbe": "1px",
+      "valueOk": true,
+      "supported": true
+    },
+    "bottom": {
+      "recognized": true,
+      "valueProbe": "1px",
+      "valueOk": true,
+      "supported": true
+    },
+    "grid": {
+      "recognized": true,
+      "valueProbe": null,
+      "valueOk": null,
+      "supported": true
+    },
+    "grid-template-columns": {
+      "recognized": true,
+      "valueProbe": "1fr 1fr",
+      "valueOk": true,
+      "supported": true
+    },
+    "animation-name": {
+      "recognized": true,
+      "valueProbe": "none",
+      "valueOk": true,
+      "supported": true
+    },
+    "transition-property": {
+      "recognized": true,
+      "valueProbe": "all",
+      "valueOk": true,
+      "supported": true
+    }
+  },
+  "selectors": {
+    "class": {
+      "supported": true,
+      "selector": ".a"
+    },
+    "id": {
+      "supported": true,
+      "selector": "#a"
+    },
+    "tag": {
+      "supported": true,
+      "selector": "div"
+    },
+    "attr": {
+      "supported": true,
+      "selector": "[data-x]"
+    },
+    "descendant": {
+      "supported": true,
+      "selector": ".a .b"
+    },
+    "child": {
+      "supported": true,
+      "selector": ".a > .b"
+    },
+    "sibling": {
+      "supported": true,
+      "selector": ".a + .b"
+    },
+    "wildcard": {
+      "supported": true,
+      "selector": "*"
+    }
+  },
+  "values": {}
+}

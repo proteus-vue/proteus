@@ -1,5 +1,6 @@
 {
   "usingComponents": {
-    "geom-probe": "/components/geom-probe/index"
+    "geom-probe": "/components/geom-probe/index",
+    "css-probe": "/components/css-probe/index"
   }
 }
