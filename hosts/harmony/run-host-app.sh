@@ -119,7 +119,7 @@ if [ -n "$READY_LINE" ]; then
   fi
 
   # ── 6.5 ★探针集（命中 / 复用池 / 结构变更 / 文本通道）——与 Android 能力域对齐 ──
-  PROBE_LOG="$(HDC shell "hilog -x | grep -E 'PROTEUS_HIT_PROBE \{|PROTEUS_RECYCLE \{|PROTEUS_SPLICE \{|PROTEUS_TEXT \{|PROTEUS_SCROLL_DONE' | tail -6" 2>/dev/null)"
+  PROBE_LOG="$(HDC shell "hilog -x | grep -E 'PROTEUS_HIT_PROBE \{|PROTEUS_RECYCLE \{|PROTEUS_SPLICE \{|PROTEUS_TEXT \{|PROTEUS_SCROLL_DONE|PROTEUS_KERNELANIM \{' | tail -7" 2>/dev/null)"
   echo
   echo "  ✓ 探针集（鸿蒙腿）："
   printf '%s\n' "$PROBE_LOG" | sed 's/^/    /'

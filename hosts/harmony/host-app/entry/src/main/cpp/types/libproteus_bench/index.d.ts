@@ -10,5 +10,7 @@ export const recycleProbe: (rows: number, frames: number) => string;
 export const spliceProbe: () => string;
 /** ★文本通道探针（ArkGraphics2D typography） */
 export const textProbe: () => string;
+/** ★内核动画探针（矩阵 #16；anim_seek + updates 读数） */
+export const kernelAnimProbe: () => string;
 /** Rust 排版核版本（仪器自检） */
 export const version: () => string;
