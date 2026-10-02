@@ -41,6 +41,10 @@ func proteus_layout_profile(_ json: UnsafePointer<CChar>, _ useBlob: Bool) -> Un
 @_silgen_name("proteus_layout_hit_test")
 func proteus_layout_hit_test(_ handle: UInt64, _ x: Float, _ y: Float) -> UnsafeMutablePointer<CChar>
 
+// ★结构变更（splice）——与 Android `spliceRun` / 鸿蒙 `spliceProbe` 同一棵树同一 payload
+@_silgen_name("proteus_layout_splice")
+func proteus_layout_splice(_ handle: UInt64, _ spliceJson: UnsafePointer<CChar>) -> UnsafeMutablePointer<CChar>
+
 func takeString(_ ptr: UnsafeMutablePointer<CChar>) -> String {
     defer { proteus_layout_free_string(ptr) }
     return String(cString: ptr)
@@ -362,6 +366,10 @@ final class BenchViewController: UIViewController {
         //   把同一组探针跑在两端：结果必须逐位相同 —— 这是「一套语义多端一致」的直接证据。
         out["hit_probes"] = runHitProbes(handle: handle)
 
+        // ★★结构变更探针（与 Android `spliceRun` / 鸿蒙 `spliceProbe` 同源：
+        //   同一棵树（0 根 → 3 容器 → 4,5 两行）+ 同一 splice payload（在 3 的 index 2 插入 id=6/h=50））
+        out["splice_probe"] = runSpliceProbe()
+
         var rects: [String: [String: Double]] = [:]
         if let d = rectsJson.data(using: .utf8),
            let root = try? JSONSerialization.jsonObject(with: d) as? [String: Any],
@@ -511,6 +519,67 @@ final class BenchViewController: UIViewController {
         拍平/原生 = \(verdict["flat_vs_native_ratio"] ?? "?")（目标 ≤1.15）
         """
         view.addSubview(label)
+    }
+
+    /// ★★结构变更探针（splice）：与 Android `spliceRun` / 鸿蒙 `spliceProbe` **同一棵树同一 payload**。
+    ///   四项判据（与两端一致）：rects 增长 / removed=0 & inserted=1 / 新节点拿到声明高 / 重排范围有界。
+    private func runSpliceProbe() -> [String: Any] {
+        let tree = """
+        {"viewport":{"width":300,"height":400},"nodes":[
+         {"id":0,"parentId":null,"width":300.0,"flexDirection":"column"},
+         {"id":3,"parentId":0,"width":300.0,"flexDirection":"column"},
+         {"id":4,"parentId":3,"width":300.0,"height":50.0,"flexShrink":0.0},
+         {"id":5,"parentId":3,"width":300.0,"height":50.0,"flexShrink":0.0}
+        ],"textMeasures":{}}
+        """
+        let spliceJson = """
+        {"removes":[],"inserts":[{"parentId":3,"index":2,"nodes":[
+         {"id":6,"parentId":3,"height":50,"flexShrink":0,"paintHint":{"isMonochrome":false,"isPureBackground":false}}
+        ]}]}
+        """
+        let handle = tree.withCString { proteus_layout_create($0) }
+        guard handle > 0 else { return ["ok": false, "error": "建树失败"] }
+
+        func rectCount() -> Int {
+            let rs = takeString(proteus_layout_rects(handle))
+            return rs.components(separatedBy: "\"x\":").count - 1
+        }
+        let before = rectCount()
+        let out = spliceJson.withCString { takeString(proteus_layout_splice(handle, $0)) }
+        let after = rectCount()
+
+        var removed = -1, inserted = -1, relayout = -1
+        if let d = out.data(using: .utf8), let o = try? JSONSerialization.jsonObject(with: d) as? [String: Any] {
+            removed = o["removed"] as? Int ?? -1
+            inserted = o["inserted"] as? Int ?? -1
+            relayout = o["relayout_count"] as? Int ?? -1
+        }
+
+        // 新节点高（rects[id=6].height）
+        var newH: Double = -1
+        let rectsJson = takeString(proteus_layout_rects(handle))
+        if let d = rectsJson.data(using: .utf8),
+           let root = try? JSONSerialization.jsonObject(with: d) as? [String: Any],
+           let rects = root["rects"] as? [String: [String: Double]],
+           let r6 = rects["6"] {
+            newH = r6["height"] ?? -1
+        }
+        _ = proteus_layout_destroy(handle)
+
+        let SPLICE_NODE_COUNT = 1
+        let rectsGrew = after == before + SPLICE_NODE_COUNT
+        let countsMatch = removed == 0 && inserted == SPLICE_NODE_COUNT
+        let newHasGeometry = newH >= 25
+        let scopeBounded = relayout > 0 && relayout < 20
+        return [
+            "ok": rectsGrew && countsMatch && newHasGeometry && scopeBounded,
+            "before_rects": before, "after_rects": after,
+            "removed": removed, "inserted": inserted, "relayout_count": relayout,
+            "new_node_height": newH,
+            "checks": ["rects_grew": rectsGrew, "counts_match": countsMatch,
+                       "new_has_geometry": newHasGeometry, "scope_bounded": scopeBounded],
+            "note": "iOS 腿：与 Android spliceRun / 鸿蒙 spliceProbe 同一棵树同一 payload",
+        ]
     }
 
     /// ★★命中测试探针：与 Android `MainActivity.hitTestRun` **同一份场景与探针点**。

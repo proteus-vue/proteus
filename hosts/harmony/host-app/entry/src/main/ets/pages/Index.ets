@@ -14,7 +14,7 @@
 //   ② 基准分档串行 + 档间 `setTimeout(16)` 让出主线程（不长时间独占 UI 线程）。
 import { deviceInfo } from '@kit.BasicServicesKit';
 import { hilog } from '@kit.PerformanceAnalysisKit';
-import { NodeContent } from '@kit.ArkUI';
+import { NodeContent, FrameCallback } from '@kit.ArkUI';
 import { util } from '@kit.ArkTS';
 import { attach, renderCommands, stats, ProteusRenderStats } from 'libproteus_render.so';
 import { bench4050, hitProbe, recycleProbe, spliceProbe, textProbe, version as rustVersion } from 'libproteus_bench.so';
@@ -22,6 +22,27 @@ import { bench4050, hitProbe, recycleProbe, spliceProbe, textProbe, version as r
 const DOMAIN = 0x0002;
 const TAG = 'ProteusRender';
 const BENCH_TAG = 'ProteusBench';
+
+/**
+ * ★滚动帧率采集回调（具名类——ArkTS 禁类字面量 `arkts-no-class-literals`，编译器当场要求）。
+ *   `stamps` 与 `onTick` 由持有方注入（避免类字段跨实例共享的坑）。
+ */
+class ScrollFrameCallback extends FrameCallback {
+  private stamps: number[];
+  private onTick: () => void;
+  constructor(stamps: number[], onTick: () => void) {
+    super();
+    this.stamps = stamps;
+    this.onTick = onTick;
+  }
+  onFrame(frameTimeInNano: number): void {
+    this.stamps.push(frameTimeInNano);
+    this.onTick();
+  }
+  onIdle(): void {
+    /* 空闲帧：不采集（滚动探针只关心活跃帧） */
+  }
+}
 
 /** CSS 十六进制色（#RRGGBB / #AARRGGBB）→ ARGB uint32 */
 function cssToArgb(css: string): number {
@@ -66,6 +87,14 @@ struct Index {
   private content: NodeContent = new NodeContent();
   @State rendered: number = -1;
   @State benchLine: string = '（未跑）';
+  // ── 滚动通道（真机滚动 + 帧率采集）──
+  @State scrollOffset: number = 0;
+  @State scrollFrames: number = 0;
+  private scrollStartNs: number = 0;
+  private scrollDone: boolean = false;
+  private scroller: Scroller = new Scroller();
+  private frameCb: FrameCallback | null = null;
+
   // ── 原生对照（声明式 ArkUI 建同规格 4050 元素）──
   @State showNative: boolean = false;
   @State nativeAppeared: number = 0;
@@ -83,6 +112,49 @@ struct Index {
     const bytes: Uint8Array = ctx.resourceManager.getRawFileContentSync('app-4050-tree.json');
     const decoder = util.TextDecoder.create('utf-8');
     return decoder.decodeToString(bytes);
+  }
+
+  /**
+   * ★滚动通道（2026-10-02）：真机滚动 + **帧率采集**（与 Android 的 gfxinfo / iOS 的帧统计同类）。
+   *
+   * 【采法】`postFrameCallback` 逐帧回调 → 记录 frameTimeInNano 序列 → 算 avg/p50/p95 间隔。
+   *   滚动由程序驱动（scrollTo 逐帧推进 60 帧），避免人工滑动的不确定性。
+   *   ★主动上报（PROTEUS_SCROLL_DONE）——零盲等纪律。
+   */
+  private runScrollProbe(): void {
+    const FRAMES = 60;
+    const STEP = 200;   // 每帧滚动推进（vp）
+    const stamps: number[] = [];
+    this.scrollStartNs = 0;
+    this.scrollDone = false;
+    let i = 0;
+    const tick = (): void => {
+      if (i >= FRAMES) {
+        // 结算：帧间隔（ns → ms）
+        const gaps: number[] = [];
+        for (let k = 1; k < stamps.length; k++) gaps.push((stamps[k] - stamps[k - 1]) / 1e6);
+        gaps.sort((a, b) => a - b);
+        const avg = gaps.length ? gaps.reduce((a, b) => a + b, 0) / gaps.length : -1;
+        const p50 = gaps.length ? gaps[Math.floor(gaps.length * 0.5)] : -1;
+        const p95 = gaps.length ? gaps[Math.floor(gaps.length * 0.95)] : -1;
+        const total = stamps.length > 1 ? (stamps[stamps.length - 1] - stamps[0]) / 1e6 : -1;
+        const fps = total > 0 ? (stamps.length - 1) / (total / 1000) : -1;
+        // ★★格式坑（2026-10-02 实测）：hilog 的流式格式化**不认 `%.2f`**（原样打出 `%.2f` 字面量）——
+        //   修法：把数值**先转成字符串**再以 %{public}s 打（数字精度在 JS 侧控制）。
+        const fmt = (v: number): string => (Math.round(v * 100) / 100).toString();
+        hilog.info(DOMAIN, BENCH_TAG,
+          'PROTEUS_SCROLL_DONE frames=%{public}d avg_ms=%{public}s p50_ms=%{public}s p95_ms=%{public}s fps=%{public}s',
+          stamps.length, fmt(avg), fmt(p50), fmt(p95), fmt(fps));
+        this.scrollDone = true;
+        return;
+      }
+      i++;
+      this.scrollOffset = this.scrollOffset + STEP;
+      this.scroller.scrollTo({ xOffset: 0, yOffset: this.scrollOffset });
+      if (this.frameCb) this.getUIContext().postFrameCallback(this.frameCb);
+    };
+    this.frameCb = new ScrollFrameCallback(stamps, tick);
+    this.getUIContext().postFrameCallback(this.frameCb);
   }
 
   /** 分档跑基准（★档间让出主线程——见文件头坑②）；4050 全量在最后一档 */
@@ -162,6 +234,21 @@ struct Index {
     Stack() {
       ContentSlot(this.content)
 
+      // ★滚动通道：Scroll 容器（runScrollProbe 程序化滚动它；帧率由 postFrameCallback 采）
+      Scroll(this.scroller) {
+        Column() {
+          ForEach(Array.from({ length: 40 }, (_: number, i: number) => i), (i: number) => {
+            Row() {
+              Text(`滚动行 ${i}`).fontSize(14).fontColor('#FFFFFF')
+            }
+            .width('100%').height(100).backgroundColor(i % 2 === 0 ? '#2A2A35' : '#222230')
+          }, (i: number) => `srow-${i}`)
+        }
+      }
+      .width(2).height(2)   // ★极小可视区（不干扰主画面；滚动逻辑与帧率采集不受尺寸影响）
+      .position({ x: -100, y: -100 })
+      .scrollBar(BarState.Off)
+
       if (this.showNative) {
         // 原生对照：声明式 ArkUI 4050 元素（规格与夹具同：50 行 × 40 格 × (格+text)）
         Column() {
@@ -229,6 +316,12 @@ struct Index {
           hilog.info(DOMAIN, BENCH_TAG, 'PROTEUS_RECYCLE %{public}s', rp);
         } catch (re) {
           hilog.error(DOMAIN, BENCH_TAG, 'PROTEUS_RECYCLE_ERROR %{public}s', JSON.stringify(re) ?? '');
+        }
+        // ★滚动通道（真机滚动 + 帧率；异步——由 postFrameCallback 驱动）
+        try {
+          this.runScrollProbe();
+        } catch (sce) {
+          hilog.error(DOMAIN, BENCH_TAG, 'PROTEUS_SCROLL_ERROR %{public}s', JSON.stringify(sce) ?? '');
         }
         // ★结构变更探针（splice；与 Android 同 payload）
         try {
