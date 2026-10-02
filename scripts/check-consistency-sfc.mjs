@@ -69,7 +69,15 @@ async function main() {
           srcSize: { width: raw.width, height: raw.height },
           colorSpace: raw.colorSpace ?? 'undeclared',
           block: r.block,
-          scale: Math.round(r.scale * 1000) / 1000,
+          // ★亚像素边缘（定标真实来源——见 pixel.ts 的 refineEdges；整数 bbox 对分数倍率端
+          //   有 0.9% 级误差，会把整幅拉伸成假差异）
+          edges: {
+            l: Math.round(r.edges.l * 1000) / 1000,
+            t: Math.round(r.edges.t * 1000) / 1000,
+            r: Math.round(r.edges.r * 1000) / 1000,
+            b: Math.round(r.edges.b * 1000) / 1000,
+          },
+          scale: Math.round(r.scale * 1000000) / 1000000,
         },
       })
     } catch (e) {

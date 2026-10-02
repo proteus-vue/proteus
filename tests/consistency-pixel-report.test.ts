@@ -311,6 +311,68 @@ describe('VC7 · 锚定归一（五端同坐标系比较的前提）', () => {
   })
 })
 
+describe('VC7 · 锚定归一的亚像素定标（分数倍率端）', () => {
+  /**
+   * 解析式渲染：把锚块按**给定边缘**（可为小数）以 ss×ss 超采样画进图（每像素求覆盖率）。
+   * 这是"分数倍率渲染"的确定性合成——真实场景（微信模拟器 1.64032×）无法在单测里跑模拟器。
+   */
+  function fracBlock(w: number, h: number, l: number, t: number, bw: number, bh: number, fg: [number, number, number], bg: [number, number, number], ss = 4): RgbaImage {
+    const rgba = new Uint8Array(w * h * 4)
+    for (let y = 0; y < h; y++) {
+      for (let x = 0; x < w; x++) {
+        let cov = 0
+        for (let sy = 0; sy < ss; sy++) {
+          for (let sx = 0; sx < ss; sx++) {
+            const px = x + (sx + 0.5) / ss
+            const py = y + (sy + 0.5) / ss
+            if (px >= l && px < l + bw && py >= t && py < t + bh) cov++
+          }
+        }
+        const a = cov / (ss * ss)
+        const i = (y * w + x) * 4
+        rgba[i] = Math.round(bg[0] + (fg[0] - bg[0]) * a)
+        rgba[i + 1] = Math.round(bg[1] + (fg[1] - bg[1]) * a)
+        rgba[i + 2] = Math.round(bg[2] + (fg[2] - bg[2]) * a)
+        rgba[i + 3] = 255
+      }
+    }
+    return { width: w, height: h, rgba }
+  }
+  const FG: [number, number, number] = [47, 111, 237]
+  const BG: [number, number, number] = [20, 20, 28]
+  const SPEC = { probe: FG, outSize: { w: 375, h: 800 }, blockTarget: { x: 16, y: 60, w: 80 } }
+
+  it('▲5 分数倍率（真实 1.64032× 的形态）：亚像素定标把 0.94% 误差压到 <0.1%（整数 bbox 达不到）', () => {
+    // 锚块 80 逻辑 @1.64032× = 131.2256px，放在 (30.6, 199.4)（两边都是小数的真实形态）
+    const trueScale = 1.64032
+    const bw = 80 * trueScale
+    const l = 30.6
+    const t = 199.4
+    const img = fracBlock(700, 1500, l, t, bw, 48 * trueScale, FG, BG)
+    const r = anchorNormalize(img, SPEC)
+    const sTrue = SPEC.blockTarget.w / bw           // 输出/源（真值）
+    const errSub = Math.abs(r.scale - sTrue) / sTrue
+    // 整数 bbox 的宽度（对照：证明"亚像素不是可有可无"）——
+    // ★按 anchorNormalize 的真实口径算：**部分覆盖即命中** ⇒ 段宽 = ceil(r) − floor(l)
+    const wInt = Math.ceil(l + bw) - Math.floor(l)
+    const errInt = Math.abs(SPEC.blockTarget.w / wInt - sTrue) / sTrue
+    expect(errSub, `亚像素定标误差 ${(errSub * 100).toFixed(3)}% 应 <0.1%`).toBeLessThan(0.001)
+    expect(errInt, `整数 bbox 误差 ${(errInt * 100).toFixed(3)}% 应显著更大（对照）`).toBeGreaterThan(errSub * 5)
+    // 边缘本身应接近解析真值（±0.25px）
+    expect(Math.abs(r.edges.l - l)).toBeLessThan(0.25)
+    expect(Math.abs((r.edges.r - r.edges.l) - bw)).toBeLessThan(0.25)
+  })
+
+  it('▲6 整数边（合成硬边夹具）：亚像素定标与整数 bbox 等价（回归保护——既有行为不劣化）', () => {
+    const img = fracBlock(700, 1500, 30, 199, 130, 78, FG, BG)
+    const r = anchorNormalize(img, SPEC)
+    expect(r.edges.l).toBeCloseTo(30, 5)
+    expect(r.edges.r).toBeCloseTo(160, 5)
+    expect(r.block, '整数 bbox 语义不变（诊断字段）').toMatchObject({ x: 30, y: 199, w: 130, h: 78 })
+    expect(r.scale).toBeCloseTo(80 / 130, 5)
+  })
+})
+
 describe('VC7 · PNG 编解码（往返 + 真实字节）', () => {
   it('⑧ 编码 → 解码 往返无损（RGBA 逐字节相同）', async () => {
     const img = makeImage(37, 23, [12, 34, 56], { x: 5, y: 5, w: 9, h: 7, color: [200, 100, 50] })
