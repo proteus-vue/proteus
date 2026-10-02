@@ -19,6 +19,20 @@ import { createAppNavigation } from '../packages/render-backend/src/app-navigati
 import { SCREEN_ANIM_DONE_KEY } from '../packages/render-backend/src/screen-executor-host'
 import type { RouteRecord } from '../packages/router/src/types'
 
+// ★本文件模拟应用的路由名扩充（机制与 router-permissions.test.ts 同款——真实工程由
+//   auto-routes.ts 生成同样的 declare module；测试里手写，否则 name 受限约束挡住用例）。
+//   ★只声明 examples 产物**没有**的名字（'user' 等由 examples/router/auto-routes.ts 提供——
+//   重复声明会 TS2717 类型冲突，这正是本仓"单一来源"纪律在类型层的体现）
+declare module '@proteus-vue/router/types' {
+  interface RouteParamsByName {
+    home: undefined
+    detail: { id?: string }
+    a: undefined
+    b: undefined
+    c: undefined
+  }
+}
+
 /** 记录桩宿主通道（贴近真机回执形态）。
  *
  * ★★关键（测试第一版超时踩到）：`screen.anim` 的回执**只表示"已受理"**——动画的完成
@@ -130,7 +144,7 @@ describe('③ 统一 createRouter 打到 App 端（零手写胶水：push → �
     await router.replace({ name: 'user' })
     expect(nav.stack.depth).toBe(1)
     expect(nav.stack.current()!.name).toBe('user')
-    await router.push({ name: 'user', ...({ reLaunch: true } as never) })
+    await router.push({ name: 'user', reLaunch: true })
     expect(nav.stack.depth).toBe(1)
   })
 

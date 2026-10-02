@@ -4,7 +4,7 @@
 //   iOS 负数（CGFloat）/ Android NaN（TypedValue）/ 鸿蒙超限（Constraint）/ Skyline 非有限数 / Web 最宽松
 // ★MP 产物 ES5 安全：禁 ?. ?? 展开 解构（决策 #32/#36）
 
-import type { AllowedStyleProp } from './whitelist'
+import type { AllowedStyleProp, StylePropKind } from './whitelist'
 import { ALLOWED_STYLE_PROPS } from './whitelist'
 
 export type StylePlatform = 'web' | 'skyline' | 'ios' | 'android' | 'harmony'
@@ -88,9 +88,20 @@ function narrowTransform(v: unknown, platform: StylePlatform): NarrowResult {
   return { valid: true, value: v }
 }
 
+/**
+ * 属性 → 白名单档位（★走函数返回，**不做控制流窄化**）：
+ *   直接 `const kind: StylePropKind = TABLE[prop]` 会被 TS 按**初始化器类型**（表内当前出现的值联合）
+ *   窄化——`Integer` 等档位在当前表里无属性挂载（zIndex 已转 FORBIDDEN）就会被 switch 判为
+ *   "不可比较"（TS2678 实测）。档位是**声明契约**（`StylePropLevel`），守卫函数保留、
+ *   档位回来时本文件无需改动。
+ */
+function kindOf(prop: string): StylePropKind {
+  return ALLOWED_STYLE_PROPS[prop as AllowedStyleProp]
+}
+
 /** 逐平台收窄（04 §3）：按白名单类型 + 平台规则归一/拦截 */
 export function narrowValue(prop: string, value: unknown, platform: StylePlatform): NarrowResult {
-  const kind = ALLOWED_STYLE_PROPS[prop as AllowedStyleProp]
+  const kind = kindOf(prop)
   switch (kind) {
     case 'Length':
       return narrowLength(value, platform)

@@ -6,6 +6,20 @@
 /** 转场枚举（webTransitionName / MP routeType 映射共享） */
 export type RouteTransition = 'slideUp' | 'slideDown' | 'halfScreen' | 'scaleDown' | 'none'
 
+/**
+ * ★NB3（导航体系，2026-10-02）分支**保活档**——分支 = `isTab` 页（零新增配置源）。
+ *   `none`：切走即销毁视图（栈状态序列化保留），切回重建（对齐 Android `saveBackStack`）
+ *   `active`（默认）：当前 + 相邻分支保活（保手感 + 控内存）
+ *   `all`：全保活（对齐 Flutter `IndexedStack`；方案 §2.4 警告：几十个模块会爆内存）
+ * ★运行时值域在 `@proteus-vue/router`（KEEP_ALIVE_TIERS，穷尽接线）——本类型是单一来源。
+ */
+export type KeepAliveTier = 'none' | 'active' | 'all'
+
+/** 分支级配置（★仅 `isTab: true` 的页面有意义；写在非 tab 页 ⇒ 构建期警告，见 gen-routes） */
+export interface BranchMeta {
+  keepAlive?: KeepAliveTier
+}
+
 /** 路由元信息（<route> meta + 集中式配置合并产物；任意扩展字段仅 JSON 可序列化） */
 export interface RouteMeta {
   requiresAuth?: boolean
@@ -14,6 +28,8 @@ export interface RouteMeta {
   title?: string
   isTab?: boolean
   transition?: RouteTransition
+  /** ★NB1/NB3 分支级配置（挂在 tab 根页上；`router.pages['index'].branch`，缺省走框架默认） */
+  branch?: BranchMeta
   /** 任意扩展字段（仅 JSON 可序列化） */
   [key: string]: unknown
 }

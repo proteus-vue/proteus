@@ -50,6 +50,21 @@ export type {
   ScreenCommand,
 } from './app-stack'
 
+// ★★NB1/NB3/NB6（导航体系）：多分支独立栈 + 保活三档 + 返回归属（App 端主战场——
+//   分支 = meta.isTab 页；命令流带 branch 标记，供多执行器按分支分发）
+export { createBranchNavigator, KEEP_ALIVE_TIERS, OUTER_BRANCH } from './branch-navigator'
+export type {
+  BranchNavigator,
+  BranchNavigatorOptions,
+  BranchSpec,
+  BranchCommand,
+  BranchEvent,
+  BranchClock,
+  BranchStackSnapshot,
+  KeepAliveDecision,
+  BackOutcome,
+} from './branch-navigator'
+
 // 转场映射（App 腿：枚举 → Morpheus 规格在 @proteus-vue/animation 的 appTransition；
 //   本入口只带**枚举与校验**——枚举收口 contracts，路由表与三端同源）
 export { isTransition } from './transforms/transform-transition'

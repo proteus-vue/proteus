@@ -5,6 +5,8 @@ export type {
   RouteRecord,
   RouteMeta,
   RouteTransition,
+  KeepAliveTier,
+  BranchMeta,
   RouteParamsByName,
   RouteBlock,
   RouteNode,

@@ -87,6 +87,47 @@ check-consistency-snapshot 七段全绿 · check:no-blind-wait ✅（新 .sh 零
 ① L2/L3/L2.5/L2.6 算子用**合成快照**——证明的是"比对引擎敏不敏感"，不是"真机数据一定对"；
 ② L4 算子用真截图但取同端注入（跨端噪声底含 AA，无区分度）；L4 的价值形态是**定位**。
 
+### ★★★2026-10-02（五十六）· 导航体系 **NB1/NB3/NB6 核心落地**（用户：「继续」）
+
+**做了什么**（承接五十五的落地方案，实施"纯逻辑、零端依赖"的三张卡）：
+1. **NB1 分支导航核心**：新增 `packages/router/src/branch-navigator.ts` —— `createBranchNavigator({ screens, tabNames })`
+   **从统一产物装配**（分支清单 = `tabNames`，分支根 = `screens[name].path`），**零新增配置源**。
+   每个分支一个**独立 `AppStack`**（懒建根：首次进入才建，内存按需）；切分支**保留各自栈**
+   （切回栈深不变——对照小程序"切 tab 清栈"）；命令流带 `branch` 标记 + 跨分支顺序纪律
+   （navigator 事务严格保序；直接栈操作下次 drain 按分支归并）。
+2. **NB3 保活三档**：`none/active/all`（缺省 `active`）。
+   · 契约：`contracts/src/route.ts` 新增 `KeepAliveTier`/`BranchMeta`（`RouteMeta.branch`）；
+   · 配置：`router.pages['x'].branch.keepAlive` → `meta.branch` → `screens[x].keepAlive`（**同一入口管全端**）；
+   · 运行时：`AppStack` 新增四原语 **`suspend`/`resume`/`releaseTrees`/`frames`**（纯逻辑，复用 freeze 命令形态
+     ⇒ 执行器零新分支）；`none` 档切走 = 整栈释放（`unmount(reason:'freeze')`）+ **栈状态全保留**
+     （`frames()` 永远完整——对齐 Android `saveBackStack` 的"instances no longer exist in memory"）；
+     切回 `resume()` 重建**原栈顶**（`mount(rebuild:true)`）。
+   · `active` = 当前 + 相邻（±1）保活，离开邻域才释放；`all` = 永不释放（IndexedStack，慎用）。
+   · 编译期警告：`branch` 写在非 tab 页 ⇒ gen-routes 警告（登记不静默——判据有单测）。
+   · ★穷尽接线：`KEEP_ALIVE_TIERS: Record<KeepAliveTier, true>`（contracts 增删档位 ⇒ 编译报错，不靠记忆）。
+3. **NB6 返回归属**：`back()` **只作用于当前活跃分支**；到根 ⇒ 可观测信号（`{action:'outer'}` / `{action:'system'}`，
+   **不静默吞掉**）；`back(delta>1)` 夹在分支内（弹到根为止，不"穿透"外层）；`parent`（外层 RootStack）
+   可注入——外层命令带 `OUTER_BRANCH` 标签进同一条流。
+4. **NB2 基础就绪**：`navigate(branch, frames)` 深链直达分支内子页（frames 缺分支根 ⇒ 自动补根——
+   分支不变式"根永远在栈底"）+ `snapshot()` 序列化往返**逐帧相同**。
+
+**判据（§4 表 1–7 全绿）**：`tests/branch-navigator.test.ts` **28 条**（7 组：装配/切分支保栈/保活三档/
+none 可恢复/返回归属/深链往返/命令隔离）+ `tests/app-stack.test.ts` ⑩ 组 **6 条**（分支原语）+
+`tests/gen-routes.test.ts` **2 条**（项目配置 → 统一产物端到端 + 非 tab 警告）。
+**验证**：定向回归 125/125 · **全量 `pnpm test` 4575/4575（363 文件，78.75s）** · `vue-tsc` 0 error ·
+`check:pkg` 0 error（新增子路径导出已构建）· `check:deps` 0 缺失 · router 纯度/平台矩阵单测绿。
+
+**★ 顺手修掉 3 处存量类型缺陷**（vue-tsc 从 17 error → 0，全是本特性线必经门禁）：
+① `packages/types/src/config.ts` 的 `router` 内联形状是 `RouterSection` 的**第二份定义**且漏 `pages`
+   （`examples/proteus.config.ts` 引用被 vue-tsc 拦下）⇒ 改为引用单一来源；
+② `tests/router-app.test.ts` 缺 `declare module` 路由名扩充（15 条错误）⇒ 按 `router-permissions` 先例补齐；
+③ `packages/runtime/src/style-safety/platform-narrowing.ts`：TS 对 `const` 用**初始化器窄化类型**做
+   控制流分析（`Integer` 档当前无属性 ⇒ switch 判"不可比较" TS2678）⇒ 走 `kindOf()` 函数返回
+   （函数返回类型不做控制流窄化）——注释记录了为什么。
+**诚实边界**：① 本批是**逻辑层**（单测判据），**未上真机**——两端宿主接线（`onBackPressed`/手势 → `back()`）
+与真机读数归 NB7；② NB2 的"深链解析产物自动合并"未接（`navigate`/`snapshot` 是它的输入形态）；
+③ NB4/NB5 未动（需真机视觉验收）；④ 鸿蒙整体未验证（无设备——与五十五边界一致）。
+
 ### ★★★2026-10-02（五十五）· 导航体系（tabBar/navBar）**落地方案文档**（用户：「看下我刚才新增的文档」+「先只出落地方案文档」）
 
 **你的新增方案**：`docs/Proteus_导航体系与多端一致性方案.md`（tabBar/navBar，三层模型
@@ -813,7 +854,7 @@ check-consistency-snapshot 七段全绿 · script-compile ✅ · no-blind-wait �
 "位置是否正确"由 L2 几何数值比对承担；L4 只管"画出来像不像"（已写入注记与文档）。
 ④ 仍未接入：iOS/Android 真机截图（当前 Web=Playwright、MP=模拟器，均非真机）。
 
-## 当前状态速览（最近一次更新：**2026-10-02·（五十五）· 导航体系（tabBar/navBar）落地方案文档：现状核对出 3 个真缺口（多分支栈/保活三档/返回归属）+ NB 系列 7 张卡（分支=isTab 页，零新增配置）**）★新会话以此为准
+## 当前状态速览（最近一次更新：**2026-10-02·（五十六）· 导航体系 **NB1/NB3/NB6 核心落地**：`createBranchNavigator`（分支=isTab 页，切分支保栈）+ 保活三档（none/active/all，`AppStack` 四原语 suspend/resume/releaseTrees/frames）+ 返回归属（back 只作用于活跃分支，到根交外层/系统信号）；判据单测全绿（28+6+2 条）；顺手清零 vue-tsc 存量 17 错**）★新会话以此为准
 ### ★★★2026-10-02（三十八）· 交互两层（离散 + 连续）—— 标准 §10.1 的最后两个"未布点"
 
 **交付**

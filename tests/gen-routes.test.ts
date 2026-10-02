@@ -180,6 +180,51 @@ describe('runGenRoutes：路由表生成全链路', () => {
     expect(userProfile).toContain('"requiresAuth":true') // 目录级保留（精确只覆盖 title）
   })
 
+  it('★★NB3（导航体系）：项目配置 router.pages[...].branch.keepAlive → 统一产物 screens.keepAlive（一个入口管全端）', () => {
+    const root = path.join(TMP, 'branch-config')
+    writeFixture(root, 'src/pages/index.vue', `<template><view>首页</view></template>\n<route>\n{\n  "meta": { "title": "首页", "isTab": true }\n}\n</route>\n`)
+    writeFixture(root, 'src/pages/mine.vue', `<template><view>我的</view></template>\n<route>\n{\n  "meta": { "title": "我的", "isTab": true }\n}\n</route>\n`)
+
+    runGenRoutes({
+      config: makeConfig({
+        router: {
+          pages: {
+            // ★分支级配置挂在页面配置里（用户决策：分支 = isTab 页，零新增配置源）
+            'mine': { isTab: true, branch: { keepAlive: 'none' } },
+          },
+        },
+      }),
+      root,
+    })
+
+    const auto = fs.readFileSync(path.join(root, 'src/router/auto-routes.ts'), 'utf-8')
+    // meta 携带 branch 声明（路由表投影——可被运行时/诊断读到）
+    expect(auto).toContain('"keepAlive":"none"')
+    // ★App 投影：screens.mine.keepAlive 已物化（createBranchNavigator 直接消费——无需二次转换）
+    const screens = auto.slice(auto.indexOf('export const screens'))
+    const mineSpec = screens.match(/"mine": \{[^}]*\}/)?.[0] ?? ''
+    expect(mineSpec).toContain('"keepAlive": "none"')
+    // tabNames 投影含两个分支（分支清单来源——与 screens 同源）
+    const tabNames = auto.slice(auto.indexOf('export const tabNames'))
+    expect(tabNames).toContain('"index"')
+    expect(tabNames).toContain('"mine"')
+  })
+
+  it('★NB3：branch 写在非 tab 页 ⇒ 构建期警告（登记不静默——配置了却永不生效是本仓抓过的缺陷形态）', () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    try {
+      const root = path.join(TMP, 'branch-stray')
+      writeFixture(root, 'src/pages/index.vue', `<template><view>首页</view></template>\n<route>\n{\n  "meta": { "isTab": true }\n}\n</route>\n`)
+      writeFixture(root, 'src/pages/detail.vue', `<template><view>详情</view></template>\n<route>\n{\n  "meta": { "title": "详情", "branch": { "keepAlive": "none" } }\n}\n</route>\n`)
+      runGenRoutes({ config: makeConfig(), root })
+      const warns = warn.mock.calls.map((c) => String(c[0])).filter((s) => s.includes('meta.branch'))
+      expect(warns).toHaveLength(1)
+      expect(warns[0]).toContain('detail')
+    } finally {
+      warn.mockRestore()
+    }
+  })
+
   it('★#505 M3 批 3：fluid/semantic-grid 规则状态决定页面 p-grid 的 usingComponents 注册（禁用回退运行时组件须注册，规则启用语义编译跳过）', () => {
     const FW = path.resolve('packages/components')
     const gridTpl = `<template><view class="page"><p-grid :min-col-width="160" :gap="12"><view class="cell" /></p-grid></view></template>`

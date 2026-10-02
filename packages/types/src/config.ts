@@ -5,6 +5,9 @@
 import type { UserConfig } from 'vite'
 import type { TransformRuleOverrides } from './compiler-types'
 import type { RouteMeta } from './router-types'
+// ★单一来源（铁律 #9）：router 段形状以 RouterSection 为准——本文件**不再**内联第二份定义
+//   （此前内联版漏带 `pages`，直到 vue-tsc 把 examples/proteus.config.ts 拦下才被发现）
+import type { RouterSection } from './router-config'
 
 export interface ViteConfigContext {
   command: 'serve' | 'build'
@@ -139,28 +142,10 @@ export interface ProteusConfig {
     strict: boolean
   }
   /** ★#492 项目级路由管理（统一路由配置面——路由相关配置唯一声明处）：
-   *  结构（routesOutput/subPackages/customRoute）+ tabBar + 集中式 meta 全部在此；
+   *  结构（routesOutput/subPackages/customRoute）+ tabBar + 页面配置（pages）全部在此；
    *  顶层三字段为向后兼容别名，双处同时声明时 router.* 优先（config:check 提示收敛）。
    *  消费方（gen-routes / app 骨架）经 resolveRouterConfig() 取生效配置——禁止散读顶层字段 */
-  router?: {
-    /** 路由表产物路径（编译期 gen-routes 生成；缺省 src/router/auto-routes.ts） */
-    routesOutput?: string
-    /** 分包配置（各分包独立扫描树） */
-    subPackages?: Array<{ root: string; name?: string }>
-    /** wx.router 自定义路由（转场 builders；缺省 registerPresets: true） */
-    customRoute?: {
-      registerPresets?: boolean
-      builders?: Record<string, string>
-    }
-    /** tabBar 声明（list.name 对应路由名；缺省按 meta.isTab 推导） */
-    tabBar?: {
-      color?: string
-      selectedColor?: string
-      list: Array<{ name: string; text: string; icon?: string }>
-    }
-    /** 集中式 meta（决策 #113）：精确路径 > 目录前缀 > 默认 */
-    meta?: Record<string, RouteMeta>
-  }
+  router?: RouterSection
   /** ★#418/★#421 vite 透传（配置收敛——开发者不写 vite.config.ts）：
    *   框架用 resolveProteusViteConfig 组装 vite 配置（vue/mpTransform/别名/构建参数全内置），
    *   本字段做开发者扩展——**类型即 vite 官方 UserConfig**（plugins/server/resolve/build…全兼容）：
