@@ -87,6 +87,117 @@ check-consistency-snapshot 七段全绿 · check:no-blind-wait ✅（新 .sh 零
 ① L2/L3/L2.5/L2.6 算子用**合成快照**——证明的是"比对引擎敏不敏感"，不是"真机数据一定对"；
 ② L4 算子用真截图但取同端注入（跨端噪声底含 AA，无区分度）；L4 的价值形态是**定位**。
 
+### ★★★2026-10-02（四十九）· **hook 5 天静默失效的根因修复**（用户当场点名「钩子为什么就是拦不住」）
+
+**现象**：用户发现 AI 在本会话**连做三次 `sleep` 轮询**（`sleep 300/240/420` 查 verify）——
+正是 09-30 起明令全禁的行为，且当时 deny-sleep hook **看起来**已接线（`check:hook-wiring` 全绿、
+脚本自测"输出 deny"通过）。用户原话：「之前说过无数次了……**钩子函数为什么就是拦不住这种盲等待呢**？」
+
+**取证链（全部机器判据，不靠推断）**：
+1. 客户端日志（`~/.zcode/cli/log/zcode-<date>.jsonl`，`grep core.hooks`）：**今日 270 次 hook 运行
+   全部 `hook.run.failed`**；上溯 09-27（hook 立起首日）→ 10-02 **零成功**（304/4/810/270 全失败）。
+2. 客户端 bundle（`ZCode.app/.../glm/zcode.cjs`）读输出契约：
+   · schema `uyr`/`grs` = **嵌套结构**：`{"hookSpecificOutput":{"hookEventName":"PreToolUse",
+     "permissionDecision":"deny",...}}`（严格校验，多余顶层键 ⇒ fail）；
+   · 而本仓三条 hook 发的是 Claude 式**扁平**结构（`hookEventName`/`permissionDecision` 在顶层）
+     ⇒ 每次 `Hook stdout failed HookJSONOutput schema validation` ⇒ deny 被**丢弃**（不阻断）。
+3. 客户端还有**退出码通道**：`createExitCodeBlockOutput`——`exit 2` + stderr **直接转成 deny**
+   （代码路径、不经 JSON schema）。
+
+**修复（三条 hook 同修）**：`deny-sleep` / `deny-blind-tests` / `deny-blind-verify` 的输出段
+一律改为 `process.stderr.write(reason); process.exit(2)`（放行仍是 rc=0 无输出）。
+**现场验证**：`sleep 1` 被立即拦截（rc=2 + 完整替代指引）；三条自测 rc 语义全对
+（拦截=2 / 放行=0）；`check:hook-wiring` 仍绿。
+
+**★教训（写入纪律）**：
+- **自测必须对准消费方的契约**：旧自测只看"自己 stdout 里有 deny"就宣布拦住了——而真正的
+  消费方（客户端）读的是另一套格式。**自测通过 ≠ 契约成立**；"接线了"（配置在）与"运行成功"
+  （hook.run.blocked/completed）是两件事——判据 = 客户端日志里出现 blocked/completed，而非 failed。
+- **这是"红线要靠工具层、而工具层自己也要有对消费方契约的验证"的又一层**：
+  门禁本身失效时**静默**（每次失败只是 warn 日志，UI 无提示），与"提交≠交付""判据错则归因错"
+  同源的静默失效家族。
+- **本轮已发生的代价**：三次 sleep（≈16 分钟盲等）+ 一次 verify 假绿（`| tail` 吃了退出码）。
+
+### ★★★2026-10-02（四十八）· 单位模型补环比（**流式宽度**）+ iOS **真机**入列 + 独立审计第三轮
+
+**用户两个问题（都属"视角效果一致性"的核心）**：
+① 缺少 iOS **真机**的 SFC 一致性验证；② 「内容距屏幕右边缘的间距看着不一致，不知道是不是因为
+内容宽度定死的问题——我们的单位模型应该就是要解决这类问题的」。**两个判断都被证实**。
+
+**① 右间距漂移的量化（改前）**：根定宽 375 + 左对齐 ⇒ 右留白 = 屏宽 − 359 随屏宽漂移：
+web 31 · MP 31.4 · Android 41 · iOS-sim 43（左留白恒 16）。**根因 = 夹具把设计宽写成了绝对宽度**。
+
+**② 抓出单位模型在模板产物缺的一环（本轮的"最值钱"发现）**：
+`parseStaticStyle` 对**百分比直接丢弃 + 诊断**（"本版只支持 px/数字"）⇒ 同一份 SFC：
+Web/MP 走 CSS 引擎流式正常，**到 iOS/Android 的 Vapor 链静默变无宽度**（跨端形态差）。
+修法：`width/height` 的 `N%` → `widthRatio/heightRatio`（内核 Rust `width_ratio` → taffy `percent()`、
+TS 核心 `widthRatio` 皆原生支持；宿主物理化白名单**不含比例键** ⇒ 长度 ×密度、比例不动，天然一致）；
+`boxSizing` 识别透传（Web/MP 由 CSS 引擎读、App 两内核恒 border-box ⇒ 无副作用忠实记录）。
+
+**③ 夹具流式改造**：根 `box-sizing:border-box; width:100%; padding-left:16; padding-right:16`、
+行 `width:100%` ⇒ 内容列宽 = 屏宽 − 32、**左右留白恒 16**。配 `StressSfcActivity` viewport 修正
+（写死 375×800 → **真实屏幕逻辑尺寸** `dm.widthPixels/dm.density`——流式基准 = 内核视口）。
+
+**④ iOS 真机入列（用户问题 ①）**：
+· `run-selfdraw.sh` 新增 `--stress` 模式（**复用既有真机链**：构建/签名/安装/`launch --console`
+  阻塞返回 = 完成；**零轮询/零 sleep/零 timeout**）；新采集脚本 `scripts/shoot-stress-ios-device.sh`
+  （入库 + 机器判据 + 特征色探针；bundle id 复用 `dev.proteus.experiments`——免费账号 3-app 上限）；
+· stress 报告补齐 `run_ts` + `js_report`（宿主 driveStress 组装形态与 selfdraw/bench 对齐 ⇒
+  既有的**内容级新鲜度/构建断言**直接可用）+ entry-bench 读数带 `build_id`。
+· 实测一次成功：inst_nodes=44 · data_rows=10 · viewport=390x844（真机）。
+
+**实测结果（五端）**：
+· **留白全部 16/16**（MP 15.8/15.8 亚像素级）· 行宽 358/361.8/368/370/358 = **屏宽 − 32**（随屏伸缩）；
+· SFC 报告 **10 对 1.74~2.91%，全部 hash=0**（改前 android 相关对 hash=4 / MP 对 hash=2——全是
+  设备 chrome 污染）；**iOS 真机 ⇄ 模拟器 0.52%**（同平台底噪，用户要的"真机验证"直接在页面上）；
+· ROI 再收紧：左界 10（右界 340）——**独立审计抓出的 Android 左侧灰条**（设备系统悬浮条，
+  x6–9/y193–259，**旧截图逐字节同存 ⇒ 存量 chrome**）+ MP 左缘 1px 框线，排除后 hash 全 0。
+
+**⑤ 独立审计第三轮（子代理，仅凭图像证据自测）**：五端留白/行宽/chip/圆点/圆角/颜色逐项复核
+**全通过**（它自建亚像素测量：锚块定标 + 行盒最长段；Android 先 P3→sRGB）；抓到两点装置层事实：
+① Android 左灰条污染任何"最左像素"自动化测量（已由 ROI 排除；多行中位数可绕过）；
+② MP 纵向整体偏移 +1.4~2.7 设计 px（1.6375 分数倍率的栅格化累积——`anchorNormalize` 的亚像素
+定标吸收了它，跨端 diff 不受影响）。**结论："左右留白一致（四端精确 16.0/16.0，MP 亚像素噪声）·
+五端视觉一致性通过"**。
+
+**⑥ 顺带修复**：`PROJECT_MEMORY.md` 有 3 个游离控制字节（0x08 退格 / 0x00 NUL——历史会话写
+记忆时 `\b`/`\0` 转义被**求值**成原始字节，Read 工具因此拒绝该文件）⇒ 已还原为文本转义符。
+
+**⑦ ★全链验证抓出三处 HEAD 存量红（都不是本轮引入，但都修了——否则任何人的 verify 都红）**：
+· **`tests/vite-config.test.ts` 3 断言过时**：VC2 提交 `153b4a9c` 给 Web/MP 两端各加了
+  `profileBoundaryPlugin`，**只改了源码没同步测试**（插件数 6→7 / 2→3）⇒ 改测试并补
+  `proteus-profile-boundary` 在名单里（**教训：加插件这类"装配变更"必须同时改计数断言**——
+  本仓已第二次踩同款：p-fluid 那次也是"改了源码忘测试"，见该测试注释）。
+· **`check-publish-contents` 2 个失败 = 工具链版本错配**：`packageManager` 声明 **pnpm@9.15.9**，
+  而本机全局 pnpm 是 **9.5.0**（`pnpm pack --json` 在 9.5 是 Unknown option）⇒
+  `npm i -g pnpm@9.15.9` 对齐；corepack 0.30 因签名密钥过期（`Cannot find matching keyid`）
+  用不了——**用 npm 装指定版本是更稳的兜底**。
+· **`fluid-formfactor-render` emoji 门禁红**：`041da4cf`（10-01 22:25 灵魂三件）在 emoji 门禁
+  加固（`f982c497` 09:58）之后**新增了「▶」**（AnimWorkbench 重播按钮）⇒ 去掉符号（同排按钮
+  本就是纯文字，风格反而更一致）。
+· **★根 vue-tsc 57 个类型错误（修掉上面三处后暴露的下一层存量——verify 在此之前从没跑到类型段）**：
+  ① `tsconfig.json` 缺 **`@proteus-vue/consistency` 的 paths**——L4 新包加包时漏配类型映射
+  （vitest alias 有、tsconfig paths 没有 ⇒ 单测能过、类型门禁红；同 2026-09-12 component-ir 先例）
+  ⇒ 补 `@proteus-vue/consistency` + `.../probes/web` 两条；
+  ② `tests/consistency-pixel-report.test.ts` 写 `d.class ?? d.toleranceClass`——`class` 不在
+  `ReportDiffEntry` 类型里（真字段是 `toleranceClass`）⇒ 改 `expect(d.toleranceClass)`。
+  ⇒ 根 vue-tsc + examples vue-tsc **全绿（RC=0）**。
+★**另一条验证纪律（本轮实践）**：`pnpm verify` 我用了 `| tail -80`——**管道的退出码是 tail 的**
+（恒 0）⇒ 差点把 6 个失败当"全绿"报出去（本仓 2026-09-29 已记账同款陷阱：
+"`| tail -1` + `set -e` 在子 shell 管道里拦不住"）。**看日志里的 `Test Files ... failed` 才算数**。
+
+**验证（补齐）**：全量单测 **4484/4484 全过**（358 文件 0 失败——修掉 3 处存量红之后）·
+`check:publish-contents` 6/6（pnpm 对齐 9.15.9 后）· `tests/vite-config.test.ts` 7/7 ·
+emoji 门禁 14/14（去「▶」后）· vapor 定向 55/55（+★⑤百分比映射用例：widthRatio/heightRatio/边界不扩大）·
+零设备编译检查（android-host-compile + check-selfdraw-compile）✅ · mp-artifacts ✅ · script-compile 117 ✅ ·
+compile-baseline ✅ · consistency-snapshot 七段 ✅ · consistency-pixel ✅ · metrics ✅（含 L4 注入值
+430→537 的**基线同步重生成**——阴影修复轮重采样样本后基线当时未同步，属存量陈旧）· content/data ✅ ·
+website vue-tsc ✅ · no-blind-wait ✅ · gates-sync ✅。
+
+**诚实边界**：① iOS 真机 ⇄ 模拟器 0.52% 里含屏宽差（402 vs 390 的逻辑行宽不同——**设计意图**，
+非缺陷）；② MP 端行宽 361.8（略大于 358）为 1.6375 分数倍率下的亚像素累加，≤2 物理像素；
+③ `parseStaticStyle` 仍不支持**非宽高**属性的百分比（margin/padding 百分比仍诊断——能力边界不扩大）。
+
 ### ★★★2026-10-02（四十七）· 子代理第二轮复验（闭环）+ 工具定标缺陷修复
 
 **第二轮复验结论（子代理独立测量）**：
@@ -412,7 +523,7 @@ check-consistency-snapshot 七段全绿 · script-compile ✅ · no-blind-wait �
 "位置是否正确"由 L2 几何数值比对承担；L4 只管"画出来像不像"（已写入注记与文档）。
 ④ 仍未接入：iOS/Android 真机截图（当前 Web=Playwright、MP=模拟器，均非真机）。
 
-## 当前状态速览（最近一次更新：**2026-10-02·（四十七）· 子代理两轮审计闭环 —— 三项修复复验通过 + 工具定标缺陷修复（假差 5.2%→2.8%），"一份源码四端一致渲染"成立**）★新会话以此为准
+## 当前状态速览（最近一次更新：**2026-10-02·（四十九）· ★hook 5 天静默失效根因修复（输出契约：exit 2 通道）—— 工具层红线首次真正生效**）★新会话以此为准
 ### ★★★2026-10-02（三十八）· 交互两层（离散 + 连续）—— 标准 §10.1 的最后两个"未布点"
 
 **交付**
@@ -8689,7 +8800,7 @@ Apple Duo 是翻盖式，我拿它的外屏比例去描述所有折叠，于是�
 
 133. **roadmap 现状校订 + 结构性项确认（★docs/roadmap.md + README，447 测试）**：**确认**——用户点名的三项结构性项已在路线图合适位置：① App 端 Vue 自定义渲染器（v0.6 详细规划：packages/renderer-app + createRenderer 运行时通道 + 与编译期通道并列的架构要点）；② Vapor 兼容（v0.6 Web 端 Vapor 模式双模式可编译 + v0.4 codegen 借鉴已落地）；③ Skyline iOS 真机白屏 bug（v0.5 三层对策：能力兼容清单编译期预警 / 页面级 WebView 降级通道 / v1.0 真机验收覆盖）；platform-plan（v0.5 多端扩展 + Capability 体系）全 ⏳ 未启动；**校订**——roadmap 能力矩阵现状列反映最新成果：编译能力补 vue-compat-advance 全批、状态管理补跨模块引用已通（B0，Pinia 待放行）、工程化 222→447 单测 + 8 包 + module-plan B0-B9 ✅、性能补分包体积监控；架构演进 packages 补 @proteus-vue/module；§8 验收 v0.4/v0.5 补前置基建提前完成标注；**README**——规则数 67→69、单测 377→447、目录结构补 packages/module、核心特性新增「Vue 能力渐进兼容」与「模块化」两条；packages/compiler/README 规则数同步；**验证**：文档改动零代码影响，447 测试基线不变；**遗留**：v0.5 多端扩展（platform-plan B1-B9 ⏳）、v0.6 App/Vapor、npm 发布、eslint-plugin-proteus
 
-134. **platform-plan B1：Capability 契约（★@proteus-vue/capabilities 新包 + CLI capabilities:manifest，457 测试）**：**包**（packages/capabilities）——`CapabilityMeta/CapabilityAPI/CapabilityAdapter/CapabilityDefinition/Capability` 类型（tier 1-4：L1 通用/L2 映射/L3 独占/L4 实验）+ `defineCapability`（编译期校验：id kebab-case/tier/adapters 非空/fallback）+ `validateCapabilityDefinition`（纯校验）+ 注册中心（registerCapability 重复报错/registerCapabilities/clearCapabilities/hasCapability）+ `useCapability/getCapability`（平台 adapter 探测实例化 + fallback 解析；未注册/无 adapter → 显式失败）+ `detectPlatform`（feature detection：wx → skyline / window → web）；**scan**（src/scan.ts，node 工具走子路径 '@proteus-vue/capabilities/scan' 不进运行时入口）——walkCapabilityFiles + loadCapabilityFile（esbuild transform + defineCapability Function 参数注入 + fileRequire）+ scanCapabilities（幂等注册 → capability-manifest.json：id/tier/platforms/fallback）；**CLI `capabilities:manifest [dir]`**（扫描 + 落盘 .proteus/capability-manifest.json）；**★踩坑三连**：① index re-export scan 把 node:fs/esbuild 带进浏览器产物（Web 构建失败）→ scan 走子路径；② 方法体内 TS 类型断言/泛型不剥离（`as unknown as {...}` 产物语法错误）→ 编译器 rewriteRefAccess 加简单断言剥离（as unknown/any/never/标识符/单层泛型；★正则  在 > 后不成立导致泛型残留 → 去 ）；③ extractMethods 丢 async（async function/箭头 → 产物非 async 方法里 await 非法）→ 正则捕获 async 前缀 + 方法简写带 `async ` 修饰；**demo**：examples/capabilities/clipboard.capability.ts（web: navigator.clipboard / skyline: wx.setClipboardData，export ClipboardAPI 接口跨平台统一类型）+ config-demo.vue 复制按钮（useCapability + isSupported 探测；★MP 端接入待含第三方依赖共享模块放行——剥离警告已标注）；**验证**：测试 +10（capabilities.test 8：defineCapability 校验/重复注册/useCapability 平台解析/getCapability fallback/detectPlatform/scan manifest/产物目录跳过/落盘；mp-transform 2：async 方法保留/断言剥离）→ 457 全绿 + verify（双端构建）+ CLI 实测（clipboard L2 web/skyline）；**遗留**：B2 Adapter Registry / B3 编译期分叉 / B4 运行时降级 / B5-B9 全 ⏳；capability 包在 MP 的打包接入（含第三方依赖共享模块放行）
+134. **platform-plan B1：Capability 契约（★@proteus-vue/capabilities 新包 + CLI capabilities:manifest，457 测试）**：**包**（packages/capabilities）——`CapabilityMeta/CapabilityAPI/CapabilityAdapter/CapabilityDefinition/Capability` 类型（tier 1-4：L1 通用/L2 映射/L3 独占/L4 实验）+ `defineCapability`（编译期校验：id kebab-case/tier/adapters 非空/fallback）+ `validateCapabilityDefinition`（纯校验）+ 注册中心（registerCapability 重复报错/registerCapabilities/clearCapabilities/hasCapability）+ `useCapability/getCapability`（平台 adapter 探测实例化 + fallback 解析；未注册/无 adapter → 显式失败）+ `detectPlatform`（feature detection：wx → skyline / window → web）；**scan**（src/scan.ts，node 工具走子路径 '@proteus-vue/capabilities/scan' 不进运行时入口）——walkCapabilityFiles + loadCapabilityFile（esbuild transform + defineCapability Function 参数注入 + fileRequire）+ scanCapabilities（幂等注册 → capability-manifest.json：id/tier/platforms/fallback）；**CLI `capabilities:manifest [dir]`**（扫描 + 落盘 .proteus/capability-manifest.json）；**★踩坑三连**：① index re-export scan 把 node:fs/esbuild 带进浏览器产物（Web 构建失败）→ scan 走子路径；② 方法体内 TS 类型断言/泛型不剥离（`as unknown as {...}` 产物语法错误）→ 编译器 rewriteRefAccess 加简单断言剥离（as unknown/any/never/标识符/单层泛型；★正则 \b 在 > 后不成立导致泛型残留 → 去 \b）；③ extractMethods 丢 async（async function/箭头 → 产物非 async 方法里 await 非法）→ 正则捕获 async 前缀 + 方法简写带 `async ` 修饰；**demo**：examples/capabilities/clipboard.capability.ts（web: navigator.clipboard / skyline: wx.setClipboardData，export ClipboardAPI 接口跨平台统一类型）+ config-demo.vue 复制按钮（useCapability + isSupported 探测；★MP 端接入待含第三方依赖共享模块放行——剥离警告已标注）；**验证**：测试 +10（capabilities.test 8：defineCapability 校验/重复注册/useCapability 平台解析/getCapability fallback/detectPlatform/scan manifest/产物目录跳过/落盘；mp-transform 2：async 方法保留/断言剥离）→ 457 全绿 + verify（双端构建）+ CLI 实测（clipboard L2 web/skyline）；**遗留**：B2 Adapter Registry / B3 编译期分叉 / B4 运行时降级 / B5-B9 全 ⏳；capability 包在 MP 的打包接入（含第三方依赖共享模块放行）
 
 135. **platform-plan B2：Adapter Registry（★packages/capabilities/src/adapter.ts，466 测试）**：**CapabilityRegistry 类**（多实例隔离工厂，SSR/Worker 独立）——`register`（同 capability+platform 重复 → 报错编译期约束 §7；priority 降序排序）/ `registerIdempotent`（scan 场景跳过）/ `has` / `clear` / `registerFallback` / `entries`（capability → priority 降序 → platform 排序）/ `validate`（fallback 未注册 → 问题清单 §7）；**选择策略**（§4）——`resolve`（async 完整版：platform 过滤 → priority 降序 → isSupported 探测（抛错视为不支持）→ 命中 wrap；无命中 → fallback 递归返回 fallback 能力实例；命中 → cap.fallback 属性引用降级）/ `resolveSync`（仅同步探测）；**defineAdapter**（独立 adapter 文件：capability/platform/priority/isSupported/create + runsInWorklet 标注；校验缺失字段报错）；**index 重构**——B1 描述文件的 adapters 展开为 adapter 注册（isSupported 延迟到调用——§6 adapter 不得模块顶层执行平台 API）+ registerAdapter（幂等）/ resolveCapability（async）；**★设计澄清**：同 capability+platform 唯一（编译期约束）与 priority 排序（同平台多实现预留）并存——priority 影响 entries 排序 + 未来多实现；fallback 语义：resolve 无命中返回 fallback 能力实例（id = fallback），命中时 cap.fallback 属性引用；**验证**：测试 +9（adapter-registry.test：defineAdapter 校验/重复注册报错+幂等/platform 过滤+priority entries/异步探测/fallback 递归与属性引用/validate/多实例隔离/registerAdapter+useCapability/resolveCapability）→ 466 全绿 + verify（双端构建）；**遗留**：B3 编译期分叉 / B4 运行时降级 / B5-B9 全 ⏳
 
@@ -9443,7 +9554,7 @@ Apple Duo 是翻盖式，我拿它的外屏比例去描述所有折叠，于是�
 
 419. **★配置收敛完整性——宽松配置加载器 + mp 组件目录通道（#418 两个缺口补全，dogfooding 前置）**：**① 缺口一（vite 插件兼容落空）**——#418 的 vite 透传字段要承载真实 vite 插件（函数对象）就必须允许配置运行时 import，但 dev/build 沿用 config:check 的纯数据沙箱（禁运行时依赖）——「完全兼容 vite 插件」只是纸上能力。修复：cli 新增 `loadProjectConfig`（宽松加载器：esbuild TS→CJS + createRequire 自配置目录解析任意包/相对 CJS 模块 + 剥离 plugin-vite 类型 require 行），dev.ts/build.ts 切到宽松版；config:check 保留 strict 纯数据沙箱（职责分离：check 校验 vs dev/build 执行）。**② 缺口二（mp 组件目录）**——examples 的 mpTransform 需要 `frameworkComponentsDir`（组件库未拆包指向 ../src/components），但 #418 resolveProteusViteConfig 硬编码 `mpTransform({ config })` 无通道。修复：ProteusConfig 新增顶层 `frameworkComponentsDir?: string`（v2.0 退役注释）+ 四处登记（类型/归属层 component/config-validate/schema）+ resolve 透传。**③ 验证**——config-loader 单测 3 例（纯数据加载/真实插件模块 import/vite 字段 plugins 数组）；全仓 vitest 2171/2171 + build ✅ + D-2 ✅。**④ 诚实边界**——宽松加载器只转配置自身（配置的相对 .ts 子模块仍需发布形态如 .cjs——真实 vite 插件均发布 dist 不受限）；config:check 与 dev/build 双加载器并存需文档注明（check 更严是特性非缺陷）；examples/website 迁移到新形态仍需一轮（web 特殊插件/docsMd/多入口已具备承载条件——宽松加载器已就位）。下一候选：examples 迁移到配置收敛形态（删 examples/vite.config.ts 全量 dogfooding 验证）或 website 迁移或 vite 字段强类型化
 
-418. **★配置收敛——vite.config 并入 proteus.config，CLI 唯一驱动（★用户「很多地方没合并，开发者要写框架配置+vite 配置，合理形态是 vite 配置收拢进框架配置删除 vite.config，启动走 CLI 而非 vite，编译器完全兼容 vite 的启动/配置/插件」）**：**① 现状取证**——模板 = proteus.config.ts + vite.config.ts + scripts/gen-routes.ts + scripts/mp-entry-stub.ts 四文件；CLI dev/build 只是 spawn（vite CLI / npm run 脚本），gen-routes 靠 tsx 前置脚本；vite.config 的手写逻辑（vue()/mpTransform/define/别名/build 分端参数/route-blocks）与 plugin-vite 能力重复。**② 框架组装**——plugin-vite 新增 `resolveProteusViteConfig({root,command,mode}, config)`：把模板 vite.config 逻辑全收归框架（configFile:false + vue/route-blocks（web）或 virtual-mp-entry+mpTransform（mp）+ define（__PROTEUS_DEBUG__/__PROTEUS_SKYLINE__）+ 别名@ + build 分端参数）+ **proteus.config 新增 `vite` 透传字段**（对象或 (ctx)=>对象；plugins 追加、resolve.alias concat 保 @、define merge；完全兼容 vite 语义）——vite 兼容是**底层事实**（产物即标准 InlineConfig）。**③ CLI 唯一驱动**——proteus dev/build：无 vite.config.ts（新形态）→ 程序化（loadTsConfig → resolveProteusViteConfig → createServer/vite.build，vite 从工程 node_modules 动态解析 + CJS 互操作解包）；gen-routes 与 mp 占位入口**进程内建**（runGenRoutes + 虚拟模块  proteus:mp-entry）→ 模板 scripts/ 目录删除；有 vite.config.ts（遗留工程）→ 旧 spawn 路径零破坏。**④ 类型面**——types/config 加 `vite?: unknown` + CONFIG_FIELD_LAYERS(vite:build) + config-validate KNOWN_FIELDS + schema（铁律 #5 四处白名单）。**⑤ 模板**——vite.config.ts/scripts/ 删除；package.json scripts 改 `proteus dev/build --target`（cli 入 devDeps）；proteus.config.ts 增 vite 透传示例；snapshot-template 同步；README/官网 4 页（05/07/08/10）改述。**⑥ 验证**——**端到端冒烟**：临时新形态工程（无 vite.config.ts）程序化 `build --target web` 真出 dist/web + `--target skyline` 真出四件套（gen-routes 进程内 auto-routes/app.json/page.json/project.config + mpTransform 编译 + 虚拟入口空 chunk 被清理）；全仓 vitest 2168/2168 + build ✅ + D-2 ✅。**⑦ 诚实边界**——website/examples 两工作区仍是遗留形态（有 vite.config.ts，走旧路径——后续批次迁移验证）；遗留工程「有 vite.config + 新 scripts」混合态可能递归（文档已注明新工程勿建 vite.config）；vite 字段类型为宽松 unknown（运行时由 plugin-vite 消费，完整 TS 推导留待 plugin-vite 侧 helper）。下一候选：website/examples 迁移到配置收敛形态（dogfooding 验证）或 vite 字段强类型化或组件特有事件 JSDoc 化
+418. **★配置收敛——vite.config 并入 proteus.config，CLI 唯一驱动（★用户「很多地方没合并，开发者要写框架配置+vite 配置，合理形态是 vite 配置收拢进框架配置删除 vite.config，启动走 CLI 而非 vite，编译器完全兼容 vite 的启动/配置/插件」）**：**① 现状取证**——模板 = proteus.config.ts + vite.config.ts + scripts/gen-routes.ts + scripts/mp-entry-stub.ts 四文件；CLI dev/build 只是 spawn（vite CLI / npm run 脚本），gen-routes 靠 tsx 前置脚本；vite.config 的手写逻辑（vue()/mpTransform/define/别名/build 分端参数/route-blocks）与 plugin-vite 能力重复。**② 框架组装**——plugin-vite 新增 `resolveProteusViteConfig({root,command,mode}, config)`：把模板 vite.config 逻辑全收归框架（configFile:false + vue/route-blocks（web）或 virtual-mp-entry+mpTransform（mp）+ define（__PROTEUS_DEBUG__/__PROTEUS_SKYLINE__）+ 别名@ + build 分端参数）+ **proteus.config 新增 `vite` 透传字段**（对象或 (ctx)=>对象；plugins 追加、resolve.alias concat 保 @、define merge；完全兼容 vite 语义）——vite 兼容是**底层事实**（产物即标准 InlineConfig）。**③ CLI 唯一驱动**——proteus dev/build：无 vite.config.ts（新形态）→ 程序化（loadTsConfig → resolveProteusViteConfig → createServer/vite.build，vite 从工程 node_modules 动态解析 + CJS 互操作解包）；gen-routes 与 mp 占位入口**进程内建**（runGenRoutes + 虚拟模块 \0proteus:mp-entry）→ 模板 scripts/ 目录删除；有 vite.config.ts（遗留工程）→ 旧 spawn 路径零破坏。**④ 类型面**——types/config 加 `vite?: unknown` + CONFIG_FIELD_LAYERS(vite:build) + config-validate KNOWN_FIELDS + schema（铁律 #5 四处白名单）。**⑤ 模板**——vite.config.ts/scripts/ 删除；package.json scripts 改 `proteus dev/build --target`（cli 入 devDeps）；proteus.config.ts 增 vite 透传示例；snapshot-template 同步；README/官网 4 页（05/07/08/10）改述。**⑥ 验证**——**端到端冒烟**：临时新形态工程（无 vite.config.ts）程序化 `build --target web` 真出 dist/web + `--target skyline` 真出四件套（gen-routes 进程内 auto-routes/app.json/page.json/project.config + mpTransform 编译 + 虚拟入口空 chunk 被清理）；全仓 vitest 2168/2168 + build ✅ + D-2 ✅。**⑦ 诚实边界**——website/examples 两工作区仍是遗留形态（有 vite.config.ts，走旧路径——后续批次迁移验证）；遗留工程「有 vite.config + 新 scripts」混合态可能递归（文档已注明新工程勿建 vite.config）；vite 字段类型为宽松 unknown（运行时由 plugin-vite 消费，完整 TS 推导留待 plugin-vite 侧 helper）。下一候选：website/examples 迁移到配置收敛形态（dogfooding 验证）或 vite 字段强类型化或组件特有事件 JSDoc 化
 
 417. **★debugging 页端表切端指令（#415 漏网——#414 手写端表残留一页）**：debugging.md 手写端表删除改 ends: debugging 指令（end-notes 注记已有）；build 产物「终端落地进度」计数验证一致（7 处=5 机制页+样式+组件）。教训：端指令迁移后需全站 grep 手写表残留（^| 微信小程序 | ✅）确认清零
 

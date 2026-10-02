@@ -23,12 +23,21 @@
            Web 端 `proteus-view` 原生渲染它，MP 端 WXSS 内联样式天然支持）。
        · 支持字段子集：width/height/margin/padding/flexDirection/alignItems/flexShrink/
          backgroundColor/color/fontSize/borderRadius（= `parseStaticStyle` 的闭集）。
+         ★2026-10-02 补齐：**百分比宽高**（`width: 100%` → 内核 `widthRatio`）与 `box-sizing`
+         ——此前 Vapor 链对百分比**直接丢弃**（"只支持 px/数字"），导致同一份 SFC 在
+         Web/MP 流式、在 App 链变无宽度（跨端形态差）；现为三链共同能力。
        ★动态行宽用 `:style="'width:' + item.w + 'px'"`（Vapor 的订阅表支持 SET_STYLE 逐键下发）。
      
-     【★尺寸 375×800（六端屏幕都放得下）】Web 390×844 CSS / iOS 402×874pt / Android 1200×2608@3
-       / 小程序 640×1386 —— 375×800 全部内缩 ✓。
+     【★尺寸：宽**流式**、高定值】根 `width: 100%` + 横向 padding 各 16（`box-sizing: border-box`）
+       ⇒ 内容列宽 = **屏宽 − 32**，左右留白恒 16——不再出现"定死 375px、右边缘留白随屏宽漂移"
+       （改前实测：web/MP 右 31 · Android 右 41 · iOS 右 43）。这正是单位模型要解决的
+       "视角效果一致"：留白按设计意图恒定，内容随屏幕伸缩。
+       高度 800px 定值（六端屏幕都放得下：Web 390×844 / iOS 402×874pt / Android 1200×2608@3
+       / 小程序 640×1386 / iOS 真机 390×844pt）。
      
-     【锚点】`#stress-anchor`（80×48 圆角块 · #2f6fed）——供六端截图**锚定归一**。 -->
+     【锚点】`#stress-anchor`（80×48 圆角块 · #2f6fed）——供六端截图**锚定归一**。
+       归一目标仍为 375×800：锚定坐标系与屏幕宽无关；跨端像素比较聚焦**固定几何区**
+       （flow 右带随屏宽、属设计意图，由报告的"屏幕边缘留白"指标单列量化，不入像素比较）。 -->
 <script setup lang="ts">
 import { ref } from 'vue'
 
@@ -55,7 +64,7 @@ const summary = ref('SFC stress · 6 targets')
        block 默认；见 packages/types/src/config.ts 的注释与 gen-routes.ts 的默认值）⇒
        **本仓标准 = view 默认 block**，写 `flex-direction: row` 而不写 `display: flex` 不生效
        （Web 模拟层同为 block；Vapor 端 taffy 默认 flex 容器——三族默认值不同，显式声明才跨端一致）。 -->
-  <view id="stress-root" style="width: 375px; height: 800px; display: flex; flex-direction: column; background-color: #14141c; padding-top: 60px; padding-left: 16px">
+  <view id="stress-root" style="box-sizing: border-box; width: 100%; height: 800px; display: flex; flex-direction: column; background-color: #14141c; padding-top: 60px; padding-left: 16px; padding-right: 16px">
     <view id="stress-anchor" style="width: 80px; height: 48px; border-radius: 14px; background-color: #2f6fed; margin-bottom: 10px"></view>
     <!-- ★★标题**显式定高 21px**（2026-10-02 · 子代理独立审计抓出 P1 的修复）：
          不给高度时，标题的盒高由各端字体 natural line-height 决定（实测 web 20.75 /
@@ -68,8 +77,9 @@ const summary = ref('SFC stress · 6 targets')
     <!-- ★chip：静态 style 承载形状/底色 + 动态 `:style` 承载宽度（**同元素两种写法**）——
          2026-10-02 实测修的编译器缺陷：两条 style 属性此前**不合并** ⇒ WXML 重复属性
          （微信只保留其一、布局静默损坏；`DuplicatedAttribute` 门禁拦在构建前）。
-         修法：编译器合并为一条 `style="静态;动态"`（动态在后 ⇒ 同键时动态胜，与 Vue 优先级一致）。 -->
-    <view v-for="item in list" :key="item.id" style="width: 343px; height: 52px; display: flex; flex-direction: row; align-items: center; margin-bottom: 6px; border-radius: 10px; background-color: #1b1b21">
+         修法：编译器合并为一条 `style="静态;动态"`（动态在后 ⇒ 同键时动态胜，与 Vue 优先级一致）。
+         ★行宽 `100%`（2026-10-02 流式改造）：行填满根内容盒（屏宽 − 32），左右留白恒 16。 -->
+    <view v-for="item in list" :key="item.id" style="width: 100%; height: 52px; display: flex; flex-direction: row; align-items: center; margin-bottom: 6px; border-radius: 10px; background-color: #1b1b21">
       <view :style="'width:' + item.w + 'px'" style="height: 32px; flex-shrink: 0; border-radius: 16px; background-color: #6f4ae8; margin-left: 10px"></view>
       <text style="width: 128px; font-size: 14px; color: #ffffff; margin-left: 10px">{{ item.title }}</text>
       <view style="width: 24px; height: 24px; flex-shrink: 0; border-radius: 12px; background-color: #2f6fed; margin-left: 8px"></view>
@@ -78,7 +88,7 @@ const summary = ref('SFC stress · 6 targets')
   </view>
 </template>
 
-<!-- ★宿主画布归一（2026-10-02 实测抓出的跨端画布差异）：夹具内容盒 375×800 之外，
+<!-- ★宿主画布归一（2026-10-02 实测抓出的跨端画布差异）：夹具内容（高 800，宽随屏）之外，
      各端宿主画布颜色不同（WeChat 默认白 / iOS 宿主黑 / Android 我们设了 #14141c）——
      白底会在像素比较里变成大面积假差异。⇒ 把 MP 页面画布显式设为夹具同色（非 scoped
      `page{}` 是 MP 页面级选择器；Web 端无 `page` 元素，选择器不匹配、无副作用）。

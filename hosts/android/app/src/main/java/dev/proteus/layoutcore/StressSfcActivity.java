@@ -93,16 +93,23 @@ public class StressSfcActivity extends Activity {
             return;
         }
 
-        // ③ 参数：viewport = **SFC 的逻辑单位**（375×800，与其它五端同口径）
+        // ③ 参数：viewport = **真实屏幕的逻辑尺寸**（本机 1200×2608 物理 @3 ⇒ 400×869.3 逻辑）
         org.json.JSONObject args = new org.json.JSONObject();
         try {
             args.put("artifacts", artifacts);
             args.put("mode", "stress");
-            // viewport 用 **SFC 的逻辑单位**（375×800——与其它端同口径）；scale 由 JS 侧换算
-            // ★★scale = density（2026-10-02 实测修复）：SFC 的 px 是逻辑单位，而本宿主按物理
-            //   像素 1:1 绘制 ⇒ 不换算时锚块 80px（其它端 130~240px）、内容只占屏 22%。
-            args.put("viewport", new org.json.JSONObject().put("width", 375).put("height", 800));
-            args.put("scale", getResources().getDisplayMetrics().density);
+            // ★★viewport = 真实屏幕的逻辑尺寸（2026-10-02 流式改造）：夹具根是 `width: 100%`
+            //   ⇒ 百分比基准 = 内核视口。此前写死 375×800（SFC 旧定宽时代的"设计宽"）——
+            //   流式内容会被算成 375 宽（右留白 = 屏宽 − 375 − 16），随屏宽漂移的问题原样保留。
+            //   改为 physical/density：本机 400×869.33 逻辑 ⇒ 与 Web（390 CSS px）/
+            //   iOS（402pt）/ MP（~390 逻辑）同口径——viewport 表达"屏幕有多少逻辑单位"。
+            //   ★scale 仍是 density：宿主按物理像素绘制，physicalizeTree 会把 viewport
+            //     与全部长度一次乘到物理单位（唯一换算点，见 VaporRenderHost 注释）。
+            android.util.DisplayMetrics dm = getResources().getDisplayMetrics();
+            args.put("viewport", new org.json.JSONObject()
+                    .put("width", dm.widthPixels / dm.density)
+                    .put("height", dm.heightPixels / dm.density));
+            args.put("scale", dm.density);
         } catch (Exception e) {
             MainActivity.writeReportStatic(this, "stress-scene.json",
                     "{\"ok\":false,\"error\":\"args 组装失败：" + e.getMessage() + "\"}");

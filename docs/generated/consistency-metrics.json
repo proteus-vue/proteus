@@ -280,7 +280,7 @@
         "caught": true,
         "expected": true,
         "ok": true,
-        "note": "圆角缺失（注入真实截图：四角填直角 ⇒ 430px 差异）⇒ 观测报告定位到注入区域（region 落在块边界±24px 内）；对照组自身比对 = identical。★诚实边界：verdict=noise-level（0.05% < 0.5% 全局噪声带——L4 形态是\"定位\"，判定由 L3 borderRadius 数值承担）"
+        "note": "圆角缺失（注入真实截图：四角填直角 ⇒ 537px 差异）⇒ 观测报告定位到注入区域（region 落在块边界±24px 内）；对照组自身比对 = identical。★诚实边界：verdict=noise-level（0.05% < 0.5% 全局噪声带——L4 形态是\"定位\"，判定由 L3 borderRadius 数值承担）"
       }
     ],
     "pendingOperators": [],

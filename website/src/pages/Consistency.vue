@@ -146,12 +146,12 @@ function pairModeLabel(mode: string | null): string {
 
     <!-- ═══ ★★★SFC 压力测试（一份源码 → 多端渲染）═══ -->
     <section v-if="D.sfc" class="cons-sec cons-sfc">
-      <p class="cons-sec-title">{{ isEn ? 'SFC stress test · one source file, four targets' : 'SFC 压力测试 · 一份源码，四端渲染' }}</p>
+      <p class="cons-sec-title">{{ isEn ? 'SFC stress test · one source file, five targets' : 'SFC 压力测试 · 一份源码，五端渲染' }}</p>
       <p class="cons-sec-note">
         {{
           isEn
-            ? 'Not hand-written fixtures — one .vue file compiled/instantiated through three independent chains (Proteus compiler for Web & mini-program; Vapor artifacts for iOS & Android), each rendered by its own engine. 44 nodes: anchor + title + 10 rows (v-for with per-row dynamic chip width + text + dot) + footer.'
-            : '不是手写夹具——同一个 .vue 文件经三条独立链（Web/小程序走 Proteus 编译器；iOS/Android 走 Vapor 编译产物 + 端上实例化），各端用自己的引擎渲染。44 节点：锚点 + 标题 + 10 行（v-for 行内动态 chip 宽 + 文字 + 圆点）+ 页脚。这是对"你们这是 SFC 渲染的吗"这类质疑的直接回答。'
+            ? 'Not hand-written fixtures — one .vue file compiled/instantiated through three independent chains (Proteus compiler for Web & mini-program; Vapor artifacts for iOS device, iOS simulator & Android), each rendered by its own engine. 44 nodes: anchor + title + 10 rows (v-for with per-row dynamic chip width + text + dot) + footer. Fluid width (width: 100% + 16px side padding) — edge margins stay 16 across targets, content stretches with the screen. This is the direct answer to "is this really rendered from SFC?"'
+            : '不是手写夹具——同一个 .vue 文件经三条独立链（Web/小程序走 Proteus 编译器；iOS 真机、iOS 模拟器与 Android 走 Vapor 编译产物 + 端上实例化），各端用自己的引擎渲染。44 节点：锚点 + 标题 + 10 行（v-for 行内动态 chip 宽 + 文字 + 圆点）+ 页脚。宽度流式（width: 100% + 两侧 16px 留白）——各端边缘留白恒为 16，内容随屏幕伸缩。这是对"你们这是 SFC 渲染的吗"这类质疑的直接回答。'
         }}
       </p>
       <div class="cons-sfc-src"><code>{{ D.sfc.source }}</code></div>
@@ -174,8 +174,8 @@ function pairModeLabel(mode: string | null): string {
       <p class="cons-note">
         {{
           isEn
-            ? 'Residual differences are dominated by glyph rasterisation — the one structural difference the standard never claims to eliminate (§2). Layout, sizes and per-row dynamic widths match across all four targets.'
-            : '剩余差异以字形栅格化为主——这正是标准里明确声明"不可消除"的那一项结构性差异（§2）。布局、尺寸与每行动态宽度四端一致。'
+            ? 'Residual differences are dominated by glyph rasterisation — the one structural difference the standard never claims to eliminate (§2). Layout, sizes and per-row dynamic widths match across all five targets.'
+            : '剩余差异以字形栅格化为主——这正是标准里明确声明"不可消除"的那一项结构性差异（§2）。布局、尺寸与每行动态宽度五端一致（含 iOS 真机）。'
         }}
       </p>
     </section>
@@ -328,11 +328,11 @@ function pairModeLabel(mode: string | null): string {
   border: 1px solid var(--line);
   background: var(--panel2);
 }
-/* ★SFC 区截图容器**限高 + 顶部对齐**（2026-10-02 实测的展示缺陷）：SFC 夹具是 375×800 竖屏，
+/* ★SFC 区截图容器**限高 + 顶部对齐**（2026-10-02 实测的展示缺陷）：SFC 夹具宽流式、高 800，
    而各端源截图高宽比不同（Android 1200×2608 ≈ 2.17:1、Web 780×1688 ≈ 2.16:1、iOS 1206×2622
    ≈ 2.17:1——相近）**但内容只占上半屏**（SFC 高 800pt vs 屏 874pt）⇒ 等宽缩放后内容显得很小。
    限高 340px + object-fit: cover + object-position: top ⇒ **裁到内容区**（顶部对齐），
-   四端内容以相近倍率呈现（对比更可读）。 */
+   五端内容以相近倍率呈现（对比更可读）。 */
 .cons-sfc .cons-shot-img {
   height: 340px;
   object-fit: cover;
