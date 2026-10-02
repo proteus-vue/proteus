@@ -94,6 +94,38 @@ describe('V4 · ★全量 SFC → 模板产物', () => {
     const r2 = buildLayoutTemplate(mixed, 'm.vue')
     expect(r2.diagnostics.some((d) => d.message.includes('文本/插值')), '纯静态+插值混合必须上报').toBe(true)
   })
+
+  it('★⑤ 百分比宽高 → **比例字段**（widthRatio / heightRatio——单位模型在模板产物里的一环）', () => {
+    // 【为什么必须有（2026-10-02 实测抓出的跨端形态差）】`width: 100%` 是"内容随屏宽、
+    //   左右留白恒定"的标准写法；此前对百分比**直接丢弃 + 诊断**（"只支持 px/数字"）
+    //   ⇒ 同一份 SFC：Web/MP 走 CSS 引擎正常流式，到 Vapor 链就静默变无宽度。
+    //   本判据锁定：① 映射为 ratio（不是数值——百分比没有密度可乘）；
+    //   ② 不再报"不是纯数值"诊断；③ 非宽高属性的百分比仍如实诊断（边界不扩大）。
+    const pct = sfc(
+      `const n = ref(1)\n`,
+      `<p-view style="width: 100%; height: 50%; padding-top: 4px">\n` +
+        `  <p-view style="width: 60.5%; height: 40px; margin-left: 5%"></p-view>\n` +
+        `</p-view>`,
+    )
+    const r = buildLayoutTemplate(pct, 'pct.vue')
+    const root = r.template.nodes.find((n) => n.id === 0)!
+    expect(root.style.widthRatio, 'width: 100% → widthRatio: 1').toBe(1)
+    expect(root.style.heightRatio, 'height: 50% → heightRatio: 0.5').toBe(0.5)
+    const child = r.template.nodes.find((n) => n.id === 1)!
+    expect(child.style.widthRatio, 'width: 60.5% → widthRatio: 0.605').toBeCloseTo(0.605, 5)
+    expect(child.style.height, 'px 混用不受影响').toBe(40)
+    // 宽高百分比不再触发"不是纯数值"诊断（逐条核对：只有宽高这两处受影响）
+    const numDiags = r.diagnostics.filter((d) => d.message.includes('不是纯数值'))
+    expect(
+      numDiags.some((d) => /width: 100%|height: 50%|width: 60\.5%/.test(d.message)),
+      `宽高百分比不应再诊断：${numDiags.map((d) => d.message).join(' | ')}`,
+    ).toBe(false)
+    // ★边界：margin 的百分比仍不支持（该形态各端语义复杂，本版不扩大）
+    expect(
+      r.diagnostics.some((d) => d.message.includes('margin-left: 5%')),
+      'margin 百分比仍应如实诊断（能力边界不扩大）',
+    ).toBe(true)
+  })
 })
 
 describe('V4 · ★★SFC 产物 → 实例化成端上节点树', () => {

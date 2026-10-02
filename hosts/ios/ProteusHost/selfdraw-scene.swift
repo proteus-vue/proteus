@@ -5970,6 +5970,14 @@ final class SelfDrawViewController: UIViewController {
             "snapshot_name": SelfDrawBridge.snapshotName,
             "js_raw": out,
         ]
+        // ★★与 selfdraw/bench 报告同形态（2026-10-02）：JS 读数进 `js_report` 子对象 + 顶层
+        //   `run_ts`——采集脚本的**内容级新鲜度/构建断言**（check-report-freshness.mjs /
+        //   check-report-build-id.mjs）读的就是这两个字段。缺了只能靠"文件存在"弱判据
+        //   （本仓实测过的旧报告假绿形态：A/B 两轮其实在同一份旧数据上比）。
+        if let d = out.data(using: .utf8), let o = try? JSONSerialization.jsonObject(with: d) as? [String: Any] {
+            report["js_report"] = o
+        }
+        report["run_ts"] = Date().timeIntervalSince1970
         let dir = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)[0]
         let url = dir.appendingPathComponent("\(SelfDrawBridge.reportFileName).json")
         if let data = try? JSONSerialization.data(withJSONObject: report, options: [.prettyPrinted, .sortedKeys]) {

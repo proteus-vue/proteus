@@ -54,8 +54,8 @@ const STRESS_SFC_PATH = path.join(ROOT, 'examples/pages/consistency-stress.vue')
 
 /**
  * 夹具 SFC：覆盖「页面 + 静态样式 + v-for 行 + 行内绑定 + 静态文本」——
- * ★尺寸用**明确 px**（不用百分比）：`parseStaticStyle` 只支持 px/纯数值，
- *   百分比会报诊断并被忽略（这是模板产物的**如实能力边界**，见 template.ts 的 LAYOUT_FIELDS）。
+ * ★尺寸用**明确 px**：`parseStaticStyle` 支持 px/纯数值 + **宽高百分比**（→ widthRatio，
+ *   2026-10-02 补齐）；**其余属性**的百分比仍不支持（报诊断并被忽略）。
  *   ★根给 1080×1600 是**让内容真的铺开**（首跑 468 像素采样 = 根无宽度 ⇒ 只画了窄窄一列）。
  *  与 `tests/vapor-sfc-to-tree.test.ts` 同源形态（那边是 Node 判据，这里是设备侧）。 */
 const SFC = `<template>

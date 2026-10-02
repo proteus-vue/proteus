@@ -278,7 +278,7 @@ export const CONSISTENCY_PAGE = {
             "id": "L4-radius-missing",
             "caught": true,
             "expected": true,
-            "note": "圆角缺失（注入真实截图：四角填直角 ⇒ 430px 差异）⇒ 观测报告定位到注入区域（region 落在块边界±24px 内）；对照组自身比对 = identical。★诚实边界：verdict=noise-level（0.05% < 0.5% 全局噪声带——L4 形态是\"定位\"，判定由 L3 borderRadius 数值承担）"
+            "note": "圆角缺失（注入真实截图：四角填直角 ⇒ 537px 差异）⇒ 观测报告定位到注入区域（region 落在块边界±24px 内）；对照组自身比对 = identical。★诚实边界：verdict=noise-level（0.05% < 0.5% 全局噪声带——L4 形态是\"定位\"，判定由 L3 borderRadius 数值承担）"
           }
         ]
       }
@@ -1124,61 +1124,97 @@ export const CONSISTENCY_PAGE = {
   "sfc": {
     "source": "examples/pages/consistency-stress.vue（真 SFC：44 节点 · 10 行 v-for · 行内动态绑定）",
     "gate": false,
-    "endCount": 4,
+    "endCount": 5,
     "pairs": [
+      {
+        "id": "sfc:android-vs-ios-device",
+        "mode": "cross-runtime",
+        "verdict": "changed",
+        "diffPixels": 5610,
+        "sampleCount": 245520,
+        "diffRatio": 0.02285,
+        "hashDistance": 0
+      },
       {
         "id": "sfc:android-vs-ios",
         "mode": "cross-runtime",
         "verdict": "changed",
-        "diffPixels": 4754,
-        "sampleCount": 279000,
-        "diffRatio": 0.01704,
+        "diffPixels": 4491,
+        "sampleCount": 245520,
+        "diffRatio": 0.01829,
         "hashDistance": 0
       },
       {
         "id": "sfc:android-vs-mp.skyline",
         "mode": "cross-runtime",
         "verdict": "changed",
-        "diffPixels": 8118,
-        "sampleCount": 279000,
-        "diffRatio": 0.0291,
-        "hashDistance": 2
+        "diffPixels": 6824,
+        "sampleCount": 245520,
+        "diffRatio": 0.02779,
+        "hashDistance": 0
       },
       {
         "id": "sfc:android-vs-web",
         "mode": "cross-runtime",
         "verdict": "changed",
-        "diffPixels": 4936,
-        "sampleCount": 279000,
-        "diffRatio": 0.01769,
+        "diffPixels": 4673,
+        "sampleCount": 245520,
+        "diffRatio": 0.01903,
+        "hashDistance": 0
+      },
+      {
+        "id": "sfc:ios-device-vs-ios",
+        "mode": "same-platform",
+        "verdict": "changed",
+        "diffPixels": 1266,
+        "sampleCount": 245520,
+        "diffRatio": 0.00516,
+        "hashDistance": 0
+      },
+      {
+        "id": "sfc:ios-device-vs-mp.skyline",
+        "mode": "cross-runtime",
+        "verdict": "changed",
+        "diffPixels": 7147,
+        "sampleCount": 245520,
+        "diffRatio": 0.02911,
+        "hashDistance": 0
+      },
+      {
+        "id": "sfc:ios-device-vs-web",
+        "mode": "cross-runtime",
+        "verdict": "changed",
+        "diffPixels": 4590,
+        "sampleCount": 245520,
+        "diffRatio": 0.0187,
         "hashDistance": 0
       },
       {
         "id": "sfc:ios-vs-mp.skyline",
         "mode": "cross-runtime",
         "verdict": "changed",
-        "diffPixels": 8146,
-        "sampleCount": 279000,
-        "diffRatio": 0.0292,
-        "hashDistance": 2
+        "diffPixels": 7115,
+        "sampleCount": 245520,
+        "diffRatio": 0.02898,
+        "hashDistance": 0
       },
       {
         "id": "sfc:ios-vs-web",
         "mode": "cross-runtime",
         "verdict": "changed",
         "diffPixels": 4261,
-        "sampleCount": 279000,
-        "diffRatio": 0.01527,
+        "sampleCount": 245520,
+        "diffRatio": 0.01736,
         "hashDistance": 0
       },
       {
         "id": "sfc:mp.skyline-vs-web",
         "mode": "cross-runtime",
         "verdict": "changed",
-        "diffPixels": 7873,
-        "sampleCount": 279000,
-        "diffRatio": 0.02822,
-        "hashDistance": 2
+        "diffPixels": 6842,
+        "sampleCount": 245520,
+        "diffRatio": 0.02787,
+        "hashDistance": 0
       }
     ],
     "ends": [
@@ -1190,6 +1226,16 @@ export const CONSISTENCY_PAGE = {
         "srcSize": {
           "width": 1200,
           "height": 2608
+        }
+      },
+      {
+        "end": "ios-device",
+        "label": "iOS 真机（Vapor）",
+        "file": "sfc.ios-device.png",
+        "scale": 0.333333,
+        "srcSize": {
+          "width": 1170,
+          "height": 2532
         }
       },
       {
@@ -1247,6 +1293,12 @@ export const CONSISTENCY_PAGE = {
         "file": "sfc.ios.png",
         "pub": "sfc-ios.png",
         "label": "iOS 模拟器（Vapor 实例化）"
+      },
+      {
+        "end": "ios-device",
+        "file": "sfc.ios-device.png",
+        "pub": "sfc-ios-device.png",
+        "label": "iOS 真机（Vapor 实例化）"
       }
     ]
   },

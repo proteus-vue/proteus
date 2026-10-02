@@ -139,13 +139,38 @@ export function parseStaticStyle(
       out[key] = { top: num, right: num, bottom: num, left: num }
       continue
     }
+    // ★★`box-sizing`（2026-10-02）：**Web/MP 由 CSS 引擎读**（百分比宽度 + 横向 padding 要
+    //   正确收进盒内，必须显式 border-box——各端默认值不同，显式声明才跨端一致）；
+    //   App 两内核**恒为 border-box**（taffy `BoxSizing::BorderBox` / TS 核心「宽高含 padding」）
+    //   ⇒ 该键进产物后对端上是无副作用的忠实记录（Rust serde 忽略未知键、Android 白名单不收）。
+    if (key === 'boxSizing') {
+      out[key] = rawVal
+      continue
+    }
     if (LAYOUT_FIELDS.has(key)) {
       if (key === 'flexDirection' || key === 'justifyContent' || key === 'alignItems' || key === 'alignSelf' || key === 'position' || key === 'display' || key === 'overflow') {
         out[key] = rawVal
         continue
       }
+      // ★★百分比宽高 → **比例字段**（2026-10-02：单位模型在模板产物里缺的一环）
+      //
+      // 【为什么必须有（实测抓出的跨端形态差）】`width: 100%` 是"内容随屏宽、左右留白恒定"
+      //   的标准写法；本版此前对百分比**直接丢弃 + 诊断**（"只支持 px/数字"）⇒ 同一份 SFC：
+      //   Web/MP 走 CSS 引擎正常流式，到了 iOS/Android 的 Vapor 链就**静默变成无宽度**
+      //   ——同一份源码两端形态不同，正是多端一致性要消灭的那类差异。
+      // 【为什么映射为 ratio 而不是数值】百分比不是长度（没有密度可乘）——内核原生支持
+      //   `widthRatio`（Rust `width_ratio` → taffy `percent()`；TS 核心 `widthRatio`），
+      //   基准 = 父**内容盒**（内核注释已证）。宿主物理化白名单（LEN_SCALARS）**不含**比例键
+      //   ⇒ 与「长度 × 密度、比例不动」的换算纪律天然一致。
+      if (key === 'width' || key === 'height') {
+        const pct = /^(\d+(?:\.\d+)?)%$/.exec(rawVal)
+        if (pct) {
+          out[key === 'width' ? 'widthRatio' : 'heightRatio'] = Number(pct[1]) / 100
+          continue
+        }
+      }
       const num = numOf(rawVal)
-      if (num === undefined) { pushDiag(`style 里 \`${rawKey}: ${rawVal}\` 不是纯数值（本版只支持 px/数字）`); continue }
+      if (num === undefined) { pushDiag(`style 里 \`${rawKey}: ${rawVal}\` 不是纯数值（支持 px/数字/百分比宽高）`); continue }
       out[key] = num
       continue
     }
@@ -165,7 +190,7 @@ export function parseStaticStyle(
   return out
 }
 
-/** `56px` / `56` / `0.5` → 数值；`50%` / `auto` → undefined（本版不支持比例，见诊断） */
+/** `56px` / `56` / `0.5` → 数值；`50%` / `auto` → undefined（百分比**宽高**在调用处另行映射为 widthRatio/heightRatio；其余属性的百分比仍不支持，见诊断） */
 function numOf(v: string): number | undefined {
   const t = v.trim().replace(/px$/i, '')
   const n = Number(t)

@@ -26,10 +26,23 @@ const SAMPLES = path.join(ROOT, 'docs/generated/consistency-samples/sfc')
 const OUT = path.join(ROOT, 'docs/generated/consistency-sfc-report.json')
 const CHECK = process.argv.includes('--check')
 
-/** SFC 夹具的归一目标（375×800 = `examples/pages/consistency-stress.vue` 的根声明） */
+/** SFC 夹具的归一目标（锚定坐标系仍是设计宽 375×800；锚块在 (16,60)）
+ *  ★注意：2026-10-02 流式改造后，**内容宽随屏宽**（行宽 = 屏宽 − 32，左右留白恒 16）——
+ *  归一输出的 375 宽窗口在窄屏端覆盖不到行盒右缘、宽屏端会把行盒右侧裁掉：
+ *  该"流式右带"**跨端天然不同（设计意图）**，不入像素比较（见 SFC_NORM_ROI）。 */
 const SFC_ANCHOR_SPEC = { probe: [47, 111, 237], outSize: { w: 375, h: 800 }, blockTarget: { x: 16, y: 60, w: 80 } }
-/** 归一后的观测窗口（锚块顶部起，含 10 行全部内容；避开锚块上方的设备 chrome） */
-const SFC_NORM_ROI = { x: 0, y: 56, w: 375, h: 744 }
+/** 归一后的观测窗口（锚块顶部起，含 10 行全部内容；避开四周设备 chrome）。
+ *  ★右界 340（不是 375）：流式内容宽 = 屏宽 − 32，各端不同（web 358 / MP ~361 / Android 368 /
+ *  iOS 370）——所有**固定几何**元素（锚块 / chip ≤ 88+10 / 文本 / 蓝点，最远 ~284）都在
+ *  340 以内；[340,375] 只剩行盒右缘与圆角（位置随屏宽 ⇒ 跨端比较无意义，由 gaps 指标单列）。
+ *  ⇒ ROI 内是"一份源码里确定会被跨端复现的几何"；流式带则验证"留白恒定"这条设计意图。
+ *  ★左界 10（不是 0）——**2026-10-02 独立审计抓出的设备 chrome 污染**（夹具内容都从 x≥16 起，
+ *  左 0–10 是纯画布区，排除零损失）：
+ *   · Android 真机：左侧一条系统悬浮竖条（实测 x6.0–9.0 · y193–259，圆头灰条 (208,208,209)，
+ *     疑为侧边面板手柄；**旧截图逐字节同存** ⇒ 存量设备 chrome，非夹具/非本轮引入）；
+ *   · MP 模拟器：自身 1px 左缘框线（x=0，色 39,39,44）。
+ *  二者若在窗口内会稳定污染 diff（每次采集都差同样几百像素）。 */
+const SFC_NORM_ROI = { x: 10, y: 56, w: 330, h: 744 }
 
 /** 端显示名（报告用） */
 const END_LABEL = {
@@ -40,9 +53,55 @@ const END_LABEL = {
   'ios-device': 'iOS 真机（Vapor）',
 }
 
+/**
+ * 屏幕边缘留白（gaps）——直接量化「内容距屏幕左右边缘的间距」（设计单位）。
+ *
+ * 【为什么单列（用户 2026-10-02 目视发现的问题）】流式改造前：根定宽 375、左对齐 ⇒
+ *   左留白恒 16、右留白 = 屏宽 − 359（实测 web 31 / MP 31.4 / Android 41 / iOS 43）——
+ *   **留白随屏宽漂移**。流式改造后：左右各 16 恒定。本函数从**原始截图**量这件事
+ *   （不依赖归一窗口——窗口只 375 宽，窄屏端的右留白落在窗口外量不到）。
+ *
+ * 量法：行盒底色（#1b1b21）逐行的**最长横段** = 行宽；两级过滤（minRun + maxRun×0.6）
+ *   与 anchorNormalize 同款（滤掉圆角端点/边缘伪影），再取所有行段的 min-left / max-right。
+ *   winX = 设计 0 在源图的物理 x（anchorNormalize 的 srcWindow.x）；scale = 输出 px / 源 px。
+ */
+function measureEdgeGaps(img, winX, scale) {
+  const [tr, tg, tb] = [27, 27, 33]
+  const tol = 5
+  const match = (i) =>
+    Math.abs(img.rgba[i] - tr) <= tol && Math.abs(img.rgba[i + 1] - tg) <= tol && Math.abs(img.rgba[i + 2] - tb) <= tol
+  const segs = []
+  for (let y = 0; y < img.height; y++) {
+    let run = 0
+    for (let x = 0; x <= img.width; x++) {
+      const hit = x < img.width && match((y * img.width + x) * 4)
+      if (hit) { run++; continue }
+      if (run >= 10) segs.push({ x0: x - run, x1: x - 1, len: run })
+      run = 0
+    }
+  }
+  if (segs.length === 0) return null
+  const maxRun = Math.max(...segs.map((s) => s.len))
+  let left = Number.POSITIVE_INFINITY
+  let right = -1
+  for (const s of segs) {
+    if (s.len < maxRun * 0.6) continue
+    if (s.x0 < left) left = s.x0
+    if (s.x1 > right) right = s.x1
+  }
+  if (!Number.isFinite(left) || right < 0) return null
+  const d = (v) => Math.round(v * 10) / 10
+  return {
+    left: d((left - winX) * scale),
+    right: d((img.width - (right + 1)) * scale),
+    rowW: d((right - left + 1) * scale),
+    screenW: d((img.width - winX) * scale),
+  }
+}
+
 async function main() {
   if (!fs.existsSync(SAMPLES)) {
-    console.error(`[sfc] ✗ 缺样本目录：${path.relative(ROOT, SAMPLES)}（先跑四个采集脚本）`)
+    console.error(`[sfc] ✗ 缺样本目录：${path.relative(ROOT, SAMPLES)}（先跑五个采集脚本：web / mp / android / ios-sim / ios-device）`)
     process.exit(2)
   }
   const files = fs.readdirSync(SAMPLES)
@@ -65,6 +124,7 @@ async function main() {
       const r = anchorNormalize(srgb, SFC_ANCHOR_SPEC)
       ends.push({
         end, file: f, img: cropImage(r.img, SFC_NORM_ROI),
+        gaps: measureEdgeGaps(srgb, r.srcWindow.x, r.scale),
         norm: {
           srcSize: { width: raw.width, height: raw.height },
           colorSpace: raw.colorSpace ?? 'undeclared',
@@ -112,12 +172,14 @@ async function main() {
   // 端清单（报告头部列出——含失败端，如实）
   const withEnds = {
     ...report,
-    note: report.note + '｜★SFC 压力夹具（一份源码三链渲染）：examples/pages/consistency-stress.vue',
+    note: report.note + '｜★SFC 压力夹具（一份源码三链渲染）：examples/pages/consistency-stress.vue'
+      + '｜宽流式（width:100% + 左右 padding 16）⇒ 边缘留白恒 16、内容随屏宽（见每端 gaps）',
     source: 'examples/pages/consistency-stress.vue（真 SFC：44 节点 · 10 行 v-for · 行内动态绑定）',
     ends: ends.map((e) => ({
       end: e.end,
       label: END_LABEL[e.end] ?? e.end,
       file: e.file,
+      ...(e.gaps ? { gaps: e.gaps } : {}),
       ...(e.norm ? { norm: e.norm } : { error: e.error }),
     })),
   }
@@ -130,6 +192,9 @@ async function main() {
     console.log(
       `  ▸ SFC ${ok.length} 端 / ${pairs.length} 对：changed ${report.totals.changedSamples} · clean ${report.totals.cleanSamples}`,
     )
+    for (const e of ends) {
+      if (e.gaps) console.log(`  ▸ ${e.end.padEnd(11)} 屏宽 ${e.gaps.screenW} · 留白 左 ${e.gaps.left} / 右 ${e.gaps.right} · 行宽 ${e.gaps.rowW}`)
+    }
     console.log('  ★SFC 观测非门禁：结论不影响退出码（仅报告）')
     if (!same) process.exit(1)
     console.log('✅ SFC 一致性报告与基线一致（非门禁）')

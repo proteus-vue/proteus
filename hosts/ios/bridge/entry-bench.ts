@@ -125,7 +125,7 @@ const BN = { snapshot: 'bench-final' }
 // ★构建标识：每次构建写入，用于**确凿判定**设备上跑的是哪份代码
 //   （踩坑：靠文件 mtime 判断"报告是否刷新"不可靠——新建目标文件的时间恒为"现在"；
 //    且我看不出设备实际执行的是旧 bundle，白跑一轮。有了这个字段就能一眼判定。）
-const BUILD_ID = 'ea118647-161511'
+const BUILD_ID = '4d39d5b3-164743'
 const now = (): number => Date.now()
 /** 宽松解析（宿主返回可能是字符串或已是对象） */
 const safeParseAny = (s: any): any => {
@@ -3293,6 +3293,9 @@ const api = {
       ok: mountOut?.ok === true,
       path: 'stress-sfc',
       src: 'examples/pages/consistency-stress.vue',
+      // ★build_id 随读数带出（2026-10-02）：stress 报告由宿主 driveStress 组装（不经 finish），
+      //   而采集脚本的新鲜度/build_id 断言读 `js_report.build_id` ⇒ 必须在读数里就有。
+      build_id: BUILD_ID,
       tpl_nodes: stress.tpl.nodes.length,
       sub_l1: stress.table?.stats?.l1 ?? -1,
       inst_nodes: nodes.length,

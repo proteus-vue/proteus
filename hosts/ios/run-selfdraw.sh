@@ -51,6 +51,7 @@ for a in "$@"; do
   case "$a" in
     --record) RECORD=1 ;;
     --bench) MODE="bench" ;;
+    --stress) MODE="stress" ;;
     --host-runtime) MODE="host-runtime" ;;
     --app-stack) MODE="app-stack" ;;
     --showcase) MODE="showcase" ;;
@@ -256,6 +257,11 @@ mkdir -p "$HERE/results"
 REPORT_FILE="selfdraw-report.json"
 SNAP_FILE="selfdraw-final.png"
 if [ "$MODE" = "bench" ]; then REPORT_FILE="logic-bench-report.json"; SNAP_FILE="bench-final.png"; fi
+# ★★六端 SFC 压力夹具 · iOS **真机**（2026-10-02）——宿主 `--stress` 驱动器
+#   （driveStress：renderStress → 截图 stress-sfc.png → 报告 stress-sfc.json → 自退）。
+#   设备上是**独立 app**（dev.proteus.layoutcore 的 Morpheus 包——见下方 BUNDLE_ID 处理），
+#   与既有 selfdraw/bench 场景同一宿主二进制、不同场景参数。
+if [ "$MODE" = "stress" ]; then REPORT_FILE="stress-sfc.json"; SNAP_FILE="stress-sfc.png"; fi
 # ★G-39：宿主运行时模式写独立报告（不污染既有产物命名）
 if [ "$MODE" = "host-runtime" ]; then REPORT_FILE="host-runtime.json"; SNAP_FILE="host-shell.json"; fi
 # ★M5：执行器场景两份报告（主 + 执行器；判据合并读）
@@ -398,6 +404,12 @@ elif [ "$MODE" = "bench" ]; then
       --environment-variables '{"PROTEUS_EXIT_AFTER_REPORT":"1"}' \
       --device "$UDID" "$BUNDLE_ID" --bench > "$LAUNCH_LOG" 2>&1 || LAUNCH_RC=$?
   fi
+elif [ "$MODE" = "stress" ]; then
+  # ★★六端 SFC 压力夹具 · iOS 真机（2026-10-02）：`--stress` 场景 = 一次挂载 + 截图 + 报告 → 自退。
+  #   完成信号与 selfdraw 同款：launch --console 阻塞到退出（零轮询/零 sleep/零 timeout）。
+  xcrun devicectl device process launch --console --terminate-existing \
+    --environment-variables '{"PROTEUS_EXIT_AFTER_REPORT":"1"}' \
+    --device "$UDID" "$BUNDLE_ID" --stress > "$LAUNCH_LOG" 2>&1 || LAUNCH_RC=$?
 else
   # ★自绘模式**显式传参**：从桌面点开（无参数）走 Info.plist 的缺省场景 = showcase，
   #   而脚本要的是自绘 ⇒ 必须显式声明（否则脚本跑起来的是演示）

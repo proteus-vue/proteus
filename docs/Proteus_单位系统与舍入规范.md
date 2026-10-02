@@ -422,3 +422,31 @@ Flutter 同时用 `Ahem` 测试字体（方块字形，度量完全确定）消�
 - **锁 DPR**：SFC 压力装置各端 DPR 固定（Web@2 / MP@1.625 / Android@3 / iOS@3），
   且报告随附每端 `scale` 与源尺寸 ⇒ **可追溯** ✓
 - **锁测试字体**：**未做**（当前用真实字体 ⇒ 文本度量差异按 A-1 走容差带）
+
+### 14.4 单位模型补环比：**比例（%）宽度落地**（2026-10-02，五端实测）
+
+**背景（用户目视抓出）**：内容距屏幕右边缘的间距随端漂移（web 31 / MP 31.4 / Android 41 / iOS 43）——
+根因是夹具把设计宽（375）写成了**绝对宽度**；而"内容随屏、留白恒定"的标准写法（`width: 100%`）
+在模板产物链上**根本不支持**（`parseStaticStyle` 对百分比直接丢弃 + 诊断）。
+
+**修复（三处，各司其职）**：
+| # | 位置 | 内容 |
+|---|---|---|
+| 1 | `packages/compiler/src/vapor/template.ts` | `width/height` 的 `N%` → `widthRatio/heightRatio`；`box-sizing` 识别透传（**不扩大边界**：非宽高属性的百分比仍诊断） |
+| 2 | `examples/pages/consistency-stress.vue` | 根 `box-sizing:border-box; width:100%; padding: 0 16`；行 `width:100%` ⇒ 留白恒 16、列宽 = 屏宽 − 32 |
+| 3 | `StressSfcActivity` | viewport 写死 375×800 → **真实屏幕逻辑尺寸**（`widthPixels/density`）——流式基准 = 内核视口 |
+
+**为什么比例与长度在换算纪律上天然相容**（本节的核心结论）：
+- 长度：**× 密度**（宿主 `physicalizeTree` 的白名单 `LEN_SCALARS`）；
+- 比例：**不乘**（`widthRatio/heightRatio` **不在**白名单）——基准由内核按**物理化后的父内容盒**解算，
+  ⇒ "长度 ×密度、比例不动"这一条与 §1.1 统一公式**逐条相容**，无需新机制。
+- 内核支持链已有（只缺编译器解析）：Rust `LStyle.width_ratio` → taffy `percent()`；
+  TS 核心 `widthRatio`（root 解算 + flex 项基尺寸两条路径均有）。
+
+**实测（五端，SFC 压力夹具）**：留白全部 **16/16**（MP 15.8/15.8 亚像素）· 行宽
+358/361.8/368/370/358 = **屏宽 − 32**；像素报告 10 对 1.74~2.91% **全 hash=0**；
+**iOS 真机 ⇄ 模拟器 0.52%**（真机入列——`run-selfdraw.sh --stress` + `shoot-stress-ios-device.sh`）。
+
+**边界（诚实）**：① 非宽高属性的百分比（margin/padding 等）仍不支持（诊断如实）；
+② MP 端 1.6375 分数倍率下亚像素累加 ≤2 物理像素；③ `applyOps` 二进制指令流与 `svgPath.d`
+坐标仍待 U0（见 §14.2，不变）。

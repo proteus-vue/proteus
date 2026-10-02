@@ -60,6 +60,8 @@ const SFC_SHOTS = [
   { end: 'mp.skyline', file: 'sfc.mp.skyline.png', pub: 'sfc-mp-skyline.png', label: '微信 Skyline（SFC 编译产物）' },
   { end: 'android', file: 'sfc.android.png', pub: 'sfc-android.png', label: 'Android 真机（Vapor 实例化）' },
   { end: 'ios', file: 'sfc.ios.png', pub: 'sfc-ios.png', label: 'iOS 模拟器（Vapor 实例化）' },
+  // ★2026-10-02 补：iOS **真机**（用户指出的缺口——模拟器与真机同平台但证据等级不同）
+  { end: 'ios-device', file: 'sfc.ios-device.png', pub: 'sfc-ios-device.png', label: 'iOS 真机（Vapor 实例化）' },
 ]
 
 function readJson(p, what) {
