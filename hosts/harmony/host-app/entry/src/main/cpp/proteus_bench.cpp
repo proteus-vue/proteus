@@ -2676,6 +2676,7 @@ static napi_value MountVirtualProbe(napi_env env, napi_callback_info info) {
 /* ── 矩阵 #7：手势命中（触摸坐标 → 核心 hitTest；与 hitProbe 同一 ABI） ── */
 
 static uint64_t g_gestureTree = 0;
+static std::unordered_map<int, Rect> g_gestureRects;   // 手势/原生混用场景共用（nodeRect 读它）
 
 /**
  * gestureHitPrepare(fixtureJson, vpW, vpH, density): string(JSON)
@@ -2712,6 +2713,7 @@ static napi_value GestureHitPrepare(napi_env env, napi_callback_info info) {
     }
     if (g_gestureTree != 0) proteus_layout_destroy(g_gestureTree);
     g_gestureTree = handle;
+    g_gestureRects = rectMap;
     char buf[160];
     snprintf(buf, sizeof(buf), "{\"ok\":true,\"nodes\":%d,\"rects\":%d}", (int)rectMap.size(), (int)rectMap.size());
     OH_LOG_Print(LOG_APP, LOG_INFO, PROTEUS_BENCH_DOMAIN, PROTEUS_BENCH_TAG,
@@ -2829,6 +2831,35 @@ static napi_value FontFamilyProbe(napi_env env, napi_callback_info info) {
     return out;
 }
 
+/**
+ * nodeRect(nodeId): string(JSON) —— ★矩阵 #10：读**核心真源**的单节点几何（设计单位）。
+ *   用途：ArkUI 原生组件（Text/Button 等）按此几何定位——**位置由 Rust 核心决定**
+ *   （与 Android native-host 的判据①同义：native View 的位置 == Rust 算出的几何）。
+ *   树来自 gestureHitPrepare/sfc 场景（同一条实例化+排版链）。
+ */
+static napi_value NodeRect(napi_env env, napi_callback_info info) {
+    size_t argc = 1;
+    napi_value args[1] = {nullptr};
+    napi_get_cb_info(env, info, &argc, args, nullptr, nullptr);
+    int id = -1;
+    if (argc >= 1) {
+        int32_t v = -1;
+        napi_get_value_int32(env, args[0], &v);
+        id = v;
+    }
+    char buf[200];
+    auto it = g_gestureRects.find(id);
+    if (it == g_gestureRects.end()) {
+        snprintf(buf, sizeof(buf), "{\"ok\":false,\"error\":\"节点 %d 不在核心真源\"}", id);
+    } else {
+        snprintf(buf, sizeof(buf), "{\"ok\":true,\"x\":%.2f,\"y\":%.2f,\"w\":%.2f,\"h\":%.2f}",
+                 it->second.x, it->second.y, it->second.w, it->second.h);
+    }
+    napi_value out;
+    napi_create_string_utf8(env, buf, NAPI_AUTO_LENGTH, &out);
+    return out;
+}
+
 /** animCurveBezier(curveId): string(JSON) —— 内核曲线采样（矩阵 #15 A1："贝塞尔来自内核"） */
 static napi_value AnimCurveBezier(napi_env env, napi_callback_info info) {
     size_t argc = 1;
@@ -2880,6 +2911,7 @@ static napi_value BenchInit(napi_env env, napi_value exports) {
         {"gestureHitPrepare", nullptr, GestureHitPrepare, nullptr, nullptr, nullptr, napi_default, nullptr},
         {"gestureHitAt", nullptr, GestureHitAt, nullptr, nullptr, nullptr, napi_default, nullptr},
         {"fontFamilyProbe", nullptr, FontFamilyProbe, nullptr, nullptr, nullptr, napi_default, nullptr},
+        {"nodeRect", nullptr, NodeRect, nullptr, nullptr, nullptr, napi_default, nullptr},
         {"version", nullptr, BenchVersion, nullptr, nullptr, nullptr, napi_default, nullptr},
     };
     napi_define_properties(env, exports, sizeof(desc) / sizeof(desc[0]), desc);

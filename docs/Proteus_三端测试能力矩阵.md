@@ -16,7 +16,7 @@
 | 7 | **手势** | ✅ `gesture`（GestureDetector；tap/longpress/fling + 负向计数） | ◐ **tap+longpress 全链已通（真机 PASS）** | ✅ **已补** | 鸿蒙：**`uitest uiInput` 真注入（系统输入栈）**→ ArkTS `.onTouch` 真触摸链（真时间戳）→ 样本落盘 → **三端中立识别器**（`packages/gesture`，与 Web/MP 同一条）分类——**8/8 PASS**：tap（held 107ms）/ longpress（held 1555ms）/ swipe-up **按真实时长分流** + 零串扰 + 每段命中核心 hitTest（target 22/14/22，chain_len 3）；★**超越 iOS V16**：覆盖其明确标注的 `not_covered: UITouch->duration-classification`（真触摸时长分类）；iOS swipe/fling 仍待补 |
 | 8 | **文本通道** | ✅ drawText/StaticLayout 分流 + 归因 | ✅ CoreText（`measureText`） | ✅ **上屏已通（含单位模型）** | 鸿蒙：`textProbe`（typography 200 项/8.0ms）+ 上屏（content modifier 回调绘制）；**单位模型已修**：RenderNode/canvas 是**物理 px**、host 属性是 **vp**——ArkTS 侧 ×`vp2px(1)` 换算（一处），host 尺寸 ÷密度；真机截图色块+文字双重可见 |
 | 9 | **字体族映射** | ✅ `font-family`（与 iOS V13 同契约） | ✅ V13 | ✅ **已补** | 鸿蒙：typography 字族解析（`OH_Drawing_SetTextStyleFontFamilies`）——与 iOS V13 **同款样本文本**（`MMMM iii WWWW` / 32px）：**三族度量分流**（默认 274.34 / Condensed **236.67** / Digit **295.78**）+ 同族稳定性反例（两次同族完全一致）+ 高度合理；证据 `results/font-family.json`（★如实：SC/Italic 与默认同宽——拉丁字形指标相同的真实行为，非未生效） |
-| 10 | **原生组件混用（L3）** | ✅ `native`/`native-host`/`shot-scroll-native` | ❌ **缺** | ⛔ **缺** | iOS/鸿蒙待补（方案坑位 #4 的核心） |
+| 10 | **原生组件混用（L3）** | ✅ `native`/`native-host`/`shot-scroll-native` | ❌ **缺** | ✅ **已补** | 鸿蒙：ArkUI **原生组件**与 Proteus 自绘共存——**三判据 PASS**（与 Android native-host 三件事同族）：① **位置由核心决定**（原生组件 bounds `[56,210][336,378]` == `nodeRect` 核心几何 (16,60) 80×48 ×3.5，逐位相同）② 原生真渲染（目标区 93.8% 原生色）③ **z-order 实测**（重叠区自绘蓝 = 0 ⇒ ArkUI 原生在上）；证据 `results/native-mix.json` ★iOS 仍缺 |
 | 11 | **结构变更（splice）** | ✅ `splice` | ✅ **已补**（`splice_probe`） | ✅ **已补**（`spliceProbe`） | **三端同树同 payload 4/4 判据全过**（rects 4→5 · 0/1 · 新节点高 50.0 · 重排 5 有界）；`apply-ops` 仍待 iOS/鸿蒙 |
 | 12 | **整树虚拟化（mount-virtual）** | ✅ `mount-virtual` | ✅（V12 同族） | ✅ **已补** | 鸿蒙：同一份 SFC 产物（`vapor-tree.json`，与两端同源）——**全树进核**（1502 节点；虚拟化省的是层不是树）+ 池化层 + 命中一致性：**8/8 判据 PASS**（500 行 · live 23 · created 26/reused 956 · **复用率 0.9735**（对照 Android 0.9744）· 可见行零缺失 · 命中全落在已物化行 · 每帧处理 0.03ms）；★口径差异如实：Android Choreographer 驱动（帧率真实）、鸿蒙为同步循环（量每帧处理耗时） |
 | 13 | **JS 引擎闭环** | ✅ `js-engine`/`js-batch`/`js-render` | ✅ JSC 现场编码 | ✅ **已补** | 鸿蒙：**JSVM（OH_JSVM_*，V8）真机可用**——三份真实产物全在设备上跑通：`bundle-vapor.js`（465KB，设备端实例化+订阅增量）· `bundle-host-runtime.js`（217KB，含 #18 全链）· `jsvmProbe`（init→VM→Env→Compile→Run 全 JSVM_OK）；**现场编码已验**：183B 二进制指令由 JSVM 内 bundle **设备端编码**产出并驱动内核重排（见 #14 判据⑤）；宿主桥（JSVM_Callback 反向调用：mount/applyOps/readRects/probeChannels/memUsage/gc）双向通 |
@@ -32,7 +32,7 @@
 
 **统计（口径 = 本表单元格「✅ + ◐ + 架构性不适用」，可逐格复算）**：
 - **Android 22/22**（✅22）
-- **鸿蒙 21/22**（✅19 + 不适用1[#3]）——持续推进：4→21（▲#5 滚动 + #7 手势 + #9 字体族）
+- **鸿蒙 21/22**（✅20 + 不适用1[#3]）——持续推进：4→21（★仅剩 #22 Perfetto/帧率）
 - **iOS 21/22**（✅19 + ◐2[#7 手势部分/#22 帧统计]）
   ★**审计注记（2026-10-03 发现，如实披露不掩盖）**：iOS 列的历史基数写作 16/22，
   与本表单元格数（21）差 5——**增量核对无碍**（历次 +1 都与单元格变化一一对应，如 #11 补上时
