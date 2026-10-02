@@ -717,6 +717,8 @@ final class VaporRenderHost {
                 }
                 vrowIds[i] = arr;
             }
+            // I2-ALLOW: 滚动索引数学（行顶 y 来自内核回执，转成宿主可见区索引数组——
+            //   不参与绘制、不写回内核；绘制几何一律走内核指令流）
             rowTops = new int[nRows];
             for (int i = 0; i < nRows; i++) {
                 JSONObject rr = vRects.get(vrowRoots[i]);
@@ -788,6 +790,8 @@ final class VaporRenderHost {
         try {
             if (recycleHandle == 0L || vrowIds == null) return err(out, "未做虚拟化挂载").toString();
             JSONObject a = new JSONObject(argsJson);
+            // I2-ALLOW: 滚动**输入参数**解析（调用方给的像素增量，非"内核几何→平台 API"换算；
+            //   几何输出仍由内核统一吸附）
             final int dy = (int) Math.round(a.optDouble("dy", 0));
             final boolean capture = a.optBoolean("capture", false);
 
@@ -835,8 +839,11 @@ final class VaporRenderHost {
         final int n = vrowRoots.length;
         if (n == 0) return new int[]{0, 0};
         final int y0 = rowTops[0];
+        // I2-ALLOW: 可见**区间索引**（行号，非几何换算——向下取整是索引语义；
+        //   几何真值仍走内核指令流）
         int first = (int) Math.floor((double) (vScrollY - y0) / rowPitch);
         first = Math.max(0, Math.min(n - 1, first));
+        // I2-ALLOW: 同上——可见区间末尾行号（索引语义）
         int last = (int) Math.floor((double) (vScrollY + vViewportH - y0) / rowPitch);
         last = Math.max(first, Math.min(n - 1, last));
         return new int[]{first, last};
@@ -905,11 +912,13 @@ final class VaporRenderHost {
     }
 
     /** 两份签名的差异百分比（0..100；capture 帧用） */
+    // I2-ALLOW: 统计与报告（差异百分比读数——不是几何）
     private static double sigDiffPct(int[] a, int[] b) {
         final int n = Math.min(a.length, b.length);
         if (n == 0) return -1;
         int diff = 0;
         for (int i = 0; i < n; i++) if (a[i] != b[i]) diff++;
+        // I2-ALLOW: 统计与报告（差异百分比读数——人类可读的一位小数，不是几何）
         return Math.round(1000.0 * diff / n) / 10.0;
     }
 
@@ -1067,12 +1076,12 @@ final class VaporRenderHost {
             float fs = (float) spec.optDouble("fontSize", 14);
             android.text.TextPaint tp = new android.text.TextPaint();
             tp.setTextSize(fs);
-            // I2-ALLOW: 文本**测量**结果的取整（测量子系统，非几何换算——度量值交给内核后
-            //   由内核统一 `snap` 吸附；平台层对**几何**零舍入，与 JsRenderHost 同款）
             float w = tp.measureText(t);
             android.graphics.Paint.FontMetrics fm = tp.getFontMetrics();
             float h = fm.descent - fm.ascent;   // ★真实字体度量（原 fs×1.4 近似已删）
             JSONObject sz = new JSONObject();
+            // I2-ALLOW: 文本**测量**结果的取整（测量子系统，非几何换算——度量值交给内核后
+            //   由内核统一 `snap` 吸附；平台层对**几何**零舍入，与 JsRenderHost 同款）
             sz.put("width", Math.ceil(w));
             sz.put("height", Math.ceil(h));
             m.put(String.valueOf(spec.getInt("id")), sz);

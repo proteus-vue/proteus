@@ -21,7 +21,7 @@ OUT="${PROTEUS_STRESS_OUT:-$ROOT/docs/generated/consistency-samples/sfc}"
 PAGE="pages/consistency-stress"
 
 mkdir -p "$OUT"
-[ -d "$SRC" ] || { echo "✗ 缺 MP 产物：$SRC（先跑：cd examples && npx tsx ../packages/cli/src/index.ts build --target skyline）"; exit 2; }
+[ -d "$SRC" ] || { echo "✗ 缺 MP 产物：${SRC}（先跑：cd examples && npx tsx ../packages/cli/src/index.ts build --target skyline）"; exit 2; }
 
 echo "==> ① 产物副本（干净状态——与 mp-e2e 同一纪律）"
 rm -rf "$REPLICA"
