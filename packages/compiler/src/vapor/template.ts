@@ -54,6 +54,37 @@ const PAINT_FIELDS = new Set(['backgroundColor', 'color', 'fontSize', 'borderRad
 const PAINT_DECL_ATTRS = new Set(['fill-gradient', 'fill-gradient-to', 'clip-path', 'glow', 'mask', 'svg-path', 'svg-path-to'])
 
 /**
+ * ★★★**未支持特性的「可见化」探测**（2026-10-03 · P0 能力清单批次）。
+ *
+ * 【为什么必须做（本仓实测抓出的**静默风险 12 项**）】能力清单调研发现：
+ *   `v-html` / `v-text` / `v-memo` / `@[ev]` / `:[k]` / `Teleport` / `KeepAlive` /
+ *   `Transition` / `Suspense` / `<component :is>` / 自定义指令 —— 这些**既无实现也无诊断**
+ *   ⇒ 产物里"什么都不发生"，而开发者以为生效（**页面看起来对、功能是空的**）。
+ *   ★本仓纪律：**静默失败最致命**。
+ *   ⇒ 本批**不实现能力**，只让"未支持"在编译期**可见**（带修法）——成本最低、收益最高。
+ *
+ * 【与既有诊断的关系】既有诊断已覆盖：嵌套 v-for / 混合文本 / 事件修饰符 / 多语句 handler /
+ *   表达式白名单。本表补的是**之前完全没被检查**的那一批。
+ */
+const UNSUPPORTED_DIRECTIVES: Record<string, string> = {
+  html: 'v-html 未支持（富文本渲染通道待建）——请改用文本 + 样式，或保留 Vue 渲染路径（L0）',
+  text: 'v-text 未支持——请改用插值 `{{ }}`（文本槽位已支持）',
+  memo: 'v-memo 未支持（依赖摘要跳过更新的语义待建）——去掉它可正常更新（仅少一层优化）',
+  cloak: 'v-cloak 未支持（App 端无 CSS 首帧闪烁语义）——可安全移除',
+  pre: 'v-pre 未支持（跳过编译的语义待建）——请手动改写为静态内容',
+}
+/** 未支持的内置组件（官方有语义，我方当普通容器 ⇒ 语义静默丢失） */
+const UNSUPPORTED_BUILTINS: Record<string, string> = {
+  Teleport: 'Teleport 未支持（多渲染面传送待建）——当前按普通容器渲染（内容在**原位置**，非目标容器）',
+  KeepAlive: 'KeepAlive 未支持（组件缓存待建；App 端路由保活已有 app-stack 的 keep-alive 档可复用）',
+  Transition: 'Transition 未支持（转场语义待建；内核动画 MA0-RT 能力已具备，缺编译期桥接）',
+  TransitionGroup: 'TransitionGroup 未支持（同 Transition；且需列表差异动画）',
+  Suspense: 'Suspense 未支持（异步边界待建）',
+  Component: '动态组件 `<component :is>` 未支持（需运行时组件解析）',
+  component: '动态组件 `<component :is>` 未支持（需运行时组件解析）',
+}
+
+/**
  * ★★**解析绘制声明属性**（`fill-gradient` / `clip-path` / `glow` / `mask` / `svg-path`…）——
  * **唯一实现**：`buildLayoutTemplate` 的模板扫描与 A/B 对照的 Vue 路径改写**共用本函数**
  * （本仓纪律：同一语义一处实现；两处各写一份 ⇒ 迟早分叉）。
@@ -290,6 +321,38 @@ export function buildLayoutTemplate(
 
       const style: Record<string, unknown> = {}
       let hasDynamicStyle = false
+      // ★★未支持特性探测（P0：让静默变可见——见 UNSUPPORTED_DIRECTIVES 头注）
+      for (const p of n.props ?? []) {
+        if (p.type === 7 /* DIRECTIVE */ && typeof p.name === 'string' && UNSUPPORTED_DIRECTIVES[p.name]) {
+          diag(`${tag}(id=${id}) ${UNSUPPORTED_DIRECTIVES[p.name]}!`)
+        }
+        // ★动态名判据 = `arg.isStatic === false`（实测：静态与动态的 arg.type 都是 4，
+        //   **只有 isStatic 区分**——首版按"有无 arg.content"判 ⇒ 两者都有 content ⇒ 全漏）。
+        const argNode = p.arg as { isStatic?: boolean } | undefined
+        const isDynamicName = p.type === 7 && argNode != null && argNode.isStatic === false
+        if (p.type === 7 && p.name === 'on' && isDynamicName) {
+          diag(
+            `${tag}(id=${id}) 动态事件名 \`@[expr]\` 未支持（本版只处理静态事件名）`,
+            '请改用静态事件名（如 @click / @tap）',
+          )
+        }
+        if (p.type === 7 && p.name === 'bind' && isDynamicName) {
+          diag(
+            `${tag}(id=${id}) 动态属性名 \`:[expr]\` 未支持（本版只处理静态属性名）`,
+            '请改用静态属性名（如 :width / :show）',
+          )
+        }
+        // 自定义指令 `v-xxx`（非 v-bind/v-on/v-for/v-if/v-show/v-model 等已处理项）
+        const KNOWN_DIRECTIVES = ['bind', 'on', 'for', 'if', 'else-if', 'else', 'show', 'model', 'slot', 'text', 'html', 'memo', 'once', 'cloak', 'pre']
+        if (p.type === 7 && typeof p.name === 'string'
+            && UNSUPPORTED_DIRECTIVES[p.name] === undefined
+            && !KNOWN_DIRECTIVES.includes(p.name)) {
+          diag(
+            `${tag}(id=${id}) 自定义指令 \`v-${p.name}\` 未支持（指令注册表待建）`,
+            '去掉它或保留 Vue 渲染路径（L0）',
+          )
+        }
+      }
       for (const p of n.props ?? []) {
         if (p.type === 6 /* ATTRIBUTE */ && p.name === 'style' && p.value?.content) {
           Object.assign(style, parseStaticStyle(p.value.content, (m, hint) => diag(`${tag}(id=${id}) ${m}`, hint)))
@@ -330,6 +393,17 @@ export function buildLayoutTemplate(
         }
       }
 
+      // ★★内置组件探测（P0：当普通容器 = 语义静默丢失——见 UNSUPPORTED_BUILTINS 头注）
+      if (tag && UNSUPPORTED_BUILTINS[tag]) {
+        diag(`${tag}(id=${id}) ${UNSUPPORTED_BUILTINS[tag]}`)
+      }
+      // ★★插槽出口 `<slot>`（P0）：组件系统未建 ⇒ 插槽内容分发不存在（静默空位）
+      if (tag === 'slot') {
+        diag(
+          `slot(id=${id}) 插槽出口 \`<slot>\` 未支持（组件系统待建——见能力清单 P1）`,
+          '插槽内容不会被分发到这里；请保留 Vue 渲染路径（L0）或等组件系统',
+        )
+      }
       const node: LayoutNode = { id, parentId, tag, style }
       if (nodeListId !== undefined) node.listId = nodeListId
       // 文本：静态文本 或 插值 → 占位（初始值由运行时回填；**混合文本不支持**）

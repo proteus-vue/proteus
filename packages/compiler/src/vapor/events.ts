@@ -162,6 +162,16 @@ export function compileEvents(source: string): EventCompileResult {
   while ((m = tagRe.exec(body)) !== null) {
     const attrs = m[2] ?? ''
     const id = nextId++
+    // ★★动态事件名（`@[ev]`）的**前置探测**（2026-10-03 · P0 静默风险批次）：
+    //   本函数的正则 `/@([\w:.-]+)/` **匹配不到 `@[ev]`**（`[` 不在字符类里）⇒ 它既不进产物
+    //   也**不进诊断**（静默丢失，比"诊断拒绝"更危险）。⇒ 先扫一遍方括号形态并报诊断。
+    //   ★这是"正则解析的盲区"——修法是**显式覆盖已知的高危形态**（而非换解析器，成本过高）。
+    {
+      const dynRe = /@\s*\[/g
+      if (dynRe.test(attrs)) {
+        diag('动态事件名未支持：@[expr]（本版只处理静态事件名；正则解析器看不到方括号形态）', '请改用静态事件名（如 @click / @tap）')
+      }
+    }
     // 收集本元素上的事件属性
     const attrRe = /@([\w:.-]+)\s*=\s*("([^"]*)"|'([^']*)')/g
     let am: RegExpExecArray | null
