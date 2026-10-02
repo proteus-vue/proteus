@@ -87,6 +87,36 @@ check-consistency-snapshot 七段全绿 · check:no-blind-wait ✅（新 .sh 零
 ① L2/L3/L2.5/L2.6 算子用**合成快照**——证明的是"比对引擎敏不敏感"，不是"真机数据一定对"；
 ② L4 算子用真截图但取同端注入（跨端噪声底含 AA，无区分度）；L4 的价值形态是**定位**。
 
+### ★★★2026-10-03（七十六）· 鸿蒙腿 **宿主运行时（G-39）**（矩阵 #18）—— 同一份 bundle + 真生命周期转发，共用判据（核心组全绿）
+
+**用户「继续」→ 接矩阵 #18**。两端已共用 `hosts/shared/bridge/entry-host-runtime.ts`（Android QuickJS / iOS JSC），
+鸿蒙现在有 JSVM ⇒ **第三条腿同源**。
+
+**交付**
+1. **`hostRuntimeProbe`**：JSVM(V8) eval 同一份 `bundle-host-runtime.js`（217KB IIFE）——
+   `SetMicrotaskPolicy(EXPLICIT)` + `PerformMicrotaskCheckpoint` = QuickJS `JS_ExecutePendingJob` 的
+   等价物（"事件循环归属宿主"在此**真验**：run 相位未解析 → 宿主泵 → finish 相位已解析）。
+   宿主桥 `memUsage`/`gc` 用 `GetHeapStatistics`（usedHeapSize，engine 口径）。
+2. **C 组真壳转发**：持久 VM（`hostRtShellInstall`，跨事件存活不销毁——与 Android shellRt 同构）+
+   EntryAbility `onBackground/onForeground` → `hostRtShellEvent('pause'/'resume')` → JS
+   `__proteusHostShellLifecycle` → 泵 job → `__proteusHostShellQuery` → 写 `host-shell.json`。
+   **真事件源 = HOME 键**（`uinput -K -d 1 -u 1`，与 Android `input keyevent HOME` 同法）。
+3. **报告要**对齐 Android Java 的**顶层合并**（run/finish 键并入顶层 + 顶层 ok）——首版嵌套被判据抓出。
+4. **判据复用**：`check-host-runtime.py` J/K 组按**能力面缺失**分档（honest skip；将来实现自动回严格档）。
+5. **采集脚本** `run-host-runtime.sh`（安装→等报告→HOME→回前台→取两份→判据，零盲等）。
+
+**真机读数（核心组全绿）**：A/B 状态机 + 四拒绝（记账 5 条）· **C pause→HIDE / resume→SHOW** ·
+D 队列 0/1/2 + **job 泵转换 false→true** · E 职责边界 · F 内存 +277KB/-476KB（engine）· **G conformance 32/32**。
+
+**★三个实测坑**：① **VM scope 缺失**（`OH_JSVM_OpenVMScope`）⇒ 逐调用 `API Misuse`（功能不受阻但违反契约；
+三处探针都补了）；② **报告结构**：Android Java 逐键拷贝并进顶层，嵌套结构会被判据读不到（`ok=None`）；
+③ **分档条件要按能力面判**（"探针跑完 done=true"≠"能力已实现"）。
+
+**指标**：矩阵鸿蒙 **16/22 → 17/22**。
+
+**诚实边界**：J（10 项原生能力经壳转发）/K（App 级事件源三环对齐）属**能力开放批次**——如实跳过
+（判据打印 ⚠ 而非 ✓，不造假）；B 组的触摸/旋转等需真设备操作，未做。
+
 ### ★★★2026-10-03（七十五）· 鸿蒙腿 **平台零参与动画（MA0-RT）**（矩阵 #15）—— RenderNode 变换 + VSync 帧步进，共用 Android 判据（A 组全绿）
 
 **用户「继续」→ 接矩阵 #15**：上一个缺口是平台动画（Android `ViewPropertyAnimator` / iOS `CAKeyframeAnimation`）。
@@ -1516,6 +1546,8 @@ check-consistency-snapshot 七段全绿 · script-compile ✅ · no-blind-wait �
 **新诚实边界**：平移对齐会**吸收真实位置差异**（若某端整体真的偏了 3px，对齐后看不出）——
 "位置是否正确"由 L2 几何数值比对承担；L4 只管"画出来像不像"（已写入注记与文档）。
 ④ 仍未接入：iOS/Android 真机截图（当前 Web=Playwright、MP=模拟器，均非真机）。
+
+## 当前状态速览（最近一次更新：**2026-10-03·（七十六）· 鸿蒙腿 **宿主运行时 G-39**（矩阵 #18，17/22）—— 同一份 bundle-host-runtime.js + 真生命周期转发（HOME 键）；A/B/C/D/E/F/G 核心组全绿（conformance 32/32）；J/K 能力面属后续批次如实跳过**）★新会话以此为准
 
 ## 当前状态速览（最近一次更新：**2026-10-03·（七十五）· 鸿蒙腿 **平台零参与动画**（矩阵 #15，16/22）—— RenderNode 变换 + VSync 帧步进：A1 内核贝塞尔/A2 8 读数/A3 终态 120/0.5/**A4 draw_delta=0**（共用 Android 判据 A 组全绿）；与 Android 的语义差异（RenderThread 自主插值 vs 帧回调步进）如实标注**）★新会话以此为准
 

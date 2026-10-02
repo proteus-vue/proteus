@@ -24,7 +24,7 @@
 | 15 | **平台零参与动画（MA0-RT）** | ✅ `platform-anim`/`platform-anim-node` | ✅（CA 动画） | ✅ **已补** | 鸿蒙：**RenderNode 变换 + VSync 帧回调逐帧写属性**（应用层零绘制/零布局）——**共用同一份 `check-platform-anim.py` A 组判据全绿**：A1 贝塞尔来自内核（Rust `anim_curve_bezier`）· A2 model 逐帧推进（8 读数）· A3 终态精确 tx=120/alpha=0.5 · **A4 draw_delta=0**（指令构建计数全程恒定）；★语义差异如实标注（Android=RenderThread 自主插值；鸿蒙 C-API 无同形入口 ⇒ 帧回调步进） |
 | 16 | **内核驱动动画（kernel-anim）** | ✅ `kernel-anim` | ✅ | ✅ **已补** | 鸿蒙 `kernelAnimProbe`（anim_seek+updates 读数）：曲线终态**精确 120** · easeOut 半程 **105**（前快后慢，>线性 60）· 滚动联动 0/-80/-160 **精确映射**；★scroll=0 读到 -1 系内核「无变化不重发」语义（已文档化，非缺陷） |
 | 17 | **App 路由栈（M5）** | ✅ `app-stack` | ✅ `app-stack` | ✅ **已补（真机判据绿）** | 鸿蒙：`app-stack.ts` **移植副本**（零运行时依赖；逐字节同步校验 `sync-core.sh`，验收自动跑）+ 场景探针（与两端同口径 depth=20000）；`check-app-stack.py` 三端共用——①–⑥ 组全绿（**真机 ArkTS 证据**），⑦ 组如实跳过（未接 ScreenExecutor） |
-| 18 | **宿主运行时（G-39）** | ✅ `host-runtime` | ✅ `host-runtime` | ⛔ **缺** | 鸿蒙待补 |
+| 18 | **宿主运行时（G-39）** | ✅ `host-runtime` | ✅ `host-runtime` | ✅ **已补** | 鸿蒙：**JSVM(V8) eval 与两端同一份 `bundle-host-runtime.js`（零移植）** + **真生命周期转发**（HOME 键→onBackground→pause / aa start→resume，与 Android `input keyevent HOME` 同法）——**共用同一份 `check-host-runtime.py`**：A/B 状态机（created→running→suspended→running→destroyed + 四条非法转换拒绝）· **C 真壳转发**（pause→HIDE/resume→SHOW 逐条驱动能力总线）· D 队列/job 泵（EXPLICIT 微任务策略 + 宿主 checkpoint：run 未解析→finish 已解析）· E 职责边界 · F 内存账本（`GetHeapStatistics` engine 口径）· G conformance **32/32**；J/K（能力通道/事件源装配）属后续批次**如实跳过** |
 | 19 | **内存读数** | ✅ `proteus-mem` | ✅ `delta_mb` | ✅ **已补** | 鸿蒙 `hidebug.getPss()` 三段式：树 **+476KB**（4051 节点，≈120B/节点）· 4000 RenderNode **+23.3MB**（≈5.8KB/节点）· **释放不归还 OS**（分配器缓存）· **复用轮仅 +6.2MB**（首轮 26% ⇒ 分配器复用，非线性泄漏）；与 Android PSS 同口径 |
 | 20 | **截图回归** | ✅ `shot`/`shot-native` | ✅（L4/sim-selfdraw） | ◐ 截图（人工取回） | 鸿蒙：**渲染树架构修正后**色块+文字双可见（`results/render-root-arch.jpeg`）；自动化像素判据待接 |
 | 21 | **一致性快照（L2-L4）** | ✅ | ✅ | ✅ **已补** | 鸿蒙腿进六端 SFC 报告：`--ps scene stress` 渲染 SFC 夹具（44 节点，与其他五端同源）→ `uitest screenCap` 无损 PNG → `sfc.harmony.png`；**锚块读数 [16,60,80,48] 与 SFC 声明逐位相同** · 留白 16.3/16.3 过硬断言 · 跨端差异 2.44~3.09%（正常带宽内；JPEG vs PNG 曾差 0.9 点，改无损后消除） |
@@ -32,7 +32,7 @@
 
 **统计（口径 = 本表单元格「✅ + ◐ + 架构性不适用」，可逐格复算）**：
 - **Android 22/22**（✅22）
-- **鸿蒙 16/22**（✅12 + ◐3[#5/#13/#20] + 不适用1[#3]）——持续推进：4→16
+- **鸿蒙 17/22**（✅13 + ◐3[#5/#13/#20] + 不适用1[#3]）——持续推进：4→17
 - **iOS 21/22**（✅19 + ◐2[#7 手势部分/#22 帧统计]）
   ★**审计注记（2026-10-03 发现，如实披露不掩盖）**：iOS 列的历史基数写作 16/22，
   与本表单元格数（21）差 5——**增量核对无碍**（历次 +1 都与单元格变化一一对应，如 #11 补上时

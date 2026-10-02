@@ -91,6 +91,34 @@ chmod 600 ~/.harmony/hdckey ~/.harmony/hdckey.pub
 Android 走 JNI、iOS 走 staticlib、**鸿蒙走 `aarch64-unknown-linux-ohos` 交叉编译 + C ABI**（无绑定层）。
 交叉编译脚本：`bash hosts/harmony/build-rust-core.sh`（产物 `cpp/thirdparty/libproteus_layout_core.a`，gitignore）。
 
+### ✅ 第九里程碑：**宿主运行时（G-39）**（2026-10-03，矩阵 #18）
+
+> **JSVM eval 与两端同一份 `bundle-host-runtime.js`（零移植）** + **真生命周期转发**：
+> HOME 键（`uinput -K -d 1 -u 1`）→ `onBackground` → JS `__proteusHostShellLifecycle('pause')`；
+> `aa start` → `onForeground` → `('resume')`——真事件源与 Android `input keyevent HOME` 同法。
+
+**判据（与两端共用 `check-host-runtime.py`，核心组全绿）**：
+
+| 组 | 判据 | 读数（真机） |
+|---|---|---|
+| A/B | 状态机 + 四条非法转换拒绝 | created→running→suspended→running→destroyed · 拒绝记账 5 条 |
+| **C** | **真壳转发**（壳把生命周期交给 runtime） | pause→**HIDE** / resume→**SHOW**（逐条驱动能力总线） |
+| D | 队列 + **job 泵** | 挂起不推进(0) / 恢复消费(1) / 同帧消化(2) / **EXPLICIT 微任务 + 宿主 checkpoint**：run 未解析→finish 已解析 |
+| E | 职责边界 | 后台线程诚实拒绝 · 未注册调用拒绝 · 注册后 echo 成功 |
+| F | 内存账本 | `GetHeapStatistics` engine 口径：+277KB 分配 / GC 回收 −476KB |
+| G | G-41 conformance | **32/32 全过** |
+
+**采集**：`bash hosts/harmony/run-host-runtime.sh`（安装→等主报告→HOME 键→回前台→取两份报告→共用判据，零盲等）。
+
+**★三个实测坑（全记进代码注释）**：① **VM scope 缺失**（`OH_JSVM_OpenVMScope`）⇒ 逐调用报
+`API Misuse: without an active VM scope`（功能不受阻但违反契约）——`jsvmProbe`/`vaporProbe`/`hostRuntimeProbe`
+三处都补了；② **报告结构要对齐**（Android Java 把 run/finish 的键**合并进顶层**，我首版放成嵌套
+⇒ 判据报 `ok=None`）——按 Java put 覆盖语义做顶层合并；③ **J/K 分档条件按"能力面缺失"判**
+（不是"探针是否跑过"——探针会跑完 done=true 但能力为空）⇒ 将来实现自动回到严格档。
+
+**诚实边界**：J（10 项原生能力经壳转发）/K（App 级事件源三环对齐）属能力开放批次，**如实跳过**；
+鸿蒙渲染 Transform 语义差异说明见第八里程碑。
+
 ### ✅ 第八里程碑：**平台零参与动画（MA0-RT）**（2026-10-03，矩阵 #15）
 
 > **RenderNode 变换 + VSync 帧回调逐帧写属性**——动画期间应用层**零绘制、零布局**：

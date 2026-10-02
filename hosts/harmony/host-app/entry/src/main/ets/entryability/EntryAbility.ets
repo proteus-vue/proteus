@@ -8,6 +8,8 @@ import { AbilityConstant, UIAbility, Want } from '@kit.AbilityKit';
 import { hilog } from '@kit.PerformanceAnalysisKit';
 import { window } from '@kit.ArkUI';
 import { deviceInfo } from '@kit.BasicServicesKit';
+// ★矩阵 #18 C 组：真生命周期 → JS 运行时转发（G-39"壳把生命周期交给 runtime"的端上证据）
+import { hostRtShellEvent } from 'libproteus_bench.so';
 
 const DOMAIN = 0x0001;
 const TAG = 'ProteusHost';
@@ -38,9 +40,23 @@ export default class EntryAbility extends UIAbility {
 
   onForeground(): void {
     hilog.info(DOMAIN, TAG, 'PROTEUS_HOST_FOREGROUND');
+    // ★真事件 → JS 运行时（resume）——触点是**真实 Ability 生命周期**（脚本用 HOME 键驱动），
+    //   不是页内手动调（后者只能证明状态机，前者才证明"壳把生命周期交给了 runtime"）。
+    try {
+      const r: string = hostRtShellEvent('resume');
+      hilog.info(DOMAIN, TAG, 'PROTEUS_SHELL_EVENT resume %{public}s', r);
+    } catch (e) {
+      hilog.error(DOMAIN, TAG, 'PROTEUS_SHELL_EVENT_ERR resume %{public}s', JSON.stringify(e) ?? '');
+    }
   }
 
   onBackground(): void {
     hilog.info(DOMAIN, TAG, 'PROTEUS_HOST_BACKGROUND');
+    try {
+      const r: string = hostRtShellEvent('pause');
+      hilog.info(DOMAIN, TAG, 'PROTEUS_SHELL_EVENT pause %{public}s', r);
+    } catch (e) {
+      hilog.error(DOMAIN, TAG, 'PROTEUS_SHELL_EVENT_ERR pause %{public}s', JSON.stringify(e) ?? '');
+    }
   }
 }

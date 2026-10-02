@@ -53,6 +53,8 @@ function copyVapor() {
   const files = [
     ['bundle-vapor.js', path.join(ROOT, 'hosts/android/bridge/dist/bundle-vapor.js')],
     ['vapor-artifacts.json', path.join(ANDROID_ASSETS, 'vapor-artifacts.json')],
+    // ★矩阵 #18：宿主运行时 bundle（同一份 hosts/shared 产物的 android 侧构建）
+    ['bundle-host-runtime.js', path.join(ROOT, 'hosts/android/bridge/dist/bundle-host-runtime.js')],
   ]
   for (const [name, src] of files) {
     if (!fs.existsSync(src)) {

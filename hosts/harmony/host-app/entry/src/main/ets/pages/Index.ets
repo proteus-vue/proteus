@@ -21,7 +21,7 @@ import { hidebug } from '@kit.PerformanceAnalysisKit';
 // ★矩阵 #17：App 路由栈场景探针（移植副本，与 Android/iOS 同口径）
 import { runAppStackProbe } from '../core/app-stack-probe';
 import { attach, renderCommands, stats, ProteusRenderStats, platformAnimBegin, platformAnimStep, platformAnimEnd, platformAnimSave } from 'libproteus_render.so';
-import { bench4050, hitProbe, recycleProbe, spliceProbe, textProbe, kernelAnimProbe, memProbe, sfcStressProbe, sfcStressCommands, jsvmProbe, vaporProbe, animCurveBezier, version as rustVersion } from 'libproteus_bench.so';
+import { bench4050, hitProbe, recycleProbe, spliceProbe, textProbe, kernelAnimProbe, memProbe, sfcStressProbe, sfcStressCommands, jsvmProbe, vaporProbe, animCurveBezier, hostRuntimeProbe, hostRtShellInstall, version as rustVersion } from 'libproteus_bench.so';
 
 const DOMAIN = 0x0002;
 const TAG = 'ProteusRender';
@@ -157,6 +157,12 @@ interface RenderCmdFixture {
   text?: string;
   fontSize?: number;
   textColor?: number;
+}
+
+/** 宿主运行时探针入参（ArkTS 严格模式） */
+interface HostRtArgs {
+  bundle: string;
+  filesDir: string;
 }
 
 /** Vapor 探针入参（ArkTS 严格模式要求显式接口） */
@@ -535,6 +541,20 @@ struct Index {
           hilog.info(DOMAIN, BENCH_TAG, 'PROTEUS_JSVM %{public}s', jv);
         } catch (je) {
           hilog.error(DOMAIN, BENCH_TAG, 'PROTEUS_JSVM_ERROR %{public}s', JSON.stringify(je) ?? '');
+        }
+        // ★★★宿主运行时（矩阵 #18，G-39）——JSVM eval 同一份 bundle-host-runtime.js
+        try {
+          const ctxH = getContext(this);
+          const hBytes: Uint8Array = ctxH.resourceManager.getRawFileContentSync('bundle-host-runtime.js');
+          const hStr: string = util.TextDecoder.create('utf-8').decodeToString(hBytes);
+          const hArgs: HostRtArgs = { bundle: hStr, filesDir: ctxH.filesDir };
+          const hOut: string = hostRuntimeProbe(JSON.stringify(hArgs));
+          hilog.info(DOMAIN, BENCH_TAG, 'PROTEUS_HOSTRT %{public}s', hOut.substring(0, 700));
+          // ★C 组：持久壳 VM（跨 onBackground/onForeground 存活——真生命周期转发的载体）
+          const shellInstall: string = hostRtShellInstall(JSON.stringify(hArgs));
+          hilog.info(DOMAIN, BENCH_TAG, 'PROTEUS_SHELLINSTALL_JS %{public}s', shellInstall);
+        } catch (he) {
+          hilog.error(DOMAIN, BENCH_TAG, 'PROTEUS_HOSTRT_ERROR %{public}s', JSON.stringify(he) ?? '');
         }
         // ★★★Vapor 设备端链（矩阵 #14）——JSVM eval 与 Android 同一份 bundle-vapor.js
         //   ★串行执行（等前一档完成）——JSVM 全链在 UI 线程，单次 ~几百 ms（见 THREAD_BLOCK_6S 纪律）

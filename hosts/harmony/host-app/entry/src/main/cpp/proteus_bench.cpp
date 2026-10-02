@@ -1333,6 +1333,10 @@ static napi_value JsvmProbe(napi_env env, napi_callback_info info) {
     memset(&vmOpts, 0, sizeof(vmOpts));
     JSVM_VM vm = nullptr;
     JSVM_Status stVm = OH_JSVM_CreateVM(&vmOpts, &vm);
+    // ★VM scope（实测：缺它时 JSVM 逐调用报 `API Misuse: without an active VM scope`——
+    //   功能不受阻但日志噪声 + 违反 API 契约；见 hostRuntimeProbe 的同款注释）
+    JSVM_VMScope jvmScope = nullptr;
+    if (vm != nullptr) OH_JSVM_OpenVMScope(vm, &jvmScope);
     JSVM_Env jsEnv = nullptr;
     JSVM_Status stEnv = (vm != nullptr) ? OH_JSVM_CreateEnv(vm, 0, nullptr, &jsEnv) : JSVM_GENERIC_FAILURE;
     JSVM_HandleScope scope = nullptr;
@@ -1356,6 +1360,7 @@ static napi_value JsvmProbe(napi_env env, napi_callback_info info) {
         OH_JSVM_CloseHandleScope(jsEnv, scope);
     }
     if (jsEnv != nullptr) OH_JSVM_DestroyEnv(jsEnv);
+    if (vm != nullptr && jvmScope != nullptr) OH_JSVM_CloseVMScope(vm, jvmScope);
     if (vm != nullptr) OH_JSVM_DestroyVM(vm);
 
     char buf[512];
@@ -1800,6 +1805,7 @@ static napi_value VaporProbe(napi_env env, napi_callback_info info) {
     JSVM_VM vm = nullptr;
     JSVM_Env jenv = nullptr;
     JSVM_HandleScope vScope = nullptr;
+    JSVM_VMScope vmVScope = nullptr;
     if (err.empty()) {
         JSVM_InitOptions io;
         memset(&io, 0, sizeof(io));
@@ -1808,6 +1814,8 @@ static napi_value VaporProbe(napi_env env, napi_callback_info info) {
         memset(&vo, 0, sizeof(vo));
         if (OH_JSVM_CreateVM(&vo, &vm) != JSVM_OK || vm == nullptr) {
             err = "CreateVM 失败";
+        } else if (OH_JSVM_OpenVMScope(vm, &vmVScope) != JSVM_OK) {
+            err = "OpenVMScope 失败";
         } else if (OH_JSVM_CreateEnv(vm, 0, nullptr, &jenv) != JSVM_OK || jenv == nullptr) {
             err = "CreateEnv 失败";
         }
@@ -1883,6 +1891,7 @@ static napi_value VaporProbe(napi_env env, napi_callback_info info) {
     }
     if (jenv != nullptr && vScope != nullptr) OH_JSVM_CloseHandleScope(jenv, vScope);
     if (jenv != nullptr) OH_JSVM_DestroyEnv(jenv);
+    if (vm != nullptr && vmVScope != nullptr) OH_JSVM_CloseVMScope(vm, vmVScope);
     if (vm != nullptr) OH_JSVM_DestroyVM(vm);
 
     // 包装（与 Android vapor.json 顶层同形）
@@ -1929,6 +1938,437 @@ static napi_value VaporProbe(napi_env env, napi_callback_info info) {
     return out;
 }
 
+/* ═══════════════════ 矩阵 #18：宿主运行时（G-39）—— JSVM eval 同一份 bundle-host-runtime.js ═══════════════════
+ *
+ * 【与 Android/iOS 的关系】同一份 `hosts/shared/bridge/entry-host-runtime.ts`（两端已共用）——
+ *   鸿蒙**零移植**：JSVM(V8) 直接 eval 同一份产物；宿主桥 memUsage/gc 用 JSVM 的
+ *   `GetHeapStatistics`（usedHeapSize，engine 口径——与 Android QuickJS JS_ComputeMemoryUsage 同档）。
+ *
+ * 【job 泵（D 组核心）】JSVM 的 Promise 续体走 microtask：`SetMicrotaskPolicy(EXPLICIT)` +
+ *   `PerformMicrotaskCheckpoint` 就是 QuickJS `JS_ExecutePendingJob` 的等价物——
+ *   "事件循环归属宿主"在此可**真验**（run 相位未解析 → 宿主泵 → finish 相位已解析）。
+ *
+ * 【诚实边界】I/J/K 组（能力开放/App 原生能力/壳生命周期事件）需要在宿主侧实现能力通道与事件源——
+ *   属后续批次；本探针先交 A–F 核心组（状态机/拒绝/队列/职责边界/内存/job 泵）。
+ *   `proteusHost.invoke` 未注入 ⇒ 能力组诚实记 pending（不伪造）。
+ */
+
+/** memUsage 的 JSON（engine 口径；字段名与 QuickJS 壳同契约：memory_used_size/obj_count/scope） */
+static std::string hostMemUsageJson(JSVM_VM vm) {
+    JSVM_HeapStatistics hs;
+    memset(&hs, 0, sizeof(hs));
+    OH_JSVM_GetHeapStatistics(vm, &hs);
+    char buf[220];
+    snprintf(buf, sizeof(buf),
+             "{\"memory_used_size\":%zu,\"obj_count\":%zu,\"scope\":\"engine\","
+             "\"total_heap_size\":%zu,\"peak_malloced\":%zu}",
+             hs.usedHeapSize, hs.numberOfNativeContexts, hs.totalHeapSize, hs.peakMallocedMemory);
+    return buf;
+}
+
+/** JSVM 回调：memUsage（返回 JSON 字符串） */
+static JSVM_Value HostMemUsageCb(JSVM_Env env, JSVM_CallbackInfo info) {
+    (void)info;
+    JSVM_VM vm = nullptr;
+    OH_JSVM_GetVM(env, &vm);
+    std::string out = vm != nullptr ? hostMemUsageJson(vm) : "{\"memory_used_size\":0,\"obj_count\":0,\"scope\":\"engine\"}";
+    JSVM_Value r = nullptr;
+    OH_JSVM_CreateStringUtf8(env, out.c_str(), out.size(), &r);
+    return r;
+}
+
+/** JSVM 回调：gc（MemoryPressureLevel 触发 GC——返回 "ok" 字符串，与 QuickJS 壳同契约） */
+static JSVM_Value HostGcCb(JSVM_Env env, JSVM_CallbackInfo info) {
+    (void)info;
+    OH_JSVM_MemoryPressureNotification(env, JSVM_MEMORY_PRESSURE_LEVEL_CRITICAL);
+    JSVM_Value r = nullptr;
+    OH_JSVM_CreateStringUtf8(env, "\"ok\"", 4, &r);
+    return r;
+}
+
+/** 取 JS 全局属性（字符串） */
+static bool jsGetStr(JSVM_Env env, JSVM_Value obj, const char* name, std::string* out) {
+    JSVM_Value v = nullptr;
+    if (OH_JSVM_GetNamedProperty(env, obj, name, &v) != JSVM_OK) return false;
+    return jsvmStr(env, v, out);
+}
+
+/**
+ * hostRuntimeProbe(argsJson): string(JSON)
+ *   argsJson = { bundle, filesDir?, hostId? }
+ *   流程：JSVM VM/Env（EXPLICIT microtask）→ 注入 proteusHost{memUsage,gc} + 平台全局
+ *   → eval bundle → `__proteusHostRun()` → 读 async_resolved_at_run → `PerformMicrotaskCheckpoint()`
+ *   （**宿主 job 泵**）→ `__proteusHostFinish()` → 组装同形报告（Android 字段名）。
+ */
+static napi_value HostRuntimeProbe(napi_env env, napi_callback_info info) {
+    size_t argc = 1;
+    napi_value args[1] = {nullptr};
+    napi_get_cb_info(env, info, &argc, args, nullptr, nullptr);
+    std::string argsJson;
+    if (argc >= 1) {
+        size_t len = 0;
+        napi_get_value_string_utf8(env, args[0], nullptr, 0, &len);
+        argsJson.resize(len + 1);
+        napi_get_value_string_utf8(env, args[0], &argsJson[0], len + 1, &len);
+        argsJson.resize(len);
+    }
+    std::string bundle, filesDir;
+    jstr(argsJson.c_str(), argsJson.size(), "bundle", &bundle);
+    jstr(argsJson.c_str(), argsJson.size(), "filesDir", &filesDir);
+    std::string err;
+    std::string runValue, finValue;
+    int jobsPumped = 0;
+    bool engineAvailable = true;
+
+    JSVM_VM vm = nullptr;
+    JSVM_Env jenv = nullptr;
+    JSVM_HandleScope scope = nullptr;
+    JSVM_VMScope vmScope = nullptr;
+    JSVM_InitOptions io;
+    memset(&io, 0, sizeof(io));
+    OH_JSVM_Init(&io);
+    JSVM_CreateVMOptions vo;
+    memset(&vo, 0, sizeof(vo));
+    if (OH_JSVM_CreateVM(&vo, &vm) != JSVM_OK || vm == nullptr) {
+        err = "CreateVM 失败";
+        engineAvailable = false;
+    } else if (OH_JSVM_OpenVMScope(vm, &vmScope) != JSVM_OK) {
+        // ★★VM scope 必须开（本轮真机实测：缺它时 `PerformMicrotaskCheckpoint` 报
+        //   `[JSVM API Misuse][E01] API called without an active VM scope`——
+        //   而那条正是我们赖以证明"job 泵归宿主"的调用；不开 scope 等于证据链建在沙子上）
+        err = "OpenVMScope 失败";
+    } else if (OH_JSVM_CreateEnv(vm, 0, nullptr, &jenv) != JSVM_OK || jenv == nullptr) {
+        err = "CreateEnv 失败";
+    } else if (OH_JSVM_OpenHandleScope(jenv, &scope) != JSVM_OK) {
+        err = "OpenHandleScope 失败";
+    } else {
+        // ★EXPLICIT 微任务策略（API 18+）：Promise 续体不自动跑，必须宿主显式 checkpoint
+        //   ——"事件循环归属宿主"的机器可验形态（对应 QuickJS 的 pending job 队列）
+        if (OH_JSVM_SetMicrotaskPolicy(vm, JSVM_MICROTASK_EXPLICIT) != JSVM_OK) {
+            // 策略设置失败不阻断（退化为 AUTO）——如实记入报告
+            err = "microtask-policy-failed";
+        }
+    }
+    if (err.empty() || err == "microtask-policy-failed") {
+        bool policyOk = err.empty();
+        err.clear();
+        // 平台全局（bundle 在**加载时**读它们 ⇒ 必须先注入再 eval——与 Android 同坑注释）
+        JSVM_Value srcId = nullptr;
+        OH_JSVM_CreateStringUtf8(jenv, "globalThis.__PROTEUS_HOST_ID__ = 'harmony';"
+                                       "globalThis.__PROTEUS_HOST_FRAME_DRIVER__ = 'VSync(postFrameCallback)';",
+                                 JSVM_AUTO_LENGTH, &srcId);
+        JSVM_Script scId = nullptr;
+        bool cr = false;
+        if (OH_JSVM_CompileScript(jenv, srcId, nullptr, 0, false, &cr, &scId) == JSVM_OK) {
+            JSVM_Value rr = nullptr;
+            OH_JSVM_RunScript(jenv, scId, &rr);
+        }
+        // 宿主桥：memUsage / gc（无 post/invoke —— invoke 未实现 ⇒ 能力组诚实 pending）
+        JSVM_Value host = nullptr;
+        OH_JSVM_CreateObject(jenv, &host);
+        struct NamedFn { const char* name; JSVM_CallbackStruct cb; };
+        NamedFn fns[] = {{"memUsage", {HostMemUsageCb, nullptr}}, {"gc", {HostGcCb, nullptr}}};
+        for (auto& f : fns) {
+            JSVM_Value fn = nullptr;
+            OH_JSVM_CreateFunction(jenv, f.name, JSVM_AUTO_LENGTH, &f.cb, &fn);
+            OH_JSVM_SetNamedProperty(jenv, host, f.name, fn);
+        }
+        JSVM_Value global = nullptr;
+        OH_JSVM_GetGlobal(jenv, &global);
+        OH_JSVM_SetNamedProperty(jenv, global, "proteusHost", host);
+
+        // eval bundle
+        JSVM_Value src = nullptr;
+        OH_JSVM_CreateStringUtf8(jenv, bundle.c_str(), bundle.size(), &src);
+        JSVM_Script script = nullptr;
+        if (OH_JSVM_CompileScript(jenv, src, nullptr, 0, false, &cr, &script) != JSVM_OK) {
+            err = "bundle 编译失败";
+        } else {
+            JSVM_Value rr = nullptr;
+            if (OH_JSVM_RunScript(jenv, script, &rr) != JSVM_OK) {
+                err = "bundle 执行失败";
+            }
+        }
+        // ① run 相位
+        if (err.empty()) {
+            JSVM_Value fnRun = nullptr;
+            if (OH_JSVM_GetNamedProperty(jenv, global, "__proteusHostRun", &fnRun) != JSVM_OK) {
+                err = "缺 __proteusHostRun";
+            } else {
+                JSVM_Value undef = nullptr;
+                OH_JSVM_GetUndefined(jenv, &undef);
+                JSVM_Value res = nullptr;
+                if (OH_JSVM_CallFunction(jenv, undef, fnRun, 0, nullptr, &res) != JSVM_OK) {
+                    err = "run 相位失败";
+                } else {
+                    jsvmStr(jenv, res, &runValue);
+                }
+            }
+        }
+        // ② **宿主 job 泵**（EXPLICIT 策略下只有这里能跑续体）
+        if (err.empty()) {
+            if (policyOk) {
+                OH_JSVM_PerformMicrotaskCheckpoint(vm);
+                jobsPumped = 1;   // 显式 checkpoint 已执行（计数语义：本探针泵了 1 次）
+            }
+        }
+        // ③ finish 相位
+        if (err.empty()) {
+            JSVM_Value fnFin = nullptr;
+            if (OH_JSVM_GetNamedProperty(jenv, global, "__proteusHostFinish", &fnFin) != JSVM_OK) {
+                err = "缺 __proteusHostFinish";
+            } else {
+                JSVM_Value undef = nullptr;
+                OH_JSVM_GetUndefined(jenv, &undef);
+                JSVM_Value res = nullptr;
+                if (OH_JSVM_CallFunction(jenv, undef, fnFin, 0, nullptr, &res) != JSVM_OK) {
+                    err = "finish 相位失败";
+                } else {
+                    jsvmStr(jenv, res, &finValue);
+                }
+            }
+        }
+    }
+    if (jenv != nullptr && scope != nullptr) OH_JSVM_CloseHandleScope(jenv, scope);
+    if (jenv != nullptr) OH_JSVM_DestroyEnv(jenv);
+    if (vm != nullptr && vmScope != nullptr) OH_JSVM_CloseVMScope(vm, vmScope);
+    if (vm != nullptr) OH_JSVM_DestroyVM(vm);
+
+    // ── 组装同形报告（Android 顶层字段名）──
+    //   ★★结构对齐（判据红过一轮）：Android 的 Java 侧把 run/finish 的键**合并进顶层**
+    //   （`out.put(k, r.get(k))` 逐键拷贝）——首版放成嵌套 `run:{...}` ⇒ 判据在顶层找不到
+    //   `state_created` 等字段 ⇒ 报"bundle/入口失败：ok=None"。⇒ 这里做同款**顶层合并**
+    //   （run 在前 finish 在后 ⇒ 同键后者胜，与 Java put 覆盖语义一致），并补顶层 `ok`。
+    bool loadOk = err.empty() || (err != "bundle 编译失败" && err != "bundle 执行失败");
+    bool runOk = !runValue.empty();
+    // finish.async_resolved（job 泵证据链的终点）
+    bool finAsync = false;
+    {
+        std::string v;
+        if (!finValue.empty() && jstr(finValue.c_str(), finValue.size(), "async_resolved", &v)) {
+            finAsync = (v == "true");
+        }
+    }
+    std::string wrapper = "{";
+    { char b[320]; snprintf(b, sizeof(b),
+        "\"engine_available\":%s,\"bundle_chars\":%zu,\"bundle_load_ok\":%s,\"run_ok\":%s,\"finish_ok\":%s,"
+        "\"jobs_pumped\":%d,\"host_id\":\"harmony\",\"frame_driver\":\"VSync(postFrameCallback)\","
+        "\"mem_scope\":\"engine\",\"ok\":%s",
+        engineAvailable ? "true" : "false", bundle.size(), loadOk ? "true" : "false",
+        runOk ? "true" : "false", finValue.empty() ? "false" : "true", jobsPumped,
+        (runOk && finAsync) ? "true" : "false");
+      wrapper += b; }
+    if (!err.empty()) wrapper += ",\"error\":\"" + jsonEscape(err) + "\"";
+    // 顶层合并（剥外层大括号后拼接；字符串感知——JSON.stringify 产物无浮点逗号歧义）
+    auto stripBraces = [](const std::string& o) -> std::string {
+        if (o.size() < 2) return "";
+        return o.substr(1, o.size() - 2);
+    };
+    if (!runValue.empty()) {
+        std::string body = stripBraces(runValue);
+        if (!body.empty()) wrapper += "," + body;
+    }
+    if (!finValue.empty()) {
+        std::string body = stripBraces(finValue);
+        if (!body.empty()) wrapper += "," + body;
+    }
+    wrapper += "}";
+    if (!filesDir.empty()) {
+        std::string path = filesDir + "/host-runtime.json";
+        FILE* f = fopen(path.c_str(), "w");
+        if (f != nullptr) {
+            fwrite(wrapper.data(), 1, wrapper.size(), f);
+            fclose(f);
+            OH_LOG_Print(LOG_APP, LOG_INFO, PROTEUS_BENCH_DOMAIN, PROTEUS_BENCH_TAG,
+                         "PROTEUS_HOSTRT_FILESAVED path=%{public}s bytes=%{public}zu", path.c_str(), wrapper.size());
+        } else {
+            OH_LOG_Print(LOG_APP, LOG_ERROR, PROTEUS_BENCH_DOMAIN, PROTEUS_BENCH_TAG,
+                         "PROTEUS_HOSTRT_FILESAVE_FAIL path=%{public}s", path.c_str());
+        }
+    }
+    OH_LOG_Print(LOG_APP, LOG_INFO, PROTEUS_BENCH_DOMAIN, PROTEUS_BENCH_TAG,
+                 "PROTEUS_HOSTRT_DONE err=%{public}s run_len=%{public}zu fin_len=%{public}zu",
+                 err.empty() ? "none" : err.c_str(), runValue.size(), finValue.size());
+    napi_value out;
+    napi_create_string_utf8(env, wrapper.c_str(), NAPI_AUTO_LENGTH, &out);
+    return out;
+}
+
+/* ── 矩阵 #18 C 组：**持久 VM**（壳转发用——跨事件存活，不销毁；与 Android 的 shellRt 同构） ──
+ *
+ * 【为什么持久】壳转发的运行时代表"App 进程"本身（Android 注释同语）：它要跨多次
+ *   onBackground/onForeground 存活，事件之间状态机保持（suspend 之后 resume 才是同一实例）。
+ *   探针 VM（hostRuntimeProbe）是一次性的；本 VM 由 `hostRtShellInstall` 建立后**不销毁**。
+ */
+static JSVM_VM g_shellVm = nullptr;
+static JSVM_Env g_shellEnv = nullptr;
+static JSVM_HandleScope g_shellScope = nullptr;
+static JSVM_VMScope g_shellVmVScope = nullptr;
+static std::string g_shellDir;
+static int g_shellAttempts = 0;   // 真事件回调次数（宿主侧计数）
+static int g_shellPushes = 0;     // 成功推入 JS 次数
+static std::string g_shellHookState = "none";  // none / installed / no-hook
+
+/** eval 一个表达式并取回字符串结果（持久 VM 上使用） */
+static bool jsvmEvalStr(JSVM_Env jenv, const char* expr, std::string* out) {
+    JSVM_Value src = nullptr;
+    OH_JSVM_CreateStringUtf8(jenv, expr, JSVM_AUTO_LENGTH, &src);
+    JSVM_Script script = nullptr;
+    bool cr = false;
+    if (OH_JSVM_CompileScript(jenv, src, nullptr, 0, false, &cr, &script) != JSVM_OK) return false;
+    JSVM_Value res = nullptr;
+    if (OH_JSVM_RunScript(jenv, script, &res) != JSVM_OK) return false;
+    if (out != nullptr) return jsvmStr(jenv, res, out);
+    return true;
+}
+
+/**
+ * hostRtShellInstall(argsJson {bundle, filesDir}): string(JSON)
+ *   懒建持久 VM/Env（EXPLICIT 微任务）→ 注入 proteusHost{memUsage,gc} + 平台全局 → eval bundle
+ *   → 检查 `__proteusHostShellLifecycle` 钩子。**已安装则跳过**（幂等）。
+ */
+static napi_value HostRtShellInstall(napi_env env, napi_callback_info info) {
+    size_t argc = 1;
+    napi_value args[1] = {nullptr};
+    napi_get_cb_info(env, info, &argc, args, nullptr, nullptr);
+    std::string argsJson;
+    if (argc >= 1) {
+        size_t len = 0;
+        napi_get_value_string_utf8(env, args[0], nullptr, 0, &len);
+        argsJson.resize(len + 1);
+        napi_get_value_string_utf8(env, args[0], &argsJson[0], len + 1, &len);
+        argsJson.resize(len);
+    }
+    std::string bundle, filesDir;
+    jstr(argsJson.c_str(), argsJson.size(), "bundle", &bundle);
+    jstr(argsJson.c_str(), argsJson.size(), "filesDir", &filesDir);
+    if (!filesDir.empty()) g_shellDir = filesDir;
+
+    if (g_shellEnv != nullptr) {
+        napi_value out;
+        std::string r = "{\"ok\":true,\"already\":true,\"hook\":\"" + g_shellHookState + "\"}";
+        napi_create_string_utf8(env, r.c_str(), NAPI_AUTO_LENGTH, &out);
+        return out;
+    }
+    std::string err;
+    if (bundle.empty()) err = "缺 bundle";
+    JSVM_InitOptions io;
+    memset(&io, 0, sizeof(io));
+    OH_JSVM_Init(&io);
+    JSVM_CreateVMOptions vo;
+    memset(&vo, 0, sizeof(vo));
+    if (err.empty()) {
+        if (OH_JSVM_CreateVM(&vo, &g_shellVm) != JSVM_OK || g_shellVm == nullptr) {
+            err = "CreateVM 失败";
+        } else if (OH_JSVM_OpenVMScope(g_shellVm, &g_shellVmVScope) != JSVM_OK) {
+            err = "OpenVMScope 失败";
+        } else if (OH_JSVM_CreateEnv(g_shellVm, 0, nullptr, &g_shellEnv) != JSVM_OK || g_shellEnv == nullptr) {
+            err = "CreateEnv 失败";
+        } else if (OH_JSVM_OpenHandleScope(g_shellEnv, &g_shellScope) != JSVM_OK) {
+            err = "OpenHandleScope 失败";
+        } else if (OH_JSVM_SetMicrotaskPolicy(g_shellVm, JSVM_MICROTASK_EXPLICIT) != JSVM_OK) {
+            err = "microtask-policy 失败";
+        }
+    }
+    if (err.empty()) {
+        jsvmEvalStr(g_shellEnv,
+                    "globalThis.__PROTEUS_HOST_ID__ = 'harmony';"
+                    "globalThis.__PROTEUS_HOST_FRAME_DRIVER__ = 'VSync(postFrameCallback)';", nullptr);
+        JSVM_Value host = nullptr;
+        OH_JSVM_CreateObject(g_shellEnv, &host);
+        struct NamedFn { const char* name; JSVM_CallbackStruct cb; };
+        NamedFn fns[] = {{"memUsage", {HostMemUsageCb, nullptr}}, {"gc", {HostGcCb, nullptr}}};
+        for (auto& f : fns) {
+            JSVM_Value fn = nullptr;
+            OH_JSVM_CreateFunction(g_shellEnv, f.name, JSVM_AUTO_LENGTH, &f.cb, &fn);
+            OH_JSVM_SetNamedProperty(g_shellEnv, host, f.name, fn);
+        }
+        JSVM_Value global = nullptr;
+        OH_JSVM_GetGlobal(g_shellEnv, &global);
+        OH_JSVM_SetNamedProperty(g_shellEnv, global, "proteusHost", host);
+        // eval bundle（IIFE——加载即注册钩子）
+        JSVM_Value src = nullptr;
+        OH_JSVM_CreateStringUtf8(g_shellEnv, bundle.c_str(), bundle.size(), &src);
+        JSVM_Script script = nullptr;
+        bool cr = false;
+        if (OH_JSVM_CompileScript(g_shellEnv, src, nullptr, 0, false, &cr, &script) != JSVM_OK) {
+            err = "bundle 编译失败";
+        } else {
+            JSVM_Value rr = nullptr;
+            if (OH_JSVM_RunScript(g_shellEnv, script, &rr) != JSVM_OK) err = "bundle 执行失败";
+        }
+    }
+    if (err.empty()) {
+        std::string hook;
+        jsvmEvalStr(g_shellEnv, "typeof __proteusHostShellLifecycle", &hook);
+        g_shellHookState = (hook == "function") ? "installed" : "no-hook";
+    }
+    char buf[256];
+    snprintf(buf, sizeof(buf), "{\"ok\":%s,\"hook\":\"%s\"%s%s}",
+             err.empty() ? "true" : "false", g_shellHookState.c_str(),
+             err.empty() ? "" : ",\"error\":\"", err.empty() ? "" : (jsonEscape(err) + "\"").c_str());
+    OH_LOG_Print(LOG_APP, LOG_INFO, PROTEUS_BENCH_DOMAIN, PROTEUS_BENCH_TAG,
+                 "PROTEUS_SHELLINSTALL %{public}s", buf);
+    napi_value out;
+    napi_create_string_utf8(env, buf, NAPI_AUTO_LENGTH, &out);
+    return out;
+}
+
+/**
+ * hostRtShellEvent(evt): string(JSON)
+ *   真事件转发：`__proteusHostShellLifecycle('pause'|'resume')` → **宿主泵 job**
+ *   （EXPLICIT 策略下 checkpoint 是唯一跑续体的地方）→ `__proteusHostShellQuery()` →
+ *   写 host-shell.json（与 Android writeReport 同形）。宿主侧独立记账 attempts/pushes。
+ */
+static napi_value HostRtShellEvent(napi_env env, napi_callback_info info) {
+    size_t argc = 1;
+    napi_value args[1] = {nullptr};
+    napi_get_cb_info(env, info, &argc, args, nullptr, nullptr);
+    std::string evt = "pause";
+    if (argc >= 1 && args[0] != nullptr) {
+        size_t len = 0;
+        napi_get_value_string_utf8(env, args[0], nullptr, 0, &len);
+        evt.resize(len + 1);
+        napi_get_value_string_utf8(env, args[0], &evt[0], len + 1, &len);
+        evt.resize(len);
+    }
+    g_shellAttempts++;
+    std::string out = "{\"ok\":false,\"reason\":\"shell-not-installed\"}";
+    if (g_shellEnv != nullptr && g_shellHookState == "installed") {
+        std::string expr = "String(__proteusHostShellLifecycle('" + evt + "'))";
+        std::string n;
+        if (jsvmEvalStr(g_shellEnv, expr.c_str(), &n)) {
+            bool pushed = !n.empty() && n != "no-hook";
+            if (pushed) g_shellPushes++;
+            OH_JSVM_PerformMicrotaskCheckpoint(g_shellVm);   // 宿主 job 泵（壳转发语义）
+            std::string q;
+            if (jsvmEvalStr(g_shellEnv, "__proteusHostShellQuery()", &q) && !q.empty()) {
+                if (!g_shellDir.empty()) {
+                    std::string path = g_shellDir + "/host-shell.json";
+                    FILE* f = fopen(path.c_str(), "w");
+                    if (f != nullptr) {
+                        fwrite(q.data(), 1, q.size(), f);
+                        fclose(f);
+                    }
+                }
+                char b[220];
+                snprintf(b, sizeof(b),
+                         "{\"ok\":true,\"evt\":\"%s\",\"count\":%s,\"pushed\":%s,\"attempts\":%d,\"pushes\":%d}",
+                         evt.c_str(), n.c_str(), pushed ? "true" : "false", g_shellAttempts, g_shellPushes);
+                out = b;
+            }
+        } else {
+            out = "{\"ok\":false,\"reason\":\"eval-failed\"}";
+        }
+    }
+    OH_LOG_Print(LOG_APP, LOG_INFO, PROTEUS_BENCH_DOMAIN, PROTEUS_BENCH_TAG,
+                 "PROTEUS_SHELLEVENT evt=%{public}s attempts=%{public}d pushes=%{public}d",
+                 evt.c_str(), g_shellAttempts, g_shellPushes);
+    napi_value r;
+    napi_create_string_utf8(env, out.c_str(), NAPI_AUTO_LENGTH, &r);
+    return r;
+}
+
 /** animCurveBezier(curveId): string(JSON) —— 内核曲线采样（矩阵 #15 A1："贝塞尔来自内核"） */
 static napi_value AnimCurveBezier(napi_env env, napi_callback_info info) {
     size_t argc = 1;
@@ -1973,6 +2413,9 @@ static napi_value BenchInit(napi_env env, napi_value exports) {
         {"jsvmProbe", nullptr, JsvmProbe, nullptr, nullptr, nullptr, napi_default, nullptr},
         {"vaporProbe", nullptr, VaporProbe, nullptr, nullptr, nullptr, napi_default, nullptr},
         {"animCurveBezier", nullptr, AnimCurveBezier, nullptr, nullptr, nullptr, napi_default, nullptr},
+        {"hostRuntimeProbe", nullptr, HostRuntimeProbe, nullptr, nullptr, nullptr, napi_default, nullptr},
+        {"hostRtShellInstall", nullptr, HostRtShellInstall, nullptr, nullptr, nullptr, napi_default, nullptr},
+        {"hostRtShellEvent", nullptr, HostRtShellEvent, nullptr, nullptr, nullptr, napi_default, nullptr},
         {"version", nullptr, BenchVersion, nullptr, nullptr, nullptr, napi_default, nullptr},
     };
     napi_define_properties(env, exports, sizeof(desc) / sizeof(desc[0]), desc);
