@@ -1,7 +1,7 @@
 {
   "end": "app",
   "format": "proteus-geometry-snapshot",
-  "node_count": 5,
+  "node_count": 6,
   "ok": true,
   "root": {
     "children": [
@@ -45,6 +45,16 @@
         "w": 300.0,
         "x": 12.0,
         "y": 128.0
+      },
+      {
+        "children": [],
+        "depth": 1,
+        "h": 30.0,
+        "nodeId": 6,
+        "path": "3",
+        "w": 50.0,
+        "x": 19.0,
+        "y": 233.0
       }
     ],
     "depth": 0,

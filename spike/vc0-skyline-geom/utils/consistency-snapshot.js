@@ -188,7 +188,8 @@ function buildStyleSnapshot(opts) {
         } else if (key === 'width' || key === 'height'
                    || key === 'min-width' || key === 'max-width'
                    || key === 'min-height' || key === 'max-height'
-                   || key === 'flex-grow' || key === 'flex-shrink' || key === 'gap') {
+                   || key === 'flex-grow' || key === 'flex-shrink' || key === 'gap'
+                   || key === 'top' || key === 'left') {
           // ★布局族数值项（auto/none/normal ⇒ normalizeLength 返回 null ⇒ 不产出——与 TS 版同口径）
           var nv3 = normalizeLength(val)
           if (nv3 !== null) styles[camelKey] = nv3
@@ -260,6 +261,7 @@ var VC3B_KEYS = [
   'min-width', 'max-width', 'min-height', 'max-height',
   'flex-direction', 'justify-content', 'align-items', 'align-self',
   'flex-grow', 'flex-shrink', 'gap', 'overflow',
+  'top', 'left',   // ★覆盖收官：偏移定位（条件可见：仅 position 非 static 时产出）
 ]
 
 /**

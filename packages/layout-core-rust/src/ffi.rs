@@ -4417,6 +4417,9 @@ mod tests {
                 {"id": 3, "parentId": 1, "width": 160.0, "height": 40.0, "flexShrink": 0.0, "text": "Hello", "tag": "p-text", "margin": {"top": 0.0, "right": 0.0, "bottom": 8.0, "left": 0.0}},
                 {"id": 4, "parentId": 1, "width": 300.0, "height": 100.0, "flexShrink": 0.0, "tag": "p-box", "padding": {"top": 8.0, "right": 8.0, "bottom": 8.0, "left": 8.0}},
                 {"id": 5, "parentId": 4, "width": 100.0, "height": 24.0, "flexShrink": 0.0, "tag": "p-box", "margin": {"top": 4.0, "right": 0.0, "bottom": 0.0, "left": 4.0}},
+                // ★覆盖收官：绝对定位节点（与 Web/小程序夹具同构——top/left 需要相对定位的父容器语义）
+                {"id": 6, "parentId": 1, "width": 50.0, "height": 30.0, "flexShrink": 0.0, "position": "relative", "tag": "p-box",
+                 "top": 5.0, "left": 7.0},
             ]
         });
         let h = unsafe { proteus_layout_create(std::ffi::CString::new(tree.to_string()).unwrap().as_ptr()) };

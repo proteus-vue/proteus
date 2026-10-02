@@ -66,33 +66,105 @@ function validateAllowList() {
   return { errs, items }
 }
 
-/* ── ② M4：L1 变异测试（注入 → 跑校验 → 数捕获） ── */
-async function runL1Mutation() {
+/* ── ② M4：变异测试（注入 → 跑校验 → 数捕获）── */
+//
+// ★★扩容（2026-10-02·二批）：从"只测 L1 边界规则"扩到**三层**：
+//   · L1：编译期边界规则（CSS 注入 → checkProfileBoundary）
+//   · L2：几何比对（构造带已知偏差的快照对 → compareGeometry 必须检出）
+//   · L3：样式比对（构造颜色/字族偏差 → compareStyle 必须检出——**含 §7.4 按钮变色反例**）
+//   全部用**合成快照**（不需设备/不需构建）——这是"校验机制本身有效"的机器证据。
+async function runMutationTests() {
   const cssCompat = await import(pathToFileURL(path.join(ROOT, 'packages', 'css-compat', 'dist', 'index.js')).href)
   const { checkProfileBoundary } = cssCompat
-  // 算子：{ id, 注入（CSS 片段）, 期望：是否被捕获 }
-  const operators = [
-    { id: 'PB-overflow-scroll', inject: '.x { overflow: scroll; }', expectCaught: true, note: '官方只认 hidden/visible' },
-    { id: 'PB-display-grid', inject: '.x { display: grid; }', expectCaught: true, note: '官方只认 none/flex/block' },
-    { id: 'PB-position-sticky', inject: '.x { position: sticky; }', expectCaught: true, note: '官方只认 relative/absolute/fixed' },
-    { id: 'PB-ctrl-legal-overflow', inject: '.x { overflow: hidden; }', expectCaught: false, note: '对照组（合法值不应误报）' },
-    { id: 'PB-ctrl-escaped', inject: '/* proteus-allow-profile: 业务验证过 */\n.x { overflow: scroll; }', expectCaught: false, note: '对照组（escape hatch 应放行）' },
-  ]
+  const consistency = await import(pathToFileURL(path.join(ROOT, 'packages', 'consistency', 'dist', 'index.js')).href)
+  const { compareGeometry, compareStyle, resolveTolerance } = consistency
+  const tolCfg = resolveTolerance(JSON.parse(fs.readFileSync(path.join(ROOT, 'docs/consistency-tolerance.json'), 'utf-8')))
+
+  /** 合成几何快照（与三端夹具同构：root > box > text） */
+  const geoSnap = (dx = 0, dw = 0) => ({
+    format: 'proteus-geometry-snapshot', version: 1, end: 'web',
+    viewport: { width: 400, height: 600 },
+    root: {
+      nodeId: 1, path: '', x: 0, y: 0, w: 400, h: 600, depth: 0,
+      children: [{
+        nodeId: 2, path: '0', x: 12 + dx, y: 12, w: 200 + dw, h: 60, depth: 1, semanticKey: 'p-box',
+        children: [{ nodeId: 3, path: '0.0', x: 16, y: 20, w: 120, h: 24, depth: 2, semanticKey: 'p-text', children: [] }],
+      }],
+    },
+  })
+  /** 合成样式快照 */
+  const styleSnap = (mut = {}) => ({
+    format: 'proteus-style-snapshot', version: 1, end: 'web',
+    nodes: [{
+      nodeId: 2, path: '0',
+      styles: {
+        backgroundColor: { r: 47, g: 111, b: 237, a: 1 }, color: { r: 255, g: 255, b: 255, a: 1 },
+        fontSize: 16, fontWeight: 700, fontFamily: 'PingFang SC',
+        width: 200, display: 'flex', overflow: 'visible', opacity: 1,
+        ...mut,
+      },
+    }],
+  })
+  // 算子：{ id, 层, 跑法, 期望是否被捕获 }
   const results = []
-  for (const op of operators) {
-    const r = checkProfileBoundary(op.inject)
-    const caught = r.violations.length > 0
-    results.push({ id: op.id, caught, expected: op.expectCaught, ok: caught === op.expectCaught, note: op.note })
+  const run = (id, layer, note, expectCaught, fn) => {
+    let caught = false
+    try {
+      caught = fn()
+    } catch (e) {
+      // 算子自身抛错 ⇒ 视为**未捕获 + 记因**（不静默）
+      results.push({ id, layer, caught: false, expected: expectCaught, ok: false, note: `${note}｜算子抛错：${String(e?.message ?? e).slice(0, 80)}` })
+      return
+    }
+    results.push({ id, layer, caught, expected: expectCaught, ok: caught === expectCaught, note })
   }
+
+  /* ── L1：编译期边界规则 ── */
+  run('L1-overflow-scroll', 'L1', '官方只认 hidden/visible', true, () => checkProfileBoundary('.x { overflow: scroll; }').violations.length > 0)
+  run('L1-display-grid', 'L1', '官方只认 none/flex/block', true, () => checkProfileBoundary('.x { display: grid; }').violations.length > 0)
+  run('L1-position-sticky', 'L1', '官方只认 relative/absolute/fixed', true, () => checkProfileBoundary('.x { position: sticky; }').violations.length > 0)
+  run('L1-ctrl-legal', 'L1', '对照组：合法值不应误报', false, () => checkProfileBoundary('.x { overflow: hidden; }').violations.length > 0)
+  run('L1-ctrl-escaped', 'L1', '对照组：escape hatch 应放行', false, () => checkProfileBoundary('/* proteus-allow-profile: 业务验证过 */\n.x { overflow: scroll; }').violations.length > 0)
+
+  /* ── L2：几何比对（间距偏移 / 尺寸偏移 / 节点缺失 / 层级错位）── */
+  const geoCaught = (a, b) => !compareGeometry(a, b, { tolerance: tolCfg }).ok
+  run('L2-margin-shift', 'L2', '间距偏移 3px（超 1px 容差）必须检出', true, () => geoCaught(geoSnap(), geoSnap(3)))
+  run('L2-width-shift', 'L2', '尺寸偏移 2px 必须检出', true, () => geoCaught(geoSnap(), geoSnap(0, 2)))
+  run('L2-node-missing', 'L2', '节点缺失必须检出（结构级）', true, () => {
+    const b = geoSnap()
+    b.root.children[0].children = []
+    return geoCaught(geoSnap(), b)
+  })
+  run('L2-depth-mismatch', 'L2', '层级错位必须检出', true, () => {
+    const b = geoSnap()
+    b.root.children[0].children[0].depth = 3
+    return geoCaught(geoSnap(), b)
+  })
+  run('L2-ctrl-within-tol', 'L2', '对照组：0.5px 在容差内不应报', false, () => geoCaught(geoSnap(), geoSnap(0.5)))
+
+  /* ── L3：样式比对（颜色 1/255 / 字族回退 / 枚举 / 标量）── */
+  const styleCaught = (mut, opts) => !compareStyle(styleSnap(), styleSnap(mut), { tolerance: tolCfg, ...(opts ?? {}) }).ok
+  run('L3-color-shift-1of255', 'L3', '★§7.4 反例：颜色偏移 1/255 必须检出', true, () =>
+    styleCaught({ backgroundColor: { r: 46, g: 111, b: 237, a: 1 } }),
+  )
+  run('L3-font-fallback', 'L3', '字族回退（PingFang SC → system-ui）必须检出', true, () => styleCaught({ fontFamily: 'system-ui' }))
+  run('L3-enum-overflow', 'L3', '枚举值差异（overflow）必须检出', true, () => styleCaught({ overflow: 'hidden' }))
+  run('L3-scalar-flexgrow', 'L3', '无单位标量（flexGrow 1→2）必须检出——不能用 px 容差吞掉', true, () => {
+    const a = styleSnap(); const b = styleSnap(); a.nodes[0].styles.flexGrow = 1; b.nodes[0].styles.flexGrow = 2
+    return !compareStyle(a, b, { tolerance: tolCfg }).ok
+  })
+  run('L3-ctrl-allowed-diff', 'L3', '对照组：A-6 豁免（字族解析差异）不应判失败', false, () =>
+    styleCaught({ fontFamily: 'system-ui' }, { allowDifferences: [{ id: 'A-6', key: 'fontFamily' }] }),
+  )
+  run('L3-ctrl-within-tol', 'L3', '对照组：宽度 0.5px 在容差内不应报', false, () => styleCaught({ width: 200.5 }))
+
   const injected = results.filter((r) => r.expected).length
   const captured = results.filter((r) => r.expected && r.caught).length
-  // ★未布点算子（标准 §7.3：单列，不得悄悄删）
+  // ★仍未布点算子的诚实清单（标准 §7.3：单列，不得悄悄删）
   const pending = [
-    { id: 'L2-margin-shift', note: '★已布点（VC5-b 比对引擎 + 三端快照；破坏性验证：2px 漂移精确检出）——算子待纳入 M4 自动注入' },
-    { id: 'L3-color-shift', note: '颜色偏移（#FF0000→#FE0000）——需 L3 计算样式（Skyline 端 computedStyle 不可用，需产出式探针）' },
-    { id: 'L3-font-fallback', note: '字体回退——同上' },
-    { id: 'L2.6-scroll-relative', note: '滚动后相对间距——需 L2.6 不变量校验' },
-    { id: 'L4-radius-missing', note: '圆角缺失——需 L4 像素观察（非门禁）' },
+    { id: 'L2.5-discrete-interaction', note: '离散交互（事件 → 结果态几何）——需 L2.5 布点（标准 §10.1 的第二层）' },
+    { id: 'L2.6-scroll-relative', note: '连续交互不变量（滚动后相对间距）——需 L2.6 布点' },
+    { id: 'L4-radius-missing', note: '圆角缺失——需 L4 像素观察（非门禁；pHash 对局部小差异不敏感，已知边界）' },
   ]
   return { operators: results, injected, captured, pending }
 }
@@ -105,7 +177,7 @@ async function build() {
   const m1Total = rows.length
   // L1 层覆盖 = 矩阵三端都有实测的字段
   const m1Covered = rows.filter((r) => r.web !== 'not-measured' && r.skyline !== 'not-listed' && r.webview !== 'not-measured').length
-  const mutation = await runL1Mutation()
+  const mutation = await runMutationTests()
   const m4Rate = mutation.injected > 0 ? mutation.captured / mutation.injected : 0
 
   // ★M1 折算表（同源口径——见 M1 的注释）：样式键 → CSS 字段（四角/四边归并）
@@ -124,6 +196,8 @@ async function build() {
     flexDirection: 'flexDirection', justifyContent: 'justifyContent',
     alignItems: 'alignItems', alignSelf: 'alignSelf',
     flexGrow: 'flexGrow', flexShrink: 'flexShrink', gap: 'gap', overflow: 'overflow',
+    // ★覆盖收官（2026-10-02·三批）：偏移定位（条件可见——position 非 static 时实测有值）
+    top: 'top', left: 'left',
     // fontFamily / fontWeight / visibility：不在 28 字段集内 ⇒ 不计（宁少算）
   }
   const l3Fields = new Set(Object.values(L3_FIELD_MAP))

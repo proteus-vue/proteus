@@ -1,5 +1,5 @@
 {
-  "geometry": "{\"format\":\"proteus-geometry-snapshot\",\"version\":1,\"end\":\"web\",\"viewport\":{\"width\":800,\"height\":900},\"boundaries\":{\"fontsLocked\":false,\"textMeasuredBy\":\"browser (getBoundingClientRect — 含字体度量结果)\",\"note\":\"Web 端 = 真值基准（卡片 VC3-a）。文本尺寸差异（vs 其他端）归 A-1 允许差异。\"},\"root\":{\"nodeId\":\"1\",\"path\":\"\",\"x\":0,\"y\":0,\"w\":400,\"h\":600,\"depth\":0,\"semanticKey\":\"p-view\",\"children\":[{\"nodeId\":\"2\",\"path\":\"0\",\"x\":12,\"y\":12,\"w\":200,\"h\":60,\"depth\":1,\"semanticKey\":\"p-box\",\"children\":[]},{\"nodeId\":\"3\",\"path\":\"1\",\"x\":12,\"y\":80,\"w\":160,\"h\":40,\"depth\":1,\"semanticKey\":\"p-text\",\"children\":[]},{\"nodeId\":\"4\",\"path\":\"2\",\"x\":12,\"y\":128,\"w\":300,\"h\":100,\"depth\":1,\"semanticKey\":\"p-box\",\"children\":[{\"nodeId\":\"p:2.0\",\"path\":\"2.0\",\"x\":24,\"y\":140,\"w\":100,\"h\":24,\"depth\":2,\"children\":[]}]}]}}",
+  "geometry": "{\"format\":\"proteus-geometry-snapshot\",\"version\":1,\"end\":\"web\",\"viewport\":{\"width\":800,\"height\":900},\"boundaries\":{\"fontsLocked\":false,\"textMeasuredBy\":\"browser (getBoundingClientRect — 含字体度量结果)\",\"note\":\"Web 端 = 真值基准（卡片 VC3-a）。文本尺寸差异（vs 其他端）归 A-1 允许差异。\"},\"root\":{\"nodeId\":\"1\",\"path\":\"\",\"x\":0,\"y\":0,\"w\":400,\"h\":600,\"depth\":0,\"semanticKey\":\"p-view\",\"children\":[{\"nodeId\":\"2\",\"path\":\"0\",\"x\":12,\"y\":12,\"w\":200,\"h\":60,\"depth\":1,\"semanticKey\":\"p-box\",\"children\":[]},{\"nodeId\":\"3\",\"path\":\"1\",\"x\":12,\"y\":80,\"w\":160,\"h\":40,\"depth\":1,\"semanticKey\":\"p-text\",\"children\":[]},{\"nodeId\":\"4\",\"path\":\"2\",\"x\":12,\"y\":128,\"w\":300,\"h\":100,\"depth\":1,\"semanticKey\":\"p-box\",\"children\":[{\"nodeId\":\"p:2.0\",\"path\":\"2.0\",\"x\":24,\"y\":140,\"w\":100,\"h\":24,\"depth\":2,\"children\":[]}]},{\"nodeId\":\"5\",\"path\":\"3\",\"x\":19,\"y\":233,\"w\":50,\"h\":30,\"depth\":1,\"semanticKey\":\"p-box\",\"children\":[]}]}}",
   "style": {
     "format": "proteus-style-snapshot",
     "version": 1,
@@ -370,6 +370,82 @@
           "overflow": "visible",
           "display": "block",
           "position": "static",
+          "visibility": "visible"
+        }
+      },
+      {
+        "nodeId": "5",
+        "path": "3",
+        "styles": {
+          "color": {
+            "r": 0,
+            "g": 0,
+            "b": 0,
+            "a": 1
+          },
+          "backgroundColor": {
+            "r": 58,
+            "g": 90,
+            "b": 138,
+            "a": 1
+          },
+          "fontSize": 16,
+          "fontWeight": 400,
+          "fontFamily": "system-ui",
+          "paddingTop": 0,
+          "paddingRight": 0,
+          "paddingBottom": 0,
+          "paddingLeft": 0,
+          "marginTop": 0,
+          "marginRight": 0,
+          "marginBottom": 0,
+          "marginLeft": 0,
+          "borderTopWidth": 0,
+          "borderRightWidth": 0,
+          "borderBottomWidth": 0,
+          "borderLeftWidth": 0,
+          "borderTopLeftRadius": 0,
+          "borderTopRightRadius": 0,
+          "borderBottomRightRadius": 0,
+          "borderBottomLeftRadius": 0,
+          "borderTopColor": {
+            "r": 0,
+            "g": 0,
+            "b": 0,
+            "a": 1
+          },
+          "borderRightColor": {
+            "r": 0,
+            "g": 0,
+            "b": 0,
+            "a": 1
+          },
+          "borderBottomColor": {
+            "r": 0,
+            "g": 0,
+            "b": 0,
+            "a": 1
+          },
+          "borderLeftColor": {
+            "r": 0,
+            "g": 0,
+            "b": 0,
+            "a": 1
+          },
+          "opacity": 1,
+          "width": 50,
+          "height": 30,
+          "flexGrow": 0,
+          "flexShrink": 0,
+          "top": 5,
+          "left": 7,
+          "flexDirection": "row",
+          "justifyContent": "normal",
+          "alignItems": "normal",
+          "alignSelf": "auto",
+          "overflow": "visible",
+          "display": "block",
+          "position": "relative",
           "visibility": "visible"
         }
       }
