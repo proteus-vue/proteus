@@ -57,6 +57,9 @@ char* proteus_layout_rects(uint64_t handle);
 char* proteus_layout_hit_test(uint64_t handle, float x, float y);
 // ★★二进制指令流（矩阵 #14）：SFC 订阅驱动更新 → 内核增量重排（与 Android JNI 同一 ABI）
 char* proteus_layout_apply_ops(uint64_t handle, const uint8_t* ptr, uint32_t len);
+// ★A/B 的 B 路（Vue patch 路径）：样式补丁更新 + 文本度量注入（与 iOS/Android 同一 ABI）
+char* proteus_layout_update(uint64_t handle, const char* patches_json);
+char* proteus_layout_set_text_measures(uint64_t handle, const char* measures_json);
 // ★复用池（长列表）——与 Android JNI / iOS @_silgen_name 同一组 C ABI
 uint64_t proteus_recycle_create(uint32_t item_count, uint32_t leading_rows, uint32_t following_rows);
 char* proteus_recycle_update(uint64_t handle, uint32_t first_visible, uint32_t last_visible);
@@ -1403,6 +1406,7 @@ static napi_value JsvmProbe(napi_env env, napi_callback_info info) {
 static uint64_t g_vaporHandle = 0;
 static std::string g_vaporCmdsJson = "[]";
 static int g_vaporMountCalls = 0;
+static int g_vaporUpdatePatchCalls = 0;   // ★B 路补丁到宿主的次数（判据 ⑥e 的宿主侧读数）
 static int g_vaporHostNodes = -1;
 static int g_vaporHostCmds = -1;
 static int g_vaporPaintedSamples = 0;
@@ -1692,6 +1696,125 @@ static std::string vaporApplyOpsImpl(const std::string& bytesJson) {
     return out;
 }
 
+/**
+ * updatePatches 的宿主实现（★矩阵 #14 续：A/B 的 **B 路** = Vue patch → 适配器补丁 → 本入口）。
+ *
+ * 【与 iOS `selfdraw-scene.updatePatches` 同一语义】（蓝本读实现而来）：
+ *   ① **文本补丁先度量再注入**（关键闭环）：补丁带 `style.text` 时，先用该节点 meta 的字号
+ *      重新度量 → `proteus_layout_set_text_measures` 注入 → 再发补丁 ⇒ 内核用**新尺寸**重排。
+ *      ★漏这步的症状：核心按旧尺寸算几何（字被裁/留白）而**零报错**（本仓踩过的静默缺陷）。
+ *   ② 调 `proteus_layout_update`（输入 = `[{id, style}]`，与适配器产出、Rust StylePatch 三处同形）。
+ *   ③ 回执：`applied` / `changed_rects`（rects 键数）/ `relayout` / `text_layers_applied`
+ *      （消费 text_updates 的条数——与 applyOps 的 text_synced 同口径：鸿蒙无"层"，
+ *       文字存在 `g_vaporStyles`，绘制指令重建时用它）。
+ *
+ * 【输入形状（读实现确认）】`[{"id":N,"style":{...}}]`——首版若按顶层找 text 会一条都注入不了
+ *   （iOS 注释记载的同款坑："又一处静默形状分叉"）。
+ */
+static std::string vaporUpdatePatchesImpl(const std::string& patchesJson) {
+    if (g_vaporHandle == 0) return "{\"ok\":false,\"error\":\"updatePatches: 无树句柄（先 mount）\"}";
+    g_vaporUpdatePatchCalls++;   // ★宿主侧真实记账（判据 ⑥e：不是 JS 自报）
+    // ① 文本补丁 → 度量 → 注入（形状：[{id, style:{text}}]）
+    std::string measures = "{";
+    int mCount = 0;
+    {
+        std::vector<std::string> items = splitJsonObjects(patchesJson);
+        for (const auto& it : items) {
+            double id = -1;
+            if (!jnum(it.c_str(), it.size(), "id", &id)) continue;
+            std::string styleObj = extractValueAfterKey(it, "style", '{', '}');
+            if (styleObj.empty()) continue;
+            std::string text;
+            if (!jstr(styleObj.c_str(), styleObj.size(), "text", &text) || text.empty()) continue;
+            // fontSize：优先补丁 style 自带，否则用建树时存的样式表（与绘制同源）
+            double fs = 0;
+            if (!jnum(styleObj.c_str(), styleObj.size(), "fontSize", &fs) || fs <= 0) {
+                auto sit = g_vaporStyles.find((int)id);
+                fs = (sit != g_vaporStyles.end()) ? sit->second.fontSize : 14.0;
+            }
+            double wpx = 0, hpx = 0;
+            measureTextTypoPx(text, fs * g_vaporDensity, &wpx, &hpx);
+            char mb[200];
+            snprintf(mb, sizeof(mb), "%s\"%d\":{\"width\":%.4f,\"height\":%.4f}",
+                     mCount > 0 ? "," : "", (int)id, wpx / g_vaporDensity, hpx / g_vaporDensity);
+            measures += mb;
+            mCount++;
+        }
+    }
+    measures += "}";
+    if (mCount > 0) {
+        char* mr = proteus_layout_set_text_measures(g_vaporHandle, measures.c_str());
+        if (mr != nullptr) proteus_layout_free_string(mr);
+    }
+    // ② 内核 update
+    char* rp = proteus_layout_update(g_vaporHandle, patchesJson.c_str());
+    std::string resp = rp ? rp : "{}";
+    if (rp) proteus_layout_free_string(rp);
+    double applied = -1, relayout = -1;
+    jnum(resp.c_str(), resp.size(), "applied", &applied);
+    jnum(resp.c_str(), resp.size(), "relayout_count", &relayout);
+    std::string rects = extractValueAfterKey(resp, "rects", '{', '}');
+    int changedN = 0;
+    {
+        // 数 rects 键数（`"<id>":{` 出现次数——与判据 changed_rects 同口径）
+        size_t q = 0;
+        while ((q = rects.find("\":{", q)) != std::string::npos) { changedN++; q += 3; }
+    }
+    // ③ 文本同步：消费 text_updates（存在样式表；与 applyOps 同口径——鸿蒙无"层"）
+    int textApplied = 0;
+    std::string tu = extractValueAfterKey(resp, "text_updates", '{', '}');
+    if (!tu.empty() && tu.size() > 2) {
+        size_t q = 0;
+        while ((q = tu.find("\":\"", q)) != std::string::npos) {
+            size_t e = q, b = e;
+            while (b > 0 && isdigit((unsigned char)tu[b - 1])) b--;
+            if (b == e) { q += 3; continue; }
+            int id = atoi(tu.substr(b, e - b).c_str());
+            size_t vStart = q + 3;
+            std::string val;
+            for (size_t i = vStart; i < tu.size(); i++) {
+                char c = tu[i];
+                if (c == '\\' && i + 1 < tu.size()) {
+                    char n = tu[i + 1];
+                    if (n == 'n') val += '\n'; else if (n == 't') val += '\t'; else val += n;
+                    i++;
+                    continue;
+                }
+                if (c == '"') break;
+                val += c;
+            }
+            auto it2 = g_vaporStyles.find(id);
+            if (it2 != g_vaporStyles.end()) it2->second.text = val;
+            textApplied++;
+            q = vStart;
+        }
+    }
+    char out[640];
+    snprintf(out, sizeof(out),
+             "{\"ok\":true,\"path\":\"updatePatches\",\"incremental\":true,"
+             "\"patch_count\":%.0f,\"applied\":%.0f,\"changed_rects\":%d,\"relayout\":%.0f,"
+             "\"text_layers_applied\":%d,\"text_measures_injected\":%d,\"rects\":%s}",
+             applied, applied, changedN, relayout, textApplied, mCount,
+             rects.empty() ? "{}" : rects.c_str());
+    OH_LOG_Print(LOG_APP, LOG_INFO, PROTEUS_BENCH_DOMAIN, PROTEUS_BENCH_TAG,
+                 "PROTEUS_VAPOR_UPDATEPATCHES applied=%{public}d changed=%{public}d relayout=%{public}d text=%{public}d measures=%{public}d",
+                 (int)applied, changedN, (int)relayout, textApplied, mCount);
+    return out;
+}
+
+/** JSVM 回调：updatePatches */
+static JSVM_Value VaporUpdatePatchesCb(JSVM_Env env, JSVM_CallbackInfo info) {
+    size_t argc = 1;
+    JSVM_Value args[1] = {nullptr};
+    OH_JSVM_GetCbInfo(env, info, &argc, args, nullptr, nullptr);
+    std::string patches;
+    if (argc > 0) jsvmStr(env, args[0], &patches);
+    std::string out = vaporUpdatePatchesImpl(patches);
+    JSVM_Value r = nullptr;
+    OH_JSVM_CreateStringUtf8(env, out.c_str(), out.size(), &r);
+    return r;
+}
+
 /* ── JSVM 回调（宿主桥的四个方法；全部返回 JSON 字符串） ── */
 
 static JSVM_Value VaporMountCb(JSVM_Env env, JSVM_CallbackInfo info) {
@@ -1775,11 +1898,15 @@ static napi_value VaporProbe(napi_env env, napi_callback_info info) {
         napi_get_value_string_utf8(env, args[0], &argsJson[0], len + 1, &len);
         argsJson.resize(len);
     }
-    std::string bundle, artifacts, filesDir;
+    std::string bundle, artifacts, filesDir, vaporMode, outName;
     double vpW = 0, vpH = 0, density = 1.0;
     jstr(argsJson.c_str(), argsJson.size(), "bundle", &bundle);
     jstr(argsJson.c_str(), argsJson.size(), "artifacts", &artifacts);
     jstr(argsJson.c_str(), argsJson.size(), "filesDir", &filesDir);
+    // ★矩阵 #14 续：vapor 模式选择（缺省 runShort；'ab' = Vapor vs Vue 运行时对照）
+    jstr(argsJson.c_str(), argsJson.size(), "mode", &vaporMode);
+    // 落盘文件名（缺省 vapor.json；A/B 场景用 vapor-ab.json——不覆盖既有 runShort 证据）
+    jstr(argsJson.c_str(), argsJson.size(), "outName", &outName);
     jnum(argsJson.c_str(), argsJson.size(), "vpW", &vpW);
     jnum(argsJson.c_str(), argsJson.size(), "vpH", &vpH);
     jnum(argsJson.c_str(), argsJson.size(), "density", &density);
@@ -1794,6 +1921,7 @@ static napi_value VaporProbe(napi_env env, napi_callback_info info) {
     g_vaporHostCmds = -1;
     g_vaporPaintedSamples = 0;
     g_vaporPaintedColors = 0;
+    g_vaporUpdatePatchCalls = 0;
     g_vaporDensity = density;
     g_vaporStyles.clear();
 
@@ -1841,6 +1969,8 @@ static napi_value VaporProbe(napi_env env, napi_callback_info info) {
             {"applyOps", {VaporApplyOpsCb, nullptr}},
             {"readRects", {VaporReadRectsCb, nullptr}},
             {"probeChannels", {VaporProbeChannelsCb, nullptr}},
+            // ★A/B 的 B 路（Vue patch → 适配器补丁 → 本入口）
+            {"updatePatches", {VaporUpdatePatchesCb, nullptr}},
         };
         for (auto& f : fns) {
             JSVM_Value fn = nullptr;
@@ -1871,8 +2001,9 @@ static napi_value VaporProbe(napi_env env, napi_callback_info info) {
                     // JS 侧参数（artifacts 作为**字符串**传入——与 Android Java 侧同形）
                     char vpb[128];
                     snprintf(vpb, sizeof(vpb), "{\"width\":%.4f,\"height\":%.4f}", vpW, vpH);
+                    std::string modePart = vaporMode.empty() ? "" : (",\"mode\":\"" + jsonEscape(vaporMode) + "\"");
                     std::string jsArgs = "{\"artifacts\":\"" + jsonEscape(artifacts) +
-                                         "\",\"viewport\":" + vpb + ",\"rows\":8,\"updates\":3}";
+                                         "\",\"viewport\":" + vpb + ",\"rows\":8,\"updates\":3" + modePart + "}";
                     JSVM_Value arg = nullptr;
                     OH_JSVM_CreateStringUtf8(jenv, jsArgs.c_str(), jsArgs.size(), &arg);
                     JSVM_Value undef = nullptr;
@@ -1899,9 +2030,9 @@ static napi_value VaporProbe(napi_env env, napi_callback_info info) {
     char head[256];
     snprintf(head, sizeof(head),
              "{\"ok\":%s,\"host_id\":\"harmony\",\"host_mount_calls\":%d,\"host_nodes\":%d,\"host_cmds\":%d,"
-             "\"host_painted_samples\":%d,\"host_painted_colors\":%d",
+             "\"host_painted_samples\":%d,\"host_painted_colors\":%d,\"host_update_patch_calls\":%d",
              err.empty() ? "true" : "false", g_vaporMountCalls, g_vaporHostNodes, g_vaporHostCmds,
-             g_vaporPaintedSamples, g_vaporPaintedColors);
+             g_vaporPaintedSamples, g_vaporPaintedColors, g_vaporUpdatePatchCalls);
     wrapper = head;
     if (!err.empty()) {
         wrapper += ",\"error\":\"" + jsonEscape(err) + "\"";
@@ -1916,7 +2047,8 @@ static napi_value VaporProbe(napi_env env, napi_callback_info info) {
     //   实测 hdc 读不了应用沙箱 el2 路径：`Error opening file: permission denied`）。
     //   哪边失败都如实记日志（不静默）；判据路径以采集脚本实际取到的为准。
     if (!filesDir.empty()) {
-        std::string paths[2] = {filesDir + "/vapor.json", "/data/local/tmp/proteus-vapor.json"};
+        std::string primary = filesDir + "/" + (outName.empty() ? "vapor.json" : outName);
+        std::string paths[2] = {primary, "/data/local/tmp/proteus-vapor.json"};
         for (const auto& path : paths) {
             FILE* f = fopen(path.c_str(), "w");
             if (f != nullptr) {
