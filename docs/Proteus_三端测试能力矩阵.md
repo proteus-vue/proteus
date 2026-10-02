@@ -13,7 +13,7 @@
 | 4 | **长列表复用池** | ✅ `recycle` | ✅ `V12_scroll_recycle` | ✅ **已补** | 鸿蒙 `recycleProbe`：**reuse_ratio 0.9962**（4000 行/400 帧，created=30/reused=7936/max_live=30） |
 | 5 | **滚动（平台侧）** | ✅ `scroll`/`scroll-core`/`scroll-native` | ✅ V12 滚动帧 | ◐ **帧率已采** | 鸿蒙 `scrollProbe`（`postFrameCallback` 逐帧）：61 帧 · **p50 16.64ms（60fps）** · p95 66.62ms · avg fps 31.9；★滚动驱动的是 ArkUI Scroll 容器（非 Proteus 渲染路径），深度接线待做 |
 | 6 | **命中测试（三层）** | ✅ `hit` | ✅ `hit_probes`（与 Android 同探针） | ✅ **已补** | 鸿蒙 `hitProbe`：**6/6 与两端逐位一致**（同场景同探针点） |
-| 7 | **手势** | ✅ `gesture`（GestureDetector + 核心 target） | ❌ **缺** | ⛔ **缺** | iOS/鸿蒙待补（`packages/gesture` 已三端中立） |
+| 7 | **手势** | ✅ `gesture`（GestureDetector；tap/longpress/fling + 负向计数） | ◐ **tap+longpress 全链已通（真机 PASS）** | ⛔ **缺** | iOS：`V9_event_dispatch`（tap 3 探针，PASS）+ `V16_gesture_split`（2 tap + 2 longpress，**零串扰负向判据**，6/6 PASS）——注入 → 核心命中 → 冒泡派发；★真实触摸层已实现 500ms 时长分流（tap/longpress/拖动三分支）。**swipe/fling 待补**；鸿蒙待补（`packages/gesture` 已三端中立） |
 | 8 | **文本通道** | ✅ drawText/StaticLayout 分流 + 归因 | ✅ CoreText（`measureText`） | ✅ **上屏已通（含单位模型）** | 鸿蒙：`textProbe`（typography 200 项/8.0ms）+ 上屏（content modifier 回调绘制）；**单位模型已修**：RenderNode/canvas 是**物理 px**、host 属性是 **vp**——ArkTS 侧 ×`vp2px(1)` 换算（一处），host 尺寸 ÷密度；真机截图色块+文字双重可见 |
 | 9 | **字体族映射** | ✅ `font-family`（与 iOS V13 同契约） | ✅ V13 | ⛔ **缺** | 鸿蒙待补 |
 | 10 | **原生组件混用（L3）** | ✅ `native`/`native-host`/`shot-scroll-native` | ❌ **缺** | ⛔ **缺** | iOS/鸿蒙待补（方案坑位 #4 的核心） |

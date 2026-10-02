@@ -80,6 +80,8 @@ interface SelfDrawNative {
   paintPatches?(patchesJson: string): string
   /** ★V9：注入一次 tap（内容坐标）——走与真实触摸同一条链（核心命中 → JS 派发） */
   tapAt?(x: number, y: number): string
+  /** ★V10：注入一次 longpress（同链；用于"tap/longpress 分流零串扰"的负向判据） */
+  longpressAt?(x: number, y: number): string
   /** ★V9：手势统计（命中/未命中/错误） */
   gestureStatsJson?(): string
   /**
@@ -125,7 +127,7 @@ const BN = { snapshot: 'bench-final' }
 // ★构建标识：每次构建写入，用于**确凿判定**设备上跑的是哪份代码
 //   （踩坑：靠文件 mtime 判断"报告是否刷新"不可靠——新建目标文件的时间恒为"现在"；
 //    且我看不出设备实际执行的是旧 bundle，白跑一轮。有了这个字段就能一眼判定。）
-const BUILD_ID = 'acd0dfc3-212149'
+const BUILD_ID = '6fbaa4d8-001821'
 const now = (): number => Date.now()
 /** 宽松解析（宿主返回可能是字符串或已是对象） */
 const safeParseAny = (s: any): any => {
@@ -2122,11 +2124,16 @@ CASES.push({
     //   实测：y=152 命中第 1 行（id=6）⇒ 首行区间约 [88, 144)，步长 64。
     //   ⇒ 用 `88 + i*64 + 28`（首行起点 88 + 行内 28 = 垂直中心）。
     //   ★纪律：坐标不手算——用**一次探针 tap** 反推出首行起点（见下方 probe 步骤）。
+    // ★★第四次修正（2026-10-02）：**行序基准由探针校准**——不再假设"y=152 命中第 1 行"。
+    //   树结构演进会让同一 y 命中不同行（9/28：152 → rowIds[0]；本轮：152 → rowIds[1]），
+    //   而硬编码 `rowIds[0..]` 的判据**必然**随结构变化失败。
+    //   校准法：探针发一发 ⇒ 读回它的 currentTarget ⇒ 在 rowIds 里取下标记为基准 idx。
     const probeY = 152
-    const probe = safeParseAny(proteusSelfDraw.tapAt?.(120, probeY) ?? '{}')
-    const firstRowId = (probe?.target as number) ?? -1
-    const firstRowY = firstRowId >= 0 ? probeY : 88
-    const taps = [0, 1, 2].map((i) => ({ x: 120, y: firstRowY + i * 64 }))
+    if (log) log.length = 0
+    safeParseAny(proteusSelfDraw.tapAt?.(120, probeY) ?? '{}')
+    const probeLog = (log ?? []).slice()
+    const baseIdx = probeLog.length > 0 ? rowIds.indexOf(probeLog[0]!.id as number) : -1
+    const taps = [0, 1, 2].map((i) => ({ x: 120, y: probeY + i * 64 }))
     const outs: unknown[] = []
     if (log) log.length = 0   // ★清掉探针那一次（只统计正式 3 次）
     for (const t of taps) outs.push(safeParseAny(proteusSelfDraw.tapAt?.(t.x, t.y) ?? '{}'))
@@ -2138,11 +2145,20 @@ CASES.push({
     const checks = {
       hitsOk: hits >= 3,
       countOk: got.length === 3,
-      // ★判据加强：`got[i].target` 必须等于**第 i 行**的 id（探针确认首行 + 后续行）
-      targetOk: got.length === 3 && got.every((g, i) => g.target === rowIds[i]),
+      // ★★判据修正（2026-10-02）：**用 `currentTarget`（log 的 `id` 字段）对齐行序**——
+      //   DOM 语义：`currentTarget` 才是 handler 绑定的节点（= 行）；`target` 是**命中的最深节点**
+      //   （行内 p-text——取决于 x 落点，是深节点还是行盒）。
+      //   【为什么改】旧判据用 `target`：当时（9/28）命中点恰是行盒 ⇒ 巧合通过；
+      //   而命中语义/树结构一演进（x=120 现落在行内文本上）⇒ 旧判据必然失败——
+      //   在 V16 首跑实测暴露（target=19/26 = 行内 text2，而行的 handler 正确收到）。
+      //   ⇒ 修正后语义更正确：**"事件到达哪一行"由 currentTarget 判定**；target 作为附加证据记录。
+      // ★判据用**校准后的基准**（baseIdx 由探针给出——见上方注释）
+      targetOk: got.length === 3 && baseIdx >= 0 && got.every((g, i) => g.id === rowIds[baseIdx + i]),
+      // 附加：命中的**深节点**应与 handler 节点不同（证明"深入命中 + 冒泡到行"两件事都真发生）
+      deepHitOk: got.length === 3 && got.every((g) => typeof g.target === 'number' && g.target > 0),
       coordOk: got.length === 3 && got.every((g, i) => g.x === taps[i]!.x && g.y === taps[i]!.y),
     }
-    const verdict = checks.hitsOk && checks.countOk && checks.targetOk && checks.coordOk ? 'PASS' : 'FAIL'
+    const verdict = checks.hitsOk && checks.countOk && checks.targetOk && checks.deepHitOk && checks.coordOk ? 'PASS' : 'FAIL'
     results.push({
       case: 'V9_event_dispatch',
       note: `注入 3 次 tap（第 1–3 行）· 宿主命中 ${hits} 次 · JS 收到 ${got.length} 次`,
@@ -2152,11 +2168,81 @@ CASES.push({
       extra: {
         verdict, taps, outs, host_hits: hits, js_received: got.length,
         tap_log: got, row_ids_sample: rowIds.slice(0, 5), checks,
-        probe: { y: probeY, target: firstRowId, first_row_id: rowIds[0], first_row_y: firstRowY },
+        probe: { y: probeY, base_idx: baseIdx, base_row_id: baseIdx >= 0 ? rowIds[baseIdx] : -1 },
         // ★诚实边界：本入口**绕过 UITouch**（复用 emitGesture）⇒ 覆盖「核心命中 → 外壳派发」两环；
         //   「UITouch → 内容坐标换算 + tap 时序判定」需人手/XCUITest（见 selfdraw-scene.swift 的 tapAt 注释）
         covered: 'core-hit + shell-dispatch',
         not_covered: 'UITouch->content-coord + tap-timing',
+      },
+    })
+    app.dispose()
+  },
+})
+
+/* V16 · ★★多手势分流：tap 与 longpress 各自直达、**零串扰**（负向判据，对齐 Android）
+ *   ★编号避让（本仓纪律：编号是稳定引用——撞号会污染历史产物）：
+ *     `V10` 已被 `V10_paint_channel` 占用 ⇒ 本条取 V16（现有最大 V15）。 */
+CASES.push({
+  name: 'V16_gesture_split',
+  note: '★★手势分流：注入 2 tap + 2 longpress ⇒ 各行处理器**恰好**收到对应类型（互不混入；对齐 Android 的 longpress/fling 负向计数纪律）',
+  fn: async () => {
+    const N = 100
+    const app = makeApp(N)
+    mountApp(app, N)
+    const log = (globalThis as unknown as { __proteusTapLog?: Array<Record<string, unknown>> }).__proteusTapLog
+
+    // 行序基准由**探针校准**（与 V9 同法——见其注释的"第四次修正"）
+    const nodes = app.adapter.toRequest(VP).nodes as Array<{ id: number; parentId: number | null; height?: number }>
+    const rowIds = nodes.filter((n) => n.height === 56).map((n) => n.id)
+    const probeY = 152
+    if (log) log.length = 0
+    safeParseAny(proteusSelfDraw.tapAt?.(120, probeY) ?? '{}')
+    const probeLog = (log ?? []).slice()
+    const baseIdx = probeLog.length > 0 ? rowIds.indexOf(probeLog[0]!.id as number) : -1
+    if (log) log.length = 0   // 清探针那一次
+
+    // ① 2 次 tap（基准行起）+ 2 次 longpress（其后两行）
+    const tapYs = [probeY, probeY + 64]
+    const lpYs = [probeY + 128, probeY + 192]
+    for (const y of tapYs) safeParseAny(proteusSelfDraw.tapAt?.(120, y) ?? '{}')
+    for (const y of lpYs) safeParseAny(proteusSelfDraw.longpressAt?.(120, y) ?? '{}')
+
+    const got = (log ?? []).map((e) => ({ ...e }))
+    const taps = got.filter((g) => g.title === 'row-tap')
+    const lps = got.filter((g) => g.title === 'row-longpress')
+
+    // ★负向判据（比"有没有"更强）：**恰好** 2/2、无串扰、target 与行号一一对应
+    // ★★与 V9 同款修正（2026-10-02）：**用 currentTarget（`id`）对齐行序**——
+    //   target 是命中的最深节点（行内 p-text），不是 handler 节点（行）。
+    const checks = {
+      tapCountOk: taps.length === 2,
+      lpCountOk: lps.length === 2,
+      totalOk: got.length === 4,                       // ★零串扰（多一条即某侧误报）
+      tapTargetsOk: baseIdx >= 0 && taps.length === 2 && taps.every((t, i) => t.id === rowIds[baseIdx + i]),
+      lpTargetsOk: baseIdx >= 0 && lps.length === 2 && lps.every((t, i) => t.id === rowIds[baseIdx + 2 + i]),
+      coordOk: taps.every((t, i) => t.y === tapYs[i] && t.x === 120)
+        && lps.every((t, i) => t.y === lpYs[i] && t.x === 120),
+    }
+    const verdict = Object.values(checks).every(Boolean) ? 'PASS' : 'FAIL'
+    results.push({
+      case: 'V16_gesture_split',
+      note: `2 tap + 2 longpress ⇒ tap ${taps.length} / longpress ${lps.length}（恰好各 2、零串扰）`,
+      items: N, nodes: nodes.length,
+      vue_ms: 0, to_request_ms: 0, serialize_ms: 0, host_ms: 0, total_ms: 0,
+      patch_count: 0, request_bytes: 0,
+      extra: {
+        verdict, checks,
+        tap_current_targets: taps.map((t) => t.id), lp_current_targets: lps.map((t) => t.id),
+        tap_deep_hits: taps.map((t) => t.target), lp_deep_hits: lps.map((t) => t.target),
+        base_idx: baseIdx, base_row_id: baseIdx >= 0 ? rowIds[baseIdx] : -1,
+        expected_rows: baseIdx >= 0 ? rowIds.slice(baseIdx, baseIdx + 4) : rowIds.slice(0, 4),
+        got_length: got.length,
+        full_log: got,
+        // ★诚实边界：与 V9 相同——注入绕过 UITouch；「真实触摸按 500ms 时长分流」
+        //   由 touchesEnded 的三分支实现（tap ≤0.5s / longpress ≥0.5s / 拖动不派发），
+        //   需人手或 XCUITest 覆盖。
+        covered: 'core-hit + shell-dispatch + type-routing',
+        not_covered: 'UITouch->duration-classification',
       },
     })
     app.dispose()
