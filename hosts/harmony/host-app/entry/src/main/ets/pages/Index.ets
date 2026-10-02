@@ -20,7 +20,7 @@ import { display } from '@kit.ArkUI';
 // ★矩阵 #17：App 路由栈场景探针（移植副本，与 Android/iOS 同口径）
 import { runAppStackProbe } from '../core/app-stack-probe';
 import { attach, renderCommands, stats, ProteusRenderStats } from 'libproteus_render.so';
-import { bench4050, hitProbe, recycleProbe, spliceProbe, textProbe, version as rustVersion } from 'libproteus_bench.so';
+import { bench4050, hitProbe, recycleProbe, spliceProbe, textProbe, kernelAnimProbe, version as rustVersion } from 'libproteus_bench.so';
 
 const DOMAIN = 0x0002;
 const TAG = 'ProteusRender';
@@ -353,6 +353,13 @@ struct Index {
           hilog.info(DOMAIN, BENCH_TAG, 'PROTEUS_SPLICE %{public}s', sp);
         } catch (se) {
           hilog.error(DOMAIN, BENCH_TAG, 'PROTEUS_SPLICE_ERROR %{public}s', JSON.stringify(se) ?? '');
+        }
+        // ★内核动画探针（矩阵 #16）
+        try {
+          const kp: string = kernelAnimProbe();
+          hilog.info(DOMAIN, BENCH_TAG, 'PROTEUS_KERNELANIM %{public}s', kp);
+        } catch (ke) {
+          hilog.error(DOMAIN, BENCH_TAG, 'PROTEUS_KERNELANIM_ERROR %{public}s', JSON.stringify(ke) ?? '');
         }
         // ★文本通道探针（ArkGraphics2D typography）
         try {
