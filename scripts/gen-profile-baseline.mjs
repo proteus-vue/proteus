@@ -33,6 +33,14 @@ const PROJECTS = {
     'showcase/pages', 'showcase/components', 'showcase/subpackages',
     'packages/components',
   ],
+  // ★2026-10-02：官网加入基线覆盖——VC2 边界门禁对**所有 vite 构建**生效（含 Web 目标，
+  //   卡片硬性要求"否则问题延迟到 App 端暴露"），而官网只有 Web 构建、此前无基线文件
+  //   ⇒ 今早门禁上线后官网构建**直接红**（既有 App.vue 6 条 + 组件库 5 条存量样式）。
+  //   ★`packages/components` 也要扫：官网 vite 把 `@proteus-vue/components` 别名到**工作区源码**
+  //     （dogfooding 直引），构建时这些 .vue 也过同一插件 ⇒ 键口径 = 相对 website 根的
+  //     `../packages/components/...`（构建报错实测的形态）。
+  //   官网是 dogfooding 验证场：语义组件 + 柔性布局本应零违规——存量按棘轮钉住待专项清理。
+  website: ['website/src', 'packages/components'],
 }
 
 const { checkProfileBoundary } = await import(
