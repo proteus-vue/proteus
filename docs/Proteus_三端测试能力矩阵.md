@@ -11,7 +11,7 @@
 | 2 | **4050 元素应用级基准** | ✅ A/B 5 轮 | ✅ L1/L2 | ✅ L1 | 统一口径见 `hosts/results/cross-end-4050.json` |
 | 3 | **L2 光栅级对照** | ✅ `soft_raster_ms` | ✅ `drawHierarchy` | ⛔ 架构性不适用 | 鸿蒙渲染由 RS 进程负责（无宿主 CPU 光栅路径） |
 | 4 | **长列表复用池** | ✅ `recycle` | ✅ `V12_scroll_recycle` | ✅ **已补** | 鸿蒙 `recycleProbe`：**reuse_ratio 0.9962**（4000 行/400 帧，created=30/reused=7936/max_live=30） |
-| 5 | **滚动（平台侧）** | ✅ `scroll`/`scroll-core`/`scroll-native` | ✅ V12 滚动帧 | ◐ **帧率已采** | 鸿蒙 `scrollProbe`（`postFrameCallback` 逐帧）：61 帧 · **p50 16.64ms（60fps）** · p95 66.62ms · avg fps 31.9；★滚动驱动的是 ArkUI Scroll 容器（非 Proteus 渲染路径），深度接线待做 |
+| 5 | **滚动（平台侧）** | ✅ `scroll`/`scroll-core`/`scroll-native` | ✅ V12 滚动帧 | ✅ **已补（含 A/B 对照）** | 鸿蒙双路串行采集：**Proteus 渲染路径滚动**（`scrollRoot` 平移根 RenderNode，SFC 夹具内容）**avg 16.64/p95 16.64/60.1fps** vs **ArkUI 原生滚动**（Scroll 容器）**avg 16.64/p95 16.64/60.1fps**——**两路均满帧零长尾**（等价于 Android scroll-core/scroll-native 对照）；★实测抓出：探针**并发编排**会互相抢主线程（p95 冲到 200ms），串行后归零——比读数本身更有价值的教训；证据 `results/scroll-ab.json` |
 | 6 | **命中测试（三层）** | ✅ `hit` | ✅ `hit_probes`（与 Android 同探针） | ✅ **已补** | 鸿蒙 `hitProbe`：**6/6 与两端逐位一致**（同场景同探针点） |
 | 7 | **手势** | ✅ `gesture`（GestureDetector；tap/longpress/fling + 负向计数） | ◐ **tap+longpress 全链已通（真机 PASS）** | ⛔ **缺** | iOS：`V9_event_dispatch`（tap 3 探针，PASS）+ `V16_gesture_split`（2 tap + 2 longpress，**零串扰负向判据**，6/6 PASS）——注入 → 核心命中 → 冒泡派发；★真实触摸层已实现 500ms 时长分流（tap/longpress/拖动三分支）。**swipe/fling 待补**；鸿蒙待补（`packages/gesture` 已三端中立） |
 | 8 | **文本通道** | ✅ drawText/StaticLayout 分流 + 归因 | ✅ CoreText（`measureText`） | ✅ **上屏已通（含单位模型）** | 鸿蒙：`textProbe`（typography 200 项/8.0ms）+ 上屏（content modifier 回调绘制）；**单位模型已修**：RenderNode/canvas 是**物理 px**、host 属性是 **vp**——ArkTS 侧 ×`vp2px(1)` 换算（一处），host 尺寸 ÷密度；真机截图色块+文字双重可见 |
@@ -32,7 +32,7 @@
 
 **统计（口径 = 本表单元格「✅ + ◐ + 架构性不适用」，可逐格复算）**：
 - **Android 22/22**（✅22）
-- **鸿蒙 18/22**（✅16 + ◐1[#5] + 不适用1[#3]）——持续推进：4→18
+- **鸿蒙 19/22**（✅17 + 不适用1[#3]）——持续推进：4→19（▲#5 滚动深度接线完成，◐ 清零）
 - **iOS 21/22**（✅19 + ◐2[#7 手势部分/#22 帧统计]）
   ★**审计注记（2026-10-03 发现，如实披露不掩盖）**：iOS 列的历史基数写作 16/22，
   与本表单元格数（21）差 5——**增量核对无碍**（历次 +1 都与单元格变化一一对应，如 #11 补上时

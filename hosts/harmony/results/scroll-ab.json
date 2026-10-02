@@ -1,0 +1,27 @@
+{
+ "ok": true,
+ "path": "scroll-core",
+ "host_id": "harmony",
+ "note": "鸿蒙腿：Proteus 渲染路径滚动（平移根 RenderNode）vs ArkUI 原生滚动（Scroll 容器）——串行采集，各跑 60 帧",
+ "proteus": {
+  "frames": 60,
+  "warmup": 8,
+  "avg_ms": 16.64,
+  "p50_ms": 16.64,
+  "p95_ms": 16.64,
+  "p99_ms": 16.64,
+  "min_ms": 16.64,
+  "max_ms": 16.64,
+  "fps": 60.1,
+  "offset": 2720
+ },
+ "native": {
+  "frames": 61,
+  "avg_ms": 16.64,
+  "p50_ms": 16.64,
+  "p95_ms": 16.64,
+  "fps": 60.1
+ },
+ "proteus_renderer": "RenderNode 根平移（SetPosition——应用自绘路径）",
+ "native_renderer": "ArkUI Scroll 容器（平台滚动）"
+}
