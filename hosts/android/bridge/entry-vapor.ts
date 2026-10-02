@@ -156,6 +156,9 @@ interface VaporListReport {
  *     相位②（下一次 eval，由宿主逐相位调用）：`takePatches()` + `updatePatches` + 读数。
  *   A 路不需要相位拆分（`slotRt.flush()` 是确定性驱动）。
  */
+/** 内核几何（判据读 `readRects` 的形状） */
+interface RectLike { x: number; y: number; width: number; height: number }
+
 interface AbReport {
   ok: boolean
   error?: string
@@ -182,6 +185,25 @@ interface AbReport {
   /** 绘制通道一致性：两侧各探针的"非空通道数"（应相同） */
   channels_a: number
   channels_b: number
+  /* ════════ ★★绘制通道逐项等价（2026-10-01 第二批：B 侧探针口径对齐） ════════ */
+  /** 各通道签名（按通道分组的**排序多重集** + 逐节点组合签名 `node_sigs`）——
+   *  不是"非空通道数相等"，而是**每条通道的值都相等**（同值同计数） */
+  chan_a: Record<string, unknown> | null
+  chan_b: Record<string, unknown> | null
+  /** ★逐项等价结论（`JSON.stringify(chan_a) === JSON.stringify(chan_b)`） */
+  chan_match: boolean
+  /* ════════ ★★事件路径 A/B（2026-10-01 第二批：B 侧事件闭环） ════════ */
+  /** A 路 tap：命中节点 / handler / 指令回执 / 内核几何前后 / 宽度位移
+   *  （tap → hitTest → 反向调用 → handler → 订阅 → 指令 → 内核几何） */
+  ev_a: { node: number; hit: number; handler: string; ops_bytes: number; applied: number; relayout: number; changed_rects: number; before: RectLike | null; after: RectLike | null; width_delta: number; tap_ms: number } | null
+  /** B 路 tap：适配器派发（fired/errors）+ 补丁 + 宿主回执 + 内核几何前后
+   *  （tap → hitTest → 反向调用 → Vue onClick → 同步 patch → 宿主 updatePatches → 内核几何） */
+  ev_b: { node: number; hit: number; fired: number[]; errors: string[]; before: RectLike | null; after: RectLike | null; width_delta: number; patches: number; applied: number; changed_rects: number; text_layers: number; driver_ms: number } | null
+  /** ★两路 tap 等价（同语义按钮：before 矩形一致 + 位移一致 + after 矩形一致） */
+  ev_match: boolean
+  /** tap 前 / 后两路按钮的**最大矩形差**（px；判据用——不等价时先看这个） */
+  ev_before_delta: number
+  ev_after_delta: number
   /* ════════════ ★★update 段（2026-10-01：同一份变更在两条路上的等价性） ════════════ */
   /** 实际跑了几轮更新（两侧轮数相同） */
   upd_rounds: number
@@ -305,13 +327,22 @@ function runAb(args: VaporArgs): string {
     cost_b: { vue_ms: 0, request_ms: 0, serialize_ms: 0, host_ms: 0, total_ms: 0 },
     layout_ms_a: -1, layout_ms_b: -1,
     channels_a: -1, channels_b: -1,
+    chan_a: null, chan_b: null, chan_match: false,
+    ev_a: null, ev_b: null, ev_match: false, ev_before_delta: -1, ev_after_delta: -1,
     upd_rounds: 0, upd_a: [], upd_b: [],
     upd_samples: 0, upd_max_delta: -1, upd_mismatches: -1, upd_first_mismatch: null,
     upd_geom_rounds: [], upd_a_text_synced: 0, upd_b_text_applied: 0,
     notes,
   }
   try {
-    const artifacts = JSON.parse(args.artifacts) as { tpl: LayoutTemplate; table: SubscriptionTable; sfc: string }
+    const artifacts = JSON.parse(args.artifacts) as {
+      tpl: LayoutTemplate
+      table: SubscriptionTable
+      sfc: string
+      /** ★事件绑定 + handler 动作表（2026-10-01 第二批：事件路径 A/B 要用——纯数据，编译期产物） */
+      events?: Array<{ nodeId: number; event: string; handler: string }>
+      handlers?: Record<string, Array<{ op: string; source: string; program: unknown }>>
+    }
     if (!artifacts.tpl.ok) {
       rep.error = '模板不可用（构建期诊断）'
       return JSON.stringify(rep)
@@ -349,8 +380,8 @@ function runAb(args: VaporArgs): string {
     // ★几何对比口径：只比**语义文本节点**（A 侧就是那些带 text 的节点；见对齐注释）
     const semIdsA = textNodesAForAb.map((n) => n.id)
     const rectsA = readRectsByOrder(semIdsA)
-    // A 的绘制通道探针（同样先读）
-    const chA = probeChannelsFor(inst.nodes.map((n) => n.id))
+    // A 的绘制通道探针（同样先读）——★第二批：探**全部节点**且保留逐通道值（逐项对照用）
+    const chARaw = probeChannelsRaw(inst.nodes.map((n) => Number(n.id)))
 
     /* ═══════════ ★★update 段 · 路 A：订阅驱动的增量（放在 B mount 之前） ═══════════
      *
@@ -364,20 +395,22 @@ function runAb(args: VaporArgs): string {
     const updRounds = Math.max(0, args.updates ?? 2)
     const updA: AbReport['upd_a'] = []
     const geomsA: Array<ReturnType<typeof readRectsByOrder>> = []
+    // ★★A 路运行时**总建**（2026-10-01 第二批）：此前建在 `if (updRounds > 0)` 内，
+    //   而**事件路径**（tap → handler → 订阅 → 指令）同样要用它 ⇒ updRounds=0 时 tap 无运行时可用。
+    const keys = new PropKeyTable()
+    const strings = new StringPool()
+    const captured: Uint8Array[] = []
+    // ★sink 捕获字节；flush() 是**确定性驱动**（runShort 同款：微任务调度器在 eval 里不排空）
+    const slotRt = new SlotRuntime(keys, strings, (bytes) => captured.push(bytes))
+    const evals = VaporRuntime.buildEvaluators(artifacts.table.evaluators)
+    const vapor = new VaporRuntime(artifacts.table, slotRt, evals, registry)
+    const ctx = { read }
+    const triggers = new Map<string, () => void>()
+    vapor.load(ctx, (name, cb) => triggers.set(name, cb))
+    vapor.relink(ctx)          // 首轮值（与 mount 相同 ⇒ 指令无净变化）
+    slotRt.flush()
+    captured.length = 0        // ★丢掉首帧指令（初始值已由 instantiateTemplate 回填进树）
     if (updRounds > 0) {
-      const keys = new PropKeyTable()
-      const strings = new StringPool()
-      const captured: Uint8Array[] = []
-      // ★sink 捕获字节；flush() 是**确定性驱动**（runShort 同款：微任务调度器在 eval 里不排空）
-      const slotRt = new SlotRuntime(keys, strings, (bytes) => captured.push(bytes))
-      const evals = VaporRuntime.buildEvaluators(artifacts.table.evaluators)
-      const vapor = new VaporRuntime(artifacts.table, slotRt, evals, registry)
-      const ctx = { read }
-      const triggers = new Map<string, () => void>()
-      vapor.load(ctx, (name, cb) => triggers.set(name, cb))
-      vapor.relink(ctx)          // 首轮值（与 mount 相同 ⇒ 指令无净变化）
-      slotRt.flush()
-      captured.length = 0        // ★丢掉首帧指令（初始值已由 instantiateTemplate 回填进树）
       for (let r = 0; r < updRounds; r++) {
         const list = data.list as Array<{ id: number; w: number; title: string }>
         if (!Array.isArray(list) || list.length === 0) break
@@ -426,6 +459,111 @@ function runAb(args: VaporArgs): string {
           moved: maxGeomDelta(prevGeom, geom),
         })
         rep.upd_a_text_synced += tsyn
+      }
+    }
+
+    /* ═══════════ ★★事件路径 · 路 A：tap → handler → 订阅 → 指令 → 内核几何 ═══════════
+     *
+     * 【为什么在 B mount 之前】宿主只有**一个句柄**：B 的 mount 会 destroy 掉 A 的句柄
+     *   （与 mount 几何、"A 更新先跑"是同一条约束）。A 的 tap 必须打在 A 的树上。
+     *
+     * 【链路（与 runShort 的交互闭环同一套环节；数据用 runAb 的独立副本）】
+     *   `proteusHost.tapAt`（宿主注入真 MotionEvent）→ 内核 `hitTest` 命中节点
+     *   → `GestureListener` → JNI 反向调用 → `globalThis.__proteusVaporGesture`
+     *   → 编译产物的动作表 `handlers` → 改数据 → 订阅触发 → `relink` → `flush`
+     *   → `applyOps` → 内核重排 ⇒ **几何真值变**（判据读 readRects，不信任何自报）。
+     */
+    const harnessEvents = artifacts.events ?? []
+    const harnessHandlers = artifacts.handlers ?? {}
+    const byNodeEvent = new Map<string, string>()
+    for (const e of harnessEvents) byNodeEvent.set(`${e.nodeId}:${e.event}`, e.handler)
+    /**
+     * 全局反向通道名（C 侧**单一注册名**：`g_gesture_cb`）。
+     * ★A/B 两相位**各自替换全局函数**——`nativeDispatchGesture` 每次按名字取当前函数，
+     *   故"替换即切换相位"（不需要两次注册，也不能两次注册）。
+     */
+    const GESTURE_CB = '__proteusVaporGesture'
+    if (typeof proteusHost.onGesture === 'function') proteusHost.onGesture(GESTURE_CB)
+    /** 跑一个动作表（与 runShort 的 `runHandler` 同一形态：先算后写，顺序语义保留） */
+    const runActions = (name: string, store: Record<string, unknown>): boolean => {
+      const acts = harnessHandlers[name]
+      if (!acts) return false
+      for (const a of acts) {
+        const v = evalExpr(a.program as never, { read: (n: string) => store[n] } as never)
+        const cur = store[a.source]
+        if (a.op === 'set') {
+          store[a.source] = v
+        } else {
+          const base = typeof cur === 'number' && Number.isFinite(cur) ? cur : 0
+          const delta = typeof v === 'number' && Number.isFinite(v) ? v : 0
+          store[a.source] = base + delta
+        }
+      }
+      return true
+    }
+    const readRectOf = (id: number): RectLike | null => {
+      try {
+        const r = JSON.parse(proteusHost.readRects()) as { rects?: Record<string, RectLike> }
+        return r.rects?.[String(id)] ?? null
+      } catch {
+        return null
+      }
+    }
+    /** 两个矩形间的最大绝对差（px）；任一为空 ⇒ -1（**不是 0**——判据必须能区分"没读到"与"一致"） */
+    const rectDelta = (a: RectLike | null, b: RectLike | null): number => {
+      if (!a || !b) return -1
+      return Math.round(Math.max(
+        Math.abs(a.x - b.x), Math.abs(a.y - b.y), Math.abs(a.width - b.width), Math.abs(a.height - b.height),
+      ) * 1000) / 1000
+    }
+    const tapBtnA = harnessEvents.find((e) => e.event === 'tap')
+    if (tapBtnA && typeof proteusHost.tapAt === 'function') {
+      const av: NonNullable<AbReport['ev_a']> = {
+        node: tapBtnA.nodeId, hit: -1, handler: '', ops_bytes: 0, applied: -1, relayout: -1,
+        changed_rects: 0, before: null, after: null, width_delta: 0, tap_ms: 0,
+      }
+      ;(globalThis as unknown as Record<string, unknown>)[GESTURE_CB] = (type: string, nodeId: number): string => {
+        const handler = byNodeEvent.get(`${nodeId}:${type}`) ?? byNodeEvent.get(`${nodeId}:tap`) ?? ''
+        if (!handler) return JSON.stringify({ ok: false, reason: `节点 ${nodeId} 上没有 ${type} 的 handler` })
+        runActions(handler, data)
+        // 触发全部订阅源（本夹具 tap 改 boxW；全触发 = "全量重算 + diff"，正确性优先）
+        for (const [, cb] of triggers) cb()
+        vapor.relink(ctx)
+        slotRt.flush()
+        const payload = captured.length ? captured[captured.length - 1]! : new Uint8Array(0)
+        captured.length = 0
+        let applied = -1
+        let relayout = -1
+        let changed = 0
+        if (payload.length > 0) {
+          const ao = JSON.parse(proteusHost.applyOps(JSON.stringify(Array.from(payload)))) as {
+            ok?: boolean; applied?: number; relayout?: number; relayout_count?: number
+            rects?: Record<string, unknown>; error?: string
+          }
+          applied = ao.ok ? (ao.applied ?? -1) : -2
+          relayout = ao.relayout_count ?? ao.relayout ?? -1
+          changed = ao.rects ? Object.keys(ao.rects).length : 0
+        }
+        av.handler = handler
+        av.ops_bytes = payload.length
+        av.applied = applied
+        av.relayout = relayout
+        av.changed_rects = changed
+        return JSON.stringify({ ok: true, handler, ops: payload.length, applied, relayout, changed_rects: changed })
+      }
+      av.before = readRectOf(tapBtnA.nodeId)
+      const tTap = t()
+      if (av.before) {
+        const c = { x: av.before.x + av.before.width / 2, y: av.before.y + av.before.height / 2 }
+        const tp = JSON.parse(proteusHost.tapAt(JSON.stringify(c))) as { ok?: boolean; last?: { target?: number } }
+        av.hit = tp.last?.target ?? -1
+      }
+      av.tap_ms = t() - tTap
+      av.after = readRectOf(tapBtnA.nodeId)
+      if (av.before && av.after) av.width_delta = Math.round((av.after.width - av.before.width) * 1000) / 1000
+      rep.ev_a = av
+      if (av.hit !== tapBtnA.nodeId) {
+        notes.push(`★A 路 tap 命中 ${av.hit} ≠ 事件节点 ${tapBtnA.nodeId}（hitTest 与事件绑定不一致）`)
       }
     }
 
@@ -526,7 +664,11 @@ function runAb(args: VaporArgs): string {
     // 文本节点数（两条路各自数——B 的"有文本节点"就是前面筛出来的那批）
     rep.texts_b = textNodesBAll.length
     const rectsB = readRectsByOrder(semIdsB)
-    const chB = probeChannelsFor(semIdsB)
+    // ★★B 侧绘制探针**取全树**（2026-10-01 第二批修正——此前探 `semIdsB`（文本节点）：
+    //   而绘制声明（圆角/渐变/发光/裁剪/描边）在**其它节点**上 ⇒ 探到恒 0 个非空通道，
+    //   被上一版判据如实标成"探针口径未对齐"。绘制属性与"是不是文本节点"无关：
+    //   两侧都按**全树**探，才能逐通道对照（逐项等价见下面的 channelSig）。
+    const chBRaw = probeChannelsRaw((req.nodes as unknown as Array<Record<string, unknown>>).map((x) => Number(x.id)))
     // ★诊断（判据缺读数时用它定位）：两路的树形态摘要
     if (rep.nodes_a !== rep.nodes_b || rep.texts_a !== rep.texts_b || true) {
       const fmt = (ns: Array<Record<string, unknown>>): string =>
@@ -576,9 +718,25 @@ function runAb(args: VaporArgs): string {
     rep.mismatches = mism
     rep.first_mismatch = first
 
-    // 绘制通道一致性（两侧"非空通道数"应相同；逐节点细比留给判据脚本）
-    rep.channels_a = chA.filter((c) => c.nonEmpty > 0).length
-    rep.channels_b = chB.filter((c) => c.nonEmpty > 0).length
+    // ★★绘制通道：两侧"非空通道节点数" + **逐通道值签名**（排序多重集）——
+    //   逐项等价的判据在判据脚本里按 chan_a/chan_b 的 JSON 相等性判（本档只如实报）。
+    const sigA = channelSig(chARaw)
+    const sigB = channelSig(chBRaw)
+    const nonEmptyCount = (probes: Array<Record<string, unknown>>): number =>
+      probes.filter((c) => {
+        for (const k of CHANNEL_KEYS) {
+          const v = c[k]
+          if (v === undefined || v === null) continue
+          if (typeof v === 'number' && v !== 0) return true
+          if (typeof v === 'string' && v.length > 0) return true
+        }
+        return false
+      }).length
+    rep.channels_a = nonEmptyCount(chARaw)
+    rep.channels_b = nonEmptyCount(chBRaw)
+    rep.chan_a = sigA
+    rep.chan_b = sigB
+    rep.chan_match = JSON.stringify(sigA) === JSON.stringify(sigB)
 
     /* ═══════════ ★★update 段 · 路 B：Vue patch → 适配器补丁 → 宿主 updatePatches ═══════════
      *
@@ -674,6 +832,90 @@ function runAb(args: VaporArgs): string {
     }
     rep.upd_a = updA
 
+    /* ═══════════ ★★事件路径 · 路 B：tap → Vue onClick → patch → 宿主 → 内核 ═══════════
+     *
+     * 【与 A 路同一条宿主链】`tapAt` → 内核 hitTest → `GestureListener` → JNI 反向调用
+     *   → 本相位替换的全局回调 → **适配器 `dispatchEvent`**（Vue 的 `onClick` 在此登记）
+     *   → handler 改 `abBoxW`（ref）→ `instance.update()` 同步重渲染 → `takePatches()`
+     *   → 宿主 `updatePatches` → 内核几何变（判据读 readRects 真值）。
+     *
+     * 【B 按钮怎么定位】夹具常量 `#2f6fed`（与 `gen-vapor-fixture.mjs` 的 SFC 同源）——
+     *   在 B 的请求树里唯一命中；命中数不为 1 ⇒ 如实记 note（**判据红**，不静默换锚点）。
+     *
+     * 【诚实边界】B 的冒泡链按"只派发 target"（`chain` 空 ⇒ 适配器兜底 `[nodeId]`）——
+     *   宿主的 `GestureSink` 目前只传 `(type, targetId)`（chain 在 JNI 分发形态里被丢弃，
+     *   见 `VaporRenderHost.GestureSink` 的签名）。单节点 handler 场景不受影响；
+     *   **祖先冒泡的等价性属后续批次**（如实标注，不假装覆盖）。
+     */
+    const btnBCands = (req.nodes as unknown as Array<Record<string, unknown>>).filter(
+      (x) => x.backgroundColor === '#2f6fed',
+    )
+    if (btnBCands.length === 1 && typeof proteusHost.tapAt === 'function') {
+      const btnBId = Number(btnBCands[0]!.id)
+      const bv: NonNullable<AbReport['ev_b']> = {
+        node: btnBId, hit: -1, fired: [], errors: [], before: null, after: null,
+        width_delta: 0, patches: -1, applied: -1, changed_rects: 0, text_layers: 0, driver_ms: 0,
+      }
+      ;(globalThis as unknown as Record<string, unknown>)[GESTURE_CB] = (type: string, nodeId: number): string => {
+        // ★适配器派发（Vue 的 onClick 已在 `patchProp('onClick')` 时登记进 handlers 表）
+        const r = adapter.dispatchEvent(nodeId, [], type, 0, 0)
+        bv.fired = r.fired
+        bv.errors = r.errors
+        return JSON.stringify({ ok: r.errors.length === 0 && r.fired.length > 0, fired: r.fired, errors: r.errors })
+      }
+      bv.before = readRectOf(btnBId)
+      const tTap = t()
+      if (bv.before) {
+        const c = { x: bv.before.x + bv.before.width / 2, y: bv.before.y + bv.before.height / 2 }
+        const tp = JSON.parse(proteusHost.tapAt(JSON.stringify(c))) as { ok?: boolean; last?: { target?: number } }
+        bv.hit = tp.last?.target ?? -1
+      }
+      // ★同步驱动重渲染（handler 已改 ref；见 `abRootInst` 注释——把"何时跑"从微任务改成显式调用，
+      //   patch 链路一字未改；若宿主回调里的微任务泵已跑过本 job，这里重跑也是幂等的：值相同 ⇒ 不标脏）
+      const rootInstB = abRootInst as { update?: () => void } | null
+      rootInstB?.update?.()
+      const t0 = t()
+      const patched = adapter.takePatches()
+      bv.driver_ms = t() - t0
+      if (patched === null) {
+        notes.push('★B 路 tap 后 takePatches() === null（结构性变化）——夹具的 boxW 变更不该触发结构')
+      } else {
+        bv.patches = patched.length
+        const ho = JSON.parse(proteusHost.updatePatches(JSON.stringify(patched))) as {
+          ok?: boolean; applied?: number; changed_rects?: number; relayout?: number; text_layers_applied?: number; error?: string
+        }
+        if (ho.ok === true) {
+          bv.applied = ho.applied ?? -1
+          bv.changed_rects = ho.changed_rects ?? 0
+          bv.text_layers = ho.text_layers_applied ?? 0
+        } else {
+          notes.push(`★B 路 tap 后 updatePatches 失败：${ho.error ?? ''}`)
+        }
+      }
+      bv.after = readRectOf(btnBId)
+      if (bv.before && bv.after) bv.width_delta = Math.round((bv.after.width - bv.before.width) * 1000) / 1000
+      rep.ev_b = bv
+      if (bv.hit !== btnBId) {
+        notes.push(`★B 路 tap 命中 ${bv.hit} ≠ 按钮节点 ${btnBId}（hitTest 与适配器登记不一致）`)
+      }
+    } else {
+      notes.push(`★B 路按钮定位失败（#2f6fed 命中 ${btnBCands.length} 个，应恰 1 个）——事件等价判据将缺读数`)
+    }
+
+    // ── 事件路径等价（A/B 两路的按钮矩形：tap 前一致 + 位移一致 + tap 后一致）──
+    rep.ev_before_delta = rectDelta(rep.ev_a?.before ?? null, rep.ev_b?.before ?? null)
+    rep.ev_after_delta = rectDelta(rep.ev_a?.after ?? null, rep.ev_b?.after ?? null)
+    rep.ev_match = !!(rep.ev_a && rep.ev_b
+      && rep.ev_before_delta >= 0 && rep.ev_before_delta <= 0.01
+      && rep.ev_after_delta >= 0 && rep.ev_after_delta <= 0.01
+      && Math.abs(rep.ev_a.width_delta - rep.ev_b.width_delta) <= 0.01)
+    if (rep.ev_a && rep.ev_b) {
+      notes.push(`事件路径：A 命中 ${rep.ev_a.hit} · 宽 ${rep.ev_a.before?.width}→${rep.ev_a.after?.width}`
+        + `（指令 ${rep.ev_a.ops_bytes}B / applied ${rep.ev_a.applied}）；`
+        + `B 命中 ${rep.ev_b.hit} · 宽 ${rep.ev_b.before?.width}→${rep.ev_b.after?.width}`
+        + `（补丁 ${rep.ev_b.patches} / applied ${rep.ev_b.applied}）`)
+    }
+
     rep.ok = true
     notes.push(`A 路 ${rep.cost_a.total_ms.toFixed(1)}ms（实例化 ${rep.cost_a.instantiate_ms} + 宿主 ${rep.cost_a.host_ms}）`)
     notes.push(`B 路 ${rep.cost_b.total_ms.toFixed(1)}ms（Vue mount ${rep.cost_b.vue_ms} + 请求 ${rep.cost_b.request_ms} + 序列化 ${rep.cost_b.serialize_ms} + 宿主 ${rep.cost_b.host_ms}）`)
@@ -762,6 +1004,71 @@ function probeChannelsFor(ids: number[]): Array<{ id: number; nonEmpty: number }
   } catch {
     return []
   }
+}
+
+/** 六个绘制通道键（与宿主 `probeChannels` 的回执键逐字一致） */
+const CHANNEL_KEYS = ['radius', 'grad', 'glow', 'clip', 'stroke_len', 'mask'] as const
+
+/** 逐节点探针（**原始回执**——保留每个通道的值，供逐项对照） */
+function probeChannelsRaw(ids: number[]): Array<Record<string, unknown>> {
+  try {
+    const r = JSON.parse(proteusHost.probeChannels(JSON.stringify(ids))) as {
+      ok?: boolean
+      channels?: Array<Record<string, unknown>>
+    }
+    return (r.channels ?? []).filter((c) => c && c.id !== undefined)
+  } catch {
+    return []
+  }
+}
+
+/**
+ * ★★**绘制通道逐项签名**（2026-10-01 第二批：B 侧探针口径对齐）——
+ *   「哪个节点带哪个通道、值是多少」的**排序多重集**，而不是"非空通道数相等"。
+ *
+ * 【为什么多重集（本批最关键的口径设计）】两条路的**树形天然不同**：
+ *   A（Vapor）把 `p-text` 文本折在元素上（文本即元素属性）；B（Vue 运行时）是标准
+ *   vnode 树（`p-text` 元素 + 匿名文本子节点，文本子节点**继承**父的绘制属性）。
+ *   ⇒ 按节点 id / 按 index 一一对照都必然错位（本仓 A/B mount 首版就吃过"错位假象"的亏）。
+ *   而"同一份 SFC 两侧应产出**同一组语义绘制声明**"是成立的——故按**签名多重集**对照：
+ *   同值同计数即等价（map 的键序差异、节点拆分差异都不影响结论）；
+ *   缺失的签名会以 `-计数` 与 `+计数` 直接暴露（判据脚本给差集）。
+ *
+ * 【为什么 `clip` 要归一（0 与 undefined 同义）】宿主回执对"无裁剪"节点给 `clip: 0`
+ *   （`clipKindOf` 的返回值），而缺该键时读作 undefined——两者是同一语义（没有裁剪），
+ *   归一后再入签名，否则会出现"0 vs undefined"的**假差异**。
+ *   ★同理 `mask`（0 = 无）与 `stroke_len`（0 = 未建描边层）——宿主对无描边的节点**不给键**，
+ *     而给 `stroke_len: 0` 的节点存在 ⇒ 一并按"零值即无"归省（只保留非零值）。
+ */
+function channelSig(probes: Array<Record<string, unknown>>): { per_channel: Record<string, Record<string, number>>; total: number } {
+  const per: Record<string, Record<string, number>> = {}
+  for (const k of CHANNEL_KEYS) per[k] = {}
+  const bump = (k: string, v: unknown): void => {
+    const key = typeof v === 'number' ? String(Math.round(v * 1000) / 1000) : String(v)
+    const m = per[k]!
+    m[key] = (m[key] ?? 0) + 1
+  }
+  let total = 0
+  for (const c of probes) {
+    for (const k of CHANNEL_KEYS) {
+      const v = c[k]
+      if (v === undefined || v === null) continue
+      // 零值 = 该通道"没有"（与缺键同义）——归省，防假差异
+      if (typeof v === 'number' && v === 0) continue
+      if (typeof v === 'string' && v === '') continue
+      bump(k, v)
+      total++
+    }
+  }
+  // 排序保证 JSON.stringify 稳定（键序无关的确定性比较）
+  const sorted: Record<string, Record<string, number>> = {}
+  for (const k of CHANNEL_KEYS) {
+    const keys = Object.keys(per[k]!).sort()
+    const m: Record<string, number> = {}
+    for (const kk of keys) m[kk] = per[k]![kk]!
+    sorted[k] = m
+  }
+  return { per_channel: sorted, total }
 }
 
 /**

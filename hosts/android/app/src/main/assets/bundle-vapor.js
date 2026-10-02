@@ -11464,6 +11464,14 @@
       layout_ms_b: -1,
       channels_a: -1,
       channels_b: -1,
+      chan_a: null,
+      chan_b: null,
+      chan_match: false,
+      ev_a: null,
+      ev_b: null,
+      ev_match: false,
+      ev_before_delta: -1,
+      ev_after_delta: -1,
       upd_rounds: 0,
       upd_a: [],
       upd_b: [],
@@ -11504,23 +11512,23 @@
       }
       const semIdsA = textNodesAForAb.map((n2) => n2.id);
       const rectsA = readRectsByOrder(semIdsA);
-      const chA = probeChannelsFor(inst.nodes.map((n2) => n2.id));
+      const chARaw = probeChannelsRaw(inst.nodes.map((n2) => Number(n2.id)));
       const updRounds = Math.max(0, args.updates ?? 2);
       const updA = [];
       const geomsA = [];
+      const keys = new PropKeyTable();
+      const strings = new StringPool();
+      const captured = [];
+      const slotRt = new SlotRuntime(keys, strings, (bytes) => captured.push(bytes));
+      const evals = VaporRuntime.buildEvaluators(artifacts.table.evaluators);
+      const vapor = new VaporRuntime(artifacts.table, slotRt, evals, registry);
+      const ctx = { read };
+      const triggers = /* @__PURE__ */ new Map();
+      vapor.load(ctx, (name, cb) => triggers.set(name, cb));
+      vapor.relink(ctx);
+      slotRt.flush();
+      captured.length = 0;
       if (updRounds > 0) {
-        const keys = new PropKeyTable();
-        const strings = new StringPool();
-        const captured = [];
-        const slotRt = new SlotRuntime(keys, strings, (bytes) => captured.push(bytes));
-        const evals = VaporRuntime.buildEvaluators(artifacts.table.evaluators);
-        const vapor = new VaporRuntime(artifacts.table, slotRt, evals, registry);
-        const ctx = { read };
-        const triggers = /* @__PURE__ */ new Map();
-        vapor.load(ctx, (name, cb) => triggers.set(name, cb));
-        vapor.relink(ctx);
-        slotRt.flush();
-        captured.length = 0;
         for (let r = 0; r < updRounds; r++) {
           const list = data.list;
           if (!Array.isArray(list) || list.length === 0) break;
@@ -11568,6 +11576,100 @@
             moved: maxGeomDelta(prevGeom, geom)
           });
           rep.upd_a_text_synced += tsyn;
+        }
+      }
+      const harnessEvents = artifacts.events ?? [];
+      const harnessHandlers = artifacts.handlers ?? {};
+      const byNodeEvent = /* @__PURE__ */ new Map();
+      for (const e of harnessEvents) byNodeEvent.set(`${e.nodeId}:${e.event}`, e.handler);
+      const GESTURE_CB = "__proteusVaporGesture";
+      if (typeof proteusHost.onGesture === "function") proteusHost.onGesture(GESTURE_CB);
+      const runActions = (name, store) => {
+        const acts = harnessHandlers[name];
+        if (!acts) return false;
+        for (const a of acts) {
+          const v = evalExpr(a.program, { read: (n2) => store[n2] });
+          const cur = store[a.source];
+          if (a.op === "set") {
+            store[a.source] = v;
+          } else {
+            const base = typeof cur === "number" && Number.isFinite(cur) ? cur : 0;
+            const delta = typeof v === "number" && Number.isFinite(v) ? v : 0;
+            store[a.source] = base + delta;
+          }
+        }
+        return true;
+      };
+      const readRectOf = (id) => {
+        try {
+          const r = JSON.parse(proteusHost.readRects());
+          return r.rects?.[String(id)] ?? null;
+        } catch {
+          return null;
+        }
+      };
+      const rectDelta = (a, b) => {
+        if (!a || !b) return -1;
+        return Math.round(Math.max(
+          Math.abs(a.x - b.x),
+          Math.abs(a.y - b.y),
+          Math.abs(a.width - b.width),
+          Math.abs(a.height - b.height)
+        ) * 1e3) / 1e3;
+      };
+      const tapBtnA = harnessEvents.find((e) => e.event === "tap");
+      if (tapBtnA && typeof proteusHost.tapAt === "function") {
+        const av = {
+          node: tapBtnA.nodeId,
+          hit: -1,
+          handler: "",
+          ops_bytes: 0,
+          applied: -1,
+          relayout: -1,
+          changed_rects: 0,
+          before: null,
+          after: null,
+          width_delta: 0,
+          tap_ms: 0
+        };
+        globalThis[GESTURE_CB] = (type, nodeId) => {
+          const handler = byNodeEvent.get(`${nodeId}:${type}`) ?? byNodeEvent.get(`${nodeId}:tap`) ?? "";
+          if (!handler) return JSON.stringify({ ok: false, reason: `\u8282\u70B9 ${nodeId} \u4E0A\u6CA1\u6709 ${type} \u7684 handler` });
+          runActions(handler, data);
+          for (const [, cb] of triggers) cb();
+          vapor.relink(ctx);
+          slotRt.flush();
+          const payload = captured.length ? captured[captured.length - 1] : new Uint8Array(0);
+          captured.length = 0;
+          let applied = -1;
+          let relayout = -1;
+          let changed = 0;
+          if (payload.length > 0) {
+            const ao = JSON.parse(proteusHost.applyOps(JSON.stringify(Array.from(payload))));
+            applied = ao.ok ? ao.applied ?? -1 : -2;
+            relayout = ao.relayout_count ?? ao.relayout ?? -1;
+            changed = ao.rects ? Object.keys(ao.rects).length : 0;
+          }
+          av.handler = handler;
+          av.ops_bytes = payload.length;
+          av.applied = applied;
+          av.relayout = relayout;
+          av.changed_rects = changed;
+          return JSON.stringify({ ok: true, handler, ops: payload.length, applied, relayout, changed_rects: changed });
+        };
+        av.before = readRectOf(tapBtnA.nodeId);
+        const tTap = t();
+        if (av.before) {
+          const c = { x: av.before.x + av.before.width / 2, y: av.before.y + av.before.height / 2 };
+          const tp = JSON.parse(proteusHost.tapAt(JSON.stringify(c)));
+          av.hit = tp.last?.target ?? -1;
+        }
+        av.tap_ms = t() - tTap;
+        av.after = readRectOf(tapBtnA.nodeId);
+        if (av.before && av.after) av.width_delta = Math.round((av.after.width - av.before.width) * 1e3) / 1e3;
+        rep.ev_a = av;
+        if (av.hit !== tapBtnA.nodeId) {
+          notes.push(`\u2605A \u8DEF tap \u547D\u4E2D ${av.hit} \u2260 \u4E8B\u4EF6\u8282\u70B9 ${tapBtnA.nodeId}\uFF08hitTest \u4E0E\u4E8B\u4EF6\u7ED1\u5B9A\u4E0D\u4E00\u81F4\uFF09`);
         }
       }
       const adapter = createSelfDrawAdapter();
@@ -11631,16 +11733,16 @@
       const semIdsB = semB.map((x) => x.nodeId);
       rep.texts_b = textNodesBAll.length;
       const rectsB = readRectsByOrder(semIdsB);
-      const chB = probeChannelsFor(semIdsB);
+      const chBRaw = probeChannelsRaw(req.nodes.map((x) => Number(x.id)));
       if (rep.nodes_a !== rep.nodes_b || rep.texts_a !== rep.texts_b || true) {
         const fmt = (ns) => ns.slice(0, 40).map((n2) => `${n2.id}${n2.parentId === null ? "" : "<" + String(n2.parentId)}:${String(n2.tag ?? "")}${typeof n2.text === "string" && n2.text ? "(" + String(n2.text).slice(0, 6) + ")" : ""}`).join(" ");
         notes.push("A \u6811: " + fmt(inst.nodes));
         notes.push("B \u6811: " + fmt(req.nodes));
         const fmt2 = (ns) => ns.slice(0, 40).map((n2) => {
-          const keys = Object.keys(n2).filter(
+          const keys2 = Object.keys(n2).filter(
             (k) => !["id", "parentId", "text"].includes(k)
           );
-          return `${n2.id}<${n2.parentId ?? "-"}[${keys.slice(0, 3).join(",")}${keys.length > 3 ? "\u2026" : ""}]${typeof n2.text === "string" && n2.text ? "{" + String(n2.text).slice(0, 5) + "}" : ""}`;
+          return `${n2.id}<${n2.parentId ?? "-"}[${keys2.slice(0, 3).join(",")}${keys2.length > 3 ? "\u2026" : ""}]${typeof n2.text === "string" && n2.text ? "{" + String(n2.text).slice(0, 5) + "}" : ""}`;
         }).join(" ");
         notes.push("A \u660E\u7EC6: " + fmt2(inst.nodes));
         notes.push("B \u660E\u7EC6: " + fmt2(req.nodes));
@@ -11672,8 +11774,22 @@
       rep.max_delta = Math.round(maxD * 1e3) / 1e3;
       rep.mismatches = mism;
       rep.first_mismatch = first;
-      rep.channels_a = chA.filter((c) => c.nonEmpty > 0).length;
-      rep.channels_b = chB.filter((c) => c.nonEmpty > 0).length;
+      const sigA = channelSig(chARaw);
+      const sigB = channelSig(chBRaw);
+      const nonEmptyCount = (probes) => probes.filter((c) => {
+        for (const k of CHANNEL_KEYS) {
+          const v = c[k];
+          if (v === void 0 || v === null) continue;
+          if (typeof v === "number" && v !== 0) return true;
+          if (typeof v === "string" && v.length > 0) return true;
+        }
+        return false;
+      }).length;
+      rep.channels_a = nonEmptyCount(chARaw);
+      rep.channels_b = nonEmptyCount(chBRaw);
+      rep.chan_a = sigA;
+      rep.chan_b = sigB;
+      rep.chan_match = JSON.stringify(sigA) === JSON.stringify(sigB);
       const updB = [];
       const geomsB = [];
       if (updRounds > 0) {
@@ -11751,6 +11867,71 @@
         rep.upd_mismatches = umism;
       }
       rep.upd_a = updA;
+      const btnBCands = req.nodes.filter(
+        (x) => x.backgroundColor === "#2f6fed"
+      );
+      if (btnBCands.length === 1 && typeof proteusHost.tapAt === "function") {
+        const btnBId = Number(btnBCands[0].id);
+        const bv = {
+          node: btnBId,
+          hit: -1,
+          fired: [],
+          errors: [],
+          before: null,
+          after: null,
+          width_delta: 0,
+          patches: -1,
+          applied: -1,
+          changed_rects: 0,
+          text_layers: 0,
+          driver_ms: 0
+        };
+        globalThis[GESTURE_CB] = (type, nodeId) => {
+          const r = adapter.dispatchEvent(nodeId, [], type, 0, 0);
+          bv.fired = r.fired;
+          bv.errors = r.errors;
+          return JSON.stringify({ ok: r.errors.length === 0 && r.fired.length > 0, fired: r.fired, errors: r.errors });
+        };
+        bv.before = readRectOf(btnBId);
+        const tTap = t();
+        if (bv.before) {
+          const c = { x: bv.before.x + bv.before.width / 2, y: bv.before.y + bv.before.height / 2 };
+          const tp = JSON.parse(proteusHost.tapAt(JSON.stringify(c)));
+          bv.hit = tp.last?.target ?? -1;
+        }
+        const rootInstB = abRootInst;
+        rootInstB?.update?.();
+        const t0 = t();
+        const patched = adapter.takePatches();
+        bv.driver_ms = t() - t0;
+        if (patched === null) {
+          notes.push("\u2605B \u8DEF tap \u540E takePatches() === null\uFF08\u7ED3\u6784\u6027\u53D8\u5316\uFF09\u2014\u2014\u5939\u5177\u7684 boxW \u53D8\u66F4\u4E0D\u8BE5\u89E6\u53D1\u7ED3\u6784");
+        } else {
+          bv.patches = patched.length;
+          const ho = JSON.parse(proteusHost.updatePatches(JSON.stringify(patched)));
+          if (ho.ok === true) {
+            bv.applied = ho.applied ?? -1;
+            bv.changed_rects = ho.changed_rects ?? 0;
+            bv.text_layers = ho.text_layers_applied ?? 0;
+          } else {
+            notes.push(`\u2605B \u8DEF tap \u540E updatePatches \u5931\u8D25\uFF1A${ho.error ?? ""}`);
+          }
+        }
+        bv.after = readRectOf(btnBId);
+        if (bv.before && bv.after) bv.width_delta = Math.round((bv.after.width - bv.before.width) * 1e3) / 1e3;
+        rep.ev_b = bv;
+        if (bv.hit !== btnBId) {
+          notes.push(`\u2605B \u8DEF tap \u547D\u4E2D ${bv.hit} \u2260 \u6309\u94AE\u8282\u70B9 ${btnBId}\uFF08hitTest \u4E0E\u9002\u914D\u5668\u767B\u8BB0\u4E0D\u4E00\u81F4\uFF09`);
+        }
+      } else {
+        notes.push(`\u2605B \u8DEF\u6309\u94AE\u5B9A\u4F4D\u5931\u8D25\uFF08#2f6fed \u547D\u4E2D ${btnBCands.length} \u4E2A\uFF0C\u5E94\u6070 1 \u4E2A\uFF09\u2014\u2014\u4E8B\u4EF6\u7B49\u4EF7\u5224\u636E\u5C06\u7F3A\u8BFB\u6570`);
+      }
+      rep.ev_before_delta = rectDelta(rep.ev_a?.before ?? null, rep.ev_b?.before ?? null);
+      rep.ev_after_delta = rectDelta(rep.ev_a?.after ?? null, rep.ev_b?.after ?? null);
+      rep.ev_match = !!(rep.ev_a && rep.ev_b && rep.ev_before_delta >= 0 && rep.ev_before_delta <= 0.01 && rep.ev_after_delta >= 0 && rep.ev_after_delta <= 0.01 && Math.abs(rep.ev_a.width_delta - rep.ev_b.width_delta) <= 0.01);
+      if (rep.ev_a && rep.ev_b) {
+        notes.push(`\u4E8B\u4EF6\u8DEF\u5F84\uFF1AA \u547D\u4E2D ${rep.ev_a.hit} \xB7 \u5BBD ${rep.ev_a.before?.width}\u2192${rep.ev_a.after?.width}\uFF08\u6307\u4EE4 ${rep.ev_a.ops_bytes}B / applied ${rep.ev_a.applied}\uFF09\uFF1BB \u547D\u4E2D ${rep.ev_b.hit} \xB7 \u5BBD ${rep.ev_b.before?.width}\u2192${rep.ev_b.after?.width}\uFF08\u8865\u4E01 ${rep.ev_b.patches} / applied ${rep.ev_b.applied}\uFF09`);
+      }
       rep.ok = true;
       notes.push(`A \u8DEF ${rep.cost_a.total_ms.toFixed(1)}ms\uFF08\u5B9E\u4F8B\u5316 ${rep.cost_a.instantiate_ms} + \u5BBF\u4E3B ${rep.cost_a.host_ms}\uFF09`);
       notes.push(`B \u8DEF ${rep.cost_b.total_ms.toFixed(1)}ms\uFF08Vue mount ${rep.cost_b.vue_ms} + \u8BF7\u6C42 ${rep.cost_b.request_ms} + \u5E8F\u5217\u5316 ${rep.cost_b.serialize_ms} + \u5BBF\u4E3B ${rep.cost_b.host_ms}\uFF09`);
@@ -11798,27 +11979,42 @@
     }
     return { delta: Math.round(delta * 1e3) / 1e3, mismatches, samples: n };
   }
-  function probeChannelsFor(ids) {
+  var CHANNEL_KEYS = ["radius", "grad", "glow", "clip", "stroke_len", "mask"];
+  function probeChannelsRaw(ids) {
     try {
       const r = JSON.parse(proteusHost.probeChannels(JSON.stringify(ids)));
-      return (r.channels ?? []).map((c) => {
-        const id = Number(c.id ?? -1);
-        let nonEmpty = 0;
-        for (const k of ["radius", "grad", "glow", "clip", "stroke_len", "mask"]) {
-          const v = c[k];
-          if (v === void 0 || v === null) continue;
-          if (k === "mask") {
-            if (Number(v) > 0) nonEmpty++;
-            continue;
-          }
-          if (typeof v === "number" && v > 0) nonEmpty++;
-          else if (typeof v === "string" && v.length > 0) nonEmpty++;
-        }
-        return { id, nonEmpty };
-      });
+      return (r.channels ?? []).filter((c) => c && c.id !== void 0);
     } catch {
       return [];
     }
+  }
+  function channelSig(probes) {
+    const per = {};
+    for (const k of CHANNEL_KEYS) per[k] = {};
+    const bump = (k, v) => {
+      const key = typeof v === "number" ? String(Math.round(v * 1e3) / 1e3) : String(v);
+      const m = per[k];
+      m[key] = (m[key] ?? 0) + 1;
+    };
+    let total = 0;
+    for (const c of probes) {
+      for (const k of CHANNEL_KEYS) {
+        const v = c[k];
+        if (v === void 0 || v === null) continue;
+        if (typeof v === "number" && v === 0) continue;
+        if (typeof v === "string" && v === "") continue;
+        bump(k, v);
+        total++;
+      }
+    }
+    const sorted = {};
+    for (const k of CHANNEL_KEYS) {
+      const keys = Object.keys(per[k]).sort();
+      const m = {};
+      for (const kk of keys) m[kk] = per[k][kk];
+      sorted[k] = m;
+    }
+    return { per_channel: sorted, total };
   }
   function runVirtualList(args) {
     const t = () => Date.now();

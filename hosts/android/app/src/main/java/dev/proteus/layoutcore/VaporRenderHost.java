@@ -175,6 +175,10 @@ final class VaporRenderHost {
                 RustLayout.destroy(handle);
                 handle = 0L;
             }
+            // ★★**清空按 id 键的每树状态**（2026-10-01 A/B 判据实测抓出的真缺陷）：
+            //   id 每棵树重新分配，旧表的裁剪/描边/变换原会被新树"同 id 节点"继承
+            //   ⇒ 幽灵裁剪 / 幽灵描边（详见 `ProteusHostView.resetPerTreeState` 注释）。
+            if (view != null) view.resetPerTreeState();
             specs.clear();
             indexById.clear();
             int textCount = 0;
@@ -614,6 +618,8 @@ final class VaporRenderHost {
                 RustLayout.recycleDestroy(recycleHandle);
                 recycleHandle = 0L;
             }
+            // ★★同 mount：按 id 键的每树状态必须清空（见 `resetPerTreeState` 注释）
+            if (view != null) view.resetPerTreeState();
             specs.clear();
             indexById.clear();
             int textCount = 0;
