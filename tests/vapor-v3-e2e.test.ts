@@ -13,8 +13,8 @@ import fs from 'node:fs'
 import { execFileSync } from 'node:child_process'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
-import { buildVaporSubscriptions } from '@proteus-vue/compiler'
-import { OpCode, PropKeyTable, StringPool, SlotRuntime, VaporRuntime, encodeOps } from '@proteus-vue/slot-runtime'
+import { buildVaporSubscriptions, buildLayoutTemplate } from '@proteus-vue/compiler'
+import { ListRegistry, OpCode, PropKeyTable, StringPool, SlotRuntime, VaporRuntime, encodeOps, instantiateTemplate } from '@proteus-vue/slot-runtime'
 import type { EvalContext, SubscriptionTable } from '@proteus-vue/slot-runtime'
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..')
@@ -249,5 +249,76 @@ const dotWidth = ref(20)
     const res = rustRoundTrip(treeJson, bytes) as unknown as { applied: number; unsupported?: unknown[] }
     expect(res.applied).toBe(0)
     expect(res.unsupported && res.unsupported.length).toBeGreaterThan(0)
+  })
+
+  it('★★嵌套 v-for 全链闭环：SFC → 递归实例化 → 改内层行 → 指令 → Rust 几何（P2-1）', () => {
+    // 【这一条补的是什么（P2-1 收尾判据）】前面的嵌套用例分两半：
+    //   · `vapor-sfc-to-tree`：结构（递归实例化产出的节点树）+ 注册表回填；
+    //   · `vapor-list-e2e`：运行时的嵌套行集解析（指令打到正确节点）；
+    //   但**没有一层**把"实例化产物"直接喂给 Rust 内核看几何——而 id 分配
+    //   （首行复用模板 id / 新增行顺序分配）恰恰只在真实树里有对错。
+    //   ★本用例走**完整链**：模板 → 递归实例化（自动回填 ListRegistry）→ 改数据
+    //     → 一条指令 → Rust 应用 → 几何逐位断言。
+    const sfc = `<template>
+  <p-view style="flex-direction: column; width: 300; height: 400">
+    <p-view v-for="g in gs" :key="g.id" style="height: 60; flex-shrink: 0; flex-direction: row">
+      <p-text :width="g.w" style="color: #fff">{{ g.t }}</p-text>
+      <p-view v-for="x in g.items" :key="x.id" style="width: 20; height: 20; margin-left: 4">
+        <p-text>{{ x.n }}</p-text>
+      </p-view>
+    </p-view>
+  </p-view>
+</template>
+
+<script setup lang="ts">
+const gs = ref([])
+</script>
+`
+    // ① 编译 + 递归实例化（registry 自动回填 —— 行内指令解析到具体行节点的前提）
+    let data = {
+      gs: [
+        { id: 1, w: 100, t: 'G1', items: [{ id: 10, n: 'a' }, { id: 11, n: 'b' }] },
+        { id: 2, w: 120, t: 'G2', items: [{ id: 20, n: 'c' }] },
+      ],
+    }
+    const { template } = buildLayoutTemplate(sfc, 'nested-e2e.vue')
+    const { table } = buildVaporSubscriptions(sfc, 'nested-e2e.vue')
+    const reg = new ListRegistry()
+    const inst = instantiateTemplate(template, {
+      viewport: { width: 300, height: 400 },
+      read: (n) => (data as unknown as Record<string, unknown>)[n],
+      table,
+      registry: reg,
+    })
+    expect(inst.nodes.length, '1 根 + 2 行×（行根+文本+内层容器）+ 3 内层文本').toBe(11)
+
+    // ② 运行时接上（含注册表 ⇒ 行内槽位解析为普通 SET_STYLE，不发 LIST_UPDATE）
+    const keys = new PropKeyTable()
+    const strings = new StringPool()
+    const captured: Uint8Array[] = []
+    const rt = new SlotRuntime(keys, strings, (b) => captured.push(b))
+    const ctx: EvalContext = { read: (n) => (data as unknown as Record<string, unknown>)[n] }
+    const vapor = new VaporRuntime(table, rt, VaporRuntime.buildEvaluators(table.evaluators), reg)
+    const triggers = new Map<string, () => void>()
+    vapor.load(ctx, (n, cb) => triggers.set(n, cb))
+    vapor.relink(ctx)
+    rt.flush()
+    captured.length = 0 // 丢首帧
+
+    // ③ 改第 2 个外层行的文本宽度 120 → 200（外层行内槽位，itemKey='2'）
+    data = { gs: [data.gs[0]!, { ...data.gs[1]!, w: 200 }] }
+    triggers.get('gs')!()
+    rt.flush()
+    expect(captured.length).toBe(1) // ★一次提交
+    const bytes = captured[0]!
+
+    // ④ 交给 Rust：树 = 实例化产物（不是手写数组）
+    const res = rustRoundTrip(JSON.stringify({ viewport: inst.viewport, nodes: inst.nodes }), bytes)
+    expect(res.applied).toBe(1)
+    // id 约定：模板序 DFS——根=0；行1=1(text=2, 内层容器=3→4, 5→6)；行2=7(text=8, 内层容器=9→10)
+    expect(res.rects['8'].width, '第 2 行文本变成 200').toBeCloseTo(200, 1)
+    expect(res.rects['2'].width, '第 1 行文本保持 100（增量不越界）').toBeCloseTo(100, 1)
+    expect(res.rects['9'].x, '内层容器跟着右移（100 + 4 边距 → 200 + 4）').toBeCloseTo(204, 1)
+    expect(res.rects['10'].width, '内层文本撑满容器（结构正确）').toBeCloseTo(20, 1)
   })
 })

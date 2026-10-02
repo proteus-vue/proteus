@@ -45,8 +45,9 @@ export interface InstantiateResult {
    *   无法知道整行有哪些节点 ⇒ 无法整行 acquire/release。
    *   ⇒ 实例化时顺手把 `idMap` 的像集记下来（零额外成本）。
    *
-   * 【诚实边界】只覆盖**单层 v-for**（与模板产物的能力一致，见模板诊断）；
-   *   多层列表此处为空 ⇒ 宿主退回全量物化（宁可多建，不可错配）。
+   * 【诚实边界】只覆盖**单层 v-for**（多列表 ⇒ 行号空间不同源，宿主按行号二分会错配）；
+   *   嵌套列表（`tpl.lists.length > 1`）此处不给出 ⇒ 宿主退回全量物化（宁可多建，不可错配）。
+   *   ★嵌套展开本身已支持（2026-10-03 P2）；此处限制的是**虚拟化描述**的适用范围。
    */
   virtual?: {
     /** 各行**按行号升序**（宿主对可见区做二分查找的前提） */
@@ -79,14 +80,22 @@ function engineFieldOf(propKey: string): { kind: 'style'; key: string } | { kind
   return { kind: 'style', key: m[1]! }
 }
 
-/** 求某列表的行数组：**复用 VaporRuntime 的同一算法**（纯 sourceExpr 逐级下钻，任意层嵌套） */
-function rowsOfList(listId: number, table: SubscriptionTable | undefined, read: (n: string) => unknown): Array<Record<string, unknown>> {
+/** 求某列表的行数组：**复用 VaporRuntime 的同一算法**（逐级下钻，任意层嵌套） */
+function rowsOfList(listId: number, meta: ListTemplate | undefined, table: SubscriptionTable | undefined, read: (n: string) => unknown): Array<Record<string, unknown>> {
   if (!table) return []
-  const itemSlots = table.sources.flatMap((s) => s.slots).filter((x) => x.kind === 'list-item' && x.listId === listId)
-  const spec = itemSlots[0]
+  const allSlots = table.sources.flatMap((s) => s.slots)
+  const itemSlots = allSlots.filter((x) => x.kind === 'list-item' && x.listId === listId)
+  // ★★无 `list-item` 槽位的列表 ⇒ 退回 **list-data 槽位**（2026-10-03 嵌套批次实测修正）
+  //
+  // 【为什么必须有】外层列表若行内**没有任何可更新绑定**（如 `<li v-for="g in gs">` 里只有
+  //   内层 v-for / 或只有 :key），订阅表里只有它的 `list-data` 槽位（`:key` 不建槽位）
+  //   ⇒ 首版直接 `return []` ⇒ **外层行集为空 ⇒ 外层 li 整行不展开**（实测：只剩内层 i）。
+  const spec = itemSlots[0] ?? allSlots.find((x) => x.kind === 'list-data' && x.listId === listId)
   if (!spec) return []
   const srcName = table.sources.find((s) => s.slots.some((x) => x.listId === listId))?.sourceName ?? ''
-  const segs = (spec.sourceExpr ?? '').split('.').filter(Boolean)
+  // ★下钻段优先取**模板的 sourceField**（如外层 `gs` / 内层 `items`）：
+  //   list-data 槽位没有 sourceExpr（它是"整源换数据"语义），靠 sourceExpr 会取到空 ⇒ 不下钻。
+  const segs = (meta?.sourceField || spec.sourceExpr || '').split('.').filter(Boolean)
   const topRows = read(srcName)
   if (!Array.isArray(topRows)) return []
   const walkSegs = segs[0] === srcName ? segs.slice(1) : segs
@@ -106,8 +115,8 @@ function rowsOfList(listId: number, table: SubscriptionTable | undefined, read: 
 /**
  * 实例化：模板 + 数据 → 节点树（并把行内槽位注册进 registry）
  *
- * ★只支持**单层** v-for 的实例化（多层会在下一轮做递归展开——见 template.ts 的诊断）。
- *   遇到多层时，本函数仍返回首行结构（不崩），但调用方应据模板诊断走标准 Vue 路径。
+ * ★支持**任意层** v-for 嵌套（2026-10-03 P2 批次：外层行克隆时按 `parentListId` 递归展开
+ *   内层列表，行根挂到外层行实例；见 `cloneRow` ②.5）。
  */
 export function instantiateTemplate(tpl: LayoutTemplate, opts: InstantiateOptions): InstantiateResult {
   const nodes: InstantiatedNode[] = []
@@ -138,21 +147,40 @@ export function instantiateTemplate(tpl: LayoutTemplate, opts: InstantiateOption
       ;(out as Record<string, unknown>)[k] = v
     }
     if (n.text !== undefined) out.text = n.text
+    // ★★`tag` / `component` **必须透传**（2026-10-03 P2 批次补的真缺陷）：本函数此前只写
+    //   id/parentId/style/text，`tag` 被丢弃 ⇒ 宿主看不到节点类型（诊断串一直是 `undefined`；
+    //   组件边界 `component` 也会丢）。★为什么之前没暴露：既有夹具的样式已足够布局、
+    //   宿主也不读 tag ⇒ 三端判据全绿（**假绿形态**）。直到组件系统（P1）需要"这是组件位"
+    //   的语义标记、嵌套 v-for（P2）需要区分容器与行，才必须补上。
+    if (n.tag) out.tag = n.tag
+    if (n.component) out.component = n.component
     nodes.push(out)
     byId.set(id, out)
   }
 
   // ★行模板的成员映射：`模板 id → 在该行内的角色`（行根 + 子节点，按模板序）
+  //
+  // ★★`parentOverrideId`（2026-10-03 嵌套批次新增）：**外层行的实例 id**
+  //   【为什么需要】内层 v-for 的行根（如 `i`）在模板里挂在**外层行根**（`li`，模板 id=1）下；
+  //     idMap 只含内层子树 ⇒ 外层父 id 翻译不到 ⇒ 会按**模板序 id** 挂（第一行巧合正确，
+  //     第二行起全挂到第一行的 li 上——实测的"内层 i 都挤在第一个 li 里"）。
+  //   ⇒ 外层行克隆把自己的**实例 id**（rowRootId）传进来，内层行根挂到它。
+  // ★`collect`（2026-10-03 嵌套批次新增）：**上层行**的完整 id 集合——
+  //   本行产出（含所有嵌套后代）在收尾时整体并入它；上层行回收时才能整行覆盖（不留孤儿）。
   const cloneRow = (
     listId: number,
     row: Record<string, unknown>,
     itemKey: string,
     first: boolean,
     rowIndex: number,
+    parentOverrideId?: number,
+    collect?: number[],
   ): number => {
     const meta = rowLists.get(listId)!
     const idMap = new Map<number, number>()
     let rowRootId = 0
+    /** ★本行**实际产出**的全部节点 id（含嵌套列表的后代；父在前）——见 virtual 注释 */
+    const myIds: number[] = []
     // ① 先分配 id（父在前 ⇒ 一遍即可建立映射）
     for (const tplId of meta.subtreeIds) {
       const engineId = first ? tplId : nextId++
@@ -166,17 +194,49 @@ export function instantiateTemplate(tpl: LayoutTemplate, opts: InstantiateOption
       const tn = tpl.nodes.find((x) => x.id === tplId)!
       const engineId = idMap.get(tplId)!
       const tplParent = tn.parentId
-      const parentId = tplParent === null ? null : (idMap.get(tplParent) ?? tplParent)
+      let parentId = tplParent === null ? null : (idMap.get(tplParent) ?? tplParent)
+      // ★行根的父在**本子树之外**（模板序不可用）⇒ 用外层行的实例 id
+      if (parentOverrideId !== undefined && tplId === meta.rowRootId) parentId = parentOverrideId
       emit(tn, engineId, parentId)
+      myIds.push(engineId)
+    }
+    // ②.5 ★★**嵌套列表递归展开**（2026-10-03 P2 批次）——任意层
+    //
+    // 【模型】`lists[]` 里 `parentListId === 本列表` 的就是本行的内层列表：
+    //   内层行集 = **本行数据**上按 `sourceField`（如 `items` / `l2.sub`）逐级取的数组
+    //   ⇒ 逐行递归克隆，行根挂到本行的实例根（rowRootId）。
+    //   ★"首行可用模板 id"仅当**本行也是首行**（first）且是内层第一行（j===0）——
+    //     模板 id 全局只能用一次，否则与第一行的内层实例**撞 id**。
+    //   ★顺序：内层行按数据序展开 ⇒ 与运行时 rowsOfList 的**全局扁平行序**一致
+    //     （LIST_UPDATE 按 itemKey 定位，不依赖顺序；但保持同序便于对账）。
+    //   ★collect 传 **myIds**：内层产出的 id 也记进本行（递归逐层向外累积 ⇒ 最外层拿到全量）。
+    for (const inner of tpl.lists) {
+      if (inner.parentListId !== listId) continue
+      // ★sourceField 可含多段（`a.l2.sub` ⇒ `l2.sub`）——逐段下钻，不是单键取值
+      let arr: unknown = row
+      for (const seg of (inner.sourceField ?? '').split('.').filter(Boolean)) {
+        arr = (arr as Record<string, unknown> | undefined)?.[seg]
+      }
+      if (!Array.isArray(arr)) continue
+      const innerKeyField = opts.table?.sources
+        .flatMap((s) => s.slots)
+        .find((x) => x.kind === 'list-item' && x.listId === inner.listId)?.itemKeyField
+      for (let j = 0; j < arr.length; j++) {
+        const innerRow = arr[j] as Record<string, unknown>
+        const innerKey = innerKeyField && innerRow?.[innerKeyField] !== undefined ? String(innerRow[innerKeyField]) : String(j)
+        cloneRow(inner.listId, innerRow, innerKey, first && j === 0, j, rowRootId, myIds)
+      }
     }
     // ③ 回填注册表：行内槽位（itemSlotId）→ 该行节点 id
-    //   ★同时记录**整行节点集合**（虚拟化用——见 InstantiateResult.virtual 注释）
+    //   ★同时记录**整行节点集合**（虚拟化用；嵌套时含内层后代 ⇒ 行回收整行覆盖）
     virtualRows.push({
       index: rowIndex,
       key: itemKey,
       root: rowRootId,
-      ids: meta.subtreeIds.map((t) => idMap.get(t)!),
+      ids: [...myIds],
     });
+    // ★本行完整 id 集并入**上层行**（最外层调用无 collect ⇒ 不产生额外开销）
+    if (collect) collect.push(...myIds)
     // ④ **回填初始值**（见 engineFieldOf 注释：不回填 ⇒ 首帧文本为空 / 几何错）
     if (opts.table) {
       const itemSlots = opts.table.sources
@@ -228,7 +288,11 @@ export function instantiateTemplate(tpl: LayoutTemplate, opts: InstantiateOption
       // 行成员：只在「行模板根」处触发展开（其子节点随行克隆）
       const meta = tpl.lists.find((l) => l.rowRootId === n.id)
       if (!meta) continue // 行内子节点（非根）——由克隆产出
-      const rows = rowsOfList(meta.listId, opts.table, opts.read)
+      // ★★嵌套列表（有父列表）**不在主循环展开**——由父行克隆递归展开（见 cloneRow ②.5）：
+      //   两层都从主循环展开 ⇒ 内层列表按"全局扁平行集"扩一次、父行克隆里又扩一次
+      //   ⇒ 重复 + id 冲突（实测：内层 i 出现在错误层级 / 撞第一行的 id）。
+      if (meta.parentListId !== undefined) continue
+      const rows = rowsOfList(meta.listId, meta, opts.table, opts.read)
       for (let i = 0; i < rows.length; i++) {
         const row = rows[i]!
         const keyOf = (): string => {

@@ -1,4 +1,6 @@
-// .tmp-probe/our-probe.mts —— 我方 Vapor 编译器能力探测（临时调研工具，用完删）
+// scripts/vapor-capability-probe.mts —— 我方 Vapor 编译器能力探测（能力清单的**可复现**装置）
+// 用法：npx tsx scripts/vapor-capability-probe.mts
+// 对照官方能力基线：docs/Proteus_Vapor能力清单.md（探针输出与清单表格逐项对应）
 import { buildLayoutTemplate } from '../packages/compiler/src/vapor/template.ts'
 import { buildVaporSubscriptions } from '../packages/compiler/src/vapor/build.ts'
 

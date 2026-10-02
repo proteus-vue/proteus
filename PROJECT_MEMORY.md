@@ -87,6 +87,49 @@ check-consistency-snapshot 七段全绿 · check:no-blind-wait ✅（新 .sh 零
 ① L2/L3/L2.5/L2.6 算子用**合成快照**——证明的是"比对引擎敏不敏感"，不是"真机数据一定对"；
 ② L4 算子用真截图但取同端注入（跨端噪声底含 AA，无区分度）；L4 的价值形态是**定位**。
 
+### ★★★2026-10-03（九十一）· **Vapor P2-1 嵌套 v-for 真支持**——任意层递归实例化 + 内核闭环判据
+
+**接能力清单 P2-1（原「诊断拒绝」项 → 真支持）**。此前的"嵌套 v-for 未支持"诊断**删除**，
+替换为**任意层**的模板递归展开 + 运行时递归实例化。★这批在试错中踩了 4 个真缺陷（全部固化）：
+
+**交付**
+1. **模板侧**（`vapor/template.ts`）：
+   · `pendingCollectors` **收集器栈**（替换单变量 `rowCollector`——内层一压就覆盖外层，嵌套直接错乱）；
+   · `ListTemplate` 三字段：`parentListId`（外层列表 id）/ `outerScope`（外层别名，如 `g`）/
+     `sourceField`（数据源字段，如 `items`——`g.items` 去前缀）；
+   · **子树不合并**：外层与内层各管各的 `subtreeIds`（合并会撞 id，见下缺陷①）。
+2. **运行时侧**（`slot-runtime/instantiate.ts`）：
+   · `cloneRow` **递归展开**内层列表（按 `parentListId` 找本行的内层）→ 任意层；
+   · `parentOverrideId`：内层行根挂到**外层行实例**（模板父在外层子树，idMap 翻译不到——缺陷②）；
+   · 主循环**跳过**带 `parentListId` 的列表（只由父行克隆递归展开——缺陷③）；
+   · `rowsOfList` **兜底 `list-data` 槽位**（外层行内无绑定时唯一线索——缺陷④）+ `sourceField` 逐段下钻；
+   · `tag`/`component` **透传修复**（此前 emit 只写 id/parentId/style/text ⇒ 宿主看不到节点类型）。
+3. **判据**：`vapor-sfc-to-tree` 新增 4 组（结构齐备 / list-data 兜底 / parentOverride 归属 /
+   3 层 2×2×2=15 节点全对）+ `vapor-v3-e2e` 新增**全链闭环**（SFC → 递归实例化 → 改数据 →
+   一条指令 → **Rust 内核几何**逐位断言：行 2 文本 120→200、行 1 保持 100、内层容器 x=204）。
+4. **探针转正**：`scripts/vapor-capability-probe.mts`（嵌套组输出 ✅ 自动反映新能力）。
+
+**试错中抓出的 4 个真缺陷（每个都已写进代码注释 + 回归锁）**
+① 两层都从主循环展开 ⇒ 内层按全局扁平行集扩一次、父行克隆又扩一次 ⇒ 撞 id（外层 li 全丢只剩 i）；
+② 内层行根的"模板父"在外层子树 ⇒ 不 override 时第 2 行起内层节点**全挂到第一行**；
+③ 外层列表**行内无绑定**（只有 :key + 内层 v-for）⇒ 无 `list-item` 槽位 ⇒ 行集空 ⇒ 外层整行不展开；
+④ 内层列表的 `list`-data 槽位缺 `listId`（v-for 源绑定用了 listContext=外层）⇒ 行集恒空。
+
+**顺带修复（verify 链上的既有红，与本批无关但挡住收尾）**
+1. **LY001 测量装置例外通道**（`LY001-ALLOW:` 源码标记，窗口 5 行，只豁免 LY001）：
+   `compile-baseline` 在**干净 HEAD 上必红**（实测）——CSS Profile 探针页里 `z-index` 是**被测对象
+   本身**（该页目的即实测 Skyline 是否接受该特性）。口径同 `check:host-rounding` 的 `I2-ALLOW`
+   （有名有姓 + 窗口有界）；`layer-safety.test.ts` 新增 1 组判据锁死边界（窗口外仍拦 / 只豁免 LY001）。
+2. **`check:layers` 死路径修复**：首版写 `showcase/src` 而**该目录从未存在** ⇒ 声称扫 showcase
+   实际一个没扫到（静默盲区）。改为真实目录（`showcase/pages` · `subpackages` · `components`，
+   扫描数 41 → **168**；仍不含 `showcase/router`——与 website 同性质的单端 Web infra）。
+
+**验证**：**208 项 Vapor + slot-runtime 测试全过**（13 文件）· compiler 490 项全过 ·
+`check:compile-baseline` ✅（干净 HEAD 上的红解除）· `check:layers` ✅（168 个 .vue）·
+`check:binding-matrix` ✅ · `check:vapor-perf` ✅ · `check:end-support` ✅ · `check:degradation` ✅。
+
+**下一步**：P2-2 混合文本（`a{{x}}b` 三段拆分）/ P2-3 事件修饰符（`.stop` 等）。
+
 ### ★★★2026-10-03（九十）· **Vapor 组件系统第一批**（P1）—— 组件边界标记 + props 通道（复用既有 opcode）
 
 **用户「继续打通补齐」→ 接能力清单 P1（组件系统，最高价值缺口）**。
@@ -1962,6 +2005,8 @@ check-consistency-snapshot 七段全绿 · script-compile ✅ · no-blind-wait �
 **新诚实边界**：平移对齐会**吸收真实位置差异**（若某端整体真的偏了 3px，对齐后看不出）——
 "位置是否正确"由 L2 几何数值比对承担；L4 只管"画出来像不像"（已写入注记与文档）。
 ④ 仍未接入：iOS/Android 真机截图（当前 Web=Playwright、MP=模拟器，均非真机）。
+
+## 当前状态速览（最近一次更新：**2026-10-03·（九十一）· **Vapor P2-1 嵌套 v-for** 真支持（任意层递归实例化 + 内核闭环判据 + 4 组回归锁）；顺带：LY001 测量装置例外通道（解除 compile-baseline 在干净 HEAD 上的红）+ check:layers 死路径修复（showcase/src 从未存在）；下一步 P2-2/P2-3**）★新会话以此为准
 
 ## 当前状态速览（最近一次更新：**2026-10-03·（九十）· **Vapor 组件系统第一批**（P1）—— 边界标记 + props 通道（复用既有 CALL_COMPONENT_UPDATE opcode；168 项测试全过）；下一步 P1 第二批或 P2**）★新会话以此为准
 

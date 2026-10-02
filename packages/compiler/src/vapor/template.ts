@@ -14,10 +14,10 @@
 //   否则指令会写到**别的节点**上（症状伪装成几何错，本仓已踩过一次）。
 //
 // 【诚实边界（本版刻意不支持，遇到即报诊断）】
-//   · 嵌套 v-for（内层行随外层行展开，需递归实例化——本版只支持单层）
+//   · ~~嵌套 v-for~~ ⇒ ✅ 2026-10-03 P2 批次已支持（递归实例化，见 ListTemplate.parentListId）
 //   · 元素子节点是「文本 + 插值混合」（`<p>a{{x}}b</p>`）⇒ 需拆分文本节点，本版拒绝
 //   · 动态 `:style` 对象（运行期多键展开）⇒ 由订阅表以 SET_STYLE 逐键下发，模板不解析
-//   · 组件标签（`<MyComp>`）⇒ 组件边界强制 L0（方案坑位 #4），不进模板
+//   · 组件标签（`<MyComp>`）⇒ 边界标记 + props 通道（P1 第一批）；内部渲染待后续批次
 import { parse as sfcParse, type SFCDescriptor } from '@vue/compiler-sfc'
 import { parse as domParse } from '@vue/compiler-dom'
 import type { VaporDiagnostic } from './build'
@@ -63,8 +63,9 @@ const PAINT_DECL_ATTRS = new Set(['fill-gradient', 'fill-gradient-to', 'clip-pat
  *   ★本仓纪律：**静默失败最致命**。
  *   ⇒ 本批**不实现能力**，只让"未支持"在编译期**可见**（带修法）——成本最低、收益最高。
  *
- * 【与既有诊断的关系】既有诊断已覆盖：嵌套 v-for / 混合文本 / 事件修饰符 / 多语句 handler /
- *   表达式白名单。本表补的是**之前完全没被检查**的那一批。
+ * 【与既有诊断的关系】既有诊断已覆盖：混合文本 / 事件修饰符 / 多语句 handler /
+ *   表达式白名单（嵌套 v-for 曾诊断拒绝，2026-10-03 P2 批次已改为**真支持**）。
+ *   本表补的是**之前完全没被检查**的那一批。
  */
 const UNSUPPORTED_DIRECTIVES: Record<string, string> = {
   html: 'v-html 未支持（富文本渲染通道待建）——请改用文本 + 样式，或保留 Vue 渲染路径（L0）',
@@ -283,6 +284,8 @@ export function buildLayoutTemplate(
   let rowCollector: { listId: number; ids: number[] } | null = null
   /** 当前行模板的 listId 栈（嵌套检测用） */
   const activeListStack: number[] = []
+  // ★行收集器栈（嵌套 v-for 用——见 v-for 分支注释：单变量会被内层覆盖）
+  const pendingCollectors: Array<{ listId: number; ids: number[] }> = []
 
   type Node = {
     type: number
@@ -371,26 +374,40 @@ export function buildLayoutTemplate(
         }
       }
 
-      // ── v-for：建立行模板（本版只支持单层）──
+      // ── v-for：建立行模板（★嵌套已支持 —— 2026-10-03 P2 批次）──
       let nodeListId: number | undefined
       if (forCode) {
-        if (activeListStack.length > 0) {
-          diag(
-            `${tag}(id=${id}) 嵌套 v-for 未支持（本版只支持单层）`,
-            '嵌套列表请保留标准 Vue 渲染路径（L0）；或等 LayoutTemplate 支持递归实例化',
-          )
-          // 嵌套时**不建**行模板，仅按静态节点处理（调用方据 ok=false 决定是否使用）
-        } else {
-          const parts = forCode.split(/\s+(?:in|of)\s+/)
-          const alias = (parts[0] ?? '').trim()
-          const names = alias.replace(/[()]/g, '').split(',').map((s) => s.trim()).filter(Boolean)
-          nodeListId = nextListId++
-          const collector = { listId: nodeListId, ids: [] as number[] }
-          rowCollector = collector
-          activeListStack.push(nodeListId)
-          lists.push({ listId: nodeListId, rowRootId: id, subtreeIds: collector.ids, scope: names[0] ?? '' })
-          // ★ids 引用同一数组：行根在下方统一 push（避免此处重复添加）
-        }
+        const parts = forCode.split(/\s+(?:in|of)\s+/)
+        const alias = (parts[0] ?? '').trim()
+        const names = alias.replace(/[()]/g, '').split(',').map((s) => s.trim()).filter(Boolean)
+        const sourceExpr = (parts[1] ?? '').trim()
+        nodeListId = nextListId++
+        // ★★嵌套支持（P2 批次）：记录外层列表 id 与外层作用域名——
+        //   运行时按外层 item 递归实例化内层（见 ListTemplate.parentListId 注释）。
+        const parentListId = activeListStack.length > 0 ? activeListStack[activeListStack.length - 1] : undefined
+        // 外层作用域名 = 本列表的源表达式**根标识符**（如 `g.x` 的 `g`）——内层求值要靠它绑定
+        const outerScope = parentListId !== undefined ? (sourceExpr.split('.')[0] ?? '') : undefined
+        // ★数据源字段名（嵌套用）：`g.items` → `items`（去掉外层作用域前缀）
+        const sourceField = parentListId !== undefined
+          ? sourceExpr.split('.').slice(1).join('.') || sourceExpr
+          : sourceExpr
+        const collector = { listId: nodeListId, ids: [] as number[] }
+        // ★★行收集器栈（嵌套的关键）：内层节点归属**内层**列表；内层收尾时弹回外层收集器。
+        //   首版用**单变量** rowCollector ⇒ 内层一压就覆盖外层（嵌套直接错乱）。
+        //   ★各列表**管各自的子树**（不把内层后代合并进外层）——合并会让外层克隆与内层展开
+        //     对同一批模板 id **撞车**（实测：外层 li 全丢）。见收尾处注释。
+        pendingCollectors.push(collector)
+        rowCollector = collector
+        activeListStack.push(nodeListId)
+        lists.push({
+          listId: nodeListId,
+          rowRootId: id,
+          subtreeIds: collector.ids,
+          scope: names[0] ?? '',
+          sourceField,
+          ...(parentListId !== undefined ? { parentListId } : {}),
+          ...(outerScope ? { outerScope } : {}),
+        })
       }
 
       // ★★内置组件探测（P0：当普通容器 = 语义静默丢失——见 UNSUPPORTED_BUILTINS 头注）
@@ -438,7 +455,9 @@ export function buildLayoutTemplate(
       // 行子树收集结束（pre-order ⇒ 子树连续；此处收尾）
       if (nodeListId !== undefined) {
         activeListStack.pop()
-        rowCollector = null
+        // ★★嵌套收尾（P2）：弹回**外层**的收集器（单变量版会把外层也清空 ⇒ 后续兄弟节点丢失）
+        pendingCollectors.pop()
+        rowCollector = pendingCollectors.length > 0 ? pendingCollectors[pendingCollectors.length - 1] : null
       }
     }
   }
