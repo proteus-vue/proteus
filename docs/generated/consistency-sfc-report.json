@@ -2,7 +2,7 @@
   "format": "proteus-pixel-observation",
   "version": 1,
   "gate": false,
-  "note": "L4 像素观察——**非门禁**（标准 §8.1）：不追求零噪声，仅作 L1–L3 够不到的四项（圆角/阴影/渐变/字形）的兜底观察。｜★SFC 压力夹具（一份源码三链渲染）：examples/pages/consistency-stress.vue｜宽流式（width:100% + 左右 padding 16）⇒ 边缘留白恒 16、内容随屏宽（见每端 gaps）",
+  "note": "L4 像素观察——**非门禁**（标准 §8.1）：不追求零噪声，仅作 L1–L3 够不到的四项（圆角/阴影/渐变/字形）的兜底观察。｜★SFC 压力夹具（一份源码三链渲染）：examples/pages/consistency-stress.vue｜宽流式（width:100% + 左右 padding 16）⇒ 边缘留白恒 16、内容随屏宽（见每端 gaps）｜★双口径透明化：observation=340 宽（固定几何带）· observationFull=375 全宽（含右流带）——两套差异率都入库，可由第三方复核\"新口径是否遮饰\"",
   "pairs": [
     {
       "id": "sfc:android-vs-ios-device",
@@ -134,6 +134,94 @@
             "h": 16,
             "pixels": 114,
             "ratio": 0.445
+          }
+        ],
+        "params": {
+          "channelThreshold": 8,
+          "blockSize": 16,
+          "noiseRatio": 0.005,
+          "noiseHashDistance": 16
+        }
+      },
+      "observationFull": {
+        "gate": false,
+        "verdict": "changed",
+        "sizeA": {
+          "width": 375,
+          "height": 744
+        },
+        "sizeB": {
+          "width": 375,
+          "height": 744
+        },
+        "sampleCount": 279000,
+        "diffPixels": 5873,
+        "diffRatio": 0.02105,
+        "hashDistance": 2,
+        "regions": [
+          {
+            "x": 144,
+            "y": 64,
+            "w": 16,
+            "h": 16,
+            "pixels": 157,
+            "ratio": 0.613
+          },
+          {
+            "x": 128,
+            "y": 64,
+            "w": 16,
+            "h": 16,
+            "pixels": 155,
+            "ratio": 0.605
+          },
+          {
+            "x": 96,
+            "y": 64,
+            "w": 16,
+            "h": 16,
+            "pixels": 144,
+            "ratio": 0.563
+          },
+          {
+            "x": 80,
+            "y": 64,
+            "w": 16,
+            "h": 16,
+            "pixels": 140,
+            "ratio": 0.547
+          },
+          {
+            "x": 48,
+            "y": 64,
+            "w": 16,
+            "h": 16,
+            "pixels": 138,
+            "ratio": 0.539
+          },
+          {
+            "x": 64,
+            "y": 64,
+            "w": 16,
+            "h": 16,
+            "pixels": 126,
+            "ratio": 0.492
+          },
+          {
+            "x": 32,
+            "y": 64,
+            "w": 16,
+            "h": 16,
+            "pixels": 121,
+            "ratio": 0.473
+          },
+          {
+            "x": 112,
+            "y": 688,
+            "w": 16,
+            "h": 16,
+            "pixels": 117,
+            "ratio": 0.457
           }
         ],
         "params": {
@@ -282,6 +370,94 @@
           "noiseRatio": 0.005,
           "noiseHashDistance": 16
         }
+      },
+      "observationFull": {
+        "gate": false,
+        "verdict": "changed",
+        "sizeA": {
+          "width": 375,
+          "height": 744
+        },
+        "sizeB": {
+          "width": 375,
+          "height": 744
+        },
+        "sampleCount": 279000,
+        "diffPixels": 4754,
+        "diffRatio": 0.01704,
+        "hashDistance": 2,
+        "regions": [
+          {
+            "x": 144,
+            "y": 64,
+            "w": 16,
+            "h": 16,
+            "pixels": 157,
+            "ratio": 0.613
+          },
+          {
+            "x": 128,
+            "y": 64,
+            "w": 16,
+            "h": 16,
+            "pixels": 155,
+            "ratio": 0.605
+          },
+          {
+            "x": 96,
+            "y": 64,
+            "w": 16,
+            "h": 16,
+            "pixels": 144,
+            "ratio": 0.563
+          },
+          {
+            "x": 80,
+            "y": 64,
+            "w": 16,
+            "h": 16,
+            "pixels": 140,
+            "ratio": 0.547
+          },
+          {
+            "x": 48,
+            "y": 64,
+            "w": 16,
+            "h": 16,
+            "pixels": 138,
+            "ratio": 0.539
+          },
+          {
+            "x": 64,
+            "y": 64,
+            "w": 16,
+            "h": 16,
+            "pixels": 126,
+            "ratio": 0.492
+          },
+          {
+            "x": 32,
+            "y": 64,
+            "w": 16,
+            "h": 16,
+            "pixels": 121,
+            "ratio": 0.473
+          },
+          {
+            "x": 112,
+            "y": 688,
+            "w": 16,
+            "h": 16,
+            "pixels": 117,
+            "ratio": 0.457
+          }
+        ],
+        "params": {
+          "channelThreshold": 8,
+          "blockSize": 16,
+          "noiseRatio": 0.005,
+          "noiseHashDistance": 16
+        }
       }
     },
     {
@@ -347,8 +523,8 @@
           "height": 744
         },
         "sampleCount": 245520,
-        "diffPixels": 6824,
-        "diffRatio": 0.02779,
+        "diffPixels": 6834,
+        "diffRatio": 0.02783,
         "hashDistance": 0,
         "regions": [
           {
@@ -414,6 +590,94 @@
             "h": 16,
             "pixels": 118,
             "ratio": 0.461
+          }
+        ],
+        "params": {
+          "channelThreshold": 8,
+          "blockSize": 16,
+          "noiseRatio": 0.005,
+          "noiseHashDistance": 16
+        }
+      },
+      "observationFull": {
+        "gate": false,
+        "verdict": "changed",
+        "sizeA": {
+          "width": 375,
+          "height": 744
+        },
+        "sizeB": {
+          "width": 375,
+          "height": 744
+        },
+        "sampleCount": 279000,
+        "diffPixels": 8130,
+        "diffRatio": 0.02914,
+        "hashDistance": 4,
+        "regions": [
+          {
+            "x": 96,
+            "y": 64,
+            "w": 16,
+            "h": 16,
+            "pixels": 183,
+            "ratio": 0.715
+          },
+          {
+            "x": 160,
+            "y": 64,
+            "w": 16,
+            "h": 16,
+            "pixels": 154,
+            "ratio": 0.602
+          },
+          {
+            "x": 144,
+            "y": 64,
+            "w": 16,
+            "h": 16,
+            "pixels": 151,
+            "ratio": 0.59
+          },
+          {
+            "x": 128,
+            "y": 64,
+            "w": 16,
+            "h": 16,
+            "pixels": 146,
+            "ratio": 0.57
+          },
+          {
+            "x": 352,
+            "y": 0,
+            "w": 16,
+            "h": 16,
+            "pixels": 135,
+            "ratio": 0.527
+          },
+          {
+            "x": 48,
+            "y": 64,
+            "w": 16,
+            "h": 16,
+            "pixels": 135,
+            "ratio": 0.527
+          },
+          {
+            "x": 64,
+            "y": 64,
+            "w": 16,
+            "h": 16,
+            "pixels": 133,
+            "ratio": 0.52
+          },
+          {
+            "x": 80,
+            "y": 64,
+            "w": 16,
+            "h": 16,
+            "pixels": 124,
+            "ratio": 0.484
           }
         ],
         "params": {
@@ -562,6 +826,94 @@
           "noiseRatio": 0.005,
           "noiseHashDistance": 16
         }
+      },
+      "observationFull": {
+        "gate": false,
+        "verdict": "changed",
+        "sizeA": {
+          "width": 375,
+          "height": 744
+        },
+        "sizeB": {
+          "width": 375,
+          "height": 744
+        },
+        "sampleCount": 279000,
+        "diffPixels": 4936,
+        "diffRatio": 0.01769,
+        "hashDistance": 2,
+        "regions": [
+          {
+            "x": 128,
+            "y": 64,
+            "w": 16,
+            "h": 16,
+            "pixels": 160,
+            "ratio": 0.625
+          },
+          {
+            "x": 144,
+            "y": 64,
+            "w": 16,
+            "h": 16,
+            "pixels": 152,
+            "ratio": 0.594
+          },
+          {
+            "x": 80,
+            "y": 64,
+            "w": 16,
+            "h": 16,
+            "pixels": 146,
+            "ratio": 0.57
+          },
+          {
+            "x": 96,
+            "y": 64,
+            "w": 16,
+            "h": 16,
+            "pixels": 146,
+            "ratio": 0.57
+          },
+          {
+            "x": 48,
+            "y": 64,
+            "w": 16,
+            "h": 16,
+            "pixels": 143,
+            "ratio": 0.559
+          },
+          {
+            "x": 64,
+            "y": 64,
+            "w": 16,
+            "h": 16,
+            "pixels": 126,
+            "ratio": 0.492
+          },
+          {
+            "x": 32,
+            "y": 64,
+            "w": 16,
+            "h": 16,
+            "pixels": 122,
+            "ratio": 0.477
+          },
+          {
+            "x": 112,
+            "y": 688,
+            "w": 16,
+            "h": 16,
+            "pixels": 118,
+            "ratio": 0.461
+          }
+        ],
+        "params": {
+          "channelThreshold": 8,
+          "blockSize": 16,
+          "noiseRatio": 0.005,
+          "noiseHashDistance": 16
+        }
       }
     },
     {
@@ -637,6 +989,29 @@
           "noiseRatio": 0.005,
           "noiseHashDistance": 16
         }
+      },
+      "observationFull": {
+        "gate": false,
+        "verdict": "noise-level",
+        "sizeA": {
+          "width": 375,
+          "height": 744
+        },
+        "sizeB": {
+          "width": 375,
+          "height": 744
+        },
+        "sampleCount": 279000,
+        "diffPixels": 1266,
+        "diffRatio": 0.00454,
+        "hashDistance": 0,
+        "regions": [],
+        "params": {
+          "channelThreshold": 8,
+          "blockSize": 16,
+          "noiseRatio": 0.005,
+          "noiseHashDistance": 16
+        }
       }
     },
     {
@@ -702,8 +1077,8 @@
           "height": 744
         },
         "sampleCount": 245520,
-        "diffPixels": 7147,
-        "diffRatio": 0.02911,
+        "diffPixels": 7157,
+        "diffRatio": 0.02915,
         "hashDistance": 0,
         "regions": [
           {
@@ -769,6 +1144,94 @@
             "h": 16,
             "pixels": 116,
             "ratio": 0.453
+          }
+        ],
+        "params": {
+          "channelThreshold": 8,
+          "blockSize": 16,
+          "noiseRatio": 0.005,
+          "noiseHashDistance": 16
+        }
+      },
+      "observationFull": {
+        "gate": false,
+        "verdict": "changed",
+        "sizeA": {
+          "width": 375,
+          "height": 744
+        },
+        "sizeB": {
+          "width": 375,
+          "height": 744
+        },
+        "sampleCount": 279000,
+        "diffPixels": 8190,
+        "diffRatio": 0.02935,
+        "hashDistance": 2,
+        "regions": [
+          {
+            "x": 96,
+            "y": 64,
+            "w": 16,
+            "h": 16,
+            "pixels": 164,
+            "ratio": 0.641
+          },
+          {
+            "x": 64,
+            "y": 64,
+            "w": 16,
+            "h": 16,
+            "pixels": 155,
+            "ratio": 0.605
+          },
+          {
+            "x": 48,
+            "y": 64,
+            "w": 16,
+            "h": 16,
+            "pixels": 153,
+            "ratio": 0.598
+          },
+          {
+            "x": 80,
+            "y": 64,
+            "w": 16,
+            "h": 16,
+            "pixels": 150,
+            "ratio": 0.586
+          },
+          {
+            "x": 128,
+            "y": 64,
+            "w": 16,
+            "h": 16,
+            "pixels": 144,
+            "ratio": 0.563
+          },
+          {
+            "x": 144,
+            "y": 64,
+            "w": 16,
+            "h": 16,
+            "pixels": 139,
+            "ratio": 0.543
+          },
+          {
+            "x": 352,
+            "y": 0,
+            "w": 16,
+            "h": 16,
+            "pixels": 135,
+            "ratio": 0.527
+          },
+          {
+            "x": 32,
+            "y": 64,
+            "w": 16,
+            "h": 16,
+            "pixels": 134,
+            "ratio": 0.523
           }
         ],
         "params": {
@@ -917,6 +1380,94 @@
           "noiseRatio": 0.005,
           "noiseHashDistance": 16
         }
+      },
+      "observationFull": {
+        "gate": false,
+        "verdict": "changed",
+        "sizeA": {
+          "width": 375,
+          "height": 744
+        },
+        "sizeB": {
+          "width": 375,
+          "height": 744
+        },
+        "sampleCount": 279000,
+        "diffPixels": 4590,
+        "diffRatio": 0.01645,
+        "hashDistance": 0,
+        "regions": [
+          {
+            "x": 128,
+            "y": 64,
+            "w": 16,
+            "h": 16,
+            "pixels": 93,
+            "ratio": 0.363
+          },
+          {
+            "x": 16,
+            "y": 64,
+            "w": 16,
+            "h": 16,
+            "pixels": 89,
+            "ratio": 0.348
+          },
+          {
+            "x": 80,
+            "y": 112,
+            "w": 16,
+            "h": 16,
+            "pixels": 88,
+            "ratio": 0.344
+          },
+          {
+            "x": 128,
+            "y": 640,
+            "w": 16,
+            "h": 16,
+            "pixels": 88,
+            "ratio": 0.344
+          },
+          {
+            "x": 144,
+            "y": 64,
+            "w": 16,
+            "h": 16,
+            "pixels": 85,
+            "ratio": 0.332
+          },
+          {
+            "x": 96,
+            "y": 176,
+            "w": 16,
+            "h": 16,
+            "pixels": 85,
+            "ratio": 0.332
+          },
+          {
+            "x": 96,
+            "y": 464,
+            "w": 16,
+            "h": 16,
+            "pixels": 85,
+            "ratio": 0.332
+          },
+          {
+            "x": 32,
+            "y": 64,
+            "w": 16,
+            "h": 16,
+            "pixels": 84,
+            "ratio": 0.328
+          }
+        ],
+        "params": {
+          "channelThreshold": 8,
+          "blockSize": 16,
+          "noiseRatio": 0.005,
+          "noiseHashDistance": 16
+        }
       }
     },
     {
@@ -982,8 +1533,8 @@
           "height": 744
         },
         "sampleCount": 245520,
-        "diffPixels": 7115,
-        "diffRatio": 0.02898,
+        "diffPixels": 7125,
+        "diffRatio": 0.02902,
         "hashDistance": 0,
         "regions": [
           {
@@ -1049,6 +1600,94 @@
             "h": 16,
             "pixels": 116,
             "ratio": 0.453
+          }
+        ],
+        "params": {
+          "channelThreshold": 8,
+          "blockSize": 16,
+          "noiseRatio": 0.005,
+          "noiseHashDistance": 16
+        }
+      },
+      "observationFull": {
+        "gate": false,
+        "verdict": "changed",
+        "sizeA": {
+          "width": 375,
+          "height": 744
+        },
+        "sizeB": {
+          "width": 375,
+          "height": 744
+        },
+        "sampleCount": 279000,
+        "diffPixels": 8158,
+        "diffRatio": 0.02924,
+        "hashDistance": 2,
+        "regions": [
+          {
+            "x": 96,
+            "y": 64,
+            "w": 16,
+            "h": 16,
+            "pixels": 164,
+            "ratio": 0.641
+          },
+          {
+            "x": 64,
+            "y": 64,
+            "w": 16,
+            "h": 16,
+            "pixels": 155,
+            "ratio": 0.605
+          },
+          {
+            "x": 48,
+            "y": 64,
+            "w": 16,
+            "h": 16,
+            "pixels": 153,
+            "ratio": 0.598
+          },
+          {
+            "x": 80,
+            "y": 64,
+            "w": 16,
+            "h": 16,
+            "pixels": 150,
+            "ratio": 0.586
+          },
+          {
+            "x": 128,
+            "y": 64,
+            "w": 16,
+            "h": 16,
+            "pixels": 144,
+            "ratio": 0.563
+          },
+          {
+            "x": 144,
+            "y": 64,
+            "w": 16,
+            "h": 16,
+            "pixels": 139,
+            "ratio": 0.543
+          },
+          {
+            "x": 352,
+            "y": 0,
+            "w": 16,
+            "h": 16,
+            "pixels": 135,
+            "ratio": 0.527
+          },
+          {
+            "x": 32,
+            "y": 64,
+            "w": 16,
+            "h": 16,
+            "pixels": 134,
+            "ratio": 0.523
           }
         ],
         "params": {
@@ -1197,6 +1836,94 @@
           "noiseRatio": 0.005,
           "noiseHashDistance": 16
         }
+      },
+      "observationFull": {
+        "gate": false,
+        "verdict": "changed",
+        "sizeA": {
+          "width": 375,
+          "height": 744
+        },
+        "sizeB": {
+          "width": 375,
+          "height": 744
+        },
+        "sampleCount": 279000,
+        "diffPixels": 4261,
+        "diffRatio": 0.01527,
+        "hashDistance": 0,
+        "regions": [
+          {
+            "x": 128,
+            "y": 64,
+            "w": 16,
+            "h": 16,
+            "pixels": 93,
+            "ratio": 0.363
+          },
+          {
+            "x": 16,
+            "y": 64,
+            "w": 16,
+            "h": 16,
+            "pixels": 89,
+            "ratio": 0.348
+          },
+          {
+            "x": 80,
+            "y": 112,
+            "w": 16,
+            "h": 16,
+            "pixels": 88,
+            "ratio": 0.344
+          },
+          {
+            "x": 128,
+            "y": 640,
+            "w": 16,
+            "h": 16,
+            "pixels": 88,
+            "ratio": 0.344
+          },
+          {
+            "x": 144,
+            "y": 64,
+            "w": 16,
+            "h": 16,
+            "pixels": 85,
+            "ratio": 0.332
+          },
+          {
+            "x": 96,
+            "y": 176,
+            "w": 16,
+            "h": 16,
+            "pixels": 85,
+            "ratio": 0.332
+          },
+          {
+            "x": 96,
+            "y": 464,
+            "w": 16,
+            "h": 16,
+            "pixels": 85,
+            "ratio": 0.332
+          },
+          {
+            "x": 32,
+            "y": 64,
+            "w": 16,
+            "h": 16,
+            "pixels": 84,
+            "ratio": 0.328
+          }
+        ],
+        "params": {
+          "channelThreshold": 8,
+          "blockSize": 16,
+          "noiseRatio": 0.005,
+          "noiseHashDistance": 16
+        }
       }
     },
     {
@@ -1262,8 +1989,8 @@
           "height": 744
         },
         "sampleCount": 245520,
-        "diffPixels": 6842,
-        "diffRatio": 0.02787,
+        "diffPixels": 6852,
+        "diffRatio": 0.02791,
         "hashDistance": 0,
         "regions": [
           {
@@ -1337,12 +2064,100 @@
           "noiseRatio": 0.005,
           "noiseHashDistance": 16
         }
+      },
+      "observationFull": {
+        "gate": false,
+        "verdict": "changed",
+        "sizeA": {
+          "width": 375,
+          "height": 744
+        },
+        "sizeB": {
+          "width": 375,
+          "height": 744
+        },
+        "sampleCount": 279000,
+        "diffPixels": 7885,
+        "diffRatio": 0.02826,
+        "hashDistance": 2,
+        "regions": [
+          {
+            "x": 96,
+            "y": 64,
+            "w": 16,
+            "h": 16,
+            "pixels": 163,
+            "ratio": 0.637
+          },
+          {
+            "x": 80,
+            "y": 64,
+            "w": 16,
+            "h": 16,
+            "pixels": 162,
+            "ratio": 0.633
+          },
+          {
+            "x": 64,
+            "y": 64,
+            "w": 16,
+            "h": 16,
+            "pixels": 156,
+            "ratio": 0.609
+          },
+          {
+            "x": 128,
+            "y": 64,
+            "w": 16,
+            "h": 16,
+            "pixels": 151,
+            "ratio": 0.59
+          },
+          {
+            "x": 48,
+            "y": 64,
+            "w": 16,
+            "h": 16,
+            "pixels": 150,
+            "ratio": 0.586
+          },
+          {
+            "x": 32,
+            "y": 64,
+            "w": 16,
+            "h": 16,
+            "pixels": 138,
+            "ratio": 0.539
+          },
+          {
+            "x": 144,
+            "y": 64,
+            "w": 16,
+            "h": 16,
+            "pixels": 137,
+            "ratio": 0.535
+          },
+          {
+            "x": 352,
+            "y": 0,
+            "w": 16,
+            "h": 16,
+            "pixels": 135,
+            "ratio": 0.527
+          }
+        ],
+        "params": {
+          "channelThreshold": 8,
+          "blockSize": 16,
+          "noiseRatio": 0.005,
+          "noiseHashDistance": 16
+        }
       }
     }
   ],
   "totals": {
     "sampleCount": 2455200,
-    "diffPixels": 52819,
+    "diffPixels": 52859,
     "changedSamples": 10,
     "cleanSamples": 0,
     "knownNoiseSamples": 0

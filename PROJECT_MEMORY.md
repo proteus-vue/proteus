@@ -87,6 +87,88 @@ check-consistency-snapshot 七段全绿 · check:no-blind-wait ✅（新 .sh 零
 ① L2/L3/L2.5/L2.6 算子用**合成快照**——证明的是"比对引擎敏不敏感"，不是"真机数据一定对"；
 ② L4 算子用真截图但取同端注入（跨端噪声底含 AA，无区分度）；L4 的价值形态是**定位**。
 
+### ★★★2026-10-02（五十）· 无界滚动修复（两端）+ 页面层级规范 LY0/LY1 落地 + **口径质疑的透明化回答**
+
+**用户三个点（逐个回答）**：
+① 「安卓示例页面可以一直上下滚动」；② 「是不是为了数字好看改夹具掩盖缺陷」；
+③ 「层级规范也要机器可验证」（附《Proteus 页面层级规范与多端一致性方案》全文）。
+
+---
+**① 无界滚动 —— 取证 → 修 → 双向实证（Android 与 iOS 是真同源缺陷）**
+
+· **取证（修复前）**：`adb input swipe` 被系统安全设置拦（INJECT_EVENTS 权限）；改用
+  `monkey --pct-motion`（系统级注入，合法可用）产生**真实拖拽**（logcat 有 `手势识别：scroll`）——
+  锚块 y 从 **180 → 264 / 145 / 171 逐轮漂移**（无任何边界）；`contentScrollY` 单调增长。
+· **根因**：`ProteusHostView.scrollDragBy` 直接 `scrollY += dy` **无上限**；iOS
+  `SelfDrawView.applyContentOffset` 同样无界——而 Web/MP **根本不滚** ⇒ **跨端交互不一致**
+  （正是多端一致性要消灭的形态）。历史成因：这两条通路是为"长卷浏览/探针"建的，
+  当时**没有"内容页语义"**这一层。
+· **修复（两端同源同口径）**：
+  · 语义：装得下 ⇒ 不可滚（range=0）；超出 ⇒ 最多滚到内容底（range=内容高 − 视口高）＝Web 页面语义；
+  · 范围来源：**内核几何**（Android `RustLayout.readRects` 最大 y+h；iOS 全量路径 rects 最大 maxY）
+    ——宿主不算第二份布局数学（与 `visibleRange()` 同纪律）；
+  · **显式开关**：`enableContentScrollRange()` / `contentScrollRangeEnabled` 仅内容页场景开
+    （Android `StressSfcActivity`；iOS `--stress`）——既有 pan/内核动画探针**依赖无界拖拽**，
+    默认钳制会静默改判据读数（历史教训）。
+· **双向实证（修复后，两端都做）**：
+  · Android：App 内注入**真实 MotionEvent 序列**（DOWN+3×MOVE+UP 走 GestureDetector）⇒
+    报告 `scroll_range=0 · scroll_after_drag=0 · drag_drive_count=3`；
+    另用 motion monkey 再打一轮：logcat 有 94px 的 `scroll` 手势而**锚块 y 180→180 纹丝不动**。
+  · iOS 模拟器 + **真机**：`scroll_range=0 · scroll_after_drag=0 · drive=6 · reset_ok`。
+  · 采集脚本已装**硬判据**（`scroll_after_drag` 非 0 ⇒ 直接 FAIL——回归即被拦）。
+
+---
+**② 「改夹具掩盖缺陷」——用数据回答，不靠口头保证**
+
+· **怀疑是合理的，且我确实动过 ROI**（375 全宽 → 340 固定带）⇒ 现在**两套口径同时入库并打印对照**：
+  `observation`（340）与 `observationFull`（375 全宽）**逐对并列**在报告与 `--check` 输出里。
+· **实测结论（与"遮饰"相反）**：新口径的数字**普遍更高**（更难看）——
+  android-vs-ios 1.83%（340）vs **1.70%**（375）；ios-vs-web 1.74% vs **1.53%**。
+  原因：旧口径把那截**两端相同的背景**也计入分母（稀释差异率）⇒ 340 才是更严格的口径。
+  ⇒ 结论：**不是改口径让数字好看，而是旧口径偏松**；两套都公开，第三方可复核。
+· **留白升级为硬断言**（不再只是打印）：`check-consistency-sfc` 现断言每端
+  左右留白 = **16 ± 0.5**（超差 ⇒ exit 1）；并已接进 `pnpm verify` 与 CI。
+· 顺带修掉一处**判据自身的假值 bug**：探针脚本用 `int(x or -1)` 取 `scroll_range`，
+  而 **0 是合法值却 falsy** ⇒ 把"已修复"误报成"未接线"（同族：判据错则归因错）。
+
+---
+**③ 页面层级规范落地（LY0 + LY1，机器可验证）**
+
+· **规范入库** `docs/Proteus_页面层级规范与多端一致性方案.md`（含 §13 实施记录与**未落地项**如实登记）。
+· **LY0 契约** `packages/contracts/src/layers.ts`（单一来源）：四层封闭集 + `LAYER_SEMANTICS`
+  （WeUI 对应）+ **跨端映射表** + `layerValueFor()` + `popoutStackValue()` + `POPOUT_STACK_LIMIT=16`
+  + `LAYER_RESERVED=['layer-transition']`。★**诚实边界**：Android `translationZ` / iOS `zPosition`
+  当前尚未由内核驱动（层序真源 = **树序**）——web/mp **现在生效**，App 两端是**既定契约**
+  （不许表述为"五端已生效"）。
+· **LY1 编译期硬校验** `packages/compiler/src/layer-safety.ts`（接入 `compileVueSfc`——**抛错非警告**）
+  五条稳定码：`LY001` 裸 z-index（style 与 :style 双形态，含驼峰/带引号键）· `LY002` 非法层名 ·
+  `LY003` Mask 单独用 · `LY004` Popout/Mask 非根容器（**附祖先链**——跨容器是"静默被遮挡"最危险陷阱）·
+  `LY005` 声明保留层名。
+· **双层闸门（互补）**：属性级 = `contracts/style.ts` 的 `zIndex: 'FORBIDDEN'`
+  （+ runtime validator STS004 + packages/style-safety 的 FORBIDDEN_PROPS——**两处白名单同步改**，
+  分叉会造成"编译期允许、运行时拒绝"的半开状态）；语义级 = LY1 五条。
+· **静态门禁** `scripts/check-layers.mjs`（扫 examples/showcase 全部 .vue，走 **dist 的同一实现**，
+  不复制规则）⇒ 已接 `pnpm verify` + CI；**双向验证**：干净绿 → 注入违规红 → 还原绿。
+  ★作用域**不含 website/**（单端纯 Web 产物、非 Proteus 应用——首版误纳 21 处"违规"全是官网普通
+  CSS 层叠 ⇒ **判据作用域错了，不是代码错了**；边界写进脚本注释）。
+· **测试** `tests/layer-safety.test.ts` **11/11**（含跨端映射一致性、层序严格递增、栈值后弹在上、
+  五码各自命中 + 合规放行）。★测试当场抓出**两个真 bug**：`:style` 对象字面量漏网、
+  `z-?index` 不匹配驼峰 `zIndex`（缺 `i` 标志）⇒ 已修并锁进用例。
+· **存量修正**：`svg-showcase-demo.vue` / `svg-skeleton-demo.vue` 两处裸 z-index
+  按 §3.3 改为「**后声明者在上**」（模板元素移位，数值彻底消失）；118 页面全量编译**零误伤**。
+
+---
+**指标/验证**：全量单测 **4495/4495**（359 文件；+11 层级用例）· `check:layers` ✅ ·
+`check:consistency-sfc` ✅（含留白硬断言与双口径打印）· `check:consistency-data` ✅ ·
+`check:mp-artifacts` ✅ · `check:gates-sync` ✅（CI 覆盖 50）· 两端零设备编译检查 ✅ ·
+五端样本重采（web/mp/android/ios-sim/ios-device，各端时间戳已核）。
+
+**诚实边界（随本轮一起公开）**：
+① LY2 各端**驱动到内核/宿主**未做（web/mp 由 CSS 生效；App 两端待内核 zOrder）；
+   LY3 弹层栈 / LY4 同层渲染 / LY5 转场对接 / LY6 遮挡关系校验**均未做**（§13.3 已登记）；
+② 滚动范围钳制**仅在内容页场景开启**——探针/动画场景保持无界（契约明确，非遗漏）；
+③ 跨端差异率仍为 1.74~2.92%（字形栅格化为主，A-1 声明范围内）。
+
 ### ★★★2026-10-02（四十九）· **hook 5 天静默失效的根因修复**（用户当场点名「钩子为什么就是拦不住」）
 
 **现象**：用户发现 AI 在本会话**连做三次 `sleep` 轮询**（`sleep 300/240/420` 查 verify）——
@@ -523,7 +605,7 @@ check-consistency-snapshot 七段全绿 · script-compile ✅ · no-blind-wait �
 "位置是否正确"由 L2 几何数值比对承担；L4 只管"画出来像不像"（已写入注记与文档）。
 ④ 仍未接入：iOS/Android 真机截图（当前 Web=Playwright、MP=模拟器，均非真机）。
 
-## 当前状态速览（最近一次更新：**2026-10-02·（四十九）· ★hook 5 天静默失效根因修复（输出契约：exit 2 通道）—— 工具层红线首次真正生效**）★新会话以此为准
+## 当前状态速览（最近一次更新：**2026-10-02·（五十）· 无界滚动修复（两端实测）+ 页面层级规范 LY0/LY1 落地（5 违规码接 CI）+ 口径质疑透明化（双口径并行公开）**）★新会话以此为准
 ### ★★★2026-10-02（三十八）· 交互两层（离散 + 连续）—— 标准 §10.1 的最后两个"未布点"
 
 **交付**

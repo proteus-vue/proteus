@@ -124,6 +124,11 @@ async function main() {
       const r = anchorNormalize(srgb, SFC_ANCHOR_SPEC)
       ends.push({
         end, file: f, img: cropImage(r.img, SFC_NORM_ROI),
+        // ★★透明化（2026-10-02 用户问「是不是改夹具让数字好看」）：同图在**旧口径**（375 全宽）
+        //   下再算一份归一像，配对报告同时给两套差异率——"新口径是不是在遮饰"由**数据**回答，
+        //   不靠口头保证。旧口径含右流带（跨端天然不同：行盒右缘位置随屏宽），差异率会更高
+        //   ——这正是"为什么必须单列"的量化证据，而不是被藏起来的证据。
+        imgFull: cropImage(r.img, { x: 0, y: 56, w: 375, h: 744 }),
         gaps: measureEdgeGaps(srgb, r.srcWindow.x, r.scale),
         norm: {
           srcSize: { width: raw.width, height: raw.height },
@@ -165,6 +170,9 @@ async function main() {
         mode,
         norm: { a: A.norm, b: B.norm, outSize: SFC_ANCHOR_SPEC.outSize },
         observation: pixelObservation(A.img, B.img),
+        // ★★旧口径对照（375 全宽，含右流带）：**同时报出**，供独立复核"新口径是否在遮饰"。
+        //   判据与展示仍用 `observation`（340）；本字段只作透明性证据。
+        observationFull: pixelObservation(A.imgFull, B.imgFull),
       })
     }
   }
@@ -173,7 +181,9 @@ async function main() {
   const withEnds = {
     ...report,
     note: report.note + '｜★SFC 压力夹具（一份源码三链渲染）：examples/pages/consistency-stress.vue'
-      + '｜宽流式（width:100% + 左右 padding 16）⇒ 边缘留白恒 16、内容随屏宽（见每端 gaps）',
+      + '｜宽流式（width:100% + 左右 padding 16）⇒ 边缘留白恒 16、内容随屏宽（见每端 gaps）'
+      + '｜★双口径透明化：observation=340 宽（固定几何带）· observationFull=375 全宽（含右流带）'
+      + '——两套差异率都入库，可由第三方复核"新口径是否遮饰"',
     source: 'examples/pages/consistency-stress.vue（真 SFC：44 节点 · 10 行 v-for · 行内动态绑定）',
     ends: ends.map((e) => ({
       end: e.end,
@@ -192,12 +202,29 @@ async function main() {
     console.log(
       `  ▸ SFC ${ok.length} 端 / ${pairs.length} 对：changed ${report.totals.changedSamples} · clean ${report.totals.cleanSamples}`,
     )
+    // ★★双口径对照（透明性证据——回答「是不是改口径让数字好看」）：逐一列出两套差异率。
+    //   预期：全宽口径**更高**（右流带把"内容随屏宽"的设计意图算成了差异）——如实公布。
+    console.log('  ▸ 双口径差异率（340 固定带 vs 375 全宽）：')
+    for (const p of pairs) {
+      const a = (p.observation.diffRatio * 100).toFixed(2)
+      const b = (p.observationFull.diffRatio * 100).toFixed(2)
+      console.log(`      ${p.id.replace('sfc:', '').padEnd(28)} ${a}%  ← 340 ｜ ${b}%  ← 375 全宽`)
+    }
     for (const e of ends) {
       if (e.gaps) console.log(`  ▸ ${e.end.padEnd(11)} 屏宽 ${e.gaps.screenW} · 留白 左 ${e.gaps.left} / 右 ${e.gaps.right} · 行宽 ${e.gaps.rowW}`)
     }
-    console.log('  ★SFC 观测非门禁：结论不影响退出码（仅报告）')
+    // ★★留白**硬断言**（2026-10-02 —— 用户问「右间距是否一致」的机器判据，不再是打印看热闹）：
+    //   夹具声明流式宽（左右 padding 16）⇒ 各端量出的左右留白必须 = 16 ± 0.5 设计单位。
+    //   容差 0.5 的依据：MP 端 1.6375 分数倍率下的亚像素累加实测 ≤0.3；超 0.5 一定是真问题
+    //   （单位模型回退 / 钳制失效 / chrome 污染）——必须红，不许"看着差不多"。
+    const gapFail = ends.filter((e) => e.gaps && (Math.abs(e.gaps.left - 16) > 0.5 || Math.abs(e.gaps.right - 16) > 0.5))
+    if (gapFail.length) {
+      console.error('❌ 留白断言失败（应 16 ± 0.5）：')
+      for (const e of gapFail) console.error(`   ${e.end}: 左 ${e.gaps.left} · 右 ${e.gaps.right}`)
+      process.exit(1)
+    }
     if (!same) process.exit(1)
-    console.log('✅ SFC 一致性报告与基线一致（非门禁）')
+    console.log('✅ SFC 一致性报告与基线一致（非门禁）；留白断言 16±0.5 通过（硬判据）')
     return
   }
   fs.mkdirSync(path.dirname(OUT), { recursive: true })
