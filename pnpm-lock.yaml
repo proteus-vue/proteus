@@ -316,6 +316,9 @@ importers:
       '@proteus-vue/component-ir':
         specifier: 0.3.0-beta.21
         version: link:../component-ir
+      '@proteus-vue/consistency':
+        specifier: 0.3.0-beta.21
+        version: link:../consistency
       '@proteus-vue/css-compat':
         specifier: 0.3.0-beta.11
         version: link:../css-compat

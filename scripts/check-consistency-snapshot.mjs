@@ -31,12 +31,18 @@ if (!fs.existsSync(webGolden)) {
   note(`Web：几何 ${rg.nodeCount} 节点 · 样式 ${rs.nodeCount} 节点 —— 校验器 ✅`)
 }
 
-// ② App 内核工件（cargo test 落盘）
-const appArtifact = path.join(ROOT, 'spike/target/geometry-snapshot-sample.json')
-const appArtifactAlt = path.join(ROOT, 'packages/layout-core-rust/target/geometry-snapshot-sample.json')
-const appFile = fs.existsSync(appArtifact) ? appArtifact : (fs.existsSync(appArtifactAlt) ? appArtifactAlt : null)
-if (!appFile) {
-  fails.push('缺 App 内核快照工件（跑 cd packages/layout-core-rust && CARGO_TARGET_DIR=../../spike/target cargo test --release geometry_snapshot）')
+// ② App 内核工件（★入库位置——CI 可复现的前提：target/ 是 gitignore，CI 上不存在）
+//   刷新流程：跑内核测试落盘 target/ → `node scripts/sync-consistency-samples.mjs` 拷到入库位置
+const appFile = path.join(ROOT, 'docs/generated/consistency-samples/app-kernel-geometry.json')
+const appFresh = [
+  path.join(ROOT, 'spike/target/geometry-snapshot-sample.json'),
+  path.join(ROOT, 'packages/layout-core-rust/target/geometry-snapshot-sample.json'),
+].find((p) => fs.existsSync(p))
+if (!fs.existsSync(appFile)) {
+  fails.push(`缺 App 内核快照工件（${path.relative(ROOT, appFile)}）——跑内核测试后执行 node scripts/sync-consistency-samples.mjs`)
+} else if (appFresh && fs.readFileSync(appFresh, 'utf-8') !== fs.readFileSync(appFile, 'utf-8')) {
+  // ★陈旧检测：本地跑过内核测试但没同步 ⇒ 报出（不静默用旧工件）
+  fails.push(`App 内核工件**陈旧**：${path.relative(ROOT, appFresh)} 比入库副本新——执行 node scripts/sync-consistency-samples.mjs`)
 } else {
   const geo = JSON.parse(fs.readFileSync(appFile, 'utf-8'))
   const rg = validateGeometrySnapshot(geo)

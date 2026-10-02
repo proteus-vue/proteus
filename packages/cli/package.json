@@ -31,7 +31,8 @@
     "@proteus-vue/types": "0.3.0-beta.12",
     "@proteus-vue/plugin-vite": "0.3.0-beta.21",
     "esbuild": "^0.28.2",
-    "@proteus-vue/slot-runtime": "0.3.0-beta.11"
+    "@proteus-vue/slot-runtime": "0.3.0-beta.11",
+    "@proteus-vue/consistency": "0.3.0-beta.21"
   },
   "devDependencies": {
     "@vue/compiler-sfc": "^3.5.42",

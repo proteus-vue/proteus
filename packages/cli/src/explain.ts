@@ -13,6 +13,8 @@ import { buildPTree, analyzePTree, formatPTrace, rawFromComponentIR, toComponent
 import { buildVaporSubscriptions } from '@proteus-vue/compiler'
 // ★VC2-b：`proteus explain <CSS-PB-*>` ——边界规则的说明（卡片验收："可 trace 为什么该属性被拦截"）
 import { SKYLINE_BOUNDARY_RULES } from '@proteus-vue/css-compat'
+// ★VC8-b：`proteus explain <一致性报告.json>` ——失败报告的解释（卡片验收："可被 proteus explain 消费"）
+import { isConsistencyReport, formatReport } from '@proteus-vue/consistency'
 import { decisionsToRows } from '@proteus-vue/slot-runtime'
 
 export interface ExplainTargetOptions {
@@ -109,6 +111,18 @@ export function explainIR(source: string, opts: ExplainTargetOptions = {}): stri
 export function explainTarget(target: string, opts: ExplainTargetOptions = {}): string {
   if (fs.existsSync(target)) {
     const source = fs.readFileSync(target, 'utf-8')
+    // ★VC8-b：一致性失败报告（JSON）→ 解释渲染（含修复建议与 autoFixes）
+    if (target.endsWith('.json')) {
+      try {
+        const parsed = JSON.parse(source) as unknown
+        if (isConsistencyReport(parsed)) {
+          const head = `目标 ${target} = 一致性失败报告（proteus-consistency-report v${parsed.version}）`
+          return `${head}\n\n${formatReport(parsed)}`
+        }
+      } catch {
+        /* 非 JSON 或非本格式 ⇒ 继续按 .vue 处理（向下兼容） */
+      }
+    }
     const result = explainTransform(source, { filename: target })
     const base = formatTransformTrace(result)
     // ★--ir：追加渲染 IR 决策 trace（M0 出口条件）

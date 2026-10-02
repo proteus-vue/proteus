@@ -1,0 +1,63 @@
+{
+  "end": "app",
+  "format": "proteus-geometry-snapshot",
+  "node_count": 5,
+  "ok": true,
+  "root": {
+    "children": [
+      {
+        "children": [],
+        "depth": 1,
+        "h": 60.0,
+        "nodeId": 2,
+        "path": "0",
+        "w": 200.0,
+        "x": 12.0,
+        "y": 12.0
+      },
+      {
+        "children": [],
+        "depth": 1,
+        "h": 40.0,
+        "nodeId": 3,
+        "path": "1",
+        "w": 160.0,
+        "x": 12.0,
+        "y": 80.0
+      },
+      {
+        "children": [
+          {
+            "children": [],
+            "depth": 2,
+            "h": 24.0,
+            "nodeId": 5,
+            "path": "2.0",
+            "w": 100.0,
+            "x": 24.0,
+            "y": 140.0
+          }
+        ],
+        "depth": 1,
+        "h": 100.0,
+        "nodeId": 4,
+        "path": "2",
+        "w": 300.0,
+        "x": 12.0,
+        "y": 128.0
+      }
+    ],
+    "depth": 0,
+    "h": 600.0,
+    "nodeId": 1,
+    "path": "",
+    "w": 400.0,
+    "x": 0.0,
+    "y": 0.0
+  },
+  "version": 1,
+  "viewport": {
+    "height": 600.0,
+    "width": 400.0
+  }
+}
