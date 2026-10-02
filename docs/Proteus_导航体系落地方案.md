@@ -363,7 +363,9 @@ export interface BranchNavigator {
 
 ## 9. 诚实边界（本方案未覆盖 / 未验证的）
 
-① **鸿蒙端整体未验证**（无设备）：NB6 的鸿蒙显式实现只有接口与规则，**实测待端可用**；
+① **鸿蒙端整体未验证**——★2026-10-02 更新：**设备已接入**（HUAWEI KLE-AL00U · OpenHarmony 7.0.0 ·
+**API 26** ⇒ RenderNode 直绘路径可用；接入方式见 `hosts/harmony/README.md`，含 RSA-3072 密钥坑），
+但**鸿蒙宿主本体尚未落地**——NB6 的鸿蒙显式实现仍只有接口与规则，**实测待宿主落地**；
 ② **`p-tabbar`/`p-nav-bar` 是否满足方案 §5/§6 全部形态**未逐项核对（本批只列差距项，未审计现有实现）；
 ③ **上游 §13 的 5 条待核实项**（鸿蒙 NavPathStack 生命周期 / Skyline tabBar 增强 / Android saveBackStack ROM 一致性 / 微信 tabBar 上限当前值 / iOS 26 large title）**均未核实**——NB0 承接；
 ④ 本方案**只出文档**（用户本轮决策："先只出落地方案"），**未动任何代码**。
