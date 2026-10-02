@@ -30,8 +30,11 @@ const ROUTER_REQUIRED_EITHER: Array<[string, string]> = [
   ['customRoute', 'object'],
 ]
 
-/** router 段已知子键白名单（统一路由管理——未知子键 = 拼写错误，阻断） */
-const ROUTER_SECTION_FIELDS = new Set(['routesOutput', 'subPackages', 'customRoute', 'tabBar', 'meta'])
+/** router 段已知子键白名单（统一路由管理——未知子键 = 拼写错误，阻断）
+ * ★2026-10-02：新增 `pages`（**页面配置首选名**，`pages.json` 等价物）；`meta` 为同义旧名别名
+ *   （两份都写时 pages 胜并登记 duplicate——见 packages/types/src/router-config.ts）。
+ *   ★门禁抓到过：加配置项时忘了登记本表 ⇒ config:check 拒绝 examples 的真实配置（当场红）。 */
+const ROUTER_SECTION_FIELDS = new Set(['routesOutput', 'subPackages', 'customRoute', 'tabBar', 'pages', 'meta'])
 
 /** 顶层已知字段白名单（未知字段 = 拼写错误，阻断） */
 const KNOWN_FIELDS = new Set([

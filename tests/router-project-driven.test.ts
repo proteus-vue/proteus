@@ -53,12 +53,17 @@ afterAll(() => {
 })
 
 describe('① 项目驱动产物：App 导航注册表（消灭夹具手写）', () => {
-  it('从 pages/ + router.meta 产出 screens/screenNames/tabNames，且与 auto-routes 同源同数', () => {
+  it('从 pages/ + router.pages 产出**单一产物**（routes + screens + 类型表同文件），且与路由表同源同数', () => {
     const { root, config } = makeProject({ index: { title: '首页', isTab: true }, detail: { transition: 'slideUp' } })
     runGenRoutes({ config, root })
 
-    const navFile = path.join(root, 'src/router/navigation.generated.ts')
-    expect(fs.existsSync(navFile), 'App 导航注册表必须被产出（此前 generateAppScreens 全仓零调用）').toBe(true)
+    // ★单一产物：App 投影与路由表在**同一个文件**里（用户反馈「两份 generated 太乱」→ 统一）
+    const navFile = path.join(root, 'src/router/auto-routes.ts')
+    expect(fs.existsSync(navFile), '统一导航产物必须被产出（此前 generateAppScreens 全仓零调用）').toBe(true)
+    expect(
+      fs.existsSync(path.join(root, 'src/router/navigation.generated.ts')),
+      '不得再有第二份导航注册表（单一产物原则）',
+    ).toBe(false)
     const src = fs.readFileSync(navFile, 'utf-8')
     // 产物形态：纯数据（screens / screenNames / tabNames）——不含 component 动态导入
     expect(src).toContain('export const screens')
@@ -75,17 +80,11 @@ describe('① 项目驱动产物：App 导航注册表（消灭夹具手写）',
     expect(new Set(navNames)).toEqual(new Set(routeNames))
   })
 
-  it('缺省路径派生：与 routesOutput 同目录的 navigation.generated.ts；routesOutput 关闭时同步关闭', () => {
-    // （配置面规则已单测于 router-config；此处验证**产物真的落在派生路径**）
-    const { root, config } = makeProject({})
-    runGenRoutes({ config, root })
-    expect(fs.existsSync(path.join(root, 'src/router/navigation.generated.ts'))).toBe(true)
-
-    // 显式关闭 → 不产出
+  it('routesOutput 关闭 ⇒ 统一产物不生成（工程自带路由机制的 opt-out）', () => {
     const off = makeProject({})
-    ;(off.config as unknown as { router: { appNavigationOutput: string } }).router.appNavigationOutput = ''
+    ;(off.config as unknown as { router: { routesOutput: string } }).router.routesOutput = ''
     runGenRoutes({ config: off.config, root: off.root })
-    expect(fs.existsSync(path.join(off.root, 'src/router/navigation.generated.ts'))).toBe(false)
+    expect(fs.existsSync(path.join(off.root, 'src/router/auto-routes.ts'))).toBe(false)
   })
 })
 
@@ -126,15 +125,49 @@ describe('② 启示 6「路由不存在 = 编译错误」：跨路由引用构�
   })
 })
 
-describe('③ 配置面：appNavigationOutput 派生规则（项目可声明）', () => {
-  it('缺省派生 / 显式声明 / 随 routesOutput 关闭 —— 三条规则', () => {
-    expect(resolveRouterConfig({}).router.appNavigationOutput).toBe('src/router/navigation.generated.ts')
-    expect(
-      resolveRouterConfig({ router: { routesOutput: 'a/b.ts' } }).router.appNavigationOutput,
-    ).toBe('a/navigation.generated.ts')
-    expect(
-      resolveRouterConfig({ router: { routesOutput: 'a/b.ts', appNavigationOutput: 'x/nav.ts' } }).router.appNavigationOutput,
-    ).toBe('x/nav.ts')
-    expect(resolveRouterConfig({ router: { routesOutput: '' } }).router.appNavigationOutput).toBe('')
+describe('③ 配置面：router.pages（pages.json 等价物）与旧名 meta 的别名关系', () => {
+  it('pages 首选；meta 为同义别名（同对象）；双写时 pages 胜并登记 duplicate', () => {
+    const a = resolveRouterConfig({ router: { pages: { index: { title: '首页' } } } })
+    expect(a.router.pages).toEqual({ index: { title: '首页' } })
+    expect(a.router.meta, 'meta 指向同一对象（旧消费者不破）').toEqual(a.router.pages)
+
+    const b = resolveRouterConfig({ router: { meta: { index: { title: '旧名' } } } })
+    expect(b.router.pages, '只写旧名也能读到（别名生效）').toEqual({ index: { title: '旧名' } })
+
+    const c = resolveRouterConfig({ router: { pages: { x: { title: '新' } }, meta: { x: { title: '旧' } } } })
+    expect(c.router.pages, '双写时 pages 胜').toEqual({ x: { title: '新' } })
+    expect(c.duplicates, '双写登记 duplicate（提示收敛）').toContain('pages/meta')
+  })
+})
+
+describe('④ 页面配置集中化：`router.pages[path].pageJson`（MP 窗口扩展上收）', () => {
+  it('集中声明的 pageJson 写进页面产物，且与 skyline 默认**合并**（不是覆盖）', () => {
+    const { root, config } = makeProject({
+      detail: { pageJson: { backgroundColorContent: 'transparent', navigationStyle: 'custom' } },
+    })
+    runGenRoutes({ config, root })
+    const pj = JSON.parse(fs.readFileSync(path.join(root, 'dist/mp-weixin/pages/detail.json'), 'utf-8'))
+    // ★此前 pageJson **只能**写页内 <route> 块 ⇒ 不满足"页面配置统一到路由管理"；本批上收
+    expect(pj.backgroundColorContent, '集中声明的 pageJson 必须落产物').toBe('transparent')
+    expect(pj.navigationStyle).toBe('custom')
+    // skyline 默认（renderer/componentFramework）与集中声明**共存**（合并而非覆盖）
+    expect(pj.renderer).toBe('skyline')
+    expect(pj.componentFramework).toBe('glass-easel')
+  })
+
+  it('目录前缀声明可被精确页面覆盖（三级匹配：精确 > 目录 > 默认）', () => {
+    // ★键的格式（实测校准，勿凭直觉）：集中配置的键 = **pageRel**（pages/ 去前缀后的相对路径）。
+    //   本夹具两个页面是 `src/pages/index.vue` 与 `src/pages/detail.vue` ⇒ pageRel = `index` / `detail`；
+    //   index 归并目录后 pageRel 就是 `index`（不是 `pages/index`）⇒ 目录前缀要写 `pages/` 形态才命中子目录页。
+    //   这里直接用**精确键**验证"精确胜目录前缀"这条语义（目录前缀的继承在 router 侧已由
+    //   `resolveConfigMeta` 单测覆盖，本用例聚焦 pageJson 的三级合并）。
+    const { root, config } = makeProject({
+      // 目录前缀（供 detail 继承；index 不在该前缀下 → 不继承）
+      'pages': { pageJson: { navigationStyle: 'default' } },
+      detail: { pageJson: { navigationStyle: 'custom' } },
+    })
+    runGenRoutes({ config, root })
+    const detailJson = JSON.parse(fs.readFileSync(path.join(root, 'dist/mp-weixin/pages/detail.json'), 'utf-8'))
+    expect(detailJson.navigationStyle, '精确声明胜目录前缀（三级匹配）').toBe('custom')
   })
 })

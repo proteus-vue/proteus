@@ -49,7 +49,7 @@ final class AppStackScene: NSObject {
         let mainOut = evalJs?("__proteusAppStackRun('{\"depth\":20000,\"fans\":32,\"budget\":1000}')") ?? "null"
         // ★★★（2026-10-02 · 项目驱动落地）第二入口：**从项目路由配置跑 App 导航**（非夹具）
         //   与 A–D 的分界：那些用合成屏池（压测装置）；本入口读
-        //   `examples/router/navigation.generated.ts`（gen-routes 从 pages/**/*.vue + router.meta 产出）
+        //   `examples/router/auto-routes.ts`（全端统一导航产物：gen-routes 从 pages/**/*.vue + router.pages 产出）
         //   ⇒ "项目配置 → App 屏注册表 → 导航语义"这条**产品路径**在 JSC 侧同样可跑。
         //   读数以 `p_` 前缀并入主报告（与 Android 腿**同名同形**——同一份判据脚本读）。
         var merged: [String: Any] = [:]
