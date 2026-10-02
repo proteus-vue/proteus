@@ -13,7 +13,7 @@
   "M1": {
     "name": "数值一致性覆盖率",
     "definition": "Σ(L1|L2|L3 各层**折算到同一 CSS 字段集**后的覆盖数) / (可表达字段数 × 3)（分层加总 · 折算口径）",
-    "value": 0.4881,
+    "value": 0.6548,
     "union": {
       "covered": 28,
       "total": 28,
@@ -31,9 +31,9 @@
         "note": "比对引擎已落地 + 三端实测通过；**折算口径**：几何 w/h → 字段 width/height（x/y 是位置不是字段——保守计 2）"
       },
       "L3": {
-        "covered": 11,
+        "covered": 25,
         "total": 28,
-        "note": "实测比对已落地（VC6：Web ⇄ WebView，硬门禁 + A-6 豁免）；**折算口径**：25 个可比样式键 → 11 个字段（四角/四边归并；fontFamily/fontWeight/visibility 不在字段集内不计）"
+        "note": "实测比对已落地（VC6：Web ⇄ WebView，硬门禁 + A-6 豁免）；**折算口径**：25 个可比样式键 → 25 个字段（四角/四边归并；fontFamily/fontWeight/visibility 不在字段集内不计）"
       }
     },
     "covered": 28,

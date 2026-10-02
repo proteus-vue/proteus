@@ -9,10 +9,10 @@
      ② 显式声明 box-sizing（Skyline 默认 border-box / WebView+Web 默认 content-box——
         不显式声明则三端基准不同，比对必然出现"盒模型假差异"；显式声明 = 消除端默认值依赖）。 -->
   <view id="c-root" style="box-sizing:border-box;width:400px;height:600px;padding:12px;display:flex;flex-direction:column;background-color:#14141c;flex-shrink:0">
-    <view id="c-box" style="width:200px;height:60px;background-color:#2a3f66;border-radius:18px;margin-bottom:8px;flex-shrink:0"></view>
-    <text id="c-text" style="width:160px;height:40px;color:#ffffff;font-size:16px;font-weight:700;margin-bottom:8px;flex-shrink:0">Hello 一致性</text>
-    <view id="c-nested" style="box-sizing:border-box;width:300px;height:100px;background-color:#1f2c44;padding:8px;flex-shrink:0">
-      <view id="c-nested-box" style="width:100px;height:24px;margin:4px 0 0 4px;background-color:#2a3f66;border-radius:4px;flex-shrink:0"></view>
+    <view id="c-box" style="width:200px;height:60px;background-color:#2a3f66;border-radius:18px;margin-bottom:8px;flex-shrink:0;flex-grow:0;overflow:hidden"></view>
+    <text id="c-text" style="width:160px;height:40px;color:#ffffff;font-size:16px;font-weight:700;margin-bottom:8px;flex-shrink:0;overflow:hidden">Hello 一致性</text>
+    <view id="c-nested" style="box-sizing:border-box;width:300px;height:100px;background-color:#1f2c44;padding:8px;flex-shrink:0;overflow:hidden">
+      <view id="c-nested-box" style="width:100px;height:24px;margin:4px 0 0 4px;background-color:#2a3f66;border-radius:4px;flex-shrink:0;overflow:visible"></view>
     </view>
   </view>
   <view id="t-display-block" style="width:20px;height:20px;display:block"></view>

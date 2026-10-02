@@ -185,8 +185,17 @@ function buildStyleSnapshot(opts) {
         } else if (key === 'opacity') {
           var op = normalizeLength(val)
           if (op !== null) styles.opacity = op
-        } else if (key === 'display' || key === 'position' || key === 'visibility') {
-          styles[key] = String(val)
+        } else if (key === 'width' || key === 'height'
+                   || key === 'min-width' || key === 'max-width'
+                   || key === 'min-height' || key === 'max-height'
+                   || key === 'flex-grow' || key === 'flex-shrink' || key === 'gap') {
+          // ★布局族数值项（auto/none/normal ⇒ normalizeLength 返回 null ⇒ 不产出——与 TS 版同口径）
+          var nv3 = normalizeLength(val)
+          if (nv3 !== null) styles[camelKey] = nv3
+        } else if (key === 'display' || key === 'position' || key === 'visibility'
+                   || key === 'flex-direction' || key === 'justify-content'
+                   || key === 'align-items' || key === 'align-self' || key === 'overflow') {
+          styles[camelKey === 'flexDirection' ? 'flexDirection' : camelKey] = String(val)
         }
         // 其它键：**静默忽略**是错的——但样式声明的键集由测试夹具控制，
         // 未识别键在自检（assertSnapshotSelfCheck）里会因"声明数与产出数不匹配"暴露
@@ -219,6 +228,11 @@ function assertSnapshotSelfCheck() {
     ['color-named', JSON.stringify(normalizeColor('white')), JSON.stringify({ r: 255, g: 255, b: 255, a: 1 })],
     ['length-px', normalizeLength('16px'), 16],
     ['length-auto', normalizeLength('auto'), null],
+    // ★覆盖扩展（2026-10-02·二批）：布局族归一化对拍
+    ['minkey', 'min-width'.replace(/-([a-z])/g, function (_m, c) { return c.toUpperCase() }), 'minWidth'],
+    ['flexgrow-0', normalizeLength('0'), 0],
+    ['gap-px', normalizeLength('0px'), 0],
+    ['flexdir', 'flex-direction'.replace(/-([a-z])/g, function (_m, c) { return c.toUpperCase() }), 'flexDirection'],
   ]
   for (var i = 0; i < cases.length; i++) {
     var name = cases[i][0], got = cases[i][1], want = cases[i][2]
@@ -241,6 +255,11 @@ var VC3B_KEYS = [
   'padding-top', 'padding-right', 'padding-bottom', 'padding-left',
   'margin-top', 'margin-right', 'margin-bottom', 'margin-left',
   'opacity', 'display', 'position', 'visibility',
+  // ★★覆盖扩展（2026-10-02·二批）：布局族（数值项 + 枚举项）——与 TS 版闭集同步
+  'width', 'height',
+  'min-width', 'max-width', 'min-height', 'max-height',
+  'flex-direction', 'justify-content', 'align-items', 'align-self',
+  'flex-grow', 'flex-shrink', 'gap', 'overflow',
 ]
 
 /**

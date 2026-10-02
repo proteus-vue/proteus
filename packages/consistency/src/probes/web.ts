@@ -148,6 +148,25 @@ function styleOf(el: Element, win: Window): NormalizedStyle {
   }
   const op = len('opacity')
   if (op !== undefined) styles.opacity = op
+  // ★★覆盖扩展（2026-10-02·二批）：布局族（数值项 `auto`/`none`/`normal` ⇒ 不产出——
+  //   与 normalizeLength 的口径一致：跳过而非假装 0）
+  for (const [prop, key] of [
+    ['width', 'width'], ['height', 'height'],
+    ['min-width', 'minWidth'], ['max-width', 'maxWidth'],
+    ['min-height', 'minHeight'], ['max-height', 'maxHeight'],
+    ['flex-grow', 'flexGrow'], ['flex-shrink', 'flexShrink'], ['gap', 'gap'],
+  ] as const) {
+    const n = len(prop)
+    if (n !== undefined) (styles as Record<string, unknown>)[key] = n
+  }
+  // 枚举项（字符串原样——跨端同名归一由各端 computed style 保证）
+  for (const [prop, key] of [
+    ['flex-direction', 'flexDirection'], ['justify-content', 'justifyContent'],
+    ['align-items', 'alignItems'], ['align-self', 'alignSelf'], ['overflow', 'overflow'],
+  ] as const) {
+    const v = cs.getPropertyValue(prop)
+    if (v) (styles as Record<string, unknown>)[key] = v
+  }
   const display = cs.getPropertyValue('display')
   if (display) styles.display = display
   const position = cs.getPropertyValue('position')

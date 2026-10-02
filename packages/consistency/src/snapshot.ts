@@ -109,6 +109,23 @@ export interface NormalizedStyle {
   display?: string
   position?: string
   visibility?: string
+  /* ── ★★覆盖扩展（2026-10-02·二批）：**布局族字段**（此前只测到 paint 族 + 少数布局）──
+   *   来源：把 28 个编译器字段里"computed style 可实测"的其余字段纳入闭集——
+   *   数值项（`auto`/`none` ⇒ 不产出）+ 枚举项 + 主轴尺寸。 */
+  width?: number
+  height?: number
+  minWidth?: number
+  maxWidth?: number
+  minHeight?: number
+  maxHeight?: number
+  flexDirection?: string
+  justifyContent?: string
+  alignItems?: string
+  alignSelf?: string
+  flexGrow?: number
+  flexShrink?: number
+  gap?: number
+  overflow?: string
 }
 
 export interface StyleNode {
@@ -365,6 +382,10 @@ const STYLE_KEYS = new Set([
   'borderTopColor', 'borderRightColor', 'borderBottomColor', 'borderLeftColor',
   'borderTopLeftRadius', 'borderTopRightRadius', 'borderBottomRightRadius', 'borderBottomLeftRadius',
   'opacity', 'display', 'position', 'visibility',
+  // ★★覆盖扩展（2026-10-02·二批）：布局族字段（与接口同步——闭集纪律：要么登记要么别产出）
+  'width', 'height', 'minWidth', 'maxWidth', 'minHeight', 'maxHeight',
+  'flexDirection', 'justifyContent', 'alignItems', 'alignSelf',
+  'flexGrow', 'flexShrink', 'gap', 'overflow',
 ])
 
 /** 校验样式快照（VC3-b：归一化规则完整且无歧义——未登记的样式键**报错**，不静默丢弃） */
@@ -406,7 +427,12 @@ export function validateStyleSnapshot(snap: unknown): ValidationResult {
         } else if (![c.r, c.g, c.b, c.a].every(isRounded3)) {
           push('non-rounded-value', `${where}.styles.${k}`, '颜色分量必须 round3 后入快照')
         }
-      } else if (k === 'display' || k === 'position' || k === 'visibility' || k === 'fontFamily') {
+      } else if (
+        // ★字符串族（枚举项）——★必须与 STYLE_KEYS 的字符串键同步（首版漏扩 ⇒ 25 条误报：
+        //   校验器把新枚举键当数值项要求。这正是"两处必须同源"的教训——本仓纪律：闭集与校验同改。）
+        k === 'display' || k === 'position' || k === 'visibility' || k === 'fontFamily'
+        || k === 'flexDirection' || k === 'justifyContent' || k === 'alignItems' || k === 'alignSelf' || k === 'overflow'
+      ) {
         if (typeof v !== 'string') push('wrong-type', `${where}.styles.${k}`, `${k} 应为字符串`)
       } else if (typeof v === 'number') {
         if (!isRounded3(v)) push('non-rounded-value', `${where}.styles.${k}`, `${k}=${v} 超出 3 位小数`)

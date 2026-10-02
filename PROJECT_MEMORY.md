@@ -48,6 +48,46 @@
   只有**可复制代码块**里的引用才真正有害。
 · 破坏性验证：恢复 `p-card` → 红并精确报 `03-fluid-grid.md:31`；还原 → 575 md 全过。
 
+## 当前状态速览（最近一次更新：**2026-10-02·（三十六）· 覆盖率第二波 —— M1 48.8% → 65.5%（L3 扩到 25 字段）**）★新会话以此为准
+### ★★★2026-10-02（三十六）· 堆覆盖率：把 28 字段里"可实测的其余 14 个"纳入 L3
+
+**方向（承接上批"M1 = 48.8%，L3 只折 11 字段"的诊断）**：查明 28 个编译器字段里
+有 **17 个未进 L3**（其中 14 个 computed style 可实测）——这是最大的可堆覆盖块。
+
+**交付（五处同步扩展，一次到位）**
+1. **快照格式**（`snapshot.ts`）：`NormalizedStyle` + `STYLE_KEYS` 闭集扩 14 字段
+   （width/height/minWidth/maxWidth/minHeight/maxHeight · flexDirection/justifyContent/
+   alignItems/alignSelf · flexGrow/flexShrink/gap/overflow）；
+2. **Web 探针**（`probes/web.ts`）：数值项走 `normalizeLength`（`auto`/`none` ⇒ 不产出，与既有口径一致）、
+   枚举项原样读 computed style；
+3. **分级容差**（`compare.ts` 的 `classifyStyleKey`）：长度类走 structure 容差、
+   **`flexGrow`/`flexShrink` 归 scalar**（"1 vs 2"是真实差异，不能用 px 容差吞掉——设计判断）、
+   枚举类严格相等；
+4. **小程序归一化器**（微信 JS 环境）：`VC3B_KEYS` + 归一化链 + **自检对拍**同步扩展；
+5. **夹具两端同构**（Web TEST_PAGE + 小程序 WXML + 产出式声明）。
+
+**★★扩展过程抓出并修的 3 处差异（这就是覆盖率的价值——原来它们不在视野里）**
+① **夹具不同构**：我给小程序加了 `overflow:hidden` 却漏了 Web 侧 ⇒ 门禁报 3 条；
+② **端默认值依赖**：根节点 `flexShrink` Web 默认 **1** vs 微信默认 **0** ⇒ **显式声明**消除
+   （与 `box-sizing` 同款纪律："显式声明 = 消除端默认值依赖"）；
+③ **CSS 继承 vs 无继承**：Web 的 `.nested .box` 匹配 `.box` 类 ⇒ 继承 `overflow:hidden`，
+   而小程序内层节点未声明 ⇒ 默认 `visible` ⇒ **两端显式声明 `overflow:visible`** 消除歧义。
+★三条都是"**夹具纪律**"层面的真教训，已写进注释。
+
+**指标变化**
+· **M1：48.8% → 65.5%**（L3 从 11 → **25 字段**；分层加总 L1 28 · L2 2 · L3 25）
+· L3 实测键数：WebView **从 25 → 34 键**（Web 探针 40 键含边界默认值）
+· 并集口径仍 100%（每个字段至少一层被机器看着）
+
+**验证**：63/63（6 个一致性测试文件；新增"覆盖扩展字段的分级归类与容差"用例——
+含 `width` 0.5px 不报/2px 报、`flexGrow` 1→2 必报、`overflow` 枚举严格）；
+三门禁全绿（snapshot / metrics / pixel）· gates-sync 绿。
+
+**诚实边界**：① L2 仍是 2 字段（几何 w/h）——x/y 位置维度未折算（"位置不是 CSS 字段"，
+   若要把它们计入需扩展 M1 的字段集定义，属口径决策）；② L3 未覆盖的 3 个字段：
+   `top`/`left`（位置类，同 x/y 问题）+ `flexBasis`（`auto` 时不产出，属"无值不判"）；
+③ Skyline 仍不参与 L3（computedStyle 不可用）。
+
 ## 当前状态速览（最近一次更新：**2026-10-02·（三十五）· 标准 §13 待核实项核实完成 —— 3 项解除 / 3 项降级 / 1 项证伪**）★新会话以此为准
 ### ★★★2026-10-02（三十五）· 对外引用闸门核实（标准 §13 + §5.2 四案例，7 个独立目标）
 
