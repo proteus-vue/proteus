@@ -91,6 +91,45 @@ chmod 600 ~/.harmony/hdckey ~/.harmony/hdckey.pub
 Android 走 JNI、iOS 走 staticlib、**鸿蒙走 `aarch64-unknown-linux-ohos` 交叉编译 + C ABI**（无绑定层）。
 交叉编译脚本：`bash hosts/harmony/build-rust-core.sh`（产物 `cpp/thirdparty/libproteus_layout_core.a`，gitignore）。
 
+### 🎉 第十五里程碑：**帧率追踪（hitrace）—— 矩阵 22/22 全项完成**（2026-10-03，矩阵 #22）
+
+> **`hitrace`（OpenHarmony 的 ftrace 前端，与 Android Perfetto 同族）**：后台采活动期 trace
+> （App 启动 + 全探针链约 8.4s 窗口）→ `FrameS-BeginScene` 帧标记序列 → 帧区间统计。
+
+| 口径 | 读数 |
+|---|---|
+| **p50（全窗口）** | **16.67ms —— 60Hz 精确** |
+| **活跃期（连续出帧段 151 帧）** | avg **18.02ms → 55.5fps** |
+| raw（含空闲间隔） | 19.64fps（如实并列——trace 窗口含空闲段） |
+
+**三判据 PASS**：帧数 ≥30（166）· p50 在 8–40ms 带 · fps > 10。
+**★与 Android Perfetto 的诚实差异**：Android 由系统直接给帧区间（Atrace + gfxinfo）；
+鸿蒙从 ftrace 标记序列算（**量纲同、来源同族、解析层不同**）。
+
+**采集**：`bash scripts/shoot-perfetto-harmony.sh`（零轮询：`&` 后台 trace + 内建 `wait`）；
+证据 `results/perfetto.json` + `results/trace-frames.txt`。
+
+---
+
+## 🎉 鸿蒙腿 22/22 全项完成（2026-10-03）
+
+| 阶段 | 覆盖 | 说明 |
+|---|---|---|
+| 起点（2026-10-02） | **4/22** | 仅"装机 + RenderNode 直绘 + 4050 基准"三件事 |
+| 终点（2026-10-03） | **22/22** | ✅21 + 架构性不适用 1（#3 L2 光栅级——鸿蒙无宿主 CPU 光栅通路，**如实标注非"缺"**） |
+
+**缺口的 18 项全部补齐**：命中/复用池/结构变更/文本/滚动（含 A/B 对照）/内核动画/内存/App 路由栈/
+一致性快照（六端报告）/JSVM（Vapor + 宿主运行时，同一份 bundle 零移植）/平台动画/整树虚拟化/
+手势（真注入·真时长分流）/字体族/原生组件混用/帧率追踪。
+
+**贯穿全部 18 项的三条方法论**（都来自实测踩坑，非纸面原则）：
+1. **先取证再断言**（设备列表 / SDK 头文件 / `uitest dumpLayout`——比截图快且准）；
+2. **判据建错靶**是系统性风险（本轮抓出 4 例：核心窗口 vs 硬算 / 命中抽样窗口 / 期望值多算偏移 /
+   bounds 字符串）——**判据侧的坐标系推导必须与实现侧一致**；
+3. **同源材料零移植**优先：`bundle-vapor.js` / `bundle-host-runtime.js` / `vapor-tree.json` /
+   `stress-44.json` 全部从 Android 侧复制（`gen-fixtures.mjs` 构建期刷新）——"两端跑的是同一份文件"
+   比"两端各写一份等价实现"强得多。
+
 ### ✅ 第十四里程碑：**原生组件混用**（2026-10-03，矩阵 #10）
 
 > ArkUI **原生组件**（Row/Text）与 Proteus 自绘内容**共存**——**三判据 PASS**
