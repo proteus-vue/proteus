@@ -57,6 +57,21 @@ static bool g_unitScaleLogged = false;   // 单位标定日志只打一次
  */
 static double g_density = 1.0;
 
+/**
+ * ★★★**渲染树形态（2026-10-02 第二次架构修正）**：一个**全屏 host** + 一个**根 RenderNode**，
+ *   所有元素 RenderNode 作为根节点的子节点（`AddChild`）——而不是"每元素一个 host customNode"。
+ *
+ * 【为什么（首版"每元素一个 host"的实测缺陷）】每个 host customNode 都会被 **ArkUI 布局流**
+ *   接管摆放（Stack 居中）⇒ 元素内容坐标（SetPosition）落在 host 内的相对位置，
+ *   最终屏幕位置 = host 摆放位置 + 内容 y ⇒ **整组色块被居中**、偏离设计坐标
+ *   （实测：x=56/y=140 的内容出现在屏幕纵向中部）。
+ *   ⇒ 正解 = 单一全屏 host（布局流无自由度）+ 根 RenderNode（全屏、坐标空间=屏幕 px）
+ *     + 元素作为其子节点（`OH_ArkUI_RenderNodeUtils_AddChild`）⇒ **绝对坐标精确定位**。
+ *   这与 Android（ProteusHostView 全屏 + Canvas 绝对坐标）同构。
+ */
+static ArkUI_NodeHandle g_rootHost = nullptr;
+static ArkUI_RenderNodeHandle g_rootNode = nullptr;
+
 // ── 极简 JSON 取值（避免为原型引入第三方 JSON 库；指令结构固定：{"x":N,"y":N,"w":N,"h":N,"color":N}）──
 //   ★诚实边界：仅支持本模块约定的**数字字段**；接真实指令流时换正式解析（或改传二进制块）。
 static bool jsonNumber(const std::string& s, const char* key, double* out) {
@@ -162,17 +177,19 @@ static void DrawTextCallback(ArkUI_DrawContext* context, void* userData) {
  *   返回 0 成功 / 负错误码。
  */
 static napi_value Attach(napi_env env, napi_callback_info info) {
-    size_t argc = 2;
-    napi_value args[2] = {nullptr, nullptr};
+    size_t argc = 4;
+    napi_value args[4] = {nullptr, nullptr, nullptr, nullptr};
     napi_get_cb_info(env, info, &argc, args, nullptr, nullptr);
     if (argc >= 2) {
         double d = 1.0;
         if (napi_get_value_double(env, args[1], &d) == napi_ok && d > 0.0) {
             g_density = d;
-            OH_LOG_Print(LOG_APP, LOG_INFO, LOG_DOMAIN, LOG_TAG,
-                         "PROTEUS_RENDER_DENSITY %{public}s",
-                         d > 0 ? "ok" : "bad");
         }
+    }
+    double screenWvp = 0, screenHvp = 0;
+    if (argc >= 4) {
+        napi_get_value_double(env, args[2], &screenWvp);
+        napi_get_value_double(env, args[3], &screenHvp);
     }
     if (argc < 1) {
         OH_LOG_Print(LOG_APP, LOG_ERROR, LOG_DOMAIN, LOG_TAG, "PROTEUS_RENDER_ATTACH argc=0 (缺 NodeContent 参数)");
@@ -194,8 +211,34 @@ static napi_value Attach(napi_env env, napi_callback_info info) {
     //   会触发 CAPI 初始化 ⇒ **必须在任何 RenderNode API 调用之前**完成（放在 attach 阶段最稳）。
     ArkUI_NativeNodeAPI_1* probeApi = nullptr;
     OH_ArkUI_GetModuleInterface(ARKUI_NATIVE_NODE, ArkUI_NativeNodeAPI_1, probeApi);
+
+    // ★建全屏 host + 根 RenderNode（见 g_rootHost 注释的架构修正）——只建一次（attach 幂等）
+    if (g_rootHost == nullptr && probeApi != nullptr && screenWvp > 0 && screenHvp > 0) {
+        g_rootHost = probeApi->createNode(ARKUI_NODE_CUSTOM);
+        if (g_rootHost != nullptr) {
+            ArkUI_NumberValue wv[1] = {}; wv[0].f32 = (float)screenWvp;
+            ArkUI_AttributeItem wi{wv, 1, nullptr, nullptr};
+            probeApi->setAttribute(g_rootHost, NODE_WIDTH, &wi);
+            ArkUI_NumberValue hv[1] = {}; hv[0].f32 = (float)screenHvp;
+            ArkUI_AttributeItem hi{hv, 1, nullptr, nullptr};
+            probeApi->setAttribute(g_rootHost, NODE_HEIGHT, &hi);
+            g_rootNode = OH_ArkUI_RenderNodeUtils_CreateNode();
+            if (g_rootNode != nullptr) {
+                OH_ArkUI_RenderNodeUtils_SetSize(g_rootNode,
+                    (int32_t)(screenWvp * g_density), (int32_t)(screenHvp * g_density));
+                int32_t rc = OH_ArkUI_RenderNodeUtils_AddRenderNode(g_rootHost, g_rootNode);
+                if (rc == ARKUI_ERROR_CODE_NO_ERROR) {
+                    OH_ArkUI_NodeContent_AddNode(g_content, g_rootHost);
+                } else {
+                    OH_LOG_Print(LOG_APP, LOG_ERROR, LOG_DOMAIN, LOG_TAG,
+                                 "PROTEUS_RENDER_ROOT_ADD_FAIL rc=%{public}d", rc);
+                }
+            }
+        }
+    }
     OH_LOG_Print(LOG_APP, LOG_INFO, LOG_DOMAIN, LOG_TAG,
-                 "PROTEUS_RENDER_ATTACHED ok capi=%{public}d", probeApi != nullptr ? 1 : 0);
+                 "PROTEUS_RENDER_ATTACHED ok capi=%{public}d root=%{public}d",
+                 probeApi != nullptr ? 1 : 0, g_rootNode != nullptr ? 1 : 0);
     napi_value ok;
     napi_create_int32(env, 0, &ok);
     return ok;
@@ -314,42 +357,18 @@ static napi_value RenderCommands(napi_env env, napi_callback_info info) {
                 delete spec;
             }
         }
-        // 挂到宿主：需要一个 customNode 作为 RenderNode 的父（NodeContent 不直接收 RenderNode）
-        //   方案 A（本实现）：每个 renderNode 建一个 customNode 包装，再 AddNode 到 content。
-        ArkUI_NativeNodeAPI_1* api = nullptr;
-        OH_ArkUI_GetModuleInterface(ARKUI_NATIVE_NODE, ArkUI_NativeNodeAPI_1, api);
-        if (api == nullptr) {
-            OH_LOG_Print(LOG_APP, LOG_ERROR, LOG_DOMAIN, LOG_TAG, "PROTEUS_RENDER_SKIP reason=node-api-null");
-            OH_ArkUI_RenderNodeUtils_DisposeNode(node);
-            continue;
-        }
-        ArkUI_NodeHandle host = api->createNode(ARKUI_NODE_CUSTOM);
-        if (host == nullptr) {
-            OH_LOG_Print(LOG_APP, LOG_ERROR, LOG_DOMAIN, LOG_TAG, "PROTEUS_RENDER_SKIP reason=custom-node-null");
-            OH_ArkUI_RenderNodeUtils_DisposeNode(node);
-            continue;
-        }
-        // ★host 尺寸按 **vp** 设置（= 内容 px ÷ 密度）——见 g_density 注释的实测踩坑
-        ArkUI_NumberValue wv[1] = {};
-        wv[0].f32 = static_cast<float>(w / g_density);
-        ArkUI_AttributeItem wi{wv, 1, nullptr, nullptr};
-        api->setAttribute(host, NODE_WIDTH, &wi);
-        ArkUI_NumberValue hv[1] = {};
-        hv[0].f32 = static_cast<float>(h / g_density);
-        ArkUI_AttributeItem hi{hv, 1, nullptr, nullptr};
-        api->setAttribute(host, NODE_HEIGHT, &hi);
-
-        int32_t rc = OH_ArkUI_RenderNodeUtils_AddRenderNode(host, node);
-        if (rc != ARKUI_ERROR_CODE_NO_ERROR) {
-            OH_LOG_Print(LOG_APP, LOG_ERROR, LOG_DOMAIN, LOG_TAG, "PROTEUS_RENDER_ADD 失败 rc=%{public}d", rc);
-            api->disposeNode(host);
-            OH_ArkUI_RenderNodeUtils_DisposeNode(node);
-            continue;
-        }
-        rc = OH_ArkUI_NodeContent_AddNode(g_content, host);
-        if (rc != ARKUI_ERROR_CODE_NO_ERROR) {
-            OH_LOG_Print(LOG_APP, LOG_ERROR, LOG_DOMAIN, LOG_TAG, "PROTEUS_RENDER_CONTENT_ADD 失败 rc=%{public}d", rc);
-            api->disposeNode(host);
+        // ★★挂到**根 RenderNode**（全屏坐标空间——见 g_rootHost 注释的架构修正）：
+        //   AddChild(root, node) ⇒ 元素在屏幕绝对坐标空间内定位（不再被 ArkUI 布局流居中）。
+        if (g_rootNode != nullptr) {
+            int32_t rcAdd = OH_ArkUI_RenderNodeUtils_AddChild(g_rootNode, node);
+            if (rcAdd != ARKUI_ERROR_CODE_NO_ERROR) {
+                OH_LOG_Print(LOG_APP, LOG_ERROR, LOG_DOMAIN, LOG_TAG,
+                             "PROTEUS_RENDER_CHILD_ADD_FAIL rc=%{public}d", rcAdd);
+                OH_ArkUI_RenderNodeUtils_DisposeNode(node);
+                continue;
+            }
+        } else {
+            OH_LOG_Print(LOG_APP, LOG_ERROR, LOG_DOMAIN, LOG_TAG, "PROTEUS_RENDER_SKIP reason=no-root");
             OH_ArkUI_RenderNodeUtils_DisposeNode(node);
             continue;
         }

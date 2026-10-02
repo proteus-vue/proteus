@@ -26,7 +26,7 @@
 | 17 | **App 路由栈（M5）** | ✅ `app-stack` | ✅ `app-stack` | ⛔ **缺** | 三端语义已对齐（`check-app-stack.py`），鸿蒙腿待接 |
 | 18 | **宿主运行时（G-39）** | ✅ `host-runtime` | ✅ `host-runtime` | ⛔ **缺** | 鸿蒙待补 |
 | 19 | **内存读数** | ✅ `proteus-mem` | ✅ `delta_mb` | ⛔ **缺** | 鸿蒙待补 |
-| 20 | **截图回归** | ✅ `shot`/`shot-native` | ✅（L4/sim-selfdraw） | ✅ 截图（人工取回） | 鸿蒙未接自动化判据 |
+| 20 | **截图回归** | ✅ `shot`/`shot-native` | ✅（L4/sim-selfdraw） | ◐ 截图（人工取回） | 鸿蒙：**渲染树架构修正后**色块+文字双可见（`results/render-root-arch.jpeg`）；自动化像素判据待接 |
 | 21 | **一致性快照（L2-L4）** | ✅ | ✅ | ⛔ **缺** | 鸿蒙待补 |
 | 22 | **Perfetto / 帧率** | ✅（Perfetto 接入） | ◐（帧统计） | ⛔ **缺** | |
 
