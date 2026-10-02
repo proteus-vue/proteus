@@ -87,6 +87,33 @@ check-consistency-snapshot 七段全绿 · check:no-blind-wait ✅（新 .sh 零
 ① L2/L3/L2.5/L2.6 算子用**合成快照**——证明的是"比对引擎敏不敏感"，不是"真机数据一定对"；
 ② L4 算子用真截图但取同端注入（跨端噪声底含 AA，无区分度）；L4 的价值形态是**定位**。
 
+### ★★★2026-10-03（八十七）· 鸿蒙 A/B **事件路径**补齐—— 三端 ⑦a–g 全绿 + 抓出第 4 个"症状离根因极远"缺陷
+
+**用户「继续打通补齐」→ 鸿蒙 A/B ⑦（事件路径）**（⑦此前按"tapAt 未实现"分档跳过）。
+
+**交付**
+1. **JSVM 反向调 JS**：`tapAt({x,y})` → 核心 hitTest → **`CallFunction` 直调**
+   （tapAt 由 JS 发起 ⇒ 调用栈里有 env；Android 用 JNI 反向调用、鸿蒙回调内直调——**同语义两种机制**）
+   → JS `__proteusVaporGesture`；`onGesture(name)` 注册回调名（与 Android `GESTURE_CB` 同模式）。
+2. **回执同形**：`{ok,x,y,dispatched,gestures_fired,last}`（与 Android `tapAt` 逐字段对应——
+   共享 bundle 读 `gestures_fired` 防"读到陈旧 last 假读数"）。
+3. **桥自检**（有复用价值）：注入后立刻打 `Object.keys(proteusHost).map(typeof)` ——
+   "JS 侧到底看得见哪些方法"从猜变成读数（本轮实测：7 个全 function，排除桥层嫌疑）。
+
+**真机读数（⑦a–g 全绿）**：两路链 [11>10>0] / [39>38>3>2>1] · 逐跳位移 [30,5] 一致 ·
+A Δ=30px（指令 56B）/ B Δ=30px（补丁 2 条）· 命中与 handler 两路都对。
+
+**★★第 4 个"症状与根因相距极远"的缺陷（四轮排查，全记代码注释）**
+| 步 | 读数 | 推论 |
+|---|---|---|
+| 1 | A 路 tap 失败 / B 路成功（fired=1） | 差异不在桥（同一份 C++）⇒ A 的 JS 回调内部抛错 |
+| 2 | `GetAndClearLastException` 取消息 ⇒ **空** | ★异常挂起时同 env 的后续 eval 也被阻塞（V8 语义）——"读不到"≠"没异常" |
+| 3 | 先清异常 + JS try/catch 再调 | 拿到真错：`Unterminated string in JSON at position 511` |
+| 4 | 定位 `char out[512]` + 内嵌完整 rects | **宿主回执被 snprintf 截断** ⇒ JS `JSON.parse` 失败 |
+★症状是"A 路 tap 回调失败"，真因是**宿主输出缓冲区大小**。修法：回执拼接一律 `std::string`。
+
+**对照表**：鸿蒙 **5/7 → 5.5/7**（事件路径补齐，与 iOS 同强度；仅 ④绘制通道按渲染层能力分档）。
+
 ### ★★★2026-10-03（八十六）· iOS **A/B 对照补齐**（P1）—— 三端 A/B 全绿 + 顺带修出 **3 个 iOS 真实缺陷**
 
 **用户「继续」→ iOS A/B**（P1；此前重估 1.5–2 天）。
@@ -1838,6 +1865,8 @@ check-consistency-snapshot 七段全绿 · script-compile ✅ · no-blind-wait �
 **新诚实边界**：平移对齐会**吸收真实位置差异**（若某端整体真的偏了 3px，对齐后看不出）——
 "位置是否正确"由 L2 几何数值比对承担；L4 只管"画出来像不像"（已写入注记与文档）。
 ④ 仍未接入：iOS/Android 真机截图（当前 Web=Playwright、MP=模拟器，均非真机）。
+
+## 当前状态速览（最近一次更新：**2026-10-03·（八十七）· 鸿蒙 A/B **事件路径**补齐——三端 ⑦a–g 全绿（JSVM 反向调 JS）；抓出"宿主回执截断"缺陷（症状=A 路 tap 回调失败，真因=char out[512] 截断）**）★新会话以此为准
 
 ## 当前状态速览（最近一次更新：**2026-10-03·（八十六）· iOS **A/B 补齐**——三端 A/B 全绿（iOS 含④⑦无分档）+ 顺带修出 3 个 iOS 真实缺陷（styleOf 漏 glow/mask · clip params 类型 · clearLayers 漏清；跨端对照=静默不渲染的探针）**）★新会话以此为准
 
