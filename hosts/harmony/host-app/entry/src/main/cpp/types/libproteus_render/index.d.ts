@@ -23,3 +23,8 @@ export const platformAnimSave: (content: string, path: string) => number;
 export const clearRoot: () => number;
 /** ★矩阵 #5：平移根 RenderNode（yDesign 设计单位）——Proteus 渲染路径的滚动；返回错误码（0=OK） */
 export const scrollRoot: (yDesign: number) => number;
+/** ★矩阵 #7：在根节点装真触摸接收器（uitest uiInput 注入 → touch-samples.jsonl + PROTEUS_TOUCH）；
+ *  filesDir = 样本落盘目录（ArkTS filesDir——el2 映射路径 hdc 可读）；返回 {ok,rc_*} */
+export const gestureInstall: (filesDir: string) => string;
+/** ★矩阵 #7：追加一行触摸样本（JSONL）→ <filesDir>/touch-samples.jsonl；返回累计行号（-1=未设目录） */
+export const gestureSample: (lineJson: string) => number;

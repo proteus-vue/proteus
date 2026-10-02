@@ -27,6 +27,8 @@
 #include <arkui/native_type.h>
 #include <arkui/native_node.h>
 #include <arkui/native_node_napi.h>
+// ★矩阵 #7：真触摸事件（uitest uiInput 注入 → 原生事件接收器）
+#include <arkui/ui_input_event.h>
 #include <arkui/native_render.h>
 // ★文本上屏（ArkGraphics2D）：typography 在 content modifier 回调里绘制
 #include <native_drawing/drawing_canvas.h>
@@ -554,7 +556,134 @@ static napi_value PlatformAnimSave(napi_env env, napi_callback_info info) {
     return out;
 }
 
+/* ══════════════ 矩阵 #7：手势（真触摸注入 → 原生接收 → 三端中立识别） ══════════════
+ *
+ * 【要证明什么（与两端的手势判据同族）】真输入注入（`uitest uiInput click/longClick/swipe`
+ *   ——**系统输入栈**，不是 App 内伪造）→ 原生节点事件接收器（`addNodeEventReceiver`）→
+ *   逐样本（action/x/y/t）落 hilog → **三端中立识别器**（`packages/gesture`）分类 =
+ *   tap / longpress / swipe，且**真实按压时长**由样本时间戳证明（≥500ms ⇒ longpress）。
+ *
+ * 【为什么这条比 iOS V16 更强】iOS 的 `tapAt`/`longpressAt` 是**注入即声明类型**（绕过 UITouch 时序）；
+ *   其报告明确标注 `not_covered: UITouch->duration-classification`。鸿蒙腿经系统输入栈真注入
+ *   ⇒ **覆盖真实时长分流**（脚本对不同注入方式取样本，分类器按时间戳判型）。
+ *
+ * 【诚实边界】① 识别器分类跑在**主机侧**（采集脚本把样本喂给 `packages/gesture`）——
+ *   与 iOS/Android 把分类放宿主端不同（彼为 GestureDetector/自研处理器）；本批证明"真触摸 →
+ *   中立识别"这条链，宿主内嵌识别器是后续批次；② hitTest 命中一致性已由 `hitProbe`（6/6 逐位
+ *   一致）与 vapor 链（tap→handler→几何变）证明，本批不重复。
+ */
+static int g_touchLogSeq = 0;   // 每次会话自增（脚本据此切分"本次注入的样本"）
+static std::string g_gestureDir;   // 触摸样本落盘目录（ArkTS 注入）
+static int g_touchCount = 0;
+
+/**
+ * 节点事件接收器：抽触摸样本 → **落盘 JSONL**（主）+ hilog（辅）。
+ *
+ * 【为什么以文件为主（本轮实测）】hilog 在系统高流量时样本行会被挤出/难定位
+ *   （注入后 `hilog -x | grep` 时有时无）；落盘与全仓其它取证同形态（el2 映射路径 hdc 可读），
+ *   且样本序列（down/move/up + 时间戳）是**时序证据**——必须完整，不能被日志缓冲裁掉。
+ *   行格式：{"action":N,"x":..,"y":..,"dx":..,"dy":..,"t":..}
+ */
+static void OnNodeTouchEvent(ArkUI_NodeEvent* event) {
+    ArkUI_UIInputEvent* input = OH_ArkUI_NodeEvent_GetInputEvent(event);
+    if (input == nullptr) return;
+    if (OH_ArkUI_UIInputEvent_GetType(input) != UI_INPUT_EVENT_SOURCE_TYPE_TOUCH_SCREEN) return;
+    int32_t action = OH_ArkUI_UIInputEvent_GetAction(input);
+    int64_t t = OH_ArkUI_UIInputEvent_GetEventTime(input);
+    float x = OH_ArkUI_PointerEvent_GetX(input);
+    float y = OH_ArkUI_PointerEvent_GetY(input);
+    float dx = OH_ArkUI_PointerEvent_GetDisplayX(input);
+    float dy = OH_ArkUI_PointerEvent_GetDisplayY(input);
+    g_touchCount++;
+    if (!g_gestureDir.empty()) {
+        std::string path = g_gestureDir + "/touch-samples.jsonl";
+        FILE* f = fopen(path.c_str(), "a");
+        if (f != nullptr) {
+            fprintf(f, "{\"action\":%d,\"x\":%.3f,\"y\":%.3f,\"dx\":%.3f,\"dy\":%.3f,\"t\":%lld}\n",
+                    action, (double)x, (double)y, (double)dx, (double)dy, (long long)t);
+            fclose(f);
+        }
+    }
+    OH_LOG_Print(LOG_APP, LOG_INFO, LOG_DOMAIN, LOG_TAG,
+                 "PROTEUS_TOUCH action=%{public}d x=%.3f y=%.3f n=%{public}d",
+                 action, (double)x, (double)y, g_touchCount);
+}
+
+/** gestureInstall(filesDir): {ok, seq} —— 在根 host 节点上装触摸接收器（幂等）；清旧样本 */
+static napi_value GestureInstall(napi_env env, napi_callback_info info) {
+    size_t argc = 1;
+    napi_value args[1] = {nullptr};
+    napi_get_cb_info(env, info, &argc, args, nullptr, nullptr);
+    if (argc >= 1 && args[0] != nullptr) {
+        size_t len = 0;
+        napi_get_value_string_utf8(env, args[0], nullptr, 0, &len);
+        g_gestureDir.resize(len + 1);
+        napi_get_value_string_utf8(env, args[0], &g_gestureDir[0], len + 1, &len);
+        g_gestureDir.resize(len);
+        if (!g_gestureDir.empty()) {
+            std::string path = g_gestureDir + "/touch-samples.jsonl";
+            remove(path.c_str());   // 清旧样本（每次安装 = 一次新采集会话）
+        }
+    }
+    g_touchCount = 0;
+    int32_t rcReg = -1, rcRecv = -1, rcHit = -1;
+    if (g_rootHost != nullptr) {
+        ArkUI_NativeNodeAPI_1* api = nullptr;
+        OH_ArkUI_GetModuleInterface(ARKUI_NATIVE_NODE, ArkUI_NativeNodeAPI_1, api);
+        if (api != nullptr) {
+            // ★显式设 hit test 模式（首版实测注入事件到不了：customNode 的默认命中行为不保证）
+            //   ARKUI_HIT_TEST_MODE_DEFAULT=0 / BLOCK=1 / TRANSPARENT=2 / NONE=3（enum 起始见 native_type.h）
+            ArkUI_NumberValue hv[1] = {};
+            hv[0].i32 = 0;   // DEFAULT（自身命中 + 子树照常测试）
+            ArkUI_AttributeItem hi{hv, 1, nullptr, nullptr};
+            rcHit = api->setAttribute(g_rootHost, NODE_HIT_TEST_BEHAVIOR, &hi);
+            rcReg = api->registerNodeEvent(g_rootHost, NODE_TOUCH_EVENT, 0, nullptr);
+            rcRecv = api->addNodeEventReceiver(g_rootHost, OnNodeTouchEvent);
+        }
+    }
+    g_touchLogSeq++;
+    char buf[160];
+    snprintf(buf, sizeof(buf), "{\"ok\":%s,\"rc_reg\":%d,\"rc_recv\":%d,\"rc_hit\":%d,\"seq\":%d}",
+             (rcReg == 0 && rcRecv == 0) ? "true" : "false", rcReg, rcRecv, rcHit, g_touchLogSeq);
+    OH_LOG_Print(LOG_APP, LOG_INFO, LOG_DOMAIN, LOG_TAG, "PROTEUS_GESTURE_INSTALL %{public}s", buf);
+    napi_value out;
+    napi_create_string_utf8(env, buf, NAPI_AUTO_LENGTH, &out);
+    return out;
+}
+
 /* ── 矩阵 #5：滚动（Proteus 渲染路径——与 ArkUI Scroll 容器对照） ── */
+
+/**
+ * gestureSample(line): number —— 追加一行触摸样本（JSONL；写 g_gestureDir/touch-samples.jsonl）。
+ *   由 ArkTS `.onTouch`（标准触摸链）调用，样本含 down/up/move + 时间戳（真时序证据）。
+ *   返回当前累计行号（>0）；未设目录返回 -1（如实拒绝，不静默）。
+ */
+static napi_value GestureSample(napi_env env, napi_callback_info info) {
+    size_t argc = 1;
+    napi_value args[1] = {nullptr};
+    napi_get_cb_info(env, info, &argc, args, nullptr, nullptr);
+    std::string line;
+    if (argc >= 1 && args[0] != nullptr) {
+        size_t len = 0;
+        napi_get_value_string_utf8(env, args[0], nullptr, 0, &len);
+        line.resize(len + 1);
+        napi_get_value_string_utf8(env, args[0], &line[0], len + 1, &len);
+        line.resize(len);
+    }
+    int32_t rc = -1;
+    if (!g_gestureDir.empty() && !line.empty()) {
+        std::string path = g_gestureDir + "/touch-samples.jsonl";
+        FILE* f = fopen(path.c_str(), "a");
+        if (f != nullptr) {
+            fprintf(f, "%s\n", line.c_str());
+            fclose(f);
+            rc = ++g_touchCount;
+        }
+    }
+    napi_value out;
+    napi_create_int32(env, rc, &out);
+    return out;
+}
 
 /** clearRoot(): number —— 清空根的所有子节点（重建内容前调用；返回剩余子节点数） */
 static napi_value ClearRoot(napi_env env, napi_callback_info info) {
@@ -614,6 +743,8 @@ static napi_value Init(napi_env env, napi_value exports) {
         {"platformAnimEnd", nullptr, PlatformAnimEnd, nullptr, nullptr, nullptr, napi_default, nullptr},
         {"platformAnimSave", nullptr, PlatformAnimSave, nullptr, nullptr, nullptr, napi_default, nullptr},
         {"clearRoot", nullptr, ClearRoot, nullptr, nullptr, nullptr, napi_default, nullptr},
+        {"gestureInstall", nullptr, GestureInstall, nullptr, nullptr, nullptr, napi_default, nullptr},
+        {"gestureSample", nullptr, GestureSample, nullptr, nullptr, nullptr, napi_default, nullptr},
         {"scrollRoot", nullptr, ScrollRoot, nullptr, nullptr, nullptr, napi_default, nullptr},
     };
     napi_define_properties(env, exports, sizeof(desc) / sizeof(desc[0]), desc);

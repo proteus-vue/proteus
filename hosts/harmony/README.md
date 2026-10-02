@@ -91,6 +91,32 @@ chmod 600 ~/.harmony/hdckey ~/.harmony/hdckey.pub
 Android 走 JNI、iOS 走 staticlib、**鸿蒙走 `aarch64-unknown-linux-ohos` 交叉编译 + C ABI**（无绑定层）。
 交叉编译脚本：`bash hosts/harmony/build-rust-core.sh`（产物 `cpp/thirdparty/libproteus_layout_core.a`，gitignore）。
 
+### ✅ 第十二里程碑：**手势（真注入 · 真时长分流）**（2026-10-03，矩阵 #7）
+
+> **`uitest uiInput`（系统输入栈真注入）** → ArkTS `.onTouch`（标准触摸链，含真时间戳）
+> → 样本落盘 JSONL（每段 down 点附核心 hitTest 结果）→ **三端中立识别器**（`packages/gesture`）分类。
+
+| 段 | 注入方式 | 样本 | 按住时长（样本时间戳算） | 分类 | 命中（核心 hitTest） |
+|---|---|---|---|---|---|
+| 1 | `click` | 2 | **106ms** | **tap** | target 22 · chain 3 |
+| 2 | `longClick` | 2 | **1517ms** | **longpress** | target 14 · chain 3 |
+| 3 | `swipe` | 22 | 339ms | **swipe-up** | target 22 · chain 3 |
+
+**判据 8/8 PASS**：段数 3 · tap/longpress/swipe 分类全对 · **零串扰** · 每段有命中 ·
+命中 target 非空 · **时长由样本时间戳算出**（非声明）。
+
+**★★本腿对 iOS V16 的关键超越**：iOS 的 `tapAt`/`longpressAt` 是"注入即声明类型"，
+其报告诚实标注 `not_covered: UITouch->duration-classification`；鸿蒙经**系统输入栈真注入**，
+分类器按**真实按压时长**判型（106ms→tap / 1517ms→longpress）——该缺口在此闭合。
+
+**★实测两个坑**：① `addNodeEventReceiver(NODE_TOUCH_EVENT)` 在 customNode 上**收不到**
+注入事件（rc=0 但零回调；hit test 模式也设了）⇒ 改用 **ArkTS `.onTouch`**（标准触摸链）；
+② 分段不能按时间间隔切（**longpress 的 down→up 间隔就是按住时长 1517ms**——按 gap 切会把它劈成两段）
+⇒ 按 **down/up 配对**切分。
+
+**采集**：`bash scripts/shoot-gesture-harmony.sh`（安装→场景→三种注入→等样本→分类，零盲等）；
+证据 `results/touch-samples.jsonl` + `results/gesture.json`。
+
 ### ✅ 第十一里程碑：**滚动深度接线（scroll-core，含原生 A/B 对照）**（2026-10-03，矩阵 #5）
 
 > **Proteus 渲染路径滚动**：`scrollRoot(y)` 平移**根 RenderNode**（内容整体位移——与 Android
