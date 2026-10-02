@@ -140,6 +140,21 @@ export function createAppNavigationAdapter(
       // Router.back() 是同步 API（三端同签名）——泵在微任务里推进，场景/测试用 flush() 收工
       void fire()
     },
+    // ★★★（2026-10-02 · 启示 3）**App 专属栈原语**——Web/MP 受平台栈语义限制，App 虚拟栈完整支持
+    //   （"App 端可解除 Skyline 硬限制"的又一兑现：按名回退/移除/提顶都不需要平台配合）
+    popTo(name) {
+      stack.popTo(name)
+      void fire()
+    },
+    removeByName(name) {
+      const n = stack.removeByName(name)
+      void fire()
+      return n
+    },
+    moveToTop(name) {
+      stack.moveToTop(name)
+      void fire()
+    },
     flush,
   }
 }

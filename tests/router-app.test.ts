@@ -174,3 +174,75 @@ describe('⑤ Web/MP 主入口行为不变（注入默认 adapter 的路径仍�
     expect(router.stackDepth).toBeGreaterThanOrEqual(0)
   })
 })
+
+// ══════════════════════════════════════════════════════════════════
+// ★★★（2026-10-02 · 依《主流框架路由调研》启示 3）：**统一 API 的栈原语**（App 端完整支持）
+//   调研原文：「在现有 navigateTo/redirectTo/switchTab/reLaunch 之上补 popTo(name/path)、
+//   removeByName」——本组证明它们已从 AppStack 一路接到 **统一 Router API**（三端同签名）。
+// ══════════════════════════════════════════════════════════════════
+describe('⑥ 统一 API 栈原语：popTo / removeByName / moveToTop（启示 3）', () => {
+  // ★夹具注意（本测试第一版踩到）：ROUTES 里 `home` 是 `isTab: true` ⇒ `router.push({name:'home'})`
+  //   走 **switchTab 语义（清栈换根）** ⇒ 栈里只剩它自己。栈原语用例需用**非 tab** 页。
+  const PLAIN: RouteRecord[] = [
+    { name: 'a', path: 'pages/a', component: '', loc: { file: 'x', line: 1, column: 1 } } as never,
+    { name: 'b', path: 'pages/b', component: '', loc: { file: 'x', line: 1, column: 1 } } as never,
+    { name: 'c', path: 'pages/c', component: '', loc: { file: 'x', line: 1, column: 1 } } as never,
+  ]
+
+  it('router.popTo(name)：按名回退（不需要数 delta）', async () => {
+    const { invoke } = makeChannel()
+    const nav = createAppNavigation({ invoke, routes: PLAIN as never })
+    const router = createRouter(PLAIN as never, { adapter: nav.adapter })
+    await router.push({ name: 'a' })
+    await router.push({ name: 'b' })
+    await router.push({ name: 'c' })
+    expect(nav.stack.depth).toBe(3)
+    router.popTo('a')
+    await nav.flush()
+    expect(nav.stack.depth).toBe(1)
+    expect(nav.stack.current()!.name).toBe('a')
+  })
+
+  it('router.removeByName(name)：抹掉该屏（幂等，返回移除数）', async () => {
+    const { invoke } = makeChannel()
+    const nav = createAppNavigation({ invoke, routes: PLAIN as never })
+    const router = createRouter(PLAIN as never, { adapter: nav.adapter })
+    await router.push({ name: 'a' })
+    await router.push({ name: 'b' })
+    expect(router.removeByName('b')).toBe(1)
+    await nav.flush()
+    expect(nav.stack.depth).toBe(1)
+    expect(router.removeByName('ghost'), '不存在的名字 = 幂等 0（不抛错）').toBe(0)
+  })
+
+  it('router.moveToTop(name)：提到栈顶且**栈深不变**（中间屏原位保留）', async () => {
+    const { invoke } = makeChannel()
+    const nav = createAppNavigation({ invoke, routes: PLAIN as never })
+    const router = createRouter(PLAIN as never, { adapter: nav.adapter })
+    await router.push({ name: 'a' })
+    await router.push({ name: 'b' })
+    await router.push({ name: 'c' })
+    router.moveToTop('a')
+    await nav.flush()
+    expect(nav.stack.depth, 'moveToTop 不改栈深').toBe(3)
+    expect(nav.stack.current()!.name).toBe('a')
+  })
+
+  it('★不支持该原语的端 ⇒ **明确报错**（不静默退化成 back——那会跳错页）', async () => {
+    // 手造一个只实现基础能力的适配器（模拟 Web/MP 侧的受限实现）
+    const base = {
+      isMP: false,
+      getCurrentPages: () => [],
+      navigateTo: async () => {},
+      redirectTo: async () => {},
+      reLaunch: async () => {},
+      switchTab: async () => {},
+      navigateBack: () => {},
+      // 故意不实现 popTo/removeByName/moveToTop
+    }
+    const router = createRouter(ROUTES as never, { adapter: base as never })
+    expect(() => router.popTo('home')).toThrow(/不支持按名回退/)
+    expect(() => router.removeByName('home')).toThrow(/不支持/)
+    expect(() => router.moveToTop('home')).toThrow(/不支持/)
+  })
+})

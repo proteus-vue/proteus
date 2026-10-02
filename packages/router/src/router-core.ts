@@ -32,6 +32,17 @@ export interface RouterAdapter {
   reLaunch(opts: { url: string }): Promise<void>
   switchTab(opts: { url: string }): Promise<void>
   navigateBack(opts: { delta: number }): void
+  /**
+   * ★★★（2026-10-02 · 依《主流框架路由调研》启示 3）**栈内定位/移除**（可选——端不实现则不暴露）：
+   *   · `popTo(name)`：回退到栈中最近一个该名的屏
+   *   · `removeByName(name)`：抹掉该名的屏（只它自己；上面的屏补位）
+   *   · `moveToTop(name)`：把该屏提到栈顶（中间屏原位保留）
+   * ★Web/MP 端受平台栈语义限制（Web 无栈概念；小程序侧只有 `navigateBack(delta)`）⇒ 可不实现；
+   *   App 端（虚拟栈）**完整支持**——这是"App 端可解除 Skyline 硬限制"的又一兑现。
+   */
+  popTo?(name: string): void
+  removeByName?(name: string): number
+  moveToTop?(name: string): void
   onPageLoad?(
     cb: (
       route: string,
@@ -224,6 +235,36 @@ export class Router {
   /** 替换当前页 */
   replace<N extends keyof RouteParamsByName = keyof RouteParamsByName>(options: NavigateOptions<N>): Promise<void> {
     return this.push({ ...options, replace: true })
+  }
+
+  /**
+   * ★★回退到栈中最近的该名路由（启示 3 · 对齐鸿蒙 `popToName`）——**不传 delta，传名字**。
+   * Web 端无栈概念 ⇒ 不支持时**明确报错**（不静默退化成 back()——那会跳错页）。
+   */
+  popTo(name: string): void {
+    if (!this.adapter.popTo) {
+      throw new Error(
+        `[router] popTo("${name}")：当前端适配器不支持按名回退（${this.adapter.isMP ? '小程序' : 'Web'} 端受平台栈语义限制）` +
+          '——App 端完整支持；其他端请用 back(delta)',
+      )
+    }
+    this.adapter.popTo(name)
+  }
+
+  /** ★★抹掉栈中该名路由（启示 3 · 对齐鸿蒙 `removeByName`）；返回移除数（0 = 栈中无此屏，幂等） */
+  removeByName(name: string): number {
+    if (!this.adapter.removeByName) {
+      throw new Error(`[router] removeByName("${name}")：当前端适配器不支持（仅 App 虚拟栈）`)
+    }
+    return this.adapter.removeByName(name)
+  }
+
+  /** ★★把栈内该屏提到栈顶（启示 3 · 对齐鸿蒙 `moveToTop`）；中间屏原位保留 */
+  moveToTop(name: string): void {
+    if (!this.adapter.moveToTop) {
+      throw new Error(`[router] moveToTop("${name}")：当前端适配器不支持（仅 App 虚拟栈）`)
+    }
+    this.adapter.moveToTop(name)
   }
 
   /** 根据命名路由/路径解析目标 */
