@@ -33,5 +33,7 @@ export const hostRuntimeProbe: (argsJson: string) => string;
 export const hostRtShellInstall: (argsJson: string) => string;
 /** ★C 组：真生命周期转发（pause/resume）→ JS 钩子 → 泵 job → 写 host-shell.json */
 export const hostRtShellEvent: (evt: string) => string;
+/** ★矩阵 #12：整树级虚拟化（全树进核 + 池化层 + 命中一致性）——fixture = vapor-tree.json */
+export const mountVirtualProbe: (fixtureJson: string) => string;
 /** Rust 排版核版本（仪器自检） */
 export const version: () => string;

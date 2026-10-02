@@ -55,6 +55,8 @@ function copyVapor() {
     ['vapor-artifacts.json', path.join(ANDROID_ASSETS, 'vapor-artifacts.json')],
     // ★矩阵 #18：宿主运行时 bundle（同一份 hosts/shared 产物的 android 侧构建）
     ['bundle-host-runtime.js', path.join(ROOT, 'hosts/android/bridge/dist/bundle-host-runtime.js')],
+    // ★矩阵 #12：整树级虚拟化夹具（同一份 SFC 产物——Android mountVirtualRun / iOS V12 同源）
+    ['vapor-tree.json', path.join(ANDROID_ASSETS, 'vapor-tree.json')],
   ]
   for (const [name, src] of files) {
     if (!fs.existsSync(src)) {

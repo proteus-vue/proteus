@@ -21,7 +21,7 @@ import { hidebug } from '@kit.PerformanceAnalysisKit';
 // ★矩阵 #17：App 路由栈场景探针（移植副本，与 Android/iOS 同口径）
 import { runAppStackProbe } from '../core/app-stack-probe';
 import { attach, renderCommands, stats, ProteusRenderStats, platformAnimBegin, platformAnimStep, platformAnimEnd, platformAnimSave } from 'libproteus_render.so';
-import { bench4050, hitProbe, recycleProbe, spliceProbe, textProbe, kernelAnimProbe, memProbe, sfcStressProbe, sfcStressCommands, jsvmProbe, vaporProbe, animCurveBezier, hostRuntimeProbe, hostRtShellInstall, version as rustVersion } from 'libproteus_bench.so';
+import { bench4050, hitProbe, recycleProbe, spliceProbe, textProbe, kernelAnimProbe, memProbe, sfcStressProbe, sfcStressCommands, jsvmProbe, vaporProbe, animCurveBezier, hostRuntimeProbe, hostRtShellInstall, mountVirtualProbe, version as rustVersion } from 'libproteus_bench.so';
 
 const DOMAIN = 0x0002;
 const TAG = 'ProteusRender';
@@ -541,6 +541,16 @@ struct Index {
           hilog.info(DOMAIN, BENCH_TAG, 'PROTEUS_JSVM %{public}s', jv);
         } catch (je) {
           hilog.error(DOMAIN, BENCH_TAG, 'PROTEUS_JSVM_ERROR %{public}s', JSON.stringify(je) ?? '');
+        }
+        // ★★整树级虚拟化（矩阵 #12）——同一份 SFC 产物（与 Android/iOS 同源）
+        try {
+          const ctxM = getContext(this);
+          const mBytes: Uint8Array = ctxM.resourceManager.getRawFileContentSync('vapor-tree.json');
+          const mStr: string = util.TextDecoder.create('utf-8').decodeToString(mBytes);
+          const mvOut: string = mountVirtualProbe(mStr);
+          hilog.info(DOMAIN, BENCH_TAG, 'PROTEUS_MOUNTVIRT %{public}s', mvOut);
+        } catch (mve) {
+          hilog.error(DOMAIN, BENCH_TAG, 'PROTEUS_MOUNTVIRT_ERROR %{public}s', JSON.stringify(mve) ?? '');
         }
         // ★★★宿主运行时（矩阵 #18，G-39）——JSVM eval 同一份 bundle-host-runtime.js
         try {
