@@ -87,6 +87,40 @@ check-consistency-snapshot 七段全绿 · check:no-blind-wait ✅（新 .sh 零
 ① L2/L3/L2.5/L2.6 算子用**合成快照**——证明的是"比对引擎敏不敏感"，不是"真机数据一定对"；
 ② L4 算子用真截图但取同端注入（跨端噪声底含 AA，无区分度）；L4 的价值形态是**定位**。
 
+### ★★★2026-10-03（七十五）· 鸿蒙腿 **平台零参与动画（MA0-RT）**（矩阵 #15）—— RenderNode 变换 + VSync 帧步进，共用 Android 判据（A 组全绿）
+
+**用户「继续」→ 接矩阵 #15**：上一个缺口是平台动画（Android `ViewPropertyAnimator` / iOS `CAKeyframeAnimation`）。
+
+**形态设计（先读 SDK 再动手）**：`native_render.h` 有 `SetTransform`（4×4 列主序，m30=x 平移 px）/
+`SetScale` / `SetOpacity` / `SetPivot` + `GetChild` 取目标节点 ⇒ 变换由 **RenderNode 属性**承载；
+帧源用 `postFrameCallback`（VSync——与系统动画同一帧源）逐帧写属性（每帧 3 写 + 2 读回）。
+
+**★与 Android 的语义差异（如实标注，不冒充等价）**：Android 一次性启动 `ViewPropertyAnimator` 后
+**RenderThread 自主插值**（应用零调用）；鸿蒙 C-API **无同形"启动即自插值"入口** ⇒
+"插值完全归平台"无等价物——但"**应用层零绘制/零布局**"成立（判据 A4 打在这一点上）。
+
+**判据复用（不是另写一份）**：`check-platform-anim.py` 加 `host_id` 显示（判定逻辑零改动）——
+**共用 Android 的 A 组四条**，全绿：
+  A1 贝塞尔来自内核（Rust `anim_curve_bezier`：[0.255, 0.76, 0.515, 1.03]）
+  A2 model 逐帧推进（8 个不同读数）
+  A3 终态精确（tx=**120.0** / alpha=**0.5**）
+  A4 **draw_delta=0**——指令构建计数（`g_cmdBuildCount`）全程恒定 =1（鸿蒙无 CPU onDraw ⇒ 口径等价物）
+
+**★读数含"读回"证据链**（GetScale/GetOpacity 写后读 == 写入值）——不是复述我们写下去的数。
+
+**依赖边界（本轮踩到并厘清）**：曲线取用最初放在 render 模块 ⇒ **链接失败**（render 不链 Rust 核，
+`undefined symbol: proteus_layout_free_string`）——修法：曲线由 ArkTS 从 **bench 模块**取（`animCurveBezier`）
+后 JS 组合报告。**模块边界 = 依赖边界**：render 模块保持"零 Rust 依赖"（它只管变换）。
+
+**交付**：`proteus_render.cpp` 四个入口（`platformAnimBegin/Step/End/Save`）+ bench 的 `animCurveBezier` +
+ArkTS 帧回调 `PlatformAnimFrameCallback`（具名类——ArkTS 禁类字面量）+ `run-platform-anim.sh`（零盲等采集）。
+
+**指标**：矩阵鸿蒙 **15/22 → 16/22**。
+
+**诚实边界**：① B 组（逐节点载体 View：draw/measure/layout 三零 + 拆除恢复）鸿蒙无对应形态
+（无独立子 View 载体——RenderNode 就是渲染节点本身），**不冒充做了**；② A 组的"on_draw_count"
+在鸿蒙是**指令构建次数**（宿主无 CPU 光栅通路——线程模型与 Android 不同，如实标注）。
+
 ### ★★★2026-10-03（七十四）· 鸿蒙腿 **JSVM(V8) 打通**（矩阵 #14 + #13）—— Vapor 设备端链与 Android **共用同一份 bundle**（零移植）
 
 **用户「继续」→ 接矩阵 #14（Vapor 指令流）**：上一批缺口里 `hosts/harmony` 的 vapor 还是"待补"。
@@ -1482,6 +1516,8 @@ check-consistency-snapshot 七段全绿 · script-compile ✅ · no-blind-wait �
 **新诚实边界**：平移对齐会**吸收真实位置差异**（若某端整体真的偏了 3px，对齐后看不出）——
 "位置是否正确"由 L2 几何数值比对承担；L4 只管"画出来像不像"（已写入注记与文档）。
 ④ 仍未接入：iOS/Android 真机截图（当前 Web=Playwright、MP=模拟器，均非真机）。
+
+## 当前状态速览（最近一次更新：**2026-10-03·（七十五）· 鸿蒙腿 **平台零参与动画**（矩阵 #15，16/22）—— RenderNode 变换 + VSync 帧步进：A1 内核贝塞尔/A2 8 读数/A3 终态 120/0.5/**A4 draw_delta=0**（共用 Android 判据 A 组全绿）；与 Android 的语义差异（RenderThread 自主插值 vs 帧回调步进）如实标注**）★新会话以此为准
 
 ## 当前状态速览（最近一次更新：**2026-10-03·（七十四）· 鸿蒙腿 **JSVM(V8) 打通**（矩阵 #14+#13，15/22）—— Vapor 设备端链与 Android **共用同一份 bundle-vapor.js**（零移植）：实例化 26 节点/订阅增量 3 轮/探针宽度 52→80/像素 119 万；判据 `check-vapor-device.py` 按 host_id 分档共用**）★新会话以此为准
 

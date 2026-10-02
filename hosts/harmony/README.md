@@ -91,6 +91,28 @@ chmod 600 ~/.harmony/hdckey ~/.harmony/hdckey.pub
 Android 走 JNI、iOS 走 staticlib、**鸿蒙走 `aarch64-unknown-linux-ohos` 交叉编译 + C ABI**（无绑定层）。
 交叉编译脚本：`bash hosts/harmony/build-rust-core.sh`（产物 `cpp/thirdparty/libproteus_layout_core.a`，gitignore）。
 
+### ✅ 第八里程碑：**平台零参与动画（MA0-RT）**（2026-10-03，矩阵 #15）
+
+> **RenderNode 变换 + VSync 帧回调逐帧写属性**——动画期间应用层**零绘制、零布局**：
+> `SetTransform`(m30=x 平移) / `SetScale` / `SetOpacity` 三个属性写入 + 两个读回（GetScale/GetOpacity，
+> **写→读证据链**），目标节点 = 根 RenderNode 的第一个子节点（`GetChild(root, 0)`）。
+
+**判据（与 Android `check-platform-anim.py` A 组共用，全绿）**：
+
+| # | 判据 | 读数（真机） |
+|---|---|---|
+| A1 | 贝塞尔来自内核 | Rust `anim_curve_bezier`：[0.255, 0.76, 0.515, 1.03] |
+| A2 | model 值逐帧推进 | 8 个不同读数（tx 0→17.14→34.29→…→120） |
+| A3 | 终态精确 | tx=**120.0** · alpha=**0.5**（scale 1→0.6） |
+| A4 | **主线程零参与绘制** | **draw_delta=0**（指令构建计数全程恒定 =1） |
+
+**采集**：`bash hosts/harmony/run-platform-anim.sh`（装机 → 启动 → 等报告落盘 → 共用判据，零盲等）。
+
+**★语义差异（如实标注，不冒充等价）**：Android 走 `ViewPropertyAnimator`——一次性启动后
+**RenderThread 自主插值**（应用零调用）；鸿蒙 C-API 无同形"启动即自插值"入口 ⇒ 本探针由
+**帧回调步进**（与系统动画同一 VSync 帧源），每帧仅 3 次属性写入 + 2 次读回——"应用层零绘制、
+渲染进程负责合成"成立；"插值完全归平台"在鸿蒙当前 API 下无等价物。
+
 ### ✅ 第七里程碑：**JSVM(V8) 打通 —— Vapor 设备端链与 Android 共用同一份 bundle**（2026-10-03，矩阵 #14 + #13）
 
 > **零移植**：鸿蒙不重写 JS 链——`OH_JSVM_*`（V8 封装，SDK 自带 `libjsvm.so`）直接在设备上

@@ -1929,6 +1929,25 @@ static napi_value VaporProbe(napi_env env, napi_callback_info info) {
     return out;
 }
 
+/** animCurveBezier(curveId): string(JSON) —— 内核曲线采样（矩阵 #15 A1："贝塞尔来自内核"） */
+static napi_value AnimCurveBezier(napi_env env, napi_callback_info info) {
+    size_t argc = 1;
+    napi_value args[1] = {nullptr};
+    napi_get_cb_info(env, info, &argc, args, nullptr, nullptr);
+    uint32_t curve = 1;
+    if (argc >= 1) {
+        int32_t c = 1;
+        napi_get_value_int32(env, args[0], &c);
+        if (c > 0) curve = (uint32_t)c;
+    }
+    char* b = proteus_anim_curve_bezier(curve);
+    std::string out = b ? b : "{\"ok\":false}";
+    if (b) proteus_layout_free_string(b);
+    napi_value r;
+    napi_create_string_utf8(env, out.c_str(), NAPI_AUTO_LENGTH, &r);
+    return r;
+}
+
 /** version(): string —— Rust 核版本自报（仪器自检） */
 static napi_value BenchVersion(napi_env env, napi_callback_info info) {
     char* v = proteus_layout_version();
@@ -1953,6 +1972,7 @@ static napi_value BenchInit(napi_env env, napi_value exports) {
         {"sfcStressCommands", nullptr, SfcStressCommands, nullptr, nullptr, nullptr, napi_default, nullptr},
         {"jsvmProbe", nullptr, JsvmProbe, nullptr, nullptr, nullptr, napi_default, nullptr},
         {"vaporProbe", nullptr, VaporProbe, nullptr, nullptr, nullptr, napi_default, nullptr},
+        {"animCurveBezier", nullptr, AnimCurveBezier, nullptr, nullptr, nullptr, napi_default, nullptr},
         {"version", nullptr, BenchVersion, nullptr, nullptr, nullptr, napi_default, nullptr},
     };
     napi_define_properties(env, exports, sizeof(desc) / sizeof(desc[0]), desc);

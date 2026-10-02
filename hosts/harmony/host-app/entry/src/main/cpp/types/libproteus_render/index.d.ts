@@ -11,3 +11,11 @@ export const attach: (content: object, density: number, screenWvp: number, scree
 export const renderCommands: (json: string) => number;
 /** 宿主记账读数（机器判据读它） */
 export const stats: () => ProteusRenderStats;
+/** ★矩阵 #15：平台零参与动画——记基线 + 取目标节点（根的第一个子节点）；返回 {ok, on_draw_count} */
+export const platformAnimBegin: () => string;
+/** ★一步变换（tx 设计单位 / scale / alpha）→ 写属性 + 读回；返回 JSON（含 on_draw_count） */
+export const platformAnimStep: (json: string) => string;
+/** ★窗口结算：{ok, draw_delta, measure_delta, layout_delta, on_draw_count}（三个增量应全 0） */
+export const platformAnimEnd: () => string;
+/** ★报告落盘（content, path）；返回 0 成功 */
+export const platformAnimSave: (content: string, path: string) => number;

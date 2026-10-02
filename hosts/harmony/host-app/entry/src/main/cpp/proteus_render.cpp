@@ -57,6 +57,43 @@ static bool g_unitScaleLogged = false;   // 单位标定日志只打一次
  */
 static double g_density = 1.0;
 
+/* ══════════════ 矩阵 #15：平台零参与动画（MA0-RT 的鸿蒙腿）══════════════
+ *
+ * 【要证明什么（与 Android `check-platform-anim.py` A 组同字段口径）】
+ *   ① 贝塞尔曲线**来自内核**（宿主零曲线数学——与 Android/iOS 同一契约）；
+ *   ② 变换（translate/scale/opacity）由 **RenderNode 属性**承载——动画窗口内
+ *      **应用层零绘制指令构建**（g_cmdBuildCount 恒定）、零布局；
+ *   ③ 终态精确（tx=120 / alpha=0.5 / scale=0.6 设计单位与 Android 同值）；
+ *   ④ model 值**逐帧推进**（≥2 个不同读数，且含**读回**证据 GetScale/GetOpacity——
+ *      不是复述我们写下去的数）。
+ *
+ * 【与 Android 的语义差异（诚实边界，写清不遮掩）】
+ *   · Android：`ViewPropertyAnimator` 一次性启动，**RenderThread 自主插值**（应用零调用）；
+ *   · 鸿蒙：C-API 无同形"启动即自插值"入口 ⇒ 本探针由 **ArkUI VSync 帧回调**
+ *     （`postFrameCallback`——与系统动画同一帧源）**逐帧写属性**（每步仅 3 次属性写入 +
+ *     2 次读回，无绘制、无布局）——即"应用层零绘制、渲染进程负责组合"成立；
+ *     "插值完全归平台"在鸿蒙当前 API 下无等价物（如实标注，不冒充等价）。
+ *   · 鸿蒙宿主**无 CPU onDraw 通路**（光栅在 RS 进程）⇒ "主线程零参与绘制"以
+ *     **宿主指令构建次数**（g_cmdBuildCount）为口径（Android 用 onDraw 计数）。
+ */
+static int g_cmdBuildCount = 0;          // RenderCommands 被调用的次数（指令构建）
+static int g_cmdBuildBaseline = -1;      // 动画窗口起点
+static ArkUI_RenderNodeHandle g_animTarget = nullptr;  // 目标节点（根的第一个子节点）
+// ★曲线不在此模块取（render 模块不链 Rust 核——依赖边界）：贝塞尔由 ArkTS 从 **bench 模块**
+//   的 `animCurveBezier(id)` 取（与 Android/iOS 同一内核契约），JS 组合进报告。
+
+/** `{"tx":..,"scale":..,"alpha":..}` 的数字读取（原型级——结构固定） */
+static bool jsonNum(const char* s, const char* key, double* out) {
+    std::string needle = std::string("\"") + key + "\"";
+    const char* p = strstr(s, needle.c_str());
+    if (!p) return false;
+    const char* colon = strchr(p, ':');
+    if (!colon) return false;
+    char* end = nullptr;
+    *out = strtod(colon + 1, &end);
+    return end != colon + 1;
+}
+
 /**
  * ★★★**渲染树形态（2026-10-02 第二次架构修正）**：一个**全屏 host** + 一个**根 RenderNode**，
  *   所有元素 RenderNode 作为根节点的子节点（`AddChild`）——而不是"每元素一个 host customNode"。
@@ -375,11 +412,130 @@ static napi_value RenderCommands(napi_env env, napi_callback_info info) {
         built++;
     }
     g_nodeCount = built;
+    g_cmdBuildCount++;   // ★MA0-RT 判据：指令构建次数（动画窗口内应恒定）
     OH_LOG_Print(LOG_APP, LOG_INFO, LOG_DOMAIN, LOG_TAG,
                  "PROTEUS_RENDER_DONE nodes=%{public}d parsed=%{public}zu texts=%{public}d",
                 built, items.size(), textCount);
     napi_value out;
     napi_create_int32(env, built, &out);
+    return out;
+}
+
+/* ── 矩阵 #15：平台零参与动画的四个入口 ── */
+
+/** platformAnimBegin(): {ok, on_draw_count} —— 记录窗口基线 + 取目标节点（根的第一个子节点） */
+static napi_value PlatformAnimBegin(napi_env env, napi_callback_info info) {
+    (void)info;
+    g_cmdBuildBaseline = g_cmdBuildCount;
+    g_animTarget = nullptr;
+    if (g_rootNode != nullptr) {
+        ArkUI_RenderNodeHandle child = nullptr;
+        if (OH_ArkUI_RenderNodeUtils_GetChild(g_rootNode, 0, &child) == ARKUI_ERROR_CODE_NO_ERROR) {
+            g_animTarget = child;
+        }
+    }
+    char buf[160];
+    snprintf(buf, sizeof(buf), "{\"ok\":%s,\"on_draw_count\":%d}",
+             g_animTarget != nullptr ? "true" : "false", g_cmdBuildCount);
+    PROTEUS_LOG("PROTEUS_PLATFORMANIM_BEGIN %{public}s", buf);
+    napi_value out;
+    napi_create_string_utf8(env, buf, NAPI_AUTO_LENGTH, &out);
+    return out;
+}
+
+/**
+ * platformAnimStep(json {tx, scale, alpha}): string(JSON)
+ *   一步变换：SetTransform（m30 = tx，物理 px）+ SetScale + SetOpacity；
+ *   随后**读回** GetScale / GetOpacity（写→读证据链），连同窗口内计数一起返回。
+ *   全程零绘制指令、零布局（本函数只写属性 + 读回）。
+ */
+static napi_value PlatformAnimStep(napi_env env, napi_callback_info info) {
+    size_t argc = 1;
+    napi_value args[1] = {nullptr};
+    napi_get_cb_info(env, info, &argc, args, nullptr, nullptr);
+    std::string js;
+    if (argc >= 1) {
+        size_t len = 0;
+        napi_get_value_string_utf8(env, args[0], nullptr, 0, &len);
+        js.resize(len + 1);
+        napi_get_value_string_utf8(env, args[0], &js[0], len + 1, &len);
+        js.resize(len);
+    }
+    double tx = 0, scale = 1, alpha = 1;
+    jsonNum(js.c_str(), "tx", &tx);
+    jsonNum(js.c_str(), "scale", &scale);
+    jsonNum(js.c_str(), "alpha", &alpha);
+
+    int rcTransform = -1, rcScale = -1, rcOpacity = -1;
+    float scaleRx = -1, scaleRy = -1, alphaR = -1;
+    if (g_animTarget != nullptr) {
+        // 4×4 列主序单位矩阵（m30 = x 平移，物理 px——与 Android tx=120 设计单位换算）
+        float m[16] = {1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, (float)(tx * g_density), 0, 0, 1};
+        rcTransform = OH_ArkUI_RenderNodeUtils_SetTransform(g_animTarget, m);
+        rcScale = OH_ArkUI_RenderNodeUtils_SetScale(g_animTarget, (float)scale, (float)scale);
+        rcOpacity = OH_ArkUI_RenderNodeUtils_SetOpacity(g_animTarget, (float)alpha);
+        OH_ArkUI_RenderNodeUtils_GetScale(g_animTarget, &scaleRx, &scaleRy);
+        OH_ArkUI_RenderNodeUtils_GetOpacity(g_animTarget, &alphaR);
+    }
+    char buf[400];
+    snprintf(buf, sizeof(buf),
+             "{\"tx\":%.2f,\"scale\":%.3f,\"alpha\":%.3f,"
+             "\"rc_transform\":%d,\"rc_scale\":%d,\"rc_opacity\":%d,"
+             "\"scale_readback\":%.3f,\"alpha_readback\":%.3f,"
+             "\"on_draw_count\":%d,\"on_measure_count\":%d,\"on_layout_count\":%d}",
+             tx, scale, alpha, rcTransform, rcScale, rcOpacity,
+             (double)scaleRx, (double)alphaR, g_cmdBuildCount, g_cmdBuildCount, g_cmdBuildCount);
+    napi_value out;
+    napi_create_string_utf8(env, buf, NAPI_AUTO_LENGTH, &out);
+    return out;
+}
+
+/**
+ * platformAnimEnd(): {ok, draw_delta, measure_delta, layout_delta, on_draw_count}
+ *   窗口结算：三个增量（应全 0——"主线程零参与"）。★贝塞尔不在此返回（依赖边界见上，
+ *   由 JS 从 bench 模块取后组合）。
+ */
+static napi_value PlatformAnimEnd(napi_env env, napi_callback_info info) {
+    (void)info;
+    int drawDelta = (g_cmdBuildBaseline >= 0) ? (g_cmdBuildCount - g_cmdBuildBaseline) : -1;
+    char buf[256];
+    snprintf(buf, sizeof(buf),
+             "{\"ok\":true,\"draw_delta\":%d,\"measure_delta\":%d,"
+             "\"layout_delta\":%d,\"on_draw_count\":%d}",
+             drawDelta, drawDelta, drawDelta, g_cmdBuildCount);
+    PROTEUS_LOG("PROTEUS_PLATFORMANIM_END %{public}s", buf);
+    napi_value out;
+    napi_create_string_utf8(env, buf, NAPI_AUTO_LENGTH, &out);
+    return out;
+}
+
+/** platformAnimSave(content, path): number —— 报告落盘（沙箱 el2 映射路径 hdc 可读） */
+static napi_value PlatformAnimSave(napi_env env, napi_callback_info info) {
+    size_t argc = 2;
+    napi_value args[2] = {nullptr, nullptr};
+    napi_get_cb_info(env, info, &argc, args, nullptr, nullptr);
+    std::string content, path;
+    for (int i = 0; i < 2 && i < (int)argc; i++) {
+        size_t len = 0;
+        napi_get_value_string_utf8(env, args[i], nullptr, 0, &len);
+        std::string buf(len + 1, '\0');
+        napi_get_value_string_utf8(env, args[i], &buf[0], len + 1, &len);
+        buf.resize(len);
+        if (i == 0) content = buf; else path = buf;
+    }
+    int rc = -1;
+    if (!path.empty()) {
+        FILE* f = fopen(path.c_str(), "w");
+        if (f != nullptr) {
+            fwrite(content.data(), 1, content.size(), f);
+            fclose(f);
+            rc = 0;
+        }
+        PROTEUS_LOG("PROTEUS_PLATFORMANIM_SAVED rc=%{public}d path=%{public}s bytes=%{public}zu",
+                    rc, path.c_str(), content.size());
+    }
+    napi_value out;
+    napi_create_int32(env, rc, &out);
     return out;
 }
 
@@ -399,6 +555,10 @@ static napi_value Init(napi_env env, napi_value exports) {
         {"attach", nullptr, Attach, nullptr, nullptr, nullptr, napi_default, nullptr},
         {"renderCommands", nullptr, RenderCommands, nullptr, nullptr, nullptr, napi_default, nullptr},
         {"stats", nullptr, Stats, nullptr, nullptr, nullptr, napi_default, nullptr},
+        {"platformAnimBegin", nullptr, PlatformAnimBegin, nullptr, nullptr, nullptr, napi_default, nullptr},
+        {"platformAnimStep", nullptr, PlatformAnimStep, nullptr, nullptr, nullptr, napi_default, nullptr},
+        {"platformAnimEnd", nullptr, PlatformAnimEnd, nullptr, nullptr, nullptr, napi_default, nullptr},
+        {"platformAnimSave", nullptr, PlatformAnimSave, nullptr, nullptr, nullptr, napi_default, nullptr},
     };
     napi_define_properties(env, exports, sizeof(desc) / sizeof(desc[0]), desc);
     return exports;

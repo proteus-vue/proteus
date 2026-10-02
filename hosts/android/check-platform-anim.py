@@ -64,7 +64,13 @@ def main() -> int:
         print(f"⚠ 缺少部分产物（{', '.join(missing)}）——只验存在的：{', '.join(present)}")
 
     for path in present:
-        print(f"═══ Android 平台动画判据：{path} ═══")
+        _host = ""
+        try:
+            with open(path, encoding="utf-8") as _f:
+                _host = json.load(_f).get("host_id") or ""
+        except Exception:
+            pass
+        print(f"═══ 平台动画判据（MA0-RT）[{_host or 'android'}]:{path} ═══")
         try:
             with open(path, encoding="utf-8") as f:
                 d = json.load(f)
