@@ -651,12 +651,18 @@ importers:
 
   packages/render-backend:
     dependencies:
+      '@proteus-vue/animation':
+        specifier: 0.3.0-beta.22
+        version: link:../animation
       '@proteus-vue/component-ir':
         specifier: 0.3.0-beta.21
         version: link:../component-ir
       '@proteus-vue/contracts':
         specifier: 0.3.0-beta.11
         version: link:../contracts
+      '@proteus-vue/router':
+        specifier: 0.3.0-beta.21
+        version: link:../router
       '@vue/runtime-core':
         specifier: ^3.4.0
         version: 3.5.42

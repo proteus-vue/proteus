@@ -16,6 +16,9 @@
 // 【产物】`hosts/android/bridge/dist/bundle-app-stack.js`（IIFE；由 build-batch.mjs 生成）
 // 【调用】Java 侧：eval(bundle) 定义 `globalThis.__proteusAppStackRun`，再 eval 调用它
 import { createAppStack } from '@proteus-vue/router/app-stack'
+// ★★场景 F（2026-10-02 App 端路由收口）：统一 API 全链（零胶水形态）
+import { createAppNavigation } from '@proteus-vue/render-backend/app-navigation'
+import { createRouter } from '@proteus-vue/router/app-route'
 // ★场景 E：执行器（命令流的消费者）+ 转场规划器（真 animation 包）
 import { routeTransitionBatches } from '@proteus-vue/animation'
 // ★执行器在 render-backend 的**子路径**（包 exports 未暴露 ⇒ 相对导入同一 src 文件：
@@ -365,6 +368,80 @@ async function runExecutorScenario(): Promise<Record<string, unknown>> {
   }
 }
 
+/**
+ * ★★场景 F（2026-10-02 · App 端路由收口）：**统一路由 API 在真机上跑全链**
+ *
+ * 【与场景 E 的差别（本场景要证明的是"零胶水"）】E 组手写装配
+ *   （`createAppStack` + `createScreenExecutor` + `createHostScreenPorts` + 手写泵）——
+ *   那是"现在 App 开发者被迫写的胶水"的测试形态。本场景改走**产品形态**：
+ *     `createAppNavigation({ invoke, routes })` + `createRouter(routes, { adapter })`
+ *   ⇒ 开发者只写 `router.push({ name, params })`，与 Web/MP **完全同形**。
+ *
+ * 【为什么放在真机（QuickJS）】① 证明 app-route / app-navigation 的模块图**可在无 DOM 环境运行**
+ *   （这是本次重构的核心风险点——shared adapter 的 #491 事故同源）；② 真机宿主（ScreenHost）真建
+ *   内核树/真播动画 —— 与 E 组同一条纪律：读数来自宿主记账，不是 JS 自述。
+ *
+ * 【两相模式】与 E 组同款（QuickJS 微任务只在宿主泵 job 时执行）：kick → 宿主 runPendingJobs → read。
+ */
+function runRouterApiScenario(): Promise<Record<string, unknown>> {
+  return (async () => {
+    // ★路由记录形状与 RouteRecord 兼容（component 在本场景不加载——只走导航语义）
+    const routes = [
+      { name: 'r-home', path: 'r-home', meta: { title: '首页' }, component: '' },
+      { name: 'r-detail', path: 'r-detail', meta: { transition: 'slideUp' }, component: '' },
+      { name: 'r-user', path: 'r-user', component: '' },
+    ]
+    const invoke = (m: string, a: string): string => {
+      const ph = (globalThis as unknown as { proteusHost?: { invoke?: (m: string, a: string) => string } }).proteusHost
+      if (!ph || typeof ph.invoke !== 'function') throw new Error('宿主 invoke 通道缺失')
+      return ph.invoke(m, a)
+    }
+    const nav = createAppNavigation({ invoke, routes: routes as never })
+    const router = createRouter(routes as never, { adapter: nav.adapter })
+
+    // ① 逐层 push（await：App 转场异步——命令流 → 执行器 → 宿主帧循环播完）
+    //  ★类型断言：本场景验**导航语义**（不验路由参数类型推导——那需要 `declare module` 路由名表，
+    //    属应用侧装配产物；与 Web/MP 的 `router.push({ name })` 是同一个 API，运行时行为一致）
+    const push = router.push.bind(router) as (o: { name: string; params?: Record<string, string>; replace?: boolean }) => Promise<void>
+    const replace = router.replace.bind(router) as (o: { name: string }) => Promise<void>
+    await push({ name: 'r-home' })
+    await push({ name: 'r-detail', params: { id: '42' } })
+    const afterPush = {
+      depth: nav.stack.depth,
+      top: nav.stack.current()?.name,
+      params: nav.stack.current()?.params,
+    }
+    // ② 同步 back（三端同签名）→ flush 收工
+    router.back()
+    await nav.flush()
+    const afterBack = { depth: nav.stack.depth, top: nav.stack.current()?.name }
+    // ③ replace 语义（不增深）
+    await replace({ name: 'r-user' })
+    const afterReplace = { depth: nav.stack.depth, top: nav.stack.current()?.name }
+    return {
+      f_ok: afterPush.depth === 2 && afterPush.top === 'r-detail' && String(afterPush.params?.id) === '42'
+        && afterBack.depth === 1 && afterBack.top === 'r-home'
+        && afterReplace.depth === 1 && afterReplace.top === 'r-user',
+      f_after_push: afterPush,
+      f_after_back: afterBack,
+      f_after_replace: afterReplace,
+      // ★f_host_stats：宿主记账读数。★诚实边界：**本字段可能为 null** ——
+      //   F 组自带内联 invoke（`proteusHost.invoke` 的直通形态），而宿主侧的 `screenHost`
+      //   实例由壳在特定路径创建；本场景不保证同一实例可读 ⇒ 读不到时**如实记 null**
+      //   （不伪装成 0）。F 组的**主判据是 `f_ok`**（导航语义全绿），宿主侧的真建树/真动画
+      //   证明由 **E 组**承担（`e_host_stats`，与宿主实例同源）——两者分工明确，不重复声称。
+      f_host_stats: (() => {
+        try {
+          return JSON.parse(invoke('screen.stats', 'null'))
+        } catch (e) {
+          return { error: String(e) }
+        }
+      })(),
+      f_note: '统一 API（createRouter）→ 虚拟栈 → 执行器 → 宿主 全链（零胶水形态）',
+    }
+  })()
+}
+
 /** 场景 E 主体（定义在上方两相导出处之后可被引用——函数提升语义，导出顺序无关） */
 // ══════════════════════════════════════════════════════════════════
 // ★★场景 E：宿主执行器（命令流的消费者）——**两相模式**（kick → 宿主泵 job → read）
@@ -379,10 +456,12 @@ export function __proteusAppStackExecutorKick(): string {
   if (g.__proteusAppStackExecutorResult !== undefined) return 'already'
   void (async () => {
     try {
-      const r = await runExecutorScenario()
-      g.__proteusAppStackExecutorResult = r
-    } catch (e) {
-      g.__proteusAppStackExecutorResult = { fatal: String(e) }
+      // ★E（手写装配=现状胶水形态）与 F（统一 API=目标形态）**并行**跑——
+      //   两者各建各的栈/宿主屏，互不干扰（屏 id 由各自 createAppStack 生成，前缀不同）。
+      const [e, f] = await Promise.all([runExecutorScenario(), runRouterApiScenario()])
+      g.__proteusAppStackExecutorResult = { ...e, ...f }
+    } catch (err) {
+      g.__proteusAppStackExecutorResult = { fatal: String(err) }
     }
   })()
   return 'kicked'
@@ -399,3 +478,46 @@ export function __proteusAppStackExecutorRead(): string {
 ;(globalThis as unknown as { __proteusAppStackExecutorKick: typeof __proteusAppStackExecutorKick }).__proteusAppStackExecutorKick = __proteusAppStackExecutorKick
 ;(globalThis as unknown as { __proteusAppStackExecutorRead: typeof __proteusAppStackExecutorRead }).__proteusAppStackExecutorRead = __proteusAppStackExecutorRead
 
+/**
+ * ★诊断出口（2026-10-02）：**单独跑场景 F 并把中间态立即回传**——
+ * 用于定位"真机 QuickJS 上 F 组卡住而 Node 通过"的环境差异（Node 已复现全绿）。
+ * 返回 JSON 含每步进度（step 字段）与异常原文——不静默。
+ */
+export function __proteusRouterApiProbe(): string {
+  const steps: string[] = []
+  const g = globalThis as unknown as { __proteusRouterProbeResult?: unknown }
+  void (async () => {
+    try {
+      steps.push('enter')
+      const routes = [
+        { name: 'r-home', path: 'r-home', component: '' },
+        { name: 'r-detail', path: 'r-detail', meta: { transition: 'slideUp' }, component: '' },
+      ]
+      const ph = (globalThis as unknown as { proteusHost?: { invoke?: (m: string, a: string) => string } }).proteusHost
+      if (!ph || typeof ph.invoke !== 'function') throw new Error('宿主 invoke 通道缺失')
+      steps.push('host-ok')
+      const nav = createAppNavigation({ invoke: (m, a) => ph.invoke!(m, a), routes: routes as never })
+      steps.push('nav-built')
+      const router = createRouter(routes as never, { adapter: nav.adapter })
+      steps.push('router-built')
+      await router.push({ name: 'r-home' } as never)
+      steps.push('pushed-home depth=' + nav.stack.depth)
+      await router.push({ name: 'r-detail' } as never)
+      steps.push('pushed-detail depth=' + nav.stack.depth)
+      g.__proteusRouterProbeResult = { ok: true, steps }
+    } catch (e) {
+      g.__proteusRouterProbeResult = { ok: false, steps, error: String(e) }
+    }
+  })()
+  return JSON.stringify({ kicked: true, steps })
+}
+
+/** 读诊断结果（未就绪 ⇒ pending） */
+export function __proteusRouterApiProbeRead(): string {
+  const g = globalThis as unknown as { __proteusRouterProbeResult?: unknown }
+  if (g.__proteusRouterProbeResult === undefined) return JSON.stringify({ pending: true })
+  return JSON.stringify(g.__proteusRouterProbeResult)
+}
+
+;(globalThis as unknown as { __proteusRouterApiProbe: typeof __proteusRouterApiProbe }).__proteusRouterApiProbe = __proteusRouterApiProbe
+;(globalThis as unknown as { __proteusRouterApiProbeRead: typeof __proteusRouterApiProbeRead }).__proteusRouterApiProbeRead = __proteusRouterApiProbeRead

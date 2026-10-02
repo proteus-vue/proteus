@@ -78,6 +78,11 @@ export default defineConfig({
       { find: '@proteus-vue/fluid', replacement: fileURLToPath(new URL('./packages/fluid/src/index.ts', import.meta.url)) },
       // ★G-27（render-backend-1-plan M1.4）：@proteus-vue/render-backend 包（tests/render-backend.test.ts 直接引用）
       { find: '@proteus-vue/render-backend', replacement: fileURLToPath(new URL('./packages/render-backend/src/index.ts', import.meta.url)) },
+      // ★★2026-10-02 应用端收口：新增子路径（router 的 app-route / render-backend 的 app-navigation）
+      { find: '@proteus-vue/router/app-route', replacement: fileURLToPath(new URL('./packages/router/src/app-route.ts', import.meta.url)) },
+      { find: '@proteus-vue/router/app-adapter', replacement: fileURLToPath(new URL('./packages/router/src/app-adapter.ts', import.meta.url)) },
+      { find: '@proteus-vue/router/router-core', replacement: fileURLToPath(new URL('./packages/router/src/router-core.ts', import.meta.url)) },
+      { find: '@proteus-vue/render-backend/app-navigation', replacement: fileURLToPath(new URL('./packages/render-backend/src/app-navigation.ts', import.meta.url)) },
       // ★G-31（component-semantics-plan B1）：@proteus-vue/component-ir 包（tests/component-ir.test.ts 直接引用）
       { find: '@proteus-vue/component-ir', replacement: fileURLToPath(new URL('./packages/component-ir/src/index.ts', import.meta.url)) },
       // ★G-29（compiler-backend-1-plan B1）：@proteus-vue/compiler-backend 包（tests/compiler-backend.test.ts 直接引用）

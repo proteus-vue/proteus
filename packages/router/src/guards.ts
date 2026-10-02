@@ -1,8 +1,11 @@
 // src/router/guards.ts
-// 全局路由守卫（P3-2 + 拆包步骤 4 工厂化）—— 支持 beforeEach / afterEach，经 adapter 获取当前路由
+// 全局路由守卫（P3-2 + 拆包步骤 4 工厂化）—— 支持 beforeEach / afterEach
 // ★工厂化：routeMap 不再 import 自 auto-routes，由 Router.push 调用时注入（对齐 createRouter 设计）
+// ★★2026-10-02（App 端收口）：本模块**不再 import 平台包**（原 `adapter` from @proteus-vue/shared）——
+//   "当前路由"由**调用方（Router 核心）**经注入的 RouterAdapter 解析后传入 `from`。
+//   理由：shared 的 adapter 单例在无 window/wx 环境会走 web 分支并在求值期读 location
+//   ⇒ App（JSC/QuickJS）无法 import 本模块（详见 router-core.ts 头注）。
 import type { RouteRecord } from './types'
-import { adapter } from '@proteus-vue/shared'
 
 export type Guard = (to: RouteRecord, from: RouteRecord | null) => boolean | Promise<boolean> | void | Promise<void>
 export type AfterGuard = (to: RouteRecord, from: RouteRecord | null) => void
@@ -34,10 +37,9 @@ export function clearGuards(): void {
 /** 执行全部前置守卫（内部使用，由 router.push 调用；routeMap 用于反查当前页路由） */
 export async function runBeforeEach(
   to: RouteRecord,
-  routeMap: Record<string, RouteRecord>,
+  from: RouteRecord | null,
   trace?: GuardTrace,
 ): Promise<boolean> {
-  const from = getCurrentFrom(routeMap)
   for (const g of beforeGuards) {
     const result = await g(to, from)
     if (result === false) {
@@ -52,18 +54,12 @@ export async function runBeforeEach(
 /** 执行全部后置守卫（内部使用，由 router.push 调用；routeMap 用于反查当前页路由） */
 export async function runAfterEach(
   to: RouteRecord,
-  routeMap: Record<string, RouteRecord>,
+  from: RouteRecord | null,
   trace?: GuardTrace,
 ): Promise<void> {
-  const from = getCurrentFrom(routeMap)
   for (const g of afterGuards) g(to, from)
   trace?.(`[guard] afterEach → ${to.name ?? to.path}（${afterGuards.length} 个守卫）`)
 }
 
-/** 从页面栈顶反查路由记录（routeMap 以 name 为键，path 回退查找） */
-function getCurrentFrom(routeMap: Record<string, RouteRecord>): RouteRecord | null {
-  const stack = adapter.getCurrentPages()
-  if (stack.length === 0) return null
-  const path = stack[stack.length - 1].route
-  return routeMap[path] || Object.values(routeMap).find(r => r.path === path) || null
-}
+// ★`getCurrentFrom` 已上移到 `router-core.ts`（`currentFrom`）——核心经**注入的 adapter** 取页面栈，
+//   本模块保持平台中立（同一语义一处实现）。

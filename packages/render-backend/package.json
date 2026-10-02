@@ -6,7 +6,9 @@
   "license": "Apache-2.0",
   "dependencies": {
     "@proteus-vue/component-ir": "0.3.0-beta.21",
-    "@proteus-vue/contracts": "0.3.0-beta.11"
+    "@proteus-vue/contracts": "0.3.0-beta.11",
+    "@proteus-vue/router": "0.3.0-beta.21",
+    "@proteus-vue/animation": "0.3.0-beta.22"
   },
   "peerDependencies": {
     "@vue/runtime-core": "^3.4.0"
@@ -19,13 +21,28 @@
       "import": "./dist/index.js",
       "default": "./dist/index.js"
     },
-    "./package.json": "./package.json"
+    "./package.json": "./package.json",
+    "./app-navigation": {
+      "types": "./dist/app-navigation.d.ts",
+      "import": "./dist/app-navigation.js",
+      "default": "./dist/app-navigation.js"
+    },
+    "./screen-executor": {
+      "types": "./dist/screen-executor.d.ts",
+      "import": "./dist/screen-executor.js",
+      "default": "./dist/screen-executor.js"
+    },
+    "./screen-executor-host": {
+      "types": "./dist/screen-executor-host.d.ts",
+      "import": "./dist/screen-executor-host.js",
+      "default": "./dist/screen-executor-host.js"
+    }
   },
   "files": [
     "dist",
     "README.md"
   ],
   "scripts": {
-    "build": "rm -rf dist && tsc -p tsconfig.build.json --emitDeclarationOnly && esbuild src/index.ts --bundle --format=esm --platform=neutral --outfile=dist/index.js --external:@vue/runtime-core"
+    "build": "rm -rf dist && tsc -p tsconfig.build.json --emitDeclarationOnly && esbuild src/index.ts src/app-navigation.ts src/screen-executor.ts src/screen-executor-host.ts --bundle --format=esm --platform=neutral --outdir=dist --external:@vue/runtime-core"
   }
 }

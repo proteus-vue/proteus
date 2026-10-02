@@ -64,18 +64,44 @@ const isFilterFlag = (tok) =>
   /^(-t|--testNamePattern|--changed|--related|--project|--shard|--dir|--bail)\b/.test(tok) ||
   tok === '-t'
 
-/** vitest 调用：`[npx|pnpm exec|pnpm dlx|yarn|bunx|node_modules/.bin/] vitest ...` */
+/** vitest 调用：`[npx|pnpm exec|pnpm dlx|yarn|bunx|node_modules/.bin/] vitest ...`
+ *
+ * ★★2026-10-02 修**误报**（hook 真生效后的第一类噪音——两轮实测）：
+ *   第一轮：`sed -n '1,5p' vitest.config.ts` 被拦（把**文件名**当调用）；
+ *   第二轮：`grep -rn vitest run README.md` 被拦（把**搜索词**当调用）。
+ *   ⇒ 根因同一条：原判据**认字符出现**，不认命令形态。
+ *   正解 = **按命令段分析**：vitest 必须是**段首命令**（可带 env 前缀 / runner 前缀），
+ *   出现在 `grep`/`sed`/`echo` 等命令的**参数位**一律不算。
+ *   ——与 deny-sleep 的 commit 文本误报同族：**判据要认"命令形态"，不是认字符出现**。 */
 function vitestFullSuite(s) {
-  const m = s.match(/(?:^|[\s;&|(])(?:[\w./-]*\/)?vitest(?:\s+([^;&|)]*))?/)
-  if (!m) return false
-  const rest = (m[1] ?? '').trim()
-  const toks = rest ? rest.split(' ').filter(Boolean) : []
-  // 非"跑"的子命令 / 帮助 → 不拦
-  if (toks.some((t) => /^(list|bench|typecheck|--version|-v|--help|-h)$/.test(t))) return false
-  if (toks.some((t) => isFilterFlag(t))) return false
-  if (toks.some((t) => !t.startsWith('-') && looksLikePath(t))) return false
-  // 剩下：`vitest run [--reporter=...]` 或无参 → 全量
-  return true
+  // 命令分段（; && || | ( ) 换行）——每段独立判定
+  const segments = s.split(/[;&|()\n]+/)
+  /** runner 前缀（可连续出现：`pnpm exec vitest`） */
+  const RUNNER = /^(npx|npm|pnpm|yarn|bun|dlx|exec|run|node_modules\/\.bin\/[\w.-]+|[\w./-]+\/)$/
+  for (const seg of segments) {
+    const toks = seg.trim().split(/\s+/).filter(Boolean)
+    // 剥掉 env 前缀（`PROTEUS_ALLOW_FULL_SUITE=1 …`）
+    let i = 0
+    while (i < toks.length && /^[A-Za-z_][A-Za-z0-9_]*=\S*$/.test(toks[i])) i++
+    // 剥掉 runner 前缀（npx / pnpm exec / node_modules/.bin/ …）——最多 3 层防死循环
+    for (let n = 0; n < 3 && i < toks.length; n++) {
+      const t = toks[i]
+      if (RUNNER.test(t)) { i++; continue }
+      break
+    }
+    const head = toks[i]
+    if (!head) continue
+    // 段首必须是 vitest 本体（可带路径前缀与 @version；后接空格/串尾才算）
+    if (!/(^|\/)vitest(@[\w.-]+)?$/.test(head)) continue
+    const rest = toks.slice(i + 1)
+    // 非"跑"的子命令 / 帮助 → 不拦
+    if (rest.some((t) => /^(list|bench|typecheck|--version|-v|--help|-h)$/.test(t))) continue
+    if (rest.some((t) => isFilterFlag(t))) continue
+    if (rest.some((t) => !t.startsWith('-') && looksLikePath(t))) continue
+    // 段首是 vitest 且无定向参数 ⇒ 该段是全量跑
+    return true
+  }
+  return false
 }
 
 /** 包管理器全量脚本：`pnpm test` / `pnpm run test` / `npm test`（**带额外参数则放行**——视为定向） */

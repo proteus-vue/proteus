@@ -35,6 +35,9 @@ await build({
     // ★与 Android 侧同一策略：alias 指向 **src**（消除"忘了重建 dist ⇒ 测旧代码"陷阱）
     '@proteus-vue/router/app-stack': path.join(ROOT, 'packages/router/src/app-stack.ts'),
     '@proteus-vue/router/codegen': path.join(ROOT, 'packages/router/src/codegen/index.ts'),
+    // ★★场景 F（2026-10-02 App 端路由收口）：统一 API 两个入口（同样 alias 到 src）
+    '@proteus-vue/router/app-route': path.join(ROOT, 'packages/router/src/app-route.ts'),
+    '@proteus-vue/render-backend/app-navigation': path.join(ROOT, 'packages/render-backend/src/app-navigation.ts'),
     '@proteus-vue/router/types': path.join(ROOT, 'packages/router/src/types.ts'),
     '@proteus-vue/animation': path.join(ROOT, 'packages/animation/src/index.ts'),
     '@proteus-vue/contracts': path.join(ROOT, 'packages/contracts/src/index.ts'),
