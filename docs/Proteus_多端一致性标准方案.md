@@ -201,13 +201,44 @@ allowDifference.register({
 
 这条是校准目标的关键依据（**案例权威性标注见下**）：
 
-**案例 1（权威性较低，但技术链条完整）**：Flutter 3.38 升级 Skia，commit `a918c0e` 重构了 `find_family_style_character` 的字体 fallback 逻辑——当 familyName 为空时跳过 `fFallbackFor` 检查，导致 **NotoSerifCJK 先于 SECCJK 被命中，中文被渲染成宋体（衬线体）**。且**只影响三星 / OPPO / OnePlus**，小米与模拟器不中[citation:52]。
+**案例 1（✅ 已核实 —— 权威性由"较低"升至"极高"）**：Flutter 3.38 升级 Skia，commit `a918c0e`
+（**2025-08-04，`SkFontMgr_android.cpp`，+34/−14**）重构 `find_family_style_character` 的字体 fallback 逻辑
+——当 familyName 为空时跳过 `fFallbackFor` 检查，导致 **NotoSerifCJK（衬线）先于 SECCJK（无衬线）被命中，
+中文被渲染成宋体**。**只影响三星 / OPPO / OnePlus，小米与模拟器不中**（用户报告逐一吻合）。
 
-**案例 2（权威性中等）**：iOS 18 苹果改了苹方设计，系统里现在存在两套苹方（"苹方"与"新苹方"）——**同一份 Flutter 代码，西文的"2"和"y"在不同 iOS 版本上显示不同**[citation:55]。
+> **★核实补充（原文缺失的关键信息）**：Flutter 团队成员 `jason-simmons` 于 2026-02-05 在
+> `flutter/flutter#178533` **复现并定位到该提交**（Samsung A06 实测两个 CJK 字体）。
+> **修复时间线**：Skia `2636871a`（2026-03-02 确认修复）→ 用户实测版本矩阵
+> **3.38.1 ❌ / 3.38.10 ❌ / 3.41.9 ❌ / 3.42.0-0.4.pre ❌ / 3.43.0-0.3.pre ✅**
+> ⇒ **从引入到修复进预发布约 9 个月**，期间受影响用户只能自己发现/上报/降级。
+> 证据入口见《一致性标准待核实项_核实报告》§A。
 
-**案例 3（权威性中等）**：`TextLeadingDistribution` iOS 默认 proportional、Android 默认 even → 16sp 文本行高差 2px[citation:61]。
+**案例 2（◐ 已核实为"部分属实"—— 表述已降级）**：~~iOS 18 苹果改了苹方设计，系统里现在存在两套苹方~~ ——
+**核实结果**：✅ "苹方存在多版本/地区变体"**有直接证据**（本机字体清单：`PingFangUI.ttc` 含
+"苹方-澳"等地区变体）；⚠ 但 **"iOS 18 新增第二版苹方"与"西文 `2`/`y` 字形变化"未找到权威来源**（多次检索无果）。
+⇒ **对外只保留"系统字体族本身有多版本/地区变体"这一层**，不引用具体字形差异。
 
-**案例 4（权威性极高）**：Flutter 3.29 才在 iOS 移除 Skia、3.38 才在 Android 废弃 opt-out——**各端引擎切换本身就不同步**。
+**案例 3（❌ 已证伪 —— 已改写）**：~~`TextLeadingDistribution` iOS 默认 proportional、Android 默认 even → 16sp 文本行高差 2px~~
+**核实结果**：Flutter 源码（`lib/ui/text.dart`）与官方文档（`text_style.dart` 注释
+"Configuration 1: **The default**… `proportional`"）**一致表明默认是 `proportional` 且与平台无关**——
+**不存在"iOS/Android 默认不同"**。
+
+> **★改写：真正有平台差异的是"Flutter 默认 vs CSS 默认"** —— Flutter 官方文档明说
+> `even` 是 **CSS 的策略**（"the default strategy used by CSS, known as 'half-leading'"）。
+> ⇒ 同一段文本在 Flutter（proportional）与 Web/CSS（even）上的**行高分配规则从默认值层面就不同**。
+> **这正是 Proteus 把行高分配显式声明进快照格式的理由**（不依赖任何默认值）。
+
+**案例 4（✅ 已核实 —— 版本事实已按官方口径更新）**：**各端引擎切换本身就不同步**。
+核实到的**准确时间线（2026-08 时点）**：官方页（`docs.flutter.dev/perf/impeller`，自述反映 Flutter 3.47）
+明示 **3.27** = Impeller 成为 iOS + Android API 29+ 的默认；**3.47** = 桌面端默认（opt-out 待移除）。
+
+> **★四平台四状态（比原文更强的表述）**：
+> · **iOS**："Impeller is the **only** supported rendering engine… **no ability to switch to Skia**"
+>   （代码级证据：2026-08-06 `flutter/flutter#190636` 删除 `IOSRenderingAPI` 选择管道，
+>   正文原话 "Skia support has been removed"）；
+> · **Android**：默认 Impeller，**低版本/无 Vulkan 回退 OpenGL**（"legacy OpenGL renderer"）；
+> · **桌面（macOS 等）**：3.47 才默认，**移 Skia 仍在进行**（2026-02-27 `#183031` 立项，open）；
+> · **Web**："currently uses Skia"。
 
 > **结论：跨端像素级一致是伪命题，自绘也达不到。**
 > Flutter 自绘了排版，但字体 fallback 依赖平台 `SkFontMgr`——一致性同样被平台、设备、甚至 OS 版本击穿。
@@ -480,16 +511,24 @@ id / category / reason / scope / evidence 必填且唯一；空字段或非法�
 
 ## 13. 待核实项
 
-| # | 内容 | 影响 |
-|---|---|---|
-| 1 | Flutter 3.38 宋体事件的确切影响范围与修复版本 | §5.2 案例 1 权威性较低，对外引用前须核实 |
-| 2 | iOS 苹方两版对西文字形的具体影响 | §5.2 案例 2 |
-| 3 | Android 密度桶与 iOS @Nx 对"像素一致"的量化影响 | §8 观察模式设计 |
-| 4 | 各端广色域（P3 / sRGB）对同色值视觉差异的量化 | §2 差异来源 ④ |
-| 5 | 各端转场插值曲线差异幅度 | §9.2 A-4 的容差设定 |
+**核实状态：✅ 已完成（2026-10-02）** —— 详见 `docs/Proteus_一致性标准待核实项_核实报告.md`
+（方法：官方文档 / 上游仓库 API / Flutter 源码 / 本机系统信息；**每条带来源与权威性**）
 
-> **对外引用闸门（2026-10-02 定）**：上表 5 项**未核实前禁止进入官网/对外材料**；
-> 核实后逐项标注结论与来源。§5.2 四条案例同此闸门（案例 1 权威性偏低是已知问题，不得作唯一论据）。
+| # | 内容 | 核实结论 | 对外可用性 |
+|---|---|---|---|
+| 1 | Flutter 宋体事件（Skia `a918c0e`） | ✅ **完全属实且更严重**：Skia 提交 2025-08-04 存在（机制逐点吻合）；Flutter 团队复现定位；**三星/OPPO/OnePlus 中招、小米与模拟器不中**（与原文一致）；**从 3.38 持续到 3.42（约 9 个月），3.43 预发布才修** | ✅ **可作核心论据**（带修复版本与时间线） |
+| 2 | iOS 苹方两版对西文影响 | ◐ **部分属实**：苹方**确有多版本/地区变体**（本机字体清单直接证据：`PingFangUI.ttc` 含"苹方-澳"等）；但"iOS 18 改版致西文 `2`/`y` 不同"**未找到权威来源** | ⚠ **降级**：只讲"存在多版本"，**不讲具体字形** |
+| 3 | `TextLeadingDistribution` 平台默认 | ❌ **证伪**：Flutter 源码与官方文档一致表明默认是 **`proportional`（与平台无关）**——不存在"iOS proportional / Android even" | ❌ **必须修正**（见 §5.2 案例 3 改写） |
+| 4 | 各端引擎切换同步性 | ✅ **属实（2026-08 时点）**：iOS"只剩 Impeller 无法切回"· Android"默认+低端回退"· 桌面"3.47 才默认、opt-out 待移除"· **Web 仍用 Skia**——四平台四状态 | ✅ 可用 |
+| 5 | 密度桶 / @Nx 量化影响 | ✅ **官方口径确认**：Android 以 **mdpi(160dpi) 为基准**，桶倍率 0.75/1/1.5/2/3/4；`nodpi` 不缩放 ⇒ **"像素比对必须锁设备"** 的直接依据 | ✅ 可用（机制与倍率） |
+| 6 | 广色域（P3/sRGB）量化 | ◐ **方向成立、量化缺口**：W3C CSS Color 4 把 `display-p3` 与 `sRGB` 并列为预设色空间（官方）；但"同色值跨端视觉差异幅度"**无公开量化** | ⚠ 只讲"色空间是差异源"，**不给数字** |
+| 7 | 转场插值曲线差异幅度 | ◐ **有基线、缺跨端量化**：Flutter Cupertino 转场 `500ms`（官方自承 "eyeball estimation"）+ 曲线族可查；**各端差异幅度无数据** | ⚠ A-4 容差**保持 `provisional`** |
+
+> **对外引用闸门处置（2026-10-02 更新）**：
+> · ✅ **已解除**：#1（宋体事件，带修复版本）、#4（引擎不同步）、#5（密度桶）—— 可直接进对外材料；
+> · ⚠ **有条件使用**：#2、#6、#7 —— 只讲"存在差异/来源"，**不得给具体数字或字形断言**；
+> · ❌ **必须修正**：#3 原文表述错误（默认其实一致）—— §5.2 案例 3 已改写。
+> · ★本闸门**对本文档自身同样适用**：所有对外数字必须能指到机器产物或可复现来源（同 "可验证一致性" 的精神）。
 
 ---
 
