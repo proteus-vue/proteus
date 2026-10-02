@@ -11,13 +11,13 @@
 | 2 | **4050 元素应用级基准** | ✅ A/B 5 轮 | ✅ L1/L2 | ✅ L1 | 统一口径见 `hosts/results/cross-end-4050.json` |
 | 3 | **L2 光栅级对照** | ✅ `soft_raster_ms` | ✅ `drawHierarchy` | ⛔ 架构性不适用 | 鸿蒙渲染由 RS 进程负责（无宿主 CPU 光栅路径） |
 | 4 | **长列表复用池** | ✅ `recycle` | ✅ `V12_scroll_recycle` | ✅ **已补** | 鸿蒙 `recycleProbe`：**reuse_ratio 0.9962**（4000 行/400 帧，created=30/reused=7936/max_live=30） |
-| 5 | **滚动（平台侧）** | ✅ `scroll`/`scroll-core`/`scroll-native` | ✅ V12 滚动帧 | ⛔ **缺** | 鸿蒙待补（设备横滑/竖滚 + 帧率） |
+| 5 | **滚动（平台侧）** | ✅ `scroll`/`scroll-core`/`scroll-native` | ✅ V12 滚动帧 | ◐ **帧率已采** | 鸿蒙 `scrollProbe`（`postFrameCallback` 逐帧）：61 帧 · **p50 16.64ms（60fps）** · p95 66.62ms · avg fps 31.9；★滚动驱动的是 ArkUI Scroll 容器（非 Proteus 渲染路径），深度接线待做 |
 | 6 | **命中测试（三层）** | ✅ `hit` | ✅ `hit_probes`（与 Android 同探针） | ✅ **已补** | 鸿蒙 `hitProbe`：**6/6 与两端逐位一致**（同场景同探针点） |
 | 7 | **手势** | ✅ `gesture`（GestureDetector + 核心 target） | ❌ **缺** | ⛔ **缺** | iOS/鸿蒙待补（`packages/gesture` 已三端中立） |
 | 8 | **文本通道** | ✅ drawText/StaticLayout 分流 + 归因 | ✅ CoreText（`measureText`） | ✅ **上屏已通** | 鸿蒙：`textProbe`（typography 构建 200 项/8.0ms）**+ 上屏接线**（`proteus_render.cpp` 的 `DrawTextCallback`：RenderNode content modifier 回调里 typography 真绘制；真机截图四段文字可见）。★字号口径（vp/px）校准待做 |
 | 9 | **字体族映射** | ✅ `font-family`（与 iOS V13 同契约） | ✅ V13 | ⛔ **缺** | 鸿蒙待补 |
 | 10 | **原生组件混用（L3）** | ✅ `native`/`native-host`/`shot-scroll-native` | ❌ **缺** | ⛔ **缺** | iOS/鸿蒙待补（方案坑位 #4 的核心） |
-| 11 | **结构变更（splice/apply-ops）** | ✅ `splice`/`apply-ops` | ❌ **缺** | ✅ **已补** | 鸿蒙 `spliceProbe`：**4/4 判据过**（rects 4→5 / removed=0,inserted=1 / 新节点高 50.0 / 重排 5 有界）——与 Android 同 payload |
+| 11 | **结构变更（splice）** | ✅ `splice` | ✅ **已补**（`splice_probe`） | ✅ **已补**（`spliceProbe`） | **三端同树同 payload 4/4 判据全过**（rects 4→5 · 0/1 · 新节点高 50.0 · 重排 5 有界）；`apply-ops` 仍待 iOS/鸿蒙 |
 | 12 | **整树虚拟化（mount-virtual）** | ✅ `mount-virtual` | ✅（V12 同族） | ⛔ **缺** | 鸿蒙待补 |
 | 13 | **JS 引擎闭环** | ✅ `js-engine`/`js-batch`/`js-render` | ✅ JSC 现场编码 | ⛔ **缺** | 鸿蒙待补（ArkTS 已含 JIT 运行时，接法待定） |
 | 14 | **Vapor 指令流** | ✅ `vapor`/`vaporAb`/`vaporList` | ✅（vapor 场景） | ⛔ **缺** | 鸿蒙待补 |
@@ -30,7 +30,7 @@
 | 21 | **一致性快照（L2-L4）** | ✅ | ✅ | ⛔ **缺** | 鸿蒙待补 |
 | 22 | **Perfetto / 帧率** | ✅（Perfetto 接入） | ◐（帧统计） | ⛔ **缺** | |
 
-**统计**：Android 22/22 · iOS **15/22** · 鸿蒙 **8/22**（本轮 4→8：命中 / 复用池 / 结构变更 / 文本通道**上屏**）。
+**统计**：Android 22/22 · iOS **16/22** · 鸿蒙 **9/22**（本轮：鸿蒙 4→9 + iOS 15→16「结构变更」三端齐平）。
 
 ## 2. 缺口归因（为什么鸿蒙最少）
 
@@ -38,8 +38,8 @@
 "装机 + RenderNode 直绘 + 4050 基准"三件事。其余能力域需要**逐个把既有 C ABI 接上**
 （`proteus_layout_*` 已在，缺的是宿主侧调用与测量装置）——属**工作量**，非**架构障碍**。
 
-iOS 的缺口（手势 / 原生组件混用 / 结构变更 / splice）是**历史遗留**：iOS 宿主先做了
-"布局基准 + CALayer 渲染"主线，周边能力域未铺开。
+iOS 的缺口（手势 / 原生组件混用 / 整树虚拟化 / JS 引擎闭环）是**历史遗留**：iOS 宿主先做了
+"布局基准 + CALayer 渲染"主线，周边能力域未铺开（「结构变更」本轮已补，见上表 #11）。
 
 ## 3. 补齐优先级（建议，按「方案价值 × 成本」）
 

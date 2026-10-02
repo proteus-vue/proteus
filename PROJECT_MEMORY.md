@@ -87,6 +87,36 @@ check-consistency-snapshot 七段全绿 · check:no-blind-wait ✅（新 .sh 零
 ① L2/L3/L2.5/L2.6 算子用**合成快照**——证明的是"比对引擎敏不敏感"，不是"真机数据一定对"；
 ② L4 算子用真截图但取同端注入（跨端噪声底含 AA，无区分度）；L4 的价值形态是**定位**。
 
+### ★★★2026-10-02（六十七）· 三端补齐续批：iOS 结构变更齐平 + 鸿蒙滚动帧率
+
+**用户「继续」**（承接六十五/六十六的矩阵缺口清单）：
+
+**① iOS 结构变更（矩阵 #11）—— 三端齐平**：`layout-core-bench.swift` 新增 `runSpliceProbe`
+（与 Android `spliceRun` / 鸿蒙 `spliceProbe` **同一棵树同一 payload**）——
+真机 **4/4 判据全过**（rects 4→5 · removed=0/inserted=1 · 新节点高 50.0 · 重排 5 有界）。
+⇒ **「结构变更」三端判据完全一致**（这项从 iOS/鸿蒙双缺 → 三端齐）。
+
+**② 鸿蒙滚动帧率（矩阵 #5 部分）**：`scrollProbe`（`postFrameCallback` 逐帧采集，程序化滚动 60 帧）——
+真机读数：**61 帧 · p50 16.64ms（= 60fps）· p95 66.62ms · avg fps 31.9**。
+★诚实边界：滚动驱动的是 **ArkUI Scroll 容器**（非 Proteus 渲染路径）——本项只补齐"帧率通道"能力，
+深度接线（Proteus 内容 + 滚动同步）待做。
+
+**★三个新踩的坑（都写进代码注释）**：
+1. **ArkTS 禁类字面量**（`arkts-no-class-literals`）：`FrameCallback` 回调改用**文件级具名类**
+   （`extends FrameCallback` + 必须实现 `onIdle`——编译器当场要求，未猜）；
+2. **hilog 不认 `%.2f`**：浮点格式串原样打出（`avg_ms=%.2f` 字面量）——修法：JS 侧先转字符串，
+   用 `%{public}s` 打（精度在 JS 控制）；
+3. iOS 探针的 `splice_probe` 字段名一致性：与两端同字段名（`ok/before_rects/after_rects/
+   removed/inserted/relayout_count/new_node_height/checks`）——三端报告可直接对读。
+
+**矩阵**：iOS 15→**16/22** · 鸿蒙 8→**9/22**（滚动帧率通道）。
+
+**验证**：iOS 真机（签名/安装/上报全链）· 鸿蒙真机（探针集六项：命中/复用池/结构变更/文本上屏/文本探针/滚动帧率）·
+`check-selfdraw-compile` ✓ · `check:no-blind-wait` ✓ · `check:docs-stats` ✓。
+
+**诚实边界**：① 滚动是 ArkUI 容器级（非 Proteus 内容路径）；② p95 66ms 说明有掉帧——
+但这是 ArkUI 容器+首次帧的混合读数（未区分冷热），深度归因待做；③ 矩阵其余 13 项（鸿蒙）/6 项（iOS）仍缺。
+
 ### ★★★2026-10-02（六十六）· 鸿蒙**文本上屏**打通（探针级 → 上屏级）
 
 **用户「继续」→ 把文本通道从上屏缺口补成上屏可用**：
