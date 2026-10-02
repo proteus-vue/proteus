@@ -429,5 +429,9 @@ export function slotKindOf(propKey: string): SlotKind {
   if (propKey === 'visible') return 'visibility'
   if (propKey.startsWith('layout.') || propKey.startsWith('paint.')) return 'style'
   if (propKey.startsWith('list.')) return 'list-data'
+  // ★组件 props（P1 组件系统）：`component.<name>` → component-prop 槽位
+  //   ⇒ 运行时发 CALL_COMPONENT_UPDATE（opcode 已存在；内核侧"s 需组件边界调度"是**预期**——
+  //     该指令由**宿主/组件运行时**消费，不归内核几何。）
+  if (propKey.startsWith('component.')) return 'component-prop'
   return 'prop'
 }

@@ -6,7 +6,7 @@
 //   （不静默）；③ **节点 id 与模板同序**（与 `buildLayoutTemplate` 的 id 分配同源——
 //   分叉的后果是 handler 挂到别的节点上，症状伪装成"点错地方"）。
 import { describe, it, expect } from 'vitest'
-import { compileEvents, buildLayoutTemplate } from '@proteus-vue/compiler'
+import { compileEvents, buildLayoutTemplate, buildVaporSubscriptions } from '@proteus-vue/compiler'
 
 const sfc = (template: string, script = `const count = ref(0)\nconst toggle = ref(false)\nconst boxW = ref(120)\nconst list = ref([{ id: 1, w: 10 }])\n`): string =>
   `<template>\n${template}\n</template>\n\n<script setup lang="ts">\n${script}</script>\n`
@@ -163,5 +163,51 @@ describe('★P0 静默风险可见化（2026-10-03 · Vapor 能力清单批次�
     expect(diagText(`<input v-model="a" style="height: 5px" />`)).not.toContain('未支持')
     expect(diagText(`<div @click="a = 1" style="height: 5px">x</div>`)).not.toContain('未支持')
     expect(diagText(`<div glow='{"color":"#fff","radius":5,"alpha":0.5}' style="height: 5px"></div>`)).not.toContain('未支持')
+  })
+})
+
+describe('★P1 组件系统第一批（2026-10-03 · 组件边界标记 + props 通道）', () => {
+  // 【设计依据】方案 §7.3 强制规则第 1 条：「组件边界强制 L0」——
+  //   props 跨组件传递走标准路径（CALL_COMPONENT_UPDATE），不穿透。
+  //   本批交付：① 编译期**标记组件边界**（节点 component 字段）
+  //             ② props 走 `component.<name>` propKey ⇒ `component-prop` 槽位
+  //                ⇒ 运行时发 CALL_COMPONENT_UPDATE（opcode/编解码已存在）。
+  //   ★诚实边界：组件**内部渲染** / 生命周期 / 插槽分发 = 后续批次（本批只做边界与通道）。
+  const COMP_SFC = `
+<script setup lang="ts">
+import { ref } from 'vue'
+const a = ref(1)
+</script>
+<template>
+  <p-view style="height: 100px">
+    <MyComp :prop1="a" style="height: 20px" />
+    <div style="height: 10px">plain</div>
+  </p-view>
+</template>`
+
+  it('① 组件标签被标记为组件边界（node.component）', () => {
+    const t = buildLayoutTemplate(COMP_SFC, 'c.vue').template
+    const comp = t.nodes.find((n) => n.tag === 'MyComp') as { component?: string } | undefined
+    expect(comp?.component).toBe('MyComp')
+    // 反向：普通元素**不得**被标记（kebab-case 是原生标签）
+    const plain = t.nodes.find((n) => n.tag === 'div') as { component?: string } | undefined
+    expect(plain?.component).toBeUndefined()
+  })
+
+  it('② 组件 props 走 component-prop 槽位（→ CALL_COMPONENT_UPDATE 通道）', () => {
+    const r = buildVaporSubscriptions(COMP_SFC, 'c.vue')
+    const slots = (r.table.sources || []).flatMap((s) => s.slots)
+    const compSlot = slots.find((s) => s.kind === 'component-prop')
+    expect(compSlot).toBeDefined()
+    expect(compSlot!.propKey).toBe('component.prop1')
+    // 反向：普通元素的 attr 绑定仍走 prop（不被误标组件）
+    const propSlots = slots.filter((s) => s.kind === 'prop')
+    expect(propSlots.every((s) => !String(s.propKey).startsWith('component.'))).toBe(true)
+  })
+
+  it('③ 组件的 style 声明仍进 layout（宿主位尺寸，与组件边界并存）', () => {
+    const t = buildLayoutTemplate(COMP_SFC, 'c.vue').template
+    const comp = t.nodes.find((n) => n.tag === 'MyComp')!
+    expect((comp.style as Record<string, unknown>).height).toBe(20)
   })
 })

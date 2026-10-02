@@ -397,6 +397,12 @@ export function buildLayoutTemplate(
       if (tag && UNSUPPORTED_BUILTINS[tag]) {
         diag(`${tag}(id=${id}) ${UNSUPPORTED_BUILTINS[tag]}`)
       }
+      // ★★**组件边界标记**（P1 组件系统第一批，2026-10-03）：`<MyComp>` 这类**大写开头**的标签
+      //   是 Vue 组件（协议：PascalCase = 组件，kebab-case = 原生标签——与 Vue 官方同约定）。
+      //   ⇒ 在节点上打 `component` 标记（运行时据此走 L0 边界语义；见 LayoutNode.component 注释）。
+      //   ★本版只做**标记 + props 通道**；组件内部渲染/生命周期/插槽分发是后续批次
+      //     （标记本身已比"当普通元素"有价值：宿主能识别"这里是组件位、需要 L0 处理"）。
+      const isComponentTag = /^[A-Z]/.test(tag) && !UNSUPPORTED_BUILTINS[tag]
       // ★★插槽出口 `<slot>`（P0）：组件系统未建 ⇒ 插槽内容分发不存在（静默空位）
       if (tag === 'slot') {
         diag(
@@ -406,6 +412,7 @@ export function buildLayoutTemplate(
       }
       const node: LayoutNode = { id, parentId, tag, style }
       if (nodeListId !== undefined) node.listId = nodeListId
+      if (isComponentTag) node.component = tag
       // 文本：静态文本 或 插值 → 占位（初始值由运行时回填；**混合文本不支持**）
       if (textChildren.length > 0) {
         if (elementChildren.length > 0) {

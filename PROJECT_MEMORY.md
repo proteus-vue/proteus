@@ -87,6 +87,35 @@ check-consistency-snapshot 七段全绿 · check:no-blind-wait ✅（新 .sh 零
 ① L2/L3/L2.5/L2.6 算子用**合成快照**——证明的是"比对引擎敏不敏感"，不是"真机数据一定对"；
 ② L4 算子用真截图但取同端注入（跨端噪声底含 AA，无区分度）；L4 的价值形态是**定位**。
 
+### ★★★2026-10-03（九十）· **Vapor 组件系统第一批**（P1）—— 组件边界标记 + props 通道（复用既有 opcode）
+
+**用户「继续打通补齐」→ 接能力清单 P1（组件系统，最高价值缺口）**。
+
+**★关键发现（省掉大部分工作）**：`CALL_COMPONENT_UPDATE`（0x30）的**基础设施全在**——
+`opcode.ts` 定义、`buffer.ts` 编解码、`slot.ts` 发射点（`component-prop` 槽位）、
+内核 `ops_apply.rs` 明确拒收（"需组件边界调度"）——**缺的只是编译期把 props 路由到该通道**。
+
+**交付（第一批）**
+1. **`LayoutNode.component` 字段**（`slot-runtime/layout-template.ts`）：组件边界标记，语义 =
+   方案 §7.3 "组件边界强制 L0"（组件内部走 Vue 标准路径，不穿透）。
+2. **组件识别**：PascalCase 判据（与 Vue 官方约定同）；`template.ts`（建节点标记）与
+   `deps.ts`（props 路由）**两处判据同源**。
+3. **props 通道**：组件上的 `:prop1="a"` → propKey `component.prop1` → `slotKindOf` 归
+   `component-prop` → 运行时发 `CALL_COMPONENT_UPDATE`。
+4. **判据 3 组**（含反向）：边界标记 / props 路由 / style 并存（宿主位尺寸）+
+   普通元素**不得**被误标组件。
+
+**验证**：**168 项 Vapor 测试全过**（新增 3 组 P1）· 既有产物逐字节无回归 ·
+闭环确认（`component-prop` → `CALL_COMPONENT_UPDATE` → 内核如实拒收上报，不静默）。
+
+**诚实边界（本批做/不做，写进文档）**
+· 做：边界标记 + props 通道（父→子传值的**声明面**）；
+· 不做（后续批次）：组件内部渲染（需组件注册表 + 实例化时机 + 与 L0/L1 边界协同）、
+  生命周期、插槽分发（`INSERT_BLOCK` 已是官方设计的对应指令）、emits（可复用冒泡链）。
+
+**下一步**：P1 第二批（组件内部渲染——复用 `renderer-app` 的 Vue 路径设计）
+或 P2 高性价比项（嵌套 v-for / 混合文本 / 事件修饰符）。
+
 ### ★★★2026-10-03（八十九）· **Vapor 能力清单**（对标官方 Vue Vapor）+ **P0 静默风险可见化**
 
 **用户要求**：「调研 vue 官方 vapor 对 SFC 的支持实现，研究落地我们 vapor 应该落地的能力清单……
@@ -1933,6 +1962,8 @@ check-consistency-snapshot 七段全绿 · script-compile ✅ · no-blind-wait �
 **新诚实边界**：平移对齐会**吸收真实位置差异**（若某端整体真的偏了 3px，对齐后看不出）——
 "位置是否正确"由 L2 几何数值比对承担；L4 只管"画出来像不像"（已写入注记与文档）。
 ④ 仍未接入：iOS/Android 真机截图（当前 Web=Playwright、MP=模拟器，均非真机）。
+
+## 当前状态速览（最近一次更新：**2026-10-03·（九十）· **Vapor 组件系统第一批**（P1）—— 边界标记 + props 通道（复用既有 CALL_COMPONENT_UPDATE opcode；168 项测试全过）；下一步 P1 第二批或 P2**）★新会话以此为准
 
 ## 当前状态速览（最近一次更新：**2026-10-03·（八十九）· **Vapor 能力清单**（对标官方 3.6.0-rc.10 实证调研）+ **P0 静默风险 12 项可见化**（全补诊断 + 反向判据）；下一步 P1 组件系统**）★新会话以此为准
 

@@ -350,6 +350,11 @@ export function collectTemplateBindings(
         content?: { content?: string } | string
       }
       const tag = n.tag ?? ''
+      // ★★组件标签（P1 组件系统第一批）：PascalCase = 组件（与 Vue 官方约定同）——
+      //   组件上的 props 走 `component.<name>` 前缀 ⇒ slotKindOf 归到 `component-prop`
+      //   ⇒ 运行时发 CALL_COMPONENT_UPDATE（方案 §7.3："组件边界强制 L0"）。
+      //   ★与 template.ts 的 `isComponentTag` 判据**同源**（同一份约定，两处判据一致）。
+      const isComponentTag = /^[A-Z]/.test(tag)
       const line = n.loc?.start?.line
       let nextScopes = scopes
       let nextBranch = inBranch
@@ -517,6 +522,10 @@ export function collectTemplateBindings(
             //   （layout.width 等）——否则运行时拿到的是整串 CSS 文本，与 SET_STYLE 的
             //   `(key_id, f32)` 契约不匹配（实测 Vapor 端该节点宽度从未生效）。见 stylePropKeyFromExpr。
             let propKey = arg ? normalizePropKey(arg) : 'attr.spread'
+            // ★组件 props：`component.<name>`（→ slotKindOf 归 component-prop → CALL_COMPONENT_UPDATE）
+            if (isComponentTag && arg && !propKey.startsWith('layout.') && !propKey.startsWith('text.')) {
+              propKey = `component.${arg.replace(/["']/g, '')}`
+            }
             // ★★`:style` 单属性降级（2026-10-02）：**键与值一起降级**——
             //   ① 键：`paint.style` → `layout.width`（宿主认的字段名）；
             //   ② 值：求值表达式从整串拼接（`'width:'+item.w+'px'`，结果是字符串）
