@@ -87,6 +87,39 @@ check-consistency-snapshot 七段全绿 · check:no-blind-wait ✅（新 .sh 零
 ① L2/L3/L2.5/L2.6 算子用**合成快照**——证明的是"比对引擎敏不敏感"，不是"真机数据一定对"；
 ② L4 算子用真截图但取同端注入（跨端噪声底含 AA，无区分度）；L4 的价值形态是**定位**。
 
+### ★★★2026-10-02（六十八）· 鸿蒙渲染树**架构修正**（全屏 host + 根 RenderNode）+ 单位模型修复
+
+**用户「继续」→ 按候选做字号校准，追出两个真实架构缺陷**（都不是调参）：
+
+**① 双单位体系错配（真缺陷）**：
+- 实测证据链：`vp2px(1)=3.5`（密度）+ DrawContext 尺寸 float 读 = 下发值 + 截图方块尺寸
+  ⇒ **RenderNode.SetSize/SetPosition 与 content modifier canvas 是物理 px**；
+  而 customNode 的 `NODE_WIDTH/NODE_HEIGHT` 是 **vp**；
+- 首版把 px 值赋给 vp 属性 ⇒ host 撑大 3.5 倍（1148px → 4018px）；
+- 修法：ArkTS 侧设计值 ×`vp2px(1)` 后下发（**换算只在一处**）；host 尺寸 ÷密度。
+
+**② 渲染树架构（第二次修正，最终形态）**：
+- 首版"每元素一个 host customNode" ⇒ 每个 host 都被 **ArkUI 布局流**接管摆放（Stack 居中）
+  ⇒ 整组色块被居中、偏离设计坐标（几何日志显示下发值完全正确——"值对但看不见"）；
+- **正解（与 Android 同构）**：单一**全屏 host**（布局流无自由度）+ **根 RenderNode**
+  （全屏、坐标空间=屏幕 px）+ 元素作为根子节点（`OH_ArkUI_RenderNodeUtils_AddChild`）
+  ⇒ **绝对坐标精确定位**；
+- 真机截图验证（`results/render-root-arch.jpeg`）：色块自 y=140px 顶部起排布、宽度精确、
+  文字清晰（"密度 3.5"自报）——全链验收绿（装机+启动+直绘+六探针）。
+
+**★三类实测日志坑（写进注释，都是同类"格式/类型假设"陷阱）**：
+1. hilog 不吃 `%.1f`（打 `<private>`）⇒ C++ 侧 snprintf 预格式化 + `%{public}s`；
+2. `ArkUI_IntSize.width` **头文件写 int32、实测字节是 float**（300.0 的位模式 1133903872）
+   ⇒ 双读实证并存（不猜类型）；
+3. ArkTS 侧 hilog 同样不吃 `%.2f` ⇒ JS 侧转字符串。
+
+**验证**：鸿蒙真机全链（`run-host-app.sh`：装机+启动+直绘+命中/复用池/结构变更/文本/滚动六探针）·
+两张截图目视（`render-text-vp.jpeg` / `render-root-arch.jpeg`）· 构建 ✓。
+
+**诚实边界**：① host 仍由 ArkUI 布局流摆放（单节点无自由度——非完全脱离布局系统）；
+② 滚动深度接线（Proteus 内容 + 滚动同步）未做；③ 自动化像素判据未接（目前人工目视）；
+④ 矩阵其余缺口仍在。
+
 ### ★★★2026-10-02（六十七）· 三端补齐续批：iOS 结构变更齐平 + 鸿蒙滚动帧率
 
 **用户「继续」**（承接六十五/六十六的矩阵缺口清单）：
