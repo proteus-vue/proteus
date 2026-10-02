@@ -6,7 +6,7 @@ export interface ProteusRenderStats {
   nodes: number;
 }
 /** 把 NodeContent 句柄交给原生模块（挂载点）；返回 0 成功 / 负错误码 */
-export const attach: (content: object) => number;
+export const attach: (content: object, density: number) => number;
 /** 消费 Proteus 指令流（RenderCmd 同形 JSON）；返回实际建出的渲染节点数 */
 export const renderCommands: (json: string) => number;
 /** 宿主记账读数（机器判据读它） */

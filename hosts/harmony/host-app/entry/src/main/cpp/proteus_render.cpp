@@ -45,6 +45,17 @@
 // 模块生命周期：持有的 ArkUI_NodeContentHandle（由 ArkTS attach 时传入）
 static ArkUI_NodeContentHandle g_content = nullptr;
 static int32_t g_nodeCount = 0;
+static bool g_unitScaleLogged = false;   // 单位标定日志只打一次
+/**
+ * ★★设备密度（vp2px）——由 ArkTS 侧 `attach(content, density)` 传入。
+ *   【为什么必须知道它（2026-10-02 真机实测踩坑）】RenderNode 的 SetSize/SetPosition 与
+ *   content modifier 的 canvas 都是**物理 px**；而 customNode 的 `NODE_WIDTH/NODE_HEIGHT`
+ *   属性是 **vp**。此前直接把 px 值赋给 NODE_WIDTH ⇒ host 被撑大到 w×密度 的像素宽
+ *   （1148px → 4018px），Stack 居中后左缘跑到屏外 ⇒ **色块整体不可见**（几何值却完全正确,
+ *   所以只有"按屏幕像素核算 host 尺寸"才发现——见 PROTEUS_RENDER_NODE 取证日志）。
+ *   ⇒ host 的 vp 尺寸 = 内容 px ÷ 密度。
+ */
+static double g_density = 1.0;
 
 // ── 极简 JSON 取值（避免为原型引入第三方 JSON 库；指令结构固定：{"x":N,"y":N,"w":N,"h":N,"color":N}）──
 //   ★诚实边界：仅支持本模块约定的**数字字段**；接真实指令流时换正式解析（或改传二进制块）。
@@ -82,6 +93,8 @@ struct TextDrawSpec {
     double fontSizePx = 24.0;
     uint32_t color = 0xFFFFFFFFu;
     std::string family;
+    /** 节点声明宽（vp）——用于**单位标定**：canvas 若是物理 px，字号需按比例换算（见回调注释） */
+    double widthVp = 0.0;
 };
 
 /**
@@ -98,11 +111,33 @@ static void DrawTextCallback(ArkUI_DrawContext* context, void* userData) {
     if (canvasRaw == nullptr) return;
     auto* canvas = static_cast<OH_Drawing_Canvas*>(canvasRaw);
 
+    // ★★单位标定（2026-10-02 实测修复）：content modifier 的 canvas **不保证是 vp 坐标系**——
+    //   若节点声明 300(vp)、画布实测 N(px)，则 1 vp = N/300 px。字号传入前乘该比例，
+    //   否则字号按物理 px 解释 ⇒ 视觉显著偏小（首版截图目视抓出：24 的字看起来只有 ~8vp）。
+    //   ★标定方式 = 画布尺寸 ÷ 节点声明宽（不猜密度表，不查设备参数——用**实测比值**）。
+    double unitScale = 1.0;
+    if (spec->widthVp > 0.0) {
+        // ★双读实证（2026-10-02）：头文件写 `int32 width`，但真机字节是 **float**（首读得
+        //   1133903872 = float 300.0 的位模式）⇒ 两种解释都打出来，用**实测比值**定标定。
+        ArkUI_IntSize sz = OH_ArkUI_DrawContext_GetSize(context);
+        float wAsFloat = 0.0f;
+        memcpy(&wAsFloat, &sz.width, sizeof(float));
+        if (!g_unitScaleLogged) {
+            g_unitScaleLogged = true;
+            OH_LOG_Print(LOG_APP, LOG_INFO, LOG_DOMAIN, LOG_TAG,
+                         "PROTEUS_RENDER_TEXT_UNIT int_read=%{public}d float_read=%.2f node_w_vp=%.1f",
+                         sz.width, wAsFloat, spec->widthVp);
+        }
+        // 诊断用：canvas 宽（px 读法）与 spec 宽（px）应量级一致 ⇒ 印证"canvas = 物理 px"
+        // （换算已在 ArkTS 侧完成；此块不参与字号计算）
+    }
+
     OH_Drawing_FontCollection* fc = OH_Drawing_CreateFontCollection();
     if (fc == nullptr) return;
     OH_Drawing_TypographyStyle* ts = OH_Drawing_CreateTypographyStyle();
     OH_Drawing_TextStyle* tstyle = OH_Drawing_CreateTextStyle();
     OH_Drawing_SetTextStyleColor(tstyle, spec->color);
+    // ★字号已是**物理 px**（ArkTS 侧 ×密度 —— 换算只在一处）⇒ 此处直用，不再乘标定比例
     OH_Drawing_SetTextStyleFontSize(tstyle, spec->fontSizePx);
     OH_Drawing_TypographyCreate* handler = OH_Drawing_CreateTypographyHandler(ts, fc);
     if (handler != nullptr) {
@@ -127,9 +162,18 @@ static void DrawTextCallback(ArkUI_DrawContext* context, void* userData) {
  *   返回 0 成功 / 负错误码。
  */
 static napi_value Attach(napi_env env, napi_callback_info info) {
-    size_t argc = 1;
-    napi_value args[1] = {nullptr};
+    size_t argc = 2;
+    napi_value args[2] = {nullptr, nullptr};
     napi_get_cb_info(env, info, &argc, args, nullptr, nullptr);
+    if (argc >= 2) {
+        double d = 1.0;
+        if (napi_get_value_double(env, args[1], &d) == napi_ok && d > 0.0) {
+            g_density = d;
+            OH_LOG_Print(LOG_APP, LOG_INFO, LOG_DOMAIN, LOG_TAG,
+                         "PROTEUS_RENDER_DENSITY %{public}s",
+                         d > 0 ? "ok" : "bad");
+        }
+    }
     if (argc < 1) {
         OH_LOG_Print(LOG_APP, LOG_ERROR, LOG_DOMAIN, LOG_TAG, "PROTEUS_RENDER_ATTACH argc=0 (缺 NodeContent 参数)");
         napi_value err;
@@ -228,6 +272,14 @@ static napi_value RenderCommands(napi_env env, napi_callback_info info) {
         }
         OH_ArkUI_RenderNodeUtils_SetSize(node, static_cast<int32_t>(w), static_cast<int32_t>(h));
         OH_ArkUI_RenderNodeUtils_SetPosition(node, static_cast<int32_t>(x), static_cast<int32_t>(y));
+        // ★取证日志（2026-10-02）：下发值必须可直接核对（"渲染去哪了"这类问题不能靠猜）
+        //   ★hilog 不吃 `%.1f`（打 <private>）⇒ snprintf 预格式化 + %{public}s（与 ArkTS 侧同坑）
+        {
+            char gbuf[160];
+            snprintf(gbuf, sizeof(gbuf), "x=%.1f y=%.1f w=%.1f h=%.1f", x, y, w, h);
+            OH_LOG_Print(LOG_APP, LOG_INFO, LOG_DOMAIN, LOG_TAG,
+                         "PROTEUS_RENDER_NODE %{public}s", gbuf);
+        }
         OH_ArkUI_RenderNodeUtils_SetBackgroundColor(node, static_cast<uint32_t>(color));
         if (radius > 0) {
             ArkUI_NodeBorderRadiusOption* br = OH_ArkUI_RenderNodeUtils_CreateNodeBorderRadiusOption();
@@ -246,7 +298,7 @@ static napi_value RenderCommands(napi_env env, napi_callback_info info) {
             jsonNumber(it, "fontSize", &fs);
             double tc = 0xFFFFFFFFu;
             jsonNumber(it, "textColor", &tc);
-            auto* spec = new TextDrawSpec{textVal, fs, static_cast<uint32_t>(tc), ""};
+            auto* spec = new TextDrawSpec{textVal, fs, static_cast<uint32_t>(tc), "", w};
             ArkUI_RenderContentModifierHandle mod = OH_ArkUI_RenderNodeUtils_CreateContentModifier();
             if (mod != nullptr) {
                 OH_ArkUI_RenderNodeUtils_SetContentModifierOnDraw(mod, spec, DrawTextCallback);
@@ -277,12 +329,13 @@ static napi_value RenderCommands(napi_env env, napi_callback_info info) {
             OH_ArkUI_RenderNodeUtils_DisposeNode(node);
             continue;
         }
+        // ★host 尺寸按 **vp** 设置（= 内容 px ÷ 密度）——见 g_density 注释的实测踩坑
         ArkUI_NumberValue wv[1] = {};
-        wv[0].f32 = static_cast<float>(w);
+        wv[0].f32 = static_cast<float>(w / g_density);
         ArkUI_AttributeItem wi{wv, 1, nullptr, nullptr};
         api->setAttribute(host, NODE_WIDTH, &wi);
         ArkUI_NumberValue hv[1] = {};
-        hv[0].f32 = static_cast<float>(h);
+        hv[0].f32 = static_cast<float>(h / g_density);
         ArkUI_AttributeItem hi{hv, 1, nullptr, nullptr};
         api->setAttribute(host, NODE_HEIGHT, &hi);
 
