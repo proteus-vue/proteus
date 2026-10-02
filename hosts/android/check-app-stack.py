@@ -387,6 +387,49 @@ def main() -> int:
                 f"入口 {ae.get('top')} → push {ap.get('pushed')} → back {ab.get('top')}（{d.get('p_back_ops')}）"
             )
 
+    # ── ⑩★★★NB1/NB3/NB6（导航体系，2026-10-02）：**分支导航器在真机上跑** ──
+    #   装配源 = 统一产物（`tabNames` 分支清单 + `screens` 含 keepAlive 物化）——
+    #   examples 的 `router.pages['mine'].branch.keepAlive='none'` 一路流到端上（配置→产物→行为全链）。
+    #   证据链：① 切分支保栈（depthAa == depthA0）② none 档释放（frozen==depth）但栈状态可读
+    #   （frames 完整）③ 切回重建（rebuilds≥1）④ back 只作用活跃分支（另一分支深度不变）
+    #   ⑤ 到根交系统（`g_back_system`——不静默吞掉）。
+    #   ★字段缺失（旧 bundle）⇒ 如实跳过并提示（不假绿）。
+    # ★字段名归一（本仓实测）：两端宿主对 `__proteusAppProjectRun` 的返回字段**统一加 `p_` 前缀**
+    #   （Android `out.put("p_" + k, ...)` / iOS `merged["p_\(k)"] = v`——两端同名同形）
+    #   ⇒ 本项目入口内产出的 `g_*` 分支读数在报告里是 `p_g_*`。判据两种形态都读（同 `p_run_ok`/`p_ok` 先例）。
+    for _k in list(d.keys()):
+        # ★剥 `p_`（2 字符）→ `g_*`；注意不是剥 `p_g_`（会把 g_ 一起吃掉——首版踩到）
+        if _k.startswith("p_g_") and _k[2:] not in d:
+            d[_k[2:]] = d[_k]
+    if "g_ok" not in d:
+        report("⑩ 分支导航场景（G）：报告无 g_ok 字段（旧 bundle？）——跳过（不假绿）")
+    elif d.get("g_ok") is not True:
+        fail(
+            f"⑩ 分支导航未通过：{d.get('g_error') or ''} "
+            f"保栈={d.get('g_switch_depth_before')}→{d.get('g_switch_kept_depth')} · "
+            f"none 档 depth={d.get('g_none_depth')} frozen={d.get('g_none_frozen')} rebuilds={d.get('g_none_rebuilds')} · "
+            f"back={d.get('g_back_action')} other_untouched={d.get('g_back_other_untouched')} system={d.get('g_back_system')}"
+        )
+    else:
+        # ★独立复算在前（防"g_ok 被人为篡改"——先核关键字段再报摘要，避免"✓ 后又 ✗"的顺序矛盾）
+        recal_ok = True
+        if d.get("g_switch_depth_before") != d.get("g_switch_kept_depth"):
+            fail("⑩ 切分支保栈复算失败：depth 前后不一致")
+            recal_ok = False
+        if not isinstance(d.get("g_none_frozen"), int) or d.get("g_none_frozen") != d.get("g_none_depth"):
+            fail(f"⑩ none 档释放数 != 栈深：{d.get('g_none_frozen')} / {d.get('g_none_depth')}")
+            recal_ok = False
+        if d.get("g_back_other_untouched") is not True:
+            fail("⑩ 返回越界：back 影响到了非活跃分支")
+            recal_ok = False
+        if recal_ok:
+            report(
+                f"⑩ ★分支导航（真机）：分支 {d.get('g_branches')}（保活 {d.get('g_keep_alive')}）· "
+                f"切分支保栈 depth {d.get('g_switch_depth_before')}→{d.get('g_switch_kept_depth')}（不变）· "
+                f"none 档释放 {d.get('g_none_frozen')}/{d.get('g_none_depth')} 屏（frames 完整 {d.get('g_none_frames')}）+ 切回重建 {d.get('g_none_rebuilds')} 次 · "
+                f"back 只作用活跃分支（另一分支深度不变）· 到根交系统={d.get('g_back_system')} · 命令分支标记 {d.get('g_cmd_branches')}"
+            )
+
     print()
     if not ok:
         print("✗ 路由虚拟栈未通过（见上方失败项）")

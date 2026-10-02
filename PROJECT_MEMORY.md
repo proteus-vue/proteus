@@ -87,6 +87,46 @@ check-consistency-snapshot 七段全绿 · check:no-blind-wait ✅（新 .sh 零
 ① L2/L3/L2.5/L2.6 算子用**合成快照**——证明的是"比对引擎敏不敏感"，不是"真机数据一定对"；
 ② L4 算子用真截图但取同端注入（跨端噪声底含 AA，无区分度）；L4 的价值形态是**定位**。
 
+### ★★★2026-10-02（五十七）· 导航体系 **NB7 真机判据落地** —— 分支导航双端实测（Android QuickJS + iOS JSC 逐字段零差异）
+
+**做了什么**（承接五十六的 NB1/NB3/NB6 逻辑层，本轮把它抬到**真机证据**）：
+1. **场景 G（分支导航）进项目驱动入口** `hosts/shared/bridge/entry-app-project.ts`——
+   `__proteusAppProjectRun` 新增 `g_*` 读数，装配源 = **项目统一产物**（`tabNames` + `screens`），
+   与 p_* 项目读数同一份产物（`examples/router/auto-routes.ts`）。证明链：
+   · 切分支保栈（depth 3→3 不变）；· `none` 档切走 ⇒ 释放 2/2 屏（`unmount freeze`）但 **frames 完整可读**，
+     切回重建原栈顶；· `back` 只作用活跃分支（另一分支深度分毫未动）+ 到根交系统（不静默）；
+   · 命令流带 branch 标记（`['index','mine']`）。
+2. **配置 → 产物 → 行为全链**：`examples/proteus.config.ts` 的 `router.pages['mine'].branch.keepAlive='none'`
+   → 重生成 `auto-routes.ts`（meta.branch 携带 + screens.mine.keepAlive 物化）→ 端上 `createBranchNavigator`
+   直接消费（**零二次转换、零夹具**）。
+3. **判据 ⑩ 组**进 `hosts/android/check-app-stack.py`（两端共用同一脚本）：
+   · 字段名归一（两端宿主对项目入口字段统一加 `p_` 前缀 ⇒ 报告里是 `p_g_*`；判据读两种形态）；
+   · **独立复算**（防 g_ok 被篡改：保栈 depth 前后一致 / 释放数 == 栈深 / 返回不越界——先复核再报 ✓，
+     修掉了首版"先 ✓ 后 ✗"的顺序矛盾）；
+   · **破坏性验证**：三个负例（篡改保栈 depth / 释放数 / 返回越界）**全被抓**。
+4. **真机双端实测**：
+   · Android（QuickJS，`d67e31a3`）：`run-app-stack.sh` 重跑 ⇒ 全部 ⓪①–⑩ 组绿；
+   · iOS（JavaScriptCore，iPhone 12）：`PROTEUS_BUNDLE_ID=dev.proteus.experiments bash hosts/ios/run-selfdraw.sh --app-stack`
+     ⇒ 全部组绿；
+   · **两端 `g_*` 读数逐字段完全一致（零差异）**——本批最强证据（同一份 TS、两个 JS 引擎、两个壳）。
+
+**★ 本轮踩到的环境事实（取证后修正，记下来防再犯）**：
+- Xcode 账号现状**已变**：`XKH568R7A5` 新团队**不在** Xcode 偏好里；可用的是旧团队 `F4R3P3L477`
+  的 5 个描述文件（**仍在有效期**，最晚 2026-10-08）+ 签名身份 `Apple Development: lyunlai@dingtalk.com`。
+  ⇒ 跑 iOS 真机用 `PROTEUS_BUNDLE_ID=dev.proteus.experiments`（该 app 设备上已装）。
+  `run-selfdraw.sh` 默认值 `cn.shxuxi.proteus.experiments` 当前**无描述文件**（provision 会失败：
+  "No Account for Team XKH568R7A5"）——**教训与 2026-09-29「先取证再断言」同源：先查 teams/profiles/identity 再跑**。
+- 首版判据归一 bug：`_k[4:]` 剥 `p_g_`（4 字符）得 `ok` 而非 `g_ok` ⇒ 应剥 `p_`（2 字符）。
+  **自测抓到**（本地造真读数 → 判据报"无 g_ok 字段"→ 逐字符排查）。
+
+**验证**：定向 76/76（branch-navigator/gen-routes/route-table/router-app/router 5 文件）·
+`check:acceptance-stub` 绿 · `check:script-compile` 绿 · `check:host-rounding` 绿 ·
+**真机判据 ⑩ 组双端绿 + 逐字段零差异** · **全量 `pnpm test` 4575/4575（363 文件，114.6s）**。
+**诚实边界**：① 真机验证的是**导航语义层**（逻辑读数 + 命令流），"切分支时视图真被释放/重建"
+   的视觉证据（截图）未做——归 NB4/NB5 视觉批次；② 宿主**系统返回键**（Android `onBackPressed` /
+   iOS 手势）到 `back()` 的接线未做（本批是统一 API 层的 `back()`，宿主接线归后续）；
+   ③ tabBar/navBar 组件未动；④ 鸿蒙无设备未验证。
+
 ### ★★★2026-10-02（五十六）· 导航体系 **NB1/NB3/NB6 核心落地**（用户：「继续」）
 
 **做了什么**（承接五十五的落地方案，实施"纯逻辑、零端依赖"的三张卡）：
@@ -854,7 +894,7 @@ check-consistency-snapshot 七段全绿 · script-compile ✅ · no-blind-wait �
 "位置是否正确"由 L2 几何数值比对承担；L4 只管"画出来像不像"（已写入注记与文档）。
 ④ 仍未接入：iOS/Android 真机截图（当前 Web=Playwright、MP=模拟器，均非真机）。
 
-## 当前状态速览（最近一次更新：**2026-10-02·（五十六）· 导航体系 **NB1/NB3/NB6 核心落地**：`createBranchNavigator`（分支=isTab 页，切分支保栈）+ 保活三档（none/active/all，`AppStack` 四原语 suspend/resume/releaseTrees/frames）+ 返回归属（back 只作用于活跃分支，到根交外层/系统信号）；判据单测全绿（28+6+2 条）；顺手清零 vue-tsc 存量 17 错**）★新会话以此为准
+## 当前状态速览（最近一次更新：**2026-10-02·（五十七）· 导航体系 **NB7 真机判据落地**：场景 G（分支导航）进项目驱动入口 + 判据 ⑩ 组（含破坏性验证）——Android QuickJS + iOS JSC **双端真机 ⑩ 组全绿且 g_* 读数逐字段零差异**（切分支保栈 3→3 / none 档释放重建 / 返回归属）**）★新会话以此为准
 ### ★★★2026-10-02（三十八）· 交互两层（离散 + 连续）—— 标准 §10.1 的最后两个"未布点"
 
 **交付**

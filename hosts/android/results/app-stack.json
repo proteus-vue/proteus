@@ -1,9 +1,9 @@
 {
   "engine_available": true,
-  "bundle_chars": 161334,
+  "bundle_chars": 174519,
   "bundle_load_ok": true,
   "run_ok": true,
-  "total_ms": 166,
+  "total_ms": 177,
   "ok": true,
   "scene": "app-stack",
   "depth": 20000,
@@ -11,8 +11,8 @@
   "budget": 1000,
   "screens": 32,
   "a_depth_reached": 20000,
-  "a_push_ms": 42,
-  "a_pop_ms": 11,
+  "a_push_ms": 45,
+  "a_pop_ms": 9,
   "a_depth_after_pop_to_root": 1,
   "a_mounts": 20000,
   "a_enters": 20000,
@@ -23,7 +23,7 @@
   "b_active_nodes": 960,
   "b_over_budget": false,
   "b_freeze_unmounts": 19985,
-  "b_push_ms": 56,
+  "b_push_ms": 64,
   "b_depth": 20000,
   "c_frozen_before_pop": 1,
   "c_rebuild_mounts": 1,
@@ -71,6 +71,38 @@
   ],
   "p_adapter_ready": true,
   "p_api_stack_depth": 0,
+  "p_g_ok": true,
+  "p_g_branches": [
+    "index",
+    "mine"
+  ],
+  "p_g_keep_alive": [
+    "index:active",
+    "mine:none"
+  ],
+  "p_g_policy": [
+    "index:keep",
+    "mine:drop"
+  ],
+  "p_g_none_branch": "mine",
+  "p_g_none_depth": 2,
+  "p_g_none_frozen": 2,
+  "p_g_none_frames": [
+    "mine",
+    "builtin-components-demo"
+  ],
+  "p_g_none_rebuilds": 2,
+  "p_g_switch_kept_depth": 3,
+  "p_g_switch_depth_before": 3,
+  "p_g_b_root_depth": 1,
+  "p_g_back_action": "pop",
+  "p_g_back_other_untouched": true,
+  "p_g_back_system": true,
+  "p_g_cmd_branches": [
+    "index",
+    "mine"
+  ],
+  "p_g_note": "分支导航器（NB1\/NB3\/NB6）——切分支保栈 + none 档释放重建 + 返回归属（真机）",
   "e_kick": "kicked",
   "e_jobs_pumped": 0,
   "e_async": "执行器结果异步写 app-stack-executor.json（动画由宿主帧循环推进）"

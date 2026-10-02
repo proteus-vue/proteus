@@ -13,14 +13,19 @@
 |---|---|---|
 | **NB1** 分支导航核心 | ✅ **已落地** | `packages/router/src/branch-navigator.ts`（`createBranchNavigator`：分支 = 独立 `AppStack`；`tabNames` + `screens` 装配，零新增配置源；`stackOf`/`activeStack`/`drainCommands`（命令带 `branch` 标记）） |
 | **NB3** 保活三档 | ✅ **已落地（逻辑层）** | 三档 `none/active/all` 声明位 = `router.pages['x'].branch.keepAlive`（缺省 `active`）；`AppStack` 新增 `suspend/resume/releaseTrees/frames` 四原语；`none`=切走整栈释放（视图销毁、栈状态保留——对齐 `saveBackStack`）；编译期警告（branch 写在非 tab 页）+ 内存读数（`stats().activeNodes`）均有单测 |
-| **NB6** 返回归属 | ◐ **逻辑层完成** | `back()` 只作用于活跃分支；到根 ⇒ `outer`/`system` 可观测信号（不静默吞掉）；`parent`（外层 RootStack）可注入。**两端宿主接线与真机读数待 NB7 批次**（Android `onBackPressed` / iOS 手势） |
+| **NB6** 返回归属 | ✅ **已落地（含真机）** | `back()` 只作用于活跃分支；到根 ⇒ `outer`/`system` 可观测信号（不静默吞掉）；`parent`（外层 RootStack）可注入。**真机判据 ⑩ 组已绿（两端）**——`back 只作用活跃分支` / `到根交系统` 双端一致 |
 | **NB2** 深链打通 | ◐ **基础就绪** | `navigate(branch, frames)` 深链直达分支内子页（自动补分支根）+ `snapshot()`/`frames()` 序列化往返逐帧相同；**深链解析产物（`buildColdStartStack`）的自动合并待接线** |
+| **NB7** 一致性回归 | ✅ **分支组已落地（真机双端）** | 真机判据 **⑩ 组**进 `check-app-stack.py`（切分支保栈 / none 档释放重建 / 返回归属 / 命令分支标记）；Android QuickJS + iOS JSC **逐字段零差异**。剩余：tabBar/navBar 视觉验收（随 NB4/NB5）、鸿蒙待端 |
 | NB4 tabBar 组件 | ⏳ 待办 | 需真机视觉验收 |
 | NB5 navBar 组件 | ⏳ 待办 | 需真机视觉验收 |
-| NB7 一致性回归 | ⏳ 待办 | 真机判据组（切分支保栈 / 返回落点）进 `check-app-stack.py`；鸿蒙整体待端可用 |
 
 > 本批判据（§4 表 1–7，共 8 组单测）已全绿：`tests/branch-navigator.test.ts`（28 条）+
 > `tests/app-stack.test.ts` ⑩ 组（分支原语 6 条）+ `tests/gen-routes.test.ts`（项目配置 → 统一产物 2 条）。
+> **真机证据（2026-10-02 双端实测）**：场景 G 进 `__proteusAppProjectRun`（`g_*` 读数）——
+> 装配源 = 项目统一产物（`examples` 的 `router.pages['mine'].branch.keepAlive='none'` 一路流到端上）；
+> Android（QuickJS）与 iOS（JSC）**逐字段完全一致**：切分支保栈 depth 3→3 · none 档释放 2/2
+> （frames 完整）+ 切回重建 · back 只作用活跃分支 · 到根交系统 · 命令分支标记 `['index','mine']`。
+> 判据侧做了破坏性验证（篡改保栈/释放数/返回越界各一个负例，全被抓）。
 
 ---
 

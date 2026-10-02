@@ -52,7 +52,10 @@ const config: ProteusConfig = {
     pages: {
       // 主包页面（pageRel：pages/ 去前缀；index.vue → 目录路径归并）
       'index': { title: '首页', isTab: true },
-      'mine': { title: '我的', isTab: true },
+      // ★NB3（导航体系）：分支级配置挂在**页面配置**里（分支 = isTab 页，零新增配置源）——
+      //   `keepAlive: 'none'` = 切走该分支即释放视图（栈状态保留，切回重建；对齐 Android saveBackStack）。
+      //   不写 branch 的 tab 页走默认 'active'（当前+相邻保活）。
+      'mine': { title: '我的', isTab: true, branch: { keepAlive: 'none' } },
       'components-demo': { title: '组件演示' },
       'builtin-components-demo': { title: '内置组件' },
       'native-components-demo': { title: '原生能力组件' },
