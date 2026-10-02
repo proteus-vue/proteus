@@ -1,15 +1,19 @@
 {
   "_note": "★VC7 像素噪声基线（L4 观察用）。规则：① id/reason/recordedBy/recordedAt 必填且唯一；② reason 必须说明「为什么是噪声而非缺陷」（≥12 字）；③ maxDiffRatio ≤ 0.05、maxHashDistance ≤ 16（与 noiseHashDistance 同带宽）——超过说明两张图已明显不同，该查清而不是登记。schema 门禁：pnpm check:consistency-pixel（违规 exit 2）。",
-  "note": "v2（2026-10-02）：五端真截图（小程序双渲染器 / 浏览器 / Android 真机 / iOS 模拟器）锚定归一后的已知光栅化差异——逐条留痕。",
+  "note": "v3（2026-10-02）：六端真截图（小程序双渲染器 / 浏览器 / Android 真机 / iOS 模拟器 / iOS 真机）锚定归一后的已知光栅化差异。",
   "entries": [
     {
       "id": "N-L4-five-end-rasterization",
-      "reason": "五端光栅化差异（已由标准 §9 允许差异清单声明为设计使然）：① 阴影策略不同——Web/小程序用 CSS box-shadow，Android/iOS 用分层逼近（本仓跨端一致策略，不用各端原生高斯 shadow）；② 字形引擎不同——各端字体度量与光栅化器各自实现（标准 §2 ③「唯一不可消除的结构性差异」/ §9 A-1）；③ 圆角/渐变边界 AA 各系统管线实现不同（§9 A-5）。实测证据：pHash 全 0（感知同形），逐像素差异 0.93%~3.01%，且差异 100% 集中在四项观测目标（蓝块边缘/阴影块/渐变块/字形行）——无一项落在空白区域（若空白区也出现差异，说明是污染而非光栅化）。",
+      "reason": "六端光栅化差异（小程序双渲染器 / 浏览器 / Android 真机 / iOS 模拟器 / iOS 真机）（已由标准 §9 允许差异清单声明为设计使然）：① 阴影策略不同——Web/小程序用 CSS box-shadow，Android/iOS 用分层逼近（本仓跨端一致策略，不用各端原生高斯 shadow）；② 字形引擎不同——各端字体度量与光栅化器各自实现（标准 §2 ③「唯一不可消除的结构性差异」/ §9 A-1）；③ 圆角/渐变边界 AA 各系统管线实现不同（§9 A-5）。实测证据：pHash 全 0（感知同形），逐像素差异 0.29%（iOS 真机⇄模拟器——同平台）~ 3.03%（跨运行时），且差异 100% 集中在四项观测目标（蓝块边缘/阴影块/渐变块/字形行）——无一项落在空白区域（若空白区也出现差异，说明是污染而非光栅化）。",
       "maxDiffRatio": 0.035,
       "maxHashDistance": 0,
-      "recordedBy": "L4 五端走查（2026-10-02 会话，锚定归一实测）",
+      "recordedBy": "L4 六端走查（2026-10-02 会话，含 iOS 真机 iPhone 12）",
       "recordedAt": "2026-10-02",
-      "evidence": { "diffPixels": 10655, "sampleCount": 354196, "hashDistance": 0 }
+      "evidence": {
+        "diffPixels": 7186,
+        "sampleCount": 2478098,
+        "hashDistance": 0
+      }
     }
   ]
 }

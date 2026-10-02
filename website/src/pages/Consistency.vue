@@ -34,6 +34,7 @@ const END_LABEL: Record<string, string> = {
   web: '浏览器 · Browser',
   android: 'Android（真机 · device）',
   ios: 'iOS（模拟器 · simulator）',
+  'ios-device': 'iOS（真机 · device）',
 }
 
 /** 核心指标卡（数字全部来自机器产物） */
@@ -96,6 +97,13 @@ function shotUrl(file: string): string {
 function pairLabel(id: string): string {
   return id.replace(/^l4:/, '').replace(/-vs-/, ' ⇄ ')
 }
+
+/** 配对形态标签（三档——残差量级不同，展示时必须区隔，避免"混读"） */
+function pairModeLabel(mode: string | null): string {
+  if (mode === 'same-runtime') return isEn.value ? 'same runtime' : '同运行时'
+  if (mode === 'same-platform') return isEn.value ? 'device vs simulator' : '真机 ⇄ 模拟器'
+  return isEn.value ? 'cross-runtime' : '跨运行时'
+}
 </script>
 
 <template>
@@ -137,12 +145,12 @@ function pairLabel(id: string): string {
 
     <!-- ═══ 五端真截图（L4 像素观测） ═══ -->
     <section class="cons-sec">
-      <p class="cons-sec-title">{{ isEn ? 'Pixel observation · one fixture, five real renderers' : '像素观测 · 同一夹具，五种真实渲染器' }}</p>
+      <p class="cons-sec-title">{{ isEn ? 'Pixel observation · one fixture, six real targets' : '像素观测 · 同一夹具，六种真实目标' }}</p>
       <p class="cons-sec-note">
         {{
           isEn
-            ? 'One fixture (radius / shadow / gradient / glyph) under the same declarations, rendered by five real targets: WeChat Skyline, WeChat WebView, browser, Android device, iOS simulator. Each screenshot is anchored to a common coordinate system by the fixture blue block (position + scale), colour-managed (Display P3 → sRGB), then compared with a perceptual algorithm (pHash + block-level diff). Observation only — never a gate.'
-            : '同一夹具（圆角 / 阴影 / 渐变 / 字形）在同一组声明下，由五个真实目标渲染：微信 Skyline、微信 WebView、浏览器、Android 真机、iOS 模拟器。每张截图按夹具蓝块锚定归一（位置 + 尺度两个自由度），做色彩管理（Display P3 → sRGB），再用感知算法比对（pHash + 分块差异定位）。仅观察，永不作为门禁。'
+            ? 'One fixture (radius / shadow / gradient / glyph) under the same declarations, rendered by six real targets: WeChat Skyline, WeChat WebView, browser, Android device, iOS simulator, iOS device. Each screenshot is anchored to a common coordinate system by the fixture blue block (position + scale), colour-managed (Display P3 → sRGB), then compared with a perceptual algorithm (pHash + block-level diff). Device-vs-simulator (same OS) measures the device-level floor; cross-runtime measures the real spread. Observation only — never a gate.'
+            : '同一夹具（圆角 / 阴影 / 渐变 / 字形）在同一组声明下，由六个真实目标渲染：微信 Skyline、微信 WebView、浏览器、Android 真机、iOS 模拟器、iOS 真机。每张截图按夹具蓝块锚定归一（位置 + 尺度两个自由度），做色彩管理（Display P3 → sRGB），再用感知算法比对（pHash + 分块差异定位）——**真机⇄模拟器（同 OS）测的是设备级底噪，跨运行时测的才是真实差距**。仅观察，永不作为门禁。'
         }}
       </p>
       <div class="cons-shots">
@@ -162,7 +170,7 @@ function pairLabel(id: string): string {
       <div class="cons-pairs">
         <div v-for="p in D.pixel.pairs" :key="p.id" class="cons-pair">
           <span class="cons-pair-head">{{ pairLabel(p.id) }}</span>
-          <span class="cons-pair-mode" :class="p.mode">{{ p.mode === 'cross-runtime' ? (isEn ? 'cross-runtime' : '跨运行时') : (isEn ? 'same runtime' : '同运行时') }}</span>
+          <span class="cons-pair-mode" :class="p.mode">{{ pairModeLabel(p.mode) }}</span>
           <span class="cons-pair-val">
             {{ (p.diffRatio * 100).toFixed(2) }}%
             <span class="cons-pair-sub">{{ isEn ? 'pixels differ' : '像素差异' }} · hash {{ p.hashDistance }} · {{ p.verdict }}</span>

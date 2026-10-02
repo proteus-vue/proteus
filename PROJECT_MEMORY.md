@@ -87,6 +87,38 @@ check-consistency-snapshot 七段全绿 · check:no-blind-wait ✅（新 .sh 零
 ① L2/L3/L2.5/L2.6 算子用**合成快照**——证明的是"比对引擎敏不敏感"，不是"真机数据一定对"；
 ② L4 算子用真截图但取同端注入（跨端噪声底含 AA，无区分度）；L4 的价值形态是**定位**。
 
+### ★★★2026-10-02（四十二）· L4 六端 —— iOS **真机**接入（用户点名「还有iOS真机，我现在真机一直连着呢」）
+
+**这一批回答什么**：用户提醒真机一直在连而我没用——本批接入 **iOS 真机（iPhone 12）** ⇒
+**六端 15 对全配对**，并补上一对**此前完全缺失的对照**：**同平台（真机 ⇄ 模拟器）**。
+
+**交付**
+1. **真机采集装置** `hosts/ios/run-l4-device.sh`（与模拟器脚本分工明确）：
+   · **取屏方式不同**：`simctl io screenshot` 仅模拟器；devicectl **无截图能力** ⇒ 真机走
+     **App 内渲染自存**（`l4-scene.swift` 新增 `savePng()`：`UIGraphicsImageRenderer` +
+     `layer.render(in:)`——CoreAnimation 同一光栅化路径，本仓已验证模式）⇒ `devicectl copy from` 取回。
+   · 完成信号：`PROTEUS_EXIT_AFTER_REPORT=1` + `launch --console`（**阻塞到 App 退出才返回**
+     ⇒ 返回即报告与 PNG 均已落盘；零轮询/零 sleep/零 timeout——本仓事件驱动纪律）。
+2. **bundle id 与描述文件的实测处置**（免费账号约束链，全是当天取证出来的）：
+   · **3-app 上限**：设备上已有 3 个 `dev.proteus.*` ⇒ 新增 bundle id 必被拒 ⇒ 复用已装 id。
+   · **描述文件 ⇄ 证书匹配**：calayer/certprobe/bench 三个描述文件绑的是**已吊销证书**
+     （`B513FFF5…` CSSMERR），装机会报 `0xe8008015`；只有 **layoutcore / experiments** 含有效证书
+     ⇒ 用 `dev.proteus.layoutcore`（有效至 10-08）。★诊断手法：比对描述文件 `DeveloperCertificates`
+     的 SHA-1 与 `security find-identity` 有效身份——**机器判据，不试错**。
+3. **报告新增配对形态第三档 `same-platform`**（真机⇄模拟器）——与 same-runtime/cross-runtime
+   并列，页面标签三档分明（残差量级不同，混读会误判）。
+
+**实测读数（六端 15 对，pHash 全 0；全部命入噪声基线 N-L4-five-end-rasterization）**：
+· **ios-device ⇄ ios = 0.29%**（★同平台最低分——**设备级底噪**的直接度量：同一份代码在
+  真机与模拟器上的光栅化差只有跨运行时差的 **1/10**）
+· 同运行时 skyline⇄webview = 0.93%
+· 跨运行时 1.41%（android⇄ios-device）~ 3.03%（ios-device⇄skyline）
+★真机分辨率 1170×2532 与模拟器 1206×2622 **不同**——锚定归一自动吸收（两者 scale 均 0.667）。
+
+**验证**：check:consistency-pixel ✅（19 对）· check:consistency-data ✅（15 对）· no-blind-wait ✅ ·
+script-compile ✅ · iOS 类型检查 ✅（含 l4-scene.swift）· 官网构建 ✅ · 渲染验收（六图全载、
+三档标签、零页面错误）。
+
 ### ★★★2026-10-02（四十一·补）· 安卓取景对齐 —— 用户反馈「怎么看着安卓的整体位置偏下呢」的完整处置
 
 **用户反馈的准确性与真因**：反馈成立且指向一个**真实缺陷**——Android 原始截图里内容距屏顶
@@ -223,7 +255,7 @@ check-consistency-snapshot 七段全绿 · script-compile ✅ · no-blind-wait �
 "位置是否正确"由 L2 几何数值比对承担；L4 只管"画出来像不像"（已写入注记与文档）。
 ④ 仍未接入：iOS/Android 真机截图（当前 Web=Playwright、MP=模拟器，均非真机）。
 
-## 当前状态速览（最近一次更新：**2026-10-02·（四十一·补）· 安卓取景对齐 —— 用户反馈"看着偏下"的真因与五课教训（含取景机器判据）**）★新会话以此为准
+## 当前状态速览（最近一次更新：**2026-10-02·（四十二）· L4 六端 —— iOS 真机接入（用户："我现在真机一直连着呢"），真机⇄模拟器 0.29% 设备级底噪**）★新会话以此为准
 ### ★★★2026-10-02（三十八）· 交互两层（离散 + 连续）—— 标准 §10.1 的最后两个"未布点"
 
 **交付**

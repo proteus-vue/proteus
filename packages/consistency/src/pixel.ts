@@ -808,7 +808,7 @@ export interface PixelObservationReport {
      *   为什么必须标注：两种形态的残差**天然不可比**（跨运行时多一个坐标系对齐残差 + 字形光栅化差异），
      *   混在一起读会把"跨运行时本来就更大"误读成"某端画坏了"。
      */
-    mode?: 'same-runtime' | 'cross-runtime'
+    mode?: 'same-runtime' | 'same-platform' | 'cross-runtime'
     /** 锚定归一记录（两端的源尺寸/色彩空间/锚块/缩放系数——"怎么归到统一坐标系"的可复现证据） */
     norm?: { a: EndNormRecord; b: EndNormRecord; outSize: { width: number; height: number } }
   }>
@@ -835,7 +835,7 @@ export function buildPixelReport(
     b: string
     observation: PixelObservation
     knownNoise?: PixelNoiseEntry
-    mode?: 'same-runtime' | 'cross-runtime'
+    mode?: 'same-runtime' | 'same-platform' | 'cross-runtime'
     norm?: { a: EndNormRecord; b: EndNormRecord; outSize: { width: number; height: number } }
   }>,
 ): PixelObservationReport {

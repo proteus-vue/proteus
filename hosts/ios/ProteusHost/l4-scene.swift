@@ -146,7 +146,12 @@ final class L4ViewController: UIViewController {
         CATransaction.begin()
         CATransaction.setCompletionBlock { [weak self] in
             guard let self else { return }
-            self.writeReport()
+            // ★★真机取屏必须**在 App 内渲染自存**（本批新增）：`devicectl` 没有截图能力
+            //   （run-calayer-scene.sh 头注已记），而模拟器用的 `simctl io screenshot` 不适用。
+            //   渲染走 `layer.render(in:)`——CoreAnimation 的同一条光栅化路径（本仓已验证模式：
+            //   selfdraw-scene.swift 的 `snapshot(named:)`），与屏幕上显示的内容逐像素同源。
+            let shotOK = self.savePng()
+            self.writeReport(shotOK: shotOK)
             // ★事件驱动收尾：与既有实验脚本同一机制（App 主动上报；脚本侧 launch 返回即完成）
             if ProcessInfo.processInfo.environment["PROTEUS_EXIT_AFTER_REPORT"] == "1" {
                 exit(0)
@@ -155,7 +160,30 @@ final class L4ViewController: UIViewController {
         CATransaction.commit()
     }
 
-    private func writeReport() {
+    /// 把当前视图（CALayer 树）渲染为 PNG 存入 Documents——供真机采集脚本经 devicectl 取回。
+    ///
+    /// 【模式与 selfdraw-scene.swift 的 `snapshot(named:)` 一致】`UIGraphicsImageRenderer`
+    /// 给的是**已翻转**的上下文（自建 CGContext 不翻转会上下颠倒——本仓实测过的坑），
+    /// 此处直接用系统 renderer ⇒ 无翻转问题；PNG 编码由 `pngData()` 完成（标准 RGBA）。
+    /// @returns 是否成功（失败写进报告——**不静默**）
+    private func savePng() -> Bool {
+        let size = view.bounds.size
+        guard size.width > 0, size.height > 0 else { return false }
+        let renderer = UIGraphicsImageRenderer(size: size)
+        let img = renderer.image { ctx in
+            view.layer.render(in: ctx.cgContext)
+        }
+        guard let data = img.pngData() else { return false }
+        let url = L4HostView.reportURL().deletingLastPathComponent().appendingPathComponent("l4-scene.png")
+        do {
+            try data.write(to: url)
+            return true
+        } catch {
+            return false
+        }
+    }
+
+    private func writeReport(shotOK: Bool) {
         let b = view.bounds
         let report: [String: Any] = [
             "ok": true,
@@ -163,6 +191,7 @@ final class L4ViewController: UIViewController {
             "screen": [Int(b.width.rounded()), Int(b.height.rounded())],
             "scale": UIScreen.main.scale,
             "unit": L4Spec.u,
+            "shot": shotOK ? "l4-scene.png" : "FAILED",
             "block": [
                 "x": Int((L4Spec.padX * L4Spec.u).rounded()),
                 "y": Int((L4Spec.padTop * L4Spec.u).rounded()),
@@ -175,7 +204,7 @@ final class L4ViewController: UIViewController {
                 "gradient(linear 90° #7c5cff→#ff9a6c)",
                 "glyph(18u #fff)",
             ],
-            "note": "L4 观测夹具（iOS · CALayer 自绘）；截图由 run-l4-sim.sh 从模拟器取回",
+            "note": "L4 观测夹具（iOS · CALayer 自绘）；模拟器截屏走 run-l4-sim.sh，真机走 run-l4-device.sh（App 内渲染自存 + devicectl 取回）",
         ]
         if let data = try? JSONSerialization.data(withJSONObject: report, options: [.prettyPrinted]) {
             try? data.write(to: L4HostView.reportURL())
