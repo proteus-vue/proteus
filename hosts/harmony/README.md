@@ -91,6 +91,22 @@ chmod 600 ~/.harmony/hdckey ~/.harmony/hdckey.pub
 Android 走 JNI、iOS 走 staticlib、**鸿蒙走 `aarch64-unknown-linux-ohos` 交叉编译 + C ABI**（无绑定层）。
 交叉编译脚本：`bash hosts/harmony/build-rust-core.sh`（产物 `cpp/thirdparty/libproteus_layout_core.a`，gitignore）。
 
+### ✅ 第十三里程碑：**字体族映射**（2026-10-03，矩阵 #9）
+
+> typography 字族解析（`OH_Drawing_SetTextStyleFontFamilies`）——与 iOS V13 **同款样本文本**
+> （`MMMM iii WWWW` / 32px）**四判据 PASS**。
+
+| 字族 | 宽度 | 说明 |
+|---|---|---|
+| HarmonyOS Sans（默认） | **274.34** | 基线 |
+| HarmonyOS Sans **Condensed** | **236.67** | 窄体分流 ✓ |
+| HarmonyOS Sans **Digit** | **295.78** | 数字字体分流 ✓ |
+| HarmonyOS Sans SC / Condensed Italic | 274.34 | ★如实：与默认同宽——**拉丁字形指标相同的真实行为**（非未生效） |
+
+**判据**：① 六族宽度全正 ② 同族两次调用**完全一致**（反例对照防噪声）③ **≥2 族与默认显著不同**（实际 2 族）④ 高度合理。
+
+**采集**：探针集（`PROTEUS_FONTFAMILY_PROBE`）；证据 `results/font-family.json`。
+
 ### ✅ 第十二里程碑：**手势（真注入 · 真时长分流）**（2026-10-03，矩阵 #7）
 
 > **`uitest uiInput`（系统输入栈真注入）** → ArkTS `.onTouch`（标准触摸链，含真时间戳）
