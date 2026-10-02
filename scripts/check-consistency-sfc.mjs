@@ -51,6 +51,7 @@ const END_LABEL = {
   android: 'Android 真机（Vapor）',
   ios: 'iOS 模拟器（Vapor）',
   'ios-device': 'iOS 真机（Vapor）',
+  harmony: 'HarmonyOS 真机（RenderNode 直绘）',
 }
 
 /**
@@ -101,7 +102,7 @@ function measureEdgeGaps(img, winX, scale) {
 
 async function main() {
   if (!fs.existsSync(SAMPLES)) {
-    console.error(`[sfc] ✗ 缺样本目录：${path.relative(ROOT, SAMPLES)}（先跑五个采集脚本：web / mp / android / ios-sim / ios-device）`)
+    console.error(`[sfc] ✗ 缺样本目录：${path.relative(ROOT, SAMPLES)}（先跑六个采集脚本：web / mp / android / ios-sim / ios-device / harmony）`)
     process.exit(2)
   }
   const files = fs.readdirSync(SAMPLES)

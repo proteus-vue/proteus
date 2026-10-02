@@ -14,7 +14,11 @@ const TAG = 'ProteusHost';
 
 export default class EntryAbility extends UIAbility {
   onCreate(want: Want, launchParam: AbilityConstant.LaunchParam): void {
-    hilog.info(DOMAIN, TAG, 'PROTEUS_HOST_ONCREATE bundle=dev.proteus.host');
+    // ★场景参数（`aa start ... --ps scene stress`）→ AppStorage（页面读取后走压力场景分支）
+    const scene = want?.parameters?.['scene'];
+    const sceneStr: string = typeof scene === 'string' ? scene : '';
+    AppStorage.setOrCreate('proteusScene', sceneStr);
+    hilog.info(DOMAIN, TAG, 'PROTEUS_HOST_ONCREATE bundle=dev.proteus.host scene=%{public}s', sceneStr);
   }
 
   onWindowStageCreate(windowStage: window.WindowStage): void {
