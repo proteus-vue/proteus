@@ -1,0 +1,6 @@
+{
+  "name": "libproteus_render.so",
+  "types": "./index.d.ts",
+  "version": "1.0.0",
+  "description": "Proteus 鸿蒙 RenderNode 直绘模块（NAPI）"
+}
