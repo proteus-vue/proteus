@@ -5505,7 +5505,8 @@ final class SelfDrawBridge: NSObject, SelfDrawExports {
         //   ★首版把范围推导挂在 `nodeRects`（**只虚拟化路径填充**）⇒ SFC stress（全量路径）
         //     读到空表 ⇒ range 未设置 ⇒ 真机实测 `scroll_after_drag=120`（内容被拖走）。
         //     ⇒ 修正：**在全量路径的 rects 处**就地推导（那时几何已在手，零额外读取）。
-        var scrollRangeInfo: [String: Any] = [:]
+        //   ★读数去向：范围设进视图后，由 `driveStress` 的 `scroll_probe`（`verticalRange`）如实报出
+        //     —— 本处不再另存一份（同值两处存 = 迟早分叉）。
         if SelfDrawBridge.contentScrollRangeEnabled {
             var maxBottom: CGFloat = 0
             for (_, r) in rects {
@@ -5515,7 +5516,6 @@ final class SelfDrawBridge: NSObject, SelfDrawExports {
             // I2-ALLOW: 滚动**交互约束**取整（钳制上限读数——不进绘制指令流；几何仍走内核吸附值）
             let range = max(0, Int((maxBottom - view.bounds.height).rounded()))
             view.setVerticalScrollRange(range)
-            scrollRangeInfo = ["content_height": Double(maxBottom), "scroll_range": range]
         }
         // 按树序拍平（父在前）——CALayer 树要求先建父
         var flat: [(id: Int, parentId: Int?, rect: CGRect, style: [String: Any])] = []
