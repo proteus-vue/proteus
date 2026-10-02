@@ -21,6 +21,14 @@ export interface CustomRouteConfig {
 export interface RouterSection {
   /** 路由表产物路径（编译期 gen-routes 生成；缺省 src/router/auto-routes.ts） */
   routesOutput?: string
+  /**
+   * ★App 端导航注册表产物路径（2026-10-02 · 项目驱动落地）：
+   *   gen-routes 从**同一棵路由树**（pages/**\/*.vue + router.meta）产出 App 屏注册表
+   *   （`AppScreenSpec` 记录），供 iOS/Android 宿主的 `createAppStack` / `createAppNavigation` 直接消费
+   *   ——不再由夹具手写屏幕数组。**缺省 = 与 routesOutput 同目录的 navigation.generated.ts**；
+   *   传空串显式关闭；routesOutput 为空（工程自带路由）时本项默认也为空。
+   */
+  appNavigationOutput?: string
   /** 分包配置（各分包独立扫描树） */
   subPackages?: Array<SubPackageDecl>
   /** wx.router 自定义路由（转场 builders） */
@@ -38,6 +46,8 @@ export interface RouterSection {
 /** 生效路由配置（解析产出——消费方只读这个形态） */
 export interface EffectiveRouterConfig {
   routesOutput: string
+  /** App 端导航注册表产物路径（缺省=与 routesOutput 同目录；空串=关闭） */
+  appNavigationOutput: string
   subPackages: Array<SubPackageDecl>
   customRoute: { registerPresets: boolean; builders: Record<string, string> }
   tabBar?: RouterSection['tabBar']
@@ -75,6 +85,16 @@ export function resolveRouterConfig(config: Record<string, unknown>): { router: 
     routesOutput = DEFAULT_ROUTES_OUTPUT
   }
 
+  let appNavigationOutput: string
+  if (section.appNavigationOutput !== undefined) {
+    appNavigationOutput = section.appNavigationOutput
+  } else if (routesOutput && !/^\s*$/.test(routesOutput)) {
+    // ★缺省派生（不引 node:path——本文件纯零依赖）：同目录 + navigation.generated.ts
+    appNavigationOutput = routesOutput.replace(/[^/]*$/, 'navigation.generated.ts')
+  } else {
+    appNavigationOutput = ''
+  }
+
   let subPackages: Array<SubPackageDecl>
   if (section.subPackages !== undefined) {
     subPackages = section.subPackages
@@ -106,6 +126,7 @@ export function resolveRouterConfig(config: Record<string, unknown>): { router: 
   return {
     router: {
       routesOutput,
+      appNavigationOutput,
       subPackages,
       customRoute,
       tabBar: section.tabBar,

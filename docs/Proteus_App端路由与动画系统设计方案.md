@@ -367,6 +367,38 @@ TS 镜像 `slot-runtime/src/anim-curve.ts` + 跨语言 golden `tests/anim-curve-
       对照小程序第 10 层 `navigateTo` 直接失败）；内存靠**预算冻结**（`b_frozen_count=19985`，
       `active_nodes 960 ≤ budget 1000`，`over_budget=false`）—— §3.4 的"红利"已用真机数字兑现。
 
+### RT1 补记（2026-10-02 · 项目驱动落地）—— **消灭"夹具手写屏幕数组"**
+
+**用户点名的缺口**：「开发者是写标准 vue 文件的……页面路由的各种配置也都是**项目上面出发落地**，
+不是我们夹具手写实现绕开」。**实测确认**：
+- `packages/router/src/codegen/app.ts` 的 `generateAppScreens` —— **全仓零调用**；
+- App 两端（iOS/Android）此前只能靠 `hosts/shared/bridge/entry-app-stack.ts` 的 `buildNodes(fans)`
+  **手搓合成屏池**才能跑路由，项目里的 `pages/**/*.vue` 与 `router.meta` 到不了 App。
+
+**本批修复（两处断链 + 一个新配置项）**：
+1. **配置面**：`RouterSection` 新增 `appNavigationOutput`（缺省 = 与 `routesOutput` 同目录的
+   `navigation.generated.ts`；`routesOutput` 为空时同步关闭）——`packages/types/src/router-config.ts`。
+2. **产物**：`gen-routes` 新增 `writeAppNavigation()`：从**同一棵路由树**产出 App 屏注册表
+   （`screens` / `screenNames` / `tabNames`），并**复用 `app-adapter` 的 `screensFromRoutes`**
+   （同一转换，不是第二份实现）；`webOnly` 分支同样产出（App 产物只依赖路由树）。带平台门控
+   （`webOnly` / `platforms` 白名单不含 `native` 的页面不入 App 注册表，与 Web/MP 各取子集同构）。
+3. **App 消费**：新入口 `hosts/shared/bridge/entry-app-project.ts`（`__proteusAppProjectRun`）——
+   直接 import 项目产物（`examples/router/navigation.generated.ts` + `auto-routes.ts`），
+   在端上跑「入口 → 依次 push 项目真实屏 → 返回」并回报读数；两端宿主把读数以 `p_` 前缀并入
+   `app-stack.json`（Android `MainActivity` / iOS `app-stack-scene.swift`）。
+
+**真机证据（Android QuickJS，判据 ⑨ 组）**：
+```
+⑨ ★项目驱动（真机）：屏 37 = 路由 37（同源）· tab 2 · 携带项目转场 2 ·
+   入口 index → push [builtin-components-demo, components-demo, config-demo] →
+   back components-demo（['exit','unmount','enter']）
+```
+⇒ 屏注册表与路由表**同源同数**、项目 `router.meta` 声明的转场（`user: slideUp`）被携带、
+push 的是**项目真实页面**（非合成屏名）、返回命令序正确。
+
+**判据**：`hosts/android/check-app-stack.py` 新增 **⑨ 组**（三条断言：同源同数 / 项目屏被 push /
+返回命令序）；字段缺失（旧 bundle）**如实跳过不假绿**；iOS 腿同名同形（同一判据脚本读）。
+
 > ★**RT1 剩余（非核心价值）**：`ANIM_BIND`/`ANIM_PROGRESS`（属 RT2 范围）、跨端 conformance
 >   （App ⇄ Skyline 转场视觉对照表）。核心价值（统一 API + App 实现 + 解除限制 + 层数实测）**已齐**。
 

@@ -993,6 +993,28 @@ public class MainActivity extends Activity {
                 String k = keys.next();
                 out.put(k, r.get(k));
             }
+            // ★★★（2026-10-02 · 项目驱动落地）第二入口：**从项目路由配置跑 App 导航**（非夹具）
+            //   与场景 A–D 的分界：那些用合成屏池（压测装置）；本入口读
+            //   `examples/router/navigation.generated.ts`（gen-routes 从 pages/**\/*.vue + router.meta 产出）
+            //   ⇒ 证明"项目配置 → App 屏注册表 → 导航语义"这条**产品路径**在端上可跑。
+            //   ★读数字段以 `p_` 前缀平铺（判据读它；缺失/失败 ⇒ 记错误字段，不静默）。
+            try {
+                QuickJsEngine.EvalResult pr = QuickJsEngine.eval("__proteusAppProjectRun('{\"steps\":3}')");
+                out.put("p_run_ok", pr.ok);
+                if (pr.ok && pr.value != null) {
+                    org.json.JSONObject prj = new org.json.JSONObject(pr.value);
+                    java.util.Iterator<String> pkeys = prj.keys();
+                    while (pkeys.hasNext()) {
+                        String k = pkeys.next();
+                        out.put("p_" + k, prj.get(k));
+                    }
+                } else {
+                    out.put("p_error", "入口调用失败：" + pr.error);
+                }
+            } catch (Throwable pt) {
+                out.put("p_error", pt.getClass().getSimpleName() + ": " + pt.getMessage());
+            }
+
             // ★★场景 E：宿主执行器（**异步报告**——kick → 泵 job → 有界轮询 → 写第二份报告）
             //   为什么必须泵 job：JS 侧 `await ePump()` 的续体只在宿主泵 job 时执行
             //   （本仓 host-runtime 场景已固化该模式）。

@@ -354,6 +354,36 @@ def main() -> int:
             f"back→{fb.get('depth')}层（{fb.get('top')}）· replace→{fr.get('depth')}层（{fr.get('top')}）"
         )
 
+    # ── ⑨★★（2026-10-02 · 项目驱动落地）：**从项目路由配置跑 App 导航**（非夹具）──
+    #   与 ⑦/⑧ 的分界：⑦/⑧ 用合成屏池（压测/装配装置）；本组读 `examples/router/navigation.generated.ts`
+    #   （gen-routes 从 pages/**/*.vue + proteus.config.ts 的 router.meta 产出）⇒
+    #   证明"项目配置 → App 屏注册表 → 导航语义"这条**产品路径**在端上可跑。
+    #   ★字段缺失（旧 bundle）⇒ 如实跳过并提示（不假绿）。
+    if "p_run_ok" not in d:
+        report("⑨ 项目驱动场景：报告无 p_run_ok 字段（旧 bundle？）——跳过（不假绿）")
+    elif d.get("p_run_ok") is not True:
+        fail(f"⑨ 项目驱动入口失败：{d.get('p_error')}")
+    else:
+        ps, pn, prc = d.get("p_screens"), d.get("p_name_count"), d.get("p_route_count")
+        ptabs, ptr = d.get("p_tab_count"), d.get("p_transitions_carried")
+        ae, ap, ab = d.get("p_after_entry") or {}, d.get("p_after_push") or {}, d.get("p_after_back") or {}
+        # ① 屏注册表与路由表**同源同数**（gen-routes 一次产出两投影——分叉即静默漂移）
+        if not (ps and pn and prc) or ps != prc or pn != prc:
+            fail(f"⑨ 屏注册表与路由表不同源：screens={ps} name_count={pn} route_count={prc}（应三者相等）")
+        # ② 入口来自项目（tab 根屏优先）＋ 真实页面被 push（不是合成屏名）
+        elif not ae.get("top") or "_" in str(ae.get("top", "")) and not isinstance(ae.get("top"), str):
+            fail(f"⑨ 入口屏异常：{ae}")
+        elif not isinstance(ap.get("pushed"), list) or len(ap.get("pushed")) == 0:
+            fail(f"⑨ 未从项目屏 push 任何屏：{ap}")
+        # ③ 返回语义（虚拟栈：退场销毁 + 上屏恢复）
+        elif d.get("p_back_ops") != ["exit", "unmount", "enter"]:
+            fail(f"⑨ 返回命令序异常：{d.get('p_back_ops')}（应 exit→unmount→enter）")
+        else:
+            report(
+                f"⑨ ★项目驱动（真机）：屏 {ps} = 路由 {prc}（同源）· tab {ptabs} · 携带项目转场 {ptr} · "
+                f"入口 {ae.get('top')} → push {ap.get('pushed')} → back {ab.get('top')}（{d.get('p_back_ops')}）"
+            )
+
     print()
     if not ok:
         print("✗ 路由虚拟栈未通过（见上方失败项）")
