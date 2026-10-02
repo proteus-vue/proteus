@@ -100,6 +100,9 @@ jobs:
       - name: 一致性指标 + 允许差异清单 schema（CS1/CS2：M1–M4 复算一致 · M4 的 L1 算子必须全捕获）
         run: pnpm run check:consistency-metrics
 
+      - name: 三端快照同一格式（VC3/VC4：Web golden ⇄ App 内核工件 ⇄ 小程序双模式，过同一校验器）
+        run: pnpm run check:consistency-snapshot
+
       - name: 双端 golden 单一来源（★2026-10-01：两端 conformance golden 必须同源——不同源会让
               覆盖面不一致，收「双端几何一致性」判据时变成**装置性判红**）
         run: pnpm run check:cross-end-golden

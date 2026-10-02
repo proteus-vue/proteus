@@ -1,0 +1,29 @@
+{
+  "name": "@proteus-vue/consistency",
+  "version": "0.3.0-beta.21",
+  "description": "★★VC3（多端一致性标准）：统一快照格式 + 归一化 + schema 校验器——几何/计算样式跨端同格式（禁止比对层格式适配）",
+  "type": "module",
+  "license": "Apache-2.0",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js",
+      "default": "./dist/index.js"
+    },
+    "./package.json": "./package.json",
+    "./probes/web": {
+      "types": "./dist/probes/web.d.ts",
+      "import": "./dist/probes/web.js",
+      "default": "./dist/probes/web.js"
+    }
+  },
+  "files": [
+    "dist",
+    "README.md"
+  ],
+  "scripts": {
+    "build": "rm -rf dist && tsc -p tsconfig.build.json --emitDeclarationOnly && esbuild src/index.ts --bundle --format=esm --platform=neutral --outfile=dist/index.js && esbuild src/probes/web.ts --bundle --format=esm --platform=neutral --outfile=dist/probes/web.js && esbuild src/probes/web.iife.ts --bundle --format=iife --platform=browser --outfile=dist/probes/web.iife.js"
+  }
+}

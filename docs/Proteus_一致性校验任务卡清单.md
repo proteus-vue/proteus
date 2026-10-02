@@ -48,12 +48,23 @@
 
 ### 第三批：快照格式与探针
 
-- [ ] **VC3-a** 统一几何快照格式规格
-- [ ] **VC3-b** 统一计算样式格式规格
-- [ ] **VC4-a** Web 端探针
-- [ ] **VC4-b** App 端探针
-- [ ] **VC4-c** Skyline 探针 🔴 依赖 VC0
-- [ ] **VC4-d** WebView 小程序探针
+- [x] **VC3-a** 统一几何快照格式规格 —— ✅（2026-10-02）：`@proteus-vue/consistency` 包
+  （nodeId/path/x/y/w/h/depth/children · 视口坐标 · round3 唯一舍入点 · 固定键序序列化 · schema 校验器）
+- [x] **VC3-b** 统一计算样式格式规格 —— ✅（2026-10-02）：归一化原语唯一实现
+  （颜色→RGBA 数值 · 长度→px · 字体三件 · 未识别形态**抛错不猜**）+ 闭集 schema 校验器
+- [x] **VC4-a** Web 端探针 —— ✅（2026-10-02）：`probes/web`（getBoundingClientRect + getComputedStyle）
+  + Playwright 实测 5/5（含 **golden test 入库** + 快照稳定性）· 破坏性验证：宽度 200→211 ⇒
+  golden 精确报 `path 0: w 200 → 211（Δ11.000px）`
+- [x] **VC4-b** App 端探针 —— ✅（2026-10-02）：内核 `proteus_layout_geometry_snapshot` FFI
+  （path/depth/children/多根合成根/display:none 如实 null）+ JNI/Java 链路 + 内核测试 4/4
+  · 跨端 schema 一致性测试 3/3（**App 真实产出过同一校验器**）
+- [x] **VC4-c** Skyline 探针 🔴 依赖 VC0 —— ✅（2026-10-02）：产出式（样式）+ 查询式（几何）
+  · 得 120x40 / 100x24 / 32x32 / 180x60（与声明一致）· 自检对拍通过
+  · ★装置坑两个（已修）：Skyline 默认 flex 会**压缩被测节点**（需 flex-shrink:0）；
+    组件 ready 跨页复用不可靠（改页面级触发）
+- [x] **VC4-d** WebView 小程序探针 —— ✅（2026-10-02）：同装置（end=webview）
+  · **skyline ⇄ webview 几何一致**（x/w/h 逐位相同 + 相对 y 相同；绝对 y 差 0.0px）
+- [x] **门禁**：`check:consistency-snapshot`（三端过同一校验器 + 双模式逐位比对）已接 verify + CI
 
 ### 第四批：比对与集成
 

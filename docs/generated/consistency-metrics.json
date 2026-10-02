@@ -23,12 +23,12 @@
       "L2": {
         "covered": 0,
         "total": 28,
-        "note": "几何快照未布点（VC3/VC4）"
+        "note": "★链路已通（VC3/VC4：三端同格式 + 同校验器 + skyline⇄webview 逐位比对）；逐字段比对引擎（VC5-b）未做 ⇒ 数值覆盖记 0（不虚报）"
       },
       "L3": {
         "covered": 0,
         "total": 28,
-        "note": "计算样式未布点（Skyline 端需产出式探针）"
+        "note": "计算样式快照格式已定（VC3-b）+ 采集已通；逐字段比对（VC6）未做 ⇒ 记 0"
       }
     },
     "covered": 28,

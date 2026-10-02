@@ -1,0 +1,12 @@
+[wechatide] skill-call: client=vc0 tool=automation_evaluate
+{
+  "ok": true,
+  "tool": "automation_evaluate",
+  "clientName": "vc0",
+  "result": {
+    "success": true,
+    "result": {
+      "result": "{\"ok\":true,\"geo\":{\"format\":\"proteus-geometry-snapshot\",\"version\":1,\"end\":\"skyline\",\"viewport\":{\"width\":0,\"height\":0},\"boundaries\":{\"fontsLocked\":false,\"textMeasuredBy\":\"wechat (boundingClientRect at 1790910835829)\",\"note\":\"小程序端：几何走查询采集（VC0 结论 A）；样式快照为产出式（VC1 实测 computedStyle 不可用）\"},\"root\":{\"nodeId\":\"c-p1-root\",\"path\":\"\",\"x\":0,\"y\":0,\"w\":0,\"h\":0,\"depth\":0,\"children\":[{\"nodeId\":\"c-p1-view\",\"path\":\"0\",\"x\":0,\"y\":413.8,\"w\":120,\"h\":40,\"depth\":1,\"children\":[]},{\"nodeId\":\"c-p1-text\",\"path\":\"1\",\"x\":0,\"y\":453.8,\"w\":100,\"h\":24,\"depth\":1,\"children\":[]},{\"nodeId\":\"c-p1-image\",\"path\":\"2\",\"x\":0,\"y\":477.8,\"w\":32,\"h\":32,\"depth\":1,\"children\":[]},{\"nodeId\":\"c-p1-scroll\",\"path\":\"3\",\"x\":0,\"y\":509.8,\"w\":180,\"h\":60,\"depth\":1,\"children\":[]}]}},\"styleSummary\":{\"nodes\":3,\"firstKeys\":[\"backgroundColor\",\"borderBottomLeftRadius\",\"borderBottomRightRadius\",\"borderTopLeftRadius\",\"borderTopRightRadius\",\"paddingTop\"]},\"selftest\":{\"ok\":true,\"problems\":[]}}"
+    }
+  }
+}

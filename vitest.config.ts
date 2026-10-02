@@ -113,6 +113,8 @@ export default defineConfig({
       // css-compat G-21：@proteus-vue/css-compat 包（★B2 数据层子路径在父路径前）
       { find: '@proteus-vue/css-compat/layout-semantics', replacement: fileURLToPath(new URL('./packages/css-compat/src/layout-semantics/index.ts', import.meta.url)) },
       { find: '@proteus-vue/css-compat', replacement: fileURLToPath(new URL('./packages/css-compat/src/index.ts', import.meta.url)) },
+      // ★VC3（2026-10-02）：多端一致性统一快照格式包（探针/比对引擎共用）
+      { find: '@proteus-vue/consistency', replacement: fileURLToPath(new URL('./packages/consistency/src/index.ts', import.meta.url)) },
       // app-config G-35 M1：@proteus-vue/app-config 包（tests/app-config.test.ts 直接引用）
       { find: '@proteus-vue/app-config', replacement: fileURLToPath(new URL('./packages/app-config/src/index.ts', import.meta.url)) },
       // test-framework M3+B2：@proteus-vue/test-core 包（tests/test-core.test.ts 直接引用；★子路径在父路径前）

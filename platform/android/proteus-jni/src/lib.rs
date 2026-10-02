@@ -185,6 +185,30 @@ pub extern "system" fn Java_dev_proteus_layoutcore_RustLayout_nativeReadRects<'l
     into_java_string(&mut env, out)
 }
 
+/// `RustLayout.nativeGeometrySnapshot(handle: Long): String` —— ★VC4-b：统一几何快照（VC3-a 格式）。
+///
+/// 【为什么单独一条（不与 readRects 合并）】`readRects` 返回**扁平 id→rect 表**（增量更新/命中用），
+///   而快照要**结构树**（path/depth/children）——两种形态的不同消费方（一致性校验 vs 运行时）。
+///   同源：两者都从内核 `absolute_rects` 取数（几何唯一事实源）。
+#[no_mangle]
+pub extern "system" fn Java_dev_proteus_layoutcore_RustLayout_nativeGeometrySnapshot<'local>(
+    mut env: JNIEnv<'local>,
+    _class: JClass<'local>,
+    handle: jni::sys::jlong,
+) -> jstring {
+    let out = std::panic::catch_unwind(|| -> String {
+        let p = unsafe { ffi::proteus_layout_geometry_snapshot(handle as u64) };
+        if p.is_null() {
+            return "{\"ok\":false,\"error\":\"null\"}".to_string();
+        }
+        let s = unsafe { std::ffi::CStr::from_ptr(p) }.to_string_lossy().into_owned();
+        unsafe { ffi::proteus_layout_free_string(p) };
+        s
+    })
+    .unwrap_or_else(|_| "{\"ok\":false,\"error\":\"panic（已捕获）\"}".to_string());
+    into_java_string(&mut env, out)
+}
+
 /// `RustLayout.nativeHitTest(handle: Long, x: Float, y: Float): String`
 ///
 /// ★★为什么不经过 Java 侧的几何镜像（本仓 M3 事件系统的关键决策）：
