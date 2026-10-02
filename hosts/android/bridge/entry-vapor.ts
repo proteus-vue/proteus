@@ -102,6 +102,15 @@ interface VaporArgs {
   rows?: number
   /** 增量更新轮数（每轮改一行文本 + 一行宽度 ⇒ 走订阅表 → 指令流） */
   updates?: number
+  /**
+   * ★★★**逻辑单位 → 物理像素的密度系数**（2026-10-02 实测抓出的真缺陷修复）。
+   *
+   * 【为什么必须有】SFC 的 px 是**逻辑单位**（与 Web CSS px / iOS pt / MP 逻辑 px 同义），
+   *   而 Android 宿主按**物理像素** 1:1 绘制 ⇒ 不换算时锚块 80px（其它端 130~240px）、
+   *   内容只占屏 22%（其它端 91~96%）——用户目视直接看出来的差异。
+   * 【调用方】`StressSfcActivity` 传 `dm.density`（本机 3.0）；其余模式不传（缺省 1 = 既有行为零变化）。
+   */
+  scale?: number
 }
 
 /** 长列表（虚拟化）报告 */
@@ -382,6 +391,14 @@ function runStress(args: VaporArgs): string {
     rep.src = 'examples/pages/consistency-stress.vue'
 
     // ── 实例化（同一份模板 + 同一份数据快照）──
+    //
+    // ★★★单位换算位置（2026-10-02 实测两轮收敛）：**不在这里**（JS 侧只改模板静态 style），
+    //   而在宿主的 `VaporRenderHost.setLengthScale`（Java）——因为 **动态绑定的值
+    //   （`:width="item.w"` → 求值器 → SET_STYLE）不经过模板字典**：第一版在 JS 侧缩放，
+    //   实测 chip 高被缩放（96=32×3 ✅）而**宽没缩放**（40，应 120）。
+    //   ⇒ 缩放统一放宿主的 `coreNodes()`（**所有几何进内核的必经点**，覆盖静态+动态全部路径）。
+    //   ★viewport 同理：由宿主按 scale 换算（Java 侧 setLengthScale 前调 setViewportScale——
+    //     见 StressSfcActivity 的调用序）。
     const read = (n: string): unknown => data[n]
     const registry = new ListRegistry()
     const t0 = Date.now()

@@ -182,8 +182,9 @@ final class VaporRenderHost {
             JSONArray nodes = tree.optJSONArray("nodes");
             if (nodes == null || nodes.length() == 0) return err(out, "批次里没有节点").toString();
             JSONObject vp = tree.optJSONObject("viewport");
-            float vw = vp != null ? (float) vp.optDouble("width", 1080) : 1080f;
-            float vh = vp != null ? (float) vp.optDouble("height", 2400) : 2400f;
+            // ★viewport 同样 ×lengthScale（SFC 逻辑单位 → 本宿主物理像素；见 lengthScale 注释）
+            float vw = (vp != null ? (float) vp.optDouble("width", 1080) : 1080f) * lengthScale;
+            float vh = (vp != null ? (float) vp.optDouble("height", 2400) : 2400f) * lengthScale;
 
             ensureView();
 
@@ -928,6 +929,25 @@ final class VaporRenderHost {
             // ★静态基态声明（内核要解析）：裁剪形状 + 路径本体（+ 描边色/宽随 svgPath 一起进）
             "clipPath", "svgPath", "svgPathTo", "perspective"));
 
+    /**
+     * ★★★**逻辑单位 → 物理像素的缩放系数**（2026-10-02 实测抓出的跨端尺寸缺陷修复）。
+     *
+     * 【为什么需要】SFC 的 px 是**逻辑单位**（Web CSS px / iOS pt / MP 逻辑 px 同义），
+     *   而本宿主按**物理像素**绘制 ⇒ 必须 × density（本机 3.0）才与其它端同尺寸。
+     *   首版缺这一步：锚块 80px（其它端 130~240px）、内容只占屏 22%（其它端 91~96%）。
+     *
+     * 【★为什么放在这里（coreNodes）而不是 JS 侧改模板 style（第一版做法实测失败）】
+     *   JS 侧只能改**模板静态 style**，而**动态绑定**（`:width="item.w"`）的值来自求值器、
+     *   不经过模板字典 ⇒ 第一版实测：chip 高被缩放（96 = 32×3 ✅）而**宽没缩放**（40，应 120）。
+     *   `coreNodes()` 是**所有几何进内核的必经点**（mount 与 update 都走它，且只带几何键）
+     *   ⇒ 在这里缩放覆盖静态+动态**全部**路径（一处换算，无遗漏）。
+     *
+     * 【调用方】`StressSfcActivity` 按 density 调 `setLengthScale`；其余场景不调（缺省 1 = 零变化）。
+     */
+    private float lengthScale = 1f;
+    /** 设置长度缩放（缺省 1 = 既有场景零行为变化） */
+    void setLengthScale(float s) { if (s > 0) lengthScale = s; }
+
     /** 节点 → 核心请求（只带几何键；`text` 单独带，供核心记入文本叶） */
     private JSONArray coreNodes() throws Exception {
         JSONArray arr = new JSONArray();
@@ -936,7 +956,22 @@ final class VaporRenderHost {
             c.put("id", spec.getInt("id"));
             if (spec.has("parentId") && !spec.isNull("parentId")) c.put("parentId", spec.getInt("parentId"));
             for (String k : LAYOUT_KEYS) {
-                if (spec.has(k) && !spec.isNull(k)) c.put(k, spec.get(k));
+                if (!spec.has(k) || spec.isNull(k)) continue;
+                Object v = spec.get(k);
+                // ★缩放几何长度（数值标量；margin/padding 是下面单独处理的嵌套对象）
+                if (lengthScale != 1f && v instanceof Number) c.put(k, ((Number) v).doubleValue() * lengthScale);
+                else c.put(k, v);
+            }
+            // 边缘对象（margin/padding：{top,right,bottom,left}）——整对象缩放
+            for (String k : new String[]{"margin", "padding"}) {
+                JSONObject e = spec.optJSONObject(k);
+                if (e == null) continue;
+                if (lengthScale == 1f) { c.put(k, e); continue; }
+                JSONObject e2 = new JSONObject();
+                for (String side : new String[]{"top", "right", "bottom", "left"}) {
+                    if (e.has(side)) e2.put(side, e.getDouble(side) * lengthScale);
+                }
+                c.put(k, e2);
             }
             String t = spec.optString("text", null);
             if (t != null && !t.isEmpty()) {
@@ -948,19 +983,36 @@ final class VaporRenderHost {
         return arr;
     }
 
-    /** 文本度量（宿主注入——内核不自研文本；与 JsRenderHost 同口径：StaticLayout） */
+    /**
+     * 文本度量（宿主注入——内核不自研文本）。
+     *
+     * ★★2026-10-02 实测修复两处与既有通路的**口径不一致**（六端 SFC 压测抓出）：
+     *   ① 高度：首版用 `fs × 1.4` **启发式近似**，而 `JsRenderHost` 用**真实字体度量**
+     *      `ceil(descent − ascent)`——同一份文本两宿主给出不同高度（实测 18pt 文本：
+     *      近似 25.3 逻辑 vs 真实 ≈21）⇒ 标题盒高差 4.3px 把后续行整体下推
+     *      （实测：Android 行盒 top=155 vs Web/iOS/MP=151）。
+     *   ② 宽度：首版多加了 `+2`（`JsRenderHost` 没有）——同款冗余。
+     *   修法：与 `JsRenderHost.measureTexts` **逐字对齐**（本仓纪律：同一语义一处实现——
+     *   此前注释写着"同口径"而实际不同，是**注释与实现不一致**的典型）。
+     *   ★与 iOS（CoreText 自然度量）和 Web（浏览器自然行盒）由此对齐到同一口径。
+     */
     private JSONObject buildMeasures() throws Exception {
         JSONObject m = new JSONObject();
         for (JSONObject spec : specs) {
             String t = spec.optString("text", null);
             if (t == null || t.isEmpty()) continue;
-            float fs = (float) spec.optDouble("fontSize", 14);
+            // ★字号同样 ×lengthScale（文本度量输入按**物理**字号——与几何缩放同源，
+            //   否则文字物理尺寸与盒子不匹配；见 lengthScale 注释）
+            float fs = (float) spec.optDouble("fontSize", 14) * lengthScale;
             android.text.TextPaint tp = new android.text.TextPaint();
             tp.setTextSize(fs);
+            // I2-ALLOW: 文本**测量**结果的取整（测量子系统，非几何换算——度量值交给内核后
+            //   由内核统一 `snap` 吸附；平台层对**几何**零舍入，与 JsRenderHost 同款）
             float w = tp.measureText(t);
-            float h = fs * 1.4f; // 行高近似（与既有通路同口径）
+            android.graphics.Paint.FontMetrics fm = tp.getFontMetrics();
+            float h = fm.descent - fm.ascent;   // ★真实字体度量（原 fs×1.4 近似已删）
             JSONObject sz = new JSONObject();
-            sz.put("width", Math.ceil(w) + 2);
+            sz.put("width", Math.ceil(w));
             sz.put("height", Math.ceil(h));
             m.put(String.valueOf(spec.getInt("id")), sz);
         }

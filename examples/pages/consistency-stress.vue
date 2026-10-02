@@ -70,3 +70,14 @@ const summary = ref('SFC stress · 6 targets')
     <text style="font-size: 12px; color: #8b8b96; margin-top: 8px">{{ summary }}</text>
   </view>
 </template>
+
+<!-- ★宿主画布归一（2026-10-02 实测抓出的跨端画布差异）：夹具内容盒 375×800 之外，
+     各端宿主画布颜色不同（WeChat 默认白 / iOS 宿主黑 / Android 我们设了 #14141c）——
+     白底会在像素比较里变成大面积假差异。⇒ 把 MP 页面画布显式设为夹具同色（非 scoped
+     `page{}` 是 MP 页面级选择器；Web 端无 `page` 元素，选择器不匹配、无副作用）。
+     ★Android/iOS 的画布色由宿主各自设置（同一目标色 #14141c）。 -->
+<style>
+page {
+  background-color: #14141c;
+}
+</style>

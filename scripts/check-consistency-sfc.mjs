@@ -18,7 +18,7 @@ import fs from 'node:fs'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 import {
-  pixelObservation, buildPixelReport, decodePng, anchorNormalize, convertToSrgb, cropImage,
+  pixelObservation, buildPixelReport, decodePng, encodePng, anchorNormalize, convertToSrgb, cropImage,
 } from '../packages/consistency/dist/index.js'
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..')
@@ -46,7 +46,10 @@ async function main() {
     process.exit(2)
   }
   const files = fs.readdirSync(SAMPLES)
-    .filter((f) => f.startsWith('sfc.') && f.endsWith('.png') && !f.includes('.tmp.'))
+    .filter((f) => f.startsWith('sfc.') && f.endsWith('.png')
+      // ★排除派生文件（本仓实测：`sfc.ios.snapshot.png` 是 App 内渲染自存的**补充证据**，
+      //   不是独立端——误收会变成"ios 出现两次"的重复配对）
+      && !f.includes('.tmp.') && !f.includes('.snapshot.'))
     .sort()
   if (files.length < 2) {
     console.error(`[sfc] ✗ 样本不足（${files.length} 个）——SFC 报告需要 ≥2 端`)
@@ -126,6 +129,7 @@ async function main() {
   }
   fs.mkdirSync(path.dirname(OUT), { recursive: true })
   fs.writeFileSync(OUT, json)
+
   console.log(`[consistency-sfc] ✅ ${path.relative(ROOT, OUT)}（**非门禁** SFC 观测报告）`)
   console.log(`  SFC 端（${ok.length}）：${ok.map((e) => e.end).join(' · ')}`)
   for (const p of pairs) {
