@@ -3,13 +3,25 @@
   "e_detail_id" : "detail#2",
   "e_home_id" : "home#1",
   "e_host_stats" : {
-    "anim_calls" : 3,
-    "anim_completed" : 4,
+    "anim_calls" : 4,
+    "anim_completed" : 5,
     "anim_hook_missing" : 0,
     "calls" : [
       "screen.mount",
       "screen.visible",
       "screen.anim",
+      "screen.mount",
+      "screen.visible",
+      "screen.mount",
+      "screen.visible",
+      "screen.anim",
+      "screen.visible",
+      "screen.visible",
+      "screen.destroy",
+      "screen.mount",
+      "screen.visible",
+      "screen.destroy",
+      "screen.stats",
       "screen.rect",
       "screen.mount",
       "screen.visible",
@@ -22,23 +34,28 @@
       "screen.destroy",
       "screen.stats"
     ],
-    "destroy_calls" : 1,
-    "live_screens" : 1,
-    "mount_calls" : 2,
+    "destroy_calls" : 3,
+    "live_screens" : 2,
+    "mount_calls" : 5,
     "rect_calls" : 2,
     "screens" : [
       {
         "rootNodeId" : 100,
         "screenId" : "home#1",
         "visible" : true
+      },
+      {
+        "rootNodeId" : 120,
+        "screenId" : "r-user#3",
+        "visible" : true
       }
     ],
     "shared_calls" : 1,
-    "visible_calls" : 4
+    "visible_calls" : 9
   },
   "e_mirror_ok" : true,
   "e_pending_anims" : 0,
-  "e_pump_rounds" : 91,
+  "e_pump_rounds" : 90,
   "e_stats" : {
     "back" : 1,
     "commands" : 8,
@@ -79,8 +96,8 @@
     }
   ],
   "e2_log" : [
-    "mount:detail:rebuild=false:node=110",
-    "visible:detail#2:true:node=110",
+    "mount:detail:rebuild=false:node=120",
+    "visible:detail#2:true:node=120",
     "visible:home#1:false:node=100"
   ],
   "e2_plays" : [
@@ -97,7 +114,7 @@
   ],
   "e3_log" : [
     "visible:home#1:true:node=100",
-    "destroy:detail#2:pop:node=110"
+    "destroy:detail#2:pop:node=120"
   ],
   "e3_plays" : [
     {
@@ -133,7 +150,7 @@
       "y" : 200
     },
     "source_screen" : "home#1",
-    "target_node" : 112,
+    "target_node" : 122,
     "target_rect" : {
       "h" : 200,
       "w" : 1080,
@@ -147,5 +164,65 @@
       "x" : 0,
       "y" : 200
     }
-  }
+  },
+  "f_after_back" : {
+    "depth" : 1,
+    "top" : "r-home"
+  },
+  "f_after_push" : {
+    "depth" : 2,
+    "params" : {
+      "id" : "42"
+    },
+    "top" : "r-detail"
+  },
+  "f_after_replace" : {
+    "depth" : 1,
+    "top" : "r-user"
+  },
+  "f_host_stats" : {
+    "data" : {
+      "anim_calls" : 2,
+      "anim_completed" : 0,
+      "anim_hook_missing" : 0,
+      "calls" : [
+        "screen.mount",
+        "screen.visible",
+        "screen.anim",
+        "screen.mount",
+        "screen.visible",
+        "screen.mount",
+        "screen.visible",
+        "screen.anim",
+        "screen.visible",
+        "screen.visible",
+        "screen.destroy",
+        "screen.mount",
+        "screen.visible",
+        "screen.destroy",
+        "screen.stats"
+      ],
+      "destroy_calls" : 2,
+      "live_screens" : 2,
+      "mount_calls" : 4,
+      "rect_calls" : 0,
+      "screens" : [
+        {
+          "rootNodeId" : 100,
+          "screenId" : "home#1",
+          "visible" : true
+        },
+        {
+          "rootNodeId" : 120,
+          "screenId" : "r-user#3",
+          "visible" : true
+        }
+      ],
+      "shared_calls" : 0,
+      "visible_calls" : 6
+    },
+    "ok" : true
+  },
+  "f_note" : "统一 API（createRouter）→ 虚拟栈 → 执行器 → 宿主 全链（零胶水形态）",
+  "f_ok" : true
 }
