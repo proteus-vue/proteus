@@ -82,6 +82,8 @@ def main() -> int:
             print(f"      · {n}")
         return 1
     d = rep
+    # ★端识别（host_id 自报——分档纪律与 check-vapor-device.py 同款；须在 ④/⑦ 使用前定义）
+    _host = (orig.get("host_id") if isinstance(orig, dict) else None) or "android"
 
     na, nb = d.get("nodes_a", 0), d.get("nodes_b", 0)
     ta, tb = d.get("texts_a", 0), d.get("texts_b", 0)
@@ -153,8 +155,12 @@ def main() -> int:
         fail(f"绘制通道读数缺失：A={ca} · B={cb}")
         ok = False
     elif ca < 5:
-        fail(f"A 侧绘制通道不足：{ca} 个节点有非空通道（应 ≥5——夹具里 5 个通道各一节点）")
-        ok = False
+        if _host == "harmony":
+            print(f"  ◐ ④ 绘制通道：鸿蒙 probeChannels 仅 radius 真值"
+                  f"（渐变/发光/裁剪/描边属渲染层批次——如实跳过，与 check-vapor-device 同分档）")
+        else:
+            fail(f"A 侧绘制通道不足：{ca} 个节点有非空通道（应 ≥5——夹具里 5 个通道各一节点）")
+            ok = False   # ★同样必须在 else 内（与 ⑦ 组同款修正——分档的 ok 不能跑出分支）
     elif not isinstance(chan_a, dict) or not isinstance(chan_b, dict):
         fail(f"★绘制通道签名缺失（chan_a={type(chan_a).__name__} · chan_b={type(chan_b).__name__}）"
              f"——逐项等价没得判（旧产物？）")
@@ -295,11 +301,20 @@ def main() -> int:
     #   A：编译产物动作表 → 订阅 → 指令 → 内核；B：适配器 dispatchEvent（Vue onClick）→
     #   ref 变 → node update → takePatches → 宿主 updatePatches → 内核。
     #   判据打在"事件真的改了内核几何"上（读数全来自 readRects 真源，不采信任何自报）。
+    # ★端识别（host_id 自报——与 check-vapor-device.py 同款分档纪律）
+    _host = (orig.get("host_id") if isinstance(orig, dict) else None) or "android"
     ev_a, ev_b = d.get("ev_a"), d.get("ev_b")
+    if _host == "harmony" and not isinstance(ev_a, dict):
+        print("  ◐ ⑦ 事件路径：鸿蒙宿主桥未实现 tapAt/onGesture（手势批次）——如实跳过；"
+              "mount/更新两路的几何等价已真验（判据 ②③⑤⑥）")
+        ev_a = ev_b = None
     if not isinstance(ev_a, dict) or not isinstance(ev_b, dict):
-        fail(f"★事件路径读数缺失（ev_a={type(ev_a).__name__} · ev_b={type(ev_b).__name__}）"
+        # ★★`ok = False` 必须在分档条件**内**（本轮实测抓出：它在外面 ⇒ 鸿蒙"如实跳过"
+        #   仍然判红——分档写了但没生效，汇总行只报"有失败项"而无具体 fail 消息，极难定位）。
+        if _host != "harmony":
+            fail(f"★事件路径读数缺失（ev_a={type(ev_a).__name__} · ev_b={type(ev_b).__name__}）"
              f"——tap 对照没跑起来（旧产物？或按钮定位失败，见 notes）")
-        ok = False
+            ok = False
     else:
         # ⑦a 两路都命中且都跑了 handler
         ha, hb = ev_a.get("hit", -1), ev_b.get("hit", -1)

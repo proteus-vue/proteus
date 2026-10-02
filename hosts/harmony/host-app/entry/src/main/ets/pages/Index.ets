@@ -276,6 +276,18 @@ interface HostRtArgs {
   filesDir: string;
 }
 
+/** Vapor A/B 探针入参（含 mode/outName——矩阵 #14 续） */
+interface VaporAbArgs {
+  bundle: string;
+  artifacts: string;
+  vpW: number;
+  vpH: number;
+  density: number;
+  filesDir: string;
+  mode: string;
+  outName: string;
+}
+
 /** Vapor 探针入参（ArkTS 严格模式要求显式接口） */
 interface VaporProbeArgs {
   bundle: string;
@@ -320,6 +332,9 @@ struct Index {
   /** ★手势场景模式（`--ps scene gesture`）：只装真触摸接收器 + 渲染 SFC 夹具——不跑任何探针
    *  （探针日志会冲掉触摸样本行——实测：正常场景跑完 bench 后 PROTEUS_TOUCH 行被挤出缓冲区） */
   private gestureScene: boolean = (AppStorage.get<string>('proteusScene') ?? '') === 'gesture';
+  /** ★Vapor A/B 场景（`--ps scene vapor-ab`，矩阵 #14 续）：Vapor vs Vue 运行时逐节点几何对照
+   *  ——落独立报告 `vapor-ab.json`（不覆盖 runShort 的 vapor.json 证据） */
+  private vaporAbScene: boolean = (AppStorage.get<string>('proteusScene') ?? '') === 'vapor-ab';
   /** ★原生混用场景（`--ps scene native-mix`，矩阵 #10）：SFC 夹具自绘 + **ArkUI 原生组件**
    *  按核心几何定位（重叠在锚块上——z-order 像素实测） */
   private nativeMixScene: boolean = (AppStorage.get<string>('proteusScene') ?? '') === 'native-mix';
@@ -652,6 +667,33 @@ struct Index {
         }
         return;
       }
+      // ── ⓪'' ★★Vapor A/B 场景（矩阵 #14 续）：Vapor vs Vue 运行时（mode:'ab'）──
+      if (this.vaporAbScene) {
+        try {
+          const ctxA = getContext(this);
+          const bA: Uint8Array = ctxA.resourceManager.getRawFileContentSync('bundle-vapor.js');
+          const bAStr: string = util.TextDecoder.create('utf-8').decodeToString(bA);
+          const aA: Uint8Array = ctxA.resourceManager.getRawFileContentSync('vapor-artifacts.json');
+          const aAStr: string = util.TextDecoder.create('utf-8').decodeToString(aA);
+          const dA = display.getDefaultDisplaySync();
+          const abArgs: VaporAbArgs = {
+            bundle: bAStr,
+            artifacts: aAStr,
+            vpW: px2vp(dA.width),
+            vpH: px2vp(dA.height),
+            density: DENSITY,
+            filesDir: ctxA.filesDir,
+            mode: 'ab',
+            outName: 'vapor-ab.json',
+          };
+          const abOut: string = vaporProbe(JSON.stringify(abArgs));
+          hilog.info(DOMAIN, BENCH_TAG, 'PROTEUS_VAPOR_AB %{public}s', abOut.substring(0, 900));
+        } catch (abe) {
+          hilog.error(DOMAIN, BENCH_TAG, 'PROTEUS_VAPOR_AB_ERROR %{public}s', JSON.stringify(abe) ?? '');
+        }
+        return;
+      }
+
       // ── ⓪'' ★★原生混用场景（矩阵 #10）：自绘内容 + ArkUI 原生组件（核心几何定位）──
       if (this.nativeMixScene) {
         try {
