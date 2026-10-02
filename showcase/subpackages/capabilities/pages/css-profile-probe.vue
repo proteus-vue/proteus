@@ -177,6 +177,9 @@ async function runProbe() {
         <view id="c-overflow" style="width:100px;height:20px;overflow:hidden" />
         <view id="c-pos-rel" style="position:relative;left:30px;width:100px;height:20px" />
         <view id="c-pos-abs" style="position:absolute;width:100px;height:20px;top:10px;left:10px" />
+        <!-- ★LY001-ALLOW: 本页是测量装置（CSS Profile 探针）——这条 z-index 就是**被测对象**
+             本身（页面目的即实测 Skyline 是否接受该特性，见页头注释与 docs/Proteus_CSS_Profile规格.md），
+             不是页面层级用法。例外纪律同 check:host-rounding 的 I2-ALLOW：有名有姓、窗口有界。 -->
         <view id="c-zindex" style="position:relative;z-index:5;width:100px;height:20px" />
         <view id="c-shadow" style="width:100px;height:20px;box-shadow:0 2px 8px rgba(0,0,0,.4)" />
         <view id="c-gradient" style="width:100px;height:20px;background-image:linear-gradient(90deg,#6f4ae8,#000)" />

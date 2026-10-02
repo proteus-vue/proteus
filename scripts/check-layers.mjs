@@ -44,8 +44,18 @@ const { validateLayerUsage } = await import(distPath)
  *   这些是**判据作用域错了**，不是代码错了（本仓纪律：判据本身错时，归因必然错）。
  *   规范 §1 的适用对象是"页面层级（跨端）"⇒ 作用域 = Proteus 应用代码。
  *   ★若未来官网也接入 Proteus 编译链（成为"第六端"），届时纳回。
+ *
+ * ★★`showcase` 的细粒度作用域（2026-10-03 修复死路径）：
+ *   首版写的是 `showcase/src`——**该目录从未存在**（showcase 直接用 `pages/`
+ *   `subpackages/` `components/`，无 `src/`）⇒ 声明"扫 showcase"而实际**一个都没扫到**
+ *   （静默盲区；本仓纪律：门禁覆盖面必须跟着实际形态走）。
+ *   ★仍**不含** `showcase/router/`（RouterView 的 CSS z-index 层叠是 showcase 自己的
+ *     Web 导航实现——与 website 同性质：单端 Web infra、非 Proteus 五端页面）。
  */
-const SCAN_DIRS = ['examples/pages', 'examples/subpackages', 'examples/components', 'showcase/src']
+const SCAN_DIRS = [
+  'examples/pages', 'examples/subpackages', 'examples/components',
+  'showcase/pages', 'showcase/subpackages', 'showcase/components',
+]
 const SKIP_DIR = /(?:^|[/\\])(?:node_modules|dist|\.proteus|generated)(?:[/\\]|$)/
 
 function* walkVue(dir) {
