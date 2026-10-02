@@ -79,6 +79,12 @@ export interface CompareOptions {
   align?: 'root' | 'none'
   /** 文本节点判定（默认 semanticKey/nodeId 含 'text'） */
   isTextNode?: (node: GeometryNode) => boolean
+  /**
+   * ★**允许差异豁免**（《多端一致性标准方案》§9 / CS2 清单）：命中的差异**不判失败**，
+   *   但在报告里标注 `allowedBy`（留痕——"清单内差异不判失败；清单外一律当 bug"）。
+   *   证据：docs/allow-differences.json（每条带 reason/scope/evidence，schema 门禁）。
+   */
+  allowDifferences?: Array<{ id: string; prop?: string; key?: string }>
 }
 
 const defaultIsTextNode = (n: GeometryNode): boolean =>
@@ -256,6 +262,8 @@ export interface StyleDiff {
   overTolerance: boolean
   rationale?: string
   hint?: string
+  /** ★命中的"允许差异"条目 id（清单内 ⇒ overTolerance=false + 本字段留痕） */
+  allowedBy?: string
 }
 
 export interface StyleComparison {
@@ -342,7 +350,7 @@ function compareStyleValue(
 export function compareStyle(
   baseline: StyleSnapshot,
   candidate: StyleSnapshot,
-  opts: { tolerance?: ToleranceConfig } = {},
+  opts: { tolerance?: ToleranceConfig; allowDifferences?: Array<{ id: string; key?: string }> } = {},
 ): StyleComparison {
   const cfg = opts.tolerance ?? DEFAULT_TOLERANCE
   const A = new Map(baseline.nodes.map((n) => [n.path, n]))
@@ -354,6 +362,10 @@ export function compareStyle(
   let keysOnlyInA = 0
   let keysOnlyInB = 0
 
+  const allowKeys = new Map<string, string>()
+  for (const ad of opts.allowDifferences ?? []) {
+    if (ad.key) allowKeys.set(ad.key, ad.id)
+  }
   for (const [path, a] of A) {
     const b = B.get(path)
     if (!b) {
@@ -375,7 +387,9 @@ export function compareStyle(
         continue
       }
       const r = compareStyleValue(key, av, bv, cfg)
-      if (r.over) mismatched++
+      // ★允许差异豁免（清单内不判失败，但留痕 allowedBy——§9 硬约束"清单内不判失败，清单外当 bug"）
+      const allowedBy = r.over ? allowKeys.get(key) : undefined
+      if (r.over && !allowedBy) mismatched++
       diffs.push({
         kind: 'mismatch',
         path,
@@ -386,9 +400,10 @@ export function compareStyle(
         bValue: bv,
         deviation: r.deviation,
         tolerance: r.tolerance,
-        overTolerance: r.over,
+        overTolerance: r.over && !allowedBy,
         rationale: r.rationale,
         hint: r.hint,
+        ...(allowedBy ? { allowedBy } : {}),
       })
     }
   }
@@ -408,7 +423,11 @@ export function compareStyle(
 }
 
 /** Web 为真值基准的样式比对 */
-export function compareStyleAgainstWeb(web: StyleSnapshot, candidate: StyleSnapshot, opts: { tolerance?: ToleranceConfig } = {}): StyleComparison {
+export function compareStyleAgainstWeb(
+  web: StyleSnapshot,
+  candidate: StyleSnapshot,
+  opts: { tolerance?: ToleranceConfig; allowDifferences?: Array<{ id: string; key?: string }> } = {},
+): StyleComparison {
   if (web.end !== 'web') {
     throw new Error(`compareStyleAgainstWeb：基线端必须是 web，实际 ${web.end}`)
   }

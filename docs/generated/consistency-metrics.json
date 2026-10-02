@@ -12,23 +12,28 @@
   },
   "M1": {
     "name": "数值一致性覆盖率",
-    "definition": "Σ(L1|L2|L3 各层已机器化字段数) / (可表达字段数 × 3)（分层加总——单层完成不代表一致）",
-    "value": 0.381,
+    "definition": "Σ(L1|L2|L3 各层**折算到同一 CSS 字段集**后的覆盖数) / (可表达字段数 × 3)（分层加总 · 折算口径）",
+    "value": 0.4881,
+    "union": {
+      "covered": 28,
+      "total": 28,
+      "value": 1
+    },
     "byLayer": {
       "L1": {
         "covered": 28,
         "total": 28,
-        "note": "支持度矩阵 + 边界门禁 + 棘轮基线（已落地）"
+        "note": "支持度矩阵 + 边界门禁 + 棘轮基线（逐字段，已落地）"
       },
       "L2": {
-        "covered": 4,
+        "covered": 2,
         "total": 28,
-        "note": "比对引擎已落地（VC5-b/VC6）：三端实测逐节点在容差内 + 破坏性验证通过；覆盖口径 = 几何 x/y/w/h 四量（不同于本表 total 的 CSS 字段集，故单列说明）"
+        "note": "比对引擎已落地 + 三端实测通过；**折算口径**：几何 w/h → 字段 width/height（x/y 是位置不是字段——保守计 2）"
       },
       "L3": {
-        "covered": 0,
+        "covered": 11,
         "total": 28,
-        "note": "计算样式快照格式已定（VC3-b）+ 采集已通；逐字段比对（VC6）未做 ⇒ 记 0"
+        "note": "实测比对已落地（VC6：Web ⇄ WebView，硬门禁 + A-6 豁免）；**折算口径**：25 个可比样式键 → 11 个字段（四角/四边归并；fontFamily/fontWeight/visibility 不在字段集内不计）"
       }
     },
     "covered": 28,
@@ -44,13 +49,14 @@
   "M2": {
     "name": "允许差异条目数",
     "definition": "docs/allow-differences.json 条目数（越少越好；每条必须有理由与证据；不得为让测试通过而加）",
-    "value": 5,
+    "value": 6,
     "ids": [
       "A-1",
       "A-2",
       "A-3",
       "A-4",
-      "A-5"
+      "A-5",
+      "A-6"
     ],
     "protected": [
       "A-4"

@@ -248,6 +248,29 @@ describe('VC6 · L3 样式比对', () => {
     expect(scalar.ok, 'float 表示粒度内不误报').toBe(true)
   })
 
+  it('⑮b ★允许差异豁免：清单内不判失败（留痕 allowedBy）；清单外仍判失败', () => {
+    const withFontDiff = style((s) => { s.fontFamily = 'system-ui' })  // 夹具默认是 'PingFang SC'——必须改成**不同**的值（首版改了同值 = 空测）
+    // 无豁免 ⇒ 失败
+    const bare = compareStyle(style(), withFontDiff, { tolerance: projTolerance })
+    expect(bare.ok, '字族不同默认判失败').toBe(false)
+    // 有豁免（A-6）⇒ 通过 + 留痕
+    const allowed = compareStyle(style(), withFontDiff, {
+      tolerance: projTolerance,
+      allowDifferences: [{ id: 'A-6', key: 'fontFamily' }],
+    })
+    expect(allowed.ok, '豁免后不判失败（标准 §9.1：清单内不判失败）').toBe(true)
+    const d = allowed.diffs.find((x) => x.key === 'fontFamily')!
+    expect(d.allowedBy, '必须留痕（可审计）').toBe('A-6')
+    expect(d.overTolerance).toBe(false)
+    // ★豁免不越界：它只对 fontFamily 生效——颜色差异仍判失败
+    const colorToo = style((s) => { s.fontFamily = 'system-ui'; s.backgroundColor = { r: 0, g: 0, b: 0, a: 1 } })
+    const mixed = compareStyle(style(), colorToo, {
+      tolerance: projTolerance,
+      allowDifferences: [{ id: 'A-6', key: 'fontFamily' }],
+    })
+    expect(mixed.ok, '清单外差异（颜色）仍判失败——"清单外一律当 bug"').toBe(false)
+  })
+
   it('⑯ compareStyleAgainstWeb：真值基准强制', () => {
     const candidate: StyleSnapshot = { ...style(), end: 'webview' }
     const r = compareStyleAgainstWeb(style(), candidate, { tolerance: projTolerance })

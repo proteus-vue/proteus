@@ -152,10 +152,10 @@ function buildStyleSnapshot(opts) {
       var key = keys[j]
       var val = css[key]
       try {
-        if (key === 'color' || key === 'background-color') {
-          var c = normalizeColor(val)
-          if (key === 'color') styles.color = c
-          else styles.backgroundColor = c
+        var camelKey = key.replace(/-([a-z])/g, function (_m, ch) { return ch.toUpperCase() })
+        if (key === 'color' || key === 'background-color' || /^border-(top|right|bottom|left)-color$/.test(key)) {
+          // 颜色三族：文本色 / 背景色 / 四边框色（longhand）
+          styles[camelKey === 'backgroundColor' ? 'backgroundColor' : camelKey] = normalizeColor(val)
         } else if (key === 'font-size') {
           var fs = normalizeLength(val)
           if (fs !== null) styles.fontSize = fs
@@ -164,10 +164,10 @@ function buildStyleSnapshot(opts) {
         } else if (key === 'font-family') {
           styles.fontFamily = normalizeFontFamily(val)
         } else if (/^(padding|margin)-(top|right|bottom|left)$/.test(key)) {
-          var camel = key.replace(/-([a-z])/g, function (_m, ch) { return ch.toUpperCase() })
           var len = normalizeLength(val)
-          if (len !== null) styles[camel] = len
+          if (len !== null) styles[camelKey] = len
         } else if (key === 'border-radius') {
+          // 简写：四项相同则展开（VC3-b 只存 longhand；不同则要求逐角声明——不猜）
           var br = normalizeLength(val)
           if (br !== null) {
             styles.borderTopLeftRadius = br
@@ -175,6 +175,13 @@ function buildStyleSnapshot(opts) {
             styles.borderBottomRightRadius = br
             styles.borderBottomLeftRadius = br
           }
+        } else if (/^border-(top|right|bottom|left)-radius$/.test(key)) {
+          // ★longhand 四角（computed style 的稳妥读法——简写可能是多值 "1px 2px 3px 4px"）
+          var rv = normalizeLength(val)
+          if (rv !== null) styles[camelKey] = rv
+        } else if (/^border-(top|right|bottom|left)-width$/.test(key)) {
+          var bw = normalizeLength(val)
+          if (bw !== null) styles[camelKey] = bw
         } else if (key === 'opacity') {
           var op = normalizeLength(val)
           if (op !== null) styles.opacity = op
@@ -224,7 +231,73 @@ function assertSnapshotSelfCheck() {
   return { ok: problems.length === 0, problems: problems }
 }
 
+/** VC3-b 闭集键（与 TS 版 StyleSnapshot 的键一一对应；computed style 读法用 CSS 名） */
+var VC3B_KEYS = [
+  'background-color', 'color',
+  'border-top-left-radius', 'border-top-right-radius', 'border-bottom-right-radius', 'border-bottom-left-radius',
+  'border-top-width', 'border-right-width', 'border-bottom-width', 'border-left-width',
+  'border-top-color', 'border-right-color', 'border-bottom-color', 'border-left-color',
+  'font-size', 'font-weight', 'font-family',
+  'padding-top', 'padding-right', 'padding-bottom', 'padding-left',
+  'margin-top', 'margin-right', 'margin-bottom', 'margin-left',
+  'opacity', 'display', 'position', 'visibility',
+]
+
+/**
+ * ★L3 实测采集（VC6 的真源）：用 `fields({computedStyle})` 读**渲染器实际算出的值**。
+ *
+ * 【为什么只在 WebView 用（VC1 实测）】Skyline 下 `fields({computedStyle})` 返回空对象
+ *   （静默丢弃）⇒ 读回全空时本函数返回 `null`，调用方**回退产出式**（如实标注语义差异）。
+ *
+ * 【与产出式的语义差别（必须写清，否则 M1 会虚高）】
+ *   · 实测 = "渲染器接受了声明并算出该值"（真·样式一致性证据）
+ *   · 产出式 = "声明 → 归一化"管线一致（**不含**渲染器是否接受——那归 L1 矩阵 + L4 观察）
+ *
+ * @param scope 组件/页面实例（查询作用域）
+ * @param spec  节点表 [{id, path}]（与几何采集同表）
+ * @param end   'webview' | 'skyline'
+ * @param done  回调（StyleSnapshot；读不到 ⇒ null）
+ */
+function collectStyleFromComputed(scope, spec, end, done) {
+  var nodes = []
+  var pending = spec.length
+  var gotAny = false
+  for (var i = 0; i < spec.length; i++) {
+    (function (sp) {
+      var q = (scope && typeof scope.createSelectorQuery === 'function') ? scope.createSelectorQuery() : wx.createSelectorQuery()
+      q.select('#' + sp.id).fields({ computedStyle: VC3B_KEYS }, function (res) {
+        var css = {}
+        if (res) {
+          for (var k = 0; k < VC3B_KEYS.length; k++) {
+            var key = VC3B_KEYS[k]
+            var v = res[key]
+            if (v !== undefined && v !== null && v !== '') {
+              css[key] = String(v)
+              gotAny = true
+            }
+          }
+        }
+        nodes.push({ nodeId: sp.id, path: sp.path, css: css })
+        if (--pending === 0) {
+          if (!gotAny) {
+            if (done) done(null) // Skyline：读不到 ⇒ 调用方回退
+            return
+          }
+          nodes.sort(function (a, b) { return a.path.length - b.path.length })
+          var snap = buildStyleSnapshot({ end: end, declared: nodes })
+          snap.boundaries = snap.boundaries || {}
+          snap.boundaries.note = (snap.boundaries.note || '') + '｜★实测（fields computedStyle）——渲染器接受并算出的值'
+          snap.boundaries.measured = true
+          if (done) done(snap)
+        }
+      }).exec()
+    })(spec[i])
+  }
+}
+
 module.exports = {
+  VC3B_KEYS: VC3B_KEYS,
+  collectStyleFromComputed: collectStyleFromComputed,
   round3: round3,
   normalizeColor: normalizeColor,
   normalizeLength: normalizeLength,
