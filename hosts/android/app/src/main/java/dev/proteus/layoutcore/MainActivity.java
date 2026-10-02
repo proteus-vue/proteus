@@ -497,6 +497,14 @@ public class MainActivity extends Activity {
             String shot = setupScreenshotScene();
             sb.append(shot).append('\n');
             writeReport("layout-shot-scene.json", shot);
+        } else if ("shot-l4".equals(testPath)) {
+            // ★★L4 像素观测夹具（Android 端）——与小程序两页 / Web 页 / iOS 场景**同声明**。
+            //   报告由 `scene.postOnAnimation` 在**首帧真的画过**（onDrawCount>0）后写入 ⇒
+            //   采集脚本以「报告落盘」为条件取屏（不盲等，见 hosts/android/run-l4-android.sh）。
+            sb.append("【L4 观测夹具（四元素同声明）】\n");
+            String l4 = setupL4Scene();
+            sb.append(l4).append('\n');
+            writeReport("l4-scene.json", l4);
         } else if ("hit".equals(testPath)) {
             // ★★★M3 事件系统：命中测试闭环
             //   三个独立层次，缺一不可：
@@ -3090,6 +3098,121 @@ public class MainActivity extends Activity {
             o.put("offset_left", LEFT);
             o.put("offset_top", TOP);
             o.put("note", "占位报告——真实报告由 scene.post() 在**布局完成后**写入（含 view_origin_*）");
+            return o.toString(2);
+        } catch (Exception e) {
+            return "{\"ok\":false,\"error\":\"" + e.getMessage() + "\"}";
+        }
+    }
+
+    /**
+     * ★★L4 像素观测夹具（Android 端）——与小程序两页 / Web 页 / iOS 场景**逐项同声明**：
+     *   root(#14141c · padding-top 120u · 左 16u) → 圆角块(80×48u · r=14u · #2f6fed) →
+     *   阴影块(80×48u · #2a3f66 · shadow 0/3/10u rgba(0,0,0,0.7)) →
+     *   渐变块(80×48u · linear 90° #7c5cff→#ff9a6c) → 字形("字形 Ag 8 中" · 18u · #ffffff)
+     *
+     * 【u = 声明单位】与其它四端**同一组数字**；本端按 ×3 绘制为设备 px——
+     *   分辨率/DPR 差异由报告侧 `anchorNormalize`（锚块定标 + 定位）吸收 ⇒ 五端同一坐标系可比。
+     *
+     * 【阴影为什么用分层逼近（本端实测的已知陷阱）】`Paint.setShadowLayer` 在硬件加速下
+     *   **只对文本生效**（对矩形/Path 静默不画——本仓实测）；且本仓"跨端一致优先"：
+     *   iOS 侧同样不用原生 shadow*（高斯曲线两端不同形）⇒ 两端统一用
+     *   **分层展开圆角矩形 + alpha 平方衰减**（与 glow 同一式，见 ProteusHostView 的发光注释）。
+     *
+     * 【为什么"首帧画过"才写报告】`onDrawCount()>0` 是"屏幕上真的画了"的机器判据
+     *   （本仓实测过 `WILL_NOT_DRAW` 陷阱：指令非空但一帧未画）；采集脚本以报告落盘为取屏条件。
+     */
+    private String setupL4Scene() {
+        final float U = 3f;                    // 声明单位 → 设备 px（本机 density≈3；残余由锚定归一吸收）
+        // 声明值（与其它四端逐字同源——改这里必须五端同步改）
+        final float PAD_TOP = 120f, PAD_X = 16f;
+        final float BW = 80f, BH = 48f, GAP = 10f, R = 14f;
+        final float SHADOW_DY = 3f, SHADOW_BLUR = 10f, SHADOW_ALPHA = 0.7f;
+        final float FONT = 18f;
+        final int BG = 0xFF14141C;
+        final int C_BLOCK = 0xFF2F6FED;
+        final int C_SHADOW_BG = 0xFF2A3F66;
+
+        java.util.List<ProteusHostView.Cmd> cmds = new java.util.ArrayList<>();
+        final float x = PAD_X * U;
+        float y = PAD_TOP * U;
+        final float bw = BW * U, bh = BH * U, gap = GAP * U, r = R * U;
+
+        // ① 圆角块
+        cmds.add(new ProteusHostView.Cmd(x, y, bw, bh, C_BLOCK, null, 0f, 0, r));
+        y += bh + gap;
+        // ② 阴影块：先铺分层阴影（由外到内：外圈弱、内圈强——同 glow 的 alpha 平方衰减），再画块本体
+        final int N = 6;
+        for (int k = N; k >= 1; k--) {
+            float t = (k - 1f) / N;
+            float alpha = SHADOW_ALPHA * (1 - t) * (1 - t);
+            float expand = SHADOW_BLUR * k / N * U;
+            int c = ((int) (alpha * 255f + 0.5f) << 24);   // 纯黑 + alpha
+            cmds.add(new ProteusHostView.Cmd(
+                    x - expand, y + SHADOW_DY * U - expand,
+                    bw + 2 * expand, bh + 2 * expand,
+                    c, null, 0f, 0, r + expand));
+        }
+        cmds.add(new ProteusHostView.Cmd(x, y, bw, bh, C_SHADOW_BG, null, 0f, 0, 0f));
+        y += bh + gap;
+        // ③ 渐变块（90° = 左→右；与 TS linearGradientEndpoints / iOS 同式）
+        ProteusHostView.GradSpec grad = new ProteusHostView.GradSpec(
+                1, 90f, 0.5f, 0.5f, 1f,
+                new int[]{0xFF7C5CFF, 0xFFFF9A6C}, new float[]{0f, 1f});
+        // ★基色必须**不透明**（本仓实测抓出的场景缺陷）：宿主先 `bgPaint.setColor(c.color)` 再挂 shader，
+        //   color=0 ⇒ paint alpha=0 ⇒ shader 结果被乘零（渐变整块不可见）。渐变块的"底色"无意义，
+        //   给不透明黑即可（shader 全覆盖）。
+        cmds.add(new ProteusHostView.Cmd(x, y, bw, bh, 0xFF000000, null, 0f, 0, 0f, grad));
+        y += bh + gap;
+        // ④ 字形（白 18u；文本框给足宽高——drawText 基线 = y + 0.8h）
+        //   ★color 必须为 0（透明）：宿主对每条 Cmd 都先 `drawRect(c.color)` 铺底——文本节点
+        //     若给不透明色会画出一块**黑底矩形**（实测：与其它端"只有字"不同形，归一后整行 18k px 差异）。
+        cmds.add(new ProteusHostView.Cmd(x, y, bw * 2, FONT * U * 1.6f, 0, "字形 Ag 8 中", FONT * U, 0xFFFFFFFF, 0f));
+
+        final ProteusHostView scene = new ProteusHostView(this);
+        scene.setCmds(cmds);
+        scene.setBackgroundColor(BG);
+        // ★全屏绝对定位（与 shot 场景同款教训：MATCH_PARENT 会被按钮挤下移；尺寸取**真实屏幕**）
+        android.graphics.Point sz = new android.graphics.Point();
+        getWindowManager().getDefaultDisplay().getRealSize(sz);
+        FrameLayout.LayoutParams lp = new FrameLayout.LayoutParams(sz.x, sz.y);
+        lp.leftMargin = 0;
+        lp.topMargin = 0;
+        root.addView(scene, lp);
+        runButton.setVisibility(android.view.View.GONE);
+
+        // ★帧驱动条件等待（零盲等）：每帧查"真的画过没"，画过才落报告（采集脚本以报告为取屏条件）
+        final Runnable afterDraw = new Runnable() {
+            @Override public void run() {
+                if (scene.onDrawCount() <= 0) {
+                    scene.postOnAnimation(this);
+                    return;
+                }
+                try {
+                    org.json.JSONObject o = new org.json.JSONObject();
+                    o.put("ok", true);
+                    o.put("path", "shot-l4");
+                    o.put("on_draw", scene.onDrawCount());
+                    o.put("unit", U);
+                    o.put("screen", new org.json.JSONArray(new int[]{sz.x, sz.y}));
+                    o.put("block", new org.json.JSONArray(new int[]{
+                            Math.round(x), Math.round(PAD_TOP * U), Math.round(bw), Math.round(bh)}));
+                    o.put("elements", new org.json.JSONArray(new String[]{
+                            "radius(border-radius 14u)", "shadow(0/3/10u rgba(0,0,0,0.7))",
+                            "gradient(linear 90° #7c5cff→#ff9a6c)", "glyph(18u #fff)"}));
+                    o.put("note", "L4 观测夹具：四元素同声明；分层阴影=本仓跨端一致策略（不用原生高斯 shadow*）");
+                    writeReport("l4-scene.json", o.toString(2));
+                } catch (Exception e) {
+                    writeReport("l4-scene.json", "{\"ok\":false,\"error\":\"" + e.getMessage() + "\"}");
+                }
+            }
+        };
+        scene.postOnAnimation(afterDraw);
+
+        try {
+            org.json.JSONObject o = new org.json.JSONObject();
+            o.put("ok", true);
+            o.put("path", "shot-l4");
+            o.put("note", "占位——真实报告在首帧绘制后写入（scene.postOnAnimation）");
             return o.toString(2);
         } catch (Exception e) {
             return "{\"ok\":false,\"error\":\"" + e.getMessage() + "\"}";

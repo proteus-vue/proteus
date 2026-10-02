@@ -69,4 +69,16 @@ if printf '%s' "$OUT" | grep -q "duplicate entries for string literal key"; then
   exit 1
 fi
 
-echo "✅ iOS 宿主类型检查通过（改动 selfdraw-scene.swift 后先跑本脚本，再上真机）"
+# ★★L4 观测夹具（l4-scene.swift）是**独立 App**（自带 @main）——单文件单独 typecheck，
+#   不进 HOST_SRCS（会与主 App 的 @main 冲突）。改它之后本脚本同样覆盖。
+echo "==> 类型检查 L4 观测夹具（l4-scene.swift · 独立 App）"
+L4_SRC="$HERE/ProteusHost/l4-scene.swift"
+[ -f "$L4_SRC" ] || { echo "✗ 找不到 $L4_SRC"; exit 2; }
+if ! OUT_L4="$(xcrun --sdk iphonesimulator swiftc -typecheck \
+      -target arm64-apple-ios15.0-simulator -framework UIKit -parse-as-library "$L4_SRC" 2>&1)"; then
+  printf '%s\n' "$OUT_L4" | tail -10
+  echo "✗ L4 夹具类型检查失败"
+  exit 1
+fi
+
+echo "✅ iOS 宿主类型检查通过（改动 selfdraw-scene.swift / l4-scene.swift 后先跑本脚本，再上真机）"

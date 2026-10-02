@@ -26,6 +26,38 @@ async function inflate(data: Uint8Array): Promise<Uint8Array> {
   return new Uint8Array(buf)
 }
 
+/**
+ * ★色彩空间探测（从解压后的 ICC profile 读红色原色判 P3 / sRGB）。
+ *
+ * 【为什么按原色判而不是按 profile 名字】名字五花八门（Skia / "Display P3" / 设备厂商串），
+ *   而原色坐标是 ICC 的**硬数据**。实测（本仓 Android 真机截图）：
+ *   P3 的 D50 适配红原色 X≈0.5151，sRGB 的 X≈0.4361——用红原色 X 单值即可区分（阈值 0.48）。
+ *
+ * ICC 布局：128B 头 + 标签表（每项 12B：sig/offset/size）。原色在 `rXYZ` 标签的
+ *   XYZNumber（s15Fixed16 ×3，紧跟 8B 类型头）。
+ */
+function detectColorSpace(iccDecompressed: Uint8Array): 'srgb' | 'display-p3' | 'unknown' {
+  try {
+    const ntags = ((iccDecompressed[128]! << 24) | (iccDecompressed[129]! << 16) | (iccDecompressed[130]! << 8) | iccDecompressed[131]!) >>> 0
+    for (let i = 0; i < ntags; i++) {
+      const off = 132 + i * 12
+      if (off + 12 > iccDecompressed.length) break
+      const sig = String.fromCharCode(iccDecompressed[off]!, iccDecompressed[off + 1]!, iccDecompressed[off + 2]!, iccDecompressed[off + 3]!)
+      if (sig !== 'rXYZ') continue
+      const toff = ((iccDecompressed[off + 4]! << 24) | (iccDecompressed[off + 5]! << 16) | (iccDecompressed[off + 6]! << 8) | iccDecompressed[off + 7]!) >>> 0
+      if (toff + 20 > iccDecompressed.length) break
+      const x = ((iccDecompressed[toff + 8]! << 24) | (iccDecompressed[toff + 9]! << 16) | (iccDecompressed[toff + 10]! << 8) | iccDecompressed[toff + 11]!) / 65536
+      // P3 红原色 X=0.5151 · sRGB 红原色 X=0.4361（D50 适配）⇒ 阈值 0.48
+      if (x > 0.48 && x < 0.55) return 'display-p3'
+      if (x > 0.40 && x <= 0.48) return 'srgb'
+      return 'unknown'
+    }
+  } catch {
+    // 解析失败 ⇒ unknown（不猜；调用方按"未声明"处理）
+  }
+  return 'unknown'
+}
+
 /** Paeth 预测器（PNG 规范 9.4） */
 function paeth(a: number, b: number, c: number): number {
   const p = a + b - c
@@ -52,6 +84,8 @@ export async function decodePng(bytes: Uint8Array): Promise<RgbaImage> {
   let colorType = 0
   let interlace = 0
   const idat: Uint8Array[] = []
+  /** ★iCCP（内嵌 ICC 配置）——压缩字节先收着，解压后判定色彩空间（见 detectColorSpace） */
+  let iccp: Uint8Array | null = null
   while (off + 8 <= bytes.length) {
     const len = u32(bytes, off)
     const type = String.fromCharCode(bytes[off + 4]!, bytes[off + 5]!, bytes[off + 6]!, bytes[off + 7]!)
@@ -62,6 +96,12 @@ export async function decodePng(bytes: Uint8Array): Promise<RgbaImage> {
       bitDepth = bytes[dataStart + 8]!
       colorType = bytes[dataStart + 9]!
       interlace = bytes[dataStart + 12]!
+    } else if (type === 'iCCP') {
+      // 结构：[profile name]\0[compression u8][compressed profile]
+      const chunk = bytes.subarray(dataStart, dataStart + len)
+      let z = 0
+      while (z < chunk.length && chunk[z] !== 0) z++
+      if (z + 2 <= chunk.length && chunk[z + 1] === 0) iccp = chunk.subarray(z + 2)
     } else if (type === 'IDAT') {
       idat.push(bytes.subarray(dataStart, dataStart + len))
     } else if (type === 'IEND') {
@@ -138,7 +178,16 @@ export async function decodePng(bytes: Uint8Array): Promise<RgbaImage> {
     }
     prev.set(cur)
   }
-  return { width, height, rgba: out }
+  // ★色彩空间：iCCP 存在则解压 + 判原色（解压/解析失败 ⇒ 'unknown'，**不改像素**）
+  let colorSpace: RgbaImage['colorSpace']
+  if (iccp) {
+    try {
+      colorSpace = detectColorSpace(await inflate(iccp))
+    } catch {
+      colorSpace = 'unknown'
+    }
+  }
+  return { width, height, rgba: out, ...(colorSpace ? { colorSpace } : {}) }
 }
 
 /* ══════════════════ 测试/夹具辅助：最小 PNG 编码器 ══════════════════ */

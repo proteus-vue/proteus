@@ -5,7 +5,7 @@
 // 用法：node scripts/probe-png-colors.mjs <png> <r,g,b> [<r,g,b> ...]
 // 退出码：全部命中 ⇒ 0；任一缺失 / 解码失败 ⇒ 1（打印 JSON 诊断）
 import fs from 'node:fs'
-import { decodePng, assertPixelsPresent } from '../packages/consistency/dist/index.js'
+import { decodePng, assertPixelsPresent, convertToSrgb } from '../packages/consistency/dist/index.js'
 
 const [file, ...specs] = process.argv.slice(2)
 if (!file || specs.length === 0) {
@@ -21,9 +21,12 @@ if (probes.some((p) => p.rgb.some((n) => !Number.isFinite(n)))) {
   process.exit(2)
 }
 try {
-  const img = await decodePng(new Uint8Array(fs.readFileSync(file)))
+  // ★色彩归一（P3→sRGB）：Android 真机截图内嵌 Display P3 ICC ⇒ 同一声明色像素值天然不同
+  //   （实测 #2f6fed → (64,110,229)）——不归一会让正确的截图被判"特征色未命中"（假红）。
+  const raw = await decodePng(new Uint8Array(fs.readFileSync(file)))
+  const img = convertToSrgb(raw)
   const r = assertPixelsPresent(img, probes)
-  console.log(JSON.stringify({ file, size: `${img.width}x${img.height}`, ok: r.ok, hit: r.hit, missed: r.missed }))
+  console.log(JSON.stringify({ file, size: `${img.width}x${img.height}`, colorSpace: raw.colorSpace ?? 'undeclared', ok: r.ok, hit: r.hit, missed: r.missed }))
   process.exit(r.ok ? 0 : 1)
 } catch (e) {
   console.log(JSON.stringify({ file, ok: false, error: String(e && e.message ? e.message : e) }))

@@ -38,6 +38,9 @@ const SHOTS = [
   { end: 'skyline', file: 'l4.skyline.png', pub: 'l4-skyline.png', label: '微信 Skyline' },
   { end: 'webview', file: 'l4.webview.png', pub: 'l4-webview.png', label: '微信 WebView' },
   { end: 'web', file: 'l4.web.png', pub: 'l4-web.png', label: '浏览器 Web' },
+  // ★五端拉齐（2026-10-02）：Android 真机 + iOS 模拟器（同一夹具，各端系统管线自绘）
+  { end: 'android', file: 'l4.android.png', pub: 'l4-android.png', label: 'Android（真机）' },
+  { end: 'ios', file: 'l4.ios.png', pub: 'l4-ios.png', label: 'iOS（模拟器）' },
 ]
 
 function readJson(p, what) {
@@ -80,7 +83,27 @@ const realPairs = pixel.pairs.filter((p) => p.id.startsWith('l4:')).map((p) => (
   diffRatio: p.observation.diffRatio,
   hashDistance: p.observation.hashDistance,
   translation: p.observation.translation ?? null,
+  knownNoise: p.knownNoise?.id ?? null,
+  // ★锚定归一记录（源尺寸/色彩空间/锚块/缩放）——"各端怎么归到统一坐标系"的可复现证据
+  norm: p.norm
+    ? {
+        outSize: p.norm.outSize,
+        a: { srcSize: p.norm.a.srcSize, colorSpace: p.norm.a.colorSpace, block: p.norm.a.block, scale: p.norm.a.scale },
+        b: { srcSize: p.norm.b.srcSize, colorSpace: p.norm.b.colorSpace, block: p.norm.b.block, scale: p.norm.b.scale },
+      }
+    : null,
 }))
+/** 各端归一记录（按端名索引——页面展示"每端源分辨率 → 归一缩放"） */
+const endNorm = {}
+for (const p of pixel.pairs.filter((x) => x.id.startsWith('l4:') && x.norm)) {
+  for (const side of ['a', 'b']) {
+    const n = p.norm[side]
+    // 从文件名取端名（l4.<end>.png）
+    const f = (side === 'a' ? p.a : p.b).split('/').pop()
+    const m = /^l4\.([a-z0-9-]+)\.png$/.exec(f)
+    if (m && !endNorm[m[1]]) endNorm[m[1]] = { srcSize: n.srcSize, colorSpace: n.colorSpace, block: n.block, scale: n.scale }
+  }
+}
 
 const DATA = {
   generatedFrom: ['docs/generated/consistency-metrics.json', 'docs/generated/consistency-pixel-report.json', 'docs/allow-differences.json'],
@@ -115,6 +138,7 @@ const DATA = {
     cleanSamples: pixel.totals.cleanSamples,
     knownNoiseSamples: pixel.totals.knownNoiseSamples,
     pairs: realPairs,
+    endNorm,
   },
   shots: SHOTS,
   debt: metrics.debt?.baselines ?? [],

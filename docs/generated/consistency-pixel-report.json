@@ -5,89 +5,123 @@
   "note": "L4 像素观察——**非门禁**（标准 §8.1）：不追求零噪声，仅作 L1–L3 够不到的四项（圆角/阴影/渐变/字形）的兜底观察。",
   "pairs": [
     {
-      "id": "l4:skyline-vs-web",
-      "a": "docs/generated/consistency-samples/pixels/l4.skyline.png",
-      "b": "docs/generated/consistency-samples/pixels/l4.web.png",
+      "id": "l4:android-vs-ios",
+      "a": "docs/generated/consistency-samples/pixels/l4.android.png",
+      "b": "docs/generated/consistency-samples/pixels/l4.ios.png",
       "mode": "cross-runtime",
+      "norm": {
+        "a": {
+          "srcSize": {
+            "width": 1200,
+            "height": 2608
+          },
+          "colorSpace": "display-p3",
+          "block": {
+            "x": 48,
+            "y": 672,
+            "w": 240,
+            "h": 144
+          },
+          "scale": 0.667
+        },
+        "b": {
+          "srcSize": {
+            "width": 1206,
+            "height": 2622
+          },
+          "colorSpace": "undeclared",
+          "block": {
+            "x": 48,
+            "y": 361,
+            "w": 240,
+            "h": 142
+          },
+          "scale": 0.667
+        },
+        "outSize": {
+          "w": 640,
+          "h": 560
+        }
+      },
       "observation": {
         "gate": false,
-        "verdict": "noise-level",
+        "verdict": "changed",
         "sizeA": {
-          "width": 640,
-          "height": 1386
+          "width": 636,
+          "height": 530
         },
         "sizeB": {
-          "width": 640,
-          "height": 1386
+          "width": 636,
+          "height": 530
         },
-        "sampleCount": 679496,
-        "diffPixels": 2643,
-        "diffRatio": 0.00389,
+        "sampleCount": 337080,
+        "diffPixels": 5289,
+        "diffRatio": 0.01569,
         "hashDistance": 0,
         "regions": [
           {
-            "x": 54,
-            "y": 490,
+            "x": 208,
+            "y": 368,
             "w": 16,
             "h": 16,
-            "pixels": 124,
-            "ratio": 0.484
+            "pixels": 184,
+            "ratio": 0.719
           },
           {
-            "x": 182,
-            "y": 490,
+            "x": 32,
+            "y": 368,
             "w": 16,
             "h": 16,
-            "pixels": 124,
-            "ratio": 0.484
+            "pixels": 182,
+            "ratio": 0.711
           },
           {
-            "x": 118,
-            "y": 506,
+            "x": 80,
+            "y": 368,
             "w": 16,
             "h": 16,
-            "pixels": 123,
-            "ratio": 0.48
+            "pixels": 176,
+            "ratio": 0.688
           },
           {
-            "x": 166,
-            "y": 490,
+            "x": 48,
+            "y": 368,
             "w": 16,
             "h": 16,
-            "pixels": 109,
-            "ratio": 0.426
+            "pixels": 167,
+            "ratio": 0.652
           },
           {
-            "x": 54,
-            "y": 506,
+            "x": 64,
+            "y": 368,
             "w": 16,
             "h": 16,
-            "pixels": 93,
-            "ratio": 0.363
+            "pixels": 166,
+            "ratio": 0.648
           },
           {
-            "x": 70,
-            "y": 490,
+            "x": 112,
+            "y": 368,
             "w": 16,
             "h": 16,
-            "pixels": 89,
-            "ratio": 0.348
+            "pixels": 164,
+            "ratio": 0.641
           },
           {
-            "x": 102,
-            "y": 506,
+            "x": 160,
+            "y": 368,
             "w": 16,
             "h": 16,
-            "pixels": 85,
-            "ratio": 0.332
+            "pixels": 144,
+            "ratio": 0.563
           },
           {
-            "x": 182,
-            "y": 506,
+            "x": 128,
+            "y": 384,
             "w": 16,
             "h": 16,
-            "pixels": 82,
-            "ratio": 0.32
+            "pixels": 141,
+            "ratio": 0.551
           }
         ],
         "params": {
@@ -95,19 +129,1006 @@
           "blockSize": 16,
           "noiseRatio": 0.005,
           "noiseHashDistance": 16
+        }
+      },
+      "knownNoise": {
+        "id": "N-L4-five-end-rasterization",
+        "reason": "五端光栅化差异（已由标准 §9 允许差异清单声明为设计使然）：① 阴影策略不同——Web/小程序用 CSS box-shadow，Android/iOS 用分层逼近（本仓跨端一致策略，不用各端原生高斯 shadow）；② 字形引擎不同——各端字体度量与光栅化器各自实现（标准 §2 ③「唯一不可消除的结构性差异」/ §9 A-1）；③ 圆角/渐变边界 AA 各系统管线实现不同（§9 A-5）。实测证据：pHash 全 0（感知同形），逐像素差异 0.93%~3.01%，且差异 100% 集中在四项观测目标（蓝块边缘/阴影块/渐变块/字形行）——无一项落在空白区域（若空白区也出现差异，说明是污染而非光栅化）。",
+        "maxDiffRatio": 0.035,
+        "maxHashDistance": 0,
+        "recordedBy": "L4 五端走查（2026-10-02 会话，锚定归一实测）",
+        "recordedAt": "2026-10-02",
+        "evidence": {
+          "diffPixels": 10655,
+          "sampleCount": 354196,
+          "hashDistance": 0
+        }
+      }
+    },
+    {
+      "id": "l4:android-vs-skyline",
+      "a": "docs/generated/consistency-samples/pixels/l4.android.png",
+      "b": "docs/generated/consistency-samples/pixels/l4.skyline.png",
+      "mode": "cross-runtime",
+      "norm": {
+        "a": {
+          "srcSize": {
+            "width": 1200,
+            "height": 2608
+          },
+          "colorSpace": "display-p3",
+          "block": {
+            "x": 48,
+            "y": 672,
+            "w": 240,
+            "h": 144
+          },
+          "scale": 0.667
         },
-        "roi": {
-          "x": 2,
-          "y": 150,
-          "w": 636,
-          "h": 1090
+        "b": {
+          "srcSize": {
+            "width": 640,
+            "height": 1386
+          },
+          "colorSpace": "undeclared",
+          "block": {
+            "x": 27,
+            "y": 199,
+            "w": 130,
+            "h": 78
+          },
+          "scale": 1.231
         },
-        "translation": {
-          "dx": -1,
-          "dy": 1,
-          "diffPixels": 2643,
-          "diffPixelsRaw": 3675,
-          "max": 4
+        "outSize": {
+          "w": 640,
+          "h": 560
+        }
+      },
+      "observation": {
+        "gate": false,
+        "verdict": "changed",
+        "sizeA": {
+          "width": 636,
+          "height": 530
+        },
+        "sizeB": {
+          "width": 636,
+          "height": 530
+        },
+        "sampleCount": 337080,
+        "diffPixels": 10149,
+        "diffRatio": 0.03011,
+        "hashDistance": 0,
+        "regions": [
+          {
+            "x": 32,
+            "y": 368,
+            "w": 16,
+            "h": 16,
+            "pixels": 230,
+            "ratio": 0.898
+          },
+          {
+            "x": 80,
+            "y": 368,
+            "w": 16,
+            "h": 16,
+            "pixels": 227,
+            "ratio": 0.887
+          },
+          {
+            "x": 48,
+            "y": 368,
+            "w": 16,
+            "h": 16,
+            "pixels": 195,
+            "ratio": 0.762
+          },
+          {
+            "x": 208,
+            "y": 368,
+            "w": 16,
+            "h": 16,
+            "pixels": 190,
+            "ratio": 0.742
+          },
+          {
+            "x": 64,
+            "y": 368,
+            "w": 16,
+            "h": 16,
+            "pixels": 184,
+            "ratio": 0.719
+          },
+          {
+            "x": 80,
+            "y": 384,
+            "w": 16,
+            "h": 16,
+            "pixels": 163,
+            "ratio": 0.637
+          },
+          {
+            "x": 16,
+            "y": 160,
+            "w": 16,
+            "h": 16,
+            "pixels": 160,
+            "ratio": 0.625
+          },
+          {
+            "x": 16,
+            "y": 176,
+            "w": 16,
+            "h": 16,
+            "pixels": 160,
+            "ratio": 0.625
+          }
+        ],
+        "params": {
+          "channelThreshold": 8,
+          "blockSize": 16,
+          "noiseRatio": 0.005,
+          "noiseHashDistance": 16
+        }
+      },
+      "knownNoise": {
+        "id": "N-L4-five-end-rasterization",
+        "reason": "五端光栅化差异（已由标准 §9 允许差异清单声明为设计使然）：① 阴影策略不同——Web/小程序用 CSS box-shadow，Android/iOS 用分层逼近（本仓跨端一致策略，不用各端原生高斯 shadow）；② 字形引擎不同——各端字体度量与光栅化器各自实现（标准 §2 ③「唯一不可消除的结构性差异」/ §9 A-1）；③ 圆角/渐变边界 AA 各系统管线实现不同（§9 A-5）。实测证据：pHash 全 0（感知同形），逐像素差异 0.93%~3.01%，且差异 100% 集中在四项观测目标（蓝块边缘/阴影块/渐变块/字形行）——无一项落在空白区域（若空白区也出现差异，说明是污染而非光栅化）。",
+        "maxDiffRatio": 0.035,
+        "maxHashDistance": 0,
+        "recordedBy": "L4 五端走查（2026-10-02 会话，锚定归一实测）",
+        "recordedAt": "2026-10-02",
+        "evidence": {
+          "diffPixels": 10655,
+          "sampleCount": 354196,
+          "hashDistance": 0
+        }
+      }
+    },
+    {
+      "id": "l4:android-vs-web",
+      "a": "docs/generated/consistency-samples/pixels/l4.android.png",
+      "b": "docs/generated/consistency-samples/pixels/l4.web.png",
+      "mode": "cross-runtime",
+      "norm": {
+        "a": {
+          "srcSize": {
+            "width": 1200,
+            "height": 2608
+          },
+          "colorSpace": "display-p3",
+          "block": {
+            "x": 48,
+            "y": 672,
+            "w": 240,
+            "h": 144
+          },
+          "scale": 0.667
+        },
+        "b": {
+          "srcSize": {
+            "width": 780,
+            "height": 1688
+          },
+          "colorSpace": "undeclared",
+          "block": {
+            "x": 32,
+            "y": 240,
+            "w": 160,
+            "h": 96
+          },
+          "scale": 1
+        },
+        "outSize": {
+          "w": 640,
+          "h": 560
+        }
+      },
+      "observation": {
+        "gate": false,
+        "verdict": "changed",
+        "sizeA": {
+          "width": 636,
+          "height": 530
+        },
+        "sizeB": {
+          "width": 636,
+          "height": 530
+        },
+        "sampleCount": 337080,
+        "diffPixels": 8161,
+        "diffRatio": 0.02421,
+        "hashDistance": 0,
+        "regions": [
+          {
+            "x": 80,
+            "y": 368,
+            "w": 16,
+            "h": 16,
+            "pixels": 188,
+            "ratio": 0.734
+          },
+          {
+            "x": 112,
+            "y": 368,
+            "w": 16,
+            "h": 16,
+            "pixels": 174,
+            "ratio": 0.68
+          },
+          {
+            "x": 64,
+            "y": 368,
+            "w": 16,
+            "h": 16,
+            "pixels": 167,
+            "ratio": 0.652
+          },
+          {
+            "x": 32,
+            "y": 368,
+            "w": 16,
+            "h": 16,
+            "pixels": 164,
+            "ratio": 0.641
+          },
+          {
+            "x": 208,
+            "y": 368,
+            "w": 16,
+            "h": 16,
+            "pixels": 164,
+            "ratio": 0.641
+          },
+          {
+            "x": 16,
+            "y": 160,
+            "w": 16,
+            "h": 16,
+            "pixels": 160,
+            "ratio": 0.625
+          },
+          {
+            "x": 16,
+            "y": 176,
+            "w": 16,
+            "h": 16,
+            "pixels": 160,
+            "ratio": 0.625
+          },
+          {
+            "x": 48,
+            "y": 208,
+            "w": 16,
+            "h": 16,
+            "pixels": 160,
+            "ratio": 0.625
+          }
+        ],
+        "params": {
+          "channelThreshold": 8,
+          "blockSize": 16,
+          "noiseRatio": 0.005,
+          "noiseHashDistance": 16
+        }
+      },
+      "knownNoise": {
+        "id": "N-L4-five-end-rasterization",
+        "reason": "五端光栅化差异（已由标准 §9 允许差异清单声明为设计使然）：① 阴影策略不同——Web/小程序用 CSS box-shadow，Android/iOS 用分层逼近（本仓跨端一致策略，不用各端原生高斯 shadow）；② 字形引擎不同——各端字体度量与光栅化器各自实现（标准 §2 ③「唯一不可消除的结构性差异」/ §9 A-1）；③ 圆角/渐变边界 AA 各系统管线实现不同（§9 A-5）。实测证据：pHash 全 0（感知同形），逐像素差异 0.93%~3.01%，且差异 100% 集中在四项观测目标（蓝块边缘/阴影块/渐变块/字形行）——无一项落在空白区域（若空白区也出现差异，说明是污染而非光栅化）。",
+        "maxDiffRatio": 0.035,
+        "maxHashDistance": 0,
+        "recordedBy": "L4 五端走查（2026-10-02 会话，锚定归一实测）",
+        "recordedAt": "2026-10-02",
+        "evidence": {
+          "diffPixels": 10655,
+          "sampleCount": 354196,
+          "hashDistance": 0
+        }
+      }
+    },
+    {
+      "id": "l4:android-vs-webview",
+      "a": "docs/generated/consistency-samples/pixels/l4.android.png",
+      "b": "docs/generated/consistency-samples/pixels/l4.webview.png",
+      "mode": "cross-runtime",
+      "norm": {
+        "a": {
+          "srcSize": {
+            "width": 1200,
+            "height": 2608
+          },
+          "colorSpace": "display-p3",
+          "block": {
+            "x": 48,
+            "y": 672,
+            "w": 240,
+            "h": 144
+          },
+          "scale": 0.667
+        },
+        "b": {
+          "srcSize": {
+            "width": 640,
+            "height": 1386
+          },
+          "colorSpace": "undeclared",
+          "block": {
+            "x": 27,
+            "y": 199,
+            "w": 130,
+            "h": 78
+          },
+          "scale": 1.231
+        },
+        "outSize": {
+          "w": 640,
+          "h": 560
+        }
+      },
+      "observation": {
+        "gate": false,
+        "verdict": "changed",
+        "sizeA": {
+          "width": 636,
+          "height": 530
+        },
+        "sizeB": {
+          "width": 636,
+          "height": 530
+        },
+        "sampleCount": 337080,
+        "diffPixels": 10107,
+        "diffRatio": 0.02998,
+        "hashDistance": 0,
+        "regions": [
+          {
+            "x": 80,
+            "y": 368,
+            "w": 16,
+            "h": 16,
+            "pixels": 226,
+            "ratio": 0.883
+          },
+          {
+            "x": 208,
+            "y": 368,
+            "w": 16,
+            "h": 16,
+            "pixels": 214,
+            "ratio": 0.836
+          },
+          {
+            "x": 32,
+            "y": 368,
+            "w": 16,
+            "h": 16,
+            "pixels": 205,
+            "ratio": 0.801
+          },
+          {
+            "x": 48,
+            "y": 368,
+            "w": 16,
+            "h": 16,
+            "pixels": 177,
+            "ratio": 0.691
+          },
+          {
+            "x": 64,
+            "y": 368,
+            "w": 16,
+            "h": 16,
+            "pixels": 172,
+            "ratio": 0.672
+          },
+          {
+            "x": 176,
+            "y": 368,
+            "w": 16,
+            "h": 16,
+            "pixels": 171,
+            "ratio": 0.668
+          },
+          {
+            "x": 224,
+            "y": 368,
+            "w": 16,
+            "h": 16,
+            "pixels": 165,
+            "ratio": 0.645
+          },
+          {
+            "x": 80,
+            "y": 384,
+            "w": 16,
+            "h": 16,
+            "pixels": 161,
+            "ratio": 0.629
+          }
+        ],
+        "params": {
+          "channelThreshold": 8,
+          "blockSize": 16,
+          "noiseRatio": 0.005,
+          "noiseHashDistance": 16
+        }
+      },
+      "knownNoise": {
+        "id": "N-L4-five-end-rasterization",
+        "reason": "五端光栅化差异（已由标准 §9 允许差异清单声明为设计使然）：① 阴影策略不同——Web/小程序用 CSS box-shadow，Android/iOS 用分层逼近（本仓跨端一致策略，不用各端原生高斯 shadow）；② 字形引擎不同——各端字体度量与光栅化器各自实现（标准 §2 ③「唯一不可消除的结构性差异」/ §9 A-1）；③ 圆角/渐变边界 AA 各系统管线实现不同（§9 A-5）。实测证据：pHash 全 0（感知同形），逐像素差异 0.93%~3.01%，且差异 100% 集中在四项观测目标（蓝块边缘/阴影块/渐变块/字形行）——无一项落在空白区域（若空白区也出现差异，说明是污染而非光栅化）。",
+        "maxDiffRatio": 0.035,
+        "maxHashDistance": 0,
+        "recordedBy": "L4 五端走查（2026-10-02 会话，锚定归一实测）",
+        "recordedAt": "2026-10-02",
+        "evidence": {
+          "diffPixels": 10655,
+          "sampleCount": 354196,
+          "hashDistance": 0
+        }
+      }
+    },
+    {
+      "id": "l4:ios-vs-skyline",
+      "a": "docs/generated/consistency-samples/pixels/l4.ios.png",
+      "b": "docs/generated/consistency-samples/pixels/l4.skyline.png",
+      "mode": "cross-runtime",
+      "norm": {
+        "a": {
+          "srcSize": {
+            "width": 1206,
+            "height": 2622
+          },
+          "colorSpace": "undeclared",
+          "block": {
+            "x": 48,
+            "y": 361,
+            "w": 240,
+            "h": 142
+          },
+          "scale": 0.667
+        },
+        "b": {
+          "srcSize": {
+            "width": 640,
+            "height": 1386
+          },
+          "colorSpace": "undeclared",
+          "block": {
+            "x": 27,
+            "y": 199,
+            "w": 130,
+            "h": 78
+          },
+          "scale": 1.231
+        },
+        "outSize": {
+          "w": 640,
+          "h": 560
+        }
+      },
+      "observation": {
+        "gate": false,
+        "verdict": "changed",
+        "sizeA": {
+          "width": 636,
+          "height": 530
+        },
+        "sizeB": {
+          "width": 636,
+          "height": 530
+        },
+        "sampleCount": 337080,
+        "diffPixels": 9887,
+        "diffRatio": 0.02933,
+        "hashDistance": 0,
+        "regions": [
+          {
+            "x": 208,
+            "y": 368,
+            "w": 16,
+            "h": 16,
+            "pixels": 220,
+            "ratio": 0.859
+          },
+          {
+            "x": 32,
+            "y": 368,
+            "w": 16,
+            "h": 16,
+            "pixels": 213,
+            "ratio": 0.832
+          },
+          {
+            "x": 112,
+            "y": 368,
+            "w": 16,
+            "h": 16,
+            "pixels": 197,
+            "ratio": 0.77
+          },
+          {
+            "x": 48,
+            "y": 368,
+            "w": 16,
+            "h": 16,
+            "pixels": 196,
+            "ratio": 0.766
+          },
+          {
+            "x": 80,
+            "y": 368,
+            "w": 16,
+            "h": 16,
+            "pixels": 180,
+            "ratio": 0.703
+          },
+          {
+            "x": 48,
+            "y": 208,
+            "w": 16,
+            "h": 16,
+            "pixels": 176,
+            "ratio": 0.688
+          },
+          {
+            "x": 64,
+            "y": 208,
+            "w": 16,
+            "h": 16,
+            "pixels": 176,
+            "ratio": 0.688
+          },
+          {
+            "x": 80,
+            "y": 208,
+            "w": 16,
+            "h": 16,
+            "pixels": 176,
+            "ratio": 0.688
+          }
+        ],
+        "params": {
+          "channelThreshold": 8,
+          "blockSize": 16,
+          "noiseRatio": 0.005,
+          "noiseHashDistance": 16
+        }
+      },
+      "knownNoise": {
+        "id": "N-L4-five-end-rasterization",
+        "reason": "五端光栅化差异（已由标准 §9 允许差异清单声明为设计使然）：① 阴影策略不同——Web/小程序用 CSS box-shadow，Android/iOS 用分层逼近（本仓跨端一致策略，不用各端原生高斯 shadow）；② 字形引擎不同——各端字体度量与光栅化器各自实现（标准 §2 ③「唯一不可消除的结构性差异」/ §9 A-1）；③ 圆角/渐变边界 AA 各系统管线实现不同（§9 A-5）。实测证据：pHash 全 0（感知同形），逐像素差异 0.93%~3.01%，且差异 100% 集中在四项观测目标（蓝块边缘/阴影块/渐变块/字形行）——无一项落在空白区域（若空白区也出现差异，说明是污染而非光栅化）。",
+        "maxDiffRatio": 0.035,
+        "maxHashDistance": 0,
+        "recordedBy": "L4 五端走查（2026-10-02 会话，锚定归一实测）",
+        "recordedAt": "2026-10-02",
+        "evidence": {
+          "diffPixels": 10655,
+          "sampleCount": 354196,
+          "hashDistance": 0
+        }
+      }
+    },
+    {
+      "id": "l4:ios-vs-web",
+      "a": "docs/generated/consistency-samples/pixels/l4.ios.png",
+      "b": "docs/generated/consistency-samples/pixels/l4.web.png",
+      "mode": "cross-runtime",
+      "norm": {
+        "a": {
+          "srcSize": {
+            "width": 1206,
+            "height": 2622
+          },
+          "colorSpace": "undeclared",
+          "block": {
+            "x": 48,
+            "y": 361,
+            "w": 240,
+            "h": 142
+          },
+          "scale": 0.667
+        },
+        "b": {
+          "srcSize": {
+            "width": 780,
+            "height": 1688
+          },
+          "colorSpace": "undeclared",
+          "block": {
+            "x": 32,
+            "y": 240,
+            "w": 160,
+            "h": 96
+          },
+          "scale": 1
+        },
+        "outSize": {
+          "w": 640,
+          "h": 560
+        }
+      },
+      "observation": {
+        "gate": false,
+        "verdict": "changed",
+        "sizeA": {
+          "width": 636,
+          "height": 530
+        },
+        "sizeB": {
+          "width": 636,
+          "height": 530
+        },
+        "sampleCount": 337080,
+        "diffPixels": 7324,
+        "diffRatio": 0.02173,
+        "hashDistance": 0,
+        "regions": [
+          {
+            "x": 112,
+            "y": 368,
+            "w": 16,
+            "h": 16,
+            "pixels": 194,
+            "ratio": 0.758
+          },
+          {
+            "x": 128,
+            "y": 368,
+            "w": 16,
+            "h": 16,
+            "pixels": 191,
+            "ratio": 0.746
+          },
+          {
+            "x": 48,
+            "y": 208,
+            "w": 16,
+            "h": 16,
+            "pixels": 176,
+            "ratio": 0.688
+          },
+          {
+            "x": 64,
+            "y": 208,
+            "w": 16,
+            "h": 16,
+            "pixels": 176,
+            "ratio": 0.688
+          },
+          {
+            "x": 80,
+            "y": 208,
+            "w": 16,
+            "h": 16,
+            "pixels": 176,
+            "ratio": 0.688
+          },
+          {
+            "x": 96,
+            "y": 208,
+            "w": 16,
+            "h": 16,
+            "pixels": 176,
+            "ratio": 0.688
+          },
+          {
+            "x": 112,
+            "y": 208,
+            "w": 16,
+            "h": 16,
+            "pixels": 176,
+            "ratio": 0.688
+          },
+          {
+            "x": 128,
+            "y": 208,
+            "w": 16,
+            "h": 16,
+            "pixels": 176,
+            "ratio": 0.688
+          }
+        ],
+        "params": {
+          "channelThreshold": 8,
+          "blockSize": 16,
+          "noiseRatio": 0.005,
+          "noiseHashDistance": 16
+        }
+      },
+      "knownNoise": {
+        "id": "N-L4-five-end-rasterization",
+        "reason": "五端光栅化差异（已由标准 §9 允许差异清单声明为设计使然）：① 阴影策略不同——Web/小程序用 CSS box-shadow，Android/iOS 用分层逼近（本仓跨端一致策略，不用各端原生高斯 shadow）；② 字形引擎不同——各端字体度量与光栅化器各自实现（标准 §2 ③「唯一不可消除的结构性差异」/ §9 A-1）；③ 圆角/渐变边界 AA 各系统管线实现不同（§9 A-5）。实测证据：pHash 全 0（感知同形），逐像素差异 0.93%~3.01%，且差异 100% 集中在四项观测目标（蓝块边缘/阴影块/渐变块/字形行）——无一项落在空白区域（若空白区也出现差异，说明是污染而非光栅化）。",
+        "maxDiffRatio": 0.035,
+        "maxHashDistance": 0,
+        "recordedBy": "L4 五端走查（2026-10-02 会话，锚定归一实测）",
+        "recordedAt": "2026-10-02",
+        "evidence": {
+          "diffPixels": 10655,
+          "sampleCount": 354196,
+          "hashDistance": 0
+        }
+      }
+    },
+    {
+      "id": "l4:ios-vs-webview",
+      "a": "docs/generated/consistency-samples/pixels/l4.ios.png",
+      "b": "docs/generated/consistency-samples/pixels/l4.webview.png",
+      "mode": "cross-runtime",
+      "norm": {
+        "a": {
+          "srcSize": {
+            "width": 1206,
+            "height": 2622
+          },
+          "colorSpace": "undeclared",
+          "block": {
+            "x": 48,
+            "y": 361,
+            "w": 240,
+            "h": 142
+          },
+          "scale": 0.667
+        },
+        "b": {
+          "srcSize": {
+            "width": 640,
+            "height": 1386
+          },
+          "colorSpace": "undeclared",
+          "block": {
+            "x": 27,
+            "y": 199,
+            "w": 130,
+            "h": 78
+          },
+          "scale": 1.231
+        },
+        "outSize": {
+          "w": 640,
+          "h": 560
+        }
+      },
+      "observation": {
+        "gate": false,
+        "verdict": "changed",
+        "sizeA": {
+          "width": 636,
+          "height": 530
+        },
+        "sizeB": {
+          "width": 636,
+          "height": 530
+        },
+        "sampleCount": 337080,
+        "diffPixels": 9824,
+        "diffRatio": 0.02914,
+        "hashDistance": 0,
+        "regions": [
+          {
+            "x": 112,
+            "y": 368,
+            "w": 16,
+            "h": 16,
+            "pixels": 218,
+            "ratio": 0.852
+          },
+          {
+            "x": 208,
+            "y": 368,
+            "w": 16,
+            "h": 16,
+            "pixels": 202,
+            "ratio": 0.789
+          },
+          {
+            "x": 32,
+            "y": 368,
+            "w": 16,
+            "h": 16,
+            "pixels": 197,
+            "ratio": 0.77
+          },
+          {
+            "x": 48,
+            "y": 208,
+            "w": 16,
+            "h": 16,
+            "pixels": 176,
+            "ratio": 0.688
+          },
+          {
+            "x": 64,
+            "y": 208,
+            "w": 16,
+            "h": 16,
+            "pixels": 176,
+            "ratio": 0.688
+          },
+          {
+            "x": 80,
+            "y": 208,
+            "w": 16,
+            "h": 16,
+            "pixels": 176,
+            "ratio": 0.688
+          },
+          {
+            "x": 96,
+            "y": 208,
+            "w": 16,
+            "h": 16,
+            "pixels": 176,
+            "ratio": 0.688
+          },
+          {
+            "x": 112,
+            "y": 208,
+            "w": 16,
+            "h": 16,
+            "pixels": 176,
+            "ratio": 0.688
+          }
+        ],
+        "params": {
+          "channelThreshold": 8,
+          "blockSize": 16,
+          "noiseRatio": 0.005,
+          "noiseHashDistance": 16
+        }
+      },
+      "knownNoise": {
+        "id": "N-L4-five-end-rasterization",
+        "reason": "五端光栅化差异（已由标准 §9 允许差异清单声明为设计使然）：① 阴影策略不同——Web/小程序用 CSS box-shadow，Android/iOS 用分层逼近（本仓跨端一致策略，不用各端原生高斯 shadow）；② 字形引擎不同——各端字体度量与光栅化器各自实现（标准 §2 ③「唯一不可消除的结构性差异」/ §9 A-1）；③ 圆角/渐变边界 AA 各系统管线实现不同（§9 A-5）。实测证据：pHash 全 0（感知同形），逐像素差异 0.93%~3.01%，且差异 100% 集中在四项观测目标（蓝块边缘/阴影块/渐变块/字形行）——无一项落在空白区域（若空白区也出现差异，说明是污染而非光栅化）。",
+        "maxDiffRatio": 0.035,
+        "maxHashDistance": 0,
+        "recordedBy": "L4 五端走查（2026-10-02 会话，锚定归一实测）",
+        "recordedAt": "2026-10-02",
+        "evidence": {
+          "diffPixels": 10655,
+          "sampleCount": 354196,
+          "hashDistance": 0
+        }
+      }
+    },
+    {
+      "id": "l4:skyline-vs-web",
+      "a": "docs/generated/consistency-samples/pixels/l4.skyline.png",
+      "b": "docs/generated/consistency-samples/pixels/l4.web.png",
+      "mode": "cross-runtime",
+      "norm": {
+        "a": {
+          "srcSize": {
+            "width": 640,
+            "height": 1386
+          },
+          "colorSpace": "undeclared",
+          "block": {
+            "x": 27,
+            "y": 199,
+            "w": 130,
+            "h": 78
+          },
+          "scale": 1.231
+        },
+        "b": {
+          "srcSize": {
+            "width": 780,
+            "height": 1688
+          },
+          "colorSpace": "undeclared",
+          "block": {
+            "x": 32,
+            "y": 240,
+            "w": 160,
+            "h": 96
+          },
+          "scale": 1
+        },
+        "outSize": {
+          "w": 640,
+          "h": 560
+        }
+      },
+      "observation": {
+        "gate": false,
+        "verdict": "changed",
+        "sizeA": {
+          "width": 636,
+          "height": 530
+        },
+        "sizeB": {
+          "width": 636,
+          "height": 530
+        },
+        "sampleCount": 337080,
+        "diffPixels": 5891,
+        "diffRatio": 0.01748,
+        "hashDistance": 0,
+        "regions": [
+          {
+            "x": 208,
+            "y": 368,
+            "w": 16,
+            "h": 16,
+            "pixels": 213,
+            "ratio": 0.832
+          },
+          {
+            "x": 32,
+            "y": 368,
+            "w": 16,
+            "h": 16,
+            "pixels": 206,
+            "ratio": 0.805
+          },
+          {
+            "x": 48,
+            "y": 368,
+            "w": 16,
+            "h": 16,
+            "pixels": 193,
+            "ratio": 0.754
+          },
+          {
+            "x": 80,
+            "y": 368,
+            "w": 16,
+            "h": 16,
+            "pixels": 175,
+            "ratio": 0.684
+          },
+          {
+            "x": 176,
+            "y": 368,
+            "w": 16,
+            "h": 16,
+            "pixels": 163,
+            "ratio": 0.637
+          },
+          {
+            "x": 128,
+            "y": 384,
+            "w": 16,
+            "h": 16,
+            "pixels": 159,
+            "ratio": 0.621
+          },
+          {
+            "x": 112,
+            "y": 368,
+            "w": 16,
+            "h": 16,
+            "pixels": 154,
+            "ratio": 0.602
+          },
+          {
+            "x": 224,
+            "y": 368,
+            "w": 16,
+            "h": 16,
+            "pixels": 153,
+            "ratio": 0.598
+          }
+        ],
+        "params": {
+          "channelThreshold": 8,
+          "blockSize": 16,
+          "noiseRatio": 0.005,
+          "noiseHashDistance": 16
+        }
+      },
+      "knownNoise": {
+        "id": "N-L4-five-end-rasterization",
+        "reason": "五端光栅化差异（已由标准 §9 允许差异清单声明为设计使然）：① 阴影策略不同——Web/小程序用 CSS box-shadow，Android/iOS 用分层逼近（本仓跨端一致策略，不用各端原生高斯 shadow）；② 字形引擎不同——各端字体度量与光栅化器各自实现（标准 §2 ③「唯一不可消除的结构性差异」/ §9 A-1）；③ 圆角/渐变边界 AA 各系统管线实现不同（§9 A-5）。实测证据：pHash 全 0（感知同形），逐像素差异 0.93%~3.01%，且差异 100% 集中在四项观测目标（蓝块边缘/阴影块/渐变块/字形行）——无一项落在空白区域（若空白区也出现差异，说明是污染而非光栅化）。",
+        "maxDiffRatio": 0.035,
+        "maxHashDistance": 0,
+        "recordedBy": "L4 五端走查（2026-10-02 会话，锚定归一实测）",
+        "recordedAt": "2026-10-02",
+        "evidence": {
+          "diffPixels": 10655,
+          "sampleCount": 354196,
+          "hashDistance": 0
         }
       }
     },
@@ -116,85 +1137,119 @@
       "a": "docs/generated/consistency-samples/pixels/l4.skyline.png",
       "b": "docs/generated/consistency-samples/pixels/l4.webview.png",
       "mode": "same-runtime",
+      "norm": {
+        "a": {
+          "srcSize": {
+            "width": 640,
+            "height": 1386
+          },
+          "colorSpace": "undeclared",
+          "block": {
+            "x": 27,
+            "y": 199,
+            "w": 130,
+            "h": 78
+          },
+          "scale": 1.231
+        },
+        "b": {
+          "srcSize": {
+            "width": 640,
+            "height": 1386
+          },
+          "colorSpace": "undeclared",
+          "block": {
+            "x": 27,
+            "y": 199,
+            "w": 130,
+            "h": 78
+          },
+          "scale": 1.231
+        },
+        "outSize": {
+          "w": 640,
+          "h": 560
+        }
+      },
       "observation": {
         "gate": false,
-        "verdict": "noise-level",
+        "verdict": "changed",
         "sizeA": {
-          "width": 640,
-          "height": 1386
+          "width": 636,
+          "height": 530
         },
         "sizeB": {
-          "width": 640,
-          "height": 1386
+          "width": 636,
+          "height": 530
         },
-        "sampleCount": 693240,
-        "diffPixels": 2161,
-        "diffRatio": 0.00312,
+        "sampleCount": 337080,
+        "diffPixels": 3136,
+        "diffRatio": 0.0093,
         "hashDistance": 0,
         "regions": [
           {
-            "x": 114,
-            "y": 502,
+            "x": 208,
+            "y": 368,
             "w": 16,
             "h": 16,
-            "pixels": 177,
-            "ratio": 0.691
+            "pixels": 178,
+            "ratio": 0.695
           },
           {
-            "x": 178,
-            "y": 502,
+            "x": 224,
+            "y": 368,
             "w": 16,
             "h": 16,
-            "pixels": 153,
-            "ratio": 0.598
+            "pixels": 152,
+            "ratio": 0.594
           },
           {
-            "x": 178,
-            "y": 486,
+            "x": 176,
+            "y": 368,
+            "w": 16,
+            "h": 16,
+            "pixels": 143,
+            "ratio": 0.559
+          },
+          {
+            "x": 144,
+            "y": 384,
+            "w": 16,
+            "h": 16,
+            "pixels": 143,
+            "ratio": 0.559
+          },
+          {
+            "x": 128,
+            "y": 384,
+            "w": 16,
+            "h": 16,
+            "pixels": 123,
+            "ratio": 0.48
+          },
+          {
+            "x": 144,
+            "y": 368,
             "w": 16,
             "h": 16,
             "pixels": 119,
             "ratio": 0.465
           },
           {
-            "x": 146,
-            "y": 502,
+            "x": 128,
+            "y": 368,
             "w": 16,
             "h": 16,
-            "pixels": 109,
-            "ratio": 0.426
+            "pixels": 114,
+            "ratio": 0.445
           },
           {
-            "x": 66,
-            "y": 502,
+            "x": 112,
+            "y": 368,
             "w": 16,
             "h": 16,
-            "pixels": 103,
-            "ratio": 0.402
-          },
-          {
-            "x": 98,
-            "y": 502,
-            "w": 16,
-            "h": 16,
-            "pixels": 100,
-            "ratio": 0.391
-          },
-          {
-            "x": 34,
-            "y": 486,
-            "w": 16,
-            "h": 16,
-            "pixels": 82,
-            "ratio": 0.32
-          },
-          {
-            "x": 66,
-            "y": 486,
-            "w": 16,
-            "h": 16,
-            "pixels": 82,
-            "ratio": 0.32
+            "pixels": 108,
+            "ratio": 0.422
           }
         ],
         "params": {
@@ -202,12 +1257,19 @@
           "blockSize": 16,
           "noiseRatio": 0.005,
           "noiseHashDistance": 16
-        },
-        "roi": {
-          "x": 2,
-          "y": 150,
-          "w": 636,
-          "h": 1090
+        }
+      },
+      "knownNoise": {
+        "id": "N-L4-five-end-rasterization",
+        "reason": "五端光栅化差异（已由标准 §9 允许差异清单声明为设计使然）：① 阴影策略不同——Web/小程序用 CSS box-shadow，Android/iOS 用分层逼近（本仓跨端一致策略，不用各端原生高斯 shadow）；② 字形引擎不同——各端字体度量与光栅化器各自实现（标准 §2 ③「唯一不可消除的结构性差异」/ §9 A-1）；③ 圆角/渐变边界 AA 各系统管线实现不同（§9 A-5）。实测证据：pHash 全 0（感知同形），逐像素差异 0.93%~3.01%，且差异 100% 集中在四项观测目标（蓝块边缘/阴影块/渐变块/字形行）——无一项落在空白区域（若空白区也出现差异，说明是污染而非光栅化）。",
+        "maxDiffRatio": 0.035,
+        "maxHashDistance": 0,
+        "recordedBy": "L4 五端走查（2026-10-02 会话，锚定归一实测）",
+        "recordedAt": "2026-10-02",
+        "evidence": {
+          "diffPixels": 10655,
+          "sampleCount": 354196,
+          "hashDistance": 0
         }
       }
     },
@@ -216,85 +1278,119 @@
       "a": "docs/generated/consistency-samples/pixels/l4.web.png",
       "b": "docs/generated/consistency-samples/pixels/l4.webview.png",
       "mode": "cross-runtime",
+      "norm": {
+        "a": {
+          "srcSize": {
+            "width": 780,
+            "height": 1688
+          },
+          "colorSpace": "undeclared",
+          "block": {
+            "x": 32,
+            "y": 240,
+            "w": 160,
+            "h": 96
+          },
+          "scale": 1
+        },
+        "b": {
+          "srcSize": {
+            "width": 640,
+            "height": 1386
+          },
+          "colorSpace": "undeclared",
+          "block": {
+            "x": 27,
+            "y": 199,
+            "w": 130,
+            "h": 78
+          },
+          "scale": 1.231
+        },
+        "outSize": {
+          "w": 640,
+          "h": 560
+        }
+      },
       "observation": {
         "gate": false,
-        "verdict": "noise-level",
+        "verdict": "changed",
         "sizeA": {
-          "width": 780,
-          "height": 1688
+          "width": 636,
+          "height": 530
         },
         "sizeB": {
-          "width": 780,
-          "height": 1688
+          "width": 636,
+          "height": 530
         },
-        "sampleCount": 679496,
-        "diffPixels": 3045,
-        "diffRatio": 0.00448,
+        "sampleCount": 337080,
+        "diffPixels": 5303,
+        "diffRatio": 0.01573,
         "hashDistance": 0,
         "regions": [
           {
-            "x": 70,
-            "y": 602,
+            "x": 32,
+            "y": 368,
             "w": 16,
             "h": 16,
-            "pixels": 101,
-            "ratio": 0.395
+            "pixels": 197,
+            "ratio": 0.77
           },
           {
-            "x": 38,
-            "y": 602,
+            "x": 48,
+            "y": 368,
             "w": 16,
             "h": 16,
-            "pixels": 87,
-            "ratio": 0.34
+            "pixels": 172,
+            "ratio": 0.672
           },
           {
-            "x": 214,
-            "y": 602,
+            "x": 208,
+            "y": 368,
             "w": 16,
             "h": 16,
-            "pixels": 80,
-            "ratio": 0.313
+            "pixels": 167,
+            "ratio": 0.652
           },
           {
-            "x": 54,
-            "y": 602,
+            "x": 80,
+            "y": 368,
             "w": 16,
             "h": 16,
-            "pixels": 75,
-            "ratio": 0.293
+            "pixels": 152,
+            "ratio": 0.594
           },
           {
-            "x": 86,
-            "y": 602,
+            "x": 112,
+            "y": 368,
             "w": 16,
             "h": 16,
-            "pixels": 75,
-            "ratio": 0.293
+            "pixels": 139,
+            "ratio": 0.543
           },
           {
-            "x": 134,
-            "y": 618,
+            "x": 144,
+            "y": 384,
             "w": 16,
             "h": 16,
-            "pixels": 74,
-            "ratio": 0.289
+            "pixels": 137,
+            "ratio": 0.535
           },
           {
-            "x": 70,
-            "y": 618,
+            "x": 224,
+            "y": 368,
             "w": 16,
             "h": 16,
-            "pixels": 69,
-            "ratio": 0.27
+            "pixels": 136,
+            "ratio": 0.531
           },
           {
-            "x": 118,
-            "y": 602,
+            "x": 32,
+            "y": 352,
             "w": 16,
             "h": 16,
-            "pixels": 68,
-            "ratio": 0.266
+            "pixels": 122,
+            "ratio": 0.477
           }
         ],
         "params": {
@@ -302,19 +1398,19 @@
           "blockSize": 16,
           "noiseRatio": 0.005,
           "noiseHashDistance": 16
-        },
-        "roi": {
-          "x": 2,
-          "y": 150,
-          "w": 636,
-          "h": 1090
-        },
-        "translation": {
-          "dx": 0,
-          "dy": -2,
-          "diffPixels": 3045,
-          "diffPixelsRaw": 5738,
-          "max": 4
+        }
+      },
+      "knownNoise": {
+        "id": "N-L4-five-end-rasterization",
+        "reason": "五端光栅化差异（已由标准 §9 允许差异清单声明为设计使然）：① 阴影策略不同——Web/小程序用 CSS box-shadow，Android/iOS 用分层逼近（本仓跨端一致策略，不用各端原生高斯 shadow）；② 字形引擎不同——各端字体度量与光栅化器各自实现（标准 §2 ③「唯一不可消除的结构性差异」/ §9 A-1）；③ 圆角/渐变边界 AA 各系统管线实现不同（§9 A-5）。实测证据：pHash 全 0（感知同形），逐像素差异 0.93%~3.01%，且差异 100% 集中在四项观测目标（蓝块边缘/阴影块/渐变块/字形行）——无一项落在空白区域（若空白区也出现差异，说明是污染而非光栅化）。",
+        "maxDiffRatio": 0.035,
+        "maxHashDistance": 0,
+        "recordedBy": "L4 五端走查（2026-10-02 会话，锚定归一实测）",
+        "recordedAt": "2026-10-02",
+        "evidence": {
+          "diffPixels": 10655,
+          "sampleCount": 354196,
+          "hashDistance": 0
         }
       }
     },
@@ -441,10 +1537,10 @@
     }
   ],
   "totals": {
-    "sampleCount": 2068616,
-    "diffPixels": 7895,
-    "changedSamples": 1,
-    "cleanSamples": 6,
-    "knownNoiseSamples": 0
+    "sampleCount": 3387184,
+    "diffPixels": 75117,
+    "changedSamples": 11,
+    "cleanSamples": 3,
+    "knownNoiseSamples": 10
   }
 }

@@ -13,7 +13,7 @@ import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 import {
   pixelObservation, pHash, hammingDistance, buildPixelReport, matchPixelNoise, validatePixelNoiseBaseline,
-  encodePng, decodePng, isConsistencyReport, formatReport, cropImage, alignTranslation,
+  encodePng, decodePng, isConsistencyReport, formatReport, cropImage, alignTranslation, anchorNormalize,
   compareGeometry, buildGeometryReport, applyAutoFixToGeometry, compareStyle, buildStyleReport, resolveTolerance,
 } from '@proteus-vue/consistency'
 import type { RgbaImage, GeometrySnapshot, PixelNoiseBaseline } from '@proteus-vue/consistency'
@@ -226,6 +226,88 @@ describe('VC7 · 平移对齐（跨运行时截图的坐标系原点差）', () 
     expect(Math.abs(fit.dx)).toBeLessThanOrEqual(3)
     expect(Math.abs(fit.dy)).toBeLessThanOrEqual(3)
     expect(fit.diffPixels, '3px 不足以对齐 8px 位移 ⇒ 残差必须可见（不是"对不齐也报 0"）').toBeGreaterThan(0)
+  })
+})
+
+describe('VC7 · 锚定归一（五端同坐标系比较的前提）', () => {
+  /** 合成"端截图"：任意画布上的锚块（蓝 130×78 直角色块）+ 一个内容块（暗灰，检验相对位置） */
+  function endShot(w: number, h: number, blockAt: { x: number; y: number }, blockW = 130, blockH = 78): RgbaImage {
+    const rgba = new Uint8Array(w * h * 4)
+    const bg = [20, 20, 28]
+    for (let y = 0; y < h; y++) {
+      for (let x = 0; x < w; x++) {
+        const i = (y * w + x) * 4
+        rgba[i] = bg[0]; rgba[i + 1] = bg[1]; rgba[i + 2] = bg[2]; rgba[i + 3] = 255
+      }
+    }
+    const paint = (x0: number, y0: number, pw: number, ph: number, c: [number, number, number]) => {
+      for (let y = y0; y < y0 + ph && y < h; y++) {
+        for (let x = x0; x < x0 + pw && x < w; x++) {
+          if (x < 0 || y < 0) continue
+          const i = (y * w + x) * 4
+          rgba[i] = c[0]; rgba[i + 1] = c[1]; rgba[i + 2] = c[2]; rgba[i + 3] = 255
+        }
+      }
+    }
+    paint(blockAt.x, blockAt.y, blockW, blockH, [47, 111, 237])                        // 锚块
+    paint(blockAt.x, blockAt.y + Math.round(blockH * 1.3), Math.round(blockW * 0.8), Math.round(blockH * 0.6), [42, 63, 102]) // 内容块
+    return { width: w, height: h, rgba }
+  }
+  const SPEC = { probe: [47, 111, 237] as [number, number, number], outSize: { w: 640, h: 560 }, blockTarget: { x: 30, y: 30, w: 160 } }
+
+  it('▲1 归一后锚块精确落在目标矩形（位置 + 尺寸两个自由度都被吸收）', () => {
+    const src = endShot(640, 1386, { x: 27, y: 199 })
+    const r = anchorNormalize(src, SPEC)
+    expect([r.img.width, r.img.height]).toEqual([640, 560])
+    expect([r.block.x, r.block.y]).toEqual([27, 199])
+    // 归一后锚块应在 (30,30) 附近、宽 ≈160（±2 像素——整数化 + 重采样误差）
+    // （用像素扫描独立复验，而不是相信函数自身的数学）
+    let x0 = Infinity, y0 = Infinity, x1 = -1, y1 = -1
+    for (let y = 0; y < r.img.height; y++) {
+      for (let x = 0; x < r.img.width; x++) {
+        const i = (y * r.img.width + x) * 4
+        if (Math.abs(r.img.rgba[i]! - 47) <= 12 && Math.abs(r.img.rgba[i + 1]! - 111) <= 12 && Math.abs(r.img.rgba[i + 2]! - 237) <= 12) {
+          if (x < x0) x0 = x; if (x > x1) x1 = x; if (y < y0) y0 = y; if (y > y1) y1 = y
+        }
+      }
+    }
+    expect(Math.abs(x0 - 30), `锚块 x=${x0} 应 ≈30`).toBeLessThanOrEqual(2)
+    expect(Math.abs(y0 - 30), `锚块 y=${y0} 应 ≈30`).toBeLessThanOrEqual(2)
+    expect(Math.abs((x1 - x0 + 1) - 160), `锚块宽=${x1 - x0 + 1} 应 ≈160`).toBeLessThanOrEqual(3)
+  })
+
+  it('▲2 整数平移不变性：内容整体平移整数像素 ⇒ 归一输出**逐字节相同**（字节确定性）', () => {
+    const a = anchorNormalize(endShot(640, 1386, { x: 27, y: 199 }), SPEC)
+    // ★锚点必须离右侧 ≥ 窗口宽（520 源像素——夹具留足边距是这个函数的前置约束，越界会抛错）
+    const b = anchorNormalize(endShot(640, 1386, { x: 100, y: 500 }), SPEC)
+    expect(Array.from(b.img.rgba)).toEqual(Array.from(a.img.rgba))
+  })
+
+  it('▲3 缩放不变性：同一夹具以 1.5× 渲染（源像素尺寸不同）⇒ 归一输出一致', () => {
+    const a = anchorNormalize(endShot(640, 1386, { x: 27, y: 199 }), SPEC)
+    // 1.5×：锚块 195×117；内容块同步放大（1.3 间距与 0.8/0.6 比例经 round 近似——允许少量差异）
+    const b = anchorNormalize(endShot(960, 2079, { x: 40, y: 298 }, 195, 117), SPEC)
+    expect([b.img.width, b.img.height]).toEqual([640, 560])
+    expect(b.scale, '缩放系数应约 160/195').toBeCloseTo(160 / 195, 3)
+    // 内容块中心的大片上色区域应近乎重合（比较两图内容块中心 20×20 的均值）
+    let sum = 0, cnt = 0
+    for (let y = 90; y < 130; y++) {
+      for (let x = 40; x < 120; x++) {
+        const ia = (y * a.img.width + x) * 4
+        const ib = (y * b.img.width + x) * 4
+        if (Math.abs(a.img.rgba[ia]! - 42) <= 12 && Math.abs(b.img.rgba[ib]! - 42) <= 12) cnt++
+        sum++
+      }
+    }
+    expect(cnt / sum, '缩放后内容块应大面积重合（≥80%）').toBeGreaterThan(0.8)
+  })
+
+  it('▲4 无锚 / 窗口越界 ⇒ 抛错（不静默产出错图）', () => {
+    const noAnchor = { width: 100, height: 100, rgba: new Uint8Array(100 * 100 * 4) }
+    expect(() => anchorNormalize(noAnchor, SPEC)).toThrow(/未找到锚点色/)
+    // 锚块贴边 ⇒ 归一窗口（左/上各留 30/s ≈14px）越界
+    const edge = endShot(200, 200, { x: 2, y: 2 })
+    expect(() => anchorNormalize(edge, SPEC)).toThrow(/越界/)
   })
 })
 

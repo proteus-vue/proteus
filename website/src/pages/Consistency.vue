@@ -27,6 +27,15 @@ const D = CONSISTENCY_PAGE
 
 const pct = (v: number): string => (v * 100).toFixed(1) + '%'
 
+/** 端名（英文页用）——中文页直接用端显示名 */
+const END_LABEL: Record<string, string> = {
+  skyline: '微信 Skyline · WeChat Skyline',
+  webview: '微信 WebView · WeChat WebView',
+  web: '浏览器 · Browser',
+  android: 'Android（真机 · device）',
+  ios: 'iOS（模拟器 · simulator）',
+}
+
 /** 核心指标卡（数字全部来自机器产物） */
 const metrics = computed(() => [
   {
@@ -126,14 +135,14 @@ function pairLabel(id: string): string {
       </div>
     </section>
 
-    <!-- ═══ 三端真截图（L4 像素观测） ═══ -->
+    <!-- ═══ 五端真截图（L4 像素观测） ═══ -->
     <section class="cons-sec">
-      <p class="cons-sec-title">{{ isEn ? 'Pixel observation · one fixture, three renderers' : '像素观测 · 同一夹具，三种渲染器' }}</p>
+      <p class="cons-sec-title">{{ isEn ? 'Pixel observation · one fixture, five real renderers' : '像素观测 · 同一夹具，五种真实渲染器' }}</p>
       <p class="cons-sec-note">
         {{
           isEn
-            ? 'One fixture (radius / shadow / gradient / glyph) rendered by three real renderers under the same declarations. Screenshots are compared with a perceptual algorithm (pHash + block-level diff), with device chrome masked out and cross-runtime alignment applied. Observation only — never a gate.'
-            : '同一夹具（圆角 / 阴影 / 渐变 / 字形）在同一组声明下由三种真实渲染器画出。截图用感知算法比对（pHash + 分块差异定位），遮掉设备 chrome、做过跨运行时对齐。仅观察，永不作为门禁。'
+            ? 'One fixture (radius / shadow / gradient / glyph) under the same declarations, rendered by five real targets: WeChat Skyline, WeChat WebView, browser, Android device, iOS simulator. Each screenshot is anchored to a common coordinate system by the fixture blue block (position + scale), colour-managed (Display P3 → sRGB), then compared with a perceptual algorithm (pHash + block-level diff). Observation only — never a gate.'
+            : '同一夹具（圆角 / 阴影 / 渐变 / 字形）在同一组声明下，由五个真实目标渲染：微信 Skyline、微信 WebView、浏览器、Android 真机、iOS 模拟器。每张截图按夹具蓝块锚定归一（位置 + 尺度两个自由度），做色彩管理（Display P3 → sRGB），再用感知算法比对（pHash + 分块差异定位）。仅观察，永不作为门禁。'
         }}
       </p>
       <div class="cons-shots">
@@ -142,18 +151,23 @@ function pairLabel(id: string): string {
           <figcaption class="cons-shot-cap">{{ s.label }}</figcaption>
         </figure>
       </div>
+      <!-- 归一记录：各端源分辨率/色彩空间/锚块/缩放——"怎么归到统一坐标系"的可复现证据 -->
+      <div class="cons-norms">
+        <span v-for="(n, end) in D.pixel.endNorm" :key="end" class="cons-norm">
+          <b>{{ end }}</b>
+          {{ n.srcSize.width }}×{{ n.srcSize.height }} → ×{{ n.scale }}
+          <span v-if="n.colorSpace === 'display-p3'" class="cons-norm-cs">Display P3 → sRGB</span>
+        </span>
+      </div>
       <div class="cons-pairs">
         <div v-for="p in D.pixel.pairs" :key="p.id" class="cons-pair">
           <span class="cons-pair-head">{{ pairLabel(p.id) }}</span>
           <span class="cons-pair-mode" :class="p.mode">{{ p.mode === 'cross-runtime' ? (isEn ? 'cross-runtime' : '跨运行时') : (isEn ? 'same runtime' : '同运行时') }}</span>
           <span class="cons-pair-val">
-            {{ (p.diffRatio * 100).toFixed(3) }}%
+            {{ (p.diffRatio * 100).toFixed(2) }}%
             <span class="cons-pair-sub">{{ isEn ? 'pixels differ' : '像素差异' }} · hash {{ p.hashDistance }} · {{ p.verdict }}</span>
           </span>
-          <span v-if="p.translation" class="cons-pair-sub">
-            {{ isEn ? 'coordinate origin offset' : '坐标系原点偏移' }}
-            dx={{ p.translation.dx }} dy={{ p.translation.dy }}
-          </span>
+          <span v-if="p.knownNoise" class="cons-pair-sub cons-known">{{ isEn ? 'known rasterization noise (declared)' : '已知光栅化噪声（已登记）' }}</span>
         </div>
       </div>
     </section>
@@ -270,6 +284,18 @@ function pairLabel(id: string): string {
   background: var(--panel2);
 }
 .cons-shot-cap { color: var(--muted); font-size: 11.5px; text-align: center; }
+
+.cons-norms { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 14px; }
+.cons-norm {
+  font-size: 11px;
+  color: var(--muted);
+  background: var(--panel2);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 5px 10px;
+}
+.cons-norm b { color: var(--ink); font-weight: 700; margin-right: 4px; }
+.cons-norm-cs { color: var(--brand-ink); margin-left: 6px; }
 
 .cons-pairs { display: flex; flex-direction: column; gap: 8px; margin-top: 14px; }
 .cons-pair {
