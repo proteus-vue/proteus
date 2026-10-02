@@ -91,6 +91,37 @@ chmod 600 ~/.harmony/hdckey ~/.harmony/hdckey.pub
 Android 走 JNI、iOS 走 staticlib、**鸿蒙走 `aarch64-unknown-linux-ohos` 交叉编译 + C ABI**（无绑定层）。
 交叉编译脚本：`bash hosts/harmony/build-rust-core.sh`（产物 `cpp/thirdparty/libproteus_layout_core.a`，gitignore）。
 
+### ✅ 第七里程碑：**JSVM(V8) 打通 —— Vapor 设备端链与 Android 共用同一份 bundle**（2026-10-03，矩阵 #14 + #13）
+
+> **零移植**：鸿蒙不重写 JS 链——`OH_JSVM_*`（V8 封装，SDK 自带 `libjsvm.so`）直接在设备上
+> eval **与 Android 完全同一份** `bundle-vapor.js`（465KB IIFE）⇒ 设备端实例化 + 订阅驱动增量
+> 全链成立，**共用同一份判据** `check-vapor-device.py`（①–⑥ 绿；⑦绘制通道/⑧tap 按 `host_id` 如实跳过）。
+
+| 判据 | 读数（真机 HUAWEI KLE-AL00U） |
+|---|---|
+| JSVM 可用性（`jsvmProbe`） | init→VM→Env→Compile→Run 全 `JSVM_OK`，`6*7=42` |
+| 设备端实例化 | 26 节点 / 模板 12 + 运行时分配 14 / 展开 8 行（**不是构建期烧死的**） |
+| 数据回填 | 非空文本 9 · 带 width 11 |
+| 宿主 mount + 离屏自检 | 26 节点 · 26 指令 · **像素采样 1,199,700 · 9 色** |
+| **订阅驱动增量** | 3 轮 · 183 字节二进制指令 · 探针节点（第 2 行宽度槽位）**52 → 80** |
+| 文本同步（判据⑥） | 3 处（逐轮 1——"读了没入表"缺陷的回归锁） |
+
+**一键复跑**：`bash hosts/harmony/run-vapor.sh`（装机 → 启动 → 等 `PROTEUS_VAPOR_DONE` → 取报告 → 判据）。
+
+**宿主桥（4 方法，全部返回 JSON 字符串）**：`mount` / `applyOps` / `readRects` / `probeChannels`
+——经 `JSVM_Callback`（`JSVM_CallbackStruct{fn,data}`）反向注入 `globalThis.proteusHost`；
+bundle 侧代码 `JSON.parse(proteusHost.mount(...))` **一字未改**。
+
+**★本轮实测三个坑（都记进代码注释）**：
+
+| # | 坑 | 现象 | 根因 | 修法 |
+|---|---|---|---|---|
+| 1 | **漏开 HandleScope** | 真机 CppCrash（栈回溯 `OH_JSVM_CreateObject+112`） | `jsvmProbe` 开了 scope 所以没事；`VaporProbe` 首版漏开 ⇒ 任何 JSVM 值创建都崩 | `OH_JSVM_OpenHandleScope` 必须在任何值创建前；`CloseHandleScope` 在 DestroyEnv 前 |
+| 2 | **parseByteArray 丢 0 字节** | `applyOps` 三轮全 `applied=-1`（decode_ops 失败） | 条件写成 `v > 0`——而**二进制指令流里 0 是合法字节** | `v >= 0`；教训：区间过滤要对着**数据域**核（整字节 ≠ 正数） |
+| 3 | 沙箱文件 hdc 读不到 | `Error opening file: permission denied`（el2 路径） | 应用沙箱对 shell 不可读 | 用 **el2 映射路径** `/data/app/el2/100/base/<bundle>/haps/.../files/`（shell 可读） |
+
+**与 Android 的口径差异（诚实边界）**：① 内核单位 = 设计单位（Android 为物理单位），各自内部一致；判据只断言相对变化。② tapAt/onGesture 未接（手势属矩阵 #7）——JS 侧按 `typeof` 自动跳过，不造假。
+
 ### ✅ 第六里程碑：**SFC 压力夹具上屏 · 六端一致性报告入列**（2026-10-02，矩阵 #21）
 
 > `examples/pages/consistency-stress.vue`（44 节点 · 10 行 v-for · 行内动态绑定）的编译器产物

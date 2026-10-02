@@ -21,7 +21,7 @@ import { hidebug } from '@kit.PerformanceAnalysisKit';
 // ★矩阵 #17：App 路由栈场景探针（移植副本，与 Android/iOS 同口径）
 import { runAppStackProbe } from '../core/app-stack-probe';
 import { attach, renderCommands, stats, ProteusRenderStats } from 'libproteus_render.so';
-import { bench4050, hitProbe, recycleProbe, spliceProbe, textProbe, kernelAnimProbe, memProbe, sfcStressProbe, sfcStressCommands, version as rustVersion } from 'libproteus_bench.so';
+import { bench4050, hitProbe, recycleProbe, spliceProbe, textProbe, kernelAnimProbe, memProbe, sfcStressProbe, sfcStressCommands, jsvmProbe, vaporProbe, version as rustVersion } from 'libproteus_bench.so';
 
 const DOMAIN = 0x0002;
 const TAG = 'ProteusRender';
@@ -82,6 +82,16 @@ interface RenderCmdFixture {
   text?: string;
   fontSize?: number;
   textColor?: number;
+}
+
+/** Vapor 探针入参（ArkTS 严格模式要求显式接口） */
+interface VaporProbeArgs {
+  bundle: string;
+  artifacts: string;
+  vpW: number;
+  vpH: number;
+  density: number;
+  filesDir: string;
 }
 
 /**
@@ -437,6 +447,35 @@ struct Index {
           hilog.info(DOMAIN, BENCH_TAG, 'PROTEUS_SFCSTRESS %{public}s', sfcOut);
         } catch (sfe) {
           hilog.error(DOMAIN, BENCH_TAG, 'PROTEUS_SFCSTRESS_ERROR %{public}s', JSON.stringify(sfe) ?? '');
+        }
+        // ★JSVM 引擎探针（矩阵 #13/#14 前置——设备端 JS 引擎可用性）
+        try {
+          const jv: string = jsvmProbe();
+          hilog.info(DOMAIN, BENCH_TAG, 'PROTEUS_JSVM %{public}s', jv);
+        } catch (je) {
+          hilog.error(DOMAIN, BENCH_TAG, 'PROTEUS_JSVM_ERROR %{public}s', JSON.stringify(je) ?? '');
+        }
+        // ★★★Vapor 设备端链（矩阵 #14）——JSVM eval 与 Android 同一份 bundle-vapor.js
+        //   ★串行执行（等前一档完成）——JSVM 全链在 UI 线程，单次 ~几百 ms（见 THREAD_BLOCK_6S 纪律）
+        try {
+          const ctx3 = getContext(this);
+          const bBytes: Uint8Array = ctx3.resourceManager.getRawFileContentSync('bundle-vapor.js');
+          const bStr: string = util.TextDecoder.create('utf-8').decodeToString(bBytes);
+          const aBytes: Uint8Array = ctx3.resourceManager.getRawFileContentSync('vapor-artifacts.json');
+          const aStr: string = util.TextDecoder.create('utf-8').decodeToString(aBytes);
+          const disp3 = display.getDefaultDisplaySync();
+          const vArgs: VaporProbeArgs = {
+            bundle: bStr,
+            artifacts: aStr,
+            vpW: px2vp(disp3.width),
+            vpH: px2vp(disp3.height),
+            density: DENSITY,
+            filesDir: ctx3.filesDir,
+          };
+          const vOut: string = vaporProbe(JSON.stringify(vArgs));
+          hilog.info(DOMAIN, BENCH_TAG, 'PROTEUS_VAPOR %{public}s', vOut.substring(0, 800));
+        } catch (ve) {
+          hilog.error(DOMAIN, BENCH_TAG, 'PROTEUS_VAPOR_ERROR %{public}s', JSON.stringify(ve) ?? '');
         }
         // ★内核动画探针（矩阵 #16）
         try {

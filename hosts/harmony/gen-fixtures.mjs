@@ -47,6 +47,28 @@ function genStress() {
   console.log(`  ✓ stress-44.json：${nodes.length} 节点（实例化自 vapor-stress-artifacts.json）`)
 }
 
+function copyVapor() {
+  // ★矩阵 #14：Vapor 设备端链的**同源材料**——与 Android 端跑的完全同一份文件
+  //   （bundle-vapor.js 是 esbuild IIFE，JSVM 直接 eval；artifacts 是编译器产物 JSON）。
+  const files = [
+    ['bundle-vapor.js', path.join(ROOT, 'hosts/android/bridge/dist/bundle-vapor.js')],
+    ['vapor-artifacts.json', path.join(ANDROID_ASSETS, 'vapor-artifacts.json')],
+  ]
+  for (const [name, src] of files) {
+    if (!fs.existsSync(src)) {
+      console.log(`  ⚠ 缺 ${path.relative(ROOT, src)}——跳过（vapor 探针将不可用）`)
+      continue
+    }
+    if (name === 'bundle-vapor.js') {
+      fs.mkdirSync(FIXTURES, { recursive: true })
+      fs.copyFileSync(src, path.join(FIXTURES, name))
+    }
+    fs.mkdirSync(RAWFILE, { recursive: true })
+    fs.copyFileSync(src, path.join(RAWFILE, name))
+    console.log(`  ✓ ${name}：与 Android 同源复制（${fs.statSync(src).size}B）`)
+  }
+}
+
 function copy4050() {
   const src = path.join(ANDROID_ASSETS, 'app-4050-tree.json')
   if (!fs.existsSync(src)) {
@@ -60,4 +82,5 @@ function copy4050() {
 console.log('[gen-fixtures] 鸿蒙宿主夹具再生成')
 genStress()
 copy4050()
+copyVapor()
 console.log(`  产物目录：${path.relative(ROOT, RAWFILE)}/`)

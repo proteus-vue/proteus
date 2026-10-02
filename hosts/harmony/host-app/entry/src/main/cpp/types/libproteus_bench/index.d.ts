@@ -19,5 +19,10 @@ export const memProbe: (phase: string, fixtureJson?: string) => string;
 export const sfcStressProbe: (fixtureJson: string, vpW: number, vpH: number, density: number) => string;
 /** ★SFC 压力夹具 → 渲染指令数组（上屏通路；density = vp2px(1)，几何/字号在该处转物理 px） */
 export const sfcStressCommands: (fixtureJson: string, density: number, vpW: number, vpH: number) => string;
+/** ★JSVM（V8）引擎探针（矩阵 #13/#14 前置）：init→VM→Env→Compile→Run→取值；默认脚本 6*7 */
+export const jsvmProbe: (script?: string) => string;
+/** ★★★Vapor 设备端链（矩阵 #14）：JSVM eval bundle-vapor.js → 设备端实例化 + 订阅驱动增量。
+ *  argsJson = { bundle, artifacts, vpW, vpH, density, filesDir? }；返回包装报告（含 report 原文） */
+export const vaporProbe: (argsJson: string) => string;
 /** Rust 排版核版本（仪器自检） */
 export const version: () => string;

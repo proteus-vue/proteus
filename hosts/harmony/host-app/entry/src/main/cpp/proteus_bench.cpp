@@ -38,6 +38,13 @@
 #include <arkui/native_type.h>
 #include <arkui/native_node.h>
 #include <arkui/native_render.h>
+// ★JSVM（V8）——矩阵 #13/#14 前置：设备端 JS 引擎可用性探针（与 Android QuickJS / iOS JSC 同定位）
+#include <ark_runtime/jsvm.h>
+// ★离屏像素自检（矩阵 #14 的 host_painted_samples）——与 Android "离屏位图采样" 同口径
+#include <native_drawing/drawing_bitmap.h>
+#include <native_drawing/drawing_brush.h>
+#include <native_drawing/drawing_rect.h>
+#include <native_drawing/drawing_round_rect.h>
 #include <arkui/native_node_napi.h>
 
 #define PROTEUS_BENCH_DOMAIN 0x0003
@@ -48,6 +55,8 @@ extern "C" {
 uint64_t proteus_layout_create(const char* request_json);
 char* proteus_layout_rects(uint64_t handle);
 char* proteus_layout_hit_test(uint64_t handle, float x, float y);
+// ★★二进制指令流（矩阵 #14）：SFC 订阅驱动更新 → 内核增量重排（与 Android JNI 同一 ABI）
+char* proteus_layout_apply_ops(uint64_t handle, const uint8_t* ptr, uint32_t len);
 // ★复用池（长列表）——与 Android JNI / iOS @_silgen_name 同一组 C ABI
 uint64_t proteus_recycle_create(uint32_t item_count, uint32_t leading_rows, uint32_t following_rows);
 char* proteus_recycle_update(uint64_t handle, uint32_t first_visible, uint32_t last_visible);
@@ -336,6 +345,32 @@ static uint64_t layoutSfcFixture(const std::string& fixture, double vpW, double 
     if (rectsRaw) proteus_layout_free_string(rectsRaw);
     parseRects(rectsStr, rects);
     return handle;
+}
+
+/** 提取 `"key":{…}` 或 `"key":[…]` 的子串（括号计数；字符串感知）——viewport/rects/text_updates 复用 */
+static std::string extractValueAfterKey(const std::string& json, const char* key, char openCh, char closeCh) {
+    std::string needle = std::string("\"") + key + "\"";
+    size_t p = json.find(needle);
+    if (p == std::string::npos) return "";
+    size_t open = json.find(openCh, p + needle.size());
+    if (open == std::string::npos) return "";
+    int depth = 0;
+    bool inStr = false;
+    for (size_t i = open; i < json.size(); i++) {
+        char c = json[i];
+        if (inStr) {
+            if (c == '\\') { i++; continue; }
+            if (c == '"') inStr = false;
+            continue;
+        }
+        if (c == '"') { inStr = true; continue; }
+        if (c == openCh) depth++;
+        else if (c == closeCh) {
+            depth--;
+            if (depth == 0) return json.substr(open, i - open + 1);
+        }
+    }
+    return "";
 }
 
 /**
@@ -1262,6 +1297,638 @@ static napi_value SfcStressCommands(napi_env env, napi_callback_info info) {
     return out;
 }
 
+/**
+ * jsvmProbe(script?): string(JSON) —— ★★★矩阵 #13/#14 **前置可行性探针：设备端 JSVM（V8）**。
+ *
+ * 【为什么先做这个（决策依据）】鸿蒙上跑"设备端实例化 + 订阅驱动更新"（Vapor）与"JS 引擎闭环"
+ *   都需要一个**可嵌入的 JS 引擎**。两条路线：
+ *     A. ArkTS 侧 eval：宿主页面自身就是 ArkTS——但设备端实例化要的是"跑 Android 那份
+ *        `bundle-vapor.js`"（IIFE、纯 JS）⇒ ArkTS 的动态执行受限，不是等价物；
+ *     B. **JSVM（OH_JSVM_*，V8 封装）**：SDK 里有头文件与 `libjsvm.so`——与 Android QuickJS /
+ *        iOS JSC 同定位，且能**直接 eval 同一份 bundle**（零移植，六端同源）。
+ *   ⇒ 先验证 B 的可用性（本探针）：init → CreateVM → CreateEnv → CompileScript → RunScript → 取值。
+ *   本探针**只验证引擎可用性**；bundle 级 eval 是下一步（#14）。
+ *
+ * 判据：`ok:true` + `value == 42`（默认脚本 `6*7`）。
+ */
+static napi_value JsvmProbe(napi_env env, napi_callback_info info) {
+    size_t argc = 1;
+    napi_value args[1] = {nullptr};
+    napi_get_cb_info(env, info, &argc, args, nullptr, nullptr);
+    std::string src = "6*7";
+    if (argc >= 1 && args[0] != nullptr) {
+        size_t len = 0;
+        napi_get_value_string_utf8(env, args[0], nullptr, 0, &len);
+        src.resize(len);
+        napi_get_value_string_utf8(env, args[0], &src[0], len + 1, &len);
+    }
+
+    JSVM_InitOptions initOpts;
+    memset(&initOpts, 0, sizeof(initOpts));
+    // ★Init 可容忍失败：文档语义「已初始化过则返回 GENERIC_FAILURE，无需重复」——
+    //   探针二次运行会命中该分支，不视为引擎不可用（后续步骤才是判据）。
+    JSVM_Status stInit = OH_JSVM_Init(&initOpts);
+
+    JSVM_CreateVMOptions vmOpts;
+    memset(&vmOpts, 0, sizeof(vmOpts));
+    JSVM_VM vm = nullptr;
+    JSVM_Status stVm = OH_JSVM_CreateVM(&vmOpts, &vm);
+    JSVM_Env jsEnv = nullptr;
+    JSVM_Status stEnv = (vm != nullptr) ? OH_JSVM_CreateEnv(vm, 0, nullptr, &jsEnv) : JSVM_GENERIC_FAILURE;
+    JSVM_HandleScope scope = nullptr;
+    JSVM_Status stScope = (jsEnv != nullptr) ? OH_JSVM_OpenHandleScope(jsEnv, &scope) : JSVM_GENERIC_FAILURE;
+
+    int32_t value = -1;
+    JSVM_Status stCompile = JSVM_GENERIC_FAILURE, stRun = JSVM_GENERIC_FAILURE, stGet = JSVM_GENERIC_FAILURE;
+    if (scope != nullptr) {
+        JSVM_Value source = nullptr;
+        OH_JSVM_CreateStringUtf8(jsEnv, src.c_str(), JSVM_AUTO_LENGTH, &source);
+        JSVM_Script script = nullptr;
+        bool cacheRejected = false;
+        stCompile = OH_JSVM_CompileScript(jsEnv, source, nullptr, 0, true, &cacheRejected, &script);
+        if (stCompile == JSVM_OK && script != nullptr) {
+            JSVM_Value result = nullptr;
+            stRun = OH_JSVM_RunScript(jsEnv, script, &result);
+            if (stRun == JSVM_OK && result != nullptr) {
+                stGet = OH_JSVM_GetValueInt32(jsEnv, result, &value);
+            }
+        }
+        OH_JSVM_CloseHandleScope(jsEnv, scope);
+    }
+    if (jsEnv != nullptr) OH_JSVM_DestroyEnv(jsEnv);
+    if (vm != nullptr) OH_JSVM_DestroyVM(vm);
+
+    char buf[512];
+    snprintf(buf, sizeof(buf),
+             "{\"ok\":%s,\"engine\":\"JSVM(V8)\",\"init\":%d,\"vm\":%d,\"env\":%d,"
+             "\"compile\":%d,\"run\":%d,\"get\":%d,\"value\":%d,\"src\":\"%s\"}",
+             (stRun == JSVM_OK && stGet == JSVM_OK) ? "true" : "false",
+             (int)stInit, (int)stVm, (int)stEnv, (int)stCompile, (int)stRun, (int)stGet, (int)value,
+             src.c_str());
+    OH_LOG_Print(LOG_APP, LOG_INFO, PROTEUS_BENCH_DOMAIN, PROTEUS_BENCH_TAG,
+                 "PROTEUS_JSVM_DONE ok=%{public}d value=%{public}d", (stRun == JSVM_OK) ? 1 : 0, value);
+    napi_value out;
+    napi_create_string_utf8(env, buf, NAPI_AUTO_LENGTH, &out);
+    return out;
+}
+
+/* ═══════════════════ 矩阵 #14：Vapor 设备端链（JSVM 宿主桥）═══════════════════
+ *
+ * 【要证明什么】与 Android `run-vapor.sh` + `check-vapor-device.py` 同一条链、同一份判据：
+ *   真实 SFC 编译产物（LayoutTemplate + 订阅表）→ **设备端实例化** → 宿主 mount（Rust 几何
+ *   + 绘制指令 + 离屏像素自检）→ 改数据 → 订阅驱动 **二进制指令** → 内核增量重排
+ *   → 内核真值回执（changed_rects / 文本同步）。
+ *
+ * 【为什么鸿蒙能用 Android 的 bundle-vapor.js（零移植）】JSVM（OH_JSVM_*，V8）在设备上可用
+ *   （见 jsvmProbe 的前置验证）——bundle 是 esbuild 的 IIFE，V8 直接 eval。宿主通过
+ *   `globalThis.proteusHost` 注入四个方法，**方法全部返回 JSON 字符串**（与 Android JNI 层同形，
+ *   bundle 侧 `JSON.parse(...)` 消费）⇒ 桥接层零结构转换。
+ *
+ * 【诚实边界（与 Android 的差异，逐条记）】
+ *   · `applicate` 里的 tapAt/onGesture/scrollRows/mountVirtual/probeChannels 中，本桥当前实现
+ *     mount / applyOps / readRects / probeChannels 四个（runShort 判据所需的最小集）；
+ *     tapAt 不实现 ⇒ JS 侧 `typeof proteusHost.tapAt === 'function'` 为 false，交互段**跳过**
+ *     （不造假——tap 证据由 Android 腿承担，鸿蒙后续补）。
+ *   · 单位口径：内核用**设计单位**（与 SFC 压力探针同约定），指令期乘密度——与 Android
+ *     （内核物理单位）不同但各自内部一致；判据只断言相对变化（before/after），不比较绝对值。
+ *   · probeChannels 当前只返回 harmony 渲染已建的通道（radius）——渐变/发光/裁剪/描边
+ *     待渲染层补齐（如实上报，不模拟）。
+ */
+
+static uint64_t g_vaporHandle = 0;
+static std::string g_vaporCmdsJson = "[]";
+static int g_vaporMountCalls = 0;
+static int g_vaporHostNodes = -1;
+static int g_vaporHostCmds = -1;
+static int g_vaporPaintedSamples = 0;
+static int g_vaporPaintedColors = 0;
+static double g_vaporDensity = 1.0;
+static std::unordered_map<int, SfcStyle> g_vaporStyles;
+
+/** JSVM 侧读字符串（两遍法：先量长再拷贝——与 napi 同款） */
+static bool jsvmStr(JSVM_Env env, JSVM_Value v, std::string* out) {
+    if (v == nullptr) return false;
+    size_t len = 0;
+    if (OH_JSVM_GetValueStringUtf8(env, v, nullptr, 0, &len) != JSVM_OK) return false;
+    std::string buf(len + 1, '\0');
+    if (len > 0 && OH_JSVM_GetValueStringUtf8(env, v, &buf[0], len + 1, &len) != JSVM_OK) return false;
+    buf.resize(len);
+    *out = buf;
+    return true;
+}
+
+/**
+ * `[1,2,3]` → bytes（0..255）。
+ * ★★**必须保留 0**（本轮真机实测缺陷）：首版条件写成 `v > 0 && v <= 255`——
+ *   而二进制指令流里 **0 是合法字节**（opcode/数据都有 0）⇒ 丢弃即错位 ⇒ decode_ops 失败
+ *   （现象：applyOps 三轮全 `applied=-1`）。"数字区间过滤"这类小工具也要对着**数据域**核：
+ *   这里的数据域是整字节，不是"正数"。
+ */
+static std::vector<uint8_t> parseByteArray(const std::string& s) {
+    std::vector<uint8_t> out;
+    const char* p = s.c_str();
+    while (*p) {
+        while (*p && !isdigit((unsigned char)*p) && *p != '-' && *p != '+') p++;
+        if (!*p) break;
+        char* end = nullptr;
+        long v = strtol(p, &end, 10);
+        if (end == p) { p++; continue; }
+        p = end;
+        if (v >= 0 && v <= 255) out.push_back((uint8_t)v);
+    }
+    return out;
+}
+
+/** `[2,3,4]` → ids */
+static std::vector<int> parseIntArrayBare(const std::string& s) {
+    std::vector<int> out;
+    const char* p = s.c_str();
+    while (*p) {
+        while (*p && !isdigit((unsigned char)*p)) p++;
+        if (!*p) break;
+        out.push_back((int)strtol(p, const_cast<char**>(&p), 10));
+    }
+    return out;
+}
+
+/**
+ * 离屏像素自检（host_painted_samples / painted_colors 的来源）——与 Android "离屏位图采样" 同口径：
+ *   把绘制指令（色块 + 圆角）真画到一张离屏 bitmap 上，数**非透明像素**与**不同颜色数**。
+ *   "屏幕上有东西"从"我相信"变成"像素级证据"（本仓 4050/单测同族纪律）。
+ */
+static void vaporPaintCheck(const std::string& cmdsJson, int* outSamples, int* outColors) {
+    *outSamples = 0;
+    *outColors = 0;
+    std::vector<std::string> items = splitJsonObjects(cmdsJson);
+    if (items.empty()) return;
+    double maxX = 1, maxY = 1;
+    for (const auto& it : items) {
+        double x = 0, y = 0, w = 0, h = 0;
+        jnum(it.c_str(), it.size(), "x", &x);
+        jnum(it.c_str(), it.size(), "y", &y);
+        jnum(it.c_str(), it.size(), "w", &w);
+        jnum(it.c_str(), it.size(), "h", &h);
+        if (x + w > maxX) maxX = x + w;
+        if (y + h > maxY) maxY = y + h;
+    }
+    double scale = 0.25;
+    if (maxX * scale > 900) scale = 900.0 / maxX;
+    if (maxY * scale > 1400) {
+        double s2 = 1400.0 / maxY;
+        if (s2 < scale) scale = s2;
+    }
+    int bw = (int)(maxX * scale) + 1;
+    int bh = (int)(maxY * scale) + 1;
+    if (bw < 8 || bh < 8) return;
+    OH_Drawing_Bitmap* bmp = OH_Drawing_BitmapCreate();
+    if (bmp == nullptr) return;
+    OH_Drawing_BitmapFormat fmt = {COLOR_FORMAT_RGBA_8888, ALPHA_FORMAT_PREMUL};
+    OH_Drawing_BitmapBuild(bmp, (uint32_t)bw, (uint32_t)bh, &fmt);
+    OH_Drawing_Canvas* cv = OH_Drawing_CanvasCreate();
+    if (cv != nullptr) {
+        OH_Drawing_CanvasBind(cv, bmp);
+        OH_Drawing_CanvasClear(cv, 0x00000000);
+        OH_Drawing_Brush* br = OH_Drawing_BrushCreate();
+        for (const auto& it : items) {
+            double x = 0, y = 0, w = 0, h = 0, color = 0, radius = 0;
+            jnum(it.c_str(), it.size(), "x", &x);
+            jnum(it.c_str(), it.size(), "y", &y);
+            jnum(it.c_str(), it.size(), "w", &w);
+            jnum(it.c_str(), it.size(), "h", &h);
+            jnum(it.c_str(), it.size(), "color", &color);
+            jnum(it.c_str(), it.size(), "radius", &radius);
+            uint32_t argb = (uint32_t)color;
+            if ((argb >> 24) == 0) continue;  // 全透明不画
+            OH_Drawing_BrushSetColor(br, argb);
+            OH_Drawing_CanvasAttachBrush(cv, br);
+            OH_Drawing_Rect* r = OH_Drawing_RectCreate((float)(x * scale), (float)(y * scale),
+                                                       (float)((x + w) * scale), (float)((y + h) * scale));
+            if (radius > 0) {
+                OH_Drawing_RoundRect* rr = OH_Drawing_RoundRectCreate(r, (float)(radius * scale), (float)(radius * scale));
+                OH_Drawing_CanvasDrawRoundRect(cv, rr);
+                OH_Drawing_RoundRectDestroy(rr);
+            } else {
+                OH_Drawing_CanvasDrawRect(cv, r);
+            }
+            OH_Drawing_RectDestroy(r);
+            OH_Drawing_CanvasDetachBrush(cv);
+        }
+        OH_Drawing_BrushDestroy(br);
+        void* pixels = OH_Drawing_BitmapGetPixels(bmp);
+        if (pixels != nullptr) {
+            const uint8_t* px = static_cast<const uint8_t*>(pixels);
+            size_t total = (size_t)bw * (size_t)bh;
+            std::unordered_map<uint32_t, int> colors;
+            int samples = 0;
+            for (size_t i = 0; i < total; i++) {
+                uint32_t a = px[i * 4 + 3];
+                if (a > 0) {
+                    samples++;
+                    uint32_t c = (a << 24) | ((uint32_t)px[i * 4] << 16) |
+                                 ((uint32_t)px[i * 4 + 1] << 8) | px[i * 4 + 2];
+                    colors[c]++;
+                }
+            }
+            *outSamples = samples;
+            *outColors = (int)colors.size();
+        }
+        OH_Drawing_CanvasDestroy(cv);
+    }
+    OH_Drawing_BitmapDestroy(bmp);
+}
+
+/** mount 的宿主实现：树 JSON（视口 + 节点）→ 内核建树排版 → 指令 → 离屏自检；返回 JSON 字符串 */
+static std::string vaporMountImpl(const std::string& treeJson) {
+    std::string vpObj = extractValueAfterKey(treeJson, "viewport", '{', '}');
+    double vpW = 1080, vpH = 1920;
+    if (!vpObj.empty()) {
+        jnum(vpObj.c_str(), vpObj.size(), "width", &vpW);
+        jnum(vpObj.c_str(), vpObj.size(), "height", &vpH);
+    }
+    std::string nodesArr = extractNodesArray(treeJson);
+    if (nodesArr.empty()) return "{\"ok\":false,\"error\":\"mount: 树无 nodes\"}";
+    std::vector<std::pair<int, SfcStyle>> styles;
+    parseSfcStyles(treeJson, styles);
+
+    // 度量表（宿主职责——见 measureTextTypoPx 注释）：物理字号量、换回设计单位
+    std::string measures = "{";
+    int mc = 0;
+    for (const auto& kv : styles) {
+        if (kv.second.text.empty()) continue;
+        double wpx = 0, hpx = 0;
+        measureTextTypoPx(kv.second.text, kv.second.fontSize * g_vaporDensity, &wpx, &hpx);
+        char mb[200];
+        snprintf(mb, sizeof(mb), "%s\"%d\":{\"width\":%.4f,\"height\":%.4f}",
+                 mc > 0 ? "," : "", kv.first, wpx / g_vaporDensity, hpx / g_vaporDensity);
+        measures += mb;
+        mc++;
+    }
+    measures += "}";
+
+    char vpb[96];
+    snprintf(vpb, sizeof(vpb), "{\"width\":%.4f,\"height\":%.4f}", vpW, vpH);
+    std::string req = "{\"viewport\":" + std::string(vpb) + ",\"nodes\":" + nodesArr +
+                      ",\"textMeasures\":" + measures + "}";
+
+    auto t0 = Clock::now();
+    uint64_t handle = proteus_layout_create(req.c_str());
+    double layoutMs = msSince(t0);
+    if (handle == 0) return "{\"ok\":false,\"error\":\"mount: 建树失败\"}";
+    char* rp = proteus_layout_rects(handle);
+    std::string rects = rp ? rp : "{}";
+    if (rp) proteus_layout_free_string(rp);
+    std::unordered_map<int, Rect> rectMap;
+    parseRects(rects, rectMap);
+
+    // 指令（几何 × 样式 × 密度，物理 px——proteus_render.RenderCommands 的输入同形）
+    std::string cmds = "[";
+    int emitted = 0;
+    for (const auto& kv : styles) {
+        auto it = rectMap.find(kv.first);
+        if (it == rectMap.end()) continue;
+        const Rect& r = it->second;
+        const SfcStyle& st = kv.second;
+        char head[320];
+        snprintf(head, sizeof(head),
+                 "%s{\"kind\":\"background\",\"x\":%.2f,\"y\":%.2f,\"w\":%.2f,\"h\":%.2f,"
+                 "\"color\":%u,\"radius\":%.2f",
+                 emitted > 0 ? "," : "", r.x * g_vaporDensity, r.y * g_vaporDensity,
+                 r.w * g_vaporDensity, r.h * g_vaporDensity, st.bg, st.radius * g_vaporDensity);
+        cmds += head;
+        if (!st.text.empty()) {
+            char tail[128];
+            snprintf(tail, sizeof(tail), ",\"fontSize\":%.2f,\"textColor\":%u",
+                     st.fontSize * g_vaporDensity, st.textColor);
+            cmds += tail;
+            cmds += ",\"text\":\"" + jsonEscape(st.text) + "\"";
+        }
+        cmds += "}";
+        emitted++;
+    }
+    cmds += "]";
+
+    int samples = 0, colors = 0;
+    vaporPaintCheck(cmds, &samples, &colors);
+
+    if (g_vaporHandle != 0) proteus_layout_destroy(g_vaporHandle);
+    g_vaporHandle = handle;
+    g_vaporCmdsJson = cmds;
+    g_vaporStyles.clear();
+    for (const auto& kv : styles) g_vaporStyles[kv.first] = kv.second;
+    g_vaporMountCalls++;
+    g_vaporHostNodes = (int)styles.size();
+    g_vaporHostCmds = emitted;
+    g_vaporPaintedSamples = samples;
+    g_vaporPaintedColors = colors;
+
+    char out[512];
+    snprintf(out, sizeof(out),
+             "{\"ok\":true,\"nodes\":%d,\"cmds\":%d,\"layout_ms\":%.2f,\"measure_ms\":%.2f,"
+             "\"painted_samples\":%d,\"painted_colors\":%d}",
+             (int)styles.size(), emitted, layoutMs, 0.0, samples, colors);
+    OH_LOG_Print(LOG_APP, LOG_INFO, PROTEUS_BENCH_DOMAIN, PROTEUS_BENCH_TAG,
+                 "PROTEUS_VAPOR_MOUNT nodes=%{public}d cmds=%{public}d painted=%{public}d colors=%{public}d",
+                 (int)styles.size(), emitted, samples, colors);
+    return out;
+}
+
+/** applyOps 的宿主实现：二进制指令 → 内核 → 回执（含文本同步消费） */
+static std::string vaporApplyOpsImpl(const std::string& bytesJson) {
+    if (g_vaporHandle == 0) return "{\"ok\":false,\"error\":\"applyOps: 无树句柄（先 mount）\"}";
+    std::vector<uint8_t> buf = parseByteArray(bytesJson);
+    if (buf.empty()) return "{\"ok\":false,\"error\":\"applyOps: 空指令\"}";
+    char* rp = proteus_layout_apply_ops(g_vaporHandle, buf.data(), (uint32_t)buf.size());
+    std::string resp = rp ? rp : "{}";
+    if (rp) proteus_layout_free_string(rp);
+
+    double applied = -1, relayout = -1;
+    jnum(resp.c_str(), resp.size(), "applied", &applied);
+    jnum(resp.c_str(), resp.size(), "relayout_count", &relayout);
+    std::string rects = extractValueAfterKey(resp, "rects", '{', '}');
+    // ★文本同步（判据 ⑥ 的 "宿主真的消费了 text_updates"）：逐条更新样式表（后续重建指令时用新文本）
+    int textSynced = 0;
+    std::string tu = extractValueAfterKey(resp, "text_updates", '{', '}');
+    if (!tu.empty() && tu.size() > 2) {
+        // 扁平表逐对解析（`"<id>":"<text>"`；splitJsonObjects 不适用——此表没有内层对象）
+        size_t q = 0;
+        while ((q = tu.find("\":\"", q)) != std::string::npos) {
+            size_t e = q;
+            size_t b = e;
+            while (b > 0 && isdigit((unsigned char)tu[b - 1])) b--;
+            if (b == e) { q += 3; continue; }
+            int id = atoi(tu.substr(b, e - b).c_str());
+            size_t vStart = q + 3;
+            std::string val;
+            for (size_t i = vStart; i < tu.size(); i++) {
+                char c = tu[i];
+                if (c == '\\' && i + 1 < tu.size()) {
+                    char n = tu[i + 1];
+                    if (n == 'n') val += '\n'; else if (n == 't') val += '\t'; else val += n;
+                    i++;
+                    continue;
+                }
+                if (c == '"') break;
+                val += c;
+            }
+            auto it2 = g_vaporStyles.find(id);
+            if (it2 != g_vaporStyles.end()) it2->second.text = val;
+            textSynced++;
+            q = vStart;
+        }
+    }
+    char out[512];
+    snprintf(out, sizeof(out),
+             "{\"ok\":true,\"applied\":%.0f,\"relayout\":%.0f,\"text_synced\":%d,"
+             "\"rects\":%s}",
+             applied, relayout, textSynced, rects.empty() ? "{}" : rects.c_str());
+    OH_LOG_Print(LOG_APP, LOG_INFO, PROTEUS_BENCH_DOMAIN, PROTEUS_BENCH_TAG,
+                 "PROTEUS_VAPOR_APPLYOPS applied=%{public}d relayout=%{public}d text_synced=%{public}d bytes=%{public}zu",
+                 (int)applied, (int)relayout, textSynced, buf.size());
+    return out;
+}
+
+/* ── JSVM 回调（宿主桥的四个方法；全部返回 JSON 字符串） ── */
+
+static JSVM_Value VaporMountCb(JSVM_Env env, JSVM_CallbackInfo info) {
+    size_t argc = 1;
+    JSVM_Value args[1] = {nullptr};
+    OH_JSVM_GetCbInfo(env, info, &argc, args, nullptr, nullptr);
+    std::string tree;
+    if (argc > 0) jsvmStr(env, args[0], &tree);
+    std::string out = vaporMountImpl(tree);
+    JSVM_Value r = nullptr;
+    OH_JSVM_CreateStringUtf8(env, out.c_str(), out.size(), &r);
+    return r;
+}
+
+static JSVM_Value VaporApplyOpsCb(JSVM_Env env, JSVM_CallbackInfo info) {
+    size_t argc = 1;
+    JSVM_Value args[1] = {nullptr};
+    OH_JSVM_GetCbInfo(env, info, &argc, args, nullptr, nullptr);
+    std::string bytesJson;
+    if (argc > 0) jsvmStr(env, args[0], &bytesJson);
+    std::string out = vaporApplyOpsImpl(bytesJson);
+    JSVM_Value r = nullptr;
+    OH_JSVM_CreateStringUtf8(env, out.c_str(), out.size(), &r);
+    return r;
+}
+
+static JSVM_Value VaporReadRectsCb(JSVM_Env env, JSVM_CallbackInfo info) {
+    (void)info;
+    std::string out = "{}";
+    if (g_vaporHandle != 0) {
+        char* rp = proteus_layout_rects(g_vaporHandle);
+        if (rp) {
+            out = rp;
+            proteus_layout_free_string(rp);
+        }
+    }
+    JSVM_Value r = nullptr;
+    OH_JSVM_CreateStringUtf8(env, out.c_str(), out.size(), &r);
+    return r;
+}
+
+static JSVM_Value VaporProbeChannelsCb(JSVM_Env env, JSVM_CallbackInfo info) {
+    size_t argc = 1;
+    JSVM_Value args[1] = {nullptr};
+    OH_JSVM_GetCbInfo(env, info, &argc, args, nullptr, nullptr);
+    std::string idsJson;
+    if (argc > 0) jsvmStr(env, args[0], &idsJson);
+    std::vector<int> ids = parseIntArrayBare(idsJson);
+    std::string out = "{\"ok\":true,\"channels\":[";
+    int n = 0;
+    for (int id : ids) {
+        auto it = g_vaporStyles.find(id);
+        if (it == g_vaporStyles.end()) continue;
+        char b[200];
+        snprintf(b, sizeof(b), "%s{\"id\":%d,\"radius\":%.2f}", n > 0 ? "," : "", id, it->second.radius);
+        out += b;
+        n++;
+    }
+    out += "]}";
+    JSVM_Value r = nullptr;
+    OH_JSVM_CreateStringUtf8(env, out.c_str(), out.size(), &r);
+    return r;
+}
+
+/**
+ * vaporProbe(argsJson): string(JSON)
+ *   argsJson = { bundle, artifacts, vpW, vpH, density, filesDir?, rows?, updates? }
+ *   返回 = { ok, report, host_mount_calls, host_nodes, host_cmds, host_painted_samples,
+ *            host_painted_colors, cmds }（report = bundle 里 __proteusVaporRun 的原样返回；
+ *   顶层字段与 Android 的 vapor.json 同形 ⇒ 直接过 `check-vapor-device.py`**同一份判据**）。
+ */
+static napi_value VaporProbe(napi_env env, napi_callback_info info) {
+    size_t argc = 1;
+    napi_value args[1] = {nullptr};
+    napi_get_cb_info(env, info, &argc, args, nullptr, nullptr);
+    std::string argsJson;
+    if (argc >= 1) {
+        size_t len = 0;
+        napi_get_value_string_utf8(env, args[0], nullptr, 0, &len);
+        argsJson.resize(len + 1);
+        napi_get_value_string_utf8(env, args[0], &argsJson[0], len + 1, &len);
+        argsJson.resize(len);
+    }
+    std::string bundle, artifacts, filesDir;
+    double vpW = 0, vpH = 0, density = 1.0;
+    jstr(argsJson.c_str(), argsJson.size(), "bundle", &bundle);
+    jstr(argsJson.c_str(), argsJson.size(), "artifacts", &artifacts);
+    jstr(argsJson.c_str(), argsJson.size(), "filesDir", &filesDir);
+    jnum(argsJson.c_str(), argsJson.size(), "vpW", &vpW);
+    jnum(argsJson.c_str(), argsJson.size(), "vpH", &vpH);
+    jnum(argsJson.c_str(), argsJson.size(), "density", &density);
+    if (density <= 0) density = 1.0;
+    if (vpW <= 0) vpW = 375;
+    if (vpH <= 0) vpH = 800;
+    // 状态复位（每次跑独立读数——不继承上一轮）
+    g_vaporHandle = 0;
+    g_vaporCmdsJson = "[]";
+    g_vaporMountCalls = 0;
+    g_vaporHostNodes = -1;
+    g_vaporHostCmds = -1;
+    g_vaporPaintedSamples = 0;
+    g_vaporPaintedColors = 0;
+    g_vaporDensity = density;
+    g_vaporStyles.clear();
+
+    std::string err;
+    std::string report;
+    if (bundle.empty()) err = "缺 bundle（rawfile bundle-vapor.js）";
+    if (artifacts.empty()) err = "缺 artifacts（rawfile vapor-artifacts.json）";
+
+    JSVM_VM vm = nullptr;
+    JSVM_Env jenv = nullptr;
+    JSVM_HandleScope vScope = nullptr;
+    if (err.empty()) {
+        JSVM_InitOptions io;
+        memset(&io, 0, sizeof(io));
+        OH_JSVM_Init(&io);  // 已初始化过会返回失败——容忍（见 jsvmProbe 注释）
+        JSVM_CreateVMOptions vo;
+        memset(&vo, 0, sizeof(vo));
+        if (OH_JSVM_CreateVM(&vo, &vm) != JSVM_OK || vm == nullptr) {
+            err = "CreateVM 失败";
+        } else if (OH_JSVM_CreateEnv(vm, 0, nullptr, &jenv) != JSVM_OK || jenv == nullptr) {
+            err = "CreateEnv 失败";
+        }
+    }
+    if (err.empty()) {
+        // ★★**必须先开 handle scope**（本轮真机 CppCrash 的根因：栈回溯 `OH_JSVM_CreateObject+112`）
+        //   ——jsvmProbe 开了它所以能跑；VaporProbe 首版漏开 ⇒ 任何 JSVM 值创建（CreateObject/
+        //   CreateStringUtf8/CreateFunction）都可能崩。V8 的 HandleScope 语义：未开时新建的
+        //   handle 无处安放（本仓纪律：与 Rust/ArkUI 的"所有权显式"同族）。
+        if (OH_JSVM_OpenHandleScope(jenv, &vScope) != JSVM_OK) {
+            err = "OpenHandleScope 失败";
+        }
+    }
+    if (err.empty()) {
+        // proteusHost 全局（四个方法）
+        JSVM_Value host = nullptr;
+        OH_JSVM_CreateObject(jenv, &host);
+        // ★JSVM_Callback 是 JSVM_CallbackStruct*（{callback, data}），不是裸函数指针——
+        //   结构体必须活到 CreateFunction 返回（栈上数组即可，调用同步完成）。
+        struct NamedFn { const char* name; JSVM_CallbackStruct cb; };
+        NamedFn fns[] = {
+            {"mount", {VaporMountCb, nullptr}},
+            {"applyOps", {VaporApplyOpsCb, nullptr}},
+            {"readRects", {VaporReadRectsCb, nullptr}},
+            {"probeChannels", {VaporProbeChannelsCb, nullptr}},
+        };
+        for (auto& f : fns) {
+            JSVM_Value fn = nullptr;
+            OH_JSVM_CreateFunction(jenv, f.name, JSVM_AUTO_LENGTH, &f.cb, &fn);
+            OH_JSVM_SetNamedProperty(jenv, host, f.name, fn);
+        }
+        JSVM_Value global = nullptr;
+        OH_JSVM_GetGlobal(jenv, &global);
+        OH_JSVM_SetNamedProperty(jenv, global, "proteusHost", host);
+
+        // eval bundle（IIFE——与 Android QuickJS 直接 eval 同一份文件）
+        JSVM_Value src = nullptr;
+        OH_JSVM_CreateStringUtf8(jenv, bundle.c_str(), bundle.size(), &src);
+        JSVM_Script script = nullptr;
+        bool cacheRejected = false;
+        JSVM_Status stC = OH_JSVM_CompileScript(jenv, src, nullptr, 0, false, &cacheRejected, &script);
+        if (stC != JSVM_OK) {
+            err = "bundle 编译失败";
+        } else {
+            JSVM_Value rr = nullptr;
+            if (OH_JSVM_RunScript(jenv, script, &rr) != JSVM_OK) {
+                err = "bundle 执行失败（IIFE 抛错？）";
+            } else {
+                JSVM_Value fnRun = nullptr;
+                if (OH_JSVM_GetNamedProperty(jenv, global, "__proteusVaporRun", &fnRun) != JSVM_OK) {
+                    err = "缺 __proteusVaporRun（bundle 未导出？）";
+                } else {
+                    // JS 侧参数（artifacts 作为**字符串**传入——与 Android Java 侧同形）
+                    char vpb[128];
+                    snprintf(vpb, sizeof(vpb), "{\"width\":%.4f,\"height\":%.4f}", vpW, vpH);
+                    std::string jsArgs = "{\"artifacts\":\"" + jsonEscape(artifacts) +
+                                         "\",\"viewport\":" + vpb + ",\"rows\":8,\"updates\":3}";
+                    JSVM_Value arg = nullptr;
+                    OH_JSVM_CreateStringUtf8(jenv, jsArgs.c_str(), jsArgs.size(), &arg);
+                    JSVM_Value undef = nullptr;
+                    OH_JSVM_GetUndefined(jenv, &undef);
+                    JSVM_Value argv[1] = {arg};
+                    JSVM_Value res = nullptr;
+                    JSVM_Status stCall = OH_JSVM_CallFunction(jenv, undef, fnRun, 1, argv, &res);
+                    if (stCall != JSVM_OK) {
+                        err = "调用 __proteusVaporRun 失败";
+                    } else if (!jsvmStr(jenv, res, &report) || report.empty()) {
+                        err = "JS 返回为空";
+                    }
+                }
+            }
+        }
+    }
+    if (jenv != nullptr && vScope != nullptr) OH_JSVM_CloseHandleScope(jenv, vScope);
+    if (jenv != nullptr) OH_JSVM_DestroyEnv(jenv);
+    if (vm != nullptr) OH_JSVM_DestroyVM(vm);
+
+    // 包装（与 Android vapor.json 顶层同形）
+    std::string wrapper;
+    char head[256];
+    snprintf(head, sizeof(head),
+             "{\"ok\":%s,\"host_id\":\"harmony\",\"host_mount_calls\":%d,\"host_nodes\":%d,\"host_cmds\":%d,"
+             "\"host_painted_samples\":%d,\"host_painted_colors\":%d",
+             err.empty() ? "true" : "false", g_vaporMountCalls, g_vaporHostNodes, g_vaporHostCmds,
+             g_vaporPaintedSamples, g_vaporPaintedColors);
+    wrapper = head;
+    if (!err.empty()) {
+        wrapper += ",\"error\":\"" + jsonEscape(err) + "\"";
+    }
+    if (!report.empty()) {
+        wrapper += ",\"report\":" + report;
+    }
+    wrapper += ",\"cmds\":" + g_vaporCmdsJson + "}";
+
+    // 落盘（filesDir 由 ArkTS 传入）。
+    // ★★两处写：① 应用沙箱（权威，应用自身可用）；② `/data/local/tmp`（**采集脚本可读**——
+    //   实测 hdc 读不了应用沙箱 el2 路径：`Error opening file: permission denied`）。
+    //   哪边失败都如实记日志（不静默）；判据路径以采集脚本实际取到的为准。
+    if (!filesDir.empty()) {
+        std::string paths[2] = {filesDir + "/vapor.json", "/data/local/tmp/proteus-vapor.json"};
+        for (const auto& path : paths) {
+            FILE* f = fopen(path.c_str(), "w");
+            if (f != nullptr) {
+                fwrite(wrapper.data(), 1, wrapper.size(), f);
+                fclose(f);
+                OH_LOG_Print(LOG_APP, LOG_INFO, PROTEUS_BENCH_DOMAIN, PROTEUS_BENCH_TAG,
+                             "PROTEUS_VAPOR_FILESAVED path=%{public}s bytes=%{public}zu", path.c_str(), wrapper.size());
+            } else {
+                OH_LOG_Print(LOG_APP, LOG_ERROR, PROTEUS_BENCH_DOMAIN, PROTEUS_BENCH_TAG,
+                             "PROTEUS_VAPOR_FILESAVE_FAIL path=%{public}s", path.c_str());
+            }
+        }
+    }
+    OH_LOG_Print(LOG_APP, LOG_INFO, PROTEUS_BENCH_DOMAIN, PROTEUS_BENCH_TAG,
+                 "PROTEUS_VAPOR_DONE ok=%{public}d mounts=%{public}d nodes=%{public}d cmds=%{public}d report_len=%{public}zu",
+                 err.empty() ? 1 : 0, g_vaporMountCalls, g_vaporHostNodes, g_vaporHostCmds, report.size());
+    napi_value out;
+    napi_create_string_utf8(env, wrapper.c_str(), NAPI_AUTO_LENGTH, &out);
+    return out;
+}
+
 /** version(): string —— Rust 核版本自报（仪器自检） */
 static napi_value BenchVersion(napi_env env, napi_callback_info info) {
     char* v = proteus_layout_version();
@@ -1284,6 +1951,8 @@ static napi_value BenchInit(napi_env env, napi_value exports) {
         {"memProbe", nullptr, MemProbe, nullptr, nullptr, nullptr, napi_default, nullptr},
         {"sfcStressProbe", nullptr, SfcStressProbe, nullptr, nullptr, nullptr, napi_default, nullptr},
         {"sfcStressCommands", nullptr, SfcStressCommands, nullptr, nullptr, nullptr, napi_default, nullptr},
+        {"jsvmProbe", nullptr, JsvmProbe, nullptr, nullptr, nullptr, napi_default, nullptr},
+        {"vaporProbe", nullptr, VaporProbe, nullptr, nullptr, nullptr, napi_default, nullptr},
         {"version", nullptr, BenchVersion, nullptr, nullptr, nullptr, napi_default, nullptr},
     };
     napi_define_properties(env, exports, sizeof(desc) / sizeof(desc[0]), desc);

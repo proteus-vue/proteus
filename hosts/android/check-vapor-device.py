@@ -42,10 +42,14 @@ def main() -> int:
         print("  ⇒ 诚实跳过（跑真机后取回）：bash hosts/android/run-vapor.sh")
         return 0
 
-    print(f"═══ Vapor 设备端判据（真实 SFC → 编译产物 → 实例化 → 订阅驱动增量）：{path} ═══")
-    ok = True
     with open(path, encoding="utf-8") as f:
         d = json.load(f)
+    # ★★端识别（`host_id` 自报；缺省 android——既有 vapor.json 无此字段，向后兼容）：
+    #   判据对**各有实现的端**同口径；某端尚未实现的能力域**如实跳过**（不静默当成"过了"，
+    #   也不把它算成该端的失败）——与 `check-app-stack.py` 的"⑦ 组如实跳过"同一纪律。
+    host = d.get("host_id") or "android"
+    print(f"═══ Vapor 设备端判据（真实 SFC → 编译产物 → 实例化 → 订阅驱动增量）[{host}]：{path} ═══")
+    ok = True
 
     def fail(msg: str) -> None:
         print(f"  ✗ {msg}")
@@ -188,7 +192,14 @@ def main() -> int:
     if not chans:
         fail("绘制通道探针无读数（宿主 probeChannels 没接线？）")
         ok = False
-    else:
+    elif host == "harmony":
+        # ★鸿蒙腿现状（如实）：probeChannels 已接（radius 真读自渲染指令；其余通道 None）——
+        #   渐变/发光/裁剪/描边是**渲染层**能力（矩阵 #14 的"应用+渲染" vs Android 的"应用+渲染"），
+        #   本批交的是"应用链"（实例化+订阅+增量+几何），渲染层四通道是后续批次。
+        print(f"  ◐ ⑦ 绘制通道：鸿蒙 probeChannels 已接线（radius 真值）——"
+              f"渐变/发光/裁剪/描边属**渲染层**，鸿蒙待补（如实跳过，不计失败）")
+        chans = {}
+    if chans:
         want = [
             (2, "radius", lambda v: float(v) > 0, "圆角（border-radius → drawRoundRect）"),
             (3, "grad", lambda v: isinstance(v, str) and v.startswith("1:") and int(v.split(":")[1]) >= 2,
@@ -223,7 +234,13 @@ def main() -> int:
     ev_h = rep.get("ev_handlers", 0)
     taps = rep.get("taps", 0)
     evd = rep.get("tap_evidence") or []
-    if ev_b < 1 or ev_h < 1:
+    if host == "harmony" and taps == 0:
+        # ★鸿蒙腿现状（如实）：JSVM 桥未实现 tapAt/onGesture（手势属矩阵 #7，另批次）；
+        #   bundle 侧按 `typeof proteusHost.tapAt === 'function'` 自动跳过 ⇒ taps=0 是**预期**。
+        #   ★事件绑定/handler 已随编译产物就位（ev_b/ev_h ≥1——产物面已对齐），只差注入通道。
+        print(f"  ◐ ⑧ 交互闭环：鸿蒙 JSVM 桥未接 tapAt/onGesture（属矩阵 #7 手势批次）——"
+              f"产物面已就位（事件 {ev_b} · handler {ev_h}），如实跳过")
+    elif ev_b < 1 or ev_h < 1:
         fail(f"编译产物里的交互缺失：事件绑定 {ev_b} · handler {ev_h}（夹具应有各 ≥1——'点不动'的根因）")
         ok = False
     elif taps < 1:

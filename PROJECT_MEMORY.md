@@ -87,6 +87,46 @@ check-consistency-snapshot 七段全绿 · check:no-blind-wait ✅（新 .sh 零
 ① L2/L3/L2.5/L2.6 算子用**合成快照**——证明的是"比对引擎敏不敏感"，不是"真机数据一定对"；
 ② L4 算子用真截图但取同端注入（跨端噪声底含 AA，无区分度）；L4 的价值形态是**定位**。
 
+### ★★★2026-10-03（七十四）· 鸿蒙腿 **JSVM(V8) 打通**（矩阵 #14 + #13）—— Vapor 设备端链与 Android **共用同一份 bundle**（零移植）
+
+**用户「继续」→ 接矩阵 #14（Vapor 指令流）**：上一批缺口里 `hosts/harmony` 的 vapor 还是"待补"。
+
+**★★关键判断（先取证再断言）**：鸿蒙跑 Vapor 有两条路——
+  A. ArkTS 侧 eval：宿主页面自身是 ArkTS，但设备端实例化要跑的是"Android 那份 `bundle-vapor.js`"
+     （IIFE、纯 JS）⇒ ArkTS 动态执行受限，不是等价物；
+  B. **JSVM（`OH_JSVM_*`，V8 封装）**：SDK 里有 `jsvm.h` + `libjsvm.so`（API 11+，设备 API 26 ✓）
+     ⇒ 与 Android QuickJS / iOS JSC 同定位，且能**直接 eval 同一份 bundle**（零移植、六端同源）。
+  ⇒ 先写 `jsvmProbe` 验证 B：真机 `ok:true value=42`（init→VM→Env→Compile→Run 全 JSVM_OK）⇒ 走 B。
+
+**交付（全部真机读数 HUAWEI KLE-AL00U）**
+1. **`vaporProbe`（proteus_bench.cpp）**：JSVM 建 VM/Env → 注入 `globalThis.proteusHost` 四方法
+   （`mount`/`applyOps`/`readRects`/`probeChannels`——经 `JSVM_Callback`=`JSVM_CallbackStruct{fn,data}`）
+   → eval `bundle-vapor.js` → 调 `__proteusVaporRun` → 包装落盘（**与 Android vapor.json 顶层同形**）。
+2. **宿主桥四实现**：mount（Rust 建树+排版 → 指令 → **离屏位图真画**计数像素）+ applyOps
+   （二进制指令 → `proteus_layout_apply_ops` → 回执 + **消费 text_updates**）+ readRects + probeChannels。
+3. **判据共用（不是"另写一份"）**：`check-vapor-device.py` 加 `host_id` **按端分档**——
+   Android 判定一字不动（⑦⑧ 全绿回归验证过）；harmony 的 ⑦绘制通道/⑧tap（属渲染层与手势批次）
+   **如实跳过**（先例：check-app-stack.py 的"⑦组如实跳过"）。**无 host_id 的旧产物仍走严格档**
+   （分档不可蒙混——破坏性验证过）。
+4. **材料同源**：`gen-fixtures.mjs` 增补 `bundle-vapor.js` + `vapor-artifacts.json`（从 Android 侧复制）——
+   构建期自动刷新；`bash hosts/harmony/run-vapor.sh` 一键复跑（条件等 `PROTEUS_VAPOR_DONE`，零盲等）。
+5. **矩阵**：**#14 ✅ · #13 ✅（引擎闭环）**——鸿蒙 13/22 → **15/22**。
+
+**真机读数（判据 ①–⑥ 全绿）**：实例化 26 节点（模板 12+运行时分配 14，展开 8 行）· 非空文本 9 ·
+带 width 11 · mount 26 节点/26 指令 · **像素采样 1,199,700（9 色）** · 订阅增量 3 轮/183B ·
+**探针节点宽度 52 → 80** · 文本同步 3 处。
+
+**★本轮实测三个坑（全记进代码注释）**
+| # | 坑 | 现象 | 根因 | 修法 |
+|---|---|---|---|---|
+| 1 | **漏开 HandleScope** | 真机 **CppCrash**（栈回溯 `OH_JSVM_CreateObject+112`） | `jsvmProbe` 开了 scope 所以没事，`VaporProbe` 首版漏开 ⇒ 任何 JSVM 值创建都崩 | `OpenHandleScope` 在任何值创建前、`CloseHandleScope` 在 DestroyEnv 前 |
+| 2 | **parseByteArray 丢 0 字节** | `applyOps` 三轮全 `applied=-1`（decode_ops 失败） | 条件写成 `v > 0`——而**二进制指令流里 0 是合法字节** | `v >= 0`；★教训：区间过滤要对着**数据域**核（"字节"≠"正数"）——与"空格容忍"同族：小工具也要按数据域设计 |
+| 3 | 沙箱文件 hdc 读不到 | `Error opening file: permission denied` | 应用沙箱（el2）对 shell 不可读 | 走 **el2 映射路径** `/data/app/el2/100/base/<bundle>/haps/entry/files/`（shell 可读） |
+
+**诚实边界**：① 内核单位 = 设计单位（Android 为物理单位），各自内部一致，判据只断言相对变化；
+② ⑦绘制通道（渐变/发光/裁剪/描边）与 ⑧tapAt 未接——分属渲染层与手势批次，判据如实跳过（不造假）；
+③ 未做 A/B（Vapor vs Vue 同设备对照）——Android 有 `check-vapor-ab.py`，鸿蒙后续可复用同一份。
+
 ### ★★★2026-10-03（七十三）· 鸿蒙腿 **SFC 压力夹具上屏**（矩阵 #21）—— 六端一致性报告入列（2 小时）
 
 **用户「继续」→ 接矩阵 #21（一致性快照）**：让鸿蒙渲染 `examples/pages/consistency-stress.vue`
@@ -1442,6 +1482,8 @@ check-consistency-snapshot 七段全绿 · script-compile ✅ · no-blind-wait �
 **新诚实边界**：平移对齐会**吸收真实位置差异**（若某端整体真的偏了 3px，对齐后看不出）——
 "位置是否正确"由 L2 几何数值比对承担；L4 只管"画出来像不像"（已写入注记与文档）。
 ④ 仍未接入：iOS/Android 真机截图（当前 Web=Playwright、MP=模拟器，均非真机）。
+
+## 当前状态速览（最近一次更新：**2026-10-03·（七十四）· 鸿蒙腿 **JSVM(V8) 打通**（矩阵 #14+#13，15/22）—— Vapor 设备端链与 Android **共用同一份 bundle-vapor.js**（零移植）：实例化 26 节点/订阅增量 3 轮/探针宽度 52→80/像素 119 万；判据 `check-vapor-device.py` 按 host_id 分档共用**）★新会话以此为准
 
 ## 当前状态速览（最近一次更新：**2026-10-03·（七十三）· 鸿蒙腿 **SFC 压力夹具上屏**（矩阵 #21，13/22）—— 六端一致性报告入列：锚块 [16,60,80,48] 与 SFC 声明逐位相同；三个实测坑固化（空格容忍 ×2 + 宿主度量表缺位）**）★新会话以此为准
 
