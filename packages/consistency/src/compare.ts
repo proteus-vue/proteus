@@ -292,8 +292,14 @@ export function classifyStyleKey(key: string, cfg: ToleranceConfig = DEFAULT_TOL
   }
   if (key === 'color' || key === 'backgroundColor' || /color$/i.test(key)) return 'color'
   if (key === 'fontSize' || key === 'fontWeight' || key === 'fontFamily') return 'font'
+  // ★★覆盖扩展（2026-10-02·二批）：布局族归类——
+  //   · 长度类（走 structure 容差）：四边 + 边框宽 + 主轴尺寸 + min/max + gap
+  //   · 标量类（无单位，走标量容差）：flexGrow / flexShrink（"1 vs 1.5"是真实差异，不能用 px 容差吞掉）
+  //   · 其余枚举类（display/position/flexDirection/…）：严格相等
   if (/^(padding|margin|border.*Width)$/i.test(key)) return 'numericLength'
-  if (key === 'opacity') return 'scalar'
+  if (key === 'width' || key === 'height' || key === 'minWidth' || key === 'maxWidth'
+      || key === 'minHeight' || key === 'maxHeight' || key === 'gap') return 'numericLength'
+  if (key === 'opacity' || key === 'flexGrow' || key === 'flexShrink') return 'scalar'
   return 'enum'
 }
 

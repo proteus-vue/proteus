@@ -118,6 +118,12 @@ async function build() {
     borderTopColor: 'borderColor', borderRightColor: 'borderColor', borderBottomColor: 'borderColor', borderLeftColor: 'borderColor',
     marginTop: 'margin', marginRight: 'margin', marginBottom: 'margin', marginLeft: 'margin',
     paddingTop: 'padding', paddingRight: 'padding', paddingBottom: 'padding', paddingLeft: 'padding',
+    // ★★覆盖扩展（2026-10-02·二批）：布局族 14 字段（与 TS 闭集同步）
+    width: 'width', height: 'height',
+    minWidth: 'minWidth', maxWidth: 'maxWidth', minHeight: 'minHeight', maxHeight: 'maxHeight',
+    flexDirection: 'flexDirection', justifyContent: 'justifyContent',
+    alignItems: 'alignItems', alignSelf: 'alignSelf',
+    flexGrow: 'flexGrow', flexShrink: 'flexShrink', gap: 'gap', overflow: 'overflow',
     // fontFamily / fontWeight / visibility：不在 28 字段集内 ⇒ 不计（宁少算）
   }
   const l3Fields = new Set(Object.values(L3_FIELD_MAP))

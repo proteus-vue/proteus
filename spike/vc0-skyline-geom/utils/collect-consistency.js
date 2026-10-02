@@ -91,11 +91,11 @@ function styleDeclared(end) {
   return snap.buildStyleSnapshot({
     end: end,
     declared: [
-      { nodeId: 'c-root', path: '', css: { 'background-color': '#14141c', display: 'flex' } },
-      { nodeId: 'c-box', path: '0', css: { 'background-color': '#2a3f66', 'border-radius': '18px' } },
-      { nodeId: 'c-text', path: '1', css: { color: '#ffffff', 'font-size': '16px', 'font-weight': 'bold', 'font-family': 'system-ui, sans-serif' } },
-      { nodeId: 'c-nested', path: '2', css: { 'background-color': '#1f2c44', 'padding-top': '8px' } },
-      { nodeId: 'c-nested-box', path: '2.0', css: { 'background-color': '#2a3f66', 'border-radius': '4px' } },
+      { nodeId: 'c-root', path: '', css: { 'background-color': '#14141c', display: 'flex', 'flex-shrink': '0' } },
+      { nodeId: 'c-box', path: '0', css: { 'background-color': '#2a3f66', 'border-radius': '18px', 'flex-shrink': '0', 'overflow': 'hidden' } },
+      { nodeId: 'c-text', path: '1', css: { color: '#ffffff', 'font-size': '16px', 'font-weight': 'bold', 'font-family': 'system-ui, sans-serif', 'overflow': 'hidden' } },
+      { nodeId: 'c-nested', path: '2', css: { 'background-color': '#1f2c44', 'padding-top': '8px', 'flex-shrink': '0', 'overflow': 'hidden' } },
+      { nodeId: 'c-nested-box', path: '2.0', css: { 'background-color': '#2a3f66', 'border-radius': '4px', 'overflow': 'visible' } },
     ],
   })
 }

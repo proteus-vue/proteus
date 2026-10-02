@@ -24,11 +24,11 @@ const GOLDEN_GEO = path.join(GOLDEN_DIR, 'web-home.geometry.json')
 const TEST_PAGE = `<!doctype html><html><head><style>
   * { box-sizing: border-box; }
   body { margin: 0; padding: 0; font-family: system-ui, sans-serif; }
-  #proteus-root { width: 400px; height: 600px; background-color: #14141c; display: flex; flex-direction: column; padding: 12px; }
-  .box { width: 200px; height: 60px; background-color: #2a3f66; margin-bottom: 8px; border-radius: 18px; }
-  .text { width: 160px; height: 40px; color: #ffffff; font-size: 16px; font-weight: 700; margin-bottom: 8px; }
-  .nested { width: 300px; height: 100px; background-color: #1f2c44; padding: 8px; }
-  .nested .box { width: 100px; height: 24px; margin: 4px 0 0 4px; border-radius: 4px; }
+  #proteus-root { width: 400px; height: 600px; background-color: #14141c; display: flex; flex-direction: column; padding: 12px; flex-shrink: 0; }
+  .box { width: 200px; height: 60px; background-color: #2a3f66; margin-bottom: 8px; border-radius: 18px; flex-shrink: 0; overflow: hidden; }
+  .text { width: 160px; height: 40px; color: #ffffff; font-size: 16px; font-weight: 700; margin-bottom: 8px; flex-shrink: 0; overflow: hidden; }
+  .nested { width: 300px; height: 100px; background-color: #1f2c44; padding: 8px; flex-shrink: 0; overflow: hidden; }
+  .nested .box { width: 100px; height: 24px; margin: 4px 0 0 4px; border-radius: 4px; overflow: visible; }
 </style></head><body>
   <div id="proteus-root" data-proteus-id="1" data-proteus-pid="p-view">
     <div class="box" data-proteus-id="2" data-proteus-pid="p-box"></div>
