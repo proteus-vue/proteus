@@ -20,7 +20,7 @@ import { display } from '@kit.ArkUI';
 import { hidebug } from '@kit.PerformanceAnalysisKit';
 // ★矩阵 #17：App 路由栈场景探针（移植副本，与 Android/iOS 同口径）
 import { runAppStackProbe } from '../core/app-stack-probe';
-import { attach, renderCommands, stats, ProteusRenderStats, platformAnimBegin, platformAnimStep, platformAnimEnd, platformAnimSave } from 'libproteus_render.so';
+import { attach, renderCommands, stats, ProteusRenderStats, platformAnimBegin, platformAnimStep, platformAnimEnd, platformAnimSave, clearRoot, scrollRoot } from 'libproteus_render.so';
 import { bench4050, hitProbe, recycleProbe, spliceProbe, textProbe, kernelAnimProbe, memProbe, sfcStressProbe, sfcStressCommands, jsvmProbe, vaporProbe, animCurveBezier, hostRuntimeProbe, hostRtShellInstall, mountVirtualProbe, version as rustVersion } from 'libproteus_bench.so';
 
 const DOMAIN = 0x0002;
@@ -134,6 +134,65 @@ class PlatformAnimFrameCallback extends FrameCallback {
     } catch (e) {
       hilog.error(DOMAIN, BENCH_TAG, 'PROTEUS_PLATFORMANIM_ERROR %{public}s', JSON.stringify(e) ?? '');
     }
+  }
+}
+
+/**
+ * ★★矩阵 #5：**Proteus 渲染路径滚动**的帧回调（与 ArkUI Scroll 容器对照）。
+ *   每帧只做一次 `scrollRoot(offset)`（平移根 RenderNode——内容整体位移）+ postFrameCallback，
+ *   帧区间由 postFrameCallback 的 timeStamp 采（与现有滚动探针同法）。
+ *   ★与 scrollProbe 的差别：那条滚的是 **ArkUI Scroll 容器**（平台滚动）；本探针滚的是
+ *   **Proteus 自绘的 RenderNode 树**（应用级滚动）——两者对照即为 Android 的
+ *   scroll-native vs scroll-core 在鸿蒙的等价物。
+ */
+class ScrollCoreFrameCallback extends FrameCallback {
+  private uiCtx: UIContext;
+  /** 完成回调（收尾编排：Proteus 滚动结束后启动原生滚动对照） */
+  private onDone: () => void;
+  private stamps: number[] = [];
+  private step: number = 0;
+  private readonly frames: number;
+  private readonly stepVp: number;
+  private readonly warmup: number;
+  private offset: number = 0;
+  onFrame(frameTimeInNano: number): void {
+    if (this.step >= this.frames + this.warmup) return;
+    this.offset += this.stepVp;
+    scrollRoot(this.offset);                    // 真滚动：整幅内容上移（应用自绘路径）
+    if (this.step >= this.warmup) {
+      this.stamps.push(frameTimeInNano);        // ★预热帧不入统计：首几帧含"内容变更后 RS 重建"的一次性成本
+    }
+    this.step++;
+    if (this.step < this.frames + this.warmup) {
+      this.uiCtx.postFrameCallback(this);
+      return;
+    }
+    // 结算
+    const gaps: number[] = [];
+    for (let k = 1; k < this.stamps.length; k++) gaps.push((this.stamps[k] - this.stamps[k - 1]) / 1e6);
+    const sorted: number[] = gaps.slice().sort((a, b) => a - b);
+    const avg: number = gaps.length ? gaps.reduce((a, b) => a + b, 0) / gaps.length : -1;
+    const p50: number = sorted.length ? sorted[Math.floor(sorted.length * 0.5)] : -1;
+    const p95: number = sorted.length ? sorted[Math.floor(sorted.length * 0.95)] : -1;
+    const p99: number = sorted.length ? sorted[Math.floor(sorted.length * 0.99)] : -1;
+    const minG: number = sorted.length ? sorted[0] : -1;
+    const maxG: number = sorted.length ? sorted[sorted.length - 1] : -1;
+    const total: number = this.stamps.length > 1 ? (this.stamps[this.stamps.length - 1] - this.stamps[0]) / 1e6 : -1;
+    const fps: number = total > 0 ? (this.stamps.length - 1) / (total / 1000) : -1;
+    const fmt = (v: number): string => (Math.round(v * 100) / 100).toString();
+    hilog.info(DOMAIN, BENCH_TAG,
+      'PROTEUS_SCROLL_CORE frames=%{public}d warmup=%{public}d avg_ms=%{public}s p50_ms=%{public}s p95_ms=%{public}s p99_ms=%{public}s min_ms=%{public}s max_ms=%{public}s fps=%{public}s offset=%{public}d',
+      this.stamps.length, this.warmup, fmt(avg), fmt(p50), fmt(p95), fmt(p99), fmt(minG), fmt(maxG), fmt(fps), this.offset);
+    this.onDone();
+  }
+  onIdle(): void {}
+  constructor(uiCtx: UIContext, frames: number, stepVp: number, warmup: number, onDone: () => void) {
+    super();
+    this.uiCtx = uiCtx;
+    this.frames = frames;
+    this.stepVp = stepVp;
+    this.warmup = warmup;
+    this.onDone = onDone;
   }
 }
 
@@ -278,6 +337,39 @@ struct Index {
     this.getUIContext().postFrameCallback(this.frameCb);
   }
 
+  /**
+   * ★★矩阵 #5（scroll-core 等价物）：**Proteus 渲染路径滚动**。
+   *   清根 → 渲染 SFC 应力夹具（44 节点，内容高 ≈816vp 可滚）→ 60 帧逐帧平移根 → 帧率上报。
+   *   ★诚实边界：帧区间口径 = postFrameCallback 的 timeStamp（与 iOS 帧统计同档；
+   *     Android 侧为 gfxinfo 系统帧统计——量纲同、采法不同，已在报告 note 标注）。
+   */
+  private runScrollCoreProbe(): void {
+    try {
+      const ctx = getContext(this);
+      const sfcBytes: Uint8Array = ctx.resourceManager.getRawFileContentSync('stress-44.json');
+      const sfcFix: string = util.TextDecoder.create('utf-8').decodeToString(sfcBytes);
+      const disp = display.getDefaultDisplaySync();
+      const vpW = px2vp(disp.width);
+      const vpH = px2vp(disp.height);
+      const remain: number = clearRoot();               // 清根（替换默认演示内容）
+      const cmds: string = sfcStressCommands(sfcFix, DENSITY, vpW, vpH);
+      const n: number = renderCommands(cmds);
+      hilog.info(DOMAIN, BENCH_TAG, 'PROTEUS_SCROLL_CORE_SETUP cleared_remain=%{public}d rendered=%{public}d',
+        remain, n);
+      // 60 帧 × 每帧 40vp（内容高 816 ⇒ 约 2.5 屏）；预热 8 帧不计（一次性重建成本归 setup）
+      // ★收尾编排（串行）：Proteus 滚动结束后 → 启动 ArkUI 原生滚动对照（各跑各的，互不抢线程）
+      this.getUIContext().postFrameCallback(new ScrollCoreFrameCallback(this.getUIContext(), 60, 40, 8, () => {
+        try {
+          this.runScrollProbe();
+        } catch (sce) {
+          hilog.error(DOMAIN, BENCH_TAG, 'PROTEUS_SCROLL_ERROR %{public}s', JSON.stringify(sce) ?? '');
+        }
+      }));
+    } catch (e) {
+      hilog.error(DOMAIN, BENCH_TAG, 'PROTEUS_SCROLL_CORE_ERROR %{public}s', JSON.stringify(e) ?? '');
+    }
+  }
+
   /** 分档跑基准（★档间让出主线程——见文件头坑②）；4050 全量在最后一档 */
   private async runBenchStaged(): Promise<void> {
     const t0 = Date.now();
@@ -340,6 +432,8 @@ struct Index {
         this.benchLine = `原生 ArkUI 4050 元素 冷=${dt}ms（热读见上一条）`;
         this.showNative = false;
         this.nativeRun = 2;
+        // ★矩阵 #5：现在主线程空闲了——启动 Proteus 渲染路径滚动探针（串行编排见 runScrollCoreProbe 注释）
+        this.runScrollCoreProbe();
       }
     } else if (!this.nativeDone && this.nativeAppeared % 1000 === 0) {
       hilog.info(DOMAIN, BENCH_TAG, 'PROTEUS_BENCH_NATIVE_PROGRESS appeared=%{public}d',
@@ -455,6 +549,10 @@ struct Index {
         const ctxAnim = getContext(this);
         this.getUIContext().postFrameCallback(
           new PlatformAnimFrameCallback(this.getUIContext(), ctxAnim.filesDir));
+        // ★矩阵 #5：Proteus 渲染路径滚动在 native 基准**热读完成后**触发（见 countNative）
+        //   ——首版用 setTimeout(1000) 与 4050 原生基准并发 ⇒ 主线程被抢 ⇒ 滚动帧长尾
+        //   （实测 p95 200ms / max 615ms）。**探针编排必须串行**（与"一条命令不并行两件写同一
+        //   产物的事"同纪律：这里是"不并行两件抢同一主线程的事"）。
       } catch (e) {
         hilog.error(DOMAIN, TAG, 'PROTEUS_RENDER_JS_ERROR %{public}s', JSON.stringify(e) ?? '');
       }
@@ -483,12 +581,9 @@ struct Index {
         } catch (ase) {
           hilog.error(DOMAIN, BENCH_TAG, 'PROTEUS_APPSTACK_ERROR %{public}s', JSON.stringify(ase) ?? '');
         }
-        // ★滚动通道（真机滚动 + 帧率；异步——由 postFrameCallback 驱动）
-        try {
-          this.runScrollProbe();
-        } catch (sce) {
-          hilog.error(DOMAIN, BENCH_TAG, 'PROTEUS_SCROLL_ERROR %{public}s', JSON.stringify(sce) ?? '');
-        }
+        // ★ArkUI 原生滚动对照（scroll-native 等价物）——改由 Proteus 滚动探针**完成后**启动
+        //   （见 ScrollCoreFrameCallback.finish 的 onDone 回调）：两条滚动串行 ⇒ 互不抢主线程，
+        //   读数各自干净（首版并发实测：Proteus 滚动 p95 200ms 全是并发噪声）。
         // ★结构变更探针（splice；与 Android 同 payload）
         try {
           const sp: string = spliceProbe();

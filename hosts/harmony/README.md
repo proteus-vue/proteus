@@ -91,6 +91,26 @@ chmod 600 ~/.harmony/hdckey ~/.harmony/hdckey.pub
 Android 走 JNI、iOS 走 staticlib、**鸿蒙走 `aarch64-unknown-linux-ohos` 交叉编译 + C ABI**（无绑定层）。
 交叉编译脚本：`bash hosts/harmony/build-rust-core.sh`（产物 `cpp/thirdparty/libproteus_layout_core.a`，gitignore）。
 
+### ✅ 第十一里程碑：**滚动深度接线（scroll-core，含原生 A/B 对照）**（2026-10-03，矩阵 #5）
+
+> **Proteus 渲染路径滚动**：`scrollRoot(y)` 平移**根 RenderNode**（内容整体位移——与 Android
+> "整层 translate" / iOS V12 载体位移同语义），SFC 夹具内容上滚 60 帧；
+> **ArkUI 原生滚动**（Scroll 容器）同帧数对照——两路**串行**采集。
+
+| 路径 | avg | p50 | p95 | fps |
+|---|---|---|---|---|
+| **Proteus**（RenderNode 根平移） | 16.64ms | 16.64 | 16.64 | **60.1** |
+| **原生**（ArkUI Scroll 容器） | 16.64ms | 16.64 | 16.64 | **60.1** |
+
+**★★实测抓出的编排缺陷（比读数本身更值钱）**：首版让滚动探针与 4050 原生基准**并发**跑 ⇒
+两者抢同一主线程 ⇒ Proteus 滚动 p95 冲到 **200ms / max 615ms**（"滚动卡顿"假象）。
+**串行化后（native bench 热读完成 → Proteus 滚动 → 原生滚动）全部归零**——
+与"一条命令内不并行两件写同一产物的事"同纪律：**不并行两件抢同一主线程的事**。
+（该缺陷藏得深：p50 一直是对的 16.66ms，只有 p95/max 暴露并发——**分布不是均值，长尾才是证据**。）
+
+**采集**：`bash hosts/harmony/run-host-app.sh`（探针集里 SCROLL_CORE + SCROLL_DONE 两行）；
+证据 `results/scroll-ab.json`。
+
 ### ✅ 第十里程碑：**整树级虚拟化（mount-virtual）**（2026-10-03，矩阵 #12）
 
 > 同一份 SFC 产物 `vapor-tree.json`（与 Android/iOS 同源夹具）——**全树进核**（1502 节点；

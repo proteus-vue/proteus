@@ -554,6 +554,45 @@ static napi_value PlatformAnimSave(napi_env env, napi_callback_info info) {
     return out;
 }
 
+/* ── 矩阵 #5：滚动（Proteus 渲染路径——与 ArkUI Scroll 容器对照） ── */
+
+/** clearRoot(): number —— 清空根的所有子节点（重建内容前调用；返回剩余子节点数） */
+static napi_value ClearRoot(napi_env env, napi_callback_info info) {
+    (void)info;
+    if (g_rootNode != nullptr) {
+        OH_ArkUI_RenderNodeUtils_ClearChildren(g_rootNode);
+    }
+    int32_t remain = -1;
+    ArkUI_RenderNodeHandle child = nullptr;
+    if (g_rootNode != nullptr) {
+        remain = (OH_ArkUI_RenderNodeUtils_GetChild(g_rootNode, 0, &child) == ARKUI_ERROR_CODE_NO_ERROR) ? 1 : 0;
+    }
+    napi_value out;
+    napi_create_int32(env, remain, &out);
+    return out;
+}
+
+/**
+ * scrollRoot(yDesign): number —— 平移**根 RenderNode**（Proteus 渲染路径的滚动）。
+ *   为什么平移根 = 滚动：所有元素都是根的子节点、用绝对坐标定位（见架构注释）——
+ *   平移根即整幅内容位移（与 Android 的 "整层 translate" / iOS V12 的载体位移同语义）。
+ *   ★单位：入参为**设计单位（vp）**，内部 ×密度 转物理 px（换算一处，与全模块一致）。
+ */
+static napi_value ScrollRoot(napi_env env, napi_callback_info info) {
+    size_t argc = 1;
+    napi_value args[1] = {nullptr};
+    napi_get_cb_info(env, info, &argc, args, nullptr, nullptr);
+    double y = 0;
+    if (argc >= 1) napi_get_value_double(env, args[0], &y);
+    int32_t rc = -1;
+    if (g_rootNode != nullptr) {
+        rc = OH_ArkUI_RenderNodeUtils_SetPosition(g_rootNode, 0, (int32_t)(-y * g_density));
+    }
+    napi_value out;
+    napi_create_int32(env, rc, &out);
+    return out;
+}
+
 /** stats(): {nodes: number} —— 机器判据读数（与 Android/iOS 宿主记账同思路） */
 static napi_value Stats(napi_env env, napi_callback_info info) {
     napi_value obj;
@@ -574,6 +613,8 @@ static napi_value Init(napi_env env, napi_value exports) {
         {"platformAnimStep", nullptr, PlatformAnimStep, nullptr, nullptr, nullptr, napi_default, nullptr},
         {"platformAnimEnd", nullptr, PlatformAnimEnd, nullptr, nullptr, nullptr, napi_default, nullptr},
         {"platformAnimSave", nullptr, PlatformAnimSave, nullptr, nullptr, nullptr, napi_default, nullptr},
+        {"clearRoot", nullptr, ClearRoot, nullptr, nullptr, nullptr, napi_default, nullptr},
+        {"scrollRoot", nullptr, ScrollRoot, nullptr, nullptr, nullptr, napi_default, nullptr},
     };
     napi_define_properties(env, exports, sizeof(desc) / sizeof(desc[0]), desc);
     return exports;

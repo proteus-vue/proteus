@@ -19,3 +19,7 @@ export const platformAnimStep: (json: string) => string;
 export const platformAnimEnd: () => string;
 /** ★报告落盘（content, path）；返回 0 成功 */
 export const platformAnimSave: (content: string, path: string) => number;
+/** ★矩阵 #5：清空根子节点（重建内容前调用）；返回剩余子节点数（0=已清空） */
+export const clearRoot: () => number;
+/** ★矩阵 #5：平移根 RenderNode（yDesign 设计单位）——Proteus 渲染路径的滚动；返回错误码（0=OK） */
+export const scrollRoot: (yDesign: number) => number;
