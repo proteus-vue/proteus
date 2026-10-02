@@ -1323,11 +1323,13 @@ public class MainActivity extends Activity {
             final android.util.DisplayMetrics dm = getResources().getDisplayMetrics();
             VaporRenderHost host = new VaporRenderHost(this, root);
             // ★★★交互闭环（2026-10-01）：宿主手势 → **反向调用 JS**（跑 handler → 触发订阅）
+            // ★冒泡链随回调下发（2026-10-02）：此前只传 (type, targetId) ⇒ 祖先 handler 永不触发
             host.setGestureSink(new VaporRenderHost.GestureSink() {
                 @Override
-                public void onGesture(String type, int targetId) {
-                    String out = QuickJsEngine.dispatchGesture(type, targetId);
+                public void onGesture(String type, int targetId, int[] chain) {
+                    String out = QuickJsEngine.dispatchGesture(type, targetId, chain);
                     android.util.Log.i("proteus", "交互闭环：手势 " + type + " @ 节点 " + targetId
+                            + " · 链 " + java.util.Arrays.toString(chain)
                             + " → JS 返回 " + (out != null ? out.substring(0, Math.min(140, out.length())) : "null"));
                 }
             });

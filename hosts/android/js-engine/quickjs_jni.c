@@ -741,27 +741,40 @@ static int pump_jobs_bounded(void) {
 
 /** 泵掉全部可跑 job（含 eval 之后的续体）——返回执行数；未初始化 -1 */
 /**
- * ★★★**分发手势到 JS**（Java 调；反向通道的分发端）——`nativeDispatchGesture(type, nodeId)`。
+ * ★★★**分发手势到 JS**（Java 调；反向通道的分发端）——`nativeDispatchGesture(type, nodeId, chainJson)`。
  *
  * 出参：JS 回调的返回串（宿主记账用）；未注册 / 异常 ⇒ `{"ok":false,"reason":…}`。
  * ★**必须在同一线程调用**（QuickJS 非线程安全；宿主从主线程的 GestureListener 调）。
+ *
+ * 【为什么带 chain（2026-10-02 · 冒泡链批次）】内核 `bubble_chain` 早就算好了
+ *   「target 自身 + 全部祖先（自深到浅）」——宿主 `GestureListener` 也拿到了，
+ *   但本函数此前只把 `(type, nodeId)` 递给 JS ⇒ **冒泡链在最后一环被丢掉**：
+ *   A/B 两路都只能对 target 本身派发，"祖先 handler"永不触发（本仓的静默丢件同族）。
+ *   ⇒ 第三个参数 `chain_json`（如 `"[10,9,0]"`）原样转给 JS 回调；调用方保证非 NULL。
  */
 JNIEXPORT jstring JNICALL
 Java_dev_proteus_layoutcore_QuickJsEngine_nativeDispatchGesture(JNIEnv *env, jclass cls,
-                                                                jstring type, jint node_id) {
+                                                                jstring type, jint node_id,
+                                                                jstring chain_json) {
   (void)cls;
   if (g_ctx == NULL) return (*env)->NewStringUTF(env, "{\"ok\":false,\"reason\":\"ctx 未就绪\"}");
   if (g_gesture_cb[0] == 0) return (*env)->NewStringUTF(env, "{\"ok\":false,\"reason\":\"未注册回调\"}");
   const char *t = (*env)->GetStringUTFChars(env, type, NULL);
   if (t == NULL) return (*env)->NewStringUTF(env, "{\"ok\":false,\"reason\":\"type 转码失败\"}");
+  const char *cj = (*env)->GetStringUTFChars(env, chain_json, NULL);
+  if (cj == NULL) {
+    (*env)->ReleaseStringUTFChars(env, type, t);
+    return (*env)->NewStringUTF(env, "{\"ok\":false,\"reason\":\"chain 转码失败\"}");
+  }
   JSValue global = JS_GetGlobalObject(g_ctx);
   JSValue fn = JS_GetPropertyStr(g_ctx, global, g_gesture_cb);
   JSValue out = JS_UNDEFINED;
   if (JS_IsFunction(g_ctx, fn)) {
-    JSValue args[2] = {JS_NewString(g_ctx, t), JS_NewInt32(g_ctx, node_id)};
-    out = JS_Call(g_ctx, fn, global, 2, args);
+    JSValue args[3] = {JS_NewString(g_ctx, t), JS_NewInt32(g_ctx, node_id), JS_NewString(g_ctx, cj)};
+    out = JS_Call(g_ctx, fn, global, 3, args);
     JS_FreeValue(g_ctx, args[0]);
     JS_FreeValue(g_ctx, args[1]);
+    JS_FreeValue(g_ctx, args[2]);
     if (JS_IsException(out)) {
       JSValue exc = JS_GetException(g_ctx);
       const char *em = JS_ToCString(g_ctx, exc);
@@ -785,6 +798,7 @@ Java_dev_proteus_layoutcore_QuickJsEngine_nativeDispatchGesture(JNIEnv *env, jcl
   JS_FreeValue(g_ctx, out);
   JS_FreeValue(g_ctx, fn);
   JS_FreeValue(g_ctx, global);
+  (*env)->ReleaseStringUTFChars(env, chain_json, cj);
   (*env)->ReleaseStringUTFChars(env, type, t);
   return ret;
 }

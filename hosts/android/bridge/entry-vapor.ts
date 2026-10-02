@@ -65,9 +65,11 @@ interface VaporHost {
   probeChannels(idsJson: string): string
   /**
    * ★★**注册手势回调**（交互闭环的反向通道：**宿主 → JS**）——传函数名，JS 侧注册后由
-   *   宿主在"语义手势 + 命中节点"时回调 `__proteusVaporGesture(type, nodeId)`。
+   *   宿主在"语义手势 + 命中节点"时回调 `__proteusVaporGesture(type, nodeId, chainJson)`。
    *   ★与其余入口的差别：那些是 JS→Java（同步取返回值）；这条是 Java→JS（宿主驱动），
    *     故用**注册函数名 + 全局回调**的形态（QuickJS 侧唯一可行的同步反向调用）。
+   *   ★`chainJson`（2026-10-02 起）：冒泡链 `"[target, ...祖先]"`（自深到浅，内核 `bubble_chain` 语义）
+   *     ——此前只传 `(type, nodeId)` ⇒ 祖先 handler 永不触发（链在最后一环被丢）。
    */
   onGesture?(jsCallbackName: string): string
   /** ★进程内注入一次 tap（判据驱动；真机 `adb input tap` 无权限——见宿主注释） */
@@ -193,12 +195,12 @@ interface AbReport {
   /** ★逐项等价结论（`JSON.stringify(chan_a) === JSON.stringify(chan_b)`） */
   chan_match: boolean
   /* ════════ ★★事件路径 A/B（2026-10-01 第二批：B 侧事件闭环） ════════ */
-  /** A 路 tap：命中节点 / handler / 指令回执 / 内核几何前后 / 宽度位移
-   *  （tap → hitTest → 反向调用 → handler → 订阅 → 指令 → 内核几何） */
-  ev_a: { node: number; hit: number; handler: string; ops_bytes: number; applied: number; relayout: number; changed_rects: number; before: RectLike | null; after: RectLike | null; width_delta: number; tap_ms: number } | null
-  /** B 路 tap：适配器派发（fired/errors）+ 补丁 + 宿主回执 + 内核几何前后
+  /** A 路 tap：命中节点 / 冒泡链 / 逐跳派发（fired）+ 逐跳宽度位移 / handler / 指令回执 /
+   *  内核几何前后 / 宽度位移（tap → hitTest → 反向调用 → handler → 订阅 → 指令 → 内核几何） */
+  ev_a: { node: number; hit: number; chain: number[]; fired: number[]; fired_width_deltas: number[]; handler: string; ops_bytes: number; applied: number; relayout: number; changed_rects: number; before: RectLike | null; after: RectLike | null; width_delta: number; tap_ms: number } | null
+  /** B 路 tap：适配器派发（chain/fired/errors）+ 逐跳宽度位移 + 补丁 + 宿主回执 + 内核几何前后
    *  （tap → hitTest → 反向调用 → Vue onClick → 同步 patch → 宿主 updatePatches → 内核几何） */
-  ev_b: { node: number; hit: number; fired: number[]; errors: string[]; before: RectLike | null; after: RectLike | null; width_delta: number; patches: number; applied: number; changed_rects: number; text_layers: number; driver_ms: number } | null
+  ev_b: { node: number; hit: number; chain: number[]; fired: number[]; fired_width_deltas: number[]; errors: string[]; before: RectLike | null; after: RectLike | null; width_delta: number; patches: number; applied: number; changed_rects: number; text_layers: number; driver_ms: number } | null
   /** ★两路 tap 等价（同语义按钮：before 矩形一致 + 位移一致 + after 矩形一致） */
   ev_match: boolean
   /** tap 前 / 后两路按钮的**最大矩形差**（px；判据用——不等价时先看这个） */
@@ -270,10 +272,14 @@ interface VaporReport {
   ev_handlers: number
   /** 注入的 tap 次数（本判据夹具体验：点"计数按钮"与"宽度按钮"各一次） */
   taps: number
-  /** 每次 tap 的逐帧读数：命中节点 / handler 跑了吗 / 源变化 / 内核变更集 / 几何真值 */
+  /** 每次 tap 的逐帧读数：命中节点 / 冒泡链 / 逐跳派发 / handler 跑了吗 / 源变化 / 内核变更集 / 几何真值 */
   tap_evidence: Array<{
     tap: number
     hit: number
+    /** ★冒泡链（内核给的：target 自身 + 全部祖先，自深到浅）——2026-10-02 起随回调记录 */
+    chain: number[]
+    /** ★链上**真的跑了 handler** 的节点（≥2 即冒泡到祖先——判据"链没断"的机器证据） */
+    fired: number[]
     handler: string
     source_after: unknown
     ops: number
@@ -295,6 +301,9 @@ function makeData(rows: number): Record<string, unknown> {
     // ★与夹具 script 的 `ref(120)` 一致：**初始数据必须给全**，否则 `:width="boxW"` 首帧是 0，
     //   tap 后变 30 的"对比基线"是零宽（几何差异虽真但语义不清——数据与声明要对齐）
     boxW: 120,
+    // ★★冒泡锚（2026-10-02）：按钮外层容器的宽度源——容器上的 `@click="padW += 5"`
+    //   是**祖先 handler**：tap 链 [按钮, 容器, root] 上两跳都要跑（判据核"链没断"）
+    padW: 300,
     tapCount: 0,
   }
 }
@@ -509,6 +518,15 @@ function runAb(args: VaporArgs): string {
         return null
       }
     }
+    /** 内核几何全表（判据用：tap 前后各读一次，逐 id 比"谁真的动了"）——一次跨边界调用 */
+    const readRectsAll = (): Record<string, RectLike> => {
+      try {
+        const r = JSON.parse(proteusHost.readRects()) as { rects?: Record<string, RectLike> }
+        return r.rects ?? {}
+      } catch {
+        return {}
+      }
+    }
     /** 两个矩形间的最大绝对差（px）；任一为空 ⇒ -1（**不是 0**——判据必须能区分"没读到"与"一致"） */
     const rectDelta = (a: RectLike | null, b: RectLike | null): number => {
       if (!a || !b) return -1
@@ -516,16 +534,23 @@ function runAb(args: VaporArgs): string {
         Math.abs(a.x - b.x), Math.abs(a.y - b.y), Math.abs(a.width - b.width), Math.abs(a.height - b.height),
       ) * 1000) / 1000
     }
-    const tapBtnA = harnessEvents.find((e) => e.event === 'tap')
+    // ★按钮锚点：与 B 路**同一颜色锚**（`#2f6fed` 唯一）——A/B 都点"同一个盒子"的中心。
+    //   为什么不取 events[0]：夹具现在有**两个** tap 绑定（按钮 + 外层容器），而"第一个事件"
+    //   是容器（元素序在前）⇒ 取它会把对照锚点错位（两路比的就不是同一个按钮了）。
+    const btnANode = (inst.nodes as unknown as Array<Record<string, unknown>>)
+      .find((n) => n.backgroundColor === '#2f6fed')
+    const tapBtnA = btnANode ? { nodeId: Number(btnANode.id) } : undefined
     if (tapBtnA && typeof proteusHost.tapAt === 'function') {
       const av: NonNullable<AbReport['ev_a']> = {
-        node: tapBtnA.nodeId, hit: -1, handler: '', ops_bytes: 0, applied: -1, relayout: -1,
-        changed_rects: 0, before: null, after: null, width_delta: 0, tap_ms: 0,
+        node: tapBtnA.nodeId, hit: -1, chain: [], fired: [], fired_width_deltas: [], handler: '', ops_bytes: 0,
+        applied: -1, relayout: -1, changed_rects: 0, before: null, after: null, width_delta: 0, tap_ms: 0,
       }
-      ;(globalThis as unknown as Record<string, unknown>)[GESTURE_CB] = (type: string, nodeId: number): string => {
-        const handler = byNodeEvent.get(`${nodeId}:${type}`) ?? byNodeEvent.get(`${nodeId}:tap`) ?? ''
-        if (!handler) return JSON.stringify({ ok: false, reason: `节点 ${nodeId} 上没有 ${type} 的 handler` })
-        runActions(handler, data)
+      ;(globalThis as unknown as Record<string, unknown>)[GESTURE_CB] = (type: string, nodeId: number, chainJson?: string): string => {
+        // ★沿**内核给的冒泡链**派发（2026-10-02：此前只看 target 本身 ⇒ 祖先 handler 永不触发）
+        const chain = parseChain(chainJson, nodeId)
+        const hit = dispatchChainA(chain, type, byNodeEvent, (h) => runActions(h, data))
+        const handler = hit.handler
+        if (!handler) return JSON.stringify({ ok: false, reason: `链 ${chain.join('>')} 上没有 ${type} 的 handler` })
         // 触发全部订阅源（本夹具 tap 改 boxW；全触发 = "全量重算 + diff"，正确性优先）
         for (const [, cb] of triggers) cb()
         vapor.relink(ctx)
@@ -545,22 +570,40 @@ function runAb(args: VaporArgs): string {
           changed = ao.rects ? Object.keys(ao.rects).length : 0
         }
         av.handler = handler
+        av.fired = hit.fired
+        av.chain = chain
         av.ops_bytes = payload.length
         av.applied = applied
         av.relayout = relayout
         av.changed_rects = changed
-        return JSON.stringify({ ok: true, handler, ops: payload.length, applied, relayout, changed_rects: changed })
+        return JSON.stringify({ ok: true, handler, fired: hit.fired, ops: payload.length, applied, relayout, changed_rects: changed })
       }
       av.before = readRectOf(tapBtnA.nodeId)
+      const rectsAllBeforeA = readRectsAll()
       const tTap = t()
       if (av.before) {
         const c = { x: av.before.x + av.before.width / 2, y: av.before.y + av.before.height / 2 }
-        const tp = JSON.parse(proteusHost.tapAt(JSON.stringify(c))) as { ok?: boolean; last?: { target?: number } }
-        av.hit = tp.last?.target ?? -1
+        const tp = JSON.parse(proteusHost.tapAt(JSON.stringify(c))) as {
+          ok?: boolean; gestures_fired?: number; last?: { target?: number }
+        }
+        // ★★本次注入**真的触发了手势**才认 last（2026-10-02 实测抓出：第二次注入被
+        //   GestureDetector 判成双击 ⇒ 无手势，而判据把上一次的陈旧探针读成新读数）
+        if (tp.gestures_fired === 1) {
+          av.hit = tp.last?.target ?? -1
+        } else {
+          notes.push(`★A 路 tap 未触发手势（gestures_fired=${tp.gestures_fired ?? '缺失'}）——hit 读数不可信`)
+        }
       }
       av.tap_ms = t() - tTap
       av.after = readRectOf(tapBtnA.nodeId)
       if (av.before && av.after) av.width_delta = Math.round((av.after.width - av.before.width) * 1000) / 1000
+      // ★逐跳宽度位移（fired 顺序 = 链序，target 在前）——判据据此核"祖先 handler 真的改了祖先几何"
+      const rectsAllAfterA = readRectsAll()
+      av.fired_width_deltas = av.fired.map((id) => {
+        const b = rectsAllBeforeA[String(id)]
+        const a2 = rectsAllAfterA[String(id)]
+        return b && a2 ? Math.round((a2.width - b.width) * 1000) / 1000 : -999
+      })
       rep.ev_a = av
       if (av.hit !== tapBtnA.nodeId) {
         notes.push(`★A 路 tap 命中 ${av.hit} ≠ 事件节点 ${tapBtnA.nodeId}（hitTest 与事件绑定不一致）`)
@@ -575,6 +618,8 @@ function runAb(args: VaporArgs): string {
     container.parent = adapter.root
     const abList = ref(dataB.list)
     const abBoxW = ref(dataB.boxW)
+    // ★冒泡锚：容器宽度源（容器 `@click="padW += 5"` 的祖先 handler 改它）
+    const abPadW = ref(dataB.padW)
     /**
      * ★★B 路更新的**同步驱动柄**（2026-10-01 更新路径 A/B）。
      *
@@ -591,7 +636,7 @@ function runAb(args: VaporArgs): string {
       name: 'VaporAbApp',
       setup() {
         abRootInst = getCurrentInstance() as unknown as { update?: () => void }
-        return { list: abList, boxW: abBoxW }
+        return { list: abList, boxW: abBoxW, padW: abPadW }
       },
       render: abRender,
     }
@@ -842,10 +887,9 @@ function runAb(args: VaporArgs): string {
      * 【B 按钮怎么定位】夹具常量 `#2f6fed`（与 `gen-vapor-fixture.mjs` 的 SFC 同源）——
      *   在 B 的请求树里唯一命中；命中数不为 1 ⇒ 如实记 note（**判据红**，不静默换锚点）。
      *
-     * 【诚实边界】B 的冒泡链按"只派发 target"（`chain` 空 ⇒ 适配器兜底 `[nodeId]`）——
-     *   宿主的 `GestureSink` 目前只传 `(type, targetId)`（chain 在 JNI 分发形态里被丢弃，
-     *   见 `VaporRenderHost.GestureSink` 的签名）。单节点 handler 场景不受影响；
-     *   **祖先冒泡的等价性属后续批次**（如实标注，不假装覆盖）。
+     * 【冒泡链（2026-10-02）】`chainJson` 来自内核（`bubble_chain`：target + 全部祖先）——
+     *   此前宿主的 `GestureSink` 只传 `(type, targetId)`、这里也按空链派发 ⇒ 祖先 handler 不触发；
+     *   现在**原样把链交给适配器**（`dispatchEvent` 沿链找处理器，DOM 冒泡语义）。
      */
     const btnBCands = (req.nodes as unknown as Array<Record<string, unknown>>).filter(
       (x) => x.backgroundColor === '#2f6fed',
@@ -853,22 +897,32 @@ function runAb(args: VaporArgs): string {
     if (btnBCands.length === 1 && typeof proteusHost.tapAt === 'function') {
       const btnBId = Number(btnBCands[0]!.id)
       const bv: NonNullable<AbReport['ev_b']> = {
-        node: btnBId, hit: -1, fired: [], errors: [], before: null, after: null,
+        node: btnBId, hit: -1, chain: [], fired: [], fired_width_deltas: [], errors: [], before: null, after: null,
         width_delta: 0, patches: -1, applied: -1, changed_rects: 0, text_layers: 0, driver_ms: 0,
       }
-      ;(globalThis as unknown as Record<string, unknown>)[GESTURE_CB] = (type: string, nodeId: number): string => {
-        // ★适配器派发（Vue 的 onClick 已在 `patchProp('onClick')` 时登记进 handlers 表）
-        const r = adapter.dispatchEvent(nodeId, [], type, 0, 0)
+      ;(globalThis as unknown as Record<string, unknown>)[GESTURE_CB] = (type: string, nodeId: number, chainJson?: string): string => {
+        // ★沿内核给的冒泡链派发（适配器按 DOM 冒泡语义逐个查处理器；链为空 ⇒ 兜底 [nodeId]）
+        const chain = parseChain(chainJson, nodeId)
+        bv.chain = chain
+        const r = adapter.dispatchEvent(nodeId, chain, type, 0, 0)
         bv.fired = r.fired
         bv.errors = r.errors
-        return JSON.stringify({ ok: r.errors.length === 0 && r.fired.length > 0, fired: r.fired, errors: r.errors })
+        return JSON.stringify({ ok: r.errors.length === 0 && r.fired.length > 0, fired: r.fired, chain, errors: r.errors })
       }
       bv.before = readRectOf(btnBId)
+      const rectsAllBeforeB = readRectsAll()
       const tTap = t()
       if (bv.before) {
         const c = { x: bv.before.x + bv.before.width / 2, y: bv.before.y + bv.before.height / 2 }
-        const tp = JSON.parse(proteusHost.tapAt(JSON.stringify(c))) as { ok?: boolean; last?: { target?: number } }
-        bv.hit = tp.last?.target ?? -1
+        const tp = JSON.parse(proteusHost.tapAt(JSON.stringify(c))) as {
+          ok?: boolean; gestures_fired?: number; last?: { target?: number }
+        }
+        // ★同 A 相位：只有本次真的触发了手势才认 last（防陈旧探针；见 A 相位注释）
+        if (tp.gestures_fired === 1) {
+          bv.hit = tp.last?.target ?? -1
+        } else {
+          notes.push(`★B 路 tap 未触发手势（gestures_fired=${tp.gestures_fired ?? '缺失'}）——hit 读数不可信`)
+        }
       }
       // ★同步驱动重渲染（handler 已改 ref；见 `abRootInst` 注释——把"何时跑"从微任务改成显式调用，
       //   patch 链路一字未改；若宿主回调里的微任务泵已跑过本 job，这里重跑也是幂等的：值相同 ⇒ 不标脏）
@@ -894,6 +948,13 @@ function runAb(args: VaporArgs): string {
       }
       bv.after = readRectOf(btnBId)
       if (bv.before && bv.after) bv.width_delta = Math.round((bv.after.width - bv.before.width) * 1000) / 1000
+      // ★逐跳宽度位移（fired 顺序 = 链序，target 在前）：判据据此核"祖先 handler 真的改了祖先几何"
+      const rectsAllAfterB = readRectsAll()
+      bv.fired_width_deltas = bv.fired.map((id) => {
+        const b = rectsAllBeforeB[String(id)]
+        const a2 = rectsAllAfterB[String(id)]
+        return b && a2 ? Math.round((a2.width - b.width) * 1000) / 1000 : -999
+      })
       rep.ev_b = bv
       if (bv.hit !== btnBId) {
         notes.push(`★B 路 tap 命中 ${bv.hit} ≠ 按钮节点 ${btnBId}（hitTest 与适配器登记不一致）`)
@@ -902,18 +963,28 @@ function runAb(args: VaporArgs): string {
       notes.push(`★B 路按钮定位失败（#2f6fed 命中 ${btnBCands.length} 个，应恰 1 个）——事件等价判据将缺读数`)
     }
 
-    // ── 事件路径等价（A/B 两路的按钮矩形：tap 前一致 + 位移一致 + tap 后一致）──
+    // ── 事件路径等价（A/B 两路的按钮矩形 + 冒泡链 + 逐跳位移）──
     rep.ev_before_delta = rectDelta(rep.ev_a?.before ?? null, rep.ev_b?.before ?? null)
     rep.ev_after_delta = rectDelta(rep.ev_a?.after ?? null, rep.ev_b?.after ?? null)
+    const bubblesOk = (e: AbReport['ev_a'] | AbReport['ev_b']): boolean =>
+      !!e && e.chain.length >= 2 && e.fired.length >= 2 && e.chain[0] === e.hit
+    const deltasMatch = ((): boolean => {
+      const a = rep.ev_a?.fired_width_deltas ?? []
+      const b = rep.ev_b?.fired_width_deltas ?? []
+      if (a.length !== b.length || a.length < 2) return false
+      return a.every((v, i) => Math.abs(v - b[i]!) <= 0.01 && v > 0 && b[i]! > 0)
+    })()
     rep.ev_match = !!(rep.ev_a && rep.ev_b
       && rep.ev_before_delta >= 0 && rep.ev_before_delta <= 0.01
       && rep.ev_after_delta >= 0 && rep.ev_after_delta <= 0.01
-      && Math.abs(rep.ev_a.width_delta - rep.ev_b.width_delta) <= 0.01)
+      && Math.abs(rep.ev_a.width_delta - rep.ev_b.width_delta) <= 0.01
+      && bubblesOk(rep.ev_a) && bubblesOk(rep.ev_b) && deltasMatch)
     if (rep.ev_a && rep.ev_b) {
-      notes.push(`事件路径：A 命中 ${rep.ev_a.hit} · 宽 ${rep.ev_a.before?.width}→${rep.ev_a.after?.width}`
-        + `（指令 ${rep.ev_a.ops_bytes}B / applied ${rep.ev_a.applied}）；`
-        + `B 命中 ${rep.ev_b.hit} · 宽 ${rep.ev_b.before?.width}→${rep.ev_b.after?.width}`
-        + `（补丁 ${rep.ev_b.patches} / applied ${rep.ev_b.applied}）`)
+      notes.push(`事件路径：A 命中 ${rep.ev_a.hit} · 链 [${rep.ev_a.chain.join('>')}] 派发 [${rep.ev_a.fired.join('>')}]`
+        + ` · 宽 ${rep.ev_a.before?.width}→${rep.ev_a.after?.width}（指令 ${rep.ev_a.ops_bytes}B / applied ${rep.ev_a.applied}）；`
+        + `B 命中 ${rep.ev_b.hit} · 链 [${rep.ev_b.chain.join('>')}] 派发 [${rep.ev_b.fired.join('>')}]`
+        + ` · 宽 ${rep.ev_b.before?.width}→${rep.ev_b.after?.width}（补丁 ${rep.ev_b.patches} / applied ${rep.ev_b.applied}）`
+        + ` · 逐跳位移 A=${JSON.stringify(rep.ev_a.fired_width_deltas)} vs B=${JSON.stringify(rep.ev_b.fired_width_deltas)}`)
     }
 
     rep.ok = true
@@ -980,6 +1051,55 @@ function geomDiff(
     if (d > 0.01) mismatches++
   }
   return { delta: Math.round(delta * 1000) / 1000, mismatches, samples: n }
+}
+
+/**
+ * ★★**解析宿主下发的冒泡链**（`"[target, ...祖先]"`，自深到浅）。
+ *   缺失 / 非法 / 空 ⇒ 退化为 `[nodeId]`（**不静默换链**：退化是显式的、且旧宿主兼容）。
+ */
+function parseChain(chainJson: unknown, nodeId: number): number[] {
+  if (typeof chainJson === 'string' && chainJson.length > 0) {
+    try {
+      const arr = JSON.parse(chainJson) as unknown
+      if (Array.isArray(arr) && arr.length > 0) {
+        const ids = arr.map((x) => Number(x)).filter((x) => Number.isFinite(x))
+        if (ids.length > 0) return ids
+      }
+    } catch {
+      /* 解析失败 ⇒ 退化（下行） */
+    }
+  }
+  return nodeId >= 0 ? [nodeId] : []
+}
+
+/**
+ * ★★**沿冒泡链派发（A 路）**——`chain` 自深到浅（内核 `bubble_chain` 语义）；
+ *   逐个查 `节点:事件 → handler`，命中即执行（**全部祖先都会跑**——DOM 冒泡语义）。
+ *
+ * 【为什么两处（runShort / runAb A 相位）共用这一份】这两条路此前都只对 **target 本身**
+ *   派发 ⇒ 祖先 handler 永不触发（冒泡链在 JNI 下发后被丢——2026-10-02 修复）。
+ *   同一语义只允许一处实现（本仓纪律）。
+ *
+ * ★诚实边界：A 路的 handler 是**动作列表**（无事件对象）⇒ 不支持 `stopPropagation`
+ *   （B 路适配器的 `dispatchEvent` 支持）。本版判据覆盖"非终止冒泡"的等价；终止语义属后续批次。
+ */
+function dispatchChainA(
+  chain: number[],
+  type: string,
+  byNodeEvent: Map<string, string>,
+  run: (name: string) => boolean,
+): { fired: number[]; handler: string } {
+  const fired: number[] = []
+  let handler = ''
+  for (const id of chain) {
+    const h = byNodeEvent.get(`${id}:${type}`) ?? byNodeEvent.get(`${id}:tap`) ?? ''
+    if (!h) continue
+    if (run(h)) {
+      fired.push(id)
+      if (!handler) handler = h
+    }
+  }
+  return { fired, handler }
 }
 
 /** 逐节点探针绘制通道（返回与 ids 等长的"非空通道数"） */
@@ -1325,13 +1445,16 @@ function runShort(args: VaporArgs): string {
     /**
      * ★★**手势回调**（宿主 → JS 的反向通道）：注册到全局供 JNI 调用。
      * 返回本帧变化读数（指令字节数 + 源变化后的值），供宿主/判据记账。
+     * ★2026-10-02：回调签名带 `chainJson`（冒泡链），**沿链派发**（此前只看 target 本身）。
      */
-    const gestureHits: Array<{ tap: number; hit: number; handler: string; source_after: unknown }> = []
-    ;(globalThis as unknown as Record<string, unknown>).__proteusVaporGesture = (type: string, nodeId: number): string => {
-      const handler = byNodeEvent.get(`${nodeId}:${type}`) ?? byNodeEvent.get(`${nodeId}:tap`) ?? ''
-      if (!handler) return JSON.stringify({ ok: false, reason: `节点 ${nodeId} 上没有 ${type} 的 handler` })
+    const gestureHits: Array<{ tap: number; hit: number; chain: number[]; fired: number[]; handler: string; source_after: unknown }> = []
+    ;(globalThis as unknown as Record<string, unknown>).__proteusVaporGesture = (type: string, nodeId: number, chainJson?: string): string => {
+      const chain = parseChain(chainJson, nodeId)
       const before = { ...data }
-      const ran = runHandler(handler)
+      const hit = dispatchChainA(chain, type, byNodeEvent, runHandler)
+      const handler = hit.handler
+      if (!handler) return JSON.stringify({ ok: false, reason: `链 ${chain.join('>')} 上没有 ${type} 的 handler` })
+      const ran = true
       // 触发订阅（源变化 → 按行/标量 diff → 二进制指令）
       const fire = triggers.get('list')
       // 本夹具的 tap 源（tapCount / boxW）不在 `list`，故**全源 relink**（参考实现形态：
@@ -1361,9 +1484,9 @@ function runShort(args: VaporArgs): string {
           applied = -3
         }
       }
-      gestureHits.push({ tap: gestureHits.length + 1, hit: nodeId, handler, source_after: changedSources })
+      gestureHits.push({ tap: gestureHits.length + 1, hit: nodeId, chain, fired: hit.fired, handler, source_after: changedSources })
       return JSON.stringify({
-        ok: ran, handler, changed: changedSources, ops: payload.length,
+        ok: ran, handler, fired: hit.fired, changed: changedSources, ops: payload.length,
         applied, relayout, changed_rects: changedN,
       })
     }
@@ -1464,7 +1587,13 @@ function runShort(args: VaporArgs): string {
         }
         // ② 注入 tap（宿主机内 → 命中 → 回调 → handler 已跑完，返回时数据已变）
         const tapOut = JSON.parse(proteusHost.tapAt(JSON.stringify({ x: cx, y: cy }))) as {
-          ok?: boolean; dispatched?: number; last?: { type?: string; target?: number }
+          ok?: boolean; gestures_fired?: number; dispatched?: number; last?: { type?: string; target?: number }
+        }
+        // ★★本次注入**真的触发了手势**才认 last（防陈旧探针；见宿主 tapAt 注释——
+        //   连续注入会被 GestureDetector 判成双击吞掉，而 last 会读到上一次的旧值）
+        const tapFired = tapOut.gestures_fired === 1
+        if (!tapFired) {
+          notes.push(`tap@${btn.nodeId} 未触发手势（gestures_fired=${tapOut.gestures_fired ?? '缺失'}）——读数不可信`)
         }
         // ★tapAt 是同步的：返回时 JS 回调（handler + applyOps）已跑完——回执在 gestureHits 末条
         rep.taps++
@@ -1503,7 +1632,10 @@ function runShort(args: VaporArgs): string {
         const lastHit = gestureHits.length > 0 ? gestureHits[gestureHits.length - 1]! : null
         rep.tap_evidence.push({
           tap: rep.taps,
-          hit: tapOut.last?.target ?? -1,
+          hit: tapFired ? (tapOut.last?.target ?? -1) : -1,   // ★未触发手势 ⇒ 不认陈旧 last
+          // ★冒泡链 + 逐跳派发（2026-10-02：判据据此核"链没断、祖先 handler 真的跑了"）
+          chain: lastHit?.chain ?? [],
+          fired: lastHit?.fired ?? [],
           handler: lastHit?.handler ?? '',
           source_after: lastHit?.source_after ?? null,
           ops: tapOut.ok ? 1 : 0,

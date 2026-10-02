@@ -244,6 +244,38 @@ export function instantiateTemplate(tpl: LayoutTemplate, opts: InstantiateOption
     emit(n, n.id, n.parentId)
   }
 
+  // ④' ★★**非行内（标量）槽位的初始值回填**（2026-10-02 修复的真缺陷）
+  //
+  // 【为什么必须有（A/B 事件冒泡判据 ⑦g 当场红的根因）】本函数此前只回填 `list-item`
+  //   槽位（见 cloneRow ④），而**标量绑定**（`:width="boxW"` / `:width="padW"` 这类
+  //   `kind:'style'` 的槽位）的首帧值**从不回填** ⇒ A 路（Vapor）树里这些节点没有
+  //   宽度声明（taffy 按撑满/内容算），直到**某次 relink 触发**才被写上。
+  //   ⇒ 表现：tap 前 A/B 两路的按钮几何看着一致（都恰被更新段 relink 覆盖过），而**容器**
+  //     （padW 从未在更新段改过）宽度从"撑满"跳到"数据值 + 5" —— 逐跳位移 A=[30,-775]
+  //     vs B=[30,5]（B 路 Vue 直接渲染，`padW` 首帧就在树里）。
+  //   ★为什么此前一直没暴露：mount 几何对比只采样**文本节点**（全在 v-for 行内、已回填），
+  //     更新的比较又发生在 relink 之后（那时标量已被写上）⇒ 恰好绕开了这片盲区。
+  //   ⇒ 修复口径与行内回填**完全一致**（同一 `engineFieldOf`、同样写顶层字段）。
+  if (opts.table) {
+    for (const src of opts.table.sources) {
+      const v = opts.read(src.sourceName)
+      for (const sl of src.slots) {
+        // 行内已由 cloneRow 回填；list-data 是"数据源本身"（不是节点属性）；组件边界不在本树
+        if (sl.kind === 'list-item' || sl.kind === 'list-data' || sl.kind === 'component-prop') continue
+        const target = byId.get(sl.nodeId)
+        if (!target) continue
+        const f = engineFieldOf(sl.propKey)
+        if (!f) continue
+        if (f.kind === 'text') {
+          target.text = String(v)
+        } else {
+          ;(target as Record<string, unknown>)[f.key] = v
+        }
+        valuesFilled++
+      }
+    }
+  }
+
   return {
     viewport: opts.viewport,
     nodes,

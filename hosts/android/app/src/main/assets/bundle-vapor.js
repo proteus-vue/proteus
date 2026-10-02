@@ -30,9 +30,9 @@
     mod
   ));
 
-  // node_modules/.pnpm/@vue+shared@3.5.42/node_modules/@vue/shared/dist/shared.cjs.prod.js
+  // ../../../node_modules/.pnpm/@vue+shared@3.5.42/node_modules/@vue/shared/dist/shared.cjs.prod.js
   var require_shared_cjs_prod = __commonJS({
-    "node_modules/.pnpm/@vue+shared@3.5.42/node_modules/@vue/shared/dist/shared.cjs.prod.js"(exports) {
+    "../../../node_modules/.pnpm/@vue+shared@3.5.42/node_modules/@vue/shared/dist/shared.cjs.prod.js"(exports) {
       "use strict";
       Object.defineProperty(exports, "__esModule", { value: true });
       // @__NO_SIDE_EFFECTS__
@@ -651,9 +651,9 @@
     }
   });
 
-  // node_modules/.pnpm/@vue+shared@3.5.42/node_modules/@vue/shared/index.js
+  // ../../../node_modules/.pnpm/@vue+shared@3.5.42/node_modules/@vue/shared/index.js
   var require_shared = __commonJS({
-    "node_modules/.pnpm/@vue+shared@3.5.42/node_modules/@vue/shared/index.js"(exports, module) {
+    "../../../node_modules/.pnpm/@vue+shared@3.5.42/node_modules/@vue/shared/index.js"(exports, module) {
       "use strict";
       if (true) {
         module.exports = require_shared_cjs_prod();
@@ -663,9 +663,9 @@
     }
   });
 
-  // node_modules/.pnpm/@vue+reactivity@3.5.42/node_modules/@vue/reactivity/dist/reactivity.cjs.prod.js
+  // ../../../node_modules/.pnpm/@vue+reactivity@3.5.42/node_modules/@vue/reactivity/dist/reactivity.cjs.prod.js
   var require_reactivity_cjs_prod = __commonJS({
-    "node_modules/.pnpm/@vue+reactivity@3.5.42/node_modules/@vue/reactivity/dist/reactivity.cjs.prod.js"(exports) {
+    "../../../node_modules/.pnpm/@vue+reactivity@3.5.42/node_modules/@vue/reactivity/dist/reactivity.cjs.prod.js"(exports) {
       "use strict";
       Object.defineProperty(exports, "__esModule", { value: true });
       var shared = require_shared();
@@ -2485,9 +2485,9 @@
     }
   });
 
-  // node_modules/.pnpm/@vue+reactivity@3.5.42/node_modules/@vue/reactivity/index.js
+  // ../../../node_modules/.pnpm/@vue+reactivity@3.5.42/node_modules/@vue/reactivity/index.js
   var require_reactivity = __commonJS({
-    "node_modules/.pnpm/@vue+reactivity@3.5.42/node_modules/@vue/reactivity/index.js"(exports, module) {
+    "../../../node_modules/.pnpm/@vue+reactivity@3.5.42/node_modules/@vue/reactivity/index.js"(exports, module) {
       "use strict";
       if (true) {
         module.exports = require_reactivity_cjs_prod();
@@ -2497,9 +2497,9 @@
     }
   });
 
-  // node_modules/.pnpm/@vue+runtime-core@3.5.42/node_modules/@vue/runtime-core/dist/runtime-core.cjs.prod.js
+  // ../../../node_modules/.pnpm/@vue+runtime-core@3.5.42/node_modules/@vue/runtime-core/dist/runtime-core.cjs.prod.js
   var require_runtime_core_cjs_prod = __commonJS({
-    "node_modules/.pnpm/@vue+runtime-core@3.5.42/node_modules/@vue/runtime-core/dist/runtime-core.cjs.prod.js"(exports) {
+    "../../../node_modules/.pnpm/@vue+runtime-core@3.5.42/node_modules/@vue/runtime-core/dist/runtime-core.cjs.prod.js"(exports) {
       "use strict";
       Object.defineProperty(exports, "__esModule", { value: true });
       var reactivity = require_reactivity();
@@ -9481,9 +9481,9 @@
     }
   });
 
-  // node_modules/.pnpm/@vue+runtime-core@3.5.42/node_modules/@vue/runtime-core/index.js
+  // ../../../node_modules/.pnpm/@vue+runtime-core@3.5.42/node_modules/@vue/runtime-core/index.js
   var require_runtime_core = __commonJS({
-    "node_modules/.pnpm/@vue+runtime-core@3.5.42/node_modules/@vue/runtime-core/index.js"(exports, module) {
+    "../../../node_modules/.pnpm/@vue+runtime-core@3.5.42/node_modules/@vue/runtime-core/index.js"(exports, module) {
       "use strict";
       if (true) {
         module.exports = require_runtime_core_cjs_prod();
@@ -9493,7 +9493,7 @@
     }
   });
 
-  // packages/slot-runtime/dist/index.js
+  // ../../../packages/slot-runtime/dist/index.js
   var PropKeyTable = class _PropKeyTable {
     constructor() {
       this.keys = [];
@@ -10246,6 +10246,25 @@
       }
       emit(n, n.id, n.parentId);
     }
+    if (opts.table) {
+      for (const src of opts.table.sources) {
+        const v = opts.read(src.sourceName);
+        for (const sl of src.slots) {
+          if (sl.kind === "list-item" || sl.kind === "list-data" || sl.kind === "component-prop") continue;
+          const target = byId.get(sl.nodeId);
+          if (!target) continue;
+          const f = engineFieldOf(sl.propKey);
+          if (!f) continue;
+          if (f.kind === "text") {
+            target.text = String(v);
+          } else {
+            ;
+            target[f.key] = v;
+          }
+          valuesFilled++;
+        }
+      }
+    }
     return {
       viewport: opts.viewport,
       nodes,
@@ -10616,7 +10635,7 @@
     }
   };
 
-  // packages/renderer-app/dist/index.js
+  // ../../../packages/renderer-app/dist/index.js
   var import_runtime_core = __toESM(require_runtime_core(), 1);
   function createAppHostConfig(adapter) {
     return {
@@ -10669,7 +10688,7 @@
     return (0, import_runtime_core.createRenderer)(createAppHostConfig(adapter));
   }
 
-  // packages/renderer-app/dist/adapters/selfdraw.js
+  // ../../../packages/renderer-app/dist/adapters/selfdraw.js
   var PAINT_KEYS = /* @__PURE__ */ new Set(["backgroundColor", "color", "fontSize", "fontWeight", "fontFamily", "borderRadius", "borderColor", "borderWidth", "opacity"]);
   var LAYOUT_KEYS = /* @__PURE__ */ new Set([
     "width",
@@ -11353,10 +11372,10 @@
     };
   }
 
-  // hosts/android/bridge/entry-vapor.ts
+  // entry-vapor.ts
   var import_runtime_core3 = __toESM(require_runtime_core(), 1);
 
-  // hosts/android/bridge/vapor-ab-render.generated.ts
+  // vapor-ab-render.generated.ts
   var import_runtime_core2 = __toESM(require_runtime_core(), 1);
   function render(_ctx, _cache) {
     const _component_p_text = (0, import_runtime_core2.resolveComponent)("p-text");
@@ -11364,7 +11383,7 @@
     return (0, import_runtime_core2.openBlock)(), (0, import_runtime_core2.createBlock)(_component_p_view, { style: { "width": 1080, "height": 1600, "flexDirection": "column", "padding": { "top": 24 }, "backgroundColor": "#14141c" } }, {
       default: (0, import_runtime_core2.withCtx)(() => [
         (0, import_runtime_core2.createVNode)(_component_p_text, { style: { "fontSize": 20, "color": "#ffffff", "margin": { "bottom": 12 } } }, {
-          default: (0, import_runtime_core2.withCtx)(() => [..._cache[1] || (_cache[1] = [
+          default: (0, import_runtime_core2.withCtx)(() => [..._cache[2] || (_cache[2] = [
             (0, import_runtime_core2.createTextVNode)(
               "Vapor \xB7 \u8BBE\u5907\u7AEF",
               -1
@@ -11418,23 +11437,36 @@
         )),
         (0, import_runtime_core2.createVNode)(_component_p_view, { style: { "height": 30, "margin": { "top": 10 }, "backgroundColor": "#6a4bf0" } }),
         (0, import_runtime_core2.createVNode)(_component_p_view, {
-          width: _ctx.boxW,
-          onClick: _cache[0] || (_cache[0] = ($event) => _ctx.boxW += 30),
-          style: { "height": 56, "margin": { "top": 8 }, "backgroundColor": "#2f6fed" }
-        }, null, 8, ["width"])
+          width: _ctx.padW,
+          onClick: _cache[1] || (_cache[1] = ($event) => _ctx.padW += 5),
+          style: { "height": 96, "margin": { "top": 8 }, "backgroundColor": "#1c2b3f" }
+        }, {
+          default: (0, import_runtime_core2.withCtx)(() => [
+            (0, import_runtime_core2.createVNode)(_component_p_view, {
+              width: _ctx.boxW,
+              onClick: _cache[0] || (_cache[0] = ($event) => _ctx.boxW += 30),
+              style: { "height": 56, "margin": { "top": 8 }, "backgroundColor": "#2f6fed" }
+            }, null, 8, ["width"])
+          ]),
+          _: 1
+          /* STABLE */
+        }, 8, ["width"])
       ]),
       _: 1
       /* STABLE */
     });
   }
 
-  // hosts/android/bridge/entry-vapor.ts
+  // entry-vapor.ts
   function makeData(rows) {
     return {
       list: Array.from({ length: rows }, (_, i) => ({ id: i + 1, w: 40 + i % 5 * 12, title: `row ${i + 1}` })),
       // ★与夹具 script 的 `ref(120)` 一致：**初始数据必须给全**，否则 `:width="boxW"` 首帧是 0，
       //   tap 后变 30 的"对比基线"是零宽（几何差异虽真但语义不清——数据与声明要对齐）
       boxW: 120,
+      // ★★冒泡锚（2026-10-02）：按钮外层容器的宽度源——容器上的 `@click="padW += 5"`
+      //   是**祖先 handler**：tap 链 [按钮, 容器, root] 上两跳都要跑（判据核"链没断"）
+      padW: 300,
       tapCount: 0
     };
   }
@@ -11608,6 +11640,14 @@
           return null;
         }
       };
+      const readRectsAll = () => {
+        try {
+          const r = JSON.parse(proteusHost.readRects());
+          return r.rects ?? {};
+        } catch {
+          return {};
+        }
+      };
       const rectDelta = (a, b) => {
         if (!a || !b) return -1;
         return Math.round(Math.max(
@@ -11617,11 +11657,15 @@
           Math.abs(a.height - b.height)
         ) * 1e3) / 1e3;
       };
-      const tapBtnA = harnessEvents.find((e) => e.event === "tap");
+      const btnANode = inst.nodes.find((n2) => n2.backgroundColor === "#2f6fed");
+      const tapBtnA = btnANode ? { nodeId: Number(btnANode.id) } : void 0;
       if (tapBtnA && typeof proteusHost.tapAt === "function") {
         const av = {
           node: tapBtnA.nodeId,
           hit: -1,
+          chain: [],
+          fired: [],
+          fired_width_deltas: [],
           handler: "",
           ops_bytes: 0,
           applied: -1,
@@ -11632,10 +11676,11 @@
           width_delta: 0,
           tap_ms: 0
         };
-        globalThis[GESTURE_CB] = (type, nodeId) => {
-          const handler = byNodeEvent.get(`${nodeId}:${type}`) ?? byNodeEvent.get(`${nodeId}:tap`) ?? "";
-          if (!handler) return JSON.stringify({ ok: false, reason: `\u8282\u70B9 ${nodeId} \u4E0A\u6CA1\u6709 ${type} \u7684 handler` });
-          runActions(handler, data);
+        globalThis[GESTURE_CB] = (type, nodeId, chainJson) => {
+          const chain = parseChain(chainJson, nodeId);
+          const hit = dispatchChainA(chain, type, byNodeEvent, (h) => runActions(h, data));
+          const handler = hit.handler;
+          if (!handler) return JSON.stringify({ ok: false, reason: `\u94FE ${chain.join(">")} \u4E0A\u6CA1\u6709 ${type} \u7684 handler` });
           for (const [, cb] of triggers) cb();
           vapor.relink(ctx);
           slotRt.flush();
@@ -11651,22 +11696,35 @@
             changed = ao.rects ? Object.keys(ao.rects).length : 0;
           }
           av.handler = handler;
+          av.fired = hit.fired;
+          av.chain = chain;
           av.ops_bytes = payload.length;
           av.applied = applied;
           av.relayout = relayout;
           av.changed_rects = changed;
-          return JSON.stringify({ ok: true, handler, ops: payload.length, applied, relayout, changed_rects: changed });
+          return JSON.stringify({ ok: true, handler, fired: hit.fired, ops: payload.length, applied, relayout, changed_rects: changed });
         };
         av.before = readRectOf(tapBtnA.nodeId);
+        const rectsAllBeforeA = readRectsAll();
         const tTap = t();
         if (av.before) {
           const c = { x: av.before.x + av.before.width / 2, y: av.before.y + av.before.height / 2 };
           const tp = JSON.parse(proteusHost.tapAt(JSON.stringify(c)));
-          av.hit = tp.last?.target ?? -1;
+          if (tp.gestures_fired === 1) {
+            av.hit = tp.last?.target ?? -1;
+          } else {
+            notes.push(`\u2605A \u8DEF tap \u672A\u89E6\u53D1\u624B\u52BF\uFF08gestures_fired=${tp.gestures_fired ?? "\u7F3A\u5931"}\uFF09\u2014\u2014hit \u8BFB\u6570\u4E0D\u53EF\u4FE1`);
+          }
         }
         av.tap_ms = t() - tTap;
         av.after = readRectOf(tapBtnA.nodeId);
         if (av.before && av.after) av.width_delta = Math.round((av.after.width - av.before.width) * 1e3) / 1e3;
+        const rectsAllAfterA = readRectsAll();
+        av.fired_width_deltas = av.fired.map((id) => {
+          const b = rectsAllBeforeA[String(id)];
+          const a2 = rectsAllAfterA[String(id)];
+          return b && a2 ? Math.round((a2.width - b.width) * 1e3) / 1e3 : -999;
+        });
         rep.ev_a = av;
         if (av.hit !== tapBtnA.nodeId) {
           notes.push(`\u2605A \u8DEF tap \u547D\u4E2D ${av.hit} \u2260 \u4E8B\u4EF6\u8282\u70B9 ${tapBtnA.nodeId}\uFF08hitTest \u4E0E\u4E8B\u4EF6\u7ED1\u5B9A\u4E0D\u4E00\u81F4\uFF09`);
@@ -11679,12 +11737,13 @@
       container.parent = adapter.root;
       const abList = (0, import_runtime_core3.ref)(dataB.list);
       const abBoxW = (0, import_runtime_core3.ref)(dataB.boxW);
+      const abPadW = (0, import_runtime_core3.ref)(dataB.padW);
       let abRootInst = null;
       const AbApp = {
         name: "VaporAbApp",
         setup() {
           abRootInst = (0, import_runtime_core3.getCurrentInstance)();
-          return { list: abList, boxW: abBoxW };
+          return { list: abList, boxW: abBoxW, padW: abPadW };
         },
         render
       };
@@ -11875,7 +11934,9 @@
         const bv = {
           node: btnBId,
           hit: -1,
+          chain: [],
           fired: [],
+          fired_width_deltas: [],
           errors: [],
           before: null,
           after: null,
@@ -11886,18 +11947,25 @@
           text_layers: 0,
           driver_ms: 0
         };
-        globalThis[GESTURE_CB] = (type, nodeId) => {
-          const r = adapter.dispatchEvent(nodeId, [], type, 0, 0);
+        globalThis[GESTURE_CB] = (type, nodeId, chainJson) => {
+          const chain = parseChain(chainJson, nodeId);
+          bv.chain = chain;
+          const r = adapter.dispatchEvent(nodeId, chain, type, 0, 0);
           bv.fired = r.fired;
           bv.errors = r.errors;
-          return JSON.stringify({ ok: r.errors.length === 0 && r.fired.length > 0, fired: r.fired, errors: r.errors });
+          return JSON.stringify({ ok: r.errors.length === 0 && r.fired.length > 0, fired: r.fired, chain, errors: r.errors });
         };
         bv.before = readRectOf(btnBId);
+        const rectsAllBeforeB = readRectsAll();
         const tTap = t();
         if (bv.before) {
           const c = { x: bv.before.x + bv.before.width / 2, y: bv.before.y + bv.before.height / 2 };
           const tp = JSON.parse(proteusHost.tapAt(JSON.stringify(c)));
-          bv.hit = tp.last?.target ?? -1;
+          if (tp.gestures_fired === 1) {
+            bv.hit = tp.last?.target ?? -1;
+          } else {
+            notes.push(`\u2605B \u8DEF tap \u672A\u89E6\u53D1\u624B\u52BF\uFF08gestures_fired=${tp.gestures_fired ?? "\u7F3A\u5931"}\uFF09\u2014\u2014hit \u8BFB\u6570\u4E0D\u53EF\u4FE1`);
+          }
         }
         const rootInstB = abRootInst;
         rootInstB?.update?.();
@@ -11919,6 +11987,12 @@
         }
         bv.after = readRectOf(btnBId);
         if (bv.before && bv.after) bv.width_delta = Math.round((bv.after.width - bv.before.width) * 1e3) / 1e3;
+        const rectsAllAfterB = readRectsAll();
+        bv.fired_width_deltas = bv.fired.map((id) => {
+          const b = rectsAllBeforeB[String(id)];
+          const a2 = rectsAllAfterB[String(id)];
+          return b && a2 ? Math.round((a2.width - b.width) * 1e3) / 1e3 : -999;
+        });
         rep.ev_b = bv;
         if (bv.hit !== btnBId) {
           notes.push(`\u2605B \u8DEF tap \u547D\u4E2D ${bv.hit} \u2260 \u6309\u94AE\u8282\u70B9 ${btnBId}\uFF08hitTest \u4E0E\u9002\u914D\u5668\u767B\u8BB0\u4E0D\u4E00\u81F4\uFF09`);
@@ -11928,9 +12002,16 @@
       }
       rep.ev_before_delta = rectDelta(rep.ev_a?.before ?? null, rep.ev_b?.before ?? null);
       rep.ev_after_delta = rectDelta(rep.ev_a?.after ?? null, rep.ev_b?.after ?? null);
-      rep.ev_match = !!(rep.ev_a && rep.ev_b && rep.ev_before_delta >= 0 && rep.ev_before_delta <= 0.01 && rep.ev_after_delta >= 0 && rep.ev_after_delta <= 0.01 && Math.abs(rep.ev_a.width_delta - rep.ev_b.width_delta) <= 0.01);
+      const bubblesOk = (e) => !!e && e.chain.length >= 2 && e.fired.length >= 2 && e.chain[0] === e.hit;
+      const deltasMatch = (() => {
+        const a = rep.ev_a?.fired_width_deltas ?? [];
+        const b = rep.ev_b?.fired_width_deltas ?? [];
+        if (a.length !== b.length || a.length < 2) return false;
+        return a.every((v, i) => Math.abs(v - b[i]) <= 0.01 && v > 0 && b[i] > 0);
+      })();
+      rep.ev_match = !!(rep.ev_a && rep.ev_b && rep.ev_before_delta >= 0 && rep.ev_before_delta <= 0.01 && rep.ev_after_delta >= 0 && rep.ev_after_delta <= 0.01 && Math.abs(rep.ev_a.width_delta - rep.ev_b.width_delta) <= 0.01 && bubblesOk(rep.ev_a) && bubblesOk(rep.ev_b) && deltasMatch);
       if (rep.ev_a && rep.ev_b) {
-        notes.push(`\u4E8B\u4EF6\u8DEF\u5F84\uFF1AA \u547D\u4E2D ${rep.ev_a.hit} \xB7 \u5BBD ${rep.ev_a.before?.width}\u2192${rep.ev_a.after?.width}\uFF08\u6307\u4EE4 ${rep.ev_a.ops_bytes}B / applied ${rep.ev_a.applied}\uFF09\uFF1BB \u547D\u4E2D ${rep.ev_b.hit} \xB7 \u5BBD ${rep.ev_b.before?.width}\u2192${rep.ev_b.after?.width}\uFF08\u8865\u4E01 ${rep.ev_b.patches} / applied ${rep.ev_b.applied}\uFF09`);
+        notes.push(`\u4E8B\u4EF6\u8DEF\u5F84\uFF1AA \u547D\u4E2D ${rep.ev_a.hit} \xB7 \u94FE [${rep.ev_a.chain.join(">")}] \u6D3E\u53D1 [${rep.ev_a.fired.join(">")}] \xB7 \u5BBD ${rep.ev_a.before?.width}\u2192${rep.ev_a.after?.width}\uFF08\u6307\u4EE4 ${rep.ev_a.ops_bytes}B / applied ${rep.ev_a.applied}\uFF09\uFF1BB \u547D\u4E2D ${rep.ev_b.hit} \xB7 \u94FE [${rep.ev_b.chain.join(">")}] \u6D3E\u53D1 [${rep.ev_b.fired.join(">")}] \xB7 \u5BBD ${rep.ev_b.before?.width}\u2192${rep.ev_b.after?.width}\uFF08\u8865\u4E01 ${rep.ev_b.patches} / applied ${rep.ev_b.applied}\uFF09 \xB7 \u9010\u8DF3\u4F4D\u79FB A=${JSON.stringify(rep.ev_a.fired_width_deltas)} vs B=${JSON.stringify(rep.ev_b.fired_width_deltas)}`);
       }
       rep.ok = true;
       notes.push(`A \u8DEF ${rep.cost_a.total_ms.toFixed(1)}ms\uFF08\u5B9E\u4F8B\u5316 ${rep.cost_a.instantiate_ms} + \u5BBF\u4E3B ${rep.cost_a.host_ms}\uFF09`);
@@ -11978,6 +12059,32 @@
       if (d > 0.01) mismatches++;
     }
     return { delta: Math.round(delta * 1e3) / 1e3, mismatches, samples: n };
+  }
+  function parseChain(chainJson, nodeId) {
+    if (typeof chainJson === "string" && chainJson.length > 0) {
+      try {
+        const arr = JSON.parse(chainJson);
+        if (Array.isArray(arr) && arr.length > 0) {
+          const ids = arr.map((x) => Number(x)).filter((x) => Number.isFinite(x));
+          if (ids.length > 0) return ids;
+        }
+      } catch {
+      }
+    }
+    return nodeId >= 0 ? [nodeId] : [];
+  }
+  function dispatchChainA(chain, type, byNodeEvent, run) {
+    const fired = [];
+    let handler = "";
+    for (const id of chain) {
+      const h = byNodeEvent.get(`${id}:${type}`) ?? byNodeEvent.get(`${id}:tap`) ?? "";
+      if (!h) continue;
+      if (run(h)) {
+        fired.push(id);
+        if (!handler) handler = h;
+      }
+    }
+    return { fired, handler };
   }
   var CHANNEL_KEYS = ["radius", "grad", "glow", "clip", "stroke_len", "mask"];
   function probeChannelsRaw(ids) {
@@ -12249,11 +12356,13 @@
         return true;
       };
       const gestureHits = [];
-      globalThis.__proteusVaporGesture = (type, nodeId) => {
-        const handler = byNodeEvent.get(`${nodeId}:${type}`) ?? byNodeEvent.get(`${nodeId}:tap`) ?? "";
-        if (!handler) return JSON.stringify({ ok: false, reason: `\u8282\u70B9 ${nodeId} \u4E0A\u6CA1\u6709 ${type} \u7684 handler` });
+      globalThis.__proteusVaporGesture = (type, nodeId, chainJson) => {
+        const chain = parseChain(chainJson, nodeId);
         const before2 = { ...data };
-        const ran = runHandler(handler);
+        const hit = dispatchChainA(chain, type, byNodeEvent, runHandler);
+        const handler = hit.handler;
+        if (!handler) return JSON.stringify({ ok: false, reason: `\u94FE ${chain.join(">")} \u4E0A\u6CA1\u6709 ${type} \u7684 handler` });
+        const ran = true;
         const fire = triggers.get("list");
         if (fire) fire();
         vapor.relink(ctx);
@@ -12276,10 +12385,11 @@
             applied = -3;
           }
         }
-        gestureHits.push({ tap: gestureHits.length + 1, hit: nodeId, handler, source_after: changedSources });
+        gestureHits.push({ tap: gestureHits.length + 1, hit: nodeId, chain, fired: hit.fired, handler, source_after: changedSources });
         return JSON.stringify({
           ok: ran,
           handler,
+          fired: hit.fired,
           changed: changedSources,
           ops: payload.length,
           applied,
@@ -12365,6 +12475,10 @@
           } catch {
           }
           const tapOut = JSON.parse(proteusHost.tapAt(JSON.stringify({ x: cx, y: cy })));
+          const tapFired = tapOut.gestures_fired === 1;
+          if (!tapFired) {
+            notes.push(`tap@${btn.nodeId} \u672A\u89E6\u53D1\u624B\u52BF\uFF08gestures_fired=${tapOut.gestures_fired ?? "\u7F3A\u5931"}\uFF09\u2014\u2014\u8BFB\u6570\u4E0D\u53EF\u4FE1`);
+          }
           rep.taps++;
           const changedSources = {};
           for (const k of Object.keys(data)) if (before2[k] !== data[k]) changedSources[k] = data[k];
@@ -12393,7 +12507,11 @@
           const lastHit = gestureHits.length > 0 ? gestureHits[gestureHits.length - 1] : null;
           rep.tap_evidence.push({
             tap: rep.taps,
-            hit: tapOut.last?.target ?? -1,
+            hit: tapFired ? tapOut.last?.target ?? -1 : -1,
+            // ★未触发手势 ⇒ 不认陈旧 last
+            // ★冒泡链 + 逐跳派发（2026-10-02：判据据此核"链没断、祖先 handler 真的跑了"）
+            chain: lastHit?.chain ?? [],
+            fired: lastHit?.fired ?? [],
             handler: lastHit?.handler ?? "",
             source_after: lastHit?.source_after ?? null,
             ops: tapOut.ok ? 1 : 0,

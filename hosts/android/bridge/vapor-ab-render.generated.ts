@@ -11,7 +11,7 @@ export function render(_ctx, _cache) {
   return (_openBlock(), _createBlock(_component_p_view, { style: {"width":1080,"height":1600,"flexDirection":"column","padding":{"top":24},"backgroundColor":"#14141c"} }, {
     default: _withCtx(() => [
       _createVNode(_component_p_text, { style: {"fontSize":20,"color":"#ffffff","margin":{"bottom":12}} }, {
-        default: _withCtx(() => [...(_cache[1] || (_cache[1] = [
+        default: _withCtx(() => [...(_cache[2] || (_cache[2] = [
           _createTextVNode("Vapor · 设备端", -1 /* CACHED */)
         ]))]),
         _: 1 /* STABLE */
@@ -42,10 +42,19 @@ export function render(_ctx, _cache) {
       }), 128 /* KEYED_FRAGMENT */)),
       _createVNode(_component_p_view, { style: {"height":30,"margin":{"top":10},"backgroundColor":"#6a4bf0"} }),
       _createVNode(_component_p_view, {
-        width: _ctx.boxW,
-        onClick: _cache[0] || (_cache[0] = $event => (_ctx.boxW += 30)),
-        style: {"height":56,"margin":{"top":8},"backgroundColor":"#2f6fed"}
-      }, null, 8 /* PROPS */, ["width"])
+        width: _ctx.padW,
+        onClick: _cache[1] || (_cache[1] = $event => (_ctx.padW += 5)),
+        style: {"height":96,"margin":{"top":8},"backgroundColor":"#1c2b3f"}
+      }, {
+        default: _withCtx(() => [
+          _createVNode(_component_p_view, {
+            width: _ctx.boxW,
+            onClick: _cache[0] || (_cache[0] = $event => (_ctx.boxW += 30)),
+            style: {"height":56,"margin":{"top":8},"backgroundColor":"#2f6fed"}
+          }, null, 8 /* PROPS */, ["width"])
+        ]),
+        _: 1 /* STABLE */
+      }, 8 /* PROPS */, ["width"])
     ]),
     _: 1 /* STABLE */
   }))
