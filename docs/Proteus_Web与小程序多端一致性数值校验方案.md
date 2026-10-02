@@ -188,6 +188,27 @@ CI 因一个像素偏移频繁挂掉
 - 渐变
 - **字形栅格化**
 
+#### 3.4.1 ★已落地（2026-10-02）：真截图观测 + 三项工程约束
+
+**装置**：`bash scripts/shoot-l4-fixtures.sh` 在微信模拟器上采集同一夹具的 Skyline / WebView
+两版截图（夹具 = `spike/vc0-skyline-geom/pages/l4-{skyline,webview}`，两端 wxml/wxss **逐字一致**，
+脚本做 diff 前置校验）；报告由 `node scripts/check-consistency-pixel.mjs` 生成，**非门禁**（`gate:false`）。
+
+实测读数（640×1386 物理像素，ROI 内）：`diff = 2161/693240 = 0.312%`、`hashDistance = 0` ⇒ `noise-level`；
+差异全部集中在四项观测目标（字形 AA 1675px、圆角 AA 266px、渐变 219px、阴影 1px）。
+
+**三条必须固化的工程约束（都是实测踩出来的）**：
+
+| # | 约束 | 为什么（实测） |
+|---|---|---|
+| ① | **观测区域（ROI）必填**——排除设备 chrome | 状态栏时钟每分钟必变（任意两张截图"必然 changed"）+ Home 条 + 画布左缘 1px 伪影；`pixelObservation({ roi })` 把对比限定在应用内容区，region 坐标回传原图口径 |
+| ② | **采集判据 = 运行时路由 + 特征色**，不是"盲等/哈希稳定" | 页面切换后模拟器**先黑屏再渲染**，两次黑屏哈希相同 ⇒ "哈希稳定即完成"会存下黑屏；`simulator_open_page` 返回 success 只表示"触发编译"，完成时刻必须查 `getCurrentPages()` 路由 + 截图上命中夹具特征色（`scripts/probe-png-colors.mjs`） |
+| ③ | **同一画面跨端比对的噪声底含该端的 AA 本身** | 圆角弧线 AA 在两端就有 266px 差（占块 2.2%）⇒ 跨端 verdict 对它无区分度；"圆角缺失"这类缺陷的检出放**同端注入**（M4 的 L4 算子：与自身原图比，原图 `identical`、注入后差异块定位到四角） |
+
+**能力形态的诚实表述**：L4 对局部小缺陷的价值是**定位**（报告差异块坐标 + 像素数），不是全局判定——
+圆角缺失最大可注入信号仅 430px（0.05%），**天然低于 0.5% 全局噪声带**，verdict 恒为 `noise-level`。
+圆角/颜色的"通过/失败"判定由 L3 数值比对承担（Web golden 实测含四个 borderRadius 角键）。
+
 ---
 
 ## 4. 各端探针设计

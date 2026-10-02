@@ -54,7 +54,7 @@
       "unsupported": 0
     },
     "boundaryRules": 24,
-    "note": "L2/L3/L4 布点后分子应扩大（标准 §6.1「逐阶段提升」）"
+    "note": "L1/L2/L3 已布点；L4 不计入本比值（非门禁观察，且其样本来自光栅化而非 CSS 字段）——L2/L3 覆盖扩展后分子继续扩大（标准 §6.1「逐阶段提升」）"
   },
   "M2": {
     "name": "允许差异条目数",
@@ -85,10 +85,10 @@
   },
   "M4": {
     "name": "一致性回归检出率",
-    "definition": "L1 变异测试捕获数 / 注入数（L2/L3/L4 算子未布点 ⇒ 单列 pending，不得悄悄删）",
+    "definition": "变异算子捕获数 / 注入数，覆盖六族：L1 编译期 · L2 几何 · L3 样式 · L2.5 离散交互 · L2.6 连续交互不变量 · L4 像素观察（真截图注入）（仍未布点者 ⇒ 单列 pending，不得悄悄删——标准 §7.3）",
     "value": 1,
-    "injected": 16,
-    "captured": 16,
+    "injected": 17,
+    "captured": 17,
     "operators": [
       {
         "id": "L1-overflow-scroll",
@@ -273,15 +273,18 @@
         "expected": false,
         "ok": true,
         "note": "★对照组：**纯滚动（整体平移）不应报**——\"禁止比绝对坐标\"的机器证明"
-      }
-    ],
-    "pendingOperators": [
+      },
       {
         "id": "L4-radius-missing",
-        "note": "圆角缺失——需 L4 像素观察（非门禁；pHash 对局部小差异不敏感，已知边界）"
+        "layer": "L4",
+        "caught": true,
+        "expected": true,
+        "ok": true,
+        "note": "圆角缺失（注入真实截图：四角填直角 ⇒ 430px 差异）⇒ 观测报告定位到注入区域（region 落在块边界±24px 内）；对照组自身比对 = identical。★诚实边界：verdict=noise-level（0.05% < 0.5% 全局噪声带——L4 形态是\"定位\"，判定由 L3 borderRadius 数值承担）"
       }
     ],
-    "note": "★标准 §7.4 反例（按钮变色 = L3 颜色类）属必过项——L3 布点后若捕获不了，本套校验不比截图比对强"
+    "pendingOperators": [],
+    "note": "★标准 §7.4 反例（按钮变色 = L3 颜色类 1/255）属必过项；L4 算子取**同端注入**（跨端圆角 AA 本身在噪声底内，无区分度——算子注释有实测数）"
   },
   "debt": {
     "note": "存量债务可见且只减不增（棘轮基线）——对外公开的\"不好看的数\"",

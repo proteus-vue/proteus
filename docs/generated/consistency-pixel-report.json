@@ -5,6 +5,105 @@
   "note": "L4 像素观察——**非门禁**（标准 §8.1）：不追求零噪声，仅作 L1–L3 够不到的四项（圆角/阴影/渐变/字形）的兜底观察。",
   "pairs": [
     {
+      "id": "l4:skyline-vs-webview",
+      "a": "docs/generated/consistency-samples/pixels/l4.skyline.png",
+      "b": "docs/generated/consistency-samples/pixels/l4.webview.png",
+      "observation": {
+        "gate": false,
+        "verdict": "noise-level",
+        "sizeA": {
+          "width": 640,
+          "height": 1386
+        },
+        "sizeB": {
+          "width": 640,
+          "height": 1386
+        },
+        "sampleCount": 693240,
+        "diffPixels": 2161,
+        "diffRatio": 0.00312,
+        "hashDistance": 0,
+        "regions": [
+          {
+            "x": 114,
+            "y": 502,
+            "w": 16,
+            "h": 16,
+            "pixels": 177,
+            "ratio": 0.691
+          },
+          {
+            "x": 178,
+            "y": 502,
+            "w": 16,
+            "h": 16,
+            "pixels": 153,
+            "ratio": 0.598
+          },
+          {
+            "x": 178,
+            "y": 486,
+            "w": 16,
+            "h": 16,
+            "pixels": 119,
+            "ratio": 0.465
+          },
+          {
+            "x": 146,
+            "y": 502,
+            "w": 16,
+            "h": 16,
+            "pixels": 109,
+            "ratio": 0.426
+          },
+          {
+            "x": 66,
+            "y": 502,
+            "w": 16,
+            "h": 16,
+            "pixels": 103,
+            "ratio": 0.402
+          },
+          {
+            "x": 98,
+            "y": 502,
+            "w": 16,
+            "h": 16,
+            "pixels": 100,
+            "ratio": 0.391
+          },
+          {
+            "x": 34,
+            "y": 486,
+            "w": 16,
+            "h": 16,
+            "pixels": 82,
+            "ratio": 0.32
+          },
+          {
+            "x": 66,
+            "y": 486,
+            "w": 16,
+            "h": 16,
+            "pixels": 82,
+            "ratio": 0.32
+          }
+        ],
+        "params": {
+          "channelThreshold": 8,
+          "blockSize": 16,
+          "noiseRatio": 0.005,
+          "noiseHashDistance": 16
+        },
+        "roi": {
+          "x": 2,
+          "y": 150,
+          "w": 636,
+          "h": 1090
+        }
+      }
+    },
+    {
       "id": "synth:identical",
       "a": "synth/base",
       "b": "synth/same",
@@ -127,10 +226,10 @@
     }
   ],
   "totals": {
-    "sampleCount": 16384,
-    "diffPixels": 46,
+    "sampleCount": 709624,
+    "diffPixels": 2207,
     "changedSamples": 1,
-    "cleanSamples": 3,
+    "cleanSamples": 4,
     "knownNoiseSamples": 0
   }
 }
