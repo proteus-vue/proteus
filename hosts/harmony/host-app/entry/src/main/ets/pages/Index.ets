@@ -66,17 +66,27 @@ interface RenderCmdFixture {
   textColor?: number;
 }
 
+/**
+ * ★★单位换算（2026-10-02 实测修复，真根因）：
+ *   RenderNode 的 `SetSize/SetPosition` 与 content modifier 的 canvas **都是物理 px 单位**
+ *   （实证链：`vp2px(1)=3.5` + canvas 实测宽 300 + 截图方块约 300px ⇒ 传 300 得 300px）。
+ *   ⇒ 设计值（vp）必须**乘密度**再下发，否则几何与字号整体缩 3.5 倍（首版字小即此因）。
+ *   ★换算放 ArkTS 侧（`vp2px` 一处；C++ 侧不猜密度）。
+ */
+const DENSITY: number = vp2px(1);
+
 function buildTestCommands(): string {
+  const D = DENSITY;
   // ★色彩块 + 白色文字（文字经 typography 真绘制——见 proteus_render.cpp 的 DrawTextCallback）
   const cmds: RenderCmdFixture[] = [
-    { kind: 'background', x: 40, y: 120, w: 300, h: 80, color: cssToArgb('#3478F6'), radius: 16,
-      text: 'Proteus 文本上屏', fontSize: 24, textColor: cssToArgb('#FFFFFF') },
-    { kind: 'background', x: 40, y: 220, w: 300, h: 80, color: cssToArgb('#F5A623'), radius: 12,
-      text: 'typography 直绘', fontSize: 22, textColor: cssToArgb('#FFFFFF') },
-    { kind: 'background', x: 40, y: 320, w: 300, h: 80, color: cssToArgb('#1ABC9C'), radius: 8,
-      text: 'RenderNode content', fontSize: 20, textColor: cssToArgb('#FFFFFF') },
-    { kind: 'background', x: 40, y: 420, w: 300, h: 80, color: cssToArgb('#9B59B6'), radius: 24,
-      text: 'API 26 真机', fontSize: 20, textColor: cssToArgb('#FFFFFF') },
+    { kind: 'background', x: 16*D, y: 40*D, w: 328*D, h: 56*D, color: cssToArgb('#3478F6'), radius: 12*D,
+      text: 'Proteus 文本上屏', fontSize: 18*D, textColor: cssToArgb('#FFFFFF') },
+    { kind: 'background', x: 16*D, y: 108*D, w: 328*D, h: 56*D, color: cssToArgb('#F5A623'), radius: 12*D,
+      text: 'typography 直绘（px 换算后）', fontSize: 16*D, textColor: cssToArgb('#FFFFFF') },
+    { kind: 'background', x: 16*D, y: 176*D, w: 328*D, h: 56*D, color: cssToArgb('#1ABC9C'), radius: 12*D,
+      text: 'RenderNode content modifier', fontSize: 15*D, textColor: cssToArgb('#FFFFFF') },
+    { kind: 'background', x: 16*D, y: 244*D, w: 328*D, h: 56*D, color: cssToArgb('#9B59B6'), radius: 12*D,
+      text: 'API 26 · 密度 3.5', fontSize: 16*D, textColor: cssToArgb('#FFFFFF') },
   ];
   return JSON.stringify(cmds);
 }
@@ -290,7 +300,9 @@ struct Index {
     .onAppear(() => {
       // ── ① RenderNode 直绘（第二里程碑）──
       try {
-        const rcAttach = attach(this.content);
+        // ★密度自报（与 C++ 侧的单位标定日志对读——用于定标"canvas 单位 vs vp"）
+        hilog.info(DOMAIN, BENCH_TAG, 'PROTEUS_DENSITY vp2px(1)=%{public}s', (vp2px(1)).toString());
+        const rcAttach = attach(this.content, vp2px(1));   // ★密度传入（host 尺寸 vp / 字号 px 都靠它）
         hilog.info(DOMAIN, TAG, 'PROTEUS_RENDER_JS_ATTACH rc=%{public}d', rcAttach);
         const n = renderCommands(buildTestCommands());
         this.rendered = n;

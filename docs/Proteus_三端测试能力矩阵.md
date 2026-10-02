@@ -14,7 +14,7 @@
 | 5 | **滚动（平台侧）** | ✅ `scroll`/`scroll-core`/`scroll-native` | ✅ V12 滚动帧 | ◐ **帧率已采** | 鸿蒙 `scrollProbe`（`postFrameCallback` 逐帧）：61 帧 · **p50 16.64ms（60fps）** · p95 66.62ms · avg fps 31.9；★滚动驱动的是 ArkUI Scroll 容器（非 Proteus 渲染路径），深度接线待做 |
 | 6 | **命中测试（三层）** | ✅ `hit` | ✅ `hit_probes`（与 Android 同探针） | ✅ **已补** | 鸿蒙 `hitProbe`：**6/6 与两端逐位一致**（同场景同探针点） |
 | 7 | **手势** | ✅ `gesture`（GestureDetector + 核心 target） | ❌ **缺** | ⛔ **缺** | iOS/鸿蒙待补（`packages/gesture` 已三端中立） |
-| 8 | **文本通道** | ✅ drawText/StaticLayout 分流 + 归因 | ✅ CoreText（`measureText`） | ✅ **上屏已通** | 鸿蒙：`textProbe`（typography 构建 200 项/8.0ms）**+ 上屏接线**（`proteus_render.cpp` 的 `DrawTextCallback`：RenderNode content modifier 回调里 typography 真绘制；真机截图四段文字可见）。★字号口径（vp/px）校准待做 |
+| 8 | **文本通道** | ✅ drawText/StaticLayout 分流 + 归因 | ✅ CoreText（`measureText`） | ✅ **上屏已通（含单位模型）** | 鸿蒙：`textProbe`（typography 200 项/8.0ms）+ 上屏（content modifier 回调绘制）；**单位模型已修**：RenderNode/canvas 是**物理 px**、host 属性是 **vp**——ArkTS 侧 ×`vp2px(1)` 换算（一处），host 尺寸 ÷密度；真机截图色块+文字双重可见 |
 | 9 | **字体族映射** | ✅ `font-family`（与 iOS V13 同契约） | ✅ V13 | ⛔ **缺** | 鸿蒙待补 |
 | 10 | **原生组件混用（L3）** | ✅ `native`/`native-host`/`shot-scroll-native` | ❌ **缺** | ⛔ **缺** | iOS/鸿蒙待补（方案坑位 #4 的核心） |
 | 11 | **结构变更（splice）** | ✅ `splice` | ✅ **已补**（`splice_probe`） | ✅ **已补**（`spliceProbe`） | **三端同树同 payload 4/4 判据全过**（rects 4→5 · 0/1 · 新节点高 50.0 · 重排 5 有界）；`apply-ops` 仍待 iOS/鸿蒙 |
