@@ -1325,6 +1325,101 @@ pub unsafe extern "C" fn proteus_layout_create(request_json: *const c_char) -> u
     }
 }
 
+/// ★★VC4-b：**统一几何快照**（VC3-a 格式）——多端一致性校验的 App 端探针。
+///
+/// 【为什么由内核直接产出（卡片 VC4-b 原文）】"Rust 内核直接产出，与指令流同源；天然支持，无 API 依赖"。
+///   几何的唯一事实源就是内核的绝对矩形（`absolute_rects`）——本函数把它按 VC3-a 规格组装：
+///   视口左上角原点（`absolute_rects` 天然如此）· path（子序索引路径）· depth（递归深度）·
+///   children[]（结构树）· **f32 原值不做 round3**。
+///
+/// 【★为什么舍入交给消费端（与 VC3-a 的"round3"不冲突）】快照的 round3 是**序列化纪律**
+///   （防格式化噪声），而内核回的是**原始 f32**——此前 `geometry_digest` 的设计已确立
+///   位模式比对比格式化强的原则（f32 位模式能抓 0.1+0.2 级差异）。⇒ 分工：
+///   内核回原值（诊断/位模式比对用），VC3-a 的 `round3` 在**落盘/比对**时施加（单一舍入点）。
+///
+/// # Safety
+/// 返回指针须用 `proteus_layout_free_string` 释放。
+#[no_mangle]
+pub unsafe extern "C" fn proteus_layout_geometry_snapshot(handle: u64) -> *mut c_char {
+    let r = std::panic::catch_unwind(|| -> Result<String, String> {
+        let reg = registry().lock().map_err(|_| "注册表锁失败".to_string())?;
+        let tree = &reg.get(&handle).ok_or_else(|| format!("句柄 {handle} 不存在"))?.tree;
+        let abs = tree.absolute_rects();
+        // 递归组装（子序 path / depth / children；display:none 的子树如实缺席——与 absolute_rects 一致）
+        fn build(
+            tree: &crate::node::LayoutTree,
+            abs: &[Option<crate::style::Rect>],
+            idx: crate::node::NodeIndex,
+            path: &str,
+            depth: u32,
+        ) -> serde_json::Value {
+            let node = tree.get(idx);
+            let r = abs[idx as usize];
+            let mut obj = serde_json::Map::new();
+            obj.insert("nodeId".into(), serde_json::json!(node.id));
+            obj.insert("path".into(), serde_json::json!(path));
+            match r {
+                Some(r) => {
+                    obj.insert("x".into(), serde_json::json!(r.x));
+                    obj.insert("y".into(), serde_json::json!(r.y));
+                    obj.insert("w".into(), serde_json::json!(r.width));
+                    obj.insert("h".into(), serde_json::json!(r.height));
+                }
+                None => {
+                    // display:none 等 ⇒ 如实缺席（x/y/w/h 记 null，不编 0——"零静默失败"）
+                    obj.insert("x".into(), serde_json::Value::Null);
+                    obj.insert("y".into(), serde_json::Value::Null);
+                    obj.insert("w".into(), serde_json::Value::Null);
+                    obj.insert("h".into(), serde_json::Value::Null);
+                }
+            }
+            obj.insert("depth".into(), serde_json::json!(depth));
+            let mut kids = Vec::new();
+            let mut i = 0usize;
+            for &child in &node.children {
+                let cpath = if path.is_empty() { i.to_string() } else { format!("{path}.{i}") };
+                kids.push(build(tree, abs, child, &cpath, depth + 1));
+                i += 1;
+            }
+            obj.insert("children".into(), serde_json::Value::Array(kids));
+            serde_json::Value::Object(obj)
+        }
+        // ★单根：path 必须为空串（VC3-a 规格：根 path=""）——不能沿用循环索引
+        let root = if tree.roots.len() == 1 {
+            build(tree, &abs, tree.roots[0], "", 0)
+        } else {
+            let mut roots = Vec::new();
+            for (i, &r) in tree.roots.iter().enumerate() {
+                roots.push(build(tree, &abs, r, &i.to_string(), 0));
+            }
+            let mut o = serde_json::Map::new();
+            o.insert("nodeId".into(), serde_json::json!("__forest__"));
+            o.insert("path".into(), serde_json::json!(""));
+            o.insert("x".into(), serde_json::json!(0.0));
+            o.insert("y".into(), serde_json::json!(0.0));
+            o.insert("w".into(), serde_json::Value::Null);
+            o.insert("h".into(), serde_json::Value::Null);
+            o.insert("depth".into(), serde_json::json!(0));
+            o.insert("children".into(), serde_json::Value::Array(roots));
+            serde_json::Value::Object(o)
+        };
+        Ok(serde_json::json!({
+            "ok": true,
+            "format": "proteus-geometry-snapshot",
+            "version": 1,
+            "end": "app",
+            "root": root,
+            "node_count": tree.len(),
+        })
+        .to_string())
+    });
+    match r {
+        Ok(Ok(s)) => into_c_string(s),
+        Ok(Err(e)) => into_c_string(format!("{{\"ok\":false,\"error\":{}}}", json_str(&e))),
+        Err(_) => into_c_string("{\"ok\":false,\"error\":\"panic\"}".to_string()),
+    }
+}
+
 /// 读句柄对应的绝对矩形（JSON）
 ///
 /// # Safety
@@ -4220,6 +4315,133 @@ pub unsafe extern "C" fn proteus_rects_free(ptr: *mut u8, len: u32) {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// ★★VC4-b：**统一几何快照**（VC3-a 格式）——App 端探针的机器判据。
+    ///
+    /// 【这份测试在防什么】三端快照必须**同一格式**（卡片硬约束：禁止比对层格式适配）。
+    ///   本档把内核产出的结构钉死：path/depth 递归正确 · children 结构与树一致 ·
+    ///   坐标是**视口绝对坐标**（父 padding 已含——见 `apply_absolute` 注释的教训）·
+    ///   display:none 如实缺席（null，不编 0）· 多根包合成根（path 语义一致）。
+    #[test]
+    fn geometry_snapshot_matches_vc3a_format() {
+        // 树：根(padding 10) → 行A(height 50) → 子块(width 30) ｜ 行B(display:none) → 块
+        let tree = serde_json::json!({
+            "viewport": {"width": 375.0, "height": 800.0},
+            "nodes": [
+                {"id": 1, "parentId": null, "flexDirection": "column", "padding": {"top": 10.0, "right": 10.0, "bottom": 10.0, "left": 10.0}, "width": 375.0, "height": 800.0},
+                {"id": 2, "parentId": 1, "flexDirection": "row", "width": 340.0, "height": 50.0},
+                {"id": 3, "parentId": 2, "width": 30.0, "height": 30.0},
+                {"id": 4, "parentId": 1, "width": 340.0, "height": 40.0, "display": "none"},
+                {"id": 5, "parentId": 4, "width": 20.0, "height": 20.0}
+            ]
+        });
+        let h = unsafe { proteus_layout_create(std::ffi::CString::new(tree.to_string()).unwrap().as_ptr()) };
+        assert!(h > 0, "建树应成功");
+        let raw = unsafe { proteus_layout_geometry_snapshot(h) };
+        let s = unsafe { std::ffi::CStr::from_ptr(raw).to_str().unwrap().to_string() };
+        unsafe { proteus_layout_free_string(raw) };
+        let v: serde_json::Value = serde_json::from_str(&s).expect("快照应为合法 JSON");
+        assert_eq!(v["ok"], true);
+        assert_eq!(v["format"], "proteus-geometry-snapshot", "格式名必须与 VC3-a 一致（三端同格式）");
+        assert_eq!(v["version"], 1);
+        assert_eq!(v["node_count"], 5, "node_count 如实含全部节点（含 display:none）");
+        let root = &v["root"];
+        assert_eq!(root["path"], "", "根 path 为空串");
+        assert_eq!(root["depth"], 0);
+        assert_eq!(root["nodeId"], 1);
+        assert_eq!(root["x"], 0.0);
+        assert_eq!(root["y"], 0.0);
+        // 子 0 = 行A：视口绝对坐标（根 padding 10 ⇒ x=10, y=10）
+        let row_a = &root["children"][0];
+        assert_eq!(row_a["path"], "0");
+        assert_eq!(row_a["depth"], 1);
+        assert_eq!(row_a["nodeId"], 2);
+        assert_eq!(row_a["x"], 10.0, "★行A 的 x 应含父 padding（视口绝对坐标）");
+        assert_eq!(row_a["y"], 10.0);
+        // 孙 0.0 = 子块：x 应再叠加（行A x=10 + 行内容起点 0）
+        let block = &row_a["children"][0];
+        assert_eq!(block["path"], "0.0");
+        assert_eq!(block["depth"], 2);
+        assert_eq!(block["nodeId"], 3);
+        assert_eq!(block["x"], 10.0);
+        // 子 1 = 行B（display:none）⇒ x/y/w/h 全 null（如实缺席，不编 0）
+        let row_b = &root["children"][1];
+        assert_eq!(row_b["path"], "1");
+        assert_eq!(row_b["nodeId"], 4);
+        assert!(row_b["x"].is_null() && row_b["y"].is_null() && row_b["w"].is_null() && row_b["h"].is_null(),
+            "display:none 节点应如实缺席（null）——不编 0（零静默失败）");
+        // 但其子树结构仍在（children 保留——结构完整性）
+        assert_eq!(row_b["children"][0]["path"], "1.0");
+        assert_eq!(row_b["children"][0]["nodeId"], 5);
+    }
+
+    /// VC4-b：多根树 → 合成根（path 语义与单根一致：子从 "0" 起）
+    #[test]
+    fn geometry_snapshot_wraps_forest_with_synthetic_root() {
+        // 两个独立根（同 parentId=null）
+        let tree = serde_json::json!({
+            "viewport": {"width": 100.0, "height": 100.0},
+            "nodes": [
+                {"id": 10, "parentId": null, "width": 50.0, "height": 50.0},
+                {"id": 11, "parentId": null, "width": 50.0, "height": 50.0}
+            ]
+        });
+        let h = unsafe { proteus_layout_create(std::ffi::CString::new(tree.to_string()).unwrap().as_ptr()) };
+        let raw = unsafe { proteus_layout_geometry_snapshot(h) };
+        let s = unsafe { std::ffi::CStr::from_ptr(raw).to_str().unwrap().to_string() };
+        unsafe { proteus_layout_free_string(raw) };
+        let v: serde_json::Value = serde_json::from_str(&s).unwrap();
+        let root = &v["root"];
+        assert_eq!(root["nodeId"], "__forest__", "多根应包合成根");
+        assert_eq!(root["children"].as_array().unwrap().len(), 2);
+        assert_eq!(root["children"][0]["path"], "0");
+        assert_eq!(root["children"][1]["path"], "1");
+    }
+
+    /// ★VC4-b：**落盘快照样本工件**——供 Node 侧跨端 schema 一致性测试消费（真实产出，非手写样例）。
+    ///
+    /// 【为什么落盘（而不是测试内自证）】`tests/consistency-cross-end-schema.test.ts` 要断言
+    ///   "App 内核的真实产出能被**同一个** VC3-a 校验器读取"——若那段断言只读本测试的断言值，
+    ///   就成了自证。⇒ 真做法：内核把真实快照写到 `target/geometry-snapshot-sample.json`，
+    ///   Node 侧读**同一份字节**过校验器。（`--nocapture` 无需打印——落盘即工件。）
+    #[test]
+    fn geometry_snapshot_emits_sample_artifact() {
+        let tree = serde_json::json!({
+            "viewport": {"width": 375.0, "height": 800.0},
+            "nodes": [
+                {"id": 1, "parentId": null, "flexDirection": "column", "padding": {"top": 10.0, "right": 10.0, "bottom": 10.0, "left": 10.0}, "width": 375.0, "height": 800.0},
+                {"id": 2, "parentId": 1, "flexDirection": "row", "width": 340.0, "height": 50.0},
+                {"id": 3, "parentId": 2, "width": 30.0, "height": 30.0},
+                {"id": 4, "parentId": 1, "width": 340.0, "height": 40.0}
+            ]
+        });
+        let h = unsafe { proteus_layout_create(std::ffi::CString::new(tree.to_string()).unwrap().as_ptr()) };
+        assert!(h > 0);
+        let raw = unsafe { proteus_layout_geometry_snapshot(h) };
+        let s = unsafe { std::ffi::CStr::from_ptr(raw).to_str().unwrap().to_string() };
+        unsafe { proteus_layout_free_string(raw) };
+        let mut v: serde_json::Value = serde_json::from_str(&s).unwrap();
+        // 补 VC3-a 要求的 viewport（快照 FFI 目前只回 root——view 端口径由宿主填；此处样例补上以过校验器）
+        v["viewport"] = serde_json::json!({"width": 375.0, "height": 800.0});
+        let dir = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("target");
+        std::fs::create_dir_all(&dir).unwrap();
+        std::fs::write(
+            dir.join("geometry-snapshot-sample.json"),
+            serde_json::to_string_pretty(&v).unwrap(),
+        )
+        .unwrap();
+    }
+
+    /// VC4-b：**未知句柄如实报错**（不返回空快照——空快照会被误当"零节点页面"）
+    #[test]
+    fn geometry_snapshot_rejects_unknown_handle() {
+        let raw = unsafe { proteus_layout_geometry_snapshot(9_999_999) };
+        let s = unsafe { std::ffi::CStr::from_ptr(raw).to_str().unwrap().to_string() };
+        unsafe { proteus_layout_free_string(raw) };
+        let v: serde_json::Value = serde_json::from_str(&s).unwrap();
+        assert_eq!(v["ok"], false);
+        assert!(v["error"].as_str().unwrap().contains("不存在"));
+    }
 
     /// ★★**颜色解析的钉值表**（2026-10-01）——TS 侧 golden 的**期望值来源**
     ///

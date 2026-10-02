@@ -1,6 +1,13 @@
 <!-- VC1 · CSS 计算样式测试节点（静态声明——小程序不能 JS 写内联样式） -->
 <!-- 顺序：尺寸兜底在前、测试声明在后（测试值必须最后生效——否则被兜底覆盖） -->
 <view class="css-probe-root">
+  <!-- ★VC4-c/d：快照采集目标（4 类节点——与 Web/App 探针的被测集合对齐） -->
+  <view id="c-p1-view" style="width:120px;height:40px;background-color:#2a3f66;border-radius:18px;flex-shrink:0"></view>
+  <text id="c-p1-text" style="width:100px;height:24px;color:#ffffff;font-size:16px;flex-shrink:0">c-text</text>
+  <image id="c-p1-image" style="width:32px;height:32px;flex-shrink:0" src="/assets/dot.png"></image>
+  <scroll-view id="c-p1-scroll" style="width:180px;height:60px;flex-shrink:0" scroll-y>
+    <view style="height:150px;width:100px"></view>
+  </scroll-view>
   <view id="t-display-block" style="width:20px;height:20px;display:block"></view>
   <view id="t-display-flex" style="width:20px;height:20px;display:flex"></view>
   <view id="t-position-relative" style="width:20px;height:20px;position:relative"></view>

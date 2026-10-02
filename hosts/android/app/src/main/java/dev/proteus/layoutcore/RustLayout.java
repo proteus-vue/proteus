@@ -42,6 +42,8 @@ final class RustLayout {
     private static native boolean nativeDestroy(long handle);
     private static native int nativeHandleCount();
     private static native String nativeReadRects(long handle);
+    /** ★VC4-b：统一几何快照（VC3-a 格式——多端一致性校验的 App 端探针） */
+    private static native String nativeGeometrySnapshot(long handle);
     /** ★单节点绝对矩形（跨页面共享元素的终点基准） */
     private static native String nativeNodeRect(long handle, int nodeId);
     private static native String nativeHitTest(long handle, float x, float y);
@@ -138,6 +140,16 @@ final class RustLayout {
     /** 读取句柄对应的绝对矩形（JSON；供截图回归等场景把几何映射到屏幕坐标） */
     static String readRects(long handle) {
         return loaded ? nativeReadRects(handle) : "{\"ok\":false,\"error\":\"native 未加载\"}";
+    }
+
+    /**
+     * ★★**统一几何快照**（VC4-b，2026-10-02）：VC3-a 格式的结构树（path/depth/children）。
+     *
+     * 【与 readRects 的分工】那个是扁平 id→rect 表（增量/命中用）；本方法是**一致性校验**用——
+     *   三端（Web/小程序/App）产出同一格式，供比对引擎逐节点比（禁止比对层格式适配）。
+     */
+    static String geometrySnapshot(long handle) {
+        return loaded ? nativeGeometrySnapshot(handle) : "{\"ok\":false,\"error\":\"native 未加载\"}";
     }
 
     /**

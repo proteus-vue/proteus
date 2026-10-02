@@ -472,6 +472,8 @@ importers:
         specifier: ^3.4.0
         version: 3.5.42(typescript@5.9.3)
 
+  packages/consistency: {}
+
   packages/contracts:
     devDependencies:
       '@types/node':
