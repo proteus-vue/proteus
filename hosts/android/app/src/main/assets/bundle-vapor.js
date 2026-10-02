@@ -30,9 +30,9 @@
     mod
   ));
 
-  // ../../../node_modules/.pnpm/@vue+shared@3.5.42/node_modules/@vue/shared/dist/shared.cjs.prod.js
+  // node_modules/.pnpm/@vue+shared@3.5.42/node_modules/@vue/shared/dist/shared.cjs.prod.js
   var require_shared_cjs_prod = __commonJS({
-    "../../../node_modules/.pnpm/@vue+shared@3.5.42/node_modules/@vue/shared/dist/shared.cjs.prod.js"(exports) {
+    "node_modules/.pnpm/@vue+shared@3.5.42/node_modules/@vue/shared/dist/shared.cjs.prod.js"(exports) {
       "use strict";
       Object.defineProperty(exports, "__esModule", { value: true });
       // @__NO_SIDE_EFFECTS__
@@ -651,9 +651,9 @@
     }
   });
 
-  // ../../../node_modules/.pnpm/@vue+shared@3.5.42/node_modules/@vue/shared/index.js
+  // node_modules/.pnpm/@vue+shared@3.5.42/node_modules/@vue/shared/index.js
   var require_shared = __commonJS({
-    "../../../node_modules/.pnpm/@vue+shared@3.5.42/node_modules/@vue/shared/index.js"(exports, module) {
+    "node_modules/.pnpm/@vue+shared@3.5.42/node_modules/@vue/shared/index.js"(exports, module) {
       "use strict";
       if (true) {
         module.exports = require_shared_cjs_prod();
@@ -663,9 +663,9 @@
     }
   });
 
-  // ../../../node_modules/.pnpm/@vue+reactivity@3.5.42/node_modules/@vue/reactivity/dist/reactivity.cjs.prod.js
+  // node_modules/.pnpm/@vue+reactivity@3.5.42/node_modules/@vue/reactivity/dist/reactivity.cjs.prod.js
   var require_reactivity_cjs_prod = __commonJS({
-    "../../../node_modules/.pnpm/@vue+reactivity@3.5.42/node_modules/@vue/reactivity/dist/reactivity.cjs.prod.js"(exports) {
+    "node_modules/.pnpm/@vue+reactivity@3.5.42/node_modules/@vue/reactivity/dist/reactivity.cjs.prod.js"(exports) {
       "use strict";
       Object.defineProperty(exports, "__esModule", { value: true });
       var shared = require_shared();
@@ -2485,9 +2485,9 @@
     }
   });
 
-  // ../../../node_modules/.pnpm/@vue+reactivity@3.5.42/node_modules/@vue/reactivity/index.js
+  // node_modules/.pnpm/@vue+reactivity@3.5.42/node_modules/@vue/reactivity/index.js
   var require_reactivity = __commonJS({
-    "../../../node_modules/.pnpm/@vue+reactivity@3.5.42/node_modules/@vue/reactivity/index.js"(exports, module) {
+    "node_modules/.pnpm/@vue+reactivity@3.5.42/node_modules/@vue/reactivity/index.js"(exports, module) {
       "use strict";
       if (true) {
         module.exports = require_reactivity_cjs_prod();
@@ -2497,9 +2497,9 @@
     }
   });
 
-  // ../../../node_modules/.pnpm/@vue+runtime-core@3.5.42/node_modules/@vue/runtime-core/dist/runtime-core.cjs.prod.js
+  // node_modules/.pnpm/@vue+runtime-core@3.5.42/node_modules/@vue/runtime-core/dist/runtime-core.cjs.prod.js
   var require_runtime_core_cjs_prod = __commonJS({
-    "../../../node_modules/.pnpm/@vue+runtime-core@3.5.42/node_modules/@vue/runtime-core/dist/runtime-core.cjs.prod.js"(exports) {
+    "node_modules/.pnpm/@vue+runtime-core@3.5.42/node_modules/@vue/runtime-core/dist/runtime-core.cjs.prod.js"(exports) {
       "use strict";
       Object.defineProperty(exports, "__esModule", { value: true });
       var reactivity = require_reactivity();
@@ -9481,9 +9481,9 @@
     }
   });
 
-  // ../../../node_modules/.pnpm/@vue+runtime-core@3.5.42/node_modules/@vue/runtime-core/index.js
+  // node_modules/.pnpm/@vue+runtime-core@3.5.42/node_modules/@vue/runtime-core/index.js
   var require_runtime_core = __commonJS({
-    "../../../node_modules/.pnpm/@vue+runtime-core@3.5.42/node_modules/@vue/runtime-core/index.js"(exports, module) {
+    "node_modules/.pnpm/@vue+runtime-core@3.5.42/node_modules/@vue/runtime-core/index.js"(exports, module) {
       "use strict";
       if (true) {
         module.exports = require_runtime_core_cjs_prod();
@@ -9493,7 +9493,7 @@
     }
   });
 
-  // ../../../packages/slot-runtime/dist/index.js
+  // packages/slot-runtime/dist/index.js
   var PropKeyTable = class _PropKeyTable {
     constructor() {
       this.keys = [];
@@ -10635,7 +10635,7 @@
     }
   };
 
-  // ../../../packages/renderer-app/dist/index.js
+  // packages/renderer-app/dist/index.js
   var import_runtime_core = __toESM(require_runtime_core(), 1);
   function createAppHostConfig(adapter) {
     return {
@@ -10688,7 +10688,7 @@
     return (0, import_runtime_core.createRenderer)(createAppHostConfig(adapter));
   }
 
-  // ../../../packages/renderer-app/dist/adapters/selfdraw.js
+  // packages/renderer-app/dist/adapters/selfdraw.js
   var PAINT_KEYS = /* @__PURE__ */ new Set(["backgroundColor", "color", "fontSize", "fontWeight", "fontFamily", "borderRadius", "borderColor", "borderWidth", "opacity"]);
   var LAYOUT_KEYS = /* @__PURE__ */ new Set([
     "width",
@@ -11372,10 +11372,10 @@
     };
   }
 
-  // entry-vapor.ts
+  // hosts/android/bridge/entry-vapor.ts
   var import_runtime_core3 = __toESM(require_runtime_core(), 1);
 
-  // vapor-ab-render.generated.ts
+  // hosts/android/bridge/vapor-ab-render.generated.ts
   var import_runtime_core2 = __toESM(require_runtime_core(), 1);
   function render(_ctx, _cache) {
     const _component_p_text = (0, import_runtime_core2.resolveComponent)("p-text");
@@ -11457,7 +11457,7 @@
     });
   }
 
-  // entry-vapor.ts
+  // hosts/android/bridge/entry-vapor.ts
   function makeData(rows) {
     return {
       list: Array.from({ length: rows }, (_, i) => ({ id: i + 1, w: 40 + i % 5 * 12, title: `row ${i + 1}` })),
@@ -11474,7 +11474,80 @@
     const args = JSON.parse(argsJson);
     if (args.mode === "list") return runVirtualList(args);
     if (args.mode === "ab") return runAb(args);
+    if (args.mode === "stress") return runStress(args);
     return runShort(args);
+  }
+  function runStress(args) {
+    const notes = [];
+    const rep = {
+      ok: false,
+      tpl_nodes: 0,
+      sub_l1: 0,
+      inst_nodes: 0,
+      inst_texts: 0,
+      inst_rows: 0,
+      data_rows: 0,
+      mount_ms: 0,
+      host_layout_ms: -1,
+      host_measure_ms: -1,
+      host_cmds: -1,
+      painted_samples: -1,
+      painted_colors: -1,
+      viewport: "",
+      first_node_style: null,
+      anchor_rect: null,
+      notes
+    };
+    try {
+      const artifacts = JSON.parse(args.artifacts);
+      if (!artifacts.tpl.ok) {
+        rep.error = "\u6A21\u677F\u4E0D\u53EF\u7528\uFF08\u6784\u5EFA\u671F\u8BCA\u65AD\uFF09";
+        return JSON.stringify(rep);
+      }
+      rep.tpl_nodes = artifacts.tpl.nodes.length;
+      rep.sub_l1 = artifacts.table.stats.l1;
+      const data = artifacts.data ?? {};
+      const listArr = Array.isArray(data.list) ? data.list : [];
+      rep.data_rows = listArr.length;
+      rep.src = "examples/pages/consistency-stress.vue";
+      const read = (n) => data[n];
+      const registry = new ListRegistry();
+      const t0 = Date.now();
+      const inst = instantiateTemplate(artifacts.tpl, {
+        viewport: args.viewport,
+        read,
+        table: artifacts.table,
+        registry
+      });
+      rep.mount_ms = Date.now() - t0;
+      rep.inst_nodes = inst.nodes.length;
+      rep.inst_rows = inst.virtual?.rows.length ?? 0;
+      rep.inst_texts = inst.nodes.filter((n) => typeof n.text === "string" && String(n.text).length > 0).length;
+      const first = inst.nodes[0];
+      rep.first_node_style = first?.style ?? null;
+      rep.viewport = `${args.viewport.width}x${args.viewport.height}`;
+      const mountOut = JSON.parse(
+        proteusHost.mount(JSON.stringify({ viewport: inst.viewport, nodes: inst.nodes }))
+      );
+      if (mountOut.ok !== true) {
+        rep.error = "\u5BBF\u4E3B mount \u5931\u8D25\uFF1A" + (mountOut.error ?? "");
+        return JSON.stringify(rep);
+      }
+      rep.host_layout_ms = mountOut.layout_ms ?? -1;
+      rep.host_measure_ms = mountOut.measure_ms ?? -1;
+      rep.host_cmds = mountOut.cmds ?? -1;
+      rep.painted_samples = mountOut.painted_samples ?? -1;
+      rep.painted_colors = mountOut.painted_colors ?? -1;
+      const anchorRect = readRectsByOrder([1]);
+      rep.anchor_rect = anchorRect.length > 0 ? [anchorRect[0].x, anchorRect[0].y, anchorRect[0].width, anchorRect[0].height] : null;
+      rep.ok = rep.inst_nodes > 0 && rep.data_rows > 0;
+      notes.push("\u516D\u7AEF SFC \u538B\u529B\u5939\u5177\uFF08Android\uFF09\uFF1A\u6E32\u67D3 examples/pages/consistency-stress.vue \u7684\u7F16\u8BD1\u4EA7\u7269");
+      notes.push("\u6570\u636E\u6765\u81EA\u6784\u5EFA\u671F\u5FEB\u7167\uFF08extractStressData\uFF09\u2014\u2014\u4E0E Web/MP \u7AEF script \u5B57\u9762\u91CF\u540C\u6E90");
+      return JSON.stringify(rep);
+    } catch (e) {
+      rep.error = String(e?.message ?? e);
+      return JSON.stringify(rep);
+    }
   }
   function runAb(args) {
     const t = () => Date.now();
@@ -12288,7 +12361,8 @@
         rep.error = "\u6A21\u677F\u4E0D\u53EF\u7528\uFF08\u6784\u5EFA\u671F\u8BCA\u65AD\u2014\u2014\u89C1 gen-vapor-fixture.mjs \u8F93\u51FA\uFF09";
         return JSON.stringify(rep);
       }
-      const data = makeData(rows);
+      const embedded = artifacts.data;
+      const data = embedded ? JSON.parse(JSON.stringify(embedded)) : makeData(rows);
       const read = (n) => data[n];
       const registry = new ListRegistry();
       const t2 = t();

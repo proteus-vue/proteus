@@ -3,7 +3,8 @@
     "pages/skyline-geom/index",
     "pages/webview-geom/index",
     "pages/l4-skyline/index",
-    "pages/l4-webview/index"
+    "pages/l4-webview/index",
+    "pages/view-default/index"
   ],
   "window": {
     "navigationStyle": "custom"

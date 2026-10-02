@@ -38,6 +38,19 @@ const ROOT = path.resolve(HERE, '../..')
 const OUT = path.join(HERE, 'app/src/main/assets/vapor-artifacts.json')
 /** 长列表产物（虚拟化通路用） */
 const OUT_LIST = path.join(HERE, 'app/src/main/assets/vapor-list-artifacts.json')
+/**
+ * ★★★六端 SFC 压力夹具产物（2026-10-02）——**源是 examples 里的真实页面文件**。
+ *
+ * 【为什么单独一份产物】上一版 L4 夹具是六端手写声明（各自 wxml/html/Java/Swift 写一遍）；
+ *   本产物让 iOS/Android 渲染**同一份 SFC 源码**（examples/pages/consistency-stress.vue），
+ *   与 Web/MP 端跑的是同一个文件 ⇒ "一份源码六端渲染"第一次成立。
+ *   ★`data` 字段：从 SFC script 解析出的**初始数据快照**——移动端不执行 script
+ *   （Vapor 的定位是"模板实例化"），故构建期把数据抽出来内嵌 ⇒ 三端渲染的
+ *   **模板 + 数据**都同源（改 SFC 一处，六端一起变）。
+ */
+const OUT_STRESS = path.join(HERE, 'app/src/main/assets/vapor-stress-artifacts.json')
+/** 共享 SFC 源（**唯一事实源**：examples 页面与移动端产物同读此文件） */
+const STRESS_SFC_PATH = path.join(ROOT, 'examples/pages/consistency-stress.vue')
 
 /**
  * 夹具 SFC：覆盖「页面 + 静态样式 + v-for 行 + 行内绑定 + 静态文本」——
@@ -151,6 +164,28 @@ const buildAb = (src, name) => {
 // 父进程算 AB（同一份 SFC 的 Vue 官方编译产物）
 const AB_RESULT = buildAb(SFC, 'vapor-ab.vue')
 
+// ★★★六端 SFC 压力夹具：读**共享 SFC 源文件**（examples 页面 = 唯一事实源）
+const stressSfc = fs.readFileSync(STRESS_SFC_PATH, 'utf-8')
+
+/**
+ * 从 `<script setup>` 抽**初始数据快照**（移动端不执行 script——Vapor 的定位是"模板实例化"，
+ *   参见 entry-vapor.ts 头注的分工）。抽法是受控的：仅剥掉 import 行、用 `ref` 桩执行余下声明
+ *   ——本夹具的 script 是**受我们控制的纯声明**（无副作用、无异步）；非受控 script 不适用。
+ *   ★判据兜底：抽出的 `list` 行数必须 > 0（否则"数据没抽到"会静默渲染成空列表）。
+ */
+function extractStressData(src) {
+  const { descriptor } = sfcParse(src)
+  const code = (descriptor.scriptSetup?.content ?? '').replace(/^\s*import[^\n]*\n/gm, '')
+  const ref = (v) => ({ value: v })
+  const fn = new Function('ref', `${code}\nreturn { list: list.value, summary: summary.value }`)
+  return fn(ref)
+}
+const STRESS_DATA = extractStressData(stressSfc)
+if (!Array.isArray(STRESS_DATA.list) || STRESS_DATA.list.length === 0) {
+  console.error('[gen-vapor-fixture] ✗ stress：script 数据快照为空（extractStressData 失效？——不静默）')
+  process.exit(1)
+}
+
 const script = `
 import { buildLayoutTemplate, buildVaporSubscriptions, compileEvents } from ${JSON.stringify(path.join(ROOT, 'packages/compiler/src/index.ts'))}
 const build = (sfc, name) => {
@@ -173,6 +208,8 @@ const build = (sfc, name) => {
 process.stdout.write(JSON.stringify({
   small: build(${JSON.stringify(SFC)}, 'vapor-device.vue'),
   list: build(${JSON.stringify(LIST_SFC)}, 'vapor-list.vue'),
+  // ★★★六端 SFC 压力夹具：编译**共享 SFC 文件**（examples 页面）——与 Web/MP 同源
+  stress: build(${JSON.stringify(stressSfc)}, 'consistency-stress.vue'),
   ab: ${JSON.stringify(AB_RESULT)},
 }))
 `
@@ -254,6 +291,13 @@ const listInfo = check('长列表产物', parsed.list)
 fs.writeFileSync(OUT_LIST, JSON.stringify(parsed.list))
 const kb2 = (fs.statSync(OUT_LIST).size / 1024).toFixed(1)
 
+// ★★★六端 SFC 压力夹具产物：编译产物 + **数据快照**（与 Web/MP 同源）
+const stressInfo = check('六端 stress 产物', parsed.stress)
+/** 数据快照进产物（端上不执行 script，见 extractStressData 注释） */
+parsed.stress.data = STRESS_DATA
+fs.writeFileSync(OUT_STRESS, JSON.stringify(parsed.stress))
+const kb3 = (fs.statSync(OUT_STRESS).size / 1024).toFixed(1)
+
 console.log(
   `[gen-vapor-fixture] ✅ ${path.relative(ROOT, OUT)}（${kb} KB）· 模板 ${smallInfo.tplNodes} 节点 · ` +
     `L1 ${smallInfo.l1}（覆盖率 ${(parsed.small.table.stats.l1Rate * 100).toFixed(1)}%）· 源 [${smallInfo.srcNames.join(', ')}]`,
@@ -264,4 +308,9 @@ console.log(
 console.log(
   `[gen-vapor-fixture] ✅ ${path.relative(ROOT, OUT_LIST)}（${kb2} KB）· 长列表模板 ${listInfo.tplNodes} 节点 · ` +
     `L1 ${listInfo.l1} · 行内槽位 ${listInfo.itemSlots.length}`,
+)
+console.log(
+  `[gen-vapor-fixture] ✅ ${path.relative(ROOT, OUT_STRESS)}（${kb3} KB）· **六端 SFC 压力夹具** ` +
+    `（源：examples/pages/consistency-stress.vue）· 模板 ${stressInfo.tplNodes} 节点 · ` +
+    `L1 ${stressInfo.l1} · 行内槽位 ${stressInfo.itemSlots.length} · 数据 ${STRESS_DATA.list.length} 行`,
 )

@@ -30,5 +30,13 @@
             android:exported="true"
             android:theme="@android:style/Theme.NoTitleBar.Fullscreen"
             android:configChanges="orientation|screenSize|smallestScreenSize|screenLayout|keyboardHidden|uiMode" />
+        <!-- ★★★六端 SFC 压力夹具（2026-10-02）：渲染 examples/pages/consistency-stress.vue 的
+             编译产物（与 L4Activity 的区别：L4 画手写 Cmd，本 Activity 画 SFC 编译产物）。
+             全屏主题同 L4Activity（取景对齐是六端像素比较的前提）。exported=true（adb 可达）。 -->
+        <activity
+            android:name=".StressSfcActivity"
+            android:exported="true"
+            android:theme="@android:style/Theme.NoTitleBar.Fullscreen"
+            android:configChanges="orientation|screenSize|smallestScreenSize|screenLayout|keyboardHidden|uiMode" />
     </application>
 </manifest>

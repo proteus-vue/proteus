@@ -5840,6 +5840,9 @@ final class SelfDrawViewController: UIViewController {
         // ★模式：`--bench` 跑逻辑层基准（复杂响应式用例 + 规模扫描），否则跑自绘场景
         //   （`--selfdraw` 是自绘模式的**显式**写法——脚本用它避免落到 Info.plist 的缺省场景）
         let isBench = ProcessInfo.processInfo.arguments.contains("--bench")
+        // ★★★六端 SFC 压力夹具（2026-10-02）：走 bench bundle（它含 renderStress 入口——
+        //   与 Android 同源的 vapor-stress.json），但不跑用例链：一次挂载 + 截图 + 报告。
+        let isStress = ProcessInfo.processInfo.arguments.contains("--stress")
         // ★★G-39：宿主运行时场景（`--host-runtime`）——独立模式，不进自绘/基准分支
         let isHostRuntime = ProcessInfo.processInfo.arguments.contains("--host-runtime")
         // ★★M5：执行器场景（`--app-stack`）——同上，独立模式
@@ -5864,6 +5867,11 @@ final class SelfDrawViewController: UIViewController {
             .first { $0.hasPrefix("--cases=") }?
             .dropFirst("--cases=".count)
             .split(separator: ",").map { $0.trimmingCharacters(in: .whitespaces) } ?? []
+        // ★stress 模式：独立报告名 + 独立截图名（不与 bench/selfdraw 产物撞名）
+        if isStress {
+            SelfDrawBridge.reportFileName = "stress-sfc"
+            SelfDrawBridge.snapshotName = "stress-sfc"
+        }
         if isBench {
             // ★★过滤跑写**独立文件**（本仓实测踩到的坑，代价=白等 10 分钟）
             //
@@ -5882,9 +5890,10 @@ final class SelfDrawViewController: UIViewController {
                 SelfDrawBridge.snapshotName = "bench-filtered-\(slug)"
             }
         }
+        // ★stress 也走 bench bundle（它含 renderStress 入口——同一份 vapor-stress.json 产物）
         let bundleName = isShowcase ? "bundle-showcase"
             : (isAppStack ? "bundle-app-stack"
-            : (isHostRuntime ? "bundle-host-runtime" : (isBench ? "bundle-bench" : "bundle-selfdraw")))
+            : (isHostRuntime ? "bundle-host-runtime" : (isBench || isStress ? "bundle-bench" : "bundle-selfdraw")))
         guard let url = Bundle.main.url(forResource: bundleName, withExtension: "js"),
               let src = try? String(contentsOf: url, encoding: .utf8) else {
             NSLog("[proteus] 缺少 %@.js", bundleName)
@@ -5926,8 +5935,44 @@ final class SelfDrawViewController: UIViewController {
         //   下面用 `DispatchQueue.main.async` 串起来——这等价于把 VM 事件循环手工补上。
         if isBench {
             driveBench(ctx: ctx)
+        } else if isStress {
+            // ★★★六端 SFC 压力夹具（2026-10-02）：渲染 examples/pages/consistency-stress.vue 的
+            //   编译产物（`vapor-stress.json`）——**一次挂载 + 截图 + 报告落盘**，不跑用例链。
+            //   与 Android 侧 `StressSfcActivity` 对称（两端渲染同一份 SFC 的产物的各自管道）。
+            driveStress(ctx: ctx)
         } else {
             schedulePhases(ctx: ctx, url: url)
+        }
+    }
+
+    /// ★★★六端 SFC 压力夹具驱动器（iOS 第三条链的落点）。
+    ///
+    /// 【链路】`__proteus.renderStress()`（= instantiateTemplate + `proteusSelfDraw.mount`）
+    ///   → Rust 内核算几何 → CALayer 自绘 → 截图（`SelfDrawView.snapshot`）→ 报告落盘。
+    ///
+    /// 【完成信号（零盲等）】报告 + PNG 落盘后（若 `PROTEUS_EXIT_AFTER_REPORT=1`）进程自退
+    ///   ⇒ 采集脚本的 `launch --console` **返回即完成**（与既有实验脚本同一机制）。
+    private func driveStress(ctx: JSContext) {
+        let evalJs = { (expr: String) -> String in ctx.evaluateScript(expr)?.toString() ?? "null" }
+        let out = evalJs("__proteus.renderStress()")
+        NSLog("[proteus] stress 渲染：%@", String(out.prefix(240)))
+        // ★截图（宿主自有能力：UIGraphicsImageRenderer 渲染视图层——与 `snapshot(named:)` 同路径）
+        let snapPath = bridge.view?.snapshot(named: SelfDrawBridge.snapshotName)
+        var report: [String: Any] = [
+            "ok": out.contains("\"ok\":true") && snapPath != nil,
+            "path": "stress-sfc",
+            "snapshot_ok": snapPath != nil,
+            "snapshot_name": SelfDrawBridge.snapshotName,
+            "js_raw": out,
+        ]
+        let dir = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)[0]
+        let url = dir.appendingPathComponent("\(SelfDrawBridge.reportFileName).json")
+        if let data = try? JSONSerialization.data(withJSONObject: report, options: [.prettyPrinted, .sortedKeys]) {
+            try? data.write(to: url)
+        }
+        NSLog("[proteus] SELFDRAW_REPORT_READY path=%@", url.path)
+        if ProcessInfo.processInfo.environment["PROTEUS_EXIT_AFTER_REPORT"] == "1" {
+            exit(report["ok"] as? Bool == true ? 0 : 1)
         }
     }
 

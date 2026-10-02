@@ -92,9 +92,12 @@ interface VaporArgs {
   artifacts: string
   /**
    * 模式：`'short'`（缺省）= 实例化 + 订阅驱动增量；
-   *      `'list'` = **长列表虚拟化**（1000 行、行高 100px、30 下 + 30 上滚动）。
+   *      `'list'` = **长列表虚拟化**（1000 行、行高 100px、30 下 + 30 上滚动）；
+   *      `'ab'` = 同一份 SFC 的 Vapor vs Vue 运行时对照；
+   *      `'stress'` = **六端 SFC 压力夹具**（examples/pages/consistency-stress.vue 的编译产物，
+   *                  数据用产物内嵌快照——见 runStress）。
    */
-  mode?: 'short' | 'list' | 'ab'
+  mode?: 'short' | 'list' | 'ab' | 'stress'
   /** 行数（覆盖产物里的首行数据；短列表缺省 8 / 长列表缺省 1000） */
   rows?: number
   /** 增量更新轮数（每轮改一行文本 + 一行宽度 ⇒ 走订阅表 → 指令流） */
@@ -313,7 +316,127 @@ export function __proteusVaporRun(argsJson: string): string {
   const args = JSON.parse(argsJson) as VaporArgs
   if (args.mode === 'list') return runVirtualList(args)
   if (args.mode === 'ab') return runAb(args)
+  if (args.mode === 'stress') return runStress(args)
   return runShort(args)
+}
+
+/**
+ * ★★★**六端 SFC 压力夹具渲染**（2026-10-02）——渲染 `examples/pages/consistency-stress.vue`
+ *   的编译产物（`vapor-stress-artifacts.json`：LayoutTemplate + 订阅表 + **数据快照**）。
+ *
+ * 【与 runShort 的差别（为什么单独一个模式）】
+ *   · runShort 用 `makeData(rows)` 的**合成数据**（行宽公式 40+(i%5)*12 / 标题 'row N'）；
+ *     本模式用 `artifacts.data`——**从 SFC script 抽出的真实快照**（构建期 extractStressData）。
+ *   · runShort 的夹具 SFC 是生成器里的内嵌字符串；本模式的 SFC 是 **examples 里的真实页面**
+ *     （与 Web/MP 端跑的是同一个文件）。
+ *   ⇒ 本模式产出的是"一份源码六端渲染"里**移动端的渲染**（另一条链是 Web/MP 的编译器）。
+ *
+ * 【报告口径】只报**渲染证据**（节点数 / 文本数 / 宿主几何耗时 / 绘制采样 / 通道），
+ *   不做 A/B（那由 runAb + vapor-artifacts 承担）——本模式的判据在**截图侧**（六端像素对比）。
+ */
+function runStress(args: VaporArgs): string {
+  const notes: string[] = []
+  interface StressReport {
+    ok: boolean
+    error?: string
+    src?: string
+    tpl_nodes: number
+    sub_l1: number
+    inst_nodes: number
+    inst_texts: number
+    inst_rows: number
+    data_rows: number
+    mount_ms: number
+    host_layout_ms: number
+    host_measure_ms: number
+    host_cmds: number
+    painted_samples: number
+    painted_colors: number
+    viewport: string
+    first_node_style: Record<string, unknown> | null
+    anchor_rect: number[] | null
+    notes: string[]
+  }
+  const rep: StressReport = {
+    ok: false, tpl_nodes: 0, sub_l1: 0, inst_nodes: 0, inst_texts: 0, inst_rows: 0, data_rows: 0,
+    mount_ms: 0, host_layout_ms: -1, host_measure_ms: -1, host_cmds: -1,
+    painted_samples: -1, painted_colors: -1, viewport: '', first_node_style: null, anchor_rect: null,
+    notes,
+  }
+  try {
+    const artifacts = JSON.parse(args.artifacts) as {
+      tpl: LayoutTemplate
+      table: SubscriptionTable
+      sfc: string
+      data?: Record<string, unknown>
+    }
+    if (!artifacts.tpl.ok) {
+      rep.error = '模板不可用（构建期诊断）'
+      return JSON.stringify(rep)
+    }
+    rep.tpl_nodes = artifacts.tpl.nodes.length
+    rep.sub_l1 = artifacts.table.stats.l1
+    const data = (artifacts.data ?? {}) as Record<string, unknown>
+    const listArr = Array.isArray(data.list) ? (data.list as unknown[]) : []
+    rep.data_rows = listArr.length
+    rep.src = 'examples/pages/consistency-stress.vue'
+
+    // ── 实例化（同一份模板 + 同一份数据快照）──
+    const read = (n: string): unknown => data[n]
+    const registry = new ListRegistry()
+    const t0 = Date.now()
+    const inst = instantiateTemplate(artifacts.tpl, {
+      viewport: args.viewport,
+      read,
+      table: artifacts.table,
+      registry,
+    })
+    rep.mount_ms = Date.now() - t0
+    rep.inst_nodes = inst.nodes.length
+    rep.inst_rows = inst.virtual?.rows.length ?? 0
+    rep.inst_texts = inst.nodes.filter((n) => typeof (n as { text?: unknown }).text === 'string'
+      && String((n as { text?: unknown }).text).length > 0).length
+    // 首节点样式 + 锚点几何（诊断：确认渲染的是 SFC 的样式而非默认值）
+    const first = inst.nodes[0] as unknown as Record<string, unknown>
+    rep.first_node_style = (first?.style as Record<string, unknown>) ?? null
+    rep.viewport = `${args.viewport.width}x${args.viewport.height}`
+
+    // ── 宿主 mount（Rust 内核 + 指令 + 上屏）──
+    const mountOut = JSON.parse(
+      proteusHost.mount(JSON.stringify({ viewport: inst.viewport, nodes: inst.nodes })),
+    ) as {
+      ok?: boolean
+      error?: string
+      layout_ms?: number
+      measure_ms?: number
+      cmds?: number
+      painted_samples?: number
+      painted_colors?: number
+    }
+    if (mountOut.ok !== true) {
+      rep.error = '宿主 mount 失败：' + (mountOut.error ?? '')
+      return JSON.stringify(rep)
+    }
+    rep.host_layout_ms = mountOut.layout_ms ?? -1
+    rep.host_measure_ms = mountOut.measure_ms ?? -1
+    rep.host_cmds = mountOut.cmds ?? -1
+    rep.painted_samples = mountOut.painted_samples ?? -1
+    rep.painted_colors = mountOut.painted_colors ?? -1
+
+    // 锚点节点矩形（id=1 = stress-anchor；截图侧的锚定归一可与之交叉验证）
+    const anchorRect = readRectsByOrder([1])
+    rep.anchor_rect = anchorRect.length > 0
+      ? [anchorRect[0]!.x, anchorRect[0]!.y, anchorRect[0]!.width, anchorRect[0]!.height]
+      : null
+
+    rep.ok = rep.inst_nodes > 0 && rep.data_rows > 0
+    notes.push('六端 SFC 压力夹具（Android）：渲染 examples/pages/consistency-stress.vue 的编译产物')
+    notes.push('数据来自构建期快照（extractStressData）——与 Web/MP 端 script 字面量同源')
+    return JSON.stringify(rep)
+  } catch (e) {
+    rep.error = String((e as Error)?.message ?? e)
+    return JSON.stringify(rep)
+  }
 }
 
 /**
@@ -1346,7 +1469,15 @@ function runShort(args: VaporArgs): string {
     }
 
     // ── ② 设备端实例化：模板 + 数据 → 节点树 ──
-    const data = makeData(rows)
+    //
+    // ★★数据源二选一（2026-10-02 · 六端 SFC 压力夹具）：
+    //   · `artifacts.data` 存在 ⇒ **用它**（构建期从共享 SFC 的 spec 生成——与 Web/MP 端
+    //     渲染的脚本字面量**逐字一致**；跨端像素比较的前提是"同一份数据"）；
+    //   · 否则 ⇒ `makeData(rows)`（既有 A/B 与 list 场景的合成数据，行为零变化）。
+    const embedded = (artifacts as { data?: Record<string, unknown> }).data
+    const data = embedded
+      ? (JSON.parse(JSON.stringify(embedded)) as Record<string, unknown>)
+      : makeData(rows)
     /** 源读取（VaporRuntime 的 EvalContext 契约：按名取当前值；行内作用域由框架按 scope 绑定） */
     const read = (n: string): unknown => data[n]
     const registry = new ListRegistry()

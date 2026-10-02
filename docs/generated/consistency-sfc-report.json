@@ -1,0 +1,862 @@
+{
+  "format": "proteus-pixel-observation",
+  "version": 1,
+  "gate": false,
+  "note": "L4 像素观察——**非门禁**（标准 §8.1）：不追求零噪声，仅作 L1–L3 够不到的四项（圆角/阴影/渐变/字形）的兜底观察。｜★SFC 压力夹具（一份源码三链渲染）：examples/pages/consistency-stress.vue",
+  "pairs": [
+    {
+      "id": "sfc:android-vs-ios",
+      "a": "docs/generated/consistency-samples/sfc/sfc.android.png",
+      "b": "docs/generated/consistency-samples/sfc/sfc.ios.png",
+      "mode": "cross-runtime",
+      "norm": {
+        "a": {
+          "srcSize": {
+            "width": 1200,
+            "height": 2608
+          },
+          "colorSpace": "display-p3",
+          "block": {
+            "x": 16,
+            "y": 60,
+            "w": 80,
+            "h": 48
+          },
+          "scale": 1
+        },
+        "b": {
+          "srcSize": {
+            "width": 1206,
+            "height": 2622
+          },
+          "colorSpace": "undeclared",
+          "block": {
+            "x": 48,
+            "y": 181,
+            "w": 240,
+            "h": 142
+          },
+          "scale": 0.333
+        },
+        "outSize": {
+          "w": 375,
+          "h": 800
+        }
+      },
+      "observation": {
+        "gate": false,
+        "verdict": "changed",
+        "sizeA": {
+          "width": 375,
+          "height": 744
+        },
+        "sizeB": {
+          "width": 375,
+          "height": 744
+        },
+        "sampleCount": 279000,
+        "diffPixels": 17556,
+        "diffRatio": 0.06292,
+        "hashDistance": 12,
+        "regions": [
+          {
+            "x": 16,
+            "y": 688,
+            "w": 16,
+            "h": 16,
+            "pixels": 189,
+            "ratio": 0.738
+          },
+          {
+            "x": 16,
+            "y": 592,
+            "w": 16,
+            "h": 16,
+            "pixels": 184,
+            "ratio": 0.719
+          },
+          {
+            "x": 16,
+            "y": 624,
+            "w": 16,
+            "h": 16,
+            "pixels": 184,
+            "ratio": 0.719
+          },
+          {
+            "x": 16,
+            "y": 528,
+            "w": 16,
+            "h": 16,
+            "pixels": 183,
+            "ratio": 0.715
+          },
+          {
+            "x": 16,
+            "y": 576,
+            "w": 16,
+            "h": 16,
+            "pixels": 178,
+            "ratio": 0.695
+          },
+          {
+            "x": 16,
+            "y": 656,
+            "w": 16,
+            "h": 16,
+            "pixels": 173,
+            "ratio": 0.676
+          },
+          {
+            "x": 16,
+            "y": 640,
+            "w": 16,
+            "h": 16,
+            "pixels": 171,
+            "ratio": 0.668
+          },
+          {
+            "x": 16,
+            "y": 560,
+            "w": 16,
+            "h": 16,
+            "pixels": 166,
+            "ratio": 0.648
+          }
+        ],
+        "params": {
+          "channelThreshold": 8,
+          "blockSize": 16,
+          "noiseRatio": 0.005,
+          "noiseHashDistance": 16
+        }
+      }
+    },
+    {
+      "id": "sfc:android-vs-mp.skyline",
+      "a": "docs/generated/consistency-samples/sfc/sfc.android.png",
+      "b": "docs/generated/consistency-samples/sfc/sfc.mp.skyline.png",
+      "mode": "cross-runtime",
+      "norm": {
+        "a": {
+          "srcSize": {
+            "width": 1200,
+            "height": 2608
+          },
+          "colorSpace": "display-p3",
+          "block": {
+            "x": 16,
+            "y": 60,
+            "w": 80,
+            "h": 48
+          },
+          "scale": 1
+        },
+        "b": {
+          "srcSize": {
+            "width": 640,
+            "height": 1386
+          },
+          "colorSpace": "undeclared",
+          "block": {
+            "x": 27,
+            "y": 101,
+            "w": 130,
+            "h": 78
+          },
+          "scale": 0.615
+        },
+        "outSize": {
+          "w": 375,
+          "h": 800
+        }
+      },
+      "observation": {
+        "gate": false,
+        "verdict": "changed",
+        "sizeA": {
+          "width": 375,
+          "height": 744
+        },
+        "sizeB": {
+          "width": 375,
+          "height": 744
+        },
+        "sampleCount": 279000,
+        "diffPixels": 13740,
+        "diffRatio": 0.04925,
+        "hashDistance": 12,
+        "regions": [
+          {
+            "x": 16,
+            "y": 688,
+            "w": 16,
+            "h": 16,
+            "pixels": 190,
+            "ratio": 0.742
+          },
+          {
+            "x": 16,
+            "y": 656,
+            "w": 16,
+            "h": 16,
+            "pixels": 171,
+            "ratio": 0.668
+          },
+          {
+            "x": 96,
+            "y": 64,
+            "w": 16,
+            "h": 16,
+            "pixels": 168,
+            "ratio": 0.656
+          },
+          {
+            "x": 16,
+            "y": 528,
+            "w": 16,
+            "h": 16,
+            "pixels": 168,
+            "ratio": 0.656
+          },
+          {
+            "x": 16,
+            "y": 624,
+            "w": 16,
+            "h": 16,
+            "pixels": 167,
+            "ratio": 0.652
+          },
+          {
+            "x": 16,
+            "y": 576,
+            "w": 16,
+            "h": 16,
+            "pixels": 165,
+            "ratio": 0.645
+          },
+          {
+            "x": 16,
+            "y": 592,
+            "w": 16,
+            "h": 16,
+            "pixels": 164,
+            "ratio": 0.641
+          },
+          {
+            "x": 96,
+            "y": 176,
+            "w": 16,
+            "h": 16,
+            "pixels": 162,
+            "ratio": 0.633
+          }
+        ],
+        "params": {
+          "channelThreshold": 8,
+          "blockSize": 16,
+          "noiseRatio": 0.005,
+          "noiseHashDistance": 16
+        }
+      }
+    },
+    {
+      "id": "sfc:android-vs-web",
+      "a": "docs/generated/consistency-samples/sfc/sfc.android.png",
+      "b": "docs/generated/consistency-samples/sfc/sfc.web.png",
+      "mode": "cross-runtime",
+      "norm": {
+        "a": {
+          "srcSize": {
+            "width": 1200,
+            "height": 2608
+          },
+          "colorSpace": "display-p3",
+          "block": {
+            "x": 16,
+            "y": 60,
+            "w": 80,
+            "h": 48
+          },
+          "scale": 1
+        },
+        "b": {
+          "srcSize": {
+            "width": 780,
+            "height": 1688
+          },
+          "colorSpace": "undeclared",
+          "block": {
+            "x": 48,
+            "y": 136,
+            "w": 160,
+            "h": 96
+          },
+          "scale": 0.5
+        },
+        "outSize": {
+          "w": 375,
+          "h": 800
+        }
+      },
+      "observation": {
+        "gate": false,
+        "verdict": "changed",
+        "sizeA": {
+          "width": 375,
+          "height": 744
+        },
+        "sizeB": {
+          "width": 375,
+          "height": 744
+        },
+        "sampleCount": 279000,
+        "diffPixels": 18635,
+        "diffRatio": 0.06679,
+        "hashDistance": 12,
+        "regions": [
+          {
+            "x": 16,
+            "y": 688,
+            "w": 16,
+            "h": 16,
+            "pixels": 191,
+            "ratio": 0.746
+          },
+          {
+            "x": 16,
+            "y": 624,
+            "w": 16,
+            "h": 16,
+            "pixels": 188,
+            "ratio": 0.734
+          },
+          {
+            "x": 16,
+            "y": 592,
+            "w": 16,
+            "h": 16,
+            "pixels": 187,
+            "ratio": 0.73
+          },
+          {
+            "x": 16,
+            "y": 528,
+            "w": 16,
+            "h": 16,
+            "pixels": 186,
+            "ratio": 0.727
+          },
+          {
+            "x": 336,
+            "y": 720,
+            "w": 16,
+            "h": 16,
+            "pixels": 184,
+            "ratio": 0.719
+          },
+          {
+            "x": 16,
+            "y": 576,
+            "w": 16,
+            "h": 16,
+            "pixels": 178,
+            "ratio": 0.695
+          },
+          {
+            "x": 16,
+            "y": 640,
+            "w": 16,
+            "h": 16,
+            "pixels": 174,
+            "ratio": 0.68
+          },
+          {
+            "x": 16,
+            "y": 656,
+            "w": 16,
+            "h": 16,
+            "pixels": 173,
+            "ratio": 0.676
+          }
+        ],
+        "params": {
+          "channelThreshold": 8,
+          "blockSize": 16,
+          "noiseRatio": 0.005,
+          "noiseHashDistance": 16
+        }
+      }
+    },
+    {
+      "id": "sfc:ios-vs-mp.skyline",
+      "a": "docs/generated/consistency-samples/sfc/sfc.ios.png",
+      "b": "docs/generated/consistency-samples/sfc/sfc.mp.skyline.png",
+      "mode": "cross-runtime",
+      "norm": {
+        "a": {
+          "srcSize": {
+            "width": 1206,
+            "height": 2622
+          },
+          "colorSpace": "undeclared",
+          "block": {
+            "x": 48,
+            "y": 181,
+            "w": 240,
+            "h": 142
+          },
+          "scale": 0.333
+        },
+        "b": {
+          "srcSize": {
+            "width": 640,
+            "height": 1386
+          },
+          "colorSpace": "undeclared",
+          "block": {
+            "x": 27,
+            "y": 101,
+            "w": 130,
+            "h": 78
+          },
+          "scale": 0.615
+        },
+        "outSize": {
+          "w": 375,
+          "h": 800
+        }
+      },
+      "observation": {
+        "gate": false,
+        "verdict": "changed",
+        "sizeA": {
+          "width": 375,
+          "height": 744
+        },
+        "sizeB": {
+          "width": 375,
+          "height": 744
+        },
+        "sampleCount": 279000,
+        "diffPixels": 14176,
+        "diffRatio": 0.05081,
+        "hashDistance": 2,
+        "regions": [
+          {
+            "x": 96,
+            "y": 64,
+            "w": 16,
+            "h": 16,
+            "pixels": 175,
+            "ratio": 0.684
+          },
+          {
+            "x": 128,
+            "y": 64,
+            "w": 16,
+            "h": 16,
+            "pixels": 162,
+            "ratio": 0.633
+          },
+          {
+            "x": 112,
+            "y": 688,
+            "w": 16,
+            "h": 16,
+            "pixels": 159,
+            "ratio": 0.621
+          },
+          {
+            "x": 48,
+            "y": 64,
+            "w": 16,
+            "h": 16,
+            "pixels": 156,
+            "ratio": 0.609
+          },
+          {
+            "x": 64,
+            "y": 64,
+            "w": 16,
+            "h": 16,
+            "pixels": 151,
+            "ratio": 0.59
+          },
+          {
+            "x": 96,
+            "y": 464,
+            "w": 16,
+            "h": 16,
+            "pixels": 151,
+            "ratio": 0.59
+          },
+          {
+            "x": 128,
+            "y": 640,
+            "w": 16,
+            "h": 16,
+            "pixels": 150,
+            "ratio": 0.586
+          },
+          {
+            "x": 80,
+            "y": 64,
+            "w": 16,
+            "h": 16,
+            "pixels": 145,
+            "ratio": 0.566
+          }
+        ],
+        "params": {
+          "channelThreshold": 8,
+          "blockSize": 16,
+          "noiseRatio": 0.005,
+          "noiseHashDistance": 16
+        }
+      }
+    },
+    {
+      "id": "sfc:ios-vs-web",
+      "a": "docs/generated/consistency-samples/sfc/sfc.ios.png",
+      "b": "docs/generated/consistency-samples/sfc/sfc.web.png",
+      "mode": "cross-runtime",
+      "norm": {
+        "a": {
+          "srcSize": {
+            "width": 1206,
+            "height": 2622
+          },
+          "colorSpace": "undeclared",
+          "block": {
+            "x": 48,
+            "y": 181,
+            "w": 240,
+            "h": 142
+          },
+          "scale": 0.333
+        },
+        "b": {
+          "srcSize": {
+            "width": 780,
+            "height": 1688
+          },
+          "colorSpace": "undeclared",
+          "block": {
+            "x": 48,
+            "y": 136,
+            "w": 160,
+            "h": 96
+          },
+          "scale": 0.5
+        },
+        "outSize": {
+          "w": 375,
+          "h": 800
+        }
+      },
+      "observation": {
+        "gate": false,
+        "verdict": "changed",
+        "sizeA": {
+          "width": 375,
+          "height": 744
+        },
+        "sizeB": {
+          "width": 375,
+          "height": 744
+        },
+        "sampleCount": 279000,
+        "diffPixels": 7179,
+        "diffRatio": 0.02573,
+        "hashDistance": 0,
+        "regions": [
+          {
+            "x": 336,
+            "y": 720,
+            "w": 16,
+            "h": 16,
+            "pixels": 184,
+            "ratio": 0.719
+          },
+          {
+            "x": 336,
+            "y": 736,
+            "w": 16,
+            "h": 8,
+            "pixels": 128,
+            "ratio": 1
+          },
+          {
+            "x": 352,
+            "y": 736,
+            "w": 16,
+            "h": 8,
+            "pixels": 109,
+            "ratio": 0.852
+          },
+          {
+            "x": 144,
+            "y": 64,
+            "w": 16,
+            "h": 16,
+            "pixels": 102,
+            "ratio": 0.398
+          },
+          {
+            "x": 32,
+            "y": 64,
+            "w": 16,
+            "h": 16,
+            "pixels": 97,
+            "ratio": 0.379
+          },
+          {
+            "x": 48,
+            "y": 64,
+            "w": 16,
+            "h": 16,
+            "pixels": 97,
+            "ratio": 0.379
+          },
+          {
+            "x": 128,
+            "y": 64,
+            "w": 16,
+            "h": 16,
+            "pixels": 97,
+            "ratio": 0.379
+          },
+          {
+            "x": 352,
+            "y": 720,
+            "w": 16,
+            "h": 16,
+            "pixels": 92,
+            "ratio": 0.359
+          }
+        ],
+        "params": {
+          "channelThreshold": 8,
+          "blockSize": 16,
+          "noiseRatio": 0.005,
+          "noiseHashDistance": 16
+        }
+      }
+    },
+    {
+      "id": "sfc:mp.skyline-vs-web",
+      "a": "docs/generated/consistency-samples/sfc/sfc.mp.skyline.png",
+      "b": "docs/generated/consistency-samples/sfc/sfc.web.png",
+      "mode": "cross-runtime",
+      "norm": {
+        "a": {
+          "srcSize": {
+            "width": 640,
+            "height": 1386
+          },
+          "colorSpace": "undeclared",
+          "block": {
+            "x": 27,
+            "y": 101,
+            "w": 130,
+            "h": 78
+          },
+          "scale": 0.615
+        },
+        "b": {
+          "srcSize": {
+            "width": 780,
+            "height": 1688
+          },
+          "colorSpace": "undeclared",
+          "block": {
+            "x": 48,
+            "y": 136,
+            "w": 160,
+            "h": 96
+          },
+          "scale": 0.5
+        },
+        "outSize": {
+          "w": 375,
+          "h": 800
+        }
+      },
+      "observation": {
+        "gate": false,
+        "verdict": "changed",
+        "sizeA": {
+          "width": 375,
+          "height": 744
+        },
+        "sizeB": {
+          "width": 375,
+          "height": 744
+        },
+        "sampleCount": 279000,
+        "diffPixels": 15304,
+        "diffRatio": 0.05485,
+        "hashDistance": 2,
+        "regions": [
+          {
+            "x": 336,
+            "y": 720,
+            "w": 16,
+            "h": 16,
+            "pixels": 184,
+            "ratio": 0.719
+          },
+          {
+            "x": 96,
+            "y": 64,
+            "w": 16,
+            "h": 16,
+            "pixels": 176,
+            "ratio": 0.688
+          },
+          {
+            "x": 112,
+            "y": 688,
+            "w": 16,
+            "h": 16,
+            "pixels": 165,
+            "ratio": 0.645
+          },
+          {
+            "x": 128,
+            "y": 64,
+            "w": 16,
+            "h": 16,
+            "pixels": 164,
+            "ratio": 0.641
+          },
+          {
+            "x": 48,
+            "y": 64,
+            "w": 16,
+            "h": 16,
+            "pixels": 158,
+            "ratio": 0.617
+          },
+          {
+            "x": 64,
+            "y": 64,
+            "w": 16,
+            "h": 16,
+            "pixels": 158,
+            "ratio": 0.617
+          },
+          {
+            "x": 80,
+            "y": 64,
+            "w": 16,
+            "h": 16,
+            "pixels": 155,
+            "ratio": 0.605
+          },
+          {
+            "x": 128,
+            "y": 640,
+            "w": 16,
+            "h": 16,
+            "pixels": 154,
+            "ratio": 0.602
+          }
+        ],
+        "params": {
+          "channelThreshold": 8,
+          "blockSize": 16,
+          "noiseRatio": 0.005,
+          "noiseHashDistance": 16
+        }
+      }
+    }
+  ],
+  "totals": {
+    "sampleCount": 1674000,
+    "diffPixels": 86590,
+    "changedSamples": 6,
+    "cleanSamples": 0,
+    "knownNoiseSamples": 0
+  },
+  "source": "examples/pages/consistency-stress.vue（真 SFC：44 节点 · 10 行 v-for · 行内动态绑定）",
+  "ends": [
+    {
+      "end": "android",
+      "label": "Android 真机（Vapor）",
+      "file": "sfc.android.png",
+      "norm": {
+        "srcSize": {
+          "width": 1200,
+          "height": 2608
+        },
+        "colorSpace": "display-p3",
+        "block": {
+          "x": 16,
+          "y": 60,
+          "w": 80,
+          "h": 48
+        },
+        "scale": 1
+      }
+    },
+    {
+      "end": "ios",
+      "label": "iOS 模拟器（Vapor）",
+      "file": "sfc.ios.png",
+      "norm": {
+        "srcSize": {
+          "width": 1206,
+          "height": 2622
+        },
+        "colorSpace": "undeclared",
+        "block": {
+          "x": 48,
+          "y": 181,
+          "w": 240,
+          "h": 142
+        },
+        "scale": 0.333
+      }
+    },
+    {
+      "end": "mp.skyline",
+      "label": "微信 Skyline（编译产物）",
+      "file": "sfc.mp.skyline.png",
+      "norm": {
+        "srcSize": {
+          "width": 640,
+          "height": 1386
+        },
+        "colorSpace": "undeclared",
+        "block": {
+          "x": 27,
+          "y": 101,
+          "w": 130,
+          "h": 78
+        },
+        "scale": 0.615
+      }
+    },
+    {
+      "end": "web",
+      "label": "浏览器 Web（编译产物）",
+      "file": "sfc.web.png",
+      "norm": {
+        "srcSize": {
+          "width": 780,
+          "height": 1688
+        },
+        "colorSpace": "undeclared",
+        "block": {
+          "x": 48,
+          "y": 136,
+          "w": 160,
+          "h": 96
+        },
+        "scale": 0.5
+      }
+    }
+  ]
+}
