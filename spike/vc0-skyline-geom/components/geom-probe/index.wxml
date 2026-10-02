@@ -1,0 +1,9 @@
+<!-- VC0 被测组件模板：4 类节点，id 带组件 tag 前缀避免页面级选择器冲突 -->
+<view class="comp-root">
+  <view id="c-{{tag}}-view" class="probe-box" data-role="box" style="width:120px;height:40px"></view>
+  <text id="c-{{tag}}-text" class="probe-text" style="width:100px;height:24px">c-text</text>
+  <image id="c-{{tag}}-image" class="probe-image" src="/assets/dot.png" style="width:32px;height:32px"></image>
+  <scroll-view id="c-{{tag}}-scroll" class="probe-scroll" scroll-y style="width:180px;height:60px">
+    <view style="height:300px;width:100px;background-color:#334"></view>
+  </scroll-view>
+</view>

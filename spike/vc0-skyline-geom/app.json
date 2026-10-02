@@ -1,0 +1,10 @@
+{
+  "pages": [
+    "pages/skyline-geom/index",
+    "pages/webview-geom/index"
+  ],
+  "window": {
+    "navigationStyle": "custom"
+  },
+  "lazyCodeLoading": "requiredComponents"
+}

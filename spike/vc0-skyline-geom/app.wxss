@@ -1,0 +1,30 @@
+/* VC0 装置：给被测节点可辨识的固定几何（px 明确，便于与读数对账） */
+.probe-box {
+  width: 200px;
+  height: 60px;
+  background-color: #2a3f66;
+  margin-bottom: 8px;
+}
+.probe-text {
+  width: 160px;
+  height: 40px;
+  color: #ffffff;
+  font-size: 16px;
+  margin-bottom: 8px;
+}
+.probe-image {
+  width: 48px;
+  height: 48px;
+  margin-bottom: 8px;
+}
+.probe-scroll {
+  width: 240px;
+  height: 80px;
+  background-color: #1f2c44;
+  margin-bottom: 8px;
+}
+.page-root {
+  padding: 12px;
+  background-color: #14141c;
+  height: 900px;
+}

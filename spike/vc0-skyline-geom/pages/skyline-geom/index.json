@@ -1,0 +1,8 @@
+{
+  "renderer": "skyline",
+  "componentFramework": "glass-easel",
+  "disableScroll": true,
+  "usingComponents": {
+    "geom-probe": "/components/geom-probe/index"
+  }
+}

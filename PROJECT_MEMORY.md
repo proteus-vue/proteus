@@ -48,6 +48,46 @@
   只有**可复制代码块**里的引用才真正有害。
 · 破坏性验证：恢复 `p-card` → 红并精确报 `03-fluid-grid.md:31`；还原 → 575 md 全过。
 
+## 当前状态速览（最近一次更新：**2026-10-02·（二十七）· VC0 Skyline 几何 API 实测——结论 A（完全可用）**）★新会话以此为准
+### ★★★2026-10-02（二十七）· VC0（一致性校验线的"一票否决"卡）：Skyline 几何 API 实测
+
+**背景**：`docs/Proteus_一致性校验任务卡清单.md` 的 VC0（⭐一票否决）——微信社区反馈
+「Skyline 下 `boundingClientRect()` 全为 0」，与本仓 2026-09-08 记录的「`.in(scope)` 查不到
+组件内元素」互相冲突，**必须实测定论**，它决定 VC4-c（Skyline 探针）能不能走查询 API。
+
+**装置（最小变量：原生小程序，不经 Proteus 编译）**：`spike/vc0-skyline-geom/`——
+双页（Skyline / WebView）× 4 类节点（view/text/image/scroll-view）× **4 时机**
+（attached/ready/onReady/delayed500）× **3 查询形态**（exec 数组 / boundingClientRect(cb) /
+`wx.createSelectorQuery().in(inst)`）× 4 选择器形态（id/class/attr/tag）；
+结果写 `getApp().globalData` 账本 + console，wechatide `automation_evaluate` 回读。
+
+**★结论：A. 完全可用（工具侧）** —— 与社区「全为 0」**不复现**；与仓库 09-08 的
+「`.in()` 查不到」也**不复现**（那次很可能是属性选择器 + 作用域混用的复合因素）：
+· 4 类节点全可取（含 `scroll-view` 的 `scrollOffset`：scrollWidth/Height 也返回）
+· **全时机有值（连 attached 都有）** · **3 个基础库版本（3.0.0/3.4.6/3.6.6）行为一致**
+· 页面级与组件级（`scope.createSelectorQuery()` 与 `.in(inst)`）**全部可用**
+· **属性选择器 `[data-*]` 与 tag 选择器恒返 `null`**（不是 0——是"查不到"；这正是
+  "取不到几何"类反馈最可能的根因）· 选择器用 id/class 即可
+· **探针可注入性 = 允许**：页面/组件 JS 可写 `globalThis`，evaluate 同上下文回读成功
+  ⇒ VC4-c **不必**被迫走产出式探针；建议查询式（对账）+ 产出式（持续采集）两法并用
+
+**证据（落盘）**：报告 `docs/Proteus_Skyline几何API结论报告.md`；原始回执
+`spike/vc0-skyline-geom/results/*.txt`（含冷启动全量 15 条 / 三版本 / WebView 对照）；
+**破坏性验证**：`#g-view` 宽度 200→310px ⇒ 读数变 310（防硬编码假绿），已恢复。
+装置缺陷自证两条（首版页面级查询漏 `g-` 前缀 ⇒ 全 null；首版 onLoad 清账本会误删
+先于页面写入的组件 attached 记录 ⇒ 改 session 标记）——都已修并记入报告 §3。
+
+**环境备忘**：IDE 登录态过期是**已知阻塞**（`APPID_ERROR: 需要重新登录`，需用户扫码
+`wechatide -c <client> login`；本次已扫码恢复）。开窗后 `compile_wxml` 等工具不再需要登录。
+**切 libVersion 的正确姿势**：改 `project.config.json` → `debug_clear_cache --action
+cleanCompileCache` → **重开项目窗口** → 重开页面（不清缓存会跑旧编译产物）。
+
+**诚实边界**：真机（Android / iOS / 鸿蒙 OS 版）未实测——需微信扫码真机调试，留待有设备
+条件的会话；`selectAll()`/`fields()` 两形态未覆盖（卡片未要求）。上述缺失**不阻塞** VC4-c
+（两条路都已在工具侧验证；真机差异由产出式探针兜底）。
+
+**任务卡状态**：VC0 勾选完成（工具侧）；清单里 VC1-a/b/c 与 VC2 系成为下一批可开工项。
+
 ## 当前状态速览（最近一次更新：**2026-10-02·（二十六）· A/B 线第三批：冒泡链两路等价 + 4 个真缺陷修复**）★新会话以此为准
 ### ★★★2026-10-02（二十六）· A/B 线「祖先冒泡」收口（+ 判据抓出的 4 个真缺陷）
 
