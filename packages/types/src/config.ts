@@ -52,10 +52,39 @@ export interface ProteusConfig {
   }
   /** 是否启用 Skyline 渲染（仅 mp-weixin 生效） */
   skyline: boolean
-  /** ★Skyline 布局对齐（2026-08 真机实测：Skyline 节点默认 flex 布局——switch/slider/icon 等表单元素被 stretch 占满一行且居中，
-   *   与 WebView/Web 块级布局不一致——默认开启 defaultDisplayBlock（Skyline 官方对齐方案） */
+  /**
+   * ★Skyline 布局对齐（VC2-c：消费官方《Skyline WXSS 样式支持与差异》的 5 个对齐开关
+   *   ——版本要求见 docs/generated/end-support-matrix.json 的 profile.skylineAlignSwitches）。
+   *
+   * 各开关语义与最低版本（Android/iOS/基础库）：
+   *   · defaultDisplayBlock      默认 block 布局，对齐 WebView      8.0.34/8.0.36/2.31.1（**默认 true**）
+   *   · defaultContentBox        默认 content-box 盒模型，对齐 Web   8.0.42/8.0.42/3.1.0
+   *   · tagNameStyleIsolation    tag 选择器全局匹配，对齐 WebView    8.0.51/8.0.51/3.6.0
+   *   · enableScrollViewAutoSize scroll-view 自动撑开               8.0.54/8.0.54/3.7.2
+   *   · keyframeStyleIsolation   @keyframes 样式全局共享             8.0.57/8.0.57/3.8.0
+   *
+   * ★默认策略（产物中如实记录实际取值，见构建期 skyline-options 记录）：
+   *   只有 defaultDisplayBlock 默认 true（本仓 2026-08 真机验证过）；其余默认 **不注入**
+   *   （保守：未在本仓验证过的开关不由框架替项目做主，避免静默改变布局/样式语义）。
+   *   ★已知限制：tagNameStyleIsolation 在开发者工具校验被拒（本仓 2026-09 实测）——
+   *     显式开启会构建失败，属平台限制，注释保留。
+   */
   skylineLayout?: {
     defaultDisplayBlock?: boolean
+    defaultContentBox?: boolean
+    tagNameStyleIsolation?: boolean
+    enableScrollViewAutoSize?: boolean
+    keyframeStyleIsolation?: boolean
+  }
+  /**
+   * ★VC2-b：Profile 边界校验（编译期静态校验——「使用了某端不支持的样式」报错）。
+   *   数据源：《Skyline WXSS 样式支持与差异》官方属性表的纯枚举 formats（生成物见
+   *   `packages/css-compat/src/generated/skyline-boundary-rules.generated.ts`）。
+   *   默认 `'error'`（阻断构建——**Web 端构建同样执行**，卡片硬性要求：否则问题延迟到 App 端暴露）。
+   *   escape hatch：样式块内注释 `proteus-allow-profile: <理由>`（理由非空才生效；豁免计入统计）。
+   */
+  profileBoundary?: {
+    level?: 'error' | 'warn' | 'off'
   }
   /** ★G-22 柔性布局（fluid-layout-plan）：p-fluid 编译期 clamp 生成参数（构建期配置——编译需要，运行期由 app-config 覆盖 Web 端） */
   layout?: {

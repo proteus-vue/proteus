@@ -324,3 +324,21 @@ honor10 因 SELinux 不可用）· 热控读数 · 进程隔离冷启动 · PSS 
 | §4.5 舍入 | 架构收敛模型说明 §3.2 |
 | §2.4 用途 | 架构收敛模型说明 §6（三个风险指标） |
 | 长跑必要性 | 现有真机验收仅约 10 秒（Redmi 1231 帧 / 荣耀10 603 帧），长跑数据缺失 |
+
+---
+
+## 端支持度矩阵（单一事实源 · VC1/VC2-d）
+
+> **本节的判定不在此文档复制**——属性 × Web / Skyline / WebView 三端的支持度矩阵是**生成的**
+> （`docs/generated/end-support-matrix.json` + 同名 `.md`），由 `scripts/gen-end-support-matrix.mjs`
+> 从三个源工件（官方文档解析 / Playwright 实测 / 设备实测）产出，并有 `pnpm check:end-support`
+> 漂移门禁（接 CI + verify）。
+>
+> 本文档对该矩阵的用法：**编译期漏点统计的对照基准**。
+>
+> 与本文件的关系：**本文件的规则口径引用该矩阵**——矩阵里 `supportTier=conditional` 的属性
+> 对应本文的 L3"有条件可用"（需显式 opt-in）；`supportTier=unsupported` 对应 L5（编译期报错）。
+> 矩阵更新（官方文档/实测变化）⇒ 重新生成即可，**不需要改本文件**。
+>
+> 边界校验（VC2-b）的实现与豁免（`proteus-allow-profile`）见 `packages/css-compat/src/profile-boundary.ts`。
+

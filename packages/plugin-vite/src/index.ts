@@ -14,5 +14,7 @@ export { resolveComponentsRoot, componentsRootExists, COMPONENTS_PKG } from './r
 export type { GenRoutesOptions } from './gen-routes'
 export type { ProteusConfig } from './config'
 export { resolveProteusViteConfig } from './vite-config'
+export { profileBoundaryPlugin } from './profile-boundary-plugin'
+export type { ProfileBoundaryPluginOptions } from './profile-boundary-plugin'
 export type { ProteusViteContext, ProteusViteResult } from './vite-config'
 export type { PluginOptions } from './plugin'
