@@ -27,6 +27,8 @@
       "@proteus-vue/contracts/style": ["packages/contracts/src/style.ts"],
       // ★LY0：层级契约子路径（compiler/layer-safety 从这里取映射表——与 style 同款单列）
       "@proteus-vue/contracts/layers": ["packages/contracts/src/layers.ts"],
+      // ★SC2：滚动容器契约子路径
+      "@proteus-vue/contracts/scroll": ["packages/contracts/src/scroll.ts"],
       "@proteus-vue/contracts": ["packages/contracts/src/index.ts"],
       "@proteus-vue/runtime": ["packages/runtime/src/index.ts"],
       "@proteus-vue/runtime/style-safety": ["packages/runtime/src/style-safety/index.ts"],

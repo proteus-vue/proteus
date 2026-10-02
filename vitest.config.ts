@@ -52,6 +52,8 @@ export default defineConfig({
       { find: '@proteus-vue/contracts/style', replacement: fileURLToPath(new URL('./packages/contracts/src/style.ts', import.meta.url)) },
       // ★LY0（2026-10-02）：层级契约子路径（compiler/layer-safety 引用——与 tsconfig paths 两处都配）
       { find: '@proteus-vue/contracts/layers', replacement: fileURLToPath(new URL('./packages/contracts/src/layers.ts', import.meta.url)) },
+      // ★SC2：滚动容器契约（compiler/scroll-safety 引用）
+      { find: '@proteus-vue/contracts/scroll', replacement: fileURLToPath(new URL('./packages/contracts/src/scroll.ts', import.meta.url)) },
       { find: '@proteus-vue/contracts', replacement: fileURLToPath(new URL('./packages/contracts/src/index.ts', import.meta.url)) },
       // ★子路径 alias 必须在父路径之前（vite alias 前缀匹配：@proteus-vue/runtime 会吞掉 /style-safety 后缀）
       { find: '@proteus-vue/runtime/style-safety', replacement: fileURLToPath(new URL('./packages/runtime/src/style-safety/index.ts', import.meta.url)) },

@@ -8,6 +8,8 @@ import { transformStyleToWxss } from './style'
 import { assertValidResult, CompilerError } from './validate'
 // ★LY1（2026-10-02）：页面层级语义校验（四层语义 + 跨容器强制——规范 §3.5/§4.1）
 import { validateLayerUsage } from './layer-safety'
+// ★SC2（2026-10-02）：可停靠滚动容器的声明面校验（封闭集 + 五条硬约束——方案 §6.2/§6.3）
+import { validateScrollUsage } from './scroll-safety'
 import { createTrace } from './trace'
 // ★卡 C4：编译期漏点计数器（只归纳既有诊断与规则 ID，不新增判断——见其文件头）
 import { GapCounter } from './gap-counter'
@@ -175,6 +177,25 @@ export function compileVueSfc(source: string, options: CompileOptions = {}): Com
       .join('\n')
     throw new CompilerError(f, `页面层级语义校验失败（${layerViolations.length} 条）\n${detail}`)
   }
+  // ★★SC2（2026-10-02 · 可停靠滚动容器方案 §6.2）：声明面硬校验。
+  //   · `SC004`（overscroll.mode='system'）是**警告级**——方案 §3.4 明确"警告 + 登记允许差异清单"，
+  //     不阻断构建（它是有意的取舍，不是错误）；
+  //   · 其余（SC001 档位 / SC002 协商必填 / SC003 initial / SC005 逃生口）为 **error 级**——
+  //     开放这些会让跨端行为发散（与"禁止裸 z-index"同理）。
+  const scrollViolations = validateScrollUsage(tpl)
+  const scrollErrors = scrollViolations.filter((v) => v.code !== 'SC004')
+  // ★警告级（SC004）：先收集，稍后并入 `warnings` 汇总（此时 tplResult 尚未创建）——
+  //   GapCounter 会自动归类（本仓"不静默"纪律）
+  const scrollWarnings = scrollViolations
+    .filter((x) => x.code === 'SC004')
+    .map((v) => `[${v.code}] ${v.message}（修法：${v.hint}）`)
+  if (scrollErrors.length > 0) {
+    const f = options.filename ?? 'anonymous.vue'
+    const detail = scrollErrors
+      .map((v) => `  [${v.code}] ${v.message}${v.line ? `（第 ${v.line} 行）` : ''}\n        规则：${v.rule}\n        修法：${v.hint}`)
+      .join('\n')
+    throw new CompilerError(f, `可停靠滚动容器声明校验失败（${scrollErrors.length} 条）\n${detail}`)
+  }
   const setup = applyPlatformMacros(descriptor.scriptSetup?.content ?? descriptor.script?.content ?? '', platform, 'code')
   // ★15-page-scroll-container 批次2：页面滚动 API 桥接——检测页面声明的滚动生命周期（传给 template 绑定 scroll-view 事件）
   const pageScrollHooks = {
@@ -272,7 +293,7 @@ export function compileVueSfc(source: string, options: CompileOptions = {}): Com
   const pageScrollCss = tplResult.pageScrollWrapped ? '\n.proteus-page-scroll { height: 100vh; }\n' : ''
   const finalWxss = `${wxss}${pageScrollCss}`
 
-  const warnings = [...tplResult.warnings, ...scriptResult.warnings, ...styleLoadWarnings]
+  const warnings = [...tplResult.warnings, ...scriptResult.warnings, ...styleLoadWarnings, ...scrollWarnings]
   const trace = [...tplTrace.events, ...scriptTrace.events, ...styleTrace.events]
 
   // ★★卡 C4：**编译期漏点计数器**（记录不阻断——埋点清单 §2.1 明确要求）

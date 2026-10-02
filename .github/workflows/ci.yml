@@ -100,6 +100,9 @@ jobs:
       - name: 页面层级语义（LY1 · 禁裸 z-index / Mask 单独用 / Popout·Mask 非根容器——WeUI 四层语义）
         run: pnpm run check:layers
 
+      - name: 可停靠滚动容器（SC2 · 档位≤3递增 / nested 必填 / initial∈detents / 无逃生口）
+        run: pnpm run check:scroll-safety
+
       - name: SFC 五端报告（含**留白 16±0.5 硬断言** + 双口径差异率透明化——夹具口径不遮饰）
         run: pnpm run check:consistency-sfc
 
