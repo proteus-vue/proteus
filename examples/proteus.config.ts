@@ -44,9 +44,12 @@ const config: ProteusConfig = {
         scaleDown: 'node_modules/@proteus-vue/router/src/presets/scaleDown.ts',
       },
     },
-    // ★决策 #113 集中式 meta：页面零 <route> 声明也能获得 meta（精确路径 > 目录前缀 > 默认）
-    // ★约定式路由收口（决策 #112/#113）：path/name 从文件路径推导，meta 全部集中在此（<route> 块仅剩 params 等特殊声明）
-    meta: {
+    // ★★★页面配置（2026-10-02 统一路由页面管理 · `pages.json` 等价物）：
+    //   一个入口管全端路由页面——`pages/**/*.vue` 由目录约定式发现（不在此重复声明"有哪些页"），
+    //   每页的配置集中在此（标题 / isTab / 转场 / 登录与权限 / MP 页面窗口扩展）。
+    //   匹配规则：**精确页面路径 > 目录前缀 > 默认**（决策 #113）。
+    //   ★字段名 `meta` → **`pages`**（旧名仍兼容；两份都写时 pages 胜并告警）。
+    pages: {
       // 主包页面（pageRel：pages/ 去前缀；index.vue → 目录路径归并）
       'index': { title: '首页', isTab: true },
       'mine': { title: '我的', isTab: true },

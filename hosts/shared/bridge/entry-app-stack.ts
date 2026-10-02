@@ -526,8 +526,8 @@ export function __proteusRouterApiProbeRead(): string {
 // ★★★（2026-10-02 · 项目驱动）**从项目路由配置跑 App 导航**（非夹具）
 //
 // 与上面场景 A–F 的分界：那些用 `buildNodes(fans)` 合成屏池（**压测装置**）；
-// 本入口读 `examples/router/navigation.generated.ts`（gen-routes 从 pages/**/*.vue +
-// proteus.config.ts 的 router.meta 产出）——**产品路径**。
+// 本入口读 `examples/router/auto-routes.ts`（**全端统一导航产物**：gen-routes 从 pages/**/*.vue +
+// proteus.config.ts 的 router.pages 产出）——**产品路径**。
 // ⇒ 一个 bundle 两个入口：`__proteusAppStackRun`（压测，装置形态）+
 //   `__proteusAppProjectRun`（项目驱动，产品形态）。
 // ══════════════════════════════════════════════════════════════════

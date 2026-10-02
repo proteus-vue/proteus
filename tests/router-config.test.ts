@@ -23,9 +23,6 @@ describe('#492 resolveRouterConfig（生效路由配置解析）', () => {
     })
     expect(duplicates).toEqual([])
     expect(router.routesOutput).toBe('router/auto-routes.ts')
-    // ★2026-10-02：App 导航注册表路径**缺省派生**（同目录 navigation.generated.ts）
-    //   ——项目驱动落地的配置面（App 屏注册表随构建自动产出，不再夹具手写）
-    expect(router.appNavigationOutput).toBe('router/navigation.generated.ts')
     expect(router.subPackages).toEqual([{ root: 'subpackages/order', name: 'order' }])
     expect(router.customRoute).toEqual({ registerPresets: false, builders: { halfScreen: 'a.ts' } })
     expect(router.meta).toEqual({ index: { title: '首页', isTab: true } })
@@ -207,22 +204,5 @@ describe('#492 配置迁移 v2→v3（顶层收编 router 段）', () => {
     expect((config as Record<string, unknown>).router).toBeUndefined()
   })
 
-  it('★★appNavigationOutput（2026-10-02 项目驱动）：显式声明 / 缺省派生 / 随 routesOutput 关闭', () => {
-    // ① 显式声明优先
-    const a = resolveRouterConfig({ router: { routesOutput: 'src/router/auto-routes.ts', appNavigationOutput: 'src/router/nav.ts' } })
-    expect(a.router.appNavigationOutput).toBe('src/router/nav.ts')
-    // ② 缺省派生（同目录）；默认 routesOutput = src/router/auto-routes.ts ⇒ src/router/navigation.generated.ts
-    const b = resolveRouterConfig({})
-    expect(b.router.appNavigationOutput).toBe('src/router/navigation.generated.ts')
-    // ③ 与 routesOutput 同目录派生（自定义目录）
-    const c = resolveRouterConfig({ router: { routesOutput: 'app/routes/x.ts' } })
-    expect(c.router.appNavigationOutput).toBe('app/routes/navigation.generated.ts')
-    // ④ routesOutput 为空（工程自带路由）⇒ App 注册表也关闭（不产出无主产物）
-    const d = resolveRouterConfig({ router: { routesOutput: '' } })
-    expect(d.router.appNavigationOutput).toBe('')
-    // ⑤ 显式关闭
-    const e = resolveRouterConfig({ router: { routesOutput: 'r/a.ts', appNavigationOutput: '' } })
-    expect(e.router.appNavigationOutput).toBe('')
-  })
 
 })

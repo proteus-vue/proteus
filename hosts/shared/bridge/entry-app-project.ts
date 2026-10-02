@@ -4,8 +4,9 @@
 // 【为什么单独一个入口（本仓反复出现的形态）】
 //   `entry-app-stack.ts` 的场景 A–D 需要"深栈/冻结"这类**可调规模**的压测输入，
 //   它自己造了 `buildNodes(fans)`（合成屏池）——那是**压测装置**，不是产品路径。
-//   本入口走**产品路径**：屏注册表直接来自 projects 的 `router/navigation.generated.ts`
-//   （由 `gen-routes` 从 `pages/**/*.vue` + `proteus.config.ts` 的 `router.meta` 产出）。
+//   本入口走**产品路径**：屏注册表直接来自项目的**统一导航产物** `router/auto-routes.ts`
+//   （由 `gen-routes` 从 `pages/**/*.vue` + `proteus.config.ts` 的 `router.pages` 产出；
+//    单一产物：同一文件携带 routes / screens / screenNames / tabNames / 类型表）。
 //
 // 【本入口证明什么（与压测装置的分界）】
 //   ① **项目 → App 的链路是通的**：改一个页面/加一条 `router.meta` 里的 transition
@@ -20,10 +21,10 @@ import { createAppStack } from '@proteus-vue/router/app-stack'
 import { createRouter } from '@proteus-vue/router/app-route'
 import { createAppNavigation } from '@proteus-vue/render-backend/app-navigation'
 
-// ★项目产物（gen-routes 生成）：屏注册表 + 路由名数组 + tab 名单
-//   —— 这两个产物与 Web/MP 的 `auto-routes.ts` 来自**同一棵路由树**（gen-routes 一次产出）。
-import { screens as projectScreens, screenNames, tabNames } from '../../../examples/router/navigation.generated'
-import { routes as projectRoutes } from '../../../examples/router/auto-routes'
+// ★项目产物（gen-routes 生成）：**一个文件承载三份投影**（2026-10-02 统一后）
+//   —— `routes`（Web/MP）· `screens`/`screenNames`/`tabNames`（App）· `RouteParamsByName` 类型表
+//   全部来自 `auto-routes.ts`（同一棵路由树、同一次产出）——不再有第二份导航注册表。
+import { routes as projectRoutes, screens as projectScreens, screenNames, tabNames } from '../../../examples/router/auto-routes'
 
 // ★诚实边界：这两个产物由 `gen-routes` 生成（`proteus build` 时）。
 //   若仓库是**干净克隆且未构建过 examples**，本文件不存在 ⇒ 构建期报错（**不静默**）——

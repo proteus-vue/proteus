@@ -355,8 +355,8 @@ def main() -> int:
         )
 
     # ── ⑨★★（2026-10-02 · 项目驱动落地）：**从项目路由配置跑 App 导航**（非夹具）──
-    #   与 ⑦/⑧ 的分界：⑦/⑧ 用合成屏池（压测/装配装置）；本组读 `examples/router/navigation.generated.ts`
-    #   （gen-routes 从 pages/**/*.vue + proteus.config.ts 的 router.meta 产出）⇒
+    #   与 ⑦/⑧ 的分界：⑦/⑧ 用合成屏池（压测/装配装置）；本组读 `examples/router/auto-routes.ts`（全端统一导航产物）
+    #   （gen-routes 从 pages/**/*.vue + proteus.config.ts 的 router.pages 产出）⇒
     #   证明"项目配置 → App 屏注册表 → 导航语义"这条**产品路径**在端上可跑。
     #   ★字段缺失（旧 bundle）⇒ 如实跳过并提示（不假绿）。
     # ★字段名容错（本仓实测：iOS 侧曾产出 `p_ok` 而 Android 是 `p_run_ok`——两端现已统一，

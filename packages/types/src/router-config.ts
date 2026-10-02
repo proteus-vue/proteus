@@ -1,7 +1,12 @@
 // packages/types/src/router-config.ts
 // ★#492 项目级路由管理：路由相关配置统一收口 router 段（routesOutput/subPackages/customRoute 从顶层收编，
-//   与既有 tabBar/meta 合并成唯一路由配置面）。顶层三字段保留为向后兼容别名（router.* 优先），
+//   与 tabBar/pages 合并成**唯一路由配置面**）。顶层三字段保留为向后兼容别名（router.* 优先），
 //   消费方（gen-routes / plugin app 骨架 / bundle-report）一律经本解析器取「生效路由配置」。
+// ★★2026-10-02 统一路由页面管理（用户反馈「两份 generated 太乱，应当只有一个路由管理入口」）：
+//   · 页面配置首选名 **`router.pages`**（`pages.json` 等价物，一个入口管全端页面）；
+//     旧名 `router.meta` 保留为同义别名（双写时 pages 胜并登记 duplicate）。
+//   · **单一产物**：gen-routes 只生成 `routesOutput` 一个文件（routes + screens + 类型三投影），
+//     原先单独的 App 导航注册表产物（`appNavigationOutput`）已废弃删除。
 // 定位：纯函数零依赖（build 期消费——gen-routes/plugin 均在 node 侧）；MP 产物安全风格（无 ?./??/对象展开）
 import type { RouteMeta } from './router-types'
 
@@ -21,14 +26,6 @@ export interface CustomRouteConfig {
 export interface RouterSection {
   /** 路由表产物路径（编译期 gen-routes 生成；缺省 src/router/auto-routes.ts） */
   routesOutput?: string
-  /**
-   * ★App 端导航注册表产物路径（2026-10-02 · 项目驱动落地）：
-   *   gen-routes 从**同一棵路由树**（pages/**\/*.vue + router.meta）产出 App 屏注册表
-   *   （`AppScreenSpec` 记录），供 iOS/Android 宿主的 `createAppStack` / `createAppNavigation` 直接消费
-   *   ——不再由夹具手写屏幕数组。**缺省 = 与 routesOutput 同目录的 navigation.generated.ts**；
-   *   传空串显式关闭；routesOutput 为空（工程自带路由）时本项默认也为空。
-   */
-  appNavigationOutput?: string
   /** 分包配置（各分包独立扫描树） */
   subPackages?: Array<SubPackageDecl>
   /** wx.router 自定义路由（转场 builders） */
@@ -39,18 +36,29 @@ export interface RouterSection {
     selectedColor?: string
     list: Array<{ name: string; text: string; icon?: string }>
   }
-  /** 集中式 meta（决策 #113）：精确路径 > 目录前缀 > 默认 */
+  /**
+   * ★★★**页面配置**（2026-10-02 · 统一路由页面管理 —— `pages.json` 等价物）：
+   *   每页的配置集中声明在此（标题 / isTab / 转场 / 登录与权限 / MP 页面窗口扩展 …），
+   *   是"一个入口管理全端路由页面"的**核心字段**（对齐 uni-app：一个 pages.json 管全端）。
+   *   匹配规则（决策 #113）：**精确页面路径 > 目录前缀 > 默认**；
+   *   页面出现次序由 pages/ 目录扫描（约定式）决定——配置不重复声明"有哪些页"。
+   *   取值见 `RouteMeta`（`title`/`isTab`/`transition`/`requiresAuth`/`permissions`/`redirectTo`/
+   *   `parent`/`pageJson` …）。
+   */
+  pages?: Record<string, RouteMeta>
+  /** 页面配置的**旧名**（与 `pages` 同义；两份都写时 `pages` 胜并登记 duplicate）。建议迁移到 `pages`。 */
   meta?: Record<string, RouteMeta>
 }
 
 /** 生效路由配置（解析产出——消费方只读这个形态） */
 export interface EffectiveRouterConfig {
   routesOutput: string
-  /** App 端导航注册表产物路径（缺省=与 routesOutput 同目录；空串=关闭） */
-  appNavigationOutput: string
   subPackages: Array<SubPackageDecl>
   customRoute: { registerPresets: boolean; builders: Record<string, string> }
   tabBar?: RouterSection['tabBar']
+  /** ★页面配置（pages.json 等价物）——`router.pages` 的生效值 */
+  pages?: Record<string, RouteMeta>
+  /** ★`pages` 的旧名别名（同一对象；仅向后兼容消费方，新代码用 `pages`） */
   meta?: Record<string, RouteMeta>
 }
 
@@ -85,14 +93,13 @@ export function resolveRouterConfig(config: Record<string, unknown>): { router: 
     routesOutput = DEFAULT_ROUTES_OUTPUT
   }
 
-  let appNavigationOutput: string
-  if (section.appNavigationOutput !== undefined) {
-    appNavigationOutput = section.appNavigationOutput
-  } else if (routesOutput && !/^\s*$/.test(routesOutput)) {
-    // ★缺省派生（不引 node:path——本文件纯零依赖）：同目录 + navigation.generated.ts
-    appNavigationOutput = routesOutput.replace(/[^/]*$/, 'navigation.generated.ts')
+  // ★★页面配置：`pages`（首选）与 `meta`（旧名）——同义；双写时 pages 胜并登记 duplicate
+  let pages: Record<string, RouteMeta> | undefined
+  if (section.pages !== undefined) {
+    pages = section.pages
+    if (section.meta !== undefined) duplicates.push('pages/meta')
   } else {
-    appNavigationOutput = ''
+    pages = section.meta
   }
 
   let subPackages: Array<SubPackageDecl>
@@ -126,11 +133,12 @@ export function resolveRouterConfig(config: Record<string, unknown>): { router: 
   return {
     router: {
       routesOutput,
-      appNavigationOutput,
       subPackages,
       customRoute,
       tabBar: section.tabBar,
-      meta: section.meta,
+      // ★pages 与 meta 指向**同一对象**（旧消费者读 meta 不破；新代码读 pages）
+      pages,
+      meta: pages,
     },
     duplicates,
   }

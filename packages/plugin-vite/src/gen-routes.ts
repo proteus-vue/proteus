@@ -126,6 +126,21 @@ export function runGenRoutes(options: GenRoutesOptions): void {
     return rc.subPackages.some((sp) => (sp.name ?? path.basename(sp.root)) === chunk) ? chunk : undefined
   }
 
+/**
+ * ★★合并页面窗口扩展（pageJson）：**集中声明打底 → 页内声明覆盖**（页内更近，胜）。
+ * @param fromConfig `router.pages[路径].pageJson`（可经目录前缀继承）
+ * @param fromPage   页内 `<route>` 块的 pageJson
+ * ★语义：浅合并（页面窗口字段如 `backgroundColorContent`/`navigationStyle` 都是标量或短数组，
+ *   深合并没有意义且更难预测——与 `mergeMeta` 的"嵌套对象深合"不同，这里刻意保持浅）。
+ */
+function mergePageJson(
+  fromConfig: Record<string, unknown> | undefined,
+  fromPage: Record<string, unknown> | undefined,
+): Record<string, unknown> | undefined {
+  if (!fromConfig && !fromPage) return undefined
+  return { ...(fromConfig ?? {}), ...(fromPage ?? {}) }
+}
+
 /** 扫描到的页面 */
 interface PageInfo {
   /** .vue 文件绝对路径 */
@@ -208,7 +223,8 @@ function resolveConfigMeta(configMeta: Record<string, RouteMeta> | undefined, pa
 /** 扫描页面集合（主包 + 分包）——★决策 #113：全页面收录（无 <route> 块零声明）+ config 集中 meta 注入 */
 function scanPages(): PageInfo[] {
   const pages: PageInfo[] = []
-  const configMeta = rc.meta
+  // ★2026-10-02：页面配置首选名 `router.pages`（pages.json 等价物）；`router.meta` 为旧名别名
+  const configMeta = rc.pages ?? rc.meta
 
   // ★平台变体·页面（第 2 层，2026-09-13）：runGenRoutes 仅服务 MP 构建（OUT_DIR=dist/mp-weixin），
   //   故按 'mp' 过滤：他端变体（page.web.vue）不收录，且被变体覆盖的基准（page.vue + page.mp.vue）只收变体。
@@ -224,14 +240,20 @@ function scanPages(): PageInfo[] {
     const relSrc = path.relative(APP_DIR, splitVariant(b.componentPath).base).replace(/\\/g, '/').replace(/\.vue$/, '')
     const pageRel = relSrc.replace(/^pages\//, '')
     trace(`[route] ${relSrc} 来源登记（${b.loc.file}:${b.loc.line}，route/scan）`)
+    // ★★页面窗口扩展（pageJson）也支持**集中声明**（2026-10-02 统一路由页面管理）：
+    //   来源二选一或叠加——`router.pages[path].pageJson`（集中，目录前缀可继承）与
+    //   页内 `<route>` 块的 pageJson（就近）。合并序：集中打底 → 页内覆盖（页内更近，胜）。
+    //   ★为什么必须有：此前 pageJson **只能**写在页内 ⇒ 不满足"页面配置统一到路由管理"。
+    const resolvedMeta = resolveConfigMeta(configMeta, pageRel)
+    const metaPageJson = (resolvedMeta as { pageJson?: Record<string, unknown> } | undefined)?.pageJson
     pages.push({
       file: b.componentPath,
       relSrc,
       mpPath: relSrc,
       // ★集中 meta：config（精确/目录前缀）→ 页面 <route> 覆盖（mergeMeta 页面胜）
-      meta: mergeMeta(resolveConfigMeta(configMeta, pageRel), b.meta),
+      meta: mergeMeta(resolvedMeta, b.meta),
       params: b.params,
-      pageJson: b.pageJson,
+      pageJson: mergePageJson(metaPageJson, b.pageJson),
       customRouteKeyName: b.customRouteKeyName,
       webOnly: b.webOnly,
       platforms: b.platforms,
@@ -249,15 +271,21 @@ function scanPages(): PageInfo[] {
       const relSrc = path.relative(APP_DIR, basePath).replace(/\\/g, '/').replace(/\.vue$/, '')
       const relInSub = path.relative(spRootAbs, basePath).replace(/\\/g, '/').replace(/\.vue$/, '')
       const pageRel = relInSub.replace(/^pages\//, '')
+      const resolvedMetaSub = resolveConfigMeta(configMeta, pageRel)
+
+      
       pages.push({
         file: b.componentPath,
         relSrc,
         mpPath: relSrc,
         subPackage: spName,
         relInSub,
-        meta: mergeMeta(resolveConfigMeta(configMeta, pageRel), b.meta),
+        meta: mergeMeta(resolvedMetaSub, b.meta),
         params: b.params,
-        pageJson: b.pageJson,
+        pageJson: mergePageJson(
+          (resolvedMetaSub as { pageJson?: Record<string, unknown> } | undefined)?.pageJson,
+          b.pageJson,
+        ),
         customRouteKeyName: b.customRouteKeyName,
         chunk: b.chunk,
         webOnly: b.webOnly,
@@ -404,23 +432,45 @@ function formatRoute(r: RouteRecord): string {
   return `  { ${parts.join(', ')} },`
 }
 
-/** 生成 auto-routes.ts（应用侧路由表，路径由 proteus.config.ts 的 routesOutput 决定）
- *  ★`routesOutput: ''` = **显式关闭路由表生成**（2026-09-19）：某些工程（如官网文档站）
- *    有**自己的路由机制**（vue-router 配置），不需要框架的应用侧路由表；此前 web 目标跳过
- *    gen-routes 时看不出问题，`webOnly` 修复后这些工程会被**误生成**一个未使用的
- *    `auto-routes.ts`——它还 import `@proteus-vue/router/types`，而这类工程并不依赖该包
- *    → 类型检查直接失败（CI 实测：官网 build `Cannot find module '@proteus-vue/router/types'`）。
- *    ⇒ 提供显式 opt-out，而不是让 CLI 去猜工程是否用框架路由。 */
+/**
+ * 生成 auto-routes.ts（**全端统一导航产物**，路径由 proteus.config.ts 的 routesOutput 决定）
+ *
+ * ★★单一产物原则（2026-10-02 · 用户反馈「有原来的路由表，还有 App 端导航注册表，太乱」）：
+ *   本文件是**唯一**的生成物，一次承载三份投影——改页面/加配置只需认它一个：
+ *     ① `routes`：Web/MP 的 `createRouter(routes)` 路由表（含 name/path/meta/subPackage/platforms）
+ *     ② `screens` / `screenNames` / `tabNames`：**App 端投影**（`createAppStack({ screens })`）
+ *        ——与 ① **同一棵路由树**（gen-routes 一次产出），不存在"第二份导航注册表"
+ *     ③ `RouteParamsByName`：按路由名的参数类型表（类型提示全链路）
+ *   ★本项目曾把 ② 单独写成 `navigation.generated.ts`；用户指出「跨端框架应当只有一个路由管理入口」
+ *     ⇒ 已合并回本文件（`router.appNavigationOutput` 配置项随之废弃）。
+ *
+ * ★`routesOutput: ''` = **显式关闭**（工程自带路由机制，如官网文档站）：
+ *   这类工程并不依赖 @proteus-vue/router，被误生成 auto-routes.ts（它 import 类型包）会让
+ *   类型检查失败 ⇒ 提供显式 opt-out，而不是让 CLI 去猜工程是否用框架路由。
+ */
 function writeAutoRoutes(routes: RouteRecord[]): void {
   if (!rc.routesOutput) {
     console.log('[gen-routes] routesOutput 为空 → 按配置**跳过**应用侧路由表生成（工程自带路由机制）')
     return
   }
+  // ★App 端投影（与 routes 同源；平台门控：webOnly / platforms 白名单不含 native 的页面剔除）
+  const appRoutes = routes.filter((r) => {
+    if (r.webOnly) return false
+    if (Array.isArray(r.platforms) && r.platforms.length > 0 && !r.platforms.includes('native')) return false
+    return true
+  })
+  const screens = screensFromRoutes(appRoutes as never) // ★复用 app-adapter 的同一转换（铁律 #9 同源）
+  const screenNames = appRoutes.map((r) => r.name)
+  const tabNames = appRoutes.filter((r) => r.meta?.isTab).map((r) => r.name)
+
   const lines = [
-    `// ${rc.routesOutput} —— 应用侧路由表（AUTO-GENERATED by scripts/gen-routes.ts，勿手动编辑）`,
-    '// ★拆包步骤 4：auto-routes 随应用存放（工厂化后路由表由应用注入 createRouter），不再属于 @proteus-vue/router 包',
+    `// ${rc.routesOutput} —— 全端统一导航产物（AUTO-GENERATED by scripts/gen-routes.ts，勿手动编辑）`,
+    '// ★三份投影同源（同一棵路由树）：routes（Web/MP）· screens（App）· RouteParamsByName（类型提示）',
+    '// 来源：pages/**/*.vue（约定式页面发现）+ proteus.config.ts 的 router.pages（每页配置）',
     "import type { RouteRecord } from '@proteus-vue/router/types'",
+    "import type { AppScreenSpec } from '@proteus-vue/router/app-stack'",
     '',
+    '// ─── ① 全端页面清单（Web/MP：createRouter(routes)）───',
     'export const routes: RouteRecord[] = [',
     ...routes.map(formatRoute),
     ']',
@@ -428,10 +478,20 @@ function writeAutoRoutes(routes: RouteRecord[]): void {
     "export const tabRoutes: RouteRecord[] = routes.filter(r => r.meta?.isTab)",
     "export const routeMap: Record<string, RouteRecord> = routes.reduce((m, r) => { m[r.name] = r; return m }, {} as Record<string, RouteRecord>)",
     '',
+    '// ─── ② App 端投影（App：createAppStack({ screens }) / createAppNavigation）───',
+    '//     与 ① 同源；平台门控已应用（webOnly / platforms 不含 native 的页面已剔除）',
+    `export const screens: Record<string, AppScreenSpec> = ${JSON.stringify(screens, null, 2)}`,
+    '',
+    '/** 路由名数组（App 深栈/压测按它循环取屏——顺序与 routes 一致） */',
+    `export const screenNames: string[] = ${JSON.stringify(screenNames)}`,
+    '',
+    '/** tab 根屏（meta.isTab）—— App 端 tab 语义（switchTab/reset）的合法目标 */',
+    `export const tabNames: string[] = ${JSON.stringify(tabNames)}`,
+    '',
   ]
-  // 类型提示全链路（步骤 1）：按路由名生成参数类型表（<route>.params 声明，未声明为 {}）
+  // ③ 类型提示全链路：按路由名生成参数类型表（<route>.params 声明，未声明为 {}）
   // ★工厂化：改为模块扩充注入 @proteus-vue/router/types 的 RouteParamsByName 基接口（vue-router 同款模式）
-  lines.push('// ★ 类型提示：按路由名索引的参数类型表（来源：<route> 块 params 声明）')
+  lines.push('// ─── ③ 类型提示：按路由名索引的参数类型表（来源：<route> 块 params 声明）───')
   lines.push("declare module '@proteus-vue/router/types' {")
   lines.push('  interface RouteParamsByName {')
   for (const r of routes) {
@@ -446,59 +506,9 @@ function writeAutoRoutes(routes: RouteRecord[]): void {
   const outFile = path.join(ROOT, rc.routesOutput)
   fs.mkdirSync(path.dirname(outFile), { recursive: true })
   fs.writeFileSync(outFile, lines.join('\n'))
-  console.log(`[gen-routes] 已生成 ${path.relative(ROOT, outFile)}（${routes.length} 条路由 + RouteParamsByName）`)
-}
-
-/**
- * ★★写入 **App 端导航注册表**（2026-10-02 · 项目驱动落地 —— 消灭"夹具手写屏幕数组"）
- *
- * 【为什么必须有（本轮实测的断链）】`codegen/app.ts` 的 `generateAppScreens` 全仓**零调用**：
- *   Web/MP 有 `auto-routes.ts`，而 App（iOS/Android）**拿不到项目路由**——
- *   此前只有夹具在 `hosts/shared/bridge/entry-app-stack.ts` 里手搓 `buildNodes()` 才能跑。
- *   本函数把 App 的屏注册表纳入 gen-routes 常规产出：从**同一棵路由树**（pages/**\/*.vue +
- *   router.meta）产出 `AppScreenSpec` 记录 ⇒ 改一个页面/加一条 transition，App 端随构建自动更新。
- *
- * 【产物形态】纯数据 TS（`screens` / `screenNames` / `tabNames`）——不含 component 动态导入：
- *   App 宿主的屏内容由各自的 Vapor/自绘管线负责，路由层只需要 name/path/transition/budgetNodes。
- *
- * 【过滤（项目语义）】`webOnly` 页面与 `platforms` 白名单不含 `native` 的页面**不入 App 注册表**
- *   ——与 Web/MP 端各按自己平台取子集同构。
- */
-function writeAppNavigation(routes: RouteRecord[]): void {
-  const out = rc.appNavigationOutput
-  if (!out) {
-    console.log('[gen-routes] appNavigationOutput 为空 → 跳过 App 端导航注册表生成')
-    return
-  }
-  // 平台门控（与 auto-routes 的 platforms 声明同源）
-  const appRoutes = routes.filter((r) => {
-    if (r.webOnly) return false
-    if (Array.isArray(r.platforms) && r.platforms.length > 0 && !r.platforms.includes('native')) return false
-    return true
-  })
-  const screens = screensFromRoutes(appRoutes as never)  // ★同一转换（app-adapter）——不是第二份实现
-  const names = appRoutes.map((r) => r.name)
-  const tabs = appRoutes.filter((r) => r.meta?.isTab).map((r) => r.name)
-  const lines = [
-    `// ${out} —— App 端导航注册表（AUTO-GENERATED by scripts/gen-routes.ts，勿手动编辑）`,
-    '// ★项目驱动：来源 = pages/**/*.vue + proteus.config.ts 的 router.meta（与 auto-routes 同一棵树）',
-    '// 消费：createAppStack({ screens }) / createAppNavigation({ invoke, screens })',
-    "import type { AppScreenSpec } from '@proteus-vue/router/app-stack'",
-    '',
-    `export const screens: Record<string, AppScreenSpec> = ${JSON.stringify(screens, null, 2)}`,
-    '',
-    '/** 路由名数组（顺序与 auto-routes 一致——深栈/压测按它循环取屏） */',
-    `export const screenNames: string[] = ${JSON.stringify(names)}`,
-    '',
-    '/** tab 根屏（meta.isTab）—— App 端 tab 语义（switchTab/reset）的合法目标 */',
-    `export const tabNames: string[] = ${JSON.stringify(tabs)}`,
-    '',
-  ]
-  const outFile = path.join(ROOT, out)
-  fs.mkdirSync(path.dirname(outFile), { recursive: true })
-  fs.writeFileSync(outFile, lines.join('\n'))
   console.log(
-    `[gen-routes] 已生成 ${path.relative(ROOT, outFile)}（App 导航注册表：${names.length} 屏 · ${tabs.length} tab）`,
+    `[gen-routes] 已生成 ${path.relative(ROOT, outFile)}（全端统一导航产物：${routes.length} 路由 · ` +
+      `${screenNames.length} App 屏 · ${tabNames.length} tab + RouteParamsByName）`,
   )
 }
 
@@ -914,14 +924,11 @@ function writeProjectConfig(): void {
   // ★webOnly：只写双端共用的应用侧路由表，跳过 MP 专属产物（且不清理 dist/mp-weixin）
   if (options.webOnly) {
     writeAutoRoutes(routes)
-    // ★App 注册表与路由表**同源同批**（webOnly 目标下也一样——App 产物只依赖路由树，不依赖 MP 产物）
-    writeAppNavigation(routes)
     console.log(`[gen-routes] （web 目标）已更新应用侧路由表：共 ${pages.length} 个页面`)
     return
   }
   fs.rmSync(OUT_DIR, { recursive: true, force: true }) // 清理陈旧产物
   writeAutoRoutes(routes)
-  writeAppNavigation(routes)
   writeAppJson(pages, routes)
   writePageJsons(pages)
   // ★2026-09-20（F-30 连带形态根治）：组件**声明与本体同源**——

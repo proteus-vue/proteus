@@ -995,7 +995,7 @@ public class MainActivity extends Activity {
             }
             // ★★★（2026-10-02 · 项目驱动落地）第二入口：**从项目路由配置跑 App 导航**（非夹具）
             //   与场景 A–D 的分界：那些用合成屏池（压测装置）；本入口读
-            //   `examples/router/navigation.generated.ts`（gen-routes 从 pages/**\/*.vue + router.meta 产出）
+            //   `examples/router/auto-routes.ts`（全端统一导航产物：gen-routes 从 pages/**\/*.vue + router.pages 产出）
             //   ⇒ 证明"项目配置 → App 屏注册表 → 导航语义"这条**产品路径**在端上可跑。
             //   ★读数字段以 `p_` 前缀平铺（判据读它；缺失/失败 ⇒ 记错误字段，不静默）。
             try {
