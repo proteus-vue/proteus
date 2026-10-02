@@ -63,3 +63,48 @@ console.log(
   `[bridge] 订阅表生成：L1 ${parsed.table.stats.l1} / L0 ${parsed.table.stats.l0}（l1Rate=${parsed.table.stats.l1Rate}）` +
   ` · 模板 ${parsed.template.nodes.length} 节点 / ${parsed.template.lists.length} 列表` +
   ` · 模板诊断 ${parsed.templateDiagnostics.length} 条 → ${path.relative(ROOT, OUT)}`)
+
+/* ══════════════════ ★★★六端 SFC 压力夹具（2026-10-02）══════════════════
+ *
+ * 【与 Android 侧的同源保证】两端都从**同一个共享 SFC 文件**编译：
+ *   `examples/pages/consistency-stress.vue`（Android：gen-vapor-fixture.mjs 的 OUT_STRESS）。
+ *   ⇒ "一份 SFC 源码，六端渲染"里 iOS 这一端挂在同一事实源上；
+ *   `data` 快照同样内嵌（端上不执行 script——与 Android 的 extractStressData 同规）。
+ */
+const STRESS_SFC_PATH = path.join(ROOT, 'examples/pages/consistency-stress.vue')
+if (!fs.existsSync(STRESS_SFC_PATH)) {
+  console.error(`[bridge] ✗ 缺共享 SFC：${path.relative(ROOT, STRESS_SFC_PATH)}（不静默）`)
+  process.exit(1)
+}
+const stressSfc = fs.readFileSync(STRESS_SFC_PATH, 'utf-8')
+const stressScript = `
+import { buildLayoutTemplate, buildVaporSubscriptions } from ${JSON.stringify(path.join(ROOT, 'packages/compiler/src/index.ts'))}
+const sfc = ${JSON.stringify(stressSfc)}
+const tplRes = buildLayoutTemplate(sfc, 'consistency-stress.vue')
+const subRes = buildVaporSubscriptions(sfc, 'consistency-stress.vue')
+process.stdout.write(JSON.stringify({
+  ok: tplRes.ok && subRes.ok,
+  tpl: tplRes.template,
+  table: subRes.table,
+  diagnostics: tplRes.diagnostics.map((d) => d.message),
+}))
+`
+const stressJson = execFileSync('npx', ['tsx', '-e', stressScript], { cwd: ROOT, encoding: 'utf-8', env: { ...process.env } })
+const stressParsed = JSON.parse(stressJson)
+// ★数据快照（与 Android 的 extractStressData 同规：剥 import 行 + ref 桩执行受控 script）
+const { parse: sfcParse } = await import('@vue/compiler-sfc')
+const { descriptor } = sfcParse(stressSfc)
+const stressCode = (descriptor.scriptSetup?.content ?? '').replace(/^\s*import[^\n]*\n/gm, '')
+const refStub = (v) => ({ value: v })
+const stressData = new Function('ref', `${stressCode}\nreturn { list: list.value, summary: summary.value }`)(refStub)
+if (!Array.isArray(stressData.list) || stressData.list.length === 0) {
+  console.error('[bridge] ✗ stress：script 数据快照为空（不静默）')
+  process.exit(1)
+}
+stressParsed.data = stressData
+const STRESS_OUT = path.join(HERE, 'dist', 'vapor-stress.json')
+fs.writeFileSync(STRESS_OUT, JSON.stringify(stressParsed))
+console.log(
+  `[bridge] ✅ 六端 SFC 压力夹具（iOS）：源 examples/pages/consistency-stress.vue · ` +
+  `模板 ${stressParsed.tpl.nodes.length} 节点 · L1 ${stressParsed.table.stats.l1} · ` +
+  `数据 ${stressData.list.length} 行 · 诊断 ${stressParsed.diagnostics.length} 条 → ${path.relative(ROOT, STRESS_OUT)}`)

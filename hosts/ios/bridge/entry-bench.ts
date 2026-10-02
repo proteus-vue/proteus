@@ -30,6 +30,9 @@ import { makeApp, VP } from './bench-app'
 //   （编译器不进 app——它依赖 @babel/*，且 app 里没有解析 SFC 的场景；见 gen-vapor-table.mjs）
 import { SlotRuntime, VaporRuntime, PropKeyTable, StringPool, ListRegistry, instantiateTemplate } from '@proteus-vue/slot-runtime'
 import vaporTableJson from './dist/vapor-table.json'
+// ★★★六端 SFC 压力夹具（2026-10-02）：与 Android 同源的编译产物
+//   （同一个 .vue 文件：examples/pages/consistency-stress.vue，由 gen-vapor-table.mjs 编译）
+import vaporStressJson from './dist/vapor-stress.json'
 import type { BenchApp } from './bench-app'
 
 /* ────────────────────────── 宿主桥（与自绘场景同形，复用同一 Swift 宿主） ────────────────────────── */
@@ -3234,6 +3237,78 @@ const api = {
     })
     return JSON.stringify({ started: c.name, index: idx, total: SELECTED.length,
                             completed: executedCases, results: results.length })
+  },
+
+  /**
+   * ★★★六端 SFC 压力夹具渲染（2026-10-02）——渲染 `examples/pages/consistency-stress.vue`
+   *   的编译产物（`vapor-stress.json`：LayoutTemplate + 订阅表 + **数据快照**）。
+   *
+   * 【与 Android 侧 `runStress` 完全同构】两端都从**同一个共享 SFC 文件**编译
+   *   （构建期 gen-vapor-table.mjs / gen-vapor-fixture.mjs 各产一份，源相同）。
+   *   实例化 → `proteusSelfDraw.mount`（Rust 内核 + CALayer 自绘）——**iOS 这一端渲染真 SFC**。
+   *
+   * 【为什么放在 bench 入口】iOS 的 JSC 宿主只有一个 bundle 能跑（bench bundle）；
+   *   stress 渲染是"一次性挂载 + 截图"，不需要 bench 的用例驱动——宿主直接调本方法即可。
+   *
+   * @returns 渲染读数 JSON（节点数/文本数/数据行/宿主耗时——截图的机器判据用）
+   */
+  renderStress: (): string => {
+    const t0 = now()
+    const stress = vaporStressJson as unknown as {
+      ok: boolean
+      tpl: import('@proteus-vue/slot-runtime').LayoutTemplate
+      table: import('@proteus-vue/slot-runtime').SubscriptionTable
+      data?: Record<string, unknown>
+      diagnostics?: string[]
+    }
+    const diag: string[] = stress.diagnostics ? [...stress.diagnostics] : []
+    if (!stress.ok || !stress.tpl) {
+      return JSON.stringify({ ok: false, error: '模板产物不可用（vapor-stress.json）', diagnostics: diag })
+    }
+    const data = (stress.data ?? {}) as Record<string, unknown>
+    const list = Array.isArray(data.list) ? (data.list as unknown[]) : []
+    const registry = new ListRegistry()
+    const inst = instantiateTemplate(stress.tpl, {
+      viewport: VP,
+      read: (n: string) => data[n],
+      table: stress.table,
+      registry,
+    })
+    const nodes = inst.nodes as unknown as Array<Record<string, unknown>>
+    const texts = nodes.filter((n) => typeof n.text === 'string' && String(n.text).length > 0).length
+    // ★一次调用完成建树与读数（宿主 mount 的回执里带几何/指令读数——本仓接口无独立读几何方法）
+    const mountOut = safeParseAny(
+      proteusSelfDraw.mount(JSON.stringify({ viewport: VP, nodes })),
+    ) as {
+      ok?: boolean
+      error?: string
+      layout_ms?: number
+      measure_ms?: number
+      cmds?: number
+      nodes?: number
+      /** 锚点节点（id=1）的矩形——宿主回执里有则带上（截图侧的锚定归一交叉验证用） */
+      anchor?: { x: number; y: number; width: number; height: number }
+    } | null
+    return JSON.stringify({
+      ok: mountOut?.ok === true,
+      path: 'stress-sfc',
+      src: 'examples/pages/consistency-stress.vue',
+      tpl_nodes: stress.tpl.nodes.length,
+      sub_l1: stress.table?.stats?.l1 ?? -1,
+      inst_nodes: nodes.length,
+      inst_texts: texts,
+      inst_rows: inst.virtual?.rows.length ?? 0,
+      data_rows: list.length,
+      mount_ms: Math.round((now() - t0) * 100) / 100,
+      host_layout_ms: mountOut?.layout_ms ?? -1,
+      host_measure_ms: mountOut?.measure_ms ?? -1,
+      host_cmds: mountOut?.cmds ?? -1,
+      host_nodes: mountOut?.nodes ?? -1,
+      anchor_rect: mountOut?.anchor ? [mountOut.anchor.x, mountOut.anchor.y, mountOut.anchor.width, mountOut.anchor.height] : null,
+      viewport: `${VP.width}x${VP.height}`,
+      diagnostics: diag,
+      note: '六端 SFC 压力夹具（iOS）：渲染 examples/pages/consistency-stress.vue 的编译产物',
+    })
   },
 
   /**

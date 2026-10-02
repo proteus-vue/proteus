@@ -1,0 +1,8 @@
+<!-- 验证假设：scroll-view 包裹是否是"行内 flex-direction 失效"的原因 -->
+<scroll-view scroll-y class="proteus-page-scroll" style="height:100vh">
+  <view wx:for="{{list}}" wx:for-item="item" wx:key="id" id="rB-{{item.id}}" style="width:343px;height:52px;flex-direction:row;align-items:center;background-color:#1b1b21;margin-bottom:6px">
+    <view id="chipB-{{item.id}}" style="height:32px;flex-shrink:0;border-radius:16px;background-color:#6f4ae8;margin-left:10px;{{'width:' + item.w + 'px'}}" />
+    <text id="txtB-{{item.id}}" style="width:128px;font-size:14px;color:#fff;margin-left:10px">{{ item.title }}</text>
+    <view id="dotB-{{item.id}}" style="width:24px;height:24px;flex-shrink:0;border-radius:12px;background-color:#2f6fed;margin-left:8px" />
+  </view>
+</scroll-view>
