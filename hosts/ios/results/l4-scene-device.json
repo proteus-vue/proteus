@@ -1,24 +1,24 @@
 {
-  "note" : "L4 观测夹具（iOS · CALayer 自绘）；模拟器截屏走 run-l4-sim.sh，真机走 run-l4-device.sh（App 内渲染自存 + devicectl 取回）",
+  "ok" : true,
   "unit" : 1,
+  "path" : "l4-scene",
+  "scale" : 3,
+  "note" : "L4 观测夹具（iOS · CALayer 自绘）；模拟器截屏走 run-l4-sim.sh，真机走 run-l4-device.sh（App 内渲染自存 + devicectl 取回）",
   "elements" : [
     "radius(border-radius 14u)",
     "shadow(0\/3\/10u rgba(0,0,0,0.7) · 分层=跨端一致策略，与 Web CSS box-shadow 有意不同形)",
     "gradient(linear 90° #7c5cff→#ff9a6c)",
     "glyph(18u #fff)"
   ],
-  "ok" : true,
-  "screen" : [
-    390,
-    844
-  ],
-  "scale" : 3,
-  "path" : "l4-scene",
+  "shot" : "l4-scene.png",
   "block" : {
     "h" : 48,
     "y" : 120,
     "x" : 16,
     "w" : 80
   },
-  "shot" : "l4-scene.png"
+  "screen" : [
+    390,
+    844
+  ]
 }

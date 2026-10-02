@@ -105,18 +105,34 @@ public class L4Activity extends Activity {
         // ① 圆角块
         cmds.add(new ProteusHostView.Cmd(x, y, bw, bh, C_BLOCK, null, 0f, 0, r));
         y += bh + gap;
-        // ② 阴影块：分层展开圆角矩形（外→内 alpha 平方衰减——与 iOS/glow 同式；
-        //    ★本仓"跨端一致优先"：不用各端原生高斯 shadow，两端统一分层逼近）
-        final int N = 6;
+        // ② 阴影块：分层展开圆角矩形（与 iOS 同式）。
+        //
+        // ★★alpha 必须按 **over 合成反算**（2026-10-02 与 iOS 同步修复"黑块污染"）：
+        //   分层是**实心填充**叠加——近环被全部 N 层覆盖，合成 alpha = 1−Π(1−a_j)。
+        //   首版把"目标剖面值"直接当每层 alpha ⇒ 近环合成 ≈ 0.92（近纯黑环）+ 每层可见台阶
+        //   （iOS 真机 3x 上肉眼可见"回"字污染）。
+        //   反算：a_k = 1−(1−A_k)/(1−A_{k+1})（A_k = 目标剖面，A_{N+1}=0）
+        //   ⇒ 每个环的合成值精确等于目标剖面（0.7 起、平方衰减到 0）。
+        // ★N=16（原 6）：expand 步进 ≈ 1.9px@3x（亚像素级，台阶不可见）。
+        final int N = 16;
+        final float[] layerAlphas = new float[N];
+        float nextTarget = 0f;
         for (int k = N; k >= 1; k--) {
             float t = (k - 1f) / N;
-            float alpha = SHADOW_ALPHA * (1 - t) * (1 - t);
+            float target = SHADOW_ALPHA * (1 - t) * (1 - t);      // A_k
+            layerAlphas[k - 1] = 1f - (1f - target) / (1f - nextTarget);
+            nextTarget = target;
+        }
+        for (int k = N; k >= 1; k--) {
             float expand = SHADOW_BLUR * k / N * U;
-            int c = ((int) (alpha * 255f + 0.5f) << 24);   // 纯黑 + alpha
+            int c = ((int) (layerAlphas[k - 1] * 255f + 0.5f) << 24);   // 纯黑 + 反算 alpha
+            // ★半径 = **阴影块自身半径（0，直角）** + expand（与 iOS 同步的第二处修复）：
+            //   首版误用变量 `r`（= 圆角块的 14u=42px）⇒ 阴影层带大圆角、四角被"咬掉"。
+            //   `0 + expand` 才是直角矩形的距离场（Minkowski 和）。
             cmds.add(new ProteusHostView.Cmd(
                     x - expand, y + SHADOW_DY * U - expand,
                     bw + 2 * expand, bh + 2 * expand,
-                    c, null, 0f, 0, r + expand));
+                    c, null, 0f, 0, expand));
         }
         cmds.add(new ProteusHostView.Cmd(x, y, bw, bh, C_SHADOW_BG, null, 0f, 0, 0f));
         y += bh + gap;
