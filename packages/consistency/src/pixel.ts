@@ -157,6 +157,71 @@ export interface RgbaImage {
   height: number
   /** RGBA，行优先；长度 = width×height×4 */
   rgba: Uint8Array
+  /**
+   * PNG 内嵌 ICC 色彩空间（`decodePng` 探测；缺省 = 未声明，按 sRGB 处理）。
+   *
+   * 【★为什么必须带上（Android 真机截图实测抓出的跨端颜色假差异）】
+   *   Android 设备截图（Skia 编码）内嵌 **Display P3** ICC：同一声明色 `#2f6fed`，
+   *   截图像素是 **(64,110,229)** 而非 (47,111,237)——这正是标准 §13 第 6 项
+   *   "广色域（P3/sRGB）对同色值视觉差异"的**真数据**（此前标注"无公开量化"）。
+   *   手算验证：sRGB(47,111,237) → Display P3 = (64.3, 109.6, 228.9)，与实测三通道全中。
+   *   ⇒ 不先归一色彩空间就比颜色，会把**色域编码差**读成"某端画错了"（假阳性）。
+   *   归一动作在 `convertToSrgb`（显式调用——解码本身**不改像素**，不静默改变语义）。
+   */
+  colorSpace?: 'srgb' | 'display-p3' | 'unknown'
+}
+
+/* ══════════════════ 色彩空间归一（P3 → sRGB） ══════════════════ */
+
+/** sRGB 传递函数：编码值 → 线性（两空间同用这条曲线——Display P3 沿用 sRGB TRC） */
+function srgbToLinear(c: number): number {
+  return c <= 0.04045 ? c / 12.92 : Math.pow((c + 0.055) / 1.055, 2.4)
+}
+/** sRGB 传递函数：线性 → 编码值 */
+function linearToSrgb(c: number): number {
+  return c <= 0.0031308 ? 12.92 * c : 1.055 * Math.pow(c, 1 / 2.4) - 0.055
+}
+
+/**
+ * Display P3 编码值 → sRGB 编码值（单通道输入 0..255，返回 0..255；超色域裁剪）。
+ *
+ * 数学：解码 gamma → 线性 P3 →（P3→XYZ D65）（XYZ D65→线性 sRGB）→ 编码 gamma。
+ * 矩阵取自 CSS Color 4 规范（与浏览器 `color(display-p3 …)` 转换同源）。
+ * 实测校准：P3 输出 (64,110,229) ↔ sRGB 输入 (47,111,237)（本仓 Android 真机数据）。
+ */
+export function p3ToSrgbChannel(r255: number, g255: number, b255: number): [number, number, number] {
+  const r = srgbToLinear(r255 / 255)
+  const g = srgbToLinear(g255 / 255)
+  const b = srgbToLinear(b255 / 255)
+  // P3 线性 → XYZ (D65)
+  const X = 0.4865709486482162 * r + 0.26566769316909306 * g + 0.1982172852343625 * b
+  const Y = 0.2289745640697488 * r + 0.6917385218365064 * g + 0.079286914093745 * b
+  const Z = 0.0 * r + 0.04511338185890264 * g + 1.043944368900976 * b
+  // XYZ (D65) → sRGB 线性
+  const lr = 3.2409699419045226 * X - 1.537383177570094 * Y - 0.4986107602930034 * Z
+  const lg = -0.9692436362808796 * X + 1.8759675015077202 * Y + 0.04155505740717559 * Z
+  const lb = 0.05563007969699366 * X - 0.20397695888897652 * Y + 1.0569715142428786 * Z
+  const enc = (v: number) => Math.max(0, Math.min(255, Math.round(linearToSrgb(Math.max(0, Math.min(1, v))) * 255)))
+  return [enc(lr), enc(lg), enc(lb)]
+}
+
+/**
+ * 把图归一为 sRGB（**仅当 `colorSpace === 'display-p3'` 时转换**；其余原样返回同一对象）。
+ *
+ * 【调用方纪律】跨端像素比较（L4）在 `decodePng` 之后、任何探针/比较之前调用本函数——
+ *   否则 P3 端与 sRGB 端的"同一声明色"像素值天然不同（实测 #2f6fed 差到 (64,110,229)）。
+ */
+export function convertToSrgb(img: RgbaImage): RgbaImage {
+  if (img.colorSpace !== 'display-p3') return img
+  const out = new Uint8Array(img.rgba.length)
+  for (let i = 0; i < img.rgba.length; i += 4) {
+    const [r, g, b] = p3ToSrgbChannel(img.rgba[i]!, img.rgba[i + 1]!, img.rgba[i + 2]!)
+    out[i] = r
+    out[i + 1] = g
+    out[i + 2] = b
+    out[i + 3] = img.rgba[i + 3]!
+  }
+  return { width: img.width, height: img.height, rgba: out, colorSpace: 'srgb' }
 }
 
 export interface ImageSize {
@@ -317,6 +382,114 @@ export function cropImage(img: RgbaImage, roi: ImageRoi): RgbaImage {
     out.set(img.rgba.subarray(src, src + roi.w * 4), y * roi.w * 4)
   }
   return { width: roi.w, height: roi.h, rgba: out }
+}
+
+/* ══════════════════ 锚定归一（五端同坐标系比较的前提） ══════════════════ */
+
+export interface AnchorNormalizeSpec {
+  /** 锚点块的特征色（夹具里唯一的大色块——实测用于定位与定标） */
+  probe: [number, number, number]
+  /** 特征色容差（默认 12） */
+  tolerance?: number
+  /**
+   * 行内最小连续段（默认 10）——只统计**同一行连续 ≥ minRun 像素**的匹配段。
+   * 【为什么需要（实测）】模拟器截图左缘有 1px 蓝色伪影（与锚点同族）⇒ 裸色匹配 bbox 被拉到 (0,0)。
+   * 锚块是 ≥100px 实心矩形 ⇒ 该过滤零误伤（伪影 1px 宽必被滤掉）。
+   */
+  minRun?: number
+  /** 输出图尺寸（全部端统一——跨端逐像素比较的前提） */
+  outSize: { w: number; h: number }
+  /** 输出图中锚点块的**目标矩形**：`w` 定标（输出像素宽）、`x/y` 定位（锚块左上角应落在此处） */
+  blockTarget: { x: number; y: number; w: number }
+}
+
+export interface AnchorNormalizeResult {
+  img: RgbaImage
+  /** 源图中实测的锚点块 bbox（诊断/报告用） */
+  block: { x: number; y: number; w: number; h: number }
+  /** 缩放系数（输出像素 / 源像素） */
+  scale: number
+  /** 源窗口（诊断用） */
+  srcWindow: ImageRoi
+}
+
+/**
+ * ★★**锚定归一**（L4 五端比较的统一坐标系）——把任意分辨率/DPR 的截图，
+ *   按"夹具锚点块"对齐并缩放到**同一输出尺寸**。
+ *
+ * 【为什么必须有（用户点名"把一致性标准全部拉齐"到 iOS/Android 的前提）】
+ *   五端的截图分辨率天然互不可比：
+ *   · 小程序模拟器 640×1386（窗口缩放 ≈1.625×逻辑）
+ *   · Web（DPR2）780×1688 · iOS 模拟器（@3x）≈1179×2556 · Android 真机（density≈3）1080×2400
+ *   ⇒ 逐像素比较**必须先落到同一坐标系**。锚定块（夹具的蓝块）同时给出两个量：
+ *     **位置**（把它对齐 ⇒ 吸收设备坐标系原点差）与**尺寸**（拿它定标 ⇒ 吸收 DPR/缩放差）。
+ *   比 `alignTranslation`（只对齐位置、假设尺寸一致）更强：单函数覆盖位置 + 尺度两个自由度。
+ *
+ * 【纯整数平移的字节确定性（单测断言）】源窗口坐标经 `Math.round` 整数化：
+ *   内容整体平移**整数像素**时，两次裁剪出的源区域**逐字节相同** ⇒ 输出逐字节相同。
+ *
+ * 【诚实边界】锚定会**吸收真实的位置与尺寸差异**（若某端整体偏移或缩放错，归一后看不出）——
+ *   "位置/尺寸是否正确"由 L2 几何数值比对承担；L4 只管"画出来像不像"（与 `alignTranslation` 同款纪律）。
+ */
+export function anchorNormalize(src: RgbaImage, spec: AnchorNormalizeSpec): AnchorNormalizeResult {
+  const tol = spec.tolerance ?? 12
+  const minRun = spec.minRun ?? 10
+  const [pr, pg, pb] = spec.probe
+  const matches = (i: number): boolean =>
+    Math.abs(src.rgba[i]! - pr) <= tol && Math.abs(src.rgba[i + 1]! - pg) <= tol && Math.abs(src.rgba[i + 2]! - pb) <= tol
+  let x0 = Number.POSITIVE_INFINITY
+  let y0 = Number.POSITIVE_INFINITY
+  let x1 = -1
+  let y1 = -1
+  let n = 0
+  // ★**两级过滤**（实测抓出的必要步骤——模拟器截图有两类与锚点同族的伪影，裸色匹配会把 bbox 拉到 (0,0)）：
+  //   ① 行内连续段过滤（minRun）：滤掉 1px 宽的左缘伪影；
+  //   ② **最长段启发**（maxRun × 0.6）：锚块是夹具里最宽的蓝色实心物 ⇒ 只保留长度 ≥ 最长段 60%
+  //      的段——滤掉圆角处的 71px 宽角块（实测 (0,0) 有一块，块本体 ~130px）。
+  //   两道过滤都**零误伤**：锚块的实心行长度 ≈ 块宽（最大），圆角首末行也 > 0.6×块宽。
+  const segs: Array<{ y: number; x0: number; x1: number; len: number }> = []
+  for (let y = 0; y < src.height; y++) {
+    let run = 0
+    for (let x = 0; x <= src.width; x++) {
+      const hit = x < src.width && matches((y * src.width + x) * 4)
+      if (hit) {
+        run++
+        continue
+      }
+      if (run >= minRun) segs.push({ y, x0: x - run, x1: x - 1, len: run })
+      run = 0
+    }
+  }
+  // ★找不到锚 ⇒ 报错，**不静默**（那意味着截图错了/夹具缺件——正是最该红的形态）
+  if (segs.length === 0) {
+    throw new Error(`anchorNormalize: 未找到锚点色 rgb(${pr},${pg},${pb})±${tol}（截图无效或夹具特征色不符——不静默）`)
+  }
+  const maxRun = Math.max(...segs.map((s) => s.len))
+  for (const s of segs) {
+    if (s.len < maxRun * 0.6) continue
+    n += s.len
+    if (s.x0 < x0) x0 = s.x0
+    if (s.x1 > x1) x1 = s.x1
+    if (s.y < y0) y0 = s.y
+    if (s.y > y1) y1 = s.y
+  }
+  const block = { x: x0, y: y0, w: x1 - x0 + 1, h: y1 - y0 + 1 }
+  // 定标：输出像素 / 源像素（用锚块宽度——宽度比高度对边缘 AA 更稳健，块是长边横块）
+  const s = spec.blockTarget.w / block.w
+  const winW = Math.round(spec.outSize.w / s)
+  const winH = Math.round(spec.outSize.h / s)
+  const winX = Math.round(block.x - spec.blockTarget.x / s)
+  const winY = Math.round(block.y - spec.blockTarget.y / s)
+  if (winX < 0 || winY < 0 || winX + winW > src.width || winY + winH > src.height) {
+    throw new Error(
+      `anchorNormalize: 归一窗口越界（源 ${src.width}x${src.height}；窗口 ${winX},${winY},${winW},${winH}）` +
+        '——夹具内容须离屏幕边缘足够远（或锚块尺寸异常）',
+    )
+  }
+  const srcWindow: ImageRoi = { x: winX, y: winY, w: winW, h: winH }
+  const cropped = cropImage(src, srcWindow)
+  const img = resampleTo(cropped, spec.outSize.w, spec.outSize.h)
+  return { img, block, scale: s, srcWindow }
 }
 
 /* ══════════════════ 观测（非门禁） ══════════════════ */
@@ -605,6 +778,18 @@ export function matchPixelNoise(
 
 /* ══════════════════ 观测报告（★记录样本量——验证"样本下降一个数量级"假设） ══════════════════ */
 
+/** 单端截图的锚定归一记录（诊断用——报告里能看出"每端是怎么归到统一坐标系的"） */
+export interface EndNormRecord {
+  /** 源截图尺寸（归一**前**——各端 DPR/分辨率差异的原始证据） */
+  srcSize: { width: number; height: number }
+  /** PNG 内嵌色彩空间（'undeclared' = 未声明；'display-p3' 已在比较前转 sRGB） */
+  colorSpace: string
+  /** 源图中实测的锚块 bbox */
+  block: { x: number; y: number; w: number; h: number }
+  /** 缩放系数（归一输出 / 源像素） */
+  scale: number
+}
+
 export interface PixelObservationReport {
   format: 'proteus-pixel-observation'
   version: 1
@@ -619,11 +804,13 @@ export interface PixelObservationReport {
     knownNoise?: PixelNoiseEntry
     /**
      * ★配对形态（L4 真截图用）：`same-runtime` = 同运行时长跑（小程序双渲染器）；
-     *   `cross-runtime` = 跨运行时（浏览器 ⇄ 小程序——走尺寸 + 平移两项对齐）。
+     *   `cross-runtime` = 跨运行时（浏览器/Android/iOS ⇄ 小程序）。
      *   为什么必须标注：两种形态的残差**天然不可比**（跨运行时多一个坐标系对齐残差 + 字形光栅化差异），
      *   混在一起读会把"跨运行时本来就更大"误读成"某端画坏了"。
      */
     mode?: 'same-runtime' | 'cross-runtime'
+    /** 锚定归一记录（两端的源尺寸/色彩空间/锚块/缩放系数——"怎么归到统一坐标系"的可复现证据） */
+    norm?: { a: EndNormRecord; b: EndNormRecord; outSize: { width: number; height: number } }
   }>
   /** ★样本量汇总（卡片硬性要求："记录每次失败的样本量"） */
   totals: {
@@ -649,6 +836,7 @@ export function buildPixelReport(
     observation: PixelObservation
     knownNoise?: PixelNoiseEntry
     mode?: 'same-runtime' | 'cross-runtime'
+    norm?: { a: EndNormRecord; b: EndNormRecord; outSize: { width: number; height: number } }
   }>,
 ): PixelObservationReport {
   const totals = { sampleCount: 0, diffPixels: 0, changedSamples: 0, cleanSamples: 0, knownNoiseSamples: 0 }

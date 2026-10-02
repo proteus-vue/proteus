@@ -16,6 +16,7 @@ import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 import {
   pixelObservation, buildPixelReport, matchPixelNoise, validatePixelNoiseBaseline, encodePng, decodePng,
+  anchorNormalize, convertToSrgb, cropImage,
 } from '../packages/consistency/dist/index.js'
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..')
@@ -46,28 +47,29 @@ if (schemaErrs.length > 0) {
 const SAMPLES_DIR = path.join(ROOT, 'docs/generated/consistency-samples/pixels')
 
 /**
- * L4 夹具截图的**观测区域**（对齐后 640×1386 口径）——排除设备 chrome，否则"任意两张截图必然 changed"：
- *   · y<150：状态栏时钟（每张都不同——12:42 vs 12:43）+ 胶囊按钮 + 模拟器圆角；
- *   · y>1240：Home 指示条；
- *   · x<2：模拟器画布左缘 1px 伪影（实测该列 1300 行有差异）。
- * ★夹具已把内容下移（padding-top 120px）使四项观测目标完整落在 ROI 内——
- *   采集脚本 `scripts/shoot-l4-fixtures.sh`（小程序双端）/ `scripts/shoot-l4-web.mjs`（Web 端）
- *   负责截图，改内容布局时**必须同步改这里**。ROI 随观测结果回传（报告里可见"比的是哪一块"）。
+ * ★★五端统一坐标系（锚定归一）——**本批把 L4 从三端拉齐到五端的关键机制**。
+ *
+ * 【为什么不再用固定 ROI + alignTranslation（三端时代的做法）】各端截图分辨率/DPR 天然互不可比：
+ *   小程序模拟器 640×1386（≈1.625×）· Web @DPR2 780×1688 · Android 真机 1080×2400 ·
+ *   iOS 模拟器 @3x 1206×2622——而且**设备 chrome 各不相同**（Android 有 ActionBar、iOS 有灵动岛）。
+ *   固定像素 ROI 在五端上必然错位。⇒ 改为**按夹具锚块（蓝块）归一到公共坐标系**：
+ *   锚块同时给出位置（吸收设备坐标系原点差）与尺寸（吸收 DPR/缩放差）——一个函数覆盖两个自由度。
+ *   `anchorNormalize` 输出的每端图都是 640×560、内容起点一致、含两级伪影过滤（1px 左缘 + 圆角角块）。
+ *
+ * 【实测验证】五端锚块：130×78（小程序）/ 160×96（Web）/ 240×144（Android）/ 240×142（iOS）
+ *   ⇒ scale 分别 1.231 / 1.000 / 0.667 / 0.667（**与各端物理倍率完全吻合**）。
+ *
+ * 【色彩空间】Android 真机截图内嵌 Display P3 ICC ⇒ 比较前转 sRGB（`convertToSrgb`）。
+ *   实测：声明 #2f6fed 在 P3 里是 (64,110,229)，转换后回到 (46,111,237)——标准 §13#6 的真数据。
  */
-const L4_ROI = { x: 2, y: 150, w: 636, h: 1090 }
-
-/** 同运行时长跑（小程序双渲染器）：同为模拟器物理像素 640×1386、同一设备框原点 ⇒ 只裁 ROI */
-const SAME_RUNTIME_OPTS = { roi: L4_ROI }
+const L4_ANCHOR_SPEC = { probe: [47, 111, 237], outSize: { w: 640, h: 560 }, blockTarget: { x: 30, y: 30, w: 160 } }
 
 /**
- * 跨运行时（浏览器 ⇄ 小程序）——**两项对齐缺一不可**（都是实测定的，不是设计推演）：
- *   · `alignSize`：Web 截图 780×1688（390×844 逻辑 @DPR2，原生渲染，让文字/AA 不被插值污染）
- *     vs 小程序 640×1386（690×844 逻辑 @≈1.64）⇒ 盒式平均归一到同尺寸。
- *   · `alignTranslation`：两端**设备坐标系原点约定不同**——实测最优整数平移 dx=−1 / dy=1，
- *     原始残差 3675 → 对齐后 2643（**解释了 28.1% 的原始差异**）。
- *     不对齐 ⇒ 把"坐标系常量差"读成"绘制不一致"（假阳性）。
+ * 归一后的**观测窗口**（从锚块顶部起）——锚块上方的区域仍有设备 chrome：
+ *   Android 状态栏（时间/信号）就压在锚块上方（实测：y<30 有 328px 差异，颜色是状态栏文字的白）。
+ *   ⇒ 只比"锚块顶部以下"的内容（四元素全在此区间）；`cropImage` 的坐标是**归一图口径**。
  */
-const CROSS_RUNTIME_OPTS = { alignSize: true, roi: L4_ROI, alignTranslation: 4 }
+const L4_NORM_ROI = { x: 2, y: 28, w: 636, h: 530 }
 
 /** 合成夹具：与一致性夹具同构的简版（直角块 + 圆角块的差异来自 AA——L4 的典型场景） */
 function synth(size = 64, corner = false, jitter = 0) {
@@ -104,23 +106,39 @@ async function loadPairs() {
       byBase.set(base, arr)
     }
     for (const [base, arr] of byBase) {
-      // ★**全配对**（N 端 ⇒ C(N,2) 对）：三端（skyline/webview/web）⇒ 3 对 =
-      //   同运行时 1 对（小程序双渲染器）+ 跨运行时 2 对（浏览器 ⇄ 小程序两渲染器）。
-      //   首版只取前两个文件（`const [a,b] = arr`）⇒ 三端齐全后会**静默少一对**——不做隐性截断。
-      for (let i = 0; i < arr.length; i++) {
-        for (let j = i + 1; j < arr.length; j++) {
-          const a = arr[i]
-          const b = arr[j]
-          const mode = (a.end === 'web') !== (b.end === 'web') ? 'cross-runtime' : 'same-runtime'
-          const imgA = await decodePng(new Uint8Array(fs.readFileSync(a.file)))
-          const imgB = await decodePng(new Uint8Array(fs.readFileSync(b.file)))
-          const opts = mode === 'cross-runtime' ? CROSS_RUNTIME_OPTS : SAME_RUNTIME_OPTS
+      // ★**锚定归一**（每端一次；失败即报错——"某端锚块找不到"必须红，不能静默跳过该端）
+      const normalized = []
+      for (const e of arr) {
+        const raw = await decodePng(new Uint8Array(fs.readFileSync(e.file)))
+        const srgb = convertToSrgb(raw)
+        const r = anchorNormalize(srgb, L4_ANCHOR_SPEC)
+        normalized.push({
+          end: e.end,
+          file: e.file,
+          img: cropImage(r.img, L4_NORM_ROI),
+          norm: {
+            srcSize: { width: raw.width, height: raw.height },
+            colorSpace: raw.colorSpace ?? 'undeclared',
+            block: r.block,
+            scale: Math.round(r.scale * 1000) / 1000,
+          },
+        })
+      }
+      // ★**全配对**（N 端 ⇒ C(N,2) 对）：五端 ⇒ 10 对。首版只取前两个文件 ⇒ 静默少对——不做隐性截断。
+      for (let i = 0; i < normalized.length; i++) {
+        for (let j = i + 1; j < normalized.length; j++) {
+          const A = normalized[i]
+          const B = normalized[j]
+          // 同运行时 = 小程序内部两渲染器（skyline/webview 互比）；其余皆跨运行时
+          const mp = new Set(['skyline', 'webview'])
+          const mode = mp.has(A.end) && mp.has(B.end) ? 'same-runtime' : 'cross-runtime'
           pairs.push({
-            id: `${base}:${a.end}-vs-${b.end}`,
-            a: path.relative(ROOT, a.file),
-            b: path.relative(ROOT, b.file),
+            id: `${base}:${A.end}-vs-${B.end}`,
+            a: path.relative(ROOT, A.file),
+            b: path.relative(ROOT, B.file),
             mode,
-            observation: pixelObservation(imgA, imgB, opts),
+            norm: { a: A.norm, b: B.norm, outSize: L4_ANCHOR_SPEC.outSize },
+            observation: pixelObservation(A.img, B.img),
           })
         }
       }

@@ -1,0 +1,211 @@
+// hosts/ios/ProteusHost/l4-scene.swift
+// ★★L4 像素观测夹具（iOS 端 · CALayer 自绘）——与小程序两页 / Web 页 / Android 场景**逐项同声明**。
+//
+// 【它补哪个缺口】L4 此前只有 Web / 小程序三端真截图（`docs/generated/consistency-samples/pixels/`）。
+//   本项目要"把一致性标准全部拉齐"到 iOS / Android —— 本文件是 iOS 侧的采集装置：
+//   同一组声明（圆角 14 / 阴影 0-3-10 rgba(0,0,0,.7) / 线性渐变 90° / 18 字形）
+//   在本端用 **CALayer 树**画出，由报告侧 `anchorNormalize`（锚块定标+定位）归一到同一坐标系。
+//
+// 【为什么用 CALayer 而不是 UIView】与宿主主链一致（方案 §6.2：跳过 UIView，CALayer 直管）；
+//   本场景只验"系统光栅化画出来像不像"，宿主几何链路由其它场景承担。
+//
+// 【阴影为什么分层逼近（跨端一致优先）】iOS 原生 `shadow*` 是高斯阴影，与 Android（无矩形
+//   shadow API，本仓用分层）不同形 ⇒ 两端统一**分层展开圆角矩形 + alpha 平方衰减**（同 glow 式）。
+//   这与 Web/小程序侧的 CSS `box-shadow` **有意不同形**——L4 是观测（非门禁），
+//   本批如实登记该差异（读数为 evidence，不是"必须一致"）。
+//
+// 【运行】bash hosts/ios/run-l4-sim.sh [模拟器名]
+import UIKit
+
+/* ────────────────────────── 声明（★五端逐字同源，改这里必须五端同步） ────────────────────────── */
+
+enum L4Spec {
+    // ★u = 声明单位 → **pt**（UIKit 单位）；@3x 屏由系统放大 ⇒ 80u=80pt=240px，
+    //   与 Android（80dp × density3 = 240px）/ Web（80 CSS px @DPR2）物理尺度对齐。
+    //   （首版 u=3 是错的：3pt 会变 720px——是 Android 的 3 倍大，锚定归一窗口直接越界。）
+    static let u: CGFloat = 1
+    static let padTop: CGFloat = 120
+    static let padX: CGFloat = 16
+    static let bw: CGFloat = 80, bh: CGFloat = 48, gap: CGFloat = 10, r: CGFloat = 14
+    static let shadowDY: CGFloat = 3, shadowBlur: CGFloat = 10, shadowAlpha: CGFloat = 0.7
+    static let font: CGFloat = 18
+    static let bg = UIColor(red: 0x14/255, green: 0x14/255, blue: 0x1C/255, alpha: 1)
+    static let cBlock = UIColor(red: 0x2F/255, green: 0x6F/255, blue: 0xED/255, alpha: 1)
+    static let cShadowBg = UIColor(red: 0x2A/255, green: 0x3F/255, blue: 0x66/255, alpha: 1)
+    static let gradFrom = UIColor(red: 0x7C/255, green: 0x5C/255, blue: 0xFF/255, alpha: 1)
+    static let gradTo = UIColor(red: 0xFF/255, green: 0x9A/255, blue: 0x6C/255, alpha: 1)
+}
+
+/* ────────────────────────── 宿主：一个 UIView + CALayer 树 ────────────────────────── */
+
+final class L4HostView: UIView {
+    private let layerTree = CALayer()
+    /// 首帧画过的证据（`onDraw` 等价物——CALayer 路径无 onDraw，用"已提交到屏幕"的合成回调）
+    private(set) var framesCommitted = 0
+
+    override init(frame: CGRect) {
+        super.init(frame: frame)
+        backgroundColor = L4Spec.bg
+        layer.addSublayer(layerTree)
+        layerTree.frame = bounds
+    }
+    required init?(coder: NSCoder) { fatalError("not used") }
+    override func layoutSubviews() {
+        super.layoutSubviews()
+        layerTree.frame = bounds
+    }
+
+    /// 建 L4 四元素（位置/尺寸 = 声明 × u，纯本端——本场景不验 Rust 几何）
+    func buildL4() {
+        let u = L4Spec.u
+        let x = L4Spec.padX * u
+        var y = L4Spec.padTop * u
+        let bw = L4Spec.bw * u, bh = L4Spec.bh * u, gap = L4Spec.gap * u, r = L4Spec.r * u
+
+        CATransaction.begin()
+        CATransaction.setDisableActions(true)
+
+        // ① 圆角块
+        let radius = CALayer()
+        radius.frame = CGRect(x: x, y: y, width: bw, height: bh)
+        radius.backgroundColor = L4Spec.cBlock.cgColor
+        radius.cornerRadius = r
+        layerTree.addSublayer(radius)
+        y += bh + gap
+
+        // ② 阴影块：分层展开圆角矩形（外→内 alpha 平方衰减——与 Android/glow 同式）
+        let N = 6
+        for k in stride(from: N, through: 1, by: -1) {
+            let t = CGFloat(k - 1) / CGFloat(N)
+            let alpha = L4Spec.shadowAlpha * (1 - t) * (1 - t)
+            let expand = L4Spec.shadowBlur * CGFloat(k) / CGFloat(N) * u
+            let sh = CALayer()
+            sh.frame = CGRect(
+                x: x - expand, y: y + L4Spec.shadowDY * u - expand,
+                width: bw + 2 * expand, height: bh + 2 * expand)
+            sh.backgroundColor = UIColor.black.withAlphaComponent(alpha).cgColor
+            sh.cornerRadius = r + expand
+            layerTree.addSublayer(sh)
+        }
+        let shadowBody = CALayer()
+        shadowBody.frame = CGRect(x: x, y: y, width: bw, height: bh)
+        shadowBody.backgroundColor = L4Spec.cShadowBg.cgColor
+        layerTree.addSublayer(shadowBody)
+        y += bh + gap
+
+        // ③ 渐变块（90° = 左→右；与 TS linearGradientEndpoints 同式：start=(0,0.5) end=(1,0.5)）
+        let grad = CAGradientLayer()
+        grad.frame = CGRect(x: x, y: y, width: bw, height: bh)
+        grad.colors = [L4Spec.gradFrom.cgColor, L4Spec.gradTo.cgColor]
+        grad.locations = [0, 1]
+        grad.startPoint = CGPoint(x: 0, y: 0.5)
+        grad.endPoint = CGPoint(x: 1, y: 0.5)
+        layerTree.addSublayer(grad)
+        y += bh + gap
+
+        // ④ 字形（CATextLayer——GPU 加速文本通道）
+        let glyph = CATextLayer()
+        glyph.frame = CGRect(x: x, y: y, width: bw * 2, height: L4Spec.font * u * 1.6)
+        glyph.string = "字形 Ag 8 中"
+        glyph.fontSize = L4Spec.font * u
+        glyph.foregroundColor = UIColor.white.cgColor
+        glyph.contentsScale = UIScreen.main.scale   // ★不设会模糊
+        glyph.alignmentMode = .left
+        layerTree.addSublayer(glyph)
+
+        CATransaction.commit()
+    }
+
+    /// 报告（Documents/l4-scene.json；采集脚本以它落盘为"可以取屏"的条件）
+    static func reportURL() -> URL {
+        FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)[0]
+            .appendingPathComponent("l4-scene.json")
+    }
+}
+
+/* ────────────────────────── 宿主 App（@main + SceneDelegate；与 calayer-scene 同骨架） ────────────────────────── */
+
+final class L4ViewController: UIViewController {
+    private var host: L4HostView!
+    private var committedOnce = false
+
+    override func viewDidLoad() {
+        super.viewDidLoad()
+        view.backgroundColor = L4Spec.bg
+        host = L4HostView(frame: view.bounds)
+        host.autoresizingMask = [.flexibleWidth, .flexibleHeight]
+        view.addSubview(host)
+        host.buildL4()
+    }
+
+    /// ★首帧真的提交到屏幕后才写报告（CALayer 路径的对应物 = `CATransaction` 完成回调）
+    override func viewDidAppear(_ animated: Bool) {
+        super.viewDidAppear(animated)
+        guard !committedOnce else { return }
+        committedOnce = true
+        CATransaction.begin()
+        CATransaction.setCompletionBlock { [weak self] in
+            guard let self else { return }
+            self.writeReport()
+            // ★事件驱动收尾：与既有实验脚本同一机制（App 主动上报；脚本侧 launch 返回即完成）
+            if ProcessInfo.processInfo.environment["PROTEUS_EXIT_AFTER_REPORT"] == "1" {
+                exit(0)
+            }
+        }
+        CATransaction.commit()
+    }
+
+    private func writeReport() {
+        let b = view.bounds
+        let report: [String: Any] = [
+            "ok": true,
+            "path": "l4-scene",
+            "screen": [Int(b.width.rounded()), Int(b.height.rounded())],
+            "scale": UIScreen.main.scale,
+            "unit": L4Spec.u,
+            "block": [
+                "x": Int((L4Spec.padX * L4Spec.u).rounded()),
+                "y": Int((L4Spec.padTop * L4Spec.u).rounded()),
+                "w": Int((L4Spec.bw * L4Spec.u).rounded()),
+                "h": Int((L4Spec.bh * L4Spec.u).rounded()),
+            ],
+            "elements": [
+                "radius(border-radius 14u)",
+                "shadow(0/3/10u rgba(0,0,0,0.7) · 分层=跨端一致策略，与 Web CSS box-shadow 有意不同形)",
+                "gradient(linear 90° #7c5cff→#ff9a6c)",
+                "glyph(18u #fff)",
+            ],
+            "note": "L4 观测夹具（iOS · CALayer 自绘）；截图由 run-l4-sim.sh 从模拟器取回",
+        ]
+        if let data = try? JSONSerialization.data(withJSONObject: report, options: [.prettyPrinted]) {
+            try? data.write(to: L4HostView.reportURL())
+        }
+    }
+}
+
+final class L4SceneDelegate: UIResponder, UIWindowSceneDelegate {
+    var window: UIWindow?
+    func scene(_ scene: UIScene, willConnectTo session: UISceneSession,
+               options connectionOptions: UIScene.ConnectionOptions) {
+        guard let windowScene = scene as? UIWindowScene else { return }
+        let win = UIWindow(windowScene: windowScene)
+        win.rootViewController = L4ViewController()
+        win.makeKeyAndVisible()
+        window = win
+    }
+}
+
+@main
+final class L4AppDelegate: UIResponder, UIApplicationDelegate {
+    func application(_ application: UIApplication,
+                     didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]? = nil) -> Bool {
+        return true
+    }
+    func application(_ application: UIApplication,
+                     configurationForConnecting connectingSceneSession: UISceneSession,
+                     options: UIScene.ConnectionOptions) -> UISceneConfiguration {
+        let config = UISceneConfiguration(name: "Default Configuration", sessionRole: connectingSceneSession.role)
+        config.delegateClass = L4SceneDelegate.self
+        return config
+    }
+}
