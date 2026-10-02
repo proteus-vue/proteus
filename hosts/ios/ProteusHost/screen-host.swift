@@ -305,40 +305,62 @@ final class ScreenHost: NSObject {
         return ok(["started": started])
     }
 
+    /// ★★**多条动画在飞**（2026-10-02 修真缺陷——由"统一 API 场景 F 与手写场景 E 并行"暴露）
+    ///
+    /// 【缺陷形态（iOS 宿主旧实现）】帧循环状态是**单份实例字段**（`frameTargets/frameT0/
+    ///   frameBudget/frameToken`），原注释还写着"一次只允许一条在飞"。而真实形态**可能并发**：
+    ///   ① 本仓 app-stack 场景 E（手写装配）+ F（统一 API）**并行**；
+    ///   ② 生产里"两个导航器同时转场"同样触发。
+    ///   旧实现里后启动的 `startFrameLoop` 会 **invalidate 前一条 link 并覆盖 token** ⇒
+    ///   先来的动画**永远等不到 `completeAnim`** ⇒ 其 promise 永挂 ⇒ 执行器超时（真机 10s）。
+    ///   ★Android 腿为何没这问题：它的 `completeAnim(token, targets)` 是**闭包参数**，
+    ///     多条动画各归其主 —— 两端**语义分叉**，本修把 iOS 对齐到同一语义。
+    ///
+    /// 【修法】帧循环状态改**按 token 的字典**（每条动画独立：目标/起点/预算/token），
+    ///   单条 CADisplayLink 统一推进（省电，不 N 条 link），各自到点各自回推。
+    private struct FrameFlight {
+        var targets: [ScreenTree]
+        var t0: CFTimeInterval
+        var budget: Double
+        var token: String
+    }
+    private var frameFlights: [String: FrameFlight] = [:]
+    private var frameLast: CFTimeInterval = 0
+
     private func startFrameLoop(targets: [ScreenTree], t0: CFTimeInterval, budgetS: Double, token: String) {
-        frameLink?.invalidate()
-        // 状态经属性传递（一次只允许一条在飞——与"一次导航 = 一次转场"同构）
-        frameTargets = targets
-        frameT0 = t0
-        frameBudget = budgetS
-        frameToken = token
+        // ★同 token 重入 = 覆盖（同一次动画重启），不同 token = 并行（各归其主）
+        frameFlights[token] = FrameFlight(targets: targets, t0: t0, budget: budgetS, token: token)
         frameLast = CACurrentMediaTime()
+        guard frameLink == nil else { return } // 已有 link 在跑 ⇒ 只登记，不新建（省电且避免覆盖）
         let link = CADisplayLink(target: self, selector: #selector(onFrame(_:)))
         link.add(to: .main, forMode: .common) // ★.common：滚动/手势期间不停（与既有帧循环同法）
         frameLink = link
     }
 
-    private var frameTargets: [ScreenTree] = []
-    private var frameT0: CFTimeInterval = 0
-    private var frameBudget: Double = 0
-    private var frameToken = ""
-    private var frameLast: CFTimeInterval = 0
-
     @objc private func onFrame(_ link: CADisplayLink) {
         let now = CACurrentMediaTime()
         let dtMs = frameLast == 0 ? 16 : Float((now - frameLast) * 1000)
         frameLast = now
-        for st in frameTargets where st.handle != 0 {
-            var outLen: UInt32 = 0
-            if let ptr = proteus_layout_anim_tick_bin(st.handle, dtMs, &outLen) {
-                // ★返回值必须释放（本仓实测教训：漏 free ⇒ 每帧泄漏一块——16B×N/帧）
-                proteus_rects_free(ptr, outLen)
+        // 推进**所有**在飞动画的目标屏（同一 dt；句柄已失效的屏跳过）
+        var ticked = Set<UInt64>()
+        for (_, f) in frameFlights {
+            for st in f.targets where st.handle != 0 && !ticked.contains(st.handle) {
+                ticked.insert(st.handle)
+                var outLen: UInt32 = 0
+                if let ptr = proteus_layout_anim_tick_bin(st.handle, dtMs, &outLen) {
+                    // ★返回值必须释放（本仓实测教训：漏 free ⇒ 每帧泄漏一块——16B×N/帧）
+                    proteus_rects_free(ptr, outLen)
+                }
             }
         }
-        if now - frameT0 >= frameBudget {
+        // 到点的各自回推（**逐条**——旧实现只回最后一条，先来的永挂）
+        for (token, f) in frameFlights where now - f.t0 >= f.budget {
+            frameFlights.removeValue(forKey: token)
+            completeAnim(token: token)
+        }
+        if frameFlights.isEmpty {
             link.invalidate()
             frameLink = nil
-            completeAnim(token: frameToken)
         }
     }
 
