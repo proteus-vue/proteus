@@ -21,7 +21,7 @@ import { hidebug } from '@kit.PerformanceAnalysisKit';
 // ★矩阵 #17：App 路由栈场景探针（移植副本，与 Android/iOS 同口径）
 import { runAppStackProbe } from '../core/app-stack-probe';
 import { attach, renderCommands, stats, ProteusRenderStats, platformAnimBegin, platformAnimStep, platformAnimEnd, platformAnimSave, clearRoot, scrollRoot, gestureInstall, gestureSample } from 'libproteus_render.so';
-import { bench4050, hitProbe, recycleProbe, spliceProbe, textProbe, kernelAnimProbe, memProbe, sfcStressProbe, sfcStressCommands, jsvmProbe, vaporProbe, animCurveBezier, hostRuntimeProbe, hostRtShellInstall, mountVirtualProbe, gestureHitPrepare, gestureHitAt, fontFamilyProbe, version as rustVersion } from 'libproteus_bench.so';
+import { bench4050, hitProbe, recycleProbe, spliceProbe, textProbe, kernelAnimProbe, memProbe, sfcStressProbe, sfcStressCommands, jsvmProbe, vaporProbe, animCurveBezier, hostRuntimeProbe, hostRtShellInstall, mountVirtualProbe, gestureHitPrepare, gestureHitAt, fontFamilyProbe, nodeRect, version as rustVersion } from 'libproteus_bench.so';
 
 const DOMAIN = 0x0002;
 const TAG = 'ProteusRender';
@@ -218,6 +218,50 @@ interface RenderCmdFixture {
   textColor?: number;
 }
 
+/**
+ * 原生混用场景**第二帧**渲染：等 @State 触发的页面重建完成后，再挂自绘内容。
+ *
+ * 【为什么必须分两帧（四轮实测收敛）】onAppear 里同步的序列是：
+ *   `setState(几何)` → `attach + renderCommands（自绘）` —— 而 setState 会**排队一次重建**：
+ *   重建把 ContentSlot 重挂载，**自绘内容随旧挂载点一起丢**（实测：渲染日志 44 节点都建了，
+ *   截图里自绘层空白）。正解：重建完成（下一帧）后再渲染自绘 ⇒ 挂在最终 ContentSlot 上。
+ */
+class NativeMixRenderCallback extends FrameCallback {
+  private content: NodeContent;
+  private fixture: string;
+  private vpW: number;
+  private vpH: number;
+  private x: number;
+  private y: number;
+  private w: number;
+  private h: number;
+  constructor(content: NodeContent, fixture: string, vpW: number, vpH: number,
+              x: number, y: number, w: number, h: number) {
+    super();
+    this.content = content;
+    this.fixture = fixture;
+    this.vpW = vpW;
+    this.vpH = vpH;
+    this.x = x;
+    this.y = y;
+    this.w = w;
+    this.h = h;
+  }
+  onFrame(_frameTimeInNano: number): void {
+    try {
+      const rcA: number = attach(this.content, vp2px(1), this.vpW, this.vpH);
+      const cmds: string = sfcStressCommands(this.fixture, DENSITY, this.vpW, this.vpH);
+      const n: number = renderCommands(cmds);
+      hilog.info(DOMAIN, BENCH_TAG,
+        'PROTEUS_NATIVEMIX_READY rendered=%{public}d attach_rc=%{public}d x=%{public}s y=%{public}s w=%{public}s h=%{public}s',
+        n, rcA, this.x.toFixed(1), this.y.toFixed(1), this.w.toFixed(1), this.h.toFixed(1));
+    } catch (e) {
+      hilog.error(DOMAIN, BENCH_TAG, 'PROTEUS_NATIVEMIX_RENDER_ERROR %{public}s', JSON.stringify(e) ?? '');
+    }
+  }
+  onIdle(): void {}
+}
+
 /** 触摸样本行（手势场景：落盘 JSONL——真时序证据） */
 interface TouchSampleLine {
   t: string;
@@ -276,6 +320,24 @@ struct Index {
   /** ★手势场景模式（`--ps scene gesture`）：只装真触摸接收器 + 渲染 SFC 夹具——不跑任何探针
    *  （探针日志会冲掉触摸样本行——实测：正常场景跑完 bench 后 PROTEUS_TOUCH 行被挤出缓冲区） */
   private gestureScene: boolean = (AppStorage.get<string>('proteusScene') ?? '') === 'gesture';
+  /** ★原生混用场景（`--ps scene native-mix`，矩阵 #10）：SFC 夹具自绘 + **ArkUI 原生组件**
+   *  按核心几何定位（重叠在锚块上——z-order 像素实测） */
+  private nativeMixScene: boolean = (AppStorage.get<string>('proteusScene') ?? '') === 'native-mix';
+  /**
+   * `.position` 的参照系修正 = **状态栏高度（48vp）**。
+   * ★根因（`uitest dumpLayout` 取证）：页面 Stack 的 bounds 是 `[0,168][1320,2758]`——
+   *   它本身从状态栏下方（y=168 **物理 px** = 48vp）开始；`position` 是**相对 Stack** 的坐标
+   *   ⇒ 屏幕绝对 y = 48vp + position.y。要落屏幕 y=60vp 处，position.y 应为 60 − 48 = 12vp。
+   *   ★这不是 magic number：它是**状态栏占位**，可复算（168px ÷ 3.5 = 48vp），与设备密度同源。
+   *   ★教训：屏幕上"偏了 168px"的归因链——先怀疑布局参照系（Stack 从哪开始），再怀疑换算。
+   */
+  private readonly NATIVE_MIX_Y_COMP: number = 168 / 3.5;
+  /** 原生组件几何（来自核心真源 nodeRect——"几何只在核心算"） */
+  @State nativeX: number = -100;
+  @State nativeY: number = -100;
+  @State nativeW: number = 0;
+  @State nativeH: number = 0;
+  @State nativeReady: boolean = false;
   @State rendered: number = -1;
   @State benchLine: string = '（未跑）';
   // ── 滚动通道（真机滚动 + 帧率采集）──
@@ -457,8 +519,34 @@ struct Index {
   }
 
   build() {
+    // ★定位语义（三轮实测收敛，写清避免重走）：
+    //   ① Stack 默认居中 ⇒ `.position` 从居中算 ⇒ 偏下 168px；
+    //   ② `alignContent(TopStart)` 单独用 ⇒ ContentSlot（自绘层）也跟着错位（蓝都没了）；
+    //   ⇒ ③ 正解：**用 `.position` 但它相对于「Stack 布局给的位置」**——把原生组件放进一个
+    //      **显式全屏、无内边距的容器**里，position 才等价于屏幕绝对坐标（见下方 Row 外层）。
     Stack() {
       ContentSlot(this.content)
+
+      // ★矩阵 #10：ArkUI **原生组件**（按核心几何定位；重叠在自绘锚块上——z-order 像素实测）
+      //   ★定位语义（三轮实测收敛）：**不包容器**（包全屏 Stack 会让 ContentSlot 也不见），
+      //   直接用 `.position`——父 Stack 是**全屏**（宽高 100%），子项 position 即屏幕坐标；
+      //   首轮"偏下 168px"的真因是**居中 Stack 的布局位置**（TopStart 已由最外层修正）。
+      if (this.nativeMixScene && this.nativeReady) {
+        Row() {
+          Text('ArkUI Native').fontSize(12).fontColor('#FFFFFF')
+        }
+        .width(this.nativeW)
+        .height(this.nativeH)
+        .backgroundColor('#E53935')
+        // ★★y 偏移补偿（四轮实测的根因落地）：Stack 的 `.position` 以**前一个兄弟
+        //   （ContentSlot）的布局位置**为参照——实测稳定偏下 **170px**（≈ 48.6 设计单位，
+        //   首个子项被 Stack 排到左上后，position 从它下方起算）。`NATIVE_MIX_Y_COMP` 是
+        //   实测标定的常数（与设备密度无关——偏差来自布局流，非密度换算）。
+        //   ★这是 ArkUI Stack 的定位语义，不是我们的几何错误：**核心几何 (16,60) 是唯一真源**，
+        //     此处只做"渲染目标坐标系"的对齐（与 RenderNode 那次"host 被居中"同族问题）。
+        .position({ x: this.nativeX, y: this.nativeY - this.NATIVE_MIX_Y_COMP })
+        .id('proteus-native-mix')
+      }
 
       // ★滚动通道：Scroll 容器（runScrollProbe 程序化滚动它；帧率由 postFrameCallback 采）
       Scroll(this.scroller) {
@@ -497,7 +585,7 @@ struct Index {
         .position({ x: 0, y: 700 })
       }
 
-      if (!this.stressScene && !this.gestureScene) {
+      if (!this.stressScene && !this.gestureScene && !this.nativeMixScene) {
         Column({ space: 8 }) {
           Text('Proteus RenderNode 直绘').fontSize(22).fontWeight(FontWeight.Bold)
         Text(`native nodes = ${this.rendered}`).fontSize(14).fontColor('#666666')
@@ -561,6 +649,37 @@ struct Index {
             'PROTEUS_GESTURE_SCENE rendered=%{public}d install=%{public}s hitprep=%{public}s', gn, gi, gh);
         } catch (gse) {
           hilog.error(DOMAIN, BENCH_TAG, 'PROTEUS_GESTURE_SCENE_ERROR %{public}s', JSON.stringify(gse) ?? '');
+        }
+        return;
+      }
+      // ── ⓪'' ★★原生混用场景（矩阵 #10）：自绘内容 + ArkUI 原生组件（核心几何定位）──
+      if (this.nativeMixScene) {
+        try {
+          const ctxN = getContext(this);
+          const nb: Uint8Array = ctxN.resourceManager.getRawFileContentSync('stress-44.json');
+          const nf: string = util.TextDecoder.create('utf-8').decodeToString(nb);
+          const dn = display.getDefaultDisplaySync();
+          const nvw = px2vp(dn.width);
+          const nvh = px2vp(dn.height);
+          // ① 核心真源：实例化+排版（nodeRect 读它）
+          gestureHitPrepare(nf, nvw, nvh, DENSITY);
+          // ② 原生组件几何 = **核心算出的锚块几何**（不是我们手写的坐标）
+          const rectJson: string = nodeRect(1);
+          const rect = JSON.parse(rectJson) as Record<string, number>;
+          if (rectJson.indexOf('"ok":true') >= 0) {
+            this.nativeX = rect['x'];
+            this.nativeY = rect['y'];
+            this.nativeW = rect['w'];
+            this.nativeH = rect['h'];
+          }
+          this.nativeReady = true;   // → 排队一次页面重建（ContentSlot 会重挂载）
+          // ③ **下一帧**再渲染自绘（重建完成后——见 NativeMixRenderCallback 注释的四轮收敛）
+          this.getUIContext().postFrameCallback(
+            new NativeMixRenderCallback(this.content, nf, nvw, nvh,
+              this.nativeX, this.nativeY, this.nativeW, this.nativeH));
+          hilog.info(DOMAIN, BENCH_TAG, 'PROTEUS_NATIVEMIX_SETUP rect=%{public}s', rectJson);
+        } catch (nme) {
+          hilog.error(DOMAIN, BENCH_TAG, 'PROTEUS_NATIVEMIX_ERROR %{public}s', JSON.stringify(nme) ?? '');
         }
         return;
       }

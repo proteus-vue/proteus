@@ -91,6 +91,33 @@ chmod 600 ~/.harmony/hdckey ~/.harmony/hdckey.pub
 Android 走 JNI、iOS 走 staticlib、**鸿蒙走 `aarch64-unknown-linux-ohos` 交叉编译 + C ABI**（无绑定层）。
 交叉编译脚本：`bash hosts/harmony/build-rust-core.sh`（产物 `cpp/thirdparty/libproteus_layout_core.a`，gitignore）。
 
+### ✅ 第十四里程碑：**原生组件混用**（2026-10-03，矩阵 #10）
+
+> ArkUI **原生组件**（Row/Text）与 Proteus 自绘内容**共存**——**三判据 PASS**
+> （与 Android `native-host-verify.py` 三件事同族）：
+
+| # | 判据 | 读数 |
+|---|---|---|
+| ① | **位置由核心决定** | 原生组件 bounds `[56,210][336,378]` == `nodeRect` 核心几何 (16,60) 80×48 ×3.5（**逐位相同**） |
+| ② | 原生真的在渲染 | 目标区原生色占 **93.8%** |
+| ③ | **z-order 实测** | 重叠区自绘蓝 = **0** ⇒ ArkUI 原生在上 |
+
+**★定位语义四轮收敛（全部记进代码注释）**：
+① Stack 默认**居中** ⇒ `.position` 从居中位置起算 ⇒ 偏下；
+② `alignContent(TopStart)` 单独用 ⇒ **ContentSlot（自绘层）也跟着错位**（自绘全丢）；
+③ 包全屏 TopStart 容器 ⇒ 自绘层仍丢；
+④ **正解**：`.position` 相对**页面 Stack**（其 bounds `[0,168][1320,2758]` = 从状态栏下方起）
+⇒ 补偿 `NATIVE_MIX_Y_COMP = 168px ÷ 3.5 = 48vp`（**状态栏占位，可复算，不是 magic number**）。
+★另一个坑：`@State` 触发页面重建会**把 ContentSlot 重挂载** ⇒ 自绘内容随旧挂载点丢失
+⇒ **分两帧**（先 setState、下一帧再渲染自绘）。
+
+**★判据自检抓出的一处"判据建错靶"**：首版期望值又加了一次 Stack 偏移 ⇒ 把完全正确的组件判成错位
+（第四例同类教训——**判据侧的坐标系推导要与实现侧一致**）。另：`dumpLayout` 的 bounds 是**字符串**
+`'[56,210][336,378]'`，按数组解构会得 NaN ⇒ 恒判错。
+
+**采集**：`bash scripts/shoot-native-mix-harmony.sh`（安装→场景→dumpLayout→截图→判据，零盲等）；
+证据 `results/native-mix.json` + `results/native-mix.png` + `results/native-mix-layout.json`。
+
 ### ✅ 第十三里程碑：**字体族映射**（2026-10-03，矩阵 #9）
 
 > typography 字族解析（`OH_Drawing_SetTextStyleFontFamilies`）——与 iOS V13 **同款样本文本**

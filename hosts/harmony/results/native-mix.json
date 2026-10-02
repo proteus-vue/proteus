@@ -1,0 +1,28 @@
+{
+ "ok": true,
+ "path": "native-mix",
+ "host_id": "harmony",
+ "note": "鸿蒙腿：ArkUI 原生组件 + Proteus 自绘共存——位置由核心几何决定、原生真渲染、z-order 实测（原生在上）",
+ "native_bounds": "[56,210][336,378]",
+ "expected": [
+  56,
+  210,
+  336,
+  378
+ ],
+ "core_rect": [
+  16,
+  60,
+  80,
+  48
+ ],
+ "density": 3.5,
+ "red_ratio": 0.938,
+ "blue_px": 0,
+ "checks": {
+  "pos_from_core": true,
+  "native_renders": true,
+  "zorder_native_on_top": true
+ },
+ "verdict": "PASS"
+}

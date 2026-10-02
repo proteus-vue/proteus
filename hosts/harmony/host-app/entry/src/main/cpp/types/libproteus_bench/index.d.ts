@@ -41,5 +41,7 @@ export const gestureHitPrepare: (fixtureJson: string, vpW: number, vpH: number, 
 export const gestureHitAt: (xDesign: number, yDesign: number) => string;
 /** ★矩阵 #9：字体族端到端（同样文本同字号三族 ⇒ 度量分流 + 同族稳定性反例） */
 export const fontFamilyProbe: () => string;
+/** ★矩阵 #10：读核心真源的单节点几何（设计单位）——ArkUI 原生组件按此定位 */
+export const nodeRect: (nodeId: number) => string;
 /** Rust 排版核版本（仪器自检） */
 export const version: () => string;
