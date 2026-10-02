@@ -21,6 +21,8 @@ endif()
 # 渲染模块（直绘）
 add_library(proteus_render SHARED proteus_render.cpp)
 target_link_libraries(proteus_render PUBLIC libace_napi.z.so libace_ndk.z.so libhilog_ndk.z.so)
+# ★文本上屏：ArkGraphics2D typography（content modifier 回调里绘制）
+target_link_libraries(proteus_render PUBLIC libnative_drawing.so)
 
 # 4050 基准模块（Rust 核 + RenderNode）
 if(HAVE_RUST_CORE)

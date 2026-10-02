@@ -39,14 +39,23 @@ interface RenderCmdFixture {
   h: number;
   color: number;
   radius: number;
+  /** ★文本上屏（2026-10-02）：带 text 的指令走 content modifier + typography */
+  text?: string;
+  fontSize?: number;
+  textColor?: number;
 }
 
 function buildTestCommands(): string {
+  // ★色彩块 + 白色文字（文字经 typography 真绘制——见 proteus_render.cpp 的 DrawTextCallback）
   const cmds: RenderCmdFixture[] = [
-    { kind: 'background', x: 40, y: 120, w: 300, h: 160, color: cssToArgb('#3478F6'), radius: 16 },
-    { kind: 'background', x: 60, y: 300, w: 260, h: 120, color: cssToArgb('#F5A623'), radius: 12 },
-    { kind: 'background', x: 80, y: 440, w: 220, h: 100, color: cssToArgb('#1ABC9C'), radius: 8 },
-    { kind: 'background', x: 100, y: 560, w: 180, h: 80, color: cssToArgb('#9B59B6'), radius: 24 },
+    { kind: 'background', x: 40, y: 120, w: 300, h: 80, color: cssToArgb('#3478F6'), radius: 16,
+      text: 'Proteus 文本上屏', fontSize: 24, textColor: cssToArgb('#FFFFFF') },
+    { kind: 'background', x: 40, y: 220, w: 300, h: 80, color: cssToArgb('#F5A623'), radius: 12,
+      text: 'typography 直绘', fontSize: 22, textColor: cssToArgb('#FFFFFF') },
+    { kind: 'background', x: 40, y: 320, w: 300, h: 80, color: cssToArgb('#1ABC9C'), radius: 8,
+      text: 'RenderNode content', fontSize: 20, textColor: cssToArgb('#FFFFFF') },
+    { kind: 'background', x: 40, y: 420, w: 300, h: 80, color: cssToArgb('#9B59B6'), radius: 24,
+      text: 'API 26 真机', fontSize: 20, textColor: cssToArgb('#FFFFFF') },
   ];
   return JSON.stringify(cmds);
 }

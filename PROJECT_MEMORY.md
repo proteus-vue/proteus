@@ -87,6 +87,30 @@ check-consistency-snapshot 七段全绿 · check:no-blind-wait ✅（新 .sh 零
 ① L2/L3/L2.5/L2.6 算子用**合成快照**——证明的是"比对引擎敏不敏感"，不是"真机数据一定对"；
 ② L4 算子用真截图但取同端注入（跨端噪声底含 AA，无区分度）；L4 的价值形态是**定位**。
 
+### ★★★2026-10-02（六十六）· 鸿蒙**文本上屏**打通（探针级 → 上屏级）
+
+**用户「继续」→ 把文本通道从上屏缺口补成上屏可用**：
+
+**实现**：`proteus_render.cpp` 新增 `DrawTextCallback` —— 指令带 `"text"` 时给该 RenderNode 挂
+**content modifier**（`CreateContentModifier → SetContentModifierOnDraw(cb) → AttachContentModifier`），
+回调里 `OH_ArkUI_DrawContext_GetCanvas` 取画布 → **typography 真绘制**（与 textProbe 同一通道）。
+
+**真机验证**：
+- 上报 `PROTEUS_RENDER_DONE nodes=4 parsed=4 **texts=4**`（四段文本全挂载）；
+- **截图四段文字真实可见**（`results/render-text-demo.jpeg`）——"Proteus 文本上屏 / typography 直绘 /
+  RenderNode content / API 26 真机"四行字均在对应色块上。
+
+**★两个新踩的坑（写进代码注释）**：
+1. **JSON 切分**：首版用第一个 `}` 截断——含 `}` 的文本或嵌套对象会断；改**大括号计数 + 字符串感知**
+   （引号内不计数、`\` 转义跳过）；
+2. **字号口径**：24 传入后按 vp 渲染 ⇒ 视觉偏小（截图可见）——vp/px 换算校准待做（如实标注为开项）。
+
+**矩阵**：鸿蒙 7/22 → **8/22**（文本通道从"探针"升为"上屏"）。
+
+**诚实边界**：① 字号口径未校准（vp/px）；② `TextDrawSpec` 生命周期绑节点但未挂析构（原型级——
+RenderNode 销毁时泄漏，正式版需析构回调）；③ 仅单行文本（无换行/富文本）；④ 文本**度量**仍未接
+（排版走桩度量；真实文本尺寸需接 typography 的 measure）。
+
 ### ★★★2026-10-02（六十五）· 鸿蒙能力域补齐（4 项真机探针，按矩阵 P0/P1 执行）
 
 **用户「不错，继续」→ 按《三端测试能力矩阵》优先级逐项补**（鸿蒙 4/22 → 7/22）：

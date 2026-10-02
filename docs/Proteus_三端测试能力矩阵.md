@@ -14,7 +14,7 @@
 | 5 | **滚动（平台侧）** | ✅ `scroll`/`scroll-core`/`scroll-native` | ✅ V12 滚动帧 | ⛔ **缺** | 鸿蒙待补（设备横滑/竖滚 + 帧率） |
 | 6 | **命中测试（三层）** | ✅ `hit` | ✅ `hit_probes`（与 Android 同探针） | ✅ **已补** | 鸿蒙 `hitProbe`：**6/6 与两端逐位一致**（同场景同探针点） |
 | 7 | **手势** | ✅ `gesture`（GestureDetector + 核心 target） | ❌ **缺** | ⛔ **缺** | iOS/鸿蒙待补（`packages/gesture` 已三端中立） |
-| 8 | **文本通道** | ✅ drawText/StaticLayout 分流 + 归因 | ✅ CoreText（`measureText`） | ◐ **探针已通** | 鸿蒙 `textProbe`：ArkGraphics2D typography **200 项/8.0ms（40μs/项）**；★上屏接线（RenderNode content modifier）待做 |
+| 8 | **文本通道** | ✅ drawText/StaticLayout 分流 + 归因 | ✅ CoreText（`measureText`） | ✅ **上屏已通** | 鸿蒙：`textProbe`（typography 构建 200 项/8.0ms）**+ 上屏接线**（`proteus_render.cpp` 的 `DrawTextCallback`：RenderNode content modifier 回调里 typography 真绘制；真机截图四段文字可见）。★字号口径（vp/px）校准待做 |
 | 9 | **字体族映射** | ✅ `font-family`（与 iOS V13 同契约） | ✅ V13 | ⛔ **缺** | 鸿蒙待补 |
 | 10 | **原生组件混用（L3）** | ✅ `native`/`native-host`/`shot-scroll-native` | ❌ **缺** | ⛔ **缺** | iOS/鸿蒙待补（方案坑位 #4 的核心） |
 | 11 | **结构变更（splice/apply-ops）** | ✅ `splice`/`apply-ops` | ❌ **缺** | ✅ **已补** | 鸿蒙 `spliceProbe`：**4/4 判据过**（rects 4→5 / removed=0,inserted=1 / 新节点高 50.0 / 重排 5 有界）——与 Android 同 payload |
@@ -30,7 +30,7 @@
 | 21 | **一致性快照（L2-L4）** | ✅ | ✅ | ⛔ **缺** | 鸿蒙待补 |
 | 22 | **Perfetto / 帧率** | ✅（Perfetto 接入） | ◐（帧统计） | ⛔ **缺** | |
 
-**统计**：Android 22/22 · iOS **15/22** · 鸿蒙 **7/22**（本轮 4→7：命中 / 复用池 / 结构变更 / 文本通道探针）。
+**统计**：Android 22/22 · iOS **15/22** · 鸿蒙 **8/22**（本轮 4→8：命中 / 复用池 / 结构变更 / 文本通道**上屏**）。
 
 ## 2. 缺口归因（为什么鸿蒙最少）
 
@@ -66,9 +66,12 @@ iOS 的缺口（手势 / 原生组件混用 / 结构变更 / splice）是**历�
 - ✅ **命中测试**（P0）：`hitProbe` 6/6 逐位一致；
 - ✅ **长列表复用池**（P0）：`recycleProbe` reuse_ratio **0.9962**（对齐 Android 0.9947 / iOS 95.5%）；
 - ✅ **结构变更**（P1）：`spliceProbe` 4/4 判据（与 Android 同 payload）；
-- ✅ **文本通道探针**（P1）：`textProbe` ArkGraphics2D 200 项/8.0ms。
+- ✅ **文本通道**（P1，探针 + **上屏**）：`textProbe` 200 项/8.0ms；**上屏已通**——
+  `proteus_render.cpp` 的 `DrawTextCallback`（content modifier 回调 → typography 绘制），
+  真机截图四段文字可见（`results/render-text-demo.jpeg`）。
   ★所有权实测（两轮定位，已写进代码注释）：`FontCollection` 跨 `CreateTypographyHandler`
   **复用会 CppCrash**（Run B）⇒ 采用"每次迭代完整创建/销毁"形态（Run A，可复现）。
+  ★指令切分修正：首版用第一个 `}` 截断 JSON——含 `}` 的文本会断；改**大括号计数 + 字符串感知**。
 
 ## 5. 诚实边界
 

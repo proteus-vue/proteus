@@ -1,7 +1,7 @@
-installed_at=2026-10-02T15:39:36Z
+installed_at=2026-10-02T15:43:00Z
 hap=/Volumes/data1/work/office/debug/proteus/hosts/harmony/host-app/entry/build/default/outputs/default/entry-default-signed.hap
-ready_line=10-02 23:39:33.321 37451 37451 I A00001/dev.proteus.host/ProteusHost: PROTEUS_HOST_READY model=KLE-AL00U os=OpenHarmony-7.0.0.105 api=26 display=KLE-AL00 7.0.0.109(SP6C00E105R3P3)
-render_line=10-02 23:39:33.391 37451 37451 I A00002/dev.proteus.host/ProteusRender: PROTEUS_RENDER_DONE nodes=4 parsed=4
-bench_line=10-02 23:39:33.656 37451 37451 I A00002/dev.proteus.host/ProteusBench: PROTEUS_BENCH_RESULT limit=4050 wall_ms=71 {"ok":true,"engine":"proteus-layout-core 0.1.0 · engine=taffy-0.14 · taffy 锁定 0.14（0.13 有 measure 指数退化）","node_count":4051,"rect_count":4051,"bg_node_count":4000,"built_render_nodes":4000,"scope_ms":62.51,"layout_ms":11.85,"emit_ms":50.66,"note":"鸿蒙腿：Rust 核（aarch64-unknown-linux-ohos）+ RenderNode 直绘树构建；文本绘制未实现（只建带背景色节点）"}
-native_line=10-02 23:39:35.045 37451 37451 I A00002/dev.proteus.host/ProteusBench: PROTEUS_BENCH_NATIVE wall_ms=588 appeared=4050
-native_warm_line=10-02 23:39:36.108 37451 37451 I A00002/dev.proteus.host/ProteusBench: PROTEUS_BENCH_NATIVE_WARM wall_ms=562 appeared=4050
+ready_line=10-02 23:42:56.700 39550 39550 I A00001/dev.proteus.host/ProteusHost: PROTEUS_HOST_READY model=KLE-AL00U os=OpenHarmony-7.0.0.105 api=26 display=KLE-AL00 7.0.0.109(SP6C00E105R3P3)
+render_line=10-02 23:42:56.806 39550 39550 I A00002/dev.proteus.host/ProteusRender: PROTEUS_RENDER_DONE nodes=4 parsed=4 texts=4
+bench_line=10-02 23:42:57.069 39550 39550 I A00002/dev.proteus.host/ProteusBench: PROTEUS_BENCH_RESULT limit=4050 wall_ms=70 {"ok":true,"engine":"proteus-layout-core 0.1.0 · engine=taffy-0.14 · taffy 锁定 0.14（0.13 有 measure 指数退化）","node_count":4051,"rect_count":4051,"bg_node_count":4000,"built_render_nodes":4000,"scope_ms":61.16,"layout_ms":12.06,"emit_ms":49.10,"note":"鸿蒙腿：Rust 核（aarch64-unknown-linux-ohos）+ RenderNode 直绘树构建；文本绘制未实现（只建带背景色节点）"}
+native_line=10-02 23:42:58.470 39550 39550 I A00002/dev.proteus.host/ProteusBench: PROTEUS_BENCH_NATIVE wall_ms=600 appeared=4050
+native_warm_line=10-02 23:42:59.547 39550 39550 I A00002/dev.proteus.host/ProteusBench: PROTEUS_BENCH_NATIVE_WARM wall_ms=576 appeared=4050

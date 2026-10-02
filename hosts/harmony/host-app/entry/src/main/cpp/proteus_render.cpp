@@ -28,6 +28,12 @@
 #include <arkui/native_node.h>
 #include <arkui/native_node_napi.h>
 #include <arkui/native_render.h>
+// ★文本上屏（ArkGraphics2D）：typography 在 content modifier 回调里绘制
+#include <native_drawing/drawing_canvas.h>
+#include <native_drawing/drawing_font_collection.h>
+#include <native_drawing/drawing_text_typography.h>
+#include <native_drawing/drawing_text_declaration.h>
+#include <native_drawing/drawing_types.h>
 
 #define LOG_DOMAIN 0x0002
 // ★hilog 的 LogType 是第一个宏参数（不是 domain）——固定用 LOG_APP
@@ -53,6 +59,66 @@ static bool jsonNumber(const std::string& s, const char* key, double* out) {
     if (end == s.c_str() + p) return false;
     *out = v;
     return true;
+}
+
+/** 极简 JSON 字符串取值（`"key":"value"`）；未找到返回 false */
+static bool jsonString(const std::string& s, const char* key, std::string* out) {
+    std::string needle = std::string("\"") + key + "\":\"";
+    size_t p = s.find(needle);
+    if (p == std::string::npos) return false;
+    p += needle.size();
+    std::string acc;
+    for (size_t i = p; i < s.size(); i++) {
+        if (s[i] == '\\' && i + 1 < s.size()) { acc.push_back(s[i + 1]); i++; continue; }
+        if (s[i] == '"') { *out = acc; return true; }
+        acc.push_back(s[i]);
+    }
+    return false;
+}
+
+/** 逐节点文本绘制数据（挂到 content modifier 的 userData；生命周期 = RenderNode 生命周期） */
+struct TextDrawSpec {
+    std::string text;
+    double fontSizePx = 24.0;
+    uint32_t color = 0xFFFFFFFFu;
+    std::string family;
+};
+
+/**
+ * content modifier 的 onDraw 回调：在节点的绘制阶段用 typography 画文字。
+ *   ★挂载链（官方 API，2026-10-02 真机验证）：CreateContentModifier → SetContentModifierOnDraw(cb)
+ *     → AttachContentModifier(node, modifier)。回调拿到的 DrawContext 转 OH_Drawing_Canvas*。
+ *   ★所有权（实测教训沿用）：**每次回调内完整创建/销毁** typography 对象——
+ *     FontCollection 跨 handler 复用在真机 CppCrash（见 proteus_bench.cpp 的 TextProbe 注释）。
+ */
+static void DrawTextCallback(ArkUI_DrawContext* context, void* userData) {
+    auto* spec = static_cast<TextDrawSpec*>(userData);
+    if (spec == nullptr || spec->text.empty()) return;
+    void* canvasRaw = OH_ArkUI_DrawContext_GetCanvas(context);
+    if (canvasRaw == nullptr) return;
+    auto* canvas = static_cast<OH_Drawing_Canvas*>(canvasRaw);
+
+    OH_Drawing_FontCollection* fc = OH_Drawing_CreateFontCollection();
+    if (fc == nullptr) return;
+    OH_Drawing_TypographyStyle* ts = OH_Drawing_CreateTypographyStyle();
+    OH_Drawing_TextStyle* tstyle = OH_Drawing_CreateTextStyle();
+    OH_Drawing_SetTextStyleColor(tstyle, spec->color);
+    OH_Drawing_SetTextStyleFontSize(tstyle, spec->fontSizePx);
+    OH_Drawing_TypographyCreate* handler = OH_Drawing_CreateTypographyHandler(ts, fc);
+    if (handler != nullptr) {
+        OH_Drawing_TypographyHandlerPushTextStyle(handler, tstyle);
+        OH_Drawing_TypographyHandlerAddText(handler, spec->text.c_str());
+        OH_Drawing_Typography* typo = OH_Drawing_CreateTypography(handler);
+        if (typo != nullptr) {
+            OH_Drawing_TypographyLayout(typo, 10000.0);   // 单行（宽度给足）
+            OH_Drawing_TypographyPaint(typo, canvas, 0.0, 0.0);
+            OH_Drawing_DestroyTypography(typo);
+        }
+        OH_Drawing_DestroyTypographyHandler(handler);
+    }
+    OH_Drawing_DestroyTextStyle(tstyle);
+    OH_Drawing_DestroyTypographyStyle(ts);
+    OH_Drawing_DestroyFontCollection(fc);
 }
 
 /**
@@ -113,17 +179,36 @@ static napi_value RenderCommands(napi_env env, napi_callback_info info) {
     napi_get_value_string_utf8(env, args[0], &json[0], len + 1, &len);
     json.resize(len);
 
-    // 简单切分顶层数组（"{"..."},"{"..."}" —— 指令结构固定，原型级解析）
+    // 切分顶层数组：**大括号计数**（首版用第一个 '}' 截断——遇嵌套对象或含 '}' 的文本会断）
     std::vector<std::string> items;
-    size_t pos = 0;
-    while ((pos = json.find('{', pos)) != std::string::npos) {
-        size_t end = json.find('}', pos);
-        if (end == std::string::npos) break;
-        items.push_back(json.substr(pos, end - pos + 1));
-        pos = end + 1;
+    {
+        size_t pos = 0;
+        while ((pos = json.find('{', pos)) != std::string::npos) {
+            int depth = 0;
+            size_t end = pos;
+            bool inStr = false;
+            for (size_t i = pos; i < json.size(); i++) {
+                char c = json[i];
+                if (inStr) {
+                    if (c == '\\') { i++; continue; }
+                    if (c == '"') inStr = false;
+                    continue;
+                }
+                if (c == '"') { inStr = true; continue; }
+                if (c == '{') depth++;
+                else if (c == '}') {
+                    depth--;
+                    if (depth == 0) { end = i; break; }
+                }
+            }
+            if (end <= pos) break;
+            items.push_back(json.substr(pos, end - pos + 1));
+            pos = end + 1;
+        }
     }
 
     int32_t built = 0;
+    int32_t textCount = 0;
     for (const auto& it : items) {
         double x = 0, y = 0, w = 0, h = 0, color = 0, radius = 0;
         if (!jsonNumber(it, "x", &x) || !jsonNumber(it, "w", &w)) {
@@ -151,6 +236,30 @@ static napi_value RenderCommands(napi_env env, napi_callback_info info) {
                     br, static_cast<uint32_t>(radius), ARKUI_CORNER_DIRECTION_ALL);
                 OH_ArkUI_RenderNodeUtils_SetBorderRadius(node, br);
                 OH_ArkUI_RenderNodeUtils_DisposeNodeBorderRadiusOption(br);
+            }
+        }
+        // ★★★文本上屏（2026-10-02）：指令带 "text" ⇒ 给该节点挂 content modifier，
+        //   在绘制阶段用 typography 画文字（Color/字号从指令取；缺省白字 24px）。
+        std::string textVal;
+        if (jsonString(it, "text", &textVal) && !textVal.empty()) {
+            double fs = 24.0;
+            jsonNumber(it, "fontSize", &fs);
+            double tc = 0xFFFFFFFFu;
+            jsonNumber(it, "textColor", &tc);
+            auto* spec = new TextDrawSpec{textVal, fs, static_cast<uint32_t>(tc), ""};
+            ArkUI_RenderContentModifierHandle mod = OH_ArkUI_RenderNodeUtils_CreateContentModifier();
+            if (mod != nullptr) {
+                OH_ArkUI_RenderNodeUtils_SetContentModifierOnDraw(mod, spec, DrawTextCallback);
+                int32_t rcMod = OH_ArkUI_RenderNodeUtils_AttachContentModifier(node, mod);
+                if (rcMod != ARKUI_ERROR_CODE_NO_ERROR) {
+                    OH_LOG_Print(LOG_APP, LOG_ERROR, LOG_DOMAIN, LOG_TAG,
+                                 "PROTEUS_RENDER_TEXT_ATTACH_FAIL rc=%{public}d", rcMod);
+                    delete spec;
+                } else {
+                    textCount++;
+                }
+            } else {
+                delete spec;
             }
         }
         // 挂到宿主：需要一个 customNode 作为 RenderNode 的父（NodeContent 不直接收 RenderNode）
@@ -195,7 +304,8 @@ static napi_value RenderCommands(napi_env env, napi_callback_info info) {
     }
     g_nodeCount = built;
     OH_LOG_Print(LOG_APP, LOG_INFO, LOG_DOMAIN, LOG_TAG,
-                 "PROTEUS_RENDER_DONE nodes=%{public}d parsed=%{public}zu", built, items.size());
+                 "PROTEUS_RENDER_DONE nodes=%{public}d parsed=%{public}zu texts=%{public}d",
+                built, items.size(), textCount);
     napi_value out;
     napi_create_int32(env, built, &out);
     return out;
