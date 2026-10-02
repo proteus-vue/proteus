@@ -40,13 +40,13 @@
     "rect_calls" : 2,
     "screens" : [
       {
-        "rootNodeId" : 100,
-        "screenId" : "home#1",
+        "rootNodeId" : 120,
+        "screenId" : "r-user#3",
         "visible" : true
       },
       {
-        "rootNodeId" : 120,
-        "screenId" : "r-user#3",
+        "rootNodeId" : 100,
+        "screenId" : "home#1",
         "visible" : true
       }
     ],
@@ -55,7 +55,7 @@
   },
   "e_mirror_ok" : true,
   "e_pending_anims" : 0,
-  "e_pump_rounds" : 92,
+  "e_pump_rounds" : 91,
   "e_stats" : {
     "back" : 1,
     "commands" : 8,
@@ -208,13 +208,13 @@
       "rect_calls" : 0,
       "screens" : [
         {
-          "rootNodeId" : 100,
-          "screenId" : "home#1",
+          "rootNodeId" : 120,
+          "screenId" : "r-user#3",
           "visible" : true
         },
         {
-          "rootNodeId" : 120,
-          "screenId" : "r-user#3",
+          "rootNodeId" : 100,
+          "screenId" : "home#1",
           "visible" : true
         }
       ],

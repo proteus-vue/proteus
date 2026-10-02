@@ -59,6 +59,10 @@ final class AppStackScene: NSObject {
         let projOut = evalJs?("__proteusAppProjectRun('{\"steps\":3}')") ?? "null"
         if let pd = projOut.data(using: .utf8), let po = (try? JSONSerialization.jsonObject(with: pd)) as? [String: Any] {
             for (k, v) in po { merged["p_\(k)"] = v }
+            // ★★两端字段名统一（本仓实测踩到：iOS 产出 `p_ok` 而判据读 `p_run_ok` ⇒ 误报"旧 bundle"）：
+            //   入口返回的 `ok` 在 Android 侧被宿主单独放进 `p_run_ok`，iOS 侧经前缀变成 `p_ok`
+            //   ⇒ 这里显式补别名，两端同名同形（判据一份脚本读两端）。
+            merged["p_run_ok"] = po["ok"] ?? false
         } else {
             merged["p_error"] = "项目驱动入口调用失败（返回值不可解析）"
         }

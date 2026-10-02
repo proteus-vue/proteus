@@ -343,6 +343,49 @@ function validate(pages: PageInfo[], routes: RouteRecord[]): void {
   if (dupNames.length) {
     throw new Error(`[gen-routes] 命名路由重复：${dupNames.map(r => r.name).join(', ')}`)
   }
+
+  // ★★★（2026-10-02 · 依《主流框架路由调研》启示 6「路由不存在 = 编译错误」）
+  //   **跨路由引用必须在构建期闭合** —— 这些字段是"指向另一条路由"的名字：
+  //     · `meta.redirectTo`（本仓 meta 约定：整栈替换目标）
+  //     · `meta.parent`（显式父子，`buildRouteTree` 会用它挂载）
+  //     · `router.tabBar.list[].name`（tab 引用）
+  //   ★为什么必须校验（调研的痛点原文）：uni-app「层级限制只写'有'不给数字」、
+  //     小程序 URL 传参限制、Next.js 并行路由未匹配 → **硬 404** —— 生态里"拼错名字"普遍
+  //     只在**运行时**炸（或更糟：静默跳错页）。本仓已有编译期路由表 ⇒ 应当**构建期闭合**。
+  //   ★与本文件其余构建期校验同款：**抛出并指名文件/行**（不静默、不降级）。
+  const nameSet = new Set(routes.map((r) => r.name))
+  const refErrors: string[] = []
+  for (const r of routes) {
+    const meta = (r.meta ?? {}) as Record<string, unknown>
+    const check = (field: string, target: unknown): void => {
+      if (target === undefined || target === null || target === '') return // 未声明 = 不校验
+      if (typeof target !== 'string') {
+        refErrors.push(`${r.name} 的 meta.${field} 必须是路由名字符串（收到 ${JSON.stringify(target)}）`)
+        return
+      }
+      if (!nameSet.has(target)) {
+        refErrors.push(
+          `${r.name} 的 meta.${field}="${target}" 指向不存在的路由` +
+            `（可用：${[...nameSet].slice(0, 6).join(', ')}${nameSet.size > 6 ? ' …' : ''}）`,
+        )
+      }
+    }
+    check('redirectTo', meta.redirectTo)
+    check('parent', meta.parent)
+  }
+  // tabBar 引用（router.tabBar.list[].name → 路由名）
+  for (const item of rc.tabBar?.list ?? []) {
+    if (!nameSet.has(item.name)) {
+      refErrors.push(`router.tabBar.list 的 "${item.name}" 指向不存在的路由（tab 会静默失效）`)
+    }
+  }
+  if (refErrors.length) {
+    throw new Error(
+      `[gen-routes] 跨路由引用未闭合（${refErrors.length} 条）——拼错的路由名在运行期只会静默失败：\n` +
+        refErrors.map((e) => `  · ${e}`).join('\n') +
+        '\n  修法：改为已存在的路由名，或在配置里删掉该引用（可用路由见 routesOutput 产物）',
+    )
+  }
 }
 
 /** 格式化一条路由记录（产物保持可读，贴近手写） */
