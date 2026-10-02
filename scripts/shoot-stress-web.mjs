@@ -66,6 +66,19 @@ try {
     await page.evaluate(() => document.fonts.ready.then(() => true))
     // ★锚点存在断言（防"路由没匹配上/页面没渲染"——比颜色探针更早失败更明确）
     await page.waitForSelector('#stress-anchor', { timeout: 15000 })
+    // ★★**宿主页面归一**（2026-10-02 · 子代理独立审计抓出的两个装置缺陷）：
+    //   ① `body` 默认 `margin: 8px`（examples 的 HTML 没有 CSS reset）⇒ 应用盒从 (8,8) 起，
+    //     截图上/左出现 8 CSS px **白边**（画布色从 (16,16) 设备像素才开始）——
+    //     与 MP（`page{}` 已设画布色）/ Android（Activity 同色）/ iOS 同目标 ⇒ 必须中和；
+    //   ② Proteus Devtools 的**浮动开关** `.pd-floating-toggle`（fixed 右下角 40×40）
+    //     压在应用画布内（实测逻辑 x326..365 / y780..819，与行 10/页脚重叠）⇒ 截图前隐藏。
+    //   ★这是**装置层**归一（对齐"四端画布同色"的目标），不动 fixtures/应用本身。
+    await page.addStyleTag({
+      content:
+        'html, body { margin: 0; padding: 0; }' +
+        'html, body { background: #14141c; }' +
+        '.pd-floating-toggle, .pd-floating-host { display: none !important; }',
+    })
     // ★★等**路由转场结束**（本仓实测踩到的假红）：examples 的路由有**层叠转场**
     //   （`router-view layered` + barrier 遮罩压暗旧页）⇒ 转场期间截图会把整页颜色压暗
     //   （实测锚块蓝被压成 [162,190,246] 而非 [47,111,237]）。

@@ -5954,6 +5954,11 @@ final class SelfDrawViewController: UIViewController {
     ///   ⇒ 采集脚本的 `launch --console` **返回即完成**（与既有实验脚本同一机制）。
     private func driveStress(ctx: JSContext) {
         let evalJs = { (expr: String) -> String in ctx.evaluateScript(expr)?.toString() ?? "null" }
+        // ★★装置归一（2026-10-02 · 独立审计抓出）：宿主画布底色 = 夹具画布色 #14141c——
+        //   与 Android `root.setBackgroundColor(0xFF14141C)` / Web `html,body{background}` 同义。
+        //   否则应用画布（375×800）之外的屏幕区域露出宿主黑（402×874 屏 ⇒ 右 27 / 下 74），
+        //   在像素对比中成为**大面积假差异**（审计实测确认存在）。
+        bridge.view?.backgroundColor = UIColor(red: 0x14 / 255.0, green: 0x14 / 255.0, blue: 0x1C / 255.0, alpha: 1)
         let out = evalJs("__proteus.renderStress()")
         NSLog("[proteus] stress 渲染：%@", String(out.prefix(240)))
         // ★截图（宿主自有能力：UIGraphicsImageRenderer 渲染视图层——与 `snapshot(named:)` 同路径）

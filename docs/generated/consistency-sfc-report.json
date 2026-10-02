@@ -55,53 +55,37 @@
           "height": 744
         },
         "sampleCount": 279000,
-        "diffPixels": 12021,
-        "diffRatio": 0.04309,
-        "hashDistance": 2,
+        "diffPixels": 7133,
+        "diffRatio": 0.02557,
+        "hashDistance": 0,
         "regions": [
-          {
-            "x": 96,
-            "y": 64,
-            "w": 16,
-            "h": 16,
-            "pixels": 159,
-            "ratio": 0.621
-          },
           {
             "x": 128,
             "y": 64,
             "w": 16,
             "h": 16,
-            "pixels": 150,
-            "ratio": 0.586
+            "pixels": 148,
+            "ratio": 0.578
           },
           {
             "x": 144,
             "y": 64,
             "w": 16,
             "h": 16,
-            "pixels": 140,
-            "ratio": 0.547
+            "pixels": 146,
+            "ratio": 0.57
+          },
+          {
+            "x": 96,
+            "y": 64,
+            "w": 16,
+            "h": 16,
+            "pixels": 137,
+            "ratio": 0.535
           },
           {
             "x": 48,
             "y": 64,
-            "w": 16,
-            "h": 16,
-            "pixels": 135,
-            "ratio": 0.527
-          },
-          {
-            "x": 32,
-            "y": 64,
-            "w": 16,
-            "h": 16,
-            "pixels": 134,
-            "ratio": 0.523
-          },
-          {
-            "x": 112,
-            "y": 688,
             "w": 16,
             "h": 16,
             "pixels": 134,
@@ -116,12 +100,28 @@
             "ratio": 0.516
           },
           {
-            "x": 96,
-            "y": 176,
+            "x": 32,
+            "y": 64,
             "w": 16,
             "h": 16,
-            "pixels": 131,
-            "ratio": 0.512
+            "pixels": 119,
+            "ratio": 0.465
+          },
+          {
+            "x": 64,
+            "y": 64,
+            "w": 16,
+            "h": 16,
+            "pixels": 119,
+            "ratio": 0.465
+          },
+          {
+            "x": 112,
+            "y": 688,
+            "w": 16,
+            "h": 16,
+            "pixels": 119,
+            "ratio": 0.465
           }
         ],
         "params": {
@@ -183,8 +183,8 @@
           "height": 744
         },
         "sampleCount": 279000,
-        "diffPixels": 11130,
-        "diffRatio": 0.03989,
+        "diffPixels": 14542,
+        "diffRatio": 0.05212,
         "hashDistance": 2,
         "regions": [
           {
@@ -192,64 +192,64 @@
             "y": 64,
             "w": 16,
             "h": 16,
-            "pixels": 182,
-            "ratio": 0.711
-          },
-          {
-            "x": 48,
-            "y": 64,
-            "w": 16,
-            "h": 16,
-            "pixels": 151,
-            "ratio": 0.59
-          },
-          {
-            "x": 128,
-            "y": 64,
-            "w": 16,
-            "h": 16,
-            "pixels": 143,
-            "ratio": 0.559
+            "pixels": 189,
+            "ratio": 0.738
           },
           {
             "x": 144,
             "y": 64,
             "w": 16,
             "h": 16,
-            "pixels": 143,
-            "ratio": 0.559
+            "pixels": 161,
+            "ratio": 0.629
+          },
+          {
+            "x": 112,
+            "y": 688,
+            "w": 16,
+            "h": 16,
+            "pixels": 159,
+            "ratio": 0.621
+          },
+          {
+            "x": 96,
+            "y": 464,
+            "w": 16,
+            "h": 16,
+            "pixels": 154,
+            "ratio": 0.602
+          },
+          {
+            "x": 128,
+            "y": 640,
+            "w": 16,
+            "h": 16,
+            "pixels": 154,
+            "ratio": 0.602
           },
           {
             "x": 160,
             "y": 64,
             "w": 16,
             "h": 16,
+            "pixels": 152,
+            "ratio": 0.594
+          },
+          {
+            "x": 48,
+            "y": 688,
+            "w": 16,
+            "h": 16,
             "pixels": 143,
             "ratio": 0.559
           },
           {
-            "x": 64,
+            "x": 48,
             "y": 64,
             "w": 16,
             "h": 16,
-            "pixels": 140,
-            "ratio": 0.547
-          },
-          {
-            "x": 80,
-            "y": 64,
-            "w": 16,
-            "h": 16,
-            "pixels": 137,
-            "ratio": 0.535
-          },
-          {
-            "x": 16,
-            "y": 688,
-            "w": 16,
-            "h": 16,
-            "pixels": 135,
-            "ratio": 0.527
+            "pixels": 141,
+            "ratio": 0.551
           }
         ],
         "params": {
@@ -287,8 +287,8 @@
           },
           "colorSpace": "undeclared",
           "block": {
-            "x": 48,
-            "y": 136,
+            "x": 32,
+            "y": 120,
             "w": 160,
             "h": 96
           },
@@ -311,73 +311,73 @@
           "height": 744
         },
         "sampleCount": 279000,
-        "diffPixels": 13009,
-        "diffRatio": 0.04663,
-        "hashDistance": 2,
+        "diffPixels": 4936,
+        "diffRatio": 0.01769,
+        "hashDistance": 0,
         "regions": [
-          {
-            "x": 336,
-            "y": 720,
-            "w": 16,
-            "h": 16,
-            "pixels": 184,
-            "ratio": 0.719
-          },
-          {
-            "x": 96,
-            "y": 64,
-            "w": 16,
-            "h": 16,
-            "pixels": 162,
-            "ratio": 0.633
-          },
           {
             "x": 128,
             "y": 64,
             "w": 16,
             "h": 16,
-            "pixels": 157,
-            "ratio": 0.613
+            "pixels": 160,
+            "ratio": 0.625
           },
           {
             "x": 144,
             "y": 64,
             "w": 16,
             "h": 16,
-            "pixels": 148,
-            "ratio": 0.578
+            "pixels": 152,
+            "ratio": 0.594
           },
           {
             "x": 80,
             "y": 64,
             "w": 16,
             "h": 16,
-            "pixels": 142,
-            "ratio": 0.555
+            "pixels": 146,
+            "ratio": 0.57
           },
           {
-            "x": 112,
-            "y": 688,
-            "w": 16,
-            "h": 16,
-            "pixels": 141,
-            "ratio": 0.551
-          },
-          {
-            "x": 32,
+            "x": 96,
             "y": 64,
             "w": 16,
             "h": 16,
-            "pixels": 138,
-            "ratio": 0.539
+            "pixels": 146,
+            "ratio": 0.57
           },
           {
             "x": 48,
             "y": 64,
             "w": 16,
             "h": 16,
-            "pixels": 137,
-            "ratio": 0.535
+            "pixels": 143,
+            "ratio": 0.559
+          },
+          {
+            "x": 64,
+            "y": 64,
+            "w": 16,
+            "h": 16,
+            "pixels": 126,
+            "ratio": 0.492
+          },
+          {
+            "x": 32,
+            "y": 64,
+            "w": 16,
+            "h": 16,
+            "pixels": 122,
+            "ratio": 0.477
+          },
+          {
+            "x": 112,
+            "y": 688,
+            "w": 16,
+            "h": 16,
+            "pixels": 118,
+            "ratio": 0.461
           }
         ],
         "params": {
@@ -439,8 +439,8 @@
           "height": 744
         },
         "sampleCount": 279000,
-        "diffPixels": 14083,
-        "diffRatio": 0.05048,
+        "diffPixels": 15540,
+        "diffRatio": 0.0557,
         "hashDistance": 2,
         "regions": [
           {
@@ -468,6 +468,22 @@
             "ratio": 0.621
           },
           {
+            "x": 96,
+            "y": 464,
+            "w": 16,
+            "h": 16,
+            "pixels": 158,
+            "ratio": 0.617
+          },
+          {
+            "x": 128,
+            "y": 640,
+            "w": 16,
+            "h": 16,
+            "pixels": 158,
+            "ratio": 0.617
+          },
+          {
             "x": 48,
             "y": 64,
             "w": 16,
@@ -482,22 +498,6 @@
             "h": 16,
             "pixels": 151,
             "ratio": 0.59
-          },
-          {
-            "x": 96,
-            "y": 464,
-            "w": 16,
-            "h": 16,
-            "pixels": 151,
-            "ratio": 0.59
-          },
-          {
-            "x": 128,
-            "y": 640,
-            "w": 16,
-            "h": 16,
-            "pixels": 150,
-            "ratio": 0.586
           },
           {
             "x": 80,
@@ -543,8 +543,8 @@
           },
           "colorSpace": "undeclared",
           "block": {
-            "x": 48,
-            "y": 136,
+            "x": 32,
+            "y": 120,
             "w": 160,
             "h": 96
           },
@@ -567,34 +567,10 @@
           "height": 744
         },
         "sampleCount": 279000,
-        "diffPixels": 7179,
-        "diffRatio": 0.02573,
+        "diffPixels": 6240,
+        "diffRatio": 0.02237,
         "hashDistance": 0,
         "regions": [
-          {
-            "x": 336,
-            "y": 720,
-            "w": 16,
-            "h": 16,
-            "pixels": 184,
-            "ratio": 0.719
-          },
-          {
-            "x": 336,
-            "y": 736,
-            "w": 16,
-            "h": 8,
-            "pixels": 128,
-            "ratio": 1
-          },
-          {
-            "x": 352,
-            "y": 736,
-            "w": 16,
-            "h": 8,
-            "pixels": 109,
-            "ratio": 0.852
-          },
           {
             "x": 144,
             "y": 64,
@@ -628,12 +604,36 @@
             "ratio": 0.379
           },
           {
-            "x": 352,
-            "y": 720,
+            "x": 16,
+            "y": 64,
             "w": 16,
             "h": 16,
-            "pixels": 92,
-            "ratio": 0.359
+            "pixels": 91,
+            "ratio": 0.355
+          },
+          {
+            "x": 80,
+            "y": 112,
+            "w": 16,
+            "h": 16,
+            "pixels": 91,
+            "ratio": 0.355
+          },
+          {
+            "x": 128,
+            "y": 640,
+            "w": 16,
+            "h": 16,
+            "pixels": 91,
+            "ratio": 0.355
+          },
+          {
+            "x": 112,
+            "y": 688,
+            "w": 16,
+            "h": 16,
+            "pixels": 91,
+            "ratio": 0.355
           }
         ],
         "params": {
@@ -671,8 +671,8 @@
           },
           "colorSpace": "undeclared",
           "block": {
-            "x": 48,
-            "y": 136,
+            "x": 32,
+            "y": 120,
             "w": 160,
             "h": 96
           },
@@ -695,18 +695,10 @@
           "height": 744
         },
         "sampleCount": 279000,
-        "diffPixels": 15211,
-        "diffRatio": 0.05452,
+        "diffPixels": 14571,
+        "diffRatio": 0.05223,
         "hashDistance": 2,
         "regions": [
-          {
-            "x": 336,
-            "y": 720,
-            "w": 16,
-            "h": 16,
-            "pixels": 184,
-            "ratio": 0.719
-          },
           {
             "x": 96,
             "y": 64,
@@ -762,6 +754,14 @@
             "h": 16,
             "pixels": 154,
             "ratio": 0.602
+          },
+          {
+            "x": 96,
+            "y": 464,
+            "w": 16,
+            "h": 16,
+            "pixels": 152,
+            "ratio": 0.594
           }
         ],
         "params": {
@@ -775,7 +775,7 @@
   ],
   "totals": {
     "sampleCount": 1674000,
-    "diffPixels": 72633,
+    "diffPixels": 62962,
     "changedSamples": 6,
     "cleanSamples": 0,
     "knownNoiseSamples": 0
@@ -850,8 +850,8 @@
         },
         "colorSpace": "undeclared",
         "block": {
-          "x": 48,
-          "y": 136,
+          "x": 32,
+          "y": 120,
           "w": 160,
           "h": 96
         },
