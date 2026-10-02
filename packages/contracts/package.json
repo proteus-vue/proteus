@@ -33,6 +33,11 @@
       "import": "./dist/layers.js",
       "default": "./dist/layers.js"
     },
+    "./scroll": {
+      "types": "./dist/scroll.d.ts",
+      "import": "./dist/scroll.js",
+      "default": "./dist/scroll.js"
+    },
     "./capability": {
       "types": "./dist/capability.d.ts",
       "import": "./dist/capability.js"
@@ -44,7 +49,7 @@
     "README.md"
   ],
   "scripts": {
-    "build": "tsc -p tsconfig.build.json --emitDeclarationOnly && esbuild src/index.ts src/route.ts src/api.ts src/store.ts src/capability.ts src/style.ts src/layers.ts --bundle --format=esm --platform=node --outdir=dist"
+    "build": "tsc -p tsconfig.build.json --emitDeclarationOnly && esbuild src/index.ts src/route.ts src/api.ts src/store.ts src/capability.ts src/style.ts src/layers.ts src/scroll.ts --bundle --format=esm --platform=node --outdir=dist"
   },
   "devDependencies": {
     "@types/node": "^20.0.0"

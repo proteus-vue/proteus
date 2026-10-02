@@ -12,3 +12,5 @@ export * from './style'
 export * from './backend'
 // ★LY0（2026-10-02）：页面层级契约（四层语义模型 + 跨端映射表——单一来源）
 export * from './layers'
+// ★SC2（2026-10-02）：可停靠滚动容器契约（声明式封闭集——方案 §6）
+export * from './scroll'
