@@ -1,0 +1,46 @@
+{
+  "version": 1,
+  "note": "《Proteus_多端一致性标准方案.md》§9 的机器可读形态（CS2 v1）。清单内差异不判失败；清单外一律当 bug。新增条目必须写明理由/范围/证据——不得为『让测试通过』而加条目（M2 是对外指标，扩条目=降标准）。schema 门禁随 check:consistency-metrics 执行。",
+  "items": [
+    {
+      "id": "A-1",
+      "category": "text-metrics",
+      "title": "同一文本三端宽度差异",
+      "reason": "文本度量引擎不同（StaticLayout / CoreText / 浏览器各自实现），不可消除——唯一需容差带的结构性差异（标准 §2 ③）",
+      "scope": "L2/L3 中一切文本尺寸相关断言（先锁确定性测试字体跑确定性校验；真实字体差异另行单列）",
+      "evidence": "标准 §2 ③ / §4.2（锁字体分离策略）；具体数值待 VC4 探针落地后补"
+    },
+    {
+      "id": "A-2",
+      "category": "runtime-behavior",
+      "title": "滚动惯性衰减",
+      "reason": "各端滚动实现不同，属设计使然——若强行对齐会破坏原生手感（标准 §9.3 陷阱注记）",
+      "scope": "连续交互（L2.6）：只验不变量（相对顺序/间距/层级/包含/可见性集合/结构完整性），不比对绝对坐标与速度曲线",
+      "evidence": "标准 §9.3 / §10.2"
+    },
+    {
+      "id": "A-3",
+      "category": "runtime-behavior",
+      "title": "滚动边界反馈（回弹 / 硬停）",
+      "reason": "平台规范不同（iOS 回弹、Android 拉伸/硬停），属设计使然",
+      "scope": "滚动边界交互的观感断言",
+      "evidence": "标准 §9.3"
+    },
+    {
+      "id": "A-4",
+      "category": "animation",
+      "title": "转场插值中间态",
+      "reason": "中间帧由平台算（RenderThread / CoreAnimation 自主插值），跨端曲线不同——终态一致、过程不同。★标准 §14#5 要求「现在就登记」，否则会在一致性校验里变成难以归因的偶发失败",
+      "scope": "转场类动画只要求终态一致；需要过程一致的编排动画改回 Rust 侧自行求值（Morpheus §5-bis）",
+      "evidence": "标准 §9.2 / 《声明式动画引擎Morpheus方案》§5-bis"
+    },
+    {
+      "id": "A-5",
+      "category": "rasterization",
+      "title": "圆角抗锯齿 / 阴影模糊",
+      "reason": "系统光栅化实现不同（RenderThread / CoreAnimation / RS / 浏览器）",
+      "scope": "L4 像素观察（非门禁）中的圆角/阴影类目",
+      "evidence": "标准 §9.3 / §8.1"
+    }
+  ]
+}
