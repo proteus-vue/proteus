@@ -1,0 +1,7 @@
+{
+  "string": [
+    { "name": "module_desc", "value": "Proteus 鸿蒙宿主（entry）" },
+    { "name": "EntryAbility_desc", "value": "Proteus 宿主入口 Ability" },
+    { "name": "EntryAbility_label", "value": "ProteusHost" }
+  ]
+}

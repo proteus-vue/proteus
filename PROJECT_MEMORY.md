@@ -87,6 +87,40 @@ check-consistency-snapshot 七段全绿 · check:no-blind-wait ✅（新 .sh 零
 ① L2/L3/L2.5/L2.6 算子用**合成快照**——证明的是"比对引擎敏不敏感"，不是"真机数据一定对"；
 ② L4 算子用真截图但取同端注入（跨端噪声底含 AA，无区分度）；L4 的价值形态是**定位**。
 
+### ★★★2026-10-02（五十九）· 鸿蒙宿主：**最小 hap 工程落地 + 构建链打通**（装机待华为账号一次介入）
+
+**用户「好的」→ 开工**（承接五十八的"宿主落地路线"，完成其中前两步的工程侧）。
+
+**① 构建链纯 CLI 打通（实测）**：DevEco Studio 自带全套工具——hvigor **6.24.4** + node 18 + JDK 21 +
+SDK **API 24**；设置三个环境变量（`NODE_HOME`/`DEVECO_SDK_HOME`/`JAVA_HOME`）后
+`hvigorw assembleHap --mode module -p product=default --no-daemon` **干净工程 7~12 秒构建成功**
+（增量 2.5 秒）——无需打开 IDE。
+
+**② 最小宿主工程入仓**：`hosts/harmony/host-app/`（DevEco 标准 Stage 模型，`bundleName=dev.proteus.host`）：
+- `EntryAbility.ets`：启动时向 hilog 打 **`PROTEUS_HOST_READY model=... os=... api=...`**——
+  **宿主主动上报**（对齐本仓禁止盲等纪律；验证脚本条件等待该标记，零 sleep）；
+- `Index.ets`：显示设备档案（与 `hosts/harmony/README.md` 同源，均以设备实测为准）；
+- 构建脚本 `build-host-app.sh`（工具链自动解析 + 签名状态提示）+ 运行脚本 `run-host-app.sh`
+  （装机→启动→条件等待上报→判据；失败路径给出可行动指引——已实测 unsigned 提示路径）；
+- `.gitignore` 按 DevEco 惯例（`**/build`、`/.hvigor`、`/oh_modules` 等）；
+  实测 `check:no-blind-wait` 绿、`bash -n` 绿。
+
+**③ ★★★ 装机阻塞点：本设备只认华为 CA 调试签名（两层证据）**：
+- 用 SDK 自带 **OpenHarmony 社区调试材料**（p12 + profile 模板，profile 里写入本机 UDID
+  `1F8CD143...`）签出的 hap：**本地 `verify-app` 通过**（`Verify success`），但**设备拒装**：
+  `error: failed to install bundle. code:9568257 error: fail to verify pkcs7 file.`；
+- 设备是**华为商业版 HarmonyOS 7**（系统应用全为 `com.huawei.hmos.*`）——`bm install` 的
+  pkcs7 校验链只认**华为 CA** 签发证书。
+- 已排除的替代路线（实测）：DCloud uni-app x 签名材料（其 profile 白名单 34 个 UDID **不含本设备**）；
+  未签名直装（`no signature file`，预期）。
+- **⇒ 需要用户一次介入**：DevEco 登录华为账号 → `Project Structure → Signing Configs` →
+  勾 **Automatically generate signature**（自动注册 UDID + 生成 p12/cer/p7b）→ 之后 CLI 全程可用。
+  步骤已写入 `hosts/harmony/README.md`（含设备 UDID 与已排除路线表，防重走）。
+
+**诚实边界**：① **装机+启动未完成**（等用户登录华为账号一次）——"构建链打通"是工程侧事实，
+  不等于"跑上设备"；② 宿主目前只是"能显示设备档案的空壳"——RenderNode 直绘接入（方案 §2.2 路径 B）
+  尚未开始；③ 鸿蒙腿未接 `check-app-stack.py`。
+
 ### ★★★2026-10-02（五十八）· **鸿蒙真机接入打通**（用户：「鸿蒙一直连着的」——我此前误判"无设备"，用户当场纠正）
 
 **背景与更正**：我在五十五/五十七把"鸿蒙无设备未验证"写进诚实边界——**错了**。USB 树上一直挂着
@@ -935,7 +969,7 @@ check-consistency-snapshot 七段全绿 · script-compile ✅ · no-blind-wait �
 "位置是否正确"由 L2 几何数值比对承担；L4 只管"画出来像不像"（已写入注记与文档）。
 ④ 仍未接入：iOS/Android 真机截图（当前 Web=Playwright、MP=模拟器，均非真机）。
 
-## 当前状态速览（最近一次更新：**2026-10-02·（五十八）· **鸿蒙真机接入打通**（更正"无设备"误判）：HUAWEI KLE-AL00U · OpenHarmony 7.0.0 · **API 26**（RenderNode 可用）· hdc 3.2.0d + **RSA-3072 密钥**（keygen 的 4096 位是"反复授权无效"根因）；`hosts/harmony/{hdc.sh,README.md}` 入仓；鸿蒙宿主本体待落地**）★新会话以此为准
+## 当前状态速览（最近一次更新：**2026-10-02·（五十九）· 鸿蒙宿主：**最小 hap 工程入仓 + 构建链纯 CLI 打通**（hvigor 6.24.4 + SDK API 24，7~12 秒构建）；**装机待华为账号一次介入**（本设备只认华为 CA 调试签名——社区签名实测被拒 `fail to verify pkcs7`，替代路线已排除并记录）**）★新会话以此为准
 ### ★★★2026-10-02（三十八）· 交互两层（离散 + 连续）—— 标准 §10.1 的最后两个"未布点"
 
 **交付**

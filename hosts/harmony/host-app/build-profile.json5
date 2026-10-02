@@ -1,0 +1,39 @@
+// Proteus 鸿蒙宿主 —— 构建与签名配置
+//
+// ★★★ 签名说明（2026-10-02 实测——本机首次运行必读）
+//   本设备（HUAWEI KLE-AL00U · HarmonyOS 7）为**商业版**：只信任**华为 CA** 签发的调试证书。
+//   实测：用 SDK 自带 OpenHarmony 社区调试材料签出的 hap 本地验证通过，但设备拒装
+//   （`error: fail to verify pkcs7 file`）。⇒ 必须用**华为开发者账号**生成调试签名：
+//     1) 打开 DevEco Studio → File → Project Structure → Signing Configs
+//     2) 勾选 "Automatically generate signature"（会要求登录华为账号）
+//     3) DevEco 自动注册本机设备 UDID 并生成 p12/cer/p7b，路径写入本文件（machine-local）
+//   完成后本文件会出现 signingConfigs 内容（属**本地状态**，勿提交）；此后 CLI
+//   （hvigorw assembleHap）也会自动用该签名。
+//   ★登录一次即可：之后本项目全链（构建→签名→安装）可离线走 CLI。
+{
+  "app": {
+    "signingConfigs": [],
+    "products": [
+      {
+        "name": "default",
+        "signingConfig": "default",
+        "compatibleSdkVersion": "5.0.5(17)",
+        "targetSdkVersion": "5.0.5(17)",
+        "runtimeOS": "HarmonyOS"
+      }
+    ],
+    "buildModeSet": [
+      { "name": "debug" },
+      { "name": "release" }
+    ]
+  },
+  "modules": [
+    {
+      "name": "entry",
+      "srcPath": "./entry",
+      "targets": [
+        { "name": "default", "applyToProducts": ["default"] }
+      ]
+    }
+  ]
+}

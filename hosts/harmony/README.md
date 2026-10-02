@@ -71,3 +71,51 @@ chmod 600 ~/.harmony/hdckey ~/.harmony/hdckey.pub
 | 工具位置约定 | SDK 标准路径 | Xcode 标准路径 | ★**非标准**——必须从 DevEco 解析（见 `hdc.sh`） |
 | 授权机制 | USB 调试（一次性） | 开发者信任（一次性） | **RSA 密钥认证**（3072 位；换密钥需重授权） |
 | 本项目包装 | `hosts/android/*.sh`（直接用 adb） | `hosts/ios/run-selfdraw.sh`（devicectl） | `hosts/harmony/hdc.sh`（本文件） |
+
+---
+
+## 宿主工程（host-app/）—— 第一里程碑：装机链路
+
+```bash
+bash hosts/harmony/build-host-app.sh          # 构建（离线 CLI，7~12 秒；自动提示签名状态）
+bash hosts/harmony/run-host-app.sh            # 装机 + 启动 + 机器验证（等宿主主动上报，零盲等）
+```
+
+**工程形态**：DevEco 标准 Stage 模型（`bundleName=dev.proteus.host`）——
+`EntryAbility` 启动时向 hilog 打 **`PROTEUS_HOST_READY model=... os=... api=...`**
+（宿主**主动上报**启动信号；`run-host-app.sh` 用 `wait_for.sh` 条件等待它——零 sleep）。
+
+**构建链已实测打通（2026-10-02）**：DevEco 自带全套工具（hvigor 6.24.4 + node 18 + JDK 21 + SDK API 24），
+三个环境变量（`NODE_HOME` / `DEVECO_SDK_HOME` / `JAVA_HOME`，脚本已自动设置）即可纯 CLI 构建。
+
+### ★★★ 签名：本设备需要华为账号（唯一一次 IDE 介入）
+
+**实测结论（两层证据）**：
+1. 用 SDK 自带 **OpenHarmony 社区调试材料**（p12 + profile 模板，含写入本机 UDID 的 profile）
+   签出的 hap：**本地 `verify-app` 通过**（`Verify success`），但**设备拒装**：
+   `error: failed to install bundle. code:9568257 error: fail to verify pkcs7 file.`
+2. 设备是**华为商业版 HarmonyOS 7**（系统应用全为 `com.huawei.hmos.*`）——
+   其 `bm install` 的 pkcs7 校验链只认**华为 CA** 签发的调试证书。
+
+**⇒ 需要你做一次（约 2 分钟）**：
+1. 打开 DevEco Studio（本机：`/Volumes/data1/work/office-applications/DevEco-Studio.app`），
+   用**华为开发者账号**登录（右上角头像 → 登录）；
+2. 打开本项目：`File → Open → /Volumes/data1/work/office/debug/proteus/hosts/harmony/host-app`；
+3. `File → Project Structure → Signing Configs` → 勾选 **Automatically generate signature**
+   → Apply（DevEco 会自动注册本机设备 UDID 并生成 p12/cer/p7b，写入 `build-profile.json5`）；
+4. 之后回到命令行：`bash hosts/harmony/build-host-app.sh && bash hosts/harmony/run-host-app.sh`
+   —— 全程 CLI，不再需要 IDE。
+
+> `build-profile.json5` 里的 signingConfigs 含**本机凭据**（路径 + 加密口令），属 machine-local
+> 状态——**不要提交**（该文件已在 `.gitignore` 里排除对本机敏感内容的提交策略：
+> 若提交请只保留空 `signingConfigs` 模板形态）。
+
+### 已排除的路线（实测，勿重走）
+
+| 路线 | 结果 |
+|---|---|
+| SDK 自带 OpenHarmony 调试材料 + 写入本机 UDID | 本地验签通过，**设备拒装**（pkcs7） |
+| 复用 DCloud uni-app x 的签名材料（`hello-uni-app-x/harmony-configs`） | 其 profile 白名单 34 个 UDID，**不含本机设备**（`1F8CD143...`） |
+| 未签名 hap 直接装 | `code:9568320 error: no signature file`（预期） |
+
+设备 UDID（注册用）：`1F8CD143FE62DE1AD62861FAA08BBFFEC67AE75A491D3CB38FB4C830A7F2C0CD`
