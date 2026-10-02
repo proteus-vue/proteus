@@ -179,12 +179,13 @@ final class VaporRenderHost {
         JSONObject out = new JSONObject();
         try {
             JSONObject tree = new JSONObject(treeJson);
+            // ★★物理化=唯一换算点（viewport + 全部 nodes 一次改写到物理单位；见 physicalizeTree 注释）
+            physicalizeTree(tree);
             JSONArray nodes = tree.optJSONArray("nodes");
             if (nodes == null || nodes.length() == 0) return err(out, "批次里没有节点").toString();
             JSONObject vp = tree.optJSONObject("viewport");
-            // ★viewport 同样 ×lengthScale（SFC 逻辑单位 → 本宿主物理像素；见 lengthScale 注释）
-            float vw = (vp != null ? (float) vp.optDouble("width", 1080) : 1080f) * lengthScale;
-            float vh = (vp != null ? (float) vp.optDouble("height", 2400) : 2400f) * lengthScale;
+            float vw = vp != null ? (float) vp.optDouble("width", 1080) : 1080f;
+            float vh = vp != null ? (float) vp.optDouble("height", 2400) : 2400f;
 
             ensureView();
 
@@ -398,6 +399,8 @@ final class VaporRenderHost {
                 int id = p.getInt("id");
                 JSONObject style = p.optJSONObject("style");
                 if (style == null) continue;
+                // ★物理化（与 mount 同一换算纪律：补丁里的长度同样是**逻辑单位**）
+                physicalizeSpec(style);
                 Integer idx = indexById.get(id);
                 if (idx == null) continue;
                 JSONObject spec = specs.get(idx);
@@ -642,6 +645,8 @@ final class VaporRenderHost {
             JSONArray rowsRaw = tree.optJSONArray("rows");
             if (nodes == null || nodes.length() == 0) return err(out, "批次里没有节点").toString();
             if (rowsRaw == null || rowsRaw.length() == 0) return err(out, "rows 为空（虚拟化无意义）").toString();
+            // ★物理化（与 mount 同一入口纪律——见 physicalizeTree）
+            physicalizeTree(tree);
             JSONObject vp = tree.optJSONObject("viewport");
             final float vw = vp != null ? (float) vp.optDouble("width", 1080) : 1080f;
             final float vh = vp != null ? (float) vp.optDouble("height", 2400) : 2400f;
@@ -929,24 +934,93 @@ final class VaporRenderHost {
             // ★静态基态声明（内核要解析）：裁剪形状 + 路径本体（+ 描边色/宽随 svgPath 一起进）
             "clipPath", "svgPath", "svgPathTo", "perspective"));
 
-    /**
-     * ★★★**逻辑单位 → 物理像素的缩放系数**（2026-10-02 实测抓出的跨端尺寸缺陷修复）。
+    /* ══════════════ 物理化（逻辑单位 → 物理像素的**唯一换算点**） ══════════════
      *
-     * 【为什么需要】SFC 的 px 是**逻辑单位**（Web CSS px / iOS pt / MP 逻辑 px 同义），
-     *   而本宿主按**物理像素**绘制 ⇒ 必须 × density（本机 3.0）才与其它端同尺寸。
-     *   首版缺这一步：锚块 80px（其它端 130~240px）、内容只占屏 22%（其它端 91~96%）。
+     * 【单位模型（依《Proteus_单位系统与舍入规范》§1/§3）】
+     *   统一公式：**物理像素 = 设计单位 × 密度**（文本再 × 字体缩放——校验场景按 §6.3 锁定为 1.0）。
+     *   各端宿主 API 期望的输入单位不同（规范 §1.2）：Android Canvas = px（**物理**）·
+     *   iOS CALayer = point（逻辑）· Web = CSS px（逻辑）· MP = 逻辑 px。
+     *   ⇒ **只有 Android 这一端需要显式换算**（iOS/Web/MP 由平台自身按 scale 缩放）；
+     *     不换算的实测后果：锚块 80px（其它端 130~240px）、内容只占屏 22%（其它端 91~96%）。
      *
-     * 【★为什么放在这里（coreNodes）而不是 JS 侧改模板 style（第一版做法实测失败）】
-     *   JS 侧只能改**模板静态 style**，而**动态绑定**（`:width="item.w"`）的值来自求值器、
-     *   不经过模板字典 ⇒ 第一版实测：chip 高被缩放（96 = 32×3 ✅）而**宽没缩放**（40，应 120）。
-     *   `coreNodes()` 是**所有几何进内核的必经点**（mount 与 update 都走它，且只带几何键）
-     *   ⇒ 在这里缩放覆盖静态+动态**全部**路径（一处换算，无遗漏）。
+     * 【★为什么是"入口一次换算"而不是"用到处补"（本轮两版失败换来的教训）】
+     *   第一版在 JS 侧改模板 style ⇒ 漏**动态绑定**（`:width="item.w"` 走求值器不经模板字典）：
+     *     chip 高缩放对了（96=32×3）而宽没缩放（40）。
+     *   第二版改成 `coreNodes()` 局部缩放 ⇒ 只覆盖**布局标量**，漏**绘制侧长度**
+     *     （borderRadius / fontSize（绘制读取处）/ glow.radius / strokeWidth）：
+     *     chip 圆角变方、蓝点由圆变方、字"度量 3× 而绘制 1×"两边打架——用户当场目视抓出。
+     *   ⇒ 正解：**换算只做一次，在树的唯一入口**，把 spec 全部改写为物理单位后落表；
+     *     之后**所有消费者**（内核输入 coreNodes / 绘制 mkCmd / 文本度量 buildMeasures /
+     *     命中测试 / 报告）读到的**天然全是物理值**——不存在"半物理化"的中间态。
      *
-     * 【调用方】`StressSfcActivity` 按 density 调 `setLengthScale`；其余场景不调（缺省 1 = 零变化）。
+     * 【与规范的对齐（逐条）】
+     *   · §2.4「宿主层仅做单位换算，且为一次乘法，不含任何 round/floor/ceil」——本处仅 `× scale`，
+     *     **零舍入**；吸附（snap）仍在内核导出边界（物理空间）完成；
+     *   · §6.3「一致性校验必须锁定字体缩放配置」——`StressSfcActivity` 未传 fontScale ⇒ 锁 1.0；
+     *   · §12「非整数 DPR 下 snap 后不得为 0」——吸附在内核（本类不参与，见 I2 卡）。
+     *
+     * 【覆盖范围（唯一清单；新增长度字段必须登记）】见 LEN_SCALARS / 边缘对象 / glow.radius。
+     * 【诚实边界（本批不做，需内核侧密度=规范 U0）】
+     *   · `applyOps` 的**二进制指令流**：值在 JS 侧编码、内核侧解码 ⇒ 宿主无法介入换算
+     *     （本批场景不用该路径；登记为 U0 的前置证据）；
+     *   · `svgPath.d` 的坐标与 strokeWidth：由**内核解析**（字符串内嵌数值）⇒ 同理需 U0。
      */
     private float lengthScale = 1f;
     /** 设置长度缩放（缺省 1 = 既有场景零行为变化） */
     void setLengthScale(float s) { if (s > 0) lengthScale = s; }
+
+    /**
+     * 标量长度字段白名单（**唯一清单**）。
+     * ★比例/枚举/分数**不得入内**：flexGrow/flexShrink（比例）· widthRatio/heightRatio（比例）·
+     *   opacity（0..1）· clipPath.params（盒分数）· mask.{angle,cx,cy,r,softness}（单位空间）·
+     *   transformOrigin（0..1）· gradient stops[].offset（0..1）/ angle（度）。
+     * ★扁平四边键也登记（`:margin-top="x"` 这类绑定的落表形态）——有则缩、无则跳，零副作用。
+     */
+    private static final String[] LEN_SCALARS = {
+        "width", "height", "minWidth", "maxWidth", "minHeight", "maxHeight",
+        "top", "left", "right", "bottom", "gap", "flexBasis",
+        "fontSize", "borderRadius", "borderWidth", "perspective",
+        "borderTopLeftRadius", "borderTopRightRadius", "borderBottomLeftRadius", "borderBottomRightRadius",
+        "marginTop", "marginRight", "marginBottom", "marginLeft",
+        "paddingTop", "paddingRight", "paddingBottom", "paddingLeft",
+    };
+
+    /** 物理化一个 spec/样式对象（原地改写；同时被 mount/updatePatches 复用——同一清单一处实现） */
+    private void physicalizeSpec(JSONObject spec) throws Exception {
+        if (lengthScale == 1f || spec == null) return;
+        for (String k : LEN_SCALARS) {
+            if (!spec.has(k) || spec.isNull(k)) continue;
+            Object v = spec.get(k);
+            if (v instanceof Number) spec.put(k, ((Number) v).doubleValue() * lengthScale);
+        }
+        // 四边对象（margin/padding：{top,right,bottom,left}）
+        for (String k : new String[]{"margin", "padding"}) {
+            JSONObject e = spec.optJSONObject(k);
+            if (e == null) continue;
+            for (String side : new String[]{"top", "right", "bottom", "left"}) {
+                if (e.has(side) && e.get(side) instanceof Number) e.put(side, e.getDouble(side) * lengthScale);
+            }
+        }
+        // 嵌套绘制对象里的长度：glow.radius（alpha 是比例，不缩放）
+        JSONObject glow = spec.optJSONObject("glow");
+        if (glow != null && glow.has("radius") && glow.get("radius") instanceof Number) {
+            glow.put("radius", glow.getDouble("radius") * lengthScale);
+        }
+    }
+
+    /** 物理化整棵树（viewport + 全部 nodes）——mount / mountVirtual 的入口各调一次 */
+    private void physicalizeTree(JSONObject tree) throws Exception {
+        if (lengthScale == 1f) return;
+        JSONObject vp = tree.optJSONObject("viewport");
+        if (vp != null) {
+            if (vp.has("width") && vp.get("width") instanceof Number) vp.put("width", vp.getDouble("width") * lengthScale);
+            if (vp.has("height") && vp.get("height") instanceof Number) vp.put("height", vp.getDouble("height") * lengthScale);
+        }
+        JSONArray nodes = tree.optJSONArray("nodes");
+        if (nodes != null) {
+            for (int i = 0; i < nodes.length(); i++) physicalizeSpec(nodes.optJSONObject(i));
+        }
+    }
 
     /** 节点 → 核心请求（只带几何键；`text` 单独带，供核心记入文本叶） */
     private JSONArray coreNodes() throws Exception {
@@ -955,23 +1029,10 @@ final class VaporRenderHost {
             JSONObject c = new JSONObject();
             c.put("id", spec.getInt("id"));
             if (spec.has("parentId") && !spec.isNull("parentId")) c.put("parentId", spec.getInt("parentId"));
+            // ★读 spec 原值——spec 已在**入口物理化**（physicalizeTree：scale=1 时为恒等），
+            //   此处**不再缩放**（避免双倍缩放；见 physicalizeTree 的"两版失败教训"）
             for (String k : LAYOUT_KEYS) {
-                if (!spec.has(k) || spec.isNull(k)) continue;
-                Object v = spec.get(k);
-                // ★缩放几何长度（数值标量；margin/padding 是下面单独处理的嵌套对象）
-                if (lengthScale != 1f && v instanceof Number) c.put(k, ((Number) v).doubleValue() * lengthScale);
-                else c.put(k, v);
-            }
-            // 边缘对象（margin/padding：{top,right,bottom,left}）——整对象缩放
-            for (String k : new String[]{"margin", "padding"}) {
-                JSONObject e = spec.optJSONObject(k);
-                if (e == null) continue;
-                if (lengthScale == 1f) { c.put(k, e); continue; }
-                JSONObject e2 = new JSONObject();
-                for (String side : new String[]{"top", "right", "bottom", "left"}) {
-                    if (e.has(side)) e2.put(side, e.getDouble(side) * lengthScale);
-                }
-                c.put(k, e2);
+                if (spec.has(k) && !spec.isNull(k)) c.put(k, spec.get(k));
             }
             String t = spec.optString("text", null);
             if (t != null && !t.isEmpty()) {
@@ -1001,9 +1062,9 @@ final class VaporRenderHost {
         for (JSONObject spec : specs) {
             String t = spec.optString("text", null);
             if (t == null || t.isEmpty()) continue;
-            // ★字号同样 ×lengthScale（文本度量输入按**物理**字号——与几何缩放同源，
-            //   否则文字物理尺寸与盒子不匹配；见 lengthScale 注释）
-            float fs = (float) spec.optDouble("fontSize", 14) * lengthScale;
+            // ★字号**不在这里缩放**：spec 已在入口物理化（physicalizeTree）⇒ 此处即物理字号
+            //   （首版在这里乘了一次，同时 mkCmd 的绘制侧未乘 ⇒ "度量 3×、绘制 1×"两边打架）
+            float fs = (float) spec.optDouble("fontSize", 14);
             android.text.TextPaint tp = new android.text.TextPaint();
             tp.setTextSize(fs);
             // I2-ALLOW: 文本**测量**结果的取整（测量子系统，非几何换算——度量值交给内核后
