@@ -87,6 +87,47 @@ check-consistency-snapshot 七段全绿 · check:no-blind-wait ✅（新 .sh 零
 ① L2/L3/L2.5/L2.6 算子用**合成快照**——证明的是"比对引擎敏不敏感"，不是"真机数据一定对"；
 ② L4 算子用真截图但取同端注入（跨端噪声底含 AA，无区分度）；L4 的价值形态是**定位**。
 
+### ★★★2026-10-02（五十八）· **鸿蒙真机接入打通**（用户：「鸿蒙一直连着的」——我此前误判"无设备"，用户当场纠正）
+
+**背景与更正**：我在五十五/五十七把"鸿蒙无设备未验证"写进诚实边界——**错了**。USB 树上一直挂着
+HUAWEI "HDC Device"（序列号 `69F9K26126005311`）。用户原话「鸿蒙一直连着的」「我反复始终信任好几次了啊，
+你就是读取不到」。★教训重申（与 2026-09-29「下否定结论前先跑一条取证命令」同源）。
+
+**设备已打通（2026-10-02 实测）**：
+- HUAWEI **KLE-AL00U** · OpenHarmony **7.0.0**（`KLE-AL00 7.0.0.109(SP6C00E105R3P3)`）·
+  **API 26**（`const.ohos.apiversion`）⇒ 方案要求的 **RenderNode 直绘（API 20+）确认可用**；
+- 屏幕 **1320×2856 @120Hz**（多档 120/90/72/60/45）；系统工具 `aa`/`bm`/`uitest`/`hidumper`/`hilog`/`param` 全在；
+- `hdc shell "echo HDC_ALIVE_OK"` ✓ · `hdc list targets -v` = `Connected`。
+
+**★★★ 根因：密钥必须是 RSA-3072（排查 ~40 分钟，三条坑全部实测确认）**：
+1. **hdc 版本**：旧 SDK 的 1.2.0a 与 HarmonyOS 7 **协议不兼容**（枚举为空）——必须用
+   DevEco Studio 6.1.1 自带的 **3.2.0d**（`<DevEco>/Contents/sdk/default/openharmony/toolchains/hdc`）；
+2. **★位数不匹配（真正的"反复点信任也没用"根因）**：设备端按 `RSA_BIT_NUM=3072` 分配验签缓冲、
+   声明 `rsa_3072_sha512` 方案；而 **`hdc keygen` 生成的是 4096 位** ⇒ **验签必然失败**（E000010）。
+   症状完美解释用户现象：设备弹窗正常、用户点"始终信任"正常（把公钥加 known_hosts），
+   但随后**签名验证**阶段尺寸不匹配失败 ⇒ 永远 `Unauthorized`。
+   **修法**：手工生成 3072 位（`openssl genpkey -algorithm RSA -pkeyopt rsa_keygen_bits:3072`）；
+3. **公钥格式**：hdc 认证路径用 `PEM_read_PUBKEY` 读 `~/.harmony/hdckey.pub`（必须 PEM）；
+   `keygen` 旧格式是 base64 blob ⇒ 报 `read pubkey ... failed`。用 `openssl pkey -pubout` 导出。
+   ★**换一次密钥 = 设备端授权作废、必须重新点一次**（排查期我反复换密钥 ⇒ 用户反复点也无效——
+   这部分是我的操作失误，教训：**排查时不要动已授权的密钥**，先把工具链版本与格式确认清楚再动）。
+
+**证据链（hdc 源码核对，非猜测）**：`src/common/auth.cpp`（`RSA_KEY_BITS`/`Pem` 读取路径）、
+`hdc_rust/src/config.rs`（`RSA_BIT_NUM: usize = 3072`）、`src/daemon/daemon.cpp`
+（`HandDaemonAuthPubkey` → `PostUIConfirm` → 弹窗 → `UpdateKnownHosts`）、设备回包
+`daemonauthstatus = DAEMON_UNAUTH` + `rsa_3072_sha512`。
+
+**已入仓（防下次再踩）**：
+- `hosts/harmony/hdc.sh`：工具链解析（DevEco 自带优先 + `PROTEUS_HDC` 覆盖）+ `check` 子命令
+  （**只读诊断**：版本 / 密钥位数与格式 / 设备状态，位数错直接给修法）；
+- `hosts/harmony/README.md`：设备档案 + 工具链全景 + **三条坑的完整记录** + 下一步（宿主落地路线）。
+- `docs/Proteus_导航体系落地方案.md` §9：鸿蒙边界从"无设备"更正为"**设备已接入、宿主本体未落地**"。
+
+**诚实边界（更新）**：① 鸿蒙**宿主本体尚未落地**（`hosts/harmony/` 目前只有接入包装，无宿主代码）——
+   NB6 鸿蒙显式实现仍只有接口与规则；② 下一步是"最小 hap 工程 → 装机 → 方舟能力侦查 → 宿主核心"，
+   见 `hosts/harmony/README.md` §下一步 与《鸿蒙宿主落地与方舟引擎能力开放方案》；
+③ 上游 §13 的鸿蒙待核实项（NavPathStack 生命周期）**现在有设备可核实**，列入下一批候选。
+
 ### ★★★2026-10-02（五十七）· 导航体系 **NB7 真机判据落地** —— 分支导航双端实测（Android QuickJS + iOS JSC 逐字段零差异）
 
 **做了什么**（承接五十六的 NB1/NB3/NB6 逻辑层，本轮把它抬到**真机证据**）：
@@ -894,7 +935,7 @@ check-consistency-snapshot 七段全绿 · script-compile ✅ · no-blind-wait �
 "位置是否正确"由 L2 几何数值比对承担；L4 只管"画出来像不像"（已写入注记与文档）。
 ④ 仍未接入：iOS/Android 真机截图（当前 Web=Playwright、MP=模拟器，均非真机）。
 
-## 当前状态速览（最近一次更新：**2026-10-02·（五十七）· 导航体系 **NB7 真机判据落地**：场景 G（分支导航）进项目驱动入口 + 判据 ⑩ 组（含破坏性验证）——Android QuickJS + iOS JSC **双端真机 ⑩ 组全绿且 g_* 读数逐字段零差异**（切分支保栈 3→3 / none 档释放重建 / 返回归属）**）★新会话以此为准
+## 当前状态速览（最近一次更新：**2026-10-02·（五十八）· **鸿蒙真机接入打通**（更正"无设备"误判）：HUAWEI KLE-AL00U · OpenHarmony 7.0.0 · **API 26**（RenderNode 可用）· hdc 3.2.0d + **RSA-3072 密钥**（keygen 的 4096 位是"反复授权无效"根因）；`hosts/harmony/{hdc.sh,README.md}` 入仓；鸿蒙宿主本体待落地**）★新会话以此为准
 ### ★★★2026-10-02（三十八）· 交互两层（离散 + 连续）—— 标准 §10.1 的最后两个"未布点"
 
 **交付**
