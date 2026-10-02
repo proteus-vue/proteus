@@ -14,5 +14,10 @@ export const textProbe: () => string;
 export const kernelAnimProbe: () => string;
 /** ★内存探针（三段式：tree/nodes/release；ArkTS 在阶段间读 PSS） */
 export const memProbe: (phase: string, fixtureJson?: string) => string;
+/** ★SFC 压力夹具探针（矩阵 #21；44 节点，与六端一致性报告同源）；
+ *  视口为**逻辑 vp 尺寸**（夹具 device-independent，widthRatio 在排版时按视口解析） */
+export const sfcStressProbe: (fixtureJson: string, vpW: number, vpH: number, density: number) => string;
+/** ★SFC 压力夹具 → 渲染指令数组（上屏通路；density = vp2px(1)，几何/字号在该处转物理 px） */
+export const sfcStressCommands: (fixtureJson: string, density: number, vpW: number, vpH: number) => string;
 /** Rust 排版核版本（仪器自检） */
 export const version: () => string;

@@ -61,6 +61,15 @@ if grep -q '"signingConfigs": \[\]' "$APP_DIR/build-profile.json5" 2>/dev/null; 
   echo
 fi
 
+# ── 夹具再生成（★唯一事实源 → rawfile，可复现：SFC/订阅表一变，构建即刷新）──
+#   由 gen-fixtures.mjs 固化：stress-44（SFC 实例化）+ app-4050-tree（与 Android 同源复制）。
+echo "==> 夹具再生成"
+if command -v npx >/dev/null 2>&1; then
+  (cd "$HERE" && npx tsx gen-fixtures.mjs) || { echo "✗ 夹具再生成失败——修正后再构建"; exit 2; }
+else
+  echo "  ⚠ 无 npx——跳过（rawfile 保持现状）"
+fi
+
 cd "$APP_DIR"
 if [ "${1:-}" = "--clean" ]; then
   echo "==> 清理（hvigor clean）"

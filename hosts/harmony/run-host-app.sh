@@ -118,14 +118,15 @@ if [ -n "$READY_LINE" ]; then
     echo "  ⚠ 未见 PROTEUS_APPSTACK 读数（探针未跑或日志滚掉）——判据跳过"
   fi
 
-  # ── 6.5 ★探针集（命中 / 复用池 / 结构变更 / 文本通道）——与 Android 能力域对齐 ──
-  PROBE_LOG="$(HDC shell "hilog -x | grep -E 'PROTEUS_HIT_PROBE \{|PROTEUS_RECYCLE \{|PROTEUS_SPLICE \{|PROTEUS_TEXT \{|PROTEUS_SCROLL_DONE|PROTEUS_KERNELANIM \{|PROTEUS_MEM \{' | tail -8" 2>/dev/null)"
+  # ── 6.5 ★探针集（命中 / 复用池 / 结构变更 / 文本通道 / SFC 压力）——与 Android 能力域对齐 ──
+  PROBE_LOG="$(HDC shell "hilog -x | grep -E 'PROTEUS_HIT_PROBE \{|PROTEUS_RECYCLE \{|PROTEUS_SPLICE \{|PROTEUS_TEXT \{|PROTEUS_SCROLL_DONE|PROTEUS_KERNELANIM \{|PROTEUS_MEM \{|PROTEUS_SFCSTRESS \{' | tail -9" 2>/dev/null)"
   echo
   echo "  ✓ 探针集（鸿蒙腿）："
   printf '%s\n' "$PROBE_LOG" | sed 's/^/    /'
   HIT_OK="$(printf '%s' "$PROBE_LOG" | grep -o '"mismatch":0' | head -1)"
   RC_OK="$(printf '%s' "$PROBE_LOG" | grep -o '"reuse_ratio":[0-9.]*' | head -1)"
-  echo "    判读：命中 ${HIT_OK:-（未见）} · $RC_OK"
+  SFC_NODES="$(printf '%s' "$PROBE_LOG" | grep -o '"nodes":[0-9]*' | head -1)"
+  echo "    判读：命中 ${HIT_OK:-（未见）} · $RC_OK · SFC ${SFC_NODES:-（未见）}"
 
   echo "  ✓ 4050 应用级基准（鸿蒙腿）："
       echo "    Proteus：${BENCH_LINE}"

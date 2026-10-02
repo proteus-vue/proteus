@@ -91,6 +91,33 @@ chmod 600 ~/.harmony/hdckey ~/.harmony/hdckey.pub
 Android 走 JNI、iOS 走 staticlib、**鸿蒙走 `aarch64-unknown-linux-ohos` 交叉编译 + C ABI**（无绑定层）。
 交叉编译脚本：`bash hosts/harmony/build-rust-core.sh`（产物 `cpp/thirdparty/libproteus_layout_core.a`，gitignore）。
 
+### ✅ 第六里程碑：**SFC 压力夹具上屏 · 六端一致性报告入列**（2026-10-02，矩阵 #21）
+
+> `examples/pages/consistency-stress.vue`（44 节点 · 10 行 v-for · 行内动态绑定）的编译器产物
+> → 构建期实例化（`fixtures/stress-44.json`）→ Rust 排版（视口 = 真实屏幕逻辑尺寸 377.14×816）
+> → **RenderNode 直绘上屏**（44/44 节点）→ `uitest screenCap` 截图 → **第六端样本 `sfc.harmony.png`**。
+
+**采集**：`bash scripts/shoot-stress-harmony.sh`（装机 → `--ps scene stress` → 等首帧主动上报
+`PROTEUS_SFCSTRESS_FRAME` → 抓读数 → 截图 → 特征色探针，全自动零盲等）。
+
+**判据（机器判定）**：探针 `ok:true` · 节点 **44** · 上屏 **44** · 锚块几何 **[16,60,80,48] 与 SFC 声明逐位相同** ·
+首行 [16,151,345,52]（行宽 = 屏宽 377.14 − 32）· 留白 **16.3/16.3** 过报告硬断言 · 跨端差异 2.44~3.09%（正常带宽）。
+
+**★本轮实测的两个坑（都是"解析器不假设输入格式"）**：
+
+| # | 坑 | 现象 | 根因 | 修法 |
+|---|---|---|---|---|
+| 1 | `"nodes":[` 精确匹配 | 探针报"夹具无 nodes"（值全对） | 夹具是 pretty-print（`"nodes": [` **带空格**） | `extractNodesArray`：定位键后跳到 `[`，括号计数取配对串（容忍任意空白） |
+| 2 | `"key":"` 精确匹配 | 画面**什么都没有**（几何全对、全透明）；指令里 `"color":0` | 同上（`"backgroundColor": "#2f6fed"` **带空格**） | `jstr`：定位键 → 跳过冒号后空白 → 读引号串 |
+| 3 | **宿主度量表缺位** | **色块全对、文字全消失**（行文本不显示） | 夹具行文本**无显式 height**（靠文本度量）——内核契约是"度量表随树给"，鸿蒙腿 `textMeasures:{}` ⇒ 文本节点高 0 ⇒ 画布 0px。对照：Android `TextPaint`/iOS CoreText/Web 行盒都有真实度量 | 宿主侧 `measureTextTypoPx`（typography 同引擎度量，物理字号量、换回设计单位）注入 `textMeasures` |
+
+**上屏链（数据流）**：`sfcStressCommands(fixture, density, vpW, vpH)`（C++：排版 → 合并节点样式 × 密度
+→ 渲染指令数组，物理 px）→ ArkTS `renderCommands(json)` → RenderNode 子树挂全屏根节点。
+★**几何 × 样式 × 密度三合一在 C++ 一处产出**——ArkTS 只做 transport（零逻辑、零单位猜测）。
+
+**截图工具实测**：`uitest screenCap` 出 **PNG 无损**（首选）；`snapshot_display` **只支持 .jpeg**
+（压缩伪影把跨端差异率抬高 ~0.9 个百分点，实测 3.53% → 2.60%，勿用于一致性样本）。
+
 ### ★★★ 渲染树架构（2026-10-02 第二次修正，最终形态）
 
 **一个全屏 host customNode + 一个根 RenderNode + 元素为其子节点**（`AddChild`）：

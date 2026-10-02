@@ -87,6 +87,56 @@ check-consistency-snapshot 七段全绿 · check:no-blind-wait ✅（新 .sh 零
 ① L2/L3/L2.5/L2.6 算子用**合成快照**——证明的是"比对引擎敏不敏感"，不是"真机数据一定对"；
 ② L4 算子用真截图但取同端注入（跨端噪声底含 AA，无区分度）；L4 的价值形态是**定位**。
 
+### ★★★2026-10-03（七十三）· 鸿蒙腿 **SFC 压力夹具上屏**（矩阵 #21）—— 六端一致性报告入列（2 小时）
+
+**用户「继续」→ 接矩阵 #21（一致性快照）**：让鸿蒙渲染 `examples/pages/consistency-stress.vue`
+（一份源码）的编译产物，进六端 SFC 像素报告（此前五端：web / mp / android / ios / ios-device）。
+
+**交付**
+1. **夹具再生成固化为脚本**：`hosts/harmony/gen-fixtures.mjs`（此前手工放置、不可复现）——
+   `vapor-stress-artifacts.json` → `instantiateTemplate`（与 Android/iOS 同一实例化链）→
+   `stress-44.json`（44 节点判据内建）；`app-4050-tree.json` 从 Android assets **同源复制**；
+   已接进 `build-host-app.sh`（每次构建自动跑）。
+2. **C++ 上屏通路**：`sfcStressCommands(fixture, density, vpW, vpH)` —— 夹具 → Rust 排版（**真实屏幕
+   逻辑尺寸** 377.14×816）→ 合并节点样式（backgroundColor/borderRadius/text/color/fontSize）× 密度
+   → **渲染指令数组（物理 px）**；ArkTS `renderCommands` 挂全屏根节点。
+   ★几何×样式×密度三合一在 C++ 一处产出——ArkTS 纯 transport（零逻辑、零单位猜测）。
+3. **stress 场景分支**：`aa start --ps scene stress` → EntryAbility 写 AppStorage → Index.ets 只渲染
+   夹具（隐藏演示组件）+ 首帧主动上报 `PROTEUS_SFCSTRESS_FRAME`（零盲等）。
+4. **采集脚本** `scripts/shoot-stress-harmony.sh`（对标 shoot-stress-android.sh）：装机 →
+   `--ps scene stress` → 等首帧 → 抓判据 → `uitest screenCap` 截图 → 特征色探针。
+5. **第六端样本入报告**：`sfc.harmony.png` + `sfc.harmony.json` → `check-consistency-sfc.mjs`
+   加 harmony 标签 → 六端 15 对全绿（harmony 相关 2.44~3.09%）；**锚块 [16,60,80,48] 与 SFC 声明逐位相同**、
+   首行 [16,151,345,52]（= 屏宽 377.14 − 32）、留白 16.3/16.3 过硬断言。
+6. **验收**：`run-host-app.sh` 探针集纳入 `PROTEUS_SFCSTRESS`（判读行显示 `SFC "nodes":44`）。
+
+**★★★ 本轮三个实测坑（都是"解析器/契约不假设输入格式"的变体——同类第三次踩）**
+
+| # | 坑 | 现象 | 根因 | 修法 |
+|---|---|---|---|---|
+| 1 | `"nodes":[` 精确匹配 | 探针报"夹具无 nodes"（值全对） | 夹具是 **pretty-print**（`"nodes": [` **空格**） | `extractNodesArray`：定位键 → 跳到 `[` → 括号计数取配对串 |
+| 2 | `"key":"` 精确匹配 | 画面**什么都没有**；指令里 `"color":0` | 同上（`"backgroundColor": "#2f6fed` **空格**）；`jstr` 精确串全空 | `jstr`：定位键 → **跳冒号后空白** → 读引号串 |
+| 3 | **宿主度量表缺位** | **色块全对、文字全消失**（行文本不显示，标题正常） | 行文本**无显式 height**（靠内容撑高）——内核契约是"度量表随树给"，鸿蒙腿 `textMeasures:{}` ⇒ 文本节点高 0 ⇒ content modifier 画布 0px。对照：Android `TextPaint`/iOS CoreText/Web 行盒都真实度量 | 宿主侧 `measureTextTypoPx`（typography 同引擎度量，物理字号量÷密度回设计单位）注入 `textMeasures` |
+
+★**坑 3 的辨别价值**：标题有显式 height 而显示、行文本没有而消失——**同一画面两种行为**指向"度量"而非"绘制"；
+若只有色块没文字，容易误判为"文字绘制坏了"（会去查 typography，全白费）。
+**"缺失度量" → "零尺寸" → "零画布"** 这条链要记住（host-abi 注释里写着，但鸿蒙宿主没实现）。
+
+**★截图工具实测（样本质量）**：`uitest screenCap` 出 **PNG 无损**（首选）；
+`snapshot_display` **只支持 .jpeg**——压缩伪影把跨端差异率抬高 **~0.9 个百分点**
+（同为 harmony 端：3.53% → 2.60%）。**一致性样本勿用 JPEG**。
+
+**指标**：矩阵鸿蒙 **12/22 → 13/22**；SFC 报告 **五端 → 六端**（15 对，噪声带内）。
+
+**验证**：`bash scripts/shoot-stress-harmony.sh`（探针 ok + 44/44 + 上屏 44 + 色探针 4/4）；
+`check-consistency-sfc.mjs --check` ✅（含留白硬断言）；`run-host-app.sh` 全链验收 ✅（探针集 9 项）；
+`build-host-app.sh` 含夹具再生成（44 节点判据）✅。
+
+**诚实边界**：① harmony 端差异率（2.44~3.09%）略高于 ios-vs-web（1.74%）——字形栅格化差异
+（OpenHarmony typography vs CoreText/浏览器）未做逐项归因，属观测值非结论；② stress 场景下手动
+观感证据靠 `snapshot_display` jpeg 缩略（`results/` 内）；③ 夹具实例化在**构建期**做（与 Android 运行时
+QuickJS 实例化路径不同——但**同一份 instantiateTemplate 源码**，属同一链的两个时相）。
+
 ### ★★★2026-10-03（七十二）· 鸿蒙腿 **内存读数打通**（矩阵 #19）—— 三段式 + 泄漏归因
 
 **用户「继续」→ 接矩阵 #19（内存读数）**：
@@ -1392,6 +1442,8 @@ check-consistency-snapshot 七段全绿 · script-compile ✅ · no-blind-wait �
 **新诚实边界**：平移对齐会**吸收真实位置差异**（若某端整体真的偏了 3px，对齐后看不出）——
 "位置是否正确"由 L2 几何数值比对承担；L4 只管"画出来像不像"（已写入注记与文档）。
 ④ 仍未接入：iOS/Android 真机截图（当前 Web=Playwright、MP=模拟器，均非真机）。
+
+## 当前状态速览（最近一次更新：**2026-10-03·（七十三）· 鸿蒙腿 **SFC 压力夹具上屏**（矩阵 #21，13/22）—— 六端一致性报告入列：锚块 [16,60,80,48] 与 SFC 声明逐位相同；三个实测坑固化（空格容忍 ×2 + 宿主度量表缺位）**）★新会话以此为准
 
 ## 当前状态速览（最近一次更新：**2026-10-02·（六十五）· **鸿蒙能力域补齐 4 项（4/22 → 7/22）**：命中测试 6/6 逐位一致 · 复用池 **0.9962** · 结构变更 4/4（与 Android 同 payload）· 文本通道 200项/8ms；两条实测教训固化（字段名读实现 / ArkGraphics2D 所有权模型）**）★新会话以此为准
 ### ★★★2026-10-02（三十八）· 交互两层（离散 + 连续）—— 标准 §10.1 的最后两个"未布点"

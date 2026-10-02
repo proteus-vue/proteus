@@ -21,7 +21,7 @@ import { hidebug } from '@kit.PerformanceAnalysisKit';
 // ★矩阵 #17：App 路由栈场景探针（移植副本，与 Android/iOS 同口径）
 import { runAppStackProbe } from '../core/app-stack-probe';
 import { attach, renderCommands, stats, ProteusRenderStats } from 'libproteus_render.so';
-import { bench4050, hitProbe, recycleProbe, spliceProbe, textProbe, kernelAnimProbe, memProbe, version as rustVersion } from 'libproteus_bench.so';
+import { bench4050, hitProbe, recycleProbe, spliceProbe, textProbe, kernelAnimProbe, memProbe, sfcStressProbe, sfcStressCommands, version as rustVersion } from 'libproteus_bench.so';
 
 const DOMAIN = 0x0002;
 const TAG = 'ProteusRender';
@@ -46,6 +46,20 @@ class ScrollFrameCallback extends FrameCallback {
   onIdle(): void {
     /* 空闲帧：不采集（滚动探针只关心活跃帧） */
   }
+}
+
+/**
+ * ★★压力场景"首帧已上屏"上报（矩阵 #21 采集用）——只报一次（避免逐帧刷屏 hilog）。
+ *   采集脚本条件等待 `PROTEUS_SFCSTRESS_FRAME`（零盲等：让被测对象主动上报）。
+ */
+class SfcFrameCallback extends FrameCallback {
+  private fired: boolean = false;
+  onFrame(_frameTimeInNano: number): void {
+    if (this.fired) return;
+    this.fired = true;
+    hilog.info(DOMAIN, BENCH_TAG, 'PROTEUS_SFCSTRESS_FRAME');
+  }
+  onIdle(): void {}
 }
 
 /** CSS 十六进制色（#RRGGBB / #AARRGGBB）→ ARGB uint32 */
@@ -99,6 +113,8 @@ function buildTestCommands(): string {
 @Component
 struct Index {
   private content: NodeContent = new NodeContent();
+  /** ★压力场景模式（`aa start --ps scene stress` 时 true）——只渲染 SFC 夹具，跑采集截图 */
+  private stressScene: boolean = (AppStorage.get<string>('proteusScene') ?? '') === 'stress';
   @State rendered: number = -1;
   @State benchLine: string = '（未跑）';
   // ── 滚动通道（真机滚动 + 帧率采集）──
@@ -285,8 +301,9 @@ struct Index {
         .position({ x: 0, y: 700 })
       }
 
-      Column({ space: 8 }) {
-        Text('Proteus RenderNode 直绘').fontSize(22).fontWeight(FontWeight.Bold)
+      if (!this.stressScene) {
+        Column({ space: 8 }) {
+          Text('Proteus RenderNode 直绘').fontSize(22).fontWeight(FontWeight.Bold)
         Text(`native nodes = ${this.rendered}`).fontSize(14).fontColor('#666666')
           .id('proteus-native-count')
         Text(`设备 ${deviceInfo.productModel} · API ${deviceInfo.sdkApiVersion}`)
@@ -294,14 +311,41 @@ struct Index {
         Text(`4050 基准：${this.benchLine}`).fontSize(12).fontColor('#666666')
           .id('proteus-bench-line')
       }
-      .width('100%')
-      .padding({ top: 40, left: 16, right: 16 })
-      .align(Alignment.TopStart)
+        .width('100%')
+        .padding({ top: 40, left: 16, right: 16 })
+        .align(Alignment.TopStart)
+      }
     }
     .width('100%')
     .height('100%')
     .backgroundColor('#F7F7F9')
     .onAppear(() => {
+      // ── ⓪ ★★压力场景分支（矩阵 #21 六端采集）：只渲染 SFC 夹具 + 主动上报，不跑探针 ──
+      //   触发：`aa start ... --ps scene stress`（EntryAbility 写入 AppStorage；缺省场景不受影响）
+      if (this.stressScene) {
+        try {
+          const ctx2 = getContext(this);
+          const sfcBytes: Uint8Array = ctx2.resourceManager.getRawFileContentSync('stress-44.json');
+          const sfcFix: string = util.TextDecoder.create('utf-8').decodeToString(sfcBytes);
+          const disp2 = display.getDefaultDisplaySync();
+          const vpW2 = px2vp(disp2.width);
+          const vpH2 = px2vp(disp2.height);
+          const rcA = attach(this.content, vp2px(1), vpW2, vpH2);
+          // ★探针读数（锚块/首行几何——与六端报告同锚点；stress 场景也上报，采集脚本一次启动全收）
+          const sfcOut2: string = sfcStressProbe(sfcFix, vpW2, vpH2, DENSITY);
+          hilog.info(DOMAIN, BENCH_TAG, 'PROTEUS_SFCSTRESS %{public}s', sfcOut2);
+          const cmds: string = sfcStressCommands(sfcFix, DENSITY, vpW2, vpH2);
+          const n2 = renderCommands(cmds);
+          this.rendered = n2;
+          hilog.info(DOMAIN, BENCH_TAG,
+            'PROTEUS_SFCSTRESS_RENDERED nodes=%{public}d attach_rc=%{public}d vp=%{public}sx%{public}s',
+            n2, rcA, vpW2.toFixed(2), vpH2.toFixed(2));
+          this.getUIContext().postFrameCallback(new SfcFrameCallback());
+        } catch (e) {
+          hilog.error(DOMAIN, BENCH_TAG, 'PROTEUS_SFCSTRESS_RENDER_ERROR %{public}s', JSON.stringify(e) ?? '');
+        }
+        return;
+      }
       // ── ① RenderNode 直绘（第二里程碑）──
       try {
         // ★密度自报（与 C++ 侧的单位标定日志对读——用于定标"canvas 单位 vs vp"）
@@ -382,6 +426,17 @@ struct Index {
           }
         } catch (me) {
           hilog.error(DOMAIN, BENCH_TAG, 'PROTEUS_MEM_ERROR %{public}s', JSON.stringify(me) ?? '');
+        }
+        // ★★SFC 压力夹具探针（矩阵 #21）——与六端一致性报告同源（同一份 .vue 的编译器产物）
+        try {
+          const ctx2 = getContext(this);
+          const sfcBytes: Uint8Array = ctx2.resourceManager.getRawFileContentSync('stress-44.json');
+          const sfcFix: string = util.TextDecoder.create('utf-8').decodeToString(sfcBytes);
+          const dispS = display.getDefaultDisplaySync();
+          const sfcOut: string = sfcStressProbe(sfcFix, px2vp(dispS.width), px2vp(dispS.height), DENSITY);
+          hilog.info(DOMAIN, BENCH_TAG, 'PROTEUS_SFCSTRESS %{public}s', sfcOut);
+        } catch (sfe) {
+          hilog.error(DOMAIN, BENCH_TAG, 'PROTEUS_SFCSTRESS_ERROR %{public}s', JSON.stringify(sfe) ?? '');
         }
         // ★内核动画探针（矩阵 #16）
         try {

@@ -1,0 +1,24 @@
+{
+ "ok": true,
+ "end": "harmony",
+ "renderer": "RenderNode 直绘（OH_ArkUI_RenderNodeUtils）",
+ "nodes": 44,
+ "rects": 44,
+ "built": 44,
+ "layout_ms": 5.78,
+ "anchor_rect": [
+  16.0,
+  60.0,
+  80.0,
+  48.0
+ ],
+ "first_row_rect": [
+  16.0,
+  151.0,
+  345.0,
+  52.0
+ ],
+ "rendered_nodes": 44,
+ "rendered_line": "10-03 01:08:15.568 36403 36403 I A00002/dev.proteus.host/ProteusBench: PROTEUS_SFCSTRESS_RENDERED nodes=44 attach_rc=0 vp=377.14x816.00",
+ "note": "鸿蒙腿：SFC 压力夹具（examples/pages/consistency-stress.vue 的编译器产物）→ 构建期实例化 → Rust 排版 → RenderNode"
+}

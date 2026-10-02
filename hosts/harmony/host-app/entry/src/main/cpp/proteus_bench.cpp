@@ -111,6 +111,234 @@ static void parseIntArray(const std::string& s, const char* key, std::vector<int
 struct Rect { float x, y, w, h; };
 
 /**
+ * ★★提取 `"nodes":[…]` 子串（**容忍任意空白**）。
+ *   【为什么必须容忍（本轮实测踩到）】首版用精确串 `"nodes":[` —— 而构建期生成的夹具是
+ *   **pretty-print**（`"nodes": [` 带空格）⇒ 匹配失败 ⇒ 探针报"夹具无 nodes"（值全对但格式不符）。
+ *   ⇒ 判据/解析对**格式变化**要健壮（本仓纪律：解析器不假设输入格式）。
+ */
+static std::string extractNodesArray(const std::string& json) {
+    size_t p = json.find("\"nodes\"");
+    if (p == std::string::npos) return "";
+    size_t colon = json.find(':', p);
+    if (colon == std::string::npos) return "";
+    size_t open = json.find('[', colon);
+    if (open == std::string::npos) return "";
+    // 大括号/方括号计数找到配对的 ']'
+    int depth = 0;
+    bool inStr = false;
+    for (size_t i = open; i < json.size(); i++) {
+        char c = json[i];
+        if (inStr) {
+            if (c == '\\') { i++; continue; }
+            if (c == '"') inStr = false;
+            continue;
+        }
+        if (c == '"') { inStr = true; continue; }
+        if (c == '[') depth++;
+        else if (c == ']') {
+            depth--;
+            if (depth == 0) return json.substr(open, i - open + 1);
+        }
+    }
+    return "";
+}
+
+/**
+ * 提取 JSON 字符串字段（原型级；带最小转义还原）。
+ *   ★★**冒号后必须容忍空白**（本轮实测踩坑）：夹具是 pretty-print（`"backgroundColor": "#2f6fed"`
+ *   **冒号后有空格**），首版精确匹配 `"key":"` ⇒ 全部字段静默取空（color 全 0 / text 全空
+ *   ⇒ 渲染出一棵"几何正确但全透明"的树，画面上什么都没有）。
+ *   这与 `extractNodesArray` 的空白坑**同源**：解析器一律不假设输入格式。
+ *   （数值字段没踩到：`jnum` 用 strtod，strtod 自己跳过前导空白。）
+ */
+static bool jstr(const char* s, size_t segLen, const char* key, std::string* out) {
+    std::string seg(s, segLen);
+    std::string needle = std::string("\"") + key + "\"";
+    size_t p = seg.find(needle);
+    if (p == std::string::npos) return false;
+    size_t colon = seg.find(':', p + needle.size());
+    if (colon == std::string::npos) return false;
+    size_t q = colon + 1;
+    while (q < seg.size() && (seg[q] == ' ' || seg[q] == '\t' || seg[q] == '\n' || seg[q] == '\r')) q++;
+    if (q >= seg.size() || seg[q] != '"') return false;
+    p = q + 1;
+    std::string r;
+    for (size_t i = p; i < seg.size(); i++) {
+        char c = seg[i];
+        if (c == '\\' && i + 1 < seg.size()) {
+            char n = seg[i + 1];
+            if (n == 'n') r += '\n'; else if (n == 't') r += '\t'; else r += n;
+            i++;
+            continue;
+        }
+        if (c == '"') break;
+        r += c;
+    }
+    *out = r;
+    return true;
+}
+
+/** CSS 十六进制色（#RRGGBB / #AARRGGBB）→ ARGB；非法给 0（= 透明，不静默画错色） */
+static uint32_t hexToArgb(const std::string& css) {
+    std::string h = css;
+    if (!h.empty() && h[0] == '#') h = h.substr(1);
+    if (h.size() != 6 && h.size() != 8) return 0;
+    uint32_t v = (uint32_t)strtoul(h.c_str(), nullptr, 16);
+    if (h.size() == 6) v |= 0xFF000000u;
+    return v;
+}
+
+/** 顶层数组切分为对象子串（大括号计数；字符串感知）——与 proteus_render.cpp 的切分同款 */
+static std::vector<std::string> splitJsonObjects(const std::string& json) {
+    std::vector<std::string> items;
+    size_t pos = 0;
+    while ((pos = json.find('{', pos)) != std::string::npos) {
+        int depth = 0;
+        size_t end = pos;
+        bool inStr = false;
+        for (size_t i = pos; i < json.size(); i++) {
+            char c = json[i];
+            if (inStr) {
+                if (c == '\\') { i++; continue; }
+                if (c == '"') inStr = false;
+                continue;
+            }
+            if (c == '"') { inStr = true; continue; }
+            if (c == '{') depth++;
+            else if (c == '}') {
+                depth--;
+                if (depth == 0) { end = i; break; }
+            }
+        }
+        if (end <= pos) break;
+        items.push_back(json.substr(pos, end - pos + 1));
+        pos = end + 1;
+    }
+    return items;
+}
+
+/** SFC 夹具节点的样式子集（渲染指令需要的字段） */
+struct SfcStyle {
+    uint32_t bg = 0;             // 0 = 无背景（透明）
+    double radius = 0;
+    uint32_t textColor = 0xFFFFFFFFu;
+    double fontSize = 24;
+    std::string text;
+};
+
+/** 按**文档序**解析样式表（id → SfcStyle）——顺序即绘制层序（父先子后） */
+static void parseSfcStyles(const std::string& fixture, std::vector<std::pair<int, SfcStyle>>& out) {
+    std::string arr = extractNodesArray(fixture);
+    if (arr.empty()) return;
+    for (const auto& item : splitJsonObjects(arr)) {
+        double id = -1;
+        if (!jnum(item.c_str(), item.size(), "id", &id)) continue;
+        SfcStyle st;
+        std::string bgCss;
+        if (jstr(item.c_str(), item.size(), "backgroundColor", &bgCss)) st.bg = hexToArgb(bgCss);
+        jnum(item.c_str(), item.size(), "borderRadius", &st.radius);
+        std::string colorCss;
+        if (jstr(item.c_str(), item.size(), "color", &colorCss)) st.textColor = hexToArgb(colorCss);
+        jnum(item.c_str(), item.size(), "fontSize", &st.fontSize);
+        jstr(item.c_str(), item.size(), "text", &st.text);
+        out.emplace_back((int)id, st);
+    }
+}
+
+/** JSON 字符串转义（文本进指令数组前必须转义引号/反斜杠/控制符） */
+static std::string jsonEscape(const std::string& s) {
+    std::string r;
+    for (char c : s) {
+        switch (c) {
+            case '"': r += "\\\""; break;
+            case '\\': r += "\\\\"; break;
+            case '\n': r += "\\n"; break;
+            case '\t': r += "\\t"; break;
+            case '\r': r += "\\r"; break;
+            default: r += c;
+        }
+    }
+    return r;
+}
+
+static void parseRects(const std::string& s, std::unordered_map<int, Rect>& out);
+
+/**
+ * ★★typography 文本度量（物理 px 输入 → 物理 px 输出）——**与绘制同一条引擎**（自洽）。
+ *
+ * 【为什么必须有（本轮实测踩坑）】夹具的文本节点多数**没有显式 height**（行文本靠内容撑高）——
+ *   内核的输入契约是"度量表随树给"（`textMeasures`），宿主不填 ⇒ 内核按零尺寸处理 ⇒
+ *   文本节点盒高 0 ⇒ content modifier 画布 0 像素 ⇒ **画面上什么都没有**（几何全对、色块全对，
+ *   唯独文字消失）。对照端各宿主都有度量：Android `TextPaint.measureText`（真实字体度量）、
+ *   iOS CoreText、Web 浏览器行盒。鸿蒙腿此前 `"textMeasures":{}`（= 缺这一环）。
+ *   ⇒ 度量放**宿主侧**（内核平台无关性的体现）；本函数即鸿蒙宿主的 `measure_text` 实现。
+ *   ★口径：物理字号量一次（与 DrawTextCallback 的绘制字号完全一致），再由调用方换回设计单位。
+ */
+static void measureTextTypoPx(const std::string& text, double fontPx, double* outW, double* outH) {
+    *outW = 0;
+    *outH = 0;
+    if (text.empty() || fontPx <= 0) return;
+    OH_Drawing_FontCollection* fc = OH_Drawing_CreateFontCollection();
+    if (fc == nullptr) return;
+    OH_Drawing_TypographyStyle* ts = OH_Drawing_CreateTypographyStyle();
+    OH_Drawing_TextStyle* tstyle = OH_Drawing_CreateTextStyle();
+    OH_Drawing_SetTextStyleFontSize(tstyle, fontPx);
+    OH_Drawing_TypographyCreate* handler = OH_Drawing_CreateTypographyHandler(ts, fc);
+    if (handler != nullptr) {
+        OH_Drawing_TypographyHandlerPushTextStyle(handler, tstyle);
+        OH_Drawing_TypographyHandlerAddText(handler, text.c_str());
+        OH_Drawing_Typography* typo = OH_Drawing_CreateTypography(handler);
+        if (typo != nullptr) {
+            OH_Drawing_TypographyLayout(typo, 10000.0);
+            *outW = OH_Drawing_TypographyGetLongestLine(typo);
+            *outH = OH_Drawing_TypographyGetHeight(typo);
+            OH_Drawing_DestroyTypography(typo);
+        }
+        OH_Drawing_DestroyTypographyHandler(handler);
+    }
+    OH_Drawing_DestroyTextStyle(tstyle);
+    OH_Drawing_DestroyTypographyStyle(ts);
+    OH_Drawing_DestroyFontCollection(fc);
+}
+
+/** 夹具排版（视口 = 调用方传入的**逻辑 vp 尺寸**——夹具 device-independent，视口运行时给）：
+ *   返回 layout handle（0 = 失败）；rects 输出 id→几何（逻辑单位）。 */
+static uint64_t layoutSfcFixture(const std::string& fixture, double vpW, double vpH,
+                                 double density, std::unordered_map<int, Rect>& rects) {
+    std::string nodesArr = extractNodesArray(fixture);
+    if (nodesArr.empty() || vpW <= 0 || vpH <= 0) return 0;
+    if (density <= 0) density = 1.0;
+    // ★★度量表（宿主职责）：逐文本节点用 typography 量（物理字号），换回**设计单位**（÷密度）。
+    //   —— 不填表 = 文本零尺寸 = 文字不显示（见 measureTextTypoPx 注释的实测）。
+    std::vector<std::pair<int, SfcStyle>> stylesForMeasure;
+    parseSfcStyles(fixture, stylesForMeasure);
+    std::string measures = "{";
+    int mCount = 0;
+    for (const auto& kv : stylesForMeasure) {
+        if (kv.second.text.empty()) continue;
+        double wpx = 0, hpx = 0;
+        measureTextTypoPx(kv.second.text, kv.second.fontSize * density, &wpx, &hpx);
+        char mb[160];
+        snprintf(mb, sizeof(mb), "%s\"%d\":{\"width\":%.4f,\"height\":%.4f}",
+                 mCount > 0 ? "," : "", kv.first, wpx / density, hpx / density);
+        measures += mb;
+        mCount++;
+    }
+    measures += "}";
+    char vp[96];
+    snprintf(vp, sizeof(vp), "{\"width\":%.4f,\"height\":%.4f}", vpW, vpH);
+    std::string req = std::string("{\"viewport\":") + vp + ",\"nodes\":" + nodesArr +
+                      ",\"textMeasures\":" + measures + "}";
+    uint64_t handle = proteus_layout_create(req.c_str());
+    if (handle == 0) return 0;
+    char* rectsRaw = proteus_layout_rects(handle);
+    std::string rectsStr = rectsRaw ? rectsRaw : "{}";
+    if (rectsRaw) proteus_layout_free_string(rectsRaw);
+    parseRects(rectsStr, rects);
+    return handle;
+}
+
+/**
  * 单遍解析 rects JSON → map<id, Rect>
  *   ★为什么必须单遍（首版隐患）：对每个节点在整串里 `find` 是 O(n²)——
  *     4051 节点 × ~600KB ≈ 2.4GB 扫描，会把"几何提取"段推高到秒级、污染计时。
@@ -859,6 +1087,181 @@ static napi_value MemProbe(napi_env env, napi_callback_info info) {
     return out;
 }
 
+/**
+ * sfcStressProbe(fixtureJson): string(JSON) —— ★★矩阵 #21：**SFC 压力夹具的鸿蒙渲染**。
+ *
+ * 【与六端一致性报告的关系】`docs/generated/consistency-samples/sfc/` 采集六端截图；
+ *   鸿蒙腿此前缺（#21）。本探针走**与 Web/MP/Android/iOS 同一条链**：
+ *   `examples/pages/consistency-stress.vue` → 编译器产物（`vapor-stress-artifacts.json`）
+ *   → **构建期实例化**（44 节点，见 fixtures/stress-44.json 的生成命令）
+ *   → Rust 内核排版 → **RenderNode 直绘**（本探针负责最后两步）。
+ *
+ * 读数：节点数 / 排版耗时 / 建 RenderNode 数 / 首行与锚块几何（供跨端核对）。
+ *   ★几何字段（anchor_rect / first_row_rect）与一致性报告同锚点：锚块 (16,60) 80×48。
+ */
+static napi_value SfcStressProbe(napi_env env, napi_callback_info info) {
+    size_t argc = 4;
+    napi_value args[4] = {nullptr, nullptr, nullptr, nullptr};
+    napi_get_cb_info(env, info, &argc, args, nullptr, nullptr);
+    if (argc < 1) {
+        napi_value out;
+        napi_create_string_utf8(env, "{\"ok\":false,\"error\":\"缺 fixture\"}", NAPI_AUTO_LENGTH, &out);
+        return out;
+    }
+    size_t len = 0;
+    napi_get_value_string_utf8(env, args[0], nullptr, 0, &len);
+    std::string fixture(len + 1, '\0');
+    napi_get_value_string_utf8(env, args[0], &fixture[0], len + 1, &len);
+    fixture.resize(len);
+
+    // 視口（逻辑 vp）：由 ArkTS 传 px2vp(屏宽/高)——夹具 widthRatio 在排版时按此解析
+    double vpW = 0, vpH = 0;
+    if (argc >= 3) {
+        napi_get_value_double(env, args[1], &vpW);
+        napi_get_value_double(env, args[2], &vpH);
+    }
+    if (vpW <= 0 || vpH <= 0) { vpW = 1080; vpH = 2400; }  // 兜底（老调用不传视口）
+
+    // ★度量用的密度：ArkTS 不传时按 1 兜底（探针只读几何，density 仅影响度量标定；
+    //   正常调用点都经 sfcStressCommands 走 density=vp2px(1)）
+    double density = 1.0;
+    if (argc >= 4) {
+        napi_get_value_double(env, args[3], &density);
+    }
+    std::unordered_map<int, Rect> rectMap;
+    auto t0 = Clock::now();
+    uint64_t handle = layoutSfcFixture(fixture, vpW, vpH, density, rectMap);
+    double layoutMs = msSince(t0);
+    if (handle == 0) {
+        napi_value out;
+        napi_create_string_utf8(env, "{\"ok\":false,\"error\":\"建树失败\"}", NAPI_AUTO_LENGTH, &out);
+        return out;
+    }
+    // 节点数（粗计："id": 出现次数）
+    int nodeCount = 0;
+    {
+        size_t q = 0;
+        while ((q = fixture.find("\"id\":", q)) != std::string::npos) { nodeCount++; q += 5; }
+    }
+
+    // 建 RenderNode（全部有几何的节点；背景色可选）
+    int built = 0;
+    for (auto& kv : rectMap) {
+        ArkUI_RenderNodeHandle n = OH_ArkUI_RenderNodeUtils_CreateNode();
+        if (n == nullptr) continue;
+        OH_ArkUI_RenderNodeUtils_SetSize(n, (int32_t)kv.second.w, (int32_t)kv.second.h);
+        OH_ArkUI_RenderNodeUtils_SetPosition(n, (int32_t)kv.second.x, (int32_t)kv.second.y);
+        OH_ArkUI_RenderNodeUtils_SetBackgroundColor(n, 0xFF1B1B21u);
+        built++;
+        OH_ArkUI_RenderNodeUtils_DisposeNode(n);
+    }
+    proteus_layout_destroy(handle);
+
+    // 锚块（id=1）/ 首行（id=3）几何——与一致性报告同锚点
+    char buf[512];
+    auto rectOf = [&](int id, double* x, double* y, double* w, double* h) {
+        auto it = rectMap.find(id);
+        if (it == rectMap.end()) { *x = *y = *w = *h = -1; return; }
+        *x = it->second.x; *y = it->second.y; *w = it->second.w; *h = it->second.h;
+    };
+    double ax, ay, aw, ah, rx, ry, rw, rh;
+    rectOf(1, &ax, &ay, &aw, &ah);
+    rectOf(3, &rx, &ry, &rw, &rh);
+    snprintf(buf, sizeof(buf),
+             "{\"ok\":true,\"nodes\":%d,\"rects\":%d,\"built\":%d,\"layout_ms\":%.2f,"
+             "\"anchor\":[%.1f,%.1f,%.1f,%.1f],\"first_row\":[%.1f,%.1f,%.1f,%.1f],"
+             "\"note\":\"鸿蒙腿：SFC 压力夹具（examples/pages/consistency-stress.vue 的编译器产物）→ 构建期实例化 → Rust 排版 → RenderNode\"}",
+             nodeCount, (int)rectMap.size(), built, layoutMs, ax, ay, aw, ah, rx, ry, rw, rh);
+    OH_LOG_Print(LOG_APP, LOG_INFO, PROTEUS_BENCH_DOMAIN, PROTEUS_BENCH_TAG,
+                 "PROTEUS_SFCSTRESS_DONE nodes=%{public}d rects=%{public}d anchor_y=%.1f row_y=%.1f",
+                 nodeCount, (int)rectMap.size(), ay, ry);
+    napi_value out;
+    napi_create_string_utf8(env, buf, NAPI_AUTO_LENGTH, &out);
+    return out;
+}
+
+/**
+ * sfcStressCommands(fixtureJson, density, vpW, vpH): string(JSON 数组)
+ *   —— ★★矩阵 #21 的**上屏通路**：夹具 → Rust 排版（逻辑 vp）→ 合并节点样式 →
+ *   **渲染指令数组**（物理 px，与 `native.renderCommands(json)` 的输入同形）。
+ *
+ * 【为什么在 C++ 合并（而不是 ArkTS 侧）】几何只在排版输出里（ArkTS 拿不到 rects）——
+ *   一处产出"几何 × 样式 × 密度"三合一的指令，ArkTS 只做 transport（零逻辑，零单位换算猜测）。
+ *   绘制层序 = 夹具文档序（父先子后 ⇒ 子节点叠在上层——RenderNode AddChild 语义）。
+ */
+static napi_value SfcStressCommands(napi_env env, napi_callback_info info) {
+    size_t argc = 4;
+    napi_value args[4] = {nullptr, nullptr, nullptr, nullptr};
+    napi_get_cb_info(env, info, &argc, args, nullptr, nullptr);
+    if (argc < 4) {
+        napi_value out;
+        napi_create_string_utf8(env, "[]", NAPI_AUTO_LENGTH, &out);
+        return out;
+    }
+    size_t len = 0;
+    napi_get_value_string_utf8(env, args[0], nullptr, 0, &len);
+    std::string fixture(len + 1, '\0');
+    napi_get_value_string_utf8(env, args[0], &fixture[0], len + 1, &len);
+    fixture.resize(len);
+    double density = 1.0, vpW = 0, vpH = 0;
+    napi_get_value_double(env, args[1], &density);
+    napi_get_value_double(env, args[2], &vpW);
+    napi_get_value_double(env, args[3], &vpH);
+    if (density <= 0) density = 1.0;
+
+    std::unordered_map<int, Rect> rectMap;
+    uint64_t handle = layoutSfcFixture(fixture, vpW, vpH, density, rectMap);
+    if (handle == 0) {
+        napi_value out;
+        napi_create_string_utf8(env, "[]", NAPI_AUTO_LENGTH, &out);
+        return out;
+    }
+    proteus_layout_destroy(handle);
+
+    std::vector<std::pair<int, SfcStyle>> styles;
+    parseSfcStyles(fixture, styles);
+
+    std::string arr = "[";
+    int emitted = 0;
+    for (const auto& kv : styles) {
+        auto it = rectMap.find(kv.first);
+        if (it == rectMap.end()) continue;   // 无几何 ⇒ 跳过（不静默造假）
+        const Rect& r = it->second;
+        const SfcStyle& st = kv.second;
+        char head[320];
+        snprintf(head, sizeof(head),
+                 "%s{\"kind\":\"background\",\"x\":%.2f,\"y\":%.2f,\"w\":%.2f,\"h\":%.2f,"
+                 "\"color\":%u,\"radius\":%.2f",
+                 emitted > 0 ? "," : "", r.x * density, r.y * density, r.w * density, r.h * density,
+                 st.bg, st.radius * density);
+        arr += head;
+        if (!st.text.empty()) {
+            char tail[96];
+            snprintf(tail, sizeof(tail), ",\"fontSize\":%.2f,\"textColor\":%u",
+                     st.fontSize * density, st.textColor);
+            arr += tail;
+            arr += ",\"text\":\"" + jsonEscape(st.text) + "\"";
+        }
+        arr += "}";
+        emitted++;
+    }
+    arr += "]";
+    char logbuf[128];
+    snprintf(logbuf, sizeof(logbuf), "PROTEUS_SFCSTRESS_CMDS nodes=%d", emitted);
+    OH_LOG_Print(LOG_APP, LOG_INFO, PROTEUS_BENCH_DOMAIN, PROTEUS_BENCH_TAG, "%{public}s", logbuf);
+    // ★调试取证：指令串前 512 字符 + 总长（"渲染去哪了"不能靠猜——与 PROTEUS_RENDER_NODE 对读）
+    {
+        std::string head = arr.substr(0, 512);
+        char lenbuf[64];
+        snprintf(lenbuf, sizeof(lenbuf), "PROTEUS_SFCSTRESS_CMDS_HEAD len=%zu", arr.size());
+        OH_LOG_Print(LOG_APP, LOG_INFO, PROTEUS_BENCH_DOMAIN, PROTEUS_BENCH_TAG, "%{public}s", lenbuf);
+        OH_LOG_Print(LOG_APP, LOG_INFO, PROTEUS_BENCH_DOMAIN, PROTEUS_BENCH_TAG, "%{public}s", head.c_str());
+    }
+    napi_value out;
+    napi_create_string_utf8(env, arr.c_str(), NAPI_AUTO_LENGTH, &out);
+    return out;
+}
+
 /** version(): string —— Rust 核版本自报（仪器自检） */
 static napi_value BenchVersion(napi_env env, napi_callback_info info) {
     char* v = proteus_layout_version();
@@ -879,6 +1282,8 @@ static napi_value BenchInit(napi_env env, napi_value exports) {
         {"textProbe", nullptr, TextProbe, nullptr, nullptr, nullptr, napi_default, nullptr},
         {"kernelAnimProbe", nullptr, KernelAnimProbe, nullptr, nullptr, nullptr, napi_default, nullptr},
         {"memProbe", nullptr, MemProbe, nullptr, nullptr, nullptr, napi_default, nullptr},
+        {"sfcStressProbe", nullptr, SfcStressProbe, nullptr, nullptr, nullptr, napi_default, nullptr},
+        {"sfcStressCommands", nullptr, SfcStressCommands, nullptr, nullptr, nullptr, napi_default, nullptr},
         {"version", nullptr, BenchVersion, nullptr, nullptr, nullptr, napi_default, nullptr},
     };
     napi_define_properties(env, exports, sizeof(desc) / sizeof(desc[0]), desc);
