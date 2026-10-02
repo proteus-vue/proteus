@@ -27,4 +27,6 @@ if(HAVE_RUST_CORE)
   add_library(proteus_bench SHARED proteus_bench.cpp)
   target_link_libraries(proteus_bench PUBLIC libace_napi.z.so libace_ndk.z.so libhilog_ndk.z.so)
   target_link_libraries(proteus_bench PUBLIC proteus_rust_layout)
+  # ★文本通道（ArkGraphics2D）：styled_string + typography（鸿蒙文本绘制）
+  target_link_libraries(proteus_bench PUBLIC libnative_drawing.so)
 endif()

@@ -10,14 +10,14 @@
 | 1 | **布局核心（Rust）** | ✅ JNI | ✅ staticlib | ✅ C ABI | 同一份源码；三端产物均真机跑通 |
 | 2 | **4050 元素应用级基准** | ✅ A/B 5 轮 | ✅ L1/L2 | ✅ L1 | 统一口径见 `hosts/results/cross-end-4050.json` |
 | 3 | **L2 光栅级对照** | ✅ `soft_raster_ms` | ✅ `drawHierarchy` | ⛔ 架构性不适用 | 鸿蒙渲染由 RS 进程负责（无宿主 CPU 光栅路径） |
-| 4 | **长列表复用池** | ✅ `recycle` | ✅ `V12_scroll_recycle` | ⛔ **缺** | 鸿蒙待补（`proteus_recycle_*` C ABI 已存在，未接） |
+| 4 | **长列表复用池** | ✅ `recycle` | ✅ `V12_scroll_recycle` | ✅ **已补** | 鸿蒙 `recycleProbe`：**reuse_ratio 0.9962**（4000 行/400 帧，created=30/reused=7936/max_live=30） |
 | 5 | **滚动（平台侧）** | ✅ `scroll`/`scroll-core`/`scroll-native` | ✅ V12 滚动帧 | ⛔ **缺** | 鸿蒙待补（设备横滑/竖滚 + 帧率） |
-| 6 | **命中测试（三层）** | ✅ `hit` | ✅ `hit_probes`（与 Android 同探针） | ⛔ **缺** | 鸿蒙待补（C ABI `proteus_layout_hit_test` 已存在） |
+| 6 | **命中测试（三层）** | ✅ `hit` | ✅ `hit_probes`（与 Android 同探针） | ✅ **已补** | 鸿蒙 `hitProbe`：**6/6 与两端逐位一致**（同场景同探针点） |
 | 7 | **手势** | ✅ `gesture`（GestureDetector + 核心 target） | ❌ **缺** | ⛔ **缺** | iOS/鸿蒙待补（`packages/gesture` 已三端中立） |
-| 8 | **文本通道** | ✅ drawText/StaticLayout 分流 + 归因 | ✅ CoreText（`measureText`） | ⛔ **缺**（渲染）；✅ 度量 | 鸿蒙文本绘制待补（`styled_string.h` + ArkGraphics2D 可用） |
+| 8 | **文本通道** | ✅ drawText/StaticLayout 分流 + 归因 | ✅ CoreText（`measureText`） | ◐ **探针已通** | 鸿蒙 `textProbe`：ArkGraphics2D typography **200 项/8.0ms（40μs/项）**；★上屏接线（RenderNode content modifier）待做 |
 | 9 | **字体族映射** | ✅ `font-family`（与 iOS V13 同契约） | ✅ V13 | ⛔ **缺** | 鸿蒙待补 |
 | 10 | **原生组件混用（L3）** | ✅ `native`/`native-host`/`shot-scroll-native` | ❌ **缺** | ⛔ **缺** | iOS/鸿蒙待补（方案坑位 #4 的核心） |
-| 11 | **结构变更（splice/apply-ops）** | ✅ `splice`/`apply-ops` | ❌ **缺** | ⛔ **缺** | iOS/鸿蒙待补 |
+| 11 | **结构变更（splice/apply-ops）** | ✅ `splice`/`apply-ops` | ❌ **缺** | ✅ **已补** | 鸿蒙 `spliceProbe`：**4/4 判据过**（rects 4→5 / removed=0,inserted=1 / 新节点高 50.0 / 重排 5 有界）——与 Android 同 payload |
 | 12 | **整树虚拟化（mount-virtual）** | ✅ `mount-virtual` | ✅（V12 同族） | ⛔ **缺** | 鸿蒙待补 |
 | 13 | **JS 引擎闭环** | ✅ `js-engine`/`js-batch`/`js-render` | ✅ JSC 现场编码 | ⛔ **缺** | 鸿蒙待补（ArkTS 已含 JIT 运行时，接法待定） |
 | 14 | **Vapor 指令流** | ✅ `vapor`/`vaporAb`/`vaporList` | ✅（vapor 场景） | ⛔ **缺** | 鸿蒙待补 |
@@ -30,7 +30,7 @@
 | 21 | **一致性快照（L2-L4）** | ✅ | ✅ | ⛔ **缺** | 鸿蒙待补 |
 | 22 | **Perfetto / 帧率** | ✅（Perfetto 接入） | ◐（帧统计） | ⛔ **缺** | |
 
-**统计**：Android 22/22 · iOS **15/22** · 鸿蒙 **4/22**。
+**统计**：Android 22/22 · iOS **15/22** · 鸿蒙 **7/22**（本轮 4→7：命中 / 复用池 / 结构变更 / 文本通道探针）。
 
 ## 2. 缺口归因（为什么鸿蒙最少）
 
@@ -56,9 +56,19 @@ iOS 的缺口（手势 / 原生组件混用 / 结构变更 / splice）是**历�
 
 ## 4. 本轮（2026-10-02）已完成的补齐
 
+**口径层**：
 - ✅ **L2 光栅级对照**：iOS 补 `drawHierarchy` 真对照（原 `layout_ms` 误标为绘制）；
   Android 补双方 `soft_raster_ms`；统一口径生成器 `scripts/gen-cross-end-4050-report.mjs`。
 - ✅ **L1 口径统一**：三端共用"建树+排版+指令送达"定义（iOS 补入 `rust_layout_ms`）。
+- ✅ **Android L2 缺口修复**：1.673× → **0.349×**（显示列表复用；见代码注释的真因归因链）。
+
+**鸿蒙能力域（4 项，全部真机读数）**：
+- ✅ **命中测试**（P0）：`hitProbe` 6/6 逐位一致；
+- ✅ **长列表复用池**（P0）：`recycleProbe` reuse_ratio **0.9962**（对齐 Android 0.9947 / iOS 95.5%）；
+- ✅ **结构变更**（P1）：`spliceProbe` 4/4 判据（与 Android 同 payload）；
+- ✅ **文本通道探针**（P1）：`textProbe` ArkGraphics2D 200 项/8.0ms。
+  ★所有权实测（两轮定位，已写进代码注释）：`FontCollection` 跨 `CreateTypographyHandler`
+  **复用会 CppCrash**（Run B）⇒ 采用"每次迭代完整创建/销毁"形态（Run A，可复现）。
 
 ## 5. 诚实边界
 
