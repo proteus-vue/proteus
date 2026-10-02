@@ -12,5 +12,7 @@ export const spliceProbe: () => string;
 export const textProbe: () => string;
 /** ★内核动画探针（矩阵 #16；anim_seek + updates 读数） */
 export const kernelAnimProbe: () => string;
+/** ★内存探针（三段式：tree/nodes/release；ArkTS 在阶段间读 PSS） */
+export const memProbe: (phase: string, fixtureJson?: string) => string;
 /** Rust 排版核版本（仪器自检） */
 export const version: () => string;

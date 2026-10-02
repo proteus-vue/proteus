@@ -17,10 +17,11 @@ import { hilog } from '@kit.PerformanceAnalysisKit';
 import { NodeContent, FrameCallback } from '@kit.ArkUI';
 import { util } from '@kit.ArkTS';
 import { display } from '@kit.ArkUI';
+import { hidebug } from '@kit.PerformanceAnalysisKit';
 // ★矩阵 #17：App 路由栈场景探针（移植副本，与 Android/iOS 同口径）
 import { runAppStackProbe } from '../core/app-stack-probe';
 import { attach, renderCommands, stats, ProteusRenderStats } from 'libproteus_render.so';
-import { bench4050, hitProbe, recycleProbe, spliceProbe, textProbe, kernelAnimProbe, version as rustVersion } from 'libproteus_bench.so';
+import { bench4050, hitProbe, recycleProbe, spliceProbe, textProbe, kernelAnimProbe, memProbe, version as rustVersion } from 'libproteus_bench.so';
 
 const DOMAIN = 0x0002;
 const TAG = 'ProteusRender';
@@ -353,6 +354,34 @@ struct Index {
           hilog.info(DOMAIN, BENCH_TAG, 'PROTEUS_SPLICE %{public}s', sp);
         } catch (se) {
           hilog.error(DOMAIN, BENCH_TAG, 'PROTEUS_SPLICE_ERROR %{public}s', JSON.stringify(se) ?? '');
+        }
+        // ★★内存读数探针（矩阵 #19）：三段式（树 / 渲染节点 / 释放）——阶段间读 PSS
+        try {
+          const fix: string = this.readFixture();
+          if (fix.length > 0) {
+            // ★单位（文档确认）：`hidebug.getPss()` 返回 **KB**（与 Android PSS 同口径）——
+            //   首版误当 bytes 除 1024 ⇒ 标签写"kb"实为 MB（数值本身没错，标签错）。
+            const pss = (): number => Number(hidebug.getPss());   // KB
+            const p0: number = pss();
+            memProbe('tree', fix);
+            const p1: number = pss();
+            memProbe('nodes');
+            const p2: number = pss();
+            memProbe('release');
+            const p3: number = pss();
+            // ★归因第二轮（复用存量再建；区分"分配器缓存"与"真实泄漏"）
+            memProbe('nodes-reuse');
+            const p4: number = pss();
+            memProbe('release');
+            const p5: number = pss();
+            const r = (v: number): number => Math.round(v);
+            hilog.info(DOMAIN, BENCH_TAG,
+              'PROTEUS_MEM {"ok":true,"base_kb":%{public}s,"tree_delta_kb":%{public}s,"nodes_delta_kb":%{public}s,"release_delta_kb":%{public}s,"reuse_delta_kb":%{public}s,"release2_delta_kb":%{public}s,"note":"鸿蒙腿：hidebug.getPss（KB）三段式；reuse 轮用于区分分配器缓存 vs 泄漏"}',
+              r(p0).toString(), r(p1 - p0).toString(), r(p2 - p1).toString(), r(p3 - p2).toString(),
+              r(p4 - p3).toString(), r(p5 - p4).toString());
+          }
+        } catch (me) {
+          hilog.error(DOMAIN, BENCH_TAG, 'PROTEUS_MEM_ERROR %{public}s', JSON.stringify(me) ?? '');
         }
         // ★内核动画探针（矩阵 #16）
         try {

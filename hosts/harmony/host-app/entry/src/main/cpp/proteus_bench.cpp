@@ -751,6 +751,114 @@ static napi_value KernelAnimProbe(napi_env env, napi_callback_info info) {
     return out;
 }
 
+/**
+ * memProbe(phase: string, fixtureJson?: string): string(JSON) —— ★★内存读数（矩阵 #19）。
+ *
+ * 【设计（为什么是"三段式"）】PSS 只能由 **ArkTS 侧**（`hidebug.getPss()`）读；
+ *   而树/渲染节点的创建在 **C++ 侧**。⇒ 探针把创建/销毁拆成三个阶段，ArkTS 在阶段间读 PSS：
+ *     · phase="tree"    ：建 Rust 布局树（4050 夹具）并**保持存活**；
+ *     · phase="nodes"   ：为全部 `backgroundColor` 节点建 **RenderNode** 并保持存活；
+ *     · phase="release" ：全部销毁（回到基线——验证"释放真的发生"）。
+ *   读数 = 相邻阶段的 PSS 差（KB）——与 Android「只建结构」/ iOS `delta_mb` 同口径。
+ */
+static uint64_t g_memTreeHandle = 0;
+static std::vector<ArkUI_RenderNodeHandle> g_memNodes;
+
+static napi_value MemProbe(napi_env env, napi_callback_info info) {
+    size_t argc = 2;
+    napi_value args[2] = {nullptr, nullptr};
+    napi_get_cb_info(env, info, &argc, args, nullptr, nullptr);
+    std::string phase = "";
+    if (argc >= 1) {
+        size_t len = 0;
+        napi_get_value_string_utf8(env, args[0], nullptr, 0, &len);
+        phase.resize(len + 1);
+        napi_get_value_string_utf8(env, args[0], &phase[0], len + 1, &len);
+        phase.resize(len);
+    }
+
+    if (phase == "tree") {
+        if (argc < 2) {
+            napi_value out;
+            napi_create_string_utf8(env, "{\"ok\":false,\"error\":\"缺 fixture\"}", NAPI_AUTO_LENGTH, &out);
+            return out;
+        }
+        size_t len = 0;
+        napi_get_value_string_utf8(env, args[1], nullptr, 0, &len);
+        std::string fixture(len + 1, '\0');
+        napi_get_value_string_utf8(env, args[1], &fixture[0], len + 1, &len);
+        fixture.resize(len);
+        size_t nodesKey = fixture.find("\"nodes\":[");
+        if (nodesKey == std::string::npos) {
+            napi_value out;
+            napi_create_string_utf8(env, "{\"ok\":false,\"error\":\"夹具无 nodes\"}", NAPI_AUTO_LENGTH, &out);
+            return out;
+        }
+        size_t arrStart = nodesKey + 9;
+        size_t arrEnd = fixture.rfind(']');
+        std::string req = "{\"viewport\":{\"width\":1080,\"height\":2400},\"nodes\":" +
+                          fixture.substr(arrStart, arrEnd - arrStart + 1) + ",\"textMeasures\":{}}";
+        if (g_memTreeHandle != 0) proteus_layout_destroy(g_memTreeHandle);
+        g_memTreeHandle = proteus_layout_create(req.c_str());
+        napi_value out;
+        napi_create_string_utf8(env, g_memTreeHandle != 0 ? "{\"ok\":true,\"phase\":\"tree\"}"
+                                                          : "{\"ok\":false,\"error\":\"建树失败\"}", NAPI_AUTO_LENGTH, &out);
+        return out;
+    }
+
+    if (phase == "nodes") {
+        // 为 4000 个带背景色节点建 RenderNode（口径与 4050 基准一致）
+        int built = 0;
+        for (int i = 0; i < 4000; i++) {
+            ArkUI_RenderNodeHandle n = OH_ArkUI_RenderNodeUtils_CreateNode();
+            if (n == nullptr) break;
+            OH_ArkUI_RenderNodeUtils_SetSize(n, 28, 18);
+            OH_ArkUI_RenderNodeUtils_SetPosition(n, (i % 40) * 29, (i / 40) * 19);
+            OH_ArkUI_RenderNodeUtils_SetBackgroundColor(n, 0xFF285AC8u);
+            g_memNodes.push_back(n);
+            built++;
+        }
+        char buf[128];
+        snprintf(buf, sizeof(buf), "{\"ok\":true,\"phase\":\"nodes\",\"built\":%d}", built);
+        napi_value out;
+        napi_create_string_utf8(env, buf, NAPI_AUTO_LENGTH, &out);
+        return out;
+    }
+
+    if (phase == "nodes-reuse") {
+        // ★归因用：**复用**上一轮释放过的存量再建（若分配器真回收，PSS 不应再涨）
+        int built = 0;
+        for (int i = 0; i < 4000; i++) {
+            ArkUI_RenderNodeHandle n = OH_ArkUI_RenderNodeUtils_CreateNode();
+            if (n == nullptr) break;
+            OH_ArkUI_RenderNodeUtils_SetSize(n, 28, 18);
+            g_memNodes.push_back(n);
+            built++;
+        }
+        char buf[128];
+        snprintf(buf, sizeof(buf), "{\"ok\":true,\"phase\":\"nodes-reuse\",\"built\":%d}", built);
+        napi_value out;
+        napi_create_string_utf8(env, buf, NAPI_AUTO_LENGTH, &out);
+        return out;
+    }
+
+    if (phase == "release") {
+        int released = 0;
+        for (auto* n : g_memNodes) { OH_ArkUI_RenderNodeUtils_DisposeNode(n); released++; }
+        g_memNodes.clear();
+        if (g_memTreeHandle != 0) { proteus_layout_destroy(g_memTreeHandle); g_memTreeHandle = 0; }
+        char buf[128];
+        snprintf(buf, sizeof(buf), "{\"ok\":true,\"phase\":\"release\",\"released\":%d}", released);
+        napi_value out;
+        napi_create_string_utf8(env, buf, NAPI_AUTO_LENGTH, &out);
+        return out;
+    }
+
+    napi_value out;
+    napi_create_string_utf8(env, "{\"ok\":false,\"error\":\"未知 phase\"}", NAPI_AUTO_LENGTH, &out);
+    return out;
+}
+
 /** version(): string —— Rust 核版本自报（仪器自检） */
 static napi_value BenchVersion(napi_env env, napi_callback_info info) {
     char* v = proteus_layout_version();
@@ -770,6 +878,7 @@ static napi_value BenchInit(napi_env env, napi_value exports) {
         {"spliceProbe", nullptr, SpliceProbe, nullptr, nullptr, nullptr, napi_default, nullptr},
         {"textProbe", nullptr, TextProbe, nullptr, nullptr, nullptr, napi_default, nullptr},
         {"kernelAnimProbe", nullptr, KernelAnimProbe, nullptr, nullptr, nullptr, napi_default, nullptr},
+        {"memProbe", nullptr, MemProbe, nullptr, nullptr, nullptr, napi_default, nullptr},
         {"version", nullptr, BenchVersion, nullptr, nullptr, nullptr, napi_default, nullptr},
     };
     napi_define_properties(env, exports, sizeof(desc) / sizeof(desc[0]), desc);
