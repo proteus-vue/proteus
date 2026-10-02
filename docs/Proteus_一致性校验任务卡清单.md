@@ -23,10 +23,15 @@
 
 ### 第二批：L1 编译期静态
 
-- [ ] **VC2-a** Profile 扩展：各端支持度维度
-- [ ] **VC2-b** 编译期静态校验实现
-- [ ] **VC2-c** Skyline 对齐开关默认配置
-- [ ] **VC2-d** 支持度矩阵同步分发
+- [x] **VC2-a** Profile 扩展：各端支持度维度 —— ✅（2026-10-02）矩阵加 `supportTier` 三级
+  （universal/conditional/unsupported）+ 与 L0–L5 关系 + 「仅部分端支持」差集 + 开关版本表
+- [x] **VC2-b** 编译期静态校验实现 —— ✅（2026-10-02）：官方 formats 派生 24 条边界规则
+  （生成物）+ `checkProfileBoundary`（错误级 + 四要素 + escape hatch 可统计）+ **Web/MP 双链注册** +
+  `proteus explain CSS-PB-*` 联动 + 存量棘轮基线（`check:profile-baseline`，只减不增）
+- [x] **VC2-c** Skyline 对齐开关默认配置 —— ✅（2026-10-02）：5 开关类型化 + 版本要求入矩阵 +
+  产物 `skyline-options.json` 记录实际取值 + 按项目覆盖（实测透传）
+- [x] **VC2-d** 支持度矩阵同步分发 —— ✅（2026-10-02）：三处文档（CSS Profile / 对标 uni-appx /
+  埋点清单）引用同一份生成矩阵（引用不复制）
 
 ### 第三批：快照格式与探针
 

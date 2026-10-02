@@ -11,6 +11,8 @@ import { buildPTree, analyzePTree, formatPTrace, rawFromComponentIR, toComponent
 // ★★Vapor IR V2 出口条件（方案 §5.5：「proteus explain 必须能输出每个槽位的分层判定与理由」
 //   ——「没有这个能力，L0/L1 混跑将完全无法调试。这是硬性要求」）
 import { buildVaporSubscriptions } from '@proteus-vue/compiler'
+// ★VC2-b：`proteus explain <CSS-PB-*>` ——边界规则的说明（卡片验收："可 trace 为什么该属性被拦截"）
+import { SKYLINE_BOUNDARY_RULES } from '@proteus-vue/css-compat'
 import { decisionsToRows } from '@proteus-vue/slot-runtime'
 
 export interface ExplainTargetOptions {
@@ -117,5 +119,18 @@ export function explainTarget(target: string, opts: ExplainTargetOptions = {}): 
   }
   const rule = getTransformRule(target)
   if (rule) return formatTransformRule(rule)
+  // ★VC2-b：边界规则（CSS-PB-<prop>）——解释"为什么该属性/取值在 Skyline 端被拦截"
+  const pb = SKYLINE_BOUNDARY_RULES.find((r) => r.id === target)
+  if (pb) {
+    return [
+      `规则：${pb.id}`,
+      `属性：${pb.prop}`,
+      `拦截原因：该端（skyline）接受的值域 = ${pb.accept.join(' / ')}；写入其他值 ⇒ 编译期报错（VC2-b）`,
+      `替代方案：${pb.suggestion}`,
+      `事实来源：${pb.source}`,
+      `豁免方式：样式块内注释 \`proteus-allow-profile: <理由>\`（理由非空才生效，豁免计入构建统计）`,
+      `全部边界规则：node scripts/gen-end-support-matrix.mjs --check 查看矩阵，或 grep CSS-PB 于 docs/generated/end-support-matrix.json`,
+    ].join('\n')
+  }
   throw new Error(`无法识别目标「${target}」：既不是存在的 .vue 文件，也不是注册的规则 ID（用 proteus rules 查看全部规则）`)
 }

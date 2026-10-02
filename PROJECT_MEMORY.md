@@ -48,6 +48,54 @@
   只有**可复制代码块**里的引用才真正有害。
 · 破坏性验证：恢复 `p-card` → 红并精确报 `03-fluid-grid.md:31`；还原 → 575 md 全过。
 
+## 当前状态速览（最近一次更新：**2026-10-02·（二十九）· VC2 四卡收口——编译期边界校验上线（含存量棘轮基线）**）★新会话以此为准
+### ★★★2026-10-02（二十九）· VC2-a/b/c/d（L1 编译期静态校验——一致性校验线第三批）
+
+**交付（四卡全勾选）**
+1. **VC2-a**：矩阵加**端支持度维度**——每行 `supportTier` 三级
+   （universal / conditional / unsupported）+ 与 L0–L5 的关系声明（准入规则：conditional 最高归 L3、
+   unsupported 归 L5）+ **「仅部分端支持」差集**（当前 3 条：position/overflow/font-size，附官方受限原因）。
+2. **VC2-b**：编译期静态校验**上线**——
+   · 规则**从官方 formats 派生**（`CSS-PB-*` 24 条，生成物 `packages/css-compat/src/generated/`，
+     由 `gen-end-support-matrix.mjs` 产出 + `--check` 防漂移）；
+   · **`checkProfileBoundary`**（`packages/css-compat/src/profile-boundary.ts`）：错误级 +
+     四要素（属性名/越界的端/值域/替代方案）+ escape hatch（`proteus-allow-profile: <理由>`，
+     理由非空才生效、豁免计数可审计）；
+   · **Web/MP 双链注册**（`profileBoundaryPlugin`——卡片硬性要求"Web 端也必须跑 lint"）；
+   · **`proteus explain CSS-PB-overflow` 联动**（"为什么该属性被拦截"可 trace）；
+   · **存量棘轮基线**（`profile-boundary-baseline.json` 入库于项目根；`check:profile-baseline`
+     接 verify+CI：**只减不增**，新增越界当场红并给差集诊断）。
+3. **VC2-c**：`skylineLayout` 类型化到 **5 个官方开关**（附各端最低版本），产物写
+   `skyline-options.json` 记录**实际取值**（可审计）；实测验证显式配置透传
+   （`defaultContentBox`/`enableScrollViewAutoSize` 均正确注入）。
+4. **VC2-d**：矩阵分发到三处文档（CSS Profile / 对标 uni-appx / 埋点清单）——**引用不复制**
+   （同一份生成物 + 门禁）。
+
+**★本轮实测抓出并修的三个真缺陷（都在"看得见的红"里）**
+● **跨行块注释误报**：首版逐行去注释处理不了跨行块注释 ⇒ 组件注释里引用的示例代码
+  （`/* 此前 display:block;overflow:auto 会… */`，p-scroll-view）被当成真实声明**误报**。
+  修：整块剥注释（保留换行、行号不漂移）+ 值健全性校验（含反引号/中文的值直接跳过）。
+● **样式块注释里的花括号**：首版解析把 `.a { overflow: scroll; }` 单行形态的 prop 解析成
+  `.a { overflow`（选择器前缀混入）——修：`{`/`}` 切边界后再解析。
+● **自检口径不一致**：VC2-a 把 skyline 列从 `listed` 改名 `supported` 后，`--check` 的
+  空绿防护仍查旧值 ⇒ 假红。修：判据跟数据模型同步（且阈值从"行数硬编码"改为"每列非空"）。
+另修两处装置：baseline 路径从 `.proteus/`（gitignore ⇒ CI 上失效）移到**项目根入库**；
+plugin-vite 的 `css-compat` 成为运行时依赖后需加 esbuild external（否则打包连带 vue 全家桶）。
+
+**验证（破坏性 + 真构建）**
+· **双端真构建**：`build:web` / `build:mp` 全绿（基线放行 examples 36 / showcase 32 条）；
+· **新增必红**：注入 `overflow: scroll` ⇒ Web 构建红（带文件定位）＋基线门禁红（差集诊断
+  `+ pages/index.vue:overflow:scroll`）；还原 ⇒ 双绿；
+· 单测 44/44（边界 10 + css-compat 21 + style-safety 13）；`check:gates-sync` / `check:docs` /
+  `check:end-support` / `check:profile-baseline` 全绿。
+
+**诚实边界**：① 基线里的 36+32 条存量违规是**真实待评估项**（组件库 Web 分支的
+`inline-flex`/`grid`/`-webkit-box` 等——多为 Web 模拟层实现，Skyline 端另有原生路径），
+按棘轮纪律逐步修（修一条删一条）；② 边界规则只覆盖官方 formats 的**纯枚举**属性（24 条），
+含 `<占位符>` 的开放值域不判（宁漏勿误）；③ 动态值（var/calc）跳过（运行期兜底）。
+
+**任务卡状态**：VC2-a/b/c/d 四卡勾选完成；下一批 = 第三批（VC3 快照格式 + VC4 探针）或 VC5 比对引擎。
+
 ## 当前状态速览（最近一次更新：**2026-10-02·（二十八）· VC1 端支持度矩阵——三端机器可读（Web 实测 / Skyline 官方解析 / WebView 实测）**）★新会话以此为准
 ### ★★★2026-10-02（二十八）· VC1-a/b/c 三张支持度矩阵（一致性校验线第二批）
 

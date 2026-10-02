@@ -469,3 +469,21 @@ Proteus   / 原生View = Y 倍（你的设备）
 - 官方结论口径：比 Android 原生 View 快 2 倍（4050）、2.4 倍（长列表）；比 Compose UI 快 2.73 倍、2.13 倍
 - **组件级展示（仅定性，无量化数字）**：rich-text（5 万字长文 + 59 张插图）、swiper（无等待呈现 59 张图片）、canvas（2 万小球同时边缘碰撞不掉帧）
 - **该基准仅含 Android 数据，无 iOS 与鸿蒙**
+
+---
+
+## 端支持度矩阵（单一事实源 · VC1/VC2-d）
+
+> **本节的判定不在此文档复制**——属性 × Web / Skyline / WebView 三端的支持度矩阵是**生成的**
+> （`docs/generated/end-support-matrix.json` + 同名 `.md`），由 `scripts/gen-end-support-matrix.mjs`
+> 从三个源工件（官方文档解析 / Playwright 实测 / 设备实测）产出，并有 `pnpm check:end-support`
+> 漂移门禁（接 CI + verify）。
+>
+> 本文档对该矩阵的用法：**CSS 降级策略依据**。
+>
+> 与本文件的关系：**本文件的规则口径引用该矩阵**——矩阵里 `supportTier=conditional` 的属性
+> 对应本文的 L3"有条件可用"（需显式 opt-in）；`supportTier=unsupported` 对应 L5（编译期报错）。
+> 矩阵更新（官方文档/实测变化）⇒ 重新生成即可，**不需要改本文件**。
+>
+> 边界校验（VC2-b）的实现与豁免（`proteus-allow-profile`）见 `packages/css-compat/src/profile-boundary.ts`。
+

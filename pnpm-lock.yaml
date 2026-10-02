@@ -612,6 +612,9 @@ importers:
       '@proteus-vue/compiler-backend':
         specifier: 0.3.0-beta.21
         version: link:../compiler-backend
+      '@proteus-vue/css-compat':
+        specifier: 0.3.0-beta.11
+        version: link:../css-compat
       '@proteus-vue/module':
         specifier: 0.3.0-beta.11
         version: link:../module

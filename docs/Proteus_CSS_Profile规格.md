@@ -450,3 +450,21 @@ Web 端由浏览器原生渲染，天然支持完整 CSS——但开发者写出
 - 可继承属性：color / font / line-height / letter-spacing / visibility / cursor；不可继承：background / border / margin / padding / position / display
 - 业界自研引擎普遍做减法：RN/Yoga 刻意排除 Grid 与 float；uni-app x UCSS 只支持 flex、仅简单类/标签选择器（官方理由"为了原生解析极速性能"）；Satori 无 grid / fixed / sticky / z-index / 选择器 / 伪元素 / 媒体查询，且不支持 WOFF2、kerning、ligatures、RTL、emoji
 - 小程序端 vw/vh 常被忽略或解析为 0；跨端 flex 行为存在平台差异
+
+---
+
+## 端支持度矩阵（单一事实源 · VC1/VC2-d）
+
+> **本节的判定不在此文档复制**——属性 × Web / Skyline / WebView 三端的支持度矩阵是**生成的**
+> （`docs/generated/end-support-matrix.json` + 同名 `.md`），由 `scripts/gen-end-support-matrix.mjs`
+> 从三个源工件（官方文档解析 / Playwright 实测 / 设备实测）产出，并有 `pnpm check:end-support`
+> 漂移门禁（接 CI + verify）。
+>
+> 本文档对该矩阵的用法：**L3 / L5 分级依据**。
+>
+> 与本文件的关系：**本文件的规则口径引用该矩阵**——矩阵里 `supportTier=conditional` 的属性
+> 对应本文的 L3"有条件可用"（需显式 opt-in）；`supportTier=unsupported` 对应 L5（编译期报错）。
+> 矩阵更新（官方文档/实测变化）⇒ 重新生成即可，**不需要改本文件**。
+>
+> 边界校验（VC2-b）的实现与豁免（`proteus-allow-profile`）见 `packages/css-compat/src/profile-boundary.ts`。
+

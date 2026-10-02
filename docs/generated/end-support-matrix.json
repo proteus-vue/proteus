@@ -1,5 +1,168 @@
 {
   "version": 1,
+  "profile": {
+    "relationToL0L5": [
+      "支持度维度（本块）与成本分级（L0–L5）是两个**正交**维度：成本分级决定\"怎么实现/贵不贵\"，支持度决定\"哪端能不能用\"。",
+      "准入规则（VC2-a 定案）：tier=universal ⇒ 可进 L0–L2；tier=conditional ⇒ 最高归 L3（\"有条件可用\"——需在 proteus.config 或组件级显式 opt-in，与 L3 既有\"默认关闭\"语义合并）；tier=unsupported ⇒ L5（编译期报错）。",
+      "L5 同时保留既有语义性禁止项（运行时动态选择器/运行时插样式表等）——那些不属\"引擎支持度\"，本表不覆盖。",
+      "Skyline 未收录（not-listed）按 conditional 保守处理：未收录 ≠ 确认不支持，需真机实测后升级（诚实边界）。"
+    ],
+    "tierRule": "universal = web∧skyline∧webview∧app 全支持且官方 formats/remark 无限制；unsupported = 全端不可用；其余 = conditional",
+    "partialSupport": [
+      {
+        "css": "position",
+        "field": "position",
+        "ends": {
+          "web": "supported",
+          "skyline": "supported",
+          "webview": "supported",
+          "app": "supported"
+        },
+        "why": "fixed 在微信客户端 8.0.43 版本开始支持，只支持相对于窗口 viewport 定位，不支持 top / left / bottom / right 默认值 auto 解析，z-index 只作用在兄弟节点；sticky 可使用 sticky-header/sticky-section 替代"
+      },
+      {
+        "css": "overflow",
+        "field": "overflow",
+        "ends": {
+          "web": "supported",
+          "skyline": "supported",
+          "webview": "supported",
+          "app": "supported"
+        },
+        "why": "scroll 不支持，只能通过 scroll-view 实现；不支持单独设置 overflow-x/y"
+      },
+      {
+        "css": "font-size",
+        "field": "fontSize",
+        "ends": {
+          "web": "supported",
+          "skyline": "supported",
+          "webview": "supported",
+          "app": "supported"
+        },
+        "why": "不支持百分比；不支持 keyword (smaller..)"
+      }
+    ],
+    "skylineAlignSwitches": [
+      {
+        "section": "开启默认Block布局",
+        "versions": [
+          [
+            "平台",
+            "最低版本"
+          ],
+          [
+            "Android",
+            "8.0.34"
+          ],
+          [
+            "iOS",
+            "8.0.36"
+          ],
+          [
+            "开发者工具",
+            "Nightly Build (1.06.2304262)"
+          ],
+          [
+            "基础库",
+            "2.31.1"
+          ]
+        ]
+      },
+      {
+        "section": "开启默认 ContentBox 盒模型",
+        "versions": [
+          [
+            "平台",
+            "最低版本"
+          ],
+          [
+            "Android",
+            "8.0.42"
+          ],
+          [
+            "iOS",
+            "8.0.42"
+          ],
+          [
+            "开发者工具",
+            "Nightly Build (1.06.2310092)"
+          ],
+          [
+            "基础库",
+            "3.1.0"
+          ]
+        ]
+      },
+      {
+        "section": "开启 tag 选择器全局匹配",
+        "versions": [
+          [
+            "平台",
+            "最低版本"
+          ],
+          [
+            "Android",
+            "8.0.51"
+          ],
+          [
+            "iOS",
+            "8.0.51"
+          ],
+          [
+            "开发者工具",
+            "Nightly Build (1.06.2409032)"
+          ],
+          [
+            "基础库",
+            "3.6.0"
+          ]
+        ]
+      },
+      {
+        "section": "开启 scroll-view 自动撑开",
+        "versions": [
+          [
+            "平台",
+            "最低版本"
+          ],
+          [
+            "Android",
+            "8.0.54"
+          ],
+          [
+            "iOS",
+            "8.0.54"
+          ],
+          [
+            "基础库",
+            "3.7.2"
+          ]
+        ]
+      },
+      {
+        "section": "开启 keyframe 样式全局共享",
+        "versions": [
+          [
+            "平台",
+            "最低版本"
+          ],
+          [
+            "Android",
+            "8.0.57"
+          ],
+          [
+            "iOS",
+            "8.0.57"
+          ],
+          [
+            "基础库",
+            "3.8.0"
+          ]
+        ]
+      }
+    ]
+  },
   "generatedNote": "自动生成，勿手改——见 scripts/gen-end-support-matrix.mjs（--check 为漂移门禁）",
   "sources": {
     "web": {
@@ -130,11 +293,13 @@
       "field": "width",
       "css": "width",
       "web": "supported",
-      "skyline": "listed",
+      "skyline": "supported",
+      "webview": "supported",
+      "app": "supported",
+      "supportTier": "universal",
       "skylineFormats": "<length>",
       "skylineDefault": "auto",
       "skylineRemark": "",
-      "webview": "supported",
       "webviewRead": "123px"
     },
     {
@@ -142,11 +307,13 @@
       "field": "height",
       "css": "height",
       "web": "supported",
-      "skyline": "listed",
+      "skyline": "supported",
+      "webview": "supported",
+      "app": "supported",
+      "supportTier": "universal",
       "skylineFormats": "<length>",
       "skylineDefault": "auto",
       "skylineRemark": "",
-      "webview": "supported",
       "webviewRead": "45px"
     },
     {
@@ -154,11 +321,13 @@
       "field": "minWidth",
       "css": "min-width",
       "web": "supported",
-      "skyline": "listed",
+      "skyline": "supported",
+      "webview": "supported",
+      "app": "supported",
+      "supportTier": "universal",
       "skylineFormats": "<length>",
       "skylineDefault": "auto",
       "skylineRemark": "",
-      "webview": "supported",
       "webviewRead": "123px"
     },
     {
@@ -166,11 +335,13 @@
       "field": "maxWidth",
       "css": "max-width",
       "web": "supported",
-      "skyline": "listed",
+      "skyline": "supported",
+      "webview": "supported",
+      "app": "supported",
+      "supportTier": "universal",
       "skylineFormats": "<length>",
       "skylineDefault": "auto",
       "skylineRemark": "",
-      "webview": "supported",
       "webviewRead": "321px"
     },
     {
@@ -178,11 +349,13 @@
       "field": "minHeight",
       "css": "min-height",
       "web": "supported",
-      "skyline": "listed",
+      "skyline": "supported",
+      "webview": "supported",
+      "app": "supported",
+      "supportTier": "universal",
       "skylineFormats": "<length>",
       "skylineDefault": "none",
       "skylineRemark": "",
-      "webview": "supported",
       "webviewRead": "55px"
     },
     {
@@ -190,11 +363,13 @@
       "field": "maxHeight",
       "css": "max-height",
       "web": "supported",
-      "skyline": "listed",
+      "skyline": "supported",
+      "webview": "supported",
+      "app": "supported",
+      "supportTier": "universal",
       "skylineFormats": "<length>",
       "skylineDefault": "none",
       "skylineRemark": "",
-      "webview": "supported",
       "webviewRead": "77px"
     },
     {
@@ -202,11 +377,13 @@
       "field": "margin",
       "css": "margin-top",
       "web": "supported",
-      "skyline": "listed",
+      "skyline": "supported",
+      "webview": "supported",
+      "app": "supported",
+      "supportTier": "universal",
       "skylineFormats": "<length>",
       "skylineDefault": "0",
       "skylineRemark": "",
-      "webview": "supported",
       "webviewRead": "7px"
     },
     {
@@ -214,11 +391,13 @@
       "field": "padding",
       "css": "padding-top",
       "web": "supported",
-      "skyline": "listed",
+      "skyline": "supported",
+      "webview": "supported",
+      "app": "supported",
+      "supportTier": "universal",
       "skylineFormats": "<length>",
       "skylineDefault": "0",
       "skylineRemark": "",
-      "webview": "supported",
       "webviewRead": "9px"
     },
     {
@@ -226,11 +405,13 @@
       "field": "flexDirection",
       "css": "flex-direction",
       "web": "supported",
-      "skyline": "listed",
+      "skyline": "supported",
+      "webview": "supported",
+      "app": "supported",
+      "supportTier": "universal",
       "skylineFormats": "row / row-reverse  / column  / column-reverse",
       "skylineDefault": "column",
       "skylineRemark": "",
-      "webview": "supported",
       "webviewRead": "row"
     },
     {
@@ -238,11 +419,13 @@
       "field": "justifyContent",
       "css": "justify-content",
       "web": "supported",
-      "skyline": "listed",
+      "skyline": "supported",
+      "webview": "supported",
+      "app": "supported",
+      "supportTier": "universal",
       "skylineFormats": "center / flex-start  / flex-end  / space-between  / space-around  / space-evenly",
       "skylineDefault": "flex-start",
       "skylineRemark": "",
-      "webview": "supported",
       "webviewRead": "center"
     },
     {
@@ -250,11 +433,13 @@
       "field": "alignItems",
       "css": "align-items",
       "web": "supported",
-      "skyline": "listed",
+      "skyline": "supported",
+      "webview": "supported",
+      "app": "supported",
+      "supportTier": "universal",
       "skylineFormats": "stretch / center / flex-start / flex-end / baseline",
       "skylineDefault": "stretch",
       "skylineRemark": "",
-      "webview": "supported",
       "webviewRead": "center"
     },
     {
@@ -262,11 +447,13 @@
       "field": "alignSelf",
       "css": "align-self",
       "web": "supported",
-      "skyline": "listed",
+      "skyline": "supported",
+      "webview": "supported",
+      "app": "supported",
+      "supportTier": "universal",
       "skylineFormats": "auto / stretch  / center  / flex-start  / flex-end  / baseline",
       "skylineDefault": "auto",
       "skylineRemark": "",
-      "webview": "supported",
       "webviewRead": "center"
     },
     {
@@ -274,11 +461,13 @@
       "field": "flexGrow",
       "css": "flex-grow",
       "web": "supported",
-      "skyline": "listed",
+      "skyline": "supported",
+      "webview": "supported",
+      "app": "supported",
+      "supportTier": "universal",
       "skylineFormats": "<float>",
       "skylineDefault": "0",
       "skylineRemark": "",
-      "webview": "supported",
       "webviewRead": "2"
     },
     {
@@ -286,11 +475,13 @@
       "field": "flexShrink",
       "css": "flex-shrink",
       "web": "supported",
-      "skyline": "listed",
+      "skyline": "supported",
+      "webview": "supported",
+      "app": "supported",
+      "supportTier": "universal",
       "skylineFormats": "<float>",
       "skylineDefault": "1",
       "skylineRemark": "",
-      "webview": "supported",
       "webviewRead": "0"
     },
     {
@@ -298,11 +489,13 @@
       "field": "flexBasis",
       "css": "flex-basis",
       "web": "supported",
-      "skyline": "listed",
+      "skyline": "supported",
+      "webview": "supported",
+      "app": "supported",
+      "supportTier": "universal",
       "skylineFormats": "<length>",
       "skylineDefault": "auto",
       "skylineRemark": "",
-      "webview": "supported",
       "webviewRead": "44px"
     },
     {
@@ -310,11 +503,13 @@
       "field": "gap",
       "css": "gap",
       "web": "supported",
-      "skyline": "listed",
+      "skyline": "supported",
+      "webview": "supported",
+      "app": "supported",
+      "supportTier": "universal",
       "skylineFormats": "<length>",
       "skylineDefault": "0",
       "skylineRemark": "",
-      "webview": "supported",
       "webviewRead": "5px"
     },
     {
@@ -322,11 +517,13 @@
       "field": "display",
       "css": "display",
       "web": "supported",
-      "skyline": "listed",
+      "skyline": "supported",
+      "webview": "supported",
+      "app": "supported",
+      "supportTier": "universal",
       "skylineFormats": "none / flex / block",
       "skylineDefault": "flex",
       "skylineRemark": "默认值可通过配置改成 block",
-      "webview": "supported",
       "webviewRead": "block"
     },
     {
@@ -334,11 +531,13 @@
       "field": "position",
       "css": "position",
       "web": "supported",
-      "skyline": "listed",
+      "skyline": "supported",
+      "webview": "supported",
+      "app": "supported",
+      "supportTier": "conditional",
       "skylineFormats": "relative / absolute / fixed",
       "skylineDefault": "relative",
       "skylineRemark": "fixed 在微信客户端 8.0.43 版本开始支持，只支持相对于窗口 viewport 定位，不支持 top / left / bottom / right 默认值 auto 解析，z-index 只作用在兄弟节点；sticky 可使用 sticky-header/sticky-section 替代",
-      "webview": "supported",
       "webviewRead": "relative"
     },
     {
@@ -346,11 +545,13 @@
       "field": "top",
       "css": "top",
       "web": "supported",
-      "skyline": "listed",
+      "skyline": "supported",
+      "webview": "supported",
+      "app": "supported",
+      "supportTier": "universal",
       "skylineFormats": "<length>",
       "skylineDefault": "auto",
       "skylineRemark": "",
-      "webview": "supported",
       "webviewRead": "13px"
     },
     {
@@ -358,11 +559,13 @@
       "field": "left",
       "css": "left",
       "web": "supported",
-      "skyline": "listed",
+      "skyline": "supported",
+      "webview": "supported",
+      "app": "supported",
+      "supportTier": "universal",
       "skylineFormats": "<length>",
       "skylineDefault": "auto",
       "skylineRemark": "",
-      "webview": "supported",
       "webviewRead": "17px"
     },
     {
@@ -370,11 +573,13 @@
       "field": "overflow",
       "css": "overflow",
       "web": "supported",
-      "skyline": "listed",
+      "skyline": "supported",
+      "webview": "supported",
+      "app": "supported",
+      "supportTier": "conditional",
       "skylineFormats": "hidden / visible",
       "skylineDefault": "visible",
       "skylineRemark": "scroll 不支持，只能通过 scroll-view 实现；不支持单独设置 overflow-x/y",
-      "webview": "supported",
       "webviewRead": "hidden"
     },
     {
@@ -382,11 +587,13 @@
       "field": "backgroundColor",
       "css": "background-color",
       "web": "supported",
-      "skyline": "listed",
+      "skyline": "supported",
+      "webview": "supported",
+      "app": "supported",
+      "supportTier": "universal",
       "skylineFormats": "<color>",
       "skylineDefault": "transparent",
       "skylineRemark": "",
-      "webview": "supported",
       "webviewRead": "rgb(4, 5, 6)"
     },
     {
@@ -394,11 +601,13 @@
       "field": "color",
       "css": "color",
       "web": "supported",
-      "skyline": "listed",
+      "skyline": "supported",
+      "webview": "supported",
+      "app": "supported",
+      "supportTier": "universal",
       "skylineFormats": "<color>",
       "skylineDefault": "black",
       "skylineRemark": "",
-      "webview": "supported",
       "webviewRead": "rgb(1, 2, 3)"
     },
     {
@@ -406,11 +615,13 @@
       "field": "fontSize",
       "css": "font-size",
       "web": "supported",
-      "skyline": "listed",
+      "skyline": "supported",
+      "webview": "supported",
+      "app": "supported",
+      "supportTier": "conditional",
       "skylineFormats": "<length>",
       "skylineDefault": "16px",
       "skylineRemark": "不支持百分比；不支持 keyword (smaller..)",
-      "webview": "supported",
       "webviewRead": "23px"
     },
     {
@@ -418,11 +629,13 @@
       "field": "borderRadius",
       "css": "border-radius",
       "web": "supported",
-      "skyline": "listed",
+      "skyline": "supported",
+      "webview": "supported",
+      "app": "supported",
+      "supportTier": "universal",
       "skylineFormats": "",
       "skylineDefault": "",
       "skylineRemark": "简写属性，支持解析但以展开属性为准",
-      "webview": "supported",
       "webviewRead": "11px"
     },
     {
@@ -430,11 +643,13 @@
       "field": "borderColor",
       "css": "border-color",
       "web": "supported",
-      "skyline": "listed",
+      "skyline": "supported",
+      "webview": "supported",
+      "app": "supported",
+      "supportTier": "universal",
       "skylineFormats": "",
       "skylineDefault": "",
       "skylineRemark": "简写属性，支持解析但以展开属性为准",
-      "webview": "supported",
       "webviewRead": "rgb(7, 8, 9)"
     },
     {
@@ -442,11 +657,13 @@
       "field": "borderWidth",
       "css": "border-width",
       "web": "supported",
-      "skyline": "listed",
+      "skyline": "supported",
+      "webview": "supported",
+      "app": "supported",
+      "supportTier": "universal",
       "skylineFormats": "",
       "skylineDefault": "",
       "skylineRemark": "简写属性，支持解析但以展开属性为准",
-      "webview": "supported",
       "webviewRead": "3px"
     },
     {
@@ -454,11 +671,13 @@
       "field": "opacity",
       "css": "opacity",
       "web": "supported",
-      "skyline": "listed",
+      "skyline": "supported",
+      "webview": "supported",
+      "app": "supported",
+      "supportTier": "universal",
       "skylineFormats": "<float>",
       "skylineDefault": "1",
       "skylineRemark": "",
-      "webview": "supported",
       "webviewRead": "0.5"
     }
   ]

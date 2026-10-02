@@ -17,6 +17,7 @@ import {
 } from '@proteus-vue/compiler'
 import type { VariantPlatform } from '@proteus-vue/compiler'
 import mpTransform, { MP_ONLY_TAGS, pFluidLayoutPlugin } from './plugin'
+import { profileBoundaryPlugin } from './profile-boundary-plugin'
 
 export interface ProteusViteContext {
   /** 工程根（proteus.config.ts 所在目录） */
@@ -173,10 +174,13 @@ export async function resolveProteusViteConfig(
   const isMp = platform === 'mp-weixin'
   const isDebug = process.env.PROTEUS_DEBUG === '1'
 
+  /** ★VC2-b 存量基线路径（棘轮：只减不增）——**项目根下、入库**（`.proteus/` 是 gitignore 的本地目录，
+   *  放那里 CI 上会失效 ⇒ 基线空 ⇒ 存量违规全红）。生成/检查：scripts/gen-profile-baseline.mjs */
+  const boundaryBaselinePath = path.join(root, 'profile-boundary-baseline.json')
   let plugins: Plugin[]
   if (isMp) {
     // ★组件库已拆包（2026-09-14）：不再传 frameworkComponentsDir——mpTransform 自行从 node_modules 解析包根
-    plugins = [virtualMpEntryPlugin(), mpTransform({ config })]
+    plugins = [profileBoundaryPlugin({ level: config.profileBoundary?.level, baselinePath: boundaryBaselinePath }), virtualMpEntryPlugin(), mpTransform({ config })]
   } else {
     const vueMod = await importFromRoot<{ default: (opts?: Record<string, unknown>) => Plugin }>(root, '@vitejs/plugin-vue')
     // ★平台宏 Web 通道（enforce:'pre'）：在 @vitejs/plugin-vue 编译 .vue **之前**做源码级宏替换——
@@ -195,6 +199,8 @@ export async function resolveProteusViteConfig(
     //   变成 Web 端未必注册的 proteus-* 组件，没有 Web 模拟层的工程会整页渲染不出来）。
     //   配套：业务需在入口调 installFluidLayout(app) 注册 v-p-fluid 指令（@proteus-vue/components）。
     plugins = [
+      // ★VC2-b：Profile 边界校验（Web 端**同样执行**——卡片硬性要求，防"问题延迟到 App 端暴露"）
+      profileBoundaryPlugin({ level: config.profileBoundary?.level, baselinePath: boundaryBaselinePath }),
       platformVariantPlugin(root, 'web'),
       vue,
       platformMacroPlugin('web'),

@@ -473,11 +473,21 @@ function writeAppJson(allPages: PageInfo[], routes: RouteRecord[]): void {
   appJson.window = windowConfig
   // Skyline 渲染前提（微信平台校验）：页面 renderer=skyline 时必须声明 requiredComponents
   if (config.skyline) appJson.lazyCodeLoading = 'requiredComponents'
-  // ★Skyline 布局对齐（2026-08 真机实测）：Skyline 节点默认 flex 会 stretch 拉伸表单元素（switch/slider/icon 占满一行居中）
-  //   → defaultDisplayBlock 默认 block 对齐 WebView/Web（基础库 2.31.1+）
+  // ★Skyline 布局对齐（VC2-c：5 个官方开关——版本要求见 docs/generated/end-support-matrix.json
+  //   的 profile.skylineAlignSwitches）。默认策略：只有 defaultDisplayBlock 默认 true（本仓真机验证过），
+  //   其余开关**只注入显式配置的**（未验证的开关不由框架替项目做主——见 ProteusConfig.skylineLayout 注释）。
   //   （text 行内恢复走类选择器 .proteus-text-inline——tagNameStyleIsolation 当前开发者工具校验拒绝，不可用）
+  let skylineOptionsRecord: Record<string, boolean> | null = null
   if (config.skyline) {
-    appJson.rendererOptions = { skyline: { defaultDisplayBlock: config.skylineLayout?.defaultDisplayBlock ?? true } }
+    const sky = {
+      defaultDisplayBlock: config.skylineLayout?.defaultDisplayBlock ?? true,
+      ...(config.skylineLayout?.defaultContentBox !== undefined ? { defaultContentBox: config.skylineLayout.defaultContentBox } : {}),
+      ...(config.skylineLayout?.tagNameStyleIsolation !== undefined ? { tagNameStyleIsolation: config.skylineLayout.tagNameStyleIsolation } : {}),
+      ...(config.skylineLayout?.enableScrollViewAutoSize !== undefined ? { enableScrollViewAutoSize: config.skylineLayout.enableScrollViewAutoSize } : {}),
+      ...(config.skylineLayout?.keyframeStyleIsolation !== undefined ? { keyframeStyleIsolation: config.skylineLayout.keyframeStyleIsolation } : {}),
+    }
+    appJson.rendererOptions = { skyline: sky }
+    skylineOptionsRecord = sky
   }
   // 平台硬边界：tabBar.list 至少 2 项（微信校验），不足时告警并忽略
   // ★#492 router.tabBar 真正接线（此前 gen-routes 仅按 meta.isTab 推导，color/selectedColor/list 声明被忽略）：
@@ -516,6 +526,17 @@ function writeAppJson(allPages: PageInfo[], routes: RouteRecord[]): void {
 
   fs.mkdirSync(OUT_DIR, { recursive: true })
   fs.writeFileSync(path.join(OUT_DIR, 'app.json'), JSON.stringify(appJson, null, 2) + '\n')
+  // ★VC2-c 产物记录：Skyline 对齐开关的**实际取值**落盘（可审计——卡片要求"需在产物中记录实际取值"）
+  if (skylineOptionsRecord) {
+    fs.writeFileSync(
+      path.join(OUT_DIR, 'skyline-options.json'),
+      JSON.stringify({
+        note: 'Skyline 对齐开关实际取值（构建期写入 rendererOptions.skyline）——版本要求见 docs/generated/end-support-matrix.json',
+        values: skylineOptionsRecord,
+        injectedAtBuild: Object.keys(skylineOptionsRecord),
+      }, null, 2) + '\n',
+    )
+  }
   console.log(`[gen-routes] 已生成 dist/mp-weixin/app.json（主包 ${mainPages.length} 页，分包 ${subPackages.length} 个）`)
 }
 
