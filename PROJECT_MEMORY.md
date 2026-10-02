@@ -87,6 +87,44 @@ check-consistency-snapshot 七段全绿 · check:no-blind-wait ✅（新 .sh 零
 ① L2/L3/L2.5/L2.6 算子用**合成快照**——证明的是"比对引擎敏不敏感"，不是"真机数据一定对"；
 ② L4 算子用真截图但取同端注入（跨端噪声底含 AA，无区分度）；L4 的价值形态是**定位**。
 
+### ★★★2026-10-03（七十）· 鸿蒙腿 **App 路由栈打通**（矩阵 #17）—— 三端真机判据全绿
+
+**用户「继续刚才的主线」→ 按矩阵补最大的一项缺口**（路由栈=所有内容的承载地基）。
+
+**① 核心移植副本（零漂移设计）**：
+- `app-stack.ts`（729 行）仅 3 处 **type-only import**、其余零依赖 ⇒ 可移植进 ArkTS 工程
+  （两套构建体系，跨接需打包发布链路——副本是成本最低形态）；
+- 移植差异**恰好两处**（声明式）：说明注释块 + 3 行 import 合并为 1 行（类型搬进
+  `app-stack-types.ts`，逐字段同形）；
+- **★防漂移（本仓纪律的又一次落地）**：`hosts/harmony/sync-core.sh` 还原因果块后与上游
+  **逐字节比对**（Python 双向校验）——**破坏性验证过**（注入 `// DRIFT` ⇒ 当场红；
+  还原 ⇒ 绿）；验收入口 `run-host-app.sh` **自动跑**它。
+
+**② 场景探针（与两端同口径）**：`app-stack-probe.ts` —— A 深栈（20000 层）· B 预算冻结
+（budget=1000）· C 冻结后重建 · D navigate diff（5000 层回退一半）；字段名与
+Android/iOS 的 `__proteusAppStackRun` **逐一对应**。
+
+**③ 真机读数（与两端高度一致）**：
+
+| 读数 | 鸿蒙（ArkTS） | Android（QuickJS） | iOS（JSC） |
+|---|---|---|---|
+| A: 20000 层 push | **45ms** | 45ms | 36ms |
+| A: 命令守恒 | mount 20000 / exit 19999 / unmount 0 | 同 | 同 |
+| B: 冻结/活跃 | 19985 屏 / active **960 ≤ 1000** / over_budget **false** | 同 | 同 |
+| C: 重建 | rebuild_mounts=1 | 同 | 同 |
+| D: diff | **mount=0** / unmount 2500 / enter 1 | 同 | 同 |
+
+**④ 判据三端共用**：`check-app-stack.py` 加 `host:"harmony"` 平台识别（优先级 ①host ②engine_available
+③其余=iOS）；⑦ 组（宿主执行器）**如实跳过**——鸿蒙未接 `ScreenExecutor`（渲染承载是 ArkUI RenderNode，
+独立通道），不把"没这条通道"当失败。**三端判据全绿**（QuickJS/JavaScriptCore/**ArkTS** 三名并列）。
+
+**⑤ 验收自动化**：`run-host-app.sh` 新增 6.2 步（app-stack 判据 + 副本同步校验，与探针集同屏）。
+
+**矩阵**：鸿蒙 9→**10/22**。
+
+**诚实边界**：① ⑦ 组（执行器/真动画）鸿蒙未接——矩阵 #14/#18；② 移植副本的同步是**字节级**的，
+上游若做**结构性重构**（如拆文件）需人工重做移植（脚本会红并给出修法）；③ 鸿蒙侧尚余 12 项缺口。
+
 ### ★★★2026-10-03（六十九）· iOS 手势补齐（tap+longpress 真机 PASS）+ 「闪退」误报澄清
 
 **① iOS 手势补齐**（承接矩阵 #7 缺口）：

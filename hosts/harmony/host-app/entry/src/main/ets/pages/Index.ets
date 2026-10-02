@@ -17,6 +17,8 @@ import { hilog } from '@kit.PerformanceAnalysisKit';
 import { NodeContent, FrameCallback } from '@kit.ArkUI';
 import { util } from '@kit.ArkTS';
 import { display } from '@kit.ArkUI';
+// ★矩阵 #17：App 路由栈场景探针（移植副本，与 Android/iOS 同口径）
+import { runAppStackProbe } from '../core/app-stack-probe';
 import { attach, renderCommands, stats, ProteusRenderStats } from 'libproteus_render.so';
 import { bench4050, hitProbe, recycleProbe, spliceProbe, textProbe, version as rustVersion } from 'libproteus_bench.so';
 
@@ -331,6 +333,13 @@ struct Index {
           hilog.info(DOMAIN, BENCH_TAG, 'PROTEUS_RECYCLE %{public}s', rp);
         } catch (re) {
           hilog.error(DOMAIN, BENCH_TAG, 'PROTEUS_RECYCLE_ERROR %{public}s', JSON.stringify(re) ?? '');
+        }
+        // ★★App 路由虚拟栈场景（矩阵 #17；与 Android/iOS 的 __proteusAppStackRun 同口径）
+        try {
+          const asOut: string = runAppStackProbe('{"depth":20000,"fans":32,"budget":1000}');
+          hilog.info(DOMAIN, BENCH_TAG, 'PROTEUS_APPSTACK %{public}s', asOut);
+        } catch (ase) {
+          hilog.error(DOMAIN, BENCH_TAG, 'PROTEUS_APPSTACK_ERROR %{public}s', JSON.stringify(ase) ?? '');
         }
         // ★滚动通道（真机滚动 + 帧率；异步——由 postFrameCallback 驱动）
         try {

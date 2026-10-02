@@ -104,7 +104,21 @@ if [ -n "$READY_LINE" ]; then
       NATIVE_WARM_LINE="$(HDC shell "hilog -x | grep 'PROTEUS_BENCH_NATIVE_WARM wall_ms' | tail -1" 2>/dev/null | head -1)"
       BENCH_JSON="$(printf '%s' "$BENCH_LINE" | sed -n 's/.*PROTEUS_BENCH_RESULT limit=4050 wall_ms=\([0-9]*\) //p')"
       echo
-      # ── 6.5 ★探针集（命中 / 复用池 / 结构变更 / 文本通道）——与 Android 能力域对齐 ──
+      # ── 6.2 ★★矩阵 #17：App 路由虚拟栈判据（与 Android/iOS 共用 check-app-stack.py）──
+  AS_LINE="$(HDC shell "hilog -x | grep 'PROTEUS_APPSTACK {' | tail -1" 2>/dev/null | head -1)"
+  AS_JSON="$(printf '%s' "$AS_LINE" | sed -n 's/.*PROTEUS_APPSTACK //p')"
+  if [ -n "$AS_JSON" ]; then
+    printf '%s' "$AS_JSON" > "$RESULTS/app-stack.json"
+    echo
+    echo "  ✓ App 路由虚拟栈读数已落盘（results/app-stack.json）——跑判据："
+    python3 "$ROOT/hosts/android/check-app-stack.py" "$RESULTS/app-stack.json" 2>&1 | tail -4 | sed 's/^/    /'
+    # ★同步核查（副本漂移防护）——核心移植副本必须与上游逐字节一致
+    bash "$HERE/sync-core.sh" | sed 's/^/    /'
+  else
+    echo "  ⚠ 未见 PROTEUS_APPSTACK 读数（探针未跑或日志滚掉）——判据跳过"
+  fi
+
+  # ── 6.5 ★探针集（命中 / 复用池 / 结构变更 / 文本通道）——与 Android 能力域对齐 ──
   PROBE_LOG="$(HDC shell "hilog -x | grep -E 'PROTEUS_HIT_PROBE \{|PROTEUS_RECYCLE \{|PROTEUS_SPLICE \{|PROTEUS_TEXT \{|PROTEUS_SCROLL_DONE' | tail -6" 2>/dev/null)"
   echo
   echo "  ✓ 探针集（鸿蒙腿）："
