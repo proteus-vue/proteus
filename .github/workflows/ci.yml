@@ -97,6 +97,9 @@ jobs:
       - name: Profile 边界基线漂移（VC2-b：存量只减不增——新增越界样式必须修或在评审中显式刷新基线）
         run: pnpm run check:profile-baseline
 
+      - name: 一致性指标 + 允许差异清单 schema（CS1/CS2：M1–M4 复算一致 · M4 的 L1 算子必须全捕获）
+        run: pnpm run check:consistency-metrics
+
       - name: 双端 golden 单一来源（★2026-10-01：两端 conformance golden 必须同源——不同源会让
               覆盖面不一致，收「双端几何一致性」判据时变成**装置性判红**）
         run: pnpm run check:cross-end-golden

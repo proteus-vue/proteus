@@ -1,0 +1,151 @@
+{
+  "version": 1,
+  "note": "M1–M4 机器生成（scripts/gen-consistency-metrics.mjs）——每项都指向已入库产物；标准 §6.2 要求公开含不好看的数",
+  "generatedFrom": {
+    "matrix": "docs/generated/end-support-matrix.json",
+    "allowList": "docs/allow-differences.json",
+    "boundaryRules": "packages/css-compat/src/generated/skyline-boundary-rules.generated.ts",
+    "baselines": [
+      "examples/profile-boundary-baseline.json",
+      "showcase/profile-boundary-baseline.json"
+    ]
+  },
+  "M1": {
+    "name": "数值一致性覆盖率",
+    "definition": "Σ(L1|L2|L3 各层已机器化字段数) / (可表达字段数 × 3)（分层加总——单层完成不代表一致）",
+    "value": 0.3333,
+    "byLayer": {
+      "L1": {
+        "covered": 28,
+        "total": 28,
+        "note": "支持度矩阵 + 边界门禁 + 棘轮基线（已落地）"
+      },
+      "L2": {
+        "covered": 0,
+        "total": 28,
+        "note": "几何快照未布点（VC3/VC4）"
+      },
+      "L3": {
+        "covered": 0,
+        "total": 28,
+        "note": "计算样式未布点（Skyline 端需产出式探针）"
+      }
+    },
+    "covered": 28,
+    "total": 28,
+    "byTier": {
+      "universal": 25,
+      "conditional": 3,
+      "unsupported": 0
+    },
+    "boundaryRules": 24,
+    "note": "L2/L3/L4 布点后分子应扩大（标准 §6.1「逐阶段提升」）"
+  },
+  "M2": {
+    "name": "允许差异条目数",
+    "definition": "docs/allow-differences.json 条目数（越少越好；每条必须有理由与证据；不得为让测试通过而加）",
+    "value": 5,
+    "ids": [
+      "A-1",
+      "A-2",
+      "A-3",
+      "A-4",
+      "A-5"
+    ],
+    "protected": [
+      "A-4"
+    ]
+  },
+  "M3": {
+    "name": "CI 门禁通过率",
+    "definition": "参与门禁全绿 = 1.0；任一红 ⇒ 本脚本/CI 退出非零（本项是引用式指标）",
+    "gates": [
+      "check:end-support",
+      "check:profile-baseline",
+      "test",
+      "check:consistency-metrics"
+    ],
+    "enforcedBy": "CI (.github/workflows/ci.yml) + pnpm verify"
+  },
+  "M4": {
+    "name": "一致性回归检出率",
+    "definition": "L1 变异测试捕获数 / 注入数（L2/L3/L4 算子未布点 ⇒ 单列 pending，不得悄悄删）",
+    "value": 1,
+    "injected": 3,
+    "captured": 3,
+    "operators": [
+      {
+        "id": "PB-overflow-scroll",
+        "caught": true,
+        "expected": true,
+        "ok": true,
+        "note": "官方只认 hidden/visible"
+      },
+      {
+        "id": "PB-display-grid",
+        "caught": true,
+        "expected": true,
+        "ok": true,
+        "note": "官方只认 none/flex/block"
+      },
+      {
+        "id": "PB-position-sticky",
+        "caught": true,
+        "expected": true,
+        "ok": true,
+        "note": "官方只认 relative/absolute/fixed"
+      },
+      {
+        "id": "PB-ctrl-legal-overflow",
+        "caught": false,
+        "expected": false,
+        "ok": true,
+        "note": "对照组（合法值不应误报）"
+      },
+      {
+        "id": "PB-ctrl-escaped",
+        "caught": false,
+        "expected": false,
+        "ok": true,
+        "note": "对照组（escape hatch 应放行）"
+      }
+    ],
+    "pendingOperators": [
+      {
+        "id": "L2-margin-shift",
+        "note": "间距偏移（8dp→11dp）——需 L2 几何快照（VC3/VC4 未布点）"
+      },
+      {
+        "id": "L3-color-shift",
+        "note": "颜色偏移（#FF0000→#FE0000）——需 L3 计算样式（Skyline 端 computedStyle 不可用，需产出式探针）"
+      },
+      {
+        "id": "L3-font-fallback",
+        "note": "字体回退——同上"
+      },
+      {
+        "id": "L2.6-scroll-relative",
+        "note": "滚动后相对间距——需 L2.6 不变量校验"
+      },
+      {
+        "id": "L4-radius-missing",
+        "note": "圆角缺失——需 L4 像素观察（非门禁）"
+      }
+    ],
+    "note": "★标准 §7.4 反例（按钮变色 = L3 颜色类）属必过项——L3 布点后若捕获不了，本套校验不比截图比对强"
+  },
+  "debt": {
+    "note": "存量债务可见且只减不增（棘轮基线）——对外公开的\"不好看的数\"",
+    "baselines": [
+      {
+        "file": "examples/profile-boundary-baseline.json",
+        "count": 36
+      },
+      {
+        "file": "showcase/profile-boundary-baseline.json",
+        "count": 32
+      }
+    ]
+  },
+  "allowListSchemaErrors": []
+}
