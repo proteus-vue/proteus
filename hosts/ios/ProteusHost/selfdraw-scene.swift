@@ -3866,6 +3866,13 @@ final class SelfDrawBridge: NSObject, SelfDrawExports {
         return s
     }
 
+    /// 小工具：数组 → JSON 串（`samplePixels` 吃裸数组——见其签名）
+    private func jsonStringList(_ a: [[String: Double]]) -> String {
+        guard let d = try? JSONSerialization.data(withJSONObject: a),
+              let s = String(data: d, encoding: .utf8) else { return "[]" }
+        return s
+    }
+
     /// ★★V5：批量像素采样（渲染一次 → 读 N 个点）
     ///
     /// 【为什么"渲染一次读多点"】逐点调用会各渲染一次（每次 `layer.render` 都不便宜）；
@@ -5559,6 +5566,17 @@ final class SelfDrawBridge: NSObject, SelfDrawExports {
             return "{\"ok\":false,\"error\":\"几何解析失败\"}"
         }
         let tBuild0 = CFAbsoluteTimeGetCurrent()
+        // ★★矩阵 #10：把**核心真源**透传给调用方（`native_hosts` 清单 + 全量 rects）——
+        //   Swift 侧建原生 UIView 的 frame 要读**核心几何**（"位置由核心决定"），
+        //   而此前回执里没有这两个字段（JS 侧 `renderNativeMix` 拿不到 ⇒ ok:false）。
+        //   ★与 Android 同纪律：IR 判定谁是 native-host 与宿主建 View **同源**（读核心回传，不维护本地表）。
+        let nativeHostIds = (ro["native_hosts"] as? [Int]) ?? []
+        // 几何按 nodeId 键返回（只含本次树内节点——与 rects 同源，不额外计算）
+        var rectsOut: [String: [String: Double]] = [:]
+        for (id, r) in rects {
+            rectsOut[id] = ["x": r["x"] ?? 0, "y": r["y"] ?? 0,
+                            "width": r["width"] ?? 0, "height": r["height"] ?? 0]
+        }
         // ★★内容滚动范围（2026-10-02 —— 与 Android `applyContentScrollRange` **同源同口径**）：
         //   内容高 = 内核 rects 的**最大 maxY**；范围 = max(0, 内容高 − 视图高) ⇒
         //   交给视图后 `applyContentOffset` 钳到 [0, range]（装得下 ⇒ 0 ⇒ 不可滚）。
@@ -5638,6 +5656,12 @@ final class SelfDrawBridge: NSObject, SelfDrawExports {
             "cgfont_failure": ProteusTextAdapter.lastCGFontFailure,
             "mem_mb": round(physFootprintMB() * 10) / 10,
             "mem_peak_mb": round(SelfDrawBridge.memPeakMB * 10) / 10,
+            // ★★矩阵 #10：**核心真源**几何透传（native_hosts 清单 + 全量 rects）——
+            //   宿主建原生 UIView 的 frame 读它（"位置由核心决定"）；与 Android
+            //   `MainActivity` 从 rectsJson 读 `native_hosts` 同纪律（IR 判定与宿主建 View 同源）。
+            //   ★只在有 native_host 时带（无 host 的场景零开销：不塞 3500 条几何进回执）。
+            "native_hosts": nativeHostIds,
+            "rects": nativeHostIds.isEmpty ? [:] : rectsOut,
         ]
         return jsonString(out)
     }
@@ -5949,6 +5973,8 @@ final class SelfDrawViewController: UIViewController {
         // ★★★六端 SFC 压力夹具（2026-10-02）：走 bench bundle（它含 renderStress 入口——
         //   与 Android 同源的 vapor-stress.json），但不跑用例链：一次挂载 + 截图 + 报告。
         let isStress = ProcessInfo.processInfo.arguments.contains("--stress")
+        // ★矩阵 #10：原生组件混用（自绘 + 原生 UIView 共存；与 Android native-host 三件事同族）
+        let isNativeMix = ProcessInfo.processInfo.arguments.contains("--native-mix")
         // ★★G-39：宿主运行时场景（`--host-runtime`）——独立模式，不进自绘/基准分支
         let isHostRuntime = ProcessInfo.processInfo.arguments.contains("--host-runtime")
         // ★★M5：执行器场景（`--app-stack`）——同上，独立模式
@@ -5999,10 +6025,15 @@ final class SelfDrawViewController: UIViewController {
                 SelfDrawBridge.snapshotName = "bench-filtered-\(slug)"
             }
         }
+        // ★矩阵 #10：native-mix 场景的产物名（与 run-selfdraw.sh 的 REPORT_FILE/SNAP_FILE 一致）
+        if isNativeMix {
+            SelfDrawBridge.reportFileName = "native-mix"
+            SelfDrawBridge.snapshotName = "native-mix"
+        }
         // ★stress 也走 bench bundle（它含 renderStress 入口——同一份 vapor-stress.json 产物）
         let bundleName = isShowcase ? "bundle-showcase"
             : (isAppStack ? "bundle-app-stack"
-            : (isHostRuntime ? "bundle-host-runtime" : (isBench || isStress ? "bundle-bench" : "bundle-selfdraw")))
+            : (isHostRuntime ? "bundle-host-runtime" : (isBench || isStress || isNativeMix ? "bundle-bench" : "bundle-selfdraw")))
         guard let url = Bundle.main.url(forResource: bundleName, withExtension: "js"),
               let src = try? String(contentsOf: url, encoding: .utf8) else {
             NSLog("[proteus] 缺少 %@.js", bundleName)
@@ -6044,6 +6075,8 @@ final class SelfDrawViewController: UIViewController {
         //   下面用 `DispatchQueue.main.async` 串起来——这等价于把 VM 事件循环手工补上。
         if isBench {
             driveBench(ctx: ctx)
+        } else if isNativeMix {
+            driveNativeMix(ctx: ctx)
         } else if isStress {
             // ★★★六端 SFC 压力夹具（2026-10-02）：渲染 examples/pages/consistency-stress.vue 的
             //   编译产物（`vapor-stress.json`）——**一次挂载 + 截图 + 报告落盘**，不跑用例链。
@@ -6114,6 +6147,116 @@ final class SelfDrawViewController: UIViewController {
         if let d = out.data(using: .utf8), let o = try? JSONSerialization.jsonObject(with: d) as? [String: Any] {
             report["js_report"] = o
         }
+        report["run_ts"] = Date().timeIntervalSince1970
+        let dir = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)[0]
+        let url = dir.appendingPathComponent("\(SelfDrawBridge.reportFileName).json")
+        if let data = try? JSONSerialization.data(withJSONObject: report, options: [.prettyPrinted, .sortedKeys]) {
+            try? data.write(to: url)
+        }
+        NSLog("[proteus] SELFDRAW_REPORT_READY path=%@", url.path)
+        if ProcessInfo.processInfo.environment["PROTEUS_EXIT_AFTER_REPORT"] == "1" {
+            exit(report["ok"] as? Bool == true ? 0 : 1)
+        }
+    }
+
+    /// ★★★矩阵 #10：**原生组件混用**（自绘 + 原生 UIView 共存）——iOS 腿。
+    ///
+    /// 【与 Android `native-host-verify.py` 三件事同族】
+    ///   ① **位置由 Rust 核心决定**：原生 UIView 的 frame == 核心几何（`native_hosts` 清单 + rects）
+    ///   ② **原生真在渲染**：截图像素采样在原生区取到原生色（#E53935 红）
+    ///   ③ **z-order 实测**：与原生 **重叠** 的自绘色块，屏幕上显示哪个
+    ///      （iOS：原生 UIView 是 `SelfDrawView` 的**子视图** ⇒ 子视图在 CALayer 树之上 ⇒ 原生在上）
+    ///
+    /// 【与 Android 的差异（如实）】Android 走 `dispatchDraw` 后加子 View；iOS 走 `addSubview`
+    ///   （UIKit 视图层级天然覆盖 CALayer 内容）——**同一语义、不同平台机制**。
+    ///
+    /// 【链路】① 建树（含 native_host 标记的节点；内核回传 `native_hosts` 清单）
+    ///   ② 从**核心真源**读该节点几何 ⇒ 建原生 UIView（红底 + "Native" UILabel）按 frame 落位
+    ///   ③ 自绘层同时渲染（含与原生**重叠**的色块——**故意重叠**以验 z-order）
+    ///   ④ 像素采样 + 截图 + 报告落盘。
+    private func driveNativeMix(ctx: JSContext) {
+        let evalJs = { (expr: String) -> String in ctx.evaluateScript(expr)?.toString() ?? "null" }
+        // 画布底色与夹具一致（避免大面积假差异——与 driveStress 同纪律）
+        bridge.view?.backgroundColor = UIColor(red: 0x14 / 255.0, green: 0x14 / 255.0, blue: 0x1C / 255.0, alpha: 1)
+        let out = evalJs("__proteus.renderNativeMix()")
+        NSLog("[proteus] native-mix 渲染：%@", String(out.prefix(400)))
+
+        // ── 从 JS 回执读**核心真源几何**（native_hosts 清单 + 该节点 rect + 重叠块 rect）──
+        var hostFrame: CGRect = .zero
+        var overlapFrame: CGRect = .zero
+        var hostNodeId = -1
+        var coreRects: [String: Any] = [:]
+        if let d = out.data(using: .utf8),
+           let o = (try? JSONSerialization.jsonObject(with: d)) as? [String: Any] {
+            if let nh = o["native_host_node_id"] as? Int { hostNodeId = nh }
+            if let r = o["native_host_rect"] as? [String: Any],
+               let x = r["x"] as? Double, let y = r["y"] as? Double,
+               let w = r["width"] as? Double, let h = r["height"] as? Double {
+                hostFrame = CGRect(x: x, y: y, width: w, height: h)
+            }
+            if let r = o["overlap_rect"] as? [String: Any],
+               let x = r["x"] as? Double, let y = r["y"] as? Double,
+               let w = r["width"] as? Double, let h = r["height"] as? Double {
+                overlapFrame = CGRect(x: x, y: y, width: w, height: h)
+            }
+            coreRects = o
+        }
+
+        // ── ② 原生 UIView：**按核心几何定位**（不是我们手写坐标）──
+        var nativeView: UIView?
+        if hostNodeId >= 0 && hostFrame != .zero, let host = bridge.view {
+            let v = UIView(frame: hostFrame)
+            v.backgroundColor = UIColor(red: 0xE5 / 255.0, green: 0x39 / 255.0, blue: 0x35 / 255.0, alpha: 1)
+            let label = UILabel(frame: v.bounds)
+            label.text = "UIKit Native"
+            label.textColor = .white
+            label.font = UIFont.systemFont(ofSize: 12)
+            label.textAlignment = .center
+            v.addSubview(label)
+            host.addSubview(v)
+            nativeView = v
+        }
+
+        // ── ④ 像素采样（原生区 + 重叠区）+ 截图 + 报告 ──
+        var samples: [String: Any] = [:]
+        if bridge.view != nil {
+            // ★`samplePixels` 在 **bridge** 上（内部持 view + 走"渲染一次读多点"的层渲染路径），
+            //   不在 SelfDrawView 上（首版按 view 调 ⇒ 编译错——方法归属要读实现，不猜）。
+            //   原生区中心采样（应取到原生红——若被自绘遮挡或未渲染则会不同）
+            // ★格式（读实现确认，不猜）：`samplePixels` 吃**裸数组** `[{"x":..,"y":..},...]`
+            //   （首版按 `{"points":[...]}` 包一层 ⇒ "points 解析失败（需数组）"）。
+            let pts: [[String: Double]] = [
+                // ① 原生区中心（应取到原生红 #E53935）
+                ["x": Double(hostFrame.midX), "y": Double(hostFrame.midY)],
+                // ② 重叠区中心（z-order 判定：原生在上 ⇒ 红）
+                ["x": Double(overlapFrame.midX), "y": Double(overlapFrame.midY)],
+                // ③ 对照点：重叠块的**左下**（原生只覆盖该区右侧/上方 ⇒ 此处应仍是自绘蓝 #2f6fed）
+                ["x": Double(overlapFrame.minX + 4), "y": Double(overlapFrame.maxY - 4)],
+            ]
+            // ★作用域（编译错抓出）：`jsonStringList` 是 `SelfDrawBridge` 的私有方法，本函数在
+            //   `SelfDrawViewController` ⇒ 直接内联序列化（不再加一份跨类可见性）。
+            if let pj = try? JSONSerialization.data(withJSONObject: pts),
+               let pjStr = String(data: pj, encoding: .utf8) {
+                samples["all_points"] = bridge.samplePixels(pjStr)
+            }
+        }
+        // 截图（原生 UIView 在视图层级里 ⇒ UIGraphicsImageRenderer 渲染含子视图）
+        let snapPath = bridge.view?.snapshot(named: SelfDrawBridge.snapshotName)
+        var report: [String: Any] = [
+            "ok": out.contains("\"ok\":true") && nativeView != nil && snapPath != nil,
+            "path": "native-mix",
+            "host_id": "ios",
+            "native_host_node_id": hostNodeId,
+            "native_view_frame": [hostFrame.origin.x, hostFrame.origin.y, hostFrame.width, hostFrame.height],
+            "overlap_frame": [overlapFrame.origin.x, overlapFrame.origin.y, overlapFrame.width, overlapFrame.height],
+            "native_view_added": nativeView != nil,
+            "samples": samples,
+            "snapshot_ok": snapPath != nil,
+            "js_raw": out,
+            "core_rects": coreRects,
+            "note": "iOS 腿：原生 UIView（UIKit）按**核心几何**定位 + 与自绘重叠色块共存——与 Android native-host 三件事同族"
+                + "（① 位置由核心决定 ② 原生真渲染 ③ z-order 实测：iOS 子视图在 CALayer 之上 ⇒ 原生在上）",
+        ]
         report["run_ts"] = Date().timeIntervalSince1970
         let dir = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)[0]
         let url = dir.appendingPathComponent("\(SelfDrawBridge.reportFileName).json")

@@ -127,7 +127,7 @@ const BN = { snapshot: 'bench-final' }
 // ★构建标识：每次构建写入，用于**确凿判定**设备上跑的是哪份代码
 //   （踩坑：靠文件 mtime 判断"报告是否刷新"不可靠——新建目标文件的时间恒为"现在"；
 //    且我看不出设备实际执行的是旧 bundle，白跑一轮。有了这个字段就能一眼判定。）
-const BUILD_ID = 'd7c580dc-021707'
+const BUILD_ID = '61bd6e10-023017'
 const now = (): number => Date.now()
 /** 宽松解析（宿主返回可能是字符串或已是对象） */
 const safeParseAny = (s: any): any => {
@@ -3408,6 +3408,87 @@ const api = {
    *
    * @returns 渲染读数 JSON（节点数/文本数/数据行/宿主耗时——截图的机器判据用）
    */
+  /**
+   * ★★★矩阵 #10：**原生组件混用**（iOS 腿）——自绘 + 原生 UIView 共存。
+   *
+   * 【与 Android native-host 场景同规格】六行纵向布局（各 40pt 高），其中：
+   *   · seq 3 = **native_host:true** 的节点（200pt 高——宿主建 UIKit 视图）
+   *   · seq 5 = **绝对定位**在与 native 重叠位置的**自绘色块**（z-order 判据）
+   * 其余自绘。
+   *
+   * 【返回】核心真源几何（`native_hosts` 清单 + 该节点 rect + 重叠块 rect）——Swift 据此建
+   *   UIView 的 frame（**位置由核心决定**，宿主不自己算）。
+   */
+  renderNativeMix: (): string => {
+    const T = 0.0
+    const ROW_H = 40.0
+    const HOST_H = 200.0
+    const W = VP.width
+    // 节点表（id 从 2 起——1 是根）：{h, kind} kind: 0 自绘 / 1 native-host / 2 重叠自绘
+    const rows: Array<{ h: number; kind: number }> = [
+      { h: ROW_H, kind: 0 }, { h: ROW_H, kind: 0 }, { h: ROW_H, kind: 0 },
+      { h: HOST_H, kind: 1 },                       // native-host（200 高）
+      { h: ROW_H, kind: 0 },
+      { h: ROW_H, kind: 2 },                        // ★与 native-host 重叠（绝对定位）
+    ]
+    const nodes: Array<Record<string, unknown>> = [
+      { id: 1, parentId: null, width: W, flexDirection: 'column' },
+    ]
+    // 先按流式排出各行的 y（native-host 那行占 HOST_H）；重叠行用绝对定位钉在 native 的 top 上
+    let flowY = T
+    let nid = 2
+    let hostNodeId = -1
+    let hostTop = -1
+    const rowMeta: Array<{ id: number; kind: number; x: number; y: number; w: number; h: number }> = []
+    for (const r of rows) {
+      const isOverlap = r.kind === 2
+      const y = isOverlap ? hostTop : flowY
+      // ★重叠块宽度取一半：露出「右上角原生、左下角自绘」两区（采样点各自可判）
+      const w = isOverlap ? W * 0.5 : W
+      nodes.push({
+        id: nid,
+        parentId: 1,
+        width: w,
+        height: r.h,
+        ...(isOverlap
+          ? { position: 'absolute', top: y, left: 0 }
+          : {}),
+        ...(r.kind === 1 ? { nativeHost: true } : {}),
+        backgroundColor: r.kind === 2 ? '#2f6fed' : (r.kind === 1 ? '#1b1b21' : '#2a2a35'),
+      })
+      if (r.kind === 1) { hostNodeId = nid; hostTop = flowY }
+      rowMeta.push({ id: nid, kind: r.kind, x: 0, y, w, h: r.h })
+      if (!isOverlap) flowY += r.h
+      nid++
+    }
+    const mountOut = safeParseAny(
+      proteusSelfDraw.mount(JSON.stringify({ viewport: { width: W, height: flowY + 400 }, nodes })),
+    ) as {
+      ok?: boolean; error?: string; cmds?: number; nodes?: number
+      native_hosts?: number[]
+      rects?: Record<string, { x: number; y: number; width: number; height: number }>
+    } | null
+    // ★从**核心回执**读 native_hosts 清单（与 Android 同纪律：IR 判定谁是 native-host 与宿主建 View 同源）
+    const hostIds = (mountOut?.native_hosts ?? []) as number[]
+    const rects = (mountOut?.rects ?? {}) as Record<string, { x: number; y: number; width: number; height: number }>
+    const hostIdFromCore = hostIds.length > 0 ? hostIds[0]! : hostNodeId
+    const hr = rects[String(hostIdFromCore)]
+    const overlapRow = rowMeta.find((m) => m.kind === 2)
+    const or_ = overlapRow ? rects[String(overlapRow.id)] : undefined
+    return JSON.stringify({
+      ok: mountOut?.ok === true && hostIds.length > 0,
+      path: 'native-mix',
+      native_hosts: hostIds,
+      native_host_node_id: hostIdFromCore,
+      native_host_rect: hr ?? { x: 0, y: 0, width: 0, height: 0 },
+      overlap_rect: or_ ?? { x: 0, y: 0, width: 0, height: 0 },
+      cmds: mountOut?.cmds ?? -1,
+      nodes: mountOut?.nodes ?? -1,
+      layout_ms: (mountOut as { layout_ms?: number } | null)?.layout_ms ?? -1,
+      spec: { row_h: ROW_H, host_h: HOST_H, rows: rows.length, width: W },
+    })
+  },
+
   renderStress: (): string => {
     const t0 = now()
     const stress = vaporStressJson as unknown as {

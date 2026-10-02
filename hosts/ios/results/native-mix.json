@@ -1,0 +1,55 @@
+{
+  "core_rects" : {
+    "cmds" : -1,
+    "layout_ms" : 0.60999999999999999,
+    "native_host_node_id" : 5,
+    "native_host_rect" : {
+      "height" : 200,
+      "width" : 390,
+      "x" : 0,
+      "y" : 120
+    },
+    "native_hosts" : [
+      5
+    ],
+    "nodes" : -1,
+    "ok" : true,
+    "overlap_rect" : {
+      "height" : 40,
+      "width" : 195,
+      "x" : 0,
+      "y" : 120
+    },
+    "path" : "native-mix",
+    "spec" : {
+      "host_h" : 200,
+      "row_h" : 40,
+      "rows" : 6,
+      "width" : 390
+    }
+  },
+  "host_id" : "ios",
+  "js_raw" : "{\"ok\":true,\"path\":\"native-mix\",\"native_hosts\":[5],\"native_host_node_id\":5,\"native_host_rect\":{\"y\":120,\"width\":390,\"x\":0,\"height\":200},\"overlap_rect\":{\"y\":120,\"width\":195,\"height\":40,\"x\":0},\"cmds\":-1,\"nodes\":-1,\"layout_ms\":0.61,\"spec\":{\"row_h\":40,\"host_h\":200,\"rows\":6,\"width\":390}}",
+  "native_host_node_id" : 5,
+  "native_view_added" : true,
+  "native_view_frame" : [
+    0,
+    120,
+    390,
+    200
+  ],
+  "note" : "iOS 腿：原生 UIView（UIKit）按**核心几何**定位 + 与自绘重叠色块共存——与 Android native-host 三件事同族（① 位置由核心决定 ② 原生真渲染 ③ z-order 实测：iOS 子视图在 CALayer 之上 ⇒ 原生在上）",
+  "ok" : true,
+  "overlap_frame" : [
+    0,
+    120,
+    195,
+    40
+  ],
+  "path" : "native-mix",
+  "run_ts" : 1790965856.670161,
+  "samples" : {
+    "all_points" : "{\"size\":{\"w\":390,\"h\":844},\"ok\":true,\"pixels\":[\"#E53935\",\"#E53935\",\"#E53935\"]}"
+  },
+  "snapshot_ok" : true
+}
