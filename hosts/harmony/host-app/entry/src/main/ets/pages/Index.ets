@@ -17,7 +17,7 @@ import { hilog } from '@kit.PerformanceAnalysisKit';
 import { NodeContent } from '@kit.ArkUI';
 import { util } from '@kit.ArkTS';
 import { attach, renderCommands, stats, ProteusRenderStats } from 'libproteus_render.so';
-import { bench4050, hitProbe, version as rustVersion } from 'libproteus_bench.so';
+import { bench4050, hitProbe, recycleProbe, spliceProbe, textProbe, version as rustVersion } from 'libproteus_bench.so';
 
 const DOMAIN = 0x0002;
 const TAG = 'ProteusRender';
@@ -213,6 +213,27 @@ struct Index {
           hilog.info(DOMAIN, BENCH_TAG, 'PROTEUS_HIT_PROBE %{public}s', hp);
         } catch (he) {
           hilog.error(DOMAIN, BENCH_TAG, 'PROTEUS_HIT_PROBE_ERROR %{public}s', JSON.stringify(he) ?? '');
+        }
+        // ★长列表复用池探针（4000 行 / 400 帧；与 Android `recycle` 同口径）
+        try {
+          const rp: string = recycleProbe(4000, 400);
+          hilog.info(DOMAIN, BENCH_TAG, 'PROTEUS_RECYCLE %{public}s', rp);
+        } catch (re) {
+          hilog.error(DOMAIN, BENCH_TAG, 'PROTEUS_RECYCLE_ERROR %{public}s', JSON.stringify(re) ?? '');
+        }
+        // ★结构变更探针（splice；与 Android 同 payload）
+        try {
+          const sp: string = spliceProbe();
+          hilog.info(DOMAIN, BENCH_TAG, 'PROTEUS_SPLICE %{public}s', sp);
+        } catch (se) {
+          hilog.error(DOMAIN, BENCH_TAG, 'PROTEUS_SPLICE_ERROR %{public}s', JSON.stringify(se) ?? '');
+        }
+        // ★文本通道探针（ArkGraphics2D typography）
+        try {
+          const tp: string = textProbe();
+          hilog.info(DOMAIN, BENCH_TAG, 'PROTEUS_TEXT %{public}s', tp);
+        } catch (te) {
+          hilog.error(DOMAIN, BENCH_TAG, 'PROTEUS_TEXT_ERROR %{public}s', JSON.stringify(te) ?? '');
         }
         this.runBenchStaged();
       } catch (e) {

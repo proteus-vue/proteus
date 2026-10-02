@@ -104,7 +104,16 @@ if [ -n "$READY_LINE" ]; then
       NATIVE_WARM_LINE="$(HDC shell "hilog -x | grep 'PROTEUS_BENCH_NATIVE_WARM wall_ms' | tail -1" 2>/dev/null | head -1)"
       BENCH_JSON="$(printf '%s' "$BENCH_LINE" | sed -n 's/.*PROTEUS_BENCH_RESULT limit=4050 wall_ms=\([0-9]*\) //p')"
       echo
-      echo "  ✓ 4050 应用级基准（鸿蒙腿）："
+      # ── 6.5 ★探针集（命中 / 复用池 / 结构变更 / 文本通道）——与 Android 能力域对齐 ──
+  PROBE_LOG="$(HDC shell "hilog -x | grep -E 'PROTEUS_HIT_PROBE \{|PROTEUS_RECYCLE \{|PROTEUS_SPLICE \{|PROTEUS_TEXT \{' | tail -4" 2>/dev/null)"
+  echo
+  echo "  ✓ 探针集（鸿蒙腿）："
+  printf '%s\n' "$PROBE_LOG" | sed 's/^/    /'
+  HIT_OK="$(printf '%s' "$PROBE_LOG" | grep -o '"mismatch":0' | head -1)"
+  RC_OK="$(printf '%s' "$PROBE_LOG" | grep -o '"reuse_ratio":[0-9.]*' | head -1)"
+  echo "    判读：命中 ${HIT_OK:-（未见）} · $RC_OK"
+
+  echo "  ✓ 4050 应用级基准（鸿蒙腿）："
       echo "    Proteus：${BENCH_LINE}"
       echo "    原生对照（冷）：${NATIVE_LINE}"
       echo "    原生对照（热）：${NATIVE_WARM_LINE}"
