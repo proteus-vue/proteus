@@ -4406,13 +4406,17 @@ mod tests {
     ///   Node 侧读**同一份字节**过校验器。（`--nocapture` 无需打印——落盘即工件。）
     #[test]
     fn geometry_snapshot_emits_sample_artifact() {
+        // ★与 Web/小程序夹具**同构**（VC5 三端比对前提）：
+        //   root(400x600, padding 12, column) > [box(200x60), text, nested(300x100, pad8) > box(100x24)]
         let tree = serde_json::json!({
-            "viewport": {"width": 375.0, "height": 800.0},
+            "viewport": {"width": 400.0, "height": 600.0},
             "nodes": [
-                {"id": 1, "parentId": null, "flexDirection": "column", "padding": {"top": 10.0, "right": 10.0, "bottom": 10.0, "left": 10.0}, "width": 375.0, "height": 800.0},
-                {"id": 2, "parentId": 1, "flexDirection": "row", "width": 340.0, "height": 50.0},
-                {"id": 3, "parentId": 2, "width": 30.0, "height": 30.0},
-                {"id": 4, "parentId": 1, "width": 340.0, "height": 40.0}
+                {"id": 1, "parentId": null, "flexDirection": "column", "boxSizing": "border-box", "padding": {"top": 12.0, "right": 12.0, "bottom": 12.0, "left": 12.0}, "width": 400.0, "height": 600.0},
+                // ★与 Web/小程序夹具**逐字段对齐**（margin 也要写——首版漏了 ⇒ 比对报 4 条累积偏移）
+                {"id": 2, "parentId": 1, "width": 200.0, "height": 60.0, "flexShrink": 0.0, "tag": "p-box", "margin": {"top": 0.0, "right": 0.0, "bottom": 8.0, "left": 0.0}},
+                {"id": 3, "parentId": 1, "width": 160.0, "height": 40.0, "flexShrink": 0.0, "text": "Hello", "tag": "p-text", "margin": {"top": 0.0, "right": 0.0, "bottom": 8.0, "left": 0.0}},
+                {"id": 4, "parentId": 1, "width": 300.0, "height": 100.0, "flexShrink": 0.0, "tag": "p-box", "padding": {"top": 8.0, "right": 8.0, "bottom": 8.0, "left": 8.0}},
+                {"id": 5, "parentId": 4, "width": 100.0, "height": 24.0, "flexShrink": 0.0, "tag": "p-box", "margin": {"top": 4.0, "right": 0.0, "bottom": 0.0, "left": 4.0}},
             ]
         });
         let h = unsafe { proteus_layout_create(std::ffi::CString::new(tree.to_string()).unwrap().as_ptr()) };
@@ -4422,7 +4426,7 @@ mod tests {
         unsafe { proteus_layout_free_string(raw) };
         let mut v: serde_json::Value = serde_json::from_str(&s).unwrap();
         // 补 VC3-a 要求的 viewport（快照 FFI 目前只回 root——view 端口径由宿主填；此处样例补上以过校验器）
-        v["viewport"] = serde_json::json!({"width": 375.0, "height": 800.0});
+        v["viewport"] = serde_json::json!({"width": 400.0, "height": 600.0});
         let dir = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("target");
         std::fs::create_dir_all(&dir).unwrap();
         std::fs::write(

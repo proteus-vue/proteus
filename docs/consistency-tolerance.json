@@ -1,0 +1,51 @@
+{
+  "_note": "★VC5-a 分级容差配置（工程配置的唯一事实源）。规则：① 每类必须带 rationale（不得凭直觉设值）；② 禁止任何\"全局/总体阈值\"类别；③ 组件级 override 仅能放宽 structure/textMetrics，且不得超过 caps；④ 修改后跑 pnpm check:consistency-snapshot 校验。详见《Proteus_多端一致性标准方案.md》§8.2 与任务卡 VC5-a。",
+  "version": 1,
+  "classes": {
+    "structure": {
+      "absPx": 1,
+      "relPct": 0.5,
+      "rationale": "坐标吸附集中在内核（pixel-snap floor(v+0.5)），残留差异只来自浮点路径与各端取整边界；1px 覆盖舍入边界、0.5% 让大尺寸元素（>200px）的容差随尺度轻微放宽（避免大元素因浮点尾数误报）。依据：卡 VC5-a 表格「结构类 ≤1px 或 ≤0.5% 取大」+ 本仓 I2 纪律（舍入只在 pnode/pixel-snap 与 snap.rs）。"
+    },
+    "color": {
+      "channelDelta": 0,
+      "rationale": "计算样式颜色是确定性整数（无合成、无抗锯齿），任何通道差都是真实缺陷。★规范冲突裁决：卡面「±1/255」源自标准 §8.2 的**像素比对**表（L4 视觉噪声）；而 §7.2（#FF0000→#FE0000 必须被捕获）/§7.4/§14#3 要求 1/255 偏移判失败 ⇒ 取更严的 exact。依据：tests/consistency-compare.test.ts 的「按钮变色」必过用例。"
+    },
+    "font": {
+      "exact": true,
+      "epsilon": 0.0005,
+      "rationale": "字体属性是离散值（字族名、字号档、字重档），无算术路径；不等即缺陷。epsilon 仅吸收 round3 序列化的表示粒度（半个千分位）。依据：卡 VC5-a 表格「字体属性 严格相等」。"
+    },
+    "textMetrics": {
+      "absPx": 2,
+      "relPct": 2,
+      "provisional": true,
+      "rationale": "三端文本度量引擎天然不同（StaticLayout / CoreText / 浏览器），是唯一不可消除的结构性差异（标准 §2 ③ / 允许差异清单 A-1）。宽带数值为**临时标定**（标准 §13 待核实项 #5）：标定前凡超带仍判失败（宁可误报不漏报）；标定后按实测分布收紧并去除 provisional。"
+    },
+    "nonDeterministic": {
+      "skipped": [
+        "radius",
+        "shadow",
+        "gradient"
+      ],
+      "rationale": "圆角/阴影/渐变/字形栅格化的差异来自光栅化路径（AA / 离屏渲染 / 色彩空间），**非确定性** ⇒ 不比数值，走 L4 像素观察（VC7，非门禁）。依据：卡 VC5-a 表格最后一行 + 标准 §10.1。"
+    }
+  },
+  "overrides": [],
+  "caps": {
+    "structure": {
+      "absPx": 2,
+      "relPct": 1
+    },
+    "color": {
+      "channelDelta": 0
+    },
+    "textMetrics": {
+      "absPx": 4,
+      "relPct": 4
+    },
+    "font": {
+      "epsilon": 0.0005
+    }
+  }
+}

@@ -68,8 +68,19 @@
 
 ### 第四批：比对与集成
 
-- [ ] **VC5-a** 分级容差配置规格 ⭐ 关键
-- [ ] **VC5-b** L2 几何比对引擎
+- [x] **VC5-a** 分级容差配置规格 ⭐ 关键 —— ✅（2026-10-02）：`packages/consistency/src/tolerance.ts`
+  （5 类每类带 rationale · 禁"全局/总体阈值"类别名 · caps 硬上限 · override 仅 structure/textMetrics
+  且不得通配 · 规范配置入库 `docs/consistency-tolerance.json`）
+  ★规范冲突裁决：卡面「颜色 ±1/255」源自标准 §8.2 **像素**表，而 §7.2/§7.4/§14#3 要求
+  1/255 偏移**必须检出** ⇒ 取更严的 `channelDelta: 0`，并有"按钮变色"必过用例兜底
+- [x] **VC5-b** L2 几何比对引擎 —— ✅（2026-10-02）：几何 + 样式比对引擎（`compare.ts`）
+  · 四要素差异（path/属性/两端值/偏差/容差/依据）· 缺失/多余/层级错位各自成类
+  · 单项失败即整体失败（**源码白盒扫描**证明无任何"差异率 ≤ X%"判定）
+  · 坐标对齐（默认按根归零——滚动量非几何；可显式 align:none）
+  · Web 真值基准强制（`compareAgainstWeb` 校验 baseline.end）
+  · **三端实测通过**（App 内核 ⇄ skyline ⇄ webview 逐节点在容差内）
+  · 破坏性验证：2px 漂移 ⇒ 精确报 `path=0 w 200 → 202（Δ2，容差 1，类 structure）`
+  · 18 单测（含 §7.4 按钮变色必过项）
 - [x] **VC5-d** 允许差异清单 v1（《多端一致性标准方案》§9 / CS2）——✅（2026-10-02）机读清单入库
   `docs/allow-differences.json`（5 条，含 A-4；schema 门禁随 `check:consistency-metrics`）
 - [ ] **VC6** L3 计算样式比对
