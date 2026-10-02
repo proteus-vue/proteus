@@ -188,26 +188,39 @@ CI 因一个像素偏移频繁挂掉
 - 渐变
 - **字形栅格化**
 
-#### 3.4.1 ★已落地（2026-10-02）：真截图观测 + 三项工程约束
+#### 3.4.1 ★已落地（2026-10-02）：真截图三端观测 + 四项工程约束
 
-**装置**：`bash scripts/shoot-l4-fixtures.sh` 在微信模拟器上采集同一夹具的 Skyline / WebView
-两版截图（夹具 = `spike/vc0-skyline-geom/pages/l4-{skyline,webview}`，两端 wxml/wxss **逐字一致**，
-脚本做 diff 前置校验）；报告由 `node scripts/check-consistency-pixel.mjs` 生成，**非门禁**（`gate:false`）。
+**装置**：
+- `bash scripts/shoot-l4-fixtures.sh` —— 微信模拟器采同一夹具的 Skyline / WebView 两版截图
+  （夹具 = `spike/vc0-skyline-geom/pages/l4-{skyline,webview}`，两端 wxml/wxss **逐字一致**，脚本 diff 前置校验）；
+- `node scripts/shoot-l4-web.mjs` —— Playwright/Chromium 采**第三端 Web**（夹具 `spike/vc0-skyline-geom/web/l4.html`，
+  与小程序两端同声明，脚本做**声明平价**前置检查 + 特征色防假绿 + 原子换名）；
+- 报告由 `node scripts/check-consistency-pixel.mjs` 生成（**全配对**：N 端 ⇒ C(N,2) 对），**非门禁**（`gate:false`）。
 
-实测读数（640×1386 物理像素，ROI 内）：`diff = 2161/693240 = 0.312%`、`hashDistance = 0` ⇒ `noise-level`；
-差异全部集中在四项观测目标（字形 AA 1675px、圆角 AA 266px、渐变 219px、阴影 1px）。
+**实测读数（三端 ⇒ 3 对，全部 `noise-level`）**：
 
-**三条必须固化的工程约束（都是实测踩出来的）**：
+| 配对 | 形态 | 对齐 | 读数 |
+|---|---|---|---|
+| skyline ⇄ webview | 同运行时（小程序双渲染器） | ROI | `2161/693240 = 0.312%` · hash 0 |
+| skyline ⇄ web（浏览器） | 跨运行时 | ROI + 尺寸 + 平移 | 对齐后 `0.389%`（原始 0.541%，平移解释 28.1%）· hash 0 |
+| web ⇄ webview | 跨运行时 | ROI + 尺寸 + 平移 | 对齐后 `0.448%`（原始 0.845%，平移解释 46.9%）· hash 0 |
+
+剩余差异全部集中在四项观测目标（字形 AA 最大宗、圆角 AA、渐变、阴影）——与标准 §2 的判断一致：
+**字形栅格化是唯一跨端不可消除的结构性差异**（三端字体度量引擎不同）。
+
+**四项必须固化的工程约束（都是实测踩出来的）**：
 
 | # | 约束 | 为什么（实测） |
 |---|---|---|
 | ① | **观测区域（ROI）必填**——排除设备 chrome | 状态栏时钟每分钟必变（任意两张截图"必然 changed"）+ Home 条 + 画布左缘 1px 伪影；`pixelObservation({ roi })` 把对比限定在应用内容区，region 坐标回传原图口径 |
 | ② | **采集判据 = 运行时路由 + 特征色**，不是"盲等/哈希稳定" | 页面切换后模拟器**先黑屏再渲染**，两次黑屏哈希相同 ⇒ "哈希稳定即完成"会存下黑屏；`simulator_open_page` 返回 success 只表示"触发编译"，完成时刻必须查 `getCurrentPages()` 路由 + 截图上命中夹具特征色（`scripts/probe-png-colors.mjs`） |
 | ③ | **同一画面跨端比对的噪声底含该端的 AA 本身** | 圆角弧线 AA 在两端就有 266px 差（占块 2.2%）⇒ 跨端 verdict 对它无区分度；"圆角缺失"这类缺陷的检出放**同端注入**（M4 的 L4 算子：与自身原图比，原图 `identical`、注入后差异块定位到四角） |
+| ④ | **跨运行时必做尺寸 + 平移两项对齐** | ①尺寸：Web 截图取 390×844 **@DPR2 = 780×1688 原生渲染**（不用 DPR1 + 上采样——否则文字/AA 全是插值痕迹，观测退化成"比插值"），由 `resampleTo` 盒式归一到 640×1386；②平移：两端**设备坐标系原点约定不同**（Web=视口左上，小程序=设备外框左上），实测最优整数平移 skyline `dx=−1/dy=1`、webview `dx=0/dy=−2`——不对齐就把"坐标系常量差"读成"绘制不一致"（假阳性）。`alignTranslation` 拟合值随报告回传 |
 
 **能力形态的诚实表述**：L4 对局部小缺陷的价值是**定位**（报告差异块坐标 + 像素数），不是全局判定——
 圆角缺失最大可注入信号仅 430px（0.05%），**天然低于 0.5% 全局噪声带**，verdict 恒为 `noise-level`。
 圆角/颜色的"通过/失败"判定由 L3 数值比对承担（Web golden 实测含四个 borderRadius 角键）。
+平移对齐同理会**吸收真实的位置差异**——"位置是否正确"由 L2 几何数值比对承担，L4 只管"画出来像不像"。
 
 ---
 

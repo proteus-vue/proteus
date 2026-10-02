@@ -1,0 +1,36 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>L4 像素观察夹具（Web 版）</title>
+<!--
+  ★L4 夹具第三端（Web）：与小程序两页（pages/l4-skyline · pages/l4-webview）**同声明**——
+  把 wxss 逐条翻译为 CSS（view → div；text → div），布局声明一一对应：
+    · .page-root：padding 120px 16px 16px · height 900px · background #14141c
+      （padding-top 120px：把内容推离设备 chrome——mp 侧状态栏/胶囊，web 侧无 chrome 但保持同构）
+    · 四个元素：radius 14px / shadow 0 3px 10px rgba(0,0,0,0.7) / linear-gradient(90deg) / glyph 18px
+  ★两端差异只允许是"运行环境"本身（字体回退、AA、坐标系原点）——不得是声明差异。
+  ★harness 归零（非夹具语义）：body margin 归零（浏览器默认 8px，mp 无此默认）；
+    html overflow:hidden（mp 页面不出现滚动条，web 同构——不影响内容布局）。
+  采集：scripts/shoot-l4-web.mjs（Playwright，viewport 390×844 @DPR2 = 与小程序的同一逻辑画布）。
+-->
+<style>
+  html { overflow: hidden; }
+  html, body { margin: 0; padding: 0; background-color: #14141c; }
+  .page-root {
+    padding: 120px 16px 16px;
+    background-color: #14141c;
+    height: 900px;
+  }
+</style>
+</head>
+<body>
+  <div id="l4-root" class="page-root">
+    <div id="l4-radius" style="width:80px;height:48px;border-radius:14px;background-color:#2f6fed;margin-bottom:10px"></div>
+    <div id="l4-shadow" style="width:80px;height:48px;background-color:#2a3f66;box-shadow:0 3px 10px rgba(0,0,0,0.7);margin-bottom:10px"></div>
+    <div id="l4-gradient" style="width:80px;height:48px;background-image:linear-gradient(90deg,#7c5cff,#ff9a6c);margin-bottom:10px"></div>
+    <div id="l4-glyph" style="font-size:18px;color:#ffffff">字形 Ag 8 中</div>
+  </div>
+</body>
+</html>
