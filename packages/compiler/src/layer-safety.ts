@@ -37,6 +37,25 @@ export const LAYER_RULE_OF: Record<LayerViolation['code'], string> = {
   LY005: '规范 §4.6「layer-transition 是框架内部层，开发者不可声明」',
 }
 
+/**
+ * ★★LY001 的**测量装置例外通道**（2026-10-03 修复：LY001 与 CSS Profile 探针页的冲突）
+ *
+ * 【为什么必须有这个口（本仓实测的真实冲突）】LY001 拦的是"把 z-index 当层级控制手段"的
+ *   **页面层级使用**；而**测量装置**（如 `showcase/.../css-profile-probe.vue`）里写
+ *   `z-index: 5` 是**被测对象本身**——该页的目的就是验证 Skyline 是否接受 z-index，
+ *   删掉它这条测量就没法做（同页还有 25 个同款探针元素）。没有例外通道时：
+ *   `pnpm check:compile-baseline` 在干净 HEAD 上必红（实测），整链无法收尾。
+ *   ★同族先例：`check:host-rounding` 的 `I2-ALLOW`（测量/位图/报告三类合法例外）——
+ *     **每个例外都要有名有姓**：标记写在源码里（谁、为什么），且有生效窗口，
+ *     不能变成静默绕过（门禁纪律：例外不可匿名）。
+ *   ★边界：**只豁免 LY001**（裸数值——唯一存在"测量/对照"场景的条款）；
+ *     LY002/003/004/005 是语义违规（层名非法 / Mask 单独用 / 非根容器 / 保留层），
+ *     不存在"测量它们"的合法场景——**无例外通道**。
+ */
+export const LY001_ALLOW_MARK = 'LY001-ALLOW:'
+/** 标记生效窗口：该行**之前 5 行内**（与 I2-ALLOW 同口径：一条注释可覆盖其后的小段） */
+const LY001_ALLOW_WINDOW = 5
+
 interface LayerNode {
   /** 元素在模板中的序号（DFS 序，与 Vapor 模板产物同源口径） */
   index: number
@@ -118,6 +137,8 @@ export function validateLayerUsage(templateSource: string): LayerViolation[] {
   const out: LayerViolation[] = []
   const nodes = scanLayerNodes(templateSource)
   const byIndex = new Map(nodes.map((n) => [n.index, n]))
+  /** 例外标记窗口查找用（保留**原始**注释文本——scanLayerNodes 内部会屏蔽注释） */
+  const srcLines = templateSource.split('\n')
 
   for (const n of nodes) {
     // LY005：框架保留层名（layer-transition——转场内部用，规范 §4.6）
@@ -143,13 +164,18 @@ export function validateLayerUsage(templateSource: string): LayerViolation[] {
     }
     // LY001：裸 z-index 数值（规范性硬约束——编译期报错）
     if (n.rawZIndex) {
-      out.push({
-        code: 'LY001',
-        rule: LAYER_RULE_OF.LY001,
-        message: `<${n.tag}> 在 ${n.rawZIndex.where} 里写裸 \`z-index\` 数值（层级必须语义化声明）`,
-        hint: '删掉 z-index；改用 `layer="content|navigation|mask|popout"`（WeUI 四层；数值由框架映射，见 contracts/layers.ts）',
-        line: n.rawZIndex.line,
-      })
+      // ★测量装置例外（`LY001-ALLOW:` 标记；窗口有界——见 LY001_ALLOW_MARK 头注）
+      const at = n.rawZIndex.line - 1
+      const windowText = srcLines.slice(Math.max(0, at - LY001_ALLOW_WINDOW), at + 1).join('\n')
+      if (!windowText.includes(LY001_ALLOW_MARK)) {
+        out.push({
+          code: 'LY001',
+          rule: LAYER_RULE_OF.LY001,
+          message: `<${n.tag}> 在 ${n.rawZIndex.where} 里写裸 \`z-index\` 数值（层级必须语义化声明）`,
+          hint: '删掉 z-index；改用 `layer="content|navigation|mask|popout"`（WeUI 四层；数值由框架映射，见 contracts/layers.ts）',
+          line: n.rawZIndex.line,
+        })
+      }
     }
   }
 

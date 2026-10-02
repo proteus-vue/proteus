@@ -82,6 +82,26 @@ describe('LY1 · 层级语义编译期校验（五条违规码 + 合规放行）
     expect(v[0]!.message).toContain('层-top' in {} ? '' : 'layer-top')
   })
 
+  it('★★LY001 测量装置例外：`LY001-ALLOW:` 标记（窗口内）放行；窗口外仍拦；只豁免 LY001', () => {
+    // 【为什么必须有这一条（2026-10-03 实测的真实冲突）】CSS Profile 探针页里 z-index **就是被测对象**
+    //   （该页目的即实测 Skyline 是否接受该特性）⇒ 删掉它测量没法做；而无例外通道时
+    //   `pnpm check:compile-baseline` 在干净 HEAD 上必红。★口径同 I2-ALLOW：
+    //   有名有姓（理由写在源码）+ 窗口有界（不能变成"整文件豁免"）+ 只对 LY001 生效。
+    const withMark = `<!-- LY001-ALLOW: 测量装置，本行即被测对象 -->\n<view style="z-index: 5">x</view>`
+    expect(validateLayerUsage(withMark).map((v) => v.code), '窗口内标记 ⇒ 放行').not.toContain('LY001')
+    // 窗口外（标记离目标 ≥8 行）⇒ 不再豁免（例外有界）
+    const far = `<!-- LY001-ALLOW: 太远了 -->\n` + '\n'.repeat(8) + `<view style="z-index: 5">x</view>`
+    expect(validateLayerUsage(far).map((v) => v.code), '窗口外标记 ⇒ 仍拦').toContain('LY001')
+    // ★例外只对 LY001 生效：LY002（非法层名）/ LY004（非根容器）带标记也照拦——语义违规无例外通道
+    const ly2 = `<!-- LY001-ALLOW: 只豁免 LY001 -->\n<view layer="layer-top">x</view>`
+    expect(validateLayerUsage(ly2).map((v) => v.code), 'LY002 不受标记影响').toContain('LY002')
+    const ly4 = `<!-- LY001-ALLOW: 只豁免 LY001 -->\n<view><view><view layer="layer-popout">d</view></view></view>`
+    expect(validateLayerUsage(ly4).map((v) => v.code), 'LY004 不受标记影响').toContain('LY004')
+    // `:style` 写法同样适用标记（同一 LY001 分支）
+    const bind = `<!-- LY001-ALLOW: 测量装置 -->\n<view :style="{ zIndex: 10 }">x</view>`
+    expect(validateLayerUsage(bind).map((v) => v.code)).not.toContain('LY001')
+  })
+
   it('LY003：layer-mask 单独使用 ⇒ 违规（WeUI：Mask 配合 Popout）', () => {
     const bad = validateLayerUsage(`<view><view layer="layer-mask"></view></view>`)
     expect(bad.map((v) => v.code)).toContain('LY003')
