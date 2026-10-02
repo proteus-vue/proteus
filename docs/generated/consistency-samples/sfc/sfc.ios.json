@@ -1,5 +1,5 @@
 {
-  "js_raw" : "{\"ok\":true,\"path\":\"stress-sfc\",\"src\":\"examples\/pages\/consistency-stress.vue\",\"tpl_nodes\":8,\"sub_l1\":4,\"inst_nodes\":44,\"inst_texts\":12,\"inst_rows\":10,\"data_rows\":10,\"mount_ms\":161,\"host_layout_ms\":4.69,\"host_measure_ms\":112.28,\"host_cmds\":-1,\"host_nodes\":-1,\"anchor_rect\":null,\"viewport\":\"402x874\",\"diagnostics\":[\"view(id=4) 含动态 :style 对象（模板不解析；由订阅表以 SET_STYLE 逐键下发）\"],\"note\":\"六端 SFC 压力夹具（iOS）：渲染 examples\/pages\/consistency-stress.vue 的编译产物\"}",
+  "js_raw" : "{\"ok\":true,\"path\":\"stress-sfc\",\"src\":\"examples\/pages\/consistency-stress.vue\",\"tpl_nodes\":8,\"sub_l1\":4,\"inst_nodes\":44,\"inst_texts\":12,\"inst_rows\":10,\"data_rows\":10,\"mount_ms\":135,\"host_layout_ms\":5.19,\"host_measure_ms\":66.47,\"host_cmds\":-1,\"host_nodes\":-1,\"anchor_rect\":null,\"viewport\":\"402x874\",\"diagnostics\":[\"view(id=4) 含动态 :style 对象（模板不解析；由订阅表以 SET_STYLE 逐键下发）\"],\"note\":\"六端 SFC 压力夹具（iOS）：渲染 examples\/pages\/consistency-stress.vue 的编译产物\"}",
   "ok" : true,
   "path" : "stress-sfc",
   "snapshot_name" : "stress-sfc",

@@ -7,7 +7,7 @@
   ],
   "payload": {
     "ok": true,
-    "run_ms": 67,
+    "run_ms": 64,
     "path": "stress-sfc",
     "js": {
       "ok": true,
@@ -18,11 +18,11 @@
       "inst_rows": 10,
       "data_rows": 10,
       "mount_ms": 0,
-      "host_layout_ms": 3.204,
-      "host_measure_ms": 0.796,
+      "host_layout_ms": 3.102,
+      "host_measure_ms": 0.826,
       "host_cmds": 44,
       "painted_samples": 18000,
-      "painted_colors": 83,
+      "painted_colors": 51,
       "viewport": "375x800",
       "first_node_style": null,
       "anchor_rect": [

@@ -57,7 +57,14 @@ const summary = ref('SFC stress · 6 targets')
        （Web 模拟层同为 block；Vapor 端 taffy 默认 flex 容器——三族默认值不同，显式声明才跨端一致）。 -->
   <view id="stress-root" style="width: 375px; height: 800px; display: flex; flex-direction: column; background-color: #14141c; padding-top: 60px; padding-left: 16px">
     <view id="stress-anchor" style="width: 80px; height: 48px; border-radius: 14px; background-color: #2f6fed; margin-bottom: 10px"></view>
-    <text style="font-size: 18px; color: #ffffff; margin-bottom: 12px">Proteus SFC stress</text>
+    <!-- ★★标题**显式定高 21px**（2026-10-02 · 子代理独立审计抓出 P1 的修复）：
+         不给高度时，标题的盒高由各端字体 natural line-height 决定（实测 web 20.75 /
+         微信 21.1 / iOS 21.8 / **Android 23.83**）⇒ Android 的列表被整体下推 **3.1px**
+         （逐行复核：锚底→行1 间距 web 42.75 / 微信 43.10 / iOS 43.83 / Android 45.83）。
+         显式定高把"字体度量差异"**隔离在文本自身**，不让它传导为流式位移——
+         夹具的确定性优先于美观（这是测试夹具，不是设计稿）；文本内部的 ±1px 差异
+         仍按标准 A-1（文本度量）走容差带。 -->
+    <text style="height: 21px; font-size: 18px; color: #ffffff; margin-bottom: 12px">Proteus SFC stress</text>
     <!-- ★chip：静态 style 承载形状/底色 + 动态 `:style` 承载宽度（**同元素两种写法**）——
          2026-10-02 实测修的编译器缺陷：两条 style 属性此前**不合并** ⇒ WXML 重复属性
          （微信只保留其一、布局静默损坏；`DuplicatedAttribute` 门禁拦在构建前）。
