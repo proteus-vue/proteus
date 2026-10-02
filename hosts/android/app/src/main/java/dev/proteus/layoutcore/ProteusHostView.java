@@ -1013,6 +1013,39 @@ public class ProteusHostView extends ViewGroup {
     }
 
     /**
+     * ★★★**清空"按节点 id 键"的全部每树状态**（2026-10-01 A/B 判据 ④ 实测抓出）。
+     *
+     * 【为什么必须有它（这是一个真缺陷，不是判据口径问题）】
+     *   节点 id 是**每棵树重新分配**的（A 树 0..24、B 树 1..38），而下面这些表都以
+     *   **节点 id 为键且从不清空**：重新 mount 之后，新树里"恰好同 id"的节点会
+     *   **继承上一棵树的裁剪 / 描边 / 变换原点 / 动画快照**——真机上表现为
+     *   **幽灵裁剪 / 幽灵描边**（新树里一个从未声明 clipPath 的节点被旧形状裁掉）。
+     *
+     * 【实测证据（A/B 两棵树前后 mount，同一视图）】B 树节点 5（一个纯文本）探到
+     *   `clip=1`、节点 6（一个纯色块）探到 `stroke_len=512.023`——两者都只出现在
+     *   **A 树**的同 id 节点上，B 树从未声明。⇒ 逐项对照当场判红，根因即本表未清。
+     *
+     * 【与 `kernelAnimStop` 的关系】那个是"动画会话结束"的清理（内核句柄仍活着）；
+     *   本方法是"**整棵树换掉**"的清理（句柄已 destroy）——动画快照同样失去意义
+     *   （它们按 id 指向旧树的节点），故一并清（不留给新树"继承"）。
+     */
+    public void resetPerTreeState() {
+        nodeSvgStroke.clear();
+        nodeClipKindAndBase.clear();
+        nodeTransformOrigin.clear();
+        animTx.clear();
+        animColor.clear();
+        animTextColor.clear();
+        animClip.clear();
+        animStroke.clear();
+        animGrad.clear();
+        animMorphFactor.clear();
+        morphCache.clear();
+        animGlow.clear();
+        animMask.clear();
+    }
+
+    /**
      * 读某节点的当前变换（探针）——从**宿主侧真源** `animTx` 读，不是读我们自己传下去的参数。
      *
      * 入参 JSON：`[id, …]`；出参：`{"ok":true,"layers":[{"id":N,"tx":…,"ty":…,"scale":…,"rotate":…,"opacity":…}, …]}`

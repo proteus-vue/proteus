@@ -1,10 +1,11 @@
 #!/usr/bin/env bash
-# hosts/android/run-vapor-ab.sh —— ★★★Vapor **长列表虚拟化**真机跑（1000 行 · 物化有界 · 回顶恒等）
+# hosts/android/run-vapor-ab.sh —— ★★★Vapor vs Vue 运行时 **A/B 对照**真机跑（同一 SFC · 两条路）
 #
-# 【要证明什么】见 `check-vapor-ab.py` 头注（判据六项：产物/实例化、物化有界、滚动真动、回顶恒等、增量有界、复用池在动）。
-# 【与 run-vapor.sh 的差别】那条跑**短列表**（8 行：实例化 + 订阅驱动增量）；
-#   本脚本跑**长列表**（1000 行）：整树进内核（几何正确）而宿主**只物化可见区**，
-#   30 帧下滚 + 30 帧上滚（回顶签名应恒等）。
+# 【要证明什么】见 `check-vapor-ab.py` 头注（判据：mount 几何逐节点一致 · 更新路径两路等价 ·
+#   绘制通道逐项等价 · 事件路径两路等价 · 文本通道双消费）。
+# 【与 run-vapor.sh 的差别】那条跑**单路**（Vapor 短列表 8 行 + 订阅增量 + 交互闭环）；
+#   本脚本跑**双路对照**（A=Vapor 编译产物 vs B=Vue 运行时，同一份 SFC、同一台设备、同一个内核），
+#   并逐相位对照几何真值（mount → 更新 → 通道 → tap）。
 #
 # 前置：① bash hosts/android/build-and-run.sh --no-install（构建 APK + bundle + 产物）
 #      ② 设备已连接 · 屏幕点亮
@@ -31,7 +32,7 @@ echo "==> ① 清旧产物 + 清 logcat + 启动 + 等就绪"
 bash "$WAIT" --cmd "\"$ADB\" logcat -d -s proteus:I | grep -q 'run-receiver-ready'" \
   --timeout 30 --interval 1 --max-interval 3 || echo "  ⚠ 未见 run-receiver-ready"
 
-echo "==> ② 触发 vaporAb 通路（1000 行虚拟化）"
+echo "==> ② 触发 vaporAb 通路（同一 SFC：Vapor vs Vue 运行时 双路对照）"
 "$ADB" shell "am broadcast -a dev.proteus.RUN --es path vaporAb -p $PKG" >/dev/null 2>&1
 
 echo "==> ③ 等报告（完成信号——条件等待，零盲等）"

@@ -12,7 +12,8 @@
   ② **★文本序列可对齐**：`texts_a == texts_b`（两条路树形天然不同——Vapor 折文本进元素、
      Vue 是标准 vnode 树——故判据是"同一份 SFC 的同一处文本可逐一对齐"，不是树规模相等）
   ③ **★★几何逐节点一致**：`max_delta ≤ 0.01px` · `mismatches == 0`（mount 段）
-  ④ **绘制通道齐备**（A 侧 ≥5：夹具里 5 个通道各一节点）
+  ④ **绘制通道齐备 + ★逐项等价**（本批扩容）：A ≥5 且 **两侧通道签名多重集相等**
+     （`chan_a == chan_b`——"每条通道的值都相等"，不只是"非空通道数"）
   ⑤ **成本可读**（不设阈值，只如实记录）：两路各自的 JS 侧 + 宿主侧耗时
   ⑥ ★★**更新路径对照（2026-10-01 新增）**：同一序列的变更（行文本 + 行宽 + 标量宽）在两条路上——
      · A 走**订阅增量**（触发源 → VaporRuntime → 二进制指令 → 内核 applyOps）
@@ -23,10 +24,21 @@
      · 判据 ⑥d：**文本通道两条路都消费**（A：`text_synced` 累计 > 0；B：`text_layers` 累计 > 0）
        —— 文本不落层 = 屏幕停留旧值，是几何断言发现不了的一类静默缺陷
      · 判据 ⑥e：B 路补丁**真的到了宿主**（宿主侧读数 `host_update_patch_calls > 0`，不是只看 JS 自报）
+  ⑦ ★★**事件路径对照（2026-10-01 第二批新增）**：宿主注入 tap（真 MotionEvent → 内核 hitTest →
+     JNI 反向调用），两条路各自跑 handler：
+     · A：`__proteusVaporGesture` → 编译产物的动作表 → 订阅触发 → 二进制指令 → 内核
+     · B：`__proteusVaporGesture` → 适配器 `dispatchEvent`（Vue onClick）→ ref 变 → node update
+       → `takePatches()` → 宿主 `updatePatches` → 内核
+     · 判据 ⑦a：两路 tap 都**命中**（`hit > 0`）且都**真的跑了 handler**（A `handler` 非空 / B `fired` 非空）
+     · 判据 ⑦b：两路按钮几何 **tap 前一致**（`ev_before_delta ≤ 0.01`）——同语义锚点前提
+     · 判据 ⑦c：两路**宽度位移一致**（|ΔA − ΔB| ≤ 0.01）且都 **> 0**（数据变更真的落到几何）
+     · 判据 ⑦d：两路按钮几何 **tap 后一致**（`ev_after_delta ≤ 0.01`）——同一语义同结果
+     · 判据 ⑦e：B 路 tap 后**有补丁且补丁到了宿主**（`patches ≥ 0` · `applied ≥ 0`）
+       ★诚实边界（JS 侧已标注）：B 的冒泡链按"只派发 target"（宿主 GestureSink 不传 chain）——
+       单节点 handler 场景等价；**祖先冒泡等价属后续批次**。
 
 【诚实边界（本档不覆盖）】
-  · 事件路径（A 已有交互闭环；B 的 `onClick` 经 Vue 的合成事件在自绘适配器上的落地未接）；
-  · B 侧绘制通道的**逐项等价**（探针口径未按 B 的 paintHint 形态对齐，只报"非空通道数"）。
+  · B 侧事件的**祖先冒泡链**（见 ⑦ 的边界说明）；
 
 用法：python3 hosts/android/check-vapor-ab.py <vapor-ab.json>
 退出码：0 全过 / 1 有失败 / 2 用法错（产物缺失时诚实跳过，返回 0）
@@ -125,20 +137,52 @@ def main() -> int:
         print(f"  ✓ ③ ★★几何一致（按**语义文本节点**对齐后逐项比）："
               f"{samples} 个样本 · 最大差 {max_d}px · 不一致 {mism} 处")
 
-    # ── ④ 绘制通道一致 ──
+    # ── ④ 绘制通道齐备 + ★逐项等价（2026-10-01 第二批：把"口径未对齐"补上）──
+    #
+    # 【为什么要扩（上一版的诚实边界）】上一版只要求 A 侧 ≥5、B 侧"如实报出"——
+    #   因为 B 的探针打的节点与 A 的树形不同（A 折文本进元素 / B 是 vnode 树）。
+    #   本版的口径：两侧都探**全树**，把每个节点上的通道值取成**排序多重集签名**
+    #   （`{radius:{...}, grad:{...}, ...}`）——树形差异不影响"同一 SFC 应产出同一组
+    #   语义绘制声明"这条断言；缺失/多出的签名会以差集直接暴露。
     ca, cb = d.get("channels_a", -1), d.get("channels_b", -1)
+    chan_a, chan_b = d.get("chan_a"), d.get("chan_b")
+    chan_match = d.get("chan_match")
     if ca is None or cb is None or ca < 0 or cb < 0:
         fail(f"绘制通道读数缺失：A={ca} · B={cb}")
         ok = False
     elif ca < 5:
-        # A 侧必须 ≥5（夹具里 5 个通道各一节点）；B 侧**探针口径不同**（适配器把绘制属性
-        # 放在 paintHint 上，且探针按 id 查 Cmd 表），故只要求 A 达标，B 如实报出——
-        # ★诚实边界：两侧绘制通道的**逐项等价**需要 B 侧的探针口径对齐（后续批次）
         fail(f"A 侧绘制通道不足：{ca} 个节点有非空通道（应 ≥5——夹具里 5 个通道各一节点）")
         ok = False
+    elif not isinstance(chan_a, dict) or not isinstance(chan_b, dict):
+        fail(f"★绘制通道签名缺失（chan_a={type(chan_a).__name__} · chan_b={type(chan_b).__name__}）"
+             f"——逐项等价没得判（旧产物？）")
+        ok = False
+    elif chan_a != chan_b or chan_match is not True:
+        # ★判据**独立比对**（不只看 JS 自报的 chan_match——那是同一件事的自证；
+        #   本行用 Python 侧的 == 再判一遍，两者不一致本身就是缺陷）
+        # ★差集诊断（"哪条通道、什么值、两侧计数差多少"）——直接指向要查的那条链
+        lines = []
+        for k in ("radius", "grad", "glow", "clip", "stroke_len", "mask"):
+            ma = (chan_a or {}).get(k) or {}
+            mb = (chan_b or {}).get(k) or {}
+            keys = sorted(set(ma) | set(mb))
+            dif = [f"{kk}: A×{ma.get(kk, 0)}/B×{mb.get(kk, 0)}"
+                   for kk in keys if ma.get(kk, 0) != mb.get(kk, 0)]
+            if dif:
+                lines.append(f"{k} → " + " · ".join(dif[:6]))
+        same_in_py = chan_a == chan_b
+        detail = ("；".join(lines) if lines
+                  else ("两侧签名对象相等但 JS 侧 chan_match=false（**JS 自判有缺陷**——查 channelSig）"
+                        if same_in_py else "（签名对象不等）"))
+        fail(f"★两侧绘制通道**逐项不等价**（签名多重集不同）：" + detail
+             + " —— 同一份 SFC 在两条路上应产出同一组绘制声明；某一路漏/多 ⇒ 查对应的翻译环节")
+        ok = False
     else:
-        print(f"  ✓ ④ A 侧绘制通道齐备（{ca} 个节点）；B 侧 {cb} 个"
-              f"（★诚实边界：B 侧探针口径未对齐——绘制通道的逐项等价属后续批次）")
+        print(f"  ✓ ④ ★绘制通道逐项等价：两侧签名多重集相同（A {ca} 节点 / B {cb} 节点带非空通道）")
+        for k in ("radius", "grad", "glow", "clip", "stroke_len", "mask"):
+            m = (chan_a or {}).get(k) or {}
+            if m:
+                print(f"       {k}: " + " · ".join(f"{kk}×{vv}" for kk, vv in m.items()))
 
     # ── ⑤ 成本（如实记录，不设阈值）──
     ca_cost = d.get("cost_a") or {}
@@ -244,12 +288,105 @@ def main() -> int:
             print(f"       B 轮 {r.get('round')}: 补丁 {r.get('patches')} 条 · 驱动 {r.get('driver_ms')}ms · "
                   f"宿主 {r.get('host_ms')}ms · 变更 {r.get('changed_rects')} 节点 · relayout {r.get('relayout')}")
 
+    # ── ⑦ ★★事件路径对照（2026-10-01 第二批）──
+    #   宿主注入 tap（真 MotionEvent → 内核 hitTest → JNI 反向调用）→ 两条路各自跑 handler：
+    #   A：编译产物动作表 → 订阅 → 指令 → 内核；B：适配器 dispatchEvent（Vue onClick）→
+    #   ref 变 → node update → takePatches → 宿主 updatePatches → 内核。
+    #   判据打在"事件真的改了内核几何"上（读数全来自 readRects 真源，不采信任何自报）。
+    ev_a, ev_b = d.get("ev_a"), d.get("ev_b")
+    if not isinstance(ev_a, dict) or not isinstance(ev_b, dict):
+        fail(f"★事件路径读数缺失（ev_a={type(ev_a).__name__} · ev_b={type(ev_b).__name__}）"
+             f"——tap 对照没跑起来（旧产物？或按钮定位失败，见 notes）")
+        ok = False
+    else:
+        # ⑦a 两路都命中且都跑了 handler
+        ha, hb = ev_a.get("hit", -1), ev_b.get("hit", -1)
+        fired_b = ev_b.get("fired") or []
+        handler_a = ev_a.get("handler") or ""
+        if ha is None or ha <= 0:
+            fail(f"★A 路 tap 没有命中任何节点（hit={ha}）——事件闭环第一环断了")
+            ok = False
+        if hb is None or hb <= 0:
+            fail(f"★B 路 tap 没有命中任何节点（hit={hb}）——事件闭环第一环断了")
+            ok = False
+        if not handler_a:
+            fail("★A 路命中后没有跑 handler（编译产物动作表里没有对应绑定？）")
+            ok = False
+        if not fired_b:
+            # ★空列表 = 没有任何处理器被调用（可能是 onClick 未登记 / 命中错节点）
+            fail(f"★B 路 hitTest 命中但**没有派发到任何处理器**（fired=[]）——"
+                 f"Vue 的 onClick 未登记到该节点，或命中节点与登记节点错位")
+            ok = False
+        if ha and ha > 0 and hb and hb > 0 and handler_a and fired_b:
+            print(f"  ✓ ⑦a 两路 tap 都命中且都跑了 handler：A hit={ha}（{handler_a}）· B hit={hb}（fired={fired_b}）")
+        # ⑦a' B 路派发无异常
+        errs_b = ev_b.get("errors") or []
+        if errs_b:
+            fail(f"★B 路派发抛异常：{errs_b}")
+            ok = False
+
+        # ⑦b tap 前按钮几何一致（同语义锚点前提）
+        bd = d.get("ev_before_delta", -1)
+        if bd is None or bd < 0:
+            fail(f"★tap 前几何对照读数缺失（ev_before_delta={bd}）——两路按钮矩形没读到，等价性无法判")
+            ok = False
+        elif bd > GEOM_TOL:
+            fail(f"★tap 前两路按钮几何不一致：最大差 {bd}px"
+                 f"（A={json.dumps(ev_a.get('before'), ensure_ascii=False)} vs "
+                 f"B={json.dumps(ev_b.get('before'), ensure_ascii=False)}）——锚点不同则后面的位移对比无意义")
+            ok = False
+        else:
+            print(f"  ✓ ⑦b tap 前两路按钮几何一致（最大差 {bd}px）")
+
+        # ⑦c 宽度位移一致且都动（>0）
+        da = ev_a.get("width_delta", 0) or 0
+        db = ev_b.get("width_delta", 0) or 0
+        if da <= 0 or db <= 0:
+            fail(f"★tap 后内核几何没有变：A Δ={da}px · B Δ={db}px"
+                 f"（应都 >0——boxW 从 120 加 30 ⇒ 按钮宽度变 30）——事件没落到几何上")
+            ok = False
+        elif abs(da - db) > GEOM_TOL:
+            fail(f"★两路宽度位移不一致：A Δ={da}px vs B Δ={db}px"
+                 f"——同一语义的 handler 在两条路上改了不同的东西")
+            ok = False
+        else:
+            print(f"  ✓ ⑦c 两路宽度位移一致且都真的落到几何：A Δ={da}px · B Δ={db}px"
+                  f"（A 指令 {ev_a.get('ops_bytes')}B / applied {ev_a.get('applied')} · "
+                  f"B 补丁 {ev_b.get('patches')} 条 / applied {ev_b.get('applied')}）")
+
+        # ⑦d tap 后按钮几何一致（同一语义同结果）
+        ad = d.get("ev_after_delta", -1)
+        if ad is None or ad < 0:
+            fail(f"★tap 后几何对照读数缺失（ev_after_delta={ad}）")
+            ok = False
+        elif ad > GEOM_TOL:
+            fail(f"★★tap 后两路按钮几何不一致：最大差 {ad}px"
+                 f"（A={json.dumps(ev_a.get('after'), ensure_ascii=False)} vs "
+                 f"B={json.dumps(ev_b.get('after'), ensure_ascii=False)}）")
+            ok = False
+        else:
+            print(f"  ✓ ⑦d tap 后两路按钮几何仍一致（最大差 {ad}px）")
+
+        # ⑦e B 路 tap → patch → 宿主（补丁通道在事件相位也通）
+        pb = ev_b.get("patches", -1)
+        apb = ev_b.get("applied", -1)
+        if pb is None or pb < 0:
+            fail(f"★B 路 tap 后 takePatches() 返回 null（结构性变化）——夹具的 boxW 变更不该触发结构")
+            ok = False
+        elif apb is None or apb < 0:
+            fail(f"★B 路 tap 后补丁没有到达宿主（applied={apb}）——事件改了数据但补丁通道断了")
+            ok = False
+        else:
+            print(f"  ✓ ⑦e B 路 tap 后补丁经宿主落内核：patches={pb} · applied={apb} · "
+                  f"changed={ev_b.get('changed_rects')} · 驱动 {ev_b.get('driver_ms')}ms")
+
     for n in (d.get("notes") or []):
         print(f"      · {n}")
 
     if ok:
-        print("\n✅ A/B 判据全过（mount 几何逐节点一致 + 更新路径两路等价 + 文本通道双消费）"
-              "—— 「Vapor 能替换 Vue 运行时」有了**量化等价证据**（含更新路径）")
+        print("\n✅ A/B 判据全过（mount 几何逐节点一致 + 更新路径两路等价 + 文本通道双消费"
+              " + 绘制通道逐项等价 + 事件路径两路等价）"
+              "—— 「Vapor 能替换 Vue 运行时」有了**量化等价证据**（mount / 更新 / 绘制 / 事件四条）")
         return 0
     print("\n✗ A/B 判据有失败项（见上）")
     return 1

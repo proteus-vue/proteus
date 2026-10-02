@@ -1,17 +1,17 @@
 {
-  "bundle_chars": 443676,
-  "run_ms": 37,
+  "bundle_chars": 452441,
+  "run_ms": 42,
   "host_mount_calls": 2,
-  "host_apply_calls": 2,
-  "host_update_patch_calls": 2,
+  "host_apply_calls": 3,
+  "host_update_patch_calls": 3,
   "host_nodes": 38,
   "host_text_nodes": 9,
   "host_cmds": 38,
-  "host_layout_ms": 0.205885,
-  "host_measure_ms": 0.042969,
+  "host_layout_ms": 0.202084,
+  "host_measure_ms": 0.040208,
   "host_painted_samples": 12060,
-  "host_painted_colors": 42,
-  "host_applied": 3,
+  "host_painted_colors": 26,
+  "host_applied": 1,
   "host_changed_nodes": 36,
   "host_view_on_draw": 4,
   "report": {
@@ -25,21 +25,116 @@
     "mismatches": 0,
     "first_mismatch": null,
     "cost_a": {
-      "instantiate_ms": 1,
-      "host_ms": 16,
-      "total_ms": 17
+      "instantiate_ms": 0,
+      "host_ms": 19,
+      "total_ms": 19
     },
     "cost_b": {
-      "vue_ms": 0,
-      "request_ms": 1,
+      "vue_ms": 1,
+      "request_ms": 0,
       "serialize_ms": 0,
       "host_ms": 14,
       "total_ms": 15
     },
-    "layout_ms_a": 0.32,
-    "layout_ms_b": 0.206,
+    "layout_ms_a": 0.326,
+    "layout_ms_b": 0.202,
     "channels_a": 5,
-    "channels_b": 0,
+    "channels_b": 5,
+    "chan_a": {
+      "per_channel": {
+        "radius": {
+          "18": 1
+        },
+        "grad": {
+          "1:2": 1
+        },
+        "glow": {
+          "26:0.9": 1
+        },
+        "clip": {
+          "1": 1
+        },
+        "stroke_len": {
+          "512.023": 1
+        },
+        "mask": {}
+      },
+      "total": 5
+    },
+    "chan_b": {
+      "per_channel": {
+        "radius": {
+          "18": 1
+        },
+        "grad": {
+          "1:2": 1
+        },
+        "glow": {
+          "26:0.9": 1
+        },
+        "clip": {
+          "1": 1
+        },
+        "stroke_len": {
+          "512.023": 1
+        },
+        "mask": {}
+      },
+      "total": 5
+    },
+    "chan_match": true,
+    "ev_a": {
+      "node": 10,
+      "hit": 10,
+      "handler": "h0",
+      "ops_bytes": 45,
+      "applied": 1,
+      "relayout": 25,
+      "changed_rects": 25,
+      "before": {
+        "height": 56,
+        "width": 180,
+        "x": 0,
+        "y": 992
+      },
+      "after": {
+        "height": 56,
+        "width": 210,
+        "x": 0,
+        "y": 992
+      },
+      "width_delta": 30,
+      "tap_ms": 1
+    },
+    "ev_b": {
+      "node": 38,
+      "hit": 38,
+      "fired": [
+        38
+      ],
+      "errors": [],
+      "before": {
+        "height": 56,
+        "width": 180,
+        "x": 0,
+        "y": 992
+      },
+      "after": {
+        "height": 56,
+        "width": 210,
+        "x": 0,
+        "y": 992
+      },
+      "width_delta": 30,
+      "patches": 1,
+      "applied": 1,
+      "changed_rects": 36,
+      "text_layers": 0,
+      "driver_ms": 0
+    },
+    "ev_match": true,
+    "ev_before_delta": 0,
+    "ev_after_delta": 0,
     "upd_rounds": 2,
     "upd_a": [
       {
@@ -49,7 +144,7 @@
         "apply_ms": 1,
         "changed_rects": 25,
         "relayout": 25,
-        "layout_ms": 0.163,
+        "layout_ms": 0.162,
         "text_synced": 1,
         "moved": 20
       },
@@ -60,7 +155,7 @@
         "apply_ms": 0,
         "changed_rects": 25,
         "relayout": 25,
-        "layout_ms": 0.03,
+        "layout_ms": 0.028,
         "text_synced": 1,
         "moved": 28
       }
@@ -75,7 +170,7 @@
         "host_ms": 0,
         "text_layers": 1,
         "moved": 20,
-        "driver_ms": 1
+        "driver_ms": 0
       },
       {
         "round": 1,
@@ -83,7 +178,7 @@
         "applied": 3,
         "changed_rects": 36,
         "relayout": 36,
-        "host_ms": 1,
+        "host_ms": 0,
         "text_layers": 1,
         "moved": 28,
         "driver_ms": 0
@@ -115,8 +210,9 @@
       "A 明细: 0<-[width,height,flexDirection…] 1<0[fontSize,color,margin]{Vapor} 2<0[height,margin,borderRadius…] 3<0[height,margin,fillGradient] 4<0[height,margin,backgroundColor…] 5<0[height,margin,backgroundColor…] 6<0[height,margin,backgroundColor…] 7<0[height,margin,backgroundColor] 8<7[fontSize,color,width]{row 1} 11<0[height,margin,backgroundColor] 12<11[fontSize,color,width]{row 2} 13<0[height,margin,backgroundColor] 14<13[fontSize,color,width]{row 3} 15<0[height,margin,backgroundColor] 16<15[fontSize,color,width]{row 4} 17<0[height,margin,backgroundColor] 18<17[fontSize,color,width]{row 5} 19<0[height,margin,backgroundColor] 20<19[fontSize,color,width]{row 6} 21<0[height,margin,backgroundColor] 22<21[fontSize,color,width]{row 7} 23<0[height,margin,backgroundColor] 24<23[fontSize,color,width]{row 8} 9<0[height,margin,backgroundColor] 10<0[height,margin,backgroundColor]",
       "B 明细: 1<-[paintHint] 2<1[paintHint] 3<2[width,height,flexDirection…] 4<3[margin,color,fontSize…] 5<4[fontSize,fontWeight,fontFamily…]{Vapor} 6<3[height,margin,backgroundColor…] 7<3[height,margin,fillGradient…] 8<3[height,margin,glow…] 9<3[height,margin,clipPath…] 10<3[height,margin,svgPath…] 11<3[paintHint] 13<3[height,margin,backgroundColor…] 14<13[width,color,fontSize…] 15<14[fontSize,fontWeight,fontFamily…]{row 1} 16<3[height,margin,backgroundColor…] 17<16[width,color,fontSize…] 18<17[fontSize,fontWeight,fontFamily…]{row 2} 19<3[height,margin,backgroundColor…] 20<19[width,color,fontSize…] 21<20[fontSize,fontWeight,fontFamily…]{row 3} 22<3[height,margin,backgroundColor…] 23<22[width,color,fontSize…] 24<23[fontSize,fontWeight,fontFamily…]{row 4} 25<3[height,margin,backgroundColor…] 26<25[width,color,fontSize…] 27<26[fontSize,fontWeight,fontFamily…]{row 5} 28<3[height,margin,backgroundColor…] 29<28[width,color,fontSize…] 30<29[fontSize,fontWeight,fontFamily…]{row 6} 31<3[height,margin,backgroundColor…] 32<31[width,color,fontSize…] 33<32[fontSize,fontWeight,fontFamily…]{row 7} 34<3[height,margin,backgroundColor…] 35<34[width,color,fontSize…] 36<35[fontSize,fontWeight,fontFamily…]{row 8} 12<3[paintHint] 37<3[height,margin,backgroundColor…] 38<3[width,height,margin…]",
       "★节点数不同：A=25 · B=38（树规模就不一致——先看这个）",
-      "A 路 17.0ms（实例化 1 + 宿主 16）",
-      "B 路 15.0ms（Vue mount 0 + 请求 1 + 序列化 0 + 宿主 14）"
+      "事件路径：A 命中 10 · 宽 180→210（指令 45B \/ applied 1）；B 命中 38 · 宽 180→210（补丁 1 \/ applied 1）",
+      "A 路 19.0ms（实例化 0 + 宿主 19）",
+      "B 路 15.0ms（Vue mount 1 + 请求 0 + 序列化 0 + 宿主 14）"
     ]
   },
   "ok": true
