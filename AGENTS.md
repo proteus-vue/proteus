@@ -56,11 +56,24 @@
           "args": ["${ZCODE_PROJECT_DIR}/scripts/hooks/deny-blind-verify.mjs"], "timeoutMs": 9000 } ] } ] } } }
     ```
     ★**三个 hook 是一个整体**（sleep 盲等 / 全量测试重复跑 / 全量门禁链重复跑）——
-      只装第一个等于三条红线只落实一条（本仓实测过：`deny-blind-tests` 在别人的机器上缺失时，
+      只装第一个等于三条红线只落实一条（本仓实测过：`deny-blind-tests` 在别的机器上缺失时，
       「全量跑三遍」那类浪费照样发生）。
-- 自测：
-  `printf '%s' '{"tool_name":"Bash","tool_input":{"command":"sleep 1"}}' | node scripts/hooks/deny-sleep.mjs` → deny；
+- ★★★**输出契约：`exit 2` + stderr（2026-10-02 修复——5 天静默失效的根因）**：
+  本仓三条 hook 原用 Claude 式**扁平** stdout JSON（`{hookEventName, permissionDecision}` 在顶层）；
+  而 ZCode 客户端 schema 是**嵌套严格校验**（`hookSpecificOutput.hookEventName/...`，多余顶层键
+  ⇒ `Hook stdout failed schema validation`）⇒ 失败被记为 `hook.run.failed`、deny 被**丢弃**。
+  实测：09-27 立 hook 至 10-02，**每一次运行都失败（零成功）**；用户当场点名「钩子就是拦不住、
+  你还连做了三次 sleep」——三次全跑掉了。现改用**官方退出码通道**（`exit 2` = block，
+  **不经 JSON schema** ⇒ 抗格式漂移；0 = 放行）。
+  ★教训：**自测必须对准消费方的契约**——旧自测只看"脚本自己 stdout 有 deny"就宣布拦住了，
+  而客户端读的是另一套格式；自测通过 ≠ 契约成立。
+- 自测（**必须看退出码，不是看输出文本**——`exit 2` 才是拦截成功）：
+  `printf '%s' '{"tool_name":"Bash","tool_input":{"command":"sleep 1"}}' | node scripts/hooks/deny-sleep.mjs; echo "rc=$?"` → **rc=2**（拦截）；
+  `printf '%s' '{"tool_name":"Bash","tool_input":{"command":"echo hi"}}' | node scripts/hooks/deny-sleep.mjs` → rc=0（放行）；
   `node scripts/check-no-blind-wait.mjs` → 绿（存量已钉）；往任意 `.sh` 注入一行 `sleep 1` → 当场红。
+- ★**hooks 是否真的在跑，看客户端日志**（`~/.zcode/cli/log/zcode-<date>.jsonl`，`grep core.hooks`）：
+  全部 `hook.run.failed` = 输出契约/启动失败（deny 无效）；正常形态应出现 `hook.run.blocked` / `hook.run.completed`。
+  这是"hook 接线了但静默失效"的唯一可靠判据——`check:hook-wiring` 只能证明**配置在**，不能证明**运行成功**。
 - 部署/线上核验：跑一次 `pnpm check:live`（仓库自带 `website/scripts/verify-live.mjs`，带 CDN 传播重试）。
   **无法机器判定时（等 CI 队列等）**：直接告诉用户「已触发，请刷新查看」——用户目视验收比 AI 轮询快。
   （用户原话：「等你验证还不如我直接去看」「不用验证了，已经生效了」——已发生 3 次，记牢。）
@@ -75,8 +88,8 @@
 - **拦**：`npx vitest run`（无文件/名称过滤）与 `pnpm test`（无参数）**且 git 指纹与上次全量相同**。
 - **放行**：① 定向跑（带 `tests/xxx.test.ts` 路径）② `--changed` / `-t <名称>` 等过滤
   ③ 代码变了（指纹变 ⇒ 自动放行一次并记账）④ 显式表态 `PROTEUS_ALLOW_FULL_SUITE=1 pnpm test`。
-- 自测：`PROTEUS_TEST_HOOK_STATE=/tmp/h.json printf '%s' '{"tool_name":"Bash","tool_input":{"command":"npx vitest run"},"cwd":"'"$PWD"'"}' | node scripts/hooks/deny-blind-tests.mjs`
-  （先跑一次放行并记账，再跑一次应输出 `permissionDecision: deny`）。
+- 自测（**看退出码**）：`PROTEUS_TEST_HOOK_STATE=/tmp/h.json` 先喂一条 `npx vitest run`（rc=0 放行并记账），
+  再喂同一条（应 **rc=2** = deny；输出理由在 stderr）。★`exit 2` 是 2026-10-02 起的唯一拦截通道（见上方输出契约）。
 - 另注：`pnpm test` 只跑非 e2e（`--exclude "tests/e2e-*.test.ts"`）；e2e 有专用入口
   （`test:e2e:web` / `test:e2e:showcase`），**跑它们前必须先建对应产物**——直接裸跑 vitest
   会环境性红（实测 124 条假失败），白等几百秒。
@@ -96,15 +109,15 @@
 - **放行**：① 代码变了（指纹变 ⇒ 自动放行一次并记账）② 显式表态 `PROTEUS_ALLOW_VERIFY=1 pnpm verify`。
 - **★被拒时会给出"按改动文件推导的定向门禁"**——设计意图：让"正确的做法"变顺手，
   否则被拦的人会加 `PROTEUS_ALLOW_VERIFY=1` 硬跑，门禁等于没做。
-- 自测（六条用例，改 hook 后必跑）：
+- 自测（六条用例，改 hook 后必跑；**判据看退出码**——`exit 2`=拦截（deny），`exit 0`=放行）：
   ```bash
   S=/tmp/vh.json; rm -f $S
-  P() { printf '%s' "$1" | PROTEUS_VERIFY_HOOK_STATE=$S node scripts/hooks/deny-blind-verify.mjs; }
-  P '{"tool_name":"Bash","tool_input":{"command":"pnpm verify"},"cwd":"'"$PWD"'"}'   # ① 首次 → 放行
-  P '{"tool_name":"Bash","tool_input":{"command":"pnpm verify"},"cwd":"'"$PWD"'"}'   # ② 同状态 → deny
-  P '{"tool_name":"Bash","tool_input":{"command":"pnpm run verify"},"cwd":"'"$PWD"'"}' # ③ 别名 → deny
-  P '{"tool_name":"Bash","tool_input":{"command":"PROTEUS_ALLOW_VERIFY=1 pnpm verify"},"cwd":"'"$PWD"'"}' # ④ 表态 → 放行
-  P '{"tool_name":"Bash","tool_input":{"command":"pnpm run check:gates-sync"},"cwd":"'"$PWD"'"}'  # ⑤ 无关 → 放行
+  P() { printf '%s' "$1" | PROTEUS_VERIFY_HOOK_STATE=$S node scripts/hooks/deny-blind-verify.mjs; echo "rc=$?"; }
+  P '{"tool_name":"Bash","tool_input":{"command":"pnpm verify"},"cwd":"'"$PWD"'"}'   # ① 首次 → rc=0 放行
+  P '{"tool_name":"Bash","tool_input":{"command":"pnpm verify"},"cwd":"'"$PWD"'"}'   # ② 同状态 → rc=2 deny
+  P '{"tool_name":"Bash","tool_input":{"command":"pnpm run verify"},"cwd":"'"$PWD"'"}' # ③ 别名 → rc=2 deny
+  P '{"tool_name":"Bash","tool_input":{"command":"PROTEUS_ALLOW_VERIFY=1 pnpm verify"},"cwd":"'"$PWD"'"}' # ④ 表态 → rc=0
+  P '{"tool_name":"Bash","tool_input":{"command":"pnpm run check:gates-sync"},"cwd":"'"$PWD"'"}'  # ⑤ 无关 → rc=0
   ```
 - **★纪律（比拦截更重要）**：
   1. **改了哪块就跑哪块的门禁**（`pnpm check:<对应的>` / 定向 vitest）——全链只在**一轮工作收尾**跑一次；
