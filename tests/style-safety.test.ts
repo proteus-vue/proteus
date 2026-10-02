@@ -65,9 +65,13 @@ describe('validateProp（06 §2：①白名单 ②类型守卫 ③平台收窄�
     expect(sky.value).toBe(20) // 非 web 归一为数值
   })
 
-  it('zIndex 必须整数', () => {
-    expect(validateProp('zIndex', 10, 'web').valid).toBe(true)
-    expect(validateProp('zIndex', 10.5, 'web').valid).toBe(false)
+  it('★★zIndex 是 FORBIDDEN（LY0/LY1 层级语义化：禁裸数值 ⇒ 用 layer 属性）', () => {
+    // 2026-10-02 行为变更（依《页面层级规范》§3.1/§3.5）：zIndex 从"可直映射(Integer)"
+    // 改为"禁止"——替代物是 `layer="content|navigation|mask|popout"` 四层语义
+    // （contracts/layers.ts 的跨端映射表；理由：数值无跨端意义 + 任意数值是收敛逃生口）。
+    const r = validateProp('zIndex', 10, 'web')
+    expect(r.valid).toBe(false)
+    expect(r.reason).toMatch(/STS004|已禁用/)
   })
 })
 

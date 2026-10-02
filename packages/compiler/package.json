@@ -17,6 +17,11 @@
       "import": "./dist/style-safety/index.js",
       "default": "./dist/style-safety/index.js"
     },
+    "./layer-safety": {
+      "types": "./dist/layer-safety.d.ts",
+      "import": "./dist/layer-safety.js",
+      "default": "./dist/layer-safety.js"
+    },
     "./package.json": "./package.json"
   },
   "files": [
@@ -24,7 +29,7 @@
     "README.md"
   ],
   "scripts": {
-    "build": "tsc -p tsconfig.build.json --emitDeclarationOnly && esbuild src/index.ts src/style-safety/index.ts --bundle --format=esm --platform=node --outdir=dist --external:@vue/compiler-sfc --external:@vue/compiler-dom --external:@proteus-vue/contracts --external:@proteus-vue/component-ir --external:@babel/core --external:@babel/plugin-transform-nullish-coalescing-operator --external:@babel/plugin-transform-optional-chaining --external:@babel/plugin-transform-logical-assignment-operators --external:@babel/plugin-transform-object-rest-spread"
+    "build": "tsc -p tsconfig.build.json --emitDeclarationOnly && esbuild src/index.ts src/style-safety/index.ts src/layer-safety.ts --bundle --format=esm --platform=node --outdir=dist --external:@vue/compiler-sfc --external:@vue/compiler-dom --external:@proteus-vue/contracts --external:@proteus-vue/component-ir --external:@babel/core --external:@babel/plugin-transform-nullish-coalescing-operator --external:@babel/plugin-transform-optional-chaining --external:@babel/plugin-transform-logical-assignment-operators --external:@babel/plugin-transform-object-rest-spread"
   },
   "peerDependencies": {
     "@vue/compiler-dom": "^3.4",

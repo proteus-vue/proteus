@@ -25,8 +25,10 @@ describe('validateStyleValue 单值校验', () => {
     expect(validateStyleValue('opacity', 0.5).ok).toBe(true)
     expect(validateStyleValue('opacity', 1.5).ok).toBe(false)
     expect(validateStyleValue('opacity', 1.5)).toMatchObject({ ok: false, fallback: 1 })
-    expect(validateStyleValue('zIndex', 10).ok).toBe(true)
-    expect(validateStyleValue('zIndex', Number.POSITIVE_INFINITY).ok).toBe(false)
+    // ★★zIndex 现为禁止属性（LY0/LY1 层级语义化，2026-10-02）：任何值都拒绝 →
+    //   替代物 = layer 属性（WeUI 四层语义；contracts/layers.ts 的映射表）。
+    expect(validateStyleValue('zIndex', 10).ok).toBe(false)
+    expect(validateStyleValue('zIndex', 10)).toMatchObject({ ok: false })
     expect(validateStyleValue('color', '#fff').ok).toBe(true)
     expect(validateStyleValue('color', 123).ok).toBe(false)
     expect(validateStyleValue('transform', 'translateX(10px)').ok).toBe(true)

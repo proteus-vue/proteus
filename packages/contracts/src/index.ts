@@ -10,3 +10,5 @@ export * from './store'
 export * from './capability'
 export * from './style'
 export * from './backend'
+// ★LY0（2026-10-02）：页面层级契约（四层语义模型 + 跨端映射表——单一来源）
+export * from './layers'
