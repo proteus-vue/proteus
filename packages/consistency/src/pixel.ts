@@ -397,6 +397,11 @@ export interface AnchorNormalizeSpec {
    * 锚块是 ≥100px 实心矩形 ⇒ 该过滤零误伤（伪影 1px 宽必被滤掉）。
    */
   minRun?: number
+  /**
+   * ★亚像素边缘定标（默认 true；见 `refineEdges` 注释）。
+   *   仅用于对照/回归（明确要整数 bbox 旧行为）时置 false。
+   */
+  subpixel?: boolean
   /** 输出图尺寸（全部端统一——跨端逐像素比较的前提） */
   outSize: { w: number; h: number }
   /** 输出图中锚点块的**目标矩形**：`w` 定标（输出像素宽）、`x/y` 定位（锚块左上角应落在此处） */
@@ -405,8 +410,14 @@ export interface AnchorNormalizeSpec {
 
 export interface AnchorNormalizeResult {
   img: RgbaImage
-  /** 源图中实测的锚点块 bbox（诊断/报告用） */
+  /** 源图中实测的锚点块 bbox（**整数**；诊断语义——定标实际用 `edges`） */
   block: { x: number; y: number; w: number; h: number }
+  /**
+   * ★亚像素边缘（l/t/r/b，图像坐标）——**定标与窗口定位的真实来源**。
+   *   整数 bbox 对**分数倍率**端（微信模拟器 1.64032× 实测）误差 0.94%，
+   *   会把整幅拉伸成假差异（见 `anchorNormalize` 内注释）。
+   */
+  edges: { l: number; t: number; r: number; b: number }
   /** 缩放系数（输出像素 / 源像素） */
   scale: number
   /** 源窗口（诊断用） */
@@ -474,12 +485,23 @@ export function anchorNormalize(src: RgbaImage, spec: AnchorNormalizeSpec): Anch
     if (s.y > y1) y1 = s.y
   }
   const block = { x: x0, y: y0, w: x1 - x0 + 1, h: y1 - y0 + 1 }
+  // ★★亚像素边缘（2026-10-02 · 独立审计抓出的工具缺陷修复）：
+  //   整数 bbox 的宽度是**离散步长**的——对**分数倍率**端（微信模拟器实测 1.64032×，
+  //   = DPR2 × devtools fit 缩放 0.8205）误差达 **0.94%**：130px 的整数 bbox 定出 1.625×，
+  //   整幅被拉伸 0.94% ⇒ 底部累计漂移 ~7.6 逻辑 px ⇒ MP 相关三对被**假报为 5.2~5.6%**
+  //   （真实值 1.4~2.0%；独立审计用尺度扫描复现了这个假差）。
+  //   ⇒ 定标与窗口定位改用 **50% 覆盖率过零** 的亚像素边缘（`subpixelEdges`）；
+  //     整数 bbox 保留在 `block` 字段（诊断语义不变）。
+  const edges =
+    spec.subpixel === false
+      ? { l: x0, t: y0, r: x1 + 1, b: y1 + 1 }
+      : refineEdges(src, { x0, y0, x1, y1 }, [pr, pg, pb])
   // 定标：输出像素 / 源像素（用锚块宽度——宽度比高度对边缘 AA 更稳健，块是长边横块）
-  const s = spec.blockTarget.w / block.w
+  const s = spec.blockTarget.w / (edges.r - edges.l)
   const winW = Math.round(spec.outSize.w / s)
   const winH = Math.round(spec.outSize.h / s)
-  const winX = Math.round(block.x - spec.blockTarget.x / s)
-  const winY = Math.round(block.y - spec.blockTarget.y / s)
+  const winX = Math.round(edges.l - spec.blockTarget.x / s)
+  const winY = Math.round(edges.t - spec.blockTarget.y / s)
   if (winX < 0 || winY < 0 || winX + winW > src.width || winY + winH > src.height) {
     throw new Error(
       `anchorNormalize: 归一窗口越界（源 ${src.width}x${src.height}；窗口 ${winX},${winY},${winW},${winH}）` +
@@ -489,7 +511,98 @@ export function anchorNormalize(src: RgbaImage, spec: AnchorNormalizeSpec): Anch
   const srcWindow: ImageRoi = { x: winX, y: winY, w: winW, h: winH }
   const cropped = cropImage(src, srcWindow)
   const img = resampleTo(cropped, spec.outSize.w, spec.outSize.h)
-  return { img, block, scale: s, srcWindow }
+  return { img, block, edges, scale: s, srcWindow }
+}
+
+/**
+ * 亚像素边缘细化（**50% 覆盖率过零**）——`anchorNormalize` 的定标来源。
+ *
+ * 【原理】每个像素相对"背景→锚色"色轴的投影覆盖率 α ∈ [0,1] 近似其被锚块覆盖的面积比。
+ *   沿扫描线从背景侧走向前景侧，取 α 首次达 0.5 的位置——在 α=0 与 α=1 两像素的**中心**
+ *   之间线性插值。像素 i 的中心取 `i + 0.5`（像素覆盖 [i, i+1) 区间）——
+ *   ★这个 +0.5 是正确性的关键：硬边（像素 30 全覆、29 全不覆）的真实边缘在 x=30.0，
+ *   按中心插值恰得 30.0（按整数索引插值会得 29.5，系统性偏 0.5px）。
+ *
+ * 【扫描线位置】取 bbox 中线（锚块是圆角矩形，中线处边缘平直；角落处有圆弧不宜采样）。
+ *
+ * 【稳健性】任一边找不到过零点 / 细化后尺寸与整数 bbox 偏离 >25% ⇒ 该轴回退整数边
+ *   （不猜、不静默产出可疑定标）。
+ */
+function refineEdges(
+  src: RgbaImage,
+  b: { x0: number; y0: number; x1: number; y1: number },
+  fg: [number, number, number],
+): { l: number; t: number; r: number; b: number } {
+  const midY = Math.min(src.height - 1, Math.max(0, Math.round((b.y0 + b.y1) / 2)))
+  const midX = Math.min(src.width - 1, Math.max(0, Math.round((b.x0 + b.x1) / 2)))
+  let l = b.x0
+  let r = b.x1 + 1
+  let t = b.y0
+  let bb = b.y1 + 1
+  const w0 = b.x1 - b.x0 + 1
+  const h0 = b.y1 - b.y0 + 1
+  const Lv = crossing(src, midY, b.x0 - 4, b.x0 + 3, true, fg)
+  const Rv = crossing(src, midY, b.x1 + 4, b.x1 - 3, true, fg)
+  if (Lv != null && Rv != null && Rv - Lv > w0 * 0.75 && Rv - Lv < w0 * 1.25) {
+    l = Lv
+    r = Rv
+  }
+  const Tv = crossing(src, midX, b.y0 - 4, b.y0 + 3, false, fg)
+  const Bv = crossing(src, midX, b.y1 + 4, b.y1 - 3, false, fg)
+  if (Tv != null && Bv != null && Bv - Tv > h0 * 0.75 && Bv - Tv < h0 * 1.25) {
+    t = Tv
+    bb = Bv
+  }
+  return { l, t, r, b: bb }
+}
+
+/** 单条扫描线的 50% 覆盖率过零（方向：from → to；返回图像坐标） */
+function crossing(
+  src: RgbaImage,
+  fixed: number,
+  fromIn: number,
+  toIn: number,
+  horizontal: boolean,
+  fg: [number, number, number],
+): number | null {
+  const limit = horizontal ? src.width : src.height
+  const from = Math.max(0, Math.min(limit - 1, fromIn))
+  const to = Math.max(0, Math.min(limit - 1, toIn))
+  const step = from <= to ? 1 : -1
+  const at = (i: number): [number, number, number] => {
+    const x = horizontal ? i : fixed
+    const y = horizontal ? fixed : i
+    const k = (y * src.width + x) * 4
+    return [src.rgba[k]!, src.rgba[k + 1]!, src.rgba[k + 2]!]
+  }
+  // 背景参考：起点侧 3 像素均值（从"确定在背景里"的位置取——调用方保证 from 在块外 4px）
+  const b0 = at(from)
+  const b1 = at(Math.max(0, Math.min(limit - 1, from + step)))
+  const b2 = at(Math.max(0, Math.min(limit - 1, from + 2 * step)))
+  const bg: [number, number, number] = [(b0[0] + b1[0] + b2[0]) / 3, (b0[1] + b1[1] + b2[1]) / 3, (b0[2] + b1[2] + b2[2]) / 3]
+  const dr = fg[0] - bg[0]
+  const dg = fg[1] - bg[1]
+  const db = fg[2] - bg[2]
+  const den = dr * dr + dg * dg + db * db
+  if (den < 1) return null // 背景与锚色几乎同色 ⇒ 无法定义覆盖率（调用方回退整数边）
+  const coverage = (p: [number, number, number]): number => {
+    const a = ((p[0] - bg[0]) * dr + (p[1] - bg[1]) * dg + (p[2] - bg[2]) * db) / den
+    return Math.max(0, Math.min(1, a))
+  }
+  let prevPos = -1
+  let prevA = -1
+  for (let i = from; step > 0 ? i <= to : i >= to; i += step) {
+    const a = coverage(at(i))
+    const pos = i + 0.5 // 像素中心（见函数头注：+0.5 是正确性的关键）
+    if (a >= 0.5) {
+      if (prevPos < 0) return null // 起点已在前景内（异常形态）⇒ 回退
+      const t2 = (0.5 - prevA) / (a - prevA)
+      return prevPos + (pos - prevPos) * t2
+    }
+    prevPos = pos
+    prevA = a
+  }
+  return null // 未见过零 ⇒ 回退
 }
 
 /* ══════════════════ 观测（非门禁） ══════════════════ */
@@ -784,9 +897,11 @@ export interface EndNormRecord {
   srcSize: { width: number; height: number }
   /** PNG 内嵌色彩空间（'undeclared' = 未声明；'display-p3' 已在比较前转 sRGB） */
   colorSpace: string
-  /** 源图中实测的锚块 bbox */
+  /** 源图中实测的锚块 bbox（整数） */
   block: { x: number; y: number; w: number; h: number }
-  /** 缩放系数（归一输出 / 源像素） */
+  /** ★亚像素边缘（可选——定标实际来源，见 `AnchorNormalizeResult.edges`） */
+  edges?: { l: number; t: number; r: number; b: number }
+  /** 缩放系数（归一输出 / 源像素；由亚像素边缘算出） */
   scale: number
 }
 
