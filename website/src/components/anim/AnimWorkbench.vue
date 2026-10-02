@@ -215,7 +215,7 @@ onUnmounted(() => runner?.stop())
       </div>
 
       <div class="wb-group">
-        <button class="wb-run" @click="play()">▶ 重新播放（三个宿主同时）</button>
+        <button class="wb-run" @click="play()">重新播放（三个宿主同时）</button>
         <button class="wb-gate" @click="provokeGate()">试试改布局属性（width）</button>
       </div>
 

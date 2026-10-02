@@ -86,6 +86,11 @@
       "@proteus-vue/render-backend/host-conformance": ["packages/render-backend/src/host-conformance.ts"],
       "@proteus-vue/style-safety": ["packages/style-safety/src/index.ts"],
       "@proteus-vue/types": ["packages/types/src/index.ts"],
+      // ★2026-10-02 补：@proteus-vue/consistency（L4 一致性工具包）——tests/consistency-*.test.ts 走包名
+      //   导入，缺本行根 vue-tsc 报 TS2307（同 2026-09-12 的 component-ir / render-backend 先例；
+      //   vitest.config.ts 的 alias 早已有该包，缺的是类型路径 ⇒ 单测能过而类型门禁红）。
+      "@proteus-vue/consistency": ["packages/consistency/src/index.ts"],
+      "@proteus-vue/consistency/probes/web": ["packages/consistency/src/probes/web.ts"],
       // ★组件库拆包（2026-09-14）：@proteus-vue/components 为真实包——补 paths 供仓库内类型检查解析包根
       "@proteus-vue/components": ["packages/components/index.ts"],
       "@proteus-vue/components/*": ["packages/components/*"]

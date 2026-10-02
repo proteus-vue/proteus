@@ -208,10 +208,12 @@ final class L4ViewController: UIViewController {
         let report: [String: Any] = [
             "ok": true,
             "path": "l4-scene",
+            // I2-ALLOW: 报告读数取整（几何真值走内核指令流；此为 l4-scene.json 报告口径）
             "screen": [Int(b.width.rounded()), Int(b.height.rounded())],
             "scale": UIScreen.main.scale,
             "unit": L4Spec.u,
             "shot": shotOK ? "l4-scene.png" : "FAILED",
+            // I2-ALLOW: 报告读数取整（同上——夹具设计坐标，供跨端核对）
             "block": [
                 "x": Int((L4Spec.padX * L4Spec.u).rounded()),
                 "y": Int((L4Spec.padTop * L4Spec.u).rounded()),

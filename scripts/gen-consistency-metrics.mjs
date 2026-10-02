@@ -241,8 +241,9 @@ async function runMutationTests() {
     const obsSelf = pixelObservation(web, web)            // 对照组：自身 ⇒ 必须 identical（字节全等）
     const obsMut = pixelObservation(web, mutated)
     // ★检出判据（**实测定的口径**，不是"必须 changed"——见下）：
-    //   圆角缺失的最大可注入信号 ≈ 455px（r≈23 时四角弧外面积 4·r²(1−π/4)）
-    //   ——只占整屏 0.05%，**天然低于 0.5% 全局噪声带** ⇒ 本场景 verdict 恒为 noise-level。
+    //   圆角缺失的可注入信号 ≈ 537px（r=20 注入块四角；★该值随样本变化——2026-10-02
+    //   阴影修复轮重采样 l4.webview 后由 430 变为 537，基线已随样本同步重生成）
+    //   ——只占整屏 0.06%，**天然低于 0.5% 全局噪声带** ⇒ 本场景 verdict 恒为 noise-level。
     //   ⇒ L4 对这类缺陷的价值形态是**定位**（报告 diffPixels>0 且差异块落在注入区域），
     //     不是全局判定；圆角缺失的"通过/失败"结论由 L1/L3 的 borderRadius 数值承担。
     //   判据 = 对照组 identical ∧（注入后逐字节已不同 ∧ 差异块出现在注入的四角范围内）。

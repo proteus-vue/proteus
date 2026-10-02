@@ -178,6 +178,8 @@ public class L4Activity extends Activity {
                     o.put("density", getResources().getDisplayMetrics().density);
                     o.put("screen", new org.json.JSONArray(new int[]{sz.x, sz.y}));
                     o.put("view_origin", new org.json.JSONArray(new int[]{loc[0], loc[1]}));
+                    // I2-ALLOW: 报告字段取整（写进 l4-scene.json 供跨端核对的读数——
+                    //   几何真值走内核指令流；此处的 block 坐标仅为人/脚本读取的报告口径）
                     o.put("block", new org.json.JSONArray(new int[]{
                             Math.round(x), Math.round(PAD_TOP * U), Math.round(bw), Math.round(bh)}));
                     o.put("chrome", "none（Theme.NoTitleBar.Fullscreen + onCreate 沉浸式——取景与其它四端对齐）");

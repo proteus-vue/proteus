@@ -458,8 +458,11 @@ describe('★VC8-b · 结构化失败报告 + AI 自纠闭环', () => {
     }
     const rep = buildStyleReport(compareStyle(base, cand, { tolerance: projTolerance }))
     expect(rep.kind).toBe('style')
+    // ★字段名以 ReportDiffEntry 为准 = `toleranceClass`（report.ts 由 StyleDiff.class 映射而来；
+    //   2026-10-02 修：此前写 `d.class ?? d.toleranceClass` —— `class` 不在类型里，根 vue-tsc 报 TS2339
+    //   （该错误长期未被触达：verify 链在更早的测试段就红，类型段从没跑到）
     const d = rep.diffs.find((x) => x.property === 'backgroundColor')!
-    expect(d.class ?? d.toleranceClass).toBe('color')
+    expect(d.toleranceClass).toBe('color')
     expect(d.expected).toEqual({ r: 46, g: 111, b: 237, a: 1 })
     expect(rep.autoFixes[0]!.to).toEqual({ r: 46, g: 111, b: 237, a: 1 })
   })
