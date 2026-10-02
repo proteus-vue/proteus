@@ -87,6 +87,7 @@ for a in "$@"; do
     --host-runtime) MODE="host-runtime" ;;
     --app-stack) MODE="app-stack" ;;
     --showcase) MODE="showcase" ;;
+    --native-mix) MODE="native-mix" ;;
     --cases=*) CASE_FILTER="${a#--cases=}" ;;
     *) [ -z "$UDID" ] && UDID="$a" ;;
   esac
@@ -294,6 +295,7 @@ if [ "$MODE" = "bench" ]; then REPORT_FILE="logic-bench-report.json"; SNAP_FILE=
 #   设备上是**独立 app**（dev.proteus.layoutcore 的 Morpheus 包——见下方 BUNDLE_ID 处理），
 #   与既有 selfdraw/bench 场景同一宿主二进制、不同场景参数。
 if [ "$MODE" = "stress" ]; then REPORT_FILE="stress-sfc.json"; SNAP_FILE="stress-sfc.png"; fi
+if [ "$MODE" = "native-mix" ]; then REPORT_FILE="native-mix.json"; SNAP_FILE="native-mix.png"; fi
 # ★G-39：宿主运行时模式写独立报告（不污染既有产物命名）
 if [ "$MODE" = "host-runtime" ]; then REPORT_FILE="host-runtime.json"; SNAP_FILE="host-shell.json"; fi
 # ★M5：执行器场景两份报告（主 + 执行器；判据合并读）
@@ -442,6 +444,11 @@ elif [ "$MODE" = "stress" ]; then
   xcrun devicectl device process launch --console --terminate-existing \
     --environment-variables '{"PROTEUS_EXIT_AFTER_REPORT":"1"}' \
     --device "$UDID" "$BUNDLE_ID" --stress > "$LAUNCH_LOG" 2>&1 || LAUNCH_RC=$?
+elif [ "$MODE" = "native-mix" ]; then
+  # ★★矩阵 #10：原生组件混用（自绘 + 原生 UIView 共存）——一次挂载 + 建原生视图 + 采样 + 截图 → 自退。
+  xcrun devicectl device process launch --console --terminate-existing \
+    --environment-variables '{"PROTEUS_EXIT_AFTER_REPORT":"1"}' \
+    --device "$UDID" "$BUNDLE_ID" --native-mix > "$LAUNCH_LOG" 2>&1 || LAUNCH_RC=$?
 else
   # ★自绘模式**显式传参**：从桌面点开（无参数）走 Info.plist 的缺省场景 = showcase，
   #   而脚本要的是自绘 ⇒ 必须显式声明（否则脚本跑起来的是演示）
@@ -514,10 +521,11 @@ print('ok' if d.get('build_id')=='$BUILD_ID' else 'build_id 不符：报告=%r �
     echo "✗ ${BID_OK}——设备上跑的不是本次构建；不等待，直接失败"
     exit 7
   fi
-elif [ "$MODE" = "app-stack" ]; then
+elif [ "$MODE" = "app-stack" ] || [ "$MODE" = "native-mix" ]; then
   # ★M5：app-stack 报告是 `__proteusAppStackRun` 的**原样输出**（无 build_id 字段——它不是
   #   编译期注入的 bundle，而是纯逻辑读数）⇒ build_id 断言不适用；新鲜度由 run_ts 断言兜底。
-  echo "    （app-stack 模式：跳过 build_id 断言——报告无该字段；run_ts 新鲜度已断言）"
+  # ★矩阵 #10：native-mix 报告由 Swift 侧组装（含 run_ts；无 bundle 注入的 build_id）——同处理。
+  echo "    （$MODE 模式：跳过 build_id 断言——报告无该字段；run_ts 新鲜度已断言）"
 else
   BID_MSG="$(node "$HERE/lib/check-report-build-id.mjs" "$HERE/results/$REPORT_FILE" "$BUILD_ID" 2>&1)"; BID_RC=$?
   if [ "$BID_RC" != "0" ]; then
@@ -592,6 +600,12 @@ if [ "$MODE" = "showcase" ]; then
   exit $?
 fi
 
+# ★★矩阵 #10：原生组件混用——跑判据（三件事：位置由核心决定 / 原生真渲染 / z-order 实测）
+if [ "$MODE" = "native-mix" ]; then
+  # ★判据放**截图取回之后**跑（见下方 ⑩ 段——先设标记；不在此 exit，否则截图步骤被跳过）
+  NATIVE_MIX_CHECK=1
+fi
+
 # ★★M5：执行器模式——取第二份报告（执行器结果）+ 跑**同一份**判据（与 Android 侧共用）
 if [ "$MODE" = "app-stack" ]; then
   EXEC_REPORT="app-stack-executor.json"
@@ -615,6 +629,11 @@ if xcrun devicectl device copy from --device "$UDID" --domain-type appDataContai
   echo "    截图：$HERE/results/$SNAP_FILE"
 else
   echo "    （无截图：$SNAP_FILE —— bench 模式属正常）"
+fi
+if [ "${NATIVE_MIX_CHECK:-0}" = "1" ]; then
+  echo "==> ⑩ 判据（scripts/check-native-mix-ios.mjs）"
+  node "$ROOT/scripts/check-native-mix-ios.mjs" "$HERE/results/$REPORT_FILE"
+  exit $?
 fi
 echo "    报告：$HERE/results/$REPORT_FILE"
 [ -f "$HERE/results/$REPORT_FILE" ] && python3 -c "

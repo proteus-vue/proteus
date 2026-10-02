@@ -87,6 +87,38 @@ check-consistency-snapshot 七段全绿 · check:no-blind-wait ✅（新 .sh 零
 ① L2/L3/L2.5/L2.6 算子用**合成快照**——证明的是"比对引擎敏不敏感"，不是"真机数据一定对"；
 ② L4 算子用真截图但取同端注入（跨端噪声底含 AA，无区分度）；L4 的价值形态是**定位**。
 
+### ★★★2026-10-03（八十四）· 🎉 **三端矩阵全部 22/22**——iOS 补齐 #22（取证核实）+ #10（原生组件混用）
+
+**用户「继续」→ 收尾 iOS 剩余两缺口**（#22 帧统计 ◐ · #10 原生组件混用 ❌）。
+
+**① #22 帧统计：不是"缺"，是矩阵漏记**——取证核实：iOS **RT2 帧率测席早已存在**
+（`CADisplayLink` 逐帧 + `check-anim-rt2.py` E 组判据），实测读数 **59.3 FPS · vsync p50 16.863ms ·
+掉帧率 0（179 帧/3.0s）· 帧耗时 p50 0.661ms / p95 0.787ms**——判据全绿。
+⇒ 矩阵 ◐ → ✅（**如实标注"原标 ◐ 属漏记"**，不掩盖）。
+
+**② #10 原生组件混用：真机实现 + 三判据 PASS**
+· **Swift 侧**：新增 `--native-mix` 场景（`driveNativeMix`）——从**核心回执**读 `native_hosts` 清单 +
+  `native_host_rect`，据此建 UIKit 原生 UIView（红底 + "UIKit Native" 标签）的 frame；
+  同时自绘层渲染**故意与原生重叠**的色块（z-order 靶子）；像素采样 + 截图 + 报告落盘。
+· **JS 侧**：`renderNativeMix()`（六行布局，seq3 = native_host 高 200、seq5 = 绝对定位重叠块）——
+  返回核心真源几何（宿主据此定位，**不自己算坐标**）。
+· **三判据 PASS**：① UIView frame `[0,120,390,200]` == 核心 `native_host_rect` **逐位相同**；
+  ② 原生区采样 `#E53935`；③ 重叠区采样 `#E53935` ⇒ **原生在上**（iOS 子视图在 CALayer 内容之上）。
+· **判据脚本化**：`scripts/check-native-mix-ios.mjs` 接入 `run-selfdraw.sh --native-mix`（一条命令即验）。
+
+**★本轮实测四个坑（全记进代码注释）**
+1. **iOS `mount` 回执不带 `native_hosts`/`rects`** ⇒ JS 侧 `ok:false`——修法：在 `render` 的回执里
+   **透传核心真源**（与 Android `MainActivity` 读 `rectsJson.native_hosts` 同纪律：
+   **IR 判定谁是 native-host 与宿主建 View 同源**；且只在有 host 时带，避免 3500 条几何塞进回执）。
+2. **`samplePixels` 吃裸数组**（不是 `{"points":[...]}`）——读实现确认，不猜。
+3. **方法归属/作用域**：`samplePixels` 在 **bridge** 不在 view 上；`jsonStringList` 在 `SelfDrawBridge`
+   而调用点在 `SelfDrawViewController` ⇒ 内联序列化（不跨类加可见性）。
+4. **脚本挂点**：`build_id` 断言对无 bundle 注入的报告不适用（native-mix 同 app-stack 处理）；
+   判据必须放**截图取回之后**（首版 `exit` 截断了截图步骤）。
+
+**🎉 矩阵终局**：Android **22/22** · iOS **22/22** · 鸿蒙 **22/22**（✅21 + 架构性不适用 1）。
+三端口径统一，全部有真机产物证据。
+
 ### ★★★2026-10-03（八十三）· iOS 补齐 **swipe 四方向**（矩阵 #7）—— 真机 5/5 PASS + 真实触摸链第四分支
 
 **用户「继续」→ iOS 补齐**（鸿蒙已 22/22）。iOS #7 此前是 ◐（tap/longpress 通、swipe/fling 待补）。
@@ -1745,6 +1777,8 @@ check-consistency-snapshot 七段全绿 · script-compile ✅ · no-blind-wait �
 **新诚实边界**：平移对齐会**吸收真实位置差异**（若某端整体真的偏了 3px，对齐后看不出）——
 "位置是否正确"由 L2 几何数值比对承担；L4 只管"画出来像不像"（已写入注记与文档）。
 ④ 仍未接入：iOS/Android 真机截图（当前 Web=Playwright、MP=模拟器，均非真机）。
+
+## 当前状态速览（最近一次更新：**2026-10-03·（八十四）· 🎉🎉 **三端矩阵全部 22/22** —— iOS 补齐 #22（取证核实 RT2 帧率测席 59.3FPS，原标 ◐ 属漏记）+ #10（原生组件混用三判据 PASS：核心几何逐位相同/原生渲染/z-order）；四坑固化（回执透传/samplePixels 裸数组/方法归属/脚本挂点）**）★新会话以此为准
 
 ## 当前状态速览（最近一次更新：**2026-10-03·（八十三）· iOS 补齐 **swipe 四方向**（矩阵 #7，5/5 PASS）—— 真实触摸链第四分支（速度分流）+ V17 用例；iOS 缺口收窄为 fling 一项；顺带披露全套 bench 长跑被 signal 9 kill 的既有缺陷**）★新会话以此为准
 

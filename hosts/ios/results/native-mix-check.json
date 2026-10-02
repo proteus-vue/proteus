@@ -1,0 +1,29 @@
+{
+ "ok": true,
+ "path": "native-mix",
+ "host_id": "ios",
+ "native_view_frame": [
+  0,
+  120,
+  390,
+  200
+ ],
+ "core_native_host_rect": [
+  0,
+  120,
+  390,
+  200
+ ],
+ "pixels": [
+  "#E53935",
+  "#E53935",
+  "#E53935"
+ ],
+ "checks": {
+  "pos_from_core": true,
+  "native_renders": true,
+  "zorder_native_on_top": true
+ },
+ "verdict": "PASS",
+ "note": "iOS 腿：原生 UIView（UIKit）按核心几何定位 + 与自绘重叠色块共存——与 Android native-host 三件事同族"
+}
