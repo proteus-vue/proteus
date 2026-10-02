@@ -62,6 +62,13 @@ export interface PixelObservation {
   params: { channelThreshold: number; blockSize: number; noiseRatio: number; noiseHashDistance: number }
   /** 本次观测区域（缺省 = 整图；声明后 sampleCount 只计区域面积——报告要能看出"比的是哪一块"） */
   roi?: ImageRoi
+  /**
+   * 平移拟合结果（仅 `alignTranslation` 开启时存在）——**跨运行时截图的坐标系原点差**可度量。
+   * ★注意：报告里的 `sampleCount`/`diffPixels`/`regions` 都是**对齐后窗口内**的口径
+   *   （窗口 = ROI 再四边各让开 `max` 像素，让开的部分不参与统计）；
+   *   `diffPixelsRaw` = 同一窗口内**未对齐**的差异数（两者之差 = 平移解释掉的差异量）。
+   */
+  translation?: TranslationFit
 }
 
 /**
@@ -129,6 +136,13 @@ export interface PixelCompareOptions {
    *   跨 DPR 截图（小程序物理像素 vs Web CSS 像素）必须开——见 `resampleTo` 注释。
    */
   alignSize?: boolean
+  /**
+   * ★平移对齐（默认 false；数字 = 搜索半径 ±N）：先求**最优整数平移**再观测。
+   *   跨运行时截图（浏览器 vs 小程序）必开——两端设备坐标系原点约定不同
+   *   （实测内容差 dy=−1，原始残差 0.530% → 对齐后 0.381%）。
+   *   拟合结果随报告回传（`translation` 字段）。见 `alignTranslation` 的诚实边界。
+   */
+  alignTranslation?: boolean | number
   /**
    * 感知同形的 hash 距离上限（默认 16）。
    * 【为什么不是 0（实测）：pHash 对整幅均匀色偏敏感（+4/255 ⇒ 距离 14），而那属色差/抗锯齿噪声；
@@ -307,6 +321,89 @@ export function cropImage(img: RgbaImage, roi: ImageRoi): RgbaImage {
 
 /* ══════════════════ 观测（非门禁） ══════════════════ */
 
+/** 平移对齐结果（"两边差了整数像素"的可度量形态——见 `alignTranslation` 选项注释） */
+export interface TranslationFit {
+  /** 使残差最小的整数平移（B 侧采样点 = (x−dx, y−dy)） */
+  dx: number
+  dy: number
+  /** 对齐后的差异像素数（与未对齐时的对比即"平移解释了多少差异"） */
+  diffPixels: number
+  /** 未对齐时的差异像素数 */
+  diffPixelsRaw: number
+  /** 搜索半径（可复现：结果只在此范围内最优） */
+  max: number
+}
+
+/**
+ * 整数平移对齐搜索（±`max`，步长 1）——**跨运行时截图的"坐标系原点差"是可度量的**。
+ *
+ * 【为什么需要（实测）】Web 端与小程序端的**设备坐标系原点约定不同**：
+ *   Web 截图的 (0,0) = 视口左上；小程序模拟器截图的 (0,0) = 设备外框左上
+ *   （含状态栏/圆角/Home 条区域）。实测：内容包围盒 dx=0 / dy=−1 ⇒ 原始残差 0.530%，
+ *   纯整数平移对齐后 0.381%——**同一个 1px 原点是 0.15 个百分点差异的来源**。
+ *   ⇒ 不先对齐就报"changed"，会把"坐标系差"读成"绘制不一致"（假阳性）；
+ *     先对齐再观测，剩下的残差才是**真正值得看的绘制差异**。
+ *
+ * 【为什么是整数平移】跨端截图的 DPR 缩放由 `resampleTo`（盒式平均）归一到同尺寸，
+ *   归一是连续变换；原点差是**离散整数像素的事**（实测 dy=±1 的最优值隔位读数 2643 vs 4713/3597）。
+ *   整数搜索零插值、零参数、结果可复现——比"图像配准"的一堆可调参数更符合本仓"判据要能解释"的纪律。
+ *
+ * 【诚实边界】平移对齐会**吸收真实的位置差异**（若某端整体真的偏了 3px，对齐后看不出来）。
+ *   ⇒ 本函数**只做观测对齐**，产出 `dx/dy` 随报告回传；"位置是否正确"由 L2 几何数值比对
+ *     承担（L4 不是判几何对错的地方，见文件头注的定位声明）。
+ *
+ * @returns 最优点（`diffPixels` 最小；同值时取半径更小者 → 确定性）
+ */
+export function alignTranslation(
+  a: RgbaImage,
+  b: RgbaImage,
+  opts: { max?: number; channelThreshold?: number } = {},
+): TranslationFit {
+  const max = opts.max ?? 4
+  const th = opts.channelThreshold ?? 8
+  // ★计数判据与 `pixelObservation` 主循环**逐字一致**（含 alpha 通道、同一窗口）——
+  //   否则"拟合最优值"与"报告 diffPixels"会差几个像素，两个数打架（本仓纪律：口径必须唯一）
+  const count = (dx: number, dy: number): number => {
+    let n = 0
+    for (let y = max; y < a.height - max; y++) {
+      for (let x = max; x < a.width - max; x++) {
+        const sx = x - dx
+        const sy = y - dy
+        const i = (y * a.width + x) * 4
+        const j = (sy * b.width + sx) * 4
+        const d = Math.max(
+          Math.abs(a.rgba[i]! - b.rgba[j]!),
+          Math.abs(a.rgba[i + 1]! - b.rgba[j + 1]!),
+          Math.abs(a.rgba[i + 2]! - b.rgba[j + 2]!),
+          Math.abs(a.rgba[i + 3]! - b.rgba[j + 3]!),
+        )
+        if (d > th) n++
+      }
+    }
+    return n
+  }
+  let best: TranslationFit | null = null
+  for (let r = 0; r <= max; r++) {
+    for (let dy = -r; dy <= r; dy++) {
+      for (let dx = -r; dx <= r; dx++) {
+        if (r > 0 && Math.abs(dx) !== r && Math.abs(dy) !== r) continue
+        const n = count(dx, dy)
+        // ★同值时取半径更小者（外层 r 递增 ⇒ 先到者胜）——确定性，不受枚举顺序影响
+        if (!best || n < best.diffPixels) best = { dx, dy, diffPixels: n, diffPixelsRaw: 0, max }
+      }
+    }
+  }
+  const fit = best!
+  // ★-0 归一（单测抓出的字节确定性缺陷——与 VC3 快照格式同款问题）：
+  //   r=0 时循环变量 `dx = -r` 就是 `-0` ⇒ 拟合结果带负零，
+  //   序列化/深比较/git diff 都会把它当"另一个值"（`Object.is(-0, 0) === false`）。
+  //   `+ 0` 把 -0 归一为 +0（`-0 + 0 === +0`）——唯一舍入点之外不做任何数值加工。
+  fit.dx = fit.dx + 0
+  fit.dy = fit.dy + 0
+  fit.diffPixelsRaw = count(0, 0)
+  return fit
+}
+
 /**
  * 像素级观察（L4）：**产出报告，不做门禁判定**（见文件头注的定位声明）。
  *
@@ -336,12 +433,41 @@ export function pixelObservation(a: RgbaImage, bIn: RgbaImage, opts: PixelCompar
   }
   const sizeB = { width: b.width, height: b.height }
   // ★ROI（可选）：裁掉设备 chrome（状态栏时钟/Home 条）——先对齐再裁（ROI 按对齐后尺寸计）
+  //   ★顺序（实测定的）：尺寸对齐 → ROI → 平移对齐。平移在 **ROI 内**搜索——
+  //     否则状态栏时钟等 chrome 差异会污染搜索（它们不参与观测，也不应影响拟合）。
   const roiOffset = { x: 0, y: 0 }
   if (opts.roi) {
     a = cropImage(a, opts.roi)
     b = cropImage(b, opts.roi)
     roiOffset.x = opts.roi.x
     roiOffset.y = opts.roi.y
+  }
+  // ★平移对齐（可选）：求最优整数平移，并把 **B 的移位采样版写回 b**——
+  //   这样后续逐像素/分块/哈希/字节相等**全部自动走对齐后口径**（一处变换，全链一致）。
+  //   `diffPixels`/`diffPixelsRaw` 由 `alignTranslation` 在**同一窗口**（四边各让开 max 像素）内算好；
+  //   下方主循环用同一窗口 ⇒ 报告里的 diffPixels 与拟合最优值**逐位相等**（口径一致，两个数不打架）。
+  let translation: TranslationFit | undefined
+  if (opts.alignTranslation) {
+    const max = typeof opts.alignTranslation === 'number' ? opts.alignTranslation : 4
+    translation = alignTranslation(a, b, { max, channelThreshold })
+    const winW = a.width - 2 * max
+    const winH = a.height - 2 * max
+    if (winW <= 0 || winH <= 0) throw new Error(`alignTranslation: 半径 ${max} 大于图尺寸 ${a.width}x${a.height}`)
+    const winA: RgbaImage = { width: winW, height: winH, rgba: new Uint8Array(winW * winH * 4) }
+    const winB: RgbaImage = { width: winW, height: winH, rgba: new Uint8Array(winW * winH * 4) }
+    for (let y = 0; y < winH; y++) {
+      for (let x = 0; x < winW; x++) {
+        const src = ((y + max) * a.width + (x + max)) * 4
+        const dst = (y * winW + x) * 4
+        winA.rgba.set(a.rgba.subarray(src, src + 4), dst)
+        const ssrc = ((y + max - translation.dy) * b.width + (x + max - translation.dx)) * 4
+        winB.rgba.set(b.rgba.subarray(ssrc, ssrc + 4), dst)
+      }
+    }
+    a = winA
+    b = winB
+    roiOffset.x += max
+    roiOffset.y += max
   }
   const sampleCount = a.width * a.height
   const hashDistance = hammingDistance(pHash(a), pHash(b))
@@ -411,6 +537,7 @@ export function pixelObservation(a: RgbaImage, bIn: RgbaImage, opts: PixelCompar
     regions: regions.slice(0, 8),
     params,
     ...(opts.roi ? { roi: opts.roi } : {}),
+    ...(translation ? { translation } : {}),
   }
 }
 
@@ -490,6 +617,13 @@ export interface PixelObservationReport {
     b: string
     observation: PixelObservation
     knownNoise?: PixelNoiseEntry
+    /**
+     * ★配对形态（L4 真截图用）：`same-runtime` = 同运行时长跑（小程序双渲染器）；
+     *   `cross-runtime` = 跨运行时（浏览器 ⇄ 小程序——走尺寸 + 平移两项对齐）。
+     *   为什么必须标注：两种形态的残差**天然不可比**（跨运行时多一个坐标系对齐残差 + 字形光栅化差异），
+     *   混在一起读会把"跨运行时本来就更大"误读成"某端画坏了"。
+     */
+    mode?: 'same-runtime' | 'cross-runtime'
   }>
   /** ★样本量汇总（卡片硬性要求："记录每次失败的样本量"） */
   totals: {
@@ -508,7 +642,14 @@ export interface PixelObservationReport {
 
 /** 生成观测报告（纯函数——调用方负责把 pairs 收集齐） */
 export function buildPixelReport(
-  pairs: Array<{ id: string; a: string; b: string; observation: PixelObservation; knownNoise?: PixelNoiseEntry }>,
+  pairs: Array<{
+    id: string
+    a: string
+    b: string
+    observation: PixelObservation
+    knownNoise?: PixelNoiseEntry
+    mode?: 'same-runtime' | 'cross-runtime'
+  }>,
 ): PixelObservationReport {
   const totals = { sampleCount: 0, diffPixels: 0, changedSamples: 0, cleanSamples: 0, knownNoiseSamples: 0 }
   for (const p of pairs) {

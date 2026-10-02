@@ -13,7 +13,7 @@ import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 import {
   pixelObservation, pHash, hammingDistance, buildPixelReport, matchPixelNoise, validatePixelNoiseBaseline,
-  encodePng, decodePng, isConsistencyReport, formatReport, cropImage,
+  encodePng, decodePng, isConsistencyReport, formatReport, cropImage, alignTranslation,
   compareGeometry, buildGeometryReport, applyAutoFixToGeometry, compareStyle, buildStyleReport, resolveTolerance,
 } from '@proteus-vue/consistency'
 import type { RgbaImage, GeometrySnapshot, PixelNoiseBaseline } from '@proteus-vue/consistency'
@@ -161,6 +161,71 @@ describe('VC7 · L4 像素观察（非门禁）', () => {
     const m = matchPixelNoise(obs, good)
     expect(m.known).toBe(true)
     expect(m.entry?.id).toBe('N-1')
+  })
+})
+
+describe('VC7 · 平移对齐（跨运行时截图的坐标系原点差）', () => {
+  /** 带明显结构的图：24×24 色块（可由基准图**整体平移**得到——测平移的唯一变量） */
+  function shiftedBlock(w: number, h: number, shiftX: number, shiftY: number): RgbaImage {
+    const rgba = new Uint8Array(w * h * 4)
+    const x0 = 20 + shiftX
+    const y0 = 20 + shiftY
+    for (let y = 0; y < h; y++) {
+      for (let x = 0; x < w; x++) {
+        const i = (y * w + x) * 4
+        const inside = x >= x0 && x < x0 + 24 && y >= y0 && y < y0 + 24
+        rgba[i] = inside ? 47 : 20
+        rgba[i + 1] = inside ? 111 : 20
+        rgba[i + 2] = inside ? 237 : 28
+        rgba[i + 3] = 255
+      }
+    }
+    return { width: w, height: h, rgba }
+  }
+
+  it('▲1 纯整数平移（b 内容右移 3 / 上移 2）⇒ 拟合精确命中、残差归零；报告回传拟合值', () => {
+    const a = shiftedBlock(64, 64, 0, 0)
+    const b = shiftedBlock(64, 64, 3, -2)
+    const fit = alignTranslation(a, b, { max: 5 })
+    // 符号约定（**实测标定**，不是推演）：dx = −(b 内容相对 a 的 x 位移)
+    expect(fit.dx).toBe(-3)
+    expect(fit.dy).toBe(2)
+    expect(fit.diffPixels, '对齐后残差应归零（纯平移）。这里归不了零 ⇒ 拟合或采样映射有 bug').toBe(0)
+    expect(fit.diffPixelsRaw, '未对齐时有大量差异（= 平移解释掉的量）').toBeGreaterThan(0)
+    expect(fit.max).toBe(5)
+    // 经 pixelObservation：translation 随报告回传 + 报告 diff 与拟合值**逐位相等**（口径唯一）
+    const obs = pixelObservation(a, b, { alignTranslation: 5 })
+    expect(obs.translation).toEqual(fit)
+    expect(obs.diffPixels).toBe(fit.diffPixels)
+    expect(obs.verdict, '对齐后不应判 changed').not.toBe('changed')
+    // ★诚实边界（机器证据）：**不对齐**时同一对图有大量差异——平移对齐会"吸收"真实位移，
+    //   "位置是否正确"必须由 L2 几何数值比对承担（见 alignTranslation 注释）
+    expect(pixelObservation(a, b).diffPixels).toBeGreaterThan(fit.diffPixels)
+  })
+
+  it('▲2 确定性：同输入 ⇒ 同拟合（枚举顺序不影响结果）', () => {
+    const a = shiftedBlock(64, 64, 0, 0)
+    const b = shiftedBlock(64, 64, -2, 4)
+    const f1 = alignTranslation(a, b, { max: 5 })
+    const f2 = alignTranslation(a, b, { max: 5 })
+    expect(f1).toEqual(f2)
+    // 反向平移的符号应对称（左移 2 / 下移 4 ⇒ dx=2 / dy=−4）
+    expect([f1.dx, f1.dy, f1.diffPixels]).toEqual([2, -4, 0])
+  })
+
+  it('▲3 对照组：无平移 ⇒ (0,0) 且 raw == 对齐后 == 0（不引入假拟合）', () => {
+    const img = shiftedBlock(64, 64, 0, 0)
+    const fit = alignTranslation(img, img, { max: 4 })
+    expect([fit.dx, fit.dy, fit.diffPixels, fit.diffPixelsRaw]).toEqual([0, 0, 0, 0])
+  })
+
+  it('▲4 半径上限：位移超出 max ⇒ 搜索不越界（结果仍在 ±max 内且残差可见）', () => {
+    const a = shiftedBlock(64, 64, 0, 0)
+    const b = shiftedBlock(64, 64, 8, 0)
+    const fit = alignTranslation(a, b, { max: 3 })
+    expect(Math.abs(fit.dx)).toBeLessThanOrEqual(3)
+    expect(Math.abs(fit.dy)).toBeLessThanOrEqual(3)
+    expect(fit.diffPixels, '3px 不足以对齐 8px 位移 ⇒ 残差必须可见（不是"对不齐也报 0"）').toBeGreaterThan(0)
   })
 })
 

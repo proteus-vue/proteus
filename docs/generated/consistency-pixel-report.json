@@ -5,9 +5,117 @@
   "note": "L4 像素观察——**非门禁**（标准 §8.1）：不追求零噪声，仅作 L1–L3 够不到的四项（圆角/阴影/渐变/字形）的兜底观察。",
   "pairs": [
     {
+      "id": "l4:skyline-vs-web",
+      "a": "docs/generated/consistency-samples/pixels/l4.skyline.png",
+      "b": "docs/generated/consistency-samples/pixels/l4.web.png",
+      "mode": "cross-runtime",
+      "observation": {
+        "gate": false,
+        "verdict": "noise-level",
+        "sizeA": {
+          "width": 640,
+          "height": 1386
+        },
+        "sizeB": {
+          "width": 640,
+          "height": 1386
+        },
+        "sampleCount": 679496,
+        "diffPixels": 2643,
+        "diffRatio": 0.00389,
+        "hashDistance": 0,
+        "regions": [
+          {
+            "x": 54,
+            "y": 490,
+            "w": 16,
+            "h": 16,
+            "pixels": 124,
+            "ratio": 0.484
+          },
+          {
+            "x": 182,
+            "y": 490,
+            "w": 16,
+            "h": 16,
+            "pixels": 124,
+            "ratio": 0.484
+          },
+          {
+            "x": 118,
+            "y": 506,
+            "w": 16,
+            "h": 16,
+            "pixels": 123,
+            "ratio": 0.48
+          },
+          {
+            "x": 166,
+            "y": 490,
+            "w": 16,
+            "h": 16,
+            "pixels": 109,
+            "ratio": 0.426
+          },
+          {
+            "x": 54,
+            "y": 506,
+            "w": 16,
+            "h": 16,
+            "pixels": 93,
+            "ratio": 0.363
+          },
+          {
+            "x": 70,
+            "y": 490,
+            "w": 16,
+            "h": 16,
+            "pixels": 89,
+            "ratio": 0.348
+          },
+          {
+            "x": 102,
+            "y": 506,
+            "w": 16,
+            "h": 16,
+            "pixels": 85,
+            "ratio": 0.332
+          },
+          {
+            "x": 182,
+            "y": 506,
+            "w": 16,
+            "h": 16,
+            "pixels": 82,
+            "ratio": 0.32
+          }
+        ],
+        "params": {
+          "channelThreshold": 8,
+          "blockSize": 16,
+          "noiseRatio": 0.005,
+          "noiseHashDistance": 16
+        },
+        "roi": {
+          "x": 2,
+          "y": 150,
+          "w": 636,
+          "h": 1090
+        },
+        "translation": {
+          "dx": -1,
+          "dy": 1,
+          "diffPixels": 2643,
+          "diffPixelsRaw": 3675,
+          "max": 4
+        }
+      }
+    },
+    {
       "id": "l4:skyline-vs-webview",
       "a": "docs/generated/consistency-samples/pixels/l4.skyline.png",
       "b": "docs/generated/consistency-samples/pixels/l4.webview.png",
+      "mode": "same-runtime",
       "observation": {
         "gate": false,
         "verdict": "noise-level",
@@ -100,6 +208,113 @@
           "y": 150,
           "w": 636,
           "h": 1090
+        }
+      }
+    },
+    {
+      "id": "l4:web-vs-webview",
+      "a": "docs/generated/consistency-samples/pixels/l4.web.png",
+      "b": "docs/generated/consistency-samples/pixels/l4.webview.png",
+      "mode": "cross-runtime",
+      "observation": {
+        "gate": false,
+        "verdict": "noise-level",
+        "sizeA": {
+          "width": 780,
+          "height": 1688
+        },
+        "sizeB": {
+          "width": 780,
+          "height": 1688
+        },
+        "sampleCount": 679496,
+        "diffPixels": 3045,
+        "diffRatio": 0.00448,
+        "hashDistance": 0,
+        "regions": [
+          {
+            "x": 70,
+            "y": 602,
+            "w": 16,
+            "h": 16,
+            "pixels": 101,
+            "ratio": 0.395
+          },
+          {
+            "x": 38,
+            "y": 602,
+            "w": 16,
+            "h": 16,
+            "pixels": 87,
+            "ratio": 0.34
+          },
+          {
+            "x": 214,
+            "y": 602,
+            "w": 16,
+            "h": 16,
+            "pixels": 80,
+            "ratio": 0.313
+          },
+          {
+            "x": 54,
+            "y": 602,
+            "w": 16,
+            "h": 16,
+            "pixels": 75,
+            "ratio": 0.293
+          },
+          {
+            "x": 86,
+            "y": 602,
+            "w": 16,
+            "h": 16,
+            "pixels": 75,
+            "ratio": 0.293
+          },
+          {
+            "x": 134,
+            "y": 618,
+            "w": 16,
+            "h": 16,
+            "pixels": 74,
+            "ratio": 0.289
+          },
+          {
+            "x": 70,
+            "y": 618,
+            "w": 16,
+            "h": 16,
+            "pixels": 69,
+            "ratio": 0.27
+          },
+          {
+            "x": 118,
+            "y": 602,
+            "w": 16,
+            "h": 16,
+            "pixels": 68,
+            "ratio": 0.266
+          }
+        ],
+        "params": {
+          "channelThreshold": 8,
+          "blockSize": 16,
+          "noiseRatio": 0.005,
+          "noiseHashDistance": 16
+        },
+        "roi": {
+          "x": 2,
+          "y": 150,
+          "w": 636,
+          "h": 1090
+        },
+        "translation": {
+          "dx": 0,
+          "dy": -2,
+          "diffPixels": 3045,
+          "diffPixelsRaw": 5738,
+          "max": 4
         }
       }
     },
@@ -226,10 +441,10 @@
     }
   ],
   "totals": {
-    "sampleCount": 709624,
-    "diffPixels": 2207,
+    "sampleCount": 2068616,
+    "diffPixels": 7895,
     "changedSamples": 1,
-    "cleanSamples": 4,
+    "cleanSamples": 6,
     "knownNoiseSamples": 0
   }
 }
