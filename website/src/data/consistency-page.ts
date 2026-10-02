@@ -285,10 +285,57 @@ export const CONSISTENCY_PAGE = {
   },
   "pixel": {
     "gate": false,
-    "changedSamples": 11,
-    "cleanSamples": 3,
-    "knownNoiseSamples": 10,
+    "changedSamples": 15,
+    "cleanSamples": 4,
+    "knownNoiseSamples": 15,
     "pairs": [
+      {
+        "id": "l4:android-vs-ios-device",
+        "mode": "cross-runtime",
+        "a": "l4.android.png",
+        "b": "l4.ios-device.png",
+        "verdict": "changed",
+        "diffPixels": 4736,
+        "sampleCount": 337080,
+        "diffRatio": 0.01405,
+        "hashDistance": 0,
+        "translation": null,
+        "knownNoise": "N-L4-five-end-rasterization",
+        "norm": {
+          "outSize": {
+            "w": 640,
+            "h": 560
+          },
+          "a": {
+            "srcSize": {
+              "width": 1200,
+              "height": 2608
+            },
+            "colorSpace": "display-p3",
+            "block": {
+              "x": 48,
+              "y": 360,
+              "w": 240,
+              "h": 144
+            },
+            "scale": 0.667
+          },
+          "b": {
+            "srcSize": {
+              "width": 1170,
+              "height": 2532
+            },
+            "colorSpace": "undeclared",
+            "block": {
+              "x": 48,
+              "y": 361,
+              "w": 240,
+              "h": 142
+            },
+            "scale": 0.667
+          }
+        }
+      },
       {
         "id": "l4:android-vs-ios",
         "mode": "cross-runtime",
@@ -458,6 +505,194 @@ export const CONSISTENCY_PAGE = {
               "y": 360,
               "w": 240,
               "h": 144
+            },
+            "scale": 0.667
+          },
+          "b": {
+            "srcSize": {
+              "width": 640,
+              "height": 1386
+            },
+            "colorSpace": "undeclared",
+            "block": {
+              "x": 27,
+              "y": 199,
+              "w": 130,
+              "h": 78
+            },
+            "scale": 1.231
+          }
+        }
+      },
+      {
+        "id": "l4:ios-device-vs-ios",
+        "mode": "same-platform",
+        "a": "l4.ios-device.png",
+        "b": "l4.ios.png",
+        "verdict": "noise-level",
+        "diffPixels": 989,
+        "sampleCount": 337080,
+        "diffRatio": 0.00293,
+        "hashDistance": 0,
+        "translation": null,
+        "knownNoise": "N-L4-five-end-rasterization",
+        "norm": {
+          "outSize": {
+            "w": 640,
+            "h": 560
+          },
+          "a": {
+            "srcSize": {
+              "width": 1170,
+              "height": 2532
+            },
+            "colorSpace": "undeclared",
+            "block": {
+              "x": 48,
+              "y": 361,
+              "w": 240,
+              "h": 142
+            },
+            "scale": 0.667
+          },
+          "b": {
+            "srcSize": {
+              "width": 1206,
+              "height": 2622
+            },
+            "colorSpace": "undeclared",
+            "block": {
+              "x": 48,
+              "y": 361,
+              "w": 240,
+              "h": 142
+            },
+            "scale": 0.667
+          }
+        }
+      },
+      {
+        "id": "l4:ios-device-vs-skyline",
+        "mode": "cross-runtime",
+        "a": "l4.ios-device.png",
+        "b": "l4.skyline.png",
+        "verdict": "changed",
+        "diffPixels": 10199,
+        "sampleCount": 337080,
+        "diffRatio": 0.03026,
+        "hashDistance": 0,
+        "translation": null,
+        "knownNoise": "N-L4-five-end-rasterization",
+        "norm": {
+          "outSize": {
+            "w": 640,
+            "h": 560
+          },
+          "a": {
+            "srcSize": {
+              "width": 1170,
+              "height": 2532
+            },
+            "colorSpace": "undeclared",
+            "block": {
+              "x": 48,
+              "y": 361,
+              "w": 240,
+              "h": 142
+            },
+            "scale": 0.667
+          },
+          "b": {
+            "srcSize": {
+              "width": 640,
+              "height": 1386
+            },
+            "colorSpace": "undeclared",
+            "block": {
+              "x": 27,
+              "y": 199,
+              "w": 130,
+              "h": 78
+            },
+            "scale": 1.231
+          }
+        }
+      },
+      {
+        "id": "l4:ios-device-vs-web",
+        "mode": "cross-runtime",
+        "a": "l4.ios-device.png",
+        "b": "l4.web.png",
+        "verdict": "changed",
+        "diffPixels": 7345,
+        "sampleCount": 337080,
+        "diffRatio": 0.02179,
+        "hashDistance": 0,
+        "translation": null,
+        "knownNoise": "N-L4-five-end-rasterization",
+        "norm": {
+          "outSize": {
+            "w": 640,
+            "h": 560
+          },
+          "a": {
+            "srcSize": {
+              "width": 1170,
+              "height": 2532
+            },
+            "colorSpace": "undeclared",
+            "block": {
+              "x": 48,
+              "y": 361,
+              "w": 240,
+              "h": 142
+            },
+            "scale": 0.667
+          },
+          "b": {
+            "srcSize": {
+              "width": 780,
+              "height": 1688
+            },
+            "colorSpace": "undeclared",
+            "block": {
+              "x": 32,
+              "y": 240,
+              "w": 160,
+              "h": 96
+            },
+            "scale": 1
+          }
+        }
+      },
+      {
+        "id": "l4:ios-device-vs-webview",
+        "mode": "cross-runtime",
+        "a": "l4.ios-device.png",
+        "b": "l4.webview.png",
+        "verdict": "changed",
+        "diffPixels": 10165,
+        "sampleCount": 337080,
+        "diffRatio": 0.03016,
+        "hashDistance": 0,
+        "translation": null,
+        "knownNoise": "N-L4-five-end-rasterization",
+        "norm": {
+          "outSize": {
+            "w": 640,
+            "h": 560
+          },
+          "a": {
+            "srcSize": {
+              "width": 1170,
+              "height": 2532
+            },
+            "colorSpace": "undeclared",
+            "block": {
+              "x": 48,
+              "y": 361,
+              "w": 240,
+              "h": 142
             },
             "scale": 0.667
           },
@@ -775,6 +1010,20 @@ export const CONSISTENCY_PAGE = {
         },
         "scale": 0.667
       },
+      "ios-device": {
+        "srcSize": {
+          "width": 1170,
+          "height": 2532
+        },
+        "colorSpace": "undeclared",
+        "block": {
+          "x": 48,
+          "y": 361,
+          "w": 240,
+          "h": 142
+        },
+        "scale": 0.667
+      },
       "ios": {
         "srcSize": {
           "width": 1206,
@@ -863,6 +1112,12 @@ export const CONSISTENCY_PAGE = {
       "file": "l4.ios.png",
       "pub": "l4-ios.png",
       "label": "iOS（模拟器）"
+    },
+    {
+      "end": "ios-device",
+      "file": "l4.ios-device.png",
+      "pub": "l4-ios-device.png",
+      "label": "iOS（真机）"
     }
   ],
   "debt": [

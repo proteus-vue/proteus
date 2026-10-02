@@ -41,6 +41,8 @@ const SHOTS = [
   // ★五端拉齐（2026-10-02）：Android 真机 + iOS 模拟器（同一夹具，各端系统管线自绘）
   { end: 'android', file: 'l4.android.png', pub: 'l4-android.png', label: 'Android（真机）' },
   { end: 'ios', file: 'l4.ios.png', pub: 'l4-ios.png', label: 'iOS（模拟器）' },
+  // ★六端（同日）：iOS **真机**（iPhone 12）——真机/模拟器同平台对照（0.29% = 设备级差异底噪）
+  { end: 'ios-device', file: 'l4.ios-device.png', pub: 'l4-ios-device.png', label: 'iOS（真机）' },
 ]
 
 function readJson(p, what) {

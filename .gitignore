@@ -46,6 +46,9 @@ hosts/android/results/lights.mp4
 # ★维度折叠录屏原片（38MB）——同款：网页交付物是 website/public/morpheus-flip.mp4（4MB）
 hosts/android/results/flip-demo.mp4
 hosts/**/build/
+# ★iOS 侧的**具名**构建目录（build-sim / build-l4 / build-l4-device）——非 `build/` 形态，
+#   逐个漏忽略（2026-10-02 加 l4-device 时才发现 build-sim 也一直没被覆盖）⇒ 用通配一次覆盖。
+hosts/ios/build-*/
 hosts/**/*.app/
 hosts/**/verify-jsc
 # 实验构建产物与**单次运行**原始数据（本机产物）

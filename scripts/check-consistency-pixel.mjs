@@ -136,9 +136,17 @@ async function loadPairs() {
         for (let j = i + 1; j < normalized.length; j++) {
           const A = normalized[i]
           const B = normalized[j]
-          // 同运行时 = 小程序内部两渲染器（skyline/webview 互比）；其余皆跨运行时
+          // 配对形态（残差天然不可比，必须标注——混读会把"本来就更大"误判成"某端画坏了"）：
+          //   · same-runtime：小程序双渲染器（同设备同 OS，不同渲染器）
+          //   · same-platform：iOS 真机 ⇄ iOS 模拟器（同 OS，不同设备/GPU——"设备级差异"的度量）
+          //   · cross-runtime：其余（跨 OS/引擎）
           const mp = new Set(['skyline', 'webview'])
-          const mode = mp.has(A.end) && mp.has(B.end) ? 'same-runtime' : 'cross-runtime'
+          const iosFamily = new Set(['ios', 'ios-device'])
+          const mode = mp.has(A.end) && mp.has(B.end)
+            ? 'same-runtime'
+            : iosFamily.has(A.end) && iosFamily.has(B.end)
+              ? 'same-platform'
+              : 'cross-runtime'
           pairs.push({
             id: `${base}:${A.end}-vs-${B.end}`,
             a: path.relative(ROOT, A.file),
