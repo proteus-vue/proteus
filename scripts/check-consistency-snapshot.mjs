@@ -130,6 +130,33 @@ if (mpGeos.skyline && mpGeos.webview) {
   }
 }
 
+// ⑤ ★★VC5-b：**真实三端比对**（skyline ⇄ webview，按分级容差）——M1 的 L2 覆盖落地
+if (mpGeos.skyline && mpGeos.webview) {
+  const { compareGeometry, resolveTolerance } = await import('../packages/consistency/dist/index.js')
+  const cfg = resolveTolerance(JSON.parse(fs.readFileSync(path.join(ROOT, 'docs/consistency-tolerance.json'), 'utf-8')))
+  const r = compareGeometry(mpGeos.skyline, mpGeos.webview, { tolerance: cfg })
+  note(`VC5-b 比对（skyline ⇄ webview，${r.summary.compared} 节点）：${r.ok ? '✅ 全部在容差内' : `❌ ${r.diffs.filter((d) => d.overTolerance).length} 条超容差`}`)
+  for (const d of r.diffs.filter((x) => x.overTolerance).slice(0, 6)) {
+    note(`    · path=${d.path} ${d.property ?? ''} ${d.aValue} → ${d.bValue}（Δ${d.deviation}，容差 ${d.tolerance}，类 ${d.toleranceClass}）`)
+  }
+  // ★比对结论的**门禁口径**（本轮实测演进，写清避免误读）：
+  //   · skyline ⇄ webview：**硬门禁**（同夹具同声明，须一致——上文 ④ 已判，且 VC5-b 复核）；
+  //   · 小程序 ⇄ App 内核：**报告**（两端 renderer 不同：微信容器 vs 自研内核；当前差异如实列出，
+  //     待 L2 覆盖扩到 App 端后按允许差异清单评估）。这不是"放水"——是"差异必须先被看见"。
+}
+
+// ⑥ ★App 内核 ⇄ 小程序（跨 renderer 比对，如实报告）
+if (appFile && mpGeos.skyline) {
+  const { compareGeometry, resolveTolerance } = await import('../packages/consistency/dist/index.js')
+  const cfg = resolveTolerance(JSON.parse(fs.readFileSync(path.join(ROOT, 'docs/consistency-tolerance.json'), 'utf-8')))
+  const appGeo = JSON.parse(fs.readFileSync(appFile, 'utf-8'))
+  const r = compareGeometry(appGeo, mpGeos.skyline, { tolerance: cfg })
+  note(`VC5-b 比对（App 内核 ⇄ skyline，${r.summary.compared} 节点）：${r.ok ? '✅ 全部在容差内' : `⚠ ${r.diffs.filter((d) => d.overTolerance).length} 条差异（跨 renderer，如实报告）`}`)
+  for (const d of r.diffs.filter((x) => x.overTolerance).slice(0, 6)) {
+    note(`    · path=${d.path} ${d.property ?? d.kind} ${d.aValue ?? ''} → ${d.bValue ?? ''}${d.deviation !== undefined ? `（Δ${d.deviation}）` : ''}`)
+  }
+}
+
 if (fails.length) {
   console.error('\n✗ 一致性快照门禁失败：')
   for (const f of fails) console.error('  - ' + f)
