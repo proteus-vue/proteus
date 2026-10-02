@@ -20,8 +20,8 @@ import { display } from '@kit.ArkUI';
 import { hidebug } from '@kit.PerformanceAnalysisKit';
 // ★矩阵 #17：App 路由栈场景探针（移植副本，与 Android/iOS 同口径）
 import { runAppStackProbe } from '../core/app-stack-probe';
-import { attach, renderCommands, stats, ProteusRenderStats, platformAnimBegin, platformAnimStep, platformAnimEnd, platformAnimSave, clearRoot, scrollRoot } from 'libproteus_render.so';
-import { bench4050, hitProbe, recycleProbe, spliceProbe, textProbe, kernelAnimProbe, memProbe, sfcStressProbe, sfcStressCommands, jsvmProbe, vaporProbe, animCurveBezier, hostRuntimeProbe, hostRtShellInstall, mountVirtualProbe, version as rustVersion } from 'libproteus_bench.so';
+import { attach, renderCommands, stats, ProteusRenderStats, platformAnimBegin, platformAnimStep, platformAnimEnd, platformAnimSave, clearRoot, scrollRoot, gestureInstall, gestureSample } from 'libproteus_render.so';
+import { bench4050, hitProbe, recycleProbe, spliceProbe, textProbe, kernelAnimProbe, memProbe, sfcStressProbe, sfcStressCommands, jsvmProbe, vaporProbe, animCurveBezier, hostRuntimeProbe, hostRtShellInstall, mountVirtualProbe, gestureHitPrepare, gestureHitAt, version as rustVersion } from 'libproteus_bench.so';
 
 const DOMAIN = 0x0002;
 const TAG = 'ProteusRender';
@@ -218,6 +218,14 @@ interface RenderCmdFixture {
   textColor?: number;
 }
 
+/** 触摸样本行（手势场景：落盘 JSONL——真时序证据） */
+interface TouchSampleLine {
+  t: string;
+  x: number;
+  y: number;
+  ts: number;
+}
+
 /** 宿主运行时探针入参（ArkTS 严格模式） */
 interface HostRtArgs {
   bundle: string;
@@ -265,6 +273,9 @@ struct Index {
   private content: NodeContent = new NodeContent();
   /** ★压力场景模式（`aa start --ps scene stress` 时 true）——只渲染 SFC 夹具，跑采集截图 */
   private stressScene: boolean = (AppStorage.get<string>('proteusScene') ?? '') === 'stress';
+  /** ★手势场景模式（`--ps scene gesture`）：只装真触摸接收器 + 渲染 SFC 夹具——不跑任何探针
+   *  （探针日志会冲掉触摸样本行——实测：正常场景跑完 bench 后 PROTEUS_TOUCH 行被挤出缓冲区） */
+  private gestureScene: boolean = (AppStorage.get<string>('proteusScene') ?? '') === 'gesture';
   @State rendered: number = -1;
   @State benchLine: string = '（未跑）';
   // ── 滚动通道（真机滚动 + 帧率采集）──
@@ -486,7 +497,7 @@ struct Index {
         .position({ x: 0, y: 700 })
       }
 
-      if (!this.stressScene) {
+      if (!this.stressScene && !this.gestureScene) {
         Column({ space: 8 }) {
           Text('Proteus RenderNode 直绘').fontSize(22).fontWeight(FontWeight.Bold)
         Text(`native nodes = ${this.rendered}`).fontSize(14).fontColor('#666666')
@@ -504,7 +515,55 @@ struct Index {
     .width('100%')
     .height('100%')
     .backgroundColor('#F7F7F9')
+    .onTouch((e: TouchEvent) => {
+      // ★矩阵 #7：手势场景——真触摸样本落盘（标准触摸链；uitest uiInput 真注入驱动）
+      if (!this.gestureScene) return;
+      try {
+        let typeName: string = 'other';
+        if (e.type === TouchType.Down) typeName = 'down';
+        else if (e.type === TouchType.Up) typeName = 'up';
+        else if (e.type === TouchType.Move) typeName = 'move';
+        else if (e.type === TouchType.Cancel) typeName = 'cancel';
+        const arr: TouchObject[] = (typeName === 'up' || typeName === 'cancel') ? e.changedTouches : e.touches;
+        if (arr.length > 0) {
+          const pt: TouchObject = arr[0];
+          const line: TouchSampleLine = { t: typeName, x: pt.x, y: pt.y, ts: e.timestamp };
+          gestureSample(JSON.stringify(line));
+          if (typeName === 'down') {
+            // 命中测试打在**按下点**（与 GestureDetector 的 ACTION_DOWN 语义同）
+            const hit: string = gestureHitAt(pt.x, pt.y);
+            gestureSample('{"hit":' + hit + ',"hx":' + pt.x.toFixed(2) + ',"hy":' + pt.y.toFixed(2) + '}');
+            hilog.info(DOMAIN, BENCH_TAG, 'PROTEUS_GESTURE_HIT x=%{public}s y=%{public}s %{public}s',
+              pt.x.toFixed(1), pt.y.toFixed(1), hit);
+          }
+        }
+      } catch (te) {
+        hilog.error(DOMAIN, BENCH_TAG, 'PROTEUS_GESTURE_TOUCH_ERROR %{public}s', JSON.stringify(te) ?? '');
+      }
+    })
     .onAppear(() => {
+      // ── ⓪' ★★手势场景分支（矩阵 #7）：只装真触摸接收器 + 渲染 SFC 夹具，不跑探针 ──
+      if (this.gestureScene) {
+        try {
+          const ctx0 = getContext(this);
+          const gb: Uint8Array = ctx0.resourceManager.getRawFileContentSync('stress-44.json');
+          const gf: string = util.TextDecoder.create('utf-8').decodeToString(gb);
+          const d0 = display.getDefaultDisplaySync();
+          const gvw = px2vp(d0.width);
+          const gvh = px2vp(d0.height);
+          attach(this.content, vp2px(1), gvw, gvh);
+          const gcmds: string = sfcStressCommands(gf, DENSITY, gvw, gvh);
+          const gn: number = renderCommands(gcmds);
+          const gi: string = gestureInstall(ctx0.filesDir);
+          // 命中测试树（触摸坐标 → 核心 hitTest——与 hitProbe 同一 ABI）
+          const gh: string = gestureHitPrepare(gf, gvw, gvh, DENSITY);
+          hilog.info(DOMAIN, BENCH_TAG,
+            'PROTEUS_GESTURE_SCENE rendered=%{public}d install=%{public}s hitprep=%{public}s', gn, gi, gh);
+        } catch (gse) {
+          hilog.error(DOMAIN, BENCH_TAG, 'PROTEUS_GESTURE_SCENE_ERROR %{public}s', JSON.stringify(gse) ?? '');
+        }
+        return;
+      }
       // ── ⓪ ★★压力场景分支（矩阵 #21 六端采集）：只渲染 SFC 夹具 + 主动上报，不跑探针 ──
       //   触发：`aa start ... --ps scene stress`（EntryAbility 写入 AppStorage；缺省场景不受影响）
       if (this.stressScene) {
@@ -546,6 +605,13 @@ struct Index {
         // ★矩阵 #15：平台零参与动画（帧回调步进；报告落沙箱 el2 —— hdc 可读映射路径）
         const beginJson: string = platformAnimBegin();
         hilog.info(DOMAIN, BENCH_TAG, 'PROTEUS_PLATFORMANIM_BEGIN_JS %{public}s', beginJson);
+        // ★矩阵 #7：装真触摸接收器（uitest uiInput 注入的样本 → PROTEUS_TOUCH 行）
+        try {
+          const gi: string = gestureInstall(getContext(this).filesDir);
+          hilog.info(DOMAIN, BENCH_TAG, 'PROTEUS_GESTURE_INSTALL_JS %{public}s', gi);
+        } catch (ge) {
+          hilog.error(DOMAIN, BENCH_TAG, 'PROTEUS_GESTURE_INSTALL_ERROR %{public}s', JSON.stringify(ge) ?? '');
+        }
         const ctxAnim = getContext(this);
         this.getUIContext().postFrameCallback(
           new PlatformAnimFrameCallback(this.getUIContext(), ctxAnim.filesDir));

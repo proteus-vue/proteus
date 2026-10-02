@@ -2673,6 +2673,77 @@ static napi_value MountVirtualProbe(napi_env env, napi_callback_info info) {
     return r;
 }
 
+/* ── 矩阵 #7：手势命中（触摸坐标 → 核心 hitTest；与 hitProbe 同一 ABI） ── */
+
+static uint64_t g_gestureTree = 0;
+
+/**
+ * gestureHitPrepare(fixtureJson, vpW, vpH, density): string(JSON)
+ *   SFC 夹具建树缓存（手势场景用；命中测试打在这棵树上）——与 sfcStressProbe 同一条链
+ *   （实例化产物 → Rust 排版，度量表由宿主注入）。
+ */
+static napi_value GestureHitPrepare(napi_env env, napi_callback_info info) {
+    size_t argc = 4;
+    napi_value args[4] = {nullptr, nullptr, nullptr, nullptr};
+    napi_get_cb_info(env, info, &argc, args, nullptr, nullptr);
+    if (argc < 3 || args[0] == nullptr) {
+        napi_value out;
+        napi_create_string_utf8(env, "{\"ok\":false,\"error\":\"缺参数\"}", NAPI_AUTO_LENGTH, &out);
+        return out;
+    }
+    std::string fixture;
+    {
+        size_t len = 0;
+        napi_get_value_string_utf8(env, args[0], nullptr, 0, &len);
+        fixture.resize(len + 1);
+        napi_get_value_string_utf8(env, args[0], &fixture[0], len + 1, &len);
+        fixture.resize(len);
+    }
+    double vpW = 0, vpH = 0, density = 1.0;
+    napi_get_value_double(env, args[1], &vpW);
+    napi_get_value_double(env, args[2], &vpH);
+    if (argc >= 4) napi_get_value_double(env, args[3], &density);
+    std::unordered_map<int, Rect> rectMap;
+    uint64_t handle = layoutSfcFixture(fixture, vpW, vpH, density, rectMap);
+    if (handle == 0) {
+        napi_value out;
+        napi_create_string_utf8(env, "{\"ok\":false,\"error\":\"建树失败\"}", NAPI_AUTO_LENGTH, &out);
+        return out;
+    }
+    if (g_gestureTree != 0) proteus_layout_destroy(g_gestureTree);
+    g_gestureTree = handle;
+    char buf[160];
+    snprintf(buf, sizeof(buf), "{\"ok\":true,\"nodes\":%d,\"rects\":%d}", (int)rectMap.size(), (int)rectMap.size());
+    OH_LOG_Print(LOG_APP, LOG_INFO, PROTEUS_BENCH_DOMAIN, PROTEUS_BENCH_TAG,
+                 "PROTEUS_GESTURE_HITPREP nodes=%{public}d", (int)rectMap.size());
+    napi_value out;
+    napi_create_string_utf8(env, buf, NAPI_AUTO_LENGTH, &out);
+    return out;
+}
+
+/** gestureHitAt(xDesign, yDesign): string(JSON) —— 核心 hitTest 原样透传（target/path/chain） */
+static napi_value GestureHitAt(napi_env env, napi_callback_info info) {
+    size_t argc = 2;
+    napi_value args[2] = {nullptr, nullptr};
+    napi_get_cb_info(env, info, &argc, args, nullptr, nullptr);
+    double x = 0, y = 0;
+    if (argc >= 2) {
+        napi_get_value_double(env, args[0], &x);
+        napi_get_value_double(env, args[1], &y);
+    }
+    std::string rj = "{\"ok\":false,\"error\":\"未建树（先 gestureHitPrepare）\"}";
+    if (g_gestureTree != 0) {
+        char* raw = proteus_layout_hit_test(g_gestureTree, (float)x, (float)y);
+        if (raw != nullptr) {
+            rj = raw;
+            proteus_layout_free_string(raw);
+        }
+    }
+    napi_value out;
+    napi_create_string_utf8(env, rj.c_str(), NAPI_AUTO_LENGTH, &out);
+    return out;
+}
+
 /** animCurveBezier(curveId): string(JSON) —— 内核曲线采样（矩阵 #15 A1："贝塞尔来自内核"） */
 static napi_value AnimCurveBezier(napi_env env, napi_callback_info info) {
     size_t argc = 1;
@@ -2721,6 +2792,8 @@ static napi_value BenchInit(napi_env env, napi_value exports) {
         {"hostRtShellInstall", nullptr, HostRtShellInstall, nullptr, nullptr, nullptr, napi_default, nullptr},
         {"hostRtShellEvent", nullptr, HostRtShellEvent, nullptr, nullptr, nullptr, napi_default, nullptr},
         {"mountVirtualProbe", nullptr, MountVirtualProbe, nullptr, nullptr, nullptr, napi_default, nullptr},
+        {"gestureHitPrepare", nullptr, GestureHitPrepare, nullptr, nullptr, nullptr, napi_default, nullptr},
+        {"gestureHitAt", nullptr, GestureHitAt, nullptr, nullptr, nullptr, napi_default, nullptr},
         {"version", nullptr, BenchVersion, nullptr, nullptr, nullptr, napi_default, nullptr},
     };
     napi_define_properties(env, exports, sizeof(desc) / sizeof(desc[0]), desc);

@@ -35,5 +35,9 @@ export const hostRtShellInstall: (argsJson: string) => string;
 export const hostRtShellEvent: (evt: string) => string;
 /** ★矩阵 #12：整树级虚拟化（全树进核 + 池化层 + 命中一致性）——fixture = vapor-tree.json */
 export const mountVirtualProbe: (fixtureJson: string) => string;
+/** ★矩阵 #7：手势命中——SFC 夹具建树缓存（触摸坐标 → 核心 hitTest 用） */
+export const gestureHitPrepare: (fixtureJson: string, vpW: number, vpH: number, density: number) => string;
+/** ★矩阵 #7：核心 hitTest（设计单位坐标）→ {ok,target,path,chain} 原样返回 */
+export const gestureHitAt: (xDesign: number, yDesign: number) => string;
 /** Rust 排版核版本（仪器自检） */
 export const version: () => string;

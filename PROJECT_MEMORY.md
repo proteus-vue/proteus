@@ -87,6 +87,36 @@ check-consistency-snapshot 七段全绿 · check:no-blind-wait ✅（新 .sh 零
 ① L2/L3/L2.5/L2.6 算子用**合成快照**——证明的是"比对引擎敏不敏感"，不是"真机数据一定对"；
 ② L4 算子用真截图但取同端注入（跨端噪声底含 AA，无区分度）；L4 的价值形态是**定位**。
 
+### ★★★2026-10-03（七十九）· 鸿蒙腿 **手势（真注入 · 真时长分流）**（矩阵 #7）—— 8/8 PASS，闭合 iOS 明确未覆盖项
+
+**用户「继续」→ 接矩阵 #7**。iOS 的 V16 已 PASS 但诚实标注 `not_covered: UITouch->duration-classification`
+（注入即声明类型）；鸿蒙走**系统输入栈真注入**（`uitest uiInput click/longClick/swipe`）⇒ 该缺口在此闭合。
+
+**链路**：`uitest uiInput` 真注入 → ArkTS `.onTouch`（标准触摸链，真时间戳）→ 样本落盘 JSONL
+（每段 down 点附**核心 hitTest** 结果）→ **三端中立识别器**（`packages/gesture`——与 Web/MP 同一条）分类。
+
+**真机读数（8/8 PASS）**
+| 段 | 注入 | 样本 | 按住时长 | 分类 | 命中 |
+|---|---|---|---|---|---|
+| 1 | click | 2 | **106ms** | tap | target 22 / chain 3 |
+| 2 | longClick | 2 | **1517ms** | longpress | target 14 / chain 3 |
+| 3 | swipe | 22 | 339ms | **swipe-up** | target 22 / chain 3 |
+零串扰（语义事件恰好 3）· 时长由**样本时间戳**算出（非声明）。
+
+**★实测两个坑**
+1. **`addNodeEventReceiver(NODE_TOUCH_EVENT)` 收不到注入事件**（rc_reg/rc_recv=0 但零回调——
+   hit test 模式也显式设了 DEFAULT；查了 enum/文档都没毛病）⇒ 改用 **ArkTS `.onTouch`**（标准触摸链）
+   ——**"原生的高级接口不通时，标准应用层接口往往是可用的"**（如实记录，不硬撑）。
+2. **分段不能按时间间隔切**：longpress 的 down→up 间隔**就是按住时长 1517ms**——
+   首版 gap>500ms 切分把它劈成两段（"longpress 段"消失）。正解：按 **down/up 配对**切分。
+   ★与"时长即签名"同源：手势数据里**时间本身就携带语义**，按它做结构切分会自毁语义。
+
+**指标**：矩阵鸿蒙 **19/22 → 20/22**。
+
+**诚实边界**：① 识别器分类跑在**主机侧**（脚本把样本喂 `packages/gesture`）——与 Android/iOS
+把分类放宿主端（GestureDetector/自研处理器）不同；本批证明"真触摸 → 中立识别"这条链，
+宿主内嵌识别器是后续批次；② 未做 fling/多指（Android fling 负向计数待对齐）。
+
 ### ★★★2026-10-03（七十八）· 鸿蒙腿 **滚动深度接线**（矩阵 #5，◐→✅）—— Proteus 自绘滚动 60fps 与原生等价 + 并发编排缺陷抓出
 
 **用户「继续」→ 补矩阵 #5 的深接线**（此前只采了 ArkUI Scroll 容器的帧率，滚动**不是** Proteus 渲染路径）。
@@ -1601,6 +1631,8 @@ check-consistency-snapshot 七段全绿 · script-compile ✅ · no-blind-wait �
 **新诚实边界**：平移对齐会**吸收真实位置差异**（若某端整体真的偏了 3px，对齐后看不出）——
 "位置是否正确"由 L2 几何数值比对承担；L4 只管"画出来像不像"（已写入注记与文档）。
 ④ 仍未接入：iOS/Android 真机截图（当前 Web=Playwright、MP=模拟器，均非真机）。
+
+## 当前状态速览（最近一次更新：**2026-10-03·（七十九）· 鸿蒙腿 **手势 真注入·真时长分流**（矩阵 #7，20/22）—— 8/8 PASS：tap 106ms / longpress 1517ms / swipe-up 按真时长分类（闭合 iOS not_covered 项）；两坑固化（原生接收器不通改标准 onTouch / 分段按 down-up 配对）**）★新会话以此为准
 
 ## 当前状态速览（最近一次更新：**2026-10-03·（七十八）· 鸿蒙腿 **滚动深度接线**（矩阵 #5，19/22，◐清零）—— Proteus 自绘滚动 60fps（16.64 平坦分布）与原生等价；并发编排缺陷抓出（p95 200ms→16.64）**）★新会话以此为准
 

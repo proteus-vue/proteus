@@ -1,0 +1,101 @@
+{
+ "ok": true,
+ "path": "gesture",
+ "host_id": "harmony",
+ "note": "鸿蒙腿：uitest uiInput 真注入（系统输入栈）→ ArkTS onTouch 真触摸链 → 样本落盘 → 三端中立识别器分类；★覆盖 iOS V16 明确未覆盖的 \"UITouch->duration-classification\"（真实时长分流）",
+ "ts_unit": "ns(已换算 ms)",
+ "segments": [
+  {
+   "seg": 1,
+   "samples": 2,
+   "start_kind": "down",
+   "held_ms": 106,
+   "x": 188.57,
+   "y": 152,
+   "semantic": [
+    {
+     "type": "tap",
+     "x": 188.57142857142858,
+     "y": 152,
+     "count": 1
+    }
+   ],
+   "semantic_types": [
+    "tap"
+   ],
+   "pan_events": 1
+  },
+  {
+   "seg": 2,
+   "samples": 2,
+   "start_kind": "down",
+   "held_ms": 1517,
+   "x": 188.57,
+   "y": 294.86,
+   "semantic": [
+    {
+     "type": "longpress",
+     "x": 188.57142857142858,
+     "y": 294.85714285714283
+    }
+   ],
+   "semantic_types": [
+    "longpress"
+   ],
+   "pan_events": 1
+  },
+  {
+   "seg": 3,
+   "samples": 22,
+   "start_kind": "down",
+   "held_ms": 339,
+   "x": 188.57,
+   "y": 409.14,
+   "semantic": [
+    {
+     "type": "swipe",
+     "direction": "up",
+     "velocity": 0.5768943293831704
+    }
+   ],
+   "semantic_types": [
+    "swipe"
+   ],
+   "pan_events": 22
+  }
+ ],
+ "hits": [
+  {
+   "target": 3,
+   "chain_len": 2,
+   "x": 188.57,
+   "y": 152,
+   "ok": true
+  },
+  {
+   "target": 14,
+   "chain_len": 3,
+   "x": 188.57,
+   "y": 294.86,
+   "ok": true
+  },
+  {
+   "target": 22,
+   "chain_len": 3,
+   "x": 188.57,
+   "y": 409.14,
+   "ok": true
+  }
+ ],
+ "checks": {
+  "seg_count_ok": true,
+  "seg1_tap": true,
+  "seg2_longpress": true,
+  "seg3_swipe_up": true,
+  "no_crosstalk": true,
+  "hits_present": true,
+  "hits_have_target": true,
+  "duration_from_samples": true
+ },
+ "verdict": "PASS"
+}
