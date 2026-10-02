@@ -41,7 +41,7 @@
 | 优先级 | 缺口 | 端 | 理由 | 成本 |
 |---|---|---|---|---|
 | ~~P0~~ | ~~A/B 对照~~ | ~~鸿蒙~~ | ✅ **已完成（2026-10-03）**：宿主桥补 `updatePatches`（含**文本先度量再注入**的闭环）+ 判据分档——mount/更新两路几何**逐位一致（0px）** | ✔ |
-| **P1** | A/B 对照 | iOS | 同上；iOS 宿主方法齐备（`updatePatches`/`applyOps`/`rects` 都在），只缺 JS 侧接线与判据 | 0.5 天 |
+| **P1** | A/B 对照 | iOS | **成本重估（2026-10-03 实测）**：iOS 宿主缺 **`readRects`** / **`probeChannels`** 两个方法（A/B 判据的几何/通道读数依赖它们）——虽 `rects()` 功能等同但**命名与返回形状不同**（`proteus_layout_rects` 原样透传 vs Android 的 `{rects:{...}}` 包装）；且 iOS 的 `vapor-artifacts.json` 是**简化版**（5 节点模板 / 单 list 源，与 Android 的 12 节点/3 源/events/handlers **不同源**）⇒ 需先统一产物再接线。**估 1.5–2 天**（非 0.5） | 1.5–2 天 |
 | **P2** | 事件路径 | 鸿蒙 | `tapAt`/`onGesture` 两方法 + 判据 ⑦ 分档（冒泡链已由 hitProbe 佐证） | 0.5 天 |
 | **P3** | 虚拟化列表 | 鸿蒙 | `mountVirtual`/`scrollRows` 两方法（内核 C ABI 已有：`proteus_recycle_*`） | 1 天 |
 
