@@ -350,6 +350,8 @@ static uint64_t layoutSfcFixture(const std::string& fixture, double vpW, double 
     return handle;
 }
 
+static bool jsvmEvalStr(JSVM_Env jenv, const char* expr, std::string* out);  // 前置声明（定义在后）
+
 /** 提取 `"key":{…}` 或 `"key":[…]` 的子串（括号计数；字符串感知）——viewport/rects/text_updates 复用 */
 static std::string extractValueAfterKey(const std::string& json, const char* key, char openCh, char closeCh) {
     std::string needle = std::string("\"") + key + "\"";
@@ -1685,11 +1687,15 @@ static std::string vaporApplyOpsImpl(const std::string& bytesJson) {
             q = vStart;
         }
     }
-    char out[512];
-    snprintf(out, sizeof(out),
-             "{\"ok\":true,\"applied\":%.0f,\"relayout\":%.0f,\"text_synced\":%d,"
-             "\"rects\":%s}",
-             applied, relayout, textSynced, rects.empty() ? "{}" : rects.c_str());
+    // ★★改 std::string（**修一个静默截断**）：首版 `char out[512]` + 内嵌完整 `rects`
+    //   ⇒ 超过 512 字节被 `snprintf` 截断 ⇒ JS 侧 `JSON.parse` 抛
+    //   `Unterminated string in JSON at position 511`（症状离根因极远：表现为"A 路 tap 回调失败"，
+    //   而真因是**宿主回执被截断**）。⇒ 回执拼接一律用 std::string（无长度上限）。
+    char head[256];
+    snprintf(head, sizeof(head),
+             "{\"ok\":true,\"applied\":%.0f,\"relayout\":%.0f,\"text_synced\":%d,",
+             applied, relayout, textSynced);
+    std::string out = std::string(head) + "\"rects\":" + (rects.empty() ? "{}" : rects) + "}";
     OH_LOG_Print(LOG_APP, LOG_INFO, PROTEUS_BENCH_DOMAIN, PROTEUS_BENCH_TAG,
                  "PROTEUS_VAPOR_APPLYOPS applied=%{public}d relayout=%{public}d text_synced=%{public}d bytes=%{public}zu",
                  (int)applied, (int)relayout, textSynced, buf.size());
@@ -1789,13 +1795,14 @@ static std::string vaporUpdatePatchesImpl(const std::string& patchesJson) {
             q = vStart;
         }
     }
-    char out[640];
-    snprintf(out, sizeof(out),
+    // ★std::string（同 applyOps 的截断教训——内嵌 rects 会超 640 字节）
+    char head2[320];
+    snprintf(head2, sizeof(head2),
              "{\"ok\":true,\"path\":\"updatePatches\",\"incremental\":true,"
              "\"patch_count\":%.0f,\"applied\":%.0f,\"changed_rects\":%d,\"relayout\":%.0f,"
-             "\"text_layers_applied\":%d,\"text_measures_injected\":%d,\"rects\":%s}",
-             applied, applied, changedN, relayout, textApplied, mCount,
-             rects.empty() ? "{}" : rects.c_str());
+             "\"text_layers_applied\":%d,\"text_measures_injected\":%d,",
+             applied, applied, changedN, relayout, textApplied, mCount);
+    std::string out = std::string(head2) + "\"rects\":" + (rects.empty() ? "{}" : rects) + "}";
     OH_LOG_Print(LOG_APP, LOG_INFO, PROTEUS_BENCH_DOMAIN, PROTEUS_BENCH_TAG,
                  "PROTEUS_VAPOR_UPDATEPATCHES applied=%{public}d changed=%{public}d relayout=%{public}d text=%{public}d measures=%{public}d",
                  (int)applied, changedN, (int)relayout, textApplied, mCount);
@@ -1812,6 +1819,146 @@ static JSVM_Value VaporUpdatePatchesCb(JSVM_Env env, JSVM_CallbackInfo info) {
     std::string out = vaporUpdatePatchesImpl(patches);
     JSVM_Value r = nullptr;
     OH_JSVM_CreateStringUtf8(env, out.c_str(), out.size(), &r);
+    return r;
+}
+
+
+/* ── 矩阵 #14 续 · A/B ⑦：手势注入 → 核心 hitTest → **反向调 JS**（与 Android JNI 同语义） ── */
+
+static std::string g_vaporGestureCbName;   // 由 bundle 经 onGesture(name) 注册
+static int g_vaporGestureDispatched = 0;   // 派发计数（tapAt 回传 gestures_fired 用）
+
+/**
+ * 调 JS 手势回调（按注册名）——Android 用 JNI 反向调用 `__proteusVaporGesture`，
+ *   鸿蒙在 **JSVM 回调内直接调**（tapAt 由 JS 发起 ⇒ 调用栈里就有 env，无需额外管道）。
+ *   签名 `(type, targetId, chainJson)`——与 bundle 侧的函数声明**逐字对应**。
+ */
+static bool callVaporGesture(JSVM_Env env, const char* type, int target, const std::string& chainJson) {
+    if (g_vaporGestureCbName.empty()) {
+        OH_LOG_Print(LOG_APP, LOG_ERROR, PROTEUS_BENCH_DOMAIN, PROTEUS_BENCH_TAG,
+                     "PROTEUS_VAPOR_GESTURE_NO_NAME（bundle 未调 onGesture 注册？）");
+        return false;
+    }
+    JSVM_Value global = nullptr;
+    if (OH_JSVM_GetGlobal(env, &global) != JSVM_OK) return false;
+    JSVM_Value fn = nullptr;
+    if (OH_JSVM_GetNamedProperty(env, global, g_vaporGestureCbName.c_str(), &fn) != JSVM_OK) {
+        OH_LOG_Print(LOG_APP, LOG_ERROR, PROTEUS_BENCH_DOMAIN, PROTEUS_BENCH_TAG,
+                     "PROTEUS_VAPOR_GESTURE_NO_PROP name=%{public}s", g_vaporGestureCbName.c_str());
+        return false;
+    }
+    bool isFn = false;
+    if (OH_JSVM_IsFunction(env, fn, &isFn) != JSVM_OK || !isFn) {
+        // ★取证读数：该键存在但**不是函数**（与"键不存在"是两个不同的修法方向）
+        OH_LOG_Print(LOG_APP, LOG_ERROR, PROTEUS_BENCH_DOMAIN, PROTEUS_BENCH_TAG,
+                     "PROTEUS_VAPOR_GESTURE_NOT_FN name=%{public}s（键存在但 typeof≠function）",
+                     g_vaporGestureCbName.c_str());
+        return false;
+    }
+    JSVM_Value argv[3] = {nullptr, nullptr, nullptr};
+    OH_JSVM_CreateStringUtf8(env, type, JSVM_AUTO_LENGTH, &argv[0]);
+    OH_JSVM_CreateInt32(env, target, &argv[1]);
+    OH_JSVM_CreateStringUtf8(env, chainJson.c_str(), JSVM_AUTO_LENGTH, &argv[2]);
+    JSVM_Value result = nullptr;
+    if (OH_JSVM_CallFunction(env, global, fn, 3, argv, &result) != JSVM_OK) {
+        // ★★归因（本仓纪律：失败必须可定位）。两条读数都是空（`exc=` 与 JS try/catch 的 detail）
+        // ★★失败归因链（本仓纪律：失败必须可定位；**四轮实证，全记**）：
+        //   ① `GetAndClearLastException` 取消息 ⇒ **空**——异常挂起时同 env 的后续 eval 也被阻塞；
+        //   ② 先清异常、再 eval + JS try/catch ⇒ 终于拿到真错：
+        //      `Unterminated string in JSON at position 511` —— **宿主回执被截断**
+        //      （`char out[512]` 内嵌完整 rects；**症状表现为"A 路 tap 回调失败"，真因在宿主输出**）；
+        //   ③ 回执拼接已改 `std::string`（见 applyOps/updatePatches）——本处保留"清异常 + 归因"路径。
+        JSVM_Value exc = nullptr;
+        OH_JSVM_GetAndClearLastException(env, &exc);
+        {
+            std::string expr = std::string("(function(){try{return String(globalThis[\"") + g_vaporGestureCbName +
+                "\"](\"" + type + "\"," + std::to_string(target) + ",\"" + chainJson +
+                "\"))}catch(e){return 'EXC:'+(e&&e.message?e.message:String(e))}})()";
+            std::string detail;
+            if (jsvmEvalStr(env, expr.c_str(), &detail) && !detail.empty()) {
+                std::string line = std::string("PROTEUS_VAPOR_GESTURE_CALL_FAIL type=") + type +
+                                   " target=" + std::to_string(target) + " detail=" + detail.substr(0, 260);
+                OH_LOG_Print(LOG_APP, LOG_ERROR, PROTEUS_BENCH_DOMAIN, PROTEUS_BENCH_TAG,
+                             "%{public}s", line.c_str());
+            }
+        }
+        return false;
+    }
+    // ★回执读数（handler 名/是否 fired——诊断"A 路命中但 handler 没跑"用）
+    std::string rs;
+    if (result != nullptr && jsvmStr(env, result, &rs)) {
+        OH_LOG_Print(LOG_APP, LOG_INFO, PROTEUS_BENCH_DOMAIN, PROTEUS_BENCH_TAG,
+                     "PROTEUS_VAPOR_GESTURE type=%{public}s target=%{public}d ret=%.140s",
+                     type, target, rs.c_str());
+    }
+    return true;
+}
+
+/** onGesture(name)：注册手势回调名（bundle 在 mount 后立刻调——见 entry-vapor 的 GESTURE_CB） */
+static JSVM_Value VaporOnGestureCb(JSVM_Env env, JSVM_CallbackInfo info) {
+    size_t argc = 1;
+    JSVM_Value args[1] = {nullptr};
+    OH_JSVM_GetCbInfo(env, info, &argc, args, nullptr, nullptr);
+    if (argc > 0) jsvmStr(env, args[0], &g_vaporGestureCbName);
+    // ★注册日志（诊断必需：注册没发生 ⇒ tapAt 的 CallFunction 必然失败——本仓实测踩到）
+    OH_LOG_Print(LOG_APP, LOG_INFO, PROTEUS_BENCH_DOMAIN, PROTEUS_BENCH_TAG,
+                 "PROTEUS_VAPOR_ON_GESTURE name=%{public}s argc=%{public}zu",
+                 g_vaporGestureCbName.c_str(), argc);
+    std::string out = "{\"ok\":true,\"registered\":\"" + jsonEscape(g_vaporGestureCbName) + "\"}";
+    JSVM_Value r = nullptr;
+    OH_JSVM_CreateStringUtf8(env, out.c_str(), out.size(), &r);
+    return r;
+}
+
+/**
+ * tapAt({x,y})：核心 hitTest → 反向调 JS 回调 → 回执（**与 Android 同形**）。
+ *
+ * 【为什么能"同步跑完 handler"】tapAt 由 JS 发起（调用栈里有 env）⇒ 直接 `CallFunction`
+ *   → bundle 的 `__proteusVaporGesture` 内同步跑 handler + 订阅 + applyOps ⇒ 返回时几何已变
+ *   （与 Android 的 `tapAt 是同步的：返回时 JS 回调已跑完` 同语义）。
+ */
+static JSVM_Value VaporTapAtCb(JSVM_Env env, JSVM_CallbackInfo info) {
+    size_t argc = 1;
+    JSVM_Value args[1] = {nullptr};
+    OH_JSVM_GetCbInfo(env, info, &argc, args, nullptr, nullptr);
+    std::string js;
+    if (argc > 0) jsvmStr(env, args[0], &js);
+    double x = 0, y = 0;
+    jnum(js.c_str(), js.size(), "x", &x);
+    jnum(js.c_str(), js.size(), "y", &y);
+
+    int target = -1;
+    std::string chainJson = "[]";
+    if (g_vaporHandle != 0) {
+        char* hRaw = proteus_layout_hit_test(g_vaporHandle, (float)x, (float)y);
+        std::string hStr = hRaw ? hRaw : "{}";
+        if (hRaw) proteus_layout_free_string(hRaw);
+        // ★target 可为 null（界外未命中）——显式判 null（同 hitProbe 的教训）
+        if (hStr.find("\"target\":null") == std::string::npos) {
+            double t = -1;
+            if (jnum(hStr.c_str(), hStr.size(), "target", &t)) target = (int)t;
+        }
+        std::string chain = extractValueAfterKey(hStr, "chain", '[', ']');
+        if (!chain.empty()) chainJson = chain;
+    }
+    int fired = 0;
+    if (target >= 0 && callVaporGesture(env, "tap", target, chainJson)) {
+        fired = 1;
+        g_vaporGestureDispatched++;
+    }
+    std::string lastStr = target >= 0
+        ? ("{\"type\":\"tap\",\"target\":" + std::to_string(target) +
+           ",\"chain_len\":" + std::to_string((int)parseIntArrayBare(chainJson).size()) + "}")
+        : "null";
+    char out[384];
+    snprintf(out, sizeof(out),
+             "{\"ok\":true,\"x\":%.1f,\"y\":%.1f,\"dispatched\":%d,\"gestures_fired\":%d,\"last\":%s}",
+             x, y, g_vaporGestureDispatched, fired, lastStr.c_str());
+    OH_LOG_Print(LOG_APP, LOG_INFO, PROTEUS_BENCH_DOMAIN, PROTEUS_BENCH_TAG,
+                 "PROTEUS_VAPOR_TAP x=%.1f y=%.1f target=%{public}d chain=%.40s fired=%{public}d",
+                 x, y, target, chainJson.c_str(), fired);
+    JSVM_Value r = nullptr;
+    OH_JSVM_CreateStringUtf8(env, out, strlen(out), &r);   // ★char 数组用 strlen（不是 .size()）
     return r;
 }
 
@@ -1922,6 +2069,8 @@ static napi_value VaporProbe(napi_env env, napi_callback_info info) {
     g_vaporPaintedSamples = 0;
     g_vaporPaintedColors = 0;
     g_vaporUpdatePatchCalls = 0;
+    g_vaporGestureCbName.clear();
+    g_vaporGestureDispatched = 0;
     g_vaporDensity = density;
     g_vaporStyles.clear();
 
@@ -1971,6 +2120,9 @@ static napi_value VaporProbe(napi_env env, napi_callback_info info) {
             {"probeChannels", {VaporProbeChannelsCb, nullptr}},
             // ★A/B 的 B 路（Vue patch → 适配器补丁 → 本入口）
             {"updatePatches", {VaporUpdatePatchesCb, nullptr}},
+            // ★A/B ⑦ 事件路径：注入 + 反向调 JS（与 Android JNI 同语义）
+            {"onGesture", {VaporOnGestureCb, nullptr}},
+            {"tapAt", {VaporTapAtCb, nullptr}},
         };
         for (auto& f : fns) {
             JSVM_Value fn = nullptr;
@@ -1980,6 +2132,16 @@ static napi_value VaporProbe(napi_env env, napi_callback_info info) {
         JSVM_Value global = nullptr;
         OH_JSVM_GetGlobal(jenv, &global);
         OH_JSVM_SetNamedProperty(jenv, global, "proteusHost", host);
+        // ★桥自检（本仓纪律：注入后立刻验"JS 侧看得见什么"——`tapAt` 不生效这类问题
+        //   若不在此处取证，只能从"事件段被跳过"反向猜）：
+        {
+            std::string probe;
+            jsvmEvalStr(jenv,
+                        "Object.keys(proteusHost).map(function(k){return k+':'+typeof proteusHost[k]}).join(',')",
+                        &probe);
+            OH_LOG_Print(LOG_APP, LOG_INFO, PROTEUS_BENCH_DOMAIN, PROTEUS_BENCH_TAG,
+                         "PROTEUS_VAPOR_BRIDGE %{public}s", probe.c_str());
+        }
 
         // eval bundle（IIFE——与 Android QuickJS 直接 eval 同一份文件）
         JSVM_Value src = nullptr;
