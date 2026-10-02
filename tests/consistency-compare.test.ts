@@ -57,6 +57,10 @@ const style = (mut: (s: Record<string, unknown>) => void = () => {}): StyleSnaps
     fontSize: 16,
     fontWeight: 700,
     fontFamily: 'PingFang SC',
+    // ★覆盖扩展（2026-10-02·二批）：布局族
+    width: 200, minWidth: 0, gap: 0,
+    flexDirection: 'column', justifyContent: 'flex-start', alignItems: 'stretch',
+    flexGrow: 1, flexShrink: 0, overflow: 'visible',
   }
   mut(styles)
   return {
@@ -269,6 +273,30 @@ describe('VC6 · L3 样式比对', () => {
       allowDifferences: [{ id: 'A-6', key: 'fontFamily' }],
     })
     expect(mixed.ok, '清单外差异（颜色）仍判失败——"清单外一律当 bug"').toBe(false)
+  })
+
+  it('⑮c ★覆盖扩展字段：布局族的分级归类与容差各有其位', () => {
+    // 归类（classifyStyleKey 是比对与 M1 统计的共同来源）
+    expect(classifyStyleKey('width')).toBe('numericLength')
+    expect(classifyStyleKey('minWidth')).toBe('numericLength')
+    expect(classifyStyleKey('gap')).toBe('numericLength')
+    expect(classifyStyleKey('flexGrow')).toBe('scalar')
+    expect(classifyStyleKey('flexShrink')).toBe('scalar')
+    expect(classifyStyleKey('flexDirection')).toBe('enum')
+    expect(classifyStyleKey('overflow')).toBe('enum')
+    // 行为：主轴尺寸差异按 structure 容差（1px 内不报、2px 报）
+    const w1 = compareStyle(style(), style((s) => { s.width = 200.5 }), { tolerance: projTolerance })
+    expect(w1.diffs.find((d) => d.key === 'width')!.overTolerance, '0.5px 在容差内').toBe(false)
+    const w2 = compareStyle(style(), style((s) => { s.width = 202 }), { tolerance: projTolerance })
+    expect(w2.diffs.find((d) => d.key === 'width')!.overTolerance, '2px 超容差').toBe(true)
+    // 行为：flexGrow 是无单位标量——1 vs 2 必须报（不能当 px 容差吞掉）
+    const fg = compareStyle(style(), style((s) => { s.flexGrow = 2 }), { tolerance: projTolerance })
+    const d = fg.diffs.find((x) => x.key === 'flexGrow')!
+    expect(d.class).toBe('scalar')
+    expect(d.overTolerance, 'flexGrow 1→2 是真实差异').toBe(true)
+    // 行为：枚举严格（overflow visible→hidden 必报）
+    const ov = compareStyle(style(), style((s) => { s.overflow = 'hidden' }), { tolerance: projTolerance })
+    expect(ov.diffs.find((x) => x.key === 'overflow')!.overTolerance).toBe(true)
   })
 
   it('⑯ compareStyleAgainstWeb：真值基准强制', () => {
