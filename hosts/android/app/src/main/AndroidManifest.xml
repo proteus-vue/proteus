@@ -16,5 +16,19 @@
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
         </activity>
+        <!-- ★★L4 观测夹具（独立 Activity · 2026-10-02）：Manifest 声明全屏主题 ⇒ 冷启动即无
+             「状态栏 + ActionBar」，与其它四端（Web/小程序/iOS）取景对齐。
+             用户反馈「安卓看着整体位置偏下」的真因就是这两道系统栏（312px）；运行时隐藏
+             （setDecorFitsSystemWindows/hide）会引入重排与截图竞态（实测：过校正到 7.4% +
+             首帧截图仍是旧 chrome），⇒ 用声明式主题（零重排）。本 Activity 无 launcher 入口。 -->
+        <!-- ★exported 必须 true：采集脚本用 `adb shell am start` 启动它，而 adb shell 是
+             external uid（uid 2000）——exported=false 会被 ActivityTaskSupervisor 拒
+             （实测：Permission Denial ... not exported from uid 10703）。
+             无 launcher intent-filter ⇒ 用户桌面看不到入口，仅脚本可达。 -->
+        <activity
+            android:name=".L4Activity"
+            android:exported="true"
+            android:theme="@android:style/Theme.NoTitleBar.Fullscreen"
+            android:configChanges="orientation|screenSize|smallestScreenSize|screenLayout|keyboardHidden|uiMode" />
     </application>
 </manifest>
