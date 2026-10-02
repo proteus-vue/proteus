@@ -87,6 +87,42 @@ check-consistency-snapshot 七段全绿 · check:no-blind-wait ✅（新 .sh 零
 ① L2/L3/L2.5/L2.6 算子用**合成快照**——证明的是"比对引擎敏不敏感"，不是"真机数据一定对"；
 ② L4 算子用真截图但取同端注入（跨端噪声底含 AA，无区分度）；L4 的价值形态是**定位**。
 
+### ★★★2026-10-02（六十二）· **App 高性能渲染 · 鸿蒙腿补齐 —— 三端数据齐**（用户：「先把 App 高性能渲染刚好把鸿蒙补齐了，先把这个补齐，然后数据全都齐了」）
+
+**做了什么**（承接六十一的 RenderNode 直绘，把方案 M5 的"数据缺口"补上）：
+
+**① Rust 排版核交叉编译到鸿蒙（同一份源码第四种落地）**：
+- `rustup target add aarch64-unknown-linux-ohos` + OHOS NDK clang 交叉链接
+  （`hosts/harmony/build-rust-core.sh`；产物 `libproteus_layout_core.a` 32MB，gitignore）；
+- 落地形态 = **C ABI 直接链接**（无绑定层）：Android 走 JNI、iOS 走 `@_silgen_name`、鸿蒙走 C ABI——
+  三种绑定同一组 `proteus_layout_*` 函数（"排版核心写一遍"的再次兑现）；
+- ★坑：Rust 1.98（LLVM22）产物用 NDK 的 llvm-nm（LLVM15）读不了符号（`Unknown attribute kind`），
+  但**链接完全正常**——判据用"链接测试"而非"nm 读取"（先验链接再下结论）。
+
+**② 4050 应用级基准（鸿蒙腿，对标 Android/iOS 同口径）**：
+- `proteus_bench.cpp`（NAPI）：读**同一份夹具** `app-4050-tree.json` → Rust 核建树排版 → RenderNode 直绘树构建；
+- **真机读数（3 次一致）**：Proteus 路径 **66~67ms**（scope 57.5~58.5ms：排版 9.7~10.4ms + 4000 RenderNode 47.4~48.6ms）；
+  **原生 ArkUI 对照 539~549ms**（4050 声明式元素 onAppear 全触发）；**比值 0.12**；
+- ★**口径如实标注**（写进 `results/bench-4050.json` 的 caveats）：Proteus 侧=「提交级」（未上屏）、
+  原生侧=「渲染级」（含首帧构建+挂载）——**不对称，不反推"等口径快 8 倍"**；
+- **三端数据齐**：Android **0.527**（应用级 A/B 5 轮，Redmi）· iOS **2.58**（拍平绘制 21.87ms / 原生 UILabel 8.48ms，
+  CALayer 路线另口径）· 鸿蒙 **0.12**（本卡新数据，口径见注）。
+
+**③ 自动化 + 文档**：`run-host-app.sh` 扩展第 6 步（条件等待 4050 基准 + 原生对照上报，零盲等；
+读数落盘 `results/`）；方案文档 M5 状态更新（✅ 绘制层接入 + 4050 数据已齐）；
+README 第三里程碑节（含三端对照表 + 每项口径注）。
+
+**★★ 实测坑（鸿蒙 UI 线程的硬约束，写进 README）**：
+1. **THREAD_BLOCK_6S 看门狗**：主线程卡 6 秒被系统杀进程——首版 `readFixture` 用逐字符
+   `out += String.fromCharCode(...)`（435KB ⇒ O(n²) 拼接）触发；修法 = `util.TextDecoder` 一次解码（2ms）。
+   ★这是鸿蒙**特有**（Android/iOS 测试宿主无此约束）——基准装置必须适配 UI 线程预算。
+2. 基准分档（500/2000/4050）+ 档间 `setTimeout(16)` 让出主线程。
+3. hilog 浮点 `%{public}.2f` 会显示 `<private>`（隐私标记与浮点格式不兼容）——日志取数只看 JSON 字段。
+
+**诚实边界**：① 文本绘制未实现（排版含 2000 文本节点，直绘树只建背景色节点——无文字光栅化）；
+② 原生对照含首帧上屏、我们不含（口径不对称见上）；③ 棘轮未接（鸿蒙腿数据刚有，纳入基线待下一批）；
+④ 语义树/无障碍仍未做。
+
 ### ★★★2026-10-02（六十一）· 鸿蒙宿主 **RenderNode 直绘接入 —— 第二里程碑达成（真机）**
 
 **用户「不错，继续」→ 开工**（承接六十的第一里程碑：装机+启动+界面渲染）。
@@ -1029,7 +1065,7 @@ check-consistency-snapshot 七段全绿 · script-compile ✅ · no-blind-wait �
 "位置是否正确"由 L2 几何数值比对承担；L4 只管"画出来像不像"（已写入注记与文档）。
 ④ 仍未接入：iOS/Android 真机截图（当前 Web=Playwright、MP=模拟器，均非真机）。
 
-## 当前状态速览（最近一次更新：**2026-10-02·（六十一）· 鸿蒙宿主 **第二里程碑：RenderNode 直绘（真机）**：Proteus 指令流 → NAPI → `OH_ArkUI_RenderNodeUtils` **绕过 measure/layout 直建渲染节点树**（nodes=4 + 截图存证）；固化三个实测坑（CAPI 初始化顺序 / hilog 宏 / ArkTS 严格模式）；下一批 = 接内核真实指令流 + text/image 指令**）★新会话以此为准
+## 当前状态速览（最近一次更新：**2026-10-02·（六十二）· **App 高性能渲染 · 鸿蒙腿补齐 —— 三端数据齐**：Rust 核交叉编译到 `aarch64-unknown-linux-ohos`（C ABI 直链）+ 4050 基准真机读数（Proteus 66~67ms vs 原生 ArkUI 539~549ms = **0.12**，口径注于 `bench-4050.json`）；三端汇总：Android 0.527 / iOS 2.58 / 鸿蒙 0.12；固化鸿蒙 UI 线程 THREAD_BLOCK_6S 坑**）★新会话以此为准
 ### ★★★2026-10-02（三十八）· 交互两层（离散 + 连续）—— 标准 §10.1 的最后两个"未布点"
 
 **交付**

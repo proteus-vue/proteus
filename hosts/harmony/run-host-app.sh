@@ -94,9 +94,24 @@ if [ -n "$READY_LINE" ]; then
     echo "    $RENDER_LINE"
     ATTACH_LINE="$(HDC shell "hilog -x | grep PROTEUS_RENDER_ATTACHED | tail -1" 2>/dev/null | head -1)"
     echo "    ${ATTACH_LINE}（capi=1 = CAPI 已初始化）"
-    # 落盘证据
+    # ── 6. 4050 应用级基准（M5）：抓取读数落盘（条件等待末档——零盲等）──
+    BENCH_JSON=""
+    NATIVE_LINE=""
+    if bash "$WAIT_SH" --cmd "bash '$HERE/hdc.sh' shell 'hilog -x | grep -q \"PROTEUS_BENCH_NATIVE wall_ms\"'" --timeout 60 --interval 3; then
+      BENCH_LINE="$(HDC shell "hilog -x | grep 'PROTEUS_BENCH_RESULT limit=4050' | tail -1" 2>/dev/null | head -1)"
+      NATIVE_LINE="$(HDC shell "hilog -x | grep 'PROTEUS_BENCH_NATIVE wall_ms' | tail -1" 2>/dev/null | head -1)"
+      BENCH_JSON="$(printf '%s' "$BENCH_LINE" | sed -n 's/.*PROTEUS_BENCH_RESULT limit=4050 wall_ms=\([0-9]*\) //p')"
+      echo
+      echo "  ✓ 4050 应用级基准（鸿蒙腿）："
+      echo "    Proteus：${BENCH_LINE}"
+      echo "    原生对照：${NATIVE_LINE}"
+    else
+      echo "  ⚠ 4050 基准未上报（60s）——查看：bash hosts/harmony/hdc.sh shell 'hilog -x | grep PROTEUS_BENCH | tail -10'"
+    fi
+    # 落盘证据（含基准原始行）
     { echo "installed_at=$(date -u +%Y-%m-%dT%H:%M:%SZ)"; echo "hap=$HAP"; echo "ready_line=$READY_LINE";
-      echo "render_line=$RENDER_LINE"; } > "$RESULTS/host-app-run.txt"
+      echo "render_line=$RENDER_LINE";
+      echo "bench_line=${BENCH_LINE:-none}"; echo "native_line=${NATIVE_LINE:-none}"; } > "$RESULTS/host-app-run.txt"
     echo
     echo "✅ 鸿蒙宿主验收通过（真机 HUAWEI KLE-AL00U）：装机 + 启动 + **RenderNode 直绘**"
     echo "   证据：$RESULTS/host-app-run.txt · 截图：$RESULTS/render-node-demo.jpeg"

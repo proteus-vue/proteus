@@ -1,0 +1,62 @@
+{
+  "scene": "app-4050（对标 uni-app x 创建元素场景；应用级口径）",
+  "device": "HUAWEI KLE-AL00U · OpenHarmony 7.0.0 · API 26 · 1320x2856 @120Hz",
+  "date": "2026-10-02",
+  "fixture": "app-4050-tree.json（与 Android 同一份真 SFC 编译产物：2050 view + 2000 text = 4050 元素 + 1 根）",
+  "path": "Rust 排版核（aarch64-unknown-linux-ohos 交叉编译，taffy-0.14）+ RenderNode 直绘树构建",
+  "readings": {
+    "run1": {
+      "wall_ms": 67,
+      "scope_ms": 58.24,
+      "layout_ms": 9.68,
+      "emit_ms": 48.55,
+      "built_render_nodes": 4000
+    },
+    "run2": {
+      "wall_ms": 67,
+      "scope_ms": 58.54,
+      "layout_ms": 10.36,
+      "emit_ms": 48.17,
+      "built_render_nodes": 4000
+    },
+    "run3": {
+      "wall_ms": 66,
+      "scope_ms": 57.51,
+      "layout_ms": 10.07,
+      "emit_ms": 47.43,
+      "built_render_nodes": 4000
+    }
+  },
+  "native_control": {
+    "wall_ms": 539,
+    "appeared": 4050,
+    "form": "声明式 ArkUI（50 行 × 40 格 × (格子+Text) = 4050 元素；全部 onAppear 触发为终点）"
+  },
+  "ratio": 0.122,
+  "caveats": [
+    "★口径不对称（如实标注）：Proteus 侧为「提交级」（建树+排版+4000 个 RenderNode 构建，未上屏、Dispose 回收）；原生侧为「渲染级」（4050 元素 onAppear 全触发——含首帧构建+挂载+上屏调度）。即原生包含更多工作 ⇒ 比值对我们有利，不能反推「等口径下也快 8 倍」。",
+    "文本绘制未实现：Proteus 侧排版含 2000 个文本节点（走桩度量 textMeasures={}），但直绘树只建带背景色的 4000 节点（2050 view + 2000 text 背景）——无文字光栅化。",
+    "原生 ArkUI 首帧成本极高：观测到前 1000 元素 ~505ms、后续 3050 元素 ~34ms（ArkUI 首帧初始化为主，含字体/渲染管线预热）。",
+    "Rust 核排版 4051 节点 = 9.68~10.36ms（三次一致）——与 Android 侧同核读数同量级。"
+  ],
+  "cross_end": {
+    "android": {
+      "proteus_ms": 46.7,
+      "native_ms": 88.6,
+      "ratio": 0.527,
+      "note": "应用级 A/B（5 轮均值，冷读）；真机 Redmi M098FE · Android 17"
+    },
+    "ios": {
+      "proteus_draw_ms": 21.87,
+      "native_ms": 8.48,
+      "ratio": 2.58,
+      "note": "拍平路线绘制 21.87ms vs 原生 UILabel 8.48ms（iPhone 12）；iOS 侧为 CALayer 路线、不同口径"
+    },
+    "harmony": {
+      "proteus_ms": 66,
+      "native_ms": 539,
+      "ratio": 0.122,
+      "note": "本报告；注：Proteus 侧提交级 vs 原生渲染级（见 caveats）"
+    }
+  }
+}
