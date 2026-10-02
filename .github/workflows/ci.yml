@@ -103,6 +103,9 @@ jobs:
       - name: 三端快照同一格式（VC3/VC4：Web golden ⇄ App 内核工件 ⇄ 小程序双模式，过同一校验器）
         run: pnpm run check:consistency-snapshot
 
+      - name: L4 像素观察报告（VC7：**非门禁**——观察结论不进退出码；schema 违规才红）
+        run: pnpm run check:consistency-pixel
+
       - name: 双端 golden 单一来源（★2026-10-01：两端 conformance golden 必须同源——不同源会让
               覆盖面不一致，收「双端几何一致性」判据时变成**装置性判红**）
         run: pnpm run check:cross-end-golden

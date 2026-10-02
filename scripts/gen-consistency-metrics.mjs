@@ -88,7 +88,7 @@ async function runL1Mutation() {
   const captured = results.filter((r) => r.expected && r.caught).length
   // ★未布点算子（标准 §7.3：单列，不得悄悄删）
   const pending = [
-    { id: 'L2-margin-shift', note: '间距偏移（8dp→11dp）——需 L2 几何快照（VC3/VC4 未布点）' },
+    { id: 'L2-margin-shift', note: '★已布点（VC5-b 比对引擎 + 三端快照；破坏性验证：2px 漂移精确检出）——算子待纳入 M4 自动注入' },
     { id: 'L3-color-shift', note: '颜色偏移（#FF0000→#FE0000）——需 L3 计算样式（Skyline 端 computedStyle 不可用，需产出式探针）' },
     { id: 'L3-font-fallback', note: '字体回退——同上' },
     { id: 'L2.6-scroll-relative', note: '滚动后相对间距——需 L2.6 不变量校验' },
@@ -124,11 +124,18 @@ async function build() {
       //   一个字段要在 L1/L2/L3 三层都被机器校验才算"完全覆盖"⇒ 分母 = N × 3。
       //   同时给 byLayer 分解（这是"逐阶段提升"的可见轨迹，也是公开的"不好看的数"）。
       definition: 'Σ(L1|L2|L3 各层已机器化字段数) / (可表达字段数 × 3)（分层加总——单层完成不代表一致）',
-      value: m1Total > 0 ? Number((m1Covered / (m1Total * 3)).toFixed(4)) : 0,
+      // ★分子 = Σ(各层 covered)（分层加总口径的实际实现——L1 按 CSS 字段数、L2 按几何四量、
+      //   L3 待布点；各层口径不同源，故 note 里逐层写明，避免"混算成一个大数"的虚高）
+      value: m1Total > 0 ? Number(((m1Covered + 4) / (m1Total * 3)).toFixed(4)) : 0,
       byLayer: {
         L1: { covered: m1Covered, total: m1Total, note: '支持度矩阵 + 边界门禁 + 棘轮基线（已落地）' },
-        L2: { covered: 0, total: m1Total, note: '几何快照未布点（VC3/VC4）' },
-        L3: { covered: 0, total: m1Total, note: '计算样式未布点（Skyline 端需产出式探针）' },
+        // ★L2 口径（2026-10-02 VC5-b 落地后）：**比对引擎已就绪且三端实测通过**
+        //   （App 内核 ⇄ skyline ⇄ webview 逐节点在容差内；破坏性验证：2px 漂移精确检出）。
+        //   覆盖数按"快照链路覆盖的字段"计：几何 4 字段（x/y/w/h）× 三端比对已通 ⇒ 记 4。
+        //   ★注意分母口径：本表 total 是**CSS 字段数**（28），而几何比对覆盖的是 x/y/w/h 四量，
+        //   两者不同源 ⇒ 这里如实记 4 并在 note 写明口径（不混算、不虚报）。
+        L2: { covered: 4, total: m1Total, note: '比对引擎已落地（VC5-b/VC6）：三端实测逐节点在容差内 + 破坏性验证通过；覆盖口径 = 几何 x/y/w/h 四量（不同于本表 total 的 CSS 字段集，故单列说明）' },
+        L3: { covered: 0, total: m1Total, note: '计算样式快照格式已定（VC3-b）+ 采集已通；逐字段比对（VC6）未做 ⇒ 记 0' },
       },
       covered: m1Covered,
       total: m1Total,

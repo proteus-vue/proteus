@@ -1,0 +1,136 @@
+{
+  "format": "proteus-pixel-observation",
+  "version": 1,
+  "gate": false,
+  "note": "L4 像素观察——**非门禁**（标准 §8.1）：不追求零噪声，仅作 L1–L3 够不到的四项（圆角/阴影/渐变/字形）的兜底观察。",
+  "pairs": [
+    {
+      "id": "synth:identical",
+      "a": "synth/base",
+      "b": "synth/same",
+      "observation": {
+        "gate": false,
+        "verdict": "identical",
+        "sizeA": {
+          "width": 64,
+          "height": 64
+        },
+        "sizeB": {
+          "width": 64,
+          "height": 64
+        },
+        "sampleCount": 4096,
+        "diffPixels": 0,
+        "diffRatio": 0,
+        "hashDistance": 0,
+        "regions": [],
+        "params": {
+          "channelThreshold": 8,
+          "blockSize": 16,
+          "noiseRatio": 0.005,
+          "noiseHashDistance": 16
+        }
+      }
+    },
+    {
+      "id": "synth:color-jitter",
+      "a": "synth/base",
+      "b": "synth/jitter+4",
+      "observation": {
+        "gate": false,
+        "verdict": "noise-level",
+        "sizeA": {
+          "width": 64,
+          "height": 64
+        },
+        "sizeB": {
+          "width": 64,
+          "height": 64
+        },
+        "sampleCount": 4096,
+        "diffPixels": 0,
+        "diffRatio": 0,
+        "hashDistance": 12,
+        "regions": [],
+        "params": {
+          "channelThreshold": 8,
+          "blockSize": 16,
+          "noiseRatio": 0.005,
+          "noiseHashDistance": 16
+        }
+      }
+    },
+    {
+      "id": "synth:corner-aa",
+      "a": "synth/square",
+      "b": "synth/rounded",
+      "observation": {
+        "gate": false,
+        "verdict": "changed",
+        "sizeA": {
+          "width": 64,
+          "height": 64
+        },
+        "sizeB": {
+          "width": 64,
+          "height": 64
+        },
+        "sampleCount": 4096,
+        "diffPixels": 46,
+        "diffRatio": 0.01123,
+        "hashDistance": 35,
+        "regions": [
+          {
+            "x": 0,
+            "y": 0,
+            "w": 16,
+            "h": 16,
+            "pixels": 46,
+            "ratio": 0.18
+          }
+        ],
+        "params": {
+          "channelThreshold": 8,
+          "blockSize": 16,
+          "noiseRatio": 0.005,
+          "noiseHashDistance": 16
+        }
+      }
+    },
+    {
+      "id": "synth:png-roundtrip",
+      "a": "synth/encode",
+      "b": "synth/decode",
+      "observation": {
+        "gate": false,
+        "verdict": "identical",
+        "sizeA": {
+          "width": 64,
+          "height": 64
+        },
+        "sizeB": {
+          "width": 64,
+          "height": 64
+        },
+        "sampleCount": 4096,
+        "diffPixels": 0,
+        "diffRatio": 0,
+        "hashDistance": 0,
+        "regions": [],
+        "params": {
+          "channelThreshold": 8,
+          "blockSize": 16,
+          "noiseRatio": 0.005,
+          "noiseHashDistance": 16
+        }
+      }
+    }
+  ],
+  "totals": {
+    "sampleCount": 16384,
+    "diffPixels": 46,
+    "changedSamples": 1,
+    "cleanSamples": 3,
+    "knownNoiseSamples": 0
+  }
+}

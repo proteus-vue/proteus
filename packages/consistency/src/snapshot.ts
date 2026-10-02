@@ -26,7 +26,12 @@
 /* ══════════════════ VC3-a：几何快照 ══════════════════ */
 
 /** 快照来源端（闭集——新端必须显式登记，防"悄悄多一个端） */
-export type SnapshotEnd = 'web' | 'skyline' | 'webview' | 'app-android' | 'app-ios' | 'app-harmony'
+export type SnapshotEnd =
+  | 'web' | 'skyline' | 'webview'
+  /** 内核通用标识（Rust 内核是跨平台同一份——它不知道自己跑在哪个宿主上，如实标 'app'）；
+   *  宿主专属采集（如需区分）用下方三个。 */
+  | 'app'
+  | 'app-android' | 'app-ios' | 'app-harmony'
 
 export interface GeometryNode {
   /** 该端稳定节点 id（数字或字符串——Web 用 data-proteus-id 或路径哈希；App 用内核 id） */

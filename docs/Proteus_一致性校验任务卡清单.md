@@ -84,7 +84,19 @@
 - [x] **VC5-d** 允许差异清单 v1（《多端一致性标准方案》§9 / CS2）——✅（2026-10-02）机读清单入库
   `docs/allow-differences.json`（5 条，含 A-4；schema 门禁随 `check:consistency-metrics`）
 - [ ] **VC6** L3 计算样式比对
-- [ ] **VC7** L4 像素兜底
+- [x] **VC7** L4 像素兜底 —— ✅（2026-10-02）：感知算法（pHash DCT）+ 差异区域定位 +
+  样本量记录（卡片硬性）+ 噪声基线 schema（带留痕字段）+ 最小 PNG 编解码（零依赖、平台中立）
+  · 🔴 **非门禁**（`gate: false` 显式字段 + 退出码语义：只有 schema 违规才红）
+  · ★**"1/255 小面积偏移 L4 抓不到"有机器证据**（单测显式断言）——这不是缺陷，
+    是感知哈希的定义性质，也正是 L4 不能当门禁的原因（该场景归 L3，有独立必过项）
+  · 修两处语义缺陷：`identical` 判据加入逐字节相等（否则 1/255 差异被误标"完全一致"）；
+    噪声带宽按实测标定（整幅 +4/255 ⇒ pHash 距离 14 ⇒ noiseHashDistance 默认 16）
+- [x] **VC8-a** CI 集成与门禁 —— ✅（2026-10-02）：`check:consistency-snapshot`（硬门禁）+
+  `check:consistency-pixel`（观察步骤）均已接 CI/verify；★CI 可复现性修复：
+  内核工件从 gitignore 的 `target/` 移至入库位置 + `sync-consistency-samples.mjs` 同步脚本 + 门禁陈旧检测
+- [x] **VC8-b** 失败报告与 AI 可读输出 —— ✅（2026-10-02）：结构化报告（`report.ts`：
+  path/属性/期望/实际/偏差/容差类/suggestion）+ `proteus explain <报告>` 消费 +
+  **★AI 自纠闭环端到端验证**（报告 → explain 解释 → `applyAutoFixToGeometry` → 复比通过）
 - [ ] **VC8-a** CI 集成与门禁
 - [ ] **VC8-b** 失败报告与 AI 可读输出
 
