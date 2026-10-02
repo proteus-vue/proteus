@@ -428,3 +428,70 @@ describe('⑦ codegen/app.ts（RouteNode[] → 屏注册表）', () => {
     expect(s.current()!.name).toBe('home')
   })
 })
+
+// ══════════════════════════════════════════════════════════════════
+// ★★★（2026-10-02 · 依《主流框架路由调研与启示》启示 3）
+//   **栈操作原语补全**（对齐鸿蒙 NavPathStack 的 removeByName / moveToTop）
+//   调研原文：「在现有 navigateTo/redirectTo/switchTab/reLaunch 之上补 popTo(name/path)、
+//   replaceAt(index)、removeByName」——本仓 popTo 早有，缺这两个。
+// ══════════════════════════════════════════════════════════════════
+describe('⑨ 栈原语补全：removeByName / moveToTop（启示 3）', () => {
+  it('removeByName：抹掉中间屏（**只它自己**，上面的屏顺次补位）—— 保栈保状态', () => {
+    const s = createAppStack({ screens: SPECS })
+    s.push('home'); s.push('user'); s.push('detail'); s.push('settings')
+    s.drainCommands()
+    expect(s.depth).toBe(4)
+    // ★选定语义（与 popTo 划清界限）：只移除「user」自己，上面的 detail/settings **原位保留**
+    const n = s.removeByName('user')
+    expect(n).toBe(1) // 只它自己
+    expect(s.depth).toBe(3)
+    expect(s.stack.map((x) => x.name)).toEqual(['home', 'detail', 'settings'])
+    const cmds = s.drainCommands()
+    expect(cmds.filter((c) => c.op === 'unmount').length, '被移除的屏必须 unmount').toBe(1)
+    // ★中间屏被移除 ⇒ 上面的屏一直可见（只是索引前移）⇒ **不打扰可见屏**（零 enter/exit）
+    expect(cmds.some((c) => c.op === 'enter' || c.op === 'exit'), '中间移除不得打扰可见屏').toBe(false)
+  })
+
+  it('removeByName：栈中无此屏 = **no-op**（幂等清理语义，返回 0，不抛错）', () => {
+    const s = createAppStack({ screens: SPECS })
+    s.push('home'); s.push('user')
+    s.drainCommands()
+    expect(s.removeByName('ghost')).toBe(0)
+    expect(s.depth).toBe(2)
+    expect(s.drainCommands().length).toBe(0)
+  })
+
+  it('removeByName：抹掉栈顶 ⇒ 等价 pop（新栈顶可见）', () => {
+    const s = createAppStack({ screens: SPECS })
+    s.push('home'); s.push('user')
+    s.drainCommands()
+    expect(s.removeByName('user')).toBe(1)
+    expect(s.depth).toBe(1)
+    const cmds = s.drainCommands()
+    expect(cmds.map((c) => c.op)).toEqual(['unmount', 'enter'])
+    expect(cmds[1]!.screenId.startsWith('home#')).toBe(true)
+  })
+
+  it('moveToTop：把栈内某屏推到栈顶，**中间屏保持原位**（不销毁）', () => {
+    const s = createAppStack({ screens: SPECS })
+    s.push('home'); s.push('user'); s.push('detail')
+    s.drainCommands()
+    expect(s.depth).toBe(3)
+    s.moveToTop('user')
+    expect(s.depth, 'moveToTop 不改变栈深（只是重排）').toBe(3)
+    expect(s.current()!.name).toBe('user')
+    expect(s.stack.map((x) => x.name)).toEqual(['home', 'detail', 'user']) // detail 原位保留
+    const cmds = s.drainCommands()
+    expect(cmds.filter((c) => c.op === 'unmount').length, '中间屏不得被销毁').toBe(0)
+    expect(cmds.map((c) => c.op)).toEqual(['exit', 'enter'])
+  })
+
+  it('moveToTop：已是栈顶 = no-op；找不到 ⇒ **抛错**（死引用不静默）', () => {
+    const s = createAppStack({ screens: SPECS })
+    s.push('home'); s.push('user')
+    s.drainCommands()
+    s.moveToTop('user') // 已是栈顶
+    expect(s.drainCommands().length).toBe(0)
+    expect(() => s.moveToTop('ghost')).toThrow(/moveToTop\("ghost"\)：栈中不存在/)
+  })
+})

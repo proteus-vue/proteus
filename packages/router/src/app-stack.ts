@@ -132,6 +132,22 @@ export interface AppStack {
   replace(name: string, params?: RouteParams, opts?: { transition?: RouteTransition }): void
   /** 返回到栈中最近一个 name 匹配的屏（找不到抛错——死引用不静默） */
   popTo(name: string): void
+  /**
+   * ★★★（2026-10-02 · 依《主流框架路由调研》启示 3）**按名移除**（不返回到它）——
+   *   对齐鸿蒙 `NavPathStack.removeByName`：把栈中所有该名的屏**就地移除**（栈位消失），
+   *   当前位置不变。典型用途：注销后清掉"账号页"、支付完成后移除"收银台"。
+   *   ★与 `popTo` 的区别：`popTo` 是**回退到**它（它成为栈顶），`removeByName` 是**抹掉**它
+   *   （它连同其上的屏一起出栈，其余保持）。找不到 = **no-op**（不是错误：幂等清理场景常见）。
+   * @returns 实际移除的屏数（0 = 栈中无此屏——调用方可据此判断，不静默）
+   */
+  removeByName(name: string): number
+  /**
+   * ★★★（启示 3）**把栈内某屏提到栈顶**——对齐鸿蒙 `NavPathStack.moveToTop`：
+   *   该屏移到栈顶（重新可见），**中间屏保持原位**（不像 popTo 会把它们弹出）。
+   *   典型用途：从深层路径回到"主页 tab"而不销毁中间页（保返回栈）。
+   *   ★找不到 ⇒ **抛错**（与 `popTo` 同款：这与"幂等清理"不同，是调用方写错了名字）。
+   */
+  moveToTop(name: string): void
   popToRoot(): void
   /** tab 切换（= 清栈换根，无转场；对齐 MP switchTab 语义） */
   tab(name: string, params?: RouteParams): void
@@ -352,6 +368,89 @@ export function createAppStack(opts: { screens: Record<string, AppScreenSpec>; p
     emit({ type: 'replace', name, depth: stack.length })
   }
 
+  /**
+   * ★按名移除（启示 3 · 对齐鸿蒙 `removeByName`）：抹掉栈中所有该名的屏（栈位消失），
+   * 当前位置不变；找不到 = no-op（幂等清理语义）。返回移除数。
+   *
+   * ★语义决策（本仓选定 —— 与 `popTo` 划清界限，也与"级联弹出"区分）：
+   *   · 只移除**该屏自身**；它**之上**的屏**顺次下移补位**（保栈、保状态、保可见屏）
+   *   · 若被移除的是栈顶 ⇒ 新栈顶 enter（等价 pop 的可见性部分）
+   *   · 若被移除的是中间屏 ⇒ 它之上的屏**不动**（只是索引前移）⇒ **不产生 exit/enter**
+   *   · 移除的屏按 `unmount(reason:'pop')` 销毁（与 pop 同款命令，执行器无需新分支）
+   * 【为什么不做"级联弹出"】那等于 `popTo(它下面的屏)`——已有原语（级联会销毁无关屏、
+   *   用户丢掉正在看的页面，且"注销后清掉账号页"这类典型场景**不希望**连带毁掉上面的页面）。
+   */
+  function removeByName(name: string): number {
+    const removedIdx: number[] = []
+    for (let i = stack.length - 1; i >= 0; i--) {
+      if (stack[i]!.name === name) removedIdx.push(i)
+    }
+    if (removedIdx.length === 0) return 0 // 幂等：栈中无此屏
+    // ★"被移除的是当前可见屏吗"要在**改状态前**判定（之后 mounted 信息就丢了）
+    const topIdx = stack.length - 1
+    const removedMounted = removedIdx.some((i) => stack[i]!.state === 'mounted')
+    const removedWasTop = removedIdx.includes(topIdx)
+    for (const i of removedIdx) {
+      const r = stack[i]!
+      if (r.state !== 'frozen') activeNodeCount -= r.budgetNodes
+      r.state = 'destroyed'
+      commands.push({ op: 'unmount', screenId: r.screenId, reason: 'pop' })
+    }
+    // 从大到小删（索引不串位）；中间的屏**原位保留**，只是索引前移
+    for (const i of removedIdx) stack.splice(i, 1)
+    if (frozenPrefix > stack.length) frozenPrefix = stack.length
+    // ★只有"原可见屏被移除"才需要新栈顶接管可见性；
+    //   被移除的是中间屏 ⇒ 上面的屏一直可见（只是索引变了）⇒ **零命令**（不打扰）
+    if (removedMounted && removedWasTop && stack.length > 0) {
+      const top = stack[stack.length - 1]!
+      if (top.state !== 'mounted') {
+        const rebuild = top.state === 'frozen'
+        top.state = 'mounted'
+        if (rebuild) {
+          rebuildCount++
+          activeNodeCount += top.budgetNodes
+          pushMount(top, true)
+          emit({ type: 'restore', screenId: top.screenId, name: top.name, depth: stack.length })
+        }
+        commands.push({ op: 'enter', screenId: top.screenId, transition: top.transition })
+      }
+    }
+    emit({ type: 'pop', name, depth: stack.length })
+    return removedIdx.length
+  }
+
+  /**
+   * ★把栈内某屏提到栈顶（启示 3 · 对齐鸿蒙 `moveToTop`）：中间屏**保持原位**。
+   * 找不到 ⇒ 抛错（调用方写错名字）。视觉：原栈顶 exit、目标屏 enter（同一转场）。
+   */
+  function moveToTop(name: string): void {
+    const idx = stack.findIndex((r) => r.name === name)
+    if (idx < 0) {
+      throw new Error(
+        `[app-stack] moveToTop("${name}")：栈中不存在该屏（当前栈：${stack.map((r) => r.name).join(' → ') || '空'}）`,
+      )
+    }
+    const target = stack[idx]!
+    if (idx === stack.length - 1) return // 已是栈顶 = no-op
+    const oldTop = stack[stack.length - 1]!
+    // 原栈顶退场（树保留），目标屏提到顶并可见
+    deactivate(oldTop, target.transition)
+    stack.splice(idx, 1)
+    stack.push(target)
+    if (target.state !== 'mounted') {
+      const rebuild = target.state === 'frozen'
+      target.state = 'mounted'
+      if (rebuild) {
+        rebuildCount++
+        activeNodeCount += target.budgetNodes
+        pushMount(target, true)
+        emit({ type: 'restore', screenId: target.screenId, name: target.name, depth: stack.length })
+      }
+    }
+    commands.push({ op: 'enter', screenId: target.screenId, transition: target.transition })
+    emit({ type: 'push', name, depth: stack.length })
+  }
+
   function popTo(name: string): void {
     let idx = -1
     for (let i = stack.length - 1; i >= 0; i--) {
@@ -482,6 +581,8 @@ export function createAppStack(opts: { screens: Record<string, AppScreenSpec>; p
     pop,
     replace,
     popTo,
+    removeByName,
+    moveToTop,
     popToRoot,
     tab: resetTo,
     reset: resetTo,
