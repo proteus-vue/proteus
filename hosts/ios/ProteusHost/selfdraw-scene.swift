@@ -323,6 +323,12 @@ func physFootprintMB() -> Double {
     ///   整幅构图会**偏向一侧**（实测：漩涡跑到右下角、大片出屏）。
     ///   ⇒ 编舞前从**内核**读一次真实 rects（几何仍然出自内核，不是 JS 自己算的）。
     func rects() -> String
+    /// ★★A/B（矩阵 #14 续）：与 Android `readRects()` **同形**（几何真源读，判据用）
+    func readRects() -> String
+    /// ★★A/B：**绘制通道探针**（与 Android `probeChannels` 同族；从 **CALayer 真读**）
+    func probeChannels(_ idsJson: String) -> String
+    /// ★★A/B：**注册手势回调名**（宿主 tapAt 时经 JSContext 调它——与 Android JNI 反向调用同语义）
+    func onGesture(_ name: String) -> String
     func layerTransformProbe(_ idsJson: String) -> String
     /// ★★**停全部动画 + 复位变换**（相位间状态清理）
     func animStopAll() -> String
@@ -578,6 +584,13 @@ final class SelfDrawView: UIView {
         layerGlowSpec.removeAll(keepingCapacity: true)
         // ★★遮罩层同款成对清理（与描边/渐变/发光同一教训）
         layerMasks.removeAll(keepingCapacity: true)
+        // ★★裁剪形状同款成对清理（★★A/B 实测抓出的漏项，2026-10-03）：
+        //   漏清它 ⇒ A 树（id=5）的 clip 登记**残留在表里**，B 树（id=9）mount 后
+        //   两棵树的登记同时在表里 ⇒ `probeChannels` 读到 2 个 clip（A 1 / B 2 的假差异）。
+        //   ★与描边/渐变/发光是**同一个教训的第四次复现**：新增一份层簿记就要在 clearLayers
+        //     里同款清理（本处已列全：stroke/gradient/glow/spec/mask/clip/base/transformOrigin）。
+        layerClipShape.removeAll(keepingCapacity: true)
+        layerClipBase.removeAll(keepingCapacity: true)
         layerTransformOrigin.removeAll(keepingCapacity: true)
         parentById.removeAll(keepingCapacity: true)
         childrenById.removeAll(keepingCapacity: true)
@@ -740,9 +753,15 @@ final class SelfDrawView: UIView {
         //   ★并**立即应用基态遮罩**——静态裁剪（声明了但未动画）也必须渲染
         //     （内核只上报"值变化"的节点 ⇒ 未动的裁剪节点不会出现在每帧记录里；
         //      首版只从每帧记录取参数 ⇒ 静态裁剪完全不生效——本仓纪律：判据要覆盖静/动两态）。
+        // ★★数值类型兼容（2026-10-03 A/B 实测抓出）：JSON 数组 `[0, 0, 0.45, 0]` 经
+        //   JSONSerialization 解析后是 **`[NSNumber]` 混合类型**（前两个是 Int、中间是 Double）
+        //   ——`as? [Double]` 在 Swift 里**不做元素级隐式转换** ⇒ 转换失败 ⇒ **clip 静默不建**
+        //   （A/B 通道签名对照：A 4/5 个通道 vs B 5/5 —— 跨端对照就是这块的探针）。
+        //   ⇒ 逐元素转 Double（`NSNumber` 与数值类型都吃）。
         if let cp = style["clipPath"] as? [String: Any],
            let kindS = cp["kind"] as? String,
-           let ps = cp["params"] as? [Double] {
+           let psAny = cp["params"] as? [Any] {
+            let ps: [Double] = psAny.compactMap { ($0 as? NSNumber)?.doubleValue ?? ($0 as? Double) }
             let kind = kindS == "inset" ? 1 : kindS == "circle" ? 2 : kindS == "polygon" ? 3 : 0
             if kind != 0 {
                 layerClipShape[nodeId] = (kind, ps.map { CGFloat($0) })
@@ -974,6 +993,106 @@ final class SelfDrawView: UIView {
         }
         return "{\"ok\":true,\"layers\":[\(parts.joined(separator: ","))]}"
     }
+
+    /// ★★A/B：**绘制通道探针**（与 Android `probeChannels` 同族——**从层上真读**，不回显声明参数）。
+    ///
+    /// 【六个通道的读数来源（全部为宿主侧实际持有的状态）】
+    ///   · `radius`：`layer.cornerRadius`（>0 = 圆角生效）
+    ///   · `grad`：`layerGradients` 表的层 + 类型/色标数（`1:2` = 线性 2 色标）
+    ///   · `glow`：`layerGlowShapes` 的层数:首层 alpha（分层同心描边）
+    ///   · `clip`：`layerClipShape` 的 kind（0=无 / 1=inset / 2=circle / 3=polygon）
+    ///   · `stroke_len`：`layerStrokeShapes` 路径的**真实弧长**（CGPath 逐段累加——真算非回显）
+    ///   · `mask`：`layerMasks` 的 kind（0=无 / 1=linear / 2=radial）
+    ///
+    /// 【为什么 stroke_len 要真算】Android 用 `PathMeasure.getLength()`（系统真值）；
+    ///   iOS 无等价 API ⇒ 逐段累加（直线精确 + 贝塞尔 16 段采样近似）——**仍是真算**。
+    func channelProbe(_ idsJson: String) -> String {
+        guard let data = idsJson.data(using: .utf8),
+              let ids = (try? JSONSerialization.jsonObject(with: data)) as? [Int] else {
+            return "{\"ok\":false,\"error\":\"入参需为 id 数组 JSON\"}"
+        }
+        var parts: [String] = []
+        for id in ids {
+            var radius = 0.0
+            var gradStr = ""
+            var glowStr = ""
+            var clipKind = 0
+            var strokeLen = 0.0
+            var maskKind = 0
+            if let layer = layersById[id] {
+                radius = Double(layer.cornerRadius)
+                if let g = layerGradients[id] {
+                    let k = g.type == .radial ? 2 : 1
+                    gradStr = "\(k):\(g.colors?.count ?? 0)"
+                }
+                if let shapes = layerGlowShapes[id], let first = shapes.first,
+                   let c = first.strokeColor {
+                    glowStr = String(format: "%d:%.3f", shapes.count, Double(c.alpha))
+                }
+                if let cs = layerClipShape[id] { clipKind = cs.kind }
+                if let shape = layerStrokeShapes[id], let p = shape.path {
+                    strokeLen = Self.cgPathLength(p)
+                }
+                if let m = layerMasks[id] { maskKind = m.type == .radial ? 2 : 1 }
+            }
+            let r3 = (radius * 1000).rounded() / 1000
+            let s3 = (strokeLen * 1000).rounded() / 1000
+            var fields = "\"id\":\(id),\"radius\":\(r3)"
+            if !gradStr.isEmpty { fields += ",\"grad\":\"\(gradStr)\"" }
+            if !glowStr.isEmpty { fields += ",\"glow\":\"\(glowStr)\"" }
+            fields += ",\"clip\":\(clipKind)"
+            if s3 > 0 { fields += ",\"stroke_len\":\(s3)" }
+            fields += ",\"mask\":\(maskKind)"
+            parts.append("{\(fields)}")
+        }
+        return "{\"ok\":true,\"channels\":[\(parts.joined(separator: ","))]}"
+    }
+
+    /// CGPath **真实弧长**（直线精确 + 贝塞尔 16 段采样——判据读它证明"描边层真的建出来了"）
+    static func cgPathLength(_ path: CGPath) -> Double {
+        var len = 0.0
+        var cur = CGPoint.zero
+        var start = CGPoint.zero
+        path.applyWithBlock { elPtr in
+            let el = elPtr.pointee
+            switch el.type {
+            case .moveToPoint:
+                cur = el.points[0]; start = cur
+            case .addLineToPoint:
+                let p = el.points[0]
+                len += hypot(Double(p.x - cur.x), Double(p.y - cur.y)); cur = p
+            case .addQuadCurveToPoint:
+                let c = el.points[0], p = el.points[1]
+                var prev = cur
+                for i in 1...16 {
+                    let t = Double(i) / 16.0
+                    let mt = 1 - t
+                    let q = CGPoint(x: mt * mt * cur.x + 2 * mt * t * c.x + t * t * p.x,
+                                    y: mt * mt * cur.y + 2 * mt * t * c.y + t * t * p.y)
+                    len += hypot(Double(q.x - prev.x), Double(q.y - prev.y)); prev = q
+                }
+                cur = p
+            case .addCurveToPoint:
+                let c1 = el.points[0], c2 = el.points[1], p = el.points[2]
+                var prev = cur
+                for i in 1...16 {
+                    let t = Double(i) / 16.0
+                    let mt = 1 - t
+                    let cx = mt * mt * mt * cur.x + 3 * mt * mt * t * c1.x + 3 * mt * t * t * c2.x + t * t * t * p.x
+                    let cy = mt * mt * mt * cur.y + 3 * mt * mt * t * c1.y + 3 * mt * t * t * c2.y + t * t * t * p.y
+                    let q = CGPoint(x: cx, y: cy)
+                    len += hypot(Double(q.x - prev.x), Double(q.y - prev.y)); prev = q
+                }
+                cur = p
+            case .closeSubpath:
+                len += hypot(Double(start.x - cur.x), Double(start.y - cur.y)); cur = start
+            @unknown default:
+                break
+            }
+        }
+        return len
+    }
+
 
     /// ★★**复位所有层的变换与透明度**（相位间状态清理；见 `animStopAll`）
     ///
@@ -2709,6 +2828,12 @@ final class SelfDrawView: UIView {
         if let sp2 = n["svgPathTo"] as? [String: Any] { style["svgPathTo"] = sp2 }
         if let sc = n["strokeColor"] as? NSNumber { style["strokeColor"] = sc }
         if let sw = n["strokeWidth"] as? Double { style["strokeWidth"] = CGFloat(sw) }
+        // ★★A/B 实测抓出的**白名单漏项**（2026-10-03）：`glow` 与 `mask` 声明在请求树里而
+        //   `styleOf` 未透传 ⇒ **静默不渲染**（与 clipPath/fillGradient 曾经的同款缺陷——
+        //   "白名单必须跟着内核新增的静态样式走"这条纪律此处又漏了两项）。
+        //   ★抓出方式：A/B 的通道签名对照（iOS 4/5 vs Android 5/5）——**跨端对照就是这块的探针**。
+        if let gl = n["glow"] as? [String: Any] { style["glow"] = gl }
+        if let mk = n["mask"] as? [String: Any] { style["mask"] = mk }
         return style
     }
 
@@ -3451,6 +3576,8 @@ final class SelfDrawBridge: NSObject, SelfDrawExports {
             SelfDrawBridge.memPeakMB = max(SelfDrawBridge.memPeakMB, m0)
             return jsonString(["ok": true, "path": "updatePatches", "incremental": true,
                                "patch_count": 0, "relayout_count": 0, "changed_rects": 0,
+                               // ★A/B 判据键名别名（见 applyOps 同款注释）
+                               "applied": 0, "relayout": 0, "text_layers_applied": 0,
                                "updated_layers": 0, "mem_mb": round(m0 * 10) / 10,
                                "mem_peak_mb": round(SelfDrawBridge.memPeakMB * 10) / 10,
                                "update_ms": round(updateMs * 100) / 100])
@@ -3489,6 +3616,8 @@ final class SelfDrawBridge: NSObject, SelfDrawExports {
                            "patch_count": applied, "relayout_count": relayout,
                            "text_updates": textUpdates.count,
                            "text_layers_applied": textApplied,
+                           // ★A/B 判据键名别名（与 applyOps 同款——共享 bundle 读 applied/relayout）
+                           "applied": applied, "relayout": relayout,
                            "measures_injected": measures.count,
                            // ★核心分段（本仓纪律：relayout 是文本补丁的主成本，必须可直读——
                            //   否则"优化有没有生效"只能靠推理，而推理在本仓已坑过多次）
@@ -3697,8 +3826,14 @@ final class SelfDrawBridge: NSObject, SelfDrawExports {
         gestureStats["last_target"] = target
         gestureStats["last_chain_len"] = chain.count
         // ★交给 JS（经 JSContext 从控制器注入；桥接层不直接持有 ctx，避免循环引用）
+        // ★★A/B（矩阵 #14 续）：派发计数（`tapAt` 回传 `gestures_fired` 用——与 Android 同形，
+        //   证明"这次注入真的触发了派发"而不是读到了上一次的陈旧值）。
+        gestureDispatchCount += 1
         onDispatchToJS?(target, chain, type, x, y)
     }
+
+    /// 派发次数（A/B 判据的 `gestures_fired` 来源；计的是**真的调了 JS 派发**的次数）
+    private(set) var gestureDispatchCount = 0
 
     /// JS 派发回调（由控制器注入：调 `__proteus_dispatch`）
     var onDispatchToJS: ((Int, [Int], String, Double, Double) -> Void)?
@@ -3709,13 +3844,19 @@ final class SelfDrawBridge: NSObject, SelfDrawExports {
     /// 见协议声明（`tapAt`）
     func tapAt(_ x: Double, _ y: Double) -> String {
         guard handle != 0 else { return "{\"ok\":false,\"error\":\"未建树\"}" }
+        let before = gestureDispatchCount
         emitGesture(x: x, y: y, type: "tap")
         // ★回传**本次命中的 target/chain**（诊断必需——本仓实测：没有它就无法定位
         //   "宿主命中但 JS 没收到"是命中错节点、还是派发链断了）
         let lastTarget = gestureStats["last_target"] ?? -1
         let lastChain = gestureStats["last_chain_len"] ?? 0
-        return jsonString(["ok": true, "x": x, "y": y, "target": lastTarget,
-                           "chain_len": lastChain, "stats": gestureStats])
+        // ★★A/B（矩阵 #14 续）：与 Android `tapAt` 回执**同形**——共享 bundle 的判据读
+        //   `gestures_fired`（本次是否真派发 ⇒ 防"读到陈旧 last"假读数）+ `last`（命中详情）。
+        var out: [String: Any] = ["ok": true, "x": x, "y": y, "target": lastTarget,
+                                  "chain_len": lastChain, "stats": gestureStats]
+        out["gestures_fired"] = gestureDispatchCount - before
+        out["last"] = lastTarget >= 0 ? ["target": lastTarget, "chain_len": lastChain] : NSNull()
+        return jsonString(out)
     }
 
     /// 见协议声明（`longpressAt`）
@@ -4070,6 +4211,34 @@ final class SelfDrawBridge: NSObject, SelfDrawExports {
     func rects() -> String {
         guard handle != 0 else { return "{\"ok\":false,\"error\":\"未接入核心\"}" }
         return takeCString(proteus_layout_rects(handle))
+    }
+
+    /// ★★A/B：与 Android `readRects()` **同形**——内核几何真源的别名（判据用；两处同名便于判据对照）
+    func readRects() -> String {
+        rects()
+    }
+
+    /// ★★A/B：绘制通道探针（转发给视图；见 `SelfDrawView.channelProbe`）
+    ///
+    /// 【为什么经 View 读（而不是 Bridge 自己算）】层与各通道表都在 View 上
+    ///   （`layersById`/`layerGradients`/…）——**判据要读的是层上的实际状态**，
+    ///   Bridge 侧没有这些真源（与 `layerTransformProbe` 同款转发模式）。
+    func probeChannels(_ idsJson: String) -> String {
+        guard let view else { return "{\"ok\":false,\"error\":\"未接入视图\"}" }
+        return view.channelProbe(idsJson)
+    }
+
+    /// ★★A/B：**注册手势回调名**（与 Android `onGesture(name)` 同语义——宿主 tapAt 时反向调用它）
+    ///
+    /// 【为什么是"注册名字"而不是"传函数"】JSExport 不能跨边界传闭包（Android 用 JNI 反向调用
+    ///   全局函数 `__proteusVaporGesture` 也是同一个模式：**宿主持名字，事件时按名查全局函数**）。
+    ///   存储后由 `tapAt` 经 JSContext 调 `globalThis[name](type, nodeId, chainJson)`。
+    /// ★`private(set)`：VC 注入的派发闭包要**读**它（首版 `private` ⇒ 跨类不可见）
+    private(set) var gestureCallbackName: String?
+
+    func onGesture(_ name: String) -> String {
+        gestureCallbackName = name
+        return "{\"ok\":true,\"registered\":\"\\(name)\"}"
     }
 
     /// ★★**停全部动画 + 复位变换**（相位间状态清理用；见 bench 注释）
@@ -5349,6 +5518,16 @@ final class SelfDrawBridge: NSObject, SelfDrawExports {
         res["unsupported_count"] = unsupported.count
         res["text_updates"] = textUpdates.count
         res["text_layers_applied"] = textApplied
+        // ★★A/B（矩阵 #14 续）：判据（与 Android 共用）读的键名别名——iOS 用 patch_count/
+        //   text_layers_applied，而共享的 bundle-vapor.js 读 applied/text_synced/relayout/rects。
+        //   ⇒ 在**宿主侧**补别名（不在共享 bundle 里改——那要三端重新生成，且会动已验证的读数）。
+        res["applied"] = applied
+        res["relayout"] = relayout
+        res["text_synced"] = textApplied
+        // rects：判据只数**键数**（changed_rects 的几何真源形态）——构轻量 id 集合（值不打）
+        var rectsMap: [String: [String: Double]] = [:]
+        for c in changed { rectsMap["\(c.id)"] = ["x": 0, "y": 0, "width": 0, "height": 0] }
+        res["rects"] = rectsMap
         res["apply_ms"] = round(applyMs * 100) / 100
         // ★Rust 侧分段（本仓实测：总账 72ms 里约 40ms 曾"去向不明"——
         //   因为 apply_ms 只覆盖「指令应用」，**不含重排**（relayout_ms 在 timing 里没被浮出）
@@ -5955,8 +6134,19 @@ final class SelfDrawViewController: UIViewController {
         bridge.view?.onScrollDrag = { [weak bridge] dx, dy in
             bridge?.scrollDragBy(dx: Double(dx), dy: Double(dy)) ?? "{\"ok\":false,\"error\":\"bridge 已释放\"}"
         }
-        bridge.onDispatchToJS = { [weak ctx] target, chain, type, x, y in
+        bridge.onDispatchToJS = { [weak bridge, weak ctx] target, chain, type, x, y in
             guard let ctx = ctx else { return }
+            // ★★A/B（矩阵 #14 续）：若宿主注册了手势回调名（`proteusSelfDraw.onGesture(name)`）
+            //   ⇒ 按名调它——签名 `(type, nodeId, chainJson)`（**共享 bundle 的契约**，与 Android
+            //   JNI 反向调用 `__proteusVaporGesture` 同语义）。
+            //   ★空名/未注册 ⇒ 落回原 `__proteus_dispatch`（V9/V16 等既有用例的路径**不变**）。
+            if let name = bridge?.gestureCallbackName, !name.isEmpty {
+                let chainJson = "[" + chain.map(String.init).joined(separator: ",") + "]"
+                if let fn = ctx.objectForKeyedSubscript(name) {
+                    _ = fn.call(withArguments: [type, target, chainJson])
+                    return
+                }
+            }
             guard let fn = ctx.objectForKeyedSubscript("__proteus_dispatch") else { return }
             // ★`call(withArguments:)` 传原生数组（JSContext 自动桥接为 JS Array/Number）
             _ = fn.call(withArguments: [target, chain, type, x, y])
@@ -5975,6 +6165,8 @@ final class SelfDrawViewController: UIViewController {
         let isStress = ProcessInfo.processInfo.arguments.contains("--stress")
         // ★矩阵 #10：原生组件混用（自绘 + 原生 UIView 共存；与 Android native-host 三件事同族）
         let isNativeMix = ProcessInfo.processInfo.arguments.contains("--native-mix")
+        // ★A/B（矩阵 #14 续）：Vapor vs Vue 运行时对照（eval 与 Android 同一份 bundle-vapor.js）
+        let isVaporAb = ProcessInfo.processInfo.arguments.contains("--vapor-ab")
         // ★★G-39：宿主运行时场景（`--host-runtime`）——独立模式，不进自绘/基准分支
         let isHostRuntime = ProcessInfo.processInfo.arguments.contains("--host-runtime")
         // ★★M5：执行器场景（`--app-stack`）——同上，独立模式
@@ -6030,6 +6222,10 @@ final class SelfDrawViewController: UIViewController {
             SelfDrawBridge.reportFileName = "native-mix"
             SelfDrawBridge.snapshotName = "native-mix"
         }
+        if isVaporAb {
+            SelfDrawBridge.reportFileName = "vapor-ab"
+            SelfDrawBridge.snapshotName = "vapor-ab"
+        }
         // ★stress 也走 bench bundle（它含 renderStress 入口——同一份 vapor-stress.json 产物）
         let bundleName = isShowcase ? "bundle-showcase"
             : (isAppStack ? "bundle-app-stack"
@@ -6075,6 +6271,8 @@ final class SelfDrawViewController: UIViewController {
         //   下面用 `DispatchQueue.main.async` 串起来——这等价于把 VM 事件循环手工补上。
         if isBench {
             driveBench(ctx: ctx)
+        } else if isVaporAb {
+            driveVaporAb(ctx: ctx)
         } else if isNativeMix {
             driveNativeMix(ctx: ctx)
         } else if isStress {
@@ -6267,6 +6465,112 @@ final class SelfDrawViewController: UIViewController {
         if ProcessInfo.processInfo.environment["PROTEUS_EXIT_AFTER_REPORT"] == "1" {
             exit(report["ok"] as? Bool == true ? 0 : 1)
         }
+    }
+
+
+    /// ★★★A/B（矩阵 #14 续）：**Vapor vs Vue 运行时**对照——iOS 腿。
+    ///
+    /// 【与 Android/鸿蒙的关系】**同一份** `bundle-vapor.js`（零移植）+ **同一份判据**
+    ///   （`hosts/android/check-vapor-ab.py`）：JSVM/JSC 都直接 eval 同一份 IIFE。
+    ///
+    /// 【宿主签名适配（JS 侧 shim——为什么不用改宿主方法）】共享 bundle 调
+    ///   `proteusHost.tapAt("<json>")` / `scrollRows("<json>")`（Android 形态），
+    ///   而 iOS 宿主是 `tapAt(_ x: Double, _ y: Double)` / `scrollRows(_ dx: Double, _ dy: Double)`
+    ///   （V9/V16 既有用例依赖它——**改签名会破既有读数**）。
+    ///   ⇒ 在 eval bundle **之前**用 JS 建一个 `proteusHost` 适配对象（shim）：
+    ///     逐方法转调 `proteusSelfDraw.*`，**两边零改动**。
+    private func driveVaporAb(ctx: JSContext) {
+        let evalJs = { (expr: String) -> String in ctx.evaluateScript(expr)?.toString() ?? "null" }
+        bridge.view?.backgroundColor = UIColor(red: 0x14 / 255.0, green: 0x14 / 255.0, blue: 0x1C / 255.0, alpha: 1)
+
+        // ── 读共享产物（构建期由 run-selfdraw.sh 从 Android 侧复制——同源零移植）──
+        guard let bundleURL = Bundle.main.url(forResource: "bundle-vapor", withExtension: "js"),
+              let bundleSrc = try? String(contentsOf: bundleURL, encoding: .utf8) else {
+            NSLog("[proteus] vapor-ab: 缺 bundle-vapor.js（构建脚本应复制——见 run-selfdraw.sh）")
+            return
+        }
+        guard let artURL = Bundle.main.url(forResource: "vapor-artifacts", withExtension: "json"),
+              let artifacts = try? String(contentsOf: artURL, encoding: .utf8) else {
+            NSLog("[proteus] vapor-ab: 缺 vapor-artifacts.json")
+            return
+        }
+        // ── 宿主桥 shim（见方法注释：签名差异在 JS 侧归一）──
+        ctx.evaluateScript("""
+        globalThis.proteusHost = {
+          mount: function (s) { return proteusSelfDraw.mount(s); },
+          applyOps: function (s) { return proteusSelfDraw.applyOps(s); },
+          updatePatches: function (s) { return proteusSelfDraw.updatePatches(s); },
+          mountVirtual: function (s) { return proteusSelfDraw.mountVirtual(s); },
+          readRects: function () { return proteusSelfDraw.readRects(); },
+          probeChannels: function (s) { return proteusSelfDraw.probeChannels(s); },
+          onGesture: function (n) { return proteusSelfDraw.onGesture(n); },
+          tapAt: function (j) { var o = JSON.parse(j); return proteusSelfDraw.tapAt(o.x, o.y); },
+          scrollRows: function (j) { var o = JSON.parse(j); return proteusSelfDraw.scrollRows(o.dx, o.dy); }
+        };
+        """)
+        let vp = jsonString(["width": Double(bridge.view?.bounds.width ?? 390),
+                             "height": Double(bridge.view?.bounds.height ?? 844)])
+        // ── eval 共享 bundle + 调 run（mode:'ab'）──
+        ctx.evaluateScript(bundleSrc, withSourceURL: bundleURL)
+        let args = jsonString2([
+            "artifacts": artifacts,
+            "viewport": ["width": Double(bridge.view?.bounds.width ?? 390),
+                         "height": Double(bridge.view?.bounds.height ?? 844)],
+            "rows": 8, "updates": 3, "mode": "ab",
+        ])
+        // ★参数经 JS 字符串字面量传入（bundle 入口吃 JSON 串——与 Android Java 侧同形；
+        //   用 jsStringLiteral 安全转义，避免 artifacts 里的引号破坏 JS 源）
+        ctx.evaluateScript("globalThis.__PROTEUS_AB_ARGS__ = \(jsStringLiteral(args));")
+        let out = evalJs("__proteusVaporRun(globalThis.__PROTEUS_AB_ARGS__)")
+        NSLog("[proteus] vapor-ab run：%@", String(out.prefix(300)))
+        // ★A/B 通道读数自检（本仓纪律：测量装置先自测——层探针曾因字符串插值未生效
+        //   而输出 `{\(fields)}` 字面量 ⇒ 判据读到的"全空"是**装置坏了**而非层没建）。
+        if let v = bridge.view {
+            let diag = v.channelProbe("[1,2,3]")
+            if !diag.contains("\"radius\"") {
+                NSLog("[proteus] vapor-ab ✗ channelProbe 输出异常：%@", String(diag.prefix(200)))
+            }
+        }
+
+        var report: [String: Any] = [
+            "ok": out.contains("\"ok\":true"),
+            "path": "vapor-ab",
+            "host_id": "ios",
+            "build_id": SelfDrawBridge.reportFileName,
+            "viewport": vp,
+            "js_raw": out,
+            "note": "iOS 腿：与 Android/鸿蒙**同一份** bundle-vapor.js + 同一份判据（零移植）；"
+                + "宿主签名差异由 JS 侧 shim 归一（tapAt/scrollRows 的 JSON vs 双参形态）",
+        ]
+        if let d = out.data(using: .utf8), let o = try? JSONSerialization.jsonObject(with: d) as? [String: Any] {
+            report["js_report"] = o
+            // ★★A/B 同形（判据读法）：共享判据下钻 `report` 字段（Android/鸿蒙产物同形——
+            //   产物的 JS 报告包在 `report` 里）。iOS 首版只写了 `js_report` ⇒ 判据报
+            //   "通路未成功：None"（**形状不符会让判据完全读不到数据**——本仓同款坑第 N 次）。
+            report["report"] = o
+        }
+        report["run_ts"] = Date().timeIntervalSince1970
+        // ★顶层拍平（判据也可能从顶层读——与 Android/鸿蒙产物同形）
+        if let jr = report["js_report"] as? [String: Any] {
+            for (k, v) in jr { if report[k] == nil { report[k] = v } }
+        }
+        let dir = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)[0]
+        let url = dir.appendingPathComponent("\(SelfDrawBridge.reportFileName).json")
+        if let data = try? JSONSerialization.data(withJSONObject: report, options: [.prettyPrinted, .sortedKeys]) {
+            try? data.write(to: url)
+        }
+        NSLog("[proteus] SELFDRAW_REPORT_READY path=%@", url.path)
+        if ProcessInfo.processInfo.environment["PROTEUS_EXIT_AFTER_REPORT"] == "1" {
+            exit(report["ok"] as? Bool == true ? 0 : 1)
+        }
+    }
+
+    /// JS 字符串字面量（安全转义：把 JSON 串包成 JS 源里的字符串——见 driveVaporAb 用法）
+    private func jsStringLiteral(_ s: String) -> String {
+        guard let d = try? JSONSerialization.data(withJSONObject: [s]),
+              let arr = String(data: d, encoding: .utf8) else { return "\"\"" }
+        // arr 形如 `["..."]` ⇒ 去掉方括号即得 JS 字符串字面量（JSON 转义与 JS 兼容）
+        return String(arr.dropFirst().dropLast())
     }
 
     // ── ★★应用级事件源（K 组 iOS 腿）：两个**真系统回调**转发到 HostLifecycleEvents ──
