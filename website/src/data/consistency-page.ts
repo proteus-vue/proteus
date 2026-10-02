@@ -389,9 +389,9 @@ export const CONSISTENCY_PAGE = {
         "a": "l4.android.png",
         "b": "l4.skyline.png",
         "verdict": "changed",
-        "diffPixels": 9741,
+        "diffPixels": 7346,
         "sampleCount": 337080,
-        "diffRatio": 0.0289,
+        "diffRatio": 0.02179,
         "hashDistance": 0,
         "translation": null,
         "knownNoise": "N-L4-five-end-rasterization",
@@ -416,17 +416,17 @@ export const CONSISTENCY_PAGE = {
           },
           "b": {
             "srcSize": {
-              "width": 640,
-              "height": 1386
+              "width": 702,
+              "height": 1520
             },
             "colorSpace": "undeclared",
             "block": {
-              "x": 27,
-              "y": 199,
-              "w": 130,
-              "h": 78
+              "x": 29,
+              "y": 217,
+              "w": 143,
+              "h": 86
             },
-            "scale": 1.231
+            "scale": 1.119
           }
         }
       },
@@ -436,9 +436,9 @@ export const CONSISTENCY_PAGE = {
         "a": "l4.android.png",
         "b": "l4.web.png",
         "verdict": "changed",
-        "diffPixels": 7656,
+        "diffPixels": 4840,
         "sampleCount": 337080,
-        "diffRatio": 0.02271,
+        "diffRatio": 0.01436,
         "hashDistance": 0,
         "translation": null,
         "knownNoise": "N-L4-five-end-rasterization",
@@ -483,9 +483,9 @@ export const CONSISTENCY_PAGE = {
         "a": "l4.android.png",
         "b": "l4.webview.png",
         "verdict": "changed",
-        "diffPixels": 9808,
+        "diffPixels": 7312,
         "sampleCount": 337080,
-        "diffRatio": 0.0291,
+        "diffRatio": 0.02169,
         "hashDistance": 0,
         "translation": null,
         "knownNoise": "N-L4-five-end-rasterization",
@@ -510,17 +510,17 @@ export const CONSISTENCY_PAGE = {
           },
           "b": {
             "srcSize": {
-              "width": 640,
-              "height": 1386
+              "width": 702,
+              "height": 1520
             },
             "colorSpace": "undeclared",
             "block": {
-              "x": 27,
-              "y": 199,
-              "w": 130,
-              "h": 78
+              "x": 29,
+              "y": 217,
+              "w": 143,
+              "h": 86
             },
-            "scale": 1.231
+            "scale": 1.119
           }
         }
       },
@@ -577,9 +577,9 @@ export const CONSISTENCY_PAGE = {
         "a": "l4.ios-device.png",
         "b": "l4.skyline.png",
         "verdict": "changed",
-        "diffPixels": 10199,
+        "diffPixels": 8708,
         "sampleCount": 337080,
-        "diffRatio": 0.03026,
+        "diffRatio": 0.02583,
         "hashDistance": 0,
         "translation": null,
         "knownNoise": "N-L4-five-end-rasterization",
@@ -604,17 +604,17 @@ export const CONSISTENCY_PAGE = {
           },
           "b": {
             "srcSize": {
-              "width": 640,
-              "height": 1386
+              "width": 702,
+              "height": 1520
             },
             "colorSpace": "undeclared",
             "block": {
-              "x": 27,
-              "y": 199,
-              "w": 130,
-              "h": 78
+              "x": 29,
+              "y": 217,
+              "w": 143,
+              "h": 86
             },
-            "scale": 1.231
+            "scale": 1.119
           }
         }
       },
@@ -624,9 +624,9 @@ export const CONSISTENCY_PAGE = {
         "a": "l4.ios-device.png",
         "b": "l4.web.png",
         "verdict": "changed",
-        "diffPixels": 7345,
+        "diffPixels": 4706,
         "sampleCount": 337080,
-        "diffRatio": 0.02179,
+        "diffRatio": 0.01396,
         "hashDistance": 0,
         "translation": null,
         "knownNoise": "N-L4-five-end-rasterization",
@@ -671,9 +671,9 @@ export const CONSISTENCY_PAGE = {
         "a": "l4.ios-device.png",
         "b": "l4.webview.png",
         "verdict": "changed",
-        "diffPixels": 10165,
+        "diffPixels": 8298,
         "sampleCount": 337080,
-        "diffRatio": 0.03016,
+        "diffRatio": 0.02462,
         "hashDistance": 0,
         "translation": null,
         "knownNoise": "N-L4-five-end-rasterization",
@@ -698,17 +698,17 @@ export const CONSISTENCY_PAGE = {
           },
           "b": {
             "srcSize": {
-              "width": 640,
-              "height": 1386
+              "width": 702,
+              "height": 1520
             },
             "colorSpace": "undeclared",
             "block": {
-              "x": 27,
-              "y": 199,
-              "w": 130,
-              "h": 78
+              "x": 29,
+              "y": 217,
+              "w": 143,
+              "h": 86
             },
-            "scale": 1.231
+            "scale": 1.119
           }
         }
       },
@@ -718,9 +718,9 @@ export const CONSISTENCY_PAGE = {
         "a": "l4.ios.png",
         "b": "l4.skyline.png",
         "verdict": "changed",
-        "diffPixels": 10158,
+        "diffPixels": 8722,
         "sampleCount": 337080,
-        "diffRatio": 0.03014,
+        "diffRatio": 0.02588,
         "hashDistance": 0,
         "translation": null,
         "knownNoise": "N-L4-five-end-rasterization",
@@ -745,17 +745,17 @@ export const CONSISTENCY_PAGE = {
           },
           "b": {
             "srcSize": {
-              "width": 640,
-              "height": 1386
+              "width": 702,
+              "height": 1520
             },
             "colorSpace": "undeclared",
             "block": {
-              "x": 27,
-              "y": 199,
-              "w": 130,
-              "h": 78
+              "x": 29,
+              "y": 217,
+              "w": 143,
+              "h": 86
             },
-            "scale": 1.231
+            "scale": 1.119
           }
         }
       },
@@ -765,9 +765,9 @@ export const CONSISTENCY_PAGE = {
         "a": "l4.ios.png",
         "b": "l4.web.png",
         "verdict": "changed",
-        "diffPixels": 7324,
+        "diffPixels": 4735,
         "sampleCount": 337080,
-        "diffRatio": 0.02173,
+        "diffRatio": 0.01405,
         "hashDistance": 0,
         "translation": null,
         "knownNoise": "N-L4-five-end-rasterization",
@@ -812,9 +812,9 @@ export const CONSISTENCY_PAGE = {
         "a": "l4.ios.png",
         "b": "l4.webview.png",
         "verdict": "changed",
-        "diffPixels": 10003,
+        "diffPixels": 8316,
         "sampleCount": 337080,
-        "diffRatio": 0.02968,
+        "diffRatio": 0.02467,
         "hashDistance": 0,
         "translation": null,
         "knownNoise": "N-L4-five-end-rasterization",
@@ -839,17 +839,17 @@ export const CONSISTENCY_PAGE = {
           },
           "b": {
             "srcSize": {
-              "width": 640,
-              "height": 1386
+              "width": 702,
+              "height": 1520
             },
             "colorSpace": "undeclared",
             "block": {
-              "x": 27,
-              "y": 199,
-              "w": 130,
-              "h": 78
+              "x": 29,
+              "y": 217,
+              "w": 143,
+              "h": 86
             },
-            "scale": 1.231
+            "scale": 1.119
           }
         }
       },
@@ -859,9 +859,9 @@ export const CONSISTENCY_PAGE = {
         "a": "l4.skyline.png",
         "b": "l4.web.png",
         "verdict": "changed",
-        "diffPixels": 6048,
+        "diffPixels": 7046,
         "sampleCount": 337080,
-        "diffRatio": 0.01794,
+        "diffRatio": 0.0209,
         "hashDistance": 0,
         "translation": null,
         "knownNoise": "N-L4-five-end-rasterization",
@@ -872,17 +872,17 @@ export const CONSISTENCY_PAGE = {
           },
           "a": {
             "srcSize": {
-              "width": 640,
-              "height": 1386
+              "width": 702,
+              "height": 1520
             },
             "colorSpace": "undeclared",
             "block": {
-              "x": 27,
-              "y": 199,
-              "w": 130,
-              "h": 78
+              "x": 29,
+              "y": 217,
+              "w": 143,
+              "h": 86
             },
-            "scale": 1.231
+            "scale": 1.119
           },
           "b": {
             "srcSize": {
@@ -906,9 +906,9 @@ export const CONSISTENCY_PAGE = {
         "a": "l4.skyline.png",
         "b": "l4.webview.png",
         "verdict": "changed",
-        "diffPixels": 3134,
+        "diffPixels": 2819,
         "sampleCount": 337080,
-        "diffRatio": 0.0093,
+        "diffRatio": 0.00836,
         "hashDistance": 0,
         "translation": null,
         "knownNoise": "N-L4-five-end-rasterization",
@@ -919,31 +919,31 @@ export const CONSISTENCY_PAGE = {
           },
           "a": {
             "srcSize": {
-              "width": 640,
-              "height": 1386
+              "width": 702,
+              "height": 1520
             },
             "colorSpace": "undeclared",
             "block": {
-              "x": 27,
-              "y": 199,
-              "w": 130,
-              "h": 78
+              "x": 29,
+              "y": 217,
+              "w": 143,
+              "h": 86
             },
-            "scale": 1.231
+            "scale": 1.119
           },
           "b": {
             "srcSize": {
-              "width": 640,
-              "height": 1386
+              "width": 702,
+              "height": 1520
             },
             "colorSpace": "undeclared",
             "block": {
-              "x": 27,
-              "y": 199,
-              "w": 130,
-              "h": 78
+              "x": 29,
+              "y": 217,
+              "w": 143,
+              "h": 86
             },
-            "scale": 1.231
+            "scale": 1.119
           }
         }
       },
@@ -953,9 +953,9 @@ export const CONSISTENCY_PAGE = {
         "a": "l4.web.png",
         "b": "l4.webview.png",
         "verdict": "changed",
-        "diffPixels": 5658,
+        "diffPixels": 6609,
         "sampleCount": 337080,
-        "diffRatio": 0.01679,
+        "diffRatio": 0.01961,
         "hashDistance": 0,
         "translation": null,
         "knownNoise": "N-L4-five-end-rasterization",
@@ -980,17 +980,17 @@ export const CONSISTENCY_PAGE = {
           },
           "b": {
             "srcSize": {
-              "width": 640,
-              "height": 1386
+              "width": 702,
+              "height": 1520
             },
             "colorSpace": "undeclared",
             "block": {
-              "x": 27,
-              "y": 199,
-              "w": 130,
-              "h": 78
+              "x": 29,
+              "y": 217,
+              "w": 143,
+              "h": 86
             },
-            "scale": 1.231
+            "scale": 1.119
           }
         }
       }
@@ -1040,17 +1040,17 @@ export const CONSISTENCY_PAGE = {
       },
       "skyline": {
         "srcSize": {
-          "width": 640,
-          "height": 1386
+          "width": 702,
+          "height": 1520
         },
         "colorSpace": "undeclared",
         "block": {
-          "x": 27,
-          "y": 199,
-          "w": 130,
-          "h": 78
+          "x": 29,
+          "y": 217,
+          "w": 143,
+          "h": 86
         },
-        "scale": 1.231
+        "scale": 1.119
       },
       "web": {
         "srcSize": {
@@ -1068,17 +1068,17 @@ export const CONSISTENCY_PAGE = {
       },
       "webview": {
         "srcSize": {
-          "width": 640,
-          "height": 1386
+          "width": 702,
+          "height": 1520
         },
         "colorSpace": "undeclared",
         "block": {
-          "x": 27,
-          "y": 199,
-          "w": 130,
-          "h": 78
+          "x": 29,
+          "y": 217,
+          "w": 143,
+          "h": 86
         },
-        "scale": 1.231
+        "scale": 1.119
       }
     }
   },

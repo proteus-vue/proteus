@@ -73,18 +73,38 @@ final class L4HostView: UIView {
         layerTree.addSublayer(radius)
         y += bh + gap
 
-        // ② 阴影块：分层展开圆角矩形（外→内 alpha 平方衰减——与 Android/glow 同式）
-        let N = 6
+        // ② 阴影块：分层展开圆角矩形（与 Android 同式）。
+        //
+        // ★★alpha 必须按 **over 合成反算**（2026-10-02 实测修复"黑块污染"）：
+        //   分层是**实心填充**叠加——近环被全部 N 层覆盖，合成 alpha = 1−Π(1−a_j)，
+        //   与单层值天差地别。首版把"目标剖面值"直接当每层 alpha ⇒ 近环合成
+        //   1−(1−.7)(1−.486)… ≈ **0.92（近纯黑环）**，且每层一条可见台阶（真机 3x 上肉眼可见"回"字）。
+        //   反算：a_k = 1−(1−A_k)/(1−A_{k+1})（A_k = 目标剖面，A_{N+1}=0）
+        //   ⇒ 每个环的**合成值精确等于目标剖面**（0.7 起、平方衰减到 0）——数学验证过逐环吻合。
+        // ★N=16（原 6）：expand 步进 = blur/N ≈ 1.9px@3x（亚像素级，台阶不可见）。
+        let N = 16
+        var layerAlphas = [CGFloat](repeating: 0, count: N)
+        var nextTarget: CGFloat = 0
         for k in stride(from: N, through: 1, by: -1) {
             let t = CGFloat(k - 1) / CGFloat(N)
-            let alpha = L4Spec.shadowAlpha * (1 - t) * (1 - t)
+            let target = L4Spec.shadowAlpha * (1 - t) * (1 - t)   // A_k
+            layerAlphas[k - 1] = 1 - (1 - target) / (1 - nextTarget)
+            nextTarget = target
+        }
+        for k in stride(from: N, through: 1, by: -1) {
             let expand = L4Spec.shadowBlur * CGFloat(k) / CGFloat(N) * u
             let sh = CALayer()
             sh.frame = CGRect(
                 x: x - expand, y: y + L4Spec.shadowDY * u - expand,
                 width: bw + 2 * expand, height: bh + 2 * expand)
-            sh.backgroundColor = UIColor.black.withAlphaComponent(alpha).cgColor
-            sh.cornerRadius = r + expand
+            sh.backgroundColor = UIColor.black.withAlphaComponent(layerAlphas[k - 1]).cgColor
+            // ★半径 = **阴影块自身半径（0，直角）** + expand（2026-10-02 实测第二处修复）：
+            //   首版误用了变量 `r`（= 圆角块的 14u=42px）⇒ 阴影层带 42+expand 的大圆角，
+            //   四角被"咬掉"一块（实测：角点上方 4px 即纯背景，本该有 0.27 alpha 的阴影）——
+            //   用户看到的"第二个矩形背景有黑块污染"含此形态。
+            //   `0 + expand` 才是**直角矩形的距离场**（Minkowski 和 = 圆角半径 expand，
+            //   弧心恰好落在阴影矩形角点 ⇒ 各层同心）。
+            sh.cornerRadius = 0 + expand
             layerTree.addSublayer(sh)
         }
         let shadowBody = CALayer()
