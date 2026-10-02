@@ -16,6 +16,7 @@ import { deviceInfo } from '@kit.BasicServicesKit';
 import { hilog } from '@kit.PerformanceAnalysisKit';
 import { NodeContent, FrameCallback } from '@kit.ArkUI';
 import { util } from '@kit.ArkTS';
+import { display } from '@kit.ArkUI';
 import { attach, renderCommands, stats, ProteusRenderStats } from 'libproteus_render.so';
 import { bench4050, hitProbe, recycleProbe, spliceProbe, textProbe, version as rustVersion } from 'libproteus_bench.so';
 
@@ -302,7 +303,9 @@ struct Index {
       try {
         // ★密度自报（与 C++ 侧的单位标定日志对读——用于定标"canvas 单位 vs vp"）
         hilog.info(DOMAIN, BENCH_TAG, 'PROTEUS_DENSITY vp2px(1)=%{public}s', (vp2px(1)).toString());
-        const rcAttach = attach(this.content, vp2px(1));   // ★密度传入（host 尺寸 vp / 字号 px 都靠它）
+        // ★密度 + 屏幕尺寸（vp）——建全屏 host + 根 RenderNode 用（绝对坐标空间）
+        const disp = display.getDefaultDisplaySync();
+        const rcAttach = attach(this.content, vp2px(1), px2vp(disp.width), px2vp(disp.height));
         hilog.info(DOMAIN, TAG, 'PROTEUS_RENDER_JS_ATTACH rc=%{public}d', rcAttach);
         const n = renderCommands(buildTestCommands());
         this.rendered = n;

@@ -91,6 +91,19 @@ chmod 600 ~/.harmony/hdckey ~/.harmony/hdckey.pub
 Android 走 JNI、iOS 走 staticlib、**鸿蒙走 `aarch64-unknown-linux-ohos` 交叉编译 + C ABI**（无绑定层）。
 交叉编译脚本：`bash hosts/harmony/build-rust-core.sh`（产物 `cpp/thirdparty/libproteus_layout_core.a`，gitignore）。
 
+### ★★★ 渲染树架构（2026-10-02 第二次修正，最终形态）
+
+**一个全屏 host customNode + 一个根 RenderNode + 元素为其子节点**（`AddChild`）：
+
+| 形态 | 结果 |
+|---|---|
+| 首版：每元素一个 host customNode | ❌ 每个 host 都被 **ArkUI 布局流**接管（Stack 居中）⇒ 整组色块被居中、偏离设计坐标 |
+| **正解：全屏 host + 根 RenderNode + AddChild** | ✅ 元素在**屏幕绝对坐标空间**内定位（与 Android "全屏 View + Canvas 绝对坐标"同构） |
+
+**单位模型（同批修正）**：`RenderNode.SetSize/SetPosition` 与 content modifier 的 canvas 是**物理 px**；
+而 customNode 的 `NODE_WIDTH/NODE_HEIGHT` 是 **vp**。⇒ ArkTS 侧设计值 ×`vp2px(1)` 后下发（换算一处）；
+host 尺寸 ÷密度。实测链：`vp2px(1)=3.5` + canvas 宽 = 下发值 ⇒ 两套单位确认。
+
 ### ★ 本轮实测坑（鸿蒙 UI 线程看门狗）
 
 | # | 坑 | 现象 | 修法 |
