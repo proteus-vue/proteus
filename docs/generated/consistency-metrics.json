@@ -13,7 +13,7 @@
   "M1": {
     "name": "数值一致性覆盖率",
     "definition": "Σ(L1|L2|L3 各层**折算到同一 CSS 字段集**后的覆盖数) / (可表达字段数 × 3)（分层加总 · 折算口径）",
-    "value": 0.6548,
+    "value": 0.6786,
     "union": {
       "covered": 28,
       "total": 28,
@@ -31,9 +31,9 @@
         "note": "比对引擎已落地 + 三端实测通过；**折算口径**：几何 w/h → 字段 width/height（x/y 是位置不是字段——保守计 2）"
       },
       "L3": {
-        "covered": 25,
+        "covered": 27,
         "total": 28,
-        "note": "实测比对已落地（VC6：Web ⇄ WebView，硬门禁 + A-6 豁免）；**折算口径**：25 个可比样式键 → 25 个字段（四角/四边归并；fontFamily/fontWeight/visibility 不在字段集内不计）"
+        "note": "实测比对已落地（VC6：Web ⇄ WebView，硬门禁 + A-6 豁免）；**折算口径**：25 个可比样式键 → 27 个字段（四角/四边归并；fontFamily/fontWeight/visibility 不在字段集内不计）"
       }
     },
     "covered": 28,
@@ -77,65 +77,150 @@
     "name": "一致性回归检出率",
     "definition": "L1 变异测试捕获数 / 注入数（L2/L3/L4 算子未布点 ⇒ 单列 pending，不得悄悄删）",
     "value": 1,
-    "injected": 3,
-    "captured": 3,
+    "injected": 11,
+    "captured": 11,
     "operators": [
       {
-        "id": "PB-overflow-scroll",
+        "id": "L1-overflow-scroll",
+        "layer": "L1",
         "caught": true,
         "expected": true,
         "ok": true,
         "note": "官方只认 hidden/visible"
       },
       {
-        "id": "PB-display-grid",
+        "id": "L1-display-grid",
+        "layer": "L1",
         "caught": true,
         "expected": true,
         "ok": true,
         "note": "官方只认 none/flex/block"
       },
       {
-        "id": "PB-position-sticky",
+        "id": "L1-position-sticky",
+        "layer": "L1",
         "caught": true,
         "expected": true,
         "ok": true,
         "note": "官方只认 relative/absolute/fixed"
       },
       {
-        "id": "PB-ctrl-legal-overflow",
+        "id": "L1-ctrl-legal",
+        "layer": "L1",
         "caught": false,
         "expected": false,
         "ok": true,
-        "note": "对照组（合法值不应误报）"
+        "note": "对照组：合法值不应误报"
       },
       {
-        "id": "PB-ctrl-escaped",
+        "id": "L1-ctrl-escaped",
+        "layer": "L1",
         "caught": false,
         "expected": false,
         "ok": true,
-        "note": "对照组（escape hatch 应放行）"
+        "note": "对照组：escape hatch 应放行"
+      },
+      {
+        "id": "L2-margin-shift",
+        "layer": "L2",
+        "caught": true,
+        "expected": true,
+        "ok": true,
+        "note": "间距偏移 3px（超 1px 容差）必须检出"
+      },
+      {
+        "id": "L2-width-shift",
+        "layer": "L2",
+        "caught": true,
+        "expected": true,
+        "ok": true,
+        "note": "尺寸偏移 2px 必须检出"
+      },
+      {
+        "id": "L2-node-missing",
+        "layer": "L2",
+        "caught": true,
+        "expected": true,
+        "ok": true,
+        "note": "节点缺失必须检出（结构级）"
+      },
+      {
+        "id": "L2-depth-mismatch",
+        "layer": "L2",
+        "caught": true,
+        "expected": true,
+        "ok": true,
+        "note": "层级错位必须检出"
+      },
+      {
+        "id": "L2-ctrl-within-tol",
+        "layer": "L2",
+        "caught": false,
+        "expected": false,
+        "ok": true,
+        "note": "对照组：0.5px 在容差内不应报"
+      },
+      {
+        "id": "L3-color-shift-1of255",
+        "layer": "L3",
+        "caught": true,
+        "expected": true,
+        "ok": true,
+        "note": "★§7.4 反例：颜色偏移 1/255 必须检出"
+      },
+      {
+        "id": "L3-font-fallback",
+        "layer": "L3",
+        "caught": true,
+        "expected": true,
+        "ok": true,
+        "note": "字族回退（PingFang SC → system-ui）必须检出"
+      },
+      {
+        "id": "L3-enum-overflow",
+        "layer": "L3",
+        "caught": true,
+        "expected": true,
+        "ok": true,
+        "note": "枚举值差异（overflow）必须检出"
+      },
+      {
+        "id": "L3-scalar-flexgrow",
+        "layer": "L3",
+        "caught": true,
+        "expected": true,
+        "ok": true,
+        "note": "无单位标量（flexGrow 1→2）必须检出——不能用 px 容差吞掉"
+      },
+      {
+        "id": "L3-ctrl-allowed-diff",
+        "layer": "L3",
+        "caught": false,
+        "expected": false,
+        "ok": true,
+        "note": "对照组：A-6 豁免（字族解析差异）不应判失败"
+      },
+      {
+        "id": "L3-ctrl-within-tol",
+        "layer": "L3",
+        "caught": false,
+        "expected": false,
+        "ok": true,
+        "note": "对照组：宽度 0.5px 在容差内不应报"
       }
     ],
     "pendingOperators": [
       {
-        "id": "L2-margin-shift",
-        "note": "★已布点（VC5-b 比对引擎 + 三端快照；破坏性验证：2px 漂移精确检出）——算子待纳入 M4 自动注入"
-      },
-      {
-        "id": "L3-color-shift",
-        "note": "颜色偏移（#FF0000→#FE0000）——需 L3 计算样式（Skyline 端 computedStyle 不可用，需产出式探针）"
-      },
-      {
-        "id": "L3-font-fallback",
-        "note": "字体回退——同上"
+        "id": "L2.5-discrete-interaction",
+        "note": "离散交互（事件 → 结果态几何）——需 L2.5 布点（标准 §10.1 的第二层）"
       },
       {
         "id": "L2.6-scroll-relative",
-        "note": "滚动后相对间距——需 L2.6 不变量校验"
+        "note": "连续交互不变量（滚动后相对间距）——需 L2.6 布点"
       },
       {
         "id": "L4-radius-missing",
-        "note": "圆角缺失——需 L4 像素观察（非门禁）"
+        "note": "圆角缺失——需 L4 像素观察（非门禁；pHash 对局部小差异不敏感，已知边界）"
       }
     ],
     "note": "★标准 §7.4 反例（按钮变色 = L3 颜色类）属必过项——L3 布点后若捕获不了，本套校验不比截图比对强"

@@ -298,7 +298,8 @@ export function classifyStyleKey(key: string, cfg: ToleranceConfig = DEFAULT_TOL
   //   · 其余枚举类（display/position/flexDirection/…）：严格相等
   if (/^(padding|margin|border.*Width)$/i.test(key)) return 'numericLength'
   if (key === 'width' || key === 'height' || key === 'minWidth' || key === 'maxWidth'
-      || key === 'minHeight' || key === 'maxHeight' || key === 'gap') return 'numericLength'
+      || key === 'minHeight' || key === 'maxHeight' || key === 'gap'
+      || key === 'top' || key === 'left') return 'numericLength'
   if (key === 'opacity' || key === 'flexGrow' || key === 'flexShrink') return 'scalar'
   return 'enum'
 }

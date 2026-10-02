@@ -29,6 +29,8 @@ const TEST_PAGE = `<!doctype html><html><head><style>
   .text { width: 160px; height: 40px; color: #ffffff; font-size: 16px; font-weight: 700; margin-bottom: 8px; flex-shrink: 0; overflow: hidden; }
   .nested { width: 300px; height: 100px; background-color: #1f2c44; padding: 8px; flex-shrink: 0; overflow: hidden; }
   .nested .box { width: 100px; height: 24px; margin: 4px 0 0 4px; border-radius: 4px; overflow: visible; }
+  /* ★覆盖收官（2026-10-02·三批）：绝对定位节点——覆盖 top/left（条件可见字段） */
+  .abs { position: relative; width: 50px; height: 30px; top: 5px; left: 7px; background-color: #3a5a8a; flex-shrink: 0; }
 </style></head><body>
   <div id="proteus-root" data-proteus-id="1" data-proteus-pid="p-view">
     <div class="box" data-proteus-id="2" data-proteus-pid="p-box"></div>
@@ -36,6 +38,7 @@ const TEST_PAGE = `<!doctype html><html><head><style>
     <div class="nested" data-proteus-id="4" data-proteus-pid="p-box">
       <div class="box"></div>
     </div>
+    <div class="abs" data-proteus-id="5" data-proteus-pid="p-box"></div>
   </div>
 </body></html>`
 
@@ -72,7 +75,7 @@ describe('VC4-a · Web 探针（真值基准）', () => {
     const r = validateGeometrySnapshot(geo)
     if (!r.ok) console.error(r.issues.slice(0, 8))
     expect(r.ok, `几何快照应通过 schema（问题 ${r.issues.length} 条）`).toBe(true)
-    expect(r.nodeCount).toBe(5) // root + box + text + nested + nested.box
+    expect(r.nodeCount).toBe(6) // root + box + text + nested + nested.box + abs
   })
 
   it('② 产出符合 VC3-b 样式格式（归一化闭集）', async () => {
@@ -80,7 +83,7 @@ describe('VC4-a · Web 探针（真值基准）', () => {
     const r = validateStyleSnapshot(style)
     if (!r.ok) console.error(r.issues.slice(0, 8))
     expect(r.ok, `样式快照应通过 schema（问题 ${r.issues.length} 条）`).toBe(true)
-    expect(r.nodeCount).toBe(5)
+    expect(r.nodeCount).toBe(6)
     const root = (style as { nodes: Array<{ nodeId: string; styles: Record<string, unknown> }> }).nodes.find((n) => n.nodeId === '1')!
     expect(root.styles.backgroundColor).toEqual({ r: 20, g: 20, b: 28, a: 1 }) // #14141c
     expect(root.styles.display).toBe('flex')

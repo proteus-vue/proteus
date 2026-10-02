@@ -17,6 +17,7 @@ var FIXTURE = [
   { id: 'c-text', path: '1', sk: 'p-text' },
   { id: 'c-nested', path: '2', sk: 'p-box' },
   { id: 'c-nested-box', path: '2.0', sk: 'p-box' },
+  { id: 'c-abs', path: '3', sk: 'p-box' },   // ★覆盖收官：绝对定位（top/left）
 ]
 
 /**

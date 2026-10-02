@@ -159,6 +159,11 @@ function styleOf(el: Element, win: Window): NormalizedStyle {
     const n = len(prop)
     if (n !== undefined) (styles as Record<string, unknown>)[key] = n
   }
+  // ★覆盖收官：偏移定位（static 下 computed 是 `auto` ⇒ normalizeLength 返回 null ⇒ 不产出）
+  for (const [prop, key] of [['top', 'top'], ['left', 'left']] as const) {
+    const n = len(prop)
+    if (n !== undefined) (styles as Record<string, unknown>)[key] = n
+  }
   // 枚举项（字符串原样——跨端同名归一由各端 computed style 保证）
   for (const [prop, key] of [
     ['flex-direction', 'flexDirection'], ['justify-content', 'justifyContent'],

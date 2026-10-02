@@ -126,6 +126,11 @@ export interface NormalizedStyle {
   flexShrink?: number
   gap?: number
   overflow?: string
+  /* ★★覆盖收官（2026-10-02·三批）：**偏移定位**（`top`/`left`）——
+   *   条件可见：仅当 `position` 非 `static` 时浏览器/宿主才给出数值（static 下是 `auto`）。
+   *   ⇒ 采集端只在拿到 px 数值时产出（auto/none ⇒ 不产出——与 width 等"无值不判"同口径）。 */
+  top?: number
+  left?: number
 }
 
 export interface StyleNode {
@@ -386,6 +391,7 @@ const STYLE_KEYS = new Set([
   'width', 'height', 'minWidth', 'maxWidth', 'minHeight', 'maxHeight',
   'flexDirection', 'justifyContent', 'alignItems', 'alignSelf',
   'flexGrow', 'flexShrink', 'gap', 'overflow',
+  'top', 'left',   // ★覆盖收官：偏移定位（条件可见——见接口注释）
 ])
 
 /** 校验样式快照（VC3-b：归一化规则完整且无歧义——未登记的样式键**报错**，不静默丢弃） */

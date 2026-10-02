@@ -14,6 +14,8 @@
     <view id="c-nested" style="box-sizing:border-box;width:300px;height:100px;background-color:#1f2c44;padding:8px;flex-shrink:0;overflow:hidden">
       <view id="c-nested-box" style="width:100px;height:24px;margin:4px 0 0 4px;background-color:#2a3f66;border-radius:4px;flex-shrink:0;overflow:visible"></view>
     </view>
+    <!-- ★覆盖收官：绝对定位节点（覆盖 top/left——条件可见字段） -->
+    <view id="c-abs" style="position:relative;width:50px;height:30px;top:5px;left:7px;background-color:#3a5a8a;flex-shrink:0"></view>
   </view>
   <view id="t-display-block" style="width:20px;height:20px;display:block"></view>
   <view id="t-display-flex" style="width:20px;height:20px;display:flex"></view>
