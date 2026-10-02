@@ -67,7 +67,7 @@ const g = globalThis as unknown as HostGlobals
 const HOST_ID = g.__PROTEUS_HOST_ID__ ?? 'quickjs-desktop'
 // ★构建标识（由 hosts/ios/bridge/inject-build-id.mjs **编译期替换**——与 entry-bench/entry-selfdraw
 //   同一机制；报告据此断言"设备上跑的是本次构建"，而不是靠运行时环境变量（那种是第二种形态））
-const BUILD_ID = 'fb508f44-023717'
+const BUILD_ID = '2ab37840-030739'
 const FRAME_DRIVER = g.__PROTEUS_HOST_FRAME_DRIVER__ ?? 'manual'
 
 // ══════════════════════════════════════════════════════════════════

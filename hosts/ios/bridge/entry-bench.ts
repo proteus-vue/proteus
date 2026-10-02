@@ -68,6 +68,12 @@ interface SelfDrawNative {
   pendingStats?(): String
   /** ★★V5：批量像素采样（渲染一次读多点）—— 像素级验证的判据 */
   samplePixels?(json: String): String
+  /** ★★A/B（矩阵 #14 续）：与 Android `readRects()` 同形——内核几何真源（判据用） */
+  readRects?(): string
+  /** ★★A/B：**绘制通道探针**（与 Android `probeChannels` 同族；从 CALayer 真读六通道） */
+  probeChannels?(idsJson: string): string
+  /** ★★A/B：**注册手势回调名**（宿主 tapAt 时经 JSContext 反向调用它——与 Android JNI 同语义） */
+  onGesture?(name: string): string
   /**
    * ★★像素格式自检（三色标定）——**像素判据的前置**
    *
@@ -127,7 +133,7 @@ const BN = { snapshot: 'bench-final' }
 // ★构建标识：每次构建写入，用于**确凿判定**设备上跑的是哪份代码
 //   （踩坑：靠文件 mtime 判断"报告是否刷新"不可靠——新建目标文件的时间恒为"现在"；
 //    且我看不出设备实际执行的是旧 bundle，白跑一轮。有了这个字段就能一眼判定。）
-const BUILD_ID = 'fb508f44-023717'
+const BUILD_ID = '2ab37840-030739'
 const now = (): number => Date.now()
 /** 宽松解析（宿主返回可能是字符串或已是对象） */
 const safeParseAny = (s: any): any => {
