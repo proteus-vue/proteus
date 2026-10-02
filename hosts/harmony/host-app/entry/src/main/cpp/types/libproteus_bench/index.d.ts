@@ -24,5 +24,7 @@ export const jsvmProbe: (script?: string) => string;
 /** ★★★Vapor 设备端链（矩阵 #14）：JSVM eval bundle-vapor.js → 设备端实例化 + 订阅驱动增量。
  *  argsJson = { bundle, artifacts, vpW, vpH, density, filesDir? }；返回包装报告（含 report 原文） */
 export const vaporProbe: (argsJson: string) => string;
+/** ★内核曲线采样（矩阵 #15 A1："贝塞尔来自内核"）——id 缺省 1 */
+export const animCurveBezier: (curveId?: number) => string;
 /** Rust 排版核版本（仪器自检） */
 export const version: () => string;

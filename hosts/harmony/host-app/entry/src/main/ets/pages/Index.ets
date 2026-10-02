@@ -14,14 +14,14 @@
 //   ② 基准分档串行 + 档间 `setTimeout(16)` 让出主线程（不长时间独占 UI 线程）。
 import { deviceInfo } from '@kit.BasicServicesKit';
 import { hilog } from '@kit.PerformanceAnalysisKit';
-import { NodeContent, FrameCallback } from '@kit.ArkUI';
+import { NodeContent, FrameCallback, UIContext } from '@kit.ArkUI';
 import { util } from '@kit.ArkTS';
 import { display } from '@kit.ArkUI';
 import { hidebug } from '@kit.PerformanceAnalysisKit';
 // ★矩阵 #17：App 路由栈场景探针（移植副本，与 Android/iOS 同口径）
 import { runAppStackProbe } from '../core/app-stack-probe';
-import { attach, renderCommands, stats, ProteusRenderStats } from 'libproteus_render.so';
-import { bench4050, hitProbe, recycleProbe, spliceProbe, textProbe, kernelAnimProbe, memProbe, sfcStressProbe, sfcStressCommands, jsvmProbe, vaporProbe, version as rustVersion } from 'libproteus_bench.so';
+import { attach, renderCommands, stats, ProteusRenderStats, platformAnimBegin, platformAnimStep, platformAnimEnd, platformAnimSave } from 'libproteus_render.so';
+import { bench4050, hitProbe, recycleProbe, spliceProbe, textProbe, kernelAnimProbe, memProbe, sfcStressProbe, sfcStressCommands, jsvmProbe, vaporProbe, animCurveBezier, version as rustVersion } from 'libproteus_bench.so';
 
 const DOMAIN = 0x0002;
 const TAG = 'ProteusRender';
@@ -60,6 +60,81 @@ class SfcFrameCallback extends FrameCallback {
     hilog.info(DOMAIN, BENCH_TAG, 'PROTEUS_SFCSTRESS_FRAME');
   }
   onIdle(): void {}
+}
+
+/** 平台动画步进读数（ArkTS 严格模式：显式接口——字段与 platformAnimStep 的 JSON 对应） */
+interface AnimStepReading {
+  tx: number;
+  scale: number;
+  alpha: number;
+  scale_readback: number;
+  alpha_readback: number;
+  on_draw_count: number;
+}
+
+/** 平台动画结算读数 */
+interface AnimEndReading {
+  ok: boolean;
+  draw_delta: number;
+  measure_delta: number;
+  layout_delta: number;
+  on_draw_count: number;
+}
+
+/**
+ * ★★平台零参与动画（矩阵 #15）：VSync 帧回调逐帧写 RenderNode 变换属性。
+ *   每帧只做 3 次属性写入 + 2 次读回（无绘制、无布局）——on_draw_count 全程恒定是本探针的核心判据。
+ *   ★与 Android ViewPropertyAnimator 的语义差异（如实）：Android 一次性启动后由 RenderThread
+ *   自主插值；鸿蒙 C-API 无同形入口 ⇒ 本探针由帧回调步进（与系统动画同一帧源）。
+ */
+class PlatformAnimFrameCallback extends FrameCallback {
+  private uiCtx: UIContext;
+  private filesDir: string;
+  private step: number = 0;
+  private readings: string[] = [];
+  private readonly total: number = 8;
+  private done: boolean = false;
+  constructor(uiCtx: UIContext, filesDir: string) {
+    super();
+    this.uiCtx = uiCtx;
+    this.filesDir = filesDir;
+  }
+  onFrame(_frameTimeInNano: number): void {
+    if (this.done) return;
+    if (this.step >= this.total) {
+      this.done = true;
+      this.finish();
+      return;
+    }
+    const t: number = this.step / (this.total - 1);
+    const payload: string = '{"tx":' + (120 * t).toFixed(2) +
+      ',"scale":' + (1 - 0.4 * t).toFixed(3) +
+      ',"alpha":' + (1 - 0.5 * t).toFixed(3) + '}';
+    const r: string = platformAnimStep(payload);
+    this.readings.push(r);
+    this.step++;
+    this.uiCtx.postFrameCallback(this);   // 下一帧继续（VSync 节奏）
+  }
+  onIdle(): void {}
+  private finish(): void {
+    try {
+      const endJson: string = platformAnimEnd();          // {ok, draw_delta, ...}
+      const bez: string = animCurveBezier(1);             // 内核贝塞尔（A1 契约）
+      const endObj: AnimEndReading = JSON.parse(endJson) as AnimEndReading;
+      const last: string = this.readings.length > 0 ? this.readings[this.readings.length - 1] : '{}';
+      const composed: string = '{"host_id":"harmony","bezier":' + bez
+        + ',"mids":[' + this.readings.join(',') + ']'
+        + ',"end":' + last
+        + ',"draw_delta":' + endObj.draw_delta
+        + ',"measure_delta":' + endObj.measure_delta
+        + ',"layout_delta":' + endObj.layout_delta
+        + ',"note":"鸿蒙腿：RenderNode 变换 + VSync 帧回调逐帧写属性（应用层零绘制/零布局）；与 Android ViewPropertyAnimator 的差异见 proteus_render.cpp 头注"}';
+      const rc: number = platformAnimSave(composed, this.filesDir + '/platform-anim.json');
+      hilog.info(DOMAIN, BENCH_TAG, 'PROTEUS_PLATFORMANIM rc=%{public}d %{public}s', rc, composed);
+    } catch (e) {
+      hilog.error(DOMAIN, BENCH_TAG, 'PROTEUS_PLATFORMANIM_ERROR %{public}s', JSON.stringify(e) ?? '');
+    }
+  }
 }
 
 /** CSS 十六进制色（#RRGGBB / #AARRGGBB）→ ARGB uint32 */
@@ -368,6 +443,12 @@ struct Index {
         this.rendered = n;
         const st: ProteusRenderStats = stats();
         hilog.info(DOMAIN, TAG, 'PROTEUS_RENDER_JS_DONE nodes=%{public}d stats=%{public}d', n, st.nodes);
+        // ★矩阵 #15：平台零参与动画（帧回调步进；报告落沙箱 el2 —— hdc 可读映射路径）
+        const beginJson: string = platformAnimBegin();
+        hilog.info(DOMAIN, BENCH_TAG, 'PROTEUS_PLATFORMANIM_BEGIN_JS %{public}s', beginJson);
+        const ctxAnim = getContext(this);
+        this.getUIContext().postFrameCallback(
+          new PlatformAnimFrameCallback(this.getUIContext(), ctxAnim.filesDir));
       } catch (e) {
         hilog.error(DOMAIN, TAG, 'PROTEUS_RENDER_JS_ERROR %{public}s', JSON.stringify(e) ?? '');
       }
