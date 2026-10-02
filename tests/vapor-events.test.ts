@@ -115,3 +115,53 @@ describe('Vapor 事件编译 · 确定性（同一源码两次编译逐字节一
     expect(JSON.stringify(a)).toBe(JSON.stringify(b))
   })
 })
+
+describe('★P0 静默风险可见化（2026-10-03 · Vapor 能力清单批次）', () => {
+  // 【为什么单列一组】能力清单调研抓出「静默风险 12 项」——即"既无实现也无诊断"：
+  //   产物里什么都不发生，而开发者以为生效（**页面看起来对、功能是空的**）。
+  //   本批不实现能力，只让"未支持"在编译期**可见**。判据 = 必须产诊断（且带修法提示）。
+  const wrap = (tpl: string): string =>
+    `<script setup lang="ts">\nimport { ref } from 'vue'\nconst a = ref(1)\nconst items = ref([{ id: 1 }])\n</script>\n<template>${tpl}</template>`
+
+  const diagText = (tpl: string): string =>
+    buildLayoutTemplate(wrap(tpl), 'p.vue').diagnostics.map((d) => String(d.message)).join(' | ')
+
+  it('v-html / v-text / v-memo 必须产诊断（此前静默）', () => {
+    expect(diagText(`<div v-html="a" style="height: 5px"></div>`)).toContain('v-html 未支持')
+    expect(diagText(`<div v-text="a" style="height: 5px"></div>`)).toContain('v-text 未支持')
+    expect(diagText(`<div v-memo="[a]" style="height: 5px"></div>`)).toContain('v-memo 未支持')
+  })
+
+  it('内置组件（Teleport / KeepAlive / Transition / Suspense）必须产诊断', () => {
+    expect(diagText(`<Teleport to="#x"><i>t</i></Teleport>`)).toContain('Teleport 未支持')
+    expect(diagText(`<KeepAlive><Comp /></KeepAlive>`)).toContain('KeepAlive 未支持')
+    expect(diagText(`<Transition><div /></Transition>`)).toContain('Transition 未支持')
+    expect(diagText(`<Suspense><div /></Suspense>`)).toContain('Suspense 未支持')
+  })
+
+  it('动态组件与插槽出口必须产诊断', () => {
+    expect(diagText(`<component :is="a" />`)).toContain('动态组件')
+    expect(diagText(`<div><slot name="foo" /></div>`)).toContain('插槽出口')
+  })
+
+  it('动态属性 :[k] / 动态事件 @[e] 必须产诊断（arg.isStatic===false 判据）', () => {
+    expect(diagText(`<div :[a]="a" style="height: 5px"></div>`)).toContain('动态属性名')
+    // 事件侧由 compileEvents 覆盖（正则解析器看不到方括号形态）
+    const ev = compileEvents(wrap(`<div @[a]="a = 1">x</div>`))
+    expect(ev.diagnostics.map((d) => String(d.message)).join(' | ')).toContain('动态事件名未支持')
+  })
+
+  it('自定义指令必须产诊断（内置白名单之外）', () => {
+    expect(diagText(`<div v-focus style="height: 5px"></div>`)).toContain('自定义指令')
+  })
+
+  it('★反向：已支持的形态**不得**误报（防"诊断噪声淹没真问题"）', () => {
+    // v-if / v-for / v-show / v-model / 事件 / 绘制声明 —— 这些都是已实现能力
+    expect(diagText(`<div v-if="a" style="height: 5px">x</div>`)).not.toContain('未支持')
+    expect(diagText(`<li v-for="it in items" :key="it.id" :width="a"></li>`)).not.toContain('未支持')
+    expect(diagText(`<div v-show="a" style="height: 5px">x</div>`)).not.toContain('未支持')
+    expect(diagText(`<input v-model="a" style="height: 5px" />`)).not.toContain('未支持')
+    expect(diagText(`<div @click="a = 1" style="height: 5px">x</div>`)).not.toContain('未支持')
+    expect(diagText(`<div glow='{"color":"#fff","radius":5,"alpha":0.5}' style="height: 5px"></div>`)).not.toContain('未支持')
+  })
+})

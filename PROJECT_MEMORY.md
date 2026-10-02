@@ -87,6 +87,46 @@ check-consistency-snapshot 七段全绿 · check:no-blind-wait ✅（新 .sh 零
 ① L2/L3/L2.5/L2.6 算子用**合成快照**——证明的是"比对引擎敏不敏感"，不是"真机数据一定对"；
 ② L4 算子用真截图但取同端注入（跨端噪声底含 AA，无区分度）；L4 的价值形态是**定位**。
 
+### ★★★2026-10-03（八十九）· **Vapor 能力清单**（对标官方 Vue Vapor）+ **P0 静默风险可见化**
+
+**用户要求**：「调研 vue 官方 vapor 对 SFC 的支持实现，研究落地我们 vapor 应该落地的能力清单……
+因为 vapor 是后面承载开发者用标准 vue 写页面组件的 App 端底层支持基座，必须保证支持完善」。
+
+**调研方法（全实证，非文档摘录）**
+· 官方侧：从 npm 拉 `@vue/compiler-vapor` + `@vue/runtime-vapor` + `@vue/compiler-sfc`
+  （`3.6.0-rc.10`）**真编译 16 组覆盖用例** → 提取产出形态（`_template("<span>")` 编译期字符串模板 +
+  `createIf/createFor/renderEffect/setText` 细粒度 helper）+ **24 个 transform**（支持面硬证据）+
+  修饰符常量（`.stop/.prevent/.self/.once/.capture/.passive/.exact` + 按键修饰符 + v-model 三修饰符）；
+· 我方侧：`buildLayoutTemplate` / `buildVaporSubscriptions` / `compileEvents` **真跑 45 组用例**
+  → 记录 nodes/sources/slots/诊断。探针转正为 `scripts/vapor-capability-probe.mts`（可复现）。
+
+**交付：《Proteus Vapor 能力清单》**（`docs/Proteus_Vapor能力清单.md`）
+· 官方能力面全景（管线/指令/修饰符/38 个运行时 API）；
+· 我方 35 项实测表（✅17 · ✓半4 · ⚠️静默12 · ❌诊断拒绝7）；
+· **缺口分级 P0–P4**（按"对开发者写标准 Vue 页面组件的影响"排序）+ 与官方形态差异的**保留意见**
+  （细粒度更新下沉内核 / JSON 声明 / Rust 几何——**这三条保持差异**，是自研价值所在）。
+
+**★★最重要发现：静默风险 12 项**（`v-html`/`v-text`/`v-memo`/自定义指令/`:[k]`/`@[ev]`/
+Teleport/KeepAlive/Transition/Suspense/`<component :is>`/`<slot>`）——**既无实现也无诊断**：
+产物里什么都不发生而开发者以为生效（页面看起来对、功能是空的）。⇒ 本批**不实现能力**，
+只让"未支持"在编译期**可见**（成本最低、收益最高）。
+
+**P0 交付（已完成）**
+1. `template.ts`：`UNSUPPORTED_DIRECTIVES` 表 + `UNSUPPORTED_BUILTINS` 表 + 自定义指令兜底 +
+   `<slot>` 出口诊断（**均带修法**）；
+2. **动态名判据修正（实测抓出）**：静态与动态的 `arg.type` 都是 `4`，**只有 `arg.isStatic` 区分**
+   ——首版按"有无 arg.content"判 ⇒ 两者都有 ⇒ 全漏；
+3. `events.ts`：**正则解析器的盲区**——`/@([\w:.-]+)/` 看不到 `@[ev]` 方括号形态（既不进产物也不进
+   诊断）⇒ 前置探测补诊断；
+4. **反向判据**（关键）：已支持形态（v-if/v-for/v-show/v-model/事件/绘制声明）**不得误报**
+   ——防"诊断噪声淹没真问题"。
+
+**验证**：`tests/vapor-events.test.ts` 新增 **6 组 P0 判据**（含反向）；165 项 Vapor 测试全过 ·
+`check:script-compile` ✅ · 既有产物无回归（vapor-artifacts.json 逐字节未变）。
+
+**下一步（清单里的 P1，最高价值）**：**组件系统**（组件边界/实例化 + 插槽分发 + props 响应式）
+——"用标准 Vue 写页面组件"的基座要素；Vue 路径已有 `renderer-app` 可复用设计。
+
 ### ★★★2026-10-03（八十八）· 鸿蒙 **虚拟化列表**补齐（#5）—— 三端 Vapor 虚拟化 6/6 全绿 + 两个装置缺陷固化
 
 **用户「继续打通补齐」→ 鸿蒙 #5（Vapor 路大列表虚拟化）**。
@@ -1893,6 +1933,8 @@ check-consistency-snapshot 七段全绿 · script-compile ✅ · no-blind-wait �
 **新诚实边界**：平移对齐会**吸收真实位置差异**（若某端整体真的偏了 3px，对齐后看不出）——
 "位置是否正确"由 L2 几何数值比对承担；L4 只管"画出来像不像"（已写入注记与文档）。
 ④ 仍未接入：iOS/Android 真机截图（当前 Web=Playwright、MP=模拟器，均非真机）。
+
+## 当前状态速览（最近一次更新：**2026-10-03·（八十九）· **Vapor 能力清单**（对标官方 3.6.0-rc.10 实证调研）+ **P0 静默风险 12 项可见化**（全补诊断 + 反向判据）；下一步 P1 组件系统**）★新会话以此为准
 
 ## 当前状态速览（最近一次更新：**2026-10-03·（八十八）· 鸿蒙 **虚拟化列表**补齐（#5）——三端 Vapor 虚拟化 6/6 全绿（1000 行/首帧 13 行/回顶 0%）；两个装置缺陷（CAPI 未初始化 · 签名口径）固化**）★新会话以此为准
 
