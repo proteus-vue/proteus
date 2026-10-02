@@ -91,6 +91,9 @@ jobs:
       - name: 坐标吸附跨语言 golden（卡 I2：TS ⇄ Rust 同输入同输出——三端差 1px 的机器判据）
         run: pnpm run check:pixel-snap
 
+      - name: 端支持度矩阵漂移（VC1：编译器属性集 ⇄ 三端矩阵 ⇄ 源工件；防矩阵落后于编译器/源）
+        run: pnpm run check:end-support
+
       - name: 双端 golden 单一来源（★2026-10-01：两端 conformance golden 必须同源——不同源会让
               覆盖面不一致，收「双端几何一致性」判据时变成**装置性判红**）
         run: pnpm run check:cross-end-golden

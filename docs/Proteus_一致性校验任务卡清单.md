@@ -12,9 +12,14 @@
 
 - [x] **VC0** Skyline 几何 API 实测 ⭐ 一票否决 —— ✅ **结论 A（工具侧，2026-10-02）**：查询 API 全时机可用
   + 探针可注入；真机（Android/iOS/鸿蒙）矩阵待有设备条件时补验
-- [ ] **VC1-a** Web 端支持度矩阵
-- [ ] **VC1-b** Skyline WXSS 支持度矩阵
-- [ ] **VC1-c** WebView 小程序支持度矩阵
+- [x] **VC1-a** Web 端支持度矩阵 —— ✅ **机器可读（2026-10-02）**：Playwright `CSS.supports` 实测
+  （Chromium 151）· 62 属性 + 8 选择器 → `docs/generated/end-support-matrix.json` 的 `web` 列
+- [x] **VC1-b** Skyline WXSS 支持度矩阵 —— ✅ **机器可读（2026-10-02）**：官方《Skyline WXSS 样式支持与差异》
+  解析（模块 14 / 选择器 13 / 属性 110 / 类型 52 行）+ 本机实测佐证（选择器形态 / computedStyle 局限）
+- [x] **VC1-c** WebView 小程序支持度矩阵 —— ✅ **机器可读（2026-10-02）**：wechatide 装置
+  `fields({computedStyle})` 实测 37/37（页面与组件作用域）
+  ★三卡产出统一为 **`docs/generated/end-support-matrix.{json,md}`**（生成器
+  `scripts/gen-end-support-matrix.mjs`，`--collect` 采集 / `--check` 漂移门禁已接 CI+verify）
 
 ### 第二批：L1 编译期静态
 

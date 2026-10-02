@@ -48,6 +48,49 @@
   只有**可复制代码块**里的引用才真正有害。
 · 破坏性验证：恢复 `p-card` → 红并精确报 `03-fluid-grid.md:31`；还原 → 575 md 全过。
 
+## 当前状态速览（最近一次更新：**2026-10-02·（二十八）· VC1 端支持度矩阵——三端机器可读（Web 实测 / Skyline 官方解析 / WebView 实测）**）★新会话以此为准
+### ★★★2026-10-02（二十八）· VC1-a/b/c 三张支持度矩阵（一致性校验线第二批）
+
+**背景**：VC0 定论（查询 API 可用）后，第一批判下的 VC1-a/b/c（Web / Skyline / WebView 支持度矩阵）
+不再需要"人读文档抄表格"——本批把它们做成**机器可读 + 门禁防漂移**。
+
+**交付**
+1. **生成器 `scripts/gen-end-support-matrix.mjs`**（离线生成 + `--collect` 联网采集 + `--check` 漂移门禁）：
+   属性清单**从编译器源码提取**（`template.ts` 的 LAYOUT_FIELDS / PAINT_FIELDS / PAINT_DECL_ATTRS
+   ——编译器认什么矩阵就覆盖什么，编译器加字段 ⇒ 门禁当场红）；产出
+   `docs/generated/end-support-matrix.{json,md}`（28 行 × 三端列 + `structural` 结构性事实区 +
+   `engineChannels` 引擎扩展通道区）。
+2. **三源工件**（`docs/generated/end-support-sources/`，带 provenance：URL/工具/日期/哈希）：
+   · Web 列 = Playwright `CSS.supports` 实测（Chromium 151；**recognized + valueProbe 双判定**）
+   · Skyline 列 = 官方《Skyline WXSS 样式支持与差异》解析（属性 110 / 选择器 13 / 类型 52 行）
+   · WebView 列 = wechatide 装置 `fields({computedStyle})` 实测 **37/37 supported**
+3. **门禁接线**：`check:end-support` 进 `pnpm verify` 链 + `.github/workflows/ci.yml`
+   （`check:gates-sync` 校验通过——"接线不靠记忆"）。
+
+**★实测抓出的两个真缺陷（都修了）**
+● **Web 假阴性**：首版用"猜一个值"探测 `CSS.supports`，把 `border-color`/`opacity` 猜成 `10px`
+  ⇒ 判 unsupported。修复：`recognized`（`inherit` 恒合法探测属性名）+ 显式 `valueProbe` 表双判定。
+● **矩阵语义污染**：`fill-gradient`/`clip-path`/`glow`/`mask`/`svg-path` 被混进 CSS 属性矩阵——
+  它们是**引擎扩展通道**（JSON 属性载体），不是 CSS 属性。修复：拆出 `engineChannels` 独立区。
+另修装置一处：`fields` 回调字段**平铺**（不嵌套 `computedStyle` 键）——首版按嵌套读 ⇒ 全判 absent 假象。
+
+**★关键端差异（新增证据，进入矩阵 structural 区）**
+· **Skyline 下 `fields({computedStyle})` 完全不可用**（实测返回 `{}` 静默丢弃；WebView 同装置可用）
+  ⇒ L3 计算样式比对在 Skyline 端**必须走产出式探针**（VC0 报告的"两法并用"建议由此强化为硬约束：
+  查询式只能在 WebView 侧用）。
+· Skyline 选择器：id/class ✓、属性/tag ✗（VC0 实测，官方选择器表亦标 ×）。
+· Skyline 默认值差异（display 默认 flex / flex-direction 默认 column / box-sizing 默认 border-box）——
+  与 Web、WebView 均不同（官方表注明可配置改）。
+
+**证据与验证**：矩阵 `--check` 绿；**破坏性验证**：往编译器 LAYOUT_FIELDS 注入 `'order'` ⇒
+门禁当场红（exit 1）、还原 ⇒ 绿；`check:script-compile` 117 文件全过；`check:docs` / `check:gates-sync` 绿。
+
+**诚实边界**：① Skyline 列目前是"官方表收录"判定（`listed`）——未收录 ≠ 确认不支持，
+逐属性真机实测属 VC4-c 开工后的持续采集；② 小程序不能 JS 写节点内联样式（装置事实，已入 structural 区）；
+③ Web 列是 Chromium 151 单一引擎（未跑 Safari/Firefox——卡片未要求，属完备性）。
+
+**任务卡状态**：VC1-a/b/c 三卡勾选完成（机器可读产出统一为一份矩阵）。
+
 ## 当前状态速览（最近一次更新：**2026-10-02·（二十七）· VC0 Skyline 几何 API 实测——结论 A（完全可用）**）★新会话以此为准
 ### ★★★2026-10-02（二十七）· VC0（一致性校验线的"一票否决"卡）：Skyline 几何 API 实测
 

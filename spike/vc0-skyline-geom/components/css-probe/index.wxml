@@ -1,0 +1,41 @@
+<!-- VC1 · CSS 计算样式测试节点（静态声明——小程序不能 JS 写内联样式） -->
+<!-- 顺序：尺寸兜底在前、测试声明在后（测试值必须最后生效——否则被兜底覆盖） -->
+<view class="css-probe-root">
+  <view id="t-display-block" style="width:20px;height:20px;display:block"></view>
+  <view id="t-display-flex" style="width:20px;height:20px;display:flex"></view>
+  <view id="t-position-relative" style="width:20px;height:20px;position:relative"></view>
+  <view id="t-position-absolute" style="width:20px;height:20px;position:absolute"></view>
+  <view id="t-box-sizing" style="width:20px;height:20px;box-sizing:content-box"></view>
+  <view id="t-opacity" style="width:20px;height:20px;opacity:0.5"></view>
+  <view id="t-color" style="width:20px;height:20px;color:rgb(1,2,3)"></view>
+  <view id="t-bg-color" style="width:20px;height:20px;background-color:rgb(4,5,6)"></view>
+  <view id="t-width" style="width:20px;height:20px;width:123px"></view>
+  <view id="t-height" style="width:20px;height:20px;height:45px"></view>
+  <view id="t-margin-top" style="width:20px;height:20px;margin-top:7px"></view>
+  <view id="t-padding-top" style="width:20px;height:20px;padding-top:9px"></view>
+  <view id="t-border-radius" style="width:20px;height:20px;border-radius:11px"></view>
+  <view id="t-border-width" style="width:20px;height:20px;border-style:solid;border-width:3px"></view>
+  <view id="t-flex-direction-row" style="width:20px;height:20px;flex-direction:row"></view>
+  <view id="t-justify-center" style="width:20px;height:20px;justify-content:center"></view>
+  <view id="t-align-center" style="width:20px;height:20px;align-items:center"></view>
+  <view id="t-flex-grow" style="width:20px;height:20px;flex-grow:2"></view>
+  <view id="t-flex-shrink" style="width:20px;height:20px;flex-shrink:0"></view>
+  <view id="t-gap" style="width:20px;height:20px;gap:5px"></view>
+  <view id="t-overflow-hidden" style="width:20px;height:20px;overflow:hidden"></view>
+  <view id="t-top" style="width:20px;height:20px;top:13px"></view>
+  <view id="t-left" style="width:20px;height:20px;left:17px"></view>
+  <view id="t-transform" style="width:20px;height:20px;transform:translateX(10px)"></view>
+  <view id="t-font-size" style="width:20px;height:20px;font-size:23px"></view>
+  <view id="t-font-weight" style="width:20px;height:20px;font-weight:700"></view>
+  <view id="t-line-height" style="width:20px;height:20px;line-height:31px"></view>
+  <view id="t-text-align" style="width:20px;height:20px;text-align:center"></view>
+  <view id="t-visibility-hidden" style="width:20px;height:20px;visibility:hidden"></view>
+  <view id="t-z-index" style="width:20px;height:20px;z-index:7"></view>
+  <view id="t-min-width" style="width:20px;height:20px;min-width:123px"></view>
+  <view id="t-max-width" style="width:20px;height:20px;max-width:321px"></view>
+  <view id="t-min-height" style="width:20px;height:20px;min-height:55px"></view>
+  <view id="t-max-height" style="width:20px;height:20px;max-height:77px"></view>
+  <view id="t-align-self" style="width:20px;height:20px;align-self:center"></view>
+  <view id="t-flex-basis" style="width:20px;height:20px;flex-basis:44px"></view>
+  <view id="t-border-color" style="width:20px;height:20px;border-style:solid;border-color:rgb(7,8,9)"></view>
+</view>

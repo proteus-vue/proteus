@@ -8,3 +8,4 @@
   </scroll-view>
   <geom-probe tag="p1"></geom-probe>
 </view>
+<css-probe id="cssprobe" tag="p1"></css-probe>
