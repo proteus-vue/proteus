@@ -45,6 +45,19 @@ if (schemaErrs.length > 0) {
 //   的入库位置 `docs/generated/consistency-samples/pixels/`。
 const SAMPLES_DIR = path.join(ROOT, 'docs/generated/consistency-samples/pixels')
 
+/**
+ * L4 夹具截图的**观测区域**（原图 640×1386 口径）——排除设备 chrome，否则"任意两张截图必然 changed"：
+ *   · y<150：状态栏时钟（每张都不同——12:42 vs 12:43）+ 胶囊按钮 + 模拟器圆角；
+ *   · y>1240：Home 指示条；
+ *   · x<2：模拟器画布左缘 1px 伪影（实测该列 1300 行有差异）。
+ * ★夹具已把内容下移（padding-top 120px）使四项观测目标完整落在 ROI 内——
+ *   采集脚本 `scripts/shoot-l4-fixtures.sh` 负责截图，改内容布局时**必须同步改这里**。
+ * ROI 随观测结果回传（报告里可见"比的是哪一块"）。
+ */
+const L4_ROI = { x: 2, y: 150, w: 636, h: 1090 }
+/** 真截图对的观测参数：L4 夹具两端同为模拟器物理像素（640×1386），但保留 alignSize 以防未来 DPR 变化 */
+const REAL_PAIR_OPTS = { alignSize: true, roi: L4_ROI }
+
 /** 合成夹具：与一致性夹具同构的简版（直角块 + 圆角块的差异来自 AA——L4 的典型场景） */
 function synth(size = 64, corner = false, jitter = 0) {
   const rgba = new Uint8Array(size * size * 4)
@@ -84,7 +97,8 @@ async function loadPairs() {
       const [a, b] = arr
       const imgA = await decodePng(new Uint8Array(fs.readFileSync(a.file)))
       const imgB = await decodePng(new Uint8Array(fs.readFileSync(b.file)))
-      pairs.push({ id: `${base}:${a.end}-vs-${b.end}`, a: path.relative(ROOT, a.file), b: path.relative(ROOT, b.file), observation: pixelObservation(imgA, imgB) })
+      // ★真截图对：ROI 排除设备 chrome + alignSize（见 L4_ROI 注释）
+      pairs.push({ id: `${base}:${a.end}-vs-${b.end}`, a: path.relative(ROOT, a.file), b: path.relative(ROOT, b.file), observation: pixelObservation(imgA, imgB, REAL_PAIR_OPTS) })
     }
   }
   // 合成夹具（**装置自检**：L4 判据本身要能在 CI 上被验证——不依赖设备）

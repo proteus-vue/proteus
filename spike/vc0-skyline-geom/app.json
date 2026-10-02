@@ -1,7 +1,9 @@
 {
   "pages": [
     "pages/skyline-geom/index",
-    "pages/webview-geom/index"
+    "pages/webview-geom/index",
+    "pages/l4-skyline/index",
+    "pages/l4-webview/index"
   ],
   "window": {
     "navigationStyle": "custom"

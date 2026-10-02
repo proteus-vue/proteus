@@ -13,7 +13,7 @@ import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 import {
   pixelObservation, pHash, hammingDistance, buildPixelReport, matchPixelNoise, validatePixelNoiseBaseline,
-  encodePng, decodePng, isConsistencyReport, formatReport,
+  encodePng, decodePng, isConsistencyReport, formatReport, cropImage,
   compareGeometry, buildGeometryReport, applyAutoFixToGeometry, compareStyle, buildStyleReport, resolveTolerance,
 } from '@proteus-vue/consistency'
 import type { RgbaImage, GeometrySnapshot, PixelNoiseBaseline } from '@proteus-vue/consistency'
@@ -103,6 +103,38 @@ describe('VC7 · L4 像素观察（非门禁）', () => {
     expect(report.totals.changedSamples).toBe(1)
     expect(report.totals.cleanSamples).toBe(1)
     expect(report.totals.diffPixels).toBe(obsChanged.diffPixels)
+  })
+
+  it('⑦-ROI ★观测区域：排除设备 chrome（样本量只计区域 + region 坐标含偏移 + 越界即红）', () => {
+    // 场景：整屏图里有一块"状态栏时钟"（左上）与一块"应用内容"（右下）——
+    // 时钟每张都不同（系统性假差异），内容完全相同 ⇒ 无 ROI 判 changed，有 ROI 判 identical
+    const a = makeImage(200, 300, [20, 20, 28], { x: 8, y: 8, w: 60, h: 20, color: [180, 180, 180] })
+    const b = makeImage(200, 300, [20, 20, 28], { x: 8, y: 8, w: 60, h: 20, color: [200, 200, 200] })
+    const btn = (img: RgbaImage, color: [number, number, number]) => {
+      for (let y = 120; y < 160; y++) for (let x = 40; x < 120; x++) {
+        const i = (y * 200 + x) * 4
+        img.rgba[i] = color[0]; img.rgba[i + 1] = color[1]; img.rgba[i + 2] = color[2]
+      }
+    }
+    btn(a, [47, 111, 237]); btn(b, [47, 111, 237])
+    expect(pixelObservation(a, b).verdict, '无 ROI：时钟噪声 ⇒ changed').toBe('changed')
+    const roi = { x: 0, y: 100, w: 200, h: 100 }
+    const obs = pixelObservation(a, b, { roi })
+    expect(obs.verdict, '有 ROI（只比内容区）⇒ identical').toBe('identical')
+    expect(obs.sampleCount, '样本量只计 ROI 面积').toBe(200 * 100)
+    expect(obs.roi, 'ROI 随报告回传（可复现）').toEqual(roi)
+    // region 坐标须含 ROI 偏移（消费方看整屏坐标，不是裁剪后坐标）
+    const shifted = pixelObservation(a, makeImage(200, 300, [20, 20, 28], { x: 8, y: 8, w: 60, h: 20, color: [200, 200, 200] }), { roi })
+    expect(shifted.verdict).toBe('changed')
+    const r0 = shifted.regions[0]!
+    expect(r0.y, 'region y 应含 ROI 偏移（≥100）').toBeGreaterThanOrEqual(100)
+    // 越界 ROI：必须报错（静默截断会让"观测区写错"变成看不出的小区域观测）
+    expect(() => cropImage(a, { x: 0, y: 0, w: 260, h: 100 })).toThrow(/越界/)
+    expect(() => cropImage(a, { x: -1, y: 0, w: 10, h: 10 })).toThrow(/越界/)
+    // cropImage 基本正确性：裁出区域尺寸与像素内容
+    const c = cropImage(a, { x: 40, y: 120, w: 80, h: 40 })
+    expect([c.width, c.height]).toEqual([80, 40])
+    expect(c.rgba[0], '裁剪区首像素应为按钮蓝').toBe(47)
   })
 
   it('⑦ 噪声基线：schema 校验（必填/唯一/上限）+ 匹配', () => {

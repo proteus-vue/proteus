@@ -56,10 +56,54 @@ export interface PixelObservation {
   diffRatio: number
   /** pHash 汉明距离（0..64；越小越像） */
   hashDistance: number
-  /** 差异区域（按像素数降序，最多 8 块——报告用） */
+  /** 差异区域（按像素数降序，最多 8 块——**坐标按原图口径**，已含 ROI 偏移） */
   regions: PixelDiffRegion[]
   /** 本次观测的参数（可复现——报告里要能看出"用什么阈值判的"） */
   params: { channelThreshold: number; blockSize: number; noiseRatio: number; noiseHashDistance: number }
+  /** 本次观测区域（缺省 = 整图；声明后 sampleCount 只计区域面积——报告要能看出"比的是哪一块"） */
+  roi?: ImageRoi
+}
+
+/**
+ * ★★**观测前置断言**（防"截图全是错误页/白屏"的假绿——本仓实测抓出）：
+ *   若两张图都是同一个错误页（模拟器启动失败/白屏），`pixelObservation` 会判 `identical`
+ *   并让调用方以为"两端一致"——**这是最危险的假绿**（截图错了两遍看起来反而"最一致"）。
+ *   ⇒ 调用方应在观测前用本函数检查"图里有没有该有的东西"（颜色探针）。
+ *
+ * @param img 待检查图像
+ * @param probes 期望出现的颜色（rgba 数值 + `tolerance` 单通道容差）
+ * @returns 命中的探针数 / 未命中的清单（调用方据此判"截图是否有效"）
+ */
+export function assertPixelsPresent(
+  img: RgbaImage,
+  probes: Array<{ name: string; rgb: [number, number, number]; tolerance?: number }>,
+): { ok: boolean; hit: string[]; missed: string[] } {
+  const hit: string[] = []
+  const missed: string[] = []
+  for (const p of probes) {
+    const tol = p.tolerance ?? 12
+    let found = false
+    for (let i = 0; i < img.rgba.length && !found; i += 4) {
+      if (
+        Math.abs(img.rgba[i]! - p.rgb[0]) <= tol &&
+        Math.abs(img.rgba[i + 1]! - p.rgb[1]) <= tol &&
+        Math.abs(img.rgba[i + 2]! - p.rgb[2]) <= tol
+      ) {
+        found = true
+      }
+    }
+    if (found) hit.push(p.name)
+    else missed.push(p.name)
+  }
+  return { ok: missed.length === 0, hit, missed }
+}
+
+/** 感兴趣区域（截图的**应用内容区**——排除设备 chrome，见 `roi` 选项注释） */
+export interface ImageRoi {
+  x: number
+  y: number
+  w: number
+  h: number
 }
 
 export interface PixelCompareOptions {
@@ -69,6 +113,22 @@ export interface PixelCompareOptions {
   blockSize?: number
   /** 噪声带：diffRatio ≤ 它且 hashDistance 很小 ⇒ noise-level（默认 0.005） */
   noiseRatio?: number
+  /**
+   * ★★观测区域（默认整图）——**排除设备 chrome**。
+   *
+   * 【为什么必须有（L4 真截图实测抓出）】整屏截图里有一类**与 App 无关**的像素：
+   *   状态栏时钟（每张截图都不同——12:37 vs 12:38）、Home 指示条、模拟器圆角透出的
+   *   窗口底色、截图左缘 1px 伪影。它们让"任意两张截图必然 changed"——
+   *   这是**系统性假差异源**（不是随机抖动，是确定性污染）。
+   *   ⇒ 只比**应用内容区**：调用方显式声明 ROI，随报告带出（可复现）。
+   *   ROI 坐标按**对齐后**尺寸计（先 `alignSize` 再裁剪）；报告的 region 坐标按原图口径。
+   */
+  roi?: ImageRoi
+  /**
+   * ★尺寸对齐（默认 false）：true 时把 **B 重采样到 A 的尺寸**后再比。
+   *   跨 DPR 截图（小程序物理像素 vs Web CSS 像素）必须开——见 `resampleTo` 注释。
+   */
+  alignSize?: boolean
   /**
    * 感知同形的 hash 距离上限（默认 16）。
    * 【为什么不是 0（实测）：pHash 对整幅均匀色偏敏感（+4/255 ⇒ 距离 14），而那属色差/抗锯齿噪声；
@@ -180,6 +240,71 @@ export function hammingDistance(a: bigint, b: bigint): number {
   return d
 }
 
+/* ══════════════════ 尺寸对齐（跨 DPR 截图的前提） ══════════════════ */
+
+/**
+ * 盒式平均重采样（把 `src` 缩放到 `dstW × dstH`）。
+ *
+ * 【为什么必须做（本仓实测）】跨端截图的分辨率天然不同——小程序模拟器截的是**物理像素**
+ *   （591×1280），Playwright 截的是**CSS 像素**（390×844）⇒ 直接逐像素比会得到
+ *   "尺寸不同"（`size-mismatch`）而**无法观察内容差异**。
+ *   ⇒ 归一到同一尺寸再比：重采样会引入少量噪声，但 `channelThreshold`（默认 8）
+ *     本就是这个量级的设计（L4 是"观察"非门禁）。
+ *
+ * 【为什么用盒式平均而不是最近邻】最近邻在缩小场景会**丢整行/整列**（采样偏差）；
+ *   盒式平均覆盖全部源像素（面积平均），对"颜色/渐变"类观察更稳。
+ */
+export function resampleTo(src: RgbaImage, dstW: number, dstH: number): RgbaImage {
+  if (dstW <= 0 || dstH <= 0) throw new Error(`resampleTo: 目标尺寸非法 ${dstW}x${dstH}`)
+  if (src.width === dstW && src.height === dstH) return src
+  const out = new Uint8Array(dstW * dstH * 4)
+  for (let dy = 0; dy < dstH; dy++) {
+    const y0 = Math.floor((dy * src.height) / dstH)
+    const y1 = Math.max(y0 + 1, Math.floor(((dy + 1) * src.height) / dstH))
+    for (let dx = 0; dx < dstW; dx++) {
+      const x0 = Math.floor((dx * src.width) / dstW)
+      const x1 = Math.max(x0 + 1, Math.floor(((dx + 1) * src.width) / dstW))
+      let r = 0
+      let g = 0
+      let b = 0
+      let a = 0
+      let n = 0
+      for (let y = y0; y < y1; y++) {
+        for (let x = x0; x < x1; x++) {
+          const i = (y * src.width + x) * 4
+          r += src.rgba[i]!
+          g += src.rgba[i + 1]!
+          b += src.rgba[i + 2]!
+          a += src.rgba[i + 3]!
+          n++
+        }
+      }
+      const o = (dy * dstW + dx) * 4
+      out[o] = Math.round(r / n)
+      out[o + 1] = Math.round(g / n)
+      out[o + 2] = Math.round(b / n)
+      out[o + 3] = Math.round(a / n)
+    }
+  }
+  return { width: dstW, height: dstH, rgba: out }
+}
+
+/**
+ * 裁剪到 ROI（**越界即报错，不静默截断**——静默截断会让"观测区写错"变成看不出的小区域观测）。
+ * ROI 与图边界允许恰好贴合；超出 1px 都不行（此时应改 ROI 而不是让引擎猜）。
+ */
+export function cropImage(img: RgbaImage, roi: ImageRoi): RgbaImage {
+  if (roi.x < 0 || roi.y < 0 || roi.w <= 0 || roi.h <= 0 || roi.x + roi.w > img.width || roi.y + roi.h > img.height) {
+    throw new Error(`cropImage: ROI ${JSON.stringify(roi)} 越界（图 ${img.width}x${img.height}）`)
+  }
+  const out = new Uint8Array(roi.w * roi.h * 4)
+  for (let y = 0; y < roi.h; y++) {
+    const src = ((roi.y + y) * img.width + roi.x) * 4
+    out.set(img.rgba.subarray(src, src + roi.w * 4), y * roi.w * 4)
+  }
+  return { width: roi.w, height: roi.h, rgba: out }
+}
+
 /* ══════════════════ 观测（非门禁） ══════════════════ */
 
 /**
@@ -190,19 +315,33 @@ export function hammingDistance(a: bigint, b: bigint): number {
  *   ② 局部差异：逐像素单通道差 > channelThreshold 的像素数 + 分块定位
  * 两者都干净 ⇒ identical；差异在噪声带内 ⇒ noise-level；否则 ⇒ changed（**报告，不阻断**）。
  */
-export function pixelObservation(a: RgbaImage, b: RgbaImage, opts: PixelCompareOptions = {}): PixelObservation {
+export function pixelObservation(a: RgbaImage, bIn: RgbaImage, opts: PixelCompareOptions = {}): PixelObservation {
+  let b = bIn
   const channelThreshold = opts.channelThreshold ?? 8
   const blockSize = opts.blockSize ?? 16
   const noiseRatio = opts.noiseRatio ?? 0.005
   const noiseHashDistance = opts.noiseHashDistance ?? 16
   const params = { channelThreshold, blockSize, noiseRatio, noiseHashDistance }
   const sizeA = { width: a.width, height: a.height }
-  const sizeB = { width: b.width, height: b.height }
+  const sizeB0 = { width: bIn.width, height: bIn.height }
   if (a.width !== b.width || a.height !== b.height) {
-    return {
-      gate: false, verdict: 'size-mismatch', sizeA, sizeB,
-      sampleCount: 0, diffPixels: 0, diffRatio: -1, hashDistance: -1, regions: [], params,
+    if (!opts.alignSize) {
+      return {
+        gate: false, verdict: 'size-mismatch', sizeA, sizeB: sizeB0,
+        sampleCount: 0, diffPixels: 0, diffRatio: -1, hashDistance: -1, regions: [], params,
+      }
     }
+    // ★尺寸对齐：B → A 的尺寸（跨 DPR 截图的可比化——见 resampleTo 注释）
+    b = resampleTo(b, a.width, a.height)
+  }
+  const sizeB = { width: b.width, height: b.height }
+  // ★ROI（可选）：裁掉设备 chrome（状态栏时钟/Home 条）——先对齐再裁（ROI 按对齐后尺寸计）
+  const roiOffset = { x: 0, y: 0 }
+  if (opts.roi) {
+    a = cropImage(a, opts.roi)
+    b = cropImage(b, opts.roi)
+    roiOffset.x = opts.roi.x
+    roiOffset.y = opts.roi.y
   }
   const sampleCount = a.width * a.height
   const hashDistance = hammingDistance(pHash(a), pHash(b))
@@ -237,6 +376,7 @@ export function pixelObservation(a: RgbaImage, b: RgbaImage, opts: PixelCompareO
     if (a.rgba[i] !== b.rgba[i]) { byteEqual = false; break }
   }
   // 差异区域：块内差异像素占比 ≥ 10% 或块内像素数 ≥ 100 才收录（滤掉孤立噪点）
+  // ★坐标回到**原图口径**（+ROI 偏移）——报告消费方看的是整屏截图坐标，不是裁剪后坐标
   const regions: PixelDiffRegion[] = []
   for (let by = 0; by < blocksY; by++) {
     for (let bx = 0; bx < blocksX; bx++) {
@@ -246,7 +386,7 @@ export function pixelObservation(a: RgbaImage, b: RgbaImage, opts: PixelCompareO
       const h = Math.min(blockSize, a.height - by * blockSize)
       const ratio = n / (w * h)
       if (ratio >= 0.1 || n >= 100) {
-        regions.push({ x: bx * blockSize, y: by * blockSize, w, h, pixels: n, ratio: Math.round(ratio * 1000) / 1000 })
+        regions.push({ x: bx * blockSize + roiOffset.x, y: by * blockSize + roiOffset.y, w, h, pixels: n, ratio: Math.round(ratio * 1000) / 1000 })
       }
     }
   }
@@ -270,6 +410,7 @@ export function pixelObservation(a: RgbaImage, b: RgbaImage, opts: PixelCompareO
     hashDistance,
     regions: regions.slice(0, 8),
     params,
+    ...(opts.roi ? { roi: opts.roi } : {}),
   }
 }
 

@@ -72,6 +72,11 @@
    ⇒ M4 的 L4 算子改**同端注入**（与自身原图比：原图 identical、注入后差异块定位四角）。
 ③ **L4 的能力形态是"定位"不是"全局判定"**：圆角缺失最大信号 430px=0.05% < 0.5% 噪声带 ⇒ verdict 恒 noise-level；
    判定（通过/失败）由 L3 数值（borderRadius 四角键）承担——**已实测确认 Web golden 含这四个键**。
+④ **提交漏文件（自查抓出并补提交）**：为验证"docs-stats 红是否 HEAD 既有"跑了一次
+   `git stash --include-untracked` → `stash pop`，**pop 后已暂存的 tracked 修改全部退回未暂存**
+   （新增文件仍以 A 留在索引）；随后只补 add 了新改的 3 个文件就提交 ⇒ 判据实现（pixel.ts）与
+   算子（gen-consistency-metrics.mjs）**没进提交**，而提交消息把成果都写了 → 远端"消息有、文件无"。
+   ⇒ 纪律：**stash 之后必须重新 add 全部预期文件 + 提交前 `git show --name-status` 核对**（已补提交 9 文件）。
 
 **指标**：M1 67.9%（不变——L4 不计入比值，样本来自光栅化非 CSS 字段）· **M4 100%（17/17，六层，pending 0）** · M2 6 条
 

@@ -205,12 +205,64 @@ async function runMutationTests() {
     !verifyInvariants(geoSnap(), translateAll(0, -300), { tolerance: tolCfg }).ok,
   )
 
+  /* ── L4：圆角缺失（**真实截图注入**——标准 §7.4 的小面积缺陷场景）──
+   * ★为什么用真截图：L4 的观测对象是"系统光栅化"（圆角 AA/阴影/渐变），合成图不经任何渲染器
+   *   ⇒ 测的是算法自证。真截图来自 `bash scripts/shoot-l4-fixtures.sh`（小程序模拟器双渲染器）。
+   * ★为什么是"同端注入"：跨端比对里**圆角 AA 本身就在噪声底内**（本仓实测：skyline vs webview
+   *   的圆角弧线 AA 差异 266px，占块面积 2.2% > 噪声带）⇒ 跨端判定不具区分度（base 与注入后同为
+   *   'changed'，只能看量级 266→618）。⇒ 机器判据取**与自身原图比**：原图=identical（字节全等）、
+   *   注入后=changed——零噪声底的干净二值判据，这才是"校验机制敏不敏感"的直接证据。
+   * ★真截图未入库（干净克隆）⇒ 算子进 pending（不得静默跳过，标准 §7.3）。 */
+  const SHOT_DIR = path.join(ROOT, 'docs/generated/consistency-samples/pixels')
+  const shotSky = path.join(SHOT_DIR, 'l4.skyline.png')
+  const shotWeb = path.join(SHOT_DIR, 'l4.webview.png')
+  const pending = []
+  if (fs.existsSync(shotSky) && fs.existsSync(shotWeb)) {
+    const { pixelObservation, decodePng } = consistency
+    const web = await decodePng(new Uint8Array(fs.readFileSync(shotWeb)))
+    // 定位圆角块（#2f6fed ±10；x≥4/y≥150——排除模拟器左缘伪影与设备 chrome，见 check-consistency-pixel 的 L4_ROI）
+    let bx0 = 1e9, by0 = 1e9, bx1 = -1, by1 = -1
+    for (let y = 150; y < web.height; y++) for (let x = 4; x < web.width - 4; x++) {
+      const i = (y * web.width + x) * 4
+      if (Math.abs(web.rgba[i] - 47) <= 10 && Math.abs(web.rgba[i + 1] - 111) <= 10 && Math.abs(web.rgba[i + 2] - 237) <= 10) {
+        if (x < bx0) bx0 = x; if (x > bx1) bx1 = x; if (y < by0) by0 = y; if (y > by1) by1 = y
+      }
+    }
+    // 注入"圆角缺失"：四角方块填成直角（r=20 < 实际半径 23 ⇒ 方块内必含弧外像素）
+    const r = 20
+    const mutated = { width: web.width, height: web.height, rgba: web.rgba.slice() }
+    const paint = (cx, cy) => {
+      for (let y = cy; y < cy + r; y++) for (let x = cx; x < cx + r; x++) {
+        const i = (y * mutated.width + x) * 4
+        mutated.rgba[i] = 47; mutated.rgba[i + 1] = 111; mutated.rgba[i + 2] = 237; mutated.rgba[i + 3] = 255
+      }
+    }
+    paint(bx0, by0); paint(bx1 - r + 1, by0); paint(bx0, by1 - r + 1); paint(bx1 - r + 1, by1 - r + 1)
+    const obsSelf = pixelObservation(web, web)            // 对照组：自身 ⇒ 必须 identical（字节全等）
+    const obsMut = pixelObservation(web, mutated)
+    // ★检出判据（**实测定的口径**，不是"必须 changed"——见下）：
+    //   圆角缺失的最大可注入信号 ≈ 455px（r≈23 时四角弧外面积 4·r²(1−π/4)）
+    //   ——只占整屏 0.05%，**天然低于 0.5% 全局噪声带** ⇒ 本场景 verdict 恒为 noise-level。
+    //   ⇒ L4 对这类缺陷的价值形态是**定位**（报告 diffPixels>0 且差异块落在注入区域），
+    //     不是全局判定；圆角缺失的"通过/失败"结论由 L1/L3 的 borderRadius 数值承担。
+    //   判据 = 对照组 identical ∧（注入后逐字节已不同 ∧ 差异块出现在注入的四角范围内）。
+    const mutDiff = obsMut.diffPixels
+    const localized = obsMut.regions.some((rg) =>
+      rg.x >= bx0 - 24 && rg.x <= bx1 + 24 && rg.y >= by0 - 24 && rg.y <= by1 + 24,
+    )
+    run(
+      'L4-radius-missing', 'L4',
+      `圆角缺失（注入真实截图：四角填直角 ⇒ ${mutDiff}px 差异）⇒ 观测报告定位到注入区域（region 落在块边界±24px 内）；` +
+        `对照组自身比对 = ${obsSelf.verdict}。★诚实边界：verdict=${obsMut.verdict}（0.05% < 0.5% 全局噪声带——L4 形态是"定位"，判定由 L3 borderRadius 数值承担）`,
+      true,
+      () => obsSelf.verdict === 'identical' && obsMut.verdict !== 'identical' && mutDiff > 0 && localized,
+    )
+  } else {
+    pending.push({ id: 'L4-radius-missing', note: '真实截图未入库——先跑 `bash scripts/shoot-l4-fixtures.sh` 采集（不静默跳过：标准 §7.3）' })
+  }
+
   const injected = results.filter((r) => r.expected).length
   const captured = results.filter((r) => r.expected && r.caught).length
-  // ★仍未布点算子的诚实清单（标准 §7.3：单列，不得悄悄删）
-  const pending = [
-    { id: 'L4-radius-missing', note: '圆角缺失——需 L4 像素观察（非门禁；pHash 对局部小差异不敏感，已知边界）' },
-  ]
   return { operators: results, injected, captured, pending }
 }
 
@@ -310,7 +362,7 @@ async function build() {
         unsupported: rows.filter((r) => r.supportTier === 'unsupported').length,
       },
       boundaryRules: 24,
-      note: 'L2/L3/L4 布点后分子应扩大（标准 §6.1「逐阶段提升」）',
+      note: 'L1/L2/L3 已布点；L4 不计入本比值（非门禁观察，且其样本来自光栅化而非 CSS 字段）——L2/L3 覆盖扩展后分子继续扩大（标准 §6.1「逐阶段提升」）',
     },
     M2: {
       name: '允许差异条目数',
@@ -327,13 +379,15 @@ async function build() {
     },
     M4: {
       name: '一致性回归检出率',
-      definition: 'L1 变异测试捕获数 / 注入数（L2/L3/L4 算子未布点 ⇒ 单列 pending，不得悄悄删）',
+      definition:
+        '变异算子捕获数 / 注入数，覆盖六族：L1 编译期 · L2 几何 · L3 样式 · L2.5 离散交互 · L2.6 连续交互不变量 · L4 像素观察（真截图注入）' +
+        '（仍未布点者 ⇒ 单列 pending，不得悄悄删——标准 §7.3）',
       value: Number(m4Rate.toFixed(4)),
       injected: mutation.injected,
       captured: mutation.captured,
       operators: mutation.operators,
       pendingOperators: mutation.pending,
-      note: '★标准 §7.4 反例（按钮变色 = L3 颜色类）属必过项——L3 布点后若捕获不了，本套校验不比截图比对强',
+      note: '★标准 §7.4 反例（按钮变色 = L3 颜色类 1/255）属必过项；L4 算子取**同端注入**（跨端圆角 AA 本身在噪声底内，无区分度——算子注释有实测数）',
     },
     debt: {
       note: '存量债务可见且只减不增（棘轮基线）——对外公开的"不好看的数"',
