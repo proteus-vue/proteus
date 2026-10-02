@@ -359,9 +359,12 @@ def main() -> int:
     #   （gen-routes 从 pages/**/*.vue + proteus.config.ts 的 router.meta 产出）⇒
     #   证明"项目配置 → App 屏注册表 → 导航语义"这条**产品路径**在端上可跑。
     #   ★字段缺失（旧 bundle）⇒ 如实跳过并提示（不假绿）。
-    if "p_run_ok" not in d:
-        report("⑨ 项目驱动场景：报告无 p_run_ok 字段（旧 bundle？）——跳过（不假绿）")
-    elif d.get("p_run_ok") is not True:
+    # ★字段名容错（本仓实测：iOS 侧曾产出 `p_ok` 而 Android 是 `p_run_ok`——两端现已统一，
+    #   但判据保留兼容读取，避免历史报告被误判为"旧 bundle"）
+    p_run_ok = d.get("p_run_ok", d.get("p_ok"))
+    if p_run_ok is None:
+        report("⑨ 项目驱动场景：报告无 p_run_ok / p_ok 字段（旧 bundle？）——跳过（不假绿）")
+    elif p_run_ok is not True:
         fail(f"⑨ 项目驱动入口失败：{d.get('p_error')}")
     else:
         ps, pn, prc = d.get("p_screens"), d.get("p_name_count"), d.get("p_route_count")
