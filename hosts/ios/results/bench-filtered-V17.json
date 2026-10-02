@@ -6367,129 +6367,91 @@
   },
   "host_node_count" : 707,
   "host_timing_last" : {
-    "build_layers_ms" : 51.058053970336914,
-    "host_total_ms" : 68.462014198303223,
-    "layout_ms" : 3.0330419540405273,
-    "measure_ms" : 7.6270103454589844
+    "build_layers_ms" : 51.082968711853027,
+    "host_total_ms" : 68.361997604370117,
+    "layout_ms" : 3.0480623245239258,
+    "measure_ms" : 7.5179338455200195
   },
   "js_completed" : 1,
   "js_ok" : true,
   "js_report" : {
-    "build_id" : "d7c580dc-021707",
+    "build_id" : "d7c580dc-021304",
     "case_filter" : [
-      "V9"
+      "V17"
     ],
     "case_timings_ms" : {
-      "V9_event_dispatch" : 112
+      "V17_swipe_directions" : 113
     },
     "cases" : [
       {
-        "case" : "V9_event_dispatch",
+        "case" : "V17_swipe_directions",
         "extra" : {
+          "base_idx" : 1,
+          "base_row_id" : 15,
           "checks" : {
             "coordOk" : true,
             "countOk" : true,
-            "deepHitOk" : true,
-            "hitsOk" : true,
-            "targetOk" : true
+            "eachDirectionOnce" : true,
+            "targetsMatchRows" : true,
+            "totalOk" : true
           },
-          "covered" : "core-hit + shell-dispatch",
-          "host_hits" : 4,
-          "js_received" : 3,
-          "not_covered" : "UITouch->content-coord + tap-timing",
-          "outs" : [
-            {
-              "chain_len" : 7,
-              "ok" : true,
-              "stats" : {
-                "hits" : 2,
-                "last_chain_len" : 7,
-                "last_target" : 19
-              },
-              "target" : 19,
-              "x" : 120,
-              "y" : 152
-            },
-            {
-              "chain_len" : 7,
-              "ok" : true,
-              "stats" : {
-                "hits" : 3,
-                "last_chain_len" : 7,
-                "last_target" : 26
-              },
-              "target" : 26,
-              "x" : 120,
-              "y" : 216
-            },
-            {
-              "chain_len" : 7,
-              "ok" : true,
-              "stats" : {
-                "hits" : 4,
-                "last_chain_len" : 7,
-                "last_target" : 33
-              },
-              "target" : 33,
-              "x" : 120,
-              "y" : 280
-            }
-          ],
-          "probe" : {
-            "base_idx" : 1,
-            "base_row_id" : 15,
-            "y" : 152
-          },
-          "row_ids_sample" : [
-            6,
+          "covered" : "core-hit + shell-dispatch + swipe-direction-routing",
+          "expected_rows" : [
             15,
             22,
             29,
             36
           ],
-          "tap_log" : [
+          "full_log" : [
             {
               "id" : 15,
               "target" : 19,
-              "title" : "row-tap",
+              "title" : "row-swipe-up",
               "x" : 120,
               "y" : 152
             },
             {
               "id" : 22,
               "target" : 26,
-              "title" : "row-tap",
+              "title" : "row-swipe-down",
               "x" : 120,
               "y" : 216
             },
             {
               "id" : 29,
               "target" : 33,
-              "title" : "row-tap",
+              "title" : "row-swipe-left",
               "x" : 120,
               "y" : 280
+            },
+            {
+              "id" : 36,
+              "target" : 40,
+              "title" : "row-swipe-right",
+              "x" : 120,
+              "y" : 344
             }
           ],
-          "taps" : [
-            {
-              "x" : 120,
-              "y" : 152
-            },
-            {
-              "x" : 120,
-              "y" : 216
-            },
-            {
-              "x" : 120,
-              "y" : 280
-            }
+          "got_length" : 4,
+          "not_covered" : "UITouch->velocity-classification (real finger)",
+          "swipe_targets" : [
+            15,
+            22,
+            29,
+            36
+          ],
+          "swipe_titles" : [
+            "row-swipe-up",
+            "row-swipe-down",
+            "row-swipe-left",
+            "row-swipe-right"
           ],
           "verdict" : "PASS"
         },
         "host_ms" : 0,
         "items" : 100,
         "nodes" : 707,
-        "note" : "注入 3 次 tap（第 1–3 行）· 宿主命中 4 次 · JS 收到 3 次",
+        "note" : "4 方向 swipe ⇒ 收到 4 条（恰好 4、零串扰）",
         "patch_count" : 0,
         "request_bytes" : 0,
         "serialize_ms" : 0,
@@ -6530,8 +6492,8 @@
   },
   "js_total" : 1,
   "launch_diag" : {
-    "bootstrap_ms" : 56.609999999999999,
-    "first_frame_ms" : 63.479999999999997,
+    "bootstrap_ms" : 59.07,
+    "first_frame_ms" : 66.780000000000001,
     "first_frame_source" : "kernel:p_starttime",
     "forced_style" : "Dark",
     "interface_style" : "Dark",
@@ -11491,7 +11453,7 @@
       "y" : 0
     }
   },
-  "run_ts" : 1790965063.625978,
+  "run_ts" : 1790964821.995878,
   "screen_max_fps" : 60,
-  "tree_hash" : "eb8edfb3"
+  "tree_hash" : "fe2facf0"
 }

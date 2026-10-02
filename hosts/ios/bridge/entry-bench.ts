@@ -127,7 +127,7 @@ const BN = { snapshot: 'bench-final' }
 // ★构建标识：每次构建写入，用于**确凿判定**设备上跑的是哪份代码
 //   （踩坑：靠文件 mtime 判断"报告是否刷新"不可靠——新建目标文件的时间恒为"现在"；
 //    且我看不出设备实际执行的是旧 bundle，白跑一轮。有了这个字段就能一眼判定。）
-const BUILD_ID = '6fbaa4d8-001821'
+const BUILD_ID = 'd7c580dc-021707'
 const now = (): number => Date.now()
 /** 宽松解析（宿主返回可能是字符串或已是对象） */
 const safeParseAny = (s: any): any => {
@@ -2249,6 +2249,76 @@ CASES.push({
   },
 })
 
+/* V17 · ★★矩阵 #7：swipe 方向分流（4 方向注入 ⇒ 恰好 4 条、方向一一对应、零串扰） */
+CASES.push({
+  name: 'V17_swipe_directions',
+  note: '★★swipe 四方向：注入 up/down/left/right ⇒ 各方向处理器**恰好**收到对应条目（零串扰；补齐 iOS "swipe/fling 待补"）',
+  fn: async () => {
+    const N = 100
+    const app = makeApp(N)
+    mountApp(app, N)
+    const log = (globalThis as unknown as { __proteusTapLog?: Array<Record<string, unknown>> }).__proteusTapLog
+
+    // 行序基准由探针校准（与 V9/V16 同法）
+    const nodes = app.adapter.toRequest(VP).nodes as Array<{ id: number; parentId: number | null; height?: number }>
+    const rowIds = nodes.filter((n) => n.height === 56).map((n) => n.id)
+    const probeY = 152
+    const DIRS = ['up', 'down', 'left', 'right'] as const
+
+    if (log) log.length = 0
+    // 4 次注入（同一行坐标；方向在参数里声明——注入入口语义见 Swift `swipeAt` 的诚实边界）
+    for (let i = 0; i < DIRS.length; i++) {
+      const d = DIRS[i]!
+      const dx = d === 'left' ? -200 : d === 'right' ? 200 : 0
+      const dy = d === 'up' ? -200 : d === 'down' ? 200 : 0
+      const y = probeY + i * 64
+      safeParseAny((proteusSelfDraw as unknown as { swipeAt?: (x: number, y: number, dx: number, dy: number) => string })
+        .swipeAt?.(120, y, dx, dy) ?? '{}')
+    }
+
+    const got = (log ?? []).map((e) => ({ ...e }))
+    const swipes = got.filter((g) => String(g.title).startsWith('row-swipe-'))
+    // ★负向判据（比"有没有"更强）：**恰好 4 条**、每方向恰好 1 条、零串扰（无 tap/longpress 混入）
+    const byDir = (d: string): Array<Record<string, unknown>> => swipes.filter((g) => g.title === 'row-swipe-' + d)
+    // ★★行序基准修正（首轮实测 FAIL 抓出）：`rowIds` 里含**表头行**（h=56 的不止列表行），
+    //   而注入落在列表第 1..4 行 ⇒ 用 rowIds[i] 对齐必然错位（实测命中 [15,22,29,36] vs
+    //   rowIds 前四项 [6,15,22,29]）。与 V16 的"探针校准"同教训：**行序基准要由探针标定**。
+    //   此处用**第 1 条 swipe 的命中 id** 作基准，再断言后续 3 条是其后**连续三行**。
+    const base = swipes.length > 0 ? Number(swipes[0]!.id) : -1
+    const baseIdx = base >= 0 ? rowIds.indexOf(base) : -1
+    const expected = baseIdx >= 0 ? [rowIds[baseIdx], rowIds[baseIdx + 1], rowIds[baseIdx + 2], rowIds[baseIdx + 3]] : []
+    const checks = {
+      countOk: swipes.length === 4,
+      totalOk: got.length === 4,                        // ★零串扰（多一条即某侧误报）
+      eachDirectionOnce: DIRS.every((d) => byDir(d).length === 1),
+      targetsMatchRows: baseIdx >= 0 && swipes.every((t, i) => t.id === expected[i]),
+      coordOk: swipes.every((t, i) => t.x === 120 && t.y === probeY + i * 64),
+    }
+    const verdict = Object.values(checks).every(Boolean) ? 'PASS' : 'FAIL'
+    results.push({
+      case: 'V17_swipe_directions',
+      note: `4 方向 swipe ⇒ 收到 ${swipes.length} 条（恰好 4、零串扰）`,
+      items: N, nodes: nodes.length,
+      vue_ms: 0, to_request_ms: 0, serialize_ms: 0, host_ms: 0, total_ms: 0,
+      patch_count: 0, request_bytes: 0,
+      extra: {
+        verdict, checks,
+        swipe_titles: swipes.map((g) => g.title),
+        swipe_targets: swipes.map((g) => g.id),
+        base_idx: baseIdx, expected_rows: expected, base_row_id: base,
+        got_length: got.length,
+        full_log: got,
+        // ★诚实边界：与 V9/V16 同——注入绕过 UITouch 时序；**真实触摸的速度分流**由
+        //   SelfDrawView.touchesEnded 三分支承担（大位移 + 速度 ≥0.3px/ms ⇒ `swipe:<dir>`），
+        //   需人手或 XCUITest 做端到端覆盖。
+        covered: 'core-hit + shell-dispatch + swipe-direction-routing',
+        not_covered: 'UITouch->velocity-classification (real finger)',
+      },
+    })
+    app.dispose()
+  },
+})
+
 /* V10 · ★★绘制通道 + 字重：颜色/圆角/字重变更 → 层上生效（不经核心） */
 CASES.push({
   name: 'V10_paint_channel',
@@ -3477,7 +3547,15 @@ const api = {
     .__proteusDispatchTarget
   if (!d) return JSON.stringify({ ok: false, error: 'no-active-app' })
   try {
-    const r = d.dispatchEvent(target, chain, type, x, y)
+    // ★★矩阵 #7：swipe 方向解码——宿主触摸链带 `swipe:<dir>` 后缀（Swift 侧编码，见
+    //   SelfDrawView.touchesEnded 三分支），此处**拆成语义名 + 方向**：
+    //   · 适配器/handler 挂的是 `onSwipe`（归一为 `swipe`）⇒ type 必须还原为 `swipe`
+    //   · 方向作为**事件属性**暴露（`e.direction`）供用例读（与 packages/gesture 的
+    //     `GestureEvent{type:'swipe', direction}` 同形状）
+    const m = /^swipe:(up|down|left|right)$/.exec(type)
+    const r = m
+      ? d.dispatchEvent(target, chain, 'swipe', x, y, { direction: m[1] })
+      : d.dispatchEvent(target, chain, type, x, y)
     return JSON.stringify({ ok: true, ...r as object })
   } catch (e) {
     return JSON.stringify({ ok: false, error: String((e as Error)?.message ?? e) })

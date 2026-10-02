@@ -13,7 +13,7 @@
 | 4 | **长列表复用池** | ✅ `recycle` | ✅ `V12_scroll_recycle` | ✅ **已补** | 鸿蒙 `recycleProbe`：**reuse_ratio 0.9962**（4000 行/400 帧，created=30/reused=7936/max_live=30） |
 | 5 | **滚动（平台侧）** | ✅ `scroll`/`scroll-core`/`scroll-native` | ✅ V12 滚动帧 | ✅ **已补（含 A/B 对照）** | 鸿蒙双路串行采集：**Proteus 渲染路径滚动**（`scrollRoot` 平移根 RenderNode，SFC 夹具内容）**avg 16.64/p95 16.64/60.1fps** vs **ArkUI 原生滚动**（Scroll 容器）**avg 16.64/p95 16.64/60.1fps**——**两路均满帧零长尾**（等价于 Android scroll-core/scroll-native 对照）；★实测抓出：探针**并发编排**会互相抢主线程（p95 冲到 200ms），串行后归零——比读数本身更有价值的教训；证据 `results/scroll-ab.json` |
 | 6 | **命中测试（三层）** | ✅ `hit` | ✅ `hit_probes`（与 Android 同探针） | ✅ **已补** | 鸿蒙 `hitProbe`：**6/6 与两端逐位一致**（同场景同探针点） |
-| 7 | **手势** | ✅ `gesture`（GestureDetector；tap/longpress/fling + 负向计数） | ◐ **tap+longpress 全链已通（真机 PASS）** | ✅ **已补** | 鸿蒙：**`uitest uiInput` 真注入（系统输入栈）**→ ArkTS `.onTouch` 真触摸链（真时间戳）→ 样本落盘 → **三端中立识别器**（`packages/gesture`，与 Web/MP 同一条）分类——**8/8 PASS**：tap（held 107ms）/ longpress（held 1555ms）/ swipe-up **按真实时长分流** + 零串扰 + 每段命中核心 hitTest（target 22/14/22，chain_len 3）；★**超越 iOS V16**：覆盖其明确标注的 `not_covered: UITouch->duration-classification`（真触摸时长分类）；iOS swipe/fling 仍待补 |
+| 7 | **手势** | ✅ `gesture`（GestureDetector；tap/longpress/fling + 负向计数） | ✅ **已补（tap+longpress+swipe 全通）** | ✅ **已补** | 鸿蒙：**`uitest uiInput` 真注入（系统输入栈）**→ ArkTS `.onTouch` 真触摸链（真时间戳）→ 样本落盘 → **三端中立识别器**（`packages/gesture`，与 Web/MP 同一条）分类——**8/8 PASS**：tap（held 107ms）/ longpress（held 1555ms）/ swipe-up **按真实时长分流** + 零串扰 + 每段命中核心 hitTest（target 22/14/22，chain_len 3）；★iOS 已补 swipe（2026-10-03）：`V17_swipe_directions`——4 方向（up/down/left/right）各恰好 1 条 · **零串扰** · 行序一一对应 · 坐标精确，**5/5 PASS**；真实触摸链同步补第四分支（大位移+速度 ≥0.3px/ms ⇒ swipe，慢拖归 pan）；★iOS 缺口收窄为 **fling**（惯性滑动）一项 |
 | 8 | **文本通道** | ✅ drawText/StaticLayout 分流 + 归因 | ✅ CoreText（`measureText`） | ✅ **上屏已通（含单位模型）** | 鸿蒙：`textProbe`（typography 200 项/8.0ms）+ 上屏（content modifier 回调绘制）；**单位模型已修**：RenderNode/canvas 是**物理 px**、host 属性是 **vp**——ArkTS 侧 ×`vp2px(1)` 换算（一处），host 尺寸 ÷密度；真机截图色块+文字双重可见 |
 | 9 | **字体族映射** | ✅ `font-family`（与 iOS V13 同契约） | ✅ V13 | ✅ **已补** | 鸿蒙：typography 字族解析（`OH_Drawing_SetTextStyleFontFamilies`）——与 iOS V13 **同款样本文本**（`MMMM iii WWWW` / 32px）：**三族度量分流**（默认 274.34 / Condensed **236.67** / Digit **295.78**）+ 同族稳定性反例（两次同族完全一致）+ 高度合理；证据 `results/font-family.json`（★如实：SC/Italic 与默认同宽——拉丁字形指标相同的真实行为，非未生效） |
 | 10 | **原生组件混用（L3）** | ✅ `native`/`native-host`/`shot-scroll-native` | ❌ **缺** | ✅ **已补** | 鸿蒙：ArkUI **原生组件**与 Proteus 自绘共存——**三判据 PASS**（与 Android native-host 三件事同族）：① **位置由核心决定**（原生组件 bounds `[56,210][336,378]` == `nodeRect` 核心几何 (16,60) 80×48 ×3.5，逐位相同）② 原生真渲染（目标区 93.8% 原生色）③ **z-order 实测**（重叠区自绘蓝 = 0 ⇒ ArkUI 原生在上）；证据 `results/native-mix.json` ★iOS 仍缺 |
@@ -33,7 +33,7 @@
 **统计（口径 = 本表单元格「✅ + ◐ + 架构性不适用」，可逐格复算）**：
 - **Android 22/22**（✅22）
 - **鸿蒙 22/22**（✅21 + 不适用1[#3]）——🎉 **全项完成**（4→22：从零起步，含架构性不适用的 #3 也如实标注）
-- **iOS 21/22**（✅19 + ◐2[#7 手势部分/#22 帧统计]）
+- **iOS 21/22**（✅19 + ◐2[#7 手势：#7 已补 swipe，剩 fling / #22 帧统计]）
   ★**审计注记（2026-10-03 发现，如实披露不掩盖）**：iOS 列的历史基数写作 16/22，
   与本表单元格数（21）差 5——**增量核对无碍**（历次 +1 都与单元格变化一一对应，如 #11 补上时
   15→16、#7 补 tap 时 ◐ 化），**差在绝对基数**（疑为早期口径不同：某些 ✅ 当时按"证据强度不足"未计入）。

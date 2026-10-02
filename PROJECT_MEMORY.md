@@ -87,6 +87,39 @@ check-consistency-snapshot 七段全绿 · check:no-blind-wait ✅（新 .sh 零
 ① L2/L3/L2.5/L2.6 算子用**合成快照**——证明的是"比对引擎敏不敏感"，不是"真机数据一定对"；
 ② L4 算子用真截图但取同端注入（跨端噪声底含 AA，无区分度）；L4 的价值形态是**定位**。
 
+### ★★★2026-10-03（八十三）· iOS 补齐 **swipe 四方向**（矩阵 #7）—— 真机 5/5 PASS + 真实触摸链第四分支
+
+**用户「继续」→ iOS 补齐**（鸿蒙已 22/22）。iOS #7 此前是 ◐（tap/longpress 通、swipe/fling 待补）。
+
+**交付（三层同改）**
+1. **Swift 真实触摸链**：`touchesEnded` 从三分支扩为**四分支**——大位移不再"静默丢弃"，
+   而是按**释放速度**分流：速度 ≥0.3 px/ms（与 `packages/gesture` 的 `swipeVelocity` 同口径）
+   ⇒ 派发 `swipe:<dir>`；慢拖仍归 pan 识别器（滚动）。新增 `swipeMinVelocity: Double = 0.3`。
+2. **注入入口** `swipeAt(x,y,dx,dy)`（协议 + 实现——与 `tapAt`/`longpressAt` 同族；
+   方向由 dx/dy 推导，与用户手势语义一致）。
+3. **方向解码 + 事件属性**：`__proteus_dispatch` 拆 `swipe:<dir>` → 语义名 `swipe`（handler 匹配）
+   + `extra:{direction}`；适配器 `dispatchEvent` 加**可选 `extra`** 参数（向后兼容，并入事件对象
+   `e.direction`）——与 `packages/gesture` 的 `GestureEvent{type:'swipe', direction}` **同形状**。
+4. **V17 用例**（`V17_swipe_directions`）：4 方向注入 ⇒ 各恰好 1 条 · 零串扰（总数恰好 4）·
+   行序一一对应 · 坐标精确。
+
+**真机读数（5/5 PASS）**：`['row-swipe-up','row-swipe-down','row-swipe-left','row-swipe-right']` ·
+targets `[15,22,29,36]` == expected（连续四行）· 零串扰。
+
+**★首轮 FAIL 抓出的判据缺陷（与 V16 同教训）**：`targetsMatchRows` 用 `rowIds[i]` 硬对齐 ⇒
+**rowIds 里含表头行**（h=56 的不止列表行）⇒ 实测命中 [15,22,29,36] vs rowIds 前四项 [6,15,22,29]。
+修法：**第 1 条 swipe 的命中 id 作行序基准**，断言后续三条是其后**连续三行**（"探针校准"第三次）。
+
+**★顺带发现（既有缺陷，如实记录不掩盖）**：iOS 全套 bench（35 用例）跑到 33/35 时
+**App 被系统 signal 9 kill**（81s 长跑触发资源回收）⇒ 报告未能取回。本轮用定向跑
+（`--cases=V9/V16/V17`）确认**三项全 PASS 无回归**；全套长跑的稳定性问题属既有状况，后续批次处理。
+
+**指标**：iOS #7 由 ◐ → **✅（tap+longpress+swipe 全通）**；iOS 缺口收窄为 **fling** 一项。
+
+**诚实边界**：① 注入入口 `swipeAt` 与 iOS/Android 注入族同构（**注入即声明类型**）——
+★**真实触摸的速度分流**由 `touchesEnded` 第四分支承担（大位移 + 速度判型），需人手/XCUITest
+做端到端覆盖（报告 extra 里 `covered`/`not_covered` 如实标注）；② fling（惯性滑动）未做。
+
 ### ★★★2026-10-03（八十二）· 鸿蒙腿 **帧率追踪（hitrace）**（矩阵 #22）—— 🎉 **22/22 全项完成**
 
 **用户「继续」→ 接矩阵 #22**（鸿蒙最后一个缺口）。这个缺口属"工具链层"——
@@ -1712,6 +1745,8 @@ check-consistency-snapshot 七段全绿 · script-compile ✅ · no-blind-wait �
 **新诚实边界**：平移对齐会**吸收真实位置差异**（若某端整体真的偏了 3px，对齐后看不出）——
 "位置是否正确"由 L2 几何数值比对承担；L4 只管"画出来像不像"（已写入注记与文档）。
 ④ 仍未接入：iOS/Android 真机截图（当前 Web=Playwright、MP=模拟器，均非真机）。
+
+## 当前状态速览（最近一次更新：**2026-10-03·（八十三）· iOS 补齐 **swipe 四方向**（矩阵 #7，5/5 PASS）—— 真实触摸链第四分支（速度分流）+ V17 用例；iOS 缺口收窄为 fling 一项；顺带披露全套 bench 长跑被 signal 9 kill 的既有缺陷**）★新会话以此为准
 
 ## 当前状态速览（最近一次更新：**2026-10-03·（八十二）· 🎉 鸿蒙腿 **22/22 全项完成**（矩阵 #22 hitrace 帧率：p50 16.67ms/60Hz 精确）—— 两日从 4/22 到 22/22；四条方法论总账（取证优先 / 判据建错靶 4 例 / 同源零移植 / 标准接口兜底）**）★新会话以此为准
 
