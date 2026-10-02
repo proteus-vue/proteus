@@ -1,12 +1,12 @@
 {
-  "create_total_ms" : 12.6,
+  "create_total_ms" : 10.02,
   "elements" : 4051,
   "engine" : "proteus-layout-core 0.1.0 · engine=taffy-0.14 · taffy 锁定 0.14（0.13 有 measure 指数退化）",
   "flattened" : {
-    "build_ms" : 0.84999999999999998,
-    "delta_mb" : 3.8999999999999999,
-    "draw_ms" : 22.120000000000001,
-    "footprint_mb" : 8.6999999999999993,
+    "build_ms" : 0.81000000000000005,
+    "delta_mb" : 8.0999999999999996,
+    "draw_ms" : 20.82,
+    "footprint_mb" : 12.4,
     "layers" : 50
   },
   "hit_probes" : {
@@ -92,34 +92,39 @@
     "summary" : "(150.0,30.0) → 2 期望 2 ✓ | (150.0,90.0) → 4 期望 4 ✓ | (100.0,110.0) → 5 期望 5 ✓ | (150.0,140.0) → 5 期望 5 ✓ | (150.0,290.0) → 6 期望 6 ✓ | (400.0,400.0) → -1 期望 -1 ✓"
   },
   "native_uikit" : {
-    "build_ms" : 109.95999999999999,
-    "delta_mb" : 16.600000000000001,
-    "footprint_mb" : 21.399999999999999,
-    "layout_ms" : 8.5299999999999994,
+    "build_ms" : 91.109999999999999,
+    "delta_mb" : 21.5,
+    "footprint_mb" : 25.800000000000001,
+    "footprint_post_raster_mb" : 135.59999999999999,
+    "layout_ms" : 6.7199999999999998,
+    "note_mem" : "§9.4 判据用光栅前读数（与 Proteus 侧同法）；post_raster 为 L2 光栅临时分配（不入判据）",
+    "raster_ms" : 140.80000000000001,
     "views" : 4050
   },
   "note" : "★几何全部来自 Rust 核心；三种形态同进程顺序测量（base 为建场景前的 footprint）；request JSON 通道含 serde 解析成本（生产应为二进制扁平化，见 M0 计划）",
   "ok" : true,
-  "profile_blob" : "{\"blob_bytes\":105291,\"build_tree_ms\":1.14,\"decode_blob_ms\":0.88,\"decode_json_ms\":2.08,\"encode_blob_ms\":0.35,\"json_bytes\":280999,\"layout_ms\":16.73,\"measured_with\":\"blob\",\"nodes\":4051,\"ok\":true}",
-  "profile_fixed_size" : "{\"blob_bytes\":113291,\"build_tree_ms\":0.77,\"decode_blob_ms\":0.38,\"decode_json_ms\":1.14,\"encode_blob_ms\":0.23,\"json_bytes\":317543,\"layout_ms\":4.49,\"measured_with\":\"json\",\"nodes\":4051,\"ok\":true}",
-  "profile_json" : "{\"blob_bytes\":105291,\"build_tree_ms\":1.73,\"decode_blob_ms\":1.73,\"decode_json_ms\":3.37,\"encode_blob_ms\":0.66,\"json_bytes\":280999,\"layout_ms\":25.25,\"measured_with\":\"json\",\"nodes\":4051,\"ok\":true}",
-  "read_rects_ms" : 5.0499999999999998,
+  "profile_blob" : "{\"blob_bytes\":105291,\"build_tree_ms\":2.31,\"decode_blob_ms\":1.12,\"decode_json_ms\":2.88,\"encode_blob_ms\":0.34,\"json_bytes\":280999,\"layout_ms\":10.66,\"measured_with\":\"blob\",\"nodes\":4051,\"ok\":true}",
+  "profile_fixed_size" : "{\"blob_bytes\":113291,\"build_tree_ms\":1.95,\"decode_blob_ms\":0.63,\"decode_json_ms\":1.7,\"encode_blob_ms\":0.26,\"json_bytes\":317543,\"layout_ms\":3.3,\"measured_with\":\"json\",\"nodes\":4051,\"ok\":true}",
+  "profile_json" : "{\"blob_bytes\":105291,\"build_tree_ms\":3.21,\"decode_blob_ms\":1.98,\"decode_json_ms\":4.6,\"encode_blob_ms\":1.12,\"json_bytes\":280999,\"layout_ms\":13.59,\"measured_with\":\"json\",\"nodes\":4051,\"ok\":true}",
+  "read_rects_ms" : 5.0599999999999996,
   "rect_count" : 4051,
   "request_json_bytes" : 280999,
-  "rust_layout_ms" : 12.6,
+  "rust_layout_ms" : 10.02,
   "rust_layout_note" : "含 serde 解析 349KB JSON + 4051 节点的内容测量（item 不设宽高）",
   "unflattened" : {
-    "build_ms" : 12.130000000000001,
-    "delta_mb" : 6.0999999999999996,
-    "draw_ms" : 32.810000000000002,
-    "footprint_mb" : 10.9,
+    "build_ms" : 11.32,
+    "delta_mb" : 10.300000000000001,
+    "draw_ms" : 29.489999999999998,
+    "footprint_mb" : 14.6,
     "layers" : 4051
   },
   "verdict" : {
     "flat_pass" : true,
-    "flat_vs_native_ratio" : 0.23599999999999999,
+    "flat_raster_vs_native" : 0.14799999999999999,
+    "flat_vs_native_ratio" : 0.377,
+    "raster_note" : "Prot=layer.render(in:) CPU 光栅 · Native=drawHierarchy(afterScreenUpdates) 同步光栅（同为 1x 位图）",
     "target" : "≤ 1.15（方案 §9.4）",
     "unflat_pass" : true,
-    "unflat_vs_native_ratio" : 0.36799999999999999
+    "unflat_vs_native_ratio" : 0.47999999999999998
   }
 }

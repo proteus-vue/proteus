@@ -59,8 +59,14 @@ cat > "$APP/Info.plist" <<PLIST
 PLIST
 
 echo "==> ④ 签名"
-IDENTITY="$(security find-identity -v -p codesigning 2>/dev/null | awk -F'"' '/Apple Development|iPhone Developer/ {print $2; exit}')"
-[ -n "$IDENTITY" ] || { echo "✗ 无签名身份"; exit 4; }
+# ★★签名身份解析（2026-10-02 实测坑）：本机有两张**同名**证书（一张已吊销）——
+#   `--sign "名字"` 会报 ambiguous 而静默失败（实测：报告没被刷新，看到的是旧数据）。
+#   修法：取 `find-identity -v`（只列**有效**）行的 **SHA-1 哈希**（第 2 列），用哈希签名。
+#   ★`-v` 的输出里**吊销证书也带**「(CSSMERR_TP_CERT_REVOKED)」后缀且可能排在前
+#     ⇒ 必须先 `grep -v REVOKED` 再取（首版漏了这步，取到吊销证书 → 安装失败 -402620392）。
+IDENTITY="$(security find-identity -v -p codesigning 2>/dev/null | grep -v REVOKED | grep -E 'Apple Development|iPhone Developer' | head -1 | awk '{print $2}')"
+[ -n "$IDENTITY" ] || { echo "✗ 无有效签名身份"; exit 4; }
+echo "    签名身份 SHA-1：$IDENTITY"
 PROFILE=""
 for pf in "$HOME/Library/Developer/Xcode/UserData/Provisioning Profiles"/*.mobileprovision; do
   [ -f "$pf" ] || continue

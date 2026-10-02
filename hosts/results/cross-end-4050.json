@@ -1,0 +1,71 @@
+{
+  "scene": "app-4050（2050 view + 2000 text = 4050 元素 + 1 根；应用级）",
+  "caliber": {
+    "L1": "提交级：触发 → 建树+排版 → 渲染指令送达（不含像素光栅化）",
+    "L2": "光栅级：L1 + CPU 全场景光栅化到内存位图（同批元素；GPU 合成一律排除）",
+    "note": "各端\"光栅化实现\"天然不同（Skia / CALayer.render / 鸿蒙 pending）——口径统一指任务定义统一，逐格注明实现"
+  },
+  "generated_at": "2026-10-02T15:14:45.315Z",
+  "findings": {
+    "L1_全端占优": "提交级三端均快于原生（0.344 / 0.111 / 0.100）——建树+排版+指令生成是本方案的主收益面",
+    "L2_分化": "光栅级两端相反：iOS 0.148（快 6.7×，原生 drawHierarchy 逐视图 CoreText 代价高）· Android 1.673（慢 1.7×，我们自写 drawCmds 循环 vs Skia 显示列表复用——与 ACCEPTANCE.md 既有「绘制路径比原生慢」量化一致）",
+    "L2_Android_原因": "Proteus 侧 4051 条指令逐条 drawRect/drawText；原生 View.draw 走 RenderNode 显示列表 + Skia 优化。优化路径已实现（drawCmdsOptimized：同色 Path 批处理 + 文本图集，图集默认关）但未接入 app-4050 场景——列为下一步优化候选",
+    "Harmony_L2_说明": "RenderNode 无 CPU 软光栅路径（渲染由 RS 进程负责）——L2 在鸿蒙端**架构性不适用**，非\"没测\""
+  },
+  "android": {
+    "source": "hosts/android/results/acceptance/20261002-231004/（第 5 轮）",
+    "l1": {
+      "proteus_scope_ms": 67.703,
+      "native_scope_ms": 196.79,
+      "ratio": 0.344
+    },
+    "l2": {
+      "proteus_soft_raster_ms": 9.656,
+      "native_soft_raster_ms": 5.771,
+      "ratio": 1.673
+    }
+  },
+  "ios": {
+    "source": "hosts/ios/results/layout-core-bench-ios.json",
+    "l1": {
+      "proteus_layout_ms": 10.02,
+      "proteus_build_ms": 0.81,
+      "proteus_l1_total_ms": 10.83,
+      "native_build_ms": 91.11,
+      "native_layout_ms": 6.72,
+      "native_l1_total_ms": 97.83,
+      "ratio": 0.111
+    },
+    "l2": {
+      "proteus_raster_ms": 20.82,
+      "native_raster_ms": 140.8,
+      "ratio": 0.148
+    },
+    "memory": {
+      "proteus_delta_mb": 8.1,
+      "native_delta_mb": 21.5,
+      "ratio": 0.377
+    }
+  },
+  "harmony": {
+    "source": "hosts/harmony/results/host-app-run.txt",
+    "l1": {
+      "proteus_scope_ms": 66,
+      "proteus_breakdown": {
+        "layout_ms": 10.69,
+        "emit_ms": 46.75
+      },
+      "native_cold_ms": 571,
+      "native_warm_ms": 572,
+      "ratio_cold": 0.101,
+      "ratio_warm": 0.1,
+      "note": "★口径不对称（Proteus=提交级 / 原生=渲染级，含首帧挂载）——见 benchmark caveats"
+    },
+    "l2": {
+      "proteus_raster_ms": null,
+      "native_raster_ms": null,
+      "ratio": null,
+      "note": "pending（RenderNode 无 CPU 软光栅路径——渲染由 RS 进程负责）"
+    }
+  }
+}

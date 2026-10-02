@@ -705,16 +705,28 @@ export default defineConfig({
   与 Android/iOS 同一份 Rust 源码）+ **RenderNode 直绘（API 20+，方案 §2.2 路径 B）**：
   `proteus_render.cpp`（NAPI + `OH_ArkUI_RenderNodeUtils_*`）+ `proteus_bench.cpp`（4050 基准）。
   验收入口：`bash hosts/harmony/run-host-app.sh`（装机→启动→RenderNode 直绘→4050 基准全自动）。
-- [x] **4050 应用级数据（鸿蒙腿）** —— ✅ **已跑**（2026-10-02 · HUAWEI KLE-AL00U · API 26）：
+- [x] **4050 应用级数据（三端统一口径）** —— ✅ **已跑并统一口径**（2026-10-02）：
 
-  | 指标 | 实测（3 次一致） | 说明 |
+  **★口径定义（本仓统一基准，`scripts/gen-cross-end-4050-report.mjs` 机器生成）**：
+  · **L1 提交级** = 触发 → 建树+排版 → 渲染指令送达（不含像素光栅化；§9.2 官方口径）
+  · **L2 光栅级** = L1 + **CPU 全场景光栅化到内存位图**（同批元素；GPU 合成一律排除）
+
+  | 端 | L1 提交级（Proteus / 原生，比值） | L2 光栅级（Proteus / 原生，比值） |
   |---|---|---|
-  | **Proteus 路径（提交级）** | **66~67ms** | Rust 核排版 10ms + 4000 RenderNode 构建 48ms |
-  | **原生 ArkUI 对照（渲染级）** | **539~549ms** | 4050 声明式元素 onAppear 全触发 |
-  | 比值 | **0.12** | ★口径不对称（见 `results/bench-4050.json` 的 caveats——原生含首帧上屏，我们不含） |
+  | Android（Redmi · 5 轮末轮） | 67.7 / 196.8ms = **0.344** | 9.7 / 5.8ms = **1.673** ▲ |
+  | iOS（iPhone 12） | 10.8 / 97.8ms = **0.111** | 20.8 / 140.8ms = **0.148** |
+  | 鸿蒙（KLE-AL00U · API 26） | 57.5 / 572ms = **0.100** ※ | **架构性不适用**（RenderNode 无 CPU 软光栅路径） |
 
-  报告：`hosts/harmony/results/bench-4050.json` · 截图：`results/render-node-demo.jpeg`。
-  **三端数据齐**：Android 0.527（5 轮）· iOS 2.58（CALayer 绘制/原生 UILabel，不同口径）· 鸿蒙 0.12（口径见注）。
+  ※ 鸿蒙 L1 两侧口径仍不对称（Proteus=提交级未上屏 / 原生=渲染级含挂载）——冷热实测（571/572ms）
+  表明原生成本非首帧预热，但终点定义不同，比值供量级参考。
+  ▲ **Android L2 落后是真实缺口（慢 1.7×）**：我们自写 drawCmds 循环逐条 drawRect/drawText，
+  原生走 RenderNode 显示列表 + Skia。优化路径已实现（`drawCmdsOptimized`：同色 Path 批处理，
+  图集默认关）但未接入 app-4050 场景 ⇒ **列为下一步优化候选**。与 `ACCEPTANCE.md` 既有
+  「绘制路径比原生慢」的定性判断一致（本条是其统一口径下的量化）。
+
+  **★iOS "反向优化"误读的澄清（用户当场追问）**：旧 README 把原生侧 `layout_ms`（只算 frame、
+  一像素未画）列在「绘」栏对比 Proteus 的真光栅化 ⇒ 错配。补 `drawHierarchy` 同步光栅真对照后
+  **L2 = 0.148（快 6.7×）**。三端统一报告：`hosts/results/cross-end-4050.json`。
 - [ ] 无障碍 / Semantics 语义树（合规必需，见 §10）—— ❌ 无证据（`component-ir` 无 semantics 字段）
 - [ ] 性能棘轮门禁常态化 —— ◐ 门禁已存在（`check:vapor-perf`）且**已接入 verify**（2026-09-28）；鸿蒙腿的棘轮到「有可复跑数据」阶段（本卡）——纳入基线待下一批。
 
