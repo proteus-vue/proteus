@@ -47,8 +47,27 @@ final class AppStackScene: NSObject {
 
         // ④ 主场景（同步：栈读数 A–D）
         let mainOut = evalJs?("__proteusAppStackRun('{\"depth\":20000,\"fans\":32,\"budget\":1000}')") ?? "null"
-        writeRaw("app-stack.json", mainOut)
-        NSLog("[proteus] app-stack 主场景完成")
+        // ★★★（2026-10-02 · 项目驱动落地）第二入口：**从项目路由配置跑 App 导航**（非夹具）
+        //   与 A–D 的分界：那些用合成屏池（压测装置）；本入口读
+        //   `examples/router/navigation.generated.ts`（gen-routes 从 pages/**/*.vue + router.meta 产出）
+        //   ⇒ "项目配置 → App 屏注册表 → 导航语义"这条**产品路径**在 JSC 侧同样可跑。
+        //   读数以 `p_` 前缀并入主报告（与 Android 腿**同名同形**——同一份判据脚本读）。
+        var merged: [String: Any] = [:]
+        if let d = mainOut.data(using: .utf8), let o = (try? JSONSerialization.jsonObject(with: d)) as? [String: Any] {
+            merged = o
+        }
+        let projOut = evalJs?("__proteusAppProjectRun('{\"steps\":3}')") ?? "null"
+        if let pd = projOut.data(using: .utf8), let po = (try? JSONSerialization.jsonObject(with: pd)) as? [String: Any] {
+            for (k, v) in po { merged["p_\(k)"] = v }
+        } else {
+            merged["p_error"] = "项目驱动入口调用失败（返回值不可解析）"
+        }
+        if let d = try? JSONSerialization.data(withJSONObject: merged, options: [.prettyPrinted, .sortedKeys]) {
+            try? d.write(to: reportDir.appendingPathComponent("app-stack.json"))
+        } else {
+            writeRaw("app-stack.json", mainOut)
+        }
+        NSLog("[proteus] app-stack 主场景完成（含项目驱动 p_* 读数）")
 
         // ⑤ 执行器两相：kick → **非阻塞轮询**（见文件头）→ 写第二份报告
         _ = evalJs?("__proteusAppStackExecutorKick()")
