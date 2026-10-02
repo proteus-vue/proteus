@@ -253,6 +253,11 @@ jobs:
       - name: 参考文档漂移门禁（CLI/编译规则目录/CSS 兼容规则/组件能力页与源一致）
         run: cd website && pnpm run check:reference && pnpm run check:css-compat && pnpm run check:content
 
+      # ★★CS6（2026-10-02）：一致性标准页数据门禁——页面展示的 M1–M4 / 允许差异清单 / 真截图
+      #   必须与 docs/generated/*.json 逐字节一致（SSOT=机器产物；页面零手写数字，防"产物变了页面说谎"）
+      - name: 一致性页数据门禁（页面 ↔ docs/generated 机器产物同源）
+        run: cd website && pnpm run check:consistency-data
+
       # ★2026-09-27：文档组件名对账（vue 代码块里引用不存在的组件会让读者照抄报错——
       #   `p-card` 曾在 3 处文档里潜伏，既有门禁全放行）
       - name: 文档组件名对账门禁（vue 代码块 ↔ 已注册组件）

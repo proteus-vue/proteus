@@ -87,6 +87,36 @@ check-consistency-snapshot 七段全绿 · check:no-blind-wait ✅（新 .sh 零
 ① L2/L3/L2.5/L2.6 算子用**合成快照**——证明的是"比对引擎敏不敏感"，不是"真机数据一定对"；
 ② L4 算子用真截图但取同端注入（跨端噪声底含 AA，无区分度）；L4 的价值形态是**定位**。
 
+### ★★★2026-10-02（四十）· CS6 收官 —— 一致性标准上线官网 `/consistency`
+
+**这一批回答什么**：标准 §12.4 要求"展示三件（标准本身 / 实时指标 / 证据链）"——
+本批把标准**对外公开**（用户原话：「可以放到官网展示的，这个也是其他跨端框架做不到的」）。
+
+**交付**
+1. **数据管线（页面零手写数字的机器保证）** `website/scripts/gen-consistency-data.mjs`：
+   `docs/generated/consistency-metrics.json` + `consistency-pixel-report.json` + `allow-differences.json`
+   ⇒ 生成 `website/src/data/consistency-page.ts`（生成物）+ 复制三张 L4 截图到 public；
+   **新门禁 `check:consistency-data`**（CI + verify 链已接，幂等 + 截图逐字节比对）。
+2. **官网页 `/consistency`**（导航第 7 项"一致性标准"，中英双语）：
+   Hero（核心落点 + 承认短板）· 实时指标四卡（M1 分层/并集 · M2 · M4 17/17 · L4 三端对）·
+   像素观测（**三端真截图并排** + 三对读数含坐标系平移偏移）· **允许差异清单六条全文**（id/类别/标题/理由）·
+   **与 Flutter 七维诚实对照**（短板高亮在 Flutter 一侧）· 证据链表 · 页尾"刻意不写：任何跨端逐像素一致的宣称"。
+3. **里程碑收口**：标准 §11 CS5/CS6 从 🔲 → ✅；§12.4 更新为"已上线"（含数据管线与坑的说明）。
+
+**★过程中抓出的三个真问题（都修了）**
+① **官网构建既有红**：VC2 边界门禁（今早上线）后官网**没人构建过** ⇒ 71 条存量违规直接阻断。
+   根治：`gen-profile-baseline.mjs` 加 website 项目（含 `packages/components`——官网别名直引工作区源码，
+   构建时这些 .vue 也过同一插件）⇒ `website/profile-boundary-baseline.json`（71 条，棘轮只减不增）。
+② **public 资源名撞"平台变体"机制**：`l4.web.png` 被构建改名 `l4.png`、`l4.skyline.png` 被当 mp 变体
+   **在 web 构建中整个排除** ⇒ 页面上两张图错/一张 404。真因在 `platform-variant.ts` 的
+   `splitVariant`（`<名>.<平台>.png` 是变体语法）。修法：public 副本用**连字符名**（`l4-skyline.png`——
+   `asSuffix` 对含 `-` 的段返回 undefined，天然免疫），**源文件名不动**（保持 `<case>.<end>.png` 配对约定）。
+③ **模板里的 markdown 星号**：正文写 `**同一组声明**` 会被字面渲染（Vue 模板不走 markdown）——修掉。
+
+**验证**：check:consistency-data ✅ · check:profile-baseline ✅（website 71 条）· gates-sync ✅（CI 覆盖 48）·
+D-2 audit ✅ 零 error · check:stats ✅ · check:content ✅ · 官网构建 ✅ · 渲染验收（Playwright：
+标题/四指标/三对读数/三图 naturalWidth>0/导航项 **零页面错误**）。
+
 ### ★★★2026-10-02（三十九·续）· L4 三端全配对 —— Web 端接入（跨运行时对照成立）
 
 **③ 原诚实边界已闭合**：Web 端（Playwright/Chromium）截图接入 L4 报告 ⇒ 三端全配对（C(3,2)=3 对）。
@@ -122,7 +152,7 @@ check-consistency-snapshot 七段全绿 · script-compile ✅ · no-blind-wait �
 "位置是否正确"由 L2 几何数值比对承担；L4 只管"画出来像不像"（已写入注记与文档）。
 ④ 仍未接入：iOS/Android 真机截图（当前 Web=Playwright、MP=模拟器，均非真机）。
 
-## 当前状态速览（最近一次更新：**2026-10-02·（三十九·续）· L4 三端全配对 —— Web 端接入 + 跨运行时尺寸/平移两项对齐**）★新会话以此为准
+## 当前状态速览（最近一次更新：**2026-10-02·（四十）· CS6 收官 —— 一致性标准上线官网 `/consistency`（页面零手写数字）**）★新会话以此为准
 ### ★★★2026-10-02（三十八）· 交互两层（离散 + 连续）—— 标准 §10.1 的最后两个"未布点"
 
 **交付**

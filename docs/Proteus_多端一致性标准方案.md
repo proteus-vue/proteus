@@ -460,8 +460,8 @@ id / category / reason / scope / evidence 必填且唯一；空字段或非法�
 | **CS2** | 允许差异清单 v1（含 A-4 动画插值） | CS0 | VC5-d 清单 | ✅ v1 入库（`docs/allow-differences.json`，6 条含 A-4；schema 门禁 + A-4 删除保护） |
 | **CS3** | 变异测试框架 + 算子清单 | CS1 | M4 采集工具 | ✅ 六层 17 注入全捕获 + 5 对照组，pending 0（两条诚实边界随数字公开，见 §7.3） |
 | **CS4** | 像素观察模式（非门禁） | CS1 | 差异率报告 | ✅ 真截图 + ROI 观测报告入库（实测 `noise-level` 0.312%/hash 0）；三条工程约束见实现层 §3.4.1 |
-| **CS5** | 与 Flutter 对照基准 | CS1、CS4 | 对外对照表（§3） | 🔲 未开始（§13 待核实项是前置） |
-| **CS6** | 标准公开 | CS1–CS5 | 对外文档 + 指标页 | 🔲 未开始（官网形态见 §12.4） |
+| **CS5** | 与 Flutter 对照基准 | CS1、CS4 | 对外对照表（§3） | ✅ 官网 `/consistency` 页内落地（七维诚实对照，短板（文本度量/像素绘制）高亮给 Flutter 一侧）+ §13 核实闸门已解除（3 条可用 / 3 条降级 / 1 条证伪并已改写） |
+| **CS6** | 标准公开 | CS1–CS5 | 对外文档 + 指标页 | ✅ 官网 `/consistency` 页上线（2026-10-02）：**页面零手写数字**——全部由 `scripts/gen-consistency-data.mjs` 从 `docs/generated/*.json` + 允许差异清单生成（`check:consistency-data` 防漂移，CI 已接）；对外表述遵守 §12.3 三条禁语（页内明写"刻意不写：任何跨端逐像素一致的宣称"） |
 
 ### 11.1 ★ CS0 是最高优先级，且应先于一切技术工作
 
@@ -508,15 +508,28 @@ id / category / reason / scope / evidence 必填且唯一；空字段或非法�
 
 **第三条尤其重要**——主动承认短板，长板才有人信。
 
-### 12.4 官网展示形态（规划 · 2026-10-02）
+### 12.4 官网展示形态（✅ 已上线 · 2026-10-02 · 路由 `/consistency`）
 
 展示三件（全部**机器产物驱动**，不靠手写数字）：
 
-1. **标准本身**（本方案 §1–§12 的对外版）
-2. **实时指标**：`docs/generated/consistency-metrics.json`（M1–M4 + 存量债务——**含不好看的数**，§6.2）
-3. **证据链**：§10.3 表（矩阵 / 边界规则 / 棘轮基线 / 门禁清单）
+1. **标准本身**（本方案 §1–§12 的对外版）—— Hero 直接给出核心落点与"不写逐像素一致"的诚实声明
+2. **实时指标**：`docs/generated/consistency-metrics.json`（M1–M4——**含不好看的数**，§6.2）
+   页面展示：M1 数值一致性覆盖率（分层加总 + 并集口径）· M2 允许差异条目 · M4 回归检出率（六层注入）·
+   L4 真截图观测对数；另附**允许差异清单六条全文**（id/类别/标题/理由——"差异是数据不是代码分支"的直接证据）
+3. **证据链**：§10.3 表 + 三端真截图（skyline / webview / web 并排 + 每对的差异率/感知哈希/平移偏移读数）
+4. **与 Flutter 的七维诚实对照**（§3 对外版）—— 短板（文本度量 / 像素绘制）**高亮给 Flutter 一侧**
 
-前置闸门：§13 待核实项核完；对外表述遵守 §12.3 禁语（尤其"承认像素绘制一致性不如 Flutter"）。
+**数据管线（页面零手写数字的机器保证）**：`website/scripts/gen-consistency-data.mjs`
+从 `docs/generated/*.json` + `docs/allow-differences.json` 生成 `website/src/data/consistency-page.ts`
+（生成物，勿手改）+ 复制三张 L4 截图到 `website/public/consistency/`；
+`pnpm check:consistency-data` 防漂移（已接 CI 与 `pnpm verify`）。
+
+**★本批实测踩出的一个坑（记录备查）**：public 静态资源名**不得**使用平台变体后缀
+（`foo.web.png` 会被构建改名 `foo.png`、`foo.skyline.png` 会被当作 mp 变体在 web 构建中整个排除——
+`packages/compiler/src/platform-variant.ts` 的既有机制）；证据截图用**连字符命名**（`l4-skyline.png`）
+规避（`asSuffix` 对含 `-` 的段返回 undefined，天然不参与变体映射）。
+
+前置闸门：§13 已核完（见核实报告）；对外表述遵守 §12.3 禁语（尤其"承认像素绘制一致性不如 Flutter"）。
 
 ---
 

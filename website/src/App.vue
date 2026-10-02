@@ -38,6 +38,8 @@ const links: NavLink[] = [
   { to: '/ecosystem', label: '生态', key: 'ecosystem' },
   // ★Morpheus 动画引擎（招牌能力——独立产品页）
   { to: '/animation', label: '动画引擎', key: 'animation' },
+  // ★★CS6 一致性标准（对外展示——实时机器指标 + 三端真截图；"可验证一致性"是我们的标准制定权主张）
+  { to: '/consistency', label: '一致性标准', key: 'consistency' },
 ]
 /** 导航文案（双语 key） */
 function navText(l: { key: string; label: string }): string {
@@ -45,6 +47,7 @@ function navText(l: { key: string; label: string }): string {
   if (l.key === 'multidev') return t('app.multidev')
   if (l.key === 'ecosystem') return t('app.ecosystem')
   if (l.key === 'animation') return t('app.animation')
+  if (l.key === 'consistency') return t('app.consistency')
   return l.label
 }
 
