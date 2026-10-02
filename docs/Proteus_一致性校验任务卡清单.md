@@ -113,9 +113,6 @@
 - [x] **VC8-b** 失败报告与 AI 可读输出 —— ✅（2026-10-02）：结构化报告（`report.ts`：
   path/属性/期望/实际/偏差/容差类/suggestion）+ `proteus explain <报告>` 消费 +
   **★AI 自纠闭环端到端验证**（报告 → explain 解释 → `applyAutoFixToGeometry` → 复比通过）
-- [ ] **VC8-a** CI 集成与门禁
-- [ ] **VC8-b** 失败报告与 AI 可读输出
-
 ---
 
 # 第一批
