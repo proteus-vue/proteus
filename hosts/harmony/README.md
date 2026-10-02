@@ -74,7 +74,20 @@ chmod 600 ~/.harmony/hdckey ~/.harmony/hdckey.pub
 
 ---
 
-## 宿主工程（host-app/）—— ✅ 第一里程碑达成：装机 + 启动（真机证据）
+## 宿主工程（host-app/）—— ✅ 第二里程碑达成：**RenderNode 直绘**（真机证据）
+
+> **2026-10-02 实测**：Proteus 指令流（RenderCmd 同形 JSON）→ NAPI → C++ →
+> `OH_ArkUI_RenderNodeUtils_*` **直建渲染节点树**（4 个圆角矩形，见 `results/render-node-demo.jpeg`）——
+> **绕过 ArkUI measure/layout**（方案 §2.2 路径 B；本机 API 26 ≥ 20 满足）。
+> 落地位置：`entry/src/main/cpp/{CMakeLists.txt,proteus_render.cpp}` + `pages/Index.ets` 接线。
+>
+> ★★**CAPI 初始化坑（实测 40 分钟）**：`OH_ArkUI_RenderNodeUtils_CreateNode()` 在 CAPI 未初始化时
+> 返回 **null**（现象：`nodes=0` + `reason=create-node-null`）。首个 `OH_ArkUI_GetModuleInterface(...)`
+> 调用会触发初始化 ⇒ **必须在任何 RenderNode API 之前调用一次**（本实现在 `attach()` 里做）。
+> 另两个实测坑：① hilog 的 `LogType` 是宏第一参（用 `OH_LOG_Print(LOG_APP, LOG_LEVEL, ...)`）；
+> ② ArkTS 严格模式禁 `any`/无类型对象字面量（`.d.ts` 要显式 interface）。
+
+### 第一里程碑：装机 + 启动（已完成）
 
 > **2026-10-02 实测结果**：`entry-default-signed.hap`（155KB）→ `bm install` **成功** →
 > `aa start` **成功** → 宿主主动上报 `PROTEUS_HOST_READY model=KLE-AL00U os=OpenHarmony-7.0.0.105 api=26`

@@ -80,11 +80,37 @@ if [ -n "$READY_LINE" ]; then
   echo "  ✓ 装机+启动：宿主主动上报成功"
   echo "    $READY_LINE"
   HDC shell "hilog -x | grep PROTEUS_HOST_LOADED | tail -1" 2>/dev/null | head -1
-  # 落盘证据
-  { echo "installed_at=$(date -u +%Y-%m-%dT%H:%M:%SZ)"; echo "hap=$HAP"; echo "ready_line=$READY_LINE"; } > "$RESULTS/host-app-run.txt"
+  # ── 5. RenderNode 直绘判据（第二里程碑：Proteus 指令流 → 渲染节点树）──
+  #   宿主上报链：PROTEUS_RENDER_ATTACHED（CAPI 就绪）→ PROTEUS_RENDER_DONE nodes=N（N>0 = 直建成功）
+  #   ★走 hilog 主动上报 + 条件等待（零盲等）
+  RENDER_LINE=""
+  if bash "$WAIT_SH" --cmd "bash '$HERE/hdc.sh' shell 'hilog -x | grep -q PROTEUS_RENDER_DONE'" --timeout 15 --interval 2; then
+    RENDER_LINE="$(HDC shell "hilog -x | grep PROTEUS_RENDER_DONE | tail -1" 2>/dev/null | head -1)"
+  fi
+  RENDER_NODES="$(printf '%s' "$RENDER_LINE" | grep -oE 'nodes=[0-9]+' | head -1 | cut -d= -f2)"
   echo
-  echo "✅ 鸿蒙宿主装机链路通过（真机 HUAWEI KLE-AL00U）——证据：$RESULTS/host-app-run.txt"
-  exit 0
+  if [ -n "$RENDER_NODES" ] && [ "$RENDER_NODES" -gt 0 ]; then
+    echo "  ✓ RenderNode 直绘：建出 ${RENDER_NODES} 个渲染节点（Proteus 指令流 → OH_ArkUI_RenderNodeUtils）"
+    echo "    $RENDER_LINE"
+    ATTACH_LINE="$(HDC shell "hilog -x | grep PROTEUS_RENDER_ATTACHED | tail -1" 2>/dev/null | head -1)"
+    echo "    ${ATTACH_LINE}（capi=1 = CAPI 已初始化）"
+    # 落盘证据
+    { echo "installed_at=$(date -u +%Y-%m-%dT%H:%M:%SZ)"; echo "hap=$HAP"; echo "ready_line=$READY_LINE";
+      echo "render_line=$RENDER_LINE"; } > "$RESULTS/host-app-run.txt"
+    echo
+    echo "✅ 鸿蒙宿主验收通过（真机 HUAWEI KLE-AL00U）：装机 + 启动 + **RenderNode 直绘**"
+    echo "   证据：$RESULTS/host-app-run.txt · 截图：$RESULTS/render-node-demo.jpeg"
+    exit 0
+  else
+    echo "  ⚠ RenderNode 直绘未上报 nodes>0（render_line=${RENDER_LINE:-无}）"
+    echo "    排查：bash hosts/harmony/hdc.sh shell 'hilog -x | grep -E "PROTEUS_RENDER|SKIP" | head -20'"
+    # 装机+启动已通过——如实分开报告（不因直绘未跑而否定装机结论）
+    { echo "installed_at=$(date -u +%Y-%m-%dT%H:%M:%SZ)"; echo "hap=$HAP"; echo "ready_line=$READY_LINE";
+      echo "render_line=${RENDER_LINE:-none}"; } > "$RESULTS/host-app-run.txt"
+    echo
+    echo "✅ 装机+启动通过（RenderNode 直绘未通过——见上）"
+    exit 1
+  fi
 else
   echo "  ✗ 未在 30s 内看到 PROTEUS_HOST_READY"
   echo "    排查：bash hosts/harmony/hdc.sh shell 'hilog -x | grep ProteusHost | tail -20'"

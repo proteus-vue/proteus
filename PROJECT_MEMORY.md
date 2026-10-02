@@ -87,6 +87,40 @@ check-consistency-snapshot 七段全绿 · check:no-blind-wait ✅（新 .sh 零
 ① L2/L3/L2.5/L2.6 算子用**合成快照**——证明的是"比对引擎敏不敏感"，不是"真机数据一定对"；
 ② L4 算子用真截图但取同端注入（跨端噪声底含 AA，无区分度）；L4 的价值形态是**定位**。
 
+### ★★★2026-10-02（六十一）· 鸿蒙宿主 **RenderNode 直绘接入 —— 第二里程碑达成（真机）**
+
+**用户「不错，继续」→ 开工**（承接六十的第一里程碑：装机+启动+界面渲染）。
+
+**实现了什么（方案 §2.2 路径 B 的真实落地）**：
+- **原生渲染模块**：`entry/src/main/cpp/{CMakeLists.txt,proteus_render.cpp}` —— NAPI（`attach`/`renderCommands`/`stats`）
+  + `OH_ArkUI_RenderNodeUtils_*`（CreateNode/SetSize/SetPosition/SetBackgroundColor/SetBorderRadius）
+  + customNode 包装 + `OH_ArkUI_NodeContent_AddNode` 挂到 ArkTS 页面；
+- **ArkTS 接线**：`pages/Index.ets` —— `NodeContent`（ContentSlot）→ `attach(content)` → `renderCommands(指令流 JSON)`；
+  指令形态 = **RenderCmd 同形**（`packages/layout-core/src/render-cmd.ts` 同结构：kind/x/y/w/h/color/radius；
+  color 为 ARGB uint32——JS 侧 `cssToArgb` 一处转换）；
+- **真机结果**：`PROTEUS_RENDER_DONE nodes=4 parsed=4`（4 个圆角矩形真实渲染，截图
+  `results/render-node-demo.jpeg`）——**绕过 ArkUI measure/layout 直建渲染节点树**；
+- **判据入脚本**：`run-host-app.sh` 扩展第 5 步（条件等待 `PROTEUS_RENDER_DONE nodes>0`；零盲等）。
+
+**★★★ 三个实测坑（全部固化进 README，防再踩）**：
+1. **CAPI 初始化顺序（40 分钟排查）**：`OH_ArkUI_RenderNodeUtils_CreateNode()` 在 CAPI 未初始化时
+   返回 **null**（现象：`nodes=0` + `reason=create-node-null` ×4）。首个 `OH_ArkUI_GetModuleInterface(...)`
+   触发初始化 ⇒ **必须在任何 RenderNode API 之前**调用一次（本实现放在 `attach()`）。
+   ★调试方法：给每个跳过点加**分类日志**（`reason=...`）——"取证式调试"再次证明有效
+   （比"猜"快 10 倍：直接读到 create-node-null）。
+2. **hilog 宏**：`OH_LOG_INFO(domain, tag, ...)` 不成立——`LogType` 是**第一参**（用
+   `OH_LOG_Print(LOG_APP, LOG_INFO, LOG_DOMAIN, LOG_TAG, ...)`）；`%{public}p` 对指针不合法。
+3. **ArkTS 严格模式**：禁 `any`/无类型对象字面量（`arkts-no-any-unknown` / `arkts-no-untyped-obj-literals`）
+   ⇒ `.d.ts` 要显式 interface；native 依赖要 `ohpm install` 生成 `oh_modules`（否则导入被判 any）。
+
+**验证**：`build-host-app.sh` 5.7 秒构建（含 native 编译）· `run-host-app.sh` 全链绿
+（装机+启动+RenderNode 直绘）· `libproteus_render.so`（77KB arm64）在 hap 内 ·
+hilog 上报链完整（ATTACHED capi=1 → DONE nodes=4）· 截图双重确认。
+
+**诚实边界**：① 当前指令是 **ArkTS 侧构造的测试指令**（RenderCmd 同形）——**尚未接** Rust/TS 内核
+产出的真实指令流（同形即直通，是下一步）；② 仅支持 background 指令（text/image/border/clip
+未实现）；③ 简化 JSON 解析（数字字段；接真实流时换正式解析）；④ 未接 `check-app-stack.py`。
+
 ### ★★★2026-10-02（六十）· 鸿蒙宿主 **装机 + 启动 + 界面渲染 —— 第一里程碑达成（真机）**
 
 **用户「签名已生成」→ 立即全链验证**（承接五十九的"装机待华为账号一次介入"）：
@@ -995,7 +1029,7 @@ check-consistency-snapshot 七段全绿 · script-compile ✅ · no-blind-wait �
 "位置是否正确"由 L2 几何数值比对承担；L4 只管"画出来像不像"（已写入注记与文档）。
 ④ 仍未接入：iOS/Android 真机截图（当前 Web=Playwright、MP=模拟器，均非真机）。
 
-## 当前状态速览（最近一次更新：**2026-10-02·（六十）· 鸿蒙宿主 **第一里程碑达成（真机）**：华为签名 → `bm install` 成功 → `aa start` 成功 → 宿主主动上报 `PROTEUS_HOST_READY api=26` → **界面完整渲染**（截图存证）；全链纯 CLI（构建 9.2s）；下一批 = RenderNode 直绘接入**）★新会话以此为准
+## 当前状态速览（最近一次更新：**2026-10-02·（六十一）· 鸿蒙宿主 **第二里程碑：RenderNode 直绘（真机）**：Proteus 指令流 → NAPI → `OH_ArkUI_RenderNodeUtils` **绕过 measure/layout 直建渲染节点树**（nodes=4 + 截图存证）；固化三个实测坑（CAPI 初始化顺序 / hilog 宏 / ArkTS 严格模式）；下一批 = 接内核真实指令流 + text/image 指令**）★新会话以此为准
 ### ★★★2026-10-02（三十八）· 交互两层（离散 + 连续）—— 标准 §10.1 的最后两个"未布点"
 
 **交付**

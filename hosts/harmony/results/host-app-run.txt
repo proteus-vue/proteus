@@ -1,3 +1,4 @@
-installed_at=2026-10-02T14:28:00Z
+installed_at=2026-10-02T14:40:03Z
 hap=/Volumes/data1/work/office/debug/proteus/hosts/harmony/host-app/entry/build/default/outputs/default/entry-default-signed.hap
-ready_line=10-02 22:27:59.528 52826 52826 I A00001/dev.proteus.host/ProteusHost: PROTEUS_HOST_READY model=KLE-AL00U os=OpenHarmony-7.0.0.105 api=26 display=KLE-AL00 7.0.0.109(SP6C00E105R3P3)
+ready_line=10-02 22:40:02.612 61676 61676 I A00001/dev.proteus.host/ProteusHost: PROTEUS_HOST_READY model=KLE-AL00U os=OpenHarmony-7.0.0.105 api=26 display=KLE-AL00 7.0.0.109(SP6C00E105R3P3)
+render_line=10-02 22:40:02.681 61676 61676 I A00002/dev.proteus.host/ProteusRender: PROTEUS_RENDER_DONE nodes=4 parsed=4
