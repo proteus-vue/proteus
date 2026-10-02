@@ -41,6 +41,7 @@
 extern "C" {
 uint64_t proteus_layout_create(const char* request_json);
 char* proteus_layout_rects(uint64_t handle);
+char* proteus_layout_hit_test(uint64_t handle, float x, float y);
 char* proteus_layout_version(void);
 void proteus_layout_free_string(char* ptr);
 bool proteus_layout_destroy(uint64_t handle);
@@ -213,6 +214,71 @@ static napi_value Bench4050(napi_env env, napi_callback_info info) {
     return out;
 }
 
+/**
+ * hitProbe(): string(JSON) —— ★命中测试探针（与 Android `hitTestRun` / iOS `runHitProbes`
+ *   **同一份场景与探针点**；三端共享核心的直接证据，要求**逐位相同**）。
+ *
+ * 场景（与两端完全一致）：
+ *   root 300×300
+ *     ├── 2 顶栏 300×60（在流）
+ *     ├── 3 卡片 300×180（在流）
+ *     │     ├── 4 absolute 240×140 @(30,20)
+ *     │     └── 5 absolute 140×100 @(60,50)
+ *     └── 6 底栏 300×60
+ * 期望（纯几何，本文件独立声明）：
+ *   (150,30)→2 · (150,90)→4 · (100,110)→5 · (150,140)→5 · (150,290)→6 · (400,400)→-1
+ */
+static napi_value HitProbe(napi_env env, napi_callback_info info) {
+    const char* scene =
+        "{\"viewport\":{\"width\":300,\"height\":300},\"nodes\":["
+        "{\"id\":1,\"parentId\":null,\"width\":300.0,\"height\":300.0,\"flexDirection\":\"column\"},"
+        "{\"id\":2,\"parentId\":1,\"width\":300.0,\"height\":60.0},"
+        "{\"id\":3,\"parentId\":1,\"width\":300.0,\"height\":180.0},"
+        "{\"id\":4,\"parentId\":3,\"position\":\"absolute\",\"top\":20.0,\"left\":30.0,\"width\":240.0,\"height\":140.0},"
+        "{\"id\":5,\"parentId\":3,\"position\":\"absolute\",\"top\":50.0,\"left\":60.0,\"width\":140.0,\"height\":100.0},"
+        "{\"id\":6,\"parentId\":1,\"width\":300.0,\"height\":60.0}"
+        "],\"textMeasures\":{}}";
+    uint64_t handle = proteus_layout_create(scene);
+    if (handle == 0) {
+        napi_value out;
+        napi_create_string_utf8(env, "{\"ok\":false,\"error\":\"建树失败\"}", NAPI_AUTO_LENGTH, &out);
+        return out;
+    }
+    // ★期望值独立声明（不取自任何一端的结果——避免「共同错」被当成一致）
+    const float probes[6][2] = {{150, 30}, {150, 90}, {100, 110}, {150, 140}, {150, 290}, {400, 400}};
+    const int expect[6] = {2, 4, 5, 5, 6, -1};
+    std::string results = "[";
+    int mismatch = 0;
+    for (int i = 0; i < 6; i++) {
+        char* raw = proteus_layout_hit_test(handle, probes[i][0], probes[i][1]);
+        std::string rj = raw ? raw : "{}";
+        if (raw) proteus_layout_free_string(raw);
+        // ★字段名以 Rust 侧返回为准（`{"ok":true,"target":<id|null>,"path":[...],"chain":[...]}`）——
+        //   首版误写 `hit_node_id` ⇒ 恒 -1（假红 5 条），修正如实记：**接口字段名要读实现，不要猜**。
+        // ★★`target` 可为 **null**（界外未命中）——必须显式判 null：
+        //   直接数字解析会把 null 读成 0（strtod 不动指针 ⇒ 返回 false 但残留 0）⇒ 误报命中根节点。
+        //   （Android 侧同语义：`!ho.isNull("target")` 才取值，否则 -1。）
+        double hit = -1;
+        if (rj.find("\"target\":null") == std::string::npos) {
+            jnum(rj.c_str(), rj.size(), "target", &hit);
+        }
+        if (hit != expect[i]) mismatch++;
+        char buf[96];
+        snprintf(buf, sizeof(buf), "%s{\"x\":%.0f,\"y\":%.0f,\"hit\":%d,\"expect\":%d}",
+                 i ? "," : "", probes[i][0], probes[i][1], (int)hit, expect[i]);
+        results += buf;
+    }
+    results += "]";
+    proteus_layout_destroy(handle);
+    OH_LOG_Print(LOG_APP, LOG_INFO, PROTEUS_BENCH_DOMAIN, PROTEUS_BENCH_TAG,
+                 "PROTEUS_HIT_PROBE_DONE mismatch=%{public}d", mismatch);
+    std::string out = "{\"ok\":" + std::string(mismatch == 0 ? "true" : "false")
+        + ",\"mismatch\":" + std::to_string(mismatch) + ",\"probes\":" + results + "}";
+    napi_value v;
+    napi_create_string_utf8(env, out.c_str(), NAPI_AUTO_LENGTH, &v);
+    return v;
+}
+
 /** version(): string —— Rust 核版本自报（仪器自检） */
 static napi_value BenchVersion(napi_env env, napi_callback_info info) {
     char* v = proteus_layout_version();
@@ -227,6 +293,7 @@ EXTERN_C_START
 static napi_value BenchInit(napi_env env, napi_value exports) {
     napi_property_descriptor desc[] = {
         {"bench4050", nullptr, Bench4050, nullptr, nullptr, nullptr, napi_default, nullptr},
+        {"hitProbe", nullptr, HitProbe, nullptr, nullptr, nullptr, napi_default, nullptr},
         {"version", nullptr, BenchVersion, nullptr, nullptr, nullptr, napi_default, nullptr},
     };
     napi_define_properties(env, exports, sizeof(desc) / sizeof(desc[0]), desc);

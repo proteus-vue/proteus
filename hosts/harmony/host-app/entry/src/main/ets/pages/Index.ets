@@ -17,7 +17,7 @@ import { hilog } from '@kit.PerformanceAnalysisKit';
 import { NodeContent } from '@kit.ArkUI';
 import { util } from '@kit.ArkTS';
 import { attach, renderCommands, stats, ProteusRenderStats } from 'libproteus_render.so';
-import { bench4050, version as rustVersion } from 'libproteus_bench.so';
+import { bench4050, hitProbe, version as rustVersion } from 'libproteus_bench.so';
 
 const DOMAIN = 0x0002;
 const TAG = 'ProteusRender';
@@ -207,6 +207,13 @@ struct Index {
       try {
         const ver: string = rustVersion();
         hilog.info(DOMAIN, BENCH_TAG, 'PROTEUS_BENCH_RUST_VERSION %{public}s', ver);
+        // ★命中测试探针（与 Android/iOS 同场景——三端共享核心的直接证据）
+        try {
+          const hp: string = hitProbe();
+          hilog.info(DOMAIN, BENCH_TAG, 'PROTEUS_HIT_PROBE %{public}s', hp);
+        } catch (he) {
+          hilog.error(DOMAIN, BENCH_TAG, 'PROTEUS_HIT_PROBE_ERROR %{public}s', JSON.stringify(he) ?? '');
+        }
         this.runBenchStaged();
       } catch (e) {
         hilog.error(DOMAIN, BENCH_TAG, 'PROTEUS_BENCH_ERROR %{public}s', JSON.stringify(e) ?? '');

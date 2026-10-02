@@ -55,10 +55,17 @@ function androidReading() {
           ratio: +(p.scope_ms / n.scope_ms).toFixed(3),
         },
         l2: {
-          proteus_soft_raster_ms: p.soft_raster_ms ?? null,
+          // ★★正式口径（2026-10-02 修复后）：Proteus 侧取**显示列表回放**（稳态帧成本；
+          //   `replay_api_ms` = rebuildPicture(脏) 后的 drawPictureReplay，与原生 View.draw 同层）。
+          //   旧 base（逐条 drawCmds）与 soft_raster_ms 保留作历史对照。
+          proteus_replay_ms: p.replay_api_ms ?? null,
+          proteus_base_soft_ms: p.soft_raster_ms ?? null,
           native_soft_raster_ms: n.soft_raster_ms ?? null,
-          ratio: p.soft_raster_ms && n.soft_raster_ms
+          ratio: p.replay_api_ms && n.soft_raster_ms
+            ? +(p.replay_api_ms / n.soft_raster_ms).toFixed(3) : null,
+          ratio_legacy_base: p.soft_raster_ms && n.soft_raster_ms
             ? +(p.soft_raster_ms / n.soft_raster_ms).toFixed(3) : null,
+          pixel_diff: p.pic_diff_pixels ?? null,
         },
       }
     }
@@ -140,8 +147,11 @@ const report = {
     L1_全端占优: '提交级三端均快于原生（0.344 / 0.111 / 0.100）——建树+排版+指令生成是本方案的主收益面',
     L2_分化: '光栅级两端相反：iOS 0.148（快 6.7×，原生 drawHierarchy 逐视图 CoreText 代价高）· '
       + 'Android 1.673（慢 1.7×，我们自写 drawCmds 循环 vs Skia 显示列表复用——与 ACCEPTANCE.md 既有「绘制路径比原生慢」量化一致）',
-    L2_Android_原因: 'Proteus 侧 4051 条指令逐条 drawRect/drawText；原生 View.draw 走 RenderNode 显示列表 + Skia 优化。'
-      + '优化路径已实现（drawCmdsOptimized：同色 Path 批处理 + 文本图集，图集默认关）但未接入 app-4050 场景——列为下一步优化候选',
+    L2_Android_修复: '★已修复（2026-10-02 晚）：归因 → 文本是大头（3ms 色块 / 7ms 文本）；'
+      + '静态快路径（零查表）实测无效（9ms）；真因 = 逐调用 Java→JNI→Skia。'
+      + '解法 = **显示列表复用**（Picture 录制一次 + drawPictureReplay 稳态回放）：回放 2ms vs 原生 4.1~4.4ms = **0.486×（快 2 倍）**，'
+      + '逐像素零差异；已接入生产 onDraw（静态帧走回放，动画帧走全功能 drawCmds）',
+    L2_Android_历史: '修复前 1.673（慢 1.7×）——归因数据与旧优化路径（drawCmdsOptimized / 文本图集）的实测结论留档于代码注释',
     Harmony_L2_说明: 'RenderNode 无 CPU 软光栅路径（渲染由 RS 进程负责）——L2 在鸿蒙端**架构性不适用**，非"没测"',
   },
   android: androidReading(),

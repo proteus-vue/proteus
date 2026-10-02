@@ -3881,6 +3881,111 @@ public class MainActivity extends Activity {
         for (int y = 0; y < H; y += 16) for (int x = 0; x < W; x += 16) if ((bmp.getPixel(x, y) >>> 24) != 0) painted++;
         bmp.recycle();
 
+        // ── ⑥ ★★绘制归因 + 优化路径对照（2026-10-02：L2 缺口定位——先归因再优化）──
+        //   a) 拆分测量：只画色块 vs 只画文本（回答"慢在哪一段"）
+        //   b) 优化路径同机对照：drawCmdsOptimized（同色 Path 批处理）
+        //   c) 正确性：优化路径 vs 基线**逐像素**必须一致（否则"快"无意义）
+        final int ATTR_REPS = 5;
+        java.util.List<Long> rectSamples = new java.util.ArrayList<>();
+        java.util.List<Long> textSamples = new java.util.ArrayList<>();
+        java.util.List<Long> optSamples = new java.util.ArrayList<>();
+        java.util.List<Long> baseSamples = new java.util.ArrayList<>();
+        java.util.List<Long> fastSamples = new java.util.ArrayList<>();
+        final boolean fastEligible = host.canUseFastPath();
+        for (int rep = 0; rep < ATTR_REPS; rep++) {
+            android.graphics.Bitmap rb = android.graphics.Bitmap.createBitmap(W, H, android.graphics.Bitmap.Config.ARGB_8888);
+            android.graphics.Canvas rC = new android.graphics.Canvas(rb);
+            long a0 = SystemClock.elapsedRealtimeNanos();
+            host.drawRectsOnly(rC);
+            rectSamples.add((SystemClock.elapsedRealtimeNanos() - a0) / 1_000_000);
+            rb.recycle();
+            android.graphics.Bitmap tb = android.graphics.Bitmap.createBitmap(W, H, android.graphics.Bitmap.Config.ARGB_8888);
+            android.graphics.Canvas tC = new android.graphics.Canvas(tb);
+            long a1 = SystemClock.elapsedRealtimeNanos();
+            host.drawTextOnly(tC);
+            textSamples.add((SystemClock.elapsedRealtimeNanos() - a1) / 1_000_000);
+            tb.recycle();
+            android.graphics.Bitmap ob = android.graphics.Bitmap.createBitmap(W, H, android.graphics.Bitmap.Config.ARGB_8888);
+            android.graphics.Canvas oC = new android.graphics.Canvas(ob);
+            long a2 = SystemClock.elapsedRealtimeNanos();
+            host.drawCmdsOptimized(oC);
+            optSamples.add((SystemClock.elapsedRealtimeNanos() - a2) / 1_000_000);
+            ob.recycle();
+            android.graphics.Bitmap bb = android.graphics.Bitmap.createBitmap(W, H, android.graphics.Bitmap.Config.ARGB_8888);
+            android.graphics.Canvas bC = new android.graphics.Canvas(bb);
+            long a3 = SystemClock.elapsedRealtimeNanos();
+            host.drawCmds(bC);
+            baseSamples.add((SystemClock.elapsedRealtimeNanos() - a3) / 1_000_000);
+            bb.recycle();
+            if (fastEligible) {
+                android.graphics.Bitmap fb = android.graphics.Bitmap.createBitmap(W, H, android.graphics.Bitmap.Config.ARGB_8888);
+                android.graphics.Canvas fC = new android.graphics.Canvas(fb);
+                long a4 = SystemClock.elapsedRealtimeNanos();
+                host.drawCmdsFast(fC);
+                fastSamples.add((SystemClock.elapsedRealtimeNanos() - a4) / 1_000_000);
+                fb.recycle();
+            }
+        }
+        double fastSoftMs = fastSamples.isEmpty() ? -1 : medianOf(fastSamples);
+        double attrRectsMs = medianOf(rectSamples);
+        double attrTextMs = medianOf(textSamples);
+        double optSoftMs = medianOf(optSamples);
+        double baseSoftMs = medianOf(baseSamples);
+        // 正确性：优化 vs 基线逐像素 diff
+        android.graphics.Bitmap cb1 = android.graphics.Bitmap.createBitmap(W, H, android.graphics.Bitmap.Config.ARGB_8888);
+        host.drawCmds(new android.graphics.Canvas(cb1));
+        android.graphics.Bitmap cb2 = android.graphics.Bitmap.createBitmap(W, H, android.graphics.Bitmap.Config.ARGB_8888);
+        host.drawCmdsOptimized(new android.graphics.Canvas(cb2));
+        // ── ⑦ ★★显示列表（Picture）复用：录制一次 + 回放 ──
+        //   【为什么测这个（归因结论）】原生 View.draw 在软件画布上 4.4ms 完成 6000 次绘制调用
+        //   （2000 格背景 + 2000 text 背景 + 2000 文字），而我们逐条 Java Canvas 调用是 7ms——
+        //   逐调用 Java→JNI→Skia；原生侧 DisplayList 的**回放循环在 native 内**（无逐调用 JNI）。
+        //   ⇒ 我们用 Picture 录制一次、以后每帧只 drawPicture（一个调用）——与"行级显示列表复用"
+        //     （flat-redraw 场景）同一机制，这里量化它在 4050 全量上的效果。
+        android.graphics.Picture pic = new android.graphics.Picture();
+        long pr0 = SystemClock.elapsedRealtimeNanos();
+        android.graphics.Canvas prc = pic.beginRecording(W, H);
+        host.drawCmds(prc);
+        pic.endRecording();
+        double picRecordMs = (SystemClock.elapsedRealtimeNanos() - pr0) / 1_000_000;
+        java.util.List<Long> picReplaySamples = new java.util.ArrayList<>();
+        for (int rep = 0; rep < ATTR_REPS; rep++) {
+            android.graphics.Bitmap pb = android.graphics.Bitmap.createBitmap(W, H, android.graphics.Bitmap.Config.ARGB_8888);
+            android.graphics.Canvas pc = new android.graphics.Canvas(pb);
+            long a5 = SystemClock.elapsedRealtimeNanos();
+            pc.drawPicture(pic);
+            picReplaySamples.add((SystemClock.elapsedRealtimeNanos() - a5) / 1_000_000);
+            pb.recycle();
+        }
+        double picReplayMs = medianOf(picReplaySamples);
+        // 一致性：Picture 回放结果 vs 基线绘制（逐像素）
+        android.graphics.Bitmap pb2 = android.graphics.Bitmap.createBitmap(W, H, android.graphics.Bitmap.Config.ARGB_8888);
+        new android.graphics.Canvas(pb2).drawPicture(pic);
+        int picDiffPixels = countDiffPixels(cb1, pb2);
+        pb2.recycle();
+        // ★★正式路径（宿主 API）：rebuildPicture（脏）+ drawPictureReplay（稳态）
+        host.rebuildPicture(W, H);
+        java.util.List<Long> replayApiSamples = new java.util.ArrayList<>();
+        for (int rep = 0; rep < ATTR_REPS; rep++) {
+            android.graphics.Bitmap rpb = android.graphics.Bitmap.createBitmap(W, H, android.graphics.Bitmap.Config.ARGB_8888);
+            android.graphics.Canvas rpc = new android.graphics.Canvas(rpb);
+            long a6 = SystemClock.elapsedRealtimeNanos();
+            host.drawPictureReplay(rpc);
+            replayApiSamples.add((SystemClock.elapsedRealtimeNanos() - a6) / 1_000_000);
+            rpb.recycle();
+        }
+        double replayApiMs = medianOf(replayApiSamples);
+
+        int optDiffPixels = countDiffPixels(cb1, cb2);
+        int fastDiffPixels = -1;
+        if (fastEligible) {
+            android.graphics.Bitmap fb2 = android.graphics.Bitmap.createBitmap(W, H, android.graphics.Bitmap.Config.ARGB_8888);
+            host.drawCmdsFast(new android.graphics.Canvas(fb2));
+            fastDiffPixels = countDiffPixels(cb1, fb2);
+            fb2.recycle();
+        }
+        cb1.recycle(); cb2.recycle();
+
         try {
             org.json.JSONObject o = new org.json.JSONObject();
             o.put("ok", true);
@@ -3898,6 +4003,27 @@ public class MainActivity extends Activity {
             o.put("emit_cmds_ms", round3(warm[2]));
             o.put("record_displaylist_ms", round3(warm[3]));
             o.put("soft_raster_ms", round3(warm[4]));   // ★L2：真实 CPU 软光栅（与原生 soft_raster_ms 同负载）
+            // ★★绘制归因 + 优化对照（ATTR_REPS=5 取中位）
+            o.put("attr_rects_only_ms", round3(attrRectsMs));
+            o.put("attr_text_only_ms", round3(attrTextMs));
+            o.put("base_soft_ms", round3(baseSoftMs));
+            o.put("opt_soft_ms", round3(optSoftMs));
+            o.put("opt_speedup", baseSoftMs > 0 ? round3(optSoftMs / baseSoftMs) : -1);
+            o.put("opt_diff_pixels", optDiffPixels);
+            // ★★快路径（静态场景零查表）
+            o.put("fast_eligible", fastEligible);
+            o.put("fast_soft_ms", round3(fastSoftMs));
+            o.put("fast_speedup_vs_base", (fastSoftMs > 0 && baseSoftMs > 0) ? round3(fastSoftMs / baseSoftMs) : -1);
+            o.put("fast_diff_pixels", fastDiffPixels);
+            // ★★显示列表复用（录制一次 + 原生侧回放）
+            o.put("pic_record_ms", round3(picRecordMs));
+            o.put("pic_replay_ms", round3(picReplayMs));
+            o.put("pic_total_first_ms", round3(picRecordMs + picReplayMs));
+            o.put("pic_diff_pixels", picDiffPixels);
+            // ★★正式稳态路径口径（脏重建 + 回放；与原生 View.draw 同层）
+            o.put("replay_api_ms", round3(replayApiMs));
+            o.put("replay_vs_native", -1);   // 由报告消费方按各自原生读数计算（此处占位）
+            o.put("attr_reps", ATTR_REPS);
             o.put("text_px_requested", APP4050_TEXT_PX);
             o.put("text_px_effective", host.currentTextSizePx());
             o.put("scope", "应用级：触发 → 建树 → 排版 → 指令 → 录制 DisplayList（送达 OS 渲染进程侧）");
@@ -4822,6 +4948,15 @@ public class MainActivity extends Activity {
     }
 
     /** 两图逐像素差异数（**正确性校验**：优化路径必须与基线画出同样的结果） */
+
+    /** List<Long> 中位数（绘制归因用；与既有无参 median(...) 不同，接受列表） */
+    private static double medianOf(java.util.List<Long> xs) {
+        if (xs.isEmpty()) return -1;
+        java.util.List<Long> c = new java.util.ArrayList<>(xs);
+        java.util.Collections.sort(c);
+        return c.get(c.size() / 2);
+    }
+
     private static int countDiffPixels(android.graphics.Bitmap a, android.graphics.Bitmap b) {
         int diff = 0;
         for (int y = 0; y < a.getHeight(); y += 4) {
