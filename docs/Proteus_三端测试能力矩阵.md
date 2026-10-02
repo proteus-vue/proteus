@@ -18,7 +18,7 @@
 | 9 | **字体族映射** | ✅ `font-family`（与 iOS V13 同契约） | ✅ V13 | ⛔ **缺** | 鸿蒙待补 |
 | 10 | **原生组件混用（L3）** | ✅ `native`/`native-host`/`shot-scroll-native` | ❌ **缺** | ⛔ **缺** | iOS/鸿蒙待补（方案坑位 #4 的核心） |
 | 11 | **结构变更（splice）** | ✅ `splice` | ✅ **已补**（`splice_probe`） | ✅ **已补**（`spliceProbe`） | **三端同树同 payload 4/4 判据全过**（rects 4→5 · 0/1 · 新节点高 50.0 · 重排 5 有界）；`apply-ops` 仍待 iOS/鸿蒙 |
-| 12 | **整树虚拟化（mount-virtual）** | ✅ `mount-virtual` | ✅（V12 同族） | ⛔ **缺** | 鸿蒙待补 |
+| 12 | **整树虚拟化（mount-virtual）** | ✅ `mount-virtual` | ✅（V12 同族） | ✅ **已补** | 鸿蒙：同一份 SFC 产物（`vapor-tree.json`，与两端同源）——**全树进核**（1502 节点；虚拟化省的是层不是树）+ 池化层 + 命中一致性：**8/8 判据 PASS**（500 行 · live 23 · created 26/reused 956 · **复用率 0.9735**（对照 Android 0.9744）· 可见行零缺失 · 命中全落在已物化行 · 每帧处理 0.03ms）；★口径差异如实：Android Choreographer 驱动（帧率真实）、鸿蒙为同步循环（量每帧处理耗时） |
 | 13 | **JS 引擎闭环** | ✅ `js-engine`/`js-batch`/`js-render` | ✅ JSC 现场编码 | ✅ **已补** | 鸿蒙：**JSVM（OH_JSVM_*，V8）真机可用**——三份真实产物全在设备上跑通：`bundle-vapor.js`（465KB，设备端实例化+订阅增量）· `bundle-host-runtime.js`（217KB，含 #18 全链）· `jsvmProbe`（init→VM→Env→Compile→Run 全 JSVM_OK）；**现场编码已验**：183B 二进制指令由 JSVM 内 bundle **设备端编码**产出并驱动内核重排（见 #14 判据⑤）；宿主桥（JSVM_Callback 反向调用：mount/applyOps/readRects/probeChannels/memUsage/gc）双向通 |
 | 14 | **Vapor 指令流** | ✅ `vapor`/`vaporAb`/`vaporList` | ✅（vapor 场景） | ✅ **已补** | 鸿蒙：**JSVM(V8) 直接 eval 与 Android 同一份 `bundle-vapor.js`（零移植）**——设备端实例化 26 节点/8 行 · 订阅驱动增量 3 轮 183B · 探针节点宽度 **52→80** · 文本同步 3 处 · 像素采样 119 万；**共用同一份 `check-vapor-device.py`**（①–⑥ 全绿；⑦绘制通道/⑧tap 属渲染层与手势批次，按 `host_id` 如实跳过） |
 | 15 | **平台零参与动画（MA0-RT）** | ✅ `platform-anim`/`platform-anim-node` | ✅（CA 动画） | ✅ **已补** | 鸿蒙：**RenderNode 变换 + VSync 帧回调逐帧写属性**（应用层零绘制/零布局）——**共用同一份 `check-platform-anim.py` A 组判据全绿**：A1 贝塞尔来自内核（Rust `anim_curve_bezier`）· A2 model 逐帧推进（8 读数）· A3 终态精确 tx=120/alpha=0.5 · **A4 draw_delta=0**（指令构建计数全程恒定）；★语义差异如实标注（Android=RenderThread 自主插值；鸿蒙 C-API 无同形入口 ⇒ 帧回调步进） |
@@ -32,7 +32,7 @@
 
 **统计（口径 = 本表单元格「✅ + ◐ + 架构性不适用」，可逐格复算）**：
 - **Android 22/22**（✅22）
-- **鸿蒙 17/22**（✅15 + ◐1[#5] + 不适用1[#3]）——持续推进：4→17（构成改善：#13/#20 由 ◐ 升 ✅）
+- **鸿蒙 18/22**（✅16 + ◐1[#5] + 不适用1[#3]）——持续推进：4→18
 - **iOS 21/22**（✅19 + ◐2[#7 手势部分/#22 帧统计]）
   ★**审计注记（2026-10-03 发现，如实披露不掩盖）**：iOS 列的历史基数写作 16/22，
   与本表单元格数（21）差 5——**增量核对无碍**（历次 +1 都与单元格变化一一对应，如 #11 补上时

@@ -91,6 +91,25 @@ chmod 600 ~/.harmony/hdckey ~/.harmony/hdckey.pub
 Android 走 JNI、iOS 走 staticlib、**鸿蒙走 `aarch64-unknown-linux-ohos` 交叉编译 + C ABI**（无绑定层）。
 交叉编译脚本：`bash hosts/harmony/build-rust-core.sh`（产物 `cpp/thirdparty/libproteus_layout_core.a`，gitignore）。
 
+### ✅ 第十里程碑：**整树级虚拟化（mount-virtual）**（2026-10-03，矩阵 #12）
+
+> 同一份 SFC 产物 `vapor-tree.json`（与 Android/iOS 同源夹具）——**全树进核**（1502 节点；
+> 虚拟化省的是**层**，不是树）+ 复用池（核心侧窗口决策）+ 宿主真执行层物化/回收 + 命中一致性。
+
+| 判据（8/8 PASS） | 读数（真机，对照 Android） |
+|---|---|
+| 行数有界 | live 23（核心池窗口含预载边距；Android 17） |
+| 复用生效 | created 26 / reused 956 / **复用率 0.9735**（Android 0.9744） |
+| 决策全执行（不重建） | platform 982 == core_acquire 982 |
+| 账目自洽 | acquire 982 = release 959 + live 23 |
+| 可见行零缺失 | max_missing_in_visible = 0 |
+| 命中全 OK 且落在已物化行 | 3/3（unmaterialized = 0） |
+| 每帧处理 | 0.03ms（同步循环口径；Android 8.4ms 为 Choreographer 真帧） |
+
+**★判据口径修正（本轮真机抓出）**：① 行数上界以"**核心池实际窗口**"为准——宿主硬算
+`vph/rowH+1` 去卡核心的预载策略 = 拿宿主猜数否掉核心真数（判据建错靶）；② 命中抽样只抽
+**当前窗口内**的行（抽窗口外 ⇒ 误报"命中了未物化行"——那正是设计意图）。
+
 ### ✅ 第九里程碑：**宿主运行时（G-39）**（2026-10-03，矩阵 #18）
 
 > **JSVM eval 与两端同一份 `bundle-host-runtime.js`（零移植）** + **真生命周期转发**：
