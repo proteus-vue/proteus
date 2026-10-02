@@ -39,5 +39,7 @@ export const mountVirtualProbe: (fixtureJson: string) => string;
 export const gestureHitPrepare: (fixtureJson: string, vpW: number, vpH: number, density: number) => string;
 /** ★矩阵 #7：核心 hitTest（设计单位坐标）→ {ok,target,path,chain} 原样返回 */
 export const gestureHitAt: (xDesign: number, yDesign: number) => string;
+/** ★矩阵 #9：字体族端到端（同样文本同字号三族 ⇒ 度量分流 + 同族稳定性反例） */
+export const fontFamilyProbe: () => string;
 /** Rust 排版核版本（仪器自检） */
 export const version: () => string;

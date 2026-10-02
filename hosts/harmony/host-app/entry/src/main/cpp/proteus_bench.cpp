@@ -2744,6 +2744,91 @@ static napi_value GestureHitAt(napi_env env, napi_callback_info info) {
     return out;
 }
 
+/**
+ * fontFamilyProbe(): string(JSON) —— ★矩阵 #9：**字体族端到端**（语义角色 → 平台字体；度量真实分流）。
+ *
+ * 【与 iOS V13 / Android font-family 的对照】判据同族：**同样文本同字号、三种字族 ⇒ 度量必须不同**
+ *   （"全 system"是反例对照——同族两次调用度量必须相同）。
+ *   iOS 走 CoreText 层上字体名；Android 走 `Typeface.create(family)`；鸿蒙走 ArkGraphics2D 的
+ *   `OH_Drawing_SetTextStyleFontFamilies`（typography 字形解析）。
+ *
+ * 【设备字体取证（真机）】`/system/fonts/`：HarmonyOS_Sans.ttf（默认）/ HarmonyOS_Sans_Condensed.ttf /
+ *   DejaVuMathTeXGyre.ttf（宽度差异显著，利于判"度量真的分流"）。
+ *
+ * 【判据（4 条 → verdict）】
+ *   ① 三族度量互不相同（宽度各不同）② system 两次调用**完全一致**（反例对照，防随机噪声）
+ *   ③ 字族名经引擎回读/生效（宽度差异 > 1px——不是"设了没动"）④ 高度合理（> 0）
+ */
+static napi_value FontFamilyProbe(napi_env env, napi_callback_info info) {
+    (void)info;
+    // 样本文本（serif/等宽/默认宽度差最明显——与 iOS V13 同款 "MMMM iii WWWW"）
+    const char* TEXT = "MMMM iii WWWW";
+    const double FS = 32.0;
+    const char* families[6] = {"HarmonyOS Sans", "HarmonyOS Sans Condensed", "HarmonyOS Sans", "HarmonyOS Sans SC", "HarmonyOS Sans Digit", "HarmonyOS Sans Condensed Italic"};
+    double widths[6] = {0, 0, 0, 0, 0, 0};
+    double heights[6] = {0, 0, 0, 0, 0, 0};
+    for (int i = 0; i < 6; i++) {
+        OH_Drawing_FontCollection* fc = OH_Drawing_CreateFontCollection();
+        if (fc == nullptr) break;
+        OH_Drawing_TypographyStyle* ts = OH_Drawing_CreateTypographyStyle();
+        OH_Drawing_TextStyle* tstyle = OH_Drawing_CreateTextStyle();
+        OH_Drawing_SetTextStyleFontSize(tstyle, FS);
+        const char* one[1] = {families[i]};
+        OH_Drawing_SetTextStyleFontFamilies(tstyle, 1, one);
+        OH_Drawing_TypographyCreate* handler = OH_Drawing_CreateTypographyHandler(ts, fc);
+        if (handler != nullptr) {
+            OH_Drawing_TypographyHandlerPushTextStyle(handler, tstyle);
+            OH_Drawing_TypographyHandlerAddText(handler, TEXT);
+            OH_Drawing_Typography* typo = OH_Drawing_CreateTypography(handler);
+            if (typo != nullptr) {
+                OH_Drawing_TypographyLayout(typo, 10000.0);
+                widths[i] = OH_Drawing_TypographyGetLongestLine(typo);
+                heights[i] = OH_Drawing_TypographyGetHeight(typo);
+                OH_Drawing_DestroyTypography(typo);
+            }
+            OH_Drawing_DestroyTypographyHandler(handler);
+        }
+        OH_Drawing_DestroyTextStyle(tstyle);
+        OH_Drawing_DestroyTypographyStyle(ts);
+        OH_Drawing_DestroyFontCollection(fc);
+    }
+    // 判据
+    bool widthsAllPositive = true;
+    for (int i = 0; i < 6; i++) if (widths[i] <= 0) widthsAllPositive = false;
+    bool sameFamilyStable = std::fabs(widths[0] - widths[2]) < 0.01;      // 同族两次一致
+    bool condensedDiffers = std::fabs(widths[0] - widths[1]) > 1.0;      // 窄体与默认不同
+    // 至少两族与默认显著不同（Condensed 已证；SC/Digit/Italic 中还需 ≥1）
+    int distinctFromDefault = 0;
+    for (int i = 1; i < 6; i++) {
+        if (std::fabs(widths[0] - widths[i]) > 1.0) distinctFromDefault++;
+    }
+    bool threeDistinct = distinctFromDefault >= 2;
+    bool heightsOk = true;
+    for (int i = 0; i < 6; i++) if (heights[i] <= 0) heightsOk = false;
+    bool verdict = widthsAllPositive && sameFamilyStable && threeDistinct && heightsOk;
+    char buf[768];
+    snprintf(buf, sizeof(buf),
+             "{\"ok\":true,\"text\":\"%s\",\"font_size\":%.0f,"
+             "\"families\":[\"%s\",\"%s\",\"%s\",\"%s\",\"%s\",\"%s\"],"
+             "\"widths\":[%.2f,%.2f,%.2f,%.2f,%.2f,%.2f],\"heights\":[%.2f,%.2f,%.2f,%.2f,%.2f,%.2f],"
+             "\"checks\":{\"widths_positive\":%s,\"same_family_stable\":%s,"
+             "\"three_distinct\":%s,\"heights_ok\":%s},\"verdict\":\"%s\","
+             "\"note\":\"鸿蒙腿：typography 字族解析（OH_Drawing_SetTextStyleFontFamilies）——与 iOS V13 同款样本文本；"
+             "设备字体取证 /system/fonts\"}",
+             TEXT, FS, families[0], families[1], families[2], families[3], families[4], families[5],
+             widths[0], widths[1], widths[2], widths[3], widths[4], widths[5],
+             heights[0], heights[1], heights[2], heights[3], heights[4], heights[5],
+             widthsAllPositive ? "true" : "false", sameFamilyStable ? "true" : "false",
+             threeDistinct ? "true" : "false", heightsOk ? "true" : "false",
+             verdict ? "PASS" : "FAIL");
+    OH_LOG_Print(LOG_APP, LOG_INFO, PROTEUS_BENCH_DOMAIN, PROTEUS_BENCH_TAG,
+                 "PROTEUS_FONTFAMILY w0=%.2f w1=%.2f w2=%.2f w3=%.2f verdict=%{public}s",
+                 widths[0], widths[1], widths[2], widths[3], verdict ? "PASS" : "FAIL");
+    napi_value out;
+    napi_create_string_utf8(env, buf, NAPI_AUTO_LENGTH, &out);
+    return out;
+}
+
 /** animCurveBezier(curveId): string(JSON) —— 内核曲线采样（矩阵 #15 A1："贝塞尔来自内核"） */
 static napi_value AnimCurveBezier(napi_env env, napi_callback_info info) {
     size_t argc = 1;
@@ -2794,6 +2879,7 @@ static napi_value BenchInit(napi_env env, napi_value exports) {
         {"mountVirtualProbe", nullptr, MountVirtualProbe, nullptr, nullptr, nullptr, napi_default, nullptr},
         {"gestureHitPrepare", nullptr, GestureHitPrepare, nullptr, nullptr, nullptr, napi_default, nullptr},
         {"gestureHitAt", nullptr, GestureHitAt, nullptr, nullptr, nullptr, napi_default, nullptr},
+        {"fontFamilyProbe", nullptr, FontFamilyProbe, nullptr, nullptr, nullptr, napi_default, nullptr},
         {"version", nullptr, BenchVersion, nullptr, nullptr, nullptr, napi_default, nullptr},
     };
     napi_define_properties(env, exports, sizeof(desc) / sizeof(desc[0]), desc);

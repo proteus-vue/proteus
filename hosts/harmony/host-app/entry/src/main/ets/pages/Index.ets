@@ -21,7 +21,7 @@ import { hidebug } from '@kit.PerformanceAnalysisKit';
 // ★矩阵 #17：App 路由栈场景探针（移植副本，与 Android/iOS 同口径）
 import { runAppStackProbe } from '../core/app-stack-probe';
 import { attach, renderCommands, stats, ProteusRenderStats, platformAnimBegin, platformAnimStep, platformAnimEnd, platformAnimSave, clearRoot, scrollRoot, gestureInstall, gestureSample } from 'libproteus_render.so';
-import { bench4050, hitProbe, recycleProbe, spliceProbe, textProbe, kernelAnimProbe, memProbe, sfcStressProbe, sfcStressCommands, jsvmProbe, vaporProbe, animCurveBezier, hostRuntimeProbe, hostRtShellInstall, mountVirtualProbe, gestureHitPrepare, gestureHitAt, version as rustVersion } from 'libproteus_bench.so';
+import { bench4050, hitProbe, recycleProbe, spliceProbe, textProbe, kernelAnimProbe, memProbe, sfcStressProbe, sfcStressCommands, jsvmProbe, vaporProbe, animCurveBezier, hostRuntimeProbe, hostRtShellInstall, mountVirtualProbe, gestureHitPrepare, gestureHitAt, fontFamilyProbe, version as rustVersion } from 'libproteus_bench.so';
 
 const DOMAIN = 0x0002;
 const TAG = 'ProteusRender';
@@ -702,6 +702,13 @@ struct Index {
           hilog.info(DOMAIN, BENCH_TAG, 'PROTEUS_JSVM %{public}s', jv);
         } catch (je) {
           hilog.error(DOMAIN, BENCH_TAG, 'PROTEUS_JSVM_ERROR %{public}s', JSON.stringify(je) ?? '');
+        }
+        // ★字体族探针（矩阵 #9）——同样文本同字号三族 ⇒ 度量分流（与 iOS V13 同款样本文本）
+        try {
+          const ff: string = fontFamilyProbe();
+          hilog.info(DOMAIN, BENCH_TAG, 'PROTEUS_FONTFAMILY_PROBE %{public}s', ff);
+        } catch (ffe) {
+          hilog.error(DOMAIN, BENCH_TAG, 'PROTEUS_FONTFAMILY_ERROR %{public}s', JSON.stringify(ffe) ?? '');
         }
         // ★★整树级虚拟化（矩阵 #12）——同一份 SFC 产物（与 Android/iOS 同源）
         try {
