@@ -513,11 +513,29 @@ export function collectTemplateBindings(
           if (name === 'bind' || name === 'model') {
             const arg = name === 'model' ? (p.arg?.content ?? 'modelValue') : (p.arg?.content ?? '')
             // 无 arg 的 v-bind="obj"（展开对象）：无法静态定位属性 ⇒ 记为 attrs（C2 交由解析结果判）
-            const propKey = arg ? normalizePropKey(arg) : 'attr.spread'
+            // ★★`:style` 单属性降级（2026-10-02）：能静态判定字段名时编成**字段级键**
+            //   （layout.width 等）——否则运行时拿到的是整串 CSS 文本，与 SET_STYLE 的
+            //   `(key_id, f32)` 契约不匹配（实测 Vapor 端该节点宽度从未生效）。见 stylePropKeyFromExpr。
+            let propKey = arg ? normalizePropKey(arg) : 'attr.spread'
+            // ★★`:style` 单属性降级（2026-10-02）：**键与值一起降级**——
+            //   ① 键：`paint.style` → `layout.width`（宿主认的字段名）；
+            //   ② 值：求值表达式从整串拼接（`'width:'+item.w+'px'`，结果是字符串）
+            //      改成**只算值那一段**（`item.w` → 40，f32 契约）。
+            //   只做能静态判定的一条（见 stylePropKeyFromExpr / styleValueExprFromExpr），
+            //   其余形态保持原样（不假装支持）。
+            let exprForBinding = String(expCode)
+            if (arg === 'style') {
+              const fieldKey = stylePropKeyFromExpr(exprForBinding)
+              const valueExpr = styleValueExprFromExpr(exprForBinding)
+              if (fieldKey && valueExpr) {
+                propKey = fieldKey
+                exprForBinding = valueExpr
+              }
+            }
             const isKey = arg === 'key'
             out.push(
               binding(
-                String(expCode),
+                exprForBinding,
                 arg ? `:${arg}` : 'v-bind',
                 propKey,
                 tag,
@@ -619,6 +637,54 @@ function binding(
     // ★`isKeyBinding` 只在该绑定自身是 `:key` 时为真（其余继承上下文）
     listContext: listContext ? { ...listContext, isKeyBinding } : undefined,
   }
+}
+
+/**
+ * ★★**单属性 `:style` 的字段级降级**（2026-10-02 六端 SFC 压力测试抓出的契约缺口）。
+ *
+ * 【缺陷（实测）】`:style="'width:' + item.w + 'px'"` 此前编成 `paint.style`（**整串键**），
+ *   而运行时的契约是**结构化字段 + 数值**（`SET_STYLE(node_id, key_id, value: f32)`，
+ *   见 layout-core-rust/src/ops.rs；宿主只认 `width`/`height`/`backgroundColor` 等字段名）。
+ *   ⇒ Vapor 端（iOS/Android）该节点宽度从未生效（实测：chip 宽度 0、整块不可见），
+ *   而 Web 端走 Vue 官方运行时直接吃 style 串 ⇒ **跨端不一致**（压力测试的产出之一）。
+ *
+ * 【降级规则（保守：只做能静态判定的一条）】表达式是**字符串字面量里含 `字段名:`** 的形态
+ *   （`'width:' + …` / `'width: …'` / `\`width: …\``）⇒ 取该字段名映射到 `layout.*`/`paint.*`。
+ *   其余形态（多属性串、`:style` 对象、动态属性名）**保持 `paint.style`**——那些需要运行时
+ *   解析 CSS 文本（本版不做；如实保留原键，不假装支持）。
+ */
+export function stylePropKeyFromExpr(exprCode: string): string | null {
+  // 取表达式里**第一个** CSS 属性名（字符串字面量开头的 `xxx:`）
+  const m = exprCode.match(/['"`]\s*([a-zA-Z-]+)\s*:/)
+  if (!m) return null
+  const cssProp = m[1]!.replace(/-([a-z])/g, (_, c: string) => c.toUpperCase())
+  // 复用同一套字段前缀规则（layout.* / paint.*）——**一处实现**，避免两处规则漂移
+  return normalizePropKey(cssProp)
+}
+
+/**
+ * ★★从 `'field: ' + EXPR + 'unit'` 形态里**抽出值表达式**（2026-10-02 同批修复的第二半）。
+ *
+ * 【为什么必须同时做（实测）】只把 propKey 改成 `layout.width` 还不够——**求值器算的仍是整个
+ *   拼接表达式**（结果是字符串 `"width:40px"`），而 `SET_STYLE` 的契约是 `value: f32`。
+ *   ⇒ 必须让求值器只算值那一段（`item.w` → `40`）。
+ *
+ * 【支持形态（保守）】字符串字面量 + 拼接 + 可选单位后缀：
+ *   `'width:' + item.w + 'px'` · `"height:" + h` · `` `width: ${w}px` ``（模板串同义）
+ * 【不支持（保持原行为，不假装支持）】多属性串（`'width:…;height:…'`）、三元/条件拼接、
+ *   动态属性名——这些需要运行时 CSS 解析，本版不做。
+ *
+ * @returns 值表达式源码（如 `item.w`），或 null（形态不支持 ⇒ 调用方保持原键与整串求值）
+ */
+export function styleValueExprFromExpr(exprCode: string): string | null {
+  const t = exprCode.trim()
+  // 形态①：'field:' + EXPR [+ 'unit']
+  const concat = t.match(/^['"`][^'"`]*[a-zA-Z-]+\s*:\s*['"`]\s*\+\s*([\s\S]+?)(?:\s*\+\s*['"`][^'"`]*['"`])?$/)
+  if (concat) return concat[1]!.trim()
+  // 形态②：模板串 `field: ${EXPR}unit`
+  const tmpl = t.match(/^`[^`]*[a-zA-Z-]+\s*:\s*\$\{([\s\S]+?)\}[^`]*`$/)
+  if (tmpl) return tmpl[1]!.trim()
+  return null
 }
 
 /** 属性名 → IR 归一化 propKey（与 component-ir 约定对齐；未知前缀归 attr） */

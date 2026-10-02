@@ -1541,7 +1541,32 @@ function serializeElement(node: ElementNode, ctx: SerializeContext): string {
     }
   }
   // ★G-22 柔性布局：static style 发射（用户静态 style + p-fluid 生成 clamp 合并）
-  if (staticStyle) attrs.push(`style="${escapeXml(staticStyle)}"`)
+  //
+  // ★★与**动态 `:style`** 合并（2026-10-02 六端 SFC 压力测试抓出的真缺陷）：
+  //   `:style` 的处理在更早（见上方 `formatStyleBinding` 分支）已 push 了一条 `style="…"`；
+  //   静态 style 此处再 push 一条 ⇒ **WXML 出现重复 style 属性**（微信只保留其一 ⇒
+  //   另一半样式静默丢失；框架校验器 `DuplicatedAttribute` 挡在构建前——门禁工作正常，
+  //   但它拦的是"编译器该合并却没合并"的产物）。
+  //   Vue 语义 = 两者**都要生效**（静态为底、动态覆盖同键）⇒ 合并为一条：
+  //     动态在前（后者覆盖），静态在后追加（同键时以静态为**底**——CSS 后写的胜；
+  //     而 Vue 的 `:style` 优先级高于静态 style ⇒ 需要动态在**后**）。
+  //   ★真机等价：`style="static;dynamic"` ⇒ 同键时 dynamic 胜（与 Vue 语义一致）。
+  if (staticStyle) {
+    const styleIdx = attrs.findIndex((a) => a.startsWith('style="'))
+    if (styleIdx >= 0) {
+      // 已有动态 style ⇒ 合并（静态在前为底，动态在后覆盖——与 Vue 的优先级一致）
+      const dyn = attrs[styleIdx]!.slice('style="'.length, -1)
+      const merged = `${escapeXml(staticStyle)};${dyn}`
+      attrs[styleIdx] = `style="${merged}"`
+      ctx.trace?.add('directive/v-bind-style', {
+        line: node.loc.start.line,
+        before: `静态 style + :style（两条 style 属性 → WXML 重复）`,
+        after: `style="${merged}"（合并：静态为底 + 动态覆盖）`,
+      })
+    } else {
+      attrs.push(`style="${escapeXml(staticStyle)}"`)
+    }
+  }
   // ★★2026-09-20（外部报告 F-28 / Bug E）：`v-model` 与 `@input` **同元素**时二者都发射 `bindinput` →
   //   WXML 重复属性（微信仅保留其一 → `@input` 的副作用静默失效；框架校验器报 DuplicatedAttribute 阻断构建）。
   //   Vue 语义是「双向绑定 + 额外副作用」，两者**都应执行** → 合并为一个 handler：
