@@ -1,0 +1,6 @@
+{
+  "component": true,
+  "componentFramework": "glass-easel",
+  "styleIsolation": "apply-shared",
+  "usingComponents": {}
+}

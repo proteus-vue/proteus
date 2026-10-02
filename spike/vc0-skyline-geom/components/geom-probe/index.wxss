@@ -1,0 +1,4 @@
+.comp-root {
+  padding: 6px;
+  background-color: #22232c;
+}

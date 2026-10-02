@@ -1,0 +1,16 @@
+{
+  "description": "VC0 · Skyline 几何 API 实测装置（最小变量：原生小程序，不经 Proteus 编译）",
+  "compileType": "miniprogram",
+  "appid": "wxa720d0c502451748",
+  "projectname": "vc0-skyline-geom",
+  "setting": {
+    "skylineRenderEnable": true,
+    "urlCheck": false,
+    "es6": true,
+    "enhance": true,
+    "postcss": true,
+    "minified": false,
+    "ignoreDevUnusedFiles": false
+  },
+  "libVersion": "3.4.6"
+}

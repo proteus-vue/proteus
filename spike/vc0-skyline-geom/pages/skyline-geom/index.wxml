@@ -1,0 +1,10 @@
+<!-- VC0 · Skyline 页：4 类节点（页面直挂）+ 一个探针组件 -->
+<view class="page-root">
+  <view id="g-view" class="probe-box" data-role="box"></view>
+  <text id="g-text" class="probe-text">page-text</text>
+  <image id="g-image" class="probe-image" src="/assets/dot.png"></image>
+  <scroll-view id="g-scroll" class="probe-scroll" scroll-y>
+    <view style="height:400px;width:120px;background-color:#445"></view>
+  </scroll-view>
+  <geom-probe tag="p1"></geom-probe>
+</view>
