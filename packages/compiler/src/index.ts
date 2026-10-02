@@ -6,6 +6,8 @@ import { transformTemplateToWxml } from './template'
 import { transformScriptToPage } from './script'
 import { transformStyleToWxss } from './style'
 import { assertValidResult, CompilerError } from './validate'
+// ★LY1（2026-10-02）：页面层级语义校验（四层语义 + 跨容器强制——规范 §3.5/§4.1）
+import { validateLayerUsage } from './layer-safety'
 import { createTrace } from './trace'
 // ★卡 C4：编译期漏点计数器（只归纳既有诊断与规则 ID，不新增判断——见其文件头）
 import { GapCounter } from './gap-counter'
@@ -158,6 +160,21 @@ export function compileVueSfc(source: string, options: CompileOptions = {}): Com
   //   MP 的 .vue 走本编译器（绕过 vite define），故替换必须在此处做；随后模板阶段静态裁剪死分支。
   const platform = options.platform ?? 'mp'
   const tpl = applyPlatformMacros(descriptor.template?.content ?? '', platform, 'template')
+  // ★★LY1（2026-10-02 · 页面层级规范 §3.5/§4.1）：层级语义的**编译期硬校验**。
+  //   与 style-safety 的 zIndex=FORBIDDEN 是**两道互补闸门**：
+  //   · style-safety 拦"写在 style 里的 z-index"（属性级）；
+  //   · 本校验拦"层级语义本身不合法"（裸 z-index / 非法层名 / Mask 单独用 /
+  //     Popout·Mask 不在根容器 / 声明框架保留层）——这些在属性级看不出来。
+  //   ★**error 不是 warning**（规范 §3.5 与 §12.2 明确：禁止裸 z-index 是编译期报错）——
+  //     开放数值会毁掉收敛体系（与"不开放任意原生调用"同理）。
+  const layerViolations = validateLayerUsage(tpl)
+  if (layerViolations.length > 0) {
+    const f = options.filename ?? 'anonymous.vue'
+    const detail = layerViolations
+      .map((v) => `  [${v.code}] ${v.message}${v.line ? `（第 ${v.line} 行）` : ''}\n        规则：${v.rule}\n        修法：${v.hint}`)
+      .join('\n')
+    throw new CompilerError(f, `页面层级语义校验失败（${layerViolations.length} 条）\n${detail}`)
+  }
   const setup = applyPlatformMacros(descriptor.scriptSetup?.content ?? descriptor.script?.content ?? '', platform, 'code')
   // ★15-page-scroll-container 批次2：页面滚动 API 桥接——检测页面声明的滚动生命周期（传给 template 绑定 scroll-view 事件）
   const pageScrollHooks = {

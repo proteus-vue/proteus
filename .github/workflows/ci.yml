@@ -97,6 +97,12 @@ jobs:
       - name: Profile 边界基线漂移（VC2-b：存量只减不增——新增越界样式必须修或在评审中显式刷新基线）
         run: pnpm run check:profile-baseline
 
+      - name: 页面层级语义（LY1 · 禁裸 z-index / Mask 单独用 / Popout·Mask 非根容器——WeUI 四层语义）
+        run: pnpm run check:layers
+
+      - name: SFC 五端报告（含**留白 16±0.5 硬断言** + 双口径差异率透明化——夹具口径不遮饰）
+        run: pnpm run check:consistency-sfc
+
       - name: 一致性指标 + 允许差异清单 schema（CS1/CS2：M1–M4 复算一致 · M4 的 L1 算子必须全捕获）
         run: pnpm run check:consistency-metrics
 

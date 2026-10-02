@@ -18,8 +18,10 @@
 
     <!-- ① 主视觉：发光核心（静态光效 + CSS 旋转 + 事件） -->
     <view class="stage">
-      <!-- ★点击热区：透明 view 覆盖（Skyline 下 image/组件内触摸不可靠，原生 view 最稳） -->
-      <view class="hit-area" @tap="onCoreTap"></view>
+      <!-- ★点击热区：透明 view 覆盖（Skyline 下 image/组件内触摸不可靠，原生 view 最稳）。
+           ★★2026-10-02（层级规范 §3.3）：不再用 `z-index: 10`——**同层内顺序由声明顺序决定**
+           （后声明者在上，各端一致）；把它**移到 svg 之后**即可，数值彻底消失。
+           （原 z-index 写法被 LY1 编译期硬拦：裸层级数值一律报错——见 docs/Proteus_页面层级规范.md） -->
       <svg viewBox="0 0 200 200" width="240" height="240" @tick="onTick">
         <defs>
           <!-- 辉光滤镜 -->
@@ -95,6 +97,9 @@
           <animateMotion dur="4.5s" repeatCount="indefinite" path="M100 40 A60 60 0 1 0 99.9 40" />
         </circle>
       </svg>
+      <!-- 点击热区（**后声明 ⇒ 在上**——层级规范 §3.3「同层内顺序由声明顺序决定」，
+           不再需要任何 z-index 数值；Skyline 下原生 view 的触摸最稳） -->
+      <view class="hit-area" @tap="onCoreTap"></view>
     </view>
 
     <!-- 交互反馈 -->
@@ -276,6 +281,8 @@ function onCoreTap(): void {
   position: relative;
 }
 .hit-area {
+  /* ★2026-10-02 层级规范：删掉 z-index——同层内顺序由**声明顺序**决定（§3.3）；
+     该元素已在模板里移到 <svg> 之后 ⇒ 天然在上（各端一致，无裸数值） */
   position: absolute;
   left: 50%;
   top: 50%;
@@ -284,7 +291,6 @@ function onCoreTap(): void {
   margin-left: -100px;
   margin-top: -100px;
   border-radius: 50%;
-  z-index: 10;
 }
 .status {
   font-size: 13px;

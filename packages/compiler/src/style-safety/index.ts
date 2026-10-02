@@ -152,7 +152,13 @@ export function analyzeStyleBindings(templateSource: string, constants: Record<s
       }
       if (level === 'FORBIDDEN') {
         staticChecked++
-        violations.push({ code: 'STS004', prop: key, value: valueExpr, line, message: `${key} 禁用（→ <p-flex> / <p-stack>）` })
+        // ★★LY1（2026-10-02）：`zIndex` 的拒绝必须给出**替代指引**（层级语义化——
+        //   规范 §3：替代物 = `layer="content|navigation|mask|popout"`）。
+        //   泛化文案（"→ <p-flex> / <p-stack>"）对层级问题没帮助——本仓纪律：修法要具体。
+        const hint = key === 'zIndex'
+          ? '→ 用层级语义属性 `layer="content|navigation|mask|popout"`（WeUI 四层模型；映射表见 contracts/layers.ts）'
+          : '→ <p-flex> / <p-stack>'
+        violations.push({ code: 'STS004', prop: key, value: valueExpr, line, message: `${key} 禁用（${hint}）` })
         continue
       }
       if (level === 'SEMANTIC_ONLY') {

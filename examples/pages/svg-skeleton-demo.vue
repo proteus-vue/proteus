@@ -25,7 +25,6 @@
     </view>
 
     <view class="stage">
-      <view class="hit" @tap="onPoke"></view>
 
       <!-- ① 行走：机械双足，前后腿反相，步伐稳健（常驻场景，非活动时 playing=false 停表 + 容器隐藏） -->
       <view :class="{ 'scene-on': mode === 'walk', 'scene-off': mode !== 'walk', 'scene-fade': fading }">
@@ -194,6 +193,10 @@
         </g>
       </svg>
       </view>
+      <!-- ★点击热区（2026-10-02 层级规范 §3.3）：**移到三个场景之后** ⇒ 后声明者在上，
+           不再需要 `z-index: 10`（裸数值被 LY1 编译期硬拦）；
+           Skyline 下原生 view 触摸最稳，语义保持"整舞台可点"。 -->
+      <view class="hit" @tap="onPoke"></view>
     </view>
 
     <!-- 速率控制（:speed 透传组件——慢放/倒放/定格） -->
@@ -371,12 +374,13 @@ function onPoke(): void {
   transition: opacity 0.16s ease-out;
 }
 .hit {
+  /* ★2026-10-02 层级规范：删 z-index——同层顺序由**声明顺序**决定（§3.3）；
+     已在模板里移到三个场景之后 ⇒ 天然覆盖（各端一致，无裸数值） */
   position: absolute;
   left: 0;
   top: 0;
   right: 0;
   bottom: 0;
-  z-index: 10;
 }
 .speeds {
   display: flex;

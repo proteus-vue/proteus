@@ -17,14 +17,19 @@ export const LENGTH_PROPS = [
 /** 颜色类（hex/rgba/theme token——编译期展开，运行时按 string 兜底） */
 export const COLOR_PROPS = ['color', 'backgroundColor', 'borderColor'] as const
 
-/** 数值类（opacity 0-1 / flex / zIndex / fontWeight） */
-export const NUMERIC_PROPS = ['opacity', 'flex', 'zIndex', 'fontWeight'] as const
+/** 数值类（opacity 0-1 / flex / fontWeight）——★`zIndex` 已移出（见下方禁止类） */
+export const NUMERIC_PROPS = ['opacity', 'flex', 'fontWeight'] as const
 
 /** transform（CSS 矩阵 ✅ 直映射） */
 export const TRANSFORM_PROPS = ['transform'] as const
 
-/** ❌ 禁止（CSS 矩阵 ❌ 级——绕过语义层直通原生风险） */
-export const FORBIDDEN_PROPS = ['display', 'float', 'position', 'backdropFilter', 'boxShadow', 'filter', 'overflow'] as const
+// ❌ 禁止（CSS 矩阵 ❌ 级——绕过语义层直通原生风险）
+// ★★LY0/LY1（2026-10-02 · 页面层级规范）：`zIndex` 从"数值类"移入**禁止类**——
+//   层级必须语义化声明（`layer="content|navigation|mask|popout"`；映射表在 contracts/layers.ts）。
+//   理由（规范 §3.1）：数值无跨端意义 + 任意数值是收敛模型的逃生口 + 语义才可编译期校验。
+//   ★两处白名单必须同步（本包与 contracts/style.ts 的 STYLE_PROP_LEVELS）——
+//     分叉会造成"同一属性编译期允许、运行时拒绝"的半开状态（本仓铁律 #9 同源）。
+export const FORBIDDEN_PROPS = ['display', 'float', 'position', 'backdropFilter', 'boxShadow', 'filter', 'overflow', 'zIndex'] as const
 
 export type StyleGuardMode = 'strict' | 'loose' | 'off'
 
