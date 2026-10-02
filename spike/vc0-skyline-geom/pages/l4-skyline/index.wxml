@@ -1,0 +1,10 @@
+<!-- ★L4 像素观察夹具（纯夹具页——无探针节点，供跨端截图对比）
+     覆盖标准的四项：圆角裁剪边界 / 阴影合成 / 渐变 / 字形栅格化
+     ★两端本文件与 index.wxss **逐字一致**（唯一差异是 json 的 renderer）
+     ——结构同构是同构比较的前提（diff 可验不变量）。 -->
+<view id="l4-root" class="page-root">
+  <view id="l4-radius" style="width:80px;height:48px;border-radius:14px;background-color:#2f6fed;margin-bottom:10px"></view>
+  <view id="l4-shadow" style="width:80px;height:48px;background-color:#2a3f66;box-shadow:0 3px 10px rgba(0,0,0,0.7);margin-bottom:10px"></view>
+  <view id="l4-gradient" style="width:80px;height:48px;background-image:linear-gradient(90deg,#7c5cff,#ff9a6c);margin-bottom:10px"></view>
+  <text id="l4-glyph" style="font-size:18px;color:#ffffff">字形 Ag 8 中</text>
+</view>

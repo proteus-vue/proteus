@@ -1,0 +1,11 @@
+/* L4 夹具：根节点显式像素高度（与 skyline-geom 页同款 `.page-root` 模式——确定性优先）。
+   ★曾误判「min-height:100vh ⇒ 黑屏」并写进注释；A/B 实测**证伪**（vh/内联 style 都正常渲染）
+   ——黑屏真因见 scripts/shoot-l4-fixtures.sh 头注：**采集判据**在渲染完成前存了图。
+   ★padding-top 120px：把内容推离**设备 chrome**（状态栏时钟 / 胶囊按钮，物理 y≈0..135）
+   ——L4 观测的 ROI 在 y≈150 以下，内容必须完整落在 ROI 内（否则半径/阴影的顶边被裁掉）。
+   两端本文件与 index.wxml **逐字一致**（结构同构是同构比较的前提——脚本会 diff 校验）。 */
+.page-root {
+  padding: 120px 16px 16px;
+  background-color: #14141c;
+  height: 900px;
+}

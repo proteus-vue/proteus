@@ -25,11 +25,11 @@ export interface StatItem {
 export const STATS: StatItem[] = [
   {
     id: 'packages',
-    value: '44',
+    value: '45',
     label: '@proteus-vue/* 包',
     labelEn: '@proteus-vue/* packages',
-    source: 'pnpm check:pkg（44 包 0 error；44 个 packages/* 目录——含 @proteus-vue/animation，Morpheus 声明式动画表面）',
-    sourceEn: 'pnpm check:pkg (43 packages, 0 errors; 43 packages/* dirs — the 43rd = @proteus-vue/slot-runtime, the L1 layer of Vapor IR)',
+    source: 'pnpm check:pkg（45 包 0 error；45 个 packages/* 目录——含 @proteus-vue/consistency，多端一致性校验与像素观测）',
+    sourceEn: 'pnpm check:pkg (45 packages, 0 errors; 45 packages/* dirs — incl. @proteus-vue/consistency, the cross-end consistency verification & pixel observation suite)',
   },
   {
     id: 'tests',
