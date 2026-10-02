@@ -158,12 +158,57 @@ async function runMutationTests() {
   )
   run('L3-ctrl-within-tol', 'L3', '对照组：宽度 0.5px 在容差内不应报', false, () => styleCaught({ width: 200.5 }))
 
+  /* ── L2.5：离散交互（事件 → 结果态几何）──
+   *   ★判据的双向性：既抓"结果态不一致"，也抓"**交互没发生**"（"点了没反应"）。
+   *   用合成快照（与 L2 同夹具）——L2.5 的判据对象是"事件→结果态"，事件来源不在判据内。 */
+  const { compareDiscreteInteraction, verifyInvariants } = consistency
+  run('L2.5-result-state-mismatch', 'L2.5', '交互结果态不一致必须检出', true, () => {
+    const before = geoSnap()
+    const afterA = { ...geoSnap(0, 60) }   // A 端：宽度 +60
+    const afterB = { ...geoSnap(0, 90) }   // B 端：宽度 +90（交互语义不同）
+    return !compareDiscreteInteraction(before, afterA, before, afterB, { tolerance: tolCfg }).ok
+  })
+  run('L2.5-dead-interaction', 'L2.5', '★任一端"点了没反应"（几何无变化）必须检出', true, () => {
+    const before = geoSnap()
+    const after = geoSnap(0, 60)
+    return !compareDiscreteInteraction(before, after, before, before, { tolerance: tolCfg }).ok
+  })
+  run('L2.5-ctrl-consistent', 'L2.5', '对照组：两端交互结果一致不应报', false, () => {
+    const before = geoSnap()
+    const after = geoSnap(0, 60)
+    return !compareDiscreteInteraction(before, after, before, after, { tolerance: tolCfg }).ok
+  })
+
+  /* ── L2.6：连续交互不变量（禁止绝对坐标——标准 §10.2）── */
+  const translateAll = (dx, dy) => {
+    const s = geoSnap()
+    const walk = (n) => { n.x += dx; n.y += dy; for (const c of n.children) walk(c) }
+    walk(s.root)
+    return s
+  }
+  run('L2.6-gap-broken', 'L2.6', '相对间距被破坏（单节点偏移）必须检出', true, () => {
+    const b = geoSnap()
+    b.root.children[0].y += 7
+    return !verifyInvariants(geoSnap(), b, { tolerance: tolCfg }).ok
+  })
+  run('L2.6-structure-lost', 'L2.6', '结构不变量（节点缺失）必须检出', true, () => {
+    const b = geoSnap()
+    b.root.children[0].children = []
+    return !verifyInvariants(geoSnap(), b, { tolerance: tolCfg }).ok
+  })
+  run('L2.6-size-changed', 'L2.6', '尺寸不变量必须检出', true, () => {
+    const b = geoSnap()
+    b.root.children[0].h += 5
+    return !verifyInvariants(geoSnap(), b, { tolerance: tolCfg }).ok
+  })
+  run('L2.6-ctrl-pure-scroll', 'L2.6', '★对照组：**纯滚动（整体平移）不应报**——"禁止比绝对坐标"的机器证明', false, () =>
+    !verifyInvariants(geoSnap(), translateAll(0, -300), { tolerance: tolCfg }).ok,
+  )
+
   const injected = results.filter((r) => r.expected).length
   const captured = results.filter((r) => r.expected && r.caught).length
   // ★仍未布点算子的诚实清单（标准 §7.3：单列，不得悄悄删）
   const pending = [
-    { id: 'L2.5-discrete-interaction', note: '离散交互（事件 → 结果态几何）——需 L2.5 布点（标准 §10.1 的第二层）' },
-    { id: 'L2.6-scroll-relative', note: '连续交互不变量（滚动后相对间距）——需 L2.6 布点' },
     { id: 'L4-radius-missing', note: '圆角缺失——需 L4 像素观察（非门禁；pHash 对局部小差异不敏感，已知边界）' },
   ]
   return { operators: results, injected, captured, pending }
@@ -227,7 +272,10 @@ async function build() {
       //     · L3：实测样式键 → 映射回字段（四角归 borderRadius、四边归 margin/padding、
       //       四向归 borderWidth/borderColor；fontFamily/fontWeight/visibility **不在 28 字段集内 ⇒ 不计**）
       //   另给 `union`（并集口径：该字段是否被**任一**层机器校验）——对外更好理解的那一个数。
-      definition: 'Σ(L1|L2|L3 各层**折算到同一 CSS 字段集**后的覆盖数) / (可表达字段数 × 3)（分层加总 · 折算口径）',
+      definition:
+        'Σ(L1|L2|L3 各层**折算到同一 CSS 字段集**后的覆盖数) / (可表达字段数 × 3)（分层加总 · 折算口径）' +
+        '｜★L2.5/L2.6（交互层）**不计入本比值**：它们校验的不是 CSS 字段（是"结果态等价"与"6 类不变量"），' +
+        '计入会让分母失去意义——覆盖状态单列在 byLayer，由门禁与 M4 算子承担。',
       value: m1Total > 0 ? Number(((m1Covered + L2_FIELDS.size + l3Fields.size) / (m1Total * 3)).toFixed(4)) : 0,
       /** ★并集口径：任一层的机器校验覆盖到的字段数 / 字段总数 */
       union: {
@@ -245,8 +293,14 @@ async function build() {
         L3: {
           covered: l3Fields.size,
           total: m1Total,
-          note: `实测比对已落地（VC6：Web ⇄ WebView，硬门禁 + A-6 豁免）；**折算口径**：25 个可比样式键 → ${l3Fields.size} 个字段（四角/四边归并；fontFamily/fontWeight/visibility 不在字段集内不计）`,
+          note: `实测比对已落地（VC6：Web ⇄ WebView，硬门禁 + A-6 豁免）；**折算口径**：可比样式键 → ${l3Fields.size} 个字段（四角/四边归并；集外键不计）`,
         },
+        // ★★L2.5 / L2.6 布点（2026-10-02·四批）：**交互层的覆盖口径随层定义**（不是 CSS 字段）——
+        //   L2.5 覆盖"交互结果态"（事件→几何，判据是结果态逐节点一致 + 两端都真的动了）；
+        //   L2.6 覆盖"6 类不变量"（structure/sizes/gaps/order/containment/translation）。
+        //   ★与 M1 分母（CSS 字段）**不同源** ⇒ 数值上如何计入见下方 value 的折算说明。
+        L2_5: { covered: 1, total: 1, note: '离散交互（事件→结果态几何）：跨端实测通过（两端位移均 60px + 结果态 7 节点一致）+ M4 算子 3 个（含"点了没反应"必红）' },
+        L2_6: { covered: 6, total: 6, note: '连续交互不变量：6 类全绿（structure/sizes/gaps/order/containment/translation）+ 实测滚动 200/500px + M4 算子 4 个（含"纯滚动不应报"对照组）' },
       },
       covered: m1Covered,
       total: m1Total,

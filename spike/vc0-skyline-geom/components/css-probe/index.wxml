@@ -16,6 +16,8 @@
     </view>
     <!-- ★覆盖收官：绝对定位节点（覆盖 top/left——条件可见字段） -->
     <view id="c-abs" style="position:relative;width:50px;height:30px;top:5px;left:7px;background-color:#3a5a8a;flex-shrink:0"></view>
+    <!-- ★L2.5 离散交互：可点击节点（tap → 宽度 60 → 120，即"展开"） -->
+    <view id="c-tap" bindtap="onTapExpand" style="width:{{tapW}}px;height:36px;background-color:#6a4bf0;flex-shrink:0;margin-top:4px"></view>
   </view>
   <view id="t-display-block" style="width:20px;height:20px;display:block"></view>
   <view id="t-display-flex" style="width:20px;height:20px;display:flex"></view>

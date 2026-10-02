@@ -8,4 +8,7 @@
   </scroll-view>
   <geom-probe tag="p1"></geom-probe>
 </view>
-<css-probe id="cssprobe" tag="p1"></css-probe>
+<!-- ★L2.6 连续交互夹具：可滚动容器（Skyline 页面本身不滚动——见 skyline-pitfalls S14） -->
+<scroll-view id="l26-scroll" scroll-y style="height:320px" scroll-top="{{scrollTop}}">
+  <css-probe id="cssprobe" tag="p1"></css-probe>
+</scroll-view>

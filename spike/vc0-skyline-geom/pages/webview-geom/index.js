@@ -2,7 +2,11 @@
 const probe = require('../../utils/probe.js')
 
 Page({
-  data: { tag: 'webview' },
+  data: { tag: 'webview', scrollTop: 0 },
+  /** ★L2.6：程序化滚动（与 skyline 页同法） */
+  scrollTo(v) {
+    this.setData({ scrollTop: v })
+  },
   onLoad() {
     // ★开新 session（**不清账本**：组件 attached 可能先于 onLoad 写入——第一版清空会误删）
     try {
