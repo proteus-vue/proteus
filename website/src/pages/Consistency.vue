@@ -95,7 +95,8 @@ function shotUrl(file: string): string {
 }
 
 function pairLabel(id: string): string {
-  return id.replace(/^l4:/, '').replace(/-vs-/, ' ⇄ ')
+  // 去掉案例前缀（`l4:` / `sfc:`）——展示层只要"端 ⇄ 端"
+  return id.replace(/^(l4|sfc):/, '').replace(/-vs-/, ' ⇄ ')
 }
 
 /** 配对形态标签（三档——残差量级不同，展示时必须区隔，避免"混读"） */
@@ -141,6 +142,42 @@ function pairModeLabel(mode: string | null): string {
           <p class="cons-note">{{ m.note }}</p>
         </article>
       </div>
+    </section>
+
+    <!-- ═══ ★★★SFC 压力测试（一份源码 → 多端渲染）═══ -->
+    <section v-if="D.sfc" class="cons-sec cons-sfc">
+      <p class="cons-sec-title">{{ isEn ? 'SFC stress test · one source file, four targets' : 'SFC 压力测试 · 一份源码，四端渲染' }}</p>
+      <p class="cons-sec-note">
+        {{
+          isEn
+            ? 'Not hand-written fixtures — one .vue file compiled/instantiated through three independent chains (Proteus compiler for Web & mini-program; Vapor artifacts for iOS & Android), each rendered by its own engine. 44 nodes: anchor + title + 10 rows (v-for with per-row dynamic chip width + text + dot) + footer.'
+            : '不是手写夹具——同一个 .vue 文件经三条独立链（Web/小程序走 Proteus 编译器；iOS/Android 走 Vapor 编译产物 + 端上实例化），各端用自己的引擎渲染。44 节点：锚点 + 标题 + 10 行（v-for 行内动态 chip 宽 + 文字 + 圆点）+ 页脚。这是对"你们这是 SFC 渲染的吗"这类质疑的直接回答。'
+        }}
+      </p>
+      <div class="cons-sfc-src"><code>{{ D.sfc.source }}</code></div>
+      <div class="cons-shots">
+        <figure v-for="s in D.sfc.shots" :key="s.end" class="cons-shot">
+          <img class="cons-shot-img" :src="shotUrl(s.pub)" :alt="s.label" loading="lazy" />
+          <figcaption class="cons-shot-cap">{{ s.label }}</figcaption>
+        </figure>
+      </div>
+      <div class="cons-pairs">
+        <div v-for="p in D.sfc.pairs" :key="p.id" class="cons-pair">
+          <span class="cons-pair-head">{{ pairLabel(p.id) }}</span>
+          <span class="cons-pair-mode" :class="p.mode">{{ pairModeLabel(p.mode) }}</span>
+          <span class="cons-pair-val">
+            {{ (p.diffRatio * 100).toFixed(2) }}%
+            <span class="cons-pair-sub">{{ isEn ? 'pixels differ' : '像素差异' }} · hash {{ p.hashDistance }} · {{ p.verdict }}</span>
+          </span>
+        </div>
+      </div>
+      <p class="cons-note">
+        {{
+          isEn
+            ? 'Residual differences are dominated by glyph rasterisation — the one structural difference the standard never claims to eliminate (§2). Layout, sizes and per-row dynamic widths match across all four targets.'
+            : '剩余差异以字形栅格化为主——这正是标准里明确声明"不可消除"的那一项结构性差异（§2）。布局、尺寸与每行动态宽度四端一致。'
+        }}
+      </p>
     </section>
 
     <!-- ═══ 五端真截图（L4 像素观测） ═══ -->
@@ -291,7 +328,29 @@ function pairModeLabel(mode: string | null): string {
   border: 1px solid var(--line);
   background: var(--panel2);
 }
+/* ★SFC 区截图容器**限高 + 顶部对齐**（2026-10-02 实测的展示缺陷）：SFC 夹具是 375×800 竖屏，
+   而各端源截图高宽比不同（Android 1200×2608 ≈ 2.17:1、Web 780×1688 ≈ 2.16:1、iOS 1206×2622
+   ≈ 2.17:1——相近）**但内容只占上半屏**（SFC 高 800pt vs 屏 874pt）⇒ 等宽缩放后内容显得很小。
+   限高 340px + object-fit: cover + object-position: top ⇒ **裁到内容区**（顶部对齐），
+   四端内容以相近倍率呈现（对比更可读）。 */
+.cons-sfc .cons-shot-img {
+  height: 340px;
+  object-fit: cover;
+  object-position: top;
+}
+.cons-shot { align-items: center; }
 .cons-shot-cap { color: var(--muted); font-size: 11.5px; text-align: center; }
+
+.cons-sfc-src { margin-bottom: 12px; }
+.cons-sfc-src code {
+  font-family: var(--mono);
+  font-size: 11.5px;
+  color: var(--brand-ink);
+  background: var(--panel2);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 6px 12px;
+}
 
 .cons-norms { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 14px; }
 .cons-norm {

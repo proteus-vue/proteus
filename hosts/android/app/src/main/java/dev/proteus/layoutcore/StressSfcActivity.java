@@ -65,6 +65,11 @@ public class StressSfcActivity extends Activity {
         }
 
         host = new VaporRenderHost(this, root);
+        // ★★★长度缩放 = density（2026-10-02 实测修复）：SFC 的 px 是**逻辑单位**（Web CSS px /
+        //   iOS pt / MP 逻辑 px 同义），而本宿主按**物理像素**绘制 ⇒ ×density 才与其它端同尺寸。
+        //   首版缺此步：锚块 80px（其它端 130~240px）、内容只占屏 22%（用户目视直接看出）。
+        //   ★设在 mount 之前——coreNodes()/viewport 都会用它（覆盖静态 + 动态绑定全部路径）。
+        host.setLengthScale(getResources().getDisplayMetrics().density);
 
         // ① bundle（QuickJS 直接 eval；与 MainActivity.vapor 通路同一份产物）
         String bundle = readAsset("bundle-vapor.js");
@@ -93,7 +98,11 @@ public class StressSfcActivity extends Activity {
         try {
             args.put("artifacts", artifacts);
             args.put("mode", "stress");
+            // viewport 用 **SFC 的逻辑单位**（375×800——与其它端同口径）；scale 由 JS 侧换算
+            // ★★scale = density（2026-10-02 实测修复）：SFC 的 px 是逻辑单位，而本宿主按物理
+            //   像素 1:1 绘制 ⇒ 不换算时锚块 80px（其它端 130~240px）、内容只占屏 22%。
             args.put("viewport", new org.json.JSONObject().put("width", 375).put("height", 800));
+            args.put("scale", getResources().getDisplayMetrics().density);
         } catch (Exception e) {
             MainActivity.writeReportStatic(this, "stress-scene.json",
                     "{\"ok\":false,\"error\":\"args 组装失败：" + e.getMessage() + "\"}");

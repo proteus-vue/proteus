@@ -7,7 +7,7 @@
   ],
   "payload": {
     "ok": true,
-    "run_ms": 56,
+    "run_ms": 74,
     "path": "stress-sfc",
     "js": {
       "ok": true,
@@ -18,18 +18,18 @@
       "inst_rows": 10,
       "data_rows": 10,
       "mount_ms": 1,
-      "host_layout_ms": 3.448,
-      "host_measure_ms": 1.591,
+      "host_layout_ms": 3.93,
+      "host_measure_ms": 0.871,
       "host_cmds": 44,
-      "painted_samples": 2144,
-      "painted_colors": 35,
+      "painted_samples": 18000,
+      "painted_colors": 21,
       "viewport": "375x800",
       "first_node_style": null,
       "anchor_rect": [
-        16,
-        60,
-        80,
-        48
+        48,
+        180,
+        240,
+        144
       ],
       "notes": [
         "六端 SFC 压力夹具（Android）：渲染 examples\/pages\/consistency-stress.vue 的编译产物",

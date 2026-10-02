@@ -13,12 +13,17 @@
 import fs from 'node:fs'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
+// ★SFC 展示图生成用（与 check-consistency-sfc.mjs 同一归一函数——展示与判据同源）
+import { decodePng, encodePng, anchorNormalize, convertToSrgb } from '../../packages/consistency/dist/index.js'
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..')
 const METRICS = path.join(ROOT, 'docs/generated/consistency-metrics.json')
 const PIXEL = path.join(ROOT, 'docs/generated/consistency-pixel-report.json')
+/** ★SFC 压力夹具报告（一份源码多端渲染——与 -pixel 是两件事，见 check-consistency-sfc.mjs 头注） */
+const SFC = path.join(ROOT, 'docs/generated/consistency-sfc-report.json')
 const ALLOW = path.join(ROOT, 'docs/allow-differences.json')
 const SHOT_DIR = path.join(ROOT, 'docs/generated/consistency-samples/pixels')
+const SFC_SHOT_DIR = path.join(ROOT, 'docs/generated/consistency-samples/sfc')
 const OUT_TS = path.join(ROOT, 'website/src/data/consistency-page.ts')
 const OUT_PUBLIC = path.join(ROOT, 'website/public/consistency')
 
@@ -43,6 +48,18 @@ const SHOTS = [
   { end: 'ios', file: 'l4.ios.png', pub: 'l4-ios.png', label: 'iOS（模拟器）' },
   // ★六端（同日）：iOS **真机**（iPhone 12）——真机/模拟器同平台对照（0.29% = 设备级差异底噪）
   { end: 'ios-device', file: 'l4.ios-device.png', pub: 'l4-ios-device.png', label: 'iOS（真机）' },
+]
+
+/**
+ * ★★★SFC 压力夹具截图（2026-10-02）——与上面 L4 的差别：这些是**同一个 .vue 文件**
+ *   （examples/pages/consistency-stress.vue）经三条编译/实例化链渲染的结果。
+ *   public 名同样避开平台变体后缀（`mp.skyline` 里的 `.skyline` 会被当 mp 变体 ⇒ 换连字符）。
+ */
+const SFC_SHOTS = [
+  { end: 'web', file: 'sfc.web.png', pub: 'sfc-web.png', label: '浏览器 Web（SFC 编译产物）' },
+  { end: 'mp.skyline', file: 'sfc.mp.skyline.png', pub: 'sfc-mp-skyline.png', label: '微信 Skyline（SFC 编译产物）' },
+  { end: 'android', file: 'sfc.android.png', pub: 'sfc-android.png', label: 'Android 真机（Vapor 实例化）' },
+  { end: 'ios', file: 'sfc.ios.png', pub: 'sfc-ios.png', label: 'iOS 模拟器（Vapor 实例化）' },
 ]
 
 function readJson(p, what) {
@@ -107,8 +124,26 @@ for (const p of pixel.pairs.filter((x) => x.id.startsWith('l4:') && x.norm)) {
   }
 }
 
+// ★SFC 压力夹具报告（存在才并入——装置未跑过时页面优雅降级，不阻断）
+let sfc = null
+try {
+  sfc = JSON.parse(fs.readFileSync(SFC, 'utf-8'))
+} catch {
+  console.warn('[consistency-data] ⚠ 缺 SFC 报告（docs/generated/consistency-sfc-report.json）——页面将不显示 SFC 压测区')
+}
+const sfcPairs = (sfc?.pairs ?? []).map((p) => ({
+  id: p.id,
+  mode: p.mode ?? null,
+  verdict: p.observation.verdict,
+  diffPixels: p.observation.diffPixels,
+  sampleCount: p.observation.sampleCount,
+  diffRatio: p.observation.diffRatio,
+  hashDistance: p.observation.hashDistance,
+}))
+const sfcEnds = (sfc?.ends ?? []).map((e) => ({ end: e.end, label: e.label, file: e.file, scale: e.norm?.scale ?? null, srcSize: e.norm?.srcSize ?? null }))
+
 const DATA = {
-  generatedFrom: ['docs/generated/consistency-metrics.json', 'docs/generated/consistency-pixel-report.json', 'docs/allow-differences.json'],
+  generatedFrom: ['docs/generated/consistency-metrics.json', 'docs/generated/consistency-pixel-report.json', 'docs/generated/consistency-sfc-report.json', 'docs/allow-differences.json'],
   m1: {
     value: metrics.M1.value,
     union: metrics.M1.union,
@@ -143,6 +178,17 @@ const DATA = {
     endNorm,
   },
   shots: SHOTS,
+  // ★★★SFC 压力夹具（一份源码多端渲染）——装置未跑过时为 null（页面不显示该区）
+  sfc: sfc
+    ? {
+        source: sfc.source ?? 'examples/pages/consistency-stress.vue',
+        gate: false,
+        endCount: sfcEnds.length,
+        pairs: sfcPairs,
+        ends: sfcEnds,
+        shots: SFC_SHOTS,
+      }
+    : null,
   debt: metrics.debt?.baselines ?? [],
 }
 
@@ -154,13 +200,17 @@ export const CONSISTENCY_PAGE = ${JSON.stringify(DATA, null, 2)} as const
 `
 
 /* ── ③ 截图复制（源名 → public 名见 SHOTS.pub；--check 只比对） ── */
-function syncShot(shot) {
-  const src = path.join(SHOT_DIR, shot.file)
+function syncShot(shot, dir = SHOT_DIR) {
+  const src = path.join(dir, shot.file)
   const dst = path.join(OUT_PUBLIC, shot.pub)
   if (!fs.existsSync(src)) {
-    console.error(`[consistency-data] ✗ 缺截图：${path.relative(ROOT, src)}（跑 bash scripts/shoot-l4-fixtures.sh + node scripts/shoot-l4-web.mjs）`)
+    console.error(`[consistency-data] ✗ 缺截图：${path.relative(ROOT, src)}`)
     process.exit(2)
   }
+  // ★SFC 展示图用**原始整屏截图**（不做展示性归一——用户 2026-10-02 明确指出：
+  //   "不是归一展示的问题，是本身渲染的就出现了差异，这个必须要查" ⇒ 展示就展示真实渲染结果；
+  //   Android 尺寸偏小/MP 白底都已在渲染链路上修好，不需要用归一图掩盖）。
+  //   归一图仅用于**像素比较**（check-consistency-sfc.mjs，那是判据不是展示）。
   const buf = fs.readFileSync(src)
   if (CHECK) {
     if (!fs.existsSync(dst) || !buf.equals(fs.readFileSync(dst))) {
@@ -178,11 +228,14 @@ if (CHECK) {
   let ok = prev === ts
   if (!ok) console.error('[consistency-data] ✗ 页面数据漂移：website/src/data/consistency-page.ts 与机器产物不一致（跑 pnpm gen:consistency-data）')
   for (const s of SHOTS) syncShot(s)
+  // ★SFC 截图（存在 SFC 报告时才要求——装置未跑过时页面降级，门禁不红）
+  if (DATA.sfc) for (const s of DATA.sfc.shots) syncShot(s, SFC_SHOT_DIR)
   if (!ok) process.exit(1)
   console.log(`[consistency-data] ✅ 一致性页数据与机器产物一致（M1–M4 + 清单 ${DATA.m2.value} 条 + 真截图对 ${DATA.pixel.pairs.length} 对）`)
 } else {
   fs.mkdirSync(path.dirname(OUT_TS), { recursive: true })
   fs.writeFileSync(OUT_TS, ts)
   for (const s of SHOTS) syncShot(s)
-  console.log(`[consistency-data] ✅ 生成 website/src/data/consistency-page.ts（${ts.length}B）+ 复制 ${SHOTS.length} 张截图 → website/public/consistency/`)
+  if (DATA.sfc) for (const s of DATA.sfc.shots) syncShot(s, SFC_SHOT_DIR)
+  console.log(`[consistency-data] ✅ 生成 website/src/data/consistency-page.ts（${ts.length}B）+ 复制 ${SHOTS.length + (DATA.sfc ? DATA.sfc.shots.length : 0)} 张截图 → website/public/consistency/`)
 }
