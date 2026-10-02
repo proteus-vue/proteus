@@ -87,6 +87,64 @@ check-consistency-snapshot 七段全绿 · check:no-blind-wait ✅（新 .sh 零
 ① L2/L3/L2.5/L2.6 算子用**合成快照**——证明的是"比对引擎敏不敏感"，不是"真机数据一定对"；
 ② L4 算子用真截图但取同端注入（跨端噪声底含 AA，无区分度）；L4 的价值形态是**定位**。
 
+### ★★★2026-10-02（五十一）· **App 端路由收口：统一 API 直通，开发者零胶水**（用户点名"路由是承载地基，开发者还要手动写各端胶水"）
+
+**用户原话**：「那现在是不是可以顺势做页面路由全端一致性落地了？因为这个是独立体系，是所有内容的
+承载地基，这个做不好也不行，**开发者用起来还是要手动写各端胶水**」。
+
+**缺口定位（先取证，不猜）**：`createRouter`（统一 API）**只接 Web/MP**——它静态 import
+`@proteus-vue/shared` 的 `adapter` 单例，而该单例在**无 window/wx 环境**（iOS JSC / Android QuickJS）
+会走 web 分支并在模块求值期读 `location`（#491 事故原文：「启动即崩」）。
+⇒ App 端过去只能**绕开统一 API**，手写五段胶水：`createAppStack` + `createScreenExecutor` +
+`createHostScreenPorts` + 每次改栈后 `drainCommands→applyCommands` + 自己包 RouterAdapter
+（`hosts/shared/bridge/entry-app-stack.ts` 的 E 组就是那坨胶水的真实形态）。
+
+**本轮交付（四件）**：
+1. **`packages/router/src/router-core.ts`（平台中立核心）**：Router 主体抽出，平台适配器经
+   `RouterAdapter`（结构子集）**注入**——不再 import 平台包。`guards.ts` 同步去掉 adapter 依赖
+   （"当前路由"由核心解析后传 `from`）。主入口 `index.ts` 只做"注入默认 shared adapter"，
+   **既有 Web/MP 调用方式逐字不变**。
+2. **`packages/router/src/app-adapter.ts` + `app-route.ts`（App 端入口）**：
+   `createAppNavigationAdapter`（栈 → RouterAdapter：URL 解析 / path↔name / back→pop / **泵串行化**）
+   + `screensFromRoutes`（路由表 → 屏注册表，消灭"手抄屏注册表"）。
+3. **`packages/render-backend/src/app-navigation.ts`（一步装配）**：
+   `createAppNavigation({ invoke, routes })` = 栈 + 执行器 + 宿主端口 + 适配器——
+   **一条调用装齐**，暴露 `nav.adapter` 直接喂 `createRouter`。
+4. **真机场景 F**（`entry-app-stack.ts`）：真机跑「`createRouter` → 虚拟栈 → 执行器 → 宿主」全链，
+   判据 `check-app-stack.py` 新增 ⑧ 组。**实测（Android 真机 QuickJS）**：
+   `f_ok=True · push→2层(r-detail · params={'id':'42'}) · back→1层(r-home) · replace→1层(r-user)`
+   —— 与 Web/MP **同一个 API**。
+
+**★这个过程抓到的真缺陷（真机才现形，单测抓不到）**：
+· **两个 `createHostScreenPorts` 实例抢同一个全局钩子**（`__proteusHostScreenAnimDone` **后装覆盖先装**）
+  ⇒ 先装侧（E 组）的动画完成回推**永远到不了** ⇒ 双双向 pending ⇒ 真机执行器 **10s 超时**。
+  **为何单测没抓到**：既有用例一次只建一个实例——覆盖问题只在"同上下文多实例"现形，
+  而真机场景（E 手写装配 + F 统一 API **并行**）正是那形态。
+  **修法**：全局槽改**多实例注册表**（钩子遍历分发，各实例只认自己 token）+ token 加**实例唯一前缀**。
+  **破坏性验证**：临时还原旧行为 ⇒ **4 条红**（含新增的多实例锁）；修复后 16/16 全绿。
+· **用法纪律（测试踩到并写进注释）**：`router.push/replace/reLaunch` 是 **async**（内部 await 转场完成
+  ——App 转场是异步的：命令流→执行器→宿主帧循环播完→回推）⇒ **必须 await**；
+  写成 `router.push(...); await nav.flush()` 会让两段导航竞争（栈序错乱**且无报错**）。
+  `flush()` 只用于同步 API（`back()`）。
+
+**★工具层修复（hook 误报治理第二、第三例）**：`deny-blind-tests` 把**文件名/搜索词**当测试调用——
+  `sed -n '1,5p' vitest.config.ts` 与 `grep -rn vitest run README.md` 都被拦。
+  判据改为**按命令段分析**（vitest 必须是段首命令，可带 env/runner 前缀；出现在参数位不算）。
+  9 条用例实测全对。**同族教训第三次**：**判据要认"命令形态"，不是认字符出现**。
+
+**验证**：定向 **94/94**（router/stack/screen-executor 全量回归，零回归）· 新增
+`tests/router-app.test.ts` **8/8**（含"零胶水全链"与"平台中立静态断言"）·
+`screen-executor-host` **16/16**（含多实例锁）· 无 window 环境**裸 Node 实测**通过
+（`router.push` 全链 + 参数保留）· 两端 bundle 构建通过 · check:deps / internal-versions /
+platform-layering / pkg 全绿 · Android 真机判据全绿（含 ⑧ 组）。
+
+**诚实边界**：
+① **iOS 腿**：同款场景已接（共用同一份 TS 与判据），本轮以 Android 真机为准；
+② `f_host_stats` 在 F 组可能为 **null**（F 用内联 invoke，宿主 `screenHost` 实例由壳在特定路径创建）
+   ——如实记 null 不伪装 0；宿主真动作的证明由 **E 组**（`e_host_stats`）承担；
+③ 统一 API 的**类型提示**在 App 端需应用侧 `declare module` 路由名表（与 Web/MP 同机制）；
+④ **未做**：`ANIM_BIND`/`ANIM_PROGRESS`（RT2 剩余）、共享元素跨端 conformance、手势协商（RT5）。
+
 ### ★★★2026-10-02（五十）· 无界滚动修复（两端）+ 页面层级规范 LY0/LY1 落地 + **口径质疑的透明化回答**
 
 **用户三个点（逐个回答）**：
@@ -605,7 +663,7 @@ check-consistency-snapshot 七段全绿 · script-compile ✅ · no-blind-wait �
 "位置是否正确"由 L2 几何数值比对承担；L4 只管"画出来像不像"（已写入注记与文档）。
 ④ 仍未接入：iOS/Android 真机截图（当前 Web=Playwright、MP=模拟器，均非真机）。
 
-## 当前状态速览（最近一次更新：**2026-10-02·（五十）· 无界滚动修复（两端实测）+ 页面层级规范 LY0/LY1 落地（5 违规码接 CI）+ 口径质疑透明化（双口径并行公开）**）★新会话以此为准
+## 当前状态速览（最近一次更新：**2026-10-02·（五十一）· ★★App 端路由收口：统一 `createRouter` 直通（真机 ⑧ 组全绿）—— 开发者零胶水；另修多实例钩子覆盖真缺陷**）★新会话以此为准
 ### ★★★2026-10-02（三十八）· 交互两层（离散 + 连续）—— 标准 §10.1 的最后两个"未布点"
 
 **交付**
