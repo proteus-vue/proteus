@@ -12,7 +12,7 @@
 - **核心理念（架构方向已定案，决策 #290）**：**一份标准 Vue 源码 → 语义 IR（C-IR/CompilerIR）→ 可插拔渲染后端**（Render anywhere, on any engine）；不再是「小程序编译器」——小程序降级为 Layer 1 兼容层
 - **四层可插拔（原则 #10 终极形态）**：编译（G-29 CompilerBackend）/ 逻辑（JS 引擎）/ UI（G-27 RenderBackend）/ 能力（G-28 NativeBackend）
 - **技术栈**：Vue 3.4+ / Vite 5 / TypeScript 5.4+ / 微信基础库 2.29.2+（Skyline + wx.router）
-- **包规模**：**44 个 @proteus-vue/* npm 包**（+ `packages/layout-core-rust` = **cargo crate，非 npm 包**，故不计数）（★2026-09-29 layout-core = App 排版核心）（check:pkg 0 error · `pnpm check:stats` 校验 ✓；31→38 修正 → G-07 glass 39 → Skyline 收口 worklet 40 → ★2026-09-14 组件库拆包 `@proteus-vue/components` 41 → ★Vapor 线新增 `@proteus-vue/slot-runtime` 42 + `@proteus-vue/layout-core` 43 → ★2026-09-30 MA1 新增 `@proteus-vue/animation` 44；版本统一 0.3.0-beta.8，见「当前状态速览」）
+- **包规模**：**45 个 @proteus-vue/* npm 包**（+ `packages/layout-core-rust` = **cargo crate，非 npm 包**，故不计数）（★2026-09-29 layout-core = App 排版核心）（check:pkg 0 error · `pnpm check:stats` 校验 ✓；31→38 修正 → G-07 glass 39 → Skyline 收口 worklet 40 → ★2026-09-14 组件库拆包 `@proteus-vue/components` 41 → ★Vapor 线新增 `@proteus-vue/slot-runtime` 42 + `@proteus-vue/layout-core` 43 → ★2026-09-30 MA1 新增 `@proteus-vue/animation` 44；版本统一 0.3.0-beta.8，见「当前状态速览」）
 - **文档**：`docs/proteus-architecture.md`（L0 规约·真理来源）→ `docs/board-inventory.md`（全景索引）→ `docs/roadmap.md`（版本线）→ `roadmap-2-plan`（里程碑线）→ 各 plan
 
 ---
@@ -48,7 +48,43 @@
   只有**可复制代码块**里的引用才真正有害。
 · 破坏性验证：恢复 `p-card` → 红并精确报 `03-fluid-grid.md:31`；还原 → 575 md 全过。
 
-## 当前状态速览（最近一次更新：**2026-10-02·（三十八）· L2.5/L2.6 布点 —— 交互两层落地，M4 扩到五层 16 注入**）★新会话以此为准
+### ★★★2026-10-02（三十九）· L4 像素观测落地（真截图 + ROI）—— 标准 §10.1 六层全布点，M4 收官 17/17
+
+**交付**
+1. **L4 真截图采集装置** `scripts/shoot-l4-fixtures.sh`：模拟器上采同一夹具的 Skyline/WebView 两版
+   （夹具 `spike/vc0-skyline-geom/pages/l4-{skyline,webview}`，两端 wxml/wxss **逐字一致** + 脚本 diff 前置校验）。
+   · **退出判据 = 运行时路由 + 特征色**（`automation_evaluate` 查 `getCurrentPages()` + `scripts/probe-png-colors.mjs`），
+     零 sleep、零盲等；**两端截图 SHA 不得相同**（防"同一页截两次"）。
+2. **`pixel.ts` 新增 ROI（观测区域）**：`cropImage` + `pixelObservation({ roi })` + 报告回传/坐标偏移——
+   排除设备 chrome（**状态栏时钟每分钟必变** ⇒ 无 ROI 时任意两张截图必然 changed + Home 条 + 画布左缘 1px 伪影）。
+3. **像素报告接入真截图**：`check-consistency-pixel.mjs` 真截图对启用 `alignSize + roi`；
+   实测 **0.312%（2161/693240）· hashDistance=0 ⇒ noise-level**，差异全落在四项观测目标
+   （字形 AA 1675px · 圆角 AA 266px · 渐变 219px · 阴影 1px）。
+4. **M4 收官**：L4 算子（**真实截图注入圆角缺失**——四角填直角）⇒ **17/17 全捕获、pending 0**（六层：L1 5·L2 5·L3 6·L2.5 3·L2.6 4·L4 1，含 5 对照组）。
+5. **文档**：标准 §10.1/§7.2/§7.3/§11 状态更新（L4 ✅、CS3/CS4 ✅）；实现层 §3.4.1 新增三条工程约束。
+
+**这个过程抓出的真问题（装置层，都修了）**
+① **"黑屏"误判（最值钱的一条）**：首版采集判据"连续两次截图哈希相同即稳定"——**切换页面后模拟器先黑屏再渲染，
+   两次黑屏哈希恰好相同** ⇒ 存下黑屏；当时误归因为「`min-height:100vh` / 内联 style 的 Skyline 样式坑」并写进夹具注释。
+   ⇒ **A/B 隔离实验（新判据下逐一放回）双双证伪**：二者都正常渲染。**教训：判据本身错时，归因必然错**——
+   先用能区分"渲染完成 vs 未完成"的判据（路由+特征色），再做样式归因。
+② **跨端噪声底含对方 AA 本身**：圆角弧线 AA 在两端就有 266px 差（占块 2.2%）⇒ 跨端 verdict 对"圆角缺失"无区分度；
+   ⇒ M4 的 L4 算子改**同端注入**（与自身原图比：原图 identical、注入后差异块定位四角）。
+③ **L4 的能力形态是"定位"不是"全局判定"**：圆角缺失最大信号 430px=0.05% < 0.5% 噪声带 ⇒ verdict 恒 noise-level；
+   判定（通过/失败）由 L3 数值（borderRadius 四角键）承担——**已实测确认 Web golden 含这四个键**。
+
+**指标**：M1 67.9%（不变——L4 不计入比值，样本来自光栅化非 CSS 字段）· **M4 100%（17/17，六层，pending 0）** · M2 6 条
+
+**验证**：定向单测 45/45（新增 ROI 用例）· check:consistency-metrics ✅ · check:consistency-pixel ✅ ·
+check-consistency-snapshot 七段全绿 · check:no-blind-wait ✅（新 .sh 零盲等）· script-compile ✅ · bash 3.2 兼容（本机即 3.2，实跑通过）
+
+**诚实边界（随 M4=100% 一起公开，见标准 §7.3）**：
+① L2/L3/L2.5/L2.6 算子用**合成快照**——证明的是"比对引擎敏不敏感"，不是"真机数据一定对"；
+② L4 算子用真截图但取同端注入（跨端噪声底含 AA，无区分度）；L4 的价值形态是**定位**；
+③ 真截图未入库到「干净克隆也能跑 M4 L4 算子」的程度——裁图在 `docs/generated/consistency-samples/pixels/`，
+   已入库；**Web 端 Playwright 截图**（跨 DPR）尚未接入 L4 报告（当前只有小程序双渲染器一对）。
+
+## 当前状态速览（最近一次更新：**2026-10-02·（三十九）· L4 像素观测落地 —— 真截图 + ROI + M4 收官 17/17（六层）**）★新会话以此为准
 ### ★★★2026-10-02（三十八）· 交互两层（离散 + 连续）—— 标准 §10.1 的最后两个"未布点"
 
 **交付**
