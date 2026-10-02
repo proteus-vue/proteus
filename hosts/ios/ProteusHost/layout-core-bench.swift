@@ -432,14 +432,43 @@ final class BenchViewController: UIViewController {
         let t6 = CFAbsoluteTimeGetCurrent()
         nativeRoot.layoutIfNeeded()
         let tLayoutNative = (CFAbsoluteTimeGetCurrent() - t6) * 1000
-        let memNative = physFootprintMB()
+
+        // ── ★★真对照 L2（光栅级，2026-10-02 补）：原生侧强制**同步 CPU 光栅化** ──
+        //   【为什么必须补（用户当场追问「iOS 真机为什么反向优化」的根因）】
+        //   此前 README 汇总把原生的 `layout_ms` 列在了「绘」一栏——但原生视图的绘制由
+        //   CoreAnimation render server（**独立进程**）异步完成，不在计时窗口内；
+        //   而 Proteus 侧 draw_ms = `layer.render(in:)` 是**真 CPU 光栅化**（2000 次 fill +
+        //   2000 段 CoreText 文字画进位图）。⇒ 「我们画完了 22ms」对「原生还没开始画 8.5ms」，
+        //   口径错配造成"反向优化"的误读。
+        //   `drawHierarchy(in:afterScreenUpdates:true)` 是官方同步渲染入口（强制把当前层级
+        //   连同待提交变更一起光栅化到给定上下文）——与 Proteus 侧同为 CPU 位图光栅化，可比。
+        //   ★内存读数时序（本轮实测）：`drawHierarchy` 会为全部 4050 视图物化 backing store ⇒
+        //     **光栅后**再测内存会被临时分配抬高（实测 16.6MB → 130.7MB）。§9.4 判据用的应是
+        //     "建成后静态占用"（与 Proteus 侧 forceRender 后的读法对齐）⇒ 在光栅**前**取样；
+        //     光栅后读数另存字段（供 L2 讨论，不参与 §9.4 判定）。
+        let memNativePreRaster = physFootprintMB()
+        let tRaster0 = CFAbsoluteTimeGetCurrent()
+        let rasterFmt = UIGraphicsImageRendererFormat()
+        rasterFmt.scale = 1.0
+        rasterFmt.opaque = true
+        let rasterRenderer = UIGraphicsImageRenderer(bounds: nativeRoot.bounds, format: rasterFmt)
+        _ = rasterRenderer.image { ctx in
+            nativeRoot.drawHierarchy(in: nativeRoot.bounds, afterScreenUpdates: true)
+        }
+        let tRasterNative = (CFAbsoluteTimeGetCurrent() - tRaster0) * 1000
+
+        let memNativePostRaster = physFootprintMB()
         out["native_uikit"] = [
             "views": BenchSpec.rows * BenchSpec.cols * 2 + BenchSpec.rows,
             "build_ms": (tBuildNative * 100).rounded() / 100,
             "layout_ms": (tLayoutNative * 100).rounded() / 100,
-            "footprint_mb": (memNative * 10).rounded() / 10,
-            "delta_mb": ((memNative - baseMB) * 10).rounded() / 10,
+            "raster_ms": (tRasterNative * 100).rounded() / 100,
+            "footprint_mb": (memNativePreRaster * 10).rounded() / 10,
+            "delta_mb": ((memNativePreRaster - baseMB) * 10).rounded() / 10,
+            "footprint_post_raster_mb": (memNativePostRaster * 10).rounded() / 10,
+            "note_mem": "§9.4 判据用光栅前读数（与 Proteus 侧同法）；post_raster 为 L2 光栅临时分配（不入判据）",
         ]
+        let memNative = memNativePreRaster   // 下方 verdict 沿用（§9.4 可比）
         nativeRoot.removeFromSuperview()
 
         // ── ⑤ 结论（方案 §9.4 指标：内存增量 ≤ 原生 × 1.15）──
@@ -447,6 +476,12 @@ final class BenchViewController: UIViewController {
         let flatDelta = memFlat - baseMB
         let unflatDelta = memUnflat - baseMB
         var verdict: [String: Any] = [:]
+        // ★L2（光栅级）真对照比值：两边都是 CPU 位图光栅化（见上方 native raster 注释）
+        if tRasterNative > 0 {
+            let flatDraw = (out["flattened"] as? [String: Any])?["draw_ms"] as? Double ?? 0
+            verdict["flat_raster_vs_native"] = ((flatDraw / tRasterNative) * 1000).rounded() / 1000
+            verdict["raster_note"] = "Prot=layer.render(in:) CPU 光栅 · Native=drawHierarchy(afterScreenUpdates) 同步光栅（同为 1x 位图）"
+        }
         if nativeDelta > 0 {
             verdict["flat_vs_native_ratio"] = ((flatDelta / nativeDelta) * 1000).rounded() / 1000
             verdict["unflat_vs_native_ratio"] = ((unflatDelta / nativeDelta) * 1000).rounded() / 1000

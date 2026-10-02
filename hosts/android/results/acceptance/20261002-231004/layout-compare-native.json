@@ -1,0 +1,51 @@
+{
+  "ok": true,
+  "elements": 4051,
+  "rows": 50,
+  "cols": 40,
+  "proteus": {
+    "rust_layout_ms": 5,
+    "rust_layout_median_of20_ms": 1.916,
+    "emit_cmds_ms": 1,
+    "canvas_draw_software_ms": 8,
+    "canvas_record_displaylist_ms": 4,
+    "total_ms": 10,
+    "cmd_count": 2000,
+    "view_count": 1,
+    "painted_pixels_sampled": 14803,
+    "draw_attribution_rects_only_ms": 3,
+    "draw_attribution_text_only_ms": 7,
+    "optimized_software_ms": 9,
+    "optimized_hw_record_ms": 5,
+    "text_atlas_entries": 0,
+    "correctness_diff_pixels": 0,
+    "correctness_painted_base": 14803,
+    "correctness_painted_optimized": 14803,
+    "correctness_diff_diag": "first_diff=(-1,-1) paintedA=59212 paintedB=59212 onlyBase=0 onlyOptimized=0",
+    "correctness_judgement": "{\"geometry_ok\":true,\"sampled\":648000,\"position_mismatch\":0,\"position_mismatch_ratio\":0.0,\"criterion\":\"覆盖位置一致（位置敏感）；不比两条光栅化路径的像素值\"}",
+    "atlas_validation": "{\"atlas_painted_pixels\":3759,\"atlas_content_ok\":true}",
+    "varied_text_optimized_ms": 41,
+    "varied_text_atlas_entries": 0
+  },
+  "native": {
+    "create_views_ms": 158,
+    "measure_layout_ms": 55,
+    "draw_ms": 4,
+    "total_ms": 217,
+    "view_count": 4051,
+    "measured_height": 2400,
+    "painted_pixels_sampled": 11340
+  },
+  "same_scope_compare": {
+    "phase_layout_proteus_ms": 6,
+    "phase_layout_native_ms": 213,
+    "phase_layout_ratio": 0.028,
+    "phase_draw_proteus_hw_record_ms": 4,
+    "phase_draw_proteus_optimized_ms": 5,
+    "phase_draw_proteus_software_ms": 8,
+    "phase_draw_native_ms": 4,
+    "phase_draw_ratio_hw": 1,
+    "phase_draw_ratio_optimized": 1.25
+  },
+  "caveat": "★§9.2 口径：本包由 acceptance.sh 以 --release 构建（非 debuggable）；轮次间 force-stop 冷启动；CPU 核判定见 layout-env.json（落在 cpu6\/7 超大核则本组作废）。温度见 layout-report.txt 的「环境核验」段。"
+}

@@ -25,16 +25,25 @@
       "layout_ms": 10.07,
       "emit_ms": 47.43,
       "built_render_nodes": 4000
+    },
+    "run_latest": {
+      "wall_ms": 66,
+      "scope_ms": 57.45,
+      "layout_ms": 10.69,
+      "emit_ms": 46.75,
+      "built_render_nodes": 4000
     }
   },
   "native_control": {
     "wall_ms": 539,
     "appeared": 4050,
-    "form": "声明式 ArkUI（50 行 × 40 格 × (格子+Text) = 4050 元素；全部 onAppear 触发为终点）"
+    "form": "声明式 ArkUI（50 行 × 40 格 × (格子+Text) = 4050 元素；onAppear 全触发为终点；热读用新 key 强制重建）",
+    "cold_ms": 571,
+    "warm_ms": 572
   },
-  "ratio": 0.122,
+  "ratio": 0.1,
   "caveats": [
-    "★口径不对称（如实标注）：Proteus 侧为「提交级」（建树+排版+4000 个 RenderNode 构建，未上屏、Dispose 回收）；原生侧为「渲染级」（4050 元素 onAppear 全触发——含首帧构建+挂载+上屏调度）。即原生包含更多工作 ⇒ 比值对我们有利，不能反推「等口径下也快 8 倍」。",
+    "★口径不对称（如实标注）：Proteus 侧=「提交级」（建树+排版+4000 RenderNode 构建，未上屏）；原生侧=「渲染级」（4050 元素 onAppear 全触发——含构建+挂载）。冷热实测表明原生成本非预热所致，但两侧终点定义仍不同 ⇒ 比值仅供量级参考，不作等口径结论。",
     "文本绘制未实现：Proteus 侧排版含 2000 个文本节点（走桩度量 textMeasures={}），但直绘树只建带背景色的 4000 节点（2050 view + 2000 text 背景）——无文字光栅化。",
     "原生 ArkUI 首帧成本极高：观测到前 1000 元素 ~505ms、后续 3050 元素 ~34ms（ArkUI 首帧初始化为主，含字体/渲染管线预热）。",
     "Rust 核排版 4051 节点 = 9.68~10.36ms（三次一致）——与 Android 侧同核读数同量级。"
@@ -58,5 +67,17 @@
       "ratio": 0.122,
       "note": "本报告；注：Proteus 侧提交级 vs 原生渲染级（见 caveats）"
     }
-  }
+  },
+  "caliber": {
+    "L1_提交级": "触发 → 建树+排版 → 渲染指令送达（不含像素光栅化）——方案 §9.2 官方口径",
+    "L2_光栅级": "L1 + CPU 全场景光栅化到内存位图（同批元素；GPU 合成一律排除）",
+    "harmony_status": "L1 已测（Proteus 提交级 66~67ms）；L2 pending（RenderNode 无 CPU 软光栅路径——渲染由 RS 进程负责，属架构事实）",
+    "harmony_l1_asymmetry": "★两侧口径不对称：Proteus=提交级（未上屏）、原生 ArkUI=渲染级（onAppear 全触发含首帧挂载）"
+  },
+  "native_cold_warm": {
+    "cold_ms": 571,
+    "warm_ms": 572,
+    "note": "★冷热几乎相同（571 vs 572）⇒ 成本不是首帧初始化，是声明式路径的真实构建成本（此前\"主要为预热\"的推断被本方实测证伪）"
+  },
+  "ratio_basis": "scope_ms（Proteus 提交级） vs warm_ms（原生渲染级）——★口径不对称见 caveats[0]"
 }

@@ -1,0 +1,14 @@
+{
+  "ok": true,
+  "path": "app-4050-native",
+  "view_count": 4051,
+  "scope_ms": 194.719,
+  "scope_cold_ms": 216.193,
+  "cold_warm_ratio": 1.11,
+  "layout_ms": 190.177,
+  "record_displaylist_ms": 4.542,
+  "soft_raster_ms": 5.859,
+  "text_px_effective": 24,
+  "scope": "应用级：触发 → 建 View 树 → measure\/layout → draw 进 DisplayList（与 app-4050 同口径）",
+  "l2_scope": "L2 光栅级：draw 到 ARGB_8888 Bitmap（CPU 软光栅；与 Proteus side canvas_draw_software_ms 同负载可比）"
+}

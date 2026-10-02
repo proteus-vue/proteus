@@ -62,6 +62,8 @@ struct Index {
   @State nativeAppeared: number = 0;
   private nativeT0: number = 0;
   private nativeDone: boolean = false;
+  // ★冷/热双读数（对齐 Android 惯例）：0=冷读中 / 1=热读中 / 2=完成
+  private nativeRun: number = 0;
   private readonly NATIVE_ROWS: number = 50;
   private readonly NATIVE_COLS: number = 40;
   private readonly NATIVE_ELEMENTS: number = 4050; // 50 行 + 2000 格 + 2000 text
@@ -107,20 +109,36 @@ struct Index {
     await new Promise<void>((resolve) => { setTimeout(() => { resolve(); }, 800); });
     this.nativeDone = false;
     this.nativeAppeared = 0;
+    this.nativeRun = 0;
     this.nativeT0 = Date.now();
     this.showNative = true;
   }
 
-  /** 原生对照计数（每个元素 onAppear 触发）：全部到齐 = 渲染完成 */
+  /** 原生对照计数（每个元素 onAppear 触发）：全部到齐 = 渲染完成；★跑两遍（冷/热双读数） */
   private countNative(): void {
     this.nativeAppeared++;
     if (!this.nativeDone && this.nativeAppeared >= this.NATIVE_ELEMENTS) {
       this.nativeDone = true;
       const dt: number = Date.now() - this.nativeT0;
-      hilog.info(DOMAIN, BENCH_TAG,
-        'PROTEUS_BENCH_NATIVE wall_ms=%{public}d appeared=%{public}d', dt, this.nativeAppeared);
-      this.benchLine = `原生 ArkUI 4050 元素 ${dt}ms`;
-      this.showNative = false;
+      if (this.nativeRun === 0) {
+        hilog.info(DOMAIN, BENCH_TAG,
+          'PROTEUS_BENCH_NATIVE wall_ms=%{public}d appeared=%{public}d', dt, this.nativeAppeared);
+        // 触发第二遍（热读：管线已预热——与 Android 侧 "cold/warm 双读数" 同法）
+        this.nativeRun = 1;
+        this.showNative = false;
+        setTimeout(() => {
+          this.nativeAppeared = 0;
+          this.nativeDone = false;
+          this.nativeT0 = Date.now();
+          this.showNative = true;
+        }, 500);
+      } else {
+        hilog.info(DOMAIN, BENCH_TAG,
+          'PROTEUS_BENCH_NATIVE_WARM wall_ms=%{public}d appeared=%{public}d', dt, this.nativeAppeared);
+        this.benchLine = `原生 ArkUI 4050 元素 冷=${dt}ms（热读见上一条）`;
+        this.showNative = false;
+        this.nativeRun = 2;
+      }
     } else if (!this.nativeDone && this.nativeAppeared % 1000 === 0) {
       hilog.info(DOMAIN, BENCH_TAG, 'PROTEUS_BENCH_NATIVE_PROGRESS appeared=%{public}d',
         this.nativeAppeared);
@@ -149,10 +167,10 @@ struct Index {
                 .backgroundColor('#285ac8')
                 .margin({ right: 1 })
                 .onAppear(() => { this.countNative(); })
-              }, (c: number) => `cell-${r}-${c}`)
+              }, (c: number) => `cell-${this.nativeRun}-${r}-${c}`)
             }
             .onAppear(() => { this.countNative(); })
-          }, (r: number) => `row-${r}`)
+          }, (r: number) => `row-${this.nativeRun}-${r}`)
         }
         .position({ x: 0, y: 700 })
       }

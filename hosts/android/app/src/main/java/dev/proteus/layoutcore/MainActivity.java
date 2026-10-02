@@ -3833,11 +3833,20 @@ public class MainActivity extends Activity {
         host.drawCmds(rc);
         rn.endRecording();
         final long t3 = SystemClock.elapsedRealtimeNanos();
-        keepAlive = new Object[]{cmds, host, rn};
+        // ── ★★L2（光栅级，2026-10-02 补）：Proteus 侧**真实 CPU 软光栅到 Bitmap** ──
+        //   与原生侧 `soft_raster_ms` 同负载（同画布尺寸、同 4050 元素、同为软件 Canvas → ARGB_8888）；
+        //   这是与原生**真正可比**的一档（提交级 DisplayList 与光栅级是两层，不混比）。
+        android.graphics.Bitmap softBmp = android.graphics.Bitmap.createBitmap(W, H, android.graphics.Bitmap.Config.ARGB_8888);
+        android.graphics.Canvas softCanvas = new android.graphics.Canvas(softBmp);
+        final long t4 = SystemClock.elapsedRealtimeNanos();
+        host.drawCmds(softCanvas);
+        final long t5 = SystemClock.elapsedRealtimeNanos();
+        softBmp.recycle();
+        keepAlive = new Object[]{cmds, host, rn, softCanvas};
         app4050LastCmds = cmds;
         app4050LastHost = host;
         RustLayout.destroy(handle);
-        return new double[]{(t3 - t0) / 1e6, (t1 - t0) / 1e6, (t2 - t1) / 1e6, (t3 - t2) / 1e6};
+        return new double[]{(t3 - t0) / 1e6, (t1 - t0) / 1e6, (t2 - t1) / 1e6, (t3 - t2) / 1e6, (t5 - t4) / 1e6};
     }
 
     private String app4050Run() {
@@ -3888,6 +3897,7 @@ public class MainActivity extends Activity {
             o.put("layout_ms", round3(warm[1]));
             o.put("emit_cmds_ms", round3(warm[2]));
             o.put("record_displaylist_ms", round3(warm[3]));
+            o.put("soft_raster_ms", round3(warm[4]));   // ★L2：真实 CPU 软光栅（与原生 soft_raster_ms 同负载）
             o.put("text_px_requested", APP4050_TEXT_PX);
             o.put("text_px_effective", host.currentTextSizePx());
             o.put("scope", "应用级：触发 → 建树 → 排版 → 指令 → 录制 DisplayList（送达 OS 渲染进程侧）");
@@ -3959,9 +3969,20 @@ public class MainActivity extends Activity {
         column.draw(rc);
         rn.endRecording();
         final long t2 = SystemClock.elapsedRealtimeNanos();
-        keepAlive = new Object[]{column, rn};
+        // ── ★★L2（光栅级，2026-10-02 补）：原生侧**真实 CPU 软光栅到 Bitmap** ──
+        //   【为什么必须补】此前 A/B 只测到"录制 DisplayList"（提交级）——而 Proteus 侧
+        //   另有 `canvas_draw_software_ms`（真软光栅）。两边能比的层不同 ⇒ 加这一档做**同负载真对照**：
+        //   与 Proteus 侧 canvas_draw_software_ms 同为「软件 Canvas 画到 ARGB_8888 位图」，
+        //   同一块画布尺寸、同一批 4050 元素 ⇒ L2 比值是有意义的。
+        android.graphics.Bitmap softBmp = android.graphics.Bitmap.createBitmap(W, H, android.graphics.Bitmap.Config.ARGB_8888);
+        android.graphics.Canvas softCanvas = new android.graphics.Canvas(softBmp);
+        final long t3 = SystemClock.elapsedRealtimeNanos();
+        column.draw(softCanvas);
+        final long t4 = SystemClock.elapsedRealtimeNanos();
+        softBmp.recycle();
+        keepAlive = new Object[]{column, rn, softCanvas};
         keepAliveLastTree = column;
-        return new double[]{(t2 - t0) / 1e6, (t1 - t0) / 1e6, (t2 - t1) / 1e6};
+        return new double[]{(t2 - t0) / 1e6, (t1 - t0) / 1e6, (t2 - t1) / 1e6, (t4 - t3) / 1e6};
     }
 
     private String app4050NativeRun() {
@@ -4015,8 +4036,10 @@ public class MainActivity extends Activity {
             o.put("cold_warm_ratio", warm[0] > 0 ? round3(cold[0] / warm[0]) : -1);
             o.put("layout_ms", round3(warm[1]));
             o.put("record_displaylist_ms", round3(warm[2]));
+            o.put("soft_raster_ms", round3(warm[3]));   // ★L2：真实 CPU 软光栅（与 Proteus canvas_draw_software_ms 同负载）
             o.put("text_px_effective", nativeTextPx);
             o.put("scope", "应用级：触发 → 建 View 树 → measure/layout → draw 进 DisplayList（与 app-4050 同口径）");
+            o.put("l2_scope", "L2 光栅级：draw 到 ARGB_8888 Bitmap（CPU 软光栅；与 Proteus side canvas_draw_software_ms 同负载可比）");
             return o.toString(2);
         } catch (Exception e) {
             return "{\"ok\":false,\"error\":\"" + e.getMessage() + "\"}";

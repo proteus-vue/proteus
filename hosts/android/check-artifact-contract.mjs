@@ -40,8 +40,14 @@ for (const f of fs.readdirSync(JAVA_DIR).filter((x) => x.endsWith('.java'))) {
   let method = '(top-level)'
   lines.forEach((l, i) => {
     // 方法边界：`private/public <ret> name(` —— 只取定义行（缩进 ≤4 且带访问修饰符）
+    // ★★排除「写入工具方法自身」（2026-10-02 实测误报）：
+    //   `private void writeReport(...)` 的**定义行**也匹配本正则，而它内部又调用 writeReport(...)
+    //   ⇒ 解析器把「写入工具」当成一个独立"场景"，与真正的场景（run）撞名 ⇒ 假红
+    //   （实测：stash 掉本轮全部改动后同样红 ⇒ 存量误报，不是本次引入的撞名）。
+    //   修法：工具方法不进 method 集合（它是**所有场景共用的写入路径**，不构成独立写者）。
+    const WRITER_HELPERS = new Set(['writeReport'])
     const decl = l.match(/^\s{0,4}(?:private|public|protected|static|final|\s)*[\w<>\[\],\s.]+\s+(\w+)\s*\([^;]*$/)
-    if (decl && !/\b(new|return|if|for|while|switch|catch)\b/.test(l)) method = decl[1]
+    if (decl && !/\b(new|return|if|for|while|switch|catch)\b/.test(l) && !WRITER_HELPERS.has(decl[1])) method = decl[1]
     const re = /writeReport\(\s*"([^"]+)"\s*,\s*([^)]*)/g
     let m
     while ((m = re.exec(l)) !== null) {
