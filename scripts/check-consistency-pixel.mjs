@@ -62,7 +62,14 @@ const SAMPLES_DIR = path.join(ROOT, 'docs/generated/consistency-samples/pixels')
  * 【色彩空间】Android 真机截图内嵌 Display P3 ICC ⇒ 比较前转 sRGB（`convertToSrgb`）。
  *   实测：声明 #2f6fed 在 P3 里是 (64,110,229)，转换后回到 (46,111,237)——标准 §13#6 的真数据。
  */
-const L4_ANCHOR_SPEC = { probe: [47, 111, 237], outSize: { w: 640, h: 560 }, blockTarget: { x: 30, y: 30, w: 160 } }
+const L4_ANCHOR_SPEC = { probe: [47, 111, 237], outSize: { w: 640, h: 560 }, blockTarget: { x: 12, y: 30, w: 160 } }
+
+/**
+ * ★blockTarget.x 从 30 收到 12（2026-10-02·用户反馈"安卓看着偏下"顺带曝出）——
+ *   观测窗 = 锚块左侧留 `blockTarget.x/scale` 源像素；x=30 时 Android 窗口从源 x=3 起，
+ *   把屏幕左缘的**系统悬浮条**（实测 y 580..776 的白色侧栏手柄）包了进来（约 150 行 × 9px 污染）。
+ *   x=12 ⇒ Android 窗口从源 x=30 起（悬浮条 x≤22 被排除）；同时覆盖小程序侧 x=0..1 的 1px 伪影。
+ *   夹具内容在锚块右侧（x≥48 源像素）⇒ 收窄左margin 零内容损失（五端输出仍有 12px 左留白）。
 
 /**
  * 归一后的**观测窗口**（从锚块顶部起）——锚块上方的区域仍有设备 chrome：

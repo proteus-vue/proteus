@@ -26,19 +26,25 @@ REPORT="/sdcard/Android/data/$PKG/files/l4-scene.json"
 echo "==> 1. install"
 "$ADB" install -r -t "$APK" 2>&1 | grep -E "Success|Failure" | head -2
 
-echo "==> 2. clear old report + trigger scene"
+echo "==> 2. clear old report + launch L4Activity"
 "$ADB" shell "rm -f $REPORT" >/dev/null 2>&1 || true
 "$ADB" shell "am force-stop $PKG" >/dev/null 2>&1 || true
-"$ADB" shell "monkey -p $PKG -c android.intent.category.LAUNCHER 1" >/dev/null 2>&1
-"$ADB" shell "am broadcast -a dev.proteus.RUN --es path shot-l4 -p $PKG" >/dev/null 2>&1
+# Launch the dedicated L4Activity (not MainActivity + broadcast):
+# its Manifest theme Theme.NoTitleBar.Fullscreen removes status bar + ActionBar at COLD START,
+# matching the other four ends' framing. (The runtime-hide approach introduced a relayout race:
+# over-corrected to 7.4% + first-frame screenshot still showed old chrome.)
+"$ADB" shell "am start -n $PKG/dev.proteus.layoutcore.L4Activity" >/dev/null 2>&1
 
-echo "==> 3. wait for report (bounded, no sleep)"
-ready=0
-for _i in $(seq 1 60); do
-  if "$ADB" shell "test -f $REPORT" >/dev/null 2>&1; then ready=1; break; fi
-done
-if [ "$ready" != "1" ]; then
-  echo "FAIL: report not written within 60 rounds ($REPORT)" >&2
+echo "==> 3. wait for report (bounded wait, real interval -- see wait_for.sh)"
+WAIT="$ROOT/.agents/skills/ai-efficiency-rules/scripts/wait_for.sh"
+if [ -x "$WAIT" ]; then
+  # wait_for.sh is the only allowed sleep primitive in this repo (bounded poll + total timeout).
+  bash "$WAIT" --cmd "$ADB shell test -f $REPORT" --timeout 90 --interval 1 || true
+else
+  echo "FAIL: wait_for.sh not found at $WAIT" >&2; exit 2
+fi
+if ! "$ADB" shell "test -f $REPORT" >/dev/null 2>&1; then
+  echo "FAIL: report not written (bounded wait timed out): $REPORT" >&2
   exit 1
 fi
 
@@ -46,6 +52,15 @@ RPT="$("$ADB" shell "cat $REPORT" 2>/dev/null | tr -d '\r')"
 NDRAW="$(printf '%s' "$RPT" | sed -n 's/.*"on_draw":[[:space:]]*\([0-9]*\).*/\1/p' | head -1)"
 if [ -z "$NDRAW" ] || [ "$NDRAW" -le 0 ] 2>/dev/null; then
   echo "FAIL: on_draw=$NDRAW (first frame not drawn -- screenshot meaningless)" >&2
+  exit 1
+fi
+
+# ★取景判据（机器可判，不靠肉眼）: the content view must start at screen (0,0) --
+# this is the direct evidence of "no system bars occupying space, framing aligned with the
+# other four ends" (user report "安卓看着整体位置偏下" was exactly a framing mismatch).
+ORIGIN="$(printf '%s' "$RPT" | tr -d ' \n' | sed -n 's/.*"view_origin":\[\([0-9-]*\),\([0-9-]*\)\].*/\1,\2/p')"
+if [ "$ORIGIN" != "0,0" ]; then
+  echo "FAIL: view_origin=${ORIGIN:-missing} (expected 0,0 -- system bars still occupying space?)" >&2
   exit 1
 fi
 
