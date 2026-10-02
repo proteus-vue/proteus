@@ -1148,9 +1148,9 @@ export const CONSISTENCY_PAGE = {
         "id": "sfc:android-vs-mp.skyline",
         "mode": "cross-runtime",
         "verdict": "changed",
-        "diffPixels": 6824,
+        "diffPixels": 6834,
         "sampleCount": 245520,
-        "diffRatio": 0.02779,
+        "diffRatio": 0.02783,
         "hashDistance": 0
       },
       {
@@ -1175,9 +1175,9 @@ export const CONSISTENCY_PAGE = {
         "id": "sfc:ios-device-vs-mp.skyline",
         "mode": "cross-runtime",
         "verdict": "changed",
-        "diffPixels": 7147,
+        "diffPixels": 7157,
         "sampleCount": 245520,
-        "diffRatio": 0.02911,
+        "diffRatio": 0.02915,
         "hashDistance": 0
       },
       {
@@ -1193,9 +1193,9 @@ export const CONSISTENCY_PAGE = {
         "id": "sfc:ios-vs-mp.skyline",
         "mode": "cross-runtime",
         "verdict": "changed",
-        "diffPixels": 7115,
+        "diffPixels": 7125,
         "sampleCount": 245520,
-        "diffRatio": 0.02898,
+        "diffRatio": 0.02902,
         "hashDistance": 0
       },
       {
@@ -1211,9 +1211,9 @@ export const CONSISTENCY_PAGE = {
         "id": "sfc:mp.skyline-vs-web",
         "mode": "cross-runtime",
         "verdict": "changed",
-        "diffPixels": 6842,
+        "diffPixels": 6852,
         "sampleCount": 245520,
-        "diffRatio": 0.02787,
+        "diffRatio": 0.02791,
         "hashDistance": 0
       }
     ],

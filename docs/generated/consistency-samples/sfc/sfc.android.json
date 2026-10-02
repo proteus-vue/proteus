@@ -5,9 +5,14 @@
     0,
     0
   ],
+  "scroll_range": 0,
+  "scroll_before_drag": 0,
+  "scroll_after_drag": 0,
+  "drag_drive_count": 3,
+  "scroll_reset_ok": true,
   "payload": {
     "ok": true,
-    "run_ms": 72,
+    "run_ms": 69,
     "path": "stress-sfc",
     "js": {
       "ok": true,
@@ -17,9 +22,9 @@
       "inst_texts": 12,
       "inst_rows": 10,
       "data_rows": 10,
-      "mount_ms": 0,
-      "host_layout_ms": 3.464,
-      "host_measure_ms": 0.978,
+      "mount_ms": 1,
+      "host_layout_ms": 2.809,
+      "host_measure_ms": 0.854,
       "host_cmds": 44,
       "painted_samples": 18000,
       "painted_colors": 50,
