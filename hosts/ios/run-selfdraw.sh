@@ -31,10 +31,42 @@ APP="$BUILD/ProteusSelfDraw.app"
 # ★包名必须与**已 provision 的描述文件**匹配（免费个人团队无法任意新增 App ID）。
 #   本机可用的 ID 见：for pf in ~/Library/Developer/Xcode/UserData/Provisioning\ Profiles/*.mobileprovision;
 #     do security cms -D -i "$pf" | PlistBuddy -c "Print :Entitlements:application-identifier" /dev/stdin; done
-# ★2026-09-28 换默认值：旧包名 `dev.proteus.experiments` 属**旧团队 F4R3P3L477**（其签名证书私钥已丢），
-#   且该设备上的免费账号名额被旧团队三个应用占满（**上限 3 个**）⇒ 改用新团队 XKH568R7A5 的包名。
-#   若描述文件缺失，先跑：bash hosts/ios/experiments/device/provision.sh cn.shxuxi.proteus.experiments XKH568R7A5
-BUNDLE_ID="${PROTEUS_BUNDLE_ID:-cn.shxuxi.proteus.experiments}"
+# ★★2026-10-02 改为**自动探测**（本仓纪律：环境变化让硬编码默认值反复失效——已实测两次）：
+#   默认值曾为 `dev.proteus.experiments`（旧团队），2026-09-28 因"私钥丢失"改为
+#   `cn.shxuxi.proteus.experiments`（新团队 XKH568R7A5）；而后者**现又不在 Xcode 偏好里**
+#   （描述文件不存在 ⇒ 每次跑都要手动传 PROTEUS_BUNDLE_ID，且报错在**编译+签名 5 分钟后**才出现）。
+#   ⇒ 现在从**本机可用的描述文件**里自动挑第一个**有效**（未过期）的，与 BUNDLE_ID 匹配逻辑同源。
+#   显式覆盖仍可用：PROTEUS_BUNDLE_ID=xxx。
+if [ -z "${PROTEUS_BUNDLE_ID:-}" ]; then
+  _AUTO_ID=""
+  for _pf in "$HOME/Library/Developer/Xcode/UserData/Provisioning Profiles"/*.mobileprovision; do
+    [ -f "$_pf" ] || continue
+    # ★PlistBuddy 需要**真文件**（`/dev/stdin` 在管道里读不到——实测 "Error Reading File"）
+    _tmp_pl="/tmp/proteus-prov-$$.plist"
+    security cms -D -i "$_pf" > "$_tmp_pl" 2>/dev/null || { rm -f "$_tmp_pl"; continue; }
+    _exp="$(/usr/libexec/PlistBuddy -c 'Print :ExpirationDate' "$_tmp_pl" 2>/dev/null || true)"
+    _appid="$(/usr/libexec/PlistBuddy -c 'Print :Entitlements:application-identifier' "$_tmp_pl" 2>/dev/null || true)"
+    rm -f "$_tmp_pl"
+    # 过期检查（_exp 形如 "2026-10-08 01:41:55 +0000"；用 date 比较）
+    if [ -n "$_appid" ]; then
+      _epoch="$(date -j -f "%Y-%m-%d %H:%M:%S %z" "$_exp" +%s 2>/dev/null || echo 0)"
+      if [ "$_epoch" -gt "$(date +%s)" ]; then
+        _AUTO_ID="${_appid#*.}"      # 去 TEAM. 前缀
+        : > /tmp/proteus-ios-autoid-log; echo "auto: $_appid (exp $_exp)" >> /tmp/proteus-ios-autoid-log
+        break
+      fi
+    fi
+  done
+  if [ -n "$_AUTO_ID" ]; then
+    BUNDLE_ID="$_AUTO_ID"
+    echo "    [auto] 自动选中可用描述文件的 bundle id：$BUNDLE_ID"
+  else
+    BUNDLE_ID="dev.proteus.experiments"   # 兜底（后续签名段会给出明确报错与指引）
+    echo "    [auto] ⚠ 未找到有效描述文件——用兜底 $BUNDLE_ID（签名段会报错时按提示 provision）"
+  fi
+else
+  BUNDLE_ID="$PROTEUS_BUNDLE_ID"
+fi
 export CARGO_TARGET_DIR="${CARGO_TARGET_DIR:-$ROOT/spike/target}"
 
 MODE="selfdraw"

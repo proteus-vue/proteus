@@ -463,6 +463,12 @@ func physFootprintMB() -> Double {
     ///   需人手或 XCUITest 覆盖）。
     /// - Parameters: x/y 为**内容坐标**（与核心 rects 同口径）
     func tapAt(_ x: Double, _ y: Double) -> String
+    /// ★V10：**注入一次 longpress**（同 `tapAt` 的链；类型 = `longpress`）
+    ///
+    /// 【与手势层阈值对齐】`packages/gesture` 的 `longpressDuration` 默认 **500ms**；
+    ///   宿主真实触摸判定同用 500ms（见 `SelfDrawView` 的 `longpressMinDuration`）——
+    ///   注入入口绕过时序（直接声明类型），真实触摸路径由 `touchesEnded` 按实测时长分流。
+    func longpressAt(_ x: Double, _ y: Double) -> String
     /// ★V9：手势统计（命中/未命中/错误——证明"触摸真的走到了核心"）
     func gestureStatsJson() -> String
     /// ★★V4 A/B 开关：'v4'（默认：二进制返回 + 只更可见层）| 'v3'（旧路径：JSON 返回 + 全部层）
@@ -2092,8 +2098,10 @@ final class SelfDrawView: UIView {
 
     /// 触摸结束到派发的**最大位移**（超过则不算 tap——与 gesture 层的 threshold 同口径）
     private let tapSlop: Double = 10.0
-    /// tap 的最长时长（超过则可能是长按；当前只区分 tap，长按留待 gesture 层）
+    /// tap 的最长时长（超过则按 longpress 分流——见 touchesEnded）
     private let tapMaxDuration: Double = 0.5
+    /// longpress 的最短时长（与 `packages/gesture` 的 longpressDuration 默认 500ms 对齐）
+    private let longpressMinDuration: Double = 0.5
 
     override func touchesBegan(_ touches: Set<UITouch>, with event: UIEvent?) {
         guard let t = touches.first else { return }
@@ -2109,14 +2117,26 @@ final class SelfDrawView: UIView {
         let dy = Double(p.y) - start.y
         let dist = (dx * dx + dy * dy).squareRoot()
         let dt = CFAbsoluteTimeGetCurrent() - start.t
-        // ★只在「短时 + 小位移」时算 tap（与 gesture 层 threshold 同口径）
-        //   ⇒ 拖动/长按不会误报成 tap（误报会让"滑动列表"触发"点击行"）
-        guard dist <= tapSlop, dt <= tapMaxDuration else { return }
+        // ★★V10（2026-10-02）：按「位移 + 时长」**分流**（此前只区分 tap，长按被静默丢弃）：
+        //   · 小位移 + 短时（≤ tapMaxDuration）      → tap
+        //   · 小位移 + 长时（≥ longpressMinDuration） → longpress
+        //   · 大位移（拖动）                          → 不派发（滚动由 pan 识别器负责）
+        //   ★阈值与 `packages/gesture` 对齐：longpressDuration 默认 500ms；
+        //     两阈值间（0.5s 以下均算 tap）不留空档：tapMaxDuration == longpressMinDuration。
+        guard dist <= tapSlop else { return }
+        let type: String
+        if dt <= tapMaxDuration {
+            type = "tap"
+        } else if dt >= longpressMinDuration {
+            type = "longpress"
+        } else {
+            return   // 理论不可达（两阈值相等）；保留以免将来改阈值时静默
+        }
         // ★用**绝对内容坐标**（核心的 rects 是内容坐标；self.bounds 是视口）
         //   ⇒ 加上滚动偏移（内容被移了，但核心坐标不动）
         let ax = Double(p.x) + Double(contentOffset.x)
         let ay = Double(p.y) + Double(contentOffset.y)
-        emitGesture(x: ax, y: ay, type: "tap")
+        emitGesture(x: ax, y: ay, type: type)
     }
 
     override func touchesCancelled(_ touches: Set<UITouch>, with event: UIEvent?) {
@@ -3677,6 +3697,16 @@ final class SelfDrawBridge: NSObject, SelfDrawExports {
         emitGesture(x: x, y: y, type: "tap")
         // ★回传**本次命中的 target/chain**（诊断必需——本仓实测：没有它就无法定位
         //   "宿主命中但 JS 没收到"是命中错节点、还是派发链断了）
+        let lastTarget = gestureStats["last_target"] ?? -1
+        let lastChain = gestureStats["last_chain_len"] ?? 0
+        return jsonString(["ok": true, "x": x, "y": y, "target": lastTarget,
+                           "chain_len": lastChain, "stats": gestureStats])
+    }
+
+    /// 见协议声明（`longpressAt`）
+    func longpressAt(_ x: Double, _ y: Double) -> String {
+        guard handle != 0 else { return "{\"ok\":false,\"error\":\"未建树\"}" }
+        emitGesture(x: x, y: y, type: "longpress")
         let lastTarget = gestureStats["last_target"] ?? -1
         let lastChain = gestureStats["last_chain_len"] ?? 0
         return jsonString(["ok": true, "x": x, "y": y, "target": lastTarget,

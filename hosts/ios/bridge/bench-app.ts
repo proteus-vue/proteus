@@ -65,10 +65,13 @@ export function buildBenchRow(
   dot: number, margin: number, c: string, extra: string | null,
   /** ★V9：行级 tap 处理器（事件探针用；不传则无处理器——见 event-dispatch 测试的注意事项） */
   onTap?: (e: { currentTarget: number; target: number; x: number; y: number }) => void,
+  /** ★V10：行级 longpress 处理器（同链；adapter 把 onLongpress 归一为语义名 `longpress`） */
+  onLongPress?: (e: { currentTarget: number; target: number; x: number; y: number }) => void,
 ): ReturnType<typeof h> {
   return h('p-view', {
     key: it.id,
     ...(onTap ? { onClick: onTap } : {}),
+    ...(onLongPress ? { onLongpress: onLongPress } : {}),
     style: {
       flexDirection: 'row', alignItems: 'center',
       height: 56, flexShrink: 0, margin: { bottom: margin }, padding: { left: 16, right: 16 },
@@ -146,6 +149,17 @@ export function makeApp(initial: number, strategy: BenchStrategy = 'plain'): Ben
       title: 'row-tap',
     })
   }
+  // ★V10：longpress 探针（同一条 log——用例按 title 计数做**负向判据**：
+  //   longpress 不应混入 tap、tap 也不应混入 longpress）
+  const onRowLongPressProbe = (e: { currentTarget: number; target: number; x: number; y: number }) => {
+    tapLog.push({
+      id: e.currentTarget,
+      target: e.target,
+      x: Math.round(e.x * 100) / 100,
+      y: Math.round(e.y * 100) / 100,
+      title: 'row-longpress',
+    })
+  }
   const container = adapter.createElement('p-view')
   adapter.root.children.push(container)
   container.parent = adapter.root
@@ -186,7 +200,7 @@ export function makeApp(initial: number, strategy: BenchStrategy = 'plain'): Ben
         if (strategy === 'comp') {
           return h(V0Row, { key: it.id, row: it, dot, margin, accent: c, extra })
         }
-        return buildBenchRow(it, dot, margin, c, extra, onRowTapProbe)
+        return buildBenchRow(it, dot, margin, c, extra, onRowTapProbe, onRowLongPressProbe)
       })
       return h('p-view', {
         style: {
