@@ -2,7 +2,11 @@
 const probe = require('../../utils/probe.js')
 
 Page({
-  data: { tag: 'sky' },
+  data: { tag: 'sky', scrollTop: 0 },
+  /** ★L2.6：程序化滚动（setData 驱动——Skyline 的 scroll-view 走数据绑定） */
+  scrollTo(v) {
+    this.setData({ scrollTop: v })
+  },
   onLoad() {
     // ★开新 session（**不清账本**：组件 attached 可能先于 onLoad 写入——第一版清空会误删）
     try {

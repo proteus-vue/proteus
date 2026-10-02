@@ -18,6 +18,7 @@ var FIXTURE = [
   { id: 'c-nested', path: '2', sk: 'p-box' },
   { id: 'c-nested-box', path: '2.0', sk: 'p-box' },
   { id: 'c-abs', path: '3', sk: 'p-box' },   // ★覆盖收官：绝对定位（top/left）
+  { id: 'c-tap', path: '4', sk: 'p-box' },   // ★L2.5：可点击节点（tap → 宽变化）
 ]
 
 /**

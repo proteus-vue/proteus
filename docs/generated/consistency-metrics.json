@@ -12,7 +12,7 @@
   },
   "M1": {
     "name": "数值一致性覆盖率",
-    "definition": "Σ(L1|L2|L3 各层**折算到同一 CSS 字段集**后的覆盖数) / (可表达字段数 × 3)（分层加总 · 折算口径）",
+    "definition": "Σ(L1|L2|L3 各层**折算到同一 CSS 字段集**后的覆盖数) / (可表达字段数 × 3)（分层加总 · 折算口径）｜★L2.5/L2.6（交互层）**不计入本比值**：它们校验的不是 CSS 字段（是\"结果态等价\"与\"6 类不变量\"），计入会让分母失去意义——覆盖状态单列在 byLayer，由门禁与 M4 算子承担。",
     "value": 0.6786,
     "union": {
       "covered": 28,
@@ -33,7 +33,17 @@
       "L3": {
         "covered": 27,
         "total": 28,
-        "note": "实测比对已落地（VC6：Web ⇄ WebView，硬门禁 + A-6 豁免）；**折算口径**：25 个可比样式键 → 27 个字段（四角/四边归并；fontFamily/fontWeight/visibility 不在字段集内不计）"
+        "note": "实测比对已落地（VC6：Web ⇄ WebView，硬门禁 + A-6 豁免）；**折算口径**：可比样式键 → 27 个字段（四角/四边归并；集外键不计）"
+      },
+      "L2_5": {
+        "covered": 1,
+        "total": 1,
+        "note": "离散交互（事件→结果态几何）：跨端实测通过（两端位移均 60px + 结果态 7 节点一致）+ M4 算子 3 个（含\"点了没反应\"必红）"
+      },
+      "L2_6": {
+        "covered": 6,
+        "total": 6,
+        "note": "连续交互不变量：6 类全绿（structure/sizes/gaps/order/containment/translation）+ 实测滚动 200/500px + M4 算子 4 个（含\"纯滚动不应报\"对照组）"
       }
     },
     "covered": 28,
@@ -77,8 +87,8 @@
     "name": "一致性回归检出率",
     "definition": "L1 变异测试捕获数 / 注入数（L2/L3/L4 算子未布点 ⇒ 单列 pending，不得悄悄删）",
     "value": 1,
-    "injected": 11,
-    "captured": 11,
+    "injected": 16,
+    "captured": 16,
     "operators": [
       {
         "id": "L1-overflow-scroll",
@@ -207,17 +217,65 @@
         "expected": false,
         "ok": true,
         "note": "对照组：宽度 0.5px 在容差内不应报"
+      },
+      {
+        "id": "L2.5-result-state-mismatch",
+        "layer": "L2.5",
+        "caught": true,
+        "expected": true,
+        "ok": true,
+        "note": "交互结果态不一致必须检出"
+      },
+      {
+        "id": "L2.5-dead-interaction",
+        "layer": "L2.5",
+        "caught": true,
+        "expected": true,
+        "ok": true,
+        "note": "★任一端\"点了没反应\"（几何无变化）必须检出"
+      },
+      {
+        "id": "L2.5-ctrl-consistent",
+        "layer": "L2.5",
+        "caught": false,
+        "expected": false,
+        "ok": true,
+        "note": "对照组：两端交互结果一致不应报"
+      },
+      {
+        "id": "L2.6-gap-broken",
+        "layer": "L2.6",
+        "caught": true,
+        "expected": true,
+        "ok": true,
+        "note": "相对间距被破坏（单节点偏移）必须检出"
+      },
+      {
+        "id": "L2.6-structure-lost",
+        "layer": "L2.6",
+        "caught": true,
+        "expected": true,
+        "ok": true,
+        "note": "结构不变量（节点缺失）必须检出"
+      },
+      {
+        "id": "L2.6-size-changed",
+        "layer": "L2.6",
+        "caught": true,
+        "expected": true,
+        "ok": true,
+        "note": "尺寸不变量必须检出"
+      },
+      {
+        "id": "L2.6-ctrl-pure-scroll",
+        "layer": "L2.6",
+        "caught": false,
+        "expected": false,
+        "ok": true,
+        "note": "★对照组：**纯滚动（整体平移）不应报**——\"禁止比绝对坐标\"的机器证明"
       }
     ],
     "pendingOperators": [
-      {
-        "id": "L2.5-discrete-interaction",
-        "note": "离散交互（事件 → 结果态几何）——需 L2.5 布点（标准 §10.1 的第二层）"
-      },
-      {
-        "id": "L2.6-scroll-relative",
-        "note": "连续交互不变量（滚动后相对间距）——需 L2.6 布点"
-      },
       {
         "id": "L4-radius-missing",
         "note": "圆角缺失——需 L4 像素观察（非门禁；pHash 对局部小差异不敏感，已知边界）"

@@ -1,0 +1,266 @@
+{
+  "before": {
+    "format": "proteus-geometry-snapshot",
+    "version": 1,
+    "end": "webview",
+    "viewport": {
+      "width": 400,
+      "height": 600
+    },
+    "root": {
+      "nodeId": "c-root",
+      "path": "",
+      "depth": 0,
+      "semanticKey": "p-view",
+      "x": 0,
+      "y": 924,
+      "w": 400,
+      "h": 600,
+      "children": [
+        {
+          "nodeId": "c-box",
+          "path": "0",
+          "depth": 1,
+          "semanticKey": "p-box",
+          "x": 12,
+          "y": 936,
+          "w": 200,
+          "h": 60,
+          "children": []
+        },
+        {
+          "nodeId": "c-text",
+          "path": "1",
+          "depth": 1,
+          "semanticKey": "p-text",
+          "x": 12,
+          "y": 1004,
+          "w": 160,
+          "h": 40,
+          "children": []
+        },
+        {
+          "nodeId": "c-nested",
+          "path": "2",
+          "depth": 1,
+          "semanticKey": "p-box",
+          "x": 12,
+          "y": 1052,
+          "w": 300,
+          "h": 100,
+          "children": [
+            {
+              "nodeId": "c-nested-box",
+              "path": "2.0",
+              "depth": 2,
+              "semanticKey": "p-box",
+              "x": 24,
+              "y": 1064,
+              "w": 100,
+              "h": 24,
+              "children": []
+            }
+          ]
+        },
+        {
+          "nodeId": "c-abs",
+          "path": "3",
+          "depth": 1,
+          "semanticKey": "p-box",
+          "x": 19,
+          "y": 1157,
+          "w": 50,
+          "h": 30,
+          "children": []
+        },
+        {
+          "nodeId": "c-tap",
+          "path": "4",
+          "depth": 1,
+          "semanticKey": "p-box",
+          "x": 12,
+          "y": 1186,
+          "w": 60,
+          "h": 36,
+          "children": []
+        }
+      ]
+    }
+  },
+  "afterTap": {
+    "format": "proteus-geometry-snapshot",
+    "version": 1,
+    "end": "webview",
+    "viewport": {
+      "width": 400,
+      "height": 600
+    },
+    "root": {
+      "nodeId": "c-root",
+      "path": "",
+      "depth": 0,
+      "semanticKey": "p-view",
+      "x": 0,
+      "y": 924,
+      "w": 400,
+      "h": 600,
+      "children": [
+        {
+          "nodeId": "c-box",
+          "path": "0",
+          "depth": 1,
+          "semanticKey": "p-box",
+          "x": 12,
+          "y": 936,
+          "w": 200,
+          "h": 60,
+          "children": []
+        },
+        {
+          "nodeId": "c-text",
+          "path": "1",
+          "depth": 1,
+          "semanticKey": "p-text",
+          "x": 12,
+          "y": 1004,
+          "w": 160,
+          "h": 40,
+          "children": []
+        },
+        {
+          "nodeId": "c-nested",
+          "path": "2",
+          "depth": 1,
+          "semanticKey": "p-box",
+          "x": 12,
+          "y": 1052,
+          "w": 300,
+          "h": 100,
+          "children": [
+            {
+              "nodeId": "c-nested-box",
+              "path": "2.0",
+              "depth": 2,
+              "semanticKey": "p-box",
+              "x": 24,
+              "y": 1064,
+              "w": 100,
+              "h": 24,
+              "children": []
+            }
+          ]
+        },
+        {
+          "nodeId": "c-abs",
+          "path": "3",
+          "depth": 1,
+          "semanticKey": "p-box",
+          "x": 19,
+          "y": 1157,
+          "w": 50,
+          "h": 30,
+          "children": []
+        },
+        {
+          "nodeId": "c-tap",
+          "path": "4",
+          "depth": 1,
+          "semanticKey": "p-box",
+          "x": 12,
+          "y": 1186,
+          "w": 120,
+          "h": 36,
+          "children": []
+        }
+      ]
+    }
+  },
+  "scrolled": {
+    "format": "proteus-geometry-snapshot",
+    "version": 1,
+    "end": "webview",
+    "viewport": {
+      "width": 400,
+      "height": 600
+    },
+    "root": {
+      "nodeId": "c-root",
+      "path": "",
+      "depth": 0,
+      "semanticKey": "p-view",
+      "x": 0,
+      "y": 424,
+      "w": 400,
+      "h": 600,
+      "children": [
+        {
+          "nodeId": "c-box",
+          "path": "0",
+          "depth": 1,
+          "semanticKey": "p-box",
+          "x": 12,
+          "y": 436,
+          "w": 200,
+          "h": 60,
+          "children": []
+        },
+        {
+          "nodeId": "c-text",
+          "path": "1",
+          "depth": 1,
+          "semanticKey": "p-text",
+          "x": 12,
+          "y": 504,
+          "w": 160,
+          "h": 40,
+          "children": []
+        },
+        {
+          "nodeId": "c-nested",
+          "path": "2",
+          "depth": 1,
+          "semanticKey": "p-box",
+          "x": 12,
+          "y": 552,
+          "w": 300,
+          "h": 100,
+          "children": [
+            {
+              "nodeId": "c-nested-box",
+              "path": "2.0",
+              "depth": 2,
+              "semanticKey": "p-box",
+              "x": 24,
+              "y": 564,
+              "w": 100,
+              "h": 24,
+              "children": []
+            }
+          ]
+        },
+        {
+          "nodeId": "c-abs",
+          "path": "3",
+          "depth": 1,
+          "semanticKey": "p-box",
+          "x": 19,
+          "y": 657,
+          "w": 50,
+          "h": 30,
+          "children": []
+        },
+        {
+          "nodeId": "c-tap",
+          "path": "4",
+          "depth": 1,
+          "semanticKey": "p-box",
+          "x": 12,
+          "y": 686,
+          "w": 60,
+          "h": 36,
+          "children": []
+        }
+      ]
+    }
+  }
+}

@@ -10,7 +10,7 @@
 import fs from 'node:fs'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
-import { validateGeometrySnapshot, validateStyleSnapshot } from '../packages/consistency/dist/index.js'
+import { validateGeometrySnapshot, validateStyleSnapshot, resolveTolerance } from '../packages/consistency/dist/index.js'
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..')
 const fails = []
@@ -142,7 +142,7 @@ if (mpGeos.skyline && mpGeos.webview) {
 
 // ⑤ ★★VC5-b：**真实三端比对**（skyline ⇄ webview，按分级容差）——M1 的 L2 覆盖落地
 if (mpGeos.skyline && mpGeos.webview) {
-  const { compareGeometry, resolveTolerance } = await import('../packages/consistency/dist/index.js')
+  const { compareGeometry } = await import('../packages/consistency/dist/index.js')
   const cfg = resolveTolerance(JSON.parse(fs.readFileSync(path.join(ROOT, 'docs/consistency-tolerance.json'), 'utf-8')))
   const r = compareGeometry(mpGeos.skyline, mpGeos.webview, { tolerance: cfg })
   note(`VC5-b 比对（skyline ⇄ webview，${r.summary.compared} 节点）：${r.ok ? '✅ 全部在容差内' : `❌ ${r.diffs.filter((d) => d.overTolerance).length} 条超容差`}`)
@@ -158,8 +158,7 @@ if (mpGeos.skyline && mpGeos.webview) {
 // ⑤b ★★L3 实测样式比对（Web 真值 ⇄ WebView）——M1 的 L3 覆盖落地
 //   前提：两端都走 `fields/getComputedStyle` **实测**（Skyline 端不可用 ⇒ 不参与——见下）
 if (mpGeos.webview) {
-  const { compareStyle, buildStyleReport, formatReport } = await import('../packages/consistency/dist/index.js')
-  const { resolveTolerance } = await import('../packages/consistency/dist/index.js')
+  const { compareStyle } = await import('../packages/consistency/dist/index.js')
   const cfg = resolveTolerance(JSON.parse(fs.readFileSync(path.join(ROOT, 'docs/consistency-tolerance.json'), 'utf-8')))
   // Web golden 里带 style（tests/consistency-web-probe.test.ts 产出）
   const webGolden = path.join(ROOT, 'tests/__snapshots__/consistency/web-home.geometry.json')
@@ -208,6 +207,41 @@ if (appFile && mpGeos.skyline) {
   note(`VC5-b 比对（App 内核 ⇄ skyline，${r.summary.compared} 节点）：${r.ok ? '✅ 全部在容差内' : `⚠ ${r.diffs.filter((d) => d.overTolerance).length} 条差异（跨 renderer，如实报告）`}`)
   for (const d of r.diffs.filter((x) => x.overTolerance).slice(0, 6)) {
     note(`    · path=${d.path} ${d.property ?? d.kind} ${d.aValue ?? ''} → ${d.bValue ?? ''}${d.deviation !== undefined ? `（Δ${d.deviation}）` : ''}`)
+  }
+}
+
+// ⑦ ★★L2.5 离散交互（跨端事件 → 结果态几何）+ L2.6 连续交互不变量
+//   数据源：spike/vc0-skyline-geom/results/interaction-<end>.json（装置实测产出）
+{
+  const { compareDiscreteInteraction, verifyInvariants } = await import('../packages/consistency/dist/index.js')
+  const cfg = resolveTolerance(JSON.parse(fs.readFileSync(path.join(ROOT, 'docs/consistency-tolerance.json'), 'utf-8')))
+  const loadInt = (end) => {
+    const f = path.join(ROOT, 'spike/vc0-skyline-geom/results', `interaction-${end}.json`)
+    return fs.existsSync(f) ? JSON.parse(fs.readFileSync(f, 'utf-8')) : null
+  }
+  const sky = loadInt('skyline')
+  const wv = loadInt('webview')
+  if (!sky || !wv) {
+    note('L2.5/L2.6 跳过：缺 interaction-<end>.json 工件（跑装置采集 + node scripts/consistency-interaction-artifacts.mjs）')
+  } else {
+    const l25 = compareDiscreteInteraction(sky.before, sky.afterTap, wv.before, wv.afterTap, { tolerance: cfg })
+    if (!l25.ok) {
+      fails.push(
+        `L2.5 离散交互对照失败：两端位移 skyline=${l25.aMoved} webview=${l25.bMoved}` +
+          (l25.problems.length ? `｜${l25.problems.join('；')}` : '') +
+          (l25.result.ok ? '' : `｜结果态 ${l25.result.diffs.filter((d) => d.overTolerance).length} 条超容差`),
+      )
+    } else {
+      note(`L2.5 离散交互 ✅：两端位移均 ${l25.aMoved}px（交互真的发生）· 结果态 ${l25.result.summary.compared} 节点逐项一致`)
+    }
+    for (const [name, s2] of [['skyline', sky], ['webview', wv]]) {
+      const r = verifyInvariants(s2.before, s2.scrolled, { tolerance: cfg })
+      if (!r.ok) {
+        fails.push(`L2.6 不变量（${name}）失败：${r.checks.filter((c) => !c.ok).map((c) => `${c.id}：${c.detail}`).join('｜')}`)
+      } else {
+        note(`L2.6 连续交互（${name}）✅：6 类不变量全过 · 识别整体平移 ${JSON.stringify(r.translation)}`)
+      }
+    }
   }
 }
 

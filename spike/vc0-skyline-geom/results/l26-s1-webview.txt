@@ -1,0 +1,12 @@
+[wechatide] skill-call: client=vc0 tool=automation_evaluate
+{
+  "ok": true,
+  "tool": "automation_evaluate",
+  "clientName": "vc0",
+  "result": {
+    "success": true,
+    "result": {
+      "result": "{\"ok\":true,\"end\":\"webview\",\"rects\":{\"c-root\":{\"id\":\"c-root\",\"dataset\":{},\"left\":0,\"right\":400,\"top\":424,\"bottom\":1024,\"width\":400,\"height\":600},\"c-box\":{\"id\":\"c-box\",\"dataset\":{},\"left\":12,\"right\":212,\"top\":436,\"bottom\":496,\"width\":200,\"height\":60},\"c-text\":{\"id\":\"c-text\",\"dataset\":{},\"left\":12,\"right\":172,\"top\":504,\"bottom\":544,\"width\":160,\"height\":40},\"c-nested\":{\"id\":\"c-nested\",\"dataset\":{},\"left\":12,\"right\":312,\"top\":552,\"bottom\":652,\"width\":300,\"height\":100},\"c-nested-box\":{\"id\":\"c-nested-box\",\"dataset\":{},\"left\":24,\"right\":124,\"top\":564,\"bottom\":588,\"width\":100,\"height\":24},\"c-abs\":{\"id\":\"c-abs\",\"dataset\":{},\"left\":19,\"right\":69,\"top\":657,\"bottom\":687,\"width\":50,\"height\":30},\"c-tap\":{\"id\":\"c-tap\",\"dataset\":{},\"left\":12,\"right\":72,\"top\":686,\"bottom\":722,\"width\":60,\"height\":36}},\"tapW\":60,\"scrollTop\":500}"
+    }
+  }
+}

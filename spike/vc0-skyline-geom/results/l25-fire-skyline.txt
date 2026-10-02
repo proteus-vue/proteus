@@ -1,0 +1,12 @@
+[wechatide] skill-call: client=vc0 tool=automation_evaluate
+{
+  "ok": true,
+  "tool": "automation_evaluate",
+  "clientName": "vc0",
+  "result": {
+    "success": true,
+    "result": {
+      "result": "{\"ok\":true,\"tapW\":120}"
+    }
+  }
+}
