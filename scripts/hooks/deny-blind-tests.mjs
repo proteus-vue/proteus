@@ -161,11 +161,10 @@ const reason = [
   '对照：上一轮 AI 把全量跑了三遍（每遍 ~400s），而第一遍输出已足够定位。',
 ].join('\n')
 
-process.stdout.write(
-  JSON.stringify({
-    hookEventName: 'PreToolUse',
-    permissionDecision: 'deny',
-    permissionDecisionReason: reason,
-  }),
-)
-process.exit(0)
+// ★★输出契约（2026-10-02 修复——与本目录另两条 hook 同因）：
+//   原用扁平 stdout JSON（`hookEventName`/`permissionDecision` 在顶层）——与 ZCode 客户端的
+//   **嵌套严格 schema**（`hookSpecificOutput.hookEventName`）不匹配 ⇒ 每次运行都
+//   `hook.run.failed`（schema 校验失败）⇒ deny 被丢弃。改用**代码路径**：
+//   `exit 2` + stderr（客户端 `createExitCodeBlockOutput` 直接转成 deny；不经 JSON schema）。
+process.stderr.write(reason + '\n')
+process.exit(2)
