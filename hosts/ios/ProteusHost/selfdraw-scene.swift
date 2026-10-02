@@ -1828,12 +1828,30 @@ final class SelfDrawView: UIView {
     func applyContentOffset(dx: CGFloat, dy: CGFloat) -> CGPoint {
         contentOffset.x += dx
         contentOffset.y += dy
+        // ★★垂直**范围钳制**（2026-10-02 —— 与 Android `scrollDragBy` 同源的修复）：
+        //   「用户实测安卓内容页可一直上下滚」的 iOS 侧同缺陷（`applyContentOffset` 无界）。
+        //   仅当场景**显式设置过**范围（`setVerticalScrollRange`，由内容高 − 视口高推导）时钳制；
+        //   默认未设置 ⇒ 与改前逐位一致（既有 pan/滚动用例零影响）。
+        if verticalRangeSet {
+            let clamped = max(0, min(CGFloat(verticalRange), contentOffset.y))
+            contentOffset.y = clamped
+        }
         // ★用 sublayerTransform 平移（不动各层 frame ⇒ 不破坏「内容坐标」语义）
         var t = CATransform3DIdentity
         t.m41 = -contentOffset.x
         t.m42 = -contentOffset.y
         self.layer.sublayerTransform = t
         return contentOffset
+    }
+
+    /// ★★垂直滚动范围（物理/点；内容高 − 视口高）。由**场景**从内核几何推导后设置
+    ///   （`nodeRects` 的最大 maxY − bounds 高）；未设置 ⇒ 不钳制（默认，保持既有行为）。
+    private(set) var verticalRange = 0
+    private(set) var verticalRangeSet = false
+
+    func setVerticalScrollRange(_ range: Int) {
+        verticalRange = max(0, range)
+        verticalRangeSet = true
     }
 
     /// 视口外的待更新层（id → 目标绝对 rect）——滚入视野前必须刷上
@@ -3035,6 +3053,10 @@ final class SelfDrawBridge: NSObject, SelfDrawExports {
     static var memPeakMB: Double = 0
     static var reportFileName = "selfdraw-report"
     static var snapshotName = "selfdraw-final"
+    /// ★★内容滚动范围钳制开关（2026-10-02 —— 与 Android `VaporRenderHost.contentScrollRangeEnabled` 同源）：
+    ///   内容页语义 = 装不下才滚、最多滚到内容底（与 Web 页面一致）；
+    ///   **仅内容页场景开启**（`--stress`），既有 pan/滚动探针用例保持"无界拖拽"（零行为变化）。
+    static var contentScrollRangeEnabled = false
 
     deinit {
         if handle != 0 { _ = proteus_layout_destroy(handle) }
@@ -5474,6 +5496,27 @@ final class SelfDrawBridge: NSObject, SelfDrawExports {
             return "{\"ok\":false,\"error\":\"几何解析失败\"}"
         }
         let tBuild0 = CFAbsoluteTimeGetCurrent()
+        // ★★内容滚动范围（2026-10-02 —— 与 Android `applyContentScrollRange` **同源同口径**）：
+        //   内容高 = 内核 rects 的**最大 maxY**；范围 = max(0, 内容高 − 视图高) ⇒
+        //   交给视图后 `applyContentOffset` 钳到 [0, range]（装得下 ⇒ 0 ⇒ 不可滚）。
+        //   ★★只有**显式开启**的场景才设置（`SelfDrawBridge.contentScrollRangeEnabled`）——
+        //     既有 pan/滚动探针用例依赖"无界拖拽"（M6/panDragProbe 押大位移读数），
+        //     默认钳制会静默改变它们的读数（历史教训：改默认行为 = 改既有判据）。
+        //   ★首版把范围推导挂在 `nodeRects`（**只虚拟化路径填充**）⇒ SFC stress（全量路径）
+        //     读到空表 ⇒ range 未设置 ⇒ 真机实测 `scroll_after_drag=120`（内容被拖走）。
+        //     ⇒ 修正：**在全量路径的 rects 处**就地推导（那时几何已在手，零额外读取）。
+        var scrollRangeInfo: [String: Any] = [:]
+        if SelfDrawBridge.contentScrollRangeEnabled {
+            var maxBottom: CGFloat = 0
+            for (_, r) in rects {
+                let bottom = CGFloat(r["y"] ?? 0) + CGFloat(r["height"] ?? 0)
+                if bottom > maxBottom { maxBottom = bottom }
+            }
+            // I2-ALLOW: 滚动**交互约束**取整（钳制上限读数——不进绘制指令流；几何仍走内核吸附值）
+            let range = max(0, Int((maxBottom - view.bounds.height).rounded()))
+            view.setVerticalScrollRange(range)
+            scrollRangeInfo = ["content_height": Double(maxBottom), "scroll_range": range]
+        }
         // 按树序拍平（父在前）——CALayer 树要求先建父
         var flat: [(id: Int, parentId: Int?, rect: CGRect, style: [String: Any])] = []
         let sortedNodes = nodes.compactMap { n -> (Int, Int?, [String: Any])? in
@@ -5871,6 +5914,9 @@ final class SelfDrawViewController: UIViewController {
         if isStress {
             SelfDrawBridge.reportFileName = "stress-sfc"
             SelfDrawBridge.snapshotName = "stress-sfc"
+            // ★★内容滚动范围钳制（2026-10-02 —— 「示例页可一直上下滚」的 iOS 侧修复）：
+            //   内容页语义（装不下才滚，最多滚到内容底）；仅本场景开启 ⇒ 既有 pan/滚动用例零影响。
+            SelfDrawBridge.contentScrollRangeEnabled = true
         }
         if isBench {
             // ★★过滤跑写**独立文件**（本仓实测踩到的坑，代价=白等 10 分钟）
@@ -5961,6 +6007,33 @@ final class SelfDrawViewController: UIViewController {
         bridge.view?.backgroundColor = UIColor(red: 0x14 / 255.0, green: 0x14 / 255.0, blue: 0x1C / 255.0, alpha: 1)
         let out = evalJs("__proteus.renderStress()")
         NSLog("[proteus] stress 渲染：%@", String(out.prefix(240)))
+        // ★★滚动手势探针（2026-10-02 —— 「示例页可一直上下滚」的 iOS 侧修复证据）：
+        //   ① 范围已在**渲染路径**里从内核几何推导（`contentScrollRangeEnabled` ⇒ rects 最大 maxY）；
+        //   ② 真实 pan 出口（`driveScrollDrag`——与真手指同一条路径）拖一段；
+        //   ③ 报告 `scroll_after_drag`（内容页应恒为 0）作为**机器判据**；
+        //   ④ 记录后复位（截图不受探针影响——与 Android `StressSfcActivity` 同款纪律）。
+        var scrollProbe: [String: Any] = [:]
+        if let v = bridge.view {
+            scrollProbe["scroll_range"] = v.verticalRangeSet ? v.verticalRange : -1
+            // ★钳制生效的直接证据：未设置范围时 offset 可被拖走（首版实测 120）——
+            //   记为哨兵式读数，判据看 `scroll_after_drag`（与 Android 的 `-999` 同约定）。
+            let before = Double(v.contentOffset.y)
+            scrollProbe["scroll_before_drag"] = before
+            // 真实手势出口（`driveScrollDrag` = pan 识别器的唯一出口），模拟「手指上移」6×20pt：
+            //   pan 处理器把手指上移（translation.y<0）换算为内容位移 dy=+20 ⇒ 逐步累加。
+            for _ in 0..<6 {
+                _ = v.driveScrollDrag(dx: 0, dy: 20)
+            }
+            scrollProbe["scroll_after_drag"] = Double(v.contentOffset.y)
+            scrollProbe["drag_drive_count"] = v.scrollDragDriveCount
+            // 记录后复位（截图不受探针影响——与 Android `StressSfcActivity` 同款纪律）：
+            // 内容页 range=0 时 offset 本就是 0；若钳制失效被拖走，这里归零保证截图干净，
+            // 而 `scroll_after_drag` 已如实留证（判据看它，不看复位后的值）。
+            _ = v.applyContentOffset(dx: -v.contentOffset.x, dy: -v.contentOffset.y)
+            scrollProbe["scroll_reset_ok"] = Double(v.contentOffset.y) == 0
+        } else {
+            scrollProbe["scroll_range_error"] = "view 未建立"
+        }
         // ★截图（宿主自有能力：UIGraphicsImageRenderer 渲染视图层——与 `snapshot(named:)` 同路径）
         let snapPath = bridge.view?.snapshot(named: SelfDrawBridge.snapshotName)
         var report: [String: Any] = [
@@ -5969,6 +6042,7 @@ final class SelfDrawViewController: UIViewController {
             "snapshot_ok": snapPath != nil,
             "snapshot_name": SelfDrawBridge.snapshotName,
             "js_raw": out,
+            "scroll_probe": scrollProbe,
         ]
         // ★★与 selfdraw/bench 报告同形态（2026-10-02）：JS 读数进 `js_report` 子对象 + 顶层
         //   `run_ts`——采集脚本的**内容级新鲜度/构建断言**（check-report-freshness.mjs /

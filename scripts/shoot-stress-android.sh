@@ -47,14 +47,28 @@ except Exception:
     print("PARSE_FAIL"); sys.exit(0)
 payload = r.get("payload") or {}
 js = payload.get("js") or {}
+
+def num(d, k, missing):
+    """取数值：**显式 None 检查**（不能用 `x or 兜底`——0 是合法值却 falsy，
+    实测踩过：scroll_range=0 被 `or -1` 吃掉 ⇒ 判据误报"未接线"，正反馈证据反被埋没）。"""
+    v = d.get(k)
+    return int(v) if isinstance(v, (int, float)) else missing
+
 print(json.dumps({
     "ok": bool(r.get("ok")),
-    "on_draw": int(r.get("on_draw") or 0),
+    "on_draw": num(r, "on_draw", 0),
     "origin": [int(v) for v in (r.get("view_origin") or [-1, -1])],
-    "inst_nodes": int(js.get("inst_nodes") or 0),
-    "data_rows": int(js.get("data_rows") or 0),
-    "inst_texts": int(js.get("inst_texts") or 0),
-    "painted_colors": int(js.get("painted_colors") or 0),
+    "inst_nodes": num(js, "inst_nodes", 0),
+    "data_rows": num(js, "data_rows", 0),
+    "inst_texts": num(js, "inst_texts", 0),
+    "painted_colors": num(js, "painted_colors", 0),
+    # ★★滚动边界判据（2026-10-02「安卓示例页面可一直上下滚」修复的证据字段）：
+    #   scroll_range=0（内容装得下）⇒ 真实拖拽后 scroll_after_drag 必须恒 0。
+    #   ★缺字段一律给**哨兵 ≠ 0**（-1 / -999）：探针没跑 = 判据不成立 = 必须红，
+    #     绝不能因"字段缺失"而落进"=0 视为通过"的假绿。
+    "scroll_range": num(r, "scroll_range", -1),
+    "scroll_after_drag": num(r, "scroll_after_drag", -999),
+    "drag_drive_count": num(r, "drag_drive_count", 0),
 }))
 PY
 )"
@@ -84,6 +98,23 @@ if [ -z "$DROWS" ] || [ "$DROWS" -le 0 ] 2>/dev/null; then
   echo "FAIL: data_rows=$DROWS (SFC 数据快照为空)" >&2
   exit 1
 fi
+# ★★滚动边界判据（2026-10-02 —— 用户实测「示例页面可以一直上下滚动」的修复门禁）：
+#   探针在 App 内注入**真实 MotionEvent 序列**（手指上移拖拽）走生产通路；
+#   内容页（装得下）必须 ⇒ range 已设置(≠-1) ∧ 拖拽后 scroll_after_drag == 0。
+#   若此处红：说明钳制未生效（页面又变成可无限滚）——正是用户报的缺陷形态，必须拦下。
+SRANGE="$(getf scroll_range)"; SAFTER="$(getf scroll_after_drag)"; DDRIVE="$(getf drag_drive_count)"
+if [ -z "$SRANGE" ] || [ "$SRANGE" = "-1" ] 2>/dev/null; then
+  echo "FAIL: scroll_range=${SRANGE}（未设置内容滚动范围——钳制未接线）" >&2
+  exit 1
+fi
+if [ "$SAFTER" != "0" ]; then
+  echo "FAIL: scroll_after_drag=${SAFTER}（真实拖拽后内容被滚走——内容页应不可滚！）" >&2
+  exit 1
+fi
+if [ -z "$DDRIVE" ] || [ "$DDRIVE" -le 0 ] 2>/dev/null; then
+  echo "FAIL: drag_drive_count=${DDRIVE}（拖拽探针未走生产通路——判据不可信）" >&2
+  exit 1
+fi
 
 echo "==> 4. screenshot"
 "$ADB" exec-out screencap -p > "$OUT/sfc.android.png" 2>/dev/null || true
@@ -94,4 +125,4 @@ node "$ROOT/scripts/probe-png-colors.mjs" "$OUT/sfc.android.png" "47,111,237" "1
   || { echo "FAIL: probe colors missed (blank/error screenshot?)" >&2; exit 1; }
 
 echo "$RPT" > "$OUT/sfc.android.json"
-echo "  [sfc.android] inst_nodes=$INODES data_rows=$DROWS on_draw=$NDRAW size=$(ls -l "$OUT/sfc.android.png" | awk '{print $5}')B sha=$(shasum -a 256 "$OUT/sfc.android.png" | awk '{print substr($1,1,12)}')"
+echo "  [sfc.android] inst_nodes=$INODES data_rows=$DROWS on_draw=$NDRAW scroll_range=$SRANGE scroll_after_drag=$SAFTER drives=$DDRIVE size=$(ls -l "$OUT/sfc.android.png" | awk '{print $5}')B sha=$(shasum -a 256 "$OUT/sfc.android.png" | awk '{print substr($1,1,12)}')"

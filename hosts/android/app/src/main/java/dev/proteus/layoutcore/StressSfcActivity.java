@@ -65,6 +65,11 @@ public class StressSfcActivity extends Activity {
         }
 
         host = new VaporRenderHost(this, root);
+        // ★★内容滚动范围钳制（2026-10-02 —— 「安卓示例页面可以一直上下滚动」修复）：
+        //   内容页语义 = 装不下才滚、最多滚到内容底（与 Web 页面一致）；
+        //   范围由内核几何推导（VaporRenderHost.applyContentScrollRange——宿主不算布局数学）。
+        //   ★只在本内容页开启：kernel-anim 等既有探针/动画用例保持"无界拖拽"（零行为变化）。
+        host.enableContentScrollRange();
         // ★★★长度缩放 = density（2026-10-02 实测修复）：SFC 的 px 是**逻辑单位**（Web CSS px /
         //   iOS pt / MP 逻辑 px 同义），而本宿主按**物理像素**绘制 ⇒ ×density 才与其它端同尺寸。
         //   首版缺此步：锚块 80px（其它端 130~240px）、内容只占屏 22%（用户目视直接看出）。
@@ -154,6 +159,40 @@ public class StressSfcActivity extends Activity {
                         o.put("ok", view.onDrawCount() > 0);
                         o.put("on_draw", view.onDrawCount());
                         o.put("view_origin", new org.json.JSONArray(new int[]{loc[0], loc[1]}));
+                        // ★★滚动手势探针（2026-10-02 —— 「安卓示例页面可以一直上下滚动」修复的机器判据）：
+                        //   注入**真实 MotionEvent 序列**（DOWN + 3×MOVE 上拖 + UP）走 GestureDetector
+                        //   → 生产通路 `scrollDragBy`（与 kernel-anim M6b 同法——真实触摸层，不用合成替身）。
+                        //   内容装得下（scroll_range=0）⇒ 拖拽后 scrollY 必须**恒为 0**（页面不可滚）。
+                        //   本字段是判据的可读证据：`scroll_after_drag` 与 `scroll_range`。
+                        final int scrollBefore = view.getContentScrollY();
+                        final long tProbe = android.os.SystemClock.uptimeMillis();
+                        android.view.MotionEvent down = android.view.MotionEvent.obtain(
+                                tProbe, tProbe, android.view.MotionEvent.ACTION_DOWN, 600f, 800f, 0);
+                        view.dispatchTouchEvent(down);
+                        down.recycle();
+                        final float[] moves = {740f, 690f, 640f};  // 手指上移（content 应下滚，若可滚）
+                        for (int i = 0; i < moves.length; i++) {
+                            android.view.MotionEvent mv = android.view.MotionEvent.obtain(
+                                    tProbe, tProbe + (i + 1) * 20L, android.view.MotionEvent.ACTION_MOVE, 600f, moves[i], 0);
+                            view.dispatchTouchEvent(mv);
+                            mv.recycle();
+                        }
+                        android.view.MotionEvent up = android.view.MotionEvent.obtain(
+                                tProbe, tProbe + 90L, android.view.MotionEvent.ACTION_UP, 600f, 640f, 0);
+                        view.dispatchTouchEvent(up);
+                        up.recycle();
+                        o.put("scroll_range", view.verticalScrollRange());
+                        o.put("scroll_before_drag", scrollBefore);
+                        o.put("scroll_after_drag", view.getContentScrollY());
+                        o.put("drag_drive_count", view.scrollDragDriveCount);
+                        // ★★探针后**复位**（2026-10-02）：探针要如实记录"拖拽后滚动值"（判据证据），
+                        //   但采集脚本紧接着会截屏做一致性比较——若修复失效、内容真的被滚走，
+                        //   截图会拍到滚走的画面（污染一致性数据）。⇒ 记录完立即归零，
+                        //   判据看 `scroll_after_drag` 判红/绿，截图看的是未滚动状态（两者互不污染）。
+                        view.setContentScrollY(0);
+                        o.put("scroll_reset_ok", view.getContentScrollY() == 0);
+                        // 拖拽后视口还没画新帧 ⇒ 再等一帧让探针的位移（若无）反映到画面（确定性）
+                        view.invalidate();
                         o.put("payload", new org.json.JSONObject(report));
                         MainActivity.writeReportStatic(StressSfcActivity.this, "stress-scene.json", o.toString(2));
                     } catch (Exception e) {

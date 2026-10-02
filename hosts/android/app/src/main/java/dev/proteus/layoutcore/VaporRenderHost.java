@@ -248,6 +248,17 @@ final class VaporRenderHost {
             lastPaintedSamples = sample(0);
             lastPaintedColors = sample(1);
 
+            // ★★内容滚动范围（2026-10-02 —— 用户实测「安卓示例页面可以一直上下滚动」的修复）：
+            //   内容高 = **内核几何**的最大下沿（`RustLayout.readRects` 的 y+height 最大值——
+            //   不是宿主自己算的布局数学）；范围 = max(0, 内容高 − 视口高) ⇒ 设给视图后
+            //   `scrollDragBy` 钳到 [0, range]（装得下 ⇒ 0 ⇒ 不可滚；超出 ⇒ 滚到内容底为止，
+            //   与 Web 页面语义一致）。
+            //   ★★**显式开启**（`enableContentScrollRange`，仅 SFC 压力场景调用）：
+            //     既有 kernel-anim 等**探针/动画用例依赖"无界拖拽"**（M6b 押 scrollY>0 的
+            //     大位移）——默认钳制会静默改变它们的读数（历史教训：改默认行为=改既有判据）。
+            //     未开启 ⇒ verticalRangeSet 仍为 false ⇒ 与改前逐位一致。
+            if (contentScrollRangeEnabled) applyContentScrollRange(vh, out);
+
             out.put("ok", true);
             out.put("nodes", specs.size());
             out.put("text_nodes", textCount);
@@ -261,6 +272,56 @@ final class VaporRenderHost {
             return out.toString();
         } catch (Throwable t) {
             return err(out, t.getClass().getSimpleName() + ": " + t.getMessage()).toString();
+        }
+    }
+
+    /**
+     * ★★**内容滚动范围**（2026-10-02 修「安卓示例页面可以一直上下滚动」）：
+     *
+     * 【语义（与 Web 页面一致）】内容装得下视口 ⇒ 不可滚（range = 0）；
+     *   内容超出 ⇒ 最多滚到内容底（range = 内容高 − 视口高）。
+     *
+     * 【★范围必须从内核几何推导，宿主不算第二份布局数学】内容高 = `RustLayout.readRects`
+     *   回传的全部节点矩形里 **y + height 的最大值**（内核已吸附的物理像素值）；
+     *   宿主只做 max 与减法——与 `visibleRange()` 的纪律同源（几何真值只在核内算）。
+     *
+     * 【失败不静默】readRects 失败/异常 ⇒ 报告里带 `scroll_range_error`（判据可判红），
+     *   此时视图保持"未设置范围"（= 不钳制）——不伪装成已修好。
+     */
+    private boolean contentScrollRangeEnabled = false;
+
+    /** 显式开启内容滚动范围钳制（仅内容页场景调用；探针/动画用例保持无界） */
+    void enableContentScrollRange() { contentScrollRangeEnabled = true; }
+
+    private void applyContentScrollRange(float vh, JSONObject out) {
+        try {
+            if (view == null || handle == 0L) return;
+            JSONObject all = new JSONObject(RustLayout.readRects(handle));
+            if (!all.optBoolean("ok", false)) {
+                out.put("scroll_range_error", "readRects 失败：" + all.optString("error", "?"));
+                return;
+            }
+            JSONObject rects = all.optJSONObject("rects");
+            float maxBottom = 0f;
+            if (rects != null) {
+                java.util.Iterator<String> it = rects.keys();
+                while (it.hasNext()) {
+                    JSONObject r = rects.optJSONObject(it.next());
+                    if (r == null) continue;
+                    float bottom = (float) (r.optDouble("y", 0) + r.optDouble("height", 0));
+                    if (bottom > maxBottom) maxBottom = bottom;
+                }
+            }
+            // I2-ALLOW: 滚动**交互约束**取整（像素级钳制上限——不进绘制指令流、非几何换算；
+            //   绘制几何仍走内核吸附值）
+            int range = Math.max(0, Math.round(maxBottom - vh));
+            view.setVerticalScrollRange(range);
+            // I2-ALLOW: 报告读数（content_height / scroll_range 为机器判据的可读字段）
+            out.put("content_height", Math.round(maxBottom));
+            out.put("scroll_range", range);
+        } catch (Exception e) {
+            // 不静默：报出（判据可据此判红）；视图保持"不钳制"状态
+            try { out.put("scroll_range_error", e.getClass().getSimpleName() + ": " + e.getMessage()); } catch (Exception ignored) { /* 报告字段写失败时保持原样 */ }
         }
     }
 

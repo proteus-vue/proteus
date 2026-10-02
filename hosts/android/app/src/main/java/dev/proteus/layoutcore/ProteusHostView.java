@@ -932,7 +932,15 @@ public class ProteusHostView extends ViewGroup {
         scrollDragDriveCount++;
         // ① 内容偏移（滚动量直接相加：正 = 向下滚动 = 内容上移）
         final int prev = scrollY;
-        setContentScrollY(prev + (int) dy);
+        int target = prev + (int) dy;
+        // ★★垂直**范围钳制**（2026-10-02 —— 用户实测「安卓示例页面可以一直上下滚动」的修复）：
+        //   仅当场景**显式设置过**范围（`setVerticalScrollRange`，由内容高 − 视口高推导）时钳制；
+        //   默认未设置 ⇒ 与改前行为完全一致（既有探针/内核动画用例零影响）。
+        //   ★为什么必须有：无范围时手指可把内容拖到屏幕外任意远（观感=坏了），
+        //     且 contentScrollY 单调漂移（实测锚块 y 180→264 无界），而 Web/MP 根本不滚动
+        //     ⇒ 跨端交互不一致（正是多端一致性要消灭的形态）。
+        if (verticalRangeSet) target = Math.max(0, Math.min(verticalRange, target));
+        setContentScrollY(target);
         if (coreHandle == 0) return "{\"ok\":false,\"error\":\"未接入核心\"}";
         // ② 内核按**新滚动位置**驱动全部窗口动画（宿主只报位置——换算在内核）
         String out = kernelAnimSeekScroll("{\"scroll\":" + scrollY + "}");
@@ -940,6 +948,21 @@ public class ProteusHostView extends ViewGroup {
         if (scrollDragListener != null) scrollDragListener.onScrollDrag(dx, dy);
         return out;
     }
+
+    /**
+     * ★★垂直滚动范围（物理像素；内容高 − 视口高）。由**场景**从内核几何推导后设置
+     *   （`VaporRenderHost.contentHeightPx()` − 视图高）；未设置 ⇒ 不钳制（默认，保持既有行为）。
+     */
+    private int verticalRange = 0;
+    private boolean verticalRangeSet = false;
+
+    public void setVerticalScrollRange(int range) {
+        this.verticalRange = Math.max(0, range);
+        this.verticalRangeSet = true;
+    }
+
+    /** 供报告/判据读（-1 = 未设置） */
+    public int verticalScrollRange() { return verticalRangeSet ? verticalRange : -1; }
 
     /**
      * ★★**横向手势滚动一步**（长卷探索模式 · 2026-10-01）——与 `scrollDragBy` **同构**
