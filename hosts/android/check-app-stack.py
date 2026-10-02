@@ -335,6 +335,25 @@ def main() -> int:
                         f"（非退化 ✓）"
                     )
 
+    # ── ⑧★场景 F（2026-10-02 · App 端路由收口）：**统一路由 API**（createRouter）真机全链 ──
+    #   证明"开发者不用手写各端胶水"：与 Web/MP **同一个 API**（push/back/replace）打到 App 端。
+    #   ★字段缺失（旧 bundle）⇒ 如实跳过并提示（不假绿）。
+    if "f_ok" not in d:
+        report("⑧ 统一 API 场景（F）：报告无 f_ok 字段（旧 bundle？）——跳过（不假绿）")
+    elif d.get("f_ok") is not True:
+        fail(
+            f"⑧ 统一 API 全链未通过：f_after_push={d.get('f_after_push')} · "
+            f"f_after_back={d.get('f_after_back')} · f_after_replace={d.get('f_after_replace')}"
+        )
+    else:
+        fp = d.get("f_after_push") or {}
+        fb = d.get("f_after_back") or {}
+        fr = d.get("f_after_replace") or {}
+        report(
+            f"⑧ ★统一 API（createRouter）真机全链：push→{fp.get('depth')}层（{fp.get('top')} · params={fp.get('params')}）· "
+            f"back→{fb.get('depth')}层（{fb.get('top')}）· replace→{fr.get('depth')}层（{fr.get('top')}）"
+        )
+
     print()
     if not ok:
         print("✗ 路由虚拟栈未通过（见上方失败项）")

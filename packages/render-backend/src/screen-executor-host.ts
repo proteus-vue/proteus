@@ -35,6 +35,9 @@ export type HostInvokeChannel = (method: string, argsJson: string) => string
 /** 完成回调的全局键（宿主回推用——与 `__proteusHostAppEvent` 同一"约定即接口"模式） */
 export const SCREEN_ANIM_DONE_KEY = '__proteusHostScreenAnimDone'
 
+/** 实例序号（多实例 token 前缀——防串台；见 createHostScreenPorts 内的说明） */
+let instSeq = 0
+
 interface HostReply {
   ok?: boolean
   data?: unknown
@@ -114,6 +117,15 @@ export function createHostScreenPorts(opts: HostScreenPortsOptions): HostScreenP
   let tokenSeq = 0
   let hookInstalled = false
 
+  // ★★唯一 token 前缀（2026-10-02 修**多实例串台**——实机抓到的真缺陷）：
+  //   【故障形态】`E 组（手写装配）+ F 组（统一 API）` **并行**跑 ⇒ 两个 `createHostScreenPorts`
+  //   实例各自装全局钩子 `__proteusHostScreenAnimDone` ⇒ **后装覆盖先装**（原实现直接赋值）
+  //   ⇒ 先装那侧（E）的动画完成回推**永远到不了** ⇒ E/F 双双 pending ⇒ 真机执行器 10s 超时。
+  //   【★为什么 Node 单测没抓到】单测一次只建一个实例（`tests/screen-executor-host.test.ts`）
+  //   ⇒ 覆盖问题只在"同上下文多实例"时现形 —— 真机场景正是那形态。
+  //   【修法】① 全局槽改为**多实例注册表**（所有实例都注册，钩子遍历分发；各实例只认自己的 token）；
+  //          ② token 加**实例唯一前缀**（`s<seq>-<n>`）——即使两实例的序号撞车也不会串台。
+  const INSTANCE_ID = `s${++instSeq}-`
   const resolveOne = (token: string, payload: unknown): boolean => {
     const r = pending.get(token)
     if (!r) return false
@@ -124,10 +136,22 @@ export function createHostScreenPorts(opts: HostScreenPortsOptions): HostScreenP
 
   if (opts.installAnimDoneHook !== false) {
     const g = globalThis as Record<string, unknown>
+    // 全局注册表（多实例共享一个槽：数组形式，钩子遍历分发）
+    const REGISTRY_KEY = `${SCREEN_ANIM_DONE_KEY}__registry`
+    let registry = g[REGISTRY_KEY] as Array<(token: string, payload: unknown) => boolean> | undefined
+    if (!Array.isArray(registry)) {
+      registry = []
+      g[REGISTRY_KEY] = registry
+    }
     const handler = (token: unknown, resultJson?: unknown): string => {
       if (typeof token !== 'string') return 'bad-token'
-      return resolveOne(token, resultJson) ? 'ok' : 'unknown-token'
+      const r = registry!
+      for (let i = 0; i < r.length; i++) {
+        if (r[i]!(token, resultJson)) return 'ok'
+      }
+      return 'unknown-token'
     }
+    registry.push((token, payload) => resolveOne(token, payload))
     try {
       g[SCREEN_ANIM_DONE_KEY] = handler
       hookInstalled = true
@@ -168,7 +192,7 @@ export function createHostScreenPorts(opts: HostScreenPortsOptions): HostScreenP
     playRouteTransition(plan, ctx) {
       const anims: readonly AnimLike[] = [...plan.incoming.anims, ...plan.outgoing.anims]
       if (anims.length === 0) return // 空批次（none 等）——不产生跨边界调用
-      const token = `screen-anim-${++tokenSeq}`
+      const token = `${INSTANCE_ID}screen-anim-${++tokenSeq}`
       const d = call(channel, 'screen.anim', {
         anims,
         durationMs: plan.durationMs,

@@ -31,6 +31,11 @@
       "@proteus-vue/runtime": ["packages/runtime/src/index.ts"],
       "@proteus-vue/runtime/style-safety": ["packages/runtime/src/style-safety/index.ts"],
       "@proteus-vue/router/navigation": ["packages/router/src/navigation.ts"],
+      // ★★2026-10-02 App 端路由收口：新子路径（app-route 核心入口 / app-adapter 适配器）
+      "@proteus-vue/router/app-route": ["packages/router/src/app-route.ts"],
+      "@proteus-vue/router/app-adapter": ["packages/router/src/app-adapter.ts"],
+      "@proteus-vue/router/router-core": ["packages/router/src/router-core.ts"],
+      "@proteus-vue/render-backend/app-navigation": ["packages/render-backend/src/app-navigation.ts"],
       "@proteus-vue/router": ["packages/router/src/index.ts"],
       "@proteus-vue/router/*": ["packages/router/src/*"],
       "@proteus-vue/plugin-vite": ["packages/plugin-vite/src/index.ts"],

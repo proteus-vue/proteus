@@ -273,3 +273,62 @@ describe('M5 生产端口 · 跨页面共享元素', () => {
     expect(done('nope')).toBe('unknown-token')
   })
 })
+
+// ══════════════════════════════════════════════════════════════════
+// ★★多实例同上下文（2026-10-02 真机抓到的缺陷回归锁）
+//
+// 【故障形态（真机 app-stack 场景 E+F 并行时现形）】两个 `createHostScreenPorts` 实例
+//   各自装全局钩子 `__proteusHostScreenAnimDone` ⇒ 原实现**后装覆盖先装** ⇒ 先装侧
+//   （E 场景）的动画完成回推永远到不了 ⇒ E/F 双双 pending ⇒ 执行器 10s 超时。
+//   【为什么既有单测没抓到】本文件其余用例一次只建一个实例——覆盖问题只在"同上下文多实例"现形，
+//   而那正是真机场景（E 手写装配 + F 统一 API 并行）的形态。
+//   【修法】全局槽改**多实例注册表**（钩子遍历分发）+ token 加实例唯一前缀。
+// ══════════════════════════════════════════════════════════════════
+describe('M5 生产端口 · 多实例同上下文（真机 E+F 并行缺陷的回归锁）', () => {
+  /** 模拟宿主回推（经**真全局键**——与真机同一条路） */
+  const pushAnimDone = (token: string): void => {
+    const g = globalThis as Record<string, unknown>
+    const h = g[SCREEN_ANIM_DONE_KEY] as ((t: unknown, r?: unknown) => string) | undefined
+    h?.(token, '{}')
+  }
+
+  it('两个实例的动画完成回推互不干扰（各自 token 各归其主）', async () => {
+    const a = makeChannel()
+    const b = makeChannel()
+    const portsA = createHostScreenPorts({ invoke: a.channel })
+    const portsB = createHostScreenPorts({ invoke: b.channel })
+
+    const plan = {
+      incoming: { anims: [{ nodeId: 1, from: 0, to: 100 }] },
+      outgoing: { anims: [{ nodeId: 2, from: 0, to: -100 }] },
+      durationMs: 200,
+      opaque: false,
+    } as never
+    const ctx = { direction: 'forward', transition: 'slideUp' } as never
+
+    // 两侧同时发起（真机并行形态）
+    const pA = portsA.anim.playRouteTransition(plan, ctx)
+    const pB = portsB.anim.playRouteTransition(plan, ctx)
+
+    // 取出两侧各自的 token（来自各自通道的调用记录）
+    const tokenA = (a.log.find((l) => l.method === 'screen.anim')!.args as { token: string }).token
+    const tokenB = (b.log.find((l) => l.method === 'screen.anim')!.args as { token: string }).token
+    expect(tokenA, '两实例 token 必须不同（实例前缀）').not.toBe(tokenB)
+
+    // ★先回推 B 的（若是"后装覆盖先装"的旧实现，A 的 handler 已被覆盖 ⇒ 回推 A 无效）
+    pushAnimDone(tokenB)
+    pushAnimDone(tokenA)
+    await Promise.all([pA, pB]) // 两侧都必须 settle（旧实现：其中一个永远 pending）
+    expect(portsA.pendingAnimations).toBe(0)
+    expect(portsB.pendingAnimations).toBe(0)
+  })
+
+  it('回推未知 token ⇒ 返回 unknown-token（不误伤其它实例）', () => {
+    const { channel } = makeChannel()
+    createHostScreenPorts({ invoke: channel })
+    const g = globalThis as Record<string, unknown>
+    const h = g[SCREEN_ANIM_DONE_KEY] as (t: unknown, r?: unknown) => string
+    expect(h('no-such-token', '{}')).toBe('unknown-token')
+    expect(h(123 as never)).toBe('bad-token')
+  })
+})

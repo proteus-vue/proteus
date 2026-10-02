@@ -103,6 +103,9 @@ const resultAppStack = await build({
   alias: {
     '@proteus-vue/router/app-stack': path.join(ROOT, 'packages/router/src/app-stack.ts'),
     '@proteus-vue/router/codegen': path.join(ROOT, 'packages/router/src/codegen/index.ts'),
+    // ★★场景 F（2026-10-02 App 端路由收口）：统一 API 两个入口（同样 alias 到 src）
+    '@proteus-vue/router/app-route': path.join(ROOT, 'packages/router/src/app-route.ts'),
+    '@proteus-vue/render-backend/app-navigation': path.join(ROOT, 'packages/render-backend/src/app-navigation.ts'),
     '@proteus-vue/router/types': path.join(ROOT, 'packages/router/src/types.ts'),
     // ★★场景 E（执行器）新增：动画包 + 执行器——同样 alias 到 **src**（同上"消除陈旧 dist"理由）。
     //   执行器在 render-backend 的 src（dist 是发布产物，但本入口与 S3b/S5 一样要"打最新源"）。
