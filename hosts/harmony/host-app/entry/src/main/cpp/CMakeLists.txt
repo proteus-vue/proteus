@@ -31,4 +31,6 @@ if(HAVE_RUST_CORE)
   target_link_libraries(proteus_bench PUBLIC proteus_rust_layout)
   # ★文本通道（ArkGraphics2D）：styled_string + typography（鸿蒙文本绘制）
   target_link_libraries(proteus_bench PUBLIC libnative_drawing.so)
+  # ★JSVM（V8 封装，矩阵 #13/#14）：设备端 JS 引擎——SDK sysroot 提供 libjsvm.so
+  target_link_libraries(proteus_bench PUBLIC libjsvm.so)
 endif()

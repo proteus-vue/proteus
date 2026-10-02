@@ -19,8 +19,8 @@
 | 10 | **原生组件混用（L3）** | ✅ `native`/`native-host`/`shot-scroll-native` | ❌ **缺** | ⛔ **缺** | iOS/鸿蒙待补（方案坑位 #4 的核心） |
 | 11 | **结构变更（splice）** | ✅ `splice` | ✅ **已补**（`splice_probe`） | ✅ **已补**（`spliceProbe`） | **三端同树同 payload 4/4 判据全过**（rects 4→5 · 0/1 · 新节点高 50.0 · 重排 5 有界）；`apply-ops` 仍待 iOS/鸿蒙 |
 | 12 | **整树虚拟化（mount-virtual）** | ✅ `mount-virtual` | ✅（V12 同族） | ⛔ **缺** | 鸿蒙待补 |
-| 13 | **JS 引擎闭环** | ✅ `js-engine`/`js-batch`/`js-render` | ✅ JSC 现场编码 | ⛔ **缺** | 鸿蒙待补（ArkTS 已含 JIT 运行时，接法待定） |
-| 14 | **Vapor 指令流** | ✅ `vapor`/`vaporAb`/`vaporList` | ✅（vapor 场景） | ⛔ **缺** | 鸿蒙待补 |
+| 13 | **JS 引擎闭环** | ✅ `js-engine`/`js-batch`/`js-render` | ✅ JSC 现场编码 | ◐ **引擎已通（宿主桥实测）** | 鸿蒙：**JSVM（OH_JSVM_*，V8）真机可用**（`jsvmProbe`：init→VM→Env→Compile→Run 全 JSVM_OK，6×7=42）；**非平凡 eval 已验**：同一份 465KB `bundle-vapor.js` IIFE 直接执行（见 #14）；宿主桥四方法（mount/applyOps/readRects/probeChannels）经 JSVM_Callback 反向调用成功。★未接的：通用「宿主运行时」壳（#18）与 JIT 现场编码用例 |
+| 14 | **Vapor 指令流** | ✅ `vapor`/`vaporAb`/`vaporList` | ✅（vapor 场景） | ✅ **已补** | 鸿蒙：**JSVM(V8) 直接 eval 与 Android 同一份 `bundle-vapor.js`（零移植）**——设备端实例化 26 节点/8 行 · 订阅驱动增量 3 轮 183B · 探针节点宽度 **52→80** · 文本同步 3 处 · 像素采样 119 万；**共用同一份 `check-vapor-device.py`**（①–⑥ 全绿；⑦绘制通道/⑧tap 属渲染层与手势批次，按 `host_id` 如实跳过） |
 | 15 | **平台零参与动画（MA0-RT）** | ✅ `platform-anim`/`platform-anim-node` | ✅（CA 动画） | ⛔ **缺** | 鸿蒙待补 |
 | 16 | **内核驱动动画（kernel-anim）** | ✅ `kernel-anim` | ✅ | ✅ **已补** | 鸿蒙 `kernelAnimProbe`（anim_seek+updates 读数）：曲线终态**精确 120** · easeOut 半程 **105**（前快后慢，>线性 60）· 滚动联动 0/-80/-160 **精确映射**；★scroll=0 读到 -1 系内核「无变化不重发」语义（已文档化，非缺陷） |
 | 17 | **App 路由栈（M5）** | ✅ `app-stack` | ✅ `app-stack` | ✅ **已补（真机判据绿）** | 鸿蒙：`app-stack.ts` **移植副本**（零运行时依赖；逐字节同步校验 `sync-core.sh`，验收自动跑）+ 场景探针（与两端同口径 depth=20000）；`check-app-stack.py` 三端共用——①–⑥ 组全绿（**真机 ArkTS 证据**），⑦ 组如实跳过（未接 ScreenExecutor） |
@@ -30,7 +30,7 @@
 | 21 | **一致性快照（L2-L4）** | ✅ | ✅ | ✅ **已补** | 鸿蒙腿进六端 SFC 报告：`--ps scene stress` 渲染 SFC 夹具（44 节点，与其他五端同源）→ `uitest screenCap` 无损 PNG → `sfc.harmony.png`；**锚块读数 [16,60,80,48] 与 SFC 声明逐位相同** · 留白 16.3/16.3 过硬断言 · 跨端差异 2.44~3.09%（正常带宽内；JPEG vs PNG 曾差 0.9 点，改无损后消除） |
 | 22 | **Perfetto / 帧率** | ✅（Perfetto 接入） | ◐（帧统计） | ⛔ **缺** | |
 
-**统计**：Android 22/22 · iOS **16/22** · 鸿蒙 **13/22**（持续推进：鸿蒙 4→13 · iOS 15→16）。
+**统计**：Android 22/22 · iOS **16/22** · 鸿蒙 **15/22**（持续推进：鸿蒙 4→15 · iOS 15→16）。
 
 ## 2. 缺口归因（为什么鸿蒙最少）
 
