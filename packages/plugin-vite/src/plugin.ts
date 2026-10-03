@@ -1036,6 +1036,11 @@ export default function mpTransform(opts: PluginOptions): Plugin {
               fluidLayout,
               renderer: pageRenderer,
               platform: 'mp',
+              // ★★★2026-10-04：**壳片段进缓存键**（缺陷：不含它 ⇒ 改壳后页面命中旧缓存 ⇒
+              //   新方法/字段永不注入——本轮实测 saSyncTabBarBadge 全页面缺失）
+              globalLayerFingerprint: globalLayerSnippet
+                ? JSON.stringify([globalLayerSnippet.wxml, globalLayerSnippet.wxss, globalLayerSnippet.data, globalLayerSnippet.methods, globalLayerSnippet.initLines])
+                : undefined,
             },
             projectRoot,
           )

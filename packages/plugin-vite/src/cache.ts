@@ -68,6 +68,15 @@ export function compileCacheKey(
     renderer?: 'skyline' | 'webview'
     /** ★平台编译期宏目标（__MP__/__WEB__ 取值）——缓存键包含，防跨平台命中错误产物 */
     platform?: 'mp' | 'web' | 'native' | 'ios' | 'android' | 'harmony'
+    /**
+     * ★★★2026-10-04（**框架缺陷修复**）：**App 壳 Global 层片段**的指纹（缓存键必须包含）。
+     * 【缺陷】页面编译时注入壳片段（data/methods/wxml/wxss——见 plugin.ts 的 globalLayer 传参），
+     *   但缓存键**不含它** ⇒ **改壳后页面命中旧缓存** ⇒ 新方法/字段永不注入
+     *   （实测：壳里新增的 saSyncTabBarBadge 在全部页面产物里缺失，而单独编译壳却有——
+     *     排查三轮才定位到缓存）。
+     * 【修法】把片段内容序列化进缓存键（JSON.stringify 承担长度与内容差异）。
+     */
+    globalLayerFingerprint?: string
   },
   projectRoot: string,
 ): string {

@@ -30,6 +30,7 @@ const REQUIRED_HOOKS = [
   ['deny-sleep.mjs', '固定 sleep 盲等'],
   ['deny-blind-tests.mjs', '全量测试无目的重复跑'],
   ['deny-blind-verify.mjs', '全量门禁链无目的重复跑'],
+  ['deny-direct-edit.mjs', '绕过 safe-edit 直接改源文件'],
 ]
 
 /** 生成可直接粘贴的安装片段（★必须是**合法 JSON**——注释放在块外，

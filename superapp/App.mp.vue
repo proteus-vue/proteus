@@ -83,14 +83,37 @@ function saStopMusic() {
 
 /* ══ ⑧ IM 未读角标（消息数跨页同步） ══ */
 const imUnread = ref(0)
+
+/**
+ * ★改名（2026-10-04）：原名 `saSyncTabBarBadge` 的 `__` 前缀让**编译器不把它当壳方法**
+ *   （注入每个页面时**整个函数体丢失**——产物里 setTabBarBadge 出现 0 次，角标永不显示）。
+ *   改名 `saSyncTabBarBadge`（与 saSetUnread 同规范前缀）后正常注入。
+ * ★2026-10-04（用户指出「web 上面把未读放到 tabbar 的消息上面了，小程序的这个还是在右上角啊」）：
+ *   MP 端角标改走**原生 tabBar 角标**（`wx.setTabBarBadge` —— 微信官方 API，大厂做法），
+ *   不再在页面右上角浮动一个自绘角标（那与 Web 端的 `Tab 角标` 形态**两端不一致**）。
+ *   index = 1 = tabBar.list 第二项（消息：index/messages/mine）；0 条 ⇒ 移除角标。
+ *   ★诚实边界：角标只对 **tabBar 页**可见（微信原生语义）；非 tabBar 页调用会 fail ⇒ 静默（不打扰）。
+ */
+function saSyncTabBarBadge() {
+  const n = imUnread.value
+  const fail = (): void => { /* 非 tabBar 环境/未配置 tabBar：静默（角标不可见是平台语义） */ }
+  if (n > 0) {
+    wx.setTabBarBadge({ index: 1, text: n > 99 ? '99+' : String(n), fail })
+  } else {
+    wx.removeTabBarBadge({ index: 1, fail })
+  }
+}
 function saSetUnread(n: number) {
   imUnread.value = n > 0 ? n : 0
+  saSyncTabBarBadge()
 }
 function saBumpUnread() {
   imUnread.value = imUnread.value + 1
+  saSyncTabBarBadge()
 }
 function saClearUnread() {
   imUnread.value = 0
+  saSyncTabBarBadge()
 }
 </script>
 
@@ -126,10 +149,6 @@ function saClearUnread() {
         <text id="sa-music-close" class="sa-music-bar__btn sa-music-bar__btn--close" @click="saStopMusic">✕</text>
       </view>
 
-      <!-- ⑧ IM 未读角标（右上角——点进消息页由消息页自己处理；此处仅展示同步值） -->
-      <view v-if="imUnread > 0" id="sa-im-badge" class="sa-im-badge">
-        <text class="sa-im-badge__num">{{ imUnread > 99 ? '99+' : imUnread }}</text>
-      </view>
     </global-layer>
   </app-root>
 </template>
@@ -275,26 +294,4 @@ function saClearUnread() {
   color: rgba(242, 243, 246, 0.55);
 }
 
-/* ── ⑧ IM 未读角标：右上角数字（99+ 截断） ── */
-.sa-im-badge {
-  position: absolute;
-  right: 24rpx;
-  /* ★2026-10-04：顶部安全区 */
-  top: calc(24rpx + var(--sa-safe-top));
-  z-index: 4;
-  min-width: 36rpx;
-  height: 36rpx;
-  padding: 0 10rpx;
-  border-radius: 18rpx;
-  display: flex;
-  flex-direction: row;
-  align-items: center;
-  justify-content: center;
-  background-color: var(--sa-badge-bg);
-}
-.sa-im-badge__num {
-  font-size: 22rpx;
-  font-weight: 600;
-  color: var(--sa-badge-ink);
-}
 </style>
