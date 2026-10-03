@@ -432,12 +432,18 @@ describe('★★P2-2 混合文本（2026-10-03）：`a{{x}}b` 编译期切分 �
     expect(staticOnly.template.nodes[0]!.text).toBe('标题')
     const single = buildLayoutTemplate(sfc(`const x = ref(1)\n`, `<p-text>{{ x }}</p-text>`), 'i.vue')
     expect(single.template.nodes[0]!.textSegments, '单插值走既有 text.content 槽位（不合成）').toBeUndefined()
-    // 反向：**元素 + 文本混排**仍需诊断（节点模型问题，不在本批范围）
+    // ★★2026-10-03（混排批次）：**元素 + 文本混排已真支持**——文本合成 `p-text` 叶
+    //   （与元素兄弟按文档序；见 text-runs.ts）。旧的"混合内容"诊断已移除。
     const mixedEl = buildLayoutTemplate(
       sfc(`const x = ref(1)\n`, `<p-view><p-text>x</p-text>尾{{ x }}</p-view>`),
       'e.vue',
     )
-    expect(mixedEl.diagnostics.some((d) => d.message.includes('混合内容'))).toBe(true)
+    expect(mixedEl.diagnostics.some((d) => d.message.includes('混合内容')), '混排不再被拒绝').toBe(false)
+    // 合成叶：父(p-view) / p-text(x) / 合成叶(尾{{x}}) —— 文本按文档序成为兄弟
+    expect(mixedEl.template.nodes.map((n) => n.tag)).toEqual(['p-view', 'p-text', 'p-text'])
+    const synth = mixedEl.template.nodes[2]!
+    expect(synth.id).toBe(2)
+    expect(synth.textSegments!.map((s) => ('text' in s ? s.text : `<expr:${s.src}>`))).toEqual(['尾', '<expr:x>'])
   })
 
   it('② 订阅表：多个插值合成**一条**槽位（否则两条 SET_TEXT 后者覆盖前者）', () => {

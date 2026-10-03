@@ -301,6 +301,26 @@ const pulse = ref(false)
 const zoomTrigger = ref(0)
 </script>`
 
+/**
+ * ★★★**元素/文本混排**夹具（2026-10-03）：三类形态各一——
+ *   ① 文本 + 元素 + 文本（`mix <b>B</b> tail`：前后两段合成叶）
+ *   ② 文本 + **插值** + 元素（`int={{ mixN }} <b>`：合成叶承载段表 + L1 槽位）
+ *   ③ 元素间单空格（`<b>a</b> <i>b</i>`：空白保留语义）
+ *   判据 ㉑ 核：① 全部文本段在**内核树**里（含插值求值结果）② 合成叶有几何
+ *   ③ 空格叶保留（Vue condense 语义）④ 缩进换行**不产**垃圾叶（节点数守恒）。
+ */
+const MIXED_SFC = `<template>
+  <p-view style="flex-direction: column">
+    <p-text style="font-size: 11px; color: #ffffff">mix <b>MIXB</b> tail</p-text>
+    <p-text style="font-size: 11px; color: #ffffff">int={{ mixN }} <b>MIXI</b></p-text>
+    <p-text style="font-size: 11px; color: #ffffff"><b>SPA</b> <i>SPB</i></p-text>
+  </p-view>
+</template>
+
+<script setup lang="ts">
+const mixN = ref(4)
+</script>`
+
 /** 长列表夹具：**行高 100px**（视口 2400 ⇒ 可见 ~24 行；预加载 ±10 ⇒ 物化 ~34 行）
  *  ——判据的口径：1000 行都必须在内核树里（几何正确），但宿主只物化可见区。
  *  ★行内含 `:width` 绑定（L1 槽位）与插值文本（`{{ item.title }}`）。 */
@@ -463,6 +483,8 @@ process.stdout.write(JSON.stringify({
   dyn: build(${JSON.stringify(DYN_SFC)}, 'vapor-dyn.vue'),
   // ★P3-5 宿主指令：父 SFC（三种指令形态）
   directive: build(${JSON.stringify(DIRECTIVE_SFC)}, 'vapor-directive.vue'),
+  // ★元素/文本混排（判据 ㉑）
+  mixed: build(${JSON.stringify(MIXED_SFC)}, 'vapor-mixed.vue'),
   // ★★★六端 SFC 压力夹具：编译**共享 SFC 文件**（examples 页面）——与 Web/MP 同源
   stress: build(${JSON.stringify(stressSfc)}, 'consistency-stress.vue'),
   ab: ${JSON.stringify(AB_RESULT)},
@@ -641,7 +663,7 @@ for (const [nm, def] of Object.entries(parsed.components)) {
       `父绑定 @${parentEmitBinds[0].event}（nodeId=${parentEmitBinds[0].nodeId}）`,
   )
 }
-fs.writeFileSync(OUT, JSON.stringify({ ...parsed.small, components: parsed.components, slot: parsed.slot, scoped: parsed.scoped, dyn: parsed.dyn, directive: parsed.directive }))
+fs.writeFileSync(OUT, JSON.stringify({ ...parsed.small, components: parsed.components, slot: parsed.slot, scoped: parsed.scoped, dyn: parsed.dyn, directive: parsed.directive, mixed: parsed.mixed }))
 console.log(`[gen-vapor-fixture] ✅ 组件注册表：${Object.keys(parsed.components).join(', ')}（随父产物下发）`)
 // ★P1-3 插槽分发夹具（判据 ⑮）：父产物必须带 slotFor 标记、子产物必须带 slotOutlet 标记
 //   （"生成器静默退化"是本仓重点拦的形态——标记缺了就是分发不可能发生）
@@ -738,6 +760,28 @@ console.log(`[gen-vapor-fixture] ✅ 组件注册表：${Object.keys(parsed.comp
   console.log(
     `[gen-vapor-fixture] ✅ 宿主指令夹具：${allDirs.map((d) => `v-${d.name}:${d.preset}`).join(' · ')}` +
       `（通道规格齐全——与 <Transition> 同一份预设表）`,
+  )
+}
+// ★元素/文本混排（2026-10-03）：合成叶必须成对出现（前段+后段）、插值叶带段表、空格叶保留
+{
+  const nodes = parsed.mixed?.tpl?.nodes ?? []
+  // 合成叶 = 静态文本叶（text 非空）∪ 段表叶（插值，text 为空但带 textSegments）
+  const staticLeaves = nodes.filter((n) => n && n.tag === 'p-text' && typeof n.text === 'string' && n.text !== '')
+  const segLeaves = nodes.filter((n) => n && n.textSegments?.length > 0)
+  const hasSpaceLeaf = nodes.some((n) => n && n.tag === 'p-text' && n.text === ' ')
+  const noDiag = (parsed.mixed?.diagnostics ?? []).filter((d) => /混合内容/.test(d.message))
+  const totalLeaves = staticLeaves.length + segLeaves.length
+  if (!parsed.mixed?.ok || totalLeaves < 4 || segLeaves.length < 1 || !hasSpaceLeaf || noDiag.length > 0) {
+    console.error(
+      `[gen-vapor-fixture] ✗ 混排夹具不完整（判据 ㉑ 将无证据）：` +
+        `合成叶 ${totalLeaves}（静态 ${staticLeaves.length} + 段表 ${segLeaves.length}，应 ≥4/≥1）· ` +
+        `空格叶 ${hasSpaceLeaf} · 意外诊断 ${noDiag.length}`,
+    )
+    process.exit(1)
+  }
+  console.log(
+    `[gen-vapor-fixture] ✅ 混排夹具：合成叶 ${totalLeaves} 段（静态 ${staticLeaves.map((n) => JSON.stringify(n.text)).join('/')} · ` +
+      `段表 ${segLeaves.length}）· 空格叶保留`,
   )
 }
 const kb = (fs.statSync(OUT).size / 1024).toFixed(1)

@@ -13471,6 +13471,7 @@
       lifecycle_probe: { bindings: [], ran_handler: "", changed_sources: [], ops_bytes: 0, applied: 0, anchor_id: -1, geom_before: -1, geom_after: -1 },
       dyn_probe: { texts: [], mounts: [], geom: [], dropped: -1, notes: [] },
       directive_probe: { nodes: [], rounds: [], plays: [] },
+      mixed_probe: { texts: [], leaves: 0, geom: [] },
       mount_ms: 0,
       mount_nodes: 0,
       updates_run: 0,
@@ -14280,6 +14281,45 @@
           }
         } else {
           notes.push("\u5BBF\u4E3B\u6307\u4EE4\u63A2\u9488\uFF1A\u4EA7\u7269\u65E0 directive \u6BB5\uFF08\u5939\u5177\u672A\u8986\u76D6 \u21D2 \u5224\u636E \u2473 \u6309\u7F3A\u5931\u5904\u7406\uFF09");
+        }
+      }
+      {
+        const mixArt = artifacts.mixed;
+        if (mixArt?.tpl?.ok) {
+          const mixInst = instantiateTemplate(mixArt.tpl, {
+            viewport: args.viewport,
+            // ★夹具的 `mixN` 初值 4（与 MIXED_SFC 的 script 一致）——插值合成的输入
+            read: (n) => n === "mixN" ? 4 : void 0,
+            table: mixArt.table,
+            registry: new ListRegistry()
+          });
+          try {
+            const mOut = JSON.parse(
+              proteusHost.mount(JSON.stringify({ viewport: mixInst.viewport, nodes: mixInst.nodes }))
+            );
+            if (mOut.ok === true) {
+              const rectsAll = JSON.parse(proteusHost.readRects());
+              const rects = rectsAll.rects ?? {};
+              const texts = mixInst.nodes.filter((n) => typeof n.text === "string" && n.text.length > 0).map((n) => String(n.text));
+              rep.mixed_probe = {
+                texts,
+                // 合成叶总数（静态 + 段表叶——判据核与编译期一致，防"少合成多合成"）
+                leaves: mixInst.nodes.filter((n) => n.tag === "p-text" && (typeof n.text === "string" && n.text.length > 0 || n.textSegments?.length)).length,
+                // 内核几何（合成叶有宽度 = 内核真布局了它们）
+                geom: mixInst.nodes.filter((n) => typeof n.text === "string" && n.text.length > 0).map((n) => ({ id: n.id, text: String(n.text), width: rects[String(n.id)]?.width ?? -1 }))
+              };
+            } else {
+              notes.push(`\u6DF7\u6392\u63A2\u9488 mount \u5931\u8D25\uFF1A${mOut.error ?? "\u672A\u77E5"}`);
+            }
+          } catch (e) {
+            notes.push(`\u6DF7\u6392\u63A2\u9488\u5F02\u5E38\uFF1A${String(e?.message ?? e)}`);
+          }
+          try {
+            proteusHost.mount(JSON.stringify({ viewport: inst.viewport, nodes: inst.nodes }));
+          } catch {
+          }
+        } else {
+          notes.push("\u6DF7\u6392\u63A2\u9488\uFF1A\u4EA7\u7269\u65E0 mixed \u6BB5\uFF08\u5939\u5177\u672A\u8986\u76D6 \u21D2 \u5224\u636E \u3251 \u6309\u7F3A\u5931\u5904\u7406\uFF09");
         }
       }
       rep.ok = rep.updates_run > 0;

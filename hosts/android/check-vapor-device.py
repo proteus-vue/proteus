@@ -728,6 +728,37 @@ def main() -> int:
             print(f"  ✓ ⑳ ★宿主指令 v-animate：{len(nodes)} 节点带通道规格 · "
                   f"mounted 播 {r_a} · 同值 0 · 变化播 {r_c}/{r_d} · 假值 0 · 已播预设 {sorted(set(presets))}")
 
+    # ── ㉑ ★★★元素/文本混排：每一段文本真的渲染了（此前**整段丢失**）──
+    #   【为什么单独判】混排曾是模板侧第一大类缺口（27 个样例页 13 处）——文本与元素交错时
+    #     文本**整段不渲染**（页面上只剩元素）。本批合成文本叶后，判据核**四证**：
+    #     ① 前置段在（`mix `）② 后置段在（` tail`）③ 插值段求值结果在（`int=4 `）
+    #     ④ 元素间单空格叶保留（` `——Vue condense：那是真内容）
+    #   缺一即红（"少一段"与"全丢失"都是静默失败形态）。
+    mp = rep.get("mixed_probe") or {}
+    if not mp or not mp.get("texts"):
+        print("  ◐ ㉑ 混排：本端夹具未覆盖（报告无 mixed_probe）——如实跳过")
+    else:
+        texts = [str(t) for t in mp.get("texts", [])]
+        joined = "|".join(texts)
+        geo = mp.get("geom") or []
+        need = {
+            "前置段": any(t == "mix " for t in texts),
+            "后置段": any(t == " tail" for t in texts),
+            "插值段": any(t.startswith("int=") and "4" in t for t in texts),
+            "空格叶": any(t == " " for t in texts),
+        }
+        missing = [k for k, v in need.items() if not v]
+        if missing:
+            fail(f"★混排文本段落缺失：{missing}（内核树文本={joined[:160]}）——该段文字没渲染")
+            ok = False
+        elif not any(isinstance(g.get("width"), (int, float)) and g.get("width") > 0 for g in geo):
+            fail(f"★合成叶在内核里没有几何（geom={geo[:3]}）——树里有、内核没有")
+            ok = False
+        else:
+            w_ok = [g for g in geo if isinstance(g.get("width"), (int, float)) and g.get("width") > 0]
+            print(f"  ✓ ㉑ ★元素/文本混排：段落齐全（{'/'.join(need.keys())}）· 合成叶 {mp.get('leaves')} · "
+                  f"内核几何 {len(w_ok)}/{len(geo)} 叶有宽度 · 实文本 {joined[:80]}")
+
     # 附加观测（不判红，只如实报）
     una = rep.get("uninstantiated_slots", 0)
     if una:

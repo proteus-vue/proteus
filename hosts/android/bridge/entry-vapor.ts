@@ -359,6 +359,17 @@ interface VaporReport {
     rounds: Array<{ name: string; started: number }>
     plays: Array<{ nodeId: number; preset: string; started: number; fromValue: unknown; toValue: unknown }>
   }
+  /**
+   * ★★★**混排探针**（元素/文本混排，2026-10-03）——每段文本真的渲染了：
+   *   · `texts`：内核树全部非空文本（判据核每一段都在，含插值求值结果）；
+   *   · `leaves`：合成叶总数（与编译期对账——防少合成/多合成）；
+   *   · `geom`：逐叶**内核宽度**（"树里有"与"内核认了"是两件事）。
+   */
+  mixed_probe: {
+    texts: string[]
+    leaves: number
+    geom: Array<{ id: number; text: string; width: number }>
+  }
   /** 模板里的过渡声明（`隐id:预设名`；判据区分"未声明"与"声明未驱动"） */
   tpl_transition: string[]
   /**
@@ -1707,7 +1718,7 @@ function runShort(args: VaporArgs): string {
     tpl_nodes: 0, tpl_ok: false, sub_l1: 0, sub_l0: 0, sub_l1_rate: 0, sub_sources: [],
     inst_ms: 0, inst_nodes: 0, inst_reused_ids: 0, inst_allocated_ids: 0, inst_rows: 0,
     inst_values_filled: 0, inst_virtual_rows: 0, inst_text_filled: 0, inst_width_filled: 0,
-    mix_text_probe: [], text_probe_rounds: [], gate_rounds: [], gate_text_nodes: [], once_node_id: -1, memo_node_id: -1, expr_probe: [], transition_started: 0, tpl_transition: [], component_mounts: 0, component_nodes: 0, component_kid_probe: {}, slot_probe: { texts: [], rects: [], fills: [], markers_left: -1 }, emit_probe: { emits: [], parent_source_after: undefined, geom_before: -1, geom_after: -1 }, scoped_probe: { texts: [], anchor_id: -1, anchor_width_field: -1, anchor_width_rect: -1 }, lifecycle_probe: { bindings: [], ran_handler: '', changed_sources: [], ops_bytes: 0, applied: 0, anchor_id: -1, geom_before: -1, geom_after: -1 }, dyn_probe: { texts: [], mounts: [], geom: [], dropped: -1, notes: [] }, directive_probe: { nodes: [], rounds: [], plays: [] },
+    mix_text_probe: [], text_probe_rounds: [], gate_rounds: [], gate_text_nodes: [], once_node_id: -1, memo_node_id: -1, expr_probe: [], transition_started: 0, tpl_transition: [], component_mounts: 0, component_nodes: 0, component_kid_probe: {}, slot_probe: { texts: [], rects: [], fills: [], markers_left: -1 }, emit_probe: { emits: [], parent_source_after: undefined, geom_before: -1, geom_after: -1 }, scoped_probe: { texts: [], anchor_id: -1, anchor_width_field: -1, anchor_width_rect: -1 }, lifecycle_probe: { bindings: [], ran_handler: '', changed_sources: [], ops_bytes: 0, applied: 0, anchor_id: -1, geom_before: -1, geom_after: -1 }, dyn_probe: { texts: [], mounts: [], geom: [], dropped: -1, notes: [] }, directive_probe: { nodes: [], rounds: [], plays: [] }, mixed_probe: { texts: [], leaves: 0, geom: [] },
     mount_ms: 0, mount_nodes: 0,
     updates_run: 0, ops_bytes: 0, ops_ms: 0, apply_ms: 0, text_synced_total: 0, update_evidence: [], geom_probe: [], channels: [],
     ev_bindings: 0, ev_handlers: 0, ev_modifiers: 0, taps: 0, tap_evidence: [],
@@ -2767,6 +2778,58 @@ function runShort(args: VaporArgs): string {
         } catch { /* 同上：重挂失败 ⇒ 判据按 host_nodes 不符判红 */ }
       } else {
         notes.push('宿主指令探针：产物无 directive 段（夹具未覆盖 ⇒ 判据 ⑳ 按缺失处理）')
+      }
+    }
+
+    /* ═══════════ ★★★元素/文本混排探针（2026-10-03）═══════════
+     *
+     * 【要证明什么】`<p>文字 <b>x</b> 文字</p>` 的**每一段文本**都真的渲染了——
+     *   ① 全部静态段在**内核树**里（此前整段丢失：只渲染元素）；
+     *   ② 插值合成叶的**求值结果**在（段表 → 运行时拼接）；
+     *   ③ 元素间单空格叶**保留**（Vue condense 语义——把真内容删掉是另一种静默错）；
+     *   ④ 缩进换行**不产垃圾叶**（节点数守恒：合成叶总数与形态匹配）。
+     *   【顺序】独立挂载 mixed 夹具树（与 ⑮/⑰/⑲/⑳ 同规）；结束后重挂主树。
+     */
+    {
+      const mixArt = (artifacts as { mixed?: { tpl: LayoutTemplate; table: SubscriptionTable } }).mixed
+      if (mixArt?.tpl?.ok) {
+        const mixInst = instantiateTemplate(mixArt.tpl, {
+          viewport: args.viewport,
+          // ★夹具的 `mixN` 初值 4（与 MIXED_SFC 的 script 一致）——插值合成的输入
+          read: (n) => (n === 'mixN' ? 4 : undefined),
+          table: mixArt.table,
+          registry: new ListRegistry(),
+        })
+        try {
+          const mOut = JSON.parse(
+            proteusHost.mount(JSON.stringify({ viewport: mixInst.viewport, nodes: mixInst.nodes })),
+          ) as { ok?: boolean; error?: string }
+          if (mOut.ok === true) {
+            const rectsAll = JSON.parse(proteusHost.readRects()) as { rects?: Record<string, { width?: number }> }
+            const rects = rectsAll.rects ?? {}
+            const texts = mixInst.nodes
+              .filter((n) => typeof n.text === 'string' && n.text.length > 0)
+              .map((n) => String(n.text))
+            rep.mixed_probe = {
+              texts,
+              // 合成叶总数（静态 + 段表叶——判据核与编译期一致，防"少合成多合成"）
+              leaves: mixInst.nodes.filter((n) => n.tag === 'p-text' && (typeof n.text === 'string' && n.text.length > 0 || (n as { textSegments?: unknown[] }).textSegments?.length)).length,
+              // 内核几何（合成叶有宽度 = 内核真布局了它们）
+              geom: mixInst.nodes
+                .filter((n) => typeof n.text === 'string' && n.text.length > 0)
+                .map((n) => ({ id: n.id, text: String(n.text), width: rects[String(n.id)]?.width ?? -1 })),
+            }
+          } else {
+            notes.push(`混排探针 mount 失败：${mOut.error ?? '未知'}`)
+          }
+        } catch (e) {
+          notes.push(`混排探针异常：${String((e as Error)?.message ?? e)}`)
+        }
+        try {
+          proteusHost.mount(JSON.stringify({ viewport: inst.viewport, nodes: inst.nodes }))
+        } catch { /* 同上：重挂失败 ⇒ 判据按 host_nodes 不符判红 */ }
+      } else {
+        notes.push('混排探针：产物无 mixed 段（夹具未覆盖 ⇒ 判据 ㉑ 按缺失处理）')
       }
     }
 
