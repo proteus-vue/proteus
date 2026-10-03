@@ -36,6 +36,16 @@
 #include <native_drawing/drawing_text_typography.h>
 #include <native_drawing/drawing_text_declaration.h>
 #include <native_drawing/drawing_types.h>
+// ★★绘制四通道（2026-10-03 · 三端打通绘制通道）：渐变/发光/裁剪/描边
+//   —— 与文本同一条 content modifier 画布路径（该路径已在真机验证可用）
+#include <native_drawing/drawing_brush.h>
+#include <native_drawing/drawing_pen.h>
+#include <native_drawing/drawing_path.h>
+#include <native_drawing/drawing_rect.h>
+#include <native_drawing/drawing_round_rect.h>
+#include <native_drawing/drawing_shader_effect.h>
+#include <native_drawing/drawing_point.h>
+#include <unordered_map>
 
 #define LOG_DOMAIN 0x0002
 // ★hilog 的 LogType 是第一个宏参数（不是 domain）——固定用 LOG_APP
@@ -126,6 +136,26 @@ static bool jsonNum(const char* s, const char* key, double* out) {
 static ArkUI_NodeHandle g_rootHost = nullptr;
 static ArkUI_RenderNodeHandle g_rootNode = nullptr;
 
+/**
+ * ★★**已建通道真源表**（2026-10-03 · 三端打通绘制通道）——`probeChannels` 回读它。
+ *
+ * 【为什么是"建什么记什么"而不是"读回 RenderNode 属性"】鸿蒙 RenderNode 只暴露
+ *   `SetBackgroundColor` / `SetBorderRadius`（无渐变/裁剪/路径读取 API）——四通道**必须**在
+ *   content modifier 的 canvas 上画 ⇒ "建出来没有"的机器可读事实 = **我们据指令建了什么**。
+ *   这与 Android 的 `probeChannels` 读自家 `specs` 表**同性质**（iOS 那条略有不同：它读
+ *   CALayer 的真属性——三端各自读"自己渲染实现的真源"，而不是复述模板声明）。
+ *   ★判据的强度来自两处：① 表里值由**指令**驱动（模板声明没到 ⇒ 表里空 ⇒ 判据红）；
+ *     ② 离屏像素自检（`vaporPaintCheck`）独立核"画布上真有东西"。
+ */
+struct VaporChannelState {
+    double radius = 0;
+    std::string grad;      // "1:N"（1=linear；N=色标数）
+    std::string glow;      // "N:alpha"
+    int clip = 0;          // 0=无；1=inset…
+    double strokeLen = 0;
+};
+static std::unordered_map<int, VaporChannelState> g_channelStates;
+
 // ── 极简 JSON 取值（避免为原型引入第三方 JSON 库；指令结构固定：{"x":N,"y":N,"w":N,"h":N,"color":N}）──
 //   ★诚实边界：仅支持本模块约定的**数字字段**；接真实指令流时换正式解析（或改传二进制块）。
 static bool jsonNumber(const std::string& s, const char* key, double* out) {
@@ -139,6 +169,34 @@ static bool jsonNumber(const std::string& s, const char* key, double* out) {
     if (end == s.c_str() + p) return false;
     *out = v;
     return true;
+}
+
+/**
+ * 取 `"key":{…}` 的**配对花括号内容**（含内层对象/数组——`jsonNumber` 只能取顶层标量）。
+ * ★为什么需要：`grad.stops[]` / `clip.params[]` 是嵌套结构，必须成块取出再逐项解析。
+ */
+static std::string extractObjectField(const std::string& s, const char* key) {
+    std::string needle = std::string("\"") + key + "\":{";
+    size_t p = s.find(needle);
+    if (p == std::string::npos) return "";
+    size_t start = p + needle.size() - 1;
+    int depth = 0;
+    bool inStr = false;
+    for (size_t i = start; i < s.size(); i++) {
+        char c = s[i];
+        if (inStr) {
+            if (c == '\\' && i + 1 < s.size()) { i++; continue; }
+            if (c == '"') inStr = false;
+            continue;
+        }
+        if (c == '"') { inStr = true; continue; }
+        if (c == '{') depth++;
+        else if (c == '}') {
+            depth--;
+            if (depth == 0) return s.substr(start, i - start + 1);
+        }
+    }
+    return "";
 }
 
 /** 极简 JSON 字符串取值（`"key":"value"`）；未找到返回 false */
@@ -156,7 +214,7 @@ static bool jsonString(const std::string& s, const char* key, std::string* out) 
     return false;
 }
 
-/** 逐节点文本绘制数据（挂到 content modifier 的 userData；生命周期 = RenderNode 生命周期） */
+/** 逐节点绘制规格（文本 + ★四通道；挂到 content modifier 的 userData，生命周期 = RenderNode 生命周期） */
 struct TextDrawSpec {
     std::string text;
     double fontSizePx = 24.0;
@@ -164,7 +222,151 @@ struct TextDrawSpec {
     std::string family;
     /** 节点声明宽（vp）——用于**单位标定**：canvas 若是物理 px，字号需按比例换算（见回调注释） */
     double widthVp = 0.0;
+    /* ── ★★四通道（2026-10-03）——在 content modifier 的 canvas 上画（RenderNode 无这些属性 API）── */
+    double w = 0, h = 0, radius = 0;          // 物理 px（与 canvas 同坐标系）
+    bool hasGrad = false;
+    bool gradLinear = true;
+    double gradAngle = 90;
+    std::vector<uint32_t> gradColors;
+    std::vector<float> gradPos;
+    bool hasGlow = false;
+    uint32_t glowColor = 0;
+    double glowRadius = 0, glowAlpha = 1;
+    int glowLayers = 0;                        // 分层同心描边数（探针读它——与判据 ≥3 对齐）
+    bool hasClip = false;
+    int clipKind = 0;                          // 1=inset
+    double clipTop = 0, clipRight = 0, clipBottom = 0, clipLeft = 0;  // 物理 px
+    bool hasStroke = false;
+    std::string strokeD;
+    uint32_t strokeColor = 0;
+    double strokeWidth = 0;
 };
+
+/** 把 CSS 角度的线性渐变端点换算为画布坐标（90° = 自上而下，与模板语义一致） */
+static void gradEndpoints(double angleDeg, double w, double h, float* x0, float* y0, float* x1, float* y1) {
+    const double rad = angleDeg * 3.14159265358979323846 / 180.0;
+    const double cx = w / 2.0, cy = h / 2.0;
+    const double len = (std::abs(std::sin(rad)) * h + std::abs(std::cos(rad)) * w) / 2.0;
+    const double dx = std::sin(rad) * len, dy = -std::cos(rad) * len;
+    *x0 = (float)(cx - dx); *y0 = (float)(cy - dy);
+    *x1 = (float)(cx + dx); *y1 = (float)(cy + dy);
+}
+
+/**
+ * ★★**画四通道 + 文本**（2026-10-03）——与 DrawTextCallback 同一条 content modifier 画布路径。
+ *
+ * 【顺序（与绘制语义一致）】裁剪 → 渐变底 → 发光 → 描边 → 文本。
+ *   · 裁剪先做：后面的渐变/发光/描边都收在裁剪区内（与模板 `clip-path` 的意图一致）；
+ *   · 渐变在后：它是**底色**（覆盖 RenderNode 的背景色，是模板 `fill-gradient` 的语义）；
+ *   · 发光/描边：装饰层，画在底上、文本下。
+ */
+static void drawChannelsAndText(OH_Drawing_Canvas* canvas, const TextDrawSpec* spec) {
+    const float w = (float)spec->w, h = (float)spec->h;
+    // ① 裁剪（inset：params = [top, right, bottom, left]，比例 × 尺寸）
+    if (spec->hasClip && spec->clipKind == 1) {
+        OH_Drawing_Rect* clip = OH_Drawing_RectCreate((float)spec->clipLeft, (float)spec->clipTop,
+                                                     w - (float)spec->clipRight, h - (float)spec->clipBottom);
+        if (clip != nullptr) {
+            OH_Drawing_CanvasClipRect(canvas, clip, OH_Drawing_CanvasClipOp::INTERSECT, true);
+            OH_Drawing_RectDestroy(clip);
+        }
+    }
+    // ② 渐变底（线性；色标 ≥2 才建——与判据同口径）
+    if (spec->hasGrad && spec->gradColors.size() >= 2 && w > 0 && h > 0) {
+        float x0, y0, x1, y1;
+        gradEndpoints(spec->gradAngle, w, h, &x0, &y0, &x1, &y1);
+        OH_Drawing_Point* p0 = OH_Drawing_PointCreate(x0, y0);
+        OH_Drawing_Point* p1 = OH_Drawing_PointCreate(x1, y1);
+        OH_Drawing_ShaderEffect* shader = OH_Drawing_ShaderEffectCreateLinearGradient(
+            p0, p1, spec->gradColors.data(), spec->gradPos.data(),
+            (uint32_t)spec->gradColors.size(), OH_Drawing_TileMode::CLAMP);
+        if (shader != nullptr) {
+            OH_Drawing_Brush* br = OH_Drawing_BrushCreate();
+            OH_Drawing_BrushSetShaderEffect(br, shader);
+            OH_Drawing_CanvasAttachBrush(canvas, br);
+            OH_Drawing_Rect* r = OH_Drawing_RectCreate(0, 0, w, h);
+            if (spec->radius > 0) {
+                OH_Drawing_RoundRect* rr = OH_Drawing_RoundRectCreate(r, (float)spec->radius, (float)spec->radius);
+                OH_Drawing_CanvasDrawRoundRect(canvas, rr);
+                OH_Drawing_RoundRectDestroy(rr);
+            } else {
+                OH_Drawing_CanvasDrawRect(canvas, r);
+            }
+            OH_Drawing_RectDestroy(r);
+            OH_Drawing_CanvasDetachBrush(canvas);
+            OH_Drawing_BrushDestroy(br);
+            OH_Drawing_ShaderEffectDestroy(shader);
+        }
+        OH_Drawing_PointDestroy(p0);
+        OH_Drawing_PointDestroy(p1);
+    }
+    // ③ 发光（分层同心描边：由外向内 alpha 递减——与 Android `glow → 分层同心描边` 同构）
+    if (spec->hasGlow && spec->glowLayers > 0) {
+        OH_Drawing_Pen* pen = OH_Drawing_PenCreate();
+        OH_Drawing_PenSetAntiAlias(pen, true);
+        for (int i = 0; i < spec->glowLayers; i++) {
+            const double frac = 1.0 - (double)i / (double)spec->glowLayers;
+            const uint32_t a = (uint32_t)(((spec->glowColor >> 24) & 0xFF) * spec->glowAlpha * frac);
+            OH_Drawing_PenSetColor(pen, (a << 24) | (spec->glowColor & 0x00FFFFFFu));
+            OH_Drawing_PenSetWidth(pen, (float)(spec->glowRadius * 2.0 / spec->glowLayers));
+            const float inset = (float)(spec->glowRadius * (double)i / (double)spec->glowLayers);
+            OH_Drawing_Rect* r = OH_Drawing_RectCreate(inset, inset, w - inset, h - inset);
+            if (spec->radius > 0) {
+                OH_Drawing_RoundRect* rr = OH_Drawing_RoundRectCreate(r, (float)spec->radius, (float)spec->radius);
+                OH_Drawing_CanvasAttachPen(canvas, pen);
+                OH_Drawing_CanvasDrawRoundRect(canvas, rr);
+                OH_Drawing_CanvasDetachPen(canvas);
+                OH_Drawing_RoundRectDestroy(rr);
+            } else {
+                OH_Drawing_CanvasAttachPen(canvas, pen);
+                OH_Drawing_CanvasDrawRect(canvas, r);
+                OH_Drawing_CanvasDetachPen(canvas);
+            }
+            OH_Drawing_RectDestroy(r);
+        }
+        OH_Drawing_PenDestroy(pen);
+    }
+    // ④ 描边（SVG path：`d` 交给 OH_Drawing_PathBuildFromSvgString 解析）
+    if (spec->hasStroke && !spec->strokeD.empty() && spec->strokeWidth > 0) {
+        OH_Drawing_Path* path = OH_Drawing_PathCreate();
+        if (path != nullptr && OH_Drawing_PathBuildFromSvgString(path, spec->strokeD.c_str())) {
+            OH_Drawing_Pen* pen = OH_Drawing_PenCreate();
+            OH_Drawing_PenSetAntiAlias(pen, true);
+            OH_Drawing_PenSetColor(pen, spec->strokeColor);
+            OH_Drawing_PenSetWidth(pen, (float)spec->strokeWidth);
+            OH_Drawing_CanvasAttachPen(canvas, pen);
+            OH_Drawing_CanvasDrawPath(canvas, path);
+            OH_Drawing_CanvasDetachPen(canvas);
+            OH_Drawing_PenDestroy(pen);
+        }
+        if (path != nullptr) OH_Drawing_PathDestroy(path);
+    }
+    // ⑤ 文本（原路径：typography）
+    if (!spec->text.empty()) {
+        OH_Drawing_FontCollection* fc = OH_Drawing_CreateFontCollection();
+        if (fc != nullptr) {
+            OH_Drawing_TypographyStyle* ts = OH_Drawing_CreateTypographyStyle();
+            OH_Drawing_TextStyle* tstyle = OH_Drawing_CreateTextStyle();
+            OH_Drawing_SetTextStyleColor(tstyle, spec->color);
+            OH_Drawing_SetTextStyleFontSize(tstyle, spec->fontSizePx);
+            OH_Drawing_TypographyCreate* handler = OH_Drawing_CreateTypographyHandler(ts, fc);
+            if (handler != nullptr) {
+                OH_Drawing_TypographyHandlerPushTextStyle(handler, tstyle);
+                OH_Drawing_TypographyHandlerAddText(handler, spec->text.c_str());
+                OH_Drawing_Typography* typo = OH_Drawing_CreateTypography(handler);
+                if (typo != nullptr) {
+                    OH_Drawing_TypographyLayout(typo, 10000.0);
+                    OH_Drawing_TypographyPaint(typo, canvas, 0.0, 0.0);
+                    OH_Drawing_DestroyTypography(typo);
+                }
+                OH_Drawing_DestroyTypographyHandler(handler);
+            }
+            OH_Drawing_DestroyTextStyle(tstyle);
+            OH_Drawing_DestroyTypographyStyle(ts);
+            OH_Drawing_DestroyFontCollection(fc);
+        }
+    }
+}
 
 /**
  * content modifier 的 onDraw 回调：在节点的绘制阶段用 typography 画文字。
@@ -175,7 +377,10 @@ struct TextDrawSpec {
  */
 static void DrawTextCallback(ArkUI_DrawContext* context, void* userData) {
     auto* spec = static_cast<TextDrawSpec*>(userData);
-    if (spec == nullptr || spec->text.empty()) return;
+    // ★★早退条件放宽（2026-10-03）：**有通道**（渐变/发光/裁剪/描边）也要进回调
+    //   —— 此前只判 `text.empty()` ⇒ 纯通道节点（无文本）永远不画（四通道全丢）。
+    if (spec == nullptr) return;
+    if (spec->text.empty() && !spec->hasGrad && !spec->hasGlow && !spec->hasClip && !spec->hasStroke) return;
     void* canvasRaw = OH_ArkUI_DrawContext_GetCanvas(context);
     if (canvasRaw == nullptr) return;
     auto* canvas = static_cast<OH_Drawing_Canvas*>(canvasRaw);
@@ -201,28 +406,10 @@ static void DrawTextCallback(ArkUI_DrawContext* context, void* userData) {
         // （换算已在 ArkTS 侧完成；此块不参与字号计算）
     }
 
-    OH_Drawing_FontCollection* fc = OH_Drawing_CreateFontCollection();
-    if (fc == nullptr) return;
-    OH_Drawing_TypographyStyle* ts = OH_Drawing_CreateTypographyStyle();
-    OH_Drawing_TextStyle* tstyle = OH_Drawing_CreateTextStyle();
-    OH_Drawing_SetTextStyleColor(tstyle, spec->color);
-    // ★字号已是**物理 px**（ArkTS 侧 ×密度 —— 换算只在一处）⇒ 此处直用，不再乘标定比例
-    OH_Drawing_SetTextStyleFontSize(tstyle, spec->fontSizePx);
-    OH_Drawing_TypographyCreate* handler = OH_Drawing_CreateTypographyHandler(ts, fc);
-    if (handler != nullptr) {
-        OH_Drawing_TypographyHandlerPushTextStyle(handler, tstyle);
-        OH_Drawing_TypographyHandlerAddText(handler, spec->text.c_str());
-        OH_Drawing_Typography* typo = OH_Drawing_CreateTypography(handler);
-        if (typo != nullptr) {
-            OH_Drawing_TypographyLayout(typo, 10000.0);   // 单行（宽度给足）
-            OH_Drawing_TypographyPaint(typo, canvas, 0.0, 0.0);
-            OH_Drawing_DestroyTypography(typo);
-        }
-        OH_Drawing_DestroyTypographyHandler(handler);
-    }
-    OH_Drawing_DestroyTextStyle(tstyle);
-    OH_Drawing_DestroyTypographyStyle(ts);
-    OH_Drawing_DestroyFontCollection(fc);
+    // ★★四通道 + 文本统一走同一实现（2026-10-03；顺序 裁剪→渐变→发光→描边→文本，见该函数注释）
+    //   ★为什么合并：先前只有文本绘制 ⇒ 四通道无处可画（RenderNode 无对应属性 API）；
+    //     合并后**一条画布路径**同时承载两者，也与"建什么记什么"的探针口径一致。
+    drawChannelsAndText(canvas, spec);
 }
 
 /**
@@ -303,22 +490,15 @@ static napi_value Attach(napi_env env, napi_callback_info info) {
  *   消费一批 Proteus 指令（RenderCmd 同形），建 RenderNode 子树并挂到 NodeContent。
  *   返回实际建出的节点数。
  */
-static napi_value RenderCommands(napi_env env, napi_callback_info info) {
-    size_t argc = 1;
-    napi_value args[1] = {nullptr};
-    napi_get_cb_info(env, info, &argc, args, nullptr, nullptr);
-    if (argc < 1 || g_content == nullptr) {
-        OH_LOG_Print(LOG_APP, LOG_ERROR, LOG_DOMAIN, LOG_TAG, "PROTEUS_RENDER_ERROR argc=%{public}zu content=%p",
-                     argc, static_cast<void*>(g_content));
-        napi_value err;
-        napi_create_int32(env, -1, &err);
-        return err;
-    }
-    size_t len = 0;
-    napi_get_value_string_utf8(env, args[0], nullptr, 0, &len);
-    std::string json(len + 1, '\0');
-    napi_get_value_string_utf8(env, args[0], &json[0], len + 1, &len);
-    json.resize(len);
+/**
+ * ★★**建树主体**（不依赖 napi —— 见 `proteus_render_commands_cstr` 的跨模块注释）
+ *
+ * @return 建出的节点数（-1 = 前置不满足/解析失败）
+ */
+static int renderCommandsImpl(const char* jsonCStr, bool fromProbe) {
+    if (jsonCStr == nullptr || g_content == nullptr || g_rootNode == nullptr) return -1;
+    std::string json = jsonCStr;
+    (void)fromProbe;
 
     // 切分顶层数组：**大括号计数**（首版用第一个 '}' 截断——遇嵌套对象或含 '}' 的文本会断）
     std::vector<std::string> items;
@@ -351,7 +531,8 @@ static napi_value RenderCommands(napi_env env, napi_callback_info info) {
     int32_t built = 0;
     int32_t textCount = 0;
     for (const auto& it : items) {
-        double x = 0, y = 0, w = 0, h = 0, color = 0, radius = 0;
+        double x = 0, y = 0, w = 0, h = 0, color = 0, radius = 0, nodeId = -1;
+        jsonNumber(it, "id", &nodeId);   // ★指令带 id（2026-10-03）：通道真源按 id 登记
         if (!jsonNumber(it, "x", &x) || !jsonNumber(it, "w", &w)) {
             OH_LOG_Print(LOG_APP, LOG_ERROR, LOG_DOMAIN, LOG_TAG,
                          "PROTEUS_RENDER_SKIP reason=no-geometry item=%{public}s", it.c_str());
@@ -390,22 +571,138 @@ static napi_value RenderCommands(napi_env env, napi_callback_info info) {
         // ★★★文本上屏（2026-10-02）：指令带 "text" ⇒ 给该节点挂 content modifier，
         //   在绘制阶段用 typography 画文字（Color/字号从指令取；缺省白字 24px）。
         std::string textVal;
-        if (jsonString(it, "text", &textVal) && !textVal.empty()) {
-            double fs = 24.0;
-            jsonNumber(it, "fontSize", &fs);
-            double tc = 0xFFFFFFFFu;
-            jsonNumber(it, "textColor", &tc);
+        jsonString(it, "text", &textVal);
+        // 文本参数（缺省白字 24px）——★提到外层作用域：四通道块也要用（此前在 if 内 ⇒ 作用域不足）
+        double fs = 24.0;
+        jsonNumber(it, "fontSize", &fs);
+        double tc = 0xFFFFFFFFu;
+        jsonNumber(it, "textColor", &tc);
+        // ★★★绘制四通道解析 + 登记（2026-10-03）：指令里带 grad/glow/clip/stroke ⇒
+        //   ① 填进 spec（回调据此在画布上真画）；② 登记进 `g_channelStates`（探针回读；
+        //   **建什么记什么**——与 Android 读自家 spec 表同性质，不是复述模板声明）。
+        {
+            bool hasAnyChannel = false;
             auto* spec = new TextDrawSpec{textVal, fs, static_cast<uint32_t>(tc), "", w};
-            ArkUI_RenderContentModifierHandle mod = OH_ArkUI_RenderNodeUtils_CreateContentModifier();
-            if (mod != nullptr) {
-                OH_ArkUI_RenderNodeUtils_SetContentModifierOnDraw(mod, spec, DrawTextCallback);
-                int32_t rcMod = OH_ArkUI_RenderNodeUtils_AttachContentModifier(node, mod);
-                if (rcMod != ARKUI_ERROR_CODE_NO_ERROR) {
-                    OH_LOG_Print(LOG_APP, LOG_ERROR, LOG_DOMAIN, LOG_TAG,
-                                 "PROTEUS_RENDER_TEXT_ATTACH_FAIL rc=%{public}d", rcMod);
-                    delete spec;
+            spec->w = w;
+            spec->h = h;
+            spec->radius = radius;
+            VaporChannelState ch;
+            ch.radius = radius;
+            // 渐变：{"kind":"linear","angle":90,"stops":[{"offset":0,"color":N},…]}
+            if (it.find("\"grad\":") != std::string::npos) {
+                std::string gsub = extractObjectField(it, "grad");
+                std::string kind;
+                if (jsonString(gsub, "kind", &kind)) spec->gradLinear = (kind != "radial");
+                double ang = 90;
+                jsonNumber(gsub, "angle", &ang);
+                spec->gradAngle = ang;
+                // stops：逐个 {offset,color}
+                size_t sp = 0;
+                while ((sp = gsub.find("{\"offset\":", sp)) != std::string::npos) {
+                    size_t e = gsub.find('}', sp);
+                    if (e == std::string::npos) break;
+                    std::string one = gsub.substr(sp, e - sp + 1);
+                    double off = 0, col = 0;
+                    jsonNumber(one, "offset", &off);
+                    jsonNumber(one, "color", &col);
+                    spec->gradPos.push_back((float)off);
+                    spec->gradColors.push_back((uint32_t)col);
+                    sp = e + 1;
+                }
+                spec->hasGrad = spec->gradColors.size() >= 2;
+                if (spec->hasGrad) {
+                    ch.grad = std::string(spec->gradLinear ? "1" : "2") + ":" + std::to_string(spec->gradColors.size());
+                    hasAnyChannel = true;
+                }
+            }
+            // 发光：{"color":N,"radius":N,"alpha":N} → 分层同心描边
+            if (it.find("\"glow\":") != std::string::npos) {
+                std::string gsub = extractObjectField(it, "glow");
+                double col = 0, rad = 0, alpha = 1;
+                jsonNumber(gsub, "color", &col);
+                jsonNumber(gsub, "radius", &rad);
+                jsonNumber(gsub, "alpha", &alpha);
+                spec->glowColor = (uint32_t)col;
+                spec->glowRadius = rad;
+                spec->glowAlpha = alpha;
+                // 层数：与外径/内径比挂钩（半径越大层越多；下界 3 与判据对齐——真画这么多层）
+                spec->glowLayers = (int)std::max(3.0, std::min(12.0, rad / 4.0));
+                spec->hasGlow = rad > 0;
+                if (spec->hasGlow) {
+                    ch.glow = std::to_string(spec->glowLayers) + ":" + std::to_string(alpha).substr(0, 5);
+                    hasAnyChannel = true;
+                }
+            }
+            // 裁剪：{"kind":"inset","params":[top,right,bottom,left]}（比例 × 尺寸）
+            if (it.find("\"clip\":") != std::string::npos) {
+                std::string csub = extractObjectField(it, "clip");
+                std::string kind;
+                jsonString(csub, "kind", &kind);
+                if (kind == "inset") spec->clipKind = 1;
+                size_t ap = csub.find("\"params\":[");
+                if (ap != std::string::npos) {
+                    size_t s0 = ap + 10;
+                    size_t e0 = csub.find(']', s0);
+                    std::vector<double> pv;
+                    if (e0 != std::string::npos) {
+                        const char* cp = csub.c_str() + s0;
+                        while (*cp && cp < csub.c_str() + e0) {
+                            char* endp = nullptr;
+                            double v = strtod(cp, &endp);
+                            if (endp != cp) { pv.push_back(v); cp = endp; continue; }
+                            cp++;
+                        }
+                    }
+                    if (pv.size() >= 4) {
+                        spec->clipTop = pv[0] * h;
+                        spec->clipRight = pv[1] * w;
+                        spec->clipBottom = pv[2] * h;
+                        spec->clipLeft = pv[3] * w;
+                    }
+                }
+                spec->hasClip = spec->clipKind != 0;
+                if (spec->hasClip) {
+                    ch.clip = spec->clipKind;
+                    hasAnyChannel = true;
+                }
+            }
+            // 描边：stroke{color,width} + strokeD（SVG `d`）
+            if (it.find("\"strokeD\":") != std::string::npos) {
+                std::string d;
+                if (jsonString(it, "strokeD", &d)) spec->strokeD = d;
+                std::string ssub = extractObjectField(it, "stroke");
+                double col = 0, wid = 1;
+                jsonNumber(ssub, "color", &col);
+                jsonNumber(ssub, "width", &wid);
+                spec->strokeColor = (uint32_t)col;
+                spec->strokeWidth = wid;
+                spec->hasStroke = !spec->strokeD.empty() && wid > 0;
+                if (spec->hasStroke) {
+                    // 弧长：真建 path 后量（判据读它证明"路径层真的建出来了"）
+                    OH_Drawing_Path* pp = OH_Drawing_PathCreate();
+                    if (pp != nullptr && OH_Drawing_PathBuildFromSvgString(pp, spec->strokeD.c_str())) {
+                        ch.strokeLen = (double)OH_Drawing_PathGetLength(pp, false);
+                    }
+                    if (pp != nullptr) OH_Drawing_PathDestroy(pp);
+                    hasAnyChannel = true;
+                }
+            }
+            if (nodeId >= 0) g_channelStates[(int)nodeId] = ch;
+            // ② 挂 content modifier：**有文本或有任一通道**都要挂（否则纯通道节点不画）
+            if (!spec->text.empty() || hasAnyChannel) {
+                ArkUI_RenderContentModifierHandle mod = OH_ArkUI_RenderNodeUtils_CreateContentModifier();
+                if (mod != nullptr) {
+                    OH_ArkUI_RenderNodeUtils_SetContentModifierOnDraw(mod, spec, DrawTextCallback);
+                    int32_t rcMod = OH_ArkUI_RenderNodeUtils_AttachContentModifier(node, mod);
+                    if (rcMod != ARKUI_ERROR_CODE_NO_ERROR) {
+                        OH_LOG_Print(LOG_APP, LOG_ERROR, LOG_DOMAIN, LOG_TAG,
+                                     "PROTEUS_RENDER_TEXT_ATTACH_FAIL rc=%{public}d", rcMod);
+                        delete spec;
+                    } else {
+                        textCount++;
+                    }
                 } else {
-                    textCount++;
+                    delete spec;
                 }
             } else {
                 delete spec;
@@ -429,12 +726,37 @@ static napi_value RenderCommands(napi_env env, napi_callback_info info) {
         built++;
     }
     g_nodeCount = built;
-    g_cmdBuildCount++;   // ★MA0-RT 判据：指令构建次数（动画窗口内应恒定）
+    // ★★MA0-RT 计数只对**绘制指令构建**（`renderCommands` 的 JS 路径）有意义——
+    //   `proteus_render_commands_cstr` 是**探针的建树入口**（vapor 场景，为让通道真建出来），
+    //   它与"动画窗口内应用层是否重发绘制指令"无关 ⇒ 不计数。
+    //   【本仓实测】首版两条路径共用计数 ⇒ 平台动画判据 A4 当场红（draw_delta=1）：
+    //   探针在 `platformAnimBegin` 之后跑了一次建树 ⇒ 被算成"应用层在动画窗口内重建指令"。
+    if (!fromProbe) g_cmdBuildCount++;
     OH_LOG_Print(LOG_APP, LOG_INFO, LOG_DOMAIN, LOG_TAG,
                  "PROTEUS_RENDER_DONE nodes=%{public}d parsed=%{public}zu texts=%{public}d",
                 built, items.size(), textCount);
+    return built;
+}
+
+/** napi 入口：`renderCommands(json)` → 建出的节点数（薄包装，实体见 `renderCommandsImpl`） */
+static napi_value RenderCommands(napi_env env, napi_callback_info info) {
+    size_t argc = 1;
+    napi_value args[1] = {nullptr};
+    napi_get_cb_info(env, info, &argc, args, nullptr, nullptr);
+    napi_value err;
+    if (argc < 1 || g_content == nullptr) {
+        OH_LOG_Print(LOG_APP, LOG_ERROR, LOG_DOMAIN, LOG_TAG, "PROTEUS_RENDER_ERROR argc=%{public}zu content=%p",
+                     argc, static_cast<void*>(g_content));
+        napi_create_int32(env, -1, &err);
+        return err;
+    }
+    size_t len = 0;
+    napi_get_value_string_utf8(env, args[0], nullptr, 0, &len);
+    std::string json(len + 1, '\0');
+    napi_get_value_string_utf8(env, args[0], &json[0], len + 1, &len);
+    json.resize(len);
     napi_value out;
-    napi_create_int32(env, built, &out);
+    napi_create_int32(env, renderCommandsImpl(json.c_str(), false), &out);
     return out;
 }
 
@@ -720,6 +1042,47 @@ static napi_value ScrollRoot(napi_env env, napi_callback_info info) {
     napi_value out;
     napi_create_int32(env, rc, &out);
     return out;
+}
+
+/**
+ * ★★**通道真源读数（跨模块）**（2026-10-03 · 三端打通绘制通道）
+ *
+ * 【为什么需要跨模块】四通道在**渲染层**（content modifier 画布）建出来，真源表
+ *   `g_channelStates` 在本模块；而 `probeChannels` 的宿主实现（读 JSON）在 `proteus_bench.cpp`
+ *   ——两模块各是一个 .so。⇒ 本函数是**唯一读数出口**（bench 侧按 id 调它）。
+ *   输出 = "1:N|glowLayers:alpha|clipKind|strokeLen|radius" 的**紧凑串**（避免跨 .so 传容器）。
+ * 【诚实边界】本表是"我们据指令建了什么"（与 Android 读自家 spec 表同性质）；
+ *   "画布上真有像素"由 `vaporPaintCheck` 的离屏自检独立核。
+ */
+/**
+ * ★★**从指令串建 RenderNode 子树**（跨模块入口，2026-10-03）
+ *
+ * 【为什么需要（本轮实测的缺口）】vapor 探针（在 `proteus_bench.so`）产出的指令此前**只进报告**
+ *   （`g_vaporCmdsJson`）——**从未送进渲染层**（渲染层只跑过 stress 夹具）⇒ 四通道在渲染层
+ *   根本没建（`g_channelStates` 全空、探针全 0）。而 `renderCommands` 是 **napi** 入口
+ *   （跨 .so 不能直接调）⇒ 本函数把"建树"抽成 C 入口，两个 .so 都能调（bench 侧在探针里调它）。
+ *
+ * @return 建出的节点数（-1 = 缺 root/解析失败）
+ */
+extern "C" int proteus_render_commands_cstr(const char* json) {
+    // 探针入口（fromProbe=true）⇒ 不参与 MA0-RT 的"应用层指令构建"计数（见 impl 内注释）
+    return renderCommandsImpl(json, true);
+}
+
+extern "C" void proteus_channel_state_of(int id, char* out, int cap) {
+    auto it = g_channelStates.find(id);
+    if (it == g_channelStates.end()) {
+        // ★★空态必须是**空串**（不是 "0"）：调用方按"非空即有该通道"判 ⇒ 写 "0" 会让
+        //   **每个节点**都被当成"有 grad/glow"（本仓实测：A/B 判据 ④ 当场红，
+        //   chan_a 的 grad 计数从 1 变成 36 —— 正是这条）。
+        snprintf(out, (size_t)cap, "||||0");
+        return;
+    }
+    const auto& c = it->second;
+    snprintf(out, (size_t)cap, "%s|%s|%d|%.4f|%.2f",
+             c.grad.empty() ? "" : c.grad.c_str(),
+             c.glow.empty() ? "" : c.glow.c_str(),
+             c.clip, c.strokeLen, c.radius);
 }
 
 /** stats(): {nodes: number} —— 机器判据读数（与 Android/iOS 宿主记账同思路） */

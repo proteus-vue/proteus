@@ -28,6 +28,10 @@ target_link_libraries(proteus_render PUBLIC libnative_drawing.so)
 if(HAVE_RUST_CORE)
   add_library(proteus_bench SHARED proteus_bench.cpp)
   target_link_libraries(proteus_bench PUBLIC libace_napi.z.so libace_ndk.z.so libhilog_ndk.z.so)
+  # ★★绘制通道真源（2026-10-03 · 三端打通绘制通道）：四通道在**渲染层**（proteus_render）建出来，
+  #   而 probeChannels 的宿主实现在 proteus_bench —— 两个 .so 之间用 C 导出（`proteus_channel_state_of`）
+  #   通信 ⇒ bench 必须链接 render。★顺序：render 先定义（见文件上方 add_library(proteus_render)）。
+  target_link_libraries(proteus_bench PUBLIC proteus_render)
   target_link_libraries(proteus_bench PUBLIC proteus_rust_layout)
   # ★文本通道（ArkGraphics2D）：styled_string + typography（鸿蒙文本绘制）
   target_link_libraries(proteus_bench PUBLIC libnative_drawing.so)
