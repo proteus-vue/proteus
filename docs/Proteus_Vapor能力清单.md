@@ -178,7 +178,7 @@ Teleport / KeepAlive / Suspense / Transition / TransitionGroup / v-memo / 自定
 | P3-2 | KeepAlive | ◐ **透传已完成（2026-10-03）**：不产包裹盒；**组件级缓存未做**（需组件实例系统 P1-3）。★**修正不实表述**：早先写"可复用 app-stack 保活"——那是**页面级**（`meta.branch.keepAlive` 三档），与**组件级** `<KeepAlive>` 不是同一件事，诊断里已分开说 |
 | P3-3 | Transition / TransitionGroup | ✅ **Transition 已完成（2026-10-03 · 三端同步）**：编译期编成**预设动画规格**（`fade`/`slide-*`/`zoom`/`fade-slide-up` 闭集）、`<Transition>` **透传**（不产包裹盒 ⇒ 与 Vue 几何等价）、运行时在可见性**真的翻转**时交宿主动画入口（三端 14/14 · 判据 ⑬）。**TransitionGroup 未做**（需列表差异/move 过渡） |
 | P3-4 | Suspense | ◐ **透传已完成（2026-10-03）**：不产包裹盒 + **只渲 `#default`**（`#fallback` 不建节点——否则内容双份）；**异步边界未做**（需异步组件系统） |
-| P3-5 | 自定义指令 | `VaporDirective` 语义 → 我方可用"宿主指令注册表" |
+| P3-5 | 自定义指令 | ◐ **宿主指令注册表已完成（2026-10-03 · 三端同步 · 判据 ⑳）**：Vue 的指令是**用户脚本**（端上不执行 script）⇒ 不能"支持任意指令"，改为**闭集注册表**（`HOST_DIRECTIVE_SPECS`，唯一事实来源在运行时包）：表内名字 → 映射**已有宿主能力**；首批 `v-animate`（预设 → 通道规格，与 `<Transition>` **同一份表**；值语义 = mounted/updated 三态，判据 ⑳ 核宿主回执）。表外指令产精确诊断（说明"指令体不会运行" + 列出可用名字）；未知预设/修饰符/行内/值编不出**四类各有诊断**。**任意用户指令体（真执行 script）不做**（架构分工） |
 | P3-5a | **动态组件 `<component :is>`** | ✅ **首帧解析已完成（2026-10-03 · 三端同步 · 判据 ⑲）**：`:is` 进 `SubscriptionTable.componentIs`（此前**完全消失**——无槽位无诊断 ⇒ 空壳静默）；实例化期求值 → 名字符串 → 走静态组件**同一条展开链**（子树/偏移/props）；静态 `is="Name"` 等价静态组件；假值 ⇒ 整节点摘除（Vue 同）。**运行时切换未做**（结构变更——编译期诊断 + 给替代路径 v-if/v-show） |
 | P3-5b | **kebab 形态内置组件**（`<keep-alive>` 等） | ✅ **已修（2026-10-03 · 静默缺陷）**：Vue 官方两种写法都收（实证：官方编译器把 `<keep-alive>` 也解析成 `_KeepAlive`），此前判据只认 PascalCase ⇒ 小写写法**多建盒 + 零诊断**。现经 `normalizeBuiltinTag` **唯一入口**规范化（template/deps/events 三处 id 同源）⇒ 小写与 PascalCase 完全等价（测试含反向：非内置 kebab 标签不误伤） |
 | P3-6 | 异步组件 `defineVaporAsyncComponent` | 同 P3-4 |

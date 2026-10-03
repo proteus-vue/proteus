@@ -281,6 +281,26 @@ const DYN_SFC = `<template>
 const dynWhich = ref('DynA')
 </script>`
 
+/**
+ * ★★★P3-5 **宿主指令**夹具（2026-10-03）：`v-animate:fade`（预设解析 + 值变化触发）+
+ *   `v-animate:zoom`（第二预设——证明预设真的参与通道规格）；另含一条**恒真无值**形态
+ *   （首评即播——mounted 语义）。
+ *   判据 ⑳ 核：① 编译产物带通道规格（preset/channels）② 首评 truthy ⇒ 播（mounted 语义）
+ *   ③ 值变化 ⇒ 再播（updated 语义）④ 假值 ⇒ 不播。
+ */
+const DIRECTIVE_SFC = `<template>
+  <p-view style="flex-direction: column">
+    <p-text v-animate:fade="pulse" style="font-size: 11px; color: #ffffff">DIR-A</p-text>
+    <p-text v-animate:zoom="zoomTrigger" style="font-size: 11px; color: #ffffff">DIR-B</p-text>
+    <p-text v-animate:slide-up style="font-size: 11px; color: #ffffff">DIR-C</p-text>
+  </p-view>
+</template>
+
+<script setup lang="ts">
+const pulse = ref(false)
+const zoomTrigger = ref(0)
+</script>`
+
 /** 长列表夹具：**行高 100px**（视口 2400 ⇒ 可见 ~24 行；预加载 ±10 ⇒ 物化 ~34 行）
  *  ——判据的口径：1000 行都必须在内核树里（几何正确），但宿主只物化可见区。
  *  ★行内含 `:width` 绑定（L1 槽位）与插值文本（`{{ item.title }}`）。 */
@@ -441,6 +461,8 @@ process.stdout.write(JSON.stringify({
   scoped: build(${JSON.stringify(SCOPED_SFC)}, 'vapor-scoped.vue'),
   // ★P3 动态组件：父 SFC（动态 / 静态 / 假值三形态）
   dyn: build(${JSON.stringify(DYN_SFC)}, 'vapor-dyn.vue'),
+  // ★P3-5 宿主指令：父 SFC（三种指令形态）
+  directive: build(${JSON.stringify(DIRECTIVE_SFC)}, 'vapor-directive.vue'),
   // ★★★六端 SFC 压力夹具：编译**共享 SFC 文件**（examples 页面）——与 Web/MP 同源
   stress: build(${JSON.stringify(stressSfc)}, 'consistency-stress.vue'),
   ab: ${JSON.stringify(AB_RESULT)},
@@ -619,7 +641,7 @@ for (const [nm, def] of Object.entries(parsed.components)) {
       `父绑定 @${parentEmitBinds[0].event}（nodeId=${parentEmitBinds[0].nodeId}）`,
   )
 }
-fs.writeFileSync(OUT, JSON.stringify({ ...parsed.small, components: parsed.components, slot: parsed.slot, scoped: parsed.scoped, dyn: parsed.dyn }))
+fs.writeFileSync(OUT, JSON.stringify({ ...parsed.small, components: parsed.components, slot: parsed.slot, scoped: parsed.scoped, dyn: parsed.dyn, directive: parsed.directive }))
 console.log(`[gen-vapor-fixture] ✅ 组件注册表：${Object.keys(parsed.components).join(', ')}（随父产物下发）`)
 // ★P1-3 插槽分发夹具（判据 ⑮）：父产物必须带 slotFor 标记、子产物必须带 slotOutlet 标记
 //   （"生成器静默退化"是本仓重点拦的形态——标记缺了就是分发不可能发生）
@@ -698,6 +720,24 @@ console.log(`[gen-vapor-fixture] ✅ 组件注册表：${Object.keys(parsed.comp
   console.log(
     `[gen-vapor-fixture] ✅ 动态组件夹具：componentIs ${dynIs.length} 条（${dynIs.map((x) => x.expr).join(', ')}）· ` +
       `静态 is="DynB" 已当静态组件`,
+  )
+}
+// ★P3-5 宿主指令（2026-10-03）：三条指令必须带**解析后的通道规格**（预设解析是编译期产物）
+{
+  const dirNodes = (parsed.directive?.tpl?.nodes ?? []).filter((n) => n && n.directives?.length)
+  const allDirs = dirNodes.flatMap((n) => n.directives)
+  const withChannels = allDirs.filter((d) => d.channels?.length > 0)
+  const noStrayDiag = (parsed.directive?.diagnostics ?? []).filter((d) => /未支持|未知/.test(d.message))
+  if (!parsed.directive?.ok || allDirs.length !== 3 || withChannels.length !== 3 || noStrayDiag.length > 0) {
+    console.error(
+      `[gen-vapor-fixture] ✗ 宿主指令夹具不完整（判据 ⑳ 将无证据）：` +
+        `指令数 ${allDirs.length}（应 3）· 带通道 ${withChannels.length}（应 3）· 意外诊断 ${noStrayDiag.length}`,
+    )
+    process.exit(1)
+  }
+  console.log(
+    `[gen-vapor-fixture] ✅ 宿主指令夹具：${allDirs.map((d) => `v-${d.name}:${d.preset}`).join(' · ')}` +
+      `（通道规格齐全——与 <Transition> 同一份预设表）`,
   )
 }
 const kb = (fs.statSync(OUT).size / 1024).toFixed(1)

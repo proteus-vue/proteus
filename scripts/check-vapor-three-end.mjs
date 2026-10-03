@@ -112,6 +112,13 @@ function fingerprint(rep) {
     (rep.dyn_probe?.geom ?? []).map((g) => `w>0:${g.width > 0}`).sort(),
     rep.dyn_probe?.dropped,
   ])
+  // ★P3-5 宿主指令（2026-10-03）：三段语义的宿主回执三端逐值一致（通道规格/逐轮 started/已播预设）——
+  //   指令注册表是共享代码 + 同一份产物 ⇒ 任一端不同即"没重跑"或"跑的不是同一份代码"。
+  fp.directive_probe = JSON.stringify([
+    (rep.directive_probe?.nodes ?? []).map((n) => `${n.id}:${[...n.dirs].sort().join('+')}`),
+    (rep.directive_probe?.rounds ?? []).map((r) => `${r.name}=${r.started}`),
+    [...new Set((rep.directive_probe?.plays ?? []).filter((p) => p.started).map((p) => `${p.nodeId}:${p.preset}`))].sort(),
+  ])
   return fp
 }
 

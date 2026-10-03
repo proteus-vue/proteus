@@ -24,6 +24,8 @@ import { parse as domParse } from '@vue/compiler-dom'
 import type { VaporDiagnostic } from './build'
 import type { VueCompatDeps } from './sources'
 import type { LayoutNode, LayoutTemplate, ListTemplate, TextSegment } from '@proteus-vue/slot-runtime'
+// ★P3-5 宿主指令注册表（**唯一事实来源在运行时包**——编译器据此产诊断、桥据此执行）
+import { HOST_DIRECTIVE_NAMES, HOST_DIRECTIVE_SPECS, isHostDirective } from '@proteus-vue/slot-runtime'
 // ★混合文本（P2-2）里的插值段要编成表达式程序——复用**同一套**编译器（能力边界一处收敛）
 import { compileExpr } from './expr'
 
@@ -615,6 +617,8 @@ export function buildLayoutTemplate(
 
       const style: Record<string, unknown> = {}
       let hasDynamicStyle = false
+      // ★P3-5 宿主指令收集器（声明在 props 扫描**之前**——扫描循环里 push；挂在节点上见下）
+      let hostDirectives: NonNullable<LayoutNode['directives']> | undefined
       // ★★未支持特性探测（P0：让静默变可见——见 UNSUPPORTED_DIRECTIVES 头注）
       for (const p of n.props ?? []) {
         if (p.type === 7 /* DIRECTIVE */ && typeof p.name === 'string' && UNSUPPORTED_DIRECTIVES[p.name]) {
@@ -671,15 +675,79 @@ export function buildLayoutTemplate(
             )
           }
         }
-        // 自定义指令 `v-xxx`（非 v-bind/v-on/v-for/v-if/v-show/v-model 等已处理项）
+        // ★★★**宿主指令**（P3-5 自定义指令，2026-10-03）——注册表（`HOST_DIRECTIVE_SPECS`）内的
+        //   指令收集成 `node.directives`；表外的走精确诊断（端上不执行 script ⇒ 指令体不会运行）。
+        //   【为什么注册表在 slot-runtime】三端契约：编译器据此产诊断、桥据此执行（"一处实现"）。
+        //   ★行内（v-for 内）指令本批不支持（需行作用域求值）——编译期诊断，不静默。
         const KNOWN_DIRECTIVES = ['bind', 'on', 'for', 'if', 'else-if', 'else', 'show', 'model', 'slot', 'text', 'html', 'memo', 'once', 'cloak', 'pre']
         if (p.type === 7 && typeof p.name === 'string'
             && UNSUPPORTED_DIRECTIVES[p.name] === undefined
             && !KNOWN_DIRECTIVES.includes(p.name)) {
-          diag(
-            `${tag}(id=${id}) 自定义指令 \`v-${p.name}\` 未支持（指令注册表待建）`,
-            '去掉它或保留 Vue 渲染路径（L0）',
-          )
+          if (isHostDirective(p.name)) {
+            // ★行内判据 = 本元素有 v-for（forCode 预扫描已就绪）**或**外层在 v-for 里
+            //   （activeListStack——注意本元素自己的 push 发生在本分支**之后**，故必须两者合取）
+            if (forCode !== undefined || activeListStack.length > 0) {
+              diag(
+                `${tag}(id=${id}) v-for **行内**的自定义指令 \`v-${p.name}\` 未支持`,
+                '把指令移到列表外的元素上，或等行作用域指令通道（本批只做顶层/非行内）',
+                'VAPOR_DIRECTIVE_IN_LIST',
+              )
+            } else {
+              const spec = HOST_DIRECTIVE_SPECS[p.name]!
+              const arg = p.arg?.content?.trim()
+              const mods = (p.modifiers ?? []).map((m) => (typeof m === 'string' ? m : String(m?.content ?? '')))
+              const presetName = arg || 'fade'
+              const preset = transitionPresetOf(presetName)
+              if (!preset) {
+                diag(
+                  `${tag}(id=${id}) \`v-${p.name}:${presetName}\`：未知${spec.argKind === 'anim-preset' ? '动画预设' : '参数'}`,
+                  `可用：${TRANSITION_PRESET_NAMES.join(' / ')}（${spec.argHint}）`,
+                  'VAPOR_DIRECTIVE_UNKNOWN_ARG',
+                )
+              } else {
+                if (mods.length > 0) {
+                  diag(
+                    `${tag}(id=${id}) \`v-${p.name}\` 上的修饰符 \`.${mods.join('.')}\` 无定义语义（已忽略）`,
+                    '本批指令不带修饰符语义；去掉修饰符即可',
+                    'VAPOR_DIRECTIVE_MODIFIERS',
+                  )
+                }
+                const valueSrc = p.exp?.content?.trim()
+                let valueProgram: import('@proteus-vue/slot-runtime').ExprProgram | undefined
+                if (valueSrc) {
+                  const compiled = compileExpr(valueSrc)
+                  if (!compiled.ok) {
+                    diag(
+                      `${tag}(id=${id}) \`v-${p.name}="${valueSrc}"\` 的值表达式无法编译：${compiled.unsupported}`,
+                      '值须为纯求值表达式（成员访问/算术/比较/逻辑/三元）',
+                      'VAPOR_DIRECTIVE_VALUE_UNSUPPORTED',
+                    )
+                  } else {
+                    valueProgram = compiled.program
+                  }
+                }
+                if (!hostDirectives) (hostDirectives = [])
+                hostDirectives.push({
+                  name: p.name,
+                  ...(arg ? { arg } : {}),
+                  ...(mods.length > 0 ? { modifiers: mods } : {}),
+                  preset: presetName,
+                  // 复用 transition 的**入场通道**（"播一次"= 从 from 到 to；与 <Transition> 同源）
+                  channels: preset.enter,
+                  durMs: 220,
+                  curve: 1,
+                  ...(valueProgram ? { value: valueProgram, valueSrc } : {}),
+                })
+              }
+            }
+          } else {
+            diag(
+              `${tag}(id=${id}) 自定义指令 \`v-${p.name}\` 未支持——端上**不执行 script**（指令体不会运行）`,
+              `宿主指令注册表内的指令可直接用：${HOST_DIRECTIVE_NAMES.map((x) => `v-${x}`).join(' / ')}；` +
+                '表外指令请改为等价的内置能力（如动画用 `v-animate:fade`），或保留 Vue 渲染路径（L0）',
+              'VAPOR_DIRECTIVE_NOT_REGISTERED',
+            )
+          }
         }
       }
       for (const p of n.props ?? []) {
@@ -813,6 +881,8 @@ export function buildLayoutTemplate(
       if (staticIsName !== undefined) node.component = staticIsName
       // ★P3 动态组件：`:is` 表达式标记（实例化期解析——见 LayoutNode.componentIs 边界）
       if (componentIsExpr !== undefined) node.componentIs = { expr: componentIsExpr }
+      // ★P3-5 宿主指令（收集在 props 扫描里；此处挂到节点）
+      if (hostDirectives !== undefined) node.directives = hostDirectives
       if (slotOutletName !== undefined) {
         node.slotOutlet = { name: slotOutletName, ...(slotOutletProps ? { props: slotOutletProps } : {}) }
       }

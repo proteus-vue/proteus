@@ -40,7 +40,7 @@
 import { instantiateTemplate, ListRegistry, PropKeyTable, StringPool, SlotRuntime, VaporRuntime, decodeOps, evalExpr, OpCode } from '@proteus-vue/slot-runtime'
 // ★★P2-3（2026-10-03）：事件派发语义（含修饰符 .stop/.self/.once）下沉到共享实现——
 //   本桥不再内联"链序 + 修饰符"逻辑（iOS/Harmony 接同一份 ⇒ 不会漂移）
-import { dispatchGesture, indexEventBindings, createDispatchState } from '@proteus-vue/slot-runtime'
+import { dispatchGesture, indexEventBindings, createDispatchState, directiveShouldPlay } from '@proteus-vue/slot-runtime'
 import type { EventBinding, EventIndex, DispatchState } from '@proteus-vue/slot-runtime'
 // ★★★A/B 对照（2026-10-01）：**同一份 SFC 的第二条路**——Vue 运行时渲染。
 //   `abRender` 由构建期用 **@vue/compiler-sfc** 从同一份 SFC 编出（见 gen-vapor-fixture.mjs）。
@@ -347,6 +347,17 @@ interface VaporReport {
     geom: Array<{ id: number; width: number }>
     dropped: number
     notes: string[]
+  }
+  /**
+   * ★★★**宿主指令探针**（P3-5 `v-animate`，2026-10-03）——三段语义的**宿主回执**读数：
+   *   · `nodes`：指令数据（name:preset:通道数——编译期解析的规格真的在）；
+   *   · `rounds`：逐轮的 `animStart` started 计数（首评 truthy/值变化/假值——各自应当如何）；
+   *   · `plays`：逐条记录（含 from→to 值，判据核"哪一轮播了哪个节点"）。
+   */
+  directive_probe: {
+    nodes: Array<{ id: number; dirs: string[] }>
+    rounds: Array<{ name: string; started: number }>
+    plays: Array<{ nodeId: number; preset: string; started: number; fromValue: unknown; toValue: unknown }>
   }
   /** 模板里的过渡声明（`隐id:预设名`；判据区分"未声明"与"声明未驱动"） */
   tpl_transition: string[]
@@ -1696,7 +1707,7 @@ function runShort(args: VaporArgs): string {
     tpl_nodes: 0, tpl_ok: false, sub_l1: 0, sub_l0: 0, sub_l1_rate: 0, sub_sources: [],
     inst_ms: 0, inst_nodes: 0, inst_reused_ids: 0, inst_allocated_ids: 0, inst_rows: 0,
     inst_values_filled: 0, inst_virtual_rows: 0, inst_text_filled: 0, inst_width_filled: 0,
-    mix_text_probe: [], text_probe_rounds: [], gate_rounds: [], gate_text_nodes: [], once_node_id: -1, memo_node_id: -1, expr_probe: [], transition_started: 0, tpl_transition: [], component_mounts: 0, component_nodes: 0, component_kid_probe: {}, slot_probe: { texts: [], rects: [], fills: [], markers_left: -1 }, emit_probe: { emits: [], parent_source_after: undefined, geom_before: -1, geom_after: -1 }, scoped_probe: { texts: [], anchor_id: -1, anchor_width_field: -1, anchor_width_rect: -1 }, lifecycle_probe: { bindings: [], ran_handler: '', changed_sources: [], ops_bytes: 0, applied: 0, anchor_id: -1, geom_before: -1, geom_after: -1 }, dyn_probe: { texts: [], mounts: [], geom: [], dropped: -1, notes: [] },
+    mix_text_probe: [], text_probe_rounds: [], gate_rounds: [], gate_text_nodes: [], once_node_id: -1, memo_node_id: -1, expr_probe: [], transition_started: 0, tpl_transition: [], component_mounts: 0, component_nodes: 0, component_kid_probe: {}, slot_probe: { texts: [], rects: [], fills: [], markers_left: -1 }, emit_probe: { emits: [], parent_source_after: undefined, geom_before: -1, geom_after: -1 }, scoped_probe: { texts: [], anchor_id: -1, anchor_width_field: -1, anchor_width_rect: -1 }, lifecycle_probe: { bindings: [], ran_handler: '', changed_sources: [], ops_bytes: 0, applied: 0, anchor_id: -1, geom_before: -1, geom_after: -1 }, dyn_probe: { texts: [], mounts: [], geom: [], dropped: -1, notes: [] }, directive_probe: { nodes: [], rounds: [], plays: [] },
     mount_ms: 0, mount_nodes: 0,
     updates_run: 0, ops_bytes: 0, ops_ms: 0, apply_ms: 0, text_synced_total: 0, update_evidence: [], geom_probe: [], channels: [],
     ev_bindings: 0, ev_handlers: 0, ev_modifiers: 0, taps: 0, tap_evidence: [],
@@ -2652,6 +2663,110 @@ function runShort(args: VaporArgs): string {
         } catch { /* 同上：重挂失败 ⇒ 判据按 host_nodes 不符判红 */ }
       } else {
         notes.push('动态组件探针：产物无 dyn 段（夹具未覆盖 ⇒ 判据 ⑲ 按缺失处理）')
+      }
+    }
+
+    /* ═══════════ ★★★P3-5 宿主指令探针（2026-10-03）：v-animate 真的交给宿主动画 ═══════════
+     *
+     * 【要证明什么】自定义指令不是"编译期产物 + 一等诊断"就完了——`v-animate` 的三段语义要真跑：
+     *   ① **首评 truthy ⇒ 播**（mounted 语义）② **值变化 ⇒ 再播**（updated 语义）③ **假值 ⇒ 不播**。
+     *   每一段的证据都是**宿主回执**（`animStart` 的 started 计数——"报给宿主了"与"宿主收了"
+     *   是两件事，本仓反复踩过）。
+     * 【顺序】独立挂载 directive 夹具树（与 ⑮/⑰/⑲ 同规）⇒ 不污染主树读数；结束后重挂主树。
+     */
+    {
+      const dirArt = (artifacts as { directive?: { tpl: LayoutTemplate; table: SubscriptionTable } }).directive
+      if (dirArt?.tpl?.ok) {
+        const dirInst = instantiateTemplate(dirArt.tpl, {
+          viewport: args.viewport,
+          read: () => undefined,
+          table: dirArt.table,
+          registry: new ListRegistry(),
+        })
+        try {
+          const dOut = JSON.parse(
+            proteusHost.mount(JSON.stringify({ viewport: dirInst.viewport, nodes: dirInst.nodes })),
+          ) as { ok?: boolean; error?: string }
+          if (dOut.ok === true) {
+            // ★指令数据在**模板**上（节点 id 与实例树同源——顶层树 idOffset=0）
+            const dirNodes = dirArt.tpl.nodes.filter((n) => (n as { directives?: unknown[] }).directives?.length)
+            const animCalls: Array<{ nodeId: number; preset: string; started: number; fromValue: unknown; toValue: unknown }> = []
+            // 指令触发状态：nodeId:name → 上一次的值 + 是否已见过（首评 = mounted 语义）
+            const dirState = new Map<string, { prev: unknown; seen: boolean }>()
+            /**
+             * 跑一轮指令检查（与 `<Transition>` 的 drainTransitions 同一形态：查声明 → 报 animStart）。
+             * @param values 本轮的值表（夹具按轮驱动——见下）
+             */
+            const runDirectiveRound = (values: Record<string, unknown>): number => {
+              let startedTotal = 0
+              for (const n of dirNodes) {
+                const dirs = (n as { directives: Array<{ name: string; preset?: string; channels?: Array<{ kind: number; from: number; to: number }>; durMs?: number; curve?: number; value?: unknown; valueSrc?: string }> }).directives
+                for (const d of dirs) {
+                  // 值求值：夹具的驱动值表优先；有 valueSrc 时按名取，无（恒真）⇒ true
+                  const cur = d.valueSrc !== undefined ? values[d.valueSrc] : true
+                  const key = `${n.id}:${d.name}`
+                  const st = dirState.get(key) ?? { prev: undefined, seen: false }
+                  const should = directiveShouldPlay(st.prev, cur, st.seen)
+                  dirState.set(key, { prev: cur, seen: true })
+                  if (!should) {
+                    animCalls.push({ nodeId: n.id, preset: d.preset ?? '', started: 0, fromValue: st.seen ? st.prev : undefined, toValue: cur })
+                    continue
+                  }
+                  const channels = d.channels ?? []
+                  const anims = channels.map((c) => ({
+                    nodeId: n.id, kind: c.kind, from: c.from, to: c.to, durMs: d.durMs ?? 220, curve: d.curve ?? 1,
+                  }))
+                  let started = 0
+                  if (anims.length > 0 && typeof proteusHost.animStart === 'function') {
+                    try {
+                      const out = JSON.parse(proteusHost.animStart(JSON.stringify({ anims }))) as { ok?: boolean; started?: number }
+                      started = out.ok === true ? (out.started ?? anims.length) : 0
+                    } catch { started = 0 }
+                  }
+                  startedTotal += started
+                  animCalls.push({
+                    nodeId: n.id, preset: d.preset ?? '', started,
+                    fromValue: st.seen ? st.prev : undefined, toValue: cur,
+                  })
+                }
+              }
+              return startedTotal
+            }
+            // ① 首轮：pulse=true（falsy→truthy：**fromValue=false 是首评前写入的** ⇒ 用两轮表达）
+            //    轮序：a) pulse=false（首评 falsy ⇒ 不播）b) pulse=true（变化 ⇒ 播：updated 语义）
+            //          c) zoomTrigger=0（首评 falsy）d) zoomTrigger=1（变化 ⇒ 播）
+            //          e) 恒真无值指令（slide-up）⇒ 首评即播（mounted 语义，在第一轮就播）
+            const roundA = runDirectiveRound({ pulse: false, zoomTrigger: 0 })   // 恒真那条在此轮播
+            const roundB = runDirectiveRound({ pulse: false, zoomTrigger: 0 })   // 同值 ⇒ 不播
+            const roundC = runDirectiveRound({ pulse: true, zoomTrigger: 0 })    // pulse 变化 ⇒ 播一次
+            const roundD = runDirectiveRound({ pulse: true, zoomTrigger: 1 })    // zoom 变化 ⇒ 播一次
+            const roundE = runDirectiveRound({ pulse: false, zoomTrigger: 1 })   // pulse 变 false ⇒ 不播（falsy）
+            rep.directive_probe = {
+              nodes: dirNodes.map((n) => ({
+                id: n.id,
+                dirs: ((n as { directives: Array<{ name: string; preset?: string; channels?: unknown[] }> }).directives)
+                  .map((d) => `${d.name}:${d.preset}:${d.channels?.length ?? 0}`),
+              })),
+              rounds: [
+                { name: 'a:首评falsy', started: roundA },
+                { name: 'b:同值', started: roundB },
+                { name: 'c:pulse变true', started: roundC },
+                { name: 'd:zoom变1', started: roundD },
+                { name: 'e:pulse变false', started: roundE },
+              ],
+              plays: animCalls,
+            }
+          } else {
+            notes.push(`宿主指令探针 mount 失败：${dOut.error ?? '未知'}`)
+          }
+        } catch (e) {
+          notes.push(`宿主指令探针异常：${String((e as Error)?.message ?? e)}`)
+        }
+        try {
+          proteusHost.mount(JSON.stringify({ viewport: inst.viewport, nodes: inst.nodes }))
+        } catch { /* 同上：重挂失败 ⇒ 判据按 host_nodes 不符判红 */ }
+      } else {
+        notes.push('宿主指令探针：产物无 directive 段（夹具未覆盖 ⇒ 判据 ⑳ 按缺失处理）')
       }
     }
 

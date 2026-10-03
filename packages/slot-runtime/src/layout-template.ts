@@ -153,6 +153,37 @@ export interface LayoutNode {
     /** 组件名表达式源码（求值器 id 在订阅表 `componentIs` 里按 nodeId 对账） */
     expr: string
   }
+  /**
+   * ★★★**宿主指令**（P3-5 自定义指令，2026-10-03）——注册表（`HOST_DIRECTIVE_SPECS`）内的
+   *   自定义指令在此节点上的绑定。**值变化（或首评 truthy）⇒ 桥报宿主动画/效果**。
+   *
+   * 【为什么放模板节点（与 `transition` 同一处置）】指令是"节点上的声明"——预设 → 通道规格
+   *   在**编译期**解析（与 `<Transition>` 共用同一份 `TRANSITION_PRESETS`，"一处实现"）；
+   *   运行时只做"值变了没有 + 报宿主播放"。值表达式是 `ExprProgram`（纯 JSON，无闭包）。
+   *
+   * 【诚实边界】① 只注册表内指令（表外的产诊断——端上不执行 script，指令体不会运行）；
+   *   ② v-for 行内指令未支持（需行作用域求值——编译期诊断）；③ 组件内部模板的指令
+   *   本批不执行（桥只走顶层模板）。三点都有诊断/文档，不静默。
+   */
+  directives?: Array<{
+    /** 指令名（不含 `v-` 前缀；如 `animate`） */
+    name: string
+    /** 参数（如 `v-animate:fade` 的 `fade`） */
+    arg?: string
+    /** 修饰符（本批未定义语义——未知修饰符在编译期诊断） */
+    modifiers?: string[]
+    /** 解析后的动画预设名（`v-animate:fade` ⇒ 'fade'） */
+    preset?: string
+    /** 编译期解析的动画通道（复用 TRANSITION_PRESETS 的 enter 通道） */
+    channels?: Array<{ kind: number; from: number; to: number }>
+    /** 时长/曲线（与 `<Transition>` 同口径：220ms / curve 1） */
+    durMs?: number
+    curve?: number
+    /** 触发值表达式（纯 JSON；缺省 = 恒真 ⇒ 首评即播） */
+    value?: import('./expr').ExprProgram
+    /** 触发值源码（诊断/对账用） */
+    valueSrc?: string
+  }>
 }
 
 /** v-for 行模板元数据（供运行时展开与注册表回填） */
