@@ -17,6 +17,7 @@ export const routes: RouteRecord[] = [
   { name: "fluid-system-demo", path: "pages/fluid-system-demo", component: "../pages/fluid-system-demo.vue", parent: "index", meta: {"title":"Fluid System"} },
   { name: "forms", path: "pages/forms", component: "../pages/forms.vue", parent: "index", meta: {"title":"表单与指令"} },
   { name: "glass-demo", path: "pages/glass-demo", component: "../pages/glass-demo.vue", parent: "index", meta: {"title":"液态玻璃（G-07）"} },
+  { name: "gp0-root-portal", path: "pages/gp0-root-portal", component: "../pages/gp0-root-portal.vue", parent: "index" },
   { name: "i18n-demo", path: "pages/i18n-demo", component: "../pages/i18n-demo.vue", parent: "index", meta: {"title":"国际化"} },
   { name: "index", path: "pages/index", component: "../pages/index.vue", meta: {"title":"首页","isTab":true} },
   { name: "mine", path: "pages/mine", component: "../pages/mine.vue", parent: "index", meta: {"title":"我的","isTab":true,"branch":{"keepAlive":"none"}} },
@@ -94,6 +95,10 @@ export const screens: Record<string, AppScreenSpec> = {
   "glass-demo": {
     "name": "glass-demo",
     "path": "pages/glass-demo"
+  },
+  "gp0-root-portal": {
+    "name": "gp0-root-portal",
+    "path": "pages/gp0-root-portal"
   },
   "i18n-demo": {
     "name": "i18n-demo",
@@ -205,7 +210,7 @@ export const screens: Record<string, AppScreenSpec> = {
 }
 
 /** 路由名数组（App 深栈/压测按它循环取屏——顺序与 routes 一致） */
-export const screenNames: string[] = ["builtin-components-demo","components-demo","config-demo","consistency-stress","dev-host-demo","devtools-open-api-demo","docs-engine-demo","fluid-layout-demo","fluid-system-demo","forms","glass-demo","i18n-demo","index","mine","mp-semantics-demo","native-components-demo","pinia-demo","platform-api-demo","provide-inject-demo","render-backend-demo","semantic-primitives-demo","showcase","svg-showcase-demo","svg-skeleton-demo","user","user-profile","virtual-list-demo","vmodel-mp-test","vue-compat-demo","order-pages-list","svg-lab-pages-image-spike","svg-lab-pages-svg-anim-probe","svg-lab-pages-svg-canvas-probe","svg-lab-pages-svg-canvas-test","svg-lab-pages-svg-hit-test","svg-lab-pages-svg-p2-spike","svg-lab-pages-svg-spike"]
+export const screenNames: string[] = ["builtin-components-demo","components-demo","config-demo","consistency-stress","dev-host-demo","devtools-open-api-demo","docs-engine-demo","fluid-layout-demo","fluid-system-demo","forms","glass-demo","gp0-root-portal","i18n-demo","index","mine","mp-semantics-demo","native-components-demo","pinia-demo","platform-api-demo","provide-inject-demo","render-backend-demo","semantic-primitives-demo","showcase","svg-showcase-demo","svg-skeleton-demo","user","user-profile","virtual-list-demo","vmodel-mp-test","vue-compat-demo","order-pages-list","svg-lab-pages-image-spike","svg-lab-pages-svg-anim-probe","svg-lab-pages-svg-canvas-probe","svg-lab-pages-svg-canvas-test","svg-lab-pages-svg-hit-test","svg-lab-pages-svg-p2-spike","svg-lab-pages-svg-spike"]
 
 /** tab 根屏（meta.isTab）—— App 端 tab 语义（switchTab/reset）的合法目标 */
 export const tabNames: string[] = ["index","mine"]
@@ -224,6 +229,7 @@ declare module '@proteus-vue/router/types' {
     'fluid-system-demo': {  },
     'forms': {  },
     'glass-demo': {  },
+    'gp0-root-portal': {  },
     'i18n-demo': {  },
     'index': {  },
     'mine': {  },
