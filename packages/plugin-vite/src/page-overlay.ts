@@ -46,6 +46,11 @@ export const OVERLAY_HOSTS: readonly OverlayHostSpec[] = [
   { key: 'toast', apis: ['showToast', 'hideToast', 'clearToasts', 'configureToast'], host: 'p-toast-host' },
   // ★GP4-b：Loading 的 API 与 Toast **不重叠**（无同名 API），故两列可共存而不误触发
   { key: 'loading', apis: ['showLoading', 'hideLoading', 'clearLoadings'], host: 'p-loading-host' },
+  // ★GP4-c（2026-10-03）：登录失效拦截弹窗——触发词是"401 失效"的上报/判定/恢复三个 API。
+  //   ★注意：**不含** `configureAuthGate`——那是装配期调用（在 main/装配文件里），
+  //     用它当触发词会把"只配置不拦截"的项目也拖上宿主（过扫的代价虽小，但这条语义明确：
+  //     真正需要宿主的是"运行时会进入失效态"的应用，即调用 notify/mark/isAuthExpired 者）。
+  { key: 'auth-gate', apis: ['notifyAuthExpired', 'markAuthRestored', 'isAuthExpired'], host: 'p-auth-gate' },
 ]
 
 /** 某能力的 API 用法正则（拼接构造——见 OVERLAY_HOSTS 的说明） */

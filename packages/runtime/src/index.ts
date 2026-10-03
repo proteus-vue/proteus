@@ -37,6 +37,14 @@ export {
 export type {
   LoadingOptions, LoadingItem, LoadingEvent, LoadingScope, LoadingStats, LoadingListener,
 } from './loading'
+// ★★★GP4-c（2026-10-03）：登录失效拦截（401 → 不可取消弹窗；**不是新机制**——既有守卫的信号源+收口）
+//   `expired` 是**唯一事实**：既有 `router.options.auth` 守卫（导航时）与弹窗（401 时）读同一份状态。
+export {
+  notifyAuthExpired, markAuthRestored, isAuthExpired, authGateState,
+  subscribeAuthGate, createAuthChecker, configureAuthGate,
+  __resetAuthGateForTest,
+} from './auth-gate'
+export type { AuthGateState, AuthGateOptions } from './auth-gate'
 export type { AppLifecycleConfig, LifecycleContext, LifecycleTrace, LifecyclePhase, FallbackStrategy, LaunchType, ProteusApp } from './lifecycle'
 // ★★2026-09-08 reactivity-runtime spke：re-export vue 的 reactive 族/守卫/effect（@vue/reactivity 经 vue 重导出——vue 是
 //   peer dep，tsc/esbuild 可解析；@vue/reactivity 未在 pnpm 提升到包 node_modules，直接 import 会 TS2307）。

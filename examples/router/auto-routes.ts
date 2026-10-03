@@ -38,6 +38,7 @@ export const routes: RouteRecord[] = [
   { name: "vmodel-mp-test", path: "pages/vmodel-mp-test", component: "../pages/vmodel-mp-test.vue", parent: "index" },
   { name: "vue-compat-demo", path: "pages/vue-compat-demo", component: "../pages/vue-compat-demo.vue", parent: "index" },
   { name: "order-pages-list", path: "subpackages/order/pages/list", component: "../subpackages/order/pages/list.vue", subPackage: "order", meta: {"title":"订单列表"} },
+  { name: "svg-lab-pages-gp4-auth-gate-demo", path: "subpackages/svg-lab/pages/gp4-auth-gate-demo", component: "../subpackages/svg-lab/pages/gp4-auth-gate-demo.vue", subPackage: "svg-lab" },
   { name: "svg-lab-pages-gp4-loading-demo", path: "subpackages/svg-lab/pages/gp4-loading-demo", component: "../subpackages/svg-lab/pages/gp4-loading-demo.vue", subPackage: "svg-lab" },
   { name: "svg-lab-pages-gp4-toast-queue-demo", path: "subpackages/svg-lab/pages/gp4-toast-queue-demo", component: "../subpackages/svg-lab/pages/gp4-toast-queue-demo.vue", subPackage: "svg-lab" },
   { name: "svg-lab-pages-image-spike", path: "subpackages/svg-lab/pages/image-spike", component: "../subpackages/svg-lab/pages/image-spike.vue", subPackage: "svg-lab" },
@@ -186,6 +187,10 @@ export const screens: Record<string, AppScreenSpec> = {
     "name": "order-pages-list",
     "path": "subpackages/order/pages/list"
   },
+  "svg-lab-pages-gp4-auth-gate-demo": {
+    "name": "svg-lab-pages-gp4-auth-gate-demo",
+    "path": "subpackages/svg-lab/pages/gp4-auth-gate-demo"
+  },
   "svg-lab-pages-gp4-loading-demo": {
     "name": "svg-lab-pages-gp4-loading-demo",
     "path": "subpackages/svg-lab/pages/gp4-loading-demo"
@@ -225,7 +230,7 @@ export const screens: Record<string, AppScreenSpec> = {
 }
 
 /** 路由名数组（App 深栈/压测按它循环取屏——顺序与 routes 一致） */
-export const screenNames: string[] = ["builtin-components-demo","components-demo","config-demo","consistency-stress","dev-host-demo","devtools-open-api-demo","docs-engine-demo","fluid-layout-demo","fluid-system-demo","forms","glass-demo","gp0-root-portal","gp3-global-layer-demo","i18n-demo","index","mine","mp-semantics-demo","native-components-demo","pinia-demo","platform-api-demo","provide-inject-demo","render-backend-demo","semantic-primitives-demo","showcase","svg-showcase-demo","svg-skeleton-demo","user","user-profile","virtual-list-demo","vmodel-mp-test","vue-compat-demo","order-pages-list","svg-lab-pages-gp4-loading-demo","svg-lab-pages-gp4-toast-queue-demo","svg-lab-pages-image-spike","svg-lab-pages-svg-anim-probe","svg-lab-pages-svg-canvas-probe","svg-lab-pages-svg-canvas-test","svg-lab-pages-svg-hit-test","svg-lab-pages-svg-p2-spike","svg-lab-pages-svg-spike"]
+export const screenNames: string[] = ["builtin-components-demo","components-demo","config-demo","consistency-stress","dev-host-demo","devtools-open-api-demo","docs-engine-demo","fluid-layout-demo","fluid-system-demo","forms","glass-demo","gp0-root-portal","gp3-global-layer-demo","i18n-demo","index","mine","mp-semantics-demo","native-components-demo","pinia-demo","platform-api-demo","provide-inject-demo","render-backend-demo","semantic-primitives-demo","showcase","svg-showcase-demo","svg-skeleton-demo","user","user-profile","virtual-list-demo","vmodel-mp-test","vue-compat-demo","order-pages-list","svg-lab-pages-gp4-auth-gate-demo","svg-lab-pages-gp4-loading-demo","svg-lab-pages-gp4-toast-queue-demo","svg-lab-pages-image-spike","svg-lab-pages-svg-anim-probe","svg-lab-pages-svg-canvas-probe","svg-lab-pages-svg-canvas-test","svg-lab-pages-svg-hit-test","svg-lab-pages-svg-p2-spike","svg-lab-pages-svg-spike"]
 
 /** tab 根屏（meta.isTab）—— App 端 tab 语义（switchTab/reset）的合法目标 */
 export const tabNames: string[] = ["index","mine"]
@@ -265,6 +270,7 @@ declare module '@proteus-vue/router/types' {
     'vmodel-mp-test': {  },
     'vue-compat-demo': {  },
     'order-pages-list': {  },
+    'svg-lab-pages-gp4-auth-gate-demo': {  },
     'svg-lab-pages-gp4-loading-demo': {  },
     'svg-lab-pages-gp4-toast-queue-demo': {  },
     'svg-lab-pages-image-spike': {  },

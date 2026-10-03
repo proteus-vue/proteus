@@ -51,6 +51,8 @@ pub fn semantic_for_tag(tag: &str) -> Option<&'static str> {
         "p-drawer" => Some("shell.drawer"),
         "p-modal" => Some("shell.modal"),
         "p-toast" => Some("shell.toast"),
+        // ★GP4-c：登录失效拦截弹窗（不可取消）——与 p-modal 同语义 shell.modal
+        "p-auth-gate" => Some("shell.modal"),
         // ★★★GP4-a/b（2026-10-03）：浮层**宿主**与声明式组件共享语义（与 Node TAG_SEMANTIC_MAP 同步；
         //   别名理由见 component-ir/src/schema.ts 的 TAG_SEMANTIC_ALIASES）
         "p-toast-host" => Some("shell.toast"),
