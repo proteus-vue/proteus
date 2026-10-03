@@ -22,6 +22,8 @@ import type { ReactiveSource } from './sources'
 import { normalizeBuiltinTag } from './template'
 // ★混排归一化（同一入口——三处遍历 id 同源）
 import { normalizedChildSequence } from './text-runs'
+// ★作用域插槽变量形态（解构的局部名要进作用域屏蔽；2026-10-03）
+import { localNamesOf, parseSlotScope } from './slot-scope'
 // ★`:style` 对象字面量逐键展开（2026-10-03）
 import { isAllConstantObject, mapStyleObjectKey, parseStyleObject } from './style-object'
 
@@ -33,6 +35,16 @@ export interface ExprDeps {
   unknown: string[]
   /** ★列表内的相对路径依赖（v-for 作用域变量及其属性访问） */
   listRelative: Array<{ scope: string; path: string }>
+  /**
+   * ★**裸作用域变量引用**（2026-10-03）——该表达式直接引用了作用域变量本身
+   *   （解构形态 `{ count }` 里的 `count`、或 `sp` 整对象）。
+   *
+   * 【为什么必须单列（本仓实测的收集缺口）】解构后内容是**裸标识符**引用（`{{ count }}`、
+   *   `dw as number` 里的 `dw`）——它们走 `scopeSet.has(name)` 提前 return ⇒
+   *   `listRelative`（只收 `sp.w` 成员链）**收不到** ⇒ build.ts 不知道这条绑定依赖插槽作用域
+   *   ⇒ **不进 slotScopedSlots** ⇒ 分发时求值不覆盖它 ⇒ **静默空值**（本仓实测）。
+   */
+  scopeRefs: string[]
   /** 表达式里是否出现函数调用（C1 纯函数判定的输入之一） */
   hasCall: boolean
   /** 表达式里出现的调用名（诊断：`fmt(...)` → 需要 @proteus-pure 才可升级） */
@@ -41,7 +53,7 @@ export interface ExprDeps {
   parseFailed: boolean
 }
 
-const EMPTY_DEPS: ExprDeps = { roots: [], unknown: [], listRelative: [], hasCall: false, calls: [], parseFailed: false }
+const EMPTY_DEPS: ExprDeps = { roots: [], unknown: [], listRelative: [], scopeRefs: [], hasCall: false, calls: [], parseFailed: false }
 
 /** JS 内置与常见全局（出现即不算「未识别的源」，避免诊断噪音） */
 /**
@@ -86,6 +98,7 @@ export function analyzeAstDeps(ast: unknown, scopes: string[] = []): ExprDeps {
   const roots = new Set<string>()
   const unknown = new Set<string>()
   const listRelative: Array<{ scope: string; path: string }> = []
+  const scopeRefs = new Set<string>()
   const calls = new Set<string>()
   const scopeSet = new Set(scopes)
   // 收集过程中记录「每个标识符的父节点」以便判断是否属性键 / 是否调用
@@ -148,7 +161,12 @@ export function analyzeAstDeps(ast: unknown, scopes: string[] = []): ExprDeps {
         const name = n.name as string
         // 调用名：父是 CallExpression 的 callee ⇒ 计入 calls（C1 判定用）
         if (parent?.type === 'CallExpression' && parent.callee === n) calls.add(name)
-        if (declared.has(name) || scopeSet.has(name)) return
+        if (scopeSet.has(name)) {
+          // ★裸作用域变量引用（见 scopeRefs 注释）——先记再 return（原实现直接 return ⇒ 完全不可见）
+          scopeRefs.add(name)
+          return
+        }
+        if (declared.has(name)) return
         if (KNOWN_GLOBALS.has(name)) return
         // 顶层/成员表达式的**根部**才计入 roots；属性键已在上面排除
         if (parent?.type === 'MemberExpression' && parent.object !== n && !parent.computed) return
@@ -219,6 +237,7 @@ export function analyzeAstDeps(ast: unknown, scopes: string[] = []): ExprDeps {
     roots: [...roots],
     unknown: [...unknown],
     listRelative,
+    scopeRefs: [...scopeRefs],
     hasCall: calls.size > 0,
     calls: [...calls],
     parseFailed: false,
@@ -444,8 +463,12 @@ export function collectTemplateBindings(
         if (tag === 'template') {
           const vsProp = (n.props ?? []).find((p) => p.type === 7 && p.name === 'slot')
           if (vsProp) {
-            const scopeCode = vsProp.exp?.content?.trim()
-            const scopeNames = scopeCode ? (scopeCode.match(/[\w$]+/g) ?? []) : []
+            // ★★★**解构形态**（2026-10-03）：`#default="{ errors }"` 的局部名也要进 `scopes`
+            //   （否则 `errors` 会被当成**顶层源**——幽灵源/误订阅，与 P2-9 可选链同族问题）。
+            //   ★用**唯一解析器**（slot-scope.ts）而不是正则抠词：`{ errors: e }` 的 `errors`
+            //     是 **props 键**（不是局部名）、`e` 才是局部名——正则两种名字分不开。
+            const parsedScope = parseSlotScope(vsProp.exp?.content)
+            const scopeNames = localNamesOf(parsedScope)
             // ★插槽声明本身不是元素 ⇒ 不占 id；children 是内容（父作用域表达式照常收集）
             //   ★P1-3 作用域插槽（2026-10-03）：作用域名**单独追踪**（`slotScopes`）——
             //     它们与 v-for 别名一样要被 suppress（不当幽灵源），但**不能**当行上下文

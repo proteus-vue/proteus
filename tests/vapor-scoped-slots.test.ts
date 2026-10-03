@@ -67,12 +67,27 @@ describe('★P1-3 作用域插槽 · 编译期（三件标记）', () => {
     expect(scoped.every((s) => s.scope === 'sp')).toBe(true)
   })
 
-  it('★解构形态（`#x="{ count }"`）必须诊断（不静默半支持）', () => {
+  it('★解构形态（`#x="{ count }"`）**已真支持**（2026-10-03）——零诊断 + scopeBindings 标记', () => {
+    // ★此前被拒（真实缺口：组件库页面的错误提示就是这么写的）；现在解析成 local/key 绑定，
+    //   分发时解构出口 props 进内容作用域（Vue 语义）。仍**不支持**的三类各有精确诊断（见下）。
     const src = sfc(
       `<p-view><Kid><template #default="{ count }"><p-text>x</p-text></template></Kid></p-view>`,
     )
-    const msgs = buildLayoutTemplate(src, 'p.vue').diagnostics.map((d) => d.message).join(' | ')
-    expect(msgs).toContain('作用域插槽的变量形态未支持')
+    const t = buildLayoutTemplate(src, 'p.vue')
+    expect(t.diagnostics, '解构不再被拒').toHaveLength(0)
+    const node = t.template.nodes.find((n) => n.slotFor)!
+    expect(node.slotFor!.scopeBindings).toEqual([{ local: 'count', key: 'count' }])
+  })
+
+  it('★解构的**不支持子形态**仍各有精确诊断（默认值 / 剩余项 / 嵌套解构）', () => {
+    const diagOf = (scope: string): string =>
+      buildLayoutTemplate(
+        sfc(`<p-view><Kid><template #default="${scope}"><p-text>x</p-text></template></Kid></p-view>`),
+        'p.vue',
+      ).diagnostics.map((d) => d.message).join(' | ')
+    expect(diagOf('{ a = 1 }')).toContain('默认值')
+    expect(diagOf('{ ...rest }')).toContain('剩余项')
+    expect(diagOf('{ a: { b } }')).toContain('嵌套解构')
   })
 
   it('★反向：非作用域插槽不产出 slotScopedSlots（既有产物不变）', () => {

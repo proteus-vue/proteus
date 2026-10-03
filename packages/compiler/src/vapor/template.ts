@@ -30,6 +30,8 @@ import { HOST_DIRECTIVE_NAMES, HOST_DIRECTIVE_SPECS, isHostDirective } from '@pr
 import { compileExpr } from './expr'
 // ★★★元素/文本**混排**归一化（2026-10-03）——三处遍历（template/deps/events）的**唯一**输入
 import { normalizedChildSequence } from './text-runs'
+// ★作用域插槽的变量形态解析（单名 / 对象解构——唯一入口；2026-10-03）
+import { parseSlotScope } from './slot-scope'
 // ★`:style` 对象字面量（逐键展开 / 常量折叠；2026-10-03）
 import { isAllConstantObject, mapStyleObjectKey, parseStyleObject } from './style-object'
 // ★单键拼接形态的判据（`'width:' + w`）——与 deps 的降级**同一函数**（一处实现）
@@ -519,7 +521,13 @@ export function buildLayoutTemplate(
      *   · `slotContentOf`：本次 walk 的直接子元素是**某个具名插槽的内容根** ⇒ 打 `slotFor: name`；
      *     `scopeVar` = 作用域插槽的变量名（`#x="sp"` ⇒ `'sp'`；见 P1-3 作用域插槽）。
      */
-    slotCtx?: { parentIsComponent?: boolean; slotContentOf?: string; scopeVar?: string },
+    slotCtx?: {
+      parentIsComponent?: boolean
+      slotContentOf?: string
+      scopeVar?: string
+      /** ★解构绑定（`{ errors }` ⇒ local/key 对；与 scopeVar 互斥） */
+      scopeBindings?: Array<{ local: string; key: string }>
+    },
   ): void => {
     // ★★★**混排归一化**（2026-10-03 · 三处遍历的唯一入口）：`<p>文字 <b>x</b></p>` 这类
     //   元素+文本混排 ⇒ 每段连续文本合成一个 `p-text` 叶（自绘树里文本是元素属性，
@@ -548,20 +556,28 @@ export function buildLayoutTemplate(
           //   ★只支持**简单标识符**——解构形态（`#x="{ count }"`）需把出口 props 展开成别名，
           //     属"作用域绑定协议"的推广（独立批次）⇒ 精确诊断（不静默半支持）。
           let scopeVar: string | undefined
+          let scopeBindings: Array<{ local: string; key: string }> | undefined
           if (scope) {
-            if (/^[A-Za-z_$][\w$]*$/.test(scope)) {
-              scopeVar = scope
-            } else {
+            // ★★★**解构形态**（2026-10-03）：`#default="{ errors }"` —— 此前被拒（真实缺口：
+            //   组件库页面的错误提示就是这么写的）⇒ 现在解析成"局部名 → props 键"的绑定，
+            //   分发时**解构**出口 props 进内容作用域（Vue 语义；见 compiler/slot-scope.ts）。
+            const parsedScope = parseSlotScope(scope)
+            if (parsedScope.kind === 'simple') {
+              scopeVar = parsedScope.name
+            } else if (parsedScope.kind === 'destructure') {
+              scopeBindings = parsedScope.entries
+            } else if (parsedScope.kind === 'unsupported') {
               diag(
-                `作用域插槽的变量形态未支持：\`#${name}="${scope.slice(0, 24)}"\`（只支持简单标识符）`,
-                '改成单名写法（如 `#default="sp"`），在内容里用 `sp.xxx` 访问出口 props',
+                `作用域插槽的变量形态未支持：\`#${name}="${scope.slice(0, 24)}"\` —— ${parsedScope.reason}`,
+                '支持两种写法：单名（`#default="sp"`，用 `sp.xxx`）或**对象解构**（`#default="{ errors }"`）；'
+                + '其余形态（嵌套解构/默认值/剩余项）保留 Vue 渲染路径（L0）',
                 'VAPOR_SLOT_SCOPE_DESTRUCTURE',
               )
             }
           }
           // 内容根标记：仅在「组件孩子」上下文中才有意义（slotCtx 决定标记名）
           walk((n.children ?? []) as unknown[], parentId, pendingTransition,
-            slotCtx?.parentIsComponent ? { slotContentOf: name, scopeVar } : slotCtx)
+            slotCtx?.parentIsComponent ? { slotContentOf: name, scopeVar, scopeBindings } : slotCtx)
           continue
         }
         if (slotCtx?.parentIsComponent) {
@@ -959,7 +975,11 @@ export function buildLayoutTemplate(
       //   ★只有**根**带标记（后代随根走——父指针链不变 ⇒ 实例化期按祖先链推导内容集合）。
       //   ★作用域插槽：变量名随标记下发（`#x="sp"` ⇒ `scope: 'sp'`；分发时绑出口 props）。
       if (slotCtx?.slotContentOf !== undefined) {
-        node.slotFor = { name: slotCtx.slotContentOf, ...(slotCtx.scopeVar ? { scope: slotCtx.scopeVar } : {}) }
+        node.slotFor = {
+          name: slotCtx.slotContentOf,
+          ...(slotCtx.scopeVar ? { scope: slotCtx.scopeVar } : {}),
+          ...(slotCtx.scopeBindings ? { scopeBindings: slotCtx.scopeBindings } : {}),
+        }
       } else if (slotCtx?.parentIsComponent) {
         node.slotFor = { name: 'default' }
       }

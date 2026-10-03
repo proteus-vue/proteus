@@ -318,6 +318,10 @@ interface VaporReport {
     anchor_id: number
     anchor_width_field: number
     anchor_width_rect: number
+    /** ★解构形态（2026-10-03）：文本（`dct-9`）+ 样式（`dw as number` ⇒ 90——TS 断言同时覆盖） */
+    destr_text: string
+    destr_width_field: number
+    destr_width_rect: number
   }
   /**
    * ★★★**生命周期探针**（P1-3 @vue:mounted，2026-10-03）——挂载后钩子的**真值读数**：
@@ -1731,7 +1735,7 @@ function runShort(args: VaporArgs): string {
     tpl_nodes: 0, tpl_ok: false, sub_l1: 0, sub_l0: 0, sub_l1_rate: 0, sub_sources: [],
     inst_ms: 0, inst_nodes: 0, inst_reused_ids: 0, inst_allocated_ids: 0, inst_rows: 0,
     inst_values_filled: 0, inst_virtual_rows: 0, inst_text_filled: 0, inst_width_filled: 0,
-    mix_text_probe: [], text_probe_rounds: [], gate_rounds: [], gate_text_nodes: [], once_node_id: -1, memo_node_id: -1, expr_probe: [], transition_started: 0, tpl_transition: [], component_mounts: 0, component_nodes: 0, component_kid_probe: {}, slot_probe: { texts: [], rects: [], fills: [], markers_left: -1 }, emit_probe: { emits: [], parent_source_after: undefined, geom_before: -1, geom_after: -1 }, scoped_probe: { texts: [], anchor_id: -1, anchor_width_field: -1, anchor_width_rect: -1 }, lifecycle_probe: { bindings: [], ran_handler: '', changed_sources: [], ops_bytes: 0, applied: 0, anchor_id: -1, geom_before: -1, geom_after: -1 }, dyn_probe: { texts: [], mounts: [], geom: [], dropped: -1, notes: [] }, directive_probe: { nodes: [], rounds: [], plays: [] }, mixed_probe: { texts: [], leaves: 0, geom: [] }, styleobj_probe: { anchor_id: -1, width_before: -1, width_after: -1, kernel_applied: 0, patch_calls: [] },
+    mix_text_probe: [], text_probe_rounds: [], gate_rounds: [], gate_text_nodes: [], once_node_id: -1, memo_node_id: -1, expr_probe: [], transition_started: 0, tpl_transition: [], component_mounts: 0, component_nodes: 0, component_kid_probe: {}, slot_probe: { texts: [], rects: [], fills: [], markers_left: -1 }, emit_probe: { emits: [], parent_source_after: undefined, geom_before: -1, geom_after: -1 }, scoped_probe: { texts: [], anchor_id: -1, anchor_width_field: -1, anchor_width_rect: -1, destr_text: '', destr_width_field: -1, destr_width_rect: -1 }, lifecycle_probe: { bindings: [], ran_handler: '', changed_sources: [], ops_bytes: 0, applied: 0, anchor_id: -1, geom_before: -1, geom_after: -1 }, dyn_probe: { texts: [], mounts: [], geom: [], dropped: -1, notes: [] }, directive_probe: { nodes: [], rounds: [], plays: [] }, mixed_probe: { texts: [], leaves: 0, geom: [] }, styleobj_probe: { anchor_id: -1, width_before: -1, width_after: -1, kernel_applied: 0, patch_calls: [] },
     mount_ms: 0, mount_nodes: 0,
     updates_run: 0, ops_bytes: 0, ops_ms: 0, apply_ms: 0, text_synced_total: 0, update_evidence: [], geom_probe: [], channels: [],
     ev_bindings: 0, ev_handlers: 0, ev_modifiers: 0, taps: 0, tap_evidence: [],
@@ -2628,8 +2632,8 @@ function runShort(args: VaporArgs): string {
         }
         const scopedInst = instantiateTemplate(scopedArt.tpl, {
           viewport: args.viewport,
-          // ★夹具的 `scopedN` 初值 7（与 SCODED_SFC 的 script 一致）——出口 props 的源头
-          read: (n) => (n === 'scopedN' ? 7 : undefined),
+          // ★夹具的 `scopedN`/`scopedM` 初值（与 SCOPED_SFC 的 script 一致）——出口 props 的源头
+          read: (n) => (n === 'scopedN' ? 7 : n === 'scopedM' ? 9 : undefined),
           table: scopedArt.table,
           registry: new ListRegistry(),
           components: scopedDefs,
@@ -2643,6 +2647,8 @@ function runShort(args: VaporArgs): string {
             const rects = rectsAll.rects ?? {}
             // 锚 = 内容里那个带文本的节点（`cnt-` 前缀——判据不必猜 id 规律）
             const anchor = scopedInst.nodes.find((n) => typeof n.text === 'string' && n.text.startsWith('cnt-'))
+            // ★★解构锚（2026-10-03）：`dct-` 前缀的内容（解构形态 + TS 断言）
+            const destrAnchor = scopedInst.nodes.find((n) => typeof n.text === 'string' && n.text.startsWith('dct-'))
             rep.scoped_probe = {
               texts: scopedInst.nodes
                 .filter((n) => typeof n.text === 'string' && n.text.length > 0)
@@ -2651,6 +2657,10 @@ function runShort(args: VaporArgs): string {
               // ★节点字段（作用域样式写进去的）与**内核真值**（必须一致——"字段写了"与"内核认了"是两件事）
               anchor_width_field: anchor ? ((anchor as { width?: number }).width ?? -1) : -1,
               anchor_width_rect: anchor ? (rects[String(anchor.id)]?.width ?? -1) : -1,
+              // ★解构形态：文本（`dct-9`）+ 样式（`dw as number` ⇒ 90；TS 断言同时被覆盖）
+              destr_text: destrAnchor ? String((destrAnchor as { text?: string }).text ?? '') : '',
+              destr_width_field: destrAnchor ? ((destrAnchor as { width?: number }).width ?? -1) : -1,
+              destr_width_rect: destrAnchor ? (rects[String(destrAnchor.id)]?.width ?? -1) : -1,
             }
           } else {
             notes.push(`作用域插槽探针 mount 失败：${scOut.error ?? '未知'}`)

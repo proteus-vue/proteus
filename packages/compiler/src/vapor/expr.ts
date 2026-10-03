@@ -74,6 +74,15 @@ function staticCalleeName(callee: Node): string | null {
 }
 
 function compileNode(n: Node): ExprCompileResult {
+  // ★★★**TS 语法节点透明解包**（2026-10-03）——`x as T` / `x!` / `<T>x` / `x satisfies T`
+  //   在**运行时没有语义**（纯编译期类型噪音；Vue 官方编译器同样剥掉它们）。
+  //   此前它们落到 default 分支 ⇒ 整条表达式被拒（`('primary' as any)` 这类**真实页面里
+  //   极常见**的写法——组件库 demo 里就有）⇒ 该槽位静默不更新。
+  //   ★解包要**递归**（`(a as any) + 1` 左操作数也是断言）——故放在 compileNode 入口。
+  while (n.type === 'TSAsExpression' || n.type === 'TSNonNullExpression'
+      || n.type === 'TSTypeAssertion' || n.type === 'TSSatisfiesExpression') {
+    n = n.expression as Node
+  }
   switch (n.type) {
     case 'Identifier': {
       const name = n.name as string

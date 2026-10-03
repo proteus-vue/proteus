@@ -609,9 +609,20 @@ def main() -> int:
         elif wf != wr:
             fail(f"★作用域宽度两侧不一致：节点字段 {wf} vs 内核真值 {wr}——两处对同一量理解不同")
             ok = False
+        elif str(scp.get("destr_text", "")).startswith("dct-") and not (
+            isinstance(scp.get("destr_width_rect"), (int, float)) and scp.get("destr_width_rect") > 0
+        ):
+            fail(f"★解构形态的**样式**没生效（destr_width_rect={scp.get('destr_width_rect')}）"
+                 + f"——`{scp.get('destr_text')}` 的 `:width` 是解构名绑的（本仓实测过『绑定不可见』形态）")
+            ok = False
+        elif not str(scp.get("destr_text", "")).startswith("dct-"):
+            fail(f"★解构形态内容缺失（destr_text={scp.get('destr_text')!r}）"
+                 + "——`#default=\"{ count, w: dw }\"` 的解构值没渲染")
+            ok = False
         else:
-            print(f"  ✓ ⑰ ★作用域插槽：内容文本 {next(t for t in texts if t.startswith('cnt-'))!r} · "
-                  f"作用域样式 width={wf}（字段与内核一致）")
+            print(f"  ✓ ⑰ ★作用域插槽：单名 {next(t for t in texts if t.startswith('cnt-'))!r}"
+                  f"（width={wf}）· **解构** {scp.get('destr_text')!r}"
+                  f"（width={scp.get('destr_width_field')}/{scp.get('destr_width_rect')}——含 TS 断言）")
 
     # ── ⑱ ★★★P1-3 生命周期：@vue:mounted 挂载后真的跑（动作 → 订阅 → **内核几何**）──
     #   【为什么单独判】这组失效全是静默的：绑定没编（此前落成"永不触发的 componentEmit"）、
