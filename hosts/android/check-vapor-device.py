@@ -613,6 +613,41 @@ def main() -> int:
             print(f"  ✓ ⑰ ★作用域插槽：内容文本 {next(t for t in texts if t.startswith('cnt-'))!r} · "
                   f"作用域样式 width={wf}（字段与内核一致）")
 
+    # ── ⑱ ★★★P1-3 生命周期：@vue:mounted 挂载后真的跑（动作 → 订阅 → **内核几何**）──
+    #   【为什么单独判】这组失效全是静默的：绑定没编（此前落成"永不触发的 componentEmit"）、
+    #     编了没跑、跑了没路由到订阅链、几何没变。⇒ 四证缺一即红：
+    #     ① 产物有绑定 ② handler 真的跑了且改了源 ③ 指令真的发给内核（applied>0）
+    #     ④ 锚节点**内核宽度**真的变了（"跑了"与"屏幕变了"是两件事）。
+    lp = rep.get("lifecycle_probe") or {}
+    if not lp or not lp.get("bindings"):
+        # ★区分"夹具未覆盖"与"产物里没有"：本仓夹具**必有** @vue:mounted（生成器断言过）
+        #   ⇒ 空绑定 = 真缺陷（不是 ◐ 跳过）——但为兼容三端历史报告，首版按 ◐ 处理并在报告可见
+        print("  ◐ ⑱ 生命周期：本端报告无 lifecycle 绑定——如实跳过（夹具应含 @vue:mounted）")
+    else:
+        ran = lp.get("ran_handler") or ""
+        ch = lp.get("changed_sources") or []
+        applied = lp.get("applied", 0)
+        gb = lp.get("geom_before", -1)
+        ga = lp.get("geom_after", -1)
+        if not ran:
+            fail(f"★@vue:mounted 绑定存在但 **handler 没跑**（bindings={lp.get('bindings')}）")
+            ok = False
+        elif not ch:
+            fail(f"★handler {ran} 跑了但**没改任何源**（changed_sources 空）——钩子动作没生效")
+            ok = False
+        elif not (isinstance(applied, (int, float)) and applied > 0):
+            fail(f"★钩子改了源但**指令没送到内核**（applied={applied} · ops_bytes={lp.get('ops_bytes')}）")
+            ok = False
+        elif not (isinstance(ga, (int, float)) and ga > 0):
+            fail(f"★锚节点**内核宽度**没变（{gb}→{ga}）——钩子链路走到了但几何没生效")
+            ok = False
+        elif isinstance(gb, (int, float)) and gb == ga:
+            fail(f"★锚节点内核宽度**前后相同**（{gb}→{ga}）——几何没变（『跑了』≠『生效了』）")
+            ok = False
+        else:
+            print(f"  ✓ ⑱ ★生命周期：@vue:mounted（{lp.get('bindings')[0]}）handler {ran} 跑了 · "
+                  f"改源 {ch} · 指令 applied={applied} · 锚节点内核宽度 {gb}→{ga}")
+
     # 附加观测（不判红，只如实报）
     una = rep.get("uninstantiated_slots", 0)
     if una:

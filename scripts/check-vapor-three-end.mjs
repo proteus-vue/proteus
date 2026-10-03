@@ -95,6 +95,15 @@ function fingerprint(rep) {
     rep.scoped_probe?.anchor_width_field,
     rep.scoped_probe?.anchor_width_rect,
   ])
+  // ★P1-3 生命周期（2026-10-03）：@vue:mounted 的三端读数（绑定/ran/源/applied/几何）逐值一致。
+  fp.lifecycle_probe = JSON.stringify([
+    [...(rep.lifecycle_probe?.bindings ?? [])].sort(),
+    rep.lifecycle_probe?.ran_handler,
+    [...(rep.lifecycle_probe?.changed_sources ?? [])].sort(),
+    rep.lifecycle_probe?.applied,
+    rep.lifecycle_probe?.geom_before,
+    rep.lifecycle_probe?.geom_after,
+  ])
   return fp
 }
 

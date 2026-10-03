@@ -100,9 +100,36 @@ export interface EventHandlers {
   [handler: string]: HandlerAction[]
 }
 
+/**
+ * ★★★**生命周期绑定**（P1-3 生命周期，2026-10-03）——模板 vnode 钩子 `@vue:mounted` 的编译产物。
+ *
+ * 【Vue 语义】`@vue:mounted` 是 Vue 3.3+ 的**模板** vnode 钩子（元素与组件都可用；
+ *   旧写法 `@vnode-mounted` 在 3.4 已移除——官方错误信息原文："Use the vue: prefix instead"）。
+ *   触发时机 = 该 vnode **挂载完成**。
+ *
+ * 【我方模型下的对应时机】端上无 DOM 插入动作；本批把 mounted 定义为「**首帧 mount 之后、
+ *   路由到订阅更新链**」——即动作改了源 ⇒ 走 relink → 指令 → 内核重排（与 Vue 的
+ *   "mounted 里改状态触发更新"**同一条链**，不是另造一套）。
+ *
+ * 【为什么单列本表（本仓实测的静默缺陷）】此前 `@vue:mounted` 落进"组件自定义事件"分支
+ *   （`componentEmit`）⇒ 产物里出现对 `vue:mounted` 事件的监听——而**子组件永远不会
+ *   `$emit('vue:mounted')`** ⇒ 钩子永不执行、且零诊断（最危险的一类静默）。⇒ 本表把它
+ *   变成可执行的一等产物（与 events/handlers 同一套动作表语义）。
+ */
+export interface LifecycleBinding {
+  /** 目标节点 id（模板序；与订阅表 nodeId 同源） */
+  nodeId: number
+  /** 钩子阶段（本批只支持 mounted；unmounted 等产精确诊断） */
+  phase: 'mounted'
+  /** handler 名（指向 `handlers`——与事件共用同一张动作表） */
+  handler: string
+}
+
 export interface EventCompileResult {
   events: EventBinding[]
   handlers: EventHandlers
+  /** ★P1-3 生命周期（无 `@vue:mounted` ⇒ **不产出字段**——既有产物逐字节不变） */
+  lifecycle?: LifecycleBinding[]
   /** 不支持形态的诊断（带修法）——不静默 */
   diagnostics: Array<{ message: string; hint?: string }>
 }
@@ -342,6 +369,35 @@ export function compileEvents(
       // 修饰符在 AST 里已拆开（`@click.stop` ⇒ arg='click' + modifiers=['stop']）——
       //   重新拼回 `click.stop` 走既有 splitModifiers（诊断文案/置位规则**零变化**）。
       const mods = (p.modifiers ?? []).map((x) => (typeof x === 'string' ? x : String(x?.content ?? ''))).filter(Boolean)
+      // ★★★**生命周期钩子 `@vue:*`**（P1-3 生命周期，2026-10-03）——必须在事件名解析**之前**拦截：
+      //   否则 `vue:mounted` 会落进"组件自定义事件"分支 ⇒ 产物里出现对 `vue:mounted` 事件的监听，
+      //   而子组件永远不会 `$emit('vue:mounted')` ⇒ **钩子永不执行且零诊断**（本仓实测的静默缺陷）。
+      //   ★Vue 官方错误信息确认本语法为现行写法（@vnode-* 已在 3.4 移除："Use the vue: prefix instead"）。
+      const vueHook = String(argNode?.content ?? '')
+      if (vueHook.startsWith('vue:')) {
+        const phase = vueHook.slice('vue:'.length)
+        if (mods.length > 0) {
+          diag(`@${vueHook} 不支持修饰符 \`.${mods.join('.')}\``, 'vnode 钩子没有修饰符语义——请去掉修饰符')
+        }
+        if (phase === 'mounted') {
+          const actions = compileStatement(String(p.exp?.content ?? '').trim(), diag)
+          if (actions.length > 0) {
+            const handler = `h${handlerSeq.length}`
+            handlerSeq.push(handler)
+            out.handlers[handler] = actions
+            if (!out.lifecycle) out.lifecycle = []
+            out.lifecycle.push({ nodeId: id, phase: 'mounted', handler })
+          }
+        } else if (phase === 'unmounted') {
+          diag(
+            `@vue:unmounted 未支持（静态树模型没有"卸载时点"——元素不会从树里摘除）`,
+            '离场用 <Transition>（可见性切换，已支持）或宿主通道；v-if 的结构摘除为后续批次',
+          )
+        } else {
+          diag(`@vue:${phase} 未支持（本版支持 @vue:mounted）`, '其余 vnode 钩子（updated / before-mount / 等）为后续批次')
+        }
+        continue
+      }
       const rawName = [String(argNode?.content ?? ''), ...mods].join('.')
       const value = String(p.exp?.content ?? '').trim()
       // ★★修饰符解析（P2-3）：先拆修饰符再判事件名（否则 `click.stop` 整串当过事件名）
