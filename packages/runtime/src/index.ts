@@ -27,6 +27,16 @@ export type {
   ToastOptions, ToastItem, ToastSnapshot, ToastEvent, ToastType,
   ToastPosition, ToastDropPolicy, ToastConfig, ToastStats, ToastListener,
 } from './toast'
+// ★★★GP4-b（2026-10-03）：Loading **多实例 + 遮罩范围**（与 Toast 的分工：Toast 是**队列**（一条条来），
+//   Loading 是**活跃集合**（同时存在 N 个，各有遮罩范围）——"进行中任务"与"临时提示"是两种语义）
+export {
+  showLoading, hideLoading, clearLoadings,
+  loadingSnapshot, loadingStats, subscribeLoading, sweepPageLoadings,
+  __resetLoadingForTest,
+} from './loading'
+export type {
+  LoadingOptions, LoadingItem, LoadingEvent, LoadingScope, LoadingStats, LoadingListener,
+} from './loading'
 export type { AppLifecycleConfig, LifecycleContext, LifecycleTrace, LifecyclePhase, FallbackStrategy, LaunchType, ProteusApp } from './lifecycle'
 // ★★2026-09-08 reactivity-runtime spke：re-export vue 的 reactive 族/守卫/effect（@vue/reactivity 经 vue 重导出——vue 是
 //   peer dep，tsc/esbuild 可解析；@vue/reactivity 未在 pnpm 提升到包 node_modules，直接 import 会 TS2307）。

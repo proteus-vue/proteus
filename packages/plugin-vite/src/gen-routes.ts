@@ -30,7 +30,7 @@ import { collectUsedFrameworkComponents } from './tag-scan'
 // ★GP3-b1（2026-10-03）：App 壳定位（与 plugin.ts 同源——"同一件事两份实现 = 修一份等于没修"）
 import { findAppShellFile } from './app-shell'
 // ★★★GP4-a（2026-10-03）：Toast 宿主按需注册（与 plugin.ts 同源判定——同一件事两份实现 = 修一份等于没修）
-import { detectToastUsage } from './page-overlay'
+import { detectOverlayUsage, OVERLAY_HOSTS } from './page-overlay'
 
 /** 入口选项：config 为项目编译配置，root 为项目根目录（默认 process.cwd()） */
 export interface GenRoutesOptions {
@@ -843,11 +843,16 @@ function writePageJsons(pages: PageInfo[]): void {
   //   （否则真机「usingComponents 未找到组件」→ **整块不渲染**，与 F-30 同族失效）。
   //   ★壳扫描一次（所有页共用）；同名以**页面**为准（页面更局部）。语义跳过集对壳不用（壳不是页面）。
   const shellComponents = shellFile ? collectComponents(shellFile, false) : {}
-  // ★GP4-a：**按需注册 Toast 宿主**——plugin.ts 往每页 wxml 注入 `<p-toast-host />`（检测到 API 用法时），
+  // ★GP4-a/b：**按需注册 Overlay 宿主**——plugin.ts 往每页 wxml 注入宿主标签（检测到 API 用法时），
   //   这里必须同步写进每页 usingComponents（否则真机「未找到组件」⇒ 整块不渲染；F-30 同族失效）。
-  //   ★两处判定同源（都调 detectToastUsage）；手动声明宿主时**双双让位**（防双宿主重复渲染）。
-  const tu = detectToastUsage(APP_DIR)
-  const toastHostComponent = tu.used && !tu.manualHost ? { 'p-toast-host': '/proteus/p-toast-host/index' } : {}
+  //   ★两处判定同源（都调 detectOverlayUsage）；手动声明宿主时**双双让位**（防双宿主重复渲染）。
+  //   ★表驱动：遍历 OVERLAY_HOSTS（加新能力自动跟上——不靠记忆）。
+  const overlayUsage = detectOverlayUsage(APP_DIR)
+  const hostComponents: Record<string, string> = {}
+  for (const spec of OVERLAY_HOSTS) {
+    const u = overlayUsage[spec.key]
+    if (u && u.used && !u.manualHost) hostComponents[spec.host] = '/proteus/' + spec.host + '/index'
+  }
   for (const p of pages) {
     const pageJson: Record<string, unknown> = {}
     if (config.skyline && !matchWebviewPage(config.page?.webviewPages, p.relSrc, p.relInSub, p.mpPath)) {
@@ -858,7 +863,7 @@ function writePageJsons(pages: PageInfo[]): void {
     if (p.pageJson) Object.assign(pageJson, p.pageJson)
     // 组件系统（v0.3）：扫描模板中的自定义组件标签 → usingComponents 注入
     // ★#496 页面源 p-grid 已被语义编译（产物无标签）——skipSemantic 排除；组件文件需注册保留
-    const components = { ...toastHostComponent, ...shellComponents, ...collectComponents(p.file, true) }
+    const components = { ...hostComponents, ...shellComponents, ...collectComponents(p.file, true) }
     if (Object.keys(components).length) pageJson.usingComponents = components
     // 注意：不再输出 customRouteKeyName —— 真机校验报"无效的 page.json [customRouteKeyName]"；
     // 自定义路由仅靠 wx.navigateTo({ routeType }) + 已注册 builder 生效，page.json 无需声明
@@ -866,7 +871,12 @@ function writePageJsons(pages: PageInfo[]): void {
     fs.mkdirSync(path.dirname(outFile), { recursive: true })
     fs.writeFileSync(outFile, JSON.stringify(pageJson, null, 2) + '\n')
   }
-  console.log(`[gen-routes] 已生成 ${pages.length} 个页面 page.json${Object.keys(shellComponents).length ? `（含 App 壳 Global 层组件 ${Object.keys(shellComponents).join('/')}）` : ''}`)
+  const injectedHosts = Object.keys(hostComponents)
+  console.log(
+    `[gen-routes] 已生成 ${pages.length} 个页面 page.json` +
+      `${Object.keys(shellComponents).length ? `（含 App 壳 Global 层组件 ${Object.keys(shellComponents).join('/')}）` : ''}` +
+      `${injectedHosts.length ? `（含按需注入的浮层宿主 ${injectedHosts.join('/')}）` : ''}`,
+  )
 }
 
 /**
@@ -888,9 +898,12 @@ function computeEmittedComponents(pages: PageInfo[]): ReadonlySet<string> | null
   //   否则"声明了/输出了"再次分叉，正是 F-30 的形态）。
   const roots = shellFile ? [...pages.map((p) => p.file), shellFile] : pages.map((p) => p.file)
   const used = collectUsedFrameworkComponents(roots, FW_COMPONENTS, path.join(APP_DIR, 'components'))
-  // ★GP4-a：按需注入的 Toast 宿主本体（与 plugin.ts 的闭包并入同源判定）
-  const tu = detectToastUsage(APP_DIR)
-  if (tu.used && !tu.manualHost) used.add('p-toast-host')
+  // ★GP4-a/b：按需注入的 Overlay 宿主本体（与 plugin.ts 的闭包并入同源判定 · 表驱动）
+  const u = detectOverlayUsage(APP_DIR)
+  for (const spec of OVERLAY_HOSTS) {
+    const rec = u[spec.key]
+    if (rec && rec.used && !rec.manualHost) used.add(spec.host)
+  }
   return used
 }
 

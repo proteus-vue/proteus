@@ -51,6 +51,11 @@ pub fn semantic_for_tag(tag: &str) -> Option<&'static str> {
         "p-drawer" => Some("shell.drawer"),
         "p-modal" => Some("shell.modal"),
         "p-toast" => Some("shell.toast"),
+        // ★★★GP4-a/b（2026-10-03）：浮层**宿主**与声明式组件共享语义（与 Node TAG_SEMANTIC_MAP 同步；
+        //   别名理由见 component-ir/src/schema.ts 的 TAG_SEMANTIC_ALIASES）
+        "p-toast-host" => Some("shell.toast"),
+        "p-loading-host" => Some("ui.loading"),
+        "p-loading-region" => Some("ui.loading"),
         "p-page" => Some("shell.page"),
         "p-segment" => Some("shell.segment"),
         "p-popover" => Some("shell.popover"),

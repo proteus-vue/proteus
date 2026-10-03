@@ -18,6 +18,10 @@ import PPopup from './p-popup/index.vue'
 import PToast from './p-toast/index.vue'
 // ★★★GP4-a（2026-10-03）：Toast 队列宿主（Overlay 层；渲染端——队列状态在 @proteus-vue/runtime）
 import PToastHost from './p-toast-host/index.vue'
+// ★★★GP4-b（2026-10-03）：Loading 多实例宿主（Overlay 层；渲染端——活跃集合在 @proteus-vue/runtime）
+import PLoadingHost from './p-loading-host/index.vue'
+// ★GP4-b：区域遮罩（就地包裹——贴合盒子尺寸，无需测量；声明式，无需注入）
+import PLoadingRegion from './p-loading-region/index.vue'
 import PLoading from './p-loading/index.vue'
 import PNavBar from './p-nav-bar/index.vue'
 import PSkeleton from './p-skeleton/index.vue'
@@ -121,6 +125,8 @@ export {
   PPopup,
   PToast,
   PToastHost,
+  PLoadingHost,
+  PLoadingRegion,
   PLoading,
   PNavBar,
   PSkeleton,

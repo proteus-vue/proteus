@@ -28,7 +28,8 @@ const PROJECT = process.env.PROTEUS_MINI_PROGRAM_PATH || path.resolve(__dirname,
 const ENABLED = process.env.PROTEUS_MP_E2E_WXIDE === '1'
 
 
-const DEMO = '/pages/gp4-toast-queue-demo'
+// ★GP4-b 起该页在**分包**（主包页面数 32 上限——演示页统一放 svg-lab 分包）
+const DEMO = '/subpackages/svg-lab/pages/gp4-toast-queue-demo'
 
 const wxideDebugger: MpDebuggerLike = {
   async consoleGrep(command: string): Promise<string[]> {
@@ -63,6 +64,7 @@ const readHostRender = (): string => {
   const pages = getCurrentPages() as unknown as Array<{ route?: string }>
   const route = pages.length ? (pages[pages.length - 1].route ?? '') : ''
   const byPage = (g.__PROTEUS_TOAST_RENDER_BY_PAGE__ as Record<string, { text?: string | null; position?: string | null }> | undefined) ?? {}
+  // ★按当前页 route 取（分包页的 route 带 `subpackages/<name>/pages/...` 前缀——不是裸 `pages/...`）
   const r = byPage[route] ?? null
   return JSON.stringify({
     mounted: Number(g.__PROTEUS_TOAST_HOST_MOUNTED__) || 0,
@@ -93,10 +95,10 @@ describe.skipIf(!ENABLED)('GP4-a · Toast 队列真机（wechatide skill-CLI）'
       }
       await driver.waitFor(1200)
       info = JSON.parse(String(await driver.evaluate(readPageState))) as { route: string; data: Record<string, unknown> }
-      if (info.route === 'pages/gp4-toast-queue-demo') break
+      if (info.route === 'subpackages/svg-lab/pages/gp4-toast-queue-demo') break
       await driver.waitFor(1800)
     }
-    expect(info.route, `reLaunch 后应停在 GP4 演示页（实到 ${info.route}）`).toBe('pages/gp4-toast-queue-demo')
+    expect(info.route, `reLaunch 后应停在 GP4 演示页（实到 ${info.route}）`).toBe('subpackages/svg-lab/pages/gp4-toast-queue-demo')
 
     // ② ★宿主在场（注入闭环第一判据——没有宿主后面全是假失败）
     expect((await host()).mounted, '★构建期注入的 <p-toast-host /> 应实例化（组件挂载落痕 ≥1）').toBeGreaterThan(0)
