@@ -7,7 +7,7 @@ generated: true
 
 # Compile rule catalog
 
-> 115 compile rules — every rule ships its own AI explainer (id / when / before → after / why). SSOT = `@proteus-vue/compiler` TRANSFORM_RULES, same source as `npx proteus rules` and the Playground trace.
+> 116 compile rules — every rule ships its own AI explainer (id / when / before → after / why). SSOT = `@proteus-vue/compiler` TRANSFORM_RULES, same source as `npx proteus rules` and the Playground trace.
 
 ## Template transforms (65)
 
@@ -858,7 +858,7 @@ after:  <text style="font-size: calc(15.77px + 1.1268vw)">x</text>（示意—�
 
 > why: Skyline has no clamp length function (per the official support table) — the Web end keeps real CSS clamp while the MP end uses the linear calc alternative (vw is naturally viewport-fluid with zero runtime cost; converged through real-device testing in #496 M3)
 
-## Script transforms (36)
+## Script transforms (37)
 
 ### `script/const-to-data`
 
@@ -1382,6 +1382,19 @@ after:  ready() { this.__proteusProbe(); /* .in(this).select('.p-x-data-v-h').bo
 ```
 
 > why: Automation tools (wechatide/automator) only reach page-owned nodes: component internals are isolated by glass-easel (createSelectorQuery returns null; no selectAllComponents in Skyline), so internal geometry/visibility cannot be asserted (a collapsed scroll-view container slipped through twice). Measurement must originate inside the component
+
+### `script/global-layer-merge`
+
+**Global layer injection (app shell → every page): data reads shared state, setData mirrors writes, onShow pulls**
+
+MP pages are independent render trees (design §1.2-bis), so the app shell's Global content is injected into every page artifact: (1) global data keys initialize from `__proteusGlobal.get(k)` (falling back to the declared initial value); (2) shell methods merge into the page instance (`this` = the page); (3) `setData` is wrapped to mirror global keys into the shared module (call sites are not rewritten — keys can be computed/path forms, so rewriting would miss cases); (4) the page pulls on `onShow` (syncing values written by other pages when returning). The shared module `_proteus/global-layer.js` relies on the require cache (same path = same instance) ⇒ "one instance per page, one shared state" (same pattern as the official custom-tab-bar)
+
+```
+before: <global-layer><view>{{ netText }}</view></global-layer>（仅声明在 App.vue）
+after:  每页产物：wxml 前缀 + `netText: __proteusGlobal.get("netText")` + setData 写镜像 + onShow 拉取
+```
+
+> why: In mini programs App is a logic-only container (no render-layer counterpart), so "declare once in App.vue, active app-wide" has no architectural home (uni-app does not support it officially). Injection is a compile-time, enumerable act — a runtime insertGlobal would defeat conformance and AI-checkability silently (C1)
 
 ## Style transforms (9)
 

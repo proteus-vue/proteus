@@ -27,6 +27,8 @@ declare module 'vue' {
     'p-popup': typeof import('./p-popup/index.vue')['default']
     PToast: typeof import('./p-toast/index.vue')['default']
     'p-toast': typeof import('./p-toast/index.vue')['default']
+    PToastHost: typeof import('./p-toast-host/index.vue')['default']
+    'p-toast-host': typeof import('./p-toast-host/index.vue')['default']
     PLoading: typeof import('./p-loading/index.vue')['default']
     'p-loading': typeof import('./p-loading/index.vue')['default']
     PNavBar: typeof import('./p-nav-bar/index.vue')['default']

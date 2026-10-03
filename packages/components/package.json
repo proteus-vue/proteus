@@ -38,6 +38,7 @@
     "@proteus-vue/fluid": "0.3.0-beta.21",
     "@proteus-vue/gesture": "0.3.0-beta.11",
     "@proteus-vue/glass": "0.3.0-beta.11",
+    "@proteus-vue/runtime": "0.3.0-beta.21",
     "@proteus-vue/shared": "0.3.0-beta.21",
     "@proteus-vue/worklet": "0.3.0-beta.21"
   },

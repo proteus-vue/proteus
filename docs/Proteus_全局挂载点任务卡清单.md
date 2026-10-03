@@ -38,7 +38,7 @@
 
 ### 第四批：全局浮层能力
 
-- [ ] **GP4-a** Toast 队列（替代 `uni.showToast` 语义）⭐
+- [x] **GP4-a** Toast 队列（替代 `uni.showToast` 语义）⭐ —— 见卡（实现完成 2026-10-03）
 - [ ] **GP4-b** Loading 多实例与遮罩范围
 - [ ] **GP4-c** 登录失效拦截弹窗（与路由守卫协同）
 
@@ -510,7 +510,7 @@ Global 层**必然是「每页一份实例」**（N = 页面栈深度）——�
 
 # 第四批 · 全局浮层能力
 
-## 卡 GP4-a · Toast 队列 ⭐
+## 卡 GP4-a · Toast 队列 ⭐　✅ **实现完成（2026-10-03）**
 
 **优先级**：⭐ 高（最直观的对外证据）
 **预估**：0.5 人周
@@ -523,20 +523,71 @@ Global 层**必然是「每页一份实例」**（N = 页面栈深度）——�
 
 ### 必做项
 
-- [ ] 实现 Toast 队列（FIFO），支持并发触发排队
-- [ ] 支持自定义样式与位置（不再是固定居中）
-- [ ] 支持指定持续时长与手动关闭
-- [ ] 队列上限与丢弃策略（防止刷屏）
+- [x] 实现 Toast 队列（FIFO），支持并发触发排队
+      —— `packages/runtime/src/toast.ts`（**模块级单例**：队列/计时器/统计；纯 TS，跨端可单测）
+- [x] 支持自定义样式与位置（不再是固定居中）
+      —— `position: top|center|bottom`（Overlay 内三锚点）+ `type: info|success|warn|error`
+      （色彩经 CSS 变量 `--p-toast-<type>` 可换色）+ `--p-toast-color` 等宿主级定制
+- [x] 支持指定持续时长与手动关闭
+      —— `duration`（0 = 常驻）+ `hideToast(id?)` / `clearToasts()` + `dismissible`（点本体即关）
+- [x] 队列上限与丢弃策略（防止刷屏）
+      —— `configureToast({ maxSize, policy })`；三种策略 `drop-oldest`（默认）/`drop-newest`/`replace`
+      + `dropped` 计数与 `drop` 事件（**丢弃可观测**——不静默丢）
 
 ### 硬约束
 
-- [ ] Toast 必须在 Overlay 层，**不得混入 Global 层**
-- [ ] 语义必须与《页面层级规范》的 Popout 层一致
+- [x] Toast 必须在 Overlay 层，**不得混入 Global 层**
+      —— 宿主 `p-toast-host` 用 `<teleport to="body">`（编译期 → `root-portal`）；**不是** `<global-layer>`
+- [x] 语义必须与《页面层级规范》的 Popout 层一致
+      —— 宿主根全屏 fixed 于 portal 内（与 p-drawer/p-modal 同款层级手法）；Toast 属"临时出现、最上层"
 
 ### 验收
 
-- [ ] 连续触发 10 个 Toast，按序显示且不互相覆盖
-- [ ] 自定义样式生效（对照 `uni.showToast` 的固定样式）
+- [x] 连续触发 10 个 Toast，按序显示且不互相覆盖
+      —— 真机 e2e 实测 **1→2→3→4→5→6→7→8→9→10**（严格递增，`tests/e2e-mp-toast-queue.test.ts`）
+- [x] 自定义样式生效（对照 `uni.showToast` 的固定样式）
+      —— 位置三态 / 色彩四态 / 常驻 / 手动关均经真机 e2e 断言
+
+### ★实现要点（怎么做的——给维护者）
+
+| 关注点 | 做法 | 为什么 |
+|---|---|---|
+| 队列归属 | **runtime 模块级单例**（不是组件内） | MP 端宿主**每页一份**；若计时器在组件里，多实例会各自推进 ⇒ 同一秒弹两个 |
+| 渲染端 | `p-toast-host`（teleport → Overlay），只订阅队列、自己不知道显示什么 | 命令式 API 与声明式组件解耦：业务只调 `showToast` |
+| **零每页引入** | plugin 检测到 toast API 用法 ⇒ **每页 wxml 注入 `<p-toast-host />`** + 每页 `usingComponents` 注册 + 组件本体按需产出 | GP5 判据（八条场景任一需每页引入 ⇒ 方案不成立）；**两处判定同源**（`detectToastUsage`） |
+| 手动优先 | 项目里已手写宿主 ⇒ 整体不注入 | 双宿主会各渲染一份 ⇒ 同一条显示两次 |
+| 无宿主提示 | 无订阅者时给**一次** console 提示（不是错误） | 防"静默不显示"；MP 端页面 `onLoad` 早于宿主 `ready` 属正常，宿主就绪会补显示 |
+| 状态一致 | 队列单例 + 各页宿主订阅（"实例 N 份、状态一份"，同 custom-tab-bar） | MP 每页独立渲染树（§1.2-bis），与 GP3-b1 同一条诚实边界 |
+
+### ★本轮真机排障三坑（已机器化/文档化，防重犯）
+
+1. **面板塌成 0×0**：面板自身 `position: fixed` 而父容器无尺寸——Skyline 下 fixed 需 portal 内**四边撑满**
+   才构成视口坐标系 ⇒ 改「全屏根 + 内层 absolute」（p-drawer 同款）。
+2. **动态类名拼串失效**（S 系列 T12/A 同族）：`:class="'p-toast-host--' + position"` 编译成
+   `'p-toast-host---' + scopeId + position` ⇒ 拼出 `...-data-v-xxxcenter`，**与任何 CSS 都不匹配** ⇒
+   根无 top ⇒ 面板塌陷且**零报错** ⇒ 一律用 `{ 'literal-key': cond }`。
+3. **测量装置反被判成产品缺陷**：组件在 `root-portal` 内 ⇒ 页面级 `selectComponent`/
+   `createSelectorQuery` **一律查不到**（四种选择器全 null）。我据此一度得出"组件未创建"的**错误结论**
+   并改错一版实现 ⇒ 教训：**排障结论必须用能看见该层的通道复核**（探针 / 运行时落痕）。
+
+### 交付物
+
+- 队列：`packages/runtime/src/toast.ts` + `index.ts` 导出（`showToast`/`hideToast`/`clearToasts`/
+  `configureToast`/`subscribeToast`/`toastSnapshot`/`toastStats`/`toastConfig` + 类型）
+- 宿主：`packages/components/p-toast-host/index.vue`（注册进 `index.ts` + `global-components.d.ts`）
+- 注入：`packages/plugin-vite/src/page-overlay.ts`（`detectToastUsage`/`injectToastHost`）
+  + `plugin.ts`（wxml 注入 + 闭包起点）+ `gen-routes.ts`（每页 `usingComponents`）
+- 演示：`examples/pages/gp4-toast-queue-demo.vue`
+- 测试：`tests/toast-queue.test.ts`（24 组·三种丢弃策略/常驻/幂等/事件）+ `tests/toast-host-inject.test.ts`
+  （14 组·按需/手动优先/**扫描器不自污染**）+ `tests/e2e-mp-toast-queue.test.ts`（真机 8 段）
+
+### ★附带修复（被本轮真机暴露的**编译器缺口**）
+
+**裸方法引用传参不重写**：`subscribeToast(applySnapshot)` 里的 `applySnapshot` 是"方法作为值"传给回调——
+编译器此前只改写 `name(` 与 `name.bind(`，裸值传参**不改写** ⇒ MP 产物里是模块作用域下不存在的裸标识符 ⇒
+`ready()` 当场 `ReferenceError`，其后整段初始化（含订阅）**静默不执行**。
+修：实参位（`(name)` / `, name,`）识别 + 补 `.bind(this)`（方法体在 MP 侧被改写成 `this.setData(...)`，
+不 bind 则回调触发瞬间 TypeError）。回归锁在 `tests/toast-queue.test.ts` 的同源测试与 GP4-a e2e。
 
 ---
 
