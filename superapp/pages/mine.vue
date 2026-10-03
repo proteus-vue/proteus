@@ -145,7 +145,9 @@ function closeMusic(): void {
           <text class="sa-item__label">深色模式</text>
           <text class="sa-item__desc">全应用即时生效（无需刷新）</text>
         </view>
-        <view id="mine-dark" class="mine-switch" :class="{ 'mine-switch--on': darkOn }" @click="toggleDark">
+        <!-- ★只有行绑 @click（整行可点）；开关是**视觉指示**——点它靠冒泡由行处理。
+             （曾双绑 ⇒ Web 端冒泡触发两次 ⇒ 相互抵消 ⇒ "点了没反应"；MP 端 catch 语义不冒泡故未暴露） -->
+        <view id="mine-dark" class="mine-switch" :class="{ 'mine-switch--on': darkOn }">
           <view class="mine-switch__knob" />
         </view>
       </view>
@@ -159,7 +161,7 @@ function closeMusic(): void {
           <text class="sa-item__label">客服悬浮球</text>
           <text class="sa-item__desc">常驻入口，关闭后全部页面隐藏</text>
         </view>
-        <view id="mine-fab" class="mine-switch" :class="{ 'mine-switch--on': fabOn }" @click="toggleFab">
+        <view id="mine-fab" class="mine-switch" :class="{ 'mine-switch--on': fabOn }">
           <view class="mine-switch__knob" />
         </view>
       </view>
@@ -272,6 +274,9 @@ function closeMusic(): void {
   align-items: center;
 }
 .mine-switch__knob {
+  /* ★2026-10-04（实测缺陷修复）：滑块盖在开关本体上并**接走点击** ⇒ 点开关无反应。
+     生产应用的开关，点滑块与点轨道都应切换 ⇒ 滑块**不接事件**（由本体接住）。 */
+  pointer-events: none;
   flex-shrink: 0;
   width: 22px;
   height: 22px;

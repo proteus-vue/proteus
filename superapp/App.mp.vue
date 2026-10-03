@@ -82,7 +82,16 @@ function saStopMusic() {
 }
 
 /* ══ ⑧ IM 未读角标（消息数跨页同步） ══ */
-const imUnread = ref(0)
+/**
+ * ★2026-10-04（用户报「未读消息徽标又不显示了」——冷启动场景）：
+ *   徽标此前只在**打开过消息页**后出现（同步写在消息页 onShow）；冷启动直接进首页时
+ *   无人调 setTabBarBadge ⇒ 徽标为空、且壳读数 0（与页头"未读 3"不一致）。
+ *   ⇒ 两处修：① **冷启动初值**（真实业务 = 本地缓存 / 服务端拉取；本 demo = 演示数据 3，
+ *     与消息页会话列表的未读之和一致，消息页 onShow 会再校正）；② 壳顶层**主动同步一次**
+ *     （见下方 saSyncTabBarBadge() 调用）——它进壳的 initLines ⇒ **每页 onLoad 都同步** ⇒
+ *     任意页面（含冷启动首页）都能立即显示正确徽标。
+ */
+const imUnread = ref(3)
 
 /**
  * ★改名（2026-10-04）：原名 `saSyncTabBarBadge` 的 `__` 前缀让**编译器不把它当壳方法**
@@ -115,6 +124,11 @@ function saClearUnread() {
   imUnread.value = 0
   saSyncTabBarBadge()
 }
+
+/* ★冷启动/每页 onLoad 同步一次角标（壳顶层副作用 ⇒ 进 initLines ⇒ 注入每个页面的 onLoad 序列）：
+   这样"任意页面打开"（含冷启动直接进首页）都能看到正确徽标，不再依赖"先逛消息页"。
+   ★幂等安全：同步只读状态 + setTabBarBadge，重复调用无副作用。 */
+saSyncTabBarBadge()
 </script>
 
 <template>

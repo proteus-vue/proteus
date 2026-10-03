@@ -119,12 +119,19 @@ describe.skipIf(!ENABLED)('★超级应用验收（Web）· 首模块：全局�
     await page.evaluate(() => (globalThis as unknown as { wx: { navigateTo: (o: { url: string }) => void } }).wx.navigateTo({ url: '/pages/mine' }))
     await page.waitForSelector('#mine-dark', { timeout: 10_000 })
 
-    // ⑦ 主题
-    const before = await page.evaluate(() => Boolean(document.querySelector('.sa-theme-bg--dark')))
+    // ⑦ 主题——★先归一状态再断言"变化"（共享状态是模块单例，**跨测试运行存活**：
+    //   上一轮把主题留成 dark 时，"切一次变 dark" 的断言会假红。本仓 MP e2e 同法。）
+    const isDark = (): Promise<boolean> => page.evaluate(() => Boolean(document.querySelector('.sa-theme-bg--dark')))
+    if (await isDark()) {
+      await page.click('#mine-dark')
+      await page.waitForTimeout(400)
+    }
+    const before = await isDark()
+    expect(before, '归一后应为浅色（再切才有可断言的"变化"）').toBe(false)
     await page.click('#mine-dark')
     await page.waitForTimeout(400)
-    const after = await page.evaluate(() => Boolean(document.querySelector('.sa-theme-bg--dark')))
-    expect(after, '★设置页开关 → 主题切换（免刷新）').toBe(!before)
+    const after = await isDark()
+    expect(after, '★设置页开关 → 主题切换（免刷新）').toBe(true)
 
     // ④ 客服球
     const fabBefore = await page.evaluate(() => Boolean(document.querySelector('#sa-fab')))
@@ -157,7 +164,7 @@ describe.skipIf(!ENABLED)('★超级应用验收（Web）· 首模块：全局�
       badge: Boolean(document.querySelector('#sa-im-badge')),
       inChrome: Boolean((document.querySelector('[data-mount-layer="overlay"]'))?.querySelector('#sa-music-bar')),
     }))
-    expect(after.dark, '★回首页主题仍是设置页切后的值（跨页同源）').toBe(true)
+    expect(after.dark, '★回首页主题仍是设置页切后的值（跨页同源；归一后为 dark）').toBe(true)
     expect(after.music, '音乐条仍在（Global 跨路由）').toBe(true)
     expect(after.badge, '角标仍在').toBe(true)
     expect(after.inChrome, '★场景节点在 Overlay 层容器内（跨页存活 + 层级正确）').toBe(true)

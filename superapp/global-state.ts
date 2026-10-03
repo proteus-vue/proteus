@@ -69,7 +69,9 @@ export function stopMusic(): void {
 }
 
 /* ══ ⑧ IM 未读角标 ══ */
-export const imUnread = ref(0)
+/** ★冷启动初值（真实业务 = 本地缓存/服务端；demo = 演示数据 3，与消息页会话未读之和一致）——
+ *   2026-10-04 修「冷启动落在首页时徽标为空」（用户报「未读消息徽标又不显示了」）。 */
+export const imUnread = ref(3)
 export function setUnread(n: number): void {
   imUnread.value = n > 0 ? n : 0
 }
