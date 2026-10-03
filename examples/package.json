@@ -27,6 +27,7 @@
     "@proteus-vue/built-in-components": "0.3.0-beta.21",
     "@proteus-vue/capabilities": "0.3.0-beta.21",
     "@proteus-vue/compat-miniprogram": "0.3.0-beta.21",
+    "@proteus-vue/components": "workspace:*",
     "@proteus-vue/desktop": "0.3.0-beta.11",
     "@proteus-vue/dev-host": "0.3.0-beta.11",
     "@proteus-vue/devtools": "0.3.0-beta.21",
@@ -46,20 +47,20 @@
     "@proteus-vue/web": "0.3.0-beta.21",
     "@proteus-vue/worklet": "0.3.0-beta.21",
     "@vue/devtools-api": "^8.0.0",
+    "ms": "2.1.3",
     "pinia": "^4.0.3",
-    "vue": "^3.4.0",
-    "@proteus-vue/components": "workspace:*"
+    "vue": "^3.4.0"
   },
   "devDependencies": {
     "@proteus-vue/cli": "0.3.0-beta.21",
     "@proteus-vue/compiler": "0.3.0-beta.21",
+    "@proteus-vue/hmr": "0.3.0-beta.21",
     "@proteus-vue/plugin-vite": "0.3.0-beta.21",
     "@types/node": "^20.0.0",
     "@vitejs/plugin-vue": "^5.0.0",
     "tsx": "^4.0.0",
     "typescript": "^5.4.0",
     "vite": "^5.0.0",
-    "vue-tsc": "^2.0.0",
-    "@proteus-vue/hmr": "0.3.0-beta.21"
+    "vue-tsc": "^2.0.0"
   }
 }

@@ -106,6 +106,37 @@ B1 ──┬── B2 ──┬── B6
 开始实现。
 ```
 
+## ★★★B1-npm — 外部模块导入（2026-10-04 · 用户点名"一刀切"）
+
+**用户原话**：「小程序没有模块化就直接判定我们也不支持模块化太一刀切了，不支持导入外部 ts 这个会劝退
+大部分开发者的，**跨端框架的基本任务就是让开发者在业务开发代码里面不感知平台环境差异**，不是直接把限制
+丢给开发者自己」。
+
+**B1 覆盖的四条能力（业务代码写标准 import，MP 端零感知）**：
+
+| 能力 | 实现 | 产物 |
+|---|---|---|
+| **npm 裸包**（`import ms from "ms"`） | esbuild 构建期打包（**browser 条件优先**——避开 npm 包的 Node fallback 分支，实测 nanoid 的 CJS 入口 `require("crypto")`）；**leaf**（BFS 不深入 node_modules，包内依赖由 esbuild 整体内联）；已知叶子**单例 external**（防「页面直连」与「共享模块内引」各内联一份） | `_proteus/npm/<id>.js`（require 缓存单例） |
+| **路径别名**（`@/utils/x`） | 复用 vite `resolve.alias`（configResolved 快照——**与 Web 端同源**）；string（精确/前缀）/RegExp 两形态 | 按展开后的相对路径 |
+| **框架包子路径**（`@proteus-vue/router/scan`） | package.json `exports` 条件直解（此前只认 dist/index.js） | `_proteus/router-scan.js` |
+| **`node:path` polyfill** | 纯字符串函数（无 IO/平台语义——正当职责）；**其余 Node 内置显式报错**（无对等物，不做假实现） | 构建期注入 |
+
+**警告分级（反黑盒但不噪音）**：未解析 import 由插件（唯一有完整解析上下文的一侧）逐条给**准确原因**——
+npm 未找到/npm 依赖 Node 内置/别名命中但目标不存在/框架包未构建/node 内置/样式文件…各不同文案；
+**设计语义静默**（`@proteus-vue/components` 的组件 import 在 MP 端经 usingComponents 解析——返回空串 ⇒ 只进 trace）。
+实测：showcase 构建从 **232 条噪音 → 0**。
+
+**顺带修的真缺陷（B1 暴露）**：① `@proteus-vue/router` 的 index re-export `./scan`（构建期工具）
+⇒ 把 796KB `@vue/compiler-sfc` 拖进小程序产物（现改子路径导出，消费方 `@proteus-vue/router/scan`）；
+② `@vue/runtime-core`/`@vue/reactivity`/`@vue/shared` 未在 vendor 单例清单 ⇒ 重复内联（现单例化）。
+
+**测试**：`tests/module-npm-b1.test.ts` 12 组（npm leaf/scoped id/browser 条件/别名四形态/exports 子路径/
+polyfill 与 Node 原生 **19 组对拍**）；端到端：`examples/subpackages/svg-lab/pages/module-import-demo.vue`
+（源码 `import ms from "ms"` → 产物 `require("../../../_proteus/npm/ms.js")`，实测构建绿）。
+
+**诚实边界**：依赖 Node 内置且无 browser 分支的 npm 包 → 构建期**显式报错**（不做 polyfill 假实现）；
+打进来的包**进代码包体积**（大包按需 import 子路径）；polyfill 仅覆盖 posix 语义与常用面。
+
 ## 进度追踪
 
 | Batch | 状态 | PR | 验收 |
@@ -121,6 +152,7 @@ B1 ──┬── B2 ──┬── B6
 | B7d | ⬜ | | 沙箱 / 内存守护（B7 子项拆批） |
 | B8 | ✅ | | audit + ESLint 阻断（audit module 硬卡） |
 | B9 | ✅ | | 示例 + 迁移指南 + init module（B9 文档整合） |
+| **B1-npm** | ✅ | | **外部模块导入（2026-10-04，用户点名："不支持导入外部 ts 会劝退大部分开发者"）**——npm 裸包/路径别名/框架包子路径/path polyfill 四能力 + 逐条精确原因（见下节） |
 | B5 | ✅ | | Skyline subPackages 生成（分包依赖 + preloadRule） |
 | B4 | ⬜ | | Web 分包产物验证 |
 | B5 | ⬜ | | Skyline subPackages 生成 |

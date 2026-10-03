@@ -3312,18 +3312,33 @@ export function transformScriptToPage(
         after: `const { ${imp.names.join(', ')} } = require('${reqPath}')（跨模块引用，共享模块独立产物）`,
       })
     } else if (!extra.isComponent) {
-      // 不可解析的跨模块 import（npm 包 / 未收录路径）：剥离 + 警告（反黑盒，vue-compat Batch A）
-      importWarnings.push(imp.source)
-      trace?.add('script/module-import', {
-        line: imp.line,
-        before: `import ... from '${imp.source}'`,
-        after: '（剥离：无法解析的跨模块引用，符号将 undefined）',
-      })
+      // 不可解析的跨模块 import：剥离 + 警告（反黑盒，vue-compat Batch A）
+      // ★★★B1（2026-10-04，用户点名「不支持导入外部 ts 会劝退大部分开发者」）：
+      //   原因由调用方（插件侧，唯一有完整解析上下文的一侧）注入——npm/别名/node 内置/
+      //   框架包/样式文件各有各的正确处置；缺省回退到"检查路径/包名"通用文案。
+      const reason = extra.unresolvedImportReason?.(imp.source) ?? '跨模块引用无法解析——检查路径/包名'
+      // ★★★B1：**空串 = 设计语义**（如 @proteus-vue/components 的组件 import 在 MP 端经
+      //   usingComponents 解析——不是错误）。只进 trace，不进 warnings（防 236 条噪音淹没真警告）。
+      if (reason === '') {
+        trace?.add('script/module-import', {
+          line: imp.line,
+          before: `import ... from '${imp.source}'`,
+          after: '（设计语义：MP 端经 usingComponents/框架通道解析，非运行时 import）',
+        })
+      } else {
+        importWarnings.push(`${imp.source}（${reason}）`)
+        trace?.add('script/module-import', {
+          line: imp.line,
+          before: `import ... from '${imp.source}'`,
+          after: `（剥离：${reason}）`,
+        })
+      }
     }
   }
   if (importWarnings.length) {
     warnings.push(
-      `检测到 ${importWarnings.length} 条无法解析的 import（${importWarnings.slice(0, 3).join(', ')}${importWarnings.length > 3 ? '…' : ''}）——小程序产物无模块系统，跨模块引用将 undefined：请改用本地模块路径（module-plan B0：相对路径共享模块自动编译 + require）或框架 store 桥`,
+      `检测到 ${importWarnings.length} 条无法解析的 import（**不是一刀切拒绝**——相对路径 / npm 包 / 路径别名均支持构建期打包；逐条原因如下）：`,
+      ...importWarnings.map((w) => `  · ${w}`),
     )
   }
   // ★底线循环 ①③：禁用集（config rules.disabled 即时生效）

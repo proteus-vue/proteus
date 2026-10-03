@@ -3,6 +3,18 @@
 //       + pFluidLayoutPlugin（★仅 p-fluid 属性改写——框架 Web 分支默认注册，见 plugin.ts 注释）
 //       + devtoolsRelayPlugin（远程查看中转）+ runGenRoutes + 配置类型
 export { default as mpTransform, defaultScopedPlugin, pFluidLayoutPlugin, resolveSharedModule, rewriteRootToPage } from './plugin'
+// ★★★B1（2026-10-04）：npm/别名/子路径/内置 解析辅助（纯函数可测——tests/module-npm-b1.test.ts 消费）
+export {
+  classifyUnresolvedImport,
+  isNodeBuiltinSource,
+  normalizeModuleAliases,
+  applyModuleAlias,
+  npmModuleRelNoExt,
+  splitNpmSource,
+  resolveNpmEntry,
+} from './plugin'
+export type { ModuleAlias } from './plugin'
+export { MP_PATH_POLYFILL_CODE } from './path-polyfill'
 export { devtoolsRelayPlugin } from './devtools-plugin'
 export { createPanelPageHandler, resolveDevtoolsDir, printPanelUrl, isOriginAllowed } from './devtools-plugin'
 export type { DevtoolsRelayOptions } from './devtools-plugin'

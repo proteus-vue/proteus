@@ -43,7 +43,11 @@ describe('Batch A：平台无对等能力显式警告（反黑盒）', () => {
   it('import 剥离 → 警告（无法解析的跨模块引用）+ 函数调用运行时初始化', () => {
     const src = '<template><view>{{ v }}</view></template>\n<script setup>\nimport { useV } from "./util"\nconst v = useV()\n</script>'
     const r = compile(src)
-    expect(r.warnings.some((w) => w.includes('import') && w.includes('undefined'))).toBe(true)
+    // ★B1（2026-10-04）：警告文案升级为**逐条精确原因**（'无法解析的 import' + 具体原因），
+    //   不再含旧句 '跨模块引用将 undefined'——断言对准新契约（仍须可见告警，反黑盒不放松）。
+    const all = r.warnings.join('\n')
+    expect(all).toContain('无法解析的 import')
+    expect(all, '逐条原因须含具体来源').toContain('./util')
     // ★module-plan B0：函数调用初始化不再降级 data undefined——运行时初始化实例属性（onLoad 注入）
     expect(r.js).toContain('this.v = useV()')
     expect(r.js).not.toContain('v: undefined')

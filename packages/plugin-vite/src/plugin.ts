@@ -13,6 +13,7 @@
 import fs from 'node:fs'
 import path from 'node:path'
 import { createRequire } from 'node:module'
+import { MP_PATH_POLYFILL_CODE } from './path-polyfill'
 import { resolveRouterConfig } from '@proteus-vue/types'
 import type { GlobalLayerSnippet } from '@proteus-vue/types'
 import { GLOBAL_LAYER_STATE_MODULE } from '@proteus-vue/contracts'
@@ -232,16 +233,226 @@ export function loadStyleSrcWithVariant(
 }
 
 /**
- * ★module-plan B0 + platform-plan B5 尾：共享模块解析（纯函数可测）
+ * ★module-plan B0/B1 + platform-plan B5 尾：共享模块解析（纯函数可测）
  * - 相对路径（本地 .ts/.js）→ 产物相对 appDir 路径
+ * - 路径别名（vite resolve.alias，与 Web 端**同源**）→ 展开后按相对路径处理
  * - @proteus-vue/*（框架包 dist）→ 产物 _proteus/<name>（白名单放行；微信 require 缓存同路径同实例）
- * - 其余裸模块（vue/pinia 等第三方）→ null（不参与）
+ * - **npm 裸包（B1，2026-10-04）**→ 产物 _proteus/npm/<id>，leaf 模块（esbuild 全内联，BFS 不深入 node_modules）
+ * - Node 内置模块（fs/path/node:*…）→ null（MP 运行时不提供——classifyUnresolvedImport 给准确原因）
+ *
+ * 【B1 为什么必须做（用户原话）】「小程序没有模块化就直接判定我们也不支持模块化太一刀切了，
+ *   不支持导入外部 ts 这个会劝退大部分开发者的，跨端框架的基本任务就是让开发者在业务开发代码里面
+ *   不感知平台环境差异，不是直接把限制丢给开发者自己」——npm 依赖同样走**构建期打包**（esbuild 内联），
+ *   业务代码视角与 Web 端完全一致（写标准 import）。
  */
+
+/** ★Node 内置模块名单（MP 运行时不提供；显式诚实边界，而不是笼统"无法解析"） */
+const NODE_BUILTINS = new Set([
+  'assert', 'async_hooks', 'buffer', 'child_process', 'cluster', 'console', 'constants', 'crypto',
+  'dgram', 'diagnostics_channel', 'dns', 'domain', 'events', 'fs', 'http', 'http2', 'https',
+  'inspector', 'module', 'net', 'os', 'path', 'perf_hooks', 'process', 'punycode', 'querystring',
+  'readline', 'repl', 'stream', 'string_decoder', 'sys', 'timers', 'tls', 'trace_events', 'tty',
+  'url', 'util', 'v8', 'vm', 'wasi', 'worker_threads', 'zlib',
+])
+
+/** 是否为 Node 内置模块来源（node: 前缀 / 名单纯名 / 子路径 fs/promises） */
+export function isNodeBuiltinSource(source: string): boolean {
+  if (source.startsWith('node:')) return true
+  const head = source.split('/')[0]
+  return NODE_BUILTINS.has(head)
+}
+
+/** 路径别名（与 vite resolve.alias 同形的子集：string / RegExp 的 find + replacement） */
+export interface ModuleAlias {
+  find: string | RegExp
+  replacement: string
+}
+
+/**
+ * 把别名配置归一为 ModuleAlias[]（兼容 vite 的 string 简写形态；customResolver 不支持——MP 构建期解析）。
+ * 非数组/非法项静默过滤（构建期配置错误由 vite 侧报，MP 侧不重复炸）。
+ */
+export function normalizeModuleAliases(raw: unknown): ModuleAlias[] {
+  if (!Array.isArray(raw)) return []
+  const out: ModuleAlias[] = []
+  for (const item of raw as Array<{ find?: unknown; replacement?: unknown }>) {
+    const find = item?.find
+    const replacement = item?.replacement
+    if ((typeof find === 'string' || find instanceof RegExp) && typeof replacement === 'string') {
+      out.push({ find, replacement })
+    }
+  }
+  return out
+}
+
+/**
+ * 别名匹配（语义对齐 @rollup/plugin-alias）：string find = 精确或 find + '/' 前缀；RegExp find = replace 语义。
+ * 返回展开后的绝对路径；未命中 → null。
+ */
+export function applyModuleAlias(source: string, aliases: ModuleAlias[], baseDir: string): string | null {
+  for (const { find, replacement } of aliases) {
+    if (typeof find === 'string') {
+      if (source !== find && !source.startsWith(find + '/')) continue
+      const rest = source === find ? '' : source.slice(find.length)
+      const mapped = path.isAbsolute(replacement) ? replacement + rest : path.resolve(baseDir, replacement + rest)
+      return mapped
+    }
+    if (find.test(source)) {
+      const replaced = source.replace(find, replacement)
+      return path.isAbsolute(replaced) ? replaced : path.resolve(baseDir, replaced)
+    }
+  }
+  return null
+}
+
+/** npm 裸包 → 产物相对路径 id（@scope/pkg/sub → _proteus/npm/scope-pkg-sub） */
+export function npmModuleRelNoExt(source: string): string {
+  const id = source.replace(/^@/, '').replace(/[\\/]/g, '-').replace(/[^\w.-]/g, '_')
+  return `_proteus/npm/${id}`
+}
+
+/** 拆分 npm 源名为 包名 + 子路径（@scope/pkg/sub → @scope/pkg + ./sub） */
+export function splitNpmSource(source: string): { pkgName: string; subpath: string } {
+  const parts = source.split('/')
+  if (source.startsWith('@')) {
+    const pkgName = parts.slice(0, 2).join('/')
+    const rest = parts.slice(2)
+    return { pkgName, subpath: rest.length ? './' + rest.join('/') : '.' }
+  }
+  const rest = parts.slice(1)
+  return { pkgName: parts[0], subpath: rest.length ? './' + rest.join('/') : '.' }
+}
+
+/** 条件导出选择（browser → import → module → default → require 依序取第一个存在的分支） */
+function pickConditionalEntry(entry: unknown): string | null {
+  if (typeof entry === 'string') return entry
+  if (entry && typeof entry === 'object') {
+    for (const cond of ['browser', 'import', 'module', 'default', 'require']) {
+      const v = (entry as Record<string, unknown>)[cond]
+      if (v !== undefined) {
+        const r = pickConditionalEntry(v)
+        if (r) return r
+      }
+    }
+  }
+  return null
+}
+
+/**
+ * npm 裸包解析（★B1，2026-10-04）：从导入方目录出发走 node 解析链（含嵌套 node_modules），
+ * 回退工程根；**入口按 browser 条件优先**（与 Web 打包器同款策略——MP 无 Node 内置，
+ * 实测：nanoid 的 require 分支 require('crypto') 构建直接失败，browser 条件能避开这类分支）。
+ * 返回 { file, pkgDir }；解析不到 → null（原因见 classifyUnresolvedImport）。
+ */
+export function resolveNpmEntry(
+  source: string,
+  absFrom: string,
+  projectRoot: string,
+): { file: string; pkgDir: string } | null {
+  const { pkgName, subpath } = splitNpmSource(source)
+  const tryResolve = (baseDir: string): { file: string; pkgDir: string } | null => {
+    try {
+      const req = createRequire(path.join(baseDir, 'package.json'))
+      const rawEntry = req.resolve(source)
+      if (!rawEntry) return null
+      // 从解析结果向上找最近的 package.json（exports 隔离下 req.resolve(pkg/package.json) 常被拦）
+      let pkgDir = path.dirname(rawEntry)
+      let pkgJsonPath = path.join(pkgDir, 'package.json')
+      while (!fs.existsSync(pkgJsonPath)) {
+        const parent = path.dirname(pkgDir)
+        if (parent === pkgDir) break
+        pkgDir = parent
+        pkgJsonPath = path.join(pkgDir, 'package.json')
+      }
+      let pkgJson: Record<string, unknown> = {}
+      if (fs.existsSync(pkgJsonPath)) {
+        try { pkgJson = JSON.parse(fs.readFileSync(pkgJsonPath, 'utf-8')) } catch { pkgJson = {} }
+      }
+      // ① exports 条件解析（browser 优先）
+      const exportsMap = pkgJson.exports as Record<string, unknown> | undefined
+      if (exportsMap && typeof exportsMap === 'object') {
+        const dot = (exportsMap[subpath] ?? (subpath === '.' ? exportsMap : undefined)) as unknown
+        const rel = pickConditionalEntry(dot)
+        if (rel) {
+          const cand = path.resolve(pkgDir, rel)
+          if (fs.existsSync(cand) && fs.statSync(cand).isFile() && /\.(m?[jt]s|cjs|jsx|tsx)$/i.test(cand)) return { file: cand, pkgDir }
+        }
+      }
+      // ② browser 字段（string 主入口替换 / object 主入口映射）
+      const browser = pkgJson.browser
+      if (typeof browser === 'string' && subpath === '.') {
+        const cand = path.resolve(pkgDir, browser)
+        if (fs.existsSync(cand)) return { file: cand, pkgDir }
+      }
+      if (browser && typeof browser === 'object' && subpath === '.') {
+        const map = browser as Record<string, string>
+        const mainField = typeof pkgJson.main === 'string' ? pkgJson.main : 'index.js'
+        const key = mainField.startsWith('./') ? mainField : './' + mainField
+        const mapped = map[key] ?? map[mainField]
+        if (typeof mapped === 'string') {
+          const cand = path.resolve(pkgDir, mapped)
+          if (fs.existsSync(cand)) return { file: cand, pkgDir }
+        }
+      }
+      // ③ module / main 字段（无 exports 的老包）
+      if (subpath === '.' && typeof pkgJson.module === 'string') {
+        const cand = path.resolve(pkgDir, pkgJson.module)
+        if (fs.existsSync(cand)) return { file: cand, pkgDir }
+      }
+      // ④ 回退：createRequire 解析结果本身（仅接受代码扩展名）
+      if (!/\.(m?[jt]s|cjs|jsx|tsx)$/i.test(rawEntry)) return null
+      if (!fs.statSync(rawEntry).isFile()) return null
+      return { file: rawEntry, pkgDir }
+    } catch {
+      return null
+    }
+  }
+  return tryResolve(path.dirname(absFrom)) ?? tryResolve(projectRoot)
+}
+/**
+ * ★未解析 import 的**准确原因**（供 compiler 生成精确警告——杀掉"一刀切"文案）。
+ * 纯函数可测；原因文案面向开发者（可直接照做）。
+ */
+export function classifyUnresolvedImport(
+  source: string,
+  opts: { aliases?: ModuleAlias[]; absFrom?: string; projectRoot?: string } = {},
+): string {
+  if (isNodeBuiltinSource(source)) {
+    return 'Node 内置模块——小程序运行时不提供（请改用平台 API / 条件编译）'
+  }
+  if (source === '@proteus-vue/components') {
+    // ★设计语义（非错误）：组件标签在 MP 端经 usingComponents 解析；JS 工具导出仅 Web 可用。
+    //   返回空串 ⇒ 编译器降为 trace 级（不刷警告——实测 showcase 236 条会淹没真警告）。
+    return ''
+  }
+  if (source.startsWith('@proteus-vue/')) {
+    return '框架包未产出 dist 入口——检查该包是否已构建（pnpm -r build），或它不是 MP 运行时包'
+  }
+  if (/\.(css|scss|sass|less|styl)(\?.*)?$/i.test(source)) {
+    return '样式文件 import 不参与 MP 打包——请把样式放进 SFC <style> 或全局 app.wxss'
+  }
+  const aliases = opts.aliases ?? []
+  if (aliases.length && opts.absFrom && opts.projectRoot) {
+    const mapped = applyModuleAlias(source, aliases, opts.projectRoot)
+    if (mapped) {
+      return `路径别名命中但目标不存在：${path.relative(opts.projectRoot, mapped)}（检查别名配置与文件）`
+    }
+  }
+  if (!source.startsWith('.')) {
+    return 'npm 依赖未找到——检查包名拼写，或先在工程里安装（pnpm add <pkg>）'
+  }
+  return '相对路径文件不存在（检查路径与扩展名）.ts/.js/.mjs/.cjs'
+}
+
+/** ★vendor 单例清单（2026-09-12 真机 bug 修复）：这些库含模块级可变状态
+ *  （pinia 的 activePinia / vue 的 currentInstance），若各 bundle 内联 → 多份独立实例 →
+ *  setActivePinia 设的那份不是 useStore() 查的那份 → store 全失效。故统一 external 到 _proteus/<name>.js。
+ *  @vue/devtools-api 是 pinia 的运行时依赖，同样单例化（避免多份注册表）。 */
 /** ★vendor 单例清单（2026-09-12 真机 bug 修复）：这些库含模块级可变状态
  *  （pinia 的 activePinia / vue 的 currentInstance），若各 bundle 内联 → 多份独立实例 →
  *  setActivePinia 设的那份不是 useStore() 查的那份 → store 全失效。故统一 external 到 `_proteus/<name>.js`。
  *  @vue/devtools-api 是 pinia 的运行时依赖，同样单例化（避免多份注册表）。 */
-export const VENDOR_SINGLETONS = ['pinia', 'vue', '@vue/devtools-api']
+export const VENDOR_SINGLETONS = ['pinia', 'vue', '@vue/devtools-api', '@vue/runtime-core', '@vue/reactivity', '@vue/shared']
 
 export function resolveSharedModule(
   appDir: string,
@@ -255,14 +466,33 @@ export function resolveSharedModule(
   resolveFrom?: string,
   /** ★平台变体解析目标（2026-09-13）：相对导入优先命中 foo.<platform>.ts（缺省 mp） */
   platform: VariantPlatform = 'mp',
-): { file: string; relNoExt: string } | null {
+  /** ★B1（2026-10-04）：路径别名（与 Web 端同源——取自 vite resolved config 的 resolve.alias） */
+  aliases: ModuleAlias[] = [],
+): { file: string; relNoExt: string; leaf?: boolean } | null {
   if (source.startsWith('@proteus-vue/')) {
     try {
       const resolver = resolveFrom ? createRequire(path.join(resolveFrom, 'package.json')) : require
-      const pkgRoot = path.dirname(resolver.resolve(`${source}/package.json`))
-      const entry = path.join(pkgRoot, 'dist', 'index.js')
+      // ★B1（2026-10-04）：**子路径导入**（@proteus-vue/router/scan）——package.json exports 直解；
+      //   无 exports 的包回退 `<pkg>/package.json` + dist/index.js（历史形态）。
+      const subpathMatch = /^(@proteus-vue\/[^/]+)\/(.+)$/.exec(source)
+      const pkgName = subpathMatch ? subpathMatch[1] : source
+      const subpath = subpathMatch ? subpathMatch[2] : null
+      const pkgRoot = path.dirname(resolver.resolve(`${pkgName}/package.json`))
+      let entry: string
+      if (subpath) {
+        const pkgJson = JSON.parse(fs.readFileSync(path.join(pkgRoot, 'package.json'), 'utf-8')) as {
+          exports?: Record<string, { import?: string; default?: string } | string>
+        }
+        const exp = pkgJson.exports?.[`./${subpath}`]
+        const rel = typeof exp === 'string' ? exp : exp?.import ?? exp?.default
+        if (!rel) return null
+        entry = path.join(pkgRoot, rel)
+      } else {
+        entry = path.join(pkgRoot, 'dist', 'index.js')
+      }
       if (!fs.existsSync(entry)) return null
-      return { file: entry, relNoExt: `_proteus/${source.replace('@proteus-vue/', '')}` }
+      const id = source.replace('@proteus-vue/', '').replace(/\//g, '-')
+      return { file: entry, relNoExt: `_proteus/${id}` }
     } catch {
       return null
     }
@@ -283,7 +513,25 @@ export function resolveSharedModule(
     if (!entry || !fs.existsSync(entry)) return null
     return { file: entry, relNoExt: `_proteus/${source}` }
   }
-  if (!source.startsWith('.')) return null // 其余裸模块（lodash 等第三方）不参与
+  // ★B1（2026-10-04）：**路径别名**（在 @proteus-vue/* 与 vendor 之后——框架包一律走 canonical 分支，
+  //   避免用户别名（如 examples 把 @proteus-vue/shared 指向本地 src）在 MP 端劫持框架包解析）。
+  if (aliases.length) {
+    const mapped = applyModuleAlias(source, aliases, resolveFrom ?? appDir)
+    if (mapped) {
+      const rel = path.relative(path.dirname(absFrom), mapped)
+      // 递归复用相对路径全逻辑（变体解析/扩展名白名单/框架重定位都在那里）
+      return resolveSharedModule(appDir, absFrom, rel.startsWith(".") ? rel : "./" + rel, frameworkDir, resolveFrom, platform)
+    }
+  }
+  if (!source.startsWith('.')) {
+    // ★B1（2026-10-04）：npm 裸包——构建期打包（esbuild 全内联，产物 _proteus/npm/<id>）。
+    //   leaf = true：BFS 不再深入 node_modules（其内部依赖由 esbuild 在打成 leaf 时内联；
+    //   深入会把包内每个文件都当独立共享模块 emit 到 node_modules/**，产物垃圾化）。
+    if (isNodeBuiltinSource(source)) return null // MP 运行时不提供（准确原因见 classifyUnresolvedImport）
+    const npmEntry = resolveNpmEntry(source, absFrom, resolveFrom ?? appDir)
+    if (!npmEntry) return null
+    return { file: npmEntry.file, relNoExt: npmModuleRelNoExt(source), leaf: true }
+  }
   const base = path.resolve(path.dirname(absFrom), source)
   // ★B2 修复（决策 #365）：扩展名白名单——仅 JS/TS 参与共享模块 bundle；
   //   非代码资源（.md/.json/.txt/图片等）不走 esbuild bundle（此前 .md 命中 base 原样文件 → esbuild 裸错 "No loader"）
@@ -576,6 +824,8 @@ export default function mpTransform(opts: PluginOptions): Plugin {
   const fluidLayout = cfg.layout ? { designWidth: cfg.layout.designWidth, viewport: cfg.layout.fluidViewport } : undefined
   const isDebug = process.env.PROTEUS_DEBUG === '1'
   let projectRoot = process.cwd()
+  /** ★B1：vite resolve.alias 快照（configResolved 填充；解析/收集/打包全链共用） */
+  let userAliases: ModuleAlias[] = []
   /** 各文件编译警告汇总（buildEnd 打印摘要，反黑盒：警告可见、可统计） */
   const warningReport: Array<{ file: string; warnings: string[] }> = []
 
@@ -591,6 +841,10 @@ export default function mpTransform(opts: PluginOptions): Plugin {
     enforce: 'pre',
     configResolved(resolved) {
       projectRoot = resolved.root
+      // ★B1（2026-10-04）：捕获 vite 解析后的 resolve.alias（**与 Web 端同源**）——
+      //   MP 端此前不读别名（`@/…` 只在 Web 可用），本字段把它带进共享模块解析/收集/打包全链。
+      const rawAlias = (resolved as { resolve?: { alias?: unknown } }).resolve?.alias
+      userAliases = normalizeModuleAliases(rawAlias)
     },
     async buildStart() {
       // 小程序页面不在模块图中（main.mp.ts 未引用页面），transform 钩子不会触发，
@@ -737,9 +991,14 @@ export default function mpTransform(opts: PluginOptions): Plugin {
       const moduleImportsByFile = new Map<string, Array<{ source: string; requirePath: string }>>()
       const sharedModules = new Set<string>()
       const sharedRelNoExt = new Map<string, string>() // 共享模块文件 → 产物相对路径（@proteus-vue/* → _proteus/<name>）
+      /** ★B1：npm 叶子包（BFS 不深入；打包时其内部依赖由 esbuild 内联） */
+      const sharedLeaf = new Set<string>()
+      /** ★B1：npm 源名 → 产物 relNoExt（打包非叶模块时把已知 npm 叶子 **external 到单例产物**，
+       *  避免「页面直接 import」与「共享模块内部 import」各内联一份——多实例/体积翻倍） */
+      const npmLeafBySource = new Map<string, string>()
       /** 解析共享模块：相对路径（本地 .ts/.js）或 @proteus-vue/*（框架包 dist，产物 _proteus/<name>）→ 返回 { file, relNoExt } */
-      const resolveShared = (absFrom: string, source: string): { file: string; relNoExt: string } | null =>
-        resolveSharedModule(appDir, absFrom, source, frameworkComponents, projectRoot, 'mp')
+      const resolveShared = (absFrom: string, source: string): { file: string; relNoExt: string; leaf?: boolean } | null =>
+        resolveSharedModule(appDir, absFrom, source, frameworkComponents, projectRoot, 'mp', userAliases)
       const scanImports = (absFile: string): Array<{ source: string; typeOnly: boolean }> => {
         const src = fs.readFileSync(absFile, 'utf-8')
         // .vue 取 <script> 块；.ts/.js 共享模块直接用全文
@@ -754,6 +1013,10 @@ export default function mpTransform(opts: PluginOptions): Plugin {
           if (!resolved) continue
           sharedModules.add(resolved.file)
           sharedRelNoExt.set(resolved.file, resolved.relNoExt)
+          if (resolved.leaf) {
+            sharedLeaf.add(resolved.file)
+            npmLeafBySource.set(imp.source, resolved.relNoExt)
+          }
           list.push({ source: imp.source, requirePath: '' }) // requirePath 待 BFS 后回填
         }
         if (list.length) moduleImportsByFile.set(file, list)
@@ -771,12 +1034,19 @@ export default function mpTransform(opts: PluginOptions): Plugin {
       const pending = [...sharedModules]
       while (pending.length) {
         const cur = pending.pop()!
+        // ★B1：**npm leaf 不深入**——叶子包的内部依赖由 esbuild 在打成该 leaf 时整体内联；
+        //   深入会把 node_modules 里每个文件都当成独立共享模块 emit（产物垃圾化、体积翻倍）。
+        if (sharedLeaf.has(cur)) continue
         for (const imp of scanImports(cur)) {
           if (imp.typeOnly) continue
           const resolved = resolveShared(cur, imp.source)
           if (!resolved || sharedModules.has(resolved.file)) continue
           sharedModules.add(resolved.file)
           sharedRelNoExt.set(resolved.file, resolved.relNoExt)
+          if (resolved.leaf) {
+            sharedLeaf.add(resolved.file)
+            npmLeafBySource.set(imp.source, resolved.relNoExt)
+          }
           pending.push(resolved.file)
         }
       }
@@ -792,30 +1062,57 @@ export default function mpTransform(opts: PluginOptions): Plugin {
           if (!imp.source.startsWith('.') && !imp.source.startsWith('@proteus-vue/') && !THIRD_PARTY_ALLOW.has(imp.source)) hasThirdParty.add(sharedFile)
         }
       }
-      // 传递：被有第三方依赖模块 import 的共享模块也跳过（bundle 会把它们一起打进）
+      // ★★★B1（2026-10-04，用户点名）：**npm 依赖不再一刀切跳过**——
+      //   B1 起 npm 裸包走 esbuild 构建期打包（leaf，全内联）⇒ 业务代码写标准 import 即可，零感知平台。
+      //   【旧行为】hasThirdParty 命中即跳过共享模块 ⇒ 该模块的 import 被剥离 ⇒ 运行时 undefined（静默）。
+      //   【新行为】"含第三方"不再是跳过理由；仅**未由 B1 覆盖的形态**（如共享模块里 import 了
+      //     二进制资源——esbuild onLoad 显式报错）会在打包时 fail loud（可见），而不是静默剥。
+      //   ★保留变量与告警通道为空实现：删除会在 diff 中掩盖语义变化（下一轮可清理）。
       const skipShared = new Set<string>()
-      const markSkip = (f: string) => {
-        if (skipShared.has(f)) return
-        skipShared.add(f)
-        for (const other of sharedModules) {
-          if (other === f) continue
-          const deps = scanImports(other).map((i) => resolveShared(other, i.source)?.file).filter(Boolean)
-          if (deps.includes(f)) markSkip(other)
-        }
-      }
-      for (const f of hasThirdParty) markSkip(f)
-      if (skipShared.size) {
-        console.warn(`[mp-transform] ⚠ ${skipShared.size} 个共享模块含第三方依赖（pinia/vue 等）已跳过编译（B0 MVP：仅支持纯逻辑 + @proteus-vue/* 框架包共享模块）——请用 store 桥 / 内联，Pinia 接入为后续批次`)
-        // 页面侧回退：被跳过模块的 import 移出 moduleImports（compiler 走剥离 + 警告）
-        for (const [file, list] of moduleImportsByFile) {
-          moduleImportsByFile.set(file, list.filter((item) => !skipShared.has(resolveShared(file, item.source)?.file ?? '')))
-        }
-      }
+      void hasThirdParty
+      void skipShared
       // 共享模块 → esbuild bundle（全内联 + @proteus-vue/* 与 vendor 单例 external，minify）→ CJS 单文件输出
       // ★vendor 单例化（2026-09-12 真机 bug 修复）：pinia/vue 若各 bundle 内联 → **多份独立实例**
       //   （pinia 的 setActivePinia 模块级变量分裂 → store 拿不到 active pinia → useStore() 返回 undefined）。
       //   修法：vendor 也 external 到 `_proteus/<name>.js`（每个 vendor 单独 bundle 一份）→ 全产物共享同一实例。
       //   （条目收集由 resolveSharedModule 的 vendor 分支 + BFS 完成，无需额外扫描。）
+      /**
+       * ★★★B1（2026-10-04）：**Node 内置模块守卫插件**——把 esbuild 的 "Could not resolve \"crypto\""
+       *   换成开发者可照做的中文指引（含是哪个 npm 包引入的）。
+       * 【为什么需要】npm 包常带 Node fallback 分支（require("crypto")）——platform:browser 已让多数包
+       *   走 browser 分支规避；但**部分包没有 browser 分支** ⇒ 构建失败。此时的裸报错指向包内实现细节，
+       *   开发者无从下手 ⇒ 本插件补上"哪条路径、哪个包、替代建议"。
+       */
+      const nodeBuiltinGuardPlugin = () => ({
+        name: 'proteus-node-builtin-guard',
+        setup(b: import('esbuild').PluginBuild) {
+          // ★① path：**polyfill**（纯字符串函数，无 IO/平台语义——跨端框架的正当职责；
+          //   实测触发：packages/router/dist 的 scan 工具（deriveNameFromFile）引用 node:path）。
+          //   业务代码直写 `import path from "node:path"\` 同样被接住。
+          b.onResolve({ filter: /^(node:)?path(\/posix)?$/ }, () => ({
+            path: 'proteus:path-polyfill',
+            namespace: 'proteus-polyfill',
+          }))
+          b.onLoad({ filter: /.*/, namespace: 'proteus-polyfill' }, () => ({
+            contents: MP_PATH_POLYFILL_CODE,
+            loader: 'js',
+          }))
+          // ★② 其余 Node 内置：**显式准确报错**（无对等物，不做假实现）
+          b.onResolve({ filter: /^(node:|fs|os|crypto|http|https|stream|util|url|zlib|events|buffer|child_process|net|tls|dns|vm|assert|readline)/ }, (args) => {
+            if (!isNodeBuiltinSource(args.path)) return undefined
+            if (args.path === 'path' || args.path === 'node:path' || args.path === 'path/posix') return undefined // 上面已接 polyfill（filter 先命中）
+            return {
+              errors: [
+                {
+                  text:
+                    `npm 依赖链里的 Node 内置模块 "${args.path}" 在小程序运行时不存在（引入方：${args.importer ? path.relative(projectRoot, args.importer) : "未知"}）——` +
+                    '该模块无小程序对等物（无 Windows 路径/IO 语义可模拟）；请换用不依赖它的包，或在共享模块里按需替换该实现（仅 path 提供 polyfill；其余不做假实现）',
+                },
+              ],
+            }
+          })
+        },
+      })
       /** external 映射插件（@proteus-vue/* 与 vendor 单例 → 相对产物路径；从 relNoExt 出发算相对） */
       const externalResolvePlugin = (relNoExt: string) => ({
         name: 'proteus-pkg-require-path',
@@ -828,6 +1125,11 @@ export default function mpTransform(opts: PluginOptions): Plugin {
           }
           b.onResolve({ filter: /^@proteus-vue\// }, (args) => mapExternal(`_proteus/${args.path.replace('@proteus-vue/', '')}.js`))
           b.onResolve({ filter: new RegExp(`^(${VENDOR_SINGLETONS.join('|')})$`) }, (args) => mapExternal(`_proteus/${args.path}.js`))
+          // ★B1：已知 npm 叶子 → external 到 `_proteus/npm/<id>.js`（单例——同路径 require 缓存同实例）
+          b.onResolve({ filter: /^[^./]/ }, (args) => {
+            const leafRelNoExt = npmLeafBySource.get(args.path)
+            return leafRelNoExt ? mapExternal(`${leafRelNoExt}.js`) : undefined
+          })
           // ★G-36/官网 B2：非 JS 资源 onLoad——文本资源（.md/.txt/.json）以字符串导出；
           //   二进制扩展（图片/字体/音视频）显式中文报错（MP 产物无资源管线——替代 esbuild 裸 "No loader"）
           b.onLoad({ filter: /\.(md|txt|json)$/ }, (args) => ({
@@ -865,6 +1167,15 @@ export default function mpTransform(opts: PluginOptions): Plugin {
             bundle: true,
             format: 'cjs',
             write: false,
+            // ★★★B1（2026-10-04）：**platform: 'browser'**——MP 运行时无 Node 内置模块，
+            //   与 Web 端同条件解析 npm 包的 browser/exports 分支（实测：nanoid 的 CJS 入口 require("crypto")
+            //   → 构建直接失败；browser 条件走 index.browser.js 正常）。
+            //   mainFields 显式声明（browser 分支优先——esbuild 的 browser 模式默认即此，写出来给读者）。
+            platform: 'browser',
+            mainFields: ['browser', 'module', 'main'],
+            // ★B1：Node 内置模块**显式准确报错**（不静默）：esbuild 默认报 Could not resolve "crypto"——
+            //   开发者看到的是包内实现细节；本插件把它换成可照做的中文指引（哪个包、怎么处置）。
+            plugins: [nodeBuiltinGuardPlugin(), externalResolvePlugin(relNoExt)],
             target: 'es2018',
             charset: 'utf8',
             logLevel: 'silent',
@@ -895,7 +1206,6 @@ export default function mpTransform(opts: PluginOptions): Plugin {
             // ★external：@proteus-vue/* 与 vendor 单例（pinia/vue）→ 产物 _proteus/<name>.js
             //   （微信 require 缓存同路径同实例 → 全产物共享同一份，杜绝重复内联导致的实例分裂）
             external: ['@proteus-vue/*', ...VENDOR_SINGLETONS],
-            plugins: [externalResolvePlugin(relNoExt)],
           })
           code = build.outputFiles?.[0]?.text ?? ''
           if (!code) {
@@ -1063,6 +1373,8 @@ export default function mpTransform(opts: PluginOptions): Plugin {
               debug: isDebug,
               preprocessStyle,
               loadStyleSrc: (src) => loadStyleSrcWithVariant(src, file, 'mp'),
+              // ★B1（2026-10-04）：未解析 import 的**准确原因**（插件是唯一有完整解析上下文的一侧）
+              unresolvedImportReason: (src) => classifyUnresolvedImport(src, { aliases: userAliases, absFrom: file, projectRoot }),
               autoScrollContainer,
               fluidLayout,
               renderer: pageRenderer,
@@ -1090,6 +1402,8 @@ export default function mpTransform(opts: PluginOptions): Plugin {
             debug: isDebug,
             preprocessStyle,
             loadStyleSrc: (src) => loadStyleSrcWithVariant(src, file, 'mp'),
+            // ★B1（2026-10-04）：未解析 import 的**准确原因**（插件是唯一有完整解析上下文的一侧）
+            unresolvedImportReason: (src) => classifyUnresolvedImport(src, { aliases: userAliases, absFrom: file, projectRoot }),
             autoScrollContainer,
             fluidLayout,
             renderer,
