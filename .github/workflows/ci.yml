@@ -95,6 +95,12 @@ jobs:
         # ★真机重跑在 CI 之外（无真机/模拟器）：hosts/*/run-*.sh；本步只复算+比对。
         run: pnpm run check:vapor-three-end
 
+      - name: Vapor 能力缺口棘轮（P4 能力视图：explain 两侧诊断合并 + 缺口只减不增）
+        # ★为什么在 CI：纯静态分析（examples/pages 的 SFC 走编译器）+ 基线对比——零设备依赖。
+        #   ① error 级缺口零容忍（"静默出错"类）② 按 code 计数棘轮（新增缺口当场红）。
+        #   ★本门禁同时是"诊断工具不再吞诊断"的回归锁（模板侧诊断必须进总账）。
+        run: pnpm run check:vapor-capability
+
       - name: 坐标吸附跨语言 golden（卡 I2：TS ⇄ Rust 同输入同输出——三端差 1px 的机器判据）
         run: pnpm run check:pixel-snap
 

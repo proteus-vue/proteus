@@ -15,11 +15,11 @@
 - **包规模**：**45 个 @proteus-vue/* npm 包**（+ `packages/layout-core-rust` = **cargo crate，非 npm 包**，故不计数）（★2026-09-29 layout-core = App 排版核心）（check:pkg 0 error · `pnpm check:stats` 校验 ✓；31→38 修正 → G-07 glass 39 → Skyline 收口 worklet 40 → ★2026-09-14 组件库拆包 `@proteus-vue/components` 41 → ★Vapor 线新增 `@proteus-vue/slot-runtime` 42 + `@proteus-vue/layout-core` 43 → ★2026-09-30 MA1 新增 `@proteus-vue/animation` 44；版本统一 0.3.0-beta.8，见「当前状态速览」）
 - **文档**：`docs/proteus-architecture.md`（L0 规约·真理来源）→ `docs/board-inventory.md`（全景索引）→ `docs/roadmap.md`（版本线）→ `roadmap-2-plan`（里程碑线）→ 各 plan
 
-## 当前状态速览（最近一次更新：**2026-10-03·（一〇七）· **P3-5 宿主指令注册表（v-animate）**（三端同步 · 判据 ⑳）——自定义指令的**闭集落地**：`HOST_DIRECTIVE_SPECS`（唯一事实来源在运行时包）；`v-animate` 预设 → 通道规格（与 `<Transition>` 同一份表）+ 三态值语义（mounted/updated/falsy）→ `animStart`；表外指令产精确诊断（"不执行 script" + 可用名字）+ 四类形态诊断；三端 21/21 · 指纹 26 项一致；下一步 P2-1 动态 `:is` 运行时切换（KeepAlive 前置）或 P3 收口盘点**）★新会话以此为准
+## 当前状态速览（最近一次更新：**2026-10-03·（一〇八）· **能力视图**（P4 首项 · 门禁 `check:vapor-capability`）——`explain --vapor` 输出**能力缺口总账**（★修出"诊断工具自己吞模板侧诊断"的静默缺陷：v-html/指令/内置边界等绝大多数缺口产生在模板侧，此前一条不显示）；`--json` 机器可读 + **棘轮门禁**（27 个真实样例页：error 零容忍 + 计数只减不增，`--update` 拒绝调高）；实测分布揭示下一步优先级（v-model 无回写 22 · 脚本钩子 8）；下一步 v-model 回写通道（需宿主输入事件）或 P3-1 Teleport 传播语义**）★新会话以此为准
 
-## 当前状态速览（最近一次更新：**2026-10-03·（一〇六）· **P3 动态组件 `<component :is>`**（三端同步 · 判据 ⑲）+ **kebab 内置组件静默缺陷修复**——`:is` 进 `componentIs` 表（此前**完全消失**⇒空壳静默）→ 实例化期解析走静态组件同一条链；静态 `is=` 等价、假值摘除；★顺修 `<keep-alive>` 等 kebab 形态"多建盒 + 零诊断"（`normalizeBuiltinTag` 唯一入口，三处 id 同源）；三端 20/20 · 指纹 25 项一致；下一步 P3-5 自定义指令或 P3-2 KeepAlive 缓存（需先支持运行时切换）**）★新会话以此为准
+## 当前状态速览（最近一次更新：**2026-10-03·（一〇七）· **P3-5 宿主指令注册表（v-animate）**（三端同步 · 判据 ⑳）——自定义指令的**闭集落地**：`HOST_DIRECTIVE_SPECS`（唯一事实来源在运行时包）；`v-animate` 预设 → 通道规格（与 `<Transition>` 同一份表）+ 三态值语义（mounted/updated/falsy）→ `animStart`；表外指令产精确诊断（"不执行 script" + 可用名字）+ 四类形态诊断；三端 21/21 · 指纹 26 项一致**）★新会话以此为准
 
-## 当前状态速览（最近一次更新：**2026-10-03·（一〇四）· **P1-3 生命周期 @vue:mounted**（三端同步 · 判据 ⑱）——**P1-3 全项收官**（内部渲染/插槽/作用域插槽/emits/生命周期）：`vue:` 前缀在事件名解析前拦截 → 一等 `lifecycle` 产物；★修出静默缺陷（此前落成"永不触发的 componentEmit 监听"）；脚本钩子 `onMounted` 等产 `VAPOR_SCRIPT_LIFECYCLE_NOT_RUN` 可见化；判据 ⑱ 四证（绑定/handler/改源/applied/内核宽度 0→250）；三端 19/19 · 指纹 24 项一致**）★新会话以此为准
+## 当前状态速览（最近一次更新：**2026-10-03·（一〇六）· **P3 动态组件 `<component :is>`**（三端同步 · 判据 ⑲）+ **kebab 内置组件静默缺陷修复**——`:is` 进 `componentIs` 表（此前**完全消失**⇒空壳静默）→ 实例化期解析走静态组件同一条链；静态 `is=` 等价、假值摘除；★顺修 `<keep-alive>` 等 kebab 形态"多建盒 + 零诊断"（`normalizeBuiltinTag` 唯一入口，三处 id 同源）；三端 20/20 · 指纹 25 项一致**）★新会话以此为准
 
 ## ★《收纳规范》（2026-10-03 立 · 门禁 `pnpm check:memory`）
 
