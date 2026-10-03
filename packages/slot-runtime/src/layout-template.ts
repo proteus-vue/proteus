@@ -115,6 +115,13 @@ export interface LayoutNode {
      *   **作用域样式绑定**（见 `SubscriptionTable.slotScopedSlots`）按它求值。
      */
     scope?: string
+    /**
+     * ★★★**解构绑定**（2026-10-03）——`<template #default="{ errors, code: c }">` ⇒
+     *   `[{local:'errors',key:'errors'}, {local:'c',key:'code'}]`。
+     *   分发时把出口 props **解构**进这些局部名（Vue 语义；见 compiler/slot-scope.ts）。
+     *   ★与 `scope` **互斥**（Vue 里两种写法不同时出现）。
+     */
+    scopeBindings?: Array<{ local: string; key: string }>
   }
   /**
    * ★★**文本段序列**（2026-10-03 · P2-2 混合文本）——按下标=子节点顺序。

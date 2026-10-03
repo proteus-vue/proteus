@@ -248,11 +248,20 @@ const SCOPED_SFC = `<template>
         <p-text :width="sp.w" style="font-size: 12px; color: #7cffb2">cnt-{{ sp.count }}</p-text>
       </template>
     </KidScoped>
+    <!-- ★P1-3 补（2026-10-03）：**解构形态**（含重命名）——此前被拒（真实缺口：
+         组件库页面的错误提示就是这么写的）⇒ 现在解构进内容作用域。
+         ★顺带覆盖 **TS 断言**（数 as number）——运行时无语义的纯类型噪音。 -->
+    <KidScoped :n="scopedM">
+      <template #default="{ count, w: dw }">
+        <p-text :width="dw as number" style="font-size: 12px; color: #ffd479">dct-{{ count }}</p-text>
+      </template>
+    </KidScoped>
   </p-view>
 </template>
 
 <script setup lang="ts">
 const scopedN = ref(7)
+const scopedM = ref(9)
 </script>`
 
 /**
@@ -705,20 +714,25 @@ console.log(`[gen-vapor-fixture] ✅ 组件注册表：${Object.keys(parsed.comp
   const scopedParent = parsed.scoped
   const scopedChild = parsed.components.KidScoped
   const outlet = (scopedChild?.tpl?.nodes ?? []).find((n) => n && n.slotOutlet)
-  const forNode = (scopedParent?.tpl?.nodes ?? []).find((n) => n && n.slotFor)
+  const forNodes = (scopedParent?.tpl?.nodes ?? []).filter((n) => n && n.slotFor)
+  const simpleNode = forNodes.find((n) => n.slotFor?.scope === 'sp')
+  const destrNode = forNodes.find((n) => n.slotFor?.scopeBindings?.length > 0)
   const scopedSlots = scopedParent?.table?.slotScopedSlots ?? []
   const outletProps = outlet?.slotOutlet?.props ?? []
-  if (!outlet || outletProps.length < 2 || forNode?.slotFor?.scope !== 'sp' || scopedSlots.length < 2) {
+  const destrOK = destrNode?.slotFor?.scopeBindings?.length === 2
+  // ★判据 ㉓ 的关键：解构绑定的**槽位**也进了 slotScopedSlots（否则分发时求值不覆盖它们）
+  const destrScoped = scopedSlots.filter((x) => ['count', 'dw'].includes(x.scope)).length
+  if (!outlet || outletProps.length < 2 || !simpleNode || !destrOK || scopedSlots.length < 3 || destrScoped < 2) {
     console.error(
-      `[gen-vapor-fixture] ✗ 作用域插槽夹具不完整（判据 ⑰ 将无证据）：` +
-        `出口 props=${JSON.stringify(outletProps)}（应 2）· 内容 scope=${JSON.stringify(forNode?.slotFor?.scope)}（应 sp）· ` +
-        `slotScopedSlots=${scopedSlots.length}（应 2）`,
+      `[gen-vapor-fixture] ✗ 作用域插槽夹具不完整（判据 ⑰/㉓ 将无证据）：` +
+        `出口 props=${JSON.stringify(outletProps)}（应 2）· 单名内容=${!!simpleNode} · ` +
+        `解构绑定=${JSON.stringify(destrNode?.slotFor?.scopeBindings)}（应 2 对）· slotScopedSlots=${scopedSlots.length}（应 ≥3，其中解构 ${destrScoped} 应 ≥2）`,
     )
     process.exit(1)
   }
   console.log(
-    `[gen-vapor-fixture] ✅ 作用域插槽夹具：出口 props ${JSON.stringify(outletProps)} · 内容 scope=sp · ` +
-      `分发时求值绑定 ${scopedSlots.map((s) => s.propKey).join(', ')}`,
+    `[gen-vapor-fixture] ✅ 作用域插槽夹具：出口 props ${JSON.stringify(outletProps)} · 单名 scope=sp · ` +
+      `解构 ${JSON.stringify(destrNode.slotFor.scopeBindings)} · 分发时求值绑定 ${scopedSlots.map((s) => s.propKey).join(', ')}`,
   )
 }
 // ★P1-3 生命周期（2026-10-03）：`@vue:mounted` 必须编成 lifecycle 绑定（而非 componentEmit 静默形态）

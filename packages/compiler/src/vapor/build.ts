@@ -561,7 +561,9 @@ export function buildVaporSubscriptions(source: string, filename = 'anonymous.vu
       list.push(slot)
       slotsBySource.set(src.sourceId, list)
     }
-    if (deps.listRelative.length > 0) {
+    // ★进入条件：**成员链**相对路径（`item.x` / `sp.x`）**或**裸作用域引用（解构后的 `count`）
+    //   —— 后者此前没有入口（`listRelative` 只收成员链）⇒ 解构依赖完全不可见（实测）。
+    if (deps.listRelative.length > 0 || (deps.scopeRefs ?? []).length > 0) {
       // ★★★**两类相对路径必须区分**（P1-3 作用域插槽，2026-10-03）：
       //   · **v-for 行相对**（`item.title`）⇒ 归属该列表源，由 LIST_UPDATE 承接（既有行为）；
       //   · **插槽作用域相对**（`sp.count`，`sp` 来自 `#x="sp"`）⇒ 没有可订阅的源——
@@ -573,17 +575,23 @@ export function buildVaporSubscriptions(source: string, filename = 'anonymous.vu
       //   `:width="sp.w"` 静默不生效（产物里连槽位都没有）。
       const rowRels = deps.listRelative.filter((r) => ref.scopeSources[r.scope] !== undefined)
       const slotRels = deps.listRelative.filter((r) => ref.scopeSources[r.scope] === undefined)
-      if (slotRels.length > 0) {
+      // ★★**裸作用域引用**（2026-10-03 · 解构批次）：解构后内容是裸标识符（`{{ count }}`、
+      //   `dw as number` 里的 `dw`）——它们不进 `listRelative`（那只收 `sp.w` 成员链）
+      //   ⇒ 此前**完全不被识别为插槽作用域依赖** ⇒ 分发时求值不覆盖 ⇒ 静默空值（实测）。
+      //   判别与上面同源：v-for 别名在 `scopeSources` 里、插槽作用域变量不在。
+      const slotRefs = (deps.scopeRefs ?? []).filter((nm) => ref.scopeSources[nm] === undefined)
+      const scopedHits = [...slotRels.map((r) => r.scope), ...slotRefs]
+      if (scopedHits.length > 0) {
         slotScopedSlots.push({
           slotId: mySlot,
           nodeId: myNode,
           propKey: ref.propKey,
           evaluatorId,
-          scope: slotRels[0]!.scope,
+          scope: scopedHits[0]!,
         })
         notes.push(
-          `slot_${mySlot} 依赖**插槽作用域** ${slotRels.map((r) => r.path).join(', ')}` +
-            `（${slotRels[0]!.scope} 来自 \`#x="${slotRels[0]!.scope}"\`）⇒ 分发时求值（见 slotScopedSlots）`,
+          `slot_${mySlot} 依赖**插槽作用域** ${[...slotRels.map((r) => r.path), ...slotRefs].join(', ')}` +
+            `（${scopedHits[0]} 来自 \`#x="${scopedHits[0]}"\`）⇒ 分发时求值（见 slotScopedSlots）`,
         )
       }
       // ★列表相对路径：归属**该列表的源**（`item` → `list`），由 LIST_UPDATE 承接（V1 已实现指令）。

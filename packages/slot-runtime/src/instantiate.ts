@@ -832,12 +832,15 @@ export function instantiateTemplate(tpl: LayoutTemplate, opts: InstantiateOption
       if (contentRoots.length > 0 || childInst.slotMounts?.length) {
         const fills = new Map<string, InstantiatedNode[]>()
         const scopeOf = new Map<string, string | undefined>()
+        /** ★解构绑定（`{ errors }` ⇒ local/key 对）——与 `scope` 互斥（编译期保证） */
+        const bindingsOf = new Map<string, Array<{ local: string; key: string }> | undefined>()
         for (const r of contentRoots) {
-          const sf = r.slotFor as { name: string; scope?: string }
+          const sf = r.slotFor as { name: string; scope?: string; scopeBindings?: Array<{ local: string; key: string }> }
           const arr = fills.get(sf.name) ?? []
           arr.push(r)
           fills.set(sf.name, arr)
           if (!scopeOf.has(sf.name)) scopeOf.set(sf.name, sf.scope)
+          if (!bindingsOf.has(sf.name)) bindingsOf.set(sf.name, sf.scopeBindings)
         }
         // ★★★**出口 props 求值**（作用域插槽）：在**子组件作用域**求——
         //   出口上的绑定（`:count="n"`）本就是子组件订阅表的普通槽位（nodeId=出口 local id），
@@ -871,7 +874,9 @@ export function instantiateTemplate(tpl: LayoutTemplate, opts: InstantiateOption
         //     之前没有任何可读的地方（见 SubscriptionTable.slotScopedSlots 注释）。
         for (const p of placed) {
           const scopeVar = scopeOf.get(p.name)
-          if (!scopeVar) continue   // 非作用域插槽：无需作用域求值
+          const scopeBindings = bindingsOf.get(p.name)
+          // ★作用域标记：单名（scopeVar）**或**解构绑定（scopeBindings）——两者都没有 ⇒ 非作用域插槽
+          if (!scopeVar && !scopeBindings) continue
           const rootIds = new Set(p.fill.map((x) => x.id))
           // 内容子树 = 落在任何内容根之下的节点（在子块空间里按 parentId 链上溯）
           const byIdOfChild = new Map(childInst.nodes.map((x) => [x.id, x]))
@@ -887,7 +892,21 @@ export function instantiateTemplate(tpl: LayoutTemplate, opts: InstantiateOption
               cur = cur.parentId === null ? undefined : byIdOfChild.get(cur.parentId)
             }
           }
-          const scopedRead = (n2: string): unknown => (n2 === scopeVar ? p.props : opts.read(n2))
+          // ★★**作用域读取**（2026-10-03 起支持解构）：
+          //   · 单名形态：`sp` ⇒ 整个出口 props 对象；
+          //   · 解构形态：`{ errors, code: c }` ⇒ 局部名逐个绑到 props 的对应键（Vue 语义）。
+          //   ★解构名**只在 props 里查不到时**才落回外层 read（Vue 里解构出的是**遮蔽**语义——
+          //     同名局部变量会遮住外层；此处按"props 优先"实现，与 Vue 的绑定遮蔽一致）。
+          const scopedRead = (n2: string): unknown => {
+            if (scopeVar && n2 === scopeVar) return p.props
+            if (scopeBindings) {
+              const hit = scopeBindings.find((b) => b.local === n2)
+              if (hit) return (p.props as Record<string, unknown>)[hit.key]
+            }
+            return opts.read(n2)
+          }
+          /** 该作用域标记的匹配判据（`slotScopedSlots.scope` 记的是**编译期的原文**） */
+          const scopeTag = scopeVar ?? scopeBindings!.map((b) => b.local).join(',')
           // ① 文本段重求值（模板产物里带 textSegments 的节点——按**本树 local id** 定位）
           for (const node of subtree) {
             const tn = tpl.nodes.find((x) => x.id === node.id - idOffset)
@@ -898,7 +917,9 @@ export function instantiateTemplate(tpl: LayoutTemplate, opts: InstantiateOption
           // ② 作用域样式绑定（`slotScopedSlots`：nodeId 是**本树 local id**）
           let appliedScoped = 0
           for (const sc of opts.table?.slotScopedSlots ?? []) {
-            if (sc.scope !== scopeVar) continue
+            // ★匹配：单名形态比 `scope`；解构形态比"该绑定引用的是哪个局部名"
+            //   （编译期 `scope` 存的是解构里的局部名——见 deps.ts 的 slotScopes 收集）
+            if (scopeVar !== undefined ? sc.scope !== scopeVar : !scopeBindings!.some((b) => b.local === sc.scope)) continue
             const target = subtree.find((x) => x.id === sc.nodeId + idOffset)
             if (!target) continue
             const impl = evaluators.get(sc.evaluatorId)
@@ -920,7 +941,8 @@ export function instantiateTemplate(tpl: LayoutTemplate, opts: InstantiateOption
             valuesFilled++
           }
           instNotes.push(
-            `插槽 ${name}#${p.name}：作用域 \`${scopeVar}\` 绑定出口 props ${JSON.stringify(p.props)}` +
+            `插槽 ${name}#${p.name}：作用域 ${scopeVar ? `\`${scopeVar}\`` : `解构 \`{ ${scopeBindings!.map((b) => b.local).join(', ')} }\``}` +
+              ` 绑定出口 props ${JSON.stringify(p.props)}` +
               `（文本段重求值 ${subtree.filter((x) => tpl.nodes.find((t) => t.id === x.id - idOffset)?.textSegments?.length).length} 节点 · 作用域样式 ${appliedScoped} 处）`,
           )
         }

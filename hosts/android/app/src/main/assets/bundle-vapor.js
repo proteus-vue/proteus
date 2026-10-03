@@ -11275,12 +11275,14 @@
         if (contentRoots.length > 0 || childInst.slotMounts?.length) {
           const fills = /* @__PURE__ */ new Map();
           const scopeOf = /* @__PURE__ */ new Map();
+          const bindingsOf = /* @__PURE__ */ new Map();
           for (const r of contentRoots) {
             const sf = r.slotFor;
             const arr = fills.get(sf.name) ?? [];
             arr.push(r);
             fills.set(sf.name, arr);
             if (!scopeOf.has(sf.name)) scopeOf.set(sf.name, sf.scope);
+            if (!bindingsOf.has(sf.name)) bindingsOf.set(sf.name, sf.scopeBindings);
           }
           const childEvaluators = def.table ? VaporRuntime.buildEvaluators(def.table.evaluators) : /* @__PURE__ */ new Map();
           const evalOutletProps = (outlet) => {
@@ -11304,7 +11306,8 @@
           const { consumed, placed } = dissolveOutlets(childInst.nodes, fills, evalOutletProps);
           for (const p of placed) {
             const scopeVar = scopeOf.get(p.name);
-            if (!scopeVar) continue;
+            const scopeBindings = bindingsOf.get(p.name);
+            if (!scopeVar && !scopeBindings) continue;
             const rootIds = new Set(p.fill.map((x) => x.id));
             const byIdOfChild = new Map(childInst.nodes.map((x) => [x.id, x]));
             const subtree = [];
@@ -11319,7 +11322,15 @@
                 cur = cur.parentId === null ? void 0 : byIdOfChild.get(cur.parentId);
               }
             }
-            const scopedRead = (n2) => n2 === scopeVar ? p.props : opts.read(n2);
+            const scopedRead = (n2) => {
+              if (scopeVar && n2 === scopeVar) return p.props;
+              if (scopeBindings) {
+                const hit = scopeBindings.find((b) => b.local === n2);
+                if (hit) return p.props[hit.key];
+              }
+              return opts.read(n2);
+            };
+            const scopeTag = scopeVar ?? scopeBindings.map((b) => b.local).join(",");
             for (const node of subtree) {
               const tn = tpl.nodes.find((x) => x.id === node.id - idOffset);
               if (tn?.textSegments && tn.textSegments.length > 0) {
@@ -11328,7 +11339,7 @@
             }
             let appliedScoped = 0;
             for (const sc of opts.table?.slotScopedSlots ?? []) {
-              if (sc.scope !== scopeVar) continue;
+              if (scopeVar !== void 0 ? sc.scope !== scopeVar : !scopeBindings.some((b) => b.local === sc.scope)) continue;
               const target = subtree.find((x) => x.id === sc.nodeId + idOffset);
               if (!target) continue;
               const impl = evaluators.get(sc.evaluatorId);
@@ -11351,7 +11362,7 @@
               valuesFilled++;
             }
             instNotes.push(
-              `\u63D2\u69FD ${name}#${p.name}\uFF1A\u4F5C\u7528\u57DF \`${scopeVar}\` \u7ED1\u5B9A\u51FA\u53E3 props ${JSON.stringify(p.props)}\uFF08\u6587\u672C\u6BB5\u91CD\u6C42\u503C ${subtree.filter((x) => tpl.nodes.find((t) => t.id === x.id - idOffset)?.textSegments?.length).length} \u8282\u70B9 \xB7 \u4F5C\u7528\u57DF\u6837\u5F0F ${appliedScoped} \u5904\uFF09`
+              `\u63D2\u69FD ${name}#${p.name}\uFF1A\u4F5C\u7528\u57DF ${scopeVar ? `\`${scopeVar}\`` : `\u89E3\u6784 \`{ ${scopeBindings.map((b) => b.local).join(", ")} }\``} \u7ED1\u5B9A\u51FA\u53E3 props ${JSON.stringify(p.props)}\uFF08\u6587\u672C\u6BB5\u91CD\u6C42\u503C ${subtree.filter((x) => tpl.nodes.find((t) => t.id === x.id - idOffset)?.textSegments?.length).length} \u8282\u70B9 \xB7 \u4F5C\u7528\u57DF\u6837\u5F0F ${appliedScoped} \u5904\uFF09`
             );
           }
           for (const [nm, roots] of fills) {
@@ -13478,7 +13489,7 @@
       component_kid_probe: {},
       slot_probe: { texts: [], rects: [], fills: [], markers_left: -1 },
       emit_probe: { emits: [], parent_source_after: void 0, geom_before: -1, geom_after: -1 },
-      scoped_probe: { texts: [], anchor_id: -1, anchor_width_field: -1, anchor_width_rect: -1 },
+      scoped_probe: { texts: [], anchor_id: -1, anchor_width_field: -1, anchor_width_rect: -1, destr_text: "", destr_width_field: -1, destr_width_rect: -1 },
       lifecycle_probe: { bindings: [], ran_handler: "", changed_sources: [], ops_bytes: 0, applied: 0, anchor_id: -1, geom_before: -1, geom_after: -1 },
       dyn_probe: { texts: [], mounts: [], geom: [], dropped: -1, notes: [] },
       directive_probe: { nodes: [], rounds: [], plays: [] },
@@ -14149,8 +14160,8 @@
           }
           const scopedInst = instantiateTemplate(scopedArt.tpl, {
             viewport: args.viewport,
-            // ★夹具的 `scopedN` 初值 7（与 SCODED_SFC 的 script 一致）——出口 props 的源头
-            read: (n) => n === "scopedN" ? 7 : void 0,
+            // ★夹具的 `scopedN`/`scopedM` 初值（与 SCOPED_SFC 的 script 一致）——出口 props 的源头
+            read: (n) => n === "scopedN" ? 7 : n === "scopedM" ? 9 : void 0,
             table: scopedArt.table,
             registry: new ListRegistry(),
             components: scopedDefs
@@ -14163,12 +14174,17 @@
               const rectsAll = JSON.parse(proteusHost.readRects());
               const rects = rectsAll.rects ?? {};
               const anchor = scopedInst.nodes.find((n) => typeof n.text === "string" && n.text.startsWith("cnt-"));
+              const destrAnchor = scopedInst.nodes.find((n) => typeof n.text === "string" && n.text.startsWith("dct-"));
               rep.scoped_probe = {
                 texts: scopedInst.nodes.filter((n) => typeof n.text === "string" && n.text.length > 0).map((n) => String(n.text)),
                 anchor_id: anchor?.id ?? -1,
                 // ★节点字段（作用域样式写进去的）与**内核真值**（必须一致——"字段写了"与"内核认了"是两件事）
                 anchor_width_field: anchor ? anchor.width ?? -1 : -1,
-                anchor_width_rect: anchor ? rects[String(anchor.id)]?.width ?? -1 : -1
+                anchor_width_rect: anchor ? rects[String(anchor.id)]?.width ?? -1 : -1,
+                // ★解构形态：文本（`dct-9`）+ 样式（`dw as number` ⇒ 90；TS 断言同时被覆盖）
+                destr_text: destrAnchor ? String(destrAnchor.text ?? "") : "",
+                destr_width_field: destrAnchor ? destrAnchor.width ?? -1 : -1,
+                destr_width_rect: destrAnchor ? rects[String(destrAnchor.id)]?.width ?? -1 : -1
               };
             } else {
               notes.push(`\u4F5C\u7528\u57DF\u63D2\u69FD\u63A2\u9488 mount \u5931\u8D25\uFF1A${scOut.error ?? "\u672A\u77E5"}`);

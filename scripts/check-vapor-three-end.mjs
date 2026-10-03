@@ -94,6 +94,10 @@ function fingerprint(rep) {
     [...(rep.scoped_probe?.texts ?? [])].sort(),
     rep.scoped_probe?.anchor_width_field,
     rep.scoped_probe?.anchor_width_rect,
+    // ★解构形态（2026-10-03）：文本（dct-9）+ 样式（90——含 TS 断言覆盖）
+    rep.scoped_probe?.destr_text,
+    rep.scoped_probe?.destr_width_field,
+    rep.scoped_probe?.destr_width_rect,
   ])
   // ★P1-3 生命周期（2026-10-03）：@vue:mounted 的三端读数（绑定/ran/源/applied/几何）逐值一致。
   fp.lifecycle_probe = JSON.stringify([
