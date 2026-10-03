@@ -36,13 +36,22 @@ HDC shell "rm -f $REPORT_DEV" >/dev/null 2>&1 || true
 HDC shell "aa start -a EntryAbility -b $BUNDLE --ps scene vapor-ab" >/dev/null 2>&1 | head -1
 
 echo "==> ② 等 A/B 报告落盘（条件等待 ≤120s——零盲等）"
-if ! bash "$WAIT" --cmd "bash '$HERE/hdc.sh' shell 'test -f $REPORT_DEV'" --timeout 120 --interval 4; then
+# ★★等待判据必须是**字符串回显**（2026-10-03）：`hdc shell` **不回传远端退出码**
+#   （实测 `test -f /nonexistent` 仍返回 0）⇒ 按退出码等待会"waited 0s 立刻通过"，
+#   随后 recv 报 ENOENT（症状离根因极远）。同族缺陷已在 run-vapor.sh 上修过。
+if ! bash "$WAIT" --cmd "bash '$HERE/hdc.sh' shell 'test -f $REPORT_DEV && echo PROTEUS_AB_READY' | grep -q PROTEUS_AB_READY" --timeout 120 --interval 4; then
   echo "✗ 报告未出现（120s）" >&2
   HDC shell "hilog -x | grep -E 'VAPOR|cppcrash' | tail -8" 2>&1 | sed 's/^/  /' >&2
   exit 1
 fi
-HDC file recv "$REPORT_DEV" "$OUT/vapor-ab.json" >/dev/null 2>&1
-[ -s "$OUT/vapor-ab.json" ] || { echo "✗ 报告未取回"; exit 1; }
+# ★★先删本地旧件 + **查 recv 输出**（`recv >/dev/null 2>&1` 吞失败 + 只查 `-s` ⇒ 本地旧报告
+#   让检查**假通过** ⇒ 判据跑上一轮数据；本仓实测见 run-vapor.sh 注释）
+rm -f "$OUT/vapor-ab.json"
+RECV_OUT="$(HDC file recv "$REPORT_DEV" "$OUT/vapor-ab.json" 2>&1)"
+if [ ! -s "$OUT/vapor-ab.json" ]; then
+  echo "✗ 报告未取回（${REPORT_DEV}）：$(echo "$RECV_OUT" | head -2 | tr '\n' ' ')"
+  exit 1
+fi
 
 echo "==> ③ 判据（与 Android 共用 check-vapor-ab.py；按 host_id 分档）"
 python3 "$ROOT/hosts/android/check-vapor-ab.py" "$OUT/vapor-ab.json"

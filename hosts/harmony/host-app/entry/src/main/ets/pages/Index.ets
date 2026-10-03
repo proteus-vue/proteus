@@ -715,6 +715,11 @@ struct Index {
             mode: 'ab',
             outName: 'vapor-ab.json',
           };
+          // ★★先 attach（2026-10-03 · 打通绘制通道）：`probeChannels` 要读**渲染层**真源
+          //   （四通道在 content modifier 画布上），而渲染层根节点由本调用建立——
+          //   standalone vapor 场景恰好在更早的 bench 阶段已 attach 过 ⇒ 侥幸能跑；
+          //   A/B 场景是**独立场景**（提前 return）⇒ 无此调用 ⇒ 建树返回 -1、通道全 0（实测）。
+          attach(this.content, vp2px(1), px2vp(dA.width), px2vp(dA.height));
           const abOut: string = vaporProbe(JSON.stringify(abArgs));
           hilog.info(DOMAIN, BENCH_TAG, 'PROTEUS_VAPOR_AB %{public}s', abOut.substring(0, 900));
         } catch (abe) {
@@ -941,6 +946,9 @@ struct Index {
             density: DENSITY,
             filesDir: ctx3.filesDir,
           };
+          // ★★显式 attach（2026-10-03）：不再依赖"更早 bench 阶段恰好 attach 过"的**隐式耦合**
+          //   （本轮实测：A/B 独立场景就没这层运气 ⇒ 渲染层建树返回 -1、通道全 0）。
+          attach(this.content, vp2px(1), px2vp(disp3.width), px2vp(disp3.height));
           const vOut: string = vaporProbe(JSON.stringify(vArgs));
           hilog.info(DOMAIN, BENCH_TAG, 'PROTEUS_VAPOR %{public}s', vOut.substring(0, 800));
         } catch (ve) {

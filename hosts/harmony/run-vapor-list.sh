@@ -35,10 +35,17 @@ HDC shell "aa start -a EntryAbility -b $BUNDLE --ps scene vapor-list" >/dev/null
 
 bash "$WAIT" --cmd "bash '$HERE/hdc.sh' shell 'hilog -x | grep -q PROTEUS_VAPOR_DONE'" --timeout 150 --interval 5 \
   || { echo "✗ 未见 PROTEUS_VAPOR_DONE（150s）"; exit 1; }
-# ★等文件在**映射视图**里可见（应用写沙箱路径后，el2 映射视图有延迟——本轮实测：
-#   日志已报 SAVED 但直接 recv 失败；条件等待"文件可见"后即成功）
-bash "$WAIT" --cmd "bash '$HERE/hdc.sh' shell 'test -f $REPORT_DEV'" --timeout 30 --interval 2 >/dev/null 2>&1
+# ★等文件在**映射视图**里可见（应用写沙箱路径后，el2 映射视图有延迟——实测：
+#   日志已报 SAVED 但直接 recv 失败；条件等待"文件可见"后即成功）。
+#   ★★判据必须是**字符串回显**：`hdc shell` **不回传远端退出码**（实测 `test -f /nonexistent`
+#     仍返回 0）⇒ 按退出码等待会"waited 0s 立刻通过"，随后 recv 报 ENOENT（症状离根因极远）。
+bash "$WAIT" --cmd "bash '$HERE/hdc.sh' shell 'test -f $REPORT_DEV && echo PROTEUS_LIST_READY' | grep -q PROTEUS_LIST_READY" --timeout 30 --interval 2 >/dev/null 2>&1
+# ★★先删本地旧件 + **查 recv 输出**（本仓实测：`recv >/dev/null 2>&1` 吞失败 + 只查 `-s`
+#   ⇒ 本地旧报告让检查**假通过** ⇒ 判据跑上一轮数据）
 rm -f "$OUT/vapor-list.json"
-HDC file recv "$REPORT_DEV" "$OUT/vapor-list.json" >/dev/null 2>&1
-[ -s "$OUT/vapor-list.json" ] || { echo "✗ 报告未取回"; exit 1; }
+RECV_OUT="$(HDC file recv "$REPORT_DEV" "$OUT/vapor-list.json" 2>&1)"
+if [ ! -s "$OUT/vapor-list.json" ]; then
+  echo "✗ 报告未取回（${REPORT_DEV}）：$(echo "$RECV_OUT" | head -2 | tr '\n' ' ')"
+  exit 1
+fi
 python3 "$ROOT/hosts/android/check-vapor-list.py" "$OUT/vapor-list.json"

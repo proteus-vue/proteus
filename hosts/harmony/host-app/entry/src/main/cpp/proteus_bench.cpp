@@ -89,6 +89,13 @@ static double msSince(Clock::time_point t0) {
 }
 
 /** 提取 JSON 数字字段（原型级解析——结构与夹具固定） */
+/* ── 跨模块 C 接口（定义在 proteus_render.cpp；两个 .so 各一，用 C 符号通信）──
+ *   ★为什么在**文件顶部**：使用点在 1700+ 行（vaporProbe），而声明原先落在 2400+ 行
+ *     ⇒ 编译期"未声明"（本仓实测：ninja 只报 `build stopped`，具体 error 要单独编译才看得到）。*/
+extern "C" void proteus_channel_state_of(int id, char* out, int cap);
+/** 建树入口：把 vapor 夹具的指令**真的送进渲染层**（此前只进报告 ⇒ 四通道从未建出来） */
+extern "C" int proteus_render_commands_cstr(const char* json);
+
 static bool jnum(const char* s, size_t segLen, const char* key, double* out) {
     std::string seg(s, segLen);
     std::string needle = std::string("\"") + key + "\":";
@@ -230,6 +237,27 @@ static std::vector<std::string> splitJsonObjects(const std::string& json) {
     return items;
 }
 
+// ── 前置声明（`extractValueAfterKey` 的定义在文件后段；本区块要先用到）──
+static std::string extractValueAfterKey(const std::string& json, const char* key, char openCh, char closeCh);
+
+/** 拆 "[0, 0, 0.45, 0]" → 顶层数值（裁剪参数等——不嵌套，遇 '[' 结束） */
+static std::vector<double> splitTopLevelNumbers(const std::string& arr) {
+    std::vector<double> out;
+    const char* p = arr.c_str();
+    while (*p) {
+        if (*p == '[' || *p == ']') break;   // 只吃**顶层**一维数组
+        char* end = nullptr;
+        double v = strtod(p, &end);
+        if (end != p) {
+            out.push_back(v);
+            p = end;
+            continue;
+        }
+        p++;
+    }
+    return out;
+}
+
 /** SFC 夹具节点的样式子集（渲染指令需要的字段） */
 struct SfcStyle {
     uint32_t bg = 0;             // 0 = 无背景（透明）
@@ -237,7 +265,93 @@ struct SfcStyle {
     uint32_t textColor = 0xFFFFFFFFu;
     double fontSize = 24;
     std::string text;
+    /* ── ★★绘制四通道（2026-10-03 · 三端打通绘制通道）──
+     *
+     * 【为什么补这四个（本仓实测的端间缺口）】模板侧早就支持这四个绘制声明
+     *   （`fill-gradient` / `glow` / `clip-path` / `svg-path` → `LayoutNode.style` 的结构字段），
+     *   Android（`probeChannels` 五项全绿）与 iOS（layer 真源五项）都建了；
+     *   唯独鸿蒙宿主**只解析 borderRadius**（`probeChannels` 也**只回 radius**）
+     *   ⇒ 同一份 SFC 在鸿蒙上**少画四样**，且判据 ⑦ 只能"如实跳过"（诚实但也是缺口）。
+     *   ⇒ 补齐三层：① 本结构解析这四个字段（从 style 子对象抽）；
+     *     ② 渲染层真正建出来（画布绘制 + RenderNode 层）；③ 探针**回读真源**（不伪造）。
+     */
+    bool hasGrad = false;
+    std::string gradKind;                        // "linear" / "radial"
+    double gradAngle = 90;                       // 角度（度；90 = 自上而下）
+    std::vector<std::pair<double, uint32_t>> gradStops;  // (offset, argb)
+    bool hasGlow = false;
+    uint32_t glowColor = 0;
+    double glowRadius = 0;
+    double glowAlpha = 1;
+    bool hasClip = false;
+    std::string clipKind;                        // "inset" …
+    std::vector<double> clipParams;
+    bool hasStroke = false;
+    std::string strokeD;                         // SVG path `d`（原样交给 OH_Drawing_PathBuildFromSvgString）
+    uint32_t strokeColor = 0;
+    double strokeWidth = 1;
 };
+
+/** 从 style 子对象抽 `fill-gradient`（JSON 对象：kind/angle/stops[]） */
+static bool parseGradInto(const std::string& nodeJson, SfcStyle& st) {
+    std::string sub = extractValueAfterKey(nodeJson, "fillGradient", '{', '}');
+    if (sub.size() < 3) return false;
+    std::string kind;
+    if (jstr(sub.c_str(), sub.size(), "kind", &kind)) st.gradKind = kind;
+    double angle = 90;
+    jnum(sub.c_str(), sub.size(), "angle", &angle);
+    st.gradAngle = angle;
+    // stops：[{offset,color},…] —— 逐对象拆
+    std::string arr = extractValueAfterKey(sub, "stops", '[', ']');
+    for (const auto& one : splitJsonObjects(arr)) {
+        double off = 0;
+        jnum(one.c_str(), one.size(), "offset", &off);
+        std::string css;
+        uint32_t argb = 0xFFFFFFFFu;
+        if (jstr(one.c_str(), one.size(), "color", &css)) argb = hexToArgb(css);
+        st.gradStops.emplace_back(off, argb);
+    }
+    st.hasGrad = st.gradStops.size() >= 2;   // 单色标不成渐变（判据同口径）
+    return st.hasGrad;
+}
+
+/** 从 style 子对象抽 `glow`（color/radius/alpha） */
+static bool parseGlowInto(const std::string& nodeJson, SfcStyle& st) {
+    std::string sub = extractValueAfterKey(nodeJson, "glow", '{', '}');
+    if (sub.size() < 3) return false;
+    std::string css;
+    if (jstr(sub.c_str(), sub.size(), "color", &css)) st.glowColor = hexToArgb(css);
+    jnum(sub.c_str(), sub.size(), "radius", &st.glowRadius);
+    jnum(sub.c_str(), sub.size(), "alpha", &st.glowAlpha);
+    st.hasGlow = st.glowRadius > 0;
+    return st.hasGlow;
+}
+
+/** 从 style 子对象抽 `clip-path`（kind/params[]） */
+static bool parseClipInto(const std::string& nodeJson, SfcStyle& st) {
+    std::string sub = extractValueAfterKey(nodeJson, "clipPath", '{', '}');
+    if (sub.size() < 3) return false;
+    std::string kind;
+    if (jstr(sub.c_str(), sub.size(), "kind", &kind)) st.clipKind = kind;
+    std::string arr = extractValueAfterKey(sub, "params", '[', ']');
+    if (!arr.empty()) {
+        for (const auto& seg : splitTopLevelNumbers(arr)) st.clipParams.push_back(seg);
+    }
+    st.hasClip = !st.clipKind.empty();
+    return st.hasClip;
+}
+
+/** 从 style 子对象抽 `svg-path`（d/stroke/strokeWidth） */
+static bool parseStrokeInto(const std::string& nodeJson, SfcStyle& st) {
+    std::string sub = extractValueAfterKey(nodeJson, "svgPath", '{', '}');
+    if (sub.size() < 3) return false;
+    jstr(sub.c_str(), sub.size(), "d", &st.strokeD);
+    std::string css;
+    if (jstr(sub.c_str(), sub.size(), "stroke", &css)) st.strokeColor = hexToArgb(css);
+    jnum(sub.c_str(), sub.size(), "strokeWidth", &st.strokeWidth);
+    st.hasStroke = !st.strokeD.empty();
+    return st.hasStroke;
+}
 
 /** 按**文档序**解析样式表（id → SfcStyle）——顺序即绘制层序（父先子后） */
 static void parseSfcStyles(const std::string& fixture, std::vector<std::pair<int, SfcStyle>>& out) {
@@ -254,6 +368,12 @@ static void parseSfcStyles(const std::string& fixture, std::vector<std::pair<int
         if (jstr(item.c_str(), item.size(), "color", &colorCss)) st.textColor = hexToArgb(colorCss);
         jnum(item.c_str(), item.size(), "fontSize", &st.fontSize);
         jstr(item.c_str(), item.size(), "text", &st.text);
+        // ★★绘制四通道（2026-10-03）：从 style 子对象抽（`extractValueAfterKey` 找的是
+        //   **该键后首个配对括号块** ⇒ 直接对整节点 JSON 抽即可，不必先切 style）
+        parseGradInto(item, st);
+        parseGlowInto(item, st);
+        parseClipInto(item, st);
+        parseStrokeInto(item, st);
         out.emplace_back((int)id, st);
     }
 }
@@ -1601,10 +1721,12 @@ static std::string vaporMountImpl(const std::string& treeJson) {
         const Rect& r = it->second;
         const SfcStyle& st = kv.second;
         char head[320];
+        // ★★指令带**节点 id**（2026-10-03）：绘制通道探针要按 id 回读真源
+        //   （此前指令只有几何/颜色 ⇒ 渲染层无从知道"这条通道是哪号节点的" ⇒ 探针无法回读）
         snprintf(head, sizeof(head),
-                 "%s{\"kind\":\"background\",\"x\":%.2f,\"y\":%.2f,\"w\":%.2f,\"h\":%.2f,"
+                 "%s{\"kind\":\"background\",\"id\":%d,\"x\":%.2f,\"y\":%.2f,\"w\":%.2f,\"h\":%.2f,"
                  "\"color\":%u,\"radius\":%.2f",
-                 emitted > 0 ? "," : "", r.x * g_vaporDensity, r.y * g_vaporDensity,
+                 emitted > 0 ? "," : "", kv.first, r.x * g_vaporDensity, r.y * g_vaporDensity,
                  r.w * g_vaporDensity, r.h * g_vaporDensity, st.bg, st.radius * g_vaporDensity);
         cmds += head;
         if (!st.text.empty()) {
@@ -1614,6 +1736,39 @@ static std::string vaporMountImpl(const std::string& treeJson) {
             cmds += tail;
             cmds += ",\"text\":\"" + jsonEscape(st.text) + "\"";
         }
+        // ★★绘制四通道进指令（2026-10-03）：渲染层据这些键**真正建出**通道
+        //   （`proteus_render.RenderCommands` 消费；探针再从此回读——不伪造）
+        if (st.hasGrad) {
+            cmds += ",\"grad\":{\"kind\":\"" + jsonEscape(st.gradKind) + "\",\"angle\":" +
+                    std::to_string((int)st.gradAngle) + ",\"stops\":[";
+            for (size_t i = 0; i < st.gradStops.size(); i++) {
+                cmds += (i ? "," : "");
+                cmds += "{\"offset\":" + std::to_string(st.gradStops[i].first) +
+                        ",\"color\":" + std::to_string((unsigned long)st.gradStops[i].second) + "}";
+            }
+            cmds += "]}";
+        }
+        if (st.hasGlow) {
+            char g[160];
+            snprintf(g, sizeof(g), ",\"glow\":{\"color\":%u,\"radius\":%.2f,\"alpha\":%.3f}",
+                     st.glowColor, st.glowRadius * g_vaporDensity, st.glowAlpha);
+            cmds += g;
+        }
+        if (st.hasClip) {
+            cmds += ",\"clip\":{\"kind\":\"" + jsonEscape(st.clipKind) + "\",\"params\":[";
+            for (size_t i = 0; i < st.clipParams.size(); i++) {
+                cmds += (i ? "," : "");
+                cmds += std::to_string(st.clipParams[i]);
+            }
+            cmds += "]}";
+        }
+        if (st.hasStroke) {
+            char stb[120];
+            snprintf(stb, sizeof(stb), ",\"stroke\":{\"color\":%u,\"width\":%.2f}",
+                     st.strokeColor, st.strokeWidth * g_vaporDensity);
+            cmds += stb;
+            cmds += ",\"strokeD\":\"" + jsonEscape(st.strokeD) + "\"";
+        }
         cmds += "}";
         emitted++;
     }
@@ -1621,6 +1776,13 @@ static std::string vaporMountImpl(const std::string& treeJson) {
 
     int samples = 0, colors = 0;
     vaporPaintCheck(cmds, &samples, &colors);
+    // ★★★把 vapor 夹具的指令**真的送进渲染层**（2026-10-03 · 三端打通绘制通道）：
+    //   `proteus_render_commands_cstr` 建 RenderNode 子树 + 四通道画布（渐变/发光/裁剪/描边）
+    //   ⇒ `probeChannels` 才能从渲染层真源读回（此前渲染层只跑过 stress 夹具）。
+    //   ★顺序：必须在 mount 之后（几何已定）、probeChannels 之前（探针要读到刚建的通道）。
+    int renderedNodes = proteus_render_commands_cstr(cmds.c_str());
+    OH_LOG_Print(LOG_APP, LOG_INFO, PROTEUS_BENCH_DOMAIN, PROTEUS_BENCH_TAG,
+                 "PROTEUS_VAPOR_LAYERS rendered=%{public}d", renderedNodes);
 
     if (g_vaporHandle != 0) proteus_layout_destroy(g_vaporHandle);
     g_vaporHandle = handle;
@@ -2309,11 +2471,40 @@ static JSVM_Value VaporProbeChannelsCb(JSVM_Env env, JSVM_CallbackInfo info) {
     std::string out = "{\"ok\":true,\"channels\":[";
     int n = 0;
     for (int id : ids) {
-        auto it = g_vaporStyles.find(id);
-        if (it == g_vaporStyles.end()) continue;
-        char b[200];
-        snprintf(b, sizeof(b), "%s{\"id\":%d,\"radius\":%.2f}", n > 0 ? "," : "", id, it->second.radius);
-        out += b;
+        // ★★★四通道真源（2026-10-03）：从**渲染层**读（`proteus_channel_state_of`）——
+        //   此前只读 `g_vaporStyles.radius`（解析出的半径）⇒ 另四通道永远缺席、判据 ⑦ 只能跳过。
+        //   现在读的是"渲染层据指令建了什么"（建什么记什么，见 render 侧注释）。
+        char st[256] = {0};
+        proteus_channel_state_of(id, st, (int)sizeof(st));
+        // 紧凑串：grad|glow|clip|strokeLen|radius
+        std::string s2 = st;
+        double radius = 0, strokeLen = 0;
+        int clip = 0;
+        std::string grad, glow;
+        {
+            size_t p1 = 0, p2 = s2.find('|');
+            if (p2 != std::string::npos) { grad = s2.substr(0, p2); p1 = p2 + 1; }
+            p2 = s2.find('|', p1);
+            if (p2 != std::string::npos) { glow = s2.substr(p1, p2 - p1); p1 = p2 + 1; }
+            p2 = s2.find('|', p1);
+            if (p2 != std::string::npos) { clip = atoi(s2.substr(p1, p2 - p1).c_str()); p1 = p2 + 1; }
+            p2 = s2.find('|', p1);
+            if (p2 != std::string::npos) { strokeLen = atof(s2.substr(p1, p2 - p1).c_str()); p1 = p2 + 1; }
+            radius = atof(s2.substr(p1).c_str());
+        }
+        char b[320];
+        int m = snprintf(b, sizeof(b), "%s{\"id\":%d,\"radius\":%.2f", n > 0 ? "," : "", id, radius);
+        std::string one(b, m > 0 ? (size_t)m : 0);
+        if (!grad.empty()) one += ",\"grad\":\"" + grad + "\"";
+        if (!glow.empty()) one += ",\"glow\":\"" + glow + "\"";
+        one += ",\"clip\":" + std::to_string(clip);
+        if (strokeLen > 0) {
+            char sb[64];
+            snprintf(sb, sizeof(sb), ",\"stroke_len\":%.3f", strokeLen);
+            one += sb;
+        }
+        one += "}";
+        out += one;
         n++;
     }
     out += "]}";

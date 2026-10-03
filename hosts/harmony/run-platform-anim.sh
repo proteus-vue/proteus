@@ -33,13 +33,22 @@ HDC shell "rm -f $REPORT_DEV" >/dev/null 2>&1 || true
 HDC shell "aa start -a EntryAbility -b $BUNDLE" >/dev/null 2>&1 | head -1
 
 echo "==> 等报告落盘（条件等待 ≤60s——零盲等）"
-if ! bash "$WAIT" --cmd "bash '$HERE/hdc.sh' shell 'test -f $REPORT_DEV'" --timeout 60 --interval 3; then
+# ★★等待判据必须是**字符串回显**（2026-10-03）：`hdc shell` **不回传远端退出码**
+#   （实测 `test -f /nonexistent` 仍返回 0）⇒ 按退出码等待会"waited 0s 立刻通过"，
+#   随后 recv 报 ENOENT（症状离根因极远）。同族缺陷已在 run-vapor.sh 上修过。
+if ! bash "$WAIT" --cmd "bash '$HERE/hdc.sh' shell 'test -f $REPORT_DEV && echo PROTEUS_ANIM_READY' | grep -q PROTEUS_ANIM_READY" --timeout 60 --interval 3; then
   echo "✗ 60s 内未见 $REPORT_DEV" >&2
   HDC shell "hilog -x | grep -E 'PLATFORMANIM|cppcrash' | tail -8" 2>&1 | sed 's/^/  /' >&2
   exit 1
 fi
-HDC file recv "$REPORT_DEV" "$RESULTS/platform-anim.json" >/dev/null 2>&1
-[ -s "$RESULTS/platform-anim.json" ] || { echo "✗ 报告未取回"; exit 1; }
+# ★★先删本地旧件 + **查 recv 输出**（`recv >/dev/null 2>&1` 吞失败 + 只查 `-s` ⇒ 本地旧报告
+#   让检查**假通过** ⇒ 判据跑上一轮数据；本仓实测见 run-vapor.sh 注释）
+rm -f "$RESULTS/platform-anim.json"
+RECV_OUT="$(HDC file recv "$REPORT_DEV" "$RESULTS/platform-anim.json" 2>&1)"
+if [ ! -s "$RESULTS/platform-anim.json" ]; then
+  echo "✗ 报告未取回（${REPORT_DEV}）：$(echo "$RECV_OUT" | head -2 | tr '\n' ' ')"
+  exit 1
+fi
 
 echo "==> 判据（与 Android 共用 check-platform-anim.py）"
 python3 "$ROOT/hosts/android/check-platform-anim.py" "$RESULTS/platform-anim.json"
