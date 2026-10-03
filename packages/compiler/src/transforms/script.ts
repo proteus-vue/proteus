@@ -315,6 +315,24 @@ export const SCRIPT_RULES: TransformRule[] = [
     source: 'src/compiler/script.ts → extractMethods（arrowRe 分支）',
   },
   {
+    id: 'script/lifecycle-callback',
+    phase: 'script',
+    status: 'implemented',
+    title: '页面生命周期回调式提取（onShow/onHide/onResize… 从框架导入）',
+    titleEn: 'Page lifecycle callback extraction (onShow/onHide/onResize… imported from the framework)',
+    description:
+      'setup 顶层 onShow(() => …)/onHide(() => …)/onResize((e) => …) 等回调体 → 同名 Page 钩子（参数透传 + 总线派发）；嵌套注册不提取（可见警告 + 移除）；onMounted/onUnmounted 走 script/lifecycle-map',
+    descriptionEn:
+      'Top-level onShow(() => …)/onHide(() => …)/onResize((e) => …) callbacks are extracted into same-named Page hooks (params passed through + bus dispatch); nested registrations are not extracted (warning + removal); onMounted/onUnmounted go through script/lifecycle-map',
+    why: '用户要求页面生命周期从框架导入（不再写同名顶层函数）；旧实现只认三个 Vue 名、其余回调体静默丢弃',
+    whyEn:
+      'Users asked for page lifecycles imported from the framework (instead of same-named top-level functions); the old implementation only knew three Vue names and silently dropped other callback bodies',
+    when: 'setup 顶层出现页面钩子名回调（onShow/onHide/onResize/onPageScroll/… 或 onLoad）时',
+    example: { before: 'onShow(() => { refresh() })', after: 'onShow() {\n  this.refresh()\n  try { this.proteusPageEmit("show") } catch (__x) {}\n},' },
+    verify: 'tests/lifecycle-callback.test.ts（18 组）',
+    source: 'src/compiler/script.ts → extractLifecycles（回调式提取）+ 生成端统一段',
+  },
+  {
     id: 'script/lifecycle-map',
     phase: 'script',
     status: 'implemented',

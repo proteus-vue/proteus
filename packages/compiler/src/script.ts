@@ -2022,6 +2022,11 @@ function extractTopLevelCalls(source: string, warnings: string[], trace?: Transf
     //   onActivated/onDeactivated/onRenderTracked/onRenderTriggered/onServerPrefetch）由 extractLifecycles 统一「剥离+警告」，
     //   亦须跳过——否则既警告又裸注入 onLoad（partial 钩子告警但产物仍裸调用 → ReferenceError）。mapOnxxx 将跳过，仅告警。
     if (/^(provide|inject|watch|computed|onLoad|onShow|onHide|onReady|onUnload|onMounted|onUnmounted|onBeforeMount|onBeforeUpdate|onUpdated|onBeforeUnmount|onActivated|onDeactivated|onErrorCaptured|onRenderTracked|onRenderTriggered|onServerPrefetch|defineProps|defineEmits|defineExpose|defineComponent|defineModel|defineAppConfig|defineOptions)\b/.test(fn)) continue
+    // ★★★2026-10-04（生命周期体系）：**页面原生钩子的回调形态**（onShow(cb)/onResize(cb)/onPageScroll(cb)/share 系列…）
+    //   有专门提取通道（extractLifecycles → 生成同名 Page 钩子），**绝不当顶层副作用注入 onLoad**。
+    //   旧行为实测（双缺陷）：`onResize((e) => …)` 既被警告"未映射已剥离"，又被裸注入 onLoad ⇒
+    //   产物里 `onResize(...)` 无 import ⇒ 运行时 ReferenceError（页面启动即崩）。
+    if (LIFECYCLE_CALL_NAMES.has(fn)) continue
     // 字符串内不含换行即视为单行闭合（保守：多行调用不抓，避免误截）
     if ((m[2].match(/['"`]/g) ?? []).length % 2 !== 0) continue
     out.push(t.replace(/;$/, ''))
@@ -2226,6 +2231,301 @@ function semanticGridOffLine(): string {
 }
 
 /**
+ * ★2026-10-04 方法体内**函数签名类型**剥除器（④⑤⑥ 三组正则的统一重构——嵌套感知）。
+ *
+ * 【为什么重构（本轮实测复现的缺口）】旧实现是三组正则，参数与返回类型都不许含 \`()\`/\`{}\`
+ *   （\`[^(){}]*\`）⇒ 下列**合法且常见**的嵌套形态全部漏剥、类型碎片残留进产物
+ *   ⇒ 产物语法检查直接红（esbuild 报 "Malformed arrow function parameter list"
+ *   / "Unexpected token ':'"）——本仓 GP5 头注记录、"逐场景显式方法"绕开的正是它：
+ *     function inner(cb: (() => void) | undefined): void {}    ← 参数含函数类型（联合）
+ *     function inner(o: { a: number }): void {}                ← 参数含对象类型
+ *     const inner = (cb: (() => void) | undefined): void => {} ← 块内箭头同上
+ *   ★重构前实测（五组探针 A–E）：全部残留 ⇒ 全链路编译抛「js 产物语法错误」。
+ *
+ * 【做法】单遍递归扫描（字符串/注释整段跳过——旧正则不区分字符串，是另一处误伤源）：
+ *   · \`function\` 关键字 → 剥参数表类型 + 返回类型；
+ *   · \`(...)\` 后随 \`=>\`（或 \`: 返回类型 =>\`）→ 剥参数表类型 + 返回类型；
+ *   · 其它 \`(...)\`/\`{...}\`/\`[...]\` → **递归**内部（嵌套箭头/函数声明都覆盖）；
+ *   · 参数位类型剥除**保留 \`= 默认值\`**（旧版把默认值一起吞掉——H/I 探针：语义静默丢失）。
+ * 【诚实边界】模板字面量内不改写（整段跳过）；对象方法简写 \`run(x: T) {}\` 不识别（旧版亦不含）；
+ *   多行/嵌套到无法确定边界时**保守不剥**（不剥不坏——宁可残留被后续校验拦，也不误改语义）。
+ */
+function skipStringLiteral(text: string, i: number): number {
+  const q = text[i]
+  let j = i + 1
+  while (j < text.length) {
+    if (text[j] === '\\') { j += 2; continue }
+    if (text[j] === q) return j + 1
+    j++
+  }
+  return text.length
+}
+
+/** 跳过空白（含换行——返回类型可跨行） */
+function skipWsChars(text: string, i: number): number {
+  while (i < text.length && (text[i] === ' ' || text[i] === '\t' || text[i] === '\n' || text[i] === '\r')) i++
+  return i
+}
+
+/** 跳过注释（行/块）；返回注释后一位 */
+function skipComment(text: string, i: number): number {
+  if (text[i] === '/' && text[i + 1] === '/') {
+    const j = text.indexOf('\n', i)
+    return j < 0 ? text.length : j
+  }
+  const j = text.indexOf('*/', i)
+  return j < 0 ? text.length : j + 2
+}
+
+/** 匹配括号对（仅同类计数；字符串/注释跳过）；open 为 \`(\` \`{\` \`[\`；返回闭括号位置（未闭合 → -1） */
+function scanMatchingBracket(text: string, open: number): number {
+  const openCh = text[open]
+  const closeCh = openCh === '(' ? ')' : openCh === '{' ? '}' : ']'
+  let depth = 0
+  let i = open
+  while (i < text.length) {
+    const c = text[i]
+    if (c === "'" || c === '"' || c === '\`') { i = skipStringLiteral(text, i); continue }
+    if (c === '/' && (text[i + 1] === '/' || text[i + 1] === '*')) { i = skipComment(text, i); continue }
+    if (c === openCh) depth++
+    else if (c === closeCh) { depth--; if (depth === 0) return i }
+    i++
+  }
+  return -1
+}
+
+/** 参数表顶层逗号切分（跳过 ()[]{}<> 嵌套与字符串；\`=>\` 的 > 不计尖括号闭合） */
+function splitTopLevelParams(text: string): string[] {
+  const parts: string[] = []
+  let depth = 0
+  let cur = ''
+  for (let i = 0; i < text.length; i++) {
+    const c = text[i]
+    if (c === "'" || c === '"' || c === '\`') { const j = skipStringLiteral(text, i); cur += text.slice(i, j); i = j - 1; continue }
+    if (c === '>' && text[i - 1] === '=') { cur += c; continue }
+    if (c === '(' || c === '[' || c === '{' || c === '<') depth++
+    else if (c === ')' || c === ']' || c === '}' || c === '>') depth = Math.max(0, depth - 1)
+    if (c === ',' && depth === 0) { parts.push(cur); cur = ''; continue }
+    cur += c
+  }
+  if (cur.trim()) parts.push(cur)
+  return parts
+}
+
+/** 单个参数位类型剥除（\`v: T\` / \`v?: T\` / \`v: T = 默认\` / 解构 / 剩余参数）——保留默认值与绑定形态 */
+function stripOneParamType(text: string): string {
+  const s = text.trim()
+  if (!s) return ''
+  if (s === 'this' || /^this\s*:/.test(s)) return '' // TS 伪参数 this（JS 无此语法——方法签名出现即 Unexpected token）
+  let prefix = ''
+  let rest = s
+  if (rest.startsWith('...')) { prefix = '...'; rest = rest.slice(3).trimStart() }
+  let binding: string
+  if (/^[A-Za-z_$]/.test(rest)) {
+    binding = /^[A-Za-z_$][\w$]*/.exec(rest)![0]
+  } else if (rest.startsWith('{') || rest.startsWith('[')) {
+    const close = scanMatchingBracket(rest, 0)
+    if (close < 0) return s // 解构括号未闭合：原样（保守）
+    binding = rest.slice(0, close + 1)
+  } else {
+    return s // 无法识别的参数形态：原样（保守——不静默改写）
+  }
+  let t = rest.slice(binding.length).trimStart()
+  if (t.startsWith('?')) t = t.slice(1).trimStart()
+  if (t.startsWith(':')) {
+    // 类型区间：扫到顶层 \`=\`（默认值起点；排除 \`=>\` 的 =）或结束
+    let i = 1
+    for (; i < t.length; i++) {
+      const c = t[i]
+      if (c === '=' && t[i + 1] !== '>' && t[i - 1] !== '=' && t[i - 1] !== '!') break
+    }
+    const def = i < t.length ? t.slice(i).trimStart() : ''
+    return prefix + binding + (def ? ' ' + def : '')
+  }
+  if (t.startsWith('=')) return prefix + binding + ' ' + t
+  if (t === '') return prefix + binding
+  return s // 其它形态（不应出现）：原样
+}
+
+/** 参数表整体剥除（顶层逗号切分 → 逐参数剥） */
+function stripParamListText(text: string): string {
+  return splitTopLevelParams(text).map(stripOneParamType).filter((p) => p !== '').join(', ')
+}
+
+/** function 声明的返回类型区间（\`:\` 起）——扫到函数体 \`{\` 前；返回体 \`{\` 位置（无法确定 → -1 保守不剥） */
+function findFnBodyAfterReturnType(body: string, colon: number): number {
+  let i = skipWsChars(body, colon + 1)
+  // 返回类型以对象字面量形态开头（\`: { a: number } {\`）：整组跳过再找函数体
+  if (body[i] === '{') {
+    const close = scanMatchingBracket(body, i)
+    if (close < 0) return -1
+    i = skipWsChars(body, close + 1)
+    if (body[i] === '{') return i
+  }
+  let depth = 0
+  const limit = colon + 240
+  while (i < body.length && i < limit) {
+    const c = body[i]
+    if (c === "'" || c === '"' || c === '\`') { i = skipStringLiteral(body, i); continue }
+    if (c === '/' && (body[i + 1] === '/' || body[i + 1] === '*')) { i = skipComment(body, i); continue }
+    if (c === '=' && body[i + 1] === '>') { i += 2; continue }
+    if (c === '{') {
+      if (depth === 0) return i
+      depth++
+    } else if (c === '(' || c === '[' || c === '<') depth++
+    else if (c === ')' || c === ']' || c === '}') {
+      if (depth === 0) return -1
+      depth--
+    } else if (c === '>' && body[i - 1] !== '=') {
+      if (depth === 0) return -1
+      depth--
+    } else if (c === ';' && depth === 0) {
+      return -1
+    }
+    i++
+  }
+  return -1
+}
+
+/** 箭头函数返回类型区间（\`:\` 起）——找函数体标记 \`=>\`；返回标记位置（无法确定 → -1 保守不剥） */
+function findArrowMarkerAfterReturnType(body: string, colon: number): number {
+  const markers: number[] = []
+  let i = skipWsChars(body, colon + 1)
+  if (body[i] === '{') {
+    const close = scanMatchingBracket(body, i)
+    if (close < 0) return -1
+    i = close + 1
+  }
+  let depth = 0
+  const limit = colon + 240
+  while (i < body.length && i < limit) {
+    const c = body[i]
+    // ★★★2026-10-04（实测回归修复）：**返回类型不跨行**——否则三元 else 分支会被误吞。
+    //   【现场】\`const q = typeof wxq.in === 'function' ? wxq.in(instanceRef) : wxq\` 之后
+    //   240 字符内有其它 \`=>\`（q.exec 回调）⇒ 旧实现把 \`: wxq …\` 整段当返回类型吃掉 ⇒
+    //   产物 \`? wxq.in(this.instanceRef) => {\` ⇒ esbuild "Malformed arrow function parameter list"
+    //   （p-loading-host 构建直接失败）。合法 TS 返回类型与本仓全部用例都在同一行。
+    if (c === '\n' || c === '\r') return -1
+    if (c === "'" || c === '"' || c === '\`') { i = skipStringLiteral(body, i); continue }
+    if (c === '/' && (body[i + 1] === '/' || body[i + 1] === '*')) { i = skipComment(body, i); continue }
+    if (c === '=' && body[i + 1] === '>') { markers.push(i); i += 2; continue }
+    if (c === '{') {
+      if (depth === 0) break // 函数体起点
+      depth++
+    } else if (c === '(' || c === '[' || c === '<') depth++
+    else if (c === ')' || c === ']' || c === '}') {
+      if (depth === 0) break
+      depth--
+    } else if (c === '>' && body[i - 1] !== '=') {
+      if (depth === 0) break
+      depth--
+    } else if ((c === ';' || c === ',') && depth === 0) {
+      break
+    }
+    i++
+  }
+  if (!markers.length) return -1
+  // 多标记（返回类型本身含箭头，如 \`: (a) => void =>\`）：优先"后随 \`{\`/\`(\`"的最后一个；
+  //   否则取第一个（表达式体箭头返回箭头 \`: number => cb => cb()\` 取第一个才正确——两形态用后随字符判别）
+  for (let k = markers.length - 1; k >= 0; k--) {
+    const after = skipWsChars(body, markers[k] + 2)
+    if (body[after] === '{' || body[after] === '(') return markers[k]
+  }
+  return markers[0]
+}
+
+/**
+ * ★★★2026-10-04（实测回归修复）：\`(\` 前驱判定——**箭头参数组 vs 调用实参**。
+ * 【为什么必须有】\`wxq.in(instanceRef) : wxq\` 里 \`(instanceRef)\` 是**调用实参**，
+ *   后随的三元 \`:\` 不是返回类型注解；若不判别，\`: else 分支\` 会被当返回类型整段吞掉
+ *   （p-loading-host 构建 "Malformed arrow function parameter list" 的直接根因）。
+ * 判据（前驱字符/关键字）：
+ *   · 前驱是 \`=\` \`(\` \`[\` \`{\` \`,\` \`;\` \`?\` \`:\` 运算符或行首 ⇒ 表达式位 ⇒ 可作箭头参数组；
+ *   · 前驱是标识符 ⇒ 仅限关键字（return/typeof/void/do/else/in/of/case/delete/yield/await/instanceof）；
+ *   · 前驱是 \`)\` \`]\` ⇒ 保守放行（形如 \`f()(x) => …\` 极罕见，放行只在"后随 : 且 240 字内有 =>"才实际剥）。
+ */
+function isArrowParamGroup(text: string, open: number): boolean {
+  let i = open - 1
+  while (i >= 0 && (text[i] === ' ' || text[i] === '\t' || text[i] === '\n' || text[i] === '\r')) i--
+  if (i < 0) return true
+  const c = text[i]
+  if ('=([{,;?:!&|+*%^~<>'.indexOf(c) >= 0) return true
+  if (c === ')' || c === ']') return true
+  const m = /([A-Za-z_$][\w$]*)$/.exec(text.slice(0, i + 1))
+  if (m) {
+    const kw = m[1]
+    return ['return', 'typeof', 'void', 'do', 'else', 'in', 'of', 'case', 'delete', 'yield', 'await', 'instanceof'].indexOf(kw) >= 0
+  }
+  return true
+}
+
+/** 方法体内函数签名（参数表 + 返回类型）注解剥除——单遍递归扫描（见上方长注释） */
+function stripFunctionSigTypes(text: string): string {
+  let out = ''
+  let i = 0
+  while (i < text.length) {
+    const c = text[i]
+    if (c === "'" || c === '"' || c === '\`') { const j = skipStringLiteral(text, i); out += text.slice(i, j); i = j; continue }
+    if (c === '/' && (text[i + 1] === '/' || text[i + 1] === '*')) { const j = skipComment(text, i); out += text.slice(i, j); i = j; continue }
+    if (
+      c === 'f' &&
+      text.startsWith('function', i) &&
+      !/[\w$.]/.test(text[i - 1] ?? '') &&
+      !/[\w$]/.test(text[i + 8] ?? '')
+    ) {
+      let j = i + 8
+      if (text[j] === '*') j++
+      j = skipWsChars(text, j)
+      const nm = /^[A-Za-z_$][\w$]*/.exec(text.slice(j))
+      if (nm) { j += nm[0].length; j = skipWsChars(text, j) }
+      if (text[j] !== '(') { out += text.slice(i, i + 8); i += 8; continue }
+      const close = scanMatchingBracket(text, j)
+      if (close < 0) { out += text.slice(i, i + 8); i += 8; continue }
+      out += text.slice(i, j) + '(' + stripParamListText(text.slice(j + 1, close)) + ')'
+      const k = skipWsChars(text, close + 1)
+      if (text[k] === ':') {
+        const bodyStart = findFnBodyAfterReturnType(text, k)
+        if (bodyStart >= 0) { out += ' '; i = bodyStart; continue }
+      }
+      i = close + 1
+      continue
+    }
+    if (c === '(') {
+      const close = scanMatchingBracket(text, i)
+      if (close < 0) { out += c; i++; continue }
+      const inner = text.slice(i + 1, close)
+      const after = skipWsChars(text, close + 1)
+      if (text.startsWith('=>', after)) {
+        out += '(' + stripParamListText(inner) + ')'
+        i = close + 1
+        continue
+      }
+      if (text[after] === ':' && isArrowParamGroup(text, i)) {
+        const marker = findArrowMarkerAfterReturnType(text, after)
+        if (marker >= 0) {
+          out += '(' + stripParamListText(inner) + ') '
+          i = marker // 跳过返回类型区间，保留 \`=>\` 起的原文
+          continue
+        }
+      }
+      out += '(' + stripFunctionSigTypes(inner) + ')'
+      i = close + 1
+      continue
+    }
+    if (c === '{' || c === '[') {
+      const close = scanMatchingBracket(text, i)
+      if (close < 0) { out += c; i++; continue }
+      out += c + stripFunctionSigTypes(text.slice(i + 1, close)) + text[close]
+      i = close + 1
+      continue
+    }
+    out += c
+    i++
+  }
+  return out
+}
+
+/**
  * ★#494 方法体 TS 类型语法统一剥除器（打法收敛：不再按形态追加 as/注解/泛型正则——
  * 断言/注解可任意嵌套（函数类型/泛型/对象字面量/索引访问/数组后缀），正则组合追不完）：
  *  ① as 断言（深度平衡单遍剥离）② 泛型调用注入 fn<Type>(x) ③ const/let 类型注解 ④ 块内箭头参数/返回注解
@@ -2293,19 +2593,9 @@ function stripTypeSyntax(body: string): string {
   out = out.replace(/([A-Za-z_$][\w$]*)<[A-Za-z_$][\w$]*>\s*\(/g, '$1(')
   // ③ 块内 const/let 类型注解剥离：const f: Record<string, number> = {...} → const f = {...}
   out = out.replace(/\b(const|let)\s+([A-Za-z_$][\w$]*)\s*:\s*[^=\n]+=/g, (m, kw, name) => `${kw} ${name} =`)
-  // ④ 块内箭头函数参数/返回类型注解剥离：(n: IRNode): void => → (n) =>；★2026-09-09 补无返回注解形态
-  //    (x: number) =>（此前仅处理带返回注解的，参数注解残留进产物 → Unexpected token ':'——svg-spike 实证）
-  out = out.replace(/\(([^(){}]*)\)\s*:\s*[A-Za-z_$][\w$.<>\[\]|\s]*\s*=>/g, (_m, params) => `(${stripParamTypes(params)}) =>`)
-  out = out.replace(/\(([^(){}]*\s*:\s*[^(){}]*)\)\s*=>/g, (_m, params) => `(${stripParamTypes(params)}) =>`)
-  // ⑤ ★2026-09-09 function 表达式/声明的参数类型注解（含返回类型）：function (r: unknown): string → function (r)
-  //   （svg-spike 实证：方法体内回调函数参数注解残留 → Unexpected token ':'；此前只覆盖箭头函数）
-  //   含具名函数声明形态：function name(r: unknown): string → function name(r)
-  out = out.replace(/\bfunction\s*([A-Za-z_$][\w$]*)?\s*\(([^(){}]*\s*:\s*[^(){}]*)\)\s*(?::\s*[A-Za-z_$][\w$.<>\[\]|\s]*)?\s*\{/g,
-    (_m, name: string | undefined, params: string) => `function ${name ? name + ' ' : ''}(${stripParamTypes(params)}) {`)
-  // ⑥ ★2026-09-09 无参/纯返回类型注解的函数表达式：function (): void { → function () {
-  //   （canvas-probe 实证：箭头/带参形态已覆盖，无参 + 仅返回类型注解漏网）
-  out = out.replace(/\bfunction\s*([A-Za-z_$][\w$]*)?\s*\(\s*\)\s*:\s*[A-Za-z_$][\w$.<>\[\]|\s]*\s*\{/g,
-    (_m, name: string | undefined) => `function ${name ? name + ' ' : ''}() {`)
+  // ④⑤⑥ 方法体内函数签名（参数表 + 返回类型）注解剥离——嵌套感知统一扫描器（2026-10-04 重构，
+  //   旧三组正则对"参数/返回类型含 ()/{}"的嵌套形态全部漏剥；见 stripFunctionSigTypes 长注释）
+  out = stripFunctionSigTypes(out)
   return out
 }
 
@@ -2638,98 +2928,244 @@ function rewriteRefAccess(
   }
   return out
 }
-/** 生命周期映射：onMounted→onReady / onUnmounted→onUnload / onLoad→onLoad */
-function extractLifecycles(source: string, trace?: TransformTrace, disabled?: Set<string>, warnings: string[] = []): { onReady?: string; onUnload?: string; onLoad?: string; asyncKeys: Set<'onReady' | 'onUnload' | 'onLoad'> } {
-  const out: { onReady?: string; onUnload?: string; onLoad?: string } = {}
-  // ★2026-09-20 外部实战报告第十四节 Bug C（阻断级）：生命周期回调的 **async 标记**此前被丢弃 →
-  //   `onMounted(async () => { await … })` 产出 `onReady() { await … }` → **语法错误、该页编译失败**
-  //   （`await is only valid in async functions`；外部工程 3 个文件命中，含首页）。
-  //   Vue 官方支持异步生命周期回调（其返回值被忽略、不 await），且**普通 async 方法在产物里本就保留 async**
-  //   （对照实验已证）——故这是漏带标记，不是平台限制。此处记录哪些键是 async，产物生成处据此写 `async onReady()`。
-  const asyncKeys = new Set<'onReady' | 'onUnload' | 'onLoad'>()
-  if (disabled?.has('script/lifecycle-map')) return { ...out, asyncKeys }
-  // ★#497 批 2：AST 顶层回调发现（onMounted→onReady / onUnmounted→onUnload / onLoad→onLoad）+ 未映射 onXxx 警告（全树扫描）
+/**
+ * ★★★2026-10-04（生命周期体系 · 页面原生钩子回调式支持）：小程序**页面级钩子名**集合——
+ * 允许以回调式形态书写（`onShow(() => …)` / `onResize((e) => …)`），由编译器提取回调体生成同名 Page 钩子。
+ * 【为什么要有】旧体验 = 必须在页面写**同名顶层函数**（`function onShow() {}`）——与"从框架导入"的
+ *   组合式直觉不符（用户原话：「生命周期函数需要在页面写同名函数，比如 onShow，这个体验太差了，
+ *   应该从我们框架导入使用才对」）；且回调式写法此前被静默丢弃（onMounted 之外）或被裸注入 onLoad（onResize）。
+ * 【与 Vue 名的关系】onMounted→onReady / onUnmounted→onUnload 由 `VUE_LIFECYCLE_CALLS` 映射；
+ *   本集合是**页面原生名**，两者合成 `LIFECYCLE_CALL_NAMES`（top-level 排除名单）。
+ * ★决策型钩子（share-timeline 等）**不自动生成**——用户以回调式提供即生成（"声明才显示入口"语义保持）。
+ */
+const PAGE_HOOK_CALLBACK_NAMES = new Set([
+  'onLoad', 'onShow', 'onHide', 'onReady', 'onUnload', 'onRouteDone', 'onResize', 'onTabItemTap',
+  'onReachBottom', 'onPageScroll', 'onPullDownRefresh', 'onShareAppMessage', 'onShareTimeline',
+  'onAddToFavorites', 'onSaveExitState',
+])
+/** Vue 组合式生命周期调用 → 小程序页面钩子键（回调式提取时改名） */
+export const VUE_LIFECYCLE_CALLS = new Map<string, string>([
+  ['onMounted', 'onReady'],
+  ['onUnmounted', 'onUnload'],
+  ['onLoad', 'onLoad'],
+])
+/** ★Vue 语义回调**不接页面载荷**（onMounted/onUnmounted 官方回调无参——提取时清空形参）；
+ *  onLoad 例外：页面钩子参数（options.query）必须透传（`onLoad((o) => …)` 的 o 进产物签名）。 */
+const VUE_NO_PAYLOAD_CALLS = new Set(['onMounted', 'onUnmounted'])
+/** ★top-level 调用排除名单（这些调用有专门通道，不得当"顶层副作用"注入 onLoad） */
+export const LIFECYCLE_CALL_NAMES: ReadonlySet<string> = new Set([
+  ...PAGE_HOOK_CALLBACK_NAMES,
+  ...VUE_LIFECYCLE_CALLS.keys(),
+  // 未映射 Vue 生命周期（onBeforeMount 等）：同样不得裸注入（既有正则已列——这里保持双保险）
+  'onBeforeMount', 'onBeforeUpdate', 'onUpdated', 'onBeforeUnmount', 'onActivated', 'onDeactivated',
+  'onErrorCaptured', 'onRenderTracked', 'onRenderTriggered', 'onServerPrefetch',
+])
+
+/** 单个提取到的钩子：回调体 + 回调参数名单（页面钩子参数透传：onLoad 的 options / onResize 的 e…） */
+interface ExtractedLifecycleHook {
+  /** 回调形参名（已剥类型；Vue 名恒为空——官方回调不接页面载荷） */
+  params: string[]
+  /** 回调体（未改写；生成端过 rw()） */
+  body: string
+}
+
+interface ExtractedLifecycles {
+  /** Page 钩子名 → 提取结果（onLoad/onReady/onUnload + 页面原生钩子 onShow/onHide/onResize/…） */
+  hooks: Record<string, ExtractedLifecycleHook>
+  /** 哪些钩子的回调是 async（产物方法须带 async 标记——Bug C：否则体内 await 是语法错误） */
+  asyncKeys: Set<string>
+}
+
+/**
+ * ★★★2026-10-04（★★★生命周期体系 · 回调式统一提取）——生命周期提取器。
+ *
+ * 【用户指令（本轮的由来）】「生命周期函数需要在页面写同名函数，比如 onShow，这个体验太差了，
+ *   应该从我们框架导入使用才对，我们框架需要一套完整的体系开放给开发者使用」。
+ *
+ * 【旧形态的缺陷（本轮实测两类）】
+ *   ① 只有 `onMounted/onUnmounted/onLoad` 三个名字支持回调式；`onShow(cb)` 等**回调体被静默丢弃**，
+ *      还给出错误原因的警告（"小程序无对等钩子"——其实可有！）；`onResize(cb)` 更被裸注入 onLoad ⇒
+ *      ReferenceError（页面启动即崩，见 extractTopLevelCalls 的排除修）；
+ *   ② 生成端"安全清单"与提取端**无去重**：`onMounted(cb)` 生成的 onReady 与自动补的 onReady
+ *      重复键 ⇒ 后者覆盖前者 ⇒ **用户回调静默失效**（本轮 probe 实证）。
+ *
+ * 【新语义（本函数是入口）】支持的调用名 = 页面原生钩子名（PAGE_HOOK_CALLBACK_NAMES，同名提取）
+ *   ∪ Vue 组合式名（VUE_LIFECYCLE_CALLS：onMounted→onReady / onUnmounted→onUnload / onLoad→onLoad）。
+ *   返回**任意页面钩子体**（hooks 表）；生成端统一生成同名 Page 钩子 + 追加总线派发 + declaredEvents
+ *   去重（三处一致，杜绝重复键）。
+ * 【组件模式（isComponent）】微信组件生命周期只有 created/attached/ready/detached —— 页面级钩子
+ *   （onShow/onHide/onLoad/onResize/…）**无对等**：剥离 + 可见警告（不静默）；onMounted/onUnmounted 保持映射。
+ * 【诚实边界】同一钩子多处声明 → 只取第 1 处 + 可见警告（MP 页面同名钩子仅一个，不静默合并）。
+ */
+function extractLifecycles(
+  source: string,
+  trace?: TransformTrace,
+  disabled?: Set<string>,
+  warnings: string[] = [],
+  isComponent = false,
+): ExtractedLifecycles {
+  const hooks: Record<string, ExtractedLifecycleHook> = {}
+  const asyncKeys = new Set<string>()
+  if (disabled?.has('script/lifecycle-map')) return { hooks, asyncKeys }
+  /** 组件模式放行集：只有 Vue 映射到组件生命周期的两个键有对等 */
+  const isAllowed = (target: string): boolean => !isComponent || target === 'onReady' || target === 'onUnload'
+  /** 调用名 → 目标 Page 钩子名（Vue 名走映射表；页面原生名同名） */
+  const targetOf = (name: string): string | undefined =>
+    VUE_LIFECYCLE_CALLS.get(name) ?? (PAGE_HOOK_CALLBACK_NAMES.has(name) ? name : undefined)
   const body = topLevelAst(source)
   if (body) {
-    const hooks = [
-      { name: 'onMounted', key: 'onReady' as const },
-      { name: 'onUnmounted', key: 'onUnload' as const },
-      { name: 'onLoad', key: 'onLoad' as const },
-    ]
-    const mapped = new Set(['onMounted', 'onUnmounted', 'onLoad'])
-    // 递归全树：未映射 onXxx（回调形态）警告 + 顶层回调体提取
-    const seen = new Map<string, { args: unknown[]; line: number }[]>()
-    const walk = (node: { type: string; callee?: { name?: string }; arguments?: unknown[]; body?: unknown[]; expression?: unknown }): void => {
+    // ★★★2026-10-04（第二代：**顶层候选 vs 嵌套注册**）——
+    //   【为什么必须区分（本轮 superapp 实测的真缺陷）】嵌套在其它回调体内的注册
+    //   （`onMounted(() => { …; onUnmounted(() => clearInterval(t)) })`——Vue 合法写法）若按顶层提取，
+    //   回调体在产物里变成**顶层 Page 钩子方法**：① 外层体里残留 `onUnmounted(...)` 裸调用（MP 无此变量
+    //   ⇒ ReferenceError）；② 提取到 onUnload 的体引用外层局部 `t`（词法作用域已断 ⇒ ReferenceError）。
+    //   ⇒ 语义：**只有 setup 顶层表达式语句可提取**；嵌套注册 = 不提取 + 从所在体移除 + 可见警告（诚实边界：
+    //   编译产物是顶层 Page 钩子，闭包变量不可见；需要闭包状态请提为顶层 let/ref 并在顶层注册）。
+    const isCallbackShape = (cb: unknown): boolean => {
+      const t = (cb as { type?: string } | undefined)?.type
+      return t === 'ArrowFunctionExpression' || t === 'FunctionExpression'
+    }
+    type NestedReg = { name: string; start: number; end: number; line: number }
+    const nestedRegs: NestedReg[] = []
+    const walk = (node: Record<string, unknown>): void => {
       if (!node || typeof node.type !== 'string') return
       if (node.type === 'CallExpression') {
-        const name = node.callee && 'name' in node.callee ? node.callee.name : ''
-        if (typeof name === 'string' && /^on[A-Z]/.test(name)) {
-          const args = (node.arguments ?? []) as Array<{ type?: string }>
-          const cb = args[0]
-          if (cb && (cb.type === 'ArrowFunctionExpression' || cb.type === 'FunctionExpression')) {
-            const arr = seen.get(name) ?? []
-            arr.push({ args, line: (node as { loc?: { start?: { line?: number } } }).loc?.start?.line ?? 0 })
-            seen.set(name, arr)
-          }
+        const callee = node.callee as { type?: string; name?: string } | undefined
+        const name = callee && callee.type === 'Identifier' ? callee.name : ''
+        const args = (node.arguments ?? []) as unknown[]
+        if (typeof name === 'string' && /^on[A-Z]/.test(name) && isCallbackShape(args[0])) {
+          nestedRegs.push({
+            name,
+            start: (node as { start?: number }).start ?? -1,
+            end: (node as { end?: number }).end ?? -1,
+            line: ((node as { loc?: { start?: { line?: number } } }).loc?.start?.line) ?? 0,
+          })
         }
       }
       for (const k of Object.keys(node)) {
-        const v = (node as Record<string, unknown>)[k]
+        const v = node[k]
         if (Array.isArray(v)) for (const c of v) walk(c as never)
         else if (v && typeof v === 'object') walk(v as never)
       }
     }
-    for (const st of body) walk(st)
-    for (const name of seen.keys()) {
-      if (!mapped.has(name)) {
+    // 顶层候选（setup 直接子级、独立表达式语句——可安全提取）
+    const seen = new Map<string, { args: unknown[]; line: number }[]>()
+    for (const st of body as Array<Record<string, unknown>>) {
+      const expr = st.type === 'ExpressionStatement' ? (st.expression as Record<string, unknown> | undefined) : undefined
+      const call = expr && expr.type === 'CallExpression' ? expr : undefined
+      const callee = call ? (call.callee as { type?: string; name?: string } | undefined) : undefined
+      const name = callee && callee.type === 'Identifier' ? callee.name : ''
+      const args = call ? ((call.arguments ?? []) as unknown[]) : []
+      if (call && typeof name === 'string' && /^on[A-Z]/.test(name) && isCallbackShape(args[0])) {
+        const arr = seen.get(name) ?? []
+        arr.push({ args, line: ((st as { loc?: { start?: { line?: number } } }).loc?.start?.line) ?? 0 })
+        seen.set(name, arr)
+        // 回调体内部的更深注册 → 嵌套（walk 从回调体出发）
+        walk(args[0] as never)
+        continue
+      }
+      // 非候选语句：全树 walk（其中的生命周期调用都算嵌套）
+      walk(st as never)
+    }
+    // 嵌套注册：可见警告（每名字一次——防重复刷屏）+ 待从所在体移除
+    const nestedNames = [...new Set(nestedRegs.map((r) => r.name))]
+    for (const nm of nestedNames) {
+      const isMapped = Boolean(targetOf(nm))
+      warnings.push(
+        isMapped
+          ? `${nm}() 嵌套在其它回调体内注册——**不被编译产物支持**（产物是顶层 Page 钩子：闭包变量不可见，且外层体会残留裸调用）——已从产物移除。请把注册移到 setup 顶层；需要闭包状态请提为顶层 let/ref（如 let timer = null）`
+          : `未映射的生命周期钩子 ${nm}() 已剥离（小程序无对等钩子；Web 端保留原生语义）——如组件内需要降级说明请注释标注`,
+      )
+    }
+    /** 从提取体里移除嵌套注册（按绝对范围，从后往前；替换为注释——留痕可追溯） */
+    const stripNested = (bodyStart: number, bodyEnd: number, bodyText: string): string => {
+      const inside = nestedRegs
+        .filter((r) => r.start > bodyStart && r.end > r.start && r.end <= bodyEnd)
+        .sort((a, b) => b.start - a.start)
+      let out = bodyText
+      for (const r of inside) {
+        const rel0 = r.start - bodyStart - 1 // bodyStart 是 '{' 的绝对位；bodyText 从其后一位起
+        const rel1 = r.end - bodyStart - 1
+        if (rel0 >= 0 && rel1 <= out.length) {
+          out = out.slice(0, rel0) + `/* proteus: 嵌套生命周期注册 ${r.name}() 已移除（见构建警告） */` + out.slice(rel1)
+        }
+      }
+      return out
+    }
+    for (const [name, hits] of seen) {
+      const target = targetOf(name)
+      if (!target) {
         warnings.push(`未映射的生命周期钩子 ${name}() 已剥离（小程序无对等钩子；Web 端保留原生语义）——如组件内需要降级说明请注释标注`)
+        continue
       }
-    }
-    for (const h of hooks) {
-      const hits = seen.get(h.name)
-      if (!hits?.length) continue
+      if (!isAllowed(target)) {
+        warnings.push(`组件内 ${name}() 无对等钩子（页面级生命周期；微信组件只有 created/attached/ready/detached）——已剥离；组件请用 onMounted/onUnmounted`)
+        continue
+      }
       const first = hits[0]
-      const cb = (first.args[0] as { body?: { start?: number } }).body
-      if (!cb || typeof cb.start !== 'number') continue
-      // ★Bug C：回调自身是否 async（AST 上的 async 字段）——产物须保留该标记
-      if ((first.args[0] as { async?: boolean }).async === true) asyncKeys.add(h.key)
-      const inner = extractBracedBody(source, cb.start)
-      if (inner !== null) {
-        out[h.key] = inner
-        trace?.add('script/lifecycle-map', { line: first.line, before: `${h.name}()`, after: h.key })
+      if (hits.length > 1) {
+        warnings.push(`${name}() 声明了 ${hits.length} 次——只取第 1 处（微信同名钩子仅一个；多处请自行合并）`)
       }
+      const cbNode = first.args[0] as { body?: { type?: string; start?: number; end?: number }; async?: boolean }
+      const bn = cbNode.body
+      if (!bn || typeof bn.start !== 'number' || typeof bn.end !== 'number') continue
+      let inner: string
+      if (bn.type === 'BlockStatement') {
+        const extracted = extractBracedBody(source, bn.start)
+        if (extracted === null) continue
+        // ★嵌套注册从本体内移除（否则裸调用残留 / 闭包变量断裂——见上方长注释）
+        inner = stripNested(bn.start, bn.end, extracted)
+      } else if (bn.type === 'ObjectExpression') {
+        // 箭头隐式返回对象（onShareAppMessage(() => ({ … })) 常见）——不能当语句体；改写指引（不静默）
+        warnings.push(`${name}() 回调为对象表达式体（隐式返回）——MP 端暂不支持该形态，请改写为块体 + return（如 onShareAppMessage(function () { return { … } })`)
+        continue
+      } else {
+        // 其它表达式体：作为单条表达式语句（`onShow(() => refresh())` → `onShow() { this.refresh() }`）
+        inner = source.slice(bn.start, bn.end)
+      }
+      if (cbNode.async === true) asyncKeys.add(target)
+      // ★2026-10-04：页面钩子**参数透传**——onLoad((options) => …)/onResize((e) => …) 的参数名进产物签名；
+      //   Vue 名（onMounted/onUnmounted）官方回调不接页面载荷 ⇒ 恒空（生成 onReady() 无参，同现状）。
+      const rawParams = (first.args[0] as { params?: unknown[] }).params ?? []
+      const paramText = VUE_NO_PAYLOAD_CALLS.has(name)
+        ? []
+        : rawParams.map((p) => astParamText(source, p)).filter((p) => p !== '')
+      hooks[target] = { params: paramText, body: inner }
+      trace?.add('script/lifecycle-map', { line: first.line, before: `${name}()`, after: target })
     }
-    return { ...out, asyncKeys }
+    return { hooks, asyncKeys }
   }
-  // —— 文本回退路径 ——
-  const hooks = [
-    { re: /onMounted\s*\(/g, key: 'onReady' as const },
-    { re: /onUnmounted\s*\(/g, key: 'onUnload' as const },
-    { re: /onLoad\s*\(/g, key: 'onLoad' as const },
-  ]
-  // ★B6 反黑盒：未映射的 onXxx 钩子显式警告（不再静默剥离）——如 onErrorCaptured（Web 能力，MP 无 Vue 运行时）
-  // 仅匹配「回调形态」调用 onXxx(() => / onXxx(function，排除方法定义（function onXxx(...)）与普通调用
-  const mapped = new Set(['onMounted', 'onUnmounted', 'onLoad'])
+  // —— 文本回退路径（AST 失败时；文档化边界：对象字面量体/多行嵌套的保守面同上） ——
   for (const hm of source.matchAll(/\bon([A-Z][A-Za-z0-9_]*)\s*\(\s*(?:(?:\([^)]*\)\s*=>)|function)/g)) {
     const full = `on${hm[1]}`
-    if (!mapped.has(full)) {
+    if (!targetOf(full)) {
       warnings.push(`未映射的生命周期钩子 ${full}() 已剥离（小程序无对等钩子；Web 端保留原生语义）——如组件内需要降级说明请注释标注`)
     }
   }
-  for (const h of hooks) {
-    h.re.lastIndex = 0
-    const m = h.re.exec(source)
+  for (const name of LIFECYCLE_CALL_NAMES) {
+    const target = targetOf(name)
+    if (!target || !isAllowed(target)) continue
+    const re = new RegExp(`\\b${name}\\s*\\(`, 'g')
+    const m = re.exec(source)
     if (!m) continue
+    // 仅回调形态：调用括号后是 `(…)` / `function` / `async`（排除 `function onShow()` 声明与普通调用）
+    const after = source.slice(m.index + m[0].length)
+    if (!/^(?:\s*async\b)?\s*(?:\(|function)/.test(after)) continue
     const braceIdx = source.indexOf('{', m.index)
-    const body = extractBracedBody(source, braceIdx)
-    trace?.add('script/lifecycle-map', { line: lineAt(source, m.index), before: m[0].replace(/\s*\(/, '()'), after: h.key })
-    // ★Bug C（文本回退路径同样要带 async 标记）：`onMounted(async () => {…})` / `onMounted(async function () {…})`
-    if (/\basync\s*(?:\(|function|[A-Za-z_$])/.test(source.slice(m.index, braceIdx < 0 ? m.index + 80 : braceIdx))) {
-      asyncKeys.add(h.key)
+    if (braceIdx < 0) continue
+    const extracted = extractBracedBody(source, braceIdx)
+    if (extracted === null) continue
+    if (/\basync\s*(?:\(|function|[A-Za-z_$])/.test(source.slice(m.index, braceIdx))) asyncKeys.add(target)
+    // 参数（保守面：只抓单标识符形参——文本路径无 AST；Vue 名恒空）
+    const paramText: string[] = []
+    if (!VUE_NO_PAYLOAD_CALLS.has(name)) {
+      const pm = /^(?:\s*async\b)?\s*\(\s*([A-Za-z_$][\w$]*)\s*(?::\s*[^),]*)?[),]/.exec(after)
+      if (pm) paramText.push(pm[1])
     }
-    if (body !== null) out[h.key] = body
+    hooks[target] = { params: paramText, body: extracted }
+    trace?.add('script/lifecycle-map', { line: lineAt(source, m.index), before: `${name}()`, after: target })
   }
-  return { ...out, asyncKeys }
+  return { hooks, asyncKeys }
 }
 
 function indentBody(body: string): string {
@@ -2832,6 +3268,13 @@ export function transformScriptToPage(
       // ★★2026-09-08 Vue 全能力基准线：vue 命名导入逐个查对齐状态（开发者写标准 SFC——每个能力必须三类之一结果）
       if (imp.kind === 'named') {
         for (const apiName of imp.names) {
+          // ★★★2026-10-04（生命周期体系 DX）：页面钩子名（onLoad/onShow/onHide/onResize/…）**不是 Vue API**
+          //   ——旧行为是 fail-closed 报错（"未在基准线对齐"），让"以为 Vue 里也有 onShow"的开发者一头雾水。
+          //   现给**准确指引**：按框架页面生命周期处理（编译期提取，等价回调式），并建议改从 '@proteus-vue/runtime' 导入。
+          if (PAGE_HOOK_CALLBACK_NAMES.has(apiName)) {
+            warnings.push(`页面生命周期钩子 ${apiName}() 不是 Vue API——已按框架页面生命周期处理（编译期提取回调生成 Page 钩子）；建议改从 '@proteus-vue/runtime' 导入（见生命周期体系文档）`)
+            continue
+          }
           const entry = vueCompatStatus(apiName)
           const level = vueCompatLevel(entry)
           if (level === 'error') {
@@ -3020,7 +3463,37 @@ export function transformScriptToPage(
   const methods = extractMethods(source, warnings, trace, disabled)
   // defineExpose（v0.3 尾）：no-op 校验（组件模式）
   if (extra.isComponent) checkDefineExpose(source, data, warnings, trace)
-  const lifecycles = extractLifecycles(source, trace, disabled, warnings)
+  const lifecycles = extractLifecycles(source, trace, disabled, warnings, extra.isComponent === true)
+  /** ★2026-10-04：提取到的回调式钩子（Page 钩子名 → {params, body}；onLoad/onReady/onUnload 有专门生成段，见下） */
+  const lifecycleHooks = lifecycles.hooks
+  /** Page 钩子名 → 总线事件名（生成派发/提取生成共用一张表） */
+  const LIFECYCLE_EXTRACT_EVENTS: Record<string, string> = {
+    onLoad: 'load', onShow: 'show', onHide: 'hide', onReady: 'ready', onUnload: 'unload',
+    onRouteDone: 'route-done', onResize: 'resize', onTabItemTap: 'tab-item-tap',
+    onReachBottom: 'reach-bottom', onPageScroll: 'page-scroll', onPullDownRefresh: 'pull-down-refresh',
+    onShareAppMessage: 'share-app-message', onShareTimeline: 'share-timeline',
+    onAddToFavorites: 'add-to-favorites', onSaveExitState: 'save-exit-state',
+  }
+  /** 决策型（wx 约定 return 值）——生成体透传用户回调返回值 */
+  const LIFECYCLE_DECISION_HOOKS = new Set(['onShareAppMessage', 'onShareTimeline', 'onAddToFavorites', 'onSaveExitState'])
+  /**
+   * ★2026-10-04（生命周期体系）：**统一派发尾巴**——提取式与声明式钩子用同一条规则生成总线派发
+   *   （否则运行时 usePageLifecycle 订阅者在提取式钩子上收不到事件；且两套实现必然漂移）。
+   * 载荷语义：resize→{size}；page-scroll→原事件载荷；其余无载荷。总线禁用/组件/壳 → 空串。
+   */
+  const lifecycleEmitTail = (hook: string, argName?: string): string => {
+    if (extra.isComponent || appShell || disabled.has('page/lifecycle-bus')) return ''
+    const evt = LIFECYCLE_EXTRACT_EVENTS[hook]
+    if (!evt) return ''
+    const arg = argName || 'arguments[0]'
+    const emit =
+      evt === 'resize'
+        ? `this.proteusPageEmit("resize", { size: (${arg} && ${arg}.size) || {} })`
+        : evt === 'page-scroll'
+          ? `this.proteusPageEmit("page-scroll", ${arg})`
+          : `this.proteusPageEmit("${evt}")`
+    return `try { ${emit} } catch (__x) {}`
+  }
   const vModelBindings = extra.vModelBindings ?? []
   // ★#499：改写集合含 computeds——派生字段 ready/onLoad 已进 data，方法体读取 x.value → this.data.x（p-modal
   //   observers/onReady 内 variants.value 此前裸引用 ReferenceError；表达式体 computed 写入路径由 setter 循环先行接管）
@@ -3555,9 +4028,10 @@ export function transformScriptToPage(
   const readyAsync = lifecycles.asyncKeys.has('onReady') ? 'async ' : ''
   if (appShell) {
     // 外壳：就绪钩子整段跳过（init 行进 appShell.initLines）
-  } else if (lifecycles.onReady) {
-    const readyBody = [semanticGridReady, probeReady, compDerivedReady, lifecycles.onReady].filter(Boolean).join('\n')
-    lines.push(`  ${readyAsync}${readyHookName}() {\n${indentBody(rw(readyBody))}\n  },`)
+  } else if (lifecycleHooks.onReady) {
+    // ★2026-10-04：体末追加总线派发（与声明式一条规则；否则运行时订阅者收不到 ready）
+    const readyBody = [semanticGridReady, probeReady, compDerivedReady, rw(lifecycleHooks.onReady.body), lifecycleEmitTail('onReady')].filter(Boolean).join('\n')
+    lines.push(`  ${readyAsync}${readyHookName}() {\n${indentBody(readyBody)}\n  },`)
   } else if (semanticGridReady || probeReady || compDerivedReady) {
     lines.push(`  ${readyHookName}() {\n${indentBody([semanticGridReady, probeReady, compDerivedReady].filter(Boolean).join('\n'))}\n  },`)
   } else if (extra.debug) {
@@ -3584,10 +4058,11 @@ export function transformScriptToPage(
   const unsubLine = hasInjects ? 'this.proteusUnsubscribeProvide()' : ''
   if (appShell) {
     // ★GP3-b1：App 壳**不产卸载钩子**（onUnload/detached 是页面/组件机制）
-  } else if (lifecycles.onUnload) {
+  } else if (lifecycleHooks.onUnload) {
     // ★Batch 4/6：页面级 inject 订阅取消 + 命名空间清理 + store dispose（前置；onUnload 显式存在时注入）
     // ★B7：组件模式 onUnmounted → detached（微信组件无 onUnload；MP 组件销毁钩子为 detached）
-    const unloadBody = rw(lifecycles.onUnload)
+    // ★2026-10-04：体末追加总线派发（同 ready——提取式钩子与声明式一条规则）
+    const unloadBody = [rw(lifecycleHooks.onUnload.body), lifecycleEmitTail('onUnload')].filter(Boolean).join('\n')
     const isComp = extra.isComponent
     const pre = isComp ? [unsubLine, reactiveDisposeLine].filter(Boolean).join('\n') : [unsubLine, appConfigUnsubLine, semGridOffLine, storeDisposeLine, reactiveDisposeLine, pageCleanupLine].filter(Boolean).join('\n')
     const hook = isComp ? 'detached' : 'onUnload'
@@ -3687,15 +4162,18 @@ ${indentBody([unsubLine, appConfigUnsubLine, semGridOffLine, storeDisposeLine, r
     // ★Batch 4：组件级 inject 订阅取消（attached 订阅 → detached 移除，防全局注册表回调泄漏）
     // ★B7：onUnmounted 已映射 detached 时不再重复生成（避免 Component 重复键覆盖）
     // ★2026-09-08 reactivity-runtime spke：组件 reactive 桥解绑同走 detached
-    if ((hasInjects || hasReactiveBridge) && !lifecycles.onUnload) {
+    if ((hasInjects || hasReactiveBridge) && !lifecycleHooks.onUnload) {
       lines.push(`  detached() {\n${indentBody([unsubLine, reactiveDisposeLine].filter(Boolean).join('\n'))}\n  },`)
     }
   } else if (appShell) {
     // ★GP3-b1：App 壳——**不产 onLoad**（外壳的初始化由注入页面承载：initLines 交 appShell 结构化件）
-  } else if (lifecycles.onLoad) {
+  } else if (lifecycleHooks.onLoad) {
     // 显式 onLoad（页面）：顶层副作用调用 + computed 初始化 + immediate watch + provide/inject 注入在方法体前（★#494 initLineSeq）
     const initLines = [probeResetLine, ...initLineSeq()].filter(Boolean)
-    const body = rw(lifecycles.onLoad)
+    // ★2026-10-04：回调形参名透传——onLoad((o) => …) 的 o 必须在产物签名可用；框架参数解析固定写 options
+    const loadParam = lifecycleHooks.onLoad.params[0] || 'options'
+    const aliasLine = loadParam !== 'options' ? 'var ' + loadParam + ' = options' : ''
+    const body = [aliasLine, rw(lifecycleHooks.onLoad.body)].filter(Boolean).join('\n')
     const loadAsync = lifecycles.asyncKeys.has('onLoad') ? 'async ' : ''
     lines.push(`  ${loadAsync}onLoad(options) {\n${indentBody(initLines.length ? `${initLines.join('\n')}\n${body}` : body)}\n  },`)
   } else {
@@ -3812,11 +4290,40 @@ ${indentBody([unsubLine, appConfigUnsubLine, semGridOffLine, storeDisposeLine, r
       .replace(/([a-z0-9])([A-Z])/g, '$1-$2')
       .toLowerCase()
   /** 用户已声明的事件名集合（从 methods 的键推导） */
-  const declaredEvents = new Set<string>(
-    Object.keys(methods)
-      .filter((m) => /^on[A-Z]/.test(m))
-      .map(hookToEvent),
-  )
+  const declaredEvents = new Set<string>([
+    ...Object.keys(methods).filter((m) => /^on[A-Z]/.test(m)),
+    // ★★★2026-10-04（生命周期体系）：**回调式提取的钩子也算"已声明"**——否则安全清单会再补一个
+    //   同名钩子（JS 重复键 ⇒ 后者覆盖前者 ⇒ 用户回调静默失效；本轮 probe 实测 onMounted+总线的双 onReady）。
+    ...Object.keys(lifecycleHooks),
+  ].map(hookToEvent))
+  /**
+   * ★★★2026-10-04（生命周期体系 · 统一生成）——**回调式提取的页面钩子生成**。
+   *
+   * 处理专门段（onLoad/onReady/onUnload）之外的提取钩子：onShow/onHide/onRouteDone/onResize/
+   * onTabItemTap/onReachBottom/onPageScroll/onPullDownRefresh/share 决策四钩。安全清单（未声明的）
+   * 仍由下方总线段生成——declaredEvents 已并入 lifecycleHooks ⇒ **绝不重复键**（本轮双 onReady 缺陷的根治）。
+   * ★诚实边界：决策型照常生成（用户已显式声明 ⇒ '声明才显示对应入口'语义保持，非自动补）。
+   */
+  if (!extra.isComponent && !appShell) {
+    for (const hook of Object.keys(lifecycleHooks)) {
+      if (hook === 'onLoad' || hook === 'onReady' || hook === 'onUnload') continue // 专门生成段
+      if (!LIFECYCLE_EXTRACT_EVENTS[hook]) continue // 未知钩子名（理论不可达——提取器只放行两类名单）
+      if (Object.prototype.hasOwnProperty.call(methods, hook)) {
+        warnings.push(`${hook}() 同时以回调式与顶层函数声明——**顶层函数优先**（回调式未生成）；请保留其一`)
+        continue
+      }
+      const hk = lifecycleHooks[hook]
+      const sig = hk.params.join(', ')
+      const bodyOut = rw(hk.body)
+      const argName = hk.params[0] || 'arguments[0]'
+      const glPull = injectLayer && hook === 'onShow' ? 'try { this.__proteusGlPull() } catch (__x) {}' : ''
+      const tail = [bodyOut ? bodyOut : '', lifecycleEmitTail(hook, argName), glPull].filter(Boolean).join('\n')
+      const asyncKw = lifecycles.asyncKeys.has(hook) ? 'async ' : ''
+      methodNames.add(hook)
+      pushMethod(`  ${asyncKw}${hook}(${sig}) {\n${indentBody(tail)}\n  },`)
+      trace?.add('script/lifecycle-callback', { before: `${hook}(…)`, after: `Page ${hook} 钩子（回调体提取 + 派发）` })
+    }
+  }
   if (!extra.isComponent && !appShell && !disabled.has('page/lifecycle-bus')) {
     // 派发辅助（Page 方法——不污染全局；运行时若未加载则静默掠过，产物可独立运行）
     methodNames.add('proteusPageEmit')
@@ -4095,7 +4602,7 @@ ${indentBody([unsubLine, appConfigUnsubLine, semGridOffLine, storeDisposeLine, r
       kind: c.blockBody ? ('block' as const) : c.setter ? ('writable' as const) : ('expression' as const),
     })),
     runtimeInits: [...runtimeInitNames].map((name) => ({ name })),
-    lifecycles: (['onLoad', 'onReady', 'onUnload'] as const).filter((k) => lifecycles[k]),
+    lifecycles: (['onLoad', 'onReady', 'onUnload'] as const).filter((k) => lifecycles.hooks[k]),
     // watch 声明（props 源 → observers；getter 源带 expr；数组源 deps>1；单 ref 源 deps=1）——规则禁用态如实
     watchers: Object.values(watches).map((w) => ({
       deps: (w.deps ?? []).slice(),

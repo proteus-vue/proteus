@@ -109,6 +109,49 @@ describe('canvas 探测 v2 暴露的编译器缺口（回归锁）', () => {
     const r = compile('function go() { [1].forEach((x: number) => { void x }) }')
     expect(r.js).not.toMatch(/\(x: number\)/)
   })
+
+  // ★★★2026-10-04（框架缺陷修复）：**嵌套函数/箭头参数含 ()/{}/泛型**的剥除回归锁。
+  // 【缺陷】旧实现是三组正则，参数与返回类型都不许含 `()`/`{}`（`[^(){}]*`）⇒ 下列合法形态
+  //   全部漏剥、类型碎片残留进产物 ⇒ **js 产物语法检查直接失败**（esbuild 报
+  //   "Malformed arrow function parameter list" / "Unexpected token ':'"）。
+  //   本仓 GP5 验收时被迫"逐场景显式方法"绕开的正是它——现由 stripFunctionSigTypes 统一修复。
+  // 【实测账】修复前五组探针（A–E）全部残留；修复后全剥且默认值保留。
+  it('④★ 嵌套函数·参数含函数类型（联合）——Malformed 缺陷回归锁', () => {
+    const r = compile('function outer(): void {\n  function inner(cb: (() => void) | undefined): void { cb && cb() }\n  inner(undefined)\n}')
+    expect(r.js).not.toMatch(/\(\s*\(\)\s*=>\s*void\)/)
+    expect(r.js).not.toMatch(/\)\s*:\s*void\s*\{/)
+    expect(r.js).toMatch(/function inner\(cb\)/)
+  })
+
+  it('④★ 嵌套函数·参数含对象类型', () => {
+    const r = compile('function outer(): void {\n  function inner(o: { a: number }): void { void o.a }\n  inner({ a: 1 })\n}')
+    expect(r.js).not.toMatch(/\(o:\s*\{/)
+    expect(r.js).toMatch(/function inner\(o\)/)
+  })
+
+  it('④★ 块内 const 箭头·参数含函数类型', () => {
+    const r = compile('function outer(): void {\n  const inner = (cb: (() => void) | undefined): void => { cb && cb() }\n  inner(undefined)\n}')
+    expect(r.js).not.toMatch(/\(cb:\s*\(\(\) => void\)/)
+    expect(r.js).toMatch(/\(cb\) =>/)
+  })
+
+  it('④★ 块内回调（function 表达式）·参数含函数类型', () => {
+    const r = compile('function outer(): void {\n  [1].forEach(function (cb: (() => void) | undefined): void { void cb })\n}')
+    expect(r.js).not.toMatch(/function \(cb:/)
+    expect(r.js).toMatch(/function \(cb\)/)
+  })
+
+  it('④★ 默认值保留（参数类型剥除不得吞默认值）', () => {
+    const r1 = compile('function outer(): void {\n  function inner(a: number = 5): void { void a }\n  inner()\n}')
+    expect(r1.js).toMatch(/function inner\(a = 5\)/)
+    const r2 = compile('function outer(): void {\n  const inner = (a: number = 5): void => { void a }\n  inner()\n}')
+    expect(r2.js).toMatch(/\(a = 5\) =>/)
+  })
+
+  it('④★ 可选参数 ? 剥除且不影响相邻参数', () => {
+    const r = compile('function outer(): void {\n  function inner(a?: number, b: string = "x"): void { void a; void b }\n  inner()\n}')
+    expect(r.js).toMatch(/function inner\(a, b = "x"\)/)
+  })
 })
 
 describe('canvas 调研探针暴露的缺口（回归锁）', () => {

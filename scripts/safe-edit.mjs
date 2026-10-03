@@ -40,6 +40,10 @@ import fs from 'node:fs'
 import path from 'node:path'
 import { execFileSync } from 'node:child_process'
 import os from 'node:os'
+import { createRequire } from 'node:module'
+
+// ★2026-10-04：.ts/.vue 的真实语法校验（TypeScript 解析器）用——从本工具文件位置解析仓库依赖
+const requireFromRepo = createRequire(import.meta.url)
 
 const argv = process.argv.slice(2)
 const file = argv.find((a) => !a.startsWith('--'))
@@ -162,48 +166,108 @@ if (shrink > maxShrink) {
 }
 
 // 3.3 括号平衡（代码类文件）
+let braceMismatch = ''
 if (['.vue', '.ts', '.js', '.mjs'].includes(ext)) {
-  const count = (s, ch) => (s.match(new RegExp(`\\${ch}`, 'g')) ?? []).length
-  // ★粗粒度：字符串/注释里的括号会干扰 ⇒ 只做"**减少**即失败"的单向判断（编辑不应大量删括号）
+  // ★2026-10-04：计数**排除字符串/注释**（本仓"扫描面必须排除注释"同款纪律）——
+  //   旧朴素计数把字符串字面量里的括号也算进去（实测：新代码含若干 '{' '}' 字面量 ⇒ 误报"平衡突变"，
+  //   挡住了完全有效的编辑）。排除后只剩真实代码括号。
+  const count = (s, ch) => {
+    let n = 0
+    let i = 0
+    while (i < s.length) {
+      const c = s[i]
+      if (c === "'" || c === '"' || c === '`') {
+        const q = c
+        i++
+        while (i < s.length) {
+          if (s[i] === '\\') { i += 2; continue }
+          if (s[i] === q) { i++; break }
+          i++
+        }
+        continue
+      }
+      if (c === '/' && s[i + 1] === '/') { const j = s.indexOf('\n', i); i = j < 0 ? s.length : j; continue }
+      if (c === '/' && s[i + 1] === '*') { const j = s.indexOf('*/', i); i = j < 0 ? s.length : j + 2; continue }
+      if (c === ch) n++
+      i++
+    }
+    return n
+  }
   for (const [open, close] of [['{', '}'], ['(', ')'], ['[', ']']]) {
     const d = count(next, open) - count(next, close)
     if (Math.abs(d) > 2) {
       warns.push(`括号计数偏差较大：${open}${close} 净差 ${d}（编辑前后应大致守恒；请核对 diff）`)
     }
   }
-  // 净差在编辑前后**突变**（+>3）= 强信号
+  // 净差在编辑前后**突变**（+>3）= 强信号。★2026-10-04：**暂存**结论而非直接失败——
+  //   本启发式对"模板字面量插值/正则字面量"等复杂形态仍有误报面（实测：改编译器时净差 8→1 但
+  //   TS 解析 0 诊断）；权威解析器通过时降级为警告，无权威解析器时仍按失败处理（见下方 synErr 处）。
   const pairDelta = (s) => count(s, '{') - count(s, '}')
   if (Math.abs(pairDelta(next) - pairDelta(src)) > 3) {
-    failures.push(`花括号平衡突变（编辑前 ${pairDelta(src)} → 编辑后 ${pairDelta(next)}）——正则很可能吃掉了代码块`)
+    braceMismatch = `花括号平衡突变（编辑前 ${pairDelta(src)} → 编辑后 ${pairDelta(next)}）——正则很可能吃掉了代码块`
   }
 }
 
 // 3.4 语法检查（按扩展名）
+let authoritativeChecked = false // ★2026-10-04：权威解析器是否实际运行（.js/.mjs/.json/.py/.sh 恒为真；.ts/.vue 取决于 typescript 可用）
 const syntaxCheck = () => {
   try {
     if (ext === '.json') {
       JSON.parse(next)
+      authoritativeChecked = true
       return null
     }
     if (ext === '.mjs' || ext === '.js') {
       execFileSync('node', ['--check', tmp], { encoding: 'utf-8', stdio: 'pipe' })
+      authoritativeChecked = true
       return null
     }
     if (ext === '.py') {
       execFileSync('python3', ['-m', 'py_compile', tmp], { encoding: 'utf-8', stdio: 'pipe' })
+      authoritativeChecked = true
       return null
     }
     if (ext === '.sh' || ext === '.bash') {
       execFileSync('bash', ['-n', tmp], { encoding: 'utf-8', stdio: 'pipe' })
+      authoritativeChecked = true
       return null
     }
   } catch (e) {
     return String(e.stderr || e.stdout || e.message).slice(0, 600)
   }
-  return null // 无对应检查器（.vue/.ts/.rs 等）——由人工看 diff + 后续构建门禁兜底
+  // ★2026-10-04：.ts/.vue 的真实语法校验——TypeScript 解析器（比粗粒度括号计数强得多；
+  //   本轮改编译器时用它验证"临时产物 0 诊断"才敢确认括号计数是误报）。typescript 缺失时跳过（不误红）。
+  if (ext === '.ts' || ext === '.vue') {
+    try {
+      const ts = requireFromRepo('typescript')
+      let code = next
+      if (ext === '.vue') {
+        const m = /<script[^>]*>([\s\S]*?)<\/script>/.exec(next)
+        code = m ? m[1] : ''
+      }
+      if (code.trim()) {
+        const sf = ts.createSourceFile('edit-check.ts', code, ts.ScriptTarget.Latest, true)
+        authoritativeChecked = true
+        if (sf.parseDiagnostics.length) {
+          const d = sf.parseDiagnostics[0]
+          const lc = sf.getLineAndCharacterOfPosition(d.start)
+          return `TS 解析诊断 ${sf.parseDiagnostics.length} 条（首条 第 ${lc.line + 1} 行：${String(d.messageText).slice(0, 200)}）`
+        }
+      }
+    } catch {
+      // typescript 不可用（非本仓环境）：跳过——由人工 diff + 构建门禁兜底
+    }
+  }
+  return null // 无对应检查器（.rs 等）——由人工看 diff + 后续构建门禁兜底
 }
 const synErr = syntaxCheck()
 if (synErr) failures.push(`语法检查失败：\n${synErr}`)
+// ★2026-10-04：括号启发式暂存结论的最终裁决——权威解析器**通过**时降为警告（启发式有误报面）；
+//   权威解析器未运行/失败时维持失败（启发式是没有解析器时的唯一防线）。
+if (braceMismatch) {
+  if (authoritativeChecked && !synErr) warns.push(`${braceMismatch}（权威语法解析已通过 ⇒ 按警告）`)
+  else failures.push(braceMismatch)
+}
 
 // 3.5 Vue SFC 结构（块齐全）
 if (ext === '.vue') {
@@ -241,7 +305,11 @@ if (ext === '.vue') {
       .replace(/\/\*[\s\S]*?\*\//g, '')
       .replace(/^\s*\/\/[^\n]*$/gm, '')
     for (const name of declaredBefore) {
-      const usedInNext = new RegExp(`\\b${name.replace(/\$/g, '\\$')}\\b`).test(bodyNoComments)
+      // ★2026-10-04：排除**类型/属性位置**（后随 `:` / `?` 的不是变量读取——如类型注解里的参数名
+      //   `(t: string, l: string) => void`、对象键 `{ t: 1 }`）。不加这条会把"同名参数出现在类型注解里"
+      //   误判成"仍在引用" ⇒ 假红挡住合法编辑（本轮实测：删掉 `const t = setInterval…` 后，
+      //   类型声明里的 `t` 参数名让检查失败）。负向先行断言：紧跟 `:`/`?` 的引用不计。
+      const usedInNext = new RegExp(`\\b${name.replace(/\$/g, '\\$')}\\b(?!\\s*[?:])`).test(bodyNoComments)
       if (usedInNext && !declared.has(name)) missing.add(name)
     }
     if (missing.size > 0) {
@@ -270,22 +338,3 @@ if (hasFlag('--apply')) {
   console.log(`\n（预演模式——源文件**未修改**。确认 diff 无误后加 --apply 落盘；临时产物 ${tmp}）`)
 }
 
-// ── ④ 结论 ──────────────────────────────────────────────────────────────────
-console.log('═══ 校验 ═══')
-if (warns.length) for (const w of warns) console.log(`  ⚠ ${w}`)
-if (failures.length) {
-  console.error(`\n❌ 校验未过（${failures.length} 项）——**源文件未修改**（临时产物保留供查看）：`)
-  for (const f of failures) console.error(`  ✗ ${f}`)
-  console.error(`\n  临时产物：${tmp}`)
-  console.error(`  修法：改小编辑范围 / 修正则 / 分步编辑；确认 diff 无误后重跑。`)
-  process.exit(1)
-}
-console.log('  ✅ 校验通过')
-
-if (hasFlag('--apply')) {
-  fs.copyFileSync(tmp, file)
-  fs.unlinkSync(tmp)
-  console.log(`\n✅ 已落盘：${file}`)
-} else {
-  console.log(`\n（预演模式——源文件**未修改**。确认 diff 无误后加 --apply 落盘；临时产物 ${tmp}）`)
-}

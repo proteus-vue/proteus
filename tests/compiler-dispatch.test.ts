@@ -51,14 +51,17 @@ describe('★底线循环 ①：AI 覆盖规则 apply → 新能力即生效', (
     const rule = getTransformRule('template/scope-attr')!
     const original = rule.apply
     try {
-      // ★模拟 AI 改规则：作用域属性从 data-v-xxx 改为 scoped-xxx
+      // ★模拟 AI 改规则：作用域**后缀**从 data-v-xxx 改为 scoped-xxx
+      //   ★2026-10-04（双类名发射适配）：apply 现在返回「后缀」而非 scopeId 本身（见 template.ts scopeSuffix 分支），
+      //   规则产出的后缀直接拼进类名（`.x` → `x-scoped-v-xxx`）；且只有**白名单内类**（页内 <style scoped> 声明过的）才后缀
+      //   ——故模板类与样式类必须同名（.x 对 .x），否则全局共享类原样（S56 语义）。
       rule.apply = (ctx) => {
         const input = ctx.input as { tag: string; scopeId: string }
         ctx.output = input.scopeId.replace(/^data-/, 'scoped-')
       }
-      const src = '<template><div class="x"></div></template><style scoped>.a {}</style>'
+      const src = '<template><div class="x"></div></template><style scoped>.x { color: red }</style>'
       const result = compileVueSfc(src, { filename: 'dispatch-test.vue' })
-      expect(result.wxml).toContain('scoped-v-')
+      expect(result.wxml).toContain('x-scoped-v-') // 双类名：原名 + 后缀名（apply 改后缀名即时生效）
       expect(result.wxml).not.toContain('data-v-')
     } finally {
       rule.apply = original

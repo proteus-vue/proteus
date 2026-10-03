@@ -72,6 +72,28 @@ Page({
 })
 ```
 
+### ★★★2026-10-04（生命周期体系）：页面钩子**从框架导入**（回调注册式，与上方订阅式并存）
+
+```ts
+import { onShow, onHide, onResize, onLoad } from '@proteus-vue/runtime'
+
+onShow(() => { refresh() })            // MP：Page.onShow；Web：onMounted（每次进页重挂载）
+onHide(() => { save() })               // MP：Page.onHide；Web：onUnmounted
+onResize((e) => { w.value = e.size.windowWidth })  // MP：Page.onResize；Web：window resize 同载荷
+onLoad((o) => { id.value = o.id })     // MP：Page.onLoad（形参名透传）；Web：onMounted + 路由参数
+```
+
+- **一份代码两端**：MP 端由编译器**提取回调体**生成同名 Page 钩子（零每页引入，回调调用被编译吸收）；
+  Web 端 runtime 按语义降级（见上表逐条）；无 Web 对等的钩子（onPageScroll/onReachBottom/share 系列…）
+  **调用时显式警告一次**（不静默）。
+- **与"顶层同名函数"（`function onShow() {}`）的关系**：后者仍是合法声明式形态（向后兼容、行为不变）；
+  两种形态**不得同时用**同一个钩子名（有可见警告，顶层函数优先）。
+- **旧的"写着很高体验差"的形态已修**：此前 onShow(cb) 之外的回调式**回调体被静默丢弃**、
+  onResize(cb) 更被裸注入 onLoad（ReferenceError 启动即崩）——现在全部走提取器（见
+  tests/lifecycle-callback.test.ts 13 组回归锁）。
+- **决策型钩子**（onShareAppMessage/onShareTimeline/onAddToFavorites/onSaveExitState）：以回调式声明
+  **即生成**（保持"声明才显示对应菜单入口"的微信语义）；对象表达式体（隐式返回）暂不接（显式警告）。
+
 ### 关键：Skyline 页面级 store 销毁
 ```ts
 // Pinia M7.5 依赖此项

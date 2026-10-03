@@ -7,7 +7,7 @@ generated: true
 
 # Compile rule catalog
 
-> 116 compile rules — every rule ships its own AI explainer (id / when / before → after / why). SSOT = `@proteus-vue/compiler` TRANSFORM_RULES, same source as `npx proteus rules` and the Playground trace.
+> 117 compile rules — every rule ships its own AI explainer (id / when / before → after / why). SSOT = `@proteus-vue/compiler` TRANSFORM_RULES, same source as `npx proteus rules` and the Playground trace.
 
 ## Template transforms (65)
 
@@ -858,7 +858,7 @@ after:  <text style="font-size: calc(15.77px + 1.1268vw)">x</text>（示意—�
 
 > why: Skyline has no clamp length function (per the official support table) — the Web end keeps real CSS clamp while the MP end uses the linear calc alternative (vw is naturally viewport-fluid with zero runtime cost; converged through real-device testing in #496 M3)
 
-## Script transforms (37)
+## Script transforms (38)
 
 ### `script/const-to-data`
 
@@ -1123,6 +1123,22 @@ after:  load() {
 ```
 
 > why: Mini program page logic lives in methods; const arrow functions are extracted as methods the same way
+
+### `script/lifecycle-callback`
+
+**Page lifecycle callback extraction (onShow/onHide/onResize… imported from the framework)**
+
+Top-level onShow(() => …)/onHide(() => …)/onResize((e) => …) callbacks are extracted into same-named Page hooks (params passed through + bus dispatch); nested registrations are not extracted (warning + removal); onMounted/onUnmounted go through script/lifecycle-map
+
+```
+before: onShow(() => { refresh() })
+after:  onShow() {
+  this.refresh()
+  try { this.proteusPageEmit("show") } catch (__x) {}
+},
+```
+
+> why: Users asked for page lifecycles imported from the framework (instead of same-named top-level functions); the old implementation only knew three Vue names and silently dropped other callback bodies
 
 ### `script/lifecycle-map`
 
