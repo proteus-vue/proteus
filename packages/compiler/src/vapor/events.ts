@@ -64,14 +64,36 @@ export interface EventBinding {
   stop?: boolean
   self?: boolean
   once?: boolean
+  /**
+   * ★★★**组件事件绑定**（P1-3 emits，2026-10-03）——父级写在**组件边界**上的自定义事件
+   *   （`<Kid @bump="total = $event" />`）。
+   *
+   * 【为什么必须与手势绑定区分】手势绑定由宿主手势**经内核冒泡链**触发；组件事件由
+   *   **子组件 `$emit`** 触发（"子→父"直接通知，不冒泡、不经 hitTest）。两者同住 `events`
+   *   数组 ⇒ 派发侧必须能区分：手势派发**跳过**它；emit 路由按「边界节点 + 事件名」直接查表。
+   */
+  componentEmit?: boolean
 }
 
-/** 一个动作：改某个源 */
+/**
+ * ★★★**一个动作**（2026-10-03 · emits 批次增补 `emit`）——handler 跑起来时改什么。
+ */
 export type HandlerAction =
   /** `source = program`（program 为纯表达式程序） */
   | { op: 'set'; source: string; program: ExprProgram }
   /** `source += program`（自增/自减/复合赋值统一归到这里；program 求值为数值） */
   | { op: 'add'; source: string; program: ExprProgram }
+  /**
+   * ★★★**`$emit('name', payload?)`**（P1-3 emits）——子组件向父级发一条组件事件。
+   *
+   * 【语义（与 Vue 对齐的收窄形态）】payload 表达式在**子组件作用域**求值（props/data/父级 read），
+   *   结果作为父级 handler 里的 `$event`；父级绑定（`@name="..."`）按**边界节点 + 事件名**查表，
+   *   命中就跑其动作表。**不冒泡**（组件事件是直接通知——Vue 语义）。
+   * 【诚实边界】本版只支持模板里的 `$emit(...)`（script 里的 `defineEmits` 返回值不执行——
+   *   移动端不跑 script，见 entry-vapor 的分工）；payload 最多一个实参（Vue 的多实参形态为
+   *   后续批次，编译期诊断）。
+   */
+  | { op: 'emit'; event: string; program?: ExprProgram }
 
 /** handler 名 → 动作列表（按序执行 ⇒ "先算后写"的顺序语义保留） */
 export interface EventHandlers {
@@ -195,6 +217,38 @@ function compileStatement(code: string, diag: (m: string, h?: string) => void): 
     return [{ op: 'add', source: name, program }]
   }
 
+  // ②.5 ★★★**`$emit('name', payload?)`**（P1-3 emits，2026-10-03）——子组件 → 父级组件事件。
+  //   形态：`$emit('bump')` / `$emit('bump', expr)`（单引号/双引号都认）。
+  //   ★为什么在赋值分支**之前**：`$emit(...)` 含逗号/括号，后面几个赋值正则不会误吃它，
+  //     但顺序上先判更清晰（也防未来正则放宽时被误匹配）。
+  {
+    const em = /^\$emit\(\s*(['"])([\w:-]+)\1\s*(?:,\s*([\s\S]+?))?\s*\)$/.exec(src)
+    if (em) {
+      const event = em[2]!
+      const payloadSrc = (em[3] ?? '').trim()
+      if (!payloadSrc) return [{ op: 'emit', event }]
+      if (payloadSrc.includes(',')) {
+        diag(`$emit 的载荷只支持一个实参：\`${src.slice(0, 48)}\``, '把多个值合成一个对象/数组再传（如 $emit(\'x\', {a, b}) 为后续批次，可用单个表达式先算）')
+        return []
+      }
+      const e = compileExpr(payloadSrc)
+      if (!e.ok) {
+        diag(`$emit 载荷表达式不支持：${e.unsupported}`, '载荷须为纯求值表达式（成员访问/算术/比较/逻辑/三元）')
+        return []
+      }
+      return [{ op: 'emit', event, program: e.program }]
+    }
+    // 变体误用诊断：`emit(...)`（script 局部名）/ 动态事件名
+    const wrong = /^(?:emit|\$emits?)\s*\(/.exec(src)
+    if (wrong) {
+      diag(
+        `handler 里的 \`${src.slice(0, 32)}…\` 不是受支持的 $emit 形态`,
+        '模板里请写 `$emit(\'事件名\')` 或 `$emit(\'事件名\', 表达式)`（静态名 + 最多一个实参）',
+      )
+      return []
+    }
+  }
+
   // ③ 赋值：`x = expr`
   const asg = /^([A-Za-z_$][\w$]*)\s*=\s*(.+)$/.exec(src)
   if (asg) {
@@ -276,7 +330,7 @@ export function compileEvents(
    *   正则版在「逻辑容器/插槽声明」处会把不产元素的标签算进 id ⇒ 其后的事件 nodeId 漂移，
    *   实测：`<KeepAlive>` 之后 `@click` 的 nodeId 比模板多 1 ⇒ handler 挂错节点）。
    */
-  const collectEvents = (n: EvNode, id: number): void => {
+  const collectEvents = (n: EvNode, id: number, isComponentTag: boolean): void => {
     const onProps = (n.props ?? []).filter((p) => p.type === 7 && p.name === 'on')
     for (const p of onProps) {
       const argNode = p.arg
@@ -295,8 +349,32 @@ export function compileEvents(
       const name = evName.toLowerCase()
       const semantic = EVENT_ALIAS[name]
       if (!semantic) {
+        // ★★★**组件自定义事件**（P1-3 emits，2026-10-03）：组件边界上的非手势事件名
+        //   = 监听子组件的 `$emit`（Vue 语义）⇒ 产 **componentEmit 绑定**（不冒泡、不 hitTest）。
+        //   ★非组件元素上的自定义事件名仍走"事件未支持"诊断（原生元素没有自定义事件源）。
+        if (isComponentTag) {
+          const actions = compileStatement(value, diag)
+          if (actions.length === 0) continue
+          if (stop || self) {
+            diag(
+              `组件自定义事件 @${rawName} 上的修饰符无意义（组件事件不冒泡）——已忽略`,
+              '组件事件是"子→父"直接通知，没有冒泡链；.once 受支持（绑定级一次）',
+            )
+          }
+          const handler = `h${handlerSeq.length}`
+          handlerSeq.push(handler)
+          out.handlers[handler] = actions
+          out.events.push({
+            nodeId: id,
+            event: evName,
+            handler,
+            componentEmit: true,
+            ...(once ? { once: true } : {}),
+          })
+          continue
+        }
         // 事件本身不支持 ⇒ 只报事件（修饰符诊断在此时无意义，避免噪音误导修法）
-        diag(`事件未支持：@${rawName}`, '本版支持 click / tap / longpress（分别映射宿主的 tap/longpress）')
+        diag(`事件未支持：@${rawName}`, '本版支持 click / tap / longpress（分别映射宿主的 tap/longpress）；组件上的自定义事件需写成 `<Kid @my-event="..." />`')
         continue
       }
       // 修饰符诊断（`.prevent` 等无对应语义 / 按键修饰符 / 未知）——**不阻碍绑定**
@@ -382,8 +460,9 @@ export function compileEvents(
       }
       // ③ 占 id 的元素：收集事件 + 走子树
       const id = nextId++
-      collectEvents(n, id)
-      walk((n.children ?? []) as unknown[], /^[A-Z]/.test(tag))
+      const isComp = /^[A-Z]/.test(tag)
+      collectEvents(n, id, isComp)
+      walk((n.children ?? []) as unknown[], isComp)
     }
   }
   let nextId = 0

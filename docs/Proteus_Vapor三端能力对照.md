@@ -349,3 +349,31 @@ SFC → 编译期产**组件注册表**（`components: { KidPanel: {template, ta
 
 **单元判据**：`tests/vapor-slot-distribution.test.ts` 8 组（编译标记/id 同源/KeepAlive 回归/
 落位/后备/孤儿/反向不误伤/命名对齐）。
+
+## 十一 · P1-3 emits（子 → 父）（2026-10-03 · 三端同步）
+
+**能力：子组件向父级通信**
+- **编译期**：子组件里的 `$emit('name', payload?)` 编成 `{op:'emit', event, program?}` 动作
+  （载荷是纯表达式程序，在**子作用域**求值）；父级写在**组件边界**上的非手势事件名
+  （`<Kid @bump="total = $event + 100" />`）编成 `componentEmit` 绑定。
+  ★**不静默的收窄**：多实参 `$emit('x', a, b)`、`emit(...)`（缺 `$`）各有精确诊断；
+  非组件元素上的自定义事件名仍报"事件未支持"（不是"都收下"）。
+- **派发区分**（`dispatch.ts` 契约新增 `componentEmit` 字段）：手势派发**跳过**组件事件绑定
+  （组件事件不冒泡、不经 hitTest——由 `$emit` 直接触发）；手势绑定照常（判据含**反向**用例）。
+- **运行时**：子组件动作表并入派发索引（handler 名带 `@child:<i>:` 前缀），
+  子节点被点时跑子动作表；遇 `emit` 动作 → 按「边界宿主 id + 事件名」查父级绑定 →
+  跑父级 handler（`$event` = 载荷）。★无对应父级监听 ⇒ 记 note（Vue 静默，本仓不静默）。
+- **判据 ⑯ 三证**（缺一即红）：① emit 记录且**已路由**（命中父 handler 名）② 载荷对账 +
+  父级落点源真的变了 ③ 锚节点**内核宽度**真的变了（`bumpTotal` 绑宽 ⇒ 0→199）。
+  "handler 跑了"与"屏幕变了"是两件事（本仓两类失效都踩过），故两者都记。
+
+**★修复/新增的缺陷与边界（本轮）**
+- `ComponentMount.treeOffset`（新字段）：`boundaryNodeId` 是**该树 local 空间**的 id——
+  emit 路由要把边界映射回**宿主 id**（顶层树 offset=0；嵌套挂载是子树拿到的偏移）。
+  不加它 ⇒ 嵌套组件里的 emit 会**查错边界**（找不到父级绑定 ⇒ 静默不路由）。
+- 子组件 handler 里的 `set`/`add`（改子组件内部状态）**不生效**——子组件无响应式状态
+  （data 是构建期快照）；桥如实 note（不静默假装）。
+- 诚实边界：`defineEmits` 的**运行时返回值**不执行（端上不跑 script，模板里的 `$emit` 是唯一入口）。
+
+**单测**：`tests/vapor-emits.test.ts` 8 组（编译动作/无载荷/componentEmit 绑定/反向诊断/
+手势不跑组件事件/反向手势照常/端到端 $event 载荷/无监听为空）。

@@ -112,7 +112,11 @@ const SFC = `<template>
     <!-- ★★★P1-3（2026-10-03）组件内部渲染夹具：Kids 子组件（构建期编译成 ComponentDef）+
          props 绑**响应式源**（kidLabelW / kidLabel）⇒ 判据核「父改 props ⇒ 子节点真的更新」。
          ★底色避开 #2f6fed（A/B 判据的按钮色锚）。 -->
-    <KidPanel :label="kidLabel" :labelW="kidLabelW" style="height: 30px"></KidPanel>
+    <KidPanel :label="kidLabel" :labelW="kidLabelW" style="height: 30px" @bump="bumpTotal = $event + 100"></KidPanel>
+    <!-- ★★★P1-3 emits（2026-10-03）：上面 @bump 监听子组件 $emit；本节点是**几何锚**——
+         宽度绑 bumpTotal（初始 0 ⇒ 几何 0 宽），判据核「子 emit ⇒ 父 handler 跑 ⇒ **内核几何真变**」。
+         ★为什么用宽度而不是文本（本仓判据口径）：文本改动可能被文本同步链路掩盖；几何是内核真值。 -->
+    <p-view :width="bumpTotal" style="height: 6px; background-color: #3aa0ff"></p-view>
     <!-- ★★★P3 批次（2026-10-03）逻辑容器**透传**夹具：三者都**不产包裹盒**
          （Vue 语义：逻辑容器不渲染元素）——判据核「节点数守恒 + 几何与 Vue 等价」。
          ★本注释不得含反引号或美元花括号（在 JS 模板串里——护栏见 check:script-compile）。 -->
@@ -160,6 +164,8 @@ const trVisible = ref(false)
 // ★P1-3 夹具源（props 的**响应式**来源——判据据此验"父改 ⇒ 子更新"）
 const kidLabel = ref('k0')
 const kidLabelW = ref(40)
+// ★P1-3 emits（2026-10-03）：子组件 @bump 的落点（父级 handler 做 bumpTotal = $event + 100）
+const bumpTotal = ref(0)
 </script>
 `
 
@@ -176,6 +182,7 @@ const kidLabelW = ref(40)
 const CHILD_SFC = `<template>
   <p-view style="flex-direction: row; height: 24px">
     <p-text :width="labelW" style="font-size: 12px; color: #ffffff">child-{{ label }}</p-text>
+    <p-text @tap="$emit('bump', labelW)" style="width: 40px; height: 16px; font-size: 10px; color: #ffd479">emit-btn</p-text>
   </p-view>
 </template>
 
@@ -512,6 +519,31 @@ for (const [nm, def] of Object.entries(parsed.components)) {
       `诊断：${(def && def.diagnostics || []).join(' | ')}`)
     process.exit(1)
   }
+}
+// ★★★P1-3 emits（2026-10-03）：子组件 **必须有** `$emit` 动作 + 父级必须有 **componentEmit 绑定**
+//   （两者缺一 ⇒ 判据 ⑯ 无证据；"生成器静默退化"是本仓重点拦的形态）。
+{
+  const kid = parsed.components?.KidPanel
+  const childEmitActs = Object.values(kid?.handlers ?? {}).flat().filter((a) => a && a.op === 'emit')
+  const parentEmitBinds = (parsed.small?.events ?? []).filter((e) => e && e.componentEmit)
+  if (childEmitActs.length === 0 || parentEmitBinds.length === 0) {
+    console.error(
+      `[gen-vapor-fixture] ✗ emits 夹具不完整（判据 ⑯ 将无证据）：` +
+        `子组件 emit 动作=${childEmitActs.length}（应 ≥1）· 父级 componentEmit 绑定=${parentEmitBinds.length}（应 ≥1）`,
+    )
+    process.exit(1)
+  }
+  if (childEmitActs.length > 1 || parentEmitBinds.length > 1) {
+    console.error(
+      `[gen-vapor-fixture] ✗ emits 夹具应**恰好一条**（多余会让判据的锚点含混）：` +
+        `emit 动作=${childEmitActs.length} · 绑定=${parentEmitBinds.length}`,
+    )
+    process.exit(1)
+  }
+  console.log(
+    `[gen-vapor-fixture] ✅ emits 夹具：子 emit('${childEmitActs[0].event}') · ` +
+      `父绑定 @${parentEmitBinds[0].event}（nodeId=${parentEmitBinds[0].nodeId}）`,
+  )
 }
 fs.writeFileSync(OUT, JSON.stringify({ ...parsed.small, components: parsed.components, slot: parsed.slot }))
 console.log(`[gen-vapor-fixture] ✅ 组件注册表：${Object.keys(parsed.components).join(', ')}（随父产物下发）`)

@@ -294,6 +294,19 @@ interface VaporReport {
     /** 出口 marker 是否残留在给内核的树里（必须为 0——分发期语义不进最终树） */
     markers_left: number
   }
+  /**
+   * ★★★**emits 探针**（P1-3 emits，2026-10-03）——子组件 `$emit` → 父级 handler 的**真值读数**：
+   *   · `emits`：逐条记录（事件名 / 载荷 / 是否路由到父级 / 父 handler 名）；
+   *   · `parent_source_after`：父级 handler 跑完后**落点源**的值（`bumpTotal`）；
+   *   · `geom_before` / `geom_after`：锚节点的**内核宽度**（emit 前后）——
+   *     "handler 跑了"与"内核几何真变"是两件事（本仓反复踩过的两类失效），故两者都记。
+   */
+  emit_probe: {
+    emits: Array<{ event: string; payload: unknown; routed: boolean; handler?: string }>
+    parent_source_after: unknown
+    geom_before: number
+    geom_after: number
+  }
   /** 模板里的过渡声明（`隐id:预设名`；判据区分"未声明"与"声明未驱动"） */
   tpl_transition: string[]
   /**
@@ -408,6 +421,8 @@ function makeData(rows: number): Record<string, unknown> {
     kidLabel: 'k0',
     kidLabelW: 40,
     tapCount: 0,
+    // ★★★P1-3 emits（2026-10-03）：子组件 @bump 的父级落点源（判据核"子 emit ⇒ 父 handler ⇒ 几何"）
+    bumpTotal: 0,
   }
 }
 
@@ -869,6 +884,9 @@ function runAb(args: VaporArgs): string {
     const abExprObj = ref(dataB.exprObj)
     // ★P3-3：B 路（Vue）也要给（否则 Vue 侧读到 undefined ⇒ 文本/几何序列不对齐）
     const abTrVisible = ref(dataB.trVisible)
+    // ★P1-3 emits：B 路（Vue）也要给 `bumpTotal`——A/B 共享同一份 SFC 编译产物，
+    //   B 侧读到 undefined ⇒ 锚节点几何按"无宽度"算 ⇒ A/B 几何对比假红（本仓已踩同族坑）。
+    const abBumpTotal = ref(dataB.bumpTotal)
     /**
      * ★★B 路更新的**同步驱动柄**（2026-10-01 更新路径 A/B）。
      *
@@ -889,6 +907,7 @@ function runAb(args: VaporArgs): string {
           list: abList, boxW: abBoxW, padW: abPadW, stopOuterW: abStopOuterW, stopInnerW: abStopInnerW,
           onceVal: abOnceVal, memoDep: abMemoDep, memoVal: abMemoVal,
           exprA: abExprA, exprArr: abExprArr, exprObj: abExprObj, trVisible: abTrVisible,
+          bumpTotal: abBumpTotal,
         }
       },
       render: abRender,
@@ -1403,7 +1422,8 @@ function dispatchChainA(
   type: string,
   index: EventIndex,
   state: DispatchState,
-  run: (name: string) => boolean,
+  /** ★P1-3 emits：第二参 = 本跳节点 id（组件事件路由要用——见 dispatchGesture 注释） */
+  run: (name: string, nodeId: number) => boolean,
 ): { fired: number[]; handler: string; stopped: boolean; skippedSelf: number[]; skippedOnce: number[] } {
   return dispatchGesture(chain, type, index, state, run)
 }
@@ -1630,7 +1650,7 @@ function runShort(args: VaporArgs): string {
     tpl_nodes: 0, tpl_ok: false, sub_l1: 0, sub_l0: 0, sub_l1_rate: 0, sub_sources: [],
     inst_ms: 0, inst_nodes: 0, inst_reused_ids: 0, inst_allocated_ids: 0, inst_rows: 0,
     inst_values_filled: 0, inst_virtual_rows: 0, inst_text_filled: 0, inst_width_filled: 0,
-    mix_text_probe: [], text_probe_rounds: [], gate_rounds: [], gate_text_nodes: [], once_node_id: -1, memo_node_id: -1, expr_probe: [], transition_started: 0, tpl_transition: [], component_mounts: 0, component_nodes: 0, component_kid_probe: {}, slot_probe: { texts: [], rects: [], fills: [], markers_left: -1 },
+    mix_text_probe: [], text_probe_rounds: [], gate_rounds: [], gate_text_nodes: [], once_node_id: -1, memo_node_id: -1, expr_probe: [], transition_started: 0, tpl_transition: [], component_mounts: 0, component_nodes: 0, component_kid_probe: {}, slot_probe: { texts: [], rects: [], fills: [], markers_left: -1 }, emit_probe: { emits: [], parent_source_after: undefined, geom_before: -1, geom_after: -1 },
     mount_ms: 0, mount_nodes: 0,
     updates_run: 0, ops_bytes: 0, ops_ms: 0, apply_ms: 0, text_synced_total: 0, update_evidence: [], geom_probe: [], channels: [],
     ev_bindings: 0, ev_handlers: 0, ev_modifiers: 0, taps: 0, tap_evidence: [],
@@ -1761,7 +1781,14 @@ function runShort(args: VaporArgs): string {
      */
     const propCallLog: string[] = []
     let childEmitCount = 0
-    const childRuntimes: Array<{ mount: NonNullable<typeof inst.componentMounts>[number]; vapor: VaporRuntime; runtime: SlotRuntime }> = []
+    const childRuntimes: Array<{
+      mount: NonNullable<typeof inst.componentMounts>[number]
+      vapor: VaporRuntime
+      runtime: SlotRuntime
+      /** ★P1-3 emits（2026-10-03）：子组件自己的事件绑定/动作表（handler 里可能有 `$emit`） */
+      childEvents: EventBinding[]
+      childHandlers: Record<string, Array<{ op: string; source?: string; program?: unknown; event?: string }>>
+    }> = []
     const mountsByBoundary = new Map<number, (typeof childRuntimes)[number]>()
     if (inst.componentMounts) {
       for (const mount of inst.componentMounts) {
@@ -1783,7 +1810,15 @@ function runShort(args: VaporArgs): string {
           childVapor.relink(mount.ctx)
           childRt.flush()
         }
-        const entry2 = { mount, vapor: childVapor!, runtime: childRt }
+        // ★P1-3 emits：子组件的**事件与动作表**（编译期产物里随组件注册表下发）
+        const childDef = (artifacts as {
+          components?: Record<string, { events?: EventBinding[]; handlers?: Record<string, Array<{ op: string; source?: string; program?: unknown; event?: string }>> }>
+        }).components?.[mount.name]
+        const entry2 = {
+          mount, vapor: childVapor!, runtime: childRt,
+          childEvents: childDef?.events ?? [],
+          childHandlers: childDef?.handlers ?? {},
+        }
         mountsByBoundary.set(mount.boundaryNodeId, entry2)
         childRuntimes.push(entry2)
       }
@@ -1834,19 +1869,41 @@ function runShort(args: VaporArgs): string {
     rep.ev_bindings = events.length
     rep.ev_handlers = Object.keys(handlers).length
 
+    // ★★★**emits 路由表**（P1-3 emits，2026-10-03）——父级写在组件边界上的自定义事件绑定。
+    //   键 = `边界宿主 id:事件名`（`componentEmit` 绑定不参与手势派发，见 dispatch.ts 注释）。
+    //   ★边界宿主 id = `boundaryNodeId + mount.treeOffset`（边界 id 是**该树 local 空间**的，
+    //     顶层树 offset=0、嵌套挂载是子树的偏移——见 ComponentMount.treeOffset 注释）。
+    const emitIndex = new Map<string, string>()
+    for (const e of events) {
+      if (e.componentEmit) emitIndex.set(`${e.nodeId}:${e.event}`, e.handler)
+    }
+    /**
+     * ★★★**子组件事件路由**（P1-3 emits）：子组件自己的 `events`（nodeId 在**子模板 local 空间**）
+     *   平移成宿主空间后并入派发索引，handler 名加 `@child:<序号>:` 前缀与父级区分。
+     *   【为什么并入同一索引】手势链路只有一条（内核命中 → 链 → 派发）——子节点被点时
+     *   与父节点走完全相同的路径；区别只在"跑哪个动作表"（子组件的）。
+     */
+    const mergedEvents: EventBinding[] = events.filter((e) => !e.componentEmit)
+    for (let i = 0; i < childRuntimes.length; i++) {
+      const cr = childRuntimes[i]!
+      for (const e of cr.childEvents) {
+        mergedEvents.push({ ...e, nodeId: e.nodeId + (cr.mount.idOffset ?? 0), handler: `@child:${i}:${e.handler}` })
+      }
+    }
     // 节点 → (事件 → handler)：宿主回来的 `(type, nodeId)` 据此找到该跑哪个 handler
     //   ★P2-3：索引与派发语义由 `@proteus-vue/slot-runtime` 提供（三端共用一份；
     //     含 `.stop`/`.self`/`.once` 修饰符语义与 `.once` 状态）
-    const byNodeEvent = indexEventBindings(events)
+    const byNodeEvent = indexEventBindings(mergedEvents)
     const dispatchState = createDispatchState()
     rep.ev_modifiers = events.filter((e) => e.stop || e.self || e.once).length
 
-    /** 跑一个 handler：按序执行动作（先算后写 ⇒ 顺序语义保留） */
-    const runHandler = (name: string): boolean => {
+    /** 跑一个 handler：按序执行动作（先算后写 ⇒ 顺序语义保留）★`$event` 可被载荷注入 */
+    const runHandler = (name: string, _nodeId?: number, payload?: unknown): boolean => {
       const acts = handlers[name]
       if (!acts) return false
       for (const a of acts) {
-        const ctx2 = { read: (n: string) => data[n] }
+        if ((a as { op: string }).op === 'emit') continue // 顶层 handler 里的 $emit 无处可去（如实 note，见 runChildHandler）
+        const ctx2 = { read: (n: string) => (n === '$event' ? payload : data[n]) }
         const v = evalExpr(a.program as never, ctx2 as never)
         const cur = data[a.source]
         if (a.op === 'set') {
@@ -1860,6 +1917,44 @@ function runShort(args: VaporArgs): string {
       }
       return true
     }
+    /**
+     * ★★★**子组件 handler 执行 + $emit 路由**（P1-3 emits）。
+     *
+     * 【链路】子节点被点 → 派发到子组件的动作表（`@child:<i>:<h>`）→ 动作在**子作用域**求值
+     *   （props/data/父级 read —— 与子运行时的求值上下文同源 `mount.ctx`）→ 遇 `emit` 动作：
+     *   查 `emitIndex`（边界宿主 id + 事件名）→ 命中则跑**父级 handler**（`$event` = 载荷）。
+     *
+     * 【诚实边界（本条要在报告里可见，不静默）】① 子组件 handler 里的 `set`/`add`
+     *   （子组件内部状态）本批**不生效**——子组件没有响应式状态（data 是构建期快照，
+     *   见 instantiate 的边界说明）⇒ 记 note；② 子 emit 无对应父级监听 ⇒ 记 note（Vue 同样静默，
+     *   但本仓纪律是"不静默"，至少留痕）。
+     */
+    const emitLog: Array<{ event: string; payload: unknown; routed: boolean; handler?: string }> = []
+    const runChildHandler = (idx: number, name: string): boolean => {
+      const cr = childRuntimes[idx]
+      if (!cr) return false
+      const acts = cr.childHandlers[name]
+      if (!acts) return false
+      for (const a of acts) {
+        if (a.op === 'emit') {
+          const evName = String(a.event ?? '')
+          const payload = a.program ? evalExpr(a.program as never, cr.mount.ctx as never) : undefined
+          const boundaryHostId = cr.mount.boundaryNodeId + (cr.mount.treeOffset ?? 0)
+          const parentHandler = emitIndex.get(`${boundaryHostId}:${evName}`)
+          if (!parentHandler) {
+            emitLog.push({ event: evName, payload, routed: false })
+            notes.push(`子组件 ${cr.mount.name} 的 $emit('${evName}') 没有父级监听（边界 ${boundaryHostId}）——未路由`)
+            continue
+          }
+          runHandler(parentHandler, undefined, payload)
+          emitLog.push({ event: evName, payload, routed: true, handler: parentHandler })
+          continue
+        }
+        // 子组件内部状态：本批不支持（子组件无响应式状态——见注释的诚实边界）
+        notes.push(`子组件 ${cr.mount.name} 的 handler 动作 \`${String(a.op)}\`（改 ${String(a.source)}）不生效——子组件无可变状态（构建期快照）`)
+      }
+      return true
+    }
 
     /**
      * ★★**手势回调**（宿主 → JS 的反向通道）：注册到全局供 JNI 调用。
@@ -1870,7 +1965,12 @@ function runShort(args: VaporArgs): string {
     ;(globalThis as unknown as Record<string, unknown>).__proteusVaporGesture = (type: string, nodeId: number, chainJson?: string): string => {
       const chain = parseChain(chainJson, nodeId)
       const before = { ...data }
-      const hit = dispatchChainA(chain, type, byNodeEvent, dispatchState, runHandler)
+      // ★P1-3 emits：派发走**路由化 run**——`@child:<i>:<h>` 前缀转到子组件动作表（见 runChildHandler）
+      const hit = dispatchChainA(chain, type, byNodeEvent, dispatchState, (h: string, id: number) => {
+        const m = /^@child:(\d+):(.+)$/.exec(h)
+        if (m) return runChildHandler(Number(m[1]), m[2]!)
+        return runHandler(h, id)
+      })
       const handler = hit.handler
       if (!handler) return JSON.stringify({ ok: false, reason: `链 ${chain.join('>')} 上没有 ${type} 的 handler` })
       const ran = true
@@ -2206,6 +2306,49 @@ function runShort(args: VaporArgs): string {
         ...rep.component_kid_probe,
         rect_before: kidRectBefore,
         rect_after: kidRectAfter,
+      }
+    }
+
+    /* ═══════════ ★★★P1-3 emits 轮（2026-10-03）：子组件 $emit → 父级 handler → 内核几何 ═══════════
+     *
+     * 【链路】宿主 tap 子组件里的 emit 按钮 → 内核 hitTest → 冒泡链 → 派发到**子组件动作表**
+     *   （mergedEvents 里的 `@child:i:h`）→ `$emit('bump', labelW)` → emitIndex 查「边界 + 事件名」
+     *   → 跑**父级 handler**（`bumpTotal = $event + 100`）→ 父 relink → SET_STYLE → 内核重排。
+     * 【判据读什么】① emit 记录（事件名/载荷/是否路由）② 父级落点源 ③ 锚节点**内核宽度**
+     *   前后对比——"handler 跑了"与"几何真变"是两件事（本仓两类失效都踩过），故两者都记。
+     */
+    if (childRuntimes.length > 0 && typeof proteusHost.tapAt === 'function') {
+      const emitBtn = inst.nodes.find((n) => (n as { text?: string }).text === 'emit-btn')
+      // 锚节点 = 绑 `:width="bumpTotal"` 的那个节点（从订阅表反查——不猜 id 规律）
+      const anchorSlot = table.sources
+        .find((s) => s.sourceName === 'bumpTotal')
+        ?.slots.find((sl) => sl.kind === 'style' && sl.propKey === 'layout.width')
+      const anchorId = anchorSlot?.nodeId   // ★顶层树：idOffset = 0 ⇒ local id 即宿主 id
+      if (emitBtn && anchorId !== undefined) {
+        const rectsNow = rectsOf()
+        const btnRect = rectsNow[String(emitBtn.id)] as { x?: number; y?: number; width?: number; height?: number } | undefined
+        const geomBefore = rectsNow[String(anchorId)]?.width ?? -1
+        emitLog.length = 0
+        if (btnRect && typeof btnRect.x === 'number' && typeof btnRect.y === 'number') {
+          const tapOut = JSON.parse(proteusHost.tapAt(JSON.stringify({
+            x: btnRect.x + (btnRect.width ?? 0) / 2,
+            y: btnRect.y + (btnRect.height ?? 0) / 2,
+          }))) as { ok?: boolean; gestures_fired?: number; last?: { target?: number } }
+          if (tapOut.gestures_fired !== 1) {
+            notes.push(`emits 探针：tap 未触发手势（gestures_fired=${tapOut.gestures_fired ?? '缺失'}）——读数不可信`)
+          }
+        } else {
+          notes.push(`emits 探针：emit 按钮（节点 ${emitBtn.id}）没有内核矩形——tap 无法注入`)
+        }
+        const rectsAfter = rectsOf()
+        rep.emit_probe = {
+          emits: emitLog.slice(),
+          parent_source_after: data.bumpTotal,
+          geom_before: geomBefore,
+          geom_after: rectsAfter[String(anchorId)]?.width ?? -1,
+        }
+      } else {
+        notes.push('emits 探针：夹具缺 emit 按钮或 bumpTotal 锚（节点未找到）——判据按缺失处理')
       }
     }
 

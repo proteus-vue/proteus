@@ -13,7 +13,7 @@ export function render(_ctx, _cache) {
   return (_openBlock(), _createBlock(_component_p_view, { style: {"width":1080,"height":1600,"flexDirection":"column","padding":{"top":24},"backgroundColor":"#14141c"} }, {
     default: _withCtx(() => [
       _createVNode(_component_p_text, { style: {"fontSize":20,"color":"#ffffff","margin":{"bottom":12}} }, {
-        default: _withCtx(() => [...(_cache[6] || (_cache[6] = [
+        default: _withCtx(() => [...(_cache[7] || (_cache[7] = [
           _createTextVNode("Vapor · 设备端", -1 /* CACHED */)
         ]))]),
         _: 1 /* STABLE */
@@ -145,8 +145,14 @@ export function render(_ctx, _cache) {
       _createVNode(_component_KidPanel, {
         label: _ctx.kidLabel,
         labelW: _ctx.kidLabelW,
+        onBump: _cache[6] || (_cache[6] = $event => (_ctx.bumpTotal = $event + 100)),
         style: {"height":30}
       }, null, 8 /* PROPS */, ["label", "labelW"]),
+      _createCommentVNode(" ★★★P1-3 emits（2026-10-03）：上面 @bump 监听子组件 $emit；本节点是**几何锚**——\n         宽度绑 bumpTotal（初始 0 ⇒ 几何 0 宽），判据核「子 emit ⇒ 父 handler 跑 ⇒ **内核几何真变**」。\n         ★为什么用宽度而不是文本（本仓判据口径）：文本改动可能被文本同步链路掩盖；几何是内核真值。 "),
+      _createVNode(_component_p_view, {
+        width: _ctx.bumpTotal,
+        style: {"height":6,"backgroundColor":"#3aa0ff"}
+      }, null, 8 /* PROPS */, ["width"]),
       _createCommentVNode(" ★★★P3 批次（2026-10-03）逻辑容器**透传**夹具：三者都**不产包裹盒**\n         （Vue 语义：逻辑容器不渲染元素）——判据核「节点数守恒 + 几何与 Vue 等价」。\n         ★本注释不得含反引号或美元花括号（在 JS 模板串里——护栏见 check:script-compile）。 "),
       _createCommentVNode(" ★★KeepAlive 的官方约束（本仓实测被 Vue 编译器当场拦下）：它要求「恰好一个子组件」\n         ——p-view（原生标签）会被拒：SyntaxError: KeepAlive expects exactly one child component.\n         ⇒ 夹具改用真组件形态（MyKeep）验证透传。\n         ★底色避开 #2f6fed（A/B 判据的按钮色锚——本仓已踩：重复 ⇒ 判据红）。 "),
       (_openBlock(), _createBlock(_KeepAlive, null, [
@@ -166,7 +172,7 @@ export function render(_ctx, _cache) {
         ]),
         fallback: _withCtx(() => [
           _createVNode(_component_p_text, { style: {"color":"#ffffff"} }, {
-            default: _withCtx(() => [...(_cache[7] || (_cache[7] = [
+            default: _withCtx(() => [...(_cache[8] || (_cache[8] = [
               _createTextVNode("suspense-fallback", -1 /* CACHED */)
             ]))]),
             _: 1 /* STABLE */

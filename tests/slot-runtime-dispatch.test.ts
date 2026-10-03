@@ -118,7 +118,10 @@ const padW = ref(300)
     const run = (h: string): boolean => {
       const acts = ev.handlers[h]
       if (!acts) return false
-      for (const a of acts) store[a.source] = (store[a.source] ?? 0) + 30
+      for (const a of acts) {
+        if (a.op === 'emit') continue
+        store[a.source] = (store[a.source] ?? 0) + 30
+      }
       return true
     }
     const r = dispatchGesture([1, 0], 'tap', index, state, run)
