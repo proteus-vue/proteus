@@ -88,7 +88,7 @@ Teleport / KeepAlive / Suspense / Transition / TransitionGroup / v-memo / 自定
 | 12 | v-once | ✓ 半 | 无诊断；仍建槽位（未阻止更新） |
 | 13 | v-memo | ⚠️ **静默** | 无诊断无槽位（与官方"跳过更新"语义不符） |
 | 14 | 事件 `@click / @tap / @longpress` | ✅ | `events:[{nodeId,event:tap,handler}]` + 动作表 |
-| 15 | 事件修饰符 `.stop` 等 | ❌ **诊断拒绝** | `"事件修饰符未支持：@click.stop"` |
+| 15 | 事件修饰符 | ◐ **部分支持（P2-3）** | `.stop` / `.self` / `.once` = **真语义**（产物置位 + 运行时共享派发器，真机判据 ⑨）；`.prevent`/`.passive`/`.capture`/按键=**诊断但不阻碍 handler**（无对应语义，忽略是忠实的） |
 | 16 | 事件多语句块 / 调用表达式 | ❌ **诊断拒绝**（标注修法） | `"handler 含多条语句…"` / `"handler 形态不支持"` |
 | 17 | 动态事件 `@[ev]` | ⚠️ **静默** | 无诊断无事件（**静默丢失**——比 15 更危险） |
 | 18 | **组件标签** | ⚠️ **建节点但无语义** | 节点 `tag:"MyComp"`、props 进 `prop:attr.p`；**无组件边界/生命周期/插槽传递** |
@@ -100,7 +100,7 @@ Teleport / KeepAlive / Suspense / Transition / TransitionGroup / v-memo / 自定
 | 24 | **Transition / TransitionGroup** | ⚠️ **静默** | 当普通容器处理（**无过渡语义**） |
 | 25 | Suspense | ⚠️ **静默** | 同上 |
 | 26 | 自定义指令 `v-focus` | ⚠️ **静默** | 无诊断无处理 |
-| 27 | **混合文本** `a{{ x }}b` | ❌ **诊断拒绝** | `"含多个文本/插值子节点（本版不支持，需文本节点拆分）"` |
+| 27 | **混合文本** `a{{ x }}b` | ✅ **已支持（P2-2）** | 编译期切分为段表（静态段 + 表达式段）⇒ 运行时求值拼接；首帧与更新都完整（真机判据 ⑩/⑩b） |
 | 28 | **绘制声明**（glow/clip-path/mask/svg-path/fill-gradient） | ✅ **独有** | 属性式 JSON 声明 → 内核通道（官方 vapor 无此概念，属我方扩展） |
 | 29 | 表达式：算术/三元/逻辑/成员链/数组长度/模板串 | ✅ | `ExprProgram` 编译通过 |
 | 30 | 表达式：**函数调用** | ❌ 诊断 | `"含函数/方法调用（纯度无法证明，属 L1 准入条件 C1）"` |
@@ -110,7 +110,7 @@ Teleport / KeepAlive / Suspense / Transition / TransitionGroup / v-memo / 自定
 | 34 | `<script setup>` 源识别（ref/reactive/computed/props） | ✅ | 槽位源 `[a,b]` 正确识别 |
 | 35 | 组件边界强制 L0（方案坑位 #4） | ◐ **设计约定** | 模板不展开组件（但**无运行时组件系统**，见 #18） |
 
-**统计**：✅ **17 项** · ✓ 半 **4 项** · ⚠️ **静默风险 12 项 → 0 项**（2026-10-03 全部补诊断）· ❌ **诊断拒绝 7 项**（均带修法提示）。
+**统计**：✅ **18 项**（+混合文本）· ✓ 半 **5 项**（+事件修饰符：三个有真语义）· ⚠️ **静默风险 12 项 → 0 项**（2026-10-03 全部补诊断）· ❌ **诊断拒绝 7 项**（均带修法提示）。
 
 ---
 
@@ -157,8 +157,8 @@ Teleport / KeepAlive / Suspense / Transition / TransitionGroup / v-memo / 自定
 | # | 缺口 | 官方支持 | 建议 / 状态 |
 |---|---|---|---|
 | P2-1 | **v-for 嵌套** | ✅ | ✅ **已完成（2026-10-03）**：模板递归展开（`parentListId`/`outerScope`/`sourceField`）+ 运行时递归实例化（`cloneRow` 递归 + `parentOverrideId` + list-data 兜底）。任意层（含 3 层）实测通过，见 `tests/vapor-sfc-to-tree.test.ts` 嵌套块 4 组判据 |
-| P2-2 | **混合文本** `a{{x}}b` | ✅ | 文本节点拆分（编译期切三段） |
-| P2-3 | **事件修饰符** `.stop/.prevent/.self/.once/.capture/.passive` + 按键修饰符 | ✅ | 修饰符语义 → 内核/宿主侧实现（`.stop` 已在 Vue 路径有先例） |
+| P2-2 | **混合文本** `a{{x}}b` | ✅ | ✅ **已完成（2026-10-03）**：段表切分（`textSegments`：静态段 + 表达式段）+ 实例化段求值 + 订阅表**合成一条**槽位（多插值不再互相覆盖）。判据：编译切分 / 首帧完整 / 行内行作用域 / 更新仍完整（真机 ⑩/⑩b） |
+| P2-3 | **事件修饰符** | ✅ | ◐ **已完成（2026-10-03）**：`.stop`/`.self`/`.once` 真语义（`slot-runtime/dispatch.ts` 共享派发器，三端同一份）；`.prevent`/`.passive`/`.capture`/按键 = 诊断（无对应语义）+ 断言修法。★真机抓出一个真缺陷（B 路 `withModifiers` 只在 runtime-dom ⇒ 见下） |
 | P2-4 | **v-model 修饰符** `.lazy/.number/.trim` | ✅ | 文本通道加修饰符选项 |
 | P2-5 | **v-once / v-memo 真语义** | ✅ | `v-once` → 不建槽位；`v-memo` → 依赖摘要跳过更新 |
 | P2-6 | **v-html / v-text** | ✅ | v-html = 富文本（我方文本通道已支持样式串——可映射）；v-text = 纯文本槽位 |
@@ -211,7 +211,7 @@ Teleport / KeepAlive / Suspense / Transition / TransitionGroup / v-memo / 自定
    （Vue 路径有 `renderer-app` 可复用设计）。
 
 **建议顺序（更新）**：~~P0~~ ✅ → ~~P1-1/P1-2（组件边界+props 通道）~~ ✅ →
-~~P2-1（嵌套 v-for）~~ ✅ → P2-2/P2-3（混合文本 / 事件修饰符，~1 天）→ 其余按需。
+~~P2-1（嵌套 v-for）~~ ✅ → ~~P2-2（混合文本）~~ ✅ → ~~P2-3（事件修饰符）~~ ✅ → P2-4（v-model 修饰符）/ P2-5（v-once/v-memo）→ 其余按需。
 
 ### ★P2-1 增量说明（2026-10-03，做/不做如实标注）
 
@@ -231,3 +231,43 @@ Teleport / KeepAlive / Suspense / Transition / TransitionGroup / v-memo / 自定
 
 ★**纪律**：每一批都要**同时**补「能力 + 判据 + 端上验证」（本仓既有三件套），
 且**先让不支持可见**（P0）**再谈补齐**——否则开发者会在"以为支持"的前提下踩坑。
+
+### ★P2-2 / P2-3 增量说明（2026-10-03，做/不做如实标注）
+
+**P2-2 混合文本（`a{{x}}b`）**
+
+| 做 | 依据 |
+|---|---|
+| 模板侧切分为**段表**（`LayoutNode.textSegments`：静态段 + 表达式段；插值段在编译期即编成 `ExprProgram`） | 自绘树里文本是**元素属性**（无独立文本节点）⇒ 正解是段数组拼接，不是"建多个文本节点"；编译期编不出（如调用表达式）⇒ **诊断 + 不进段表**（否则源码会被当字面量，静默错值） |
+| 订阅表**合成一条**文本槽位（源码 `'a' + (x) + 'b'`，走同一套表达式编译器） | 多个插值若不合成 = 多个 `text.content` 槽位指向**同一节点** ⇒ 运行时两条 SET_TEXT **后者覆盖前者**（只显示最后一个，静默）；静态段此前完全不参与更新 |
+| 实例化**段求值**（`evalTextSegments`）+ 初值回填改走**求值器**（不再"取单字段/单源值"） | 组合表达式（段表 / `a + b`）用"取字段"回填会得到**半截文本**；首帧指令被调用方丢弃（既有假设），错值会一直显示 |
+| 行内文本段走 **v-for 行作用域**（`makeScopedRead`，与 `VaporRuntime.makeRowCtx` 同一实现） | `前缀{{item.x}}` 在行内必须按行求值；用顶层 read 读到 undefined（实测） |
+
+| 不做（后续） | 原因 |
+|---|---|
+| 「元素 + 文本」混排（`<p><b>x</b>尾{{y}}</p>`） | 需**文本节点结构化**（自绘树里文本是元素属性）——是节点模型问题，与本批（表达式问题）不同域；仍诊断拒绝 |
+| 富文本 / `v-html` | 同域问题（P2-6） |
+
+**P2-3 事件修饰符**
+
+| 做 | 依据 |
+|---|---|
+| `.stop` / `.self` / `.once` **真语义**：产物置位（`EventBinding.stop/self/once`）+ 运行时**共享派发器**（`@proteus-vue/slot-runtime` 的 `dispatchGesture`） | 此前语义只**内联在 Android 桥**里且不支持任何修饰符 ⇒ `@click.stop` 失效形态是**静默多派发**（点按钮祖先 handler 也跑）。语义下沉到消费端包 ⇒ 三端同一份（本仓纪律） |
+| `.prevent` / `.passive` / `.capture` / 按键修饰符 ⇒ **诊断 + 仍执行 handler** | 自绘 UI 无浏览器默认动作 / 无捕获阶段 / 无键盘事件 ⇒ 忽略修饰符是**忠实**的（不是"没实现对"）；但必须可见（诊断带修法），且**不阻碍**绑定（否则一个 `.prevent` 就把按钮点不动了） |
+| 修饰符**链式**（`.stop.once`）与未知修饰符处理 | 旧 `MODIFIER_RE` 只看**末尾一个** ⇒ `.stop.prevent` 的第二个会被当过事件名（落到"事件未支持"，修法误导） |
+
+**★真机抓出的一个真缺陷（B 路 / Vue 对照路径）**：模板一旦用 `@click.stop`，Vue 官方编译器产出
+`_withModifiers(...)`——而 `withModifiers` **只在 `@vue/runtime-dom`**（它调 DOM 事件的
+`stopPropagation`/`preventDefault`），本仓 A/B 的 B 路接的是**自绘宿主**（`runtimeModuleName` 指
+`@vue/runtime-core`，该包不导出它）⇒ 挂载时抛 `withModifiers is not a function`；而 **QuickJS 无
+`console`** ⇒ 错误上报自身又炸，设备侧只看到 `'console' is not defined`（**把真因盖住**——查了三轮）。
+修法：生成的 render 里带一份**同语义 shim**（守卫表与官方逐条对应；`.stop` ⇒ 事件对象的
+`stopPropagation` ⇒ 适配器派发循环在本跳跑完后 break），并**摘掉那条 import** + 绑别名
+`_withModifiers`（首版只定义函数、引用处仍是 undefined ⇒ 第二轮实测才修对）。
+★教训：**"跨宿主复用官方编译器产物"必须核对它的运行时依赖面**——`runtime-core` 是 DOM-free 的，
+编译器的 `runtimeModuleName` 也不能凭空把它变成全功能运行时。
+
+**验证**：单测 **+16**（`vapor-events` 修饰符 5 组 · `slot-runtime-dispatch` 7 组 · `vapor-sfc-to-tree`
+混合文本 6 组含反向 + `vapor-v3-e2e` 闭环 2 组）；**真机**：`run-vapor` 判据 **11/11**
+（新增 ⑨ `.stop` 终止冒泡 / ⑩+⑩b 混合文本首帧与更新完整）· `run-vapor-ab` 全过（文本序列对齐回归修复）·
+`run-vapor-list` 6/6 无回归。**破坏性验证**：`.stop` 改"先停后跑" ⇒ 2 条红；`.self` 判据反转 ⇒ 红（基线先确认绿）。

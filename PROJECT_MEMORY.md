@@ -15,11 +15,11 @@
 - **包规模**：**45 个 @proteus-vue/* npm 包**（+ `packages/layout-core-rust` = **cargo crate，非 npm 包**，故不计数）（★2026-09-29 layout-core = App 排版核心）（check:pkg 0 error · `pnpm check:stats` 校验 ✓；31→38 修正 → G-07 glass 39 → Skyline 收口 worklet 40 → ★2026-09-14 组件库拆包 `@proteus-vue/components` 41 → ★Vapor 线新增 `@proteus-vue/slot-runtime` 42 + `@proteus-vue/layout-core` 43 → ★2026-09-30 MA1 新增 `@proteus-vue/animation` 44；版本统一 0.3.0-beta.8，见「当前状态速览」）
 - **文档**：`docs/proteus-architecture.md`（L0 规约·真理来源）→ `docs/board-inventory.md`（全景索引）→ `docs/roadmap.md`（版本线）→ `roadmap-2-plan`（里程碑线）→ 各 plan
 
+## 当前状态速览（最近一次更新：**2026-10-03·（九十二）· **Vapor P2-2 混合文本 + P2-3 事件修饰符**——段表切分/合成槽位/共享派发器；真机 11/11（新增 ⑨ .stop 终止冒泡 / ⑩+⑩b 混合文本完整）+ 真机抓出 B 路 withModifiers 真缺陷；下一步 P2-4/P2-5**）★新会话以此为准
+
 ## 当前状态速览（最近一次更新：**2026-10-03·（九十一）· **Vapor P2-1 嵌套 v-for** 真支持（任意层递归实例化 + 内核闭环判据 + 4 组回归锁）；顺带：LY001 测量装置例外通道（解除 compile-baseline 在干净 HEAD 上的红）+ check:layers 死路径修复（showcase/src 从未存在）；下一步 P2-2/P2-3**）★新会话以此为准
 
 ## 当前状态速览（最近一次更新：**2026-10-03·（九十）· **Vapor 组件系统第一批**（P1）—— 边界标记 + props 通道（复用既有 CALL_COMPONENT_UPDATE opcode；168 项测试全过）；下一步 P1 第二批或 P2**）★新会话以此为准
-
-## 当前状态速览（最近一次更新：**2026-10-03·（八十九）· **Vapor 能力清单**（对标官方 3.6.0-rc.10 实证调研）+ **P0 静默风险 12 项可见化**（全补诊断 + 反向判据）；下一步 P1 组件系统**）★新会话以此为准
 
 ## ★《收纳规范》（2026-10-03 立 · 门禁 `pnpm check:memory`）
 
@@ -44,7 +44,7 @@
 
 | 文件 | 内容 |
 |---|---|
-| `docs/project-memory-archive/2026-10.md` | 里程碑详细叙事（三十九～九十一）+ 状态速览历史栈（约 3.7k 行） |
+| `docs/project-memory-archive/2026-10.md` | 里程碑详细叙事（三十九～九十二）+ 状态速览历史栈（约 3.8k 行） |
 | `docs/project-memory-archive/2026-09.md` | 09 月全部叙事 + 柔性系统重组历史 + 2026-08 进度快照 + 已落地文件 + 09-19 验证状态（约 6.5k 行） |
 | `docs/project-memory-archive/decisions.md` | 决策链全文 #1–#465（455 条 / 约 840 KB）——按号检索 |
 

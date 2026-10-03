@@ -15,19 +15,22 @@
 //
 // 【诚实边界（本版刻意不支持，遇到即报诊断）】
 //   · ~~嵌套 v-for~~ ⇒ ✅ 2026-10-03 P2 批次已支持（递归实例化，见 ListTemplate.parentListId）
-//   · 元素子节点是「文本 + 插值混合」（`<p>a{{x}}b</p>`）⇒ 需拆分文本节点，本版拒绝
+//   · ~~元素子节点是「文本 + 插值混合」~~ ⇒ ✅ 2026-10-03 P2-2 已支持（`a{{x}}b` 编译期切分，
+//     见 LayoutNode.textSegments；元素与文本**混排**仍拒绝——需文本节点结构化）
 //   · 动态 `:style` 对象（运行期多键展开）⇒ 由订阅表以 SET_STYLE 逐键下发，模板不解析
 //   · 组件标签（`<MyComp>`）⇒ 边界标记 + props 通道（P1 第一批）；内部渲染待后续批次
 import { parse as sfcParse, type SFCDescriptor } from '@vue/compiler-sfc'
 import { parse as domParse } from '@vue/compiler-dom'
 import type { VaporDiagnostic } from './build'
 import type { VueCompatDeps } from './sources'
-import type { LayoutNode, LayoutTemplate, ListTemplate } from '@proteus-vue/slot-runtime'
+import type { LayoutNode, LayoutTemplate, ListTemplate, TextSegment } from '@proteus-vue/slot-runtime'
+// ★混合文本（P2-2）里的插值段要编成表达式程序——复用**同一套**编译器（能力边界一处收敛）
+import { compileExpr } from './expr'
 
 // ★类型定义在**运行时契约包**（slot-runtime/layout-template.ts）——编译器只是产出方之一，
 //   消费方定义的形状才是唯一契约（与 SubscriptionTable 同一处置）。
 //   这里 re-export 便于 `proteus explain` 等工具从编译器侧一并取用。
-export type { LayoutTemplate, LayoutNode, ListTemplate } from '@proteus-vue/slot-runtime'
+export type { LayoutTemplate, LayoutNode, ListTemplate, TextSegment } from '@proteus-vue/slot-runtime'
 
 /** 静态样式里**引擎认的**字段（其余（如 paint.*）由宿主绘制读，不进核心） */
 const LAYOUT_FIELDS = new Set([
@@ -63,7 +66,8 @@ const PAINT_DECL_ATTRS = new Set(['fill-gradient', 'fill-gradient-to', 'clip-pat
  *   ★本仓纪律：**静默失败最致命**。
  *   ⇒ 本批**不实现能力**，只让"未支持"在编译期**可见**（带修法）——成本最低、收益最高。
  *
- * 【与既有诊断的关系】既有诊断已覆盖：混合文本 / 事件修饰符 / 多语句 handler /
+ * 【与既有诊断的关系】既有诊断已覆盖：~~混合文本~~（2026-10-03 P2-2 已支持）/ 事件修饰符
+ *   （2026-10-03 P2-3 起 .stop/.self/.once 支持，其余产诊断）/ 多语句 handler /
  *   表达式白名单（嵌套 v-for 曾诊断拒绝，2026-10-03 P2 批次已改为**真支持**）。
  *   本表补的是**之前完全没被检查**的那一批。
  */
@@ -430,17 +434,61 @@ export function buildLayoutTemplate(
       const node: LayoutNode = { id, parentId, tag, style }
       if (nodeListId !== undefined) node.listId = nodeListId
       if (isComponentTag) node.component = tag
-      // 文本：静态文本 或 插值 → 占位（初始值由运行时回填；**混合文本不支持**）
+      // 文本：静态文本 / 插值 / ★★**混合文本**（`a{{x}}b` ⇒ 编译期切分，2026-10-03 · P2-2）
+      //
+      // 【这一批补的是什么（能力清单 P2-2）】此前"文本 + 插值混合"（`<p>a{{x}}b</p>`）
+      //   被诊断拒绝 ⇒ 模板里极常见的写法（前后缀 + 变量）只能改写或退回 Vue 路径。
+      //   ⇒ 现在把子节点序列编成**段数组**（静态段 / 表达式段），运行时求值后拼成完整文本。
+      //     这与"组合表达式"是同一件事（`a{{x}}b` ≡ `'a' + x + 'b'`）——切分只是
+      //     把模板写法归一成表达式**段**，不引入第二套求值语义。
+      //
+      // 【为什么仍拒绝"元素 + 文本"混排】那需要**文本节点结构化**（自绘树里文本是元素属性，
+      //   没有独立文本节点）⇒ 是节点模型问题，不是表达式问题（本版如实保留诊断）。
       if (textChildren.length > 0) {
         if (elementChildren.length > 0) {
           diag(`${tag}(id=${id}) 同时含元素与文本子节点（本版不支持混合内容）`, '请拆分为纯容器或纯文本元素')
-        } else if (textChildren.length > 1) {
-          diag(`${tag}(id=${id}) 含多个文本/插值子节点（本版不支持，需文本节点拆分）`)
         } else {
-          const c = textChildren[0] as Node & { content?: unknown }
-          // TEXT 的 content 是字符串；INTERPOLATION 的 content 是 {content: 'expr'}
-          const isInterp = (c as { type: number }).type === 5
-          node.text = isInterp ? '' : String((c.content as string) ?? '')
+          const segs: TextSegment[] = []
+          for (const raw of textChildren) {
+            const c = raw as Node & { content?: unknown }
+            // TEXT 的 content 是字符串；INTERPOLATION 的 content 是 {content: 'expr'}
+            const isInterp = (c as { type: number }).type === 5
+            if (isInterp) {
+              const inner = c.content as { content?: string } | string | undefined
+              const code = typeof inner === 'object' ? (inner?.content ?? '') : String(inner ?? '')
+              if (!code.trim()) continue
+              // ★插值表达式**立即按表达式程序编译**（与 `{{ x }}` 单段同一套能力边界：
+              //   不支持的语法在编译期就可见；未支持的形态仍由订阅表带出诊断）
+              const compiled = compileExpr(code.trim())
+              if (compiled.ok) {
+                segs.push({ expr: compiled.program, src: code.trim() })
+              } else {
+                // 参考实现编不出（如调用表达式）⇒ 若把源码当字面量文本保留 = **静默算错**
+                // ⇒ 不产出该段 + 诊断（修法指向表达式能力边界）
+                diag(
+                  `${tag}(id=${id}) 混合文本里的插值 \`${code.trim()}\` 无法编译为可求值程序：${compiled.unsupported}`,
+                  '可改写为受支持的表达式子集（成员访问/算术/比较/逻辑/三元），或对该元素改用纯插值 + 独立静态元素',
+                  'VAPOR_TEXT_INTERP_UNSUPPORTED',
+                )
+                continue
+              }
+            } else {
+              const text = String((c.content as string) ?? '')
+              if (!text) continue
+              segs.push({ text })
+            }
+          }
+          const hasExpr = segs.some((s) => 'expr' in s)
+          if (!hasExpr || segs.length === 1) {
+            // ★单段（纯静态 / 纯插值）⇒ 走既有占位路径（产物形态对既有模板**逐字节不变**）；
+            //   纯静态多段（如 `a{{ }}b` 的空插值被丢掉后）⇒ 直接拼成占位串（无表达式 ⇒ 无需运行时求值）
+            node.text = segs.map((s) => ('text' in s ? s.text : '')).join('')
+          } else {
+            // ★多段（静态+插值混合 / 多插值 / 插值+静态）⇒ 段数组；运行时求值拼接
+            //   `node.text` 留空串占位（由回填/更新写满），与既有"插值初值为空串"同一形态
+            node.textSegments = segs
+            node.text = ''
+          }
         }
       }
       if (hasDynamicStyle) {

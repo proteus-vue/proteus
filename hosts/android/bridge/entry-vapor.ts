@@ -38,6 +38,10 @@
 // 【产物】hosts/android/bridge/dist/bundle-vapor.js（IIFE，QuickJS 直接 eval）
 // 【调用】Java：`__proteusVaporRun(argsJson)`（见 MainActivity 的 `vapor` 通路）
 import { instantiateTemplate, ListRegistry, PropKeyTable, StringPool, SlotRuntime, VaporRuntime, evalExpr } from '@proteus-vue/slot-runtime'
+// ★★P2-3（2026-10-03）：事件派发语义（含修饰符 .stop/.self/.once）下沉到共享实现——
+//   本桥不再内联"链序 + 修饰符"逻辑（iOS/Harmony 接同一份 ⇒ 不会漂移）
+import { dispatchGesture, indexEventBindings, createDispatchState } from '@proteus-vue/slot-runtime'
+import type { EventBinding, EventIndex, DispatchState } from '@proteus-vue/slot-runtime'
 // ★★★A/B 对照（2026-10-01）：**同一份 SFC 的第二条路**——Vue 运行时渲染。
 //   `abRender` 由构建期用 **@vue/compiler-sfc** 从同一份 SFC 编出（见 gen-vapor-fixture.mjs）。
 import { createAppRenderer } from '@proteus-vue/renderer-app'
@@ -260,6 +264,17 @@ interface VaporReport {
   /** 实例树里 text 非空 / width 非空的节点数（"数据真的回填了"的机器证据） */
   inst_text_filled: number
   inst_width_filled: number
+  /**
+   * ★★**混合文本首帧探针**（P2-2，2026-10-03）：实例树里**多段拼接**节点的实际文本。
+   *   判据核它等于「静态段 + 实参求值」的完整串（不是单字段/单个源值）——
+   *   这是"段求值真的在设备上跑了"的证据（不依赖宿主回执）。
+   */
+  mix_text_probe: Array<{ id: number; text: string }>
+  /**
+   * ★★**更新后的文本串**（P2-2 第二半）：逐轮记录内核回执 `text_probe.text`。
+   *   混合文本更新若不完整（丢静态段）⇒ 这里的串会缺前缀（判据核 `·` 仍在）。
+   */
+  text_probe_rounds: string[]
   // —— 渲染段（宿主侧读数，回执）——
   mount_ms: number
   mount_nodes: number
@@ -282,6 +297,8 @@ interface VaporReport {
   /** 编译产物里的事件绑定数 / handler 数 */
   ev_bindings: number
   ev_handlers: number
+  /** ★P2-3：带**语义修饰符**（.stop/.self/.once）的绑定数——>0 时判据核「修饰符真的进了产物」 */
+  ev_modifiers: number
   /** 注入的 tap 次数（本判据夹具体验：点"计数按钮"与"宽度按钮"各一次） */
   taps: number
   /** 每次 tap 的逐帧读数：命中节点 / 冒泡链 / 逐跳派发 / handler 跑了吗 / 源变化 / 内核变更集 / 几何真值 */
@@ -294,6 +311,10 @@ interface VaporReport {
     fired: number[]
     handler: string
     source_after: unknown
+    /** ★P2-3：本跳是否被 `.stop` 终止冒泡（修饰符真的生效的证据） */
+    stopped?: boolean
+    /** ★P2-3：因 `.self` 被挡下的节点（诊断用） */
+    skipped_self?: number[]
     ops: number
     changed_rects: number
     geom_before: number
@@ -316,6 +337,10 @@ function makeData(rows: number): Record<string, unknown> {
     // ★★冒泡锚（2026-10-02）：按钮外层容器的宽度源——容器上的 `@click="padW += 5"`
     //   是**祖先 handler**：tap 链 [按钮, 容器, root] 上两跳都要跑（判据核"链没断"）
     padW: 300,
+    // ★★P2-3 修饰符夹具（2026-10-03）：内层 `@click.stop` 的宽度源 + 外层（无修饰）的宽度源
+    //   ——判据 ⑨ 核"点了内层，**外层 handler 不许跑**"（.stop 真的终止了冒泡）
+    stopOuterW: 300,
+    stopInnerW: 120,
     tapCount: 0,
   }
 }
@@ -488,8 +513,9 @@ function runAb(args: VaporArgs): string {
       tpl: LayoutTemplate
       table: SubscriptionTable
       sfc: string
-      /** ★事件绑定 + handler 动作表（2026-10-01 第二批：事件路径 A/B 要用——纯数据，编译期产物） */
-      events?: Array<{ nodeId: number; event: string; handler: string }>
+      /** ★事件绑定 + handler 动作表（2026-10-01 第二批：事件路径 A/B 要用——纯数据，编译期产物）
+       *  ★P2-3（2026-10-03）：绑定可带语义修饰符（stop/self/once）——见 slot-runtime 的 EventBinding */
+      events?: EventBinding[]
       handlers?: Record<string, Array<{ op: string; source: string; program: unknown }>>
     }
     if (!artifacts.tpl.ok) {
@@ -624,8 +650,9 @@ function runAb(args: VaporArgs): string {
      */
     const harnessEvents = artifacts.events ?? []
     const harnessHandlers = artifacts.handlers ?? {}
-    const byNodeEvent = new Map<string, string>()
-    for (const e of harnessEvents) byNodeEvent.set(`${e.nodeId}:${e.event}`, e.handler)
+    // ★P2-3：索引 + `.once` 状态走共享实现（runShort 用的同一套语义）
+    const byNodeEvent = indexEventBindings(harnessEvents)
+    const dispatchStateA = createDispatchState()
     /**
      * 全局反向通道名（C 侧**单一注册名**：`g_gesture_cb`）。
      * ★A/B 两相位**各自替换全局函数**——`nativeDispatchGesture` 每次按名字取当前函数，
@@ -688,7 +715,7 @@ function runAb(args: VaporArgs): string {
       ;(globalThis as unknown as Record<string, unknown>)[GESTURE_CB] = (type: string, nodeId: number, chainJson?: string): string => {
         // ★沿**内核给的冒泡链**派发（2026-10-02：此前只看 target 本身 ⇒ 祖先 handler 永不触发）
         const chain = parseChain(chainJson, nodeId)
-        const hit = dispatchChainA(chain, type, byNodeEvent, (h) => runActions(h, data))
+        const hit = dispatchChainA(chain, type, byNodeEvent, dispatchStateA, (h) => runActions(h, data))
         const handler = hit.handler
         if (!handler) return JSON.stringify({ ok: false, reason: `链 ${chain.join('>')} 上没有 ${type} 的 handler` })
         // 触发全部订阅源（本夹具 tap 改 boxW；全触发 = "全量重算 + diff"，正确性优先）
@@ -760,6 +787,10 @@ function runAb(args: VaporArgs): string {
     const abBoxW = ref(dataB.boxW)
     // ★冒泡锚：容器宽度源（容器 `@click="padW += 5"` 的祖先 handler 改它）
     const abPadW = ref(dataB.padW)
+    // ★P2-3 修饰符夹具（B 路同样要提供源——否则 Vue 渲染时 `stopOuterW` 未定义 ⇒
+    //   该节点无宽度 ⇒ A/B 几何对比假红；夹具源必须两路对齐）
+    const abStopOuterW = ref(dataB.stopOuterW)
+    const abStopInnerW = ref(dataB.stopInnerW)
     /**
      * ★★B 路更新的**同步驱动柄**（2026-10-01 更新路径 A/B）。
      *
@@ -776,7 +807,7 @@ function runAb(args: VaporArgs): string {
       name: 'VaporAbApp',
       setup() {
         abRootInst = getCurrentInstance() as unknown as { update?: () => void }
-        return { list: abList, boxW: abBoxW, padW: abPadW }
+        return { list: abList, boxW: abBoxW, padW: abPadW, stopOuterW: abStopOuterW, stopInnerW: abStopInnerW }
       },
       render: abRender,
     }
@@ -1223,23 +1254,30 @@ function parseChain(chainJson: unknown, nodeId: number): number[] {
  * ★诚实边界：A 路的 handler 是**动作列表**（无事件对象）⇒ 不支持 `stopPropagation`
  *   （B 路适配器的 `dispatchEvent` 支持）。本版判据覆盖"非终止冒泡"的等价；终止语义属后续批次。
  */
+/**
+ * ★★**沿冒泡链派发（A 路）**——`chain` 自深到浅（内核 `bubble_chain` 语义）；
+ *   逐个查 `节点:事件 → handler`，命中即执行（**全部祖先都会跑**——DOM 冒泡语义）。
+ *
+ * 【为什么两处（runShort / runAb A 相位）共用这一份】这两条路此前都只对 **target 本身**
+ *   派发 ⇒ 祖先 handler 永不触发（冒泡链在 JNI 下发后被丢——2026-10-02 修复）。
+ *   同一语义只允许一处实现（本仓纪律）。
+ *
+ * ★★**2026-10-03 · P2-3：语义下沉到 `@proteus-vue/slot-runtime` 的共享派发器**
+ *   （`dispatchGesture`）——本函数只是薄接线（转调 + 保持既有返回形状）。
+ *   ⇒ 修饰符 `.stop` / `.self` / `.once` 与链序语义**三端共用一份实现**
+ *     （此前这里内联、iOS/Harmony 各写一份必然漂移；且当时**不支持任何修饰符**）。
+ *   ★诚实边界仍在但已**收窄**：A 路的 handler 是**动作列表**（无事件对象）⇒
+ *     `preventDefault` 这类"事件对象上的方法"仍无对应物；而 `.stop`（终止冒泡）
+ *     **已支持**（此前注释写的"不支持 stopPropagation"已过期——本批修正）。
+ */
 function dispatchChainA(
   chain: number[],
   type: string,
-  byNodeEvent: Map<string, string>,
+  index: EventIndex,
+  state: DispatchState,
   run: (name: string) => boolean,
-): { fired: number[]; handler: string } {
-  const fired: number[] = []
-  let handler = ''
-  for (const id of chain) {
-    const h = byNodeEvent.get(`${id}:${type}`) ?? byNodeEvent.get(`${id}:tap`) ?? ''
-    if (!h) continue
-    if (run(h)) {
-      fired.push(id)
-      if (!handler) handler = h
-    }
-  }
-  return { fired, handler }
+): { fired: number[]; handler: string; stopped: boolean; skippedSelf: number[]; skippedOnce: number[] } {
+  return dispatchGesture(chain, type, index, state, run)
 }
 
 /** 逐节点探针绘制通道（返回与 ids 等长的"非空通道数"） */
@@ -1464,9 +1502,10 @@ function runShort(args: VaporArgs): string {
     tpl_nodes: 0, tpl_ok: false, sub_l1: 0, sub_l0: 0, sub_l1_rate: 0, sub_sources: [],
     inst_ms: 0, inst_nodes: 0, inst_reused_ids: 0, inst_allocated_ids: 0, inst_rows: 0,
     inst_values_filled: 0, inst_virtual_rows: 0, inst_text_filled: 0, inst_width_filled: 0,
+    mix_text_probe: [], text_probe_rounds: [],
     mount_ms: 0, mount_nodes: 0,
     updates_run: 0, ops_bytes: 0, ops_ms: 0, apply_ms: 0, text_synced_total: 0, update_evidence: [], geom_probe: [], channels: [],
-    ev_bindings: 0, ev_handlers: 0, taps: 0, tap_evidence: [],
+    ev_bindings: 0, ev_handlers: 0, ev_modifiers: 0, taps: 0, tap_evidence: [],
     uninstantiated_slots: 0, notes,
   }
   try {
@@ -1515,6 +1554,11 @@ function runShort(args: VaporArgs): string {
     // ★回填证据（本仓实测踩过的缺陷形态：不回填 ⇒ 首帧空白/几何错，且**零报错**）
     rep.inst_text_filled = inst.nodes.filter((n) => typeof n.text === 'string' && n.text.length > 0).length
     rep.inst_width_filled = inst.nodes.filter((n) => typeof n.width === 'number').length
+    // ★P2-2：多段拼接节点的首帧文本（模板里只有**段表**的节点——判据核"完整拼接"）
+    const segNodeIds = new Set(tpl.nodes.filter((n) => (n as { textSegments?: unknown[] }).textSegments?.length).map((n) => n.id))
+    rep.mix_text_probe = inst.nodes
+      .filter((n) => segNodeIds.has(n.id))
+      .map((n) => ({ id: n.id, text: String((n as { text?: string }).text ?? '') }))
     if (rep.inst_text_filled === 0) notes.push('⚠ 实例树里没有任何非空文本——回填链可疑')
 
     // ── ③ 渲染：交给宿主（Rust 核心算几何 + 下发绘制指令）──
@@ -1562,13 +1606,16 @@ function runShort(args: VaporArgs): string {
      *   之后设备端只做**执行**（`evalExpr` 求值 + 写数据）——无 eval、无字符串解析。
      */
     const handlers = (artifacts as unknown as { handlers?: Record<string, Array<{ op: string; source: string; program: unknown }>> }).handlers ?? {}
-    const events = (artifacts as unknown as { events?: Array<{ nodeId: number; event: string; handler: string }> }).events ?? []
+    const events = (artifacts as unknown as { events?: EventBinding[] }).events ?? []
     rep.ev_bindings = events.length
     rep.ev_handlers = Object.keys(handlers).length
 
     // 节点 → (事件 → handler)：宿主回来的 `(type, nodeId)` 据此找到该跑哪个 handler
-    const byNodeEvent = new Map<string, string>()
-    for (const e of events) byNodeEvent.set(`${e.nodeId}:${e.event}`, e.handler)
+    //   ★P2-3：索引与派发语义由 `@proteus-vue/slot-runtime` 提供（三端共用一份；
+    //     含 `.stop`/`.self`/`.once` 修饰符语义与 `.once` 状态）
+    const byNodeEvent = indexEventBindings(events)
+    const dispatchState = createDispatchState()
+    rep.ev_modifiers = events.filter((e) => e.stop || e.self || e.once).length
 
     /** 跑一个 handler：按序执行动作（先算后写 ⇒ 顺序语义保留） */
     const runHandler = (name: string): boolean => {
@@ -1595,11 +1642,11 @@ function runShort(args: VaporArgs): string {
      * 返回本帧变化读数（指令字节数 + 源变化后的值），供宿主/判据记账。
      * ★2026-10-02：回调签名带 `chainJson`（冒泡链），**沿链派发**（此前只看 target 本身）。
      */
-    const gestureHits: Array<{ tap: number; hit: number; chain: number[]; fired: number[]; handler: string; source_after: unknown }> = []
+    const gestureHits: Array<{ tap: number; hit: number; chain: number[]; fired: number[]; handler: string; source_after: unknown; stopped?: boolean; skipped_self?: number[] }> = []
     ;(globalThis as unknown as Record<string, unknown>).__proteusVaporGesture = (type: string, nodeId: number, chainJson?: string): string => {
       const chain = parseChain(chainJson, nodeId)
       const before = { ...data }
-      const hit = dispatchChainA(chain, type, byNodeEvent, runHandler)
+      const hit = dispatchChainA(chain, type, byNodeEvent, dispatchState, runHandler)
       const handler = hit.handler
       if (!handler) return JSON.stringify({ ok: false, reason: `链 ${chain.join('>')} 上没有 ${type} 的 handler` })
       const ran = true
@@ -1632,7 +1679,11 @@ function runShort(args: VaporArgs): string {
           applied = -3
         }
       }
-      gestureHits.push({ tap: gestureHits.length + 1, hit: nodeId, chain, fired: hit.fired, handler, source_after: changedSources })
+      gestureHits.push({
+        tap: gestureHits.length + 1, hit: nodeId, chain, fired: hit.fired, handler, source_after: changedSources,
+        // ★P2-3：终止/跳过读数（判据核「修饰符真的生效」——既有形态下恒 false/[]）
+        stopped: hit.stopped, skipped_self: hit.skippedSelf,
+      })
       return JSON.stringify({
         ok: ran, handler, fired: hit.fired, changed: changedSources, ops: payload.length,
         applied, relayout, changed_rects: changedN,
@@ -1688,12 +1739,17 @@ function runShort(args: VaporArgs): string {
       const ao = JSON.parse(applyOut) as {
         ok?: boolean; applied?: number; rects?: Record<string, unknown>
         relayout?: number; text_synced?: number; text_synced_total?: number; error?: string
+        /** ★P2-2：内核回执里最后一次文本更新的 {id, text}（宿主落绘制真源前的那份完整串） */
+        text_probe?: { id: number; text: string }
       }
       if (ao.ok !== true) {
         notes.push(`第 ${r} 轮 applyOps 失败：${ao.error ?? ''}`)
         continue
       }
       const changed = ao.rects ? Object.keys(ao.rects).length : 0
+      // ★P2-2：记录内核回执里的文本串（宿主已消费；判据核"完整拼接"没有退化）
+      const probe = (ao as { text_probe?: { text?: string } }).text_probe
+      if (probe?.text) rep.text_probe_rounds.push(String(probe.text))
       evidence.push({
         round: r, row: at + 1, ops: payload.length, changed_rects: changed,
         relayout: ao.relayout ?? -1,
@@ -1786,6 +1842,9 @@ function runShort(args: VaporArgs): string {
           fired: lastHit?.fired ?? [],
           handler: lastHit?.handler ?? '',
           source_after: lastHit?.source_after ?? null,
+          // ★P2-3：该次 tap 是否被 .stop 终止（判据 ⑨ 用；无修饰符时恒 false）
+          stopped: lastHit?.stopped ?? false,
+          skipped_self: lastHit?.skipped_self ?? [],
           ops: tapOut.ok ? 1 : 0,
           changed_rects: geomChanged,
           geom_before: geomBefore,

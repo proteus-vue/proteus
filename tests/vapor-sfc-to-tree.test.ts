@@ -106,10 +106,18 @@ describe('V4 · ★全量 SFC → 模板产物', () => {
     expect(outer!.subtreeIds, '外层子树只含行根自身（内层节点归内层列表）').toEqual([outer!.rowRootId])
     expect(inner!.subtreeIds).toContain(inner!.rowRootId)
 
-    // 反向：混合文本**仍必须**上报（本批未做）
+    // 反向：★混合文本（P2-2 之前"必须上报"）——**2026-10-03 起已支持** ⇒ 判据改为：
+    //   零诊断 + 产物带 textSegments 段表（静态段 + 表达式段）
     const mixed = sfc(`const n = ref(1)\n`, `<p-text style="color: #fff">前缀{{ n }}</p-text>`)
     const r2 = buildLayoutTemplate(mixed, 'm.vue')
-    expect(r2.diagnostics.some((d) => d.message.includes('文本/插值')), '纯静态+插值混合必须上报').toBe(true)
+    expect(
+      r2.diagnostics.some((d) => d.message.includes('文本/插值')),
+      '混合文本已支持（P2-2）——不应再报"未支持"诊断',
+    ).toBe(false)
+    const mixedNode = r2.template.nodes.find((n) => n.tag === 'p-text')!
+    expect(mixedNode.textSegments, '混合文本必须产出段表（静态段 + 表达式段）').toBeDefined()
+    expect(mixedNode.textSegments!.map((s) => ('text' in s ? s.text : `<expr:${s.src}>`)))
+      .toEqual(['前缀', '<expr:n>'])
   })
 
   it('★⑤ 百分比宽高 → **比例字段**（widthRatio / heightRatio——单位模型在模板产物里的一环）', () => {
@@ -396,5 +404,99 @@ describe('V4 · ★★嵌套 v-for 递归实例化（P2 批次，2026-10-03）',
     // 8 条文本全部回填（层级 × 路径都正确才可能全对）
     const texts = inst.nodes.map((n) => (n as { text?: string }).text).filter(Boolean).sort()
     expect(texts).toEqual(['t000', 't001', 't010', 't011', 't100', 't101', 't110', 't111'])
+  })
+})
+
+describe('★★P2-2 混合文本（2026-10-03）：`a{{x}}b` 编译期切分 → 段求值 → 首帧与更新都对', () => {
+  // 【这一批补的是什么（能力清单 P2-2）】此前"文本 + 插值混合"被诊断拒绝；而"前缀{{x}}后缀"
+  //   是模板里的常见写法。自绘树里文本是**元素属性**（没有独立文本节点）⇒ 正解是**段数组**
+  //   （静态段 + 表达式段），运行时求值拼接——与"组合表达式"同一套求值语义。
+  //
+  // 【本组判据打在三处（各自对应一个会静默出错的环节）】
+  //   ① 切分：段序/段型正确（错 ⇒ 文本顺序错，看起来"像对的"）；
+  //   ② 首帧回填：实例化后 `text` 已是完整拼接（错 ⇒ 首帧空白或半截，零报错）；
+  //   ③ **更新**：改数据 ⇒ 一条指令 ⇒ Rust 内核文本真的变（错 ⇒ 首帧对、之后不更新）。
+  it('① 切分：静态段 + 表达式段按子节点序（`a{{x}}b` ⇒ 3 段）', () => {
+    const src = sfc(`const x = ref(1)\n`, `<p-text style="color: #fff">a{{ x }}b</p-text>`)
+    const r = buildLayoutTemplate(src, 'mix.vue')
+    expect(r.diagnostics, '混合文本不应有诊断').toHaveLength(0)
+    const node = r.template.nodes.find((n) => n.tag === 'p-text')!
+    expect(node.textSegments!.map((s) => ('text' in s ? s.text : `<expr:${s.src}>`))).toEqual(['a', '<expr:x>', 'b'])
+    expect(node.text, '段表节点 text 置空串占位（既有"插值初值为空串"形态）').toBe('')
+  })
+
+  it('★反向：纯静态 / 单插值**不得**产出段表（既有产物逐字节不变）', () => {
+    const staticOnly = buildLayoutTemplate(sfc(`const x = ref(1)\n`, `<p-text>标题</p-text>`), 's.vue')
+    expect(staticOnly.template.nodes[0]!.textSegments).toBeUndefined()
+    expect(staticOnly.template.nodes[0]!.text).toBe('标题')
+    const single = buildLayoutTemplate(sfc(`const x = ref(1)\n`, `<p-text>{{ x }}</p-text>`), 'i.vue')
+    expect(single.template.nodes[0]!.textSegments, '单插值走既有 text.content 槽位（不合成）').toBeUndefined()
+    // 反向：**元素 + 文本混排**仍需诊断（节点模型问题，不在本批范围）
+    const mixedEl = buildLayoutTemplate(
+      sfc(`const x = ref(1)\n`, `<p-view><p-text>x</p-text>尾{{ x }}</p-view>`),
+      'e.vue',
+    )
+    expect(mixedEl.diagnostics.some((d) => d.message.includes('混合内容'))).toBe(true)
+  })
+
+  it('② 订阅表：多个插值合成**一条**槽位（否则两条 SET_TEXT 后者覆盖前者）', () => {
+    // 【本仓实测的形态】`{{a}}-{{b}}` 若不合成 ⇒ 两个独立 `text.content` 槽位指向**同一节点**
+    //   ⇒ 运行时发两条 SET_TEXT，屏幕上只剩最后一个（静默错内容）。
+    const src = sfc(
+      `const a = ref(1)\nconst b = ref(2)\n`,
+      `<p-text style="color: #fff">{{ a }}-{{ b }}</p-text>`,
+    )
+    const { table } = buildVaporSubscriptions(src, 'mix2.vue')
+    const textSlots = table.sources.flatMap((s) => s.slots).filter((x) => x.propKey === 'text.content')
+    // ★同一槽位被多个源驱动 ⇒ 会出现在多条源记录里（多源依赖的既有形态，见 build.ts 的 slotsBySource）；
+    //   判据是**唯一 slotId 只有一个**——不合成时是两个不同 slotId ⇒ 运行时后者覆盖前者
+    const uniqueSlots = [...new Set(textSlots.map((x) => x.slotId))]
+    expect(uniqueSlots, '两个插值 ⇒ 合成后只应有一条文本槽位').toHaveLength(1)
+    // 合成槽位的求值器必须是"程序"形态（拼接受支持）且被实例化
+    const ev = table.evaluators.find((e) => e.evaluatorId === textSlots[0]!.evaluatorId)!
+    expect(ev.form, '合成后的求值器应是程序（支持的拼接表达式）').toBe('program')
+  })
+
+  it('③ 首帧回填：实例化后 text 是**完整拼接**（不是单字段/单个源值）', () => {
+    const src = sfc(
+      `const a = ref(7)\nconst b = ref('zz')\n`,
+      `<p-text style="color: #fff">a{{ a }}b{{ b }}</p-text>`,
+    )
+    const tpl = buildLayoutTemplate(src, 'fill.vue').template
+    const { table } = buildVaporSubscriptions(src, 'fill.vue')
+    const inst = instantiateTemplate(tpl, {
+      viewport: { width: 390, height: 844 }, read: (n) => ({ a: 7, b: 'zz' } as Record<string, unknown>)[n], table,
+    })
+    const node = inst.nodes.find((n) => (n as { tag?: string }).tag === 'p-text')!
+    expect((node as { text?: string }).text, '首帧必须是完整拼接').toBe('a7bzz')
+  })
+
+  it('★行内混合文本：段求值走 v-for 行作用域（`{{item.n}}!` 不能读到 undefined）', () => {
+    const src = sfc(
+      `const list = ref([{ id: 1, n: 'x' }, { id: 2, n: 'y' }])\n`,
+      `<ul><li v-for="item in list" :key="item.id"><span>{{ item.n }}!</span></li></ul>`,
+    )
+    const tpl = buildLayoutTemplate(src, 'rowmix.vue').template
+    const { table } = buildVaporSubscriptions(src, 'rowmix.vue')
+    const inst = instantiateTemplate(tpl, {
+      viewport: { width: 390, height: 844 },
+      read: (n) => ({ list: [{ id: 1, n: 'x' }, { id: 2, n: 'y' }] } as Record<string, unknown>)[n],
+      table,
+    })
+    const texts = inst.nodes.map((n) => (n as { text?: string }).text).filter(Boolean).sort()
+    expect(texts, '两行的文本都要完整（行作用域绑定对）').toEqual(['x!', 'y!'])
+  })
+
+  it('★诊断边界：混合文本里的插值**编不出**（如调用）⇒ 诊断而非静默当字面量', () => {
+    const src = sfc(`const n = ref(1)\n`, `<p-text style="color: #fff">a{{ fmt(n) }}b</p-text>`)
+    const r = buildLayoutTemplate(src, 'bad.vue')
+    expect(
+      r.diagnostics.some((d) => d.message.includes('无法编译为可求值程序')),
+      `编不出的插值必须诊断：${r.diagnostics.map((d) => d.message).join(' | ')}`,
+    ).toBe(true)
+    // ★不静默：编不出的那段**不进段表**（否则会被当成字面量文本 ⇒ 屏幕上出现 "fmt(n)" 字样）
+    const node = r.template.nodes.find((n) => n.tag === 'p-text')!
+    const hasFmtLiteral = (node.textSegments ?? []).some((s) => 'text' in s && s.text.includes('fmt'))
+    expect(hasFmtLiteral, '表达式源码不得被当成字面量文本段').toBe(false)
   })
 })
