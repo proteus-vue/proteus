@@ -135,7 +135,7 @@ Teleport / KeepAlive / Suspense / Transition / TransitionGroup / v-memo / 自定
 |---|---|---|---|
 | **P1-1** | **组件边界标记**：原先只有 `tag:"MyComp"` 字符串（当普通元素） | 宿主无法识别"这里是组件位" | ✅ **已完成（第一批，2026-10-03）**：`LayoutNode.component` 字段（PascalCase 判据，与 Vue 约定同）；template.ts 与 deps.ts **两处判据同源** |
 | **P1-2** | **组件 props 响应式通道** | 父→子传值无通路 | ✅ **已完成（第一批）**：props 走 `component.<name>` propKey → `component-prop` 槽位 → **`CALL_COMPONENT_UPDATE` 指令**（opcode/编解码**早已存在**，缺的只是发射端）；内核明确拒收并上报（"需组件边界调度"——**预期形态**：组件指令归宿主/组件运行时，不归内核几何） |
-| **P1-3** | **组件内部渲染 / 生命周期 / 插槽分发 / emits** | 组件无法真正"跑起来" | ⏳ **后续批次**（本批只交边界与通道——见下方"增量说明"） |
+| **P1-3** | **组件内部渲染** / 生命周期 / 插槽分发 / emits | 组件无法真正"跑起来" | ◐ **组件内部渲染已完成（2026-10-03 · 三端同步）**：组件注册表（`ComponentDef`）→ 实例化期**偏移展开**（`idOffset` 子树 id 重映射）→ 子运行时装配（`nodeIdOffset` 指令定向）→ **props 双向**（下行：父源 → `component-prop` → 子运行时 `writeSlotsOfSource`；上行：子槽位写值 → `onComponentProp` 桥回调）。判据 ⑭ 核**三层证据**：子节点文本（下行）/ 子 flush 的 `layout.width` 指令（指令上行）/ applyOps 后**内核矩形真变 40→99**（真值上行）。**生命周期 / 具名插槽分发 / emits 未做**（后续批次） |
 
 **★P1 增量说明（本批做/不做，如实标注）**
 
@@ -143,12 +143,12 @@ Teleport / KeepAlive / Suspense / Transition / TransitionGroup / v-memo / 自定
 |---|---|
 | 组件边界标记（`component` 字段） | 方案 §7.3 "组件边界强制 L0"——标记是 L0 语义的载体 |
 | props 通道（`component-prop` → `CALL_COMPONENT_UPDATE`） | opcode/编码/解码/发射点**全部已存在**（`buffer.ts`/`slot.ts`），只缺编译期发射 ⇒ 本批补齐 |
+| **组件内部渲染（P1-3 主体，2026-10-03）** | 注册表 + 偏移展开 + 子运行时装配 + props 双向——判据 ⑭ 三端同步全过（见 `docs/Proteus_Vapor三端能力对照.md`） |
 | 判据（3 组：边界标记 / props 路由 / style 并存 + 反向不误标） | 本仓"能力 + 判据 + 端上验证"三件套 |
 
 | 不做（后续批次） | 原因 |
 |---|---|
-| 组件内部渲染（用 `renderer-app` 实例化子组件） | 需要"组件注册表 + 实例化时机 + 与 L0/L1 边界协同"——独立批次 |
-| 生命周期（setup/mounted/unmounted） | 同上（与 `app-stack` 的屏生命周期机制可协同） |
+| 生命周期（setup/mounted/unmounted） | 与 `app-stack` 的屏生命周期机制可协同——独立批次 |
 | 插槽分发（具名/作用域） | 需子树注入协议（`INSERT_BLOCK` 已被官方设计为对应指令） |
 | emits（子→父） | 需反向事件通道（可复用 `events/handlers` + 冒泡链） |
 

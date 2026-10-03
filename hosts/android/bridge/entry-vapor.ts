@@ -276,6 +276,11 @@ interface VaporReport {
   inst_width_filled: number
   /** ★★★P3-3（2026-10-03）：`<Transition>` 交给宿主的动画条数（>0 = 过渡真的被驱动） */
   transition_started: number
+  /** ★★★P1-3（2026-10-03）：组件挂载数 / 组件展开产出的节点数（0 = 无组件或未注册） */
+  component_mounts: number
+  component_nodes: number
+  /** 组件子节点的实测探针（文本 = props 值；宽度 = props 上行后的值） */
+  component_kid_probe: { text?: string; width?: number; width_after?: number; rect_before?: number; rect_after?: number }
   /** 模板里的过渡声明（`隐id:预设名`；判据区分"未声明"与"声明未驱动"） */
   tpl_transition: string[]
   /**
@@ -386,6 +391,9 @@ function makeData(rows: number): Record<string, unknown> {
     exprObj: { inner: 'ok' },
     // ★P3-3 夹具：初始**不可见** ⇒ 判据里改 true ⇒ 触发入场过渡（见 drainTransitions）
     trVisible: false,
+    // ★★★P1-3 夹具（组件 props 源——判据改它们验"父改 ⇒ 子更新"）
+    kidLabel: 'k0',
+    kidLabelW: 40,
     tapCount: 0,
   }
 }
@@ -448,6 +456,8 @@ function runStress(args: VaporArgs): string {
       table: SubscriptionTable
       sfc: string
       data?: Record<string, unknown>
+      /** ★★★P1-3（2026-10-03）：组件注册表（子组件编译产物——键名与生成器**必须一致**） */
+      components?: Record<string, { tpl: LayoutTemplate; table: SubscriptionTable; data?: Record<string, unknown> }>
     }
     if (!artifacts.tpl.ok) {
       rep.error = '模板不可用（构建期诊断）'
@@ -1607,7 +1617,7 @@ function runShort(args: VaporArgs): string {
     tpl_nodes: 0, tpl_ok: false, sub_l1: 0, sub_l0: 0, sub_l1_rate: 0, sub_sources: [],
     inst_ms: 0, inst_nodes: 0, inst_reused_ids: 0, inst_allocated_ids: 0, inst_rows: 0,
     inst_values_filled: 0, inst_virtual_rows: 0, inst_text_filled: 0, inst_width_filled: 0,
-    mix_text_probe: [], text_probe_rounds: [], gate_rounds: [], gate_text_nodes: [], once_node_id: -1, memo_node_id: -1, expr_probe: [], transition_started: 0, tpl_transition: [],
+    mix_text_probe: [], text_probe_rounds: [], gate_rounds: [], gate_text_nodes: [], once_node_id: -1, memo_node_id: -1, expr_probe: [], transition_started: 0, tpl_transition: [], component_mounts: 0, component_nodes: 0, component_kid_probe: {},
     mount_ms: 0, mount_nodes: 0,
     updates_run: 0, ops_bytes: 0, ops_ms: 0, apply_ms: 0, text_synced_total: 0, update_evidence: [], geom_probe: [], channels: [],
     ev_bindings: 0, ev_handlers: 0, ev_modifiers: 0, taps: 0, tap_evidence: [],
@@ -1615,7 +1625,13 @@ function runShort(args: VaporArgs): string {
   }
   try {
     // ── ① 编译产物（构建期产出）──
-    const artifacts = JSON.parse(args.artifacts) as { tpl: LayoutTemplate; table: SubscriptionTable; sfc: string }
+    const artifacts = JSON.parse(args.artifacts) as {
+      tpl: LayoutTemplate
+      table: SubscriptionTable
+      sfc: string
+      /** ★★★P1-3（2026-10-03）：组件注册表（子组件编译产物——键名与生成器**必须一致**） */
+      components?: Record<string, { tpl: LayoutTemplate; table: SubscriptionTable; data?: Record<string, unknown> }>
+    }
     const tpl = artifacts.tpl
     const table = artifacts.table
     rep.tpl_nodes = tpl.nodes.length
@@ -1647,11 +1663,18 @@ function runShort(args: VaporArgs): string {
     const read = (n: string): unknown => data[n]
     const registry = new ListRegistry()
     const t2 = t()
+    // ★★★P1-3：把注册表从"产物形态"翻成"运行时形态"（ComponentDef）
+    const componentDefs: Record<string, { template: LayoutTemplate; table?: SubscriptionTable; data?: Record<string, unknown> }> = {}
+    for (const [nm, def] of Object.entries(artifacts.components ?? {})) {
+      componentDefs[nm] = { template: def.tpl, table: def.table, data: def.data }
+    }
     const inst = instantiateTemplate(tpl, {
       viewport: args.viewport,
       read,
       table,
       registry,
+      // ★P1-3：有注册表 ⇒ 组件内部被**展开**（无 ⇒ 保留边界标记、内部留空 + note）
+      ...(Object.keys(componentDefs).length > 0 ? { components: componentDefs } : {}),
     })
     rep.inst_ms = t() - t2
     rep.inst_nodes = inst.nodes.length
@@ -1710,7 +1733,71 @@ function runShort(args: VaporArgs): string {
     //   本入口全同步，而 SlotRuntime 默认调度器是微任务（evaluateScript 期间不排空，本仓实测过）。
     const slotRt = new SlotRuntime(keys, strings, (bytes) => captured.push(bytes))
     const evals = VaporRuntime.buildEvaluators(table.evaluators)
-    const vapor = new VaporRuntime(table, slotRt, evals, registry)
+    /* ═══════════ ★★★P1-3：**组件内部渲染**的运行时装配（2026-10-03）═══════════
+     *
+     * 【装配链（三层）】
+     *   ① 构建期：子组件 SFC 编译成 `ComponentDef`（模板 + 订阅表 + data 快照）随产物下发；
+     *   ② 实例化：命中组件的边界节点被**展开**成子树（id 平移），并产出 `componentMounts`
+     *      （桥据此知道"哪个边界挂了哪个子组件、它的 props 是什么"）；
+     *   ③ 运行时（这里）：每个挂载建一个**子 VaporRuntime**（自己的表/自己的注册表），
+     *      并把父级的 `onComponentProp(boundaryLocalId, prop, value)` 路由到对应子运行时：
+     *      props 改了 ⇒ 写进子组件的求值上下文 ⇒ 子运行时把变化编成**它自己的指令流**。
+     *
+     * 【为什么这样分层是对的】子组件的更新是"普通槽位更新"（它有自己的订阅表）——
+     *   组件系统只是**多了一层子树 + 一次 props 赋值**，不引入新指令语义（内核零改动）。
+     */
+    const propCallLog: string[] = []
+    let childEmitCount = 0
+    const childRuntimes: Array<{ mount: NonNullable<typeof inst.componentMounts>[number]; vapor: VaporRuntime; runtime: SlotRuntime }> = []
+    const mountsByBoundary = new Map<number, (typeof childRuntimes)[number]>()
+    if (inst.componentMounts) {
+      for (const mount of inst.componentMounts) {
+        // 子组件自己的指令流：追加到同一 sink（captured）⇒ 与父级共用一次 flush/一次 applyOps
+        const childRt = new SlotRuntime(keys, strings, (bytes) => { captured.push(bytes); childEmitCount++ })
+        // ★★nodeIdOffset（P1-3 实测缺陷②）：子组件的令牌表 nodeId 是**子树 local 空间**，
+        //   而指令要打到**父树 id 空间**的同一个内核上 ⇒ 必须平移。
+        //   ★偏移量 = 子树的起点 = 挂载记录里最小节点 id − 子树模板的 local 最小 id。
+        //     这里直接用"子树节点 id 的最小值 − 子模板 local 最大值映射"不便算 ⇒
+        //     让实例化把偏移**带出来**（`mount.idOffset`），桥只做透传。
+        const childVapor = mount.table
+          ? new VaporRuntime(
+              mount.table, childRt, VaporRuntime.buildEvaluators(mount.table.evaluators), mount.registry,
+              undefined, mount.idOffset ?? 0)
+          : undefined
+        if (childVapor && mount.table) {
+          const triggers2 = new Map<string, () => void>()
+          childVapor.load(mount.ctx, (n, cb) => triggers2.set(n, cb))
+          childVapor.relink(mount.ctx)
+          childRt.flush()
+        }
+        const entry2 = { mount, vapor: childVapor!, runtime: childRt }
+        mountsByBoundary.set(mount.boundaryNodeId, entry2)
+        childRuntimes.push(entry2)
+      }
+    }
+    rep.component_mounts = childRuntimes.length
+    rep.component_nodes = inst.stats.componentNodes
+    /**
+     * 父级 props 变化 → 对应子运行时（见上注释的装配链）。
+     * ★boundaryNodeId 是**父树 local id**（订阅表里的 nodeId 空间——与模板序同源）。
+     */
+    const onComponentProp = (boundaryLocalId: number, propName: string, value: unknown): void => {
+      const target = mountsByBoundary.get(boundaryLocalId)
+      if (!target) {
+        notes.push(`组件 props 变化找不到挂载记录（boundary=${boundaryLocalId} ${propName}）——内部渲染未装配？`)
+        return
+      }
+      target.mount.props[propName] = value
+      propCallLog.push(`${propName}=${String(value)}`)
+      if (!target.vapor) {
+        propCallLog.push('(no-vapor)')
+        return
+      }
+      // 子组件的订阅表里，props 是**源**（`sourceName` = props 名）
+      target.vapor.writeSlotsOfSource(propName, target.mount.ctx)
+      target.runtime.flush()
+    }
+    const vapor = new VaporRuntime(table, slotRt, evals, registry, onComponentProp)
     const ctx = { read }
     const triggers = new Map<string, () => void>()
     vapor.load(ctx, (name, cb) => triggers.set(name, cb))
@@ -2039,6 +2126,76 @@ function runShort(args: VaporArgs): string {
      *   ⇒ 必须**显式制造一次可见性翻转**（`trVisible: false → true`），
      *     然后核：运行时有事件、模板有声明、宿主有动画（三层缺一不可）。
      */
+    /* ═══════════ ★★★P1-3 组件 props 上行轮（2026-10-03）═══════════
+     *
+     * 【为什么单独一轮】props 的**下行**在首帧就能验（子节点带值）；而**上行**必须有一次
+     *   "父源变化"才发生 ⇒ 显式改 `kidLabelW` 并核"子节点的宽度真的跟着变"。
+     *   ★判据读的是**子节点探针**（不是"发了指令"）——指令发错节点也满足前者（本仓实测过）。
+     */
+    if (triggers.has('kidLabelW') && childRuntimes.length > 0) {
+      // ★探针节点 = 组件子树里那个 p-text（判据核它的文本/宽度是否来自 props）
+      //   ——用挂载记录的 nodeIds 过滤（不必依赖挂载顺序，也不必猜 id 规律）。
+      const kidNodeIds = new Set(childRuntimes.flatMap((cr) => cr.mount.nodeIds))
+      const kidText = inst.nodes.find((n) => kidNodeIds.has(n.id) && (n as { tag?: string }).tag === 'p-text')
+      const kidTextNodeId = kidText?.id
+      rep.component_kid_probe = {
+        text: kidText ? String((kidText as { text?: string }).text ?? '') : undefined,
+        width: kidText ? ((kidText as { width?: number }).width ?? undefined) : undefined,
+      }
+      // ★★上行判据的**内核几何真值**基线（不是"发了指令"——指令发错节点/写错键也会"发出去了"）：
+      //   改数据前先读一次内核矩形（读不到 = undefined ⇒ 判据按缺失判红，不静默放行）。
+      const kidRectBefore = kidTextNodeId !== undefined ? rectsOf()[String(kidTextNodeId)]?.width : undefined
+      propCallLog.length = 0   // ★只统计**本轮**的 props 回调（否则日志混入历史 relink 的旧值）
+      data.kidLabelW = 99
+      data.kidLabel = 'k9'
+      for (const [, cb] of triggers) cb()
+      vapor.relink(ctx)
+      slotRt.flush()
+      for (const cr of childRuntimes) cr.runtime.flush()
+      // ★★本轮可能有多条（父 relink 一条 + 各子运行时各一条）——**逐条都发给宿主**
+      //   （首版只取最后一条 ⇒ 若子组件指令在前就漏发；本仓实测：子sink产出=3 而主链路取到 0）
+      const kidPayloads = captured.slice()
+      captured.length = 0
+      for (const pl of kidPayloads) {
+        if (pl.length === 0) continue
+        try { proteusHost.applyOps(JSON.stringify(Array.from(pl))) } catch { /* 回执失败不阻断 */ }
+      }
+      // ★上行后从**全部本轮指令**里读子节点的新宽度（实例树是首帧快照，不会自己变）。
+      //   ★必须遍历 `captured` **全部条目**（本仓实测的坑）：父级 relink 与子运行时各自 flush
+      //     一次 ⇒ `captured` 有**两条**（父的在前、子的在后）；首版只取最后一条
+      //     （`captured[length-1]`）——若子组件的指令恰在**前一条**，就读不到它的宽度（实测 None）。
+      let afterW: number | undefined
+      // ★逐个 payload 找子节点的宽度指令（见上：本轮可能有多条——父/子各自的 flush）
+      //   ★★用 **payload 自带的键表**（`d.keys`）而不是桥的全局 `keys`（本仓实测的真缺陷）：
+      //     `decodeOps` 返回的是**该 payload 内联的**键表（只含它用到的键，首现顺序由各运行时
+      //     自己的 intern 顺序决定）——查全局表会得到**错的键名**（实测：keyId=0 在全局表里是
+      //     `text.content`、在子 payload 里才是 `layout.width`）⇒ 判据永远读不到宽度。
+      for (const b of kidPayloads) {
+        try {
+          const d = decodeOps(b)
+          for (const op of d.ops) {
+            if (op.op === OpCode.SET_STYLE) {
+              const k = d.keys.keyOf((op as { keyId: number }).keyId)
+              if (k === 'layout.width' && kidTextNodeId !== undefined && (op as { nodeId: number }).nodeId === kidTextNodeId) {
+                afterW = (op as { value: number }).value
+              }
+            }
+          }
+        } catch { /* 单条解码失败不阻断其余（判据按缺失处理） */ }
+      }
+      rep.component_kid_probe = { ...rep.component_kid_probe, ...(afterW !== undefined ? { width_after: afterW } : {}) }
+      // ★★上行**内核真值**（独立于指令解码的第二证据）：applyOps 后重读内核矩形——
+      //   子节点的宽度必须真变（读不到 = 内核没这节点/没重排 ⇒ 判据缺失判红）。
+      //   【为什么第二证据不可省（本仓实测）】只核"指令值"时，指令写到**别的节点**
+      //   也可能值对（判据曾经用全局键表把 keyId=0 读成 text.content 还判过——见上）。
+      const kidRectAfter = kidTextNodeId !== undefined ? rectsOf()[String(kidTextNodeId)]?.width : undefined
+      rep.component_kid_probe = {
+        ...rep.component_kid_probe,
+        rect_before: kidRectBefore,
+        rect_after: kidRectAfter,
+      }
+    }
+
     if (triggers.has('trVisible')) {
       const beforeTr = rep.transition_started
       data.trVisible = true

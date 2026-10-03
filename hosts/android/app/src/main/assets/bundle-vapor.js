@@ -10375,11 +10375,13 @@
     }
   };
   var VaporRuntime = class {
-    constructor(table, rt, evaluators, registry) {
+    constructor(table, rt, evaluators, registry, onComponentProp, nodeIdOffset = 0) {
       this.table = table;
       this.rt = rt;
       this.evaluators = evaluators;
       this.registry = registry;
+      this.onComponentProp = onComponentProp;
+      this.nodeIdOffset = nodeIdOffset;
       this.slots = /* @__PURE__ */ new Map();
       this.slotById = /* @__PURE__ */ new Map();
       this.evalImpls = /* @__PURE__ */ new Map();
@@ -10471,7 +10473,8 @@
             slot = createSlot(
               {
                 id: spec.slotId,
-                nodeId: spec.nodeId,
+                // ★P1-3：子组件的 nodeId 统一加偏移（内核/宿主在**父树空间**里认节点）
+                nodeId: spec.nodeId + this.nodeIdOffset,
                 kind: spec.kind,
                 keyId: this.rt.keys.intern(spec.propKey),
                 listId: spec.listId ?? spec.slotId,
@@ -10533,6 +10536,12 @@
           const impl = this.evaluators.get(spec.evaluatorId);
           if (!entry || !impl) continue;
           const value = impl(ctx);
+          if (spec.kind === "component-prop" && this.onComponentProp) {
+            const propName = spec.propKey.startsWith("component.") ? spec.propKey.slice("component.".length) : spec.propKey;
+            this.onComponentProp(spec.nodeId, propName, value);
+            entry.slot.value = value;
+            continue;
+          }
           this.rt.setSlot(entry.slot, value);
           if (spec.once) this.onceWritten.add(spec.slotId);
           if (spec.kind === "visibility") {
@@ -10843,6 +10852,8 @@
   }
   function instantiateTemplate(tpl, opts) {
     const nodes = [];
+    const idOffset = opts.idOffset ?? 0;
+    const instNotes = [];
     const maxTemplateId = tpl.nodes.reduce((m, n) => Math.max(m, n.id), 0);
     let nextId = opts.firstRowInstanceId ?? maxTemplateId + 1;
     let allocated = 0;
@@ -10886,6 +10897,8 @@
       }
       if (n.tag) out.tag = n.tag;
       if (n.component) out.component = n.component;
+      out.id = id + idOffset;
+      out.parentId = parentId === null ? null : parentId + idOffset;
       nodes.push(out);
       byId.set(id, out);
     };
@@ -10928,8 +10941,8 @@
       virtualRows.push({
         index: rowIndex,
         key: itemKey,
-        root: rowRootId,
-        ids: [...myIds]
+        root: rowRootId + idOffset,
+        ids: myIds.map((x) => x + idOffset)
       });
       if (collect) collect.push(...myIds);
       if (opts.table) {
@@ -10966,7 +10979,9 @@
             valuesFilled++;
           }
           if (opts.registry && Object.keys(slotNodes).length > 0) {
-            opts.registry.registerItem(listId, itemKey, slotNodes);
+            const shifted = {};
+            for (const [k, v] of Object.entries(slotNodes)) shifted[Number(k)] = v + idOffset;
+            opts.registry.registerItem(listId, itemKey, shifted);
           }
         }
       }
@@ -11034,12 +11049,99 @@
         }
       }
     }
+    const componentMounts = [];
+    let componentNodes = 0;
+    if (opts.components) {
+      const depth = opts.componentDepth ?? 0;
+      const boundaries = nodes.filter((n) => n.component);
+      for (const boundary of boundaries) {
+        const name = boundary.component;
+        const def = opts.components[name];
+        if (!def) {
+          instNotes.push(`\u7EC4\u4EF6 ${name}\uFF08\u8FB9\u754C\u8282\u70B9 ${boundary.id}\uFF09\u672A\u5728\u6CE8\u518C\u8868\u91CC \u21D2 \u5185\u90E8\u7559\u7A7A\uFF08\u5360\u4F4D\uFF09`);
+          continue;
+        }
+        if (depth >= 8) {
+          instNotes.push(`\u7EC4\u4EF6 ${name} \u5C55\u5F00\u6DF1\u5EA6\u8D85\u4E0A\u9650\uFF088\uFF09\u21D2 \u505C\u6B62\u9012\u5F52\uFF08\u9632\u81EA\u5F15\u7528\uFF09`);
+          continue;
+        }
+        const boundaryLocalId = boundary.id - idOffset;
+        const props = {};
+        if (opts.table) {
+          const allSlots = [
+            ...opts.table.sources.flatMap((src) => src.slots.map((sl) => ({ sl, srcName: src.sourceName }))),
+            ...(opts.table.constantSlots ?? []).map((sl) => ({ sl, srcName: void 0 }))
+          ];
+          for (const { sl, srcName } of allSlots) {
+            if (sl.kind !== "component-prop" || sl.nodeId !== boundaryLocalId) continue;
+            const propName = sl.propKey.startsWith("component.") ? sl.propKey.slice("component.".length) : sl.propKey;
+            if (srcName !== void 0) {
+              props[propName] = opts.read(srcName);
+            } else {
+              const impl = evaluators.get(sl.evaluatorId);
+              if (impl) {
+                try {
+                  props[propName] = impl({ read: opts.read });
+                } catch {
+                  props[propName] = void 0;
+                }
+              }
+            }
+          }
+        }
+        const childRead = (n) => {
+          if (Object.prototype.hasOwnProperty.call(props, n)) return props[n];
+          const d = def.data;
+          if (d && Object.prototype.hasOwnProperty.call(d, n)) return d[n];
+          return opts.read(n);
+        };
+        const ctx = { read: childRead };
+        const childRegistry = opts.registry ? new ListRegistry() : void 0;
+        const childOffset = nextId;
+        const childInst = instantiateTemplate(def.template, {
+          viewport: opts.viewport,
+          read: childRead,
+          table: def.table,
+          registry: childRegistry,
+          idOffset: idOffset + childOffset,
+          components: opts.components,
+          componentDepth: depth + 1
+        });
+        for (const r of childInst.nodes) if (r.parentId === null) r.parentId = boundary.id;
+        nodes.push(...childInst.nodes);
+        componentNodes += childInst.nodes.length;
+        valuesFilled += childInst.stats.valuesFilled;
+        nextId = childOffset + childInst.stats.maxLocalId + 1;
+        componentMounts.push({
+          boundaryNodeId: boundary.id,
+          name,
+          props,
+          ctx,
+          table: def.table,
+          registry: childRegistry,
+          nodeIds: childInst.nodes.map((x) => x.id),
+          idOffset: idOffset + childOffset
+        });
+        for (const m of childInst.componentMounts ?? []) componentMounts.push(m);
+        for (const nt of childInst.notes ?? []) instNotes.push(nt);
+      }
+    }
     return {
       viewport: opts.viewport,
       nodes,
-      stats: { reusedTemplateIds: reused, allocatedIds: allocated, rows: nodes.length, valuesFilled },
+      stats: {
+        reusedTemplateIds: reused,
+        allocatedIds: allocated,
+        rows: nodes.length,
+        valuesFilled,
+        // ★P1-3：本树 local 高水位（父级据此推进自己的分配器——**不含** idOffset）
+        maxLocalId: nextId - 1,
+        componentNodes
+      },
       // ★只有**恰好一个**列表时才给虚拟化描述（多个列表 ⇒ 行号空间不同源，宿主按行号二分会错配）
-      virtual: virtualRows.length > 0 && tpl.lists.length === 1 ? { rows: virtualRows } : void 0
+      virtual: virtualRows.length > 0 && tpl.lists.length === 1 ? { rows: virtualRows } : void 0,
+      ...componentMounts.length > 0 ? { componentMounts } : {},
+      ...instNotes.length > 0 ? { notes: instNotes } : {}
     };
   }
   function createDispatchState() {
@@ -11833,6 +11935,7 @@
   function render(_ctx, _cache) {
     const _component_p_text = (0, import_runtime_core2.resolveComponent)("p-text");
     const _component_p_view = (0, import_runtime_core2.resolveComponent)("p-view");
+    const _component_KidPanel = (0, import_runtime_core2.resolveComponent)("KidPanel");
     const _component_MyKeep = (0, import_runtime_core2.resolveComponent)("MyKeep");
     return (0, import_runtime_core2.openBlock)(), (0, import_runtime_core2.createBlock)(_component_p_view, { style: { "width": 1080, "height": 1600, "flexDirection": "column", "padding": { "top": 24 }, "backgroundColor": "#14141c" } }, {
       default: (0, import_runtime_core2.withCtx)(() => [
@@ -12032,6 +12135,12 @@
           _: 1
           /* STABLE */
         }),
+        (0, import_runtime_core2.createCommentVNode)(" \u2605\u2605\u2605P1-3\uFF082026-10-03\uFF09\u7EC4\u4EF6\u5185\u90E8\u6E32\u67D3\u5939\u5177\uFF1AKids \u5B50\u7EC4\u4EF6\uFF08\u6784\u5EFA\u671F\u7F16\u8BD1\u6210 ComponentDef\uFF09+\n         props \u7ED1**\u54CD\u5E94\u5F0F\u6E90**\uFF08kidLabelW / kidLabel\uFF09\u21D2 \u5224\u636E\u6838\u300C\u7236\u6539 props \u21D2 \u5B50\u8282\u70B9\u771F\u7684\u66F4\u65B0\u300D\u3002\n         \u2605\u5E95\u8272\u907F\u5F00 #2f6fed\uFF08A/B \u5224\u636E\u7684\u6309\u94AE\u8272\u951A\uFF09\u3002 "),
+        (0, import_runtime_core2.createVNode)(_component_KidPanel, {
+          label: _ctx.kidLabel,
+          labelW: _ctx.kidLabelW,
+          style: { "height": 30 }
+        }, null, 8, ["label", "labelW"]),
         (0, import_runtime_core2.createCommentVNode)(" \u2605\u2605\u2605P3 \u6279\u6B21\uFF082026-10-03\uFF09\u903B\u8F91\u5BB9\u5668**\u900F\u4F20**\u5939\u5177\uFF1A\u4E09\u8005\u90FD**\u4E0D\u4EA7\u5305\u88F9\u76D2**\n         \uFF08Vue \u8BED\u4E49\uFF1A\u903B\u8F91\u5BB9\u5668\u4E0D\u6E32\u67D3\u5143\u7D20\uFF09\u2014\u2014\u5224\u636E\u6838\u300C\u8282\u70B9\u6570\u5B88\u6052 + \u51E0\u4F55\u4E0E Vue \u7B49\u4EF7\u300D\u3002\n         \u2605\u672C\u6CE8\u91CA\u4E0D\u5F97\u542B\u53CD\u5F15\u53F7\u6216\u7F8E\u5143\u82B1\u62EC\u53F7\uFF08\u5728 JS \u6A21\u677F\u4E32\u91CC\u2014\u2014\u62A4\u680F\u89C1 check:script-compile\uFF09\u3002 "),
         (0, import_runtime_core2.createCommentVNode)(" \u2605\u2605KeepAlive \u7684\u5B98\u65B9\u7EA6\u675F\uFF08\u672C\u4ED3\u5B9E\u6D4B\u88AB Vue \u7F16\u8BD1\u5668\u5F53\u573A\u62E6\u4E0B\uFF09\uFF1A\u5B83\u8981\u6C42\u300C\u6070\u597D\u4E00\u4E2A\u5B50\u7EC4\u4EF6\u300D\n         \u2014\u2014p-view\uFF08\u539F\u751F\u6807\u7B7E\uFF09\u4F1A\u88AB\u62D2\uFF1ASyntaxError: KeepAlive expects exactly one child component.\n         \u21D2 \u5939\u5177\u6539\u7528\u771F\u7EC4\u4EF6\u5F62\u6001\uFF08MyKeep\uFF09\u9A8C\u8BC1\u900F\u4F20\u3002\n         \u2605\u5E95\u8272\u907F\u5F00 #2f6fed\uFF08A/B \u5224\u636E\u7684\u6309\u94AE\u8272\u951A\u2014\u2014\u672C\u4ED3\u5DF2\u8E29\uFF1A\u91CD\u590D \u21D2 \u5224\u636E\u7EA2\uFF09\u3002 "),
         ((0, import_runtime_core2.openBlock)(), (0, import_runtime_core2.createBlock)(
@@ -12132,6 +12241,9 @@
       exprObj: { inner: "ok" },
       // ★P3-3 夹具：初始**不可见** ⇒ 判据里改 true ⇒ 触发入场过渡（见 drainTransitions）
       trVisible: false,
+      // ★★★P1-3 夹具（组件 props 源——判据改它们验"父改 ⇒ 子更新"）
+      kidLabel: "k0",
+      kidLabelW: 40,
       tapCount: 0
     };
   }
@@ -13046,6 +13158,9 @@
       expr_probe: [],
       transition_started: 0,
       tpl_transition: [],
+      component_mounts: 0,
+      component_nodes: 0,
+      component_kid_probe: {},
       mount_ms: 0,
       mount_nodes: 0,
       updates_run: 0,
@@ -13084,11 +13199,17 @@
       const read = (n) => data[n];
       const registry = new ListRegistry();
       const t2 = t();
+      const componentDefs = {};
+      for (const [nm, def] of Object.entries(artifacts.components ?? {})) {
+        componentDefs[nm] = { template: def.tpl, table: def.table, data: def.data };
+      }
       const inst = instantiateTemplate(tpl, {
         viewport: args.viewport,
         read,
         table,
-        registry
+        registry,
+        // ★P1-3：有注册表 ⇒ 组件内部被**展开**（无 ⇒ 保留边界标记、内部留空 + note）
+        ...Object.keys(componentDefs).length > 0 ? { components: componentDefs } : {}
       });
       rep.inst_ms = t() - t2;
       rep.inst_nodes = inst.nodes.length;
@@ -13125,7 +13246,53 @@
       const captured = [];
       const slotRt = new SlotRuntime(keys, strings, (bytes) => captured.push(bytes));
       const evals = VaporRuntime.buildEvaluators(table.evaluators);
-      const vapor = new VaporRuntime(table, slotRt, evals, registry);
+      const propCallLog = [];
+      let childEmitCount = 0;
+      const childRuntimes = [];
+      const mountsByBoundary = /* @__PURE__ */ new Map();
+      if (inst.componentMounts) {
+        for (const mount of inst.componentMounts) {
+          const childRt = new SlotRuntime(keys, strings, (bytes) => {
+            captured.push(bytes);
+            childEmitCount++;
+          });
+          const childVapor = mount.table ? new VaporRuntime(
+            mount.table,
+            childRt,
+            VaporRuntime.buildEvaluators(mount.table.evaluators),
+            mount.registry,
+            void 0,
+            mount.idOffset ?? 0
+          ) : void 0;
+          if (childVapor && mount.table) {
+            const triggers2 = /* @__PURE__ */ new Map();
+            childVapor.load(mount.ctx, (n, cb) => triggers2.set(n, cb));
+            childVapor.relink(mount.ctx);
+            childRt.flush();
+          }
+          const entry2 = { mount, vapor: childVapor, runtime: childRt };
+          mountsByBoundary.set(mount.boundaryNodeId, entry2);
+          childRuntimes.push(entry2);
+        }
+      }
+      rep.component_mounts = childRuntimes.length;
+      rep.component_nodes = inst.stats.componentNodes;
+      const onComponentProp = (boundaryLocalId, propName, value) => {
+        const target = mountsByBoundary.get(boundaryLocalId);
+        if (!target) {
+          notes.push(`\u7EC4\u4EF6 props \u53D8\u5316\u627E\u4E0D\u5230\u6302\u8F7D\u8BB0\u5F55\uFF08boundary=${boundaryLocalId} ${propName}\uFF09\u2014\u2014\u5185\u90E8\u6E32\u67D3\u672A\u88C5\u914D\uFF1F`);
+          return;
+        }
+        target.mount.props[propName] = value;
+        propCallLog.push(`${propName}=${String(value)}`);
+        if (!target.vapor) {
+          propCallLog.push("(no-vapor)");
+          return;
+        }
+        target.vapor.writeSlotsOfSource(propName, target.mount.ctx);
+        target.runtime.flush();
+      };
+      const vapor = new VaporRuntime(table, slotRt, evals, registry, onComponentProp);
       const ctx = { read };
       const triggers = /* @__PURE__ */ new Map();
       vapor.load(ctx, (name, cb) => triggers.set(name, cb));
@@ -13387,6 +13554,54 @@
         }, false);
         rep.gate_rounds = gateRounds;
         rep.gate_text_nodes = gateTextNodes;
+      }
+      if (triggers.has("kidLabelW") && childRuntimes.length > 0) {
+        const kidNodeIds = new Set(childRuntimes.flatMap((cr) => cr.mount.nodeIds));
+        const kidText = inst.nodes.find((n) => kidNodeIds.has(n.id) && n.tag === "p-text");
+        const kidTextNodeId = kidText?.id;
+        rep.component_kid_probe = {
+          text: kidText ? String(kidText.text ?? "") : void 0,
+          width: kidText ? kidText.width ?? void 0 : void 0
+        };
+        const kidRectBefore = kidTextNodeId !== void 0 ? rectsOf()[String(kidTextNodeId)]?.width : void 0;
+        propCallLog.length = 0;
+        data.kidLabelW = 99;
+        data.kidLabel = "k9";
+        for (const [, cb] of triggers) cb();
+        vapor.relink(ctx);
+        slotRt.flush();
+        for (const cr of childRuntimes) cr.runtime.flush();
+        const kidPayloads = captured.slice();
+        captured.length = 0;
+        for (const pl of kidPayloads) {
+          if (pl.length === 0) continue;
+          try {
+            proteusHost.applyOps(JSON.stringify(Array.from(pl)));
+          } catch {
+          }
+        }
+        let afterW;
+        for (const b of kidPayloads) {
+          try {
+            const d = decodeOps(b);
+            for (const op of d.ops) {
+              if (op.op === OpCode.SET_STYLE) {
+                const k = d.keys.keyOf(op.keyId);
+                if (k === "layout.width" && kidTextNodeId !== void 0 && op.nodeId === kidTextNodeId) {
+                  afterW = op.value;
+                }
+              }
+            }
+          } catch {
+          }
+        }
+        rep.component_kid_probe = { ...rep.component_kid_probe, ...afterW !== void 0 ? { width_after: afterW } : {} };
+        const kidRectAfter = kidTextNodeId !== void 0 ? rectsOf()[String(kidTextNodeId)]?.width : void 0;
+        rep.component_kid_probe = {
+          ...rep.component_kid_probe,
+          rect_before: kidRectBefore,
+          rect_after: kidRectAfter
+        };
       }
       if (triggers.has("trVisible")) {
         const beforeTr = rep.transition_started;

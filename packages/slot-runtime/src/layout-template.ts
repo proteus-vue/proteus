@@ -125,6 +125,37 @@ export interface ListTemplate {
   sourceField?: string
 }
 
+/**
+ * ★★★**组件定义**（P1-3 组件系统第二批，2026-10-03）——组件注册表的条目。
+ *
+ * 【这一层补的是什么（能力清单 P1-3）】P1 第一批只交"组件边界标记 + props 通道"
+ *   （`LayoutNode.component` + `component-prop` 槽位 → `CALL_COMPONENT_UPDATE`）——
+ *   **组件内部是空的**（标记在那儿，没人渲染它）。
+ *   本批交出**内部渲染**：把子组件的模板实例化成**一段子树**挂在边界节点下。
+ *
+ * 【为什么注册表在**运行时包**（与 LayoutTemplate/SubscriptionTable 同一处置）】
+ *   它是"产物之间的引用"：父组件的产物里只有 `component: "Panel"` 这个名字，
+ *   真正的形状由本接口定义 ⇒ 消费方（运行时）定契约，生产方（构建期编译器）填内容。
+ *   ★**同一份 registry 三端共用**（随 bundle 走）⇒ 内部渲染天然三端一致，宿主零改动。
+ *
+ * 【诚实边界（本批不做）】① 生命周期（mounted/unmounted 钩子）；② 插槽分发（具名/作用域）；
+ *   ③ emits（子→父）；④ 组件自身的**响应式状态**（`data` 是构建期快照——端上不执行 script，
+ *   与既有夹具同规）。这四项各有诊断/文档标注。
+ */
+export interface ComponentDef {
+  /** 组件模板（该 SFC 的 `<template>` 编译产物） */
+  template: LayoutTemplate
+  /** 组件订阅表（props → 槽位；有它才能 props 下行 + 子组件自身更新） */
+  table?: import('./table').SubscriptionTable
+  /**
+   * 组件自身的数据快照（构建期从 `<script setup>` 抽取——**端上不执行 script**，与设备端夹具同规）。
+   * 缺省 `{}`。★props 优先于 data（同名时 props 胜——与 Vue 的"props 不可被 data 覆盖"同向）。
+   */
+  data?: Record<string, unknown>
+  /** 组件名（诊断用；缺省取注册表的键） */
+  name?: string
+}
+
 /** 布局模板（编译器产物之一；序列化后即可跨端传输） */
 export interface LayoutTemplate {
   nodes: LayoutNode[]

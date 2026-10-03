@@ -136,6 +136,27 @@ export class VaporRuntime {
      *（核心无需懂列表）；不提供或未登记 ⇒ 回退 `LIST_UPDATE`（宿主自持映射的场景）。
      */
     private readonly registry?: ListRegistry,
+    /**
+     * ★★★**组件私有 nodeId 偏移**（P1-3，2026-10-03）——本运行时驱动的指令要加的偏移量。
+     *
+     * 【为什么必须有（本仓实测的静默错节点）】子组件的令牌表里 nodeId 是**子树的 local 空间**
+     *   （模板序从 0 起），而指令要发给**同一个内核**，内核里的 id 是**父树空间**（实例化时统一平移过）。
+     *   ⇒ 子运行时若不加偏移，`SET_TEXT nodeId=1` 会打到**父树第 1 号节点**上
+     *     （本仓实测：子组件的更新写到了父级的容器上——零报错、几何静默错）。
+     *   ★默认 0（独立树/无组件时行为零变化）。
+     */
+    /**
+     * ★★★**组件 props 变更回调**（P1-3，2026-10-03）——`component-prop` 槽位被求值时的出口。
+     *
+     * 【为什么必须是回调（而不是运行时内部处理）】props 的**消费者是子组件的运行时**
+     *   （它有自己的订阅表/槽位/指令流）——而"哪个边界节点挂了哪个子运行时"只有**桥**知道
+     *   （组件挂载记录是实例化产物，见 `ComponentMount`）。⇒ 运行时只负责"报告 props 变了"，
+     *   桥负责"转交给对应的子运行时"（分层正确 + 可单测）。
+     * 【缺省行为】**不发 CALL_COMPONENT_UPDATE 指令**（那是给"宿主自己管组件"的场景）——
+     *   有回调时回调负责驱动子组件（内部渲染路径），无回调时保留旧行为（指令交宿主）。
+     */
+    private readonly onComponentProp?: (boundaryNodeId: number, propName: string, value: unknown) => void,
+    private readonly nodeIdOffset: number = 0,
   ) {}
 
   /**
@@ -234,7 +255,8 @@ export class VaporRuntime {
           slot = createSlot(
             {
               id: spec.slotId,
-              nodeId: spec.nodeId,
+              // ★P1-3：子组件的 nodeId 统一加偏移（内核/宿主在**父树空间**里认节点）
+              nodeId: spec.nodeId + this.nodeIdOffset,
               kind: spec.kind as SlotKind,
               keyId: this.rt.keys.intern(spec.propKey),
               listId: spec.listId ?? spec.slotId,
@@ -323,6 +345,19 @@ export class VaporRuntime {
         const impl = this.evaluators.get(spec.evaluatorId)
         if (!entry || !impl) continue
         const value = impl(ctx) as never
+        // ★★★P1-3：**组件 props 走内部渲染通道**（有回调时）——不发 CALL_COMPONENT_UPDATE
+        //   （那条指令是给"宿主自持组件"的场景；内部渲染路径下 props 直接改子组件的求值上下文，
+        //    由子运行时把变化编成它自己的普通指令流）。
+        //   ★父级 local nodeId → 桥侧的**边界 id**由回调方换算（见 entry-vapor 的装配）。
+        if (spec.kind === 'component-prop' && this.onComponentProp) {
+          const propName = spec.propKey.startsWith('component.') ? spec.propKey.slice('component.'.length) : spec.propKey
+          this.onComponentProp(spec.nodeId, propName, value)
+          // 仍然要填槽位值（诊断/explain 读它；但不经 slot.emit ⇒ 不发那条指令）
+          entry.slot.value = value
+          continue
+        }
+        // ★P1-3：nodeId 偏移在**创建 slot 时**一次生效（见下方 createSlot 的 nodeId 行）
+        //   ——此处不再改（同一槽位只建一次，重复加会累加出错误 id）
         this.rt.setSlot(entry.slot, value)
         if (spec.once) this.onceWritten.add(spec.slotId)
         // ★P3-3：可见性**真的翻转**才记（见 visibilityLog 注释；relink 重写全部槽位 ⇒ 必须去重）

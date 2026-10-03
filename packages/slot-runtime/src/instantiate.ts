@@ -12,9 +12,9 @@
 //     `firstRowInstanceId`（调用方给，须 > 模板最大 id）起**顺序分配**
 //   · 同时回填 `ListRegistry`（(listId,itemKey,itemSlotId) → 行内节点 id）——
 //     这是行内槽位能发出**普通 SET_STYLE/SET_TEXT** 的前提（否则退回 LIST_UPDATE）
-import type { ListRegistry } from './list-registry'
+import { ListRegistry } from './list-registry'
 import type { SubscriptionTable } from './table'
-import type { InstantiatedNode, LayoutNode, LayoutTemplate, ListTemplate } from './layout-template'
+import type { ComponentDef, InstantiatedNode, LayoutNode, LayoutTemplate, ListTemplate } from './layout-template'
 // ★★初值回填复用**运行时同一套实现**（求值器重建 + 行作用域读取）——见下方注释：
 //   组合表达式（`'a' + item.x + 'b'`）不能靠"取单个字段"回填，且两处各写一份必然分叉。
 //   ★文本段求值也走同一套 `evalExpr`（同一求值语义）
@@ -36,13 +36,78 @@ export interface InstantiateOptions {
   read: (name: string) => unknown
   /** 订阅表（含行内槽位定义、itemValueField/itemKeyField、sourceExpr） */
   table?: SubscriptionTable
+  /**
+   * ★★★**id 偏移**（P1-3 组件系统）：本棵树内所有 id 统一加该偏移。
+   *
+   * 【为什么必须有（不偏移就会撞车）】子组件的模板序 id 从 **0** 开始——
+   *   直接挂进父树会与父节点的 id **正面冲突**（内核按 id 建索引 ⇒ 树结构静默错乱）。
+   *   ⇒ 组件展开时由父级传入"当前 id 高水位"作为偏移，整棵子树平移。
+   */
+  idOffset?: number
+  /**
+   * ★★★**组件注册表**（P1-3）：`组件名 → 定义`——提供它才会**展开组件内部**。
+   *
+   * 【缺失时的行为（诚实）】节点仍带 `component` 标记（P1 第一批的语义），
+   *   但**内部为空**（占位）——不静默假装渲染了内容。
+   * 【递归】子树里的组件节点用**同一张注册表**继续展开（任意层，带深度上限防自引用）。
+   */
+  components?: Record<string, ComponentDef>
+  /** ★内部用：组件展开深度（防自引用无限递归；缺省 0，上限 8） */
+  componentDepth?: number
+}
+
+/**
+ * ★★★**组件挂载记录**（P1-3）——组件内部渲染后，桥/宿主据此**驱动子组件更新**。
+ *
+ * 【为什么必须由实例化给出】"这个边界节点下挂了哪个组件实例、它的 props 从哪读、
+ *   它的子树是哪些 id"——只有实例化知道（与 `virtual.rows` 同款理由）。
+ *   ★**props 上行更新**：父级某源变化 ⇒ 桥从 `onComponentProp` 拿到 (boundaryId, prop, value)
+ *   ⇒ 更新 `props` 对象 ⇒ 调子运行时的 `writeSlotsOfSource(prop, ctx)`（见 entry-vapor 装配）。
+ */
+export interface ComponentMount {
+  /** 边界节点 id（父树里的组件位） */
+  boundaryNodeId: number
+  /** 组件名 */
+  name: string
+  /**
+   * ★**props 对象**（**可变**——桥在父级 props 变化时直接改它）。
+   * 子组件的求值上下文按它读值（`read(prop)` ⇒ 这里）。
+   */
+  props: Record<string, unknown>
+  /** 子组件的求值上下文（`read` = props ?? data ?? 父级 read）——桥驱动更新时传它 */
+  ctx: import('./runtime').EvalContext
+  /** 子组件订阅表（无表 ⇒ 该组件无 props/无内部更新，仅静态子树） */
+  table?: SubscriptionTable
+  /** 子组件实例注册表（子组件**自己的** v-for 行解析用；无子列表时为空表） */
+  registry?: ListRegistry
+  /** 子树（含后代）的节点 id（虚拟化/诊断用） */
+  nodeIds: number[]
+  /**
+   * ★★**子树 id 偏移**（P1-3）——子组件的指令要把 nodeId 从 local 空间平移到本树空间。
+   *   = `opts.idOffset + 子树起点`（即子模板 local id + 本值 = 宿主看到的 id）。
+   *   桥把它透传给子运行时的 `nodeIdOffset`（见 `VaporRuntime` 构造）。
+   */
+  idOffset: number
 }
 
 export interface InstantiateResult {
   viewport: { width: number; height: number }
   nodes: InstantiatedNode[]
   /** id 分配读数（供对账："首行用模板 id、新增行从哪起"） */
-  stats: { reusedTemplateIds: number; allocatedIds: number; rows: number; valuesFilled: number }
+  stats: {
+    reusedTemplateIds: number
+    allocatedIds: number
+    rows: number
+    valuesFilled: number
+    /** ★P1-3：本棵树的 **local 最大 id**（不含 idOffset）——父级据此推进自己的分配器 */
+    maxLocalId: number
+    /** ★P1-3：组件展开产出的节点数（0 = 无组件或未提供注册表） */
+    componentNodes: number
+  }
+  /** ★P1-3：组件挂载记录（未展开组件时为 undefined） */
+  componentMounts?: ComponentMount[]
+  /** ★P1-3：实例化备注（如"组件未注册 / 超出深度上限"——不静默） */
+  notes?: string[]
   /**
    * ★★**虚拟化描述**（宿主据此按行物化/回收层——方案 §12.6 / §12.7 P1）
    *
@@ -153,6 +218,10 @@ export function evalTextSegments(
  */
 export function instantiateTemplate(tpl: LayoutTemplate, opts: InstantiateOptions): InstantiateResult {
   const nodes: InstantiatedNode[] = []
+  /** ★P1-3：本棵树的 id 平移量（组件展开时由父级给；0 = 独立树） */
+  const idOffset = opts.idOffset ?? 0
+  /** ★P1-3：实例化备注（组件未注册 / 深度超限——不静默） */
+  const instNotes: string[] = []
   const maxTemplateId = tpl.nodes.reduce((m, n) => Math.max(m, n.id), 0)
   let nextId = opts.firstRowInstanceId ?? maxTemplateId + 1
   let allocated = 0
@@ -242,6 +311,10 @@ export function instantiateTemplate(tpl: LayoutTemplate, opts: InstantiateOption
     //   的语义标记、嵌套 v-for（P2）需要区分容器与行，才必须补上。
     if (n.tag) out.tag = n.tag
     if (n.component) out.component = n.component
+    // ★★P1-3：**id 偏移只在写出时应用**（内部 byId/idMap 全用 local 空间——
+    //   这样初值回填/行解析等所有既有查找逻辑**零改动**，只有"给宿主的 id"平移）。
+    out.id = id + idOffset
+    out.parentId = parentId === null ? null : parentId + idOffset
     nodes.push(out)
     byId.set(id, out)
   }
@@ -325,8 +398,8 @@ export function instantiateTemplate(tpl: LayoutTemplate, opts: InstantiateOption
     virtualRows.push({
       index: rowIndex,
       key: itemKey,
-      root: rowRootId,
-      ids: [...myIds],
+      root: rowRootId + idOffset,
+      ids: myIds.map((x) => x + idOffset),
     });
     // ★本行完整 id 集并入**上层行**（最外层调用无 collect ⇒ 不产生额外开销）
     if (collect) collect.push(...myIds)
@@ -374,7 +447,10 @@ export function instantiateTemplate(tpl: LayoutTemplate, opts: InstantiateOption
           valuesFilled++
         }
         if (opts.registry && Object.keys(slotNodes).length > 0) {
-          opts.registry.registerItem(listId, itemKey, slotNodes)
+          // ★P1-3：注册表给的是**宿主看到的 id**（含偏移）——行内指令要按它命中节点
+          const shifted: Record<number, number> = {}
+          for (const [k, v] of Object.entries(slotNodes)) shifted[Number(k)] = v + idOffset
+          opts.registry.registerItem(listId, itemKey, shifted)
         }
       }
     }
@@ -476,11 +552,131 @@ export function instantiateTemplate(tpl: LayoutTemplate, opts: InstantiateOption
     }
   }
 
+  /* ═══════════ ★★★P1-3：**组件内部渲染**（2026-10-03 · 组件系统第二批）═══════════
+   *
+   * 【这一层补的是什么】P1 第一批只交"边界标记 + props 通道"——组件**内部是空的**。
+   *   本层把注册表里命中的组件**实例化成一段子树**挂在边界节点下：
+   *     ① props 求值：父订阅表里 `component.<name>` 槽位（该边界节点的）→ 初值对象；
+   *     ② 子上下文：`read` = props ?? 子组件 data ?? 父级 read（props 优先，与 Vue 同向）；
+   *     ③ **递归实例化**：子模板走同一条链（自己的表/自己的 id 空间/自己的行注册表）；
+   *     ④ **id 平移**：子树整体加 offset（子模板 id 从 0 起，不平移必与父树撞车）；
+   *     ⑤ 子树的根挂到边界节点下（模板里它们是"根"，在父树里是边界节点的孩子）。
+   *
+   * 【为什么在 JS 侧做（而不是宿主）】本函数与整条实例化链**三端共用**（同一份 bundle）
+   *   ⇒ 组件内部渲染**天然三端一致，宿主零改动**（宿主只看到一棵更大的扁平树）。
+   *
+   * 【诚实边界（本批）】① 生命周期钩子未做；② 插槽分发未做；③ emits（子→父）未做；
+   *   ④ 子组件自身的**响应式状态**未做（`data` 是构建期快照——端上不执行 script）。
+   */
+  const componentMounts: ComponentMount[] = []
+  let componentNodes = 0
+  if (opts.components) {
+    const depth = opts.componentDepth ?? 0
+    // ★只展开**本棵树**的边界节点（刚展开的子节点在子调用里处理——递归自然覆盖）
+    const boundaries = nodes.filter((n) => n.component)
+    for (const boundary of boundaries) {
+      const name = boundary.component!
+      const def = opts.components[name]
+      if (!def) {
+        instNotes.push(`组件 ${name}（边界节点 ${boundary.id}）未在注册表里 ⇒ 内部留空（占位）`)
+        continue
+      }
+      if (depth >= 8) {
+        instNotes.push(`组件 ${name} 展开深度超上限（8）⇒ 停止递归（防自引用）`)
+        continue
+      }
+      // ① props 求值：父表里该边界节点的 component-prop 槽位（模板序 local id）
+      const boundaryLocalId = boundary.id - idOffset
+      const props: Record<string, unknown> = {}
+      if (opts.table) {
+        // ★★两处都要扫（本仓实测的坑）：源驱动的 props 在 `sources`，而**字面量 props**
+        //   （`:label="'hi'"`）无源依赖 ⇒ 落在 `constantSlots`（P2-8 为常量表达式建的通道）
+        //   ⇒ 只扫 sources 会**拿不到字面量 props**（实测：props 对象为空 ⇒ 子组件读不到值）。
+        const allSlots = [
+          ...opts.table.sources.flatMap((src) => src.slots.map((sl) => ({ sl, srcName: src.sourceName }))),
+          ...(opts.table.constantSlots ?? []).map((sl) => ({ sl, srcName: undefined as string | undefined })),
+        ]
+        for (const { sl, srcName } of allSlots) {
+          if (sl.kind !== 'component-prop' || sl.nodeId !== boundaryLocalId) continue
+          const propName = sl.propKey.startsWith('component.') ? sl.propKey.slice('component.'.length) : sl.propKey
+          // ★★★两种形态（本仓实测）：**源驱动**的 props（`:label="kidLabel"`）——
+          //   初值 = 该源的当前值（`read(srcName)`），**不能**用求值器求（求值器算的是"整个表达式"，
+          //   对 `kidLabel` 这种纯成员访问结果相同，但对 `a.b` 形态会取到父级上下文的值——
+          //   而 props 语义是"取该源的值"）；**字面量** props（`:label="'hi'"`）在 constantSlots，
+          //   用求值器求。⇒ 分开处理（首版只走求值器 ⇒ 响应式 props 首帧为空——实测）。
+          if (srcName !== undefined) {
+            props[propName] = opts.read(srcName)
+          } else {
+            const impl = evaluators.get(sl.evaluatorId)
+            if (impl) {
+              try {
+                props[propName] = impl({ read: opts.read })
+              } catch {
+                props[propName] = undefined
+              }
+            }
+          }
+        }
+      }
+      // ② 子上下文：props 优先 ⇒ 子组件 data ⇒ 父级 read（props 不可被 data 覆盖——与 Vue 同向）
+      const childRead = (n: string): unknown => {
+        if (Object.prototype.hasOwnProperty.call(props, n)) return props[n]
+        const d = def.data
+        if (d && Object.prototype.hasOwnProperty.call(d, n)) return d[n]
+        return opts.read(n)
+      }
+      const ctx = { read: childRead }
+      // ③ 子组件自己的行注册表（它的 v-for 行解析用——与父树注册表隔离，互不污染）
+      const childRegistry = opts.registry ? new ListRegistry() : undefined
+      const childOffset = nextId   // 父树当前高水位（local 空间）——子树的起点
+      const childInst = instantiateTemplate(def.template, {
+        viewport: opts.viewport,
+        read: childRead,
+        table: def.table,
+        registry: childRegistry,
+        idOffset: idOffset + childOffset,
+        components: opts.components,
+        componentDepth: depth + 1,
+      })
+      // ④ 子树根挂到边界节点下（模板里它们是根 ⇒ 在父树里是边界的孩子）
+      for (const r of childInst.nodes) if (r.parentId === null) r.parentId = boundary.id
+      nodes.push(...childInst.nodes)
+      componentNodes += childInst.nodes.length
+      // ★回填计数聚合（子树的首帧回填也算本树的——报告/判据读 `inst_values_filled` 才完整）
+      valuesFilled += childInst.stats.valuesFilled
+      // ⑤ 推进本树分配器（子树的 local 高水位）
+      nextId = childOffset + childInst.stats.maxLocalId + 1
+      componentMounts.push({
+        boundaryNodeId: boundary.id,
+        name,
+        props,
+        ctx,
+        table: def.table,
+        registry: childRegistry,
+        nodeIds: childInst.nodes.map((x) => x.id),
+        idOffset: idOffset + childOffset,
+      })
+      // 子树的**嵌套**组件挂载记录一并冒出（桥要为每个挂载建运行时）
+      for (const m of childInst.componentMounts ?? []) componentMounts.push(m)
+      for (const nt of childInst.notes ?? []) instNotes.push(nt)
+    }
+  }
+
   return {
     viewport: opts.viewport,
     nodes,
-    stats: { reusedTemplateIds: reused, allocatedIds: allocated, rows: nodes.length, valuesFilled },
+    stats: {
+      reusedTemplateIds: reused,
+      allocatedIds: allocated,
+      rows: nodes.length,
+      valuesFilled,
+      // ★P1-3：本树 local 高水位（父级据此推进自己的分配器——**不含** idOffset）
+      maxLocalId: nextId - 1,
+      componentNodes,
+    },
     // ★只有**恰好一个**列表时才给虚拟化描述（多个列表 ⇒ 行号空间不同源，宿主按行号二分会错配）
     virtual: virtualRows.length > 0 && tpl.lists.length === 1 ? { rows: virtualRows } : undefined,
+    ...(componentMounts.length > 0 ? { componentMounts } : {}),
+    ...(instNotes.length > 0 ? { notes: instNotes } : {}),
   }
 }
