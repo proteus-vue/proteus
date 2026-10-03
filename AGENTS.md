@@ -243,6 +243,31 @@
   `pnpm check:android-host-compile`（javac + android.jar）· `bash hosts/ios/check-selfdraw-compile.sh`
   （swiftc -typecheck）。二者都在 `pnpm verify` 链上，但**改完立刻单跑**比等全量快得多。
 
+### ★★★内核改动的「配套断言」必须顺手同步（2026-10-04 起工具化：`pnpm test:coupled`）
+
+- **用户原话（这条纪律的由来）**：「我发现一个问题就是**编译器内核运行时规则修改总是忘了同步配套的断言**，
+  这个也是低效率方式，带来的后果就是**花大量的时间跑全量来为这些低效率债务买单**」。
+- **实证（这个债务多贵）**：S56b 双类名发射改完（ed4da92c）配套断言忘了同步 ——
+  `compiler-mp-probe` 7 条 + `compiler-dispatch` 1 条 + `golden` 快照 + 规则数/官网数字 4 处，
+  **在全量里连爆两轮**（每轮 ≈2-3 分钟）才逐个发现；而按配套表定向跑 = **~10 秒**。
+- **为什么旧机制漏了**：`deny-blind-verify` 的建议表是命令级粗粒度，`packages/compiler/` 只建议
+  `npx vitest run tests/compiler` —— 而债务重灾区（`golden`/`mp-transform`/`svg-spike-compiler-gaps`）
+  文件名**不含 "compiler"**，永远建议不到（建议表的结构性盲区）。
+- **纪律（操作）**：改 `packages/{compiler,runtime,plugin-vite}/src/**` 后、提交前，**先跑**：
+  ```bash
+  pnpm test:coupled            # 按 git diff 推导配套断言并**真跑**（通常 5~15 秒）
+  pnpm test:coupled -- --list  # 只看会跑什么（先看后跑）
+  pnpm test:coupled -- --wide  # 改的内核文件未命中精化表时：跑包级 import 面兜底
+  ```
+  红了就地修（修断言或修实现）——**别把发现推迟到全量**（全量只是再发现一次，且贵 10 倍）。
+- **映射表 SSOT**：`scripts/test-coupling.mjs` 的 `COUPLING`（含`--explain` 查看）。
+  **新增/改名内核源文件或新增产物形态断言类测试时，把配对加进去**；漏加不致命（会落进宽面提示，不静默），
+  但会让定向退化为提示。表本身有自检（表中测试文件不存在 ⇒ 当场红，防表腐化后静默失效）。
+- **同源工件**：规则注册表（`transforms/`）类改动还会带出「规则数快照 + 官网数字 + 参考页」三处
+  —— `test:coupled` 会在报告里提示顺跑（`pnpm check:stats` / `gen-reference`）。
+- **接线位置（不靠记忆）**：`pnpm test:coupled`（package.json）· `deny-blind-verify`
+  被拦时的定向建议（`packages/{compiler,plugin-vite,runtime}/` → 建议本工具）· 本段纪律。
+
 ## ★★★三端同步纪律（2026-10-03 用户指定：「后面的 vapor 推进就三端同步走」）
 
 **判据（机器强制）**：`pnpm check:vapor-three-end`（已接 `verify` 链 + CI）——

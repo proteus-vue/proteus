@@ -132,7 +132,10 @@ if (!prev || prev.fingerprint !== fingerprint) { record(); process.exit(0) }
 const TARGETED = [
   [/^packages\/render-backend\//, ['npx vitest run tests/render-backend.test.ts', 'pnpm run check:host-rounding']],
   [/^packages\/layout-core(-rust)?\//, ['npx vitest run tests/layout-core', 'pnpm run check:pixel-snap']],
-  [/^packages\/compiler\//, ['npx vitest run tests/compiler', 'pnpm run check:compile-baseline']],
+  // ★★2026-10-04：compiler/runtime/plugin-vite 内核改动 ⇒ 用 test:coupled（精化配套表 + 真跑）
+  //   ——旧条目只建议 'npx vitest run tests/compiler'，而本轮债务重灾区（golden/mp-transform/
+  //   svg-spike-compiler-gaps 等）文件名不含 "compiler"，**永远建议不到**（建议表的结构性盲区）。
+  [/^packages\/(compiler|plugin-vite|runtime)\//, ['pnpm run test:coupled', 'pnpm run check:compile-baseline']],
   [/^hosts\/android\//, ['bash hosts/android/check-host-compile.sh', 'node hosts/android/acceptance-stub.mjs', 'node scripts/check-host-rounding.mjs']],
   [/^hosts\/ios\//, ['bash hosts/ios/check-selfdraw-compile.sh']],
   [/^scripts\//, ['node scripts/check-shell-i18n-vars.mjs', 'pnpm run check:gates-sync']],

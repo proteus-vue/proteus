@@ -85,6 +85,8 @@
     "check:mp-spec": "node scripts/gen-mp-spec.mjs --check",
     "check:no-blind-wait": "node scripts/check-no-blind-wait.mjs",
     "check:safe-edit": "node scripts/check-safe-edit.mjs",
+    "test:coupled": "node scripts/test-coupling.mjs",
+    "check:coupled-table": "node scripts/test-coupling.mjs --coverage",
     "check:ops-fixture": "node hosts/android/gen-ops-fixture.mjs --check",
     "check:pixel-snap": "npx tsx scripts/gen-pixel-snap-golden.mjs --check",
     "check:pkg": "node scripts/check-package-health.js",
