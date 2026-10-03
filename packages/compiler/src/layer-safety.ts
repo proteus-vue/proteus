@@ -196,22 +196,50 @@ export function validateLayerUsage(templateSource: string): LayerViolation[] {
   // LY004：popout / mask 必须在**根容器**（规范 §4.1——跨容器层级不生效是最大陷阱）
   //   判据：其祖先链上只有根一个元素（depth === 1：root 之下的直接子级；depth 0 = 根自身）。
   //   ★这是最保守的判据（可放宽到"根的直接子级"）——宁严勿松：跨容器失效是静默缺陷。
+  //
+  //   ★★★**层叠逃逸点**（GP3-b0，2026-10-03）：`<teleport>`（MP 编译为 `root-portal`）在
+  //     **运行时**把子树提升到页面根（脱离页面层叠）——**源码深度不代表运行时层叠上下文**。
+  //     ⇒ 判据改为"**portal 内的相对深度**"：从最近的 `<teleport>` 往下数，
+  //       相对深度 ≤ 1（teleport 直接子级，或它下面再一层容器）视为合法——这是 r/既有正解
+  //       （`p-drawer` 形态：`<teleport><view class="root"><view layer="popout">`）的形状；
+  //       相对深度 ≥ 2 ⇒ **仍报**（portal 内又套了两层以上容器 ⇒ 层叠上下文重新累积）。
+  //     ★本仓实测的误报：修前把 `p-drawer` 这类合法形态判成 LY004（源码 depth 很深）。
   for (const n of nodes) {
     if (n.layer !== 'layer-popout' && n.layer !== 'layer-mask') continue
-    if (n.depth > 1) {
-      const chain: string[] = []
-      let cur = n.parentIndex
-      while (cur !== null) {
-        const p = byIndex.get(cur)
-        if (p) chain.unshift(`<${p.tag}#${p.index}>`)
-        cur = p?.parentIndex ?? null
+    // ① 收集完整祖先链（自根到父，带 index）
+    const ancestors: number[] = []
+    let cur: number | null = n.parentIndex
+    while (cur !== null) {
+      const p = byIndex.get(cur)
+      if (!p) break
+      ancestors.unshift(p.index)
+      cur = p.parentIndex
+    }
+    // ② 找**最近**的 teleport 祖先（自父向上第一个 tag === 'teleport'）
+    let portalAt = -1
+    for (let i = ancestors.length - 1; i >= 0; i--) {
+      const a = byIndex.get(ancestors[i]!)
+      if (a?.tag === 'teleport') {
+        portalAt = i
+        break
       }
+    }
+    // ③ 有效深度：无 portal ⇒ 用 n.depth；有 portal ⇒ portal 之下的祖先数（相对深度）
+    const effectiveDepth = portalAt >= 0 ? ancestors.length - portalAt - 1 : n.depth
+    if (effectiveDepth > 1) {
+      const fullChain = ancestors.map((i) => {
+        const a = byIndex.get(i)
+        return `<${a?.tag ?? '?'}#${i}>`
+      })
       out.push({
         code: 'LY004',
         rule: LAYER_RULE_OF.LY004,
-        message: `<${n.tag}> 的 \`${n.layer}\` 嵌套在深层容器里（祖先链：${chain.join(' > ')}）——` +
-          'CSS stacking context 与鸿蒙 zIndex 都不跨容器，弹层会在部分端被遮挡（静默！）',
-        hint: '把该弹层提升到**根容器的直接子级**（规范 §4.1）；它不得位于任何 transform/opacity<1 的动画子树内',
+        message: `<${n.tag}> 的 \`${n.layer}\` 嵌套在深层容器里（祖先链：${fullChain.join(' > ')}）——` +
+          'CSS stacking context 与鸿蒙 zIndex 都不跨容器，弹层会在部分端被遮挡（静默！）' +
+          (portalAt >= 0 ? `（已计入 \`<teleport>\` 层叠逃逸：portal 内相对深度 ${effectiveDepth} > 1）` : ''),
+        hint:
+          '把该弹层提升到**根容器的直接子级**（规范 §4.1）；若用 `<teleport>`（MP→root-portal），' +
+          'portal 内最多再包一层（相对深度 ≤1）；它不得位于任何 transform/opacity<1 的动画子树内',
       })
     }
   }

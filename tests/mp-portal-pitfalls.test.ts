@@ -20,7 +20,7 @@ import { describe, it, expect } from 'vitest'
 import { transformTemplateToWxml } from '@proteus-vue/compiler'
 
 const wxml = (tpl: string): { warnings: string[]; code: string } => {
-  const r = transformTemplateToWxml(tpl, { px2rpx: false }) as unknown as { warnings: string[]; code?: string; wxml?: string }
+  const r = transformTemplateToWxml(tpl, { px2rpx: false, rpxRatio: 2 }) as unknown as { warnings: string[]; code?: string; wxml?: string }
   return { warnings: r.warnings, code: String(r.code ?? r.wxml ?? '') }
 }
 /** 只看 portal 相关警告（其余警告如 "to 无对等" 是既有的，不属本批判据） */
