@@ -110,6 +110,20 @@ export class VaporRuntime {
    */
   private readonly memoDirtyFrame = new Map<number, number>()
 
+  /* ── ★★★P3-3（2026-10-03）：可见性变化日志（`<Transition>` 的**驱动源**）──
+   *
+   * 【为什么运行时记、桥来消费】`v-show` / `v-if` 的切换在运行时表现为 `visible` 槽位写入
+   *   ⇒ 编成 `TOGGLE_VIS` 指令（内核只管**应用**可见性，不知道"要不要过渡"）。
+   *   而"这个节点有没有过渡声明"是**编译产物**（`LayoutNode.transition`）、
+   *   "把动画交给谁播"是**宿主**（`proteusHost.animStart`）——桥正好两头都有。
+   *   ⇒ 运行时只负责**记事实**（谁、变成什么），桥负责**查声明 + 转发**（分层正确、可单测）。
+   *
+   * 【为什么要去重】`relink` 会重写全部槽位（含未变的可见性）⇒ 不去重会把"每次 relink"
+   *   当成一次切换（过渡被反复触发）。⇒ 与上一状态比较，**只在真的翻转时记**。
+   */
+  private readonly visibilityLog: Array<{ nodeId: number; visible: boolean }> = []
+  private readonly lastVisible = new Map<number, boolean>()
+
   constructor(
     readonly table: SubscriptionTable,
     readonly rt: SlotRuntime,
@@ -308,8 +322,18 @@ export class VaporRuntime {
         const entry = this.slotById.get(spec.slotId)
         const impl = this.evaluators.get(spec.evaluatorId)
         if (!entry || !impl) continue
-        this.rt.setSlot(entry.slot, impl(ctx) as never)
+        const value = impl(ctx) as never
+        this.rt.setSlot(entry.slot, value)
         if (spec.once) this.onceWritten.add(spec.slotId)
+        // ★P3-3：可见性**真的翻转**才记（见 visibilityLog 注释；relink 重写全部槽位 ⇒ 必须去重）
+        if (spec.kind === 'visibility') {
+          const now = Boolean(value)
+          const prev = this.lastVisible.get(spec.nodeId)
+          if (prev !== undefined && prev !== now) {
+            this.visibilityLog.push({ nodeId: spec.nodeId, visible: now })
+          }
+          this.lastVisible.set(spec.nodeId, now)
+        }
       }
     }
   }
@@ -624,6 +648,19 @@ export class VaporRuntime {
   private rowsOfSource(sourceName: string, ctx: EvalContext): unknown[] {
     const v = ctx.read(sourceName)
     return Array.isArray(v) ? v : []
+  }
+
+  /**
+   * ★★★**取走可见性变化**（P3-3；取走即复位——与 `takePatches` 同款"自上次取走以来"语义）。
+   *
+   * 桥侧用法：`relink`/手势回调后 drain ⇒ 对每个变化查模板的 `transition` 声明 ⇒
+   * 有声明则调 `proteusHost.animStart(...)`（宿主把动画交给内核）。
+   */
+  takeVisibilityChanges(): Array<{ nodeId: number; visible: boolean }> {
+    if (this.visibilityLog.length === 0) return []
+    const out = this.visibilityLog.slice()
+    this.visibilityLog.length = 0
+    return out
   }
 
   /** 某槽位是否已建立订阅（诊断：确认"这个槽位真的被接管了"） */

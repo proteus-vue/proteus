@@ -7,6 +7,7 @@ import android.graphics.Paint;
 import android.graphics.RectF;
 import android.view.View;
 import android.view.ViewGroup;
+import org.json.JSONObject;
 
 import java.util.HashMap;
 import java.util.List;
@@ -1290,6 +1291,55 @@ public class ProteusHostView extends ViewGroup {
             android.view.Choreographer.getInstance().postFrameCallback(this);
         }
     };
+
+    /* ── ★★★过渡动画帧循环（P3-3，2026-10-03）：驱动到"内核没有活跃动画"为止 ── */
+
+    private boolean trRunning = false;
+    private int trFrames = 0;
+    private float trLastDtMs = 16.7f;
+
+    /**
+     * ★★**过渡动画驱动**（与 `kernelTickStart` 的区别：**时长未知**——由"内核还有没有活跃动画"
+     *   决定何时停；而 MA0-RT 的基准循环是**给定时长**、到点自停）。
+     *
+     * 【为什么停判据用 `animActive`（内核权威）】过渡时长由**声明**决定（`durMs`），但
+     *   接管/串联会改变实际时长 ⇒ "还没完就停"会截断动画、"完了不停"会空转。
+     *   `proteus_layout_anim_active` 是内核自报的**仍在推进条数**——与 MA5 幕切换同一条权威判据。
+     *
+     * 【为什么每帧 `postFrameCallback` 而不设死时限】过渡是**疏散**的（本批 220ms 量级）；
+     *   上限保护仍保留（`maxMs`，防"内核有 bug 说永远活跃"时无限帧循环）。
+     */
+    public void driveKernelAnimFrames() {
+        if (coreHandle == 0) return;
+        if (trRunning) return;   // 已在驱动（多次可见性切换合并到同一循环）
+        trRunning = true;
+        trFrames = 0;
+        final long hardStopAtNs = System.nanoTime() + 3_000_000_000L;   // 硬上限 3s
+        android.view.Choreographer.getInstance().postFrameCallback(new android.view.Choreographer.FrameCallback() {
+            @Override public void doFrame(long frameTimeNanos) {
+                if (!trRunning) return;
+                float dtMs = trLastDtMs;
+                if (dtMs > 100f) dtMs = 100f;
+                applyTickBin(RustLayout.animTickBin(coreHandle, dtMs));
+                trFrames++;
+                // 停判据：内核自报活跃数（权威）——0 = 全结束
+                int active = -1;
+                try {
+                    String a = RustLayout.animActive(coreHandle);
+                    JSONObject ao = new JSONObject(a);
+                    if (ao.optBoolean("ok")) active = ao.optInt("active", -1);
+                } catch (Throwable ignored) { /* 读数失败 ⇒ 靠硬上限兜底（不静默盲转） */ }
+                if (active == 0 || System.nanoTime() > hardStopAtNs) {
+                    trRunning = false;
+                    return;
+                }
+                android.view.Choreographer.getInstance().postFrameCallback(this);
+            }
+        });
+    }
+
+    /** 过渡帧循环读数（判据：帧数 > 0 = 真的驱动过；与 `transition_started` 互补） */
+    public int transitionFrames() { return trFrames; }
 
     /**
      * 启动真帧循环（时长驱动：到点自停——**不是**"看到没有动画了才停"，避免判据依赖时序）。

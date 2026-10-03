@@ -97,7 +97,7 @@ Teleport / KeepAlive / Suspense / Transition / TransitionGroup / v-memo / 自定
 | 21 | **动态组件** `:is` | ⚠️ **静默** | 节点 `tag:"component"` 原样落产物（宿主无法解析） |
 | 22 | **Teleport** | ⚠️ **静默** | 当普通容器处理（**无传送语义**） |
 | 23 | **KeepAlive** | ⚠️ **静默** | 当普通容器处理（**无缓存语义**） |
-| 24 | **Transition / TransitionGroup** | ⚠️ **静默** | 当普通容器处理（**无过渡语义**） |
+| 24 | **Transition** | ✅ **已支持（P3-3）** | 编译成预设动画（见 P3-3；判据 ⑬ 三端全过）·TransitionGroup 仍不支持 |
 | 25 | Suspense | ⚠️ **静默** | 同上 |
 | 26 | 自定义指令 `v-focus` | ⚠️ **静默** | 无诊断无处理 |
 | 27 | **混合文本** `a{{ x }}b` | ✅ **已支持（P2-2）** | 编译期切分为段表（静态段 + 表达式段）⇒ 运行时求值拼接；首帧与更新都完整（真机判据 ⑩/⑩b） |
@@ -172,7 +172,7 @@ Teleport / KeepAlive / Suspense / Transition / TransitionGroup / v-memo / 自定
 |---|---|---|
 | P3-1 | Teleport | 鸿蒙/App 端"传送到指定容器"——需宿主支持多渲染面 |
 | P3-2 | KeepAlive | App 端已有路由栈保活（`app-stack` 的 keep-alive 档）——可复用 |
-| P3-3 | Transition / TransitionGroup | 我方有**内核驱动动画**（MA0-RT/MA5）+ 平台零参与——**能力齐备，缺编译期桥接** |
+| P3-3 | Transition / TransitionGroup | ✅ **Transition 已完成（2026-10-03 · 三端同步）**：编译期编成**预设动画规格**（`fade`/`slide-*`/`zoom`/`fade-slide-up` 闭集）、`<Transition>` **透传**（不产包裹盒 ⇒ 与 Vue 几何等价）、运行时在可见性**真的翻转**时交宿主动画入口（三端 14/14 · 判据 ⑬）。**TransitionGroup 未做**（需列表差异/move 过渡） |
 | P3-4 | Suspense | 异步组件边界（与 KeepAlive/Transition 同族） |
 | P3-5 | 自定义指令 | `VaporDirective` 语义 → 我方可用"宿主指令注册表" |
 | P3-6 | 异步组件 `defineVaporAsyncComponent` | 同 P3-4 |
@@ -359,3 +359,36 @@ Teleport / KeepAlive / Suspense / Transition / TransitionGroup / v-memo / 自定
 ② 白名单是**闭集**：业务函数仍需 `@proteus-pure` 或 computed 预计算；
 ③ `Math.random` / `Date` 等不纯者刻意排除（模板渲染应为纯函数——否则更新不可预测）；
 ④ 可选链的**调用形态**（`fn?.()`）仍拒绝（`OptionalCallExpression`——需先决定"调用谁"）。
+
+### ★★P3-3 `Transition` 增量说明（2026-10-03 · 三端同步）
+
+**问题**：`<Transition>` 此前在 `UNSUPPORTED_BUILTINS` 表里（**当普通容器** ⇒ 无过渡语义、静默）。
+而对齐官方时发现：Vue 的过渡靠 **CSS class**（`v-enter-from` → 浏览器自己过渡），我方**没有 CSS 引擎**——
+但**内核有完整动画能力**（MA0-RT：`proteus_layout_anim_start` + 每帧 tick，曲线/弹簧/序列/循环齐备）。
+
+| 做 | 依据 |
+|---|---|
+| **`<Transition>` 透传**（不占节点 id、不产包裹盒） | 与 Vue 语义一致（Transition 不渲染包裹元素）⇒ **与 Vue 路径几何等价**（多一层盒会让 A/B 判据红）。★template.ts 与 deps.ts **两处同一条判据**（id 空间同源） |
+| **预设规格**（`fade` / `slide-up|down|left|right` / `zoom` / `fade-slide-up`） | `kind` 编号与内核 `AnimKind` **一一对应**（0=TranslateX/1=TranslateY/2=Scale/4=Opacity）——跨语言契约；离场 = 入场**反向**（与 Vue enter/leave 对称一致） |
+| 运行时**可见性日志**（`takeVisibilityChanges`，取走即复位） | `v-show`/`v-if` 的切换在运行时表现为 `visible` 槽位写入；**去重**（relink 重写全部槽位不得误触发——单测锁定） |
+| 桥 `drainTransitions`：查模板声明 → 组动画 → `proteusHost.animStart` | 两半信息在两处（声明在产物、翻转在运行时），桥正好两头都有 |
+| 三端宿主帧循环（Android `driveKernelAnimFrames` / iOS `animStartFrameLoop` / 鸿蒙 `TransitionFrameCallback`） | 内核只做**求值**，"每帧推一次"是宿主职责（与几何同纪律）；**停判据 = 内核自报 `animActive()===0`**（权威）+ 3s 硬上限 |
+
+**★抓出的真缺陷（4 个，全有实测证据）**
+1. **`:duration="300"` 被忽略**（静默回落 220）：`@vue/compiler-dom` 把它归一为
+   **不带 arg 的 `bind`**（与 `v-bind="obj"` 同形）⇒ 判据要认两种形态（静态 + 无 arg 且值纯数字）。
+2. **Android 宿主只加 `animStart` 不够**：JNI 侧**按方法对条件注入**（`animStart` 与 `animTick`
+   **同时存在**才暴露）⇒ 首版 JS 侧 `typeof proteusHost.animStart` 为 undefined
+   ⇒ 过渡静默不播（判据 ⑬ 精确报出"宿主未实现 animStart"）。补 `animTick`/`animStop`/`animActive`。
+3. **`transition_started` 被覆盖回 0**：桥里有两处 drain 调用 ⇒ 后一处把前一处的结果**覆盖**
+   （事件已被取走 ⇒ drain 返回 0）⇒ 判据误判"没驱动"。去掉重复调用。
+4. **鸿蒙 ArkTS 的 `postFrameCallback` 要 `FrameCallback` 实例**（闭包编译期报错）
+   + `.so` 导出需在 `index.d.ts` 声明（两处都补齐）。
+
+**验证**：单测 5 组（透传/规格/未知预设/无触发源/**运行时去重**）·
+**三端真机 14/14 零跳过**（`check:vapor-three-end` 指纹一致：23 模板节点 / L1 16 / 12 源 / 实例化 37）·
+判据 ⑬ = "2 条动画交给宿主"（`fade-slide-up` 双通道）· 破坏性验证（抹掉 `transition_started` ⇒ ⑬ 红）。
+
+**诚实边界**：① `TransitionGroup` 未做（需列表差异/move 过渡）；② `v-if` 的**离场**
+（元素从树上摘除）不在此路径（结构级动画属 L2 通道——本批只驱动可见性切换）；
+③ 预设是**闭集**（无 CSS 自定义过渡：`v-enter-from` 那套在我方无对应物）。

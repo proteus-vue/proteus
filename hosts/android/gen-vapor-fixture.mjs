@@ -102,6 +102,13 @@ const SFC = `<template>
     <p-text style="font-size: 12px; color: #ffffff">mx-{{ Math.max(exprA, 7) }}</p-text>
     <p-text style="font-size: 12px; color: #ffffff">jn-{{ exprArr.join('|') }}</p-text>
     <p-text style="font-size: 12px; color: #ffffff">oc-{{ exprObj?.inner }}</p-text>
+    <!-- ★★★P3-3（2026-10-03）Transition 桥接夹具：**外层 Transition 透传**（不占节点 id、
+         不产包裹盒）+ 内层元素带 v-show（可见性切换是过渡的驱动源）。
+         判据 ⑬ 核：可见性翻转后 transition_started 大于 0（动画真的交给了宿主）。
+         ★本注释**不得**含反引号或美元花括号（它在 JS 模板串里——本仓已踩四次）。 -->
+    <Transition name="fade-slide-up">
+      <p-view v-show="trVisible" style="height: 40px; background-color: #7c5cff"></p-view>
+    </Transition>
   </p-view>
 </template>
 
@@ -121,6 +128,8 @@ const memoVal = ref(1)
 const exprA = ref(3)
 const exprArr = ref(['a', 'b'])
 const exprObj = ref({ inner: 'ok' })
+// ★P3-3 夹具源（与 makeData 的初值一致）：Transition 的可见性开关
+const trVisible = ref(false)
 </script>
 `
 

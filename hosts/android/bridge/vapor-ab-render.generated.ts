@@ -2,7 +2,7 @@
 // source: @vue/compiler-sfc (mode=module, runtimeModuleName=@vue/runtime-core)
 // @ts-nocheck
 /* eslint-disable */
-import { createTextVNode as _createTextVNode, resolveComponent as _resolveComponent, withCtx as _withCtx, createVNode as _createVNode, renderList as _renderList, Fragment as _Fragment, openBlock as _openBlock, createElementBlock as _createElementBlock, createCommentVNode as _createCommentVNode, toDisplayString as _toDisplayString, createBlock as _createBlock, setBlockTracking as _setBlockTracking, withMemo as _withMemo } from "@vue/runtime-core"
+import { createTextVNode as _createTextVNode, resolveComponent as _resolveComponent, withCtx as _withCtx, createVNode as _createVNode, renderList as _renderList, Fragment as _Fragment, openBlock as _openBlock, createElementBlock as _createElementBlock, createCommentVNode as _createCommentVNode, toDisplayString as _toDisplayString, createBlock as _createBlock, setBlockTracking as _setBlockTracking, withMemo as _withMemo, vShow as _vShow, withDirectives as _withDirectives, Transition as _Transition } from "@vue/runtime-core"
 
 export function render(_ctx, _cache) {
   const _component_p_text = _resolveComponent("p-text")
@@ -124,6 +124,18 @@ export function render(_ctx, _cache) {
       _createVNode(_component_p_text, { style: {"fontSize":12,"color":"#ffffff"} }, {
         default: _withCtx(() => [
           _createTextVNode("oc-" + _toDisplayString(_ctx.exprObj?.inner), 1 /* TEXT */)
+        ]),
+        _: 1 /* STABLE */
+      }),
+      _createCommentVNode(" ★★★P3-3（2026-10-03）Transition 桥接夹具：**外层 Transition 透传**（不占节点 id、\n         不产包裹盒）+ 内层元素带 v-show（可见性切换是过渡的驱动源）。\n         判据 ⑬ 核：可见性翻转后 transition_started 大于 0（动画真的交给了宿主）。\n         ★本注释**不得**含反引号或美元花括号（它在 JS 模板串里——本仓已踩四次）。 "),
+      _createVNode(_Transition, {
+        name: "fade-slide-up",
+        persisted: ""
+      }, {
+        default: _withCtx(() => [
+          _withDirectives(_createVNode(_component_p_view, { style: {"height":40,"backgroundColor":"#7c5cff"} }, null, 512 /* NEED_PATCH */), [
+            [_vShow, _ctx.trVisible]
+          ])
         ]),
         _: 1 /* STABLE */
       })
