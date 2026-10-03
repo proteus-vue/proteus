@@ -89,6 +89,8 @@ for a in "$@"; do
     --showcase) MODE="showcase" ;;
     --native-mix) MODE="native-mix" ;;
     --vapor-ab) MODE="vapor-ab" ;;
+    # ★★★Vapor 设备端链（2026-10-03 · 三端对齐）：与 Android/鸿蒙**同一份**判据（①–⑫）
+    --vapor) MODE="vapor" ;;
     --cases=*) CASE_FILTER="${a#--cases=}" ;;
     *) [ -z "$UDID" ] && UDID="$a" ;;
   esac
@@ -303,6 +305,7 @@ if [ "$MODE" = "bench" ]; then REPORT_FILE="logic-bench-report.json"; SNAP_FILE=
 if [ "$MODE" = "stress" ]; then REPORT_FILE="stress-sfc.json"; SNAP_FILE="stress-sfc.png"; fi
 if [ "$MODE" = "native-mix" ]; then REPORT_FILE="native-mix.json"; SNAP_FILE="native-mix.png"; fi
 if [ "$MODE" = "vapor-ab" ]; then REPORT_FILE="vapor-ab.json"; SNAP_FILE="vapor-ab.png"; fi
+if [ "$MODE" = "vapor" ]; then REPORT_FILE="vapor.json"; SNAP_FILE="vapor.png"; fi
 # ★G-39：宿主运行时模式写独立报告（不污染既有产物命名）
 if [ "$MODE" = "host-runtime" ]; then REPORT_FILE="host-runtime.json"; SNAP_FILE="host-shell.json"; fi
 # ★M5：执行器场景两份报告（主 + 执行器；判据合并读）
@@ -456,6 +459,11 @@ elif [ "$MODE" = "vapor-ab" ]; then
   xcrun devicectl device process launch --console --terminate-existing \
     --environment-variables '{"PROTEUS_EXIT_AFTER_REPORT":"1"}' \
     --device "$UDID" "$BUNDLE_ID" --vapor-ab > "$LAUNCH_LOG" 2>&1 || LAUNCH_RC=$?
+elif [ "$MODE" = "vapor" ]; then
+  # ★★★Vapor 设备端链（三端对齐）：跑 bundle 默认模式（runShort）→ 判据 ①–⑫ → 报告 → 自退。
+  xcrun devicectl device process launch --console --terminate-existing \
+    --environment-variables '{"PROTEUS_EXIT_AFTER_REPORT":"1"}' \
+    --device "$UDID" "$BUNDLE_ID" --vapor > "$LAUNCH_LOG" 2>&1 || LAUNCH_RC=$?
 elif [ "$MODE" = "native-mix" ]; then
   # ★★矩阵 #10：原生组件混用（自绘 + 原生 UIView 共存）——一次挂载 + 建原生视图 + 采样 + 截图 → 自退。
   xcrun devicectl device process launch --console --terminate-existing \
@@ -533,7 +541,7 @@ print('ok' if d.get('build_id')=='$BUILD_ID' else 'build_id 不符：报告=%r �
     echo "✗ ${BID_OK}——设备上跑的不是本次构建；不等待，直接失败"
     exit 7
   fi
-elif [ "$MODE" = "app-stack" ] || [ "$MODE" = "native-mix" ] || [ "$MODE" = "vapor-ab" ]; then
+elif [ "$MODE" = "app-stack" ] || [ "$MODE" = "native-mix" ] || [ "$MODE" = "vapor-ab" ] || [ "$MODE" = "vapor" ]; then
   # ★M5：app-stack 报告是 `__proteusAppStackRun` 的**原样输出**（无 build_id 字段——它不是
   #   编译期注入的 bundle，而是纯逻辑读数）⇒ build_id 断言不适用；新鲜度由 run_ts 断言兜底。
   # ★矩阵 #10：native-mix 报告由 Swift 侧组装（含 run_ts；无 bundle 注入的 build_id）——同处理。
@@ -621,6 +629,11 @@ if [ "$MODE" = "vapor-ab" ]; then
   # ★★A/B（矩阵 #14 续）：判据与 Android **同一份**（check-vapor-ab.py）——放截图取回之后跑
   VAPOR_AB_CHECK=1
 fi
+if [ "$MODE" = "vapor" ]; then
+  # ★★★Vapor 设备端链（三端对齐）：判据与 Android/鸿蒙**同一份**（check-vapor-device.py）——
+  #   放截图取回之后跑（见下方 ⑩ 段）。
+  VAPOR_CHECK=1
+fi
 
 # ★★M5：执行器模式——取第二份报告（执行器结果）+ 跑**同一份**判据（与 Android 侧共用）
 if [ "$MODE" = "app-stack" ]; then
@@ -654,6 +667,11 @@ fi
 if [ "${VAPOR_AB_CHECK:-0}" = "1" ]; then
   echo "==> ⑩ 判据（与 Android **同一份** hosts/android/check-vapor-ab.py）"
   python3 "$ROOT/hosts/android/check-vapor-ab.py" "$HERE/results/$REPORT_FILE"
+  exit $?
+fi
+if [ "${VAPOR_CHECK:-0}" = "1" ]; then
+  echo "==> ⑩ 判据（与 Android/鸿蒙 **同一份** hosts/android/check-vapor-device.py——按 host_id 分档）"
+  python3 "$ROOT/hosts/android/check-vapor-device.py" "$HERE/results/$REPORT_FILE"
   exit $?
 fi
 echo "    报告：$HERE/results/$REPORT_FILE"

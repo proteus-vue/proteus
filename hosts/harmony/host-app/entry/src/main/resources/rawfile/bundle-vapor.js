@@ -9494,6 +9494,21 @@
   });
 
   // packages/slot-runtime/dist/index.js
+  var OpCode = /* @__PURE__ */ ((OpCode2) => {
+    OpCode2[OpCode2["SET_PROP"] = 1] = "SET_PROP";
+    OpCode2[OpCode2["SET_STYLE"] = 2] = "SET_STYLE";
+    OpCode2[OpCode2["SET_TEXT"] = 3] = "SET_TEXT";
+    OpCode2[OpCode2["SET_ATTRS"] = 4] = "SET_ATTRS";
+    OpCode2[OpCode2["TOGGLE_VIS"] = 5] = "TOGGLE_VIS";
+    OpCode2[OpCode2["INSERT_BLOCK"] = 16] = "INSERT_BLOCK";
+    OpCode2[OpCode2["REMOVE_NODE"] = 17] = "REMOVE_NODE";
+    OpCode2[OpCode2["MOVE_NODE"] = 18] = "MOVE_NODE";
+    OpCode2[OpCode2["LIST_SET"] = 32] = "LIST_SET";
+    OpCode2[OpCode2["LIST_SPLICE"] = 33] = "LIST_SPLICE";
+    OpCode2[OpCode2["LIST_UPDATE"] = 34] = "LIST_UPDATE";
+    OpCode2[OpCode2["CALL_COMPONENT_UPDATE"] = 48] = "CALL_COMPONENT_UPDATE";
+    return OpCode2;
+  })(OpCode || {});
   var PropKeyTable = class _PropKeyTable {
     constructor() {
       this.keys = [];
@@ -9655,6 +9670,47 @@
       return this.buf;
     }
   };
+  var ByteReader = class {
+    constructor(buf) {
+      this.buf = buf;
+      this.pos = 0;
+    }
+    get offset() {
+      return this.pos;
+    }
+    get remaining() {
+      return this.buf.length - this.pos;
+    }
+    u8() {
+      if (this.remaining < 1) throw new Error("\u6307\u4EE4\u6D41\u88AB\u622A\u65AD\uFF08u8\uFF09");
+      return this.buf[this.pos++];
+    }
+    u16() {
+      if (this.remaining < 2) throw new Error("\u6307\u4EE4\u6D41\u88AB\u622A\u65AD\uFF08u16\uFF09");
+      const v = this.buf[this.pos] | this.buf[this.pos + 1] << 8;
+      this.pos += 2;
+      return v;
+    }
+    u32() {
+      if (this.remaining < 4) throw new Error("\u6307\u4EE4\u6D41\u88AB\u622A\u65AD\uFF08u32\uFF09");
+      const v = (this.buf[this.pos] | this.buf[this.pos + 1] << 8 | this.buf[this.pos + 2] << 16 | this.buf[this.pos + 3] << 24) >>> 0;
+      this.pos += 4;
+      return v;
+    }
+    f32() {
+      if (this.remaining < 4) throw new Error("\u6307\u4EE4\u6D41\u88AB\u622A\u65AD\uFF08f32\uFF09");
+      const b = this.buf.subarray(this.pos, this.pos + 4);
+      this.pos += 4;
+      return new Float32Array(b.buffer.slice(b.byteOffset, b.byteOffset + 4))[0];
+    }
+    str() {
+      const len = this.u16();
+      if (this.remaining < len) throw new Error("\u6307\u4EE4\u6D41\u88AB\u622A\u65AD\uFF08str\uFF09");
+      const s = utf8Decode(this.buf.subarray(this.pos, this.pos + len));
+      this.pos += len;
+      return s;
+    }
+  };
   function utf8Encode(s) {
     const out = [];
     for (let i = 0; i < s.length; i++) {
@@ -9672,6 +9728,44 @@
       else out.push(240 | cp >> 18, 128 | cp >> 12 & 63, 128 | cp >> 6 & 63, 128 | cp & 63);
     }
     return Uint8Array.from(out);
+  }
+  function utf8Decode(bytes) {
+    let out = "";
+    let i = 0;
+    while (i < bytes.length) {
+      const b0 = bytes[i];
+      let cp;
+      let need;
+      if (b0 < 128) {
+        cp = b0;
+        need = 0;
+      } else if ((b0 & 224) === 192) {
+        cp = b0 & 31;
+        need = 1;
+      } else if ((b0 & 240) === 224) {
+        cp = b0 & 15;
+        need = 2;
+      } else if ((b0 & 248) === 240) {
+        cp = b0 & 7;
+        need = 3;
+      } else {
+        throw new Error(`\u975E\u6CD5 UTF-8 \u9996\u5B57\u8282\uFF1A0x${b0.toString(16)} @${i}`);
+      }
+      if (i + need >= bytes.length) throw new Error(`UTF-8 \u622A\u65AD @${i}`);
+      for (let k = 1; k <= need; k++) {
+        const bn = bytes[i + k];
+        if ((bn & 192) !== 128) throw new Error(`\u975E\u6CD5 UTF-8 \u7EED\u5B57\u8282\uFF1A0x${bn.toString(16)} @${i + k}`);
+        cp = cp << 6 | bn & 63;
+      }
+      i += need + 1;
+      if (cp > 65535) {
+        cp -= 65536;
+        out += String.fromCharCode(55296 + (cp >> 10), 56320 + (cp & 1023));
+      } else {
+        out += String.fromCharCode(cp);
+      }
+    }
+    return out;
   }
   var OpBuffer = class {
     constructor() {
@@ -9846,6 +9940,66 @@
       }
     }
   }
+  function decodeOps(bytes) {
+    const r = new ByteReader(bytes);
+    const magic = r.u32();
+    if (magic !== OPS_MAGIC) throw new Error(`magic \u4E0D\u7B26\uFF1A0x${magic.toString(16)}\uFF08\u671F\u671B 0x${OPS_MAGIC.toString(16)}\uFF09`);
+    const version = r.u32();
+    if (version !== OPS_VERSION) throw new Error(`\u7248\u672C\u4E0D\u7B26\uFF1A${version}\uFF08\u671F\u671B ${OPS_VERSION}\uFF09`);
+    const opCount = r.u32();
+    const keyCount = r.u32();
+    const strCount = r.u32();
+    const keys = new PropKeyTable();
+    for (let i = 0; i < keyCount; i++) keys.intern(r.str());
+    const strings = new StringPool();
+    for (let i = 0; i < strCount; i++) strings.intern(r.str());
+    const ops = [];
+    for (let i = 0; i < opCount; i++) ops.push(decodeOp(r));
+    if (r.remaining !== 0) throw new Error(`\u6307\u4EE4\u6D41\u5C3E\u90E8\u6709 ${r.remaining} \u5B57\u8282\u6B8B\u7559\uFF08\u683C\u5F0F\u6216\u8BA1\u6570\u4E0D\u7B26\uFF09`);
+    return { version, ops, keys, strings };
+  }
+  function decodeOp(r) {
+    const op = r.u8();
+    switch (op) {
+      case 1:
+      case 2:
+        return { op, nodeId: r.u32(), keyId: r.u16(), value: r.f32() };
+      case 3:
+        return { op, nodeId: r.u32(), textRef: r.u32() };
+      case 4: {
+        const nodeId = r.u32();
+        const n = r.u16();
+        const attrs = [];
+        for (let i = 0; i < n; i++) attrs.push({ keyId: r.u16(), value: r.f32() });
+        return { op, nodeId, attrs };
+      }
+      case 5:
+        return { op, nodeId: r.u32(), visible: r.u8() !== 0 };
+      case 16:
+        return { op, blockId: r.u32(), refNodeId: r.u32(), pos: r.u8() };
+      case 17:
+        return { op, nodeId: r.u32() };
+      case 18:
+        return { op, nodeId: r.u32(), refNodeId: r.u32(), pos: r.u8() };
+      case 32:
+        return { op, listId: r.u32(), dataRef: r.u32() };
+      case 33: {
+        const listId = r.u32();
+        const start = r.u32();
+        const delCount = r.u32();
+        const n = r.u16();
+        const itemKeyRefs = [];
+        for (let i = 0; i < n; i++) itemKeyRefs.push(r.u32());
+        return { op, listId, start, delCount, itemKeyRefs };
+      }
+      case 34:
+        return { op, listId: r.u32(), itemKeyRef: r.u32(), slotId: r.u32(), value: r.f32() };
+      case 48:
+        return { op, componentId: r.u32(), slotId: r.u32(), value: r.f32() };
+      default:
+        throw new Error(`\u672A\u77E5\u64CD\u4F5C\u7801\uFF1A0x${op.toString(16)}\uFF08\u6E38\u6807\u4F4D\u7F6E ${r.offset}\uFF09`);
+    }
+  }
   function createSlot(spec, keys, strings, initial, registry) {
     const nodeId = spec.nodeId;
     const keyId = spec.keyId ?? 0;
@@ -9931,6 +10085,11 @@
       this.dirty = [];
       this.pending = false;
       this.stats = { flushes: 0, opsEmitted: 0, bytesSent: 0, shortCircuits: 0 };
+      this.frame = 0;
+    }
+    /** 帧号（v-memo 门用；只读） */
+    get frameId() {
+      return this.frame;
     }
     /** 槽位写入（方案 §3.3）：相等即短路；否则标脏 + 排帧 */
     setSlot(slot, next) {
@@ -9958,6 +10117,7 @@
      *   驱动一次提交（本仓四次踩过"测量装置污染读数"）。
      */
     flush() {
+      this.frame++;
       this.pending = false;
       for (const slot of this.dirty) {
         slot.emit(slot.value, this.buffer);
@@ -9976,6 +10136,77 @@
     get dirtyCount() {
       return this.dirty.length;
     }
+  };
+  var PURE_CALLS = {
+    // —— Math（纯计算）——
+    "Math.abs": Math.abs,
+    "Math.ceil": Math.ceil,
+    "Math.floor": Math.floor,
+    "Math.round": Math.round,
+    "Math.trunc": Math.trunc,
+    "Math.sign": Math.sign,
+    "Math.sqrt": Math.sqrt,
+    "Math.cbrt": Math.cbrt,
+    "Math.pow": Math.pow,
+    "Math.exp": Math.exp,
+    "Math.log": Math.log,
+    "Math.log2": Math.log2,
+    "Math.log10": Math.log10,
+    "Math.min": Math.min,
+    "Math.max": Math.max,
+    // —— 类型转换（call 形态，非 new）——
+    "String": String,
+    "Number": Number,
+    "Boolean": Boolean,
+    // —— 解析 / 判定（全局）——
+    "parseInt": parseInt,
+    "parseFloat": parseFloat,
+    "isNaN": isNaN,
+    "isFinite": isFinite,
+    "Number.isFinite": Number.isFinite,
+    "Number.isInteger": Number.isInteger,
+    "Number.isNaN": Number.isNaN,
+    // —— 数组判定 ——
+    "Array.isArray": Array.isArray
+  };
+  var PURE_METHODS = {
+    // —— Array（非变异）——
+    join: (recv, sep) => Array.isArray(recv) ? recv.join(sep === void 0 ? "," : String(sep)) : void 0,
+    slice: (recv, a, b) => typeof recv === "string" || Array.isArray(recv) ? recv.slice(a, b) : void 0,
+    concat: (recv, ...rest) => Array.isArray(recv) ? recv.concat(...rest) : void 0,
+    indexOf: (recv, x) => typeof recv === "string" || Array.isArray(recv) ? recv.indexOf(x) : void 0,
+    includes: (recv, x) => typeof recv === "string" || Array.isArray(recv) ? recv.includes(x) : void 0,
+    // —— String（非变异）——
+    toUpperCase: (recv) => typeof recv === "string" ? recv.toUpperCase() : void 0,
+    toLowerCase: (recv) => typeof recv === "string" ? recv.toLowerCase() : void 0,
+    trim: (recv) => typeof recv === "string" ? recv.trim() : void 0,
+    trimStart: (recv) => typeof recv === "string" ? recv.trimStart() : void 0,
+    trimEnd: (recv) => typeof recv === "string" ? recv.trimEnd() : void 0,
+    charAt: (recv, i) => typeof recv === "string" ? recv.charAt(i) : void 0,
+    padStart: (recv, n, pad) => typeof recv === "string" ? recv.padStart(n, pad) : void 0,
+    padEnd: (recv, n, pad) => typeof recv === "string" ? recv.padEnd(n, pad) : void 0,
+    repeat: (recv, n) => typeof recv === "string" ? recv.repeat(n) : void 0,
+    substring: (recv, a, b) => typeof recv === "string" ? recv.substring(a, b) : void 0,
+    startsWith: (recv, x) => typeof recv === "string" ? recv.startsWith(x) : void 0,
+    endsWith: (recv, x) => typeof recv === "string" ? recv.endsWith(x) : void 0,
+    // —— Number（非变异）——
+    toFixed: (recv, n) => typeof recv === "number" ? recv.toFixed(n) : void 0,
+    toString: (recv) => recv === void 0 || recv === null ? void 0 : String(recv)
+  };
+  var GLOBAL_CONST_MEMBERS = {
+    "Math.PI": Math.PI,
+    "Math.E": Math.E,
+    "Math.LN2": Math.LN2,
+    "Math.LN10": Math.LN10,
+    "Math.LOG2E": Math.LOG2E,
+    "Math.LOG10E": Math.LOG10E,
+    "Math.SQRT2": Math.SQRT2,
+    "Math.SQRT1_2": Math.SQRT1_2,
+    "Number.MAX_SAFE_INTEGER": Number.MAX_SAFE_INTEGER,
+    "Number.MIN_SAFE_INTEGER": Number.MIN_SAFE_INTEGER,
+    "Number.EPSILON": Number.EPSILON,
+    "Number.MAX_VALUE": Number.MAX_VALUE,
+    "Number.MIN_VALUE": Number.MIN_VALUE
   };
   function toNum(v) {
     if (typeof v === "number") return v;
@@ -10065,6 +10296,24 @@
       }
       case "arr":
         return p.items.map((x) => evalExpr(x, ctx));
+      case "mcall": {
+        const recv = evalExpr(p.recv, ctx);
+        if (recv === void 0 || recv === null) return void 0;
+        const impl = PURE_METHODS[p.method];
+        if (!impl) {
+          throw new Error(`\u8868\u8FBE\u5F0F\u7A0B\u5E8F\u5F15\u7528\u4E86\u975E\u767D\u540D\u5355\u65B9\u6CD5\uFF1A${p.method}\uFF08\u89C1 slot-runtime/expr.ts \u7684 PURE_METHODS\uFF09`);
+        }
+        const args = p.args.map((a) => evalExpr(a, ctx));
+        return impl(recv, ...args);
+      }
+      case "call": {
+        const fn = PURE_CALLS[p.fn];
+        if (typeof fn !== "function") {
+          throw new Error(`\u8868\u8FBE\u5F0F\u7A0B\u5E8F\u5F15\u7528\u4E86\u975E\u767D\u540D\u5355\u51FD\u6570\uFF1A${p.fn}\uFF08\u89C1 slot-runtime/expr.ts \u7684 PURE_CALLS\uFF09`);
+        }
+        const args = p.args.map((a) => evalExpr(a, ctx));
+        return fn(...args);
+      }
       default: {
         const never = p;
         throw new Error(`\u672A\u77E5\u8868\u8FBE\u5F0F\u8282\u70B9\uFF1A${JSON.stringify(never)}`);
@@ -10125,154 +10374,6 @@
       return { hits: this.hits, misses: this.misses, items: this.size };
     }
   };
-  function engineFieldOf(propKey) {
-    if (propKey === "text.content") return { kind: "text" };
-    const m = propKey.match(/^(?:layout|paint|text)\.(.+)$/);
-    if (!m) return null;
-    return { kind: "style", key: m[1] };
-  }
-  function rowsOfList(listId, table, read) {
-    if (!table) return [];
-    const itemSlots = table.sources.flatMap((s) => s.slots).filter((x) => x.kind === "list-item" && x.listId === listId);
-    const spec = itemSlots[0];
-    if (!spec) return [];
-    const srcName = table.sources.find((s) => s.slots.some((x) => x.listId === listId))?.sourceName ?? "";
-    const segs = (spec.sourceExpr ?? "").split(".").filter(Boolean);
-    const topRows = read(srcName);
-    if (!Array.isArray(topRows)) return [];
-    const walkSegs = segs[0] === srcName ? segs.slice(1) : segs;
-    let cur = topRows;
-    for (const field of walkSegs) {
-      const next = [];
-      for (const r of cur) {
-        const arr = r?.[field];
-        if (!Array.isArray(arr)) continue;
-        for (const x of arr) next.push(x);
-      }
-      cur = next;
-    }
-    return cur;
-  }
-  function instantiateTemplate(tpl, opts) {
-    const nodes = [];
-    const maxTemplateId = tpl.nodes.reduce((m, n) => Math.max(m, n.id), 0);
-    let nextId = opts.firstRowInstanceId ?? maxTemplateId + 1;
-    let allocated = 0;
-    let reused = 0;
-    const rowLists = new Map(tpl.lists.map((l) => [l.listId, l]));
-    const byId = /* @__PURE__ */ new Map();
-    let valuesFilled = 0;
-    const virtualRows = [];
-    const emit = (n, id, parentId) => {
-      const out = { id, parentId };
-      if (n.style) for (const [k, v] of Object.entries(n.style)) {
-        ;
-        out[k] = v;
-      }
-      if (n.text !== void 0) out.text = n.text;
-      nodes.push(out);
-      byId.set(id, out);
-    };
-    const cloneRow = (listId, row, itemKey, first, rowIndex) => {
-      const meta = rowLists.get(listId);
-      const idMap = /* @__PURE__ */ new Map();
-      let rowRootId = 0;
-      for (const tplId of meta.subtreeIds) {
-        const engineId = first ? tplId : nextId++;
-        if (!first) allocated++;
-        else reused++;
-        idMap.set(tplId, engineId);
-        if (tplId === meta.rowRootId) rowRootId = engineId;
-      }
-      for (const tplId of meta.subtreeIds) {
-        const tn = tpl.nodes.find((x) => x.id === tplId);
-        const engineId = idMap.get(tplId);
-        const tplParent = tn.parentId;
-        const parentId = tplParent === null ? null : idMap.get(tplParent) ?? tplParent;
-        emit(tn, engineId, parentId);
-      }
-      virtualRows.push({
-        index: rowIndex,
-        key: itemKey,
-        root: rowRootId,
-        ids: meta.subtreeIds.map((t) => idMap.get(t))
-      });
-      if (opts.table) {
-        const itemSlots = opts.table.sources.flatMap((s) => s.slots).filter((x) => x.kind === "list-item" && x.listId === listId);
-        if (itemSlots.length > 0) {
-          const slotNodes = {};
-          for (const sl of itemSlots) {
-            const mapped = idMap.get(sl.nodeId);
-            if (mapped !== void 0) slotNodes[sl.itemSlotId] = mapped;
-            if (mapped === void 0) continue;
-            const target = byId.get(mapped);
-            const field = sl.itemValueField;
-            if (!target || !field) continue;
-            const v = row[field];
-            if (v === void 0) continue;
-            const f = engineFieldOf(sl.propKey);
-            if (!f) continue;
-            if (f.kind === "text") {
-              target.text = String(v);
-            } else {
-              ;
-              target[f.key] = v;
-            }
-            valuesFilled++;
-          }
-          if (opts.registry && Object.keys(slotNodes).length > 0) {
-            opts.registry.registerItem(listId, itemKey, slotNodes);
-          }
-        }
-      }
-      return rowRootId;
-    };
-    const rowMemberIds = /* @__PURE__ */ new Set();
-    for (const l of tpl.lists) for (const id of l.subtreeIds) rowMemberIds.add(id);
-    for (const n of tpl.nodes) {
-      if (rowMemberIds.has(n.id)) {
-        const meta = tpl.lists.find((l) => l.rowRootId === n.id);
-        if (!meta) continue;
-        const rows = rowsOfList(meta.listId, opts.table, opts.read);
-        for (let i = 0; i < rows.length; i++) {
-          const row = rows[i];
-          const keyOf = () => {
-            const keyField = opts.table?.sources.flatMap((s) => s.slots).find((x) => x.kind === "list-item" && x.listId === meta.listId)?.itemKeyField;
-            return keyField && row[keyField] !== void 0 ? String(row[keyField]) : String(i);
-          };
-          cloneRow(meta.listId, row, keyOf(), i === 0, i);
-        }
-        continue;
-      }
-      emit(n, n.id, n.parentId);
-    }
-    if (opts.table) {
-      for (const src of opts.table.sources) {
-        const v = opts.read(src.sourceName);
-        for (const sl of src.slots) {
-          if (sl.kind === "list-item" || sl.kind === "list-data" || sl.kind === "component-prop") continue;
-          const target = byId.get(sl.nodeId);
-          if (!target) continue;
-          const f = engineFieldOf(sl.propKey);
-          if (!f) continue;
-          if (f.kind === "text") {
-            target.text = String(v);
-          } else {
-            ;
-            target[f.key] = v;
-          }
-          valuesFilled++;
-        }
-      }
-    }
-    return {
-      viewport: opts.viewport,
-      nodes,
-      stats: { reusedTemplateIds: reused, allocatedIds: allocated, rows: nodes.length, valuesFilled },
-      // ★只有**恰好一个**列表时才给虚拟化描述（多个列表 ⇒ 行号空间不同源，宿主按行号二分会错配）
-      virtual: virtualRows.length > 0 && tpl.lists.length === 1 ? { rows: virtualRows } : void 0
-    };
-  }
   var VaporRuntime = class {
     constructor(table, rt, evaluators, registry) {
       this.table = table;
@@ -10286,6 +10387,9 @@
       this.uninstantiatedSlots = [];
       this.itemValueCache = /* @__PURE__ */ new Map();
       this.loaded = false;
+      this.onceWritten = /* @__PURE__ */ new Set();
+      this.memoBaseline = /* @__PURE__ */ new Map();
+      this.memoDirtyFrame = /* @__PURE__ */ new Map();
     }
     /**
      * 从订阅表重建求值函数（把**可序列化的声明**变成可执行函数）
@@ -10421,12 +10525,44 @@
         for (const spec of src.slots) {
           if (spec.kind === "list-item") continue;
           if (spec.kind === "list-data") continue;
+          if (spec.once && this.onceWritten.has(spec.slotId)) continue;
+          if (spec.memoId !== void 0 && !this.memoGroupDirty(spec.memoId, ctx)) continue;
           const entry = this.slotById.get(spec.slotId);
           const impl = this.evaluators.get(spec.evaluatorId);
           if (!entry || !impl) continue;
           this.rt.setSlot(entry.slot, impl(ctx));
+          if (spec.once) this.onceWritten.add(spec.slotId);
         }
       }
+    }
+    /**
+     * ★★**v-memo 组脏判定**（P2-5）：依赖逐项比较（`Object.is`），任一变化即"脏"。
+     *
+     * 【语义（对齐 Vue `withMemo`）】依赖未变 ⇒ **跳过**该子树更新；变了 ⇒ 照常更新，
+     *   并把本次依赖值记为基线供下轮比较。
+     * 【诚实边界】组定义缺失（产物异常）⇒ 返回 true（照常更新）——**不静默冻结**：
+     *   "少一层优化"可接受，"该更新的不更新"不可接受。
+     */
+    memoGroupDirty(memoId, ctx) {
+      const fid = this.rt.frameId;
+      if (this.memoDirtyFrame.get(memoId) === fid) return true;
+      const group = this.table.memoGroups?.find((g) => g.memoId === memoId);
+      if (!group) return true;
+      const now = [];
+      for (const prog of group.deps) {
+        try {
+          now.push(evalExpr(prog, ctx));
+        } catch {
+          now.push(void 0);
+        }
+      }
+      const prev = this.memoBaseline.get(memoId);
+      const changed = !prev || now.some((v, i) => !Object.is(v, prev[i]));
+      if (changed) {
+        this.memoBaseline.set(memoId, now);
+        this.memoDirtyFrame.set(memoId, fid);
+      }
+      return changed;
     }
     /**
      * ★列表行内槽位通道：按行求值 → 与上一轮**按 key 缓存**的值 diff → 只发变化行
@@ -10443,7 +10579,7 @@
         const cached = rowsCache.get(listId);
         if (cached) return cached;
         const out = [];
-        const keyOf = (r, i) => spec.itemKeyField && r && r[spec.itemKeyField] !== void 0 ? String(r[spec.itemKeyField]) : String(i);
+        const keyOf2 = (r, i) => spec.itemKeyField && r && r[spec.itemKeyField] !== void 0 ? String(r[spec.itemKeyField]) : String(i);
         const segs = (spec.sourceExpr ?? "").split(".").filter(Boolean);
         const topRows = ctx.read(src.sourceName);
         if (!Array.isArray(topRows)) return out;
@@ -10462,7 +10598,7 @@
           current = next;
         }
         for (let i = 0; i < current.length; i++) {
-          out.push({ key: keyOf(current[i].row, i), row: current[i].row, ancestors: current[i].ancestors });
+          out.push({ key: keyOf2(current[i].row, i), row: current[i].row, ancestors: current[i].ancestors });
         }
         rowsCache.set(listId, out);
         return out;
@@ -10536,14 +10672,7 @@
       if (!scope) return ctx;
       const lid = this.listIdOfScope(scope);
       const ancestorScopes = lid === void 0 ? [] : this.ancestorScopesOf(lid);
-      return {
-        read: (n) => {
-          if (n === scope) return row;
-          const idx = ancestorScopes.indexOf(n);
-          if (idx >= 0 && idx < ancestors.length) return ancestors[idx];
-          return ctx.read(n);
-        }
-      };
+      return makeScopedRead(scope, row, ancestors, ancestorScopes, ctx);
     }
     /** ★值 diff + 发射（**唯一实现**）：嵌套 Map 免拼接：listId/slotId 均为数字键 */
     diffAndEmit(spec, key, value) {
@@ -10634,6 +10763,301 @@
       return [...this.slots.keys()].sort((a, b) => a - b);
     }
   };
+  function makeScopedRead(scope, row, ancestors, ancestorScopes, ctx) {
+    if (!scope) return ctx;
+    return {
+      read: (n) => {
+        if (n === scope) return row;
+        const idx = ancestorScopes.indexOf(n);
+        if (idx >= 0 && idx < ancestors.length) return ancestors[idx];
+        return ctx.read(n);
+      }
+    };
+  }
+  function engineFieldOf(propKey) {
+    if (propKey === "text.content") return { kind: "text" };
+    const m = propKey.match(/^(?:layout|paint|text)\.(.+)$/);
+    if (!m) return null;
+    return { kind: "style", key: m[1] };
+  }
+  function evalTextSegments(segs, read) {
+    let out = "";
+    for (const s of segs) {
+      if ("text" in s) {
+        out += s.text;
+        continue;
+      }
+      try {
+        const v = evalExpr(s.expr, { read });
+        out += v === void 0 || v === null ? "" : String(v);
+      } catch {
+      }
+    }
+    return out;
+  }
+  function rowsOfList(listId, meta, table, read) {
+    if (!table) return [];
+    const allSlots = table.sources.flatMap((s) => s.slots);
+    const itemSlots = allSlots.filter((x) => x.kind === "list-item" && x.listId === listId);
+    const spec = itemSlots[0] ?? allSlots.find((x) => x.kind === "list-data" && x.listId === listId);
+    if (!spec) return [];
+    const srcName = table.sources.find((s) => s.slots.some((x) => x.listId === listId))?.sourceName ?? "";
+    const segs = (meta?.sourceField || spec.sourceExpr || "").split(".").filter(Boolean);
+    const topRows = read(srcName);
+    if (!Array.isArray(topRows)) return [];
+    const walkSegs = segs[0] === srcName ? segs.slice(1) : segs;
+    let cur = topRows;
+    for (const field of walkSegs) {
+      const next = [];
+      for (const r of cur) {
+        const arr = r?.[field];
+        if (!Array.isArray(arr)) continue;
+        for (const x of arr) next.push(x);
+      }
+      cur = next;
+    }
+    return cur;
+  }
+  function instantiateTemplate(tpl, opts) {
+    const nodes = [];
+    const maxTemplateId = tpl.nodes.reduce((m, n) => Math.max(m, n.id), 0);
+    let nextId = opts.firstRowInstanceId ?? maxTemplateId + 1;
+    let allocated = 0;
+    let reused = 0;
+    const rowLists = new Map(tpl.lists.map((l) => [l.listId, l]));
+    const byId = /* @__PURE__ */ new Map();
+    let valuesFilled = 0;
+    const evaluators = opts.table ? VaporRuntime.buildEvaluators(opts.table.evaluators) : /* @__PURE__ */ new Map();
+    const ancestorScopesOf = (listId) => {
+      const chain = [];
+      let cur = listId;
+      let guard = 0;
+      while (cur !== void 0 && guard < 32) {
+        const meta = rowLists.get(cur);
+        if (!meta) break;
+        chain.unshift(meta.scope ?? "");
+        cur = meta.parentListId;
+        guard++;
+      }
+      return chain;
+    };
+    const evalInitial = (evaluatorId, ctx) => {
+      const impl = evaluators.get(evaluatorId);
+      if (!impl) return { ok: false };
+      try {
+        return { ok: true, value: impl(ctx) };
+      } catch {
+        return { ok: false };
+      }
+    };
+    const virtualRows = [];
+    const emit = (n, id, parentId, ctx = { read: opts.read }) => {
+      const out = { id, parentId };
+      if (n.style) for (const [k, v] of Object.entries(n.style)) {
+        ;
+        out[k] = v;
+      }
+      if (n.text !== void 0) out.text = n.text;
+      if (n.textSegments && n.textSegments.length > 0) {
+        out.text = evalTextSegments(n.textSegments, ctx.read);
+      }
+      if (n.tag) out.tag = n.tag;
+      if (n.component) out.component = n.component;
+      nodes.push(out);
+      byId.set(id, out);
+    };
+    const cloneRow = (listId, row, itemKey, first, rowIndex, parentOverrideId, collect, ancestors = []) => {
+      const meta = rowLists.get(listId);
+      const idMap = /* @__PURE__ */ new Map();
+      let rowRootId = 0;
+      const myIds = [];
+      for (const tplId of meta.subtreeIds) {
+        const engineId = first ? tplId : nextId++;
+        if (!first) allocated++;
+        else reused++;
+        idMap.set(tplId, engineId);
+        if (tplId === meta.rowRootId) rowRootId = engineId;
+      }
+      const rowRead = makeScopedRead(meta.scope ?? "", row, ancestors, ancestorScopesOf(listId), { read: opts.read });
+      for (const tplId of meta.subtreeIds) {
+        const tn = tpl.nodes.find((x) => x.id === tplId);
+        const engineId = idMap.get(tplId);
+        const tplParent = tn.parentId;
+        let parentId = tplParent === null ? null : idMap.get(tplParent) ?? tplParent;
+        if (parentOverrideId !== void 0 && tplId === meta.rowRootId) parentId = parentOverrideId;
+        emit(tn, engineId, parentId, rowRead);
+        myIds.push(engineId);
+      }
+      for (const inner of tpl.lists) {
+        if (inner.parentListId !== listId) continue;
+        let arr = row;
+        for (const seg of (inner.sourceField ?? "").split(".").filter(Boolean)) {
+          arr = arr?.[seg];
+        }
+        if (!Array.isArray(arr)) continue;
+        const innerKeyField = opts.table?.sources.flatMap((s) => s.slots).find((x) => x.kind === "list-item" && x.listId === inner.listId)?.itemKeyField;
+        for (let j = 0; j < arr.length; j++) {
+          const innerRow = arr[j];
+          const innerKey = innerKeyField && innerRow?.[innerKeyField] !== void 0 ? String(innerRow[innerKeyField]) : String(j);
+          cloneRow(inner.listId, innerRow, innerKey, first && j === 0, j, rowRootId, myIds, [...ancestors, row]);
+        }
+      }
+      virtualRows.push({
+        index: rowIndex,
+        key: itemKey,
+        root: rowRootId,
+        ids: [...myIds]
+      });
+      if (collect) collect.push(...myIds);
+      if (opts.table) {
+        const itemSlots = opts.table.sources.flatMap((s) => s.slots).filter((x) => x.kind === "list-item" && x.listId === listId);
+        if (itemSlots.length > 0) {
+          const slotNodes = {};
+          const rowCtx = makeScopedRead(meta.scope ?? "", row, ancestors, ancestorScopesOf(listId), {
+            read: opts.read
+          });
+          for (const sl of itemSlots) {
+            const mapped = idMap.get(sl.nodeId);
+            if (mapped !== void 0) slotNodes[sl.itemSlotId] = mapped;
+            if (mapped === void 0) continue;
+            const target = byId.get(mapped);
+            if (!target) continue;
+            const f = engineFieldOf(sl.propKey);
+            if (!f) continue;
+            const ev0 = evalInitial(sl.evaluatorId, rowCtx);
+            let v;
+            if (ev0.ok) {
+              v = ev0.value;
+            } else {
+              const field = sl.itemValueField;
+              if (!field) continue;
+              v = row[field];
+              if (v === void 0) continue;
+            }
+            if (f.kind === "text") {
+              target.text = v === void 0 || v === null ? "" : String(v);
+            } else {
+              ;
+              target[f.key] = v;
+            }
+            valuesFilled++;
+          }
+          if (opts.registry && Object.keys(slotNodes).length > 0) {
+            opts.registry.registerItem(listId, itemKey, slotNodes);
+          }
+        }
+      }
+      return rowRootId;
+    };
+    const rowMemberIds = /* @__PURE__ */ new Set();
+    for (const l of tpl.lists) for (const id of l.subtreeIds) rowMemberIds.add(id);
+    for (const n of tpl.nodes) {
+      if (rowMemberIds.has(n.id)) {
+        const meta = tpl.lists.find((l) => l.rowRootId === n.id);
+        if (!meta) continue;
+        if (meta.parentListId !== void 0) continue;
+        const rows = rowsOfList(meta.listId, meta, opts.table, opts.read);
+        for (let i = 0; i < rows.length; i++) {
+          const row = rows[i];
+          const keyOf2 = () => {
+            const keyField = opts.table?.sources.flatMap((s) => s.slots).find((x) => x.kind === "list-item" && x.listId === meta.listId)?.itemKeyField;
+            return keyField && row[keyField] !== void 0 ? String(row[keyField]) : String(i);
+          };
+          cloneRow(meta.listId, row, keyOf2(), i === 0, i);
+        }
+        continue;
+      }
+      emit(n, n.id, n.parentId);
+    }
+    if (opts.table) {
+      for (const sl of opts.table.constantSlots ?? []) {
+        const target = byId.get(sl.nodeId);
+        if (!target) continue;
+        const f = engineFieldOf(sl.propKey);
+        if (!f) continue;
+        const evS = evalInitial(sl.evaluatorId, { read: opts.read });
+        if (!evS.ok) continue;
+        const v = evS.value;
+        if (f.kind === "text") {
+          target.text = v === void 0 || v === null ? "" : String(v);
+        } else {
+          ;
+          target[f.key] = v;
+        }
+        valuesFilled++;
+      }
+      for (const src of opts.table.sources) {
+        for (const sl of src.slots) {
+          if (sl.kind === "list-item" || sl.kind === "list-data" || sl.kind === "component-prop") continue;
+          const target = byId.get(sl.nodeId);
+          if (!target) continue;
+          const f = engineFieldOf(sl.propKey);
+          if (!f) continue;
+          const evS = evalInitial(sl.evaluatorId, { read: opts.read });
+          let v;
+          if (evS.ok) {
+            v = evS.value;
+          } else {
+            v = opts.read(src.sourceName);
+            if (v === void 0) continue;
+          }
+          if (f.kind === "text") {
+            target.text = v === void 0 || v === null ? "" : String(v);
+          } else {
+            ;
+            target[f.key] = v;
+          }
+          valuesFilled++;
+        }
+      }
+    }
+    return {
+      viewport: opts.viewport,
+      nodes,
+      stats: { reusedTemplateIds: reused, allocatedIds: allocated, rows: nodes.length, valuesFilled },
+      // ★只有**恰好一个**列表时才给虚拟化描述（多个列表 ⇒ 行号空间不同源，宿主按行号二分会错配）
+      virtual: virtualRows.length > 0 && tpl.lists.length === 1 ? { rows: virtualRows } : void 0
+    };
+  }
+  function createDispatchState() {
+    return { onceFired: /* @__PURE__ */ new Set() };
+  }
+  var keyOf = (nodeId, event, handler) => `${nodeId}:${event}:${handler}`;
+  function indexEventBindings(bindings) {
+    const byNodeEvent = /* @__PURE__ */ new Map();
+    for (const b of bindings) byNodeEvent.set(`${b.nodeId}:${b.event}`, b);
+    return byNodeEvent;
+  }
+  function dispatchGesture(chain, event, index, state, run) {
+    const fired = [];
+    const skippedSelf = [];
+    const skippedOnce = [];
+    let handler = "";
+    let stopped = false;
+    const hit = chain.length > 0 ? chain[0] : -1;
+    for (const id of chain) {
+      const b = index.get(`${id}:${event}`) ?? index.get(`${id}:tap`);
+      if (!b) continue;
+      if (b.self && id !== hit) {
+        skippedSelf.push(id);
+        continue;
+      }
+      const onceKey = keyOf(id, b.event, b.handler);
+      if (b.once && state.onceFired.has(onceKey)) {
+        skippedOnce.push(id);
+        continue;
+      }
+      if (!run(b.handler)) continue;
+      if (b.once) state.onceFired.add(onceKey);
+      fired.push(id);
+      if (!handler) handler = b.handler;
+      if (b.stop) {
+        stopped = true;
+        break;
+      }
+    }
+    return { fired, handler, stopped, skippedSelf, skippedOnce };
+  }
 
   // packages/renderer-app/dist/index.js
   var import_runtime_core = __toESM(require_runtime_core(), 1);
@@ -11173,6 +11597,10 @@
       },
       parentNode: (node) => parentOf.get(node) ?? parentNodeOf(node),
       patchProp(el, key, prev, next) {
+        if (key === "textContent") {
+          if (next !== null && next !== void 0) this.setElementText(el, String(next));
+          return;
+        }
         if (key.startsWith("on")) {
           const type = normalizeEventType(key);
           if (type) {
@@ -11284,7 +11712,7 @@
         }
         return { removes: removed, inserts };
       },
-      dispatchEvent(nodeId, chain, type, x, y) {
+      dispatchEvent(nodeId, chain, type, x, y, extra) {
         const fired = [];
         const errors = [];
         let stoppedAt = null;
@@ -11298,6 +11726,8 @@
             currentTarget: id,
             x,
             y,
+            // ★语义附加字段（swipe.direction 等——与 packages/gesture 的 GestureEvent 同形状）
+            ...extra ?? {},
             _stopped: false,
             stopPropagation() {
               ev._stopped = true;
@@ -11383,7 +11813,7 @@
     return (0, import_runtime_core2.openBlock)(), (0, import_runtime_core2.createBlock)(_component_p_view, { style: { "width": 1080, "height": 1600, "flexDirection": "column", "padding": { "top": 24 }, "backgroundColor": "#14141c" } }, {
       default: (0, import_runtime_core2.withCtx)(() => [
         (0, import_runtime_core2.createVNode)(_component_p_text, { style: { "fontSize": 20, "color": "#ffffff", "margin": { "bottom": 12 } } }, {
-          default: (0, import_runtime_core2.withCtx)(() => [..._cache[2] || (_cache[2] = [
+          default: (0, import_runtime_core2.withCtx)(() => [..._cache[6] || (_cache[6] = [
             (0, import_runtime_core2.createTextVNode)(
               "Vapor \xB7 \u8BBE\u5907\u7AEF",
               -1
@@ -11410,13 +11840,14 @@
               },
               {
                 default: (0, import_runtime_core2.withCtx)(() => [
+                  (0, import_runtime_core2.createCommentVNode)(' \u2605\u2605\u6DF7\u5408\u6587\u672C\uFF08P2-2\uFF0C2026-10-03\uFF09\uFF1A\u9759\u6001\u6BB5 + \u4E24\u4E2A\u63D2\u503C\u6BB5 \u21D2 \u8FD0\u884C\u65F6\u6C42\u503C\u62FC\u63A5\u3002\n           \u5224\u636E\u6838\u7684\u662F**\u5B8C\u6574\u4E32**\uFF08"row-1\xB7row 1"\uFF09\u771F\u7684\u5230\u4E86\u5185\u6838\uFF08text_probe\uFF09\uFF0C\n           \u4EE5\u53CA\u6539\u6570\u636E\u540E\u91CD\u53D1\u7684 SET_TEXT \u4ECD\u662F\u5B8C\u6574\u4E32\uFF08\u4E0D\u662F\u53EA\u5269\u4E00\u4E2A\u5B57\u6BB5\uFF09\u3002 '),
                   (0, import_runtime_core2.createVNode)(_component_p_text, {
                     width: item.w,
                     style: { "fontSize": 12, "color": "#ffffff" }
                   }, {
                     default: (0, import_runtime_core2.withCtx)(() => [
                       (0, import_runtime_core2.createTextVNode)(
-                        (0, import_runtime_core2.toDisplayString)(item.title),
+                        "row-" + (0, import_runtime_core2.toDisplayString)(item.id) + "\xB7" + (0, import_runtime_core2.toDisplayString)(item.title),
                         1
                         /* TEXT */
                       )
@@ -11450,12 +11881,149 @@
           ]),
           _: 1
           /* STABLE */
-        }, 8, ["width"])
+        }, 8, ["width"]),
+        (0, import_runtime_core2.createCommentVNode)(' \u2605\u2605\u4E8B\u4EF6\u4FEE\u9970\u7B26\u5939\u5177\uFF08P2-3\uFF0C2026-10-03\uFF09\uFF1A\u5916\u5C42 @click\uFF08\u65E0\u4FEE\u9970\uFF09+ \u5185\u5C42 @click.stop\u3002\n         **\u5185\u5C42\u523B\u610F\u4E0D\u906E\u4F4F\u5916\u5C42\u7684\u4E2D\u5FC3**\uFF08\u5185\u5C42 40px \u8D34\u9876\uFF0C\u5916\u5C42 220px \u21D2 \u5916\u5C42\u4E2D\u5FC3 y=110 \u5728\u5185\u5C42\u4E4B\u5916\uFF09\n         \u2014\u2014\u5BBF\u4E3B\u6CE8\u5165 tap \u662F\u6309"\u8282\u70B9\u4E2D\u5FC3"\u70B9\u7684\uFF1A\u82E5\u91CD\u53E0\uFF0C\u70B9\u5916\u5C42\u4E5F\u4F1A\u547D\u4E2D\u5185\u5C42 \u21D2 \u5224\u636E\u62FF\u4E0D\u5230\n         \u300C\u7956\u5148 handler \u672C\u4F1A\u8DD1\u3001\u4F46\u88AB .stop \u6321\u4E0B\u300D\u7684\u8BC1\u636E\u3002 '),
+        (0, import_runtime_core2.createVNode)(_component_p_view, {
+          width: _ctx.stopOuterW,
+          onClick: _cache[3] || (_cache[3] = ($event) => _ctx.stopOuterW += 5),
+          style: { "height": 220, "margin": { "top": 8 }, "backgroundColor": "#223344" }
+        }, {
+          default: (0, import_runtime_core2.withCtx)(() => [
+            (0, import_runtime_core2.createVNode)(_component_p_view, {
+              width: _ctx.stopInnerW,
+              onClick: _cache[2] || (_cache[2] = _withModifiers(($event) => _ctx.stopInnerW += 30, ["stop"])),
+              style: { "height": 40, "backgroundColor": "#445566" }
+            }, null, 8, ["width"])
+          ]),
+          _: 1
+          /* STABLE */
+        }, 8, ["width"]),
+        (0, import_runtime_core2.createCommentVNode)(' \u2605\u2605P2-5\uFF082026-10-03\uFF09\uFF1Av-once \u51BB\u7ED3 / v-memo \u7EC4\u95E8 \u5939\u5177\u3002\n         \xB7 once \u884C\uFF1A{{ onceVal }} \u53EA\u5728\u9996\u5E27\u5199\uFF0C\u4E4B\u540E**\u6E90\u600E\u4E48\u6539\u90FD\u4E0D\u518D\u5199**\uFF08\u5224\u636E \u246A \u7528\uFF09\uFF1B\n         \xB7 memo \u884C\uFF1Av-memo="[memoDep]" + {{ memoVal }} \u2014\u2014 \u6539 memoVal\uFF08\u4F9D\u8D56\u51C0\uFF09\u21D2 **\u8DF3\u8FC7**\u3001\n                     \u6539 memoDep\uFF08\u4F9D\u8D56\u810F\uFF09\u21D2 \u653E\u884C\uFF08\u628A\u6700\u65B0 memoVal \u5199\u4E0B\u53BB\uFF09\u3002\n         \u2605\u4E24\u884C\u7684\u6587\u672C\u521D\u503C\u523B\u610F\u53EF\u533A\u5206\uFF08once-x / memo-y\uFF09\uFF0C\u5224\u636E\u6838"\u8DF3\u8FC7"\u4E0E"\u653E\u884C"\u7684**\u4E0D\u540C**\u7ED3\u679C\u3002 '),
+        (0, import_runtime_core2.createVNode)(_component_p_text, { style: { "fontSize": 12, "color": "#ffffff" } }, {
+          default: (0, import_runtime_core2.withCtx)(() => [
+            (0, import_runtime_core2.createTextVNode)(
+              "once-" + (0, import_runtime_core2.toDisplayString)(_ctx.onceVal),
+              1
+              /* TEXT */
+            )
+          ]),
+          _: 1
+          /* STABLE */
+        }),
+        _cache[4] || ((0, import_runtime_core2.setBlockTracking)(-1, true), (_cache[4] = (0, import_runtime_core2.createVNode)(_component_p_text, { style: { "fontSize": 12, "color": "#ffffff" } }, {
+          default: (0, import_runtime_core2.withCtx)(() => [
+            (0, import_runtime_core2.createTextVNode)(
+              "once-" + (0, import_runtime_core2.toDisplayString)(_ctx.onceVal),
+              1
+              /* TEXT */
+            )
+          ]),
+          _: 1
+          /* STABLE */
+        })).cacheIndex = 4, (0, import_runtime_core2.setBlockTracking)(1), _cache[4]),
+        (0, import_runtime_core2.withMemo)([_ctx.memoDep], () => ((0, import_runtime_core2.openBlock)(), (0, import_runtime_core2.createBlock)(_component_p_text, {
+          key: "memo",
+          style: { "fontSize": 12, "color": "#ffffff" }
+        }, {
+          default: (0, import_runtime_core2.withCtx)(() => [
+            (0, import_runtime_core2.createTextVNode)(
+              "memo-" + (0, import_runtime_core2.toDisplayString)(_ctx.memoVal),
+              1
+              /* TEXT */
+            )
+          ]),
+          _: 1
+          /* STABLE */
+        })), _cache, 5),
+        (0, import_runtime_core2.createCommentVNode)(` \u2605\u2605P2-6~P2-9\uFF082026-10-03\uFF09\uFF1A
+         \xB7 v-text\uFF08P2-6\uFF09\uFF1A\u4E0E\u63D2\u503C\u540C\u69FD\u4F4D\uFF1B
+         \xB7 \u767D\u540D\u5355\u7EAF\u51FD\u6570\uFF08P2-8\uFF09\uFF1AMath.round / String \u7B49 + Math.PI \u7F16\u8BD1\u671F\u5185\u8054\uFF08\u6B64\u524D\u9759\u9ED8\u6E32\u67D3\u6210\u7A7A\uFF09\uFF1B
+         \xB7 \u7EAF\u65B9\u6CD5\uFF08P2-8 \u7EED\uFF09\uFF1Aarr.join\uFF08\u771F\u5B9E\u9879\u76EE\u7528\u6CD5\uFF09\uFF1B
+         \xB7 \u53EF\u9009\u94FE\uFF08P2-9\uFF09\uFF1Aobj?.x \u7F16\u8BD1\u671F\u964D\u7EA7\u4E3A cond \u7A0B\u5E8F\uFF08\u7A7A\u503C \u21D2 \u7A7A\u4E32\uFF0C\u4E0D\u662F 'undefined'\uFF09\u3002
+         \u5224\u636E \u246B \u6838\uFF1A\u8FD9\u4E9B\u8282\u70B9\u7684**\u9996\u5E27\u6587\u672C**\u662F\u6C42\u503C\u7ED3\u679C\uFF08\u4E0D\u662F\u7A7A\u4E32\u3001\u4E5F\u4E0D\u662F "undefined"/"null" \u5B57\u9762\u91CF\uFF09\u3002 `),
+        (0, import_runtime_core2.createVNode)(_component_p_text, {
+          textContent: (0, import_runtime_core2.toDisplayString)("vt-" + _ctx.exprA),
+          style: { "fontSize": 12, "color": "#ffffff" }
+        }, null, 8, ["textContent"]),
+        (0, import_runtime_core2.createVNode)(_component_p_text, { style: { "fontSize": 12, "color": "#ffffff" } }, {
+          default: (0, import_runtime_core2.withCtx)(() => [
+            (0, import_runtime_core2.createTextVNode)(
+              "pi-" + (0, import_runtime_core2.toDisplayString)(Math.PI.toFixed(2)),
+              1
+              /* TEXT */
+            )
+          ]),
+          _: 1
+          /* STABLE */
+        }),
+        (0, import_runtime_core2.createVNode)(_component_p_text, { style: { "fontSize": 12, "color": "#ffffff" } }, {
+          default: (0, import_runtime_core2.withCtx)(() => [
+            (0, import_runtime_core2.createTextVNode)(
+              "mx-" + (0, import_runtime_core2.toDisplayString)(Math.max(_ctx.exprA, 7)),
+              1
+              /* TEXT */
+            )
+          ]),
+          _: 1
+          /* STABLE */
+        }),
+        (0, import_runtime_core2.createVNode)(_component_p_text, { style: { "fontSize": 12, "color": "#ffffff" } }, {
+          default: (0, import_runtime_core2.withCtx)(() => [
+            (0, import_runtime_core2.createTextVNode)(
+              "jn-" + (0, import_runtime_core2.toDisplayString)(_ctx.exprArr.join("|")),
+              1
+              /* TEXT */
+            )
+          ]),
+          _: 1
+          /* STABLE */
+        }),
+        (0, import_runtime_core2.createVNode)(_component_p_text, { style: { "fontSize": 12, "color": "#ffffff" } }, {
+          default: (0, import_runtime_core2.withCtx)(() => [
+            (0, import_runtime_core2.createTextVNode)(
+              "oc-" + (0, import_runtime_core2.toDisplayString)(_ctx.exprObj?.inner),
+              1
+              /* TEXT */
+            )
+          ]),
+          _: 1
+          /* STABLE */
+        })
       ]),
       _: 1
       /* STABLE */
     });
   }
+  var modifierGuards = {
+    stop: (e) => {
+      if (typeof e.stopPropagation === "function") e.stopPropagation();
+    },
+    prevent: (e) => {
+      if (typeof e.preventDefault === "function") e.preventDefault();
+    },
+    self: (e) => e.target !== e.currentTarget,
+    ctrl: (e) => !e.ctrlKey,
+    shift: (e) => !e.shiftKey,
+    alt: (e) => !e.altKey,
+    meta: (e) => !e.metaKey,
+    left: (e) => "button" in e && e.button !== 0,
+    middle: (e) => "button" in e && e.button !== 1,
+    right: (e) => "button" in e && e.button !== 2,
+    exact: (e, modifiers) => ["ctrl", "shift", "alt", "meta"].some((m) => e[m + "Key"] && !modifiers.includes(m))
+  };
+  var withModifiers = (fn, modifiers) => {
+    if (!fn) return fn;
+    const cache = fn._withMods || (fn._withMods = {});
+    const cacheKey = modifiers.join(".");
+    return cache[cacheKey] || (cache[cacheKey] = (event, ...args) => {
+      for (const m of modifiers) {
+        const guard = modifierGuards[m];
+        if (guard && guard(event, modifiers)) return;
+      }
+      return fn(event, ...args);
+    });
+  };
+  var _withModifiers = withModifiers;
 
   // hosts/android/bridge/entry-vapor.ts
   function makeData(rows) {
@@ -11467,6 +12035,18 @@
       // ★★冒泡锚（2026-10-02）：按钮外层容器的宽度源——容器上的 `@click="padW += 5"`
       //   是**祖先 handler**：tap 链 [按钮, 容器, root] 上两跳都要跑（判据核"链没断"）
       padW: 300,
+      // ★★P2-3 修饰符夹具（2026-10-03）：内层 `@click.stop` 的宽度源 + 外层（无修饰）的宽度源
+      //   ——判据 ⑨ 核"点了内层，**外层 handler 不许跑**"（.stop 真的终止了冒泡）
+      stopOuterW: 300,
+      stopInnerW: 120,
+      // ★★P2-5 夹具（2026-10-03）：once 冻结 / memo 组门——判据 ⑪ 用（见 runShort 的更新轮）
+      onceVal: 1,
+      memoDep: 0,
+      memoVal: 1,
+      // ★★P2-6~P2-9 夹具（2026-10-03）：表达式能力（判据 ⑫ 核首帧文本）
+      exprA: 3,
+      exprArr: ["a", "b"],
+      exprObj: { inner: "ok" },
       tapCount: 0
     };
   }
@@ -11685,8 +12265,8 @@
       }
       const harnessEvents = artifacts.events ?? [];
       const harnessHandlers = artifacts.handlers ?? {};
-      const byNodeEvent = /* @__PURE__ */ new Map();
-      for (const e of harnessEvents) byNodeEvent.set(`${e.nodeId}:${e.event}`, e.handler);
+      const byNodeEvent = indexEventBindings(harnessEvents);
+      const dispatchStateA = createDispatchState();
       const GESTURE_CB = "__proteusVaporGesture";
       if (typeof proteusHost.onGesture === "function") proteusHost.onGesture(GESTURE_CB);
       const runActions = (name, store) => {
@@ -11751,7 +12331,7 @@
         };
         globalThis[GESTURE_CB] = (type, nodeId, chainJson) => {
           const chain = parseChain(chainJson, nodeId);
-          const hit = dispatchChainA(chain, type, byNodeEvent, (h) => runActions(h, data));
+          const hit = dispatchChainA(chain, type, byNodeEvent, dispatchStateA, (h) => runActions(h, data));
           const handler = hit.handler;
           if (!handler) return JSON.stringify({ ok: false, reason: `\u94FE ${chain.join(">")} \u4E0A\u6CA1\u6709 ${type} \u7684 handler` });
           for (const [, cb] of triggers) cb();
@@ -11811,12 +12391,32 @@
       const abList = (0, import_runtime_core3.ref)(dataB.list);
       const abBoxW = (0, import_runtime_core3.ref)(dataB.boxW);
       const abPadW = (0, import_runtime_core3.ref)(dataB.padW);
+      const abStopOuterW = (0, import_runtime_core3.ref)(dataB.stopOuterW);
+      const abStopInnerW = (0, import_runtime_core3.ref)(dataB.stopInnerW);
+      const abOnceVal = (0, import_runtime_core3.ref)(dataB.onceVal);
+      const abMemoDep = (0, import_runtime_core3.ref)(dataB.memoDep);
+      const abMemoVal = (0, import_runtime_core3.ref)(dataB.memoVal);
+      const abExprA = (0, import_runtime_core3.ref)(dataB.exprA);
+      const abExprArr = (0, import_runtime_core3.ref)(dataB.exprArr);
+      const abExprObj = (0, import_runtime_core3.ref)(dataB.exprObj);
       let abRootInst = null;
       const AbApp = {
         name: "VaporAbApp",
         setup() {
           abRootInst = (0, import_runtime_core3.getCurrentInstance)();
-          return { list: abList, boxW: abBoxW, padW: abPadW };
+          return {
+            list: abList,
+            boxW: abBoxW,
+            padW: abPadW,
+            stopOuterW: abStopOuterW,
+            stopInnerW: abStopInnerW,
+            onceVal: abOnceVal,
+            memoDep: abMemoDep,
+            memoVal: abMemoVal,
+            exprA: abExprA,
+            exprArr: abExprArr,
+            exprObj: abExprObj
+          };
         },
         render
       };
@@ -12146,18 +12746,8 @@
     }
     return nodeId >= 0 ? [nodeId] : [];
   }
-  function dispatchChainA(chain, type, byNodeEvent, run) {
-    const fired = [];
-    let handler = "";
-    for (const id of chain) {
-      const h = byNodeEvent.get(`${id}:${type}`) ?? byNodeEvent.get(`${id}:tap`) ?? "";
-      if (!h) continue;
-      if (run(h)) {
-        fired.push(id);
-        if (!handler) handler = h;
-      }
-    }
-    return { fired, handler };
+  function dispatchChainA(chain, type, index, state, run) {
+    return dispatchGesture(chain, type, index, state, run);
   }
   var CHANNEL_KEYS = ["radius", "grad", "glow", "clip", "stroke_len", "mask"];
   function probeChannelsRaw(ids) {
@@ -12330,6 +12920,13 @@
       inst_virtual_rows: 0,
       inst_text_filled: 0,
       inst_width_filled: 0,
+      mix_text_probe: [],
+      text_probe_rounds: [],
+      gate_rounds: [],
+      gate_text_nodes: [],
+      once_node_id: -1,
+      memo_node_id: -1,
+      expr_probe: [],
       mount_ms: 0,
       mount_nodes: 0,
       updates_run: 0,
@@ -12342,6 +12939,7 @@
       channels: [],
       ev_bindings: 0,
       ev_handlers: 0,
+      ev_modifiers: 0,
       taps: 0,
       tap_evidence: [],
       uninstantiated_slots: 0,
@@ -12381,6 +12979,15 @@
       rep.inst_virtual_rows = inst.virtual?.rows.length ?? 0;
       rep.inst_text_filled = inst.nodes.filter((n) => typeof n.text === "string" && n.text.length > 0).length;
       rep.inst_width_filled = inst.nodes.filter((n) => typeof n.width === "number").length;
+      const segNodes = tpl.nodes.filter((n) => n.textSegments?.length);
+      const segNodeIds = new Set(segNodes.map((n) => n.id));
+      const staticsOf = new Map(segNodes.map((n) => [
+        n.id,
+        (n.textSegments ?? []).filter((sg) => sg.text !== void 0 && sg.text !== "").map((sg) => String(sg.text))
+      ]));
+      rep.mix_text_probe = inst.nodes.filter((n) => segNodeIds.has(n.id)).map((n) => ({ id: n.id, text: String(n.text ?? ""), statics: staticsOf.get(n.id) ?? [] }));
+      const EXPR_PREFIXES = ["vt-", "pi-", "mx-", "jn-", "oc-"];
+      rep.expr_probe = inst.nodes.map((n) => ({ id: n.id, text: String(n.text ?? "") })).filter((n) => EXPR_PREFIXES.some((p2) => n.text.startsWith(p2))).map((n) => ({ id: n.id, prefix: n.text.slice(0, 3), text: n.text }));
       if (rep.inst_text_filled === 0) notes.push("\u26A0 \u5B9E\u4F8B\u6811\u91CC\u6CA1\u6709\u4EFB\u4F55\u975E\u7A7A\u6587\u672C\u2014\u2014\u56DE\u586B\u94FE\u53EF\u7591");
       const t3 = t();
       const mountOut = proteusHost.mount(JSON.stringify({ viewport: inst.viewport, nodes: inst.nodes }));
@@ -12410,8 +13017,9 @@
       const events = artifacts.events ?? [];
       rep.ev_bindings = events.length;
       rep.ev_handlers = Object.keys(handlers).length;
-      const byNodeEvent = /* @__PURE__ */ new Map();
-      for (const e of events) byNodeEvent.set(`${e.nodeId}:${e.event}`, e.handler);
+      const byNodeEvent = indexEventBindings(events);
+      const dispatchState = createDispatchState();
+      rep.ev_modifiers = events.filter((e) => e.stop || e.self || e.once).length;
       const runHandler = (name) => {
         const acts = handlers[name];
         if (!acts) return false;
@@ -12433,7 +13041,7 @@
       globalThis.__proteusVaporGesture = (type, nodeId, chainJson) => {
         const chain = parseChain(chainJson, nodeId);
         const before2 = { ...data };
-        const hit = dispatchChainA(chain, type, byNodeEvent, runHandler);
+        const hit = dispatchChainA(chain, type, byNodeEvent, dispatchState, runHandler);
         const handler = hit.handler;
         if (!handler) return JSON.stringify({ ok: false, reason: `\u94FE ${chain.join(">")} \u4E0A\u6CA1\u6709 ${type} \u7684 handler` });
         const ran = true;
@@ -12459,7 +13067,17 @@
             applied = -3;
           }
         }
-        gestureHits.push({ tap: gestureHits.length + 1, hit: nodeId, chain, fired: hit.fired, handler, source_after: changedSources });
+        gestureHits.push({
+          tap: gestureHits.length + 1,
+          hit: nodeId,
+          chain,
+          fired: hit.fired,
+          handler,
+          source_after: changedSources,
+          // ★P2-3：终止/跳过读数（判据核「修饰符真的生效」——既有形态下恒 false/[]）
+          stopped: hit.stopped,
+          skipped_self: hit.skippedSelf
+        });
         return JSON.stringify({
           ok: ran,
           handler,
@@ -12518,6 +13136,8 @@
           continue;
         }
         const changed = ao.rects ? Object.keys(ao.rects).length : 0;
+        const probe = ao.text_probe;
+        if (probe?.text) rep.text_probe_rounds.push(String(probe.text));
         evidence.push({
           round: r,
           row: at + 1,
@@ -12588,6 +13208,9 @@
             fired: lastHit?.fired ?? [],
             handler: lastHit?.handler ?? "",
             source_after: lastHit?.source_after ?? null,
+            // ★P2-3：该次 tap 是否被 .stop 终止（判据 ⑨ 用；无修饰符时恒 false）
+            stopped: lastHit?.stopped ?? false,
+            skipped_self: lastHit?.skipped_self ?? [],
             ops: tapOut.ok ? 1 : 0,
             changed_rects: geomChanged,
             geom_before: geomBefore,
@@ -12596,6 +13219,54 @@
           });
           void changedSources;
         }
+      }
+      const gateRounds = [];
+      const gateTextNodes = [];
+      if (triggers.has("onceVal") || triggers.has("memoDep")) {
+        const allSlotsFlat = table.sources.flatMap((s3) => s3.slots);
+        rep.once_node_id = allSlotsFlat.find((x) => x.once)?.nodeId ?? -1;
+        rep.memo_node_id = allSlotsFlat.find((x) => x.memoId !== void 0)?.nodeId ?? -1;
+        const runGate = (name, mut, expectSkip) => {
+          mut();
+          for (const [, cb] of triggers) cb();
+          vapor.relink(ctx);
+          slotRt.flush();
+          const payload = captured.length ? captured[captured.length - 1] : new Uint8Array(0);
+          captured.length = 0;
+          const texts = [];
+          const entries = [];
+          if (payload.length > 0) {
+            const d = decodeOps(payload);
+            for (const op of d.ops) {
+              if (op.op === OpCode.SET_TEXT) {
+                const t4 = String(d.strings.valueOf(op.textRef));
+                texts.push(t4);
+                entries.push({ nodeId: op.nodeId, text: t4 });
+              }
+            }
+            try {
+              proteusHost.applyOps(JSON.stringify(Array.from(payload)));
+            } catch {
+            }
+          }
+          gateRounds.push({ name, ops: payload.length, texts, expect_skip: expectSkip });
+          gateTextNodes.push({ name, entries });
+        };
+        runGate("once-frozen", () => {
+          data.onceVal = 42;
+        }, true);
+        runGate("plain-updated", () => {
+          data.tapCount = 7;
+          data.list[0].title = "gate";
+        }, false);
+        runGate("memo-clean", () => {
+          data.memoVal = 99;
+        }, true);
+        runGate("memo-dirty", () => {
+          data.memoDep = 1;
+        }, false);
+        rep.gate_rounds = gateRounds;
+        rep.gate_text_nodes = gateTextNodes;
       }
       if (probeId !== void 0) {
         const after = rectsOf()[String(probeId)]?.width ?? -1;

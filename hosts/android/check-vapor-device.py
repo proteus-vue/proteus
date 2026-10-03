@@ -119,7 +119,7 @@ def main() -> int:
     hm = d.get("host_mount_calls", 0)
     hn = d.get("host_nodes", -1)
     hc = d.get("host_cmds", -1)
-    ps = d.get("host_painted_samples", -1)
+    ps = d.get("host_painted_samples", -1)  # iOS：离屏渲染自检的"画过像素数"（见 paintedPixelProbe）
     if hm < 1:
         fail("宿主 mount 没被调用（host_mount_calls=0）")
         ok = False
@@ -198,6 +198,13 @@ def main() -> int:
         #   本批交的是"应用链"（实例化+订阅+增量+几何），渲染层四通道是后续批次。
         print(f"  ◐ ⑦ 绘制通道：鸿蒙 probeChannels 已接线（radius 真值）——"
               f"渐变/发光/裁剪/描边属**渲染层**，鸿蒙待补（如实跳过，不计失败）")
+        chans = {}
+    elif host == "ios":
+        # ★iOS 腿现状（2026-10-03 首次接本判据，如实）：通道探针已接（A/B 路径已验证 5/5）——
+        #   但本判据的期望值是**夹具节点固定的 id**（2 圆角 / 3 渐变…），而 iOS 的层序/节点 id
+        #   与 Android 的树同源（同一份产物）⇒ 理论可判；**先如实跳过**，等一轮实测读数再收紧
+        #   （本仓纪律：不自造未实测的判据口径——"看起来应该能过"不是证据）。
+        print(f"  ◐ ⑦ 绘制通道：iOS 腿首轮接入（探针已接，期望 id 尚未实测标定）——如实跳过，下一轮收紧")
         chans = {}
     if chans:
         want = [

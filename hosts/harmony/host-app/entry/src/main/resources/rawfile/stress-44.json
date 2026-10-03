@@ -17,7 +17,8 @@
     "top": 60,
     "left": 16,
     "right": 16
-   }
+   },
+   "tag": "view"
   },
   {
    "id": 1,
@@ -28,7 +29,8 @@
    "backgroundColor": "#2f6fed",
    "margin": {
     "bottom": 10
-   }
+   },
+   "tag": "view"
   },
   {
    "id": 2,
@@ -39,7 +41,8 @@
    "margin": {
     "bottom": 12
    },
-   "text": "Proteus SFC stress"
+   "text": "Proteus SFC stress",
+   "tag": "text"
   },
   {
    "id": 3,
@@ -53,7 +56,8 @@
     "bottom": 6
    },
    "borderRadius": 10,
-   "backgroundColor": "#1b1b21"
+   "backgroundColor": "#1b1b21",
+   "tag": "view"
   },
   {
    "id": 4,
@@ -65,6 +69,7 @@
    "margin": {
     "left": 10
    },
+   "tag": "view",
    "width": 40
   },
   {
@@ -76,7 +81,8 @@
    "margin": {
     "left": 10
    },
-   "text": "row 1"
+   "text": "row 1",
+   "tag": "text"
   },
   {
    "id": 6,
@@ -88,7 +94,8 @@
    "backgroundColor": "#2f6fed",
    "margin": {
     "left": 8
-   }
+   },
+   "tag": "view"
   },
   {
    "id": 8,
@@ -102,7 +109,8 @@
     "bottom": 6
    },
    "borderRadius": 10,
-   "backgroundColor": "#1b1b21"
+   "backgroundColor": "#1b1b21",
+   "tag": "view"
   },
   {
    "id": 9,
@@ -114,6 +122,7 @@
    "margin": {
     "left": 10
    },
+   "tag": "view",
    "width": 52
   },
   {
@@ -125,7 +134,8 @@
    "margin": {
     "left": 10
    },
-   "text": "row 2"
+   "text": "row 2",
+   "tag": "text"
   },
   {
    "id": 11,
@@ -137,7 +147,8 @@
    "backgroundColor": "#2f6fed",
    "margin": {
     "left": 8
-   }
+   },
+   "tag": "view"
   },
   {
    "id": 12,
@@ -151,7 +162,8 @@
     "bottom": 6
    },
    "borderRadius": 10,
-   "backgroundColor": "#1b1b21"
+   "backgroundColor": "#1b1b21",
+   "tag": "view"
   },
   {
    "id": 13,
@@ -163,6 +175,7 @@
    "margin": {
     "left": 10
    },
+   "tag": "view",
    "width": 64
   },
   {
@@ -174,7 +187,8 @@
    "margin": {
     "left": 10
    },
-   "text": "row 3"
+   "text": "row 3",
+   "tag": "text"
   },
   {
    "id": 15,
@@ -186,7 +200,8 @@
    "backgroundColor": "#2f6fed",
    "margin": {
     "left": 8
-   }
+   },
+   "tag": "view"
   },
   {
    "id": 16,
@@ -200,7 +215,8 @@
     "bottom": 6
    },
    "borderRadius": 10,
-   "backgroundColor": "#1b1b21"
+   "backgroundColor": "#1b1b21",
+   "tag": "view"
   },
   {
    "id": 17,
@@ -212,6 +228,7 @@
    "margin": {
     "left": 10
    },
+   "tag": "view",
    "width": 76
   },
   {
@@ -223,7 +240,8 @@
    "margin": {
     "left": 10
    },
-   "text": "row 4"
+   "text": "row 4",
+   "tag": "text"
   },
   {
    "id": 19,
@@ -235,7 +253,8 @@
    "backgroundColor": "#2f6fed",
    "margin": {
     "left": 8
-   }
+   },
+   "tag": "view"
   },
   {
    "id": 20,
@@ -249,7 +268,8 @@
     "bottom": 6
    },
    "borderRadius": 10,
-   "backgroundColor": "#1b1b21"
+   "backgroundColor": "#1b1b21",
+   "tag": "view"
   },
   {
    "id": 21,
@@ -261,6 +281,7 @@
    "margin": {
     "left": 10
    },
+   "tag": "view",
    "width": 88
   },
   {
@@ -272,7 +293,8 @@
    "margin": {
     "left": 10
    },
-   "text": "row 5"
+   "text": "row 5",
+   "tag": "text"
   },
   {
    "id": 23,
@@ -284,7 +306,8 @@
    "backgroundColor": "#2f6fed",
    "margin": {
     "left": 8
-   }
+   },
+   "tag": "view"
   },
   {
    "id": 24,
@@ -298,7 +321,8 @@
     "bottom": 6
    },
    "borderRadius": 10,
-   "backgroundColor": "#1b1b21"
+   "backgroundColor": "#1b1b21",
+   "tag": "view"
   },
   {
    "id": 25,
@@ -310,6 +334,7 @@
    "margin": {
     "left": 10
    },
+   "tag": "view",
    "width": 40
   },
   {
@@ -321,7 +346,8 @@
    "margin": {
     "left": 10
    },
-   "text": "row 6"
+   "text": "row 6",
+   "tag": "text"
   },
   {
    "id": 27,
@@ -333,7 +359,8 @@
    "backgroundColor": "#2f6fed",
    "margin": {
     "left": 8
-   }
+   },
+   "tag": "view"
   },
   {
    "id": 28,
@@ -347,7 +374,8 @@
     "bottom": 6
    },
    "borderRadius": 10,
-   "backgroundColor": "#1b1b21"
+   "backgroundColor": "#1b1b21",
+   "tag": "view"
   },
   {
    "id": 29,
@@ -359,6 +387,7 @@
    "margin": {
     "left": 10
    },
+   "tag": "view",
    "width": 52
   },
   {
@@ -370,7 +399,8 @@
    "margin": {
     "left": 10
    },
-   "text": "row 7"
+   "text": "row 7",
+   "tag": "text"
   },
   {
    "id": 31,
@@ -382,7 +412,8 @@
    "backgroundColor": "#2f6fed",
    "margin": {
     "left": 8
-   }
+   },
+   "tag": "view"
   },
   {
    "id": 32,
@@ -396,7 +427,8 @@
     "bottom": 6
    },
    "borderRadius": 10,
-   "backgroundColor": "#1b1b21"
+   "backgroundColor": "#1b1b21",
+   "tag": "view"
   },
   {
    "id": 33,
@@ -408,6 +440,7 @@
    "margin": {
     "left": 10
    },
+   "tag": "view",
    "width": 64
   },
   {
@@ -419,7 +452,8 @@
    "margin": {
     "left": 10
    },
-   "text": "row 8"
+   "text": "row 8",
+   "tag": "text"
   },
   {
    "id": 35,
@@ -431,7 +465,8 @@
    "backgroundColor": "#2f6fed",
    "margin": {
     "left": 8
-   }
+   },
+   "tag": "view"
   },
   {
    "id": 36,
@@ -445,7 +480,8 @@
     "bottom": 6
    },
    "borderRadius": 10,
-   "backgroundColor": "#1b1b21"
+   "backgroundColor": "#1b1b21",
+   "tag": "view"
   },
   {
    "id": 37,
@@ -457,6 +493,7 @@
    "margin": {
     "left": 10
    },
+   "tag": "view",
    "width": 76
   },
   {
@@ -468,7 +505,8 @@
    "margin": {
     "left": 10
    },
-   "text": "row 9"
+   "text": "row 9",
+   "tag": "text"
   },
   {
    "id": 39,
@@ -480,7 +518,8 @@
    "backgroundColor": "#2f6fed",
    "margin": {
     "left": 8
-   }
+   },
+   "tag": "view"
   },
   {
    "id": 40,
@@ -494,7 +533,8 @@
     "bottom": 6
    },
    "borderRadius": 10,
-   "backgroundColor": "#1b1b21"
+   "backgroundColor": "#1b1b21",
+   "tag": "view"
   },
   {
    "id": 41,
@@ -506,6 +546,7 @@
    "margin": {
     "left": 10
    },
+   "tag": "view",
    "width": 88
   },
   {
@@ -517,7 +558,8 @@
    "margin": {
     "left": 10
    },
-   "text": "row 10"
+   "text": "row 10",
+   "tag": "text"
   },
   {
    "id": 43,
@@ -529,7 +571,8 @@
    "backgroundColor": "#2f6fed",
    "margin": {
     "left": 8
-   }
+   },
+   "tag": "view"
   },
   {
    "id": 7,
@@ -539,7 +582,8 @@
    "margin": {
     "top": 8
    },
-   "text": "SFC stress · 6 targets"
+   "text": "SFC stress · 6 targets",
+   "tag": "text"
   }
  ]
 }

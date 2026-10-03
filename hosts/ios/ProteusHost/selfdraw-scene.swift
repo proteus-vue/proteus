@@ -4218,6 +4218,40 @@ final class SelfDrawBridge: NSObject, SelfDrawExports {
         rects()
     }
 
+    /// ★★**离屏像素自检**（2026-10-03 · 三端对齐：判据 ④ 的 iOS 腿）——
+    ///   把层树渲染到离屏位图，数"与背景色不同"的像素。
+    ///
+    /// 【为什么需要】判据 ④ 要"渲染真的发生了"的**宿主侧独立证据**（不信 JS 自报）。
+    ///   Android 用 `onDraw` 期间的绘制采样数、鸿蒙用 `host_painted_samples`；
+    ///   iOS 无同款计数器 ⇒ **离屏渲染一遍数像素**：`CALayer.render(in:)` 走的是 Core Animation
+    ///   的真实绘制路径——层上真画了内容才计数（空层/没建层 ⇒ 恒 0 ⇒ 判据能红）。
+    /// 【背景判定】本模式把 view 底色设为 #14141c（见 `driveVapor`）——与背景差超容差的即计"画过"
+    ///   （抗锯齿边缘也计入 ⇒ 下限 1000 极易满足、不会假红；而"什么都没画"必红）。
+    func paintedPixelProbe() -> (samples: Int, colors: Int) {
+        guard let view = view, view.bounds.width >= 1, view.bounds.height >= 1 else { return (0, 0) }
+        view.layoutIfNeeded()
+        let w = Int(view.bounds.width.rounded()), h = Int(view.bounds.height.rounded())
+        let cs = CGColorSpaceCreateDeviceRGB()
+        guard let bctx = CGContext(data: nil, width: w, height: h, bitsPerComponent: 8,
+                                   bytesPerRow: w * 4, space: cs,
+                                   bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue) else { return (0, 0) }
+        view.layer.render(in: bctx)
+        guard let raw = bctx.data else { return (0, 0) }
+        let px = raw.bindMemory(to: UInt8.self, capacity: w * h * 4)
+        var painted = 0
+        var colors = Set<UInt32>()
+        for i in stride(from: 0, to: w * h * 4, by: 4) {
+            let r = Int(px[i]), g = Int(px[i + 1]), b = Int(px[i + 2]), a = Int(px[i + 3])
+            if a <= 0 { continue }
+            let nearBg = abs(r - 0x14) < 8 && abs(g - 0x14) < 8 && abs(b - 0x1C) < 8
+            if !nearBg {
+                painted += 1
+                colors.insert(UInt32(r) << 16 | UInt32(g) << 8 | UInt32(b))
+            }
+        }
+        return (painted, colors.count)
+    }
+
     /// ★★A/B：绘制通道探针（转发给视图；见 `SelfDrawView.channelProbe`）
     ///
     /// 【为什么经 View 读（而不是 Bridge 自己算）】层与各通道表都在 View 上
@@ -5524,6 +5558,17 @@ final class SelfDrawBridge: NSObject, SelfDrawExports {
         res["applied"] = applied
         res["relayout"] = relayout
         res["text_synced"] = textApplied
+        // ★★P2-2 ⑩b（2026-10-03 · 三端对齐）：`text_probe` = 本轮**最后一次**文本更新的
+        //   {id,text}（与 Android `VaporRenderHost.lastTextProbe` / 鸿蒙 `PROTEUS_VAPOR_TEXTPROBE`
+        //   同形）——判据 ⑩b 靠它核"更新后的文本仍是完整拼接串"（缺它 ⇒ iOS 在混合文本更新上无读数）。
+        // ★`textUpdates` 是 `[String: Any]`（**字典没有 `.last`**——首版按数组写，编译期即红）；
+        //   取任一非空条目作"最后一次更新"的代表（判据只核"是完整拼接串"，不核具体哪一条）。
+        for (k, v) in textUpdates {
+            if let txt = v as? String, let pid = Int(k) {
+                res["text_probe"] = ["id": pid, "text": txt]
+                break
+            }
+        }
         // rects：判据只数**键数**（changed_rects 的几何真源形态）——构轻量 id 集合（值不打）
         var rectsMap: [String: [String: Double]] = [:]
         for c in changed { rectsMap["\(c.id)"] = ["x": 0, "y": 0, "width": 0, "height": 0] }
@@ -6167,6 +6212,10 @@ final class SelfDrawViewController: UIViewController {
         let isNativeMix = ProcessInfo.processInfo.arguments.contains("--native-mix")
         // ★A/B（矩阵 #14 续）：Vapor vs Vue 运行时对照（eval 与 Android 同一份 bundle-vapor.js）
         let isVaporAb = ProcessInfo.processInfo.arguments.contains("--vapor-ab")
+        // ★★★Vapor 设备端链（2026-10-03 · 三端对齐）：跑 bundle 的**默认模式**（runShort）——
+        //   即 `check-vapor-device.py` 判据 ①–⑫ 所在路径（实例化/增量/交互/门禁轮/表达式能力）。
+        //   A/B 模式（--vapor-ab）跑的是 `mode:'ab'`，两者**不同路径**（判据集也不同）。
+        let isVapor = ProcessInfo.processInfo.arguments.contains("--vapor")
         // ★★G-39：宿主运行时场景（`--host-runtime`）——独立模式，不进自绘/基准分支
         let isHostRuntime = ProcessInfo.processInfo.arguments.contains("--host-runtime")
         // ★★M5：执行器场景（`--app-stack`）——同上，独立模式
@@ -6226,10 +6275,19 @@ final class SelfDrawViewController: UIViewController {
             SelfDrawBridge.reportFileName = "vapor-ab"
             SelfDrawBridge.snapshotName = "vapor-ab"
         }
+        if isVapor {
+            // ★三端对齐：报告名与 Android/鸿蒙**同名**（`vapor.json`）——判据脚本按名取件、
+            //   三端产物同形（本仓同款坑：名字不一致会让"取报告"静默失败，排查成本高）。
+            SelfDrawBridge.reportFileName = "vapor"
+            SelfDrawBridge.snapshotName = "vapor"
+        }
         // ★stress 也走 bench bundle（它含 renderStress 入口——同一份 vapor-stress.json 产物）
+        // ★三端对齐（2026-10-03）：vapor 与 vapor-ab 都吃 **bundle-vapor.js**（含 runShort 与 abRender）
         let bundleName = isShowcase ? "bundle-showcase"
             : (isAppStack ? "bundle-app-stack"
-            : (isHostRuntime ? "bundle-host-runtime" : (isBench || isStress || isNativeMix ? "bundle-bench" : "bundle-selfdraw")))
+            : (isHostRuntime ? "bundle-host-runtime"
+            : (isBench || isStress || isNativeMix ? "bundle-bench"
+            : (isVapor || isVaporAb ? "bundle-vapor" : "bundle-selfdraw"))))
         guard let url = Bundle.main.url(forResource: bundleName, withExtension: "js"),
               let src = try? String(contentsOf: url, encoding: .utf8) else {
             NSLog("[proteus] 缺少 %@.js", bundleName)
@@ -6273,6 +6331,8 @@ final class SelfDrawViewController: UIViewController {
             driveBench(ctx: ctx)
         } else if isVaporAb {
             driveVaporAb(ctx: ctx)
+        } else if isVapor {
+            driveVapor(ctx: ctx)
         } else if isNativeMix {
             driveNativeMix(ctx: ctx)
         } else if isStress {
@@ -6479,6 +6539,91 @@ final class SelfDrawViewController: UIViewController {
     ///   （V9/V16 既有用例依赖它——**改签名会破既有读数**）。
     ///   ⇒ 在 eval bundle **之前**用 JS 建一个 `proteusHost` 适配对象（shim）：
     ///     逐方法转调 `proteusSelfDraw.*`，**两边零改动**。
+    /// ★★★**Vapor 设备端链**（2026-10-03 · 三端对齐）：eval **与 Android/鸿蒙同一份**
+    ///   `bundle-vapor.js` → 跑**默认模式**（runShort）→ 报告落盘（与 Android `vapor.json` 同形）。
+    ///
+    /// 【为什么与 driveVaporAb 并存（不是同一个）】A/B 跑 `mode:'ab'`（Vapor vs Vue 两路对照，
+    ///   判据集 = check-vapor-ab.py④⑦）；本模式跑 runShort（**判据 ①–⑫**：实例化/增量/交互/
+    ///   事件修饰符/混合文本/once·memo 门禁/表达式能力）——两边覆盖的能力面不同，都要有。
+    ///
+    /// 【宿主读数怎么来（判据 ④ 要"渲染真的发生了"的宿主侧独立证据）】
+    ///   · mount 次数 / 节点数 / 层数：JS 侧 shim **计数并回读**（`__hostMountCalls` 等）；
+    ///   · 离屏像素：iOS 侧真实渲染一遍数像素（`paintedPixelProbe`——层上真画了才计数）。
+    private func driveVapor(ctx: JSContext) {
+        let evalJs = { (expr: String) -> String in ctx.evaluateScript(expr)?.toString() ?? "null" }
+        bridge.view?.backgroundColor = UIColor(red: 0x14 / 255.0, green: 0x14 / 255.0, blue: 0x1C / 255.0, alpha: 1)
+
+        guard let bundleURL = Bundle.main.url(forResource: "bundle-vapor", withExtension: "js"),
+              let bundleSrc = try? String(contentsOf: bundleURL, encoding: .utf8) else {
+            NSLog("[proteus] vapor: 缺 bundle-vapor.js（构建脚本应复制——见 run-selfdraw.sh）")
+            return
+        }
+        guard let artURL = Bundle.main.url(forResource: "vapor-artifacts", withExtension: "json"),
+              let artifacts = try? String(contentsOf: artURL, encoding: .utf8) else {
+            NSLog("[proteus] vapor: 缺 vapor-artifacts.json")
+            return
+        }
+        // 宿主桥 shim（与 A/B 同一套签名归一）+ **调用计数**（判据 ④ 的宿主读数）
+        ctx.evaluateScript("""
+        globalThis.__hostMountCalls = 0; globalThis.__hostNodes = 0; globalThis.__hostCmds = 0;
+        globalThis.proteusHost = {
+          mount: function (s) { var r = proteusSelfDraw.mount(s); __hostMountCalls++;
+            try { var o = JSON.parse(r); __hostNodes = (o.node_count || 0); __hostCmds = (o.layer_count || 0); } catch (e) {} return r; },
+          applyOps: function (s) { return proteusSelfDraw.applyOps(s); },
+          updatePatches: function (s) { return proteusSelfDraw.updatePatches(s); },
+          mountVirtual: function (s) { return proteusSelfDraw.mountVirtual(s); },
+          readRects: function () { return proteusSelfDraw.readRects(); },
+          probeChannels: function (s) { return proteusSelfDraw.probeChannels(s); },
+          onGesture: function (n) { return proteusSelfDraw.onGesture(n); },
+          tapAt: function (j) { var o = JSON.parse(j); return proteusSelfDraw.tapAt(o.x, o.y); },
+          scrollRows: function (j) { var o = JSON.parse(j); return proteusSelfDraw.scrollRows(o.dx, o.dy); }
+        };
+        """)
+        ctx.evaluateScript(bundleSrc, withSourceURL: bundleURL)
+        let args = jsonString2([
+            "artifacts": artifacts,
+            "viewport": ["width": Double(bridge.view?.bounds.width ?? 390),
+                         "height": Double(bridge.view?.bounds.height ?? 844)],
+            "rows": 8, "updates": 3,
+        ])
+        ctx.evaluateScript("globalThis.__PROTEUS_VAPOR_ARGS__ = \(jsStringLiteral(args));")
+        let out = evalJs("__proteusVaporRun(globalThis.__PROTEUS_VAPOR_ARGS__)")
+        NSLog("[proteus] vapor run：%@", String(out.prefix(300)))
+        // ★离屏像素自检（宿主侧独立证据——见 paintedPixelProbe 注释）
+        let pixels = bridge.paintedPixelProbe()
+        var report: [String: Any] = [
+            "ok": out.contains("\"ok\":true"),
+            "path": "vapor",
+            "host_id": "ios",
+            "build_id": SelfDrawBridge.reportFileName,
+            "host_mount_calls": Int(evalJs("__hostMountCalls")) ?? 0,
+            "host_nodes": Int(evalJs("__hostNodes")) ?? 0,
+            "host_cmds": Int(evalJs("__hostCmds")) ?? 0,
+            "host_painted_samples": pixels.samples,
+            "host_painted_colors": pixels.colors,
+            "js_raw": out,
+            "note": "iOS 腿：与 Android/鸿蒙**同一份** bundle-vapor.js + 同一份判据（零移植）；"
+                + "宿主签名差异由 JS 侧 shim 归一；像素读数 = iOS 离屏渲染自检",
+        ]
+        if let d = out.data(using: .utf8), let o = try? JSONSerialization.jsonObject(with: d) as? [String: Any] {
+            report["js_report"] = o
+            report["report"] = o
+        }
+        report["run_ts"] = Date().timeIntervalSince1970
+        if let jr = report["js_report"] as? [String: Any] {
+            for (k, v) in jr { if report[k] == nil { report[k] = v } }
+        }
+        let dir = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)[0]
+        let url = dir.appendingPathComponent("\(SelfDrawBridge.reportFileName).json")
+        if let data = try? JSONSerialization.data(withJSONObject: report, options: [.prettyPrinted, .sortedKeys]) {
+            try? data.write(to: url)
+        }
+        NSLog("[proteus] SELFDRAW_REPORT_READY path=%@", url.path)
+        if ProcessInfo.processInfo.environment["PROTEUS_EXIT_AFTER_REPORT"] == "1" {
+            exit(report["ok"] as? Bool == true ? 0 : 1)
+        }
+    }
+
     private func driveVaporAb(ctx: JSContext) {
         let evalJs = { (expr: String) -> String in ctx.evaluateScript(expr)?.toString() ?? "null" }
         bridge.view?.backgroundColor = UIColor(red: 0x14 / 255.0, green: 0x14 / 255.0, blue: 0x1C / 255.0, alpha: 1)
