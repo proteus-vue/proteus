@@ -291,6 +291,8 @@ export function compileVueSfc(source: string, options: CompileOptions = {}): Com
     vModelMergedHandlers: tplResult.vModelMergedHandlers,
     semanticGrids: tplResult.semanticGrids,
     moduleImports: options.moduleImports,
+    // ★★★B1（2026-10-04）：未解析 import 的准确原因（插件注入的回调，逐条透传——反一刀切）
+    unresolvedImportReason: options.unresolvedImportReason,
     modelRefs: sfcMacros.ok ? sfcMacros.modelRefs : undefined,
     // ★2026-09-08 defineOptions 对齐：compileScript 权威语义（name/inheritAttrs）——transformScriptToPage 剥离 no-op + name 写组件字段
     defineOptions: sfcMacros.ok ? sfcMacros.defineOptions : undefined,

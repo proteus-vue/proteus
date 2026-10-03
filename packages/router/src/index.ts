@@ -74,7 +74,10 @@ export type {
 // ★G-32 B6（2026-09-19）：路由名推导是**跨包公开契约**——迁移工具链（compat-miniprogram 路由名表
 //   `routeNameFromPath`）必须与 derivePath 模式下的真实产物同名，否则 codemod 建议的
 //   `router.push({ name })` 在 routeMap 中查不到（死引用）。导出供 tests/route-table.test.ts 跨包一致性断言。
-export { deriveNameFromFile } from './scan'
+// ★★★B1（2026-10-04）：**deriveNameFromFile 不再从运行时入口导出**——它属于 `./scan` 子路径
+//   （构建期工具：依赖 @vue/compiler-sfc 与 node:path）。此前顶层 re-export 把整个 scan 模块
+//   拖进运行时依赖图 ⇒ 小程序产物被打入 796KB 的 @vue/compiler-sfc（实测，B1 npm 支持后暴露）。
+//   消费方请改：import { deriveNameFromFile } from '@proteus-vue/router/scan'。
 
 // ★router-plus G-32 M1：路由语义层 + 五端导航映射 + 栈 diff
 //（NAVIGATION_MAP 映射语义 → 各端原生 API；computeRoutePatch 是转场事务的输入）

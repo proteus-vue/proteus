@@ -60,6 +60,8 @@ export default defineConfig({
       { find: '@proteus-vue/runtime', replacement: fileURLToPath(new URL('./packages/runtime/src/index.ts', import.meta.url)) },
       // ★子路径 alias 必须在父路径之前
       { find: '@proteus-vue/router/navigation', replacement: fileURLToPath(new URL('./packages/router/src/navigation.ts', import.meta.url)) },
+      // ★B1（2026-10-04）：构建期工具子路径（scan 依赖 @vue/compiler-sfc——不进运行时入口）
+      { find: '@proteus-vue/router/scan', replacement: fileURLToPath(new URL('./packages/router/src/scan.ts', import.meta.url)) },
       { find: '@proteus-vue/router', replacement: fileURLToPath(new URL('./packages/router/src', import.meta.url)) },
       // 插件/编译引擎（plugin.test 加载 plugin.ts 时 import @proteus-vue/compiler 需解析）
       { find: '@proteus-vue/compiler/style-safety', replacement: fileURLToPath(new URL('./packages/compiler/src/style-safety/index.ts', import.meta.url)) },

@@ -242,6 +242,10 @@ export interface ScriptTransformOptions {
   vModelMergedHandlers?: Array<{ name: string; calls: string[] }>
   /** ★module-plan B0：跨模块引用映射（import 转 require） */
   moduleImports?: Array<{ source: string; requirePath: string }>
+  /** ★★★B1（2026-10-04，用户点名"太一刀切"）：未解析 import 的**准确原因**（由调用方注入——
+   *  只有插件侧有完整解析上下文：别名/node 内置/npm/框架包/样式文件各不同文案）。
+   *  缺省 undefined → 回退到通用文案（编译器独立使用场景）。 */
+  unresolvedImportReason?: (source: string) => string
   /** ★2026-09-08 P1（defineModel 地基）：compileScript 权威源的模型引用（var→propName）——m.value 读写重写 + prop 注册 */
   modelRefs?: Array<{ varName: string; propName: string }>
   /** ★2026-09-08 defineOptions 对齐：compileScript 权威语义 { name?, inheritAttrs? }——剥离为 no-op + name 写组件字段（inheritAttrs 诚实降级） */
@@ -323,6 +327,8 @@ export interface CompileOptions {
   loadStyleSrc?: (src: string, fromFilename: string) => string | null
   /** ★module-plan B0：跨模块引用映射 */
   moduleImports?: Array<{ source: string; requirePath: string }>
+  /** ★★★B1（2026-10-04）：未解析 import 的**准确原因**（插件注入——见 ScriptTransformOptions 同名字段） */
+  unresolvedImportReason?: (source: string) => string
   /** ★15-page-scroll-container：页面模式自动包滚动容器（Skyline 页面本身不滚动，滚动必须 scroll-view；默认 true） */
   autoScrollContainer?: boolean
   /** ★平台化薄接缝（2026-09-08，proteus-compiler-platform-plan）：MP 内部渲染引擎。

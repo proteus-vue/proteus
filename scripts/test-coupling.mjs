@@ -205,7 +205,16 @@ const COUPLING = [
   },
   {
     match: /^packages\/plugin-vite\/src\//,
-    tests: ['tests/mp-global-layer-inject.test.ts', 'tests/overlay-host-inject.test.ts', 'tests/cache.test.ts'],
+    tests: [
+      'tests/mp-global-layer-inject.test.ts',
+      'tests/overlay-host-inject.test.ts',
+      'tests/cache.test.ts',
+      // ★B1（2026-10-04）：npm/别名/子路径/path-polyfill 解析链
+      'tests/module-npm-b1.test.ts',
+      'tests/module-import.test.ts',
+      'tests/mp-transform-exclude.test.ts',
+      'tests/component-b4.test.ts',
+    ],
     why: 'MP 插件（壳片段注入/宿主注入/编译缓存键）',
   },
   {

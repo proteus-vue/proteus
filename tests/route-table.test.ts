@@ -5,7 +5,8 @@
 //   ——迁移建议的 name 必须与 derivePath 模式真实写进 routeMap 的 name 同名，否则是死引用
 import { describe, it, expect } from 'vitest'
 import { collectRouteTargets, routeNameFromPath, buildRouteTable } from '@proteus-vue/compat-miniprogram'
-import { deriveNameFromFile } from '@proteus-vue/router'
+// ★B1：构建期工具走子路径（运行时入口不再导出——防 @vue/compiler-sfc 进小程序包）
+import { deriveNameFromFile } from '@proteus-vue/router/scan'
 
 describe('G-32 B6 路由名表（迁移工具链）', () => {
   it('collectRouteTargets：收集四类导航 API 的 url（量 query/无引号差异）', () => {
