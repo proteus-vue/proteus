@@ -207,3 +207,27 @@ iOS 此前只有 `--vapor-ab`（跑 `mode:'ab'`，判据集 = A/B ④⑦），**
 ⇒ 终止误启进程 + 用正确 bundle id 启动，截图核验 MORPHEUS 动画正常（**主 App 无缺陷**）。
 ★教训：**同名/近名 App 的 bundle id 必须写死用途**（"哪个是面板、哪个是基准"），
 否则"白屏"会被误读成渲染缺陷。
+
+## 六 · ★★★三端同步已成为**机器门禁**（2026-10-03 · 用户指令）
+
+**用户原话立此**：「后面的 vapor 推进就**三端同步走**」。
+
+**门禁**：`pnpm check:vapor-three-end`（已接 `verify` 链 + CI 的 `Vapor 三端同步` 步骤）：
+
+| 判据 | 抓什么 | 破坏性验证 |
+|---|---|---|
+| ① **证据齐**（三端 `results/vapor.json` 都在） | "只跑了一端就收工" | 移走 ios 报告 ⇒ **rc=1**（实测） |
+| ② **同一份判据三端全过**（`check-vapor-device.py`；◐ 如实跳过会**列出**而不静默当"过"） | 某端判据红（宿主回执缺字段/读数不达标…） | 注入 `host_painted_samples=0` ⇒ **rc=1**（实测） |
+| ③ **指纹逐项一致**（17 项：模板/源/槽位/实例化/增量/事件/混合文本/门禁轮/表达式探针） | "有一端没重跑"（旧证据冒充新证据） | 改 ios 的 `tpl_nodes=17` ⇒ **rc=1 且报出 `tpl_nodes: android=22 vs ios=17`**（实测） |
+
+**为什么必须工具化**：Vapor 能力全在**平台无关共享包**（构造上三端共享），
+而验证只跑一端时另一端是**推断**不是**证据**——与「提交 ≠ 交付」同族：
+没有任何机制会提醒"另外两端还没重跑"。
+
+**改 Vapor 面代码时的义务**（编译器 `vapor/*` · `slot-runtime/*` · `entry-vapor.ts` ·
+`gen-vapor-fixture.mjs`）：**三端重跑并提交结果**——
+```bash
+bash hosts/android/run-vapor.sh      # Android（USB）
+bash hosts/harmony/run-vapor.sh      # 鸿蒙（hdc）——含 gen-fixtures 同源复制
+bash hosts/ios/run-selfdraw.sh --vapor  # iOS（真机）
+```
