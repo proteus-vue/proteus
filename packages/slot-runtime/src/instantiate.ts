@@ -647,10 +647,23 @@ export function instantiateTemplate(tpl: LayoutTemplate, opts: InstantiateOption
    * 【同名出口多次出现】内容只填**第一个**（其余走后备）——Vue 会**复制**内容到每个出口，
    *   而我方的节点 id 是唯一的（复制 = 重新分配整棵子树，属后续批次）；此处如实记录（note）。
    *
-   * 返回：被消费的插槽名（调用方据此判"父级提供的内容有没有出口接住"）。
+   * 返回：被消费的插槽名 + **已落位的填充**（作用域插槽要靠它做分发时求值——见调用方）。
    */
-  const dissolveOutlets = (list: InstantiatedNode[], fills: Map<string, InstantiatedNode[]>): Set<string> => {
+  const dissolveOutlets = (
+    list: InstantiatedNode[],
+    fills: Map<string, InstantiatedNode[]>,
+    /**
+     * ★★★**出口 props 求值**（P1-3 作用域插槽，2026-10-03）——调用方提供（它持有**子组件**的
+     *   订阅表/求值器/上下文）。缺省 ⇒ 不求值（顶层出口没有"父级提供内容"这回事）。
+     */
+    evalProps?: (outlet: InstantiatedNode) => Record<string, unknown>,
+  ): {
+    consumed: Set<string>
+    /** 已落位的填充（含出口 props——作用域求值的输入） */
+    placed: Array<{ name: string; fill: InstantiatedNode[]; outlet: InstantiatedNode; props: Record<string, unknown> }>
+  } => {
     const consumed = new Set<string>()
+    const placed: Array<{ name: string; fill: InstantiatedNode[]; outlet: InstantiatedNode; props: Record<string, unknown> }> = []
     for (const outlet of list.filter((x) => x.slotOutlet)) {
       if (list.indexOf(outlet) < 0) continue   // 已被上一个出口的摘除连带移除（嵌套出口的边缘态）
       const name = (outlet.slotOutlet as { name: string }).name
@@ -658,6 +671,7 @@ export function instantiateTemplate(tpl: LayoutTemplate, opts: InstantiateOption
       const useFill = fill !== undefined && fill.length > 0 && !consumed.has(name)
       if (useFill) {
         consumed.add(name)
+        const outletProps = evalProps ? evalProps(outlet) : {}
         const doomed = subtreeOf(list, outlet.id)
         for (const id of doomed) droppedNodeIds.add(id)
         const idx = list.findIndex((x) => x.id === outlet.id)
@@ -671,6 +685,7 @@ export function instantiateTemplate(tpl: LayoutTemplate, opts: InstantiateOption
           delete (r as { slotFor?: unknown }).slotFor   // 标记是分发期语义——落地即摘
         }
         slotMounts.push({ outletNodeId: outlet.id, name, filled: true, contentIds: fill!.map((x) => x.id), fallbackIds: [] })
+        placed.push({ name, fill: fill!, outlet, props: outletProps })
       } else {
         const kids = list.filter((x) => x.parentId === outlet.id)
         const fallbackIds: number[] = []
@@ -691,7 +706,7 @@ export function instantiateTemplate(tpl: LayoutTemplate, opts: InstantiateOption
         slotMounts.push({ outletNodeId: outlet.id, name, filled: false, contentIds: [], fallbackIds })
       }
     }
-    return consumed
+    return { consumed, placed }
   }
 
   if (opts.components) {
@@ -769,13 +784,99 @@ export function instantiateTemplate(tpl: LayoutTemplate, opts: InstantiateOption
       const contentRoots = nodes.filter((x) => x.parentId === boundary.id && x.slotFor)
       if (contentRoots.length > 0 || childInst.slotMounts?.length) {
         const fills = new Map<string, InstantiatedNode[]>()
+        const scopeOf = new Map<string, string | undefined>()
         for (const r of contentRoots) {
-          const nm = (r.slotFor as { name: string }).name
-          const arr = fills.get(nm) ?? []
+          const sf = r.slotFor as { name: string; scope?: string }
+          const arr = fills.get(sf.name) ?? []
           arr.push(r)
-          fills.set(nm, arr)
+          fills.set(sf.name, arr)
+          if (!scopeOf.has(sf.name)) scopeOf.set(sf.name, sf.scope)
         }
-        const consumed = dissolveOutlets(childInst.nodes, fills)
+        // ★★★**出口 props 求值**（作用域插槽）：在**子组件作用域**求——
+        //   出口上的绑定（`:count="n"`）本就是子组件订阅表的普通槽位（nodeId=出口 local id），
+        //   值 = 子表求值器算的（props/data/父级 read）。⇒ 不重复实现"表达式语义"（一处实现）。
+        const childEvaluators = def.table ? VaporRuntime.buildEvaluators(def.table.evaluators) : new Map()
+        const evalOutletProps = (outlet: InstantiatedNode): Record<string, unknown> => {
+          const out: Record<string, unknown> = {}
+          const names = (outlet.slotOutlet as { props?: string[] }).props ?? []
+          const outletLocal = outlet.id - (idOffset + childOffset)
+          const allSlots = def.table
+            ? [...def.table.sources.flatMap((s) => s.slots), ...(def.table.constantSlots ?? [])]
+            : []
+          for (const propName of names) {
+            const sl = allSlots.find((s) => s.nodeId === outletLocal && s.propKey === `attr.${propName}`)
+            if (!sl) continue
+            const impl = childEvaluators.get(sl.evaluatorId)
+            if (!impl) continue
+            try {
+              out[propName] = impl({ read: childRead })
+            } catch {
+              out[propName] = undefined
+            }
+          }
+          return out
+        }
+        const { consumed, placed } = dissolveOutlets(childInst.nodes, fills, evalOutletProps)
+        // ★★★**作用域绑定应用**（P1-3 作用域插槽）：内容子树里的 `sp.*` 按出口 props 求值——
+        //   ① **文本段**重求值（`cnt-{{ sp.count }}`：实例化时 `sp` 读 undefined ⇒ 现在补上）；
+        //   ② **作用域样式绑定**（`:width="sp.w"`）按 `slotScopedSlots` 写节点字段。
+        //   【为什么在此处（分发时）】出口 props 只有在"内容与出口配对"那一刻才存在——
+        //     之前没有任何可读的地方（见 SubscriptionTable.slotScopedSlots 注释）。
+        for (const p of placed) {
+          const scopeVar = scopeOf.get(p.name)
+          if (!scopeVar) continue   // 非作用域插槽：无需作用域求值
+          const rootIds = new Set(p.fill.map((x) => x.id))
+          // 内容子树 = 落在任何内容根之下的节点（在子块空间里按 parentId 链上溯）
+          const byIdOfChild = new Map(childInst.nodes.map((x) => [x.id, x]))
+          const subtree: InstantiatedNode[] = []
+          for (const x of childInst.nodes) {
+            let cur: InstantiatedNode | undefined = x
+            let guard = 0
+            while (cur !== undefined && guard++ < 64) {
+              if (rootIds.has(cur.id)) {
+                subtree.push(x)
+                break
+              }
+              cur = cur.parentId === null ? undefined : byIdOfChild.get(cur.parentId)
+            }
+          }
+          const scopedRead = (n2: string): unknown => (n2 === scopeVar ? p.props : opts.read(n2))
+          // ① 文本段重求值（模板产物里带 textSegments 的节点——按**本树 local id** 定位）
+          for (const node of subtree) {
+            const tn = tpl.nodes.find((x) => x.id === node.id - idOffset)
+            if (tn?.textSegments && tn.textSegments.length > 0) {
+              node.text = evalTextSegments(tn.textSegments, scopedRead)
+            }
+          }
+          // ② 作用域样式绑定（`slotScopedSlots`：nodeId 是**本树 local id**）
+          let appliedScoped = 0
+          for (const sc of opts.table?.slotScopedSlots ?? []) {
+            if (sc.scope !== scopeVar) continue
+            const target = subtree.find((x) => x.id === sc.nodeId + idOffset)
+            if (!target) continue
+            const impl = evaluators.get(sc.evaluatorId)
+            if (!impl) continue
+            const f = engineFieldOf(sc.propKey)
+            if (!f) continue
+            let v: unknown
+            try {
+              v = impl({ read: scopedRead })
+            } catch {
+              continue
+            }
+            if (f.kind === 'text') {
+              target.text = v === undefined || v === null ? '' : String(v)
+            } else {
+              ;(target as Record<string, unknown>)[f.key] = v
+            }
+            appliedScoped++
+            valuesFilled++
+          }
+          instNotes.push(
+            `插槽 ${name}#${p.name}：作用域 \`${scopeVar}\` 绑定出口 props ${JSON.stringify(p.props)}` +
+              `（文本段重求值 ${subtree.filter((x) => tpl.nodes.find((t) => t.id === x.id - idOffset)?.textSegments?.length).length} 节点 · 作用域样式 ${appliedScoped} 处）`,
+          )
+        }
         // ★★遍历 **fills map**（而不是 `contentRoots` 的 `slotFor`——本仓实测：被消费的内容根
         //   在 dissolve 里已摘掉 `slotFor` 标记，再读它 = undefined.name 崩）
         for (const [nm, roots] of fills) {

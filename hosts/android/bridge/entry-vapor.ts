@@ -307,6 +307,18 @@ interface VaporReport {
     geom_before: number
     geom_after: number
   }
+  /**
+   * ★★★**作用域插槽探针**（P1-3 作用域插槽，2026-10-03）——`#default="sp"` 内容按出口 props 求值：
+   *   · `texts`：内核树里的文本（判据核 `cnt-7` 在——不是空串/`undefined` 字样）；
+   *   · `anchor_width_field`：内容锚节点的**字段**宽度（作用域样式写进去的）；
+   *   · `anchor_width_rect`：同一节点的**内核真值**宽度（"字段写了"与"内核认了"是两件事）。
+   */
+  scoped_probe: {
+    texts: string[]
+    anchor_id: number
+    anchor_width_field: number
+    anchor_width_rect: number
+  }
   /** 模板里的过渡声明（`隐id:预设名`；判据区分"未声明"与"声明未驱动"） */
   tpl_transition: string[]
   /**
@@ -1650,7 +1662,7 @@ function runShort(args: VaporArgs): string {
     tpl_nodes: 0, tpl_ok: false, sub_l1: 0, sub_l0: 0, sub_l1_rate: 0, sub_sources: [],
     inst_ms: 0, inst_nodes: 0, inst_reused_ids: 0, inst_allocated_ids: 0, inst_rows: 0,
     inst_values_filled: 0, inst_virtual_rows: 0, inst_text_filled: 0, inst_width_filled: 0,
-    mix_text_probe: [], text_probe_rounds: [], gate_rounds: [], gate_text_nodes: [], once_node_id: -1, memo_node_id: -1, expr_probe: [], transition_started: 0, tpl_transition: [], component_mounts: 0, component_nodes: 0, component_kid_probe: {}, slot_probe: { texts: [], rects: [], fills: [], markers_left: -1 }, emit_probe: { emits: [], parent_source_after: undefined, geom_before: -1, geom_after: -1 },
+    mix_text_probe: [], text_probe_rounds: [], gate_rounds: [], gate_text_nodes: [], once_node_id: -1, memo_node_id: -1, expr_probe: [], transition_started: 0, tpl_transition: [], component_mounts: 0, component_nodes: 0, component_kid_probe: {}, slot_probe: { texts: [], rects: [], fills: [], markers_left: -1 }, emit_probe: { emits: [], parent_source_after: undefined, geom_before: -1, geom_after: -1 }, scoped_probe: { texts: [], anchor_id: -1, anchor_width_field: -1, anchor_width_rect: -1 },
     mount_ms: 0, mount_nodes: 0,
     updates_run: 0, ops_bytes: 0, ops_ms: 0, apply_ms: 0, text_synced_total: 0, update_evidence: [], geom_probe: [], channels: [],
     ev_bindings: 0, ev_handlers: 0, ev_modifiers: 0, taps: 0, tap_evidence: [],
@@ -2441,6 +2453,59 @@ function runShort(args: VaporArgs): string {
         } catch { /* 重挂失败不阻断：宿主读数会指向 slot 树，判据按 host_nodes 不符判红 */ }
       } else {
         notes.push('插槽探针：产物无 slot 段（夹具未覆盖 ⇒ 判据 ⑮ 按缺失处理）')
+      }
+    }
+
+    /* ═══════════ ★★★P1-3 作用域插槽探针（2026-10-03）═══════════
+     *
+     * 【要证明什么】`#default="sp"` 内容真的按**出口 props** 求值了——
+     *   ① 文本段（`cnt-{{ sp.count }}` ⇒ `cnt-7`）② **作用域样式**（`:width="sp.w"` ⇒ 内核宽度 70）。
+     * 【为什么独立挂载】与 ⑮ 同一理由（不污染主树读数）；读数取**内核真值**（readRects）。
+     */
+    {
+      const scopedArt = (artifacts as { scoped?: { tpl: LayoutTemplate; table: SubscriptionTable } }).scoped
+      if (scopedArt?.tpl?.ok) {
+        const scopedDefs: Record<string, { template: LayoutTemplate; table?: SubscriptionTable }> = {}
+        for (const [nm, def] of Object.entries(artifacts.components ?? {})) {
+          scopedDefs[nm] = { template: def.tpl, table: def.table }
+        }
+        const scopedInst = instantiateTemplate(scopedArt.tpl, {
+          viewport: args.viewport,
+          // ★夹具的 `scopedN` 初值 7（与 SCODED_SFC 的 script 一致）——出口 props 的源头
+          read: (n) => (n === 'scopedN' ? 7 : undefined),
+          table: scopedArt.table,
+          registry: new ListRegistry(),
+          components: scopedDefs,
+        })
+        try {
+          const scOut = JSON.parse(
+            proteusHost.mount(JSON.stringify({ viewport: scopedInst.viewport, nodes: scopedInst.nodes })),
+          ) as { ok?: boolean; error?: string }
+          if (scOut.ok === true) {
+            const rectsAll = JSON.parse(proteusHost.readRects()) as { rects?: Record<string, { width?: number }> }
+            const rects = rectsAll.rects ?? {}
+            // 锚 = 内容里那个带文本的节点（`cnt-` 前缀——判据不必猜 id 规律）
+            const anchor = scopedInst.nodes.find((n) => typeof n.text === 'string' && n.text.startsWith('cnt-'))
+            rep.scoped_probe = {
+              texts: scopedInst.nodes
+                .filter((n) => typeof n.text === 'string' && n.text.length > 0)
+                .map((n) => String(n.text)),
+              anchor_id: anchor?.id ?? -1,
+              // ★节点字段（作用域样式写进去的）与**内核真值**（必须一致——"字段写了"与"内核认了"是两件事）
+              anchor_width_field: anchor ? ((anchor as { width?: number }).width ?? -1) : -1,
+              anchor_width_rect: anchor ? (rects[String(anchor.id)]?.width ?? -1) : -1,
+            }
+          } else {
+            notes.push(`作用域插槽探针 mount 失败：${scOut.error ?? '未知'}`)
+          }
+        } catch (e) {
+          notes.push(`作用域插槽探针异常：${String((e as Error)?.message ?? e)}`)
+        }
+        try {
+          proteusHost.mount(JSON.stringify({ viewport: inst.viewport, nodes: inst.nodes }))
+        } catch { /* 同上：重挂失败 ⇒ 判据按 host_nodes 不符判红 */ }
+      } else {
+        notes.push('作用域插槽探针：产物无 scoped 段（夹具未覆盖 ⇒ 判据 ⑰ 按缺失处理）')
       }
     }
 

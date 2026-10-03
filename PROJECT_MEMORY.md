@@ -15,11 +15,11 @@
 - **包规模**：**45 个 @proteus-vue/* npm 包**（+ `packages/layout-core-rust` = **cargo crate，非 npm 包**，故不计数）（★2026-09-29 layout-core = App 排版核心）（check:pkg 0 error · `pnpm check:stats` 校验 ✓；31→38 修正 → G-07 glass 39 → Skyline 收口 worklet 40 → ★2026-09-14 组件库拆包 `@proteus-vue/components` 41 → ★Vapor 线新增 `@proteus-vue/slot-runtime` 42 + `@proteus-vue/layout-core` 43 → ★2026-09-30 MA1 新增 `@proteus-vue/animation` 44；版本统一 0.3.0-beta.8，见「当前状态速览」）
 - **文档**：`docs/proteus-architecture.md`（L0 规约·真理来源）→ `docs/board-inventory.md`（全景索引）→ `docs/roadmap.md`（版本线）→ `roadmap-2-plan`（里程碑线）→ 各 plan
 
+## 当前状态速览（最近一次更新：**2026-10-03·（一〇三）· **P1-3 作用域插槽**（三端同步 · 判据 ⑰）——P1-3 全项收官：出口 props 子作用域求值 + 内容文本段重求值 + 作用域样式（`slotScopedSlots` 分发时求值通道）；★修出"作用域样式绑定整条消失"的静默缺陷（被误归列表相对路径）；判据 ⑰ 三证（`cnt-7` + 字段/内核宽度 70 一致）；三端 18/18 · 指纹 23 项一致；下一步 P1-3 生命周期或 P3-5 自定义指令**）★新会话以此为准
+
 ## 当前状态速览（最近一次更新：**2026-10-03·（一〇二）· **P1-3 emits（子→父）**（三端同步 · 判据 ⑯）——P1-3 主体收官：`$emit` 动作 + `componentEmit` 绑定（不冒泡）+ 桥按「边界+事件名」路由（`$event`=载荷）；新字段 `ComponentMount.treeOffset`（嵌套 emit 不查错边界）；判据 ⑯ 三证（路由/源值/内核宽度 0→199）；三端 17/17 · 指纹 22 项一致；下一步作用域插槽或 P1-3 生命周期**）★新会话以此为准
 
 ## 当前状态速览（最近一次更新：**2026-10-03·（一〇一）· **P1-3 插槽分发**（三端同步 · 判据 ⑮）+ **陈旧 dist 陷阱真根因**——出口溶解/后备三态/孤儿摘除 + `<template #x>` 不产盒；顺修 `events.ts` 正则平扫的 **id 漂移**（重写为 AST）；★查三轮的根因 = bundle 的 slot-runtime alias 指向 dist（改 src + build-and-run 查 src + metafile 输入自检）；三端 16/16 · 指纹 21 项一致；下一步 P3-5 自定义指令或 P1-3 生命周期/emits**）★新会话以此为准
-
-## 当前状态速览（最近一次更新：**2026-10-03·（一〇〇）· **P1-3 组件内部渲染**（三端同步）——组件注册表 + 偏移展开 + 子运行时装配 + props 双向；判据 ⑭ 从"假绿"改**三层证据缺一即红**（文本下行/指令上行/内核真值 40→99）；修出探针查错键表 + captured 只取末条；三端 15/15 零跳过 · 指纹 18 项一致；下一步 P3-5 自定义指令或 P1-3 生命周期/插槽/emits**）★新会话以此为准
 
 ## ★《收纳规范》（2026-10-03 立 · 门禁 `pnpm check:memory`）
 

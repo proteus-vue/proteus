@@ -148,14 +148,16 @@ describe('★P0 静默风险可见化（2026-10-03 · Vapor 能力清单批次�
     expect(diagText(`<Transition name="fade"><div v-show="a" /></Transition>`)).not.toContain('Transition 未支持')
   })
 
-  it('动态组件必须产诊断；★插槽出口已真支持（P1-3 插槽分发）——静态名零诊断，动态名/出口 props 仍诊断', () => {
+  it('动态组件必须产诊断；★插槽出口已真支持（P1-3）——静态名/出口 props 零诊断，动态名仍诊断', () => {
     expect(diagText(`<component :is="a" />`)).toContain('动态组件')
     // ★2026-10-03（P1-3 插槽分发）：`<slot name="x">` 从"未支持"升为**真支持**
     //   （出口溶解 + 内容分发，见 instantiate.ts dissolveOutlets）——不该再有"未支持"诊断
     expect(diagText(`<div><slot name="foo" /></div>`), '静态名已支持').not.toContain('插槽出口')
-    // 仍不支持的两种形态（各自精确诊断——不静默半支持）
+    // ★2026-10-03（P1-3 作用域插槽）：出口 props（`<slot :text="a">`）升为**真支持**
+    //   （分发时求值 + 父级 `#x="sp"` 按它求值）——同样不该再有"未支持"诊断
+    expect(diagText(`<div><slot :text="a">fb</slot></div>`), '出口 props 已支持').not.toContain('出口 props')
+    // 仍不支持的形态（精确诊断，不静默半支持）
     expect(diagText(`<div><slot :name="a" /></div>`)).toContain('动态插槽名')
-    expect(diagText(`<div><slot :text="a">fb</slot></div>`)).toContain('出口 props')
   })
 
   it('动态属性 :[k] / 动态事件 @[e] 必须产诊断（arg.isStatic===false 判据）', () => {
