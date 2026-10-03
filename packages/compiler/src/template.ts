@@ -187,8 +187,10 @@ function formatClassBinding(exp: string, warnings: string[], scopeId = '', shoul
   const cw = templateCallWarning(t)
   if (cw) warnings.push(cw)
   // ★2026-10-04：白名单外的类名（全局共享类）不加后缀——见 compiler-types 的 scopedClassNames
+  // ★★双类名发射（与静态 class 同法）：白名单内的类**保留原名 + 追加后缀** ⇒ 全局 app.wxss 规则
+  //   与页内 scoped 规则**各自命中、并存**（只发后缀名会让全局规则失配 ⇒ 元素回落默认布局 ⇒ 塌陷）。
   const sfx = (name: string): string =>
-    scopeId && shouldSuffix(name) && !name.endsWith(`-${scopeId}`) ? `${name}-${scopeId}` : name
+    scopeId && shouldSuffix(name) && !name.endsWith(`-${scopeId}`) ? `${name} ${name}-${scopeId}` : name
   // 表达式内类名字面量后缀（三元值 'a'/'b' 等；比较操作数/空串不动——见 suffixClassLiterals）
   const sfxExpr = (e: string): string => (scopeId ? suffixClassLiterals(e, sfx) : e)
   const dynWarn = (name: string): void => {
@@ -1691,12 +1693,17 @@ function serializeElement(node: ElementNode, ctx: SerializeContext): string {
   // ★统一 class 发射（★2026-08 真机重构）：scope 后缀化各类名（.box → .box-data-v-x 单一类，Skyline ✓）——
   //   不再附加独立 scope class（复合选择器 .a.data-v-x 在 Skyline 不匹配，真机实测 p-button 自身样式失效）
   // ★2026-10-04：逐 token gate（全局共享类原样过去——见 shouldSuffix）
+  // ★★2026-10-04（Skyline 塌陷真根因修复）：**双类名发射**——白名单内的类**保留原名 + 追加后缀**
+  //   （`sa-item sa-item-data-v-x`）。为什么：类名同时出现在页 scoped 样式里时，只发射后缀名会让
+  //   **全局 app.wxss 的规则失配**（flex-row/卡片等全丢）⇒ 未声明 display 的元素回落 view 默认 column
+  //   ⇒ 页面"纵向塌陷"（实测 mine/verify 塌、index/messages 正常——差别就在页 scoped 是否提到该全局类）。
+  //   ★不是复合选择器（`.a.data-v-x` 2026-08 实测 Skyline 不匹配，别回头）——是两个独立单类规则并存。
   const suffix = (v: string): string =>
     scopeSuffix
       ? v
           .split(/\s+/)
           .filter(Boolean)
-          .map((n) => (shouldSuffix(n) ? suffixClassName(n, scopeSuffix) : n))
+          .map((n) => (shouldSuffix(n) ? `${n} ${suffixClassName(n, scopeSuffix)}` : n))
           .join(' ')
       : v
   // ★layout/auto-flex-row（2026-08 用户决策）：Skyline 引擎不支持 inline 布局（text 天生 block 占满一行）——

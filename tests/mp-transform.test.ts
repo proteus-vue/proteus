@@ -230,6 +230,47 @@ describe('computed 读路径（v0.3）', () => {
   })
 })
 
+describe('★★★2026-10-04 回归锁：**双类名发射**（全局 app.wxss 规则与页内 scoped 规则必须并存）', () => {
+  // 【缺陷（真机抓出：页面"纵向塌陷"）】类名**同时出现在页面自己的 `<style scoped>` 里**时，
+  //   旧实现对白名单内的类**只发射后缀名**（`sa-item` → `class="sa-item-data-v-x"`），
+  //   而**全局 app.wxss 的 `.sa-item` 规则**（flex-direction:row 等）与之**不匹配**
+  //   ⇒ 该元素只剩页内规则 ⇒ 未声明 display 的**回落到 view 默认 column** ⇒ 表现为纵向塌陷。
+  //   ★取证：index/messages（页 scoped 不提到 sa- 类 ⇒ 产物原名 ⇒ 全局规则命中）**正常**；
+  //          mine/verify（页 scoped 提到 ⇒ 被后缀 ⇒ 全局规则失配）**塌陷**——同一框架、同一天、同设备。
+  //   ★修法（对齐 Vue scoped 语义）：**双类名**（`sa-item sa-item-data-v-x`）——
+  //     全局单类规则 + 页内 scoped 规则各自命中、并存。
+  //     ★不是复合选择器 `.a.data-v-x`（2026-08 实测 Skyline 不匹配，别回头）。
+  const SFC = `<template>
+  <div class="sa-card local"><p class="sa-item localx">hi</p></div>
+</template>
+<style scoped>
+.local { color: red; }
+.sa-item { padding: 8px; }
+</style>`
+
+  it('★页 scoped 提到的全局类：产物**同时保留原名与后缀**（全局规则不失配）', () => {
+    const r = compileVueSfc(SFC, { filename: 'dual-class-demo.vue' })
+    // sa-item（页 scoped 提到 ⇒ 白名单内）⇒ 双类名
+    expect(r.wxml, '★双类名（原名 + 后缀）——全局 app.wxss 规则靠原名命中').toMatch(/class="[^"]*\bsa-item sa-item-data-v-[a-f0-9]+/)
+    // localx（未提到 ⇒ 不在白名单）⇒ 原样
+    expect(r.wxml).toContain('localx')
+    expect(r.wxml, '未声明的类不后缀').not.toMatch(/localx-data-v-/)
+  })
+
+  it('★页 scoped **未**提到的全局类：保持原名（与 index/messages 页同形态——那两页本就正常）', () => {
+    const r = compileVueSfc(SFC, { filename: 'dual-class-demo.vue' })
+    // sa-card（本 SFC 的 scoped 里没提到它）⇒ 原样（全局规则命中）
+    expect(r.wxml, '未提到的全局类原样（本页已正常的那种形态）').toMatch(/class="[^"]*\bsa-card\b(?![\w-])/)
+    expect(r.wxml, '不得后缀').not.toMatch(/sa-card-data-v-/)
+  })
+
+  it('★反向：页内本地类**必须**带后缀（scoped 隔离不能破）', () => {
+    const r = compileVueSfc(SFC, { filename: 'dual-class-demo.vue' })
+    expect(r.wxml, '本地类仍后缀（scoped 语义完好）').toMatch(/local local-data-v-[a-f0-9]+/)
+    expect(r.wxss, '对应规则在').toMatch(/\.local-data-v-[a-f0-9]+/)
+  })
+})
+
 describe('★★2026-10-04 框架修复：scoped 后缀**只作用于组件自己声明的类**（全局共享类保持原样）', () => {
   // 【缺陷（superapp 验收场抓出，两端视觉分叉的根因）】旧实现对模板里**所有** class 无差别追加
   //   scopeId（`sa-card` → `sa-card-data-v-x`）——而全局共享类定义在 app.wxss（`.sa-card`，**无后缀**）
@@ -291,9 +332,11 @@ describe('scoped CSS（v0.3）', () => {
   it('★类名后缀拼接：用户 class 与 scopeId 拼接为单一类（.card → .card-data-v-x，Skyline 单类选择器 ✓）', () => {
     const result = compileVueSfc(SFC, { filename: 'scoped-demo.vue' })
     expect(result.wxml).toContain('data-v-')
-    expect(result.wxml).toContain('class="card-data-v-') // 用户类名 + '-' + scopeId（不再并列 scope class——复合选择器 Skyline 不匹配）
-    expect(result.wxml).toContain('class="proteus-p-data-v-') // 语义基础类同样后缀
-    expect(result.wxml).toContain('title-data-v-')
+    // ★2026-10-04 双类名发射（全局规则 + scoped 规则并存）：`card card-data-v-x`
+    //   （只发后缀名会让**全局 app.wxss 规则失配** ⇒ 元素回落默认布局 ⇒ Skyline 塌陷——真机实测）
+    expect(result.wxml, '★双类名：原名保留 + 后缀追加').toMatch(/class="card card-data-v-[a-f0-9]+"/)
+    expect(result.wxml).toContain('proteus-p proteus-p-data-v-') // 语义基础类同法
+    expect(result.wxml).toContain('title title-data-v-')
     // 单 class 属性不变量（WXML 重复 class 属性只保留其一）
     expect(result.wxml).not.toMatch(/class="[^"]*"\s+class=/)
     expect(result.wxss).toContain('.card-data-v-')
@@ -376,7 +419,7 @@ describe('scoped CSS（v0.3）', () => {
   it('★默认 scoped（2026-08 用户决策）：<style> 无标记按 scoped 处理（类名后缀）+ 编译期警告', () => {
     const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined)
     const result = compileVueSfc('<template><div class="a">x</div></template>\n<style>\n.a { color: red; }\n</style>', { filename: 'plain-demo.vue' })
-    expect(result.wxml).toContain('class="a-data-v-') // 默认 scoped：用户 class + 后缀
+    expect(result.wxml, '★双类名（原名 + 后缀）').toMatch(/class="a a-data-v-[a-f0-9]+"/) // 默认 scoped
     expect(result.wxss).toContain('.a-data-v-') // 选择器后缀
     expect(warn).toHaveBeenCalledWith(expect.stringContaining('scoped 处理'))
   })
@@ -1437,11 +1480,11 @@ describe('组件 class 透传（component/root-class，2026-08 真机实测）',
       { filename: 'pages/use-pview.vue' },
     )
     // 组件标签 class 后缀拼接后透传（root-class="box-data-v-x {{...}}"）
-    expect(wxml).toMatch(/root-class="box-data-v-[a-f0-9]+ /)
+    expect(wxml, '★双类名（root-class 同法）').toMatch(/root-class="box box-data-v-[a-f0-9]+ /)
     // ★2026-10-04 框架修复后的语义：`:class` 里**未在 scoped 样式声明过**的类（`on`）**不再后缀**
     //   （旧断言 `on-data-v-` 是"无差别后缀"的行为——全局共享类因此在 MP 端失配，两端分叉的根因）。
     expect(wxml, '★未声明的动态类不后缀（框架修复）').toContain("{{(on?'on ':'')")
-    expect(wxml, '★已声明的 class（box）照常后缀').toMatch(/box-data-v-[a-f0-9]+/)
+    expect(wxml, '★已声明的 class 双类名（原名+后缀）').toMatch(/box box-data-v-[a-f0-9]+/)
     // 组件标签不再输出独立 class 属性（避免 host 节点样式双重应用）
     expect(wxml).not.toMatch(/<p-view[^>]*\sclass="/)
     // scoped 后缀特征（类名拼接 -data-v-）
@@ -1454,7 +1497,7 @@ describe('组件 class 透传（component/root-class，2026-08 真机实测）',
       { filename: 'pages/seg.vue' },
     )
     // 判断值 'a' 原样保留；类名 'on' 后缀；空串 '' 不被后缀
-    expect(wxml).toMatch(/\{\{mode === 'a' \? 'on-data-v-[a-f0-9]+' : ''\}\}/)
+    expect(wxml).toMatch(/\{\{mode === 'a' \? 'on on-data-v-[a-f0-9]+' : ''\}\}/)
     // 反向锁：判断值/空串绝不带 scope 后缀
     expect(wxml).not.toMatch(/mode === 'a-data-v-/)
     expect(wxml).not.toMatch(/: '-data-v-/) // 空串不被改成 '-data-v-x'
@@ -1466,7 +1509,7 @@ describe('组件 class 透传（component/root-class，2026-08 真机实测）',
       { filename: 'proteus/p-view/index', isComponent: true },
     )
     // 组件根节点：组件自身类名后缀 + {{rootClass}}（rootClass 由页面 root-class 传入，已后缀）
-    expect(wxml).toMatch(/<view[^>]*class="p-view-data-v-[a-f0-9]+ \{\{rootClass\}\}"/)
+    expect(wxml).toMatch(/<view[^>]*class="p-view p-view-data-v-[a-f0-9]+ \{\{rootClass\}\}"/)
     expect(js).toContain('rootClass: { type: String, value: "" }')
     // 非组件模式（页面）不注入 rootClass property
     const page = compileVueSfc('<template><view class="a">x</view></template>', { filename: 'pages/x.vue' })
@@ -1569,7 +1612,7 @@ describe('页面滚动 API 桥接（page/scroll-bridge，15-page-scroll-containe
     const scoped = compileVueSfc('<template><view class="row"><switch /><text>开关</text></view></template>\n<style scoped>.row { margin: 4px 0; }</style>', {
       filename: 'pages/flexrow2.vue',
     })
-    expect(scoped.wxml).toContain('class="proteus-flex-row-data-v-')
+    expect(scoped.wxml, '★双类名（框架注入类同法）').toMatch(/class="proteus-flex-row proteus-flex-row-data-v-[a-f0-9]+/)
     expect(scoped.wxss).toMatch(/\.proteus-flex-row-data-v-[a-f0-9]+ \{ display: flex; flex-direction: row; align-items: center; \}/)
   })
 
