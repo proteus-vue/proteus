@@ -18,6 +18,8 @@ export type {
   ScriptTransformResult,
   CompileOptions,
   CompileResult,
+  /** ★GP3-b1：Global 层注入片段（App 壳 → 每页） */
+  GlobalLayerSnippet,
 } from './compiler-types'
 export type {
   CapabilityPlatform,

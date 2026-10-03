@@ -69,7 +69,8 @@ function rewriteSelectorTags(css: string, res: ResolvedOverrides, tagRe: RegExp)
 // margin 用 em（相对自身字号）且只设底部单边——Web 相邻段落 margin 折叠取 max，
 // 而 Skyline 自研引擎不折叠，单边 bottom 在两端主流组合（段落连续 / 标题后接段落）下
 // 视觉间距一致（如 p→p 均为 1em、h1→p 均为 0.67emₕ₁）；用户样式特异性更高可覆盖
-const BASE_SEMANTIC_WXSS = [
+/** ★GP3-b1：语义基础样式（**每个文件都会注入**——导出供 Global 层片段去重：片段里剥掉它） */
+export const BASE_SEMANTIC_WXSS = [
   // ★16-progress-skyline-degrade：<progress> 降级自定义进度条（Skyline 不支持原生 progress）
   '.proteus-progress { display: flex; align-items: center; gap: 8px; }',
   '.proteus-progress-track { flex: 1; background: #ebedf0; border-radius: 2px; overflow: hidden; }',

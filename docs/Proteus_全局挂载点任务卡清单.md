@@ -401,7 +401,7 @@ Vue 3 `Teleport to="body"` 原生支持。Teleport **只移动 DOM，不移动�
 
 ---
 
-## 卡 GP3-b1 · 小程序端 **Global 层新建**（★本方案在小程序端的真正增量）
+## 卡 GP3-b1 · 小程序端 **Global 层新建**（★本方案在小程序端的真正增量）　◐ **实现完成（2026-10-03），待真机 e2e**
 
 **优先级**：⭐ 最高　**预估**：0.8 人周　**依赖**：GP0-a、GP1-a、GP3-b0　**阻塞**：GP5
 
@@ -413,21 +413,59 @@ Global 层**必然是「每页一份实例」**（N = 页面栈深度）——�
 
 ### 必做项
 
-- [ ] **每页注入机制**：编译期把 App.vue 声明的 Global 内容注入每页产物（对齐 `custom-tab-bar`）
-- [ ] **状态共享通道**：多份实例共享一份状态（参照 `custom-tab-bar` 的「实例多份、状态一份」）
-- [ ] 与 `layers.ts` 的 `layer-content` 对齐（Global 在 Content 之下）
-- [ ] 内存口径：**O(N)**（回补 GP0 待核实项 4）；C2 上限区分「每页 32」vs「总驻留 32×N」（联动 GP2-c）
+- [x] **每页注入机制**：编译期把 App.vue 声明的 Global 内容注入每页产物（对齐 `custom-tab-bar`）
+      —— 实现：`App.vue`/`App.mp.vue` 含 `*-layer` 标签时按 `appShell` 模式编译（不产页面机制）
+      → `GlobalLayerSnippet`（wxml/wxss/data/methods/initLines，**与外壳自身产物同源**，不从产物文本反解）
+      → plugin 按页回填 `requirePath` 并注入（wxml **前缀** = 树序表达层间顺序 / data 合并 / 方法合并 / wxss 并入）
+- [x] **状态共享通道**：多份实例共享一份状态（参照 `custom-tab-bar` 的「实例多份、状态一份」）
+      —— 实现：产物 `_proteus/global-layer.js`（**require 缓存 = 同实例**，与 vendor 单例化同机制）。
+      ★**不用 `getApp().globalData`**：它是否存在取决于用户入口写法（骨架极简模式下没有）——
+      依赖它 = 依赖"用户手写形态"（脆弱）。
+      两个方向：**写** = 拦截页面 `setData` 镜像全局键（全覆盖：计算属性/路径键都覆盖）；
+      **读** = Page data 字面量直读（首次进入）+ `onShow` 拉取（回退到本页时同步别的页写过的值）
+- [x] 与 `layers.ts` 的 `layer-content` 对齐（Global 在 Content 之下）
+      —— 判据 = **树序**（GP1-a 零新指令结论）：注入时 Global 内容置于页面 wxml **之前** ⇒ 内核 z-order 天然在下；
+      `mountLayerDomainOffset` 域偏移仅 CSS 场景（layers.ts）；`.wxss` 里不写死层级（不依赖 `position: fixed`——S42 红线）
+- [x] 内存口径：**O(N)**（回补 GP0 待核实项 4）；C2 上限区分「每页 32」vs「总驻留 32×N」（联动 GP2-c）
+      —— 契约注释已写明（`GLOBAL_LAYER_NODE_LIMIT` 的**每页**口径）；实测开销待 GP7
+
+### ★实现要点（怎么做的——给维护者）
+
+| 关注点 | 做法 | 为什么 |
+|---|---|---|
+| 外壳识别 | `findAppShellFile`（`app-shell.ts`，**两处消费者同源**：plugin 注入 + gen-routes 注册） | 同一件事两份实现 = 修一份等于没修（F-30 教训） |
+| 外壳编译 | `compileVueSfc(..., { appShell: true })`：**保留** data/methods/computed/provide·inject，**跳过** onLoad/onReady/onUnload/派发桥/滚动桥/探测复位/决策钩子 | 外壳不是页面（与 GP2-a 同一条纪律）——那些机制属于页面运行期 |
+| 生命周期冲突 | 壳方法名为 `onShow` 等页面钩子名 ⇒ **壳侧剔除 + 警告**（页面侧合并再兜一道） | 注入会与页面钩子**抢同一个 Page 键** ⇒ 页面自身钩子被覆盖（**静默失效**） |
+| 同名冲突 | **页面优先**（数据字段/方法都是）+ 可见 warning | 页面更局部；不静默丢弃 |
+| 组件引用 | 壳并入 `usedComponents` 闭包起点 + 每页 `usingComponents` 注册壳标签 | 否则"只被 Global 层用到的组件"不产出 ⇒ 真机 `usingComponents 未找到`（F-30 同族） |
+| 平台变体 | `isMountLayerDeclarableFile` 放行 `App.<平台>.vue`；`App.mp.vue` 是 MP 的声明面 | 变体是同一逻辑文件的按端形态（本仓机制）——拦掉变体 = C1 误报 |
+| 样式去重 | 壳 wxss **剥离** `BASE_SEMANTIC_WXSS`（每文件都注入的常量）——分段剥（global/scoped 各一段） | 不剥 = 每页多 ~1.8KB 死重量且永不命中 |
 
 ### 硬约束
 
-- [ ] **不得对外宣称「MP 端单实例跨页面存活」**（不实表述——实例数就是 N）
-- [ ] 不得包含页面级业务组件（C3，编译期检查）
+- [x] **不得对外宣称「MP 端单实例跨页面存活」**（不实表述——实例数就是 N）
+      —— 规格与任务卡、代码注释、单测头注、e2e 头注**四处**都写了这条边界
+- [x] 不得包含页面级业务组件（C3，编译期检查）
+      —— GP2-d 已接线（error 级）；本轮 C3 判据改用**产物形态**（`router-link` → `bindtap="proteusNavigateTo"`）
 
 ### 验收
 
-- [ ] App.vue 声明一次，**任意页面自动显示**（源码零改动）
-- [ ] 页面栈 3 层时 Global 状态跨页一致
-- [ ] 内存如实报告 N 份实例的实测开销（不得只报单份）
+- [x] App.vue 声明一次，**任意页面自动显示**（源码零改动）
+      —— 示例：`examples/App.mp.vue` 的 `<global-layer>` 注入全部页面产物（构建日志 + 产物取证）
+- [x] 页面栈 3 层时 Global 状态跨页一致
+      —— 单测 19 组锁"写镜像 + onShow 拉取"两条通道；真机链路 = `tests/e2e-mp-global-layer.test.ts`
+      （本页注入 → 跨页可见 → 第二页写回 → 回第一页仍生效）
+- [x] 内存如实报告 N 份实例的实测开销（不得只报单份）
+      —— 口径如实写入（O(N) 每页一份）；**实测数值待 GP7**（当前只报口径，不报未测的数）
+
+### 交付物
+
+- 契约：`GlobalLayerSnippet`（types）+ `GLOBAL_LAYER_STATE_MODULE`（contracts）
+- 编译：`appShell` 模式（template/script 双侧）+ `mountLayerWxml` 逐层留存 + 页面侧合并
+- 插件：`app-shell.ts`（壳定位，两消费者同源）+ 每页注入 + 状态模块产出 + 闭包起点
+- 路由：`gen-routes` 壳组件并入每页 `usingComponents`（含闭包起点）
+- 示例：`examples/App.mp.vue`（全局网络状态条）+ `examples/pages/gp3-global-layer-demo.vue`（验证页）
+- 测试：`tests/mp-global-layer-inject.test.ts`（19 组）+ `tests/e2e-mp-global-layer.test.ts`（真机四段证据）
 
 
 ## 卡 GP3-c · App 端挂载实现

@@ -27,6 +27,8 @@ import { resolveComponentsRoot } from './resolve-components'
 //   （plugin.ts 的按需过滤）必须同源——否则产物出现「有声明、无本体」的空壳。
 //   故此处复用同一个收集函数（不是另写一份等价逻辑）。
 import { collectUsedFrameworkComponents } from './tag-scan'
+// ★GP3-b1（2026-10-03）：App 壳定位（与 plugin.ts 同源——"同一件事两份实现 = 修一份等于没修"）
+import { findAppShellFile } from './app-shell'
 
 /** 入口选项：config 为项目编译配置，root 为项目根目录（默认 process.cwd()） */
 export interface GenRoutesOptions {
@@ -82,6 +84,9 @@ export function matchWebviewPage(list: string[] | undefined, rel?: string, relIn
   return list.some((name) => keys.has(norm(name)))
 }
 
+/** ★GP3-b1：本轮构建的 App 壳文件（runGenRoutes 内赋值；无壳 = null——下游按需处理） */
+let shellFile: string | null = null
+
 export function runGenRoutes(options: GenRoutesOptions): void {
   const config = options.config
   const ROOT = options.root ?? process.cwd()
@@ -97,6 +102,8 @@ export function runGenRoutes(options: GenRoutesOptions): void {
   //  此前是「未拆包 alias 指仓库 src/components」（决策 #115）；拆包后包内即 .vue 源码，产物路径 proteus/<tag>/index 不变。
   //  options.componentsDir 仅作包未安装时的显式覆盖（测试/特殊布局）。
   const FW_COMPONENTS = options.componentsDir ? path.resolve(ROOT, options.componentsDir) : resolveComponentsRoot(ROOT)
+  // ★GP3-b1：App 壳（含挂载层标签的 App.vue）——它的组件引用也是「页面注入内容」的组成部分
+  shellFile = findAppShellFile(APP_DIR)
   // ★2026-09-19 假阳性修复：此警告此前**无条件**触发——但刚 `npm create` 出来的模板工程并不使用
   //   p-* 组件，于是每个新用户第一次构建都会看到「p-* 组件将不被注册」的误导性警告。
   //   改为：仅当工程**确实引用了 p-* 标签**时才提示（真正用到而未安装才是问题）。
@@ -829,6 +836,11 @@ function collectComponents(file: string, skipSemantic = false): Record<string, s
 
 /** 生成每页 page.json（P2-3：Skyline 配置，renderer 随 skyline 开关） */
 function writePageJsons(pages: PageInfo[]): void {
+  // ★★GP3-b1（2026-10-03）：**App 壳的组件也要在每页注册**——Global 层 wxml 被注入每个页面
+  //   （plugin.ts 的 globalLayer 注入），上面出现的自定义组件标签**必须**在该页 usingComponents
+  //   （否则真机「usingComponents 未找到组件」→ **整块不渲染**，与 F-30 同族失效）。
+  //   ★壳扫描一次（所有页共用）；同名以**页面**为准（页面更局部）。语义跳过集对壳不用（壳不是页面）。
+  const shellComponents = shellFile ? collectComponents(shellFile, false) : {}
   for (const p of pages) {
     const pageJson: Record<string, unknown> = {}
     if (config.skyline && !matchWebviewPage(config.page?.webviewPages, p.relSrc, p.relInSub, p.mpPath)) {
@@ -839,7 +851,7 @@ function writePageJsons(pages: PageInfo[]): void {
     if (p.pageJson) Object.assign(pageJson, p.pageJson)
     // 组件系统（v0.3）：扫描模板中的自定义组件标签 → usingComponents 注入
     // ★#496 页面源 p-grid 已被语义编译（产物无标签）——skipSemantic 排除；组件文件需注册保留
-    const components = collectComponents(p.file, true)
+    const components = { ...shellComponents, ...collectComponents(p.file, true) }
     if (Object.keys(components).length) pageJson.usingComponents = components
     // 注意：不再输出 customRouteKeyName —— 真机校验报"无效的 page.json [customRouteKeyName]"；
     // 自定义路由仅靠 wx.navigateTo({ routeType }) + 已注册 builder 生效，page.json 无需声明
@@ -847,7 +859,7 @@ function writePageJsons(pages: PageInfo[]): void {
     fs.mkdirSync(path.dirname(outFile), { recursive: true })
     fs.writeFileSync(outFile, JSON.stringify(pageJson, null, 2) + '\n')
   }
-  console.log(`[gen-routes] 已生成 ${pages.length} 个页面 page.json`)
+  console.log(`[gen-routes] 已生成 ${pages.length} 个页面 page.json${Object.keys(shellComponents).length ? `（含 App 壳 Global 层组件 ${Object.keys(shellComponents).join('/')}）` : ''}`)
 }
 
 /**
@@ -865,7 +877,10 @@ function writePageJsons(pages: PageInfo[]): void {
 function computeEmittedComponents(pages: PageInfo[]): ReadonlySet<string> | null {
   if (process.env.PROTEUS_COMPONENTS_EMIT === 'all') return null
   // pages 全部是页面（writeComponentJsons 的组件扫描在 APP_DIR/components，不在此列）
-  return collectUsedFrameworkComponents(pages.map((p) => p.file), FW_COMPONENTS, path.join(APP_DIR, 'components'))
+  // ★GP3-b1：**App 壳并入闭包起点**（与 plugin.ts 的 collectMpEntries 同源判定——两处必须一致，
+  //   否则"声明了/输出了"再次分叉，正是 F-30 的形态）。
+  const roots = shellFile ? [...pages.map((p) => p.file), shellFile] : pages.map((p) => p.file)
+  return collectUsedFrameworkComponents(roots, FW_COMPONENTS, path.join(APP_DIR, 'components'))
 }
 
 function writeComponentJsons(emittedComponents?: ReadonlySet<string> | null): void {

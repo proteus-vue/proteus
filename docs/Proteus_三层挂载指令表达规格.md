@@ -170,5 +170,11 @@ export function mountLayerDomainOffset(layer) {    // 层域偏移
 
 - [x] 契约落地：`packages/contracts/src/mount-layers.ts`（封闭集 / 顺序 / 域偏移 / 语义 / C1 辅助 / C2 上限）
 - [x] 单元判据：域偏移不重叠 + 层间顺序不可配置 + 与层内四层正交（见 `tests/mount-layers.test.ts`）
-- [ ] GP2-a 编译支持（App.vue 模板 → 层标记 → 注入每页）——**下一卡**
-- [ ] GP2-b/c/d 三条校验接进编译链——GP2-a 之后
+- [x] GP2-a 编译支持（App.vue 模板 → 层标记 → 回收每页）——见 `tests/mp-mount-layers-compile.test.ts`
+- [x] GP2-b/c/d 三条校验接进编译链（error 级，`compileVueSfc` 内）
+- [x] **GP3-b1 MP 端 Global 层注入**（2026-10-03）——本规格的"零新指令 + 树序表达"结论在 MP 端的落地形态：
+      · 外壳编译（`appShell: true`）→ `GlobalLayerSnippet`（与外壳产物**同源**，不从文本反解）
+      · 每页注入：wxml **前缀**（树序 ⇒ Global 在下，**零指令**兑现）+ data/methods 合并 + wxss 并入
+      · 状态共享：`_proteus/global-layer.js`（require 缓存 = 同实例；写镜像 + onShow 拉取两个方向）
+      · 判据：`tests/mp-global-layer-inject.test.ts`（19 组）+ `tests/e2e-mp-global-layer.test.ts`（真机）
+      · ★诚实边界：每页一份实例（N = 页面栈）——**不是**单实例跨页存活（方案 §1.2-bis）

@@ -2,9 +2,11 @@
 // 编译引擎公开 API —— 未来独立包 @proteus-vue/compiler 的入口
 // 约束：本模块及同目录文件不得 import vite / proteus.config，选项全部入参
 import { parse as sfcParse } from '@vue/compiler-sfc'
+// ★GP3-b1（2026-10-03）：Global 层共享状态模块路径（插件按此产出通道；契约单一来源）
+import { GLOBAL_LAYER_STATE_MODULE } from '@proteus-vue/contracts'
 import { transformTemplateToWxml } from './template'
 import { transformScriptToPage } from './script'
-import { transformStyleToWxss } from './style'
+import { transformStyleToWxss, BASE_SEMANTIC_WXSS } from './style'
 import { assertValidResult, CompilerError } from './validate'
 // ★LY1（2026-10-02）：页面层级语义校验（四层语义 + 跨容器强制——规范 §3.5/§4.1）
 import { validateLayerUsage } from './layer-safety'
@@ -231,7 +233,14 @@ export function compileVueSfc(source: string, options: CompileOptions = {}): Com
     throw new CompilerError(f, `三层挂载校验失败（${mountViolations.length} 条）\n${detail}`)
   }
   const sfcMacros = extractSfcMacros(source, options.filename ?? 'anonymous.vue')
-  const wxml = sfcMacros.ok && sfcMacros.modelRefs.length ? renameModelVarsInWxml(tplResult.wxml, sfcMacros.modelRefs) : tplResult.wxml
+  const wxmlBase = sfcMacros.ok && sfcMacros.modelRefs.length ? renameModelVarsInWxml(tplResult.wxml, sfcMacros.modelRefs) : tplResult.wxml
+  // ★★★GP3-b1（2026-10-03）：**页面侧 Global 层合并（wxml 前缀）**
+  //   · 位置：Global 层内容置于页面 wxml **之前**（树序 = z-order ⇒ Global 在下、页面内容在上）
+  //   · 仅页面（组件不注入——Global 层是页面级概念；App 壳自己也不注入自己）
+  //   ★为什么在 model 变量改名之后：改名只服务**本文件**的宏（壳片段来自另一次编译），两者互不干扰。
+  const glSnippet = options.globalLayer
+  const mergeLayer = options.appShell !== true && options.isComponent !== true && glSnippet !== undefined
+  const wxml = mergeLayer && glSnippet!.wxml.trim() ? `${glSnippet!.wxml}\n${wxmlBase}` : wxmlBase
   const scriptTrace = createTrace('script')
   const scriptResult = transformScriptToPage(setup, styleOpts, {
     file: options.filename,
@@ -268,6 +277,9 @@ export function compileVueSfc(source: string, options: CompileOptions = {}): Com
     modelRefs: sfcMacros.ok ? sfcMacros.modelRefs : undefined,
     // ★2026-09-08 defineOptions 对齐：compileScript 权威语义（name/inheritAttrs）——transformScriptToPage 剥离 no-op + name 写组件字段
     defineOptions: sfcMacros.ok ? sfcMacros.defineOptions : undefined,
+    // ★★★GP3-b1（2026-10-03）：App 壳模式 / 页面侧 Global 层注入（见 ScriptTransformOptions 注释）
+    appShell: options.appShell,
+    globalLayer: options.globalLayer,
     trace: scriptTrace,
   })
 
@@ -301,11 +313,29 @@ export function compileVueSfc(source: string, options: CompileOptions = {}): Com
   })
   // ★2026-09-09 动画提升：SVG 整体变换 → CSS @keyframes（模板侧收集，此处追加）
   const animCss = (tplResult.animCss ?? []).join('\n')
-  const wxss = [globalWxss, scopedWxss, animCss].filter(Boolean).join('\n')
+  // ★★GP3-b1（2026-10-03）：**App 壳 wxss 去基础样式**——语义基础样式（`BASE_SEMANTIC_WXSS`）是
+  //   **每个文件都会注入的常量**（页面自己也会注入一份）⇒ 壳片段的 wxss 里再带一份 = 每页多 ~1.8KB
+  //   且**永远不可能命中**（壳片的类名带壳 scopeId，页面文档里没有这些元素）——纯死重量。
+  //   ★剥离点必须在**分段处**（不是最终串前缀匹配）：globalWxss/scopedWxss 各自以基础样式打头，
+  //     拼成 finalWxss 后只有第一段能前缀匹配（第二段藏在中间）——本仓实测首版就漏了 scoped 段。
+  const stripBase = (css: string, base: string): string => {
+    const b = base.trimEnd()
+    if (!b || !css.startsWith(b)) return css
+    return css.slice(b.length).replace(/^\n+/, '')
+  }
+  const scopedBase = options.appShell === true && scopeId ? transformStyleToWxss('', { ...styleOpts, scopeId }) : ''
+  const wxss =
+    options.appShell === true
+      ? [stripBase(globalWxss, BASE_SEMANTIC_WXSS), stripBase(scopedWxss, scopedBase), animCss].filter(Boolean).join('\n')
+      : [globalWxss, scopedWxss, animCss].filter(Boolean).join('\n')
   // ★15-page-scroll-container：页面自动包滚动容器后注入高度样式（100vh = Skyline 视口；
   //   scoped 转换后拼接 → .proteus-page-scroll 不参与 scope 后缀，匹配模板注入节点）
   const pageScrollCss = tplResult.pageScrollWrapped ? '\n.proteus-page-scroll { height: 100vh; }\n' : ''
-  const finalWxss = `${wxss}${pageScrollCss}`
+  // ★GP3-b1：页面注入 Global 层时**并入壳样式**（置最前——页面样式可覆盖；scoped 后缀同源天然匹配）。
+  //   ★并入时机在 `wxss` 之后：壳样式不经页面的 scoped 变换（它自己的编译已做过）——
+  //   直接拼在 finalWxss 前部，避免二次后缀。
+  const glCss = mergeLayer && glSnippet!.wxss.trim() ? `${glSnippet!.wxss}\n` : ''
+  const finalWxss = `${glCss}${wxss}${pageScrollCss}`
 
   const warnings = [...tplResult.warnings, ...scriptResult.warnings, ...styleLoadWarnings, ...scrollWarnings]
   const trace = [...tplTrace.events, ...scriptTrace.events, ...styleTrace.events]
@@ -339,6 +369,50 @@ export function compileVueSfc(source: string, options: CompileOptions = {}): Com
     sourcemap: scriptResult.sourcemap,
     /** ★卡 C4：漏点记录（三类分列；空数组 = 本文件无漏点） */
     gaps: gapCounter.records,
+  }
+
+  // ★★★GP3-b1（2026-10-03）：App 壳 ⇒ 产出 **Global 层注入片段**（plugin 把它注入每个页面）。
+  //
+  // 【片段从哪来】**结构化件由 script 管线同源交出**（`scriptResult.appShell`——data 条目/方法行/
+  //   init 行都是 codegen 当场用的那几件，不是从产物文本反解）；本处只做**组装**：
+  //   wxml 取模板侧留存的 `global` 层内容（GP3-b1 新增的 mountLayerWxml），wxss 取本文件 wxss。
+  //   ★为什么不用文本反解：反解 = 同一件事两份实现（改一处漏一处）——本仓已为这类分叉付过代价。
+  //
+  // 【诚实边界（不静默半支持）】page/overlay 层在 App 壳里**有内容**时：MP 端不由外壳提供
+  //   （页面自成一 Page 层；Overlay 在页面/组件内声明）⇒ **可见警告**；`<global-layer>` 为空
+  //   则不产片段（无 Global 层可注入）。
+  if (tplResult.isAppShell) {
+    result.isAppShell = true
+    const shell = scriptResult.appShell
+    const globalWxml = (tplResult.mountLayerWxml?.global ?? []).join('\n')
+    for (const layer of ['page', 'overlay'] as const) {
+      const content = (tplResult.mountLayerWxml?.[layer] ?? []).filter((s) => s.trim().length > 0)
+      if (content.length > 0) {
+        warnings.push(
+          `App 壳的 <${layer}-layer> 含内容，但 MP 端该层不由 App 壳提供——已忽略：` +
+            (layer === 'page'
+              ? 'MP 端"页面即 Page 层"（每页产物自身就是 Page 层）；全局内容请放 <global-layer>'
+              : 'Overlay 声明在页面/组件内（<teleport> → root-portal）；全局 Toast/弹窗走 GP4 的 Overlay 通道'),
+        )
+      }
+    }
+    if (!shell) {
+      warnings.push('App 壳未产出结构化件（scriptResult.appShell 缺失）——Global 层注入跳过（页面照常构建）')
+    } else if (globalWxml.trim().length === 0) {
+      warnings.push('App 壳未声明 <global-layer> 内容——无 Global 层可注入（页面照常构建）')
+    } else {
+      // ★wxss 已在上面**分段剥离基础样式**（每页各带一份常量；壳片段再带 = 死重量）
+      result.globalLayerSnippet = {
+        wxml: globalWxml,
+        wxss: finalWxss,
+        data: shell.data,
+        methods: shell.methods,
+        initLines: shell.initLines,
+        derivedInitLine: shell.derivedInitLine,
+        stateModuleRel: GLOBAL_LAYER_STATE_MODULE,
+        srcRel: options.filename ?? 'App.vue',
+      }
+    }
   }
 
   // 反黑盒：产物自校验，坏产物当场抛错并指明文件（绝不静默输出）

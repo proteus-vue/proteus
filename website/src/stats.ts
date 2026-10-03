@@ -68,7 +68,7 @@ export const STATS: StatItem[] = [
   },
   {
     id: 'rules',
-    value: '115',
+    value: '116',
     label: '编译规则 AI 说明书',
     labelEn: 'compiler rules (AI-readable catalog)',
     source: 'listTransformRules().length（@proteus-vue/compiler transforms 注册表）',

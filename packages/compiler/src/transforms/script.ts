@@ -639,4 +639,33 @@ export const SCRIPT_RULES: TransformRule[] = [
     source: 'packages/compiler/src/script.ts → probeReadyCode / probeResetLine；注册表 packages/runtime/src/probe.ts；消费 packages/test-core/src/driver/{mp,web}.ts + packages/api/src/capability.ts（useElement 回落）',
     decision: '框架元素探针（跨端 E2E 降级通道；框架 API 与测试共用）',
   },
+  {
+    id: 'script/global-layer-merge',
+    phase: 'script',
+    status: 'implemented',
+    title: 'Global 层注入（App 壳 → 每页）：data 直读共享状态 + setData 写镜像 + onShow 拉取',
+    titleEn: 'Global layer injection (app shell → every page): data reads shared state, setData mirrors writes, onShow pulls',
+    description:
+      'MP 每页独立渲染树（方案 §1.2-bis）⇒ App 壳的 Global 内容**注入每个页面产物**：' +
+      '① data 全局键初值 `__proteusGlobal.get(k)`（缺省回声明初值）② 壳方法并入页面实例（`this` = 页面实例）' +
+      '③ 拦截 `setData` 把全局键**镜像**进共享模块（不改写调用点——键可为计算属性/路径写法，改写必漏）' +
+      '④ 页面 `onShow` 拉取（回退到本页时同步别的页写过的值）。共享模块 `_proteus/global-layer.js` 靠' +
+      '**require 缓存 = 同实例**（与 vendor 单例化同机制）⇒ "实例每页一份、状态一份"（与官方 custom-tab-bar 同模式）',
+    descriptionEn:
+      'MP pages are independent render trees (design §1.2-bis), so the app shell\'s Global content is injected into every page artifact: ' +
+      '(1) global data keys initialize from `__proteusGlobal.get(k)` (falling back to the declared initial value); ' +
+      '(2) shell methods merge into the page instance (`this` = the page); ' +
+      '(3) `setData` is wrapped to mirror global keys into the shared module (call sites are not rewritten — keys can be computed/path forms, so rewriting would miss cases); ' +
+      '(4) the page pulls on `onShow` (syncing values written by other pages when returning). The shared module `_proteus/global-layer.js` relies on the require cache (same path = same instance) ⇒ "one instance per page, one shared state" (same pattern as the official custom-tab-bar)',
+    why: '小程序里 App 是逻辑容器（渲染层无对应物）⇒ "App.vue 写模板、全局组件声明一次全应用生效" 架构上无处安放（uni-app 官方不支持）。注入是编译期行为（可枚举）——运行时 insertGlobal 会让 conformance 与 AI 可校验同时失效且静默（C1）',
+    whyEn: 'In mini programs App is a logic-only container (no render-layer counterpart), so "declare once in App.vue, active app-wide" has no architectural home (uni-app does not support it officially). Injection is a compile-time, enumerable act — a runtime insertGlobal would defeat conformance and AI-checkability silently (C1)',
+    when: 'App.vue/App.mp.vue 含挂载层标签（appShell 编译）且页面编译收到 globalLayer 片段时',
+    example: {
+      before: '<global-layer><view>{{ netText }}</view></global-layer>（仅声明在 App.vue）',
+      after: '每页产物：wxml 前缀 + `netText: __proteusGlobal.get("netText")` + setData 写镜像 + onShow 拉取',
+    },
+    verify: 'tests/mp-global-layer-inject.test.ts（19 组）+ tests/e2e-mp-global-layer.test.ts（真机四段证据）',
+    source: 'packages/compiler/src/script.ts → glData/glInitLines/__proteusGlWrap/__proteusGlPull；片段产出 packages/compiler/src/index.ts（GlobalLayerSnippet）+ packages/plugin-vite/src/plugin.ts（每页注入）+ app-shell.ts（壳定位，两消费者同源）',
+    decision: 'GP3-b1 MP 端 Global 层（每页注入 + 状态共享；诚实边界 = 实例数 N，不宣称单实例跨页存活）',
+  },
 ]

@@ -143,6 +143,12 @@ export interface TemplateTransformResult {
   mountLayers?: Partial<Record<'global' | 'page' | 'overlay', { declared: boolean; nodeCount: number; hasNavigation: boolean }>>
   /** ★GP2-a：本文件是 **App 壳**（含 `<app-root>` 或 `*-layer`）——不包页面滚动容器 */
   isAppShell?: boolean
+  /**
+   * ★★★GP3-b1（2026-10-03）：**逐层 wxml 内容**（`global` 层 = MP 每页注入片段的来源）。
+   *   `page`/`overlay` 层内容在 MP 不由 App 壳提供（页面自成一 Page 层；Overlay 在页面/组件内声明）——
+   *   消费者（compiler/index.ts）对"这两层有内容"出**可见警告**（不静默丢弃）。
+   */
+  mountLayerWxml?: Partial<Record<'global' | 'page' | 'overlay', string[]>>
   /** 离开动画状态机（裸 ref v-if 的 transition 子元素） */
   transitions?: Array<{ ref: string; tName: string; index: number }>
   /** ★#494 模板表达式裸标识符（与 runtimeInits 求交 → 快照 setData） */
@@ -228,7 +234,43 @@ export interface ScriptTransformOptions {
   modelRefs?: Array<{ varName: string; propName: string }>
   /** ★2026-09-08 defineOptions 对齐：compileScript 权威语义 { name?, inheritAttrs? }——剥离为 no-op + name 写组件字段（inheritAttrs 诚实降级） */
   defineOptions?: { name?: string; inheritAttrs?: boolean }
+  /** ★GP3-b1：App 壳模式（见 CompileOptions.appShell）——跳过页面机制、产出 `appShell` 结构化件 */
+  appShell?: boolean
+  /** ★GP3-b1：注入的 Global 层片段（见 CompileOptions.globalLayer）——页面侧合并 + 生命周期同步包装 */
+  globalLayer?: GlobalLayerSnippet
   trace?: TransformTrace
+}
+
+/**
+ * ★★★GP3-b1（2026-10-03）：**Global 层注入片段**（App 壳编译产出；plugin 注入每个页面）。
+ *
+ * 【为什么是一个独立片段而不是"另一个页面产物"】小程序每页是独立渲染树（方案 §1.2-bis）
+ *   ⇒ Global 层要被**注入到每个页面产物**（wxml 前缀 + data 合并 + 方法合并 + 生命周期同步）。
+ *   本结构就是那个可注入单元。
+ *   ★**状态共享**：`data` 只是**初值快照**；跨页一致靠共享模块（见 `stateModuleRel`）——
+ *   "实例每页一份、状态一份"（与官方 `custom-tab-bar` 同模式）。
+ *   ★**同源原则**：片段不是从产物文本反解，而是 script 管线在 codegen 处**直接交出**的结构化件
+ *   （dataEntries / methodLines / initLines）——与外壳自身产物同源（改一处不会只改半边）。
+ */
+export interface GlobalLayerSnippet {
+  /** Global 层的 wxml（无滚动壳——GP2-a 保证；注入时作为页面 wxml 的**前缀**） */
+  wxml: string
+  /** Global 层的 wxss（注入时并入页面 wxss 前部——页面样式可覆盖） */
+  wxss: string
+  /** Global 层的 data 初值（`[键, 值]` 保序；页面同名时以**页面**为准） */
+  data: Array<[string, unknown]>
+  /** Global 层的方法源码行（已含 ref 改写/派生补丁；页面同名时以**页面**为准） */
+  methods: string[]
+  /** onLoad 期初始化行（computed 初值 / runtimeInit / immediate watch / provide·inject） */
+  initLines: string[]
+  /** ★派生重算行（computed 初值 setData 单行）——拉共享状态后重算派生字段（防"只更新叶子、派生不动"） */
+  derivedInitLine?: string
+  /** ★共享状态模块的产物相对路径（默认 `_proteus/global-layer.js`，见 contracts 的常量） */
+  stateModuleRel: string
+  /** ★由 plugin 按**目标页面**回填的 require 路径（`./_proteus/global-layer.js` 形态，页面目录相对） */
+  requirePath?: string
+  /** 片段来源（诊断/日志用） */
+  srcRel: string
 }
 
 /** script → Page/Component 构造器结果 */
@@ -238,6 +280,17 @@ export interface ScriptTransformResult {
   sourcemap?: string
   /** ★#505 M4 ScriptIR 语义快照（script 提取层结构化投影——codegen 出口不变；编译产物与既有逐字节等价） */
   ir?: ScriptIR
+  /**
+   * ★GP3-b1：**App 壳的结构化件**（仅 `appShell: true` 时产出）——data 初值 + 方法行 + init 行。
+   *   与外壳自身 `Page({...})` 产物**同源**（同一处 codegen 交出）；不含页面专用件
+   *   （生命周期派发桥 / 滚动桥 / 探测复位 / 决策型钩子）——那些属于页面，不属于全局层。
+   */
+  appShell?: {
+    data: Array<[string, unknown]>
+    methods: string[]
+    initLines: string[]
+    derivedInitLine?: string
+  }
 }
 
 /** 编译选项（compileVueSfc 入口） */
@@ -269,6 +322,21 @@ export interface CompileOptions {
    *  并静态裁剪死分支（v-if="__MP__" 在 Web 构建整体消失）。
    *  缺省 'mp'（本编译器服务 MP；Web 端走标准 @vitejs/plugin-vue + vite define 同值替换）。 */
   platform?: 'mp' | 'web' | 'native' | 'ios' | 'android' | 'harmony'
+  /**
+   * ★★★GP3-b1（2026-10-03）：**注入到本页面的 Global 层片段**（缺省 = 无 Global 层，零开销）。
+   *
+   * 【消费方】plugin 在编译 App 壳后，把片段传给**每个页面**的编译——本编译层完成合并
+   *   （wxml 前缀 / data 合并 / 方法合并 / init 行前插 / wxss 并入 / Page 配置包装）。
+   *   **组件产物不注入**（Global 层是页面级概念）。
+   *   ★合并规则：同名**页面优先**（页面更局部）——冲突产生 warning（不静默丢弃）。
+   */
+  globalLayer?: GlobalLayerSnippet
+  /**
+   * ★GP3-b1：**App 壳模式**（App.vue 的 MP 编译）——像"页面"一样编译出 data/methods/init，
+   *   但**不产页面机制**（无 onLoad/onReady/生命周期派发桥/滚动桥/探测复位——那些属于页面）。
+   *   产物 `ScriptTransformResult.appShell` 交出结构化件；外壳自身 `js` 仅作形态参考（不直接运行）。
+   */
+  appShell?: boolean
 }
 
 /** 整包编译结果（.wxml + .js + .wxss） */
@@ -298,6 +366,13 @@ export interface CompileResult {
     ruleId?: string
     suggestedPrimitive?: string
   }>
+  /**
+   * ★★★GP3-b1（2026-10-03）：**App 壳编译**产出的 Global 层注入片段（仅 App 壳有值）。
+   *   plugin 拿到它后注入每个页面（见 `CompileOptions.globalLayer`）。
+   */
+  globalLayerSnippet?: GlobalLayerSnippet
+  /** ★GP3-b1：本文件是 App 壳（含 `<app-root>`/`*-layer`）——plugin 据此判定"这是外壳" */
+  isAppShell?: boolean
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
