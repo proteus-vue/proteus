@@ -14,6 +14,8 @@ import fs from 'node:fs'
 import path from 'node:path'
 import { createRequire } from 'node:module'
 import { resolveRouterConfig } from '@proteus-vue/types'
+import type { GlobalLayerSnippet } from '@proteus-vue/types'
+import { GLOBAL_LAYER_STATE_MODULE } from '@proteus-vue/contracts'
 import { transform as esbuildTransform, build as esbuildBuild } from 'esbuild'
 import * as sass from 'sass'
 import type { Plugin } from 'vite'
@@ -27,9 +29,26 @@ import type { TransformRuleOverrides } from '@proteus-vue/compiler'
 import type { ProteusConfig } from './config'
 import { matchWebviewPage } from './gen-routes'
 import { resolveComponentsRoot } from './resolve-components'
-import { APP_LAUNCH_SKELETON, APP_LIFECYCLE_BOOTSTRAP } from './appSkeleton'
+import { APP_LAUNCH_SKELETON, APP_LIFECYCLE_BOOTSTRAP, GLOBAL_LAYER_STATE_CODE } from './appSkeleton'
 import { createCompileCache, compileCacheKey, createBundleCache, bundleCacheKey } from './cache'
 import { collectUsedFrameworkComponents } from './tag-scan'
+import { findAppShellFile, looksLikeAppShell } from './app-shell'
+
+/**
+ * ★GP3-b1：**按目标页面回填 Global 层片段的 require 路径**（不污染公共片段——每个页面算各自的相对路径）。
+ * 组件不注入（Global 层是页面级概念）。
+ */
+function globalLayerFor(
+  rel: string,
+  isComponent: boolean,
+  snippet: GlobalLayerSnippet | null,
+): GlobalLayerSnippet | undefined {
+  if (!snippet || isComponent) return undefined
+  const pageDir = path.posix.dirname(rel)
+  let rp = path.posix.relative(pageDir, snippet.stateModuleRel)
+  if (!rp.startsWith('.')) rp = `./${rp}`
+  return { ...snippet, requirePath: rp }
+}
 
 /**
  * ★默认 scoped + 小程序语义标签改写（2026-08 用户决策）：
@@ -497,9 +516,14 @@ export function collectMpEntries(opts: {
   // ★2026-09-20（F-30 修复，真机阻断级）：必须把**应用组件根目录**传进去——
   //   否则 BFS 遇到应用组件就 `continue`，「页面 → 应用组件 → 框架组件」的链断裂 →
   //   used 恒空 → 76 个框架组件只产出 index.json（缺 js/wxml/wxss）→ 真机启动失败。
+  // ★★GP3-b1（2026-10-03）：**App 壳也是组件引用的起点之一**——Global 层里用的框架组件
+  //   若不在闭包 → 不产出 → 真机 `usingComponents 未找到组件`（整块不渲染）；反之若只被
+  //   Global 层用到，页面闭包也看不到它（壳不是页面）⇒ 必须把壳并进 BFS 起点。
+  const shellFileForClosure = findAppShellFile(appDir)
+  const closureRoots = shellFileForClosure ? [...pageFiles, shellFileForClosure] : pageFiles
   const usedComponents = emitAll
     ? null
-    : collectUsedFrameworkComponents(pageFiles, componentsDir, path.join(appDir, 'components'))
+    : collectUsedFrameworkComponents(closureRoots, componentsDir, path.join(appDir, 'components'))
   for (const f of effectiveVariants(walkVueFiles(componentsDir), platform)) {
     if (webOnlyPages?.has(f)) {
       onSkipWebOnly?.(f)
@@ -879,6 +903,65 @@ export default function mpTransform(opts: PluginOptions): Plugin {
           item.requirePath = rel
         }
       }
+      /* ═══════════ ★★★GP3-b1（2026-10-03）：**Global 层注入**（App 壳 → 每页）═══════════
+       *
+       * 【要解决什么（方案 §1 的痛点）】小程序里 `App` 是**逻辑容器**（渲染层无对应物）
+       *   ⇒ "在 App.vue 写模板、全局组件声明一次全应用生效"**架构上无处安放**
+       *   （uni-app 官方不支持，社区靠第三方 Vite 插件 @uni-ku/root 补）。
+       *
+       * 【本实现（★诚实前提：MP 每页独立渲染树，方案 §1.2-bis）】App 壳（含 `*-layer` 的 SFC）
+       *   编译成一段**可注入片段**，**编译期注入到每个页面产物**：
+       *   · **源码层面**只声明一次（用户写 App.vue，不碰任何页面）——这是核心价值；
+       *   · **实例层面**每页一份（N = 页面栈深度）——小程序架构约束，**不是缺陷**
+       *     （与官方 `custom-tab-bar` 同模式：每页注入 + **共享状态**）。
+       *   ★**共享状态通道**：片段只带**初值**；跨页一致靠 `_proteus/global-layer.js`
+       *     —— 小程序 require 缓存保证同路径同实例 ⇒ "实例每页一份、状态一份"。
+       *     （不用 `getApp().globalData`：它是否存在于 app.js 取决于用户入口写法——骨架极简模式下没有，
+       *       依赖它等于依赖"用户手写形态"，脆弱。）
+       *
+       * 【为什么在编译期注入（而不是运行时动态挂）】方案 §3.2 C1：**声明式、可枚举**
+       *   ——运行时 insertGlobal 会让 conformance 与 AI 可校验同时失效且**静默**。
+       */
+      let globalLayerSnippet: GlobalLayerSnippet | null = null
+      const appShellFile = findAppShellFile(appDir)
+      {
+        if (appShellFile) {
+          const appEntryFile = appShellFile
+          const appEntryRel = path.relative(appDir, appEntryFile).replace(/\\/g, '/')
+          const appSource = fs.readFileSync(appEntryFile, 'utf-8')
+          const appResult = compileVueSfc(appSource, {
+            filename: appEntryRel,
+            isComponent: false,
+            appShell: true, // ★GP3-b1：外壳模式——产出结构化件，不产页面机制（见 compiler 的 appShell 注释）
+            px2rpx, rpxRatio, rules,
+            annotateLines: isDebug,
+            debug: isDebug,
+            preprocessStyle,
+            loadStyleSrc: (src) => loadStyleSrcWithVariant(src, appEntryFile, 'mp'),
+            autoScrollContainer: false, // ★App 壳不是页面（GP2-a 已在模板侧保证，这里双保险）
+            fluidLayout, renderer, platform: 'mp',
+          })
+          if (appResult.isAppShell) {
+            globalLayerSnippet = appResult.globalLayerSnippet ?? null
+            if (globalLayerSnippet) {
+              console.log(
+                `[mp-transform] ★Global 层：App 壳（${appEntryRel}）→ 片段就绪（wxml ${globalLayerSnippet.wxml.length}B / data ${globalLayerSnippet.data.length} 字段 / 方法 ${globalLayerSnippet.methods.length} 个）——将注入每个页面`,
+              )
+            } else {
+              console.warn(`[mp-transform] App 壳（${appEntryRel}）未声明 <global-layer> 内容——无 Global 层可注入`)
+            }
+          } else {
+            console.warn(`[mp-transform] ${appEntryRel} 含挂载层标签但未被识别为 App 壳（isAppShell=false）——Global 层注入跳过`)
+          }
+        }
+        // ★共享状态模块（有 Global 层才产出）：require 缓存 ⇒ 多页一份状态
+        if (globalLayerSnippet) {
+          const stateModule = globalLayerSnippet.stateModuleRel
+          this.emitFile({ type: 'asset', fileName: stateModule, source: GLOBAL_LAYER_STATE_CODE })
+          console.log(`[mp-transform] Global 层状态通道 → ${stateModule}（多页实例共享一份状态，require 缓存同实例）`)
+        }
+      }
+
       for (const { file, rel, isComponent } of files) {
         const source = fs.readFileSync(file, 'utf-8')
         // ★G-29：compiler=rust → 先跑 Node/Rust 双编译语义等价校验（fail fast——不等价不产出）
@@ -947,6 +1030,8 @@ export default function mpTransform(opts: PluginOptions): Plugin {
               fluidLayout,
               renderer: pageRenderer,
               platform: 'mp',
+              // ★GP3-b1：页面注入 Global 层片段（**仅页面**——组件不是页面级概念）
+              globalLayer: globalLayerFor(rel, isComponent, globalLayerSnippet),
             })
             wxml = result.wxml
             js = result.js
@@ -972,6 +1057,8 @@ export default function mpTransform(opts: PluginOptions): Plugin {
             fluidLayout,
             renderer,
             platform: 'mp',
+            // ★GP3-b1：页面注入 Global 层片段（**仅页面**——组件不是页面级概念）
+            globalLayer: globalLayerFor(rel, isComponent, globalLayerSnippet),
           })
           wxml = result.wxml
           js = result.js

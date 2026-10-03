@@ -316,6 +316,11 @@ interface SerializeContext {
    *   每个 `*-layer` 标签在此登记（是否声明 / 内容节点数 / 是否含路由动作）。
    */
   mountLayers: Partial<Record<MountLayer, { declared: boolean; nodeCount: number; hasNavigation: boolean }>>
+  /**
+   * ★GP3-b1：**逐层 wxml 内容**（`global` 为 MP 注入片段的来源；page/overlay 留作诊断——
+   *   MP 端 App 壳的这两层内容不参与注入，index.ts 会为此出可见警告）。
+   */
+  mountLayerWxml: Partial<Record<MountLayer, string[]>>
   /** ★App.vue 形态（含 `<app-root>` 或 `*-layer`）：**不包页面滚动壳**（它不是页面） */
   isAppShell: boolean
   /** ★2026-09-09 支持矩阵 fail-fast：矩阵外语义「已原样输出」→ 编译期 CompilerError（rules.failFast） */
@@ -772,6 +777,10 @@ function serializeElement(node: ElementNode, ctx: SerializeContext): string {
       const layer = mountLayerOf as MountLayer
       // 层内容序列化（解壳：不输出层标签本身）
       const inner = node.children.map((c) => serializeNode(c, ctx)).join('\n')
+      // ★GP3-b1：**逐层内容留存**——`global` 层的 wxml 就是 MP 端每页注入的片段
+      //   （page/overlay 层内容在 MP 不由 App 壳提供：页面自成一 Page 层、Overlay 在页面/组件内声明；
+      //      index.ts 对这两层"有内容"会出**可见警告**——不静默丢弃）
+      ;(ctx.mountLayerWxml[layer] ??= []).push(inner)
       // ★C1 判据的**收集侧**：是否在允许的文件里声明（收尾统一报错，因为 filename 在 ctx 上）
       const prev = ctx.mountLayers[layer]
       // 内容节点数：直接元素子节点数（C2 的口径——与 MOUNT_LAYER 契约的"挂载节点数"一致）
@@ -1942,6 +1951,8 @@ export function transformTemplateToWxml(
     styleBindings: new Set<string>(),
     // ★GP2-a：三层挂载声明收集（见 SerializeContext.mountLayers）
     mountLayers: {},
+    // ★GP3-b1：逐层 wxml 留存（global → 每页注入片段）
+    mountLayerWxml: {},
     isAppShell: false,
     // ★2026-09-09 G-62 事件命中：带事件的静态 SVG 图形表
     svgHits: [],
@@ -2062,6 +2073,8 @@ export function transformTemplateToWxml(
     warnings: ctx.warnings,
     // ★★★GP2-a/b/c/d（2026-10-03）：三层挂载声明（**可枚举**——C1/C2/C3 的实现基础 + 宿主/诊断消费）
     mountLayers: ctx.mountLayers,
+    // ★★★GP3-b1（2026-10-03）：逐层 wxml（global → MP 每页注入片段；见 SerializeContext.mountLayerWxml）
+    mountLayerWxml: ctx.mountLayerWxml,
     isAppShell: ctx.isAppShell,
   }
 }

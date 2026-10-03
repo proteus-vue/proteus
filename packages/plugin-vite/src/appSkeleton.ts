@@ -114,3 +114,66 @@ __PRESET_REGISTRATION__
   },
 })
 `
+
+/**
+ * ★★★GP3-b1（2026-10-03）：**Global 层共享状态模块**（产物 `_proteus/global-layer.js`）。
+ *
+ * 【它解决什么】MP 端每页是独立渲染树 ⇒ Global 层**每页一份实例**（方案 §1.2-bis），
+ *   而"全局网络状态条/主题/未读角标"需要**跨页一致**。官方 `custom-tab-bar` 的答案是
+ *   "每页注入 + **共享状态**"；本模块就是那个共享状态（小程序 require 缓存：同路径同实例，
+ *   与 vendor 单例化同一机制——`_proteus/pinia.js` 等已验证）。
+ *
+ * 【为什么不用 `getApp().globalData`】它是否存在**取决于用户入口怎么写**（极简模式下骨架含，
+ *   全量模式下用户自己写）——把框架能力押在"用户手写形态"上是脆弱设计。共享模块自包含：
+ *   插件保证产出、页面 require 即得。
+ *
+ * 【API（页面产物注入的桥只调这四个）】get/set/has/all——
+ *   · `set(k, v)`：写状态（页面 setData 镜像调用）
+ *   · `get(k)`：读状态（Page data 构造 / onShow 拉取）
+ *   · `all()`：快照（诊断/调试）
+ * ★**条件编译门**：`__PROTEUS_GLOBAL_LAYER_LIMIT__` 由构建 define 注入（缺省不校验）——
+ *   每页注入的字段数由 C2（32）在编译期限定，这里只做运行时兜底（防手改产物）。
+ */
+export const GLOBAL_LAYER_STATE_CODE = `// _proteus/global-layer.js —— Proteus Global 层共享状态（GP3-b1，2026-10-03）
+// 自动生成，请勿编辑。用途：MP 端"实例每页一份、状态一份"（与官方 custom-tab-bar 同模式）。
+// ★require 缓存保证：所有页面 require 本模块拿到的是**同一个对象**（跨页状态一致）。
+var __state = Object.create(null)
+var __subs = Object.create(null)
+
+module.exports = {
+  /** 读一个全局字段（未写过 ⇒ undefined——调用方用声明初值兜底） */
+  get: function (k) {
+    return __state[k]
+  },
+  /** 写一个全局字段（页面 setData 镜像调用；通知订阅者） */
+  set: function (k, v) {
+    __state[k] = v
+    var list = __subs[k]
+    if (list) {
+      for (var i = 0; i < list.length; i++) {
+        try { list[i](v) } catch (e) {}
+      }
+    }
+  },
+  /** 是否写过（区分"没写过"与"写过 undefined"） */
+  has: function (k) {
+    return Object.prototype.hasOwnProperty.call(__state, k)
+  },
+  /** 全量快照（诊断/调试；深拷贝防外部改内部） */
+  all: function () {
+    var out = {}
+    for (var k in __state) if (Object.prototype.hasOwnProperty.call(__state, k)) out[k] = __state[k]
+    return out
+  },
+  /** 订阅字段变更（返回退订函数）——为将来"实时同步"预留（当前页面间靠 onShow 拉取） */
+  subscribe: function (k, fn) {
+    (__subs[k] || (__subs[k] = [])).push(fn)
+    return function () {
+      var list = __subs[k]
+      if (!list) return
+      var idx = list.indexOf(fn)
+      if (idx >= 0) list.splice(idx, 1)
+    }
+  },
+}
+`

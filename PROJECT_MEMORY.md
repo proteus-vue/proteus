@@ -15,11 +15,13 @@
 - **包规模**：**45 个 @proteus-vue/* npm 包**（+ `packages/layout-core-rust` = **cargo crate，非 npm 包**，故不计数）（★2026-09-29 layout-core = App 排版核心）（check:pkg 0 error · `pnpm check:stats` 校验 ✓；31→38 修正 → G-07 glass 39 → Skyline 收口 worklet 40 → ★2026-09-14 组件库拆包 `@proteus-vue/components` 41 → ★Vapor 线新增 `@proteus-vue/slot-runtime` 42 + `@proteus-vue/layout-core` 43 → ★2026-09-30 MA1 新增 `@proteus-vue/animation` 44；版本统一 0.3.0-beta.8，见「当前状态速览」）
 - **文档**：`docs/proteus-architecture.md`（L0 规约·真理来源）→ `docs/board-inventory.md`（全景索引）→ `docs/roadmap.md`（版本线）→ `roadmap-2-plan`（里程碑线）→ 各 plan
 
-## 当前状态速览（最近一次更新：**2026-10-03·（一一三）· **全局挂载点 GP1+GP2 完成**——GP1-a/b：三层挂载规格（★**零新指令**：层间顺序用树序表达；GP1-b 域偏移与层内四层正交）+ 契约 `contracts/mount-layers.ts`；GP2-a/b/c/d：层标签**解壳**+声明收集（此前静默透传）+ **C1/C2/C3 硬约束**（error 级，接进 compileVueSfc）；单测 22 组 · 全量 4787 用例绿；下一步 GP3-b1（Global 层新建：每页注入 + 状态共享）**）★新会话以此为准
+## 当前状态速览（最近一次更新：**2026-10-03·（一一四）· **GP3-b1：MP 端 Global 层新建（每页注入 + 状态共享）**——App.vue/App.mp.vue 的 `<global-layer>` **编译期注入每个页面产物**（源码声明一次 = 核心价值；实例每页一份 = 官方 custom-tab-bar 同模式）★`appShell` 编译模式（不产页面机制）+ `GlobalLayerSnippet`（与外壳产物**同源**，不从文本反解）+ 共享状态 `_proteus/global-layer.js`（require 缓存 = 同实例；写 = setData 拦截镜像 / 读 = data 直读 + onShow 拉取）+ 两条防静默规则（生命周期名黑名单 / 页面优先）；★诚实边界：实例数 N、不宣称"单实例跨页存活"；单测 19 组 + 真机 e2e 四段证据（本页注入→跨页可见→写回同步）；规则 115→116 已同步三处门禁；下一步 GP5（八条超级应用场景验收）或 GP4（Toast/Loading 队列）**）★新会话以此为准
+
+## 当前状态速览（最近一次更新：**2026-10-03·（一一三）· **全局挂载点 GP1+GP2 完成**——GP1-a/b：三层挂载规格（★**零新指令**：层间顺序用树序表达；GP1-b 域偏移与层内四层正交）+ 契约 `contracts/mount-layers.ts`；GP2-a/b/c/d：层标签**解壳**+声明收集（此前静默透传）+ **C1/C2/C3 硬约束**（error 级，接进 compileVueSfc）；单测 22 组 · 全量 4787 用例绿**）★新会话以此为准
 
 ## 当前状态速览（最近一次更新：**2026-10-03·（一一二）· **全局挂载点线开局**——方案+任务卡入库（6 处对账修正：★MP 的 Global 层是「每页一份实例」O(N) 的诚实边界）+ **GP0-a 实测**（基础库 3.17.x：root-portal **不穿透**，三形态均到 JS；★判据固化为 16s 可重跑 e2e）+ **GP3-b0 三项**（S42/S47 坑经验机器化 + LY004×teleport 层叠逃逸修复 + 门禁同步）**）★新会话以此为准
 
-## 当前状态速览（最近一次更新：**2026-10-03·（一一一）· **TS 类型语法剥除 + 作用域插槽解构**（三端同步）——`w as number`/`x!`/`<T>x` 此前**整条表达式被拒**（真实页面 2 处）⇒ `compileNode` 入口透明解包（★反向：`f() as any` 剥完仍是调用 ⇒ 仍受纯度约束）；`#default="{ errors, code: c }"` 解构此前被拒（1 处）⇒ `slot-scope.ts` 唯一入口解析 + 分发时解构；★修两层根因（**对象字面量≠解构模式** / **裸作用域引用不可见** ⇒ 新增 `ExprDeps.scopeRefs`）；缺口棘轮实测 表达式 3→1 · 解构 1→**0** · 模板 10→5 · 零缺口页 13→15；三端 23/23 · 指纹 28 项**）★新会话以此为准
+
 
 ## ★《收纳规范》（2026-10-03 立 · 门禁 `pnpm check:memory`）
 

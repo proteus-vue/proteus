@@ -22,7 +22,7 @@ const isApplyRule = (r: TransformRule): boolean => typeof (r as { apply?: unknow
 // ★2026-09-30：111 → 112（新增 page/lifecycle-bus——页面生命周期 → 运行时总线派发）
 // ★2026-10-03：112 → 114（GP3-b0 portal 陷阱机器化：template/teleport-root-v-if + template/teleport-v-if-dropped）
 // ★2026-10-03：114 → 115（GP2-a 三层挂载：template/mount-layer）
-const COUNT_SNAPSHOT = { total: 115, template: 65, script: 36, style: 9, validate: 5 }
+const COUNT_SNAPSHOT = { total: 116, template: 65, script: 37, style: 9, validate: 5 }
 
 /** ★执行层快照：已登记 apply 的规则（判定/命名入规则 = 删 apply 即红） */
 const APPLY_RULES = [
@@ -38,12 +38,12 @@ const APPLY_RULES = [
 const VERIFY_NON_FILE = new Set(['node/interpolation', 'script/es5-safe', 'style/semantic-base-wxss', 'style/skyline-selector'])
 
 describe('★#505 M5 批 1：规则治理门禁——总数/分相快照 + verify 机器可解析', () => {
-  it('规则总数与分相快照（115 = template 65 + script 36 + style 9 + validate 5——增删规则须同步更新本快照并跑 gen:reference）', () => {
+  it('规则总数与分相快照（116 = template 65 + script 37 + style 9 + validate 5——增删规则须同步更新本快照并跑 gen:reference）', () => {
     const rules = listTransformRules()
     const byPhase: Record<string, number> = {}
     for (const r of rules) byPhase[r.phase] = (byPhase[r.phase] ?? 0) + 1
     expect(rules.length, `规则总数漂移（现 ${rules.length}，快照 ${COUNT_SNAPSHOT.total}）——新增规则请在 registry 登记 + 更新快照`).toBe(COUNT_SNAPSHOT.total)
-    for (const [phase, n] of Object.entries({ template: 65, script: 36, style: 9, validate: 5 })) {
+    for (const [phase, n] of Object.entries({ template: 65, script: 37, style: 9, validate: 5 })) {
       expect(byPhase[phase], `phase ${phase} 规则数漂移（现 ${byPhase[phase] ?? 0}，快照 ${n}）`).toBe(n)
     }
   })

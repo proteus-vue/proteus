@@ -126,9 +126,11 @@ export const GLOBAL_LAYER_NODE_LIMIT = 32
  * @returns 该文件是否允许声明三层挂载点
  */
 export function isMountLayerDeclarableFile(filename: string): boolean {
-  // 只认文件名 `App.vue`（大小写不敏感、允许路径前缀）——与 Vue 生态约定一致
+  // 认文件名 `App.vue` 与**平台变体** `App.<平台>.vue`（大小写不敏感、允许路径前缀）——
+  // ★变体必须放行：`App.mp.vue`/`App.web.vue` 是同一逻辑文件的按端形态（本仓平台变体机制），
+  //   拦掉变体 = MP/其它端拿到变体文件时 C1 误报（且"只能在 App.vue 声明"的语义并未被保护得更好）。
   const base = filename.replace(/\\/g, '/').split('/').pop() ?? ''
-  return base.toLowerCase() === 'app.vue'
+  return /^app(\.[a-z0-9]+)?\.vue$/i.test(base)
 }
 
 /**
@@ -149,3 +151,14 @@ export const MOUNT_LAYER_TAGS: Record<string, MountLayer | 'root'> = {
 export function mountLayerTagOf(layer: MountLayer): string {
   return `${layer}-layer`
 }
+
+/**
+ * ★★★GP3-b1（2026-10-03）：**Global 层共享状态模块的产物路径**（MP 每页注入通道）。
+ *
+ * 【为什么用共享模块而不是 `getApp().globalData`】`globalData` 是否存在于 app.js **取决于
+ *   用户入口怎么写**（极简模式下骨架不含它）——依赖它 = 依赖用户手写形态（脆弱）。
+ *   而**小程序 require 缓存**（同路径同实例）是本仓已验证的机制（vendor 单例化就靠它，
+ *   见 plugin-vue 的 `VENDOR_SINGLETONS` 注释）⇒ 共享模块是**自包含**的状态通道：
+ *   "实例每页一份、状态一份"（与官方 `custom-tab-bar` 同模式）。
+ */
+export const GLOBAL_LAYER_STATE_MODULE = '_proteus/global-layer.js'
