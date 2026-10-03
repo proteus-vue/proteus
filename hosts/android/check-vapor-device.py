@@ -433,6 +433,27 @@ def main() -> int:
             detail = " · ".join(f"{e.get('prefix')}→{e.get('text')}" for e in expr_probe)
             print(f"  ✓ ⑫ ★表达式能力（v-text / 白名单纯函数 / Math.PI 内联 / 纯方法 / 可选链）首帧均为求值结果：{detail}")
 
+    # ── ⑬ ★★★P3-3 `<Transition>`：可见性翻转 ⇒ 过渡**真的交给宿主** ──
+    #   【为什么单独判】`<Transition>` 的失效形态是**静默无过渡**（页面正常、只是不动）：
+    #     缺任一层都会这样——① 运行时没记可见性翻转；② 模板没把声明挂到节点；
+    #     ③ 桥没转发；④ 宿主没实现 animStart。⇒ 判据核**端到端**：`transition_started > 0`。
+    #   ★同时核**节点数守恒**（Transition 透传不占 id——若多出包裹节点，A/B 几何会不等价）。
+    tr_started = rep.get("transition_started", -1)
+    tpl_transition = rep.get("tpl_transition") or []
+    if tr_started < 0:
+        print("  ◐ ⑬ <Transition>：本端夹具未覆盖（报告无 transition_started）——如实跳过")
+    elif tr_started <= 0:
+        # 分档：夹具没声明过渡 ⇒ 只核"节点数守恒"；有声明却没动画 ⇒ 红
+        if not tpl_transition:
+            print("  ◐ ⑬ <Transition>：本端夹具无过渡声明——如实跳过")
+        else:
+            fail(f"★<Transition> 声明存在（{tpl_transition}）但**没有任何动画交给宿主**"
+                 f"（transition_started={tr_started}）——过渡不会播（静默无过渡）")
+            ok = False
+    else:
+        print(f"  ✓ ⑬ ★<Transition> 过渡真的被驱动：{tr_started} 条动画交给宿主"
+              + (f"（声明预设：{tpl_transition}）" if tpl_transition else ""))
+
     # 附加观测（不判红，只如实报）
     una = rep.get("uninstantiated_slots", 0)
     if una:

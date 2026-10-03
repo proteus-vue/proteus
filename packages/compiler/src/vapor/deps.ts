@@ -412,6 +412,13 @@ export function collectTemplateBindings(
       let activeListCtx: ListCtx = listCtx
 
       if (n.type === 1 /* ELEMENT */) {
+        // ★★★P3-3（2026-10-03）：`<Transition>` **透传**（与 template.ts **同一条判据**）——
+        //   它不渲染包裹元素 ⇒ **不占节点序号**。两处必须一致，否则 nodeId 空间分叉
+        //   （症状：指令写到别的节点上，且不报错——本仓踩过的老坑）。
+        if (tag === 'Transition') {
+          walk((n.children ?? []) as unknown[], scopes, inBranch, scopeSources, parentElementIndex, listCtx, onceCtx, memoCtx, memoInvalidCtx)
+          continue
+        }
         // ★每个元素（无论是否含绑定）都占一个序号——与 IR builder 的 DFS 编号一致
         const myElementIndex = nextElementIndex++
         // ★先扫一遍该元素的 `:key`（v-for 的行标识字段）——必须在处理其它绑定**之前**拿到，

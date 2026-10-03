@@ -60,6 +60,12 @@ char* proteus_layout_hit_test(uint64_t handle, float x, float y);
 char* proteus_layout_apply_ops(uint64_t handle, const uint8_t* ptr, uint32_t len);
 // ★A/B 的 B 路（Vue patch 路径）：样式补丁更新 + 文本度量注入（与 iOS/Android 同一 ABI）
 char* proteus_layout_update(uint64_t handle, const char* patches_json);
+// ★★★P3-3（2026-10-03 · 三端同步）：内核动画（`<Transition>` 的驱动端）——
+//   与 Android/iOS 同一套 `anim.rs` 入口（跨语言契约，见 anim.rs 头注）
+char* proteus_layout_anim_start(uint64_t handle, const char* json);
+char* proteus_layout_anim_tick(uint64_t handle, float dt_ms);
+char* proteus_layout_anim_active(uint64_t handle);
+char* proteus_layout_anim_stop(uint64_t handle, const char* json);
 char* proteus_layout_set_text_measures(uint64_t handle, const char* measures_json);
 // ★复用池（长列表）——与 Android JNI / iOS @_silgen_name 同一组 C ABI
 uint64_t proteus_recycle_create(uint32_t item_count, uint32_t leading_rows, uint32_t following_rows);
@@ -2004,6 +2010,9 @@ static JSVM_Value VaporUpdatePatchesCb(JSVM_Env env, JSVM_CallbackInfo info) {
 /* ── 矩阵 #14 续 · A/B ⑦：手势注入 → 核心 hitTest → **反向调 JS**（与 Android JNI 同语义） ── */
 
 static std::string g_vaporGestureCbName;   // 由 bundle 经 onGesture(name) 注册
+// ★P3-3：动画入口调用读数（判据经报告读——与 Android `animStartCalls` 同口径）
+static int g_vaporAnimStarts = 0;
+static int g_vaporAnimTicks = 0;
 static int g_vaporGestureDispatched = 0;   // 派发计数（tapAt 回传 gestures_fired 用）
 
 /**
@@ -2461,6 +2470,89 @@ static JSVM_Value VaporReadRectsCb(JSVM_Env env, JSVM_CallbackInfo info) {
     return r;
 }
 
+/* ── ★★★P3-3：宿主动画入口（`<Transition>` 桥的消费端；与 Android `VaporRenderHost.animStart` 同形）── */
+
+/** `animStart(animsJson)` → 内核 `proteus_layout_anim_start`（宿主帧循环由 ArkTS 侧驱动） */
+static JSVM_Value VaporAnimStartCb(JSVM_Env env, JSVM_CallbackInfo info) {
+    size_t argc = 1;
+    JSVM_Value args[1] = {nullptr};
+    OH_JSVM_GetCbInfo(env, info, &argc, args, nullptr, nullptr);
+    std::string json;
+    if (argc > 0) jsvmStr(env, args[0], &json);
+    std::string out = "{\"ok\":false,\"error\":\"未 mount\"}";
+    if (g_vaporHandle != 0) {
+        char* rp = proteus_layout_anim_start(g_vaporHandle, json.c_str());
+        out = rp ? rp : "{\"ok\":false}";
+        if (rp) proteus_layout_free_string(rp);
+        g_vaporAnimStarts++;
+        OH_LOG_Print(LOG_APP, LOG_INFO, PROTEUS_BENCH_DOMAIN, PROTEUS_BENCH_TAG,
+                     "PROTEUS_VAPOR_ANIM_START bytes=%{public}zu total=%{public}d", json.size(), g_vaporAnimStarts);
+    }
+    JSVM_Value r = nullptr;
+    OH_JSVM_CreateStringUtf8(env, out.c_str(), out.size(), &r);
+    return r;
+}
+
+/** `animTick(dtMs)` → 内核推进一帧（**ArkTS 帧循环**按 vsync 调它——与 Android Choreographer 同职责） */
+static JSVM_Value VaporAnimTickCb(JSVM_Env env, JSVM_CallbackInfo info) {
+    size_t argc = 1;
+    JSVM_Value args[1] = {nullptr};
+    OH_JSVM_GetCbInfo(env, info, &argc, args, nullptr, nullptr);
+    double dt = 16.7;
+    if (argc > 0) {
+        std::string j;
+        jsvmStr(env, args[0], &j);
+        // 入参可能是 JSON 数字串或 `{"dtMs":16.7}`（两种形态都认——与 iOS shim 的 `o.dtMs` 对齐）
+        const char* p = j.c_str();
+        while (*p && (*p == ' ' || *p == '{' || *p == '"')) p++;
+        char* end = nullptr;
+        double v = strtod(p, &end);
+        if (end != p) dt = v;
+    }
+    std::string out = "{\"ok\":false,\"error\":\"未 mount\"}";
+    if (g_vaporHandle != 0) {
+        char* rp = proteus_layout_anim_tick(g_vaporHandle, (float)dt);
+        out = rp ? rp : "{\"ok\":false}";
+        if (rp) proteus_layout_free_string(rp);
+        g_vaporAnimTicks++;
+    }
+    JSVM_Value r = nullptr;
+    OH_JSVM_CreateStringUtf8(env, out.c_str(), out.size(), &r);
+    return r;
+}
+
+/** `animActive()` → 仍在推进的条数（0 = 全结束；判据/帧循环停判据） */
+static JSVM_Value VaporAnimActiveCb(JSVM_Env env, JSVM_CallbackInfo info) {
+    (void)info;
+    std::string out = "{\"ok\":false}";
+    if (g_vaporHandle != 0) {
+        char* rp = proteus_layout_anim_active(g_vaporHandle);
+        out = rp ? rp : "{\"ok\":false}";
+        if (rp) proteus_layout_free_string(rp);
+    }
+    JSVM_Value r = nullptr;
+    OH_JSVM_CreateStringUtf8(env, out.c_str(), out.size(), &r);
+    return r;
+}
+
+/** `animStop(json)` → 停动画 */
+static JSVM_Value VaporAnimStopCb(JSVM_Env env, JSVM_CallbackInfo info) {
+    size_t argc = 1;
+    JSVM_Value args[1] = {nullptr};
+    OH_JSVM_GetCbInfo(env, info, &argc, args, nullptr, nullptr);
+    std::string json = "{}";
+    if (argc > 0) jsvmStr(env, args[0], &json);
+    std::string out = "{\"ok\":false}";
+    if (g_vaporHandle != 0) {
+        char* rp = proteus_layout_anim_stop(g_vaporHandle, json.c_str());
+        out = rp ? rp : "{\"ok\":false}";
+        if (rp) proteus_layout_free_string(rp);
+    }
+    JSVM_Value r = nullptr;
+    OH_JSVM_CreateStringUtf8(env, out.c_str(), out.size(), &r);
+    return r;
+}
+
 static JSVM_Value VaporProbeChannelsCb(JSVM_Env env, JSVM_CallbackInfo info) {
     size_t argc = 1;
     JSVM_Value args[1] = {nullptr};
@@ -2613,6 +2705,11 @@ static napi_value VaporProbe(napi_env env, napi_callback_info info) {
             // ★#5 虚拟化列表（bundle mode:'list'）
             {"mountVirtual", {VaporMountVirtualCb, nullptr}},
             {"scrollRows", {VaporScrollRowsCb, nullptr}},
+            // ★★★P3-3（2026-10-03）：`<Transition>` 的宿主动画入口（与 Android/iOS 同形）
+            {"animStart", {VaporAnimStartCb, nullptr}},
+            {"animTick", {VaporAnimTickCb, nullptr}},
+            {"animActive", {VaporAnimActiveCb, nullptr}},
+            {"animStop", {VaporAnimStopCb, nullptr}},
         };
         for (auto& f : fns) {
             JSVM_Value fn = nullptr;

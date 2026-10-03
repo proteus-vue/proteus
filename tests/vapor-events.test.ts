@@ -135,11 +135,15 @@ describe('★P0 静默风险可见化（2026-10-03 · Vapor 能力清单批次�
     expect(diagText(`<div v-memo="a" style="height: 5px"></div>`), '非数组字面量必须诊断').toContain('数组字面量')
   })
 
-  it('内置组件（Teleport / KeepAlive / Transition / Suspense）必须产诊断', () => {
+  it('内置组件（Teleport / KeepAlive / TransitionGroup / Suspense）必须产诊断', () => {
     expect(diagText(`<Teleport to="#x"><i>t</i></Teleport>`)).toContain('Teleport 未支持')
     expect(diagText(`<KeepAlive><Comp /></KeepAlive>`)).toContain('KeepAlive 未支持')
-    expect(diagText(`<Transition><div /></Transition>`)).toContain('Transition 未支持')
+    // ★2026-10-03（P3-3）：`<Transition>` 从"当普通容器"升为**真支持**（预设动画 + 宿主动画入口），
+    //   换 `TransitionGroup` 验同一档缺口（列表差异/move 过渡仍未做）。
+    expect(diagText(`<TransitionGroup><div /></TransitionGroup>`)).toContain('TransitionGroup 未支持')
     expect(diagText(`<Suspense><div /></Suspense>`)).toContain('Suspense 未支持')
+    // ★反向：`<Transition>` 现在**不该**再报"未支持"（它只可能因用法问题产别的诊断）
+    expect(diagText(`<Transition name="fade"><div v-show="a" /></Transition>`)).not.toContain('Transition 未支持')
   })
 
   it('动态组件与插槽出口必须产诊断', () => {

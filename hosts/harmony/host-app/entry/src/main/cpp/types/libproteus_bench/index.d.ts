@@ -45,3 +45,12 @@ export const fontFamilyProbe: () => string;
 export const nodeRect: (nodeId: number) => string;
 /** Rust 排版核版本（仪器自检） */
 export const version: () => string;
+/* ── ★★★P3-3（2026-10-03）：`<Transition>` 宿主动画入口（三端同形）── */
+/** 登记动画（内核 `proteus_layout_anim_start`）；返回 `{"ok":true,"started":N}` */
+export const animStart: (animsJson: string) => string;
+/** 推进一帧（`{"dtMs":16.7}`；内核求值——宿主每帧调） */
+export const animTick: (dtMsJson: string) => string;
+/** 仍在推进的条数（0 = 全结束；帧循环的停判据） */
+export const animActive: () => string;
+/** 停动画 */
+export const animStop: (json: string) => string;

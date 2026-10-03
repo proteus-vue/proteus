@@ -86,12 +86,54 @@ const UNSUPPORTED_DIRECTIVES: Record<string, string> = {
 const UNSUPPORTED_BUILTINS: Record<string, string> = {
   Teleport: 'Teleport 未支持（多渲染面传送待建）——当前按普通容器渲染（内容在**原位置**，非目标容器）',
   KeepAlive: 'KeepAlive 未支持（组件缓存待建；App 端路由保活已有 app-stack 的 keep-alive 档可复用）',
-  Transition: 'Transition 未支持（转场语义待建；内核动画 MA0-RT 能力已具备，缺编译期桥接）',
-  TransitionGroup: 'TransitionGroup 未支持（同 Transition；且需列表差异动画）',
+  // ★★P3-3（2026-10-03）：`Transition` 已**支持**（编译成预设动画规格；见 TRANSITION_PRESETS）——
+  //   从本表移除。`TransitionGroup` 仍在（需**列表差异动画** = move 过渡，独立批次）。
+  TransitionGroup: 'TransitionGroup 未支持（需**列表差异动画**/move 过渡——`Transition` 单元素过渡已支持）',
   Suspense: 'Suspense 未支持（异步边界待建）',
   Component: '动态组件 `<component :is>` 未支持（需运行时组件解析）',
   component: '动态组件 `<component :is>` 未支持（需运行时组件解析）',
 }
+
+/**
+ * ★★★**过渡预设**（P3-3，2026-10-03）——`<Transition name="X">` 的通道规格（**闭集**）。
+ *
+ * 【为什么是闭集预设而不是解析 CSS】Vue 靠 CSS 类驱动过渡（`v-enter-from`/`-active`/`-to`）；
+ *   我方无 CSS 引擎，但有**内核动画**（`AnimKind` 通道 + 曲线/时长）⇒ 直接把常见过渡
+ *   编成通道规格。`kind` 编号与 `packages/layout-core-rust/src/anim.rs` 的 `AnimKind`
+ *   **一一对应**（0=TranslateX / 1=TranslateY / 2=Scale / 4=Opacity）——跨语言契约，不得改号。
+ * 【入场 vs 离场】入场 = from→to（如 fade：0→1）；离场 = **反向**（1→0）——
+ *   语义与 Vue 的 enter/leave 对称性一致（同一 `name` 既有入场也有离场）。
+ * 【未知名】产诊断（不静默退化成"无过渡"——那会让"写了过渡却不动"无从归因）。
+ */
+const TRANSITION_PRESETS: Record<string, Array<{ kind: number; from: number; to: number }>> = {
+  fade: [{ kind: 4, from: 0, to: 1 }],
+  'slide-up': [{ kind: 1, from: 40, to: 0 }],
+  'slide-down': [{ kind: 1, from: -40, to: 0 }],
+  'slide-left': [{ kind: 0, from: 40, to: 0 }],
+  'slide-right': [{ kind: 0, from: -40, to: 0 }],
+  zoom: [{ kind: 2, from: 0.9, to: 1 }],
+  /** 组合（淡入 + 上滑）——最常见的入场形态；多通道 = 同一节点的多条动画并行 */
+  'fade-slide-up': [
+    { kind: 4, from: 0, to: 1 },
+    { kind: 1, from: 24, to: 0 },
+  ],
+}
+
+/** 预设名 → `{enter, leave}` 通道规格（未知名 ⇒ null，调用方诊断） */
+export function transitionPresetOf(
+  name: string,
+): { enter: Array<{ kind: number; from: number; to: number }>; leave: Array<{ kind: number; from: number; to: number }> } | null {
+  const base = TRANSITION_PRESETS[name]
+  if (!base) return null
+  return {
+    enter: base.map((c) => ({ ...c })),
+    // 离场 = 入场**反向**（from/to 互换）——与 Vue enter/leave 的对称语义一致
+    leave: base.map((c) => ({ kind: c.kind, from: c.to, to: c.from })),
+  }
+}
+
+/** 预设名清单（诊断里列出，便于照抄） */
+export const TRANSITION_PRESET_NAMES = Object.keys(TRANSITION_PRESETS)
 
 /**
  * ★★**解析绘制声明属性**（`fill-gradient` / `clip-path` / `glow` / `mask` / `svg-path`…）——
@@ -238,6 +280,77 @@ function numOf(v: string): number | undefined {
 }
 
 /**
+ * ★★★**`<Transition>` → 过渡规格**（P3-3，2026-10-03）
+ *
+ * 支持的 props（**闭集**，其余诊断）：
+ *   · `name="fade"`      → 预设名（见 `TRANSITION_PRESETS`；未知名 ⇒ 诊断）
+ *   · `:duration="300"`  → 时长 ms（缺省 220；静态字符串数字也认）
+ *   · `appear`           → 首帧也播入场（带值即视为真；`appear="false"` 视为假）
+ *   · `:css="false"`     → 忽略（我方本就无 CSS——不报错，属"已满足"）
+ *
+ * 【不支持的形态 ⇒ 诊断（不静默）】多子元素 / 无子元素（Vue 对 Transition 的同一约束）——
+ *   多子时 Vue 会告警并改用"单元素"语义，我方**明确诊断**（避免"以为在过渡、其实没动"）。
+ */
+export function transitionOfElement(
+  n: { props?: Array<{ type: number; name: string; arg?: { content?: string }; exp?: { content?: string }; value?: { content?: string } }>; children?: unknown[] },
+  diag: (msg: string, hint?: string, code?: string) => void,
+): LayoutNode['transition'] | undefined {
+  let name = 'fade'
+  let durMs = 220
+  let appear = false
+  for (const p of n.props ?? []) {
+    // ★两种形态都要读（本仓实测）：静态属性（`duration="300"`，值在 `value.content`）与
+    //   **绑定**（`:duration="300"` / `:name="'fade'"`，值在 `exp.content`）——
+    //   首版只读静态 ⇒ `:duration="300"` 被忽略（静默回落 220，症状是"时长不对"而非报错）。
+    // ★★形态取证（本仓实测）：`:duration="300"` 在 @vue/compiler-dom 里被归一为
+    //   **`{type:7, name:'bind', exp:'300'}`（不带 arg！）**——与 `v-bind="obj"` 同形。
+    //   ⇒ 判据要认两种：① 静态 `duration="300"`（type 6）；② **无 arg 的 bind 且值是纯数字**
+    //     （`:duration="300"` 的归一形态——值本身就是时长，不是"展开对象"）。
+    const rawName = p.type === 6 ? p.name : (p.arg?.content ?? '')
+    const isDurationBind = p.type === 7 && p.name === 'bind' && !p.arg?.content && /^\s*\d+\s*$/.test(String(p.exp?.content ?? ''))
+    const value = p.type === 6 ? p.value?.content : p.exp?.content
+    if (p.name === 'name' && value) name = value.replace(/["']/g, '').trim()
+    if (isDurationBind && value) {
+      const num = Number(String(value).trim())
+      if (Number.isFinite(num) && num > 0) durMs = num
+    }
+    if (rawName === 'duration' && value) {
+      const num = Number(String(value).replace(/["']/g, '').trim())
+      if (Number.isFinite(num) && num > 0) durMs = num
+      else {
+        diag(
+          `<Transition :duration="${value}">：本版只支持**字面量数值**（如 :duration="300"）`,
+          '改成字面量，或等运行时时长通道（动态时长的过渡规格需要运行时解析）',
+          'VAPOR_TRANSITION_DURATION_DYNAMIC',
+        )
+      }
+    }
+    if (p.name === 'appear') appear = String(value ?? '') !== 'false'
+    if (p.name === 'css') {
+      // `:css="false"` = 告诉 Vue "不要用 CSS 类，我全在 JS 里做"——我方本就无 CSS
+      // ⇒ 语义已满足（不诊断；`css="true"` 则**我们做不到**，如实提示一次）
+      if (String(value ?? '').replace(/["']/g, '') === 'true') {
+        diag(
+          `<Transition :css="true">：我方没有 CSS 类机制（过渡由**内核动画**驱动，不是 v-enter-from 类）`,
+          '删掉 `:css`（缺省即由本框架的预设动画驱动），或保留 Vue 渲染路径（L0）',
+          'VAPOR_TRANSITION_CSS',
+        )
+      }
+    }
+  }
+  const preset = transitionPresetOf(name)
+  if (!preset) {
+    diag(
+      `<Transition name="${name}">：未知预设名`,
+      `可用预设：${TRANSITION_PRESET_NAMES.join(' / ')}（闭集；CSS 自定义过渡我方无 CSS 引擎）`,
+      'VAPOR_TRANSITION_UNKNOWN_PRESET',
+    )
+    return undefined
+  }
+  return { preset: name, enter: preset.enter, leave: preset.leave, durMs, curve: 1, ...(appear ? { appear: true } : {}) }
+}
+
+/**
  * 主入口：SFC 源码 → LayoutTemplate（静态结构）
  *
  * @param compat 可注入的 SFC/DOM 解析器（与 `buildVaporSubscriptions` 同一注入面，供 Vue 多版本兼容测试）
@@ -310,7 +423,12 @@ export function buildLayoutTemplate(
     children?: unknown[]
   }
 
-  const walk = (children: unknown[], parentId: number | null): void => {
+  const walk = (
+    children: unknown[],
+    parentId: number | null,
+    /** ★P3-3：外层 `<Transition>` 的过渡规格（透传给**直接子元素**；无则 undefined） */
+    pendingTransition?: LayoutNode['transition'],
+  ): void => {
     for (const raw of children) {
       const n = raw as Node
       if (n.type !== 1 /* ELEMENT */) {
@@ -318,6 +436,17 @@ export function buildLayoutTemplate(
         continue
       }
       const tag = n.tag ?? ''
+      // ★★★P3-3：`<Transition>` **透传**（不占节点 id、不产节点）——与 Vue 语义一致
+      //   （Transition 不渲染包裹元素）；其 props（name/duration/appear）编成**预设动画规格**，
+      //   挂到**直接子元素**上（该子元素才是被过渡的节点）。
+      //   ★为什么必须跳过 id 分配（而不是"建个空壳容器"）：多一个包裹节点 = 布局多一层盒
+      //     ⇒ 与 Vue 路径（无包裹）**几何不等价** ⇒ A/B 判据会红。deps.ts 必须**同样跳过**
+      //     （两处 id 分配同源：模板产物与订阅表的 nodeId 必须逐位一致）。
+      if (tag === 'Transition') {
+        const t = transitionOfElement(n, diag)
+        walk((n.children ?? []) as unknown[], parentId, t ?? pendingTransition)
+        continue
+      }
       const id = nextElementIndex++
 
       // ── props 扫描（与 deps.ts 同序：先 :key / v-for，再其余）──
@@ -475,6 +604,19 @@ export function buildLayoutTemplate(
       const node: LayoutNode = { id, parentId, tag, style }
       if (nodeListId !== undefined) node.listId = nodeListId
       if (isComponentTag) node.component = tag
+      // ★P3-3：外层 `<Transition>` 的规格挂到本节点（直接被过渡的元素）
+      if (pendingTransition) {
+        node.transition = pendingTransition
+        // 过渡作用于**可见性切换**（v-show / :show）——这是本批驱动路径（见 LayoutNode.transition 边界）
+        const hasShow = (n.props ?? []).some((p) => p.type === 7 && (p.name === 'show' || p.name === 'if'))
+        if (!hasShow) {
+          diag(
+            `${tag}(id=${id}) 外层 <Transition> 但本元素既无 v-show 也无 v-if——过渡不会被驱动`,
+            '把 v-show/v-if 放到被过渡的元素上（本批只驱动可见性切换这条路径）',
+            'VAPOR_TRANSITION_NO_TRIGGER',
+          )
+        }
+      }
       // 文本：静态文本 / 插值 / ★★**混合文本**（`a{{x}}b` ⇒ 编译期切分，2026-10-03 · P2-2）
       //
       // 【这一批补的是什么（能力清单 P2-2）】此前"文本 + 插值混合"（`<p>a{{x}}b</p>`）
@@ -563,6 +705,7 @@ export function buildLayoutTemplate(
       if (parentId === null) roots.push(id)
       if (rowCollector) rowCollector.ids.push(id)
 
+      // ★P3-3：`pendingTransition` **只作用于直接子元素**（Vue 同：Transition 只包一个元素）
       walk(subChildren, id)
 
       // 行子树收集结束（pre-order ⇒ 子树连续；此处收尾）

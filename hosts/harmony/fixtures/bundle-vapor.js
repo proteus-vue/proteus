@@ -10390,6 +10390,8 @@
       this.onceWritten = /* @__PURE__ */ new Set();
       this.memoBaseline = /* @__PURE__ */ new Map();
       this.memoDirtyFrame = /* @__PURE__ */ new Map();
+      this.visibilityLog = [];
+      this.lastVisible = /* @__PURE__ */ new Map();
     }
     /**
      * 从订阅表重建求值函数（把**可序列化的声明**变成可执行函数）
@@ -10530,8 +10532,17 @@
           const entry = this.slotById.get(spec.slotId);
           const impl = this.evaluators.get(spec.evaluatorId);
           if (!entry || !impl) continue;
-          this.rt.setSlot(entry.slot, impl(ctx));
+          const value = impl(ctx);
+          this.rt.setSlot(entry.slot, value);
           if (spec.once) this.onceWritten.add(spec.slotId);
+          if (spec.kind === "visibility") {
+            const now = Boolean(value);
+            const prev = this.lastVisible.get(spec.nodeId);
+            if (prev !== void 0 && prev !== now) {
+              this.visibilityLog.push({ nodeId: spec.nodeId, visible: now });
+            }
+            this.lastVisible.set(spec.nodeId, now);
+          }
         }
       }
     }
@@ -10746,6 +10757,18 @@
     rowsOfSource(sourceName, ctx) {
       const v = ctx.read(sourceName);
       return Array.isArray(v) ? v : [];
+    }
+    /**
+     * ★★★**取走可见性变化**（P3-3；取走即复位——与 `takePatches` 同款"自上次取走以来"语义）。
+     *
+     * 桥侧用法：`relink`/手势回调后 drain ⇒ 对每个变化查模板的 `transition` 声明 ⇒
+     * 有声明则调 `proteusHost.animStart(...)`（宿主把动画交给内核）。
+     */
+    takeVisibilityChanges() {
+      if (this.visibilityLog.length === 0) return [];
+      const out = this.visibilityLog.slice();
+      this.visibilityLog.length = 0;
+      return out;
     }
     /** 某槽位是否已建立订阅（诊断：确认"这个槽位真的被接管了"） */
     hasSlot(slotId) {
@@ -11988,6 +12011,25 @@
           ]),
           _: 1
           /* STABLE */
+        }),
+        (0, import_runtime_core2.createCommentVNode)(" \u2605\u2605\u2605P3-3\uFF082026-10-03\uFF09Transition \u6865\u63A5\u5939\u5177\uFF1A**\u5916\u5C42 Transition \u900F\u4F20**\uFF08\u4E0D\u5360\u8282\u70B9 id\u3001\n         \u4E0D\u4EA7\u5305\u88F9\u76D2\uFF09+ \u5185\u5C42\u5143\u7D20\u5E26 v-show\uFF08\u53EF\u89C1\u6027\u5207\u6362\u662F\u8FC7\u6E21\u7684\u9A71\u52A8\u6E90\uFF09\u3002\n         \u5224\u636E \u246C \u6838\uFF1A\u53EF\u89C1\u6027\u7FFB\u8F6C\u540E transition_started \u5927\u4E8E 0\uFF08\u52A8\u753B\u771F\u7684\u4EA4\u7ED9\u4E86\u5BBF\u4E3B\uFF09\u3002\n         \u2605\u672C\u6CE8\u91CA**\u4E0D\u5F97**\u542B\u53CD\u5F15\u53F7\u6216\u7F8E\u5143\u82B1\u62EC\u53F7\uFF08\u5B83\u5728 JS \u6A21\u677F\u4E32\u91CC\u2014\u2014\u672C\u4ED3\u5DF2\u8E29\u56DB\u6B21\uFF09\u3002 "),
+        (0, import_runtime_core2.createVNode)(import_runtime_core2.Transition, {
+          name: "fade-slide-up",
+          persisted: ""
+        }, {
+          default: (0, import_runtime_core2.withCtx)(() => [
+            (0, import_runtime_core2.withDirectives)((0, import_runtime_core2.createVNode)(
+              _component_p_view,
+              { style: { "height": 40, "backgroundColor": "#7c5cff" } },
+              null,
+              512
+              /* NEED_PATCH */
+            ), [
+              [import_runtime_core2.vShow, _ctx.trVisible]
+            ])
+          ]),
+          _: 1
+          /* STABLE */
         })
       ]),
       _: 1
@@ -12047,6 +12089,8 @@
       exprA: 3,
       exprArr: ["a", "b"],
       exprObj: { inner: "ok" },
+      // ★P3-3 夹具：初始**不可见** ⇒ 判据里改 true ⇒ 触发入场过渡（见 drainTransitions）
+      trVisible: false,
       tapCount: 0
     };
   }
@@ -12399,6 +12443,7 @@
       const abExprA = (0, import_runtime_core3.ref)(dataB.exprA);
       const abExprArr = (0, import_runtime_core3.ref)(dataB.exprArr);
       const abExprObj = (0, import_runtime_core3.ref)(dataB.exprObj);
+      const abTrVisible = (0, import_runtime_core3.ref)(dataB.trVisible);
       let abRootInst = null;
       const AbApp = {
         name: "VaporAbApp",
@@ -12415,7 +12460,8 @@
             memoVal: abMemoVal,
             exprA: abExprA,
             exprArr: abExprArr,
-            exprObj: abExprObj
+            exprObj: abExprObj,
+            trVisible: abTrVisible
           };
         },
         render
@@ -12746,6 +12792,36 @@
     }
     return nodeId >= 0 ? [nodeId] : [];
   }
+  function drainTransitions(tpl, vapor, notes) {
+    const changes = vapor.takeVisibilityChanges();
+    if (changes.length === 0) return 0;
+    const anims = [];
+    for (const ch of changes) {
+      const node = tpl.nodes.find((n) => n.id === ch.nodeId);
+      const tr = node?.transition;
+      if (!tr) continue;
+      const channels = ch.visible ? tr.enter : tr.leave;
+      for (const c of channels) {
+        anims.push({ nodeId: ch.nodeId, kind: c.kind, from: c.from, to: c.to, durMs: tr.durMs, curve: tr.curve });
+      }
+    }
+    if (anims.length === 0) return 0;
+    if (typeof proteusHost.animStart !== "function") {
+      notes.push(`<Transition> \u6709 ${anims.length} \u6761\u52A8\u753B\u5F85\u64AD\uFF0C\u4F46\u5BBF\u4E3B\u672A\u5B9E\u73B0 animStart\uFF08\u8FC7\u6E21\u4E0D\u4F1A\u53D1\u751F\uFF09`);
+      return 0;
+    }
+    try {
+      const out = JSON.parse(proteusHost.animStart(JSON.stringify({ anims })));
+      if (out.ok !== true) {
+        notes.push(`animStart \u5931\u8D25\uFF1A${out.error ?? "\u672A\u77E5"}`);
+        return 0;
+      }
+      return out.started ?? anims.length;
+    } catch (e) {
+      notes.push(`animStart \u629B\u9519\uFF1A${String(e?.message ?? e)}`);
+      return 0;
+    }
+  }
   function dispatchChainA(chain, type, index, state, run) {
     return dispatchGesture(chain, type, index, state, run);
   }
@@ -12927,6 +13003,8 @@
       once_node_id: -1,
       memo_node_id: -1,
       expr_probe: [],
+      transition_started: 0,
+      tpl_transition: [],
       mount_ms: 0,
       mount_nodes: 0,
       updates_run: 0,
@@ -12950,6 +13028,7 @@
       const tpl = artifacts.tpl;
       const table = artifacts.table;
       rep.tpl_nodes = tpl.nodes.length;
+      rep.tpl_transition = tpl.nodes.filter((n) => n.transition).map((n) => `${n.id}:${n.transition?.preset ?? ""}`);
       rep.tpl_ok = tpl.ok;
       rep.sub_l1 = table.stats.l1;
       rep.sub_l0 = table.stats.l0;
@@ -13267,6 +13346,22 @@
         }, false);
         rep.gate_rounds = gateRounds;
         rep.gate_text_nodes = gateTextNodes;
+      }
+      if (triggers.has("trVisible")) {
+        const beforeTr = rep.transition_started;
+        data.trVisible = true;
+        for (const [, cb] of triggers) cb();
+        vapor.relink(ctx);
+        slotRt.flush();
+        const payloadTr = captured.length ? captured[captured.length - 1] : new Uint8Array(0);
+        captured.length = 0;
+        if (payloadTr.length > 0) {
+          try {
+            proteusHost.applyOps(JSON.stringify(Array.from(payloadTr)));
+          } catch {
+          }
+        }
+        rep.transition_started = beforeTr + drainTransitions(tpl, vapor, notes);
       }
       if (probeId !== void 0) {
         const after = rectsOf()[String(probeId)]?.width ?? -1;

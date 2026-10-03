@@ -21,6 +21,8 @@ import { hidebug } from '@kit.PerformanceAnalysisKit';
 // ★矩阵 #17：App 路由栈场景探针（移植副本，与 Android/iOS 同口径）
 import { runAppStackProbe } from '../core/app-stack-probe';
 import { attach, renderCommands, stats, ProteusRenderStats, platformAnimBegin, platformAnimStep, platformAnimEnd, platformAnimSave, clearRoot, scrollRoot, gestureInstall, gestureSample } from 'libproteus_render.so';
+// ★P3-3：宿主动画入口（`<Transition>` 桥的鸿蒙腿——与 Android/iOS 同形）
+import { animTick, animActive } from 'libproteus_bench.so';
 import { bench4050, hitProbe, recycleProbe, spliceProbe, textProbe, kernelAnimProbe, memProbe, sfcStressProbe, sfcStressCommands, jsvmProbe, vaporProbe, animCurveBezier, hostRuntimeProbe, hostRtShellInstall, mountVirtualProbe, gestureHitPrepare, gestureHitAt, fontFamilyProbe, nodeRect, version as rustVersion } from 'libproteus_bench.so';
 
 const DOMAIN = 0x0002;
@@ -87,6 +89,44 @@ interface AnimEndReading {
  *   ★与 Android ViewPropertyAnimator 的语义差异（如实）：Android 一次性启动后由 RenderThread
  *   自主插值；鸿蒙 C-API 无同形入口 ⇒ 本探针由帧回调步进（与系统动画同一帧源）。
  */
+/**
+ * ★★★**过渡动画帧循环**（P3-3，2026-10-03 · 三端同步的鸿蒙腿）
+ *
+ * 【与 Android/iOS 同一套内核动画】`animStart`（登记）→ 每帧 `animTick(dt)`（推进/求值）
+ *   → `animActive()` 报 0 停。宿主只做"按 vsync 调"（几何/通道求值全在内核）。
+ * 【停判据】内核自报活跃数（权威）；硬上限 3s 防"永远活跃"时无限帧循环。
+ */
+class TransitionFrameCallback extends FrameCallback {
+  private uiCtx: UIContext;
+  private frames: number = 0;
+  private hardStopAtMs: number = 0;
+  constructor(uiCtx: UIContext) {
+    super();
+    this.uiCtx = uiCtx;
+    this.hardStopAtMs = Date.now() + 3000;
+  }
+  onFrame(_frameTimeInNano: number): void {
+    try {
+      animTick('{"dtMs":16.7}');
+      this.frames++;
+      let active: number = -1;
+      try {
+        const a: string = animActive();
+        const o = JSON.parse(a) as Record<string, number>;
+        if (o && typeof o.active === 'number') active = o.active;
+      } catch (ignored) { /* 读数失败 ⇒ 硬上限兜底（不静默盲转） */ }
+      if (active === 0 || Date.now() > this.hardStopAtMs) {
+        hilog.info(DOMAIN, BENCH_TAG, 'PROTEUS_VAPOR_ANIM_LOOP_DONE frames=%{public}d', this.frames);
+        return;
+      }
+    } catch (e) {
+      hilog.error(DOMAIN, BENCH_TAG, 'PROTEUS_VAPOR_ANIM_LOOP_ERROR %{public}s', JSON.stringify(e) ?? '');
+      return;
+    }
+    this.uiCtx.postFrameCallback(this);
+  }
+}
+
 class PlatformAnimFrameCallback extends FrameCallback {
   private uiCtx: UIContext;
   private filesDir: string;
@@ -532,6 +572,21 @@ struct Index {
     }
   }
 
+  /**
+   * ★★★**过渡动画帧循环**（P3-3，2026-10-03 · 三端同步的鸿蒙腿）
+   *
+   * 【与 Android/iOS 同一套内核动画】`animStart`（登记）→ 每帧 `animTick(dt)`（推进，内核求值）
+   *   → `animActive()` 报 0 停。宿主只做"按 vsync 调"这一件事（几何/求值全在内核）。
+   * 【停判据用内核自报】与 Android `driveKernelAnimFrames` 同：`animActive` 是权威
+   *   （时长由声明决定但接管/串联会改变实际时长）；硬上限 3s 防"永远活跃"时无限帧循环。
+   */
+  startTransitionFrameLoop(): void {
+    // ★ArkTS 的 postFrameCallback 要 **FrameCallback 实例**（不是闭包——本仓实测编译期报
+    //   `Argument of type '() => void' is not assignable to parameter of type 'FrameCallback'`
+    //   ⇒ 与既有 PlatformAnimFrameCallback 同一模式：独立类实现 onFrame（该类定义在文件后段）。
+    this.getUIContext().postFrameCallback(new TransitionFrameCallback(this.getUIContext()));
+  }
+
   aboutToAppear(): void {
     hilog.info(DOMAIN, TAG, 'PROTEUS_PAGE_APPEAR');
   }
@@ -946,6 +1001,11 @@ struct Index {
             density: DENSITY,
             filesDir: ctx3.filesDir,
           };
+          // ★★★P3-3（2026-10-03 · 三端同步）：启动**过渡动画帧循环**——
+          //   `animStart` 只把动画登记进内核；"每帧 tick"是宿主职责（与 Android Choreographer /
+          //   iOS CADisplayLink 同纪律）。本循环：每 vsync 调 `animTick(16.7)`，
+          //   直到 `animActive` 报 0（内核权威停判据）或硬上限（3s 防"永远活跃"）。
+          this.startTransitionFrameLoop();
           // ★★显式 attach（2026-10-03）：不再依赖"更早 bench 阶段恰好 attach 过"的**隐式耦合**
           //   （本轮实测：A/B 独立场景就没这层运气 ⇒ 渲染层建树返回 -1、通道全 0）。
           attach(this.content, vp2px(1), px2vp(disp3.width), px2vp(disp3.height));

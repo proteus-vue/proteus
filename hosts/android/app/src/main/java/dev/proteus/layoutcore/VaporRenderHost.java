@@ -673,6 +673,94 @@ final class VaporRenderHost {
         }
     }
 
+    /**
+     * ★★★**宿主动画入口**（P3-3 · `<Transition>` 桥接，2026-10-03）：
+     *   `{anims:[{nodeId,kind,from,to,durMs,curve}]}` → 内核 `proteus_layout_anim_start`
+     *   → **启帧循环**（`ProteusHostView.kernelAnimTick` 由 Choreographer 驱动、逐帧 tick
+     *   并把采样写进绘制层——与 MA0-RT/MA5 同一套内核动画机器）。
+     *
+     * 【为什么"启动后还要自己 tick"】内核只做**求值**（给定 dt 给出该帧的通道值）；
+     *   "每帧推一次"是**宿主帧循环**的职责（Android Choreographer / iOS CADisplayLink /
+     *   鸿蒙帧回调）——与几何同纪律：JS 只产语义，平台负责驱动。
+     *   `ProteusHostView.driveKernelAnimFrames(...)` 已实现该循环（MA0-RT 在用）⇒ 直接复用。
+     */
+    public String animStart(String animsJson) {
+        JSONObject out = new JSONObject();
+        try {
+            if (view == null) return err(out, "视图未建（先 mount）").toString();
+            String res = view.kernelAnimStart(animsJson);
+            // 复用既有帧循环（与 MA0-RT 的驱动同一条路：内核 tick → 采样 → 写层）
+            view.driveKernelAnimFrames();
+            JSONObject rr = new JSONObject(res);
+            if (!rr.optBoolean("ok")) {
+                out.put("ok", false);
+                out.put("error", rr.optString("error", "内核 animStart 失败"));
+                return out.toString();
+            }
+            out.put("ok", true);
+            out.put("started", rr.optInt("started", -1));
+            animStartCalls++;
+            return out.toString();
+        } catch (Throwable t) {
+            return err(out, t.getClass().getSimpleName() + ": " + t.getMessage()).toString();
+        }
+    }
+
+    /** animStart 被调用次数（判据读它证明"过渡真的交给了宿主"） */
+    public int animStartCalls = 0;
+
+    /**
+     * ★★**推进一帧**（动画桥的必需配套方法，2026-10-03）：
+     *   JNI 侧**按方法对条件注入**——`animStart` 与 `animTick` **同时存在**才暴露给 JS
+     *   （见 `quickjs_jni.c` 的注入判据）。`VaporRenderHost` 首版只加了 `animStart`
+     *   ⇒ **未注入** ⇒ JS 侧 `typeof proteusHost.animStart` 为 undefined ⇒ 过渡静默不播
+     *   （判据 ⑬ 当场红并**精确报出**"宿主未实现 animStart"——本仓实测）。
+     *
+     * @param dtMsJson 帧间隔（JSON 数字串，如 `"16.7"`；缺省 16.7 即 60fps）
+     * @return `{"ok":true,"active":N}`（N = 内核仍在推进的动画条数）
+     */
+    public String animTick(String dtMsJson) {
+        JSONObject out = new JSONObject();
+        try {
+            if (view == null) return err(out, "视图未建").toString();
+            float dt = 16.7f;
+            try { dt = Float.parseFloat(dtMsJson == null ? "16.7" : dtMsJson.trim()); } catch (Throwable ignored) { /* 用缺省 */ }
+            view.kernelAnimTick(dt);
+            out.put("ok", true);
+            out.put("active", -1);
+            return out.toString();
+        } catch (Throwable t) {
+            return err(out, t.getClass().getSimpleName() + ": " + t.getMessage()).toString();
+        }
+    }
+
+    /** 停动画（对齐 JNI 方法表；`animStop` 亦为条件注入项之一） */
+    public String animStop(String json) {
+        JSONObject out = new JSONObject();
+        try {
+            if (view != null) view.kernelTickStop();
+            out.put("ok", true);
+            return out.toString();
+        } catch (Throwable t) {
+            return err(out, t.getClass().getSimpleName() + ": " + t.getMessage()).toString();
+        }
+    }
+
+    /** 仍在推进的动画条数（判据：> 0 = 还没播完） */
+    public String animActive() {
+        JSONObject out = new JSONObject();
+        try {
+            if (handle == 0L) return err(out, "尚未 mount").toString();
+            String a = RustLayout.animActive(handle);
+            JSONObject ao = new JSONObject(a);
+            out.put("ok", ao.optBoolean("ok", false));
+            out.put("active", ao.optInt("active", -1));
+            return out.toString();
+        } catch (Throwable t) {
+            return err(out, t.getClass().getSimpleName() + ": " + t.getMessage()).toString();
+        }
+    }
+
     /** 几何真源（判据用）：直接读内核（`{"ok":true,"rects":{id:{x,y,width,height}}}`） */
     public String readRects() {
         if (handle == 0L) return "{\"ok\":false,\"error\":\"尚未 mount\"}";

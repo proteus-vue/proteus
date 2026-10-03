@@ -6576,7 +6576,15 @@ final class SelfDrawViewController: UIViewController {
           probeChannels: function (s) { return proteusSelfDraw.probeChannels(s); },
           onGesture: function (n) { return proteusSelfDraw.onGesture(n); },
           tapAt: function (j) { var o = JSON.parse(j); return proteusSelfDraw.tapAt(o.x, o.y); },
-          scrollRows: function (j) { var o = JSON.parse(j); return proteusSelfDraw.scrollRows(o.dx, o.dy); }
+          scrollRows: function (j) { var o = JSON.parse(j); return proteusSelfDraw.scrollRows(o.dx, o.dy); },
+          // ★★★P3-3（2026-10-03 · 三端同步）：`<Transition>` 的宿主动画入口——
+          //   iOS 宿主本就有完整动画能力（animStart + CADisplayLink 帧循环），此前只是没接到 vapor shim。
+          //   ★`animStart` 之后**必须启帧循环**（内核只做求值，"每帧推一次"是宿主职责；
+          //     与 Android `driveKernelAnimFrames()` 同纪律）。
+          animStart: function (j) { var r = proteusSelfDraw.animStart(j); proteusSelfDraw.animStartFrameLoop(); return r; },
+          animTick: function (j) { var o = JSON.parse(j); return proteusSelfDraw.animTick(o.dtMs); },
+          animStop: function (j) { return proteusSelfDraw.animStop(j); },
+          animActive: function () { return proteusSelfDraw.animActive(); }
         };
         """)
         ctx.evaluateScript(bundleSrc, withSourceURL: bundleURL)
@@ -6650,7 +6658,15 @@ final class SelfDrawViewController: UIViewController {
           probeChannels: function (s) { return proteusSelfDraw.probeChannels(s); },
           onGesture: function (n) { return proteusSelfDraw.onGesture(n); },
           tapAt: function (j) { var o = JSON.parse(j); return proteusSelfDraw.tapAt(o.x, o.y); },
-          scrollRows: function (j) { var o = JSON.parse(j); return proteusSelfDraw.scrollRows(o.dx, o.dy); }
+          scrollRows: function (j) { var o = JSON.parse(j); return proteusSelfDraw.scrollRows(o.dx, o.dy); },
+          // ★★★P3-3（2026-10-03 · 三端同步）：`<Transition>` 的宿主动画入口——
+          //   iOS 宿主本就有完整动画能力（animStart + CADisplayLink 帧循环），此前只是没接到 vapor shim。
+          //   ★`animStart` 之后**必须启帧循环**（内核只做求值，"每帧推一次"是宿主职责；
+          //     与 Android `driveKernelAnimFrames()` 同纪律）。
+          animStart: function (j) { var r = proteusSelfDraw.animStart(j); proteusSelfDraw.animStartFrameLoop(); return r; },
+          animTick: function (j) { var o = JSON.parse(j); return proteusSelfDraw.animTick(o.dtMs); },
+          animStop: function (j) { return proteusSelfDraw.animStop(j); },
+          animActive: function () { return proteusSelfDraw.animActive(); }
         };
         """)
         let vp = jsonString(["width": Double(bridge.view?.bounds.width ?? 390),

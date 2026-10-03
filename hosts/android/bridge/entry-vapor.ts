@@ -58,6 +58,16 @@ interface VaporHost {
   /** 二进制指令流（`number[]` JSON 形态——JNI 侧转 byte[]，见 JsRenderHost.applyOps） */
   applyOps(opsJson: string): string
   /**
+   * ★★★**宿主动画入口**（P3-3 · `<Transition>` 桥接）：`{anims:[{nodeId,kind,from,to,durMs,curve}]}`
+   *   → 内核 `proteus_layout_anim_start`（宿主每帧 tick、采样回绘制层）。
+   *
+   * 【为什么走宿主而不是 JS】内核动画是**平台无关的**（`anim.rs`），入口是 FFI；
+   *   而"每帧推进"由各端的帧循环驱动（Android `Choreographer` / iOS `CADisplayLink` /
+   *   鸿蒙帧回调）—— 那是**宿主职责**（与几何同纪律：JS 只产语义，平台负责驱动）。
+   *   可选：宿主未实现 ⇒ 桥如实记 note（不静默把"过渡没播"当成"播了"）。
+   */
+  animStart?(animsJson: string): string
+  /**
    * ★★**样式/文本增量补丁**（B 路 / Vue 运行时的更新入口；2026-10-01 更新路径 A/B 新增宿主端口）：
    *   适配器 `takePatches()` 产出的 `[{id, style}]` → 宿主度量 → 内核 `update` → 变化集 → 增量指令。
    *   （形状与 iOS `selfdraw-scene.updatePatches`、Rust `StylePatch` 三处同形。）
@@ -264,6 +274,10 @@ interface VaporReport {
   /** 实例树里 text 非空 / width 非空的节点数（"数据真的回填了"的机器证据） */
   inst_text_filled: number
   inst_width_filled: number
+  /** ★★★P3-3（2026-10-03）：`<Transition>` 交给宿主的动画条数（>0 = 过渡真的被驱动） */
+  transition_started: number
+  /** 模板里的过渡声明（`隐id:预设名`；判据区分"未声明"与"声明未驱动"） */
+  tpl_transition: string[]
   /**
    * ★★**混合文本首帧探针**（P2-2，2026-10-03）：实例树里**多段拼接**节点的实际文本。
    *   判据核它等于「静态段 + 实参求值」的完整串（不是单字段/单个源值）——
@@ -370,6 +384,8 @@ function makeData(rows: number): Record<string, unknown> {
     exprA: 3,
     exprArr: ['a', 'b'],
     exprObj: { inner: 'ok' },
+    // ★P3-3 夹具：初始**不可见** ⇒ 判据里改 true ⇒ 触发入场过渡（见 drainTransitions）
+    trVisible: false,
     tapCount: 0,
   }
 }
@@ -828,6 +844,8 @@ function runAb(args: VaporArgs): string {
     const abExprA = ref(dataB.exprA)
     const abExprArr = ref(dataB.exprArr)
     const abExprObj = ref(dataB.exprObj)
+    // ★P3-3：B 路（Vue）也要给（否则 Vue 侧读到 undefined ⇒ 文本/几何序列不对齐）
+    const abTrVisible = ref(dataB.trVisible)
     /**
      * ★★B 路更新的**同步驱动柄**（2026-10-01 更新路径 A/B）。
      *
@@ -847,7 +865,7 @@ function runAb(args: VaporArgs): string {
         return {
           list: abList, boxW: abBoxW, padW: abPadW, stopOuterW: abStopOuterW, stopInnerW: abStopInnerW,
           onceVal: abOnceVal, memoDep: abMemoDep, memoVal: abMemoVal,
-          exprA: abExprA, exprArr: abExprArr, exprObj: abExprObj,
+          exprA: abExprA, exprArr: abExprArr, exprObj: abExprObj, trVisible: abTrVisible,
         }
       },
       render: abRender,
@@ -1284,6 +1302,52 @@ function parseChain(chainJson: unknown, nodeId: number): number[] {
   return nodeId >= 0 ? [nodeId] : []
 }
 
+
+/**
+ * ★★★**`<Transition>` 桥**（P3-3，2026-10-03）：可见性变化 → 宿主动画入口。
+ *
+ * 【为什么需要一个"桥"函数】两半信息在两个地方：
+ *   · **有没有过渡声明** → 编译产物（`LayoutNode.transition`，模板侧）；
+ *   · **可见性真的翻转了** → 运行时（`VaporRuntime.takeVisibilityChanges`，见其注释）。
+ *   本函数把两半接起来：drain 变化 → 查模板 → 组动画规格 → 交宿主（`animStart`）。
+ * 【诚实边界】宿主未实现 `animStart` ⇒ 记 note（不静默）；`v-if` 的**离场**（元素从树上摘除）
+ *   不在此路径（结构级动画属 L2 通道，本批只做可见性切换）。
+ */
+function drainTransitions(
+  tpl: { nodes: Array<{ id: number; transition?: { preset: string; enter: Array<{kind:number;from:number;to:number}>; leave: Array<{kind:number;from:number;to:number}>; durMs: number; curve: number } }> },
+  vapor: { takeVisibilityChanges(): Array<{ nodeId: number; visible: boolean }> },
+  notes: string[],
+): number {
+  const changes = vapor.takeVisibilityChanges()
+  if (changes.length === 0) return 0
+  const anims: Array<Record<string, unknown>> = []
+  for (const ch of changes) {
+    const node = tpl.nodes.find((n) => n.id === ch.nodeId)
+    const tr = node?.transition
+    if (!tr) continue   // 无过渡声明 ⇒ 只有可见性切换（正常路径，不记 note——否则每次 v-show 都刷屏）
+    const channels = ch.visible ? tr.enter : tr.leave
+    for (const c of channels) {
+      anims.push({ nodeId: ch.nodeId, kind: c.kind, from: c.from, to: c.to, durMs: tr.durMs, curve: tr.curve })
+    }
+  }
+  if (anims.length === 0) return 0
+  if (typeof proteusHost.animStart !== 'function') {
+    notes.push(`<Transition> 有 ${anims.length} 条动画待播，但宿主未实现 animStart（过渡不会发生）`)
+    return 0
+  }
+  try {
+    const out = JSON.parse(proteusHost.animStart(JSON.stringify({ anims }))) as { ok?: boolean; started?: number; error?: string }
+    if (out.ok !== true) {
+      notes.push(`animStart 失败：${out.error ?? '未知'}`)
+      return 0
+    }
+    return out.started ?? anims.length
+  } catch (e) {
+    notes.push(`animStart 抛错：${String((e as Error)?.message ?? e)}`)
+    return 0
+  }
+}
+
 /**
  * ★★**沿冒泡链派发（A 路）**——`chain` 自深到浅（内核 `bubble_chain` 语义）；
  *   逐个查 `节点:事件 → handler`，命中即执行（**全部祖先都会跑**——DOM 冒泡语义）。
@@ -1543,7 +1607,7 @@ function runShort(args: VaporArgs): string {
     tpl_nodes: 0, tpl_ok: false, sub_l1: 0, sub_l0: 0, sub_l1_rate: 0, sub_sources: [],
     inst_ms: 0, inst_nodes: 0, inst_reused_ids: 0, inst_allocated_ids: 0, inst_rows: 0,
     inst_values_filled: 0, inst_virtual_rows: 0, inst_text_filled: 0, inst_width_filled: 0,
-    mix_text_probe: [], text_probe_rounds: [], gate_rounds: [], gate_text_nodes: [], once_node_id: -1, memo_node_id: -1, expr_probe: [],
+    mix_text_probe: [], text_probe_rounds: [], gate_rounds: [], gate_text_nodes: [], once_node_id: -1, memo_node_id: -1, expr_probe: [], transition_started: 0, tpl_transition: [],
     mount_ms: 0, mount_nodes: 0,
     updates_run: 0, ops_bytes: 0, ops_ms: 0, apply_ms: 0, text_synced_total: 0, update_evidence: [], geom_probe: [], channels: [],
     ev_bindings: 0, ev_handlers: 0, ev_modifiers: 0, taps: 0, tap_evidence: [],
@@ -1555,6 +1619,10 @@ function runShort(args: VaporArgs): string {
     const tpl = artifacts.tpl
     const table = artifacts.table
     rep.tpl_nodes = tpl.nodes.length
+    // ★P3-3：模板里声明的过渡（判据据此区分"夹具没声明"与"声明了但没驱动"）
+    rep.tpl_transition = tpl.nodes
+      .filter((n) => (n as { transition?: unknown }).transition)
+      .map((n) => `${n.id}:${(n as { transition?: { preset?: string } }).transition?.preset ?? ''}`)
     rep.tpl_ok = tpl.ok
     rep.sub_l1 = table.stats.l1
     rep.sub_l0 = table.stats.l0
@@ -1963,6 +2031,32 @@ function runShort(args: VaporArgs): string {
       rep.gate_rounds = gateRounds
       rep.gate_text_nodes = gateTextNodes
     }
+
+    /* ═══════════ ★★★P3-3 过渡驱动轮（2026-10-03）：改可见性 ⇒ 过渡真的交给宿主 ═══════════
+     *
+     * 【为什么单独一轮】`<Transition>` 的语义是"**可见性变化时**播动画"——它既不在首帧
+     *   （初始不可见 ⇒ 无变化），也不在常规数据更新里（改的是别的源）。
+     *   ⇒ 必须**显式制造一次可见性翻转**（`trVisible: false → true`），
+     *     然后核：运行时有事件、模板有声明、宿主有动画（三层缺一不可）。
+     */
+    if (triggers.has('trVisible')) {
+      const beforeTr = rep.transition_started
+      data.trVisible = true
+      for (const [, cb] of triggers) cb()
+      vapor.relink(ctx)
+      slotRt.flush()
+      const payloadTr = captured.length ? captured[captured.length - 1]! : new Uint8Array(0)
+      captured.length = 0
+      if (payloadTr.length > 0) {
+        try { proteusHost.applyOps(JSON.stringify(Array.from(payloadTr))) } catch { /* 回执失败不阻断 */ }
+      }
+      // ★过渡驱动（可见性翻转 → 查模板声明 → animStart）
+      rep.transition_started = beforeTr + drainTransitions(tpl, vapor, notes)
+    }
+
+    // 说明：首帧的 `<Transition>`（`appear`）驱动**已在上方的过渡驱动轮里统一处理**——
+    //   此处不再重复调用（本仓实测：重复调用会把 `transition_started` **覆盖回 0**，
+    //   因为事件已被上一处 drain 取走 ⇒ 判据看到 0 ⇒ 误判"过渡没驱动"）。
 
     // 几何真值对比（内核真源：探针节点的宽度应随数据变——第 2 行参与每轮更新）
     if (probeId !== undefined) {

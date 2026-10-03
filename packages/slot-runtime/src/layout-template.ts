@@ -40,6 +40,38 @@ export interface LayoutNode {
   /** 文本占位（元素含静态文本或插值子节点时存在；插值初值为空串，由运行时回填） */
   text?: string
   /**
+   * ★★★**过渡声明**（2026-10-03 · P3-3 `Transition` 桥接）——该节点的可见性切换要带过渡。
+   *
+   * 【为什么是"声明"而不是"实现"】Vue 的 `<Transition>` 在 Web 端靠 CSS class 驱动
+   *   （`v-enter-from` → canvas/DOM 自己去过渡）；我方**没有 CSS 引擎**，但**内核有完整动画能力**
+   *   （MA0-RT：`proteus_layout_anim_start` + 每帧 tick，曲线/弹簧/序列/循环齐备）。
+   *   ⇒ 桥接形态：编译期把 `<Transition name="fade">` 编成**预设动画的通道规格**，
+   *     运行时在该节点**可见性真的变化**时把规格交给宿主动画入口（见 entry-vapor.ts 的 drain）。
+   *
+   * 【预设（闭集，不引入 CSS 语义）】`fade` / `slide-up|down|left|right` / `zoom`——
+   *   每个预设 = 若干 `(kind, from, to)` 通道（与内核 `AnimKind` 编号一一对应）。
+   *   未知名 ⇒ 编译期诊断（不静默退化成"无过渡"）。
+   *
+   * 【诚实边界】① 只支持**单子元素**（与 Vue 的 `<Transition>` 同约束；多子/无子 ⇒ 诊断）；
+   *   ② `TransitionGroup` 的**列表差异动画**（move 过渡）未支持（需行级 diff，独立批次）；
+   *   ③ `v-if` 的**离场**（元素从树上摘除）暂不驱动过渡（结构级动画属 L2 通道）——
+   *     本批只做 `v-show` / 可见性切换（TOGGLE_VIS）这条路径。
+   */
+  transition?: {
+    /** 预设名（决定通道规格；见 `TRANSITION_PRESETS`） */
+    preset: string
+    /** 入场通道（可见性 false→true 时按 from→to 播） */
+    enter: Array<{ kind: number; from: number; to: number }>
+    /** 离场通道（true→false 时按 from→to 播） */
+    leave: Array<{ kind: number; from: number; to: number }>
+    /** 时长（ms；`<Transition :duration="...">` 可显式给） */
+    durMs: number
+    /** 曲线 id（缺省 1 = easeOutCubic，与内核 `AnimCurve` 同源） */
+    curve: number
+    /** `appear`：首帧（节点初次可见）也播入场 */
+    appear?: boolean
+  }
+  /**
    * ★★**文本段序列**（2026-10-03 · P2-2 混合文本）——按下标=子节点顺序。
    *
    * 存在时表示该节点的文本由**多段拼接**（`a{{x}}b` / `{{a}}-{{b}}` / 插值+静态混排）；
