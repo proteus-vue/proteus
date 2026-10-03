@@ -1,0 +1,419 @@
+/* superapp/styles/global.css —— 超级应用视觉规范 · 全局样式唯一通道
+   ═══════════════════════════════════════════════════════════════════════════════
+   【为什么是一个文件（不是 tokens + components 两个）】
+     框架的 `globalStyle` 只接受**单个文件**，且构建期只做 CSS→WXSS 变换
+     （无 @import 打包）——拆两文件会让 MP 端 app.wxss 漏掉一半（且**静默**）。
+   ⇒ 本文件 = L1（设计 token）+ L2（组件规范共享类）**同一份**；
+     规范叙事分三层写在 docs/Proteus_超级应用视觉设计规范.md（那份是文档，不是构建输入）。
+   【两端消费】MP：proteus.config 的 globalStyle（→ app.wxss）；
+     Web：main.ts `import './styles/global.css'`（★单一事实源）。
+   ═══════════════════════════════════════════════════════════════════════════════ */
+
+/* ═══════════════════════════════════════════════════════════════════════════════
+ * L1 · 设计 token（色彩 / 字号 / 间距 / 圆角 / 阴影 / 动效）
+ * ═══════════════════════════════════════════════════════════════════════════════ */
+
+:root {
+  /* ── 品牌色 ──
+     靛蓝（#5b5bd6）——生产应用的主力色：比 showase 的紫更冷、更稳，
+     与"业务系统"的语义一致（银行/工具类超级应用的常见色相）。
+     ★对比度：白字 on #5b5bd6 = 5.1:1（AA 正文达标的临界；大字号 AAA 达标） */
+  --sa-brand: #5b5bd6;
+  --sa-brand-ink: #4a4ab8;
+  --sa-brand-soft: rgba(91, 91, 214, 0.10);
+  --sa-brand-soft-2: rgba(91, 91, 214, 0.18);
+
+  /* ── 中性面（浅色为默认；深色见下方 .sa-dark 覆盖块）──
+     ★底色用**冷灰**（#f4f5f7）而不是纯白：生产应用页面多、卡片多，
+     纯白底会让卡片边界消失（靠阴影表达边界 = 低对比、打印差）。 */
+  --sa-bg: #f4f5f7;
+  --sa-surface: #ffffff;
+  --sa-surface-2: #fafbfc;
+  --sa-line: #dcdfe5;      /* ★2026-10-04：由 #e4e6eb 加深（分隔线可见度） */
+  --sa-line-soft: #e8eaee; /* ★由 #eef0f3 加深（原对底仅 1.1:1 ≈ 不可见） */
+  --sa-text: #1a1c22;
+  --sa-text-2: #4b5058;   /* ★2026-10-04：由 #5a5e6b 加深（审计：对比度不足） */
+  --sa-text-3: #5f6673;   /* ★2026-10-04 第二轮：由 #9298a4 → #6b7280(实测 4.43:1 仍差 1.6%) → #5f6673(5.30:1 ✓)——实测报告 #9298A4/F4F5F7
+                             仅 2.66:1（**不达 WCAG AA 4.5:1**，且被大面积用于列表副文/时间/
+                             分区标题）。#6b7280 on #F4F5F7 = 4.83:1 ✓；on #FFF = 5.24:1 ✓ */
+  --sa-line-strong: #d8dbe1; /* 分隔线加深档（默认 line/line-soft 仍用于弱分隔） */
+
+  /* ── 语义状态 ──
+     全部满足 AA（白字 on 色 ≥ 4.5:1）：ok/warn/rec 都取的是**压过一级**的深色版
+     （"浅绿配白字"是 demo 常见错误——对比度不够，真机阳光下看不清） */
+  --sa-ok: #1f9d5f;
+  --sa-warn: #c47f17;
+  --sa-rec: #d64545;
+  --sa-info: #2f6fd6;
+
+  /* ── 层级背景（页面/卡片/浮层三档——超级应用常见）── */
+  --sa-bg-elevated: #ffffff;
+  --sa-bg-sunken: #eceef1;
+
+  /* ── 圆角（语义化——页面禁写裸 px 圆角）── */
+  --sa-radius-sm: 6px;
+  --sa-radius-md: 10px;
+  --sa-radius-lg: 14px;
+  --sa-radius-xl: 20px;
+  --sa-radius-pill: 999px;
+
+  /* ── 间距 scale（4 的倍数——与《单位系统与舍入规范》的物理像素整数对齐）── */
+  --sa-1: 4px;
+  --sa-2: 8px;
+  --sa-3: 12px;
+  --sa-4: 16px;
+  --sa-5: 20px;
+  --sa-6: 24px;
+  --sa-8: 32px;
+  --sa-10: 40px;
+  /* ★安全区（与 p-safe 组件协同；此处给变量便于页面直接用） */
+  --sa-safe-top: env(safe-area-inset-top, 0px);
+  --sa-safe-bottom: env(safe-area-inset-bottom, 0px);
+
+  /* ── 字号 scale（生产应用：正文 14、辅助 12——比演示类应用的 15/16 更紧，信息密度优先）── */
+  --sa-font-xs: 11px;
+  --sa-font-sm: 12px;
+  --sa-font-md: 14px;
+  --sa-font-lg: 16px;
+  --sa-font-xl: 20px;
+  --sa-font-xxl: 26px;
+  --sa-lh-tight: 1.25;
+  --sa-lh-normal: 1.5;
+  --sa-lh-loose: 1.7;
+
+  /* ── 字重 ── */
+  --sa-fw-regular: 400;
+  --sa-fw-medium: 500;
+  --sa-fw-semibold: 600;
+  --sa-fw-bold: 700;
+
+  /* ── 阴影（克制——靠明度差 + 1px 线，不用发光；生产应用忌"每个卡片都发光"）── */
+  --sa-shadow-sm: 0 1px 2px rgba(26, 28, 34, 0.05);
+  --sa-shadow-md: 0 2px 8px rgba(26, 28, 34, 0.07);
+  --sa-shadow-lg: 0 8px 24px rgba(26, 28, 34, 0.10);
+
+  /* ── 字体族 ── */
+  --sa-font: -apple-system, BlinkMacSystemFont, 'PingFang SC', 'Helvetica Neue', system-ui, sans-serif;
+  --sa-mono: ui-monospace, SFMono-Regular, 'SF Mono', Menlo, Consolas, monospace;
+
+  /* ── 动效时长（生产应用：快而稳——不炫技）── */
+  --sa-dur-fast: 140ms;
+  --sa-dur-med: 240ms;
+  --sa-dur-slow: 380ms;
+  --sa-ease-out: cubic-bezier(0.22, 0.61, 0.36, 1);
+  --sa-ease-in-out: cubic-bezier(0.4, 0, 0.2, 1);
+
+  /* ★框架组件品牌主题（跨组件需在 page 级定义——微信组件样式隔离，实测） */
+  --p-page-bg: var(--sa-bg);
+
+  /* ★框架弹层组件主题化（组件默认值向后兼容；应用在此接自己的品牌色） */
+  --p-auth-gate-action-bg: var(--sa-brand);
+  --p-toast-tone: rgba(29, 32, 40, 0.92);
+
+  /* ★全局层/浮层专用变量（八条场景消费；宿主可整体换肤） */
+  --sa-fab-bg: var(--sa-brand);
+  --sa-fab-ink: #ffffff;
+  --sa-music-bg: #1d2028;
+  --sa-music-ink: #f2f3f6;
+  --sa-music-accent: #9ea8ff;
+  --sa-badge-bg: var(--sa-rec);
+  --sa-badge-ink: #ffffff;
+  --sa-netbar-bg: #fff7e6;
+  --sa-netbar-ink: #8a6d3b;
+}
+
+/* ── 深色主题（★机制：页根绑 {'sa-dark': theme === 'dark'}——本块在 page 级生效，
+      元素继承；不使用 prefers-color-scheme（小程序内主题由应用内开关控制）──
+   ★为什么不用 .sa-dark 前缀选择器作用于 body：MP 端无 body、page 是唯一宿主，见文件头。 */
+/* ★★2026-10-04 修复（外部验收实测：深色模式与浅色版逐像素差异仅 1.3% ⇒ **完全不生效**）：
+   原 `.sa-dark` 只在"页根元素"上生效，但**没有任何地方给它加过这个类**（页面模板里没绑）⇒
+   整个覆盖块是死代码。修法：**主题类加在应用根**上（Web=`<html>`、MP=`page`），变量天然向下继承
+   ⇒ 一个类切换全应用，无需每个页面各绑一次（也避免"漏绑某页"的静默不一致）。 */
+:root.sa-dark,
+page.sa-dark,
+.sa-dark {
+  --sa-bg: #121418;
+  --sa-surface: #1c1f26;
+  --sa-surface-2: #232730;
+  --sa-line: #2e3340;
+  --sa-line-soft: #262b36;
+  --sa-text: #eef0f5;
+  --sa-text-2: #b6bcc9;  /* ★2026-10-04 审计：深底上抬一档 */
+  --sa-text-3: #9aa1af;  /* ★深底上 >= 4.5:1 */
+  --sa-line-strong: #3a4150;
+
+  --sa-bg-elevated: #1c1f26;
+  --sa-bg-sunken: #101217;
+
+  /* 状态色在深底上**提亮**（AA 反转：深底上用亮色调） */
+  --sa-ok: #3ec27e;
+  --sa-warn: #e0a53a;
+  --sa-rec: #f07070;
+  --sa-info: #6da2f0;
+
+  --sa-brand: #7b7bef;
+  --sa-brand-ink: #9393f5;
+  --sa-brand-soft: rgba(123, 123, 239, 0.16);
+  --sa-brand-soft-2: rgba(123, 123, 239, 0.26);
+
+  --sa-shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.35);
+  --sa-shadow-md: 0 2px 10px rgba(0, 0, 0, 0.45);
+  --sa-shadow-lg: 0 10px 28px rgba(0, 0, 0, 0.55);
+
+  --sa-netbar-bg: #3a2f18;
+  --sa-netbar-ink: #e8c887;
+
+  --p-page-bg: var(--sa-bg);
+}
+
+/* ── 元素级重置（作用于宿主，无类名匹配问题）── */
+page,
+body {
+  /* ★2026-10-04：清 body 默认 8px 边距（外部验收实测：页面四周一圈露底 ⇒ 像"卡片浮在灰底上"） */
+  margin: 0;
+  /* ★防横向溢出（生产应用不允许多出滚动条——元素超宽会让整页可横移） */
+  overflow-x: hidden;
+  max-width: 100%;
+  background: var(--sa-bg);
+  color: var(--sa-text);
+  font-family: var(--sa-font);
+  font-size: var(--sa-font-md);
+  line-height: var(--sa-lh-normal);
+  -webkit-font-smoothing: antialiased;
+}
+
+/* 深色时宿主也要换底（Web 端 body 不继承 .sa-dark——它是页根类） */
+body:has(.sa-dark) {
+  background: #14161b;
+}
+
+
+/* ═══════════════════════════════════════════════════════════════════════════════
+ * L2 · 组件规范（共享类：卡片 / 列表 / 徽标 / 按钮 / 空态 / 文本工具）
+ * ═══════════════════════════════════════════════════════════════════════════════ */
+
+/* ── 容器与骨架 ─────────────────────────────────────────────────────────────── */
+
+/* 页面容器（Pages 的标准骨架：全高 + 底安全区留白）
+   ★2026-10-04 第二轮修复：补 `width: 100%` + `overflow-x: hidden`——
+     page 层容器无宽度约束时，内部超宽元素（长英文/长数字/负 margin）会把 .sa-page 撑开
+     ⇒ 整页出现横向滚动（实测 docWidth 390 但内容溢出）⇒ 截图里表现为"内容贴左/白块"。
+   同时显式 `background: var(--sa-bg)` 兜底（页面底色属页面，不依赖容器）。 */
+.sa-page {
+  width: 100%;
+  max-width: 100%;
+  overflow-x: hidden;
+  box-sizing: border-box;
+  min-height: 100vh;
+  background: var(--sa-bg);
+  color: var(--sa-text);
+  /* ★2026-10-04：**页面统一 gutter**（卡片/列表不再各自 margin——那套在本工程出现
+     "computed margin 16px 但 rect.x=0" 的层叠异常，外部验收表现为"左侧白条"）。
+     标准生产模式：页面负责左右留白，卡片在内容区满宽。 */
+  padding-left: var(--sa-4);
+  padding-right: var(--sa-4);
+  padding-bottom: calc(var(--sa-6) + var(--sa-safe-bottom));
+}
+
+/* 分区标题（页面内分组——生产应用的视觉层级靠它，不靠大留白） */
+.sa-section {
+  padding: var(--sa-4) 0 var(--sa-2);
+  font-size: var(--sa-font-sm);
+  color: var(--sa-text-3);
+  letter-spacing: 0.02em;
+}
+
+/* 卡片（生产应用的基本面：1px 线 + 轻阴影，不用重投影） */
+.sa-card {
+  width: 100%;
+  box-sizing: border-box;
+  background: var(--sa-surface);
+  border: 1px solid var(--sa-line-soft);
+  border-radius: var(--sa-radius-lg);
+  margin: 0 0 var(--sa-3);
+  box-shadow: var(--sa-shadow-sm);
+  overflow: hidden;
+}
+
+.sa-card__body {
+  padding: var(--sa-4);
+}
+
+.sa-card__title {
+  font-size: var(--sa-font-lg);
+  font-weight: var(--sa-fw-semibold);
+  color: var(--sa-text);
+  line-height: var(--sa-lh-tight);
+}
+
+.sa-card__sub {
+  margin-top: var(--sa-1);
+  font-size: var(--sa-font-sm);
+  color: var(--sa-text-2);
+}
+
+/* 分隔线（卡片内列表项之间） */
+.sa-hr {
+  height: 1px;
+  background: var(--sa-line-soft);
+  margin: 0 var(--sa-4);
+}
+
+/* ── 列表（生产应用最重的模式） ──────────────────────────────────────────────── */
+
+.sa-list {
+  width: 100%;
+  box-sizing: border-box;
+  background: var(--sa-surface);
+  border: 1px solid var(--sa-line-soft);
+  border-radius: var(--sa-radius-lg);
+  margin: 0 0 var(--sa-3);
+  overflow: hidden;
+}
+
+/* 列表项：左主文案 + 右值/箭头（标准双栏） */
+.sa-item {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  min-height: 48px;
+  padding: 0 var(--sa-4);
+  box-sizing: border-box;
+}
+
+.sa-item--tap:active {
+  background: var(--sa-surface-2);
+}
+
+.sa-item + .sa-item {
+  border-top: 1px solid var(--sa-line-soft);
+}
+
+.sa-item__main {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  padding: var(--sa-3) 0;
+}
+
+.sa-item__label {
+  font-size: var(--sa-font-md);
+  color: var(--sa-text);
+}
+
+.sa-item__desc {
+  margin-top: 2px;
+  font-size: var(--sa-font-sm);
+  color: var(--sa-text-3);
+}
+
+.sa-item__value {
+  flex-shrink: 0;
+  margin-left: var(--sa-3);
+  font-size: var(--sa-font-md);
+  color: var(--sa-text-2);
+}
+
+/* 右箭头（纯 CSS 画——不依赖字体/图片） */
+.sa-item__arrow {
+  flex-shrink: 0;
+  width: 8px;
+  height: 8px;
+  margin-left: var(--sa-3);
+  border-top: 1.5px solid var(--sa-text-3);
+  border-right: 1.5px solid var(--sa-text-3);
+  transform: rotate(45deg);
+}
+
+/* ── 徽标 / 角标 ───────────────────────────────────────────────────────────── */
+
+.sa-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 18px;
+  height: 18px;
+  padding: 0 5px;
+  border-radius: var(--sa-radius-pill);
+  background: var(--sa-rec);
+  color: var(--sa-badge-ink);
+  font-size: var(--sa-font-xs);
+  font-weight: var(--sa-fw-semibold);
+}
+
+.sa-tag {
+  display: inline-flex;
+  align-items: center;
+  height: 20px;
+  padding: 0 var(--sa-2);
+  border-radius: var(--sa-radius-sm);
+  background: var(--sa-brand-soft);
+  color: var(--sa-brand-ink);
+  font-size: var(--sa-font-xs);
+  font-weight: var(--sa-fw-medium);
+}
+
+/* ── 主操作按钮（补充 p-button：页面级大按钮） ───────────────────────────────── */
+
+.sa-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 44px;
+  margin: 0 0 var(--sa-3);
+  border-radius: var(--sa-radius-md);
+  background: var(--sa-brand);
+  color: #ffffff;
+  font-size: var(--sa-font-md);
+  font-weight: var(--sa-fw-semibold);
+  transition: opacity var(--sa-dur-fast) var(--sa-ease-out);
+}
+
+.sa-btn--ghost {
+  background: var(--sa-surface);
+  color: var(--sa-text);
+  border: 1px solid var(--sa-line);
+}
+
+.sa-btn:active {
+  opacity: 0.85;
+}
+
+/* ── 空态 / 占位 ────────────────────────────────────────────────────────────── */
+
+.sa-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: var(--sa-10) var(--sa-4);
+  color: var(--sa-text-3);
+}
+
+.sa-empty__icon {
+  width: 56px;
+  height: 56px;
+  border-radius: var(--sa-radius-pill);
+  background: var(--sa-bg-sunken);
+  margin-bottom: var(--sa-3);
+}
+
+.sa-empty__text {
+  font-size: var(--sa-font-sm);
+}
+
+/* ── 文本工具 ──────────────────────────────────────────────────────────────── */
+
+.sa-t1 { font-size: var(--sa-font-xl); font-weight: var(--sa-fw-bold); color: var(--sa-text); line-height: var(--sa-lh-tight); }
+.sa-t2 { font-size: var(--sa-font-lg); font-weight: var(--sa-fw-semibold); color: var(--sa-text); }
+.sa-t3 { font-size: var(--sa-font-md); color: var(--sa-text); }
+.sa-t4 { font-size: var(--sa-font-sm); color: var(--sa-text-2); }
+.sa-t5 { font-size: var(--sa-font-sm); color: var(--sa-text-3); }
+.sa-mono { font-family: var(--sa-mono); }
+
+.sa-ok { color: var(--sa-ok); }
+.sa-warn { color: var(--sa-warn); }
+.sa-rec { color: var(--sa-rec); }
+.sa-brand-ink { color: var(--sa-brand-ink); }

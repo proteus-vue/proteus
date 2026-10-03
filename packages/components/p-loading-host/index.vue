@@ -220,7 +220,14 @@ void props
   left: 0;
   right: 0;
   bottom: 0;
-  z-index: 9998;
+  z-index: 2000000; /* ★Overlay 域内基线（契约 MOUNT_LAYER_DOMAIN=1e6 × overlay(2)）——原 9998 会被页面层(1e6)压住 */
+  /* ★★与 p-toast-host 同源的 Web 修复（见其注释）：根默认**不拦**（Web 的 DOM 无"无监听即穿透"），
+     仅在有 blocking 实例时由 `--blocking` 放开拦截（= 小程序端"绑 catchtap 才消费"的等价语义）。
+     Skyline 不识别 pointer-events ⇒ MP 端行为不变。 */
+  pointer-events: none;
+}
+.p-loading-host--blocking {
+  pointer-events: auto;
 }
 /* 遮罩 = 交互拦截面（铺满视口、吞点击——`mask: true` 时才输出） */
 .p-loading-host__mask {

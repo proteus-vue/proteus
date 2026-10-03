@@ -69,6 +69,18 @@ export interface StyleTransformOptions {
   rules?: TransformRuleOverrides
   /** scoped CSS 作用域属性（如 'data-v-abc123'） */
   scopeId?: string
+  /**
+   * ★★★2026-10-04（**框架修复**）：**该做 scoped 后缀的类名白名单**。
+   *
+   * 【为什么必须有】MP 的 scoped 机制是"类名后缀"（`.sa-card` → `sa-card-data-v-x`）——
+   *   而旧实现对模板里**所有** class 无差别后缀 ⇒ **全局共享类**（定义在 app.wxss 的 `.sa-card`，
+   *   无后缀）与模板里的 `sa-card-data-v-x` **永不相交** ⇒ 全局样式在 MP 端整层失效
+   *   （Web 端没有这套机制 ⇒ **两端视觉分叉**；superapp 验收场真机截图抓出）。
+   * 【正确语义（对齐 Vue scoped）】只有**组件自己 `<style scoped>` 里声明过的类**
+   *   （含框架注入并被一并后缀的基础语义类 / 转场类）才加后缀；其余类名（全局共享类）保持原样。
+   * 【向后兼容】缺省（undefined）= 旧行为（全后缀）——只有 compileVueSfc 主链路显式传入。
+   */
+  scopedClassNames?: ReadonlySet<string>
   /** ★平台化薄接缝：MP 渲染引擎（skyline/webview）——缺省沿用现行为；使 platform 特判有显式挂点 */
   renderer?: Renderer
 }

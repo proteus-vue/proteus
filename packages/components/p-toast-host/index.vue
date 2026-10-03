@@ -151,14 +151,26 @@ void props
 </script>
 
 <style scoped>
-/* 全屏根 = 视口坐标系（portal 内 fixed + 四边撑满——Skyline 正解，抄 p-drawer/p-modal） */
+/* 全屏根 = 视口坐标系（portal 内 fixed + 四边撑满——Skyline 正解，抄 p-drawer/p-modal）
+   ★★`pointer-events: none`（本行是 **Web 端真缺陷的修复**，2026-10-04 superapp 验收抓出）：
+     小程序语义 = "有元素即命中，无监听即穿透"（根未绑 tap 时不消费）——但 **Web/DOM 不是**：
+     全屏 div **无论有无监听器都拦截指针** ⇒ Toast 宿主把整页点击吃光（superapp 的 Web e2e
+     实测：`#p-toast-host-root intercepts pointer events` ⇒ 页面所有按钮点不动）。
+     而 `pointer-events` 在 Skyline **不被识别**（无效属性，无副作用）⇒ 两端语义由此对齐：
+       · Web：根穿（pointer-events:none）· 面板按需可点（见下）
+       · MP ：维持原样（不绑 tap 即穿） */
 .p-toast-host {
   position: fixed;
   top: 0;
   left: 0;
   right: 0;
   bottom: 0;
-  z-index: 9999;
+  z-index: 2000010; /* ★Overlay 域内（Toast 在 Loading 之上）——原 9999 < 页面层 1e6 ⇒ 被盖住 */
+  pointer-events: none;
+}
+/* 面板：可点关（dismissible）时需要接收指针 ⇒ 单独放开（Web）；MP 端由 @tap 绑定决定 */
+.p-toast-host__panel {
+  pointer-events: auto;
 }
 /* 面板：相对全屏根的绝对定位锚点（位置类由根容器承载——见 template 的字面量键） */
 .p-toast-host__panel {

@@ -182,11 +182,13 @@ function suffixClassLiterals(e: string, sfx: (name: string) => string): string {
 
 /** :class 绑定：对象语法 → 三元拼接，其余 → {{expr}}
  * ★2026-08 scoped 后缀：scopeId 非空时字符串字面量/对象键后缀（'box' → 'box-data-v-x'）；动态变量类名无法静态后缀 → 编译期警告 */
-function formatClassBinding(exp: string, warnings: string[], scopeId = ''): string {
+function formatClassBinding(exp: string, warnings: string[], scopeId = '', shouldSuffix: (n: string) => boolean = () => true): string {
   const t = exp.trim()
   const cw = templateCallWarning(t)
   if (cw) warnings.push(cw)
-  const sfx = (name: string): string => (scopeId && !name.endsWith(`-${scopeId}`) ? `${name}-${scopeId}` : name)
+  // ★2026-10-04：白名单外的类名（全局共享类）不加后缀——见 compiler-types 的 scopedClassNames
+  const sfx = (name: string): string =>
+    scopeId && shouldSuffix(name) && !name.endsWith(`-${scopeId}`) ? `${name}-${scopeId}` : name
   // 表达式内类名字面量后缀（三元值 'a'/'b' 等；比较操作数/空串不动——见 suffixClassLiterals）
   const sfxExpr = (e: string): string => (scopeId ? suffixClassLiterals(e, sfx) : e)
   const dynWarn = (name: string): void => {
@@ -327,6 +329,10 @@ interface SerializeContext {
   failFast?: boolean
   /** scoped CSS 作用域属性（v0.3：元素附加 data-v-xxx，样式侧选择器属性匹配） */
   scopeId?: string
+  /** ★★★2026-10-04：**该做 scoped 后缀的类名白名单**（undefined = 旧行为"全后缀"）。
+   *   只有组件自己 <style scoped> 声明过的类（+框架注入的语义/转场类）才后缀——
+   *   全局共享类（app.wxss 定义）保持原样，否则与全局规则永不相交（两端视觉分叉的根因）。 */
+  scopedClassNames?: ReadonlySet<string>
   /** ★组件模式根节点标记（首个顶层元素：class 追加 {{rootClass}} 接收外部 class 透传） */
   isComponentRoot?: boolean
   /** .self 修饰符 handler 名集合（script 生成 proteusSelfXxx 包装） */
@@ -1205,6 +1211,8 @@ function serializeElement(node: ElementNode, ctx: SerializeContext): string {
   }
   // ★scoped 类名拼接后缀（2026-08 真机重构）：scopeClass 作为类名后缀（.box → .box-data-v-x 单类选择器），不再附加独立 scope class
   const scopeSuffix = scopeClass || ''
+  /** ★★★2026-10-04：是否该给这个类名加 scoped 后缀（白名单缺省 = 旧行为"全后缀"） */
+  const shouldSuffix = (name: string): boolean => !ctx.scopedClassNames || ctx.scopedClassNames.has(name)
   // class 源缓冲：静态 class / :class 绑定（发射统一合并为单个 class 属性，见本函数末尾）
   let staticClass: string | undefined
   let bindingClass: string | undefined
@@ -1479,7 +1487,7 @@ function serializeElement(node: ElementNode, ctx: SerializeContext): string {
         }
         if (arg === 'class') {
           if (ctx.disabled.has('directive/v-bind-class')) break
-          bindingClass = formatClassBinding(exp, ctx.warnings, scopeSuffix)
+          bindingClass = formatClassBinding(exp, ctx.warnings, scopeSuffix, shouldSuffix)
           ctx.trace?.add('directive/v-bind-class', { line: node.loc.start.line, before: `:class="${exp}"`, after: bindingClass })
         } else if (arg === 'style') {
           if (ctx.disabled.has('directive/v-bind-style')) break
@@ -1675,12 +1683,22 @@ function serializeElement(node: ElementNode, ctx: SerializeContext): string {
     const tctx = ctx.transitionCtx
     ctx.transitionCtx = undefined // 首个元素消费后清空（多子元素场景后续元素不受影响）
     if (tctx && tctx.ref !== undefined) {
-      transitionLeaveExpr = `{{__tl${tctx.index} ? '${suffixClassName(`${transitionAnimCls}-leave`, scopeSuffix)}' : ''}}`
+      const leaveBase = `${transitionAnimCls}-leave`
+      const leaveCls = shouldSuffix(leaveBase) ? suffixClassName(leaveBase, scopeSuffix) : leaveBase
+      transitionLeaveExpr = `{{__tl${tctx.index} ? '${leaveCls}' : ''}}`
     }
   }
   // ★统一 class 发射（★2026-08 真机重构）：scope 后缀化各类名（.box → .box-data-v-x 单一类，Skyline ✓）——
   //   不再附加独立 scope class（复合选择器 .a.data-v-x 在 Skyline 不匹配，真机实测 p-button 自身样式失效）
-  const suffix = (v: string): string => (scopeSuffix ? suffixClassValue(v, scopeSuffix) : v)
+  // ★2026-10-04：逐 token gate（全局共享类原样过去——见 shouldSuffix）
+  const suffix = (v: string): string =>
+    scopeSuffix
+      ? v
+          .split(/\s+/)
+          .filter(Boolean)
+          .map((n) => (shouldSuffix(n) ? suffixClassName(n, scopeSuffix) : n))
+          .join(' ')
+      : v
   // ★layout/auto-flex-row（2026-08 用户决策）：Skyline 引擎不支持 inline 布局（text 天生 block 占满一行）——
   //   容器**恰好** 1 个 text + **恰好** 1 个行内控件（switch/slider/icon/image/button 等）→ 自动 flex row（双端一致：行内排布唯一路径）
   //   ★保守规则：多 text（label+描述+按钮）或多控件（纵向列表容器）不触发——避免误伤
@@ -1940,6 +1958,7 @@ export function transformTemplateToWxml(
     // ★底线循环 ①③：生效配置 = tags.ts 常量 + config 覆盖（规则改写/禁用即时生效）
     ...resolveOverrides(opts.rules),
     scopeId: opts.scopeId,
+    scopedClassNames: opts.scopedClassNames,
     selfHandlers: new Set(),
     onceHandlers: new Set(),
     inlineHandlers: [],

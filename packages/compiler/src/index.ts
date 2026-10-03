@@ -5,6 +5,7 @@ import { parse as sfcParse } from '@vue/compiler-sfc'
 // ★GP3-b1（2026-10-03）：Global 层共享状态模块路径（插件按此产出通道；契约单一来源）
 import { GLOBAL_LAYER_STATE_MODULE } from '@proteus-vue/contracts'
 import { transformTemplateToWxml } from './template'
+import { collectCssClassNames, FRAMEWORK_SCOPED_CLASS_NAMES } from './style'
 import { transformScriptToPage } from './script'
 import { transformStyleToWxss, BASE_SEMANTIC_WXSS } from './style'
 import { assertValidResult, CompilerError } from './validate'
@@ -210,11 +211,27 @@ export function compileVueSfc(source: string, options: CompileOptions = {}): Com
     hasOnPullDownRefresh: /onPullDownRefresh\s*\(/.test(setup),
     hasPageScrollTo: /wx\.pageScrollTo\s*\(/.test(setup),
   }
+  // ★★★2026-10-04（**框架修复**，superapp 验收场真机抓出）：scoped 后缀白名单——
+  //   只后缀"组件自己 scoped 样式里声明过的类"（+ 框架注入的语义/转场类）。
+  //   【为什么】旧实现对**所有** class 无差别后缀 ⇒ 全局共享类（app.wxss 定义，无后缀）
+  //   与模板里的 `x-data-v-y` **永不相交** ⇒ MP 端全局样式整层失效（Web 端无此机制 ⇒ 两端分叉）。
+  //   【白名单来源】scoped 样式文本（**未后缀的原样 CSS**）∪ FRAMEWORK_SCOPED_CLASS_NAMES。
+  // CSS 预处理器（v0.3 尾）：lang=scss/less 的 style 块先经 preprocessStyle 钩子转 css（适配层注入，编译器零依赖）
+  const preprocess = (s: (typeof descriptor.styles)[number]): string =>
+    styleSource(s) && s.lang && options.preprocessStyle ? options.preprocessStyle(s.lang, styleSource(s)) : styleSource(s)
+
+  const scopedClassNameSet = hasScoped
+    ? new Set<string>([
+        ...collectCssClassNames(scopedStyles.map(preprocess).join('\n')),
+        ...FRAMEWORK_SCOPED_CLASS_NAMES,
+      ])
+    : undefined
   const tplResult = transformTemplateToWxml(tpl, {
     ...styleOpts,
     filename: options.filename,
     annotateLines: options.annotateLines,
     scopeId,
+    scopedClassNames: scopedClassNameSet,
     isComponent: options.isComponent,
     autoScrollContainer: options.autoScrollContainer,
     pageScrollHooks,
@@ -284,9 +301,6 @@ export function compileVueSfc(source: string, options: CompileOptions = {}): Com
   })
 
   const styleTrace = createTrace('style')
-  // CSS 预处理器（v0.3 尾）：lang=scss/less 的 style 块先经 preprocessStyle 钩子转 css（适配层注入，编译器零依赖）
-  const preprocess = (s: (typeof descriptor.styles)[number]): string =>
-    styleSource(s) && s.lang && options.preprocessStyle ? options.preprocessStyle(s.lang, styleSource(s)) : styleSource(s)
   // ★默认 scoped（2026-08）：<style> 无标记按 scoped 处理 + 警告（每文件一条）
   if (!options.rules?.disabled?.includes('style/default-scoped')) {
     for (const s of scopedStyles) {

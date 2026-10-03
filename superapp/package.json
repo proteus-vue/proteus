@@ -1,0 +1,38 @@
+{
+  "name": "proteus-superapp",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Proteus 超级应用（框架最终验收场）：真实生产形态的超级应用，所有超级应用验收场景（GP5 起）都在这里验收",
+  "scripts": {
+    "dev:web": "proteus dev --target web",
+    "build:web": "proteus build --target web",
+    "dev:mp": "proteus dev --target skyline",
+    "build:mp": "proteus build --target skyline",
+    "cli:check": "tsx ../packages/cli/src/index.ts check",
+    "cli:build:web": "tsx ../packages/cli/src/index.ts build --target web",
+    "cli:build:mp": "tsx ../packages/cli/src/index.ts build --target skyline"
+  },
+  "dependencies": {
+    "@proteus-vue/api": "0.3.0-beta.21",
+    "@proteus-vue/app-config": "0.3.0-beta.11",
+    "@proteus-vue/built-in-components": "0.3.0-beta.21",
+    "@proteus-vue/components": "workspace:*",
+    "@proteus-vue/router": "0.3.0-beta.21",
+    "@proteus-vue/runtime": "0.3.0-beta.21",
+    "@proteus-vue/shared": "0.3.0-beta.21",
+    "@proteus-vue/web": "0.3.0-beta.21",
+    "vue": "^3.4.0"
+  },
+  "devDependencies": {
+    "@proteus-vue/cli": "0.3.0-beta.21",
+    "@proteus-vue/compiler": "0.3.0-beta.21",
+    "@proteus-vue/plugin-vite": "0.3.0-beta.21",
+    "@types/node": "^20.0.0",
+    "@vitejs/plugin-vue": "^5.0.0",
+    "tsx": "^4.0.0",
+    "typescript": "^5.4.0",
+    "vite": "^5.0.0",
+    "vue-tsc": "^2.0.0"
+  }
+}

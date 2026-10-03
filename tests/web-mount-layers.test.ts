@@ -109,10 +109,30 @@ describe('★GP3-a ① 三层顺序（DOM 序 = 层序；域偏移来自契约�
     }
   })
 
-  it('★`position: relative` 随 z-index 一起给（CSS 层面 z-index 对 static 元素无效——少一个就静默失效）', () => {
+  it('★position 随 z-index 一起给（z-index 对 static 无效——少一个就静默失效）', () => {
     const { el, unmount } = mount(defineComponent({ setup: () => () => h(GlobalLayer) }))
     const node = el.querySelector('[data-mount-layer="global"]') as HTMLElement
-    expect(getComputedStyle(node).position, '★没有 position，z-index 就是个摆设（静默失效）').toBe('relative')
+    expect(node.style.position, '★没有 position，z-index 就是个摆设（静默失效）').not.toBe('')
+    unmount()
+  })
+
+  it('★★2026-10-04（外部视觉验收抓出）：global/overlay = **视口锚定**（fixed），page = 文档流（relative）', () => {
+    // 缺陷形态：三层都用 relative ⇒ global 层容器零高、其 absolute 子元素（全局音乐条/悬浮球）
+    //   锚在**文档顶部** ⇒ 页面一滚就"跑掉"（实测截图：音乐条出现在滚动后的页面顶部）。
+    //   超级应用的全局层必须"一直在视口内" ⇒ global/overlay 铺满视口（fixed + inset 0）。
+    const { el, unmount } = mount(defineComponent({
+      setup: () => () => h('div', [h(GlobalLayer), h(PageLayer), h(OverlayLayer)]),
+    }))
+    const g = el.querySelector('[data-mount-layer="global"]') as HTMLElement
+    const p2 = el.querySelector('[data-mount-layer="page"]') as HTMLElement
+    const o = el.querySelector('[data-mount-layer="overlay"]') as HTMLElement
+    expect(g.style.position, '★global 必须 fixed（视口锚定——全局内容不随页面滚动）').toBe('fixed')
+    expect(o.style.position, '★overlay 必须 fixed（浮层同理）').toBe('fixed')
+    expect(p2.style.position, 'page 层在文档流内（承载路由内容，随页滚动）').toBe('relative')
+    // 视口锚定 = 四边撑满；且容器不吃事件（穿透——交互元素自还原 auto）
+    expect(['0', '0px'], 'global 四边撑满（inset）').toContain(g.style.top)
+    expect(g.style.pointerEvents, '★global 容器不吃事件（穿透；交互元素各自 auto）').toBe('none')
+    expect(o.style.pointerEvents, '★overlay 容器不吃事件（同上）').toBe('none')
     unmount()
   })
 
@@ -127,8 +147,8 @@ describe('★GP3-a ① 三层顺序（DOM 序 = 层序；域偏移来自契约�
     expect(node.style.padding, '组件不得设 padding').toBe('')
     expect(node.style.width, '组件不得设 width').toBe('')
     expect(node.style.height, '组件不得设 height').toBe('')
-    // 组件**只**设了这两条（position + z-index）——多设即越权
-    expect(node.style.position, '应设 position（z-index 生效前提）').toBe('relative')
+    // 组件只设 position + z-index（+ 2026-10-04 起 global/overlay 的 inset/pointer-events）——多设即越权
+    expect(node.style.position, '应设 position（z-index 生效前提；global 层为 fixed——见上一条用例）').toBe('fixed')
     expect(node.style.zIndex, '应设 z-index（层叠域）').not.toBe('')
     unmount()
   })

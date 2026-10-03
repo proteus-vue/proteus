@@ -883,6 +883,64 @@ importers:
         specifier: ^2.0.0
         version: 2.2.12(typescript@5.9.3)
 
+  superapp:
+    dependencies:
+      '@proteus-vue/api':
+        specifier: 0.3.0-beta.21
+        version: link:../packages/api
+      '@proteus-vue/app-config':
+        specifier: 0.3.0-beta.11
+        version: link:../packages/app-config
+      '@proteus-vue/built-in-components':
+        specifier: 0.3.0-beta.21
+        version: link:../packages/built-in-components
+      '@proteus-vue/components':
+        specifier: workspace:*
+        version: link:../packages/components
+      '@proteus-vue/router':
+        specifier: 0.3.0-beta.21
+        version: link:../packages/router
+      '@proteus-vue/runtime':
+        specifier: 0.3.0-beta.21
+        version: link:../packages/runtime
+      '@proteus-vue/shared':
+        specifier: 0.3.0-beta.21
+        version: link:../packages/shared
+      '@proteus-vue/web':
+        specifier: 0.3.0-beta.21
+        version: link:../packages/web
+      vue:
+        specifier: ^3.4.0
+        version: 3.5.42(typescript@5.9.3)
+    devDependencies:
+      '@proteus-vue/cli':
+        specifier: 0.3.0-beta.21
+        version: link:../packages/cli
+      '@proteus-vue/compiler':
+        specifier: 0.3.0-beta.21
+        version: link:../packages/compiler
+      '@proteus-vue/plugin-vite':
+        specifier: 0.3.0-beta.21
+        version: link:../packages/plugin-vite
+      '@types/node':
+        specifier: ^20.0.0
+        version: 20.19.43
+      '@vitejs/plugin-vue':
+        specifier: ^5.0.0
+        version: 5.2.4(vite@5.4.21(@types/node@20.19.43)(sass@1.104.0))(vue@3.5.42(typescript@5.9.3))
+      tsx:
+        specifier: ^4.0.0
+        version: 4.23.13
+      typescript:
+        specifier: ^5.4.0
+        version: 5.9.3
+      vite:
+        specifier: ^5.0.0
+        version: 5.4.21(@types/node@20.19.43)(sass@1.104.0)
+      vue-tsc:
+        specifier: ^2.0.0
+        version: 2.2.12(typescript@5.9.3)
+
   website:
     dependencies:
       '@proteus-vue/animation':

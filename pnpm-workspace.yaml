@@ -4,3 +4,5 @@ packages:
   - examples
   # ★showcase：Proteus 官方演示小程序（对外旗舰演示；examples 保留为内部测试全家桶，勿混用）
   - showcase
+  # ★superapp：Proteus 超级应用（框架最终验收场——真实生产形态，所有超级应用验收场景都进这里）
+  - superapp

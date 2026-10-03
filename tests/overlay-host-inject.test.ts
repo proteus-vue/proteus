@@ -127,6 +127,30 @@ describe('★GP4-b ④ 扫描器不自污染（GP4-a 真坑的回归锁）', () 
   })
 })
 
+describe('★2026-10-04 回归锁：Web 专用 `App.vue` 的宿主声明**不得**抑制 MP 注入', () => {
+  it('★同目录存在 `App.mp.vue` 时，`App.vue` 里的 `<p-toast-host />`（Web 正确声明）不参与 manualHost', () => {
+    const dir = fixture({
+      'App.vue': '<template><overlay-layer><p-toast-host /><p-loading-host /></overlay-layer></template>',
+      'App.mp.vue': '<template><app-root><global-layer><view>x</view></global-layer></app-root></template>',
+      'pages/a.vue': `<script setup>showToast({ text: 'x' }); showLoading({ id: 'y' })\n</script>`,
+    })
+    const u = detectOverlayUsage(dir)
+    // ★缺陷形态：若计入 ⇒ manualHost=true ⇒ MP 自动注入被静默关掉 ⇒ 真机不显示且零报错
+    expect(u.toast!.manualHost, '★Web 变体的宿主声明不得抑制 MP 注入（静默失效最坏）').toBe(false)
+    expect(u.loading!.manualHost, '★同上').toBe(false)
+    expect(u.toast!.used, 'API 用法仍被识别（照常注入）').toBe(true)
+  })
+
+  it('★仅 `App.vue`（无 mp 变体）⇒ 它同时是 MP 壳 ⇒ 其宿主声明**照常**参与让位', () => {
+    const dir = fixture({
+      'App.vue': '<template><app-root><global-layer><p-toast-host /></global-layer></app-root></template>',
+      'pages/a.vue': `<script setup>showToast({ text: 'x' })\n</script>`,
+    })
+    const u = detectOverlayUsage(dir)
+    expect(u.toast!.manualHost, '★无 mp 变体时 App.vue 是共享壳——壳里写宿主会与注入重复渲染 ⇒ 必须让位').toBe(true)
+  })
+})
+
 describe('★GP4-b ⑤ 手动优先**按能力**（表驱动后的关键新判据）', () => {
   it('★手写 Toast 宿主 ⇒ 只 toast 让位，loading 照常注入', () => {
     const dir = fixture({
