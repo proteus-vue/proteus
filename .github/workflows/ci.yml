@@ -88,6 +88,13 @@ jobs:
       - name: Vapor IR 性能棘轮（★只降不升——防平移传播/返回通道优化被静默回退）
         run: pnpm run check:vapor-perf
 
+      - name: ★★★Vapor 三端同步（用户指令 2026-10-03「后面的 vapor 推进就三端同步走」）
+        # 消费**已入库**的三端真机结果（hosts/{android,harmony,ios}/results/vapor.json）：
+        #   ① 证据齐（缺一端即红——陈旧证据会冒充新证据）② 同一份判据三端全过（◐ 如实跳过会列出）
+        #   ③ 指纹逐项一致（同一份产物 ⇒ 必须同结果；不一致 = 有一端没重跑，报出是哪端哪个字段）
+        # ★真机重跑在 CI 之外（无真机/模拟器）：hosts/*/run-*.sh；本步只复算+比对。
+        run: pnpm run check:vapor-three-end
+
       - name: 坐标吸附跨语言 golden（卡 I2：TS ⇄ Rust 同输入同输出——三端差 1px 的机器判据）
         run: pnpm run check:pixel-snap
 

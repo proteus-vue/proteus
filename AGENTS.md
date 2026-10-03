@@ -243,6 +243,30 @@
   `pnpm check:android-host-compile`（javac + android.jar）· `bash hosts/ios/check-selfdraw-compile.sh`
   （swiftc -typecheck）。二者都在 `pnpm verify` 链上，但**改完立刻单跑**比等全量快得多。
 
+## ★★★三端同步纪律（2026-10-03 用户指定：「后面的 vapor 推进就三端同步走」）
+
+**判据（机器强制）**：`pnpm check:vapor-three-end`（已接 `verify` 链 + CI）——
+① **证据齐**（三端 `hosts/{android,harmony,ios}/results/vapor.json` 都在；
+缺一端即红：陈旧证据会冒充新证据）② **同一份判据三端全过**（`check-vapor-device.py`，
+◐ 如实跳过会列出而不是静默当"过"）③ **指纹逐项一致**（模板/源/槽位/实例化/增量/事件/
+混合文本/门禁轮/表达式探针 17 项——不一致会报出**是哪端哪个字段**）。
+
+**含义（改 Vapor 相关代码时的义务）**：凡是动到 Vapor 面的改动（编译器 `vapor/*` ·
+`slot-runtime/*` · 桥 `hosts/android/bridge/entry-vapor.ts` · 夹具 `gen-vapor-fixture.mjs`），
+**必须三端重跑并提交结果**——只跑 Android 会被这道门禁当场拦下。
+
+**三端重跑入口**（真机/模拟器，CI 跑不了）：
+```bash
+bash hosts/android/run-vapor.sh                 # Android（USB 设备）
+bash hosts/harmony/run-vapor.sh                 # 鸿蒙（hdc 设备）——含 gen-fixtures 同源复制
+bash hosts/ios/run-selfdraw.sh --vapor           # iOS（真机；模拟器见 run-selfdraw.sh 帮助）
+```
+三端跑完各产生一份 `results/vapor.json`（已入库）⇒ 提交后 CI 复算判据 + 比对指纹。
+
+★**为什么必须工具化**（本仓教训同源）：Vapor 能力全在**平台无关共享包**里（构造上三端共享），
+而验证只跑一端时，另一端是**推断**不是**证据**——与「提交 ≠ 交付」同族：没有任何机制会提醒
+"另外两端还没重跑"，于是旧证据会冒充新证据。
+
 ## 2. 项目门禁（改代码后按需运行）
 
 ```bash
@@ -250,6 +274,7 @@ pnpm test                 # 全量单测（Node ≥ 22；jsdom 27 为 ESM-only�
 pnpm check:mp-attrs       # 端对齐属性棘轮（只增不减）
 pnpm check:content        # 官网内容生成幂等
 pnpm check:stats          # 官网数字 vs 源码实际值（防「数字过时」静默上线）
+pnpm check:vapor-three-end # ★★★三端同步（证据齐 + 同一判据三端全过 + 指纹逐项一致）
 pnpm check:ledger         # 外部报告台账自洽（schema/枚举/repro/related）
 pnpm check:cobuild        # AI 共建三方一致（报告↔台账↔回执）
 pnpm ledger:check         # 收口率报告（**发布前**跑：未收口项 exit 1）
