@@ -7,9 +7,9 @@ generated: true
 
 # 编译规则目录
 
-> 112 条编译规则——每条自带 AI 说明书（id / when / before → after / why）。SSOT = `@proteus-vue/compiler` TRANSFORM_RULES，与 `npx proteus rules` / Playground Trace 同源。
+> 114 条编译规则——每条自带 AI 说明书（id / when / before → after / why）。SSOT = `@proteus-vue/compiler` TRANSFORM_RULES，与 `npx proteus rules` / Playground Trace 同源。
 
-## 模板转换（62）
+## 模板转换（64）
 
 ### `tag/div-to-view`
 
@@ -413,6 +413,32 @@ after:  <root-portal><view class="overlay">hi</view></root-portal>（脱离页�
 ```
 
 > why: Skyline/WebView root-portal（官方组件）把子树脱离页面固定，正是 Vue <teleport> 弹层层叠/传送到 body 的跨端等价——解决 p-popover 等弹层被下层元素遮挡（z-index 层叠上下文）
+
+### `template/teleport-root-v-if`
+
+**portal 根内容 v-if 拦截（S47：条件卸载会锁死页面）**
+
+<teleport> 的**直接子元素**带 v-if ⇒ 编译期警告：portal 根内容被条件卸载/重挂，glass-easel 下 portal 挂载异常 + 残留层锁死页面（Skyline 坑 S47 实测：二次打开卡死 + 页面无法滚动）；修法 = 根内容**常驻** + `:class`/`visibility` 驱动显隐与动画。**内层 v-if 不受限**（p-drawer/p-page-container 这些正解自己就在内层用 v-if 渲遮罩）
+
+```
+before: <teleport to="body"><view v-if="open">…</view></teleport>
+after:  <teleport to="body"><view class="root" :class="{ open }">…</view></teleport>（根内容常驻 + class 驱动）
+```
+
+> why: S47 是**真机页面锁死**级缺陷（比"不显示"严重）——只写在 markdown 拦不住；与 sleep/重复跑测试同源：只有工具层门禁是结构性的。检查范围收窄到直接子元素是为了不误伤已验证组件
+
+### `template/teleport-v-if-dropped`
+
+**teleport 自身 v-if 丢弃警告（S42：条件永远失效）**
+
+<teleport> **自身**带 v-if ⇒ 编译期警告：本编译器的 teleport 分支直接序列化 children，v-if **被静默丢弃**（产物取证：`wx:if` 完全消失，root-portal 无条件挂载）⇒ 条件永远失效；修法 = 常驻 portal + `:class` 驱动显隐。**不顺手支持它**的理由：portal 上的 wx:if 正是 S47 的挂载异常形态
+
+```
+before: <teleport to="body" v-if="open">…</teleport>
+after:  <teleport to="body"><view class="root" :class="{ open }">…</view></teleport>
+```
+
+> why: 静默丢弃比报错更危险（用户以为能开关，实际恒挂载）；且"顺手支持"会把用户推进 S47 的坑 ⇒ 警告 + 指向正解
 
 ### `directive/v-once`
 
