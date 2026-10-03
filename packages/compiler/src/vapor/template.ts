@@ -74,10 +74,11 @@ const PAINT_DECL_ATTRS = new Set(['fill-gradient', 'fill-gradient-to', 'clip-pat
 const UNSUPPORTED_DIRECTIVES: Record<string, string> = {
   html: 'v-html 未支持（富文本渲染通道待建）——请改用文本 + 样式，或保留 Vue 渲染路径（L0）',
   text: 'v-text 未支持——请改用插值 `{{ }}`（文本槽位已支持）',
-  memo: 'v-memo 未支持（依赖摘要跳过更新的语义待建）——去掉它可正常更新（仅少一层优化）',
   cloak: 'v-cloak 未支持（App 端无 CSS 首帧闪烁语义）——可安全移除',
   pre: 'v-pre 未支持（跳过编译的语义待建）——请手动改写为静态内容',
 }
+// ★★P2-5（2026-10-03）：v-once / v-memo 已**真支持**（见 SlotSubscription.once / MemoGroup）——
+//   本表不再收录；**不支持的形态**（v-memo 非数组字面量 / 行内 once）在下方遍历里逐条诊断。
 /** 未支持的内置组件（官方有语义，我方当普通容器 ⇒ 语义静默丢失） */
 const UNSUPPORTED_BUILTINS: Record<string, string> = {
   Teleport: 'Teleport 未支持（多渲染面传送待建）——当前按普通容器渲染（内容在**原位置**，非目标容器）',
@@ -300,6 +301,8 @@ export function buildLayoutTemplate(
       arg?: { content?: string }
       exp?: { content?: string }
       value?: { content?: string }
+      /** ★指令修饰符（P2-4：v-model .trim/.number/.lazy；AST 形态 `{content}[]`） */
+      modifiers?: Array<{ content?: string } | string>
     }>
     children?: unknown[]
   }
@@ -332,6 +335,35 @@ export function buildLayoutTemplate(
       for (const p of n.props ?? []) {
         if (p.type === 7 /* DIRECTIVE */ && typeof p.name === 'string' && UNSUPPORTED_DIRECTIVES[p.name]) {
           diag(`${tag}(id=${id}) ${UNSUPPORTED_DIRECTIVES[p.name]}!`)
+        }
+        // ★★**v-model 的诚实边界诊断**（P2-4，2026-10-03）：Vapor 路目前只有**下行**（值 → 文本槽位），
+        //   **没有回写通道**（App 端输入法/键盘事件未接；宿主手势层只有 tap/longpress）。
+        //   ⇒ 元素上出现 v-model 时明确诊断——不静默半支持（"页面看着对、输入不生效"属最危险一类）。
+        //   ★`v-model` 的**修饰符**在 Vapor 路的语义（`.trim/.number` 作用于回写值）**依赖回写通道**，
+        //     通道缺失时修饰符一并如实标注（不假装生效）。
+        if (p.type === 7 && p.name === 'model') {
+          const mods = (p.modifiers ?? [])
+            .map((m) => (typeof m === 'string' ? m : (m?.content ?? '')))
+            .filter(Boolean)
+          diag(
+            `${tag}(id=${id}) v-model 在 Vapor 路只有**下行**（值→文本槽位），**无回写通道**` +
+              (mods.length ? `（修饰符 .${mods.join(' / .')} 依赖回写、同样无法生效）` : '') +
+              `——输入不会写回数据`,
+            '需要双向绑定时请保留 Vue 渲染路径（L0），或等 App 端输入通道批次',
+            'VAPOR_VMODEL_NO_WRITEBACK',
+          )
+        }
+        // ★P2-5：v-memo 的**形态诊断**（只支持数组字面量——运行时按"逐项比较"建依赖表，
+        //   动态形态（`v-memo="deps"` / 变量数组）无法静态建表 ⇒ 明确诊断，不静默按"总是更新"跑）
+        if (p.type === 7 && p.name === 'memo') {
+          const memoSrc = (p.exp as { content?: string } | undefined)?.content?.trim() ?? ''
+          if (!/^\[[\s\S]*\]$/.test(memoSrc)) {
+            diag(
+              `${tag}(id=${id}) v-memo 的依赖需为**数组字面量**（如 v-memo="[a, b]"）——当前 \`${memoSrc || '<空>'}\` 无法静态建依赖表`,
+              '请把依赖写成数组字面量（成员/算术/比较均可），或去掉 v-memo（仅少一层优化）',
+              'VAPOR_MEMO_SHAPE',
+            )
+          }
         }
         // ★动态名判据 = `arg.isStatic === false`（实测：静态与动态的 arg.type 都是 4，
         //   **只有 isStatic 区分**——首版按"有无 arg.content"判 ⇒ 两者都有 content ⇒ 全漏）。

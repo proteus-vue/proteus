@@ -3277,10 +3277,27 @@ export function transformScriptToPage(
   //   现 handler 名与 setData 键统一走 model-path（与 template 侧同源，保证两端一致）；
   //   路径键按小程序语法加引号（setData 支持 `'a.b'` 写入嵌套字段）。
   const vmodelDisabled = disabled.has('script/vmodel-handler')
+  // ★★**v-model 转换修饰符**（P2-4，2026-10-03）：`.trim` / `.number` 在回写时施加——
+  //   语义对齐官方 `vModelText` 的 `castValue`（先 trim 再 number）：`trim` ⇒ `String(v).trim()`；
+  //   `number` ⇒ `parseFloat` 得了数就转数、否则**原样保留**（宽松转换，不是 `Number()`）。
+  //   ★为什么在回写端做（而不是模板端）：MP 的数据流是 `e.detail.value → setData`，
+  //     "写入什么值"由 handler 决定 —— 这正是修饰符的语义位置（与官方 el.value 赋值等价）。
+  const vmodelModsOf = new Map((extra.vModelModifiers ?? []).map((m) => [m.model, m.modifiers]))
+  /** 生成回写表达式的值部分（含修饰符转换链） */
+  const vmodelValueExpr = (model: string, base: string): string => {
+    const mods = vmodelModsOf.get(model) ?? []
+    let out = base
+    if (mods.includes('trim')) out = `String(${out}).trim()`
+    if (mods.includes('number')) {
+      // 官方 looseToNumber：parseFloat 得数 ⇒ 数值；NaN ⇒ 原值（含空串/纯文本）
+      out = `(function (v) { var n = parseFloat(v); return isNaN(n) ? v : n })(${out})`
+    }
+    return out
+  }
   for (const name of vModelBindings) {
     if (!vmodelDisabled) {
       methodNames.add(inputModelHandler(name))
-      pushMethod(`  ${inputModelHandler(name)}(e) { this.setData({ ${setDataEntry(name, 'e.detail.value')} }) },`)
+      pushMethod(`  ${inputModelHandler(name)}(e) { this.setData({ ${setDataEntry(name, vmodelValueExpr(name, 'e.detail.value'))} }) },`)
     }
   }
   // ★#500 自定义组件 v-model[:arg] 回写 handler：proteusUpdate<Arg>Model(e) { this.setData({ model: e.detail }) }

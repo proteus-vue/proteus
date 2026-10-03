@@ -191,6 +191,78 @@ export function buildVaporSubscriptions(source: string, filename = 'anonymous.vu
     for (const r of refs) synthesizedMembers.add(r)
     bindings[bindings.indexOf(first)] = synthetic
   }
+  // ★★P2-5：**memo 组依赖表**（`v-memo="[a, b]"` 的依赖程序）——按 memoId 去重收集
+  //
+  // 【为什么在编译期编成程序】运行时"依赖变了没有"要**逐项比较**；比较的输入是求值结果，
+  //   而求值必须走同一套表达式执行器（可序列化、跨端禁 eval）⇒ 依赖也编成 ExprProgram。
+  // 【不支持的形态】依赖不是数组字面量 / 单项编不出 ⇒ 产诊断 + **不建组**
+  //   （不建组 = 该子树照常更新——"少一层优化"而不是"错"；与修法提示一致）。
+  const memoGroups: import('@proteus-vue/slot-runtime').MemoGroup[] = []
+  const memoSeen = new Set<number>()
+  // ★非法形态（非数组字面量）⇒ 诊断（模板产物侧已有同类诊断；订阅产物侧也报，因为
+  //   "优化没生效"必须在自己这张产物上可见——门禁/工具可能只读订阅产物）
+  const memoInvalidSeen = new Set<number>()
+  for (const ref of bindings) {
+    if (ref.memoInvalid && !memoInvalidSeen.has(ref.elementIndex)) {
+      memoInvalidSeen.add(ref.elementIndex)
+      diagnostics.push({
+        severity: 'warn',
+        code: 'VAPOR_MEMO_SHAPE',
+        message: `v-memo（元素 ${ref.elementIndex}）的依赖需为数组字面量（如 v-memo="[a, b]"）——当前形态无法静态建依赖表`,
+        hint: '把依赖写成数组字面量，或去掉 v-memo（该子树会照常更新，仅少一层优化）',
+      })
+    }
+  }
+  for (const ref of bindings) {
+    if (!ref.memo || memoSeen.has(ref.memo.memoId)) continue
+    if (ref.listContext) {
+      // v-for 行内 + v-memo：组依赖是**行作用域**表达式 ⇒ 需要按行比较（本版未做）
+      diagnostics.push({
+        severity: 'warn',
+        code: 'VAPOR_MEMO_IN_LIST',
+        message: `v-memo 用在 v-for 行内（元素 ${ref.elementIndex}）——行作用域的依赖比较未支持`,
+        hint: '该子树会照常更新（仅少一层优化）；如必须，请把 v-memo 提到列表外层元素',
+      })
+      memoSeen.add(ref.memo.memoId)
+      continue
+    }
+    const deps: import('@proteus-vue/slot-runtime').ExprProgram[] = []
+    let failed: string | undefined
+    for (const src of ref.memo.deps) {
+      const c = compileExpr(src)
+      if (c.ok) deps.push(c.program)
+      else {
+        failed = `${src}（${c.unsupported}）`
+        break
+      }
+    }
+    if (failed) {
+      diagnostics.push({
+        severity: 'warn',
+        code: 'VAPOR_MEMO_DEP_UNSUPPORTED',
+        message: `v-memo 依赖无法编译：${failed}`,
+        hint: '依赖需为可静态求值的表达式（成员/算术/比较/逻辑）——该子树会照常更新（仅少一层优化）',
+      })
+      memoSeen.add(ref.memo.memoId)
+      continue
+    }
+    memoGroups.push({ memoId: ref.memo.memoId, deps, depsSrc: [...ref.memo.deps] })
+    memoSeen.add(ref.memo.memoId)
+  }
+  // ★v-once 在 v-for 行内：官方语义是**共享缓存槽**（首项内容冻结后复用给所有行）——
+  //   反直觉且与"每行独立冻结"差很远 ⇒ 明确诊断（不照抄、不静默按行冻结）
+  for (const ref of bindings) {
+    if (ref.once && ref.listContext && !ref.listContext.isKeyBinding) {
+      diagnostics.push({
+        severity: 'warn',
+        code: 'VAPOR_ONCE_IN_LIST',
+        message: `v-once 用在 v-for 行内（元素 ${ref.elementIndex}）——行内 once 语义（官方为共享缓存槽）未支持`,
+        hint: '该绑定会随行数据正常更新（仅少一层优化）；静态内容请去掉插值',
+      })
+      break // 每个模板报一条即可（避免同子树刷屏）
+    }
+  }
+
   const pure = new Set(opts.pureSymbols ?? [])
   const forceL0 = new Set(opts.forceL0Slots ?? [])
 
@@ -342,13 +414,20 @@ export function buildVaporSubscriptions(source: string, filename = 'anonymous.vu
       notes.push(`slot_${mySlot} 行内槽位：${ref.code} → listId=${listId} itemSlotId=${itemSlotId}${keyNote}`)
       continue
     }
-    if (ref.listContext?.isKeyBinding) {
+    if (ref.listContext?.isKeyBinding || ref.propKey === 'attr.key') {
       // :key 不建槽位（非渲染属性）——跳过但要留痕，便于 explain 追查
-      notes.push(`:key="${ref.code}" 不建槽位（行标识字段，非可更新渲染属性）`)
+      //
+      // ★★2026-10-03 修（P2-5 实测抓出的潜在缺陷）：**非列表**元素上的 `:key`（如
+      //   `<p-text :key="'memo'">`）此前**会建槽位**（`attr.key` → kind='prop'）
+      //   ⇒ 运行时 `toF32('memo')` **抛错**（prop 槽位只接受数值）——或若值是数字，
+      //     则向宿主发一条**无意义**的 SET_PROP。`:key` 在任何位置都**不是可渲染属性**
+      //     （它只是 diff 提示）⇒ 统一跳过（不只列表内）。
+      const inList = Boolean(ref.listContext?.isKeyBinding)
+      notes.push(`:key="${ref.code}" 不建槽位（${inList ? '行标识字段' : 'diff 提示'}，非可更新渲染属性）`)
       diagnostics.push({
         severity: 'info',
         code: 'VAPOR_KEY_IS_ROW_IDENTITY',
-        message: `:key="${ref.code}" 用作行标识字段（非可更新渲染属性）`,
+        message: `:key="${ref.code}" 用作${inList ? '行标识字段' : ' diff 提示'}（非可更新渲染属性）`,
       })
       continue
     }
@@ -366,6 +445,9 @@ export function buildVaporSubscriptions(source: string, filename = 'anonymous.vu
       propKey: ref.propKey,
       // ★list-data（v-for 源绑定）用 **ownListId**；行内绑定用 listContext.listId
       ...(kind === 'list-data' ? { listId: ref.ownListId ?? ref.listContext?.listId } : {}),
+      // ★★P2-5（v-once / v-memo）：标记随槽位进产物（缺省省略字段 ⇒ 既有产物不变）
+      ...(ref.once ? { once: true } : {}),
+      ...(ref.memo ? { memoId: ref.memo.memoId } : {}),
     }
     slotRecords.push({ slot, deps, ref })
 
@@ -378,8 +460,14 @@ export function buildVaporSubscriptions(source: string, filename = 'anonymous.vu
     }
 
     // Step 3：依赖图（sourceId → slots）
-    const roots = deps.roots.filter((r) => srcScan.byName.has(r))
-    const missing = deps.roots.filter((r) => !srcScan.byName.has(r))
+    // ★★P2-5（关键）：memo **依赖的根也必须在订阅图里**——否则"依赖变了"不触发求值
+    //   ⇒ 该子树静默不更新（组语义的反面：本该更新的却漏了）。
+    const depRoots = ref.memo
+      ? ref.memo.deps.flatMap((d) => analyzeExprDeps(d, ref.scopes).roots)
+      : []
+    const allRoots = [...new Set([...deps.roots, ...depRoots])]
+    const roots = allRoots.filter((r) => srcScan.byName.has(r))
+    const missing = allRoots.filter((r) => !srcScan.byName.has(r))
     if (missing.length > 0) notes.push(`slot_${mySlot} 引用未识别标识符：${missing.join(', ')}（已计入 L1，若为运行时值请加 @proteus-pure 或降级）`)
     for (const rootName of roots) {
       const src = srcScan.byName.get(rootName)!
@@ -438,6 +526,8 @@ export function buildVaporSubscriptions(source: string, filename = 'anonymous.vu
       sources,
       evaluators,
       l0Slots,
+      // ★P2-5：memo 组表（无 v-memo ⇒ 不产出字段，既有产物逐字节不变）
+      ...(memoGroups.length > 0 ? { memoGroups } : {}),
       stats: { l1, l0, l1Rate: l1 + l0 === 0 ? 0 : Math.round((l1 / (l1 + l0)) * 10000) / 10000 },
     },
     sources: srcScan.sources,

@@ -209,6 +209,21 @@ export class SlotRuntime {
   private readonly dirty: Slot[] = []
   private pending = false
   private readonly stats: SlotRuntimeStats = { flushes: 0, opsEmitted: 0, bytesSent: 0, shortCircuits: 0 }
+  /**
+   * ★★**帧号**（P2-5 新增）：每次 `flush()` 调用（**包括无脏槽位的空调用**）自增。
+   *
+   * 【为什么需要（v-memo 的组语义要求帧边界）】memo 组在"同一帧内"只判定一次脏：
+   *   若一帧里有多个源变化（多次 `writeSlotsOfSource`）触到同一组的多个槽位，
+   *   第一次判定"依赖变了"之后，同帧其余槽位必须**照常写**（组语义 = 子树整体更新）。
+   *   而判定一次的判据只有帧边界——`flush()` 是这套系统的天然帧边界。
+   *   ★与 `stats.flushes` 的区别：后者只在**真的提交了字节**时自增（空 flush 不计）；
+   *     本计数每次 flush 调用都自增（帧边界语义）。
+   */
+  private frame = 0
+  /** 帧号（v-memo 门用；只读） */
+  get frameId(): number {
+    return this.frame
+  }
 
   constructor(
     readonly keys: PropKeyTable,
@@ -245,6 +260,9 @@ export class SlotRuntime {
    *   驱动一次提交（本仓四次踩过"测量装置污染读数"）。
    */
   flush(): void {
+    // ★帧边界（v-memo 门用）：见 `frameId` 注释——空 flush 也计一帧（否则"依赖未变"的帧
+    //   与"没有帧"无法区分）。
+    this.frame++
     this.pending = false
     for (const slot of this.dirty) {
       slot.emit(slot.value, this.buffer)

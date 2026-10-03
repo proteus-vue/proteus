@@ -2,7 +2,7 @@
 // source: @vue/compiler-sfc (mode=module, runtimeModuleName=@vue/runtime-core)
 // @ts-nocheck
 /* eslint-disable */
-import { createTextVNode as _createTextVNode, resolveComponent as _resolveComponent, withCtx as _withCtx, createVNode as _createVNode, renderList as _renderList, Fragment as _Fragment, openBlock as _openBlock, createElementBlock as _createElementBlock, createCommentVNode as _createCommentVNode, toDisplayString as _toDisplayString, createBlock as _createBlock } from "@vue/runtime-core"
+import { createTextVNode as _createTextVNode, resolveComponent as _resolveComponent, withCtx as _withCtx, createVNode as _createVNode, renderList as _renderList, Fragment as _Fragment, openBlock as _openBlock, createElementBlock as _createElementBlock, createCommentVNode as _createCommentVNode, toDisplayString as _toDisplayString, createBlock as _createBlock, setBlockTracking as _setBlockTracking, withMemo as _withMemo } from "@vue/runtime-core"
 
 export function render(_ctx, _cache) {
   const _component_p_text = _resolveComponent("p-text")
@@ -11,7 +11,7 @@ export function render(_ctx, _cache) {
   return (_openBlock(), _createBlock(_component_p_view, { style: {"width":1080,"height":1600,"flexDirection":"column","padding":{"top":24},"backgroundColor":"#14141c"} }, {
     default: _withCtx(() => [
       _createVNode(_component_p_text, { style: {"fontSize":20,"color":"#ffffff","margin":{"bottom":12}} }, {
-        default: _withCtx(() => [...(_cache[4] || (_cache[4] = [
+        default: _withCtx(() => [...(_cache[6] || (_cache[6] = [
           _createTextVNode("Vapor · 设备端", -1 /* CACHED */)
         ]))]),
         _: 1 /* STABLE */
@@ -70,7 +70,34 @@ export function render(_ctx, _cache) {
           }, null, 8 /* PROPS */, ["width"])
         ]),
         _: 1 /* STABLE */
-      }, 8 /* PROPS */, ["width"])
+      }, 8 /* PROPS */, ["width"]),
+      _createCommentVNode(" ★★P2-5（2026-10-03）：v-once 冻结 / v-memo 组门 夹具。\n         · once 行：{{ onceVal }} 只在首帧写，之后**源怎么改都不再写**（判据 ⑪ 用）；\n         · memo 行：v-memo=\"[memoDep]\" + {{ memoVal }} —— 改 memoVal（依赖净）⇒ **跳过**、\n                     改 memoDep（依赖脏）⇒ 放行（把最新 memoVal 写下去）。\n         ★两行的文本初值刻意可区分（once-x / memo-y），判据核\"跳过\"与\"放行\"的**不同**结果。 "),
+      _createVNode(_component_p_text, { style: {"fontSize":12,"color":"#ffffff"} }, {
+        default: _withCtx(() => [
+          _createTextVNode("once-" + _toDisplayString(_ctx.onceVal), 1 /* TEXT */)
+        ]),
+        _: 1 /* STABLE */
+      }),
+      _cache[4] || (
+        _setBlockTracking(-1, true),
+        (_cache[4] = _createVNode(_component_p_text, { style: {"fontSize":12,"color":"#ffffff"} }, {
+          default: _withCtx(() => [
+            _createTextVNode("once-" + _toDisplayString(_ctx.onceVal), 1 /* TEXT */)
+          ]),
+          _: 1 /* STABLE */
+        })).cacheIndex = 4,
+        _setBlockTracking(1),
+        _cache[4]
+      ),
+      _withMemo([_ctx.memoDep], () => (_openBlock(), _createBlock(_component_p_text, {
+        key: 'memo',
+        style: {"fontSize":12,"color":"#ffffff"}
+      }, {
+        default: _withCtx(() => [
+          _createTextVNode("memo-" + _toDisplayString(_ctx.memoVal), 1 /* TEXT */)
+        ]),
+        _: 1 /* STABLE */
+      })), _cache, 5)
     ]),
     _: 1 /* STABLE */
   }))

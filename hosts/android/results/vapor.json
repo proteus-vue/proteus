@@ -1,24 +1,24 @@
 {
-  "bundle_chars": 469500,
-  "run_ms": 22,
+  "bundle_chars": 481968,
+  "run_ms": 26,
   "host_mount_calls": 1,
-  "host_apply_calls": 7,
+  "host_apply_calls": 10,
   "host_update_patch_calls": 0,
-  "host_nodes": 28,
-  "host_text_nodes": 9,
-  "host_cmds": 28,
-  "host_layout_ms": 0.307135,
-  "host_measure_ms": 0.250364,
+  "host_nodes": 31,
+  "host_text_nodes": 12,
+  "host_cmds": 31,
+  "host_layout_ms": 0.350521,
+  "host_measure_ms": 0.277187,
   "host_painted_samples": 12060,
-  "host_painted_colors": 41,
+  "host_painted_colors": 46,
   "host_applied": 1,
-  "host_changed_nodes": 2,
+  "host_changed_nodes": 31,
   "host_view_on_draw": 2,
   "report": {
     "ok": true,
-    "tpl_nodes": 14,
+    "tpl_nodes": 17,
     "tpl_ok": true,
-    "sub_l1": 7,
+    "sub_l1": 10,
     "sub_l0": 0,
     "sub_l1_rate": 1,
     "sub_sources": [
@@ -26,21 +26,49 @@
       "boxW",
       "padW",
       "stopOuterW",
-      "stopInnerW"
+      "stopInnerW",
+      "onceVal",
+      "memoDep",
+      "memoVal"
     ],
     "inst_ms": 1,
-    "inst_nodes": 28,
+    "inst_nodes": 31,
     "inst_reused_ids": 2,
     "inst_allocated_ids": 14,
-    "inst_rows": 28,
-    "inst_values_filled": 20,
+    "inst_rows": 31,
+    "inst_values_filled": 24,
     "inst_virtual_rows": 8,
-    "inst_text_filled": 9,
+    "inst_text_filled": 12,
     "inst_width_filled": 13,
     "mix_text_probe": [
       {
         "id": 8,
-        "text": "row-1·row 1"
+        "text": "row-1·row 1",
+        "statics": [
+          "row-",
+          "·"
+        ]
+      },
+      {
+        "id": 14,
+        "text": "once-1",
+        "statics": [
+          "once-"
+        ]
+      },
+      {
+        "id": 15,
+        "text": "once-1",
+        "statics": [
+          "once-"
+        ]
+      },
+      {
+        "id": 16,
+        "text": "memo-1",
+        "statics": [
+          "memo-"
+        ]
       }
     ],
     "text_probe_rounds": [
@@ -48,8 +76,75 @@
       "row-2·upd 1",
       "row-3·upd 2"
     ],
+    "gate_rounds": [
+      {
+        "name": "once-frozen",
+        "ops": 38,
+        "texts": [
+          "once-42"
+        ],
+        "expect_skip": true
+      },
+      {
+        "name": "plain-updated",
+        "ops": 42,
+        "texts": [
+          "row-1·gate"
+        ],
+        "expect_skip": false
+      },
+      {
+        "name": "memo-clean",
+        "ops": 0,
+        "texts": [],
+        "expect_skip": true
+      },
+      {
+        "name": "memo-dirty",
+        "ops": 38,
+        "texts": [
+          "memo-99"
+        ],
+        "expect_skip": false
+      }
+    ],
+    "gate_text_nodes": [
+      {
+        "name": "once-frozen",
+        "entries": [
+          {
+            "nodeId": 14,
+            "text": "once-42"
+          }
+        ]
+      },
+      {
+        "name": "plain-updated",
+        "entries": [
+          {
+            "nodeId": 8,
+            "text": "row-1·gate"
+          }
+        ]
+      },
+      {
+        "name": "memo-clean",
+        "entries": []
+      },
+      {
+        "name": "memo-dirty",
+        "entries": [
+          {
+            "nodeId": 16,
+            "text": "memo-99"
+          }
+        ]
+      }
+    ],
+    "once_node_id": 15,
+    "memo_node_id": 16,
     "mount_ms": 16,
-    "mount_nodes": 28,
+    "mount_nodes": 31,
     "updates_run": 3,
     "ops_bytes": 204,
     "ops_ms": 0,
@@ -83,7 +178,7 @@
     ],
     "geom_probe": [
       {
-        "id": 15,
+        "id": 18,
         "before": 52,
         "after": 80
       }
@@ -151,7 +246,7 @@
         "ops": 1,
         "changed_rects": 1,
         "geom_before": 96,
-        "geom_after": 28,
+        "geom_after": 31,
         "geom_diff_ids": [
           10
         ]
@@ -178,7 +273,7 @@
         "ops": 1,
         "changed_rects": 2,
         "geom_before": 56,
-        "geom_after": 28,
+        "geom_after": 31,
         "geom_diff_ids": [
           10,
           11
@@ -203,7 +298,7 @@
         "ops": 1,
         "changed_rects": 1,
         "geom_before": 220,
-        "geom_after": 28,
+        "geom_after": 31,
         "geom_diff_ids": [
           12
         ]
@@ -228,7 +323,7 @@
         "ops": 1,
         "changed_rects": 1,
         "geom_before": 40,
-        "geom_after": 28,
+        "geom_after": 31,
         "geom_diff_ids": [
           13
         ]
@@ -240,10 +335,10 @@
       "tap@11 自身宽度 120 → 150",
       "tap@12 自身宽度 300 → 305",
       "tap@13 自身宽度 120 → 150",
-      "实例树 28 节点 \/ 行 28 \/ 虚拟化行 8 \/ 增量 3 轮"
+      "实例树 31 节点 \/ 行 31 \/ 虚拟化行 8 \/ 增量 3 轮"
     ],
-    "host_layout_ms": 0.307,
-    "host_cmds": 28
+    "host_layout_ms": 0.351,
+    "host_cmds": 31
   },
   "ok": true
 }

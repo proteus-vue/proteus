@@ -316,12 +316,25 @@ def main() -> int:
         # 本端夹具未覆盖混合文本 ⇒ 如实跳过（不静默当过了，也不误判失败）
         print("  ◐ ⑩ 混合文本：本端夹具无多段文本节点——如实跳过")
     else:
-        bad = [m for m in mx if "·" not in m.get("text", "")]
+        # ★判据口径：**每个静态段按序都出现在文本里**（子序列校验）——
+        #   首版写死字符 '·'，换了夹具（once-/memo- 前缀）就误红（本仓实测踩到：
+        #   判据绑死在某一版夹具上 = 判据自身缺陷）。
+        def statics_ok(m: dict) -> bool:
+            text = m.get("text", "")
+            pos = 0
+            for seg in m.get("statics", []):
+                idx = text.find(seg, pos)
+                if idx < 0:
+                    return False
+                pos = idx + len(seg)
+            return True
+
+        bad = [m for m in mx if not statics_ok(m)]
         if bad:
-            fail(f"★混合文本首帧不完整（缺静态段）：{bad} —— 段求值没跑或只写了插值")
+            fail(f"★混合文本首帧不完整（静态段缺失/乱序）：{bad} —— 段求值没跑或只写了插值")
             ok = False
         else:
-            print(f"  ✓ ⑩ ★混合文本首帧完整拼接（设备端实例树实测）：{mx[0].get('text')!r}"
+            print(f"  ✓ ⑩ ★混合文本首帧完整拼接（设备端实例树实测 · 静态段按序齐备）：{mx[0].get('text')!r}"
                   + (f" 等 {len(mx)} 处" if len(mx) > 1 else ""))
 
     # ⑩b 更新后的完整串（内核回执 text_probe）：混合文本更新**不得丢静态段**
@@ -330,13 +343,64 @@ def main() -> int:
         fail("★有混合文本节点，但内核没有任何 text_probe 读数——文本更新没到内核（或宿主没回执）")
         ok = False
     elif mx:
-        incomplete = [t for t in tpr if "·" not in t]
+        # ★子序列校验（口径同 ⑩）：用 mx 的静态段集合核每条更新文本
+        statics_pool = [st for m in mx for st in m.get("statics", [])]
+        def keeps_a_static(t: str) -> bool:
+            # 至少保住**本夹具某节点的一条**静态段（更新只写插值 ⇒ 任何段都不在）
+            return any(st in t for st in statics_pool)
+        incomplete = [t for t in tpr if not keeps_a_static(t)]
         if incomplete:
             fail(f"★更新后的文本丢了静态段：{incomplete} —— 混合文本更新只写了插值部分（静默错内容）")
             ok = False
         else:
             print(f"  ✓ ⑩b ★更新后仍是完整拼接串（内核回执实测）：{tpr[:3]}"
                   + (f" 等 {len(tpr)} 轮" if len(tpr) > 3 else ""))
+
+    # ── ⑪ ★P2-5 v-once 冻结 / v-memo 组门（"该跳过的必须跳过"要有对照才算证据）──
+    #   【为什么单独判】前几轮的判据都是"改了数据 ⇒ 必须发指令"；P2-5 恰好相反：
+    #     **依赖净/已冻结时必须不发**。而"不发"与"链路断了"在读数上长得一样
+    #     ⇒ 判据靠**成对轮次**区分：expect_skip=true 必须 ops==0，expect_skip=false 必须 ops>0。
+    gates = rep.get("gate_rounds") or []
+    gate_nodes = {g.get("name"): (g.get("entries") or []) for g in (rep.get("gate_text_nodes") or [])}
+    once_nid = rep.get("once_node_id", -1)
+    memo_nid = rep.get("memo_node_id", -1)
+    if not gates:
+        print("  ◐ ⑪ v-once/v-memo 门禁轮：本端夹具未覆盖（无 onceVal/memoDep 源）——如实跳过")
+    else:
+        def text_of(round_name: str, node_id: int) -> list:
+            return [e.get("text", "") for e in gate_nodes.get(round_name, []) if e.get("nodeId") == node_id]
+
+        # ★★判据升级（本仓真机实测抓出的**判据自身缺陷**）：不能按"整批文本里有没有新值"判——
+        #   夹具里 once 节点与**同源对照节点**并存，对照节点更新是**正确行为**；
+        #   首版按整批判 ⇒ 把正确行为判红（假红）。⇒ 必须**精确到节点**。
+        once_frozen_texts = text_of('once-frozen', once_nid) if once_nid >= 0 else []
+        memo_clean_texts = text_of('memo-clean', memo_nid) if memo_nid >= 0 else []
+        memo_dirty_texts = text_of('memo-dirty', memo_nid) if memo_nid >= 0 else []
+        if once_nid >= 0 and once_frozen_texts:
+            fail(f"★once 节点 {once_nid} 在源变化后仍被写（{once_frozen_texts}）——v-once 没冻结")
+            ok = False
+        elif memo_nid >= 0 and memo_clean_texts:
+            fail(f"★memo 节点 {memo_nid} 在**依赖净**时仍被写（{memo_clean_texts}）——组门没生效")
+            ok = False
+        elif memo_nid >= 0 and not memo_dirty_texts:
+            fail(f"★memo 节点 {memo_nid} 在**依赖脏**时没有写（链路断了 ⇒ 那么'跳过'不能证明是语义）")
+            ok = False
+        elif memo_nid >= 0 and not any('99' in t for t in memo_dirty_texts):
+            fail(f"★memo 依赖脏时放行的文本不含最新值 99（实际 {memo_dirty_texts}）——写的是旧值（求值时机错）")
+            ok = False
+        elif any(g.get("expect_skip") is False and g.get("ops", 0) <= 0 for g in gates):
+            # ★对照轮（plain-updated）必须真的发指令——"跳过"要有对照才算证据
+            fail(f"★对照轮没有发指令（链路可能断了）：{[g['name'] for g in gates if g.get('ops', 0) <= 0]}")
+            ok = False
+        else:
+            detail = " · ".join(
+                f"{g['name']}={g.get('ops')}B" + (f"→节点{[e['nodeId'] for e in gate_nodes.get(g['name'], [])]}" if g.get('ops') else '（跳过）')
+                for g in gates
+            )
+            print(f"  ✓ ⑪ ★v-once 冻结 + v-memo 组门（**逐节点**核对：once 节点未写 / memo 净跳过 / memo 脏放行且写新值）：{detail}")
+
+    # 附加观测（不判红，只如实报）
+    una = rep.get("uninstantiated_slots", 0)
 
     # 附加观测（不判红，只如实报）
     una = rep.get("uninstantiated_slots", 0)

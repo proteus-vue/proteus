@@ -83,6 +83,14 @@ const SFC = `<template>
     <p-view :width="stopOuterW" @click="stopOuterW += 5" style="height: 220px; margin-top: 8px; background-color: #223344">
       <p-view :width="stopInnerW" @click.stop="stopInnerW += 30" style="height: 40px; background-color: #445566"></p-view>
     </p-view>
+    <!-- ★★P2-5（2026-10-03）：v-once 冻结 / v-memo 组门 夹具。
+         · once 行：{{ onceVal }} 只在首帧写，之后**源怎么改都不再写**（判据 ⑪ 用）；
+         · memo 行：v-memo="[memoDep]" + {{ memoVal }} —— 改 memoVal（依赖净）⇒ **跳过**、
+                     改 memoDep（依赖脏）⇒ 放行（把最新 memoVal 写下去）。
+         ★两行的文本初值刻意可区分（once-x / memo-y），判据核"跳过"与"放行"的**不同**结果。 -->
+    <p-text style="font-size: 12px; color: #ffffff">once-{{ onceVal }}</p-text>
+    <p-text v-once style="font-size: 12px; color: #ffffff">once-{{ onceVal }}</p-text>
+    <p-text v-memo="[memoDep]" :key="'memo'" style="font-size: 12px; color: #ffffff">memo-{{ memoVal }}</p-text>
   </p-view>
 </template>
 
@@ -94,6 +102,10 @@ const tapCount = ref(0)
 // ★P2-3 修饰符夹具的两个源（与 makeData 的初值一致）
 const stopOuterW = ref(300)
 const stopInnerW = ref(120)
+// ★P2-5 夹具源（与 makeData 的初值一致）：onceVal 冻结；memoDep 是 v-memo 的依赖、memoVal 是内容
+const onceVal = ref(1)
+const memoDep = ref(0)
+const memoVal = ref(1)
 </script>
 `
 
@@ -158,6 +170,23 @@ const buildAb = (src, name) => {
         continue
       }
       keep.push(am[0])
+    }
+    // ★★2026-10-03 修（P2-5 实测抓出）：上面的 attrRe **要求有 `=值`** ⇒ **无值属性**
+    //   （`v-once` / `v-pre` / 布尔属性如 `hidden`、`disabled`）会被**静默丢弃**——
+    //   而 v-once 直接决定"这棵子树是否冻结"，丢了它 = A/B 两侧语义不等价（B 侧照常更新）。
+    //   ⇒ 补一道**裸属性**扫描（无 `=` 的 token 原样保留；不重复已收集的）。
+    {
+      // ★先把**带引号的值**整段挖掉再扫（否则会匹配到值内部的 `color:` 之类 token ⇒
+      //   注入伪属性——本仓实测踩到：生成的 prop 里出现 `"color:": ""`）
+      const bareAttrs = attrs.replace(/"[^"]*"|'[^']*'/g, ' ')
+      const bare = /(?:^|\s)([@:a-zA-Z][\w:.-]*)(?=\s|$)/g
+      let bm
+      while ((bm = bare.exec(bareAttrs)) !== null) {
+        const tok = bm[1]
+        if (tok.includes('=')) continue
+        if (keep.some((k) => k === tok || k.startsWith(tok + '='))) continue
+        keep.push(tok)
+      }
     }
     if (!has) return full
     const styleObj = JSON.stringify(camelize(merged))

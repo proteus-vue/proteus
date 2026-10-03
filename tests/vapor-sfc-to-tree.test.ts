@@ -13,7 +13,8 @@
 //      ⇒ 行内更新发普通 SET_STYLE（而不是回退 LIST_UPDATE）
 import { describe, it, expect } from 'vitest'
 import { buildVaporSubscriptions, buildLayoutTemplate } from '@proteus-vue/compiler'
-import { ListRegistry, instantiateTemplate } from '@proteus-vue/slot-runtime'
+import { ListRegistry, OpCode, PropKeyTable, StringPool, SlotRuntime, VaporRuntime, decodeOps, instantiateTemplate } from '@proteus-vue/slot-runtime'
+import type { EvalContext } from '@proteus-vue/slot-runtime'
 import type { LayoutTemplate, SubscriptionTable } from '@proteus-vue/slot-runtime'
 
 const sfc = (script: string, template: string): string =>
@@ -498,5 +499,127 @@ describe('★★P2-2 混合文本（2026-10-03）：`a{{x}}b` 编译期切分 �
     const node = r.template.nodes.find((n) => n.tag === 'p-text')!
     const hasFmtLiteral = (node.textSegments ?? []).some((s) => 'text' in s && s.text.includes('fmt'))
     expect(hasFmtLiteral, '表达式源码不得被当成字面量文本段').toBe(false)
+  })
+})
+
+describe('★★P2-5（2026-10-03）：v-once 冻结 / v-memo 组门 —— 编译产物 + 运行时语义', () => {
+  const sfc2 = (script: string, template: string): string =>
+    `<template>\n${template}\n</template>\n\n<script setup lang="ts">\n${script}\n</script>\n`
+  const SCRIPT = `const a = ref(1)\nconst b = ref(2)\nconst c = ref(3)\n`
+
+  it('① 编译：v-once 槽位带 once 标记；v-memo 槽位带 memoId + 组依赖表', () => {
+    const onceSrc = sfc2(SCRIPT, `<p-text v-once>{{ a }}</p-text>`)
+    const r1 = buildVaporSubscriptions(onceSrc, 'o.vue')
+    const onceSlot = r1.table.sources.flatMap((s) => s.slots)[0]!
+    expect(onceSlot.once, 'v-once 绑定必须带 once 标记').toBe(true)
+    expect(r1.diagnostics, 'v-once 不应有诊断').toHaveLength(0)
+
+    const memoSrc = sfc2(SCRIPT, `<p-text v-memo="[a, b]">{{ c }}</p-text>`)
+    const r2 = buildVaporSubscriptions(memoSrc, 'm.vue')
+    const memoSlot = r2.table.sources.flatMap((s) => s.slots)[0]!
+    expect(memoSlot.memoId, 'v-memo 绑定必须带 memoId').toBe(0)
+    expect(r2.table.memoGroups, 'memo 组表必须产出').toBeDefined()
+    expect(r2.table.memoGroups![0]!.depsSrc, '依赖按书写序').toEqual(['a', 'b'])
+    // ★关键：memo 依赖的根也必须在订阅图里（否则"依赖变了"不触发求值 ⇒ 静默漏更新）
+    const srcNames = r2.table.sources.map((s) => s.sourceName)
+    expect(srcNames, 'memo 依赖的源必须在订阅图（漏挂 ⇒ 依赖变化不触发）').toEqual(expect.arrayContaining(['a', 'b']))
+  })
+
+  it('★反向：无 v-once/v-memo 时**不产出**新字段（既有产物逐字节不变）', () => {
+    const plain = sfc2(SCRIPT, `<p-text>{{ a }}</p-text>`)
+    const r = buildVaporSubscriptions(plain, 'p.vue')
+    expect(r.table.memoGroups, '无 v-memo ⇒ 不产出 memoGroups').toBeUndefined()
+    expect(r.table.sources.flatMap((s) => s.slots).every((x) => x.once === undefined && x.memoId === undefined)).toBe(true)
+  })
+
+  it('★诊断边界：v-memo 非数组字面量 / 行内 v-once ⇒ 诊断（不静默）', () => {
+    const bad = sfc2(SCRIPT, `<p-text v-memo="a">{{ c }}</p-text>`)
+    const r1 = buildVaporSubscriptions(bad, 'b.vue')
+    expect(r1.diagnostics.some((d) => d.code === 'VAPOR_MEMO_SHAPE'), '非数组 v-memo 必须诊断').toBe(true)
+    expect(r1.table.memoGroups, '建不出依赖表 ⇒ 不产出组（照常更新，仅少优化）').toBeUndefined()
+
+    const inList = sfc2(
+      `const list = ref([{ id: 1, n: 'x' }])\n`,
+      `<ul><li v-for="it in list" :key="it.id"><span v-once>{{ it.n }}</span></li></ul>`,
+    )
+    const r2 = buildVaporSubscriptions(inList, 'l.vue')
+    expect(r2.diagnostics.some((d) => d.code === 'VAPOR_ONCE_IN_LIST'), '行内 v-once 必须诊断').toBe(true)
+  })
+
+  it('★★② 运行时：v-once 首帧后**永久冻结**（源变化不再写）', () => {
+    const src = sfc2(SCRIPT, `<p-text v-once>{{ a }}</p-text>`)
+    const { table } = buildVaporSubscriptions(src, 'o.vue')
+    const data: Record<string, unknown> = { a: 1 }
+    const keys = new PropKeyTable(); const strings = new StringPool()
+    const captured: Uint8Array[] = []
+    const rt = new SlotRuntime(keys, strings, (bx) => captured.push(bx))
+    const ctx: EvalContext = { read: (n) => data[n] }
+    const vapor = new VaporRuntime(table, rt, VaporRuntime.buildEvaluators(table.evaluators))
+    const triggers = new Map<string, () => void>()
+    vapor.load(ctx, (n, cb) => triggers.set(n, cb))
+    vapor.relink(ctx); rt.flush()
+    // 首帧已写（冻结前的唯一一次写）
+    expect(captured.length, '首帧应有写入').toBe(1)
+    captured.length = 0
+    // 改源 → 触发 → relink：**不得**再写
+    data.a = 999
+    for (const [, cb] of triggers) cb()
+    vapor.relink(ctx)
+    rt.flush()
+    expect(captured.length, '★v-once：源变化后不得再写（冻结）').toBe(0)
+  })
+
+  it('★★③ 运行时：v-memo 组门——依赖净则跳过、依赖脏则放行', () => {
+    const src = sfc2(SCRIPT, `<p-text v-memo="[a]">{{ c }}</p-text>`)
+    const { table } = buildVaporSubscriptions(src, 'm.vue')
+    const data: Record<string, unknown> = { a: 1, c: 10 }
+    const keys = new PropKeyTable(); const strings = new StringPool()
+    const captured: Uint8Array[] = []
+    const rt = new SlotRuntime(keys, strings, (bx) => captured.push(bx))
+    const ctx: EvalContext = { read: (n) => data[n] }
+    const vapor = new VaporRuntime(table, rt, VaporRuntime.buildEvaluators(table.evaluators))
+    const triggers = new Map<string, () => void>()
+    vapor.load(ctx, (n, cb) => triggers.set(n, cb))
+    vapor.relink(ctx); rt.flush()
+    captured.length = 0
+    // ① 只改 c（memo 依赖 a 未变）⇒ **跳过**（stale c 与官方 withMemo 一致）
+    data.c = 20
+    for (const [, cb] of triggers) cb()
+    vapor.relink(ctx); rt.flush()
+    expect(captured.length, '★依赖净 ⇒ 必须跳过（组门生效）').toBe(0)
+    // ② 改 a（依赖脏）⇒ 放行（同帧把新 c 写下去）
+    data.a = 5
+    for (const [, cb] of triggers) cb()
+    vapor.relink(ctx); rt.flush()
+    expect(captured.length, '★依赖脏 ⇒ 必须放行').toBe(1)
+    const d = decodeOps(captured[0]!)
+    const setText = d.ops.find((o) => o.op === OpCode.SET_TEXT) as { textRef: number } | undefined
+    expect(d.strings.valueOf(setText!.textRef), '放行时写出的是**最新**值（20）').toBe('20')
+  })
+
+  it('★帧语义：同帧内先写依赖槽位、后写被门控槽位 ⇒ 两个都写出（组=子树整体更新）', () => {
+    // 元素同时渲染依赖与内容：v-memo="[a]" 且 {{ a }} + {{ c }}
+    const src = sfc2(SCRIPT, `<p-view v-memo="[a]"><p-text>{{ a }}</p-text><p-text>{{ c }}</p-text></p-view>`)
+    const { table } = buildVaporSubscriptions(src, 'f.vue')
+    const data: Record<string, unknown> = { a: 1, c: 10 }
+    const keys = new PropKeyTable(); const strings = new StringPool()
+    const captured: Uint8Array[] = []
+    const rt = new SlotRuntime(keys, strings, (bx) => captured.push(bx))
+    const ctx: EvalContext = { read: (n) => data[n] }
+    const vapor = new VaporRuntime(table, rt, VaporRuntime.buildEvaluators(table.evaluators))
+    const triggers = new Map<string, () => void>()
+    vapor.load(ctx, (n, cb) => triggers.set(n, cb))
+    vapor.relink(ctx); rt.flush()
+    captured.length = 0
+    // 同帧改 a + c（依赖脏）：**两个槽位都要写**（不能因"第一个已判定"而漏掉第二个）
+    data.a = 7; data.c = 70
+    for (const [, cb] of triggers) cb()
+    vapor.relink(ctx); rt.flush()
+    const texts: string[] = []
+    for (const bx of captured) {
+      const d = decodeOps(bx)
+      for (const o of d.ops) if (o.op === OpCode.SET_TEXT) texts.push(String(d.strings.valueOf((o as { textRef: number }).textRef)))
+    }
+    expect(texts.sort(), '同帧依赖脏 ⇒ 组内**两个**槽位都要写').toEqual(['7', '70'])
   })
 })

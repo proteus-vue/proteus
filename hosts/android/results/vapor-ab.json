@@ -1,43 +1,43 @@
 {
-  "bundle_chars": 469500,
-  "run_ms": 40,
+  "bundle_chars": 481968,
+  "run_ms": 41,
   "host_mount_calls": 2,
   "host_apply_calls": 3,
   "host_update_patch_calls": 3,
-  "host_nodes": 41,
-  "host_text_nodes": 9,
-  "host_cmds": 41,
-  "host_layout_ms": 0.217291,
-  "host_measure_ms": 0.058698,
+  "host_nodes": 47,
+  "host_text_nodes": 12,
+  "host_cmds": 47,
+  "host_layout_ms": 0.233333,
+  "host_measure_ms": 0.075261,
   "host_painted_samples": 12060,
-  "host_painted_colors": 41,
+  "host_painted_colors": 46,
   "host_applied": 2,
-  "host_changed_nodes": 39,
+  "host_changed_nodes": 45,
   "host_view_on_draw": 4,
   "report": {
     "ok": true,
-    "nodes_a": 28,
-    "nodes_b": 41,
-    "texts_a": 9,
-    "texts_b": 9,
-    "samples": 9,
+    "nodes_a": 31,
+    "nodes_b": 47,
+    "texts_a": 12,
+    "texts_b": 12,
+    "samples": 12,
     "max_delta": 0,
     "mismatches": 0,
     "first_mismatch": null,
     "cost_a": {
-      "instantiate_ms": 0,
-      "host_ms": 17,
+      "instantiate_ms": 1,
+      "host_ms": 16,
       "total_ms": 17
     },
     "cost_b": {
       "vue_ms": 0,
       "request_ms": 1,
       "serialize_ms": 0,
-      "host_ms": 14,
-      "total_ms": 15
+      "host_ms": 15,
+      "total_ms": 16
     },
-    "layout_ms_a": 0.229,
-    "layout_ms_b": 0.217,
+    "layout_ms_a": 0.245,
+    "layout_ms_b": 0.233,
     "channels_a": 5,
     "channels_b": 5,
     "chan_a": {
@@ -102,8 +102,8 @@
       "handler": "h1",
       "ops_bytes": 56,
       "applied": 2,
-      "relayout": 28,
-      "changed_rects": 28,
+      "relayout": 31,
+      "changed_rects": 31,
       "before": {
         "height": 56,
         "width": 180,
@@ -117,7 +117,7 @@
         "y": 999
       },
       "width_delta": 30,
-      "tap_ms": 1
+      "tap_ms": 2
     },
     "ev_b": {
       "node": 39,
@@ -153,7 +153,7 @@
       "width_delta": 30,
       "patches": 2,
       "applied": 2,
-      "changed_rects": 39,
+      "changed_rects": 45,
       "text_layers": 0,
       "driver_ms": 0
     },
@@ -169,7 +169,7 @@
         "apply_ms": 1,
         "changed_rects": 4,
         "relayout": 4,
-        "layout_ms": 0.068,
+        "layout_ms": 0.05,
         "text_synced": 1,
         "moved": 20
       },
@@ -180,7 +180,7 @@
         "apply_ms": 0,
         "changed_rects": 4,
         "relayout": 4,
-        "layout_ms": 0.028,
+        "layout_ms": 0.026,
         "text_synced": 1,
         "moved": 28
       }
@@ -195,7 +195,7 @@
         "host_ms": 0,
         "text_layers": 1,
         "moved": 20,
-        "driver_ms": 0
+        "driver_ms": 1
       },
       {
         "round": 1,
@@ -209,7 +209,7 @@
         "driver_ms": 0
       }
     ],
-    "upd_samples": 18,
+    "upd_samples": 24,
     "upd_max_delta": 0,
     "upd_mismatches": 0,
     "upd_first_mismatch": null,
@@ -218,26 +218,26 @@
         "round": 0,
         "delta": 0,
         "mismatches": 0,
-        "samples": 9
+        "samples": 12
       },
       {
         "round": 1,
         "delta": 0,
         "mismatches": 0,
-        "samples": 9
+        "samples": 12
       }
     ],
     "upd_a_text_synced": 2,
     "upd_b_text_applied": 2,
     "notes": [
-      "A 树: 0:p-view 1<0:p-text(Vapor ) 2<0:p-view 3<0:p-view 4<0:p-view 5<0:p-view 6<0:p-view 7<0:p-view 8<7:p-text(row-1·) 14<0:p-view 15<14:p-text(row-2·) 16<0:p-view 17<16:p-text(row-3·) 18<0:p-view 19<18:p-text(row-4·) 20<0:p-view 21<20:p-text(row-5·) 22<0:p-view 23<22:p-text(row-6·) 24<0:p-view 25<24:p-text(row-7·) 26<0:p-view 27<26:p-text(row-8·) 9<0:p-view 10<0:p-view 11<10:p-view 12<0:p-view 13<12:p-view",
+      "A 树: 0:p-view 1<0:p-text(Vapor ) 2<0:p-view 3<0:p-view 4<0:p-view 5<0:p-view 6<0:p-view 7<0:p-view 8<7:p-text(row-1·) 17<0:p-view 18<17:p-text(row-2·) 19<0:p-view 20<19:p-text(row-3·) 21<0:p-view 22<21:p-text(row-4·) 23<0:p-view 24<23:p-text(row-5·) 25<0:p-view 26<25:p-text(row-6·) 27<0:p-view 28<27:p-text(row-7·) 29<0:p-view 30<29:p-text(row-8·) 9<0:p-view 10<0:p-view 11<10:p-view 12<0:p-view 13<12:p-view 14<0:p-text(once-1) 15<0:p-text(once-1) 16<0:p-text(memo-1)",
       "B 树: 1: 2<1: 3<2: 4<3: 5<4:(Vapor ) 6<3: 7<3: 8<3: 9<3: 10<3: 11<3: 13<3: 14<13: 15<14:(row-1·) 16<3: 17<16: 18<17:(row-2·) 19<3: 20<19: 21<20:(row-3·) 22<3: 23<22: 24<23:(row-4·) 25<3: 26<25: 27<26:(row-5·) 28<3: 29<28: 30<29:(row-6·) 31<3: 32<31: 33<32:(row-7·) 34<3: 35<34: 36<35:(row-8·) 12<3: 37<3: 38<3: 39<38: 40<3:",
-      "A 明细: 0<-[width,height,flexDirection…] 1<0[fontSize,color,margin…]{Vapor} 2<0[height,margin,borderRadius…] 3<0[height,margin,fillGradient…] 4<0[height,margin,backgroundColor…] 5<0[height,margin,backgroundColor…] 6<0[height,margin,backgroundColor…] 7<0[height,margin,backgroundColor…] 8<7[fontSize,color,tag…]{row-1} 14<0[height,margin,backgroundColor…] 15<14[fontSize,color,tag…]{row-2} 16<0[height,margin,backgroundColor…] 17<16[fontSize,color,tag…]{row-3} 18<0[height,margin,backgroundColor…] 19<18[fontSize,color,tag…]{row-4} 20<0[height,margin,backgroundColor…] 21<20[fontSize,color,tag…]{row-5} 22<0[height,margin,backgroundColor…] 23<22[fontSize,color,tag…]{row-6} 24<0[height,margin,backgroundColor…] 25<24[fontSize,color,tag…]{row-7} 26<0[height,margin,backgroundColor…] 27<26[fontSize,color,tag…]{row-8} 9<0[height,margin,backgroundColor…] 10<0[height,margin,backgroundColor…] 11<10[height,margin,backgroundColor…] 12<0[height,margin,backgroundColor…] 13<12[height,backgroundColor,tag…]",
+      "A 明细: 0<-[width,height,flexDirection…] 1<0[fontSize,color,margin…]{Vapor} 2<0[height,margin,borderRadius…] 3<0[height,margin,fillGradient…] 4<0[height,margin,backgroundColor…] 5<0[height,margin,backgroundColor…] 6<0[height,margin,backgroundColor…] 7<0[height,margin,backgroundColor…] 8<7[fontSize,color,tag…]{row-1} 17<0[height,margin,backgroundColor…] 18<17[fontSize,color,tag…]{row-2} 19<0[height,margin,backgroundColor…] 20<19[fontSize,color,tag…]{row-3} 21<0[height,margin,backgroundColor…] 22<21[fontSize,color,tag…]{row-4} 23<0[height,margin,backgroundColor…] 24<23[fontSize,color,tag…]{row-5} 25<0[height,margin,backgroundColor…] 26<25[fontSize,color,tag…]{row-6} 27<0[height,margin,backgroundColor…] 28<27[fontSize,color,tag…]{row-7} 29<0[height,margin,backgroundColor…] 30<29[fontSize,color,tag…]{row-8} 9<0[height,margin,backgroundColor…] 10<0[height,margin,backgroundColor…] 11<10[height,margin,backgroundColor…] 12<0[height,margin,backgroundColor…] 13<12[height,backgroundColor,tag…] 14<0[fontSize,color,tag]{once-} 15<0[fontSize,color,tag]{once-} 16<0[fontSize,color,tag]{memo-}",
       "B 明细: 1<-[paintHint] 2<1[paintHint] 3<2[width,height,flexDirection…] 4<3[margin,color,fontSize…] 5<4[fontSize,fontWeight,fontFamily…]{Vapor} 6<3[height,margin,backgroundColor…] 7<3[height,margin,fillGradient…] 8<3[height,margin,glow…] 9<3[height,margin,clipPath…] 10<3[height,margin,svgPath…] 11<3[paintHint] 13<3[height,margin,backgroundColor…] 14<13[width,color,fontSize…] 15<14[fontSize,fontWeight,fontFamily…]{row-1} 16<3[height,margin,backgroundColor…] 17<16[width,color,fontSize…] 18<17[fontSize,fontWeight,fontFamily…]{row-2} 19<3[height,margin,backgroundColor…] 20<19[width,color,fontSize…] 21<20[fontSize,fontWeight,fontFamily…]{row-3} 22<3[height,margin,backgroundColor…] 23<22[width,color,fontSize…] 24<23[fontSize,fontWeight,fontFamily…]{row-4} 25<3[height,margin,backgroundColor…] 26<25[width,color,fontSize…] 27<26[fontSize,fontWeight,fontFamily…]{row-5} 28<3[height,margin,backgroundColor…] 29<28[width,color,fontSize…] 30<29[fontSize,fontWeight,fontFamily…]{row-6} 31<3[height,margin,backgroundColor…] 32<31[width,color,fontSize…] 33<32[fontSize,fontWeight,fontFamily…]{row-7} 34<3[height,margin,backgroundColor…] 35<34[width,color,fontSize…] 36<35[fontSize,fontWeight,fontFamily…]{row-8} 12<3[paintHint] 37<3[height,margin,backgroundColor…] 38<3[width,height,margin…] 39<38[width,height,margin…] 40<3[width,height,margin…]",
-      "★节点数不同：A=28 · B=41（树规模就不一致——先看这个）",
+      "★节点数不同：A=31 · B=47（树规模就不一致——先看这个）",
       "事件路径：A 命中 11 · 链 [11>10>0] 派发 [11>10] · 宽 180→210（指令 56B \/ applied 2）；B 命中 39 · 链 [39>38>3>2>1] 派发 [39>38] · 宽 180→210（补丁 2 \/ applied 2） · 逐跳位移 A=[30,5] vs B=[30,5]",
-      "A 路 17.0ms（实例化 0 + 宿主 17）",
-      "B 路 15.0ms（Vue mount 0 + 请求 1 + 序列化 0 + 宿主 14）"
+      "A 路 17.0ms（实例化 1 + 宿主 16）",
+      "B 路 16.0ms（Vue mount 0 + 请求 1 + 序列化 0 + 宿主 15）"
     ]
   },
   "ok": true
