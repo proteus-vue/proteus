@@ -31,7 +31,7 @@
 ### 第三批：各端实现 🔴 依赖 GP0
 
 - [ ] **GP3-a** Web 端挂载实现
-- [ ] **GP3-b0** 小程序端 **Overlay 收口**（既有 teleport→root-portal 链路 + 三件套复用 + S47 经验）
+- [~] **GP3-b0** 小程序端 **Overlay 收口** —— **进行中（2026-10-03）**：✅ S42/S47 陷阱机器化（编译期检查 + 回归锁）· ✅ LY004×teleport 层叠逃逸修复 · ⏳ virtualHost 固定（依赖 GP0-a 矩阵）· ⏳ 导航栏影响（需实测）
 - [ ] **GP3-b1** 小程序端 **Global 层新建**（每页注入机制 + 状态共享通道）🔴 依赖 GP0-a
 - [ ] **GP3-c** App 端挂载实现（Android / iOS）
 - [ ] **GP3-d** 鸿蒙端挂载实现 🔴 依赖 GP0-b
@@ -377,18 +377,27 @@ Vue 3 `Teleport to="body"` 原生支持。Teleport **只移动 DOM，不移动�
 - 三件套已在用：`p-drawer` / `p-popover` / `p-page-container`
 - `docs/skyline-pitfalls.md` **S42**（Skyline 无 fixed ⇒ 用 teleport）/ **S47**（portal 用 `v-if` 会卡死 ⇒ **常驻 + class 驱动**）已固化
 
-### 必做项
+### 必做项（★状态为 2026-10-03）
 
-- [ ] 与方案 §3 三层模型对齐（overlay 层语义 = `root-portal` + 常驻）
-- [ ] 按 GP0-a 结论固定 `virtualHost`（当前全仓**零配置**——见 GP0-a）
-- [ ] 把 S47 经验固化为编译期检查/文档（portal 内容不得 `v-if`）
-- [ ] 与 `contracts/src/layers.ts` 四层语义打通（`layer-popout` ↔ overlay 层）
-- [ ] 处理 Skyline **不支持 `position: fixed`**（浮层挂 root，不依赖 CSS）
-- [ ] 处理 Skyline **不支持原生导航栏** 的影响
+- [x] **S42/S47 经验固化** ⇒ 已升级为**编译期检查**（不只是文档）：
+      `<teleport>` 自身带 v-if（静默丢弃）与**直接子元素**带 v-if（S47 锁死形态）**各拦一条警告**，
+      修法指向正解（常驻 + class 驱动）；回归锁 `tests/mp-portal-pitfalls.test.ts`（6 组）
+      规则登记 `template/teleport-root-v-if` / `template/teleport-v-if-dropped`
+- [x] **与 `contracts/src/layers.ts` 打通** ⇒ 修出**真缺陷**：LY004（popout/mask 必须在根容器）
+      只看源码 depth，把 `<teleport>` 内（**运行时被提升到根**）的合法正解判成违规
+      ⇒ 判据改为「**portal 内相对深度 ≤1**」；验证：169 个 .vue 扫描无违规、单测 +4 组
+- [x] 处理 Skyline **不支持 `position: fixed`** ⇒ 已有 teleport→root-portal 链路（既有实现）+ 本批补检查
+- [ ] 按 GP0-a 结论固定 `virtualHost`（⏳ **依赖 GP0-a 版本矩阵**——当前结论"暂不设"，见报告 §5.2）
+- [ ] 处理 Skyline **不支持原生导航栏** 的影响（⏳ 需实测：导航栏在 skyline 下由谁渲染）
+- [ ] 与方案 §3 三层模型的**完整对齐**（overlay 层语义收口为"root-portal + 常驻"的**文档化约定**
+      + 新增弹层组件的模板（脚手架））
 
-### 验收
+### 验收（★状态为 2026-10-03）
 
-- [ ] Skyline + WebView 双引擎下 overlay 行为一致 · 点击穿透不存在（真机回归）
+- [x] 坑经验**有机器判据**（编译期拦得住，不只写在 markdown）
+- [x] `layer-*` 语义在 portal 路径上**被消费**（LY004 已按逃逸点修正）
+- [ ] Skyline + WebView 双引擎下 overlay 行为一致（⏳ WebView 档未测）
+- [ ] 点击穿透不存在（真机回归）—— ★GP0-a 已在**模拟器**证明三形态可达；**真机**未跑
 
 ---
 
