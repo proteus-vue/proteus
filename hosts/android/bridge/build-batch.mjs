@@ -209,15 +209,46 @@ const resultVapor = await build({
   platform: 'neutral',
   target: 'es2020',
   define: { 'process.env.NODE_ENV': '"production"', __DEV__: 'false' },
+  // ★★★metafile：给下面的**输入来源自检**用（esbuild 记录本次打包实际读了哪些文件——
+  //   这是"bundle 到底跑了哪份代码"的**权威判据**，不靠注释/约定）。
+  metafile: true,
   alias: {
     // ★子路径必须排在包名之前（esbuild 按 alias 键顺序匹配前缀——iOS 同款注释）
     '@proteus-vue/renderer-app/adapters/selfdraw': path.join(APP_DIST, 'adapters/selfdraw.js'),
     '@proteus-vue/renderer-app': path.join(APP_DIST, 'index.js'),
     '@vue/runtime-core': aliasRuntimeCore,
-    '@proteus-vue/slot-runtime': path.join(ROOT, 'packages/slot-runtime/dist/index.js'),
+    // ★★★**alias 到 src 而不是 dist**（2026-10-03 实测抓出的陈旧产物陷阱——本仓已踩第 N 次）：
+    //   此前指向 `packages/slot-runtime/dist/index.js` ⇒ **改了 src、忘了重建 dist** 时，
+    //   bundle 里跑的是**旧代码**，而设备报告看不出任何异常（症状是"新能力在真机上没生效，
+    //   本地直接 import src 的探针却全部正确"——我为此查了三轮：先疑产物、再疑安装、最后
+    //   用设备等价回路复现才定位）。本文件 app-stack/animation/contracts 各段早已改用 src
+    //   （见上注释「消除忘了重建 dist ⇒ 真机测的是旧代码」）——vapor 段是**遗漏的那一处**。
+    //   ★纪律：**同一类陷阱要么全仓消除，要么它会从没改到的那一处冒出来**。
+    '@proteus-vue/slot-runtime': path.join(ROOT, 'packages/slot-runtime/src/index.ts'),
   },
   legalComments: 'none',
 })
+
+// ★★★**输入来源自检**（2026-10-03）：bundle 的输入里**不许出现 packages/*/dist 代码**
+//   （renderer-app 除外——它的 dist 是刻意使用的"已发布产物"，且有专门的 src 新于 dist 重建防线）。
+//   【为什么必须有（这不是"再谨慎一点"）】陈旧 dist 的症状是"改的东西在设备上不生效，
+//   而所有本地探针都正确"——**症状与根因隔了两层**（bundle 内容），靠人排查要反复三到四轮
+//   （本仓 2026-10-03 实测）。这条判据把"打的是哪份代码"变成**构建期可见的事实**：
+//   凡有 `packages/<x>/dist/` 作为输入且无豁免 ⇒ 当场红（顺手把下一处遗漏也堵死）。
+{
+  const inputs = Object.keys(resultVapor.metafile.inputs ?? {})
+  const stale = inputs.filter(
+    (f) => /packages[\\/][^\\/]+[\\/]dist[\\/]/.test(f) && !/packages[\\/]renderer-app[\\/]dist[\\/]/.test(f),
+  )
+  if (stale.length > 0) {
+    console.error(`✗ vapor bundle 的输入里含**陈旧风险 dist**（应 alias 到 src）：`)
+    for (const f of stale.slice(0, 10)) console.error(`    ${f}`)
+    console.error(`  ⇒ 把对应包的 alias 改为 src（见本文件上方注释「陈旧 dist 陷阱」）`)
+    process.exit(3)
+  }
+  const fromSrc = inputs.filter((f) => /packages[\\/]slot-runtime[\\/]src[\\/]/.test(f)).length
+  console.log(`[android-bundle] ✅ bundle 输入自检：slot-runtime 走 src（${fromSrc} 个源文件）· 无未豁免 dist 输入`)
+}
 
 const bytesVapor = fs.statSync(OUT_VAPOR).size
 console.log(`[android-bundle] ✅ ${path.relative(ROOT, OUT_VAPOR)}（${(bytesVapor / 1024).toFixed(1)} KB）`)

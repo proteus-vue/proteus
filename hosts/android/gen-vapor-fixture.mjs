@@ -184,6 +184,33 @@ const props = defineProps<{ label: string; labelW: number }>()
 </script>
 `
 
+/**
+ * ★★★P1-3 **插槽分发**夹具（2026-10-03）：子组件含具名出口 + 默认出口（两者都带**元素后备**）
+ *   + 一个**空出口**（无后备）；父组件提供 #header / 默认内容 + 一个**无出口接住**的
+ *   #orphan 内容。判据 ⑮ 核四件事：内容真的落到出口位置 / 后备被内容遮蔽（元素真的没了）/
+ *   孤儿内容不渲染 / 内容节点在**内核**里真的有几何（不是"树里有、内核没有"）。
+ *   ★文本用**唯一前缀**（SLOT- / fb- / kid-head）便于判据按文本锚定（不依赖 id 规律）。
+ *   ★本注释不得含反引号或美元花括号（护栏见 check:script-compile）。
+ */
+const SLOT_CHILD_SFC = `<template>
+  <p-view style="flex-direction: column; height: 74px">
+    <p-text style="font-size: 10px; color: #cfe0ff">kid-head</p-text>
+    <slot name="header"><p-text style="font-size: 10px">fb-hdr</p-text></slot>
+    <slot><p-text style="font-size: 10px">fb-dft</p-text></slot>
+    <slot name="empty" />
+  </p-view>
+</template>`
+
+const SLOT_SFC = `<template>
+  <p-view style="flex-direction: column">
+    <KidSlot>
+      <template #header><p-text style="font-size: 12px; color: #ffffff">SLOT-HDR</p-text></template>
+      <p-text style="font-size: 12px; color: #ffffff">SLOT-DFT</p-text>
+      <template #orphan><p-text style="font-size: 12px; color: #ffffff">ORPHAN-NEVER</p-text></template>
+    </KidSlot>
+  </p-view>
+</template>`
+
 /** 长列表夹具：**行高 100px**（视口 2400 ⇒ 可见 ~24 行；预加载 ±10 ⇒ 物化 ~34 行）
  *  ——判据的口径：1000 行都必须在内核树里（几何正确），但宿主只物化可见区。
  *  ★行内含 `:width` 绑定（L1 槽位）与插值文本（`{{ item.title }}`）。 */
@@ -324,9 +351,15 @@ const build = (sfc, name) => {
 
 process.stdout.write(JSON.stringify({
   // ★★★P1-3：组件注册表（子组件 SFC 的编译产物——与父产物同批产出、同源下发）
-  components: { KidPanel: build(${JSON.stringify(CHILD_SFC)}, 'kid-panel.vue') },
+  components: {
+    KidPanel: build(${JSON.stringify(CHILD_SFC)}, 'kid-panel.vue'),
+    // ★P1-3 插槽分发夹具（判据 ⑮）——子组件含具名/默认出口（带元素后备）+ 空出口
+    KidSlot: build(${JSON.stringify(SLOT_CHILD_SFC)}, 'kid-slot.vue'),
+  },
   small: build(${JSON.stringify(SFC)}, 'vapor-device.vue'),
   list: build(${JSON.stringify(LIST_SFC)}, 'vapor-list.vue'),
+  // ★P1-3 插槽分发：父 SFC（提供 #header / 默认内容 + 无出口的 #orphan）
+  slot: build(${JSON.stringify(SLOT_SFC)}, 'vapor-slot.vue'),
   // ★★★六端 SFC 压力夹具：编译**共享 SFC 文件**（examples 页面）——与 Web/MP 同源
   stress: build(${JSON.stringify(stressSfc)}, 'consistency-stress.vue'),
   ab: ${JSON.stringify(AB_RESULT)},
@@ -480,8 +513,25 @@ for (const [nm, def] of Object.entries(parsed.components)) {
     process.exit(1)
   }
 }
-fs.writeFileSync(OUT, JSON.stringify({ ...parsed.small, components: parsed.components }))
+fs.writeFileSync(OUT, JSON.stringify({ ...parsed.small, components: parsed.components, slot: parsed.slot }))
 console.log(`[gen-vapor-fixture] ✅ 组件注册表：${Object.keys(parsed.components).join(', ')}（随父产物下发）`)
+// ★P1-3 插槽分发夹具（判据 ⑮）：父产物必须带 slotFor 标记、子产物必须带 slotOutlet 标记
+//   （"生成器静默退化"是本仓重点拦的形态——标记缺了就是分发不可能发生）
+{
+  const slotParent = parsed.slot
+  const slotChild = parsed.components.KidSlot
+  const has = (nodes, key) => (nodes || []).filter((n) => n && n[key]).length
+  const parentFors = has(slotParent.tpl.nodes, 'slotFor')
+  const childOutlets = has(slotChild.tpl.nodes, 'slotOutlet')
+  if (!slotParent.ok || !slotChild.ok || parentFors < 3 || childOutlets < 3) {
+    console.error(
+      `[gen-vapor-fixture] ✗ 插槽分发夹具不完整（判据 ⑮ 将无证据）：` +
+        `父 slotFor=${parentFors}（应 3）· 子 slotOutlet=${childOutlets}（应 3）· ok=${slotParent.ok}/${slotChild.ok}`,
+    )
+    process.exit(1)
+  }
+  console.log(`[gen-vapor-fixture] ✅ 插槽分发夹具：父内容根 ${parentFors} 个 · 子出口 ${childOutlets} 个`)
+}
 const kb = (fs.statSync(OUT).size / 1024).toFixed(1)
 
 const listInfo = check('长列表产物', parsed.list)

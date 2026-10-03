@@ -1,19 +1,19 @@
 {
-  "bundle_chars": 508028,
-  "run_ms": 36,
-  "host_mount_calls": 1,
+  "bundle_chars": 517605,
+  "run_ms": 92,
+  "host_mount_calls": 3,
   "host_apply_calls": 13,
   "host_update_patch_calls": 0,
   "host_nodes": 44,
   "host_text_nodes": 18,
   "host_cmds": 44,
-  "host_layout_ms": 0.414844,
-  "host_measure_ms": 0.361927,
+  "host_layout_ms": 0.231666,
+  "host_measure_ms": 0.118907,
   "host_painted_samples": 12060,
   "host_painted_colors": 55,
   "host_applied": 1,
   "host_changed_nodes": 0,
-  "host_view_on_draw": 2,
+  "host_view_on_draw": 6,
   "report": {
     "ok": true,
     "tpl_nodes": 28,
@@ -37,7 +37,7 @@
       "kidLabel",
       "kidLabelW"
     ],
-    "inst_ms": 0,
+    "inst_ms": 1,
     "inst_nodes": 44,
     "inst_reused_ids": 2,
     "inst_allocated_ids": 14,
@@ -222,12 +222,55 @@
       "rect_before": 40,
       "rect_after": 99
     },
-    "mount_ms": 22,
+    "slot_probe": {
+      "texts": [
+        "kid-head",
+        "SLOT-HDR",
+        "SLOT-DFT"
+      ],
+      "rects": [
+        {
+          "id": 6,
+          "width": 60
+        },
+        {
+          "id": 2,
+          "width": 60
+        },
+        {
+          "id": 3,
+          "width": 60
+        }
+      ],
+      "fills": [
+        {
+          "name": "header",
+          "filled": true,
+          "contentIds": [
+            2
+          ]
+        },
+        {
+          "name": "default",
+          "filled": true,
+          "contentIds": [
+            3
+          ]
+        },
+        {
+          "name": "empty",
+          "filled": false,
+          "contentIds": []
+        }
+      ],
+      "markers_left": 0
+    },
+    "mount_ms": 41,
     "mount_nodes": 44,
     "updates_run": 3,
     "ops_bytes": 204,
-    "ops_ms": 1,
-    "apply_ms": 1,
+    "ops_ms": 0,
+    "apply_ms": 4,
     "text_synced_total": 3,
     "update_evidence": [
       {
@@ -416,7 +459,7 @@
       "tap@13 自身宽度 120 → 150",
       "实例树 44 节点 \/ 行 44 \/ 虚拟化行 8 \/ 增量 3 轮"
     ],
-    "host_layout_ms": 0.415,
+    "host_layout_ms": 1.455,
     "host_cmds": 44
   },
   "ok": true

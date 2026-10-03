@@ -73,6 +73,13 @@ function fingerprint(rep) {
     rep.component_kid_probe?.text, rep.component_kid_probe?.width,
     rep.component_kid_probe?.width_after, rep.component_kid_probe?.rect_before, rep.component_kid_probe?.rect_after,
   ])
+  // ★P1-3 插槽分发（2026-10-03）：分发结果三端必须逐值相同（内容文本集/填充记录/标记残留数）——
+  //   分发是纯 JS 共享代码 + 同一份产物 ⇒ 任一端不同即"没重跑"或"跑的不是同一份代码"。
+  fp.slot_probe = JSON.stringify([
+    [...(rep.slot_probe?.texts ?? [])].sort(),
+    [...(rep.slot_probe?.fills ?? [])].map((f) => `${f.name}:${f.filled}`).sort(),
+    rep.slot_probe?.markers_left,
+  ])
   return fp
 }
 

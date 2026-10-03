@@ -284,8 +284,12 @@ ENTRY_VP="$HERE/bridge/entry-vapor.ts"
 NEED_BUILD_VP=0
 if [ ! -f "$BUNDLE_VP" ]; then NEED_BUILD_VP=1; fi
 if [ -f "$ENTRY_VP" ] && [ -f "$BUNDLE_VP" ] && [ "$ENTRY_VP" -nt "$BUNDLE_VP" ]; then NEED_BUILD_VP=1; fi
-# slot-runtime dist 更新也要重建（实例化/订阅的表征在那里）
-if [ -f "$BUNDLE_VP" ] && [ "$HERE/../../packages/slot-runtime/dist/index.js" -nt "$BUNDLE_VP" ]; then NEED_BUILD_VP=1; fi
+# ★★★slot-runtime **src** 更新也要重建（2026-10-03 修正）：
+#   此前只查 `slot-runtime/dist/index.js`——而 bundle 的 alias 现已**改为 src**（见 build-batch.mjs
+#   的注释：陈旧 dist 陷阱）。若仍只查 dist，会出现"改了 src 而判定无需重建"⇒ 设备跑旧代码
+#   （本仓实测：插槽分发在真机上完全没生效，我为此查了三轮才定位）。
+#   判据与 renderer-app 的防陈旧块**同族**：src 下任一 .ts 比 bundle 新 ⇒ 重建。
+if [ -f "$BUNDLE_VP" ] && [ -n "$(find "$HERE/../../packages/slot-runtime/src" -newer "$BUNDLE_VP" -name '*.ts' -print -quit 2>/dev/null)" ]; then NEED_BUILD_VP=1; fi
 # ★★renderer-app dist 更新也要重建（2026-10-01 实测抓出的陈旧产物：bundle 的 alias 指向
 #   `packages/renderer-app/dist`——改了 src（如 setText 文本补丁修复）而 dist 未重建 ⇒
 #   设备跑的是**旧适配器**，新修的在设备上根本不生效（"我修了但设备没变"的又一形态）。
