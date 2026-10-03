@@ -648,6 +648,39 @@ def main() -> int:
             print(f"  ✓ ⑱ ★生命周期：@vue:mounted（{lp.get('bindings')[0]}）handler {ran} 跑了 · "
                   f"改源 {ch} · 指令 applied={applied} · 锚节点内核宽度 {gb}→{ga}")
 
+    # ── ⑲ ★★★P3 动态组件 `:is`：首帧解析成对应组件（三个形态各一证）──
+    #   【为什么单独判】动态组件的失效形态全是静默的：`:is` 绑定消失（此前产物里连槽位都没有）⇒
+    #     空壳节点；解析错组件；假值没摘除（留空壳）；解析对了但内核没布局。⇒ 四证缺一即红：
+    #     ① 动态解析出 DynA（DYNA 在、DYNB 不在——防"都渲染"/"都没渲染"）
+    #     ② 静态 is="DynB" 等价（DYNB 在）③ 假值摘除（dropped>0）④ 内容节点**内核几何**存在。
+    dp = rep.get("dyn_probe") or {}
+    if not dp or not dp.get("texts"):
+        print("  ◐ ⑲ 动态组件：本端夹具未覆盖（报告无 dyn_probe）——如实跳过")
+    else:
+        texts = [str(t) for t in dp.get("texts", [])]
+        mounts = dp.get("mounts") or []
+        geom = dp.get("geom") or []
+        dropped = dp.get("dropped", -1)
+        has_a = "DYNA" in texts
+        has_b = "DYNB" in texts
+        if not (has_a and has_b):
+            fail(f"★动态组件没渲染出两种落点（DYNA={has_a} DYNB={has_b} · texts={texts} · mounts={mounts}）"
+                 f"——动态解析或静态 `is` 没走通")
+            ok = False
+        elif "DynA" not in mounts or "DynB" not in mounts:
+            fail(f"★解析出的组件名不对（mounts={mounts}）——动态/静态两条路的落点不匹配")
+            ok = False
+        elif not (isinstance(dropped, (int, float)) and dropped > 0):
+            fail(f"★假值 `:is` 没摘除（dropped={dropped}）——Vue 语义：假值渲染空（不留空壳）")
+            ok = False
+        elif not any(isinstance(g.get("width"), (int, float)) and g.get("width") > 0 for g in geom):
+            fail(f"★动态组件内容在内核里没有几何（geom={geom[:3]}）——树里有、内核没有")
+            ok = False
+        else:
+            w_ok = [g for g in geom if isinstance(g.get("width"), (int, float)) and g.get("width") > 0]
+            print(f"  ✓ ⑲ ★动态组件 `:is`：动态→DynA · 静态 is→DynB · 假值摘除 {dropped} 节点 · "
+                  f"内核几何 {len(w_ok)}/{len(geom)} 节点有宽度")
+
     # 附加观测（不判红，只如实报）
     una = rep.get("uninstantiated_slots", 0)
     if una:

@@ -10,7 +10,7 @@
 //   ② **id 同源**（订阅表槽位的 nodeId 指向"被包的那个元素"，不是错位一格）；
 //   ③ **诊断精确**（说明"哪部分不支持 + 当前行为 + 替代路径"，不是笼统的"未支持"）。
 import { describe, it, expect } from 'vitest'
-import { buildVaporSubscriptions, buildLayoutTemplate } from '@proteus-vue/compiler'
+import { buildVaporSubscriptions, buildLayoutTemplate, compileEvents } from '@proteus-vue/compiler'
 
 const sfc = (tpl: string): string =>
   `<template>\n${tpl}\n</template>\n\n<script setup lang="ts">\nconst vis = ref(true)\nconst w = ref(10)\n</script>\n`
@@ -74,5 +74,44 @@ describe('★★★P3 逻辑容器透传（KeepAlive / Teleport / Suspense / Tra
 
     const sp = buildLayoutTemplate(sfc(`<Suspense><template #default>${INNER}</template></Suspense>`), 's.vue').diagnostics.map((d) => d.message).join(' | ')
     expect(sp, '说明只渲染 default').toContain('#fallback')
+  })
+})
+describe('★★★kebab 形态内置组件（2026-10-03 · 静默缺陷修复）', () => {
+  it('小写 keep-alive / teleport / suspense 与 PascalCase **等价**（不再多建盒 + 有诊断）', () => {
+    // 【为什么（本仓实测的静默缺陷）】Vue 官方同时接受两种写法（实证：官方编译器把
+    //   `<keep-alive>` 也解析成 `_KeepAlive`）；而此前判据只认 PascalCase ⇒ 小写写法
+    //   **多建一层盒 + 零诊断**——"用了内置组件"的假象（最危险的一类静默）。
+    const cases: Array<[string, string, string]> = [
+      ['<keep-alive><MyA /></keep-alive>', 'keep-alive', 'KeepAlive 的**组件级缓存**未支持'],
+      ['<teleport to="#x"><p-view /></teleport>', 'teleport', '传送语义'],
+      ['<suspense><template #default><p-view /></template></suspense>', 'suspense', '异步边界'],
+    ]
+    for (const [tpl, tag, expectDiag] of cases) {
+      const lower = buildLayoutTemplate(sfc(tpl), 'l.vue')
+      const tags = lower.template.nodes.map((n) => n.tag)
+      expect(tags, `${tpl} 不该建盒`).not.toContain(tag)
+      expect(lower.diagnostics.map((d) => d.message).join('|'), `${tpl} 必须有诊断`).toContain(expectDiag)
+    }
+  })
+
+  it('★小写 transition 真支持（与 PascalCase 同一条路——不产盒）', () => {
+    const t = buildLayoutTemplate(sfc(`<transition name="fade"><p-view v-show="a" /></transition>`), 't.vue')
+    expect(t.template.nodes.map((n) => n.tag)).toEqual(['p-view'])
+    expect(t.diagnostics.map((d) => d.message).join('|')).not.toContain('Transition 未支持')
+  })
+
+  it('★三处 id 同源：kebab 透传后事件 nodeId 仍命中同一元素（不漂移）', () => {
+    const src = sfc(`<p-view><keep-alive><MyA><p-view style="height: 20px" /></MyA></keep-alive><p-view @click="a = 1"></p-view></p-view>`)
+    const tpl = buildLayoutTemplate(src, 'p.vue').template
+    const ev = compileEvents(src)
+    const target = tpl.nodes.find((n) => n.id === ev.events[0]!.nodeId)
+    expect(target, '事件 nodeId 必须命中模板节点').toBeTruthy()
+    expect(target!.tag).toBe('p-view')
+  })
+
+  it('★反向：非内置的 kebab 标签**不得**被误规范化（自定义标签语义不变）', () => {
+    const t = buildLayoutTemplate(sfc(`<p-view><my-comp><p-view /></my-comp></p-view>`), 'p.vue')
+    expect(t.template.nodes.map((n) => n.tag)).toContain('my-comp')
+    expect(t.template.nodes.find((n) => n.tag === 'my-comp')?.component).toBeUndefined()
   })
 })

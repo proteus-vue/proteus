@@ -335,6 +335,19 @@ interface VaporReport {
     geom_before: number
     geom_after: number
   }
+  /**
+   * ★★★**动态组件探针**（P3 `<component :is>`，2026-10-03）——首帧解析的真值读数：
+   *   · `texts`：内核树文本（判据核 DYNA 在 / DYNB 在（静态形态）/ 假值不留空壳）；
+   *   · `mounts`：解析出的组件名（从挂载记录读——不猜 id 规律）；
+   *   · `geom` / `dropped`：内容节点的**内核宽度**与摘除数（"树里有"与"内核认了"是两件事）。
+   */
+  dyn_probe: {
+    texts: string[]
+    mounts: string[]
+    geom: Array<{ id: number; width: number }>
+    dropped: number
+    notes: string[]
+  }
   /** 模板里的过渡声明（`隐id:预设名`；判据区分"未声明"与"声明未驱动"） */
   tpl_transition: string[]
   /**
@@ -1683,7 +1696,7 @@ function runShort(args: VaporArgs): string {
     tpl_nodes: 0, tpl_ok: false, sub_l1: 0, sub_l0: 0, sub_l1_rate: 0, sub_sources: [],
     inst_ms: 0, inst_nodes: 0, inst_reused_ids: 0, inst_allocated_ids: 0, inst_rows: 0,
     inst_values_filled: 0, inst_virtual_rows: 0, inst_text_filled: 0, inst_width_filled: 0,
-    mix_text_probe: [], text_probe_rounds: [], gate_rounds: [], gate_text_nodes: [], once_node_id: -1, memo_node_id: -1, expr_probe: [], transition_started: 0, tpl_transition: [], component_mounts: 0, component_nodes: 0, component_kid_probe: {}, slot_probe: { texts: [], rects: [], fills: [], markers_left: -1 }, emit_probe: { emits: [], parent_source_after: undefined, geom_before: -1, geom_after: -1 }, scoped_probe: { texts: [], anchor_id: -1, anchor_width_field: -1, anchor_width_rect: -1 }, lifecycle_probe: { bindings: [], ran_handler: '', changed_sources: [], ops_bytes: 0, applied: 0, anchor_id: -1, geom_before: -1, geom_after: -1 },
+    mix_text_probe: [], text_probe_rounds: [], gate_rounds: [], gate_text_nodes: [], once_node_id: -1, memo_node_id: -1, expr_probe: [], transition_started: 0, tpl_transition: [], component_mounts: 0, component_nodes: 0, component_kid_probe: {}, slot_probe: { texts: [], rects: [], fills: [], markers_left: -1 }, emit_probe: { emits: [], parent_source_after: undefined, geom_before: -1, geom_after: -1 }, scoped_probe: { texts: [], anchor_id: -1, anchor_width_field: -1, anchor_width_rect: -1 }, lifecycle_probe: { bindings: [], ran_handler: '', changed_sources: [], ops_bytes: 0, applied: 0, anchor_id: -1, geom_before: -1, geom_after: -1 }, dyn_probe: { texts: [], mounts: [], geom: [], dropped: -1, notes: [] },
     mount_ms: 0, mount_nodes: 0,
     updates_run: 0, ops_bytes: 0, ops_ms: 0, apply_ms: 0, text_synced_total: 0, update_evidence: [], geom_probe: [], channels: [],
     ev_bindings: 0, ev_handlers: 0, ev_modifiers: 0, taps: 0, tap_evidence: [],
@@ -2580,6 +2593,65 @@ function runShort(args: VaporArgs): string {
         } catch { /* 同上：重挂失败 ⇒ 判据按 host_nodes 不符判红 */ }
       } else {
         notes.push('作用域插槽探针：产物无 scoped 段（夹具未覆盖 ⇒ 判据 ⑰ 按缺失处理）')
+      }
+    }
+
+    /* ═══════════ ★★★P3 动态组件探针（2026-10-03）═══════════
+     *
+     * 【要证明什么】`<component :is="expr">` 的首帧解析真的组出**对应组件**的子树——
+     *   ① 动态形态解析成 DynA（文本 DYNA 在、DYNB 不在——防"两个都渲染"/"一个都没渲染"）；
+     *   ② 静态 `is="DynB"` 与静态组件等价（DYNB 在）；
+     *   ③ 假值形态**整节点摘除**（不留空壳）；
+     *   ④ 解析结果在**内核**里有几何（"树里有"与"内核认了"是两件事——本仓反复踩过）。
+     * 【顺序】与其它探针同：主流程读数之后跑，结束后重挂主树（宿主读数归位）。
+     */
+    {
+      const dynArt = (artifacts as { dyn?: { tpl: LayoutTemplate; table: SubscriptionTable } }).dyn
+      if (dynArt?.tpl?.ok) {
+        const dynDefs: Record<string, { template: LayoutTemplate; table?: SubscriptionTable }> = {}
+        for (const [nm, def] of Object.entries(artifacts.components ?? {})) {
+          dynDefs[nm] = { template: def.tpl, table: def.table }
+        }
+        const dynInst = instantiateTemplate(dynArt.tpl, {
+          viewport: args.viewport,
+          // ★夹具的 `dynWhich` 初值 'DynA'（与 DYN_SFC 的 script 一致）——动态解析的输入
+          read: (n) => (n === 'dynWhich' ? 'DynA' : undefined),
+          table: dynArt.table,
+          registry: new ListRegistry(),
+          components: dynDefs,
+        })
+        try {
+          const dOut = JSON.parse(
+            proteusHost.mount(JSON.stringify({ viewport: dynInst.viewport, nodes: dynInst.nodes })),
+          ) as { ok?: boolean; error?: string }
+          if (dOut.ok === true) {
+            const rectsAll = JSON.parse(proteusHost.readRects()) as { rects?: Record<string, { width?: number }> }
+            const rects = rectsAll.rects ?? {}
+            const texts = dynInst.nodes
+              .filter((n) => typeof n.text === 'string' && n.text.length > 0)
+              .map((n) => String(n.text))
+            rep.dyn_probe = {
+              texts,
+              // 解析出的组件边界节点（判据核"解析成了谁"——从挂载记录读，不猜 id 规律）
+              mounts: (dynInst.componentMounts ?? []).map((m) => m.name),
+              // 内容节点的**内核宽度**（> 0 = 内核真布局了该子树）
+              geom: dynInst.nodes
+                .filter((n) => typeof n.text === 'string' && n.text.length > 0)
+                .map((n) => ({ id: n.id, width: rects[String(n.id)]?.width ?? -1 })),
+              dropped: dynInst.stats.droppedNodeIds?.length ?? 0,
+              notes: (dynInst.notes ?? []).slice(0, 4),
+            }
+          } else {
+            notes.push(`动态组件探针 mount 失败：${dOut.error ?? '未知'}`)
+          }
+        } catch (e) {
+          notes.push(`动态组件探针异常：${String((e as Error)?.message ?? e)}`)
+        }
+        try {
+          proteusHost.mount(JSON.stringify({ viewport: inst.viewport, nodes: inst.nodes }))
+        } catch { /* 同上：重挂失败 ⇒ 判据按 host_nodes 不符判红 */ }
+      } else {
+        notes.push('动态组件探针：产物无 dyn 段（夹具未覆盖 ⇒ 判据 ⑲ 按缺失处理）')
       }
     }
 

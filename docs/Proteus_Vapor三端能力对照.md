@@ -421,3 +421,39 @@ SFC → 编译期产**组件注册表**（`components: { KidPanel: {template, ta
 
 **单测**：`tests/vapor-lifecycle.test.ts` 8 组（绑定形态/组件上也支持/静默缺陷回归锁/
 不产出字段/未支持钩子诊断/脚本钩子可见化/反向不误报/id 同源）。
+
+## 十四 · P3 动态组件 `<component :is>`（2026-10-03 · 三端同步）
+
+**能力：首帧组件名解析**
+- **编译期**：`:is="expr"` 进 `SubscriptionTable.componentIs`（nodeId + 求值器 + 源码）——
+  ★**修出的静默缺陷**：此前该绑定**从产物里完全消失**（不进 sources、不进 constantSlots、
+  **也无诊断**）⇒ `<component :is>` 渲染成空壳且零提示。静态 `is="Name"` 直接当静态组件
+  （与 `<Name>` 完全等价——零新机制）；缺 `:is` 与"运行时切换"边界各有精确诊断。
+- **实例化期**：求值 → **组件名字符串** → 查注册表 → 走静态组件**同一条展开链**
+  （子树 / id 偏移 / props / 插槽——零新增机制）。边界行为都不静默：
+  假值（`''`/null）⇒ **整节点摘除**（Vue 同——不留空壳）；非字符串 / 未注册 ⇒ note。
+- **判据 ⑲ 四证**（缺一即红）：动态解析出对应组件（防"都渲染"/"都没渲染"）· 静态 `is` 等价 ·
+  假值摘除（dropped>0）· 内容节点在**内核**里有几何。
+- 诚实边界：只做**首帧解析**——运行时切换是**结构变更**（换组件 = 换整棵子树），
+  静态树模型不支持（诊断给替代路径：v-if/v-show 分支 + 静态标签）。
+
+**单测**：`tests/vapor-dynamic-component.test.ts` 9 组（标记/表/静态等价/缺 is 诊断/
+切换边界/展开/双节点各解析/假值摘除/非字符串与未注册 note/反向不产出字段）。
+
+## 十五 · kebab 形态内置组件修复（2026-10-03 · 静默缺陷）
+
+**问题（探针主动发现）**：Vue 官方**同时接受** `<KeepAlive>` 与 `<keep-alive>`
+（实证：官方编译器把后者也解析成 `_KeepAlive`）；而我方判据（`tag in LOGICAL_CONTAINERS`、
+动态组件 `tag === 'component'`）此前**只认 PascalCase** ⇒ 小写写法：
+- **多建一层盒**（"透传"根本没生效 ⇒ 几何与 Vue 不等价）；
+- **零诊断**（用户以为用了内置组件，实际是普通容器——最危险的一类静默）。
+
+**修复**：`normalizeBuiltinTag`（**唯一入口**，template.ts / deps.ts / events.ts 三处共用）——
+只规范化**确定性等价**的官方内置名单（keep-alive / transition / transition-group / teleport /
+suspense），不引入一般大小写转换（那会误伤用户的 kebab 自定义标签）。
+
+**测试**：`tests/vapor-logical-containers.test.ts` 新增 4 组（小写等价 / transition 真支持 /
+三处 id 同源不漂移 / 反向：非内置 kebab 不被误规范化）。
+
+★这是"**绑定/标签静默消失**"这条主线上的又一处——本批（P3 动态组件）连同修复的静默缺陷共 2 处：
+`:is` 绑定消失（判据 ⑲）、kebab 内置标签多建盒（判据在逻辑容器组）。

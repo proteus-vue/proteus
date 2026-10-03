@@ -179,6 +179,8 @@ Teleport / KeepAlive / Suspense / Transition / TransitionGroup / v-memo / 自定
 | P3-3 | Transition / TransitionGroup | ✅ **Transition 已完成（2026-10-03 · 三端同步）**：编译期编成**预设动画规格**（`fade`/`slide-*`/`zoom`/`fade-slide-up` 闭集）、`<Transition>` **透传**（不产包裹盒 ⇒ 与 Vue 几何等价）、运行时在可见性**真的翻转**时交宿主动画入口（三端 14/14 · 判据 ⑬）。**TransitionGroup 未做**（需列表差异/move 过渡） |
 | P3-4 | Suspense | ◐ **透传已完成（2026-10-03）**：不产包裹盒 + **只渲 `#default`**（`#fallback` 不建节点——否则内容双份）；**异步边界未做**（需异步组件系统） |
 | P3-5 | 自定义指令 | `VaporDirective` 语义 → 我方可用"宿主指令注册表" |
+| P3-5a | **动态组件 `<component :is>`** | ✅ **首帧解析已完成（2026-10-03 · 三端同步 · 判据 ⑲）**：`:is` 进 `SubscriptionTable.componentIs`（此前**完全消失**——无槽位无诊断 ⇒ 空壳静默）；实例化期求值 → 名字符串 → 走静态组件**同一条展开链**（子树/偏移/props）；静态 `is="Name"` 等价静态组件；假值 ⇒ 整节点摘除（Vue 同）。**运行时切换未做**（结构变更——编译期诊断 + 给替代路径 v-if/v-show） |
+| P3-5b | **kebab 形态内置组件**（`<keep-alive>` 等） | ✅ **已修（2026-10-03 · 静默缺陷）**：Vue 官方两种写法都收（实证：官方编译器把 `<keep-alive>` 也解析成 `_KeepAlive`），此前判据只认 PascalCase ⇒ 小写写法**多建盒 + 零诊断**。现经 `normalizeBuiltinTag` **唯一入口**规范化（template/deps/events 三处 id 同源）⇒ 小写与 PascalCase 完全等价（测试含反向：非内置 kebab 标签不误伤） |
 | P3-6 | 异步组件 `defineVaporAsyncComponent` | 同 P3-4 |
 | P3-7 | `defineVaporCustomElement` | 我方有原生组件混用（#10 已验）——可考虑 |
 

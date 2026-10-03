@@ -255,6 +255,32 @@ const SCOPED_SFC = `<template>
 const scopedN = ref(7)
 </script>`
 
+/**
+ * ★★★P3 **动态组件 `:is`** 夹具（2026-10-03）：三个形态各一——
+ *   ① `:is="dynWhich"`（响应式源 ⇒ 首帧解析 PanelA）② 静态 `is="PanelB"`（等价静态组件）
+ *   ③ `:is="''"`（假值 ⇒ 整节点摘除）。
+ *   判据 ⑲ 核：动态名真的渲染成对应组件（文本 + **内核几何**）、静态等价、假值摘除。
+ */
+const DYN_A_SFC = `<template>
+  <p-view style="height: 26px"><p-text style="font-size: 11px; color: #ffffff">DYNA</p-text></p-view>
+</template>`
+
+const DYN_B_SFC = `<template>
+  <p-view style="height: 34px"><p-text style="font-size: 11px; color: #ffffff">DYNB</p-text></p-view>
+</template>`
+
+const DYN_SFC = `<template>
+  <p-view style="flex-direction: column">
+    <component :is="dynWhich" />
+    <component is="DynB" />
+    <component :is="''" />
+  </p-view>
+</template>
+
+<script setup lang="ts">
+const dynWhich = ref('DynA')
+</script>`
+
 /** 长列表夹具：**行高 100px**（视口 2400 ⇒ 可见 ~24 行；预加载 ±10 ⇒ 物化 ~34 行）
  *  ——判据的口径：1000 行都必须在内核树里（几何正确），但宿主只物化可见区。
  *  ★行内含 `:width` 绑定（L1 槽位）与插值文本（`{{ item.title }}`）。 */
@@ -403,6 +429,9 @@ process.stdout.write(JSON.stringify({
     KidSlot: build(${JSON.stringify(SLOT_CHILD_SFC)}, 'kid-slot.vue'),
     // ★P1-3 作用域插槽夹具（判据 ⑰）——出口带 props；父级内容按 sp.* 求值
     KidScoped: build(${JSON.stringify(SCOPED_CHILD_SFC)}, 'kid-scoped.vue'),
+    // ★P3 动态组件夹具（判据 ⑲）——组件名表达式的两种落点组件
+    DynA: build(${JSON.stringify(DYN_A_SFC)}, 'dyn-a.vue'),
+    DynB: build(${JSON.stringify(DYN_B_SFC)}, 'dyn-b.vue'),
   },
   small: build(${JSON.stringify(SFC)}, 'vapor-device.vue'),
   list: build(${JSON.stringify(LIST_SFC)}, 'vapor-list.vue'),
@@ -410,6 +439,8 @@ process.stdout.write(JSON.stringify({
   slot: build(${JSON.stringify(SLOT_SFC)}, 'vapor-slot.vue'),
   // ★P1-3 作用域插槽：父 SFC（作用域内容含文本段 + 作用域样式）
   scoped: build(${JSON.stringify(SCOPED_SFC)}, 'vapor-scoped.vue'),
+  // ★P3 动态组件：父 SFC（动态 / 静态 / 假值三形态）
+  dyn: build(${JSON.stringify(DYN_SFC)}, 'vapor-dyn.vue'),
   // ★★★六端 SFC 压力夹具：编译**共享 SFC 文件**（examples 页面）——与 Web/MP 同源
   stress: build(${JSON.stringify(stressSfc)}, 'consistency-stress.vue'),
   ab: ${JSON.stringify(AB_RESULT)},
@@ -588,7 +619,7 @@ for (const [nm, def] of Object.entries(parsed.components)) {
       `父绑定 @${parentEmitBinds[0].event}（nodeId=${parentEmitBinds[0].nodeId}）`,
   )
 }
-fs.writeFileSync(OUT, JSON.stringify({ ...parsed.small, components: parsed.components, slot: parsed.slot, scoped: parsed.scoped }))
+fs.writeFileSync(OUT, JSON.stringify({ ...parsed.small, components: parsed.components, slot: parsed.slot, scoped: parsed.scoped, dyn: parsed.dyn }))
 console.log(`[gen-vapor-fixture] ✅ 组件注册表：${Object.keys(parsed.components).join(', ')}（随父产物下发）`)
 // ★P1-3 插槽分发夹具（判据 ⑮）：父产物必须带 slotFor 标记、子产物必须带 slotOutlet 标记
 //   （"生成器静默退化"是本仓重点拦的形态——标记缺了就是分发不可能发生）
@@ -648,6 +679,25 @@ console.log(`[gen-vapor-fixture] ✅ 组件注册表：${Object.keys(parsed.comp
   console.log(
     `[gen-vapor-fixture] ✅ 生命周期夹具：@vue:${life[0].phase}（节点 ${life[0].nodeId}）· ` +
       `动作 ${JSON.stringify(lifeActs[0])}`,
+  )
+}
+// ★P3 动态组件（2026-10-03）：`:is` 必须进 componentIs 表（此前完全消失）；`is=` 必须当静态组件
+{
+  const dyn = parsed.dyn
+  const dynIs = dyn?.table?.componentIs ?? []
+  const staticComp = (dyn?.tpl?.nodes ?? []).find((n) => n && n.tag === 'component' && n.component === 'DynB')
+  const hasA = (parsed.components?.DynA?.tpl?.nodes ?? []).length > 0
+  const hasB = (parsed.components?.DynB?.tpl?.nodes ?? []).length > 0
+  if (!dyn?.ok || dynIs.length !== 2 || !staticComp || !hasA || !hasB) {
+    console.error(
+      `[gen-vapor-fixture] ✗ 动态组件夹具不完整（判据 ⑲ 将无证据）：` +
+        `componentIs=${dynIs.length}（应 2——动态 + 假值）· 静态 is 落点=${!!staticComp} · 组件 A/B=${hasA}/${hasB}`,
+    )
+    process.exit(1)
+  }
+  console.log(
+    `[gen-vapor-fixture] ✅ 动态组件夹具：componentIs ${dynIs.length} 条（${dynIs.map((x) => x.expr).join(', ')}）· ` +
+      `静态 is="DynB" 已当静态组件`,
   )
 }
 const kb = (fs.statSync(OUT).size / 1024).toFixed(1)

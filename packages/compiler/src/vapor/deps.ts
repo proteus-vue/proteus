@@ -18,6 +18,8 @@ import { parse as domParse } from '@vue/compiler-dom'
 import type { VueCompatDeps } from './sources'
 import { parse as babelParse } from '@babel/parser'
 import type { ReactiveSource } from './sources'
+// ★kebab 形态内置组件名的**唯一**规范化入口（template.ts / events.ts 同源——"一处实现"）
+import { normalizeBuiltinTag } from './template'
 
 /** 表达式的依赖分析结果 */
 export interface ExprDeps {
@@ -408,7 +410,11 @@ export function collectTemplateBindings(
         loc?: { start?: { line?: number } }
         content?: { content?: string } | string
       }
-      const tag = n.tag ?? ''
+      // ★★kebab 形态的内置组件规范化（2026-10-03 · 与 template.ts **同一条判据**）——
+      //   官方同时接受 `<keep-alive>` 与 `<KeepAlive>`；不规范化 ⇒ 本处把它当普通元素
+      //   （占 id），而 template.ts 规范化后透传（不占 id）⇒ **两处 id 空间分叉**
+      //   （症状：指令写到别的节点上、零报错——本仓踩过多次的老坑）。
+      const tag = normalizeBuiltinTag(n.tag ?? '')
       // ★★组件标签（P1 组件系统第一批）：PascalCase = 组件（与 Vue 官方约定同）——
       //   组件上的 props 走 `component.<name>` 前缀 ⇒ slotKindOf 归到 `component-prop`
       //   ⇒ 运行时发 CALL_COMPONENT_UPDATE（方案 §7.3："组件边界强制 L0"）。

@@ -319,6 +319,8 @@ export function buildVaporSubscriptions(source: string, filename = 'anonymous.vu
   //   没有可订阅的源（出口 props 分发时才算得出）⇒ 单列本表，实例化期**分发时求值**。
   //   见 `SubscriptionTable.slotScopedSlots` 注释（含诚实边界：只做初始分发）。
   const slotScopedSlots: NonNullable<SubscriptionTable['slotScopedSlots']> = []
+  // ★★★P3 动态组件（2026-10-03）：`<component :is="expr">` 的组件名表达式——实例化期解析。
+  const componentIs: NonNullable<SubscriptionTable['componentIs']> = []
 
   for (const ref of bindings) {
     // ★被合成组里的其余成员**跳过建槽**（合成绑定已代表整条文本；见上方合成段注释）
@@ -379,6 +381,22 @@ export function buildVaporSubscriptions(source: string, filename = 'anonymous.vu
     const evaluatorId = evaluators.length
     const evBuilt = makeEvaluator(evaluatorId, ref.code, deps)
     evaluators.push(evBuilt.spec)
+    // ★★★**动态组件 `:is`**（P3 批次，2026-10-03）：该绑定**不是渲染槽位**——它是"选哪个组件"，
+    //   要在实例化期解析。⇒ 记进 `componentIs` 表后 `continue`（不建 sources/constantSlots 槽位）。
+    //   【为什么必须单列（本仓实测的静默丢弃）】此前它既不进任何表、也**无诊断** ⇒
+    //     `<component :is>` 渲染成空壳且零提示（最危险的一类静默）。
+    if (ref.propKey === 'attr.is' && ref.tag === 'component') {
+      componentIs.push({ nodeId: myNode, evaluatorId, expr: ref.code })
+      notes.push(`slot_${mySlot} 动态组件 \`:is="${ref.code}"\` ⇒ 实例化期解析组件名（见 componentIs 表）`)
+      decisions.push({
+        slotId: mySlot,
+        snippet: `${ref.where}="${ref.code}"`,
+        tier: 'L1',
+        reason: '动态组件 :is（实例化期解析——非渲染槽位）',
+        mark: '✓',
+      })
+      continue
+    }
     // ★★编译期就上报「参考实现无法求值」的表达式（比运行时上报更早、更可行动）
     //
     // 【为什么提前到编译期】运行时上报只能告诉"某槽位未生效"；
@@ -638,6 +656,8 @@ export function buildVaporSubscriptions(source: string, filename = 'anonymous.vu
       ...(constantSlots.length > 0 ? { constantSlots } : {}),
       // ★P1-3 作用域插槽（无 ⇒ 不产出字段——既有产物逐字节不变）
       ...(slotScopedSlots.length > 0 ? { slotScopedSlots } : {}),
+      // ★P3 动态组件 `:is`（无 ⇒ 不产出字段）
+      ...(componentIs.length > 0 ? { componentIs } : {}),
       stats: { l1, l0, l1Rate: l1 + l0 === 0 ? 0 : Math.round((l1 / (l1 + l0)) * 10000) / 10000 },
     },
     sources: srcScan.sources,

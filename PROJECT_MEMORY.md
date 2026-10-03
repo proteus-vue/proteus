@@ -15,11 +15,11 @@
 - **包规模**：**45 个 @proteus-vue/* npm 包**（+ `packages/layout-core-rust` = **cargo crate，非 npm 包**，故不计数）（★2026-09-29 layout-core = App 排版核心）（check:pkg 0 error · `pnpm check:stats` 校验 ✓；31→38 修正 → G-07 glass 39 → Skyline 收口 worklet 40 → ★2026-09-14 组件库拆包 `@proteus-vue/components` 41 → ★Vapor 线新增 `@proteus-vue/slot-runtime` 42 + `@proteus-vue/layout-core` 43 → ★2026-09-30 MA1 新增 `@proteus-vue/animation` 44；版本统一 0.3.0-beta.8，见「当前状态速览」）
 - **文档**：`docs/proteus-architecture.md`（L0 规约·真理来源）→ `docs/board-inventory.md`（全景索引）→ `docs/roadmap.md`（版本线）→ `roadmap-2-plan`（里程碑线）→ 各 plan
 
-## 当前状态速览（最近一次更新：**2026-10-03·（一〇四）· **P1-3 生命周期 @vue:mounted**（三端同步 · 判据 ⑱）——**P1-3 全项收官**（内部渲染/插槽/作用域插槽/emits/生命周期）：`vue:` 前缀在事件名解析前拦截 → 一等 `lifecycle` 产物；★修出静默缺陷（此前落成"永不触发的 componentEmit 监听"）；脚本钩子 `onMounted` 等产 `VAPOR_SCRIPT_LIFECYCLE_NOT_RUN` 可见化；判据 ⑱ 四证（绑定/handler/改源/applied/内核宽度 0→250）；三端 19/19 · 指纹 24 项一致；下一步 P3-5 自定义指令或 P3-2 KeepAlive 组件级缓存**）★新会话以此为准
+## 当前状态速览（最近一次更新：**2026-10-03·（一〇六）· **P3 动态组件 `<component :is>`**（三端同步 · 判据 ⑲）+ **kebab 内置组件静默缺陷修复**——`:is` 进 `componentIs` 表（此前**完全消失**⇒空壳静默）→ 实例化期解析走静态组件同一条链；静态 `is=` 等价、假值摘除；★顺修 `<keep-alive>` 等 kebab 形态"多建盒 + 零诊断"（`normalizeBuiltinTag` 唯一入口，三处 id 同源）；三端 20/20 · 指纹 25 项一致；下一步 P3-5 自定义指令或 P3-2 KeepAlive 缓存（需先支持运行时切换）**）★新会话以此为准
+
+## 当前状态速览（最近一次更新：**2026-10-03·（一〇四）· **P1-3 生命周期 @vue:mounted**（三端同步 · 判据 ⑱）——**P1-3 全项收官**（内部渲染/插槽/作用域插槽/emits/生命周期）：`vue:` 前缀在事件名解析前拦截 → 一等 `lifecycle` 产物；★修出静默缺陷（此前落成"永不触发的 componentEmit 监听"）；脚本钩子 `onMounted` 等产 `VAPOR_SCRIPT_LIFECYCLE_NOT_RUN` 可见化；判据 ⑱ 四证（绑定/handler/改源/applied/内核宽度 0→250）；三端 19/19 · 指纹 24 项一致**）★新会话以此为准
 
 ## 当前状态速览（最近一次更新：**2026-10-03·（一〇三）· **P1-3 作用域插槽**（三端同步 · 判据 ⑰）——出口 props 子作用域求值 + 内容文本段重求值 + 作用域样式（`slotScopedSlots` 分发时求值通道）；★修出"作用域样式绑定整条消失"的静默缺陷（被误归列表相对路径）；判据 ⑰ 三证（`cnt-7` + 字段/内核宽度 70 一致）；三端 18/18 · 指纹 23 项一致；下一步 P1-3 生命周期或 P3-5 自定义指令**）★新会话以此为准
-
-## 当前状态速览（最近一次更新：**2026-10-03·（一〇二）· **P1-3 emits（子→父）**（三端同步 · 判据 ⑯）——`$emit` 动作 + `componentEmit` 绑定（不冒泡）+ 桥按「边界+事件名」路由（`$event`=载荷）；新字段 `ComponentMount.treeOffset`（嵌套 emit 不查错边界）；判据 ⑯ 三证（路由/源值/内核宽度 0→199）；三端 17/17 · 指纹 22 项一致；下一步作用域插槽或 P1-3 生命周期**）★新会话以此为准
 
 ## ★《收纳规范》（2026-10-03 立 · 门禁 `pnpm check:memory`）
 
