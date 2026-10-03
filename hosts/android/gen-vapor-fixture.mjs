@@ -117,6 +117,10 @@ const SFC = `<template>
          宽度绑 bumpTotal（初始 0 ⇒ 几何 0 宽），判据核「子 emit ⇒ 父 handler 跑 ⇒ **内核几何真变**」。
          ★为什么用宽度而不是文本（本仓判据口径）：文本改动可能被文本同步链路掩盖；几何是内核真值。 -->
     <p-view :width="bumpTotal" style="height: 6px; background-color: #3aa0ff"></p-view>
+    <!-- ★★★P1-3 生命周期（2026-10-03）：vue:mounted 模板钩子——首帧 mount 后触发动作表
+         （改 lifeW ⇒ 走订阅 → 指令 → 内核重排）。本节点是**几何锚**（宽绑 lifeW，初值 0）。
+         ★为什么用宽度：文本改动可能被文本同步链路掩盖；几何是内核真值。 -->
+    <p-view @vue:mounted="lifeW = 250" :width="lifeW" style="height: 6px; background-color: #ff9a6c"></p-view>
     <!-- ★★★P3 批次（2026-10-03）逻辑容器**透传**夹具：三者都**不产包裹盒**
          （Vue 语义：逻辑容器不渲染元素）——判据核「节点数守恒 + 几何与 Vue 等价」。
          ★本注释不得含反引号或美元花括号（在 JS 模板串里——护栏见 check:script-compile）。 -->
@@ -166,6 +170,8 @@ const kidLabel = ref('k0')
 const kidLabelW = ref(40)
 // ★P1-3 emits（2026-10-03）：子组件 @bump 的落点（父级 handler 做 bumpTotal = $event + 100）
 const bumpTotal = ref(0)
+// ★P1-3 生命周期（2026-10-03）：@vue:mounted 动作的落点源（初值 0 ⇒ 挂载后变 250）
+const lifeW = ref(0)
 </script>
 `
 
@@ -382,6 +388,8 @@ const build = (sfc, name) => {
     // ★★交互闭环（2026-10-01）：事件绑定 + handler 动作表（纯数据）
     events: evRes.events,
     handlers: evRes.handlers,
+    // ★P1-3 生命周期（2026-10-03）：vue:mounted 绑定（无 ⇒ 不产出字段——既有产物不变）
+    ...(evRes.lifecycle ? { lifecycle: evRes.lifecycle } : {}),
     eventDiagnostics: evRes.diagnostics.map((d) => d.message),
     sfc,
   }
@@ -618,6 +626,28 @@ console.log(`[gen-vapor-fixture] ✅ 组件注册表：${Object.keys(parsed.comp
   console.log(
     `[gen-vapor-fixture] ✅ 作用域插槽夹具：出口 props ${JSON.stringify(outletProps)} · 内容 scope=sp · ` +
       `分发时求值绑定 ${scopedSlots.map((s) => s.propKey).join(', ')}`,
+  )
+}
+// ★P1-3 生命周期（2026-10-03）：`@vue:mounted` 必须编成 lifecycle 绑定（而非 componentEmit 静默形态）
+{
+  const life = parsed.small?.lifecycle ?? []
+  const lifeActs = life.flatMap((b) => parsed.small?.handlers?.[b.handler] ?? [])
+  const silentEmit = (parsed.small?.events ?? []).filter((e) => String(e.event).startsWith('vue:'))
+  if (life.length !== 1 || lifeActs.length === 0) {
+    console.error(
+      `[gen-vapor-fixture] ✗ 生命周期夹具不完整（判据 ⑱ 将无证据）：` +
+        `lifecycle 绑定=${life.length}（应 1）· 动作=${lifeActs.length}（应 ≥1）`,
+    )
+    process.exit(1)
+  }
+  // ★反向：`vue:` 前缀**不得**再落进 events（此前是"永不触发的 componentEmit 监听"——本批修的静默缺陷）
+  if (silentEmit.length > 0) {
+    console.error(`[gen-vapor-fixture] ✗ 生命周期钩子漏进 events（静默缺陷回归）：${JSON.stringify(silentEmit)}`)
+    process.exit(1)
+  }
+  console.log(
+    `[gen-vapor-fixture] ✅ 生命周期夹具：@vue:${life[0].phase}（节点 ${life[0].nodeId}）· ` +
+      `动作 ${JSON.stringify(lifeActs[0])}`,
   )
 }
 const kb = (fs.statSync(OUT).size / 1024).toFixed(1)

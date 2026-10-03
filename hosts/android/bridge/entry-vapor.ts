@@ -319,6 +319,22 @@ interface VaporReport {
     anchor_width_field: number
     anchor_width_rect: number
   }
+  /**
+   * ★★★**生命周期探针**（P1-3 @vue:mounted，2026-10-03）——挂载后钩子的**真值读数**：
+   *   · bindings / ran_handler：产物里的绑定与真的跑了的 handler（"编了"与"跑了"是两件事）；
+   *   · changed_sources：动作改了哪些源；ops_bytes / applied：指令链真的把变化送到内核；
+   *   · geom_before / geom_after：锚节点**内核宽度**（"跑了"与"屏幕变了"是两件事）。
+   */
+  lifecycle_probe: {
+    bindings: string[]
+    ran_handler: string
+    changed_sources: string[]
+    ops_bytes: number
+    applied: number
+    anchor_id: number
+    geom_before: number
+    geom_after: number
+  }
   /** 模板里的过渡声明（`隐id:预设名`；判据区分"未声明"与"声明未驱动"） */
   tpl_transition: string[]
   /**
@@ -435,6 +451,8 @@ function makeData(rows: number): Record<string, unknown> {
     tapCount: 0,
     // ★★★P1-3 emits（2026-10-03）：子组件 @bump 的父级落点源（判据核"子 emit ⇒ 父 handler ⇒ 几何"）
     bumpTotal: 0,
+    // ★★★P1-3 生命周期（2026-10-03）：@vue:mounted 动作的落点源（初值 0 ⇒ 挂载后变 250）
+    lifeW: 0,
   }
 }
 
@@ -899,6 +917,8 @@ function runAb(args: VaporArgs): string {
     // ★P1-3 emits：B 路（Vue）也要给 `bumpTotal`——A/B 共享同一份 SFC 编译产物，
     //   B 侧读到 undefined ⇒ 锚节点几何按"无宽度"算 ⇒ A/B 几何对比假红（本仓已踩同族坑）。
     const abBumpTotal = ref(dataB.bumpTotal)
+    // ★P1-3 生命周期：B 路（Vue）同样要给 `lifeW`（A/B 共享 SFC ⇒ 缺它 B 侧几何按 0 宽算 ⇒ 假红）
+    const abLifeW = ref(dataB.lifeW)
     /**
      * ★★B 路更新的**同步驱动柄**（2026-10-01 更新路径 A/B）。
      *
@@ -920,6 +940,7 @@ function runAb(args: VaporArgs): string {
           onceVal: abOnceVal, memoDep: abMemoDep, memoVal: abMemoVal,
           exprA: abExprA, exprArr: abExprArr, exprObj: abExprObj, trVisible: abTrVisible,
           bumpTotal: abBumpTotal,
+          lifeW: abLifeW,
         }
       },
       render: abRender,
@@ -1662,7 +1683,7 @@ function runShort(args: VaporArgs): string {
     tpl_nodes: 0, tpl_ok: false, sub_l1: 0, sub_l0: 0, sub_l1_rate: 0, sub_sources: [],
     inst_ms: 0, inst_nodes: 0, inst_reused_ids: 0, inst_allocated_ids: 0, inst_rows: 0,
     inst_values_filled: 0, inst_virtual_rows: 0, inst_text_filled: 0, inst_width_filled: 0,
-    mix_text_probe: [], text_probe_rounds: [], gate_rounds: [], gate_text_nodes: [], once_node_id: -1, memo_node_id: -1, expr_probe: [], transition_started: 0, tpl_transition: [], component_mounts: 0, component_nodes: 0, component_kid_probe: {}, slot_probe: { texts: [], rects: [], fills: [], markers_left: -1 }, emit_probe: { emits: [], parent_source_after: undefined, geom_before: -1, geom_after: -1 }, scoped_probe: { texts: [], anchor_id: -1, anchor_width_field: -1, anchor_width_rect: -1 },
+    mix_text_probe: [], text_probe_rounds: [], gate_rounds: [], gate_text_nodes: [], once_node_id: -1, memo_node_id: -1, expr_probe: [], transition_started: 0, tpl_transition: [], component_mounts: 0, component_nodes: 0, component_kid_probe: {}, slot_probe: { texts: [], rects: [], fills: [], markers_left: -1 }, emit_probe: { emits: [], parent_source_after: undefined, geom_before: -1, geom_after: -1 }, scoped_probe: { texts: [], anchor_id: -1, anchor_width_field: -1, anchor_width_rect: -1 }, lifecycle_probe: { bindings: [], ran_handler: '', changed_sources: [], ops_bytes: 0, applied: 0, anchor_id: -1, geom_before: -1, geom_after: -1 },
     mount_ms: 0, mount_nodes: 0,
     updates_run: 0, ops_bytes: 0, ops_ms: 0, apply_ms: 0, text_synced_total: 0, update_evidence: [], geom_probe: [], channels: [],
     ev_bindings: 0, ev_handlers: 0, ev_modifiers: 0, taps: 0, tap_evidence: [],
@@ -2361,6 +2382,59 @@ function runShort(args: VaporArgs): string {
         }
       } else {
         notes.push('emits 探针：夹具缺 emit 按钮或 bumpTotal 锚（节点未找到）——判据按缺失处理')
+      }
+    }
+
+    /* ═══════════ ★★★P1-3 生命周期轮（2026-10-03）：@vue:mounted → 动作表 → 内核几何 ═══════════
+     *
+     * 【语义（本批的定义）】端上无"DOM 插入"动作 ⇒ mounted 定义为「**首帧 mount 完成之后**，
+     *   把钩子动作跑一遍并路由到订阅更新链」（改源 ⇒ relink → 指令 → 内核重排——与 Vue 的
+     *   "mounted 里改状态触发更新"**同一条链**）。
+     * 【为什么此刻跑】上面 `proteusHost.mount()` 已成功（首帧树在内核里）——mounted 的语义
+     *   是"挂载完成"，跑太早（挂载前）违语义、跑太晚（用户交互后）测不到。
+     * 【诚实边界】动作在**顶层树作用域**求值（`@vue:mounted` 写在模板节点上——与 events 同一
+     *   动作表语义）；`@vue:unmounted` / v-if 结构摘除未支持（编译期精确诊断——静态树模型
+     *   没有"卸载时点"）。
+     */
+    {
+      const lifecycle = (artifacts as { lifecycle?: Array<{ nodeId: number; phase: string; handler: string }> }).lifecycle ?? []
+      if (lifecycle.length > 0) {
+        // 锚 = 该绑定节点自身：核它的**内核宽度**在钩子前后真的变（夹具里钩子改 lifeW 而宽度绑它）
+        const lifeNode = lifecycle[0]!
+        const rectsBefore = rectsOf()
+        const geomBefore = rectsBefore[String(lifeNode.nodeId)]?.width ?? -1
+        const beforeVals = { ...data }
+        let ranHandler = ''
+        // ★动作表执行**复用 runHandler**（与事件同一套"先算后写"语义——一处实现）
+        if (runHandler(lifeNode.handler)) ranHandler = lifeNode.handler
+        // 路由到订阅更新链（改源 ⇒ 重算槽位 ⇒ 发指令 ⇒ 内核重排）
+        vapor.relink(ctx)
+        slotRt.flush()
+        const lifePayloads = captured.slice()
+        captured.length = 0
+        let appliedTotal = 0
+        for (const pl of lifePayloads) {
+          if (pl.length === 0) continue
+          try {
+            const ao = JSON.parse(proteusHost.applyOps(JSON.stringify(Array.from(pl)))) as { ok?: boolean; applied?: number }
+            appliedTotal += ao.applied ?? 0
+          } catch { /* 回执失败不阻断（判据按几何真值判） */ }
+        }
+        const changedSources: Record<string, unknown> = {}
+        for (const k of Object.keys(data)) if (beforeVals[k] !== data[k]) changedSources[k] = data[k]
+        const rectsAfter = rectsOf()
+        rep.lifecycle_probe = {
+          bindings: lifecycle.map((b) => `${b.phase}@${b.nodeId}:${b.handler}`),
+          ran_handler: ranHandler,
+          changed_sources: Object.keys(changedSources),
+          ops_bytes: lifePayloads.reduce((a, b) => a + b.length, 0),
+          applied: appliedTotal,
+          anchor_id: lifeNode.nodeId,
+          geom_before: geomBefore,
+          geom_after: rectsAfter[String(lifeNode.nodeId)]?.width ?? -1,
+        }
+      } else {
+        rep.lifecycle_probe = { bindings: [], ran_handler: '', changed_sources: [], ops_bytes: 0, applied: 0, anchor_id: -1, geom_before: -1, geom_after: -1 }
       }
     }
 

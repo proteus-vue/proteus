@@ -13,7 +13,7 @@ export function render(_ctx, _cache) {
   return (_openBlock(), _createBlock(_component_p_view, { style: {"width":1080,"height":1600,"flexDirection":"column","padding":{"top":24},"backgroundColor":"#14141c"} }, {
     default: _withCtx(() => [
       _createVNode(_component_p_text, { style: {"fontSize":20,"color":"#ffffff","margin":{"bottom":12}} }, {
-        default: _withCtx(() => [...(_cache[7] || (_cache[7] = [
+        default: _withCtx(() => [...(_cache[8] || (_cache[8] = [
           _createTextVNode("Vapor · 设备端", -1 /* CACHED */)
         ]))]),
         _: 1 /* STABLE */
@@ -153,6 +153,12 @@ export function render(_ctx, _cache) {
         width: _ctx.bumpTotal,
         style: {"height":6,"backgroundColor":"#3aa0ff"}
       }, null, 8 /* PROPS */, ["width"]),
+      _createCommentVNode(" ★★★P1-3 生命周期（2026-10-03）：vue:mounted 模板钩子——首帧 mount 后触发动作表\n         （改 lifeW ⇒ 走订阅 → 指令 → 内核重排）。本节点是**几何锚**（宽绑 lifeW，初值 0）。\n         ★为什么用宽度：文本改动可能被文本同步链路掩盖；几何是内核真值。 "),
+      _createVNode(_component_p_view, {
+        onVnodeMounted: _cache[7] || (_cache[7] = $event => (_ctx.lifeW = 250)),
+        width: _ctx.lifeW,
+        style: {"height":6,"backgroundColor":"#ff9a6c"}
+      }, null, 8 /* PROPS */, ["width"]),
       _createCommentVNode(" ★★★P3 批次（2026-10-03）逻辑容器**透传**夹具：三者都**不产包裹盒**\n         （Vue 语义：逻辑容器不渲染元素）——判据核「节点数守恒 + 几何与 Vue 等价」。\n         ★本注释不得含反引号或美元花括号（在 JS 模板串里——护栏见 check:script-compile）。 "),
       _createCommentVNode(" ★★KeepAlive 的官方约束（本仓实测被 Vue 编译器当场拦下）：它要求「恰好一个子组件」\n         ——p-view（原生标签）会被拒：SyntaxError: KeepAlive expects exactly one child component.\n         ⇒ 夹具改用真组件形态（MyKeep）验证透传。\n         ★底色避开 #2f6fed（A/B 判据的按钮色锚——本仓已踩：重复 ⇒ 判据红）。 "),
       (_openBlock(), _createBlock(_KeepAlive, null, [
@@ -172,7 +178,7 @@ export function render(_ctx, _cache) {
         ]),
         fallback: _withCtx(() => [
           _createVNode(_component_p_text, { style: {"color":"#ffffff"} }, {
-            default: _withCtx(() => [...(_cache[8] || (_cache[8] = [
+            default: _withCtx(() => [...(_cache[9] || (_cache[9] = [
               _createTextVNode("suspense-fallback", -1 /* CACHED */)
             ]))]),
             _: 1 /* STABLE */

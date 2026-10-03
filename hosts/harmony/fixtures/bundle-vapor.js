@@ -12176,7 +12176,7 @@
     return (0, import_runtime_core2.openBlock)(), (0, import_runtime_core2.createBlock)(_component_p_view, { style: { "width": 1080, "height": 1600, "flexDirection": "column", "padding": { "top": 24 }, "backgroundColor": "#14141c" } }, {
       default: (0, import_runtime_core2.withCtx)(() => [
         (0, import_runtime_core2.createVNode)(_component_p_text, { style: { "fontSize": 20, "color": "#ffffff", "margin": { "bottom": 12 } } }, {
-          default: (0, import_runtime_core2.withCtx)(() => [..._cache[7] || (_cache[7] = [
+          default: (0, import_runtime_core2.withCtx)(() => [..._cache[8] || (_cache[8] = [
             (0, import_runtime_core2.createTextVNode)(
               "Vapor \xB7 \u8BBE\u5907\u7AEF",
               -1
@@ -12383,6 +12383,12 @@
           width: _ctx.bumpTotal,
           style: { "height": 6, "backgroundColor": "#3aa0ff" }
         }, null, 8, ["width"]),
+        (0, import_runtime_core2.createCommentVNode)(" \u2605\u2605\u2605P1-3 \u751F\u547D\u5468\u671F\uFF082026-10-03\uFF09\uFF1Avue:mounted \u6A21\u677F\u94A9\u5B50\u2014\u2014\u9996\u5E27 mount \u540E\u89E6\u53D1\u52A8\u4F5C\u8868\n         \uFF08\u6539 lifeW \u21D2 \u8D70\u8BA2\u9605 \u2192 \u6307\u4EE4 \u2192 \u5185\u6838\u91CD\u6392\uFF09\u3002\u672C\u8282\u70B9\u662F**\u51E0\u4F55\u951A**\uFF08\u5BBD\u7ED1 lifeW\uFF0C\u521D\u503C 0\uFF09\u3002\n         \u2605\u4E3A\u4EC0\u4E48\u7528\u5BBD\u5EA6\uFF1A\u6587\u672C\u6539\u52A8\u53EF\u80FD\u88AB\u6587\u672C\u540C\u6B65\u94FE\u8DEF\u63A9\u76D6\uFF1B\u51E0\u4F55\u662F\u5185\u6838\u771F\u503C\u3002 "),
+        (0, import_runtime_core2.createVNode)(_component_p_view, {
+          onVnodeMounted: _cache[7] || (_cache[7] = ($event) => _ctx.lifeW = 250),
+          width: _ctx.lifeW,
+          style: { "height": 6, "backgroundColor": "#ff9a6c" }
+        }, null, 8, ["width"]),
         (0, import_runtime_core2.createCommentVNode)(" \u2605\u2605\u2605P3 \u6279\u6B21\uFF082026-10-03\uFF09\u903B\u8F91\u5BB9\u5668**\u900F\u4F20**\u5939\u5177\uFF1A\u4E09\u8005\u90FD**\u4E0D\u4EA7\u5305\u88F9\u76D2**\n         \uFF08Vue \u8BED\u4E49\uFF1A\u903B\u8F91\u5BB9\u5668\u4E0D\u6E32\u67D3\u5143\u7D20\uFF09\u2014\u2014\u5224\u636E\u6838\u300C\u8282\u70B9\u6570\u5B88\u6052 + \u51E0\u4F55\u4E0E Vue \u7B49\u4EF7\u300D\u3002\n         \u2605\u672C\u6CE8\u91CA\u4E0D\u5F97\u542B\u53CD\u5F15\u53F7\u6216\u7F8E\u5143\u82B1\u62EC\u53F7\uFF08\u5728 JS \u6A21\u677F\u4E32\u91CC\u2014\u2014\u62A4\u680F\u89C1 check:script-compile\uFF09\u3002 "),
         (0, import_runtime_core2.createCommentVNode)(" \u2605\u2605KeepAlive \u7684\u5B98\u65B9\u7EA6\u675F\uFF08\u672C\u4ED3\u5B9E\u6D4B\u88AB Vue \u7F16\u8BD1\u5668\u5F53\u573A\u62E6\u4E0B\uFF09\uFF1A\u5B83\u8981\u6C42\u300C\u6070\u597D\u4E00\u4E2A\u5B50\u7EC4\u4EF6\u300D\n         \u2014\u2014p-view\uFF08\u539F\u751F\u6807\u7B7E\uFF09\u4F1A\u88AB\u62D2\uFF1ASyntaxError: KeepAlive expects exactly one child component.\n         \u21D2 \u5939\u5177\u6539\u7528\u771F\u7EC4\u4EF6\u5F62\u6001\uFF08MyKeep\uFF09\u9A8C\u8BC1\u900F\u4F20\u3002\n         \u2605\u5E95\u8272\u907F\u5F00 #2f6fed\uFF08A/B \u5224\u636E\u7684\u6309\u94AE\u8272\u951A\u2014\u2014\u672C\u4ED3\u5DF2\u8E29\uFF1A\u91CD\u590D \u21D2 \u5224\u636E\u7EA2\uFF09\u3002 "),
         ((0, import_runtime_core2.openBlock)(), (0, import_runtime_core2.createBlock)(
@@ -12409,7 +12415,7 @@
           ]),
           fallback: (0, import_runtime_core2.withCtx)(() => [
             (0, import_runtime_core2.createVNode)(_component_p_text, { style: { "color": "#ffffff" } }, {
-              default: (0, import_runtime_core2.withCtx)(() => [..._cache[8] || (_cache[8] = [
+              default: (0, import_runtime_core2.withCtx)(() => [..._cache[9] || (_cache[9] = [
                 (0, import_runtime_core2.createTextVNode)(
                   "suspense-fallback",
                   -1
@@ -12488,7 +12494,9 @@
       kidLabelW: 40,
       tapCount: 0,
       // ★★★P1-3 emits（2026-10-03）：子组件 @bump 的父级落点源（判据核"子 emit ⇒ 父 handler ⇒ 几何"）
-      bumpTotal: 0
+      bumpTotal: 0,
+      // ★★★P1-3 生命周期（2026-10-03）：@vue:mounted 动作的落点源（初值 0 ⇒ 挂载后变 250）
+      lifeW: 0
     };
   }
   function __proteusVaporRun(argsJson) {
@@ -12842,6 +12850,7 @@
       const abExprObj = (0, import_runtime_core3.ref)(dataB.exprObj);
       const abTrVisible = (0, import_runtime_core3.ref)(dataB.trVisible);
       const abBumpTotal = (0, import_runtime_core3.ref)(dataB.bumpTotal);
+      const abLifeW = (0, import_runtime_core3.ref)(dataB.lifeW);
       let abRootInst = null;
       const AbApp = {
         name: "VaporAbApp",
@@ -12860,7 +12869,8 @@
             exprArr: abExprArr,
             exprObj: abExprObj,
             trVisible: abTrVisible,
-            bumpTotal: abBumpTotal
+            bumpTotal: abBumpTotal,
+            lifeW: abLifeW
           };
         },
         render
@@ -13410,6 +13420,7 @@
       slot_probe: { texts: [], rects: [], fills: [], markers_left: -1 },
       emit_probe: { emits: [], parent_source_after: void 0, geom_before: -1, geom_after: -1 },
       scoped_probe: { texts: [], anchor_id: -1, anchor_width_field: -1, anchor_width_rect: -1 },
+      lifecycle_probe: { bindings: [], ran_handler: "", changed_sources: [], ops_bytes: 0, applied: 0, anchor_id: -1, geom_before: -1, geom_after: -1 },
       mount_ms: 0,
       mount_nodes: 0,
       updates_run: 0,
@@ -13929,6 +13940,45 @@
           };
         } else {
           notes.push("emits \u63A2\u9488\uFF1A\u5939\u5177\u7F3A emit \u6309\u94AE\u6216 bumpTotal \u951A\uFF08\u8282\u70B9\u672A\u627E\u5230\uFF09\u2014\u2014\u5224\u636E\u6309\u7F3A\u5931\u5904\u7406");
+        }
+      }
+      {
+        const lifecycle = artifacts.lifecycle ?? [];
+        if (lifecycle.length > 0) {
+          const lifeNode = lifecycle[0];
+          const rectsBefore = rectsOf();
+          const geomBefore = rectsBefore[String(lifeNode.nodeId)]?.width ?? -1;
+          const beforeVals = { ...data };
+          let ranHandler = "";
+          if (runHandler(lifeNode.handler)) ranHandler = lifeNode.handler;
+          vapor.relink(ctx);
+          slotRt.flush();
+          const lifePayloads = captured.slice();
+          captured.length = 0;
+          let appliedTotal = 0;
+          for (const pl of lifePayloads) {
+            if (pl.length === 0) continue;
+            try {
+              const ao = JSON.parse(proteusHost.applyOps(JSON.stringify(Array.from(pl))));
+              appliedTotal += ao.applied ?? 0;
+            } catch {
+            }
+          }
+          const changedSources = {};
+          for (const k of Object.keys(data)) if (beforeVals[k] !== data[k]) changedSources[k] = data[k];
+          const rectsAfter = rectsOf();
+          rep.lifecycle_probe = {
+            bindings: lifecycle.map((b) => `${b.phase}@${b.nodeId}:${b.handler}`),
+            ran_handler: ranHandler,
+            changed_sources: Object.keys(changedSources),
+            ops_bytes: lifePayloads.reduce((a, b) => a + b.length, 0),
+            applied: appliedTotal,
+            anchor_id: lifeNode.nodeId,
+            geom_before: geomBefore,
+            geom_after: rectsAfter[String(lifeNode.nodeId)]?.width ?? -1
+          };
+        } else {
+          rep.lifecycle_probe = { bindings: [], ran_handler: "", changed_sources: [], ops_bytes: 0, applied: 0, anchor_id: -1, geom_before: -1, geom_after: -1 };
         }
       }
       if (triggers.has("trVisible")) {

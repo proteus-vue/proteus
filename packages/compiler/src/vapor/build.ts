@@ -33,6 +33,8 @@ import type { ExprDeps, TemplateBindingRef } from './deps'
 // ★混合文本合成绑定（P2-2）：段表来自**模板产物**（唯一实现）——不在此处重算切分
 import { buildLayoutTemplate } from './template'
 import type { TextSegment } from '@proteus-vue/slot-runtime'
+// ★P1-3 生命周期：脚本级钩子诊断要读 `<script setup>` 源码（复用唯一的 SFC 解析入口）
+import { parse as sfcParse } from '@vue/compiler-sfc'
 
 /* ────────────────────────── 产物形态（方案 §4.4） ────────────────────────── */
 
@@ -149,6 +151,44 @@ export function buildVaporSubscriptions(source: string, filename = 'anonymous.vu
   }
 
   const bindings = collectTemplateBindings(source, filename, opts.compat)
+  /* ═══════════ ★★★P1-3 生命周期诊断（2026-10-03）═══════════
+   *
+   * 【为什么必须有（本仓实测的静默缺陷）】Vapor 的分工是"**端上不执行 script**"
+   *   （见 entry-vapor 头注：脚本逻辑在构建期抽数据快照，端上只实例化模板）。
+   *   而 `onMounted(() => { count.value = 99 })` 这类**脚本级钩子**写起来毫无征兆：
+   *   编译期零诊断、端上不执行 ⇒ **钩子里的事永远不会发生**，且没有任何提示。
+   *   ⇒ 本诊断把"钩子不会运行"变成可见的（并给出替代路径：模板 vnode 钩子 `@vue:mounted`，
+   *     它是**模板产物**、端上真执行）。
+   *   ★脚本级钩子的完整支持（把钩子体编成动作表在端上跑）为独立批次——需要
+   *     "钩子体语句 → 动作"的编译通道（与 handler 动作表同族，但生命周期顺序语义更复杂）。
+   */
+  {
+    const SCRIPT_HOOKS = ['onMounted', 'onUnmounted', 'onBeforeMount', 'onBeforeUnmount', 'onUpdated', 'onActivated', 'onDeactivated']
+    let scriptSrc = ''
+    try {
+      // 复用唯一的 SFC 解析入口（与 sources.ts 同一处置；解析失败已在上游拦下）
+      const desc = (opts.compat?.sfcParse ?? sfcParse)(source, { filename }).descriptor
+      scriptSrc = desc.scriptSetup?.content ?? desc.script?.content ?? ''
+    } catch {
+      scriptSrc = ''
+    }
+    for (const hook of SCRIPT_HOOKS) {
+      // 词边界匹配（防 `myonMounted` 误报）；`import { onMounted }` 单独出现不算调用
+      const re = new RegExp(`(^|[^\\w$.])${hook}\\s*\\(`)
+      if (!re.test(scriptSrc)) continue
+      const supported = hook === 'onMounted'
+      diagnostics.push({
+        severity: 'warn',
+        code: 'VAPOR_SCRIPT_LIFECYCLE_NOT_RUN',
+        message: `脚本级 \`${hook}\` 不会在端上运行（Vapor 不执行 script——见端上分工）`,
+        hint:
+          `把该钩子的逻辑改写为**模板 vnode 钩子**（如 \`<p-view @vue:mounted="..." />\`）` +
+          (supported
+            ? '——`@vue:mounted` 已真支持（动作表 + 首帧 mount 后触发）'
+            : '（本版只支持 @vue:mounted）'),
+      })
+    }
+  }
   // ★★**混合文本的合成绑定**（2026-10-03 · P2-2）：`a{{x}}b` 的插值子节点在 `collectTemplateBindings`
   //   里是**独立**的 `text.content` 绑定（每个插值一条）⇒ 两条问题：
   //     ① 它们都指向**同一个节点**（元素级）⇒ 运行时会发**两条** SET_TEXT，**后者覆盖前者**
