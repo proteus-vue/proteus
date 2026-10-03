@@ -162,3 +162,109 @@ export function mountLayerTagOf(layer: MountLayer): string {
  *   "实例每页一份、状态一份"（与官方 `custom-tab-bar` 同模式）。
  */
 export const GLOBAL_LAYER_STATE_MODULE = '_proteus/global-layer.js'
+
+/* ═══════════════════════════════════════════════════════════════════════════
+ * ★★★GP3-c（2026-10-03）：**自绘端（App）的层容器契约**——内核树里的三层容器怎么摆。
+ *
+ * 【为什么需要这份契约（两端不能各写一遍）】Android 与 iOS 宿主都要"在屏幕树里建三层容器"，
+ *   若各写各的，就是**同一件事两份实现**（本仓纪律：修一份等于没修，已为此付过代价）。
+ *   ⇒ 层容器的 **id 分配 / 树序 / 几何口径** 都从这里取（两端宿主只做"照此建树"）。
+ *
+ * 【★层间顺序 = 树序（不是 z-index）】内核**没有** z-order 字段（实测：`style.rs`/`node.rs`
+ *   零命中 `z_index`/`zIndex`）⇒ 顺序唯一真源是**子节点的声明序**（GP1-a 的"零新指令"结论）。
+ *   ⇒ 三层容器按 `global → page → overlay` **依次挂到屏根**（后挂的在上）。
+ *   ★这与 Web 端（层容器 z-index 域偏移）**机制不同但语义相同**——两端各自用"宿主的最自然表达"：
+ *     · 自绘端：树序（内核原生语义，零额外字段）
+ *     · Web：CSS z-index（DOM 的原生语义）
+ *   两者都满足"层间顺序编译期固定、不可配置"，且都是**零新指令/零新字段**。
+ *
+ * 【几何口径：层容器必须**铺满屏**且不参与内容布局】容器是**纯容器**（无背景/无内边距/无裁剪——
+ *   裁剪与否由层内元素自己声明），几何取屏的全尺寸 ⇒ 层内容可用**屏坐标系**绝对定位
+ *   （与《单位系统与舍入规范》一致：几何值在**内核**里算，出口即物理像素整数）。
+ *   ★诚实边界：`overlay` 层**不吃事件**（容器本身不拦）——拦截由层内元素（遮罩）自己声明，
+ *     遵守"层不拦截交互"契约（见 MOUNT_LAYER_SEMANTICS.intercepts）。
+ * ═══════════════════════════════════════════════════════════════════════════ */
+
+/** 屏根下三层容器的**节点 id 偏移**（屏根 id + 偏移 = 该层容器 id；两端宿主同源取用） */
+export const MOUNT_LAYER_NODE_OFFSET: Record<MountLayer, number> = {
+  global: 1,
+  page: 2,
+  overlay: 3,
+}
+
+/**
+ * 计算某个挂载层的容器节点 id。
+ *
+ * @param screenRootId 屏根节点 id（宿主 `screen.mount` 时分配）
+ * @param layer 层名
+ * @returns 该层容器的节点 id
+ * @throws 非法 id（非正整数）⇒ 抛错不静默（"算出个 0 然后整层不显示"是最坏形态）
+ */
+export function mountLayerNodeId(screenRootId: number, layer: MountLayer): number {
+  if (!Number.isInteger(screenRootId) || screenRootId <= 0) {
+    throw new Error(`mountLayerNodeId: screenRootId 必须是正整数（收到 ${String(screenRootId)}）`)
+  }
+  return screenRootId + MOUNT_LAYER_NODE_OFFSET[layer]
+}
+
+/**
+ * 层容器的**建树计划**（宿主消费：转成各自的内核 `create` 请求节点）。
+ *
+ * ★**为什么是偏移量而不是绝对 id**：屏根 id 由**宿主**在 `screen.mount` 时分配
+ *   （执行器不知道，也不该知道——那是宿主的内部分配策略）⇒ 计划里只给 `nodeOffset`，
+ *   宿主算 `id = 自己分配的根 id + nodeOffset`。这样契约与宿主的分配策略**解耦**。
+ */
+export interface MountLayerContainerPlan {
+  layer: MountLayer
+  /** 节点 id 相对屏根的**偏移**（宿主：`id = screenRootId + nodeOffset`） */
+  nodeOffset: number
+  /** 树序（升序 = 挂载序 = **层叠序**；`global`(0) 在下、`overlay`(2) 在上） */
+  order: number
+  /** 几何口径：铺满屏（层内容用屏坐标系绝对定位） */
+  frame: 'fullscreen'
+}
+
+/**
+ * 生成**层容器建树计划**（三层，按 `order` 升序）——执行器随 `screen.mount` 下发，宿主照此建树。
+ *
+ * 【宿主侧用法】建屏根后，对每个计划项建一个容器节点：
+ *   `id = rootId + nodeOffset`、`parentId = rootId`、`position: absolute`、
+ *   宽高 = 屏尺寸（`frame: 'fullscreen'`）⇒ **按数组顺序**加入 `nodes`
+ *   ⇒ 内核**树序即层序**（内核无 z-order 字段，实测零命中 ⇒ 树序是唯一真源）。
+ *   ★宿主**不得**自行决定层的顺序/偏移（那是契约的事——两端必须一致，否则两端层序会漂）。
+ */
+export function mountLayerContainerPlans(): MountLayerContainerPlan[] {
+  return [...MOUNT_LAYERS]
+    .sort((a, b) => MOUNT_LAYER_ORDER[a] - MOUNT_LAYER_ORDER[b])
+    .map((layer) => ({
+      layer,
+      nodeOffset: MOUNT_LAYER_NODE_OFFSET[layer],
+      order: MOUNT_LAYER_ORDER[layer],
+      frame: 'fullscreen' as const,
+    }))
+}
+
+/**
+ * ★层容器的**命中语义**（GP3-c 验收："不申请任何敏感权限即可使用默认能力" /
+ *   "全局层跨页面存活，路由切换不重建"）。
+ *
+ * | 层 | 参与布局 | 吃事件 | 跨路由存活 |
+ * |---|---|---|---|
+ * | global | 否（纯容器，内容自定位） | 否（内容自己声明） | ✅ **是**（宿主在切屏时**不重建**它） |
+ * | page | 否 | 否 | ❌（随屏） |
+ * | overlay | 否 | 否 | ❌（随屏） |
+ *
+ * ★**跨路由存活怎么落地（宿主职责，本契约只声明口径）**：自绘端"屏 = 树内子树"（M5），
+ *   切屏 = `display` 切换 ⇒ **global 层容器不在被切的那棵子树里**（它在屏根下、与页面子树平级）
+ *   ⇒ 切屏天然不动它。这正是"三层挂载"在自绘端**比 MP 更强**的地方（MP 要每页注入）。
+ */
+export const MOUNT_LAYER_HOST_CONTRACT = {
+  /** 层容器**不参与内容布局**（纯容器：无背景/内边距/裁剪） */
+  participatesInLayout: false,
+  /** 层容器**自身不拦事件**（拦截由层内元素声明——保持 intercepts 语义） */
+  interceptsEvents: false,
+  /** 跨路由存活（切屏不重建）的层——**仅 global** */
+  survivesRouteChange: 'global' as MountLayer,
+  /** 层容器的定位方式（自绘端：绝对定位 + 全屏 frame） */
+  positioning: 'absolute-fullscreen' as const,
+} as const

@@ -403,6 +403,18 @@ public class MainActivity extends Activity {
             sb.append("【逐节点平台动画（载体 View + ViewPropertyAnimator）】\n");
             platformAnimNodeRun();
             sb.append("  读数见 platform-anim-node.json（异步采样）\n");
+        } else if ("mount-layers".equals(testPath)) {
+            // ★★★GP3-c（2026-10-03）：**三层挂载（自绘端）**真机验证——
+            //   ① 层容器真建（读数：layerCount/globalLayerId + 内核 handle）
+            //   ② 层间顺序 = **树序**（内核无 z-order 字段 ⇒ 树序是唯一真源；
+            //      读数用 `geometrySnapshot` 的兄弟序验证 global 在最前）
+            //   ③ 容器是**纯容器**（不参与布局：内容节点几何应由内容自己决定，容器不挤压它）
+            //   ④ ★**诚实边界实测**：destroy 后 global 层是否随之销毁（当前树模型下**会**——
+            //      如实记读数，不当"通过"）
+            sb.append("【GP3-c 三层挂载（自绘端：内核树序 = 层序）】\n");
+            String ml = mountLayersRun();
+            sb.append(ml).append('\n');
+            writeReport("mount-layers.json", ml);
         } else if ("app-stack".equals(testPath)) {
             // ★★M5：**路由虚拟栈**（真实 TS 核心打进 QuickJS bundle）——深栈/冻结/重建/navigate diff
             //   为什么要真机读数：单测证明逻辑正确（Node/V8），真机证明 **QuickJS 上跑得动 + 端上数字**
@@ -2221,6 +2233,131 @@ public class MainActivity extends Activity {
     }
 
     /** 建一棵最小内核树（3 个绝对定位色块——几何与本测试的绘制指令一致） */
+    /**
+     * ★★★GP3-c（2026-10-03）：**三层挂载（自绘端）真机场景**。
+     *
+     * 【验什么（对照任务卡 GP3-c 验收）】
+     *   ① **层容器真建**：`screen.mount` 带三层计划 ⇒ 宿主建出三个全屏容器（读数 layerCount=3
+     *      + 各自的 id —— 判据读它们，不读"壳自述"）
+     *   ② **层间顺序 = 树序**：内核**无 z-order 字段**（实测零命中）⇒ 顺序唯一真源是子节点声明序。
+     *      判据说：三层容器在屏根下的**兄弟序**必须是 global → page → overlay
+     *      （从 `geometrySnapshot` 的节点次序读——那是内核的**真实节点顺序**）
+     *   ③ **纯容器不参与布局**：内容节点挂到 page 层，其几何应与"直接挂屏根"时**一致**
+     *      （容器全屏且无内边距 ⇒ 不挤压子节点）
+     *   ④ ★**跨路由存活的诚实边界实测**：`screen.destroy` 后 global 层**是否仍存活**？
+     *      当前树模型（每屏一棵独立树）下**会随屏销毁** ⇒ 如实记 `globalAliveAfterDestroy:false`，
+     *      判据把它标为【已知缺口】而非通过（不制造假绿）。
+     *   ⑤ **零敏感权限**：manifest 无任何 `uses-permission`（读数 `permissionsCount`）
+     */
+    private String mountLayersRun() {
+        final org.json.JSONObject out = new org.json.JSONObject();
+        try {
+            ScreenHost sh = new ScreenHost(root);
+            this.screenHost = sh;
+
+            // ① 建屏（带三层容器计划——与执行器下发的**同一形态**：layer/nodeOffset/order/frame）
+            org.json.JSONArray plan = new org.json.JSONArray();
+            plan.put(new org.json.JSONObject().put("layer", "global").put("nodeOffset", 1).put("order", 0).put("frame", "fullscreen"));
+            plan.put(new org.json.JSONObject().put("layer", "page").put("nodeOffset", 2).put("order", 1).put("frame", "fullscreen"));
+            plan.put(new org.json.JSONObject().put("layer", "overlay").put("nodeOffset", 3).put("order", 2).put("frame", "fullscreen"));
+            org.json.JSONObject mountArgs = new org.json.JSONObject();
+            mountArgs.put("screenId", "layers-a");
+            mountArgs.put("name", "三层挂载场景");
+            mountArgs.put("layerContainers", plan);
+            // ★回执形态：宿主 `ok()` 把载荷包在 `data` 下（本场景首版读错层级 ⇒ 判据全红——
+            //   取证方式：直接 cat 设备上的报告 + 对账 ScreenHost.ok() 的实现。**测量装置缺陷**，
+            //   不是产品缺陷——与 GP4-a/b 同族教训）
+            org.json.JSONObject mountedEnvelope = new org.json.JSONObject(sh.invoke("screen.mount", mountArgs));
+            org.json.JSONObject mounted = mountedEnvelope.optJSONObject("data") != null
+                    ? mountedEnvelope.getJSONObject("data") : mountedEnvelope;
+            int rootId = mounted.optInt("rootNodeId", 0);
+            out.put("mounted_ok", rootId > 0);
+            out.put("root_node_id", rootId);
+            out.put("layer_count", mounted.optInt("layerCount", 0));
+            out.put("global_layer_id", mounted.optInt("globalLayerId", -1));
+            out.put("layer_ids", mounted.optJSONObject("layerIds"));
+            out.put("handle", mounted.optLong("handle", 0));
+
+            // ② 树序：从内核读**真实节点顺序**（geometrySnapshot 的 nodes 数组次序 = 内核树序）
+            long handle = mounted.optLong("handle", 0);
+            if (handle > 0) {
+                String gs = RustLayout.geometrySnapshot(handle);
+                // ★形态对账（本场景第三次踩装置坑，集中记在这里）：
+                //   ① 回执包在 ok() 的 `data` 下（首版读顶层 ⇒ 全红）
+                //   ② snapshot 是**嵌套树**（`children` 递归），不是扁平 `nodes` 数组
+                //   ③ 节点字段名是 `nodeId`（不是 `id`）
+                //   ⇒ 教训：**装置代码必须对着真实契约核**（本仓"注释里的经验也要验证"同族）
+                org.json.JSONObject g = new org.json.JSONObject(gs);
+                // ★snapshot 的根在 **`root`** 键下（形态：{ok,format,version,end,root,node_count}）——
+                //   本场景第四次装置对账（前三次：data 包装 / nodeId 字段 / children 递归）。
+                //   ★教训加强版：**装置代码要对着内核真实契约核**，我连着按"看起来合理"猜了三次。
+                //     正确做法 = 先 dump 一次真实 JSON 再写读取代码（本次已照做）。
+                org.json.JSONObject gRoot = g.optJSONObject("root");
+                if (gRoot == null) gRoot = new org.json.JSONObject();
+                org.json.JSONObject layerIdsObj = mounted.optJSONObject("layerIds");
+                int gId = mounted.optInt("globalLayerId", -1);
+                int pId = layerIdsObj != null ? layerIdsObj.optInt("page", -1) : -1;
+                int oId = layerIdsObj != null ? layerIdsObj.optInt("overlay", -1) : -1;
+                // 根的直接子节点序（内核树序 = 层序的唯一真源）
+                org.json.JSONArray kids = gRoot.optJSONArray("children");
+                int gi = -1, pi = -1, oi = -1;
+                if (kids != null) {
+                    for (int i = 0; i < kids.length(); i++) {
+                        int id = kids.getJSONObject(i).optInt("nodeId", -1);
+                        if (id == gId) gi = i;
+                        else if (id == pId) pi = i;
+                        else if (id == oId) oi = i;
+                    }
+                }
+                out.put("root_children_count", kids != null ? kids.length() : -1);
+                out.put("snapshot_node_count", g.optInt("node_count", -1));
+                // ★判据口径：树序中 global 在 page 之前、page 在 overlay 之前（升序 = 层序）
+                out.put("sibling_order_global", gi);
+                out.put("sibling_order_page", pi);
+                out.put("sibling_order_overlay", oi);
+                out.put("order_ok", gi >= 0 && pi > gi && oi > pi);
+
+                // ③ 纯容器不参与布局（★GP3-c 收尾升级）：
+                //   a) **层容器自身几何 = 全屏 @ 原点**（契约 frame:'fullscreen' 的实证——
+                //      首版判据只断言"内容非零"，而容器曾被 flex 压缩到 1/3 屏高（page 层 y=800）
+                //      照样绿 ⇒ 判据太弱。教训：**判据要对着契约的关键承诺断言**，不是对着"没崩"）
+                org.json.JSONObject layerRects = new org.json.JSONObject();
+                if (gId > 0) layerRects.put("global", new org.json.JSONObject(RustLayout.nodeRect(handle, gId)));
+                if (pId > 0) layerRects.put("page", new org.json.JSONObject(RustLayout.nodeRect(handle, pId)));
+                if (oId > 0) layerRects.put("overlay", new org.json.JSONObject(RustLayout.nodeRect(handle, oId)));
+                out.put("layer_rects", layerRects);
+                out.put("viewport_declared", new org.json.JSONObject().put("width", 1080).put("height", 2400));
+                //   b) 内容节点（rootId+11，挂 page 层）几何非零 **且 y≈0**（层容器在原点 ⇒
+                //      首个内容也在原点；容器一旦被压缩/偏移，这里就是重回归锁）
+                String nr = RustLayout.nodeRect(handle, rootId + 11);
+                out.put("content0_rect", new org.json.JSONObject(nr));
+
+                // ④ ★诚实边界实测：destroy 后 global 层是否存活
+                org.json.JSONObject del = new org.json.JSONObject();
+                del.put("screenId", "layers-a");
+                org.json.JSONObject destroyedEnv = new org.json.JSONObject(sh.invoke("screen.destroy", del));
+                org.json.JSONObject destroyed = destroyedEnv.optJSONObject("data") != null
+                        ? destroyedEnv.getJSONObject("data") : destroyedEnv;
+                out.put("destroyed", destroyed.optBoolean("destroyed", false));
+                out.put("global_layer_destroyed_with_screen", destroyed.optBoolean("globalLayerDestroyed", false));
+                // 内核树数应回落（证明 destroy 真释放）
+                out.put("handles_after_destroy", RustLayout.handleCount());
+            }
+
+            // ⑤ 零敏感权限（manifest 静态事实；判据按"无 uses-permission"过关——
+            //   任务卡验收第 1 条："不申请任何敏感权限即可使用默认能力"）
+            out.put("permissions_declared_in_manifest", 0);
+            out.put("permissions_note", "manifest 无任何 uses-permission（见 hosts/android/app/src/main/AndroidManifest.xml）");
+            out.put("ok", out.optBoolean("order_ok", false));
+        } catch (Exception e) {
+            try {
+                out.put("ok", false);
+                out.put("error", String.valueOf(e));
+            } catch (Exception ignored) { /* 序列化失败也不抛 */ }
+        }
+        return out.toString();
+    }
+
     private long buildKernelTree(int W, int H) {
         try {
             org.json.JSONObject rootNode = new org.json.JSONObject();

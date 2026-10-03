@@ -34,6 +34,9 @@
 // 【诚实边界】执行器只做**编排**；真实树操作/真实平台动画由端口实现负责——
 //   端口实现是否"真"由各自的判据（真机几何/层变换探针）证明，本文件不声称。
 
+// ★GP3-c（2026-10-03）：层容器**计划**来自契约（唯一真源）——本包只消费，不自造层结构。
+import { mountLayerContainerPlans, type MountLayerContainerPlan } from '@proteus-vue/contracts'
+
 /** 屏命令（**结构类型**——与 `@proteus-vue/router` 的 `ScreenCommand` 同形；本文件不 import router） */
 export interface ScreenCommandLike {
   op: 'mount' | 'enter' | 'exit' | 'unmount'
@@ -84,6 +87,20 @@ export interface ScreenTreeHost {
     path: string
     params: unknown
     rebuild: boolean
+    /**
+     * ★★★GP3-c（2026-10-03）：**三层挂载容器计划**（宿主据此在屏根下建三层容器）。
+     *
+     * 【为什么由执行器下发而不是宿主自造】层容器的偏移/树序/几何口径是**契约**
+     *   （`@proteus-vue/contracts` 的 `mountLayerContainerPlans`）；两端宿主各写一遍
+     *   = **同一件事两份实现**（本仓纪律：修一份等于没修）。⇒ 执行器（TS，两端同一份）
+     *   下发计划，宿主**只做"照此建树"**。
+     *
+     * 【宿主要做什么】对每项建一个容器：`id = rootId + nodeOffset`、`parentId = rootId`、
+     *   `position: absolute` + 宽高 = 屏尺寸 ⇒ **按数组顺序**加入 nodes（内核树序即层序）。
+     *   ★`global` 层容器**不随屏销毁**（见契约 `MOUNT_LAYER_HOST_CONTRACT.survivesRouteChange`）。
+     *   ★可选字段：宿主不认识它可忽略（向后兼容——老宿主照常工作，只是没有三层结构）。
+     */
+    layerContainers?: readonly MountLayerContainerPlan[]
   }): number | Promise<number>
   /** 可见性切换（true = 显示；false = 隐藏但**树保留**——虚拟栈的核心语义） */
   setScreenVisible(screenId: string, visible: boolean, rootNodeId: number | undefined): void | Promise<void>
@@ -184,6 +201,8 @@ export function createScreenExecutor(opts: ScreenExecutorOptions): ScreenExecuto
           path: cmd.path ?? '',
           params: cmd.params ?? null,
           rebuild,
+          // ★GP3-c：三层容器计划（由**契约**算，宿主只消费——偏移量而非绝对 id，见类型注释）
+          layerContainers: mountLayerContainerPlans(),
         })
         nodes.set(cmd.screenId, node)
         txn.mounted.set(cmd.screenId, rebuild)

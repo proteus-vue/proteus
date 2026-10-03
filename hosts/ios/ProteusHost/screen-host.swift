@@ -45,6 +45,8 @@ final class ScreenHost: NSObject {
         let name: String
         var handle: UInt64
         var rootNodeId: Int
+        /// ★GP3-c：global 层容器 id（-1 = 无）。★当前树模型下它会随屏销毁——见 destroy 的诚实边界
+        var globalLayerId = -1
         var visible = false
         init(screenId: String, name: String, handle: UInt64, rootNodeId: Int) {
             self.screenId = screenId
@@ -157,15 +159,34 @@ final class ScreenHost: NSObject {
             nodeToScreen = nodeToScreen.filter { $0.value !== old }
             screens.removeValue(forKey: screenId)
         }
-        // 装置屏树：根 + 3 个子（真实业务里是 Vue 渲染产物；此处用几何合理的占位子树——
-        // 与 Android 腿同一边界，见文件头）
+        // 装置屏树：根 + 三层挂载容器 + 3 个内容节点（真实业务里是 Vue 渲染产物；
+        // 此处用几何合理的占位子树——与 Android 腿同一边界，见文件头）
         let rootId = 100 + screens.count * 10
-        let nodes: [[String: Any]] = [
-            node(rootId, nil, 0, 0, 1080, 2400, nil),
-            node(rootId + 1, rootId, 0, 0, 1080, 200, 0x3355AA),
-            node(rootId + 2, rootId, 0, 200, 1080, 200, 0xAA5533),
-            node(rootId + 3, rootId, 0, 400, 1080, 200, 0x33AA55),
-        ]
+        // ★★★GP3-c（2026-10-03）：**三层挂载容器**——计划由执行器按契约下发，本处只"照此建树"。
+        //   内核**无 z-order 字段** ⇒ 层间顺序唯一真源是**树序**：按计划的 order 升序依次 append
+        //   ⇒ global 在下、overlay 在上（与契约 MOUNT_LAYER_ORDER 同源）。
+        //   ★与 Android 腿**同一份契约**（偏移/顺序/几何口径都来自 `mountLayerContainerPlans`）——
+        //     两端各写一遍层结构 = 同一件事两份实现（本仓纪律：修一份等于没修）。
+        var nodes: [[String: Any]] = [node(rootId, nil, 0, 0, 1080, 2400, nil)]
+        var layerCount = 0
+        var globalLayerId = -1
+        var layerIds: [String: Int] = [:]
+        if let plan = args["layerContainers"] as? [[String: Any]] {
+            for item in plan {
+                guard let layer = item["layer"] as? String,
+                      let off = item["nodeOffset"] as? Int, off > 0 else { continue }
+                let id = rootId + off
+                nodes.append(layerNode(id, rootId, 1080, 2400)) // ★全屏 + absolute（纯容器）
+                layerIds[layer] = id
+                layerCount += 1
+                if layer == "global" { globalLayerId = id }
+            }
+        }
+        // 内容节点挂到 **page 层**（无计划则回落屏根——向后兼容：老行为不变）
+        let contentParent = layerIds["page"] ?? rootId
+        nodes.append(node(rootId + 11, contentParent, 0, 0, 1080, 200, 0x3355AA))
+        nodes.append(node(rootId + 12, contentParent, 0, 200, 1080, 200, 0xAA5533))
+        nodes.append(node(rootId + 13, contentParent, 0, 400, 1080, 200, 0x33AA55))
         let req: [String: Any] = ["viewport": ["width": 1080, "height": 2400], "nodes": nodes]
         guard let reqData = try? JSONSerialization.data(withJSONObject: req),
               let reqJson = String(data: reqData, encoding: .utf8) else {
@@ -174,14 +195,22 @@ final class ScreenHost: NSObject {
         let handle = reqJson.withCString { proteus_layout_create($0) }
         if handle == 0 { return fail("screen.mount: proteus_layout_create 失败（屏 \(screenId)）") }
         let st = ScreenTree(screenId: screenId, name: name, handle: handle, rootNodeId: rootId)
+        st.globalLayerId = globalLayerId // ★GP3-c（destroy 的诚实边界要读它）
         screens[screenId] = st
-        for i in 0..<4 { nodeToScreen[rootId + i] = st }
+        // 装置节点注册（含层容器）：root + 三层容器 + 三个内容节点（11..13）
+        nodeToScreen[rootId] = st
+        for off in layerIds.values { nodeToScreen[off] = st }
+        for i in 11...13 { nodeToScreen[rootId + i] = st }
         mountCalls += 1
         return ok([
             "rootNodeId": rootId,
-            "nodes": 4,
+            "nodes": layerCount + 4,
             "rebuild": rebuild,
             "handle": Int(handle),
+            // ★GP3-c 读数：三层容器（判据读它证明"层结构真建了"——不是壳自述）
+            "layerCount": layerCount,
+            "globalLayerId": globalLayerId,
+            "layerIds": layerIds,
         ])
     }
 
@@ -200,6 +229,23 @@ final class ScreenHost: NSObject {
         n["height"] = h
         if let c = color { n["bg"] = c }
         return n
+    }
+
+    /// ★★★GP3-c：**层容器节点**（全屏 absolute，`left/top` 显式 0）。
+    ///
+    /// 【为什么不能走 `node()`——本轮真机抓到的缺陷（非装置问题，是层实现缺陷）】
+    ///   `node()` 的启发式是「x/y≠0 才 absolute」，而层容器**恰在原点 (0,0)**
+    ///   ⇒ 被写成 `relative` 进入 flex 流 ⇒ 三个全屏容器**互相挤压**（真机实测：每个只剩
+    ///   1/3 屏高 = 800px，page 层落在 y=800）——契约 `frame:'fullscreen'` /
+    ///   `MOUNT_LAYER_HOST_CONTRACT.positioning:'absolute-fullscreen'` 名存实亡。
+    ///   ⇒ **原点也必须显式 absolute**（与 Android 腿同法——两端同源修复）。
+    private func layerNode(_ id: Int, _ parentId: Int, _ w: Double, _ h: Double) -> [String: Any] {
+        [
+            "id": id, "parentId": parentId,
+            "position": "absolute",
+            "left": 0, "top": 0, // ★显式 0：absolute + auto inset 的静态位置有歧义，显式写入是唯一确定性来源
+            "width": w, "height": h,
+        ]
     }
 
     // MARK: - screen.visible
@@ -253,7 +299,20 @@ final class ScreenHost: NSObject {
         nodeToScreen = nodeToScreen.filter { $0.value !== st }
         let destroyed = st.handle != 0 && proteus_layout_destroy(st.handle)
         destroyCalls += 1
-        return ok(["removed": destroyed ? 4 : 0, "destroyed": destroyed])
+        // ★★★GP3-c（2026-10-03）：**诚实边界——当前 destroy 会连 global 层一起销毁**。
+        //   【为什么】本实现的树模型是**每屏一棵独立内核树**（M2 装置形态），而三层容器建在
+        //     该屏的树里 ⇒ `proteus_layout_destroy(屏树)` 把 global 层容器一并释放
+        //     ⇒ 验收第 2 条（"全局层跨页面存活，路由切换不重建"）在本树模型下**不成立**。
+        //   【为什么不在这里顺手修】M5 设计原文是「**屏 = 树内子树**，切屏 = display 切换」——
+        //     那要求**所有屏共享一棵内核树**。改成共享树是 ScreenHost 的整体重构（id 分配/
+        //     节点映射/动画按树分发全要跟进），不是 destroy 里能补的一行；硬补（如"销毁时把
+        //     global 层摘出来重建"）会制造"看着通过、实则重建了新实例"的**假绿**——比不通过更坏。
+        //   ⇒ 如实记账（判据可读），缺口写进任务卡。
+        return ok([
+            "removed": destroyed ? 4 : 0,
+            "destroyed": destroyed,
+            "globalLayerDestroyed": st.globalLayerId > 0,
+        ])
     }
 
     // MARK: - screen.anim

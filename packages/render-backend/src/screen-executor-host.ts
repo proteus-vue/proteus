@@ -173,7 +173,11 @@ export function createHostScreenPorts(opts: HostScreenPortsOptions): HostScreenP
         path: screen.path,
         params: screen.params,
         rebuild: screen.rebuild,
-      }) as { rootNodeId?: number; nodes?: number } | null
+        // ★★★GP3-c：**三层容器计划**随 mount 下发（宿主照此建树——偏移量，宿主加到自己分配的根 id 上）。
+        //   执行器已按契约算好（见 screen-executor.ts）；本层只做**透传**（不再重复计算——
+        //   本仓纪律：同一件事两份实现 = 修一份等于没修）。
+        ...(screen.layerContainers ? { layerContainers: screen.layerContainers } : {}),
+      }) as { rootNodeId?: number; nodes?: number; layers?: Record<string, number> } | null
       const rootNodeId = Number(d?.rootNodeId ?? 0)
       if (!rootNodeId) {
         throw new Error(`[screen-host] screen.mount 未返回 rootNodeId（${JSON.stringify(d)}）——宿主实现不完整`)

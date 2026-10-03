@@ -487,6 +487,7 @@ final class BenchViewController: UIViewController {
         // ★L2（光栅级）真对照比值：两边都是 CPU 位图光栅化（见上方 native raster 注释）
         if tRasterNative > 0 {
             let flatDraw = (out["flattened"] as? [String: Any])?["draw_ms"] as? Double ?? 0
+            // I2-ALLOW: 基准报告读数（光栅耗时比值写成 3 位小数供人读）——统计/报告，非几何
             verdict["flat_raster_vs_native"] = ((flatDraw / tRasterNative) * 1000).rounded() / 1000
             verdict["raster_note"] = "Prot=layer.render(in:) CPU 光栅 · Native=drawHierarchy(afterScreenUpdates) 同步光栅（同为 1x 位图）"
         }
