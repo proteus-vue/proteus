@@ -9493,22 +9493,7 @@
     }
   });
 
-  // packages/slot-runtime/dist/index.js
-  var OpCode = /* @__PURE__ */ ((OpCode2) => {
-    OpCode2[OpCode2["SET_PROP"] = 1] = "SET_PROP";
-    OpCode2[OpCode2["SET_STYLE"] = 2] = "SET_STYLE";
-    OpCode2[OpCode2["SET_TEXT"] = 3] = "SET_TEXT";
-    OpCode2[OpCode2["SET_ATTRS"] = 4] = "SET_ATTRS";
-    OpCode2[OpCode2["TOGGLE_VIS"] = 5] = "TOGGLE_VIS";
-    OpCode2[OpCode2["INSERT_BLOCK"] = 16] = "INSERT_BLOCK";
-    OpCode2[OpCode2["REMOVE_NODE"] = 17] = "REMOVE_NODE";
-    OpCode2[OpCode2["MOVE_NODE"] = 18] = "MOVE_NODE";
-    OpCode2[OpCode2["LIST_SET"] = 32] = "LIST_SET";
-    OpCode2[OpCode2["LIST_SPLICE"] = 33] = "LIST_SPLICE";
-    OpCode2[OpCode2["LIST_UPDATE"] = 34] = "LIST_UPDATE";
-    OpCode2[OpCode2["CALL_COMPONENT_UPDATE"] = 48] = "CALL_COMPONENT_UPDATE";
-    return OpCode2;
-  })(OpCode || {});
+  // packages/slot-runtime/src/opcode.ts
   var PropKeyTable = class _PropKeyTable {
     constructor() {
       this.keys = [];
@@ -9569,6 +9554,8 @@
       return p;
     }
   };
+
+  // packages/slot-runtime/src/anim-curve.ts
   var AnimCurve = {
     LINEAR: 0,
     EASE_OUT_CUBIC: 1,
@@ -9597,33 +9584,35 @@
     buildTable(AnimCurve.EASE_IN_OUT_CUBIC),
     buildTable(AnimCurve.SPRING_APPROX)
   ];
+
+  // packages/slot-runtime/src/buffer.ts
   var OPS_MAGIC = 1347376720;
   var OPS_VERSION = 2;
   var OPS_HEADER_BYTES = 20;
   function opSize(op) {
     switch (op.op) {
-      case 1:
-      case 2:
+      case 1 /* SET_PROP */:
+      case 2 /* SET_STYLE */:
         return 11;
-      case 3:
+      case 3 /* SET_TEXT */:
         return 9;
-      case 4:
+      case 4 /* SET_ATTRS */:
         return 7 + 6 * op.attrs.length;
-      case 5:
+      case 5 /* TOGGLE_VIS */:
         return 6;
-      case 16:
+      case 16 /* INSERT_BLOCK */:
         return 10;
-      case 17:
+      case 17 /* REMOVE_NODE */:
         return 5;
-      case 18:
+      case 18 /* MOVE_NODE */:
         return 10;
-      case 32:
+      case 32 /* LIST_SET */:
         return 9;
-      case 33:
+      case 33 /* LIST_SPLICE */:
         return 15 + 4 * op.itemKeyRefs.length;
-      case 34:
+      case 34 /* LIST_UPDATE */:
         return 17;
-      case 48:
+      case 48 /* CALL_COMPONENT_UPDATE */:
         return 13;
       default: {
         const never = op;
@@ -9805,20 +9794,20 @@
     const s = /* @__PURE__ */ new Set();
     for (const op of ops) {
       switch (op.op) {
-        case 1:
-        case 2:
+        case 1 /* SET_PROP */:
+        case 2 /* SET_STYLE */:
           k.add(op.keyId);
           break;
-        case 4:
+        case 4 /* SET_ATTRS */:
           for (const a of op.attrs) k.add(a.keyId);
           break;
-        case 3:
+        case 3 /* SET_TEXT */:
           s.add(op.textRef);
           break;
-        case 33:
+        case 33 /* LIST_SPLICE */:
           for (const r of op.itemKeyRefs) s.add(r);
           break;
-        case 34:
+        case 34 /* LIST_UPDATE */:
           s.add(op.itemKeyRef);
           break;
         // TOGGLE_VIS / INSERT_BLOCK / REMOVE_NODE / MOVE_NODE / LIST_SET /
@@ -9836,16 +9825,16 @@
   }
   function remapOp(op, kMap, sMap) {
     switch (op.op) {
-      case 1:
-      case 2:
+      case 1 /* SET_PROP */:
+      case 2 /* SET_STYLE */:
         return { ...op, keyId: kMap.get(op.keyId) ?? 0 };
-      case 4:
+      case 4 /* SET_ATTRS */:
         return { ...op, attrs: op.attrs.map((a) => ({ keyId: kMap.get(a.keyId) ?? 0, value: a.value })) };
-      case 3:
+      case 3 /* SET_TEXT */:
         return { ...op, textRef: sMap.get(op.textRef) ?? 0 };
-      case 33:
+      case 33 /* LIST_SPLICE */:
         return { ...op, itemKeyRefs: op.itemKeyRefs.map((r) => sMap.get(r) ?? 0) };
-      case 34:
+      case 34 /* LIST_UPDATE */:
         return { ...op, itemKeyRef: sMap.get(op.itemKeyRef) ?? 0 };
       default:
         return op;
@@ -9877,17 +9866,17 @@
   function encodeOp(w, op) {
     w.u8(op.op);
     switch (op.op) {
-      case 1:
-      case 2:
+      case 1 /* SET_PROP */:
+      case 2 /* SET_STYLE */:
         w.u32(op.nodeId);
         w.u16(op.keyId);
         w.f32(op.value);
         return;
-      case 3:
+      case 3 /* SET_TEXT */:
         w.u32(op.nodeId);
         w.u32(op.textRef);
         return;
-      case 4:
+      case 4 /* SET_ATTRS */:
         w.u32(op.nodeId);
         w.u16(op.attrs.length);
         for (const a of op.attrs) {
@@ -9895,41 +9884,41 @@
           w.f32(a.value);
         }
         return;
-      case 5:
+      case 5 /* TOGGLE_VIS */:
         w.u32(op.nodeId);
         w.u8(op.visible ? 1 : 0);
         return;
-      case 16:
+      case 16 /* INSERT_BLOCK */:
         w.u32(op.blockId);
         w.u32(op.refNodeId);
         w.u8(op.pos);
         return;
-      case 17:
+      case 17 /* REMOVE_NODE */:
         w.u32(op.nodeId);
         return;
-      case 18:
+      case 18 /* MOVE_NODE */:
         w.u32(op.nodeId);
         w.u32(op.refNodeId);
         w.u8(op.pos);
         return;
-      case 32:
+      case 32 /* LIST_SET */:
         w.u32(op.listId);
         w.u32(op.dataRef);
         return;
-      case 33:
+      case 33 /* LIST_SPLICE */:
         w.u32(op.listId);
         w.u32(op.start);
         w.u32(op.delCount);
         w.u16(op.itemKeyRefs.length);
         for (const r of op.itemKeyRefs) w.u32(r);
         return;
-      case 34:
+      case 34 /* LIST_UPDATE */:
         w.u32(op.listId);
         w.u32(op.itemKeyRef);
         w.u32(op.slotId);
         w.f32(op.value);
         return;
-      case 48:
+      case 48 /* CALL_COMPONENT_UPDATE */:
         w.u32(op.componentId);
         w.u32(op.slotId);
         w.f32(op.value);
@@ -9961,29 +9950,29 @@
   function decodeOp(r) {
     const op = r.u8();
     switch (op) {
-      case 1:
-      case 2:
+      case 1 /* SET_PROP */:
+      case 2 /* SET_STYLE */:
         return { op, nodeId: r.u32(), keyId: r.u16(), value: r.f32() };
-      case 3:
+      case 3 /* SET_TEXT */:
         return { op, nodeId: r.u32(), textRef: r.u32() };
-      case 4: {
+      case 4 /* SET_ATTRS */: {
         const nodeId = r.u32();
         const n = r.u16();
         const attrs = [];
         for (let i = 0; i < n; i++) attrs.push({ keyId: r.u16(), value: r.f32() });
         return { op, nodeId, attrs };
       }
-      case 5:
+      case 5 /* TOGGLE_VIS */:
         return { op, nodeId: r.u32(), visible: r.u8() !== 0 };
-      case 16:
+      case 16 /* INSERT_BLOCK */:
         return { op, blockId: r.u32(), refNodeId: r.u32(), pos: r.u8() };
-      case 17:
+      case 17 /* REMOVE_NODE */:
         return { op, nodeId: r.u32() };
-      case 18:
+      case 18 /* MOVE_NODE */:
         return { op, nodeId: r.u32(), refNodeId: r.u32(), pos: r.u8() };
-      case 32:
+      case 32 /* LIST_SET */:
         return { op, listId: r.u32(), dataRef: r.u32() };
-      case 33: {
+      case 33 /* LIST_SPLICE */: {
         const listId = r.u32();
         const start = r.u32();
         const delCount = r.u32();
@@ -9992,14 +9981,16 @@
         for (let i = 0; i < n; i++) itemKeyRefs.push(r.u32());
         return { op, listId, start, delCount, itemKeyRefs };
       }
-      case 34:
+      case 34 /* LIST_UPDATE */:
         return { op, listId: r.u32(), itemKeyRef: r.u32(), slotId: r.u32(), value: r.f32() };
-      case 48:
+      case 48 /* CALL_COMPONENT_UPDATE */:
         return { op, componentId: r.u32(), slotId: r.u32(), value: r.f32() };
       default:
         throw new Error(`\u672A\u77E5\u64CD\u4F5C\u7801\uFF1A0x${op.toString(16)}\uFF08\u6E38\u6807\u4F4D\u7F6E ${r.offset}\uFF09`);
     }
   }
+
+  // packages/slot-runtime/src/slot.ts
   function createSlot(spec, keys, strings, initial, registry) {
     const nodeId = spec.nodeId;
     const keyId = spec.keyId ?? 0;
@@ -10014,30 +10005,30 @@
       emit(next, buf) {
         switch (spec.kind) {
           case "text":
-            buf.push({ op: 3, nodeId, textRef: strings.intern(String(next)) });
+            buf.push({ op: 3 /* SET_TEXT */, nodeId, textRef: strings.intern(String(next)) });
             return;
           case "prop":
-            buf.push({ op: 1, nodeId, keyId, value: toF32(next) });
+            buf.push({ op: 1 /* SET_PROP */, nodeId, keyId, value: toF32(next) });
             return;
           case "style":
-            buf.push({ op: 2, nodeId, keyId, value: toF32(next) });
+            buf.push({ op: 2 /* SET_STYLE */, nodeId, keyId, value: toF32(next) });
             return;
           case "visibility":
-            buf.push({ op: 5, nodeId, visible: Boolean(next) });
+            buf.push({ op: 5 /* TOGGLE_VIS */, nodeId, visible: Boolean(next) });
             return;
           case "list-item": {
             const item = next;
             const nodeId2 = registry?.resolveNode(listId, item.key, listSlotId);
             if (nodeId2 !== void 0) {
               if ((spec.itemKind ?? "style") === "text") {
-                buf.push({ op: 3, nodeId: nodeId2, textRef: strings.intern(String(item.value)) });
+                buf.push({ op: 3 /* SET_TEXT */, nodeId: nodeId2, textRef: strings.intern(String(item.value)) });
               } else {
-                buf.push({ op: 2, nodeId: nodeId2, keyId, value: toF32(item.value) });
+                buf.push({ op: 2 /* SET_STYLE */, nodeId: nodeId2, keyId, value: toF32(item.value) });
               }
               return;
             }
             buf.push({
-              op: 34,
+              op: 34 /* LIST_UPDATE */,
               listId,
               itemKeyRef: strings.intern(item.key),
               slotId: listSlotId,
@@ -10046,15 +10037,15 @@
             return;
           }
           case "list-data":
-            buf.push({ op: 32, listId, dataRef: toF32(next) });
+            buf.push({ op: 32 /* LIST_SET */, listId, dataRef: toF32(next) });
             return;
           case "attrs": {
             const attrs = next;
-            buf.push({ op: 4, nodeId, attrs });
+            buf.push({ op: 4 /* SET_ATTRS */, nodeId, attrs });
             return;
           }
           case "component-prop":
-            buf.push({ op: 48, componentId: nodeId, slotId: listSlotId, value: toF32(next) });
+            buf.push({ op: 48 /* CALL_COMPONENT_UPDATE */, componentId: nodeId, slotId: listSlotId, value: toF32(next) });
             return;
           default: {
             const never = spec.kind;
@@ -10085,6 +10076,16 @@
       this.dirty = [];
       this.pending = false;
       this.stats = { flushes: 0, opsEmitted: 0, bytesSent: 0, shortCircuits: 0 };
+      /**
+       * ★★**帧号**（P2-5 新增）：每次 `flush()` 调用（**包括无脏槽位的空调用**）自增。
+       *
+       * 【为什么需要（v-memo 的组语义要求帧边界）】memo 组在"同一帧内"只判定一次脏：
+       *   若一帧里有多个源变化（多次 `writeSlotsOfSource`）触到同一组的多个槽位，
+       *   第一次判定"依赖变了"之后，同帧其余槽位必须**照常写**（组语义 = 子树整体更新）。
+       *   而判定一次的判据只有帧边界——`flush()` 是这套系统的天然帧边界。
+       *   ★与 `stats.flushes` 的区别：后者只在**真的提交了字节**时自增（空 flush 不计）；
+       *     本计数每次 flush 调用都自增（帧边界语义）。
+       */
       this.frame = 0;
     }
     /** 帧号（v-memo 门用；只读） */
@@ -10137,6 +10138,8 @@
       return this.dirty.length;
     }
   };
+
+  // packages/slot-runtime/src/expr.ts
   var PURE_CALLS = {
     // —— Math（纯计算）——
     "Math.abs": Math.abs,
@@ -10320,9 +10323,13 @@
       }
     }
   }
+
+  // packages/slot-runtime/src/list-registry.ts
   var ListRegistry = class {
     constructor() {
+      /** listId → itemKey → (itemSlotId → nodeId) */
       this.items = /* @__PURE__ */ new Map();
+      /** 统计（诊断：解释"这次 item 更新为什么没走快路径"） */
       this.hits = 0;
       this.misses = 0;
     }
@@ -10374,24 +10381,69 @@
       return { hits: this.hits, misses: this.misses, items: this.size };
     }
   };
+
+  // packages/slot-runtime/src/runtime.ts
   var VaporRuntime = class {
-    constructor(table, rt, evaluators, registry, onComponentProp, nodeIdOffset = 0) {
+    constructor(table, rt, evaluators, registry, onComponentProp, nodeIdOffset = 0, skipNodeIds) {
       this.table = table;
       this.rt = rt;
       this.evaluators = evaluators;
       this.registry = registry;
       this.onComponentProp = onComponentProp;
       this.nodeIdOffset = nodeIdOffset;
+      this.skipNodeIds = skipNodeIds;
       this.slots = /* @__PURE__ */ new Map();
       this.slotById = /* @__PURE__ */ new Map();
       this.evalImpls = /* @__PURE__ */ new Map();
       this.sourcesOfSlot = /* @__PURE__ */ new Map();
+      /**
+       * ★★未能实例化求值器的槽位（**诊断，不许静默**）
+       *
+       * 【为什么必须有（本仓实测）】表达式引用外层别名或含运算时编译器给 `expr` 形态，
+       *   而 `expr` 只支持纯路径 ⇒ `impl` 为 undefined。首版**直接 continue** ⇒
+       *   该槽位永不写、且无任何提示（静默不更新的典型）。
+       */
       this.uninstantiatedSlots = [];
+      /** ★行内槽位的按键值缓存（`slotId:key` → 上次值）——只发变化行 */
+      /**
+       * ★★行内值缓存（**免字符串拼接**，2026-09-29 优化）
+       *
+       * 【为什么改（本仓实测的瓶颈）】原实现每 (槽位 × 行) 都做一次
+       *   `` `${spec.slotId}:${key}` `` 字符串拼接 + Map 查存；1000 行 × 3 槽位 = 3000 次
+       *   ⇒ 在 `V11` 测得单行更新 **JS 侧 6.76ms**（扫描成本主导，而增量只有 1 条指令）。
+       *   ⇒ 改**嵌套 Map**（listId → slotId → key → value）：键是数字/字符串原值，无拼接、无临时字符串。
+       *   ★正确性不变（同一 (listId, slotId, key) 三元组仍是唯一键）。
+       */
       this.itemValueCache = /* @__PURE__ */ new Map();
       this.loaded = false;
+      /* ── ★★P2-5（2026-10-03）：v-once / v-memo 的运行时状态 ── */
+      /**
+       * v-once：已写过的槽位 id（**只写一次**——首次写入后永久冻结）。
+       * ★为什么记在运行时（而不是把槽位从表里删掉）：表是编译产物（只读、可序列化）；
+       *   而"写过没有"是**实例态**（页面重挂载 ⇒ 重新写一次，与官方"重挂载重新渲染"一致）。
+       */
       this.onceWritten = /* @__PURE__ */ new Set();
+      /** v-memo：各组的**依赖基线**（上一次比较时的值；缺省 = 还没建过基线 ⇒ 首帧必脏） */
       this.memoBaseline = /* @__PURE__ */ new Map();
+      /**
+       * v-memo：组在本**帧**已被判定为"依赖变了"的标记（值 = 帧号）。
+       *
+       * 【为什么按帧记（组语义的关键）】一帧里多个源变化可能触到同组多个槽位——
+       *   第一次判定"变了"之后，**同帧其余槽位必须照常写**（组 = 子树整体更新）；
+       *   而"一次判定管一帧"的边界只有 `flush()`（见 `SlotRuntime.frameId`）。
+       */
       this.memoDirtyFrame = /* @__PURE__ */ new Map();
+      /* ── ★★★P3-3（2026-10-03）：可见性变化日志（`<Transition>` 的**驱动源**）──
+       *
+       * 【为什么运行时记、桥来消费】`v-show` / `v-if` 的切换在运行时表现为 `visible` 槽位写入
+       *   ⇒ 编成 `TOGGLE_VIS` 指令（内核只管**应用**可见性，不知道"要不要过渡"）。
+       *   而"这个节点有没有过渡声明"是**编译产物**（`LayoutNode.transition`）、
+       *   "把动画交给谁播"是**宿主**（`proteusHost.animStart`）——桥正好两头都有。
+       *   ⇒ 运行时只负责**记事实**（谁、变成什么），桥负责**查声明 + 转发**（分层正确、可单测）。
+       *
+       * 【为什么要去重】`relink` 会重写全部槽位（含未变的可见性）⇒ 不去重会把"每次 relink"
+       *   当成一次切换（过渡被反复触发）。⇒ 与上一状态比较，**只在真的翻转时记**。
+       */
       this.visibilityLog = [];
       this.lastVisible = /* @__PURE__ */ new Map();
     }
@@ -10531,6 +10583,7 @@
           if (spec.kind === "list-item") continue;
           if (spec.kind === "list-data") continue;
           if (spec.once && this.onceWritten.has(spec.slotId)) continue;
+          if (this.skipNodeIds?.has(spec.nodeId + this.nodeIdOffset)) continue;
           if (spec.memoId !== void 0 && !this.memoGroupDirty(spec.memoId, ctx)) continue;
           const entry = this.slotById.get(spec.slotId);
           const impl = this.evaluators.get(spec.evaluatorId);
@@ -10714,12 +10767,13 @@
     /** 发一条行内更新指令：解析得到 nodeId 就发普通指令，否则回退 LIST_UPDATE */
     emitListItem(spec, key, value) {
       const nodeId = this.registry?.resolveNode(spec.listId ?? -1, key, spec.itemSlotId ?? -1);
+      if (nodeId !== void 0 && this.skipNodeIds?.has(nodeId)) return;
       if (nodeId !== void 0) {
         if ((spec.itemKind ?? "style") === "text") {
-          this.rt.buffer.push({ op: 3, nodeId, textRef: this.rt.strings.intern(String(value)) });
+          this.rt.buffer.push({ op: 3 /* SET_TEXT */, nodeId, textRef: this.rt.strings.intern(String(value)) });
         } else {
           this.rt.buffer.push({
-            op: 2,
+            op: 2 /* SET_STYLE */,
             nodeId,
             keyId: this.rt.keys.intern(spec.propKey),
             value: typeof value === "number" ? value : Number(value) || 0
@@ -10727,7 +10781,7 @@
         }
       } else {
         this.rt.buffer.push({
-          op: 34,
+          op: 34 /* LIST_UPDATE */,
           listId: spec.listId ?? -1,
           itemKeyRef: this.rt.strings.intern(key),
           slotId: spec.itemSlotId ?? -1,
@@ -10806,6 +10860,8 @@
       }
     };
   }
+
+  // packages/slot-runtime/src/instantiate.ts
   function engineFieldOf(propKey) {
     if (propKey === "text.content") return { kind: "text" };
     const m = propKey.match(/^(?:layout|paint|text)\.(.+)$/);
@@ -10897,6 +10953,8 @@
       }
       if (n.tag) out.tag = n.tag;
       if (n.component) out.component = n.component;
+      if (n.slotOutlet) out.slotOutlet = n.slotOutlet;
+      if (n.slotFor) out.slotFor = n.slotFor;
       out.id = id + idOffset;
       out.parentId = parentId === null ? null : parentId + idOffset;
       nodes.push(out);
@@ -11050,11 +11108,69 @@
       }
     }
     const componentMounts = [];
+    const slotMounts = [];
+    const droppedNodeIds = /* @__PURE__ */ new Set();
     let componentNodes = 0;
+    const subtreeOf = (list, rootId) => {
+      const doomed = /* @__PURE__ */ new Set([rootId]);
+      let grew = true;
+      while (grew) {
+        grew = false;
+        for (const x of list) {
+          if (x.parentId !== null && !doomed.has(x.id) && doomed.has(x.parentId)) {
+            doomed.add(x.id);
+            grew = true;
+          }
+        }
+      }
+      return doomed;
+    };
+    const dissolveOutlets = (list, fills) => {
+      const consumed = /* @__PURE__ */ new Set();
+      for (const outlet of list.filter((x) => x.slotOutlet)) {
+        if (list.indexOf(outlet) < 0) continue;
+        const name = outlet.slotOutlet.name;
+        const fill = fills.get(name);
+        const useFill = fill !== void 0 && fill.length > 0 && !consumed.has(name);
+        if (useFill) {
+          consumed.add(name);
+          const doomed = subtreeOf(list, outlet.id);
+          for (const id of doomed) droppedNodeIds.add(id);
+          const idx = list.findIndex((x) => x.id === outlet.id);
+          const kept = list.filter((x) => !doomed.has(x.id));
+          kept.splice(Math.min(idx, kept.length), 0, ...fill);
+          list.length = 0;
+          list.push(...kept);
+          for (const r of fill) {
+            r.parentId = outlet.parentId;
+            delete r.slotFor;
+          }
+          slotMounts.push({ outletNodeId: outlet.id, name, filled: true, contentIds: fill.map((x) => x.id), fallbackIds: [] });
+        } else {
+          const kids = list.filter((x) => x.parentId === outlet.id);
+          const fallbackIds = [];
+          if (kids.length > 0) {
+            for (const k of kids) k.parentId = outlet.parentId;
+            fallbackIds.push(...kids.map((x) => x.id));
+            list.splice(list.indexOf(outlet), 1);
+            droppedNodeIds.add(outlet.id);
+          } else if (typeof outlet.text === "string" && outlet.text !== "") {
+            delete outlet.slotOutlet;
+            outlet.tag = "p-text";
+          } else {
+            list.splice(list.indexOf(outlet), 1);
+            droppedNodeIds.add(outlet.id);
+          }
+          slotMounts.push({ outletNodeId: outlet.id, name, filled: false, contentIds: [], fallbackIds });
+        }
+      }
+      return consumed;
+    };
     if (opts.components) {
       const depth = opts.componentDepth ?? 0;
       const boundaries = nodes.filter((n) => n.component);
       for (const boundary of boundaries) {
+        if (droppedNodeIds.has(boundary.id)) continue;
         const name = boundary.component;
         const def = opts.components[name];
         if (!def) {
@@ -11107,6 +11223,32 @@
           components: opts.components,
           componentDepth: depth + 1
         });
+        const contentRoots = nodes.filter((x) => x.parentId === boundary.id && x.slotFor);
+        if (contentRoots.length > 0 || childInst.slotMounts?.length) {
+          const fills = /* @__PURE__ */ new Map();
+          for (const r of contentRoots) {
+            const nm = r.slotFor.name;
+            const arr = fills.get(nm) ?? [];
+            arr.push(r);
+            fills.set(nm, arr);
+          }
+          const consumed = dissolveOutlets(childInst.nodes, fills);
+          for (const [nm, roots] of fills) {
+            if (consumed.has(nm)) {
+              for (const r of roots) {
+                const i = nodes.indexOf(r);
+                if (i >= 0) nodes.splice(i, 1);
+              }
+              continue;
+            }
+            for (const r of roots) {
+              const doomed = subtreeOf(nodes, r.id);
+              for (const id of doomed) droppedNodeIds.add(id);
+              for (let i = nodes.length - 1; i >= 0; i--) if (doomed.has(nodes[i].id)) nodes.splice(i, 1);
+            }
+            instNotes.push(`\u63D2\u69FD ${name}#${nm} \u7684\u5185\u5BB9\u65E0\u51FA\u53E3\u63A5\u4F4F\uFF08\u5B50\u7EC4\u4EF6\u6CA1\u6709\u540C\u540D <slot>\uFF09\u21D2 \u672A\u6E32\u67D3`);
+          }
+        }
         for (const r of childInst.nodes) if (r.parentId === null) r.parentId = boundary.id;
         nodes.push(...childInst.nodes);
         componentNodes += childInst.nodes.length;
@@ -11123,7 +11265,17 @@
           idOffset: idOffset + childOffset
         });
         for (const m of childInst.componentMounts ?? []) componentMounts.push(m);
+        for (const sm of childInst.slotMounts ?? []) slotMounts.push(sm);
+        for (const d of childInst.stats.droppedNodeIds ?? []) droppedNodeIds.add(d);
         for (const nt of childInst.notes ?? []) instNotes.push(nt);
+      }
+    }
+    if ((opts.componentDepth ?? 0) === 0) {
+      dissolveOutlets(nodes, /* @__PURE__ */ new Map());
+      for (const x of nodes) {
+        const rec = x;
+        if (rec.slotFor !== void 0) delete rec.slotFor;
+        if (rec.slotOutlet !== void 0) delete rec.slotOutlet;
       }
     }
     return {
@@ -11136,14 +11288,19 @@
         valuesFilled,
         // ★P1-3：本树 local 高水位（父级据此推进自己的分配器——**不含** idOffset）
         maxLocalId: nextId - 1,
-        componentNodes
+        componentNodes,
+        // ★P1-3 插槽分发：丢弃节点（最终 id 空间）——桥传给运行时 `skipNodeIds`
+        ...droppedNodeIds.size > 0 ? { droppedNodeIds: [...droppedNodeIds] } : {}
       },
       // ★只有**恰好一个**列表时才给虚拟化描述（多个列表 ⇒ 行号空间不同源，宿主按行号二分会错配）
       virtual: virtualRows.length > 0 && tpl.lists.length === 1 ? { rows: virtualRows } : void 0,
       ...componentMounts.length > 0 ? { componentMounts } : {},
+      ...slotMounts.length > 0 ? { slotMounts } : {},
       ...instNotes.length > 0 ? { notes: instNotes } : {}
     };
   }
+
+  // packages/slot-runtime/src/dispatch.ts
   function createDispatchState() {
     return { onceFired: /* @__PURE__ */ new Set() };
   }
@@ -13161,6 +13318,7 @@
       component_mounts: 0,
       component_nodes: 0,
       component_kid_probe: {},
+      slot_probe: { texts: [], rects: [], fills: [], markers_left: -1 },
       mount_ms: 0,
       mount_nodes: 0,
       updates_run: 0,
@@ -13525,7 +13683,7 @@
           if (payload.length > 0) {
             const d = decodeOps(payload);
             for (const op of d.ops) {
-              if (op.op === OpCode.SET_TEXT) {
+              if (op.op === 3 /* SET_TEXT */) {
                 const t4 = String(d.strings.valueOf(op.textRef));
                 texts.push(t4);
                 entries.push({ nodeId: op.nodeId, text: t4 });
@@ -13585,7 +13743,7 @@
           try {
             const d = decodeOps(b);
             for (const op of d.ops) {
-              if (op.op === OpCode.SET_STYLE) {
+              if (op.op === 2 /* SET_STYLE */) {
                 const k = d.keys.keyOf(op.keyId);
                 if (k === "layout.width" && kidTextNodeId !== void 0 && op.nodeId === kidTextNodeId) {
                   afterW = op.value;
@@ -13627,6 +13785,48 @@
         const ch = JSON.parse(proteusHost.probeChannels("[2,3,4,5,6]"));
         if (ch.ok && ch.channels) rep.channels = ch.channels;
       } catch {
+      }
+      {
+        const slotArt = artifacts.slot;
+        if (slotArt?.tpl?.ok) {
+          const slotDefs = {};
+          for (const [nm, def] of Object.entries(artifacts.components ?? {})) {
+            slotDefs[nm] = { template: def.tpl, table: def.table };
+          }
+          const slotRegistry = new ListRegistry();
+          const slotInst = instantiateTemplate(slotArt.tpl, {
+            viewport: args.viewport,
+            read: () => void 0,
+            table: slotArt.table,
+            registry: slotRegistry,
+            components: slotDefs
+          });
+          try {
+            const smOut = JSON.parse(
+              proteusHost.mount(JSON.stringify({ viewport: slotInst.viewport, nodes: slotInst.nodes }))
+            );
+            if (smOut.ok === true) {
+              const rectsAll = JSON.parse(proteusHost.readRects());
+              const rects = rectsAll.rects ?? {};
+              rep.slot_probe = {
+                texts: slotInst.nodes.filter((n) => typeof n.text === "string" && n.text.length > 0).map((n) => String(n.text)),
+                rects: slotInst.nodes.filter((n) => typeof n.text === "string" && n.text.length > 0).map((n) => ({ id: n.id, width: rects[String(n.id)]?.width ?? -1 })),
+                fills: (slotInst.slotMounts ?? []).map((m) => ({ name: m.name, filled: m.filled, contentIds: m.contentIds })),
+                markers_left: slotInst.nodes.filter((n) => n.slotFor || n.slotOutlet).length
+              };
+            } else {
+              notes.push(`\u63D2\u69FD\u63A2\u9488 mount \u5931\u8D25\uFF1A${smOut.error ?? "\u672A\u77E5"}`);
+            }
+          } catch (e) {
+            notes.push(`\u63D2\u69FD\u63A2\u9488\u5F02\u5E38\uFF1A${String(e?.message ?? e)}`);
+          }
+          try {
+            proteusHost.mount(JSON.stringify({ viewport: inst.viewport, nodes: inst.nodes }));
+          } catch {
+          }
+        } else {
+          notes.push("\u63D2\u69FD\u63A2\u9488\uFF1A\u4EA7\u7269\u65E0 slot \u6BB5\uFF08\u5939\u5177\u672A\u8986\u76D6 \u21D2 \u5224\u636E \u246E \u6309\u7F3A\u5931\u5904\u7406\uFF09");
+        }
       }
       rep.ok = rep.updates_run > 0;
       if (!rep.ok) notes.push("\u589E\u91CF\u94FE\u672A\u8DD1\u8D77\u6765\u2014\u2014\u89C1\u4E0A\u65B9 notes");

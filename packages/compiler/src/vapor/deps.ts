@@ -419,6 +419,21 @@ export function collectTemplateBindings(
       let activeListCtx: ListCtx = listCtx
 
       if (n.type === 1 /* ELEMENT */) {
+        // ★★★**插槽声明 `<template #x>`**（P1-3 插槽分发，2026-10-03 · 与 template.ts **同一条判据**）——
+        //   Vue 里 `template` 是片段/插槽声明、**不产元素** ⇒ 不占节点序号。
+        //   ★作用域变量（`#default="sp"`）加入 `scopes`（它们**不是顶层源**——不加会被
+        //     roots 收成"幽灵源"，与 P2-9 的可选链幽灵源同一族问题）。
+        if (tag === 'template') {
+          const vsProp = (n.props ?? []).find((p) => p.type === 7 && p.name === 'slot')
+          if (vsProp) {
+            const scopeCode = vsProp.exp?.content?.trim()
+            const scopeNames = scopeCode ? (scopeCode.match(/[\w$]+/g) ?? []) : []
+            // ★插槽声明本身不是元素 ⇒ 不占 id；children 是内容（父作用域表达式照常收集）
+            walk((n.children ?? []) as unknown[], [...scopes, ...scopeNames], inBranch, scopeSources,
+              parentElementIndex, listCtx, onceCtx, memoCtx, memoInvalidCtx)
+            continue
+          }
+        }
         // ★★★**逻辑容器统一透传**（P3 批次，2026-10-03 · 与 template.ts **同一条判据**）——
         //   `Transition`/`KeepAlive`/`Teleport`/`Suspense` 在 Vue 里都**不渲染包裹元素**
         //   ⇒ **不占节点序号**。两处必须一致，否则 nodeId 空间分叉

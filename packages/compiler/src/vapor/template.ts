@@ -449,11 +449,39 @@ export function buildLayoutTemplate(
     children?: unknown[]
   }
 
+  /**
+   * ★★★**插槽声明探测**（2026-10-03 · P1-3 插槽分发）：元素上是否有 `v-slot` 指令。
+   *
+   * 返回：`undefined` = 无 v-slot；`''` = 无参（⇒ `default`）；非空 = 具名。
+   * ★父元素是不是组件由调用方判定（Vue 里 `#x` 只对组件有意义）。
+   */
+  const vSlotNameOf = (n: Node): string | undefined => {
+    const p = (n.props ?? []).find((x) => x.type === 7 && x.name === 'slot')
+    if (!p) return undefined
+    const arg = p.arg?.content
+    return arg === undefined ? '' : String(arg)
+  }
+  /** `v-slot` 的**作用域变量**（`#default="sp"` ⇒ `'sp'`；无 ⇒ undefined） */
+  const vSlotScopeOf = (n: Node): string | undefined => {
+    const p = (n.props ?? []).find((x) => x.type === 7 && x.name === 'slot')
+    const exp = p?.exp?.content?.trim()
+    return exp ? exp : undefined
+  }
+
   const walk = (
     children: unknown[],
     parentId: number | null,
-    /** ★P3-3：外层 `<Transition>` 的过渡规格（透传给**直接子元素**；无则 undefined） */
+    /**
+     * ★P3-3：外层 `<Transition>` 的过渡规格（透传给**直接子元素**；无则 undefined）
+     */
     pendingTransition?: LayoutNode['transition'],
+    /**
+     * ★★★**插槽上下文**（2026-10-03 · P1-3 插槽分发）——两者互斥（一次 walk 只处于一种）：
+     *   · `parentIsComponent`：本次 walk 的直接子元素是**组件的孩子** ⇒ 它们是
+     *     默认插槽内容根（打 `slotFor: default`）；`<template #x>` 是插槽声明（不产节点）。
+     *   · `slotContentOf`：本次 walk 的直接子元素是**某个具名插槽的内容根** ⇒ 打 `slotFor: name`。
+     */
+    slotCtx?: { parentIsComponent?: boolean; slotContentOf?: string },
   ): void => {
     for (const raw of children) {
       const n = raw as Node
@@ -462,6 +490,34 @@ export function buildLayoutTemplate(
         continue
       }
       const tag = n.tag ?? ''
+      // ★★★**插槽声明 `<template #x>`**（Vue 里 `template` 是**片段/插槽声明**、不产元素）：
+      //   不占 id、不产节点；其**直接子元素**是该具名插槽的内容根（打 `slotFor`）。
+      //   ★判据与 deps.ts/events.ts **同源**（有 v-slot 的 template ⇒ 跳过）。
+      if (tag === 'template') {
+        const vs = vSlotNameOf(n)
+        if (vs !== undefined) {
+          const name = vs === '' ? 'default' : vs
+          const scope = vSlotScopeOf(n)
+          if (scope) {
+            diag(
+              `作用域插槽未支持：\`#${name}="${scope}"\` 的作用域变量不会绑定到出口 props（内容仍会分发）`,
+              '本版支持具名/默认插槽分发；作用域插槽（出口 :prop ⇒ 父级 scope 变量）为后续批次',
+              'VAPOR_SLOT_SCOPED_UNSUPPORTED',
+            )
+          }
+          // 内容根标记：仅在「组件孩子」上下文中才有意义（slotCtx 决定标记名）
+          walk((n.children ?? []) as unknown[], parentId, pendingTransition,
+            slotCtx?.parentIsComponent ? { slotContentOf: name } : slotCtx)
+          continue
+        }
+        if (slotCtx?.parentIsComponent) {
+          diag(
+            `组件下的 <template>（无 v-slot）会建一层盒（Vue 里 template 是片段、不产元素）`,
+            '若想表达插槽内容请用具名写法 `<template #name>`；若只是条件渲染，盒子差异见本诊断',
+            'VAPOR_SLOT_TEMPLATE_BOX',
+          )
+        }
+      }
       // ★★★**逻辑容器统一透传**（P3 批次，2026-10-03）——`Transition` / `KeepAlive` /
       //   `Teleport` / `Suspense`：Vue 里都**不渲染包裹元素** ⇒ 透传（不占 id、不产节点），
       //   否则同一份 SFC 在 Vapor 链上多一层盒 ⇒ 几何与 Vue 不等价（A/B 判据红）。
@@ -473,7 +529,7 @@ export function buildLayoutTemplate(
         if (tag === 'Transition') {
           // Transition：props 编成预设规格，挂到**直接子元素**
           const t = transitionOfElement(n, diag)
-          walk((n.children ?? []) as unknown[], parentId, t ?? pendingTransition)
+          walk((n.children ?? []) as unknown[], parentId, t ?? pendingTransition, slotCtx)
         } else if (tag === 'Suspense') {
           // ★Suspense：只走 `#default`（我方无异步 ⇒ 永远 resolved）；`#fallback` 跳过。
           //   【为什么不能两个都走】两棵子树都会建 ⇒ 内容**双份**（fallback 永不隐藏 ⇒ 叠影）。
@@ -496,9 +552,9 @@ export function buildLayoutTemplate(
               flattened.push(c)
             }
           }
-          walk(flattened, parentId)
+          walk(flattened, parentId, pendingTransition, slotCtx)
         } else {
-          walk((n.children ?? []) as unknown[], parentId)
+          walk((n.children ?? []) as unknown[], parentId, pendingTransition, slotCtx)
         }
         continue
       }
@@ -653,16 +709,44 @@ export function buildLayoutTemplate(
       // ★逻辑容器（KeepAlive/Teleport/Suspense/Transition）虽是 PascalCase，但**不是**组件边界
       //   （它们已被透传分支 `continue` 掉了 ⇒ 此处本就走不到；判据保留以防未来顺序调整）
       const isComponentTag = /^[A-Z]/.test(tag) && !UNSUPPORTED_BUILTINS[tag] && !(tag in LOGICAL_CONTAINERS)
-      // ★★插槽出口 `<slot>`（P0）：组件系统未建 ⇒ 插槽内容分发不存在（静默空位）
+      // ★★插槽出口 `<slot>`（P1-3 插槽分发，2026-10-03）：打 `slotOutlet` 标记——
+      //   实例化期把父级内容**分发到出口位置**（出口自身**不产元素**，见 LayoutNode.slotOutlet）。
+      //   ★静态名（`<slot name="header">`）/ 缺省（`default`）都支持；动态名（`:name`）
+      //     与出口 props（`<slot :text="msg">`，作用域插槽）为后续批次 ⇒ 精确诊断（不静默）。
+      let slotOutletName: string | undefined
       if (tag === 'slot') {
-        diag(
-          `slot(id=${id}) 插槽出口 \`<slot>\` 未支持（组件系统待建——见能力清单 P1）`,
-          '插槽内容不会被分发到这里；请保留 Vue 渲染路径（L0）或等组件系统',
-        )
+        const nameProp = (n.props ?? []).find((p) => p.type === 6 && p.name === 'name')
+        const dynName = (n.props ?? []).some((p) => p.type === 7 && p.arg?.content === 'name')
+        const scopedProps = (n.props ?? []).some((p) => p.type === 7 && p.arg?.content !== 'name' && p.name === 'bind')
+        if (dynName) {
+          diag(
+            `slot(id=${id}) 动态插槽名（:name）未支持——内容不会分发到这里`,
+            '请改用静态名（<slot name="x">）；动态名为后续批次',
+            'VAPOR_SLOT_DYNAMIC_NAME',
+          )
+        } else if (scopedProps) {
+          diag(
+            `slot(id=${id}) 出口 props（\`:x="..."\`）未支持——作用域插槽为后续批次`,
+            '出口仍会分发内容；父级 #x="sp" 拿不到出口值（见 scoped 诊断）',
+            'VAPOR_SLOT_SCOPED_UNSUPPORTED',
+          )
+          slotOutletName = nameProp?.value?.content ?? 'default'
+        } else {
+          slotOutletName = nameProp?.value?.content ?? 'default'
+        }
       }
       const node: LayoutNode = { id, parentId, tag, style }
       if (nodeListId !== undefined) node.listId = nodeListId
       if (isComponentTag) node.component = tag
+      if (slotOutletName !== undefined) node.slotOutlet = { name: slotOutletName }
+      // ★★**插槽内容根标记**（P1-3 插槽分发）：本元素是「组件孩子」（默认插槽）或
+      //   「<template #x> 的直接子元素」（具名插槽）⇒ 实例化期把它重挂到子组件的出口位置。
+      //   ★只有**根**带标记（后代随根走——父指针链不变 ⇒ 实例化期按祖先链推导内容集合）。
+      if (slotCtx?.slotContentOf !== undefined) {
+        node.slotFor = { name: slotCtx.slotContentOf }
+      } else if (slotCtx?.parentIsComponent) {
+        node.slotFor = { name: 'default' }
+      }
       // ★P3-3：外层 `<Transition>` 的规格挂到本节点（直接被过渡的元素）
       if (pendingTransition) {
         node.transition = pendingTransition
@@ -765,7 +849,9 @@ export function buildLayoutTemplate(
       if (rowCollector) rowCollector.ids.push(id)
 
       // ★P3-3：`pendingTransition` **只作用于直接子元素**（Vue 同：Transition 只包一个元素）
-      walk(subChildren, id)
+      // ★★P1-3 插槽分发：组件元素的**直接子元素**是默认插槽内容根（打 `slotFor`）；
+      //   非组件元素无插槽语义（slotCtx 缺省 ⇒ 不标记）。
+      walk(subChildren, id, undefined, isComponentTag ? { parentIsComponent: true } : undefined)
 
       // 行子树收集结束（pre-order ⇒ 子树连续；此处收尾）
       if (nodeListId !== undefined) {

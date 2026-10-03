@@ -26,6 +26,12 @@
 //     按键修饰符**产诊断但仍执行 handler**（没有对应语义，忽略是忠实的——见 splitModifiers）。
 import type { ExprProgram } from '@proteus-vue/slot-runtime'
 import { compileExpr } from './expr'
+import { parse as sfcParse } from '@vue/compiler-sfc'
+import { parse as domParse } from '@vue/compiler-dom'
+import type { VueCompatDeps } from './sources'
+
+/** 逻辑容器（与 template.ts/deps.ts **同一条判据**——透传：不占节点 id） */
+const LOGICAL_CONTAINER_TAGS = new Set(['Transition', 'KeepAlive', 'Teleport', 'Suspense'])
 
 /** 一条事件绑定（节点 → 事件 → handler） */
 export interface EventBinding {
@@ -220,51 +226,72 @@ function compileStatement(code: string, diag: (m: string, h?: string) => void): 
  *   "只依赖源码文本"以便独立单测。★与 template.ts 的节点 id 分配**必须同序**：
  *   那边按**元素出现顺序**（`nextElementIndex++`）分配，本模块用**同一个遍历顺序**推导 id。
  */
-export function compileEvents(source: string): EventCompileResult {
+export function compileEvents(
+  source: string,
+  /** ★可注入（缺省用本仓锁定的 Vue 版本）；与 deps.ts 同形——兼容性测试可传 3.4/3.6 解析器 */
+  compat?: Pick<VueCompatDeps, 'sfcParse' | 'domParse'>,
+): EventCompileResult {
   const out: EventCompileResult = { events: [], handlers: {}, diagnostics: [] }
   const diag = (message: string, hint?: string): void => {
     out.diagnostics.push({ message, hint })
   }
 
-  const tpl = /<template[^>]*>([\s\S]*?)<\/template>/.exec(source)
-  if (!tpl) {
+  const vueParse = compat?.sfcParse ?? sfcParse
+  const dom = compat?.domParse ?? domParse
+  let body = ''
+  try {
+    body = vueParse(source, { filename: 'anonymous.vue' }).descriptor.template?.content ?? ''
+  } catch {
+    diag('SFC 解析失败（事件编译跳过）', '请检查 SFC 形态')
+    return out
+  }
+  if (!body.trim()) {
     diag('未找到 <template> 块（事件编译跳过）', '请检查 SFC 形态')
     return out
   }
-  const body = tpl[1]!
+  let ast: { children: unknown[] }
+  try {
+    ast = dom(body, { comments: false }) as unknown as { children: unknown[] }
+  } catch (e) {
+    diag(`模板解析失败（事件编译跳过）：${String((e as Error)?.message ?? e)}`, '请检查模板语法')
+    return out
+  }
 
-  // ★元素序 id：与 template.ts 同一条纪律（DFS 先序，含自闭合与嵌套）
-  let nextId = 0
-  /** 显式栈的 DFS：同时收 event 属性（自闭合与普通标签都要覆盖） */
-  const tagRe = /<([A-Za-z][\w-]*)((?:"[^"]*"|'[^']*'|[^>"'])*?)(\/?)>/g
-  let m: RegExpExecArray | null
+  type EvNode = {
+    type: number
+    tag?: string
+    props?: Array<{
+      type: number
+      name: string
+      arg?: { content?: string; isStatic?: boolean }
+      exp?: { content?: string }
+      modifiers?: Array<{ content?: string } | string>
+    }>
+    children?: unknown[]
+  }
+
   const handlerSeq: string[] = []
-  while ((m = tagRe.exec(body)) !== null) {
-    const attrs = m[2] ?? ''
-    const id = nextId++
-    // ★★动态事件名（`@[ev]`）的**前置探测**（2026-10-03 · P0 静默风险批次）：
-    //   本函数的正则 `/@([\w:.-]+)/` **匹配不到 `@[ev]`**（`[` 不在字符类里）⇒ 它既不进产物
-    //   也**不进诊断**（静默丢失，比"诊断拒绝"更危险）。⇒ 先扫一遍方括号形态并报诊断。
-    //   ★这是"正则解析的盲区"——修法是**显式覆盖已知的高危形态**（而非换解析器，成本过高）。
-    {
-      const dynRe = /@\s*\[/g
-      if (dynRe.test(attrs)) {
-        diag('动态事件名未支持：@[expr]（本版只处理静态事件名；正则解析器看不到方括号形态）', '请改用静态事件名（如 @click / @tap）')
-      }
-    }
-    // 收集本元素上的事件属性
-    const attrRe = /@([\w:.-]+)\s*=\s*("([^"]*)"|'([^']*)')/g
-    let am: RegExpExecArray | null
-    while ((am = attrRe.exec(attrs)) !== null) {
-      const rawName = am[1]!
-      const value = (am[3] ?? am[4] ?? '').trim()
-      // ★★修饰符解析（P2-3）：先拆修饰符再判事件名（否则 `click.stop` 整串当过事件名）
-      const { event: evName, stop, self, once, notes: modNotes } = splitModifiers(rawName)
-      // 动态事件名（@[x]）不支持
-      if (evName.startsWith('[')) {
-        diag(`动态事件名未支持：@${evName}`, '请写静态事件名')
+  /**
+   * 在一个元素上收集事件（正则时代的属性扫描换成 AST 走查——**同一条解析器**：
+   *   正则版在「逻辑容器/插槽声明」处会把不产元素的标签算进 id ⇒ 其后的事件 nodeId 漂移，
+   *   实测：`<KeepAlive>` 之后 `@click` 的 nodeId 比模板多 1 ⇒ handler 挂错节点）。
+   */
+  const collectEvents = (n: EvNode, id: number): void => {
+    const onProps = (n.props ?? []).filter((p) => p.type === 7 && p.name === 'on')
+    for (const p of onProps) {
+      const argNode = p.arg
+      // ★动态事件名（`@[ev]`）：arg.isStatic === false ⇒ 不进产物，但要**产诊断**（不静默）
+      if (argNode && argNode.isStatic === false) {
+        diag(`动态事件名未支持：@[${String(argNode.content ?? 'expr')}]`, '请改用静态事件名（如 @click / @tap）')
         continue
       }
+      // 修饰符在 AST 里已拆开（`@click.stop` ⇒ arg='click' + modifiers=['stop']）——
+      //   重新拼回 `click.stop` 走既有 splitModifiers（诊断文案/置位规则**零变化**）。
+      const mods = (p.modifiers ?? []).map((x) => (typeof x === 'string' ? x : String(x?.content ?? ''))).filter(Boolean)
+      const rawName = [String(argNode?.content ?? ''), ...mods].join('.')
+      const value = String(p.exp?.content ?? '').trim()
+      // ★★修饰符解析（P2-3）：先拆修饰符再判事件名（否则 `click.stop` 整串当过事件名）
+      const { event: evName, stop, self, once, notes: modNotes } = splitModifiers(rawName)
       const name = evName.toLowerCase()
       const semantic = EVENT_ALIAS[name]
       if (!semantic) {
@@ -273,7 +300,7 @@ export function compileEvents(source: string): EventCompileResult {
         continue
       }
       // 修饰符诊断（`.prevent` 等无对应语义 / 按键修饰符 / 未知）——**不阻碍绑定**
-      for (const n of modNotes) diag(`@${rawName}：${n}`, '语义修饰符见 packages/slot-runtime/src/dispatch.ts（.stop/.self/.once）')
+      for (const note of modNotes) diag(`@${rawName}：${note}`, '语义修饰符见 packages/slot-runtime/src/dispatch.ts（.stop/.self/.once）')
       const actions = compileStatement(value, diag)
       if (actions.length === 0) continue
       // handler 命名：`h<序号>`（确定性——同一份源码每次编译同名，便于对账）
@@ -291,5 +318,75 @@ export function compileEvents(source: string): EventCompileResult {
       })
     }
   }
+  /** 跳过子树前先检查是否藏了事件（藏了就诊断——"静默丢事件"比"诊断拒绝"更危险） */
+  const hasEventHandler = (n: EvNode): boolean =>
+    (n.props ?? []).some((p) => p.type === 7 && p.name === 'on')
+  const warnSkippedSubtree = (n: EvNode, why: string): void => {
+    const stack = [n]
+    while (stack.length > 0) {
+      const cur = stack.pop() as EvNode
+      if (hasEventHandler(cur)) {
+        diag(`被跳过的内容里有事件绑定（${why}）——该事件不生效`, '把事件移到会渲染的元素上')
+        return
+      }
+      for (const c of (cur.children ?? []) as EvNode[]) if (c.type === 1) stack.push(c)
+    }
+  }
+
+  /**
+   * ★元素序 id：与 template.ts **同一条判据**（下表是"不占 id"的三类——两处必须一致，
+   *   否则事件 nodeId 与模板节点错位：症状 = handler 挂到邻居节点上、零报错）。
+   *   ① 逻辑容器（透传）② 带 v-slot 的 `<template>`（插槽声明）③ Suspense 只走 #default。
+   */
+  const walk = (children: unknown[], parentComponent: boolean): void => {
+    for (const raw of children) {
+      const n = raw as EvNode
+      if (n.type !== 1) continue
+      const tag = n.tag ?? ''
+      // ① 插槽声明 `<template #x>`：不占 id（内容元素照常走——它们才是渲染节点）
+      if (tag === 'template') {
+        const vsProp = (n.props ?? []).find((p) => p.type === 7 && p.name === 'slot')
+        if (vsProp) {
+          if (hasEventHandler(n)) diag('<template #x> 上的事件不生效（插槽声明不产元素）', '把事件移到插槽内容元素上')
+          if (vsProp.exp?.content) {
+            // 作用域插槽的诊断在 template.ts 产（此处不重复）
+          }
+          walk((n.children ?? []) as unknown[], parentComponent)
+          continue
+        }
+      }
+      // ② 逻辑容器：不占 id
+      if (LOGICAL_CONTAINER_TAGS.has(tag)) {
+        if (hasEventHandler(n)) diag(`<${tag}> 上的事件不生效（逻辑容器不产元素）`, '把事件移到其子元素上')
+        if (tag === 'Suspense') {
+          // 只走 #default（与 template.ts 同口径）；#fallback 整棵跳过——藏了事件要报
+          const kids = (n.children ?? []) as EvNode[]
+          const slotOf = (c: EvNode): string | undefined =>
+            (c.props ?? []).find((p) => p.type === 7 && p.name === 'slot')?.arg?.content
+          for (const c of kids) {
+            const sa = slotOf(c)
+            if (sa !== undefined && sa !== 'default') warnSkippedSubtree(c, 'Suspense #fallback 永不显示（我方无 pending 态）')
+          }
+          const flattened: unknown[] = []
+          for (const c of kids) {
+            const sa = slotOf(c)
+            if (!(sa === undefined || sa === 'default')) continue
+            if (c.tag === 'template') flattened.push(...(c.children ?? []))
+            else flattened.push(c)
+          }
+          walk(flattened, parentComponent)
+        } else {
+          walk((n.children ?? []) as unknown[], parentComponent)
+        }
+        continue
+      }
+      // ③ 占 id 的元素：收集事件 + 走子树
+      const id = nextId++
+      collectEvents(n, id)
+      walk((n.children ?? []) as unknown[], /^[A-Z]/.test(tag))
+    }
+  }
+  let nextId = 0
+  walk(ast.children ?? [], false)
   return out
 }

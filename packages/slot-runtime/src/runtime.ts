@@ -157,6 +157,16 @@ export class VaporRuntime {
      */
     private readonly onComponentProp?: (boundaryNodeId: number, propName: string, value: unknown) => void,
     private readonly nodeIdOffset: number = 0,
+    /**
+     * ★★★**跳过节点集**（P1-3 插槽分发，2026-10-03）——被分发**丢弃**的节点（内容遮掉的
+     * 后备 / 未消费的插槽内容 / 空出口），id 是**宿主空间**（= 实例化产物里最终 id）。
+     *
+     * 【为什么必须有】插槽分发在实例化期**摘除**节点，而订阅表是按模板静态编的：
+     *   被摘除节点上的槽位仍会被求值 ⇒ 发出一条 `SET_TEXT/SET_STYLE @ 不存在的节点`
+     *   ⇒ 内核记 `unsupported`（噪音，且判据"指令都落到了树里"这类断言会被污染）。
+     *   ★语义上"丢弃" ≠ "静默"：丢弃本身有 slotMounts/notes 记录，这里只是**不发死指令**。
+     */
+    private readonly skipNodeIds?: ReadonlySet<number>,
   ) {}
 
   /**
@@ -338,6 +348,8 @@ export class VaporRuntime {
         if (spec.kind === 'list-data') continue
         // ★★P2-5：**v-once** —— 写过一次就永久跳过（源变化 / relink 都不再写）
         if (spec.once && this.onceWritten.has(spec.slotId)) continue
+        // ★★P1-3 插槽分发：被丢弃的节点**不发死指令**（见 skipNodeIds 注释——丢弃有记录，不静默）
+        if (this.skipNodeIds?.has(spec.nodeId + this.nodeIdOffset)) continue
         // ★★P2-5：**v-memo** —— 组内依赖全都没变 ⇒ 跳过本槽位（"跳过子树更新"）
         //   （依赖变了 ⇒ 本帧整组放行——见 memoDirtyFrame 注释）
         if (spec.memoId !== undefined && !this.memoGroupDirty(spec.memoId, ctx)) continue
@@ -627,6 +639,8 @@ export class VaporRuntime {
   /** 发一条行内更新指令：解析得到 nodeId 就发普通指令，否则回退 LIST_UPDATE */
   private emitListItem(spec: SubscriptionTable['sources'][number]['slots'][number], key: string, value: unknown): void {
     const nodeId = this.registry?.resolveNode(spec.listId ?? -1, key, spec.itemSlotId ?? -1)
+    // ★P1-3 插槽分发：解析出的节点若已被丢弃（整行被摘）⇒ 不发死指令（见 skipNodeIds 注释）
+    if (nodeId !== undefined && this.skipNodeIds?.has(nodeId)) return
     if (nodeId !== undefined) {
       if ((spec.itemKind ?? 'style') === 'text') {
         this.rt.buffer.push({ op: OpCode.SET_TEXT, nodeId, textRef: this.rt.strings.intern(String(value)) })

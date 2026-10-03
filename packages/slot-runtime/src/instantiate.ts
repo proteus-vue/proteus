@@ -90,6 +90,25 @@ export interface ComponentMount {
   idOffset: number
 }
 
+/**
+ * ★★★**插槽分发记录**（P1-3 插槽分发，2026-10-03）——一个 `<slot>` 出口的分发结果。
+ *
+ * 【为什么由实例化给出】"哪个出口被哪个内容填了、后备有没有渲染"只有实例化知道
+ *   （与 `componentMounts` 同款理由）；桥/判据据此核"内容真的到了子组件位置"。
+ */
+export interface SlotMount {
+  /** 出口节点 id（**最终 id**；出口自身已溶解——此 id 仅作溯源，不在树里） */
+  outletNodeId: number
+  /** 插槽名（`default` / 具名） */
+  name: string
+  /** 是否被父级内容填充（false ⇒ 走了后备/空） */
+  filled: boolean
+  /** 分发落位的内容根 id（filled 时非空） */
+  contentIds: number[]
+  /** 后备渲染的节点 id（未填充且有元素后备时非空） */
+  fallbackIds: number[]
+}
+
 export interface InstantiateResult {
   viewport: { width: number; height: number }
   nodes: InstantiatedNode[]
@@ -103,9 +122,16 @@ export interface InstantiateResult {
     maxLocalId: number
     /** ★P1-3：组件展开产出的节点数（0 = 无组件或未提供注册表） */
     componentNodes: number
+    /**
+     * ★★★P1-3 插槽分发：被**丢弃**的节点最终 id（内容遮掉的后备 / 未消费的内容 / 空出口）。
+     * 桥把它传给运行时（`skipNodeIds`）——为不在树里的节点发指令 = 死指令（内核报 unsupported 噪音）。
+     */
+    droppedNodeIds?: number[]
   }
   /** ★P1-3：组件挂载记录（未展开组件时为 undefined） */
   componentMounts?: ComponentMount[]
+  /** ★★★P1-3 插槽分发记录（无插槽出口时为 undefined） */
+  slotMounts?: SlotMount[]
   /** ★P1-3：实例化备注（如"组件未注册 / 超出深度上限"——不静默） */
   notes?: string[]
   /**
@@ -311,6 +337,10 @@ export function instantiateTemplate(tpl: LayoutTemplate, opts: InstantiateOption
     //   的语义标记、嵌套 v-for（P2）需要区分容器与行，才必须补上。
     if (n.tag) out.tag = n.tag
     if (n.component) out.component = n.component
+    // ★★★P1-3 插槽分发（2026-10-03）：出口 / 内容根标记随节点透传——分发在**本函数收尾**做
+    //   （标记是**分发期**语义：分发完即摘除，不会出现在给宿主的树里——见 dissolveOutlets）。
+    if (n.slotOutlet) out.slotOutlet = n.slotOutlet
+    if (n.slotFor) out.slotFor = n.slotFor
     // ★★P1-3：**id 偏移只在写出时应用**（内部 byId/idMap 全用 local 空间——
     //   这样初值回填/行解析等所有既有查找逻辑**零改动**，只有"给宿主的 id"平移）。
     out.id = id + idOffset
@@ -569,12 +599,99 @@ export function instantiateTemplate(tpl: LayoutTemplate, opts: InstantiateOption
    *   ④ 子组件自身的**响应式状态**未做（`data` 是构建期快照——端上不执行 script）。
    */
   const componentMounts: ComponentMount[] = []
+  const slotMounts: SlotMount[] = []
+  /**
+   * ★★★**被丢弃节点的最终 id**（P1-3 插槽分发）——内容遮掉的后备 / 未消费的内容 / 空出口。
+   * 传回桥 ⇒ 运行时据此**跳过**这些节点的槽位（为不在树里的节点发指令 = 死指令 + 内核
+   * `unsupported` 噪音——本仓"不静默"纪律下这属**已知丢弃**，要显式跳过而非留噪音）。
+   */
+  const droppedNodeIds = new Set<number>()
   let componentNodes = 0
+
+  /** 子树（含自身）的 id 集——分发时"整棵摘除"用（后备被遮 / 内容无出口） */
+  const subtreeOf = (list: InstantiatedNode[], rootId: number): Set<number> => {
+    const doomed = new Set<number>([rootId])
+    let grew = true
+    while (grew) {
+      grew = false
+      for (const x of list) {
+        if (x.parentId !== null && !doomed.has(x.id) && doomed.has(x.parentId)) {
+          doomed.add(x.id)
+          grew = true
+        }
+      }
+    }
+    return doomed
+  }
+
+  /**
+   * ★★★**出口分发**（P1-3 插槽分发，2026-10-03）——把 list 里带 `slotOutlet` 标记的节点
+   * **溶解**掉（Vue 里 `<slot>` 不渲染包裹元素），按 fills（插槽名 → 内容根）决定谁渲染：
+   *
+   *   · **有内容**：内容根挂到**出口的父**（即出口原来在的位置——DFS 顺序用"插到出口原位"
+   *     保证）；出口自带的后备子树**整棵摘除**（Vue：内容遮蔽后备）。
+   *   · **无内容**：后备**元素**子节点挂到出口的父（后备渲染）；出口自带的**裸文本**后备
+   *     （`<slot>文字</slot>` 的文字折在出口自身的 `text` 上）改造成 `p-text` **保留**
+   *     （自绘树没有独立文本节点——以文本元素承载，见 LayoutNode.slotOutlet 注释）；
+   *     空出口（无内容也无后备）直接摘除。
+   *
+   * 【同名出口多次出现】内容只填**第一个**（其余走后备）——Vue 会**复制**内容到每个出口，
+   *   而我方的节点 id 是唯一的（复制 = 重新分配整棵子树，属后续批次）；此处如实记录（note）。
+   *
+   * 返回：被消费的插槽名（调用方据此判"父级提供的内容有没有出口接住"）。
+   */
+  const dissolveOutlets = (list: InstantiatedNode[], fills: Map<string, InstantiatedNode[]>): Set<string> => {
+    const consumed = new Set<string>()
+    for (const outlet of list.filter((x) => x.slotOutlet)) {
+      if (list.indexOf(outlet) < 0) continue   // 已被上一个出口的摘除连带移除（嵌套出口的边缘态）
+      const name = (outlet.slotOutlet as { name: string }).name
+      const fill = fills.get(name)
+      const useFill = fill !== undefined && fill.length > 0 && !consumed.has(name)
+      if (useFill) {
+        consumed.add(name)
+        const doomed = subtreeOf(list, outlet.id)
+        for (const id of doomed) droppedNodeIds.add(id)
+        const idx = list.findIndex((x) => x.id === outlet.id)
+        const kept = list.filter((x) => !doomed.has(x.id))
+        // 插入点 = 出口原位（摘除只可能发生在出口之后的连续块；出口之前的摘除数为 0）
+        kept.splice(Math.min(idx, kept.length), 0, ...fill!)
+        list.length = 0
+        list.push(...kept)
+        for (const r of fill!) {
+          r.parentId = outlet.parentId
+          delete (r as { slotFor?: unknown }).slotFor   // 标记是分发期语义——落地即摘
+        }
+        slotMounts.push({ outletNodeId: outlet.id, name, filled: true, contentIds: fill!.map((x) => x.id), fallbackIds: [] })
+      } else {
+        const kids = list.filter((x) => x.parentId === outlet.id)
+        const fallbackIds: number[] = []
+        if (kids.length > 0) {
+          // 后备元素：挂到出口的父（出口不产盒——它们顶替出口的位置）
+          for (const k of kids) k.parentId = outlet.parentId
+          fallbackIds.push(...kids.map((x) => x.id))
+          list.splice(list.indexOf(outlet), 1)
+          droppedNodeIds.add(outlet.id)
+        } else if (typeof outlet.text === 'string' && outlet.text !== '') {
+          // 裸文本后备 ⇒ 出口改造成文本元素（保留 id；这是"文字要有元素承载"的最近等价物）
+          delete (outlet as { slotOutlet?: unknown }).slotOutlet
+          outlet.tag = 'p-text'
+        } else {
+          list.splice(list.indexOf(outlet), 1)
+          droppedNodeIds.add(outlet.id)
+        }
+        slotMounts.push({ outletNodeId: outlet.id, name, filled: false, contentIds: [], fallbackIds })
+      }
+    }
+    return consumed
+  }
+
   if (opts.components) {
     const depth = opts.componentDepth ?? 0
     // ★只展开**本棵树**的边界节点（刚展开的子节点在子调用里处理——递归自然覆盖）
     const boundaries = nodes.filter((n) => n.component)
     for (const boundary of boundaries) {
+      // ★被分发摘除的边界（内容未被消费的子树里的组件）⇒ 不再展开（否则子块挂到孤儿上）
+      if (droppedNodeIds.has(boundary.id)) continue
       const name = boundary.component!
       const def = opts.components[name]
       if (!def) {
@@ -638,7 +755,42 @@ export function instantiateTemplate(tpl: LayoutTemplate, opts: InstantiateOption
         components: opts.components,
         componentDepth: depth + 1,
       })
-      // ④ 子树根挂到边界节点下（模板里它们是根 ⇒ 在父树里是边界的孩子）
+      // ★★★插槽分发（P1-3，2026-10-03）——**在把子块挂进本树之前**做（此时 `nodes` 里
+      //   带 `slotFor` 且 parentId=边界的节点就是"父级提供的内容根"，不会被刚展开的子块污染）。
+      const contentRoots = nodes.filter((x) => x.parentId === boundary.id && x.slotFor)
+      if (contentRoots.length > 0 || childInst.slotMounts?.length) {
+        const fills = new Map<string, InstantiatedNode[]>()
+        for (const r of contentRoots) {
+          const nm = (r.slotFor as { name: string }).name
+          const arr = fills.get(nm) ?? []
+          arr.push(r)
+          fills.set(nm, arr)
+        }
+        const consumed = dissolveOutlets(childInst.nodes, fills)
+        // ★★遍历 **fills map**（而不是 `contentRoots` 的 `slotFor`——本仓实测：被消费的内容根
+        //   在 dissolve 里已摘掉 `slotFor` 标记，再读它 = undefined.name 崩）
+        for (const [nm, roots] of fills) {
+          if (consumed.has(nm)) {
+            // ★★被消费的内容根**从父数组移出**（本仓实测的重复 id 缺陷：不移出则同一对象
+            //   既在父数组、又被插入子块数组 ⇒ 给内核的 nodes 里同 id 出现两次 ⇒ 拒收）。
+            //   对象此刻已挂在子块的出口位置（`childInst.nodes` 里），父数组这份只是残留。
+            for (const r of roots) {
+              const i = nodes.indexOf(r)
+              if (i >= 0) nodes.splice(i, 1)
+            }
+            continue
+          }
+          // 父级提供的内容没有出口接住 ⇒ **整棵摘除**（Vue：未消费的插槽内容不渲染——不静默留盒）
+          for (const r of roots) {
+            const doomed = subtreeOf(nodes, r.id)
+            for (const id of doomed) droppedNodeIds.add(id)
+            for (let i = nodes.length - 1; i >= 0; i--) if (doomed.has(nodes[i]!.id)) nodes.splice(i, 1)
+          }
+          instNotes.push(`插槽 ${name}#${nm} 的内容无出口接住（子组件没有同名 <slot>）⇒ 未渲染`)
+        }
+      }
+      // ④ 子树根挂到边界节点下（模板里它们是"根" ⇒ 在父树里是边界的孩子）
+      //   ★内容根此时已带 parentId（出口的父，在子块空间）——不受本行影响（只挑 null 的）
       for (const r of childInst.nodes) if (r.parentId === null) r.parentId = boundary.id
       nodes.push(...childInst.nodes)
       componentNodes += childInst.nodes.length
@@ -656,9 +808,25 @@ export function instantiateTemplate(tpl: LayoutTemplate, opts: InstantiateOption
         nodeIds: childInst.nodes.map((x) => x.id),
         idOffset: idOffset + childOffset,
       })
-      // 子树的**嵌套**组件挂载记录一并冒出（桥要为每个挂载建运行时）
+      // 子树的**嵌套**组件挂载记录 / 插槽记录一并冒出（桥要为每个挂载建运行时）
       for (const m of childInst.componentMounts ?? []) componentMounts.push(m)
+      for (const sm of childInst.slotMounts ?? []) slotMounts.push(sm)
+      // ★P1-3 插槽分发：子树内丢弃的节点 id 也并入本树（桥要一并跳过——不分层泄漏）
+      for (const d of childInst.stats.droppedNodeIds ?? []) droppedNodeIds.add(d)
       for (const nt of childInst.notes ?? []) instNotes.push(nt)
+    }
+  }
+  // ★★★顶层收尾：本树自己的出口（页面模板里的 `<slot>`——没有父组件提供内容）
+  //   按"无内容"分发（有元素后备 ⇒ 后备渲染；裸文本 ⇒ 改造成文本元素；空 ⇒ 摘除）。
+  //   ★组件子树里的出口**不在此处理**（由父级展开时的 dissolveOutlets 处理——见上）。
+  if ((opts.componentDepth ?? 0) === 0) {
+    dissolveOutlets(nodes, new Map())
+    // ★分发期标记**不带出产物**（`slotFor` 是"谁来填"的中间态——树给宿主时应已全部落地/摘除）。
+    //   （`slotOutlet` 只可能残留于"无注册表 ⇒ 组件未展开"的边界场景，一并清掉。）
+    for (const x of nodes) {
+      const rec = x as { slotFor?: unknown; slotOutlet?: unknown }
+      if (rec.slotFor !== undefined) delete rec.slotFor
+      if (rec.slotOutlet !== undefined) delete rec.slotOutlet
     }
   }
 
@@ -673,10 +841,13 @@ export function instantiateTemplate(tpl: LayoutTemplate, opts: InstantiateOption
       // ★P1-3：本树 local 高水位（父级据此推进自己的分配器——**不含** idOffset）
       maxLocalId: nextId - 1,
       componentNodes,
+      // ★P1-3 插槽分发：丢弃节点（最终 id 空间）——桥传给运行时 `skipNodeIds`
+      ...(droppedNodeIds.size > 0 ? { droppedNodeIds: [...droppedNodeIds] } : {}),
     },
     // ★只有**恰好一个**列表时才给虚拟化描述（多个列表 ⇒ 行号空间不同源，宿主按行号二分会错配）
     virtual: virtualRows.length > 0 && tpl.lists.length === 1 ? { rows: virtualRows } : undefined,
     ...(componentMounts.length > 0 ? { componentMounts } : {}),
+    ...(slotMounts.length > 0 ? { slotMounts } : {}),
     ...(instNotes.length > 0 ? { notes: instNotes } : {}),
   }
 }

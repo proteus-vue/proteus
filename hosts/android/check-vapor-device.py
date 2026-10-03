@@ -501,6 +501,49 @@ def main() -> int:
                      f"——指令发了但宿主/内核侧没生效（『发了』≠『生效了』）")
                 ok = False
 
+    # ── ⑮ ★★★P1-3 插槽分发：内容真的落到出口位置、后备真的被遮蔽、孤儿真的不渲染 ──
+    #   【为什么单独判】分发的每一处出错都**不报错**：出口多留一层盒 = 几何不等价；
+    #     内容没落位 = 空页；后备没遮 = 内容双份（叠影）；孤儿没摘 = 幽灵节点。
+    #   ★四条证据（缺一即红）：① 内容文本在（SLOT- 前缀，内核树实测）
+    #     ② 后备/孤儿文本**不在**（fb- / ORPHAN-NEVER）③ 内容节点在**内核**里有几何
+    #     ④ 分发标记（slotFor/slotOutlet）不残留在给内核的树里。
+    sp = rep.get("slot_probe") or {}
+    if not sp or not sp.get("texts"):
+        # 缺 slot_probe ⇒ 本端夹具未覆盖（honest skip，与 ⑭ 的 ◐ 同规）
+        print("  ◐ ⑮ 插槽分发：本端夹具未覆盖（报告无 slot_probe）——如实跳过")
+    else:
+        texts = [str(t) for t in sp.get("texts", [])]
+        joined = " | ".join(texts)
+        has_hdr = any(t == "SLOT-HDR" for t in texts)
+        has_dft = any(t == "SLOT-DFT" for t in texts)
+        bad_fb = [t for t in texts if t.startswith("fb-")]
+        bad_orphan = [t for t in texts if t.startswith("ORPHAN-NEVER")]
+        fills = sp.get("fills") or []
+        rects = sp.get("rects") or []
+        markers = sp.get("markers_left", -1)
+        if not (has_hdr and has_dft):
+            fail(f"★插槽内容没落到出口位置（#header={has_hdr} · 默认={has_dft}）——"
+                 f"内核树文本：{joined[:160]}")
+            ok = False
+        elif bad_fb:
+            fail(f"★后备内容**没被遮蔽**（内核树里仍有 {bad_fb}）——内容与后备双份（叠影）")
+            ok = False
+        elif bad_orphan:
+            fail(f"★无出口接住的插槽内容**仍被渲染**（{bad_orphan}）——Vue 语义：未消费内容不渲染")
+            ok = False
+        elif markers != 0:
+            fail(f"★分发期标记残留在给内核的树里（markers_left={markers}）——分发中间态泄漏")
+            ok = False
+        elif not any(isinstance(r.get("width"), (int, float)) and r.get("width") > 0 for r in rects):
+            fail(f"★插槽内容节点在**内核**里没有几何（rects={rects[:3]}）——树里有、内核没有")
+            ok = False
+        else:
+            w_ok = [r for r in rects if isinstance(r.get("width"), (int, float)) and r.get("width") > 0]
+            print(f"  ✓ ⑮ ★插槽分发：内容落位（{'#header' if has_hdr else ''}{'+默认' if has_dft else ''}）· "
+                  f"后备被遮蔽（fb-* 0 处）· 孤儿摘除（0 处）· 标记零残留 · "
+                  f"内核几何 {len(w_ok)}/{len(rects)} 节点有宽度"
+                  + (f" · fills={[(f.get('name'), f.get('filled')) for f in fills]}" if fills else ""))
+
     # 附加观测（不判红，只如实报）
     una = rep.get("uninstantiated_slots", 0)
     if una:

@@ -281,6 +281,19 @@ interface VaporReport {
   component_nodes: number
   /** 组件子节点的实测探针（文本 = props 值；宽度 = props 上行后的值） */
   component_kid_probe: { text?: string; width?: number; width_after?: number; rect_before?: number; rect_after?: number }
+  /**
+   * ★★★**插槽分发探针**（P1-3 插槽分发，2026-10-03）——独立挂载 slot 夹具树后的读数：
+   *   · `texts`：内核树里的全部非空文本（判据核 SLOT-HDR/SLOT-DFT 在、后备前缀与孤儿前缀不在）；
+   *   · `rects`：按探针节点 id 读的**内核几何**（内容节点真被布局——"树里有、内核没有"是另一类失效）；
+   *   · `fills`：slotMounts 如实透传（filled/name/contentIds——分发记录）。
+   */
+  slot_probe: {
+    texts: string[]
+    rects: Array<{ id: number; width: number }>
+    fills: Array<{ name: string; filled: boolean; contentIds: number[] }>
+    /** 出口 marker 是否残留在给内核的树里（必须为 0——分发期语义不进最终树） */
+    markers_left: number
+  }
   /** 模板里的过渡声明（`隐id:预设名`；判据区分"未声明"与"声明未驱动"） */
   tpl_transition: string[]
   /**
@@ -1617,7 +1630,7 @@ function runShort(args: VaporArgs): string {
     tpl_nodes: 0, tpl_ok: false, sub_l1: 0, sub_l0: 0, sub_l1_rate: 0, sub_sources: [],
     inst_ms: 0, inst_nodes: 0, inst_reused_ids: 0, inst_allocated_ids: 0, inst_rows: 0,
     inst_values_filled: 0, inst_virtual_rows: 0, inst_text_filled: 0, inst_width_filled: 0,
-    mix_text_probe: [], text_probe_rounds: [], gate_rounds: [], gate_text_nodes: [], once_node_id: -1, memo_node_id: -1, expr_probe: [], transition_started: 0, tpl_transition: [], component_mounts: 0, component_nodes: 0, component_kid_probe: {},
+    mix_text_probe: [], text_probe_rounds: [], gate_rounds: [], gate_text_nodes: [], once_node_id: -1, memo_node_id: -1, expr_probe: [], transition_started: 0, tpl_transition: [], component_mounts: 0, component_nodes: 0, component_kid_probe: {}, slot_probe: { texts: [], rects: [], fills: [], markers_left: -1 },
     mount_ms: 0, mount_nodes: 0,
     updates_run: 0, ops_bytes: 0, ops_ms: 0, apply_ms: 0, text_synced_total: 0, update_evidence: [], geom_probe: [], channels: [],
     ev_bindings: 0, ev_handlers: 0, ev_modifiers: 0, taps: 0, tap_evidence: [],
@@ -2227,6 +2240,65 @@ function runShort(args: VaporArgs): string {
       if (ch.ok && ch.channels) rep.channels = ch.channels
     } catch {
       /* 探针失败不阻断主判据（notes 里会缺读数，判据按缺失判红） */
+    }
+
+    /* ═══════════ ★★★P1-3 插槽分发探针（2026-10-03）═══════════
+     *
+     * 【为什么独立挂载一份 slot 夹具树】插槽分发的验收对象是"**最终树**"（内容落位/后备遮蔽/
+     *   孤儿不渲染），而主树（vapor-device.vue，28 节点）不含插槽结构——把它塞进主树会让
+     *   既有的 14 项判据读数（节点数/文本/几何探针/门禁轮）全部漂移。⇒ 独立挂载、独立读数。
+     * 【为什么读**内核**矩形而不是只看实例树】"树里有内容"与"内核里有几何"是两件事
+     *   （本仓反复出现过的两类失效）——内容节点必须真被布局。
+     * 【顺序】探针在主流程**全部读数之后**跑；结束后**重挂主树**，保证宿主侧读数
+     *   （host_nodes/host_cmds/painted）仍是主树的（Java 侧读的是"最后一次 mount"）。
+     */
+    {
+      const slotArt = (artifacts as { slot?: { tpl: LayoutTemplate; table: SubscriptionTable } }).slot
+      if (slotArt?.tpl?.ok) {
+        const slotDefs: Record<string, { template: LayoutTemplate; table?: SubscriptionTable }> = {}
+        for (const [nm, def] of Object.entries(artifacts.components ?? {})) {
+          slotDefs[nm] = { template: def.tpl, table: def.table }
+        }
+        const slotRegistry = new ListRegistry()
+        const slotInst = instantiateTemplate(slotArt.tpl, {
+          viewport: args.viewport,
+          read: () => undefined,
+          table: slotArt.table,
+          registry: slotRegistry,
+          components: slotDefs,
+        })
+        try {
+          const smOut = JSON.parse(
+            proteusHost.mount(JSON.stringify({ viewport: slotInst.viewport, nodes: slotInst.nodes })),
+          ) as { ok?: boolean; error?: string }
+          if (smOut.ok === true) {
+            // 内核几何：取内容节点的宽度（内容真被布局 ⇒ width > 0）
+            const rectsAll = JSON.parse(proteusHost.readRects()) as { rects?: Record<string, { width?: number }> }
+            const rects = rectsAll.rects ?? {}
+            rep.slot_probe = {
+              texts: slotInst.nodes
+                .filter((n) => typeof n.text === 'string' && n.text.length > 0)
+                .map((n) => String(n.text)),
+              rects: slotInst.nodes
+                .filter((n) => typeof n.text === 'string' && n.text.length > 0)
+                .map((n) => ({ id: n.id, width: rects[String(n.id)]?.width ?? -1 })),
+              fills: ((slotInst as { slotMounts?: Array<{ name: string; filled: boolean; contentIds: number[] }> }).slotMounts ?? [])
+                .map((m) => ({ name: m.name, filled: m.filled, contentIds: m.contentIds })),
+              markers_left: slotInst.nodes.filter((n) => (n as { slotFor?: unknown; slotOutlet?: unknown }).slotFor || (n as { slotFor?: unknown; slotOutlet?: unknown }).slotOutlet).length,
+            }
+          } else {
+            notes.push(`插槽探针 mount 失败：${smOut.error ?? '未知'}`)
+          }
+        } catch (e) {
+          notes.push(`插槽探针异常：${String((e as Error)?.message ?? e)}`)
+        }
+        // ★重挂主树（宿主读数归位——见上注释的顺序说明）
+        try {
+          proteusHost.mount(JSON.stringify({ viewport: inst.viewport, nodes: inst.nodes }))
+        } catch { /* 重挂失败不阻断：宿主读数会指向 slot 树，判据按 host_nodes 不符判红 */ }
+      } else {
+        notes.push('插槽探针：产物无 slot 段（夹具未覆盖 ⇒ 判据 ⑮ 按缺失处理）')
+      }
     }
 
     rep.ok = rep.updates_run > 0
