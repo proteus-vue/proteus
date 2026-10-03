@@ -1,24 +1,24 @@
 {
-  "bundle_chars": 498320,
-  "run_ms": 99,
+  "bundle_chars": 508028,
+  "run_ms": 36,
   "host_mount_calls": 1,
-  "host_apply_calls": 11,
+  "host_apply_calls": 13,
   "host_update_patch_calls": 0,
-  "host_nodes": 41,
-  "host_text_nodes": 17,
-  "host_cmds": 41,
-  "host_layout_ms": 2.136406,
-  "host_measure_ms": 0.479843,
+  "host_nodes": 44,
+  "host_text_nodes": 18,
+  "host_cmds": 44,
+  "host_layout_ms": 0.414844,
+  "host_measure_ms": 0.361927,
   "host_painted_samples": 12060,
-  "host_painted_colors": 52,
+  "host_painted_colors": 55,
   "host_applied": 1,
   "host_changed_nodes": 0,
   "host_view_on_draw": 2,
   "report": {
     "ok": true,
-    "tpl_nodes": 27,
+    "tpl_nodes": 28,
     "tpl_ok": true,
-    "sub_l1": 16,
+    "sub_l1": 18,
     "sub_l0": 0,
     "sub_l1_rate": 1,
     "sub_sources": [
@@ -33,17 +33,19 @@
       "exprA",
       "exprArr",
       "exprObj",
-      "trVisible"
+      "trVisible",
+      "kidLabel",
+      "kidLabelW"
     ],
-    "inst_ms": 1,
-    "inst_nodes": 41,
+    "inst_ms": 0,
+    "inst_nodes": 44,
     "inst_reused_ids": 2,
     "inst_allocated_ids": 14,
-    "inst_rows": 41,
-    "inst_values_filled": 28,
+    "inst_rows": 44,
+    "inst_values_filled": 30,
     "inst_virtual_rows": 8,
-    "inst_text_filled": 17,
-    "inst_width_filled": 13,
+    "inst_text_filled": 18,
+    "inst_width_filled": 14,
     "mix_text_probe": [
       {
         "id": 8,
@@ -211,12 +213,21 @@
     "tpl_transition": [
       "22:fade-slide-up"
     ],
-    "mount_ms": 48,
-    "mount_nodes": 41,
+    "component_mounts": 1,
+    "component_nodes": 2,
+    "component_kid_probe": {
+      "text": "child-k0",
+      "width": 40,
+      "width_after": 99,
+      "rect_before": 40,
+      "rect_after": 99
+    },
+    "mount_ms": 22,
+    "mount_nodes": 44,
     "updates_run": 3,
     "ops_bytes": 204,
-    "ops_ms": 0,
-    "apply_ms": 4,
+    "ops_ms": 1,
+    "apply_ms": 1,
     "text_synced_total": 3,
     "update_evidence": [
       {
@@ -246,7 +257,7 @@
     ],
     "geom_probe": [
       {
-        "id": 28,
+        "id": 29,
         "before": 52,
         "after": 80
       }
@@ -314,7 +325,7 @@
         "ops": 1,
         "changed_rects": 1,
         "geom_before": 96,
-        "geom_after": 41,
+        "geom_after": 44,
         "geom_diff_ids": [
           10
         ]
@@ -341,7 +352,7 @@
         "ops": 1,
         "changed_rects": 2,
         "geom_before": 56,
-        "geom_after": 41,
+        "geom_after": 44,
         "geom_diff_ids": [
           10,
           11
@@ -366,7 +377,7 @@
         "ops": 1,
         "changed_rects": 1,
         "geom_before": 220,
-        "geom_after": 41,
+        "geom_after": 44,
         "geom_diff_ids": [
           12
         ]
@@ -391,7 +402,7 @@
         "ops": 1,
         "changed_rects": 1,
         "geom_before": 40,
-        "geom_after": 41,
+        "geom_after": 44,
         "geom_diff_ids": [
           13
         ]
@@ -403,10 +414,10 @@
       "tap@11 自身宽度 120 → 150",
       "tap@12 自身宽度 300 → 305",
       "tap@13 自身宽度 120 → 150",
-      "实例树 41 节点 \/ 行 41 \/ 虚拟化行 8 \/ 增量 3 轮"
+      "实例树 44 节点 \/ 行 44 \/ 虚拟化行 8 \/ 增量 3 轮"
     ],
-    "host_layout_ms": 2.136,
-    "host_cmds": 41
+    "host_layout_ms": 0.415,
+    "host_cmds": 44
   },
   "ok": true
 }

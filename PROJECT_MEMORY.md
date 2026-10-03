@@ -15,11 +15,11 @@
 - **包规模**：**45 个 @proteus-vue/* npm 包**（+ `packages/layout-core-rust` = **cargo crate，非 npm 包**，故不计数）（★2026-09-29 layout-core = App 排版核心）（check:pkg 0 error · `pnpm check:stats` 校验 ✓；31→38 修正 → G-07 glass 39 → Skyline 收口 worklet 40 → ★2026-09-14 组件库拆包 `@proteus-vue/components` 41 → ★Vapor 线新增 `@proteus-vue/slot-runtime` 42 + `@proteus-vue/layout-core` 43 → ★2026-09-30 MA1 新增 `@proteus-vue/animation` 44；版本统一 0.3.0-beta.8，见「当前状态速览」）
 - **文档**：`docs/proteus-architecture.md`（L0 规约·真理来源）→ `docs/board-inventory.md`（全景索引）→ `docs/roadmap.md`（版本线）→ `roadmap-2-plan`（里程碑线）→ 各 plan
 
+## 当前状态速览（最近一次更新：**2026-10-03·（一〇〇）· **P1-3 组件内部渲染**（三端同步）——组件注册表 + 偏移展开 + 子运行时装配 + props 双向；判据 ⑭ 从"假绿"改**三层证据缺一即红**（文本下行/指令上行/内核真值 40→99）；修出探针查错键表 + captured 只取末条；三端 15/15 零跳过 · 指纹 18 项一致；下一步 P3-5 自定义指令或 P1-3 生命周期/插槽/emits**）★新会话以此为准
+
 ## 当前状态速览（最近一次更新：**2026-10-03·（九十九）· **P3 逻辑容器透传**（KeepAlive/Teleport/Suspense——修"多一层盒"的几何不等价）+ **生成器语法护栏**（`node --check`，补上"生成器从未被门禁编译过"的盲区）；三端 14/14 零跳过 + A/B 几何 0px；下一步 P3-5 自定义指令或 P1-3 组件内部渲染**）★新会话以此为准
 
 ## 当前状态速览（最近一次更新：**2026-10-03·（九十八）· **P3-3 `<Transition>` 桥接**（三端同步）——预设动画规格 + 透传（不产包裹盒）+ 三端宿主帧循环；判据 ⑬ 三端 14/14 零跳过；抓出 4 个真缺陷（duration 归一形态 / JNI 方法对注入 / drain 覆盖 / ArkTS 帧回调形态）；下一步 P3-1 Teleport 或 P3-2 KeepAlive**）★新会话以此为准
-
-## 当前状态速览（最近一次更新：**2026-10-03·（九十七）· **绘制通道三端打通**（用户指令）——五通道三端真建真判、判据 ⑦ 零跳过（13/13×3）；鸿蒙三层补齐（解析→渲染层→探针）；抓出 5 个真缺陷（指令未进渲染层 / 无节点 id / 画布早退 / A/B 缺 attach / 探针计数污染）；同族脚本缺陷一次扫完；下一步 P3 内置组件（三端同步）**）★新会话以此为准
 
 ## ★《收纳规范》（2026-10-03 立 · 门禁 `pnpm check:memory`）
 

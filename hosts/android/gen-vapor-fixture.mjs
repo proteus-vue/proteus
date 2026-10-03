@@ -109,6 +109,10 @@ const SFC = `<template>
     <Transition name="fade-slide-up">
       <p-view v-show="trVisible" style="height: 40px; background-color: #7c5cff"></p-view>
     </Transition>
+    <!-- ★★★P1-3（2026-10-03）组件内部渲染夹具：Kids 子组件（构建期编译成 ComponentDef）+
+         props 绑**响应式源**（kidLabelW / kidLabel）⇒ 判据核「父改 props ⇒ 子节点真的更新」。
+         ★底色避开 #2f6fed（A/B 判据的按钮色锚）。 -->
+    <KidPanel :label="kidLabel" :labelW="kidLabelW" style="height: 30px"></KidPanel>
     <!-- ★★★P3 批次（2026-10-03）逻辑容器**透传**夹具：三者都**不产包裹盒**
          （Vue 语义：逻辑容器不渲染元素）——判据核「节点数守恒 + 几何与 Vue 等价」。
          ★本注释不得含反引号或美元花括号（在 JS 模板串里——护栏见 check:script-compile）。 -->
@@ -153,6 +157,30 @@ const exprArr = ref(['a', 'b'])
 const exprObj = ref({ inner: 'ok' })
 // ★P3-3 夹具源（与 makeData 的初值一致）：Transition 的可见性开关
 const trVisible = ref(false)
+// ★P1-3 夹具源（props 的**响应式**来源——判据据此验"父改 ⇒ 子更新"）
+const kidLabel = ref('k0')
+const kidLabelW = ref(40)
+</script>
+`
+
+/**
+ * ★★★P1-3 组件内部渲染夹具（2026-10-03）：一个**真子组件 SFC**——构建期连同父模板一起编译成
+ *   `ComponentDef`（模板 + 订阅表 + data 快照）随产物下发。设备端实例化时按注册表**展开内部**。
+ *
+ * 形态要点（每条都对应一条判据）：
+ *   · `defineProps` 声明两个 props（`label` 字符串 / `labelW` 数值）⇒ 订阅表里它们是**源**；
+ *   · 模板里同时用 `{{ label }}`（文本）与 `:width="labelW"`（样式）⇒ 两条槽位都要通；
+ *   · 无 script 副作用（端上不执行 script——`data` 只作兜底）。
+ * ★本块不得含反引号或美元花括号（在 JS 模板串里——护栏见 check:script-compile）。
+ */
+const CHILD_SFC = `<template>
+  <p-view style="flex-direction: row; height: 24px">
+    <p-text :width="labelW" style="font-size: 12px; color: #ffffff">child-{{ label }}</p-text>
+  </p-view>
+</template>
+
+<script setup lang="ts">
+const props = defineProps<{ label: string; labelW: number }>()
 </script>
 `
 
@@ -295,6 +323,8 @@ const build = (sfc, name) => {
 }
 
 process.stdout.write(JSON.stringify({
+  // ★★★P1-3：组件注册表（子组件 SFC 的编译产物——与父产物同批产出、同源下发）
+  components: { KidPanel: build(${JSON.stringify(CHILD_SFC)}, 'kid-panel.vue') },
   small: build(${JSON.stringify(SFC)}, 'vapor-device.vue'),
   list: build(${JSON.stringify(LIST_SFC)}, 'vapor-list.vue'),
   // ★★★六端 SFC 压力夹具：编译**共享 SFC 文件**（examples 页面）——与 Web/MP 同源
@@ -435,7 +465,23 @@ if (Object.keys(parsed.small.handlers || {}).length < 2) {
   console.error(`[gen-vapor-fixture] ✗ 交互闭环：handler 不足（应 ≥2——boxW 与 padW 各一；实际 ${Object.keys(parsed.small.handlers || {}).length}）`)
   process.exit(1)
 }
-fs.writeFileSync(OUT, JSON.stringify(parsed.small))
+// ★★★P1-3（2026-10-03）：组件注册表随父产物一起下发（键名 `components`——
+//   与 `entry-vapor.ts` 读的名字**必须一致**；本仓已踩过"题键不一致 ⇒ 静默拿不到"的坑）。
+//   ★断言：注册表非空且**每个组件可编译**（否则设备端展开会留空占位——
+//     "生成器静默退化"是本仓三令五申要拦的形态）。
+if (!parsed.components || Object.keys(parsed.components).length === 0) {
+  console.error('[gen-vapor-fixture] ✗ 组件注册表为空（P1-3 夹具应含 KidPanel）')
+  process.exit(1)
+}
+for (const [nm, def] of Object.entries(parsed.components)) {
+  if (!def || !def.ok || !def.tpl || !def.table) {
+    console.error(`[gen-vapor-fixture] ✗ 组件 ${nm} 编译不完整（ok=${def && def.ok}）——` +
+      `诊断：${(def && def.diagnostics || []).join(' | ')}`)
+    process.exit(1)
+  }
+}
+fs.writeFileSync(OUT, JSON.stringify({ ...parsed.small, components: parsed.components }))
+console.log(`[gen-vapor-fixture] ✅ 组件注册表：${Object.keys(parsed.components).join(', ')}（随父产物下发）`)
 const kb = (fs.statSync(OUT).size / 1024).toFixed(1)
 
 const listInfo = check('长列表产物', parsed.list)

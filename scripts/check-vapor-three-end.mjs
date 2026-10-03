@@ -56,6 +56,7 @@ const SCALAR_FIELDS = [
   'inst_nodes', 'inst_reused_ids', 'inst_allocated_ids', 'inst_text_filled', 'inst_width_filled',
   'updates_run', 'ops_bytes',
   'ev_bindings', 'ev_handlers', 'ev_modifiers',
+  'component_mounts', 'component_nodes',
 ]
 
 /** 取一个报告的结构化指纹（顺序敏感：数组按报告内顺序拼接——同一产物顺序也同） */
@@ -66,6 +67,12 @@ function fingerprint(rep) {
   fp.mix_text = JSON.stringify((rep.mix_text_probe ?? []).map((m) => `${m.id}:${m.text}`))
   fp.gate_rounds = JSON.stringify((rep.gate_rounds ?? []).map((g) => `${g.name}|${g.ops}|${(g.texts ?? []).join('~')}`))
   fp.expr_probe = JSON.stringify((rep.expr_probe ?? []).map((e) => `${e.prefix}${e.text}`))
+  // ★P1-3：组件子节点探针（props 下行值 + 上行指令值 + 上行内核真值）——同一份产物驱动，
+  //   三端必须逐值相同（含内核真值：三端共用同一 Rust 布局内核 ⇒ 宽度必然一致）。
+  fp.kid_probe = JSON.stringify([
+    rep.component_kid_probe?.text, rep.component_kid_probe?.width,
+    rep.component_kid_probe?.width_after, rep.component_kid_probe?.rect_before, rep.component_kid_probe?.rect_after,
+  ])
   return fp
 }
 

@@ -454,6 +454,53 @@ def main() -> int:
         print(f"  ✓ ⑬ ★<Transition> 过渡真的被驱动：{tr_started} 条动画交给宿主"
               + (f"（声明预设：{tpl_transition}）" if tpl_transition else ""))
 
+    # ── ⑭ ★★★P1-3 组件内部渲染：组件**真的被展开**且 props 能双向走通 ──
+    #   【为什么单独判】P1 第一批只交"边界标记 + props 通道"——组件**内部是空的**。
+    #     本判据核的是"内部真的渲染了"：`component_mounts > 0`（有挂载记录）+
+    #     `component_nodes > 0`（子树真的建出来）。
+    #   ★同时核**独立证据**：子节点的文本/宽度来自 props（在 ⑫ 的探针之外单列——
+    #     因为"展开了但 props 没下去"是另一种静默失效）。
+    #   ★★三条证据**缺一即红**（本仓实测的判据自缺陷：首版 `w_after is None` 放行 ⇒
+    #     "探针读不到宽度"与"宽度没上行"判成了同一结果 ⇒ 全过是**假绿**）：
+    #     ① 文本下行（子节点文本含 props 值）② 指令上行（子 flush 里真有 layout.width 指令）
+    #     ③ 内核真值上行（applyOps 后内核矩形确实变了——指令发错节点时 ② 仍可能成立）。
+    cm = rep.get("component_mounts", -1)
+    cn = rep.get("component_nodes", -1)
+    kid = rep.get("component_kid_probe") or {}
+    if cm < 0:
+        print("  ◐ ⑭ 组件内部渲染：本端夹具未覆盖（报告无 component_mounts）——如实跳过")
+    elif cm == 0:
+        fail(f"★组件**未展开**（component_mounts=0）——若夹具含组件则内部渲染没跑（P1-3 失效）")
+        ok = False
+    else:
+        if cn <= 0:
+            fail(f"★有挂载记录（{cm}）但**没有组件节点**（component_nodes={cn}）——展开为空")
+            ok = False
+        elif not kid.get("text") or not str(kid.get("text", "")).startswith("child-"):
+            fail(f"★组件子节点的文本不含 props 值（component_kid_probe={kid}）"
+                 f"——props 下行没通（首帧留空）")
+            ok = False
+        elif kid.get("width_after") is None:
+            fail(f"★props 上行**无指令证据**（width_after 缺失 · kid={kid}）"
+                 f"——子运行时的 layout.width 指令没被观测到（不是『没变』，是『没证据』）")
+            ok = False
+        elif kid.get("rect_after") is None:
+            fail(f"★props 上行**无内核真值证据**（rect_after 缺失 · kid={kid}）"
+                 f"——applyOps 后读不到子节点矩形（宿主侧没这节点 / 读回失败）")
+            ok = False
+        elif not (isinstance(kid.get("rect_after"), (int, float)) and kid.get("rect_after") > 0):
+            fail(f"★props 上行后子节点内核宽度异常（{kid.get('rect_after')}）——更新没落到内核")
+            ok = False
+        else:
+            w_after = kid.get("width_after")
+            print(f"  ✓ ⑭ ★组件内部渲染：{cm} 个挂载 · {cn} 个组件节点 · "
+                  f"子节点文本 {kid.get('text')!r} · 宽度 {kid.get('width')}→{w_after}"
+                  f"（props 下行 + 上行都通）· 内核真值 {kid.get('rect_before')}→{kid.get('rect_after')}")
+            if isinstance(kid.get("rect_before"), (int, float)) and kid.get("rect_before") == kid.get("rect_after"):
+                fail(f"★内核宽度**没变**（{kid.get('rect_before')}→{kid.get('rect_after')}）"
+                     f"——指令发了但宿主/内核侧没生效（『发了』≠『生效了』）")
+                ok = False
+
     # 附加观测（不判红，只如实报）
     una = rep.get("uninstantiated_slots", 0)
     if una:
