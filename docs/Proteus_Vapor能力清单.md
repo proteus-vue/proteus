@@ -189,7 +189,12 @@ Teleport / KeepAlive / Suspense / Transition / TransitionGroup / v-memo / 自定
 - **JSX 支持**（官方 `vue/jsx` + `vapor` 选项）
 - **SSR / 水合**（官方 `createVaporSSRApp`；我方 App 端不需要，但 Web 端可能）
 - **vdom ⇄ vapor 互通**（官方 `vaporInteropPlugin`；我方对应"Vapor 组件内用 Vue 组件"——与 P1-1 同批）
-- **`proteus explain` 能力视图**：把本清单变成**机器可查**（编译期报告"你的页面用了 N 个未支持特性"）
+- ✅ **`proteus explain` 能力视图**（2026-10-03 完成 · 门禁 `check:vapor-capability`）：把本清单变成**机器可查**——
+  `explain --vapor` 输出**能力缺口总账**（**模板侧 + 订阅侧诊断合并**；★修出"诊断工具自己吞模板侧诊断"的静默缺陷：
+  v-html / 自定义指令 / 内置边界等**绝大多数缺口产生在模板侧**，此前一条都不显示）；
+  `--json` 输出机器可读形态（`supported` 字段可作 CI 判据）；**棘轮门禁**（`examples/pages` 27 个真实页面：
+  error 级零容忍 + 按 code 计数只减不增，`--update` 拒绝调高）。
+  ★扫描实测分布（数据驱动优先级）：`v-model 无回写` 22 · `无 :key 的 v-for 标识` 22（info）· 脚本钩子 8 · 表外指令 6 · 表达式不支持 3 · 作用域解构 1 · 内置边界 1
 
 ---
 

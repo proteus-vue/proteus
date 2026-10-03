@@ -1,0 +1,14 @@
+{
+  "scannedPages": 27,
+  "counts": {
+    "VAPOR_BUILTIN_PARTIAL": 1,
+    "VAPOR_DIRECTIVE_NOT_REGISTERED": 6,
+    "VAPOR_EXPR_UNSUPPORTED": 3,
+    "VAPOR_KEY_IS_ROW_IDENTITY": 22,
+    "VAPOR_SCRIPT_LIFECYCLE_NOT_RUN": 8,
+    "VAPOR_SLOT_SCOPE_DESTRUCTURE": 1,
+    "VAPOR_TEMPLATE_UNSUPPORTED": 26,
+    "VAPOR_VMODEL_NO_WRITEBACK": 22
+  },
+  "note": "棘轮：只减不增（--update 只允许更小）"
+}

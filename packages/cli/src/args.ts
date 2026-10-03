@@ -77,6 +77,8 @@ export interface ExplainArgs {
   onlyBlocked?: boolean
   /** ★M0：节点显示上限（防输出爆炸） */
   maxNodes?: number
+  /** ★★P4 能力视图（2026-10-03）：`--json` 输出**机器可读**的能力缺口（CI/门禁消费） */
+  json?: boolean
 }
 
 export function parseExplainArgs(argv: string[]): ExplainArgs {
@@ -96,6 +98,7 @@ export function parseExplainArgs(argv: string[]): ExplainArgs {
     ...(flags.has('--vapor') ? { withVapor: true } : {}),
     ...(flags.has('--only-blocked') ? { onlyBlocked: true } : {}),
     ...(Number.isFinite(maxNodes) ? { maxNodes: maxNodes as number } : {}),
+    ...(flags.has('--json') ? { json: true } : {}),
   }
 }
 
@@ -603,7 +606,7 @@ export const HELP_GROUPS: HelpGroup[] = [
     titleEn: 'Diagnostics & tools',
     entries: [
       {
-        usage: 'proteus explain <vue 文件 | 规则 ID> [--ir] [--vapor] [--only-blocked] [--max-nodes N]',
+        usage: 'proteus explain <vue 文件 | 规则 ID> [--ir] [--vapor] [--only-blocked] [--max-nodes N] [--json]',
         desc: 'vue 文件 → 决策 trace（该文件实际触发的全部转换规则）\n      规则 ID  → 该规则的 AI 说明书（what/why/when/example/verify/source）\n      --ir     → 追加渲染 IR 决策 trace（拍平资格 / 静态子树 / PaintHint；M0）',
         descEn: 'vue file → decision trace (all transform rules actually triggered by that file)\n      rule ID → the AI manual for that rule (what/why/when/example/verify/source)\n      --ir     → also print the render-IR decision trace (flatten eligibility / static subtree / PaintHint; M0)',
       },

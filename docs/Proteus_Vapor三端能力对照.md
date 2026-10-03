@@ -482,3 +482,31 @@ suspense），不引入一般大小写转换（那会误伤用户的 kebab 自�
 
 **单测**：`tests/vapor-directives.test.ts` 11 组（注册表 / 通道规格 / 缺省 fade / 五类诊断 /
 文案 / 反向不产出字段 / 值语义五态）。
+
+## 十七 · 能力视图：`explain --vapor` 缺口总账 + 棘轮门禁（2026-10-03）
+
+**★修出的静默缺陷（本批起因）**：`explain --vapor` 此前**只读订阅表侧诊断**
+（`buildVaporSubscriptions`），而**模板侧诊断**（`v-html` / 自定义指令 / 内置组件边界 /
+动态组件 / 插槽用法…——**绝大多数能力缺口产生在那里**）**一条都不显示**。
+⇒ 用户跑 explain 自查，看到"槽位分层"就以为没事，而"这东西静默不生效"的事实完全不可见——
+**诊断工具自己把诊断吞了**（"静默风险"主线上的最"元"一处）。
+
+**修复与新增**：
+- `analyzeVaporGaps`（新）：**两侧诊断合并** + 按 `code` 归类（计数 + 一处修法——防重复消息淹没）；
+  `supported` 字段 = 无 error/warn（**机器判据**，CI 可 gate）。
+- `explain --vapor`：输出「能力缺口 / 需要注意」段（首段展示，含修法）；
+  无缺口时明确写"无未说明差异"（不是沉默）。
+- `explain --vapor --json`：机器可读形态（CI / 工具消费）。
+- **棘轮门禁 `check:vapor-capability`**（接进 verify 链 + CI）：
+  ① 扫 `examples/pages` 全部 SFC，**error 级缺口零容忍**（"静默出错"类）；
+  ② 按 code 计数**只减不增**（基线 `scripts/vapor-capability-baseline.json`；
+  `--update` **拒绝调高**——破坏性验证过：调低基线 ⇒ 当场报"增长"）。
+  ★为什么是棘轮而不是全清零：缺口里混着"**已说明的边界**"（如 v-model 无回写——诊断明确 + 替代路径）
+  与真欠账；棘轮让前者如实存在、后者只减不增。
+
+**实测分布（27 个真实样例页 · 11 个零缺口）**：`VAPOR_TEMPLATE_UNSUPPORTED` 26 ·
+`VAPOR_KEY_IS_ROW_IDENTITY` 22（info）· `VAPOR_VMODEL_NO_WRITEBACK` 22 · 脚本钩子 8 ·
+表外指令 6 · 表达式 3 · 作用域解构 1 · 内置边界 1。
+
+**单测**：`tests/explain-vapor-gaps.test.ts` 9 组（模板侧必现 / 归类计数 / severity 取高 /
+机器判据 / 呈现两态 / json 可解析 / 反向不误报）。

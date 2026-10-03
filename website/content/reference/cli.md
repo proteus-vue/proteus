@@ -312,7 +312,7 @@ proteus cobuild <init|check> [--force]
 ### `proteus explain`
 
 ```bash
-proteus explain <vue 文件 | 规则 ID> [--ir] [--vapor] [--only-blocked] [--max-nodes N]
+proteus explain <vue 文件 | 规则 ID> [--ir] [--vapor] [--only-blocked] [--max-nodes N] [--json]
 ```
 
 vue 文件 → 决策 trace（该文件实际触发的全部转换规则）
