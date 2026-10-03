@@ -180,6 +180,8 @@ const reason = [
   '《AI 执行效率规范》：等待有条件、获取有缓存、**重复有上限**——全量套件一次几百秒，属最贵的重复动作。',
   '按目的选一条（三条都比"再跑一遍全量"快）：',
   '  ① 只想回归本次改动的模块 → 定向跑：`npx vitest run tests/<相关>.test.ts`（几秒级）；',
+  '  ①-b ★改了编译内核（packages/{compiler,runtime,plugin-vite}/src/**）→ `pnpm test:coupled`',
+  '        （按 diff 推导**配套断言**并真跑；~10 秒——漏同步的断言债务若留到全量，要连爆两轮才被发现）；',
   '  ② 想只跑受影响用例 → `npx vitest run --changed`；',
   '  ③ 确实需要全量（发布前门禁 / 用户点名）→ 在命令里显式表态：',
   '     `PROTEUS_ALLOW_FULL_SUITE=1 pnpm test`（或 `npx vitest run` 前加同款环境变量）。',
