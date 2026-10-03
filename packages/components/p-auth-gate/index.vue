@@ -141,7 +141,7 @@ void props
   left: 0;
   right: 0;
   bottom: 0;
-  z-index: 10000;
+  z-index: 2000020; /* ★Overlay 域内最高（模态在浮层之上）——原 10000 < 页面层 1e6 ⇒ 弹窗被页面文字压住（外部验收实测） */
   visibility: hidden;
   opacity: 0;
 }
@@ -186,7 +186,9 @@ void props
   width: 100%;
   height: 40px;
   border-radius: 8px;
-  background: #1a7af8;
+  /* ★2026-10-04：可主题化（外部验收实测"CTA 亮蓝与应用主色靛蓝不是同一品牌色"）
+     ——默认值不变（向后兼容），应用以 `--p-auth-gate-action-bg` 覆盖为自己的品牌色。 */
+  background: var(--p-auth-gate-action-bg, #1a7af8);
   display: flex;
   align-items: center;
   justify-content: center;

@@ -230,6 +230,61 @@ describe('computed 读路径（v0.3）', () => {
   })
 })
 
+describe('★★2026-10-04 框架修复：scoped 后缀**只作用于组件自己声明的类**（全局共享类保持原样）', () => {
+  // 【缺陷（superapp 验收场抓出，两端视觉分叉的根因）】旧实现对模板里**所有** class 无差别追加
+  //   scopeId（`sa-card` → `sa-card-data-v-x`）——而全局共享类定义在 app.wxss（`.sa-card`，**无后缀**）
+  //   ⇒ MP 端全局类永不匹配 ⇒ 全局样式整层失效（Web 端无此机制 ⇒ 两端分叉）。
+  //   正确语义（对齐 Vue scoped）：**只有组件自己 <style scoped> 里声明过的类才加后缀**。
+  const SFC = `<template>
+  <div class="sa-card global-x">
+    <p class="local">hi</p>
+    <p :class="{ 'sa-dark': x, 'localmod': y }">dyn</p>
+  </div>
+</template>
+<style scoped>
+.local { color: red; }
+.localmod { color: blue; }
+</style>`
+
+  it('★scoped 声明的类加后缀；未声明的类（全局共享类）保持原样', () => {
+    const r = compileVueSfc(SFC, { filename: 'global-class-demo.vue' })
+    // 全局类：不得带 scopeId 后缀（否则与 app.wxss 的规则永不相交）
+    expect(r.wxml, '★全局共享类必须原样（这是两端分叉的根因）').toContain('class="sa-card global-x"')
+    expect(r.wxml, '★全局类不得被后缀').not.toMatch(/sa-card-data-v-/)
+    // 组件声明的类：照常后缀（scoped 语义不变）
+    expect(r.wxml, '组件声明的类仍后缀').toMatch(/local-data-v-/)
+    expect(r.wxml, '组件声明的类仍后缀（对象键）').toMatch(/localmod-data-v-/)
+    // 对象的非声明键（sa-dark 未在 scoped 样式里声明）⇒ 原样
+    expect(r.wxml, '★:class 对象里未声明的键也不后缀').toMatch(/'sa-dark'|sa-dark/)
+    expect(r.wxml).not.toMatch(/sa-dark-data-v-/)
+  })
+
+  it('★框架注入的基础语义类（proteus-p 等）仍后缀（它们在 scoped 输出里也有对应规则）', () => {
+    const r = compileVueSfc(SFC, { filename: 'global-class-demo.vue' })
+    expect(r.wxml, '语义基础类在 BASE_SEMANTIC_WXSS 里被后缀 ⇒ 模板侧必须同步').toMatch(/proteus-p-data-v-/)
+    expect(r.wxss, '对应规则在').toContain('.proteus-p-data-v-')
+  })
+
+  it('★转场动画类（proteus-transition-*）仍后缀（它们在 TRANSITION_WXSS 里被后缀）', () => {
+    const r = compileVueSfc(
+      `<template><transition name="fade"><div class="local">x</div></transition></template>
+<style scoped>.local { color: red }</style>`,
+      { filename: 'trans-demo.vue' },
+    )
+    expect(r.wxml, '转场类必须后缀（否则与后缀后的动画规则不匹配）').toMatch(/proteus-transition-fade-data-v-/)
+  })
+
+  it('反向：没有 scoped 样式块的组件 ⇒ 无 scopeId ⇒ 一切原样（零行为变化）', () => {
+    const r = compileVueSfc(
+      `<template><div class="sa-card"><p class="x">hi</p></div></template>
+<style global>.g { color: red }</style>`,
+      { filename: 'no-scoped.vue' },
+    )
+    expect(r.wxml).toContain('class="sa-card"')
+    expect(r.wxml).not.toMatch(/data-v-/)
+  })
+})
+
 describe('scoped CSS（v0.3）', () => {
   const SFC = '<template>\n  <div class="card">\n    <p class="title">hi</p>\n  </div>\n</template>\n<style scoped>\n.card { padding: 8px; }\n.card .title { color: red; }\n</style>'
 
@@ -1383,7 +1438,10 @@ describe('组件 class 透传（component/root-class，2026-08 真机实测）',
     )
     // 组件标签 class 后缀拼接后透传（root-class="box-data-v-x {{...}}"）
     expect(wxml).toMatch(/root-class="box-data-v-[a-f0-9]+ /)
-    expect(wxml).toContain('{{(on?\'on-data-v-')
+    // ★2026-10-04 框架修复后的语义：`:class` 里**未在 scoped 样式声明过**的类（`on`）**不再后缀**
+    //   （旧断言 `on-data-v-` 是"无差别后缀"的行为——全局共享类因此在 MP 端失配，两端分叉的根因）。
+    expect(wxml, '★未声明的动态类不后缀（框架修复）').toContain("{{(on?'on ':'')")
+    expect(wxml, '★已声明的 class（box）照常后缀').toMatch(/box-data-v-[a-f0-9]+/)
     // 组件标签不再输出独立 class 属性（避免 host 节点样式双重应用）
     expect(wxml).not.toMatch(/<p-view[^>]*\sclass="/)
     // scoped 后缀特征（类名拼接 -data-v-）

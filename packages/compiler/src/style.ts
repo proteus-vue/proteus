@@ -107,6 +107,24 @@ const TRANSITION_WXSS = [
   '@keyframes proteus-scale-out { from { transform: scale(1) translateY(0); opacity: 1; } to { transform: scale(0.92) translateY(4%); opacity: 0.8; } }',
 ].join('\n')
 
+/**
+ * ★★★2026-10-04：**从 CSS 文本收集类名**（供 scoped 后缀白名单用——见 compiler-types 的
+ *   `scopedClassNames`）。只做"看起来像类 token"的提取：误多（提取到不存在的类名）无害
+ *   （后缀一个没人用的类 = 现状），漏提才有害（声明的类不加后缀 ⇒ 样式丢）⇒ 宁可多不可少。
+ */
+export function collectCssClassNames(css: string): string[] {
+  const out: string[] = []
+  for (const m of css.matchAll(/\.(-?[A-Za-z_][\w-]*)/g)) out.push(m[1]!)
+  return out
+}
+
+/** 框架注入且**会被一并后缀**的类（BASE_SEMANTIC_WXSS + 转场动画）——模板侧应同步后缀，否则失配 */
+export const FRAMEWORK_SCOPED_CLASS_NAMES: readonly string[] = [
+  ...collectCssClassNames(BASE_SEMANTIC_WXSS),
+  ...collectCssClassNames(TRANSITION_WXSS),
+]
+
+
 /** 统计选择器重写前源 CSS 中的标签选择器处数（语义标签与普通标签分开计数） */
 function countSelectorRewrites(css: string, res: ResolvedOverrides): { tag: number; semantic: number } {
   const semanticKeys = Object.keys(res.semanticClass)

@@ -150,6 +150,19 @@ export function detectOverlayUsage(appDir: string): OverlayUsage {
       } catch {
         continue
       }
+      // ★★Web 专用的 `App.vue` **不参与**手动宿主判定（2026-10-04 superapp 验收抓出的真缺陷）。
+      //
+      // 【缺陷形态（有构建日志实证）】项目根同时存在 `App.mp.vue` 时，`App.vue` 是 **Web 根组件**
+      //   （变体机制：MP 端用 `App.mp.vue`——见 app-shell.ts 的 findAppShellFile）。而 Web 端**没有
+      //   编译期注入**，宿主必须在 `App.vue` 里手写一次 ⇒ 那是**正确的 Web 声明**。
+      //   若把它计入 manualHost ⇒ **整个项目的 MP 自动注入被静默关掉**
+      //   （实测日志：`检测到手动声明的宿主，不自动注入` ⇒ toast/loading 宿主全家消失，
+      //     真机不显示且零报错——正是本仓最忌的静默失效）。
+      //
+      // 【判定规则】`App.vue` 且**同目录存在 `App.mp.vue`** ⇒ 是 Web 变体，跳过；
+      //   否则（仅 App.vue ⇒ 它同时是 MP 壳）**照常参与**——因为壳的 global-layer 内容会被
+      //   注入每个页面，在壳里写宿主**确实**会与自动注入重复渲染。
+      if (/^App\.vue$/i.test(e.name) && fs.existsSync(path.join(dir, 'App.mp.vue'))) continue
       // ★API 用法：**原样扫描**（含注释/字符串命中 ⇒ 过扫，见头注的取舍——过扫只多一个 ~2KB 组件）
       const tpl = e.name.endsWith('.vue') ? stripComments(templateSectionOf(src)) : ''
       for (const { spec, apiRe, hostRe } of matchers) {

@@ -58,8 +58,15 @@ export function createMountLayerComponent(layer: MountLayer): Component {
             'data-mount-layer': layer,
             class: `proteus-mount-layer proteus-mount-layer--${layer}`,
             style: {
-              // `position: relative` 让 z-index 生效（且不改变布局——无偏移量）；两者共同建立层叠上下文
-              position: 'relative',
+              // ★★2026-10-04 修复（外部视觉验收实测：音乐条/悬浮球**随页面滚动跑掉**、出现在文档顶部）：
+              //   `global`/`overlay` 是**视口锚定**层（Global 层语义 = "一直在"——真实超级应用的全局条/
+              //   悬浮球不随页面滚动）⇒ 必须 `position: fixed; inset: 0`（铺满视口、零布局参与），
+              //   子元素在其内用 `absolute` 定位即锚定**视口**（这正是 MP 端"portal 内四边撑满"的等价物）。
+              //   `page` 层相反——它承载路由内容，必须**在文档流内**（relative），随页面滚动。
+              //   ★`pointer-events: none`：容器本身不吃事件（与 MP"无监听即穿透"语义对齐）；
+              //     层内需要交互的元素各自 `pointer-events: auto`（fab/音乐条/角标/网络条已在壳里声明）。
+              position: layer === 'page' ? 'relative' : 'fixed',
+              ...(layer === 'page' ? {} : { top: '0', left: '0', right: '0', bottom: '0', pointerEvents: 'none' as const }),
               // ★域偏移**来自契约**（不是本文件硬编码数值——"各端映射表由框架统一维护"）
               zIndex: String(mountLayerDomainOffset(layer)),
             },
