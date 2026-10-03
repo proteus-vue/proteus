@@ -224,12 +224,20 @@ describe('V2 Step 6 · 分层判定（★L0/L1 混跑）', () => {
     expect(l1.decisions[0].mark).toBe('⚠') // 人工担保
   })
 
-  it('★动态组件 ⇒ 全文件降级（C3）', () => {
+  it('★动态组件（渲染绑定）⇒ 全文件降级（C3）；★`:is` 自身已升为**非渲染绑定**（P3，2026-10-03）', () => {
     const src = sfc(`const which = ref('a')\nconst count = ref(1)\n`, `<component :is="which" />\n<p-view :style="count" />`)
     const res = buildVaporSubscriptions(src, 'a.vue')
-    // C3 是文件级事实：整个文件的槽位都应降 L0
-    expect(res.decisions.every((d) => d.tier === 'L0')).toBe(true)
-    expect(res.decisions[0].reason).toContain('C3')
+    // C3 是文件级事实：**渲染槽位**仍应降 L0（`:style` 那条）
+    const renderDecisions = res.decisions.filter((d) => !d.reason.includes('动态组件 :is'))
+    expect(renderDecisions.every((d) => d.tier === 'L0'), '渲染槽位仍受 C3 降级').toBe(true)
+    expect(renderDecisions[0]!.reason).toContain('C3')
+    // ★2026-10-03（P3 动态组件）：`:is` 绑定的命运变了——它不再是"渲染槽位"，而是
+    // **实例化期解析**的组件名表达式（进 componentIs 表）⇒ 不在 C3 降级范围内（非渲染属性）
+    expect(res.table.componentIs, '`:is` 进 componentIs 表').toHaveLength(1)
+    expect(res.table.componentIs![0]!.expr).toBe('which')
+    // 且它**不再**出现在任何渲染槽位里（不建 sources/constantSlots 槽位）
+    const allSlots = res.table.sources.flatMap((s) => s.slots).concat(res.table.constantSlots ?? [])
+    expect(allSlots.some((sl) => sl.propKey === 'attr.is')).toBe(false)
   })
 
   it('★getCurrentInstance ⇒ 降 L0（C7，方案 §5.4）', () => {

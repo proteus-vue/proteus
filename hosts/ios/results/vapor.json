@@ -45,6 +45,31 @@
   },
   "component_mounts" : 1,
   "component_nodes" : 3,
+  "dyn_probe" : {
+    "dropped" : 1,
+    "geom" : [
+      {
+        "id" : 5,
+        "width" : 31
+      },
+      {
+        "id" : 7,
+        "width" : 31
+      }
+    ],
+    "mounts" : [
+      "DynA",
+      "DynB"
+    ],
+    "notes" : [
+      "动态组件 `:is=\"dynWhich\"` ⇒ 解析为 DynA（实例化期一次性解析）",
+      "动态组件 `:is=\"''\"` 求值为假（）⇒ 节点已摘除（Vue 同）"
+    ],
+    "texts" : [
+      "DYNA",
+      "DYNB"
+    ]
+  },
   "emit_probe" : {
     "emits" : [
       {
@@ -166,13 +191,13 @@
   ],
   "host_cmds" : 47,
   "host_id" : "ios",
-  "host_layout_ms" : 0.88,
-  "host_mount_calls" : 5,
+  "host_layout_ms" : 0.84999999999999998,
+  "host_mount_calls" : 7,
   "host_nodes" : 47,
   "host_painted_colors" : 801,
   "host_painted_samples" : 242446,
   "inst_allocated_ids" : 14,
-  "inst_ms" : 3,
+  "inst_ms" : 4,
   "inst_nodes" : 47,
   "inst_reused_ids" : 2,
   "inst_rows" : 47,
@@ -180,7 +205,7 @@
   "inst_values_filled" : 32,
   "inst_virtual_rows" : 8,
   "inst_width_filled" : 17,
-  "js_raw" : "{\"ok\":true,\"tpl_nodes\":30,\"tpl_ok\":true,\"sub_l1\":20,\"sub_l0\":0,\"sub_l1_rate\":1,\"sub_sources\":[\"list\",\"boxW\",\"padW\",\"stopOuterW\",\"stopInnerW\",\"onceVal\",\"memoDep\",\"memoVal\",\"exprA\",\"exprArr\",\"exprObj\",\"trVisible\",\"kidLabel\",\"kidLabelW\",\"bumpTotal\",\"lifeW\"],\"inst_ms\":3,\"inst_nodes\":47,\"inst_reused_ids\":2,\"inst_allocated_ids\":14,\"inst_rows\":47,\"inst_values_filled\":32,\"inst_virtual_rows\":8,\"inst_text_filled\":19,\"inst_width_filled\":17,\"mix_text_probe\":[{\"id\":8,\"text\":\"row-1·row 1\",\"statics\":[\"row-\",\"·\"]},{\"id\":14,\"text\":\"once-1\",\"statics\":[\"once-\"]},{\"id\":15,\"text\":\"once-1\",\"statics\":[\"once-\"]},{\"id\":16,\"text\":\"memo-1\",\"statics\":[\"memo-\"]},{\"id\":17,\"text\":\"vt-3\",\"statics\":[]},{\"id\":18,\"text\":\"pi-3.14\",\"statics\":[\"pi-\"]},{\"id\":19,\"text\":\"mx-7\",\"statics\":[\"mx-\"]},{\"id\":20,\"text\":\"jn-a|b\",\"statics\":[\"jn-\"]},{\"id\":21,\"text\":\"oc-ok\",\"statics\":[\"oc-\"]}],\"text_probe_rounds\":[\"row-1·upd 0\",\"row-2·upd 1\",\"row-3·upd 2\"],\"gate_rounds\":[{\"name\":\"once-frozen\",\"ops\":38,\"texts\":[\"once-42\"],\"expect_skip\":true},{\"name\":\"plain-updated\",\"ops\":42,\"texts\":[\"row-1·gate\"],\"expect_skip\":false},{\"name\":\"memo-clean\",\"ops\":0,\"texts\":[],\"expect_skip\":true},{\"name\":\"memo-dirty\",\"ops\":38,\"texts\":[\"memo-99\"],\"expect_skip\":false}],\"gate_text_nodes\":[{\"name\":\"once-frozen\",\"entries\":[{\"nodeId\":14,\"text\":\"once-42\"}]},{\"name\":\"plain-updated\",\"entries\":[{\"nodeId\":8,\"text\":\"row-1·gate\"}]},{\"name\":\"memo-clean\",\"entries\":[]},{\"name\":\"memo-dirty\",\"entries\":[{\"nodeId\":16,\"text\":\"memo-99\"}]}],\"once_node_id\":15,\"memo_node_id\":16,\"expr_probe\":[{\"id\":17,\"prefix\":\"vt-\",\"text\":\"vt-3\"},{\"id\":18,\"prefix\":\"pi-\",\"text\":\"pi-3.14\"},{\"id\":19,\"prefix\":\"mx-\",\"text\":\"mx-7\"},{\"id\":20,\"prefix\":\"jn-\",\"text\":\"jn-a|b\"},{\"id\":21,\"prefix\":\"oc-\",\"text\":\"oc-ok\"}],\"transition_started\":2,\"tpl_transition\":[\"22:fade-slide-up\"],\"component_mounts\":1,\"component_nodes\":3,\"component_kid_probe\":{\"text\":\"child-k0\",\"width\":40,\"width_after\":99,\"rect_before\":40,\"rect_after\":99},\"slot_probe\":{\"texts\":[\"kid-head\",\"SLOT-HDR\",\"SLOT-DFT\"],\"rects\":[{\"id\":6,\"width\":61},{\"id\":2,\"width\":61},{\"id\":3,\"width\":61}],\"fills\":[{\"name\":\"header\",\"filled\":true,\"contentIds\":[2]},{\"name\":\"default\",\"filled\":true,\"contentIds\":[3]},{\"name\":\"empty\",\"filled\":false,\"contentIds\":[]}],\"markers_left\":0},\"emit_probe\":{\"emits\":[{\"event\":\"bump\",\"payload\":99,\"routed\":true,\"handler\":\"h4\"}],\"parent_source_after\":199,\"geom_before\":0,\"geom_after\":199},\"scoped_probe\":{\"texts\":[\"cnt-7\"],\"anchor_id\":2,\"anchor_width_field\":70,\"anchor_width_rect\":70},\"lifecycle_probe\":{\"bindings\":[\"mounted@25:h5\"],\"ran_handler\":\"h5\",\"changed_sources\":[\"lifeW\"],\"ops_bytes\":90,\"applied\":2,\"anchor_id\":25,\"geom_before\":0,\"geom_after\":250},\"mount_ms\":16,\"mount_nodes\":-1,\"updates_run\":3,\"ops_bytes\":204,\"ops_ms\":0,\"apply_ms\":1,\"text_synced_total\":3,\"update_evidence\":[{\"round\":0,\"row\":1,\"ops\":68,\"changed_rects\":2,\"relayout\":2,\"text_synced\":1},{\"round\":1,\"row\":2,\"ops\":68,\"changed_rects\":2,\"relayout\":2,\"text_synced\":1},{\"round\":2,\"row\":3,\"ops\":68,\"changed_rects\":2,\"relayout\":2,\"text_synced\":1}],\"geom_probe\":[{\"id\":31,\"before\":52,\"after\":80}],\"channels\":[{\"id\":2,\"radius\":18,\"clip\":0,\"mask\":0},{\"id\":3,\"radius\":0,\"grad\":\"1:2\",\"clip\":0,\"mask\":0},{\"id\":4,\"radius\":0,\"glow\":\"5:0.900\",\"clip\":0,\"mask\":0},{\"id\":5,\"radius\":0,\"clip\":1,\"mask\":0},{\"id\":6,\"radius\":0,\"clip\":0,\"stroke_len\":512.07,\"mask\":0}],\"ev_bindings\":5,\"ev_handlers\":6,\"ev_modifiers\":1,\"taps\":4,\"tap_evidence\":[{\"tap\":1,\"hit\":10,\"chain\":[10,0],\"fired\":[10],\"handler\":\"h0\",\"source_after\":{\"padW\":305},\"stopped\":false,\"skipped_self\":[],\"ops\":1,\"changed_rects\":1,\"geom_before\":96,\"geom_after\":47,\"geom_diff_ids\":[10]},{\"tap\":2,\"hit\":11,\"chain\":[11,10,0],\"fired\":[11,10],\"handler\":\"h1\",\"source_after\":{\"boxW\":150,\"padW\":310},\"stopped\":false,\"skipped_self\":[],\"ops\":1,\"changed_rects\":2,\"geom_before\":56,\"geom_after\":47,\"geom_diff_ids\":[10,11]},{\"tap\":3,\"hit\":12,\"chain\":[12,0],\"fired\":[12],\"handler\":\"h2\",\"source_after\":{\"stopOuterW\":305},\"stopped\":false,\"skipped_self\":[],\"ops\":1,\"changed_rects\":1,\"geom_before\":220,\"geom_after\":47,\"geom_diff_ids\":[12]},{\"tap\":4,\"hit\":13,\"chain\":[13,12,0],\"fired\":[13],\"handler\":\"h3\",\"source_after\":{\"stopInnerW\":150},\"stopped\":true,\"skipped_self\":[],\"ops\":1,\"changed_rects\":1,\"geom_before\":40,\"geom_after\":47,\"geom_diff_ids\":[13]}],\"uninstantiated_slots\":0,\"notes\":[\"tap@10 自身宽度 300 → 305\",\"tap@11 自身宽度 120 → 150\",\"tap@12 自身宽度 300 → 305\",\"tap@13 自身宽度 120 → 150\",\"实例树 47 节点 \/ 行 47 \/ 虚拟化行 8 \/ 增量 3 轮\"],\"host_layout_ms\":0.88}",
+  "js_raw" : "{\"ok\":true,\"tpl_nodes\":30,\"tpl_ok\":true,\"sub_l1\":20,\"sub_l0\":0,\"sub_l1_rate\":1,\"sub_sources\":[\"list\",\"boxW\",\"padW\",\"stopOuterW\",\"stopInnerW\",\"onceVal\",\"memoDep\",\"memoVal\",\"exprA\",\"exprArr\",\"exprObj\",\"trVisible\",\"kidLabel\",\"kidLabelW\",\"bumpTotal\",\"lifeW\"],\"inst_ms\":4,\"inst_nodes\":47,\"inst_reused_ids\":2,\"inst_allocated_ids\":14,\"inst_rows\":47,\"inst_values_filled\":32,\"inst_virtual_rows\":8,\"inst_text_filled\":19,\"inst_width_filled\":17,\"mix_text_probe\":[{\"id\":8,\"text\":\"row-1·row 1\",\"statics\":[\"row-\",\"·\"]},{\"id\":14,\"text\":\"once-1\",\"statics\":[\"once-\"]},{\"id\":15,\"text\":\"once-1\",\"statics\":[\"once-\"]},{\"id\":16,\"text\":\"memo-1\",\"statics\":[\"memo-\"]},{\"id\":17,\"text\":\"vt-3\",\"statics\":[]},{\"id\":18,\"text\":\"pi-3.14\",\"statics\":[\"pi-\"]},{\"id\":19,\"text\":\"mx-7\",\"statics\":[\"mx-\"]},{\"id\":20,\"text\":\"jn-a|b\",\"statics\":[\"jn-\"]},{\"id\":21,\"text\":\"oc-ok\",\"statics\":[\"oc-\"]}],\"text_probe_rounds\":[\"row-1·upd 0\",\"row-2·upd 1\",\"row-3·upd 2\"],\"gate_rounds\":[{\"name\":\"once-frozen\",\"ops\":38,\"texts\":[\"once-42\"],\"expect_skip\":true},{\"name\":\"plain-updated\",\"ops\":42,\"texts\":[\"row-1·gate\"],\"expect_skip\":false},{\"name\":\"memo-clean\",\"ops\":0,\"texts\":[],\"expect_skip\":true},{\"name\":\"memo-dirty\",\"ops\":38,\"texts\":[\"memo-99\"],\"expect_skip\":false}],\"gate_text_nodes\":[{\"name\":\"once-frozen\",\"entries\":[{\"nodeId\":14,\"text\":\"once-42\"}]},{\"name\":\"plain-updated\",\"entries\":[{\"nodeId\":8,\"text\":\"row-1·gate\"}]},{\"name\":\"memo-clean\",\"entries\":[]},{\"name\":\"memo-dirty\",\"entries\":[{\"nodeId\":16,\"text\":\"memo-99\"}]}],\"once_node_id\":15,\"memo_node_id\":16,\"expr_probe\":[{\"id\":17,\"prefix\":\"vt-\",\"text\":\"vt-3\"},{\"id\":18,\"prefix\":\"pi-\",\"text\":\"pi-3.14\"},{\"id\":19,\"prefix\":\"mx-\",\"text\":\"mx-7\"},{\"id\":20,\"prefix\":\"jn-\",\"text\":\"jn-a|b\"},{\"id\":21,\"prefix\":\"oc-\",\"text\":\"oc-ok\"}],\"transition_started\":2,\"tpl_transition\":[\"22:fade-slide-up\"],\"component_mounts\":1,\"component_nodes\":3,\"component_kid_probe\":{\"text\":\"child-k0\",\"width\":40,\"width_after\":99,\"rect_before\":40,\"rect_after\":99},\"slot_probe\":{\"texts\":[\"kid-head\",\"SLOT-HDR\",\"SLOT-DFT\"],\"rects\":[{\"id\":6,\"width\":61},{\"id\":2,\"width\":61},{\"id\":3,\"width\":61}],\"fills\":[{\"name\":\"header\",\"filled\":true,\"contentIds\":[2]},{\"name\":\"default\",\"filled\":true,\"contentIds\":[3]},{\"name\":\"empty\",\"filled\":false,\"contentIds\":[]}],\"markers_left\":0},\"emit_probe\":{\"emits\":[{\"event\":\"bump\",\"payload\":99,\"routed\":true,\"handler\":\"h4\"}],\"parent_source_after\":199,\"geom_before\":0,\"geom_after\":199},\"scoped_probe\":{\"texts\":[\"cnt-7\"],\"anchor_id\":2,\"anchor_width_field\":70,\"anchor_width_rect\":70},\"lifecycle_probe\":{\"bindings\":[\"mounted@25:h5\"],\"ran_handler\":\"h5\",\"changed_sources\":[\"lifeW\"],\"ops_bytes\":90,\"applied\":2,\"anchor_id\":25,\"geom_before\":0,\"geom_after\":250},\"dyn_probe\":{\"texts\":[\"DYNA\",\"DYNB\"],\"mounts\":[\"DynA\",\"DynB\"],\"geom\":[{\"id\":5,\"width\":31},{\"id\":7,\"width\":31}],\"dropped\":1,\"notes\":[\"动态组件 `:is=\\\"dynWhich\\\"` ⇒ 解析为 DynA（实例化期一次性解析）\",\"动态组件 `:is=\\\"''\\\"` 求值为假（）⇒ 节点已摘除（Vue 同）\"]},\"mount_ms\":15,\"mount_nodes\":-1,\"updates_run\":3,\"ops_bytes\":204,\"ops_ms\":0,\"apply_ms\":1,\"text_synced_total\":3,\"update_evidence\":[{\"round\":0,\"row\":1,\"ops\":68,\"changed_rects\":2,\"relayout\":2,\"text_synced\":1},{\"round\":1,\"row\":2,\"ops\":68,\"changed_rects\":2,\"relayout\":2,\"text_synced\":1},{\"round\":2,\"row\":3,\"ops\":68,\"changed_rects\":2,\"relayout\":2,\"text_synced\":1}],\"geom_probe\":[{\"id\":31,\"before\":52,\"after\":80}],\"channels\":[{\"id\":2,\"radius\":18,\"clip\":0,\"mask\":0},{\"id\":3,\"radius\":0,\"grad\":\"1:2\",\"clip\":0,\"mask\":0},{\"id\":4,\"radius\":0,\"glow\":\"5:0.900\",\"clip\":0,\"mask\":0},{\"id\":5,\"radius\":0,\"clip\":1,\"mask\":0},{\"id\":6,\"radius\":0,\"clip\":0,\"stroke_len\":512.07,\"mask\":0}],\"ev_bindings\":5,\"ev_handlers\":6,\"ev_modifiers\":1,\"taps\":4,\"tap_evidence\":[{\"tap\":1,\"hit\":10,\"chain\":[10,0],\"fired\":[10],\"handler\":\"h0\",\"source_after\":{\"padW\":305},\"stopped\":false,\"skipped_self\":[],\"ops\":1,\"changed_rects\":1,\"geom_before\":96,\"geom_after\":47,\"geom_diff_ids\":[10]},{\"tap\":2,\"hit\":11,\"chain\":[11,10,0],\"fired\":[11,10],\"handler\":\"h1\",\"source_after\":{\"boxW\":150,\"padW\":310},\"stopped\":false,\"skipped_self\":[],\"ops\":1,\"changed_rects\":2,\"geom_before\":56,\"geom_after\":47,\"geom_diff_ids\":[10,11]},{\"tap\":3,\"hit\":12,\"chain\":[12,0],\"fired\":[12],\"handler\":\"h2\",\"source_after\":{\"stopOuterW\":305},\"stopped\":false,\"skipped_self\":[],\"ops\":1,\"changed_rects\":1,\"geom_before\":220,\"geom_after\":47,\"geom_diff_ids\":[12]},{\"tap\":4,\"hit\":13,\"chain\":[13,12,0],\"fired\":[13],\"handler\":\"h3\",\"source_after\":{\"stopInnerW\":150},\"stopped\":true,\"skipped_self\":[],\"ops\":1,\"changed_rects\":1,\"geom_before\":40,\"geom_after\":47,\"geom_diff_ids\":[13]}],\"uninstantiated_slots\":0,\"notes\":[\"tap@10 自身宽度 300 → 305\",\"tap@11 自身宽度 120 → 150\",\"tap@12 自身宽度 300 → 305\",\"tap@13 自身宽度 120 → 150\",\"实例树 47 节点 \/ 行 47 \/ 虚拟化行 8 \/ 增量 3 轮\"],\"host_layout_ms\":0.85}",
   "js_report" : {
     "apply_ms" : 1,
     "channels" : [
@@ -227,6 +252,31 @@
     },
     "component_mounts" : 1,
     "component_nodes" : 3,
+    "dyn_probe" : {
+      "dropped" : 1,
+      "geom" : [
+        {
+          "id" : 5,
+          "width" : 31
+        },
+        {
+          "id" : 7,
+          "width" : 31
+        }
+      ],
+      "mounts" : [
+        "DynA",
+        "DynB"
+      ],
+      "notes" : [
+        "动态组件 `:is=\"dynWhich\"` ⇒ 解析为 DynA（实例化期一次性解析）",
+        "动态组件 `:is=\"''\"` 求值为假（）⇒ 节点已摘除（Vue 同）"
+      ],
+      "texts" : [
+        "DYNA",
+        "DYNB"
+      ]
+    },
     "emit_probe" : {
       "emits" : [
         {
@@ -346,9 +396,9 @@
         "id" : 31
       }
     ],
-    "host_layout_ms" : 0.88,
+    "host_layout_ms" : 0.84999999999999998,
     "inst_allocated_ids" : 14,
-    "inst_ms" : 3,
+    "inst_ms" : 4,
     "inst_nodes" : 47,
     "inst_reused_ids" : 2,
     "inst_rows" : 47,
@@ -437,7 +487,7 @@
         "text" : "oc-ok"
       }
     ],
-    "mount_ms" : 16,
+    "mount_ms" : 15,
     "mount_nodes" : -1,
     "notes" : [
       "tap@10 自身宽度 300 → 305",
@@ -758,7 +808,7 @@
       "text" : "oc-ok"
     }
   ],
-  "mount_ms" : 16,
+  "mount_ms" : 15,
   "mount_nodes" : -1,
   "note" : "iOS 腿：与 Android\/鸿蒙**同一份** bundle-vapor.js + 同一份判据（零移植）；宿主签名差异由 JS 侧 shim 归一；像素读数 = iOS 离屏渲染自检",
   "notes" : [
@@ -819,6 +869,31 @@
     },
     "component_mounts" : 1,
     "component_nodes" : 3,
+    "dyn_probe" : {
+      "dropped" : 1,
+      "geom" : [
+        {
+          "id" : 5,
+          "width" : 31
+        },
+        {
+          "id" : 7,
+          "width" : 31
+        }
+      ],
+      "mounts" : [
+        "DynA",
+        "DynB"
+      ],
+      "notes" : [
+        "动态组件 `:is=\"dynWhich\"` ⇒ 解析为 DynA（实例化期一次性解析）",
+        "动态组件 `:is=\"''\"` 求值为假（）⇒ 节点已摘除（Vue 同）"
+      ],
+      "texts" : [
+        "DYNA",
+        "DYNB"
+      ]
+    },
     "emit_probe" : {
       "emits" : [
         {
@@ -938,9 +1013,9 @@
         "id" : 31
       }
     ],
-    "host_layout_ms" : 0.88,
+    "host_layout_ms" : 0.84999999999999998,
     "inst_allocated_ids" : 14,
-    "inst_ms" : 3,
+    "inst_ms" : 4,
     "inst_nodes" : 47,
     "inst_reused_ids" : 2,
     "inst_rows" : 47,
@@ -1029,7 +1104,7 @@
         "text" : "oc-ok"
       }
     ],
-    "mount_ms" : 16,
+    "mount_ms" : 15,
     "mount_nodes" : -1,
     "notes" : [
       "tap@10 自身宽度 300 → 305",
@@ -1269,7 +1344,7 @@
     ],
     "updates_run" : 3
   },
-  "run_ts" : 1791019796.044502,
+  "run_ts" : 1791020459.9807739,
   "scoped_probe" : {
     "anchor_id" : 2,
     "anchor_width_field" : 70,

@@ -148,8 +148,13 @@ describe('★P0 静默风险可见化（2026-10-03 · Vapor 能力清单批次�
     expect(diagText(`<Transition name="fade"><div v-show="a" /></Transition>`)).not.toContain('Transition 未支持')
   })
 
-  it('动态组件必须产诊断；★插槽出口已真支持（P1-3）——静态名/出口 props 零诊断，动态名仍诊断', () => {
-    expect(diagText(`<component :is="a" />`)).toContain('动态组件')
+  it('★动态组件已真支持（P3，2026-10-03）——首帧解析；★插槽出口真支持（P1-3）', () => {
+    // ★2026-10-03（P3 动态组件）：`<component :is>` 从"未支持"升为**首帧解析真支持**
+    //   （编译期标记 + 实例化期求值 → 组件展开）；诊断改为**边界说明**（运行时切换不支持）
+    expect(diagText(`<component :is="a" />`)).toContain('按**首帧值**解析组件')
+    expect(diagText(`<component :is="a" />`), '不再是"未支持"').not.toContain('动态组件 `<component :is>` 未支持')
+    // 缺 :is 的形态仍诊断
+    expect(diagText(`<component />`)).toContain('动态组件缺 `:is`')
     // ★2026-10-03（P1-3 插槽分发）：`<slot name="x">` 从"未支持"升为**真支持**
     //   （出口溶解 + 内容分发，见 instantiate.ts dissolveOutlets）——不该再有"未支持"诊断
     expect(diagText(`<div><slot name="foo" /></div>`), '静态名已支持').not.toContain('插槽出口')

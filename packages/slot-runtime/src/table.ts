@@ -195,6 +195,21 @@ export interface SubscriptionTable {
     /** 作用域变量名（与 `slotFor.scope` 匹配——多重嵌套插槽时区分） */
     scope: string
   }>
+  /**
+   * ★★★**动态组件 `:is` 求值表**（P3 批次，2026-10-03）——`<component :is="expr">` 的组件名表达式。
+   *
+   * 【为什么必须单列（本仓实测的静默丢弃）】`:is` 的绑定此前**从产物里完全消失**
+   *   （既不进 sources、也不进 constantSlots、更无诊断）⇒ 实例化期无从解析 ⇒
+   *   `<component :is>` 渲染成一个空壳节点且**零提示**。
+   *   ⇒ 单列本表：实例化期按 nodeId 取求值器解析组件名（见 `LayoutNode.componentIs` 的边界）。
+   */
+  componentIs?: Array<{
+    /** 该 `<component>` 节点的**模板序 local id** */
+    nodeId: number
+    evaluatorId: number
+    /** 表达式源码（诊断/对账） */
+    expr: string
+  }>
   /** 未走 L1 的槽位（诊断：解释"为什么这个绑定没有加速"） */
   l0Slots: Array<{ slotId: number; nodeId: number; propKey: string; reason: string }>
   /** 统计（棘轮 / 覆盖率度量用） */

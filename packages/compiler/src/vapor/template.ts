@@ -107,6 +107,35 @@ const LOGICAL_CONTAINERS: Record<string, string | null> = {
     '★当前行为：只渲染 `#default` 内容（`#fallback` 永不显示——我方无 pending 态）',
 }
 
+/**
+ * ★★★**内置组件名规范化**（2026-10-03 · 静默风险批次）——kebab-case 形态 → PascalCase。
+ *
+ * 【为什么必须有（本仓实测的静默缺陷）】Vue 官方**同时接受** `<KeepAlive>` 与 `<keep-alive>`
+ *   （官方编译器把后者也解析成 `_KeepAlive`——已实证）；而我方判据（`tag in LOGICAL_CONTAINERS`、
+ *   动态组件 `tag === 'component'` 等）此前**只认 PascalCase** ⇒ 写 `<keep-alive>` /
+ *   `<transition>` / `<teleport>` / `<suspense>` 时：
+ *   · **多建一层盒**（几何与 Vue 不等价——"透传"根本没生效）；
+ *   · **零诊断**（最危险的一类静默：用户以为用了内置组件，实际是普通容器）。
+ *
+ * 【规范化什么、不规范化什么（收窄原则）】只规范化**确定性等价**的短名单（Vue 内置组件名）——
+ *   对每个 `<keep-alive>` 都自动"翻成" `KeepAlive` 正是 Vue 官方行为的等价物（官方编译器亦如此）。
+ *   不引入一般性大小写转换（那会误伤用户的 `<my-comp>` 自定义标签语义——PascalCase 才是组件约定）。
+ *
+ * ★本函数是**唯一入口**：template.ts / deps.ts / events.ts 三处 id 分配共用同一份判据
+ *   （本仓纪律："同一语义只允许一处实现"，此前三处各写一遍 kebab 判据必漂移）。
+ */
+export function normalizeBuiltinTag(tag: string): string {
+  switch (tag) {
+    case 'keep-alive': return 'KeepAlive'
+    case 'transition': return 'Transition'
+    case 'transition-group': return 'TransitionGroup'
+    case 'teleport': return 'Teleport'
+    case 'suspense': return 'Suspense'
+    case 'component': return 'component'   // 动态组件：小写本就是规范写法
+    default: return tag
+  }
+}
+
 /** 未支持的内置组件（官方有语义，我方当普通容器 ⇒ 语义静默丢失） */
 const UNSUPPORTED_BUILTINS: Record<string, string> = {
   // ★P3 批次：Teleport/KeepAlive/Suspense 移入 LOGICAL_CONTAINERS（透传 + 精确诊断）——
@@ -490,7 +519,10 @@ export function buildLayoutTemplate(
         // 文本/插值节点在**父元素**上处理（本函数只在元素遍历里被调用，见下方 children 过滤）
         continue
       }
-      const tag = n.tag ?? ''
+      // ★★★kebab 形态的内置组件规范化（2026-10-03）：`<keep-alive>` ⇒ `KeepAlive` 等——
+      //   官方同时接受两种写法（实证：官方编译器把 `<keep-alive>` 也解析成 `_KeepAlive`），
+      //   而此前判据只认 PascalCase ⇒ 小写写法**多建盒 + 零诊断**（静默缺陷）。见 normalizeBuiltinTag。
+      const tag = normalizeBuiltinTag(n.tag ?? '')
       // ★★★**插槽声明 `<template #x>`**（Vue 里 `template` 是**片段/插槽声明**、不产元素）：
       //   不占 id、不产节点；其**直接子元素**是该具名插槽的内容根（打 `slotFor`）。
       //   ★判据与 deps.ts/events.ts **同源**（有 v-slot 的 template ⇒ 跳过）。
@@ -707,16 +739,45 @@ export function buildLayoutTemplate(
       // ★★内置组件探测（P0：当普通容器 = 语义静默丢失——见 UNSUPPORTED_BUILTINS 头注）
       //   ★P3 批次：逻辑容器（LOGICAL_CONTAINERS）已在**透传分支**里诊断（含精确边界 + 替代路径）
       //     ⇒ 此处不再重复；本分支只剩"真·当普通容器"的那些。
-      if (tag && UNSUPPORTED_BUILTINS[tag]) {
+      //   ★★★动态组件（P3 批次，2026-10-03）：`<component :is>` 已在**本步之后**单独处理
+      //     ⇒ 从本表跳过（否则"未支持"诊断会把已实现的能力说成不支持）。
+      if (tag && tag !== 'component' && UNSUPPORTED_BUILTINS[tag]) {
         diag(`${tag}(id=${id}) ${UNSUPPORTED_BUILTINS[tag]}`)
+      }
+      // ★★★**动态组件 `:is`**（P3 批次，2026-10-03）——`<component :is="expr">`：
+      //   · 静态 `is="Name"`（普通属性）⇒ 直接当静态组件（与 `<Name>` 完全等价——零新机制）；
+      //   · `:is="expr"` ⇒ 打 `componentIs` 标记（实例化期按表达式求值解析组件名）。
+      //   ★诚实边界：只做**首帧解析**——运行时切换是**结构变更**（换组件 = 换整棵子树），
+      //     静态树模型不支持 ⇒ 编译期诊断说明边界 + 替代路径（v-if/v-show 分支 + 静态标签）。
+      let componentIsExpr: string | undefined
+      /** 静态 `is="Name"` ⇒ 直接当静态组件（与 `<Name>` 完全等价——零新机制） */
+      let staticIsName: string | undefined
+      if (tag === 'component') {
+        const staticIs = (n.props ?? []).find((p) => p.type === 6 && p.name === 'is')
+        const dynIs = (n.props ?? []).find((p) => p.type === 7 && p.name === 'bind' && p.arg?.content === 'is')
+        if (staticIs?.value?.content) {
+          staticIsName = String(staticIs.value.content)
+        } else if (dynIs?.exp?.content?.trim()) {
+          componentIsExpr = dynIs.exp.content.trim()
+          diag(
+            `component(id=${id}) \`<component :is="${componentIsExpr}">\` 按**首帧值**解析组件（运行时切换不支持）`,
+            '动态组件在实例化期解析一次（名字须在组件注册表里）；需要运行时切换请用 v-if/v-show 分支 + 静态组件标签',
+            'VAPOR_DYNAMIC_COMPONENT_IS',
+          )
+        } else {
+          diag(
+            `component(id=${id}) 动态组件缺 \`:is\`——不会渲染任何组件`,
+            '写法：`<component :is="\'MyComp\'" />` 或静态 `is="MyComp"`',
+            'VAPOR_DYNAMIC_COMPONENT_NO_IS',
+          )
+        }
       }
       // ★★**组件边界标记**（P1 组件系统第一批，2026-10-03）：`<MyComp>` 这类**大写开头**的标签
       //   是 Vue 组件（协议：PascalCase = 组件，kebab-case = 原生标签——与 Vue 官方同约定）。
       //   ⇒ 在节点上打 `component` 标记（运行时据此走 L0 边界语义；见 LayoutNode.component 注释）。
-      //   ★本版只做**标记 + props 通道**；组件内部渲染/生命周期/插槽分发是后续批次
-      //     （标记本身已比"当普通元素"有价值：宿主能识别"这里是组件位、需要 L0 处理"）。
       // ★逻辑容器（KeepAlive/Teleport/Suspense/Transition）虽是 PascalCase，但**不是**组件边界
       //   （它们已被透传分支 `continue` 掉了 ⇒ 此处本就走不到；判据保留以防未来顺序调整）
+      // ★动态组件的**静态形态**（`is="Name"`）等价于静态组件——在此统一打标记（零新机制）
       const isComponentTag = /^[A-Z]/.test(tag) && !UNSUPPORTED_BUILTINS[tag] && !(tag in LOGICAL_CONTAINERS)
       // ★★插槽出口 `<slot>`（P1-3 插槽分发，2026-10-03）：打 `slotOutlet` 标记——
       //   实例化期把父级内容**分发到出口位置**（出口自身**不产元素**，见 LayoutNode.slotOutlet）。
@@ -748,6 +809,10 @@ export function buildLayoutTemplate(
       const node: LayoutNode = { id, parentId, tag, style }
       if (nodeListId !== undefined) node.listId = nodeListId
       if (isComponentTag) node.component = tag
+      // ★静态 `is="Name"` ⇒ 当静态组件（与 `<Name>` 完全等价——组件标记指向真名）
+      if (staticIsName !== undefined) node.component = staticIsName
+      // ★P3 动态组件：`:is` 表达式标记（实例化期解析——见 LayoutNode.componentIs 边界）
+      if (componentIsExpr !== undefined) node.componentIs = { expr: componentIsExpr }
       if (slotOutletName !== undefined) {
         node.slotOutlet = { name: slotOutletName, ...(slotOutletProps ? { props: slotOutletProps } : {}) }
       }

@@ -104,6 +104,14 @@ function fingerprint(rep) {
     rep.lifecycle_probe?.geom_before,
     rep.lifecycle_probe?.geom_after,
   ])
+  // ★P3 动态组件（2026-10-03）：`:is` 解析结果三端逐值一致（文本/解析名/摘除数）——
+  //   解析是共享代码 + 同一份产物 ⇒ 任一端不同即"没重跑"或"跑的不是同一份代码"。
+  fp.dyn_probe = JSON.stringify([
+    [...(rep.dyn_probe?.texts ?? [])].sort(),
+    [...(rep.dyn_probe?.mounts ?? [])].sort(),
+    (rep.dyn_probe?.geom ?? []).map((g) => `w>0:${g.width > 0}`).sort(),
+    rep.dyn_probe?.dropped,
+  ])
   return fp
 }
 

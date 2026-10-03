@@ -11169,6 +11169,40 @@
       }
       return { consumed, placed };
     };
+    if (opts.table?.componentIs && opts.table.componentIs.length > 0) {
+      for (const ci of opts.table.componentIs) {
+        const target = byId.get(ci.nodeId);
+        if (!target) continue;
+        const impl = evaluators.get(ci.evaluatorId);
+        if (!impl) {
+          instNotes.push(`\u52A8\u6001\u7EC4\u4EF6 \`:is="${ci.expr}"\`\uFF08\u8282\u70B9 ${ci.nodeId}\uFF09\u6C42\u503C\u5668\u672A\u5B9E\u4F8B\u5316 \u21D2 \u672A\u89E3\u6790`);
+          continue;
+        }
+        let name;
+        try {
+          name = impl({ read: opts.read });
+        } catch (e) {
+          instNotes.push(`\u52A8\u6001\u7EC4\u4EF6 \`:is="${ci.expr}"\` \u6C42\u503C\u629B\u9519\uFF08${String(e?.message ?? e)}\uFF09\u21D2 \u672A\u89E3\u6790`);
+          continue;
+        }
+        if (name === void 0 || name === null || name === "") {
+          const doomed = subtreeOf(nodes, ci.nodeId);
+          for (const id of doomed) droppedNodeIds.add(id);
+          for (let i = nodes.length - 1; i >= 0; i--) if (doomed.has(nodes[i].id)) nodes.splice(i, 1);
+          instNotes.push(`\u52A8\u6001\u7EC4\u4EF6 \`:is="${ci.expr}"\` \u6C42\u503C\u4E3A\u5047\uFF08${String(name)}\uFF09\u21D2 \u8282\u70B9\u5DF2\u6458\u9664\uFF08Vue \u540C\uFF09`);
+          continue;
+        }
+        if (typeof name !== "string") {
+          instNotes.push(
+            `\u52A8\u6001\u7EC4\u4EF6 \`:is="${ci.expr}"\` \u6C42\u503C\u4E0D\u662F\u5B57\u7B26\u4E32\uFF08${typeof name}\uFF09\u21D2 \u672A\u89E3\u6790\uFF08\u672C\u5B9E\u73B0\u6309**\u7EC4\u4EF6\u540D**\u67E5\u6CE8\u518C\u8868\uFF1B\u7EC4\u4EF6\u5BF9\u8C61\u5F62\u6001\u4E3A\u540E\u7EED\u6279\u6B21\uFF09`
+          );
+          continue;
+        }
+        target.component = name;
+        delete target.componentIs;
+        instNotes.push(`\u52A8\u6001\u7EC4\u4EF6 \`:is="${ci.expr}"\` \u21D2 \u89E3\u6790\u4E3A ${name}\uFF08\u5B9E\u4F8B\u5316\u671F\u4E00\u6B21\u6027\u89E3\u6790\uFF09`);
+      }
+    }
     if (opts.components) {
       const depth = opts.componentDepth ?? 0;
       const boundaries = nodes.filter((n) => n.component);
@@ -13421,6 +13455,7 @@
       emit_probe: { emits: [], parent_source_after: void 0, geom_before: -1, geom_after: -1 },
       scoped_probe: { texts: [], anchor_id: -1, anchor_width_field: -1, anchor_width_rect: -1 },
       lifecycle_probe: { bindings: [], ran_handler: "", changed_sources: [], ops_bytes: 0, applied: 0, anchor_id: -1, geom_before: -1, geom_after: -1 },
+      dyn_probe: { texts: [], mounts: [], geom: [], dropped: -1, notes: [] },
       mount_ms: 0,
       mount_nodes: 0,
       updates_run: 0,
@@ -14090,6 +14125,52 @@
           }
         } else {
           notes.push("\u4F5C\u7528\u57DF\u63D2\u69FD\u63A2\u9488\uFF1A\u4EA7\u7269\u65E0 scoped \u6BB5\uFF08\u5939\u5177\u672A\u8986\u76D6 \u21D2 \u5224\u636E \u2470 \u6309\u7F3A\u5931\u5904\u7406\uFF09");
+        }
+      }
+      {
+        const dynArt = artifacts.dyn;
+        if (dynArt?.tpl?.ok) {
+          const dynDefs = {};
+          for (const [nm, def] of Object.entries(artifacts.components ?? {})) {
+            dynDefs[nm] = { template: def.tpl, table: def.table };
+          }
+          const dynInst = instantiateTemplate(dynArt.tpl, {
+            viewport: args.viewport,
+            // ★夹具的 `dynWhich` 初值 'DynA'（与 DYN_SFC 的 script 一致）——动态解析的输入
+            read: (n) => n === "dynWhich" ? "DynA" : void 0,
+            table: dynArt.table,
+            registry: new ListRegistry(),
+            components: dynDefs
+          });
+          try {
+            const dOut = JSON.parse(
+              proteusHost.mount(JSON.stringify({ viewport: dynInst.viewport, nodes: dynInst.nodes }))
+            );
+            if (dOut.ok === true) {
+              const rectsAll = JSON.parse(proteusHost.readRects());
+              const rects = rectsAll.rects ?? {};
+              const texts = dynInst.nodes.filter((n) => typeof n.text === "string" && n.text.length > 0).map((n) => String(n.text));
+              rep.dyn_probe = {
+                texts,
+                // 解析出的组件边界节点（判据核"解析成了谁"——从挂载记录读，不猜 id 规律）
+                mounts: (dynInst.componentMounts ?? []).map((m) => m.name),
+                // 内容节点的**内核宽度**（> 0 = 内核真布局了该子树）
+                geom: dynInst.nodes.filter((n) => typeof n.text === "string" && n.text.length > 0).map((n) => ({ id: n.id, width: rects[String(n.id)]?.width ?? -1 })),
+                dropped: dynInst.stats.droppedNodeIds?.length ?? 0,
+                notes: (dynInst.notes ?? []).slice(0, 4)
+              };
+            } else {
+              notes.push(`\u52A8\u6001\u7EC4\u4EF6\u63A2\u9488 mount \u5931\u8D25\uFF1A${dOut.error ?? "\u672A\u77E5"}`);
+            }
+          } catch (e) {
+            notes.push(`\u52A8\u6001\u7EC4\u4EF6\u63A2\u9488\u5F02\u5E38\uFF1A${String(e?.message ?? e)}`);
+          }
+          try {
+            proteusHost.mount(JSON.stringify({ viewport: inst.viewport, nodes: inst.nodes }));
+          } catch {
+          }
+        } else {
+          notes.push("\u52A8\u6001\u7EC4\u4EF6\u63A2\u9488\uFF1A\u4EA7\u7269\u65E0 dyn \u6BB5\uFF08\u5939\u5177\u672A\u8986\u76D6 \u21D2 \u5224\u636E \u2472 \u6309\u7F3A\u5931\u5904\u7406\uFF09");
         }
       }
       rep.ok = rep.updates_run > 0;

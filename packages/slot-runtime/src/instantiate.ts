@@ -709,6 +709,53 @@ export function instantiateTemplate(tpl: LayoutTemplate, opts: InstantiateOption
     return { consumed, placed }
   }
 
+  /* ═══════════ ★★★P3 动态组件 `:is` 解析（2026-10-03）═══════════
+   *
+   * 【时机】组件展开**之前**——把 `<component :is="expr">` 的节点解析成"它实际渲染的组件"，
+   *   之后走与静态组件**完全同一条链**（注册表查找 / 子树偏移 / props / 插槽）。
+   * 【为什么在此层（而不是宿主）】与组件展开同一理由：本函数三端共用 ⇒ 语义天然一致。
+   * 【边界行为（都不静默）】
+   *   · 求值为**假**（''/null/undefined）⇒ **整节点摘除**（Vue：`:is` 为假渲染空）；
+   *   · 求值不是字符串（对象/函数形态——Vue 支持组件对象）⇒ 不展开 + note（我方注册表按名查）；
+   *   · 名字不在注册表 ⇒ 不展开 + note（与静态组件"未注册"同一处置）。
+   */
+  if (opts.table?.componentIs && opts.table.componentIs.length > 0) {
+    for (const ci of opts.table.componentIs) {
+      const target = byId.get(ci.nodeId)
+      if (!target) continue
+      const impl = evaluators.get(ci.evaluatorId)
+      if (!impl) {
+        instNotes.push(`动态组件 \`:is="${ci.expr}"\`（节点 ${ci.nodeId}）求值器未实例化 ⇒ 未解析`)
+        continue
+      }
+      let name: unknown
+      try {
+        name = impl({ read: opts.read })
+      } catch (e) {
+        instNotes.push(`动态组件 \`:is="${ci.expr}"\` 求值抛错（${String((e as Error)?.message ?? e)}）⇒ 未解析`)
+        continue
+      }
+      if (name === undefined || name === null || name === '') {
+        // 假值 ⇒ 摘除该节点（Vue：`:is` 为假渲染空——不留空壳）
+        const doomed = subtreeOf(nodes, ci.nodeId)
+        for (const id of doomed) droppedNodeIds.add(id)
+        for (let i = nodes.length - 1; i >= 0; i--) if (doomed.has(nodes[i]!.id)) nodes.splice(i, 1)
+        instNotes.push(`动态组件 \`:is="${ci.expr}"\` 求值为假（${String(name)}）⇒ 节点已摘除（Vue 同）`)
+        continue
+      }
+      if (typeof name !== 'string') {
+        instNotes.push(
+          `动态组件 \`:is="${ci.expr}"\` 求值不是字符串（${typeof name}）⇒ 未解析` +
+            `（本实现按**组件名**查注册表；组件对象形态为后续批次）`,
+        )
+        continue
+      }
+      target.component = name
+      delete (target as { componentIs?: unknown }).componentIs
+      instNotes.push(`动态组件 \`:is="${ci.expr}"\` ⇒ 解析为 ${name}（实例化期一次性解析）`)
+    }
+  }
+
   if (opts.components) {
     const depth = opts.componentDepth ?? 0
     // ★只展开**本棵树**的边界节点（刚展开的子节点在子调用里处理——递归自然覆盖）

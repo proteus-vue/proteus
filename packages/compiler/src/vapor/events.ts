@@ -29,6 +29,8 @@ import { compileExpr } from './expr'
 import { parse as sfcParse } from '@vue/compiler-sfc'
 import { parse as domParse } from '@vue/compiler-dom'
 import type { VueCompatDeps } from './sources'
+// ★kebab 形态内置组件名的**唯一**规范化入口（template.ts 同源导入——"一处实现"）
+import { normalizeBuiltinTag } from './template'
 
 /** 逻辑容器（与 template.ts/deps.ts **同一条判据**——透传：不占节点 id） */
 const LOGICAL_CONTAINER_TAGS = new Set(['Transition', 'KeepAlive', 'Teleport', 'Suspense'])
@@ -476,7 +478,10 @@ export function compileEvents(
     for (const raw of children) {
       const n = raw as EvNode
       if (n.type !== 1) continue
-      const tag = n.tag ?? ''
+      // ★★kebab 形态的内置组件规范化（2026-10-03 · 与 template.ts **同一条判据**）：
+      //   `<keep-alive>`/`<transition>` 等与 PascalCase 等价（官方实证）——不规范化会让
+      //   本函数把逻辑容器算进元素序 ⇒ 其后事件 nodeId 漂移（与 P1-3 修过的同类缺陷同源）。
+      const tag = normalizeBuiltinTag(n.tag ?? '')
       // ① 插槽声明 `<template #x>`：不占 id（内容元素照常走——它们才是渲染节点）
       if (tag === 'template') {
         const vsProp = (n.props ?? []).find((p) => p.type === 7 && p.name === 'slot')

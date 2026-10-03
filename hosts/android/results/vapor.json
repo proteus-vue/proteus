@@ -1,19 +1,19 @@
 {
-  "bundle_chars": 532341,
-  "run_ms": 85,
-  "host_mount_calls": 5,
+  "bundle_chars": 536658,
+  "run_ms": 104,
+  "host_mount_calls": 7,
   "host_apply_calls": 16,
   "host_update_patch_calls": 0,
   "host_nodes": 47,
   "host_text_nodes": 19,
   "host_cmds": 47,
-  "host_layout_ms": 0.241511,
-  "host_measure_ms": 0.10901,
+  "host_layout_ms": 0.224792,
+  "host_measure_ms": 0.111667,
   "host_painted_samples": 12060,
   "host_painted_colors": 55,
   "host_applied": 1,
   "host_changed_nodes": 0,
-  "host_view_on_draw": 10,
+  "host_view_on_draw": 14,
   "report": {
     "ok": true,
     "tpl_nodes": 30,
@@ -302,7 +302,32 @@
       "geom_before": 0,
       "geom_after": 250
     },
-    "mount_ms": 18,
+    "dyn_probe": {
+      "texts": [
+        "DYNA",
+        "DYNB"
+      ],
+      "mounts": [
+        "DynA",
+        "DynB"
+      ],
+      "geom": [
+        {
+          "id": 5,
+          "width": 30
+        },
+        {
+          "id": 7,
+          "width": 30
+        }
+      ],
+      "dropped": 1,
+      "notes": [
+        "动态组件 `:is=\"dynWhich\"` ⇒ 解析为 DynA（实例化期一次性解析）",
+        "动态组件 `:is=\"''\"` 求值为假（）⇒ 节点已摘除（Vue 同）"
+      ]
+    },
+    "mount_ms": 28,
     "mount_nodes": 47,
     "updates_run": 3,
     "ops_bytes": 204,
@@ -496,7 +521,7 @@
       "tap@13 自身宽度 120 → 150",
       "实例树 47 节点 \/ 行 47 \/ 虚拟化行 8 \/ 增量 3 轮"
     ],
-    "host_layout_ms": 0.502,
+    "host_layout_ms": 2.44,
     "host_cmds": 47
   },
   "ok": true
