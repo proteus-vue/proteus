@@ -136,6 +136,50 @@ describe('LY1 · 层级语义编译期校验（五条违规码 + 合规放行）
   })
 })
 
+describe('★★★LY004 × `<teleport>` 层叠逃逸（GP3-b0，2026-10-03）', () => {
+  // 【背景（本仓实测的误报）】`<teleport>`（MP→root-portal）在运行时把子树提升到**页面根** ⇒
+  //   源码深度**不代表**运行时层叠上下文。修前把 `p-drawer` 这类合法正解判成 LY004。
+  //   判据改为"portal 内**相对**深度 ≤1"（teleport 直接子级 / 再一层容器 = 合法）。
+
+  const codesOf = (tpl: string): string[] => validateLayerUsage(tpl).map((x) => x.code)
+
+  it('★portal 内相对深度 0/1 ⇒ **合法**（既有正解 p-drawer 形态，修前是误报）', () => {
+    expect(codesOf(`<view><teleport to="body"><view layer="layer-popout">x</view></teleport></view>`)).toEqual([])
+    expect(
+      codesOf(`<view><teleport to="body"><view class="root"><view layer="layer-popout">x</view></view></teleport></view>`),
+      'portal 内再包一层容器 = p-drawer 形态，合法',
+    ).toEqual([])
+  })
+
+  it('★portal 内相对深度 ≥2 ⇒ **仍报**（层叠上下文在 portal 内重新累积）', () => {
+    const v = validateLayerUsage(
+      `<view><teleport to="body"><view class="r"><view class="i"><view layer="layer-popout">x</view></view></view></teleport></view>`,
+    )
+    expect(v.map((x) => x.code)).toContain('LY004')
+    expect(v[0]!.message, '消息要点明已计入逃逸').toContain('层叠逃逸')
+  })
+
+  it('★无 teleport 时判据**不变**（回归：原有 LY004 行为不放松）', () => {
+    expect(codesOf(`<view><view class="i"><view layer="layer-popout">x</view></view></view>`), '深层仍报').toContain('LY004')
+    expect(codesOf(`<view><view layer="layer-popout">x</view></view>`), '根直接子级合法').toEqual([])
+  })
+
+  it('★mask 同判（layer-mask 与 popout 同一逃逸语义；★配 popout 兄弟以满足 LY003）', () => {
+    // ★注意：mask 必须与 popout **同页配对**（LY003）——故用例里给一个 popout 兄弟，
+    //   把被测变量**隔离**到"portal 逃逸"这一点上（否则 LY003 会混进结果）。
+    expect(
+      codesOf(
+        `<view><teleport to="body"><view class="r"><view layer="layer-popout">p</view><view layer="layer-mask">m</view></view></teleport></view>`,
+      ),
+    ).toEqual([])
+    expect(
+      codesOf(
+        `<view><teleport to="body"><view class="r"><view class="i"><view layer="layer-popout">p</view><view layer="layer-mask">m</view></view></view></teleport></view>`,
+      ),
+    ).toContain('LY004')
+  })
+})
+
 describe('LY1 × style-safety 联动（两道互补闸门）', () => {
   it('zIndex 在运行时白名单里是 FORBIDDEN（与编译期 LY001 互补，不是重复）', () => {
     const r = validateProp('zIndex', 10, 'web')
