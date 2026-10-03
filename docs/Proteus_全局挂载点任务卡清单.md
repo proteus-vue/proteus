@@ -30,7 +30,7 @@
 
 ### 第三批：各端实现 🔴 依赖 GP0
 
-- [ ] **GP3-a** Web 端挂载实现
+- [x] **GP3-a** Web 端挂载实现 —— 见卡（实现完成 2026-10-03）
 - [~] **GP3-b0** 小程序端 **Overlay 收口** —— **进行中（2026-10-03）**：✅ S42/S47 陷阱机器化（编译期检查 + 回归锁）· ✅ LY004×teleport 层叠逃逸修复 · ⏳ virtualHost 固定（依赖 GP0-a 矩阵）· ⏳ 导航栏影响（需实测）
 - [ ] **GP3-b1** 小程序端 **Global 层新建**（每页注入机制 + 状态共享通道）🔴 依赖 GP0-a
 - [ ] **GP3-c** App 端挂载实现（Android / iOS）
@@ -347,7 +347,7 @@ Vue 3 `Teleport to="body"` 原生支持。Teleport **只移动 DOM，不移动�
 
 # 第三批 · 各端实现 🔴 依赖 GP0
 
-## 卡 GP3-a · Web 端挂载实现
+## 卡 GP3-a · Web 端挂载实现　✅ **实现完成（2026-10-03）**
 
 **优先级**：高
 **预估**：0.5 人周
@@ -356,14 +356,63 @@ Vue 3 `Teleport to="body"` 原生支持。Teleport **只移动 DOM，不移动�
 
 ### 必做项
 
-- [ ] 按 GP0-e 结论实现（倾向自有渲染树节点，不用原生 Teleport）
-- [ ] 三层与 DOM 结构的映射
-- [ ] 与《页面层级规范》的 z-index 语义打通
+- [x] 按 GP0-e 结论实现（倾向自有渲染树节点，不用原生 Teleport）
+      —— `packages/web/src/mount-layers.ts`：三层是**普通 Vue 组件**（`defineComponent`），
+      内容**原地渲染**（零 Teleport；单测的机器判据 = 内容在层容器**内部** + 容器挂在挂载点之下）
+- [x] 三层与 DOM 结构的映射
+      —— `<app-root>` **解壳**（不产元素，与 MP 编译器同款 ⇒ 两端 DOM 同构）；
+      三个层容器各产一个 `<div data-mount-layer="global|page|overlay">`
+      （**可枚举**——测试/DevTools/conformance 的机器可查面）
+- [x] 与《页面层级规范》的 z-index 语义打通
+      —— 层容器 = **独立层叠上下文**（`position: relative` + `z-index: 域偏移`），
+      偏移**取自契约** `mountLayerDomainOffset()`（不硬编码数值）；层内元素照常写 1/10/100/1000
+      ⇒ 被限制在本层域内（两个正交维度各管一段）
 
 ### 验收
 
-- [ ] 三层顺序正确：Overlay > Page > Global
-- [ ] 全局层内容在路由切换时保持存活且不重复挂载
+- [x] 三层顺序正确：Overlay > Page > Global
+      —— 真浏览器 E2E 双判据：**DOM 序**（global→page→overlay）+ **z-index 值**
+      （0 / 1_000_000 / 2_000_000，即契约域偏移，且严格递增）
+- [x] 全局层内容在路由切换时保持存活且不重复挂载
+      —— E2E 三条判据：切换后 Global 层**仍在** + **同一 DOM 节点**（打标验证，非重建）+
+      层容器**数量不变**（不随路由累积）
+
+### ★与 MP 端的"同形不同机制"（本卡的架构要点）
+
+| | Web（本卡） | MP（GP2-a / GP3-b1） |
+|---|---|---|
+| 层标签本质 | **运行时组件**（App.vue 是真根组件） | **编译期**概念（编译器解壳） |
+| Global 如何跨路由 | RouterView 之外 ⇒ **天然存活**（同一实例） | **每页注入**（N 份实例 + 共享状态） |
+| 层间顺序表达 | 容器 z-index（域偏移） | **树序**（注入时前缀）——零新指令 |
+| 声明形态 | `<app-root>` / `<*-layer>`（**相同**） | 同左（**相同**） |
+
+⇒ **声明形态统一、落地机制分端**——这是"一套源码跨端"在本议题上的兑现方式。
+
+### ★C1 的 Web 侧：运行时软校验（与 MP 的编译期 error 分工）
+
+契约 C1 = "层只能声明在 App.vue"。MP 端是**编译期 error**（GP2-b）；Web 端跑标准 Vue、
+无编译期检查 ⇒ 本卡用 `provide/inject` 做**开发模式软校验**：层不在 `<app-root>` 之下时给警告
+（含修法指引），**不阻断渲染**。生产由 `__PROTEUS_DEBUG__` 常量折叠 ⇒ 零开销。
+
+### ★诚实的实现边界（本卡侦察发现的**既有缺口**，如实登记）
+
+`layer="layer-navigation"` 等**层内四层原语**当前**不产 z-index**——实测：
+MP 端属性**原样透传**进 wxml、WXSS 里**没有** z-index；Web 端插件也不处理；全仓
+`layerValueFor()` **零消费者**。即：**层间**（本卡做的）今天生效，**层内**层级今天不生效
+（只做校验不产出）。
+★这不是本卡引入的缺口——《页面层级规范》§13.3 已把"LY2 各端映射驱动到内核/宿主"登记为
+**未做**；但该节措辞是"web/mp **由 CSS 生效**"，与实测**不符** ⇒ 本卡在此如实更正：
+**web/mp 也尚未生效**。⇒ 后续若要层内层级，需做 LY2（产出 z-index）；在那之前
+**不得假设 `layer="..."` 会带来任何遮挡效果**（既有弹层组件如 p-drawer/p-modal 用的是
+**自带裸 z-index**，与本原语无关——这也是它们至今正常的原因）。
+
+### 交付物
+
+- 实现：`packages/web/src/mount-layers.ts`（`installMountLayers` / `createMountLayerComponent` /
+  `AppRoot` / `GlobalLayer` / `PageLayer` / `OverlayLayer`）+ `global-components.ts`（模板类型）
+- 接线：`installWebPlatform` 聚合安装（未使用的应用零开销）+ `examples/App.vue`（三层示例）
+- 测试：`tests/web-mount-layers.test.ts`（16 组，happy-dom，含破坏性验证 3 条）
+  + `tests/e2e-web-mount-layers.test.ts`（5 组，真 Chromium + 真产物）
 
 ---
 

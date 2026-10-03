@@ -778,6 +778,9 @@ importers:
       '@proteus-vue/built-in-components':
         specifier: 0.3.0-beta.21
         version: link:../built-in-components
+      '@proteus-vue/contracts':
+        specifier: 0.3.0-beta.11
+        version: link:../contracts
     devDependencies:
       '@proteus-vue/shared':
         specifier: 0.3.0-beta.21
