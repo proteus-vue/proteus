@@ -271,6 +271,11 @@ interface VaporReport {
    */
   mix_text_probe: Array<{ id: number; text: string; statics: string[] }>
   /**
+   * ★★**表达式能力探针**（P2-6~P2-9）：按**前缀锚定**的节点首帧文本
+   *   （`pi-` / `mx-` / `jn-` / `oc-` / `vt-`）——判据核"求值真的落在文本上"。
+   */
+  expr_probe: Array<{ id: number; prefix: string; text: string }>
+  /**
    * ★★**P2-5 门禁轮读数**（v-once 冻结 / v-memo 组门）：每轮的「应跳过 vs 实际发了几条指令」。
    *   判据核：expect_skip=true 的轮 **ops 必须为 0**（且不含目标文本）；
    *            expect_skip=false 的轮 **ops 必须 > 0**（证明链路没断——"跳过"是语义而非失效）。
@@ -361,6 +366,10 @@ function makeData(rows: number): Record<string, unknown> {
     onceVal: 1,
     memoDep: 0,
     memoVal: 1,
+    // ★★P2-6~P2-9 夹具（2026-10-03）：表达式能力（判据 ⑫ 核首帧文本）
+    exprA: 3,
+    exprArr: ['a', 'b'],
+    exprObj: { inner: 'ok' },
     tapCount: 0,
   }
 }
@@ -815,6 +824,10 @@ function runAb(args: VaporArgs): string {
     const abOnceVal = ref(dataB.onceVal)
     const abMemoDep = ref(dataB.memoDep)
     const abMemoVal = ref(dataB.memoVal)
+    // ★P2-6~P2-9：B 路也要提供（否则 Vue 侧读到 undefined ⇒ 文本序列不对齐）
+    const abExprA = ref(dataB.exprA)
+    const abExprArr = ref(dataB.exprArr)
+    const abExprObj = ref(dataB.exprObj)
     /**
      * ★★B 路更新的**同步驱动柄**（2026-10-01 更新路径 A/B）。
      *
@@ -834,6 +847,7 @@ function runAb(args: VaporArgs): string {
         return {
           list: abList, boxW: abBoxW, padW: abPadW, stopOuterW: abStopOuterW, stopInnerW: abStopInnerW,
           onceVal: abOnceVal, memoDep: abMemoDep, memoVal: abMemoVal,
+          exprA: abExprA, exprArr: abExprArr, exprObj: abExprObj,
         }
       },
       render: abRender,
@@ -1529,7 +1543,7 @@ function runShort(args: VaporArgs): string {
     tpl_nodes: 0, tpl_ok: false, sub_l1: 0, sub_l0: 0, sub_l1_rate: 0, sub_sources: [],
     inst_ms: 0, inst_nodes: 0, inst_reused_ids: 0, inst_allocated_ids: 0, inst_rows: 0,
     inst_values_filled: 0, inst_virtual_rows: 0, inst_text_filled: 0, inst_width_filled: 0,
-    mix_text_probe: [], text_probe_rounds: [], gate_rounds: [], gate_text_nodes: [], once_node_id: -1, memo_node_id: -1,
+    mix_text_probe: [], text_probe_rounds: [], gate_rounds: [], gate_text_nodes: [], once_node_id: -1, memo_node_id: -1, expr_probe: [],
     mount_ms: 0, mount_nodes: 0,
     updates_run: 0, ops_bytes: 0, ops_ms: 0, apply_ms: 0, text_synced_total: 0, update_evidence: [], geom_probe: [], channels: [],
     ev_bindings: 0, ev_handlers: 0, ev_modifiers: 0, taps: 0, tap_evidence: [],
@@ -1595,6 +1609,12 @@ function runShort(args: VaporArgs): string {
     rep.mix_text_probe = inst.nodes
       .filter((n) => segNodeIds.has(n.id))
       .map((n) => ({ id: n.id, text: String((n as { text?: string }).text ?? ''), statics: staticsOf.get(n.id) ?? [] }))
+    // ★P2-6~P2-9：按**首帧文本前缀**锚定表达式能力节点（前缀是夹具里写死的字面量段）
+    const EXPR_PREFIXES = ['vt-', 'pi-', 'mx-', 'jn-', 'oc-']
+    rep.expr_probe = inst.nodes
+      .map((n) => ({ id: n.id, text: String((n as { text?: string }).text ?? '') }))
+      .filter((n) => EXPR_PREFIXES.some((p2) => n.text.startsWith(p2)))
+      .map((n) => ({ id: n.id, prefix: n.text.slice(0, 3), text: n.text }))
     if (rep.inst_text_filled === 0) notes.push('⚠ 实例树里没有任何非空文本——回填链可疑')
 
     // ── ③ 渲染：交给宿主（Rust 核心算几何 + 下发绘制指令）──

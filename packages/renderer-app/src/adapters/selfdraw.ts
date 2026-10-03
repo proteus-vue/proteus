@@ -1092,6 +1092,20 @@ export function createSelfDrawAdapter(): SelfDrawAdapter {
     parentNode: (node: NativeNode): NativeElementNode | null =>
       parentOf.get(node) ?? parentNodeOf(node),
     patchProp(el: NativeElementNode, key: string, prev: unknown, next: unknown): void {
+      // ★★**`textContent` 当作"元素文本"处理**（2026-10-03 · P2-6 实测抓出的适配器缺口）
+      //
+      // 【为什么必须（链路 + 真机证据）】Vue 官方编译器对**非原生标签**上的 `v-text`
+      //   （如 `<p-text v-text="'vt-' + a">`——`p-text` 含连字符 ⇒ 被当组件）产出的不是文本子节点，
+      //   而是 **`textContent` prop**（`textContent: _toDisplayString(...)`）。
+      //   而 runtime-dom 的 `patchProp` 有专门的 `textContent` 分支（设置元素文本）；
+      //   我方适配器**没有** ⇒ 该 prop 落进 `unknownKeys` ⇒ **文本整段丢失**
+      //   （真机 A/B 实测：A 侧 17 处文本 / B 侧 16 处——批量对账当场抓到）。
+      //   ⇒ 本分支与 runtime-dom 对齐：`textContent` = 元素文本（复用 `setElementText` 的
+      //     "原地改文本节点"实现 ⇒ id 稳定、走补丁通道，不误判结构变更）。
+      if (key === 'textContent') {
+        if (next !== null && next !== undefined) this.setElementText(el, String(next))
+        return
+      }
       // ★★事件（onXxx）：**登记处理器**供核心命中测试后的派发用（见 `handlers` 注释）
       if (key.startsWith('on')) {
         const type = normalizeEventType(key)

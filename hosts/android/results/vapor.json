@@ -1,24 +1,24 @@
 {
-  "bundle_chars": 481968,
-  "run_ms": 26,
+  "bundle_chars": 490434,
+  "run_ms": 28,
   "host_mount_calls": 1,
   "host_apply_calls": 10,
   "host_update_patch_calls": 0,
-  "host_nodes": 31,
-  "host_text_nodes": 12,
-  "host_cmds": 31,
-  "host_layout_ms": 0.350521,
-  "host_measure_ms": 0.277187,
+  "host_nodes": 36,
+  "host_text_nodes": 17,
+  "host_cmds": 36,
+  "host_layout_ms": 0.382188,
+  "host_measure_ms": 0.340156,
   "host_painted_samples": 12060,
-  "host_painted_colors": 46,
+  "host_painted_colors": 48,
   "host_applied": 1,
-  "host_changed_nodes": 31,
+  "host_changed_nodes": 36,
   "host_view_on_draw": 2,
   "report": {
     "ok": true,
-    "tpl_nodes": 17,
+    "tpl_nodes": 22,
     "tpl_ok": true,
-    "sub_l1": 10,
+    "sub_l1": 15,
     "sub_l0": 0,
     "sub_l1_rate": 1,
     "sub_sources": [
@@ -29,16 +29,19 @@
       "stopInnerW",
       "onceVal",
       "memoDep",
-      "memoVal"
+      "memoVal",
+      "exprA",
+      "exprArr",
+      "exprObj"
     ],
-    "inst_ms": 1,
-    "inst_nodes": 31,
+    "inst_ms": 0,
+    "inst_nodes": 36,
     "inst_reused_ids": 2,
     "inst_allocated_ids": 14,
-    "inst_rows": 31,
-    "inst_values_filled": 24,
+    "inst_rows": 36,
+    "inst_values_filled": 28,
     "inst_virtual_rows": 8,
-    "inst_text_filled": 12,
+    "inst_text_filled": 17,
     "inst_width_filled": 13,
     "mix_text_probe": [
       {
@@ -68,6 +71,39 @@
         "text": "memo-1",
         "statics": [
           "memo-"
+        ]
+      },
+      {
+        "id": 17,
+        "text": "vt-3",
+        "statics": []
+      },
+      {
+        "id": 18,
+        "text": "pi-3.14",
+        "statics": [
+          "pi-"
+        ]
+      },
+      {
+        "id": 19,
+        "text": "mx-7",
+        "statics": [
+          "mx-"
+        ]
+      },
+      {
+        "id": 20,
+        "text": "jn-a|b",
+        "statics": [
+          "jn-"
+        ]
+      },
+      {
+        "id": 21,
+        "text": "oc-ok",
+        "statics": [
+          "oc-"
         ]
       }
     ],
@@ -143,12 +179,39 @@
     ],
     "once_node_id": 15,
     "memo_node_id": 16,
-    "mount_ms": 16,
-    "mount_nodes": 31,
+    "expr_probe": [
+      {
+        "id": 17,
+        "prefix": "vt-",
+        "text": "vt-3"
+      },
+      {
+        "id": 18,
+        "prefix": "pi-",
+        "text": "pi-3.14"
+      },
+      {
+        "id": 19,
+        "prefix": "mx-",
+        "text": "mx-7"
+      },
+      {
+        "id": 20,
+        "prefix": "jn-",
+        "text": "jn-a|b"
+      },
+      {
+        "id": 21,
+        "prefix": "oc-",
+        "text": "oc-ok"
+      }
+    ],
+    "mount_ms": 17,
+    "mount_nodes": 36,
     "updates_run": 3,
     "ops_bytes": 204,
     "ops_ms": 0,
-    "apply_ms": 1,
+    "apply_ms": 2,
     "text_synced_total": 3,
     "update_evidence": [
       {
@@ -178,7 +241,7 @@
     ],
     "geom_probe": [
       {
-        "id": 18,
+        "id": 23,
         "before": 52,
         "after": 80
       }
@@ -246,7 +309,7 @@
         "ops": 1,
         "changed_rects": 1,
         "geom_before": 96,
-        "geom_after": 31,
+        "geom_after": 36,
         "geom_diff_ids": [
           10
         ]
@@ -273,7 +336,7 @@
         "ops": 1,
         "changed_rects": 2,
         "geom_before": 56,
-        "geom_after": 31,
+        "geom_after": 36,
         "geom_diff_ids": [
           10,
           11
@@ -298,7 +361,7 @@
         "ops": 1,
         "changed_rects": 1,
         "geom_before": 220,
-        "geom_after": 31,
+        "geom_after": 36,
         "geom_diff_ids": [
           12
         ]
@@ -323,7 +386,7 @@
         "ops": 1,
         "changed_rects": 1,
         "geom_before": 40,
-        "geom_after": 31,
+        "geom_after": 36,
         "geom_diff_ids": [
           13
         ]
@@ -335,10 +398,10 @@
       "tap@11 自身宽度 120 → 150",
       "tap@12 自身宽度 300 → 305",
       "tap@13 自身宽度 120 → 150",
-      "实例树 31 节点 \/ 行 31 \/ 虚拟化行 8 \/ 增量 3 轮"
+      "实例树 36 节点 \/ 行 36 \/ 虚拟化行 8 \/ 增量 3 轮"
     ],
-    "host_layout_ms": 0.351,
-    "host_cmds": 31
+    "host_layout_ms": 0.382,
+    "host_cmds": 36
   },
   "ok": true
 }

@@ -43,6 +43,16 @@ export interface TierFacts {
   usesInstanceInternals?: boolean
   /** ★逃生通道：`// @proteus-pure`（强制升级；违背 C1 时由人工担保） */
   forcePure?: boolean
+  /**
+   * ★★**内建白名单纯函数**（P2-8，2026-10-03）：表达式里的调用**全部**在 `PURE_CALLS` 内
+   *   （`Math.round` / `String` / `parseInt`…）。
+   *
+   * 【与 forcePure 的区别（必须分开）】两者都让 C1 通过，但**可信度不同**：
+   *   · 本字段 = **语言级静态可证**（表是跨端一致的内建语义，可复算）；
+   *   · `forcePure` = **开发者承诺**（`@proteus-pure`，人工担保）。
+   *   ⇒ 诊断/explain 必须能区分二者（首版把内建纯函数也显示成"人工担保"，属误导）。
+   */
+  builtinPure?: boolean
   /** ★反向逃生通道：`<!-- @proteus-tier=L0 -->`（强制降级） */
   forceTier?: UpdateTier
 }
@@ -91,8 +101,8 @@ export function decideTier(facts: TierFacts): TierDecision {
 
   const failed: ConditionId[] = []
   for (const { fact, cond, expect } of CONDITION_RULES) {
-    // C1 例外：forcePure 把「无法证明纯」升级为「人工担保纯」
-    if (cond === 'C1' && facts.forcePure) continue
+    // C1 例外：白名单内建纯（语言级可证）或 forcePure（人工担保）把「无法证明纯」升级为通过
+    if (cond === 'C1' && (facts.forcePure || facts.builtinPure)) continue
     if (facts[fact] !== expect) failed.push(cond)
   }
 
@@ -100,8 +110,13 @@ export function decideTier(facts: TierFacts): TierDecision {
     return {
       tier: 'L1',
       failed: [],
-      reason: facts.forcePure ? 'C1 由 @proteus-pure 人工担保，其余条件静态证明通过' : '纯函数 / 依赖可枚举 / 无动态结构',
-      forced: Boolean(facts.forcePure),
+      reason: facts.builtinPure
+        ? 'C1 由**内建白名单纯函数**静态保证（PURE_CALLS），其余条件静态证明通过'
+        : facts.forcePure
+          ? 'C1 由 @proteus-pure 人工担保，其余条件静态证明通过'
+          : '纯函数 / 依赖可枚举 / 无动态结构',
+      // ★forced 表示"非静态可证"（explain 里显 ⚠）：内建白名单**是**静态可证的 ⇒ 不标 forced
+      forced: Boolean(facts.forcePure) && !facts.builtinPure,
     }
   }
 

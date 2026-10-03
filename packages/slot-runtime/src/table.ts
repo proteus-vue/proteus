@@ -165,6 +165,16 @@ export interface SubscriptionTable {
    *   运行时按 `memoId` 查依赖、按「组」比较（任一依赖变化 ⇒ 组内槽位照常写）。
    */
   memoGroups?: MemoGroup[]
+  /**
+   * ★★**常量槽位**（P2-8，2026-10-03）——求值器**无任何源依赖**的槽位（如 `{{ Math.PI }}`
+   *   被内联成字面量程序、`{{ 5 }}` 这类常量表达式）。
+   *
+   * 【为什么必须单列（本仓实测的真缺口）】订阅表以 `sources` 为骨架（"哪个源变写哪个槽位"），
+   *   而**没有源的槽位无处安放** ⇒ 既不在任何 source.slots 里、也不在 l0Slots 里 ⇒
+   *   实例化回填与 `relink` 都**看不到它** ⇒ **首帧空白**（`{{ Math.PI }}` 渲染成空、且零报错）。
+   *   ⇒ 单列本表：它**永不更新**（没有源），但**必须参与首帧回填**（与其余槽位同一条回填链）。
+   */
+  constantSlots?: SlotSubscription[]
   /** 未走 L1 的槽位（诊断：解释"为什么这个绑定没有加速"） */
   l0Slots: Array<{ slotId: number; nodeId: number; propKey: string; reason: string }>
   /** 统计（棘轮 / 覆盖率度量用） */

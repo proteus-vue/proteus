@@ -84,7 +84,7 @@ Teleport / KeepAlive / Suspense / Transition / TransitionGroup / v-memo / 自定
 | 8 | 动态属性 `:[k]` | ⚠️ **静默** | 无诊断，槽位错标成 `prop:attr.fn`（**把表达式源码当属性名**） |
 | 9 | **v-show** | ✅ | 走 `visibility:visible` 槽位（与 v-if 同通道，语义不同） |
 | 10 | **v-model** | ✓ 半 | ◐ **下行支持 + 回写诊断（P2-4）**：值→文本槽位可用；**无回写通道**（App 输入未接）⇒ 出现即诊断（修饰符一并标注）。修饰符 `.trim/.number/.lazy` 的**真语义**在 MP 路径（回写端转换） |
-| 11 | v-html / v-text | ⚠️ **静默** | 无诊断也无槽位（**看不见的丢失**） |
+| 11 | v-html / v-text | ◐ | v-text ✅ **已支持（P2-6）**：与插值同槽位（覆盖子节点语义）；v-html ❌ 仍不支持——**富文本通道缺失**（内核文本单串、宿主单次 drawText），诊断写明真实原因 |
 | 12 | v-once | ✅ | ✅ **已支持（P2-5）**：槽位带 `once` 标记 ⇒ 首次写入后**永久冻结**（真机判据 ⑪）；行内 v-once（官方共享缓存槽语义）如实诊断 |
 | 13 | v-memo | ✅ | ✅ **已支持（P2-5）**：`v-memo="[a,b]"` ⇒ 依赖编成 `memoGroups`，运行时**按组比较**（依赖净 ⇒ 跳过子树更新；脏 ⇒ 放行）。非数组字面量形态如实诊断 |
 | 14 | 事件 `@click / @tap / @longpress` | ✅ | `events:[{nodeId,event:tap,handler}]` + 动作表 |
@@ -103,9 +103,9 @@ Teleport / KeepAlive / Suspense / Transition / TransitionGroup / v-memo / 自定
 | 27 | **混合文本** `a{{ x }}b` | ✅ **已支持（P2-2）** | 编译期切分为段表（静态段 + 表达式段）⇒ 运行时求值拼接；首帧与更新都完整（真机判据 ⑩/⑩b） |
 | 28 | **绘制声明**（glow/clip-path/mask/svg-path/fill-gradient） | ✅ **独有** | 属性式 JSON 声明 → 内核通道（官方 vapor 无此概念，属我方扩展） |
 | 29 | 表达式：算术/三元/逻辑/成员链/数组长度/模板串 | ✅ | `ExprProgram` 编译通过 |
-| 30 | 表达式：**函数调用** | ❌ 诊断 | `"含函数/方法调用（纯度无法证明，属 L1 准入条件 C1）"` |
-| 31 | 表达式：**宽松相等 `==`** | ❌ 诊断 | `"不支持宽松相等…请改用 ===/!=="` |
-| 32 | 表达式：**可选链 `?.`** | ❌ 诊断 | `"不支持可选链（可用 ?? 与三元改写）"` |
+| 30 | 表达式：**函数调用** | ◐ **白名单内支持（P2-8）** | 内建纯函数 `Math.*`（除 `Math.random`）/ `String` / `Number` / `parseInt` / `Number.isFinite`… **可用且进 L1**（语言级静态可证）；★**白名单外**（含业务函数）仍诊断。**纯方法**（P2-8 续）：`arr.join/slice/concat/indexOf/includes`、`s.trim/toUpperCase/slice…`、`n.toFixed`（**非变异**）可用；**变异方法**（`sort/reverse/push/splice`）与正则 `replace` 仍拒绝 |
+| 31 | 表达式：**宽松相等 `==`** | ❌ 诊断（**保持**） | `"不支持宽松相等…请改用 ===/!=="`——JS 语义微妙（`null==undefined`、字符串转数字），实现错会**静默算错值**；结论：**不放宽** |
+| 32 | 表达式：**可选链 `?.`** | ✅ **已支持（P2-9）** | 编译期**降级为 cond 程序**（`a?.b` ⇒ `(a===null\|\|a===undefined) ? undefined : a.b`）；空值渲染为空串（不是 `"undefined"`）。★同时修掉**幽灵源**（属性名曾被当独立依赖） |
 | 33 | 表达式：赋值/自增（在渲染表达式里） | ❌ 诊断 | `"表达式含赋值/自增（模板表达式应为纯求值）"` |
 | 34 | `<script setup>` 源识别（ref/reactive/computed/props） | ✅ | 槽位源 `[a,b]` 正确识别 |
 | 35 | 组件边界强制 L0（方案坑位 #4） | ◐ **设计约定** | 模板不展开组件（但**无运行时组件系统**，见 #18） |
@@ -161,10 +161,10 @@ Teleport / KeepAlive / Suspense / Transition / TransitionGroup / v-memo / 自定
 | P2-3 | **事件修饰符** | ✅ | ◐ **已完成（2026-10-03）**：`.stop`/`.self`/`.once` 真语义（`slot-runtime/dispatch.ts` 共享派发器，三端同一份）；`.prevent`/`.passive`/`.capture`/按键 = 诊断（无对应语义）+ 断言修法。★真机抓出一个真缺陷（B 路 `withModifiers` 只在 runtime-dom ⇒ 见下） |
 | P2-4 | **v-model 修饰符** `.lazy/.number/.trim` | ✅ | ◐ **已完成（2026-10-03）**：MP 路径真语义（`.trim` ⇒ `String(v).trim()`；`.number` ⇒ **looseToNumber**（parseFloat+NaN 回退，不是 `Number()`）；`.lazy` ⇒ 事件通道换 `bindblur`）；组件形态/未知修饰符 ⇒ 诊断。Vapor 路径 **v-model 无回写通道 ⇒ 显式诊断**（不静默半支持） |
 | P2-5 | **v-once / v-memo 真语义** | ✅ | ✅ **已完成（2026-10-03）**：`v-once` 槽位带标记、运行时首次写入后冻结；`v-memo` 依赖程序化（`memoGroups`）+ 帧感知组门（同帧一次判定 ⇒ 组内槽位整体放行）。★行内 v-once 与官方"共享缓存槽"语义如实诊断（不照抄反直觉行为） |
-| P2-6 | **v-html / v-text** | ✅ | v-html = 富文本（我方文本通道已支持样式串——可映射）；v-text = 纯文本槽位 |
-| P2-7 | **动态属性 `:[k]`** | ✅ | 内核 attr 白名单 + 动态键名槽位 |
-| P2-8 | **表达式：函数调用**（受控） | ✅（任意 JS 表达式） | 我方保守（安全边界）。**建议**：白名单"纯函数"（`Math.*`、`String.*`、模板内 `computed`）经 `@proteus-pure` 显式标注后放行 |
-| P2-9 | **表达式：可选链 / 宽松相等** | ✅ | 可选链可降级改写（诊断已给修法）；宽松相等建议保持拒绝（语义陷阱） |
+| P2-6 | **v-html / v-text** | ✅ | ◐ **已完成（2026-10-03）**：v-text ✅ 真支持（与插值同槽位）；★v-html **仍不支持**——能力清单此前写"可映射"**与实现不符**，经查内核/宿主均无富文本能力（单串 + 单次 drawText）⇒ 修正如实标注 |
+| P2-7 | **动态属性 `:[k]`** | ✅ | ◐ **已完成（2026-10-03）**：字符串字面量形态（`:['width']`）**降级为静态属性名**（可用）；真动态（`:[k]`）⇒ 诊断 + **不建垃圾槽位**（此前建 `attr.k` 永不生效） |
+| P2-8 | **表达式：函数调用**（受控） | ✅（任意 JS 表达式） | ✅ **已完成（2026-10-03）**：`PURE_CALLS`（内建纯函数，**语言级静态可证** ⇒ 进 L1 且 explain 显示"内建白名单"而非"人工担保"）+ `PURE_METHODS`（非变异方法）；`Math.PI` 等**全局常量编译期内联**（★修掉"静默渲染成空"） |
+| P2-9 | **表达式：可选链 / 宽松相等** | ✅ | ✅ **可选链已完成（2026-10-03）**：编译期降级为 `cond`；宽松相等**保持拒绝**（语义陷阱，不冒险） |
 
 ### P3 · 内置组件与进阶（可延后但需**可见**）
 
@@ -211,7 +211,7 @@ Teleport / KeepAlive / Suspense / Transition / TransitionGroup / v-memo / 自定
    （Vue 路径有 `renderer-app` 可复用设计）。
 
 **建议顺序（更新）**：~~P0~~ ✅ → ~~P1-1/P1-2（组件边界+props 通道）~~ ✅ →
-~~P2-1（嵌套 v-for）~~ ✅ → ~~P2-2（混合文本）~~ ✅ → ~~P2-3（事件修饰符）~~ ✅ → ~~P2-4（v-model 修饰符）~~ ✅ → ~~P2-5（v-once/v-memo）~~ ✅ → P2-6~P2-9（v-html / 动态属性 / 表达式放宽）→ 其余按需。
+~~P2-1~~ ✅ → ~~P2-2~~ ✅ → ~~P2-3~~ ✅ → ~~P2-4~~ ✅ → ~~P2-5~~ ✅ → ~~P2-6~~（v-text ✅ / v-html ❌ 诚实标注）→ ~~P2-7~~ ✅ → ~~P2-8~~ ✅ → ~~P2-9~~（可选链 ✅ / 宽松相等 保持拒绝）→ **P2 段收官**；余下为 P3 内置组件（Teleport/KeepAlive/Transition/Suspense/自定义指令）与 P4 生态级。
 
 ### ★P2-1 增量说明（2026-10-03，做/不做如实标注）
 
@@ -316,3 +316,46 @@ Teleport / KeepAlive / Suspense / Transition / TransitionGroup / v-memo / 自定
 `once-frozen=38B→节点[14]` / `plain-updated=42B→节点[8]` / `memo-clean=0B（跳过）` / `memo-dirty=38B→节点[16]`）；
 `run-vapor-ab` 全过（B 路 v-once/v-memo 语义补齐后仍逐项等价）· `run-vapor-list` 6/6。
 **破坏性验证**：once 门失效 ⇒ 红；memo 门失效（永远脏）⇒ 红（均先确认基线绿）。
+
+### ★P2-6~P2-9 增量说明（2026-10-03 · **P2 段收官**）
+
+**做（按能力清单顺序）**
+
+| 项 | 做法 | 依据 |
+|---|---|---|
+| **P2-6 v-text** | 与插值**同槽位**（`text.content`）+ 覆盖子节点语义（与子元素并存 ⇒ 诊断） | 官方 `v-text` = 设置 textContent；与插值同通道 ⇒ 下游（订阅表/运行时/回填）**零改动** |
+| **P2-6 v-html** | ❌ **仍不支持**，但**诊断改写为真实原因**（内核文本是单串、宿主单次 `drawText`，无分段字形/内联样式） | ★**修正能力清单的不实标注**：原文写"我方文本通道已支持样式串——可映射"，经查内核与宿主**都没有**富文本能力 ⇒ 如实标注（"可映射"是错的） |
+| **P2-7 动态属性名** | 字符串字面量（`:['width']`）⇒ **降级为静态属性名**（等价 `:width`，零诊断）；真动态（`:[k]`）⇒ 诊断 + **不建槽位** | 首版把键名表达式当属性名 ⇒ 产物里出现 `attr.k` 之类**永不生效**的槽位（静默） |
+| **P2-8 白名单纯函数** | 新 `PURE_CALLS`（`Math.*` 除 random / `String` / `Number` / `parseInt` / `isFinite` / `Number.isFinite`…）+ `call` 节点；**语言级静态可证** ⇒ 进 L1 且 explain 标"内建白名单"（与 `@proteus-pure` **人工担保**区分开——首版混为一谈，误导） | 官方任意表达式；我方取"**枚举可证的**"（与方案 §5.3 C1 一致），其余仍拒绝（不猜） |
+| **P2-8 续 · 纯方法** | 新 `PURE_METHODS`（**非变异**）：`arr.join/slice/concat/indexOf/includes`、`s.trim/toUpperCase/toLowerCase/slice/substring/padStart/...`、`n.toFixed`；`mcall` 节点（接收者参与求值） | ★**真实项目驱动**：showcase 三个生命周期页写 `{{ phases.join(" → ") || "（暂无）" }}`——修 `hasCall` 漏记成员链调用后它们会掉 L0 ⇒ 正解是把这些可证纯的方法纳入白名单（而不是退回去装作没看见）。**变异方法**（`sort/reverse/push/splice`）与正则 `replace` 仍拒绝 |
+| **P2-8 全局常量** | `Math.PI` / `Number.MAX_SAFE_INTEGER` 等 **编译期内联为字面量**（`GLOBAL_CONST_MEMBERS`）；已知全局的非白名单成员（`Math.foo`）⇒ 诊断 | ★修**静默错值**：`Math.PI` 此前编成 `mem(root('Math'))` ⇒ 运行时 `read('Math')` 恒 undefined ⇒ **渲染成空**且零报错 |
+| **P2-9 可选链** | 编译期降级：`a?.b` ⇒ `(a===null \|\| a===undefined) ? undefined : a.b`（`cond` 程序）；`?.` 的**计算形态**（`arr?.[0]`）同样支持 | ★**不能**用 `==` 降级（`a == null` 语义正确但宽松相等是拒绝项）⇒ 显式用 `===` 双判（正是 JS [[Get]] 对可选链的定义）；空值渲染为**空串**（`String(undefined)` 会把字面量 "undefined" 写上屏） |
+| **P2-9 依赖修正** | `OptionalMemberExpression` 是 babel 独立节点类型——此前不在 switch 里 ⇒ 走 default **遍历全部子节点** ⇒ 属性名被当**独立源**（幽灵依赖） | 修复后 `a?.b` 的 roots 只有 `a` |
+
+**★本批抓出并修复的真缺陷（3 个，全部有实测证据）**
+
+1. **`hasCall` 漏记成员链调用**（`deps.ts`）：只记"裸标识符调用"⇒ `Math.round(a)` / `arr.join()` 的 `hasCall=false`
+   ⇒ C1 把它们当**静态可证纯** ⇒ 判 L1 但**求值器是 `expr` 形态（永不更新）** = **静默不更新**。
+   修复：补记成员链调用名 ⇒ 顺带暴露了 showcase 三处真实用法（见 P2-8 续）。
+2. **适配器缺 `textContent` 分支**（`renderer-app/selfdraw`）：Vue 对**非原生标签**上的 `v-text`
+   产出 `textContent` **prop**（runtime-dom 有专门分支）——我方没有 ⇒ 该 prop 落进 `unknownKeys`
+   ⇒ **文本整段丢失**。真机 A/B ②「文本数 A=17 vs B=16」当场抓到；修后两路各 17。
+   ★这是"两条路等价"判据**又一次**抓住跨实现缺口（与 P2-3 的 `withModifiers` 同族）。
+3. **`undefined` 结果被写成长字面量**（`instantiate.ts`）：回填把"求值器缺失"与"求值结果就是 undefined"
+   混成一个返回值 ⇒ `{{ a?.b }}`（a 为空）会**误走源值兜底** ⇒ `String(null)` = `'null'` 字面量上屏。
+   修复：求值结果分 `{ok,value}` 两态；文本写出统一"空值 ⇒ 空串"。
+
+**验证**
+- 单测 **+17**（`vapor-expr-p2` 15 组：白名单/常量内联/可选链语义与依赖/ v-text / 动态属性 + 适配器 `textContent` 2 组）；
+  全量 **365 文件 / 4638 用例全绿**；
+- **真机**：`run-vapor` 判据 **13/13**（新增 ⑫ 表达式能力逐前缀核对：`vt-→vt-3 · pi-→pi-3.14 · mx-→mx-7 · jn-→jn-a|b · oc-→oc-ok`）；
+  `run-vapor-ab` 全过（含修 `textContent` 后的文本序列对齐回归）· `run-vapor-list` 6/6；
+- **破坏性验证**：可选链 guard 写反 ⇒ 红；白名单校验失效 ⇒ 红；`join` 实现退化 ⇒ 红（均先确认基线绿）；
+- 门禁：binding-matrix **重生成后覆盖率回到 99.1%**（L0 15 个——与改动前持平；说明白名单补全真的把三个
+  "曾静默 L1 不更新"的绑定变成了 L1 可用）。
+
+**诚实边界**
+① `v-html` 富文本通道缺失（需内核分段文本 + 宿主分段绘制——独立批次）；
+② 白名单是**闭集**：业务函数仍需 `@proteus-pure` 或 computed 预计算；
+③ `Math.random` / `Date` 等不纯者刻意排除（模板渲染应为纯函数——否则更新不可预测）；
+④ 可选链的**调用形态**（`fn?.()`）仍拒绝（`OptionalCallExpression`——需先决定"调用谁"）。

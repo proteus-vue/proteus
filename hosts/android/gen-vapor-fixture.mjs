@@ -91,6 +91,17 @@ const SFC = `<template>
     <p-text style="font-size: 12px; color: #ffffff">once-{{ onceVal }}</p-text>
     <p-text v-once style="font-size: 12px; color: #ffffff">once-{{ onceVal }}</p-text>
     <p-text v-memo="[memoDep]" :key="'memo'" style="font-size: 12px; color: #ffffff">memo-{{ memoVal }}</p-text>
+    <!-- ★★P2-6~P2-9（2026-10-03）：
+         · v-text（P2-6）：与插值同槽位；
+         · 白名单纯函数（P2-8）：Math.round / String 等 + Math.PI 编译期内联（此前静默渲染成空）；
+         · 纯方法（P2-8 续）：arr.join（真实项目用法）；
+         · 可选链（P2-9）：obj?.x 编译期降级为 cond 程序（空值 ⇒ 空串，不是 'undefined'）。
+         判据 ⑫ 核：这些节点的**首帧文本**是求值结果（不是空串、也不是 "undefined"/"null" 字面量）。 -->
+    <p-text v-text="'vt-' + exprA" style="font-size: 12px; color: #ffffff"></p-text>
+    <p-text style="font-size: 12px; color: #ffffff">pi-{{ Math.PI.toFixed(2) }}</p-text>
+    <p-text style="font-size: 12px; color: #ffffff">mx-{{ Math.max(exprA, 7) }}</p-text>
+    <p-text style="font-size: 12px; color: #ffffff">jn-{{ exprArr.join('|') }}</p-text>
+    <p-text style="font-size: 12px; color: #ffffff">oc-{{ exprObj?.inner }}</p-text>
   </p-view>
 </template>
 
@@ -106,6 +117,10 @@ const stopInnerW = ref(120)
 const onceVal = ref(1)
 const memoDep = ref(0)
 const memoVal = ref(1)
+// ★P2-6~P2-9 夹具源（与 makeData 的初值一致）
+const exprA = ref(3)
+const exprArr = ref(['a', 'b'])
+const exprObj = ref({ inner: 'ok' })
 </script>
 `
 

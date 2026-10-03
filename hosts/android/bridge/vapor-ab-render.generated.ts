@@ -97,7 +97,36 @@ export function render(_ctx, _cache) {
           _createTextVNode("memo-" + _toDisplayString(_ctx.memoVal), 1 /* TEXT */)
         ]),
         _: 1 /* STABLE */
-      })), _cache, 5)
+      })), _cache, 5),
+      _createCommentVNode(" ★★P2-6~P2-9（2026-10-03）：\n         · v-text（P2-6）：与插值同槽位；\n         · 白名单纯函数（P2-8）：Math.round / String 等 + Math.PI 编译期内联（此前静默渲染成空）；\n         · 纯方法（P2-8 续）：arr.join（真实项目用法）；\n         · 可选链（P2-9）：obj?.x 编译期降级为 cond 程序（空值 ⇒ 空串，不是 'undefined'）。\n         判据 ⑫ 核：这些节点的**首帧文本**是求值结果（不是空串、也不是 \"undefined\"/\"null\" 字面量）。 "),
+      _createVNode(_component_p_text, {
+        textContent: _toDisplayString('vt-' + _ctx.exprA),
+        style: {"fontSize":12,"color":"#ffffff"}
+      }, null, 8 /* PROPS */, ["textContent"]),
+      _createVNode(_component_p_text, { style: {"fontSize":12,"color":"#ffffff"} }, {
+        default: _withCtx(() => [
+          _createTextVNode("pi-" + _toDisplayString(Math.PI.toFixed(2)), 1 /* TEXT */)
+        ]),
+        _: 1 /* STABLE */
+      }),
+      _createVNode(_component_p_text, { style: {"fontSize":12,"color":"#ffffff"} }, {
+        default: _withCtx(() => [
+          _createTextVNode("mx-" + _toDisplayString(Math.max(_ctx.exprA, 7)), 1 /* TEXT */)
+        ]),
+        _: 1 /* STABLE */
+      }),
+      _createVNode(_component_p_text, { style: {"fontSize":12,"color":"#ffffff"} }, {
+        default: _withCtx(() => [
+          _createTextVNode("jn-" + _toDisplayString(_ctx.exprArr.join('|')), 1 /* TEXT */)
+        ]),
+        _: 1 /* STABLE */
+      }),
+      _createVNode(_component_p_text, { style: {"fontSize":12,"color":"#ffffff"} }, {
+        default: _withCtx(() => [
+          _createTextVNode("oc-" + _toDisplayString(_ctx.exprObj?.inner), 1 /* TEXT */)
+        ]),
+        _: 1 /* STABLE */
+      })
     ]),
     _: 1 /* STABLE */
   }))

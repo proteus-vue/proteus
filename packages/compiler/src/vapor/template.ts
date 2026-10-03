@@ -72,11 +72,14 @@ const PAINT_DECL_ATTRS = new Set(['fill-gradient', 'fill-gradient-to', 'clip-pat
  *   本表补的是**之前完全没被检查**的那一批。
  */
 const UNSUPPORTED_DIRECTIVES: Record<string, string> = {
-  html: 'v-html 未支持（富文本渲染通道待建）——请改用文本 + 样式，或保留 Vue 渲染路径（L0）',
-  text: 'v-text 未支持——请改用插值 `{{ }}`（文本槽位已支持）',
+  html:
+    'v-html 未支持（**富文本通道**待建：内核文本是单串、宿主是单次 drawText，' +
+    '不支持分段字形/内联样式）——请改为多个文本节点 + 样式，或保留 Vue 渲染路径（L0）',
   cloak: 'v-cloak 未支持（App 端无 CSS 首帧闪烁语义）——可安全移除',
   pre: 'v-pre 未支持（跳过编译的语义待建）——请手动改写为静态内容',
 }
+// ★★P2-6（2026-10-03）：v-text 已**真支持**（见下方 textSegments 分支——语义 = 覆盖子节点的纯文本）；
+//   v-html 仍不支持（富文本通道缺失，**诚实标注**：能力清单此前写"可映射"，经查内核/宿主均无分段文本能力）。
 // ★★P2-5（2026-10-03）：v-once / v-memo 已**真支持**（见 SlotSubscription.once / MemoGroup）——
 //   本表不再收录；**不支持的形态**（v-memo 非数组字面量 / 行内 once）在下方遍历里逐条诊断。
 /** 未支持的内置组件（官方有语义，我方当普通容器 ⇒ 语义静默丢失） */
@@ -367,7 +370,7 @@ export function buildLayoutTemplate(
         }
         // ★动态名判据 = `arg.isStatic === false`（实测：静态与动态的 arg.type 都是 4，
         //   **只有 isStatic 区分**——首版按"有无 arg.content"判 ⇒ 两者都有 content ⇒ 全漏）。
-        const argNode = p.arg as { isStatic?: boolean } | undefined
+        const argNode = p.arg as { isStatic?: boolean; content?: string } | undefined
         const isDynamicName = p.type === 7 && argNode != null && argNode.isStatic === false
         if (p.type === 7 && p.name === 'on' && isDynamicName) {
           diag(
@@ -376,10 +379,16 @@ export function buildLayoutTemplate(
           )
         }
         if (p.type === 7 && p.name === 'bind' && isDynamicName) {
-          diag(
-            `${tag}(id=${id}) 动态属性名 \`:[expr]\` 未支持（本版只处理静态属性名）`,
-            '请改用静态属性名（如 :width / :show）',
-          )
+          const rawArg = String(argNode?.content ?? '').trim()
+          // ★★P2-7（2026-10-03）：**字符串字面量**形态（`:['width']`）编译期可判定
+          //   ⇒ 降级为静态属性名（**已支持**，诊断不再报）；只有**真动态**（`:[k]`）才诊断。
+          const strLit = /^(['"])([^'"]*)\1$/.exec(rawArg)
+          if (!strLit) {
+            diag(
+              `${tag}(id=${id}) 动态属性名 \`:[expr]\` 未支持（键名运行时才知 ⇒ 无法静态建槽位）`,
+              `字符串字面量形态可直接用（如 :['width'] 编译期等价于 :width）；真动态键名请改用静态属性名或条件分支`,
+            )
+          }
         }
         // 自定义指令 `v-xxx`（非 v-bind/v-on/v-for/v-if/v-show/v-model 等已处理项）
         const KNOWN_DIRECTIVES = ['bind', 'on', 'for', 'if', 'else-if', 'else', 'show', 'model', 'slot', 'text', 'html', 'memo', 'once', 'cloak', 'pre']
@@ -476,7 +485,31 @@ export function buildLayoutTemplate(
       //
       // 【为什么仍拒绝"元素 + 文本"混排】那需要**文本节点结构化**（自绘树里文本是元素属性，
       //   没有独立文本节点）⇒ 是节点模型问题，不是表达式问题（本版如实保留诊断）。
-      if (textChildren.length > 0) {
+      // ★★P2-6：`v-text="expr"` ⇒ 文本槽位（**覆盖**子节点——与 Vue 语义一致：v-text 设置 textContent）
+      //   与插值共用 `text.content` 通道 ⇒ 下游（订阅表/运行时/回填）零改动。
+      //   ★形态取"单表达式段"（与 `{{ expr }}` 完全同形）——但**不**参与 P2-2 的多段合成
+      //     （v-text 只有一个表达式、没有静态段）。
+      {
+        const vTextProp = (n.props ?? []).find((p) => p.type === 7 && p.name === 'text')
+        const vTextCode = vTextProp?.exp?.content?.trim()
+        if (vTextCode) {
+          if (elementChildren.length > 0) {
+            diag(`${tag}(id=${id}) v-text 与子元素并存——v-text 会**覆盖**全部子节点（Vue 语义）`, '请删掉子元素或改用插值')
+          }
+          node.text = ''
+          const compiled = compileExpr(vTextCode)
+          if (compiled.ok) {
+            node.textSegments = [{ expr: compiled.program, src: vTextCode }]
+          } else {
+            diag(
+              `${tag}(id=${id}) v-text 的表达式 \`${vTextCode}\` 无法编译为可求值程序：${compiled.unsupported}`,
+              '可改写为受支持的表达式子集（成员访问/算术/比较/逻辑/三元/白名单内建）',
+              'VAPOR_TEXT_INTERP_UNSUPPORTED',
+            )
+          }
+        }
+      }
+      if (textChildren.length > 0 && !node.textSegments) {
         if (elementChildren.length > 0) {
           diag(`${tag}(id=${id}) 同时含元素与文本子节点（本版不支持混合内容）`, '请拆分为纯容器或纯文本元素')
         } else {
