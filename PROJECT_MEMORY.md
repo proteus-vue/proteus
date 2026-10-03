@@ -15,11 +15,11 @@
 - **包规模**：**45 个 @proteus-vue/* npm 包**（+ `packages/layout-core-rust` = **cargo crate，非 npm 包**，故不计数）（★2026-09-29 layout-core = App 排版核心）（check:pkg 0 error · `pnpm check:stats` 校验 ✓；31→38 修正 → G-07 glass 39 → Skyline 收口 worklet 40 → ★2026-09-14 组件库拆包 `@proteus-vue/components` 41 → ★Vapor 线新增 `@proteus-vue/slot-runtime` 42 + `@proteus-vue/layout-core` 43 → ★2026-09-30 MA1 新增 `@proteus-vue/animation` 44；版本统一 0.3.0-beta.8，见「当前状态速览」）
 - **文档**：`docs/proteus-architecture.md`（L0 规约·真理来源）→ `docs/board-inventory.md`（全景索引）→ `docs/roadmap.md`（版本线）→ `roadmap-2-plan`（里程碑线）→ 各 plan
 
+## 当前状态速览（最近一次更新：**2026-10-03·（一一八）· **原生资产复用方案入库（决策 #466，不占 G 序）**——《原生能力接入方案》的**工程落地层**（那份=目标原则"99% 不用手写原生"，这份=已有资产怎么零改写接进来：L1 直连/L2 Janus IDL/L3 逃生口 + R 反向复用）；★**入库对账 3 修正 + 1 证据升级**：①"不自绘"按《多端一致性标准方案》§1.1 权威定义校准（三层拆分；依据须落 **L-C 层共用系统光栅化**，且 **L-B 是自研 Rust 内核**不得让渡）② **★核心论断"原生嵌入天然同层"已有实现级证据**——`hosts/android/.../ProteusHostView.java` = `extends ViewGroup` + 自绘内容走 onDraw（无 View 树）+ **原生子 View 由 dispatchDraw 在 onDraw 后绘制**（源码定义 z-order）+ addView 接线 ⇒ **NA0 从"未知验证"降为"已知机制的工程化"**（契约化+推广 iOS/鸿蒙+conformance）③ `183 原语`→187 ④ 关联文档 5 份均存在；★生命线 **J1=实现体禁业务逻辑**（否则退化成 RN/uni-app）；禁语含**"改原生也能热更新"**（Apple 2.5.2 实践禁区）；★**启动时机**：真实触发 = App 宿主主线推进到"需接第三方原生资产"那一步（与 NC0–NC5 同批最自然）；登记为**待启战略线**；下一步 GP5 或宿主主线**）★新会话以此为准
+
 ## 当前状态速览（最近一次更新：**2026-10-03·（一一七）· **GP4-c：登录失效拦截**（复用守卫，非新机制）——★补的是"**非导航触发**的失效"（既有 auth 守卫只在导航时跑）；`expired` 是**唯一事实**（`createAuthChecker()` 直接喂既有 `createRouter({auth})` ⇒ 守卫与弹窗同一判据；`onAuthFail` 与 401 上报**汇入同一状态**；恢复走业务注入的既有导航）；不可取消 = **不提供** closable/maskClosable（不给误配置口子）+ 组件内**不得出现导航 API**（单测锁）；★**判据设计取舍**：把"不可取消"表达成**状态事实**（`isAuthExpired` 点击后是否仍 true）而非交互事实——GP4-b 的"遮罩拦截"因依赖命中测试**不可机器断言**，本卡刻意避开 ⇒ **能表达成状态的就不要表达成交互**；★发现注入机制真实边界：**纯状态驱动宿主可注入，需业务回调的宿主须手写**（本项目演示页手写 p-auth-gate 且让位正确）；★四向语义登记 `shell.modal`+别名+Rust 表；全量 **4922/4922 全绿**（+22）；下一步 GP5（八条场景验收）**）★新会话以此为准
 
 ## 当前状态速览（最近一次更新：**2026-10-03·（一一六）· **GP4-b：Loading 多实例与遮罩范围**（三层分工：服务=活跃集合 / 宿主 portal / 区域遮罩组件就地）——★与 Toast 的**队列**语义分道扬镳（"进行中任务" vs "临时提示"）；三范围 `global`（跨页存活）/`page`（仅本页+**卸载自动清理**，swept 可观测）/`region`（就地贴合盒子，零测量）；★注入机制重构为**表驱动** `OVERLAY_HOSTS`（扫描/注入/注册/闭包四处自动跟上）+ **按能力的手动优先**新判据；★真机两处缺陷（根 `display` 切换在 portal 内不重排⇒0×0；**观测面自毁**——诊断抛错被 notify 吞掉连落痕一起跳过）；★**验证边界**：`automation_element_action` 选择器 tap 绕过层叠 ⇒ 遮罩拦截**不可机器断言**（渲染用截图取证，拦截在单测锁字段）；主包页面数撞 32 上限 ⇒ 演示页移入 svg-lab 分包；单测 44 组（24+20）+ 破验 5 条；四向语义登记（schema/alias/Rust/audit）已同步；下一步 GP5（八条超级应用场景验收）或 GP4-c**）★新会话以此为准
-
-## 当前状态速览（最近一次更新：**2026-10-03·（一一五）· **GP4-a：Toast 队列**（置换 uni.showToast 单例语义）——**队列在 runtime（模块级单例）/ 渲染在组件（p-toast-host → teleport 到 Overlay 层）/ 注入在插件（每页零引入）** 三层分工；★**按需注入**（检测到 toast API 用法才注入——与组件按需输出同哲学）+ **手动优先**（已手写宿主则不注入，防双宿主）；FIFO + 上限三种丢弃策略（drop-oldest/drop-newest/replace，**丢弃可观测**）+ 时长/常驻/手动关/幂等；★真机 e2e：**连续 10 条实测 1→2→…→10 严格递增**（不互相覆盖）；★附带修复编译器缺口（**裸方法引用传参不重写** ⇒ 补实参位识别 + `.bind(this)`——此前 ready() 当场 ReferenceError 且后续初始化静默不执行）；★排障三坑已文档化（面板塌 0×0 / 动态类名拼串失效 / **测量装置反被判成产品缺陷**）；单测 38 组 + 破验三条；下一步 GP5（八条超级应用场景验收）或 GP4-b（Loading 多实例）**）★新会话以此为准
 
 
 ## ★《收纳规范》（2026-10-03 立 · 门禁 `pnpm check:memory`）
@@ -47,11 +47,11 @@
 |---|---|
 | `docs/project-memory-archive/2026-10.md` | 里程碑详细叙事（三十九～九十九）+ 状态速览历史栈（约 4.5k 行） |
 | `docs/project-memory-archive/2026-09.md` | 09 月全部叙事 + 柔性系统重组历史 + 2026-08 进度快照 + 已落地文件 + 09-19 验证状态（约 6.5k 行） |
-| `docs/project-memory-archive/decisions.md` | 决策链全文 #1–#465（455 条 / 约 840 KB）——按号检索 |
+| `docs/project-memory-archive/decisions.md` | 决策链全文 #1–#466（456 条 / 约 845 KB）——按号检索 |
 
 检索示例：`grep -n "2026-09-29\|判据建错靶" docs/project-memory-archive/2026-09.md`
 
-## 关键决策与文档偏差（#1–#465 → 归档速查）
+## 关键决策与文档偏差（#1–#466 → 归档速查）
 
 **全文在 `docs/project-memory-archive/decisions.md`**（按号检索：`grep -n "^290\." docs/project-memory-archive/decisions.md`）。
 决策号**只增不改号**（外部文档按号引用）；新决策追加到该文件末尾（号 +1）。
