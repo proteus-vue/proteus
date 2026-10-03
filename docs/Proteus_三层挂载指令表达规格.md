@@ -166,6 +166,21 @@ export function mountLayerDomainOffset(layer) {    // 层域偏移
 
 ---
 
+## 6.5 各端落地对照（GP3 系列实做后的收敛表）
+
+| | **Web**（GP3-a ✅） | **MP**（GP2-a / GP3-b1 ✅） | App 自绘（GP3-c ⬜） |
+|---|---|---|---|
+| 层标签本质 | 运行时组件（App.vue 是真根组件） | 编译期解壳（无渲染层 App） | 待定（我们定义根节点） |
+| Global 跨路由 | ✅ **天然存活**（同一实例，在 RouterView 之外） | 🔴 **每页一份实例**（N；状态共享） | ✅ 单实例（我们定义根） |
+| 层间顺序表达 | 容器 z-index = **契约域偏移** | **树序**（注入时前缀）——零新指令 | 树序 |
+| Overlay 承载 | 渲染树内节点（**不用 Teleport**） | `root-portal`（teleport 编译产出） | 同窗口内分层（预期） |
+| C1 校验时机 | **运行时软校验**（开发模式警告） | **编译期 error** | 待定 |
+| 声明形态 | `<app-root>` / `<*-layer>` | **相同** | 同左 |
+
+★**读法**：**声明形态统一、落地机制分端**——这正是"一套源码跨端"在本议题上的兑现方式；
+上表每一行的差异都是**平台约束**（不是实现偷懒）：MP 无渲染层 App ⇒ 只能每页注入；
+Web 有真根组件 ⇒ 天然存活。★**内存口径**：Web 与自绘端 Global 层是 **1 份**；MP 是 **O(N)**。
+
 ## 7 验收（GP1-a/GP1-b 的机器判据）
 
 - [x] 契约落地：`packages/contracts/src/mount-layers.ts`（封闭集 / 顺序 / 域偏移 / 语义 / C1 辅助 / C2 上限）
@@ -178,3 +193,14 @@ export function mountLayerDomainOffset(layer) {    // 层域偏移
       · 状态共享：`_proteus/global-layer.js`（require 缓存 = 同实例；写镜像 + onShow 拉取两个方向）
       · 判据：`tests/mp-global-layer-inject.test.ts`（19 组）+ `tests/e2e-mp-global-layer.test.ts`（真机）
       · ★诚实边界：每页一份实例（N = 页面栈）——**不是**单实例跨页存活（方案 §1.2-bis）
+- [x] **GP3-a Web 端挂载**（2026-10-03）——本规格在 Web 端的落地：
+      · 三层 = 运行时组件（`packages/web/src/mount-layers.ts`），内容**原地渲染**（零 Teleport）
+      · `<app-root>` 解壳（与 MP 编译器同款 ⇒ 两端 DOM 同构）
+      · 层叠域偏移**取自契约**（`mountLayerDomainOffset`，不硬编码数值）
+      · 判据：`tests/web-mount-layers.test.ts`（16 组）+ `tests/e2e-web-mount-layers.test.ts`（5 组真浏览器）
+      · ★诚实边界：Global 层 Web 端是 **1 份**（天然跨路由存活）——与 MP 的 N 份**不同**，勿混述
+- ⚠ **层内四层原语（`layer="layer-navigation"` 等）当前不产 z-index**（2026-10-03 GP3-a 实测取证）：
+      MP 属性原样透传进 wxml 且 WXSS 无 z-index、Web 插件不处理、全仓 `layerValueFor()` 零消费者
+      ⇒ **层间（本规格主体）已生效；层内今天只有校验、没有效果**。
+      ⇒ 见《页面层级规范》§13.3 的 LY2（已就地更正其"web/mp 由 CSS 生效"的不实表述）。
+      ★**推论**：不得假设 `layer="..."` 带来任何遮挡效果——既有弹层组件用的是**自带裸 z-index**。

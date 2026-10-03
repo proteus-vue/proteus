@@ -431,7 +431,7 @@ Morpheus 的**共享元素转场**需要把元素提升覆盖在两个页面之�
 
 | 任务 | 状态 | 说明 |
 |---|---|---|
-| LY2 各端映射**驱动到内核/宿主** | ⬜ 未做 | web/mp 由 CSS 生效；App 两端待内核接入 zOrder（§13.1 边界） |
+| LY2 各端映射**驱动到内核/宿主** | ⬜ 未做 | ★**更正（2026-10-03 GP3-a 实测）**：原写「web/mp 由 CSS 生效」**与实测不符** —— `layer` 属性在 web 与 mp **都尚未产出 z-index**（MP：属性原样透传进 wxml 且 WXSS 无 z-index；Web：插件不处理；全仓 `layerValueFor()` 零消费者）⇒ **层内四层今天只有校验、没有效果**；App 两端待内核接入 zOrder（§13.1 边界） |
 | LY3 弹层栈管理器 | ⬜ 未做 | 契约已定（`popoutStackValue` / `POPOUT_STACK_LIMIT`），实现待做 |
 | LY4 小程序同层渲染 + `bindrendererror` 降级 | ⬜ 未做 | §4.2 |
 | LY5 `layer-transition` × Morpheus 转场 | ⬜ 未做 | §4.6；本仓 iOS 已有转场期 `zPosition` 提升（内部实现），与契约对接待做 |

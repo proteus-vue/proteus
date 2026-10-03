@@ -22,7 +22,8 @@
     "build": "tsc -p tsconfig.build.json --emitDeclarationOnly && esbuild src/index.ts --bundle --format=esm --platform=node --outfile=dist/index.js --external:vue --external:@proteus-vue/built-in-components"
   },
   "dependencies": {
-    "@proteus-vue/built-in-components": "0.3.0-beta.21"
+    "@proteus-vue/built-in-components": "0.3.0-beta.21",
+    "@proteus-vue/contracts": "0.3.0-beta.11"
   },
   "peerDependencies": {
     "vue": "^3.4"
