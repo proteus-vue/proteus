@@ -13,8 +13,8 @@ import fs from 'node:fs'
 import { execFileSync } from 'node:child_process'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
-import { buildVaporSubscriptions, buildLayoutTemplate } from '@proteus-vue/compiler'
-import { ListRegistry, OpCode, PropKeyTable, StringPool, SlotRuntime, VaporRuntime, encodeOps, instantiateTemplate } from '@proteus-vue/slot-runtime'
+import { buildVaporSubscriptions, buildLayoutTemplate, compileEvents } from '@proteus-vue/compiler'
+import { ListRegistry, OpCode, PropKeyTable, StringPool, SlotRuntime, VaporRuntime, decodeOps, dispatchGesture, indexEventBindings, createDispatchState, encodeOps, evalExpr, instantiateTemplate } from '@proteus-vue/slot-runtime'
 import type { EvalContext, SubscriptionTable } from '@proteus-vue/slot-runtime'
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..')
@@ -320,5 +320,102 @@ const gs = ref([])
     expect(res.rects['2'].width, '第 1 行文本保持 100（增量不越界）').toBeCloseTo(100, 1)
     expect(res.rects['9'].x, '内层容器跟着右移（100 + 4 边距 → 200 + 4）').toBeCloseTo(204, 1)
     expect(res.rects['10'].width, '内层文本撑满容器（结构正确）').toBeCloseTo(20, 1)
+  })
+})
+
+describe('★★P2-2/P2-3 闭环（2026-10-03）：混合文本首帧 + 合成表达式更新 + .stop 派发语义', () => {
+  it('★★混合文本：首帧完整拼接 → 改数据 → 一条 SET_TEXT → Rust 内核文本真的变', () => {
+    // 【这条补的是什么】前面几条都测"单源节点"（一个绑定点一个节点）。混合文本
+    //   （`a{{x}}b`）此前是**诊断拒绝**项 ⇒ 本次支持后要证明：首帧拼接对、
+    //   且**更新**沿订阅表一条指令到内核（而不只是 JS 侧拼对了字符串）。
+    const sfc = `<template>
+  <p-view style="flex-direction: column; width: 300; height: 200">
+    <p-text style="height: 20">a{{ n }}b</p-text>
+  </p-view>
+</template>
+
+<script setup lang="ts">
+const n = ref(7)
+</script>
+`
+    let data: Record<string, unknown> = { n: 7 }
+    const tpl = buildLayoutTemplate(sfc, 'mix-e2e.vue').template
+    const { table } = buildVaporSubscriptions(sfc, 'mix-e2e.vue')
+    const reg = new ListRegistry()
+    const inst = instantiateTemplate(tpl, {
+      viewport: { width: 300, height: 200 },
+      read: (k) => data[k],
+      table,
+      registry: reg,
+    })
+    // ① 首帧：段表求值拼接（不是单源值）
+    const textNode = inst.nodes.find((n) => (n as { tag?: string }).tag === 'p-text')!
+    expect((textNode as { text?: string }).text, '首帧必须是完整拼接 a7b').toBe('a7b')
+
+    // ② 运行时接上 → 改数据 → 订阅触发 → 指令交给 Rust
+    const keys = new PropKeyTable()
+    const strings = new StringPool()
+    const captured: Uint8Array[] = []
+    const rt = new SlotRuntime(keys, strings, (b) => captured.push(b))
+    const ctx: EvalContext = { read: (k) => data[k] }
+    const vapor = new VaporRuntime(table, rt, VaporRuntime.buildEvaluators(table.evaluators), reg)
+    const triggers = new Map<string, () => void>()
+    vapor.load(ctx, (name, cb) => triggers.set(name, cb))
+    vapor.relink(ctx)
+    rt.flush()
+    captured.length = 0 // 丢首帧（初始值已由实例化回填）
+
+    data = { n: 42 }
+    triggers.get('n')!()
+    rt.flush()
+    expect(captured.length, '一次提交').toBe(1)
+    const bytes = captured[0]!
+    // ③ 指令流里是**一条** SET_TEXT，且文本是完整拼接（不是只把 n 写进去）
+    const decoded = decodeOps(bytes)
+    const setTexts = decoded.ops.filter((o) => o.op === OpCode.SET_TEXT) as Array<{ op: number; nodeId: number; textRef: number }>
+    expect(setTexts, '混合文本只发一条 SET_TEXT（不合成时会是两条互相覆盖）').toHaveLength(1)
+    expect(decoded.strings.valueOf(setTexts[0]!.textRef), '发下去的是完整拼接文本').toBe('a42b')
+    const res = rustRoundTrip(JSON.stringify({ viewport: inst.viewport, nodes: inst.nodes }), bytes)
+    expect(res.applied, 'Rust 侧真的应用了').toBe(1)
+    // ④ 内核几何：文本变了 ⇒ 文本叶子被重排（高度/度量重算 ⇒ 回执里有该节点）
+    expect(Object.keys(res.rects).length, '内核回执含矩形（文本改动触发重排）').toBeGreaterThan(0)
+  })
+
+  it('★P2-3 `.stop` 派发：子节点 stop ⇒ 祖先 handler 不跑（链序语义）', () => {
+    // 【为什么在 e2e 层再判一次】编译期置位 + 运行时语义分别在各自的单测里判过；
+    //   这里判**两半接起来**：编译产物直接喂共享派发器 ⇒ 数据变化与几何**都只应来自子节点**。
+    const sfc = `<template>
+  <p-view style="width: 300; height: 200">
+    <p-view @click="padW += 5" style="width: 200; height: 100">
+      <p-view @click.stop="boxW += 30" style="width: 50; height: 50"></p-view>
+    </p-view>
+  </p-view>
+</template>
+
+<script setup lang="ts">
+const boxW = ref(50)
+const padW = ref(200)
+</script>
+`
+    const ev = compileEvents(sfc)
+    const index = indexEventBindings(ev.events)
+    const state = createDispatchState()
+    const store: Record<string, unknown> = { boxW: 50, padW: 200 }
+    const run = (h: string): boolean => {
+      const acts = ev.handlers[h]
+      if (!acts) return false
+      for (const a of acts) {
+        const v = evalExpr(a.program as never, { read: (k: string) => store[k] } as never)
+        const cur = store[a.source]
+        const base = typeof cur === 'number' && Number.isFinite(cur) ? cur : 0
+        store[a.source] = a.op === 'set' ? v : base + (typeof v === 'number' && Number.isFinite(v) ? v : 0)
+      }
+      return true
+    }
+    // 链 = [内层(2), 外层(1)]（自深到浅；根没绑定）
+    const r = dispatchGesture([2, 1], 'tap', index, state, run)
+    expect(r.stopped, '.stop 应终止冒泡').toBe(true)
+    expect(store.boxW, '子节点 handler 跑了').toBe(80)
+    expect(store.padW, '★祖先 handler 被 .stop 挡下（不挡 = 点按钮祖先也动，静默多派发）').toBe(200)
   })
 })

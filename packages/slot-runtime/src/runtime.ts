@@ -491,15 +491,7 @@ export class VaporRuntime {
     // ★复用已有的 `ancestorScopesOf`（按 listId 查）；scope → listId 反查（首个匹配）
     const lid = this.listIdOfScope(scope)
     const ancestorScopes = lid === undefined ? [] : this.ancestorScopesOf(lid)
-    return {
-      read: (n) => {
-        if (n === scope) return row
-        // 祖先别名：别名链与祖先链**同为「自外向内」** ⇒ 按同一位置取
-        const idx = ancestorScopes.indexOf(n)
-        if (idx >= 0 && idx < ancestors.length) return ancestors[idx]
-        return ctx.read(n)
-      },
-    }
+    return makeScopedRead(scope, row, ancestors, ancestorScopes, ctx)
   }
 
   /** ★值 diff + 发射（**唯一实现**）：嵌套 Map 免拼接：listId/slotId 均为数字键 */
@@ -596,6 +588,38 @@ export class VaporRuntime {
   /** L1 槽位表（供宿主对账：哪些槽位由 L1 接管） */
   slotIds(): number[] {
     return [...this.slots.keys()].sort((a, b) => a - b)
+  }
+}
+
+/**
+ * ★★**行作用域读取**（`VaporRuntime.makeRowCtx` 与 `instantiateTemplate` 初值回填共用的唯一实现，2026-10-03）
+ *
+ * 【为什么抽成模块级函数】"内层表达式引用外层别名"（`{{ 'a' + g.t + x.n }}`）这条语义此前只存在于
+ *   `VaporRuntime` 私有方法里；而实例化的**首帧回填**（`instantiateTemplate`）也需要同一套绑定
+ *   （组合表达式 `'a' + item.x` 不能靠"取单个字段"回填——本仓实测：字段直取会漏掉静态段）。
+ *   两处各写一份 ⇒ 迟早分叉（本仓纪律）。⇒ 抽成本函数，两边共用。
+ *
+ * @param scope          当前行别名（v-for 的 `item`）；空串 ⇒ 直接用原 ctx
+ * @param row            当前行数据
+ * @param ancestors      祖先行链（自外向内；不含自身）
+ * @param ancestorScopes 各层别名（自外向内，与 ancestors 按位置对应）
+ */
+export function makeScopedRead(
+  scope: string,
+  row: Record<string, unknown>,
+  ancestors: Array<Record<string, unknown>>,
+  ancestorScopes: string[],
+  ctx: EvalContext,
+): EvalContext {
+  if (!scope) return ctx
+  return {
+    read: (n) => {
+      if (n === scope) return row
+      // 祖先别名：别名链与祖先链**同为「自外向内」** ⇒ 按同一位置取
+      const idx = ancestorScopes.indexOf(n)
+      if (idx >= 0 && idx < ancestors.length) return ancestors[idx]
+      return ctx.read(n)
+    },
   }
 }
 

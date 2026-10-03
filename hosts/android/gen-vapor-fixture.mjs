@@ -67,11 +67,21 @@ const SFC = `<template>
     <p-view style="height: 90px; margin-bottom: 8px; background-color: #24405e" clip-path='{"kind":"inset","params":[0,0,0.45,0]}'></p-view>
     <p-view style="height: 80px; margin-bottom: 8px; background-color: #16203a" svg-path='{"d":"M16 64 Q 270 8 524 64","stroke":"#cfe0ff","strokeWidth":7,"progress":1}'></p-view>
     <p-view v-for="item in list" :key="item.id" style="height: 44px; margin-bottom: 6px; background-color: #285ac8">
-      <p-text :width="item.w" style="font-size: 12px; color: #ffffff">{{ item.title }}</p-text>
+      <!-- ★★混合文本（P2-2，2026-10-03）：静态段 + 两个插值段 ⇒ 运行时求值拼接。
+           判据核的是**完整串**（"row-1·row 1"）真的到了内核（text_probe），
+           以及改数据后重发的 SET_TEXT 仍是完整串（不是只剩一个字段）。 -->
+      <p-text :width="item.w" style="font-size: 12px; color: #ffffff">row-{{ item.id }}·{{ item.title }}</p-text>
     </p-view>
     <p-view style="height: 30px; margin-top: 10px; background-color: #6a4bf0"></p-view>
     <p-view :width="padW" @click="padW += 5" style="height: 96px; margin-top: 8px; background-color: #1c2b3f">
       <p-view :width="boxW" @click="boxW += 30" style="height: 56px; margin-top: 8px; background-color: #2f6fed"></p-view>
+    </p-view>
+    <!-- ★★事件修饰符夹具（P2-3，2026-10-03）：外层 @click（无修饰）+ 内层 @click.stop。
+         **内层刻意不遮住外层的中心**（内层 40px 贴顶，外层 220px ⇒ 外层中心 y=110 在内层之外）
+         ——宿主注入 tap 是按"节点中心"点的：若重叠，点外层也会命中内层 ⇒ 判据拿不到
+         「祖先 handler 本会跑、但被 .stop 挡下」的证据。 -->
+    <p-view :width="stopOuterW" @click="stopOuterW += 5" style="height: 220px; margin-top: 8px; background-color: #223344">
+      <p-view :width="stopInnerW" @click.stop="stopInnerW += 30" style="height: 40px; background-color: #445566"></p-view>
     </p-view>
   </p-view>
 </template>
@@ -81,6 +91,9 @@ const list = ref([{ id: 1, w: 40, title: 'a' }])
 const boxW = ref(120)
 const padW = ref(300)
 const tapCount = ref(0)
+// ★P2-3 修饰符夹具的两个源（与 makeData 的初值一致）
+const stopOuterW = ref(300)
+const stopInnerW = ref(120)
 </script>
 `
 
@@ -257,6 +270,68 @@ if ((parsed.ab.errors || []).length > 0) {
   process.exit(1)
 }
 const AB_OUT = path.join(HERE, 'bridge/vapor-ab-render.generated.ts')
+/**
+ * ★★**`withModifiers` 的宿主侧适配**（2026-10-03 · P2-3 实测抓出的真缺陷）
+ *
+ * 【故障链（真机实测）】`withModifiers` 官方**只在 `@vue/runtime-dom`**（它调 DOM 事件对象的
+ *   `stopPropagation`/`preventDefault`）；而本 A/B 的 B 路把 Vue 运行时接到**自绘宿主**
+ *   （无 DOM）⇒ 编译期 `runtimeModuleName` 指 `@vue/runtime-core`，该包**不导出**它
+ *   ⇒ 模板一旦用 `@click.stop`，产出的 `_withModifiers(...)` 在挂载时抛
+ *   `withModifiers is not a function`；而 QuickJS 无 `console` ⇒ 错误上报自身又炸，
+ *   设备侧只看到 **`'console' is not defined`**（把真因盖住——本仓实测踩到）。
+ *   ⇒ 正解：生成物里**带一份同语义实现**（守卫表与官方逐条对应），事件对象 = 自绘适配器
+ *     `dispatchEvent` 合成的那个（`target`/`currentTarget`/`stopPropagation` 都有）。
+ *   ★这也是 A/B **修饰符语义对齐**的前提：A 路（`slot-runtime.dispatchGesture`）的 `.stop`
+ *     = "先跑本跳、再终止冒泡"；本实现走官方语义 = 守卫置 `_stopped` ⇒ 适配器派发循环
+ *     break 在**本跳跑完之后** ⇒ 两路同语义（判据 ⑦"逐跳等价"才成立）。
+ */
+const WITH_MODIFIERS_SHIM = `
+/* ★宿主侧 withModifiers（见生成器头注：官方只在 runtime-dom，自绘宿主没有 DOM） */
+const modifierGuards = {
+  stop: (e) => { if (typeof e.stopPropagation === 'function') e.stopPropagation() },
+  prevent: (e) => { if (typeof e.preventDefault === 'function') e.preventDefault() },
+  self: (e) => e.target !== e.currentTarget,
+  ctrl: (e) => !e.ctrlKey, shift: (e) => !e.shiftKey, alt: (e) => !e.altKey, meta: (e) => !e.metaKey,
+  left: (e) => 'button' in e && e.button !== 0,
+  middle: (e) => 'button' in e && e.button !== 1,
+  right: (e) => 'button' in e && e.button !== 2,
+  exact: (e, modifiers) => ['ctrl','shift','alt','meta'].some((m) => e[m + 'Key'] && !modifiers.includes(m)),
+}
+const withModifiers = (fn, modifiers) => {
+  if (!fn) return fn
+  const cache = fn._withMods || (fn._withMods = {})
+  const cacheKey = modifiers.join('.')
+  return cache[cacheKey] || (cache[cacheKey] = (event, ...args) => {
+    for (const m of modifiers) {
+      const guard = modifierGuards[m]
+      if (guard && guard(event, modifiers)) return
+    }
+    return fn(event, ...args)
+  })
+}
+// ★生成物里的调用名是**别名** _withModifiers（编译器按 withModifiers as _withModifiers 产出）——
+//   我们摘掉了那条 import，这里必须把别名绑上（首版只定义 withModifiers ⇒ 引用处仍是 undefined，实测踩到）
+const _withModifiers = withModifiers
+`
+
+// 从 runtime-core 的 import 里摘掉 `withModifiers`（该包不导出它），改由本文件的 shim 提供
+let abCode = String(parsed.ab.code)
+if (/withModifiers/.test(abCode)) {
+  const before = abCode
+  abCode = abCode.replace(/import \{([^}]*)\} from "@vue\/runtime-core";?/, (m, names) => {
+    const list = String(names)
+      .split(',')
+      .map((x) => x.trim())
+      .filter(Boolean)
+      .filter((n) => n !== 'withModifiers' && !/^withModifiers as\s/.test(n))
+    return `import { ${list.join(', ')} } from "@vue/runtime-core"`
+  })
+  if (abCode === before) {
+    console.error('[gen-vapor-fixture] ✗ A/B: 生成物引用了 withModifiers 但未能从 import 摘除（语法形态变了？）——不静默')
+    process.exit(1)
+  }
+  abCode += WITH_MODIFIERS_SHIM
+}
 fs.writeFileSync(
   AB_OUT,
   '// GENERATED - do not edit (gen-vapor-fixture.mjs from the same SFC)\n' +
@@ -266,7 +341,7 @@ fs.writeFileSync(
     //   这个文件是特例且理由明确，与"global.d.ts 类声明"同属常规做法）
     '// @ts-nocheck\n' +
     '/* eslint-disable */\n' +
-    parsed.ab.code + '\nexport { render as abRender }\n',
+    abCode + '\nexport { render as abRender }\n',
 )
 console.log(
   `[gen-vapor-fixture] OK A/B: Vue official compiler render (${parsed.ab.code.length} bytes) -> ${path.relative(ROOT, AB_OUT)}`,

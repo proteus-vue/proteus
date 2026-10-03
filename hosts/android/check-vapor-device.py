@@ -269,6 +269,75 @@ def main() -> int:
         )
         print(f"  ✓ ⑧ ★交互闭环跑通（tap → handler → 数据变 → **几何变**）：{detail}")
 
+    # ── ⑨ ★P2-3 事件修饰符：`.stop` 真的**终止了冒泡**（不是"允许但忽略"）──
+    #   【为什么单独判】`@click.stop` 的失效形态是**静默多派发**：外层祖先的 handler 也跑了，
+    #     页面看起来"能用"（按钮有反应），但多改了数据（本仓记为最该拦下的一类）。
+    #     ⇒ 判据：夹具里内层按钮带 `.stop` ⇒ 点它时 (a) `stopped=true`；
+    #       (b) `fired` 恰 1 跳（祖先没跑）；(c) 祖先的源**不在**变化源里（最强证据）。
+    mods = rep.get("ev_modifiers", 0)
+    if mods <= 0:
+        # 本端夹具未覆盖修饰符 ⇒ 如实跳过（不静默当"过了"——但也不误判为失败）
+        print(f"  ◐ ⑨ 事件修饰符：本端产物无修饰符绑定（ev_modifiers={mods}）——如实跳过")
+    else:
+        stop_evs = [e for e in evd if e.get("stopped")]
+        if not stop_evs:
+            fail(f"★产物里有 {mods} 条修饰符绑定，但**没有任何 tap 报 stopped=true**"
+                 f"—— .stop 没生效（本判据要堵的正是「允许但忽略」的静默多派发）")
+            ok = False
+        else:
+            e0 = stop_evs[0]
+            fired = e0.get("fired") or []
+            src_after = e0.get("source_after") or {}
+            if len(fired) != 1:
+                fail(f"★.stop 的节点命中后 fired 应为 1 跳（自身），实际 {fired}"
+                     f"—— 冒泡没有被终止")
+                ok = False
+            elif "stopOuterW" in src_after:
+                fail(f"★`.stop` 报 stopped=true，但祖先的源仍在变化里（{sorted(src_after)}）"
+                     f"—— 祖先 handler 还是跑了（静默多派发）")
+                ok = False
+            elif "stopInnerW" not in src_after:
+                fail(f"★`.stop` 的 tap 没有改到自身源（变化源 {sorted(src_after)}）"
+                     f"—— handler 可能根本没跑（判据前提不成立）")
+                ok = False
+            else:
+                print(f"  ✓ ⑨ ★事件修饰符 .stop 真的终止冒泡：命中 {e0.get('hit')} · "
+                      f"派发 {fired} · 变化源 {sorted(src_after)}（祖先源 stopOuterW 未出现）· "
+                      f"产物带修饰符绑定 {mods} 条")
+
+    # ── ⑩ ★P2-2 混合文本：首帧**完整拼接** + 更新后仍是完整串（两道口子都要堵）──
+    #   【为什么单独判】`a{{x}}b` 的失效形态有两种，都**静默**：
+    #     (a) 首帧只回填单个字段/源值 ⇒ 屏幕上是 "row 1" 而不是 "row-1·row 1"（少静态段）；
+    #     (b) 更新时只写插值那一段 ⇒ 后一轮覆盖成 "upd 0"（静态段丢失）。
+    #   ⇒ (a) 判 `mix_text_probe`（设备端实例树实际文本）；(b) 判内核回执里的
+    #     `text_probe`（最后一次文本更新——宿主落绘制真源前的那份完整串）。
+    mx = rep.get("mix_text_probe") or []
+    if not mx:
+        # 本端夹具未覆盖混合文本 ⇒ 如实跳过（不静默当过了，也不误判失败）
+        print("  ◐ ⑩ 混合文本：本端夹具无多段文本节点——如实跳过")
+    else:
+        bad = [m for m in mx if "·" not in m.get("text", "")]
+        if bad:
+            fail(f"★混合文本首帧不完整（缺静态段）：{bad} —— 段求值没跑或只写了插值")
+            ok = False
+        else:
+            print(f"  ✓ ⑩ ★混合文本首帧完整拼接（设备端实例树实测）：{mx[0].get('text')!r}"
+                  + (f" 等 {len(mx)} 处" if len(mx) > 1 else ""))
+
+    # ⑩b 更新后的完整串（内核回执 text_probe）：混合文本更新**不得丢静态段**
+    tpr = rep.get("text_probe_rounds") or []
+    if mx and not tpr:
+        fail("★有混合文本节点，但内核没有任何 text_probe 读数——文本更新没到内核（或宿主没回执）")
+        ok = False
+    elif mx:
+        incomplete = [t for t in tpr if "·" not in t]
+        if incomplete:
+            fail(f"★更新后的文本丢了静态段：{incomplete} —— 混合文本更新只写了插值部分（静默错内容）")
+            ok = False
+        else:
+            print(f"  ✓ ⑩b ★更新后仍是完整拼接串（内核回执实测）：{tpr[:3]}"
+                  + (f" 等 {len(tpr)} 轮" if len(tpr) > 3 else ""))
+
     # 附加观测（不判红，只如实报）
     una = rep.get("uninstantiated_slots", 0)
     if una:

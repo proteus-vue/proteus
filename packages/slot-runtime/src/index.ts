@@ -55,8 +55,11 @@ export type { ExprProgram, ExprContext, BinOp, UnOp, LogicOp } from './expr'
 // ★V4：列表项注册表（让 LIST_UPDATE 在 JS 侧可解析）
 export { ListRegistry } from './list-registry'
 // ★V4：LayoutTemplate 契约 + 实例化（模板 + 数据 → 引擎就绪节点树）
-export type { LayoutTemplate, LayoutNode, ListTemplate, InstantiatedNode } from './layout-template'
-export { instantiateTemplate } from './instantiate'
+export type { LayoutTemplate, LayoutNode, ListTemplate, TextSegment, InstantiatedNode } from './layout-template'
+export { instantiateTemplate, evalTextSegments } from './instantiate'
 export type { InstantiateOptions, InstantiateResult } from './instantiate'
-export { VaporRuntime, tierOf } from './runtime'
+export { VaporRuntime, tierOf, makeScopedRead } from './runtime'
 export type { SourceSubscriber, EvalContext, LoadResult } from './runtime'
+// ★P2-3：手势派发语义（链序 + 事件修饰符 .stop/.self/.once）——各端宿主共用的唯一实现
+export { dispatchGesture, indexEventBindings, createDispatchState } from './dispatch'
+export type { EventBinding, EventIndex, DispatchState, DispatchResult } from './dispatch'

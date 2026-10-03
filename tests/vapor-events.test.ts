@@ -68,7 +68,6 @@ describe('Vapor 事件编译 · 支持形态', () => {
 
 describe('Vapor 事件编译 · ★不支持形态必须产诊断（不静默）', () => {
   const cases: Array<[string, string, string]> = [
-    ['修饰符', `<p-view @click.stop="count++"></p-view>`, '修饰符'],
     ['调用表达式', `<p-view @click="submit()"></p-view>`, 'handler 形态不支持'],
     ['多语句', `<p-view @click="count++; toggle = !toggle"></p-view>`, '多条语句'],
     ['未支持事件', `<p-view @input="count++"></p-view>`, '事件未支持'],
@@ -209,5 +208,52 @@ const a = ref(1)
     const t = buildLayoutTemplate(COMP_SFC, 'c.vue').template
     const comp = t.nodes.find((n) => n.tag === 'MyComp')!
     expect((comp.style as Record<string, unknown>).height).toBe(20)
+  })
+})
+
+describe('★★P2-3 事件修饰符（2026-10-03）：.stop/.self/.once 真语义 + 其余如实诊断', () => {
+  // 【设计依据】能力清单 P2-3：修饰符语义在**运行时共享派发器**
+  //   （`@proteus-vue/slot-runtime` 的 `dispatchGesture`）里实现——本组判编译期产物面
+  //   （置位正确 / 误报为零），运行时语义由 `tests/slot-runtime-dispatch.test.ts` 判。
+  it('`.stop` / `.self` / `.once` 置位（且不产诊断）', () => {
+    const r = compileEvents(sfc(`<p-view @click.stop="count++"></p-view>`))
+    expect(r.diagnostics).toHaveLength(0)
+    expect(r.events[0]).toMatchObject({ nodeId: 0, event: 'tap', stop: true })
+    expect(r.events[0]!.self, '未写的修饰符不得置位').toBeUndefined()
+
+    const r2 = compileEvents(sfc(`<p-view @click.self="count++" @click.once="boxW += 1"></p-view>`))
+    expect(r2.events[0]).toMatchObject({ self: true })
+    expect(r2.events[1]).toMatchObject({ once: true })
+  })
+
+  it('链式修饰符（`.stop.once`）逐个识别（旧实现的尾缀正则只认最后一个）', () => {
+    const r = compileEvents(sfc(`<p-view @click.stop.once="count++"></p-view>`))
+    expect(r.events).toHaveLength(1)
+    expect(r.events[0]).toMatchObject({ stop: true, once: true })
+    // ★旧实现（`MODIFIER_RE` 只看末尾）会把 `click.stop` 整串当事件名的一部分 ⇒
+    //   落到"事件未支持"诊断（误导修法）。本判据锁「多修饰符时不产生任何诊断」。
+    expect(r.diagnostics, `链式修饰符不应有诊断：${r.diagnostics.map((d) => d.message).join(' | ')}`).toHaveLength(0)
+  })
+
+  it('反向：裸事件**不得**带任何修饰符字段（既有模板产物逐字节不变）', () => {
+    const r = compileEvents(sfc(`<p-view @click="count++"></p-view>`))
+    expect(r.events[0]).toEqual({ nodeId: 0, event: 'tap', handler: 'h0' })
+  })
+
+  it('`.prevent`/`.passive`/`.capture`/按键修饰符 ⇒ 诊断但仍执行 handler（不静默丢弃）', () => {
+    for (const [mod, key] of [['prevent', '无对应语义'], ['passive', '无对应语义'], ['capture', '没有对应语义'], ['enter', '按键修饰符']] as const) {
+      const r = compileEvents(sfc(`<p-view @click.${mod}="count++"></p-view>`))
+      expect(r.events, `.${mod} 应仍产出绑定（handler 照常执行）`).toHaveLength(1)
+      expect(r.diagnostics.length, `.${mod} 必须产诊断`).toBeGreaterThan(0)
+      expect(r.diagnostics.map((d) => d.message).join(' | ')).toContain(key)
+      // ★诊断对象是**修饰符**而不是事件名（否则修法会误导）
+      expect(r.events[0]!.event, '事件语义不受修饰符影响').toBe('tap')
+    }
+  })
+
+  it('未知修饰符 ⇒ 诊断（列出支持的三个），handler 仍执行', () => {
+    const r = compileEvents(sfc(`<p-view @click.nonsense="count++"></p-view>`))
+    expect(r.events).toHaveLength(1)
+    expect(r.diagnostics.map((d) => d.message).join(' | ')).toContain('未知修饰符')
   })
 })

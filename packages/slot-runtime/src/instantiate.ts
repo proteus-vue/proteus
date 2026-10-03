@@ -15,6 +15,12 @@
 import type { ListRegistry } from './list-registry'
 import type { SubscriptionTable } from './table'
 import type { InstantiatedNode, LayoutNode, LayoutTemplate, ListTemplate } from './layout-template'
+// ★★初值回填复用**运行时同一套实现**（求值器重建 + 行作用域读取）——见下方注释：
+//   组合表达式（`'a' + item.x + 'b'`）不能靠"取单个字段"回填，且两处各写一份必然分叉。
+//   ★文本段求值也走同一套 `evalExpr`（同一求值语义）
+import { VaporRuntime, makeScopedRead } from './runtime'
+import type { EvalContext } from './runtime'
+import { evalExpr } from './expr'
 
 export interface InstantiateOptions {
   /** 视口（写进返回值，便于宿主一次拿到完整请求） */
@@ -80,8 +86,35 @@ function engineFieldOf(propKey: string): { kind: 'style'; key: string } | { kind
   return { kind: 'style', key: m[1]! }
 }
 
-/** 求某列表的行数组：**复用 VaporRuntime 的同一算法**（逐级下钻，任意层嵌套） */
-function rowsOfList(listId: number, meta: ListTemplate | undefined, table: SubscriptionTable | undefined, read: (n: string) => unknown): Array<Record<string, unknown>> {
+/**
+ * ★★**文本段求值**（2026-10-03 · P2-2 混合文本）——静态段 + 表达式段拼接成完整文本。
+ *
+ * 【为什么是"参考实现"而不是"唯一实现"】表达式段是 `ExprProgram`（纯 JSON，可序列化）——
+ *   各端本可用自家表达式执行器；本函数是**参考实现**（与 `VaporRuntime` 的求值器同一套 `evalExpr`），
+ *   供实例化与测试用。★段求值失败（表达式抛错）⇒ 该段按空串处理（不阻断其他段，
+ *   也不静默产出半截文本之外的错——页面仍渲染静态段）。
+ */
+export function evalTextSegments(
+  segs: readonly import('./layout-template').TextSegment[],
+  read: (name: string) => unknown,
+): string {
+  let out = ''
+  for (const s of segs) {
+    if ('text' in s) {
+      out += s.text
+      continue
+    }
+    try {
+      const v = evalExpr(s.expr, { read })
+      out += v === undefined || v === null ? '' : String(v)
+    } catch {
+      /* 段求值失败 ⇒ 按空串（其余段照常拼接） */
+    }
+  }
+  return out
+}
+
+/** 求某列表的行数组：**复用 VaporRuntime 的同一算法**（逐级下钻，任意层嵌套） */function rowsOfList(listId: number, meta: ListTemplate | undefined, table: SubscriptionTable | undefined, read: (n: string) => unknown): Array<Record<string, unknown>> {
   if (!table) return []
   const allSlots = table.sources.flatMap((s) => s.slots)
   const itemSlots = allSlots.filter((x) => x.kind === 'list-item' && x.listId === listId)
@@ -128,10 +161,49 @@ export function instantiateTemplate(tpl: LayoutTemplate, opts: InstantiateOption
   /** 已产出的节点（供初始值回填时按 id 定位） */
   const byId = new Map<number, InstantiatedNode>()
   let valuesFilled = 0
+  // ★★**求值器重建**（2026-10-03 初值回填修正）：初值必须按**绑定表达式**求，而不是"取源值/取字段"。
+  //
+  // 【为什么（本仓实测的缺陷形态）】此前标量回填写 `read(sourceName)`、行内回填写 `row[itemValueField]`
+  //   ⇒ 对 `{{ a + b }}` / 混合文本 `a{{x}}b` / `行内 '···' + item.x` 这类**组合表达式**，
+  //     回填的是"某个源值"或"某个字段"⇒ **首帧文本错**（而首帧指令被调用方丢弃
+  //     ——"初值已由实例化回填"的既有假设，见引擎端 entry-vapor 的 `captured.length = 0`）。
+  //   ⇒ 正解：与运行时**同一套**求值器（`VaporRuntime.buildEvaluators`）求初值；求值器缺失
+  //     （`expr` 形态：参考实现不支持）时退回既有"取源值/取字段"路径（行为不变，不静默变差）。
+  const evaluators: Map<number, (ctx: EvalContext) => unknown> =
+    opts.table ? VaporRuntime.buildEvaluators(opts.table.evaluators) : new Map()
+  /** 某列表的**别名链**（自外向内，含自身；行作用域读取要与祖先行链按位置对齐） */
+  const ancestorScopesOf = (listId: number): string[] => {
+    const chain: string[] = []
+    let cur: number | undefined = listId
+    let guard = 0
+    while (cur !== undefined && guard < 32) {
+      const meta = rowLists.get(cur)
+      if (!meta) break
+      chain.unshift(meta.scope ?? '')
+      cur = meta.parentListId
+      guard++
+    }
+    return chain
+  }
+  /** 用一个求值器求初值（失败/缺失 ⇒ undefined，由调用方走兜底） */
+  const evalInitial = (evaluatorId: number, ctx: EvalContext): unknown => {
+    const impl = evaluators.get(evaluatorId)
+    if (!impl) return undefined
+    try {
+      return impl(ctx)
+    } catch {
+      return undefined
+    }
+  }
   /** ★虚拟化：行号 → {行键, 行根 id, 整行节点 id}（见 InstantiateResult.virtual 注释） */
   const virtualRows: NonNullable<InstantiateResult['virtual']>['rows'] = []
 
-  const emit = (n: LayoutNode, id: number, parentId: number | null): void => {
+  /**
+   * @param ctx ★文本段求值用的**行作用域上下文**（2026-10-03 P2-2）——**行内节点必须传行作用域读取**
+   *   （`{{ item.title }} 前缀` 的段表达式含 v-for 别名；用顶层 read 会读到 undefined）。
+   *   缺省 = 顶层 `opts.read`（静态部分/顶层节点的正确形态）。
+   */
+  const emit = (n: LayoutNode, id: number, parentId: number | null, ctx: EvalContext = { read: opts.read }): void => {
     // ★★**样式必须摊平到节点顶层**（本仓实测的接口不匹配缺陷）
     //
     // 【为什么（这条链此前静默失效）】核心的 `NodeDto` 期望样式字段**平铺在节点上**
@@ -147,6 +219,13 @@ export function instantiateTemplate(tpl: LayoutTemplate, opts: InstantiateOption
       ;(out as Record<string, unknown>)[k] = v
     }
     if (n.text !== undefined) out.text = n.text
+    // ★★**文本段序列**（2026-10-03 · P2-2 混合文本）：静态段 + 表达式段 ⇒ 实例化时求值拼接。
+    //   为什么在实例化做：`textSegments` 只在模板产物里（订阅表编的是**合成表达式**——
+    //   `'a' + (x) + 'b'`）；实例化拿不到订阅表的求值器（调用方未传 table 时也要能出首帧），
+    //   而表达式段在编译期已编成 `ExprProgram`（纯 JSON）⇒ 本层直接执行即可（无 eval）。
+    if (n.textSegments && n.textSegments.length > 0) {
+      out.text = evalTextSegments(n.textSegments, ctx.read)
+    }
     // ★★`tag` / `component` **必须透传**（2026-10-03 P2 批次补的真缺陷）：本函数此前只写
     //   id/parentId/style/text，`tag` 被丢弃 ⇒ 宿主看不到节点类型（诊断串一直是 `undefined`；
     //   组件边界 `component` 也会丢）。★为什么之前没暴露：既有夹具的样式已足够布局、
@@ -175,6 +254,8 @@ export function instantiateTemplate(tpl: LayoutTemplate, opts: InstantiateOption
     rowIndex: number,
     parentOverrideId?: number,
     collect?: number[],
+    /** ★祖先行链（自外向内；不含自身）——行作用域表达式（引用外层别名）求初值用（2026-10-03） */
+    ancestors: Array<Record<string, unknown>> = [],
   ): number => {
     const meta = rowLists.get(listId)!
     const idMap = new Map<number, number>()
@@ -190,6 +271,8 @@ export function instantiateTemplate(tpl: LayoutTemplate, opts: InstantiateOption
       if (tplId === meta.rowRootId) rowRootId = engineId
     }
     // ② 再产出节点（父 id 经映射翻译；行根挂到模板里行根的 parent）
+    //    ★行作用域读取**先建**（P2-2）：行内节点的文本段（`前缀{{item.title}}`）求值需要它
+    const rowRead = makeScopedRead(meta.scope ?? '', row, ancestors, ancestorScopesOf(listId), { read: opts.read })
     for (const tplId of meta.subtreeIds) {
       const tn = tpl.nodes.find((x) => x.id === tplId)!
       const engineId = idMap.get(tplId)!
@@ -197,7 +280,7 @@ export function instantiateTemplate(tpl: LayoutTemplate, opts: InstantiateOption
       let parentId = tplParent === null ? null : (idMap.get(tplParent) ?? tplParent)
       // ★行根的父在**本子树之外**（模板序不可用）⇒ 用外层行的实例 id
       if (parentOverrideId !== undefined && tplId === meta.rowRootId) parentId = parentOverrideId
-      emit(tn, engineId, parentId)
+      emit(tn, engineId, parentId, rowRead)
       myIds.push(engineId)
     }
     // ②.5 ★★**嵌套列表递归展开**（2026-10-03 P2 批次）——任意层
@@ -224,7 +307,8 @@ export function instantiateTemplate(tpl: LayoutTemplate, opts: InstantiateOption
       for (let j = 0; j < arr.length; j++) {
         const innerRow = arr[j] as Record<string, unknown>
         const innerKey = innerKeyField && innerRow?.[innerKeyField] !== undefined ? String(innerRow[innerKeyField]) : String(j)
-        cloneRow(inner.listId, innerRow, innerKey, first && j === 0, j, rowRootId, myIds)
+        // ★子行的祖先链 = 父祖先行链 + 父行自身（与运行时 rowsOfList 的累积口径一致）
+        cloneRow(inner.listId, innerRow, innerKey, first && j === 0, j, rowRootId, myIds, [...ancestors, row])
       }
     }
     // ③ 回填注册表：行内槽位（itemSlotId）→ 该行节点 id
@@ -244,6 +328,12 @@ export function instantiateTemplate(tpl: LayoutTemplate, opts: InstantiateOption
         .filter((x) => x.kind === 'list-item' && x.listId === listId)
       if (itemSlots.length > 0) {
         const slotNodes: Record<number, number> = {}
+        // ★行作用域上下文（当前行别名 + 各层祖先别名）——2026-10-03：组合表达式
+        //   （`'a' + item.title` / 混合文本 `前缀{{item.title}}`）求初值必须靠它；
+        //   与 `VaporRuntime.makeRowCtx` **共用同一实现**（makeScopedRead），两处语义不分叉。
+        const rowCtx = makeScopedRead(meta.scope ?? '', row, ancestors, ancestorScopesOf(listId), {
+          read: opts.read,
+        })
         for (const sl of itemSlots) {
           // ★行内槽位的 nodeId 是「模板序」——同一份模板序在这里用 idMap 翻译成实际实例
           const mapped = idMap.get(sl.nodeId)
@@ -251,12 +341,17 @@ export function instantiateTemplate(tpl: LayoutTemplate, opts: InstantiateOption
           // ④ 初始值
           if (mapped === undefined) continue
           const target = byId.get(mapped)
-          const field = sl.itemValueField
-          if (!target || !field) continue
-          const v = row[field]
-          if (v === undefined) continue
+          if (!target) continue
           const f = engineFieldOf(sl.propKey)
           if (!f) continue
+          // ★① 表达式求值（组合表达式的**唯一正确**路径）；缺失/抛错 ⇒ 退回 ② 字段直取
+          let v = evalInitial(sl.evaluatorId, rowCtx)
+          if (v === undefined) {
+            const field = sl.itemValueField
+            if (!field) continue
+            v = row[field]
+          }
+          if (v === undefined) continue
           if (f.kind === 'text') {
             target.text = String(v)
           } else {
@@ -322,7 +417,6 @@ export function instantiateTemplate(tpl: LayoutTemplate, opts: InstantiateOption
   //   ⇒ 修复口径与行内回填**完全一致**（同一 `engineFieldOf`、同样写顶层字段）。
   if (opts.table) {
     for (const src of opts.table.sources) {
-      const v = opts.read(src.sourceName)
       for (const sl of src.slots) {
         // 行内已由 cloneRow 回填；list-data 是"数据源本身"（不是节点属性）；组件边界不在本树
         if (sl.kind === 'list-item' || sl.kind === 'list-data' || sl.kind === 'component-prop') continue
@@ -330,6 +424,12 @@ export function instantiateTemplate(tpl: LayoutTemplate, opts: InstantiateOption
         if (!target) continue
         const f = engineFieldOf(sl.propKey)
         if (!f) continue
+        // ★★表达式求值优先（2026-10-03 初值回填修正）：`{{ a + b }}` / 混合文本这类**组合表达式**
+        //   "取源值"是错的（会把表达式文本的语义丢成单个源值）⇒ 与运行时同一套求值器求初值；
+        //   求值器缺失（`expr` 形态）⇒ 退回既有"取源值"路径（行为不变）。
+        let v = evalInitial(sl.evaluatorId, { read: opts.read })
+        if (v === undefined) v = opts.read(src.sourceName)
+        if (v === undefined) continue
         if (f.kind === 'text') {
           target.text = String(v)
         } else {

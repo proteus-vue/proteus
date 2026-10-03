@@ -2,7 +2,7 @@
 // source: @vue/compiler-sfc (mode=module, runtimeModuleName=@vue/runtime-core)
 // @ts-nocheck
 /* eslint-disable */
-import { createTextVNode as _createTextVNode, resolveComponent as _resolveComponent, withCtx as _withCtx, createVNode as _createVNode, renderList as _renderList, Fragment as _Fragment, openBlock as _openBlock, createElementBlock as _createElementBlock, toDisplayString as _toDisplayString, createBlock as _createBlock } from "@vue/runtime-core"
+import { createTextVNode as _createTextVNode, resolveComponent as _resolveComponent, withCtx as _withCtx, createVNode as _createVNode, renderList as _renderList, Fragment as _Fragment, openBlock as _openBlock, createElementBlock as _createElementBlock, createCommentVNode as _createCommentVNode, toDisplayString as _toDisplayString, createBlock as _createBlock } from "@vue/runtime-core"
 
 export function render(_ctx, _cache) {
   const _component_p_text = _resolveComponent("p-text")
@@ -11,7 +11,7 @@ export function render(_ctx, _cache) {
   return (_openBlock(), _createBlock(_component_p_view, { style: {"width":1080,"height":1600,"flexDirection":"column","padding":{"top":24},"backgroundColor":"#14141c"} }, {
     default: _withCtx(() => [
       _createVNode(_component_p_text, { style: {"fontSize":20,"color":"#ffffff","margin":{"bottom":12}} }, {
-        default: _withCtx(() => [...(_cache[2] || (_cache[2] = [
+        default: _withCtx(() => [...(_cache[4] || (_cache[4] = [
           _createTextVNode("Vapor · 设备端", -1 /* CACHED */)
         ]))]),
         _: 1 /* STABLE */
@@ -27,12 +27,13 @@ export function render(_ctx, _cache) {
           style: {"height":44,"margin":{"bottom":6},"backgroundColor":"#285ac8"}
         }, {
           default: _withCtx(() => [
+            _createCommentVNode(" ★★混合文本（P2-2，2026-10-03）：静态段 + 两个插值段 ⇒ 运行时求值拼接。\n           判据核的是**完整串**（\"row-1·row 1\"）真的到了内核（text_probe），\n           以及改数据后重发的 SET_TEXT 仍是完整串（不是只剩一个字段）。 "),
             _createVNode(_component_p_text, {
               width: item.w,
               style: {"fontSize":12,"color":"#ffffff"}
             }, {
               default: _withCtx(() => [
-                _createTextVNode(_toDisplayString(item.title), 1 /* TEXT */)
+                _createTextVNode("row-" + _toDisplayString(item.id) + "·" + _toDisplayString(item.title), 1 /* TEXT */)
               ]),
               _: 2 /* DYNAMIC */
             }, 1032 /* PROPS, DYNAMIC_SLOTS */, ["width"])
@@ -54,9 +55,51 @@ export function render(_ctx, _cache) {
           }, null, 8 /* PROPS */, ["width"])
         ]),
         _: 1 /* STABLE */
+      }, 8 /* PROPS */, ["width"]),
+      _createCommentVNode(" ★★事件修饰符夹具（P2-3，2026-10-03）：外层 @click（无修饰）+ 内层 @click.stop。\n         **内层刻意不遮住外层的中心**（内层 40px 贴顶，外层 220px ⇒ 外层中心 y=110 在内层之外）\n         ——宿主注入 tap 是按\"节点中心\"点的：若重叠，点外层也会命中内层 ⇒ 判据拿不到\n         「祖先 handler 本会跑、但被 .stop 挡下」的证据。 "),
+      _createVNode(_component_p_view, {
+        width: _ctx.stopOuterW,
+        onClick: _cache[3] || (_cache[3] = $event => (_ctx.stopOuterW += 5)),
+        style: {"height":220,"margin":{"top":8},"backgroundColor":"#223344"}
+      }, {
+        default: _withCtx(() => [
+          _createVNode(_component_p_view, {
+            width: _ctx.stopInnerW,
+            onClick: _cache[2] || (_cache[2] = _withModifiers($event => (_ctx.stopInnerW += 30), ["stop"])),
+            style: {"height":40,"backgroundColor":"#445566"}
+          }, null, 8 /* PROPS */, ["width"])
+        ]),
+        _: 1 /* STABLE */
       }, 8 /* PROPS */, ["width"])
     ]),
     _: 1 /* STABLE */
   }))
 }
+/* ★宿主侧 withModifiers（见生成器头注：官方只在 runtime-dom，自绘宿主没有 DOM） */
+const modifierGuards = {
+  stop: (e) => { if (typeof e.stopPropagation === 'function') e.stopPropagation() },
+  prevent: (e) => { if (typeof e.preventDefault === 'function') e.preventDefault() },
+  self: (e) => e.target !== e.currentTarget,
+  ctrl: (e) => !e.ctrlKey, shift: (e) => !e.shiftKey, alt: (e) => !e.altKey, meta: (e) => !e.metaKey,
+  left: (e) => 'button' in e && e.button !== 0,
+  middle: (e) => 'button' in e && e.button !== 1,
+  right: (e) => 'button' in e && e.button !== 2,
+  exact: (e, modifiers) => ['ctrl','shift','alt','meta'].some((m) => e[m + 'Key'] && !modifiers.includes(m)),
+}
+const withModifiers = (fn, modifiers) => {
+  if (!fn) return fn
+  const cache = fn._withMods || (fn._withMods = {})
+  const cacheKey = modifiers.join('.')
+  return cache[cacheKey] || (cache[cacheKey] = (event, ...args) => {
+    for (const m of modifiers) {
+      const guard = modifierGuards[m]
+      if (guard && guard(event, modifiers)) return
+    }
+    return fn(event, ...args)
+  })
+}
+// ★生成物里的调用名是**别名** _withModifiers（编译器按 withModifiers as _withModifiers 产出）——
+//   我们摘掉了那条 import，这里必须把别名绑上（首版只定义 withModifiers ⇒ 引用处仍是 undefined，实测踩到）
+const _withModifiers = withModifiers
+
 export { render as abRender }

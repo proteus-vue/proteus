@@ -29,6 +29,9 @@ import { compileExpr } from './expr'
 import type { ReactiveSource } from './sources'
 import { analyzeExprDeps, collectTemplateBindings } from './deps'
 import type { ExprDeps, TemplateBindingRef } from './deps'
+// ★混合文本合成绑定（P2-2）：段表来自**模板产物**（唯一实现）——不在此处重算切分
+import { buildLayoutTemplate } from './template'
+import type { TextSegment } from '@proteus-vue/slot-runtime'
 
 /* ────────────────────────── 产物形态（方案 §4.4） ────────────────────────── */
 
@@ -145,6 +148,49 @@ export function buildVaporSubscriptions(source: string, filename = 'anonymous.vu
   }
 
   const bindings = collectTemplateBindings(source, filename, opts.compat)
+  // ★★**混合文本的合成绑定**（2026-10-03 · P2-2）：`a{{x}}b` 的插值子节点在 `collectTemplateBindings`
+  //   里是**独立**的 `text.content` 绑定（每个插值一条）⇒ 两条问题：
+  //     ① 它们都指向**同一个节点**（元素级）⇒ 运行时会发**两条** SET_TEXT，**后者覆盖前者**
+  //        （现象：只显示最后一个插值，且无报错——静默错内容）；
+  //     ② 静态段（`a` / `b`）完全不参与 ⇒ 文本永远缺前后缀。
+  //   ⇒ 正解：从**模板产物**取该节点的 `textSegments`，把**该元素上的全部插值绑定**合并成
+  //     **一条合成绑定**（源码 = `'a' + (x) + 'b'`，走表达式编译器 ⇒ 与单段插值同一套求值）。
+  //     **同一语义一处实现**：合成的表达式文本为此后唯一入口，独立绑定不再各发一条。
+  //   ★单段插值（`{{ x }}`，无静态段）**不合成**——产物与既有逐字节一致（既有回归锁）。
+  const textSegsByNode = new Map<number, TextSegment[]>()
+  {
+    const tplRes = buildLayoutTemplate(source, filename, opts.compat)
+    for (const n of tplRes.template.nodes) {
+      if (n.textSegments && n.textSegments.length > 0) textSegsByNode.set(n.id, n.textSegments)
+    }
+  }
+  /** 节点 id → 各插值绑定（按出现序）——按元素聚组后决定"合成"还是"原样" */
+  const textBindingsByNode = new Map<number, TemplateBindingRef[]>()
+  for (const ref of bindings) {
+    if (ref.propKey !== 'text.content' || ref.where !== '{{ }}') continue
+    const list = textBindingsByNode.get(ref.elementIndex) ?? []
+    list.push(ref)
+    textBindingsByNode.set(ref.elementIndex, list)
+  }
+  /** 该绑定是否属于"被合成"的一组（合成后由合成绑定代表；原独立绑定跳过建槽） */
+  const synthesizedMembers = new Set<TemplateBindingRef>()
+  for (const [nodeId, refs] of textBindingsByNode) {
+    const segs = textSegsByNode.get(nodeId)
+    if (!segs) continue // 单段插值（无静态段）⇒ 不合成
+    // 该元素的**表达式段源码**（与 refs 按出现序对应——两者都来自同一份模板的子节点序）
+    const exprSrcs = segs.filter((s) => 'expr' in s).map((s) => (s as { src: string }).src)
+    if (exprSrcs.length !== refs.length) continue // 形态不匹配（防御：不合成，保持既有行为）
+    // 合成源码：静态段 → 字符串字面量，表达式段 → 括号包裹的原码（保优先级）
+    const parts = segs.map((s) => ('text' in s ? JSON.stringify(s.text) : `(${(s as { src: string }).src})`))
+    // ★单表达式段且无静态段（`{{ a }}` 且只有它）⇒ 不必合成（产物更小、与既有形态一致）
+    if (parts.length === 1) continue
+    const composedSrc = parts.join(' + ')
+    // 用第一个成员的身份承载合成绑定（nodeId/propKey/scopes/listContext 都正确）
+    const first = refs[0]!
+    const synthetic: TemplateBindingRef = { ...first, code: composedSrc }
+    for (const r of refs) synthesizedMembers.add(r)
+    bindings[bindings.indexOf(first)] = synthetic
+  }
   const pure = new Set(opts.pureSymbols ?? [])
   const forceL0 = new Set(opts.forceL0Slots ?? [])
 
@@ -158,6 +204,8 @@ export function buildVaporSubscriptions(source: string, filename = 'anonymous.vu
   const slotRecords: Array<{ slot: SlotSubscription; deps: ExprDeps; ref: TemplateBindingRef }> = []
 
   for (const ref of bindings) {
+    // ★被合成组里的其余成员**跳过建槽**（合成绑定已代表整条文本；见上方合成段注释）
+    if (synthesizedMembers.has(ref)) continue
     const deps = analyzeExprDeps(ref.code, ref.scopes)
     const kind = slotKindOf(ref.propKey)
     // 每个绑定 = 一个槽位；★nodeId 取「该元素在模板序 DFS 中的序号」

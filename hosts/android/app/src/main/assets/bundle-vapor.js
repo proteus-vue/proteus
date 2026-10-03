@@ -10125,154 +10125,6 @@
       return { hits: this.hits, misses: this.misses, items: this.size };
     }
   };
-  function engineFieldOf(propKey) {
-    if (propKey === "text.content") return { kind: "text" };
-    const m = propKey.match(/^(?:layout|paint|text)\.(.+)$/);
-    if (!m) return null;
-    return { kind: "style", key: m[1] };
-  }
-  function rowsOfList(listId, table, read) {
-    if (!table) return [];
-    const itemSlots = table.sources.flatMap((s) => s.slots).filter((x) => x.kind === "list-item" && x.listId === listId);
-    const spec = itemSlots[0];
-    if (!spec) return [];
-    const srcName = table.sources.find((s) => s.slots.some((x) => x.listId === listId))?.sourceName ?? "";
-    const segs = (spec.sourceExpr ?? "").split(".").filter(Boolean);
-    const topRows = read(srcName);
-    if (!Array.isArray(topRows)) return [];
-    const walkSegs = segs[0] === srcName ? segs.slice(1) : segs;
-    let cur = topRows;
-    for (const field of walkSegs) {
-      const next = [];
-      for (const r of cur) {
-        const arr = r?.[field];
-        if (!Array.isArray(arr)) continue;
-        for (const x of arr) next.push(x);
-      }
-      cur = next;
-    }
-    return cur;
-  }
-  function instantiateTemplate(tpl, opts) {
-    const nodes = [];
-    const maxTemplateId = tpl.nodes.reduce((m, n) => Math.max(m, n.id), 0);
-    let nextId = opts.firstRowInstanceId ?? maxTemplateId + 1;
-    let allocated = 0;
-    let reused = 0;
-    const rowLists = new Map(tpl.lists.map((l) => [l.listId, l]));
-    const byId = /* @__PURE__ */ new Map();
-    let valuesFilled = 0;
-    const virtualRows = [];
-    const emit = (n, id, parentId) => {
-      const out = { id, parentId };
-      if (n.style) for (const [k, v] of Object.entries(n.style)) {
-        ;
-        out[k] = v;
-      }
-      if (n.text !== void 0) out.text = n.text;
-      nodes.push(out);
-      byId.set(id, out);
-    };
-    const cloneRow = (listId, row, itemKey, first, rowIndex) => {
-      const meta = rowLists.get(listId);
-      const idMap = /* @__PURE__ */ new Map();
-      let rowRootId = 0;
-      for (const tplId of meta.subtreeIds) {
-        const engineId = first ? tplId : nextId++;
-        if (!first) allocated++;
-        else reused++;
-        idMap.set(tplId, engineId);
-        if (tplId === meta.rowRootId) rowRootId = engineId;
-      }
-      for (const tplId of meta.subtreeIds) {
-        const tn = tpl.nodes.find((x) => x.id === tplId);
-        const engineId = idMap.get(tplId);
-        const tplParent = tn.parentId;
-        const parentId = tplParent === null ? null : idMap.get(tplParent) ?? tplParent;
-        emit(tn, engineId, parentId);
-      }
-      virtualRows.push({
-        index: rowIndex,
-        key: itemKey,
-        root: rowRootId,
-        ids: meta.subtreeIds.map((t) => idMap.get(t))
-      });
-      if (opts.table) {
-        const itemSlots = opts.table.sources.flatMap((s) => s.slots).filter((x) => x.kind === "list-item" && x.listId === listId);
-        if (itemSlots.length > 0) {
-          const slotNodes = {};
-          for (const sl of itemSlots) {
-            const mapped = idMap.get(sl.nodeId);
-            if (mapped !== void 0) slotNodes[sl.itemSlotId] = mapped;
-            if (mapped === void 0) continue;
-            const target = byId.get(mapped);
-            const field = sl.itemValueField;
-            if (!target || !field) continue;
-            const v = row[field];
-            if (v === void 0) continue;
-            const f = engineFieldOf(sl.propKey);
-            if (!f) continue;
-            if (f.kind === "text") {
-              target.text = String(v);
-            } else {
-              ;
-              target[f.key] = v;
-            }
-            valuesFilled++;
-          }
-          if (opts.registry && Object.keys(slotNodes).length > 0) {
-            opts.registry.registerItem(listId, itemKey, slotNodes);
-          }
-        }
-      }
-      return rowRootId;
-    };
-    const rowMemberIds = /* @__PURE__ */ new Set();
-    for (const l of tpl.lists) for (const id of l.subtreeIds) rowMemberIds.add(id);
-    for (const n of tpl.nodes) {
-      if (rowMemberIds.has(n.id)) {
-        const meta = tpl.lists.find((l) => l.rowRootId === n.id);
-        if (!meta) continue;
-        const rows = rowsOfList(meta.listId, opts.table, opts.read);
-        for (let i = 0; i < rows.length; i++) {
-          const row = rows[i];
-          const keyOf = () => {
-            const keyField = opts.table?.sources.flatMap((s) => s.slots).find((x) => x.kind === "list-item" && x.listId === meta.listId)?.itemKeyField;
-            return keyField && row[keyField] !== void 0 ? String(row[keyField]) : String(i);
-          };
-          cloneRow(meta.listId, row, keyOf(), i === 0, i);
-        }
-        continue;
-      }
-      emit(n, n.id, n.parentId);
-    }
-    if (opts.table) {
-      for (const src of opts.table.sources) {
-        const v = opts.read(src.sourceName);
-        for (const sl of src.slots) {
-          if (sl.kind === "list-item" || sl.kind === "list-data" || sl.kind === "component-prop") continue;
-          const target = byId.get(sl.nodeId);
-          if (!target) continue;
-          const f = engineFieldOf(sl.propKey);
-          if (!f) continue;
-          if (f.kind === "text") {
-            target.text = String(v);
-          } else {
-            ;
-            target[f.key] = v;
-          }
-          valuesFilled++;
-        }
-      }
-    }
-    return {
-      viewport: opts.viewport,
-      nodes,
-      stats: { reusedTemplateIds: reused, allocatedIds: allocated, rows: nodes.length, valuesFilled },
-      // ★只有**恰好一个**列表时才给虚拟化描述（多个列表 ⇒ 行号空间不同源，宿主按行号二分会错配）
-      virtual: virtualRows.length > 0 && tpl.lists.length === 1 ? { rows: virtualRows } : void 0
-    };
-  }
   var VaporRuntime = class {
     constructor(table, rt, evaluators, registry) {
       this.table = table;
@@ -10443,7 +10295,7 @@
         const cached = rowsCache.get(listId);
         if (cached) return cached;
         const out = [];
-        const keyOf = (r, i) => spec.itemKeyField && r && r[spec.itemKeyField] !== void 0 ? String(r[spec.itemKeyField]) : String(i);
+        const keyOf2 = (r, i) => spec.itemKeyField && r && r[spec.itemKeyField] !== void 0 ? String(r[spec.itemKeyField]) : String(i);
         const segs = (spec.sourceExpr ?? "").split(".").filter(Boolean);
         const topRows = ctx.read(src.sourceName);
         if (!Array.isArray(topRows)) return out;
@@ -10462,7 +10314,7 @@
           current = next;
         }
         for (let i = 0; i < current.length; i++) {
-          out.push({ key: keyOf(current[i].row, i), row: current[i].row, ancestors: current[i].ancestors });
+          out.push({ key: keyOf2(current[i].row, i), row: current[i].row, ancestors: current[i].ancestors });
         }
         rowsCache.set(listId, out);
         return out;
@@ -10536,14 +10388,7 @@
       if (!scope) return ctx;
       const lid = this.listIdOfScope(scope);
       const ancestorScopes = lid === void 0 ? [] : this.ancestorScopesOf(lid);
-      return {
-        read: (n) => {
-          if (n === scope) return row;
-          const idx = ancestorScopes.indexOf(n);
-          if (idx >= 0 && idx < ancestors.length) return ancestors[idx];
-          return ctx.read(n);
-        }
-      };
+      return makeScopedRead(scope, row, ancestors, ancestorScopes, ctx);
     }
     /** ★值 diff + 发射（**唯一实现**）：嵌套 Map 免拼接：listId/slotId 均为数字键 */
     diffAndEmit(spec, key, value) {
@@ -10634,6 +10479,277 @@
       return [...this.slots.keys()].sort((a, b) => a - b);
     }
   };
+  function makeScopedRead(scope, row, ancestors, ancestorScopes, ctx) {
+    if (!scope) return ctx;
+    return {
+      read: (n) => {
+        if (n === scope) return row;
+        const idx = ancestorScopes.indexOf(n);
+        if (idx >= 0 && idx < ancestors.length) return ancestors[idx];
+        return ctx.read(n);
+      }
+    };
+  }
+  function engineFieldOf(propKey) {
+    if (propKey === "text.content") return { kind: "text" };
+    const m = propKey.match(/^(?:layout|paint|text)\.(.+)$/);
+    if (!m) return null;
+    return { kind: "style", key: m[1] };
+  }
+  function evalTextSegments(segs, read) {
+    let out = "";
+    for (const s of segs) {
+      if ("text" in s) {
+        out += s.text;
+        continue;
+      }
+      try {
+        const v = evalExpr(s.expr, { read });
+        out += v === void 0 || v === null ? "" : String(v);
+      } catch {
+      }
+    }
+    return out;
+  }
+  function rowsOfList(listId, meta, table, read) {
+    if (!table) return [];
+    const allSlots = table.sources.flatMap((s) => s.slots);
+    const itemSlots = allSlots.filter((x) => x.kind === "list-item" && x.listId === listId);
+    const spec = itemSlots[0] ?? allSlots.find((x) => x.kind === "list-data" && x.listId === listId);
+    if (!spec) return [];
+    const srcName = table.sources.find((s) => s.slots.some((x) => x.listId === listId))?.sourceName ?? "";
+    const segs = (meta?.sourceField || spec.sourceExpr || "").split(".").filter(Boolean);
+    const topRows = read(srcName);
+    if (!Array.isArray(topRows)) return [];
+    const walkSegs = segs[0] === srcName ? segs.slice(1) : segs;
+    let cur = topRows;
+    for (const field of walkSegs) {
+      const next = [];
+      for (const r of cur) {
+        const arr = r?.[field];
+        if (!Array.isArray(arr)) continue;
+        for (const x of arr) next.push(x);
+      }
+      cur = next;
+    }
+    return cur;
+  }
+  function instantiateTemplate(tpl, opts) {
+    const nodes = [];
+    const maxTemplateId = tpl.nodes.reduce((m, n) => Math.max(m, n.id), 0);
+    let nextId = opts.firstRowInstanceId ?? maxTemplateId + 1;
+    let allocated = 0;
+    let reused = 0;
+    const rowLists = new Map(tpl.lists.map((l) => [l.listId, l]));
+    const byId = /* @__PURE__ */ new Map();
+    let valuesFilled = 0;
+    const evaluators = opts.table ? VaporRuntime.buildEvaluators(opts.table.evaluators) : /* @__PURE__ */ new Map();
+    const ancestorScopesOf = (listId) => {
+      const chain = [];
+      let cur = listId;
+      let guard = 0;
+      while (cur !== void 0 && guard < 32) {
+        const meta = rowLists.get(cur);
+        if (!meta) break;
+        chain.unshift(meta.scope ?? "");
+        cur = meta.parentListId;
+        guard++;
+      }
+      return chain;
+    };
+    const evalInitial = (evaluatorId, ctx) => {
+      const impl = evaluators.get(evaluatorId);
+      if (!impl) return void 0;
+      try {
+        return impl(ctx);
+      } catch {
+        return void 0;
+      }
+    };
+    const virtualRows = [];
+    const emit = (n, id, parentId, ctx = { read: opts.read }) => {
+      const out = { id, parentId };
+      if (n.style) for (const [k, v] of Object.entries(n.style)) {
+        ;
+        out[k] = v;
+      }
+      if (n.text !== void 0) out.text = n.text;
+      if (n.textSegments && n.textSegments.length > 0) {
+        out.text = evalTextSegments(n.textSegments, ctx.read);
+      }
+      if (n.tag) out.tag = n.tag;
+      if (n.component) out.component = n.component;
+      nodes.push(out);
+      byId.set(id, out);
+    };
+    const cloneRow = (listId, row, itemKey, first, rowIndex, parentOverrideId, collect, ancestors = []) => {
+      const meta = rowLists.get(listId);
+      const idMap = /* @__PURE__ */ new Map();
+      let rowRootId = 0;
+      const myIds = [];
+      for (const tplId of meta.subtreeIds) {
+        const engineId = first ? tplId : nextId++;
+        if (!first) allocated++;
+        else reused++;
+        idMap.set(tplId, engineId);
+        if (tplId === meta.rowRootId) rowRootId = engineId;
+      }
+      const rowRead = makeScopedRead(meta.scope ?? "", row, ancestors, ancestorScopesOf(listId), { read: opts.read });
+      for (const tplId of meta.subtreeIds) {
+        const tn = tpl.nodes.find((x) => x.id === tplId);
+        const engineId = idMap.get(tplId);
+        const tplParent = tn.parentId;
+        let parentId = tplParent === null ? null : idMap.get(tplParent) ?? tplParent;
+        if (parentOverrideId !== void 0 && tplId === meta.rowRootId) parentId = parentOverrideId;
+        emit(tn, engineId, parentId, rowRead);
+        myIds.push(engineId);
+      }
+      for (const inner of tpl.lists) {
+        if (inner.parentListId !== listId) continue;
+        let arr = row;
+        for (const seg of (inner.sourceField ?? "").split(".").filter(Boolean)) {
+          arr = arr?.[seg];
+        }
+        if (!Array.isArray(arr)) continue;
+        const innerKeyField = opts.table?.sources.flatMap((s) => s.slots).find((x) => x.kind === "list-item" && x.listId === inner.listId)?.itemKeyField;
+        for (let j = 0; j < arr.length; j++) {
+          const innerRow = arr[j];
+          const innerKey = innerKeyField && innerRow?.[innerKeyField] !== void 0 ? String(innerRow[innerKeyField]) : String(j);
+          cloneRow(inner.listId, innerRow, innerKey, first && j === 0, j, rowRootId, myIds, [...ancestors, row]);
+        }
+      }
+      virtualRows.push({
+        index: rowIndex,
+        key: itemKey,
+        root: rowRootId,
+        ids: [...myIds]
+      });
+      if (collect) collect.push(...myIds);
+      if (opts.table) {
+        const itemSlots = opts.table.sources.flatMap((s) => s.slots).filter((x) => x.kind === "list-item" && x.listId === listId);
+        if (itemSlots.length > 0) {
+          const slotNodes = {};
+          const rowCtx = makeScopedRead(meta.scope ?? "", row, ancestors, ancestorScopesOf(listId), {
+            read: opts.read
+          });
+          for (const sl of itemSlots) {
+            const mapped = idMap.get(sl.nodeId);
+            if (mapped !== void 0) slotNodes[sl.itemSlotId] = mapped;
+            if (mapped === void 0) continue;
+            const target = byId.get(mapped);
+            if (!target) continue;
+            const f = engineFieldOf(sl.propKey);
+            if (!f) continue;
+            let v = evalInitial(sl.evaluatorId, rowCtx);
+            if (v === void 0) {
+              const field = sl.itemValueField;
+              if (!field) continue;
+              v = row[field];
+            }
+            if (v === void 0) continue;
+            if (f.kind === "text") {
+              target.text = String(v);
+            } else {
+              ;
+              target[f.key] = v;
+            }
+            valuesFilled++;
+          }
+          if (opts.registry && Object.keys(slotNodes).length > 0) {
+            opts.registry.registerItem(listId, itemKey, slotNodes);
+          }
+        }
+      }
+      return rowRootId;
+    };
+    const rowMemberIds = /* @__PURE__ */ new Set();
+    for (const l of tpl.lists) for (const id of l.subtreeIds) rowMemberIds.add(id);
+    for (const n of tpl.nodes) {
+      if (rowMemberIds.has(n.id)) {
+        const meta = tpl.lists.find((l) => l.rowRootId === n.id);
+        if (!meta) continue;
+        if (meta.parentListId !== void 0) continue;
+        const rows = rowsOfList(meta.listId, meta, opts.table, opts.read);
+        for (let i = 0; i < rows.length; i++) {
+          const row = rows[i];
+          const keyOf2 = () => {
+            const keyField = opts.table?.sources.flatMap((s) => s.slots).find((x) => x.kind === "list-item" && x.listId === meta.listId)?.itemKeyField;
+            return keyField && row[keyField] !== void 0 ? String(row[keyField]) : String(i);
+          };
+          cloneRow(meta.listId, row, keyOf2(), i === 0, i);
+        }
+        continue;
+      }
+      emit(n, n.id, n.parentId);
+    }
+    if (opts.table) {
+      for (const src of opts.table.sources) {
+        for (const sl of src.slots) {
+          if (sl.kind === "list-item" || sl.kind === "list-data" || sl.kind === "component-prop") continue;
+          const target = byId.get(sl.nodeId);
+          if (!target) continue;
+          const f = engineFieldOf(sl.propKey);
+          if (!f) continue;
+          let v = evalInitial(sl.evaluatorId, { read: opts.read });
+          if (v === void 0) v = opts.read(src.sourceName);
+          if (v === void 0) continue;
+          if (f.kind === "text") {
+            target.text = String(v);
+          } else {
+            ;
+            target[f.key] = v;
+          }
+          valuesFilled++;
+        }
+      }
+    }
+    return {
+      viewport: opts.viewport,
+      nodes,
+      stats: { reusedTemplateIds: reused, allocatedIds: allocated, rows: nodes.length, valuesFilled },
+      // ★只有**恰好一个**列表时才给虚拟化描述（多个列表 ⇒ 行号空间不同源，宿主按行号二分会错配）
+      virtual: virtualRows.length > 0 && tpl.lists.length === 1 ? { rows: virtualRows } : void 0
+    };
+  }
+  function createDispatchState() {
+    return { onceFired: /* @__PURE__ */ new Set() };
+  }
+  var keyOf = (nodeId, event, handler) => `${nodeId}:${event}:${handler}`;
+  function indexEventBindings(bindings) {
+    const byNodeEvent = /* @__PURE__ */ new Map();
+    for (const b of bindings) byNodeEvent.set(`${b.nodeId}:${b.event}`, b);
+    return byNodeEvent;
+  }
+  function dispatchGesture(chain, event, index, state, run) {
+    const fired = [];
+    const skippedSelf = [];
+    const skippedOnce = [];
+    let handler = "";
+    let stopped = false;
+    const hit = chain.length > 0 ? chain[0] : -1;
+    for (const id of chain) {
+      const b = index.get(`${id}:${event}`) ?? index.get(`${id}:tap`);
+      if (!b) continue;
+      if (b.self && id !== hit) {
+        skippedSelf.push(id);
+        continue;
+      }
+      const onceKey = keyOf(id, b.event, b.handler);
+      if (b.once && state.onceFired.has(onceKey)) {
+        skippedOnce.push(id);
+        continue;
+      }
+      if (!run(b.handler)) continue;
+      if (b.once) state.onceFired.add(onceKey);
+      fired.push(id);
+      if (!handler) handler = b.handler;
+      if (b.stop) {
+        stopped = true;
+        break;
+      }
+    }
+    return { fired, handler, stopped, skippedSelf, skippedOnce };
+  }
 
   // packages/renderer-app/dist/index.js
   var import_runtime_core = __toESM(require_runtime_core(), 1);
@@ -11284,7 +11400,7 @@
         }
         return { removes: removed, inserts };
       },
-      dispatchEvent(nodeId, chain, type, x, y) {
+      dispatchEvent(nodeId, chain, type, x, y, extra) {
         const fired = [];
         const errors = [];
         let stoppedAt = null;
@@ -11298,6 +11414,8 @@
             currentTarget: id,
             x,
             y,
+            // ★语义附加字段（swipe.direction 等——与 packages/gesture 的 GestureEvent 同形状）
+            ...extra ?? {},
             _stopped: false,
             stopPropagation() {
               ev._stopped = true;
@@ -11383,7 +11501,7 @@
     return (0, import_runtime_core2.openBlock)(), (0, import_runtime_core2.createBlock)(_component_p_view, { style: { "width": 1080, "height": 1600, "flexDirection": "column", "padding": { "top": 24 }, "backgroundColor": "#14141c" } }, {
       default: (0, import_runtime_core2.withCtx)(() => [
         (0, import_runtime_core2.createVNode)(_component_p_text, { style: { "fontSize": 20, "color": "#ffffff", "margin": { "bottom": 12 } } }, {
-          default: (0, import_runtime_core2.withCtx)(() => [..._cache[2] || (_cache[2] = [
+          default: (0, import_runtime_core2.withCtx)(() => [..._cache[4] || (_cache[4] = [
             (0, import_runtime_core2.createTextVNode)(
               "Vapor \xB7 \u8BBE\u5907\u7AEF",
               -1
@@ -11410,13 +11528,14 @@
               },
               {
                 default: (0, import_runtime_core2.withCtx)(() => [
+                  (0, import_runtime_core2.createCommentVNode)(' \u2605\u2605\u6DF7\u5408\u6587\u672C\uFF08P2-2\uFF0C2026-10-03\uFF09\uFF1A\u9759\u6001\u6BB5 + \u4E24\u4E2A\u63D2\u503C\u6BB5 \u21D2 \u8FD0\u884C\u65F6\u6C42\u503C\u62FC\u63A5\u3002\n           \u5224\u636E\u6838\u7684\u662F**\u5B8C\u6574\u4E32**\uFF08"row-1\xB7row 1"\uFF09\u771F\u7684\u5230\u4E86\u5185\u6838\uFF08text_probe\uFF09\uFF0C\n           \u4EE5\u53CA\u6539\u6570\u636E\u540E\u91CD\u53D1\u7684 SET_TEXT \u4ECD\u662F\u5B8C\u6574\u4E32\uFF08\u4E0D\u662F\u53EA\u5269\u4E00\u4E2A\u5B57\u6BB5\uFF09\u3002 '),
                   (0, import_runtime_core2.createVNode)(_component_p_text, {
                     width: item.w,
                     style: { "fontSize": 12, "color": "#ffffff" }
                   }, {
                     default: (0, import_runtime_core2.withCtx)(() => [
                       (0, import_runtime_core2.createTextVNode)(
-                        (0, import_runtime_core2.toDisplayString)(item.title),
+                        "row-" + (0, import_runtime_core2.toDisplayString)(item.id) + "\xB7" + (0, import_runtime_core2.toDisplayString)(item.title),
                         1
                         /* TEXT */
                       )
@@ -11450,12 +11569,58 @@
           ]),
           _: 1
           /* STABLE */
+        }, 8, ["width"]),
+        (0, import_runtime_core2.createCommentVNode)(' \u2605\u2605\u4E8B\u4EF6\u4FEE\u9970\u7B26\u5939\u5177\uFF08P2-3\uFF0C2026-10-03\uFF09\uFF1A\u5916\u5C42 @click\uFF08\u65E0\u4FEE\u9970\uFF09+ \u5185\u5C42 @click.stop\u3002\n         **\u5185\u5C42\u523B\u610F\u4E0D\u906E\u4F4F\u5916\u5C42\u7684\u4E2D\u5FC3**\uFF08\u5185\u5C42 40px \u8D34\u9876\uFF0C\u5916\u5C42 220px \u21D2 \u5916\u5C42\u4E2D\u5FC3 y=110 \u5728\u5185\u5C42\u4E4B\u5916\uFF09\n         \u2014\u2014\u5BBF\u4E3B\u6CE8\u5165 tap \u662F\u6309"\u8282\u70B9\u4E2D\u5FC3"\u70B9\u7684\uFF1A\u82E5\u91CD\u53E0\uFF0C\u70B9\u5916\u5C42\u4E5F\u4F1A\u547D\u4E2D\u5185\u5C42 \u21D2 \u5224\u636E\u62FF\u4E0D\u5230\n         \u300C\u7956\u5148 handler \u672C\u4F1A\u8DD1\u3001\u4F46\u88AB .stop \u6321\u4E0B\u300D\u7684\u8BC1\u636E\u3002 '),
+        (0, import_runtime_core2.createVNode)(_component_p_view, {
+          width: _ctx.stopOuterW,
+          onClick: _cache[3] || (_cache[3] = ($event) => _ctx.stopOuterW += 5),
+          style: { "height": 220, "margin": { "top": 8 }, "backgroundColor": "#223344" }
+        }, {
+          default: (0, import_runtime_core2.withCtx)(() => [
+            (0, import_runtime_core2.createVNode)(_component_p_view, {
+              width: _ctx.stopInnerW,
+              onClick: _cache[2] || (_cache[2] = _withModifiers(($event) => _ctx.stopInnerW += 30, ["stop"])),
+              style: { "height": 40, "backgroundColor": "#445566" }
+            }, null, 8, ["width"])
+          ]),
+          _: 1
+          /* STABLE */
         }, 8, ["width"])
       ]),
       _: 1
       /* STABLE */
     });
   }
+  var modifierGuards = {
+    stop: (e) => {
+      if (typeof e.stopPropagation === "function") e.stopPropagation();
+    },
+    prevent: (e) => {
+      if (typeof e.preventDefault === "function") e.preventDefault();
+    },
+    self: (e) => e.target !== e.currentTarget,
+    ctrl: (e) => !e.ctrlKey,
+    shift: (e) => !e.shiftKey,
+    alt: (e) => !e.altKey,
+    meta: (e) => !e.metaKey,
+    left: (e) => "button" in e && e.button !== 0,
+    middle: (e) => "button" in e && e.button !== 1,
+    right: (e) => "button" in e && e.button !== 2,
+    exact: (e, modifiers) => ["ctrl", "shift", "alt", "meta"].some((m) => e[m + "Key"] && !modifiers.includes(m))
+  };
+  var withModifiers = (fn, modifiers) => {
+    if (!fn) return fn;
+    const cache = fn._withMods || (fn._withMods = {});
+    const cacheKey = modifiers.join(".");
+    return cache[cacheKey] || (cache[cacheKey] = (event, ...args) => {
+      for (const m of modifiers) {
+        const guard = modifierGuards[m];
+        if (guard && guard(event, modifiers)) return;
+      }
+      return fn(event, ...args);
+    });
+  };
+  var _withModifiers = withModifiers;
 
   // hosts/android/bridge/entry-vapor.ts
   function makeData(rows) {
@@ -11467,6 +11632,10 @@
       // ★★冒泡锚（2026-10-02）：按钮外层容器的宽度源——容器上的 `@click="padW += 5"`
       //   是**祖先 handler**：tap 链 [按钮, 容器, root] 上两跳都要跑（判据核"链没断"）
       padW: 300,
+      // ★★P2-3 修饰符夹具（2026-10-03）：内层 `@click.stop` 的宽度源 + 外层（无修饰）的宽度源
+      //   ——判据 ⑨ 核"点了内层，**外层 handler 不许跑**"（.stop 真的终止了冒泡）
+      stopOuterW: 300,
+      stopInnerW: 120,
       tapCount: 0
     };
   }
@@ -11685,8 +11854,8 @@
       }
       const harnessEvents = artifacts.events ?? [];
       const harnessHandlers = artifacts.handlers ?? {};
-      const byNodeEvent = /* @__PURE__ */ new Map();
-      for (const e of harnessEvents) byNodeEvent.set(`${e.nodeId}:${e.event}`, e.handler);
+      const byNodeEvent = indexEventBindings(harnessEvents);
+      const dispatchStateA = createDispatchState();
       const GESTURE_CB = "__proteusVaporGesture";
       if (typeof proteusHost.onGesture === "function") proteusHost.onGesture(GESTURE_CB);
       const runActions = (name, store) => {
@@ -11751,7 +11920,7 @@
         };
         globalThis[GESTURE_CB] = (type, nodeId, chainJson) => {
           const chain = parseChain(chainJson, nodeId);
-          const hit = dispatchChainA(chain, type, byNodeEvent, (h) => runActions(h, data));
+          const hit = dispatchChainA(chain, type, byNodeEvent, dispatchStateA, (h) => runActions(h, data));
           const handler = hit.handler;
           if (!handler) return JSON.stringify({ ok: false, reason: `\u94FE ${chain.join(">")} \u4E0A\u6CA1\u6709 ${type} \u7684 handler` });
           for (const [, cb] of triggers) cb();
@@ -11811,12 +11980,14 @@
       const abList = (0, import_runtime_core3.ref)(dataB.list);
       const abBoxW = (0, import_runtime_core3.ref)(dataB.boxW);
       const abPadW = (0, import_runtime_core3.ref)(dataB.padW);
+      const abStopOuterW = (0, import_runtime_core3.ref)(dataB.stopOuterW);
+      const abStopInnerW = (0, import_runtime_core3.ref)(dataB.stopInnerW);
       let abRootInst = null;
       const AbApp = {
         name: "VaporAbApp",
         setup() {
           abRootInst = (0, import_runtime_core3.getCurrentInstance)();
-          return { list: abList, boxW: abBoxW, padW: abPadW };
+          return { list: abList, boxW: abBoxW, padW: abPadW, stopOuterW: abStopOuterW, stopInnerW: abStopInnerW };
         },
         render
       };
@@ -12146,18 +12317,8 @@
     }
     return nodeId >= 0 ? [nodeId] : [];
   }
-  function dispatchChainA(chain, type, byNodeEvent, run) {
-    const fired = [];
-    let handler = "";
-    for (const id of chain) {
-      const h = byNodeEvent.get(`${id}:${type}`) ?? byNodeEvent.get(`${id}:tap`) ?? "";
-      if (!h) continue;
-      if (run(h)) {
-        fired.push(id);
-        if (!handler) handler = h;
-      }
-    }
-    return { fired, handler };
+  function dispatchChainA(chain, type, index, state, run) {
+    return dispatchGesture(chain, type, index, state, run);
   }
   var CHANNEL_KEYS = ["radius", "grad", "glow", "clip", "stroke_len", "mask"];
   function probeChannelsRaw(ids) {
@@ -12330,6 +12491,8 @@
       inst_virtual_rows: 0,
       inst_text_filled: 0,
       inst_width_filled: 0,
+      mix_text_probe: [],
+      text_probe_rounds: [],
       mount_ms: 0,
       mount_nodes: 0,
       updates_run: 0,
@@ -12342,6 +12505,7 @@
       channels: [],
       ev_bindings: 0,
       ev_handlers: 0,
+      ev_modifiers: 0,
       taps: 0,
       tap_evidence: [],
       uninstantiated_slots: 0,
@@ -12381,6 +12545,8 @@
       rep.inst_virtual_rows = inst.virtual?.rows.length ?? 0;
       rep.inst_text_filled = inst.nodes.filter((n) => typeof n.text === "string" && n.text.length > 0).length;
       rep.inst_width_filled = inst.nodes.filter((n) => typeof n.width === "number").length;
+      const segNodeIds = new Set(tpl.nodes.filter((n) => n.textSegments?.length).map((n) => n.id));
+      rep.mix_text_probe = inst.nodes.filter((n) => segNodeIds.has(n.id)).map((n) => ({ id: n.id, text: String(n.text ?? "") }));
       if (rep.inst_text_filled === 0) notes.push("\u26A0 \u5B9E\u4F8B\u6811\u91CC\u6CA1\u6709\u4EFB\u4F55\u975E\u7A7A\u6587\u672C\u2014\u2014\u56DE\u586B\u94FE\u53EF\u7591");
       const t3 = t();
       const mountOut = proteusHost.mount(JSON.stringify({ viewport: inst.viewport, nodes: inst.nodes }));
@@ -12410,8 +12576,9 @@
       const events = artifacts.events ?? [];
       rep.ev_bindings = events.length;
       rep.ev_handlers = Object.keys(handlers).length;
-      const byNodeEvent = /* @__PURE__ */ new Map();
-      for (const e of events) byNodeEvent.set(`${e.nodeId}:${e.event}`, e.handler);
+      const byNodeEvent = indexEventBindings(events);
+      const dispatchState = createDispatchState();
+      rep.ev_modifiers = events.filter((e) => e.stop || e.self || e.once).length;
       const runHandler = (name) => {
         const acts = handlers[name];
         if (!acts) return false;
@@ -12433,7 +12600,7 @@
       globalThis.__proteusVaporGesture = (type, nodeId, chainJson) => {
         const chain = parseChain(chainJson, nodeId);
         const before2 = { ...data };
-        const hit = dispatchChainA(chain, type, byNodeEvent, runHandler);
+        const hit = dispatchChainA(chain, type, byNodeEvent, dispatchState, runHandler);
         const handler = hit.handler;
         if (!handler) return JSON.stringify({ ok: false, reason: `\u94FE ${chain.join(">")} \u4E0A\u6CA1\u6709 ${type} \u7684 handler` });
         const ran = true;
@@ -12459,7 +12626,17 @@
             applied = -3;
           }
         }
-        gestureHits.push({ tap: gestureHits.length + 1, hit: nodeId, chain, fired: hit.fired, handler, source_after: changedSources });
+        gestureHits.push({
+          tap: gestureHits.length + 1,
+          hit: nodeId,
+          chain,
+          fired: hit.fired,
+          handler,
+          source_after: changedSources,
+          // ★P2-3：终止/跳过读数（判据核「修饰符真的生效」——既有形态下恒 false/[]）
+          stopped: hit.stopped,
+          skipped_self: hit.skippedSelf
+        });
         return JSON.stringify({
           ok: ran,
           handler,
@@ -12518,6 +12695,8 @@
           continue;
         }
         const changed = ao.rects ? Object.keys(ao.rects).length : 0;
+        const probe = ao.text_probe;
+        if (probe?.text) rep.text_probe_rounds.push(String(probe.text));
         evidence.push({
           round: r,
           row: at + 1,
@@ -12588,6 +12767,9 @@
             fired: lastHit?.fired ?? [],
             handler: lastHit?.handler ?? "",
             source_after: lastHit?.source_after ?? null,
+            // ★P2-3：该次 tap 是否被 .stop 终止（判据 ⑨ 用；无修饰符时恒 false）
+            stopped: lastHit?.stopped ?? false,
+            skipped_self: lastHit?.skipped_self ?? [],
             ops: tapOut.ok ? 1 : 0,
             changed_rects: geomChanged,
             geom_before: geomBefore,
