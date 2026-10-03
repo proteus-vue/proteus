@@ -45,6 +45,9 @@ jobs:
       - name: 盲等门禁（★用户红线：脚本内 sleep 一律禁止——要么 App/被测对象主动上报，要么 wait_for.sh 条件等待）
         run: node scripts/check-no-blind-wait.mjs
 
+      - name: 安全编辑门禁（★用户纪律：程序化编辑必须走 safe-edit——临时文件 + diff + 校验，禁止直接改源文件）
+        run: node scripts/check-safe-edit.mjs
+
       - name: 能力清单跨语言 golden 门禁（★HA3：golden 与 TS 侧 scanCapabilities 产出必须一致）
         # ★为什么需要：Rust 侧的消费判据只能证明"冻结那一刻"两边一致；TS 侧改了形状而 golden
         #   没重生成 ⇒ 静默失效。本门禁每次重新生成并逐字节比对（TS 侧一动就红）。

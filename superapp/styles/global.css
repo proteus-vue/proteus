@@ -252,12 +252,6 @@ body:has(.sa-dark) {
   color: var(--sa-text-2);
 }
 
-/* 分隔线（卡片内列表项之间） */
-.sa-hr {
-  height: 1px;
-  background: var(--sa-line-soft);
-  margin: 0 var(--sa-4);
-}
 
 /* ── 列表（生产应用最重的模式） ──────────────────────────────────────────────── */
 
@@ -285,9 +279,6 @@ body:has(.sa-dark) {
   background: var(--sa-surface-2);
 }
 
-.sa-item + .sa-item {
-  border-top: 1px solid var(--sa-line-soft);
-}
 
 .sa-item__main {
   flex: 1;

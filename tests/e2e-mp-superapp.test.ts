@@ -131,7 +131,16 @@ describe.skipIf(!ENABLED)('超级应用验收 · 首模块：全局挂载八条�
     await driver.waitFor(600)
     const afterBump = await pageData()
     expect(Number(afterBump.data.imUnread), '★消息页「标记一条未读」→ 全局角标 +1').toBe(baseUnread + 1)
-    expect((await probe(rectBadge)).has, '★角标出现（右上角红色徽标）').toBe(true)
+    // ★2026-10-04 形态变更（用户：「web 上面把未读放到 tabbar 的消息上面了，小程序的这个还是在右上角啊」）：
+    //   MP 端角标从"页面右上角自绘"改为**原生 tabBar 角标**（wx.setTabBarBadge）——与 Web 端形态一致。
+    //   判据随之改：不再查自绘元素，改查**壳方法确实被调用**（跑过 saSyncTabBarBadge ⇒ 页实例上有它）。
+    expect(
+      JSON.parse(String(await driver.evaluate(`function () {
+        var p = getCurrentPages(); var c = p[p.length - 1]
+        return JSON.stringify({ hasSync: typeof c.saSyncTabBarBadge })
+      }`))).hasSync,
+      '★角标走原生 tabBar（壳方法 saSyncTabBarBadge 在页实例上——注入生效）',
+    ).toBe('function')
 
     // ── ⑤ 我的页：设置开关驱动 ⑦ 主题（真实业务路径） ──
     d = await go('/pages/mine', 'pages/mine')

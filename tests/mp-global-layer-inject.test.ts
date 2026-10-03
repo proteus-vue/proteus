@@ -231,6 +231,31 @@ function onShow() { n.value++ }
   })
 })
 
+describe('★★2026-10-04 回归锁：编译缓存键**必须含 App 壳片段**（本轮真缺陷）', () => {
+  // 【缺陷】页面编译时注入壳片段，但缓存键不含它 ⇒ **改壳后页面命中旧缓存** ⇒ 新方法/字段永不注入。
+  //   实测：壳里新增的 saSyncTabBarBadge 在**全部页面产物**里缺失（单独编译壳却有）——
+  //   排查三轮才定位到缓存。修法：plugin.ts 的 compileCacheKey 传 globalLayerFingerprint。
+  it('★compileCacheKey 的 options 含 globalLayerFingerprint（不同壳片段 ⇒ 不同键）', async () => {
+    const { compileCacheKey } = await import('../packages/plugin-vite/src/cache')
+    const optsA = { rel: 'pages/a.vue', isComponent: false, px2rpx: false, rpxRatio: 2, annotateLines: false, debug: false, globalLayerFingerprint: 'SHELL_A' }
+    const optsB = { ...optsA, globalLayerFingerprint: 'SHELL_B' }
+    const root = process.cwd()
+    const kA = compileCacheKey('<view/>', optsA, root)
+    const kB = compileCacheKey('<view/>', optsB, root)
+    expect(kA, '★壳片段不同 ⇒ 缓存键必须不同（否则改壳不失效）').not.toBe(kB)
+    // 反向：其余相同 ⇒ 键相同（缓存仍有效——不是把缓存整个废掉）
+    const kA2 = compileCacheKey('<view/>', { ...optsA }, root)
+    expect(kA2, '同输入 ⇒ 同键（缓存仍工作）').toBe(kA)
+  })
+
+  it('★plugin.ts 确实把 shell 片段传进缓存键（源码级判据——防"改回不传"）', async () => {
+    const fs = await import('node:fs')
+    const src = fs.readFileSync(new URL('../packages/plugin-vite/src/plugin.ts', import.meta.url), 'utf-8')
+    expect(src, '★缓存键构造处必须传 globalLayerFingerprint').toContain('globalLayerFingerprint:')
+    expect(src, '★且取值来自 globalLayerSnippet（不是常量占位）').toMatch(/globalLayerFingerprint:[\s\S]{0,200}globalLayerSnippet/)
+  })
+})
+
 describe('★GP3-b1 · ③ 共享状态模块：API 齐备（写/读/快照/订阅）', () => {
   it('状态模块源码含 get/set/has/all/subscribe（页面桥只调 get/set）', async () => {
     const mod = await import('../packages/plugin-vite/src/appSkeleton')
