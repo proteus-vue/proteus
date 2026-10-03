@@ -36,30 +36,51 @@ case "$STATE" in
 esac
 echo "    hap=${HAP##*/}  设备=$STATE"
 
-echo "==> 1. 安装 + 清场 + 删除旧报告"
+echo "==> 1. 安装 + 清场 + **清日志缓冲** + 删除旧报告"
 HDC install "$HAP" 2>&1 | grep -qiE "successfully|Success" || { echo "✗ 安装失败"; exit 1; }
 HDC shell "aa force-stop $BUNDLE" >/dev/null 2>&1 || true
+# ★★清日志缓冲（与 Android `adb logcat -c` 同义）——【为什么必须（本仓实测的陈旧信号隐患）】
+#   等待是 `grep PROTEUS_VAPOR_DONE`，而 hilog 缓冲可跨分钟保留**上一次运行**的 DONE 行
+#   ⇒ 不清缓冲时等待会**立刻返回陈旧信号**（"看起来跑完了"）；旧报告同理。
+HDC shell "hilog -r" >/dev/null 2>&1 || true
 HDC shell "rm -f $REPORT_DEV" >/dev/null 2>&1 || true
+# ★删不掉就报错（否则下一步"等文件"会立刻命中**旧报告** ⇒ 假通过）
+if HDC shell "test -f $REPORT_DEV && echo STILL_EXISTS" 2>/dev/null | grep -q STILL_EXISTS; then
+  echo "✗ 旧报告删不掉（$REPORT_DEV）——等待信号会命中陈旧文件，拒绝继续"; exit 1
+fi
 
 echo "==> 2. 启动（探针随页面 onAppear 自动跑）"
 HDC shell "aa start -a EntryAbility -b $BUNDLE" 2>&1 | grep -qi "successfully" || { echo "✗ 启动失败"; exit 1; }
 
-echo "==> 3. 等主动上报 PROTEUS_VAPOR_DONE（条件等待 ≤90s——零盲等）"
-if ! bash "$WAIT" --cmd "bash '$HERE/hdc.sh' shell 'hilog -x | grep -q PROTEUS_VAPOR_DONE'" --timeout 90 --interval 3; then
-  echo "✗ 90s 内未见 PROTEUS_VAPOR_DONE" >&2
+echo "==> 3. 等**报告落盘**（完成信号 = 文件存在；探针先落盘、后打 DONE——零盲等）"
+# ★判据为什么从"等 DONE 日志行"改成"等文件"（本仓实测）：DONE 行要**二次 shell 查询**，
+#   实测出现过 wait 命中后紧接着查询为空（hilog 缓冲/传输抖动）⇒ 脚本以空串走 ok=0 分支**误判失败**；
+#   而报告文件由探针**成功与失败路径都写盘**（同一写盘块）⇒ 文件存在即"探针跑完了"的充分信号。
+# ★★必须用**字符串回显**而不是 `test -f` 的退出码（第二次实测抓出的装置缺陷）：**hdc shell
+#   不传远端退出码**（实测：远端 `test -f /nonexistent-xyz` ⇒ hdc 仍返回 0）⇒ 按退出码等待
+#   会"waited 0s 立刻通过"，随后 `file recv` 报 ENOENT（症状离根因极远）。
+if ! bash "$WAIT" --cmd "bash '$HERE/hdc.sh' shell 'test -f $REPORT_DEV && echo PROTEUS_REPORT_READY' | grep -q PROTEUS_REPORT_READY" --timeout 90 --interval 3; then
+  echo "✗ 90s 内未见报告落盘（$REPORT_DEV）" >&2
   HDC shell "hilog -x | grep -E 'VAPOR|cppcrash' | tail -8" 2>&1 | sed 's/^/  /' >&2
   exit 1
 fi
+# DONE 行仅作**信息输出**（best-effort，不作门禁——门禁是下面的报告判据）
 DONE_LINE="$(HDC shell 'hilog -x | grep PROTEUS_VAPOR_DONE | tail -1' 2>/dev/null | head -1)"
-echo "    $DONE_LINE"
-case "$DONE_LINE" in
-  *ok=1*) ;;
-  *) echo "✗ 探针上报 ok=0（见上方日志）"; exit 1 ;;
-esac
+[ -n "$DONE_LINE" ] && echo "    $DONE_LINE"
 
 echo "==> 4. 取回报到"
-HDC file recv "$REPORT_DEV" "$RESULTS/vapor.json" >/dev/null 2>&1
-[ -s "$RESULTS/vapor.json" ] || { echo "✗ 报告未取回（$REPORT_DEV）"; exit 1; }
+# ★★先删本地旧文件 + **检查 recv 退出码**（本仓实测的第二个陈旧信号缺陷）：
+#   原写法 `recv >/dev/null 2>&1` 吞掉失败 + 只查 `-s`（非空）⇒ 本地旧报告让检查**假通过**
+#   ⇒ 判据跑在**上一次**的报告上（实测：设备端 text_probe 已就绪，判据却一直红）。
+#   Android 版（run-vapor.sh）本来就是"先 rm + 查退出码"——鸿蒙侧漏了这两点。
+rm -f "$RESULTS/vapor.json"
+RECV_OUT="$(HDC file recv "$REPORT_DEV" "$RESULTS/vapor.json" 2>&1)"
+# ★判据 = **本地文件非空**（recv 的输出串不作判据：hdc 的措辞可能变，且曾把 trace 混进管道）
+if [ ! -s "$RESULTS/vapor.json" ]; then
+  echo "✗ 报告取回失败（${REPORT_DEV}）：$(echo "$RECV_OUT" | head -2 | tr '\n' ' ')"
+  exit 1
+fi
+echo "    vapor.json $(wc -c < "$RESULTS/vapor.json" | tr -d ' ') 字节" 
 
 echo "==> 5. 判据（与 Android 共用 check-vapor-device.py；按 host_id 分档）"
 python3 "$ROOT/hosts/android/check-vapor-device.py" "$RESULTS/vapor.json"

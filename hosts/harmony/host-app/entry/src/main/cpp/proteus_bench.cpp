@@ -1659,6 +1659,11 @@ static std::string vaporApplyOpsImpl(const std::string& bytesJson) {
     std::string rects = extractValueAfterKey(resp, "rects", '{', '}');
     // ★文本同步（判据 ⑥ 的 "宿主真的消费了 text_updates"）：逐条更新样式表（后续重建指令时用新文本）
     int textSynced = 0;
+    // ★★`text_probe`（2026-10-03 补：与 Android `VaporRenderHost.lastTextProbe` **同形**）——
+    //   「本轮最后一次文本更新」的 {id,text}。判据 ⑩b 靠它核"更新后的文本仍是完整拼接串"
+    //   （缺它 ⇒ 鸿蒙在混合文本更新上**无读数**、判红——本仓实测：三端对齐排查时抓到）。
+    int lastProbeId = -1;
+    std::string lastProbeText;
     std::string tu = extractValueAfterKey(resp, "text_updates", '{', '}');
     if (!tu.empty() && tu.size() > 2) {
         // 扁平表逐对解析（`"<id>":"<text>"`；splitJsonObjects 不适用——此表没有内层对象）
@@ -1684,6 +1689,8 @@ static std::string vaporApplyOpsImpl(const std::string& bytesJson) {
             }
             auto it2 = g_vaporStyles.find(id);
             if (it2 != g_vaporStyles.end()) it2->second.text = val;
+            lastProbeId = id;
+            lastProbeText = val;
             textSynced++;
             q = vStart;
         }
@@ -1696,7 +1703,15 @@ static std::string vaporApplyOpsImpl(const std::string& bytesJson) {
     snprintf(head, sizeof(head),
              "{\"ok\":true,\"applied\":%.0f,\"relayout\":%.0f,\"text_synced\":%d,",
              applied, relayout, textSynced);
-    std::string out = std::string(head) + "\"rects\":" + (rects.empty() ? "{}" : rects) + "}";
+    std::string out = std::string(head) + "\"rects\":" + (rects.empty() ? "{}" : rects);
+    if (textSynced > 0 && lastProbeId >= 0) {
+        out += ",\"text_probe\":{\"id\":" + std::to_string(lastProbeId) + ",\"text\":\"" + jsonEscape(lastProbeText) + "\"}";
+    }
+    out += "}";
+    // ★诊断（三端对齐排查用）：确认新代码路径真的跑在设备上（无此行 = 跑的是旧 .so）
+    OH_LOG_Print(LOG_APP, LOG_INFO, PROTEUS_BENCH_DOMAIN, PROTEUS_BENCH_TAG,
+                 "PROTEUS_VAPOR_TEXTPROBE id=%{public}d tlen=%{public}zu attached=%{public}d",
+                 lastProbeId, lastProbeText.size(), (textSynced > 0 && lastProbeId >= 0) ? 1 : 0);
     OH_LOG_Print(LOG_APP, LOG_INFO, PROTEUS_BENCH_DOMAIN, PROTEUS_BENCH_TAG,
                  "PROTEUS_VAPOR_APPLYOPS applied=%{public}d relayout=%{public}d text_synced=%{public}d bytes=%{public}zu",
                  (int)applied, (int)relayout, textSynced, buf.size());

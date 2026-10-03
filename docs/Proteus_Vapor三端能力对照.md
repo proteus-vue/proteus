@@ -13,7 +13,8 @@
 
 | # | 能力 | Android | iOS | 鸿蒙 | 判据/产物 |
 |---|---|---|---|---|---|
-| 1 | **设备端实例化**（编译产物 → 节点树） | ✅ `runShort` | ✅ `V3_vapor_slot_pipeline` | ✅ `vaporProbe` | 三端均：模板 12 节点 → 实例化 26 节点（含运行时分配 id） |
+| 0 | **Vapor 设备端链全判据 ①–⑫**（实例化/增量/交互/事件修饰符 `.stop`/混合文本/once·memo 门禁/表达式能力） | ✅ **13/13**（2026-10-03） | ✅ **12/13**（⑦ 通道如实跳过） | ✅ **13/13**（2026-10-03） | **三端同一份 `bundle-vapor.js` + 同一份 `check-vapor-device.py`**（零移植）；★iOS 腿为本日新接（补 `--vapor` 模式 + `text_probe` 回执 + 离屏像素自检）·鸿蒙腿本轮补齐两处装置缺陷（陈旧信号） |
+| 1 | **设备端实例化**（编译产物 → 节点树） | ✅ `runShort` | ✅ `V3_vapor_slot_pipeline` + `--vapor` | ✅ `vaporProbe` | 三端均：模板 **22 节点** → 实例化 **36 节点**（含运行时分配 id）；同一份产物 |
 | 2 | **订阅驱动增量**（二进制指令 → 内核几何变） | ✅ | ✅ | ✅ | Android/iOS：V3 单节点更新分位；鸿蒙：3 轮 / 183B / 探针宽 52→80 |
 | 3 | **六端 SFC 压力夹具**（同一份 .vue） | ✅ `runStress` | ✅ `--stress` | ✅ `PROTEUS_SFCSTRESS` | 六端像素报告（44 节点） |
 | 4 | **A/B 等价对照**（Vapor vs Vue 运行时） | ✅（7 组） | ✅ **已补** | ✅ **已补** | **三端同一份判据、同一份 bundle**（零移植）；iOS（2026-10-03）：mount 9 样本 0px · 更新 27 样本 0px · **绘制通道 5/5 逐项等价** · **事件路径 ⑦a–g 全过（含冒泡链逐跳 [30,5]）**——iOS 比鸿蒙更完整（无分档跳过）；Android 原有：**鸿蒙（2026-10-03）**：同一份判据——**mount 几何 9 样本 max_delta 0px** · **更新后 27 样本 max_delta 0px** · 两路 moved 一致 `[20,28,36]` · 文本双消费 `3/3` · 宿主补丁 3 次；④绘制通道/⑦事件路径按能力面**如实分档** |
@@ -21,7 +22,34 @@
 | 6 | **事件路径**（tap → handler → 几何变） | ✅ 判据 ⑦（含冒泡链逐跳） | ✅ **已补** | ✅ **已补** | **三端同判据 ⑦a–g 全绿**：两路链 [11>10>0] / [39>38>3>2>1]，逐跳位移 [30,5] 一致；鸿蒙经 `tapAt` → 核心 hitTest → **JSVM 反向调 JS**（`onGesture` 注册名）真验；iOS 经 shim 归一签名（tapAt/scrollRows 的 JSON vs 双参） |
 | 7 | **绘制通道**（圆角/渐变/发光/裁剪/描边） | ✅ `probeChannels` 5 通道 | ✅（层上验证） | ◐ `probeChannels`（radius 真值；其余待渲染层） | — |
 
-**统计**：Android **6.5/7** · iOS **6/7** · 鸿蒙 **6.5/7**（▲本轮：A/B + 事件路径 + **虚拟化列表**——**与 Android 同强度**；仅 ④绘制通道按渲染层能力分档）。
+**统计**：Android **6.5/7** · iOS **6/7** · 鸿蒙 **6.5/7**（A/B + 事件路径 + 虚拟化列表与 Android 同强度；④绘制通道按渲染层能力分档）。
+
+★★**2026-10-03 续 · Vapor 设备端链三端全接（本日新增）**：`check-vapor-device.py` 的判据面从
+**①–⑧ 扩到 ①–⑫**（新增 ⑨ 事件修饰符 `.stop` 真终止冒泡 / ⑩+⑩b 混合文本首帧与更新完整 /
+⑪ v-once 冻结与 v-memo 组门逐节点核对 / ⑫ 表达式能力：v-text·白名单纯函数·`Math.PI` 内联·纯方法·可选链），
+**三端现已同跑这一套**（同一份 bundle + 同一份判据，零移植）：
+
+| 端 | 结果 | 本轮为接线补的东西 |
+|---|---|---|
+| Android | **13/13** | （判据本就在此端实现——基准端） |
+| 鸿蒙 | **13/13** | 宿主 `applyOps` 回执补 `text_probe`（判据 ⑩b 依赖）；★并修两处**装置缺陷**：① 等待信号命中陈旧日志（不清 hilog 缓冲）② `recv` 失败被吞 + 本地旧报告让 `-s` 假通过（症状=判据跑上一轮数据） |
+| iOS | **12/13**（⑦ 如实跳过） | 新增 `--vapor` 模式（跑 `runShort` 路径）；`applyOps` 回执补 `text_probe`；新增**离屏像素自检**（`paintedPixelProbe`：`CALayer.render(in:)` 真渲染一遍数像素 ⇒ 判据 ④ 的 iOS 腿）；脚本接入同一判据（`--vapor` ⇒ `check-vapor-device.py`） |
+
+★**三端真机读数（同一份 22 节点模板 / 11 源 / L1 15）**：
+- 实例化 36 节点（含运行时分配 14）· 文本回填 17 处 · 宽度 13 处；
+- 增量 3 轮 · 204 字节指令 · 探针节点宽度 52→80；
+- 交互 4 次 tap 全部：handler 命中 + 数据变 + **内核几何变**；⑨ `.stop` 命中内层 13、祖先源未变；
+- ⑩/⑩b 混合文本：`row-1·row 1` → 更新后 `row-1·upd 0`（完整拼接，三端一致）；
+- ⑪ 逐节点：once 节点未写 / 对照节点照常写 / memo 净跳过 0B / memo 脏放行且写新值；
+- ⑫ 表达式：`vt-3 · pi-3.14 · mx-7 · jn-a|b · oc-ok`（三端一致）。
+
+★**诚实边界（三端各自的分档，均"如实跳过"而非判红）**：Android 全量；鸿蒙 ⑦ 绘制通道只 radius
+（渐变/发光/裁剪/描边属渲染层批次）；iOS ⑦ 首轮接入（探针已接但期望 id 未实测标定——**下一轮收紧**）。
+
+★★**iOS 腿顺带抓出并修的真缺陷**：`applyOps` 回执缺 `text_probe`（判据 ⑩b 无读数 ⇒ 三端对齐排查时
+直接暴露"iOS 少一个回执字段"）；同时定位了一次"主 App 白屏"误报——那是**基准 App（`dev.proteus.layoutcore`
+= ProteusBench，界面本就空白）**被调试命令启动到前台所致（**不是**主 App 缺陷；主 App = `dev.proteus.experiments`，
+截图核验 showcase 正常）。★教训：**两个 App 的 bundle id 混用**会让"白屏"看起来像渲染缺陷。
 
 ## 三、缺口归因
 
@@ -126,3 +154,56 @@ A Δ=30px（指令 56B）/ B Δ=30px（补丁 2 条）。
 - iOS 的 V4/V5（滚动补刷 + 像素验证）与 Android 判据 ④（绘制通道逐项等价）**形态不同**：
   前者验"滚动后屏幕与几何一致"，后者验"两条路通道签名相等"——**不可互相替代**。
 - 鸿蒙 `probeChannels` 当前只返回 `radius`（渲染层其余通道待补，判据如实分档）。
+
+## 五 · Vapor 设备端链三端接线（2026-10-03 · 判据 ①–⑫）
+
+**背景**：P2-2~P2-9 这批能力（混合文本 / 事件修饰符 / v-model 修饰符 / v-once·v-memo /
+v-text·动态属性 / 白名单纯函数·可选链）全部落在**平台无关的共享包**（编译器 + `slot-runtime`）——
+构造上三端共享；**但验证只有 Android**（判据 ①–⑫ 全在 `check-vapor-device.py`）。
+本次把鸿蒙与 iOS 都接到同一条链上，让"构造对齐"变成"有证据对齐"。
+
+### 5.1 鸿蒙（完成 ✅ 13/13）
+
+材料本就同源（`gen-fixtures.mjs` 从 Android 逐字节复制 bundle/artifacts），宿主方法齐全
+（tapAt/onGesture/readRects/probeChannels/updatePatches/mountVirtual/scrollRows）。本轮补：
+
+1. **宿主 `applyOps` 回执补 `text_probe`**（判据 ⑩b 依赖）：解析 `text_updates` 时记 `lastProbeId/Text`，
+   回执追加 `"text_probe":{"id":…,"text":…}`——与 Android `VaporRenderHost.lastTextProbe` **同形**。
+   ★缺它的症状：鸿蒙在混合文本更新上**无读数**、判据 ⑩b 判红（三端对齐排查时抓到）。
+   诊断日志 `PROTEUS_VAPOR_TEXTPROBE id=… tlen=… attached=…`（区分"so 未更新"与"JS 未读到"）。
+2. **★装置缺陷①：等待信号命中陈旧日志**。原写法只 `grep PROTEUS_VAPOR_DONE`，而 hilog 缓冲可保留
+   上一次运行的 DONE 行 ⇒ 等待**立刻返回**（"看起来跑完了"）。修：清场时 `hilog -r`（与 Android
+   `logcat -c` 同义）+ 改等**报告落盘**（探针成功与失败路径都写盘，文件存在即完成信号；
+   失败诊断交判据读报告里的 ok/error）。
+3. **★装置缺陷②：`recv` 失败被吞 + 本地旧报告让检查假通过**。原写法 `recv >/dev/null 2>&1` 只看
+   `-s`（非空）⇒ `recv` 失败时**上一轮的报告**让检查通过 ⇒ **判据跑在旧数据上**（实测症状：设备端
+   text_probe 已就绪，判据却一直红）。修：先 `rm` 本地旧件 + 查 `recv` 结果 + 断言本地文件非空。
+4. **★`hdc shell` 不回传远端退出码**（第二次实测才定位）：`test -f /nonexistent` 仍返回 0 ⇒
+   按退出码等待会"waited 0s 立刻通过"（随后 `recv` 报 ENOENT，症状离根因极远）。
+   修：等待用**字符串回显**（`test -f X && echo PROTEUS_REPORT_READY` + grep）。
+
+### 5.2 iOS（完成 ✅ 12/13，⑦ 如实跳过）
+
+iOS 此前只有 `--vapor-ab`（跑 `mode:'ab'`，判据集 = A/B ④⑦），**没有**跑 `runShort` 的模式
+（判据 ①–⑫ 所在路径）。本轮补：
+
+1. **宿主 `applyOps` 回执补 `text_probe`**（同上，与 Android/鸿蒙同形——`textUpdates` 字典取一条）。
+2. **新增离屏像素自检 `paintedPixelProbe`**（判据 ④ 的 iOS 腿）：`view.layer.render(in:)` 走 Core
+   Animation 真实绘制路径，数"与背景色（#14141c）差超容差"的像素 ⇒ 层上真画了内容才计数
+   （空层/没建层 ⇒ 恒 0 ⇒ 判据能红）。实测 **242446 采样 / 804 色**。
+3. **新增 `--vapor` 模式**（`driveVapor`）：宿主桥 shim（与 A/B 同一套签名归一）+ **调用计数**
+   （`__hostMountCalls` 等 ⇒ 判据 ④ 的宿主读数）+ eval 同一份 bundle + 报告落盘（`vapor.json`）。
+4. **脚本接线**：`--vapor` ⇒ `check-vapor-device.py`（与 Android/鸿蒙**同一份**）；报告名与三端同名
+   （`vapor.json`）；`build_id` 断言按分档跳过（该 bundle 不注入 build_id，与 vapor-ab 同况）。
+5. **⑦ 绘制通道如实跳过**：探针已接（A/B 路径已验 5/5），但本判据的期望值是**夹具节点固定 id**——
+   先如实跳过、等一轮实测读数再收紧（本仓纪律：不自造未实测的判据口径）。
+
+### 5.3 ★排查过程中定位的一次"主 App 白屏"误报（记录以免再踩）
+
+现象：用户报"App 打开是白屏"。取证后发现设备前台跑的是 **`ProteusBench`**
+（bundle id = `dev.proteus.layoutcore`，**基准 App，界面本来就空白**——只写 JSON 报告）；
+而主 App 是 **`dev.proteus.experiments`**（Morpheus 炫技场）。
+根因：调试命令用了 `dev.proteus.layoutcore`（以为是主 App），把它启动到前台并留着。
+⇒ 终止误启进程 + 用正确 bundle id 启动，截图核验 MORPHEUS 动画正常（**主 App 无缺陷**）。
+★教训：**同名/近名 App 的 bundle id 必须写死用途**（"哪个是面板、哪个是基准"），
+否则"白屏"会被误读成渲染缺陷。
