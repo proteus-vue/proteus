@@ -577,6 +577,42 @@ def main() -> int:
                 print(f"  ✓ ⑯ ★emits 子→父：$emit('{routed[0].get('event')}', 载荷={routed[0].get('payload')!r})"
                       f" 路由到 {routed[0].get('handler')} · 父源 {sa} · 锚节点内核宽度 {gb}→{ga}")
 
+    # ── ⑰ ★★★P1-3 作用域插槽：内容按**出口 props** 求值（文本 + 样式）──
+    #   【为什么单独判】作用域插槽的失效形态全是静默的：`sp.*` 读 undefined（文本缺值）、
+    #     作用域样式绑定**整条消失**（产物里连槽位都没有——本仓实测过）。⇒ 三证缺一即红：
+    #     ① 文本 = `cnt-7`（不是空串/含 undefined）② 内容节点字段里有作用域宽度
+    #     ③ **内核真值**宽度 = 那个值（"字段写了"与"内核认了"是两件事）。
+    scp = rep.get("scoped_probe") or {}
+    if not scp or not scp.get("texts"):
+        print("  ◐ ⑰ 作用域插槽：本端夹具未覆盖（报告无 scoped_probe）——如实跳过")
+    else:
+        texts = [str(t) for t in scp.get("texts", [])]
+        wf = scp.get("anchor_width_field", -1)
+        wr = scp.get("anchor_width_rect", -1)
+        has_cnt = any(t.startswith("cnt-") for t in texts)
+        bad_undef = any("undefined" in t for t in texts)
+        if not has_cnt:
+            fail(f"★作用域插槽内容文本缺失（texts={texts}）——`sp.count` 没绑定到出口 props")
+            ok = False
+        elif bad_undef:
+            fail(f"★作用域内容含字面量 undefined（texts={texts}）——作用域变量没绑上（静默错字）")
+            ok = False
+        elif not any(t == "cnt-7" for t in texts):
+            fail(f"★作用域内容文本≠`cnt-7`（texts={texts}）——出口 props 求值不对（scopedN=7）")
+            ok = False
+        elif not (isinstance(wf, (int, float)) and wf > 0):
+            fail(f"★作用域**样式**绑定没生效（字段 width={wf}）——`:width=\"sp.w\"` 被丢弃（本仓实测的静默形态）")
+            ok = False
+        elif not (isinstance(wr, (int, float)) and wr > 0):
+            fail(f"★作用域样式在**内核**里没有几何（rect width={wr}）——字段写了但内核没认")
+            ok = False
+        elif wf != wr:
+            fail(f"★作用域宽度两侧不一致：节点字段 {wf} vs 内核真值 {wr}——两处对同一量理解不同")
+            ok = False
+        else:
+            print(f"  ✓ ⑰ ★作用域插槽：内容文本 {next(t for t in texts if t.startswith('cnt-'))!r} · "
+                  f"作用域样式 width={wf}（字段与内核一致）")
+
     # 附加观测（不判红，只如实报）
     una = rep.get("uninstantiated_slots", 0)
     if una:

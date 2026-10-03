@@ -11125,8 +11125,9 @@
       }
       return doomed;
     };
-    const dissolveOutlets = (list, fills) => {
+    const dissolveOutlets = (list, fills, evalProps) => {
       const consumed = /* @__PURE__ */ new Set();
+      const placed = [];
       for (const outlet of list.filter((x) => x.slotOutlet)) {
         if (list.indexOf(outlet) < 0) continue;
         const name = outlet.slotOutlet.name;
@@ -11134,6 +11135,7 @@
         const useFill = fill !== void 0 && fill.length > 0 && !consumed.has(name);
         if (useFill) {
           consumed.add(name);
+          const outletProps = evalProps ? evalProps(outlet) : {};
           const doomed = subtreeOf(list, outlet.id);
           for (const id of doomed) droppedNodeIds.add(id);
           const idx = list.findIndex((x) => x.id === outlet.id);
@@ -11146,6 +11148,7 @@
             delete r.slotFor;
           }
           slotMounts.push({ outletNodeId: outlet.id, name, filled: true, contentIds: fill.map((x) => x.id), fallbackIds: [] });
+          placed.push({ name, fill, outlet, props: outletProps });
         } else {
           const kids = list.filter((x) => x.parentId === outlet.id);
           const fallbackIds = [];
@@ -11164,7 +11167,7 @@
           slotMounts.push({ outletNodeId: outlet.id, name, filled: false, contentIds: [], fallbackIds });
         }
       }
-      return consumed;
+      return { consumed, placed };
     };
     if (opts.components) {
       const depth = opts.componentDepth ?? 0;
@@ -11226,13 +11229,86 @@
         const contentRoots = nodes.filter((x) => x.parentId === boundary.id && x.slotFor);
         if (contentRoots.length > 0 || childInst.slotMounts?.length) {
           const fills = /* @__PURE__ */ new Map();
+          const scopeOf = /* @__PURE__ */ new Map();
           for (const r of contentRoots) {
-            const nm = r.slotFor.name;
-            const arr = fills.get(nm) ?? [];
+            const sf = r.slotFor;
+            const arr = fills.get(sf.name) ?? [];
             arr.push(r);
-            fills.set(nm, arr);
+            fills.set(sf.name, arr);
+            if (!scopeOf.has(sf.name)) scopeOf.set(sf.name, sf.scope);
           }
-          const consumed = dissolveOutlets(childInst.nodes, fills);
+          const childEvaluators = def.table ? VaporRuntime.buildEvaluators(def.table.evaluators) : /* @__PURE__ */ new Map();
+          const evalOutletProps = (outlet) => {
+            const out = {};
+            const names = outlet.slotOutlet.props ?? [];
+            const outletLocal = outlet.id - (idOffset + childOffset);
+            const allSlots = def.table ? [...def.table.sources.flatMap((s) => s.slots), ...def.table.constantSlots ?? []] : [];
+            for (const propName of names) {
+              const sl = allSlots.find((s) => s.nodeId === outletLocal && s.propKey === `attr.${propName}`);
+              if (!sl) continue;
+              const impl = childEvaluators.get(sl.evaluatorId);
+              if (!impl) continue;
+              try {
+                out[propName] = impl({ read: childRead });
+              } catch {
+                out[propName] = void 0;
+              }
+            }
+            return out;
+          };
+          const { consumed, placed } = dissolveOutlets(childInst.nodes, fills, evalOutletProps);
+          for (const p of placed) {
+            const scopeVar = scopeOf.get(p.name);
+            if (!scopeVar) continue;
+            const rootIds = new Set(p.fill.map((x) => x.id));
+            const byIdOfChild = new Map(childInst.nodes.map((x) => [x.id, x]));
+            const subtree = [];
+            for (const x of childInst.nodes) {
+              let cur = x;
+              let guard = 0;
+              while (cur !== void 0 && guard++ < 64) {
+                if (rootIds.has(cur.id)) {
+                  subtree.push(x);
+                  break;
+                }
+                cur = cur.parentId === null ? void 0 : byIdOfChild.get(cur.parentId);
+              }
+            }
+            const scopedRead = (n2) => n2 === scopeVar ? p.props : opts.read(n2);
+            for (const node of subtree) {
+              const tn = tpl.nodes.find((x) => x.id === node.id - idOffset);
+              if (tn?.textSegments && tn.textSegments.length > 0) {
+                node.text = evalTextSegments(tn.textSegments, scopedRead);
+              }
+            }
+            let appliedScoped = 0;
+            for (const sc of opts.table?.slotScopedSlots ?? []) {
+              if (sc.scope !== scopeVar) continue;
+              const target = subtree.find((x) => x.id === sc.nodeId + idOffset);
+              if (!target) continue;
+              const impl = evaluators.get(sc.evaluatorId);
+              if (!impl) continue;
+              const f = engineFieldOf(sc.propKey);
+              if (!f) continue;
+              let v;
+              try {
+                v = impl({ read: scopedRead });
+              } catch {
+                continue;
+              }
+              if (f.kind === "text") {
+                target.text = v === void 0 || v === null ? "" : String(v);
+              } else {
+                ;
+                target[f.key] = v;
+              }
+              appliedScoped++;
+              valuesFilled++;
+            }
+            instNotes.push(
+              `\u63D2\u69FD ${name}#${p.name}\uFF1A\u4F5C\u7528\u57DF \`${scopeVar}\` \u7ED1\u5B9A\u51FA\u53E3 props ${JSON.stringify(p.props)}\uFF08\u6587\u672C\u6BB5\u91CD\u6C42\u503C ${subtree.filter((x) => tpl.nodes.find((t) => t.id === x.id - idOffset)?.textSegments?.length).length} \u8282\u70B9 \xB7 \u4F5C\u7528\u57DF\u6837\u5F0F ${appliedScoped} \u5904\uFF09`
+            );
+          }
           for (const [nm, roots] of fills) {
             if (consumed.has(nm)) {
               for (const r of roots) {
@@ -13333,6 +13409,7 @@
       component_kid_probe: {},
       slot_probe: { texts: [], rects: [], fills: [], markers_left: -1 },
       emit_probe: { emits: [], parent_source_after: void 0, geom_before: -1, geom_after: -1 },
+      scoped_probe: { texts: [], anchor_id: -1, anchor_width_field: -1, anchor_width_rect: -1 },
       mount_ms: 0,
       mount_nodes: 0,
       updates_run: 0,
@@ -13919,6 +13996,50 @@
           }
         } else {
           notes.push("\u63D2\u69FD\u63A2\u9488\uFF1A\u4EA7\u7269\u65E0 slot \u6BB5\uFF08\u5939\u5177\u672A\u8986\u76D6 \u21D2 \u5224\u636E \u246E \u6309\u7F3A\u5931\u5904\u7406\uFF09");
+        }
+      }
+      {
+        const scopedArt = artifacts.scoped;
+        if (scopedArt?.tpl?.ok) {
+          const scopedDefs = {};
+          for (const [nm, def] of Object.entries(artifacts.components ?? {})) {
+            scopedDefs[nm] = { template: def.tpl, table: def.table };
+          }
+          const scopedInst = instantiateTemplate(scopedArt.tpl, {
+            viewport: args.viewport,
+            // ★夹具的 `scopedN` 初值 7（与 SCODED_SFC 的 script 一致）——出口 props 的源头
+            read: (n) => n === "scopedN" ? 7 : void 0,
+            table: scopedArt.table,
+            registry: new ListRegistry(),
+            components: scopedDefs
+          });
+          try {
+            const scOut = JSON.parse(
+              proteusHost.mount(JSON.stringify({ viewport: scopedInst.viewport, nodes: scopedInst.nodes }))
+            );
+            if (scOut.ok === true) {
+              const rectsAll = JSON.parse(proteusHost.readRects());
+              const rects = rectsAll.rects ?? {};
+              const anchor = scopedInst.nodes.find((n) => typeof n.text === "string" && n.text.startsWith("cnt-"));
+              rep.scoped_probe = {
+                texts: scopedInst.nodes.filter((n) => typeof n.text === "string" && n.text.length > 0).map((n) => String(n.text)),
+                anchor_id: anchor?.id ?? -1,
+                // ★节点字段（作用域样式写进去的）与**内核真值**（必须一致——"字段写了"与"内核认了"是两件事）
+                anchor_width_field: anchor ? anchor.width ?? -1 : -1,
+                anchor_width_rect: anchor ? rects[String(anchor.id)]?.width ?? -1 : -1
+              };
+            } else {
+              notes.push(`\u4F5C\u7528\u57DF\u63D2\u69FD\u63A2\u9488 mount \u5931\u8D25\uFF1A${scOut.error ?? "\u672A\u77E5"}`);
+            }
+          } catch (e) {
+            notes.push(`\u4F5C\u7528\u57DF\u63D2\u69FD\u63A2\u9488\u5F02\u5E38\uFF1A${String(e?.message ?? e)}`);
+          }
+          try {
+            proteusHost.mount(JSON.stringify({ viewport: inst.viewport, nodes: inst.nodes }));
+          } catch {
+          }
+        } else {
+          notes.push("\u4F5C\u7528\u57DF\u63D2\u69FD\u63A2\u9488\uFF1A\u4EA7\u7269\u65E0 scoped \u6BB5\uFF08\u5939\u5177\u672A\u8986\u76D6 \u21D2 \u5224\u636E \u2470 \u6309\u7F3A\u5931\u5904\u7406\uFF09");
         }
       }
       rep.ok = rep.updates_run > 0;

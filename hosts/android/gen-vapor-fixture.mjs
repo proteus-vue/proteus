@@ -218,6 +218,37 @@ const SLOT_SFC = `<template>
   </p-view>
 </template>`
 
+/**
+ * ★★★P1-3 **作用域插槽**夹具（2026-10-03）：子组件出口带 props（`:n` 来自它自己的 props、
+ *   `:w="n * 10"` 是**出口上的表达式**——顺带验"出口 props 在子作用域求值"）；
+ *   父级 `#default="sp"` 内容同时含**文本段**（`cnt-{{ sp.count }}`）与**样式绑定**
+ *   （`:width="sp.w"`——此前会被静默丢弃的那一类）。
+ *   判据 ⑰ 核：文本 = `cnt-7`（不是空/undefined）、内核宽度 = 70（=7*10）。
+ */
+const SCOPED_CHILD_SFC = `<template>
+  <p-view style="flex-direction: column; height: 40px">
+    <slot :count="n" :w="n * 10"><p-text style="font-size: 10px">fb-scoped</p-text></slot>
+  </p-view>
+</template>
+
+<script setup lang="ts">
+const props = defineProps<{ n: number }>()
+</script>`
+
+const SCOPED_SFC = `<template>
+  <p-view style="flex-direction: column">
+    <KidScoped :n="scopedN">
+      <template #default="sp">
+        <p-text :width="sp.w" style="font-size: 12px; color: #7cffb2">cnt-{{ sp.count }}</p-text>
+      </template>
+    </KidScoped>
+  </p-view>
+</template>
+
+<script setup lang="ts">
+const scopedN = ref(7)
+</script>`
+
 /** 长列表夹具：**行高 100px**（视口 2400 ⇒ 可见 ~24 行；预加载 ±10 ⇒ 物化 ~34 行）
  *  ——判据的口径：1000 行都必须在内核树里（几何正确），但宿主只物化可见区。
  *  ★行内含 `:width` 绑定（L1 槽位）与插值文本（`{{ item.title }}`）。 */
@@ -362,11 +393,15 @@ process.stdout.write(JSON.stringify({
     KidPanel: build(${JSON.stringify(CHILD_SFC)}, 'kid-panel.vue'),
     // ★P1-3 插槽分发夹具（判据 ⑮）——子组件含具名/默认出口（带元素后备）+ 空出口
     KidSlot: build(${JSON.stringify(SLOT_CHILD_SFC)}, 'kid-slot.vue'),
+    // ★P1-3 作用域插槽夹具（判据 ⑰）——出口带 props；父级内容按 sp.* 求值
+    KidScoped: build(${JSON.stringify(SCOPED_CHILD_SFC)}, 'kid-scoped.vue'),
   },
   small: build(${JSON.stringify(SFC)}, 'vapor-device.vue'),
   list: build(${JSON.stringify(LIST_SFC)}, 'vapor-list.vue'),
   // ★P1-3 插槽分发：父 SFC（提供 #header / 默认内容 + 无出口的 #orphan）
   slot: build(${JSON.stringify(SLOT_SFC)}, 'vapor-slot.vue'),
+  // ★P1-3 作用域插槽：父 SFC（作用域内容含文本段 + 作用域样式）
+  scoped: build(${JSON.stringify(SCOPED_SFC)}, 'vapor-scoped.vue'),
   // ★★★六端 SFC 压力夹具：编译**共享 SFC 文件**（examples 页面）——与 Web/MP 同源
   stress: build(${JSON.stringify(stressSfc)}, 'consistency-stress.vue'),
   ab: ${JSON.stringify(AB_RESULT)},
@@ -545,7 +580,7 @@ for (const [nm, def] of Object.entries(parsed.components)) {
       `父绑定 @${parentEmitBinds[0].event}（nodeId=${parentEmitBinds[0].nodeId}）`,
   )
 }
-fs.writeFileSync(OUT, JSON.stringify({ ...parsed.small, components: parsed.components, slot: parsed.slot }))
+fs.writeFileSync(OUT, JSON.stringify({ ...parsed.small, components: parsed.components, slot: parsed.slot, scoped: parsed.scoped }))
 console.log(`[gen-vapor-fixture] ✅ 组件注册表：${Object.keys(parsed.components).join(', ')}（随父产物下发）`)
 // ★P1-3 插槽分发夹具（判据 ⑮）：父产物必须带 slotFor 标记、子产物必须带 slotOutlet 标记
 //   （"生成器静默退化"是本仓重点拦的形态——标记缺了就是分发不可能发生）
@@ -563,6 +598,27 @@ console.log(`[gen-vapor-fixture] ✅ 组件注册表：${Object.keys(parsed.comp
     process.exit(1)
   }
   console.log(`[gen-vapor-fixture] ✅ 插槽分发夹具：父内容根 ${parentFors} 个 · 子出口 ${childOutlets} 个`)
+}
+// ★P1-3 作用域插槽（2026-10-03）：三件标记缺一 ⇒ 判据 ⑰ 无证据（生成器静默退化是本仓重点拦的形态）
+{
+  const scopedParent = parsed.scoped
+  const scopedChild = parsed.components.KidScoped
+  const outlet = (scopedChild?.tpl?.nodes ?? []).find((n) => n && n.slotOutlet)
+  const forNode = (scopedParent?.tpl?.nodes ?? []).find((n) => n && n.slotFor)
+  const scopedSlots = scopedParent?.table?.slotScopedSlots ?? []
+  const outletProps = outlet?.slotOutlet?.props ?? []
+  if (!outlet || outletProps.length < 2 || forNode?.slotFor?.scope !== 'sp' || scopedSlots.length < 2) {
+    console.error(
+      `[gen-vapor-fixture] ✗ 作用域插槽夹具不完整（判据 ⑰ 将无证据）：` +
+        `出口 props=${JSON.stringify(outletProps)}（应 2）· 内容 scope=${JSON.stringify(forNode?.slotFor?.scope)}（应 sp）· ` +
+        `slotScopedSlots=${scopedSlots.length}（应 2）`,
+    )
+    process.exit(1)
+  }
+  console.log(
+    `[gen-vapor-fixture] ✅ 作用域插槽夹具：出口 props ${JSON.stringify(outletProps)} · 内容 scope=sp · ` +
+      `分发时求值绑定 ${scopedSlots.map((s) => s.propKey).join(', ')}`,
+  )
 }
 const kb = (fs.statSync(OUT).size / 1024).toFixed(1)
 

@@ -275,6 +275,10 @@ export function buildVaporSubscriptions(source: string, filename = 'anonymous.vu
   const l0Slots: SubscriptionTable['l0Slots'] = []
   const decisions: ExplainRow[] = []
   const slotRecords: Array<{ slot: SlotSubscription; deps: ExprDeps; ref: TemplateBindingRef }> = []
+  // ★★★P1-3 作用域插槽（2026-10-03）：父级 `#x="sp"` 内容里引用 `sp.*` 的绑定——
+  //   没有可订阅的源（出口 props 分发时才算得出）⇒ 单列本表，实例化期**分发时求值**。
+  //   见 `SubscriptionTable.slotScopedSlots` 注释（含诚实边界：只做初始分发）。
+  const slotScopedSlots: NonNullable<SubscriptionTable['slotScopedSlots']> = []
 
   for (const ref of bindings) {
     // ★被合成组里的其余成员**跳过建槽**（合成绑定已代表整条文本；见上方合成段注释）
@@ -500,12 +504,36 @@ export function buildVaporSubscriptions(source: string, filename = 'anonymous.vu
       slotsBySource.set(src.sourceId, list)
     }
     if (deps.listRelative.length > 0) {
-      // ★列表内相对路径：归属**该列表的源**（`item` → `list`），由 LIST_UPDATE 承接（V1 已实现指令）。
+      // ★★★**两类相对路径必须区分**（P1-3 作用域插槽，2026-10-03）：
+      //   · **v-for 行相对**（`item.title`）⇒ 归属该列表源，由 LIST_UPDATE 承接（既有行为）；
+      //   · **插槽作用域相对**（`sp.count`，`sp` 来自 `#x="sp"`）⇒ 没有可订阅的源——
+      //     出口 props 在**分发时**才算得出来（见 SubscriptionTable.slotScopedSlots）。
+      //   ★判别：v-for 别名一定在 `scopeSources` 里（建行上下文时写入），插槽作用域变量**不在**
+      //     （depper 只把它加进 `scopes` 用于屏蔽幽灵源）。
+      //   【为什么必须分开（本仓实测的静默丢弃）】此前两者都进"列表相对"分支 ⇒ 插槽作用域
+      //   路径找不到源 ⇒ 只留一条误导性的"未挂到任何列表源"警告，**绑定整条消失** ⇒
+      //   `:width="sp.w"` 静默不生效（产物里连槽位都没有）。
+      const rowRels = deps.listRelative.filter((r) => ref.scopeSources[r.scope] !== undefined)
+      const slotRels = deps.listRelative.filter((r) => ref.scopeSources[r.scope] === undefined)
+      if (slotRels.length > 0) {
+        slotScopedSlots.push({
+          slotId: mySlot,
+          nodeId: myNode,
+          propKey: ref.propKey,
+          evaluatorId,
+          scope: slotRels[0]!.scope,
+        })
+        notes.push(
+          `slot_${mySlot} 依赖**插槽作用域** ${slotRels.map((r) => r.path).join(', ')}` +
+            `（${slotRels[0]!.scope} 来自 \`#x="${slotRels[0]!.scope}"\`）⇒ 分发时求值（见 slotScopedSlots）`,
+        )
+      }
+      // ★列表相对路径：归属**该列表的源**（`item` → `list`），由 LIST_UPDATE 承接（V1 已实现指令）。
       //
       // 【本仓实测的坑】首版直接拿 scope 名（`item`）去找同名源 ⇒ 找不到 ⇒ **这条绑定从依赖图里消失**
       //   （现象：槽位标了 L1，但依赖图里没有它 = 运行时那个源变化不会写这个槽位 → 静默不更新）。
       //   正解：走 `scopeSources` 别名映射（`item` → `list`）回到真正的列表源。
-      const listRoots = [...new Set(deps.listRelative.map((r) => ref.scopeSources[r.scope] ?? r.scope))]
+      const listRoots = [...new Set(rowRels.map((r) => ref.scopeSources[r.scope] ?? r.scope))]
       let hooked = 0
       for (const rootName of listRoots) {
         const src = srcScan.byName.get(rootName)
@@ -515,8 +543,8 @@ export function buildVaporSubscriptions(source: string, filename = 'anonymous.vu
         slotsBySource.set(src.sourceId, list)
         hooked++
       }
-      if (hooked === 0) {
-        notes.push(`★slot_${mySlot} 依赖列表相对路径 ${deps.listRelative.map((r) => r.path).join(', ')} 但**未挂到任何列表源**（scopeSources=${JSON.stringify(ref.scopeSources)}）——请检查 v-for 形态`)
+      if (hooked === 0 && rowRels.length > 0) {
+        notes.push(`★slot_${mySlot} 依赖列表相对路径 ${rowRels.map((r) => r.path).join(', ')} 但**未挂到任何列表源**（scopeSources=${JSON.stringify(ref.scopeSources)}）——请检查 v-for 形态`)
         diagnostics.push({
           severity: 'warn',
           code: 'VAPOR_LIST_BINDING_NOT_HOOKED',
@@ -524,16 +552,19 @@ export function buildVaporSubscriptions(source: string, filename = 'anonymous.vu
           hint: '该槽位不会被任何源驱动 ⇒ 可能静默不更新；请检查 v-for 形态（如 v-for 是否写在正确的元素上）',
           slotId: mySlot,
         })
-      } else {
-        notes.push(`slot_${mySlot} 依赖列表相对路径 ${deps.listRelative.map((r) => r.path).join(', ')} ⇒ 归属列表源 ${listRoots.join('/')}，由 LIST_UPDATE 承接（item 级）`)
+      } else if (hooked > 0) {
+        notes.push(`slot_${mySlot} 依赖列表相对路径 ${rowRels.map((r) => r.path).join(', ')} ⇒ 归属列表源 ${listRoots.join('/')}，由 LIST_UPDATE 承接（item 级）`)
       }
     }
   }
 
   // ★★P2-8：**常量槽位**收集（无源依赖 ⇒ 不进 sources，但必须参与首帧回填——见 constantSlots 注释）
   const constantSlots: SlotSubscription[] = []
+  const slotScopedIds = new Set(slotScopedSlots.map((s) => s.slotId))
   for (const rec of slotRecords) {
     if (rec.slot.kind === 'list-item' || rec.slot.kind === 'list-data') continue
+    // ★P1-3 作用域插槽绑定**不是常量**：它依赖分发时才存在的出口 props（见 slotScopedSlots）
+    if (slotScopedIds.has(rec.slot.slotId)) continue
     const rootsOf = rec.deps.roots.filter((r) => srcScan.byName.has(r))
     const listRel = rec.deps.listRelative.length > 0
     if (rec.slot.tier === 'L1' && rootsOf.length === 0 && !listRel && rec.deps.calls.length === 0) {
@@ -565,6 +596,8 @@ export function buildVaporSubscriptions(source: string, filename = 'anonymous.vu
       ...(memoGroups.length > 0 ? { memoGroups } : {}),
       // ★P2-8：常量槽位（无 ⇒ 不产出字段）
       ...(constantSlots.length > 0 ? { constantSlots } : {}),
+      // ★P1-3 作用域插槽（无 ⇒ 不产出字段——既有产物逐字节不变）
+      ...(slotScopedSlots.length > 0 ? { slotScopedSlots } : {}),
       stats: { l1, l0, l1Rate: l1 + l0 === 0 ? 0 : Math.round((l1 / (l1 + l0)) * 10000) / 10000 },
     },
     sources: srcScan.sources,

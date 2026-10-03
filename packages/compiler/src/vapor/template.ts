@@ -479,9 +479,10 @@ export function buildLayoutTemplate(
      * ★★★**插槽上下文**（2026-10-03 · P1-3 插槽分发）——两者互斥（一次 walk 只处于一种）：
      *   · `parentIsComponent`：本次 walk 的直接子元素是**组件的孩子** ⇒ 它们是
      *     默认插槽内容根（打 `slotFor: default`）；`<template #x>` 是插槽声明（不产节点）。
-     *   · `slotContentOf`：本次 walk 的直接子元素是**某个具名插槽的内容根** ⇒ 打 `slotFor: name`。
+     *   · `slotContentOf`：本次 walk 的直接子元素是**某个具名插槽的内容根** ⇒ 打 `slotFor: name`；
+     *     `scopeVar` = 作用域插槽的变量名（`#x="sp"` ⇒ `'sp'`；见 P1-3 作用域插槽）。
      */
-    slotCtx?: { parentIsComponent?: boolean; slotContentOf?: string },
+    slotCtx?: { parentIsComponent?: boolean; slotContentOf?: string; scopeVar?: string },
   ): void => {
     for (const raw of children) {
       const n = raw as Node
@@ -498,16 +499,24 @@ export function buildLayoutTemplate(
         if (vs !== undefined) {
           const name = vs === '' ? 'default' : vs
           const scope = vSlotScopeOf(n)
+          // ★★★P1-3 作用域插槽（2026-10-03）：`#x="sp"` 的变量名随内容标记下发（分发时绑出口 props）。
+          //   ★只支持**简单标识符**——解构形态（`#x="{ count }"`）需把出口 props 展开成别名，
+          //     属"作用域绑定协议"的推广（独立批次）⇒ 精确诊断（不静默半支持）。
+          let scopeVar: string | undefined
           if (scope) {
-            diag(
-              `作用域插槽未支持：\`#${name}="${scope}"\` 的作用域变量不会绑定到出口 props（内容仍会分发）`,
-              '本版支持具名/默认插槽分发；作用域插槽（出口 :prop ⇒ 父级 scope 变量）为后续批次',
-              'VAPOR_SLOT_SCOPED_UNSUPPORTED',
-            )
+            if (/^[A-Za-z_$][\w$]*$/.test(scope)) {
+              scopeVar = scope
+            } else {
+              diag(
+                `作用域插槽的变量形态未支持：\`#${name}="${scope.slice(0, 24)}"\`（只支持简单标识符）`,
+                '改成单名写法（如 `#default="sp"`），在内容里用 `sp.xxx` 访问出口 props',
+                'VAPOR_SLOT_SCOPE_DESTRUCTURE',
+              )
+            }
           }
           // 内容根标记：仅在「组件孩子」上下文中才有意义（slotCtx 决定标记名）
           walk((n.children ?? []) as unknown[], parentId, pendingTransition,
-            slotCtx?.parentIsComponent ? { slotContentOf: name } : slotCtx)
+            slotCtx?.parentIsComponent ? { slotContentOf: name, scopeVar } : slotCtx)
           continue
         }
         if (slotCtx?.parentIsComponent) {
@@ -714,36 +723,40 @@ export function buildLayoutTemplate(
       //   ★静态名（`<slot name="header">`）/ 缺省（`default`）都支持；动态名（`:name`）
       //     与出口 props（`<slot :text="msg">`，作用域插槽）为后续批次 ⇒ 精确诊断（不静默）。
       let slotOutletName: string | undefined
+      let slotOutletProps: string[] | undefined
       if (tag === 'slot') {
         const nameProp = (n.props ?? []).find((p) => p.type === 6 && p.name === 'name')
         const dynName = (n.props ?? []).some((p) => p.type === 7 && p.arg?.content === 'name')
-        const scopedProps = (n.props ?? []).some((p) => p.type === 7 && p.arg?.content !== 'name' && p.name === 'bind')
+        // ★★★P1-3 作用域插槽（2026-10-03）：出口上的绑定属性 = 作用域 props（`:count="n"` 等）。
+        //   值不在此处求——那些绑定本身就是子组件订阅表的普通槽位（nodeId=本出口 id），
+        //   实例化期用子组件的表求值（见 deck 注释"一处实现"）。
+        const scopedProps = (n.props ?? [])
+          .filter((p) => p.type === 7 && p.name === 'bind' && p.arg?.content !== 'name')
+          .map((p) => String(p.arg?.content ?? ''))
+          .filter(Boolean)
         if (dynName) {
           diag(
             `slot(id=${id}) 动态插槽名（:name）未支持——内容不会分发到这里`,
             '请改用静态名（<slot name="x">）；动态名为后续批次',
             'VAPOR_SLOT_DYNAMIC_NAME',
           )
-        } else if (scopedProps) {
-          diag(
-            `slot(id=${id}) 出口 props（\`:x="..."\`）未支持——作用域插槽为后续批次`,
-            '出口仍会分发内容；父级 #x="sp" 拿不到出口值（见 scoped 诊断）',
-            'VAPOR_SLOT_SCOPED_UNSUPPORTED',
-          )
-          slotOutletName = nameProp?.value?.content ?? 'default'
         } else {
           slotOutletName = nameProp?.value?.content ?? 'default'
+          if (scopedProps.length > 0) slotOutletProps = scopedProps
         }
       }
       const node: LayoutNode = { id, parentId, tag, style }
       if (nodeListId !== undefined) node.listId = nodeListId
       if (isComponentTag) node.component = tag
-      if (slotOutletName !== undefined) node.slotOutlet = { name: slotOutletName }
+      if (slotOutletName !== undefined) {
+        node.slotOutlet = { name: slotOutletName, ...(slotOutletProps ? { props: slotOutletProps } : {}) }
+      }
       // ★★**插槽内容根标记**（P1-3 插槽分发）：本元素是「组件孩子」（默认插槽）或
       //   「<template #x> 的直接子元素」（具名插槽）⇒ 实例化期把它重挂到子组件的出口位置。
       //   ★只有**根**带标记（后代随根走——父指针链不变 ⇒ 实例化期按祖先链推导内容集合）。
+      //   ★作用域插槽：变量名随标记下发（`#x="sp"` ⇒ `scope: 'sp'`；分发时绑出口 props）。
       if (slotCtx?.slotContentOf !== undefined) {
-        node.slotFor = { name: slotCtx.slotContentOf }
+        node.slotFor = { name: slotCtx.slotContentOf, ...(slotCtx.scopeVar ? { scope: slotCtx.scopeVar } : {}) }
       } else if (slotCtx?.parentIsComponent) {
         node.slotFor = { name: 'default' }
       }

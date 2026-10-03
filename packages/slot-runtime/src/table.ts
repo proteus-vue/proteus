@@ -175,6 +175,26 @@ export interface SubscriptionTable {
    *   ⇒ 单列本表：它**永不更新**（没有源），但**必须参与首帧回填**（与其余槽位同一条回填链）。
    */
   constantSlots?: SlotSubscription[]
+  /**
+   * ★★★**作用域插槽内容绑定**（P1-3 作用域插槽，2026-10-03）——父级 `#x="sp"` 内容子树里
+   *   **引用 `sp.*` 的样式绑定**（如 `:width="sp.w"`）。
+   *
+   * 【为什么必须单列（本仓实测的静默丢弃）】这类绑定的依赖是**插槽作用域变量**而非顶层源 ⇒
+   *   既挂不到任何 `sources`，也不属 `constantSlots`（它确实有依赖）⇒ 此前**整条绑定消失**
+   *   （产物里连槽位都没有，只留一条误导性的"未挂到任何列表源"提示）⇒ 样式静默不生效。
+   *   ⇒ 单列本表：**分发时**（出口被内容填充的那一刻）用「作用域读」求值一次并写节点字段。
+   *
+   * 【诚实边界】只做**初始分发**求值——出口源后续变化不重分发（见 `LayoutNode.slotFor.scope`）。
+   */
+  slotScopedSlots?: Array<{
+    slotId: number
+    /** 内容节点的**模板序 local id**（与 LayoutNode.id 同源；分发时按它定位） */
+    nodeId: number
+    propKey: string
+    evaluatorId: number
+    /** 作用域变量名（与 `slotFor.scope` 匹配——多重嵌套插槽时区分） */
+    scope: string
+  }>
   /** 未走 L1 的槽位（诊断：解释"为什么这个绑定没有加速"） */
   l0Slots: Array<{ slotId: number; nodeId: number; propKey: string; reason: string }>
   /** 统计（棘轮 / 覆盖率度量用） */

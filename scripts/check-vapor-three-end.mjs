@@ -88,6 +88,13 @@ function fingerprint(rep) {
     rep.emit_probe?.geom_before,
     rep.emit_probe?.geom_after,
   ])
+  // ★P1-3 作用域插槽（2026-10-03）：内容文本 + 作用域样式（字段与内核真值）三端逐值一致——
+  //   分发时求值是共享代码 + 同一份产物 ⇒ 任一端不同即"没重跑"或"跑的不是同一份代码"。
+  fp.scoped_probe = JSON.stringify([
+    [...(rep.scoped_probe?.texts ?? [])].sort(),
+    rep.scoped_probe?.anchor_width_field,
+    rep.scoped_probe?.anchor_width_rect,
+  ])
   return fp
 }
 

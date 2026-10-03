@@ -381,6 +381,11 @@ export function collectTemplateBindings(
     memoCtx: { memoId: number; deps: string[] } | null = null,
     /** ★P2-5：当前元素有非法形态 v-memo（非数组字面量）——随子树下行，供插值分支产诊断 */
     memoInvalidCtx = false,
+    /**
+     * ★★★**插槽作用域变量集**（P1-3 作用域插槽，2026-10-03）——`#x="sp"` 引入的名字。
+     *   与 v-for 的 `scopes` 分开追踪：`sp.*` 既不属顶层源、也不属行（见 slotScoped 注释）。
+     */
+    slotScopes: string[] = [],
   ): void => {
     for (const raw of nodes) {
       const n = raw as {
@@ -429,8 +434,11 @@ export function collectTemplateBindings(
             const scopeCode = vsProp.exp?.content?.trim()
             const scopeNames = scopeCode ? (scopeCode.match(/[\w$]+/g) ?? []) : []
             // ★插槽声明本身不是元素 ⇒ 不占 id；children 是内容（父作用域表达式照常收集）
+            //   ★P1-3 作用域插槽（2026-10-03）：作用域名**单独追踪**（`slotScopes`）——
+            //     它们与 v-for 别名一样要被 suppress（不当幽灵源），但**不能**当行上下文
+            //     （`sp.*` 的绑定要走"分发时求值"通道，见 slotScopes 注释）。
             walk((n.children ?? []) as unknown[], [...scopes, ...scopeNames], inBranch, scopeSources,
-              parentElementIndex, listCtx, onceCtx, memoCtx, memoInvalidCtx)
+              parentElementIndex, listCtx, onceCtx, memoCtx, memoInvalidCtx, [...slotScopes, ...scopeNames])
             continue
           }
         }
