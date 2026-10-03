@@ -454,6 +454,8 @@ final class VaporRenderHost {
             int applied = 0;
             /** 改过文本的 id（重度量 + 文本落层两处都要） */
             java.util.List<Integer> textIds = new java.util.ArrayList<>();
+            /** ★改过绘制键的 id（纯绘制补丁要**重建指令**——见下方 ④ 的注释） */
+            java.util.LinkedHashSet<Integer> paintChangedIds = new java.util.LinkedHashSet<>();
             int paintOnly = 0;
             for (int i = 0; i < patches.length(); i++) {
                 JSONObject p = patches.getJSONObject(i);
@@ -488,6 +490,7 @@ final class VaporRenderHost {
                     corePatches.put(cp);
                     applied++;
                 } else {
+                    paintChangedIds.add(id);
                     paintOnly++;
                 }
             }
@@ -541,8 +544,27 @@ final class VaporRenderHost {
                 cmds.set(at, mkCmd(specs.get(idx2), cmds.get(at)));
                 textApplied++;
             }
-            if (textApplied > 0) pushToView();
-            else if (paintOnly > 0 && corePatches.length() == 0) pushToView(); // 纯绘制补丁也要重绘
+            /* ★★★**纯绘制补丁的指令重建**（2026-10-03 · `:style` 对象展开批次实测抓出的真缺陷）：
+             *   此前纯绘制补丁（改颜色/字号等、无几何键）只 `pushToView()` —— 而它推的是**旧 cmds**
+             *   （spec 已更新、指令没重建）⇒ **颜色永远不变**（`RustLayout.update` 都没被调）。
+             *   ⇒ 正解：纯绘制补丁也走 `mkCmd` 重建（与文本变更同一条路）。
+             *   【为什么带 rects 用全量版本】prev 版本（`mkCmd(spec, prev)`）**不带绘制通道**
+             *     （半径/渐变/发光/遮罩）——对带通道的节点会把通道洗掉（本仓实测过同类形态）。
+             *     故有矩形时用全量版本（`mkCmd(spec, rects)`），无矩形才退回 prev 版本。 */
+            if (paintOnly > 0 && corePatches.length() == 0) {
+                JSONObject rects = new JSONObject(RustLayout.readRects(handle)).optJSONObject("rects");
+                boolean rebuilt = false;
+                for (int id : paintChangedIds) {
+                    Integer at = cmdIndexById.get(id);
+                    Integer idx2 = indexById.get(id);
+                    if (at == null || idx2 == null) continue;
+                    JSONObject r = rects != null ? rects.optJSONObject(String.valueOf(id)) : null;
+                    if (r != null) cmds.set(at, mkCmd(specs.get(idx2), r));
+                    else cmds.set(at, mkCmd(specs.get(idx2), cmds.get(at)));
+                    rebuilt = true;
+                }
+                if (rebuilt) pushToView();
+            } else if (textApplied > 0) pushToView();
             double emitMs = (System.nanoTime() - te) / 1e6;
             double totalMs = (System.nanoTime() - t0) / 1e6;
             out.put("ok", true);

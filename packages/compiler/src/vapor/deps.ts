@@ -22,6 +22,8 @@ import type { ReactiveSource } from './sources'
 import { normalizeBuiltinTag } from './template'
 // ★混排归一化（同一入口——三处遍历 id 同源）
 import { normalizedChildSequence } from './text-runs'
+// ★`:style` 对象字面量逐键展开（2026-10-03）
+import { isAllConstantObject, mapStyleObjectKey, parseStyleObject } from './style-object'
 
 /** 表达式的依赖分析结果 */
 export interface ExprDeps {
@@ -749,6 +751,45 @@ export function collectTemplateBindings(
               if (fieldKey && valueExpr) {
                 propKey = fieldKey
                 exprForBinding = valueExpr
+              } else {
+                // ★★★**对象字面量逐键展开**（2026-10-03 · `:style` 批次）——`{ width: w, color: c }`
+                //   的**键是编译期已知的** ⇒ 每个键展开成一条独立绑定：
+                //     · 布局键 ⇒ `layout.<field>`（内核 SET_STYLE 真改几何）；
+                //     · 绘制键 ⇒ `paint.<field>`（值由**桥转给宿主**——内核 f32 装不下颜色字符串）。
+                //   【为什么必须展开（本仓实测的静默失效）】此前整对象是一条 `paint.style`
+                //   多层键 ⇒ 两个成员产出**两条同名槽位**，内核只认字段级键 ⇒ 全部被忽略
+                //   （颜色/宽度都不生效），而诊断声称"逐键下发"（假承诺）。
+                //   ★全字面量对象在**模板侧**折进静态 style（零槽位）——这里只处理含表达式成员的对象。
+                const parsed = parseStyleObject(exprForBinding)
+                if (parsed) {
+                  // ★**全字面量对象** ⇒ 模板侧已折进静态 style（见 template.ts 的 isAllConstantObject
+                  //   分支）⇒ 此处**不建任何槽位**（否则静态值 + 槽位重复下发同一条指令）。
+                  if (isAllConstantObject(parsed)) continue
+                  for (const entry of parsed.entries) {
+                    const mapped = mapStyleObjectKey(entry.key)
+                    if (!mapped) continue   // 不支持的键：模板侧已产诊断（此处静默跳过，不建垃圾槽位）
+                    out.push(
+                      binding(
+                        entry.valueSrc,
+                        `:style.${entry.key}`,
+                        mapped,
+                        tag,
+                        expLine,
+                        nextScopes,
+                        inBranch,
+                        nextScopeSources,
+                        myElementIndex,
+                        (activeListCtx ?? undefined),
+                        false,
+                        undefined,
+                        myOnce,
+                        myMemo,
+                        memoInvalidOfElement,
+                      ),
+                    )
+                  }
+                  continue   // ★整对象已按成员展开 ⇒ 不再产"整对象"绑定
+                }
               }
             }
             const isKey = arg === 'key'

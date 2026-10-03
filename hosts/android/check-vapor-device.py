@@ -759,6 +759,39 @@ def main() -> int:
             print(f"  ✓ ㉑ ★元素/文本混排：段落齐全（{'/'.join(need.keys())}）· 合成叶 {mp.get('leaves')} · "
                   f"内核几何 {len(w_ok)}/{len(geo)} 叶有宽度 · 实文本 {joined[:80]}")
 
+    # ── ㉒ ★★★`:style` 对象展开：**两条通道各自生效**（内核算几何 / 宿主算绘制）──
+    #   【为什么单独判】对象字面量此前产出**两条同名 `paint.style` 槽位** ⇒ 内核只认字段级键
+    #     ⇒ 宽度与颜色**都不生效**（静默），而诊断声称"逐键下发"（假承诺）。本批逐键展开后：
+    #     布局键进内核、绘制键由桥转宿主。**两条通道必须分开核**——绘制不进内核，
+    #     只看内核读数会看漏它的失效（本仓实测过）。
+    spo = rep.get("styleobj_probe") or {}
+    if not spo or spo.get("anchor_id", -1) < 0:
+        print("  ◐ ㉒ :style 对象：本端夹具未覆盖（报告无 styleobj_probe）——如实跳过")
+    else:
+        wb = spo.get("width_before", -1)
+        wa = spo.get("width_after", -1)
+        ka = spo.get("kernel_applied", 0)
+        patches = spo.get("patch_calls") or []
+        patch_bg = any('backgroundColor' in (p[0].split(':', 1)[1] if ':' in p[0] else '') for p in patches if p)
+        if not (isinstance(wb, (int, float)) and wb > 0):
+            fail(f"★:style 对象的**布局键**初值没生效（width_before={wb}）——内核通道没走通")
+            ok = False
+        elif not (isinstance(wa, (int, float)) and wa > 0 and wa != wb):
+            fail(f"★更新后**内核宽度没变**（{wb}→{wa}）——布局键（layout.width）没生效")
+            ok = False
+        elif not (isinstance(ka, (int, float)) and ka > 0):
+            fail(f"★更新轮内核没应用任何指令（kernel_applied={ka}）")
+            ok = False
+        elif len(patches) == 0:
+            fail("★**绘制键没有提交给宿主**（patch_calls 空）——paint.backgroundColor 被丢弃（静默失效形态）")
+            ok = False
+        elif not patch_bg:
+            fail(f"★绘制补丁内容不含 backgroundColor（patches={patches[:2]}）——桥没把绘制键转宿主")
+            ok = False
+        else:
+            print(f"  ✓ ㉒ ★:style 对象逐键展开：布局键内核宽度 {wb}→{wa}（applied={ka}）· "
+                  f"绘制键提交宿主 {patches[0][0] if patches and patches[0] else ''}")
+
     # 附加观测（不判红，只如实报）
     una = rep.get("uninstantiated_slots", 0)
     if una:

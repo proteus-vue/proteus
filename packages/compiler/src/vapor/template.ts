@@ -30,6 +30,10 @@ import { HOST_DIRECTIVE_NAMES, HOST_DIRECTIVE_SPECS, isHostDirective } from '@pr
 import { compileExpr } from './expr'
 // ★★★元素/文本**混排**归一化（2026-10-03）——三处遍历（template/deps/events）的**唯一**输入
 import { normalizedChildSequence } from './text-runs'
+// ★`:style` 对象字面量（逐键展开 / 常量折叠；2026-10-03）
+import { isAllConstantObject, mapStyleObjectKey, parseStyleObject } from './style-object'
+// ★单键拼接形态的判据（`'width:' + w`）——与 deps 的降级**同一函数**（一处实现）
+import { stylePropKeyFromExpr } from './deps'
 
 // ★类型定义在**运行时契约包**（slot-runtime/layout-template.ts）——编译器只是产出方之一，
 //   消费方定义的形状才是唯一契约（与 SubscriptionTable 同一处置）。
@@ -764,7 +768,62 @@ export function buildLayoutTemplate(
           Object.assign(style, parseStaticStyle(p.value.content, (m, hint) => diag(`${tag}(id=${id}) ${m}`, hint)))
         }
         if (p.type === 7 /* DIRECTIVE */ && p.name === 'bind' && p.arg?.content === 'style') {
-          hasDynamicStyle = true
+          // ★★★**`:style` 对象字面量**（2026-10-03 · 静默失效批次）——分三种情形：
+          //   ① 全字面量成员 ⇒ **折进静态 style**（零槽位，与 `style="…"` 等价——比建槽位更省）；
+          //   ② 含表达式成员 ⇒ 由订阅表**逐键展开**（deps.ts；布局键进内核、绘制键由桥转宿主）；
+          //   ③ 变量/不支持的成员（计算键 / 展开 / 嵌套对象）⇒ 精确诊断（不再声称"逐键下发"）。
+          const styleExp = (p.exp as { content?: string } | undefined)?.content?.trim() ?? ''
+          const parsed = styleExp ? parseStyleObject(styleExp) : null
+          if (parsed) {
+            for (const pr of parsed.problems) {
+              const what =
+                pr.kind === 'computed' ? '计算键 `[expr]`'
+                : pr.kind === 'spread' ? '对象展开 `...obj`'
+                : `嵌套对象 \`${pr.key}\``
+              diag(
+                `${tag}(id=${id}) \`:style\` 对象的${what}未支持（键名必须编译期可知）`,
+                '把该成员拆成独立绑定（如 `:style="{ width: w }"`）或放静态 `style`；'
+                + '全字面量的对象会被折进静态样式（可用）',
+                'VAPOR_STYLE_OBJECT_UNSUPPORTED',
+              )
+            }
+            const unsupportedKeys = parsed.entries.filter((e) => mapStyleObjectKey(e.key) === null)
+            for (const e of unsupportedKeys) {
+              diag(
+                `${tag}(id=${id}) \`:style\` 的键 \`${e.key}\` 不支持**动态**更新` +
+                  `（内核通道为数值几何；字符串类布局值/未知绘制字段不可动态）`,
+                `请把 \`${e.key}\` 放静态 \`style\`（值固定时），或改用受支持的键` +
+                  `（布局数值键 + 绘制键 backgroundColor/color/fontSize/borderRadius/borderColor/borderWidth/opacity）`,
+                'VAPOR_STYLE_KEY_UNSUPPORTED',
+              )
+            }
+            if (isAllConstantObject(parsed)) {
+              // ① 全字面量 ⇒ 折进静态 style（与 parseStaticStyle 同一形态：键归一化 + 数值/字符串原样）
+              for (const e of parsed.entries) {
+                const mapped = mapStyleObjectKey(e.key)
+                if (!mapped) continue
+                style[mapped.slice(mapped.indexOf('.') + 1)] = e.constValue
+              }
+              hasDynamicStyle = false
+            } else {
+              // ② 含表达式 ⇒ 逐键展开（订阅表）；不再有"整对象"槽位，也不再有旧诊断
+              hasDynamicStyle = parsed.entries.some((e) => mapStyleObjectKey(e.key) !== null)
+            }
+          } else {
+            // ③ 变量形态 / 非对象字面量：键名编译期不可知 ⇒ **如实诊断**（不谎报"逐键下发"）
+            hasDynamicStyle = true
+            if (styleExp && !styleExp.startsWith('{')) {
+              // 既有的单键拼接形态（`'width:' + w`）走 deps 降级，属可用 ⇒ 不产本诊断
+              const fieldKey = stylePropKeyFromExpr(styleExp)
+              if (!fieldKey) {
+                diag(
+                  `${tag}(id=${id}) \`:style="${styleExp}"\` 为**变量形态**（键名编译期不可知）——无法逐键下发`,
+                  '改用对象字面量（`:style="{ width: w }"`——键静态可析出、逐键生效）或静态 `style`',
+                  'VAPOR_STYLE_DYNAMIC_OBJECT',
+                )
+              }
+            }
+          }
         }
         // ★★结构化绘制声明（见 PAINT_DECL_ATTRS 头注）：JSON 串 → 结构字段（解析失败 ⇒ 诊断）
         if (p.type === 6 /* ATTRIBUTE */ && isPaintDeclAttr(p.name) && p.value?.content) {
@@ -1005,7 +1064,10 @@ export function buildLayoutTemplate(
         }
       }
       if (hasDynamicStyle) {
-        diag(`${tag}(id=${id}) 含动态 :style 对象（模板不解析；由订阅表以 SET_STYLE 逐键下发）`)
+        // ★2026-10-03：旧的"由订阅表以 SET_STYLE 逐键下发"是**假承诺**（整对象多层键内核不认）
+        //   ⇒ 对象字面量已在上面按成员逐键展开（或折进静态 style）；此处只剩"无法逐键"的形态，
+        //     而它们**各自已有精确诊断**（见上面的 VAPOR_STYLE_* 系列）——不再产笼统消息。
+        void 0
       }
       nodes.push(node)
       if (parentId === null) roots.push(id)

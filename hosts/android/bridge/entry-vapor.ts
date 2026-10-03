@@ -370,6 +370,19 @@ interface VaporReport {
     leaves: number
     geom: Array<{ id: number; text: string; width: number }>
   }
+  /**
+   * ★★★**`:style` 对象展开探针**（2026-10-03）——两条通道各自的真值：
+   *   · 布局键 ⇒ `width_before/after`（**内核矩形**，真改几何）；
+   *   · 绘制键 ⇒ `patch_calls`（提交给宿主的补丁内容——绘制**不进内核**，
+   *     只看内核读数会看漏它的失效：本仓实测过整键被忽略的形态）。
+   */
+  styleobj_probe: {
+    anchor_id: number
+    width_before: number
+    width_after: number
+    kernel_applied: number
+    patch_calls: string[][]
+  }
   /** 模板里的过渡声明（`隐id:预设名`；判据区分"未声明"与"声明未驱动"） */
   tpl_transition: string[]
   /**
@@ -1718,7 +1731,7 @@ function runShort(args: VaporArgs): string {
     tpl_nodes: 0, tpl_ok: false, sub_l1: 0, sub_l0: 0, sub_l1_rate: 0, sub_sources: [],
     inst_ms: 0, inst_nodes: 0, inst_reused_ids: 0, inst_allocated_ids: 0, inst_rows: 0,
     inst_values_filled: 0, inst_virtual_rows: 0, inst_text_filled: 0, inst_width_filled: 0,
-    mix_text_probe: [], text_probe_rounds: [], gate_rounds: [], gate_text_nodes: [], once_node_id: -1, memo_node_id: -1, expr_probe: [], transition_started: 0, tpl_transition: [], component_mounts: 0, component_nodes: 0, component_kid_probe: {}, slot_probe: { texts: [], rects: [], fills: [], markers_left: -1 }, emit_probe: { emits: [], parent_source_after: undefined, geom_before: -1, geom_after: -1 }, scoped_probe: { texts: [], anchor_id: -1, anchor_width_field: -1, anchor_width_rect: -1 }, lifecycle_probe: { bindings: [], ran_handler: '', changed_sources: [], ops_bytes: 0, applied: 0, anchor_id: -1, geom_before: -1, geom_after: -1 }, dyn_probe: { texts: [], mounts: [], geom: [], dropped: -1, notes: [] }, directive_probe: { nodes: [], rounds: [], plays: [] }, mixed_probe: { texts: [], leaves: 0, geom: [] },
+    mix_text_probe: [], text_probe_rounds: [], gate_rounds: [], gate_text_nodes: [], once_node_id: -1, memo_node_id: -1, expr_probe: [], transition_started: 0, tpl_transition: [], component_mounts: 0, component_nodes: 0, component_kid_probe: {}, slot_probe: { texts: [], rects: [], fills: [], markers_left: -1 }, emit_probe: { emits: [], parent_source_after: undefined, geom_before: -1, geom_after: -1 }, scoped_probe: { texts: [], anchor_id: -1, anchor_width_field: -1, anchor_width_rect: -1 }, lifecycle_probe: { bindings: [], ran_handler: '', changed_sources: [], ops_bytes: 0, applied: 0, anchor_id: -1, geom_before: -1, geom_after: -1 }, dyn_probe: { texts: [], mounts: [], geom: [], dropped: -1, notes: [] }, directive_probe: { nodes: [], rounds: [], plays: [] }, mixed_probe: { texts: [], leaves: 0, geom: [] }, styleobj_probe: { anchor_id: -1, width_before: -1, width_after: -1, kernel_applied: 0, patch_calls: [] },
     mount_ms: 0, mount_nodes: 0,
     updates_run: 0, ops_bytes: 0, ops_ms: 0, apply_ms: 0, text_synced_total: 0, update_evidence: [], geom_probe: [], channels: [],
     ev_bindings: 0, ev_handlers: 0, ev_modifiers: 0, taps: 0, tap_evidence: [],
@@ -1913,7 +1926,42 @@ function runShort(args: VaporArgs): string {
       target.vapor.writeSlotsOfSource(propName, target.mount.ctx)
       target.runtime.flush()
     }
-    const vapor = new VaporRuntime(table, slotRt, evals, registry, onComponentProp)
+    /* ★★★**绘制键收集**（2026-10-03 · `:style` 对象展开批次）——`paint.*` 槽位不走内核
+     *   （f32 通道装不下颜色字符串 ⇒ 会静默变 0），改由宿主 `updatePatches` 更新绘制指令。
+     *   【为什么批量】一次 relink 可能改多个节点的多个绘制键 ⇒ 合并成一份补丁
+     *   （一次跨边界调用，与"每帧一次"的既有纪律一致）。flush 之后统一提交。 */
+    const pendingPaint = new Map<number, Record<string, unknown>>()
+    const paintLog: string[] = []
+    const onPaintProp = (nodeId: number, propKey: string, value: unknown): void => {
+      // propKey 形如 `paint.color` ⇒ 宿主 spec 的**扁平字段名** `color`（与静态 style 同键名）
+      const field = propKey.slice('paint.'.length)
+      const rec = pendingPaint.get(nodeId) ?? {}
+      rec[field] = value
+      pendingPaint.set(nodeId, rec)
+      paintLog.push(`${nodeId}:${field}=${String(value)}`)
+    }
+    /** 把累积的绘制键交给宿主（`updatePatches` 合并进 spec 并重建绘制指令） */
+    const flushPaint = (): number => {
+      if (pendingPaint.size === 0) return 0
+      const patches = [...pendingPaint.entries()].map(([id, style]) => ({ id, style }))
+      pendingPaint.clear()
+      if (typeof proteusHost.updatePatches !== 'function') {
+        notes.push(`绘制键有 ${patches.length} 条待更新，但宿主未实现 updatePatches（绘制不会变）`)
+        return 0
+      }
+      try {
+        const out = JSON.parse(proteusHost.updatePatches(JSON.stringify(patches))) as { ok?: boolean; error?: string }
+        if (out.ok !== true) {
+          notes.push(`绘制键 updatePatches 失败：${out.error ?? '未知'}`)
+          return 0
+        }
+        return patches.length
+      } catch (e) {
+        notes.push(`绘制键 updatePatches 抛错：${String((e as Error)?.message ?? e)}`)
+        return 0
+      }
+    }
+    const vapor = new VaporRuntime(table, slotRt, evals, registry, onComponentProp, 0, undefined, onPaintProp)
     const ctx = { read }
     const triggers = new Map<string, () => void>()
     vapor.load(ctx, (name, cb) => triggers.set(name, cb))
@@ -2830,6 +2878,104 @@ function runShort(args: VaporArgs): string {
         } catch { /* 同上：重挂失败 ⇒ 判据按 host_nodes 不符判红 */ }
       } else {
         notes.push('混排探针：产物无 mixed 段（夹具未覆盖 ⇒ 判据 ㉑ 按缺失处理）')
+      }
+    }
+
+    /* ═══════════ ★★★`:style` 对象展开探针（2026-10-03）═══════════
+     *
+     * 【要证明什么】对象字面量的**两条通道**都真的生效（此前整键 `paint.style` 被内核忽略）：
+     *   ① **布局键**（`layout.width`）⇒ 走内核 SET_STYLE ⇒ **内核实测**宽度变；
+     *   ② **绘制键**（`paint.backgroundColor`）⇒ 走 `updatePatches` ⇒ **宿主绘制真源**（cmds）变色。
+     *   ③ 完整链：改源 → relink → flush（内核指令 + paint 提交）→ 两条通道都变。
+     *   【为什么两条通道分开核】"指令发出去了"与"两条通道各自生效"是三件事（本仓反复踩过）；
+     *     尤其绘制键**不经内核**——只看内核读数会**看漏**它的失效。
+     */
+    {
+      const soArt = (artifacts as { styleObj?: { tpl: LayoutTemplate; table: SubscriptionTable } }).styleObj
+      if (soArt?.tpl?.ok) {
+        const soInst = instantiateTemplate(soArt.tpl, {
+          viewport: args.viewport,
+          read: (n) => (n === 'stW' ? 120 : n === 'stBg' ? '#2f6fed' : undefined),
+          table: soArt.table,
+          registry: new ListRegistry(),
+        })
+        try {
+          const sOut = JSON.parse(
+            proteusHost.mount(JSON.stringify({ viewport: soInst.viewport, nodes: soInst.nodes })),
+          ) as { ok?: boolean; error?: string }
+          if (sOut.ok === true) {
+            const anchor = soInst.nodes.find((n) => (n as { backgroundColor?: string }).backgroundColor === '#2f6fed')
+            const anchorId = anchor?.id
+            const rectsBefore = rectsOf()
+            const widthBefore = anchorId !== undefined ? (rectsBefore[String(anchorId)]?.width ?? -1) : -1
+            // 独立运行时 + paint 通道（与 runShort 主链同一装配形态）
+            const soKeys = new PropKeyTable()
+            const soStrings = new StringPool()
+            const soCaptured: Uint8Array[] = []
+            const soRt = new SlotRuntime(soKeys, soStrings, (b) => soCaptured.push(b))
+            const pending = new Map<number, Record<string, unknown>>()
+            const patchCalls: Array<{ id: number; style: Record<string, unknown> }[]> = []
+            const soVapor = new VaporRuntime(
+              soArt.table, soRt, VaporRuntime.buildEvaluators(soArt.table.evaluators), undefined,
+              undefined, 0, undefined,
+              (nodeId, propKey, value) => {
+                const f = propKey.slice('paint.'.length)
+                const rec = pending.get(nodeId) ?? {}
+                rec[f] = value
+                pending.set(nodeId, rec)
+              },
+            )
+            const soData: Record<string, unknown> = { stW: 120, stBg: '#2f6fed' }
+            const soCtx = { read: (n: string) => soData[n] }
+            const soTriggers = new Map<string, () => void>()
+            soVapor.load(soCtx, (n2, cb) => soTriggers.set(n2, cb))
+            soVapor.relink(soCtx)
+            soRt.flush()
+            soCaptured.length = 0
+            pending.clear()
+            // ★改两个源（宽度 + 颜色）⇒ 一轮更新
+            soData.stW = 260
+            soData.stBg = '#e2483d'
+            soVapor.relink(soCtx)
+            soRt.flush()
+            let kernelApplied = 0
+            for (const pl of soCaptured) {
+              if (pl.length === 0) continue
+              const ao = JSON.parse(proteusHost.applyOps(JSON.stringify(Array.from(pl)))) as { ok?: boolean; applied?: number; unsupported?: unknown[] }
+              kernelApplied += ao.applied ?? 0
+              if (ao.unsupported && ao.unsupported.length > 0) notes.push(`:style 探针内核拒收：${JSON.stringify(ao.unsupported).slice(0, 160)}`)
+            }
+            // 绘制键提交（与主链 flushPaint 同一形态）
+            if (pending.size > 0) {
+              const patches = [...pending.entries()].map(([id, style]) => ({ id, style }))
+              patchCalls.push(patches as Array<{ id: number; style: Record<string, unknown> }>)
+              pending.clear()
+              try {
+                proteusHost.updatePatches(JSON.stringify(patches))
+              } catch { /* 判据按宿主侧读数判 */ }
+            }
+            const rectsAfter = rectsOf()
+            const widthAfter = anchorId !== undefined ? (rectsAfter[String(anchorId)]?.width ?? -1) : -1
+            // ★**两条通道各自读真源**：布局键读**内核矩形**；绘制键读**宿主回执**（updatePatches 的
+            //   ok/applied——绘制不进内核，只看内核读数会看漏它的失效）。
+            rep.styleobj_probe = {
+              anchor_id: anchorId ?? -1,
+              width_before: widthBefore,
+              width_after: widthAfter,
+              kernel_applied: kernelApplied,
+              patch_calls: patchCalls.map((ps) => ps.map((p) => `${p.id}:${JSON.stringify(p.style)}`)),
+            }
+          } else {
+            notes.push(`:style 对象探针 mount 失败：${sOut.error ?? '未知'}`)
+          }
+        } catch (e) {
+          notes.push(`:style 对象探针异常：${String((e as Error)?.message ?? e)}`)
+        }
+        try {
+          proteusHost.mount(JSON.stringify({ viewport: inst.viewport, nodes: inst.nodes }))
+        } catch { /* 同上重挂纪律 */ }
+      } else {
+        notes.push(':style 对象探针：产物无 styleObj 段（夹具未覆盖 ⇒ 判据 ㉒ 按缺失处理）')
       }
     }
 

@@ -309,6 +309,22 @@ const zoomTrigger = ref(0)
  *   判据 ㉑ 核：① 全部文本段在**内核树**里（含插值求值结果）② 合成叶有几何
  *   ③ 空格叶保留（Vue condense 语义）④ 缩进换行**不产**垃圾叶（节点数守恒）。
  */
+/**
+ * ★★★**`:style` 对象展开**夹具（2026-10-03）：`{ width: stW, backgroundColor: stBg }`——
+ *   宽度走**内核几何通道**、背景色走**宿主绘制通道**（两条通道一次验证）。
+ *   判据 ㉒ 核：① 宽度真的改了几何（内核实测）② 背景色真的到了宿主绘制（宿主探针）③ 初始值正确。
+ */
+const STYLE_OBJ_SFC = `<template>
+  <p-view style="flex-direction: column">
+    <p-view :style="{ width: stW, backgroundColor: stBg }" style="height: 12px"></p-view>
+  </p-view>
+</template>
+
+<script setup lang="ts">
+const stW = ref(120)
+const stBg = ref('#2f6fed')
+</script>`
+
 const MIXED_SFC = `<template>
   <p-view style="flex-direction: column">
     <p-text style="font-size: 11px; color: #ffffff">mix <b>MIXB</b> tail</p-text>
@@ -485,6 +501,8 @@ process.stdout.write(JSON.stringify({
   directive: build(${JSON.stringify(DIRECTIVE_SFC)}, 'vapor-directive.vue'),
   // ★元素/文本混排（判据 ㉑）
   mixed: build(${JSON.stringify(MIXED_SFC)}, 'vapor-mixed.vue'),
+  // ★:style 对象展开（判据 ㉒）
+  styleObj: build(${JSON.stringify(STYLE_OBJ_SFC)}, 'vapor-style-obj.vue'),
   // ★★★六端 SFC 压力夹具：编译**共享 SFC 文件**（examples 页面）——与 Web/MP 同源
   stress: build(${JSON.stringify(stressSfc)}, 'consistency-stress.vue'),
   ab: ${JSON.stringify(AB_RESULT)},
@@ -663,7 +681,7 @@ for (const [nm, def] of Object.entries(parsed.components)) {
       `父绑定 @${parentEmitBinds[0].event}（nodeId=${parentEmitBinds[0].nodeId}）`,
   )
 }
-fs.writeFileSync(OUT, JSON.stringify({ ...parsed.small, components: parsed.components, slot: parsed.slot, scoped: parsed.scoped, dyn: parsed.dyn, directive: parsed.directive, mixed: parsed.mixed }))
+fs.writeFileSync(OUT, JSON.stringify({ ...parsed.small, components: parsed.components, slot: parsed.slot, scoped: parsed.scoped, dyn: parsed.dyn, directive: parsed.directive, mixed: parsed.mixed, styleObj: parsed.styleObj }))
 console.log(`[gen-vapor-fixture] ✅ 组件注册表：${Object.keys(parsed.components).join(', ')}（随父产物下发）`)
 // ★P1-3 插槽分发夹具（判据 ⑮）：父产物必须带 slotFor 标记、子产物必须带 slotOutlet 标记
 //   （"生成器静默退化"是本仓重点拦的形态——标记缺了就是分发不可能发生）
@@ -783,6 +801,22 @@ console.log(`[gen-vapor-fixture] ✅ 组件注册表：${Object.keys(parsed.comp
     `[gen-vapor-fixture] ✅ 混排夹具：合成叶 ${totalLeaves} 段（静态 ${staticLeaves.map((n) => JSON.stringify(n.text)).join('/')} · ` +
       `段表 ${segLeaves.length}）· 空格叶保留`,
   )
+}
+// ★:style 对象展开（2026-10-03）：必须**逐键**（layout.width + paint.backgroundColor），不得有整键
+{
+  const so = parsed.styleObj
+  const keys = (so?.table?.sources ?? []).flatMap((x) => x.slots.map((sl) => sl.propKey))
+  const consts = (so?.table?.constantSlots ?? []).map((sl) => sl.propKey)
+  const hasWhole = [...keys, ...consts].some((k) => k === 'paint.style')
+  const noStray = (so?.table?.l0Slots ?? []).length === 0
+  if (!so?.ok || !keys.includes('layout.width') || !keys.includes('paint.backgroundColor') || hasWhole || !noStray) {
+    console.error(
+      `[gen-vapor-fixture] ✗ :style 对象夹具不完整（判据 ㉒ 将无证据）：` +
+        `keys=${JSON.stringify(keys)} + consts=${JSON.stringify(consts)} · 整键=${hasWhole} · l0=${!noStray}`,
+    )
+    process.exit(1)
+  }
+  console.log(`[gen-vapor-fixture] ✅ :style 对象夹具：逐键展开 ${JSON.stringify([...keys, ...consts])}（无 paint.style 整键）`)
 }
 const kb = (fs.statSync(OUT).size / 1024).toFixed(1)
 

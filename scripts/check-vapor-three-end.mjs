@@ -124,6 +124,12 @@ function fingerprint(rep) {
     [...(rep.mixed_probe?.texts ?? [])].sort(),
     rep.mixed_probe?.leaves,
   ])
+  // ★`:style` 对象展开（2026-10-03）：双通道读数三端逐值一致（内核宽度 + 宿主补丁内容）
+  fp.styleobj_probe = JSON.stringify([
+    rep.styleobj_probe?.width_before,
+    rep.styleobj_probe?.width_after,
+    (rep.styleobj_probe?.patch_calls ?? []).map((ps2) => ps2.join('|')),
+  ])
   return fp
 }
 
