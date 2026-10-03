@@ -347,7 +347,7 @@ uni-app 是**①源码层面**的负担——那正是差异所在；不要把�
 | GP3-b0 | ★**Overlay 收口**（既有 teleport→root-portal 链路 + 三件套复用 + S47 经验固化） | 0.2 人周 | GP1 |
 | GP3-b1 | ★**Global 层新建**（MP：每页注入机制 + 状态共享通道——§1.2-bis） ✅ **实现完成（2026-10-03）**：外壳 `appShell` 编译 → `GlobalLayerSnippet`（与外壳产物同源）→ 每页注入（wxml **前缀** = 树序表达层间顺序 / data·方法合并 / wxss 并入）+ `_proteus/global-layer.js` 状态通道（写镜像 + onShow 拉取）；判据 = 单测 19 组 + 真机 e2e 四段证据（本页注入 → 跨页可见 → 第二页写回 → 回本页仍生效） | 0.8 人周 | GP3-b0 |
 | **GP4** | 全局 Toast / Loading 队列（替代 `uni.showToast` 语义） | 0.5 人周 | GP2 |
-| **GP5** | 八条超级应用场景验收 | 0.5 人周 | GP3、GP4 |
+| **GP5** | 八条超级应用场景验收 ✅ **实现完成（2026-10-03）**：八条全部零每页引入（Overlay 三条经 GP4-a/b/c 的按需注入/根组件声明；**Global 五条一次声明**——网络状态条/悬浮球/音乐条/主题容器/IM 角标）；演示页 `subpackages/svg-lab/pages/gp5-scenarios-demo.vue` **源码零全局声明**；判据 = 单测 13 组 + MP/Web 真机 e2e | 0.5 人周 | GP3、GP4 |
 | **GP6** | 例外通道（独立窗口）与授权流程 | 1 人周 | GP3 |
 
 **合计约 7 人周。GP0 必须先做**——Skyline 那个点击穿透是版本相关的静默失效，不实测会在 GP3 后期才暴露。
