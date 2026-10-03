@@ -544,6 +544,39 @@ def main() -> int:
                   f"内核几何 {len(w_ok)}/{len(rects)} 节点有宽度"
                   + (f" · fills={[(f.get('name'), f.get('filled')) for f in fills]}" if fills else ""))
 
+    # ── ⑯ ★★★P1-3 emits：子组件 $emit → 父级 handler → 内核几何真变 ──
+    #   【为什么单独判】emits 的失效全是静默的：动作没编译 / 路由没命中 / 载荷没绑 / handler
+    #     跑了但几何没变。⇒ 四层证据**缺一即红**：① 有 emit 记录且**已路由** ② 载荷与源值对账
+    #     ③ 父级落点源真的变了 ④ 锚节点**内核宽度**真的变了（handler 跑了 ≠ 屏幕变了）。
+    ep = rep.get("emit_probe") or {}
+    emits = ep.get("emits") or []
+    if not emits:
+        print("  ◐ ⑯ emits：本端夹具未覆盖（报告无 emit_probe.emits）——如实跳过")
+    else:
+        routed = [e for e in emits if e.get("routed")]
+        if len(routed) == 0:
+            fail(f"★$emit 全部**未路由**到父级（{emits}）——父级绑定未命中（边界 id/事件名对不上？）")
+            ok = False
+        elif not routed[0].get("handler"):
+            fail(f"★$emit 已路由但**父 handler 名缺失**（{routed[0]}）——路由表不全")
+            ok = False
+        else:
+            sa = ep.get("parent_source_after")
+            gb = ep.get("geom_before", -1)
+            ga = ep.get("geom_after", -1)
+            if not (isinstance(sa, (int, float)) and sa > 0):
+                fail(f"★父级落点源没被改（parent_source_after={sa}）——父 handler 没跑或 $event 没绑上载荷")
+                ok = False
+            elif not (isinstance(ga, (int, float)) and ga > 0):
+                fail(f"★锚节点**内核宽度**没变（{gb}→{ga}）——emit 链路走到了但几何没生效")
+                ok = False
+            elif isinstance(gb, (int, float)) and gb == ga:
+                fail(f"★锚节点内核宽度**前后相同**（{gb}→{ga}）——几何没变（『跑了』≠『生效了』）")
+                ok = False
+            else:
+                print(f"  ✓ ⑯ ★emits 子→父：$emit('{routed[0].get('event')}', 载荷={routed[0].get('payload')!r})"
+                      f" 路由到 {routed[0].get('handler')} · 父源 {sa} · 锚节点内核宽度 {gb}→{ga}")
+
     # 附加观测（不判红，只如实报）
     una = rep.get("uninstantiated_slots", 0)
     if una:

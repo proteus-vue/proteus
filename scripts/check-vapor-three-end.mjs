@@ -80,6 +80,14 @@ function fingerprint(rep) {
     [...(rep.slot_probe?.fills ?? [])].map((f) => `${f.name}:${f.filled}`).sort(),
     rep.slot_probe?.markers_left,
   ])
+  // ★P1-3 emits（2026-10-03）：子→父链路三端必须逐值相同（事件名/载荷/路由/父源/内核宽度）——
+  //   emit 路由是共享代码 + 同一份产物 + 同一内核 ⇒ 任一端不同即可疑（不是"设备无关读数"）。
+  fp.emit_probe = JSON.stringify([
+    [...(rep.emit_probe?.emits ?? [])].map((e) => `${e.event}:${JSON.stringify(e.payload)}:${e.routed}`),
+    rep.emit_probe?.parent_source_after,
+    rep.emit_probe?.geom_before,
+    rep.emit_probe?.geom_after,
+  ])
   return fp
 }
 

@@ -11262,7 +11262,9 @@
           table: def.table,
           registry: childRegistry,
           nodeIds: childInst.nodes.map((x) => x.id),
-          idOffset: idOffset + childOffset
+          idOffset: idOffset + childOffset,
+          // ★P1-3 emits：边界在**本树**的 id 空间 —— 宿主要加 idOffset 才是它看到的 id
+          treeOffset: idOffset
         });
         for (const m of childInst.componentMounts ?? []) componentMounts.push(m);
         for (const sm of childInst.slotMounts ?? []) slotMounts.push(sm);
@@ -11320,6 +11322,7 @@
     for (const id of chain) {
       const b = index.get(`${id}:${event}`) ?? index.get(`${id}:tap`);
       if (!b) continue;
+      if (b.componentEmit) continue;
       if (b.self && id !== hit) {
         skippedSelf.push(id);
         continue;
@@ -11329,7 +11332,7 @@
         skippedOnce.push(id);
         continue;
       }
-      if (!run(b.handler)) continue;
+      if (!run(b.handler, id)) continue;
       if (b.once) state.onceFired.add(onceKey);
       fired.push(id);
       if (!handler) handler = b.handler;
@@ -12097,7 +12100,7 @@
     return (0, import_runtime_core2.openBlock)(), (0, import_runtime_core2.createBlock)(_component_p_view, { style: { "width": 1080, "height": 1600, "flexDirection": "column", "padding": { "top": 24 }, "backgroundColor": "#14141c" } }, {
       default: (0, import_runtime_core2.withCtx)(() => [
         (0, import_runtime_core2.createVNode)(_component_p_text, { style: { "fontSize": 20, "color": "#ffffff", "margin": { "bottom": 12 } } }, {
-          default: (0, import_runtime_core2.withCtx)(() => [..._cache[6] || (_cache[6] = [
+          default: (0, import_runtime_core2.withCtx)(() => [..._cache[7] || (_cache[7] = [
             (0, import_runtime_core2.createTextVNode)(
               "Vapor \xB7 \u8BBE\u5907\u7AEF",
               -1
@@ -12296,8 +12299,14 @@
         (0, import_runtime_core2.createVNode)(_component_KidPanel, {
           label: _ctx.kidLabel,
           labelW: _ctx.kidLabelW,
+          onBump: _cache[6] || (_cache[6] = ($event) => _ctx.bumpTotal = $event + 100),
           style: { "height": 30 }
         }, null, 8, ["label", "labelW"]),
+        (0, import_runtime_core2.createCommentVNode)(" \u2605\u2605\u2605P1-3 emits\uFF082026-10-03\uFF09\uFF1A\u4E0A\u9762 @bump \u76D1\u542C\u5B50\u7EC4\u4EF6 $emit\uFF1B\u672C\u8282\u70B9\u662F**\u51E0\u4F55\u951A**\u2014\u2014\n         \u5BBD\u5EA6\u7ED1 bumpTotal\uFF08\u521D\u59CB 0 \u21D2 \u51E0\u4F55 0 \u5BBD\uFF09\uFF0C\u5224\u636E\u6838\u300C\u5B50 emit \u21D2 \u7236 handler \u8DD1 \u21D2 **\u5185\u6838\u51E0\u4F55\u771F\u53D8**\u300D\u3002\n         \u2605\u4E3A\u4EC0\u4E48\u7528\u5BBD\u5EA6\u800C\u4E0D\u662F\u6587\u672C\uFF08\u672C\u4ED3\u5224\u636E\u53E3\u5F84\uFF09\uFF1A\u6587\u672C\u6539\u52A8\u53EF\u80FD\u88AB\u6587\u672C\u540C\u6B65\u94FE\u8DEF\u63A9\u76D6\uFF1B\u51E0\u4F55\u662F\u5185\u6838\u771F\u503C\u3002 "),
+        (0, import_runtime_core2.createVNode)(_component_p_view, {
+          width: _ctx.bumpTotal,
+          style: { "height": 6, "backgroundColor": "#3aa0ff" }
+        }, null, 8, ["width"]),
         (0, import_runtime_core2.createCommentVNode)(" \u2605\u2605\u2605P3 \u6279\u6B21\uFF082026-10-03\uFF09\u903B\u8F91\u5BB9\u5668**\u900F\u4F20**\u5939\u5177\uFF1A\u4E09\u8005\u90FD**\u4E0D\u4EA7\u5305\u88F9\u76D2**\n         \uFF08Vue \u8BED\u4E49\uFF1A\u903B\u8F91\u5BB9\u5668\u4E0D\u6E32\u67D3\u5143\u7D20\uFF09\u2014\u2014\u5224\u636E\u6838\u300C\u8282\u70B9\u6570\u5B88\u6052 + \u51E0\u4F55\u4E0E Vue \u7B49\u4EF7\u300D\u3002\n         \u2605\u672C\u6CE8\u91CA\u4E0D\u5F97\u542B\u53CD\u5F15\u53F7\u6216\u7F8E\u5143\u82B1\u62EC\u53F7\uFF08\u5728 JS \u6A21\u677F\u4E32\u91CC\u2014\u2014\u62A4\u680F\u89C1 check:script-compile\uFF09\u3002 "),
         (0, import_runtime_core2.createCommentVNode)(" \u2605\u2605KeepAlive \u7684\u5B98\u65B9\u7EA6\u675F\uFF08\u672C\u4ED3\u5B9E\u6D4B\u88AB Vue \u7F16\u8BD1\u5668\u5F53\u573A\u62E6\u4E0B\uFF09\uFF1A\u5B83\u8981\u6C42\u300C\u6070\u597D\u4E00\u4E2A\u5B50\u7EC4\u4EF6\u300D\n         \u2014\u2014p-view\uFF08\u539F\u751F\u6807\u7B7E\uFF09\u4F1A\u88AB\u62D2\uFF1ASyntaxError: KeepAlive expects exactly one child component.\n         \u21D2 \u5939\u5177\u6539\u7528\u771F\u7EC4\u4EF6\u5F62\u6001\uFF08MyKeep\uFF09\u9A8C\u8BC1\u900F\u4F20\u3002\n         \u2605\u5E95\u8272\u907F\u5F00 #2f6fed\uFF08A/B \u5224\u636E\u7684\u6309\u94AE\u8272\u951A\u2014\u2014\u672C\u4ED3\u5DF2\u8E29\uFF1A\u91CD\u590D \u21D2 \u5224\u636E\u7EA2\uFF09\u3002 "),
         ((0, import_runtime_core2.openBlock)(), (0, import_runtime_core2.createBlock)(
@@ -12324,7 +12333,7 @@
           ]),
           fallback: (0, import_runtime_core2.withCtx)(() => [
             (0, import_runtime_core2.createVNode)(_component_p_text, { style: { "color": "#ffffff" } }, {
-              default: (0, import_runtime_core2.withCtx)(() => [..._cache[7] || (_cache[7] = [
+              default: (0, import_runtime_core2.withCtx)(() => [..._cache[8] || (_cache[8] = [
                 (0, import_runtime_core2.createTextVNode)(
                   "suspense-fallback",
                   -1
@@ -12401,7 +12410,9 @@
       // ★★★P1-3 夹具（组件 props 源——判据改它们验"父改 ⇒ 子更新"）
       kidLabel: "k0",
       kidLabelW: 40,
-      tapCount: 0
+      tapCount: 0,
+      // ★★★P1-3 emits（2026-10-03）：子组件 @bump 的父级落点源（判据核"子 emit ⇒ 父 handler ⇒ 几何"）
+      bumpTotal: 0
     };
   }
   function __proteusVaporRun(argsJson) {
@@ -12754,6 +12765,7 @@
       const abExprArr = (0, import_runtime_core3.ref)(dataB.exprArr);
       const abExprObj = (0, import_runtime_core3.ref)(dataB.exprObj);
       const abTrVisible = (0, import_runtime_core3.ref)(dataB.trVisible);
+      const abBumpTotal = (0, import_runtime_core3.ref)(dataB.bumpTotal);
       let abRootInst = null;
       const AbApp = {
         name: "VaporAbApp",
@@ -12771,7 +12783,8 @@
             exprA: abExprA,
             exprArr: abExprArr,
             exprObj: abExprObj,
-            trVisible: abTrVisible
+            trVisible: abTrVisible,
+            bumpTotal: abBumpTotal
           };
         },
         render
@@ -13319,6 +13332,7 @@
       component_nodes: 0,
       component_kid_probe: {},
       slot_probe: { texts: [], rects: [], fills: [], markers_left: -1 },
+      emit_probe: { emits: [], parent_source_after: void 0, geom_before: -1, geom_after: -1 },
       mount_ms: 0,
       mount_nodes: 0,
       updates_run: 0,
@@ -13428,7 +13442,14 @@
             childVapor.relink(mount.ctx);
             childRt.flush();
           }
-          const entry2 = { mount, vapor: childVapor, runtime: childRt };
+          const childDef = artifacts.components?.[mount.name];
+          const entry2 = {
+            mount,
+            vapor: childVapor,
+            runtime: childRt,
+            childEvents: childDef?.events ?? [],
+            childHandlers: childDef?.handlers ?? {}
+          };
           mountsByBoundary.set(mount.boundaryNodeId, entry2);
           childRuntimes.push(entry2);
         }
@@ -13462,14 +13483,26 @@
       const events = artifacts.events ?? [];
       rep.ev_bindings = events.length;
       rep.ev_handlers = Object.keys(handlers).length;
-      const byNodeEvent = indexEventBindings(events);
+      const emitIndex = /* @__PURE__ */ new Map();
+      for (const e of events) {
+        if (e.componentEmit) emitIndex.set(`${e.nodeId}:${e.event}`, e.handler);
+      }
+      const mergedEvents = events.filter((e) => !e.componentEmit);
+      for (let i = 0; i < childRuntimes.length; i++) {
+        const cr = childRuntimes[i];
+        for (const e of cr.childEvents) {
+          mergedEvents.push({ ...e, nodeId: e.nodeId + (cr.mount.idOffset ?? 0), handler: `@child:${i}:${e.handler}` });
+        }
+      }
+      const byNodeEvent = indexEventBindings(mergedEvents);
       const dispatchState = createDispatchState();
       rep.ev_modifiers = events.filter((e) => e.stop || e.self || e.once).length;
-      const runHandler = (name) => {
+      const runHandler = (name, _nodeId, payload) => {
         const acts = handlers[name];
         if (!acts) return false;
         for (const a of acts) {
-          const ctx2 = { read: (n) => data[n] };
+          if (a.op === "emit") continue;
+          const ctx2 = { read: (n) => n === "$event" ? payload : data[n] };
           const v = evalExpr(a.program, ctx2);
           const cur = data[a.source];
           if (a.op === "set") {
@@ -13482,11 +13515,40 @@
         }
         return true;
       };
+      const emitLog = [];
+      const runChildHandler = (idx, name) => {
+        const cr = childRuntimes[idx];
+        if (!cr) return false;
+        const acts = cr.childHandlers[name];
+        if (!acts) return false;
+        for (const a of acts) {
+          if (a.op === "emit") {
+            const evName = String(a.event ?? "");
+            const payload = a.program ? evalExpr(a.program, cr.mount.ctx) : void 0;
+            const boundaryHostId = cr.mount.boundaryNodeId + (cr.mount.treeOffset ?? 0);
+            const parentHandler = emitIndex.get(`${boundaryHostId}:${evName}`);
+            if (!parentHandler) {
+              emitLog.push({ event: evName, payload, routed: false });
+              notes.push(`\u5B50\u7EC4\u4EF6 ${cr.mount.name} \u7684 $emit('${evName}') \u6CA1\u6709\u7236\u7EA7\u76D1\u542C\uFF08\u8FB9\u754C ${boundaryHostId}\uFF09\u2014\u2014\u672A\u8DEF\u7531`);
+              continue;
+            }
+            runHandler(parentHandler, void 0, payload);
+            emitLog.push({ event: evName, payload, routed: true, handler: parentHandler });
+            continue;
+          }
+          notes.push(`\u5B50\u7EC4\u4EF6 ${cr.mount.name} \u7684 handler \u52A8\u4F5C \`${String(a.op)}\`\uFF08\u6539 ${String(a.source)}\uFF09\u4E0D\u751F\u6548\u2014\u2014\u5B50\u7EC4\u4EF6\u65E0\u53EF\u53D8\u72B6\u6001\uFF08\u6784\u5EFA\u671F\u5FEB\u7167\uFF09`);
+        }
+        return true;
+      };
       const gestureHits = [];
       globalThis.__proteusVaporGesture = (type, nodeId, chainJson) => {
         const chain = parseChain(chainJson, nodeId);
         const before2 = { ...data };
-        const hit = dispatchChainA(chain, type, byNodeEvent, dispatchState, runHandler);
+        const hit = dispatchChainA(chain, type, byNodeEvent, dispatchState, (h, id) => {
+          const m = /^@child:(\d+):(.+)$/.exec(h);
+          if (m) return runChildHandler(Number(m[1]), m[2]);
+          return runHandler(h, id);
+        });
         const handler = hit.handler;
         if (!handler) return JSON.stringify({ ok: false, reason: `\u94FE ${chain.join(">")} \u4E0A\u6CA1\u6709 ${type} \u7684 handler` });
         const ran = true;
@@ -13760,6 +13822,37 @@
           rect_before: kidRectBefore,
           rect_after: kidRectAfter
         };
+      }
+      if (childRuntimes.length > 0 && typeof proteusHost.tapAt === "function") {
+        const emitBtn = inst.nodes.find((n) => n.text === "emit-btn");
+        const anchorSlot = table.sources.find((s) => s.sourceName === "bumpTotal")?.slots.find((sl) => sl.kind === "style" && sl.propKey === "layout.width");
+        const anchorId = anchorSlot?.nodeId;
+        if (emitBtn && anchorId !== void 0) {
+          const rectsNow = rectsOf();
+          const btnRect = rectsNow[String(emitBtn.id)];
+          const geomBefore = rectsNow[String(anchorId)]?.width ?? -1;
+          emitLog.length = 0;
+          if (btnRect && typeof btnRect.x === "number" && typeof btnRect.y === "number") {
+            const tapOut = JSON.parse(proteusHost.tapAt(JSON.stringify({
+              x: btnRect.x + (btnRect.width ?? 0) / 2,
+              y: btnRect.y + (btnRect.height ?? 0) / 2
+            })));
+            if (tapOut.gestures_fired !== 1) {
+              notes.push(`emits \u63A2\u9488\uFF1Atap \u672A\u89E6\u53D1\u624B\u52BF\uFF08gestures_fired=${tapOut.gestures_fired ?? "\u7F3A\u5931"}\uFF09\u2014\u2014\u8BFB\u6570\u4E0D\u53EF\u4FE1`);
+            }
+          } else {
+            notes.push(`emits \u63A2\u9488\uFF1Aemit \u6309\u94AE\uFF08\u8282\u70B9 ${emitBtn.id}\uFF09\u6CA1\u6709\u5185\u6838\u77E9\u5F62\u2014\u2014tap \u65E0\u6CD5\u6CE8\u5165`);
+          }
+          const rectsAfter = rectsOf();
+          rep.emit_probe = {
+            emits: emitLog.slice(),
+            parent_source_after: data.bumpTotal,
+            geom_before: geomBefore,
+            geom_after: rectsAfter[String(anchorId)]?.width ?? -1
+          };
+        } else {
+          notes.push("emits \u63A2\u9488\uFF1A\u5939\u5177\u7F3A emit \u6309\u94AE\u6216 bumpTotal \u951A\uFF08\u8282\u70B9\u672A\u627E\u5230\uFF09\u2014\u2014\u5224\u636E\u6309\u7F3A\u5931\u5904\u7406");
+        }
       }
       if (triggers.has("trVisible")) {
         const beforeTr = rep.transition_started;

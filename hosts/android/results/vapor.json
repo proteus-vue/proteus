@@ -1,14 +1,14 @@
 {
-  "bundle_chars": 517605,
-  "run_ms": 92,
+  "bundle_chars": 523344,
+  "run_ms": 52,
   "host_mount_calls": 3,
-  "host_apply_calls": 13,
+  "host_apply_calls": 14,
   "host_update_patch_calls": 0,
-  "host_nodes": 44,
-  "host_text_nodes": 18,
-  "host_cmds": 44,
-  "host_layout_ms": 0.231666,
-  "host_measure_ms": 0.118907,
+  "host_nodes": 46,
+  "host_text_nodes": 19,
+  "host_cmds": 46,
+  "host_layout_ms": 0.226823,
+  "host_measure_ms": 0.112448,
   "host_painted_samples": 12060,
   "host_painted_colors": 55,
   "host_applied": 1,
@@ -16,9 +16,9 @@
   "host_view_on_draw": 6,
   "report": {
     "ok": true,
-    "tpl_nodes": 28,
+    "tpl_nodes": 29,
     "tpl_ok": true,
-    "sub_l1": 18,
+    "sub_l1": 19,
     "sub_l0": 0,
     "sub_l1_rate": 1,
     "sub_sources": [
@@ -35,17 +35,18 @@
       "exprObj",
       "trVisible",
       "kidLabel",
-      "kidLabelW"
+      "kidLabelW",
+      "bumpTotal"
     ],
-    "inst_ms": 1,
-    "inst_nodes": 44,
+    "inst_ms": 0,
+    "inst_nodes": 46,
     "inst_reused_ids": 2,
     "inst_allocated_ids": 14,
-    "inst_rows": 44,
-    "inst_values_filled": 30,
+    "inst_rows": 46,
+    "inst_values_filled": 31,
     "inst_virtual_rows": 8,
-    "inst_text_filled": 18,
-    "inst_width_filled": 14,
+    "inst_text_filled": 19,
+    "inst_width_filled": 16,
     "mix_text_probe": [
       {
         "id": 8,
@@ -214,7 +215,7 @@
       "22:fade-slide-up"
     ],
     "component_mounts": 1,
-    "component_nodes": 2,
+    "component_nodes": 3,
     "component_kid_probe": {
       "text": "child-k0",
       "width": 40,
@@ -265,12 +266,25 @@
       ],
       "markers_left": 0
     },
-    "mount_ms": 41,
-    "mount_nodes": 44,
+    "emit_probe": {
+      "emits": [
+        {
+          "event": "bump",
+          "payload": 99,
+          "routed": true,
+          "handler": "h4"
+        }
+      ],
+      "parent_source_after": 199,
+      "geom_before": 0,
+      "geom_after": 199
+    },
+    "mount_ms": 17,
+    "mount_nodes": 46,
     "updates_run": 3,
     "ops_bytes": 204,
     "ops_ms": 0,
-    "apply_ms": 4,
+    "apply_ms": 1,
     "text_synced_total": 3,
     "update_evidence": [
       {
@@ -300,7 +314,7 @@
     ],
     "geom_probe": [
       {
-        "id": 29,
+        "id": 30,
         "before": 52,
         "after": 80
       }
@@ -344,8 +358,8 @@
         "stroke_len": 512.023
       }
     ],
-    "ev_bindings": 4,
-    "ev_handlers": 4,
+    "ev_bindings": 5,
+    "ev_handlers": 5,
     "ev_modifiers": 1,
     "taps": 4,
     "tap_evidence": [
@@ -368,7 +382,7 @@
         "ops": 1,
         "changed_rects": 1,
         "geom_before": 96,
-        "geom_after": 44,
+        "geom_after": 46,
         "geom_diff_ids": [
           10
         ]
@@ -395,7 +409,7 @@
         "ops": 1,
         "changed_rects": 2,
         "geom_before": 56,
-        "geom_after": 44,
+        "geom_after": 46,
         "geom_diff_ids": [
           10,
           11
@@ -420,7 +434,7 @@
         "ops": 1,
         "changed_rects": 1,
         "geom_before": 220,
-        "geom_after": 44,
+        "geom_after": 46,
         "geom_diff_ids": [
           12
         ]
@@ -445,7 +459,7 @@
         "ops": 1,
         "changed_rects": 1,
         "geom_before": 40,
-        "geom_after": 44,
+        "geom_after": 46,
         "geom_diff_ids": [
           13
         ]
@@ -457,10 +471,10 @@
       "tap@11 自身宽度 120 → 150",
       "tap@12 自身宽度 300 → 305",
       "tap@13 自身宽度 120 → 150",
-      "实例树 44 节点 \/ 行 44 \/ 虚拟化行 8 \/ 增量 3 轮"
+      "实例树 46 节点 \/ 行 46 \/ 虚拟化行 8 \/ 增量 3 轮"
     ],
-    "host_layout_ms": 1.455,
-    "host_cmds": 44
+    "host_layout_ms": 0.472,
+    "host_cmds": 46
   },
   "ok": true
 }

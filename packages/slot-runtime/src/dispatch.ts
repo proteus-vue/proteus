@@ -37,6 +37,16 @@ export interface EventBinding {
   self?: boolean
   /** `.once`：同一绑定只跑一次（需调用方持有 DispatchState） */
   once?: boolean
+  /**
+   * ★★★**组件事件绑定**（P1-3 emits，2026-10-03）——父级写在**组件边界**上的自定义事件
+   *   （`<Kid @bump="total = $event" />`）。
+   *
+   * 【为什么必须与手势绑定区分】手势绑定由宿主手势**经内核冒泡链**触发；组件事件由
+   *   **子组件 `$emit`** 触发（"子→父"直接通知，不冒泡、不经 hitTest）。两者同住 `events`
+   *   数组 ⇒ 派发侧必须能区分：手势派发**永不**匹配它（事件名不是语义手势名）；
+   *   emit 路由按「边界节点 + 事件名」**直接查表**（不沿链）。
+   */
+  componentEmit?: boolean
 }
 
 /**
@@ -94,6 +104,9 @@ export function indexEventBindings(bindings: readonly EventBinding[]): EventInde
  * @param index  `indexEventBindings(events)` 的产物
  * @param state  `.once` 状态（调用方持有，见 DispatchState）
  * @param run    执行 handler（返回 false = 没跑成/不存在 ⇒ 不计入 fired）
+ *   ★第二参 `nodeId`（2026-10-03 增补，向后兼容）：本跳的节点——**组件事件（$emit）路由要用它
+ *   反查"这个节点属于哪个组件挂载"**（子组件的 emit 要顺着挂载找到边界节点，见桥的 emits 装配）。
+ *   既有调用方只接一个参数也不受影响（JS 忽略多余实参）。
  *
  * ★查找口径与既有实现**逐字一致**（含 `:tap` 兜底）：先查 `节点:事件`，
  *   再退到 `节点:tap`——宿主上报的类型可能是 `longpress` 而绑定只在 tap 上，
@@ -104,7 +117,7 @@ export function dispatchGesture(
   event: string,
   index: EventIndex,
   state: DispatchState,
-  run: (handler: string) => boolean,
+  run: (handler: string, nodeId: number) => boolean,
 ): DispatchResult {
   const fired: number[] = []
   const skippedSelf: number[] = []
@@ -116,6 +129,9 @@ export function dispatchGesture(
   for (const id of chain) {
     const b = index.get(`${id}:${event}`) ?? index.get(`${id}:tap`)
     if (!b) continue
+    // ★组件事件绑定（componentEmit）**不参与手势派发**——它由 emit 路由直接查表触发
+    //   （见 EventBinding.componentEmit 注释；防"手势恰好同名"把需要 $event 的 handler 跑起来）
+    if (b.componentEmit) continue
     // `.self`：命中节点不是本节点 ⇒ 跳过（DOM `target === currentTarget` 等价）
     if (b.self && id !== hit) {
       skippedSelf.push(id)
@@ -127,7 +143,7 @@ export function dispatchGesture(
       skippedOnce.push(id)
       continue
     }
-    if (!run(b.handler)) continue
+    if (!run(b.handler, id)) continue
     if (b.once) state.onceFired.add(onceKey)
     fired.push(id)
     if (!handler) handler = b.handler

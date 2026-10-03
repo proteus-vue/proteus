@@ -88,6 +88,15 @@ export interface ComponentMount {
    *   桥把它透传给子运行时的 `nodeIdOffset`（见 `VaporRuntime` 构造）。
    */
   idOffset: number
+  /**
+   * ★★★**边界所在树的偏移**（P1-3 emits，2026-10-03）——`boundaryNodeId` 是**该树 local 空间**
+   *   的 id；宿主看到的 id = `boundaryNodeId + treeOffset`。
+   *   【为什么必须单列（实测的两种情形）】顶层树的 `idOffset` 参数是 0 ⇒ treeOffset 0；
+   *   而嵌在**子组件树**里的挂载，其 `boundaryNodeId` 是子树的 local id（如 5），
+   *   宿主空间要加**子树当时拿到的偏移**（如 42）——**不是**本挂载自己的 `idOffset`
+   *   （那是"子组件的子树的偏移"，另一层）。emit 路由靠它把边界映射回宿主 id。
+   */
+  treeOffset: number
 }
 
 /**
@@ -807,6 +816,8 @@ export function instantiateTemplate(tpl: LayoutTemplate, opts: InstantiateOption
         registry: childRegistry,
         nodeIds: childInst.nodes.map((x) => x.id),
         idOffset: idOffset + childOffset,
+        // ★P1-3 emits：边界在**本树**的 id 空间 —— 宿主要加 idOffset 才是它看到的 id
+        treeOffset: idOffset,
       })
       // 子树的**嵌套**组件挂载记录 / 插槽记录一并冒出（桥要为每个挂载建运行时）
       for (const m of childInst.componentMounts ?? []) componentMounts.push(m)
