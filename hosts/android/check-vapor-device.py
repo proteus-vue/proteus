@@ -681,6 +681,53 @@ def main() -> int:
             print(f"  ✓ ⑲ ★动态组件 `:is`：动态→DynA · 静态 is→DynB · 假值摘除 {dropped} 节点 · "
                   f"内核几何 {len(w_ok)}/{len(geom)} 节点有宽度")
 
+    # ── ⑳ ★★★P3-5 宿主指令 `v-animate`：三段语义（mounted / updated / 假值不播）──
+    #   【为什么单独判】自定义指令在我的架构里**不能执行用户脚本**（端上不执行 script）——
+    #     正解是"闭集注册表 + 已有宿主能力"。本判据核注册表路线的三段语义**真的跑**：
+    #     ① 编译产物带**通道规格**（preset 解析——不是只留一个名字）；
+    #     ② 首评 truthy ⇒ 播（mounted 语义）；③ 值变化 ⇒ 再播（updated 语义）；④ 假值 ⇒ 不播。
+    #   ★证据是**宿主回执**（animStart started 计数）——"报给宿主了"与"宿主收了"是两件事。
+    drp = rep.get("directive_probe") or {}
+    if not drp or not drp.get("rounds"):
+        print("  ◐ ⑳ 宿主指令：本端夹具未覆盖（报告无 directive_probe）——如实跳过")
+    else:
+        nodes = drp.get("nodes") or []
+        rounds = {r.get("name"): r.get("started", -1) for r in (drp.get("rounds") or [])}
+        plays = drp.get("plays") or []
+        # ① 编译产物：三节点各一条指令，且**通道数 > 0**（规格真的解析了）
+        ch_ok = all(
+            any(part.split(":")[2].isdigit() and int(part.split(":")[2]) > 0 for part in n.get("dirs", []))
+            for n in nodes
+        )
+        # ② 首轮有播放（恒真无值指令的 mounted 语义）③ 同值轮零播放 ④ 变化轮有播放 ⑤ 假值轮零播放
+        r_a = rounds.get("a:首评falsy", -1)
+        r_b = rounds.get("b:同值", -1)
+        r_c = rounds.get("c:pulse变true", -1)
+        r_d = rounds.get("d:zoom变1", -1)
+        r_e = rounds.get("e:pulse变false", -1)
+        if not nodes or not ch_ok:
+            fail(f"★指令编译产物不完整（nodes={nodes}）——通道规格没解析出来（只剩名字 = 无处可播）")
+            ok = False
+        elif not (isinstance(r_a, (int, float)) and r_a >= 1):
+            fail(f"★首轮没有播放（started={r_a}）——恒真无值指令的 mounted 语义没生效（plays={plays[:2]}）")
+            ok = False
+        elif r_b != 0:
+            fail(f"★同值轮**不该播**但播了（started={r_b}）——updated 语义要求『值变化才播』")
+            ok = False
+        elif not (isinstance(r_c, (int, float)) and r_c >= 1):
+            fail(f"★值变化轮没播（started={r_c}）——updated 语义没生效")
+            ok = False
+        elif not (isinstance(r_d, (int, float)) and r_d >= 1):
+            fail(f"★第二条指令值变化没播（started={r_d}）")
+            ok = False
+        elif r_e != 0:
+            fail(f"★假值轮**不该播**但播了（started={r_e}）——falsy 语义要求不播")
+            ok = False
+        else:
+            presets = [p.get("preset") for p in plays if p.get("started")]
+            print(f"  ✓ ⑳ ★宿主指令 v-animate：{len(nodes)} 节点带通道规格 · "
+                  f"mounted 播 {r_a} · 同值 0 · 变化播 {r_c}/{r_d} · 假值 0 · 已播预设 {sorted(set(presets))}")
+
     # 附加观测（不判红，只如实报）
     una = rep.get("uninstantiated_slots", 0)
     if una:

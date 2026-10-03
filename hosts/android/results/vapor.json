@@ -1,19 +1,19 @@
 {
-  "bundle_chars": 536658,
-  "run_ms": 104,
-  "host_mount_calls": 7,
+  "bundle_chars": 542092,
+  "run_ms": 132,
+  "host_mount_calls": 9,
   "host_apply_calls": 16,
   "host_update_patch_calls": 0,
   "host_nodes": 47,
   "host_text_nodes": 19,
   "host_cmds": 47,
-  "host_layout_ms": 0.224792,
-  "host_measure_ms": 0.111667,
+  "host_layout_ms": 0.333281,
+  "host_measure_ms": 0.146615,
   "host_painted_samples": 12060,
   "host_painted_colors": 55,
   "host_applied": 1,
   "host_changed_nodes": 0,
-  "host_view_on_draw": 14,
+  "host_view_on_draw": 18,
   "report": {
     "ok": true,
     "tpl_nodes": 30,
@@ -327,7 +327,155 @@
         "动态组件 `:is=\"''\"` 求值为假（）⇒ 节点已摘除（Vue 同）"
       ]
     },
-    "mount_ms": 28,
+    "directive_probe": {
+      "nodes": [
+        {
+          "id": 1,
+          "dirs": [
+            "animate:fade:1"
+          ]
+        },
+        {
+          "id": 2,
+          "dirs": [
+            "animate:zoom:1"
+          ]
+        },
+        {
+          "id": 3,
+          "dirs": [
+            "animate:slide-up:1"
+          ]
+        }
+      ],
+      "rounds": [
+        {
+          "name": "a:首评falsy",
+          "started": 1
+        },
+        {
+          "name": "b:同值",
+          "started": 0
+        },
+        {
+          "name": "c:pulse变true",
+          "started": 1
+        },
+        {
+          "name": "d:zoom变1",
+          "started": 1
+        },
+        {
+          "name": "e:pulse变false",
+          "started": 0
+        }
+      ],
+      "plays": [
+        {
+          "nodeId": 1,
+          "preset": "fade",
+          "started": 0,
+          "toValue": false
+        },
+        {
+          "nodeId": 2,
+          "preset": "zoom",
+          "started": 0,
+          "toValue": 0
+        },
+        {
+          "nodeId": 3,
+          "preset": "slide-up",
+          "started": 1,
+          "toValue": true
+        },
+        {
+          "nodeId": 1,
+          "preset": "fade",
+          "started": 0,
+          "fromValue": false,
+          "toValue": false
+        },
+        {
+          "nodeId": 2,
+          "preset": "zoom",
+          "started": 0,
+          "fromValue": 0,
+          "toValue": 0
+        },
+        {
+          "nodeId": 3,
+          "preset": "slide-up",
+          "started": 0,
+          "fromValue": true,
+          "toValue": true
+        },
+        {
+          "nodeId": 1,
+          "preset": "fade",
+          "started": 1,
+          "fromValue": false,
+          "toValue": true
+        },
+        {
+          "nodeId": 2,
+          "preset": "zoom",
+          "started": 0,
+          "fromValue": 0,
+          "toValue": 0
+        },
+        {
+          "nodeId": 3,
+          "preset": "slide-up",
+          "started": 0,
+          "fromValue": true,
+          "toValue": true
+        },
+        {
+          "nodeId": 1,
+          "preset": "fade",
+          "started": 0,
+          "fromValue": true,
+          "toValue": true
+        },
+        {
+          "nodeId": 2,
+          "preset": "zoom",
+          "started": 1,
+          "fromValue": 0,
+          "toValue": 1
+        },
+        {
+          "nodeId": 3,
+          "preset": "slide-up",
+          "started": 0,
+          "fromValue": true,
+          "toValue": true
+        },
+        {
+          "nodeId": 1,
+          "preset": "fade",
+          "started": 0,
+          "fromValue": true,
+          "toValue": false
+        },
+        {
+          "nodeId": 2,
+          "preset": "zoom",
+          "started": 0,
+          "fromValue": 1,
+          "toValue": 1
+        },
+        {
+          "nodeId": 3,
+          "preset": "slide-up",
+          "started": 0,
+          "fromValue": true,
+          "toValue": true
+        }
+      ]
+    },
+    "mount_ms": 23,
     "mount_nodes": 47,
     "updates_run": 3,
     "ops_bytes": 204,
@@ -521,7 +669,7 @@
       "tap@13 自身宽度 120 → 150",
       "实例树 47 节点 \/ 行 47 \/ 虚拟化行 8 \/ 增量 3 轮"
     ],
-    "host_layout_ms": 2.44,
+    "host_layout_ms": 0.572,
     "host_cmds": 47
   },
   "ok": true

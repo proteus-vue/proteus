@@ -11454,6 +11454,20 @@
     return { fired, handler, stopped, skippedSelf, skippedOnce };
   }
 
+  // packages/slot-runtime/src/directives.ts
+  var HOST_DIRECTIVE_SPECS = {
+    animate: {
+      argKind: "anim-preset",
+      argHint: "\u52A8\u753B\u9884\u8BBE\uFF08fade / slide-up / slide-down / slide-left / slide-right / zoom / fade-slide-up\uFF09",
+      desc: "\u503C\u53D8\u5316\uFF08\u6216\u9996\u6B21\u6C42\u503C\u4E3A\u771F\uFF09\u65F6\u5728\u8BE5\u8282\u70B9**\u64AD\u4E00\u6B21**\u9884\u8BBE\u52A8\u753B\uFF08\u8D70\u5185\u6838\u52A8\u753B\u901A\u9053\uFF0C\u4E0E <Transition> \u540C\u4E00\u5957\uFF09\u3002\u8BED\u4E49\u5BF9\u9F50\uFF1A\u6307\u4EE4\u7684 mounted\uFF08\u9996\u8BC4 truthy \u5373\u64AD\uFF09\u4E0E updated\uFF08\u503C\u53D8\u5316\u5373\u64AD\uFF09\u3002"
+    }
+  };
+  var HOST_DIRECTIVE_NAMES = Object.keys(HOST_DIRECTIVE_SPECS);
+  function directiveShouldPlay(prev, cur, seen) {
+    if (!seen) return Boolean(cur);
+    return !Object.is(prev, cur) && Boolean(cur);
+  }
+
   // packages/renderer-app/dist/index.js
   var import_runtime_core = __toESM(require_runtime_core(), 1);
   function createAppHostConfig(adapter) {
@@ -13456,6 +13470,7 @@
       scoped_probe: { texts: [], anchor_id: -1, anchor_width_field: -1, anchor_width_rect: -1 },
       lifecycle_probe: { bindings: [], ran_handler: "", changed_sources: [], ops_bytes: 0, applied: 0, anchor_id: -1, geom_before: -1, geom_after: -1 },
       dyn_probe: { texts: [], mounts: [], geom: [], dropped: -1, notes: [] },
+      directive_probe: { nodes: [], rounds: [], plays: [] },
       mount_ms: 0,
       mount_nodes: 0,
       updates_run: 0,
@@ -14171,6 +14186,100 @@
           }
         } else {
           notes.push("\u52A8\u6001\u7EC4\u4EF6\u63A2\u9488\uFF1A\u4EA7\u7269\u65E0 dyn \u6BB5\uFF08\u5939\u5177\u672A\u8986\u76D6 \u21D2 \u5224\u636E \u2472 \u6309\u7F3A\u5931\u5904\u7406\uFF09");
+        }
+      }
+      {
+        const dirArt = artifacts.directive;
+        if (dirArt?.tpl?.ok) {
+          const dirInst = instantiateTemplate(dirArt.tpl, {
+            viewport: args.viewport,
+            read: () => void 0,
+            table: dirArt.table,
+            registry: new ListRegistry()
+          });
+          try {
+            const dOut = JSON.parse(
+              proteusHost.mount(JSON.stringify({ viewport: dirInst.viewport, nodes: dirInst.nodes }))
+            );
+            if (dOut.ok === true) {
+              const dirNodes = dirArt.tpl.nodes.filter((n) => n.directives?.length);
+              const animCalls = [];
+              const dirState = /* @__PURE__ */ new Map();
+              const runDirectiveRound = (values) => {
+                let startedTotal = 0;
+                for (const n of dirNodes) {
+                  const dirs = n.directives;
+                  for (const d of dirs) {
+                    const cur = d.valueSrc !== void 0 ? values[d.valueSrc] : true;
+                    const key = `${n.id}:${d.name}`;
+                    const st = dirState.get(key) ?? { prev: void 0, seen: false };
+                    const should = directiveShouldPlay(st.prev, cur, st.seen);
+                    dirState.set(key, { prev: cur, seen: true });
+                    if (!should) {
+                      animCalls.push({ nodeId: n.id, preset: d.preset ?? "", started: 0, fromValue: st.seen ? st.prev : void 0, toValue: cur });
+                      continue;
+                    }
+                    const channels = d.channels ?? [];
+                    const anims = channels.map((c) => ({
+                      nodeId: n.id,
+                      kind: c.kind,
+                      from: c.from,
+                      to: c.to,
+                      durMs: d.durMs ?? 220,
+                      curve: d.curve ?? 1
+                    }));
+                    let started = 0;
+                    if (anims.length > 0 && typeof proteusHost.animStart === "function") {
+                      try {
+                        const out = JSON.parse(proteusHost.animStart(JSON.stringify({ anims })));
+                        started = out.ok === true ? out.started ?? anims.length : 0;
+                      } catch {
+                        started = 0;
+                      }
+                    }
+                    startedTotal += started;
+                    animCalls.push({
+                      nodeId: n.id,
+                      preset: d.preset ?? "",
+                      started,
+                      fromValue: st.seen ? st.prev : void 0,
+                      toValue: cur
+                    });
+                  }
+                }
+                return startedTotal;
+              };
+              const roundA = runDirectiveRound({ pulse: false, zoomTrigger: 0 });
+              const roundB = runDirectiveRound({ pulse: false, zoomTrigger: 0 });
+              const roundC = runDirectiveRound({ pulse: true, zoomTrigger: 0 });
+              const roundD = runDirectiveRound({ pulse: true, zoomTrigger: 1 });
+              const roundE = runDirectiveRound({ pulse: false, zoomTrigger: 1 });
+              rep.directive_probe = {
+                nodes: dirNodes.map((n) => ({
+                  id: n.id,
+                  dirs: n.directives.map((d) => `${d.name}:${d.preset}:${d.channels?.length ?? 0}`)
+                })),
+                rounds: [
+                  { name: "a:\u9996\u8BC4falsy", started: roundA },
+                  { name: "b:\u540C\u503C", started: roundB },
+                  { name: "c:pulse\u53D8true", started: roundC },
+                  { name: "d:zoom\u53D81", started: roundD },
+                  { name: "e:pulse\u53D8false", started: roundE }
+                ],
+                plays: animCalls
+              };
+            } else {
+              notes.push(`\u5BBF\u4E3B\u6307\u4EE4\u63A2\u9488 mount \u5931\u8D25\uFF1A${dOut.error ?? "\u672A\u77E5"}`);
+            }
+          } catch (e) {
+            notes.push(`\u5BBF\u4E3B\u6307\u4EE4\u63A2\u9488\u5F02\u5E38\uFF1A${String(e?.message ?? e)}`);
+          }
+          try {
+            proteusHost.mount(JSON.stringify({ viewport: inst.viewport, nodes: inst.nodes }));
+          } catch {
+          }
+        } else {
+          notes.push("\u5BBF\u4E3B\u6307\u4EE4\u63A2\u9488\uFF1A\u4EA7\u7269\u65E0 directive \u6BB5\uFF08\u5939\u5177\u672A\u8986\u76D6 \u21D2 \u5224\u636E \u2473 \u6309\u7F3A\u5931\u5904\u7406\uFF09");
         }
       }
       rep.ok = rep.updates_run > 0;
