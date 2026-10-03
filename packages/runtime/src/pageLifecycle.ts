@@ -1,10 +1,19 @@
 // src/runtime/pageLifecycle.ts
-// Vue 生命周期 → 小程序 Page()/Component() 映射（P5-3）
-// - onReady/onUnload：Vue setup 中注册钩子（运行时渲染路径用）
+// 生命周期体系（P5-3 → 2026-10-04 完整化）：**从框架导入**的页面生命周期注册 API。
+//
+// 【为什么（用户指令）】「生命周期函数需要在页面写同名函数，比如 onShow，这个体验太差了，
+//   应该从我们框架导入使用才对，我们框架需要一套完整的体系开放给开发者使用」。
+//   ⇒ 统一形态：`import { onShow, onHide, … } from '@proteus-vue/runtime'` + 回调注册
+//     （对齐 Vue 组合式 onMounted 的直觉；不再要求开发者记忆"写同名顶层函数"）。**两端同源一份代码**：
+//     · **MP**：编译器提取回调体 → 生成同名 Page 钩子（零每页引入；回调调用在产物中被编译吸收）；
+//     · **Web**：本模块按语义降级（onShow→onMounted / onHide→onUnmounted / onResize→window resize…），
+//       无对等实现的钩子在**调用时显式警告一次**（反黑盒，不静默）。
+// - onReady/onUnload：MP 运行时渲染路径的钩子注册（既有语义）；Web 端为 no-op 兼容
 // - createPage：Vue setup 结果（data/methods）→ Page 构造器配置
 // - createComponent：同上，组件场景（lifetimes.attached/detached）
 import { setDataBridge } from './setDataBridge'
 import { adapter } from '@proteus-vue/shared'
+import { onMounted, onUnmounted } from 'vue'
 
 /** Vue onMounted → 小程序 onReady（页面级） */
 export function onReady(hook: () => void): void {
@@ -25,6 +34,80 @@ export function onLoad(_hook: (options?: any) => void): void {
 export function onUnload(hook: () => void): void {
   ;(getCurrentPage() as any)?.__onUnloadHooks?.push(hook)
 }
+
+/**
+ * ★★★2026-10-04（生命周期体系）：**页面级 Web 降级注册**——在 Vue setup 里注册挂载/卸载回调。
+ * MP 端这些调用被编译器提取（回调体 → Page 钩子），运行时函数**不会被调用**；此处仅 Web 语义。
+ * 非组件上下文（无活跃 Vue 实例）时安全忽略（MP 运行时渲染路径不适用 Vue 钩子）。
+ */
+function registerWebHook(hook: () => void, kind: 'mount' | 'unmount'): void {
+  try {
+    if (kind === 'mount') onMounted(hook)
+    else onUnmounted(hook)
+  } catch {
+    // 无活跃实例：忽略（MP 运行时路径 / 组件外调用）
+  }
+}
+
+/** ★★2026-10-04：无 Web 对等的页面钩子——**调用即显式警告一次**（不静默吞掉开发者意图） */
+const warnedNoWebEquiv = new Set<string>()
+function warnNoWebEquiv(name: string): void {
+  if (warnedNoWebEquiv.has(name)) return
+  warnedNoWebEquiv.add(name)
+  console.warn(
+    `[proteus] ${name}() 在 Web 端暂无对等实现（MP 端由编译产物接管，两端语义不同）——该注册已忽略；` +
+      '如需 Web 端对应能力：滚动类用容器事件 / 触底用 IntersectionObserver / 下拉用自定义手势，或等待后续批次。',
+  )
+}
+
+/**
+ * 页面显示（MP Page.onShow；Web ≈ onMounted——无 keep-alive 的路由下每次进页都重新挂载）。
+ * `import { onShow } from '@proteus-vue/runtime'`；写一次两端生效。
+ */
+export function onShow(hook: () => void): void {
+  registerWebHook(hook, 'mount')
+}
+
+/** 页面隐藏（MP Page.onHide；Web ≈ onUnmounted——离开路由即卸载） */
+export function onHide(hook: () => void): void {
+  registerWebHook(hook, 'unmount')
+}
+
+/** 页面尺寸变化（MP Page.onResize，载荷 {size:{windowWidth,windowHeight}}；Web = window resize 同载荷） */
+export function onResize(hook: (e: { size: { windowWidth: number; windowHeight: number } }) => void): void {
+  if (typeof window === 'undefined' || typeof window.addEventListener !== 'function') {
+    warnNoWebEquiv('onResize')
+    return
+  }
+  const handler = (): void => {
+    hook({ size: { windowWidth: window.innerWidth, windowHeight: window.innerHeight } })
+  }
+  try {
+    onMounted(() => {
+      window.addEventListener('resize', handler)
+    })
+    onUnmounted(() => {
+      window.removeEventListener('resize', handler)
+    })
+  } catch {
+    warnNoWebEquiv('onResize')
+  }
+}
+
+/**
+ * 页面生命周期（其余成员）：MP 端由编译器提取生成同名 Page 钩子；
+ * **Web 端暂无对等**——调用时警告一次（见 warnNoWebEquiv；诚实边界，不静默）。
+ */
+export function onRouteDone(_hook: () => void): void { warnNoWebEquiv('onRouteDone') }
+export function onTabItemTap(_hook: (e: { index: number; pagePath: string }) => void): void { warnNoWebEquiv('onTabItemTap') }
+export function onReachBottom(_hook: () => void): void { warnNoWebEquiv('onReachBottom') }
+export function onPageScroll(_hook: (e: { scrollTop: number }) => void): void { warnNoWebEquiv('onPageScroll') }
+export function onPullDownRefresh(_hook: () => void): void { warnNoWebEquiv('onPullDownRefresh') }
+/** 转发（MP：声明才显示菜单入口；Web 端走浏览器原生 share 或自研按钮——此处 no-op + 警告） */
+export function onShareAppMessage(_hook: () => unknown): void { warnNoWebEquiv('onShareAppMessage') }
+export function onShareTimeline(_hook: () => unknown): void { warnNoWebEquiv('onShareTimeline') }
+export function onAddToFavorites(_hook: () => unknown): void { warnNoWebEquiv('onAddToFavorites') }
+export function onSaveExitState(_hook: () => unknown): void { warnNoWebEquiv('onSaveExitState') }
 
 /** 获取当前页面实例 */
 function getCurrentPage(): any {

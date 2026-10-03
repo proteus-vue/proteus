@@ -7,7 +7,7 @@ generated: true
 
 # 编译规则目录
 
-> 116 条编译规则——每条自带 AI 说明书（id / when / before → after / why）。SSOT = `@proteus-vue/compiler` TRANSFORM_RULES，与 `npx proteus rules` / Playground Trace 同源。
+> 117 条编译规则——每条自带 AI 说明书（id / when / before → after / why）。SSOT = `@proteus-vue/compiler` TRANSFORM_RULES，与 `npx proteus rules` / Playground Trace 同源。
 
 ## 模板转换（65）
 
@@ -858,7 +858,7 @@ after:  <text style="font-size: calc(15.77px + 1.1268vw)">x</text>（示意—�
 
 > why: Skyline 无 clamp 长度函数（官方支持表）——Web 端可保留真实 CSS clamp，MP 端 calc 线性替代（vw 天然随窗流式零运行时；#496 M3 实测收敛）
 
-## 脚本转换（37）
+## 脚本转换（38）
 
 ### `script/const-to-data`
 
@@ -1123,6 +1123,22 @@ after:  load() {
 ```
 
 > why: 小程序页面逻辑在 methods 中；const 箭头函数同样提取为方法
+
+### `script/lifecycle-callback`
+
+**页面生命周期回调式提取（onShow/onHide/onResize… 从框架导入）**
+
+setup 顶层 onShow(() => …)/onHide(() => …)/onResize((e) => …) 等回调体 → 同名 Page 钩子（参数透传 + 总线派发）；嵌套注册不提取（可见警告 + 移除）；onMounted/onUnmounted 走 script/lifecycle-map
+
+```
+before: onShow(() => { refresh() })
+after:  onShow() {
+  this.refresh()
+  try { this.proteusPageEmit("show") } catch (__x) {}
+},
+```
+
+> why: 用户要求页面生命周期从框架导入（不再写同名顶层函数）；旧实现只认三个 Vue 名、其余回调体静默丢弃
 
 ### `script/lifecycle-map`
 

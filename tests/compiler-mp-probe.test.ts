@@ -116,7 +116,7 @@ describe('★mp-conformance 探针矩阵 P7：p-drawer Skyline 遮罩命中契�
   const js = r.js ?? ''
 
   it('P7a：关闭事件挂根容器 bindtap（onMaskAreaTap），遮罩无任何事件绑定（纯视觉）', () => {
-    expect(wxml).toMatch(/<view bindtap="onMaskAreaTap" class="p-drawer-root-data-v-["\w]+ /)
+    expect(wxml).toMatch(/<view bindtap="onMaskAreaTap" class="p-drawer-root p-drawer-root-data-v-["\w]+/)
     const maskNode = wxml.match(/<view wx:if="\{\{modelValue && overlay\}\}"[^>]*class="p-drawer-mask[^"]*"[^>]*\/?>/) ?? ''
     expect(maskNode).not.toContain('bindtap')
     expect(maskNode).not.toContain('catchtap')
@@ -146,8 +146,8 @@ describe('★mp-conformance 探针矩阵 P7：p-drawer Skyline 遮罩命中契�
 
   it('P7e：side 静态分支（p-drawer-left/--right 字面量 scoped）——right 侧不再落静态位置（动态 side 类 Skyline 无 scoped 匹配）', () => {
     const wxml = compileComponent('packages/components/p-drawer/index.vue').wxml ?? ''
-    expect(wxml).toMatch(/p-drawer-data-v-[\w]+ p-drawer-left-data-v-[\w]+/)
-    expect(wxml).toMatch(/p-drawer-data-v-[\w]+ p-drawer-right-data-v-[\w]+/)
+    expect(wxml).toMatch(/p-drawer-left p-drawer-left-data-v-[\w]+/)
+    expect(wxml).toMatch(/p-drawer-right p-drawer-right-data-v-[\w]+/)
     expect(wxml).not.toContain('{{(side)')
   })
 })
@@ -158,9 +158,9 @@ describe('★mp-conformance 探针矩阵 P8：弹层族关闭事件挂可靠命�
   it('P8a：p-action-sheet——layer 收 onCancel（wx:if modelValue），mask 无事件，panel catchtap=noop', () => {
     const r = compileComponent('packages/components/p-action-sheet/index.vue')
     const wxml = r.wxml ?? ''
-    expect(wxml).toMatch(/<view wx:if="\{\{modelValue\}\}" bindtap="onCancel" class="p-as-layer-data-v-[\w]+/)
-    expect(wxml).toMatch(/<view class="p-as-mask-data-v-[\w]+[^"]*" \/>/)
-    expect(wxml).toMatch(/catchtap="noop"[^>]*class="p-as-panel-data-v-/)
+    expect(wxml).toMatch(/<view wx:if="\{\{modelValue\}\}" bindtap="onCancel" class="p-as-layer p-as-layer-data-v-[\w]+/)
+    expect(wxml).toMatch(/<view class="p-as-mask[^"]*" \/>/)
+    expect(wxml).toMatch(/catchtap="noop"[^>]*class="p-as-panel p-as-panel-data-v-/)
     expect(wxml).not.toMatch(/p-as-mask[^>]*bindtap/)
     expect(wxml).not.toMatch(/p-as-mask[^>]*catchtap/)
   })
@@ -168,10 +168,10 @@ describe('★mp-conformance 探针矩阵 P8：弹层族关闭事件挂可靠命�
   it('P8b：p-modal——关闭事件挂容器（onMaskTap），mask 无事件，panel catchtap=noop', () => {
     const r = compileComponent('packages/components/p-modal/index.vue')
     const wxml = r.wxml ?? ''
-    expect(wxml).toMatch(/<view wx:if="\{\{shown\}\}" bindtap="onMaskTap" class="p-modal-data-v-[\w]+/)
+    expect(wxml).toMatch(/<view wx:if="\{\{shown\}\}" bindtap="onMaskTap" class="p-modal p-modal-data-v-[\w]+/)
     expect(wxml).not.toMatch(/p-modal-mask[^>]*bindtap/)
     expect(wxml).not.toMatch(/p-modal-mask[^>]*catchtap/)
-    expect(wxml).toMatch(/catchtap="noop"[^>]*class="p-modal-panel-data-v-/)
+    expect(wxml).toMatch(/catchtap="noop"[^>]*class="p-modal-panel p-modal-panel-data-v-/)
   })
 
   it('P8c：p-popup——关闭事件挂容器（onLayerTap），mask 无事件，面板 catch:tap=noop；位置类静态字面量（skyline 动态类/动态 style 不可靠 → 左上角，修复实证）', () => {
@@ -179,13 +179,13 @@ describe('★mp-conformance 探针矩阵 P8：弹层族关闭事件挂可靠命�
     const wxml = r.wxml ?? ''
     const wxss = r.wxss ?? ''
     const js = r.js ?? ''
-    expect(wxml).toMatch(/<view wx:if="\{\{shown\}\}" bind:tap="onLayerTap" class="p-popup-data-v-[\w]+/)
+    expect(wxml).toMatch(/<view wx:if="\{\{shown\}\}" bind:tap="onLayerTap" class="p-popup p-popup-data-v-[\w]+/)
     expect(wxml).not.toMatch(/p-popup-mask[^>]*bindtap|p-popup-mask[^>]*bind:tap/)
     expect(wxml).toMatch(/catch:tap="noop"/)
     // 位置类静态字面量（三形态分支）——scoped 必命中；无动态拼接类/panelStyle 动态 style
-    expect(wxml).toMatch(/class="p-popup-panel-data-v-[\w]+ p-popup-panel--bottom-data-v-[\w]+/)
-    expect(wxml).toMatch(/class="p-popup-panel-data-v-[\w]+ p-popup-panel--top-data-v-[\w]+/)
-    expect(wxml).toMatch(/class="p-popup-panel-data-v-[\w]+ p-popup-panel--center-data-v-[\w]+/)
+    expect(wxml).toMatch(/class="p-popup-panel p-popup-panel-data-v-[\w]+ p-popup-panel--bottom p-popup-panel--bottom-data-v-[\w]+/)
+    expect(wxml).toMatch(/class="p-popup-panel p-popup-panel-data-v-[\w]+ p-popup-panel--top p-popup-panel--top-data-v-[\w]+/)
+    expect(wxml).toMatch(/class="p-popup-panel p-popup-panel-data-v-[\w]+ p-popup-panel--center p-popup-panel--center-data-v-[\w]+/)
     expect(wxml).not.toContain('style="{{panelStyle}}"')
     expect(wxml).not.toMatch(/p-popup-panel---data-v-[\w]+' \+ position/)
     expect(wxss).toMatch(/\.p-popup-panel--bottom-data-v-[\w]+\s*\{[\s\S]*?bottom: 0/)
@@ -200,7 +200,7 @@ describe('★mp-conformance 探针矩阵 P8：弹层族关闭事件挂可靠命�
     const r = compileComponent('packages/components/p-popover/index.vue')
     const wxml = r.wxml ?? ''
     const wxss = r.wxss ?? ''
-    expect(wxml).toMatch(/<view bindtap="close" class="p-popover-layer-data-v-[\w]+/)
+    expect(wxml).toMatch(/<view bindtap="close" class="p-popover-layer p-popover-layer-data-v-[\w]+/)
     expect(wxml).not.toContain('p-popover-mask')
     const m = wxss.match(/\.p-popover-layer-data-v-[\w]+\s*\{[\s\S]*?\}/)
     expect(m).not.toBeNull()
@@ -208,7 +208,7 @@ describe('★mp-conformance 探针矩阵 P8：弹层族关闭事件挂可靠命�
     expect(m![0]).toContain('bottom: 0')
     // placement 静态分支（动态 placement 类 Skyline 无 scoped 匹配 → 面板左上角）
     for (const p of ['bottom', 'top', 'left', 'right']) {
-      expect(wxml).toMatch(new RegExp(`p-popover-panel-data-v-[\\w]+ p-popover-${p}-data-v-[\\w]+`))
+      expect(wxml).toMatch(new RegExp(`p-popover-panel p-popover-panel-data-v-[\\w]+ p-popover-${p} p-popover-${p}-data-v-[\\w]+`))
     }
     expect(wxml).not.toContain("+ placement")
     // ★★2026-09-08（teleport 对齐）：组件写标准 <teleport>，编译器转 <root-portal>（官方同层节点逃逸层叠）——
@@ -216,7 +216,7 @@ describe('★mp-conformance 探针矩阵 P8：弹层族关闭事件挂可靠命�
     expect(wxml).toMatch(/<root-portal>/)
     expect(wxml.replace(/<!--[\s\S]*?-->/g, '')).not.toContain('<teleport')
     expect(wxml).not.toContain('wx:if="{{modelValue}}"')
-    expect(wxml).toMatch(/class="p-popover-overlay-data-v-[\w]+ \{\{/) 
+    expect(wxml).toMatch(/class="p-popover-overlay p-popover-overlay-data-v-[\w]+ \{\{/) 
     expect(wxss).toMatch(/\.p-popover-overlay-data-v-[\w]+\s*\{[\s\S]*?visibility: hidden/)
     expect(wxss).toMatch(/\.p-popover-overlay--on-data-v-[\w]+\s*\{[\s\S]*?visibility: visible/)
   })
@@ -244,7 +244,7 @@ describe('★mp-conformance 探针矩阵 P8e：p-popover 方案 A spike 契约�
     expect((wxml.match(/style="\{\{panelStyle\}\}"/g) ?? []).length).toBe(4)
     // 保留静态 placement 类（回退锚定；未改成动态 class——编译器插半截 scope 后缀坑）
     for (const p of ['bottom', 'top', 'left', 'right']) {
-      expect(wxml).toMatch(new RegExp(`p-popover-panel-data-v-[\\w]+ p-popover-${p}-data-v-[\\w]+`))
+      expect(wxml).toMatch(new RegExp(`p-popover-panel p-popover-panel-data-v-[\\w]+ p-popover-${p} p-popover-${p}-data-v-[\\w]+`))
     }
     expect(wxml).not.toContain("+ placement")
   })

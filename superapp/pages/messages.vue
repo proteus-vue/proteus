@@ -8,7 +8,9 @@
   【页面模式（L3）】本页 = **列表模式**：筛选段 + 会话列表 + 底部说明。
 -->
 <script setup lang="ts">
-import { ref, onMounted } from 'vue'
+import { ref } from 'vue'
+// ★2026-10-04（生命周期体系）：页面生命周期**从框架导入**（不再写同名顶层函数）
+import { onShow } from '@proteus-vue/runtime'
 
 /** ★★★2026-10-04（**两端视觉对不上的根因**，用户当场指出）：
  *   MP 编译器给**静态 class 与模板字面量**一律追加 scopeId（`sa-card` → `sa-card-data-v-xxx`），
@@ -91,18 +93,12 @@ function syncToShell(): void {
   }
 }
 
-/** ★Web 端没有"页面 onShow"（顶层 onShow 只被编译器映射进 MP 的
- *   `Page({ onShow })`——Web 端它是普通函数、**永不执行**，2026-10-04 验收实测踩到）。
- *   两端覆盖 = `onMounted`（Web 每次进页重新挂载 ⇒ 等价 onShow）+ `onShow`（MP 返回时刷新）。 */
-onMounted(() => {
-  syncToShell()
-})
-
-/** MP 端页面显示时刷新（编译器映射进 Page 钩子；Web 端不调用——见上） */
-function onShow() {
+/** ★2026-10-04（生命周期体系）：`onShow` 从框架导入——编译期提取回调体生成 MP 的 Page 钩子，
+ *   Web 端映射 onMounted（每次进页重新挂载）。**一份代码两端生效**（不再"同名函数 + onMounted"双写）。 */
+onShow(() => {
   // 首次进入把列表未读灌进壳（打开应用即见角标——真实形态）
   syncToShell()
-}
+})
 
 /** 标记一条未读（模拟新消息到达） */
 function markOneUnread(): void {

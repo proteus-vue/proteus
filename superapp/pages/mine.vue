@@ -7,7 +7,9 @@
   【页面模式（L3）】本页 = **设置模式**：分组卡片 + 开关行 + 关于区。
 -->
 <script setup lang="ts">
-import { ref, onMounted } from 'vue'
+import { ref } from 'vue'
+// ★2026-10-04（生命周期体系）：页面生命周期**从框架导入**（不再写同名顶层函数）
+import { onShow } from '@proteus-vue/runtime'
 
 /** ★★★2026-10-04（**两端视觉对不上的根因**，用户当场指出）：
  *   MP 编译器给**静态 class 与模板字面量**一律追加 scopeId（`sa-card` → `sa-card-data-v-xxx`），
@@ -77,17 +79,11 @@ function syncFromShell(): void {
   musicOn.value = Boolean(readVal('musicVisible'))
 }
 
-/** ★Web 端没有"页面 onShow"（顶层 onShow 只被编译器映射进 MP 的
- *   `Page({ onShow })`——Web 端它是普通函数、**永不执行**，2026-10-04 验收实测踩到）。
- *   两端覆盖 = `onMounted`（Web 每次进页重新挂载 ⇒ 等价 onShow）+ `onShow`（MP 返回时刷新）。 */
-onMounted(() => {
+/** ★2026-10-04（生命周期体系）：`onShow` 从框架导入——编译期提取回调体生成 MP 的 Page 钩子，
+ *   Web 端映射 onMounted（每次进页重新挂载）。**一份代码两端生效**（不再"同名函数 + onMounted"双写）。 */
+onShow(() => {
   syncFromShell()
 })
-
-/** MP 端页面显示时刷新（编译器映射进 Page 钩子；Web 端不调用——见上） */
-function onShow() {
-  syncFromShell()
-}
 
 /** ⑦ 深色模式开关（真实业务：设置项 → 全局主题容器） */
 function toggleDark(): void {

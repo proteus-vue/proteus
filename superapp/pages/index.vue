@@ -10,6 +10,8 @@
 -->
 <script setup lang="ts">
 import { ref, onMounted, onUnmounted } from 'vue'
+// ★2026-10-04（生命周期体系）：页面生命周期**从框架导入**（不再写同名顶层函数）
+import { onShow } from '@proteus-vue/runtime'
 
 /** ★★★2026-10-04（**两端视觉对不上的根因**，用户当场指出）：
  *   MP 编译器给**静态 class 与模板字面量**一律追加 scopeId（`sa-card` → `sa-card-data-v-xxx`），
@@ -85,31 +87,35 @@ function syncReadout(): void {
 }
 
 
-/** ★Web 端没有"页面 onShow"（顶层 onShow 只被编译器映射进 MP 的 Page({
- *   onShow })——Web 端它是普通函数、永不执行，2026-10-04 验收实测踩到）。
- *   两端覆盖 = onMounted（Web 每次进页都重新挂载 ⇒ 等价 onShow）+ onShow（MP 返回时刷新）。 */
+// ★2026-10-04（生命周期体系 · 标准写法）：定时器句柄是**顶层 let**（编译产物把顶层 let 变成实例属性，
+//   钩子体里裸引用改写为 this.<name>）——这是"注册放顶层 + 闭包状态顶层化"的规范形态；
+//   ★反面：把 onUnmounted 嵌套写在 onMounted 回调体内 = 产物闭包变量不可见（构建会显式警告并移除）。
+let readoutTimer: number | null = null
+
+/** Web 端**壳桥轮询**（仅 Web：MP 端无 __SUPERAPP_GLOBAL__ 桥；MP 由 onShow 的 GlPull 拉取）。
+ *  ★2026-10-04 第三轮（外部验收：切换后读数不刷新）：页面存续期内持续轻量同步（200ms 读 data 是纯内存操作）。 */
 onMounted(() => {
   syncReadout()
-  // ★2026-10-04 第二轮（外部验收抓出「面板 0 / 角标 5 / 统计 3」三方矛盾）：
-  //   原只在挂载/onShow 刷新 ⇒ 在同一页里改全局状态（点快捷入口开音乐/角标）时面板不更新。
-  //   修法：Web 端**订阅壳的响应式状态**（桥对象里的 ref）——任一变化立即重算读数。
   const g: any = globalThis
   const b: any = g.__SUPERAPP_GLOBAL__
   if (b && typeof b === 'object') {
-    // 用 Vue 的 watchEffect 不可行（壳 ref 不是本组件依赖）⇒ 轻量轮询窗口（200ms × 30 次 = 6s 覆盖交互期）
-    // ★诚实边界：MP 端由 onShow 拉取（跨页回来刷新）；Web 端本页内即时——两端都覆盖主要路径。
-    // ★2026-10-04 第三轮（外部验收：02「场景全开」图里读数仍是 0/未播放——切换后未刷新）：
-    //   原窗口 6s 太短（截图脚本先点弱网再点播放，跨越该窗口）⇒ 改为**页面存续期内持续轻量同步**
-    //   （200ms 往返一次读 data 是纯内存操作，代价可忽略；页面卸载即清）。
-    const t = setInterval(() => syncReadout(), 200)
-    onUnmounted(() => clearInterval(t))
+    readoutTimer = setInterval(() => syncReadout(), 200) as unknown as number
   }
 })
 
-/** MP 端页面显示时刷新（编译器映射进 Page 钩子；Web 端此函数不被调用——见上） */
-function onShow() {
+/** ★注册在 setup 顶层（与 onShow 并列）——两端生效：MP 产物 onUnload / Web onUnmounted。 */
+onUnmounted(() => {
+  if (readoutTimer !== null) {
+    clearInterval(readoutTimer)
+    readoutTimer = null
+  }
+})
+
+/** ★2026-10-04（生命周期体系）：`onShow` 从框架导入——编译期提取回调体生成 MP 的 Page 钩子，
+ *   Web 端映射 onMounted（每次进页重新挂载）。**一份代码两端生效**（不再"同名函数 + onMounted"双写）。 */
+onShow(() => {
   syncReadout()
-}
+})
 
 /** 快捷入口：模拟一次"弱网"（触发全局网络提示条——真实业务在网络回调里调） */
 function simulateWeakNet(): void {

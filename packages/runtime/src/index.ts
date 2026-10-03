@@ -1,7 +1,16 @@
 // src/runtime/index.ts —— 运行时公共入口
 // 页面生命周期（onReady/onUnload/onLoad + createPage/createComponent）与 setData 桥接、store 桥、Pinia 持久化
 // ★pinia-plan（docs/proteus-pinia-plan）：持久化层（社区兼容 + 自研轻量）在 ./pinia/persistence，工厂在 ./pinia
-export { onReady, onUnload, onLoad, createPage, createComponent } from './pageLifecycle'
+// ★★★2026-10-04（生命周期体系完整化）：页面生命周期**从框架导入**（对齐 Vue 组合式直觉）——
+//   onShow/onHide/onReady/onUnload/onResize/onRouteDone/onTabItemTap/onReachBottom/onPageScroll/
+//   onPullDownRefresh/onShareAppMessage/onShareTimeline/onAddToFavorites/onSaveExitState
+//   （MP 端编译器提取回调体生成 Page 钩子；Web 端按语义降级——无对等的调用时显式警告，不静默）
+export {
+  onReady, onUnload, onLoad, onShow, onHide, onResize,
+  onRouteDone, onTabItemTap, onReachBottom, onPageScroll, onPullDownRefresh,
+  onShareAppMessage, onShareTimeline, onAddToFavorites, onSaveExitState,
+  createPage, createComponent,
+} from './pageLifecycle'
 export { setDataBridge } from './setDataBridge'
 // ★框架元素探针（跨端 E2E 降级通道，2026-09-14）：组件自测量 → 全局注册表 → 测试经 evaluate 读取
 //   （绕开自动化工具「查不到组件内部节点」的限制；设计见 probe.ts 头注）
