@@ -34,7 +34,7 @@ import { createCompileCache, compileCacheKey, createBundleCache, bundleCacheKey 
 import { collectUsedFrameworkComponents } from './tag-scan'
 import { findAppShellFile, looksLikeAppShell } from './app-shell'
 // ★★★GP4-a（2026-10-03）：页面级 Overlay 宿主的按需注入（Toast 队列渲染端；与 gen-routes 同源判定）
-import { detectToastUsage, injectToastHost } from './page-overlay'
+import { detectOverlayUsage, injectOverlayHosts, OVERLAY_HOSTS } from './page-overlay'
 
 /**
  * ★GP3-b1：**按目标页面回填 Global 层片段的 require 路径**（不污染公共片段——每个页面算各自的相对路径）。
@@ -527,12 +527,14 @@ export function collectMpEntries(opts: {
   const usedComponents = emitAll
     ? null
     : collectUsedFrameworkComponents(closureRoots, componentsDir, path.join(appDir, 'components'))
-  // ★GP4-a：按需注入的 Toast 宿主也必须产出本体（否则真机 `usingComponents 未找到组件` ⇒ 整块不渲染）。
-  //   ★这里用一次**独立**检测（collectMpEntries 在 files 收集阶段，早于 buildStart 主体）——
-  //     两处扫描同一源（detectToastUsage），不是两份实现。
+  // ★GP4-a/b：按需注入的 Overlay 宿主也必须产出本体（否则真机 `usingComponents 未找到组件` ⇒ 整块不渲染）。
+  //   ★表驱动：遍历 OVERLAY_HOSTS（加新能力自动跟上）——与 gen-routes 同源（同一份扫描实现）。
+  const overlayUsageForClosure = detectOverlayUsage(appDir)
   if (usedComponents) {
-    const tu = detectToastUsage(appDir)
-    if (tu.used && !tu.manualHost) usedComponents.add('p-toast-host')
+    for (const spec of OVERLAY_HOSTS) {
+      const u = overlayUsageForClosure[spec.key]
+      if (u && u.used && !u.manualHost) usedComponents.add(spec.host)
+    }
   }
   for (const f of effectiveVariants(walkVueFiles(componentsDir), platform)) {
     if (webOnlyPages?.has(f)) {
@@ -647,24 +649,26 @@ export default function mpTransform(opts: PluginOptions): Plugin {
         // ★框架组件按引用输出（2026-09-18）；PROTEUS_COMPONENTS_EMIT=all 回退全量（非常规用法逃生舱）
         componentEmit: process.env.PROTEUS_COMPONENTS_EMIT === 'all' ? 'all' : 'used',
       })
-      /* ═══ ★★★GP4-a（2026-10-03）：**Toast 队列宿主注入**（按需）═══
+      /* ═══ ★★★GP4-a/b（2026-10-03）：**Overlay 宿主注入**（按需 · 表驱动）═══
        *
-       * 【为什么注入】队列是命令式的（业务只调 showToast）——渲染端 `p-toast-host` 必须有人挂。
-       *   让开发者每页写一次 = "每页引入"（本方案要消灭的东西；GP5 判据：八条场景任一需要每页引入
-       *   ⇒ 方案不成立）⇒ 编译期按需注入。
-       * 【为什么按需】只有项目里真的用过 toast API 才注入（不用的应用零成本——与"组件按需输出"同哲学）。
-       * 【手动优先】用户已手写 `<p-toast-host` ⇒ 整体不注入（双宿主会各渲染一份 ⇒ 同一 toast 显示两次）。
-       * 【★与 gen-routes 同源】两处都调 detectToastUsage（判定只有一份实现）。
+       * 【为什么注入】命令式浮层能力（Toast 队列 / Loading 多实例）需要**渲染端**挂在每页——
+       *   让开发者每页写一次 = "每页引入"（GP5 判据：八条场景任一需要每页引入 ⇒ 方案不成立）。
+       * 【为什么按需】只有项目里真的用过该能力的 API 才注入（不用的应用零成本——与"组件按需输出"同哲学）。
+       * 【手动优先】用户已手写宿主 ⇒ 该能力整体不注入（双宿主会各渲染一份 ⇒ 重复显示）。
+       * 【★表驱动】能力清单在 page-overlay.ts 的 OVERLAY_HOSTS（唯一事实来源）——本处只遍历。
+       * 【★与 gen-routes 同源】两处都调 detectOverlayUsage（判定只有一份实现）。
        */
-      const toastUsage = detectToastUsage(appDir)
-      const injectToast = toastUsage.used && !toastUsage.manualHost
-      if (toastUsage.used) {
-        const hitList = toastUsage.files.map((f) => path.relative(projectRoot, f).replace(/\\/g, '/')).slice(0, 3)
+      const overlayUsage = detectOverlayUsage(appDir)
+      const injectSpecs = OVERLAY_HOSTS.filter((spec) => {
+        const u = overlayUsage[spec.key]
+        if (!u || !u.used) return false
+        const hitList = u.files.map((f) => path.relative(projectRoot, f).replace(/\\/g, '/')).slice(0, 3)
         console.log(
-          `[mp-transform] ★Toast 队列：检测到 API 用法（${hitList.join(' / ')}${toastUsage.files.length > 3 ? ` 等 ${toastUsage.files.length} 处` : ''}）` +
-            (injectToast ? ' → 每页注入 <p-toast-host />（源码零每页引入）' : ' → **检测到手动声明的宿主**，不自动注入（防重复渲染）'),
+          `[mp-transform] ★${spec.key} 浮层：检测到 API 用法（${hitList.join(' / ')}${u.files.length > 3 ? ` 等 ${u.files.length} 处` : ''}）` +
+            (u.manualHost ? ' → **检测到手动声明的宿主**，不自动注入（防重复渲染）' : ` → 每页注入 <${spec.host} />（源码零每页引入）`),
         )
-      }
+        return !u.manualHost
+      })
       // ★ app.js 直出（绕开 rollup 打包）：读取 examples/main.mp.ts → esbuild 转译 TS → 纯文本资产
       // 微信 worklet 响应式重执行对打包代码不友好，原生直出与官方示例一致；
       // 调试开关 __PROTEUS_DEBUG__ 由本插件替换（vite define 不作用于直出资产）
@@ -1100,10 +1104,10 @@ export default function mpTransform(opts: PluginOptions): Plugin {
           console.log(`[mp-transform] 编译缓存命中：${rel}`)
         }
 
-        // ★GP4-a：**按需注入 Toast 队列宿主**（仅页面；组件不是页面级概念）。
+        // ★GP4-a/b：**按需注入 Overlay 宿主**（仅页面；组件不是页面级概念）。
         //   位置在**页面 wxml 末尾**（宿主可见内容由 teleport → root-portal 渲染，标签位置不影响
         //   层叠；末尾 = 对既有页面结构零扰动）。
-        const wxmlOut = injectToast && !isComponent ? injectToastHost(wxml) : wxml
+        const wxmlOut = !isComponent ? injectOverlayHosts(wxml, injectSpecs) : wxml
         // sourcemap（v0.3）：方法级 JS 源码映射，调试构建落盘 + js 尾部 sourceMappingURL（微信开发者工具可定位源码）
         // ★2026-09-08 reactivity-runtime spke：裸 @proteus-vue/* require → 相对 _proteus/*.js（编译器注入行不走 moduleImports）
         const jsFinal = rewriteFrameworkRequires(js, rel)

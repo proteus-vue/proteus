@@ -175,6 +175,11 @@ export const TAG_SEMANTIC_MAP: Record<string, string> = {
   'p-modal': 'shell.modal',
   'p-popover': 'shell.popover',
   'p-toast': 'shell.toast',
+  // ★★★GP4-a/b（2026-10-03）：两个**浮层宿主**同属其能力的语义（multi-tag 别名——同 ui.loading 的先例）。
+  //   · p-toast-host：Toast 队列的渲染端（构建期按需注入）
+  //   · p-loading-host：Loading 多实例的渲染端（同上）
+  //   ★不登记 ⇒ 编译期按"未注册自定义组件"输出 ⇒ **MP 端不渲染**（M3 门禁当场抓出）
+  'p-toast-host': 'shell.toast',
   'p-action-sheet': 'shell.action-sheet',
   'p-split': 'layout.split', // ★已落地绑定（G-32 S10 分栏语义——layout.split 承载）
   // G-32 ④ Gesture 组件形态（2）
@@ -209,6 +214,13 @@ export const TAG_SEMANTIC_MAP: Record<string, string> = {
   'p-zone': 'layout.zone',
   'p-formfactor': 'layout.formfactor', // ★★Fluid System v2：柔性形态容器
   'p-loading': 'ui.loading',
+  // ★★★GP4-b（2026-10-03）：Loading **多实例宿主**与**区域遮罩**同属 ui.loading 语义（multi-tag 别名，
+  //   与上一行 `router-link`/`p-view` 的"同一语义多标签"同款）。
+  //   · p-loading-host：命令式多实例的渲染端（由构建期按需注入——用户一般不手写）
+  //   · p-loading-region：区域遮罩（就地包裹，用户手写）
+  //   ★不登记 ⇒ 编译期按"未注册自定义组件"输出 ⇒ MP 端不渲染（M3 门禁当场抓出——它是对的）
+  'p-loading-host': 'ui.loading',
+  'p-loading-region': 'ui.loading',
   'p-scale': 'ui.scale',
   'p-skeleton': 'ui.skeleton',
   'p-mask': 'shell.mask',
@@ -293,5 +305,27 @@ export const TAG_SEMANTIC_ALIASES: Record<string, TagAliasDecl> = {
     canonical: 'p-router-link',
     aliases: ['router-link'],
     reason: 'router-link 是 Vue Router 风格标签兼容别名（framework 保留字，非 catalog 条目）。',
+  },
+  // ★★★GP4-a/b（2026-10-03）：两个浮层能力的**宿主标签**与其声明式组件共享语义——
+  //   与上两条"实现替换/血统并存"的别名不同，这里是**职责分工**（声明式 vs 命令式渲染端）：
+  //   · `p-toast`     = 声明式单条提示（用户摆位置）｜`p-toast-host`   = Toast 队列的**渲染端**
+  //     （命令式 `showToast` 的宿主；构建期按需注入，**用户一般不手写**）
+  //   · `p-loading`   = 声明式遮罩（单实例）    ｜`p-loading-host` = Loading **多实例**宿主（同上）
+  //   · `p-loading-region` = 区域遮罩（就地包裹；用户手写，与 p-loading 是不同用法而非替代）
+  //   ★语义相同（都是"提示/加载态"）故共享 primitive；**保留两标签**因为用法与生命周期都不同。
+  'shell.toast': {
+    canonical: 'p-toast',
+    aliases: ['p-toast-host'],
+    reason:
+      'p-toast 是声明式单条提示（父级给 visible/text）；p-toast-host 是同语义的**命令式渲染端**' +
+      '（订阅 runtime 队列，由构建期按需注入每页）——两者用途不同，故并存而非替代。',
+  },
+  'ui.loading': {
+    canonical: 'p-loading',
+    aliases: ['p-loading-host', 'p-loading-region'],
+    reason:
+      'p-loading 是声明式遮罩（单实例）；p-loading-host 是同语义的**命令式多实例渲染端**（构建期注入）；' +
+      'p-loading-region 是**区域遮罩**（就地包裹、贴合盒子尺寸）。三者是同一语义的三种用法（全屏声明式/' +
+      '全屏命令式/区域内），故共享 primitive 而保留各自标签。',
   },
 }

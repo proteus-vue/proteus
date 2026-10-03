@@ -19,7 +19,6 @@ export const routes: RouteRecord[] = [
   { name: "glass-demo", path: "pages/glass-demo", component: "../pages/glass-demo.vue", parent: "index", meta: {"title":"液态玻璃（G-07）"} },
   { name: "gp0-root-portal", path: "pages/gp0-root-portal", component: "../pages/gp0-root-portal.vue", parent: "index" },
   { name: "gp3-global-layer-demo", path: "pages/gp3-global-layer-demo", component: "../pages/gp3-global-layer-demo.vue", parent: "index" },
-  { name: "gp4-toast-queue-demo", path: "pages/gp4-toast-queue-demo", component: "../pages/gp4-toast-queue-demo.vue", parent: "index" },
   { name: "i18n-demo", path: "pages/i18n-demo", component: "../pages/i18n-demo.vue", parent: "index", meta: {"title":"国际化"} },
   { name: "index", path: "pages/index", component: "../pages/index.vue", meta: {"title":"首页","isTab":true} },
   { name: "mine", path: "pages/mine", component: "../pages/mine.vue", parent: "index", meta: {"title":"我的","isTab":true,"branch":{"keepAlive":"none"}} },
@@ -39,6 +38,8 @@ export const routes: RouteRecord[] = [
   { name: "vmodel-mp-test", path: "pages/vmodel-mp-test", component: "../pages/vmodel-mp-test.vue", parent: "index" },
   { name: "vue-compat-demo", path: "pages/vue-compat-demo", component: "../pages/vue-compat-demo.vue", parent: "index" },
   { name: "order-pages-list", path: "subpackages/order/pages/list", component: "../subpackages/order/pages/list.vue", subPackage: "order", meta: {"title":"订单列表"} },
+  { name: "svg-lab-pages-gp4-loading-demo", path: "subpackages/svg-lab/pages/gp4-loading-demo", component: "../subpackages/svg-lab/pages/gp4-loading-demo.vue", subPackage: "svg-lab" },
+  { name: "svg-lab-pages-gp4-toast-queue-demo", path: "subpackages/svg-lab/pages/gp4-toast-queue-demo", component: "../subpackages/svg-lab/pages/gp4-toast-queue-demo.vue", subPackage: "svg-lab" },
   { name: "svg-lab-pages-image-spike", path: "subpackages/svg-lab/pages/image-spike", component: "../subpackages/svg-lab/pages/image-spike.vue", subPackage: "svg-lab" },
   { name: "svg-lab-pages-svg-anim-probe", path: "subpackages/svg-lab/pages/svg-anim-probe", component: "../subpackages/svg-lab/pages/svg-anim-probe.vue", subPackage: "svg-lab" },
   { name: "svg-lab-pages-svg-canvas-probe", path: "subpackages/svg-lab/pages/svg-canvas-probe", component: "../subpackages/svg-lab/pages/svg-canvas-probe.vue", subPackage: "svg-lab" },
@@ -105,10 +106,6 @@ export const screens: Record<string, AppScreenSpec> = {
   "gp3-global-layer-demo": {
     "name": "gp3-global-layer-demo",
     "path": "pages/gp3-global-layer-demo"
-  },
-  "gp4-toast-queue-demo": {
-    "name": "gp4-toast-queue-demo",
-    "path": "pages/gp4-toast-queue-demo"
   },
   "i18n-demo": {
     "name": "i18n-demo",
@@ -189,6 +186,14 @@ export const screens: Record<string, AppScreenSpec> = {
     "name": "order-pages-list",
     "path": "subpackages/order/pages/list"
   },
+  "svg-lab-pages-gp4-loading-demo": {
+    "name": "svg-lab-pages-gp4-loading-demo",
+    "path": "subpackages/svg-lab/pages/gp4-loading-demo"
+  },
+  "svg-lab-pages-gp4-toast-queue-demo": {
+    "name": "svg-lab-pages-gp4-toast-queue-demo",
+    "path": "subpackages/svg-lab/pages/gp4-toast-queue-demo"
+  },
   "svg-lab-pages-image-spike": {
     "name": "svg-lab-pages-image-spike",
     "path": "subpackages/svg-lab/pages/image-spike"
@@ -220,7 +225,7 @@ export const screens: Record<string, AppScreenSpec> = {
 }
 
 /** 路由名数组（App 深栈/压测按它循环取屏——顺序与 routes 一致） */
-export const screenNames: string[] = ["builtin-components-demo","components-demo","config-demo","consistency-stress","dev-host-demo","devtools-open-api-demo","docs-engine-demo","fluid-layout-demo","fluid-system-demo","forms","glass-demo","gp0-root-portal","gp3-global-layer-demo","gp4-toast-queue-demo","i18n-demo","index","mine","mp-semantics-demo","native-components-demo","pinia-demo","platform-api-demo","provide-inject-demo","render-backend-demo","semantic-primitives-demo","showcase","svg-showcase-demo","svg-skeleton-demo","user","user-profile","virtual-list-demo","vmodel-mp-test","vue-compat-demo","order-pages-list","svg-lab-pages-image-spike","svg-lab-pages-svg-anim-probe","svg-lab-pages-svg-canvas-probe","svg-lab-pages-svg-canvas-test","svg-lab-pages-svg-hit-test","svg-lab-pages-svg-p2-spike","svg-lab-pages-svg-spike"]
+export const screenNames: string[] = ["builtin-components-demo","components-demo","config-demo","consistency-stress","dev-host-demo","devtools-open-api-demo","docs-engine-demo","fluid-layout-demo","fluid-system-demo","forms","glass-demo","gp0-root-portal","gp3-global-layer-demo","i18n-demo","index","mine","mp-semantics-demo","native-components-demo","pinia-demo","platform-api-demo","provide-inject-demo","render-backend-demo","semantic-primitives-demo","showcase","svg-showcase-demo","svg-skeleton-demo","user","user-profile","virtual-list-demo","vmodel-mp-test","vue-compat-demo","order-pages-list","svg-lab-pages-gp4-loading-demo","svg-lab-pages-gp4-toast-queue-demo","svg-lab-pages-image-spike","svg-lab-pages-svg-anim-probe","svg-lab-pages-svg-canvas-probe","svg-lab-pages-svg-canvas-test","svg-lab-pages-svg-hit-test","svg-lab-pages-svg-p2-spike","svg-lab-pages-svg-spike"]
 
 /** tab 根屏（meta.isTab）—— App 端 tab 语义（switchTab/reset）的合法目标 */
 export const tabNames: string[] = ["index","mine"]
@@ -241,7 +246,6 @@ declare module '@proteus-vue/router/types' {
     'glass-demo': {  },
     'gp0-root-portal': {  },
     'gp3-global-layer-demo': {  },
-    'gp4-toast-queue-demo': {  },
     'i18n-demo': {  },
     'index': {  },
     'mine': {  },
@@ -261,6 +265,8 @@ declare module '@proteus-vue/router/types' {
     'vmodel-mp-test': {  },
     'vue-compat-demo': {  },
     'order-pages-list': {  },
+    'svg-lab-pages-gp4-loading-demo': {  },
+    'svg-lab-pages-gp4-toast-queue-demo': {  },
     'svg-lab-pages-image-spike': {  },
     'svg-lab-pages-svg-anim-probe': {  },
     'svg-lab-pages-svg-canvas-probe': {  },
