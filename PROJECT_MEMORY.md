@@ -15,12 +15,11 @@
 - **包规模**：**45 个 @proteus-vue/* npm 包**（+ `packages/layout-core-rust` = **cargo crate，非 npm 包**，故不计数）（★2026-09-29 layout-core = App 排版核心）（check:pkg 0 error · `pnpm check:stats` 校验 ✓；31→38 修正 → G-07 glass 39 → Skyline 收口 worklet 40 → ★2026-09-14 组件库拆包 `@proteus-vue/components` 41 → ★Vapor 线新增 `@proteus-vue/slot-runtime` 42 + `@proteus-vue/layout-core` 43 → ★2026-09-30 MA1 新增 `@proteus-vue/animation` 44；版本统一 0.3.0-beta.8，见「当前状态速览」）
 - **文档**：`docs/proteus-architecture.md`（L0 规约·真理来源）→ `docs/board-inventory.md`（全景索引）→ `docs/roadmap.md`（版本线）→ `roadmap-2-plan`（里程碑线）→ 各 plan
 
+## 当前状态速览（最近一次更新：**2026-10-03·（一一五）· **GP4-a：Toast 队列**（置换 uni.showToast 单例语义）——**队列在 runtime（模块级单例）/ 渲染在组件（p-toast-host → teleport 到 Overlay 层）/ 注入在插件（每页零引入）** 三层分工；★**按需注入**（检测到 toast API 用法才注入——与组件按需输出同哲学）+ **手动优先**（已手写宿主则不注入，防双宿主）；FIFO + 上限三种丢弃策略（drop-oldest/drop-newest/replace，**丢弃可观测**）+ 时长/常驻/手动关/幂等；★真机 e2e：**连续 10 条实测 1→2→…→10 严格递增**（不互相覆盖）；★附带修复编译器缺口（**裸方法引用传参不重写** ⇒ 补实参位识别 + `.bind(this)`——此前 ready() 当场 ReferenceError 且后续初始化静默不执行）；★排障三坑已文档化（面板塌 0×0 / 动态类名拼串失效 / **测量装置反被判成产品缺陷**）；单测 38 组 + 破验三条；下一步 GP5（八条超级应用场景验收）或 GP4-b（Loading 多实例）**）★新会话以此为准
+
 ## 当前状态速览（最近一次更新：**2026-10-03·（一一四）· **GP3-b1：MP 端 Global 层新建（每页注入 + 状态共享）**——App.vue/App.mp.vue 的 `<global-layer>` **编译期注入每个页面产物**（源码声明一次 = 核心价值；实例每页一份 = 官方 custom-tab-bar 同模式）★`appShell` 编译模式（不产页面机制）+ `GlobalLayerSnippet`（与外壳产物**同源**，不从文本反解）+ 共享状态 `_proteus/global-layer.js`（require 缓存 = 同实例；写 = setData 拦截镜像 / 读 = data 直读 + onShow 拉取）+ 两条防静默规则（生命周期名黑名单 / 页面优先）；★诚实边界：实例数 N、不宣称"单实例跨页存活"；单测 19 组 + 真机 e2e 四段证据（本页注入→跨页可见→写回同步）；规则 115→116 已同步三处门禁；下一步 GP5（八条超级应用场景验收）或 GP4（Toast/Loading 队列）**）★新会话以此为准
 
 ## 当前状态速览（最近一次更新：**2026-10-03·（一一三）· **全局挂载点 GP1+GP2 完成**——GP1-a/b：三层挂载规格（★**零新指令**：层间顺序用树序表达；GP1-b 域偏移与层内四层正交）+ 契约 `contracts/mount-layers.ts`；GP2-a/b/c/d：层标签**解壳**+声明收集（此前静默透传）+ **C1/C2/C3 硬约束**（error 级，接进 compileVueSfc）；单测 22 组 · 全量 4787 用例绿**）★新会话以此为准
-
-## 当前状态速览（最近一次更新：**2026-10-03·（一一二）· **全局挂载点线开局**——方案+任务卡入库（6 处对账修正：★MP 的 Global 层是「每页一份实例」O(N) 的诚实边界）+ **GP0-a 实测**（基础库 3.17.x：root-portal **不穿透**，三形态均到 JS；★判据固化为 16s 可重跑 e2e）+ **GP3-b0 三项**（S42/S47 坑经验机器化 + LY004×teleport 层叠逃逸修复 + 门禁同步）**）★新会话以此为准
-
 
 
 ## ★《收纳规范》（2026-10-03 立 · 门禁 `pnpm check:memory`）

@@ -16,6 +16,8 @@ import PTextarea from './p-textarea/index.vue'
 import PMask from './p-mask/index.vue'
 import PPopup from './p-popup/index.vue'
 import PToast from './p-toast/index.vue'
+// ★★★GP4-a（2026-10-03）：Toast 队列宿主（Overlay 层；渲染端——队列状态在 @proteus-vue/runtime）
+import PToastHost from './p-toast-host/index.vue'
 import PLoading from './p-loading/index.vue'
 import PNavBar from './p-nav-bar/index.vue'
 import PSkeleton from './p-skeleton/index.vue'
@@ -118,6 +120,7 @@ export {
   PMask,
   PPopup,
   PToast,
+  PToastHost,
   PLoading,
   PNavBar,
   PSkeleton,

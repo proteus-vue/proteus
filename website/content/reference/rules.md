@@ -7,7 +7,7 @@ generated: true
 
 # 编译规则目录
 
-> 115 条编译规则——每条自带 AI 说明书（id / when / before → after / why）。SSOT = `@proteus-vue/compiler` TRANSFORM_RULES，与 `npx proteus rules` / Playground Trace 同源。
+> 116 条编译规则——每条自带 AI 说明书（id / when / before → after / why）。SSOT = `@proteus-vue/compiler` TRANSFORM_RULES，与 `npx proteus rules` / Playground Trace 同源。
 
 ## 模板转换（65）
 
@@ -858,7 +858,7 @@ after:  <text style="font-size: calc(15.77px + 1.1268vw)">x</text>（示意—�
 
 > why: Skyline 无 clamp 长度函数（官方支持表）——Web 端可保留真实 CSS clamp，MP 端 calc 线性替代（vw 天然随窗流式零运行时；#496 M3 实测收敛）
 
-## 脚本转换（36）
+## 脚本转换（37）
 
 ### `script/const-to-data`
 
@@ -1382,6 +1382,19 @@ after:  ready() { this.__proteusProbe(); /* .in(this).select('.p-x-data-v-h').bo
 ```
 
 > why: 自动化工具（wechatide/automator）只能查页面拥有的节点：组件内部节点被 glass-easel 隔离（createSelectorQuery 返回 null，Skyline 无 selectAllComponents）→ 组件内部几何/可见性无法断言（scroll-view 容器塌成细线两轮漏检）。测量必须从组件内部发起
+
+### `script/global-layer-merge`
+
+**Global 层注入（App 壳 → 每页）：data 直读共享状态 + setData 写镜像 + onShow 拉取**
+
+MP 每页独立渲染树（方案 §1.2-bis）⇒ App 壳的 Global 内容**注入每个页面产物**：① data 全局键初值 `__proteusGlobal.get(k)`（缺省回声明初值）② 壳方法并入页面实例（`this` = 页面实例）③ 拦截 `setData` 把全局键**镜像**进共享模块（不改写调用点——键可为计算属性/路径写法，改写必漏）④ 页面 `onShow` 拉取（回退到本页时同步别的页写过的值）。共享模块 `_proteus/global-layer.js` 靠**require 缓存 = 同实例**（与 vendor 单例化同机制）⇒ "实例每页一份、状态一份"（与官方 custom-tab-bar 同模式）
+
+```
+before: <global-layer><view>{{ netText }}</view></global-layer>（仅声明在 App.vue）
+after:  每页产物：wxml 前缀 + `netText: __proteusGlobal.get("netText")` + setData 写镜像 + onShow 拉取
+```
+
+> why: 小程序里 App 是逻辑容器（渲染层无对应物）⇒ "App.vue 写模板、全局组件声明一次全应用生效" 架构上无处安放（uni-app 官方不支持）。注入是编译期行为（可枚举）——运行时 insertGlobal 会让 conformance 与 AI 可校验同时失效且静默（C1）
 
 ## 样式转换（9）
 

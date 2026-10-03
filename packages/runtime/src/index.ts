@@ -15,6 +15,18 @@ export type { PersistenceOptions } from './pinia/persistence/lightweight'
 export { createWebPinia, createMpPinia, createAppPinia, createSsrPinia } from './pinia'
 export { registerProvide, readInject, clearProvides, provideCount, subscribeProvide, notifyProvide, nextPageId, destroyPage } from './provide-inject'
 export { defineApp, LifecycleOrchestrator, PHASE_ORDER, PhaseTimeoutError } from './lifecycle'
+// ★★★GP4-a（2026-10-03）：Toast 队列（替代 uni.showToast 的全局单例语义）
+//   队列状态与调度在 runtime（纯 TS·跨端·可单测）；渲染归组件 p-toast-host（Overlay 层）；
+//   MP 端宿主由 plugin-vite 注入每个页面（源码零每页引入）。
+export {
+  showToast, hideToast, clearToasts, configureToast,
+  toastSnapshot, toastStats, toastConfig, subscribeToast,
+  __resetToastForTest, __checkHostPresence,
+} from './toast'
+export type {
+  ToastOptions, ToastItem, ToastSnapshot, ToastEvent, ToastType,
+  ToastPosition, ToastDropPolicy, ToastConfig, ToastStats, ToastListener,
+} from './toast'
 export type { AppLifecycleConfig, LifecycleContext, LifecycleTrace, LifecyclePhase, FallbackStrategy, LaunchType, ProteusApp } from './lifecycle'
 // ★★2026-09-08 reactivity-runtime spke：re-export vue 的 reactive 族/守卫/effect（@vue/reactivity 经 vue 重导出——vue 是
 //   peer dep，tsc/esbuild 可解析；@vue/reactivity 未在 pnpm 提升到包 node_modules，直接 import 会 TS2307）。

@@ -33,6 +33,8 @@ import { APP_LAUNCH_SKELETON, APP_LIFECYCLE_BOOTSTRAP, GLOBAL_LAYER_STATE_CODE }
 import { createCompileCache, compileCacheKey, createBundleCache, bundleCacheKey } from './cache'
 import { collectUsedFrameworkComponents } from './tag-scan'
 import { findAppShellFile, looksLikeAppShell } from './app-shell'
+// ★★★GP4-a（2026-10-03）：页面级 Overlay 宿主的按需注入（Toast 队列渲染端；与 gen-routes 同源判定）
+import { detectToastUsage, injectToastHost } from './page-overlay'
 
 /**
  * ★GP3-b1：**按目标页面回填 Global 层片段的 require 路径**（不污染公共片段——每个页面算各自的相对路径）。
@@ -521,9 +523,17 @@ export function collectMpEntries(opts: {
   //   Global 层用到，页面闭包也看不到它（壳不是页面）⇒ 必须把壳并进 BFS 起点。
   const shellFileForClosure = findAppShellFile(appDir)
   const closureRoots = shellFileForClosure ? [...pageFiles, shellFileForClosure] : pageFiles
+  // ★GP4-a：检测 toast 用法（按需注入宿主；与 gen-routes 同源判定——同一件事两份实现 = 修一份等于没修）
   const usedComponents = emitAll
     ? null
     : collectUsedFrameworkComponents(closureRoots, componentsDir, path.join(appDir, 'components'))
+  // ★GP4-a：按需注入的 Toast 宿主也必须产出本体（否则真机 `usingComponents 未找到组件` ⇒ 整块不渲染）。
+  //   ★这里用一次**独立**检测（collectMpEntries 在 files 收集阶段，早于 buildStart 主体）——
+  //     两处扫描同一源（detectToastUsage），不是两份实现。
+  if (usedComponents) {
+    const tu = detectToastUsage(appDir)
+    if (tu.used && !tu.manualHost) usedComponents.add('p-toast-host')
+  }
   for (const f of effectiveVariants(walkVueFiles(componentsDir), platform)) {
     if (webOnlyPages?.has(f)) {
       onSkipWebOnly?.(f)
@@ -637,6 +647,24 @@ export default function mpTransform(opts: PluginOptions): Plugin {
         // ★框架组件按引用输出（2026-09-18）；PROTEUS_COMPONENTS_EMIT=all 回退全量（非常规用法逃生舱）
         componentEmit: process.env.PROTEUS_COMPONENTS_EMIT === 'all' ? 'all' : 'used',
       })
+      /* ═══ ★★★GP4-a（2026-10-03）：**Toast 队列宿主注入**（按需）═══
+       *
+       * 【为什么注入】队列是命令式的（业务只调 showToast）——渲染端 `p-toast-host` 必须有人挂。
+       *   让开发者每页写一次 = "每页引入"（本方案要消灭的东西；GP5 判据：八条场景任一需要每页引入
+       *   ⇒ 方案不成立）⇒ 编译期按需注入。
+       * 【为什么按需】只有项目里真的用过 toast API 才注入（不用的应用零成本——与"组件按需输出"同哲学）。
+       * 【手动优先】用户已手写 `<p-toast-host` ⇒ 整体不注入（双宿主会各渲染一份 ⇒ 同一 toast 显示两次）。
+       * 【★与 gen-routes 同源】两处都调 detectToastUsage（判定只有一份实现）。
+       */
+      const toastUsage = detectToastUsage(appDir)
+      const injectToast = toastUsage.used && !toastUsage.manualHost
+      if (toastUsage.used) {
+        const hitList = toastUsage.files.map((f) => path.relative(projectRoot, f).replace(/\\/g, '/')).slice(0, 3)
+        console.log(
+          `[mp-transform] ★Toast 队列：检测到 API 用法（${hitList.join(' / ')}${toastUsage.files.length > 3 ? ` 等 ${toastUsage.files.length} 处` : ''}）` +
+            (injectToast ? ' → 每页注入 <p-toast-host />（源码零每页引入）' : ' → **检测到手动声明的宿主**，不自动注入（防重复渲染）'),
+        )
+      }
       // ★ app.js 直出（绕开 rollup 打包）：读取 examples/main.mp.ts → esbuild 转译 TS → 纯文本资产
       // 微信 worklet 响应式重执行对打包代码不友好，原生直出与官方示例一致；
       // 调试开关 __PROTEUS_DEBUG__ 由本插件替换（vite define 不作用于直出资产）
@@ -1072,11 +1100,15 @@ export default function mpTransform(opts: PluginOptions): Plugin {
           console.log(`[mp-transform] 编译缓存命中：${rel}`)
         }
 
+        // ★GP4-a：**按需注入 Toast 队列宿主**（仅页面；组件不是页面级概念）。
+        //   位置在**页面 wxml 末尾**（宿主可见内容由 teleport → root-portal 渲染，标签位置不影响
+        //   层叠；末尾 = 对既有页面结构零扰动）。
+        const wxmlOut = injectToast && !isComponent ? injectToastHost(wxml) : wxml
         // sourcemap（v0.3）：方法级 JS 源码映射，调试构建落盘 + js 尾部 sourceMappingURL（微信开发者工具可定位源码）
         // ★2026-09-08 reactivity-runtime spke：裸 @proteus-vue/* require → 相对 _proteus/*.js（编译器注入行不走 moduleImports）
         const jsFinal = rewriteFrameworkRequires(js, rel)
         const jsWithMap = sourcemap && isDebug ? `${jsFinal}//# sourceMappingURL=${rel}.js.map\n` : jsFinal
-        this.emitFile({ type: 'asset', fileName: `${rel}.wxml`, source: wxml })
+        this.emitFile({ type: 'asset', fileName: `${rel}.wxml`, source: wxmlOut })
         this.emitFile({ type: 'asset', fileName: `${rel}.js`, source: jsWithMap })
         this.emitFile({ type: 'asset', fileName: `${rel}.wxss`, source: wxss })
         if (sourcemap && isDebug) {
@@ -1087,7 +1119,7 @@ export default function mpTransform(opts: PluginOptions): Plugin {
           this.emitFile({
             type: 'asset',
             fileName: `.transform-debug/${rel}.json`,
-            source: JSON.stringify({ file: rel, wxml, js, wxss, warnings, trace }, null, 2),
+            source: JSON.stringify({ file: rel, wxml: wxmlOut, js, wxss, warnings, trace }, null, 2),
           })
         }
         if (warnings.length) warningReport.push({ file: rel, warnings })

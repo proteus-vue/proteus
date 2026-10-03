@@ -60,7 +60,7 @@ export const STATS: StatItem[] = [
   },
   {
     id: 'components',
-    value: '77',
+    value: '78',
     label: '语义组件（p-* / pg-glass / virtual-list）',
     labelEn: 'semantic components (p-* / pg-glass / virtual-list)',
     source: 'proteus components:audit packages/components（76 组件全部通过）',

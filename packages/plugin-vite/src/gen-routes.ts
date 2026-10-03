@@ -29,6 +29,8 @@ import { resolveComponentsRoot } from './resolve-components'
 import { collectUsedFrameworkComponents } from './tag-scan'
 // ★GP3-b1（2026-10-03）：App 壳定位（与 plugin.ts 同源——"同一件事两份实现 = 修一份等于没修"）
 import { findAppShellFile } from './app-shell'
+// ★★★GP4-a（2026-10-03）：Toast 宿主按需注册（与 plugin.ts 同源判定——同一件事两份实现 = 修一份等于没修）
+import { detectToastUsage } from './page-overlay'
 
 /** 入口选项：config 为项目编译配置，root 为项目根目录（默认 process.cwd()） */
 export interface GenRoutesOptions {
@@ -841,6 +843,11 @@ function writePageJsons(pages: PageInfo[]): void {
   //   （否则真机「usingComponents 未找到组件」→ **整块不渲染**，与 F-30 同族失效）。
   //   ★壳扫描一次（所有页共用）；同名以**页面**为准（页面更局部）。语义跳过集对壳不用（壳不是页面）。
   const shellComponents = shellFile ? collectComponents(shellFile, false) : {}
+  // ★GP4-a：**按需注册 Toast 宿主**——plugin.ts 往每页 wxml 注入 `<p-toast-host />`（检测到 API 用法时），
+  //   这里必须同步写进每页 usingComponents（否则真机「未找到组件」⇒ 整块不渲染；F-30 同族失效）。
+  //   ★两处判定同源（都调 detectToastUsage）；手动声明宿主时**双双让位**（防双宿主重复渲染）。
+  const tu = detectToastUsage(APP_DIR)
+  const toastHostComponent = tu.used && !tu.manualHost ? { 'p-toast-host': '/proteus/p-toast-host/index' } : {}
   for (const p of pages) {
     const pageJson: Record<string, unknown> = {}
     if (config.skyline && !matchWebviewPage(config.page?.webviewPages, p.relSrc, p.relInSub, p.mpPath)) {
@@ -851,7 +858,7 @@ function writePageJsons(pages: PageInfo[]): void {
     if (p.pageJson) Object.assign(pageJson, p.pageJson)
     // 组件系统（v0.3）：扫描模板中的自定义组件标签 → usingComponents 注入
     // ★#496 页面源 p-grid 已被语义编译（产物无标签）——skipSemantic 排除；组件文件需注册保留
-    const components = { ...shellComponents, ...collectComponents(p.file, true) }
+    const components = { ...toastHostComponent, ...shellComponents, ...collectComponents(p.file, true) }
     if (Object.keys(components).length) pageJson.usingComponents = components
     // 注意：不再输出 customRouteKeyName —— 真机校验报"无效的 page.json [customRouteKeyName]"；
     // 自定义路由仅靠 wx.navigateTo({ routeType }) + 已注册 builder 生效，page.json 无需声明
@@ -880,7 +887,11 @@ function computeEmittedComponents(pages: PageInfo[]): ReadonlySet<string> | null
   // ★GP3-b1：**App 壳并入闭包起点**（与 plugin.ts 的 collectMpEntries 同源判定——两处必须一致，
   //   否则"声明了/输出了"再次分叉，正是 F-30 的形态）。
   const roots = shellFile ? [...pages.map((p) => p.file), shellFile] : pages.map((p) => p.file)
-  return collectUsedFrameworkComponents(roots, FW_COMPONENTS, path.join(APP_DIR, 'components'))
+  const used = collectUsedFrameworkComponents(roots, FW_COMPONENTS, path.join(APP_DIR, 'components'))
+  // ★GP4-a：按需注入的 Toast 宿主本体（与 plugin.ts 的闭包并入同源判定）
+  const tu = detectToastUsage(APP_DIR)
+  if (tu.used && !tu.manualHost) used.add('p-toast-host')
+  return used
 }
 
 function writeComponentJsons(emittedComponents?: ReadonlySet<string> | null): void {

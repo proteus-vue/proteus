@@ -2378,6 +2378,21 @@ function rewriteBareMethodCalls(body: string, methodNames: Set<string>, runtimeI
       // ★2026-09-09 canvas-probe 实证：方法作为**值**引用（name.bind(this) / 传给回调）也需 this. 化——
       //   此前只改 `name(` 调用形态，`loop.bind(this)` 的裸 loop → ReferenceError
       seg = seg.replace(new RegExp(`(?<![\\w$.:])${name}\\.bind\\s*\\(`, 'g'), `this.${name}.bind(`)
+      // ★★★GP4-a 实证缺口（2026-10-03）：方法作为**裸值传参**（`subscribeToast(applySnapshot)` /
+      //   `arr.map(fn)` / `setTimeout(tick)`）此前**不改写** → MP 产物里是模块作用域下不存在的
+      //   裸标识符 ⇒ **ready() 当场 ReferenceError**，其后整段初始化（含订阅）全不执行（静默失效：
+      //   页面不报错，只是"什么都不发生"）。本组件（p-toast-host）首版即踩。
+      //   判据限定在**实参位**（`(name)` / `, name,` / `, name)`）——比"所有裸标识符"保守得多：
+      //   局部同名变量遮蔽方法名时，实参位误判的概率远低于任意位置（且本仓惯例：方法名不与局部同名）。
+      //   ★必须同时 **`.bind(this)`**：方法体在 MP 侧被改写成 `this.setData(...)`，
+      //     裸引用（不 bind）交给回调时 `this` 丢失 ⇒ 回调触发瞬间 TypeError（比不改写更难查：
+      //     不改写是"启动就 ReferenceError"，不 bind 是"第一次推送才炸"）。
+      seg = seg.replace(new RegExp(`([(,]\\s*)${name}(\\s*[),])`, 'g'), (m, pre: string, post: string) => {
+        const at = seg.indexOf(m)
+        const abs = offset + (at >= 0 ? at : 0)
+        const inPlainFn = needsSelf && fnRanges.some((r) => abs > r.start && abs < r.end)
+        return `${pre}${inPlainFn ? 'self.' : 'this.'}${name}.bind(this)${post}`
+      })
       const re = new RegExp(`(?<![\\w$.])${name}\\s*\\(`, 'g')
       if (!needsSelf) {
         seg = seg.replace(re, `this.${name}(`)
