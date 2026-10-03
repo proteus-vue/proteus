@@ -18,6 +18,8 @@ import { executeRule } from './transforms/registry'
 import type { RuleContext } from './transforms/types'
 import { resolveOverrides } from './overrides'
 import { GESTURE_MP_EVENTS, MP_GESTURE_ALTERNATIVES } from './tags'
+// ★★★GP2-a（2026-10-03）：三层挂载契约（层标签 / C1 判据 / C2 上限——单一来源在 contracts）
+import { GLOBAL_LAYER_NODE_LIMIT, MOUNT_LAYER_TAGS, isMountLayerDeclarableFile, type MountLayer } from '@proteus-vue/contracts'
 import { CompilerError } from './validate'
 import { lowerSvgToImage, lowerSvgDynamic, collectUnsupportedSvgTags, lowerSvgToScene } from './svg-lower'
 import type { SvgTextNode } from './svg-lower'
@@ -309,6 +311,13 @@ interface SerializeContext {
   semanticClass: Record<string, string>
   /** 被禁用的规则 ID 集合 */
   disabled: Set<string>
+  /**
+   * ★★★GP2-a（2026-10-03）：**三层挂载声明收集**（可枚举性 = C1/C2/C3 的实现基础）。
+   *   每个 `*-layer` 标签在此登记（是否声明 / 内容节点数 / 是否含路由动作）。
+   */
+  mountLayers: Partial<Record<MountLayer, { declared: boolean; nodeCount: number; hasNavigation: boolean }>>
+  /** ★App.vue 形态（含 `<app-root>` 或 `*-layer`）：**不包页面滚动壳**（它不是页面） */
+  isAppShell: boolean
   /** ★2026-09-09 支持矩阵 fail-fast：矩阵外语义「已原样输出」→ 编译期 CompilerError（rules.failFast） */
   failFast?: boolean
   /** scoped CSS 作用域属性（v0.3：元素附加 data-v-xxx，样式侧选择器属性匹配） */
@@ -741,6 +750,59 @@ function serializeElement(node: ElementNode, ctx: SerializeContext): string {
     )
     ctx.trace?.add('template/is-component', { line: node.loc.start.line, before: '<component :is>', after: '（无效标签，请条件渲染）' })
   }
+  /* ═══════════ ★★★GP2-a（2026-10-03）：**三层挂载标签**（App.vue 形态）═══════════
+   *
+   * 【这一层补的是什么】《全局挂载点与App根组件方案》§3 的三层模型在编译器里**完全不存在**
+   *   （探针实测：`<app-root>`/`<global-layer>` 等被**原样透传**为无效标签 + **零警告**）。
+   *   本分支把它们变成：**逻辑容器解壳**（自身不产元素——与 Transition/KeepAlive 同族）
+   *   + **声明收集**（可枚举性 = C1/C2/C3 的实现基础，见文件末的收尾校验）。
+   *
+   * 【为什么层标签不产元素】层是"挂载区"不是"盒子"——Vue 里 Teleport/Transition 都不渲染
+   *   包裹元素；`<global-layer>` 同理。要布局容器请用户自己包 `<view>`（诚实边界写在规格 §2.3）。
+   *
+   * 【★顺序语义用**树序**表达（GP1-a 核心结论）】内核 z-order 真源 = 树序 ⇒ 层间顺序
+   *   （global < page < overlay）**不需要任何新指令**：只要把内容按序拼进同一棵树。
+   *   本分支**保持文档序**序列化 children（不重排）——重排会把用户的书写顺序当噪音，
+   *   而"层内顺序由声明顺序决定"（规范 §3.3）正是既有契约。
+   */
+  const mountLayerOf = MOUNT_LAYER_TAGS[node.tag]
+  if (mountLayerOf !== undefined) {
+    ctx.isAppShell = true
+    if (mountLayerOf !== 'root') {
+      const layer = mountLayerOf as MountLayer
+      // 层内容序列化（解壳：不输出层标签本身）
+      const inner = node.children.map((c) => serializeNode(c, ctx)).join('\n')
+      // ★C1 判据的**收集侧**：是否在允许的文件里声明（收尾统一报错，因为 filename 在 ctx 上）
+      const prev = ctx.mountLayers[layer]
+      // 内容节点数：直接元素子节点数（C2 的口径——与 MOUNT_LAYER 契约的"挂载节点数"一致）
+      const directChildren = node.children.filter((c) => c.type === NodeTypes.ELEMENT).length
+      // 路由动作检测（C3 的一半）：内容里出现 `<navigator>` 或带 href 的链接
+      // ★判据用**产物形态**（不是源码标签）：`router-link` 会被编译成
+      //   `bindtap="proteusNavigateTo"`（导航动作的产物标记），`navigator`/`a[href]` 保持标签形态
+      //   ——只匹配源码标签会漏掉 router-link（本仓实测）。
+      const hasNav = /<navigator\b|proteusNavigateTo|data-url=|<a\s[^>]*href=/i.test(inner)
+      ctx.mountLayers[layer] = {
+        declared: true,
+        nodeCount: (prev?.nodeCount ?? 0) + directChildren,
+        hasNavigation: (prev?.hasNavigation ?? false) || hasNav,
+      }
+      ctx.trace?.add('template/mount-layer', {
+        line: node.loc.start.line,
+        before: `<${node.tag}>`,
+        after: `（挂载层 ${layer}：解壳——自身不产元素；内容按**文档序**进树，层间顺序由编译期拼接表达）`,
+      })
+      // 重复声明同一层：允许（多次追加同层内容属合法用法——按文档序拼接）
+      return inner
+    }
+    // `<app-root>`：App 壳的根（不属任何层；等价于页面模板的根元素）——同样解壳
+    ctx.trace?.add('template/mount-layer', {
+      line: node.loc.start.line,
+      before: '<app-root>',
+      after: '（App 根：解壳——不属任何挂载层，它是层的父）',
+    })
+    return node.children.map((c) => serializeNode(c, ctx)).join('\n')
+  }
+
   // ★vue-compat-advance Batch 2：<transition> 装饰式——动画 class 注入子元素，过渡标签不输出（进入动画自动播放，离开立即移除）
   const isTransition = node.tag === 'transition'
   if (isTransition) {
@@ -1878,6 +1940,9 @@ export function transformTemplateToWxml(
     templateRefs: new Set<string>(),
     // ★#500 :style 动态标识符绑定收集
     styleBindings: new Set<string>(),
+    // ★GP2-a：三层挂载声明收集（见 SerializeContext.mountLayers）
+    mountLayers: {},
+    isAppShell: false,
     // ★2026-09-09 G-62 事件命中：带事件的静态 SVG 图形表
     svgHits: [],
     // ★2026-09-09 动画提升：SVG 整体变换 → CSS
@@ -1906,7 +1971,11 @@ export function transformTemplateToWxml(
   const isComp = opts.isComponent === true
   // ★15-page-scroll-container：页面模式自动包滚动容器（Skyline 页面本身不滚动，滚动必须 scroll-view）——
   //   顶层已是 scroll-view/p-scroll-view 根时不重复包装（用户显式滚动容器场景）；开关 autoScrollContainer 默认 true
-  const autoScroll = opts.autoScrollContainer !== false && !isComp
+  // ★GP2-a：App 壳（含 `<app-root>` / `*-layer`）**不是页面** ⇒ 不包页面滚动容器
+  //   （它是全应用壳层；给它套 scroll-view 会让三层内容被包进一个滚动盒——语义与几何都不对）
+  // ★GP2-a：`isAppShell` 只有**序列化后**才知道（`<app-root>`/`*-layer` 在 serializeElement 里置位）
+  //   ⇒ 这里先算"配置允许 + 非组件"，最终判定推迟到 `const wxml = inner` 之后（见下）
+  const autoScrollCfg = opts.autoScrollContainer !== false && !isComp
   const topTags = root.children.filter((c) => c.type === NodeTypes.ELEMENT).map((c) => (c as ElementNode).tag)
   const alreadyScroll = topTags.length === 1 && (topTags[0] === 'scroll-view' || topTags[0] === 'p-scroll-view')
   let firstEl = isComp
@@ -1929,6 +1998,7 @@ export function transformTemplateToWxml(
     })
     .join('\n')
   let wxml = inner
+  const autoScroll = autoScrollCfg && !ctx.isAppShell   // ★GP2-a：App 壳不包页面滚动容器
   if (autoScroll && !alreadyScroll) {
     // ★15-page-scroll-container：页面滚动 API 桥接（批次2）——声明 onPageScroll/onReachBottom 等时
     //   自动包装 scroll-view 绑定对应事件（页面本身不滚动，页面级钩子靠 scroll-view 事件触发）
@@ -1990,5 +2060,75 @@ export function transformTemplateToWxml(
     // ★15-page-scroll-container：已自动包滚动容器（compileVueSfc 据此注入高度样式）
     pageScrollWrapped: autoScroll && !alreadyScroll,
     warnings: ctx.warnings,
+    // ★★★GP2-a/b/c/d（2026-10-03）：三层挂载声明（**可枚举**——C1/C2/C3 的实现基础 + 宿主/诊断消费）
+    mountLayers: ctx.mountLayers,
+    isAppShell: ctx.isAppShell,
   }
+}
+
+/**
+ * ★★★**C1/C2/C3 静态校验**（GP2-b/c/d，2026-10-03）——三层挂载的**编译期硬约束**。
+ *
+ * 【为什么必须校验（方案 §3.2）】C1 是"架构能力"与"**新逃生口**"的分界：
+ *   若允许在任意文件声明全局挂载点，conformance 与 AI 可校验**同时失效**，且失效**静默**
+ *   （与"不开放任意原生调用"同一条原则：收敛模型只适用于可枚举的声明）。
+ *
+ * | # | 约束 | 判据 |
+ * |---|---|---|
+ * | C1 | 层声明只能在 **App.vue** | `isMountLayerDeclarableFile(filename)`（契约）+ 本函数 |
+ * | C2 | Global 层节点数 ≤ **32** | `GLOBAL_LAYER_NODE_LIMIT`（契约） |
+ * | C3 | Global 层不得含**页面级业务**（路由动作） | 内容里出现 navigator/router-link/a[href] |
+ *
+ * @returns 违规列表（空 = 合规）；调用方（compileVueSfc）决定 raise 成编译错误还是 warning
+ */
+export function validateMountLayerUsage(
+  result: Pick<TemplateTransformResult, 'mountLayers' | 'isAppShell'>,
+  filename: string,
+): Array<{ code: 'C1' | 'C2' | 'C3'; message: string; hint: string }> {
+  const out: Array<{ code: 'C1' | 'C2' | 'C3'; message: string; hint: string }> = []
+  const layers = result.mountLayers ?? {}
+  const declared = Object.keys(layers) as MountLayer[]
+  if (declared.length === 0) return out
+
+  // ── C1：声明位置（只有 App.vue 允许）──
+  if (!isMountLayerDeclarableFile(filename)) {
+    out.push({
+      code: 'C1',
+      message:
+        `${filename} 声明了挂载层（${declared.map((l) => `<${l}-layer>`).join(' / ')}），` +
+        '但挂载层**只允许在 App.vue 的 template 中声明**',
+      hint:
+        '把全局挂载内容移到 App.vue；页面级内容直接写在页面 template 里（它就是 Page 层）。' +
+        '★禁用运行时动态挂载（insertGlobal）——那会让 conformance 与 AI 可校验同时失效且静默',
+    })
+  }
+
+  // ── C2：Global 层节点上限 ──
+  const global = layers.global
+  if (global && global.nodeCount > GLOBAL_LAYER_NODE_LIMIT) {
+    out.push({
+      code: 'C2',
+      message:
+        `Global 层挂载了 ${global.nodeCount} 个节点，超过上限 ${GLOBAL_LAYER_NODE_LIMIT}——` +
+        'Global 层常驻内存（自绘端永不销毁 / MP 端每页一份 × 页面栈深度）',
+      hint:
+        '拆分：把"临时出现"的内容移到 `<overlay-layer>`（Toast/弹窗）；' +
+        '把"页面级"的内容移回页面 template；确有大量常驻内容时请评审其必要性' +
+        '（MP 端的实际驻留是 32 × 页面栈深度，见方案 §1.2-bis）',
+    })
+  }
+
+  // ── C3：Global 层不得含页面级业务（路由动作）──
+  if (global?.hasNavigation) {
+    out.push({
+      code: 'C3',
+      message:
+        'Global 层内容里出现路由动作（`<navigator>` / `<router-link>` / `<a href>`）——' +
+        '全局层不得包含页面级业务（它不参与路由栈）',
+      hint:
+        '把该动作移到页面 template，或改用事件回调（`@tap` + `useRouter().push`）' +
+        '——后者在全局层是允许的（不依赖页面上下文）',
+    })
+  }
+  return out
 }

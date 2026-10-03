@@ -8,6 +8,8 @@ import { transformStyleToWxss } from './style'
 import { assertValidResult, CompilerError } from './validate'
 // ★LY1（2026-10-02）：页面层级语义校验（四层语义 + 跨容器强制——规范 §3.5/§4.1）
 import { validateLayerUsage } from './layer-safety'
+// ★★★GP2-b/c/d（2026-10-03）：三层挂载硬约束（C1 声明位置 / C2 全局层节点上限 / C3 禁路由动作）
+import { validateMountLayerUsage } from './template'
 // ★SC2（2026-10-02）：可停靠滚动容器的声明面校验（封闭集 + 五条硬约束——方案 §6.2/§6.3）
 import { validateScrollUsage } from './scroll-safety'
 import { createTrace } from './trace'
@@ -53,6 +55,8 @@ export type {
 } from './types'
 
 export { transformTemplateToWxml } from './template'
+// ★GP2-b/c/d（2026-10-03）：三层挂载硬约束校验（C1/C2/C3——供门禁/工具独立消费）
+export { validateMountLayerUsage } from './template'
 export { transformScriptToPage } from './script'
 export { transformStyleToWxss } from './style'
 export { validateJs, validateWxml, validateWxmlPlatform, scanWxmlPlatformIssues, validateMpJsPlatform, scanMpUnsafeEs5, assertValidResult, CompilerError } from './validate'
@@ -218,6 +222,14 @@ export function compileVueSfc(source: string, options: CompileOptions = {}): Com
   })
   // ★★2026-09-08 架构定调：宏语义权威源 = @vue/compiler-sfc compileScript（不手造）——defineModel 经它展开
   //   _useModel(__props, name)；用其 modelRefs 驱动模板 var 改名 + 脚本 .value 读写（对齐 glass-easel 规范落地 IR）
+  // ★★★GP2-b/c/d（2026-10-03）：三层挂载硬校验（**error 级**——C1 是"架构能力 vs 新逃生口"的分界）。
+  //   只在**声明了**挂载层时触发（普通页面零开销、零行为变化）。
+  const mountViolations = validateMountLayerUsage(tplResult, options.filename ?? 'anonymous.vue')
+  if (mountViolations.length > 0) {
+    const f = options.filename ?? 'anonymous.vue'
+    const detail = mountViolations.map((v) => `  [${v.code}] ${v.message}\n        修法：${v.hint}`).join('\n')
+    throw new CompilerError(f, `三层挂载校验失败（${mountViolations.length} 条）\n${detail}`)
+  }
   const sfcMacros = extractSfcMacros(source, options.filename ?? 'anonymous.vue')
   const wxml = sfcMacros.ok && sfcMacros.modelRefs.length ? renameModelVarsInWxml(tplResult.wxml, sfcMacros.modelRefs) : tplResult.wxml
   const scriptTrace = createTrace('script')

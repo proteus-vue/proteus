@@ -7,9 +7,9 @@ generated: true
 
 # 编译规则目录
 
-> 114 条编译规则——每条自带 AI 说明书（id / when / before → after / why）。SSOT = `@proteus-vue/compiler` TRANSFORM_RULES，与 `npx proteus rules` / Playground Trace 同源。
+> 115 条编译规则——每条自带 AI 说明书（id / when / before → after / why）。SSOT = `@proteus-vue/compiler` TRANSFORM_RULES，与 `npx proteus rules` / Playground Trace 同源。
 
-## 模板转换（64）
+## 模板转换（65）
 
 ### `tag/div-to-view`
 
@@ -439,6 +439,20 @@ after:  <teleport to="body"><view class="root" :class="{ open }">…</view></tel
 ```
 
 > why: 静默丢弃比报错更危险（用户以为能开关，实际恒挂载）；且"顺手支持"会把用户推进 S47 的坑 ⇒ 警告 + 指向正解
+
+### `template/mount-layer`
+
+**三层挂载（App.vue 形态）：层标签解壳 + 声明收集**
+
+`<app-root>` / `<global-layer>` / `<page-layer>` / `<overlay-layer>` → **逻辑容器解壳**（自身不产元素——与 Transition/KeepAlive 同族；层是"挂载区"不是"盒子"）+ **声明收集**（`mountLayers` 可枚举 ⇒ C1/C2/C3 校验基础）+ **App 壳免页面滚动容器**；★层间顺序（global < page < overlay）用**树序**表达（内核 z-order 真源 = 声明顺序）⇒ **零新指令**
+
+```
+before: <app-root><global-layer><view>status</view></global-layer><overlay-layer><toast /></overlay-layer></app-root>
+after:  <view>status</view>
+<toast />（层标签解壳；顺序 = 文档序；App 壳不包 scroll-view）
+```
+
+> why: 打破小程序系「App.vue 不能写模板」的限制（uni-app 需第三方插件 @uni-ku/root 才能补上）——为超级应用提供真正可承载的全局挂载点；层间顺序借用内核已有的树序语义，避免为已有语义造新指令
 
 ### `directive/v-once`
 
