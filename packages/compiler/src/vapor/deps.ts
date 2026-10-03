@@ -20,6 +20,8 @@ import { parse as babelParse } from '@babel/parser'
 import type { ReactiveSource } from './sources'
 // ★kebab 形态内置组件名的**唯一**规范化入口（template.ts / events.ts 同源——"一处实现"）
 import { normalizeBuiltinTag } from './template'
+// ★混排归一化（同一入口——三处遍历 id 同源）
+import { normalizedChildSequence } from './text-runs'
 
 /** 表达式的依赖分析结果 */
 export interface ExprDeps {
@@ -389,7 +391,10 @@ export function collectTemplateBindings(
      */
     slotScopes: string[] = [],
   ): void => {
-    for (const raw of nodes) {
+    // ★★★混排归一化（2026-10-03 · 与 template.ts/events.ts **同一入口**——三处 id 必须同源）：
+    //   `<p>文字 <b>x</b></p>` ⇒ 每段连续文本合成 `p-text` 叶（探针实测：不接这里 ⇒
+    //   插值槽位挂到**父元素** id 上，而合成叶是另一个 id ⇒ 指令写错节点）。
+    for (const raw of normalizedChildSequence(nodes)) {
       const n = raw as {
         type: number
         tag?: string

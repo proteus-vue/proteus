@@ -119,6 +119,11 @@ function fingerprint(rep) {
     (rep.directive_probe?.rounds ?? []).map((r) => `${r.name}=${r.started}`),
     [...new Set((rep.directive_probe?.plays ?? []).filter((p) => p.started).map((p) => `${p.nodeId}:${p.preset}`))].sort(),
   ])
+  // ★混排（2026-10-03）：文本段集合 + 合成叶数三端逐值一致（同一份产物 + 共享代码）
+  fp.mixed_probe = JSON.stringify([
+    [...(rep.mixed_probe?.texts ?? [])].sort(),
+    rep.mixed_probe?.leaves,
+  ])
   return fp
 }
 

@@ -31,6 +31,8 @@ import { parse as domParse } from '@vue/compiler-dom'
 import type { VueCompatDeps } from './sources'
 // ★kebab 形态内置组件名的**唯一**规范化入口（template.ts 同源导入——"一处实现"）
 import { normalizeBuiltinTag } from './template'
+// ★混排归一化（同一入口——三处遍历 id 同源）
+import { normalizedChildSequence } from './text-runs'
 
 /** 逻辑容器（与 template.ts/deps.ts **同一条判据**——透传：不占节点 id） */
 const LOGICAL_CONTAINER_TAGS = new Set(['Transition', 'KeepAlive', 'Teleport', 'Suspense'])
@@ -475,7 +477,8 @@ export function compileEvents(
    *   ① 逻辑容器（透传）② 带 v-slot 的 `<template>`（插槽声明）③ Suspense 只走 #default。
    */
   const walk = (children: unknown[], parentComponent: boolean): void => {
-    for (const raw of children) {
+    // ★★★混排归一化（2026-10-03 · 与 template.ts/deps.ts **同一入口**——三处 id 必须同源）
+    for (const raw of normalizedChildSequence(children)) {
       const n = raw as EvNode
       if (n.type !== 1) continue
       // ★★kebab 形态的内置组件规范化（2026-10-03 · 与 template.ts **同一条判据**）：

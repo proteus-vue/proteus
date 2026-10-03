@@ -28,6 +28,8 @@ import type { LayoutNode, LayoutTemplate, ListTemplate, TextSegment } from '@pro
 import { HOST_DIRECTIVE_NAMES, HOST_DIRECTIVE_SPECS, isHostDirective } from '@proteus-vue/slot-runtime'
 // ★混合文本（P2-2）里的插值段要编成表达式程序——复用**同一套**编译器（能力边界一处收敛）
 import { compileExpr } from './expr'
+// ★★★元素/文本**混排**归一化（2026-10-03）——三处遍历（template/deps/events）的**唯一**输入
+import { normalizedChildSequence } from './text-runs'
 
 // ★类型定义在**运行时契约包**（slot-runtime/layout-template.ts）——编译器只是产出方之一，
 //   消费方定义的形状才是唯一契约（与 SubscriptionTable 同一处置）。
@@ -515,7 +517,12 @@ export function buildLayoutTemplate(
      */
     slotCtx?: { parentIsComponent?: boolean; slotContentOf?: string; scopeVar?: string },
   ): void => {
-    for (const raw of children) {
+    // ★★★**混排归一化**（2026-10-03 · 三处遍历的唯一入口）：`<p>文字 <b>x</b></p>` 这类
+    //   元素+文本混排 ⇒ 每段连续文本合成一个 `p-text` 叶（自绘树里文本是元素属性，
+    //   没有独立文本节点）——与元素兄弟按**文档序**排布（与 B 路适配器同构）。
+    //   ★非混排 ⇒ **引用原样**（既有产物逐字节不变）；空白压缩逐条照抄 Vue condense
+    //     （见 text-runs.ts 头注——不对齐会合成一堆缩进空白叶、节点数全错）。
+    for (const raw of normalizedChildSequence(children)) {
       const n = raw as Node
       if (n.type !== 1 /* ELEMENT */) {
         // 文本/插值节点在**父元素**上处理（本函数只在元素遍历里被调用，见下方 children 过滤）
@@ -619,6 +626,8 @@ export function buildLayoutTemplate(
       let hasDynamicStyle = false
       // ★P3-5 宿主指令收集器（声明在 props 扫描**之前**——扫描循环里 push；挂在节点上见下）
       let hostDirectives: NonNullable<LayoutNode['directives']> | undefined
+      // ★混排（2026-10-03）：本元素是否有 `v-text`（有 ⇒ 覆盖子节点，不做混排合成）
+      let hasVText = false
       // ★★未支持特性探测（P0：让静默变可见——见 UNSUPPORTED_DIRECTIVES 头注）
       for (const p of n.props ?? []) {
         if (p.type === 7 /* DIRECTIVE */ && typeof p.name === 'string' && UNSUPPORTED_DIRECTIVES[p.name]) {
@@ -916,8 +925,7 @@ export function buildLayoutTemplate(
       //     这与"组合表达式"是同一件事（`a{{x}}b` ≡ `'a' + x + 'b'`）——切分只是
       //     把模板写法归一成表达式**段**，不引入第二套求值语义。
       //
-      // 【为什么仍拒绝"元素 + 文本"混排】那需要**文本节点结构化**（自绘树里文本是元素属性，
-      //   没有独立文本节点）⇒ 是节点模型问题，不是表达式问题（本版如实保留诊断）。
+      // ★（2026-10-03 更新：**混排已真支持**——文本合成 `p-text` 叶，见 text-runs.ts）
       // ★★P2-6：`v-text="expr"` ⇒ 文本槽位（**覆盖**子节点——与 Vue 语义一致：v-text 设置 textContent）
       //   与插值共用 `text.content` 通道 ⇒ 下游（订阅表/运行时/回填）零改动。
       //   ★形态取"单表达式段"（与 `{{ expr }}` 完全同形）——但**不**参与 P2-2 的多段合成
@@ -926,6 +934,7 @@ export function buildLayoutTemplate(
         const vTextProp = (n.props ?? []).find((p) => p.type === 7 && p.name === 'text')
         const vTextCode = vTextProp?.exp?.content?.trim()
         if (vTextCode) {
+          hasVText = true
           if (elementChildren.length > 0) {
             diag(`${tag}(id=${id}) v-text 与子元素并存——v-text 会**覆盖**全部子节点（Vue 语义）`, '请删掉子元素或改用插值')
           }
@@ -943,8 +952,14 @@ export function buildLayoutTemplate(
         }
       }
       if (textChildren.length > 0 && !node.textSegments) {
-        if (elementChildren.length > 0) {
-          diag(`${tag}(id=${id}) 同时含元素与文本子节点（本版不支持混合内容）`, '请拆分为纯容器或纯文本元素')
+        // ★★★**元素+文本混排**（2026-10-03 起真支持）：文本不再折到父元素上，而是由
+        //   `walk` 的归一化序列**合成 `p-text` 叶**（与元素兄弟按文档序排布）。
+        //   ⇒ 父元素自己不再带 `text`（否则同一段文字会渲染两遍：父属性一份 + 合成叶一份）。
+        //   ★`v-text` 在场 ⇒ 按 Vue 语义**覆盖全部子节点**（上面已诊断），此时不做混排合成。
+        if (elementChildren.length > 0 && !hasVText) {
+          // 混排：交给归一化序列（父不带文本——见上）
+        } else if (elementChildren.length > 0) {
+          // v-text 覆盖子节点：父元素文本已由 v-text 设置（不合成、不继承子文本）
         } else {
           const segs: TextSegment[] = []
           for (const raw of textChildren) {
