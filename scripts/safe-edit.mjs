@@ -331,7 +331,12 @@ if (failures.length) {
 console.log('  ✅ 校验通过')
 
 if (hasFlag('--apply')) {
+  // ★2026-10-04（真缺陷修复，实测）：临时文件是新建的（默认 0644）⇒ 直接 copyFileSync 会**丢掉源文件的执行位**
+  //   （实测：编辑 /tmp/mode-test.sh 后 -rwxr-xr-x → -rw-r--r--）——对 hosts/**/*.sh 这类脚本是致命的。
+  //   修法：落盘前记住源文件 mode，copy 后 chmod 还原（对普通文件是无操作）。
+  const srcMode = fs.statSync(file).mode
   fs.copyFileSync(tmp, file)
+  fs.chmodSync(file, srcMode)
   fs.unlinkSync(tmp)
   console.log(`\n✅ 已落盘：${file}`)
 } else {
