@@ -744,6 +744,39 @@ export const TEMPLATE_RULES: TransformRule[] = [
     decision: 'GP3-b0 portal 陷阱机器化（S42 落成编译期检查）',
   },
   {
+    id: 'template/mount-layer',
+    phase: 'template',
+    status: 'implemented',
+    title: '三层挂载（App.vue 形态）：层标签解壳 + 声明收集',
+    titleEn: 'Three mount layers (App.vue form): layer tags unwrap + declaration collection',
+    description:
+      '`<app-root>` / `<global-layer>` / `<page-layer>` / `<overlay-layer>` → **逻辑容器解壳**' +
+      '（自身不产元素——与 Transition/KeepAlive 同族；层是"挂载区"不是"盒子"）' +
+      '+ **声明收集**（`mountLayers` 可枚举 ⇒ C1/C2/C3 校验基础）+ **App 壳免页面滚动容器**；' +
+      '★层间顺序（global < page < overlay）用**树序**表达（内核 z-order 真源 = 声明顺序）⇒ **零新指令**',
+    descriptionEn:
+      '`<app-root>` / `<global-layer>` / `<page-layer>` / `<overlay-layer>` → logical-container unwrap ' +
+      '(no element of their own — same family as Transition/KeepAlive; a layer is a mount region, not a box) ' +
+      '+ declaration collection (`mountLayers` enumerable, the basis for the C1/C2/C3 checks) ' +
+      '+ the App shell skips the page scroll container. Layer order (global < page < overlay) is expressed by tree order ' +
+      '(the kernel z-order source of truth is declaration order) → ZERO new instructions.',
+    why:
+      '打破小程序系「App.vue 不能写模板」的限制（uni-app 需第三方插件 @uni-ku/root 才能补上）——' +
+      '为超级应用提供真正可承载的全局挂载点；层间顺序借用内核已有的树序语义，避免为已有语义造新指令',
+    whyEn:
+      "Breaks the mini-program family's 'App.vue cannot have a template' limitation (uni-app needs the third-party " +
+      '@uni-ku/root plugin to work around it), giving super-apps a real global mount point; layer ordering reuses the ' +
+      "kernel's existing tree-order semantics instead of inventing a new instruction for an already-expressed meaning.",
+    when: '模板出现 <app-root> 或 <global-layer>/<page-layer>/<overlay-layer> 时',
+    example: {
+      before: '<app-root><global-layer><view>status</view></global-layer><overlay-layer><toast /></overlay-layer></app-root>',
+      after: '<view>status</view>\n<toast />（层标签解壳；顺序 = 文档序；App 壳不包 scroll-view）',
+    },
+    verify: 'tests/mp-mount-layers-compile.test.ts',
+    source: 'packages/compiler/src/template.ts → serializeElement（三层挂载标签分支）',
+    decision: 'GP2-a 三层挂载编译支持（规格见 docs/Proteus_三层挂载指令表达规格.md）',
+  },
+  {
     id: 'directive/v-once',
     phase: 'template',
     status: 'implemented',

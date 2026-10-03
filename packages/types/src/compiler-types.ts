@@ -135,6 +135,14 @@ export interface TemplateTransformResult {
   inlineHandlers?: Array<{ name: string; code: string }>
   /** 模板是否使用 <transition> */
   usesTransition?: boolean
+  /**
+   * ★★★GP2-a（2026-10-03）：**三层挂载声明**（App.vue 形态）——`{ global/page/overlay: {...} }`。
+   *   可枚举性 = C1/C2/C3 校验的实现基础（`validateMountLayerUsage`）+ 宿主/诊断消费。
+   *   缺省 `{}`（普通页面无声明 ⇒ 全部节点属 page 层）。
+   */
+  mountLayers?: Partial<Record<'global' | 'page' | 'overlay', { declared: boolean; nodeCount: number; hasNavigation: boolean }>>
+  /** ★GP2-a：本文件是 **App 壳**（含 `<app-root>` 或 `*-layer`）——不包页面滚动容器 */
+  isAppShell?: boolean
   /** 离开动画状态机（裸 ref v-if 的 transition 子元素） */
   transitions?: Array<{ ref: string; tName: string; index: number }>
   /** ★#494 模板表达式裸标识符（与 runtimeInits 求交 → 快照 setData） */

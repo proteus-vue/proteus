@@ -7,9 +7,9 @@ generated: true
 
 # Compile rule catalog
 
-> 114 compile rules — every rule ships its own AI explainer (id / when / before → after / why). SSOT = `@proteus-vue/compiler` TRANSFORM_RULES, same source as `npx proteus rules` and the Playground trace.
+> 115 compile rules — every rule ships its own AI explainer (id / when / before → after / why). SSOT = `@proteus-vue/compiler` TRANSFORM_RULES, same source as `npx proteus rules` and the Playground trace.
 
-## Template transforms (64)
+## Template transforms (65)
 
 ### `tag/div-to-view`
 
@@ -439,6 +439,20 @@ after:  <teleport to="body"><view class="root" :class="{ open }">…</view></tel
 ```
 
 > why: Silent dropping is more dangerous than an error (users think the toggle works while it always mounts); and "just supporting it" would push users into the S47 hole — so warn and point at the correct pattern.
+
+### `template/mount-layer`
+
+**Three mount layers (App.vue form): layer tags unwrap + declaration collection**
+
+`<app-root>` / `<global-layer>` / `<page-layer>` / `<overlay-layer>` → logical-container unwrap (no element of their own — same family as Transition/KeepAlive; a layer is a mount region, not a box) + declaration collection (`mountLayers` enumerable, the basis for the C1/C2/C3 checks) + the App shell skips the page scroll container. Layer order (global < page < overlay) is expressed by tree order (the kernel z-order source of truth is declaration order) → ZERO new instructions.
+
+```
+before: <app-root><global-layer><view>status</view></global-layer><overlay-layer><toast /></overlay-layer></app-root>
+after:  <view>status</view>
+<toast />（层标签解壳；顺序 = 文档序；App 壳不包 scroll-view）
+```
+
+> why: Breaks the mini-program family's 'App.vue cannot have a template' limitation (uni-app needs the third-party @uni-ku/root plugin to work around it), giving super-apps a real global mount point; layer ordering reuses the kernel's existing tree-order semantics instead of inventing a new instruction for an already-expressed meaning.
 
 ### `directive/v-once`
 

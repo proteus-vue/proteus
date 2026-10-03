@@ -21,12 +21,12 @@
 
 ### 第二批：模型与编译期约束
 
-- [ ] **GP1-a** 三层挂载的指令流表达规格
-- [ ] **GP1-b** 三层层级编码（Overlay > Page > Global）
-- [ ] **GP2-a** App.vue template 编译支持 ⭐
-- [ ] **GP2-b** C1 静态检查：必须声明在 App.vue ⭐
-- [ ] **GP2-c** C2 静态检查：挂载节点上限 32
-- [ ] **GP2-d** C3 静态检查：禁止 useRoute / navigateTo
+- [x] **GP1-a** 三层挂载的指令流表达规格 ⇒ **已完成（2026-10-03）**：★核心结论是 **零新指令**（层间顺序用**树序**表达——内核 z-order 真源 = 声明顺序）；规格见 `docs/Proteus_三层挂载指令表达规格.md` + 契约 `packages/contracts/src/mount-layers.ts`
+- [x] **GP1-b** 三层层级编码 ⇒ **已完成（2026-10-03）**：**域偏移**方案（`mountLayerDomainOffset` = 层序 × 1_000_000）——与层内四层**正交不混用**；单测实证误用场景被数值拦住
+- [x] **GP2-a** App.vue template 编译支持 ⭐ ⇒ **已完成（2026-10-03）**：层标签解壳 + 声明收集（可枚举）+ App 壳免滚动容器；规则 `template/mount-layer` 已登记
+- [x] **GP2-b** C1 静态检查 ⇒ **已完成（2026-10-03）**：`validateMountLayerUsage` + 接进 `compileVueSfc`（**error 级**）；修法点明"禁用运行时 insertGlobal"
+- [x] **GP2-c** C2 静态检查 ⇒ **已完成（2026-10-03）**：`GLOBAL_LAYER_NODE_LIMIT` + 超限 error（提示含 MP 的 N 倍驻留口径）；★**数值待 GP0/实测校准**（当前 32 为契约常量）
+- [x] **GP2-d** C3 静态检查 ⇒ **已完成（2026-10-03）**：Global 层内路由动作（navigator / router-link→proteusNavigateTo / a[href]）⇒ error；★事件回调**不**触发（不越界）
 
 ### 第三批：各端实现 🔴 依赖 GP0
 
