@@ -213,9 +213,10 @@ const java = `package dev.proteus.layoutcore;
  *     —— 跨语言契约根本没被验证（本仓纪律：只测自身往返等于没测）。
  *
  * 场景：3 节点小树（根 column → row(边界) → 叶子），指令为
- *   \`SET_STYLE(nodeId=2, layout.width, ${fx.widthAfter})\`
- * 期望：设备上该节点几何宽度 == **${fx.widthAfter}**（该值来自**指令输入**，
+ *   SET_STYLE(nodeId=2, layout.width, 期望宽度)
+ * 期望：设备上该节点几何宽度 == **期望宽度**（该值来自**指令输入**，
  *   不是"核心算出的另一个数" ⇒ 断言不是循环论证）。
+ * ★本块不得含反引号或美元花括号（它在生成器的 JS 模板串里——见 check:script-compile 的护栏）。
  */
 public final class OpsFixture {
     private OpsFixture() {}
@@ -243,9 +244,10 @@ ${byteLiteral}
     /* ══════════ ★splice（结构变更）夹具：payload 取自**适配器真实产出** ══════════ */
 
     /**
-     * 适配器 \`takeSplice()\` 的真实输出（追加一行）——由构建期跑真实适配器得到，**非手搓**。
+     * 适配器 takeSplice() 的真实输出（追加一行）——由构建期跑真实适配器得到，**非手搓**。
      *
-     * 形状：\`{removes:[…], inserts:[{parentId, nodes:[…], index}], textMeasures:{…}}\`
+     * 形状：{removes:[…], inserts:[{parentId, nodes:[…], index}], textMeasures:{…}}
+     * ★本块不得含反引号或美元花括号（在生成器 JS 模板串里——见护栏）。
      */
     public static final String SPLICE_JSON = ${JSON.stringify(JSON.stringify(sp.splice))};
 

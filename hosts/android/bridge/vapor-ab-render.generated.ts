@@ -2,11 +2,12 @@
 // source: @vue/compiler-sfc (mode=module, runtimeModuleName=@vue/runtime-core)
 // @ts-nocheck
 /* eslint-disable */
-import { createTextVNode as _createTextVNode, resolveComponent as _resolveComponent, withCtx as _withCtx, createVNode as _createVNode, renderList as _renderList, Fragment as _Fragment, openBlock as _openBlock, createElementBlock as _createElementBlock, createCommentVNode as _createCommentVNode, toDisplayString as _toDisplayString, createBlock as _createBlock, setBlockTracking as _setBlockTracking, withMemo as _withMemo, vShow as _vShow, withDirectives as _withDirectives, Transition as _Transition } from "@vue/runtime-core"
+import { createTextVNode as _createTextVNode, resolveComponent as _resolveComponent, withCtx as _withCtx, createVNode as _createVNode, renderList as _renderList, Fragment as _Fragment, openBlock as _openBlock, createElementBlock as _createElementBlock, createCommentVNode as _createCommentVNode, toDisplayString as _toDisplayString, createBlock as _createBlock, setBlockTracking as _setBlockTracking, withMemo as _withMemo, vShow as _vShow, withDirectives as _withDirectives, Transition as _Transition, KeepAlive as _KeepAlive, Teleport as _Teleport, Suspense as _Suspense } from "@vue/runtime-core"
 
 export function render(_ctx, _cache) {
   const _component_p_text = _resolveComponent("p-text")
   const _component_p_view = _resolveComponent("p-view")
+  const _component_MyKeep = _resolveComponent("MyKeep")
 
   return (_openBlock(), _createBlock(_component_p_view, { style: {"width":1080,"height":1600,"flexDirection":"column","padding":{"top":24},"backgroundColor":"#14141c"} }, {
     default: _withCtx(() => [
@@ -138,7 +139,34 @@ export function render(_ctx, _cache) {
           ])
         ]),
         _: 1 /* STABLE */
-      })
+      }),
+      _createCommentVNode(" ★★★P3 批次（2026-10-03）逻辑容器**透传**夹具：三者都**不产包裹盒**\n         （Vue 语义：逻辑容器不渲染元素）——判据核「节点数守恒 + 几何与 Vue 等价」。\n         ★本注释不得含反引号或美元花括号（在 JS 模板串里——护栏见 check:script-compile）。 "),
+      _createCommentVNode(" ★★KeepAlive 的官方约束（本仓实测被 Vue 编译器当场拦下）：它要求「恰好一个子组件」\n         ——p-view（原生标签）会被拒：SyntaxError: KeepAlive expects exactly one child component.\n         ⇒ 夹具改用真组件形态（MyKeep）验证透传。\n         ★底色避开 #2f6fed（A/B 判据的按钮色锚——本仓已踩：重复 ⇒ 判据红）。 "),
+      (_openBlock(), _createBlock(_KeepAlive, null, [
+        _createVNode(_component_MyKeep, null, {
+          default: _withCtx(() => [
+            _createVNode(_component_p_view, { style: {"height":20,"backgroundColor":"#4a5f8a"} })
+          ]),
+          _: 1 /* STABLE */
+        })
+      ], 1024 /* DYNAMIC_SLOTS */)),
+      (_openBlock(), _createBlock(_Teleport, { to: "#nowhere" }, [
+        _createVNode(_component_p_view, { style: {"height":20,"backgroundColor":"#6f4ae8"} })
+      ])),
+      (_openBlock(), _createBlock(_Suspense, null, {
+        default: _withCtx(() => [
+          _createVNode(_component_p_view, { style: {"height":20,"backgroundColor":"#1b2a4a"} })
+        ]),
+        fallback: _withCtx(() => [
+          _createVNode(_component_p_text, { style: {"color":"#ffffff"} }, {
+            default: _withCtx(() => [...(_cache[7] || (_cache[7] = [
+              _createTextVNode("suspense-fallback", -1 /* CACHED */)
+            ]))]),
+            _: 1 /* STABLE */
+          })
+        ]),
+        _: 1 /* STABLE */
+      }))
     ]),
     _: 1 /* STABLE */
   }))

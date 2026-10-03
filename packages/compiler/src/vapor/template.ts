@@ -82,10 +82,36 @@ const UNSUPPORTED_DIRECTIVES: Record<string, string> = {
 //   v-html 仍不支持（富文本通道缺失，**诚实标注**：能力清单此前写"可映射"，经查内核/宿主均无分段文本能力）。
 // ★★P2-5（2026-10-03）：v-once / v-memo 已**真支持**（见 SlotSubscription.once / MemoGroup）——
 //   本表不再收录；**不支持的形态**（v-memo 非数组字面量 / 行内 once）在下方遍历里逐条诊断。
+/**
+ * ★★★**逻辑容器**（不产元素的 Vue 内置组件，2026-10-03 · P3 批次）——统一**透传**。
+ *
+ * 【为什么必须透传（本仓实测的几何等价缺陷）】Vue 里这四个都**不渲染包裹元素**
+ *   （它们是逻辑容器：过渡/缓存/传送/异步边界）⇒ 若我方给它们建节点，同一份 SFC 在
+ *   Vapor 链上会**多一层盒** ⇒ 布局多一层、几何与 Vue 路径**不等价**（A/B 判据红）。
+ *   ⇒ 与 `<Transition>` 同一处置（P3-3 已验证）：**不占节点 id、不产节点**，
+ *     `template.ts` 与 `deps.ts` **两处同一条判据**（id 空间同源）。
+ * 【诚实边界】透传只解决"几何等价"；**功能语义**（缓存/传送/异步）另见各自诊断。
+ */
+const LOGICAL_CONTAINERS: Record<string, string | null> = {
+  // 已支持（P3-3）：编成预设动画规格 + 宿主动画入口——**无诊断**
+  Transition: null,
+  KeepAlive:
+    'KeepAlive 的**组件级缓存**未支持（需组件实例系统——P1-3 组件内部渲染待建）。' +
+    '★当前行为：**内容正常渲染但状态不缓存**（切走即销毁）。' +
+    '★替代路径：**页面级**保活已支持——路由 `meta.branch.keepAlive` 三档（none=切走销毁 / active=当前+相邻 / all=全保活，见《导航体系》NB3）',
+  Teleport:
+    'Teleport 的**传送语义**未支持（需宿主多渲染面）。' +
+    '★当前行为：内容渲染在**原位置**（不是 `to` 指定的容器）',
+  Suspense:
+    'Suspense 的**异步边界**未支持（需异步组件系统）。' +
+    '★当前行为：只渲染 `#default` 内容（`#fallback` 永不显示——我方无 pending 态）',
+}
+
 /** 未支持的内置组件（官方有语义，我方当普通容器 ⇒ 语义静默丢失） */
 const UNSUPPORTED_BUILTINS: Record<string, string> = {
-  Teleport: 'Teleport 未支持（多渲染面传送待建）——当前按普通容器渲染（内容在**原位置**，非目标容器）',
-  KeepAlive: 'KeepAlive 未支持（组件缓存待建；App 端路由保活已有 app-stack 的 keep-alive 档可复用）',
+  // ★P3 批次：Teleport/KeepAlive/Suspense 移入 LOGICAL_CONTAINERS（透传 + 精确诊断）——
+  //   它们**不是**"当普通容器"（那是错的：会多建一层盒），而是"逻辑容器透传"。
+  //   本表保留的只有**真·当普通容器**的（即：官方会渲染元素而我们要区别对待的）。
   // ★★P3-3（2026-10-03）：`Transition` 已**支持**（编译成预设动画规格；见 TRANSITION_PRESETS）——
   //   从本表移除。`TransitionGroup` 仍在（需**列表差异动画** = move 过渡，独立批次）。
   TransitionGroup: 'TransitionGroup 未支持（需**列表差异动画**/move 过渡——`Transition` 单元素过渡已支持）',
@@ -436,15 +462,44 @@ export function buildLayoutTemplate(
         continue
       }
       const tag = n.tag ?? ''
-      // ★★★P3-3：`<Transition>` **透传**（不占节点 id、不产节点）——与 Vue 语义一致
-      //   （Transition 不渲染包裹元素）；其 props（name/duration/appear）编成**预设动画规格**，
-      //   挂到**直接子元素**上（该子元素才是被过渡的节点）。
-      //   ★为什么必须跳过 id 分配（而不是"建个空壳容器"）：多一个包裹节点 = 布局多一层盒
-      //     ⇒ 与 Vue 路径（无包裹）**几何不等价** ⇒ A/B 判据会红。deps.ts 必须**同样跳过**
-      //     （两处 id 分配同源：模板产物与订阅表的 nodeId 必须逐位一致）。
-      if (tag === 'Transition') {
-        const t = transitionOfElement(n, diag)
-        walk((n.children ?? []) as unknown[], parentId, t ?? pendingTransition)
+      // ★★★**逻辑容器统一透传**（P3 批次，2026-10-03）——`Transition` / `KeepAlive` /
+      //   `Teleport` / `Suspense`：Vue 里都**不渲染包裹元素** ⇒ 透传（不占 id、不产节点），
+      //   否则同一份 SFC 在 Vapor 链上多一层盒 ⇒ 几何与 Vue 不等价（A/B 判据红）。
+      //   ★`deps.ts` 必须用**同一条判据**（两处 id 分配同源 ⇒ 订阅表 nodeId 逐位一致）。
+      if (tag in LOGICAL_CONTAINERS) {
+        const hint = LOGICAL_CONTAINERS[tag]
+        // ★诊断**不带 id**（本容器透传、不占节点 id——引用它反而是错的）
+        if (hint) diag(`<${tag}> ${hint}`, undefined, 'VAPOR_BUILTIN_PARTIAL')
+        if (tag === 'Transition') {
+          // Transition：props 编成预设规格，挂到**直接子元素**
+          const t = transitionOfElement(n, diag)
+          walk((n.children ?? []) as unknown[], parentId, t ?? pendingTransition)
+        } else if (tag === 'Suspense') {
+          // ★Suspense：只走 `#default`（我方无异步 ⇒ 永远 resolved）；`#fallback` 跳过。
+          //   【为什么不能两个都走】两棵子树都会建 ⇒ 内容**双份**（fallback 永不隐藏 ⇒ 叠影）。
+          //   ★`<template #default>` 本身是**插槽声明**（Vue 里不产元素）⇒ 必须**下钻一层**：
+          //     把它的 children 提上来走（否则会多一个 `template` 节点——本仓实测：
+          //     Suspense 的 width 槽位 nodeId 偏到 2、多一层盒）。
+          const kids = (n.children ?? []) as Array<Node>
+          const slotOf = (c: Node): string | undefined =>
+            (c.props ?? []).find((p) => p.type === 7 && p.name === 'slot')?.arg?.content
+          const defaultKids = kids.filter((c) => {
+            const slotArg = slotOf(c)
+            return slotArg === undefined || slotArg === 'default'
+          })
+          // 下钻：`<template #default>` 的 children 直接提到本层（template 不产节点）
+          const flattened: unknown[] = []
+          for (const c of defaultKids) {
+            if ((c as { tag?: string }).tag === 'template') {
+              flattened.push(...(((c as { children?: unknown[] }).children) ?? []))
+            } else {
+              flattened.push(c)
+            }
+          }
+          walk(flattened, parentId)
+        } else {
+          walk((n.children ?? []) as unknown[], parentId)
+        }
         continue
       }
       const id = nextElementIndex++
@@ -585,6 +640,8 @@ export function buildLayoutTemplate(
       }
 
       // ★★内置组件探测（P0：当普通容器 = 语义静默丢失——见 UNSUPPORTED_BUILTINS 头注）
+      //   ★P3 批次：逻辑容器（LOGICAL_CONTAINERS）已在**透传分支**里诊断（含精确边界 + 替代路径）
+      //     ⇒ 此处不再重复；本分支只剩"真·当普通容器"的那些。
       if (tag && UNSUPPORTED_BUILTINS[tag]) {
         diag(`${tag}(id=${id}) ${UNSUPPORTED_BUILTINS[tag]}`)
       }
@@ -593,7 +650,9 @@ export function buildLayoutTemplate(
       //   ⇒ 在节点上打 `component` 标记（运行时据此走 L0 边界语义；见 LayoutNode.component 注释）。
       //   ★本版只做**标记 + props 通道**；组件内部渲染/生命周期/插槽分发是后续批次
       //     （标记本身已比"当普通元素"有价值：宿主能识别"这里是组件位、需要 L0 处理"）。
-      const isComponentTag = /^[A-Z]/.test(tag) && !UNSUPPORTED_BUILTINS[tag]
+      // ★逻辑容器（KeepAlive/Teleport/Suspense/Transition）虽是 PascalCase，但**不是**组件边界
+      //   （它们已被透传分支 `continue` 掉了 ⇒ 此处本就走不到；判据保留以防未来顺序调整）
+      const isComponentTag = /^[A-Z]/.test(tag) && !UNSUPPORTED_BUILTINS[tag] && !(tag in LOGICAL_CONTAINERS)
       // ★★插槽出口 `<slot>`（P0）：组件系统未建 ⇒ 插槽内容分发不存在（静默空位）
       if (tag === 'slot') {
         diag(

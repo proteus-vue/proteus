@@ -170,10 +170,10 @@ Teleport / KeepAlive / Suspense / Transition / TransitionGroup / v-memo / 自定
 
 | # | 缺口 | 说明 |
 |---|---|---|
-| P3-1 | Teleport | 鸿蒙/App 端"传送到指定容器"——需宿主支持多渲染面 |
-| P3-2 | KeepAlive | App 端已有路由栈保活（`app-stack` 的 keep-alive 档）——可复用 |
+| P3-1 | Teleport | ◐ **透传已完成（2026-10-03）**：**不产包裹盒**（Vue 语义：逻辑容器不渲染元素）⇒ 几何与 Vue 等价；**传送语义未做**（需宿主多渲染面）⇒ 诊断带边界说明（内容渲染在**原位置**） |
+| P3-2 | KeepAlive | ◐ **透传已完成（2026-10-03）**：不产包裹盒；**组件级缓存未做**（需组件实例系统 P1-3）。★**修正不实表述**：早先写"可复用 app-stack 保活"——那是**页面级**（`meta.branch.keepAlive` 三档），与**组件级** `<KeepAlive>` 不是同一件事，诊断里已分开说 |
 | P3-3 | Transition / TransitionGroup | ✅ **Transition 已完成（2026-10-03 · 三端同步）**：编译期编成**预设动画规格**（`fade`/`slide-*`/`zoom`/`fade-slide-up` 闭集）、`<Transition>` **透传**（不产包裹盒 ⇒ 与 Vue 几何等价）、运行时在可见性**真的翻转**时交宿主动画入口（三端 14/14 · 判据 ⑬）。**TransitionGroup 未做**（需列表差异/move 过渡） |
-| P3-4 | Suspense | 异步组件边界（与 KeepAlive/Transition 同族） |
+| P3-4 | Suspense | ◐ **透传已完成（2026-10-03）**：不产包裹盒 + **只渲 `#default`**（`#fallback` 不建节点——否则内容双份）；**异步边界未做**（需异步组件系统） |
 | P3-5 | 自定义指令 | `VaporDirective` 语义 → 我方可用"宿主指令注册表" |
 | P3-6 | 异步组件 `defineVaporAsyncComponent` | 同 P3-4 |
 | P3-7 | `defineVaporCustomElement` | 我方有原生组件混用（#10 已验）——可考虑 |
@@ -392,3 +392,35 @@ Teleport / KeepAlive / Suspense / Transition / TransitionGroup / v-memo / 自定
 **诚实边界**：① `TransitionGroup` 未做（需列表差异/move 过渡）；② `v-if` 的**离场**
 （元素从树上摘除）不在此路径（结构级动画属 L2 通道——本批只驱动可见性切换）；
 ③ 预设是**闭集**（无 CSS 自定义过渡：`v-enter-from` 那套在我方无对应物）。
+
+### ★★P3 逻辑容器透传增量说明（2026-10-03 · 三端同步）
+
+**问题（本仓实测的几何等价缺陷）**：Vue 里 `KeepAlive` / `Teleport` / `Suspense` / `Transition`
+都是**逻辑容器**（缓存/传送/异步/过渡）——**不渲染包裹元素**。此前除 `Transition`（P3-3 已修）外，
+其余三个都**当普通容器建了节点** ⇒ 同一份 SFC 在 Vapor 链上**多一层盒**
+⇒ 布局多一层、几何与 Vue 路径**不等价**（A/B 判据会红）。
+
+| 做 | 依据 |
+|---|---|
+| 四者**统一透传**（不占节点 id、不产节点） | Vue 语义：逻辑容器不渲染元素。`template.ts` 与 `deps.ts` **同一条判据**（id 空间同源——分叉 ⇒ 指令写错节点且不报错） |
+| `Suspense` 只走 `#default`，且**下钻 `<template #default>`** | ① `#fallback` 若也建 ⇒ 内容**双份**（我方无 pending 态 ⇒ fallback 永不隐藏 ⇒ 叠影）；② `<template>` 是**插槽声明**（Vue 不产元素）⇒ 它自身也不能产节点（本仓实测：首版多一层 `template` 节点 ⇒ 槽位 nodeId 偏 1） |
+| 诊断**精确化**（能力边界 + 当前行为 + 替代路径） | 首版文案有**不实表述**：`KeepAlive` 写"可复用 app-stack 保活"——那是**页面级**（`meta.branch.keepAlive` 三档），与**组件级** `<KeepAlive>` 不是同一件事 ⇒ 已分开说明 |
+
+**★顺带抓出的真问题（Vue 官方约束）**：夹具里 `<KeepAlive><p-view/></KeepAlive>` 被 Vue 编译器**当场拒绝**：
+`SyntaxError: <KeepAlive> expects exactly one child component.` ⇒ `KeepAlive` 要求**恰好一个子组件**
+（原生标签不行）——这条官方约束已写进诊断与夹具注释。
+
+**★门禁补强：生成器语法护栏（`node --check`）**
+- **为什么**：生成器把 SFC 夹具写成 **JS 模板串**；夹具注释里的**未转义**反引号 / 美元花括号会
+  提前闭合模板串 ⇒ 生成器抛 `SyntaxError`，而症状离根因很远。**本仓为此踩了 5 次**。
+- **口径演进（诚实记录）**：首版**自写词法扫描**——**漏报**：文件里含引号的**正则字面量**会让
+  扫描器把正则里的引号当字符串开始 ⇒ 后续全部错位（实测：注入未转义反引号仍报 0 违规）。
+  ⇒ 改用 **`node --check`**（"这个字符会不会破坏模板串"的权威判据：注入 ⇒ exit 1 + 精确行列；
+  合法转义写法正常通过）。
+- **★顺带补上真实覆盖盲区**：这些生成器**此前从未被任何门禁编译过**（`check:script-compile`
+  只编译 `.vue` 产物；生成器只有跑构建时才被执行）。
+- 破坏性验证：向真实生成器注入未转义反引号 ⇒ 门禁 rc=1 并报精确行列；还原后绿。
+
+**验证**：单测 **7 组**（四容器透传 / Suspense fallback 不建 / id 同源 / 反向不误伤普通元素与组件边界）·
+**三端真机 14/14 零跳过**（`check:vapor-three-end` 指纹一致：27 模板节点 / L1 16 / 12 源 / 实例化 41）·
+**A/B 几何等价 17 样本 0px**（透传的直接验证）· 全量单测 4645+ 通过。

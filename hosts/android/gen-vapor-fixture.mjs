@@ -109,6 +109,29 @@ const SFC = `<template>
     <Transition name="fade-slide-up">
       <p-view v-show="trVisible" style="height: 40px; background-color: #7c5cff"></p-view>
     </Transition>
+    <!-- ★★★P3 批次（2026-10-03）逻辑容器**透传**夹具：三者都**不产包裹盒**
+         （Vue 语义：逻辑容器不渲染元素）——判据核「节点数守恒 + 几何与 Vue 等价」。
+         ★本注释不得含反引号或美元花括号（在 JS 模板串里——护栏见 check:script-compile）。 -->
+    <!-- ★★KeepAlive 的官方约束（本仓实测被 Vue 编译器当场拦下）：它要求「恰好一个子组件」
+         ——p-view（原生标签）会被拒：SyntaxError: KeepAlive expects exactly one child component.
+         ⇒ 夹具改用真组件形态（MyKeep）验证透传。
+         ★底色避开 #2f6fed（A/B 判据的按钮色锚——本仓已踩：重复 ⇒ 判据红）。 -->
+    <KeepAlive>
+      <MyKeep>
+        <p-view style="height: 20px; background-color: #4a5f8a"></p-view>
+      </MyKeep>
+    </KeepAlive>
+    <Teleport to="#nowhere">
+      <p-view style="height: 20px; background-color: #6f4ae8"></p-view>
+    </Teleport>
+    <Suspense>
+      <template #default>
+        <p-view style="height: 20px; background-color: #1b2a4a"></p-view>
+      </template>
+      <template #fallback>
+        <p-text style="color: #ffffff">suspense-fallback</p-text>
+      </template>
+    </Suspense>
   </p-view>
 </template>
 

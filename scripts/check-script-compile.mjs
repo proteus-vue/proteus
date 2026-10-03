@@ -36,6 +36,45 @@ collect(path.join(ROOT, 'examples/subpackages'), files)
 collect(path.join(ROOT, 'examples/components'), files)
 collect(path.join(ROOT, 'packages/components'), files) // ★语义组件库（2026-09-14 拆包）
 
+/**
+ * ★★★**生成器语法护栏**（2026-10-03）——防"夹具注释里的反引号 / 美元花括号破坏 JS 模板串"。
+ *
+ * 【为什么必须机器化（本仓实测踩了 **5 次**）】生成器（hosts 下的 gen-*.mjs）把 SFC 夹具写成
+ *   JS 模板字符串；夹具里的注释若含**未转义**反引号或美元花括号，会把宿主模板串提前闭合/插值
+ *   ⇒ 生成器抛 SyntaxError，而症状（"夹具生成失败"）离根因（注释里一个字符）很远。
+ *   ★规则写在注释里拦不住（同 sleep 盲等的教训）。
+ *
+ * 【判据 = **`node --check`**（本仓实测的口径演进）】
+ *   · 首版自己写词法扫描（跳字符串/注释/模板串）——**漏报**：文件里含引号的**正则字面量**
+ *     （如 /^(['"])([^'"]*)\1$/）会让扫描器把正则里的引号当字符串开始 ⇒ 后续全部错位 ⇒
+ *     注入了未转义反引号也扫不出来（本仓实测：注入后仍报 0 违规）。
+ *   · 正解：**直接用 Node 的语法检查**——它正是"这个字符会不会破坏模板串"的权威判据
+ *     （同上：注入未转义反引号 ⇒ node --check **exit 1 并给出精确行列**；转义写法则合法通过）。
+ *   ★顺带补上了一个真实覆盖盲区：**这些生成器此前从未被任何门禁编译过**
+ *     （check:script-compile 只编译 .vue 产物；generator 只有跑构建时才被执行）。
+ */
+function checkGeneratorSyntax() {
+  const targets = []
+  for (const d of ['android', 'ios', 'harmony']) {
+    const dir = path.join(ROOT, 'hosts', d)
+    if (!fs.existsSync(dir)) continue
+    for (const f of fs.readdirSync(dir)) {
+      if (/^gen-.*\.mjs$/.test(f)) targets.push(path.join(dir, f))
+    }
+  }
+  const bad = []
+  for (const file of targets) {
+    try {
+      execFileSync(process.execPath, ['--check', file], { stdio: 'pipe' })
+    } catch (e) {
+      const msg = String(e.stderr ?? e.message ?? '').split('\n').slice(0, 4).join(' ').slice(0, 300)
+      bad.push(`${path.relative(ROOT, file)} 语法检查失败：${msg}` +
+        '  ⇒ 常见根因：夹具注释里的**未转义**反引号 / 美元花括号破坏了 JS 模板串（本仓已踩五次）')
+    }
+  }
+  return bad
+}
+
 let pass = 0
 const failures = []
 /** ★#503 ES5 tripwire：产物中出现 ?? / ?.（ES2020）→ 微信预览上传期 SyntaxError（node --check 认识该语法抓不到）。
@@ -99,10 +138,18 @@ for (const f of files.sort()) {
 }
 fs.rmSync(path.join(ROOT, 'node_modules', '.cache', 'proteus-check'), { recursive: true, force: true })
 
+// ★生成器模板串护栏（见 checkGeneratorTemplateGuards 头注；本仓踩过五次）
+const tplViolations = checkGeneratorSyntax()
+if (tplViolations.length) {
+  console.error('[script-compile] ❌ 生成器语法护栏（node --check 失败）:')
+  for (const x of tplViolations.slice(0, 15)) console.error(`  - ${x}`)
+  process.exit(1)
+}
+
 console.log(`[script-compile] ${pass} 个 script 通过 / ${failures.length} 失败（${files.length} 文件；静默 MVP 提示 ${suppressed} 条）`)
 if (failures.length) {
   console.error('[script-compile] ❌ 编译形态缺口（修复根因或登记豁免——禁止靠改 demo 规避）:')
   for (const x of failures.slice(0, 15)) console.error(`  - ${x}`)
   process.exit(1)
 }
-console.log('[script-compile] ✅ 全量 script 编译通过')
+console.log(`[script-compile] ✅ 全量 script 编译通过（含生成器语法护栏：node --check 全过）`)
