@@ -33,6 +33,8 @@ declare module 'vue' {
     'p-loading-host': typeof import('./p-loading-host/index.vue')['default']
     PLoadingRegion: typeof import('./p-loading-region/index.vue')['default']
     'p-loading-region': typeof import('./p-loading-region/index.vue')['default']
+    PAuthGate: typeof import('./p-auth-gate/index.vue')['default']
+    'p-auth-gate': typeof import('./p-auth-gate/index.vue')['default']
     PLoading: typeof import('./p-loading/index.vue')['default']
     'p-loading': typeof import('./p-loading/index.vue')['default']
     PNavBar: typeof import('./p-nav-bar/index.vue')['default']

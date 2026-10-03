@@ -173,6 +173,10 @@ export const TAG_SEMANTIC_MAP: Record<string, string> = {
   'p-segment': 'shell.segment',
   'p-drawer': 'shell.drawer',
   'p-modal': 'shell.modal',
+  // ★★★GP4-c（2026-10-03）：登录失效拦截弹窗——与 p-modal **同语义**（模态弹窗）、
+  //   **不同可取消性**（本组件不可取消：无关闭按钮/点遮罩不关；唯一出口是登录态恢复）。
+  //   ★不登记 ⇒ 编译期按"未注册自定义组件"输出 ⇒ MP 端不渲染（M3 门禁会当场红）
+  'p-auth-gate': 'shell.modal',
   'p-popover': 'shell.popover',
   'p-toast': 'shell.toast',
   // ★★★GP4-a/b（2026-10-03）：两个**浮层宿主**同属其能力的语义（multi-tag 别名——同 ui.loading 的先例）。
@@ -313,6 +317,14 @@ export const TAG_SEMANTIC_ALIASES: Record<string, TagAliasDecl> = {
   //   · `p-loading`   = 声明式遮罩（单实例）    ｜`p-loading-host` = Loading **多实例**宿主（同上）
   //   · `p-loading-region` = 区域遮罩（就地包裹；用户手写，与 p-loading 是不同用法而非替代）
   //   ★语义相同（都是"提示/加载态"）故共享 primitive；**保留两标签**因为用法与生命周期都不同。
+  'shell.modal': {
+    canonical: 'p-modal',
+    aliases: ['p-auth-gate'],
+    reason:
+      'p-modal 是可取消弹层（有关闭按钮/点遮罩可关）；p-auth-gate 是**不可取消**的登录失效拦截弹窗' +
+      '（唯一出口是登录态恢复）。同语义（模态弹窗）不同可取消性 ⇒ 保留两标签而非合并' +
+      '（把"不可取消"做成 p-modal 的开关，会让"可关"的默认配置有机会被误用到拦截场景）。',
+  },
   'shell.toast': {
     canonical: 'p-toast',
     aliases: ['p-toast-host'],

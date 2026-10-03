@@ -22,6 +22,8 @@ import PToastHost from './p-toast-host/index.vue'
 import PLoadingHost from './p-loading-host/index.vue'
 // ★GP4-b：区域遮罩（就地包裹——贴合盒子尺寸，无需测量；声明式，无需注入）
 import PLoadingRegion from './p-loading-region/index.vue'
+// ★GP4-c：登录失效拦截弹窗（不可取消——既有守卫的可视出口，非新机制）
+import PAuthGate from './p-auth-gate/index.vue'
 import PLoading from './p-loading/index.vue'
 import PNavBar from './p-nav-bar/index.vue'
 import PSkeleton from './p-skeleton/index.vue'
@@ -127,6 +129,7 @@ export {
   PToastHost,
   PLoadingHost,
   PLoadingRegion,
+  PAuthGate,
   PLoading,
   PNavBar,
   PSkeleton,
