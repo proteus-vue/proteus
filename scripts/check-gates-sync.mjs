@@ -115,6 +115,10 @@ const LOCAL_ONLY = {
   //   端上读数（在 QuickJS 上跑**真实 app-stack.ts**：2 万层深栈 / 预算冻结 / 命令守恒）无法在 CI 复现
   //   （CI 无设备、无宿主 APK）；本机侧的等价逻辑判据已在 tests/app-stack.test.ts（34 条，CI 覆盖）。
   'check:app-stack': '需真机产物（adb pull 的 app-stack.json）；CI 无设备（本机侧等价判据 = tests/app-stack.test.ts）',
+  // ★★GP3-c 三层挂载判据（2026-10-03 新增）：与 app-stack 同族——输入是真机产物
+  //   （adb pull 的 mount-layers.json：层容器数/树序/全屏@原点/零权限）。CI 无设备；
+  //   本机侧等价判据 = tests/mount-layers.test.ts（16 组，纯契约可跑，CI 覆盖）。
+  'check:mount-layers': '需真机产物（adb pull 的 mount-layers.json）；CI 无设备（本机侧等价判据 = tests/mount-layers.test.ts）',
   // ★Morpheus 炫技场（800 瓦片三段编舞）——需**真机**产物（iOS 宿主帧循环 + CADisplayLink 读数）；
   //   CI 无设备。本机侧等价判据 = 单测（tests/showcase-*.test.ts，校验编舞指令的真编译产物）。
   'check:showcase': '需真机产物（iOS showcase.json + 收尾截图）；CI 无设备、无 Xcode',

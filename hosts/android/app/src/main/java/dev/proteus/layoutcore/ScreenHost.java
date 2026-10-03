@@ -45,6 +45,8 @@ public final class ScreenHost {
         final String name;
         long handle;          // RustLayout 句柄
         int rootNodeId;       // 树根节点 id（返回给执行器做动画目标）
+        /** ★GP3-c：global 层容器 id（-1 = 无）。★当前树模型下它会随屏销毁——见 destroy 的诚实边界 */
+        int globalLayerId = -1;
         boolean visible = false;
         ScreenTree(String screenId, String name) { this.screenId = screenId; this.name = name; }
     }
@@ -185,11 +187,34 @@ public final class ScreenHost {
         }
         // 屏树：根 + 3 个子（几何上是一个全屏容器 + 三行——足以证明布局与可见性真生效）
         int rootId = 100 + screens.size() * 10;
+        // ★★★GP3-c（2026-10-03）：**三层挂载容器**（计划由执行器按契约下发，本处只"照此建树"）。
+        //   内核**无 z-order 字段**（实测零命中）⇒ 层间顺序唯一真源是**树序**：
+        //   按计划的 order 升序依次 put ⇒ global 在下、overlay 在上（与契约 MOUNT_LAYER_ORDER 同源）。
+        //   ★容器是**纯容器**（absolute + 全屏，无背景/无裁剪）⇒ 层内容用屏坐标系绝对定位。
+        org.json.JSONArray layerPlan = args.optJSONArray("layerContainers");
+        int layerCount = 0;
+        int globalLayerId = -1;
+        JSONObject layerIds = new JSONObject();
         org.json.JSONArray nodes = new org.json.JSONArray();
         nodes.put(node(rootId, null, 0, 0, 1080, 2400, null));
-        nodes.put(node(rootId + 1, rootId, 0, 0, 1080, 200, 0xFF3355AA));
-        nodes.put(node(rootId + 2, rootId, 0, 200, 1080, 200, 0xFFAA5533));
-        nodes.put(node(rootId + 3, rootId, 0, 400, 1080, 200, 0xFF33AA55));
+        if (layerPlan != null) {
+            for (int i = 0; i < layerPlan.length(); i++) {
+                JSONObject p = layerPlan.getJSONObject(i);
+                String layer = p.optString("layer", "");
+                int off = p.optInt("nodeOffset", 0);
+                if (layer.isEmpty() || off <= 0) continue; // 计划不完整 ⇒ 跳过该项（不静默伪造层）
+                int id = rootId + off;
+                nodes.put(layerNode(id, rootId, 1080, 2400)); // ★全屏 + absolute（纯容器）
+                layerIds.put(layer, id);
+                layerCount++;
+                if ("global".equals(layer)) globalLayerId = id;
+            }
+        }
+        // 内容节点挂到 **page 层**（若计划没给 page 层则回落挂屏根——向后兼容：老行为不变）
+        int contentParent = layerIds.optInt("page", rootId);
+        nodes.put(node(rootId + 11, contentParent, 0, 0, 1080, 200, 0xFF3355AA));
+        nodes.put(node(rootId + 12, contentParent, 0, 200, 1080, 200, 0xFFAA5533));
+        nodes.put(node(rootId + 13, contentParent, 0, 400, 1080, 200, 0xFF33AA55));
         JSONObject req = new JSONObject();
         req.put("viewport", new JSONObject().put("width", 1080).put("height", 2400));
         req.put("nodes", nodes);
@@ -198,14 +223,28 @@ public final class ScreenHost {
         ScreenTree st = new ScreenTree(screenId, name);
         st.handle = h;
         st.rootNodeId = rootId;
+        st.globalLayerId = globalLayerId; // ★GP3-c（destroy 的诚实边界要读它）
         screens.put(screenId, st);
-        for (int i = 0; i < 4; i++) nodeToScreen.put(rootId + i, st); // 装置节点 root..root+3
+        // 装置节点注册（含层容器）：root + 三层容器（偏移 1..3）+ 三个内容节点（11..13）
+        nodeToScreen.put(rootId, st);
+        if (layerPlan != null) {
+            for (int i = 0; i < layerPlan.length(); i++) {
+                JSONObject p = layerPlan.getJSONObject(i);
+                int off = p.optInt("nodeOffset", 0);
+                if (off > 0) nodeToScreen.put(rootId + off, st);
+            }
+        }
+        for (int i = 11; i <= 13; i++) nodeToScreen.put(rootId + i, st);
         mountCalls++;
         JSONObject d = new JSONObject();
         d.put("rootNodeId", rootId);
-        d.put("nodes", 4);
+        d.put("nodes", layerCount + 4);
         d.put("rebuild", rebuild);
         d.put("handle", h);
+        // ★GP3-c 读数：三层容器 id（判据读它证明"层结构真建了"——不是壳自述）
+        d.put("layerCount", layerCount);
+        d.put("globalLayerId", globalLayerId); // ★跨路由存活的层（-1 = 无）
+        d.put("layerIds", layerIds);
         return ok(d);
     }
 
@@ -224,6 +263,29 @@ public final class ScreenHost {
         n.put("width", w);
         n.put("height", h);
         if (color != null) n.put("bg", color);
+        return n;
+    }
+
+    /**
+     * ★★★GP3-c：**层容器节点**（全屏 absolute，`left/top` 显式 0）。
+     *
+     * 【为什么不能走 `node()`——本轮真机抓到的缺陷（非装置问题，是层实现缺陷）】
+     *   `node()` 的启发式是「x/y≠0 才 absolute」，而层容器**恰在原点 (0,0)**
+     *   ⇒ 被写成 `relative` 进入 flex 流 ⇒ 三个全屏容器**互相挤压**（真机实测：每个只剩
+     *   1/3 屏高 = 800px，page 层落在 y=800、内容随之偏移 800）——契约
+     *   `frame:'fullscreen'` / `MOUNT_LAYER_HOST_CONTRACT.positioning:'absolute-fullscreen'` 名存实亡。
+     *   ⇒ **原点也必须显式 absolute**。判据同步升级（"几何非零"太弱——曾据此假绿）：
+     *     三层容器必须**全屏 @ 原点**（1080×2400 @ (0,0)）+ 内容 y≈0。
+     */
+    private static JSONObject layerNode(int id, int parentId, float w, float h) throws Exception {
+        JSONObject n = new JSONObject();
+        n.put("id", id);
+        n.put("parentId", parentId);
+        n.put("position", "absolute");
+        n.put("left", 0); // ★显式 0：absolute + auto inset 的静态位置有歧义，显式写入是唯一确定性来源
+        n.put("top", 0);
+        n.put("width", w);
+        n.put("height", h);
         return n;
     }
 
@@ -283,6 +345,20 @@ public final class ScreenHost {
         JSONObject d = new JSONObject();
         d.put("removed", destroyed ? 4 : 0);
         d.put("destroyed", destroyed);
+        /* ★★★GP3-c（2026-10-03）：**诚实边界——当前 destroy 会连 global 层一起销毁**。
+         *
+         * 【为什么】本实现的树模型是**每屏一棵独立内核树**（M2 装置形态；见类头与 `ScreenTree` 注释），
+         *   而三层容器建在**该屏的树里** ⇒ `proteus_layout_destroy(屏树)` 把 global 层容器一并释放。
+         *   ⇒ **验收第 2 条（"全局层跨页面存活，路由切换不重建"）在本树模型下不成立**。
+         *
+         * 【为什么不在这里"顺手修"】M5 设计原文是「**屏 = 树内子树**，切屏 = display 切换」
+         *   ——那要求**所有屏共享一棵内核树**（屏是它的子树）。这与本实现的"每屏一棵树"是
+         *   **两种树模型**：改成共享树是 `ScreenHost` 的整体重构（id 分配/节点映射/动画按树分发
+         *   全都要跟着改），不是 destroy 里能补的一行。**在此处硬补（如"销毁时把 global 层摘出来
+         *   重建"）会制造"看起来通过了、其实是重建了一份新实例"的假绿**——那比不通过更坏。
+         * ⇒ 如实记账：本响应带 `globalLayerDestroyed: true`（判据可读），并把该缺口写进任务卡。
+         */
+        d.put("globalLayerDestroyed", st.globalLayerId > 0); // ★如实标注（不静默）
         return ok(d);
     }
 

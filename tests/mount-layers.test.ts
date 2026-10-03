@@ -133,3 +133,61 @@ describe('★GP1-a · 编译期约束的契约支撑（C1/C2）', () => {
     expect(LAYER_MAPPING['layer-popout'].cssZIndex).toBe(1000)
   })
 })
+
+// ═══════════════════════════════════════════════════════════════════════════
+// ★★★GP3-c（2026-10-03）：**自绘端（App）层容器契约**——内核树里的三层容器怎么摆
+//
+// 【这一组锁什么】Android 与 iOS 宿主都要"在屏幕树里建三层容器"；若各写各的
+//   = 同一件事两份实现（本仓纪律：修一份等于没修）。本组锁住两端**共用的那份契约**：
+//   ① 偏移/顺序/几何口径单一来源 ② 层序按 order 升序（内核无 z-order ⇒ 树序是真源）
+//   ③ id 分配确定性（两端算出同一个）④ 非法输入抛错不静默
+// ═══════════════════════════════════════════════════════════════════════════
+import {
+  mountLayerNodeId, mountLayerContainerPlans, MOUNT_LAYER_NODE_OFFSET, MOUNT_LAYER_HOST_CONTRACT,
+} from '@proteus-vue/contracts'
+
+describe('★GP3-c 自绘端层容器：计划（两端共用的事实来源）', () => {
+  it('★计划按 order 升序 = global → page → overlay（内核树序即层序——内核无 z-order 字段）', () => {
+    const plans = mountLayerContainerPlans()
+    expect(plans.map((p) => p.layer), '★升序 = 挂载序 = 层叠序').toEqual(['global', 'page', 'overlay'])
+    const orders = plans.map((p) => p.order)
+    for (let i = 1; i < orders.length; i++) expect(orders[i]).toBeGreaterThan(orders[i - 1]!)
+  })
+
+  it('★偏移唯一且与层名绑定（两端算同一 id ⇒ 不会各摆各的）', () => {
+    const plans = mountLayerContainerPlans()
+    const offsets = plans.map((p) => p.nodeOffset)
+    expect(new Set(offsets).size, '偏移不重复').toBe(plans.length)
+    for (const p of plans) expect(p.nodeOffset).toBe(MOUNT_LAYER_NODE_OFFSET[p.layer])
+    // 确定性：重复调用结果一致
+    expect(mountLayerContainerPlans()).toEqual(plans)
+  })
+
+  it('★几何口径 = fullscreen（纯容器：层内容用屏坐标系绝对定位）', () => {
+    for (const p of mountLayerContainerPlans()) expect(p.frame).toBe('fullscreen')
+  })
+
+  it('★`mountLayerNodeId`：根 id + 偏移；**非法根 id 抛错**（"算出个 0 然后整层不显示"是最坏形态）', () => {
+    expect(mountLayerNodeId(100, 'global')).toBe(100 + MOUNT_LAYER_NODE_OFFSET.global)
+    expect(mountLayerNodeId(100, 'overlay')).toBe(100 + MOUNT_LAYER_NODE_OFFSET.overlay)
+    for (const bad of [0, -1, 1.5, Number.NaN]) {
+      expect(() => mountLayerNodeId(bad as number, 'page'), `根 id=${String(bad)} 应抛错`).toThrow(/正整数/)
+    }
+  })
+
+  it('★宿主契约：层容器不参与布局/不吃事件；跨路由存活的**只有 global**', () => {
+    expect(MOUNT_LAYER_HOST_CONTRACT.participatesInLayout, '纯容器不参与内容布局').toBe(false)
+    expect(MOUNT_LAYER_HOST_CONTRACT.interceptsEvents, '层自身不拦事件（拦截由层内元素声明）').toBe(false)
+    expect(MOUNT_LAYER_HOST_CONTRACT.survivesRouteChange, '★仅 global 跨路由（page/overlay 随屏）').toBe('global')
+    expect(MOUNT_LAYER_HOST_CONTRACT.positioning).toBe('absolute-fullscreen')
+  })
+
+  it('★与 Web 端机制不同但语义同源（都满足"层间顺序编译期固定"）', () => {
+    // Web 用 z-index 域偏移、自绘端用树序——两端都**不新增字段/不新增指令**
+    const plans = mountLayerContainerPlans()
+    for (let i = 0; i < plans.length; i++) {
+      // 树序（order）与域偏移（Web 用的）**必须同序**，否则两端层序会漂
+      expect(plans[i]!.order, `第 ${i} 位的层序应与 MOUNT_LAYER_ORDER 一致`).toBe(MOUNT_LAYER_ORDER[plans[i]!.layer])
+    }
+  })
+})

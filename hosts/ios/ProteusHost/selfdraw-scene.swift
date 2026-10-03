@@ -4230,6 +4230,7 @@ final class SelfDrawBridge: NSObject, SelfDrawExports {
     func paintedPixelProbe() -> (samples: Int, colors: Int) {
         guard let view = view, view.bounds.width >= 1, view.bounds.height >= 1 else { return (0, 0) }
         view.layoutIfNeeded()
+        // I2-ALLOW: 离屏位图缓冲尺寸（CGContext 分配必须整数像素）——测量/位图，非几何指令
         let w = Int(view.bounds.width.rounded()), h = Int(view.bounds.height.rounded())
         let cs = CGColorSpaceCreateDeviceRGB()
         guard let bctx = CGContext(data: nil, width: w, height: h, bitsPerComponent: 8,

@@ -319,6 +319,36 @@ def main() -> int:
                 fail(f"⑦.7 跨页面共享元素未跑（e4={e4}）——页面栈层未接 screen.rect/screen.shared？")
             else:
                 trect = e4.get("target_rect") or {}
+                # ★★GP3-c 回归锁（2026-10-03 收尾）：**层容器 = 全屏 @ 原点**（契约
+                #   `frame:'fullscreen'` / `positioning:'absolute-fullscreen'`）。
+                #   【为什么在这里锁】iOS 腿没有专门的 mount-layers 场景——本场景读的
+                #   `source_node`（= 屏根 + 2）**正是 page 层容器**（rootId+偏移 2），
+                #   它的矩形就是"层容器几何"的端上读数。
+                #   实测背景：层容器曾被 `node()` 启发式写成 `relative`（它恰在原点 (0,0)，
+                #   而该启发式 x/y≠0 才给 absolute）⇒ 三个全屏容器进 flex 流互相挤压，
+                #   每个只剩 1/3 屏高（源矩形 y=800 · h=800 即此形态）——旧判据照样绿。
+                #   ⇒ 断言：源矩形 = 全屏 @ 原点（对 root 的 viewport/根几何而言）。
+                srect_raw = e4.get("source_rect") or {}
+                # "全屏"的口径：与目标根矩形同尺寸（两屏装置同构）= 屏根几何本身就是全屏
+                full_ok = (
+                    srect_raw.get("w")
+                    and srect_raw.get("h")
+                    and abs((srect_raw.get("x") or 0)) <= 0.5
+                    and abs((srect_raw.get("y") or 0)) <= 0.5
+                    # 屏根 1080×2400 是装置几何（两腿同源）——层容器必须与它同宽高
+                    and abs((srect_raw.get("w") or 0) - 1080) <= 0.5
+                    and abs((srect_raw.get("h") or 0) - 2400) <= 0.5
+                )
+                if not full_ok:
+                    fail(
+                        f"⑦.7 层容器几何异常：源矩形 {srect_raw}（期望全屏 1080×2400 @ (0,0)）——"
+                        "层容器被写成 relative 进 flex 流挤压（GP3-c 已修缺陷的回归）"
+                    )
+                else:
+                    report(
+                        "⑦.7 ★层容器 = 全屏 @ 原点（源节点即 page 层容器："
+                        f"1080×2400 @ (0,0)）——GP3-c 契约 frame:'fullscreen' 端上成立"
+                    )
                 # ★按**实际注入**的源矩形复算（错开后的——见 entry-app-stack 的注释：
                 #   两侧装置几何相同会让复算退化成恒等式，错开才真考验"按两个不同矩形算几何"）
                 srect = e4.get("injected_source_rect") or {}
