@@ -10384,7 +10384,7 @@
 
   // packages/slot-runtime/src/runtime.ts
   var VaporRuntime = class {
-    constructor(table, rt, evaluators, registry, onComponentProp, nodeIdOffset = 0, skipNodeIds) {
+    constructor(table, rt, evaluators, registry, onComponentProp, nodeIdOffset = 0, skipNodeIds, onPaintProp) {
       this.table = table;
       this.rt = rt;
       this.evaluators = evaluators;
@@ -10392,6 +10392,7 @@
       this.onComponentProp = onComponentProp;
       this.nodeIdOffset = nodeIdOffset;
       this.skipNodeIds = skipNodeIds;
+      this.onPaintProp = onPaintProp;
       this.slots = /* @__PURE__ */ new Map();
       this.slotById = /* @__PURE__ */ new Map();
       this.evalImpls = /* @__PURE__ */ new Map();
@@ -10584,6 +10585,16 @@
           if (spec.kind === "list-data") continue;
           if (spec.once && this.onceWritten.has(spec.slotId)) continue;
           if (this.skipNodeIds?.has(spec.nodeId + this.nodeIdOffset)) continue;
+          if (spec.propKey.startsWith("paint.") && this.onPaintProp) {
+            const impl2 = this.evaluators.get(spec.evaluatorId);
+            if (impl2) {
+              const v = impl2(ctx);
+              this.onPaintProp(spec.nodeId + this.nodeIdOffset, spec.propKey, v);
+              const e2 = this.slotById.get(spec.slotId);
+              if (e2) e2.slot.value = v;
+            }
+            continue;
+          }
           if (spec.memoId !== void 0 && !this.memoGroupDirty(spec.memoId, ctx)) continue;
           const entry = this.slotById.get(spec.slotId);
           const impl = this.evaluators.get(spec.evaluatorId);
@@ -13472,6 +13483,7 @@
       dyn_probe: { texts: [], mounts: [], geom: [], dropped: -1, notes: [] },
       directive_probe: { nodes: [], rounds: [], plays: [] },
       mixed_probe: { texts: [], leaves: 0, geom: [] },
+      styleobj_probe: { anchor_id: -1, width_before: -1, width_after: -1, kernel_applied: 0, patch_calls: [] },
       mount_ms: 0,
       mount_nodes: 0,
       updates_run: 0,
@@ -13610,7 +13622,36 @@
         target.vapor.writeSlotsOfSource(propName, target.mount.ctx);
         target.runtime.flush();
       };
-      const vapor = new VaporRuntime(table, slotRt, evals, registry, onComponentProp);
+      const pendingPaint = /* @__PURE__ */ new Map();
+      const paintLog = [];
+      const onPaintProp = (nodeId, propKey, value) => {
+        const field = propKey.slice("paint.".length);
+        const rec = pendingPaint.get(nodeId) ?? {};
+        rec[field] = value;
+        pendingPaint.set(nodeId, rec);
+        paintLog.push(`${nodeId}:${field}=${String(value)}`);
+      };
+      const flushPaint = () => {
+        if (pendingPaint.size === 0) return 0;
+        const patches = [...pendingPaint.entries()].map(([id, style]) => ({ id, style }));
+        pendingPaint.clear();
+        if (typeof proteusHost.updatePatches !== "function") {
+          notes.push(`\u7ED8\u5236\u952E\u6709 ${patches.length} \u6761\u5F85\u66F4\u65B0\uFF0C\u4F46\u5BBF\u4E3B\u672A\u5B9E\u73B0 updatePatches\uFF08\u7ED8\u5236\u4E0D\u4F1A\u53D8\uFF09`);
+          return 0;
+        }
+        try {
+          const out = JSON.parse(proteusHost.updatePatches(JSON.stringify(patches)));
+          if (out.ok !== true) {
+            notes.push(`\u7ED8\u5236\u952E updatePatches \u5931\u8D25\uFF1A${out.error ?? "\u672A\u77E5"}`);
+            return 0;
+          }
+          return patches.length;
+        } catch (e) {
+          notes.push(`\u7ED8\u5236\u952E updatePatches \u629B\u9519\uFF1A${String(e?.message ?? e)}`);
+          return 0;
+        }
+      };
+      const vapor = new VaporRuntime(table, slotRt, evals, registry, onComponentProp, 0, void 0, onPaintProp);
       const ctx = { read };
       const triggers = /* @__PURE__ */ new Map();
       vapor.load(ctx, (name, cb) => triggers.set(name, cb));
@@ -14320,6 +14361,96 @@
           }
         } else {
           notes.push("\u6DF7\u6392\u63A2\u9488\uFF1A\u4EA7\u7269\u65E0 mixed \u6BB5\uFF08\u5939\u5177\u672A\u8986\u76D6 \u21D2 \u5224\u636E \u3251 \u6309\u7F3A\u5931\u5904\u7406\uFF09");
+        }
+      }
+      {
+        const soArt = artifacts.styleObj;
+        if (soArt?.tpl?.ok) {
+          const soInst = instantiateTemplate(soArt.tpl, {
+            viewport: args.viewport,
+            read: (n) => n === "stW" ? 120 : n === "stBg" ? "#2f6fed" : void 0,
+            table: soArt.table,
+            registry: new ListRegistry()
+          });
+          try {
+            const sOut = JSON.parse(
+              proteusHost.mount(JSON.stringify({ viewport: soInst.viewport, nodes: soInst.nodes }))
+            );
+            if (sOut.ok === true) {
+              const anchor = soInst.nodes.find((n) => n.backgroundColor === "#2f6fed");
+              const anchorId = anchor?.id;
+              const rectsBefore = rectsOf();
+              const widthBefore = anchorId !== void 0 ? rectsBefore[String(anchorId)]?.width ?? -1 : -1;
+              const soKeys = new PropKeyTable();
+              const soStrings = new StringPool();
+              const soCaptured = [];
+              const soRt = new SlotRuntime(soKeys, soStrings, (b) => soCaptured.push(b));
+              const pending = /* @__PURE__ */ new Map();
+              const patchCalls = [];
+              const soVapor = new VaporRuntime(
+                soArt.table,
+                soRt,
+                VaporRuntime.buildEvaluators(soArt.table.evaluators),
+                void 0,
+                void 0,
+                0,
+                void 0,
+                (nodeId, propKey, value) => {
+                  const f = propKey.slice("paint.".length);
+                  const rec = pending.get(nodeId) ?? {};
+                  rec[f] = value;
+                  pending.set(nodeId, rec);
+                }
+              );
+              const soData = { stW: 120, stBg: "#2f6fed" };
+              const soCtx = { read: (n) => soData[n] };
+              const soTriggers = /* @__PURE__ */ new Map();
+              soVapor.load(soCtx, (n2, cb) => soTriggers.set(n2, cb));
+              soVapor.relink(soCtx);
+              soRt.flush();
+              soCaptured.length = 0;
+              pending.clear();
+              soData.stW = 260;
+              soData.stBg = "#e2483d";
+              soVapor.relink(soCtx);
+              soRt.flush();
+              let kernelApplied = 0;
+              for (const pl of soCaptured) {
+                if (pl.length === 0) continue;
+                const ao = JSON.parse(proteusHost.applyOps(JSON.stringify(Array.from(pl))));
+                kernelApplied += ao.applied ?? 0;
+                if (ao.unsupported && ao.unsupported.length > 0) notes.push(`:style \u63A2\u9488\u5185\u6838\u62D2\u6536\uFF1A${JSON.stringify(ao.unsupported).slice(0, 160)}`);
+              }
+              if (pending.size > 0) {
+                const patches = [...pending.entries()].map(([id, style]) => ({ id, style }));
+                patchCalls.push(patches);
+                pending.clear();
+                try {
+                  proteusHost.updatePatches(JSON.stringify(patches));
+                } catch {
+                }
+              }
+              const rectsAfter = rectsOf();
+              const widthAfter = anchorId !== void 0 ? rectsAfter[String(anchorId)]?.width ?? -1 : -1;
+              rep.styleobj_probe = {
+                anchor_id: anchorId ?? -1,
+                width_before: widthBefore,
+                width_after: widthAfter,
+                kernel_applied: kernelApplied,
+                patch_calls: patchCalls.map((ps) => ps.map((p) => `${p.id}:${JSON.stringify(p.style)}`))
+              };
+            } else {
+              notes.push(`:style \u5BF9\u8C61\u63A2\u9488 mount \u5931\u8D25\uFF1A${sOut.error ?? "\u672A\u77E5"}`);
+            }
+          } catch (e) {
+            notes.push(`:style \u5BF9\u8C61\u63A2\u9488\u5F02\u5E38\uFF1A${String(e?.message ?? e)}`);
+          }
+          try {
+            proteusHost.mount(JSON.stringify({ viewport: inst.viewport, nodes: inst.nodes }));
+          } catch {
+          }
+        } else {
+          notes.push(":style \u5BF9\u8C61\u63A2\u9488\uFF1A\u4EA7\u7269\u65E0 styleObj \u6BB5\uFF08\u5939\u5177\u672A\u8986\u76D6 \u21D2 \u5224\u636E \u3252 \u6309\u7F3A\u5931\u5904\u7406\uFF09");
         }
       }
       rep.ok = rep.updates_run > 0;

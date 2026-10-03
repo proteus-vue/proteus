@@ -167,6 +167,18 @@ export class VaporRuntime {
      *   ★语义上"丢弃" ≠ "静默"：丢弃本身有 slotMounts/notes 记录，这里只是**不发死指令**。
      */
     private readonly skipNodeIds?: ReadonlySet<number>,
+    /**
+     * ★★★**绘制键出口**（`:style` 对象展开批次，2026-10-03）——`paint.*` 槽位被写值时的回调。
+     *
+     * 【为什么 paint 键不能走内核（本仓实测的静默失效）】内核 `SET_STYLE` 的载荷是
+     *   **f32**（`(key_id, value: f32)`），而 `paint.color` / `paint.backgroundColor` 的值是
+     *   **颜色字符串**——经二进制指令流必然被 `Number(value) || 0` 洗成 0（静默变黑/透明）。
+     *   内核也明确把 `paint.*` 归入 paint-only（`Ok(false)`：不改几何、它不管绘制）。
+     *   ⇒ 绘制键的正解：**JS 侧直接告诉宿主**（`updatePatches([{id, style:{color}}])`——
+     *     宿主合并进 spec 并重建绘制指令，这是 B 路已在用的同一条通道）。
+     * 【缺省行为】无回调时**不发指令**（不静默送 0——那正是此前的失效形态）。
+     */
+    private readonly onPaintProp?: (nodeId: number, propKey: string, value: unknown) => void,
   ) {}
 
   /**
@@ -350,6 +362,19 @@ export class VaporRuntime {
         if (spec.once && this.onceWritten.has(spec.slotId)) continue
         // ★★P1-3 插槽分发：被丢弃的节点**不发死指令**（见 skipNodeIds 注释——丢弃有记录，不静默）
         if (this.skipNodeIds?.has(spec.nodeId + this.nodeIdOffset)) continue
+        // ★★★**绘制键走宿主通道**（2026-10-03 · `:style` 对象展开批次）——`paint.*` 的值是
+        //   颜色/字号等（字符串或数值），内核的 f32 通道**装不下**（送进去必被洗成 0 ⇒ 静默变黑）。
+        //   ⇒ 报给宿主（它重建绘制指令），不进二进制指令流（见 onPaintProp 注释）。
+        if (spec.propKey.startsWith('paint.') && this.onPaintProp) {
+          const impl2 = this.evaluators.get(spec.evaluatorId)
+          if (impl2) {
+            const v = impl2(ctx)
+            this.onPaintProp(spec.nodeId + this.nodeIdOffset, spec.propKey, v)
+            const e2 = this.slotById.get(spec.slotId)
+            if (e2) e2.slot.value = v as never
+          }
+          continue
+        }
         // ★★P2-5：**v-memo** —— 组内依赖全都没变 ⇒ 跳过本槽位（"跳过子树更新"）
         //   （依赖变了 ⇒ 本帧整组放行——见 memoDirtyFrame 注释）
         if (spec.memoId !== undefined && !this.memoGroupDirty(spec.memoId, ctx)) continue
