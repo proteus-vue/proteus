@@ -399,8 +399,33 @@ def main() -> int:
             )
             print(f"  ✓ ⑪ ★v-once 冻结 + v-memo 组门（**逐节点**核对：once 节点未写 / memo 净跳过 / memo 脏放行且写新值）：{detail}")
 
-    # 附加观测（不判红，只如实报）
-    una = rep.get("uninstantiated_slots", 0)
+    # ── ⑫ ★P2-6~P2-9 表达式能力：首帧文本必须是**求值结果**（不是空串/字面量 "undefined"/"null"）──
+    #   【为什么这样判】这批能力的失效形态全是**静默错值**：
+    #     · Math.PI 此前 mem(root('Math')) ⇒ read('Math')=undefined ⇒ 渲染成**空**；
+    #     · 可选链空值若按 String(undefined) 写 ⇒ 屏上出现字面量 **"undefined"**；
+    #     · v-text / 白名单调用/方法若没进回填链 ⇒ 同样是空（零报错）。
+    #   ⇒ 判据 = 逐前缀核对（pi-/mx-/jn-/oc-/vt-），并**显式拒绝** "undefined"/"null" 字面量。
+    expr_probe = rep.get("expr_probe") or []
+    if not expr_probe:
+        print("  ◐ ⑫ 表达式能力（P2-6~P2-9）：本端夹具未覆盖——如实跳过")
+    else:
+        bad = []
+        for e in expr_probe:
+            t = str(e.get("text") or "")
+            pref = str(e.get("prefix") or "")
+            if not t.startswith(pref):
+                bad.append((e.get("id"), e.get("prefix"), t, '缺前缀/空'))
+            elif t in ("undefined", "null") or t.endswith("undefined") or t.endswith("null"):
+                bad.append((e.get("id"), e.get("prefix"), t, '字面量 undefined/null 上屏'))
+            elif t == pref:
+                bad.append((e.get("id"), e.get("prefix"), t, '前缀后无求值结果（表达式没跑）'))
+        if bad:
+            fail(f"★表达式能力（P2-6~P2-9）首帧不对：{bad}"
+                 f"—— v-text / 白名单调用 / Math.PI 内联 / 可选链，至少一项没落到文本上（静默错值）")
+            ok = False
+        else:
+            detail = " · ".join(f"{e.get('prefix')}→{e.get('text')}" for e in expr_probe)
+            print(f"  ✓ ⑫ ★表达式能力（v-text / 白名单纯函数 / Math.PI 内联 / 纯方法 / 可选链）首帧均为求值结果：{detail}")
 
     # 附加观测（不判红，只如实报）
     una = rep.get("uninstantiated_slots", 0)

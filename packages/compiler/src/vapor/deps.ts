@@ -142,7 +142,12 @@ export function analyzeAstDeps(ast: unknown, scopes: string[] = []): ExprDeps {
         roots.add(name)
         return
       }
-      case 'MemberExpression': {
+      case 'MemberExpression':
+      // ★★P2-9（2026-10-03）：`?.` 在 babel AST 里是**独立类型** OptionalMemberExpression——
+      //   此前不在本 switch 里 ⇒ 走 default 分支**遍历全部子节点** ⇒ property 里的标识符
+      //   被当成**独立源**（`a?.b` 的 roots 变成 ["a","b"]，多出幽灵源 `b`）。
+      //   现象：产物里出现对不存在源的订阅（假依赖）；`b` 恰好同名的话还会**误订阅**。
+      case 'OptionalMemberExpression': {
         // ★完整路径（供列表内相对路径诊断）：取非计算链
         const path = memberPath(n)
         if (path) {
@@ -166,6 +171,13 @@ export function analyzeAstDeps(ast: unknown, scopes: string[] = []): ExprDeps {
         collectPattern(n.id as Node)
         return
       case 'CallExpression': {
+        // ★★P2-8（2026-10-03 修正）：**成员链调用**（`Math.round(a)` / `obj.fn(a)`）必须记进 calls。
+        //   此前只记 `parent.callee === n` 的**裸标识符**调用 ⇒ `Math.round(a)` 的 hasCall=false
+        //   （被判成"纯表达式"）而 calls=[] ⇒ C1 判定把它当静态可证纯（**误判**）；
+        //   且诊断说不出调用名（修法给不出）。⇒ 这里补记成员链名字。
+        const callee = n.callee as Node
+        const calleeName = memberPath(callee)
+        if (calleeName) calls.add(calleeName)
         walk(n.callee as Node, n)
         for (const a of (n.arguments as Node[]) ?? []) walk(a, n)
         return
@@ -202,7 +214,7 @@ export function analyzeAstDeps(ast: unknown, scopes: string[] = []): ExprDeps {
 
 /** 取成员链路径（`a.b.c` → 'a.b.c'；含计算属性返回 null——路径不静态） */
 function memberPath(node: { type: string; object?: unknown; property?: unknown; computed?: boolean }): string | null {
-  if (node.type !== 'MemberExpression') {
+  if (node.type !== 'MemberExpression' && node.type !== 'OptionalMemberExpression') {
     if (node.type === 'Identifier') return (node as unknown as { name: string }).name
     return null
   }
@@ -590,6 +602,15 @@ export function collectTemplateBindings(
             nextBranch = true
             continue
           }
+          // ★★P2-6（2026-10-03）：`v-text="expr"` ⇒ 与插值**同一槽位**（text.content）——
+          //   语义 = 覆盖子节点的纯文本。与 `{{ expr }}` 同形 ⇒ 下游零改动；
+          //   v-model 的下行同理（`:value` → text.content）。
+          if (name === 'text') {
+            out.push(
+              binding(String(expCode), 'v-text', 'text.content', tag, expLine, nextScopes, inBranch, nextScopeSources, myElementIndex, activeListCtx ?? undefined, false, undefined, myOnce, myMemo, memoInvalidOfElement),
+            )
+            continue
+          }
           // v-show 与 v-if 不同：节点**始终在树内**，只是可见性切换 ⇒ 不算运行时分支
           if (name === 'show') {
             out.push(binding(String(expCode), 'v-show', 'visible', tag, expLine, nextScopes, inBranch, nextScopeSources, myElementIndex, activeListCtx ?? undefined, false, undefined, myOnce, myMemo, memoInvalidOfElement))
@@ -597,6 +618,45 @@ export function collectTemplateBindings(
           }
           // 动态绑定（:x / v-bind:x / v-model）——★属性名在 arg 里
           if (name === 'bind' || name === 'model') {
+            // ★★P2-7（2026-10-03）：**动态属性名** `:[k]` / `:['width']`
+            //   · 字符串字面量形态（`:['width']` / `:["w"]`）⇒ 编译期可判定 ⇒ **降级为静态属性名**
+            //     （此前整串被当成属性名 ⇒ `attr.['width']` 之类的垃圾键 ⇒ 宿主未命中、静默无效）；
+            //   · 真动态（`:[k]`，键名运行时才知道）⇒ **不建槽位**（此前建 `attr.k`——把"键名表达式"
+            //     当成了"属性名"，产物里出现永不生效的槽位）+ 诊断（模板侧也有一条）。
+            const argNode = p.arg as { isStatic?: boolean; content?: string } | undefined
+            if (argNode && argNode.isStatic === false) {
+              const rawArg = String(argNode.content ?? '').trim()
+              const strLit = /^(['"])([^'"]*)\1$/.exec(rawArg)
+              if (strLit) {
+                // 静态化（把内容当属性名继续走既有通道）
+                const staticArg = strLit[2]!
+                p.arg = { isStatic: true, content: staticArg } as never
+              } else {
+                // 真动态：产出**标记绑定**（build.ts 据此诊断 + **不建槽位**——避免垃圾键）；
+                //   ★为什么不在本层静默 continue：订阅产物是独立交付物（门禁/工具可能只读它）
+                //     ⇒ "这个绑定为什么消失"必须在那张产物上可见（与 memoInvalid 同一处置）。
+                out.push(
+                  binding(
+                    String(expCode),
+                    ':[]',
+                    'attr.__dynamic__',
+                    tag,
+                    expLine,
+                    nextScopes,
+                    inBranch,
+                    nextScopeSources,
+                    myElementIndex,
+                    activeListCtx ?? undefined,
+                    false,
+                    undefined,
+                    myOnce,
+                    myMemo,
+                    memoInvalidOfElement,
+                  ),
+                )
+                continue
+              }
+            }
             const arg = name === 'model' ? (p.arg?.content ?? 'modelValue') : (p.arg?.content ?? '')
             // 无 arg 的 v-bind="obj"（展开对象）：无法静态定位属性 ⇒ 记为 attrs（C2 交由解析结果判）
             // ★★`:style` 单属性降级（2026-10-02）：能静态判定字段名时编成**字段级键**

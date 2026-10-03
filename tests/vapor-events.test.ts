@@ -125,9 +125,10 @@ describe('★P0 静默风险可见化（2026-10-03 · Vapor 能力清单批次�
   const diagText = (tpl: string): string =>
     buildLayoutTemplate(wrap(tpl), 'p.vue').diagnostics.map((d) => String(d.message)).join(' | ')
 
-  it('v-html / v-text 必须产诊断（此前静默）；★v-memo 已真支持（P2-5）', () => {
+  it('v-html 必须产诊断（此前静默）；★v-text / v-memo 已真支持（P2-6 / P2-5）', () => {
     expect(diagText(`<div v-html="a" style="height: 5px"></div>`)).toContain('v-html 未支持')
-    expect(diagText(`<div v-text="a" style="height: 5px"></div>`)).toContain('v-text 未支持')
+    // ★2026-10-03（P2-6）：v-text 从"诊断拒绝"升为**真支持**（与插值同槽位）
+    expect(diagText(`<div v-text="a" style="height: 5px"></div>`), 'v-text 已支持').not.toContain('v-text 未支持')
     // ★2026-10-03（P2-5）：v-memo 从"诊断拒绝"升为**真支持**——数组字面量形态零诊断；
     //   非数组字面量仍诊断（形态诊断，不是"未支持"）
     expect(diagText(`<div v-memo="[a]" style="height: 5px"></div>`), 'v-memo 数组字面量已支持').not.toContain('v-memo 未支持')

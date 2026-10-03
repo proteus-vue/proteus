@@ -24,6 +24,7 @@ import type {
   SourceSubscription,
   EvaluatorSpec,
 } from '@proteus-vue/slot-runtime'
+import { isPureCallExprName } from '@proteus-vue/slot-runtime'
 import { scanReactiveSources } from './sources'
 import { compileExpr } from './expr'
 import type { ReactiveSource } from './sources'
@@ -278,6 +279,17 @@ export function buildVaporSubscriptions(source: string, filename = 'anonymous.vu
   for (const ref of bindings) {
     // ★被合成组里的其余成员**跳过建槽**（合成绑定已代表整条文本；见上方合成段注释）
     if (synthesizedMembers.has(ref)) continue
+    // ★★P2-7：真动态属性名（`:[]` 标记绑定）⇒ 诊断 + **不建槽位**（键名运行时才知——
+    //   建出来也是永不生效的垃圾键；模板产物侧同样有一条诊断）
+    if (ref.propKey === 'attr.__dynamic__') {
+      diagnostics.push({
+        severity: 'warn',
+        code: 'VAPOR_DYNAMIC_ATTR',
+        message: `动态属性名在元素 ${ref.elementIndex} 上未支持（键名运行时才知 ⇒ 无法静态建槽位）`,
+        hint: "字符串字面量形态可直接用（如 :['width'] 编译期等价于 :width）；真动态键名请改用静态属性名或条件分支",
+      })
+      continue
+    }
     const deps = analyzeExprDeps(ref.code, ref.scopes)
     const kind = slotKindOf(ref.propKey)
     // 每个绑定 = 一个槽位；★nodeId 取「该元素在模板序 DFS 中的序号」
@@ -295,10 +307,20 @@ export function buildVaporSubscriptions(source: string, filename = 'anonymous.vu
     //   · 有调用但**全部**在 `pureSymbols`（= `@proteus-pure` 注解）⇒ 走**人工担保**
     //     （置 `forcePure: true` ⇒ tier.ts 会标记 forced=true，explain 显示 ⚠）
     //   两者的可信度不同：静态证明是可复算的，人工担保是开发者的承诺——诊断必须能区分。
-    const allCallsWhitelisted = deps.calls.length > 0 && deps.calls.every((c) => pure.has(c))
+    // ★★P2-8（2026-10-03）：**白名单内建纯函数**（`Math.round` 等）与**人工担保**（`@proteus-pure`）
+    //   走同一条"非静态但可信"通道；
+    //   区分如下（两者都置 forcePure，但来源不同 —— explain 的 reason 会写明）：
+    //     · 内建白名单 ⇒ **语言级静态可证**（表在 slot-runtime/PURE_CALLS，跨端语义一致）
+    //     · pureSymbols ⇒ **开发者承诺**（人工担保）
+    const builtinPure = deps.calls.length > 0 && deps.calls.every((c) => isPureCallExprName(c))
+    // 内建白名单之外若还有人工担保符号 ⇒ 仍然是 forcePure（人工承诺）而非 builtinPure
+    const allCallsWhitelisted = deps.calls.length > 0 && deps.calls.every((c) => pure.has(c) || isPureCallExprName(c))
+    const onlyBuiltin = builtinPure
     const decision = decideTier({
       pureExpression: !deps.hasCall,
-      forcePure: allCallsWhitelisted,
+      // ★P2-8：内建白名单（静态可证）与人工担保（@proteus-pure）**分开上报**——explain 要能区分
+      builtinPure: onlyBuiltin,
+      forcePure: allCallsWhitelisted && !onlyBuiltin,
       // C2：依赖全部静态可枚举（解析成功 + 每个标识符要么是已知源、要么是全局）
       depsEnumerable: !deps.parseFailed,
       // C3–C7：本模块在 SFC 模板的静态范围内，逐项判定
@@ -324,7 +346,9 @@ export function buildVaporSubscriptions(source: string, filename = 'anonymous.vu
         severity: 'warn',
         code: 'VAPOR_EXPR_UNSUPPORTED',
         message: `表达式 \`${ref.code}\` 无法编译为可求值程序：${evBuilt.unsupported}`,
-        hint: '该槽位在参考实现下不会更新（各端可注入自己的表达式执行器）；或改写为受支持的子集',
+        hint:
+          '该槽位在参考实现下不会更新（各端可注入自己的表达式执行器）；' +
+          '或改写为受支持的子集（白名单内建纯函数见 slot-runtime/expr.ts 的 PURE_CALLS）',
         slotId: mySlot,
         line: ref.line,
       })
@@ -506,6 +530,17 @@ export function buildVaporSubscriptions(source: string, filename = 'anonymous.vu
     }
   }
 
+  // ★★P2-8：**常量槽位**收集（无源依赖 ⇒ 不进 sources，但必须参与首帧回填——见 constantSlots 注释）
+  const constantSlots: SlotSubscription[] = []
+  for (const rec of slotRecords) {
+    if (rec.slot.kind === 'list-item' || rec.slot.kind === 'list-data') continue
+    const rootsOf = rec.deps.roots.filter((r) => srcScan.byName.has(r))
+    const listRel = rec.deps.listRelative.length > 0
+    if (rec.slot.tier === 'L1' && rootsOf.length === 0 && !listRel && rec.deps.calls.length === 0) {
+      constantSlots.push(rec.slot)
+    }
+  }
+
   // 组装源表（只保留有 L1 槽位的源；按 sourceId 升序 ⇒ 产物可复现）
   const sources: SourceSubscription[] = []
   for (const s of [...srcScan.sources].sort((a, b) => a.sourceId - b.sourceId)) {
@@ -528,6 +563,8 @@ export function buildVaporSubscriptions(source: string, filename = 'anonymous.vu
       l0Slots,
       // ★P2-5：memo 组表（无 v-memo ⇒ 不产出字段，既有产物逐字节不变）
       ...(memoGroups.length > 0 ? { memoGroups } : {}),
+      // ★P2-8：常量槽位（无 ⇒ 不产出字段）
+      ...(constantSlots.length > 0 ? { constantSlots } : {}),
       stats: { l1, l0, l1Rate: l1 + l0 === 0 ? 0 : Math.round((l1 / (l1 + l0)) * 10000) / 10000 },
     },
     sources: srcScan.sources,
@@ -548,6 +585,18 @@ function makeEvaluator(
   deps: ExprDeps,
 ): { spec: EvaluatorSpec; unsupported?: string } {
   const trimmed = code.trim()
+  // ★★P2-8/P2-9（2026-10-03）：**已知内置全局**不得走下面的 `member` 快捷路径——
+  //   那条路的实现是 `ctx.read('Math')`，运行时恒为 **undefined**（模板上下文只有业务源）
+  //   ⇒ `Math.PI` 会**静默渲染成空**、`Math.round(...)` 同理。
+  //   ⇒ 全局形态一律交给 `compileExpr`（常量内联 / 白名单调用 / 已知全局成员拒绝）。
+  const isKnownGlobalExpr = /^(Math|JSON|Number|String|Boolean|Array|Object|Date|RegExp|Intl|console)\b/.test(trimmed)
+  if (isKnownGlobalExpr) {
+    const compiledGlobal = compileExpr(trimmed)
+    if (compiledGlobal.ok) {
+      return { spec: { evaluatorId, form: 'program', program: compiledGlobal.program, pure: true } }
+    }
+    return { spec: { evaluatorId, form: 'expr', expr: trimmed, pure: false }, unsupported: compiledGlobal.unsupported }
+  }
   void deps
   // ① 纯成员访问（最常见形态：`item.name`）：免解析直接取值
   if (/^[A-Za-z_$][\w$]*(\.[A-Za-z_$][\w$]*)*$/.test(trimmed)) {

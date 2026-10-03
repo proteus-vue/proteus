@@ -185,14 +185,23 @@ export function instantiateTemplate(tpl: LayoutTemplate, opts: InstantiateOption
     }
     return chain
   }
-  /** 用一个求值器求初值（失败/缺失 ⇒ undefined，由调用方走兜底） */
-  const evalInitial = (evaluatorId: number, ctx: EvalContext): unknown => {
+  /**
+   * 用一个求值器求初值。
+   *
+   * ★★返回值语义（2026-10-03 修）：`{ ok: true, value }` = 求值器跑了（**值可能就是 undefined**——
+   *   那是合法结果，如 `{{ nothing?.x }}`）；`{ ok: false }` = 没有求值器/抛错（调用方走兜底）。
+   *
+   * 【本仓实测的真缺陷】首版把二者混成一个 `undefined` 返回 ⇒ 对"表达式结果本来就该是 undefined"
+   *   的槽位会**误走源值兜底** ⇒ `String(read('nothing'))` = `'null'` **错值上屏**
+   *   （页面显示字面量 "null"——静默错内容）。
+   */
+  const evalInitial = (evaluatorId: number, ctx: EvalContext): { ok: boolean; value?: unknown } => {
     const impl = evaluators.get(evaluatorId)
-    if (!impl) return undefined
+    if (!impl) return { ok: false }
     try {
-      return impl(ctx)
+      return { ok: true, value: impl(ctx) }
     } catch {
-      return undefined
+      return { ok: false }
     }
   }
   /** ★虚拟化：行号 → {行键, 行根 id, 整行节点 id}（见 InstantiateResult.virtual 注释） */
@@ -345,15 +354,19 @@ export function instantiateTemplate(tpl: LayoutTemplate, opts: InstantiateOption
           const f = engineFieldOf(sl.propKey)
           if (!f) continue
           // ★① 表达式求值（组合表达式的**唯一正确**路径）；缺失/抛错 ⇒ 退回 ② 字段直取
-          let v = evalInitial(sl.evaluatorId, rowCtx)
-          if (v === undefined) {
+          const ev0 = evalInitial(sl.evaluatorId, rowCtx)
+          let v: unknown
+          if (ev0.ok) {
+            v = ev0.value  // ★可能就是 undefined（合法结果）——仍要走"写出"（文本渲染为空）
+          } else {
             const field = sl.itemValueField
             if (!field) continue
             v = row[field]
+            if (v === undefined) continue
           }
-          if (v === undefined) continue
           if (f.kind === 'text') {
-            target.text = String(v)
+            // ★P2-9：空值（undefined/null）⇒ **空串**（`String(undefined)` 会把字面量 "undefined" 写上屏）
+            target.text = v === undefined || v === null ? '' : String(v)
           } else {
             // ★回填也写**顶层**（与 emit 的摊平一致——否则回填的键核心看不到）
             ;(target as Record<string, unknown>)[f.key] = v
@@ -416,6 +429,22 @@ export function instantiateTemplate(tpl: LayoutTemplate, opts: InstantiateOption
   //     更新的比较又发生在 relink 之后（那时标量已被写上）⇒ 恰好绕开了这片盲区。
   //   ⇒ 修复口径与行内回填**完全一致**（同一 `engineFieldOf`、同样写顶层字段）。
   if (opts.table) {
+    // ★P2-8：常量槽位（无源）也要回填首帧——与源驱动槽位同一套写出逻辑
+    for (const sl of opts.table.constantSlots ?? []) {
+      const target = byId.get(sl.nodeId)
+      if (!target) continue
+      const f = engineFieldOf(sl.propKey)
+      if (!f) continue
+      const evS = evalInitial(sl.evaluatorId, { read: opts.read })
+      if (!evS.ok) continue
+      const v = evS.value
+      if (f.kind === 'text') {
+        target.text = v === undefined || v === null ? '' : String(v)
+      } else {
+        ;(target as Record<string, unknown>)[f.key] = v
+      }
+      valuesFilled++
+    }
     for (const src of opts.table.sources) {
       for (const sl of src.slots) {
         // 行内已由 cloneRow 回填；list-data 是"数据源本身"（不是节点属性）；组件边界不在本树
@@ -427,11 +456,18 @@ export function instantiateTemplate(tpl: LayoutTemplate, opts: InstantiateOption
         // ★★表达式求值优先（2026-10-03 初值回填修正）：`{{ a + b }}` / 混合文本这类**组合表达式**
         //   "取源值"是错的（会把表达式文本的语义丢成单个源值）⇒ 与运行时同一套求值器求初值；
         //   求值器缺失（`expr` 形态）⇒ 退回既有"取源值"路径（行为不变）。
-        let v = evalInitial(sl.evaluatorId, { read: opts.read })
-        if (v === undefined) v = opts.read(src.sourceName)
-        if (v === undefined) continue
+        //   ★"结果就是 undefined"（如 `{{ a?.b }}` 且 a 为空）**不得**触发兜底（否则写 'null' 字符串）
+        const evS = evalInitial(sl.evaluatorId, { read: opts.read })
+        let v: unknown
+        if (evS.ok) {
+          v = evS.value
+        } else {
+          v = opts.read(src.sourceName)
+          if (v === undefined) continue
+        }
         if (f.kind === 'text') {
-          target.text = String(v)
+          // ★P2-9：空值 ⇒ 空串（同 cloneRow 的口径）
+          target.text = v === undefined || v === null ? '' : String(v)
         } else {
           ;(target as Record<string, unknown>)[f.key] = v
         }

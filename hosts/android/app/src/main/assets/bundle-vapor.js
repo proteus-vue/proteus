@@ -10137,6 +10137,77 @@
       return this.dirty.length;
     }
   };
+  var PURE_CALLS = {
+    // —— Math（纯计算）——
+    "Math.abs": Math.abs,
+    "Math.ceil": Math.ceil,
+    "Math.floor": Math.floor,
+    "Math.round": Math.round,
+    "Math.trunc": Math.trunc,
+    "Math.sign": Math.sign,
+    "Math.sqrt": Math.sqrt,
+    "Math.cbrt": Math.cbrt,
+    "Math.pow": Math.pow,
+    "Math.exp": Math.exp,
+    "Math.log": Math.log,
+    "Math.log2": Math.log2,
+    "Math.log10": Math.log10,
+    "Math.min": Math.min,
+    "Math.max": Math.max,
+    // —— 类型转换（call 形态，非 new）——
+    "String": String,
+    "Number": Number,
+    "Boolean": Boolean,
+    // —— 解析 / 判定（全局）——
+    "parseInt": parseInt,
+    "parseFloat": parseFloat,
+    "isNaN": isNaN,
+    "isFinite": isFinite,
+    "Number.isFinite": Number.isFinite,
+    "Number.isInteger": Number.isInteger,
+    "Number.isNaN": Number.isNaN,
+    // —— 数组判定 ——
+    "Array.isArray": Array.isArray
+  };
+  var PURE_METHODS = {
+    // —— Array（非变异）——
+    join: (recv, sep) => Array.isArray(recv) ? recv.join(sep === void 0 ? "," : String(sep)) : void 0,
+    slice: (recv, a, b) => typeof recv === "string" || Array.isArray(recv) ? recv.slice(a, b) : void 0,
+    concat: (recv, ...rest) => Array.isArray(recv) ? recv.concat(...rest) : void 0,
+    indexOf: (recv, x) => typeof recv === "string" || Array.isArray(recv) ? recv.indexOf(x) : void 0,
+    includes: (recv, x) => typeof recv === "string" || Array.isArray(recv) ? recv.includes(x) : void 0,
+    // —— String（非变异）——
+    toUpperCase: (recv) => typeof recv === "string" ? recv.toUpperCase() : void 0,
+    toLowerCase: (recv) => typeof recv === "string" ? recv.toLowerCase() : void 0,
+    trim: (recv) => typeof recv === "string" ? recv.trim() : void 0,
+    trimStart: (recv) => typeof recv === "string" ? recv.trimStart() : void 0,
+    trimEnd: (recv) => typeof recv === "string" ? recv.trimEnd() : void 0,
+    charAt: (recv, i) => typeof recv === "string" ? recv.charAt(i) : void 0,
+    padStart: (recv, n, pad) => typeof recv === "string" ? recv.padStart(n, pad) : void 0,
+    padEnd: (recv, n, pad) => typeof recv === "string" ? recv.padEnd(n, pad) : void 0,
+    repeat: (recv, n) => typeof recv === "string" ? recv.repeat(n) : void 0,
+    substring: (recv, a, b) => typeof recv === "string" ? recv.substring(a, b) : void 0,
+    startsWith: (recv, x) => typeof recv === "string" ? recv.startsWith(x) : void 0,
+    endsWith: (recv, x) => typeof recv === "string" ? recv.endsWith(x) : void 0,
+    // —— Number（非变异）——
+    toFixed: (recv, n) => typeof recv === "number" ? recv.toFixed(n) : void 0,
+    toString: (recv) => recv === void 0 || recv === null ? void 0 : String(recv)
+  };
+  var GLOBAL_CONST_MEMBERS = {
+    "Math.PI": Math.PI,
+    "Math.E": Math.E,
+    "Math.LN2": Math.LN2,
+    "Math.LN10": Math.LN10,
+    "Math.LOG2E": Math.LOG2E,
+    "Math.LOG10E": Math.LOG10E,
+    "Math.SQRT2": Math.SQRT2,
+    "Math.SQRT1_2": Math.SQRT1_2,
+    "Number.MAX_SAFE_INTEGER": Number.MAX_SAFE_INTEGER,
+    "Number.MIN_SAFE_INTEGER": Number.MIN_SAFE_INTEGER,
+    "Number.EPSILON": Number.EPSILON,
+    "Number.MAX_VALUE": Number.MAX_VALUE,
+    "Number.MIN_VALUE": Number.MIN_VALUE
+  };
   function toNum(v) {
     if (typeof v === "number") return v;
     if (typeof v === "boolean") return v ? 1 : 0;
@@ -10225,6 +10296,24 @@
       }
       case "arr":
         return p.items.map((x) => evalExpr(x, ctx));
+      case "mcall": {
+        const recv = evalExpr(p.recv, ctx);
+        if (recv === void 0 || recv === null) return void 0;
+        const impl = PURE_METHODS[p.method];
+        if (!impl) {
+          throw new Error(`\u8868\u8FBE\u5F0F\u7A0B\u5E8F\u5F15\u7528\u4E86\u975E\u767D\u540D\u5355\u65B9\u6CD5\uFF1A${p.method}\uFF08\u89C1 slot-runtime/expr.ts \u7684 PURE_METHODS\uFF09`);
+        }
+        const args = p.args.map((a) => evalExpr(a, ctx));
+        return impl(recv, ...args);
+      }
+      case "call": {
+        const fn = PURE_CALLS[p.fn];
+        if (typeof fn !== "function") {
+          throw new Error(`\u8868\u8FBE\u5F0F\u7A0B\u5E8F\u5F15\u7528\u4E86\u975E\u767D\u540D\u5355\u51FD\u6570\uFF1A${p.fn}\uFF08\u89C1 slot-runtime/expr.ts \u7684 PURE_CALLS\uFF09`);
+        }
+        const args = p.args.map((a) => evalExpr(a, ctx));
+        return fn(...args);
+      }
       default: {
         const never = p;
         throw new Error(`\u672A\u77E5\u8868\u8FBE\u5F0F\u8282\u70B9\uFF1A${JSON.stringify(never)}`);
@@ -10754,11 +10843,11 @@
     };
     const evalInitial = (evaluatorId, ctx) => {
       const impl = evaluators.get(evaluatorId);
-      if (!impl) return void 0;
+      if (!impl) return { ok: false };
       try {
-        return impl(ctx);
+        return { ok: true, value: impl(ctx) };
       } catch {
-        return void 0;
+        return { ok: false };
       }
     };
     const virtualRows = [];
@@ -10835,15 +10924,18 @@
             if (!target) continue;
             const f = engineFieldOf(sl.propKey);
             if (!f) continue;
-            let v = evalInitial(sl.evaluatorId, rowCtx);
-            if (v === void 0) {
+            const ev0 = evalInitial(sl.evaluatorId, rowCtx);
+            let v;
+            if (ev0.ok) {
+              v = ev0.value;
+            } else {
               const field = sl.itemValueField;
               if (!field) continue;
               v = row[field];
+              if (v === void 0) continue;
             }
-            if (v === void 0) continue;
             if (f.kind === "text") {
-              target.text = String(v);
+              target.text = v === void 0 || v === null ? "" : String(v);
             } else {
               ;
               target[f.key] = v;
@@ -10878,6 +10970,22 @@
       emit(n, n.id, n.parentId);
     }
     if (opts.table) {
+      for (const sl of opts.table.constantSlots ?? []) {
+        const target = byId.get(sl.nodeId);
+        if (!target) continue;
+        const f = engineFieldOf(sl.propKey);
+        if (!f) continue;
+        const evS = evalInitial(sl.evaluatorId, { read: opts.read });
+        if (!evS.ok) continue;
+        const v = evS.value;
+        if (f.kind === "text") {
+          target.text = v === void 0 || v === null ? "" : String(v);
+        } else {
+          ;
+          target[f.key] = v;
+        }
+        valuesFilled++;
+      }
       for (const src of opts.table.sources) {
         for (const sl of src.slots) {
           if (sl.kind === "list-item" || sl.kind === "list-data" || sl.kind === "component-prop") continue;
@@ -10885,11 +10993,16 @@
           if (!target) continue;
           const f = engineFieldOf(sl.propKey);
           if (!f) continue;
-          let v = evalInitial(sl.evaluatorId, { read: opts.read });
-          if (v === void 0) v = opts.read(src.sourceName);
-          if (v === void 0) continue;
+          const evS = evalInitial(sl.evaluatorId, { read: opts.read });
+          let v;
+          if (evS.ok) {
+            v = evS.value;
+          } else {
+            v = opts.read(src.sourceName);
+            if (v === void 0) continue;
+          }
           if (f.kind === "text") {
-            target.text = String(v);
+            target.text = v === void 0 || v === null ? "" : String(v);
           } else {
             ;
             target[f.key] = v;
@@ -11484,6 +11597,10 @@
       },
       parentNode: (node) => parentOf.get(node) ?? parentNodeOf(node),
       patchProp(el, key, prev, next) {
+        if (key === "textContent") {
+          if (next !== null && next !== void 0) this.setElementText(el, String(next));
+          return;
+        }
         if (key.startsWith("on")) {
           const type = normalizeEventType(key);
           if (type) {
@@ -11817,7 +11934,61 @@
           ]),
           _: 1
           /* STABLE */
-        })), _cache, 5)
+        })), _cache, 5),
+        (0, import_runtime_core2.createCommentVNode)(` \u2605\u2605P2-6~P2-9\uFF082026-10-03\uFF09\uFF1A
+         \xB7 v-text\uFF08P2-6\uFF09\uFF1A\u4E0E\u63D2\u503C\u540C\u69FD\u4F4D\uFF1B
+         \xB7 \u767D\u540D\u5355\u7EAF\u51FD\u6570\uFF08P2-8\uFF09\uFF1AMath.round / String \u7B49 + Math.PI \u7F16\u8BD1\u671F\u5185\u8054\uFF08\u6B64\u524D\u9759\u9ED8\u6E32\u67D3\u6210\u7A7A\uFF09\uFF1B
+         \xB7 \u7EAF\u65B9\u6CD5\uFF08P2-8 \u7EED\uFF09\uFF1Aarr.join\uFF08\u771F\u5B9E\u9879\u76EE\u7528\u6CD5\uFF09\uFF1B
+         \xB7 \u53EF\u9009\u94FE\uFF08P2-9\uFF09\uFF1Aobj?.x \u7F16\u8BD1\u671F\u964D\u7EA7\u4E3A cond \u7A0B\u5E8F\uFF08\u7A7A\u503C \u21D2 \u7A7A\u4E32\uFF0C\u4E0D\u662F 'undefined'\uFF09\u3002
+         \u5224\u636E \u246B \u6838\uFF1A\u8FD9\u4E9B\u8282\u70B9\u7684**\u9996\u5E27\u6587\u672C**\u662F\u6C42\u503C\u7ED3\u679C\uFF08\u4E0D\u662F\u7A7A\u4E32\u3001\u4E5F\u4E0D\u662F "undefined"/"null" \u5B57\u9762\u91CF\uFF09\u3002 `),
+        (0, import_runtime_core2.createVNode)(_component_p_text, {
+          textContent: (0, import_runtime_core2.toDisplayString)("vt-" + _ctx.exprA),
+          style: { "fontSize": 12, "color": "#ffffff" }
+        }, null, 8, ["textContent"]),
+        (0, import_runtime_core2.createVNode)(_component_p_text, { style: { "fontSize": 12, "color": "#ffffff" } }, {
+          default: (0, import_runtime_core2.withCtx)(() => [
+            (0, import_runtime_core2.createTextVNode)(
+              "pi-" + (0, import_runtime_core2.toDisplayString)(Math.PI.toFixed(2)),
+              1
+              /* TEXT */
+            )
+          ]),
+          _: 1
+          /* STABLE */
+        }),
+        (0, import_runtime_core2.createVNode)(_component_p_text, { style: { "fontSize": 12, "color": "#ffffff" } }, {
+          default: (0, import_runtime_core2.withCtx)(() => [
+            (0, import_runtime_core2.createTextVNode)(
+              "mx-" + (0, import_runtime_core2.toDisplayString)(Math.max(_ctx.exprA, 7)),
+              1
+              /* TEXT */
+            )
+          ]),
+          _: 1
+          /* STABLE */
+        }),
+        (0, import_runtime_core2.createVNode)(_component_p_text, { style: { "fontSize": 12, "color": "#ffffff" } }, {
+          default: (0, import_runtime_core2.withCtx)(() => [
+            (0, import_runtime_core2.createTextVNode)(
+              "jn-" + (0, import_runtime_core2.toDisplayString)(_ctx.exprArr.join("|")),
+              1
+              /* TEXT */
+            )
+          ]),
+          _: 1
+          /* STABLE */
+        }),
+        (0, import_runtime_core2.createVNode)(_component_p_text, { style: { "fontSize": 12, "color": "#ffffff" } }, {
+          default: (0, import_runtime_core2.withCtx)(() => [
+            (0, import_runtime_core2.createTextVNode)(
+              "oc-" + (0, import_runtime_core2.toDisplayString)(_ctx.exprObj?.inner),
+              1
+              /* TEXT */
+            )
+          ]),
+          _: 1
+          /* STABLE */
+        })
       ]),
       _: 1
       /* STABLE */
@@ -11872,6 +12043,10 @@
       onceVal: 1,
       memoDep: 0,
       memoVal: 1,
+      // ★★P2-6~P2-9 夹具（2026-10-03）：表达式能力（判据 ⑫ 核首帧文本）
+      exprA: 3,
+      exprArr: ["a", "b"],
+      exprObj: { inner: "ok" },
       tapCount: 0
     };
   }
@@ -12221,6 +12396,9 @@
       const abOnceVal = (0, import_runtime_core3.ref)(dataB.onceVal);
       const abMemoDep = (0, import_runtime_core3.ref)(dataB.memoDep);
       const abMemoVal = (0, import_runtime_core3.ref)(dataB.memoVal);
+      const abExprA = (0, import_runtime_core3.ref)(dataB.exprA);
+      const abExprArr = (0, import_runtime_core3.ref)(dataB.exprArr);
+      const abExprObj = (0, import_runtime_core3.ref)(dataB.exprObj);
       let abRootInst = null;
       const AbApp = {
         name: "VaporAbApp",
@@ -12234,7 +12412,10 @@
             stopInnerW: abStopInnerW,
             onceVal: abOnceVal,
             memoDep: abMemoDep,
-            memoVal: abMemoVal
+            memoVal: abMemoVal,
+            exprA: abExprA,
+            exprArr: abExprArr,
+            exprObj: abExprObj
           };
         },
         render
@@ -12745,6 +12926,7 @@
       gate_text_nodes: [],
       once_node_id: -1,
       memo_node_id: -1,
+      expr_probe: [],
       mount_ms: 0,
       mount_nodes: 0,
       updates_run: 0,
@@ -12804,6 +12986,8 @@
         (n.textSegments ?? []).filter((sg) => sg.text !== void 0 && sg.text !== "").map((sg) => String(sg.text))
       ]));
       rep.mix_text_probe = inst.nodes.filter((n) => segNodeIds.has(n.id)).map((n) => ({ id: n.id, text: String(n.text ?? ""), statics: staticsOf.get(n.id) ?? [] }));
+      const EXPR_PREFIXES = ["vt-", "pi-", "mx-", "jn-", "oc-"];
+      rep.expr_probe = inst.nodes.map((n) => ({ id: n.id, text: String(n.text ?? "") })).filter((n) => EXPR_PREFIXES.some((p2) => n.text.startsWith(p2))).map((n) => ({ id: n.id, prefix: n.text.slice(0, 3), text: n.text }));
       if (rep.inst_text_filled === 0) notes.push("\u26A0 \u5B9E\u4F8B\u6811\u91CC\u6CA1\u6709\u4EFB\u4F55\u975E\u7A7A\u6587\u672C\u2014\u2014\u56DE\u586B\u94FE\u53EF\u7591");
       const t3 = t();
       const mountOut = proteusHost.mount(JSON.stringify({ viewport: inst.viewport, nodes: inst.nodes }));

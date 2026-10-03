@@ -10,6 +10,7 @@
 //   由上游把它保留为 `expr` 形态并**上报**（不静默）。
 //   宁可「不支持但可发现」，不可「支持但可能错」。
 import { parse as babelParse } from '@babel/parser'
+import { isPureCallName, isPureMethodName, GLOBAL_CONST_MEMBERS } from '@proteus-vue/slot-runtime'
 import type { ExprProgram } from '@proteus-vue/slot-runtime'
 
 /** 编译结果：要么给出程序，要么给出**明确的不支持原因**（供上报） */
@@ -21,7 +22,10 @@ interface Node {
   [k: string]: unknown
 }
 
-const UNSUPPORTED_CALL = '含函数/方法调用（纯度无法证明，属 L1 准入条件 C1）'
+const UNSUPPORTED_CALL =
+  '含**白名单外**的函数/方法调用（纯度无法证明，属 L1 准入条件 C1）——' +
+  '内置纯函数（Math.* / String / Number / parseInt 等，见 slot-runtime 的 PURE_CALLS）可直接用；' +
+  '业务函数请加 @proteus-pure 人工担保，或在 computed 里算好再绑定'
 
 /** 二元运算符白名单（★刻意排除 `==` / `!=`——见 expr.ts 顶注的诚实边界） */
 const BIN_OPS = new Set(['+', '-', '*', '/', '%', '===', '!==', '<', '>', '<=', '>='])
@@ -50,6 +54,25 @@ export function compileExpr(code: string): ExprCompileResult {
   return compileNode(expr)
 }
 
+/** 已知内置全局（其成员访问**不可**静默编成 `mem`——运行时 read() 取不到，会静默 undefined） */
+const KNOWN_GLOBAL_ROOTS = new Set(['Math', 'JSON', 'Number', 'String', 'Boolean', 'Array', 'Object', 'Date', 'RegExp', 'Intl', 'console'])
+
+/** 取静态成员链名字（`Math.PI` → 'Math.PI'；非静态/含调用返回 null） */
+function staticGlobalName(n: Node): string | null {
+  if (n.type === 'Identifier') return typeof n.name === 'string' ? (n.name as string) : null
+  if (n.type !== 'MemberExpression' && n.type !== 'OptionalMemberExpression') return null
+  if (n.computed === true) return null
+  const obj = staticGlobalName(n.object as Node)
+  const prop = n.property as Node
+  if (!obj || !prop || prop.type !== 'Identifier' || typeof prop.name !== 'string') return null
+  return `${obj}.${prop.name as string}`
+}
+
+/** 取被调用者的静态名字（`Math.round` → 'Math.round'；`fn` → 'fn'；方法调用 `a.b()` → 'a.b'） */
+function staticCalleeName(callee: Node): string | null {
+  return staticGlobalName(callee)
+}
+
 function compileNode(n: Node): ExprCompileResult {
   switch (n.type) {
     case 'Identifier': {
@@ -71,7 +94,42 @@ function compileNode(n: Node): ExprCompileResult {
     case 'NullLiteral':
       return { ok: true, program: { k: 'lit', v: null } }
 
+    // ★★P2-9（2026-10-03）：**可选链降级**——`a?.b` 语义上等价于 `a == null ? undefined : a.b`
+    //   但 `==` 是被拒绝的（宽松相等），而 `===` 的语义**恰好不同**（null 时 a===undefined 为 false，
+    //   于是会去取 `a.b` ⇒ 抛错或错值）。⇒ 用 `cond` 程序**显式**表达：
+    //     `a?.b`  ⇒ `(a === null || a === undefined) ? undefined : a.b`
+    //   即"**空值检查节点**"——正是 JS 规范 [[Get]] 对可选链的定义。
+    //   ★这也是"编译期降级"（可读、可序列化），而非运行时特判（少一条执行器分支）。
+    case 'OptionalMemberExpression': {
+      const obj = compileNode(n.object as Node)
+      if (!obj.ok) return obj
+      const guard: ExprProgram = {
+        k: 'logi',
+        op: '||',
+        l: { k: 'bin', op: '===', l: obj.program, r: { k: 'lit', v: null } },
+        r: { k: 'bin', op: '===', l: obj.program, r: { k: 'undef' } },
+      }
+      let access: ExprProgram
+      if (n.computed === true) {
+        const key = compileNode(n.property as Node)
+        if (!key.ok) return key
+        access = { k: 'memdyn', obj: obj.program, key: key.program }
+      } else {
+        const prop = n.property as Node
+        if (prop.type !== 'Identifier' || typeof prop.name !== 'string') {
+          return { ok: false, unsupported: '可选链的属性名不是静态标识符' }
+        }
+        access = { k: 'mem', obj: obj.program, key: prop.name }
+      }
+      return { ok: true, program: { k: 'cond', t: guard, c: { k: 'undef' }, a: access } }
+    }
     case 'MemberExpression': {
+      // ★P2-9：`Math.PI` 这类的**编译期常量内联**——见 GLOBAL_CONST_MEMBERS 头注
+      //   （此前编成 `mem(root('Math'),'PI')` ⇒ 运行时 read('Math') = undefined ⇒ 静默渲染成空）
+      const constName = staticGlobalName(n)
+      if (constName && constName in GLOBAL_CONST_MEMBERS) {
+        return { ok: true, program: { k: 'lit', v: GLOBAL_CONST_MEMBERS[constName]! } }
+      }
       const obj = compileNode(n.object as Node)
       if (!obj.ok) return obj
       if (n.computed === true) {
@@ -82,6 +140,15 @@ function compileNode(n: Node): ExprCompileResult {
       const prop = n.property as Node
       if (prop.type !== 'Identifier' || typeof prop.name !== 'string') {
         return { ok: false, unsupported: '成员访问的属性名不是静态标识符' }
+      }
+      // ★P2-9：**已知全局对象**上的非白名单成员（`Math.foo` / `JSON.x`）⇒ 明确拒绝而不是
+      //   静默 undefined（`ctx.read('Math')` 恒为 undefined —— 模板会静默渲染成空）
+      const knownGlobal = KNOWN_GLOBAL_ROOTS.has(staticGlobalName(n.object as Node) ?? '')
+      if (knownGlobal) {
+        return {
+          ok: false,
+          unsupported: `不支持访问内置全局 \`${staticGlobalName(n)}\`（模板层只允许白名单内建）——请改用 Math.* 纯函数（见 PURE_CALLS）或在 computed 里算好`,
+        }
       }
       return { ok: true, program: { k: 'mem', obj: obj.program, key: prop.name } }
     }
@@ -179,12 +246,45 @@ function compileNode(n: Node): ExprCompileResult {
       return { ok: true, program: acc }
     }
 
-    case 'CallExpression':
+    case 'CallExpression': {
+      // ★★P2-8（2026-10-03）：**白名单纯函数 / 纯方法**可编译（表在消费端——唯一事实源）。
+      //   · 自由函数（`Math.round` / `parseInt`）⇒ `call` 节点；
+      //   · 方法调用（`arr.join` / `s.trim`）⇒ `mcall` 节点（**接收者要参与求值**）；
+      //   白名单外一律拒绝（含业务函数）。
+      const callee = n.callee as Node
+      const calleeName = staticCalleeName(callee)
+      const isMemberCallee = callee.type === 'MemberExpression' || callee.type === 'OptionalMemberExpression'
+      const methodName = isMemberCallee && callee.computed !== true
+        ? (typeof (callee.property as Node | undefined)?.name === 'string' ? String((callee.property as Node).name) : '')
+        : ''
+      if (methodName && isPureMethodName(methodName)) {
+        // 方法形态：接收者单独编译（依赖分析按接收者建图）
+        const recv = compileNode(callee.object as Node)
+        if (!recv.ok) return recv
+        const args: ExprProgram[] = []
+        for (const raw of (n.arguments as Node[]) ?? []) {
+          if (raw.type === 'SpreadElement') return { ok: false, unsupported: '调用实参不支持展开运算符' }
+          const a = compileNode(raw)
+          if (!a.ok) return a
+          args.push(a.program)
+        }
+        return { ok: true, program: { k: 'mcall', recv: recv.program, method: methodName, args } }
+      }
+      if (!calleeName || !isPureCallName(calleeName)) {
+        return { ok: false, unsupported: UNSUPPORTED_CALL }
+      }
+      const args: ExprProgram[] = []
+      for (const raw of (n.arguments as Node[]) ?? []) {
+        if (raw.type === 'SpreadElement') return { ok: false, unsupported: '调用实参不支持展开运算符' }
+        const a = compileNode(raw)
+        if (!a.ok) return a
+        args.push(a.program)
+      }
+      return { ok: true, program: { k: 'call', fn: calleeName, args } }
+    }
     case 'NewExpression':
     case 'OptionalCallExpression':
       return { ok: false, unsupported: UNSUPPORTED_CALL }
-    case 'OptionalMemberExpression':
-      return { ok: false, unsupported: '不支持可选链 `?.`（可用 `??` 与三元改写）' }
     case 'AssignmentExpression':
     case 'UpdateExpression':
       return { ok: false, unsupported: '表达式含赋值/自增（模板表达式应为纯求值）' }

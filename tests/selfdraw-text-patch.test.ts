@@ -243,3 +243,67 @@ describe('V8 · ★文本字号必须传给宿主（此前被静默丢弃 ⇒ �
     app.unmount()
   })
 })
+
+describe('★★P2-6 适配器：`textContent` prop = 元素文本（对齐 runtime-dom）', () => {
+  it('v-text 经 B 路编译成 textContent prop ⇒ 必须渲染出文本（此前整段丢失）', async () => {
+    // 【本仓真机实测的缺口】Vue 对**非原生标签**上的 v-text 产出 `textContent` prop；
+    //   runtime-dom 的 patchProp 有该分支，我方适配器没有 ⇒ 文本进 unknownKeys、整段丢失
+    //   （A/B 判据 ② 文本数 17 vs 16 当场抓到）。
+    const { createAppRenderer } = await import('@proteus-vue/renderer-app')
+    const { createSelfDrawAdapter } = await import('@proteus-vue/renderer-app/adapters/selfdraw')
+    const { h, ref } = await import('@vue/runtime-core')
+    const adapter = createSelfDrawAdapter()
+    const renderer = createAppRenderer(adapter)
+    const container = adapter.createElement('p-view')
+    adapter.root.children.push(container as never)
+    container.parent = adapter.root
+    const v = ref(7)
+    const App = {
+      setup() {
+        return { v }
+      },
+      render() {
+        // ① 初值形态：textContent prop（与 Vue 编译产物同形）
+        return h('p-view', null, [h('p-text', { textContent: `vt-${v.value}` })])
+      },
+    }
+    renderer.createApp(App as never).mount(container as never)
+    const req = adapter.toRequest({ width: 100, height: 100 })
+    const texts = (req.nodes as unknown as Array<Record<string, unknown>>).map((n) => n.text).filter(Boolean)
+    expect(texts, 'textContent prop 必须变成文本（此前丢失）').toEqual(['vt-7'])
+  })
+
+  it('textContent 更新走补丁通道（不误判结构变更）——id 稳定', async () => {
+    const { createAppRenderer } = await import('@proteus-vue/renderer-app')
+    const { createSelfDrawAdapter } = await import('@proteus-vue/renderer-app/adapters/selfdraw')
+    const { h, ref, getCurrentInstance } = await import('@vue/runtime-core')
+    const adapter = createSelfDrawAdapter()
+    const renderer = createAppRenderer(adapter)
+    const container = adapter.createElement('p-view')
+    adapter.root.children.push(container as never)
+    container.parent = adapter.root
+    const v = ref(7)
+    let inst: { update?: () => void } | null = null
+    const App = {
+      setup() {
+        inst = getCurrentInstance() as never
+        return { v }
+      },
+      render() {
+        return h('p-view', null, [h('p-text', { textContent: `vt-${v.value}` })])
+      },
+    }
+    renderer.createApp(App as never).mount(container as never)
+    const first = adapter.toRequest({ width: 100, height: 100 })
+    const id0 = (first.nodes as unknown as Array<Record<string, unknown>>).find((n) => n.text)?.id
+    adapter.takePatches(); adapter.takeSplice()
+    v.value = 9
+    ;(inst as unknown as { update?: () => void } | null)?.update?.()
+    const splice = adapter.takeSplice()
+    expect(splice, '★改文本不得触发结构变更').toBeNull()
+    const after = adapter.toRequest({ width: 100, height: 100 })
+    const node = (after.nodes as unknown as Array<Record<string, unknown>>).find((n) => n.text)
+    expect(node?.text).toBe('vt-9')
+    expect(node?.id, 'id 稳定（原地改文本）').toBe(id0)
+  })
+})
