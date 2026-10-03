@@ -119,6 +119,12 @@ export interface TemplateTransformResult {
   wxml: string
   /** v-model 绑定字段名 */
   vModelBindings: string[]
+  /**
+   * ★★**v-model 的转换修饰符**（P2-4，2026-10-03）：`{ model, modifiers }`——
+   *   script 侧据此生成带 trim/number 转换的回写 handler；`.lazy` 已在模板侧改为 bindblur，
+   *   不在此列（它改的是**事件通道**，不是值的转换）。
+   */
+  vModelModifiers?: Array<{ model: string; modifiers: string[] }>
   /** 模板是否出现导航链接 */
   usesNavigate: boolean
   /** .self 修饰符 handler 名 */
@@ -186,6 +192,8 @@ export interface ScriptTransformOptions {
   /** ★scoped 类名后缀（scopeId）——组件探针需据根类名定位根节点（`.<tag>-<scopeId>`） */
   scopeId?: string
   vModelBindings?: string[]
+  /** ★P2-4：v-model 转换修饰符（见 TemplateTransformResult.vModelModifiers） */
+  vModelModifiers?: Array<{ model: string; modifiers: string[] }>
   usesNavigate?: boolean
   debug?: boolean
   rules?: TransformRuleOverrides

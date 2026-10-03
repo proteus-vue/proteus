@@ -281,6 +281,15 @@ function formatStyleBinding(exp: string): string {
 /** 序列化上下文（跨递归传递的编译期状态） */
 interface SerializeContext {
   vModelBindings: string[]
+  /**
+   * ★★**v-model 修饰符**（P2-4，2026-10-03）：`{ model, modifiers }` —— script 侧据此生成
+   *   带 trim/number 转换的回写 handler（`.lazy` 已在模板侧改绑事件，不进这里）。
+   *
+   * 【为什么单列（不复用 vModelBindings 的 string[]）】修饰符影响的是**回写 handler 的代码形态**，
+   *   而 `vModelBindings` 只关心"哪些模型绑过"（去重派发）；两者用途不同。
+   *   同一模型出现多组修饰符时**首见为准 + 警告**（handler 名由模型名派生 ⇒ 无法并存两组）。
+   */
+  vModelModifiers: Array<{ model: string; modifiers: string[] }>
   warnings: string[]
   /** 是否注入源码行号注释（反黑盒） */
   annotateLines: boolean
@@ -1403,6 +1412,23 @@ function serializeElement(node: ElementNode, ctx: SerializeContext): string {
         if (ctx.disabled.has('directive/v-model')) { ctx.warnings.push('规则 directive/v-model 已被禁用（rules.disabled），v-model 已忽略'); break }
         const model = exprContent(dir.exp)
         if (model && !ctx.vModelBindings.includes(model)) ctx.vModelBindings.push(model)
+        // ★★**v-model 修饰符**（P2-4，2026-10-03）——官方语义（`vModelText` 的 castValue）：
+        //   `.trim`  ⇒ 写入前 `value.trim()`
+        //   `.number`⇒ 写入前 `looseToNumber`（`parseFloat` 得了数就转数、否则原样——**不是** `Number()`）
+        //   `.lazy`  ⇒ 监听 **change**（提交时）而非每次输入 —— MP 无 change，用 `bindblur`
+        //     （失焦提交，语义最接近；`.lazy` 与 Vue 的 `@input` 仍是两条独立通道，互不影响）
+        //   ★转化在**回写 handler**（script 侧）执行：模板侧只传修饰符清单（与 MP 的分工一致）。
+        const VMOD_KNOWN = ['trim', 'number', 'lazy']
+        const vmods = (dir.modifiers as unknown as Array<{ content?: string } | string> | undefined ?? [])
+          .map((m) => (typeof m === 'string' ? m : (m?.content ?? '')))
+          .filter(Boolean)
+        const vmodsKnown = vmods.filter((m) => VMOD_KNOWN.includes(m))
+        const vmodsUnknown = vmods.filter((m) => !VMOD_KNOWN.includes(m))
+        if (vmodsUnknown.length > 0) {
+          ctx.warnings.push(
+            `v-model 修饰符 .${vmodsUnknown.join(' / .')} 无对等语义（MP 表单只有 value+bindinput/blur 两通道，无事件对象可阻止/无捕获阶段）——已忽略该修饰符，绑定照常（vue-compat）。支持的修饰符：.trim / .number / .lazy`,
+          )
+        }
         // ★#500 + #505 校准族：形态判定与契约命名经规则 apply（directive/v-model）——
         //   组件形态（非 input-like 且非原生标签）= prop + update:arg 事件（Vue 组件双向绑定核心语义；
         //   旧产物无脑 bindinput → p-modal v-model:visible 永不生效真机实证）；原生/input = value + bindinput。
@@ -1417,6 +1443,13 @@ function serializeElement(node: ElementNode, ctx: SerializeContext): string {
           | { kind: 'input'; model: string; inputHandler: string }
         if (vmodel.kind === 'component') {
           const { propName, updateHandler } = vmodel
+          // ★P2-4：**组件形态**的 v-model 修饰符在官方语义里是「`modelModifiers` prop 传给组件、
+          //   由组件自己处理」——MP 无此 prop 通道 ⇒ 明确诊断（不静默当成已处理）
+          if (vmodsKnown.length > 0) {
+            ctx.warnings.push(
+              `v-model 修饰符 .${vmodsKnown.join(' / .')} 用在**组件**上：官方经 modelModifiers prop 由组件内部处理，而 MP 无该通道（已忽略；请在组件内自行处理，或改用原生 input/textarea）`,
+            )
+          }
           // ★G12 候选 B（2026-09-07 Skyline 真机实证）：事件名单段归一 update:{arg} → update-{arg}——
           //   glass-easel/微信编译链事件名 = 单段标识符（双冒号 bind:update:* 被丢弃 → Skyline 下 v-model
           //   关不掉/不回传：p-modal 遮罩关、p-switch、p-input 三实证）；arg 语义在 IR 保留（见 vModelComponentHandlers.arg）
@@ -1436,8 +1469,26 @@ function serializeElement(node: ElementNode, ctx: SerializeContext): string {
         }
         if (isInputLike) attrs.push(`value="{{${model}}}"`)
         // 方法名不用 __ 前缀（微信保留前缀，真机绑定可能失效）
-        attrs.push(`bindinput="${vmodel.inputHandler}"`)
-        ctx.trace?.add('directive/v-model', { line: node.loc.start.line, before: `v-model="${model}"`, after: `bindinput="${vmodel.inputHandler}"` })
+        // ★P2-4：`.lazy` ⇒ 绑 **change 语义**（MP 用 bindblur 失焦提交；官方 .lazy = change 事件）
+        const isLazy = vmodsKnown.includes('lazy')
+        const bindEvent = isLazy ? 'bindblur' : 'bindinput'
+        attrs.push(`${bindEvent}="${vmodel.inputHandler}"`)
+        // ★P2-4：转换修饰符（trim/number）登记给 script 侧生成回写体；同模型多组 ⇒ 首见为准 + 警告
+        const casts = vmodsKnown.filter((m) => m === 'trim' || m === 'number')
+        if (casts.length > 0 && model) {
+          const prev = ctx.vModelModifiers.find((x) => x.model === model)
+          if (!prev) ctx.vModelModifiers.push({ model, modifiers: casts })
+          else if (JSON.stringify(prev.modifiers) !== JSON.stringify(casts)) {
+            ctx.warnings.push(
+              `同一绑定目标 \`${model}\` 出现多组 v-model 修饰符（先见 .${prev.modifiers.join(' / .')} · 后见 .${casts.join(' / .')}）——handler 名由模型名派生、无法并存两组，以**先见者为准**`,
+            )
+          }
+        }
+        ctx.trace?.add('directive/v-model', {
+          line: node.loc.start.line,
+          before: `v-model${vmodsKnown.length ? '.' + vmodsKnown.join('.') : ''}="${model}"`,
+          after: `${bindEvent}="${vmodel.inputHandler}"${casts.length ? `（回写转换：.${casts.join(' / .')}）` : ''}`,
+        })
         break
       }
       case 'html':
@@ -1753,6 +1804,7 @@ export function transformTemplateToWxml(
 ): TemplateTransformResult {
   const ctx: SerializeContext = {
     vModelBindings: [],
+    vModelModifiers: [],
     warnings: [],
     annotateLines: opts.annotateLines ?? false,
     filename: opts.filename,
@@ -1853,6 +1905,7 @@ export function transformTemplateToWxml(
   return {
     wxml,
     vModelBindings: ctx.vModelBindings,
+    vModelModifiers: ctx.vModelModifiers,
     usesNavigate: ctx.usesNavigate,
     selfHandlers: [...ctx.selfHandlers],
     onceHandlers: [...ctx.onceHandlers],

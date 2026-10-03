@@ -56,6 +56,8 @@ export function explainTransform(source: string, options: ExplainOptions = {}): 
     isComponent: options.isComponent,
     vModelBindings: tplResult.vModelBindings,
     usesNavigate: tplResult.usesNavigate,
+    // ★P2-4：v-model 转换修饰符（trim/number）随管线传给 script 侧
+    vModelModifiers: tplResult.vModelModifiers,
     rules: options.rules,
     trace: scriptTrace,
   })

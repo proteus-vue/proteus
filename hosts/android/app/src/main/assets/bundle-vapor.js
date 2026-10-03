@@ -9494,6 +9494,21 @@
   });
 
   // packages/slot-runtime/dist/index.js
+  var OpCode = /* @__PURE__ */ ((OpCode2) => {
+    OpCode2[OpCode2["SET_PROP"] = 1] = "SET_PROP";
+    OpCode2[OpCode2["SET_STYLE"] = 2] = "SET_STYLE";
+    OpCode2[OpCode2["SET_TEXT"] = 3] = "SET_TEXT";
+    OpCode2[OpCode2["SET_ATTRS"] = 4] = "SET_ATTRS";
+    OpCode2[OpCode2["TOGGLE_VIS"] = 5] = "TOGGLE_VIS";
+    OpCode2[OpCode2["INSERT_BLOCK"] = 16] = "INSERT_BLOCK";
+    OpCode2[OpCode2["REMOVE_NODE"] = 17] = "REMOVE_NODE";
+    OpCode2[OpCode2["MOVE_NODE"] = 18] = "MOVE_NODE";
+    OpCode2[OpCode2["LIST_SET"] = 32] = "LIST_SET";
+    OpCode2[OpCode2["LIST_SPLICE"] = 33] = "LIST_SPLICE";
+    OpCode2[OpCode2["LIST_UPDATE"] = 34] = "LIST_UPDATE";
+    OpCode2[OpCode2["CALL_COMPONENT_UPDATE"] = 48] = "CALL_COMPONENT_UPDATE";
+    return OpCode2;
+  })(OpCode || {});
   var PropKeyTable = class _PropKeyTable {
     constructor() {
       this.keys = [];
@@ -9655,6 +9670,47 @@
       return this.buf;
     }
   };
+  var ByteReader = class {
+    constructor(buf) {
+      this.buf = buf;
+      this.pos = 0;
+    }
+    get offset() {
+      return this.pos;
+    }
+    get remaining() {
+      return this.buf.length - this.pos;
+    }
+    u8() {
+      if (this.remaining < 1) throw new Error("\u6307\u4EE4\u6D41\u88AB\u622A\u65AD\uFF08u8\uFF09");
+      return this.buf[this.pos++];
+    }
+    u16() {
+      if (this.remaining < 2) throw new Error("\u6307\u4EE4\u6D41\u88AB\u622A\u65AD\uFF08u16\uFF09");
+      const v = this.buf[this.pos] | this.buf[this.pos + 1] << 8;
+      this.pos += 2;
+      return v;
+    }
+    u32() {
+      if (this.remaining < 4) throw new Error("\u6307\u4EE4\u6D41\u88AB\u622A\u65AD\uFF08u32\uFF09");
+      const v = (this.buf[this.pos] | this.buf[this.pos + 1] << 8 | this.buf[this.pos + 2] << 16 | this.buf[this.pos + 3] << 24) >>> 0;
+      this.pos += 4;
+      return v;
+    }
+    f32() {
+      if (this.remaining < 4) throw new Error("\u6307\u4EE4\u6D41\u88AB\u622A\u65AD\uFF08f32\uFF09");
+      const b = this.buf.subarray(this.pos, this.pos + 4);
+      this.pos += 4;
+      return new Float32Array(b.buffer.slice(b.byteOffset, b.byteOffset + 4))[0];
+    }
+    str() {
+      const len = this.u16();
+      if (this.remaining < len) throw new Error("\u6307\u4EE4\u6D41\u88AB\u622A\u65AD\uFF08str\uFF09");
+      const s = utf8Decode(this.buf.subarray(this.pos, this.pos + len));
+      this.pos += len;
+      return s;
+    }
+  };
   function utf8Encode(s) {
     const out = [];
     for (let i = 0; i < s.length; i++) {
@@ -9672,6 +9728,44 @@
       else out.push(240 | cp >> 18, 128 | cp >> 12 & 63, 128 | cp >> 6 & 63, 128 | cp & 63);
     }
     return Uint8Array.from(out);
+  }
+  function utf8Decode(bytes) {
+    let out = "";
+    let i = 0;
+    while (i < bytes.length) {
+      const b0 = bytes[i];
+      let cp;
+      let need;
+      if (b0 < 128) {
+        cp = b0;
+        need = 0;
+      } else if ((b0 & 224) === 192) {
+        cp = b0 & 31;
+        need = 1;
+      } else if ((b0 & 240) === 224) {
+        cp = b0 & 15;
+        need = 2;
+      } else if ((b0 & 248) === 240) {
+        cp = b0 & 7;
+        need = 3;
+      } else {
+        throw new Error(`\u975E\u6CD5 UTF-8 \u9996\u5B57\u8282\uFF1A0x${b0.toString(16)} @${i}`);
+      }
+      if (i + need >= bytes.length) throw new Error(`UTF-8 \u622A\u65AD @${i}`);
+      for (let k = 1; k <= need; k++) {
+        const bn = bytes[i + k];
+        if ((bn & 192) !== 128) throw new Error(`\u975E\u6CD5 UTF-8 \u7EED\u5B57\u8282\uFF1A0x${bn.toString(16)} @${i + k}`);
+        cp = cp << 6 | bn & 63;
+      }
+      i += need + 1;
+      if (cp > 65535) {
+        cp -= 65536;
+        out += String.fromCharCode(55296 + (cp >> 10), 56320 + (cp & 1023));
+      } else {
+        out += String.fromCharCode(cp);
+      }
+    }
+    return out;
   }
   var OpBuffer = class {
     constructor() {
@@ -9846,6 +9940,66 @@
       }
     }
   }
+  function decodeOps(bytes) {
+    const r = new ByteReader(bytes);
+    const magic = r.u32();
+    if (magic !== OPS_MAGIC) throw new Error(`magic \u4E0D\u7B26\uFF1A0x${magic.toString(16)}\uFF08\u671F\u671B 0x${OPS_MAGIC.toString(16)}\uFF09`);
+    const version = r.u32();
+    if (version !== OPS_VERSION) throw new Error(`\u7248\u672C\u4E0D\u7B26\uFF1A${version}\uFF08\u671F\u671B ${OPS_VERSION}\uFF09`);
+    const opCount = r.u32();
+    const keyCount = r.u32();
+    const strCount = r.u32();
+    const keys = new PropKeyTable();
+    for (let i = 0; i < keyCount; i++) keys.intern(r.str());
+    const strings = new StringPool();
+    for (let i = 0; i < strCount; i++) strings.intern(r.str());
+    const ops = [];
+    for (let i = 0; i < opCount; i++) ops.push(decodeOp(r));
+    if (r.remaining !== 0) throw new Error(`\u6307\u4EE4\u6D41\u5C3E\u90E8\u6709 ${r.remaining} \u5B57\u8282\u6B8B\u7559\uFF08\u683C\u5F0F\u6216\u8BA1\u6570\u4E0D\u7B26\uFF09`);
+    return { version, ops, keys, strings };
+  }
+  function decodeOp(r) {
+    const op = r.u8();
+    switch (op) {
+      case 1:
+      case 2:
+        return { op, nodeId: r.u32(), keyId: r.u16(), value: r.f32() };
+      case 3:
+        return { op, nodeId: r.u32(), textRef: r.u32() };
+      case 4: {
+        const nodeId = r.u32();
+        const n = r.u16();
+        const attrs = [];
+        for (let i = 0; i < n; i++) attrs.push({ keyId: r.u16(), value: r.f32() });
+        return { op, nodeId, attrs };
+      }
+      case 5:
+        return { op, nodeId: r.u32(), visible: r.u8() !== 0 };
+      case 16:
+        return { op, blockId: r.u32(), refNodeId: r.u32(), pos: r.u8() };
+      case 17:
+        return { op, nodeId: r.u32() };
+      case 18:
+        return { op, nodeId: r.u32(), refNodeId: r.u32(), pos: r.u8() };
+      case 32:
+        return { op, listId: r.u32(), dataRef: r.u32() };
+      case 33: {
+        const listId = r.u32();
+        const start = r.u32();
+        const delCount = r.u32();
+        const n = r.u16();
+        const itemKeyRefs = [];
+        for (let i = 0; i < n; i++) itemKeyRefs.push(r.u32());
+        return { op, listId, start, delCount, itemKeyRefs };
+      }
+      case 34:
+        return { op, listId: r.u32(), itemKeyRef: r.u32(), slotId: r.u32(), value: r.f32() };
+      case 48:
+        return { op, componentId: r.u32(), slotId: r.u32(), value: r.f32() };
+      default:
+        throw new Error(`\u672A\u77E5\u64CD\u4F5C\u7801\uFF1A0x${op.toString(16)}\uFF08\u6E38\u6807\u4F4D\u7F6E ${r.offset}\uFF09`);
+    }
+  }
   function createSlot(spec, keys, strings, initial, registry) {
     const nodeId = spec.nodeId;
     const keyId = spec.keyId ?? 0;
@@ -9931,6 +10085,11 @@
       this.dirty = [];
       this.pending = false;
       this.stats = { flushes: 0, opsEmitted: 0, bytesSent: 0, shortCircuits: 0 };
+      this.frame = 0;
+    }
+    /** 帧号（v-memo 门用；只读） */
+    get frameId() {
+      return this.frame;
     }
     /** 槽位写入（方案 §3.3）：相等即短路；否则标脏 + 排帧 */
     setSlot(slot, next) {
@@ -9958,6 +10117,7 @@
      *   驱动一次提交（本仓四次踩过"测量装置污染读数"）。
      */
     flush() {
+      this.frame++;
       this.pending = false;
       for (const slot of this.dirty) {
         slot.emit(slot.value, this.buffer);
@@ -10138,6 +10298,9 @@
       this.uninstantiatedSlots = [];
       this.itemValueCache = /* @__PURE__ */ new Map();
       this.loaded = false;
+      this.onceWritten = /* @__PURE__ */ new Set();
+      this.memoBaseline = /* @__PURE__ */ new Map();
+      this.memoDirtyFrame = /* @__PURE__ */ new Map();
     }
     /**
      * 从订阅表重建求值函数（把**可序列化的声明**变成可执行函数）
@@ -10273,12 +10436,44 @@
         for (const spec of src.slots) {
           if (spec.kind === "list-item") continue;
           if (spec.kind === "list-data") continue;
+          if (spec.once && this.onceWritten.has(spec.slotId)) continue;
+          if (spec.memoId !== void 0 && !this.memoGroupDirty(spec.memoId, ctx)) continue;
           const entry = this.slotById.get(spec.slotId);
           const impl = this.evaluators.get(spec.evaluatorId);
           if (!entry || !impl) continue;
           this.rt.setSlot(entry.slot, impl(ctx));
+          if (spec.once) this.onceWritten.add(spec.slotId);
         }
       }
+    }
+    /**
+     * ★★**v-memo 组脏判定**（P2-5）：依赖逐项比较（`Object.is`），任一变化即"脏"。
+     *
+     * 【语义（对齐 Vue `withMemo`）】依赖未变 ⇒ **跳过**该子树更新；变了 ⇒ 照常更新，
+     *   并把本次依赖值记为基线供下轮比较。
+     * 【诚实边界】组定义缺失（产物异常）⇒ 返回 true（照常更新）——**不静默冻结**：
+     *   "少一层优化"可接受，"该更新的不更新"不可接受。
+     */
+    memoGroupDirty(memoId, ctx) {
+      const fid = this.rt.frameId;
+      if (this.memoDirtyFrame.get(memoId) === fid) return true;
+      const group = this.table.memoGroups?.find((g) => g.memoId === memoId);
+      if (!group) return true;
+      const now = [];
+      for (const prog of group.deps) {
+        try {
+          now.push(evalExpr(prog, ctx));
+        } catch {
+          now.push(void 0);
+        }
+      }
+      const prev = this.memoBaseline.get(memoId);
+      const changed = !prev || now.some((v, i) => !Object.is(v, prev[i]));
+      if (changed) {
+        this.memoBaseline.set(memoId, now);
+        this.memoDirtyFrame.set(memoId, fid);
+      }
+      return changed;
     }
     /**
      * ★列表行内槽位通道：按行求值 → 与上一轮**按 key 缓存**的值 diff → 只发变化行
@@ -11501,7 +11696,7 @@
     return (0, import_runtime_core2.openBlock)(), (0, import_runtime_core2.createBlock)(_component_p_view, { style: { "width": 1080, "height": 1600, "flexDirection": "column", "padding": { "top": 24 }, "backgroundColor": "#14141c" } }, {
       default: (0, import_runtime_core2.withCtx)(() => [
         (0, import_runtime_core2.createVNode)(_component_p_text, { style: { "fontSize": 20, "color": "#ffffff", "margin": { "bottom": 12 } } }, {
-          default: (0, import_runtime_core2.withCtx)(() => [..._cache[4] || (_cache[4] = [
+          default: (0, import_runtime_core2.withCtx)(() => [..._cache[6] || (_cache[6] = [
             (0, import_runtime_core2.createTextVNode)(
               "Vapor \xB7 \u8BBE\u5907\u7AEF",
               -1
@@ -11585,7 +11780,44 @@
           ]),
           _: 1
           /* STABLE */
-        }, 8, ["width"])
+        }, 8, ["width"]),
+        (0, import_runtime_core2.createCommentVNode)(' \u2605\u2605P2-5\uFF082026-10-03\uFF09\uFF1Av-once \u51BB\u7ED3 / v-memo \u7EC4\u95E8 \u5939\u5177\u3002\n         \xB7 once \u884C\uFF1A{{ onceVal }} \u53EA\u5728\u9996\u5E27\u5199\uFF0C\u4E4B\u540E**\u6E90\u600E\u4E48\u6539\u90FD\u4E0D\u518D\u5199**\uFF08\u5224\u636E \u246A \u7528\uFF09\uFF1B\n         \xB7 memo \u884C\uFF1Av-memo="[memoDep]" + {{ memoVal }} \u2014\u2014 \u6539 memoVal\uFF08\u4F9D\u8D56\u51C0\uFF09\u21D2 **\u8DF3\u8FC7**\u3001\n                     \u6539 memoDep\uFF08\u4F9D\u8D56\u810F\uFF09\u21D2 \u653E\u884C\uFF08\u628A\u6700\u65B0 memoVal \u5199\u4E0B\u53BB\uFF09\u3002\n         \u2605\u4E24\u884C\u7684\u6587\u672C\u521D\u503C\u523B\u610F\u53EF\u533A\u5206\uFF08once-x / memo-y\uFF09\uFF0C\u5224\u636E\u6838"\u8DF3\u8FC7"\u4E0E"\u653E\u884C"\u7684**\u4E0D\u540C**\u7ED3\u679C\u3002 '),
+        (0, import_runtime_core2.createVNode)(_component_p_text, { style: { "fontSize": 12, "color": "#ffffff" } }, {
+          default: (0, import_runtime_core2.withCtx)(() => [
+            (0, import_runtime_core2.createTextVNode)(
+              "once-" + (0, import_runtime_core2.toDisplayString)(_ctx.onceVal),
+              1
+              /* TEXT */
+            )
+          ]),
+          _: 1
+          /* STABLE */
+        }),
+        _cache[4] || ((0, import_runtime_core2.setBlockTracking)(-1, true), (_cache[4] = (0, import_runtime_core2.createVNode)(_component_p_text, { style: { "fontSize": 12, "color": "#ffffff" } }, {
+          default: (0, import_runtime_core2.withCtx)(() => [
+            (0, import_runtime_core2.createTextVNode)(
+              "once-" + (0, import_runtime_core2.toDisplayString)(_ctx.onceVal),
+              1
+              /* TEXT */
+            )
+          ]),
+          _: 1
+          /* STABLE */
+        })).cacheIndex = 4, (0, import_runtime_core2.setBlockTracking)(1), _cache[4]),
+        (0, import_runtime_core2.withMemo)([_ctx.memoDep], () => ((0, import_runtime_core2.openBlock)(), (0, import_runtime_core2.createBlock)(_component_p_text, {
+          key: "memo",
+          style: { "fontSize": 12, "color": "#ffffff" }
+        }, {
+          default: (0, import_runtime_core2.withCtx)(() => [
+            (0, import_runtime_core2.createTextVNode)(
+              "memo-" + (0, import_runtime_core2.toDisplayString)(_ctx.memoVal),
+              1
+              /* TEXT */
+            )
+          ]),
+          _: 1
+          /* STABLE */
+        })), _cache, 5)
       ]),
       _: 1
       /* STABLE */
@@ -11636,6 +11868,10 @@
       //   ——判据 ⑨ 核"点了内层，**外层 handler 不许跑**"（.stop 真的终止了冒泡）
       stopOuterW: 300,
       stopInnerW: 120,
+      // ★★P2-5 夹具（2026-10-03）：once 冻结 / memo 组门——判据 ⑪ 用（见 runShort 的更新轮）
+      onceVal: 1,
+      memoDep: 0,
+      memoVal: 1,
       tapCount: 0
     };
   }
@@ -11982,12 +12218,24 @@
       const abPadW = (0, import_runtime_core3.ref)(dataB.padW);
       const abStopOuterW = (0, import_runtime_core3.ref)(dataB.stopOuterW);
       const abStopInnerW = (0, import_runtime_core3.ref)(dataB.stopInnerW);
+      const abOnceVal = (0, import_runtime_core3.ref)(dataB.onceVal);
+      const abMemoDep = (0, import_runtime_core3.ref)(dataB.memoDep);
+      const abMemoVal = (0, import_runtime_core3.ref)(dataB.memoVal);
       let abRootInst = null;
       const AbApp = {
         name: "VaporAbApp",
         setup() {
           abRootInst = (0, import_runtime_core3.getCurrentInstance)();
-          return { list: abList, boxW: abBoxW, padW: abPadW, stopOuterW: abStopOuterW, stopInnerW: abStopInnerW };
+          return {
+            list: abList,
+            boxW: abBoxW,
+            padW: abPadW,
+            stopOuterW: abStopOuterW,
+            stopInnerW: abStopInnerW,
+            onceVal: abOnceVal,
+            memoDep: abMemoDep,
+            memoVal: abMemoVal
+          };
         },
         render
       };
@@ -12493,6 +12741,10 @@
       inst_width_filled: 0,
       mix_text_probe: [],
       text_probe_rounds: [],
+      gate_rounds: [],
+      gate_text_nodes: [],
+      once_node_id: -1,
+      memo_node_id: -1,
       mount_ms: 0,
       mount_nodes: 0,
       updates_run: 0,
@@ -12545,8 +12797,13 @@
       rep.inst_virtual_rows = inst.virtual?.rows.length ?? 0;
       rep.inst_text_filled = inst.nodes.filter((n) => typeof n.text === "string" && n.text.length > 0).length;
       rep.inst_width_filled = inst.nodes.filter((n) => typeof n.width === "number").length;
-      const segNodeIds = new Set(tpl.nodes.filter((n) => n.textSegments?.length).map((n) => n.id));
-      rep.mix_text_probe = inst.nodes.filter((n) => segNodeIds.has(n.id)).map((n) => ({ id: n.id, text: String(n.text ?? "") }));
+      const segNodes = tpl.nodes.filter((n) => n.textSegments?.length);
+      const segNodeIds = new Set(segNodes.map((n) => n.id));
+      const staticsOf = new Map(segNodes.map((n) => [
+        n.id,
+        (n.textSegments ?? []).filter((sg) => sg.text !== void 0 && sg.text !== "").map((sg) => String(sg.text))
+      ]));
+      rep.mix_text_probe = inst.nodes.filter((n) => segNodeIds.has(n.id)).map((n) => ({ id: n.id, text: String(n.text ?? ""), statics: staticsOf.get(n.id) ?? [] }));
       if (rep.inst_text_filled === 0) notes.push("\u26A0 \u5B9E\u4F8B\u6811\u91CC\u6CA1\u6709\u4EFB\u4F55\u975E\u7A7A\u6587\u672C\u2014\u2014\u56DE\u586B\u94FE\u53EF\u7591");
       const t3 = t();
       const mountOut = proteusHost.mount(JSON.stringify({ viewport: inst.viewport, nodes: inst.nodes }));
@@ -12778,6 +13035,54 @@
           });
           void changedSources;
         }
+      }
+      const gateRounds = [];
+      const gateTextNodes = [];
+      if (triggers.has("onceVal") || triggers.has("memoDep")) {
+        const allSlotsFlat = table.sources.flatMap((s3) => s3.slots);
+        rep.once_node_id = allSlotsFlat.find((x) => x.once)?.nodeId ?? -1;
+        rep.memo_node_id = allSlotsFlat.find((x) => x.memoId !== void 0)?.nodeId ?? -1;
+        const runGate = (name, mut, expectSkip) => {
+          mut();
+          for (const [, cb] of triggers) cb();
+          vapor.relink(ctx);
+          slotRt.flush();
+          const payload = captured.length ? captured[captured.length - 1] : new Uint8Array(0);
+          captured.length = 0;
+          const texts = [];
+          const entries = [];
+          if (payload.length > 0) {
+            const d = decodeOps(payload);
+            for (const op of d.ops) {
+              if (op.op === OpCode.SET_TEXT) {
+                const t4 = String(d.strings.valueOf(op.textRef));
+                texts.push(t4);
+                entries.push({ nodeId: op.nodeId, text: t4 });
+              }
+            }
+            try {
+              proteusHost.applyOps(JSON.stringify(Array.from(payload)));
+            } catch {
+            }
+          }
+          gateRounds.push({ name, ops: payload.length, texts, expect_skip: expectSkip });
+          gateTextNodes.push({ name, entries });
+        };
+        runGate("once-frozen", () => {
+          data.onceVal = 42;
+        }, true);
+        runGate("plain-updated", () => {
+          data.tapCount = 7;
+          data.list[0].title = "gate";
+        }, false);
+        runGate("memo-clean", () => {
+          data.memoVal = 99;
+        }, true);
+        runGate("memo-dirty", () => {
+          data.memoDep = 1;
+        }, false);
+        rep.gate_rounds = gateRounds;
+        rep.gate_text_nodes = gateTextNodes;
       }
       if (probeId !== void 0) {
         const after = rectsOf()[String(probeId)]?.width ?? -1;

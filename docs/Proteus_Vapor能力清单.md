@@ -83,10 +83,10 @@ Teleport / KeepAlive / Suspense / Transition / TransitionGroup / v-memo / 自定
 | 7 | 动态 `:style` 对象 | ✓ 半 | 模板不解析（**由订阅表 `SET_STYLE` 逐键下发**——设计如此，非缺陷） |
 | 8 | 动态属性 `:[k]` | ⚠️ **静默** | 无诊断，槽位错标成 `prop:attr.fn`（**把表达式源码当属性名**） |
 | 9 | **v-show** | ✅ | 走 `visibility:visible` 槽位（与 v-if 同通道，语义不同） |
-| 10 | **v-model** | ✓ 半 | 槽位 `text:text.content`（文本通道）；**无 `.lazy/.number/.trim` 修饰符语义** |
+| 10 | **v-model** | ✓ 半 | ◐ **下行支持 + 回写诊断（P2-4）**：值→文本槽位可用；**无回写通道**（App 输入未接）⇒ 出现即诊断（修饰符一并标注）。修饰符 `.trim/.number/.lazy` 的**真语义**在 MP 路径（回写端转换） |
 | 11 | v-html / v-text | ⚠️ **静默** | 无诊断也无槽位（**看不见的丢失**） |
-| 12 | v-once | ✓ 半 | 无诊断；仍建槽位（未阻止更新） |
-| 13 | v-memo | ⚠️ **静默** | 无诊断无槽位（与官方"跳过更新"语义不符） |
+| 12 | v-once | ✅ | ✅ **已支持（P2-5）**：槽位带 `once` 标记 ⇒ 首次写入后**永久冻结**（真机判据 ⑪）；行内 v-once（官方共享缓存槽语义）如实诊断 |
+| 13 | v-memo | ✅ | ✅ **已支持（P2-5）**：`v-memo="[a,b]"` ⇒ 依赖编成 `memoGroups`，运行时**按组比较**（依赖净 ⇒ 跳过子树更新；脏 ⇒ 放行）。非数组字面量形态如实诊断 |
 | 14 | 事件 `@click / @tap / @longpress` | ✅ | `events:[{nodeId,event:tap,handler}]` + 动作表 |
 | 15 | 事件修饰符 | ◐ **部分支持（P2-3）** | `.stop` / `.self` / `.once` = **真语义**（产物置位 + 运行时共享派发器，真机判据 ⑨）；`.prevent`/`.passive`/`.capture`/按键=**诊断但不阻碍 handler**（无对应语义，忽略是忠实的） |
 | 16 | 事件多语句块 / 调用表达式 | ❌ **诊断拒绝**（标注修法） | `"handler 含多条语句…"` / `"handler 形态不支持"` |
@@ -159,8 +159,8 @@ Teleport / KeepAlive / Suspense / Transition / TransitionGroup / v-memo / 自定
 | P2-1 | **v-for 嵌套** | ✅ | ✅ **已完成（2026-10-03）**：模板递归展开（`parentListId`/`outerScope`/`sourceField`）+ 运行时递归实例化（`cloneRow` 递归 + `parentOverrideId` + list-data 兜底）。任意层（含 3 层）实测通过，见 `tests/vapor-sfc-to-tree.test.ts` 嵌套块 4 组判据 |
 | P2-2 | **混合文本** `a{{x}}b` | ✅ | ✅ **已完成（2026-10-03）**：段表切分（`textSegments`：静态段 + 表达式段）+ 实例化段求值 + 订阅表**合成一条**槽位（多插值不再互相覆盖）。判据：编译切分 / 首帧完整 / 行内行作用域 / 更新仍完整（真机 ⑩/⑩b） |
 | P2-3 | **事件修饰符** | ✅ | ◐ **已完成（2026-10-03）**：`.stop`/`.self`/`.once` 真语义（`slot-runtime/dispatch.ts` 共享派发器，三端同一份）；`.prevent`/`.passive`/`.capture`/按键 = 诊断（无对应语义）+ 断言修法。★真机抓出一个真缺陷（B 路 `withModifiers` 只在 runtime-dom ⇒ 见下） |
-| P2-4 | **v-model 修饰符** `.lazy/.number/.trim` | ✅ | 文本通道加修饰符选项 |
-| P2-5 | **v-once / v-memo 真语义** | ✅ | `v-once` → 不建槽位；`v-memo` → 依赖摘要跳过更新 |
+| P2-4 | **v-model 修饰符** `.lazy/.number/.trim` | ✅ | ◐ **已完成（2026-10-03）**：MP 路径真语义（`.trim` ⇒ `String(v).trim()`；`.number` ⇒ **looseToNumber**（parseFloat+NaN 回退，不是 `Number()`）；`.lazy` ⇒ 事件通道换 `bindblur`）；组件形态/未知修饰符 ⇒ 诊断。Vapor 路径 **v-model 无回写通道 ⇒ 显式诊断**（不静默半支持） |
+| P2-5 | **v-once / v-memo 真语义** | ✅ | ✅ **已完成（2026-10-03）**：`v-once` 槽位带标记、运行时首次写入后冻结；`v-memo` 依赖程序化（`memoGroups`）+ 帧感知组门（同帧一次判定 ⇒ 组内槽位整体放行）。★行内 v-once 与官方"共享缓存槽"语义如实诊断（不照抄反直觉行为） |
 | P2-6 | **v-html / v-text** | ✅ | v-html = 富文本（我方文本通道已支持样式串——可映射）；v-text = 纯文本槽位 |
 | P2-7 | **动态属性 `:[k]`** | ✅ | 内核 attr 白名单 + 动态键名槽位 |
 | P2-8 | **表达式：函数调用**（受控） | ✅（任意 JS 表达式） | 我方保守（安全边界）。**建议**：白名单"纯函数"（`Math.*`、`String.*`、模板内 `computed`）经 `@proteus-pure` 显式标注后放行 |
@@ -211,7 +211,7 @@ Teleport / KeepAlive / Suspense / Transition / TransitionGroup / v-memo / 自定
    （Vue 路径有 `renderer-app` 可复用设计）。
 
 **建议顺序（更新）**：~~P0~~ ✅ → ~~P1-1/P1-2（组件边界+props 通道）~~ ✅ →
-~~P2-1（嵌套 v-for）~~ ✅ → ~~P2-2（混合文本）~~ ✅ → ~~P2-3（事件修饰符）~~ ✅ → P2-4（v-model 修饰符）/ P2-5（v-once/v-memo）→ 其余按需。
+~~P2-1（嵌套 v-for）~~ ✅ → ~~P2-2（混合文本）~~ ✅ → ~~P2-3（事件修饰符）~~ ✅ → ~~P2-4（v-model 修饰符）~~ ✅ → ~~P2-5（v-once/v-memo）~~ ✅ → P2-6~P2-9（v-html / 动态属性 / 表达式放宽）→ 其余按需。
 
 ### ★P2-1 增量说明（2026-10-03，做/不做如实标注）
 
@@ -271,3 +271,48 @@ Teleport / KeepAlive / Suspense / Transition / TransitionGroup / v-memo / 自定
 混合文本 6 组含反向 + `vapor-v3-e2e` 闭环 2 组）；**真机**：`run-vapor` 判据 **11/11**
 （新增 ⑨ `.stop` 终止冒泡 / ⑩+⑩b 混合文本首帧与更新完整）· `run-vapor-ab` 全过（文本序列对齐回归修复）·
 `run-vapor-list` 6/6 无回归。**破坏性验证**：`.stop` 改"先停后跑" ⇒ 2 条红；`.self` 判据反转 ⇒ 红（基线先确认绿）。
+
+### ★P2-4 / P2-5 增量说明（2026-10-03，做/不做如实标注）
+
+**P2-5 v-once / v-memo（Vapor + MP 两路）**
+
+| 做 | 依据 |
+|---|---|
+| `v-once`：槽位带 `once` 标记，运行时**首次写入后冻结**（`onceWritten` 集合） | 官方语义 = 只渲染一次。不建槽位会让首帧没值（回填走同一张表）⇒ "建槽+只写一次"观测等价且复用回填链。状态在**运行时实例**（重挂载 ⇒ 重新生效，与官方一致） |
+| `v-memo`：依赖编译成 `memoGroups`（`ExprProgram`，可序列化），运行时**按组比较**（`Object.is` 逐项） | 官方 `withMemo` 的等价物；依赖程序化复用**同一套表达式执行器**（跨端禁 eval 纪律） |
+| ★**帧感知组门**（`SlotRuntime.frameId`）：同一帧内一次判定 ⇒ 组内槽位**整体放行** | 组语义 = 子树整体更新；若无帧边界，一帧内多个源变化会只放行第一个槽位（其余被误跳过） |
+| ★**memo 依赖的根必须进订阅图**（`depRoots` 并入 `roots`） | 否则"依赖变了"不触发求值 ⇒ 该子树**静默漏更新**（组语义的反面） |
+| 诊断：非数组字面量 `v-memo` / 行内 `v-once`（官方共享缓存槽语义）| "优化没生效"必须可见；行内 once 的官方语义反直觉（首项冻结后复用给所有行）——不照抄、不静默 |
+
+| 不做（后续） | 原因 |
+|---|---|
+| 行内 v-once 的官方"共享缓存槽"语义 | 反直觉（首项内容给所有行）；已诊断，静态内容建议去掉插值 |
+| v-memo 在 v-for 行内（行作用域依赖比较） | 需按行建依赖快照（本版诊断 + 照常更新） |
+
+**P2-4 v-model 修饰符**
+
+| 做 | 依据 |
+|---|---|
+| MP 路径：`.trim` / `.number` 在**回写 handler** 端转换（`castValue` 语义）；`.lazy` ⇒ 事件通道换 `bindblur` | 官方 `vModelText`：先 trim 再 looseToNumber；`.lazy` = change 事件（MP 无 change，bindblur 是失焦提交语义最接近的） |
+| ★`.number` 用 **looseToNumber**（`parseFloat` + `isNaN` 回退原值），**不是** `Number()` | `Number('') === 0` 会把空输入**静默清空**为 0——与官方不同（判据里显式锁死：产物不得含 `Number(e.detail.value)`） |
+| 诊断：组件上的修饰符（官方走 `modelModifiers` prop，MP 无该通道）/ 未知修饰符 / 同模型多组修饰符（首见为准） | 三条都是"会静默失效或冲突"的形态 |
+| **Vapor 路径**：`v-model` ⇒ 显式诊断（**无回写通道**，修饰符一并标注） | 此前静默半支持（"页面看着对、输入不生效"）——最危险一类；双向绑定请走 L0 或等 App 输入通道批次 |
+
+**★真机 + 本地实测抓出的两个真缺陷（都已修 + 记入注释）**
+1. **`v-memo` 元素在 B 路（Vue 对照）触发块级替换**：`withMemo` 复用缓存 vnode 时，父级 `dynamicChildren`
+   长度在两个块间不一致 ⇒ Vue 走全量 `patchChildren`（而非块级快路径）⇒ 适配器报**结构变更**
+   （removes/inserts）⇒ A/B 判据 ⑥ 按 `takePatches() === null` 判红。修法：夹具的 v-memo 元素加
+   **静态 `:key`**（对齐稳定）。★这不是 Vue 的 bug（无 key 的同级替换本就可能重建），而是**夹具形态**
+   问题——但它是 A/B 判据的**真实约束**，已写进夹具注释。
+2. **`:key` 在非列表元素上会建槽位**（`attr.key`，kind='prop'）⇒ 运行时 `toF32('memo')` **抛错**
+   （或数值 key 时发一条无意义 SET_PROP）。`:key` 在任何位置都只是 **diff 提示**、不是可渲染属性
+   ⇒ `build.ts` 统一跳过（此前只跳列表内的 `isKeyBinding`）。
+3. **`gen-vapor-fixture.mjs` 的文本级改写器丢裸属性**（`v-once` 这类**无 `=值`** 的属性被 attrRe
+   忽略）⇒ A/B 的 B 路**丢了 v-once**（两侧语义不等价却"判据全绿"）。修法：补裸属性扫描
+   （先挖掉带引号的值再扫，防值内 token 被误认成属性——首版实测注入过伪属性 `"color:": ""`）。
+
+**验证**：单测 **+25**（`vapor-sfc-to-tree` once/memo 编译+运行时 6 组 · `mp-transform` 修饰符 7 组 ·
+`vapor-events` 反向更新）；**真机**：`run-vapor` 判据 **12/12**（新增 ⑪ 逐节点核对：
+`once-frozen=38B→节点[14]` / `plain-updated=42B→节点[8]` / `memo-clean=0B（跳过）` / `memo-dirty=38B→节点[16]`）；
+`run-vapor-ab` 全过（B 路 v-once/v-memo 语义补齐后仍逐项等价）· `run-vapor-list` 6/6。
+**破坏性验证**：once 门失效 ⇒ 红；memo 门失效（永远脏）⇒ 红（均先确认基线绿）。

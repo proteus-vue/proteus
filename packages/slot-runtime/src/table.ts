@@ -61,6 +61,48 @@ export interface SlotSubscription {
   sourceExpr?: string
   /** 外层列表的 listId（嵌套时才有；运行时先取外层行，再在行上求内层数组） */
   parentListId?: number
+
+  /* ── ★★P2-5（2026-10-03）：v-once / v-memo 语义 ── */
+
+  /**
+   * ★`v-once`：该槽位**只写一次**（首次 relink 写入后永久冻结）。
+   *
+   * 【语义与实现】（Vue：元素只渲染一次、之后不再更新）
+   *   · 编译期：v-once 子树内的绑定打上本标记；
+   *   · 运行时：首次写值后记入 `onceWritten`，此后再不写（源变化/relink 都跳过）。
+   *   ★为什么是"建槽位但只写一次"而不是"不建槽位"：初值回填走的是同一张槽位表
+   *     （`instantiateTemplate` 按槽位填首帧）——不建槽位会让首帧**没有值**（空白）。
+   *     观测语义（冻结在首帧值）与"不建槽位"等价，且复用同一条回填链（少一条路径 = 少一处能分叉的实现）。
+   *   ★诚实边界：v-for 行内的 v-once 不按此实现（诊断，见 build.ts）——官方在列表里用
+   *     **共享缓存槽**（首项内容冻结后复用给所有行，`_cache[0]`），语义反直觉，不照抄。
+   */
+  once?: boolean
+  /**
+   * ★`v-memo`：该槽位属于某个 memo 组；组内依赖**全都没变**时跳过写入。
+   *
+   * 【语义】（Vue：`v-memo="[a,b]"` ⇒ 依赖未变则跳过子树更新）
+   *   依赖表达式编译成程序存在 `SubscriptionTable.memoGroups`；运行时按组比较
+   *   （Object.is 逐项）——变了才写、并把新值记为基线下一次比较用。
+   *   ★关键：依赖源必须在**订阅图**里（编译期把 deps 的根也挂到源上）——
+   *     否则"依赖变了"这件事根本不会触发求值（静默漏更新）。
+   */
+  memoId?: number
+}
+
+/**
+ * ★★**memo 组**（P2-5）——`v-memo="[a, b]"` 的依赖程序表（纯 JSON，可序列化）。
+ *
+ * 【为什么依赖单独成表而不是内联在每个槽位上】同一子树里的多个槽位共享同一组依赖
+ *   （元素上有 v-memo，子树里可能有多个绑定）⇒ 内联会重复编译同一份表达式，且
+ *   运行时同一组要多份快照（组语义是"任一依赖变了 ⇒ 整棵子树更新"）。
+ */
+export interface MemoGroup {
+  /** 组 id（编译期按出现顺序分配） */
+  memoId: number
+  /** 依赖表达式程序（按源码书写顺序） */
+  deps: import('./expr').ExprProgram[]
+  /** 依赖源码（诊断/对账用） */
+  depsSrc: string[]
 }
 
 /** 一个响应式源的订阅条目 */
@@ -118,6 +160,11 @@ export interface SubscriptionTable {
   sources: SourceSubscription[]
   /** 求值函数表（id → 形态声明） */
   evaluators: EvaluatorSpec[]
+  /**
+   * ★★memo 组表（P2-5）——`v-memo` 的依赖程序（缺省 = 无 v-memo 使用；既有产物不变）。
+   *   运行时按 `memoId` 查依赖、按「组」比较（任一依赖变化 ⇒ 组内槽位照常写）。
+   */
+  memoGroups?: MemoGroup[]
   /** 未走 L1 的槽位（诊断：解释"为什么这个绑定没有加速"） */
   l0Slots: Array<{ slotId: number; nodeId: number; propKey: string; reason: string }>
   /** 统计（棘轮 / 覆盖率度量用） */

@@ -293,6 +293,23 @@ export interface TemplateBindingRef {
   line?: number
   /** 是否在运行时才可判定的 v-if 分支内（C5 判定输入） */
   inRuntimeBranch: boolean
+  /**
+   * ★★**v-once**（P2-5，2026-10-03）：该绑定位于 v-once 子树内（含元素自身）。
+   *   运行时语义 = **只写一次**（首次写入后冻结）——见 `SlotSubscription.once`。
+   */
+  once?: boolean
+  /**
+   * ★★**v-memo**（P2-5）：该绑定位于某 v-memo 元素内，携带组 id 与**依赖源码**。
+   *
+   * 【依赖怎么来】`v-memo="[a, b]"` 的数组字面量元素（静态可枚举才支持；
+   *   非数组字面量 ⇒ 产诊断——"摘要"语义要逐项比较，动态形态无法静态建表）。
+   */
+  memo?: { memoId: number; deps: string[] }
+  /**
+   * ★**v-memo 形态非法**（非数组字面量）：本绑定位于该元素内，但依赖表建不起来。
+   *   订阅产物侧据此**产诊断**（不静默按"总是更新"跑——那会让"优化没生效"不可见）。
+   */
+  memoInvalid?: true
 }
 
 /**
@@ -328,6 +345,7 @@ export function collectTemplateBindings(
 
   let nextElementIndex = 0
   let nextListId = 0 // ★v-for 的稳定 id（按出现顺序 ⇒ 产物可复现）
+  let nextMemoId = 0 // ★P2-5：v-memo 组 id（按出现顺序 ⇒ 产物可复现）
   type ListCtx = NonNullable<TemplateBindingRef['listContext']> | null
   const walk = (
     nodes: unknown[],
@@ -338,6 +356,12 @@ export function collectTemplateBindings(
     parentElementIndex = 0,
     /** ★当前所处的 v-for 上下文（外层为 null） */
     listCtx: ListCtx = null,
+    /** ★P2-5：当前是否在 v-once 子树内（含元素自身） */
+    onceCtx = false,
+    /** ★P2-5：当前所处的 v-memo 上下文（元素自身起，含子树） */
+    memoCtx: { memoId: number; deps: string[] } | null = null,
+    /** ★P2-5：当前元素有非法形态 v-memo（非数组字面量）——随子树下行，供插值分支产诊断 */
+    memoInvalidCtx = false,
   ): void => {
     for (const raw of nodes) {
       const n = raw as {
@@ -382,6 +406,11 @@ export function collectTemplateBindings(
         //   否则「:key 写在插值之后」的模板会让前面的绑定拿不到 keyField。
         let keyFieldOfElement: string | undefined
         let forCodeOfElement: string | undefined
+        // ★★P2-5：v-once / v-memo **同样在预扫描取**（与 v-for 同一理由：与属性书写顺序无关，
+        //   元素自身的绑定也属于该元素的作用范围）
+        let hasOnceOfElement = false
+        let memoDepsOfElement: string[] | undefined
+        let memoInvalidOfElement = false
         for (const p of n.props ?? []) {
           if (p.name === 'bind' && p.arg?.content === 'key' && p.exp?.content) {
             keyFieldOfElement = p.exp.content.trim()
@@ -389,7 +418,28 @@ export function collectTemplateBindings(
           if (p.name === 'for' && p.exp?.content) {
             forCodeOfElement = p.exp.content.trim()
           }
+          if (p.name === 'once') hasOnceOfElement = true
+          if (p.name === 'memo' && p.exp?.content) {
+            // ★只支持**数组字面量**形态（静态可枚举的依赖）：`v-memo="[a, b]"`。
+            //   非数组字面量（`v-memo="foo"`）⇒ 标记非法（调用方产诊断——"摘要"需逐项比较，
+            //   动态形态建不了静态依赖表，见 TemplateBindingRef.memo 注释）。
+            const m = p.exp.content.trim().match(/^\[([\s\S]*)\]$/)
+            if (m) {
+              memoDepsOfElement = (m[1] ?? '')
+                .split(',')
+                .map((x) => x.trim())
+                .filter(Boolean)
+            } else {
+              memoInvalidOfElement = true
+            }
+          }
         }
+        // ★memo 组上下文：本元素起生效（含子树）；元素自身已有 memo 时不叠加（最近者胜——
+        //   与 Vue 的"内层 v-memo 覆盖外层"一致）
+        const myMemo: { memoId: number; deps: string[] } | null = memoDepsOfElement
+          ? { memoId: nextMemoId++, deps: memoDepsOfElement }
+          : memoCtx
+        const myOnce = onceCtx || hasOnceOfElement
 
         // ★★先建立**行上下文**，再处理该元素的其余绑定（本仓实测的正确性修复）
         //
@@ -455,6 +505,9 @@ export function collectTemplateBindings(
                 undefined,
                 false,
                 rowCtxOfElement.listId,
+                myOnce,
+                myMemo,
+                memoInvalidOfElement,
               ),
             )
           }
@@ -533,13 +586,13 @@ export function collectTemplateBindings(
           }
           // v-if / v-else-if：条件本身是依赖；★其**内部**属「运行时分支」（C5）
           if (name === 'if' || name === 'else-if') {
-            out.push(binding(String(expCode), `v-${name}`, 'visible', tag, expLine, nextScopes, inBranch, nextScopeSources, myElementIndex, activeListCtx ?? undefined))
+            out.push(binding(String(expCode), `v-${name}`, 'visible', tag, expLine, nextScopes, inBranch, nextScopeSources, myElementIndex, activeListCtx ?? undefined, false, undefined, myOnce, myMemo, memoInvalidOfElement))
             nextBranch = true
             continue
           }
           // v-show 与 v-if 不同：节点**始终在树内**，只是可见性切换 ⇒ 不算运行时分支
           if (name === 'show') {
-            out.push(binding(String(expCode), 'v-show', 'visible', tag, expLine, nextScopes, inBranch, nextScopeSources, myElementIndex, activeListCtx ?? undefined))
+            out.push(binding(String(expCode), 'v-show', 'visible', tag, expLine, nextScopes, inBranch, nextScopeSources, myElementIndex, activeListCtx ?? undefined, false, undefined, myOnce, myMemo, memoInvalidOfElement))
             continue
           }
           // 动态绑定（:x / v-bind:x / v-model）——★属性名在 arg 里
@@ -584,11 +637,15 @@ export function collectTemplateBindings(
                 (activeListCtx ?? undefined),
                 // ★`:key` 自身标记（它不是可更新渲染属性 ⇒ 建槽位时跳过；但它的表达式是**行标识字段**）
                 isKey,
+                undefined,
+                myOnce,
+                myMemo,
+                memoInvalidOfElement,
               ),
             )
           }
         }
-        walk((n.children ?? []) as unknown[], nextScopes, nextBranch, nextScopeSources, myElementIndex, nextListCtx ?? listCtx)
+        walk((n.children ?? []) as unknown[], nextScopes, nextBranch, nextScopeSources, myElementIndex, nextListCtx ?? listCtx, myOnce, myMemo, memoInvalidOfElement)
         continue
       }
       // ★插值（type 5）本身不是元素：它归属**最近遍历到的元素**（INTERPOLATION 只出现在元素子节点里）
@@ -598,12 +655,12 @@ export function collectTemplateBindings(
         const code = typeof c === 'object' ? c.content : (c as unknown as string)
         if (code) {
           out.push(
-            binding(String(code), '{{ }}', 'text.content', tag, c?.loc?.start?.line ?? line, scopes, inBranch, scopeSources, parentElementIndex, activeListCtx ?? undefined),
+            binding(String(code), '{{ }}', 'text.content', tag, c?.loc?.start?.line ?? line, scopes, inBranch, scopeSources, parentElementIndex, activeListCtx ?? undefined, false, undefined, onceCtx, memoCtx, memoInvalidCtx),
           )
         }
         continue
       }
-      if (Array.isArray(n.children)) walk(n.children, nextScopes, nextBranch, nextScopeSources, parentElementIndex)
+      if (Array.isArray(n.children)) walk(n.children, nextScopes, nextBranch, nextScopeSources, parentElementIndex, null, onceCtx, memoCtx, memoInvalidCtx)
     }
   }
 
@@ -662,6 +719,12 @@ function binding(
   isKeyBinding = false,
   /** ★本绑定**所属列表**的 listId（v-for 源绑定专用；2026-10-03 嵌套批次） */
   ownListId?: number,
+  /** ★P2-5：v-once 子树内（含元素自身） */
+  once = false,
+  /** ★P2-5：v-memo 组（含元素自身；内层覆盖外层） */
+  memo: { memoId: number; deps: string[] } | null = null,
+  /** ★P2-5：v-memo 形态非法（非数组字面量）——产诊断用 */
+  memoInvalid = false,
 ): TemplateBindingRef {
   return {
     code: code.trim(),
@@ -677,6 +740,10 @@ function binding(
     listContext: listContext ? { ...listContext, isKeyBinding } : undefined,
     // ★v-for 源绑定自带的本列表 listId（见 binding 签名注释；其余绑定为 undefined）
     ownListId,
+    // ★P2-5：只在真置位时带字段（缺省省略 ⇒ 既有产物逐字节不变）
+    ...(once ? { once: true } : {}),
+    ...(memo ? { memo: { memoId: memo.memoId, deps: [...memo.deps] } } : {}),
+    ...(memoInvalid ? { memoInvalid: true as const } : {}),
   }
 }
 

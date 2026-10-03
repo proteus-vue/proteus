@@ -227,6 +227,8 @@ export function compileVueSfc(source: string, options: CompileOptions = {}): Com
     scopeId,
     vModelBindings: tplResult.vModelBindings,
     usesNavigate: tplResult.usesNavigate,
+    // ★P2-4：v-model 转换修饰符（trim/number）随管线传给 script 侧
+    vModelModifiers: tplResult.vModelModifiers,
     selfHandlers: tplResult.selfHandlers,
     onceHandlers: tplResult.onceHandlers,
     inlineHandlers: tplResult.inlineHandlers,

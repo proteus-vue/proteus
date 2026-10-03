@@ -37,7 +37,7 @@
 //
 // 【产物】hosts/android/bridge/dist/bundle-vapor.js（IIFE，QuickJS 直接 eval）
 // 【调用】Java：`__proteusVaporRun(argsJson)`（见 MainActivity 的 `vapor` 通路）
-import { instantiateTemplate, ListRegistry, PropKeyTable, StringPool, SlotRuntime, VaporRuntime, evalExpr } from '@proteus-vue/slot-runtime'
+import { instantiateTemplate, ListRegistry, PropKeyTable, StringPool, SlotRuntime, VaporRuntime, decodeOps, evalExpr, OpCode } from '@proteus-vue/slot-runtime'
 // ★★P2-3（2026-10-03）：事件派发语义（含修饰符 .stop/.self/.once）下沉到共享实现——
 //   本桥不再内联"链序 + 修饰符"逻辑（iOS/Harmony 接同一份 ⇒ 不会漂移）
 import { dispatchGesture, indexEventBindings, createDispatchState } from '@proteus-vue/slot-runtime'
@@ -269,7 +269,23 @@ interface VaporReport {
    *   判据核它等于「静态段 + 实参求值」的完整串（不是单字段/单个源值）——
    *   这是"段求值真的在设备上跑了"的证据（不依赖宿主回执）。
    */
-  mix_text_probe: Array<{ id: number; text: string }>
+  mix_text_probe: Array<{ id: number; text: string; statics: string[] }>
+  /**
+   * ★★**P2-5 门禁轮读数**（v-once 冻结 / v-memo 组门）：每轮的「应跳过 vs 实际发了几条指令」。
+   *   判据核：expect_skip=true 的轮 **ops 必须为 0**（且不含目标文本）；
+   *            expect_skip=false 的轮 **ops 必须 > 0**（证明链路没断——"跳过"是语义而非失效）。
+   */
+  gate_rounds: Array<{ name: string; ops: number; texts: string[]; expect_skip: boolean }>
+  /**
+   * ★★门禁轮的**节点级**读数（P2-5 判据要从"发没发"升级到"**发给谁**"）。
+   *   为什么必须（本仓真机实测踩到的判据缺陷）：夹具里同时有 once 节点与**同源的对照节点**——
+   *   对照节点的更新是**正确行为**，按"整批文本里有没有 onceVal 的新值"判会把正确行为判成红。
+   *   ⇒ 逐节点记录：判据核「once 节点 id **不在**受更新集里」且「对照节点 id **在**」。
+   */
+  gate_text_nodes: Array<{ name: string; entries: Array<{ nodeId: number; text: string }> }>
+  /** ★once / memo 的**节点 id**（判据按 id 精确核对；-1 = 本端无该夹具） */
+  once_node_id: number
+  memo_node_id: number
   /**
    * ★★**更新后的文本串**（P2-2 第二半）：逐轮记录内核回执 `text_probe.text`。
    *   混合文本更新若不完整（丢静态段）⇒ 这里的串会缺前缀（判据核 `·` 仍在）。
@@ -341,6 +357,10 @@ function makeData(rows: number): Record<string, unknown> {
     //   ——判据 ⑨ 核"点了内层，**外层 handler 不许跑**"（.stop 真的终止了冒泡）
     stopOuterW: 300,
     stopInnerW: 120,
+    // ★★P2-5 夹具（2026-10-03）：once 冻结 / memo 组门——判据 ⑪ 用（见 runShort 的更新轮）
+    onceVal: 1,
+    memoDep: 0,
+    memoVal: 1,
     tapCount: 0,
   }
 }
@@ -791,6 +811,10 @@ function runAb(args: VaporArgs): string {
     //   该节点无宽度 ⇒ A/B 几何对比假红；夹具源必须两路对齐）
     const abStopOuterW = ref(dataB.stopOuterW)
     const abStopInnerW = ref(dataB.stopInnerW)
+    // ★P2-5 夹具（同上：B 路也要提供源，否则 Vue 侧读到 undefined ⇒ 文本序列不对齐）
+    const abOnceVal = ref(dataB.onceVal)
+    const abMemoDep = ref(dataB.memoDep)
+    const abMemoVal = ref(dataB.memoVal)
     /**
      * ★★B 路更新的**同步驱动柄**（2026-10-01 更新路径 A/B）。
      *
@@ -807,7 +831,10 @@ function runAb(args: VaporArgs): string {
       name: 'VaporAbApp',
       setup() {
         abRootInst = getCurrentInstance() as unknown as { update?: () => void }
-        return { list: abList, boxW: abBoxW, padW: abPadW, stopOuterW: abStopOuterW, stopInnerW: abStopInnerW }
+        return {
+          list: abList, boxW: abBoxW, padW: abPadW, stopOuterW: abStopOuterW, stopInnerW: abStopInnerW,
+          onceVal: abOnceVal, memoDep: abMemoDep, memoVal: abMemoVal,
+        }
       },
       render: abRender,
     }
@@ -1502,7 +1529,7 @@ function runShort(args: VaporArgs): string {
     tpl_nodes: 0, tpl_ok: false, sub_l1: 0, sub_l0: 0, sub_l1_rate: 0, sub_sources: [],
     inst_ms: 0, inst_nodes: 0, inst_reused_ids: 0, inst_allocated_ids: 0, inst_rows: 0,
     inst_values_filled: 0, inst_virtual_rows: 0, inst_text_filled: 0, inst_width_filled: 0,
-    mix_text_probe: [], text_probe_rounds: [],
+    mix_text_probe: [], text_probe_rounds: [], gate_rounds: [], gate_text_nodes: [], once_node_id: -1, memo_node_id: -1,
     mount_ms: 0, mount_nodes: 0,
     updates_run: 0, ops_bytes: 0, ops_ms: 0, apply_ms: 0, text_synced_total: 0, update_evidence: [], geom_probe: [], channels: [],
     ev_bindings: 0, ev_handlers: 0, ev_modifiers: 0, taps: 0, tap_evidence: [],
@@ -1555,10 +1582,19 @@ function runShort(args: VaporArgs): string {
     rep.inst_text_filled = inst.nodes.filter((n) => typeof n.text === 'string' && n.text.length > 0).length
     rep.inst_width_filled = inst.nodes.filter((n) => typeof n.width === 'number').length
     // ★P2-2：多段拼接节点的首帧文本（模板里只有**段表**的节点——判据核"完整拼接"）
-    const segNodeIds = new Set(tpl.nodes.filter((n) => (n as { textSegments?: unknown[] }).textSegments?.length).map((n) => n.id))
+    const segNodes = tpl.nodes.filter((n) => (n as { textSegments?: unknown[] }).textSegments?.length)
+    const segNodeIds = new Set(segNodes.map((n) => n.id))
+    // ★静态段清单（判据做"子序列"校验：静态段按序都在文本里 ⇒ 拼接完整；
+    //   写死某个字符（如 '·'）会把判据绑死在某一版夹具上——本仓实测踩到）
+    const staticsOf = new Map(segNodes.map((n) => [
+      n.id,
+      ((n as { textSegments?: Array<{ text?: string }> }).textSegments ?? [])
+        .filter((sg) => sg.text !== undefined && sg.text !== '')
+        .map((sg) => String(sg.text)),
+    ]))
     rep.mix_text_probe = inst.nodes
       .filter((n) => segNodeIds.has(n.id))
-      .map((n) => ({ id: n.id, text: String((n as { text?: string }).text ?? '') }))
+      .map((n) => ({ id: n.id, text: String((n as { text?: string }).text ?? ''), statics: staticsOf.get(n.id) ?? [] }))
     if (rep.inst_text_filled === 0) notes.push('⚠ 实例树里没有任何非空文本——回填链可疑')
 
     // ── ③ 渲染：交给宿主（Rust 核心算几何 + 下发绘制指令）──
@@ -1853,6 +1889,59 @@ function runShort(args: VaporArgs): string {
         })
         void changedSources
       }
+    }
+
+    /* ═══════════ ★★P2-5 门禁轮（2026-10-03）：v-once 冻结 / v-memo 组门 ═══════════
+     *
+     * 【为什么单独一轮】前面几轮的判据是"改了数据 ⇒ 必须发指令"；而 P2-5 的语义恰好相反：
+     *   **该跳过的必须跳过**（once 冻结 / memo 依赖净）。"没发指令"必须被区分成
+     *   「正确跳过」与「链路断了」——区分方式 = 同一轮里既有**应跳过**的源、也有**应放行**的源。
+     */
+    const gateRounds: Array<{ name: string; ops: number; texts: string[]; expect_skip: boolean }> = []
+    const gateTextNodes: Array<{ name: string; entries: Array<{ nodeId: number; text: string }> }> = []
+    if (triggers.has('onceVal') || triggers.has('memoDep')) {
+      // ★逐节点定位（P2-5 判据要"精确到节点"）：once 槽位的模板 nodeId 直接是**首行实例 id**
+      //   （静态节点用模板序 id）；memo 槽位同理。
+      const allSlotsFlat = table.sources.flatMap((s3) => s3.slots)
+      rep.once_node_id = allSlotsFlat.find((x) => x.once)?.nodeId ?? -1
+      rep.memo_node_id = allSlotsFlat.find((x) => x.memoId !== undefined)?.nodeId ?? -1
+      const runGate = (name: string, mut: () => void, expectSkip: boolean): void => {
+        mut()
+        for (const [, cb] of triggers) cb()
+        vapor.relink(ctx)
+        slotRt.flush()
+        const payload = captured.length ? captured[captured.length - 1]! : new Uint8Array(0)
+        captured.length = 0
+        const texts: string[] = []
+        const entries: Array<{ nodeId: number; text: string }> = []
+        if (payload.length > 0) {
+          const d = decodeOps(payload)
+          for (const op of d.ops) {
+            if (op.op === OpCode.SET_TEXT) {
+              const t = String(d.strings.valueOf((op as { textRef: number }).textRef))
+              texts.push(t)
+              entries.push({ nodeId: (op as { nodeId: number }).nodeId, text: t })
+            }
+          }
+          try {
+            proteusHost.applyOps(JSON.stringify(Array.from(payload)))
+          } catch {
+            /* 回执失败不阻断（判据看 JS 侧的"发了什么"） */
+          }
+        }
+        gateRounds.push({ name, ops: payload.length, texts, expect_skip: expectSkip })
+        gateTextNodes.push({ name, entries })
+      }
+      // ① v-once：改源 ⇒ 必须**跳过**（冻结）
+      runGate('once-frozen', () => { data.onceVal = 42 }, true)
+      // ② 对照：同轮改**普通**文本源（无 once）⇒ 必须放行（证明"跳过"不是链路断了）
+      runGate('plain-updated', () => { data.tapCount = 7; (data.list as Array<{ title: string }>)[0]!.title = 'gate' }, false)
+      // ③ v-memo 依赖净（改 memoVal、依赖 memoDep 不动）⇒ 跳过
+      runGate('memo-clean', () => { data.memoVal = 99 }, true)
+      // ④ v-memo 依赖脏（改 memoDep）⇒ 放行，且写出**最新** memoVal
+      runGate('memo-dirty', () => { data.memoDep = 1 }, false)
+      rep.gate_rounds = gateRounds
+      rep.gate_text_nodes = gateTextNodes
     }
 
     // 几何真值对比（内核真源：探针节点的宽度应随数据变——第 2 行参与每轮更新）

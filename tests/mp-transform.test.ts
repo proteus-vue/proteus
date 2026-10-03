@@ -1758,3 +1758,89 @@ function setN() {
     expect(r.js).toContain('String((_p$source = p.source) !== null && _p$source !== void 0 ? _p$source :')
   })
 })
+
+describe('★★P2-4（2026-10-03）：v-model 修饰符 .trim / .number / .lazy', () => {
+  const opts = { filename: 'p.vue' } as never
+  const t = (tpl: string) => transformTemplateToWxml(tpl, opts) as unknown as Record<string, unknown>
+
+  it('① `.trim` ⇒ 回写 handler 施加 trim（对齐官方 castValue 的第一半）', () => {
+    const r = t('<input v-model.trim="name" />')
+    expect(r.vModelModifiers).toEqual([{ model: 'name', modifiers: ['trim'] }])
+    const js = (transformScriptToPage('', opts, { vModelBindings: r.vModelBindings as string[], vModelModifiers: r.vModelModifiers as never }) as { js: string }).js
+    expect(js).toContain('this.setData({ name: String(e.detail.value).trim() })')
+  })
+
+  it('② `.number` ⇒ looseToNumber 语义（parseFloat 得数转数、NaN 原样——**不是** Number()）', () => {
+    const r = t('<input v-model.number="count" />')
+    expect(r.vModelModifiers).toEqual([{ model: 'count', modifiers: ['number'] }])
+    const js = (transformScriptToPage('', opts, { vModelBindings: r.vModelBindings as string[], vModelModifiers: r.vModelModifiers as never }) as { js: string }).js
+    // ★判据打在语义上：parseFloat + isNaN 回退（Number('') === 0 会**静默清空**——官方不是这语义）
+    expect(js).toContain('parseFloat(v)')
+    expect(js).toContain('isNaN(n) ? v : n')
+    expect(js, '不得用 Number()（空串会变 0，与官方 looseToNumber 不同）').not.toContain('Number(e.detail.value)')
+  })
+
+  it('③ `.lazy` ⇒ 事件通道换成 bindblur（提交语义；MP 无 change）', () => {
+    const r = t('<input v-model.lazy="name" />')
+    const wxml = String(r.wxml)
+    expect(wxml, '.lazy 应绑 bindblur').toContain('bindblur="proteusOnNameInput"')
+    expect(wxml, '不应再有 bindinput').not.toContain('bindinput=')
+    // .lazy 不进转换表（它改的是事件通道，不是值的转换）
+    expect(r.vModelModifiers).toEqual([])
+    // 反向：不带 .lazy 仍是 bindinput（既有行为不变）
+    const plain = t('<input v-model="name" />')
+    expect(String(plain.wxml)).toContain('bindinput="proteusOnNameInput"')
+  })
+
+  it('④ 链式 `.trim.number.lazy` ⇒ 先 trim 再 number + bindblur（与官方 castValue 次序一致）', () => {
+    const r = t('<input v-model.trim.number.lazy="name" />')
+    expect(r.vModelModifiers).toEqual([{ model: 'name', modifiers: ['trim', 'number'] }])
+    expect(String(r.wxml)).toContain('bindblur=')
+    const js = (transformScriptToPage('', opts, { vModelBindings: r.vModelBindings as string[], vModelModifiers: r.vModelModifiers as never }) as { js: string }).js
+    const m = js.match(/proteusOnNameInput\(e\) \{[\s\S]*?\},/)?.[0] ?? ''
+    // 次序：trim 在内、number 在外（与官方 castValue：先 trim 再 looseToNumber）
+    //   ⇒ 生成文本里 `parseFloat(<... String(...).trim() ...>)`：parseFloat 在前、trim() 在其内
+    expect(m, `handler 应含 trim：${m}`).toContain('trim()')
+    expect(m).toContain('parseFloat')
+    const iParse = m.indexOf('parseFloat')
+    const iTrim = m.indexOf('trim()')
+    expect(iTrim, 'trim() 必须在 parseFloat 的实参里（先 trim 再转数）').toBeGreaterThan(iParse)
+  })
+
+  it('★⑤ 诚实边界：组件上的修饰符 ⇒ 诊断（官方走 modelModifiers prop，MP 无该通道）', () => {
+    const r = t('<p-input v-model.trim="name" />')
+    const warns = (r.warnings ?? []) as string[]
+    expect(warns.some((w) => w.includes('组件') && w.includes('modelModifiers')), `组件修饰符必须诊断：${warns.join(' | ')}`).toBe(true)
+    // 不得静默当成原生 input 处理（组件产物仍是 prop + update 事件）
+    expect(String(r.wxml)).toContain('bind:update-modelValue=')
+  })
+
+  it('★⑥ 未知修饰符 ⇒ 诊断（列出支持的三个），绑定照常', () => {
+    const r = t('<input v-model.foo="name" />')
+    const warns = (r.warnings ?? []) as string[]
+    expect(warns.some((w) => w.includes('.foo') && w.includes('.trim / .number / .lazy'))).toBe(true)
+    expect(String(r.wxml)).toContain('bindinput="proteusOnNameInput"')
+  })
+
+  it('★⑦ 同模型多组修饰符 ⇒ 首见为准 + 警告（handler 名派生 ⇒ 无法并存）', () => {
+    const r = t('<input v-model.trim="name" /><input v-model.number="name" />')
+    expect(r.vModelModifiers).toEqual([{ model: 'name', modifiers: ['trim'] }])
+    const warns = (r.warnings ?? []) as string[]
+    expect(warns.some((w) => w.includes('多组 v-model 修饰符')), `应警告撞名：${warns.join(' | ')}`).toBe(true)
+  })
+})
+
+describe('★★P2-4（Vapor 路）：v-model 无回写通道必须**可见**（不静默半支持）', () => {
+  it('v-model 产诊断（含修饰符时一并标注），普通插值不受影响', async () => {
+    const { buildLayoutTemplate } = await import('@proteus-vue/compiler')
+    const sfc = (tpl: string) => `<template>\n${tpl}\n</template>\n<script setup lang="ts">\nconst name = ref('')\n</script>\n`
+    const r1 = buildLayoutTemplate(sfc(`<input v-model="name" />`), 'v.vue')
+    expect(r1.diagnostics.some((d) => d.code === 'VAPOR_VMODEL_NO_WRITEBACK'), 'v-model 必须诊断').toBe(true)
+    const r2 = buildLayoutTemplate(sfc(`<input v-model.trim.number="name" />`), 'v.vue')
+    const msg = r2.diagnostics.map((d) => d.message).join(' | ')
+    expect(msg, '修饰符应一并标注（依赖回写通道）').toContain('.trim / .number')
+    // 反向：普通插值无诊断（防诊断噪声）
+    const r3 = buildLayoutTemplate(sfc(`<p-text>{{ name }}</p-text>`), 'v.vue')
+    expect(r3.diagnostics).toHaveLength(0)
+  })
+})

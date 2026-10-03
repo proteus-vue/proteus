@@ -91,6 +91,25 @@ export class VaporRuntime {
   private lastCtx: EvalContext | undefined
   private loaded = false
 
+  /* ── ★★P2-5（2026-10-03）：v-once / v-memo 的运行时状态 ── */
+
+  /**
+   * v-once：已写过的槽位 id（**只写一次**——首次写入后永久冻结）。
+   * ★为什么记在运行时（而不是把槽位从表里删掉）：表是编译产物（只读、可序列化）；
+   *   而"写过没有"是**实例态**（页面重挂载 ⇒ 重新写一次，与官方"重挂载重新渲染"一致）。
+   */
+  private readonly onceWritten = new Set<number>()
+  /** v-memo：各组的**依赖基线**（上一次比较时的值；缺省 = 还没建过基线 ⇒ 首帧必脏） */
+  private readonly memoBaseline = new Map<number, unknown[]>()
+  /**
+   * v-memo：组在本**帧**已被判定为"依赖变了"的标记（值 = 帧号）。
+   *
+   * 【为什么按帧记（组语义的关键）】一帧里多个源变化可能触到同组多个槽位——
+   *   第一次判定"变了"之后，**同帧其余槽位必须照常写**（组 = 子树整体更新）；
+   *   而"一次判定管一帧"的边界只有 `flush()`（见 `SlotRuntime.frameId`）。
+   */
+  private readonly memoDirtyFrame = new Map<number, number>()
+
   constructor(
     readonly table: SubscriptionTable,
     readonly rt: SlotRuntime,
@@ -281,12 +300,48 @@ export class VaporRuntime {
         //   把它当标量写 ⇒ 求值器返回数组 ⇒ `toF32(数组)` 抛错（本仓实测就是这个）。
         //   ⇒ 结构性的 LIST_SET/LIST_SPLICE 属独立课题（需数据源引用协议），当前显式跳过。
         if (spec.kind === 'list-data') continue
+        // ★★P2-5：**v-once** —— 写过一次就永久跳过（源变化 / relink 都不再写）
+        if (spec.once && this.onceWritten.has(spec.slotId)) continue
+        // ★★P2-5：**v-memo** —— 组内依赖全都没变 ⇒ 跳过本槽位（"跳过子树更新"）
+        //   （依赖变了 ⇒ 本帧整组放行——见 memoDirtyFrame 注释）
+        if (spec.memoId !== undefined && !this.memoGroupDirty(spec.memoId, ctx)) continue
         const entry = this.slotById.get(spec.slotId)
         const impl = this.evaluators.get(spec.evaluatorId)
         if (!entry || !impl) continue
         this.rt.setSlot(entry.slot, impl(ctx) as never)
+        if (spec.once) this.onceWritten.add(spec.slotId)
       }
     }
+  }
+
+  /**
+   * ★★**v-memo 组脏判定**（P2-5）：依赖逐项比较（`Object.is`），任一变化即"脏"。
+   *
+   * 【语义（对齐 Vue `withMemo`）】依赖未变 ⇒ **跳过**该子树更新；变了 ⇒ 照常更新，
+   *   并把本次依赖值记为基线供下轮比较。
+   * 【诚实边界】组定义缺失（产物异常）⇒ 返回 true（照常更新）——**不静默冻结**：
+   *   "少一层优化"可接受，"该更新的不更新"不可接受。
+   */
+  private memoGroupDirty(memoId: number, ctx: EvalContext): boolean {
+    const fid = this.rt.frameId
+    if (this.memoDirtyFrame.get(memoId) === fid) return true
+    const group = this.table.memoGroups?.find((g) => g.memoId === memoId)
+    if (!group) return true
+    const now: unknown[] = []
+    for (const prog of group.deps) {
+      try {
+        now.push(evalExpr(prog, ctx as never))
+      } catch {
+        now.push(undefined)
+      }
+    }
+    const prev = this.memoBaseline.get(memoId)
+    const changed = !prev || now.some((v, i) => !Object.is(v, prev[i]))
+    if (changed) {
+      this.memoBaseline.set(memoId, now)
+      this.memoDirtyFrame.set(memoId, fid)
+    }
+    return changed
   }
 
   /**
