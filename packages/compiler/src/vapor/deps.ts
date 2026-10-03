@@ -38,6 +38,13 @@ export interface ExprDeps {
 const EMPTY_DEPS: ExprDeps = { roots: [], unknown: [], listRelative: [], hasCall: false, calls: [], parseFailed: false }
 
 /** JS 内置与常见全局（出现即不算「未识别的源」，避免诊断噪音） */
+/**
+ * ★★★**逻辑容器标签**（P3 批次，2026-10-03）——与 `template.ts` 的 `LOGICAL_CONTAINERS`
+ * **同一条判据**（"两处 id 分配必须同源"是本仓最硬的纪律之一：分叉 ⇒ 指令写错节点且不报错）。
+ *   `Transition`/`KeepAlive`/`Teleport`/`Suspense` 在 Vue 里均**不渲染包裹元素**。
+ */
+const LOGICAL_CONTAINER_TAGS = new Set(['Transition', 'KeepAlive', 'Teleport', 'Suspense'])
+
 const KNOWN_GLOBALS = new Set([
   'Math', 'Date', 'JSON', 'Number', 'String', 'Boolean', 'Array', 'Object', 'console',
   'parseInt', 'parseFloat', 'isNaN', 'isFinite', 'undefined', 'null', 'true', 'false',
@@ -412,11 +419,32 @@ export function collectTemplateBindings(
       let activeListCtx: ListCtx = listCtx
 
       if (n.type === 1 /* ELEMENT */) {
-        // ★★★P3-3（2026-10-03）：`<Transition>` **透传**（与 template.ts **同一条判据**）——
-        //   它不渲染包裹元素 ⇒ **不占节点序号**。两处必须一致，否则 nodeId 空间分叉
+        // ★★★**逻辑容器统一透传**（P3 批次，2026-10-03 · 与 template.ts **同一条判据**）——
+        //   `Transition`/`KeepAlive`/`Teleport`/`Suspense` 在 Vue 里都**不渲染包裹元素**
+        //   ⇒ **不占节点序号**。两处必须一致，否则 nodeId 空间分叉
         //   （症状：指令写到别的节点上，且不报错——本仓踩过的老坑）。
-        if (tag === 'Transition') {
-          walk((n.children ?? []) as unknown[], scopes, inBranch, scopeSources, parentElementIndex, listCtx, onceCtx, memoCtx, memoInvalidCtx)
+        if (LOGICAL_CONTAINER_TAGS.has(tag)) {
+          // ★Suspense：只走 `#default`（与 template.ts 同口径——否则 fallback 子树也会建，
+          //   而它永不隐藏 ⇒ 内容双份）
+          if (tag === 'Suspense') {
+            type Kid = { tag?: string; children?: unknown[]; props?: Array<{ type: number; name: string; arg?: { content?: string } }> }
+            const kids = (n.children ?? []) as Kid[]
+            const slotOf = (c: Kid): string | undefined =>
+              (c.props ?? []).find((p2) => p2.type === 7 && p2.name === 'slot')?.arg?.content
+            const defaultKids = kids.filter((c) => {
+              const slotArg = slotOf(c)
+              return slotArg === undefined || slotArg === 'default'
+            })
+            // ★下钻 `<template #default>`（插槽声明不产元素——与 template.ts 同口径）
+            const flattened: unknown[] = []
+            for (const c of defaultKids) {
+              if (c.tag === 'template') flattened.push(...(c.children ?? []))
+              else flattened.push(c)
+            }
+            walk(flattened, scopes, inBranch, scopeSources, parentElementIndex, listCtx, onceCtx, memoCtx, memoInvalidCtx)
+          } else {
+            walk((n.children ?? []) as unknown[], scopes, inBranch, scopeSources, parentElementIndex, listCtx, onceCtx, memoCtx, memoInvalidCtx)
+          }
           continue
         }
         // ★每个元素（无论是否含绑定）都占一个序号——与 IR builder 的 DFS 编号一致
