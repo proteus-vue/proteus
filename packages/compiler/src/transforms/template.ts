@@ -690,6 +690,60 @@ export const TEMPLATE_RULES: TransformRule[] = [
     decision: 'teleport→root-portal 对齐（Skyline 官方组件）',
   },
   {
+    id: 'template/teleport-root-v-if',
+    phase: 'template',
+    status: 'implemented',
+    title: 'portal 根内容 v-if 拦截（S47：条件卸载会锁死页面）',
+    titleEn: 'Portal root-child v-if interception (S47: conditional unmount can lock the page)',
+    description:
+      '<teleport> 的**直接子元素**带 v-if ⇒ 编译期警告：portal 根内容被条件卸载/重挂，' +
+      'glass-easel 下 portal 挂载异常 + 残留层锁死页面（Skyline 坑 S47 实测：二次打开卡死 + 页面无法滚动）；' +
+      '修法 = 根内容**常驻** + `:class`/`visibility` 驱动显隐与动画。**内层 v-if 不受限**' +
+      '（p-drawer/p-page-container 这些正解自己就在内层用 v-if 渲遮罩）',
+    descriptionEn:
+      'A direct child of <teleport> carrying v-if triggers a compile-time warning: the portal root content being ' +
+      'conditionally unmounted/remounted breaks portal mounting under glass-easel and the residual layer can lock the page ' +
+      '(Skyline pitfall S47, measured: second open freezes + page cannot scroll); fix = keep the root content persistent ' +
+      'and drive visibility/animation with :class/visibility. Inner v-if is NOT restricted (verified solutions like ' +
+      'p-drawer/p-page-container use inner v-if for their mask).',
+    why: 'S47 是**真机页面锁死**级缺陷（比"不显示"严重）——只写在 markdown 拦不住；与 sleep/重复跑测试同源：只有工具层门禁是结构性的。检查范围收窄到直接子元素是为了不误伤已验证组件',
+    whyEn: 'S47 is a page-freezing defect (worse than not-rendering) — markdown documentation cannot enforce it; same rationale as the sleep/repeat-suite gates: only a tool-level gate is structural. Scoping the check to direct children avoids false positives on verified components.',
+    when: '模板出现 <teleport> 且其直接子元素带 v-if 时',
+    example: {
+      before: '<teleport to="body"><view v-if="open">…</view></teleport>',
+      after: '<teleport to="body"><view class="root" :class="{ open }">…</view></teleport>（根内容常驻 + class 驱动）',
+    },
+    verify: 'tests/mp-portal-pitfalls.test.ts',
+    source: 'packages/compiler/src/template.ts → serializeElement（teleport portal 陷阱检查）',
+    decision: 'GP3-b0 portal 陷阱机器化（S47 落成编译期检查）',
+  },
+  {
+    id: 'template/teleport-v-if-dropped',
+    phase: 'template',
+    status: 'implemented',
+    title: 'teleport 自身 v-if 丢弃警告（S42：条件永远失效）',
+    titleEn: 'teleport self v-if dropped warning (S42: condition silently ignored)',
+    description:
+      '<teleport> **自身**带 v-if ⇒ 编译期警告：本编译器的 teleport 分支直接序列化 children，' +
+      'v-if **被静默丢弃**（产物取证：`wx:if` 完全消失，root-portal 无条件挂载）⇒ 条件永远失效；' +
+      '修法 = 常驻 portal + `:class` 驱动显隐。**不顺手支持它**的理由：portal 上的 wx:if 正是 S47 的挂载异常形态',
+    descriptionEn:
+      '<teleport> itself carrying v-if triggers a compile-time warning: this compiler\'s teleport branch serializes ' +
+      'children directly, so v-if is silently dropped (artifact evidence: wx:if disappears entirely, root-portal mounts ' +
+      'unconditionally) and the condition never takes effect; fix = persistent portal + :class-driven visibility. ' +
+      'We deliberately do NOT support it: wx:if on the portal is exactly the S47 broken-mount form.',
+    why: '静默丢弃比报错更危险（用户以为能开关，实际恒挂载）；且"顺手支持"会把用户推进 S47 的坑 ⇒ 警告 + 指向正解',
+    whyEn: 'Silent dropping is more dangerous than an error (users think the toggle works while it always mounts); and "just supporting it" would push users into the S47 hole — so warn and point at the correct pattern.',
+    when: '模板出现 <teleport> 且其自身带 v-if 时',
+    example: {
+      before: '<teleport to="body" v-if="open">…</teleport>',
+      after: '<teleport to="body"><view class="root" :class="{ open }">…</view></teleport>',
+    },
+    verify: 'tests/mp-portal-pitfalls.test.ts',
+    source: 'packages/compiler/src/template.ts → serializeElement（teleport portal 陷阱检查）',
+    decision: 'GP3-b0 portal 陷阱机器化（S42 落成编译期检查）',
+  },
+  {
     id: 'directive/v-once',
     phase: 'template',
     status: 'implemented',

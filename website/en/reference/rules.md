@@ -7,9 +7,9 @@ generated: true
 
 # Compile rule catalog
 
-> 112 compile rules — every rule ships its own AI explainer (id / when / before → after / why). SSOT = `@proteus-vue/compiler` TRANSFORM_RULES, same source as `npx proteus rules` and the Playground trace.
+> 114 compile rules — every rule ships its own AI explainer (id / when / before → after / why). SSOT = `@proteus-vue/compiler` TRANSFORM_RULES, same source as `npx proteus rules` and the Playground trace.
 
-## Template transforms (62)
+## Template transforms (64)
 
 ### `tag/div-to-view`
 
@@ -413,6 +413,32 @@ after:  <root-portal><view class="overlay">hi</view></root-portal>（脱离页�
 ```
 
 > why: Skyline/WebView root-portal (official component) detaches the subtree from the page, which is the cross-end equivalent of Vue <teleport> layering/teleporting to body — solving popovers (p-popover etc.) being occluded by lower elements (z-index stacking contexts)
+
+### `template/teleport-root-v-if`
+
+**Portal root-child v-if interception (S47: conditional unmount can lock the page)**
+
+A direct child of <teleport> carrying v-if triggers a compile-time warning: the portal root content being conditionally unmounted/remounted breaks portal mounting under glass-easel and the residual layer can lock the page (Skyline pitfall S47, measured: second open freezes + page cannot scroll); fix = keep the root content persistent and drive visibility/animation with :class/visibility. Inner v-if is NOT restricted (verified solutions like p-drawer/p-page-container use inner v-if for their mask).
+
+```
+before: <teleport to="body"><view v-if="open">…</view></teleport>
+after:  <teleport to="body"><view class="root" :class="{ open }">…</view></teleport>（根内容常驻 + class 驱动）
+```
+
+> why: S47 is a page-freezing defect (worse than not-rendering) — markdown documentation cannot enforce it; same rationale as the sleep/repeat-suite gates: only a tool-level gate is structural. Scoping the check to direct children avoids false positives on verified components.
+
+### `template/teleport-v-if-dropped`
+
+**teleport self v-if dropped warning (S42: condition silently ignored)**
+
+<teleport> itself carrying v-if triggers a compile-time warning: this compiler's teleport branch serializes children directly, so v-if is silently dropped (artifact evidence: wx:if disappears entirely, root-portal mounts unconditionally) and the condition never takes effect; fix = persistent portal + :class-driven visibility. We deliberately do NOT support it: wx:if on the portal is exactly the S47 broken-mount form.
+
+```
+before: <teleport to="body" v-if="open">…</teleport>
+after:  <teleport to="body"><view class="root" :class="{ open }">…</view></teleport>
+```
+
+> why: Silent dropping is more dangerous than an error (users think the toggle works while it always mounts); and "just supporting it" would push users into the S47 hole — so warn and point at the correct pattern.
 
 ### `directive/v-once`
 

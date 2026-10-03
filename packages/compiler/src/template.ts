@@ -763,6 +763,62 @@ function serializeElement(node: ElementNode, ctx: SerializeContext): string {
   //   to 属性 MP 无 target 选择器语义（root-portal 恒脱离页面 = fixed 等价）——警告说明忽略 to；@vue/compiler-dom 已
   //   把 teleport 当容器（tag=teleport），NATIVE_TAGS 已含 root-portal（原样透传）。
   if (node.tag === 'teleport' && !isTransition) {
+    /* ═══════════ ★★★GP3-b0（2026-10-03）：两条 **glass-easel portal 陷阱**的编译期检查 ═══════════
+     *
+     * 【为什么必须机器化（本仓原则：坑经验写在 markdown 拦不住）】
+     *   S42 / S47 都**只记在 `docs/skyline-pitfalls.md`**——而这两条曾导致**真机页面锁死**
+     *   （比"不显示"严重得多；S49 甚至记录了"改了多轮 v-if/teleport/动画都没用"的排查代价）。
+     *   与 sleep/重复跑测试同源：**只有工具层门禁是结构性的**（文档靠人记得读）。
+     *
+     * 【① `<teleport v-if="...">`：本分支**不看 teleport 自身的指令**（直接序列化 children）
+     *    ⇒ v-if **静默丢弃**：条件永远失效（用户以为能开关，实际恒显示/恒挂载）。
+     *    ★为什么不是"顺手支持它"】`root-portal` 上的 `wx:if` 正是 ② 的形态（portal 挂载异常）
+     *      ⇒ 支持它等于把用户推进更深的坑。正解与 ② 同一条：**常驻 + class 驱动可见性**。
+     *
+     * 【② `<teleport>` 的**直接子元素**带 v-if：portal **根内容**被条件卸载/重挂
+     *    ⇒ glass-easel 下 portal 挂载异常 + **残留层锁死页面**（S47 实测：二次打开卡死 + 页面无法滚动）。
+     *    ★检查**只收窄到直接子元素**（portal 的根内容）——**允许内层 v-if**（遮罩等）：
+     *      既有正解 `p-drawer` / `p-page-container` 自己就在内层用 `v-if="modelValue && overlay"` 渲遮罩
+     *      ⇒ 广撒网会误伤已验证组件（本仓"门禁误伤 ⇒ 被人加豁免 ⇒ 等于没做"的教训）。
+     */
+    {
+      // ① teleport 自身带 v-if / v-show（静默丢弃形态）
+      const selfIf = node.props.find(
+        (p2): p2 is DirectiveNode => p2.type === NodeTypes.DIRECTIVE && p2.name === 'if',
+      )
+      if (selfIf) {
+        ctx.warnings.push(
+          `<teleport v-if="…"> 的 v-if 在小程序**会被静默丢弃**（root-portal 无条件挂载）——条件永远失效；` +
+            '请改为**常驻** portal + 用 `:class` 驱动显隐（Skyline 坑 S42：portal 上的 wx:if 即挂载异常形态）',
+        )
+        ctx.trace?.add('template/teleport-v-if-dropped', {
+          line: node.loc.start.line,
+          before: '<teleport v-if="…">',
+          after: '（v-if 丢弃：root-portal 常驻——改用 :class 驱动显隐）',
+        })
+      }
+      // ② 直接子元素带 v-if（portal 根内容卸载/重挂 ⇒ 页面锁死形态）
+      for (const c of node.children) {
+        if (c.type !== NodeTypes.ELEMENT) continue
+        const el = c as ElementNode
+        const childIf = el.props.find(
+          (p2): p2 is DirectiveNode => p2.type === NodeTypes.DIRECTIVE && p2.name === 'if',
+        )
+        if (childIf) {
+          ctx.warnings.push(
+            `<teleport> 的**直接子元素** <${el.tag}> 带 v-if——portal 根内容被条件卸载/重挂，` +
+              'glass-easel 下 portal 挂载异常会**锁死页面**（Skyline 坑 S47 实测：二次打开卡死 + 无法滚动）；' +
+              '请改为**根内容常驻** + `:class`/`visibility` 驱动显隐与动画（内层 v-if 不受限）',
+          )
+          ctx.trace?.add('template/teleport-root-v-if', {
+            line: el.loc.start.line,
+            before: `<${el.tag} v-if="…">（portal 直接子元素）`,
+            after: '（⚠ portal 根内容条件卸载 = S47 页面锁死形态——改常驻）',
+          })
+          break // 一条足够（同类问题不刷屏）
+        }
+      }
+    }
     const child = node.children.map((c) => serializeNode(c, ctx)).join('\n')
     const toVal = node.props.find((p) => p.type === NodeTypes.ATTRIBUTE && (p as AttributeNode).name === 'to') as AttributeNode | undefined
     if (toVal?.value?.content) {
