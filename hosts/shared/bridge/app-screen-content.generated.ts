@@ -5302,6 +5302,48 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
         "backgroundColor": "#07c160",
         "textAlign": "center",
         "semantic": "div"
+      },
+      {
+        "id": 57,
+        "parentId": 0,
+        "width": 240,
+        "margin": {
+          "top": 16,
+          "bottom": 16
+        },
+        "marginAuto": {
+          "right": true,
+          "left": true
+        },
+        "padding": {
+          "top": 8,
+          "right": 8,
+          "bottom": 8,
+          "left": 8
+        },
+        "backgroundColor": "#f5f6f7",
+        "borderRadius": 6,
+        "textAlign": "center",
+        "semantic": "div"
+      },
+      {
+        "id": 58,
+        "parentId": 57,
+        "width": 300,
+        "maxWidthPct": 1,
+        "backgroundColor": "#e3e6eb",
+        "borderRadius": 4,
+        "padding": {
+          "top": 6,
+          "right": 6,
+          "bottom": 6,
+          "left": 6
+        },
+        "color": "#666",
+        "fontSize": 12,
+        "textAlign": "center",
+        "text": "max-width:100% ⇒ 不溢出父容器",
+        "semantic": "div"
       }
     ]
   },

@@ -343,6 +343,16 @@ pub struct LStyle {
     pub min_height: Option<f32>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub max_height: Option<f32>,
+    /// ★批次 19（CSS 兼容对齐 · 以 Web 为基准）：**百分比** min/max 尺寸（0..1；基准 = 父内容盒）。
+    ///   与 `*_ratio`（未约束的尺寸）平行，但作用于 min/max 钳制——`max-width:100%`（不溢出容器）/ `min-height:100%` 常用。
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub min_width_pct: Option<f32>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub max_width_pct: Option<f32>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub min_height_pct: Option<f32>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub max_height_pct: Option<f32>,
 
     #[serde(default)]
     pub margin: Edges,
@@ -597,6 +607,10 @@ impl Default for LStyle {
             max_width: None,
             min_height: None,
             max_height: None,
+            min_width_pct: None,
+            max_width_pct: None,
+            min_height_pct: None,
+            max_height_pct: None,
             margin: Edges::ZERO,
             margin_auto: MarginAuto::NONE,
             padding: Edges::ZERO,

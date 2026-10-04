@@ -93,7 +93,7 @@ export const APP_TEXT_OVERFLOW_VALUES = ['clip', 'ellipsis'] as const
 /** 四边简写字段（`margin`/`padding` → 结构化 `{top,right,bottom,left}`） */
 export const APP_EDGE_FIELDS = ['margin', 'padding'] as const
 /** 百分比宽高折叠出的**比例字段**（App 端原生支持 `widthRatio`/`heightRatio`；非长度、不乘密度） */
-export const APP_DERIVED_FIELDS = ['widthRatio', 'heightRatio', 'marginAuto', 'borderRadiusPct'] as const
+export const APP_DERIVED_FIELDS = ['widthRatio', 'heightRatio', 'marginAuto', 'borderRadiusPct', 'minWidthPct', 'maxWidthPct', 'minHeightPct', 'maxHeightPct'] as const
 /** 特殊透传键（App 两内核恒 border-box ⇒ `box-sizing` 只作忠实记录、无副作用） */
 export const APP_SPECIAL_FIELDS = ['boxSizing'] as const
 
@@ -590,6 +590,17 @@ export function parseStaticStyle(
           const ratioKey = key === 'width' ? 'widthRatio' : 'heightRatio'
           out[ratioKey] = Number(pct[1]) / 100
           markImportant(ratioKey)
+          continue
+        }
+      }
+      // ★批次 19（CSS 兼容对齐 · 以 Web 为基准）：`min/max-width/height` 的**百分比** → `*Pct` 派生字段
+      //   （`max-width: 100%` 不溢出容器、`min-height: 100%` 撑满——超级应用常用）。基准 = 父内容盒。
+      if (key === 'minWidth' || key === 'maxWidth' || key === 'minHeight' || key === 'maxHeight') {
+        const pct = /^(\d+(?:\.\d+)?)%$/.exec(rawVal)
+        if (pct) {
+          const pctKey = key + 'Pct'
+          out[pctKey] = Number(pct[1]) / 100
+          markImportant(pctKey)
           continue
         }
       }

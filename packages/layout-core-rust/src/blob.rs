@@ -69,6 +69,11 @@ pub const F_MARGIN_AUTO_T: u32 = 1 << 22;
 pub const F_MARGIN_AUTO_R: u32 = 1 << 23;
 pub const F_MARGIN_AUTO_B: u32 = 1 << 24;
 pub const F_MARGIN_AUTO_L: u32 = 1 << 25;
+// ★批次 19：百分比 min/max（f32 段）
+pub const F_MIN_W_PCT: u32 = 1 << 26;
+pub const F_MAX_W_PCT: u32 = 1 << 27;
+pub const F_MIN_H_PCT: u32 = 1 << 28;
+pub const F_MAX_H_PCT: u32 = 1 << 29;
 
 /* ── 枚举字段位图（u8）── */
 pub const E_FLEX_DIRECTION: u8 = 1 << 0;
@@ -225,6 +230,10 @@ pub fn encode(req: &LayoutRequest) -> Vec<u8> {
         set(F_GAP, n.gap.is_some(), &mut fm);
         set(F_TOP, n.top.is_some(), &mut fm);
         set(F_LEFT, n.left.is_some(), &mut fm);
+        set(F_MIN_W_PCT, n.min_width_pct.is_some(), &mut fm);
+        set(F_MAX_W_PCT, n.max_width_pct.is_some(), &mut fm);
+        set(F_MIN_H_PCT, n.min_height_pct.is_some(), &mut fm);
+        set(F_MAX_H_PCT, n.max_height_pct.is_some(), &mut fm);
         // ★批次 17：margin auto 标记进 field_mask（值区不写 f32，仅集合标记）
         let ma = n.margin_auto.unwrap_or_default();
         set(F_MARGIN_AUTO_T, ma.top, &mut fm);
@@ -312,6 +321,10 @@ pub fn encode(req: &LayoutRequest) -> Vec<u8> {
         put_f!(F_GAP, n.gap.unwrap_or(0.0));
         put_f!(F_TOP, n.top.unwrap_or(0.0));
         put_f!(F_LEFT, n.left.unwrap_or(0.0));
+        put_f!(F_MIN_W_PCT, n.min_width_pct.unwrap_or(0.0));
+        put_f!(F_MAX_W_PCT, n.max_width_pct.unwrap_or(0.0));
+        put_f!(F_MIN_H_PCT, n.min_height_pct.unwrap_or(0.0));
+        put_f!(F_MAX_H_PCT, n.max_height_pct.unwrap_or(0.0));
 
         // 枚举段（按位序升序）
         macro_rules! put_e {
@@ -448,6 +461,10 @@ pub fn decode(buf: &[u8]) -> Result<LayoutRequest> {
         n.gap = get_f!(F_GAP);
         n.top = get_f!(F_TOP);
         n.left = get_f!(F_LEFT);
+        n.min_width_pct = get_f!(F_MIN_W_PCT);
+        n.max_width_pct = get_f!(F_MAX_W_PCT);
+        n.min_height_pct = get_f!(F_MIN_H_PCT);
+        n.max_height_pct = get_f!(F_MAX_H_PCT);
 
         macro_rules! get_e {
             ($bit:expr, $table:expr) => {

@@ -236,6 +236,20 @@ describe('★C1 最小切片 · SFC <style> 单类规则 → class→节点样�
     expect(d.some((x) => x.includes('border-radius')), '多值有诊断').toBe(true)
   })
 
+  it('★⑦g min/max 百分比（批次 19 · ★基准 = Web）：折为 *Pct 派生字段', () => {
+    // 【为什么（以 web 为基准）】max-width:100%（不溢出容器）/ min-height:100% 常用；此前被丢弃。
+    const s1 = parseStaticStyle('max-width: 100%', () => {})
+    expect((s1 as { maxWidthPct?: number }).maxWidthPct, 'max-width:100% ⇒ 1').toBe(1)
+    const s2 = parseStaticStyle('min-height: 50%', () => {})
+    expect((s2 as { minHeightPct?: number }).minHeightPct, 'min-height:50% ⇒ 0.5').toBe(0.5)
+    const s3 = parseStaticStyle('min-width: 33.33%', () => {})
+    expect((s3 as { minWidthPct?: number }).minWidthPct, 'min-width:33.33%').toBeCloseTo(0.3333, 4)
+    // 数值 min/max 仍走绝对值（既有，零行为变化）
+    const s4 = parseStaticStyle('max-width: 320px', () => {})
+    expect((s4 as { maxWidth?: number }).maxWidth, 'px max').toBe(320)
+    expect((s4 as { maxWidthPct?: number }).maxWidthPct, 'px 不产 Pct').toBeUndefined()
+  })
+
   it('★⑧ 元素/类型选择器 + @keyframes 跳过（C1 收尾）', () => {
     // 【真项目形态】examples 有 9 处元素选择器（h3/code…）+ 6 处 @keyframes 关键帧被误当选择器
     const sfc = `<template>
