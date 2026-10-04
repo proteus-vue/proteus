@@ -659,6 +659,8 @@ final class SelfDrawView: UIView {
             //   二者在 CoreAnimation 里互斥）。自绘节点是**叶子层**（无子层可裁）⇒ 安全。
             layer.masksToBounds = !hasShadow
         }
+        // ★批次 34：逐角圆角（非统一时用 maskedCorners；会覆盖上面的 masksToBounds）
+        applyRadiusCorners(layer, style: style)
         // ★B 批 3D：透视快照（建层时读一次——动画期 applyTransform 只查表，不回读树样式）
         if let d = style["perspective"] as? CGFloat, d > 0 {
             layerPerspective[nodeId] = d
@@ -2533,6 +2535,7 @@ final class SelfDrawView: UIView {
             layer.cornerRadius = r
             layer.masksToBounds = r > 0
         }
+        applyRadiusCorners(layer, style: paint)   // ★批次 34：逐角圆角（paint 表）
         // ④ 透明度
         if let opAny = paint["opacity"] {
             let op = (opAny as? CGFloat) ?? 1
@@ -2973,6 +2976,7 @@ final class SelfDrawView: UIView {
         let r = (style["borderRadius"] as? CGFloat) ?? 0
         layer.cornerRadius = r
         layer.masksToBounds = r > 0 && !hasShadow2
+        applyRadiusCorners(layer, style: style)   // ★批次 34：逐角圆角
         layer.opacity = 1
     }
 
@@ -3002,6 +3006,19 @@ final class SelfDrawView: UIView {
         let r = pct * min(size.width, size.height)
         layer.cornerRadius = r
         layer.masksToBounds = (style["boxShadow"] as? [String: Any]) == nil
+    }
+
+    /// ★批次 34（对齐 Web）：逐角圆角——`borderRadiusCorners` 掩码（bit0=TL/1=TR/2=BR/3=BL）→ CALayer.maskedCorners。
+    ///   缺省（无掩码）⇒ 保持全部四角（既有行为）；调用方须已设 `cornerRadius`。
+    private func applyRadiusCorners(_ layer: CALayer, style: [String: Any]) {
+        guard let m = style["borderRadiusCorners"] as? [String: Any] else { return }
+        var c: CACornerMask = []
+        if (m["topLeft"] as? Bool) == true { c.insert(.layerMinXMinYCorner) }
+        if (m["topRight"] as? Bool) == true { c.insert(.layerMaxXMinYCorner) }
+        if (m["bottomRight"] as? Bool) == true { c.insert(.layerMaxXMaxYCorner) }
+        if (m["bottomLeft"] as? Bool) == true { c.insert(.layerMinXMaxYCorner) }
+        layer.maskedCorners = c
+        layer.masksToBounds = true   // 部分圆角需要裁剪
     }
 
     /// ★批次 20（CSS 兼容对齐 · 以 Web 为基准）：文本层的 `string` 值——声明 `letterSpacing` 时用

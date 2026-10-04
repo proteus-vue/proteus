@@ -1333,6 +1333,7 @@ final class VaporRenderHost {
             //   逐节点调用会让每节点付一次 JSON 解析，1000 行虚拟化直接垮）
             injectClipPath(id, spec);
             injectTransformOrigin(id, spec);
+            injectRadiusCorners(id, spec);
         }
 
         // ★★**Cmd 上的绘制通道**（与 LightsHost 的构造逐项对齐）：
@@ -1427,6 +1428,7 @@ final class VaporRenderHost {
             int id = spec.getInt("id");
             injectClipPath(id, spec);
             injectTransformOrigin(id, spec);
+            injectRadiusCorners(id, spec);
         }
     }
 
@@ -1449,6 +1451,18 @@ final class VaporRenderHost {
         if (torig == null) return;
         view.setNodeTransformOrigin(id,
                 (float) torig.optDouble("x", 0.5), (float) torig.optDouble("y", 0.5));
+    }
+
+    /** ★批次 34：逐角圆角掩码注入（`borderRadiusCorners` 对象 → bit0=TL/1=TR/2=BR/3=BL；全 true ⇒ 不注入） */
+    private void injectRadiusCorners(int id, JSONObject spec) {
+        org.json.JSONObject rc = spec.optJSONObject("borderRadiusCorners");
+        if (rc == null) return;
+        int mask = 0;
+        if (rc.optBoolean("topLeft", false)) mask |= 1;
+        if (rc.optBoolean("topRight", false)) mask |= 2;
+        if (rc.optBoolean("bottomRight", false)) mask |= 4;
+        if (rc.optBoolean("bottomLeft", false)) mask |= 8;
+        view.setNodeRadiusCorners(id, mask);
     }
 
     /** 渐变声明 → `GradSpec`（`GradSpec.parse` 对非法返回 null ⇒ 退回纯色——与 LightsHost 同口径） */

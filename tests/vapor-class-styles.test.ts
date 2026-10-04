@@ -482,6 +482,23 @@ describe('★C1 最小切片 · SFC <style> 单类规则 → class→节点样�
     expect((parseStaticStyle('background: #fff', () => {}) as { backgroundColor?: string }).backgroundColor, '纯色').toBe('#fff')
   })
 
+  it('★⑦t 逐角 border-radius（批次 34 · ★基准 = Web）：统一半径 + 部分角掩码', () => {
+    // 【为什么（以 web 为基准）】真实项目用 `border-radius: 12px 12px 0 0`（上圆下方卡片/弹层）。
+    const t1 = parseStaticStyle('border-radius: 12px 12px 0 0', () => {}) as { borderRadius?: number; borderRadiusCorners?: Record<string, boolean> }
+    expect(t1.borderRadius, '统一半径 12').toBe(12)
+    expect(t1.borderRadiusCorners, '上两角 true / 下两角 false').toEqual({ topLeft: true, topRight: true, bottomRight: false, bottomLeft: false })
+    const t2 = parseStaticStyle('border-radius: 0 0 12px 12px', () => {}) as { borderRadiusCorners?: Record<string, boolean> }
+    expect(t2.borderRadiusCorners, '下两角圆').toEqual({ topLeft: false, topRight: false, bottomRight: true, bottomLeft: true })
+    // 统一值 ⇒ 只 borderRadius（无掩码，零行为变化）
+    const t3 = parseStaticStyle('border-radius: 8px', () => {}) as { borderRadius?: number; borderRadiusCorners?: unknown }
+    expect(t3.borderRadius, '统一 8').toBe(8)
+    expect(t3.borderRadiusCorners, '统一 ⇒ 无掩码').toBeUndefined()
+    // 半径不一致（8px 4px）⇒ 诊断（不猜）
+    const d: string[] = []
+    parseStaticStyle('border-radius: 8px 4px', (m: string) => d.push(m))
+    expect(d.length > 0, '不一致半径 ⇒ 诊断').toBe(true)
+  })
+
   it('★⑧ 元素/类型选择器 + @keyframes 跳过（C1 收尾）', () => {
     // 【真项目形态】examples 有 9 处元素选择器（h3/code…）+ 6 处 @keyframes 关键帧被误当选择器
     const sfc = `<template>

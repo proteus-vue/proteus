@@ -227,6 +227,14 @@ public class ProteusHostView extends ViewGroup {
     /** ★★**变换原点表**（transform-origin v1）：节点 id → `[x, y]` 盒分数（缺省不存 = 中心） */
     private final Map<Integer, float[]> nodeTransformOrigin = new HashMap<>();
 
+    /** ★批次 34：节点 id → **逐角圆角掩码**（bit0=TL/1=TR/2=BR/3=BL；15=统一，缺省不存） */
+    private final Map<Integer, Integer> nodeRadiusCorners = new HashMap<>();
+    /** 场景注入某节点的逐角圆角掩码（仅**非统一**时注入——统一走 Cmd.radius） */
+    public void setNodeRadiusCorners(int nodeId, int mask) {
+        if (mask == 15) { nodeRadiusCorners.remove(nodeId); return; }
+        nodeRadiusCorners.put(nodeId, mask);
+    }
+
     /** 场景注入某节点的变换原点（`[x, y]` 盒分数）——建树时由 LightsHost/MainActivity 调用 */
     public void setNodeTransformOrigin(int nodeId, float ox, float oy) {
         nodeTransformOrigin.put(nodeId, new float[]{ox, oy});
@@ -1110,6 +1118,7 @@ public class ProteusHostView extends ViewGroup {
         nodeSvgStroke.clear();
         nodeClipKindAndBase.clear();
         nodeTransformOrigin.clear();
+        nodeRadiusCorners.clear();
         animTx.clear();
         animColor.clear();
         animTextColor.clear();
@@ -2119,6 +2128,20 @@ public class ProteusHostView extends ViewGroup {
      *     （「宿主 Canvas 下发指令 → DisplayList → RenderThread → Skia → GPU」）
      *   拿软件路径的数字去和原生（走硬件加速）比，是**不对等比较**，会得出「Proteus 绘制更慢」的假象。
      */
+    /** ★批次 34：逐角圆角填充（mask 位：bit0=TL/1=TR/2=BR/3=BL；未置位角半径=0）。 */
+    private void drawPathCorners(Canvas canvas, Cmd c, int mask, android.graphics.Paint p) {
+        final float r = c.radius;
+        final float[] radii = new float[]{
+            (mask & 1) != 0 ? r : 0f, (mask & 1) != 0 ? r : 0f,      // 左上
+            (mask & 2) != 0 ? r : 0f, (mask & 2) != 0 ? r : 0f,      // 右上
+            (mask & 4) != 0 ? r : 0f, (mask & 4) != 0 ? r : 0f,      // 右下
+            (mask & 8) != 0 ? r : 0f, (mask & 8) != 0 ? r : 0f,      // 左下
+        };
+        final android.graphics.Path path = new android.graphics.Path();
+        path.addRoundRect(new android.graphics.RectF(c.x, c.y, c.x + c.w, c.y + c.h), radii, android.graphics.Path.Direction.CW);
+        canvas.drawPath(path, p);
+    }
+
     public void drawCmds(Canvas canvas) {
         // ★单次遍历下发全部指令（无 View 树、无递归 measure/layout）
         final List<Cmd> list = cmds;
@@ -2320,7 +2343,9 @@ public class ProteusHostView extends ViewGroup {
                 canvas.restoreToCount(ssave);
             }
             // ★圆角（灯光秀的灯珠）：radius > 0 走 drawRoundRect——纯绘制属性，默认 0 零行为变化
-            if (c.radius > 0f) canvas.drawRoundRect(c.x, c.y, c.x + c.w, c.y + c.h, c.radius, c.radius, bgPaint);
+            final Integer rcm = (ids != null && i < ids.length) ? nodeRadiusCorners.get(ids[i]) : null;
+            if (rcm != null) { drawPathCorners(canvas, c, rcm, bgPaint); }
+            else if (c.radius > 0f) canvas.drawRoundRect(c.x, c.y, c.x + c.w, c.y + c.h, c.radius, c.radius, bgPaint);
             else canvas.drawRect(c.x, c.y, c.x + c.w, c.y + c.h, bgPaint);
             if (gradShader != null) bgPaint.setShader(null); // ★清（paint 复用——漏挂会污染后续指令）
             // ★★C2 描边（2026-10-01）：该节点有 SVG 路径时**画线**——用 PathMeasure 按进度截取

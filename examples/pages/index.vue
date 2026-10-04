@@ -135,6 +135,9 @@ function go(name: 'forms' | 'config-demo' | 'user') {
 
     <!-- ★CSS 渐变演示（批次 33）：background: linear-gradient（免手写 fill-gradient JSON） -->
     <div class="grad-demo">linear-gradient 135°</div>
+
+    <!-- ★逐角圆角演示（批次 34）：border-radius: 12px 12px 0 0（上圆下方卡片） -->
+    <div class="corner-demo">逐角圆角 12 12 0 0</div>
   </div>
 </template>
 
@@ -379,6 +382,17 @@ function go(name: 'forms' | 'config-demo' | 'user') {
   background: linear-gradient(135deg, #1a7af8, #7c5cff);
   border-radius: 8px;
   color: #ffffff;
+  font-size: 12px;
+  text-align: center;
+}
+/* ★逐角圆角演示（批次 34）——上两角圆、下两角直 */
+.corner-demo {
+  width: 200px;
+  height: 44px;
+  margin: 16px auto;
+  background-color: #f5f6f7;
+  border-radius: 12px 12px 0 0;
+  color: #888;
   font-size: 12px;
   text-align: center;
 }

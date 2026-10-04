@@ -9232,6 +9232,33 @@
           "textAlign": "center",
           "text": "linear-gradient 135\xB0",
           "semantic": "div"
+        },
+        {
+          "id": 75,
+          "parentId": 0,
+          "width": 200,
+          "height": 44,
+          "margin": {
+            "top": 16,
+            "bottom": 16
+          },
+          "marginAuto": {
+            "right": true,
+            "left": true
+          },
+          "backgroundColor": "#f5f6f7",
+          "borderRadius": 12,
+          "borderRadiusCorners": {
+            "topLeft": true,
+            "topRight": true,
+            "bottomRight": false,
+            "bottomLeft": false
+          },
+          "color": "#888",
+          "fontSize": 12,
+          "textAlign": "center",
+          "text": "\u9010\u89D2\u5706\u89D2 12 12 0 0",
+          "semantic": "div"
         }
       ]
     },

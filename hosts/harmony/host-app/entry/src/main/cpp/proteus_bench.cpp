@@ -4273,6 +4273,17 @@ static napi_value AppScreenCommands(napi_env env, napi_callback_info info) {
         uint32_t bg = 0; std::string bgCss; if (jstr(it.c_str(), it.size(), "backgroundColor", &bgCss)) bg = hexToArgb(bgCss);
         double radius = 0; jnum(it.c_str(), it.size(), "borderRadius", &radius);
         { double rp = 0; jnum(it.c_str(), it.size(), "borderRadiusPct", &rp); if (rp > 0) radius = rp * (r.w < r.h ? r.w : r.h); } // ★批次 18
+        // ★批次 34：逐角圆角掩码（borderRadiusCorners → bit0=TL/1=TR/2=BR/3=BL；0/15 ⇒ 不发射）
+        int rcMask = 0;
+        {
+            std::string rcSub = extractValueAfterKey(it, "borderRadiusCorners", '{', '}');
+            if (!rcSub.empty()) {
+                if (rcSub.find("\"topLeft\":true") != std::string::npos) rcMask |= 1;
+                if (rcSub.find("\"topRight\":true") != std::string::npos) rcMask |= 2;
+                if (rcSub.find("\"bottomRight\":true") != std::string::npos) rcMask |= 4;
+                if (rcSub.find("\"bottomLeft\":true") != std::string::npos) rcMask |= 8;
+            }
+        }
         std::string text; jstr(it.c_str(), it.size(), "text", &text);
         double fs = 24; jnum(it.c_str(), it.size(), "fontSize", &fs);
         double fw = 400; jnum(it.c_str(), it.size(), "fontWeight", &fw);   // ★批次 3：字重
@@ -4306,6 +4317,7 @@ static napi_value AppScreenCommands(napi_env env, napi_callback_info info) {
             char bb[96]; snprintf(bb, sizeof(bb), ",\"borderWidth\":%.2f,\"borderColor\":%u", bw * density, bc);
             arr += bb;
         }
+        if (rcMask > 0 && rcMask != 15) { char rcb[48]; snprintf(rcb, sizeof(rcb), ",\"radiusCorners\":%d", rcMask); arr += rcb; }
         if (!text.empty()) {
             char tail[128]; snprintf(tail, sizeof(tail), ",\"fontSize\":%.2f,\"fontWeight\":%d,\"textColor\":%u", fs * density, (int)fw, tc);
             arr += tail;
