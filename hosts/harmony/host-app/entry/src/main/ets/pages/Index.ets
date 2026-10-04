@@ -855,7 +855,8 @@ struct Index {
           const es = (rd['e_stats'] ?? {}) as Record<string, Object>;
           const summary: string = `{"ok":${ex['ok']},"host":"harmony","exec_content_nodes":${ex['exec_content_nodes']},` +
             `"exec_mounts":${ex['exec_mounts']},"exec_visible":${ex['exec_visible']},"exec_destroy":${ex['exec_destroy']},` +
-            `"exec_commands":${es['commands']},"exec_transitions":${es['transitions']},"exec_errors":${JSON.stringify(es['errors'] ?? [])}}`;
+            `"exec_commands":${es['commands']},"exec_transitions":${es['transitions']},"exec_anim_started":${ex['exec_anim_started']},` +
+            `"exec_errors":${JSON.stringify(es['errors'] ?? [])}}`;
           hilog.info(DOMAIN, BENCH_TAG, 'PROTEUS_APP_EXECUTOR %{public}s', summary);
           const rf = ctxEX.filesDir + '/app-stack-executor.json';
           const fd = fileIo.openSync(rf, fileIo.OpenMode.READ_WRITE | fileIo.OpenMode.CREATE | fileIo.OpenMode.TRUNC);
