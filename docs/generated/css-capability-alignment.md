@@ -37,6 +37,21 @@
 
 > tier 是**加入该能力的成本档位**（人工按 Profile §3 标注，非实测毫秒）；supported 项的 tier = 它落地时所处档位；absent 候选的 tier = 若实现将归入的档位。
 
+## 超级应用能力清单（★优先口径：不按 demo 使用频次）
+
+> ★优先口径（用户 2026-10-04 明示）：「我们的目标不仅仅是当前项目使用到的，我们的目标是**承载超级应用**」。⇒ 批次选择**不按 demo 使用频次**，而按「超级应用是否会用到」+ 三端可实现性。下表的 status 用 today 取值（supported/folded-only/engine-only/absent）。
+
+| 超级应用能力 | 用途 | 现状 |
+|---|---|---|
+| 定位锚点（absolute + top/left/right/bottom + z 序） | 角标 / FAB / 关闭按钮 / 底部弹层 / 悬浮层 | supported（批 8 补 right/bottom；层序走层容器） |
+| 卡片外观（background / border / border-radius / shadow / 内边距） | 列表项 / 卡片 / 面板 | background/border/border-radius/padding ✅；**box-shadow ⏳（Android 硬件加速下 setShadowLayer 仅支持文本，需阴影通道）** |
+| 弹性流式布局（flex + wrap + gap + align/justify + 百分比） | 响应式排布 / 标签墙 / 宫格 | supported（批 6 补 flex-wrap；缺 align-content） |
+| 文本呈现（size / weight / align / color / line-height / 截断） | 标题 / 正文 / 单行截断 | font-size/weight/align/color ✅；**line-height ⏳ / text-overflow ⏳** |
+| 栅格 / 复杂排布（grid） | 仪表盘 / 复杂页面 | absent（[Rust]：引擎 Display 未开放 Grid） |
+| 动效（transition / transform / keyframes） | 转场 / 反馈 / 加载 | 引擎 anim 通道 ✅（transition 走 <Transition>/宿主指令）；**transform 静态折叠面 ⏳** |
+| 滚动容器（overflow + 滚动） | 长列表 / 弹层内容 | supported（overflow + 虚拟列表） |
+| 层叠与主题（继承 / 变量令牌 / 特异性） | 主题化 / 组件库 | 继承/特异性/!important ✅（批 1）；**CSS 变量 var() 令牌 ⏳（跨 SFC 令牌表，未折叠）** |
+
 ## CSS 能力矩阵
 
 | 类别 | CSS | Web | Skyline | App 现状 | App 可扩展 | 策略 | 对齐 | 说明 |
@@ -79,7 +94,7 @@
 | layout | `display: grid / grid-template-*` | supported | not-listed | absent | L2 | 直映射 | conditional | ★引擎未接：taffy 有完整 Grid 能力但 Rust `Display` 枚举无 Grid、to_taffy 未设置（Profile §3 已定案开放 L2）——加 = 引擎+DTO+taffy 三处；Skyline 端实测退化为 block ⇒ 有条件可用 |
 | layout | `flex-wrap` | supported | supported | supported | L2 | 直映射 | universal | ★批次 6（2026-10-04）：引擎新增 `FlexWrap`（Rust `LStyle.flex_wrap` + `NodeDto` + taffy `flex_wrap` 映射，闭合集 nowrap/wrap/wrap-reverse）；编译器入 APP_LAYOUT_FIELDS + APP_ENUM_VALUES + Android LAYOUT_KEYS 白名单。引擎行为测试 tests/flex_wrap.rs（wrap 换行/nowrap 不换行） |
 | layout | `align-content` | supported | supported | absent | L2 | 直映射 | conditional | 引擎无字段（多行弹性容器的行间对齐；需引擎+DTO+taffy）——后续批次 |
-| layout | `right / bottom` | supported | supported | absent | L2 | 直映射 | conditional | 引擎 LStyle 无 right/bottom（恒 auto）——加 = 引擎+DTO+taffy |
+| layout | `right / bottom` | supported | supported | supported | L2 | 直映射 | universal | ★批次 8（2026-10-04）：引擎 `LStyle.right/bottom` + `NodeDto` + taffy inset 映射（absolute/relative 的右/下边缘锚定）；编译器入 APP_LAYOUT_FIELDS + style-object + Android LEN_SCALARS/LAYOUT_KEYS。★**超级应用刚需**：角标 / FAB / 关闭按钮 / 底部弹层锚点。引擎行为测试 tests/inset_right_bottom.rs（right=10/bottom=5 ⇒ 落父右下角） |
 | layout | `order` | supported | supported | absent | L2 | 直映射 | conditional | 引擎无字段 |
 | layer | `z-index` | supported | supported | absent | L3 | 语义组件 | conditional | 本仓已定案**语义化**（layer="content\|navigation\|mask\|popout"，见 contracts/layers.ts）——数值禁止（跨端无意义 + 推高合成层内存） |
 | paint | `box-shadow` | supported | supported | absent | L3 | 语义组件 | conditional | 离屏渲染；走 <p-shadow> 语义组件（各端原生阴影） |
@@ -106,7 +121,6 @@
 | `特异性 / 继承 / !important` | — | — | supported | ★批次 1（2026-10-04）：规则按 (!important, 特异性 (id,class,tag), 源序) 层叠；color/fontSize 沿树继承（CSS 可继承子 |
 | `display: grid / grid-template-*` | supported | not-listed | absent | ★引擎未接：taffy 有完整 Grid 能力但 Rust `Display` 枚举无 Grid、to_taffy 未设置（Profile §3 已定案开放 L2）——加 = 引擎 |
 | `align-content` | supported | supported | absent | 引擎无字段（多行弹性容器的行间对齐；需引擎+DTO+taffy）——后续批次 |
-| `right / bottom` | supported | supported | absent | 引擎 LStyle 无 right/bottom（恒 auto）——加 = 引擎+DTO+taffy |
 | `order` | supported | supported | absent | 引擎无字段 |
 | `z-index` | supported | supported | absent | 本仓已定案**语义化**（layer="content\|navigation\|mask\|popout"，见 contracts/layers.ts）——数值禁止（跨端无意义  |
 | `box-shadow` | supported | supported | absent | 离屏渲染；走 <p-shadow> 语义组件（各端原生阴影） |

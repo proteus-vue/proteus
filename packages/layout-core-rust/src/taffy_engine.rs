@@ -226,18 +226,18 @@ impl TaffyEngine {
                 out.position = taffy::Position::Absolute;
                 out.inset = taffy::Rect {
                     left: style.left.map(length).unwrap_or(auto()),
-                    right: auto(),
+                    right: style.right.map(length).unwrap_or(auto()),
                     top: style.top.map(length).unwrap_or(auto()),
-                    bottom: auto(),
+                    bottom: style.bottom.map(length).unwrap_or(auto()),
                 };
             }
             Position::Relative => {
                 out.position = taffy::Position::Relative;
                 out.inset = taffy::Rect {
                     left: style.left.map(length).unwrap_or(auto()),
-                    right: auto(),
+                    right: style.right.map(length).unwrap_or(auto()),
                     top: style.top.map(length).unwrap_or(auto()),
-                    bottom: auto(),
+                    bottom: style.bottom.map(length).unwrap_or(auto()),
                 };
             }
             Position::Static => {

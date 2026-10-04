@@ -15,9 +15,9 @@
 - **包规模**：**45 个 @proteus-vue/* npm 包**（+ `packages/layout-core-rust` = **cargo crate，非 npm 包**，故不计数）（★2026-09-29 layout-core = App 排版核心）（check:pkg 0 error · `pnpm check:stats` 校验 ✓；31→38 修正 → G-07 glass 39 → Skyline 收口 worklet 40 → ★2026-09-14 组件库拆包 `@proteus-vue/components` 41 → ★Vapor 线新增 `@proteus-vue/slot-runtime` 42 + `@proteus-vue/layout-core` 43 → ★2026-09-30 MA1 新增 `@proteus-vue/animation` 44；版本统一 0.3.0-beta.8，见「当前状态速览」）
 - **文档**：`docs/proteus-architecture.md`（L0 规约·真理来源）→ `docs/board-inventory.md`（全景索引）→ `docs/roadmap.md`（版本线）→ `roadmap-2-plan`（里程碑线）→ 各 plan
 
+## 当前状态速览（最近一次更新：**2026-10-04·（一五五）· **CSS 兼容对齐 · 批次 8：right/bottom（[Rust] 定位）+ ★超级应用优先口径**（决策 #501）——用户「继续。**我们的目标不仅仅是当前项目使用到的，我们的目标是承载超级应用**」。★**口径修正**：批次选择不再按 demo 使用频次，按「超级应用是否会用到」+ 三端可实现性；并把**超级应用能力清单**（8 类：定位锚点/卡片外观/弹性布局/文本呈现/栅格/动效/滚动/层叠主题）编码进清单数据源（`superappGoal`）。★**批 8 实现**：Rust `LStyle.right/bottom` + `NodeDto` + taffy inset；编译器入 APP_LAYOUT_FIELDS + style-object；Android LAYOUT_KEYS 白名单。★判据：引擎行为测试 `tests/inset_right_bottom.rs`（破坏性验证：去映射⇒红）；编译器 tests 42 组；capability 源 right-bottom absent→supported。★全量 **5119/5119** 绿 · Rust 236 测试 · 三端编译 + vue-tsc 0 错。★诚实：M1 64.5%→62.6%（分母 +2、L3 未同步）。★**下一步（超级应用口径）**：box-shadow（⏳需阴影通道）· line-height/text-overflow（⏳）· grid（[Rust]）· var() 令牌折叠（⏳）· transform 静态折叠面）★新会话以此为准
 ## 当前状态速览（最近一次更新：**2026-10-04·（一五四）· **CSS 兼容对齐 · 批次 7：flex 简写（展开到引擎已支持字段，零引擎改动）**（决策 #500）——用户「继续」。★**取证选批**：批 1–6 后重扫未支持 → line-height(26)/font-family(11)/box-shadow(10)/flex(3)；选 flex(纯编译器、零引擎改动)。★**实现**：`parseFlexShorthand`（`flex: <g> [<s> [<b>]]` CSS 语义展到 flexGrow/Shrink/Basis；none/auto；非法诊断）。★判据 tests 40 组（破坏性验证：默认 shrink 改 0⇒红）；capability 源 value-shorthand 补 flex；重生成清单 + app-screen-content（10 节点获 flexGrow+flexBasis）。★全量 **5117/5117** 绿 · vue-tsc 0 错。★**里程碑**：CSS 兼容对齐（引擎无关侧）基本穷尽——批 1–7：层叠正确性 / 值·简写归一化（margin·padding·background·flex）/ font-weight / text-align / border / flex-wrap([Rust])。★**剩余全需动 Rust 或低频**：align-content·right·bottom·grid·box-shadow（[Rust]）· line-height（跨端基线）· font-family（var() 收益低））★新会话以此为准
 ## 当前状态速览（最近一次更新：**2026-10-04·（一五三）· **CSS 兼容对齐 · 批次 6：flex-wrap（首个 [Rust] 引擎能力）**（决策 #499）——用户「继续」。★**首次进入 [Rust] 侧**（前 5 批纯编译器/宿主接线）。★**取证选批**：flex-wrap(12) 是剩余最高价值布局能力、taffy 原生支持完整（零布局算法风险）⇒ 选它。★**实现**：Rust 新增 `FlexWrap` 枚举 + `LStyle.flex_wrap` + `NodeDto` + `to_taffy` 映射 + re-export；编译器入 APP_LAYOUT_FIELDS/APP_ENUM_VALUES/枚举校验；Android `LAYOUT_KEYS` 白名单加 flexWrap。★**判据（★首次带引擎行为测试）**：`packages/layout-core-rust/tests/flex_wrap.rs`（wrap 换行/nowrap 不换行；破坏性验证：to_taffy 恒 NoWrap⇒红）；编译器 tests 35 组；capability 源 flex-wrap absent→supported；重生成清单（47 行·App 全通 30）+ app-screen-content（**75 节点获 flexWrap**）；零设备 Rust 235 测试 + 三端编译 + vue-tsc 0 错。★全量 **5112/5112** 绿。★诚实：M1 65.6%→64.5%（分母 +1、L3 未同步）。★**剩余（均 [Rust]）**：align-content · right·bottom · grid · box-shadow · line-height · transform 折叠面）★新会话以此为准
-## 当前状态速览（最近一次更新：**2026-10-04·（一五二）· **CSS 兼容对齐 · 批次 5：border（uniform 简写 + 三端宿主真绘制）**（决策 #498）——用户「继续」。★**取证选批**：border(47)/line-height(26)/flex-wrap(12)/font-family(11)；font-family 多为 var() 收益低，**border 最高频且 paint-only（不改 Rust）、正是"宿主没画"的缺口** ⇒ 选它。★**实现**：编译器 border 简写（`<width> <style> <color>`）→ borderWidth+borderColor（逐边/styled 诊断跳过、var() 诚实诊断）；**iOS** CALayer.border* · **Android** Cmd.border* + 专用 borderPaint 描边（圆角/半内缩）· **鸿蒙** OH_ArkUI_RenderNodeUtils_SetBorderWidth/Color。★判据 tests 33 组；capability 源 border **folded-only→supported**（此前折叠透传但宿主不画，本批补齐）；重生成清单（46 行·App 全通 29）+ app-screen-content（**125 节点获 borderWidth**）；三端零设备编译全过。★全量 **5110/5110** 绿 · vue-tsc 0 错。★**剩余**：line-height（半 [Rust]）· flex-wrap/grid（[Rust]）· box-shadow/transform（[Rust]）· font-family（var() 收益低））★新会话以此为准
 
 
 
@@ -53,11 +53,11 @@
 |---|---|
 | `docs/project-memory-archive/2026-10.md` | 里程碑详细叙事（三十九～一四五）+ 状态速览历史栈（约 4.5k 行） |
 | `docs/project-memory-archive/2026-09.md` | 09 月全部叙事 + 柔性系统重组历史 + 2026-08 进度快照 + 已落地文件 + 09-19 验证状态（约 6.5k 行） |
-| `docs/project-memory-archive/decisions.md` | 决策链全文 #1–#500——按号检索 |
+| `docs/project-memory-archive/decisions.md` | 决策链全文 #1–#501——按号检索 |
 
 检索示例：`grep -n "2026-09-29\|判据建错靶" docs/project-memory-archive/2026-09.md`
 
-## 关键决策与文档偏差（#1–#500 → 归档速查）
+## 关键决策与文档偏差（#1–#501 → 归档速查）
 
 **全文在 `docs/project-memory-archive/decisions.md`**（按号检索：`grep -n "^290\." docs/project-memory-archive/decisions.md`）。
 决策号**只增不改号**（外部文档按号引用）；新决策追加到该文件末尾（号 +1）。

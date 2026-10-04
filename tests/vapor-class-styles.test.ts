@@ -484,3 +484,24 @@ describe('★批次 7 · flex 简写（展开到引擎已支持的三字段）',
     expect((n!.style as { flexShrink?: number }).flexShrink).toBe(1)
   })
 })
+
+// ★★★批次 8（CSS 兼容对齐 · [Rust] 定位）：right/bottom（超级应用刚需）——2026-10-04
+describe('★批次 8 · right/bottom（absolute 定位）', () => {
+  it('① 数值/px 折进（与 top/left 同解析路径）', () => {
+    expect(parseStaticStyle('right: 0; bottom: 0', () => {})).toEqual({ right: 0, bottom: 0 })
+    expect(parseStaticStyle('right: 26px; bottom: -40px', () => {})).toEqual({ right: 26, bottom: -40 })
+  })
+
+  it('② 端到端：角标定位（position:absolute; right; bottom）折进节点 style', () => {
+    const sfc = `<template><view class="badge">3</view></template>
+<script setup>const z = 1</script>
+<style>
+.badge { position: absolute; right: 6; bottom: 6 }
+</style>`
+    const r = buildLayoutTemplate(sfc, 'pages/b.vue')
+    const n = r.template.nodes.find((x) => (x.style as { right?: number }).right !== undefined)
+    expect((n!.style as { right?: number }).right).toBe(6)
+    expect((n!.style as { bottom?: number }).bottom).toBe(6)
+    expect((n!.style as { position?: string }).position).toBe('absolute')
+  })
+})

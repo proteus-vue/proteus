@@ -112,6 +112,11 @@ pub(crate) struct NodeDto {
     pub(crate) top: Option<f32>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub(crate) left: Option<f32>,
+    /// ★批次 8：`right` / `bottom`（absolute 定位的右/下边缘 inset）
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub(crate) right: Option<f32>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub(crate) bottom: Option<f32>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub(crate) overflow: Option<String>,
     /// ★★**背景色**（2026-10-01，颜色动画的**底色**来源）——接受 CSS 形态：
@@ -240,6 +245,8 @@ impl NodeDto {
             position: None,
             top: None,
             left: None,
+            right: None,
+            bottom: None,
             overflow: None,
             // ★颜色：blob 形态暂无这两个字段（按位图解码；未提供 ⇒ 该节点不进颜色轨道）
             background_color: None,
@@ -680,6 +687,8 @@ pub(crate) fn style_from_dto(dto: &NodeDto) -> Result<LStyle, String> {
     }
     style.top = dto.top;
     style.left = dto.left;
+    style.right = dto.right;
+    style.bottom = dto.bottom;
     if let Some(o) = dto.overflow.as_deref() {
         style.overflow = match o {
             "visible" => Overflow::Visible,

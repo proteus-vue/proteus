@@ -23,6 +23,51 @@
       "L5": "禁止（编译期报错：运行时动态选择器/无法折叠的层叠/运行时插样式表/超 Profile）"
     },
     "noteOnTier": "tier 是**加入该能力的成本档位**（人工按 Profile §3 标注，非实测毫秒）；supported 项的 tier = 它落地时所处档位；absent 候选的 tier = 若实现将归入的档位。",
+    "superappGoal": {
+      "note": "★优先口径（用户 2026-10-04 明示）：「我们的目标不仅仅是当前项目使用到的，我们的目标是**承载超级应用**」。⇒ 批次选择**不按 demo 使用频次**，而按「超级应用是否会用到」+ 三端可实现性。下表的 status 用 today 取值（supported/folded-only/engine-only/absent）。",
+      "checklist": [
+        {
+          "capability": "定位锚点（absolute + top/left/right/bottom + z 序）",
+          "why": "角标 / FAB / 关闭按钮 / 底部弹层 / 悬浮层",
+          "status": "supported（批 8 补 right/bottom；层序走层容器）"
+        },
+        {
+          "capability": "卡片外观（background / border / border-radius / shadow / 内边距）",
+          "why": "列表项 / 卡片 / 面板",
+          "status": "background/border/border-radius/padding ✅；**box-shadow ⏳（Android 硬件加速下 setShadowLayer 仅支持文本，需阴影通道）**"
+        },
+        {
+          "capability": "弹性流式布局（flex + wrap + gap + align/justify + 百分比）",
+          "why": "响应式排布 / 标签墙 / 宫格",
+          "status": "supported（批 6 补 flex-wrap；缺 align-content）"
+        },
+        {
+          "capability": "文本呈现（size / weight / align / color / line-height / 截断）",
+          "why": "标题 / 正文 / 单行截断",
+          "status": "font-size/weight/align/color ✅；**line-height ⏳ / text-overflow ⏳**"
+        },
+        {
+          "capability": "栅格 / 复杂排布（grid）",
+          "why": "仪表盘 / 复杂页面",
+          "status": "absent（[Rust]：引擎 Display 未开放 Grid）"
+        },
+        {
+          "capability": "动效（transition / transform / keyframes）",
+          "why": "转场 / 反馈 / 加载",
+          "status": "引擎 anim 通道 ✅（transition 走 <Transition>/宿主指令）；**transform 静态折叠面 ⏳**"
+        },
+        {
+          "capability": "滚动容器（overflow + 滚动）",
+          "why": "长列表 / 弹层内容",
+          "status": "supported（overflow + 虚拟列表）"
+        },
+        {
+          "capability": "层叠与主题（继承 / 变量令牌 / 特异性）",
+          "why": "主题化 / 组件库",
+          "status": "继承/特异性/!important ✅（批 1）；**CSS 变量 var() 令牌 ⏳（跨 SFC 令牌表，未折叠）**"
+        }
+      ]
+    },
     "relationNote": "支持度维度（web/skyline/app 现状）与成本分级（L0–L5）是**正交**维度：成本分级决定\"怎么实现/贵不贵\"，支持度决定\"哪端能不能用、App 加它多贵\"。App 端为自研引擎 ⇒ 候选特性带 tier 即为\"可扩展档位\"。",
     "tierRule": "universal = web∧skyline∧app 现状全 supported；unsupported = 三端皆不可用；其余 = conditional",
     "partialSupport": [
@@ -125,16 +170,6 @@
           "app": "absent"
         },
         "why": "引擎无字段（多行弹性容器的行间对齐；需引擎+DTO+taffy）——后续批次"
-      },
-      {
-        "css": "right / bottom",
-        "id": "right-bottom",
-        "ends": {
-          "web": "supported",
-          "skyline": "supported",
-          "app": "absent"
-        },
-        "why": "引擎 LStyle 无 right/bottom（恒 auto）——加 = 引擎+DTO+taffy"
       },
       {
         "css": "order",
@@ -386,6 +421,8 @@
       "position",
       "top",
       "left",
+      "right",
+      "bottom",
       "overflow"
     ],
     "paint": [
@@ -1025,14 +1062,17 @@
       "id": "right-bottom",
       "css": "right / bottom",
       "category": "layout",
-      "compilerFields": [],
+      "compilerFields": [
+        "right",
+        "bottom"
+      ],
       "web": "supported",
       "skyline": "supported",
-      "app": "absent",
+      "app": "supported",
       "tier": "L2",
       "strategy": "直映射",
-      "note": "引擎 LStyle 无 right/bottom（恒 auto）——加 = 引擎+DTO+taffy",
-      "supportTier": "conditional"
+      "note": "★批次 8（2026-10-04）：引擎 `LStyle.right/bottom` + `NodeDto` + taffy inset 映射（absolute/relative 的右/下边缘锚定）；编译器入 APP_LAYOUT_FIELDS + style-object + Android LEN_SCALARS/LAYOUT_KEYS。★**超级应用刚需**：角标 / FAB / 关闭按钮 / 底部弹层锚点。引擎行为测试 tests/inset_right_bottom.rs（right=10/bottom=5 ⇒ 落父右下角）",
+      "supportTier": "universal"
     },
     {
       "id": "order",
