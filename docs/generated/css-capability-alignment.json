@@ -811,7 +811,7 @@
       "app": "supported",
       "tier": "L1",
       "strategy": "编译期折叠",
-      "note": "px/数字（宿主圆角绘制）",
+      "note": "px/数字（宿主圆角绘制）；★批次 18：**百分比**（`border-radius: 50%` = 内切圆/椭圆，头像/圆点刚需）折为 `borderRadiusPct`（0..1）⇒ 宿主按 `pct × min(w,h)` 算半径（正方盒 = 精确圆，Web 一致；非正方盒为统一圆角，Web 为椭圆——如实近似）。逐角多值（8px 4px）未支持（诊断）",
       "supportTier": "universal"
     },
     {

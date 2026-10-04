@@ -8727,6 +8727,47 @@
           "fontSize": 13,
           "text": "\u8FD9\u662F\u4E00\u6BB5\u5F88\u957F\u7684\u5217\u8868\u9879\u6587\u672C\uFF0C\u8D85\u8FC7\u5BB9\u5668\u5BBD\u5EA6\u65F6\u5E94\u5728\u884C\u5C3E\u4EE5\u7701\u7565\u53F7\u7ED3\u5C3E\uFF0C\u800C\u4E0D\u662F\u6362\u884C\u6216\u6EA2\u51FA\u5BB9\u5668",
           "semantic": "div"
+        },
+        {
+          "id": 54,
+          "parentId": 0,
+          "display": "flex",
+          "gap": 12,
+          "justifyContent": "center",
+          "alignItems": "center",
+          "margin": {
+            "top": 16,
+            "bottom": 16
+          },
+          "marginAuto": {
+            "right": true,
+            "left": true
+          },
+          "textAlign": "center",
+          "semantic": "div"
+        },
+        {
+          "id": 55,
+          "parentId": 54,
+          "width": 48,
+          "height": 48,
+          "borderRadiusPct": 0.5,
+          "backgroundColor": "#1a7af8",
+          "color": "#ffffff",
+          "fontSize": 20,
+          "textAlign": "center",
+          "text": "A",
+          "semantic": "div"
+        },
+        {
+          "id": 56,
+          "parentId": 54,
+          "width": 16,
+          "height": 16,
+          "borderRadiusPct": 0.5,
+          "backgroundColor": "#07c160",
+          "textAlign": "center",
+          "semantic": "div"
         }
       ]
     },
@@ -14420,6 +14461,7 @@
             "left": -100,
             "top": -100
           },
+          "borderRadiusPct": 0.5,
           "semantic": "view"
         },
         {

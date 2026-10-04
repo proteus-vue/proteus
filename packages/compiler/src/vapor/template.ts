@@ -93,7 +93,7 @@ export const APP_TEXT_OVERFLOW_VALUES = ['clip', 'ellipsis'] as const
 /** 四边简写字段（`margin`/`padding` → 结构化 `{top,right,bottom,left}`） */
 export const APP_EDGE_FIELDS = ['margin', 'padding'] as const
 /** 百分比宽高折叠出的**比例字段**（App 端原生支持 `widthRatio`/`heightRatio`；非长度、不乘密度） */
-export const APP_DERIVED_FIELDS = ['widthRatio', 'heightRatio', 'marginAuto'] as const
+export const APP_DERIVED_FIELDS = ['widthRatio', 'heightRatio', 'marginAuto', 'borderRadiusPct'] as const
 /** 特殊透传键（App 两内核恒 border-box ⇒ `box-sizing` 只作忠实记录、无副作用） */
 export const APP_SPECIAL_FIELDS = ['boxSizing'] as const
 
@@ -643,6 +643,19 @@ export function parseStaticStyle(
         }
         out[key] = lh
         markImportant(key)
+        continue
+      }
+      if (key === 'borderRadius') {
+        // ★批次 18（CSS 兼容对齐 · 以 Web 为基准）：`border-radius` 支持**百分比**（Web `border-radius: 50%`
+        //   = 内切圆/椭圆——头像/圆点刚需）。百分比折为 `borderRadiusPct`（0..1），宿主按盒尺寸算半径
+        //   （`pct × min(w,h)`：正方盒 = 精确圆、与 Web 一致；非正方盒为统一圆角，Web 为椭圆——如实边界）。
+        //   多值（逐角简写）未支持 ⇒ 诊断（不猜）。
+        const pct = /^(\d+(?:\.\d+)?)%$/.exec(rawVal.trim())
+        if (pct) { out.borderRadiusPct = Number(pct[1]) / 100; markImportant('borderRadiusPct'); continue }
+        const num = numOf(rawVal)
+        if (num === undefined) { pushDiag(`style 里 \`${rawKey}: ${rawVal}\` 不是纯数值（支持 px/数字/百分比）——已跳过`); continue }
+        out.borderRadius = num
+        markImportant('borderRadius')
         continue
       }
       if (key === 'boxShadow') {

@@ -5254,6 +5254,47 @@
         "fontSize": 13,
         "text": "这是一段很长的列表项文本，超过容器宽度时应在行尾以省略号结尾，而不是换行或溢出容器",
         "semantic": "div"
+      },
+      {
+        "id": 54,
+        "parentId": 0,
+        "display": "flex",
+        "gap": 12,
+        "justifyContent": "center",
+        "alignItems": "center",
+        "margin": {
+          "top": 16,
+          "bottom": 16
+        },
+        "marginAuto": {
+          "right": true,
+          "left": true
+        },
+        "textAlign": "center",
+        "semantic": "div"
+      },
+      {
+        "id": 55,
+        "parentId": 54,
+        "width": 48,
+        "height": 48,
+        "borderRadiusPct": 0.5,
+        "backgroundColor": "#1a7af8",
+        "color": "#ffffff",
+        "fontSize": 20,
+        "textAlign": "center",
+        "text": "A",
+        "semantic": "div"
+      },
+      {
+        "id": 56,
+        "parentId": 54,
+        "width": 16,
+        "height": 16,
+        "borderRadiusPct": 0.5,
+        "backgroundColor": "#07c160",
+        "textAlign": "center",
+        "semantic": "div"
       }
     ]
   },
@@ -10947,6 +10988,7 @@
           "left": -100,
           "top": -100
         },
+        "borderRadiusPct": 0.5,
         "semantic": "view"
       },
       {
