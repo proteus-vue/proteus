@@ -82,7 +82,7 @@ describe.skipIf(!ENABLED)('GP5 · 八条超级应用场景（Global 层四条 ·
     }
     const pageData = async (): Promise<{ route: string; data: Record<string, unknown> }> =>
       JSON.parse(String(await driver.evaluate(readPageData))) as { route: string; data: Record<string, unknown> }
-    const probe = async (fn: string): Promise<{ has: boolean; width: number; height: number }> =>
+    const probe = async (fn: () => string): Promise<{ has: boolean; width: number; height: number }> =>
       JSON.parse(String(await driver.evaluate(fn))) as { has: boolean; width: number; height: number }
 
     // ① 进演示页（以"真的到了这页"为判据重试——首次开窗编译慢）

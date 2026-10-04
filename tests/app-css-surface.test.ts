@@ -76,6 +76,8 @@ describe('★App CSS 支持面 · ② SSOT 与折叠实现同源（真折叠，�
       if (f === 'overflow') return 'hidden'
       if (['backgroundColor', 'color', 'borderColor'].includes(f)) return '#123456'
       if (f === 'boxSizing') return 'border-box'
+      if (f === 'fontWeight') return 'bold'
+      if (f === 'textAlign') return 'center'
       return '10'
     }
     const notFolded: string[] = []
@@ -98,7 +100,7 @@ describe('★App CSS 支持面 · ③ 棘轮：新增未登记分歧 ⇒ 红', (
         '若是引擎字段层确需 → 加进 APP_ENGINE_LEVEL_FIELDS（本测试 + check-app-css-surface.mjs 两处）；否则修正 App 折叠面',
     ).toEqual([])
     // 反向：已登记集不得是"僵尸"（登记了却不在交集 ⇒ 提示清理）
-    const stale = [...APP_ENGINE_LEVEL_FIELDS].filter((f) => !hits.includes(f))
+    const stale = [...APP_ENGINE_LEVEL_FIELDS].filter((f) => !(hits as string[]).includes(f))
     expect(stale, `已登记但已不在交集（应清理登记）：${stale.join(', ')}`).toEqual([])
   })
 

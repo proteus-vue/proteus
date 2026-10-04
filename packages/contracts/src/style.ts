@@ -15,6 +15,7 @@ export type StylePropLevel =
   | 'FlexNumber'
   | 'FlexAlign'
   | 'FlexJustify'
+  | 'TextAlign'
   | 'Transform'
   | 'TransformOrigin'
   | 'SEMANTIC_ONLY'
@@ -44,6 +45,7 @@ export const STYLE_PROP_LEVELS = {
   borderColor: 'Color',
   opacity: 'Opacity',
   fontWeight: 'Integer',
+  textAlign: 'TextAlign',
   borderRadius: 'Length',
   borderWidth: 'Length',
   borderTopWidth: 'Length',

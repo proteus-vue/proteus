@@ -26,6 +26,8 @@ export const FALLBACK_DEFAULTS: Record<string, unknown> = {
 /** 值类型守卫（06 §2 第 2 步）——04 §2 命名守卫（types.ts）按属性类型映射 */
 const FLEX_ALIGN = ['flex-start', 'flex-end', 'center', 'stretch', 'baseline', 'auto']
 const FLEX_JUSTIFY = ['flex-start', 'flex-end', 'center', 'space-between', 'space-around', 'space-evenly']
+/** ★批次 4：`text-align` 封闭集（App 自绘文本水平对齐） */
+const TEXT_ALIGN = ['left', 'center', 'right']
 
 export const PROP_TYPES = {
   Length: isLength,
@@ -35,6 +37,7 @@ export const PROP_TYPES = {
   FlexNumber: isFlexNumber,
   FlexAlign: isEnum(FLEX_ALIGN),
   FlexJustify: isEnum(FLEX_JUSTIFY),
+  TextAlign: isEnum(TEXT_ALIGN),
   Transform: (v: unknown): boolean => typeof v === 'string' && /^(translate|scale|rotate|skew)/i.test(v.trim()),
   TransformOrigin: (v: unknown): boolean => typeof v === 'string' && /^(left|right|top|bottom|center|\d+)/i.test(v.trim()),
 } as const

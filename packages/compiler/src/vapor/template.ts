@@ -73,8 +73,14 @@ export const APP_ENUM_VALUES: Record<string, readonly string[]> = {
 }
 
 /** 绘制字段（宿主自绘读这些键；模板照样要带上，否则挂载后无底色/无字色） */
-export const APP_PAINT_FIELDS = ['backgroundColor', 'color', 'fontSize', 'fontWeight', 'borderRadius', 'borderColor', 'borderWidth', 'opacity'] as const
+export const APP_PAINT_FIELDS = ['backgroundColor', 'color', 'fontSize', 'fontWeight', 'textAlign', 'borderRadius', 'borderColor', 'borderWidth', 'opacity'] as const
 const PAINT_FIELDS = new Set<string>(APP_PAINT_FIELDS)
+/**
+ * ★批次 4（CSS 兼容对齐）：`text-align` 的**封闭集**（App 自绘文本在盒内的水平对齐）。
+ *   宿主映射：iOS `CATextLayer.alignmentMode` · Android `Paint.Align` · 鸿蒙 `OH_Drawing_TextAlign`。
+ *   `justify`/`start`/`end` 等未列 ⇒ 诊断跳过（不静默当默认）。
+ */
+export const APP_TEXT_ALIGN_VALUES = ['left', 'center', 'right'] as const
 /** 四边简写字段（`margin`/`padding` → 结构化 `{top,right,bottom,left}`） */
 export const APP_EDGE_FIELDS = ['margin', 'padding'] as const
 /** 百分比宽高折叠出的**比例字段**（App 端原生支持 `widthRatio`/`heightRatio`；非长度、不乘密度） */
@@ -398,6 +404,17 @@ export function parseStaticStyle(
         const w = normalizeFontWeight(rawVal)
         if (w === undefined) { pushDiag(`style 里 \`${rawKey}: ${rawVal}\` 不是合法字重（normal/bold/100–900）`); continue }
         out[key] = w
+        markImportant(key)
+        continue
+      }
+      if (key === 'textAlign') {
+        // ★批次 4：`text-align`——封闭集 left/center/right（宿主文本对齐通道；值原样下发）
+        const v = rawVal.trim().toLowerCase()
+        if (!(APP_TEXT_ALIGN_VALUES as readonly string[]).includes(v)) {
+          pushDiag(`\`${rawKey}: ${rawVal}\` 不是 App 支持的对齐（仅 ${APP_TEXT_ALIGN_VALUES.join(' / ')}）——已跳过`)
+          continue
+        }
+        out[key] = v
         markImportant(key)
         continue
       }
@@ -1330,7 +1347,7 @@ export function buildLayoutTemplate(
                 `${tag}(id=${id}) \`:style\` 的键 \`${e.key}\` 不支持**动态**更新` +
                   `（内核通道为数值几何；字符串类布局值/未知绘制字段不可动态）`,
                 `请把 \`${e.key}\` 放静态 \`style\`（值固定时），或改用受支持的键` +
-                  `（布局数值键 + 绘制键 backgroundColor/color/fontSize/fontWeight/borderRadius/borderColor/borderWidth/opacity）`,
+                  `（布局数值键 + 绘制键 backgroundColor/color/fontSize/fontWeight/textAlign/borderRadius/borderColor/borderWidth/opacity）`,
                 'VAPOR_STYLE_KEY_UNSUPPORTED',
               )
             }

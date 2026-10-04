@@ -1314,9 +1314,19 @@ final class VaporRenderHost {
             int textColor = tc != null ? parseColor(tc) : 0xFFFFFFFF;
             // ★批次 3：字重（`font-weight` 折叠值；缺省 400 = normal）
             int fw = (int) spec.optDouble("fontWeight", 400);
-            return new ProteusHostView.Cmd(x, y, w, h, color, t, fs, textColor, radius, grad, glowSpec, maskSpec, fw);
+            // ★批次 4：文本水平对齐（text-align → 0/1/2）
+            int ta = alignOf(spec.optString("textAlign", null));
+            return new ProteusHostView.Cmd(x, y, w, h, color, t, fs, textColor, radius, grad, glowSpec, maskSpec, fw, ta);
         }
         return new ProteusHostView.Cmd(x, y, w, h, color, null, 0f, 0, radius, grad, glowSpec, maskSpec);
+    }
+
+    /** ★批次 4：`text-align` 字符串 → 码（0=left / 1=center / 2=right；未知 ⇒ 0） */
+    private static int alignOf(String a) {
+        if (a == null) return 0;
+        if (a.equals("center")) return 1;
+        if (a.equals("right")) return 2;
+        return 0;
     }
 
     /**
@@ -1426,9 +1436,10 @@ final class VaporRenderHost {
             String tc = spec.optString("color", null);
             final int textColor = tc != null ? parseColor(tc) : prev.textColor;
             final int fw = (int) spec.optDouble("fontWeight", prev.fontWeight);
-            return new ProteusHostView.Cmd(prev.x, prev.y, prev.w, prev.h, color, t, fs, textColor, prev.radius, prev.gradient, prev.glow, prev.mask, fw);
+            final int ta = spec.has("textAlign") ? alignOf(spec.optString("textAlign", null)) : prev.textAlign;
+            return new ProteusHostView.Cmd(prev.x, prev.y, prev.w, prev.h, color, t, fs, textColor, prev.radius, prev.gradient, prev.glow, prev.mask, fw, ta);
         }
-        return new ProteusHostView.Cmd(prev.x, prev.y, prev.w, prev.h, color, prev.text, prev.fontSize, prev.textColor, prev.radius, prev.gradient, prev.glow, prev.mask, prev.fontWeight);
+        return new ProteusHostView.Cmd(prev.x, prev.y, prev.w, prev.h, color, prev.text, prev.fontSize, prev.textColor, prev.radius, prev.gradient, prev.glow, prev.mask, prev.fontWeight, prev.textAlign);
     }
 
     /** 全量：几何 → 指令（矩形 + 文本 + 底色） */

@@ -271,6 +271,7 @@ struct SfcStyle {
     uint32_t textColor = 0xFFFFFFFFu;
     double fontSize = 24;
     int fontWeight = 400;        // ★批次 3：字重（`font-weight` 折叠值）
+    std::string textAlign;       // ★批次 4：文本水平对齐（left/center/right）
     std::string text;
     /* ── ★★绘制四通道（2026-10-03 · 三端打通绘制通道）──
      *
@@ -375,6 +376,7 @@ static void parseSfcStyles(const std::string& fixture, std::vector<std::pair<int
         if (jstr(item.c_str(), item.size(), "color", &colorCss)) st.textColor = hexToArgb(colorCss);
         jnum(item.c_str(), item.size(), "fontSize", &st.fontSize);
         double fwv = 400; jnum(item.c_str(), item.size(), "fontWeight", &fwv); st.fontWeight = (int)fwv;
+        jstr(item.c_str(), item.size(), "textAlign", &st.textAlign);
         jstr(item.c_str(), item.size(), "text", &st.text);
         // ★★绘制四通道（2026-10-03）：从 style 子对象抽（`extractValueAfterKey` 找的是
         //   **该键后首个配对括号块** ⇒ 直接对整节点 JSON 抽即可，不必先切 style）
@@ -1409,6 +1411,7 @@ static napi_value SfcStressCommands(napi_env env, napi_callback_info info) {
             snprintf(tail, sizeof(tail), ",\"fontSize\":%.2f,\"fontWeight\":%d,\"textColor\":%u",
                      st.fontSize * density, st.fontWeight, st.textColor);
             arr += tail;
+            if (!st.textAlign.empty()) arr += ",\"textAlign\":\"" + jsonEscape(st.textAlign) + "\"";
             arr += ",\"text\":\"" + jsonEscape(st.text) + "\"";
         }
         arr += "}";
@@ -1742,6 +1745,7 @@ static std::string vaporMountImpl(const std::string& treeJson) {
             snprintf(tail, sizeof(tail), ",\"fontSize\":%.2f,\"fontWeight\":%d,\"textColor\":%u",
                      st.fontSize * g_vaporDensity, st.fontWeight, st.textColor);
             cmds += tail;
+            if (!st.textAlign.empty()) cmds += ",\"textAlign\":\"" + jsonEscape(st.textAlign) + "\"";
             cmds += ",\"text\":\"" + jsonEscape(st.text) + "\"";
         }
         // ★★绘制四通道进指令（2026-10-03）：渲染层据这些键**真正建出**通道
@@ -4218,6 +4222,7 @@ static napi_value AppScreenCommands(napi_env env, napi_callback_info info) {
         std::string text; jstr(it.c_str(), it.size(), "text", &text);
         double fs = 24; jnum(it.c_str(), it.size(), "fontSize", &fs);
         double fw = 400; jnum(it.c_str(), it.size(), "fontWeight", &fw);   // ★批次 3：字重
+        std::string ta; jstr(it.c_str(), it.size(), "textAlign", &ta);      // ★批次 4：对齐
         uint32_t tc = 0xFFFFFFFFu; std::string tcCss; if (jstr(it.c_str(), it.size(), "color", &tcCss)) tc = hexToArgb(tcCss);
         char head[320];
         snprintf(head, sizeof(head), "%s{\"kind\":\"background\",\"x\":%.2f,\"y\":%.2f,\"w\":%.2f,\"h\":%.2f,\"color\":%u,\"radius\":%.2f",
@@ -4225,7 +4230,8 @@ static napi_value AppScreenCommands(napi_env env, napi_callback_info info) {
         arr += head;
         if (!text.empty()) {
             char tail[128]; snprintf(tail, sizeof(tail), ",\"fontSize\":%.2f,\"fontWeight\":%d,\"textColor\":%u", fs * density, (int)fw, tc);
-            arr += tail; arr += ",\"text\":\"" + jsonEscape(text) + "\"";
+            arr += tail;
+            if (!ta.empty()) arr += ",\"textAlign\":\"" + jsonEscape(ta) + "\""; arr += ",\"text\":\"" + jsonEscape(text) + "\"";
         }
         arr += "}"; emitted++;
     }

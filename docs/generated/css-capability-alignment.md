@@ -84,7 +84,8 @@
 | paint | `box-shadow` | supported | supported | absent | L3 | 语义组件 | conditional | 离屏渲染；走 <p-shadow> 语义组件（各端原生阴影） |
 | paint | `filter / backdrop-filter` | supported | supported | absent | L3 | 语义组件 | conditional | 离屏/额外缓冲；走 <p-glass> / <p-filter> 语义组件 |
 | text | `font-weight` | not-measured | supported | supported | L1 | 编译期折叠 | conditional | ★批次 3（2026-10-04）：`normal`→400 / `bold`→700 / 100–900 数值归一；作为**文本可继承**字段沿树继承。三端宿主：iOS 已读 `fontWeight`（≥600 bold 判据）、Android 新接线（Cmd.fontWeight + 绘制/度量同源 typeface）、鸿蒙新接线（OH_Drawing_SetTextStyleFontWeight） |
-| text | `line-height / letter-spacing / text-align / white-space` | supported | supported | absent | L4 | 降级 | conditional | 文本度量与排版走平台文本引擎（不自研）；当前 App 折叠面文本维 = fontSize/color/fontWeight（需扩引擎/宿主文本通道，属后续） |
+| text | `text-align` | not-measured | supported | supported | L1 | 编译期折叠 | conditional | ★批次 4（2026-10-04）：封闭集 left/center/right（justify/st 等诊断跳过）。宿主：iOS CATextLayer.alignmentMode · Android Paint.Align（绘制 x 按对齐换算）· 鸿蒙 OH_Drawing_SetTypographyTextAlign。真项目 28 处（22 center） |
+| text | `line-height / letter-spacing / white-space` | supported | supported | absent | L4 | 降级 | conditional | 文本度量与排版走平台文本引擎（不自研）；当前 App 折叠面文本维 = fontSize/color/fontWeight/textAlign（line-height/letter-spacing 需扩引擎/宿主文本通道，属后续） |
 | paint | `visibility` | supported | supported | absent | L1 | 直映射 | conditional | 引擎无 visibility 字段（可用 display:none 或 opacity 近似） |
 
 > 表中**带编译器字段**的行（对应 `packages/compiler/src/vapor/template.ts` 的 LAYOUT/PAINT_FIELDS）是
@@ -111,7 +112,8 @@
 | `box-shadow` | supported | supported | absent | 离屏渲染；走 <p-shadow> 语义组件（各端原生阴影） |
 | `filter / backdrop-filter` | supported | supported | absent | 离屏/额外缓冲；走 <p-glass> / <p-filter> 语义组件 |
 | `font-weight` | not-measured | supported | supported | ★批次 3（2026-10-04）：`normal`→400 / `bold`→700 / 100–900 数值归一；作为**文本可继承**字段沿树继承。三端宿主：iOS 已读 ` |
-| `line-height / letter-spacing / text-align / white-space` | supported | supported | absent | 文本度量与排版走平台文本引擎（不自研）；当前 App 折叠面文本维 = fontSize/color/fontWeight（需扩引擎/宿主文本通道，属后续） |
+| `text-align` | not-measured | supported | supported | ★批次 4（2026-10-04）：封闭集 left/center/right（justify/st 等诊断跳过）。宿主：iOS CATextLayer.alignmentMode |
+| `line-height / letter-spacing / white-space` | supported | supported | absent | 文本度量与排版走平台文本引擎（不自研）；当前 App 折叠面文本维 = fontSize/color/fontWeight/textAlign（line-height/letter |
 | `visibility` | supported | supported | absent | 引擎无 visibility 字段（可用 display:none 或 opacity 近似） |
 
 ## 官方 Skyline 对齐开关

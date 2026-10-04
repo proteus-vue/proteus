@@ -112,6 +112,7 @@ export function narrowValue(prop: string, value: unknown, platform: StylePlatfor
     case 'FlexAlign':
     case 'FlexJustify':
     case 'FlexNumber':
+    case 'TextAlign':
     case 'Color':
       return { valid: true, value }
     case 'Transform':
