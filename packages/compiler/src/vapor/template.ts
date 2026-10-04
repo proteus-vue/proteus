@@ -54,7 +54,7 @@ export type { LayoutTemplate, LayoutNode, ListTemplate, TextSegment } from '@pro
 export const APP_LAYOUT_FIELDS = [
   'width', 'height', 'minWidth', 'maxWidth', 'minHeight', 'maxHeight',
   'margin', 'padding', 'flexDirection', 'flexWrap', 'justifyContent', 'alignItems', 'alignContent', 'alignSelf',
-  'flexGrow', 'flexShrink', 'flexBasis', 'gap', 'display', 'position', 'top', 'left', 'right', 'bottom', 'overflow',
+  'flexGrow', 'flexShrink', 'flexBasis', 'gap', 'rowGap', 'columnGap', 'display', 'position', 'top', 'left', 'right', 'bottom', 'overflow',
   'gridTemplateColumns', 'gridTemplateRows', 'aspectRatio',
 ] as const
 const LAYOUT_FIELDS = new Set<string>(APP_LAYOUT_FIELDS)
@@ -615,6 +615,25 @@ export function parseStaticStyle(
       //   `widthRatio`（Rust `width_ratio` → taffy `percent()`；TS 核心 `widthRatio`），
       //   基准 = 父**内容盒**（内核注释已证）。宿主物理化白名单（LEN_SCALARS）**不含**比例键
       //   ⇒ 与「长度 × 密度、比例不动」的换算纪律天然一致。
+      if (key === 'gap') {
+        // ★批次 31（CSS 兼容对齐 · 以 Web 为基准）：两值 gap:<row> <col>（等价 row-gap/column-gap）。
+        //   单值 ⇒ gap；两值 ⇒ rowGap + columnGap。
+        const toks = splitTopLevelSpaces(rawVal)
+        if (toks.length === 1) { const n = numOf(toks[0]!); if (n === undefined) { pushDiag(`gap 非法值 ${rawVal}——应为 1 个数值，已跳过`); continue } out.gap = n; markImportant('gap'); continue }
+        if (toks.length === 2) {
+          const r = numOf(toks[0]!), c = numOf(toks[1]!)
+          if (r === undefined || c === undefined) { pushDiag(`gap 两值非法 ${rawVal}——应为两个数值，已跳过`); continue }
+          out.rowGap = r; out.columnGap = c; markImportant('rowGap'); markImportant('columnGap'); continue
+        }
+        pushDiag(`gap 无法解析 ${rawVal}——仅支持 1–2 个数值，已跳过`)
+        continue
+      }
+      // ★批次 31：row-gap / column-gap（轴级）
+      if (key === 'rowGap' || key === 'columnGap') {
+        const n = numOf(rawVal)
+        if (n === undefined) { pushDiag(`gap 非法值 ${rawVal}——应为 1 个数值，已跳过`); continue }
+        out[key] = n; markImportant(key); continue
+      }
       if (key === 'width' || key === 'height') {
         const pct = /^(\d+(?:\.\d+)?)%$/.exec(rawVal)
         if (pct) {

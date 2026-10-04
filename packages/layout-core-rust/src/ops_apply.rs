@@ -282,6 +282,15 @@ pub fn apply_style_key(node: &mut LNode, key: &str, value: f32) -> Result<bool, 
             s.gap = v;
             Ok(true)
         }
+        // ★批次 31：轴级 gap 指令映射
+        "layout.rowGap" => {
+            s.row_gap = Some(v);
+            Ok(true)
+        }
+        "layout.columnGap" => {
+            s.column_gap = Some(v);
+            Ok(true)
+        }
         "layout.display" => {
             s.display = if v == 0.0 { crate::style::Display::None } else { crate::style::Display::Flex };
             Ok(true)

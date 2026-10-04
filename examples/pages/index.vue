@@ -119,6 +119,13 @@ function go(name: 'forms' | 'config-demo' | 'user') {
       <div class="vis-hidden">visibility:hidden（占位不显示）</div>
       <div class="vis-child">父hidden</div>
     </div>
+
+    <!-- ★两值 gap 演示（批次 31）：gap: 4px 20px（行 4 / 列 20） -->
+    <div class="gap-demo">
+      <div class="gap-cell">A</div>
+      <div class="gap-cell">B</div>
+      <div class="gap-cell">C</div>
+    </div>
   </div>
 </template>
 
@@ -303,6 +310,23 @@ function go(name: 'forms' | 'config-demo' | 'user') {
 .vis-child {
   height: 24px;
   color: #888;
+  font-size: 12px;
+  text-align: center;
+}
+/* ★两值 gap 演示（批次 31）——gap: 4px 20px（列间距 20） */
+.gap-demo {
+  display: flex;
+  flex-direction: row;
+  gap: 4px 20px;
+  justify-content: center;
+  margin: 16px auto;
+}
+.gap-cell {
+  width: 32px;
+  height: 24px;
+  background-color: #e8f0ff;
+  border-radius: 4px;
+  color: #1a7af8;
   font-size: 12px;
   text-align: center;
 }

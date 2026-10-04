@@ -70,7 +70,7 @@
 | layout | `justify-content` | supported | supported | supported | L2 | 直映射 | universal | 引擎为**开放字符串**（未知值静默落默认，不崩） |
 | layout | `align-items / align-self` | supported | supported | supported | L2 | 直映射 | universal | 开放字符串（未知值静默落默认） |
 | layout | `flex-grow / flex-shrink / flex-basis` | supported | supported | supported | L2 | 直映射 | universal | flex-basis 为长度 |
-| layout | `gap` | supported | supported | supported | L2 | 直映射 | universal | px/数字（无 row-gap/column-gap 分开形态） |
+| layout | `gap（+ row-gap / column-gap）` | partial | partial | supported | L2 | 直映射 | conditional | px/数字；★批次 31：**两值** `gap:<row> <col>` 与 **轴级** `row-gap`/`column-gap`（内核 `LStyle.row_gap/column_gap` → taffy `gap.height/width`）——真项目组件库 15 处两值 gap |
 | layout | `position: static / relative / absolute` | supported | supported | supported | L2 | 直映射 | universal | 引擎封闭集；sticky/fixed ⇒ 诊断跳过 |
 | layout | `top / left` | supported | supported | supported | L2 | 直映射 | universal | 配合 absolute；引擎无 right/bottom（见候选） |
 | layout | `overflow: visible / hidden / scroll / auto` | supported | supported | supported | L2 | 直映射 | universal | 引擎封闭集；auto 折叠为 taffy Scroll |
@@ -120,6 +120,7 @@
 
 | CSS | Web | Skyline | App | 受限原因 |
 |---|---|---|---|---|
+| `gap（+ row-gap / column-gap）` | partial | partial | supported | px/数字；★批次 31：**两值** `gap:<row> <col>` 与 **轴级** `row-gap`/`column-gap`（内核 `LStyle.row_gap/c |
 | `margin/padding 1–4 值简写 + background 纯色简写 + flex 简写` | — | — | supported | ★批次 2/7（2026-10-04）：a) `margin: 8px 0` / `padding: 8px 12px` 按 CSS 标准展开为 {top,right,bottom |
 | `width/height 百分比` | — | — | supported | → widthRatio/heightRatio（比例字段） |
 | `transform（translate/scale/rotate/skew/perspective）` | supported | supported | engine-only | ★引擎/宿主已支持（LStyle 的绘制通道 paint-only + 宿主动画桥），但编译期折叠面（parseStaticStyle）**未接 transform** ⇒ 「可扩 |

@@ -204,9 +204,12 @@ impl TaffyEngine {
             (None, Some(r)) => percent(r),
             _ => auto(),
         };
-        if style.gap != 0.0 {
-            let g = length(style.gap);
-            out.gap = taffy::Size { width: g, height: g };
+        // ★批次 31：`gap` 为基值（两轴同），`row-gap`/`column-gap` 为轴级覆盖；任一非零都要应用
+        if style.gap != 0.0 || style.row_gap.is_some() || style.column_gap.is_some() {
+            out.gap = taffy::Size {
+                width: length(style.column_gap.unwrap_or(style.gap)),
+                height: length(style.row_gap.unwrap_or(style.gap)),
+            };
         }
 
         // ④ 尺寸（比例以父内容盒为基准——spike 已验证）
