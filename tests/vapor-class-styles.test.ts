@@ -272,3 +272,45 @@ describe('★批次 1 · CSS 层叠正确性（特异性 / 继承 / !important�
     expect([...imp], '仅 width 标记为 important').toEqual(['width'])
   })
 })
+
+// ★★★批次 2（CSS 兼容对齐 · 值/简写归一化）：margin/padding 多值 + background 简写（2026-10-04）
+//   取证依据：真项目里 `margin: 8px 0` / `padding: 8px 12px` 等**多值简写高频**（此前整体丢弃）。
+describe('★批次 2 · 值/简写归一化（四值简写 + background）', () => {
+  it('① margin/padding 四值简写按 CSS 标准展开', () => {
+    expect(parseStaticStyle('margin: 8px 0', () => {}).margin, '两值 → top/bottom=8, right/left=0').toEqual({ top: 8, right: 0, bottom: 8, left: 0 })
+    expect(parseStaticStyle('padding: 8px 12px', () => {}).padding, '两值').toEqual({ top: 8, right: 12, bottom: 8, left: 12 })
+    expect(parseStaticStyle('padding: 1px 2px 3px', () => {}).padding, '三值 → top=1,left/right=2,bottom=3').toEqual({ top: 1, right: 2, bottom: 3, left: 2 })
+    expect(parseStaticStyle('padding: 1px 2px 3px 4px', () => {}).padding, '四值').toEqual({ top: 1, right: 2, bottom: 3, left: 4 })
+  })
+
+  it('①b margin: auto 的边忽略（内核对等无 auto），其余边照设', () => {
+    expect(parseStaticStyle('margin: 0 auto', () => {}).margin, '左右 auto 忽略，仅上/下=0').toEqual({ top: 0, bottom: 0 })
+  })
+
+  it('② background 简写 → backgroundColor（纯色归一为 hex）', () => {
+    expect(parseStaticStyle('background: #eef4ff', () => {}).backgroundColor).toBe('#eef4ff')
+    expect(parseStaticStyle('background: rgba(26, 122, 248, 0.06)', () => {}).backgroundColor, 'rgba → hex8').toBe('#1a7af80f')
+    expect(parseStaticStyle('background: transparent', () => {}).backgroundColor).toBe('#00000000')
+  })
+
+  it('②b background 渐变/图片 ⇒ 跳过 + 诊断（不静默；渐变走引擎 fill-gradient 通道）', () => {
+    const diags: string[] = []
+    const out = parseStaticStyle('background: linear-gradient(135deg, #fff 0%, #000 100%)', (m) => diags.push(m))
+    expect(out.backgroundColor, '渐变不折成 backgroundColor').toBeUndefined()
+    expect(diags.some((m) => m.includes('background 简写')), '产诊断').toBe(true)
+  })
+
+  it('③ 端到端：多值简写经 <style> class 折进节点 style', () => {
+    const sfc = `<template><view class="card">x</view></template>
+<script setup>const z = 1</script>
+<style>
+.card { margin: 8px 0; padding: 12px 16px; background: #f5f6f7 }
+</style>`
+    const r = buildLayoutTemplate(sfc, 'pages/card.vue')
+    expect(r.ok).toBe(true)
+    const n = r.template.nodes.find((x) => x.style && (x.style as { margin?: unknown }).margin)
+    expect((n!.style as { margin?: unknown }).margin, 'margin 两值').toEqual({ top: 8, right: 0, bottom: 8, left: 0 })
+    expect((n!.style as { padding?: unknown }).padding, 'padding 两值').toEqual({ top: 12, right: 16, bottom: 12, left: 16 })
+    expect((n!.style as { backgroundColor?: string }).backgroundColor, 'background → backgroundColor').toBe('#f5f6f7')
+  })
+})

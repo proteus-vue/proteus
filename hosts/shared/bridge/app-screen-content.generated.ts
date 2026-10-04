@@ -126,6 +126,12 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
       {
         "id": 14,
         "parentId": 11,
+        "margin": {
+          "top": 8,
+          "right": 0,
+          "bottom": 8,
+          "left": 0
+        },
         "semantic": "p-text"
       },
       {
@@ -163,6 +169,12 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
       {
         "id": 18,
         "parentId": 17,
+        "margin": {
+          "top": 8,
+          "right": 0,
+          "bottom": 8,
+          "left": 0
+        },
         "text": "p-view 容器 + p-text 文本（selectable）",
         "semantic": "p-text"
       },
@@ -175,6 +187,12 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
       {
         "id": 20,
         "parentId": 17,
+        "margin": {
+          "top": 8,
+          "right": 0,
+          "bottom": 8,
+          "left": 0
+        },
         "semantic": "p-text"
       },
       {
@@ -195,6 +213,12 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
       {
         "id": 22,
         "parentId": 0,
+        "margin": {
+          "top": 8,
+          "right": 0,
+          "bottom": 8,
+          "left": 0
+        },
         "semantic": "p-text"
       },
       {
@@ -279,6 +303,12 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
       {
         "id": 32,
         "parentId": 29,
+        "margin": {
+          "top": 8,
+          "right": 0,
+          "bottom": 8,
+          "left": 0
+        },
         "semantic": "p-text"
       },
       {
@@ -344,6 +374,12 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
       {
         "id": 40,
         "parentId": 39,
+        "margin": {
+          "top": 8,
+          "right": 0,
+          "bottom": 8,
+          "left": 0
+        },
         "text": "弹层内容（bottom + slide 转场）",
         "semantic": "p-text"
       },
@@ -408,6 +444,12 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
       {
         "id": 49,
         "parentId": 46,
+        "margin": {
+          "top": 8,
+          "right": 0,
+          "bottom": 8,
+          "left": 0
+        },
         "text": "数据已加载",
         "semantic": "p-text"
       }
@@ -516,7 +558,14 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
           "bottom": 16,
           "left": 16
         },
+        "backgroundColor": "#eef4ff",
         "borderRadius": 8,
+        "margin": {
+          "top": 12,
+          "right": 0,
+          "bottom": 12,
+          "left": 0
+        },
         "text": "customTags：'demo-box' → view（config 启用）",
         "semantic": "demo-box"
       },
@@ -534,12 +583,19 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
       {
         "id": 9,
         "parentId": 0,
+        "margin": {
+          "top": 12,
+          "right": 0,
+          "bottom": 12,
+          "left": 0
+        },
         "padding": {
           "top": 12,
           "right": 12,
           "bottom": 12,
           "left": 12
         },
+        "backgroundColor": "#f5f6f7",
         "borderRadius": 8,
         "semantic": "div"
       },
@@ -559,12 +615,19 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
       {
         "id": 12,
         "parentId": 0,
+        "margin": {
+          "top": 12,
+          "right": 0,
+          "bottom": 12,
+          "left": 0
+        },
         "padding": {
           "top": 12,
           "right": 12,
           "bottom": 12,
           "left": 12
         },
+        "backgroundColor": "#f5f6f7",
         "borderRadius": 8,
         "semantic": "div"
       },
@@ -584,12 +647,19 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
       {
         "id": 15,
         "parentId": 0,
+        "margin": {
+          "top": 12,
+          "right": 0,
+          "bottom": 12,
+          "left": 0
+        },
         "padding": {
           "top": 12,
           "right": 12,
           "bottom": 12,
           "left": 12
         },
+        "backgroundColor": "#f5f6f7",
         "borderRadius": 8,
         "semantic": "div"
       },
@@ -632,6 +702,7 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
         "margin": {
           "top": 20
         },
+        "backgroundColor": "#f5f6f7",
         "padding": {
           "top": 12,
           "right": 12,
@@ -665,6 +736,13 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
       {
         "id": 25,
         "parentId": 22,
+        "backgroundColor": "#e6e8eb",
+        "padding": {
+          "top": 1,
+          "right": 4,
+          "bottom": 1,
+          "left": 4
+        },
         "borderRadius": 4,
         "fontSize": 12,
         "text": "npm run build:mp",
@@ -692,6 +770,13 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
       {
         "id": 29,
         "parentId": 28,
+        "backgroundColor": "#e6e8eb",
+        "padding": {
+          "top": 1,
+          "right": 4,
+          "bottom": 1,
+          "left": 4
+        },
         "borderRadius": 4,
         "fontSize": 12,
         "text": "customTags",
@@ -713,6 +798,13 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
       {
         "id": 32,
         "parentId": 31,
+        "backgroundColor": "#e6e8eb",
+        "padding": {
+          "top": 1,
+          "right": 4,
+          "bottom": 1,
+          "left": 4
+        },
         "borderRadius": 4,
         "fontSize": 12,
         "text": "mapping",
@@ -734,6 +826,13 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
       {
         "id": 35,
         "parentId": 34,
+        "backgroundColor": "#e6e8eb",
+        "padding": {
+          "top": 1,
+          "right": 4,
+          "bottom": 1,
+          "left": 4
+        },
         "borderRadius": 4,
         "fontSize": 12,
         "text": "disabled",
@@ -858,11 +957,23 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
       {
         "id": 0,
         "parentId": null,
+        "padding": {
+          "top": 20,
+          "right": 16,
+          "bottom": 48,
+          "left": 16
+        },
         "semantic": "view"
       },
       {
         "id": 1,
         "parentId": 0,
+        "padding": {
+          "top": 20,
+          "right": 0,
+          "bottom": 16,
+          "left": 0
+        },
         "display": "flex",
         "flexDirection": "column",
         "semantic": "view"
@@ -924,7 +1035,14 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
         "id": 7,
         "parentId": 6,
         "fontSize": 13,
+        "padding": {
+          "top": 8,
+          "right": 12,
+          "bottom": 8,
+          "left": 12
+        },
         "borderRadius": 8,
+        "backgroundColor": "#3b82f61f",
         "borderColor": "#3b82f673",
         "text": "调用 scanQR()",
         "semantic": "view"
@@ -988,7 +1106,14 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
         "id": 13,
         "parentId": 12,
         "fontSize": 13,
+        "padding": {
+          "top": 8,
+          "right": 12,
+          "bottom": 8,
+          "left": 12
+        },
         "borderRadius": 8,
+        "backgroundColor": "#3b82f61f",
         "borderColor": "#3b82f673",
         "text": "push scanner@1.0.0",
         "semantic": "view"
@@ -997,7 +1122,14 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
         "id": 14,
         "parentId": 12,
         "fontSize": 13,
+        "padding": {
+          "top": 8,
+          "right": 12,
+          "bottom": 8,
+          "left": 12
+        },
         "borderRadius": 8,
+        "backgroundColor": "#3b82f61f",
         "borderColor": "#3b82f673",
         "text": "push scanner@2.0.0（热升级）",
         "semantic": "view"
@@ -1016,7 +1148,14 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
         "id": 16,
         "parentId": 15,
         "fontSize": 13,
+        "padding": {
+          "top": 8,
+          "right": 12,
+          "bottom": 8,
+          "left": 12
+        },
         "borderRadius": 8,
+        "backgroundColor": "#ef44441a",
         "borderColor": "#ef444466",
         "text": "push 坏签名（应拒绝）",
         "semantic": "view"
@@ -1025,7 +1164,14 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
         "id": 17,
         "parentId": 15,
         "fontSize": 13,
+        "padding": {
+          "top": 8,
+          "right": 12,
+          "bottom": 8,
+          "left": 12
+        },
         "borderRadius": 8,
+        "backgroundColor": "#ef44441a",
         "borderColor": "#ef444466",
         "text": "push 坏 shape（应拒绝+降级）",
         "semantic": "view"
@@ -1091,6 +1237,12 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
         "id": 24,
         "parentId": 23,
         "fontSize": 13,
+        "padding": {
+          "top": 8,
+          "right": 12,
+          "bottom": 8,
+          "left": 12
+        },
         "borderRadius": 8,
         "text": "业务再写 30 页",
         "semantic": "view"
@@ -1141,7 +1293,14 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
         "id": 29,
         "parentId": 28,
         "minWidth": 72,
+        "padding": {
+          "top": 8,
+          "right": 10,
+          "bottom": 8,
+          "left": 10
+        },
         "borderRadius": 10,
+        "backgroundColor": "#80808014",
         "display": "flex",
         "flexDirection": "column",
         "alignItems": "center",
@@ -1168,7 +1327,14 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
         "id": 32,
         "parentId": 28,
         "minWidth": 72,
+        "padding": {
+          "top": 8,
+          "right": 10,
+          "bottom": 8,
+          "left": 10
+        },
         "borderRadius": 10,
+        "backgroundColor": "#80808014",
         "display": "flex",
         "flexDirection": "column",
         "alignItems": "center",
@@ -1195,7 +1361,14 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
         "id": 35,
         "parentId": 28,
         "minWidth": 72,
+        "padding": {
+          "top": 8,
+          "right": 10,
+          "bottom": 8,
+          "left": 10
+        },
         "borderRadius": 10,
+        "backgroundColor": "#80808014",
         "display": "flex",
         "flexDirection": "column",
         "alignItems": "center",
@@ -1222,7 +1395,14 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
         "id": 38,
         "parentId": 28,
         "minWidth": 72,
+        "padding": {
+          "top": 8,
+          "right": 10,
+          "bottom": 8,
+          "left": 10
+        },
         "borderRadius": 10,
+        "backgroundColor": "#80808014",
         "display": "flex",
         "flexDirection": "column",
         "alignItems": "center",
@@ -1249,7 +1429,14 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
         "id": 41,
         "parentId": 28,
         "minWidth": 72,
+        "padding": {
+          "top": 8,
+          "right": 10,
+          "bottom": 8,
+          "left": 10
+        },
         "borderRadius": 10,
+        "backgroundColor": "#80808014",
         "display": "flex",
         "flexDirection": "column",
         "alignItems": "center",
@@ -1276,7 +1463,14 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
         "id": 44,
         "parentId": 28,
         "minWidth": 72,
+        "padding": {
+          "top": 8,
+          "right": 10,
+          "bottom": 8,
+          "left": 10
+        },
         "borderRadius": 10,
+        "backgroundColor": "#80808014",
         "display": "flex",
         "flexDirection": "column",
         "alignItems": "center",
@@ -1329,6 +1523,12 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
         "parentId": 47,
         "display": "flex",
         "gap": 8,
+        "padding": {
+          "top": 4,
+          "right": 0,
+          "bottom": 4,
+          "left": 0
+        },
         "semantic": "view"
       },
       {
@@ -1364,6 +1564,16 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
         "id": 0,
         "parentId": null,
         "maxWidth": 860,
+        "margin": {
+          "top": 0,
+          "bottom": 0
+        },
+        "padding": {
+          "top": 24,
+          "right": 16,
+          "bottom": 24,
+          "left": 16
+        },
         "fontSize": 13,
         "semantic": "div"
       },
@@ -1392,7 +1602,14 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
       {
         "id": 4,
         "parentId": 2,
+        "backgroundColor": "#f2f3f5",
         "borderRadius": 3,
+        "padding": {
+          "top": 0,
+          "right": 4,
+          "bottom": 0,
+          "left": 4
+        },
         "fontSize": 12,
         "color": "#666",
         "text": "@proteus-vue/devtools",
@@ -1409,7 +1626,14 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
       {
         "id": 6,
         "parentId": 2,
+        "backgroundColor": "#f2f3f5",
         "borderRadius": 3,
+        "padding": {
+          "top": 0,
+          "right": 4,
+          "bottom": 0,
+          "left": 4
+        },
         "fontSize": 12,
         "color": "#666",
         "text": "/proteus-panel",
@@ -1426,7 +1650,14 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
       {
         "id": 8,
         "parentId": 2,
+        "backgroundColor": "#f2f3f5",
         "borderRadius": 3,
+        "padding": {
+          "top": 0,
+          "right": 4,
+          "bottom": 0,
+          "left": 4
+        },
         "fontSize": 12,
         "color": "#666",
         "text": "createDevtoolsWsSource(url)",
@@ -1443,7 +1674,14 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
       {
         "id": 10,
         "parentId": 2,
+        "backgroundColor": "#f2f3f5",
         "borderRadius": 3,
+        "padding": {
+          "top": 0,
+          "right": 4,
+          "bottom": 0,
+          "left": 4
+        },
         "fontSize": 12,
         "color": "#666",
         "text": "onEvent / appInfo() / deviceInfo() / sendCommand()",
@@ -1460,6 +1698,18 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
       {
         "id": 12,
         "parentId": 0,
+        "margin": {
+          "top": 10,
+          "right": 0,
+          "bottom": 10,
+          "left": 0
+        },
+        "padding": {
+          "top": 4,
+          "right": 10,
+          "bottom": 4,
+          "left": 10
+        },
         "borderRadius": 4,
         "fontSize": 13,
         "semantic": "div"
@@ -1469,6 +1719,12 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
         "parentId": 0,
         "display": "flex",
         "gap": 8,
+        "margin": {
+          "top": 8,
+          "right": 0,
+          "bottom": 8,
+          "left": 0
+        },
         "fontSize": 13,
         "semantic": "div"
       },
@@ -1476,6 +1732,13 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
         "id": 14,
         "parentId": 13,
         "borderRadius": 4,
+        "backgroundColor": "#fff",
+        "padding": {
+          "top": 5,
+          "right": 12,
+          "bottom": 5,
+          "left": 12
+        },
         "fontSize": 13,
         "text": "读取 appInfo（路由表）",
         "semantic": "button"
@@ -1484,6 +1747,13 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
         "id": 15,
         "parentId": 13,
         "borderRadius": 4,
+        "backgroundColor": "#fff",
+        "padding": {
+          "top": 5,
+          "right": 12,
+          "bottom": 5,
+          "left": 12
+        },
         "fontSize": 13,
         "text": "读取 deviceInfo（环境/能力）",
         "semantic": "button"
@@ -1492,6 +1762,18 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
         "id": 16,
         "parentId": 0,
         "borderRadius": 6,
+        "padding": {
+          "top": 8,
+          "right": 10,
+          "bottom": 8,
+          "left": 10
+        },
+        "margin": {
+          "top": 10,
+          "right": 0,
+          "bottom": 10,
+          "left": 0
+        },
         "fontSize": 13,
         "semantic": "div"
       },
@@ -1500,6 +1782,12 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
         "parentId": 16,
         "display": "flex",
         "gap": 8,
+        "margin": {
+          "top": 8,
+          "right": 0,
+          "bottom": 8,
+          "left": 0
+        },
         "fontSize": 13,
         "semantic": "div"
       },
@@ -1507,6 +1795,12 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
         "id": 18,
         "parentId": 17,
         "borderRadius": 4,
+        "padding": {
+          "top": 5,
+          "right": 8,
+          "bottom": 5,
+          "left": 8
+        },
         "fontSize": 12,
         "semantic": "input"
       },
@@ -1514,6 +1808,13 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
         "id": 19,
         "parentId": 17,
         "borderRadius": 4,
+        "backgroundColor": "#fff",
+        "padding": {
+          "top": 5,
+          "right": 12,
+          "bottom": 5,
+          "left": 12
+        },
         "fontSize": 13,
         "text": "下发命令",
         "semantic": "button"
@@ -1522,6 +1823,12 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
         "id": 20,
         "parentId": 16,
         "borderRadius": 4,
+        "padding": {
+          "top": 5,
+          "right": 8,
+          "bottom": 5,
+          "left": 8
+        },
         "fontSize": 12,
         "semantic": "input"
       },
@@ -1538,6 +1845,12 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
         "parentId": 0,
         "display": "flex",
         "gap": 6,
+        "margin": {
+          "top": 10,
+          "right": 0,
+          "bottom": 10,
+          "left": 0
+        },
         "fontSize": 13,
         "semantic": "div"
       },
@@ -1545,6 +1858,12 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
         "id": 23,
         "parentId": 22,
         "borderRadius": 3,
+        "padding": {
+          "top": 2,
+          "right": 8,
+          "bottom": 2,
+          "left": 8
+        },
         "fontSize": 12,
         "color": "#fff",
         "semantic": "span"
@@ -1582,6 +1901,12 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
         "parentId": 26,
         "borderRadius": 6,
         "maxHeight": 320,
+        "padding": {
+          "top": 6,
+          "right": 8,
+          "bottom": 6,
+          "left": 8
+        },
         "fontSize": 13,
         "semantic": "div"
       },
@@ -1591,6 +1916,12 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
         "display": "flex",
         "alignItems": "center",
         "gap": 6,
+        "padding": {
+          "top": 2,
+          "right": 0,
+          "bottom": 2,
+          "left": 0
+        },
         "fontSize": 12,
         "semantic": "div"
       },
@@ -1598,6 +1929,12 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
         "id": 30,
         "parentId": 29,
         "borderRadius": 3,
+        "padding": {
+          "top": 0,
+          "right": 6,
+          "bottom": 0,
+          "left": 6
+        },
         "color": "#fff",
         "fontSize": 11,
         "semantic": "span"
@@ -1649,6 +1986,12 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
         "parentId": 35,
         "borderRadius": 6,
         "maxHeight": 320,
+        "padding": {
+          "top": 6,
+          "right": 8,
+          "bottom": 6,
+          "left": 8
+        },
         "fontSize": 13,
         "semantic": "div"
       },
@@ -1656,6 +1999,12 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
         "id": 38,
         "parentId": 37,
         "fontSize": 11,
+        "padding": {
+          "top": 1,
+          "right": 0,
+          "bottom": 1,
+          "left": 0
+        },
         "semantic": "div"
       },
       {
@@ -1668,6 +2017,7 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
       {
         "id": 40,
         "parentId": 35,
+        "backgroundColor": "#f8f9fa",
         "borderRadius": 6,
         "padding": {
           "top": 8,
@@ -1692,6 +2042,10 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
       {
         "id": 1,
         "parentId": 0,
+        "padding": {
+          "right": 0,
+          "left": 0
+        },
         "semantic": "view"
       },
       {
@@ -1710,6 +2064,10 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
       {
         "id": 4,
         "parentId": 0,
+        "margin": {
+          "right": 0,
+          "left": 0
+        },
         "semantic": "view"
       },
       {
@@ -1751,6 +2109,10 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
       {
         "id": 12,
         "parentId": 11,
+        "padding": {
+          "right": 0,
+          "left": 0
+        },
         "semantic": "view"
       },
       {
@@ -1767,6 +2129,7 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
       {
         "id": 15,
         "parentId": 0,
+        "backgroundColor": "#f5f6f8",
         "semantic": "view"
       },
       {
@@ -1789,6 +2152,16 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
         "id": 0,
         "parentId": null,
         "maxWidth": 900,
+        "margin": {
+          "top": 0,
+          "bottom": 0
+        },
+        "padding": {
+          "top": 24,
+          "right": 16,
+          "bottom": 24,
+          "left": 16
+        },
         "semantic": "div"
       },
       {
@@ -1813,7 +2186,14 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
       {
         "id": 4,
         "parentId": 2,
+        "backgroundColor": "#f2f3f5",
         "borderRadius": 3,
+        "padding": {
+          "top": 0,
+          "right": 4,
+          "bottom": 0,
+          "left": 4
+        },
         "color": "#666",
         "text": "p-grid",
         "semantic": "code"
@@ -1829,7 +2209,20 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
         "id": 6,
         "parentId": 0,
         "color": "#07c160",
+        "backgroundColor": "#fff",
         "borderRadius": 4,
+        "padding": {
+          "top": 6,
+          "right": 14,
+          "bottom": 6,
+          "left": 14
+        },
+        "margin": {
+          "top": 8,
+          "right": 0,
+          "bottom": 16,
+          "left": 0
+        },
         "text": "展开 12 卡片 + 8 标签",
         "semantic": "button"
       },
@@ -1844,6 +2237,7 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
       {
         "id": 8,
         "parentId": 7,
+        "backgroundColor": "#e8f7ee",
         "borderRadius": 8,
         "padding": {
           "top": 16,
@@ -1878,13 +2272,21 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
       {
         "id": 11,
         "parentId": 10,
+        "backgroundColor": "#f0f2f5",
         "borderRadius": 12,
+        "padding": {
+          "top": 4,
+          "right": 12,
+          "bottom": 4,
+          "left": 12
+        },
         "fontSize": 12,
         "semantic": "span"
       },
       {
         "id": 12,
         "parentId": 0,
+        "backgroundColor": "#f8f9fa",
         "borderRadius": 8,
         "padding": {
           "top": 16,
@@ -1900,8 +2302,15 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
       {
         "id": 13,
         "parentId": 12,
+        "backgroundColor": "#1d6fb8",
         "color": "#fff",
         "borderRadius": 6,
+        "padding": {
+          "top": 8,
+          "right": 12,
+          "bottom": 8,
+          "left": 12
+        },
         "text": "内容驱动宽度（fit-content · 最大 80%）",
         "semantic": "p-fit"
       },
@@ -1920,6 +2329,16 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
         "id": 0,
         "parentId": null,
         "maxWidth": 1000,
+        "margin": {
+          "top": 0,
+          "bottom": 0
+        },
+        "padding": {
+          "top": 24,
+          "right": 16,
+          "bottom": 24,
+          "left": 16
+        },
         "semantic": "div"
       },
       {
@@ -1959,7 +2378,20 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
         "id": 6,
         "parentId": 0,
         "color": "#1d6fb8",
+        "backgroundColor": "#fff",
         "borderRadius": 4,
+        "padding": {
+          "top": 6,
+          "right": 14,
+          "bottom": 6,
+          "left": 14
+        },
+        "margin": {
+          "top": 8,
+          "right": 0,
+          "bottom": 16,
+          "left": 0
+        },
         "text": "展开 8 卡片",
         "semantic": "button"
       },
@@ -1989,6 +2421,7 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
           "bottom": 12,
           "left": 12
         },
+        "backgroundColor": "#eef4fb",
         "semantic": "div"
       },
       {
@@ -2015,6 +2448,7 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
           "bottom": 12,
           "left": 12
         },
+        "backgroundColor": "#e8f7ee",
         "semantic": "div"
       },
       {
@@ -2052,6 +2486,7 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
         "margin": {
           "bottom": 8
         },
+        "backgroundColor": "#fff1f0",
         "text": "sm 布局：单列堆叠（容器 < 188px）",
         "semantic": "div"
       },
@@ -2068,6 +2503,7 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
         "margin": {
           "bottom": 8
         },
+        "backgroundColor": "#fff7e6",
         "text": "md 布局：两列（容器 ≥ 328px）",
         "semantic": "div"
       },
@@ -2084,6 +2520,7 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
         "margin": {
           "bottom": 8
         },
+        "backgroundColor": "#f6ffed",
         "text": "lg 布局：三列（容器 ≥ 469px）",
         "semantic": "div"
       },
@@ -2100,6 +2537,7 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
         "margin": {
           "bottom": 8
         },
+        "backgroundColor": "#e6f7ff",
         "text": "xl 布局：四列（容器 ≥ 609px）",
         "semantic": "div"
       },
@@ -2114,6 +2552,7 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
       {
         "id": 20,
         "parentId": 19,
+        "backgroundColor": "#f0f2f5",
         "borderRadius": 6,
         "padding": {
           "top": 10,
@@ -2127,6 +2566,12 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
       {
         "id": 21,
         "parentId": 0,
+        "margin": {
+          "top": 28,
+          "right": 0,
+          "bottom": 8,
+          "left": 0
+        },
         "fontSize": 16,
         "text": "S2 · 安全区避让（p-safe）",
         "semantic": "h3"
@@ -2146,6 +2591,7 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
         "margin": {
           "bottom": 10
         },
+        "backgroundColor": "#eef4fb",
         "semantic": "p-safe"
       },
       {
@@ -2168,6 +2614,7 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
         "margin": {
           "bottom": 10
         },
+        "backgroundColor": "#eef4fb",
         "semantic": "p-safe"
       },
       {
@@ -2190,6 +2637,7 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
         "margin": {
           "bottom": 10
         },
+        "backgroundColor": "#eef4fb",
         "semantic": "p-safe"
       },
       {
@@ -2212,6 +2660,7 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
         "margin": {
           "bottom": 10
         },
+        "backgroundColor": "#fffbe6",
         "borderColor": "#ffe58f",
         "semantic": "p-safe"
       },
@@ -2231,6 +2680,12 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
       {
         "id": 31,
         "parentId": 0,
+        "margin": {
+          "top": 28,
+          "right": 0,
+          "bottom": 8,
+          "left": 0
+        },
         "fontSize": 16,
         "text": "S2 · 纵横比容器（p-aspect）",
         "semantic": "h3"
@@ -2252,6 +2707,7 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
       {
         "id": 34,
         "parentId": 33,
+        "backgroundColor": "#f0f2f5",
         "display": "flex",
         "alignItems": "center",
         "justifyContent": "center",
@@ -2271,6 +2727,7 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
       {
         "id": 36,
         "parentId": 35,
+        "backgroundColor": "#f0f2f5",
         "display": "flex",
         "alignItems": "center",
         "justifyContent": "center",
@@ -2293,11 +2750,18 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
           "left": 12
         },
         "borderRadius": 8,
+        "backgroundColor": "#fafafa",
         "semantic": "div"
       },
       {
         "id": 38,
         "parentId": 37,
+        "margin": {
+          "top": 0,
+          "right": 0,
+          "bottom": 6,
+          "left": 0
+        },
         "fontSize": 14,
         "text": "当前设备形态",
         "semantic": "h3"
@@ -2379,6 +2843,12 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
       {
         "id": 49,
         "parentId": 0,
+        "margin": {
+          "top": 28,
+          "right": 0,
+          "bottom": 8,
+          "left": 0
+        },
         "fontSize": 16,
         "text": "S3 · 自适应导航栏（p-sidebar）",
         "semantic": "h3"
@@ -2404,6 +2874,12 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
       {
         "id": 52,
         "parentId": 51,
+        "padding": {
+          "top": 8,
+          "right": 12,
+          "bottom": 8,
+          "left": 12
+        },
         "color": "#1d6fb8",
         "borderRadius": 4,
         "fontSize": 13,
@@ -2413,6 +2889,12 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
       {
         "id": 53,
         "parentId": 51,
+        "padding": {
+          "top": 8,
+          "right": 12,
+          "bottom": 8,
+          "left": 12
+        },
         "color": "#1d6fb8",
         "borderRadius": 4,
         "fontSize": 13,
@@ -2422,6 +2904,12 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
       {
         "id": 54,
         "parentId": 51,
+        "padding": {
+          "top": 8,
+          "right": 12,
+          "bottom": 8,
+          "left": 12
+        },
         "color": "#1d6fb8",
         "borderRadius": 4,
         "fontSize": 13,
@@ -2431,6 +2919,12 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
       {
         "id": 55,
         "parentId": 51,
+        "padding": {
+          "top": 8,
+          "right": 12,
+          "bottom": 8,
+          "left": 12
+        },
         "color": "#1d6fb8",
         "borderRadius": 4,
         "fontSize": 13,
@@ -2465,6 +2959,12 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
       {
         "id": 59,
         "parentId": 0,
+        "margin": {
+          "top": 28,
+          "right": 0,
+          "bottom": 8,
+          "left": 0
+        },
         "fontSize": 16,
         "text": "S3 · 工具栏溢出折叠（p-toolbar）",
         "semantic": "h3"
@@ -2496,6 +2996,12 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
       {
         "id": 62,
         "parentId": 0,
+        "margin": {
+          "top": 28,
+          "right": 0,
+          "bottom": 8,
+          "left": 0
+        },
         "fontSize": 16,
         "text": "S4 · 动态字号/密度（p-scale）",
         "semantic": "h3"
@@ -2549,6 +3055,7 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
           "bottom": 12,
           "left": 12
         },
+        "backgroundColor": "#fafafa",
         "semantic": "p-scale"
       },
       {
@@ -2587,6 +3094,7 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
           "bottom": 12,
           "left": 12
         },
+        "backgroundColor": "#fafafa",
         "semantic": "p-scale"
       },
       {
@@ -2625,6 +3133,7 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
           "bottom": 12,
           "left": 12
         },
+        "backgroundColor": "#fafafa",
         "semantic": "p-scale"
       },
       {
@@ -2656,6 +3165,12 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
       {
         "id": 77,
         "parentId": 0,
+        "margin": {
+          "top": 28,
+          "right": 0,
+          "bottom": 8,
+          "left": 0
+        },
         "fontSize": 16,
         "text": "p-adaptive · 容器形态自适应（B1 求解 + B2 组件 + B4 p-modal）",
         "semantic": "h3"
@@ -2700,6 +3215,7 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
           "bottom": 16,
           "left": 16
         },
+        "backgroundColor": "#fafafa",
         "margin": {
           "bottom": 8
         },
@@ -2726,7 +3242,14 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
       {
         "id": 85,
         "parentId": 84,
+        "padding": {
+          "top": 4,
+          "right": 12,
+          "bottom": 4,
+          "left": 12
+        },
         "borderRadius": 12,
+        "backgroundColor": "#eee",
         "color": "#999",
         "fontSize": 12,
         "text": "sheet",
@@ -2735,7 +3258,14 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
       {
         "id": 86,
         "parentId": 84,
+        "padding": {
+          "top": 4,
+          "right": 12,
+          "bottom": 4,
+          "left": 12
+        },
         "borderRadius": 12,
+        "backgroundColor": "#eee",
         "color": "#999",
         "fontSize": 12,
         "text": "dialog",
@@ -2744,7 +3274,14 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
       {
         "id": 87,
         "parentId": 84,
+        "padding": {
+          "top": 4,
+          "right": 12,
+          "bottom": 4,
+          "left": 12
+        },
         "borderRadius": 12,
+        "backgroundColor": "#eee",
         "color": "#999",
         "fontSize": 12,
         "text": "popover",
@@ -2757,6 +3294,12 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
         "alignItems": "center",
         "gap": 6,
         "justifyContent": "center",
+        "margin": {
+          "top": 10,
+          "right": 0,
+          "bottom": 10,
+          "left": 0
+        },
         "semantic": "div"
       },
       {
@@ -2770,16 +3313,30 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
       {
         "id": 90,
         "parentId": 88,
+        "backgroundColor": "#fff",
         "color": "#333",
         "borderRadius": 4,
+        "padding": {
+          "top": 3,
+          "right": 10,
+          "bottom": 3,
+          "left": 10
+        },
         "fontSize": 12,
         "semantic": "button"
       },
       {
         "id": 91,
         "parentId": 88,
+        "backgroundColor": "#fff",
         "color": "#333",
         "borderRadius": 4,
+        "padding": {
+          "top": 3,
+          "right": 10,
+          "bottom": 3,
+          "left": 10
+        },
         "fontSize": 12,
         "text": "跟随窗口",
         "semantic": "button"
@@ -2788,7 +3345,20 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
         "id": 92,
         "parentId": 82,
         "color": "#1d6fb8",
+        "backgroundColor": "#fff",
         "borderRadius": 4,
+        "padding": {
+          "top": 6,
+          "right": 14,
+          "bottom": 6,
+          "left": 14
+        },
+        "margin": {
+          "top": 8,
+          "right": 0,
+          "bottom": 16,
+          "left": 0
+        },
         "semantic": "button"
       },
       {
@@ -2847,7 +3417,20 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
         "id": 101,
         "parentId": 100,
         "color": "#1d6fb8",
+        "backgroundColor": "#fff",
         "borderRadius": 4,
+        "padding": {
+          "top": 6,
+          "right": 14,
+          "bottom": 6,
+          "left": 14
+        },
+        "margin": {
+          "top": 8,
+          "right": 0,
+          "bottom": 16,
+          "left": 0
+        },
         "text": "取消",
         "semantic": "button"
       },
@@ -2855,7 +3438,20 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
         "id": 102,
         "parentId": 100,
         "color": "#1d6fb8",
+        "backgroundColor": "#fff",
         "borderRadius": 4,
+        "padding": {
+          "top": 6,
+          "right": 14,
+          "bottom": 6,
+          "left": 14
+        },
+        "margin": {
+          "top": 8,
+          "right": 0,
+          "bottom": 16,
+          "left": 0
+        },
         "text": "确定",
         "semantic": "button"
       }
@@ -2878,6 +3474,12 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
         "id": 2,
         "parentId": 0,
         "widthRatio": 1,
+        "margin": {
+          "top": 8,
+          "right": 0,
+          "bottom": 8,
+          "left": 0
+        },
         "padding": {
           "top": 8,
           "right": 8,
@@ -2891,6 +3493,12 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
         "id": 3,
         "parentId": 0,
         "widthRatio": 1,
+        "margin": {
+          "top": 8,
+          "right": 0,
+          "bottom": 8,
+          "left": 0
+        },
         "padding": {
           "top": 8,
           "right": 8,
@@ -2932,7 +3540,14 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
           "bottom": 12,
           "left": 12
         },
+        "backgroundColor": "#f5f6f7",
         "borderRadius": 8,
+        "margin": {
+          "top": 12,
+          "right": 0,
+          "bottom": 12,
+          "left": 0
+        },
         "semantic": "div"
       },
       {
@@ -2984,7 +3599,14 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
           "bottom": 12,
           "left": 12
         },
+        "backgroundColor": "#f5f6f7",
         "borderRadius": 8,
+        "margin": {
+          "top": 12,
+          "right": 0,
+          "bottom": 12,
+          "left": 0
+        },
         "semantic": "div"
       },
       {
@@ -3004,6 +3626,7 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
           "bottom": 14,
           "left": 14
         },
+        "backgroundColor": "#e8f1fd",
         "borderRadius": 8,
         "fontSize": 14,
         "text": "过渡卡片：切换时先播 fade 动画再移除（Web 原生 / MP 状态机）",
@@ -3018,7 +3641,14 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
           "bottom": 12,
           "left": 12
         },
+        "backgroundColor": "#f5f6f7",
         "borderRadius": 8,
+        "margin": {
+          "top": 12,
+          "right": 0,
+          "bottom": 12,
+          "left": 0
+        },
         "semantic": "div"
       },
       {
@@ -3057,6 +3687,12 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
       {
         "id": 2,
         "parentId": 0,
+        "margin": {
+          "top": 4,
+          "right": 0,
+          "bottom": 16,
+          "left": 0
+        },
         "color": "#666",
         "fontSize": 13,
         "text": "统一入口 <pg-glass> → 各端映射到该端最强玻璃；L1 基础玻璃全端必达，降级不崩溃",
@@ -3079,6 +3715,12 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
       {
         "id": 5,
         "parentId": 3,
+        "margin": {
+          "top": 6,
+          "right": 0,
+          "bottom": 12,
+          "left": 0
+        },
         "color": "#888",
         "fontSize": 12,
         "text": "preset = 经验证的最佳参数组合，业务优先用 preset；下方为各预设默认外观",
@@ -3142,6 +3784,12 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
       {
         "id": 12,
         "parentId": 10,
+        "margin": {
+          "top": 6,
+          "right": 0,
+          "bottom": 12,
+          "left": 0
+        },
         "color": "#888",
         "fontSize": 12,
         "text": "同一 custom 预设，不同模糊厚度（none=0 → ultra 最厚）",
@@ -3205,6 +3853,12 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
       {
         "id": 19,
         "parentId": 17,
+        "margin": {
+          "top": 6,
+          "right": 0,
+          "bottom": 12,
+          "left": 0
+        },
         "color": "#888",
         "fontSize": 12,
         "text": "noise > 0 渲染噪点层；border 控制高光边（Web/Skyline CSS 模拟）",
@@ -3327,6 +3981,12 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
       {
         "id": 32,
         "parentId": 30,
+        "margin": {
+          "top": 6,
+          "right": 0,
+          "bottom": 12,
+          "left": 0
+        },
         "color": "#888",
         "fontSize": 12,
         "text": "props → 环境 → 层级：能力不足降实色，绝不白屏/黑块",
@@ -3341,6 +4001,13 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
           "bottom": 0,
           "left": 0
         },
+        "padding": {
+          "top": 12,
+          "right": 14,
+          "bottom": 12,
+          "left": 14
+        },
+        "backgroundColor": "#14141a",
         "color": "#9fd3c7",
         "borderRadius": 8,
         "fontSize": 12,
@@ -3388,6 +4055,7 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
           "bottom": 12,
           "left": 12
         },
+        "backgroundColor": "#f5f5f5",
         "borderRadius": 8,
         "display": "flex",
         "flexDirection": "column",
@@ -3419,6 +4087,7 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
           "bottom": 10,
           "left": 10
         },
+        "backgroundColor": "#e8f0ff",
         "borderRadius": 8,
         "semantic": "view"
       },
@@ -3448,6 +4117,7 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
           "bottom": 12,
           "left": 12
         },
+        "backgroundColor": "#f5f5f5",
         "borderRadius": 8,
         "display": "flex",
         "flexDirection": "column",
@@ -3586,6 +4256,12 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
         "display": "flex",
         "alignItems": "center",
         "gap": 8,
+        "margin": {
+          "top": 8,
+          "right": 0,
+          "bottom": 8,
+          "left": 0
+        },
         "semantic": "div"
       },
       {
@@ -3603,16 +4279,34 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
       {
         "id": 6,
         "parentId": 0,
+        "margin": {
+          "top": 8,
+          "right": 0,
+          "bottom": 8,
+          "left": 0
+        },
         "semantic": "p"
       },
       {
         "id": 7,
         "parentId": 0,
+        "margin": {
+          "top": 8,
+          "right": 0,
+          "bottom": 8,
+          "left": 0
+        },
         "semantic": "p"
       },
       {
         "id": 8,
         "parentId": 0,
+        "margin": {
+          "top": 8,
+          "right": 0,
+          "bottom": 8,
+          "left": 0
+        },
         "semantic": "p"
       },
       {
@@ -3621,6 +4315,12 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
         "display": "flex",
         "alignItems": "center",
         "gap": 8,
+        "margin": {
+          "top": 8,
+          "right": 0,
+          "bottom": 8,
+          "left": 0
+        },
         "semantic": "div"
       },
       {
@@ -3644,11 +4344,23 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
       {
         "id": 13,
         "parentId": 0,
+        "margin": {
+          "top": 8,
+          "right": 0,
+          "bottom": 8,
+          "left": 0
+        },
         "semantic": "button"
       },
       {
         "id": 14,
         "parentId": 0,
+        "margin": {
+          "top": 8,
+          "right": 0,
+          "bottom": 8,
+          "left": 0
+        },
         "text": "✅",
         "semantic": "p"
       }
@@ -3659,6 +4371,12 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
       {
         "id": 0,
         "parentId": null,
+        "padding": {
+          "top": 48,
+          "right": 0,
+          "bottom": 48,
+          "left": 0
+        },
         "semantic": "div"
       },
       {
@@ -3685,6 +4403,12 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
       {
         "id": 5,
         "parentId": 0,
+        "padding": {
+          "top": 4,
+          "right": 0,
+          "bottom": 4,
+          "left": 0
+        },
         "semantic": "div"
       },
       {
@@ -3704,6 +4428,12 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
       {
         "id": 8,
         "parentId": 7,
+        "padding": {
+          "top": 8,
+          "right": 0,
+          "bottom": 8,
+          "left": 0
+        },
         "color": "#1a7af8",
         "text": "表单与指令",
         "semantic": "a"
@@ -3711,6 +4441,12 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
       {
         "id": 9,
         "parentId": 7,
+        "padding": {
+          "top": 8,
+          "right": 0,
+          "bottom": 8,
+          "left": 0
+        },
         "color": "#1a7af8",
         "text": "配置演示",
         "semantic": "a"
@@ -3718,6 +4454,12 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
       {
         "id": 10,
         "parentId": 7,
+        "padding": {
+          "top": 8,
+          "right": 0,
+          "bottom": 8,
+          "left": 0
+        },
         "color": "#1a7af8",
         "text": "组件演示",
         "semantic": "a"
@@ -3725,6 +4467,12 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
       {
         "id": 11,
         "parentId": 7,
+        "padding": {
+          "top": 8,
+          "right": 0,
+          "bottom": 8,
+          "left": 0
+        },
         "color": "#1a7af8",
         "text": "小程序语义（MP 组件/API）",
         "semantic": "a"
@@ -3732,6 +4480,12 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
       {
         "id": 12,
         "parentId": 7,
+        "padding": {
+          "top": 8,
+          "right": 0,
+          "bottom": 8,
+          "left": 0
+        },
         "color": "#1a7af8",
         "text": "PlatformAPI 收口",
         "semantic": "a"
@@ -3739,6 +4493,12 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
       {
         "id": 13,
         "parentId": 7,
+        "padding": {
+          "top": 8,
+          "right": 0,
+          "bottom": 8,
+          "left": 0
+        },
         "color": "#1a7af8",
         "text": "柔性布局（Fluid）",
         "semantic": "a"
@@ -3746,6 +4506,12 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
       {
         "id": 14,
         "parentId": 7,
+        "padding": {
+          "top": 8,
+          "right": 0,
+          "bottom": 8,
+          "left": 0
+        },
         "color": "#1a7af8",
         "text": "Fluid System（折叠屏/车机）",
         "semantic": "a"
@@ -3753,6 +4519,12 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
       {
         "id": 15,
         "parentId": 7,
+        "padding": {
+          "top": 8,
+          "right": 0,
+          "bottom": 8,
+          "left": 0
+        },
         "color": "#1a7af8",
         "text": "G-32 语义原语（B2）",
         "semantic": "a"
@@ -3760,6 +4532,12 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
       {
         "id": 16,
         "parentId": 7,
+        "padding": {
+          "top": 8,
+          "right": 0,
+          "bottom": 8,
+          "left": 0
+        },
         "color": "#1a7af8",
         "text": "v-model MP 复测（G12）",
         "semantic": "a"
@@ -3767,6 +4545,12 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
       {
         "id": 17,
         "parentId": 7,
+        "padding": {
+          "top": 8,
+          "right": 0,
+          "bottom": 8,
+          "left": 0
+        },
         "color": "#1a7af8",
         "text": "渲染后端可插拔（G-27）",
         "semantic": "a"
@@ -3774,6 +4558,12 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
       {
         "id": 18,
         "parentId": 7,
+        "padding": {
+          "top": 8,
+          "right": 0,
+          "bottom": 8,
+          "left": 0
+        },
         "color": "#1a7af8",
         "text": "液态玻璃（G-07）",
         "semantic": "a"
@@ -3781,6 +4571,12 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
       {
         "id": 19,
         "parentId": 7,
+        "padding": {
+          "top": 8,
+          "right": 0,
+          "bottom": 8,
+          "left": 0
+        },
         "color": "#1a7af8",
         "text": "文档引擎（md 编译渲染）",
         "semantic": "a"
@@ -3788,6 +4584,12 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
       {
         "id": 20,
         "parentId": 7,
+        "padding": {
+          "top": 8,
+          "right": 0,
+          "bottom": 8,
+          "left": 0
+        },
         "color": "#1a7af8",
         "text": "开放 API 演示（第三方面板）",
         "semantic": "a"
@@ -3795,6 +4597,12 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
       {
         "id": 21,
         "parentId": 7,
+        "padding": {
+          "top": 8,
+          "right": 0,
+          "bottom": 8,
+          "left": 0
+        },
         "color": "#1a7af8",
         "text": "内置组件",
         "semantic": "a"
@@ -3802,6 +4610,12 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
       {
         "id": 22,
         "parentId": 7,
+        "padding": {
+          "top": 8,
+          "right": 0,
+          "bottom": 8,
+          "left": 0
+        },
         "color": "#1a7af8",
         "text": "原生能力组件（camera/map/ad）",
         "semantic": "a"
@@ -3809,6 +4623,12 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
       {
         "id": 23,
         "parentId": 7,
+        "padding": {
+          "top": 8,
+          "right": 0,
+          "bottom": 8,
+          "left": 0
+        },
         "color": "#1a7af8",
         "text": "国际化",
         "semantic": "a"
@@ -3816,6 +4636,12 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
       {
         "id": 24,
         "parentId": 7,
+        "padding": {
+          "top": 8,
+          "right": 0,
+          "bottom": 8,
+          "left": 0
+        },
         "color": "#1a7af8",
         "text": "注入演示",
         "semantic": "a"
@@ -3823,6 +4649,12 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
       {
         "id": 25,
         "parentId": 7,
+        "padding": {
+          "top": 8,
+          "right": 0,
+          "bottom": 8,
+          "left": 0
+        },
         "color": "#1a7af8",
         "text": "虚拟列表",
         "semantic": "a"
@@ -3830,6 +4662,12 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
       {
         "id": 26,
         "parentId": 7,
+        "padding": {
+          "top": 8,
+          "right": 0,
+          "bottom": 8,
+          "left": 0
+        },
         "color": "#1a7af8",
         "text": "状态管理",
         "semantic": "a"
@@ -3837,6 +4675,12 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
       {
         "id": 27,
         "parentId": 7,
+        "padding": {
+          "top": 8,
+          "right": 0,
+          "bottom": 8,
+          "left": 0
+        },
         "color": "#1a7af8",
         "text": "用户中心",
         "semantic": "a"
@@ -3844,6 +4688,12 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
       {
         "id": 28,
         "parentId": 7,
+        "padding": {
+          "top": 8,
+          "right": 0,
+          "bottom": 8,
+          "left": 0
+        },
         "color": "#1a7af8",
         "text": "个人资料",
         "semantic": "a"
@@ -3851,6 +4701,12 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
       {
         "id": 29,
         "parentId": 7,
+        "padding": {
+          "top": 8,
+          "right": 0,
+          "bottom": 8,
+          "left": 0
+        },
         "color": "#1a7af8",
         "text": "订单列表",
         "semantic": "a"
@@ -3879,6 +4735,12 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
       {
         "id": 32,
         "parentId": 30,
+        "margin": {
+          "top": 4,
+          "right": 0,
+          "bottom": 4,
+          "left": 0
+        },
         "fontSize": 12,
         "color": "#888",
         "text": "静态/动态 SVG、use 展开、文字提升、事件命中、动画（CSS/canvas）",
@@ -3960,13 +4822,29 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
       {
         "id": 45,
         "parentId": 0,
+        "margin": {
+          "top": 20,
+          "bottom": 20
+        },
         "maxWidth": 360,
+        "padding": {
+          "top": 12,
+          "right": 16,
+          "bottom": 12,
+          "left": 16
+        },
         "borderRadius": 8,
         "semantic": "div"
       },
       {
         "id": 46,
         "parentId": 45,
+        "margin": {
+          "top": 0,
+          "right": 0,
+          "bottom": 6,
+          "left": 0
+        },
         "fontSize": 15,
         "text": "路由嵌套演示",
         "semantic": "h3"
@@ -3974,6 +4852,12 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
       {
         "id": 47,
         "parentId": 45,
+        "margin": {
+          "top": 4,
+          "right": 0,
+          "bottom": 4,
+          "left": 0
+        },
         "fontSize": 12,
         "color": "#888",
         "text": "嵌套链：首页 → 用户中心 → 个人资料（user-profile 的 parent 是 user）",
@@ -3982,6 +4866,12 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
       {
         "id": 48,
         "parentId": 45,
+        "padding": {
+          "top": 6,
+          "right": 0,
+          "bottom": 6,
+          "left": 0
+        },
         "color": "#1a7af8",
         "text": "① 进入用户中心（a 链接·嵌套入口）",
         "semantic": "a"
@@ -3989,6 +4879,12 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
       {
         "id": 49,
         "parentId": 45,
+        "padding": {
+          "top": 6,
+          "right": 0,
+          "bottom": 6,
+          "left": 0
+        },
         "color": "#1a7af8",
         "text": "② router.push → 用户中心（push 路径）",
         "semantic": "button"
@@ -3996,6 +4892,12 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
       {
         "id": 50,
         "parentId": 45,
+        "margin": {
+          "top": 4,
+          "right": 0,
+          "bottom": 4,
+          "left": 0
+        },
         "fontSize": 12,
         "color": "#888",
         "text": "进入用户中心后点「个人资料」→ route 面板连续两条嵌套记录",
@@ -4008,6 +4910,12 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
       {
         "id": 0,
         "parentId": null,
+        "padding": {
+          "top": 48,
+          "right": 0,
+          "bottom": 48,
+          "left": 0
+        },
         "semantic": "div"
       },
       {
@@ -4091,6 +4999,12 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
         "display": "flex",
         "alignItems": "center",
         "gap": 8,
+        "margin": {
+          "top": 4,
+          "right": 0,
+          "bottom": 4,
+          "left": 0
+        },
         "semantic": "view"
       },
       {
@@ -4317,8 +5231,15 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
         "boxSizing": "border-box",
         "widthRatio": 1,
         "borderRadius": 6,
+        "padding": {
+          "top": 8,
+          "right": 12,
+          "bottom": 8,
+          "left": 12
+        },
         "fontSize": 14,
         "borderColor": "#ffffff33",
+        "backgroundColor": "#191919",
         "color": "#ffffffcc",
         "semantic": "input"
       },
@@ -4365,8 +5286,15 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
         "boxSizing": "border-box",
         "widthRatio": 1,
         "borderRadius": 6,
+        "padding": {
+          "top": 8,
+          "right": 12,
+          "bottom": 8,
+          "left": 12
+        },
         "fontSize": 14,
         "borderColor": "#ffffff33",
+        "backgroundColor": "#191919",
         "color": "#ffffffcc",
         "semantic": "textarea"
       },
@@ -4376,6 +5304,12 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
         "display": "flex",
         "alignItems": "center",
         "gap": 8,
+        "margin": {
+          "top": 4,
+          "right": 0,
+          "bottom": 4,
+          "left": 0
+        },
         "semantic": "view"
       },
       {
@@ -4397,6 +5331,12 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
         "display": "flex",
         "alignItems": "center",
         "gap": 8,
+        "margin": {
+          "top": 4,
+          "right": 0,
+          "bottom": 4,
+          "left": 0
+        },
         "semantic": "view"
       },
       {
@@ -4418,6 +5358,12 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
         "display": "flex",
         "alignItems": "center",
         "gap": 8,
+        "margin": {
+          "top": 4,
+          "right": 0,
+          "bottom": 4,
+          "left": 0
+        },
         "semantic": "view"
       },
       {
@@ -4449,6 +5395,12 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
         "display": "flex",
         "alignItems": "center",
         "gap": 8,
+        "margin": {
+          "top": 4,
+          "right": 0,
+          "bottom": 4,
+          "left": 0
+        },
         "semantic": "view"
       },
       {
@@ -4464,6 +5416,12 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
         "display": "flex",
         "alignItems": "center",
         "gap": 8,
+        "margin": {
+          "top": 4,
+          "right": 0,
+          "bottom": 4,
+          "left": 0
+        },
         "semantic": "view"
       },
       {
@@ -4484,6 +5442,12 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
         "display": "flex",
         "alignItems": "center",
         "gap": 8,
+        "margin": {
+          "top": 4,
+          "right": 0,
+          "bottom": 4,
+          "left": 0
+        },
         "semantic": "view"
       },
       {
@@ -4570,6 +5534,12 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
         "display": "flex",
         "alignItems": "center",
         "gap": 8,
+        "margin": {
+          "top": 4,
+          "right": 0,
+          "bottom": 4,
+          "left": 0
+        },
         "semantic": "view"
       },
       {
@@ -4614,6 +5584,12 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
       {
         "id": 3,
         "parentId": 0,
+        "margin": {
+          "top": 20,
+          "right": 0,
+          "bottom": 8,
+          "left": 0
+        },
         "fontSize": 15,
         "text": "p-camera（<camera>）",
         "semantic": "h3"
@@ -4628,11 +5604,23 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
         "parentId": 0,
         "color": "#666",
         "fontSize": 13,
+        "margin": {
+          "top": 8,
+          "right": 0,
+          "bottom": 4,
+          "left": 0
+        },
         "semantic": "p-text"
       },
       {
         "id": 6,
         "parentId": 0,
+        "margin": {
+          "top": 20,
+          "right": 0,
+          "bottom": 8,
+          "left": 0
+        },
         "fontSize": 15,
         "text": "p-map（<map>）",
         "semantic": "h3"
@@ -4647,11 +5635,23 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
         "parentId": 0,
         "color": "#666",
         "fontSize": 13,
+        "margin": {
+          "top": 8,
+          "right": 0,
+          "bottom": 4,
+          "left": 0
+        },
         "semantic": "p-text"
       },
       {
         "id": 9,
         "parentId": 0,
+        "margin": {
+          "top": 20,
+          "right": 0,
+          "bottom": 8,
+          "left": 0
+        },
         "fontSize": 15,
         "text": "p-webview（<web-view>）",
         "semantic": "h3"
@@ -4681,6 +5681,12 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
         "parentId": 0,
         "color": "#999",
         "fontSize": 12,
+        "margin": {
+          "top": 2,
+          "right": 0,
+          "bottom": 8,
+          "left": 0
+        },
         "semantic": "p-text"
       },
       {
@@ -4698,11 +5704,23 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
         "parentId": 0,
         "color": "#666",
         "fontSize": 13,
+        "margin": {
+          "top": 8,
+          "right": 0,
+          "bottom": 4,
+          "left": 0
+        },
         "semantic": "p-text"
       },
       {
         "id": 17,
         "parentId": 0,
+        "margin": {
+          "top": 20,
+          "right": 0,
+          "bottom": 8,
+          "left": 0
+        },
         "fontSize": 15,
         "text": "p-ad（<ad>）",
         "semantic": "h3"
@@ -4717,11 +5735,23 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
         "parentId": 0,
         "color": "#666",
         "fontSize": 13,
+        "margin": {
+          "top": 8,
+          "right": 0,
+          "bottom": 4,
+          "left": 0
+        },
         "semantic": "p-text"
       },
       {
         "id": 20,
         "parentId": 0,
+        "margin": {
+          "top": 20,
+          "right": 0,
+          "bottom": 8,
+          "left": 0
+        },
         "fontSize": 15,
         "text": "p-keyboard-accessory（<keyboard-accessory>）",
         "semantic": "h3"
@@ -4741,6 +5771,12 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
         "parentId": 22,
         "display": "flex",
         "gap": 8,
+        "padding": {
+          "top": 6,
+          "right": 0,
+          "bottom": 6,
+          "left": 0
+        },
         "semantic": "p-view"
       },
       {
@@ -4788,34 +5824,70 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
         "id": 3,
         "parentId": 0,
         "fontSize": 16,
+        "margin": {
+          "top": 12,
+          "right": 0,
+          "bottom": 12,
+          "left": 0
+        },
         "semantic": "p"
       },
       {
         "id": 4,
         "parentId": 0,
+        "margin": {
+          "top": 8,
+          "right": 0,
+          "bottom": 8,
+          "left": 0
+        },
         "semantic": "p"
       },
       {
         "id": 5,
         "parentId": 0,
+        "margin": {
+          "top": 0,
+          "right": 6,
+          "bottom": 0,
+          "left": 6
+        },
         "text": "▶ 播放",
         "semantic": "button"
       },
       {
         "id": 6,
         "parentId": 0,
+        "margin": {
+          "top": 0,
+          "right": 6,
+          "bottom": 0,
+          "left": 6
+        },
         "text": "⏯ 暂停/继续",
         "semantic": "button"
       },
       {
         "id": 7,
         "parentId": 0,
+        "margin": {
+          "top": 0,
+          "right": 6,
+          "bottom": 0,
+          "left": 6
+        },
         "text": "音量 -",
         "semantic": "button"
       },
       {
         "id": 8,
         "parentId": 0,
+        "margin": {
+          "top": 0,
+          "right": 6,
+          "bottom": 0,
+          "left": 6
+        },
         "text": "音量 +",
         "semantic": "button"
       }
@@ -4889,11 +5961,18 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
         "boxSizing": "border-box",
         "widthRatio": 1,
         "borderRadius": 6,
+        "padding": {
+          "top": 8,
+          "right": 12,
+          "bottom": 8,
+          "left": 12
+        },
         "fontSize": 14,
         "margin": {
           "bottom": 8
         },
         "borderColor": "#ffffff33",
+        "backgroundColor": "#191919",
         "color": "#ffffffcc",
         "semantic": "input"
       },
@@ -4903,6 +5982,12 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
         "display": "flex",
         "alignItems": "center",
         "gap": 8,
+        "margin": {
+          "top": 4,
+          "right": 0,
+          "bottom": 4,
+          "left": 0
+        },
         "semantic": "view"
       },
       {
@@ -4957,6 +6042,12 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
         "display": "flex",
         "alignItems": "center",
         "gap": 8,
+        "margin": {
+          "top": 4,
+          "right": 0,
+          "bottom": 4,
+          "left": 0
+        },
         "semantic": "view"
       },
       {
@@ -5029,6 +6120,12 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
         "display": "flex",
         "alignItems": "center",
         "gap": 8,
+        "margin": {
+          "top": 4,
+          "right": 0,
+          "bottom": 4,
+          "left": 0
+        },
         "semantic": "view"
       },
       {
@@ -5082,6 +6179,12 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
         "display": "flex",
         "alignItems": "center",
         "gap": 8,
+        "margin": {
+          "top": 4,
+          "right": 0,
+          "bottom": 4,
+          "left": 0
+        },
         "semantic": "view"
       },
       {
@@ -5163,6 +6266,12 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
         "display": "flex",
         "alignItems": "center",
         "gap": 8,
+        "margin": {
+          "top": 4,
+          "right": 0,
+          "bottom": 4,
+          "left": 0
+        },
         "semantic": "view"
       },
       {
@@ -5255,6 +6364,12 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
         "display": "flex",
         "alignItems": "center",
         "gap": 8,
+        "margin": {
+          "top": 4,
+          "right": 0,
+          "bottom": 4,
+          "left": 0
+        },
         "semantic": "view"
       },
       {
@@ -5356,6 +6471,12 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
         "display": "flex",
         "alignItems": "center",
         "gap": 8,
+        "margin": {
+          "top": 4,
+          "right": 0,
+          "bottom": 4,
+          "left": 0
+        },
         "semantic": "view"
       },
       {
@@ -5448,6 +6569,12 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
         "display": "flex",
         "alignItems": "center",
         "gap": 8,
+        "margin": {
+          "top": 4,
+          "right": 0,
+          "bottom": 4,
+          "left": 0
+        },
         "semantic": "view"
       },
       {
@@ -5558,6 +6685,12 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
         "display": "flex",
         "alignItems": "center",
         "gap": 8,
+        "margin": {
+          "top": 4,
+          "right": 0,
+          "bottom": 4,
+          "left": 0
+        },
         "semantic": "view"
       },
       {
@@ -5668,6 +6801,12 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
         "display": "flex",
         "alignItems": "center",
         "gap": 8,
+        "margin": {
+          "top": 4,
+          "right": 0,
+          "bottom": 4,
+          "left": 0
+        },
         "semantic": "view"
       },
       {
@@ -5751,6 +6890,12 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
         "display": "flex",
         "alignItems": "center",
         "gap": 8,
+        "margin": {
+          "top": 4,
+          "right": 0,
+          "bottom": 4,
+          "left": 0
+        },
         "semantic": "view"
       },
       {
@@ -5861,6 +7006,12 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
         "display": "flex",
         "alignItems": "center",
         "gap": 8,
+        "margin": {
+          "top": 4,
+          "right": 0,
+          "bottom": 4,
+          "left": 0
+        },
         "semantic": "view"
       },
       {
@@ -5906,7 +7057,14 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
         "alignItems": "center",
         "justifyContent": "center",
         "height": 88,
+        "margin": {
+          "top": 8,
+          "right": 0,
+          "bottom": 8,
+          "left": 0
+        },
         "borderRadius": 8,
+        "backgroundColor": "#1a7af80f",
         "semantic": "view"
       },
       {
@@ -5922,6 +7080,12 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
       {
         "id": 108,
         "parentId": 107,
+        "padding": {
+          "top": 10,
+          "right": 22,
+          "bottom": 10,
+          "left": 22
+        },
         "borderRadius": 8,
         "color": "#fff",
         "fontSize": 16,
@@ -5982,6 +7146,12 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
         "display": "flex",
         "alignItems": "center",
         "gap": 8,
+        "margin": {
+          "top": 4,
+          "right": 0,
+          "bottom": 4,
+          "left": 0
+        },
         "semantic": "view"
       },
       {
@@ -6083,6 +7253,12 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
         "display": "flex",
         "alignItems": "center",
         "gap": 8,
+        "margin": {
+          "top": 4,
+          "right": 0,
+          "bottom": 4,
+          "left": 0
+        },
         "semantic": "view"
       },
       {
@@ -6193,6 +7369,12 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
         "display": "flex",
         "alignItems": "center",
         "gap": 8,
+        "margin": {
+          "top": 4,
+          "right": 0,
+          "bottom": 4,
+          "left": 0
+        },
         "semantic": "view"
       },
       {
@@ -6276,6 +7458,12 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
         "display": "flex",
         "alignItems": "center",
         "gap": 8,
+        "margin": {
+          "top": 4,
+          "right": 0,
+          "bottom": 4,
+          "left": 0
+        },
         "semantic": "view"
       },
       {
@@ -6350,6 +7538,12 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
         "display": "flex",
         "alignItems": "center",
         "gap": 8,
+        "margin": {
+          "top": 4,
+          "right": 0,
+          "bottom": 4,
+          "left": 0
+        },
         "semantic": "view"
       },
       {
@@ -6473,6 +7667,12 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
         "parentId": 0,
         "color": "#888",
         "fontSize": 13,
+        "margin": {
+          "top": 8,
+          "right": 0,
+          "bottom": 8,
+          "left": 0
+        },
         "text": "页面 provide → 组件 inject（getApp().__proteusProvides 全局注册表桥）",
         "semantic": "p"
       },
@@ -6492,6 +7692,12 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
         "parentId": 0,
         "color": "#888",
         "fontSize": 13,
+        "margin": {
+          "top": 8,
+          "right": 0,
+          "bottom": 8,
+          "left": 0
+        },
         "semantic": "p"
       }
     ]
@@ -6525,6 +7731,12 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
       {
         "id": 3,
         "parentId": 0,
+        "margin": {
+          "top": 16,
+          "right": 0,
+          "bottom": 16,
+          "left": 0
+        },
         "semantic": "section"
       },
       {
@@ -6543,7 +7755,14 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
       {
         "id": 6,
         "parentId": 5,
+        "padding": {
+          "top": 6,
+          "right": 12,
+          "bottom": 6,
+          "left": 12
+        },
         "borderRadius": 6,
+        "backgroundColor": "#fff",
         "fontSize": 13,
         "semantic": "button"
       },
@@ -6560,6 +7779,12 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
       {
         "id": 8,
         "parentId": 0,
+        "margin": {
+          "top": 16,
+          "right": 0,
+          "bottom": 16,
+          "left": 0
+        },
         "semantic": "section"
       },
       {
@@ -6571,6 +7796,7 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
       {
         "id": 10,
         "parentId": 8,
+        "backgroundColor": "#f6f8fa",
         "borderRadius": 8,
         "padding": {
           "top": 10,
@@ -6584,6 +7810,12 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
       {
         "id": 11,
         "parentId": 0,
+        "margin": {
+          "top": 16,
+          "right": 0,
+          "bottom": 16,
+          "left": 0
+        },
         "semantic": "section"
       },
       {
@@ -6602,6 +7834,12 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
         "parentId": 13,
         "color": "#555",
         "fontSize": 13,
+        "margin": {
+          "top": 8,
+          "right": 0,
+          "bottom": 4,
+          "left": 0
+        },
         "text": "vue-dom 真实 DOM（后端内联渲染）：",
         "semantic": "p-text"
       },
@@ -6618,6 +7856,7 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
         "minHeight": 60,
         "display": "flex",
         "gap": 8,
+        "backgroundColor": "#1a7af80a",
         "semantic": "div"
       },
       {
@@ -6625,12 +7864,19 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
         "parentId": 11,
         "color": "#555",
         "fontSize": 13,
+        "margin": {
+          "top": 8,
+          "right": 0,
+          "bottom": 4,
+          "left": 0
+        },
         "text": "各端控件快照（renderComponentSnapshot readback）：",
         "semantic": "p-text"
       },
       {
         "id": 17,
         "parentId": 11,
+        "backgroundColor": "#f6f8fa",
         "borderRadius": 8,
         "padding": {
           "top": 10,
@@ -6666,6 +7912,12 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
         "id": 2,
         "parentId": 0,
         "color": "#969799",
+        "margin": {
+          "top": 8,
+          "right": 0,
+          "bottom": 16,
+          "left": 0
+        },
         "text": "128 原语 SSOT 已冻结——本页演示 B2 落地的 13 个新组件",
         "semantic": "p-text"
       },
@@ -6681,6 +7933,7 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
           "bottom": 12,
           "left": 12
         },
+        "backgroundColor": "#f7f8fa",
         "borderRadius": 8,
         "semantic": "section"
       },
@@ -6701,6 +7954,12 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
         "display": "flex",
         "alignItems": "center",
         "gap": 8,
+        "margin": {
+          "top": 10,
+          "right": 0,
+          "bottom": 10,
+          "left": 0
+        },
         "semantic": "div"
       },
       {
@@ -6719,6 +7978,13 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
       {
         "id": 9,
         "parentId": 8,
+        "padding": {
+          "top": 4,
+          "right": 10,
+          "bottom": 4,
+          "left": 10
+        },
+        "backgroundColor": "#fff",
         "borderRadius": 4,
         "fontSize": 13,
         "text": "A",
@@ -6727,6 +7993,13 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
       {
         "id": 10,
         "parentId": 8,
+        "padding": {
+          "top": 4,
+          "right": 10,
+          "bottom": 4,
+          "left": 10
+        },
+        "backgroundColor": "#fff",
         "borderRadius": 4,
         "fontSize": 13,
         "text": "B",
@@ -6735,6 +8008,13 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
       {
         "id": 11,
         "parentId": 8,
+        "padding": {
+          "top": 4,
+          "right": 10,
+          "bottom": 4,
+          "left": 10
+        },
+        "backgroundColor": "#fff",
         "borderRadius": 4,
         "fontSize": 13,
         "text": "C",
@@ -6746,6 +8026,12 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
         "display": "flex",
         "alignItems": "center",
         "gap": 8,
+        "margin": {
+          "top": 10,
+          "right": 0,
+          "bottom": 10,
+          "left": 0
+        },
         "semantic": "div"
       },
       {
@@ -6766,6 +8052,13 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
       {
         "id": 15,
         "parentId": 14,
+        "padding": {
+          "top": 4,
+          "right": 10,
+          "bottom": 4,
+          "left": 10
+        },
+        "backgroundColor": "#fff",
         "borderRadius": 4,
         "fontSize": 13,
         "text": "左",
@@ -6779,6 +8072,13 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
       {
         "id": 17,
         "parentId": 14,
+        "padding": {
+          "top": 4,
+          "right": 10,
+          "bottom": 4,
+          "left": 10
+        },
+        "backgroundColor": "#fff",
         "borderRadius": 4,
         "fontSize": 13,
         "text": "右",
@@ -6790,6 +8090,12 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
         "display": "flex",
         "alignItems": "center",
         "gap": 8,
+        "margin": {
+          "top": 10,
+          "right": 0,
+          "bottom": 10,
+          "left": 0
+        },
         "semantic": "div"
       },
       {
@@ -6811,6 +8117,12 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
         "display": "flex",
         "alignItems": "center",
         "gap": 8,
+        "margin": {
+          "top": 10,
+          "right": 0,
+          "bottom": 10,
+          "left": 0
+        },
         "semantic": "div"
       },
       {
@@ -6852,6 +8164,12 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
         "display": "flex",
         "alignItems": "center",
         "gap": 8,
+        "margin": {
+          "top": 10,
+          "right": 0,
+          "bottom": 10,
+          "left": 0
+        },
         "semantic": "div"
       },
       {
@@ -6870,6 +8188,7 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
       {
         "id": 28,
         "parentId": 27,
+        "backgroundColor": "#fff",
         "borderRadius": 6,
         "display": "flex",
         "alignItems": "center",
@@ -6884,6 +8203,12 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
         "display": "flex",
         "alignItems": "center",
         "gap": 8,
+        "margin": {
+          "top": 10,
+          "right": 0,
+          "bottom": 10,
+          "left": 0
+        },
         "semantic": "div"
       },
       {
@@ -6905,6 +8230,12 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
         "display": "flex",
         "alignItems": "center",
         "gap": 8,
+        "margin": {
+          "top": 10,
+          "right": 0,
+          "bottom": 10,
+          "left": 0
+        },
         "semantic": "div"
       },
       {
@@ -6935,6 +8266,7 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
         "display": "flex",
         "alignItems": "center",
         "justifyContent": "center",
+        "backgroundColor": "#f7f8fa",
         "borderRadius": 6,
         "fontSize": 13,
         "color": "#07c160",
@@ -6958,6 +8290,7 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
           "bottom": 12,
           "left": 12
         },
+        "backgroundColor": "#f7f8fa",
         "borderRadius": 8,
         "semantic": "section"
       },
@@ -6978,6 +8311,12 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
         "display": "flex",
         "alignItems": "center",
         "gap": 8,
+        "margin": {
+          "top": 10,
+          "right": 0,
+          "bottom": 10,
+          "left": 0
+        },
         "semantic": "div"
       },
       {
@@ -6992,6 +8331,12 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
         "display": "flex",
         "alignItems": "center",
         "gap": 8,
+        "margin": {
+          "top": 10,
+          "right": 0,
+          "bottom": 10,
+          "left": 0
+        },
         "semantic": "div"
       },
       {
@@ -7025,6 +8370,12 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
         "display": "flex",
         "alignItems": "center",
         "gap": 8,
+        "margin": {
+          "top": 10,
+          "right": 0,
+          "bottom": 10,
+          "left": 0
+        },
         "semantic": "div"
       },
       {
@@ -7052,6 +8403,12 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
         "display": "flex",
         "alignItems": "center",
         "gap": 8,
+        "margin": {
+          "top": 10,
+          "right": 0,
+          "bottom": 10,
+          "left": 0
+        },
         "semantic": "div"
       },
       {
@@ -7085,6 +8442,7 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
           "bottom": 12,
           "left": 12
         },
+        "backgroundColor": "#f7f8fa",
         "borderRadius": 8,
         "semantic": "section"
       },
@@ -7105,6 +8463,12 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
         "display": "flex",
         "alignItems": "center",
         "gap": 8,
+        "margin": {
+          "top": 10,
+          "right": 0,
+          "bottom": 10,
+          "left": 0
+        },
         "semantic": "div"
       },
       {
@@ -7136,6 +8500,12 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
         "display": "flex",
         "alignItems": "center",
         "gap": 8,
+        "margin": {
+          "top": 10,
+          "right": 0,
+          "bottom": 10,
+          "left": 0
+        },
         "semantic": "div"
       },
       {
@@ -7157,6 +8527,12 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
         "display": "flex",
         "alignItems": "center",
         "gap": 8,
+        "margin": {
+          "top": 10,
+          "right": 0,
+          "bottom": 10,
+          "left": 0
+        },
         "semantic": "div"
       },
       {
@@ -7241,6 +8617,12 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
         "display": "flex",
         "alignItems": "center",
         "gap": 8,
+        "margin": {
+          "top": 10,
+          "right": 0,
+          "bottom": 10,
+          "left": 0
+        },
         "semantic": "div"
       },
       {
@@ -7262,6 +8644,12 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
         "display": "flex",
         "alignItems": "center",
         "gap": 8,
+        "margin": {
+          "top": 10,
+          "right": 0,
+          "bottom": 10,
+          "left": 0
+        },
         "semantic": "div"
       },
       {
@@ -7295,6 +8683,12 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
         "display": "flex",
         "alignItems": "center",
         "gap": 8,
+        "margin": {
+          "top": 10,
+          "right": 0,
+          "bottom": 10,
+          "left": 0
+        },
         "semantic": "div"
       },
       {
@@ -7334,6 +8728,7 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
           "bottom": 12,
           "left": 12
         },
+        "backgroundColor": "#f7f8fa",
         "borderRadius": 8,
         "semantic": "section"
       },
@@ -7354,6 +8749,12 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
         "display": "flex",
         "alignItems": "center",
         "gap": 8,
+        "margin": {
+          "top": 10,
+          "right": 0,
+          "bottom": 10,
+          "left": 0
+        },
         "semantic": "div"
       },
       {
@@ -7375,6 +8776,12 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
         "display": "flex",
         "alignItems": "center",
         "gap": 8,
+        "margin": {
+          "top": 10,
+          "right": 0,
+          "bottom": 10,
+          "left": 0
+        },
         "semantic": "div"
       },
       {
@@ -7401,6 +8808,12 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
         "display": "flex",
         "alignItems": "center",
         "gap": 8,
+        "margin": {
+          "top": 10,
+          "right": 0,
+          "bottom": 10,
+          "left": 0
+        },
         "semantic": "div"
       },
       {
@@ -7422,6 +8835,12 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
         "display": "flex",
         "alignItems": "center",
         "gap": 8,
+        "margin": {
+          "top": 10,
+          "right": 0,
+          "bottom": 10,
+          "left": 0
+        },
         "semantic": "div"
       },
       {
@@ -7448,6 +8867,12 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
         "display": "flex",
         "alignItems": "center",
         "gap": 8,
+        "margin": {
+          "top": 10,
+          "right": 0,
+          "bottom": 10,
+          "left": 0
+        },
         "semantic": "div"
       },
       {
@@ -7469,6 +8894,12 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
         "display": "flex",
         "alignItems": "center",
         "gap": 8,
+        "margin": {
+          "top": 10,
+          "right": 0,
+          "bottom": 10,
+          "left": 0
+        },
         "semantic": "div"
       },
       {
@@ -7497,6 +8928,12 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
         "display": "flex",
         "alignItems": "center",
         "gap": 8,
+        "margin": {
+          "top": 10,
+          "right": 0,
+          "bottom": 10,
+          "left": 0
+        },
         "semantic": "div"
       },
       {
@@ -7525,6 +8962,12 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
         "display": "flex",
         "alignItems": "center",
         "gap": 8,
+        "margin": {
+          "top": 10,
+          "right": 0,
+          "bottom": 10,
+          "left": 0
+        },
         "semantic": "div"
       },
       {
@@ -7546,6 +8989,12 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
         "display": "flex",
         "alignItems": "center",
         "gap": 8,
+        "margin": {
+          "top": 10,
+          "right": 0,
+          "bottom": 10,
+          "left": 0
+        },
         "semantic": "div"
       },
       {
@@ -7601,6 +9050,7 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
           "bottom": 12,
           "left": 12
         },
+        "backgroundColor": "#f7f8fa",
         "borderRadius": 8,
         "semantic": "section"
       },
@@ -7621,6 +9071,12 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
         "display": "flex",
         "alignItems": "center",
         "gap": 8,
+        "margin": {
+          "top": 10,
+          "right": 0,
+          "bottom": 10,
+          "left": 0
+        },
         "semantic": "div"
       },
       {
@@ -7654,6 +9110,12 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
         "display": "flex",
         "alignItems": "center",
         "gap": 8,
+        "margin": {
+          "top": 10,
+          "right": 0,
+          "bottom": 10,
+          "left": 0
+        },
         "semantic": "div"
       },
       {
@@ -7687,6 +9149,12 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
         "display": "flex",
         "alignItems": "center",
         "gap": 8,
+        "margin": {
+          "top": 10,
+          "right": 0,
+          "bottom": 10,
+          "left": 0
+        },
         "semantic": "div"
       },
       {
@@ -7714,6 +9182,7 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
           "bottom": 12,
           "left": 12
         },
+        "backgroundColor": "#f7f8fa",
         "borderRadius": 8,
         "semantic": "section"
       },
@@ -7734,6 +9203,12 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
         "display": "flex",
         "alignItems": "center",
         "gap": 8,
+        "margin": {
+          "top": 10,
+          "right": 0,
+          "bottom": 10,
+          "left": 0
+        },
         "semantic": "div"
       },
       {
@@ -7756,6 +9231,12 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
         "display": "flex",
         "alignItems": "center",
         "gap": 8,
+        "margin": {
+          "top": 10,
+          "right": 0,
+          "bottom": 10,
+          "left": 0
+        },
         "semantic": "div"
       },
       {
@@ -7777,6 +9258,12 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
         "display": "flex",
         "alignItems": "center",
         "gap": 8,
+        "margin": {
+          "top": 10,
+          "right": 0,
+          "bottom": 10,
+          "left": 0
+        },
         "semantic": "div"
       },
       {
@@ -7798,6 +9285,12 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
         "display": "flex",
         "alignItems": "center",
         "gap": 8,
+        "margin": {
+          "top": 10,
+          "right": 0,
+          "bottom": 10,
+          "left": 0
+        },
         "semantic": "div"
       },
       {
@@ -7836,6 +9329,7 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
           "bottom": 12,
           "left": 12
         },
+        "backgroundColor": "#f7f8fa",
         "borderRadius": 8,
         "semantic": "section"
       },
@@ -7855,6 +9349,12 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
         "parentId": 162,
         "color": "#888",
         "fontSize": 12,
+        "margin": {
+          "top": 6,
+          "right": 0,
+          "bottom": 6,
+          "left": 0
+        },
         "semantic": "p-text"
       },
       {
@@ -7863,6 +9363,12 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
         "display": "flex",
         "alignItems": "center",
         "gap": 8,
+        "margin": {
+          "top": 10,
+          "right": 0,
+          "bottom": 10,
+          "left": 0
+        },
         "semantic": "div"
       },
       {
@@ -7895,6 +9401,12 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
         "display": "flex",
         "alignItems": "center",
         "gap": 8,
+        "margin": {
+          "top": 10,
+          "right": 0,
+          "bottom": 10,
+          "left": 0
+        },
         "semantic": "div"
       },
       {
@@ -7928,6 +9440,12 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
         "display": "flex",
         "alignItems": "center",
         "gap": 8,
+        "margin": {
+          "top": 10,
+          "right": 0,
+          "bottom": 10,
+          "left": 0
+        },
         "semantic": "div"
       },
       {
@@ -7961,6 +9479,7 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
           "bottom": 12,
           "left": 12
         },
+        "backgroundColor": "#f7f8fa",
         "borderRadius": 8,
         "semantic": "section"
       },
@@ -7980,6 +9499,12 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
         "parentId": 180,
         "color": "#888",
         "fontSize": 12,
+        "margin": {
+          "top": 6,
+          "right": 0,
+          "bottom": 6,
+          "left": 0
+        },
         "semantic": "p-text"
       },
       {
@@ -7988,6 +9513,12 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
         "display": "flex",
         "alignItems": "center",
         "gap": 8,
+        "margin": {
+          "top": 10,
+          "right": 0,
+          "bottom": 10,
+          "left": 0
+        },
         "semantic": "div"
       },
       {
@@ -8021,6 +9552,12 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
         "display": "flex",
         "alignItems": "center",
         "gap": 8,
+        "margin": {
+          "top": 10,
+          "right": 0,
+          "bottom": 10,
+          "left": 0
+        },
         "semantic": "div"
       },
       {
@@ -8036,8 +9573,21 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
         "parentId": 189,
         "alignItems": "center",
         "gap": 4,
+        "padding": {
+          "top": 3,
+          "right": 8,
+          "bottom": 3,
+          "left": 8
+        },
+        "margin": {
+          "top": 0,
+          "right": 4,
+          "bottom": 4,
+          "left": 0
+        },
         "borderRadius": 4,
         "fontSize": 12,
+        "backgroundColor": "#fff",
         "semantic": "span"
       },
       {
@@ -8049,8 +9599,15 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
       {
         "id": 193,
         "parentId": 191,
+        "backgroundColor": "#00000000",
         "color": "#999",
         "fontSize": 12,
+        "padding": {
+          "top": 0,
+          "right": 2,
+          "bottom": 0,
+          "left": 2
+        },
         "text": "×",
         "semantic": "button"
       },
@@ -8071,6 +9628,12 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
         "display": "flex",
         "alignItems": "center",
         "gap": 8,
+        "margin": {
+          "top": 10,
+          "right": 0,
+          "bottom": 10,
+          "left": 0
+        },
         "semantic": "div"
       },
       {
@@ -8116,6 +9679,12 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
         "display": "flex",
         "alignItems": "center",
         "gap": 8,
+        "margin": {
+          "top": 10,
+          "right": 0,
+          "bottom": 10,
+          "left": 0
+        },
         "semantic": "div"
       },
       {
@@ -8149,6 +9718,7 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
           "bottom": 12,
           "left": 12
         },
+        "backgroundColor": "#f7f8fa",
         "borderRadius": 8,
         "semantic": "section"
       },
@@ -8168,6 +9738,12 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
         "parentId": 207,
         "color": "#888",
         "fontSize": 12,
+        "margin": {
+          "top": 6,
+          "right": 0,
+          "bottom": 6,
+          "left": 0
+        },
         "semantic": "p-text"
       },
       {
@@ -8176,6 +9752,12 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
         "display": "flex",
         "alignItems": "center",
         "gap": 8,
+        "margin": {
+          "top": 10,
+          "right": 0,
+          "bottom": 10,
+          "left": 0
+        },
         "semantic": "div"
       },
       {
@@ -8203,6 +9785,12 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
         "display": "flex",
         "alignItems": "center",
         "gap": 8,
+        "margin": {
+          "top": 10,
+          "right": 0,
+          "bottom": 10,
+          "left": 0
+        },
         "semantic": "div"
       },
       {
@@ -8230,6 +9818,12 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
         "display": "flex",
         "alignItems": "center",
         "gap": 8,
+        "margin": {
+          "top": 10,
+          "right": 0,
+          "bottom": 10,
+          "left": 0
+        },
         "semantic": "div"
       },
       {
@@ -8289,6 +9883,7 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
       {
         "id": 3,
         "parentId": 0,
+        "backgroundColor": "#f5f6f7",
         "borderRadius": 12,
         "padding": {
           "top": 16,
@@ -8296,11 +9891,23 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
           "bottom": 16,
           "left": 16
         },
+        "margin": {
+          "top": 12,
+          "right": 0,
+          "bottom": 12,
+          "left": 0
+        },
         "semantic": "div"
       },
       {
         "id": 4,
         "parentId": 3,
+        "margin": {
+          "top": 0,
+          "right": 0,
+          "bottom": 4,
+          "left": 0
+        },
         "fontSize": 16,
         "semantic": "h3"
       },
@@ -8328,6 +9935,12 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
       {
         "id": 7,
         "parentId": 6,
+        "padding": {
+          "top": 8,
+          "right": 0,
+          "bottom": 8,
+          "left": 0
+        },
         "color": "#1a7af8",
         "text": "→ 个人资料（层叠缩放：本页下沉 + 目标页滑入）",
         "semantic": "a"
@@ -8342,7 +9955,14 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
         "display": "flex",
         "flexDirection": "column",
         "alignItems": "center",
+        "padding": {
+          "top": 16,
+          "right": 12,
+          "bottom": 40,
+          "left": 12
+        },
         "gap": 6,
+        "backgroundColor": "#0b1020",
         "boxSizing": "border-box",
         "semantic": "view"
       },
@@ -8986,7 +10606,14 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
         "display": "flex",
         "flexDirection": "column",
         "alignItems": "center",
+        "padding": {
+          "top": 16,
+          "right": 12,
+          "bottom": 40,
+          "left": 12
+        },
         "gap": 6,
+        "backgroundColor": "#0b1020",
         "boxSizing": "border-box",
         "semantic": "view"
       },
@@ -9028,7 +10655,14 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
         "parentId": 4,
         "fontSize": 13,
         "color": "#94a3b8",
+        "backgroundColor": "#111a30",
         "borderRadius": 18,
+        "padding": {
+          "top": 6,
+          "right": 18,
+          "bottom": 6,
+          "left": 18
+        },
         "text": "行走",
         "semantic": "text"
       },
@@ -9037,7 +10671,14 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
         "parentId": 4,
         "fontSize": 13,
         "color": "#94a3b8",
+        "backgroundColor": "#111a30",
         "borderRadius": 18,
+        "padding": {
+          "top": 6,
+          "right": 18,
+          "bottom": 6,
+          "left": 18
+        },
         "text": "奔跑",
         "semantic": "text"
       },
@@ -9046,7 +10687,14 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
         "parentId": 4,
         "fontSize": 13,
         "color": "#94a3b8",
+        "backgroundColor": "#111a30",
         "borderRadius": 18,
+        "padding": {
+          "top": 6,
+          "right": 18,
+          "bottom": 6,
+          "left": 18
+        },
         "text": "跳跃",
         "semantic": "text"
       },
@@ -9937,7 +11585,14 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
         "parentId": 180,
         "fontSize": 12,
         "color": "#94a3b8",
+        "backgroundColor": "#111a30",
         "borderRadius": 14,
+        "padding": {
+          "top": 5,
+          "right": 14,
+          "bottom": 5,
+          "left": 14
+        },
         "text": "慢放",
         "semantic": "text"
       },
@@ -9946,7 +11601,14 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
         "parentId": 180,
         "fontSize": 12,
         "color": "#94a3b8",
+        "backgroundColor": "#111a30",
         "borderRadius": 14,
+        "padding": {
+          "top": 5,
+          "right": 14,
+          "bottom": 5,
+          "left": 14
+        },
         "text": "原速",
         "semantic": "text"
       },
@@ -9955,7 +11617,14 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
         "parentId": 180,
         "fontSize": 12,
         "color": "#94a3b8",
+        "backgroundColor": "#111a30",
         "borderRadius": 14,
+        "padding": {
+          "top": 5,
+          "right": 14,
+          "bottom": 5,
+          "left": 14
+        },
         "text": "快放",
         "semantic": "text"
       },
@@ -9964,7 +11633,14 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
         "parentId": 180,
         "fontSize": 12,
         "color": "#94a3b8",
+        "backgroundColor": "#111a30",
         "borderRadius": 14,
+        "padding": {
+          "top": 5,
+          "right": 14,
+          "bottom": 5,
+          "left": 14
+        },
         "text": "倒放",
         "semantic": "text"
       },
@@ -9973,7 +11649,14 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
         "parentId": 180,
         "fontSize": 12,
         "color": "#94a3b8",
+        "backgroundColor": "#111a30",
         "borderRadius": 14,
+        "padding": {
+          "top": 5,
+          "right": 14,
+          "bottom": 5,
+          "left": 14
+        },
         "text": "定格",
         "semantic": "text"
       },
@@ -10036,7 +11719,14 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
         },
         "widthRatio": 1,
         "maxWidth": 300,
+        "backgroundColor": "#111a30",
         "borderRadius": 12,
+        "padding": {
+          "top": 12,
+          "right": 14,
+          "bottom": 12,
+          "left": 14
+        },
         "boxSizing": "border-box",
         "semantic": "view"
       },
@@ -10158,6 +11848,12 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
       {
         "id": 0,
         "parentId": null,
+        "padding": {
+          "top": 24,
+          "right": 0,
+          "bottom": 24,
+          "left": 0
+        },
         "semantic": "div"
       },
       {
@@ -10180,6 +11876,12 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
       {
         "id": 4,
         "parentId": 3,
+        "padding": {
+          "top": 8,
+          "right": 0,
+          "bottom": 8,
+          "left": 0
+        },
         "color": "#1a7af8",
         "text": "转场演示（缩放-综合能力）",
         "semantic": "a"
@@ -10187,6 +11889,12 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
       {
         "id": 5,
         "parentId": 3,
+        "padding": {
+          "top": 8,
+          "right": 0,
+          "bottom": 8,
+          "left": 0
+        },
         "color": "#1a7af8",
         "text": "订单列表（缩放进入）",
         "semantic": "a"
@@ -10194,6 +11902,12 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
       {
         "id": 6,
         "parentId": 3,
+        "padding": {
+          "top": 8,
+          "right": 0,
+          "bottom": 8,
+          "left": 0
+        },
         "color": "#1a7af8",
         "text": "个人资料（半屏-自定义）",
         "semantic": "a"
@@ -10201,6 +11915,12 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
       {
         "id": 7,
         "parentId": 3,
+        "padding": {
+          "top": 8,
+          "right": 0,
+          "bottom": 8,
+          "left": 0
+        },
         "color": "#1a7af8",
         "text": "个人资料（slideUp 自定义）",
         "semantic": "a"
@@ -10208,6 +11928,12 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
       {
         "id": 8,
         "parentId": 3,
+        "padding": {
+          "top": 8,
+          "right": 0,
+          "bottom": 8,
+          "left": 0
+        },
         "color": "#1a7af8",
         "text": "个人资料（半屏-微信预设）",
         "semantic": "a"
@@ -10219,6 +11945,12 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
       {
         "id": 0,
         "parentId": null,
+        "padding": {
+          "top": 24,
+          "right": 0,
+          "bottom": 24,
+          "left": 0
+        },
         "semantic": "div"
       },
       {
@@ -10289,6 +12021,7 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
       {
         "id": 3,
         "parentId": 0,
+        "backgroundColor": "#fff",
         "semantic": "view"
       },
       {
@@ -10311,6 +12044,10 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
       {
         "id": 7,
         "parentId": 6,
+        "padding": {
+          "right": 0,
+          "left": 0
+        },
         "semantic": "view"
       },
       {
@@ -10328,6 +12065,7 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
       {
         "id": 10,
         "parentId": 0,
+        "backgroundColor": "#fff",
         "semantic": "view"
       },
       {
@@ -10358,6 +12096,7 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
       {
         "id": 15,
         "parentId": 0,
+        "backgroundColor": "#fff",
         "semantic": "view"
       },
       {
@@ -10387,6 +12126,7 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
       {
         "id": 20,
         "parentId": 0,
+        "backgroundColor": "#fff",
         "semantic": "view"
       },
       {
@@ -10431,6 +12171,7 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
       {
         "id": 3,
         "parentId": 0,
+        "backgroundColor": "#fff",
         "semantic": "view"
       },
       {
@@ -10450,6 +12191,7 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
       {
         "id": 6,
         "parentId": 5,
+        "backgroundColor": "#eef",
         "text": "bump 一次（count++ → double 重算 + watch 记录）",
         "semantic": "view"
       },
@@ -10462,6 +12204,7 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
       {
         "id": 8,
         "parentId": 0,
+        "backgroundColor": "#fff",
         "semantic": "view"
       },
       {
@@ -10474,6 +12217,12 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
         "id": 10,
         "parentId": 8,
         "borderRadius": 6,
+        "padding": {
+          "top": 8,
+          "right": 12,
+          "bottom": 8,
+          "left": 12
+        },
         "fontSize": 14,
         "widthRatio": 1,
         "boxSizing": "border-box",
@@ -10488,6 +12237,7 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
       {
         "id": 12,
         "parentId": 0,
+        "backgroundColor": "#fff",
         "semantic": "view"
       },
       {
@@ -10507,6 +12257,7 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
       {
         "id": 15,
         "parentId": 14,
+        "backgroundColor": "#eef",
         "text": "切换 agree",
         "semantic": "view"
       },
@@ -10540,6 +12291,7 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
       {
         "id": 20,
         "parentId": 0,
+        "backgroundColor": "#fff",
         "semantic": "view"
       },
       {
@@ -10557,6 +12309,7 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
       {
         "id": 23,
         "parentId": 0,
+        "backgroundColor": "#fff",
         "semantic": "view"
       },
       {
@@ -10573,11 +12326,13 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
       {
         "id": 26,
         "parentId": 23,
+        "backgroundColor": "#eef",
         "semantic": "view"
       },
       {
         "id": 27,
         "parentId": 0,
+        "backgroundColor": "#fff",
         "semantic": "view"
       },
       {
@@ -10597,17 +12352,20 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
       {
         "id": 30,
         "parentId": 29,
+        "backgroundColor": "#eef",
         "semantic": "view"
       },
       {
         "id": 31,
         "parentId": 27,
+        "backgroundColor": "#f0f7ff",
         "text": "过渡卡片：先播 fade 再移除",
         "semantic": "view"
       },
       {
         "id": 32,
         "parentId": 0,
+        "backgroundColor": "#fff",
         "semantic": "view"
       },
       {
@@ -10632,6 +12390,7 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
       {
         "id": 36,
         "parentId": 35,
+        "backgroundColor": "#eef",
         "text": "切换 user（裸 ref 联动 → inject 组件自动刷新）",
         "semantic": "view"
       },
@@ -10644,6 +12403,7 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
       {
         "id": 38,
         "parentId": 0,
+        "backgroundColor": "#fff",
         "semantic": "view"
       },
       {
@@ -10666,6 +12426,7 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
       {
         "id": 42,
         "parentId": 0,
+        "backgroundColor": "#fff",
         "semantic": "view"
       },
       {
@@ -10685,6 +12446,7 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
       {
         "id": 45,
         "parentId": 44,
+        "backgroundColor": "#eef",
         "text": "bump reactive.count（变更 → setData 桥刷新）",
         "semantic": "view"
       },
@@ -10697,6 +12459,7 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
       {
         "id": 47,
         "parentId": 0,
+        "backgroundColor": "#fff",
         "semantic": "view"
       },
       {
@@ -10716,6 +12479,7 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
       {
         "id": 50,
         "parentId": 49,
+        "backgroundColor": "#eef",
         "text": "bump xRef.value（逻辑层 toRef 读写）",
         "semantic": "view"
       },
@@ -10728,6 +12492,7 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
       {
         "id": 52,
         "parentId": 0,
+        "backgroundColor": "#fff",
         "semantic": "view"
       },
       {
@@ -10747,6 +12512,7 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
       {
         "id": 55,
         "parentId": 54,
+        "backgroundColor": "#eef",
         "text": "bump customR.value（customRef 工厂 set→trigger）",
         "semantic": "view"
       },
@@ -10759,6 +12525,7 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
       {
         "id": 57,
         "parentId": 0,
+        "backgroundColor": "#fff",
         "semantic": "view"
       },
       {
@@ -10778,6 +12545,7 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
       {
         "id": 60,
         "parentId": 59,
+        "backgroundColor": "#eef",
         "semantic": "view"
       },
       {
@@ -10804,6 +12572,12 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
       {
         "id": 0,
         "parentId": null,
+        "padding": {
+          "top": 24,
+          "right": 0,
+          "bottom": 24,
+          "left": 0
+        },
         "semantic": "div"
       },
       {
@@ -10820,6 +12594,12 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
       {
         "id": 3,
         "parentId": 2,
+        "padding": {
+          "top": 8,
+          "right": 0,
+          "bottom": 8,
+          "left": 0
+        },
         "color": "#1a7af8",
         "text": "转场演示（层叠缩放：本页下沉 + 演示页滑入）",
         "semantic": "a"
@@ -11409,6 +13189,12 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
         "display": "flex",
         "flexDirection": "column",
         "alignItems": "center",
+        "padding": {
+          "top": 24,
+          "right": 0,
+          "bottom": 24,
+          "left": 0
+        },
         "gap": 12,
         "semantic": "view"
       },
@@ -11443,6 +13229,7 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
         "parentId": 3,
         "width": 80,
         "height": 80,
+        "backgroundColor": "#f7f8fa",
         "semantic": "image"
       },
       {
@@ -11450,6 +13237,7 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
         "parentId": 3,
         "width": 80,
         "height": 80,
+        "backgroundColor": "#f7f8fa",
         "semantic": "image"
       },
       {
@@ -11457,6 +13245,7 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
         "parentId": 3,
         "width": 80,
         "height": 80,
+        "backgroundColor": "#f7f8fa",
         "semantic": "image"
       },
       {
@@ -11517,6 +13306,7 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
         "parentId": 13,
         "width": 80,
         "height": 80,
+        "backgroundColor": "#f7f8fa",
         "semantic": "image"
       },
       {
@@ -11609,6 +13399,12 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
         "display": "flex",
         "flexDirection": "column",
         "alignItems": "center",
+        "padding": {
+          "top": 16,
+          "right": 8,
+          "bottom": 16,
+          "left": 8
+        },
         "gap": 10,
         "semantic": "view"
       },
@@ -11794,6 +13590,12 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
         "display": "flex",
         "flexDirection": "column",
         "alignItems": "center",
+        "padding": {
+          "top": 12,
+          "right": 8,
+          "bottom": 12,
+          "left": 8
+        },
         "gap": 8,
         "semantic": "view"
       },
@@ -11809,6 +13611,7 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
         "parentId": 0,
         "width": 120,
         "height": 120,
+        "backgroundColor": "#fafafa",
         "semantic": "canvas"
       },
       {
@@ -11816,6 +13619,7 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
         "parentId": 0,
         "width": 120,
         "height": 120,
+        "backgroundColor": "#fafafa",
         "semantic": "image"
       },
       {
@@ -11838,6 +13642,7 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
           "bottom": 8,
           "left": 8
         },
+        "backgroundColor": "#f7f8fa",
         "widthRatio": 1,
         "boxSizing": "border-box",
         "semantic": "text"
@@ -11852,6 +13657,12 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
         "display": "flex",
         "flexDirection": "column",
         "alignItems": "center",
+        "padding": {
+          "top": 16,
+          "right": 8,
+          "bottom": 16,
+          "left": 8
+        },
         "gap": 8,
         "semantic": "view"
       },
@@ -12074,6 +13885,7 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
       {
         "id": 4,
         "parentId": 3,
+        "backgroundColor": "#fafafa",
         "semantic": "svg"
       },
       {
@@ -12116,6 +13928,7 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
       {
         "id": 11,
         "parentId": 10,
+        "backgroundColor": "#fafafa",
         "semantic": "svg"
       },
       {
@@ -12279,6 +14092,7 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
         "parentId": 15,
         "width": 64,
         "height": 64,
+        "backgroundColor": "#fafafa",
         "semantic": "image"
       },
       {
@@ -12309,6 +14123,7 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
         "parentId": 18,
         "width": 64,
         "height": 64,
+        "backgroundColor": "#fafafa",
         "semantic": "image"
       },
       {
@@ -12377,6 +14192,7 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
         "parentId": 25,
         "width": 64,
         "height": 64,
+        "backgroundColor": "#fafafa",
         "semantic": "image"
       },
       {
@@ -12399,6 +14215,12 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
         "display": "flex",
         "flexDirection": "column",
         "alignItems": "center",
+        "padding": {
+          "top": 16,
+          "right": 8,
+          "bottom": 16,
+          "left": 8
+        },
         "gap": 8,
         "semantic": "view"
       },
@@ -12421,6 +14243,7 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
         "parentId": 0,
         "width": 240,
         "height": 120,
+        "backgroundColor": "#f0f0f0",
         "semantic": "canvas"
       },
       {
@@ -12443,6 +14266,7 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
           "bottom": 8,
           "left": 8
         },
+        "backgroundColor": "#f7f8fa",
         "widthRatio": 1,
         "boxSizing": "border-box",
         "semantic": "text"
@@ -12460,6 +14284,7 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
         "parentId": 0,
         "width": 240,
         "height": 120,
+        "backgroundColor": "#f0f0f0",
         "semantic": "image"
       }
     ]
