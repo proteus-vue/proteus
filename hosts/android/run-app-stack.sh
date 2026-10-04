@@ -69,6 +69,11 @@ rm -f "$HERE/results/app-stack.json" "$HERE/results/app-stack-executor.json"  # 
   echo "✗ adb pull 失败"; exit 1; }
 "$ADB" pull "$EXEC_REPORT" "$HERE/results/app-stack-executor.json" >/dev/null 2>&1 || {
   echo "  ⚠ 执行器报告未取到"; }
+# ★★★App 三端对齐 · 视觉合成（2026-10-04）：取回合成报告 + PNG（真机"真画屏"证据）
+COMP_REPORT="/sdcard/Android/data/$PKG/files/app-screen-composite.json"
+COMP_PNG="/sdcard/Android/data/$PKG/files/app-screen-composite.png"
+"$ADB" pull "$COMP_REPORT" "$HERE/results/app-screen-composite.json" >/dev/null 2>&1 || echo "  ⚠ 合成报告未取到"
+"$ADB" pull "$COMP_PNG" "$HERE/results/app-screen-composite.png" >/dev/null 2>&1 || echo "  ⚠ 合成 PNG 未取到"
 
 echo "==> ⑥ 判据"
 python3 "$HERE/check-app-stack.py" "$HERE/results/app-stack.json"

@@ -160,7 +160,7 @@
         "rootNodeId": 130
       }
     ],
-    "handle_count": 2
+    "handle_count": 3
   },
   "e_pending_anims": 0,
   "e_anim_hook": true,
@@ -231,7 +231,7 @@
           "rootNodeId": 130
         }
       ],
-      "handle_count": 3
+      "handle_count": 4
     }
   },
   "f_note": "统一 API（createRouter）→ 虚拟栈 → 执行器 → 宿主 全链（零胶水形态）",
