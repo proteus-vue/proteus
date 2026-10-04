@@ -23,7 +23,7 @@ import { runAppStackProbe } from '../core/app-stack-probe';
 import { attach, renderCommands, stats, ProteusRenderStats, platformAnimBegin, platformAnimStep, platformAnimEnd, platformAnimSave, clearRoot, scrollRoot, gestureInstall, gestureSample } from 'libproteus_render.so';
 // ★P3-3：宿主动画入口（`<Transition>` 桥的鸿蒙腿——与 Android/iOS 同形）
 import { animTick, animActive } from 'libproteus_bench.so';
-import { bench4050, hitProbe, recycleProbe, spliceProbe, textProbe, kernelAnimProbe, memProbe, sfcStressProbe, sfcStressCommands, jsvmProbe, vaporProbe, animCurveBezier, hostRuntimeProbe, hostRtShellInstall, mountVirtualProbe, gestureHitPrepare, gestureHitAt, fontFamilyProbe, nodeRect, version as rustVersion } from 'libproteus_bench.so';
+import { bench4050, hitProbe, recycleProbe, spliceProbe, textProbe, kernelAnimProbe, memProbe, sfcStressProbe, sfcStressCommands, jsvmProbe, vaporProbe, animCurveBezier, hostRuntimeProbe, hostRtShellInstall, mountVirtualProbe, gestureHitPrepare, gestureHitAt, fontFamilyProbe, nodeRect, screenContentProbe, version as rustVersion } from 'libproteus_bench.so';
 
 const DOMAIN = 0x0002;
 const TAG = 'ProteusRender';
@@ -840,6 +840,37 @@ struct Index {
         }
         return;
       }
+        // ★★★App 三端对齐 · 鸿蒙 B2 腿（2026-10-04）：**消费 App 屏内容建真实内核树**。
+        //   rawfile app-screen-content.json = 项目路由 → 真实 SFC → 编译器 的屏内容（三端同源）。
+        //   逐页取 nodes → screenContentProbe 建内核树 ⇒ 证明「真实页面内容 → 鸿蒙内核树」这条链。
+        try {
+          const ctxSC = getContext(this);
+          const sBytes: Uint8Array = ctxSC.resourceManager.getRawFileContentSync('app-screen-content.json');
+          const sStr: string = util.TextDecoder.create('utf-8').decodeToString(sBytes);
+          const pages = JSON.parse(sStr) as Record<string, Record<string, Object>>;
+          let pagesDone = 0;
+          let nodesDone = 0;
+          const failed: string[] = [];
+          const names: string[] = Object.keys(pages);
+          for (const nm of names) {
+            const sc = pages[nm];
+            const nodesArr = sc['nodes'];
+            const args: Record<string, Object> = {
+              'nodes': JSON.stringify(nodesArr),
+              'page': nm,
+              'filesDir': ctxSC.filesDir,
+              'vpW': 1080,
+              'vpH': 2400,
+            };
+            const r: string = screenContentProbe(JSON.stringify(args));
+            const ro = JSON.parse(r) as Record<string, Object>;
+            if (ro['ok'] === true) { pagesDone++; nodesDone += Number(ro['content_nodes']); } else { failed.push(nm); }
+          }
+          const sum: string = `{"ok":true,"pages":${names.length},"pages_mounted":${pagesDone},"content_nodes_total":${nodesDone},"failed":${JSON.stringify(failed)}}`;
+          hilog.info(DOMAIN, BENCH_TAG, 'PROTEUS_APP_SCREEN_CONTENT %{public}s', sum);
+        } catch (sce) {
+          hilog.error(DOMAIN, BENCH_TAG, 'PROTEUS_APP_SCREEN_CONTENT_ERROR %{public}s', JSON.stringify(sce) ?? '');
+        }
       // ── ① RenderNode 直绘（第二里程碑）──
       try {
         // ★密度自报（与 C++ 侧的单位标定日志对读——用于定标"canvas 单位 vs vp"）

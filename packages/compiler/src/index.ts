@@ -97,6 +97,7 @@ export {
   parseClassStyles,
   parseClassRules,
   resolveClassStyles,
+  normalizeCssColor,
   stripScopeSuffix,
   parsePaintDeclAttr,
   isPaintDeclAttr,

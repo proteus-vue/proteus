@@ -58,6 +58,18 @@ describe('★App 屏内容产物门禁（内核契约静态校验）', () => {
     fs.rmSync(f, { force: true })
   })
 
+  it('②b 注入非 hex 颜色（rgba）⇒ 红（真机建树失败的那一类）', () => {
+    const f = writeBad((j) => {
+      const n = j.index.nodes.find((x: any) => x.color)
+      if (n) n.color = 'rgba(255,255,255,0.8)'
+      else j.index.nodes[0].backgroundColor = 'rgb(1,2,3)'
+    })
+    const r = runGate(f)
+    expect(r.ok, 'rgba 颜色应判红').toBe(false)
+    expect(r.out, '报出非 hex 颜色').toMatch(/非 hex 颜色/)
+    fs.rmSync(f, { force: true })
+  })
+
   it('③ 注入悬空 parentId ⇒ 红', () => {
     const f = writeBad((j) => {
       j.index.nodes[1].parentId = 999999

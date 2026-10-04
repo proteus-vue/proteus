@@ -54,3 +54,7 @@ export const animTick: (dtMsJson: string) => string;
 export const animActive: () => string;
 /** 停动画 */
 export const animStop: (json: string) => string;
+/** ★★★App 三端对齐（2026-10-04）：消费 App 屏内容（某页 nodes）建真实内核树。
+ *  argsJson = { nodes: string, page?: string, filesDir?: string, vpW?: number, vpH?: number }；
+ *  返回 {ok, page, content_nodes, mount_ok}；给 filesDir 时落盘 app-screen-content.json。 */
+export const screenContentProbe: (argsJson: string) => string;

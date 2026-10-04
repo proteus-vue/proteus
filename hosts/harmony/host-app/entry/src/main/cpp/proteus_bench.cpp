@@ -3782,6 +3782,64 @@ static napi_value BenchVersion(napi_env env, napi_callback_info info) {
 }
 
 EXTERN_C_START
+/**
+ * ★★★App 三端对齐 · 鸿蒙 ScreenHost 最小片（2026-10-04）：**消费 App 屏内容建真实内核树**。
+ *
+ * 【它证明什么】与 Android/iOS 的 ScreenHost.mount（消费 content.nodes 建屏子树）**同契约**的鸿蒙版：
+ *   把某页的屏内容节点交给内核 proteus_layout_create 建树 ⇒ 证明「项目真实页面内容 → 鸿蒙内核树」
+ *   这条链在第三端也通（B2 的鸿蒙腿）。
+ * 【为什么是 napi 探针而非完整 ScreenHost】executor/promise 编排（screen.mount/visible/destroy 经
+ *   JSVM invoke 往返）是更大的一步；本片先把**内容→内核树**这条链在鸿蒙打通（可验证、可判据）。
+ * 【入参】ArkTS 传某页的 nodes 数组串（它自己 JSON.parse 取页）+ 视口宽高；C++ 只做建树 + 计数。
+ * 【出参】JSON 串 {ok, page, content_nodes, mount_ok}；给 filesDir 时落盘 app-screen-content.json。
+ */
+static napi_value ScreenContentProbe(napi_env env, napi_callback_info info) {
+    size_t argc = 1;
+    napi_value args[1] = {nullptr};
+    napi_get_cb_info(env, info, &argc, args, nullptr, nullptr);
+    std::string argsJson;
+    if (argc >= 1 && args[0] != nullptr) {
+        size_t len = 0;
+        napi_get_value_string_utf8(env, args[0], nullptr, 0, &len);
+        argsJson.resize(len + 1);
+        napi_get_value_string_utf8(env, args[0], &argsJson[0], len + 1, &len);
+        argsJson.resize(len);
+    }
+    std::string nodes, page, filesDir;
+    double vpW = 1080, vpH = 1920;
+    jstr(argsJson.c_str(), argsJson.size(), "nodes", &nodes);
+    jstr(argsJson.c_str(), argsJson.size(), "page", &page);
+    jstr(argsJson.c_str(), argsJson.size(), "filesDir", &filesDir);
+    jnum(argsJson.c_str(), argsJson.size(), "vpW", &vpW);
+    jnum(argsJson.c_str(), argsJson.size(), "vpH", &vpH);
+    std::string out;
+    if (nodes.empty()) {
+        out = "{\"ok\":false,\"error\":\"缺 nodes\"}";
+    } else {
+        int count = 0;
+        { size_t p = 0; while ((p = nodes.find("\"id\":", p)) != std::string::npos) { count++; p += 5; } }
+        char vpb[96];
+        snprintf(vpb, sizeof(vpb), "{\"width\":%.2f,\"height\":%.2f}", vpW, vpH);
+        std::string req = "{\"viewport\":" + std::string(vpb) + ",\"nodes\":" + nodes + "}";
+        uint64_t h = proteus_layout_create(req.c_str());
+        bool ok = h > 0;
+        if (h > 0) proteus_layout_destroy(h);
+        char ob[320];
+        snprintf(ob, sizeof(ob),
+                 "{\"ok\":%s,\"page\":\"%s\",\"content_nodes\":%d,\"mount_ok\":%s}",
+                 ok ? "true" : "false", page.c_str(), ok ? count : 0, ok ? "true" : "false");
+        out = ob;
+    }
+    if (!filesDir.empty()) {
+        std::string path = filesDir + "/app-screen-content.json";
+        FILE* f = fopen(path.c_str(), "w");
+        if (f) { fwrite(out.c_str(), 1, out.size(), f); fclose(f); }
+    }
+    napi_value r;
+    napi_create_string_utf8(env, out.c_str(), out.size(), &r);
+    return r;
+}
+
 static napi_value BenchInit(napi_env env, napi_value exports) {
     napi_property_descriptor desc[] = {
         {"bench4050", nullptr, Bench4050, nullptr, nullptr, nullptr, napi_default, nullptr},
@@ -3795,6 +3853,7 @@ static napi_value BenchInit(napi_env env, napi_value exports) {
         {"sfcStressCommands", nullptr, SfcStressCommands, nullptr, nullptr, nullptr, napi_default, nullptr},
         {"jsvmProbe", nullptr, JsvmProbe, nullptr, nullptr, nullptr, napi_default, nullptr},
         {"vaporProbe", nullptr, VaporProbe, nullptr, nullptr, nullptr, napi_default, nullptr},
+        {"screenContentProbe", nullptr, ScreenContentProbe, nullptr, nullptr, nullptr, napi_default, nullptr},
         {"animCurveBezier", nullptr, AnimCurveBezier, nullptr, nullptr, nullptr, napi_default, nullptr},
         {"hostRuntimeProbe", nullptr, HostRuntimeProbe, nullptr, nullptr, nullptr, napi_default, nullptr},
         {"hostRtShellInstall", nullptr, HostRtShellInstall, nullptr, nullptr, nullptr, napi_default, nullptr},

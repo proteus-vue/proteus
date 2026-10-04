@@ -235,5 +235,5 @@
     }
   },
   "f_note": "统一 API（createRouter）→ 虚拟栈 → 执行器 → 宿主 全链（零胶水形态）",
-  "e_pump_rounds": 70
+  "e_pump_rounds": 71
 }

@@ -12,7 +12,7 @@
 //   ⑤ 认不出的声明值仍走 parseStaticStyle 折叠面（px/数字；百分比宽高→比例）
 
 import { describe, it, expect } from 'vitest'
-import { buildLayoutTemplate, parseClassStyles, parseStaticStyle, stripScopeSuffix } from '@proteus-vue/compiler'
+import { buildLayoutTemplate, parseClassStyles, parseStaticStyle, stripScopeSuffix, normalizeCssColor } from '@proteus-vue/compiler'
 
 const SFC = `<template>
   <view class="card">
@@ -24,7 +24,7 @@ const SFC = `<template>
 const x = 1
 </script>
 <style scoped>
-.card { width: 300; height: 120; background-color: #FFFFFF; flex-direction: column }
+.card { width: 300; height: 120; background-color: #ffffff; flex-direction: column }
 .title { font-size: 20; color: #333333 }
 .card > .title { margin-top: 8 }
 .title:hover { color: #FF0000 }
@@ -40,7 +40,7 @@ describe('★C1 最小切片 · SFC <style> 单类规则 → class→节点样�
       return s.height === 120
     })
     expect(card, 'class="card" 的节点应拿到 .card 样式').toBeTruthy()
-    expect((card!.style as { backgroundColor?: string }).backgroundColor, '.card 背景色').toBe('#FFFFFF')
+    expect((card!.style as { backgroundColor?: string }).backgroundColor, '.card 背景色').toBe('#ffffff')
     expect((card!.style as { flexDirection?: string }).flexDirection, '.card flexDirection').toBe('column')
     const title = r.template.nodes.find((n) => (n.style as { fontSize?: number }).fontSize === 20)
     expect(title, 'class="title" 的节点应拿到 .title 样式').toBeTruthy()
@@ -52,7 +52,7 @@ describe('★C1 最小切片 · SFC <style> 单类规则 → class→节点样�
     const inlineNode = r.template.nodes.find(
       (n) => (n.style as { backgroundColor?: string }).backgroundColor === '#000000',
     )
-    expect(inlineNode, '★inline 背景色覆盖了 .card 的 #FFFFFF').toBeTruthy()
+    expect(inlineNode, '★inline 背景色覆盖了 .card 的 #ffffff').toBeTruthy()
     // 且 class 的其它属性仍在（width/height）——是"合并"不是"替换"
     expect((inlineNode!.style as { height?: number }).height, 'class 的 height 仍在（合并）').toBe(120)
   })
@@ -73,7 +73,7 @@ describe('★C1 最小切片 · SFC <style> 单类规则 → class→节点样�
     </style>`
     const rc = buildLayoutTemplate(chainSfc, 'pages/list.vue')
     expect(rc.ok).toBe(true)
-    const row = rc.template.nodes.find((n) => (n.style as { backgroundColor?: string }).backgroundColor === '#EEEEEE')
+    const row = rc.template.nodes.find((n) => (n.style as { backgroundColor?: string }).backgroundColor === '#eeeeee')
     expect(row, '★复合 .row.active 匹配').toBeTruthy()
     expect((row!.style as { height?: number }).height, '单类 .row 也并到该节点').toBe(40)
     const label = rc.template.nodes.find((n) => (n.style as { fontSize?: number }).fontSize === 18)
@@ -107,6 +107,22 @@ describe('★C1 最小切片 · SFC <style> 单类规则 → class→节点样�
     const diag: string[] = []
     parseStaticStyle('display: grid', (x) => diag.push(x))
     expect(diag.length, 'inline display:grid 也诊断').toBeGreaterThan(0)
+  })
+
+  it('★⑦ 颜色归一：rgb()/rgba()/transparent → hex（内核只认 hex）', () => {
+    // 【真机缺陷回归】rgba() 原样透传 ⇒ 内核 parse_css_color 拒绝 ⇒ 整树建不起来。现编译期归一。
+    expect(normalizeCssColor('rgb(255, 255, 255)')).toBe('#ffffff')
+    expect(normalizeCssColor('rgba(255, 255, 255, 0.8)')).toBe('#ffffffcc')
+    expect(normalizeCssColor('rgba(0, 0, 0, 0.5)')).toBe('#00000080')
+    expect(normalizeCssColor('rgba(255,0,0,1)')).toBe('#ff0000ff')
+    expect(normalizeCssColor('transparent')).toBe('#00000000')
+    expect(normalizeCssColor('#FFF')).toBe('#fff')
+    expect(normalizeCssColor('#12345678')).toBe('#12345678')
+    expect(normalizeCssColor('red'), '命名色不支持 ⇒ undefined').toBeUndefined()
+    expect(normalizeCssColor('hsl(0,0%,0%)')).toBeUndefined()
+    // 端到端：<style> 里的 rgba 折成 hex
+    const m = parseClassStyles('.c { color: rgba(255, 255, 255, 0.8) }')
+    expect((m.c as { color?: string }).color, 'class 里的 rgba 归一为 hex').toBe('#ffffffcc')
   })
 
   it('⑤ 折叠面同源：百分比宽高 → 比例字段（与 inline style 同一 parseStaticStyle）', () => {

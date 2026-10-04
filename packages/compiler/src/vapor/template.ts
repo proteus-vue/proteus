@@ -365,7 +365,18 @@ export function parseStaticStyle(
     }
     if (PAINT_FIELDS.has(key)) {
       if (key === 'backgroundColor' || key === 'color' || key === 'borderColor') {
-        out[key] = rawVal
+        // ★★★颜色**归一化**（2026-10-04 修：真机 RustLayout.create 失败暴露）——内核 `parse_css_color`
+        //   只认 `#RGB/#RRGGBB/#RRGGBBAA` 十六进制；CSS 常见的 `rgb()/rgba()/transparent` 原样透传
+        //   ⇒ create 拒绝 ⇒ **整棵树建不起来**（页面全崩）。⇒ 编译期把常见形态归一为 hex。
+        const norm = normalizeCssColor(rawVal)
+        if (!norm) {
+          pushDiag(
+            `颜色 \`${rawKey}: ${rawVal}\` 无法归一为 App 引擎接受的十六进制（#RGB/#RRGGBB/#RRGGBBAA）——已跳过`,
+            'App 端颜色只支持 hex / rgb() / rgba() / transparent；命名色（red 等）请改 hex',
+          )
+          continue
+        }
+        out[key] = norm
       } else {
         const num = numOf(rawVal)
         if (num === undefined) { pushDiag(`style 里 \`${rawKey}: ${rawVal}\` 不是纯数值`); continue }
@@ -536,6 +547,42 @@ export function parseClassStyles(
   return out
 }
 
+/**
+ * ★★★C1 颜色归一（2026-10-04 修：真机 `RustLayout.create` 失败暴露）——CSS 颜色 → 内核接受的 hex。
+ *
+ * 【为什么需要】内核 `parse_css_color` 只认 `#RGB/#RRGGBB/#RRGGBBAA`；CSS 常见的 `rgb()/rgba()`
+ *   （真实项目大量使用）原样透传 ⇒ create 拒绝 ⇒ **整棵树建不起来**。⇒ 编译期归一。
+ * 【支持】`#rgb`/`#rrggbb`/`#rrggbbaa`（原样）· `rgb(r,g,b)` · `rgba(r,g,b,a)`（a 可为 0..1 小数或 0-255）·
+ *   `transparent`（→ #00000000）。其余（命名色 / hsl / var()）⇒ 返回 undefined（调用方诊断 + 跳过）。
+ * 【输出序】`#RRGGBB`（不透明）或 `#RRGGBBAA`（含 alpha）——与内核 parse_css_color 的 CSS4 序一致。
+ */
+export function normalizeCssColor(raw: string): string | undefined {
+  const s = raw.trim().toLowerCase()
+  if (!s) return undefined
+  if (/^#[0-9a-f]{3}$|^#[0-9a-f]{6}$|^#[0-9a-f]{8}$/.test(s)) return s
+  if (s === 'transparent') return '#00000000'
+  const m = /^rgba?\(([^)]*)\)$/.exec(s)
+  if (!m) return undefined
+  const parts = m[1].split(',').map((x) => x.trim())
+  if (parts.length < 3) return undefined
+  const ch = (t: string): number | undefined => {
+    if (/%$/.test(t)) { const n = Number(t.slice(0, -1)); return Number.isFinite(n) ? Math.round((n / 100) * 255) : undefined }
+    const n = Number(t)
+    return Number.isFinite(n) ? Math.round(n) : undefined
+  }
+  const r = ch(parts[0]), g = ch(parts[1]), b = ch(parts[2])
+  if (r === undefined || g === undefined || b === undefined) return undefined
+  const cl = (n: number): number => Math.max(0, Math.min(255, n))
+  const hx = (n: number): string => cl(n).toString(16).padStart(2, '0')
+  if (parts.length >= 4) {
+    let a = 1
+    const at = parts[3]
+    if (/%$/.test(at)) { const n = Number(at.slice(0, -1)); if (Number.isFinite(n)) a = n / 100 }
+    else { const n = Number(at); if (Number.isFinite(n)) a = n > 1 ? n / 255 : n }
+    return '#' + hx(r) + hx(g) + hx(b) + hx(Math.round(a * 255))
+  }
+  return '#' + hx(r) + hx(g) + hx(b)
+}
 /** 去 scoped 后缀（`foo-data-v-abc123` / `foo-data-v-abc` → `foo`；无后缀原样返回） */
 export function stripScopeSuffix(name: string): string {
   return name.replace(/-data-v-[A-Za-z0-9]+$/, '')

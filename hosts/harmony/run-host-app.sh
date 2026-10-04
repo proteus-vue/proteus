@@ -118,6 +118,18 @@ if [ -n "$READY_LINE" ]; then
     echo "  ⚠ 未见 PROTEUS_APPSTACK 读数（探针未跑或日志滚掉）——判据跳过"
   fi
 
+  # ── 6.4 ★★★App 三端对齐（2026-10-04）：App 屏内容产物 → 鸿蒙内核树（B2 鸿蒙腿）──
+  #   与 Android/iOS 的 ScreenHost 同契约：逐页取屏内容 nodes 交给内核 create 建真实页面子树。
+  SC_LINE="$(HDC shell "hilog -x | grep 'PROTEUS_APP_SCREEN_CONTENT {' | tail -1" 2>/dev/null | head -1)"
+  SC_JSON="$(printf '%s' "$SC_LINE" | sed -n 's/.*PROTEUS_APP_SCREEN_CONTENT //p')"
+  if [ -n "$SC_JSON" ]; then
+    printf '%s' "$SC_JSON" > "$RESULTS/app-screen-content.json"
+    echo
+    echo "  ✓ App 屏内容（鸿蒙腿）：$SC_JSON"
+  else
+    echo "  ⚠ 未见 PROTEUS_APP_SCREEN_CONTENT 读数——跳过"
+  fi
+
   # ── 6.5 ★探针集（命中 / 复用池 / 结构变更 / 文本通道 / SFC 压力）——与 Android 能力域对齐 ──
   PROBE_LOG="$(HDC shell "hilog -x | grep -E 'PROTEUS_HIT_PROBE \{|PROTEUS_RECYCLE \{|PROTEUS_SPLICE \{|PROTEUS_TEXT \{|PROTEUS_SCROLL_DONE|PROTEUS_KERNELANIM \{|PROTEUS_MEM \{|PROTEUS_SFCSTRESS \{|PROTEUS_JSVM \{|PROTEUS_VAPOR \{|PROTEUS_PLATFORMANIM_END \{|PROTEUS_MOUNTVIRT \{|PROTEUS_HOSTRT_DONE \{|PROTEUS_SHELLINSTALL \{|PROTEUS_SHELLEVENT \{|PROTEUS_SCROLL_CORE \{|PROTEUS_PLATFORMANIM \{|PROTEUS_GESTURE_INSTALL_JS \{|PROTEUS_FONTFAMILY_PROBE \{' | tail -23" 2>/dev/null)"
   echo

@@ -15,9 +15,9 @@
 - **包规模**：**45 个 @proteus-vue/* npm 包**（+ `packages/layout-core-rust` = **cargo crate，非 npm 包**，故不计数）（★2026-09-29 layout-core = App 排版核心）（check:pkg 0 error · `pnpm check:stats` 校验 ✓；31→38 修正 → G-07 glass 39 → Skyline 收口 worklet 40 → ★2026-09-14 组件库拆包 `@proteus-vue/components` 41 → ★Vapor 线新增 `@proteus-vue/slot-runtime` 42 + `@proteus-vue/layout-core` 43 → ★2026-09-30 MA1 新增 `@proteus-vue/animation` 44；版本统一 0.3.0-beta.8，见「当前状态速览」）
 - **文档**：`docs/proteus-architecture.md`（L0 规约·真理来源）→ `docs/board-inventory.md`（全景索引）→ `docs/roadmap.md`（版本线）→ `roadmap-2-plan`（里程碑线）→ 各 plan
 
+## 当前状态速览（最近一次更新：**2026-10-04·（一三七）· **App 三端对齐 — 鸿蒙 B2 腿打通（屏内容 → 鸿蒙内核树）+ 修真机颜色归一 bug**（决策 #483）——用户「继续」。★**鸿蒙 B4/2b**：新增 `screenContentProbe`（C++ napi：消费 App 屏内容 nodes → `proteus_layout_create` 建真实内核树，与 Android/iOS `ScreenHost` 同契约）+ ArkTS 逐页建树 ⇒ 真机（KLE-AL00U）**44/44 页建树 · 1625 节点 · 零失败**；`check:app-screen-content` 增**设备腿判据**。★**真机真 bug**：颜色未归一（`rgb()/rgba()` 内核只认 hex）⇒ `RustLayout.create` 拒绝 ⇒ 整树崩（鸿蒙 2 页）⇒ `normalizeCssColor` 编译期归一（三端 **0 rgba/477 hex**）+ 门禁加 hex 校验。★与上轮 `display:block`（枚举）同族——**内核只认封闭集，编译期必须兜住**。★全量 **5074/5074** 绿。★**三端现状**：Android+iOS = executor 全链（真机 ⑦.8 102 节点）；鸿蒙 = napi 探针（内容→内核树，未接完整 executor）。下一步：鸿蒙完整 executor（promise 编排+视觉合成）或 C1 收尾（伪类/元素选择器）**）★新会话以此为准
 ## 当前状态速览（最近一次更新：**2026-10-04·（一三六）· **App 屏内容产物门禁 `check:app-screen-content`（内核契约静态校验）**（决策 #482）——★**动机**：C1 折叠面铺开后 `display:block` 等**内核不认的值**透传 ⇒ 真机 `RustLayout.create` 失败 ⇒ 整树建不起来（页面全崩），构建期零告警 ⇒ 需产物层机器判据。★**门禁**（`scripts/check-app-screen-content.mjs`，零设备/可 CI）：① JSON/nodes 非空 ② id 正整数且唯一 ③ parentId 可达无环 ④ **枚举键值 ∈ `APP_ENUM_VALUES`（契约 SSOT）** ⑤ 数值/边距结构；扫 `examples/dist/app/*/screen-content.json`。★破坏性验证（注入非法枚举+悬空父 ⇒ 红）；回归锁 5 组；接线 package.json+verify+CI。★全量 **5072/5072** 绿。下一步：鸿蒙接 ScreenExecutor+content（阶段 2b，大工程）或 C1 收尾（伪类/元素选择器，规模小）**）★新会话以此为准
 ## 当前状态速览（最近一次更新：**2026-10-04·（一三五）· **App 三端对齐 — 缺口 C1 最小切片：SFC `<style>` 单类规则 → class→节点样式**（决策 #481）——用户「继续」。★**缺口 C1**：App 路径**无 CSS 引擎**（只吃 inline style）⇒ 真实项目「有结构无样式」。★**实现**：`parseClassStyles`（`compiler/src/vapor/template.ts`）把 `<style>` 的**单一简单类选择器**规则折成「类名→引擎字段」+ `buildLayoutTemplate` 建 `classStyles` + **模板节点按静态 `class` 合并**（★inline 覆盖 class，合并非替换）+ scoped 后缀类自动匹配；不支持选择器（组合/伪类/属性）⇒ 跳过+诊断 `VAPOR_STYLE_SELECTOR_UNSUPPORTED`（不静默）。★**判据**：`tests/vapor-class-styles.test.ts` 5 组；★真项目 **44 页 42 页有样式·933/1625 节点带样式**（含选择器链：单类/复合/后代/子 + 层叠源序）；真机 ⑦.8 仍 102 节点（bundle 398→482KB）。★**顺带修真 bug**：枚举值（display/position/overflow/flexDirection）未校验 ⇒ `display:block/grid` 透传 ⇒ 内核 `RustLayout.create` 拒绝 ⇒ **真机整树建不起来**（折叠面铺开后爆发）⇒ 加 `APP_ENUM_VALUES` 封闭集（不支持值诊断+跳过）。★**诚实边界**：继承/特异性不完备 · 只静态 class · 伪类/属性/元素选择器不支持 · grid/box-shadow/媒体查询不支持。★同轮先做**标准构建目标集**（`web|skyline|ios|android|harmony|all`，弃笼统 app，产物分 `dist/app/<platform>/`）。★全量 **5066/5066** 绿。下一步：C1 余下批次（层叠/伪类/选择器收敛模型）或阶段 2b（鸿蒙接 ScreenExecutor+content）**）★新会话以此为准
-## 当前状态速览（最近一次更新：**2026-10-04·（一三四）· **App 三端对齐 — 阶段 1b-A（A1）：`proteus build --target app`（路由驱动的 App 屏内容）**（决策 #480）——用户「继续」。★承接阶段 1b（SFC 产物→屏内容）：本轮把**硬编码屏名**换成**项目路由驱动**。★**实现（★标准目标集，非笼统 app）**：CLI `--target web|skyline|ios|android|harmony|all`（与全仓 CONCRETE_PLATFORMS 一致）——App 端 = **三具体平台**，产物分目录 `dist/app/<platform>/screen-content.json`；`buildAppScreenContent(root, platform)`（读 `router/auto-routes.ts` → 逐页 `buildLayoutTemplate` → `screenContentFromLayoutTemplate`；缺产物/零页 ⇒ 报错不静默）；目标名 SSOT `packages/cli/src/targets.ts`；`all` = 逐端全构建（3 App + web + skyline）· args/build/index 接入 · ★**webOnly gen-routes**（不清 MP dist——默认会清 ⇒ check:mp-artifacts 红，实测踩到）· ★**一处实现**：hosts 装置生成器**委托** CLI 构建器 · npm `build:app`。★**判据（真机）**：Android+iOS ⑦.8 均绿——**真建 102 个内容节点**（项目 44 页真实 SFC 产物，非硬编码）；测试 `tests/app-content-cli.test.ts` 5 组。★**诚实边界**：App 路径不吃 CSS class（缺口 C1）⇒ 屏内容眼下主要是**结构** + inline style；真实页面诊断如实（v-model 回写/v-html/Teleport 等 36 类）。★全量 **5060/5060** 绿。下一步：C1（CSS class → 每节点样式折叠——真实页面带样式的最后一跳）或阶段 2b（鸿蒙接 ScreenExecutor+content）**）★新会话以此为准
 
 
 
@@ -51,13 +51,13 @@
 
 | 文件 | 内容 |
 |---|---|
-| `docs/project-memory-archive/2026-10.md` | 里程碑详细叙事（三十九～一三六）+ 状态速览历史栈（约 4.5k 行） |
+| `docs/project-memory-archive/2026-10.md` | 里程碑详细叙事（三十九～一三七）+ 状态速览历史栈（约 4.5k 行） |
 | `docs/project-memory-archive/2026-09.md` | 09 月全部叙事 + 柔性系统重组历史 + 2026-08 进度快照 + 已落地文件 + 09-19 验证状态（约 6.5k 行） |
-| `docs/project-memory-archive/decisions.md` | 决策链全文 #1–#482——按号检索 |
+| `docs/project-memory-archive/decisions.md` | 决策链全文 #1–#483——按号检索 |
 
 检索示例：`grep -n "2026-09-29\|判据建错靶" docs/project-memory-archive/2026-09.md`
 
-## 关键决策与文档偏差（#1–#482 → 归档速查）
+## 关键决策与文档偏差（#1–#483 → 归档速查）
 
 **全文在 `docs/project-memory-archive/decisions.md`**（按号检索：`grep -n "^290\." docs/project-memory-archive/decisions.md`）。
 决策号**只增不改号**（外部文档按号引用）；新决策追加到该文件末尾（号 +1）。

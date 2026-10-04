@@ -1625,8 +1625,17 @@
     "p-segment": "shell.segment",
     "p-drawer": "shell.drawer",
     "p-modal": "shell.modal",
+    // ★★★GP4-c（2026-10-03）：登录失效拦截弹窗——与 p-modal **同语义**（模态弹窗）、
+    //   **不同可取消性**（本组件不可取消：无关闭按钮/点遮罩不关；唯一出口是登录态恢复）。
+    //   ★不登记 ⇒ 编译期按"未注册自定义组件"输出 ⇒ MP 端不渲染（M3 门禁会当场红）
+    "p-auth-gate": "shell.modal",
     "p-popover": "shell.popover",
     "p-toast": "shell.toast",
+    // ★★★GP4-a/b（2026-10-03）：两个**浮层宿主**同属其能力的语义（multi-tag 别名——同 ui.loading 的先例）。
+    //   · p-toast-host：Toast 队列的渲染端（构建期按需注入）
+    //   · p-loading-host：Loading 多实例的渲染端（同上）
+    //   ★不登记 ⇒ 编译期按"未注册自定义组件"输出 ⇒ **MP 端不渲染**（M3 门禁当场抓出）
+    "p-toast-host": "shell.toast",
     "p-action-sheet": "shell.action-sheet",
     "p-split": "layout.split",
     // ★已落地绑定（G-32 S10 分栏语义——layout.split 承载）
@@ -1667,6 +1676,13 @@
     "p-formfactor": "layout.formfactor",
     // ★★Fluid System v2：柔性形态容器
     "p-loading": "ui.loading",
+    // ★★★GP4-b（2026-10-03）：Loading **多实例宿主**与**区域遮罩**同属 ui.loading 语义（multi-tag 别名，
+    //   与上一行 `router-link`/`p-view` 的"同一语义多标签"同款）。
+    //   · p-loading-host：命令式多实例的渲染端（由构建期按需注入——用户一般不手写）
+    //   · p-loading-region：区域遮罩（就地包裹，用户手写）
+    //   ★不登记 ⇒ 编译期按"未注册自定义组件"输出 ⇒ MP 端不渲染（M3 门禁当场抓出——它是对的）
+    "p-loading-host": "ui.loading",
+    "p-loading-region": "ui.loading",
     "p-scale": "ui.scale",
     "p-skeleton": "ui.skeleton",
     "p-mask": "shell.mask",
@@ -2231,6 +2247,61 @@
     buildTable(AnimCurve.EASE_IN_OUT_CUBIC),
     buildTable(AnimCurve.SPRING_APPROX)
   ];
+  var PURE_CALLS = {
+    // —— Math（纯计算）——
+    "Math.abs": Math.abs,
+    "Math.ceil": Math.ceil,
+    "Math.floor": Math.floor,
+    "Math.round": Math.round,
+    "Math.trunc": Math.trunc,
+    "Math.sign": Math.sign,
+    "Math.sqrt": Math.sqrt,
+    "Math.cbrt": Math.cbrt,
+    "Math.pow": Math.pow,
+    "Math.exp": Math.exp,
+    "Math.log": Math.log,
+    "Math.log2": Math.log2,
+    "Math.log10": Math.log10,
+    "Math.min": Math.min,
+    "Math.max": Math.max,
+    // —— 类型转换（call 形态，非 new）——
+    "String": String,
+    "Number": Number,
+    "Boolean": Boolean,
+    // —— 解析 / 判定（全局）——
+    "parseInt": parseInt,
+    "parseFloat": parseFloat,
+    "isNaN": isNaN,
+    "isFinite": isFinite,
+    "Number.isFinite": Number.isFinite,
+    "Number.isInteger": Number.isInteger,
+    "Number.isNaN": Number.isNaN,
+    // —— 数组判定 ——
+    "Array.isArray": Array.isArray
+  };
+  var GLOBAL_CONST_MEMBERS = {
+    "Math.PI": Math.PI,
+    "Math.E": Math.E,
+    "Math.LN2": Math.LN2,
+    "Math.LN10": Math.LN10,
+    "Math.LOG2E": Math.LOG2E,
+    "Math.LOG10E": Math.LOG10E,
+    "Math.SQRT2": Math.SQRT2,
+    "Math.SQRT1_2": Math.SQRT1_2,
+    "Number.MAX_SAFE_INTEGER": Number.MAX_SAFE_INTEGER,
+    "Number.MIN_SAFE_INTEGER": Number.MIN_SAFE_INTEGER,
+    "Number.EPSILON": Number.EPSILON,
+    "Number.MAX_VALUE": Number.MAX_VALUE,
+    "Number.MIN_VALUE": Number.MIN_VALUE
+  };
+  var HOST_DIRECTIVE_SPECS = {
+    animate: {
+      argKind: "anim-preset",
+      argHint: "\u52A8\u753B\u9884\u8BBE\uFF08fade / slide-up / slide-down / slide-left / slide-right / zoom / fade-slide-up\uFF09",
+      desc: "\u503C\u53D8\u5316\uFF08\u6216\u9996\u6B21\u6C42\u503C\u4E3A\u771F\uFF09\u65F6\u5728\u8BE5\u8282\u70B9**\u64AD\u4E00\u6B21**\u9884\u8BBE\u52A8\u753B\uFF08\u8D70\u5185\u6838\u52A8\u753B\u901A\u9053\uFF0C\u4E0E <Transition> \u540C\u4E00\u5957\uFF09\u3002\u8BED\u4E49\u5BF9\u9F50\uFF1A\u6307\u4EE4\u7684 mounted\uFF08\u9996\u8BC4 truthy \u5373\u64AD\uFF09\u4E0E updated\uFF08\u503C\u53D8\u5316\u5373\u64AD\uFF09\u3002"
+    }
+  };
+  var HOST_DIRECTIVE_NAMES = Object.keys(HOST_DIRECTIVE_SPECS);
 
   // packages/render-backend/src/dispatcher.ts
   var DispatcherError = class extends Error {
@@ -3380,7 +3451,7 @@
   }
   var g = globalThis;
   var HOST_ID = g.__PROTEUS_HOST_ID__ ?? "quickjs-desktop";
-  var BUILD_ID = "5b025400-182307";
+  var BUILD_ID = "106d0d31-114818";
   var FRAME_DRIVER = g.__PROTEUS_HOST_FRAME_DRIVER__ ?? "manual";
   var shellLog = [];
   var shellRt = null;

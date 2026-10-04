@@ -85,8 +85,28 @@ function copy4050() {
   console.log(`  ✓ app-4050-tree.json：与 Android 同源复制（${fs.statSync(src).size}B）`)
 }
 
+/**
+ * ★★★App 三端对齐（2026-10-04）：**App 屏内容产物**（项目路由 → 真实 SFC → 编译器 → 屏内容）。
+ *   源头 = CLI 的 `proteus build --target harmony`（packages/cli/src/app-content.ts）产出的
+ *   `examples/dist/app/harmony/screen-content.json`。鸿蒙宿主读取它 → 逐页取 nodes →
+ *   screenContentProbe 建内核树 ⇒ 证明「项目真实页面内容 → 鸿蒙内核树」这条链（B2 鸿蒙腿）。
+ *   ★与 Android/iOS 同一份产物的**harmony 平台投影**（同源编译，三端一致）。
+ */
+function copyAppScreenContent() {
+  const src = path.join(ROOT, 'examples/dist/app/harmony/screen-content.json')
+  const name = 'app-screen-content.json'
+  if (!fs.existsSync(src)) {
+    console.log(`  ⚠ 缺 ${path.relative(ROOT, src)}——跳过（先跑 examples 的 build:harmony）`)
+    return
+  }
+  fs.mkdirSync(RAWFILE, { recursive: true })
+  fs.copyFileSync(src, path.join(RAWFILE, name))
+  console.log(`  ✓ ${name}：App 屏内容产物（${fs.statSync(src).size}B）`)
+}
+
 console.log('[gen-fixtures] 鸿蒙宿主夹具再生成')
 genStress()
 copy4050()
 copyVapor()
+copyAppScreenContent()
 console.log(`  产物目录：${path.relative(ROOT, RAWFILE)}/`)

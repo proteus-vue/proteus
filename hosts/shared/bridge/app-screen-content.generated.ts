@@ -900,7 +900,7 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
         "parentId": 6,
         "fontSize": 13,
         "borderRadius": 8,
-        "borderColor": "rgba(59,130,246,0.45)",
+        "borderColor": "#3b82f673",
         "text": "调用 scanQR()",
         "semantic": "view"
       },
@@ -964,7 +964,7 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
         "parentId": 12,
         "fontSize": 13,
         "borderRadius": 8,
-        "borderColor": "rgba(59,130,246,0.45)",
+        "borderColor": "#3b82f673",
         "text": "push scanner@1.0.0",
         "semantic": "view"
       },
@@ -973,7 +973,7 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
         "parentId": 12,
         "fontSize": 13,
         "borderRadius": 8,
-        "borderColor": "rgba(59,130,246,0.45)",
+        "borderColor": "#3b82f673",
         "text": "push scanner@2.0.0（热升级）",
         "semantic": "view"
       },
@@ -992,7 +992,7 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
         "parentId": 15,
         "fontSize": 13,
         "borderRadius": 8,
-        "borderColor": "rgba(239,68,68,0.4)",
+        "borderColor": "#ef444466",
         "text": "push 坏签名（应拒绝）",
         "semantic": "view"
       },
@@ -1001,7 +1001,7 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
         "parentId": 15,
         "fontSize": 13,
         "borderRadius": 8,
-        "borderColor": "rgba(239,68,68,0.4)",
+        "borderColor": "#ef444466",
         "text": "push 坏 shape（应拒绝+降级）",
         "semantic": "view"
       },
@@ -3930,14 +3930,14 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
         "margin": {
           "bottom": 8
         },
-        "color": "rgba(255, 255, 255, 0.8)",
+        "color": "#ffffffcc",
         "text": "小程序语义1（14-mp-first-semantics）",
         "semantic": "text"
       },
       {
         "id": 2,
         "parentId": 0,
-        "color": "rgba(255, 255, 255, 0.5)",
+        "color": "#ffffff80",
         "fontSize": 13,
         "margin": {
           "bottom": 16
@@ -3958,13 +3958,13 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
         "margin": {
           "bottom": 12
         },
-        "borderColor": "rgba(255, 255, 255, 0.1)",
+        "borderColor": "#ffffff1a",
         "semantic": "view"
       },
       {
         "id": 4,
         "parentId": 3,
-        "color": "rgba(255, 255, 255, 0.5)",
+        "color": "#ffffff80",
         "fontSize": 12,
         "margin": {
           "bottom": 8
@@ -3999,13 +3999,13 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
         "margin": {
           "bottom": 12
         },
-        "borderColor": "rgba(255, 255, 255, 0.1)",
+        "borderColor": "#ffffff1a",
         "semantic": "view"
       },
       {
         "id": 8,
         "parentId": 7,
-        "color": "rgba(255, 255, 255, 0.5)",
+        "color": "#ffffff80",
         "fontSize": 12,
         "margin": {
           "bottom": 8
@@ -4038,13 +4038,13 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
         "margin": {
           "bottom": 12
         },
-        "borderColor": "rgba(255, 255, 255, 0.1)",
+        "borderColor": "#ffffff1a",
         "semantic": "view"
       },
       {
         "id": 12,
         "parentId": 11,
-        "color": "rgba(255, 255, 255, 0.5)",
+        "color": "#ffffff80",
         "fontSize": 12,
         "margin": {
           "bottom": 8
@@ -4119,13 +4119,13 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
         "margin": {
           "bottom": 12
         },
-        "borderColor": "rgba(255, 255, 255, 0.1)",
+        "borderColor": "#ffffff1a",
         "semantic": "view"
       },
       {
         "id": 20,
         "parentId": 19,
-        "color": "rgba(255, 255, 255, 0.5)",
+        "color": "#ffffff80",
         "fontSize": 12,
         "margin": {
           "bottom": 8
@@ -4176,13 +4176,13 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
         "margin": {
           "bottom": 12
         },
-        "borderColor": "rgba(255, 255, 255, 0.1)",
+        "borderColor": "#ffffff1a",
         "semantic": "view"
       },
       {
         "id": 27,
         "parentId": 26,
-        "color": "rgba(255, 255, 255, 0.5)",
+        "color": "#ffffff80",
         "fontSize": 12,
         "margin": {
           "bottom": 8
@@ -4205,8 +4205,8 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
         "widthRatio": 1,
         "borderRadius": 6,
         "fontSize": 14,
-        "borderColor": "rgba(255, 255, 255, 0.2)",
-        "color": "rgba(255, 255, 255, 0.8)",
+        "borderColor": "#ffffff33",
+        "color": "#ffffffcc",
         "semantic": "input"
       },
       {
@@ -4232,13 +4232,13 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
         "margin": {
           "bottom": 12
         },
-        "borderColor": "rgba(255, 255, 255, 0.1)",
+        "borderColor": "#ffffff1a",
         "semantic": "view"
       },
       {
         "id": 32,
         "parentId": 31,
-        "color": "rgba(255, 255, 255, 0.5)",
+        "color": "#ffffff80",
         "fontSize": 12,
         "margin": {
           "bottom": 8
@@ -4253,8 +4253,8 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
         "widthRatio": 1,
         "borderRadius": 6,
         "fontSize": 14,
-        "borderColor": "rgba(255, 255, 255, 0.2)",
-        "color": "rgba(255, 255, 255, 0.8)",
+        "borderColor": "#ffffff33",
+        "color": "#ffffffcc",
         "semantic": "textarea"
       },
       {
@@ -4274,7 +4274,7 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
         "id": 36,
         "parentId": 34,
         "fontSize": 13,
-        "color": "rgba(255, 255, 255, 0.8)",
+        "color": "#ffffffcc",
         "text": "switch（默认开）",
         "semantic": "text"
       },
@@ -4296,7 +4296,7 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
         "id": 39,
         "parentId": 37,
         "fontSize": 13,
-        "color": "rgba(255, 255, 255, 0.8)",
+        "color": "#ffffffcc",
         "semantic": "text"
       },
       {
@@ -4321,7 +4321,7 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
         "id": 43,
         "parentId": 40,
         "fontSize": 13,
-        "color": "rgba(255, 255, 255, 0.8)",
+        "color": "#ffffffcc",
         "text": "icon（success/warn + color 调色）",
         "semantic": "text"
       },
@@ -4362,7 +4362,7 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
         "id": 49,
         "parentId": 48,
         "fontSize": 13,
-        "color": "rgba(255, 255, 255, 0.8)",
+        "color": "#ffffffcc",
         "semantic": "text"
       },
       {
@@ -4382,7 +4382,7 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
         "id": 52,
         "parentId": 51,
         "fontSize": 13,
-        "color": "rgba(255, 255, 255, 0.8)",
+        "color": "#ffffffcc",
         "semantic": "text"
       },
       {
@@ -4398,13 +4398,13 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
         "margin": {
           "bottom": 12
         },
-        "borderColor": "rgba(255, 255, 255, 0.1)",
+        "borderColor": "#ffffff1a",
         "semantic": "view"
       },
       {
         "id": 54,
         "parentId": 53,
-        "color": "rgba(255, 255, 255, 0.5)",
+        "color": "#ffffff80",
         "fontSize": 12,
         "margin": {
           "bottom": 8
@@ -4416,7 +4416,7 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
         "id": 55,
         "parentId": 53,
         "fontSize": 13,
-        "color": "rgba(255, 255, 255, 0.8)",
+        "color": "#ffffffcc",
         "semantic": "text"
       },
       {
@@ -4438,13 +4438,13 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
         "margin": {
           "bottom": 12
         },
-        "borderColor": "rgba(255, 255, 255, 0.1)",
+        "borderColor": "#ffffff1a",
         "semantic": "view"
       },
       {
         "id": 58,
         "parentId": 57,
-        "color": "rgba(255, 255, 255, 0.5)",
+        "color": "#ffffff80",
         "fontSize": 12,
         "margin": {
           "bottom": 8
@@ -4463,7 +4463,7 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
         "id": 60,
         "parentId": 59,
         "fontSize": 13,
-        "color": "rgba(255, 255, 255, 0.8)",
+        "color": "#ffffffcc",
         "semantic": "text"
       }
     ]
@@ -4723,14 +4723,14 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
         "margin": {
           "bottom": 8
         },
-        "color": "rgba(255, 255, 255, 0.8)",
+        "color": "#ffffffcc",
         "text": "PlatformAPI 收口演示（B9）",
         "semantic": "text"
       },
       {
         "id": 2,
         "parentId": 0,
-        "color": "rgba(255, 255, 255, 0.5)",
+        "color": "#ffffff80",
         "fontSize": 13,
         "margin": {
           "bottom": 16
@@ -4751,13 +4751,13 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
         "margin": {
           "bottom": 12
         },
-        "borderColor": "rgba(255, 255, 255, 0.1)",
+        "borderColor": "#ffffff1a",
         "semantic": "view"
       },
       {
         "id": 4,
         "parentId": 3,
-        "color": "rgba(255, 255, 255, 0.5)",
+        "color": "#ffffff80",
         "fontSize": 12,
         "margin": {
           "bottom": 8
@@ -4775,8 +4775,8 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
         "margin": {
           "bottom": 8
         },
-        "borderColor": "rgba(255, 255, 255, 0.2)",
-        "color": "rgba(255, 255, 255, 0.8)",
+        "borderColor": "#ffffff33",
+        "color": "#ffffffcc",
         "semantic": "input"
       },
       {
@@ -4819,13 +4819,13 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
         "margin": {
           "bottom": 12
         },
-        "borderColor": "rgba(255, 255, 255, 0.1)",
+        "borderColor": "#ffffff1a",
         "semantic": "view"
       },
       {
         "id": 10,
         "parentId": 9,
-        "color": "rgba(255, 255, 255, 0.5)",
+        "color": "#ffffff80",
         "fontSize": 12,
         "margin": {
           "bottom": 8
@@ -4891,13 +4891,13 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
         "margin": {
           "bottom": 12
         },
-        "borderColor": "rgba(255, 255, 255, 0.1)",
+        "borderColor": "#ffffff1a",
         "semantic": "view"
       },
       {
         "id": 17,
         "parentId": 16,
-        "color": "rgba(255, 255, 255, 0.5)",
+        "color": "#ffffff80",
         "fontSize": 12,
         "margin": {
           "bottom": 8
@@ -4944,13 +4944,13 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
         "margin": {
           "bottom": 12
         },
-        "borderColor": "rgba(255, 255, 255, 0.1)",
+        "borderColor": "#ffffff1a",
         "semantic": "view"
       },
       {
         "id": 22,
         "parentId": 21,
-        "color": "rgba(255, 255, 255, 0.5)",
+        "color": "#ffffff80",
         "fontSize": 12,
         "margin": {
           "bottom": 8
@@ -5025,13 +5025,13 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
         "margin": {
           "bottom": 12
         },
-        "borderColor": "rgba(255, 255, 255, 0.1)",
+        "borderColor": "#ffffff1a",
         "semantic": "view"
       },
       {
         "id": 30,
         "parentId": 29,
-        "color": "rgba(255, 255, 255, 0.5)",
+        "color": "#ffffff80",
         "fontSize": 12,
         "margin": {
           "bottom": 8
@@ -5096,7 +5096,7 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
       {
         "id": 37,
         "parentId": 29,
-        "color": "rgba(255, 255, 255, 0.5)",
+        "color": "#ffffff80",
         "fontSize": 13,
         "margin": {
           "bottom": 16
@@ -5117,13 +5117,13 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
         "margin": {
           "bottom": 12
         },
-        "borderColor": "rgba(255, 255, 255, 0.1)",
+        "borderColor": "#ffffff1a",
         "semantic": "view"
       },
       {
         "id": 39,
         "parentId": 38,
-        "color": "rgba(255, 255, 255, 0.5)",
+        "color": "#ffffff80",
         "fontSize": 12,
         "margin": {
           "bottom": 8
@@ -5197,7 +5197,7 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
       {
         "id": 47,
         "parentId": 38,
-        "color": "rgba(255, 255, 255, 0.5)",
+        "color": "#ffffff80",
         "fontSize": 13,
         "margin": {
           "bottom": 16
@@ -5218,13 +5218,13 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
         "margin": {
           "bottom": 12
         },
-        "borderColor": "rgba(255, 255, 255, 0.1)",
+        "borderColor": "#ffffff1a",
         "semantic": "view"
       },
       {
         "id": 49,
         "parentId": 48,
-        "color": "rgba(255, 255, 255, 0.5)",
+        "color": "#ffffff80",
         "fontSize": 12,
         "margin": {
           "bottom": 8
@@ -5289,7 +5289,7 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
       {
         "id": 56,
         "parentId": 48,
-        "color": "rgba(255, 255, 255, 0.5)",
+        "color": "#ffffff80",
         "fontSize": 13,
         "margin": {
           "bottom": 16
@@ -5310,13 +5310,13 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
         "margin": {
           "bottom": 12
         },
-        "borderColor": "rgba(255, 255, 255, 0.1)",
+        "borderColor": "#ffffff1a",
         "semantic": "view"
       },
       {
         "id": 58,
         "parentId": 57,
-        "color": "rgba(255, 255, 255, 0.5)",
+        "color": "#ffffff80",
         "fontSize": 12,
         "margin": {
           "bottom": 8
@@ -5399,7 +5399,7 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
       {
         "id": 67,
         "parentId": 57,
-        "color": "rgba(255, 255, 255, 0.5)",
+        "color": "#ffffff80",
         "fontSize": 13,
         "margin": {
           "bottom": 16
@@ -5420,13 +5420,13 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
         "margin": {
           "bottom": 12
         },
-        "borderColor": "rgba(255, 255, 255, 0.1)",
+        "borderColor": "#ffffff1a",
         "semantic": "view"
       },
       {
         "id": 69,
         "parentId": 68,
-        "color": "rgba(255, 255, 255, 0.5)",
+        "color": "#ffffff80",
         "fontSize": 12,
         "margin": {
           "bottom": 8
@@ -5509,7 +5509,7 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
       {
         "id": 78,
         "parentId": 68,
-        "color": "rgba(255, 255, 255, 0.5)",
+        "color": "#ffffff80",
         "fontSize": 13,
         "margin": {
           "bottom": 16
@@ -5530,13 +5530,13 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
         "margin": {
           "bottom": 12
         },
-        "borderColor": "rgba(255, 255, 255, 0.1)",
+        "borderColor": "#ffffff1a",
         "semantic": "view"
       },
       {
         "id": 80,
         "parentId": 79,
-        "color": "rgba(255, 255, 255, 0.5)",
+        "color": "#ffffff80",
         "fontSize": 12,
         "margin": {
           "bottom": 8
@@ -5592,7 +5592,7 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
       {
         "id": 86,
         "parentId": 79,
-        "color": "rgba(255, 255, 255, 0.5)",
+        "color": "#ffffff80",
         "fontSize": 13,
         "margin": {
           "bottom": 16
@@ -5613,13 +5613,13 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
         "margin": {
           "bottom": 12
         },
-        "borderColor": "rgba(255, 255, 255, 0.1)",
+        "borderColor": "#ffffff1a",
         "semantic": "view"
       },
       {
         "id": 88,
         "parentId": 87,
-        "color": "rgba(255, 255, 255, 0.5)",
+        "color": "#ffffff80",
         "fontSize": 12,
         "margin": {
           "bottom": 8
@@ -5702,7 +5702,7 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
       {
         "id": 97,
         "parentId": 87,
-        "color": "rgba(255, 255, 255, 0.5)",
+        "color": "#ffffff80",
         "fontSize": 13,
         "margin": {
           "bottom": 16
@@ -5723,13 +5723,13 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
         "margin": {
           "bottom": 12
         },
-        "borderColor": "rgba(255, 255, 255, 0.1)",
+        "borderColor": "#ffffff1a",
         "semantic": "view"
       },
       {
         "id": 99,
         "parentId": 98,
-        "color": "rgba(255, 255, 255, 0.5)",
+        "color": "#ffffff80",
         "fontSize": 12,
         "margin": {
           "bottom": 8
@@ -5823,7 +5823,7 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
       {
         "id": 110,
         "parentId": 98,
-        "color": "rgba(255, 255, 255, 0.5)",
+        "color": "#ffffff80",
         "fontSize": 13,
         "margin": {
           "bottom": 16
@@ -5844,13 +5844,13 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
         "margin": {
           "bottom": 12
         },
-        "borderColor": "rgba(255, 255, 255, 0.1)",
+        "borderColor": "#ffffff1a",
         "semantic": "view"
       },
       {
         "id": 112,
         "parentId": 111,
-        "color": "rgba(255, 255, 255, 0.5)",
+        "color": "#ffffff80",
         "fontSize": 12,
         "margin": {
           "bottom": 8
@@ -5924,7 +5924,7 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
       {
         "id": 120,
         "parentId": 111,
-        "color": "rgba(255, 255, 255, 0.5)",
+        "color": "#ffffff80",
         "fontSize": 13,
         "margin": {
           "bottom": 16
@@ -5945,13 +5945,13 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
         "margin": {
           "bottom": 12
         },
-        "borderColor": "rgba(255, 255, 255, 0.1)",
+        "borderColor": "#ffffff1a",
         "semantic": "view"
       },
       {
         "id": 122,
         "parentId": 121,
-        "color": "rgba(255, 255, 255, 0.5)",
+        "color": "#ffffff80",
         "fontSize": 12,
         "margin": {
           "bottom": 8
@@ -6034,7 +6034,7 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
       {
         "id": 131,
         "parentId": 121,
-        "color": "rgba(255, 255, 255, 0.5)",
+        "color": "#ffffff80",
         "fontSize": 13,
         "margin": {
           "bottom": 16
@@ -6055,13 +6055,13 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
         "margin": {
           "bottom": 12
         },
-        "borderColor": "rgba(255, 255, 255, 0.1)",
+        "borderColor": "#ffffff1a",
         "semantic": "view"
       },
       {
         "id": 133,
         "parentId": 132,
-        "color": "rgba(255, 255, 255, 0.5)",
+        "color": "#ffffff80",
         "fontSize": 12,
         "margin": {
           "bottom": 8
@@ -6117,7 +6117,7 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
       {
         "id": 139,
         "parentId": 132,
-        "color": "rgba(255, 255, 255, 0.5)",
+        "color": "#ffffff80",
         "fontSize": 13,
         "margin": {
           "bottom": 16
@@ -6138,13 +6138,13 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
         "margin": {
           "bottom": 12
         },
-        "borderColor": "rgba(255, 255, 255, 0.1)",
+        "borderColor": "#ffffff1a",
         "semantic": "view"
       },
       {
         "id": 141,
         "parentId": 140,
-        "color": "rgba(255, 255, 255, 0.5)",
+        "color": "#ffffff80",
         "fontSize": 12,
         "margin": {
           "bottom": 8
@@ -6191,7 +6191,7 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
       {
         "id": 147,
         "parentId": 140,
-        "color": "rgba(255, 255, 255, 0.5)",
+        "color": "#ffffff80",
         "fontSize": 13,
         "margin": {
           "bottom": 16
@@ -6212,13 +6212,13 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
         "margin": {
           "bottom": 12
         },
-        "borderColor": "rgba(255, 255, 255, 0.1)",
+        "borderColor": "#ffffff1a",
         "semantic": "view"
       },
       {
         "id": 149,
         "parentId": 148,
-        "color": "rgba(255, 255, 255, 0.5)",
+        "color": "#ffffff80",
         "fontSize": 12,
         "margin": {
           "bottom": 8
@@ -6283,7 +6283,7 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
       {
         "id": 156,
         "parentId": 148,
-        "color": "rgba(255, 255, 255, 0.5)",
+        "color": "#ffffff80",
         "fontSize": 13,
         "margin": {
           "bottom": 16
@@ -6304,13 +6304,13 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
         "margin": {
           "bottom": 12
         },
-        "borderColor": "rgba(255, 255, 255, 0.1)",
+        "borderColor": "#ffffff1a",
         "semantic": "view"
       },
       {
         "id": 158,
         "parentId": 157,
-        "color": "rgba(255, 255, 255, 0.5)",
+        "color": "#ffffff80",
         "fontSize": 12,
         "margin": {
           "bottom": 8
@@ -6321,7 +6321,7 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
       {
         "id": 159,
         "parentId": 157,
-        "color": "rgba(255, 255, 255, 0.5)",
+        "color": "#ffffff80",
         "fontSize": 13,
         "margin": {
           "bottom": 16
