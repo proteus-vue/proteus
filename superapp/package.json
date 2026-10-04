@@ -10,8 +10,14 @@
     "dev:mp": "proteus dev --target skyline",
     "build:mp": "proteus build --target skyline",
     "cli:check": "tsx ../packages/cli/src/index.ts check",
+    "build:ios": "proteus build --target ios",
+    "build:android": "proteus build --target android",
+    "build:harmony": "proteus build --target harmony",
     "cli:build:web": "tsx ../packages/cli/src/index.ts build --target web",
-    "cli:build:mp": "tsx ../packages/cli/src/index.ts build --target skyline"
+    "cli:build:mp": "tsx ../packages/cli/src/index.ts build --target skyline",
+    "cli:build:android": "tsx ../packages/cli/src/index.ts build --target android",
+    "cli:build:ios": "tsx ../packages/cli/src/index.ts build --target ios",
+    "cli:build:harmony": "tsx ../packages/cli/src/index.ts build --target harmony"
   },
   "dependencies": {
     "@proteus-vue/api": "0.3.0-beta.21",

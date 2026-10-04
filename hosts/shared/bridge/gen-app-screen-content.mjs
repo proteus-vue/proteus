@@ -21,7 +21,8 @@ const OUT = path.join(HERE, 'app-screen-content.generated.ts')
 
 const argv = process.argv.slice(2)
 const projIdx = argv.indexOf('--project')
-const PROJECT = path.resolve(ROOT, projIdx >= 0 ? argv[projIdx + 1] : 'examples')
+// ★批次 43：**App 端默认工程 = superapp**（独立应用落地三端）——可用 `PROTEUS_APP_PROJECT` 或 `--project X` 覆盖
+const PROJECT = path.resolve(ROOT, projIdx >= 0 ? argv[projIdx + 1] : (process.env.PROTEUS_APP_PROJECT || 'superapp'))
 const platIdx = argv.indexOf('--platform')
 // ★按**具体平台**构建（标准做法；产物落 dist/app/<platform>/）——装置默认 android（bundle 两壳共用）
 const PLATFORM = platIdx >= 0 ? argv[platIdx + 1] : 'android'

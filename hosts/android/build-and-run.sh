@@ -230,7 +230,7 @@ else
 fi
 
 # ★★★App 三端对齐 · 视觉合成（2026-10-04）：App 屏内容产物 → assets（真机真画屏用）
-APP_SC="$ROOT/examples/dist/app/android/screen-content.json"
+APP_SC="$ROOT/${PROTEUS_APP_PROJECT:-superapp}/dist/app/android/screen-content.json"
 if [ -f "$APP_SC" ]; then
   cp "$APP_SC" "$APP/src/main/assets/app-screen-content.json"
   echo "    app-screen-content.json 已入 assets（$(du -h "$APP_SC" | awk '{print $1}')）"

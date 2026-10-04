@@ -101,10 +101,11 @@ function copyAppScreenContent() {
   } else {
     console.log('  ⚠ 缺 bundle-app-stack.js——跳过（先跑 node hosts/android/bridge/build-batch.mjs）')
   }
-  const src = path.join(ROOT, 'examples/dist/app/harmony/screen-content.json')
+  const proj = process.env.PROTEUS_APP_PROJECT || 'superapp'
+  const src = path.join(ROOT, `${proj}/dist/app/harmony/screen-content.json`)
   const name = 'app-screen-content.json'
   if (!fs.existsSync(src)) {
-    console.log(`  ⚠ 缺 ${path.relative(ROOT, src)}——跳过（先跑 examples 的 build:harmony）`)
+    console.log(`  ⚠ 缺 ${path.relative(ROOT, src)}——跳过（先跑 ${proj} 的 build:harmony）`)
     return
   }
   fs.mkdirSync(RAWFILE, { recursive: true })
