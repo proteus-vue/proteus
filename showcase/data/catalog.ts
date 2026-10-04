@@ -19,7 +19,7 @@ export interface CatalogGroup {
   items: CatalogItem[]
 }
 
-/** 组件：6 域 / 74 个（已备详情页 73） */
+/** 组件：6 域 / 78 个（已备详情页 73） */
 export const COMPONENT_GROUPS: CatalogGroup[] = [
   {
     name: "布局",
@@ -62,6 +62,8 @@ export const COMPONENT_GROUPS: CatalogGroup[] = [
       { name: "p-label", desc: "表单标签 / 控件关联", route: "/subpackages/components/pages/p-label" },
       { name: "p-list-view", desc: "虚拟长列表", route: "/subpackages/components/pages/p-list-view" },
       { name: "p-loading", desc: "加载中", route: "/subpackages/components/pages/p-loading" },
+      { name: "p-loading-host", desc: "Loading 多实例宿主", route: "" },
+      { name: "p-loading-region", desc: "**区域遮罩**", route: "" },
       { name: "p-map", desc: "地图", route: "/subpackages/components/pages/p-map" },
       { name: "p-media", desc: "媒体统一入口", route: "/subpackages/components/pages/p-media" },
       { name: "p-nav-bar", desc: "导航栏", route: "/subpackages/components/pages/p-nav-bar" },
@@ -86,6 +88,7 @@ export const COMPONENT_GROUPS: CatalogGroup[] = [
     items: [
       { name: "p-action-sheet", desc: "动作面板", route: "/subpackages/components/pages/p-action-sheet" },
       { name: "p-ad", desc: "广告位", route: "/subpackages/components/pages/p-ad" },
+      { name: "p-auth-gate", desc: "**登录失效拦截弹窗**", route: "" },
       { name: "p-drawer", desc: "侧滑抽屉", route: "/subpackages/components/pages/p-drawer" },
       { name: "p-keyboard-accessory", desc: "键盘上方工具栏", route: "/subpackages/components/pages/p-keyboard-accessory" },
       { name: "p-mask", desc: "遮罩", route: "/subpackages/components/pages/p-mask" },
@@ -99,6 +102,7 @@ export const COMPONENT_GROUPS: CatalogGroup[] = [
       { name: "p-split", desc: "自适应分栏", route: "/subpackages/components/pages/p-split" },
       { name: "p-tabbar", desc: "底部标签栏", route: "/subpackages/components/pages/p-tabbar" },
       { name: "p-toast", desc: "轻提示", route: "/subpackages/components/pages/p-toast" },
+      { name: "p-toast-host", desc: "Toast 队列宿主", route: "" },
       { name: "p-toolbar", desc: "工具栏溢出折叠", route: "/subpackages/components/pages/p-toolbar" },
       { name: "p-webview", desc: "内嵌网页", route: "/subpackages/components/pages/p-webview" },
     ],
@@ -277,7 +281,7 @@ export const CAPABILITY_GROUPS: CatalogGroup[] = [
 
 export const CATALOG_STATS = {
   componentGroups: 6,
-  componentTotal: 74,
+  componentTotal: 78,
   componentReady: 73,
   capabilityGroups: 9,
   capabilityTotal: 84,

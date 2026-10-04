@@ -353,6 +353,68 @@ export function parseStaticStyle(
   return out
 }
 
+/**
+ * ★★★C1 最小切片（2026-10-04 · App 三端对齐缺口 C1）：**SFC `<style>` 单类规则 → `class → 声明` 表**。
+ *
+ * 【为什么需要】App 路径**没有 CSS 引擎**——`buildLayoutTemplate` 只吃节点上的 **inline `style`**；
+ *   真实项目的样式多在 **`<style>` + `class`** 里 ⇒ App 端页面「有结构、无样式」。本函数把 `<style>`
+ *   里**可静态解析的类规则**抽成「类名 → 引擎字段声明」，供模板节点按 `class` 合并。
+ *
+ * 【最小切片范围（如实，不假装全支持）】只处理：
+ *   · **单一简单选择器**规则（`.foo { … }`）；选择器含组合（空格/`>`/`,`/`&`）、伪类（`:`）、属性选择器
+ *     等 ⇒ **跳过整条规则**（不猜，交给更完整的批次）；
+ *   · **声明体**走既有 `parseStaticStyle`（同一折叠面/同一诊断）——`inherit`/`var()`/`calc()` 等
+ *     非 px/数值会被它诊断忽略（不静默）；
+ *   · ★**scope / 后缀类**：`scoped` 会给类加后缀（如 `foo-data-v-xxx`），故**同时**登记**去后缀名**
+ *     （`stripScopeSuffix`，只匹配元素上的原始类名）——否则 `class="foo"` 找不到 `.foo-data-v-xxx`。
+ *
+ * 【诚实边界（写进诊断/文档）】① **无选择器特异性/层叠/顺序**——同属性「后声明者胜」（源序），
+ *   与多类共存时的优先级**不完备**；② **无继承**（父类样式不传给子节点）；③ 只覆盖**静态**类
+ *   （动态 `:class` 的值/Vue 变量形态不可静态展开，见既有 VAPOR_STYLE_DYNAMIC_OBJECT 诊断）。
+ *   ⇒ 这是让真实页面**拿到大部分静态样式**的第一步；完整 CSS 收敛模型属后续批次。
+ */
+export function parseClassStyles(
+  css: string,
+  pushDiag?: (msg: string, hint?: string) => void,
+): Record<string, Record<string, unknown>> {
+  const out: Record<string, Record<string, unknown>> = {}
+  // 去注释后按 `}` 切块（CSS 无嵌套取巧；本切片只处理扁平单类规则）
+  const body = css.replace(/\/\*[\s\S]*?\*\//g, '')
+  const ruleRe = /([^{}]+)\{([^{}]*)\}/g
+  let m: RegExpExecArray | null
+  let skipped = 0
+  while ((m = ruleRe.exec(body))) {
+    const selector = m[1]!.trim()
+    const decls = m[2]!.trim()
+    if (!decls) continue
+    // 只认「单一简单类选择器」：`.foo`（可带 scope 后缀）；其余（组合/伪类/@media/元素选择器等）跳过
+    const single = /^\.([A-Za-z_][\w-]*)$/.exec(selector)
+    if (!single) {
+      skipped++
+      continue
+    }
+    const rawName = single[1]!
+    const name = stripScopeSuffix(rawName)
+    const style = parseStaticStyle(decls, () => {}) // 声明体诊断不外抛（此处静默收集；调用方已按需打印）
+    if (Object.keys(style).length === 0) continue
+    // 去后缀名优先登记（元素上写的是原始类名）；同时保留带后缀名（若有人显式用）
+    out[name] = { ...(out[name] ?? {}), ...style }
+    if (name !== rawName) out[rawName] = { ...(out[rawName] ?? {}), ...style }
+  }
+  if (skipped > 0 && pushDiag) {
+    pushDiag(
+      `<style> 中有 ${skipped} 条**不支持的选择器**规则被跳过（只处理单一简单类选择器 \`.foo{}\`）`,
+      'App 端无 CSS 引擎：组合/伪类/属性选择器等暂不支持；把关键样式改为独立单类或 inline style，或保留 Web 端渲染',
+    )
+  }
+  return out
+}
+
+/** 去 scoped 后缀（`foo-data-v-abc123` / `foo-data-v-abc` → `foo`；无后缀原样返回） */
+export function stripScopeSuffix(name: string): string {
+  return name.replace(/-data-v-[A-Za-z0-9]+$/, '')
+}
+
 /** `56px` / `56` / `0.5` → 数值；`50%` / `auto` → undefined（百分比**宽高**在调用处另行映射为 widthRatio/heightRatio；其余属性的百分比仍不支持，见诊断） */
 function numOf(v: string): number | undefined {
   const t = v.trim().replace(/px$/i, '')
@@ -478,6 +540,16 @@ export function buildLayoutTemplate(
     return { template: { nodes: [], lists: [], roots: [], ok: false }, diagnostics, ok: false }
   }
   const ast = dom(desc.template.content, { comments: false }) as unknown as { children: unknown[] }
+
+  // ★★★C1 最小切片（2026-10-04）：把 SFC `<style>` 的**单类规则**折成 `class → 声明` 表——
+  //   供模板节点按 `class` 合并（App 路径无 CSS 引擎；真实项目样式多在 `<style>`+class 里）。
+  //   ★诚实边界见 parseClassStyles（只处理单一简单类选择器；无层叠/继承）。
+  const classStyles: Record<string, Record<string, unknown>> = {}
+  for (const blk of desc.styles ?? []) {
+    if (!blk?.content) continue
+    const parsed = parseClassStyles(blk.content, (msg, hint) => diag(msg, hint, 'VAPOR_STYLE_SELECTOR_UNSUPPORTED'))
+    for (const [k, v] of Object.entries(parsed)) classStyles[k] = { ...(classStyles[k] ?? {}), ...v }
+  }
 
   // ★与 deps.ts 完全同源的两套计数器（见文件头「id 约定」）
   let nextElementIndex = 0
@@ -659,6 +731,21 @@ export function buildLayoutTemplate(
       })
 
       const style: Record<string, unknown> = {}
+      // ★★★C1 最小切片：按 `class`（静态类名）合并 `<style>` 单类规则——**先合并类样式**，
+      //   随后 props 循环里的 inline `style` 覆盖之（inline 优先，符合同元素 inline > class 直觉）。
+      //   ★只处理**静态** class（ATTRIBUTE）；动态 `:class` 的值形态不可静态展开（既有诊断覆盖）。
+      {
+        const clsAttr = (n.props ?? []).find(
+          (p) => p.type === 6 /* ATTRIBUTE */ && p.name === 'class' && p.value?.content,
+        ) as { value?: { content?: string } } | undefined
+        const clsStr = clsAttr?.value?.content?.trim()
+        if (clsStr && Object.keys(classStyles).length) {
+          for (const cn of clsStr.split(/\s+/).filter(Boolean)) {
+            const cs = classStyles[cn]
+            if (cs) Object.assign(style, cs)
+          }
+        }
+      }
       let hasDynamicStyle = false
       // ★P3-5 宿主指令收集器（声明在 props 扫描**之前**——扫描循环里 push；挂在节点上见下）
       let hostDirectives: NonNullable<LayoutNode['directives']> | undefined
