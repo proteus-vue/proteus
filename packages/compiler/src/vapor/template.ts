@@ -484,6 +484,9 @@ export function parseStaticStyle(
     if (tokens) rawVal = substituteCssVars(rawVal, tokens)
     const markImportant = (engineKey: string): void => { if (important) importantOut?.add(engineKey) }
     const key = kebabToCamel(rawKey)
+    // ★批次 26（CSS 兼容对齐 · 以 Web 为基准）：**Web 默认值 / 无操作声明** ⇒ 显式 no-op（不诊断）。
+    //   这些是「无视觉变化」或「= App 默认」的写法，报成「缺口」是**假阳性**（淹没真缺口）。
+    if (isNoOpDeclaration(key, rawVal)) continue
     // 四边：`margin-bottom` / `padding-left` …
     const edge = key.match(/^(margin|padding)(Top|Right|Bottom|Left)$/)
     if (edge) {
@@ -1087,6 +1090,32 @@ export function parseClassStyles(
     )
   }
   return out
+}
+
+/**
+ * ★批次 26（CSS 兼容对齐 · 以 Web 为基准）：**无操作 / Web 默认值**声明判定。
+ *   true ⇒ 该声明对 App 无视觉变化（或等价于 App 默认）⇒ 编译期**忽略且不诊断**（减少假阳性噪声）。
+ *   ★不是「不支持」——是不需要做任何事（如 `transform:none` 就是不变换）。
+ */
+function isNoOpDeclaration(key: string, val: string): boolean {
+  const v = val.trim().toLowerCase()
+  switch (key) {
+    case 'transform':
+    case 'textDecoration':
+    case 'outline':
+    case 'backgroundImage':
+    case 'boxShadow':
+      return v === 'none'
+    case 'border':
+      return v === 'none' || v === '0' || v === '0px'
+    case 'background':
+      return v === 'none'
+    case 'display':
+      // App 默认 flex-direction: column（block-like）⇒ `display:block` 无变化；`inline*` 才是真缺口。
+      return v === 'block'
+    default:
+      return false
+  }
 }
 
 /**

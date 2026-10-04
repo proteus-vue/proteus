@@ -356,6 +356,24 @@ describe('★C1 最小切片 · SFC <style> 单类规则 → class→节点样�
     expect((overridden?.style as { visibility?: string })?.visibility, '子 visible 覆盖').toBe('visible')
   })
 
+  it('★⑦n Web 默认值/无操作声明（批次 26）：不诊断、不落键', () => {
+    // 【为什么（以 web 为基准）】这些是「无视觉变化」或「= App 默认」的写法；报成缺口是假阳性。
+    for (const css of ['transform: none', 'border: none', 'border: 0', 'background: none',
+      'box-shadow: none', 'text-decoration: none', 'outline: none', 'background-image: none', 'display: block']) {
+      const d: string[] = []
+      const out = parseStaticStyle(css, (m: string) => d.push(m))
+      expect(d.length, css + ' 不应诊断').toBe(0)
+      expect(Object.keys(out).length, css + ' 不应落键').toBe(0)
+    }
+    // 真缺口仍诊断（inline 才是不支持；block 是默认）
+    const d2: string[] = []
+    parseStaticStyle('display: inline', (m: string) => d2.push(m))
+    expect(d2.length > 0, 'display:inline 仍诊断').toBe(true)
+    const d3: string[] = []
+    parseStaticStyle('transform: scale(2)', (m: string) => d3.push(m))
+    expect(d3.length > 0, 'transform:scale 仍诊断（未支持）').toBe(true)
+  })
+
   it('★⑧ 元素/类型选择器 + @keyframes 跳过（C1 收尾）', () => {
     // 【真项目形态】examples 有 9 处元素选择器（h3/code…）+ 6 处 @keyframes 关键帧被误当选择器
     const sfc = `<template>
