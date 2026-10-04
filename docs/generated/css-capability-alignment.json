@@ -1025,7 +1025,7 @@
       "app": "absent",
       "tier": "L0",
       "strategy": "编译期折叠",
-      "note": "仅收 px/数字（宽高另支持 %）；其余单位编译期无法在无上下文时求值 ⇒ 诊断跳过（`var()` 令牌见 css-vars 行——已支持）",
+      "note": "收 px/数字/rpx（宽高另支持 %）。★批次 21：`rpx`（小程序 750 设计单位，1rpx = 0.5px，与 rpxRatio:2 互为逆）折为 px——真项目 125 处。其余单位（em/rem/vw/vh/calc/clamp）编译期无法在无上下文时求值 ⇒ 诊断跳过（`var()` 令牌见 css-vars 行——已支持）",
       "supportTier": "unsupported"
     },
     {
