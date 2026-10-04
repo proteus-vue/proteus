@@ -9,12 +9,18 @@
     "calls" : [
       "screen.mount",
       "screen.visible",
-      "screen.anim",
-      "screen.mount",
-      "screen.visible",
       "screen.mount",
       "screen.visible",
       "screen.anim",
+      "screen.stats",
+      "screen.mount",
+      "screen.visible",
+      "screen.visible",
+      "screen.destroy",
+      "screen.destroy",
+      "screen.mount",
+      "screen.visible",
+      "screen.stats",
       "screen.rect",
       "screen.mount",
       "screen.visible",
@@ -34,29 +40,34 @@
       "screen.destroy",
       "screen.stats"
     ],
-    "content_node_total" : 114,
-    "destroy_calls" : 3,
-    "live_screens" : 2,
-    "mount_calls" : 5,
+    "content_node_total" : 286,
+    "destroy_calls" : 5,
+    "live_screens" : 3,
+    "mount_calls" : 8,
     "rect_calls" : 2,
     "screens" : [
       {
-        "rootNodeId" : 130,
+        "rootNodeId" : 140,
         "screenId" : "r-user#3",
         "visible" : true
       },
       {
-        "rootNodeId" : 100,
+        "rootNodeId" : 130,
+        "screenId" : "messages#3",
+        "visible" : true
+      },
+      {
+        "rootNodeId" : 110,
         "screenId" : "home#1",
         "visible" : true
       }
     ],
     "shared_calls" : 1,
-    "visible_calls" : 9
+    "visible_calls" : 13
   },
   "e_mirror_ok" : true,
   "e_pending_anims" : 0,
-  "e_pump_rounds" : 91,
+  "e_pump_rounds" : 90,
   "e_stats" : {
     "back" : 1,
     "commands" : 8,
@@ -81,8 +92,8 @@
     }
   },
   "e1_log" : [
-    "mount:home:rebuild=false:node=100",
-    "visible:home#1:true:node=100"
+    "mount:home:rebuild=false:node=110",
+    "visible:home#1:true:node=110"
   ],
   "e1_plays" : [
     {
@@ -97,9 +108,9 @@
     }
   ],
   "e2_log" : [
-    "mount:detail:rebuild=false:node=130",
-    "visible:detail#2:true:node=130",
-    "visible:home#1:false:node=100"
+    "mount:detail:rebuild=false:node=140",
+    "visible:detail#2:true:node=140",
+    "visible:home#1:false:node=110"
   ],
   "e2_plays" : [
     {
@@ -114,8 +125,8 @@
     }
   ],
   "e3_log" : [
-    "visible:home#1:true:node=100",
-    "destroy:detail#2:pop:node=130"
+    "visible:home#1:true:node=110",
+    "destroy:detail#2:pop:node=140"
   ],
   "e3_plays" : [
     {
@@ -143,7 +154,7 @@
       "y" : 30
     },
     "ran" : true,
-    "source_node" : 102,
+    "source_node" : 112,
     "source_rect" : {
       "h" : 2400,
       "w" : 1080,
@@ -151,7 +162,7 @@
       "y" : 0
     },
     "source_screen" : "home#1",
-    "target_node" : 132,
+    "target_node" : 142,
     "target_rect" : {
       "h" : 2400,
       "w" : 1080,
@@ -189,12 +200,23 @@
       "calls" : [
         "screen.mount",
         "screen.visible",
+        "screen.mount",
+        "screen.visible",
         "screen.anim",
         "screen.mount",
         "screen.visible",
         "screen.mount",
         "screen.visible",
         "screen.anim",
+        "screen.stats",
+        "screen.mount",
+        "screen.visible",
+        "screen.visible",
+        "screen.destroy",
+        "screen.destroy",
+        "screen.mount",
+        "screen.visible",
+        "screen.stats",
         "screen.rect",
         "screen.mount",
         "screen.visible",
@@ -207,30 +229,35 @@
         "screen.destroy",
         "screen.stats"
       ],
-      "content_node_total" : 114,
-      "destroy_calls" : 2,
-      "live_screens" : 3,
-      "mount_calls" : 5,
+      "content_node_total" : 286,
+      "destroy_calls" : 4,
+      "live_screens" : 4,
+      "mount_calls" : 8,
       "rect_calls" : 1,
       "screens" : [
         {
-          "rootNodeId" : 130,
+          "rootNodeId" : 140,
+          "screenId" : "detail#2",
+          "visible" : true
+        },
+        {
+          "rootNodeId" : 140,
           "screenId" : "r-user#3",
           "visible" : true
         },
         {
           "rootNodeId" : 130,
-          "screenId" : "detail#2",
+          "screenId" : "messages#3",
           "visible" : true
         },
         {
-          "rootNodeId" : 100,
+          "rootNodeId" : 110,
           "screenId" : "home#1",
           "visible" : true
         }
       ],
       "shared_calls" : 0,
-      "visible_calls" : 7
+      "visible_calls" : 11
     },
     "ok" : true
   },

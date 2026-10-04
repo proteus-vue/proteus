@@ -59,3 +59,29 @@ await build({
 
 const size = (fs.statSync(OUT).size / 1024).toFixed(1)
 console.log(`[bridge] app-stack bundle 产出：${path.relative(ROOT, OUT)} · ${size} KB`)
+
+// ── 批次 43（superapp 真实应用）：superapp 应用入口 bundle（被 .app 打包，JSC evaluateScript）──
+const OUT_SA = path.join(HERE, 'dist', 'bundle-superapp.js')
+const ENTRY_SA = path.join(ROOT, 'hosts/shared/bridge/entry-superapp.ts')
+await build({
+  entryPoints: [ENTRY_SA],
+  outfile: OUT_SA,
+  bundle: true,
+  format: 'iife',
+  platform: 'neutral',
+  target: 'es2020',
+  define: { 'process.env.NODE_ENV': '"production"', __DEV__: 'false' },
+  alias: {
+    '@proteus-vue/router': path.join(ROOT, 'packages/router/src/index.ts'),
+    '@proteus-vue/router/app-stack': path.join(ROOT, 'packages/router/src/app-stack.ts'),
+    '@proteus-vue/router/app-route': path.join(ROOT, 'packages/router/src/app-route.ts'),
+    '@proteus-vue/router/types': path.join(ROOT, 'packages/router/src/types.ts'),
+    '@proteus-vue/render-backend/app-navigation': path.join(ROOT, 'packages/render-backend/src/app-navigation.ts'),
+    '@proteus-vue/animation': path.join(ROOT, 'packages/animation/src/index.ts'),
+    '@proteus-vue/contracts': path.join(ROOT, 'packages/contracts/src/index.ts'),
+  },
+  logLevel: 'warning',
+  absWorkingDir: ROOT,
+})
+const sizeSA = (fs.statSync(OUT_SA).size / 1024).toFixed(1)
+console.log(`[bridge] superapp bundle 产出：${path.relative(ROOT, OUT_SA)} · ${sizeSA} KB`)
