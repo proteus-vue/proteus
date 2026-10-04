@@ -1109,7 +1109,7 @@ final class VaporRenderHost {
     private static final java.util.Set<String> LAYOUT_KEYS = new java.util.HashSet<>(java.util.Arrays.asList(
             "width", "height", "minWidth", "maxWidth", "minHeight", "maxHeight",
             "margin", "padding", "flexDirection", "flexWrap", "justifyContent", "alignItems", "alignContent", "alignSelf",
-            "flexGrow", "flexShrink", "flexBasis", "gap", "display", "position", "top", "left", "right", "bottom",
+            "flexGrow", "flexShrink", "flexBasis", "gap", "rowGap", "columnGap", "display", "position", "top", "left", "right", "bottom",
             "gridTemplateColumns", "gridTemplateRows", "aspectRatio",
             "widthRatio", "heightRatio", "marginAuto", "minWidthPct", "maxWidthPct", "minHeightPct", "maxHeightPct", "overflow",
             // ★静态基态声明（内核要解析）：裁剪形状 + 路径本体（+ 描边色/宽随 svgPath 一起进）

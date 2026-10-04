@@ -9036,6 +9036,64 @@
           "textAlign": "center",
           "text": "\u7236hidden",
           "semantic": "div"
+        },
+        {
+          "id": 67,
+          "parentId": 0,
+          "display": "flex",
+          "flexDirection": "row",
+          "rowGap": 4,
+          "columnGap": 20,
+          "justifyContent": "center",
+          "margin": {
+            "top": 16,
+            "bottom": 16
+          },
+          "marginAuto": {
+            "right": true,
+            "left": true
+          },
+          "textAlign": "center",
+          "semantic": "div"
+        },
+        {
+          "id": 68,
+          "parentId": 67,
+          "width": 32,
+          "height": 24,
+          "backgroundColor": "#e8f0ff",
+          "borderRadius": 4,
+          "color": "#1a7af8",
+          "fontSize": 12,
+          "textAlign": "center",
+          "text": "A",
+          "semantic": "div"
+        },
+        {
+          "id": 69,
+          "parentId": 67,
+          "width": 32,
+          "height": 24,
+          "backgroundColor": "#e8f0ff",
+          "borderRadius": 4,
+          "color": "#1a7af8",
+          "fontSize": 12,
+          "textAlign": "center",
+          "text": "B",
+          "semantic": "div"
+        },
+        {
+          "id": 70,
+          "parentId": 67,
+          "width": 32,
+          "height": 24,
+          "backgroundColor": "#e8f0ff",
+          "borderRadius": 4,
+          "color": "#1a7af8",
+          "fontSize": 12,
+          "textAlign": "center",
+          "text": "C",
+          "semantic": "div"
         }
       ]
     },
@@ -14137,6 +14195,7 @@
         {
           "id": 193,
           "parentId": 191,
+          "borderWidth": 0,
           "backgroundColor": "#00000000",
           "color": "#999",
           "fontSize": 12,

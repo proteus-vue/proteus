@@ -427,6 +427,21 @@ describe('★C1 最小切片 · SFC <style> 单类规则 → class→节点样�
     expect(d.length, 'width:inherit 不诊断').toBe(0)
   })
 
+  it('★⑦q 两值 gap / row-gap / column-gap（批次 31 · ★基准 = Web）', () => {
+    // 【为什么（以 web 为基准）】gap:<row> <col> 与 row-gap/column-gap 是标准写法；此前只支持单值。
+    expect((parseStaticStyle('gap: 8px', () => {}) as { gap?: number }).gap, '单值 ⇒ gap').toBe(8)
+    const two = parseStaticStyle('gap: 8px 12px', () => {}) as { gap?: number; rowGap?: number; columnGap?: number }
+    expect(two.gap, '两值不产 gap').toBeUndefined()
+    expect(two.rowGap, 'row=8').toBe(8)
+    expect(two.columnGap, 'col=12').toBe(12)
+    expect((parseStaticStyle('row-gap: 6px', () => {}) as { rowGap?: number }).rowGap, 'row-gap').toBe(6)
+    expect((parseStaticStyle('column-gap: 16px', () => {}) as { columnGap?: number }).columnGap, 'column-gap').toBe(16)
+    // 三值/非法 ⇒ 诊断
+    const d: string[] = []
+    parseStaticStyle('gap: 1px 2px 3px', (m: string) => d.push(m))
+    expect(d.length > 0, '三值诊断').toBe(true)
+  })
+
   it('★⑧ 元素/类型选择器 + @keyframes 跳过（C1 收尾）', () => {
     // 【真项目形态】examples 有 9 处元素选择器（h3/code…）+ 6 处 @keyframes 关键帧被误当选择器
     const sfc = `<template>

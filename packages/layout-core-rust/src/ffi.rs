@@ -122,6 +122,11 @@ pub(crate) struct NodeDto {
     pub(crate) flex_basis: Option<f32>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub(crate) gap: Option<f32>,
+    /// ★批次 31：轴级 gap 覆盖（见 LStyle.row_gap/column_gap）。
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub(crate) row_gap: Option<f32>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub(crate) column_gap: Option<f32>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub(crate) display: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -282,6 +287,8 @@ impl NodeDto {
             flex_shrink: None,
             flex_basis: None,
             gap: None,
+            row_gap: None,
+            column_gap: None,
             display: None,
             position: None,
             top: None,
@@ -728,6 +735,8 @@ pub(crate) fn style_from_dto(dto: &NodeDto) -> Result<LStyle, String> {
     if let Some(gap) = dto.gap {
         style.gap = gap;
     }
+    style.row_gap = dto.row_gap;
+    style.column_gap = dto.column_gap;
     if let Some(d) = dto.display.as_deref() {
         style.display = match d {
             "flex" => crate::style::Display::Flex,
@@ -1778,6 +1787,8 @@ pub(crate) struct PatchStyle {
     flex_shrink: Option<f32>,
     flex_basis: Option<Option<f32>>,
     gap: Option<f32>,
+    row_gap: Option<f32>,
+    column_gap: Option<f32>,
     display: Option<String>,
     margin: Option<EdgesDto>,
     margin_auto: Option<MarginAutoDto>,
@@ -1801,6 +1812,8 @@ impl StylePatch {
         if let Some(sh) = s.flex_shrink { node.style.flex_shrink = sh; }
         if let Some(b) = s.flex_basis { node.style.flex_basis = b; }
         if let Some(g) = s.gap { node.style.gap = g; }
+        if s.row_gap.is_some() { node.style.row_gap = s.row_gap; }
+        if s.column_gap.is_some() { node.style.column_gap = s.column_gap; }
         if let Some(d) = &s.display {
             node.style.display = match d.as_str() {
                 "none" => crate::style::Display::None,

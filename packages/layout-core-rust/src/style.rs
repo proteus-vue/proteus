@@ -393,6 +393,12 @@ pub struct LStyle {
 
     #[serde(default)]
     pub gap: f32,
+    /// ★批次 31（CSS 兼容对齐 · 以 Web 为基准）：**行/列间距分离**（`gap: <row> <col>` / `row-gap` / `column-gap`）。
+    ///   `gap` 是基值（两轴同），本两字段为**轴级覆盖**（None ⇒ 用 gap）。taffy `gap.width`=列间距、`gap.height`=行间距。
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub row_gap: Option<f32>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub column_gap: Option<f32>,
 
     #[serde(default)]
     pub display: Display,
@@ -629,6 +635,8 @@ impl Default for LStyle {
             flex_basis: None,
             flex_basis_ratio: None,
             gap: 0.0,
+            row_gap: None,
+            column_gap: None,
             display: Display::default(),
             position: Position::default(),
             top: None,

@@ -10139,6 +10139,43 @@
     }
   };
 
+  // packages/slot-runtime/src/table.ts
+  function resolveDynamicClasses(classValue, rules) {
+    const active = collectActiveClasses(classValue);
+    if (active.size === 0 || rules.length === 0) return {};
+    const normal = {};
+    const important = {};
+    for (const r of rules) {
+      if (r.classes.length === 0) continue;
+      if (!r.classes.every((c) => active.has(c))) continue;
+      for (const [k, v] of Object.entries(r.decls)) {
+        if (r.important.includes(k)) important[k] = v;
+        else normal[k] = v;
+      }
+    }
+    return { ...normal, ...important };
+  }
+  function collectActiveClasses(v) {
+    const out = /* @__PURE__ */ new Set();
+    const walk = (x) => {
+      if (!x) return;
+      if (typeof x === "string") {
+        for (const c of x.split(/\s+/)) if (c) out.add(c);
+        return;
+      }
+      if (Array.isArray(x)) {
+        for (const e of x) walk(e);
+        return;
+      }
+      if (typeof x === "object") {
+        for (const [k, vv] of Object.entries(x)) if (vv) out.add(k);
+        return;
+      }
+    };
+    walk(v);
+    return out;
+  }
+
   // packages/slot-runtime/src/expr.ts
   var PURE_CALLS = {
     // —— Math（纯计算）——
@@ -10424,6 +10461,8 @@
        *   而"写过没有"是**实例态**（页面重挂载 ⇒ 重新写一次，与官方"重挂载重新渲染"一致）。
        */
       this.onceWritten = /* @__PURE__ */ new Set();
+      /** ★批次 30：每节点上次由动态 `:class` 施加的引擎字段（关掉类 ⇒ 需清除这些字段） */
+      this.lastClassFields = /* @__PURE__ */ new Map();
       /** v-memo：各组的**依赖基线**（上一次比较时的值；缺省 = 还没建过基线 ⇒ 首帧必脏） */
       this.memoBaseline = /* @__PURE__ */ new Map();
       /**
@@ -10585,6 +10624,24 @@
           if (spec.kind === "list-data") continue;
           if (spec.once && this.onceWritten.has(spec.slotId)) continue;
           if (this.skipNodeIds?.has(spec.nodeId + this.nodeIdOffset)) continue;
+          if (spec.propKey === "paint.class" && this.onPaintProp) {
+            const implC = this.evaluators.get(spec.evaluatorId);
+            if (implC) {
+              const cv = implC(ctx);
+              const fields = resolveDynamicClasses(cv, this.table.classRules ?? []);
+              const nid = spec.nodeId + this.nodeIdOffset;
+              const nextKeys = new Set(Object.keys(fields));
+              const prev = this.lastClassFields.get(nid);
+              if (prev) {
+                for (const k of prev) if (!nextKeys.has(k)) this.onPaintProp(nid, `paint.${k}`, void 0);
+              }
+              for (const [fk, fv] of Object.entries(fields)) this.onPaintProp(nid, `paint.${fk}`, fv);
+              this.lastClassFields.set(nid, nextKeys);
+              const eC = this.slotById.get(spec.slotId);
+              if (eC) eC.slot.value = cv;
+            }
+            continue;
+          }
           if (spec.propKey.startsWith("paint.") && this.onPaintProp) {
             const impl2 = this.evaluators.get(spec.evaluatorId);
             if (impl2) {
@@ -10873,6 +10930,15 @@
   }
 
   // packages/slot-runtime/src/instantiate.ts
+  function applyStyleField(target, propKey, key, v, classRules) {
+    if (propKey === "paint.class") {
+      const fields = resolveDynamicClasses(v, classRules ?? []);
+      for (const [k, val] of Object.entries(fields)) target[k] = val;
+      return;
+    }
+    ;
+    target[key] = v;
+  }
   function engineFieldOf(propKey) {
     if (propKey === "text.content") return { kind: "text" };
     const m = propKey.match(/^(?:layout|paint|text)\.(.+)$/);
@@ -11042,8 +11108,7 @@
             if (f.kind === "text") {
               target.text = v === void 0 || v === null ? "" : String(v);
             } else {
-              ;
-              target[f.key] = v;
+              applyStyleField(target, sl.propKey, f.key, v, opts.table?.classRules);
             }
             valuesFilled++;
           }
@@ -11088,8 +11153,7 @@
         if (f.kind === "text") {
           target.text = v === void 0 || v === null ? "" : String(v);
         } else {
-          ;
-          target[f.key] = v;
+          applyStyleField(target, sl.propKey, f.key, v, opts.table?.classRules);
         }
         valuesFilled++;
       }
@@ -11111,8 +11175,7 @@
           if (f.kind === "text") {
             target.text = v === void 0 || v === null ? "" : String(v);
           } else {
-            ;
-            target[f.key] = v;
+            applyStyleField(target, sl.propKey, f.key, v, opts.table?.classRules);
           }
           valuesFilled++;
         }
@@ -11355,8 +11418,7 @@
               if (f.kind === "text") {
                 target.text = v === void 0 || v === null ? "" : String(v);
               } else {
-                ;
-                target[f.key] = v;
+                applyStyleField(target, sc.propKey, f.key, v, opts.table?.classRules);
               }
               appliedScoped++;
               valuesFilled++;

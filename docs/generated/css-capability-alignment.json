@@ -73,6 +73,16 @@
     "tierRule": "universal = web∧skyline∧app 现状全 supported；unsupported = 三端皆不可用；其余 = conditional",
     "partialSupport": [
       {
+        "css": "gap（+ row-gap / column-gap）",
+        "id": "gap",
+        "ends": {
+          "web": "partial",
+          "skyline": "partial",
+          "app": "supported"
+        },
+        "why": "px/数字；★批次 31：**两值** `gap:<row> <col>` 与 **轴级** `row-gap`/`column-gap`（内核 `LStyle.row_gap/column_gap` → taffy `gap.height/width`）——真项目组件库 15 处两值 gap"
+      },
+      {
         "css": "margin/padding 1–4 值简写 + background 纯色简写 + flex 简写",
         "id": "value-shorthand",
         "ends": {
@@ -409,6 +419,8 @@
       "flexShrink",
       "flexBasis",
       "gap",
+      "rowGap",
+      "columnGap",
       "display",
       "position",
       "top",
@@ -672,18 +684,20 @@
     },
     {
       "id": "gap",
-      "css": "gap",
+      "css": "gap（+ row-gap / column-gap）",
       "category": "layout",
       "compilerFields": [
-        "gap"
+        "gap",
+        "rowGap",
+        "columnGap"
       ],
-      "web": "supported",
-      "skyline": "supported",
+      "web": "partial",
+      "skyline": "partial",
       "app": "supported",
       "tier": "L2",
       "strategy": "直映射",
-      "note": "px/数字（无 row-gap/column-gap 分开形态）",
-      "supportTier": "universal"
+      "note": "px/数字；★批次 31：**两值** `gap:<row> <col>` 与 **轴级** `row-gap`/`column-gap`（内核 `LStyle.row_gap/column_gap` → taffy `gap.height/width`）——真项目组件库 15 处两值 gap",
+      "supportTier": "conditional"
     },
     {
       "id": "position",
