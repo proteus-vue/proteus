@@ -1229,6 +1229,10 @@ export function stripScopeSuffix(name: string): string {
 /** `56px` / `56` / `0.5` → 数值；`50%` / `auto` → undefined（百分比**宽高**在调用处另行映射为 widthRatio/heightRatio；其余属性的百分比仍不支持，见诊断） */
 function numOf(v: string): number | undefined {
   const s = v.trim()
+  // ★批次 22（CSS 兼容对齐 · 以 Web 为基准）：`calc()` 常量折叠——设计令牌算术
+  //   `calc(var(--u) * 1.15)` 的 var() 已在解析前置换 ⇒ 此处对已知常量的算术求值（无 % / 相对单位时）。
+  //   组件库 64 处 `calc(var(--x) * N)` 依赖它（间距/字号刻度）。
+  if (/^calc\(/i.test(s)) return foldCalc(s)
   // ★批次 21（多端一致 · 以 MP 为基准）：`rpx`（小程序 750 设计单位）⇒ px。
   //   比例 0.5（1rpx = 0.5px）＝ 与 `rpxRatio:2`（px→rpx）互为逆——本仓 UA 基础样式即按此书写
   //   （`h1: font-size:64rpx` = 32px）。此前 App 折叠**丢弃 rpx** ⇒ 真实项目（125 处）失样式。
@@ -1242,12 +1246,63 @@ function numOf(v: string): number | undefined {
 }
 
 /**
+ * ★批次 22：`calc(<算术>)` 常量折叠 → 数值（px）。
+ *   仅当操作数全为 **px / 无单位** 时折叠；含 `%`（如 `calc(100% - 20px)`）或相对单位（em/vh…）
+ *     ⇒ 无上下文不可求值，返回 undefined（调用方诊断，不猜）。
+ */
+function foldCalc(v: string): number | undefined {
+  const m = /^calc\(([\s\S]*)\)$/i.exec(v.trim())
+  if (!m) return undefined
+  const inner = m[1]!.replace(/px/gi, '')
+  // 去 px 后仍含字母（em/vh/rem…）或 `%` ⇒ 不可折叠
+  if (/[a-zA-Z%]/.test(inner)) return undefined
+  return evalArith(inner)
+}
+
+/** 受限算术求值（+ - * / 与括号；递归下降）。非法 ⇒ undefined。 */
+function evalArith(src: string): number | undefined {
+  let i = 0
+  const peek = (): string => src[i] ?? ''
+  const skip = (): void => { while (/\s/.test(peek())) i++ }
+  const expr = (): number | undefined => {
+    let v = term(); if (v === undefined) return undefined
+    for (;;) {
+      skip(); const c = peek()
+      if (c === '+' || c === '-') { i++; const r = term(); if (r === undefined) return undefined; v = c === '+' ? v + r : v - r }
+      else return v
+    }
+  }
+  const term = (): number | undefined => {
+    let v = factor(); if (v === undefined) return undefined
+    for (;;) {
+      skip(); const c = peek()
+      if (c === '*' || c === '/') { i++; const r = factor(); if (r === undefined) return undefined; v = c === '*' ? v * r : (r === 0 ? NaN : v / r) }
+      else return v
+    }
+  }
+  const factor = (): number | undefined => {
+    skip()
+    if (peek() === '(') { i++; const v = expr(); skip(); if (peek() !== ')') return undefined; i++; return v }
+    if (peek() === '+' ) { i++; return factor() }
+    if (peek() === '-') { i++; const v = factor(); return v === undefined ? undefined : -v }
+    const start = i
+    while (/[0-9.]/.test(peek())) i++
+    if (i === start) return undefined
+    const n = Number(src.slice(start, i))
+    return Number.isFinite(n) ? n : undefined
+  }
+  const r = expr(); skip()
+  if (i !== src.length || r === undefined || !Number.isFinite(r)) return undefined
+  return r
+}
+
+/**
  * ★批次 2（值归一化）：`margin`/`padding` 的 **1–4 值简写** → `{top,right,bottom,left}`（CSS 标准展开）。
  *   `auto` / 不可解析的边 ⇒ 该边**不设**（其余边照设）；整条全是非数值 ⇒ 返回 undefined（调用方诊断）。
  *   ★为什么忽略 auto：内核对等无 auto（浏览器才有的"均分剩余空间"）——设一个错误数值反而更糟。
  */
 function expandBoxShorthand(rawVal: string, toNum: (v: string) => number | undefined): Record<string, number> | null {
-  const toks = rawVal.trim().split(/\s+/).filter(Boolean)
+  const toks = splitTopLevelSpaces(rawVal)
   if (toks.length === 0 || toks.length > 4) return null
   const n = toks.map(toNum) // undefined = 该边忽略（auto 等）
   let top: number | undefined
@@ -1288,7 +1343,7 @@ function normalizeFontWeight(raw: string): number | undefined {
 function expandMarginShorthand(rawVal: string, toNum: (v: string) => number | undefined): {
   box: Record<string, number>; auto: Record<string, boolean>
 } | null {
-  const toks = rawVal.trim().split(/\s+/).filter(Boolean)
+  const toks = splitTopLevelSpaces(rawVal)
   if (toks.length === 0 || toks.length > 4) return null
   const sides = ['top', 'right', 'bottom', 'left'] as const
   // 1–4 值 → 四边展开（CSS 标准）
