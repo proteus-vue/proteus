@@ -241,16 +241,6 @@
           "app": "absent"
         },
         "why": "字距/白空格走平台文本引擎（不自研）；当前 App 折叠面文本维 = fontSize/color/fontWeight/textAlign/line-height/text-overflow/letter-spacing——white-space 未支持"
-      },
-      {
-        "css": "visibility",
-        "id": "visibility",
-        "ends": {
-          "web": "supported",
-          "skyline": "supported",
-          "app": "absent"
-        },
-        "why": "引擎无 visibility 字段（可用 display:none 或 opacity 近似）"
       }
     ],
     "skylineAlignSwitches": [
@@ -439,6 +429,7 @@
       "lineHeight",
       "textOverflow",
       "letterSpacing",
+      "visibility",
       "borderRadius",
       "borderColor",
       "borderWidth",
@@ -1262,14 +1253,16 @@
       "id": "visibility",
       "css": "visibility",
       "category": "paint",
-      "compilerFields": [],
+      "compilerFields": [
+        "visibility"
+      ],
       "web": "supported",
       "skyline": "supported",
-      "app": "absent",
+      "app": "supported",
       "tier": "L1",
-      "strategy": "直映射",
-      "note": "引擎无 visibility 字段（可用 display:none 或 opacity 近似）",
-      "supportTier": "conditional"
+      "strategy": "编译期折叠",
+      "note": "★批次 25（2026-10-04 · ★基准 = Web）：`visible` / `hidden`。与 `display:none` 不同——`hidden` **仍占位**（保留布局），只是**不绘制**（宿主跳过绘制该节点）。CSS **可继承**（父 hidden ⇒ 子默认 hidden；子显式 **visible 可覆盖**）——编译期按树算 computed 值（每节点独立标记）。宿主：iOS `layer.isHidden`（子层随父隐藏）· Android Cmd 跳过（color/text/border 清零）· 鸿蒙指令不绘制。诚实边界：`collapse`（表格行折叠）未支持（诊断）",
+      "supportTier": "universal"
     }
   ],
   "_missingCompilerCoverage": []

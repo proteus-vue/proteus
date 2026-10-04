@@ -113,6 +113,12 @@ function go(name: 'forms' | 'config-demo' | 'user') {
 
     <!-- ★aspect-ratio 演示（批次 24）：宽 160 + aspect-ratio 16/9 ⇒ 高 90（媒体卡） -->
     <div class="ar-demo">aspect-ratio 16/9</div>
+
+    <!-- ★visibility 演示（批次 25）：hidden 仍占位（保留布局）但不绘制；子 visible 覆盖 -->
+    <div class="vis-demo">
+      <div class="vis-hidden">visibility:hidden（占位不显示）</div>
+      <div class="vis-child">父hidden</div>
+    </div>
   </div>
 </template>
 
@@ -279,6 +285,23 @@ function go(name: 'forms' | 'config-demo' | 'user') {
   margin: 16px auto;
   background-color: #f5f6f7;
   border-radius: 4px;
+  color: #888;
+  font-size: 12px;
+  text-align: center;
+}
+/* ★visibility 演示（批次 25）——hidden 仍占位、不绘制 */
+.vis-demo {
+  margin: 16px auto;
+}
+.vis-hidden {
+  height: 24px;
+  background-color: #ff6b9d;
+  visibility: hidden;
+  font-size: 12px;
+  text-align: center;
+}
+.vis-child {
+  height: 24px;
   color: #888;
   font-size: 12px;
   text-align: center;

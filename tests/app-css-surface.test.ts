@@ -83,6 +83,7 @@ describe('★App CSS 支持面 · ② SSOT 与折叠实现同源（真折叠，�
       if (f === 'gridTemplateColumns' || f === 'gridTemplateRows') return '1fr 1fr'
       if (f === 'lineHeight') return '1.5'
       if (f === 'textOverflow') return 'ellipsis'
+      if (f === 'visibility') return 'hidden'
       return '10'
     }
     const notFolded: string[] = []

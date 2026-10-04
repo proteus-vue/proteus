@@ -1314,6 +1314,12 @@ final class VaporRenderHost {
         float y = (float) r.optDouble("y");
         float w = (float) r.optDouble("width");
         float h = (float) r.optDouble("height");
+        // ★批次 25（CSS 兼容对齐 · 以 Web 为基准）：`visibility:hidden` ⇒ **仍占位、不绘制**。
+        //   编译器**已按继承**把 hidden 传播到全部后代（除非显式 visible 覆盖）⇒ 此处只需看本节点自身。
+        //   返回一个「什么都不画」的 Cmd（color=0 / 无文本 / 无边框阴影）。
+        if ("hidden".equals(spec.optString("visibility", null))) {
+            return new ProteusHostView.Cmd(x, y, w, h, 0, null, 0f, 0, 0f);
+        }
         String bg = spec.optString("backgroundColor", null);
         int color = bg != null ? parseColor(bg) : 0;
 
