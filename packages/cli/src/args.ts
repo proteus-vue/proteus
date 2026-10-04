@@ -16,8 +16,8 @@ export interface BuildArgs {
   debug: boolean
   /** 规则覆盖（--rules <json-file>） */
   rules?: TransformRuleOverrides
-  /** ★cli-plus M2：工程构建目标（--target web|skyline|all；缺省 = 独立编译） */
-  target?: 'web' | 'skyline' | 'all'
+  /** ★cli-plus M2：工程构建目标（--target web|skyline|app|all；缺省 = 独立编译） */
+  target?: 'web' | 'skyline' | 'app' | 'all'
   /** ★G-29 编译器后端插拔：--compiler node|rust（缺省 node；rust → 双编译语义等价校验） */
   compiler?: 'node' | 'rust'
 }
@@ -38,7 +38,7 @@ export function parseBuildArgs(argv: string[]): BuildArgs {
       args.debug = true
     } else if (a === '--target') {
       const t = argv[++i]
-      if (t !== 'web' && t !== 'skyline' && t !== 'all') throw new Error(`--target 需为 web/skyline/all（${t ?? '空'}）`)
+      if (t !== 'web' && t !== 'skyline' && t !== 'app' && t !== 'all') throw new Error(`--target 需为 web/skyline/app/all（${t ?? '空'}）`)
       args.target = t
     } else if (a === '--no-px2rpx') {
       args.px2rpx = false

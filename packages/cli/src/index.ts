@@ -59,7 +59,9 @@ async function main(): Promise<void> {
       //   有 vite.config.ts（遗留工程）→ 旧路径（spawn 工程构建脚本）
       if (args.target) {
         try {
-          if (!hasLegacyViteConfig(process.cwd())) {
+          // ★A1（2026-10-04）：`app` 目标**恒走程序化路径**（无对应 npm 脚本——屏内容构建是框架职责，
+          //   不是工程脚本；遗留 vite.config.ts 工程也一样）。
+          if (!hasLegacyViteConfig(process.cwd()) || args.target === 'app') {
             const r = await runTargetedBuildProgrammatic(args.target)
             if (!r.ok) process.exitCode = 1
           } else {
