@@ -484,9 +484,11 @@ export function parseStaticStyle(
     if (tokens) rawVal = substituteCssVars(rawVal, tokens)
     const markImportant = (engineKey: string): void => { if (important) importantOut?.add(engineKey) }
     const key = kebabToCamel(rawKey)
-    // ★批次 26（CSS 兼容对齐 · 以 Web 为基准）：**Web 默认值 / 无操作声明** ⇒ 显式 no-op（不诊断）。
-    //   这些是「无视觉变化」或「= App 默认」的写法，报成「缺口」是**假阳性**（淹没真缺口）。
-    if (isNoOpDeclaration(key, rawVal)) continue
+    // ★批次 26/27（CSS 兼容对齐 · 以 Web 为基准）：**Web 默认值 / 重置声明** ⇒ 记录**默认值**（不诊断）。
+    //   ★批次 27 修正：**不能直接 skip**——重置声明（如 `.b{border:none}`）必须**记录**默认值，
+    //   否则覆盖不了低优先级的 `.a{border:1px solid}`（级联失效，实测过）。无 App 字段的（transform 等）⇒ 空记录。
+    const noop = noOpResetValue(key, rawVal)
+    if (noop !== null) { for (const nk in noop) { out[nk] = noop[nk]; markImportant(nk) } continue }
     // 四边：`margin-bottom` / `padding-left` …
     const edge = key.match(/^(margin|padding)(Top|Right|Bottom|Left)$/)
     if (edge) {
@@ -1093,28 +1095,32 @@ export function parseClassStyles(
 }
 
 /**
- * ★批次 26（CSS 兼容对齐 · 以 Web 为基准）：**无操作 / Web 默认值**声明判定。
- *   true ⇒ 该声明对 App 无视觉变化（或等价于 App 默认）⇒ 编译期**忽略且不诊断**（减少假阳性噪声）。
- *   ★不是「不支持」——是不需要做任何事（如 `transform:none` 就是不变换）。
+ * ★批次 26/27（CSS 兼容对齐 · 以 Web 为基准）：**Web 默认值 / 重置声明** → 要记录的默认值。
+ *   null ⇒ 非 no-op（正常走后续解析）；否则返回要写入 `out` 的字段（可能为空 {} = 无 App 字段，直接跳过且不诊断）。
+ *   ★批次 27：有 App 字段的**必须记录默认值**（`border:none`→borderWidth:0 等）——否则级联覆盖失效。
  */
-function isNoOpDeclaration(key: string, val: string): boolean {
+function noOpResetValue(key: string, val: string): Record<string, unknown> | null {
   const v = val.trim().toLowerCase()
   switch (key) {
+    // 无 App 对应字段 ⇒ 空记录（级联无关，直接跳过）
     case 'transform':
     case 'textDecoration':
     case 'outline':
     case 'backgroundImage':
+      return v === 'none' ? {} : null
+    // 有 App 字段 ⇒ 记录**默认值**（保证级联覆盖生效）
     case 'boxShadow':
-      return v === 'none'
+      return v === 'none' ? { boxShadow: null } : null
     case 'border':
-      return v === 'none' || v === '0' || v === '0px'
+      return (v === 'none' || v === '0' || v === '0px') ? { borderWidth: 0 } : null
     case 'background':
-      return v === 'none'
+      return v === 'none' ? { backgroundColor: '#00000000' } : null
     case 'display':
-      // App 默认 flex-direction: column（block-like）⇒ `display:block` 无变化；`inline*` 才是真缺口。
-      return v === 'block'
+      // App 默认 display = flex 且 flex-direction = column（= block-like）⇒ `display:block` **无行为差异** ⇒
+      //   空记录（不落键；避免给每个 block 元素平白加 display:flex 的 churn）。`inline*` 才是真缺口。
+      return v === 'block' ? {} : null
     default:
-      return false
+      return null
   }
 }
 
