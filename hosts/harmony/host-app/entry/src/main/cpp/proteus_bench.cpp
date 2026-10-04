@@ -3852,6 +3852,11 @@ static napi_value ScreenContentProbe(napi_env env, napi_callback_info info) {
 static std::unordered_map<std::string, uint64_t> g_scHandle;
 static std::unordered_map<std::string, int> g_scNodeCount;
 static int g_scMounts = 0, g_scVisible = 0, g_scDestroy = 0, g_scContentTotal = 0, g_scSeq = 0;
+static int g_scAnimStarted = 0;
+// ★★★App 三端对齐 · 鸿蒙 anim 逐帧（2026-10-04）：在飞转场的 token / 剩余时长 / 目标句柄
+static std::string g_scAnimToken;
+static double g_scAnimRemainMs = 0;
+static std::vector<uint64_t> g_scAnimHandles;
 
 /** screen.* 分发（返回 JSON 串，与 Android ScreenHost.invoke 同形：多数包 {ok,data}） */
 static std::string screenInvokeDispatch(const std::string& method, const std::string& argsJson) {
@@ -3864,14 +3869,28 @@ static std::string screenInvokeDispatch(const std::string& method, const std::st
         if (nodesArr.empty()) return "{\"ok\":false,\"reason\":\"screen.mount: 无 content.nodes\"}";
         int count = 0;
         { size_t p = 0; while ((p = nodesArr.find("\"id\":", p)) != std::string::npos) { count++; p += 5; } }
-        int rootId = 100000 + (g_scSeq++) * 10000;
-        std::string req = "{\"viewport\":{\"width\":1080,\"height\":2400},\"nodes\":" + nodesArr + "}";
+        // ★★★屏根节点（2026-10-04）：加**合成根**（非零 id —— 0 被 screen-executor-host 当"无根"哨兵），
+        //   并把**内容首个根节点**的 parentId:null 改指该根（单点替换，零 id 重排——其余 parentId 不动）。
+        //   ★必要性：转场动画目标是 mount 返回的 rootNodeId；无根/根=0 ⇒ 内核拒绝动画（实测 exec_anim_started=0）。
+        int rootId = 900000 + (g_scSeq) * 10000;
+        std::string nodesInner = nodesArr.substr(1, nodesArr.size() - 2); // 去外层 []
+        {
+            // ★序列化是 pretty（`"parentId": null` 冒号后有空格）——按实际形态匹配（本仓实测过的坑）。
+            const std::string needle = "\"parentId\": null";
+            size_t pn = nodesInner.find(needle);
+            if (pn != std::string::npos) {
+                char pnr[40]; snprintf(pnr, sizeof(pnr), "\"parentId\": %d", rootId);
+                nodesInner = nodesInner.substr(0, pn) + pnr + nodesInner.substr(pn + needle.size());
+            }
+        }
+        char rootNode[100]; snprintf(rootNode, sizeof(rootNode), "{\"id\":%d,\"parentId\":null,\"width\":1080,\"height\":2400}", rootId);
+        std::string req = "{\"viewport\":{\"width\":1080,\"height\":2400},\"nodes\":[" + std::string(rootNode) + (count > 0 ? "," : "") + nodesInner + "]}";
         uint64_t h = proteus_layout_create(req.c_str());
         if (h == 0) return "{\"ok\":false,\"reason\":\"screen.mount: create 失败\"}";
         g_scHandle[sid] = h; g_scNodeCount[sid] = count;
         g_scMounts++; g_scContentTotal += count;
         char b[220];
-        snprintf(b, sizeof(b), "{\"ok\":true,\"data\":{\"rootNodeId\":%d,\"nodes\":%d,\"contentNodes\":%d}}", rootId, count, count);
+        snprintf(b, sizeof(b), "{\"ok\":true,\"data\":{\"rootNodeId\":%d,\"nodes\":%d,\"contentNodes\":%d}}", rootId, count + 1, count);
         return b;
     }
     if (method == "screen.visible") {
@@ -3888,7 +3907,31 @@ static std::string screenInvokeDispatch(const std::string& method, const std::st
         return b;
     }
     if (method == "screen.anim") {
-        return "{\"ok\":true,\"data\":{\"started\":0,\"immediate\":true,\"note\":\"鸿蒙 executor 片：anim 即时（无帧循环）\"}}";
+        // ★★★真逐帧（2026-10-04）：start 内核动画（曲线/弹簧在 Rust 侧求值）——不 immediate，
+        //   JS 侧等 `__proteusHostScreenAnimDone(token)` 回推（回推由探针循环在到点时发出）。
+        std::string tok; jstr(argsJson.c_str(), argsJson.size(), "token", &tok);
+        double dur = 300; jnum(argsJson.c_str(), argsJson.size(), "durationMs", &dur);
+        std::string animsArr = extractValueAfterKey(argsJson, "anims", '[', ']');
+        if (animsArr.empty() || animsArr == "[]") {
+            return "{\"ok\":true,\"data\":{\"started\":0,\"immediate\":true}}";
+        }
+        int started = 0;
+        g_scAnimHandles.clear();
+        for (auto& kv : g_scHandle) {
+            std::string body = "{\"anims\":" + animsArr + "}";
+            char* rp = proteus_layout_anim_start(kv.second, body.c_str());
+            std::string rs = rp ? rp : "{}"; if (rp) proteus_layout_free_string(rp);
+            double n = 0; jnum(rs.c_str(), rs.size(), "started", &n);
+            if (n > 0) { started += (int)n; g_scAnimHandles.push_back(kv.second); }
+        }
+        if (started == 0) {
+            return "{\"ok\":true,\"data\":{\"started\":0,\"immediate\":true,\"note\":\"内核未受理任何动画（如实）\"}}";
+        }
+        g_scAnimToken = tok;
+        g_scAnimRemainMs = dur > 0 ? dur : 300;
+        g_scAnimStarted += started;
+        char b[128]; snprintf(b, sizeof(b), "{\"ok\":true,\"data\":{\"started\":%d}}", started);
+        return b;
     }
     if (method == "screen.rect" || method == "screen.shared") {
         return "{\"ok\":false,\"missing\":true,\"reason\":\"未实现（e4 诚实跳过）\"}";
@@ -3972,6 +4015,25 @@ static napi_value AppStackExecutorProbe(napi_env env, napi_callback_info info) {
         JSVM_Value fnR = nullptr;
         if (OH_JSVM_GetNamedProperty(jenv, global, "__proteusAppStackExecutorRead", &fnR) == JSVM_OK) {
             for (int i = 0; i < 4096; i++) {
+                // ★★★帧循环（2026-10-04 · anim 逐帧，与 Android/iOS 同一条完成链）：
+                //   若有在飞转场 ⇒ 每轮推进内核动画（固定 16.7ms 模拟帧）+ 到点回推 done。
+                //   ★诚实边界：鸿蒙无宿主帧回调通道（C++ 侧），故用**同步模拟帧**（真实时间由 durMs 折算）；
+                //     观感等价（曲线在 Rust 侧求值），差别只是不跟随 vsync。
+                if (g_scAnimRemainMs > 0) {
+                    for (uint64_t h : g_scAnimHandles) {
+                        char* rp = proteus_layout_anim_tick(h, 16.7f);
+                        if (rp) proteus_layout_free_string(rp);
+                    }
+                    g_scAnimRemainMs -= 16.7;
+                    if (g_scAnimRemainMs <= 0) {
+                        std::string expr = "typeof __proteusHostScreenAnimDone === 'function' ? String(__proteusHostScreenAnimDone(\"" +
+                            jsonEscape(g_scAnimToken) + "\", '{}')) : 'no-hook'";
+                        std::string probe;
+                        jsvmEvalStr(jenv, expr.c_str(), &probe);
+                        // ★清异常（2026-10-04 实测：done 回推若挂起异常，同 env 后续 read 被阻塞 ⇒ "read 失败"）
+                        { JSVM_Value exc = nullptr; OH_JSVM_GetAndClearLastException(jenv, &exc); }
+                    }
+                }
                 if (policyOk) OH_JSVM_PerformMicrotaskCheckpoint(vm);
                 rounds++;
                 JSVM_Value rr = nullptr;
@@ -3990,8 +4052,8 @@ static napi_value AppStackExecutorProbe(napi_env env, napi_callback_info info) {
     if (vm != nullptr && vmScope != nullptr) OH_JSVM_CloseVMScope(vm, vmScope);
     if (vm != nullptr) OH_JSVM_DestroyVM(vm);
     char head[200];
-    snprintf(head, sizeof(head), "{\"ok\":%s,\"engine_available\":true,\"host\":\"harmony\",\"exec_content_nodes\":%d,\"exec_mounts\":%d,\"exec_visible\":%d,\"exec_destroy\":%d",
-             err.empty() ? "true" : "false", g_scContentTotal, g_scMounts, g_scVisible, g_scDestroy);
+    snprintf(head, sizeof(head), "{\"ok\":%s,\"engine_available\":true,\"host\":\"harmony\",\"exec_content_nodes\":%d,\"exec_mounts\":%d,\"exec_visible\":%d,\"exec_destroy\":%d,\"exec_anim_started\":%d",
+             err.empty() ? "true" : "false", g_scContentTotal, g_scMounts, g_scVisible, g_scDestroy, g_scAnimStarted);
     std::string out = head;
     if (readValue.size() > 2) { out += ",\"exec_read\":" + readValue; }
     out += ",\"exec_rounds\":" + std::to_string(rounds);

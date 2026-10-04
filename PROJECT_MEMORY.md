@@ -15,9 +15,9 @@
 - **包规模**：**45 个 @proteus-vue/* npm 包**（+ `packages/layout-core-rust` = **cargo crate，非 npm 包**，故不计数）（★2026-09-29 layout-core = App 排版核心）（check:pkg 0 error · `pnpm check:stats` 校验 ✓；31→38 修正 → G-07 glass 39 → Skyline 收口 worklet 40 → ★2026-09-14 组件库拆包 `@proteus-vue/components` 41 → ★Vapor 线新增 `@proteus-vue/slot-runtime` 42 + `@proteus-vue/layout-core` 43 → ★2026-09-30 MA1 新增 `@proteus-vue/animation` 44；版本统一 0.3.0-beta.8，见「当前状态速览」）
 - **文档**：`docs/proteus-architecture.md`（L0 规约·真理来源）→ `docs/board-inventory.md`（全景索引）→ `docs/roadmap.md`（版本线）→ `roadmap-2-plan`（里程碑线）→ 各 plan
 
+## 当前状态速览（最近一次更新：**2026-10-04·（一四二）· **App 三端对齐 — 鸿蒙 anim 逐帧打通（三端转场全对齐）**（决策 #488）——用户「继续」。★承接三端视觉合成：**鸿蒙 anim 从"即时"变"真逐帧"**——修 key bug（`screen.mount` **无真屏根** ⇒ 转场动画目标不存在 ⇒ 内核拒绝 ⇒ 此前 `exec_anim_started=0`；现加合成根 + 内容根 parentId 指它，**带空格**序列化精确匹配）+ 探针循环**每轮 tick（模拟 16.7ms 帧）+ 到点回推 done**（免 ArkTS 帧循环）。★真机 **exec_anim_started=13**，executor 全链与 Android/iOS **计数一致**（8 命令/3 转场/forward 2/back 1/镜像对成立/零错误）；门禁加 anim 断言（破坏性验证过）。★**里程碑：App 三端「转场动画」真逐帧对齐**（Android/iOS CADisplayLink/Choreographer、鸿蒙模拟帧）。★诚实边界：鸿蒙无 vsync 帧回调通道（用模拟帧，观感等价、不跟随显示器节拍）。★全量 **5074/5074** 绿。下一步：C1 收尾（伪类/元素，规模小）或真机交互上屏**）★新会话以此为准
 ## 当前状态速览（最近一次更新：**2026-10-04·（一四一）· **App 三端对齐 — 三端视觉合成全打通（内容→内核树→真画屏）**（决策 #487）——用户「继续」。★承接 Android/iOS：**鸿蒙也真画屏了**——新增 `appScreenCommands`（内容→内核树→RenderCmd 数组）+ ArkTS `attach + renderCommands` 真建 RenderNode ⇒ 真机 **51 内容节点 → 51 渲染节点**。`check:app-screen-content` 视觉合成设备腿**三端齐**（Android 283 像素 / iOS 51 层+PNG / 鸿蒙 51 渲染节点；破坏性验证过）。★**里程碑：App 三端「项目路由 → 真实 SFC（含类样式）→ 编译器 → 屏内容 → executor → 内核树 → 真画屏」全链闭环**。★诚实边界：鸿蒙 anim 即时（无逐帧）· 三端合成均为"入口页静态画屏"（未接真机交互/滚动上屏）。★全量 **5074/5074** 绿。下一步：C1 收尾（伪类/元素选择器）或三端 anim 逐帧/交互**）★新会话以此为准
 ## 当前状态速览（最近一次更新：**2026-10-04·（一四〇）· **App 三端对齐 — iOS 视觉合成打通（内容→内核树→真画屏，PNG 证据）**（决策 #486）——用户「继续」。★承接 Android 视觉合成：**iOS 也真画屏了**——app-stack 场景复用同一 ctx 的 `proteusSelfDraw`（`mount` 建真 CALayer + `snapshot` 落 PNG）⇒ 真机 **51 内容节点 → 51 层 + PNG**（`results/app-screen-composite.png` 可见 examples index 页真实样式：白底/标题/彩色分组/SVG 区/路由项）。`check:app-screen-content` 视觉合成设备腿**泛化到 Android+iOS**（破坏性验证过）。★诚实边界：**鸿蒙视觉合成 ⏳**（RenderNode 直绘入口已有，对称接入属下一步）。★全量 **5074/5074** 绿。★**三端现状**：Android+iOS = 内容→内核树→**真画屏**✅；鸿蒙 = executor 全链 + 内容→内核树（44/44 页，未真画屏）**）★新会话以此为准
-## 当前状态速览（最近一次更新：**2026-10-04·（一三九）· **App 三端对齐 — Android 视觉合成打通（内容→内核树→真画屏，PNG 证据）**（决策 #485）——用户「继续」。★**缺口 B6（视觉合成）**：三端此前只到"内容→内核树"，**没真上屏**。本轮 Android 收口：app-stack 场景复用 `VaporRenderHost`（树→指令→`ProteusHostView` 自绘）把 `app-screen-content.json` 入口页**真画到屏**——真机 **51 内容节点 → 283 采样像素 + PNG**（`results/app-screen-composite.png` 肉眼可见真实页面文字/标题/列表/蓝色链接）；`check:app-screen-content` 加**视觉合成设备腿判据**（破坏性验证过）。★**诚实边界**：iOS/鸿蒙视觉合成 ⏳（iOS 有 `selfdraw-scene` CALayer 绘制/`snapshot` 入口、鸿蒙有 RenderNode 直绘入口——对称接入属下一步）。★全量 **5074/5074** 绿。下一步：iOS/鸿蒙视觉合成（对称）+ 鸿蒙 anim 逐帧 / C1 收尾。★**三端现状**：Android = 内容→内核树→**真画屏**✅；iOS = executor 全链（真机 102 节点）；鸿蒙 = executor 探针 + 内容→内核树（44/44 页）**）★新会话以此为准
 
 
 
@@ -51,13 +51,13 @@
 
 | 文件 | 内容 |
 |---|---|
-| `docs/project-memory-archive/2026-10.md` | 里程碑详细叙事（三十九～一四一）+ 状态速览历史栈（约 4.5k 行） |
+| `docs/project-memory-archive/2026-10.md` | 里程碑详细叙事（三十九～一四二）+ 状态速览历史栈（约 4.5k 行） |
 | `docs/project-memory-archive/2026-09.md` | 09 月全部叙事 + 柔性系统重组历史 + 2026-08 进度快照 + 已落地文件 + 09-19 验证状态（约 6.5k 行） |
-| `docs/project-memory-archive/decisions.md` | 决策链全文 #1–#487——按号检索 |
+| `docs/project-memory-archive/decisions.md` | 决策链全文 #1–#488——按号检索 |
 
 检索示例：`grep -n "2026-09-29\|判据建错靶" docs/project-memory-archive/2026-09.md`
 
-## 关键决策与文档偏差（#1–#487 → 归档速查）
+## 关键决策与文档偏差（#1–#488 → 归档速查）
 
 **全文在 `docs/project-memory-archive/decisions.md`**（按号检索：`grep -n "^290\." docs/project-memory-archive/decisions.md`）。
 决策号**只增不改号**（外部文档按号引用）；新决策追加到该文件末尾（号 +1）。
