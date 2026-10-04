@@ -66,6 +66,7 @@ watch(
 onMounted(() => {
   document.title = appConfig.app.name
   // ★Web 桥：把全局状态与控制函数挂到 globalThis（页面不 import 外部模块——MP 侧会落 undefined）
+  // ★GP7：glStats/glUnmount/glSetBudget 一并挂桥（验收控制台同形读数——MP 走页实例桥 __proteusGlStats）
   ;(globalThis as unknown as Record<string, unknown>).__SUPERAPP_GLOBAL__ = globalState
 })
 </script>

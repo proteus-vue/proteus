@@ -133,20 +133,69 @@ __PRESET_REGISTRATION__
  *   · `all()`：快照（诊断/调试）
  * ★**条件编译门**：`__PROTEUS_GLOBAL_LAYER_LIMIT__` 由构建 define 注入（缺省不校验）——
  *   每页注入的字段数由 C2（32）在编译期限定，这里只做运行时兜底（防手改产物）。
+ *
+ * ★★★GP7（2026-10-04）：**内存记账**——本模块同时是 Global 层的「运行时内存可观测面」：
+ *   · `stats()`：可查占用（**分端口径**——MP：共享状态一份 + 每页字段 × 页面栈；自绘/Web：1 份）
+ *   · `unmount(k)`：显式卸载一个全局状态键（与**编译期挂载**对称）——释放共享状态内存
+ *   · `setBudget(b)`：调整预算（超限告警一次，不刷屏）
+ *   ★诚实边界（不许含糊）：`unmount` 释放的是**共享状态**（N 页共用的一份）；
+ *     页面本地 data 副本与静态 wxml 节点壳归**页面场景**管理（不随本调用回滚）——
+ *     视觉联动（如让音乐条消失）请把渲染条件绑在对应字段上、并在业务侧导航/刷新后生效。
+ *   ★字节口径 = JSON 序列化长度（近似，非 ASCII 偏小）——诊断口径，不是计量承诺。
+ *
+ * 【参数（由插件按真实壳片段注入——数值烘焙进产物，不依赖运行时探测）】
+ *   · fieldCount：每页注入的 Global 层字段数（data 条目数）
+ *   · perPageBytes：每页注入的**初值字节**（JSON 长度——分端估算的 N 倍部分）
  */
-export const GLOBAL_LAYER_STATE_CODE = `// _proteus/global-layer.js —— Proteus Global 层共享状态（GP3-b1，2026-10-03）
+export function globalLayerStateCode(opts: {
+  fieldCount?: number
+  perPageBytes?: number
+  budgetBytes?: number
+} = {}): string {
+  const fieldCount = typeof opts.fieldCount === 'number' && opts.fieldCount >= 0 ? opts.fieldCount : 0
+  const perPageBytes = typeof opts.perPageBytes === 'number' && opts.perPageBytes >= 0 ? opts.perPageBytes : 0
+  const budgetBytes = typeof opts.budgetBytes === 'number' && opts.budgetBytes > 0 ? opts.budgetBytes : 65536
+  return `// _proteus/global-layer.js —— Proteus Global 层共享状态（GP3-b1 建 · GP7 内存记账 2026-10-04）
 // 自动生成，请勿编辑。用途：MP 端"实例每页一份、状态一份"（与官方 custom-tab-bar 同模式）。
+// ★GP7：stats() 内存读数（分端口径）/ unmount(k) 显式卸载 / setBudget(b) 预算——见仓库 GP7 卡。
 // ★require 缓存保证：所有页面 require 本模块拿到的是**同一个对象**（跨页状态一致）。
 var __state = Object.create(null)
 var __subs = Object.create(null)
+var __gone = Object.create(null)   // 墓碑：unmount 过的键（区分"没写过"与"已卸载"）
+var __budget = ${budgetBytes}      // 预算（字节）——超限告警一次；可 setBudget 调整（GP7，阈值待实测校准）
+var __fieldCount = ${fieldCount}   // 编译期注入：每页字段数（分端口径的 N 倍部分）
+var __perPageBytes = ${perPageBytes} // 编译期注入：每页初值字节（分端口径的 N 倍部分）
+var __warned = false               // 告警去重（不刷屏）
+
+function __bytes(v) {
+  // 近似字节：JSON 序列化长度（ASCII 1:1；非 ASCII 偏小——诊断口径）
+  try { return JSON.stringify(v === undefined ? null : v).length } catch (e) { return 0 }
+}
+function __totalBytes() {
+  var n = 0
+  for (var k in __state) if (Object.prototype.hasOwnProperty.call(__state, k)) n += __bytes(__state[k])
+  return n
+}
+function __warnIfOver() {
+  var b = __totalBytes()
+  if (b > __budget && !__warned) {
+    __warned = true
+    try {
+      console.warn('[proteus] Global 层共享状态 ' + b + ' 字节，超过预算 ' + __budget +
+        ' 字节——Global 层常驻内存（MP 端：状态一份 + 每页字段 × 页面栈；见 GP7）。' +
+        '建议把大集合移出全局层（编译期也会告警），或调 __proteusGlobal.setBudget(b) 显式确认预算')
+    } catch (e) {}
+  }
+}
 
 module.exports = {
-  /** 读一个全局字段（未写过 ⇒ undefined——调用方用声明初值兜底） */
+  /** 读一个全局字段（未写过/已卸载 ⇒ undefined——调用方用声明初值兜底） */
   get: function (k) {
     return __state[k]
   },
   /** 写一个全局字段（页面 setData 镜像调用；通知订阅者） */
   set: function (k, v) {
+    if (__gone[k]) delete __gone[k] // 重新写入 ⇒ 复活（unmount 后再挂载的语义：显式 set 即恢复）
     __state[k] = v
     var list = __subs[k]
     if (list) {
@@ -154,6 +203,7 @@ module.exports = {
         try { list[i](v) } catch (e) {}
       }
     }
+    __warnIfOver()
   },
   /** 是否写过（区分"没写过"与"写过 undefined"） */
   has: function (k) {
@@ -175,5 +225,67 @@ module.exports = {
       if (idx >= 0) list.splice(idx, 1)
     }
   },
+  /** ★GP7：显式卸载一个全局状态键——释放共享状态内存（与编译期挂载对称）；通知订阅者 */
+  unmount: function (k) {
+    if (Object.prototype.hasOwnProperty.call(__state, k)) delete __state[k]
+    __gone[k] = 1
+    var list = __subs[k]
+    if (list) {
+      for (var i = 0; i < list.length; i++) {
+        try { list[i](undefined) } catch (e) {}
+      }
+    }
+  },
+  /** ★GP7：该键是否已被 unmount（get 返回 undefined 的两种来源：从未写 / 已卸载） */
+  unmounted: function (k) {
+    return __gone[k] === 1
+  },
+  /** ★GP7：内存读数（**分端口径**——MP：状态一份 + 每页初值 × 页面栈；无页面栈环境为 1 份） */
+  stats: function () {
+    var keys = 0
+    for (var k in __state) if (Object.prototype.hasOwnProperty.call(__state, k)) keys++
+    var stack = 1
+    try {
+      if (typeof getCurrentPages === 'function') {
+        var ps = getCurrentPages()
+        if (ps && ps.length) stack = ps.length
+      }
+    } catch (e) {}
+    var bytes = __totalBytes()
+    return {
+      keys: keys,
+      bytes: bytes,
+      budgetBytes: __budget,
+      overBudget: bytes > __budget,
+      fieldCount: __fieldCount,
+      perPageBytes: __perPageBytes,
+      pageStack: stack,
+      residentEstimateBytes: bytes + __perPageBytes * stack,
+    }
+  },
+  /** ★GP7：调整预算（字节）——返回是否生效；调大 = 显式确认更大常驻（重置告警去重后按新预算判定） */
+  setBudget: function (b) {
+    var n = Number(b)
+    if (!isFinite(n) || n <= 0) return false
+    __budget = n
+    __warned = false
+    __warnIfOver()
+    return true
+  },
+  /** ★GP7：测试钩子（重置内部状态——e2e"跨运行状态残留"纪律：判据先归一） */
+  __resetForTest: function () {
+    __state = Object.create(null)
+    __subs = Object.create(null)
+    __gone = Object.create(null)
+    __warned = false
+    return true
+  },
 }
 `
+}
+
+/**
+ * 默认形态（无烘焙数值）——供既有测试/诊断引用；
+ * ★插件侧请调 `globalLayerStateCode({...})` 传入真实字段数/初值字节（分端估算依赖它）。
+ */
+export const GLOBAL_LAYER_STATE_CODE = globalLayerStateCode()

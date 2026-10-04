@@ -22,6 +22,7 @@ import {
   applyModuleAlias,
   npmModuleRelNoExt,
   splitNpmSource,
+  findMissingExternalTargets,
 } from '@proteus-vue/plugin-vite'
 
 const ROOT = path.resolve(__dirname, '..')
@@ -147,5 +148,57 @@ describe('★★★B1 ④：node:path polyfill（其余内置显式报错）', (
     for (const [name, got, want] of cases) {
       expect(got(), `对拍失败：${name}`).toBe(want())
     }
+  })
+})
+
+describe('★★★B1 修复（2026-10-04）：external 闭包缺口扫描（CJS require 悬空）', () => {
+  // 【真缺陷】B1 把 @vue/* 加入 vendor 单例后：vue 的 CJS 入口 `require('@vue/shared')`
+  //   被外部化成 `require("./@vue/shared.js")`，而收集侧 BFS 只扫 ESM ⇒ 目标从未产出
+  //   ⇒ 模拟器 `module '_proteus/@vue/shared.js' is not defined` ⇒ 所有页面挂。
+  //   修法 = 扫产物相对 require 找缺口（本函数），消费方再反推源名补进 sharedModules。
+  it('★真实缺陷形态：vue.js 产物里的 ./@vue/shared.js 缺口被抓出（未排期 ⇒ 报告）', () => {
+    const code = `var x = require("./@vue/shared.js"); var y = require("./@vue/runtime-core.js");`
+    const gaps = findMissingExternalTargets(code, '_proteus/vue', new Set(['_proteus/vue']))
+    expect(gaps, '两个 @vue 子模块都在缺口里').toEqual(['_proteus/@vue/shared', '_proteus/@vue/runtime-core'])
+  })
+
+  it('已排期的目标不报（防重复产出）', () => {
+    const code = `require("./@vue/shared.js"); require("./npm/ms.js");`
+    const scheduled = new Set(['_proteus/@vue/shared', '_proteus/npm/ms'])
+    expect(findMissingExternalTargets(code, '_proteus/vue', scheduled)).toEqual([])
+  })
+
+  it('页面目录的相对 require（../_proteus/...）同样归一命中', () => {
+    const code = `require("../_proteus/global-layer.js")`
+    const gaps = findMissingExternalTargets(code, 'pages/index', new Set())
+    expect(gaps, '页面产物形态（../ 前缀）').toEqual(['_proteus/global-layer'])
+  })
+
+  it('业务相对模块（非 _proteus/ 前缀）不归本函数管（页面侧 own）', () => {
+    // 页面目录出发的相对 require（业务模块）——归一后不以 _proteus/ 开头 ⇒ 过滤
+    const code = `require("./helper.js"); require("../utils/format.js")`
+    expect(findMissingExternalTargets(code, 'pages/index', new Set())).toEqual([])
+    // 共享模块里的相对引入**不会出现**在产物 require 里（esbuild bundle 内联）——
+    // 能出现在产物的相对 require 只有 externalResolvePlugin 的 `_proteus/**` 映射
+  })
+
+  it('去重保序：同一目标多次 require 只报一次', () => {
+    const code = `require("./@vue/shared.js"); require("./@vue/shared.js"); require("./@vue/shared.js")`
+    expect(findMissingExternalTargets(code, '_proteus/vue', new Set())).toEqual(['_proteus/@vue/shared'])
+  })
+
+  it('★真实产物核对：vue.js 实测缺口全部为 _proteus/@vue/*（构建期同判据）', async () => {
+    const fs = await import('node:fs')
+    // 用任一工程的 MP 构建产物（若存在）——验证"扫描函数对真实产物成立"
+    const candidates = ['superapp', 'examples', 'showcase'].map((p) =>
+      path.join(ROOT, p, 'dist', 'mp-weixin', '_proteus', 'vue.js'),
+    )
+    const real = candidates.find((f) => fs.existsSync(f))
+    expect(real, '需要至少一个工程的 MP 构建产物（先 build:mp）').toBeTruthy()
+    const code = fs.readFileSync(real!, 'utf-8')
+    const gaps = findMissingExternalTargets(code, '_proteus/vue', new Set())
+    expect(gaps.length, '★真实产物应含 @vue/* 外部引用（B1 单例化产物形态）').toBeGreaterThan(0)
+    // 且缺口全部是 @vue/ 前缀（本产物形态）——不得混入业务模块
+    for (const g of gaps) expect(g, '★缺口须为 _proteus/@vue/* 形态').toMatch(/^_proteus\/@vue\//)
   })
 })

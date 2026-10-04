@@ -16,7 +16,7 @@ import { createRequire } from 'node:module'
 import { MP_PATH_POLYFILL_CODE } from './path-polyfill'
 import { resolveRouterConfig } from '@proteus-vue/types'
 import type { GlobalLayerSnippet } from '@proteus-vue/types'
-import { GLOBAL_LAYER_STATE_MODULE } from '@proteus-vue/contracts'
+import { GLOBAL_LAYER_MEMORY_BUDGET_BYTES, GLOBAL_LAYER_STATE_MODULE } from '@proteus-vue/contracts'
 import { transform as esbuildTransform, build as esbuildBuild } from 'esbuild'
 import * as sass from 'sass'
 import type { Plugin } from 'vite'
@@ -30,7 +30,7 @@ import type { TransformRuleOverrides } from '@proteus-vue/compiler'
 import type { ProteusConfig } from './config'
 import { matchWebviewPage } from './gen-routes'
 import { resolveComponentsRoot } from './resolve-components'
-import { APP_LAUNCH_SKELETON, APP_LIFECYCLE_BOOTSTRAP, GLOBAL_LAYER_STATE_CODE } from './appSkeleton'
+import { APP_LAUNCH_SKELETON, APP_LIFECYCLE_BOOTSTRAP, GLOBAL_LAYER_STATE_CODE, globalLayerStateCode } from './appSkeleton'
 import { createCompileCache, compileCacheKey, createBundleCache, bundleCacheKey } from './cache'
 import { collectUsedFrameworkComponents } from './tag-scan'
 import { findAppShellFile, looksLikeAppShell } from './app-shell'
@@ -453,6 +453,44 @@ export function classifyUnresolvedImport(
  *  setActivePinia 设的那份不是 useStore() 查的那份 → store 全失效。故统一 external 到 `_proteus/<name>.js`。
  *  @vue/devtools-api 是 pinia 的运行时依赖，同样单例化（避免多份注册表）。 */
 export const VENDOR_SINGLETONS = ['pinia', 'vue', '@vue/devtools-api', '@vue/runtime-core', '@vue/reactivity', '@vue/shared']
+
+/**
+ * ★★★B1 修复（2026-10-04）：**扫描产物的相对 require，找出"未被排期产出"的目标**。
+ *
+ * 【为什么需要（真缺陷）】B1 把 `@vue/shared`/`@vue/runtime-core`/`@vue/reactivity` 加入
+ *   vendor 单例后：`vue` 的入口是 **CJS**（`vue.cjs.js` 里 `require('@vue/shared')`）⇒ esbuild
+ *   按 external 输出 `require("./@vue/shared.js")`；而收集侧 BFS 只扫 **ESM import**
+ *   （scanSourceImports 的正则不匹配 CJS require）⇒ 目标从未进 sharedModules ⇒ 文件从未产出
+ *   ⇒ 模拟器 `module '_proteus/@vue/shared.js' is not defined` ⇒ **所有页面挂**
+ *   （构建期零告警——外部化不校验目标是否存在）。
+ *   ★教训：**"收集"与"引用"必须是同一套判据**——收集扫 ESM / 引用按 esbuild 图 ⇒ 静默缺口。
+ *
+ * 【本函数职责（纯函数，供单测）】从产物代码提取相对 require 的目标产物路径
+ *   （normalize 成 `_proteus/<id>` 形态），过滤掉**已排期**的项，返回**缺口列表**（去重、保序）。
+ *   ★消费方（plugin 的 ensureExternalClosure）对缺口反推源名 → `resolveShared` 补进
+ *   sharedModules——Set 的 for-of 迭代会访问迭代中新增的项 ⇒ 链式自动收敛
+ *   （vue→shared、runtime-dom→runtime-core→reactivity→shared）。
+ *
+ * @param code 共享模块产物代码（esbuild CJS 输出）
+ * @param baseRel 该产物的 relNoExt（如 `_proteus/vue`——用于相对路径归一）
+ * @param scheduled 已排期产出的 relNoExt 集合（`sharedRelNoExt.values()`）
+ * @returns 未被排期、且形如 `_proteus/**`（框架单例/框架包/npm 叶子产物）的缺失目标（无扩展名）
+ */
+export function findMissingExternalTargets(code: string, baseRel: string, scheduled: ReadonlySet<string>): string[] {
+  const re = /require\(\s*(["'])((?:\.\.?\/)[^"']+\.js)\1\s*\)/g
+  const out: string[] = []
+  const seen = new Set<string>()
+  for (const m of code.matchAll(re)) {
+    const relTarget = path.posix.normalize(path.posix.join(path.posix.dirname(baseRel), m[2]))
+    const targetNoExt = relTarget.replace(/\.js$/, '')
+    // 只管 `_proteus/` 下的产物（框架单例 / 框架包 / npm 叶子）——业务相对模块由页面侧 own
+    if (!targetNoExt.startsWith('_proteus/')) continue
+    if (scheduled.has(targetNoExt) || seen.has(targetNoExt)) continue
+    seen.add(targetNoExt)
+    out.push(targetNoExt)
+  }
+  return out
+}
 
 export function resolveSharedModule(
   appDir: string,
@@ -1147,6 +1185,45 @@ export default function mpTransform(opts: PluginOptions): Plugin {
       })
       // ★M8：bundle 缓存（输入快照 mtime+size 校验；PROTEUS_NO_CACHE=1 关闭）
       const bundleCacheEnabled = !process.env.PROTEUS_NO_CACHE && !isDebug
+      /* ═══ ★★★B1 修复（2026-10-04，模拟器真机抓出）：**外部引用的闭包补全** ═══
+       *
+       * 【缺陷（静默、整页崩）】`vue` 的入口是 CJS（require('@vue/shared') 等）⇒ esbuild 按
+       *   external 规则输出 `require("./@vue/shared.js")`；而收集侧 BFS 只扫 **ESM import**
+       *   ⇒ 目标从未产出 ⇒ 模拟器 `module '_proteus/@vue/shared.js' is not defined` ⇒ **所有页面挂**。
+       *   ★教训：**"收集"与"引用"必须是同一套判据**（详见 findMissingExternalTargets 头注）。
+       *
+       * 【修法】编译产物后扫**产物自身的相对 require**（对消费方契约扫描）→ 缺口反推源名 →
+       *   `resolveShared` 补进 sharedModules——Set 的 for-of 迭代**会访问迭代中新增的项**
+       *   ⇒ 链式（vue→shared、runtime-dom→runtime-core→reactivity→shared）自动收敛。
+       */
+      const scheduledRel = new Set(sharedRelNoExt.values())
+      const sourceByLeafRel = new Map<string, string>()
+      for (const [src, rel] of npmLeafBySource) sourceByLeafRel.set(rel, src)
+      const ensureExternalClosure = (code: string, baseRel: string, absFrom: string): void => {
+        for (const targetNoExt of findMissingExternalTargets(code, baseRel, scheduledRel)) {
+          let source: string | undefined
+          if (targetNoExt.startsWith('_proteus/npm/')) {
+            source = sourceByLeafRel.get(targetNoExt)
+          } else {
+            const id = targetNoExt.slice('_proteus/'.length)
+            source = VENDOR_SINGLETONS.includes(id) ? id : `@proteus-vue/${id}`
+          }
+          if (!source) continue
+          let resolved = resolveShared(absFrom, source)
+          // 框架包子路径产物（`_proteus/router-scan` → `@proteus-vue/router/scan`）：id 首个横线回退为路径分隔
+          if (!resolved && source.startsWith('@proteus-vue/') && source.includes('-')) {
+            resolved = resolveShared(absFrom, source.replace('-', '/'))
+          }
+          if (!resolved || sharedModules.has(resolved.file)) continue
+          sharedModules.add(resolved.file)
+          sharedRelNoExt.set(resolved.file, resolved.relNoExt)
+          scheduledRel.add(resolved.relNoExt)
+          if (resolved.leaf) sharedLeaf.add(resolved.file)
+          console.log(
+            `[mp-transform] ★external 闭包补全：${source} → ${resolved.relNoExt}.js（CJS 图 BFS 盲区——不补则运行时 require 悬空）`,
+          )
+        }
+      }
       for (const sharedFile of sharedModules) {
         if (skipShared.has(sharedFile)) continue
         const relNoExt = sharedRelNoExt.get(sharedFile) ?? ''
@@ -1230,6 +1307,8 @@ export default function mpTransform(opts: PluginOptions): Plugin {
         }
         this.emitFile({ type: 'asset', fileName: `${relNoExt}.js`, source: code })
         console.log(`[mp-transform] 共享模块 → ${relNoExt}.js（${(code.length / 1024).toFixed(1)}KB，bundle 内联）`)
+        // ★B1 修复：外部引用闭包（产物扫 require——见 ensureExternalClosure 头注；Set 迭代覆盖新增）
+        ensureExternalClosure(code, relNoExt, sharedFile)
       }
       // 回填 requirePath：页面产物（rel.js）→ 共享模块产物相对路径
       for (const [file, list] of moduleImportsByFile) {
@@ -1299,8 +1378,23 @@ export default function mpTransform(opts: PluginOptions): Plugin {
         // ★共享状态模块（有 Global 层才产出）：require 缓存 ⇒ 多页一份状态
         if (globalLayerSnippet) {
           const stateModule = globalLayerSnippet.stateModuleRel
-          this.emitFile({ type: 'asset', fileName: stateModule, source: GLOBAL_LAYER_STATE_CODE })
-          console.log(`[mp-transform] Global 层状态通道 → ${stateModule}（多页实例共享一份状态，require 缓存同实例）`)
+          // ★★★GP7（2026-10-04）：把**真实字段数/初值字节**烘焙进共享模块——
+          //   `stats()` 的"每页一份 × 页面栈"分端估算依赖它（运行时探测不到编译期事实）。
+          const glData = globalLayerSnippet.data
+          const perPageBytes = glData.reduce((n, [, v]) => n + JSON.stringify(v ?? null).length, 0)
+          this.emitFile({
+            type: 'asset',
+            fileName: stateModule,
+            source: globalLayerStateCode({
+              fieldCount: glData.length,
+              perPageBytes,
+              budgetBytes: GLOBAL_LAYER_MEMORY_BUDGET_BYTES,
+            }),
+          })
+          console.log(
+            `[mp-transform] Global 层状态通道 → ${stateModule}（多页实例共享一份状态，require 缓存同实例；` +
+              `★GP7 内存记账：${glData.length} 字段 / 每页初值 ≈${perPageBytes}B / 预算 ${GLOBAL_LAYER_MEMORY_BUDGET_BYTES}B）`,
+          )
         }
       }
 
