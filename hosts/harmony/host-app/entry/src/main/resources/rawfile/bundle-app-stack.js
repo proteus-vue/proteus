@@ -8936,6 +8936,27 @@
           "textAlign": "center",
           "text": "rpx 240 \u2192 120px",
           "semantic": "div"
+        },
+        {
+          "id": 61,
+          "parentId": 0,
+          "width": 30,
+          "height": 24,
+          "margin": {
+            "top": 16,
+            "bottom": 16
+          },
+          "marginAuto": {
+            "right": true,
+            "left": true
+          },
+          "backgroundColor": "#e8f0ff",
+          "borderRadius": 6,
+          "color": "#1a7af8",
+          "fontSize": 12,
+          "textAlign": "center",
+          "text": "calc(20\xD71.5) \u2192 30px",
+          "semantic": "div"
         }
       ]
     },

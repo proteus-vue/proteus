@@ -5,7 +5,7 @@
   "a_exits" : 19999,
   "a_mounts" : 20000,
   "a_pop_ms" : 4,
-  "a_push_ms" : 29,
+  "a_push_ms" : 27,
   "a_root_unmounts" : 19999,
   "a_unmounts" : 0,
   "b_active_nodes" : 960,

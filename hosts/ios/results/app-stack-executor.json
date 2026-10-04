@@ -34,7 +34,7 @@
       "screen.destroy",
       "screen.stats"
     ],
-    "content_node_total" : 122,
+    "content_node_total" : 124,
     "destroy_calls" : 3,
     "live_screens" : 2,
     "mount_calls" : 5,
@@ -207,7 +207,7 @@
         "screen.destroy",
         "screen.stats"
       ],
-      "content_node_total" : 122,
+      "content_node_total" : 124,
       "destroy_calls" : 2,
       "live_screens" : 3,
       "mount_calls" : 5,

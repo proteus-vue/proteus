@@ -281,6 +281,27 @@ describe('★C1 最小切片 · SFC <style> 单类规则 → class→节点样�
     expect((s5 as { lineHeight?: string }).lineHeight, 'line-height rpx ⇒ px token').toBe('20px')
   })
 
+  it('★⑦j calc() 常量折叠（批次 22 · ★设计令牌算术）：var() 已置换 ⇒ 常量求值', () => {
+    // 【为什么（以 web 为基准）】组件库 64 处 calc(var(--x) * N)（间距/字号刻度）；var() 已在前置换。
+    const s1 = parseStaticStyle('width: calc(8px * 0.6)', () => {})
+    expect((s1 as { width?: number }).width, '乘').toBe(4.8)
+    const s2 = parseStaticStyle('padding: calc(4px + 2px)', () => {})
+    expect((s2 as { padding?: Record<string, number> }).padding, '加（简写不切碎）').toEqual({ top: 6, right: 6, bottom: 6, left: 6 })
+    const s3 = parseStaticStyle('font-size: calc(16px * 1.15)', () => {})
+    expect((s3 as { fontSize?: number }).fontSize, '字号刻度').toBe(18.4)
+    const s4 = parseStaticStyle('gap: calc(10px / 2)', () => {})
+    expect((s4 as { gap?: number }).gap, '除').toBe(5)
+    const s5 = parseStaticStyle('margin: calc((4px + 2px) * 2)', () => {})
+    expect((s5 as { margin?: Record<string, number> }).margin, '括号').toEqual({ top: 12, right: 12, bottom: 12, left: 12 })
+    // 含 % / 相对单位 ⇒ 无上下文不可求值 ⇒ 诊断（不猜）
+    const d: string[] = []
+    parseStaticStyle('width: calc(100% - 20px)', (m: string) => d.push(m))
+    expect(d.length > 0, '% 含入 ⇒ 诊断').toBe(true)
+    const d2: string[] = []
+    parseStaticStyle('font-size: calc(0.4em + 10px)', (m: string) => d2.push(m))
+    expect(d2.length > 0, 'em 含入 ⇒ 诊断').toBe(true)
+  })
+
   it('★⑧ 元素/类型选择器 + @keyframes 跳过（C1 收尾）', () => {
     // 【真项目形态】examples 有 9 处元素选择器（h3/code…）+ 6 处 @keyframes 关键帧被误当选择器
     const sfc = `<template>

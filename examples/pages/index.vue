@@ -104,6 +104,9 @@ function go(name: 'forms' | 'config-demo' | 'user') {
 
     <!-- ★rpx 演示（批次 21）：240rpx = 120px（小程序 750 设计单位，跨端一致） -->
     <div class="rpx-demo">rpx 240 → 120px</div>
+
+    <!-- ★calc 常量折叠演示（批次 22）：calc(20px * 1.5) = 30px 间距（设计令牌算术） -->
+    <div class="calc-demo">calc(20×1.5) → 30px</div>
   </div>
 </template>
 
@@ -238,6 +241,17 @@ function go(name: 'forms' | 'config-demo' | 'user') {
   border-radius: 8rpx;
   color: #666;
   font-size: 24rpx;
+  text-align: center;
+}
+/* ★calc 常量折叠演示（批次 22）——calc(20px * 1.5)=30px / calc(4px + 20px)=24px */
+.calc-demo {
+  width: calc(20px * 1.5);
+  height: calc(4px + 20px);
+  margin: 16px auto;
+  background-color: #e8f0ff;
+  border-radius: calc(3px * 2);
+  color: #1a7af8;
+  font-size: 12px;
   text-align: center;
 }
 </style>
