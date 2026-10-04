@@ -70,7 +70,7 @@ describe.skipIf(!ENABLED)('超级应用验收 · 首模块：全局挂载八条�
     }
     const pageData = async (): Promise<{ route: string; data: Record<string, unknown> }> =>
       JSON.parse(String(await driver.evaluate(readPageData))) as { route: string; data: Record<string, unknown> }
-    const probe = async (fn: string): Promise<{ has: boolean; width: number; height: number }> =>
+    const probe = async (fn: () => string): Promise<{ has: boolean; width: number; height: number }> =>
       JSON.parse(String(await driver.evaluate(fn))) as { has: boolean; width: number; height: number }
     const go = async (url: string, want: string): Promise<Record<string, unknown>> => {
       // ★首次进入时模拟器可能尚未打开本项目 ⇒ 先 reLaunch（带重试），再读 pageData

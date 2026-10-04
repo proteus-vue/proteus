@@ -355,3 +355,26 @@ describe('★批次 3 · font-weight（关键字 + 数值归一）+ 继承', () 
     expect((n!.style as { fontWeight?: number }).fontWeight).toBe(700)
   })
 })
+
+// ★★★批次 4（CSS 兼容对齐 · 文本对齐）：text-align（真项目 28 处，22 center）——2026-10-04
+describe('★批次 4 · text-align（封闭集 + 端到端）', () => {
+  it('① 封闭集：left/center/right 折进；justify ⇒ 诊断跳过', () => {
+    expect(parseStaticStyle('text-align: center', () => {}).textAlign).toBe('center')
+    expect(parseStaticStyle('text-align: right', () => {}).textAlign).toBe('right')
+    expect(parseStaticStyle('text-align: left', () => {}).textAlign).toBe('left')
+    const d: string[] = []
+    expect(parseStaticStyle('text-align: justify', (m) => d.push(m)).textAlign).toBeUndefined()
+    expect(d.some((m) => m.includes('text-align'))).toBe(true)
+  })
+
+  it('② 端到端：text-align 经 <style> class 折进节点 style', () => {
+    const sfc = `<template><view class="t">x</view></template>
+<script setup>const z = 1</script>
+<style>
+.t { text-align: center }
+</style>`
+    const r = buildLayoutTemplate(sfc, 'pages/t.vue')
+    const n = r.template.nodes.find((x) => (x.style as { textAlign?: string }).textAlign)
+    expect((n!.style as { textAlign?: string }).textAlign).toBe('center')
+  })
+})

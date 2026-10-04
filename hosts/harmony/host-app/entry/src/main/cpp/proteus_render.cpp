@@ -225,6 +225,8 @@ struct TextDrawSpec {
     int fontWeight = 400;
     /** 节点声明宽（vp）——用于**单位标定**：canvas 若是物理 px，字号需按比例换算（见回调注释） */
     double widthVp = 0.0;
+    /** ★批次 4（CSS 兼容对齐）：文本水平对齐（`text-align`；left/center/right）。映射到 OH_Drawing_TextAlign。 */
+    std::string textAlign = "left";
     /* ── ★★四通道（2026-10-03）——在 content modifier 的 canvas 上画（RenderNode 无这些属性 API）── */
     double w = 0, h = 0, radius = 0;          // 物理 px（与 canvas 同坐标系）
     bool hasGrad = false;
@@ -350,6 +352,10 @@ static void drawChannelsAndText(OH_Drawing_Canvas* canvas, const TextDrawSpec* s
         if (fc != nullptr) {
             OH_Drawing_TypographyStyle* ts = OH_Drawing_CreateTypographyStyle();
             OH_Drawing_TextStyle* tstyle = OH_Drawing_CreateTextStyle();
+            // ★批次 4：文本水平对齐（typography align 设在 TypographyStyle 上；枚举 LEFT=0/RIGHT=1/CENTER=2）
+            if (spec->textAlign == "center") OH_Drawing_SetTypographyTextAlign(ts, 2);
+            else if (spec->textAlign == "right") OH_Drawing_SetTypographyTextAlign(ts, 1);
+            else OH_Drawing_SetTypographyTextAlign(ts, 0);
             OH_Drawing_SetTextStyleColor(tstyle, spec->color);
             OH_Drawing_SetTextStyleFontSize(tstyle, spec->fontSizePx);
             // ★批次 3：字重（`OH_Drawing_FontWeight` = FONT_WEIGHT_100..900 ⇒ 索引 (w/100)-1，钳 [0,8]）
@@ -589,12 +595,16 @@ static int renderCommandsImpl(const char* jsonCStr, bool fromProbe) {
         // ★批次 3：字重（`font-weight` 折叠值；缺省 400）
         double fw = 400;
         jsonNumber(it, "fontWeight", &fw);
+        // ★批次 4：文本水平对齐（text-align；缺省 left）
+        std::string taStr;
+        jsonString(it, "textAlign", &taStr);
         // ★★★绘制四通道解析 + 登记（2026-10-03）：指令里带 grad/glow/clip/stroke ⇒
         //   ① 填进 spec（回调据此在画布上真画）；② 登记进 `g_channelStates`（探针回读；
         //   **建什么记什么**——与 Android 读自家 spec 表同性质，不是复述模板声明）。
         {
             bool hasAnyChannel = false;
             auto* spec = new TextDrawSpec{textVal, fs, static_cast<uint32_t>(tc), "", static_cast<int>(fw), w};
+            if (!taStr.empty()) spec->textAlign = taStr;
             spec->w = w;
             spec->h = h;
             spec->radius = radius;

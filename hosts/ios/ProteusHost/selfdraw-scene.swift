@@ -629,7 +629,7 @@ final class SelfDrawView: UIView {
             tl.foregroundColor = textCg
             // ★记文字色快照（复位目标；见 `layerOriginalTextColor` 注释）
             layerOriginalTextColor[nodeId] = textCg
-            tl.alignmentMode = .left
+            tl.alignmentMode = alignmentMode(style["textAlign"] as? String)
             tl.truncationMode = .end
             // ★contentsScale 必须显式设置：否则 Retina 上文本模糊（CATextLayer 不继承自动缩放）
             tl.contentsScale = UIScreen.main.scale
@@ -2828,10 +2828,20 @@ final class SelfDrawView: UIView {
         return (makeLayer(style: style, nodeId: nodeId), false)
     }
 
+    /// ★批次 4（CSS 兼容对齐）：`text-align` → `CATextLayer.alignmentMode`（left/center/right；缺省 left）。
+    ///   iOS 对齐常量 `.left`/`.center`/`.right`（非自然语言语义）。
+    private func alignmentMode(_ v: String?) -> CATextLayerAlignmentMode {
+        switch v {
+        case "center": return .center
+        case "right": return .right
+        default: return .left
+        }
+    }
+
     /// 把节点规格里的绘制字段取出来（与全量路径同款；单一实现避免分叉）
     static func styleOf(_ n: [String: Any]) -> [String: Any] {
         var style: [String: Any] = [:]
-        for k in ["backgroundColor", "color", "text", "fontFamily"] {
+        for k in ["backgroundColor", "color", "text", "fontFamily", "textAlign"] {
             if let v = n[k] as? String { style[k] = v }
         }
         // ★★I3：绘制提示必须**透传**——本函数是 `acquireLayer`/`buildLayers` 的必经之路，
@@ -2907,7 +2917,7 @@ final class SelfDrawView: UIView {
                 tl.fontSize = fs
                 tl.foregroundColor = (style["color"] as? String).flatMap(parseHexColor)?.cgColor
                     ?? UIColor.white.cgColor
-                tl.alignmentMode = .left
+                tl.alignmentMode = alignmentMode(style["textAlign"] as? String)
                 tl.truncationMode = .end
                 tl.isWrapped = false
                 tl.contentsScale = UIScreen.main.scale

@@ -64,6 +64,11 @@ public class ProteusHostView extends ViewGroup {
          */
         final int fontWeight;
         /**
+         * ★批次 4（CSS 兼容对齐）：文本**水平对齐**（`text-align`）。0=left（缺省，零行为变化）/ 1=center / 2=right。
+         *   映射到 `Paint.Align`（LEFT/CENTER/RIGHT）+ 绘制 x 按对齐换算（见 drawCmds）。
+         */
+        final int textAlign;
+        /**
          * ★★圆角半径（px；0 = 直角）——纯绘制属性（内核不收，只影响观感）。
          *
          * 【为什么加（2026-10-01 · 灯光秀）】灯光秀的 800 颗灯珠用 4px 圆角（圆点观感）；
@@ -106,10 +111,10 @@ public class ProteusHostView extends ViewGroup {
         }
         Cmd(float x, float y, float w, float h, int color, String text, float fontSize, int textColor, float radius,
             GradSpec gradient, float[] glow, float[] mask) {
-            this(x, y, w, h, color, text, fontSize, textColor, radius, gradient, glow, mask, 400);
+            this(x, y, w, h, color, text, fontSize, textColor, radius, gradient, glow, mask, 400, 0);
         }
         Cmd(float x, float y, float w, float h, int color, String text, float fontSize, int textColor, float radius,
-            GradSpec gradient, float[] glow, float[] mask, int fontWeight) {
+            GradSpec gradient, float[] glow, float[] mask, int fontWeight, int textAlign) {
             this.x = x; this.y = y; this.w = w; this.h = h; this.color = color; this.text = text;
             this.fontSize = fontSize;
             this.textColor = textColor;
@@ -118,6 +123,7 @@ public class ProteusHostView extends ViewGroup {
             this.glow = glow;
             this.mask = mask;
             this.fontWeight = fontWeight;
+            this.textAlign = textAlign;
         }
     }
 
@@ -2081,6 +2087,7 @@ public class ProteusHostView extends ViewGroup {
         // ★字号只在**变化时**设置（同字号连排时零开销；见 Cmd.fontSize 注释）
         float lastSize = textPaint.getTextSize();
         int lastWeight = -1;   // ★批次 3：字重变化才重建 typeface（-1 = 首次必设，与默认 paint 对齐）
+        int lastAlign = -1;    // ★批次 4：文本对齐变化才设 Paint.Align
         final java.util.Set<Integer> skip = skipCmdIndices;   // ★被载体提升的指令：跳过（否则重影）
         final int[] ids = cmdNodeIds;
         for (int i = 0; i < list.size(); i++) {
@@ -2356,6 +2363,12 @@ public class ProteusHostView extends ViewGroup {
                     textPaint.setTypeface(ProteusHostView.typefaceOf(null, c.fontWeight, null));
                     lastWeight = c.fontWeight;
                 }
+                // ★批次 4：文本水平对齐（仅在变化时设 Align——同对齐连排零开销）
+                if (c.textAlign != lastAlign) {
+                    textPaint.setTextAlign(c.textAlign == 1 ? Paint.Align.CENTER
+                            : c.textAlign == 2 ? Paint.Align.RIGHT : Paint.Align.LEFT);
+                    lastAlign = c.textAlign;
+                }
                 // ★★文字色覆盖（2026-10-01）：动画值优先，其次静态 `Cmd.textColor`
                 //   （两者都无 ⇒ 保持 paint 现值——既有场景不受影响，零额外开销）。
                 //   ★alpha 口径（与底色路径同一条）：把**色自身 alpha × opacity** 落进 paint——
@@ -2368,7 +2381,10 @@ public class ProteusHostView extends ViewGroup {
                 final int alphaBase = (animTc != null || c.textColor != 0)
                         ? Color.alpha(animTc != null ? animTc : c.textColor) : 255;
                 textPaint.setAlpha(op < 1f ? Math.max(0, Math.min(255, (int) (alphaBase * op))) : alphaBase);
-                canvas.drawText(c.text, c.x + 1f, c.y + c.h * 0.8f, textPaint);
+                // ★批次 4：绘制 x 按对齐换算（LEFT:CENTER:RIGHT 的 x 语义不同——见 Paint.Align）
+                final float tx = c.textAlign == 1 ? c.x + c.w * 0.5f
+                        : c.textAlign == 2 ? c.x + c.w - 1f : c.x + 1f;
+                canvas.drawText(c.text, tx, c.y + c.h * 0.8f, textPaint);
             }
             // ★★软边遮罩合成（mask v1）：**在全部内容（含文字/描边/发光）之后**用
             //   `渐变 shader + DST_IN` 把本层按揭示色标"擦"出来——

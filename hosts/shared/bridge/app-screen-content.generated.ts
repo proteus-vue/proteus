@@ -466,6 +466,7 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
           "bottom": 24,
           "left": 24
         },
+        "textAlign": "center",
         "semantic": "div"
       },
       {
@@ -510,6 +511,7 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
           "bottom": 24,
           "left": 24
         },
+        "textAlign": "center",
         "semantic": "div"
       },
       {
@@ -702,6 +704,7 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
         "margin": {
           "top": 20
         },
+        "textAlign": "left",
         "backgroundColor": "#f5f6f7",
         "padding": {
           "top": 12,
@@ -2261,6 +2264,7 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
           "bottom": 16,
           "left": 16
         },
+        "textAlign": "center",
         "minHeight": 64,
         "boxSizing": "border-box",
         "semantic": "div"
@@ -2501,6 +2505,7 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
           "bottom": 12,
           "left": 12
         },
+        "textAlign": "center",
         "margin": {
           "bottom": 8
         },
@@ -2518,6 +2523,7 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
           "bottom": 12,
           "left": 12
         },
+        "textAlign": "center",
         "margin": {
           "bottom": 8
         },
@@ -2535,6 +2541,7 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
           "bottom": 12,
           "left": 12
         },
+        "textAlign": "center",
         "margin": {
           "bottom": 8
         },
@@ -2552,6 +2559,7 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
           "bottom": 12,
           "left": 12
         },
+        "textAlign": "center",
         "margin": {
           "bottom": 8
         },
@@ -2578,6 +2586,7 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
           "bottom": 10,
           "left": 10
         },
+        "textAlign": "center",
         "fontSize": 12,
         "semantic": "div"
       },
@@ -3233,6 +3242,7 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
           "bottom": 16,
           "left": 16
         },
+        "textAlign": "center",
         "backgroundColor": "#fafafa",
         "margin": {
           "bottom": 8
@@ -4359,6 +4369,7 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
         "id": 11,
         "parentId": 9,
         "minWidth": 32,
+        "textAlign": "center",
         "semantic": "span"
       },
       {
@@ -4397,6 +4408,7 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
       {
         "id": 0,
         "parentId": null,
+        "textAlign": "center",
         "padding": {
           "top": 48,
           "right": 0,
@@ -4862,6 +4874,7 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
           "left": 16
         },
         "borderRadius": 8,
+        "textAlign": "center",
         "semantic": "div"
       },
       {
@@ -4938,6 +4951,7 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
       {
         "id": 0,
         "parentId": null,
+        "textAlign": "center",
         "padding": {
           "top": 48,
           "right": 0,
@@ -4970,6 +4984,7 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
           "bottom": 24,
           "left": 24
         },
+        "textAlign": "left",
         "semantic": "view"
       },
       {
@@ -5833,6 +5848,7 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
           "bottom": 24,
           "left": 24
         },
+        "textAlign": "center",
         "semantic": "div"
       },
       {
@@ -5934,6 +5950,7 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
           "bottom": 24,
           "left": 24
         },
+        "textAlign": "left",
         "semantic": "view"
       },
       {
@@ -7686,6 +7703,7 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
           "bottom": 24,
           "left": 24
         },
+        "textAlign": "center",
         "semantic": "div"
       },
       {
@@ -7745,6 +7763,7 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
           "bottom": 16,
           "left": 16
         },
+        "textAlign": "left",
         "semantic": "div"
       },
       {
@@ -9896,6 +9915,7 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
           "bottom": 24,
           "left": 24
         },
+        "textAlign": "center",
         "semantic": "div"
       },
       {
@@ -9929,6 +9949,7 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
           "bottom": 12,
           "left": 0
         },
+        "textAlign": "left",
         "semantic": "div"
       },
       {
@@ -10018,6 +10039,7 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
         "fontSize": 11,
         "color": "#7dd3fc",
         "opacity": 0.8,
+        "textAlign": "center",
         "text": "渐变 · 滤镜辉光 · 进度环 · 轨道粒子 · 脉冲 · 交互",
         "semantic": "text"
       },
@@ -10237,6 +10259,7 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
         "parentId": 0,
         "fontSize": 12,
         "color": "#fca5a5",
+        "textAlign": "center",
         "semantic": "text"
       },
       {
@@ -10244,6 +10267,7 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
         "parentId": 0,
         "fontSize": 12,
         "color": "#fca5a5",
+        "textAlign": "center",
         "semantic": "text"
       },
       {
@@ -10251,6 +10275,7 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
         "parentId": 0,
         "fontSize": 12,
         "color": "#fca5a5",
+        "textAlign": "center",
         "semantic": "text"
       },
       {
@@ -10258,6 +10283,7 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
         "parentId": 0,
         "fontSize": 12,
         "color": "#fca5a5",
+        "textAlign": "center",
         "semantic": "text"
       },
       {
@@ -10265,6 +10291,7 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
         "parentId": 0,
         "fontSize": 12,
         "color": "#fca5a5",
+        "textAlign": "center",
         "semantic": "text"
       },
       {
@@ -10628,6 +10655,7 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
         "margin": {
           "top": 16
         },
+        "textAlign": "center",
         "text": "点击核心有反馈 · 8 项能力同时运行",
         "semantic": "text"
       }
@@ -10672,6 +10700,7 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
         "fontSize": 12,
         "color": "#7dd3fc",
         "opacity": 0.85,
+        "textAlign": "center",
         "text": "嵌套变换复合 · 层级运动学 · 可交互",
         "semantic": "text"
       },
@@ -11723,6 +11752,7 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
         "parentId": 0,
         "fontSize": 12,
         "color": "#fca5a5",
+        "textAlign": "center",
         "semantic": "text"
       },
       {
@@ -11730,6 +11760,7 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
         "parentId": 0,
         "fontSize": 12,
         "color": "#fca5a5",
+        "textAlign": "center",
         "semantic": "text"
       },
       {
@@ -11737,6 +11768,7 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
         "parentId": 0,
         "fontSize": 12,
         "color": "#fca5a5",
+        "textAlign": "center",
         "semantic": "text"
       },
       {
@@ -11744,6 +11776,7 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
         "parentId": 0,
         "fontSize": 12,
         "color": "#fca5a5",
+        "textAlign": "center",
         "semantic": "text"
       },
       {
@@ -11880,6 +11913,7 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
         "margin": {
           "top": 16
         },
+        "textAlign": "center",
         "text": "父级变换 × 子级变换 沿链累乘 · 切动作 / 变速 / 点机甲",
         "semantic": "text"
       }
@@ -11890,6 +11924,7 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
       {
         "id": 0,
         "parentId": null,
+        "textAlign": "center",
         "padding": {
           "top": 24,
           "right": 0,
@@ -11987,6 +12022,7 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
       {
         "id": 0,
         "parentId": null,
+        "textAlign": "center",
         "padding": {
           "top": 24,
           "right": 0,
@@ -12014,6 +12050,7 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
           "bottom": 24,
           "left": 24
         },
+        "textAlign": "center",
         "semantic": "div"
       },
       {
@@ -12632,6 +12669,7 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
       {
         "id": 0,
         "parentId": null,
+        "textAlign": "center",
         "padding": {
           "top": 24,
           "right": 0,
@@ -13644,6 +13682,7 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
         "parentId": 0,
         "fontSize": 11,
         "color": "#666",
+        "textAlign": "center",
         "text": "A/B/C 应持续动；D 应静止（SVG 内部动画不播放）",
         "semantic": "text"
       }

@@ -197,14 +197,24 @@
         "why": "★批次 3（2026-10-04）：`normal`→400 / `bold`→700 / 100–900 数值归一；作为**文本可继承**字段沿树继承。三端宿主：iOS 已读 `fontWeight`（≥600 bold 判据）、Android 新接线（Cmd.fontWeight + 绘制/度量同源 typeface）、鸿蒙新接线（OH_Drawing_SetTextStyleFontWeight）"
       },
       {
-        "css": "line-height / letter-spacing / text-align / white-space",
+        "css": "text-align",
+        "id": "text-align",
+        "ends": {
+          "web": "not-measured",
+          "skyline": "supported",
+          "app": "supported"
+        },
+        "why": "★批次 4（2026-10-04）：封闭集 left/center/right（justify/st 等诊断跳过）。宿主：iOS CATextLayer.alignmentMode · Android Paint.Align（绘制 x 按对齐换算）· 鸿蒙 OH_Drawing_SetTypographyTextAlign。真项目 28 处（22 center）"
+      },
+      {
+        "css": "line-height / letter-spacing / white-space",
         "id": "text-attrs",
         "ends": {
           "web": "supported",
           "skyline": "supported",
           "app": "absent"
         },
-        "why": "文本度量与排版走平台文本引擎（不自研）；当前 App 折叠面文本维 = fontSize/color/fontWeight（需扩引擎/宿主文本通道，属后续）"
+        "why": "文本度量与排版走平台文本引擎（不自研）；当前 App 折叠面文本维 = fontSize/color/fontWeight/textAlign（line-height/letter-spacing 需扩引擎/宿主文本通道，属后续）"
       },
       {
         "css": "visibility",
@@ -392,6 +402,7 @@
       "color",
       "fontSize",
       "fontWeight",
+      "textAlign",
       "borderRadius",
       "borderColor",
       "borderWidth",
@@ -1085,8 +1096,23 @@
       "supportTier": "conditional"
     },
     {
+      "id": "text-align",
+      "css": "text-align",
+      "category": "text",
+      "compilerFields": [
+        "textAlign"
+      ],
+      "web": "not-measured",
+      "skyline": "supported",
+      "app": "supported",
+      "tier": "L1",
+      "strategy": "编译期折叠",
+      "note": "★批次 4（2026-10-04）：封闭集 left/center/right（justify/st 等诊断跳过）。宿主：iOS CATextLayer.alignmentMode · Android Paint.Align（绘制 x 按对齐换算）· 鸿蒙 OH_Drawing_SetTypographyTextAlign。真项目 28 处（22 center）",
+      "supportTier": "conditional"
+    },
+    {
       "id": "text-attrs",
-      "css": "line-height / letter-spacing / text-align / white-space",
+      "css": "line-height / letter-spacing / white-space",
       "category": "text",
       "compilerFields": [],
       "web": "supported",
@@ -1094,7 +1120,7 @@
       "app": "absent",
       "tier": "L4",
       "strategy": "降级",
-      "note": "文本度量与排版走平台文本引擎（不自研）；当前 App 折叠面文本维 = fontSize/color/fontWeight（需扩引擎/宿主文本通道，属后续）",
+      "note": "文本度量与排版走平台文本引擎（不自研）；当前 App 折叠面文本维 = fontSize/color/fontWeight/textAlign（line-height/letter-spacing 需扩引擎/宿主文本通道，属后续）",
       "supportTier": "conditional"
     },
     {
