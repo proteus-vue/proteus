@@ -93,7 +93,7 @@ export const APP_TEXT_OVERFLOW_VALUES = ['clip', 'ellipsis'] as const
 /** 四边简写字段（`margin`/`padding` → 结构化 `{top,right,bottom,left}`） */
 export const APP_EDGE_FIELDS = ['margin', 'padding'] as const
 /** 百分比宽高折叠出的**比例字段**（App 端原生支持 `widthRatio`/`heightRatio`；非长度、不乘密度） */
-export const APP_DERIVED_FIELDS = ['widthRatio', 'heightRatio', 'marginAuto', 'borderRadiusPct', 'minWidthPct', 'maxWidthPct', 'minHeightPct', 'maxHeightPct'] as const
+export const APP_DERIVED_FIELDS = ['widthRatio', 'heightRatio', 'marginAuto', 'borderRadiusCorners', 'borderRadiusPct', 'minWidthPct', 'maxWidthPct', 'minHeightPct', 'maxHeightPct'] as const
 /** 特殊透传键（App 两内核恒 border-box ⇒ `box-sizing` 只作忠实记录、无副作用） */
 export const APP_SPECIAL_FIELDS = ['boxSizing'] as const
 
@@ -742,12 +742,37 @@ export function parseStaticStyle(
         //   = 内切圆/椭圆——头像/圆点刚需）。百分比折为 `borderRadiusPct`（0..1），宿主按盒尺寸算半径
         //   （`pct × min(w,h)`：正方盒 = 精确圆、与 Web 一致；非正方盒为统一圆角，Web 为椭圆——如实边界）。
         //   多值（逐角简写）未支持 ⇒ 诊断（不猜）。
-        const pct = /^(\d+(?:\.\d+)?)%$/.exec(rawVal.trim())
-        if (pct) { out.borderRadiusPct = Number(pct[1]) / 100; markImportant('borderRadiusPct'); continue }
-        const num = numOf(rawVal)
-        if (num === undefined) { pushDiag(`style 里 \`${rawKey}: ${rawVal}\` 不是纯数值（支持 px/数字/百分比）——已跳过`); continue }
-        out.borderRadius = num
-        markImportant('borderRadius')
+        const toks = splitTopLevelSpaces(rawVal)
+        // ★批次 34（对齐 Web）：1 值 = 统一；2–4 值 = 逐角（CSS 展开 [tl,tr,br,bl]）。
+        if (toks.length === 1) {
+          const pct = /^(\d+(?:\.\d+)?)%$/.exec(toks[0]!)
+          if (pct) { out.borderRadiusPct = Number(pct[1]) / 100; markImportant('borderRadiusPct'); continue }
+          const num = numOf(toks[0]!)
+          if (num === undefined) { pushDiag(`style 里 \`${rawKey}: ${rawVal}\` 未解析（支持 1–4 个 px/数字；百分比仅单值）——已跳过`); continue }
+          out.borderRadius = num; markImportant('borderRadius'); continue
+        }
+        if (toks.length >= 2 && toks.length <= 4) {
+          const v = toks.length === 2 ? [toks[0]!, toks[1]!, toks[0]!, toks[1]!]
+            : toks.length === 3 ? [toks[0]!, toks[1]!, toks[2]!, toks[1]!] : toks
+          const nums = v.map((t) => numOf(t))
+          if (nums.every((n) => n !== undefined)) {
+            const vals = nums as number[]
+            const nz = vals.filter((n) => n > 0)
+            if (nz.length === 0) continue   // 全 0 = 无圆角
+            // 统一半径（全部相等）⇒ 只用 borderRadius
+            if (vals.every((n) => n === vals[0])) { out.borderRadius = vals[0]!; markImportant('borderRadius'); continue }
+            // 部分角圆 + 非零半径一致 ⇒ borderRadius + 逐角掩码（覆盖真实用法 `12px 12px 0 0`）
+            if (nz.every((n) => n === nz[0])) {
+              out.borderRadius = nz[0]!
+              out.borderRadiusCorners = { topLeft: vals[0]! > 0, topRight: vals[1]! > 0, bottomRight: vals[2]! > 0, bottomLeft: vals[3]! > 0 }
+              markImportant('borderRadius'); markImportant('borderRadiusCorners')
+              continue
+            }
+            pushDiag(`border-radius 逐角半径**不一致**（${rawVal}）——已跳过（仅支持统一圆角半径，可只圆部分角如 12px 12px 0 0）`)
+            continue
+          }
+        }
+        pushDiag(`style 里 \`${rawKey}: ${rawVal}\` 未解析（支持 1–4 个 px/数字；百分比仅单值）——已跳过`)
         continue
       }
       if (key === 'boxShadow') {

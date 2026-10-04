@@ -1,9 +1,9 @@
 {
   "ok": true,
   "page": "index",
-  "content_nodes": 75,
+  "content_nodes": 76,
   "cmds_live": -1,
-  "painted_samples": 642,
+  "painted_samples": 710,
   "png": "app-screen-composite.png",
   "hit_points_hit": 20,
   "hit_first_target": 0,

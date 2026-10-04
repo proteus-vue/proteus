@@ -573,6 +573,7 @@ static int renderCommandsImpl(const char* jsonCStr, bool fromProbe) {
     int32_t textCount = 0;
     for (const auto& it : items) {
         double x = 0, y = 0, w = 0, h = 0, color = 0, radius = 0, nodeId = -1;
+        int radiusMask = 0;   // ★批次 34：逐角圆角掩码（0/15=统一 ALL）
         jsonNumber(it, "id", &nodeId);   // ★指令带 id（2026-10-03）：通道真源按 id 登记
         if (!jsonNumber(it, "x", &x) || !jsonNumber(it, "w", &w)) {
             OH_LOG_Print(LOG_APP, LOG_ERROR, LOG_DOMAIN, LOG_TAG,
@@ -583,6 +584,7 @@ static int renderCommandsImpl(const char* jsonCStr, bool fromProbe) {
         jsonNumber(it, "h", &h);
         jsonNumber(it, "color", &color);
         jsonNumber(it, "radius", &radius);
+        { double rcm = 0; if (jsonNumber(it, "radiusCorners", &rcm)) radiusMask = (int)rcm; }
         // ★批次 5（CSS 兼容对齐 · 边框）：uniform 边框宽度/颜色
         double borderWidth = 0, borderColor = 0;
         jsonNumber(it, "borderWidth", &borderWidth);
@@ -613,8 +615,17 @@ static int renderCommandsImpl(const char* jsonCStr, bool fromProbe) {
         if (radius > 0) {
             ArkUI_NodeBorderRadiusOption* br = OH_ArkUI_RenderNodeUtils_CreateNodeBorderRadiusOption();
             if (br != nullptr) {
-                OH_ArkUI_RenderNodeUtils_SetNodeBorderRadiusOptionCornerRadius(
-                    br, static_cast<uint32_t>(radius), ARKUI_CORNER_DIRECTION_ALL);
+                // ★批次 34：逐角（bit0=TL/1=TR/2=BR/3=BL）；0/15 ⇒ 统一 ALL
+                if (radiusMask > 0 && radiusMask != 15) {
+                    const uint32_t rr = static_cast<uint32_t>(radius);
+                    if (radiusMask & 1) OH_ArkUI_RenderNodeUtils_SetNodeBorderRadiusOptionCornerRadius(br, rr, ARKUI_CORNER_DIRECTION_TOP_LEFT);
+                    if (radiusMask & 2) OH_ArkUI_RenderNodeUtils_SetNodeBorderRadiusOptionCornerRadius(br, rr, ARKUI_CORNER_DIRECTION_TOP_RIGHT);
+                    if (radiusMask & 4) OH_ArkUI_RenderNodeUtils_SetNodeBorderRadiusOptionCornerRadius(br, rr, ARKUI_CORNER_DIRECTION_BOTTOM_RIGHT);
+                    if (radiusMask & 8) OH_ArkUI_RenderNodeUtils_SetNodeBorderRadiusOptionCornerRadius(br, rr, ARKUI_CORNER_DIRECTION_BOTTOM_LEFT);
+                } else {
+                    OH_ArkUI_RenderNodeUtils_SetNodeBorderRadiusOptionCornerRadius(
+                        br, static_cast<uint32_t>(radius), ARKUI_CORNER_DIRECTION_ALL);
+                }
                 OH_ArkUI_RenderNodeUtils_SetBorderRadius(node, br);
                 OH_ArkUI_RenderNodeUtils_DisposeNodeBorderRadiusOption(br);
             }

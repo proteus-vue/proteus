@@ -118,7 +118,7 @@
     "anim_hook_missing": 0,
     "rect_calls": 2,
     "shared_calls": 1,
-    "content_node_total": 150,
+    "content_node_total": 152,
     "live_screens": 2,
     "calls": [
       "screen.mount",
@@ -191,7 +191,7 @@
       "anim_hook_missing": 0,
       "rect_calls": 1,
       "shared_calls": 0,
-      "content_node_total": 150,
+      "content_node_total": 152,
       "live_screens": 3,
       "calls": [
         "screen.mount",
