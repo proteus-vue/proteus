@@ -90,6 +90,9 @@ pub(crate) struct NodeDto {
     pub(crate) min_height_pct: Option<f32>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub(crate) max_height_pct: Option<f32>,
+    /// ★批次 24：宽高比（`aspect-ratio`；见 LStyle）。
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub(crate) aspect_ratio: Option<f32>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub(crate) margin: Option<EdgesDto>,
     /// ★批次 17：逐边 auto 外距（见 MarginAutoDto）。与 `margin` 平行——auto 为真 ⇒ 忽略该边数值。
@@ -265,6 +268,7 @@ impl NodeDto {
             max_width_pct: None,
             min_height_pct: None,
             max_height_pct: None,
+            aspect_ratio: None,
             margin: None,
             margin_auto: None,
             padding: None,
@@ -674,6 +678,8 @@ pub(crate) fn style_from_dto(dto: &NodeDto) -> Result<LStyle, String> {
     style.max_width_pct = dto.max_width_pct;
     style.min_height_pct = dto.min_height_pct;
     style.max_height_pct = dto.max_height_pct;
+    // ★批次 24：宽高比
+    style.aspect_ratio = dto.aspect_ratio;
     if let Some(m) = dto.margin {
         style.margin = m.into();
     }
@@ -1779,6 +1785,7 @@ pub(crate) struct PatchStyle {
     max_width_pct: Option<f32>,
     min_height_pct: Option<f32>,
     max_height_pct: Option<f32>,
+    aspect_ratio: Option<f32>,
     padding: Option<EdgesDto>,
     #[serde(default)]
     text: Option<String>,
@@ -1812,6 +1819,7 @@ impl StylePatch {
         if s.max_width_pct.is_some() { node.style.max_width_pct = s.max_width_pct; }
         if s.min_height_pct.is_some() { node.style.min_height_pct = s.min_height_pct; }
         if s.max_height_pct.is_some() { node.style.max_height_pct = s.max_height_pct; }
+        if s.aspect_ratio.is_some() { node.style.aspect_ratio = s.aspect_ratio; }
         if let Some(p) = &s.padding {
             node.style.padding = Edges { top: p.top, right: p.right, bottom: p.bottom, left: p.left };
         }

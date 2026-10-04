@@ -220,6 +220,7 @@ impl TaffyEngine {
         };
         // ★max 未指定**必须**是 `auto`（= 无上限）——与 min 相反：清零会让所有节点被压成 0。
         //   ⇒ max 用各自独立的映射（`None → auto()`），**不可**复用上面的 `opt_lpa`。
+        out.aspect_ratio = style.aspect_ratio; // ★批次 24（CSS 兼容对齐）：宽高比（taffy 原生）
         out.max_size = taffy::Size {
             width: ltp(style.max_width, style.max_width_pct, auto()),
             height: ltp(style.max_height, style.max_height_pct, auto()),

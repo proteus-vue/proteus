@@ -110,6 +110,9 @@ function go(name: 'forms' | 'config-demo' | 'user') {
 
     <!-- ★color-mix 常量折叠演示（批次 23）：品牌色 20% + 透明 = 淡色底（令牌着色） -->
     <div class="mix-demo">color-mix 20% 品牌色</div>
+
+    <!-- ★aspect-ratio 演示（批次 24）：宽 160 + aspect-ratio 16/9 ⇒ 高 90（媒体卡） -->
+    <div class="ar-demo">aspect-ratio 16/9</div>
   </div>
 </template>
 
@@ -266,6 +269,17 @@ function go(name: 'forms' | 'config-demo' | 'user') {
   border: 1px solid color-mix(in srgb, #1a7af8 40%, transparent);
   border-radius: 6px;
   color: #1a7af8;
+  font-size: 12px;
+  text-align: center;
+}
+/* ★aspect-ratio 演示（批次 24）——宽 160 + 16/9 ⇒ 高 90 */
+.ar-demo {
+  width: 160px;
+  aspect-ratio: 16 / 9;
+  margin: 16px auto;
+  background-color: #f5f6f7;
+  border-radius: 4px;
+  color: #888;
   font-size: 12px;
   text-align: center;
 }

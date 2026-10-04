@@ -74,6 +74,8 @@ pub const F_MIN_W_PCT: u32 = 1 << 26;
 pub const F_MAX_W_PCT: u32 = 1 << 27;
 pub const F_MIN_H_PCT: u32 = 1 << 28;
 pub const F_MAX_H_PCT: u32 = 1 << 29;
+// ★批次 24：宽高比（f32 段）
+pub const F_ASPECT: u32 = 1 << 30;
 
 /* ── 枚举字段位图（u8）── */
 pub const E_FLEX_DIRECTION: u8 = 1 << 0;
@@ -234,6 +236,7 @@ pub fn encode(req: &LayoutRequest) -> Vec<u8> {
         set(F_MAX_W_PCT, n.max_width_pct.is_some(), &mut fm);
         set(F_MIN_H_PCT, n.min_height_pct.is_some(), &mut fm);
         set(F_MAX_H_PCT, n.max_height_pct.is_some(), &mut fm);
+        set(F_ASPECT, n.aspect_ratio.is_some(), &mut fm);
         // ★批次 17：margin auto 标记进 field_mask（值区不写 f32，仅集合标记）
         let ma = n.margin_auto.unwrap_or_default();
         set(F_MARGIN_AUTO_T, ma.top, &mut fm);
@@ -325,6 +328,7 @@ pub fn encode(req: &LayoutRequest) -> Vec<u8> {
         put_f!(F_MAX_W_PCT, n.max_width_pct.unwrap_or(0.0));
         put_f!(F_MIN_H_PCT, n.min_height_pct.unwrap_or(0.0));
         put_f!(F_MAX_H_PCT, n.max_height_pct.unwrap_or(0.0));
+        put_f!(F_ASPECT, n.aspect_ratio.unwrap_or(0.0));
 
         // 枚举段（按位序升序）
         macro_rules! put_e {
@@ -465,6 +469,7 @@ pub fn decode(buf: &[u8]) -> Result<LayoutRequest> {
         n.max_width_pct = get_f!(F_MAX_W_PCT);
         n.min_height_pct = get_f!(F_MIN_H_PCT);
         n.max_height_pct = get_f!(F_MAX_H_PCT);
+        n.aspect_ratio = get_f!(F_ASPECT);
 
         macro_rules! get_e {
             ($bit:expr, $table:expr) => {
