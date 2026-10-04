@@ -442,6 +442,24 @@ describe('★C1 最小切片 · SFC <style> 单类规则 → class→节点样�
     expect(d.length > 0, '三值诊断').toBe(true)
   })
 
+  it('★⑦r pointer-events（批次 32 · ★基准 = Web）：none ⇒ false + 可继承 + 子 auto 覆盖', () => {
+    // 【为什么（以 web 为基准）】浮层/遮罩「穿透」刚需；CSS 可继承、子 auto 可覆盖。
+    expect((parseStaticStyle('pointer-events: none', () => {}) as { pointerEvents?: boolean }).pointerEvents, 'none ⇒ false').toBe(false)
+    expect((parseStaticStyle('pointer-events: auto', () => {}) as { pointerEvents?: boolean }).pointerEvents, 'auto ⇒ true').toBe(true)
+    const sfc = `<template>
+      <view class="ov"><text class="t">x</text></view>
+    </template>
+    <style>
+      .ov { pointer-events: none }
+      .t { pointer-events: auto }
+    </style>`
+    const r = buildLayoutTemplate(sfc, 'pe.vue')
+    const ov = r.template.nodes.find((n) => (n as { tag?: string }).tag === 'view')
+    const tx = r.template.nodes.find((n) => (n as { text?: string }).text === 'x')
+    expect((ov?.style as { pointerEvents?: boolean })?.pointerEvents, '父 none').toBe(false)
+    expect((tx?.style as { pointerEvents?: boolean })?.pointerEvents, '子 auto 覆盖').toBe(true)
+  })
+
   it('★⑧ 元素/类型选择器 + @keyframes 跳过（C1 收尾）', () => {
     // 【真项目形态】examples 有 9 处元素选择器（h3/code…）+ 6 处 @keyframes 关键帧被误当选择器
     const sfc = `<template>

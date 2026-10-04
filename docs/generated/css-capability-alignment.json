@@ -251,6 +251,16 @@
           "app": "absent"
         },
         "why": "字距/白空格走平台文本引擎（不自研）；当前 App 折叠面文本维 = fontSize/color/fontWeight/textAlign/line-height/text-overflow/letter-spacing——white-space 未支持"
+      },
+      {
+        "css": "pointer-events",
+        "id": "pointer-events",
+        "ends": {
+          "web": "not-measured",
+          "skyline": "supported",
+          "app": "supported"
+        },
+        "why": "★批次 32（2026-10-04 · ★基准 = Web）：`none` / `auto`。`none` ⇒ 该节点**不参与命中测试**（事件穿透到其下——浮层/遮罩刚需），但**仍占位**（有几何）。CSS **可继承**（父 none ⇒ 子默认 none、子 auto 可覆盖）——编译期按树算 computed 值。内核 `hit_path` 逐节点跳过 `pointer_events==false`（绘制/层不动——node 仍绘制）。只有内核 hitTest 消费（三端同一命中实现）。"
       }
     ],
     "skylineAlignSwitches": [
@@ -430,7 +440,8 @@
       "overflow",
       "gridTemplateColumns",
       "gridTemplateRows",
-      "aspectRatio"
+      "aspectRatio",
+      "pointerEvents"
     ],
     "paint": [
       "backgroundColor",
@@ -1261,6 +1272,21 @@
       "tier": "L4",
       "strategy": "降级",
       "note": "字距/白空格走平台文本引擎（不自研）；当前 App 折叠面文本维 = fontSize/color/fontWeight/textAlign/line-height/text-overflow/letter-spacing——white-space 未支持",
+      "supportTier": "conditional"
+    },
+    {
+      "id": "pointer-events",
+      "css": "pointer-events",
+      "category": "layout",
+      "compilerFields": [
+        "pointerEvents"
+      ],
+      "web": "not-measured",
+      "skyline": "supported",
+      "app": "supported",
+      "tier": "L2",
+      "strategy": "编译期折叠",
+      "note": "★批次 32（2026-10-04 · ★基准 = Web）：`none` / `auto`。`none` ⇒ 该节点**不参与命中测试**（事件穿透到其下——浮层/遮罩刚需），但**仍占位**（有几何）。CSS **可继承**（父 none ⇒ 子默认 none、子 auto 可覆盖）——编译期按树算 computed 值。内核 `hit_path` 逐节点跳过 `pointer_events==false`（绘制/层不动——node 仍绘制）。只有内核 hitTest 消费（三端同一命中实现）。",
       "supportTier": "conditional"
     },
     {

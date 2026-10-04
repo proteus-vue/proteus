@@ -234,6 +234,10 @@ pub fn geometry_snapped(tree: &LayoutTree) -> Vec<NodeGeometry> {
 /// 用**给定几何快照**做命中（供宿主路径注入吸附几何；默认入口见 `hit_path`）
 pub fn hit_path_with(tree: &LayoutTree, x: f32, y: f32, geo: &[NodeGeometry]) -> Vec<NodeIndex> {
     let visible = |i: NodeIndex| -> bool {
+        // ★批次 32：`pointer-events:none` 不作命中目标（事件穿透；其子仍可独立命中——逐节点判定）
+        if tree.get(i).style.pointer_events == Some(false) {
+            return false;
+        }
         let g = geo[i as usize];
         match g.rect {
             Some(r) => rect_contains(r, x, y) && g.clip.map_or(true, |c| rect_contains(c, x, y)),

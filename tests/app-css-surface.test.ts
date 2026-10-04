@@ -84,6 +84,8 @@ describe('★App CSS 支持面 · ② SSOT 与折叠实现同源（真折叠，�
       if (f === 'lineHeight') return '1.5'
       if (f === 'textOverflow') return 'ellipsis'
       if (f === 'visibility') return 'hidden'
+      if (f === 'aspectRatio') return '1.5'
+      if (f === 'pointerEvents') return 'none'
       return '10'
     }
     const notFolded: string[] = []

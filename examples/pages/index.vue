@@ -126,6 +126,12 @@ function go(name: 'forms' | 'config-demo' | 'user') {
       <div class="gap-cell">B</div>
       <div class="gap-cell">C</div>
     </div>
+
+    <!-- ★pointer-events 演示（批次 32）：覆盖层 none ⇒ 命中穿透到底层（仍占位绘制） -->
+    <div class="pe-demo">
+      <div class="pe-under">底层可点</div>
+      <div class="pe-over">覆盖层（pointer-events:none）</div>
+    </div>
   </div>
 </template>
 
@@ -327,6 +333,38 @@ function go(name: 'forms' | 'config-demo' | 'user') {
   background-color: #e8f0ff;
   border-radius: 4px;
   color: #1a7af8;
+  font-size: 12px;
+  text-align: center;
+}
+/* ★pointer-events 演示（批次 32）——覆盖层 none ⇒ 穿透 */
+.pe-demo {
+  position: relative;
+  width: 200px;
+  height: 40px;
+  margin: 16px auto;
+}
+.pe-under {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 200px;
+  height: 40px;
+  background-color: #e8f7ee;
+  border-radius: 4px;
+  color: #07c160;
+  font-size: 12px;
+  text-align: center;
+}
+.pe-over {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 200px;
+  height: 40px;
+  background-color: color-mix(in srgb, #7c3aed 15%, transparent);
+  border-radius: 4px;
+  pointer-events: none;
+  color: #7c3aed;
   font-size: 12px;
   text-align: center;
 }
