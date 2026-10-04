@@ -794,7 +794,7 @@
       "app": "supported",
       "tier": "L1",
       "strategy": "编译期折叠",
-      "note": "颜色编译期归一为 hex：hex / rgb() / rgba() / **命名色（148 个标准色，批 14）** / transparent；hsl/var ⇒ 诊断跳过。★`background` 纯色简写折进 backgroundColor（渐变/图片诊断跳过）。★批 14 多端一致性审计修：命名色此前丢弃（Web 生效）⇒ 现查表归一（核心只认 hex）",
+      "note": "颜色编译期归一为 hex：hex / rgb() / rgba() / **命名色（148 个标准色，批 14）** / transparent；hsl/var ⇒ 诊断跳过。★`background` 纯色简写折进 backgroundColor；★批次 33：`linear-gradient` / `radial-gradient` 折进引擎 `fillGradient` 通道（`background`/`background-image` 均可）——免去手写 `fill-gradient='{json}'` 的胶水；`url()` 图片仍诊断（走原生组件）。★批 14 多端一致性审计修：命名色此前丢弃（Web 生效）⇒ 现查表归一（核心只认 hex）",
       "supportTier": "universal"
     },
     {

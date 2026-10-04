@@ -132,6 +132,9 @@ function go(name: 'forms' | 'config-demo' | 'user') {
       <div class="pe-under">底层可点</div>
       <div class="pe-over">覆盖层（pointer-events:none）</div>
     </div>
+
+    <!-- ★CSS 渐变演示（批次 33）：background: linear-gradient（免手写 fill-gradient JSON） -->
+    <div class="grad-demo">linear-gradient 135°</div>
   </div>
 </template>
 
@@ -365,6 +368,17 @@ function go(name: 'forms' | 'config-demo' | 'user') {
   border-radius: 4px;
   pointer-events: none;
   color: #7c3aed;
+  font-size: 12px;
+  text-align: center;
+}
+/* ★CSS 渐变演示（批次 33）——linear-gradient 折进引擎 fillGradient 通道 */
+.grad-demo {
+  width: 240px;
+  height: 48px;
+  margin: 16px auto;
+  background: linear-gradient(135deg, #1a7af8, #7c5cff);
+  border-radius: 8px;
+  color: #ffffff;
   font-size: 12px;
   text-align: center;
 }

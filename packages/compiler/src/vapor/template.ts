@@ -794,6 +794,10 @@ export function parseStaticStyle(
     }
     // ★批次 2（值/简写归一化）：`background` 简写 → backgroundColor（仅纯色；渐变/图片另走通道）
     if (key === 'background') {
+      // ★批次 33（CSS 兼容对齐 · 以 Web 为基准）：CSS 渐变 → 引擎 fillGradient 通道
+      //   （复用既有绘制通道；免去开发者手写 fill-gradient='{json}' 的胶水）。
+      const grad = parseCssGradient(rawVal)
+      if (grad) { out.fillGradient = grad; markImportant('fillGradient'); continue }
       const color = extractBackgroundColor(rawVal)
       if (!color) {
         pushDiag(
@@ -804,6 +808,13 @@ export function parseStaticStyle(
       }
       out.backgroundColor = color
       markImportant('backgroundColor')
+      continue
+    }
+    // ★批次 33：`background-image` 渐变 → fillGradient（`none` 已由 no-op 处理）
+    if (key === 'backgroundImage') {
+      const grad = parseCssGradient(rawVal)
+      if (grad) { out.fillGradient = grad; markImportant('fillGradient'); continue }
+      pushDiag(`style 里 \`${rawKey}: ${rawVal}\` 未解析（仅支持 linear-gradient / radial-gradient；图片 url() 请用原生组件）——已跳过`)
       continue
     }
     // ★批次 5（CSS 兼容对齐 · 边框）：`border` 简写 → borderWidth + borderColor（uniform）。
@@ -1646,6 +1657,71 @@ function extractBackgroundColor(rawVal: string): string | undefined {
     if (c) return c
   }
   return undefined
+}
+
+/**
+ * ★批次 33（CSS 兼容对齐 · 以 Web 为基准）：CSS 渐变 → 引擎 `fillGradient` 结构。
+ *   支持 `linear-gradient([<n>deg | to <dir>,] <color> [<pos>%], …)` 与 `radial-gradient([…shape…,] <color> …)`。
+ *   输出形如 `{kind, angle, stops:[{offset, color:'#RRGGBB', alpha?}]}`（与 `fill-gradient` 属性**同一契约**）。
+ *   颜色须能归一（hex/rgb/hsl/命名色/transparent）；`color-mix()` 亦已支持。不可解析 ⇒ null（调用方诊断）。
+ */
+function parseCssGradient(raw: string): Record<string, unknown> | null {
+  const m = /^(linear|radial)-gradient\(([\s\S]*)\)$/i.exec(raw.trim())
+  if (!m) return null
+  const kind = m[1]!.toLowerCase()
+  const args = splitTopLevelComma(m[2]!)
+  if (args.length < 2) return null
+  let start = 0
+  let angle = 180 // CSS 缺省 = `to bottom`
+  if (kind === 'linear') {
+    const first = args[0]!.trim()
+    const am = /^(-?\d+(?:\.\d+)?)deg$/i.exec(first)
+    if (am) { angle = Number(am[1]); start = 1 }
+    else if (/^to\s+/i.test(first)) { const d = dirToDeg(first); if (d !== undefined) { angle = d; start = 1 } }
+  } else {
+    // radial：跳过 shape/preposition 参数（`circle` / `at 50% 50%` / `closest-side` …）直到首个颜色
+    while (start < args.length && !normalizeCssColor(args[start]!.trim().split(/\s+/)[0] ?? '')) start++
+  }
+  const stops = parseGradientStops(args.slice(start))
+  if (!stops || stops.length < 2) return null
+  return kind === 'linear' ? { kind: 'linear', angle, stops } : { kind: 'radial', cx: 0.5, cy: 0.5, r: 1.0, stops }
+}
+
+/** 方向关键字 → 角度（CSS：0deg = to top、90 = to right、180 = to bottom、270 = to left）。 */
+function dirToDeg(t: string): number | undefined {
+  const set = new Set(t.trim().toLowerCase().split(/\s+/).filter(Boolean))
+  if (!set.has('to')) return undefined
+  const up = set.has('top'); const down = set.has('bottom'); const left = set.has('left'); const right = set.has('right')
+  if (up && right) return 45; if (down && right) return 135; if (down && left) return 225; if (up && left) return 315
+  if (up) return 0; if (right) return 90; if (down) return 180; if (left) return 270
+  return undefined
+}
+
+/** 色标序列：`<color> [<pos>%]`；缺省位置按 CSS 均分/插值补齐。色不可归一 ⇒ null。 */
+function parseGradientStops(args: string[]): Array<{ offset: number; color: string; alpha?: number }> | null {
+  const raw: Array<{ color: string; alpha?: number; pos?: number }> = []
+  for (const a of args) {
+    const t = a.trim()
+    if (!t) continue
+    const pm = /^([\s\S]*?)\s+(-?\d+(?:\.\d+)?)%$/.exec(t)
+    const colorStr = (pm ? pm[1]! : t).trim()
+    const pos = pm ? Number(pm[2]) / 100 : undefined
+    const norm = normalizeCssColor(colorStr)
+    if (!norm) return null
+    let color = norm; let alpha: number | undefined
+    if (norm.length === 9) { alpha = parseInt(norm.slice(7, 9), 16) / 255; color = norm.slice(0, 7) }
+    raw.push({ color, ...(alpha !== undefined ? { alpha } : {}), ...(pos !== undefined ? { pos } : {}) })
+  }
+  if (raw.length < 2) return null
+  const n = raw.length
+  const stops: Array<{ offset: number; color: string; alpha?: number }> = []
+  for (let i = 0; i < n; i++) {
+    const r = raw[i]!
+    // 缺省位置：按 CSS 均分（端点 0/1，中间均匀）
+    const offset = r.pos !== undefined ? Math.max(0, Math.min(1, r.pos)) : i / (n - 1)
+    stops.push({ offset, color: r.color, ...(r.alpha !== undefined ? { alpha: r.alpha } : {}) })
+  }
+  return stops
 }
 
 /**
