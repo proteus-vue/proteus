@@ -34,7 +34,7 @@
         { "capability": "定位锚点（absolute + top/left/right/bottom + z 序）", "why": "角标 / FAB / 关闭按钮 / 底部弹层 / 悬浮层", "status": "supported（批 8 补 right/bottom；层序走层容器）" },
         { "capability": "卡片外观（background / border / border-radius / shadow / 内边距）", "why": "列表项 / 卡片 / 面板", "status": "supported（background/border/border-radius/padding ✅ 批 2/5；**box-shadow ✅ 批 10**——iOS/鸿蒙原生、Android 分层近似）" },
         { "capability": "弹性流式布局（flex + wrap + gap + align/justify/content + 百分比）", "why": "响应式排布 / 标签墙 / 宫格", "status": "supported（批 6 flex-wrap · 批 11 align-content 已补）" },
-        { "capability": "文本呈现（size / weight / align / color / line-height / 截断）", "why": "标题 / 正文 / 单行截断", "status": "font-size/weight/align/color ✅；**line-height ⏳ / text-overflow ⏳**" },
+        { "capability": "文本呈现（size / weight / align / color / line-height / 截断）", "why": "标题 / 正文 / 单行截断", "status": "font-size/weight/align/color ✅ · **line-height ✅ 批 13**；**text-overflow 截断 ⏳**" },
         { "capability": "栅格 / 复杂排布（grid）", "why": "仪表盘 / 复杂页面", "status": "supported（批 12：引擎 Display::Grid + 显式轨迹 fr/px + repeat 展开；诚实边界：auto/minmax/gr、id-area 定位未支持）" },
         { "capability": "动效（transition / transform / keyframes）", "why": "转场 / 反馈 / 加载", "status": "引擎 anim 通道 ✅（transition 走 <Transition>/宿主指令）；**transform 静态折叠面 ⏳**" },
         { "capability": "滚动容器（overflow + 滚动）", "why": "长列表 / 弹层内容", "status": "supported（overflow + 虚拟列表）" },
@@ -90,7 +90,8 @@
     { "id": "filter-backdrop", "css": "filter / backdrop-filter", "category": "paint", "today": "absent", "tier": "L3", "strategy": "语义组件", "probe": ["filter", "backdrop-filter"], "note": "离屏/额外缓冲；走 <p-glass> / <p-filter> 语义组件" },
     { "id": "font-weight", "css": "font-weight", "category": "text", "today": "supported", "tier": "L1", "strategy": "编译期折叠", "probe": ["font-weight"], "note": "★批次 3（2026-10-04）：`normal`→400 / `bold`→700 / 100–900 数值归一；作为**文本可继承**字段沿树继承。三端宿主：iOS 已读 `fontWeight`（≥600 bold 判据）、Android 新接线（Cmd.fontWeight + 绘制/度量同源 typeface）、鸿蒙新接线（OH_Drawing_SetTextStyleFontWeight）" },
     { "id": "text-align", "css": "text-align", "category": "text", "today": "supported", "tier": "L1", "strategy": "编译期折叠", "probe": ["text-align"], "note": "★批次 4（2026-10-04）：封闭集 left/center/right（justify/st 等诊断跳过）。宿主：iOS CATextLayer.alignmentMode · Android Paint.Align（绘制 x 按对齐换算）· 鸿蒙 OH_Drawing_SetTypographyTextAlign。真项目 28 处（22 center）" },
-    { "id": "text-attrs", "css": "line-height / letter-spacing / white-space", "category": "text", "today": "absent", "tier": "L4", "strategy": "降级", "probe": ["line-height", "letter-spacing", "white-space"], "note": "文本度量与排版走平台文本引擎（不自研）；当前 App 折叠面文本维 = fontSize/color/fontWeight/textAlign（line-height/letter-spacing 需扩引擎/宿主文本通道，属后续）" },
+    { "id": "line-height", "css": "line-height", "category": "text", "today": "supported", "tier": "L1", "strategy": "编译期折叠", "probe": ["line-height"], "note": "★批次 13（2026-10-04）：无单位倍数 / 百分比（→倍数）/ 绝对 px 归一为 token；作为**文本可继承**字段沿树继承。三端宿主用于**行盒高**（覆盖字形度量高；字形顶对齐——三端一致）：iOS measureText（CATextLayer 顶对齐）· Android buildMeasures + drawCmds 基线 = 盒顶+ascent · 鸿蒙 measureTextTypoPx 覆盖。诚实边界：行盒高顶对齐（非 CSS 半行距居中）；letter-spacing 未支持" },
+    { "id": "text-attrs", "css": "letter-spacing / white-space", "category": "text", "today": "absent", "tier": "L4", "strategy": "降级", "probe": ["letter-spacing", "white-space"], "note": "字距/白空格走平台文本引擎（不自研）；当前 App 折叠面文本维 = fontSize/color/fontWeight/textAlign/line-height——letter-spacing/white-space 未支持" },
     { "id": "visibility", "css": "visibility", "category": "paint", "today": "absent", "tier": "L1", "strategy": "直映射", "probe": ["visibility"], "note": "引擎无 visibility 字段（可用 display:none 或 opacity 近似）" }
   ]
 }

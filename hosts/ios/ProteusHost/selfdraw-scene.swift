@@ -2385,6 +2385,11 @@ final class SelfDrawView: UIView {
         return nil
     }
 
+    /// ★批次 13：取某节点建层时记录的 `lineHeight`（文本度量用——与绘制同源）
+    func lineHeightOf(id: Int) -> String? {
+        metaByNodeId[id]?["lineHeight"] as? String
+    }
+
     /// ★★**层序对账**（⚠ **设计有误，仅作诊断读数——勿当判据**，见下）
     ///
     /// 【为什么要做它】像素判据**证明不了层序**——把 `insertLayers` 退化为"恒追加"后
@@ -2850,7 +2855,7 @@ final class SelfDrawView: UIView {
     /// 把节点规格里的绘制字段取出来（与全量路径同款；单一实现避免分叉）
     static func styleOf(_ n: [String: Any]) -> [String: Any] {
         var style: [String: Any] = [:]
-        for k in ["backgroundColor", "color", "text", "fontFamily", "textAlign", "borderColor"] {
+        for k in ["backgroundColor", "color", "text", "fontFamily", "textAlign", "borderColor", "lineHeight"] {
             if let v = n[k] as? String { style[k] = v }
         }
         if let bw = n["borderWidth"] as? Double { style["borderWidth"] = CGFloat(bw) }
@@ -3644,7 +3649,7 @@ final class SelfDrawBridge: NSObject, SelfDrawExports {
                 let fw = (view.fontWeightOf(id: id)).map { CGFloat($0) } ?? 400
                 // ★字族也取宿主 meta（与绘制同源）——漏了它 ⇒ 度量的字体与绘制的字体不同
                 let fam = view.fontFamilyOf(id: id) ?? "system"
-                let sz = ProteusTextAdapter.measureText(text, fontSize: fs, fontWeight: fw, fontFamily: fam)
+                let sz = ProteusTextAdapter.measureText(text, fontSize: fs, fontWeight: fw, fontFamily: fam, lineHeight: view.lineHeightOf(id: id))
                 measures["\(id)"] = ["width": Double(sz.width), "height": Double(sz.height)]
             }
         }
@@ -3794,7 +3799,8 @@ final class SelfDrawBridge: NSObject, SelfDrawExports {
                     let fontSize = (n["fontSize"] as? Double).map { CGFloat($0) } ?? 14
                     let fw = (n["fontWeight"] as? Double).map { CGFloat($0) } ?? 400
                     let fam = (n["fontFamily"] as? String) ?? "system"
-                    let sz = ProteusTextAdapter.measureText(text, fontSize: fontSize, fontWeight: fw, fontFamily: fam)
+                    let lh = n["lineHeight"] as? String
+                    let sz = ProteusTextAdapter.measureText(text, fontSize: fontSize, fontWeight: fw, fontFamily: fam, lineHeight: lh)
                     measures["\(id)"] = ["width": Double(sz.width), "height": Double(sz.height)]
                 }
             }
@@ -5260,7 +5266,8 @@ final class SelfDrawBridge: NSObject, SelfDrawExports {
                 let fs = (n["fontSize"] as? Double).map { CGFloat($0) } ?? 14
                 let fw = (n["fontWeight"] as? Double).map { CGFloat($0) } ?? 400
                 let fam = (n["fontFamily"] as? String) ?? "system"
-                let sz = ProteusTextAdapter.measureText(text, fontSize: fs, fontWeight: fw, fontFamily: fam)
+                let lh = n["lineHeight"] as? String
+                let sz = ProteusTextAdapter.measureText(text, fontSize: fs, fontWeight: fw, fontFamily: fam, lineHeight: lh)
                 measures["\(id)"] = ["width": Double(sz.width), "height": Double(sz.height)]
             }
             root["textMeasures"] = measures
@@ -5729,7 +5736,8 @@ final class SelfDrawBridge: NSObject, SelfDrawExports {
             let fontSize = (n["fontSize"] as? Double).map { CGFloat($0) } ?? 14
             let fw = (n["fontWeight"] as? Double).map { CGFloat($0) } ?? 400
             let fam = (n["fontFamily"] as? String) ?? "system"
-            let sz = ProteusTextAdapter.measureText(text, fontSize: fontSize, fontWeight: fw, fontFamily: fam)
+            let lh = n["lineHeight"] as? String
+            let sz = ProteusTextAdapter.measureText(text, fontSize: fontSize, fontWeight: fw, fontFamily: fam, lineHeight: lh)
             textMeasures["\(id)"] = ["width": Double(sz.width), "height": Double(sz.height)]
         }
         let measureMs = (CFAbsoluteTimeGetCurrent() - tMeasure0) * 1000

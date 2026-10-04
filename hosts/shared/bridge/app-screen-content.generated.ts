@@ -1015,6 +1015,7 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
         "margin": {
           "top": 6
         },
+        "lineHeight": "1.6",
         "text": "基座是常驻宿主，不是构建产物——装一次，换插件，永不重打（渲染与能力走可插拔后端，不是 WebView 套壳）",
         "semantic": "text"
       },
@@ -1643,6 +1644,7 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
         "id": 2,
         "parentId": 0,
         "color": "#666",
+        "lineHeight": "1.7",
         "fontSize": 13,
         "semantic": "p"
       },
@@ -1651,6 +1653,7 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
         "parentId": 2,
         "color": "#666",
         "fontSize": 13,
+        "lineHeight": "1.7",
         "text": " 本页不依赖 ",
         "semantic": "p-text"
       },
@@ -1667,6 +1670,7 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
         },
         "fontSize": 12,
         "color": "#666",
+        "lineHeight": "1.7",
         "text": "@proteus-vue/devtools",
         "semantic": "code"
       },
@@ -1675,6 +1679,7 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
         "parentId": 2,
         "color": "#666",
         "fontSize": 13,
+        "lineHeight": "1.7",
         "text": " 包——原生 WebSocket 直连 ",
         "semantic": "p-text"
       },
@@ -1691,6 +1696,7 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
         },
         "fontSize": 12,
         "color": "#666",
+        "lineHeight": "1.7",
         "text": "/proteus-panel",
         "semantic": "code"
       },
@@ -1699,6 +1705,7 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
         "parentId": 2,
         "color": "#666",
         "fontSize": 13,
+        "lineHeight": "1.7",
         "text": "，按 Proteus 开放协议（15-open-api.md）接入应用全部 devtools 数据。 等价包级 API：",
         "semantic": "p-text"
       },
@@ -1715,6 +1722,7 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
         },
         "fontSize": 12,
         "color": "#666",
+        "lineHeight": "1.7",
         "text": "createDevtoolsWsSource(url)",
         "semantic": "code"
       },
@@ -1723,6 +1731,7 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
         "parentId": 2,
         "color": "#666",
         "fontSize": 13,
+        "lineHeight": "1.7",
         "text": " + ",
         "semantic": "p-text"
       },
@@ -1739,6 +1748,7 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
         },
         "fontSize": 12,
         "color": "#666",
+        "lineHeight": "1.7",
         "text": "onEvent / appInfo() / deviceInfo() / sendCommand()",
         "semantic": "code"
       },
@@ -1747,6 +1757,7 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
         "parentId": 2,
         "color": "#666",
         "fontSize": 13,
+        "lineHeight": "1.7",
         "text": "。 ",
         "semantic": "p-text"
       },
@@ -2189,6 +2200,7 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
       {
         "id": 10,
         "parentId": 8,
+        "lineHeight": "1.7",
         "semantic": "view"
       },
       {
@@ -2265,12 +2277,14 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
         "id": 2,
         "parentId": 0,
         "color": "#666",
+        "lineHeight": "1.7",
         "semantic": "p"
       },
       {
         "id": 3,
         "parentId": 2,
         "color": "#666",
+        "lineHeight": "1.7",
         "text": " 声明式语义布局：",
         "semantic": "p-text"
       },
@@ -2286,6 +2300,7 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
           "left": 4
         },
         "color": "#666",
+        "lineHeight": "1.7",
         "text": "p-grid",
         "semantic": "code"
       },
@@ -2293,6 +2308,7 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
         "id": 5,
         "parentId": 2,
         "color": "#666",
+        "lineHeight": "1.7",
         "text": " 只声明每列最小宽度（160px）——320px→1 列、768px→4 列、1440px→8 列，框架自动求解。 ",
         "semantic": "p-text"
       },
@@ -2449,12 +2465,14 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
         "id": 2,
         "parentId": 0,
         "color": "#666",
+        "lineHeight": "1.7",
         "semantic": "p"
       },
       {
         "id": 3,
         "parentId": 2,
         "color": "#666",
+        "lineHeight": "1.7",
         "text": " 响应式基准是",
         "semantic": "p-text"
       },
@@ -2462,6 +2480,7 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
         "id": 4,
         "parentId": 2,
         "color": "#666",
+        "lineHeight": "1.7",
         "text": "容器",
         "semantic": "strong"
       },
@@ -2469,6 +2488,7 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
         "id": 5,
         "parentId": 2,
         "color": "#666",
+        "lineHeight": "1.7",
         "text": "而非视口——折叠屏/平板/车机/多窗口场景下，组件按自身容器宽度求解。 拖动窗口或缩放容器看实时变化。 ",
         "semantic": "p-text"
       },
@@ -4188,6 +4208,7 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
         "color": "#9fd3c7",
         "borderRadius": 8,
         "fontSize": 12,
+        "lineHeight": "1.7",
         "semantic": "pre"
       }
     ]
@@ -5519,6 +5540,7 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
         "parentId": 34,
         "fontSize": 13,
         "color": "#ffffffcc",
+        "lineHeight": "1.6",
         "text": "switch（默认开）",
         "semantic": "text"
       },
@@ -5547,6 +5569,7 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
         "parentId": 37,
         "fontSize": 13,
         "color": "#ffffffcc",
+        "lineHeight": "1.6",
         "semantic": "text"
       },
       {
@@ -5578,6 +5601,7 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
         "parentId": 40,
         "fontSize": 13,
         "color": "#ffffffcc",
+        "lineHeight": "1.6",
         "text": "icon（success/warn + color 调色）",
         "semantic": "text"
       },
@@ -5631,6 +5655,7 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
         "parentId": 48,
         "fontSize": 13,
         "color": "#ffffffcc",
+        "lineHeight": "1.6",
         "semantic": "text"
       },
       {
@@ -5657,6 +5682,7 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
         "parentId": 51,
         "fontSize": 13,
         "color": "#ffffffcc",
+        "lineHeight": "1.6",
         "semantic": "text"
       },
       {
@@ -5692,6 +5718,7 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
         "parentId": 53,
         "fontSize": 13,
         "color": "#ffffffcc",
+        "lineHeight": "1.6",
         "semantic": "text"
       },
       {
@@ -5746,6 +5773,7 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
         "parentId": 59,
         "fontSize": 13,
         "color": "#ffffffcc",
+        "lineHeight": "1.6",
         "semantic": "text"
       }
     ]
@@ -6128,6 +6156,7 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
         "margin": {
           "bottom": 16
         },
+        "lineHeight": "1.6",
         "text": "业务代码零 wx.* —— request / storage / router / ui 统一走 createPlatformAPI",
         "semantic": "text"
       },
@@ -6542,6 +6571,7 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
         "margin": {
           "bottom": 16
         },
+        "lineHeight": "1.6",
         "text": "useFetch = G-32 C26（迁移文档：wx.request → await useFetch(url)）· usePermission/useStorage 见 @proteus-vue/api/capability.ts（probe 降级 + createReactiveStorage 响应式）",
         "semantic": "text"
       },
@@ -6651,6 +6681,7 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
         "margin": {
           "bottom": 16
         },
+        "lineHeight": "1.6",
         "text": "useBiometric → web 无 WebAuthn 时 data:false（feature detection）；useQRCode web 需摄像头取流源 → Err · 小程序端 wx.scanCode 直通",
         "semantic": "text"
       },
@@ -6751,6 +6782,7 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
         "margin": {
           "bottom": 16
         },
+        "lineHeight": "1.6",
         "text": "useWebSocket/useAnalytics 小程序端走 wx.connectSocket/reportEvent；useFileSystem web 端内存降级（非持久）· useUpload/useDownload 见 @proteus-vue/api/capability.ts",
         "semantic": "text"
       },
@@ -6869,6 +6901,7 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
         "margin": {
           "bottom": 16
         },
+        "lineHeight": "1.6",
         "text": "小程序端走 wx.requestSubscribeMessage/chooseContact/addPhoneCalendar/compressFile/addToDesktop + App 钩子；web 端仅 Notification 与 visibilitychange 有原生对应，其余诚实降级 → Err",
         "semantic": "text"
       },
@@ -6987,6 +7020,7 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
         "margin": {
           "bottom": 16
         },
+        "lineHeight": "1.6",
         "text": "小程序端走 wx.openBluetoothAdapter/getHCEState/authorize/onKeyboardHeightChange/onPageShow·onPageHide；web 端蓝牙·NFC 为特性探测，相机·麦克风走 getUserMedia（需 HTTPS），键盘走 visualViewport 启发式",
         "semantic": "text"
       },
@@ -7078,6 +7112,7 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
         "margin": {
           "bottom": 16
         },
+        "lineHeight": "1.6",
         "text": "createEngineering 注入 Vue reactivity——useState=ref 语义 / useComputed=computed / usePageParam 读页面参数（api 包零 vue 依赖，消费方注入）",
         "semantic": "text"
       },
@@ -7196,6 +7231,7 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
         "margin": {
           "bottom": 16
         },
+        "lineHeight": "1.6",
         "text": "createRouterEngineering 注入兼容 router（mock 录制调用，不真实导航）——E11-E15 语义委托既有 router（replace=replace:true / switchTab / reLaunch 标志）；E10 useRoute 读注入 getCurrentRoute 源；E16/E17 守卫委托（router 缺省时安全 no-op）",
         "semantic": "text"
       },
@@ -7340,6 +7376,7 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
         "margin": {
           "bottom": 16
         },
+        "lineHeight": "1.6",
         "text": "E19 p-transition（CSS 显隐过渡）· E20 p-animate（CSS 动画声明——组件形态，纯 CSS 双端）；E21 useAnimation（wx.createAnimation 语义构建器）/ E22 useGestureAnimation（增量累积→提交帧）/ E23 useScrollAnimation（进度→插值）——reactivity/driver 注入式，web 端 WAAPI 播放（MP/无 driver 安全 no-op）",
         "semantic": "text"
       },
@@ -7449,6 +7486,7 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
         "margin": {
           "bottom": 16
         },
+        "lineHeight": "1.6",
         "text": "E24 useDevTools（dev 事件面）/ E25 useInspector（组件树快照）/ E26 usePerformance（wx.reportPerformance 语义）→ 注入式 Hook；E27 defineComponent（类型化组件定义含 C-IR 元信息 + 声明期校验）/ E28 defineCapability（G-30 降级链声明 + 解析）→ 纯函数声明工具——工程原语 28 收口",
         "semantic": "text"
       },
@@ -7567,6 +7605,7 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
         "margin": {
           "bottom": 16
         },
+        "lineHeight": "1.6",
         "text": "Capability 50/50 收官——web 真实能力（cookie=document.cookie / background=visibilitychange / face-id=WebAuthn）+ wx 原生（map=createMapContext / mini-program=navigateToMiniProgram）+ 宿主桥（data-channel / embedded / live / extension）——web 无标准 → 诚实 Err 降级",
         "semantic": "text"
       },
@@ -7658,6 +7697,7 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
         "margin": {
           "bottom": 16
         },
+        "lineHeight": "1.6",
         "text": "注入式请求数据层（mock client + compat storage 缓存底座，无真实网络）——R2 useQuery SWR（缓存命中即用 + in-flight 去重 + refresh/mutate/invalidate）；R3 enqueue 并发队列（FIFO + 上限 + 失败隔离）；R1 request 策略请求（ttl 缓存 + dedupe 合并 + 可选排队）——与四工厂同族注入式可单测；useQuery 点两次看第二次缓存命中",
         "semantic": "text"
       },
@@ -7740,6 +7780,7 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
         "margin": {
           "bottom": 16
         },
+        "lineHeight": "1.6",
         "text": "E18 p-router-link 声明式导航（engineering.router-link，B5 工程原语最后节点）——点击 emit('navigate', { to, replace, switchTab })；父级 @navigate 调 rx.push/replace/switchTab（E11-E14 语义委托 mock router 录制，不真实导航）；组件零平台依赖（审计合规）+ web role=\"link\" 可访问性 · MP bindtap",
         "semantic": "text"
       },
@@ -7840,6 +7881,7 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
         "margin": {
           "bottom": 16
         },
+        "lineHeight": "1.6",
         "text": "E30 engineering.mcp——规范面：document.modelContext.registerTool + signal 注销（★非 navigator；规范无 unregisterTool）；框架差异化：能力面统一 CapResult<T> 契约 → 能力可自动派生为工具（ok→结果 / Err→isError+错误码）。本机浏览器未实现 WebMCP 时如实降级（isSupported=false，不抛错）——可用下面「调用工具」验证派生工具的归一行为（不依赖浏览器支持）。",
         "semantic": "text"
       },
@@ -7879,6 +7921,7 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
         "margin": {
           "bottom": 16
         },
+        "lineHeight": "1.6",
         "text": " wx.showToast → api.ui.showToast · wx.showModal → api.ui.showModal · wx.showActionSheet → api.ui.showActionSheet · wx.setStorageSync → api.storage.set · wx.navigateTo → api.router.push · wx.switchTab → api.router.switchTab · wx.request → api.request ",
         "semantic": "text"
       }
@@ -8053,6 +8096,7 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
           "left": 10
         },
         "fontSize": 12,
+        "lineHeight": "1.5",
         "semantic": "pre"
       },
       {
@@ -8138,6 +8182,7 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
           "left": 10
         },
         "fontSize": 12,
+        "lineHeight": "1.5",
         "semantic": "pre"
       }
     ]
@@ -9920,6 +9965,7 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
         "backgroundColor": "#00000000",
         "color": "#999",
         "fontSize": 12,
+        "lineHeight": "1",
         "padding": {
           "top": 0,
           "right": 2,
@@ -10532,6 +10578,7 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
         "fontSize": 12,
         "color": "#fca5a5",
         "textAlign": "center",
+        "lineHeight": "1.3",
         "semantic": "text"
       },
       {
@@ -10540,6 +10587,7 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
         "fontSize": 12,
         "color": "#fca5a5",
         "textAlign": "center",
+        "lineHeight": "1.3",
         "semantic": "text"
       },
       {
@@ -10548,6 +10596,7 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
         "fontSize": 12,
         "color": "#fca5a5",
         "textAlign": "center",
+        "lineHeight": "1.3",
         "semantic": "text"
       },
       {
@@ -10556,6 +10605,7 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
         "fontSize": 12,
         "color": "#fca5a5",
         "textAlign": "center",
+        "lineHeight": "1.3",
         "semantic": "text"
       },
       {
@@ -10564,6 +10614,7 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
         "fontSize": 12,
         "color": "#fca5a5",
         "textAlign": "center",
+        "lineHeight": "1.3",
         "semantic": "text"
       },
       {
@@ -12045,6 +12096,7 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
         "fontSize": 12,
         "color": "#fca5a5",
         "textAlign": "center",
+        "lineHeight": "1.3",
         "semantic": "text"
       },
       {
@@ -12053,6 +12105,7 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
         "fontSize": 12,
         "color": "#fca5a5",
         "textAlign": "center",
+        "lineHeight": "1.3",
         "semantic": "text"
       },
       {
@@ -12061,6 +12114,7 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
         "fontSize": 12,
         "color": "#fca5a5",
         "textAlign": "center",
+        "lineHeight": "1.3",
         "semantic": "text"
       },
       {
@@ -12069,6 +12123,7 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
         "fontSize": 12,
         "color": "#fca5a5",
         "textAlign": "center",
+        "lineHeight": "1.3",
         "semantic": "text"
       },
       {

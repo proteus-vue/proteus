@@ -81,6 +81,7 @@ describe('★App CSS 支持面 · ② SSOT 与折叠实现同源（真折叠，�
       if (f === 'textAlign') return 'center'
       if (f === 'boxShadow') return '0 1px 2px #000000'
       if (f === 'gridTemplateColumns' || f === 'gridTemplateRows') return '1fr 1fr'
+      if (f === 'lineHeight') return '1.5'
       return '10'
     }
     const notFolded: string[] = []

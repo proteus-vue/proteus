@@ -1261,7 +1261,10 @@ final class VaporRenderHost {
             tp.setTypeface(ProteusHostView.typefaceOf(null, mw, null));
             float w = tp.measureText(t);
             android.graphics.Paint.FontMetrics fm = tp.getFontMetrics();
-            float h = fm.descent - fm.ascent;   // ★真实字体度量（原 fs×1.4 近似已删）
+            float glyphH = fm.descent - fm.ascent;   // ★真实字体度量（原 fs×1.4 近似已删）
+            // ★批次 13（line-height）：行盒高 = 行高（倍数×fs 或绝对 px）；缺省 = 字形度量高
+            float lh = lineHeightPxOf(spec, fs);
+            float h = lh > 0 ? lh : glyphH;
             JSONObject sz = new JSONObject();
             // I2-ALLOW: 文本**测量**结果的取整（测量子系统，非几何换算——度量值交给内核后
             //   由内核统一 `snap` 吸附；平台层对**几何**零舍入，与 JsRenderHost 同款）
@@ -1270,6 +1273,21 @@ final class VaporRenderHost {
             m.put(String.valueOf(spec.getInt("id")), sz);
         }
         return m;
+    }
+
+    /**
+     * ★批次 13：`line-height` token → **行盒高 px**（0 = 未声明，用字形度量高）。
+     *   无单位倍数（`1.6`）⇒ `1.6 × fontSize`；绝对（`24px`）⇒ 24。
+     */
+    static float lineHeightPxOf(JSONObject spec, float fontSizePx) {
+        String lh = spec.optString("lineHeight", null);
+        if (lh == null || lh.isEmpty()) return 0f;
+        try {
+            if (lh.endsWith("px")) return Float.parseFloat(lh.substring(0, lh.length() - 2));
+            return Float.parseFloat(lh) * fontSizePx;   // 无单位倍数
+        } catch (NumberFormatException e) {
+            return 0f;
+        }
     }
 
     /** 变化节点的文本重度量（文本更新 ⇒ 需注入新度量再重排；先度量后重排的纪律不变） */
@@ -1330,7 +1348,9 @@ final class VaporRenderHost {
             int fw = (int) spec.optDouble("fontWeight", 400);
             // ★批次 4：文本水平对齐（text-align → 0/1/2）
             int ta = alignOf(spec.optString("textAlign", null));
-            return new ProteusHostView.Cmd(x, y, w, h, color, t, fs, textColor, radius, grad, glowSpec, maskSpec, fw, ta, bw, bc, shadowSpec);
+            // ★批次 13：行高（px；0 = 缺省）
+            float lh = lineHeightPxOf(spec, fs);
+            return new ProteusHostView.Cmd(x, y, w, h, color, t, fs, textColor, radius, grad, glowSpec, maskSpec, fw, ta, bw, bc, shadowSpec, lh);
         }
         return new ProteusHostView.Cmd(x, y, w, h, color, null, 0f, 0, radius, grad, glowSpec, maskSpec, 400, 0, bw, bc, shadowSpec);
     }
@@ -1468,7 +1488,8 @@ final class VaporRenderHost {
             final float bw = spec.has("borderWidth") ? (float) spec.optDouble("borderWidth", prev.borderWidth) : prev.borderWidth;
             final int bc = spec.has("borderColor") ? parseColor(spec.optString("borderColor", null)) : prev.borderColor;
             final float[] sh = spec.has("boxShadow") ? parseBoxShadow(spec.optJSONObject("boxShadow")) : prev.boxShadow;
-            return new ProteusHostView.Cmd(prev.x, prev.y, prev.w, prev.h, color, t, fs, textColor, prev.radius, prev.gradient, prev.glow, prev.mask, fw, ta, bw, bc, sh);
+            final float lh = lineHeightPxOf(spec, fs);
+            return new ProteusHostView.Cmd(prev.x, prev.y, prev.w, prev.h, color, t, fs, textColor, prev.radius, prev.gradient, prev.glow, prev.mask, fw, ta, bw, bc, sh, lh);
         }
         return new ProteusHostView.Cmd(prev.x, prev.y, prev.w, prev.h, color, prev.text, prev.fontSize, prev.textColor, prev.radius, prev.gradient, prev.glow, prev.mask, prev.fontWeight, prev.textAlign, prev.borderWidth, prev.borderColor, prev.boxShadow);
     }
