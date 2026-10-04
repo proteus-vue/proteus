@@ -4122,6 +4122,8 @@
         {
           "id": 25,
           "parentId": 22,
+          "borderRadius": 4,
+          "fontSize": 12,
           "text": "npm run build:mp",
           "semantic": "code"
         },
@@ -4144,6 +4146,8 @@
         {
           "id": 29,
           "parentId": 28,
+          "borderRadius": 4,
+          "fontSize": 12,
           "text": "customTags",
           "semantic": "code"
         },
@@ -4161,6 +4165,8 @@
         {
           "id": 32,
           "parentId": 31,
+          "borderRadius": 4,
+          "fontSize": 12,
           "text": "mapping",
           "semantic": "code"
         },
@@ -4178,6 +4184,8 @@
         {
           "id": 35,
           "parentId": 34,
+          "borderRadius": 4,
+          "fontSize": 12,
           "text": "disabled",
           "semantic": "code"
         },
@@ -4827,6 +4835,8 @@
         {
           "id": 4,
           "parentId": 2,
+          "borderRadius": 3,
+          "fontSize": 12,
           "text": "@proteus-vue/devtools",
           "semantic": "code"
         },
@@ -4839,6 +4849,8 @@
         {
           "id": 6,
           "parentId": 2,
+          "borderRadius": 3,
+          "fontSize": 12,
           "text": "/proteus-panel",
           "semantic": "code"
         },
@@ -4851,6 +4863,8 @@
         {
           "id": 8,
           "parentId": 2,
+          "borderRadius": 3,
+          "fontSize": 12,
           "text": "createDevtoolsWsSource(url)",
           "semantic": "code"
         },
@@ -4863,6 +4877,8 @@
         {
           "id": 10,
           "parentId": 2,
+          "borderRadius": 3,
+          "fontSize": 12,
           "text": "onEvent / appInfo() / deviceInfo() / sendCommand()",
           "semantic": "code"
         },
@@ -5210,6 +5226,7 @@
         {
           "id": 4,
           "parentId": 2,
+          "borderRadius": 3,
           "text": "p-grid",
           "semantic": "code"
         },
@@ -5689,6 +5706,7 @@
         {
           "id": 38,
           "parentId": 37,
+          "fontSize": 14,
           "text": "\u5F53\u524D\u8BBE\u5907\u5F62\u6001",
           "semantic": "h3"
         },
@@ -7227,6 +7245,10 @@
         {
           "id": 31,
           "parentId": 30,
+          "fontSize": 16,
+          "margin": {
+            "bottom": 8
+          },
           "text": "SVG \u2192 Skyline \u4E13\u9879",
           "semantic": "h3"
         },
@@ -7321,6 +7343,7 @@
         {
           "id": 46,
           "parentId": 45,
+          "fontSize": 15,
           "text": "\u8DEF\u7531\u5D4C\u5957\u6F14\u793A",
           "semantic": "h3"
         },
@@ -7967,6 +7990,7 @@
         {
           "id": 3,
           "parentId": 0,
+          "fontSize": 15,
           "text": "p-camera\uFF08<camera>\uFF09",
           "semantic": "h3"
         },
@@ -7985,6 +8009,7 @@
         {
           "id": 6,
           "parentId": 0,
+          "fontSize": 15,
           "text": "p-map\uFF08<map>\uFF09",
           "semantic": "h3"
         },
@@ -8003,6 +8028,7 @@
         {
           "id": 9,
           "parentId": 0,
+          "fontSize": 15,
           "text": "p-webview\uFF08<web-view>\uFF09",
           "semantic": "h3"
         },
@@ -8053,6 +8079,7 @@
         {
           "id": 17,
           "parentId": 0,
+          "fontSize": 15,
           "text": "p-ad\uFF08<ad>\uFF09",
           "semantic": "h3"
         },
@@ -8071,6 +8098,7 @@
         {
           "id": 20,
           "parentId": 0,
+          "fontSize": 15,
           "text": "p-keyboard-accessory\uFF08<keyboard-accessory>\uFF09",
           "semantic": "h3"
         },

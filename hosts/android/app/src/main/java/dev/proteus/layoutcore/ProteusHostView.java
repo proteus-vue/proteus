@@ -58,6 +58,12 @@ public class ProteusHostView extends ViewGroup {
          */
         final int textColor;
         /**
+         * ★批次 3（CSS 兼容对齐）：文本**字重**（`font-weight` 折叠值；数值）。
+         *   语义：`>= 600` ⇒ `Typeface.BOLD`（与 iOS `weight >= 600`、`configureText` 同判据）；
+         *   缺省 **400**（normal）⇒ 既有全部路径零行为变化。
+         */
+        final int fontWeight;
+        /**
          * ★★圆角半径（px；0 = 直角）——纯绘制属性（内核不收，只影响观感）。
          *
          * 【为什么加（2026-10-01 · 灯光秀）】灯光秀的 800 颗灯珠用 4px 圆角（圆点观感）；
@@ -100,6 +106,10 @@ public class ProteusHostView extends ViewGroup {
         }
         Cmd(float x, float y, float w, float h, int color, String text, float fontSize, int textColor, float radius,
             GradSpec gradient, float[] glow, float[] mask) {
+            this(x, y, w, h, color, text, fontSize, textColor, radius, gradient, glow, mask, 400);
+        }
+        Cmd(float x, float y, float w, float h, int color, String text, float fontSize, int textColor, float radius,
+            GradSpec gradient, float[] glow, float[] mask, int fontWeight) {
             this.x = x; this.y = y; this.w = w; this.h = h; this.color = color; this.text = text;
             this.fontSize = fontSize;
             this.textColor = textColor;
@@ -107,6 +117,7 @@ public class ProteusHostView extends ViewGroup {
             this.gradient = gradient;
             this.glow = glow;
             this.mask = mask;
+            this.fontWeight = fontWeight;
         }
     }
 
@@ -2069,6 +2080,7 @@ public class ProteusHostView extends ViewGroup {
         final List<Cmd> list = cmds;
         // ★字号只在**变化时**设置（同字号连排时零开销；见 Cmd.fontSize 注释）
         float lastSize = textPaint.getTextSize();
+        int lastWeight = -1;   // ★批次 3：字重变化才重建 typeface（-1 = 首次必设，与默认 paint 对齐）
         final java.util.Set<Integer> skip = skipCmdIndices;   // ★被载体提升的指令：跳过（否则重影）
         final int[] ids = cmdNodeIds;
         for (int i = 0; i < list.size(); i++) {
@@ -2337,6 +2349,12 @@ public class ProteusHostView extends ViewGroup {
                 if (c.fontSize > 0 && c.fontSize != lastSize) {
                     textPaint.setTextSize(c.fontSize);
                     lastSize = c.fontSize;
+                }
+                // ★批次 3：字重只在**变化时**设置 typeface（>=600 ⇒ BOLD；缺省 400 = normal，
+                //   与既有 `typefaceOf(role, weight)` 同判据）——同字重连排时零开销。
+                if (c.fontWeight != lastWeight) {
+                    textPaint.setTypeface(ProteusHostView.typefaceOf(null, c.fontWeight, null));
+                    lastWeight = c.fontWeight;
                 }
                 // ★★文字色覆盖（2026-10-01）：动画值优先，其次静态 `Cmd.textColor`
                 //   （两者都无 ⇒ 保持 paint 现值——既有场景不受影响，零额外开销）。

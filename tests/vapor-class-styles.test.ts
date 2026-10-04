@@ -314,3 +314,44 @@ describe('★批次 2 · 值/简写归一化（四值简写 + background）', ()
     expect((n!.style as { backgroundColor?: string }).backgroundColor, 'background → backgroundColor').toBe('#f5f6f7')
   })
 })
+
+// ★★★批次 3（CSS 兼容对齐 · 文本属性）：font-weight（真项目第 2 高频丢弃项）——2026-10-04
+describe('★批次 3 · font-weight（关键字 + 数值归一）+ 继承', () => {
+  it('① 关键字/数值归一为数值（normal→400 / bold→700 / 100–900）', () => {
+    expect(parseStaticStyle('font-weight: normal', () => {}).fontWeight).toBe(400)
+    expect(parseStaticStyle('font-weight: bold', () => {}).fontWeight).toBe(700)
+    expect(parseStaticStyle('font-weight: 600', () => {}).fontWeight).toBe(600)
+    expect(parseStaticStyle('font-weight: 900', () => {}).fontWeight).toBe(900)
+  })
+
+  it('①b bolder/lighter（依赖父级）⇒ 诊断跳过（不猜）', () => {
+    const d: string[] = []
+    const out = parseStaticStyle('font-weight: bolder', (m) => d.push(m))
+    expect(out.fontWeight).toBeUndefined()
+    expect(d.some((m) => m.includes('font-weight'))).toBe(true)
+  })
+
+  it('② 继承：font-weight 沿树向下传播（与 color/fontSize 同为文本可继承子集）', () => {
+    const sfc = `<template>
+      <view class="root"><text class="leaf">x</text></view>
+    </template>
+<script setup>const z = 1</script>
+<style>
+.root { font-weight: 700 }
+</style>`
+    const r = buildLayoutTemplate(sfc, 'pages/s.vue')
+    const leaf = r.template.nodes.find((x) => x.tag === 'text')
+    expect((leaf?.style as { fontWeight?: number }).fontWeight, '字重继承到 text').toBe(700)
+  })
+
+  it('③ 端到端：font-weight 经 <style> class 折进节点 style', () => {
+    const sfc = `<template><view class="t">x</view></template>
+<script setup>const z = 1</script>
+<style>
+.t { font-weight: bold }
+</style>`
+    const r = buildLayoutTemplate(sfc, 'pages/t.vue')
+    const n = r.template.nodes.find((x) => (x.style as { fontWeight?: number }).fontWeight)
+    expect((n!.style as { fontWeight?: number }).fontWeight).toBe(700)
+  })
+})

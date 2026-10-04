@@ -43,6 +43,7 @@ export const STYLE_PROP_LEVELS = {
   backgroundColor: 'Color',
   borderColor: 'Color',
   opacity: 'Opacity',
+  fontWeight: 'Integer',
   borderRadius: 'Length',
   borderWidth: 'Length',
   borderTopWidth: 'Length',

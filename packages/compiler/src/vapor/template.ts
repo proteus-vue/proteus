@@ -73,7 +73,7 @@ export const APP_ENUM_VALUES: Record<string, readonly string[]> = {
 }
 
 /** 绘制字段（宿主自绘读这些键；模板照样要带上，否则挂载后无底色/无字色） */
-export const APP_PAINT_FIELDS = ['backgroundColor', 'color', 'fontSize', 'borderRadius', 'borderColor', 'borderWidth', 'opacity'] as const
+export const APP_PAINT_FIELDS = ['backgroundColor', 'color', 'fontSize', 'fontWeight', 'borderRadius', 'borderColor', 'borderWidth', 'opacity'] as const
 const PAINT_FIELDS = new Set<string>(APP_PAINT_FIELDS)
 /** 四边简写字段（`margin`/`padding` → 结构化 `{top,right,bottom,left}`） */
 export const APP_EDGE_FIELDS = ['margin', 'padding'] as const
@@ -91,7 +91,7 @@ export const APP_SPECIAL_FIELDS = ['boxSizing'] as const
  * 【为什么只有这两个】App 折叠面里语义上可继承的只有文本色/字号；背景/边框/圆角/不透明度
  *   在 CSS 里**不继承**（见 Profile §3 可继承/不可继承表）⇒ 不得纳入。
  */
-export const APP_INHERITABLE_FIELDS = ['color', 'fontSize'] as const
+export const APP_INHERITABLE_FIELDS = ['color', 'fontSize', 'fontWeight'] as const
 
 /**
  * ★★**结构化绘制声明**（2026-10-01 · 绘制通道补齐）——`style="{...}"` 装不下的那些通道，
@@ -392,6 +392,15 @@ export function parseStaticStyle(
       continue
     }
     if (PAINT_FIELDS.has(key)) {
+      if (key === 'fontWeight') {
+        // ★批次 3：`font-weight`（真项目第 2 高频丢弃项）——`normal`/`bold` 关键字 + 100–900 数值
+        //   归一为**数值**（宿主按 `weight >= 600 ⇒ bold` 判定——见 Android typefaceOf / iOS）。
+        const w = normalizeFontWeight(rawVal)
+        if (w === undefined) { pushDiag(`style 里 \`${rawKey}: ${rawVal}\` 不是合法字重（normal/bold/100–900）`); continue }
+        out[key] = w
+        markImportant(key)
+        continue
+      }
       if (key === 'backgroundColor' || key === 'color' || key === 'borderColor') {
         // ★★★颜色**归一化**（2026-10-04 修：真机 RustLayout.create 失败暴露）——内核 `parse_css_color`
         //   只认 `#RGB/#RRGGBB/#RRGGBBAA` 十六进制；CSS 常见的 `rgb()/rgba()/transparent` 原样透传
@@ -762,6 +771,19 @@ function expandBoxShorthand(rawVal: string, toNum: (v: string) => number | undef
   if (bottom !== undefined) box.bottom = bottom
   if (left !== undefined) box.left = left
   return Object.keys(box).length > 0 ? box : null
+}
+
+/**
+ * ★批次 3：`font-weight` → 数值（100–900）。关键字：`normal`→400 / `bold`→700；`bolder`/`lighter`
+ *   依赖父级（App 折叠面无上下文）⇒ 返回 undefined（调用方诊断，不猜）。
+ */
+function normalizeFontWeight(raw: string): number | undefined {
+  const v = raw.trim().toLowerCase()
+  if (v === 'normal') return 400
+  if (v === 'bold') return 700
+  const n = Number(v)
+  if (Number.isFinite(n) && n >= 1 && n <= 1000) return Math.round(n)
+  return undefined
 }
 
 /**
@@ -1308,7 +1330,7 @@ export function buildLayoutTemplate(
                 `${tag}(id=${id}) \`:style\` 的键 \`${e.key}\` 不支持**动态**更新` +
                   `（内核通道为数值几何；字符串类布局值/未知绘制字段不可动态）`,
                 `请把 \`${e.key}\` 放静态 \`style\`（值固定时），或改用受支持的键` +
-                  `（布局数值键 + 绘制键 backgroundColor/color/fontSize/borderRadius/borderColor/borderWidth/opacity）`,
+                  `（布局数值键 + 绘制键 backgroundColor/color/fontSize/fontWeight/borderRadius/borderColor/borderWidth/opacity）`,
                 'VAPOR_STYLE_KEY_UNSUPPORTED',
               )
             }

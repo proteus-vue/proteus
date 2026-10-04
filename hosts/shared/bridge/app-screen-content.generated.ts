@@ -982,6 +982,7 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
         "id": 2,
         "parentId": 1,
         "fontSize": 24,
+        "fontWeight": 700,
         "text": "调试基座即宿主",
         "semantic": "text"
       },
@@ -1015,6 +1016,7 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
         "id": 5,
         "parentId": 4,
         "fontSize": 15,
+        "fontWeight": 600,
         "margin": {
           "bottom": 10
         },
@@ -1086,6 +1088,7 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
         "id": 11,
         "parentId": 10,
         "fontSize": 15,
+        "fontWeight": 600,
         "margin": {
           "bottom": 10
         },
@@ -1217,6 +1220,7 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
         "id": 22,
         "parentId": 21,
         "fontSize": 15,
+        "fontWeight": 600,
         "margin": {
           "bottom": 10
         },
@@ -1276,6 +1280,7 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
         "id": 27,
         "parentId": 26,
         "fontSize": 15,
+        "fontWeight": 600,
         "margin": {
           "bottom": 10
         },
@@ -1310,6 +1315,7 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
         "id": 30,
         "parentId": 29,
         "fontSize": 20,
+        "fontWeight": 700,
         "semantic": "text"
       },
       {
@@ -1344,6 +1350,7 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
         "id": 33,
         "parentId": 32,
         "fontSize": 20,
+        "fontWeight": 700,
         "semantic": "text"
       },
       {
@@ -1378,6 +1385,7 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
         "id": 36,
         "parentId": 35,
         "fontSize": 20,
+        "fontWeight": 700,
         "semantic": "text"
       },
       {
@@ -1412,6 +1420,7 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
         "id": 39,
         "parentId": 38,
         "fontSize": 20,
+        "fontWeight": 700,
         "semantic": "text"
       },
       {
@@ -1446,6 +1455,7 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
         "id": 42,
         "parentId": 41,
         "fontSize": 20,
+        "fontWeight": 700,
         "semantic": "text"
       },
       {
@@ -1480,6 +1490,7 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
         "id": 45,
         "parentId": 44,
         "fontSize": 20,
+        "fontWeight": 700,
         "semantic": "text"
       },
       {
@@ -1512,6 +1523,7 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
         "id": 48,
         "parentId": 47,
         "fontSize": 15,
+        "fontWeight": 600,
         "margin": {
           "bottom": 10
         },
@@ -1711,6 +1723,7 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
           "left": 10
         },
         "borderRadius": 4,
+        "fontWeight": 600,
         "fontSize": 13,
         "semantic": "div"
       },
@@ -2051,6 +2064,7 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
       {
         "id": 2,
         "parentId": 1,
+        "fontWeight": 700,
         "text": "文档引擎",
         "semantic": "text"
       },
@@ -2094,6 +2108,7 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
       {
         "id": 9,
         "parentId": 8,
+        "fontWeight": 700,
         "semantic": "text"
       },
       {
@@ -2118,6 +2133,7 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
       {
         "id": 13,
         "parentId": 12,
+        "fontWeight": 600,
         "semantic": "text"
       },
       {
@@ -2259,6 +2275,7 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
           "left": 0
         },
         "color": "#07c160",
+        "fontWeight": 600,
         "semantic": "p"
       },
       {
@@ -2318,6 +2335,7 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
         "id": 14,
         "parentId": 0,
         "color": "#1d6fb8",
+        "fontWeight": 600,
         "text": "p-fluid=\"font-size(14,20) margin(16,32)\" —— 字号与外边距随窗口宽度流式变化",
         "semantic": "p"
       }
@@ -3225,6 +3243,7 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
         "id": 83,
         "parentId": 82,
         "fontSize": 28,
+        "fontWeight": 700,
         "color": "#1d6fb8",
         "margin": {
           "bottom": 8
@@ -3764,6 +3783,7 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
         "id": 9,
         "parentId": 8,
         "fontSize": 13,
+        "fontWeight": 600,
         "color": "#fff",
         "semantic": "p-text"
       },
@@ -3833,6 +3853,7 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
         "id": 16,
         "parentId": 15,
         "fontSize": 13,
+        "fontWeight": 600,
         "color": "#fff",
         "semantic": "p-text"
       },
@@ -3902,6 +3923,7 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
         "id": 23,
         "parentId": 22,
         "fontSize": 13,
+        "fontWeight": 600,
         "color": "#fff",
         "text": "noise 0.08",
         "semantic": "p-text"
@@ -3931,6 +3953,7 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
         "id": 26,
         "parentId": 25,
         "fontSize": 13,
+        "fontWeight": 600,
         "color": "#fff",
         "text": "border=false",
         "semantic": "p-text"
@@ -3960,6 +3983,7 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
         "id": 29,
         "parentId": 28,
         "fontSize": 13,
+        "fontWeight": 600,
         "color": "#fff",
         "text": "custom 紫",
         "semantic": "p-text"
@@ -4035,6 +4059,7 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
         "id": 1,
         "parentId": 0,
         "fontSize": 18,
+        "fontWeight": 600,
         "text": "GP0-a · root-portal 点击穿透实测",
         "semantic": "text"
       },
@@ -4160,6 +4185,7 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
       {
         "id": 1,
         "parentId": 0,
+        "fontWeight": 700,
         "text": "GP3-b1 · Global 层（每页注入 + 状态共享）",
         "semantic": "text"
       },
@@ -4749,6 +4775,7 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
       {
         "id": 33,
         "parentId": 30,
+        "fontWeight": 700,
         "color": "#7c3aed",
         "text": "★ SVG 能力综合演示（炫丽效果）",
         "semantic": "a"
@@ -4756,6 +4783,7 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
       {
         "id": 34,
         "parentId": 30,
+        "fontWeight": 700,
         "color": "#7c3aed",
         "text": "★ SVG 骨骼动画（嵌套变换复合 / 层级运动学）",
         "semantic": "a"
@@ -4948,6 +4976,7 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
         "id": 1,
         "parentId": 0,
         "fontSize": 20,
+        "fontWeight": 700,
         "margin": {
           "bottom": 8
         },
@@ -5824,6 +5853,7 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
         "id": 3,
         "parentId": 0,
         "fontSize": 16,
+        "fontWeight": 600,
         "margin": {
           "top": 12,
           "right": 0,
@@ -5910,6 +5940,7 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
         "id": 1,
         "parentId": 0,
         "fontSize": 20,
+        "fontWeight": 700,
         "margin": {
           "bottom": 8
         },
@@ -7089,6 +7120,7 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
         "borderRadius": 8,
         "color": "#fff",
         "fontSize": 16,
+        "fontWeight": 700,
         "text": "Proteus",
         "semantic": "text"
       },
@@ -9975,6 +10007,7 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
         "id": 2,
         "parentId": 0,
         "fontSize": 20,
+        "fontWeight": 700,
         "color": "#e0f2fe",
         "text": "SVG 能量核心",
         "semantic": "text"
@@ -10185,6 +10218,7 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
         "margin": {
           "top": 4
         },
+        "fontWeight": 600,
         "semantic": "text"
       },
       {
@@ -10195,6 +10229,7 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
         "margin": {
           "top": 4
         },
+        "fontWeight": 600,
         "semantic": "text"
       },
       {
@@ -10626,6 +10661,7 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
         "id": 2,
         "parentId": 0,
         "fontSize": 20,
+        "fontWeight": 700,
         "color": "#e0f2fe",
         "text": "SVG 骨骼动画",
         "semantic": "text"
@@ -11668,6 +11704,7 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
         "margin": {
           "top": 4
         },
+        "fontWeight": 600,
         "semantic": "text"
       },
       {
@@ -11678,6 +11715,7 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
         "margin": {
           "top": 4
         },
+        "fontWeight": 600,
         "semantic": "text"
       },
       {
@@ -11744,6 +11782,7 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
         "parentId": 193,
         "fontSize": 12,
         "color": "#7dd3fc",
+        "fontWeight": 600,
         "text": "根 → 髋",
         "semantic": "text"
       },
@@ -11769,6 +11808,7 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
         "parentId": 196,
         "fontSize": 12,
         "color": "#7dd3fc",
+        "fontWeight": 600,
         "text": "髋 → 大腿",
         "semantic": "text"
       },
@@ -11794,6 +11834,7 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
         "parentId": 199,
         "fontSize": 12,
         "color": "#7dd3fc",
+        "fontWeight": 600,
         "text": "大腿 → 小腿",
         "semantic": "text"
       },
@@ -11819,6 +11860,7 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
         "parentId": 202,
         "fontSize": 12,
         "color": "#7dd3fc",
+        "fontWeight": 600,
         "text": "动作切换",
         "semantic": "text"
       },
@@ -12008,6 +12050,7 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
       {
         "id": 1,
         "parentId": 0,
+        "fontWeight": 700,
         "text": "★G12 v-model MP 复测（Skyline）",
         "semantic": "text"
       },
@@ -12027,6 +12070,7 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
       {
         "id": 4,
         "parentId": 3,
+        "fontWeight": 600,
         "text": "① p-modal v-model:visible（update-visible 单段事件契约）",
         "semantic": "text"
       },
@@ -12071,6 +12115,7 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
       {
         "id": 11,
         "parentId": 10,
+        "fontWeight": 600,
         "text": "② p-switch v-model（update-modelValue 契约）",
         "semantic": "text"
       },
@@ -12102,6 +12147,7 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
       {
         "id": 16,
         "parentId": 15,
+        "fontWeight": 600,
         "text": "③ p-slider v-model（update-modelValue 契约——MP 映射已落地：原生 slider 双端）",
         "semantic": "text"
       },
@@ -12132,6 +12178,7 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
       {
         "id": 21,
         "parentId": 20,
+        "fontWeight": 600,
         "text": "④ p-input（受控组件：:value + @input，非 v-model）",
         "semantic": "text"
       },
@@ -12158,6 +12205,7 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
       {
         "id": 1,
         "parentId": 0,
+        "fontWeight": 700,
         "text": "Vue 能力对齐",
         "semantic": "text"
       },
@@ -12177,6 +12225,7 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
       {
         "id": 4,
         "parentId": 3,
+        "fontWeight": 600,
         "text": "① ref / computed / watch",
         "semantic": "text"
       },
@@ -12210,6 +12259,7 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
       {
         "id": 9,
         "parentId": 8,
+        "fontWeight": 600,
         "text": "② v-model（input 双绑）",
         "semantic": "text"
       },
@@ -12243,6 +12293,7 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
       {
         "id": 13,
         "parentId": 12,
+        "fontWeight": 600,
         "text": "③ v-if 条件链 / v-show",
         "semantic": "text"
       },
@@ -12297,6 +12348,7 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
       {
         "id": 21,
         "parentId": 20,
+        "fontWeight": 600,
         "text": "④ v-for",
         "semantic": "text"
       },
@@ -12315,6 +12367,7 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
       {
         "id": 24,
         "parentId": 23,
+        "fontWeight": 600,
         "text": "⑤ v-html / :class / :style",
         "semantic": "text"
       },
@@ -12338,6 +12391,7 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
       {
         "id": 28,
         "parentId": 27,
+        "fontWeight": 600,
         "text": "⑥ transition（离开动画状态机）",
         "semantic": "text"
       },
@@ -12371,6 +12425,7 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
       {
         "id": 33,
         "parentId": 32,
+        "fontWeight": 600,
         "text": "⑦ provide / inject",
         "semantic": "text"
       },
@@ -12409,6 +12464,7 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
       {
         "id": 39,
         "parentId": 38,
+        "fontWeight": 600,
         "text": "⑧ defineModel（v-model 组件契约）",
         "semantic": "text"
       },
@@ -12432,6 +12488,7 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
       {
         "id": 43,
         "parentId": 42,
+        "fontWeight": 600,
         "text": "⑨ reactivity-runtime（reactive / readonly 真 Proxy）",
         "semantic": "text"
       },
@@ -12465,6 +12522,7 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
       {
         "id": 48,
         "parentId": 47,
+        "fontWeight": 600,
         "text": "⑩ toRef / toRefs（运行时真 ref）",
         "semantic": "text"
       },
@@ -12498,6 +12556,7 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
       {
         "id": 53,
         "parentId": 52,
+        "fontWeight": 600,
         "text": "⑪ markRaw / customRef（运行时真语义）",
         "semantic": "text"
       },
@@ -12531,6 +12590,7 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
       {
         "id": 58,
         "parentId": 57,
+        "fontWeight": 600,
         "text": "⑫ teleport → root-portal（弹层层叠）",
         "semantic": "text"
       },
@@ -12618,6 +12678,7 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
       {
         "id": 1,
         "parentId": 0,
+        "fontWeight": 700,
         "text": "GP4-c · 登录失效拦截（不可取消模态）",
         "semantic": "text"
       },
@@ -12716,6 +12777,7 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
       {
         "id": 1,
         "parentId": 0,
+        "fontWeight": 700,
         "text": "GP4-b · Loading 多实例与遮罩范围",
         "semantic": "text"
       },
@@ -12896,6 +12958,7 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
       {
         "id": 1,
         "parentId": 0,
+        "fontWeight": 700,
         "text": "GP4-a · Toast 队列",
         "semantic": "text"
       },
@@ -13094,6 +13157,7 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
       {
         "id": 1,
         "parentId": 0,
+        "fontWeight": 700,
         "text": "GP5 · 八条超级应用场景",
         "semantic": "text"
       },
@@ -13202,6 +13266,7 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
         "id": 1,
         "parentId": 0,
         "fontSize": 18,
+        "fontWeight": 700,
         "text": "P0 image + SVG data-URI 验证",
         "semantic": "text"
       },
@@ -13363,6 +13428,7 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
       {
         "id": 1,
         "parentId": 0,
+        "fontWeight": 600,
         "text": "外部模块导入验证（B1：npm 包构建期打包）",
         "semantic": "text"
       },
@@ -13412,6 +13478,7 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
         "id": 1,
         "parentId": 0,
         "fontSize": 16,
+        "fontWeight": 700,
         "text": "SVG 动画方案验证",
         "semantic": "text"
       },
@@ -13603,6 +13670,7 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
         "id": 1,
         "parentId": 0,
         "fontSize": 15,
+        "fontWeight": 700,
         "text": "Canvas 方案调研探针",
         "semantic": "text"
       },
@@ -13670,6 +13738,7 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
         "id": 1,
         "parentId": 0,
         "fontSize": 16,
+        "fontWeight": 700,
         "text": "Canvas 通道动画验证",
         "semantic": "text"
       },
@@ -13837,6 +13906,7 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
         "parentId": 0,
         "fontSize": 13,
         "color": "#e74c3c",
+        "fontWeight": 700,
         "margin": {
           "top": 4
         },
@@ -13865,6 +13935,7 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
         "id": 1,
         "parentId": 0,
         "fontSize": 16,
+        "fontWeight": 700,
         "text": "SVG 事件命中验证",
         "semantic": "text"
       },
@@ -13873,6 +13944,7 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
         "parentId": 0,
         "fontSize": 14,
         "color": "#e74c3c",
+        "fontWeight": 700,
         "semantic": "text"
       },
       {
@@ -13915,6 +13987,7 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
         "id": 9,
         "parentId": 0,
         "fontSize": 16,
+        "fontWeight": 700,
         "text": "SVG text 提升验证",
         "semantic": "text"
       },
@@ -13971,6 +14044,7 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
         "id": 1,
         "parentId": 0,
         "fontSize": 15,
+        "fontWeight": 700,
         "text": "SVG 高级特性渲染对照",
         "semantic": "text"
       },
@@ -14228,6 +14302,7 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
         "id": 1,
         "parentId": 0,
         "fontSize": 16,
+        "fontWeight": 700,
         "text": "canvas node 通道探测 v2",
         "semantic": "text"
       },
