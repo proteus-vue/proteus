@@ -338,6 +338,9 @@ pub struct LStyle {
     /// `align-items`（`stretch` / `flex-start` / `center` / `flex-end` …）
     #[serde(default = "default_align")]
     pub align_items: String,
+    /// ★批次 11（CSS 兼容对齐）：`align-content`（多行弹性容器的**行间**对齐；open string，缺省 stretch）
+    #[serde(default = "default_align_content")]
+    pub align_content: String,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub align_self: Option<String>,
 
@@ -542,6 +545,11 @@ fn default_justify() -> String {
 fn default_align() -> String {
     "stretch".into()
 }
+
+/// ★批次 11：`align-content` 缺省（CSS 默认 `stretch`）
+fn default_align_content() -> String {
+    "stretch".into()
+}
 fn default_shrink() -> f32 {
     1.0
 }
@@ -563,6 +571,7 @@ impl Default for LStyle {
             flex_wrap: FlexWrap::default(),
             justify_content: default_justify(),
             align_items: default_align(),
+            align_content: default_align_content(),
             align_self: None,
             flex_grow: 0.0,
             flex_shrink: 1.0,

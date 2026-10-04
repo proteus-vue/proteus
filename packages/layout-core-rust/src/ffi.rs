@@ -94,6 +94,9 @@ pub(crate) struct NodeDto {
     pub(crate) justify_content: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub(crate) align_items: Option<String>,
+    /// ★批次 11：`align-content`（多行弹性容器的行间对齐）
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub(crate) align_content: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub(crate) align_self: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -236,6 +239,7 @@ impl NodeDto {
             flex_wrap: None,
             justify_content: None,
             align_items: None,
+            align_content: None,
             align_self: None,
             flex_grow: None,
             flex_shrink: None,
@@ -658,6 +662,9 @@ pub(crate) fn style_from_dto(dto: &NodeDto) -> Result<LStyle, String> {
     }
     if let Some(a) = dto.align_items.clone() {
         style.align_items = a;
+    }
+    if let Some(ac) = dto.align_content.clone() {
+        style.align_content = ac;
     }
     style.align_self = dto.align_self.clone();
     if let Some(g) = dto.flex_grow {

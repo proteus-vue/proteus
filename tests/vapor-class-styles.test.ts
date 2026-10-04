@@ -575,3 +575,23 @@ describe('★批次 10 · box-shadow（结构化 + 三端宿主绘制）', () =>
     expect((n!.style as { boxShadow?: { blur?: number } }).boxShadow?.blur).toBe(14)
   })
 })
+
+// ★★★批次 11（CSS 兼容对齐 · [Rust] 布局）：align-content——2026-10-04
+describe('★批次 11 · align-content（多行容器行间对齐）', () => {
+  it('① open string：center/space-between 等折进（未知值原样交引擎落默认）', () => {
+    expect(parseStaticStyle('align-content: center', () => {}).alignContent).toBe('center')
+    expect(parseStaticStyle('align-content: space-between', () => {}).alignContent).toBe('space-between')
+    expect(parseStaticStyle('align-content: stretch', () => {}).alignContent).toBe('stretch')
+  })
+
+  it('② 端到端：wrap 容器 + align-content 折进节点 style', () => {
+    const sfc = `<template><view class="tags">x</view></template>
+<script setup>const z = 1</script>
+<style>
+.tags { display: flex; flex-direction: row; flex-wrap: wrap; align-content: center }
+</style>`
+    const r = buildLayoutTemplate(sfc, 'pages/tags.vue')
+    const n = r.template.nodes.find((x) => (x.style as { alignContent?: string }).alignContent)
+    expect((n!.style as { alignContent?: string }).alignContent).toBe('center')
+  })
+})
