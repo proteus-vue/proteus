@@ -133,6 +133,33 @@ console.log(`[android-bundle] ✅ ${path.relative(ROOT, OUT_APP_STACK)}（${(byt
 if (resultAppStack.warnings.length) {
   for (const w of resultAppStack.warnings) console.warn(`  ⚠ ${w.text}`)
 }
+// ══════════════════════════════════════════════════════════════════
+// ★★★批次 43（superapp 真实应用）：superapp 应用入口 bundle
+//   entry-superapp.ts = 真实应用启动路径（装配 App 导航 → createRouter(routes,{adapter}) →
+//   进入入口 tab，常驻；暴露 __SUPERAPP__）。屏注册表 + 各页内容来自构建期产物
+//   （app-screen-content.generated.ts，可 import superapp/examples 的真实路由）。
+const OUT_SUPERAPP = path.join(HERE, 'dist', 'bundle-superapp.js')
+const resultSuperapp = await build({
+  entryPoints: [path.join(ROOT, 'hosts', 'shared', 'bridge', 'entry-superapp.ts')],
+  outfile: OUT_SUPERAPP,
+  bundle: true, format: 'iife', platform: 'neutral', target: 'es2020',
+  define: { 'process.env.NODE_ENV': '"production"', __DEV__: 'false' },
+  alias: {
+    '@proteus-vue/router': path.join(ROOT, 'packages/router/src/index.ts'),
+    '@proteus-vue/router/app-stack': path.join(ROOT, 'packages/router/src/app-stack.ts'),
+    '@proteus-vue/router/app-route': path.join(ROOT, 'packages/router/src/app-route.ts'),
+    '@proteus-vue/router/types': path.join(ROOT, 'packages/router/src/types.ts'),
+    '@proteus-vue/render-backend/app-navigation': path.join(ROOT, 'packages/render-backend/src/app-navigation.ts'),
+    '@proteus-vue/animation': path.join(ROOT, 'packages/animation/src/index.ts'),
+    '@proteus-vue/contracts': path.join(ROOT, 'packages/contracts/src/index.ts'),
+  },
+  legalComments: 'none',
+})
+const bytesSuperapp = fs.statSync(OUT_SUPERAPP).size
+console.log(`[android-bundle] ✅ ${path.relative(ROOT, OUT_SUPERAPP)}（${(bytesSuperapp / 1024).toFixed(1)} KB）`)
+if (resultSuperapp.warnings.length) {
+  for (const w of resultSuperapp.warnings) console.warn(`  ⚠ ${w.text}`)
+}
 
 // ══════════════════════════════════════════════════════════════════
 // ★★G-39：第三个 entry —— 宿主运行时（host-runtime：生命周期/事件循环/职责边界/内存账本）

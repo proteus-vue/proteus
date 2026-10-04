@@ -39,6 +39,8 @@ hosts/android/app/src/main/assets/bundle-app-stack.js
 hosts/android/app/src/main/assets/bundle-host-runtime.js
 # ★灯光秀 bundle 的拷贝（源 hosts/android/bridge/dist/bundle-lights.js；同款规则同款理由）
 hosts/android/app/src/main/assets/bundle-lights.js
+# ★批次 43（superapp 真实应用）bundle 的拷贝（源 hosts/android/bridge/dist/bundle-superapp.js；同款规则同款理由）
+hosts/android/app/src/main/assets/bundle-superapp.js
 # ★灯光秀录屏原片（43MB）——与 iOS showcase.mp4 同款：网页交付物是正片
 #   website/public/morpheus-lights.mp4（6.6MB，已在库）；原片留本机复跑用
 hosts/android/results/lights-demo.mp4

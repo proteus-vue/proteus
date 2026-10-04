@@ -229,6 +229,16 @@ else
   echo "    ⚠ 未见 $BUNDLE_AS —— 缺它只影响 app-stack 测试路径"
 fi
 
+# 批次 43（superapp 真实应用）：superapp 应用入口 bundle → assets（真实应用运行路径）
+BUNDLE_SA="$HERE/bridge/dist/bundle-superapp.js"
+if [ -f "$BUNDLE_SA" ]; then
+  mkdir -p "$APP/src/main/assets"
+  cp "$BUNDLE_SA" "$APP/src/main/assets/bundle-superapp.js"
+  echo "    bundle-superapp.js 已入 assets（$(du -h "$BUNDLE_SA" | awk '{print $1}')）"
+else
+  echo "    ⚠ 未见 $BUNDLE_SA —— 缺它只影响 superapp 真实应用路径"
+fi
+
 # ★★★App 三端对齐 · 视觉合成（2026-10-04）：App 屏内容产物 → assets（真机真画屏用）
 APP_SC="$ROOT/${PROTEUS_APP_PROJECT:-superapp}/dist/app/android/screen-content.json"
 if [ -f "$APP_SC" ]; then

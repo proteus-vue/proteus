@@ -2039,3 +2039,78 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
     ]
   }
 }
+
+// 批次 43：**屏注册表**（来源项目 router/auto-routes.ts；screens/tabNames/tab 标题）——
+//   App 端真实应用入口据此装配路由栈与 tab。与 Web/MP 同一棵路由树。
+export const APP_SCREEN_REGISTRY = {
+  "screens": {
+    "index": {
+      "name": "index",
+      "path": "pages/index"
+    },
+    "messages": {
+      "name": "messages",
+      "path": "pages/messages"
+    },
+    "mine": {
+      "name": "mine",
+      "path": "pages/mine"
+    },
+    "verify": {
+      "name": "verify",
+      "path": "pages/verify"
+    }
+  },
+  "tabNames": [
+    "index",
+    "messages",
+    "mine"
+  ],
+  "tabLabels": {
+    "index": "Proteus 超级应用",
+    "messages": "消息",
+    "mine": "我的",
+    "verify": "验收控制台"
+  },
+  "indexName": "index",
+  "routes": [
+    {
+      "name": "index",
+      "path": "pages/index",
+      "component": "../pages/index.vue",
+      "meta": {
+        "title": "Proteus 超级应用",
+        "isTab": true
+      }
+    },
+    {
+      "name": "messages",
+      "path": "pages/messages",
+      "component": "../pages/messages.vue",
+      "parent": "index",
+      "meta": {
+        "title": "消息",
+        "isTab": true
+      }
+    },
+    {
+      "name": "mine",
+      "path": "pages/mine",
+      "component": "../pages/mine.vue",
+      "parent": "index",
+      "meta": {
+        "title": "我的",
+        "isTab": true
+      }
+    },
+    {
+      "name": "verify",
+      "path": "pages/verify",
+      "component": "../pages/verify.vue",
+      "parent": "index",
+      "meta": {
+        "title": "验收控制台"
+      }
+    }
+  ]
+}
