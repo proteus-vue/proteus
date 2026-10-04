@@ -75,7 +75,7 @@ export const APP_ENUM_VALUES: Record<string, readonly string[]> = {
 }
 
 /** 绘制字段（宿主自绘读这些键；模板照样要带上，否则挂载后无底色/无字色） */
-export const APP_PAINT_FIELDS = ['backgroundColor', 'color', 'fontSize', 'fontWeight', 'textAlign', 'lineHeight', 'textOverflow', 'letterSpacing', 'textDecoration', 'visibility', 'borderRadius', 'borderColor', 'borderWidth', 'opacity', 'boxShadow'] as const
+export const APP_PAINT_FIELDS = ['backgroundColor', 'color', 'fontSize', 'fontWeight', 'fontFamily', 'textAlign', 'lineHeight', 'textOverflow', 'letterSpacing', 'textDecoration', 'visibility', 'borderRadius', 'borderColor', 'borderWidth', 'opacity', 'boxShadow'] as const
 const PAINT_FIELDS = new Set<string>(APP_PAINT_FIELDS)
 /**
  * ★批次 4（CSS 兼容对齐）：`text-align` 的**封闭集**（App 自绘文本在盒内的水平对齐）。
@@ -107,7 +107,7 @@ export const APP_SPECIAL_FIELDS = ['boxSizing'] as const
  *   `font-weight`/`line-height`/`text-align`/`text-overflow`（批 16）。
  *   背景/边框/圆角/不透明度在内核语义里**不继承**（见 Profile §3 可继承/不可继承表）⇒ 不得纳入。
  */
-export const APP_INHERITABLE_FIELDS = ['color', 'fontSize', 'fontWeight', 'lineHeight', 'textAlign', 'textOverflow', 'letterSpacing', 'textDecoration'] as const
+export const APP_INHERITABLE_FIELDS = ['color', 'fontSize', 'fontWeight', 'fontFamily', 'lineHeight', 'textAlign', 'textOverflow', 'letterSpacing', 'textDecoration'] as const
 /** ★批次 28：支持 `inherit` 关键字的字段集（可继承 + visibility）。 */
 const INHERIT_KEY_SET = new Set<string>([...APP_INHERITABLE_FIELDS, 'visibility'])
 
@@ -734,6 +734,13 @@ export function parseStaticStyle(
         pushDiag(`style 里 \`${rawKey}: ${rawVal}\` 未支持（仅 none / underline / line-through）——已跳过`)
         continue
       }
+      if (key === 'fontFamily') {
+        // ★批次 36（对齐 Web · 削减胶水）：`font-family` 候选清单 → **字体角色**（可继承）。
+        //   与 renderer-app 的 normalizeFontFamily **同一映射**（两端一处归一；原生宿主按角色解析）。
+        const role = parseFontFamilyRole(rawVal)
+        if (role === undefined) { pushDiag(`style 里 \`${rawKey}: ${rawVal}\` 无法归一为字体角色（system/serif/monospace/rounded/condensed）——已跳过`); continue }
+        out[key] = role; markImportant(key); continue
+      }
       if (key === 'lineHeight') {
         // ★批次 13：`line-height`（超级应用文本排版）——归一为 token 串：无单位倍数 `1.6` / 绝对 `24px`
         //   （`160%` → 倍数 1.6）。宿主据此算行盒高（倍数 × fontSize）并令字形**垂直居中**。
@@ -1246,6 +1253,30 @@ function noOpResetValue(key: string, val: string): Record<string, unknown> | nul
     default:
       return null
   }
+}
+
+/**
+ * ★批次 36（对齐 Web）：`font-family` 候选清单 → **字体角色**。
+ *   映射与 `@proteus-vue/renderer-app` 的 `normalizeFontFamily` **逐条一致**（本仓纪律：一处归一；
+ *   编译器 App 折叠面 + 适配器 JS 路共用同一角色词表）。未识别 ⇒ 取首个具体族名 `custom:<名>`（自定义族透传）。
+ *   返回 undefined ⇔ 空清单/全为通用族关键字但未命中（调用方诊断）。
+ */
+function parseFontFamilyRole(v: string): string | undefined {
+  const rawList = v.split(',').map((s) => s.trim().replace(/^["']|["']$/g, '')).filter(Boolean)
+  if (rawList.length === 0) return undefined
+  const cands = rawList.map((s) => s.toLowerCase())
+  for (const c of cands) {
+    if (!c) continue
+    if (c === 'system' || c === 'system-ui' || c === '-apple-system' || c === 'sans-serif' || c === 'sans') return 'system'
+    if (c === 'serif' || (c.includes('serif') && !c.includes('sans'))) return 'serif'
+    if (c === 'monospace' || c === 'mono') return 'monospace'
+    if (c.includes('rounded')) return 'rounded'
+    if (c.includes('condensed')) return 'condensed'
+    if (c.includes('georgia') || c.includes('times') || c.includes('songti') || c.includes('宋')) return 'serif'
+    if (c.includes('menlo') || c.includes('consolas') || c.includes('courier') || c.includes('mono')) return 'monospace'
+    if (c === 'helvetica' || c === 'roboto' || c === 'arial' || c.includes('pingfang')) return 'system'
+  }
+  return 'custom:' + rawList[0]!
 }
 
 /**

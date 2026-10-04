@@ -5387,6 +5387,7 @@
             "bottom": 5,
             "left": 8
           },
+          "fontFamily": "monospace",
           "fontSize": 12,
           "semantic": "input"
         },
@@ -5422,6 +5423,7 @@
             "bottom": 5,
             "left": 8
           },
+          "fontFamily": "monospace",
           "fontSize": 12,
           "semantic": "input"
         },
@@ -5559,6 +5561,7 @@
           "parentId": 29,
           "color": "#bbb",
           "fontSize": 11,
+          "fontFamily": "monospace",
           "semantic": "span"
         },
         {
@@ -5601,6 +5604,7 @@
         {
           "id": 38,
           "parentId": 37,
+          "fontFamily": "monospace",
           "fontSize": 11,
           "padding": {
             "top": 1,
@@ -9293,6 +9297,24 @@
           "textAlign": "center",
           "text": "line-through \u5220\u9664\u7EBF",
           "semantic": "span"
+        },
+        {
+          "id": 79,
+          "parentId": 0,
+          "margin": {
+            "top": 12,
+            "bottom": 12
+          },
+          "marginAuto": {
+            "right": true,
+            "left": true
+          },
+          "fontFamily": "monospace",
+          "color": "#333",
+          "fontSize": 13,
+          "textAlign": "center",
+          "text": "font-family: monospace",
+          "semantic": "div"
         }
       ]
     },

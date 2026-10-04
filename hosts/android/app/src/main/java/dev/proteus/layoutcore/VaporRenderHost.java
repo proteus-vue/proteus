@@ -1110,7 +1110,7 @@ final class VaporRenderHost {
             "width", "height", "minWidth", "maxWidth", "minHeight", "maxHeight",
             "margin", "padding", "flexDirection", "flexWrap", "justifyContent", "alignItems", "alignContent", "alignSelf",
             "flexGrow", "flexShrink", "flexBasis", "gap", "rowGap", "columnGap", "display", "position", "top", "left", "right", "bottom",
-            "gridTemplateColumns", "gridTemplateRows", "aspectRatio", "pointerEvents",
+            "gridTemplateColumns", "gridTemplateRows", "aspectRatio", "pointerEvents", "fontFamily",
             "widthRatio", "heightRatio", "marginAuto", "minWidthPct", "maxWidthPct", "minHeightPct", "maxHeightPct", "overflow",
             // ★静态基态声明（内核要解析）：裁剪形状 + 路径本体（+ 描边色/宽随 svgPath 一起进）
             "clipPath", "svgPath", "svgPathTo", "perspective"));
@@ -1258,7 +1258,8 @@ final class VaporRenderHost {
             // ★批次 3：度量与绘制**同源**（bold 字形更宽 —— 度量不带字重会与绘制不一致，本仓已踩过
             //   "度量用一支字体/绘制用另一支"的坑）。缺省 400 = normal ⇒ 既有路径零变化。
             int mw = (int) spec.optDouble("fontWeight", 400);
-            tp.setTypeface(ProteusHostView.typefaceOf(null, mw, null));
+            // ★批次 36：字体角色（font-family → role）+ 字重（度量与绘制同源）
+            tp.setTypeface(ProteusHostView.typefaceOf(spec.optString("fontFamily", null), mw, null));
             // ★批次 20：字距（px ⇒ em；与绘制同源，否则度量窄、绘制宽）
             float ls = (float) spec.optDouble("letterSpacing", 0);
             if (ls != 0f && fs > 0f) tp.setLetterSpacing(ls / fs);
@@ -1334,6 +1335,7 @@ final class VaporRenderHost {
             injectClipPath(id, spec);
             injectTransformOrigin(id, spec);
             injectRadiusCorners(id, spec);
+            injectFontRole(id, spec);
         }
 
         // ★★**Cmd 上的绘制通道**（与 LightsHost 的构造逐项对齐）：
@@ -1432,6 +1434,7 @@ final class VaporRenderHost {
             injectClipPath(id, spec);
             injectTransformOrigin(id, spec);
             injectRadiusCorners(id, spec);
+            injectFontRole(id, spec);
         }
     }
 
@@ -1466,6 +1469,12 @@ final class VaporRenderHost {
         if (rc.optBoolean("bottomRight", false)) mask |= 4;
         if (rc.optBoolean("bottomLeft", false)) mask |= 8;
         view.setNodeRadiusCorners(id, mask);
+    }
+
+    /** ★批次 36：字体角色注入（`fontFamily` → 宿主节点表；绘制/度量按角色设 typeface） */
+    private void injectFontRole(int id, JSONObject spec) {
+        if (view == null) return;
+        view.setNodeFontRole(id, spec.optString("fontFamily", null));
     }
 
     /** 渐变声明 → `GradSpec`（`GradSpec.parse` 对非法返回 null ⇒ 退回纯色——与 LightsHost 同口径） */

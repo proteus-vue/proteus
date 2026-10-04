@@ -376,6 +376,14 @@ static void drawChannelsAndText(OH_Drawing_Canvas* canvas, const TextDrawSpec* s
             }
             // ★批次 35：文本装饰（0=none/1=underline/4=line-through）
             if (spec->textDecoration != 0) OH_Drawing_SetTextStyleDecoration(tstyle, spec->textDecoration);
+            // ★批次 36：字体角色 → 字族（best-effort；鸿蒙字体集有限，未知角色回落默认）
+            if (spec->family == "monospace") {
+                const char* fams[] = {"HarmonyOS Sans Digit", "monospace"};
+                OH_Drawing_SetTextStyleFontFamilies(tstyle, 2, fams);
+            } else if (spec->family == "serif") {
+                const char* fams[] = {"serif"};
+                OH_Drawing_SetTextStyleFontFamilies(tstyle, 1, fams);
+            }
             // ★批次 20（CSS 兼容对齐 · 以 Web 为基准）：字距（物理 px；0 = 默认不设）
             if (spec->letterSpacing != 0) OH_Drawing_SetTextStyleLetterSpacing(tstyle, spec->letterSpacing);
             // ★批次 16（CSS 兼容对齐 · 以 Web 为基准）：`text-overflow:ellipsis` ⇒ 单行尾部省略号。
@@ -671,6 +679,7 @@ static int renderCommandsImpl(const char* jsonCStr, bool fromProbe) {
         int deco = 0;
         jsonNumber(it, "fontWeight", &fw);
         { std::string tdStr; jsonString(it, "textDecoration", &tdStr); if (tdStr == "underline") deco = 1; else if (tdStr == "line-through") deco = 4; }
+        std::string ffStr; jsonString(it, "fontFamily", &ffStr);
         // ★批次 4：文本水平对齐（text-align；缺省 left）
         std::string taStr;
         jsonString(it, "textAlign", &taStr);
@@ -685,6 +694,7 @@ static int renderCommandsImpl(const char* jsonCStr, bool fromProbe) {
             auto* spec = new TextDrawSpec{textVal, fs, static_cast<uint32_t>(tc), "", static_cast<int>(fw), w};
             if (!taStr.empty()) spec->textAlign = taStr;
             spec->textDecoration = deco;
+            spec->family = ffStr;
             spec->lineHeightPx = lhPx;
             { double lsg = 0; jsonNumber(it, "letterSpacing", &lsg); spec->letterSpacing = lsg; }
             { double toe = 0; jsonNumber(it, "textOverflowEllipsis", &toe); spec->textOverflowEllipsis = toe > 0 ? 1 : 0; }

@@ -144,6 +144,9 @@ function go(name: 'forms' | 'config-demo' | 'user') {
       <span class="deco-u">underline 下划线</span>
       <span class="deco-s">line-through 删除线</span>
     </div>
+
+    <!-- ★font-family 演示（批次 36）：等宽字体（字体角色 monospace） -->
+    <div class="mono-demo">font-family: monospace</div>
   </div>
 </template>
 
@@ -416,5 +419,13 @@ function go(name: 'forms' | 'config-demo' | 'user') {
   text-decoration: line-through;
   color: #888;
   font-size: 13px;
+}
+/* ★font-family 演示（批次 36）——等宽角色 */
+.mono-demo {
+  margin: 12px auto;
+  font-family: 'SF Mono', Consolas, monospace;
+  color: #333;
+  font-size: 13px;
+  text-align: center;
 }
 </style>
