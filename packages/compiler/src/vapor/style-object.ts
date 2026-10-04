@@ -141,7 +141,7 @@ export function mapStyleObjectKey(key: string): string | null {
   ])
   if (LAYOUT_NUMERIC.has(camel)) return `layout.${camel}`
   // 绘制键（宿主 mkCmd 认的扁平字段：backgroundColor / color / fontSize / borderRadius / …）
-  const PAINT = new Set(['backgroundColor', 'color', 'fontSize', 'fontWeight', 'textAlign', 'lineHeight', 'textOverflow', 'letterSpacing', 'visibility', 'borderRadius', 'borderColor', 'borderWidth', 'opacity'])
+  const PAINT = new Set(['backgroundColor', 'color', 'fontSize', 'fontWeight', 'textAlign', 'lineHeight', 'textOverflow', 'letterSpacing', 'textDecoration', 'visibility', 'borderRadius', 'borderColor', 'borderWidth', 'opacity'])
   if (PAINT.has(camel)) return `paint.${camel}`
   return null
 }

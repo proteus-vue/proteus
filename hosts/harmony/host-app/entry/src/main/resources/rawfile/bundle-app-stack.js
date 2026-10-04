@@ -9259,6 +9259,40 @@
           "textAlign": "center",
           "text": "\u9010\u89D2\u5706\u89D2 12 12 0 0",
           "semantic": "div"
+        },
+        {
+          "id": 76,
+          "parentId": 0,
+          "margin": {
+            "top": 16,
+            "bottom": 16
+          },
+          "marginAuto": {
+            "right": true,
+            "left": true
+          },
+          "textAlign": "center",
+          "semantic": "div"
+        },
+        {
+          "id": 77,
+          "parentId": 76,
+          "textDecoration": "underline",
+          "color": "#1a7af8",
+          "fontSize": 13,
+          "textAlign": "center",
+          "text": "underline \u4E0B\u5212\u7EBF",
+          "semantic": "span"
+        },
+        {
+          "id": 78,
+          "parentId": 76,
+          "textDecoration": "line-through",
+          "color": "#888",
+          "fontSize": 13,
+          "textAlign": "center",
+          "text": "line-through \u5220\u9664\u7EBF",
+          "semantic": "span"
         }
       ]
     },

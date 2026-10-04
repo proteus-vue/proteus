@@ -5793,6 +5793,40 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
         "textAlign": "center",
         "text": "逐角圆角 12 12 0 0",
         "semantic": "div"
+      },
+      {
+        "id": 76,
+        "parentId": 0,
+        "margin": {
+          "top": 16,
+          "bottom": 16
+        },
+        "marginAuto": {
+          "right": true,
+          "left": true
+        },
+        "textAlign": "center",
+        "semantic": "div"
+      },
+      {
+        "id": 77,
+        "parentId": 76,
+        "textDecoration": "underline",
+        "color": "#1a7af8",
+        "fontSize": 13,
+        "textAlign": "center",
+        "text": "underline 下划线",
+        "semantic": "span"
+      },
+      {
+        "id": 78,
+        "parentId": 76,
+        "textDecoration": "line-through",
+        "color": "#888",
+        "fontSize": 13,
+        "textAlign": "center",
+        "text": "line-through 删除线",
+        "semantic": "span"
       }
     ]
   },

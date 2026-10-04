@@ -138,6 +138,12 @@ function go(name: 'forms' | 'config-demo' | 'user') {
 
     <!-- ★逐角圆角演示（批次 34）：border-radius: 12px 12px 0 0（上圆下方卡片） -->
     <div class="corner-demo">逐角圆角 12 12 0 0</div>
+
+    <!-- ★text-decoration 演示（批次 35）：下划线 / 删除线（文本装饰，可继承） -->
+    <div class="deco-demo">
+      <span class="deco-u">underline 下划线</span>
+      <span class="deco-s">line-through 删除线</span>
+    </div>
   </div>
 </template>
 
@@ -395,5 +401,20 @@ function go(name: 'forms' | 'config-demo' | 'user') {
   color: #888;
   font-size: 12px;
   text-align: center;
+}
+/* ★text-decoration 演示（批次 35） */
+.deco-demo {
+  margin: 16px auto;
+  text-align: center;
+}
+.deco-u {
+  text-decoration: underline;
+  color: #1a7af8;
+  font-size: 13px;
+}
+.deco-s {
+  text-decoration: line-through;
+  color: #888;
+  font-size: 13px;
 }
 </style>

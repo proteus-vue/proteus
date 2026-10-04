@@ -1376,7 +1376,10 @@ final class VaporRenderHost {
             float lh = lineHeightPxOf(spec, fs);
             // ★批次 20：字距（px）
             float ls = (float) spec.optDouble("letterSpacing", 0);
-            return new ProteusHostView.Cmd(x, y, w, h, color, t, fs, textColor, radius, grad, glowSpec, maskSpec, fw, ta, bw, bc, shadowSpec, lh, ls);
+            // ★批次 35：文本装饰（0=none/1=underline/2=line-through）
+            String td = spec.optString("textDecoration", null);
+            int decor = "underline".equals(td) ? 1 : "line-through".equals(td) ? 2 : 0;
+            return new ProteusHostView.Cmd(x, y, w, h, color, t, fs, textColor, radius, grad, glowSpec, maskSpec, fw, ta, bw, bc, shadowSpec, lh, ls, decor);
         }
         return new ProteusHostView.Cmd(x, y, w, h, color, null, 0f, 0, radius, grad, glowSpec, maskSpec, 400, 0, bw, bc, shadowSpec);
     }

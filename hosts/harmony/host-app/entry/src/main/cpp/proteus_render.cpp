@@ -230,6 +230,8 @@ struct TextDrawSpec {
     /** ★批次 13（line-height · CSS 半行距居中）：行盒高（物理 px；0 = 未声明 ⇒ 用字形高、顶对齐）。
      *   声明时字形内容区在行盒内**垂直居中**（与 Web/Skyline 的真 CSS 一致）。 */
     double lineHeightPx = 0;
+    /** ★批次 35：文本装饰（0=none/1=underline/4=line-through；OH_Drawing_TextDecoration 位）。 */
+    int textDecoration = 0;
     /** ★批次 20（CSS 兼容对齐 · 以 Web 为基准）：字距（物理 px；0 = 默认）。由指令扁平键 `letterSpacing` 折出。 */
     double letterSpacing = 0;
     /** ★批次 16（CSS 兼容对齐 · 以 Web 为基准）：`text-overflow` 是否 ellipsis（单行溢出以 … 截断）。
@@ -372,6 +374,8 @@ static void drawChannelsAndText(OH_Drawing_Canvas* canvas, const TextDrawSpec* s
                 if (wi < 0) wi = 0; else if (wi > 8) wi = 8;
                 OH_Drawing_SetTextStyleFontWeight(tstyle, wi);
             }
+            // ★批次 35：文本装饰（0=none/1=underline/4=line-through）
+            if (spec->textDecoration != 0) OH_Drawing_SetTextStyleDecoration(tstyle, spec->textDecoration);
             // ★批次 20（CSS 兼容对齐 · 以 Web 为基准）：字距（物理 px；0 = 默认不设）
             if (spec->letterSpacing != 0) OH_Drawing_SetTextStyleLetterSpacing(tstyle, spec->letterSpacing);
             // ★批次 16（CSS 兼容对齐 · 以 Web 为基准）：`text-overflow:ellipsis` ⇒ 单行尾部省略号。
@@ -664,7 +668,9 @@ static int renderCommandsImpl(const char* jsonCStr, bool fromProbe) {
         jsonNumber(it, "textColor", &tc);
         // ★批次 3：字重（`font-weight` 折叠值；缺省 400）
         double fw = 400;
+        int deco = 0;
         jsonNumber(it, "fontWeight", &fw);
+        { std::string tdStr; jsonString(it, "textDecoration", &tdStr); if (tdStr == "underline") deco = 1; else if (tdStr == "line-through") deco = 4; }
         // ★批次 4：文本水平对齐（text-align；缺省 left）
         std::string taStr;
         jsonString(it, "textAlign", &taStr);
@@ -678,6 +684,7 @@ static int renderCommandsImpl(const char* jsonCStr, bool fromProbe) {
             bool hasAnyChannel = false;
             auto* spec = new TextDrawSpec{textVal, fs, static_cast<uint32_t>(tc), "", static_cast<int>(fw), w};
             if (!taStr.empty()) spec->textAlign = taStr;
+            spec->textDecoration = deco;
             spec->lineHeightPx = lhPx;
             { double lsg = 0; jsonNumber(it, "letterSpacing", &lsg); spec->letterSpacing = lsg; }
             { double toe = 0; jsonNumber(it, "textOverflowEllipsis", &toe); spec->textOverflowEllipsis = toe > 0 ? 1 : 0; }
