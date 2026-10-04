@@ -249,6 +249,9 @@ jobs:
       - name: App 端 CSS 支持面对照门禁（阶段 0 · 三表分层对照棘轮）
         run: pnpm run check:app-css-surface
 
+      - name: App 屏内容产物门禁（内核契约：枚举封闭集 + 树结构不变量）
+        run: pnpm run check:app-screen-content
+
       - name: Web 构建（示例工程）
         run: pnpm run build:web
 
