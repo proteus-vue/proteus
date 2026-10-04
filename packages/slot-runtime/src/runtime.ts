@@ -22,6 +22,7 @@ import { evalExpr } from './expr'
 import { SlotRuntime, createSlot } from './slot'
 import type { Slot } from './slot'
 import type { EvaluatorSpec, SubscriptionTable } from './table'
+import { resolveDynamicClasses } from './table'
 
 /** 源订阅钩子：源值变化时回调（由宿主注入；Vue 场景 = watch / effect） */
 export type SourceSubscriber = (sourceName: string, onChange: () => void) => void
@@ -99,6 +100,8 @@ export class VaporRuntime {
    *   而"写过没有"是**实例态**（页面重挂载 ⇒ 重新写一次，与官方"重挂载重新渲染"一致）。
    */
   private readonly onceWritten = new Set<number>()
+  /** ★批次 30：每节点上次由动态 `:class` 施加的引擎字段（关掉类 ⇒ 需清除这些字段） */
+  private readonly lastClassFields = new Map<number, Set<string>>()
   /** v-memo：各组的**依赖基线**（上一次比较时的值；缺省 = 还没建过基线 ⇒ 首帧必脏） */
   private readonly memoBaseline = new Map<number, unknown[]>()
   /**
@@ -365,6 +368,26 @@ export class VaporRuntime {
         // ★★★**绘制键走宿主通道**（2026-10-03 · `:style` 对象展开批次）——`paint.*` 的值是
         //   颜色/字号等（字符串或数值），内核的 f32 通道**装不下**（送进去必被洗成 0 ⇒ 静默变黑）。
         //   ⇒ 报给宿主（它重建绘制指令），不进二进制指令流（见 onPaintProp 注释）。
+        // ★批次 30（对齐 Web · 削减胶水）：**动态 `:class`** —— `paint.class` 的值是类名形态
+        //   （对象/数组/字符串）⇒ 解析活跃类名集 → 匹配自匹配规则 → 逐字段（paint.<f> 等）下发。
+        //   ★通道复用：算出的字段仍走 onPaintProp（与 :style 绘制键同一条出口）。
+        if (spec.propKey === 'paint.class' && this.onPaintProp) {
+          const implC = this.evaluators.get(spec.evaluatorId)
+          if (implC) {
+            const cv = implC(ctx)
+            const fields = resolveDynamicClasses(cv, this.table.classRules ?? [])
+            const nid = spec.nodeId + this.nodeIdOffset
+            const nextKeys = new Set(Object.keys(fields))
+            // ★批次 30：**关掉的类的字段要清除**（否则切走仍残留旧样式——Vue 语义：类移除 ⇒ 样式移除）
+            const prev = this.lastClassFields.get(nid)
+            if (prev) { for (const k of prev) if (!nextKeys.has(k)) this.onPaintProp(nid, `paint.${k}`, undefined) }
+            for (const [fk, fv] of Object.entries(fields)) this.onPaintProp(nid, `paint.${fk}`, fv)
+            this.lastClassFields.set(nid, nextKeys)
+            const eC = this.slotById.get(spec.slotId)
+            if (eC) eC.slot.value = cv as never
+          }
+          continue
+        }
         if (spec.propKey.startsWith('paint.') && this.onPaintProp) {
           const impl2 = this.evaluators.get(spec.evaluatorId)
           if (impl2) {

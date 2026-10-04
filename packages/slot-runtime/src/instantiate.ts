@@ -14,6 +14,7 @@
 //     这是行内槽位能发出**普通 SET_STYLE/SET_TEXT** 的前提（否则退回 LIST_UPDATE）
 import { ListRegistry } from './list-registry'
 import type { SubscriptionTable } from './table'
+import { resolveDynamicClasses } from './table'
 import type { ComponentDef, InstantiatedNode, LayoutNode, LayoutTemplate, ListTemplate } from './layout-template'
 // ★★初值回填复用**运行时同一套实现**（求值器重建 + 行作用域读取）——见下方注释：
 //   组合表达式（`'a' + item.x + 'b'`）不能靠"取单个字段"回填，且两处各写一份必然分叉。
@@ -179,6 +180,26 @@ export interface InstantiateResult {
  *   若不在首帧前回填，首帧几何就是错的（要靠后续指令"补上"，白闪一次）。
  *   ⇒ 纪律：**实例化必须产出"结构 + 初始值"完整的第一帧**；增量指令只负责此后 delta。
  */
+/**
+ * ★批次 30（对齐 Web · 削减胶水）：回填**样式字段**——动态 `:class` 需特殊处置。
+ *   `paint.class` 的值是类名形态（对象/数组/字符串）⇒ 解析成引擎字段集合写出；
+ *   其余 ⇒ 直接写 `key`（既有行为）。
+ */
+function applyStyleField(
+  target: InstantiatedNode,
+  propKey: string,
+  key: string,
+  v: unknown,
+  classRules: readonly import('./table').DynamicClassRule[] | undefined,
+): void {
+  if (propKey === 'paint.class') {
+    const fields = resolveDynamicClasses(v, classRules ?? [])
+    for (const [k, val] of Object.entries(fields)) (target as Record<string, unknown>)[k] = val
+    return
+  }
+  ;(target as Record<string, unknown>)[key] = v
+}
+
 function engineFieldOf(propKey: string): { kind: 'style'; key: string } | { kind: 'text' } | null {
   if (propKey === 'text.content') return { kind: 'text' }
   const m = propKey.match(/^(?:layout|paint|text)\.(.+)$/)
@@ -481,7 +502,7 @@ export function instantiateTemplate(tpl: LayoutTemplate, opts: InstantiateOption
             target.text = v === undefined || v === null ? '' : String(v)
           } else {
             // ★回填也写**顶层**（与 emit 的摊平一致——否则回填的键核心看不到）
-            ;(target as Record<string, unknown>)[f.key] = v
+            applyStyleField(target, sl.propKey, f.key, v, opts.table?.classRules)
           }
           valuesFilled++
         }
@@ -556,7 +577,7 @@ export function instantiateTemplate(tpl: LayoutTemplate, opts: InstantiateOption
       if (f.kind === 'text') {
         target.text = v === undefined || v === null ? '' : String(v)
       } else {
-        ;(target as Record<string, unknown>)[f.key] = v
+        applyStyleField(target, sl.propKey, f.key, v, opts.table?.classRules)
       }
       valuesFilled++
     }
@@ -584,7 +605,7 @@ export function instantiateTemplate(tpl: LayoutTemplate, opts: InstantiateOption
           // ★P2-9：空值 ⇒ 空串（同 cloneRow 的口径）
           target.text = v === undefined || v === null ? '' : String(v)
         } else {
-          ;(target as Record<string, unknown>)[f.key] = v
+          applyStyleField(target, sl.propKey, f.key, v, opts.table?.classRules)
         }
         valuesFilled++
       }
@@ -935,7 +956,7 @@ export function instantiateTemplate(tpl: LayoutTemplate, opts: InstantiateOption
             if (f.kind === 'text') {
               target.text = v === undefined || v === null ? '' : String(v)
             } else {
-              ;(target as Record<string, unknown>)[f.key] = v
+              applyStyleField(target, sc.propKey, f.key, v, opts.table?.classRules)
             }
             appliedScoped++
             valuesFilled++
