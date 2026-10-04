@@ -55,7 +55,7 @@ export const APP_LAYOUT_FIELDS = [
   'width', 'height', 'minWidth', 'maxWidth', 'minHeight', 'maxHeight',
   'margin', 'padding', 'flexDirection', 'flexWrap', 'justifyContent', 'alignItems', 'alignContent', 'alignSelf',
   'flexGrow', 'flexShrink', 'flexBasis', 'gap', 'display', 'position', 'top', 'left', 'right', 'bottom', 'overflow',
-  'gridTemplateColumns', 'gridTemplateRows',
+  'gridTemplateColumns', 'gridTemplateRows', 'aspectRatio',
 ] as const
 const LAYOUT_FIELDS = new Set<string>(APP_LAYOUT_FIELDS)
 /**
@@ -555,6 +555,21 @@ export function parseStaticStyle(
         }
         out[key] = tracks
         markImportant(key)
+        continue
+      }
+      if (key === 'aspectRatio') {
+        // ★批次 24（CSS 兼容对齐 · 以 Web 为基准）：`aspect-ratio`（宽高比；媒体卡/占位图刚需）。
+        //   `<n>`（如 `1.5`）/ `<w>/<h>`（如 `16/9`）→ 比值；`auto` → 不发射（默认）。
+        const v = rawVal.trim().toLowerCase()
+        if (v === 'auto') continue   // 默认 ⇒ 不发射（零行为变化）
+        const ratio = /^(\d+(?:\.\d+)?)\s*\/\s*(\d+(?:\.\d+)?)$/.exec(v)
+        if (ratio) {
+          const r = Number(ratio[1]) / Number(ratio[2])
+          if (Number.isFinite(r) && r > 0) { out.aspectRatio = r; markImportant('aspectRatio'); continue }
+        }
+        const n = Number(v)
+        if (Number.isFinite(n) && n > 0) { out.aspectRatio = n; markImportant('aspectRatio'); continue }
+        pushDiag(`\`${rawKey}: ${rawVal}\` 未解析（支持 <n> 或 <w>/<h> 或 auto）——已跳过`)
         continue
       }
       if (key === 'flexDirection' || key === 'flexWrap' || key === 'justifyContent' || key === 'alignItems' || key === 'alignContent' || key === 'alignSelf' || key === 'position' || key === 'display' || key === 'overflow') {

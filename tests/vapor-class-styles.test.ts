@@ -318,6 +318,21 @@ describe('★C1 最小切片 · SFC <style> 单类规则 → class→节点样�
     expect((s as { borderColor?: string }).borderColor, 'border 内 color-mix').toBe('#0000001f')
   })
 
+  it('★⑦l aspect-ratio（批次 24 · ★基准 = Web）：数值 + 分数 + auto 不发射', () => {
+    // 【为什么（以 web 为基准）】媒体卡/占位图宽高比；Web <n> / <w>/<h>；auto = 默认。
+    const s1 = parseStaticStyle('aspect-ratio: 1.5', () => {})
+    expect((s1 as { aspectRatio?: number }).aspectRatio, '1.5').toBe(1.5)
+    const s2 = parseStaticStyle('aspect-ratio: 16/9', () => {})
+    expect((s2 as { aspectRatio?: number }).aspectRatio, '16/9').toBeCloseTo(1.7778, 3)
+    const s3 = parseStaticStyle('aspect-ratio: 4 / 3', () => {})
+    expect((s3 as { aspectRatio?: number }).aspectRatio, '带空格 4 / 3').toBeCloseTo(1.3333, 3)
+    const s4 = parseStaticStyle('aspect-ratio: auto', () => {})
+    expect((s4 as { aspectRatio?: number }).aspectRatio, 'auto 不发射').toBeUndefined()
+    const d: string[] = []
+    parseStaticStyle('aspect-ratio: abc', (m: string) => d.push(m))
+    expect(d.length > 0, '非法值诊断').toBe(true)
+  })
+
   it('★⑧ 元素/类型选择器 + @keyframes 跳过（C1 收尾）', () => {
     // 【真项目形态】examples 有 9 处元素选择器（h3/code…）+ 6 处 @keyframes 关键帧被误当选择器
     const sfc = `<template>

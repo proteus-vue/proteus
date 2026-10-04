@@ -34,7 +34,7 @@
         {
           "capability": "卡片外观（background / border / border-radius / shadow / 内边距）",
           "why": "列表项 / 卡片 / 面板",
-          "status": "supported（background/border/border-radius/padding ✅ 批 2/5；**box-shadow ✅ 批 10**——iOS/鸿蒙原生、Android 分层近似）"
+          "status": "supported（background/border/border-radius/padding ✅ 批 2/5；**box-shadow ✅ 批 10**；**aspect-ratio ✅ 批 24**——媒体卡/占位图，内核 taffy 原生）"
         },
         {
           "capability": "弹性流式布局（flex + wrap + gap + align/justify/content + 百分比）",
@@ -44,7 +44,7 @@
         {
           "capability": "文本呈现（size / weight / align / color / line-height / 截断）",
           "why": "标题 / 正文 / 单行截断",
-          "status": "font-size/weight/align/color ✅ · **line-height ✅ 批 13**；**text-overflow 截断 ⏳**"
+          "status": "font-size/weight/align/color ✅ · **line-height ✅ 批 13** · **text-overflow 单行截断 ✅ 批 16** · **letter-spacing 字距 ✅ 批 20**（诚实边界：仅单行截断 / px 字距）"
         },
         {
           "capability": "栅格 / 复杂排布（grid）",
@@ -171,6 +171,16 @@
           "app": "supported"
         },
         "why": "★批次 12（2026-10-04）：引擎 `Display::Grid` + `LStyle.grid_template_columns/rows`（字符串轨迹）+ `NodeDto` + taffy grid_template_* 映射（parse_grid_tracks：fr/px/数字）；编译器 display:grid 入封闭集 + `grid-template-columns/rows` 解析（**显式轨迹**，`repeat(N,X)` 编译期展开）。★**诚实边界**：仅显式轨迹（fr/px/数字）——auto/minmax/fit-content/命名线/隐式行（grid-auto-*）/grid-area 定位**未支持**，诊断跳过；Skyline 端实测退化为 block ⇒ 有条件可用"
+      },
+      {
+        "css": "aspect-ratio",
+        "id": "aspect-ratio",
+        "ends": {
+          "web": "not-measured",
+          "skyline": "not-listed",
+          "app": "supported"
+        },
+        "why": "★批次 24（2026-10-04 · ★基准 = Web）：宽高比（媒体卡/占位图）。`<n>`（1.5）/`<w>/<h>`（16/9，含空格）→ 比值；`auto` = 默认不发射。内核 `LStyle.aspect_ratio` → taffy `aspect_ratio`（原生；定一轴派生另一轴）"
       },
       {
         "css": "order",
@@ -417,7 +427,8 @@
       "bottom",
       "overflow",
       "gridTemplateColumns",
-      "gridTemplateRows"
+      "gridTemplateRows",
+      "aspectRatio"
     ],
     "paint": [
       "backgroundColor",
@@ -1042,6 +1053,21 @@
       "tier": "L2",
       "strategy": "直映射",
       "note": "★批次 12（2026-10-04）：引擎 `Display::Grid` + `LStyle.grid_template_columns/rows`（字符串轨迹）+ `NodeDto` + taffy grid_template_* 映射（parse_grid_tracks：fr/px/数字）；编译器 display:grid 入封闭集 + `grid-template-columns/rows` 解析（**显式轨迹**，`repeat(N,X)` 编译期展开）。★**诚实边界**：仅显式轨迹（fr/px/数字）——auto/minmax/fit-content/命名线/隐式行（grid-auto-*）/grid-area 定位**未支持**，诊断跳过；Skyline 端实测退化为 block ⇒ 有条件可用",
+      "supportTier": "conditional"
+    },
+    {
+      "id": "aspect-ratio",
+      "css": "aspect-ratio",
+      "category": "layout",
+      "compilerFields": [
+        "aspectRatio"
+      ],
+      "web": "not-measured",
+      "skyline": "not-listed",
+      "app": "supported",
+      "tier": "L2",
+      "strategy": "编译期折叠",
+      "note": "★批次 24（2026-10-04 · ★基准 = Web）：宽高比（媒体卡/占位图）。`<n>`（1.5）/`<w>/<h>`（16/9，含空格）→ 比值；`auto` = 默认不发射。内核 `LStyle.aspect_ratio` → taffy `aspect_ratio`（原生；定一轴派生另一轴）",
       "supportTier": "conditional"
     },
     {

@@ -8980,6 +8980,27 @@
           "textAlign": "center",
           "text": "color-mix 20% \u54C1\u724C\u8272",
           "semantic": "div"
+        },
+        {
+          "id": 63,
+          "parentId": 0,
+          "width": 160,
+          "aspectRatio": 1.7777777777777777,
+          "margin": {
+            "top": 16,
+            "bottom": 16
+          },
+          "marginAuto": {
+            "right": true,
+            "left": true
+          },
+          "backgroundColor": "#f5f6f7",
+          "borderRadius": 4,
+          "color": "#888",
+          "fontSize": 12,
+          "textAlign": "center",
+          "text": "aspect-ratio 16/9",
+          "semantic": "div"
         }
       ]
     },

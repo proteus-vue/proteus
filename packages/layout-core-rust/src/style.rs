@@ -353,6 +353,9 @@ pub struct LStyle {
     pub min_height_pct: Option<f32>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub max_height_pct: Option<f32>,
+    /// ★批次 24（CSS 兼容对齐 · 以 Web 为基准）：宽高比（`aspect-ratio: 1.5` / `16/9`）——taffy 原生。
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub aspect_ratio: Option<f32>,
 
     #[serde(default)]
     pub margin: Edges,
@@ -611,6 +614,7 @@ impl Default for LStyle {
             max_width_pct: None,
             min_height_pct: None,
             max_height_pct: None,
+            aspect_ratio: None,
             margin: Edges::ZERO,
             margin_auto: MarginAuto::NONE,
             padding: Edges::ZERO,
