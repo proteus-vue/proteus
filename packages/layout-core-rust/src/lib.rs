@@ -52,7 +52,7 @@ pub use engine::{
     AvailableSpace, LayoutEngine, LayoutOutput, NullTextMeasurer, RootConstraint, TableTextMeasurer, TextMeasurer,
 };
 pub use node::{LNode, LayoutTree, NodeIndex, TextMeasureRequest, NO_PARENT};
-pub use style::{Display, Edges, FlexDirection, LStyle, Overflow, Position, Rect, Size};
+pub use style::{Display, Edges, FlexDirection, FlexWrap, LStyle, Overflow, Position, Rect, Size};
 pub use taffy_engine::TaffyEngine;
 
 // ★M3 `hit/`：命中测试（逆绘制序 + 裁剪感知——事件系统的几何地基）

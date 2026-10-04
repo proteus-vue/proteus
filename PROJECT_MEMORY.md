@@ -15,9 +15,9 @@
 - **包规模**：**45 个 @proteus-vue/* npm 包**（+ `packages/layout-core-rust` = **cargo crate，非 npm 包**，故不计数）（★2026-09-29 layout-core = App 排版核心）（check:pkg 0 error · `pnpm check:stats` 校验 ✓；31→38 修正 → G-07 glass 39 → Skyline 收口 worklet 40 → ★2026-09-14 组件库拆包 `@proteus-vue/components` 41 → ★Vapor 线新增 `@proteus-vue/slot-runtime` 42 + `@proteus-vue/layout-core` 43 → ★2026-09-30 MA1 新增 `@proteus-vue/animation` 44；版本统一 0.3.0-beta.8，见「当前状态速览」）
 - **文档**：`docs/proteus-architecture.md`（L0 规约·真理来源）→ `docs/board-inventory.md`（全景索引）→ `docs/roadmap.md`（版本线）→ `roadmap-2-plan`（里程碑线）→ 各 plan
 
+## 当前状态速览（最近一次更新：**2026-10-04·（一五三）· **CSS 兼容对齐 · 批次 6：flex-wrap（首个 [Rust] 引擎能力）**（决策 #499）——用户「继续」。★**首次进入 [Rust] 侧**（前 5 批纯编译器/宿主接线）。★**取证选批**：flex-wrap(12) 是剩余最高价值布局能力、taffy 原生支持完整（零布局算法风险）⇒ 选它。★**实现**：Rust 新增 `FlexWrap` 枚举 + `LStyle.flex_wrap` + `NodeDto` + `to_taffy` 映射 + re-export；编译器入 APP_LAYOUT_FIELDS/APP_ENUM_VALUES/枚举校验；Android `LAYOUT_KEYS` 白名单加 flexWrap。★**判据（★首次带引擎行为测试）**：`packages/layout-core-rust/tests/flex_wrap.rs`（wrap 换行/nowrap 不换行；破坏性验证：to_taffy 恒 NoWrap⇒红）；编译器 tests 35 组；capability 源 flex-wrap absent→supported；重生成清单（47 行·App 全通 30）+ app-screen-content（**75 节点获 flexWrap**）；零设备 Rust 235 测试 + 三端编译 + vue-tsc 0 错。★全量 **5112/5112** 绿。★诚实：M1 65.6%→64.5%（分母 +1、L3 未同步）。★**剩余（均 [Rust]）**：align-content · right·bottom · grid · box-shadow · line-height · transform 折叠面）★新会话以此为准
 ## 当前状态速览（最近一次更新：**2026-10-04·（一五二）· **CSS 兼容对齐 · 批次 5：border（uniform 简写 + 三端宿主真绘制）**（决策 #498）——用户「继续」。★**取证选批**：border(47)/line-height(26)/flex-wrap(12)/font-family(11)；font-family 多为 var() 收益低，**border 最高频且 paint-only（不改 Rust）、正是"宿主没画"的缺口** ⇒ 选它。★**实现**：编译器 border 简写（`<width> <style> <color>`）→ borderWidth+borderColor（逐边/styled 诊断跳过、var() 诚实诊断）；**iOS** CALayer.border* · **Android** Cmd.border* + 专用 borderPaint 描边（圆角/半内缩）· **鸿蒙** OH_ArkUI_RenderNodeUtils_SetBorderWidth/Color。★判据 tests 33 组；capability 源 border **folded-only→supported**（此前折叠透传但宿主不画，本批补齐）；重生成清单（46 行·App 全通 29）+ app-screen-content（**125 节点获 borderWidth**）；三端零设备编译全过。★全量 **5110/5110** 绿 · vue-tsc 0 错。★**剩余**：line-height（半 [Rust]）· flex-wrap/grid（[Rust]）· box-shadow/transform（[Rust]）· font-family（var() 收益低））★新会话以此为准
 ## 当前状态速览（最近一次更新：**2026-10-04·（一五一）· **CSS 兼容对齐 · 批次 4：text-align（+ 清理 vue-tsc 存量红）**（决策 #497）——用户「继续」。★**取证选批**：text-align(28·22 center) / line-height(26·语义需定) / border(47·var() 不可解析+宿主不画) ⇒ 选 text-align。★**实现**：编译器封闭集 left/center/right + APP_PAINT_FIELDS；contracts 新增 TextAlign 档位 + runtime pass-through；**iOS** alignmentMode · **Android** Paint.Align（x 按对齐换算）· **鸿蒙** OH_Drawing_SetTypographyTextAlign。★判据 tests 27 组；capability 源 +text-align；重生成清单（46 行·App 全通 28）+ app-screen-content（39 节点获 textAlign）；三端零设备编译全过。★**顺带清理 vue-tsc 存量红**：11 处类型错误（10 早于本会话、1 为 #492 引入）一并修 ⇒ **vue-tsc 11→0**。★全量 **5104/5104** 绿。★**剩余**：line-height（半 [Rust]）· border（宿主未画边框）· flex-wrap/grid（[Rust]）· box-shadow/transform（[Rust]））★新会话以此为准
-## 当前状态速览（最近一次更新：**2026-10-04·（一五〇）· **CSS 兼容对齐 · 批次 3：font-weight（关键字/数值归一 + 三端宿主接线）**（决策 #496）——用户「继续」。★**取证选批**：真项目第 2 高频丢弃项 font-weight（58 处）。★**关键发现**：宿主链路大半已就绪但**从未接线**——iOS 早读 `style["fontWeight"]`、适配器 PAINT_KEYS 已含它、Android `typefaceOf(role,weight)` 已实现，**唯独编译器从不下发**。★**实现**：编译器 `font-weight`→数值（normal→400/bold→700/100–900；bolder 诊断跳过）+ 入 APP_PAINT_FIELDS/可继承 + style-object；contracts `STYLE_PROP_LEVELS.fontWeight=Integer`；**Android** Cmd+mkCmd+drawCmds+度量同源 typeface；**鸿蒙** TextDrawSpec+typography+RenderCmd 通道。★判据 tests 25 组；重生成清单（45 行·App 全通 27）+ app-screen-content（**75 节点获 fontWeight**，三端 assets 同步）；三端零设备编译全过。★**诚实**：M1 覆盖率 67.9%→66.7%（分母 +1、L3 未同步 ⇒ 如实降）。★全量 **5102/5102** 绿。★**剩余**：text-align/line-height（半 [Rust]）· border 简写（宿主未画边框）· flex-wrap/grid（[Rust]）· box-shadow/transform（[Rust]））★新会话以此为准
 
 
 
@@ -53,11 +53,11 @@
 |---|---|
 | `docs/project-memory-archive/2026-10.md` | 里程碑详细叙事（三十九～一四五）+ 状态速览历史栈（约 4.5k 行） |
 | `docs/project-memory-archive/2026-09.md` | 09 月全部叙事 + 柔性系统重组历史 + 2026-08 进度快照 + 已落地文件 + 09-19 验证状态（约 6.5k 行） |
-| `docs/project-memory-archive/decisions.md` | 决策链全文 #1–#498——按号检索 |
+| `docs/project-memory-archive/decisions.md` | 决策链全文 #1–#499——按号检索 |
 
 检索示例：`grep -n "2026-09-29\|判据建错靶" docs/project-memory-archive/2026-09.md`
 
-## 关键决策与文档偏差（#1–#498 → 归档速查）
+## 关键决策与文档偏差（#1–#499 → 归档速查）
 
 **全文在 `docs/project-memory-archive/decisions.md`**（按号检索：`grep -n "^290\." docs/project-memory-archive/decisions.md`）。
 决策号**只增不改号**（外部文档按号引用）；新决策追加到该文件末尾（号 +1）。

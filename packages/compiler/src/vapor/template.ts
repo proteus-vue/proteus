@@ -53,7 +53,7 @@ export type { LayoutTemplate, LayoutNode, ListTemplate, TextSegment } from '@pro
  */
 export const APP_LAYOUT_FIELDS = [
   'width', 'height', 'minWidth', 'maxWidth', 'minHeight', 'maxHeight',
-  'margin', 'padding', 'flexDirection', 'justifyContent', 'alignItems', 'alignSelf',
+  'margin', 'padding', 'flexDirection', 'flexWrap', 'justifyContent', 'alignItems', 'alignSelf',
   'flexGrow', 'flexShrink', 'flexBasis', 'gap', 'display', 'position', 'top', 'left', 'overflow',
 ] as const
 const LAYOUT_FIELDS = new Set<string>(APP_LAYOUT_FIELDS)
@@ -70,6 +70,7 @@ export const APP_ENUM_VALUES: Record<string, readonly string[]> = {
   position: ['static', 'relative', 'absolute'],
   overflow: ['visible', 'hidden', 'scroll', 'auto'],
   flexDirection: ['row', 'column', 'row-reverse', 'column-reverse'],
+  flexWrap: ['nowrap', 'wrap', 'wrap-reverse'],
 }
 
 /** 绘制字段（宿主自绘读这些键；模板照样要带上，否则挂载后无底色/无字色） */
@@ -356,7 +357,7 @@ export function parseStaticStyle(
       continue
     }
     if (LAYOUT_FIELDS.has(key)) {
-      if (key === 'flexDirection' || key === 'justifyContent' || key === 'alignItems' || key === 'alignSelf' || key === 'position' || key === 'display' || key === 'overflow') {
+      if (key === 'flexDirection' || key === 'flexWrap' || key === 'justifyContent' || key === 'alignItems' || key === 'alignSelf' || key === 'position' || key === 'display' || key === 'overflow') {
         // ★★★枚举值**校验**（2026-10-04 修：真机 RustLayout.create 失败暴露）——内核只认封闭集；
         //   不支持的值（如 `display: block/grid`、`position: sticky`）⇒ **诊断 + 跳过**（用内核默认），
         //   否则原样透传会让**整棵树建不起来**（App/小程序端页面全崩）。

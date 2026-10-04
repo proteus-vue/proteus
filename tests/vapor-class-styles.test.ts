@@ -425,3 +425,26 @@ describe('★批次 5 · border 简写（uniform 实线）', () => {
     expect((n!.style as { borderColor?: string }).borderColor).toBe('#ddd')
   })
 })
+
+// ★★★批次 6（CSS 兼容对齐 · [Rust] 布局）：flex-wrap（taffy 原生支持）——2026-10-04
+describe('★批次 6 · flex-wrap（引擎闭合集 + 编译折叠）', () => {
+  it('① 封闭集 nowrap/wrap/wrap-reverse 折进；未知值 ⇒ 诊断跳过', () => {
+    expect(parseStaticStyle('flex-wrap: wrap', () => {}).flexWrap).toBe('wrap')
+    expect(parseStaticStyle('flex-wrap: wrap-reverse', () => {}).flexWrap).toBe('wrap-reverse')
+    expect(parseStaticStyle('flex-wrap: nowrap', () => {}).flexWrap).toBe('nowrap')
+    const d: string[] = []
+    expect(parseStaticStyle('flex-wrap: bogus', (m) => d.push(m)).flexWrap).toBeUndefined()
+    expect(d.some((m) => m.includes('flexWrap'))).toBe(true)
+  })
+
+  it('② 端到端：flex-wrap 经 <style> class 折进节点 style', () => {
+    const sfc = `<template><view class="wrap">x</view></template>
+<script setup>const z = 1</script>
+<style>
+.wrap { display: flex; flex-direction: row; flex-wrap: wrap }
+</style>`
+    const r = buildLayoutTemplate(sfc, 'pages/w.vue')
+    const n = r.template.nodes.find((x) => (x.style as { flexWrap?: string }).flexWrap)
+    expect((n!.style as { flexWrap?: string }).flexWrap).toBe('wrap')
+  })
+})

@@ -24,7 +24,7 @@ use taffy::{AvailableSpace as TaffyAvailableSpace, NodeId, Style, TaffyTree};
 
 use crate::engine::{AvailableSpace, LayoutEngine, LayoutOutput, RootConstraint, TextMeasurer};
 use crate::node::{LayoutTree, LNode, NodeIndex, NO_PARENT};
-use crate::style::{Display, FlexDirection, LStyle, Overflow, Position, Rect, Size};
+use crate::style::{Display, FlexDirection, FlexWrap, LStyle, Overflow, Position, Rect, Size};
 
 /// Taffy 后端（DCP-1：`taffy = "0.14"`，**禁止降级到 0.13**——0.13 有 measure 指数退化）
 pub struct TaffyEngine {
@@ -173,6 +173,12 @@ impl TaffyEngine {
             FlexDirection::Column => taffy::FlexDirection::Column,
             FlexDirection::RowReverse => taffy::FlexDirection::RowReverse,
             FlexDirection::ColumnReverse => taffy::FlexDirection::ColumnReverse,
+        };
+        // ★批次 6：`flex-wrap`（taffy 原生支持）
+        out.flex_wrap = match style.flex_wrap {
+            FlexWrap::Nowrap => taffy::FlexWrap::NoWrap,
+            FlexWrap::Wrap => taffy::FlexWrap::Wrap,
+            FlexWrap::WrapReverse => taffy::FlexWrap::WrapReverse,
         };
         out.justify_content = Some(parse_justify(&style.justify_content));
         out.align_items = Some(parse_align_items(&style.align_items));

@@ -17,7 +17,7 @@ use std::ffi::{c_char, CStr, CString};
 
 use crate::engine::{AvailableSpace, LayoutEngine, RootConstraint, TableTextMeasurer};
 use crate::node::{LNode, LayoutTree, NodeIndex, NO_PARENT};
-use crate::style::{Edges, FlexDirection, LStyle, Overflow, Position, Size};
+use crate::style::{Edges, FlexDirection, FlexWrap, LStyle, Overflow, Position, Size};
 use crate::taffy_engine::TaffyEngine;
 
 /// 把 Rust 字符串交给 C 侧（调用方负责用 `proteus_layout_free_string` 释放）
@@ -87,6 +87,9 @@ pub(crate) struct NodeDto {
     pub(crate) padding: Option<EdgesDto>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub(crate) flex_direction: Option<String>,
+    /// ★批次 6：`flex-wrap`（`nowrap` / `wrap` / `wrap-reverse`）
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub(crate) flex_wrap: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub(crate) justify_content: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -225,6 +228,7 @@ impl NodeDto {
             margin: None,
             padding: None,
             flex_direction: None,
+            flex_wrap: None,
             justify_content: None,
             align_items: None,
             align_self: None,
@@ -632,6 +636,14 @@ pub(crate) fn style_from_dto(dto: &NodeDto) -> Result<LStyle, String> {
             "row-reverse" => FlexDirection::RowReverse,
             "column-reverse" => FlexDirection::ColumnReverse,
             other => return Err(format!("未知 flexDirection：{other}")),
+        };
+    }
+    if let Some(fw) = dto.flex_wrap.as_deref() {
+        style.flex_wrap = match fw {
+            "nowrap" => FlexWrap::Nowrap,
+            "wrap" => FlexWrap::Wrap,
+            "wrap-reverse" => FlexWrap::WrapReverse,
+            other => return Err(format!("未知 flexWrap：{other}")),
         };
     }
     if let Some(j) = dto.justify_content.clone() {
