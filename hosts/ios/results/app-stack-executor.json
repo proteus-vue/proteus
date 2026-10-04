@@ -34,20 +34,20 @@
       "screen.destroy",
       "screen.stats"
     ],
-    "content_node_total" : 8,
+    "content_node_total" : 10,
     "destroy_calls" : 3,
     "live_screens" : 2,
     "mount_calls" : 5,
     "rect_calls" : 2,
     "screens" : [
       {
-        "rootNodeId" : 130,
-        "screenId" : "r-user#3",
+        "rootNodeId" : 100,
+        "screenId" : "home#1",
         "visible" : true
       },
       {
-        "rootNodeId" : 100,
-        "screenId" : "home#1",
+        "rootNodeId" : 130,
+        "screenId" : "r-user#3",
         "visible" : true
       }
     ],
@@ -207,15 +207,15 @@
         "screen.destroy",
         "screen.stats"
       ],
-      "content_node_total" : 8,
+      "content_node_total" : 10,
       "destroy_calls" : 2,
       "live_screens" : 3,
       "mount_calls" : 5,
       "rect_calls" : 1,
       "screens" : [
         {
-          "rootNodeId" : 130,
-          "screenId" : "detail#2",
+          "rootNodeId" : 100,
+          "screenId" : "home#1",
           "visible" : true
         },
         {
@@ -224,8 +224,8 @@
           "visible" : true
         },
         {
-          "rootNodeId" : 100,
-          "screenId" : "home#1",
+          "rootNodeId" : 130,
+          "screenId" : "detail#2",
           "visible" : true
         }
       ],
