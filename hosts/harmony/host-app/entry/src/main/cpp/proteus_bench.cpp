@@ -4138,12 +4138,86 @@ static int g_appTouchCmdCount = 0;
 static int g_appTouchHitCount = 0;      // 装置内命中（合成时 20 点，向后兼容旧读数）
 static int g_appTouchTransformCount = 0; // ★批次 39：带静态变换的节点数（编译期 CSS transform）
 static int g_appTouchOriginCount = 0;    // ★批次 40：带 transform-origin 的节点数
+static int g_appTouchCssAnimNodes = 0;   // ★批次 42：带 CSS animation 的节点数（编译期折叠）
 static int g_appTouchHitFirst = -1;
 static int g_appTouchRealCount = 0;     // ★真实触摸事件数（.onTouch → appScreenHitAt）
 static int g_appTouchRealHits = 0;      // ★真实触摸命中数
 static int g_appTouchRealFirst = -1;    // ★首个真实命中目标
 
 /** 写 app-screen-composite.json（含装置内命中 + 真实触摸两套读数） */
+/**
+ * ★批次 42（动效 · 对齐 Web）：把编译期折叠的 **CSS animation**（各节点扁平键 `animation`）→
+ *   内核 `proteus_layout_anim_start`（`{nodeId,kind,from,to,durMs,keyframes}`）。返回带动画的节点数。
+ */
+static int launchAppScreenAnimations(uint64_t handle, const std::vector<std::string>& items) {
+    if (handle == 0) return 0;
+    std::string anims = "["; int started = 0; int nodes = 0; bool first = true;
+    for (const auto& it : items) {
+        std::string arr = extractValueAfterKey(it, "animation", '[', ']');
+        if (arr.empty()) continue;
+        double id = -1; jnum(it.c_str(), it.size(), "id", &id);
+        bool any = false;
+        for (const auto& ch : splitJsonObjects(arr)) {
+            std::string kf = extractValueAfterKey(ch, "keyframes", '[', ']');
+            if (kf.empty()) continue;
+            std::vector<std::string> segs = splitJsonObjects(kf);
+            if (segs.empty()) continue;
+            double kind = 0, from = 0, total = 0, lastTo = 0;
+            jnum(ch.c_str(), ch.size(), "kind", &kind);
+            jnum(ch.c_str(), ch.size(), "from", &from);
+            lastTo = from;
+            for (const auto& sg : segs) {
+                double d = 0, t = 0;
+                jnum(sg.c_str(), sg.size(), "durMs", &d);
+                jnum(sg.c_str(), sg.size(), "to", &t);
+                total += d; lastTo = t;
+            }
+            char b[400];
+            snprintf(b, sizeof(b),
+                     "%s{\"nodeId\":%d,\"kind\":%d,\"from\":%.6f,\"to\":%.6f,\"durMs\":%.6f,\"keyframes\":%s}",
+                     first ? "" : ",", (int)id, (int)kind, from, lastTo, total, kf.c_str());
+            anims += b; first = false; any = true; started++;
+        }
+        if (any) nodes++;
+    }
+    anims += "]";
+    if (started == 0) return 0;
+    std::string req = std::string("{\"anims\":") + anims + "}";
+    char* r = proteus_layout_anim_start(handle, req.c_str());
+    if (r) proteus_layout_free_string(r);
+    return nodes;
+}
+
+/**
+ * ★批次 42（动效）：推进一帧 **app-screen 树**（`g_appTouchTree`）的内核动画——
+ *   与 VaporAnimTickCb 同形，但 tick 的是 **合成树**（CSS animation 登记在它上）。返回 `{ok, active}`。
+ */
+static napi_value AppScreenAnimTick(napi_env env, napi_callback_info info) {
+    size_t argc = 1; napi_value args[1] = {nullptr};
+    napi_get_cb_info(env, info, &argc, args, nullptr, nullptr);
+    double dt = 16.7;
+    std::string js;
+    if (argc >= 1 && args[0] != nullptr) {
+        size_t l = 0; napi_get_value_string_utf8(env, args[0], nullptr, 0, &l);
+        js.resize(l + 1); napi_get_value_string_utf8(env, args[0], &js[0], l + 1, &l); js.resize(l);
+        const char* p = js.c_str();
+        while (*p && (*p == ' ' || *p == '{' || *p == '"')) p++;
+        char* end = nullptr; double v = strtod(p, &end); if (end != p) dt = v;
+    }
+    char buf[128];
+    if (g_appTouchTree == 0) {
+        snprintf(buf, sizeof(buf), "{\"ok\":false,\"active\":-1,\"error\":\"未建树\"}");
+    } else {
+        char* rt = proteus_layout_anim_tick(g_appTouchTree, (float)dt);
+        if (rt) proteus_layout_free_string(rt);
+        char* ra = proteus_layout_anim_active(g_appTouchTree);
+        int active = -1;
+        if (ra) { std::string a(ra); size_t q = a.find("\"active\":"); if (q != std::string::npos) active = atoi(a.c_str() + q + 9); proteus_layout_free_string(ra); }
+        snprintf(buf, sizeof(buf), "{\"ok\":true,\"active\":%d}", active);
+    }
+    napi_value out; napi_create_string_utf8(env, buf, NAPI_AUTO_LENGTH, &out); return out;
+}
+
 static void writeAppScreenComposite() {
     if (g_appTouchFilesDir.empty()) return;
     char sum[440];
@@ -4151,10 +4225,10 @@ static void writeAppScreenComposite() {
              "{\"ok\":%s,\"page\":\"%s\",\"content_nodes\":%d,\"cmds\":%d,\"render_nodes\":%d,"
              "\"hit_points_hit\":%d,\"hit_first_target\":%d,"
              "\"real_touch\":true,\"touch_count\":%d,\"real_touch_hits\":%d,\"real_touch_first_target\":%d,"
-             "\"transformed_nodes\":%d,\"transform_origin_nodes\":%d}",
+             "\"transformed_nodes\":%d,\"transform_origin_nodes\":%d,\"css_anim_nodes\":%d}",
              g_appTouchCmdCount > 0 ? "true" : "false", g_appTouchPage.c_str(), g_appTouchContentNodes,
              g_appTouchCmdCount, g_appTouchCmdCount, g_appTouchHitCount, g_appTouchHitFirst,
-             g_appTouchRealCount, g_appTouchRealHits, g_appTouchRealFirst, g_appTouchTransformCount, g_appTouchOriginCount);
+             g_appTouchRealCount, g_appTouchRealHits, g_appTouchRealFirst, g_appTouchTransformCount, g_appTouchOriginCount, g_appTouchCssAnimNodes);
     std::string path = g_appTouchFilesDir + "/app-screen-composite.json";
     FILE* f = fopen(path.c_str(), "w"); if (f) { fwrite(sum, 1, strlen(sum), f); fclose(f); }
 }
@@ -4243,6 +4317,8 @@ static napi_value AppScreenCommands(napi_env env, napi_callback_info info) {
     g_appTouchFilesDir = filesDir;
     g_appTouchContentNodes = (int)nItems.size();
     g_appTouchRealCount = 0; g_appTouchRealHits = 0; g_appTouchRealFirst = -1;
+    // ★批次 42（动效）：启动编译期折叠的 CSS animation（启动读数入 composite）
+    g_appTouchCssAnimNodes = launchAppScreenAnimations(handle, nItems);
     char* rp = proteus_layout_rects(handle);
     std::string rects = rp ? rp : "{}";
     if (rp) proteus_layout_free_string(rp);
@@ -4407,6 +4483,7 @@ static napi_value BenchInit(napi_env env, napi_value exports) {
         {"screenContentProbe", nullptr, ScreenContentProbe, nullptr, nullptr, nullptr, napi_default, nullptr},
         {"appScreenCommands", nullptr, AppScreenCommands, nullptr, nullptr, nullptr, napi_default, nullptr},
         {"appScreenHitAt", nullptr, AppScreenHitAt, nullptr, nullptr, nullptr, napi_default, nullptr},
+        {"appScreenAnimTick", nullptr, AppScreenAnimTick, nullptr, nullptr, nullptr, napi_default, nullptr},
         {"appStackExecutorProbe", nullptr, AppStackExecutorProbe, nullptr, nullptr, nullptr, napi_default, nullptr},
         {"animCurveBezier", nullptr, AnimCurveBezier, nullptr, nullptr, nullptr, napi_default, nullptr},
         {"hostRuntimeProbe", nullptr, HostRuntimeProbe, nullptr, nullptr, nullptr, napi_default, nullptr},

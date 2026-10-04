@@ -9462,6 +9462,98 @@
           },
           "text": "transform-origin: bottom + rotate(8deg)",
           "semantic": "div"
+        },
+        {
+          "id": 88,
+          "parentId": 0,
+          "display": "grid",
+          "gridTemplateColumns": "1fr 1fr",
+          "gap": 6,
+          "width": 220,
+          "margin": {
+            "top": 16,
+            "bottom": 16
+          },
+          "marginAuto": {
+            "right": true,
+            "left": true
+          },
+          "textAlign": "center",
+          "semantic": "div"
+        },
+        {
+          "id": 89,
+          "parentId": 88,
+          "height": 24,
+          "backgroundColor": "#f0f0f0",
+          "color": "#666666",
+          "fontSize": 11,
+          "textAlign": "center",
+          "borderRadius": 4,
+          "text": "A",
+          "semantic": "div"
+        },
+        {
+          "id": 90,
+          "parentId": 88,
+          "height": 24,
+          "backgroundColor": "#f0f0f0",
+          "color": "#666666",
+          "fontSize": 11,
+          "textAlign": "center",
+          "borderRadius": 4,
+          "text": "B",
+          "semantic": "div"
+        },
+        {
+          "id": 91,
+          "parentId": 88,
+          "height": 24,
+          "backgroundColor": "#12b886",
+          "color": "#ffffff",
+          "fontSize": 11,
+          "textAlign": "center",
+          "borderRadius": 4,
+          "gridColumn": {
+            "start": 1,
+            "end": -1
+          },
+          "text": "C \u8DE8\u5217(1 / -1)",
+          "semantic": "div"
+        },
+        {
+          "id": 92,
+          "parentId": 0,
+          "width": 220,
+          "height": 36,
+          "margin": {
+            "top": 16,
+            "bottom": 16
+          },
+          "marginAuto": {
+            "right": true,
+            "left": true
+          },
+          "backgroundColor": "#7048e8",
+          "color": "#ffffff",
+          "fontSize": 12,
+          "textAlign": "center",
+          "borderRadius": 8,
+          "animation": [
+            {
+              "kind": 4,
+              "from": 0.1,
+              "keyframes": [
+                {
+                  "to": 1,
+                  "durMs": 300,
+                  "curve": 3
+                }
+              ]
+            }
+          ],
+          "text": "CSS animation: fade-in",
+          "semantic": "div"
         }
       ]
     },

@@ -12,7 +12,7 @@
 //   ⑤ 认不出的声明值仍走 parseStaticStyle 折叠面（px/数字；百分比宽高→比例）
 
 import { describe, it, expect } from 'vitest'
-import { buildLayoutTemplate, parseClassStyles, parseStaticStyle, stripScopeSuffix, normalizeCssColor, parseCssVarTokens, substituteCssVars } from '@proteus-vue/compiler'
+import { buildLayoutTemplate, parseClassStyles, parseStaticStyle, stripScopeSuffix, normalizeCssColor, parseCssVarTokens, substituteCssVars, parseKeyframes } from '@proteus-vue/compiler'
 
 const SFC = `<template>
   <view class="card">
@@ -1365,5 +1365,59 @@ describe('★批次 41 · grid-column / grid-row 线号放置（补齐 CSS Grid�
     const r = buildLayoutTemplate(sfc, 'grid.vue')
     const full = r.template.nodes.find((n) => (n.style as { backgroundColor?: string }).backgroundColor === '#12b886')
     expect((full?.style as { gridColumn?: { start: number; end?: number } })?.gridColumn).toEqual({ start: 1, end: -1 })
+  })
+})
+
+// ★批次 42（动效 · 对齐 Web）：**CSS @keyframes + animation** —— 编译期折叠为内核 keyframe 动画 ——2026-10-04
+//   App 端此前整条丢弃；现折成逐通道 `{kind, from, keyframes:[{to,durMs,curve}]}`（挂载后由宿主 animStart 播）。
+describe('★批次 42 · CSS @keyframes + animation（对齐 Web 动效）', () => {
+  const kf = (css: string) => parseKeyframes(css)
+
+  it('① @keyframes 解析（from/to/% → 停靠点 + opacity/transform 通道）', () => {
+    expect(kf('@keyframes a { from { opacity: 0 } to { opacity: 1 } }').a).toEqual([
+      { offset: 0, decls: { opacity: 0 } },
+      { offset: 1, decls: { opacity: 1 } },
+    ])
+    const k = kf('@keyframes b { 0% { opacity: 0 } 50% { opacity: 0.5 } 100% { opacity: 1 } }').b!
+    expect(k.map((s) => s.offset)).toEqual([0, 0.5, 1])
+  })
+
+  it('② animation 简写 → 逐通道 keyframe 规格（含时长/曲线）', () => {
+    const kfm = kf('@keyframes fade-in { from { opacity: 0.1 } to { opacity: 1 } }')
+    const o = parseStaticStyle('animation: fade-in 0.3s ease forwards', () => {}, undefined, undefined, kfm) as {
+      animation?: Array<{ kind: number; from: number; keyframes: Array<{ to: number; durMs: number; curve: number }> }>
+    }
+    expect(o.animation).toBeTruthy()
+    expect(o.animation![0]).toMatchObject({ kind: 4, from: 0.1 })
+    expect(o.animation![0]!.keyframes[0]).toEqual({ to: 1, durMs: 300, curve: 3 })
+  })
+
+  it('③ transform 通道（translateY px 关键帧）', () => {
+    const kfm = kf('@keyframes slide-up { from { transform: translateY(40px) } to { transform: translateY(0) } }')
+    const o = parseStaticStyle('animation: slide-up 0.32s ease-out', () => {}, undefined, undefined, kfm) as {
+      animation?: Array<{ kind: number; from: number }>
+    }
+    expect(o.animation!.some((c) => c.kind === 1 && c.from === 40), 'translateY 通道 from=40').toBe(true)
+  })
+
+  it('④ 未知名与无时长 ⇒ 诊断跳过（不静默）', () => {
+    const d1: string[] = []
+    parseStaticStyle('animation: nope 0.3s', (m) => d1.push(m), undefined, undefined, {})
+    expect(d1.some((m) => m.includes('@keyframes nope'))).toBe(true)
+    const d2: string[] = []
+    parseStaticStyle('animation: x', (m) => d2.push(m), undefined, undefined, {})
+    expect(d2.length).toBeGreaterThan(0)
+  })
+
+  it('⑤ 端到端：class 里的 animation → 节点 style', () => {
+    const sfc = `<template><view class="fade">x</view></template>
+<style>
+@keyframes fade-in { from { opacity: 0 } to { opacity: 1 } }
+.fade { width: 100px; height: 40px; animation: fade-in 0.3s ease }
+</style>`
+    const r = buildLayoutTemplate(sfc, 'anim.vue')
+    const f = r.template.nodes.find((n) => (n.style as { animation?: unknown }).animation !== undefined)
+    expect(f, '节点带 animation 规格').toBeTruthy()
+    expect((f!.style as { animation: Array<{ kind: number }> }).animation[0]!.kind).toBe(4)
   })
 })

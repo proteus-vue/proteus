@@ -240,6 +240,9 @@ final class VaporRenderHost {
             long te = System.nanoTime();
             emitAll();
             double emitMs = (System.nanoTime() - te) / 1e6;
+            // ★批次 42（动效 · 对齐 Web）：**CSS animation**（编译期折叠）——挂载后启动
+            //   （复用既有 animStart：内核 kernelAnimStart + Choreographer 帧循环）
+            cssAnimNodes = startStaticAnimations();
 
             lastNodeCount = specs.size();
             lastTextCount = textCount;
@@ -268,6 +271,7 @@ final class VaporRenderHost {
             out.put("emit_cmds_ms", round3(emitMs));
             out.put("painted_samples", lastPaintedSamples);
             out.put("painted_colors", lastPaintedColors);
+            out.put("css_anim_nodes", cssAnimNodes);
             out.put("viewport", vw + "x" + vh);
             return out.toString();
         } catch (Throwable t) {
@@ -706,6 +710,60 @@ final class VaporRenderHost {
      *   鸿蒙帧回调）——与几何同纪律：JS 只产语义，平台负责驱动。
      *   `ProteusHostView.driveKernelAnimFrames(...)` 已实现该循环（MA0-RT 在用）⇒ 直接复用。
      */
+    /** ★批次 42：上一棵树里带 CSS animation 的节点数（读数） */
+    public int cssAnimNodes = 0;
+
+    /**
+     * ★批次 42（动效 · 对齐 Web）：**启动静态 CSS 动画**（编译期折叠的 `animation` → 逐通道 keyframe 规格）。
+     *   读 specs 里各节点的 `animation`（`[{kind, from, keyframes:[{to,durMs,curve}]}]`）→ 组 `anim_start` 报文 →
+     *   调既有 `animStart`（内核 + 帧循环）。返回启动动画的节点数（0 = 无）。
+     */
+    private int startStaticAnimations() {
+        if (view == null) return 0;
+        try {
+            JSONArray anims = new JSONArray();
+            int nodes = 0;
+            for (JSONObject spec : specs) {
+                JSONArray chans = spec.optJSONArray("animation");
+                if (chans == null) continue;
+                int id = spec.optInt("id", -1);
+                if (id < 0) continue;
+                boolean any = false;
+                for (int i = 0; i < chans.length(); i++) {
+                    JSONObject ch = chans.optJSONObject(i);
+                    if (ch == null) continue;
+                    JSONArray kf = ch.optJSONArray("keyframes");
+                    if (kf == null || kf.length() == 0) continue;
+                    double total = 0;
+                    double lastTo = ch.optDouble("from", 0);
+                    for (int k = 0; k < kf.length(); k++) {
+                        JSONObject seg = kf.optJSONObject(k);
+                        if (seg == null) continue;
+                        total += seg.optDouble("durMs", 0);
+                        lastTo = seg.optDouble("to", lastTo);
+                    }
+                    JSONObject one = new JSONObject();
+                    one.put("nodeId", id);
+                    one.put("kind", ch.optInt("kind"));
+                    one.put("from", ch.optDouble("from"));
+                    one.put("to", lastTo);
+                    one.put("durMs", total);
+                    one.put("keyframes", kf);
+                    anims.put(one);
+                    any = true;
+                }
+                if (any) nodes++;
+            }
+            if (anims.length() == 0) return 0;
+            JSONObject req = new JSONObject();
+            req.put("anims", anims);
+            animStart(req.toString());
+            return nodes;
+        } catch (Throwable t) {
+            return 0;
+        }
+    }
+
     public String animStart(String animsJson) {
         JSONObject out = new JSONObject();
         try {

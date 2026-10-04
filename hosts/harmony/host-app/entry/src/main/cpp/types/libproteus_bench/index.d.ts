@@ -64,6 +64,8 @@ export const appScreenCommands: (argsJson: string) => string;
 /** ★★★真实触摸（2026-10-04）：`.onTouch` 真注入的 vp 坐标 → 内核 hitTest（保留的合成树）。
  *  返回 {ok,target,path,chain}；每调用一次计入 app-screen-composite.json 的真实触摸读数。 */
 export const appScreenHitAt: (x: number, y: number) => string;
+/** ★批次 42（动效）：推进一帧 app-screen 树的内核动画（返回 {ok, active}） */
+export const appScreenAnimTick: (dtMsJson: string) => string;
 /** ★★★App 三端对齐（2026-10-04）：鸿蒙 executor 探针——eval 同一份 bundle-app-stack.js + 注入
  *  proteusHost.invoke（screen.* 真内核树）+ 两相泵 job。argsJson = { bundle }；返回 {ok, exec_* , exec_read}。 */
 export const appStackExecutorProbe: (argsJson: string) => string;

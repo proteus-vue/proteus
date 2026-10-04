@@ -172,6 +172,9 @@ function go(name: 'forms' | 'config-demo' | 'user') {
       <div class="gi">B</div>
       <div class="gi gi-full">C 跨列(1 / -1)</div>
     </div>
+
+    <!-- ★CSS animation 演示（批次 42）：@keyframes 淡入（opacity 通道，内核动画） -->
+    <div class="anim-demo">CSS animation: fade-in</div>
   </div>
 </template>
 
@@ -493,6 +496,22 @@ function go(name: 'forms' | 'config-demo' | 'user') {
   font-size: 12px;
   text-align: center;
   border-radius: 8px;
+}
+/* ★CSS animation 演示（批次 42）——@keyframes 淡入（编译期 → 内核动画） */
+@keyframes fade-in {
+  from { opacity: 0.1 }
+  to { opacity: 1 }
+}
+.anim-demo {
+  width: 220px;
+  height: 36px;
+  margin: 16px auto;
+  background-color: #7048e8;
+  color: #ffffff;
+  font-size: 12px;
+  text-align: center;
+  border-radius: 8px;
+  animation: fade-in 0.3s ease forwards;
 }
 /* ★grid-column 放置演示（批次 41）——2 列网格 + 第 3 项跨全宽 */
 .grid-demo {

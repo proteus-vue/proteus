@@ -489,6 +489,8 @@ export function parseStaticStyle(
   importantOut?: Set<string>,
   /** ★批次 9：设计令牌表（`--name` → 值）——`var()` 编译期折叠；缺省则 var() 原样（会在后续诊断） */
   tokens?: Record<string, string>,
+  /** ★批次 42：`@keyframes` 表（`animation` 简写解析用；由 parseClassRules 传入） */
+  keyframes?: KeyframesMap,
 ): Record<string, unknown> {
   const out: Record<string, unknown> = {}
   for (const part of css.split(';')) {
@@ -599,6 +601,23 @@ export function parseStaticStyle(
         if (o.x === 0.5 && o.y === 0.5) continue   // 默认（元素中心）⇒ 不发射（零行为变化）
         out.transformOrigin = o
         markImportant('transformOrigin')
+        continue
+      }
+      if (key === 'animation') {
+        // ★批次 42（动效 · 对齐 Web）：`animation: <name> <dur> <timing?> [delay] [iter] [dir] [fill]` ——
+        //   折成**逐通道 keyframe 规格**（内核 `anim_start` 的 `{kind, from, keyframes:[{to,durMs,curve}]}`）。
+        //   名字须命中 `<style>` 里的 `@keyframes`（`keyframes` 表经 parseClassRules 传入）；未知名 ⇒ 诊断跳过。
+        if (rawVal.trim().toLowerCase() === 'none') continue   // 默认无动画 ⇒ 不发射
+        const spec = parseAnimationShorthand(rawVal)
+        if (spec === null) { pushDiag(`style 里 \`${rawKey}: ${rawVal}\` 未解析（支持 \`<name> <dur> <timing?> …\`；需带时间单位）——已跳过`); continue }
+        const stops = keyframes ? keyframes[spec.name] : undefined
+        if (stops) {
+          const chans = resolveAnimationChannels(stops, spec.durMs, spec.curve)
+          if (chans.length > 0) { out.animation = chans; markImportant('animation') }
+          else pushDiag(`\`animation: ${rawVal}\` 的 @keyframes \`${spec.name}\` 无可动画通道（opacity / px 位移 / 等比缩放 / 旋转）——已跳过`)
+        } else {
+          pushDiag(`\`animation: ${rawVal}\` 未找到 \`@keyframes ${spec.name}\`（App 端 animation 需同文件的 @keyframes 声明）——已跳过`)
+        }
         continue
       }
     if (LAYOUT_FIELDS.has(key)) {
@@ -1065,7 +1084,7 @@ function specificityOf(segments: ClassStyleSegment[]): [number, number, number] 
 }
 
 /** 解析 `<style>` 文本 → 选择器规则表（源序）；不支持的整条跳过并计数（调用方决定是否诊断） */
-export function parseClassRules(css: string, tokens?: Record<string, string>): { rules: ClassStyleRule[]; skipped: number } {
+export function parseClassRules(css: string, tokens?: Record<string, string>, keyframes?: KeyframesMap): { rules: ClassStyleRule[]; skipped: number } {
   const rules: ClassStyleRule[] = []
   let skipped = 0
   let order = 0
@@ -1090,7 +1109,7 @@ export function parseClassRules(css: string, tokens?: Record<string, string>): {
         continue
       }
       const important = new Set<string>()
-      const style = parseStaticStyle(decls, () => {}, important, tokens)
+      const style = parseStaticStyle(decls, () => {}, important, tokens, keyframes)
       if (Object.keys(style).length === 0) continue
       rules.push({
         segments: parsed.segments,
@@ -1506,6 +1525,138 @@ function parseTransformOrigin(val: string): { x: number; y: number } | null {
   return { x, y }
 }
 
+export interface KeyframeStop { offset: number; decls: Record<string, unknown> }
+export type KeyframesMap = Record<string, KeyframeStop[]>
+
+/**
+ * ★批次 42（动效 · 对齐 Web）：解析 `<style>` 里的 `@keyframes <name> { … }` → `name → 停靠点表`。
+ *   停靠点：`from`/`to`/`<n>%`（→ offset 0..1）；`decls` 只收**可动画通道**（`opacity` + `transform` 子项）。
+ *   诚实边界：只支持 opacity 与 transform（px 位移/等比缩放/旋转）；其余声明忽略（不静默——由上层对未支持形态诊断）。
+ */
+export function parseKeyframes(css: string): KeyframesMap {
+  const out: KeyframesMap = {}
+  const body = css.replace(/\/\*[\s\S]*?\*\//g, '')
+  const kfRe = /@keyframes\s+([A-Za-z_][\w-]*)\s*\{/g
+  let m: RegExpExecArray | null
+  while ((m = kfRe.exec(body))) {
+    const name = m[1]!
+    const open = m.index + m[0].length - 1
+    let depth = 0
+    let close = -1
+    for (let i = open; i < body.length; i++) {
+      if (body[i] === '{') depth++
+      else if (body[i] === '}') { depth--; if (depth === 0) { close = i; break } }
+    }
+    if (close < 0) continue
+    const inner = body.slice(open + 1, close)
+    const stops: KeyframeStop[] = []
+    const stopRe = /([^{}]+)\{([^{}]*)\}/g
+    let s: RegExpExecArray | null
+    while ((s = stopRe.exec(inner))) {
+      const offs = s[1]!.split(',').map((x) => x.trim()).filter(Boolean).map((t) => {
+        if (t === 'from') return 0
+        if (t === 'to') return 1
+        const p = /^(\d+(?:\.\d+)?)%$/.exec(t)
+        return p ? Number(p[1]) / 100 : NaN
+      }).filter((n) => Number.isFinite(n))
+      if (offs.length === 0) continue
+      const decls: Record<string, unknown> = {}
+      for (const part of s[2]!.split(';')) {
+        const i2 = part.indexOf(':')
+        if (i2 < 0) continue
+        const k = part.slice(0, i2).trim().toLowerCase()
+        const v = part.slice(i2 + 1).trim()
+        if (k === 'opacity') {
+          const n = numOf(v)
+          if (n !== undefined) decls.opacity = n
+        } else if (k === 'transform') {
+          const t = parseCssTransform(v, true)   // ★关键帧端点：保留 identity（translateY(0) 是有意义的终点）
+          if (t && t !== null) decls.transform = t
+        }
+      }
+      for (const o of offs) stops.push({ offset: o, decls })
+    }
+    if (stops.length > 0) out[name] = stops
+  }
+  return out
+}
+
+/**
+ * ★批次 42：把 `@keyframes` 停靠点表 + 总时长**解析为逐通道的 keyframe 规格**
+ *   （内核 `anim_start` 的 `{kind, from, keyframes:[{to,durMs,curve}]}` 形态）。
+ *   非等比缩放 / % 位移（需盒尺寸）⇒ 该通道跳过（如实，不猜）。
+ */
+function resolveAnimationChannels(
+  stops: KeyframeStop[],
+  durMs: number,
+  curve: number,
+): Array<{ kind: number; from: number; keyframes: Array<{ to: number; durMs: number; curve: number }> }> {
+  const chans: Array<{ kind: number; from: number; keyframes: Array<{ to: number; durMs: number; curve: number }> }> = []
+  const build = (kind: number, get: (d: Record<string, unknown>) => number | undefined): void => {
+    const pts: Array<[number, number]> = []
+    for (const st of stops) {
+      const v = get(st.decls)
+      if (v !== undefined) pts.push([st.offset, v])
+    }
+    if (pts.length < 2) return
+    const from = pts[0]![1]
+    const segs: Array<{ to: number; durMs: number; curve: number }> = []
+    for (let i = 1; i < pts.length; i++) {
+      const d = (pts[i]![0] - pts[i - 1]![0]) * durMs
+      if (d <= 0) continue
+      segs.push({ to: pts[i]![1], durMs: d, curve })
+    }
+    if (segs.length > 0) chans.push({ kind, from, keyframes: segs })
+  }
+  const tfNum = (d: Record<string, unknown>, pick: (t: { txPx: number; tyPx: number; txPct: number; tyPct: number; sx: number; sy: number; rotate: number }) => number | undefined): number | undefined => {
+    const t = d.transform as { txPx: number; tyPx: number; txPct: number; tyPct: number; sx: number; sy: number; rotate: number } | undefined
+    if (!t) return undefined
+    if (t.txPct !== 0 || t.tyPct !== 0) return undefined   // % 位移需盒尺寸 ⇒ 该通道跳过
+    if (t.sx !== t.sy) return undefined                    // 非等比缩放 ⇒ 跳过
+    return pick(t)
+  }
+  build(4, (d) => d.opacity as number | undefined)                                        // 4=opacity
+  build(0, (d) => tfNum(d, (t) => t.txPx))                                                // 0=translateX(px)
+  build(1, (d) => tfNum(d, (t) => t.tyPx))                                                // 1=translateY(px)
+  build(2, (d) => tfNum(d, (t) => t.sx))                                                  // 2=scale
+  build(3, (d) => tfNum(d, (t) => t.rotate))                                              // 3=rotate
+  return chans
+}
+
+/** CSS `timing-function`/关键字 → 内核 curve id（0=linear / 1=ease-out / 2=ease-in / 3=ease-in-out） */
+function cssTimingToCurve(t: string): number {
+  const s = t.trim().toLowerCase()
+  if (s === 'linear') return 0
+  if (s === 'ease-out' || s === 'ease-out-cubic') return 1
+  if (s === 'ease-in' || s === 'ease-in-cubic') return 2
+  // `ease`（CSS 默认，≈先快后慢）与 `ease-in-out` 都落 ease-in-out（最接近的内置曲线）
+  return 3
+}
+
+
+/**
+ * ★批次 42：CSS `animation` 简写 → `{name, durMs, curve}`。
+ *   取首 token 为名字（命中 @keyframes）、首个带时间单位的 token 为时长、timing 关键字 → curve。
+ *   迭代/delay/direction/fill 暂忽略（诚实边界：App 端 animation 播**单次**、终态保持）。
+ */
+function parseAnimationShorthand(val: string): { name: string; durMs: number; curve: number } | null {
+  const toks = val.trim().split(/\s+/).filter(Boolean)
+  if (toks.length === 0) return null
+  const name = toks[0]!
+  if (!/^[A-Za-z_][\w-]*$/.test(name)) return null
+  let durMs: number | undefined
+  let curve: number | undefined
+  for (const t of toks.slice(1)) {
+    const s = t.toLowerCase()
+    const sec = /^([\d.]+)s$/.exec(s)
+    const ms = /^([\d.]+)ms$/.exec(s)
+    if (sec) { if (durMs === undefined) durMs = Number(sec[1]) * 1000 }
+    else if (ms) { if (durMs === undefined) durMs = Number(ms[1]) }
+    else if (['linear', 'ease', 'ease-in', 'ease-out', 'ease-in-out'].includes(s)) { if (curve === undefined) curve = cssTimingToCurve(s) }
+  }
+  if (durMs === undefined) return null   // 无时长 ⇒ 不可静态化
+  return { name, durMs, curve: curve ?? 3 }
+}
 /**
  * ★批次 38（对齐 Web）：CSS transform（**静态**）→ 引擎变换数值集。
  *   支持 2D 子集：translate/translateX/translateY（px/数字/%）、scale/scaleX/scaleY、rotate（deg/rad/grad/turn）。
@@ -1513,7 +1664,7 @@ function parseTransformOrigin(val: string): { x: number; y: number } | null {
  *   【为什么位移分 px / pct 两栏】translate(-50%,-50%) 是居中标准写法（% 相对自身盒）——编译期不知盒尺寸，
  *   存盒比例，由宿主按 pct × w/h 落成物理位移（三端同一口径）。
  */
-function parseCssTransform(val: string): { txPx: number; tyPx: number; txPct: number; tyPct: number; sx: number; sy: number; rotate: number } | false | null {
+function parseCssTransform(val: string, keepIdentity = false): { txPx: number; tyPx: number; txPct: number; tyPct: number; sx: number; sy: number; rotate: number } | false | null {
   const v = val.trim()
   if (v === '' || v.toLowerCase() === 'none') return null
   const fnRe = /([a-zA-Z][a-zA-Z0-9]*)\(([^()]*)\)/g
@@ -1579,7 +1730,7 @@ function parseCssTransform(val: string): { txPx: number; tyPx: number; txPct: nu
   if (covered === 0) return null
   // App 宿主变换模型为单一缩放 ⇒ 非等比缩放（scaleX/scaleY 单独或不等）如实拒绝（不静默按 x 冒充）
   if (out.sx !== out.sy) return false
-  if (out.txPx === 0 && out.tyPx === 0 && out.txPct === 0 && out.tyPct === 0 && out.sx === 1 && out.sy === 1 && out.rotate === 0) return null
+  if (out.txPx === 0 && out.tyPx === 0 && out.txPct === 0 && out.tyPct === 0 && out.sx === 1 && out.sy === 1 && out.rotate === 0) return keepIdentity ? out : null
   return out
 }
 
@@ -2244,9 +2395,15 @@ export function buildLayoutTemplate(
   //   供模板节点按 `class`（+ 祖先类链）匹配合并（App 路径无 CSS 引擎；真实项目样式多在 `<style>`+class）。
   //   支持：单类 `.a` / 复合 `.a.b` / 后代 `.a .b` / 子 `.a>.b`；其余跳过 + 诊断（见 parseClassRules）。
   const classRules: ClassStyleRule[] = []
+  // ★批次 42：先收集 <style> 里的 @keyframes（animation 简写解析用）
+  const keyframesMap: Record<string, import('./template').KeyframeStop[]> = {}
   for (const blk of desc.styles ?? []) {
     if (!blk?.content) continue
-    const { rules, skipped } = parseClassRules(blk.content, tokens)
+    Object.assign(keyframesMap, parseKeyframes(blk.content))
+  }
+  for (const blk of desc.styles ?? []) {
+    if (!blk?.content) continue
+    const { rules, skipped } = parseClassRules(blk.content, tokens, keyframesMap)
     classRules.push(...rules)
     if (skipped > 0) {
       diag(
