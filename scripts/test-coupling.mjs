@@ -181,8 +181,10 @@ const COUPLING = [
       'tests/vapor-style-object.test.ts',
       'tests/vapor-lifecycle.test.ts',
       'tests/vapor-ts-syntax-and-scope-destructure.test.ts',
+      // ★2026-10-04：App 端 CSS 支持面 SSOT（APP_*_FIELDS 导出 + 三表分层对照棘轮）
+      'tests/app-css-surface.test.ts',
     ],
-    why: 'Vapor 子系统（表达式/槽位/事件/生命周期/样式对象——独立测试体系）',
+    why: 'Vapor 子系统（表达式/槽位/事件/生命周期/样式对象——独立测试体系）+ App CSS 支持面 SSOT',
   },
   {
     match: /^packages\/compiler\/src\/ir\//,
