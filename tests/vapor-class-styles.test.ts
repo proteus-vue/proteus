@@ -628,3 +628,29 @@ describe('★批次 12 · CSS Grid（display:grid + 显式轨迹）', () => {
     expect((n!.style as { gap?: number }).gap).toBe(12)
   })
 })
+
+// ★★★批次 13（CSS 兼容对齐 · 超级应用文本排版）：line-height——2026-10-04
+describe('★批次 13 · line-height（行盒高）', () => {
+  it('① 无单位倍数 / 百分比 / 绝对 px 归一为 token', () => {
+    expect(parseStaticStyle('line-height: 1.6', () => {}).lineHeight).toBe('1.6')
+    expect(parseStaticStyle('line-height: 160%', () => {}).lineHeight).toBe('1.6')
+    expect(parseStaticStyle('line-height: 24px', () => {}).lineHeight).toBe('24px')
+  })
+
+  it('② normal / 非法 ⇒ 诊断跳过', () => {
+    const d: string[] = []
+    expect(parseStaticStyle('line-height: normal', (m) => d.push(m)).lineHeight).toBeUndefined()
+    expect(d.some((m) => m.includes('line-height'))).toBe(true)
+  })
+
+  it('③ 继承：line-height 沿树向下传播（文本可继承子集）', () => {
+    const sfc = `<template><view class="root"><text class="leaf">x</text></view></template>
+<script setup>const z = 1</script>
+<style>
+.root { line-height: 1.7 }
+</style>`
+    const r = buildLayoutTemplate(sfc, 'pages/s.vue')
+    const leaf = r.template.nodes.find((x) => x.tag === 'text')
+    expect((leaf?.style as { lineHeight?: string }).lineHeight, '行高继承到 text').toBe('1.7')
+  })
+})

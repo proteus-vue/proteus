@@ -74,6 +74,8 @@ public class ProteusHostView extends ViewGroup {
         final int borderColor;
         /** ★批次 10（CSS 兼容对齐 · 超级应用视觉）：盒阴影规格 `{dx,dy,blur,spread,color}`；null=无阴影（零行为变化）。 */
         final float[] boxShadow;
+        /** ★批次 13（line-height）：行盒高（px；0 = 用字形度量高，字形基线沿用旧 0.8h——零行为变化）。 */
+        final float lineHeight;
         /**
          * ★★圆角半径（px；0 = 直角）——纯绘制属性（内核不收，只影响观感）。
          *
@@ -129,6 +131,10 @@ public class ProteusHostView extends ViewGroup {
         }
         Cmd(float x, float y, float w, float h, int color, String text, float fontSize, int textColor, float radius,
             GradSpec gradient, float[] glow, float[] mask, int fontWeight, int textAlign, float borderWidth, int borderColor, float[] boxShadow) {
+            this(x, y, w, h, color, text, fontSize, textColor, radius, gradient, glow, mask, fontWeight, textAlign, borderWidth, borderColor, boxShadow, 0f);
+        }
+        Cmd(float x, float y, float w, float h, int color, String text, float fontSize, int textColor, float radius,
+            GradSpec gradient, float[] glow, float[] mask, int fontWeight, int textAlign, float borderWidth, int borderColor, float[] boxShadow, float lineHeight) {
             this.x = x; this.y = y; this.w = w; this.h = h; this.color = color; this.text = text;
             this.fontSize = fontSize;
             this.textColor = textColor;
@@ -141,6 +147,7 @@ public class ProteusHostView extends ViewGroup {
             this.borderWidth = borderWidth;
             this.borderColor = borderColor;
             this.boxShadow = boxShadow;
+            this.lineHeight = lineHeight;
         }
     }
 
@@ -2430,7 +2437,17 @@ public class ProteusHostView extends ViewGroup {
                 // ★批次 4：绘制 x 按对齐换算（LEFT:CENTER:RIGHT 的 x 语义不同——见 Paint.Align）
                 final float tx = c.textAlign == 1 ? c.x + c.w * 0.5f
                         : c.textAlign == 2 ? c.x + c.w - 1f : c.x + 1f;
-                canvas.drawText(c.text, tx, c.y + c.h * 0.8f, textPaint);
+                // ★批次 13（line-height）：声明行高时字形**顶对齐**于更大的行盒（基线 = 盒顶 + ascent）；
+                //   未声明 ⇒ 沿用旧 0.8h（既有路径零行为变化）。★三端一致：iOS(CATextLayer)/鸿蒙(typography)
+                //   本就顶对齐 ⇒ 行高只改变行盒高，字形位置在所有端保持顶对齐（诚实边界：非 CSS 半行距居中）。
+                final float baseY;
+                if (c.lineHeight > 0f) {
+                    android.graphics.Paint.FontMetrics fm = textPaint.getFontMetrics();
+                    baseY = c.y - fm.ascent;   // 字形顶落在盒顶
+                } else {
+                    baseY = c.y + c.h * 0.8f;
+                }
+                canvas.drawText(c.text, tx, baseY, textPaint);
             }
             // ★批次 5（CSS 兼容对齐 · 边框）：uniform 边框（stroke 半内缩：strokeWidth/2 居中于边线）。
             if (c.borderWidth > 0 && c.borderColor != 0) {

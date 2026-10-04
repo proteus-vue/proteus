@@ -44,7 +44,7 @@
         {
           "capability": "文本呈现（size / weight / align / color / line-height / 截断）",
           "why": "标题 / 正文 / 单行截断",
-          "status": "font-size/weight/align/color ✅；**line-height ⏳ / text-overflow ⏳**"
+          "status": "font-size/weight/align/color ✅ · **line-height ✅ 批 13**；**text-overflow 截断 ⏳**"
         },
         {
           "capability": "栅格 / 复杂排布（grid）",
@@ -222,14 +222,14 @@
         "why": "★批次 4（2026-10-04）：封闭集 left/center/right（justify/st 等诊断跳过）。宿主：iOS CATextLayer.alignmentMode · Android Paint.Align（绘制 x 按对齐换算）· 鸿蒙 OH_Drawing_SetTypographyTextAlign。真项目 28 处（22 center）"
       },
       {
-        "css": "line-height / letter-spacing / white-space",
+        "css": "letter-spacing / white-space",
         "id": "text-attrs",
         "ends": {
           "web": "supported",
           "skyline": "supported",
           "app": "absent"
         },
-        "why": "文本度量与排版走平台文本引擎（不自研）；当前 App 折叠面文本维 = fontSize/color/fontWeight/textAlign（line-height/letter-spacing 需扩引擎/宿主文本通道，属后续）"
+        "why": "字距/白空格走平台文本引擎（不自研）；当前 App 折叠面文本维 = fontSize/color/fontWeight/textAlign/line-height——letter-spacing/white-space 未支持"
       },
       {
         "css": "visibility",
@@ -424,6 +424,7 @@
       "fontSize",
       "fontWeight",
       "textAlign",
+      "lineHeight",
       "borderRadius",
       "borderColor",
       "borderWidth",
@@ -1171,8 +1172,23 @@
       "supportTier": "conditional"
     },
     {
+      "id": "line-height",
+      "css": "line-height",
+      "category": "text",
+      "compilerFields": [
+        "lineHeight"
+      ],
+      "web": "supported",
+      "skyline": "supported",
+      "app": "supported",
+      "tier": "L1",
+      "strategy": "编译期折叠",
+      "note": "★批次 13（2026-10-04）：无单位倍数 / 百分比（→倍数）/ 绝对 px 归一为 token；作为**文本可继承**字段沿树继承。三端宿主用于**行盒高**（覆盖字形度量高；字形顶对齐——三端一致）：iOS measureText（CATextLayer 顶对齐）· Android buildMeasures + drawCmds 基线 = 盒顶+ascent · 鸿蒙 measureTextTypoPx 覆盖。诚实边界：行盒高顶对齐（非 CSS 半行距居中）；letter-spacing 未支持",
+      "supportTier": "universal"
+    },
+    {
       "id": "text-attrs",
-      "css": "line-height / letter-spacing / white-space",
+      "css": "letter-spacing / white-space",
       "category": "text",
       "compilerFields": [],
       "web": "supported",
@@ -1180,7 +1196,7 @@
       "app": "absent",
       "tier": "L4",
       "strategy": "降级",
-      "note": "文本度量与排版走平台文本引擎（不自研）；当前 App 折叠面文本维 = fontSize/color/fontWeight/textAlign（line-height/letter-spacing 需扩引擎/宿主文本通道，属后续）",
+      "note": "字距/白空格走平台文本引擎（不自研）；当前 App 折叠面文本维 = fontSize/color/fontWeight/textAlign/line-height——letter-spacing/white-space 未支持",
       "supportTier": "conditional"
     },
     {

@@ -223,23 +223,39 @@ final class ProteusTextAdapter {
     private(set) static var lastUnknownFontFamily = ""
 
     static func measureText(_ text: String, fontSize: CGFloat, fontWeight: CGFloat = 400,
-                            fontFamily: String = "system") -> CGSize {
+                            fontFamily: String = "system", lineHeight: String? = nil) -> CGSize {
         if text.isEmpty { return .zero }
         // ★缓存键必须含**字重与字族**（本仓实测的同一类缺陷：键不含某维度 ⇒ 不同字体共用度量 ⇒ 静默错几何）
         //   ★三层维度与适配器 `fontSignature` 的输入**逐项对应**（新增维度必须两边同时加）
-        let key = "\(fontSize)\u{1}\(fontWeight)\u{1}\(fontFamily)\u{1}\(text)"
+        //   ★批次 13：键含 `lineHeight`（影响行盒高）
+        let key = "\(fontSize)\u{1}\(fontWeight)\u{1}\(fontFamily)\u{1}\(lineHeight ?? "")\u{1}\(text)"
         if let hit = measureCache[key] { measureCacheHits += 1; return hit }
         measureCacheMisses += 1
         let font = ProteusTextAdapter.font(size: fontSize, weight: fontWeight, family: fontFamily)
         let attrs: [NSAttributedString.Key: Any] = [.font: font]
         let size = (text as NSString).size(withAttributes: attrs)
+        // ★批次 13（line-height）：声明行高 ⇒ **行盒高** = 行高（无单位倍数×fontSize / 绝对 px），
+        //   覆盖字形度量高（字形由 CATextLayer 顶对齐绘制——三端一致，见宿主注释）
+        var height = size.height
+        if let lh = lineHeight, let h = ProteusTextAdapter.lineHeightPx(lh, fontSize: fontSize) {
+            height = h
+        }
         // ★向上取整到整点：真机实测文本宽度常带小数（如 47.33pt），
         //   而宿主按整点布置 CALayer 更稳定；同时避免「同一文本两次测量差 0.001」导致布局抖动
         // I2-ALLOW: 文本**测量**结果的取整（测量子系统，非几何换算——度量值由内核消费后
         //   再经 `snap` 统一吸附；平台层对**几何**（层 frame）零舍入，见 check:host-rounding）
-        let rounded = CGSize(width: ceil(size.width), height: ceil(size.height))
+        let rounded = CGSize(width: ceil(size.width), height: ceil(height))
         measureCache[key] = rounded
         return rounded
+    }
+
+    /// ★批次 13：`line-height` token → 行盒高 px（无单位倍数×fontSize / 绝对 px；解析失败 ⇒ nil）
+    static func lineHeightPx(_ token: String, fontSize: CGFloat) -> CGFloat? {
+        if token.hasSuffix("px") {
+            return CGFloat(Double(token.dropLast(2)) ?? 0)
+        }
+        if let mult = Double(token) { return CGFloat(mult) * fontSize }
+        return nil
     }
 
     /// 度量缓存命中/未命中（诊断：证明缓存真的生效）

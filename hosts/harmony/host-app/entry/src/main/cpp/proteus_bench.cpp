@@ -421,6 +421,22 @@ static void parseRects(const std::string& s, std::unordered_map<int, Rect>& out)
  *   ⇒ 度量放**宿主侧**（内核平台无关性的体现）；本函数即鸿蒙宿主的 `measure_text` 实现。
  *   ★口径：物理字号量一次（与 DrawTextCallback 的绘制字号完全一致），再由调用方换回设计单位。
  */
+/**
+ * ★批次 13：`line-height` token → 行盒高（设计单位；0 = 未声明）。
+ *   无单位倍数（`1.6`）⇒ `1.6 × fontSize`；绝对（`24px`）⇒ 去掉 px 后缀的数值。
+ */
+static double lineHeightDesignPx(const std::string& token, double fontSizeDesign) {
+    if (token.empty()) return 0.0;
+    try {
+        if (token.size() > 2 && token.substr(token.size() - 2) == "px") {
+            return std::stod(token.substr(0, token.size() - 2));
+        }
+        return std::stod(token) * fontSizeDesign;
+    } catch (...) {
+        return 0.0;
+    }
+}
+
 static void measureTextTypoPx(const std::string& text, double fontPx, double* outW, double* outH) {
     *outW = 0;
     *outH = 0;
@@ -4186,6 +4202,10 @@ static napi_value AppScreenCommands(napi_env env, napi_callback_info info) {
         jnum(it.c_str(), it.size(), "fontSize", &fs);
         double wpx = 0, hpx = 0;
         measureTextTypoPx(tx, fs * density, &wpx, &hpx);
+        // ★批次 13：line-height ⇒ 行盒高覆盖字形高
+        std::string lhTok; jstr(it.c_str(), it.size(), "lineHeight", &lhTok);
+        double lhDesign = lineHeightDesignPx(lhTok, fs);
+        if (lhDesign > 0) hpx = lhDesign * density;
         char mb[160]; snprintf(mb, sizeof(mb), "%s\"%d\":{\"width\":%.2f,\"height\":%.2f}", mc > 0 ? "," : "", (int)id, wpx / density, hpx / density);
         measures += mb; mc++;
     }

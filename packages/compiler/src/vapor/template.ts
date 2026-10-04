@@ -75,7 +75,7 @@ export const APP_ENUM_VALUES: Record<string, readonly string[]> = {
 }
 
 /** 绘制字段（宿主自绘读这些键；模板照样要带上，否则挂载后无底色/无字色） */
-export const APP_PAINT_FIELDS = ['backgroundColor', 'color', 'fontSize', 'fontWeight', 'textAlign', 'borderRadius', 'borderColor', 'borderWidth', 'opacity', 'boxShadow'] as const
+export const APP_PAINT_FIELDS = ['backgroundColor', 'color', 'fontSize', 'fontWeight', 'textAlign', 'lineHeight', 'borderRadius', 'borderColor', 'borderWidth', 'opacity', 'boxShadow'] as const
 const PAINT_FIELDS = new Set<string>(APP_PAINT_FIELDS)
 /**
  * ★批次 4（CSS 兼容对齐）：`text-align` 的**封闭集**（App 自绘文本在盒内的水平对齐）。
@@ -99,7 +99,7 @@ export const APP_SPECIAL_FIELDS = ['boxSizing'] as const
  * 【为什么只有这两个】App 折叠面里语义上可继承的只有文本色/字号；背景/边框/圆角/不透明度
  *   在 CSS 里**不继承**（见 Profile §3 可继承/不可继承表）⇒ 不得纳入。
  */
-export const APP_INHERITABLE_FIELDS = ['color', 'fontSize', 'fontWeight'] as const
+export const APP_INHERITABLE_FIELDS = ['color', 'fontSize', 'fontWeight', 'lineHeight'] as const
 
 /**
  * ★★**结构化绘制声明**（2026-10-01 · 绘制通道补齐）——`style="{...}"` 装不下的那些通道，
@@ -304,6 +304,20 @@ const kebabToCamel = (s: string): string => s.replace(/-([a-z])/g, (_, c: string
  *   `style="height: 56px; ..."`；不支持它等于"模板里的样式全部丢失且无提示"。
  *   本函数对**认不出的键/值**产出诊断（不静默吞——本仓纪律）。
  */
+/**
+ * ★批次 13：`line-height` 归一为 token 串（宿主解析）：无单位倍数 → `"1.6"`；绝对 → `"24px"`；
+ *   `160%` → 倍数 `"1.6"`。`normal` / 其它关键字 ⇒ null（调用方诊断）。
+ */
+function parseLineHeight(raw: string): string | null {
+  const v = raw.trim().toLowerCase()
+  if (v === 'normal' || v === '') return null
+  const pct = /^(\d+(?:\.\d+)?)%$/.exec(v)
+  if (pct) return String(Number(pct[1]) / 100)
+  if (/^\d*\.?\d+px$/.test(v)) return v
+  if (/^\d*\.?\d+$/.test(v)) return v
+  return null
+}
+
 /**
  * ★批次 12（CSS Grid）：显式轨迹串 → 归一化的空格分隔串（内核再解析）。
  *   · `<n>fr` / `<n>px` / 纯数字 保留；`repeat(N, X)` 展开为 N 个 X（`repeat(3, 1fr)` → `1fr 1fr 1fr`）；
@@ -567,6 +581,18 @@ export function parseStaticStyle(
           continue
         }
         out[key] = v
+        markImportant(key)
+        continue
+      }
+      if (key === 'lineHeight') {
+        // ★批次 13：`line-height`（超级应用文本排版）——归一为 token 串：无单位倍数 `1.6` / 绝对 `24px`
+        //   （`160%` → 倍数 1.6）。宿主据此算行盒高（倍数 × fontSize）并令字形**垂直居中**。
+        const lh = parseLineHeight(rawVal)
+        if (lh === null) {
+          pushDiag(`\`${rawKey}: ${rawVal}\` 未解析（支持无单位倍数 \`1.6\` / \`160%\` / \`24px\`）——已跳过`)
+          continue
+        }
+        out[key] = lh
         markImportant(key)
         continue
       }
@@ -1626,7 +1652,7 @@ export function buildLayoutTemplate(
                 `${tag}(id=${id}) \`:style\` 的键 \`${e.key}\` 不支持**动态**更新` +
                   `（内核通道为数值几何；字符串类布局值/未知绘制字段不可动态）`,
                 `请把 \`${e.key}\` 放静态 \`style\`（值固定时），或改用受支持的键` +
-                  `（布局数值键 + 绘制键 backgroundColor/color/fontSize/fontWeight/textAlign/borderRadius/borderColor/borderWidth/opacity）`,
+                  `（布局数值键 + 绘制键 backgroundColor/color/fontSize/fontWeight/textAlign/lineHeight/borderRadius/borderColor/borderWidth/opacity）`,
                 'VAPOR_STYLE_KEY_UNSUPPORTED',
               )
             }

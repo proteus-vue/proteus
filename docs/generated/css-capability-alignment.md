@@ -46,7 +46,7 @@
 | 定位锚点（absolute + top/left/right/bottom + z 序） | 角标 / FAB / 关闭按钮 / 底部弹层 / 悬浮层 | supported（批 8 补 right/bottom；层序走层容器） |
 | 卡片外观（background / border / border-radius / shadow / 内边距） | 列表项 / 卡片 / 面板 | supported（background/border/border-radius/padding ✅ 批 2/5；**box-shadow ✅ 批 10**——iOS/鸿蒙原生、Android 分层近似） |
 | 弹性流式布局（flex + wrap + gap + align/justify/content + 百分比） | 响应式排布 / 标签墙 / 宫格 | supported（批 6 flex-wrap · 批 11 align-content 已补） |
-| 文本呈现（size / weight / align / color / line-height / 截断） | 标题 / 正文 / 单行截断 | font-size/weight/align/color ✅；**line-height ⏳ / text-overflow ⏳** |
+| 文本呈现（size / weight / align / color / line-height / 截断） | 标题 / 正文 / 单行截断 | font-size/weight/align/color ✅ · **line-height ✅ 批 13**；**text-overflow 截断 ⏳** |
 | 栅格 / 复杂排布（grid） | 仪表盘 / 复杂页面 | supported（批 12：引擎 Display::Grid + 显式轨迹 fr/px + repeat 展开；诚实边界：auto/minmax/gr、id-area 定位未支持） |
 | 动效（transition / transform / keyframes） | 转场 / 反馈 / 加载 | 引擎 anim 通道 ✅（transition 走 <Transition>/宿主指令）；**transform 静态折叠面 ⏳** |
 | 滚动容器（overflow + 滚动） | 长列表 / 弹层内容 | supported（overflow + 虚拟列表） |
@@ -102,7 +102,8 @@
 | paint | `filter / backdrop-filter` | supported | supported | absent | L3 | 语义组件 | conditional | 离屏/额外缓冲；走 <p-glass> / <p-filter> 语义组件 |
 | text | `font-weight` | not-measured | supported | supported | L1 | 编译期折叠 | conditional | ★批次 3（2026-10-04）：`normal`→400 / `bold`→700 / 100–900 数值归一；作为**文本可继承**字段沿树继承。三端宿主：iOS 已读 `fontWeight`（≥600 bold 判据）、Android 新接线（Cmd.fontWeight + 绘制/度量同源 typeface）、鸿蒙新接线（OH_Drawing_SetTextStyleFontWeight） |
 | text | `text-align` | not-measured | supported | supported | L1 | 编译期折叠 | conditional | ★批次 4（2026-10-04）：封闭集 left/center/right（justify/st 等诊断跳过）。宿主：iOS CATextLayer.alignmentMode · Android Paint.Align（绘制 x 按对齐换算）· 鸿蒙 OH_Drawing_SetTypographyTextAlign。真项目 28 处（22 center） |
-| text | `line-height / letter-spacing / white-space` | supported | supported | absent | L4 | 降级 | conditional | 文本度量与排版走平台文本引擎（不自研）；当前 App 折叠面文本维 = fontSize/color/fontWeight/textAlign（line-height/letter-spacing 需扩引擎/宿主文本通道，属后续） |
+| text | `line-height` | supported | supported | supported | L1 | 编译期折叠 | universal | ★批次 13（2026-10-04）：无单位倍数 / 百分比（→倍数）/ 绝对 px 归一为 token；作为**文本可继承**字段沿树继承。三端宿主用于**行盒高**（覆盖字形度量高；字形顶对齐——三端一致）：iOS measureText（CATextLayer 顶对齐）· Android buildMeasures + drawCmds 基线 = 盒顶+ascent · 鸿蒙 measureTextTypoPx 覆盖。诚实边界：行盒高顶对齐（非 CSS 半行距居中）；letter-spacing 未支持 |
+| text | `letter-spacing / white-space` | supported | supported | absent | L4 | 降级 | conditional | 字距/白空格走平台文本引擎（不自研）；当前 App 折叠面文本维 = fontSize/color/fontWeight/textAlign/line-height——letter-spacing/white-space 未支持 |
 | paint | `visibility` | supported | supported | absent | L1 | 直映射 | conditional | 引擎无 visibility 字段（可用 display:none 或 opacity 近似） |
 
 > 表中**带编译器字段**的行（对应 `packages/compiler/src/vapor/template.ts` 的 LAYOUT/PAINT_FIELDS）是
@@ -127,7 +128,7 @@
 | `filter / backdrop-filter` | supported | supported | absent | 离屏/额外缓冲；走 <p-glass> / <p-filter> 语义组件 |
 | `font-weight` | not-measured | supported | supported | ★批次 3（2026-10-04）：`normal`→400 / `bold`→700 / 100–900 数值归一；作为**文本可继承**字段沿树继承。三端宿主：iOS 已读 ` |
 | `text-align` | not-measured | supported | supported | ★批次 4（2026-10-04）：封闭集 left/center/right（justify/st 等诊断跳过）。宿主：iOS CATextLayer.alignmentMode |
-| `line-height / letter-spacing / white-space` | supported | supported | absent | 文本度量与排版走平台文本引擎（不自研）；当前 App 折叠面文本维 = fontSize/color/fontWeight/textAlign（line-height/letter |
+| `letter-spacing / white-space` | supported | supported | absent | 字距/白空格走平台文本引擎（不自研）；当前 App 折叠面文本维 = fontSize/color/fontWeight/textAlign/line-height——letter |
 | `visibility` | supported | supported | absent | 引擎无 visibility 字段（可用 display:none 或 opacity 近似） |
 
 ## 官方 Skyline 对齐开关
