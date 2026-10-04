@@ -175,7 +175,7 @@ cp "$HERE/bridge/dist/bundle-host-runtime.js" "$APP/bundle-host-runtime.js"
 # ★M5：执行器场景 bundle（`--app-stack` 模式用）
 cp "$HERE/bridge/dist/bundle-app-stack.js" "$APP/bundle-app-stack.js"
 # ★★★App 三端对齐 · 视觉合成（2026-10-04）：App 屏内容产物 → .app（真机真画屏用）
-APP_SC="$ROOT/examples/dist/app/ios/screen-content.json"
+APP_SC="$ROOT/${PROTEUS_APP_PROJECT:-superapp}/dist/app/ios/screen-content.json"
 if [ -f "$APP_SC" ]; then
   cp "$APP_SC" "$APP/app-screen-content.json"
   echo "    app-screen-content.json 已入 .app（$(du -h "$APP_SC" | awk '{print $1}')）"
