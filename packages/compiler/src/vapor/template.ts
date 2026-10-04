@@ -555,6 +555,17 @@ export function parseStaticStyle(
       markImportant(key)
       continue
     }
+    if (key === 'inset') {
+      // ★批次 38（对齐 Web · 削减胶水）：`inset` 简写（CSS `top/right/bottom/left` 的 1–4 值缩写）——
+      //   覆盖层/遮罩 `position:absolute; inset:0` 刚需（真项目 15 处：路由层/浮层/scrim）。
+      //   展开为 top/right/bottom/left 数值（引擎绝对定位已支持四边）；`auto` = 默认偏移（不偏移）⇒ 该边不设（忠实）。
+      const m = expandMarginShorthand(rawVal, numOf)
+      if (!m) { pushDiag(`style 里 \`${rawKey}: ${rawVal}\` 无法解析为 inset 简写（支持 1–4 个 px/数字/auto）`); continue }
+      for (const s of ['top', 'right', 'bottom', 'left'] as const) {
+        if (m.box[s] !== undefined) { out[s] = m.box[s]; markImportant(s) }
+      }
+      continue
+    }
     if (LAYOUT_FIELDS.has(key)) {
       // ★批次 12（CSS Grid）：`grid-template-columns/rows` —— 显式轨迹串（`1fr 1fr 200px`）；
       //   `repeat(N, X)` 展开为 N 个 X；不支持的形态（`auto`/`minmax`/`fit-content`）诊断跳过。

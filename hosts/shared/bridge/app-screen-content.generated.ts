@@ -5897,6 +5897,41 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
         "backgroundColor": "#ff6b35",
         "text": "last",
         "semantic": "div"
+      },
+      {
+        "id": 84,
+        "parentId": 0,
+        "position": "relative",
+        "width": 200,
+        "height": 44,
+        "margin": {
+          "top": 16,
+          "bottom": 16
+        },
+        "marginAuto": {
+          "right": true,
+          "left": true
+        },
+        "backgroundColor": "#eef2ff",
+        "borderRadius": 8,
+        "textAlign": "center",
+        "semantic": "div"
+      },
+      {
+        "id": 85,
+        "parentId": 84,
+        "position": "absolute",
+        "top": 0,
+        "right": 0,
+        "bottom": 0,
+        "left": 0,
+        "backgroundColor": "#7c3aed",
+        "color": "#ffffff",
+        "fontSize": 12,
+        "textAlign": "center",
+        "borderRadius": 8,
+        "text": "inset: 0 覆盖层",
+        "semantic": "div"
       }
     ]
   },

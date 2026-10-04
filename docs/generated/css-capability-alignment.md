@@ -104,6 +104,7 @@
 | layout | `flex-wrap` | supported | supported | supported | L2 | 直映射 | universal | ★批次 6（2026-10-04）：引擎新增 `FlexWrap`（Rust `LStyle.flex_wrap` + `NodeDto` + taffy `flex_wrap` 映射，闭合集 nowrap/wrap/wrap-reverse）；编译器入 APP_LAYOUT_FIELDS + APP_ENUM_VALUES + Android LAYOUT_KEYS 白名单。引擎行为测试 tests/flex_wrap.rs（wrap 换行/nowrap 不换行） |
 | layout | `align-content` | supported | supported | supported | L2 | 直映射 | universal | ★批次 11（2026-10-04）：引擎 `LStyle.align_content`（open string，与 justify/align-items 同模式）+ `NodeDto` + taffy `align_content` 映射（parse_align_content：center/flex-start/…/space-evenly → AlignContent）；编译器入 APP_LAYOUT_FIELDS + Android LAYOUT_KEYS。多行弹性容器的**行间**对齐（标签墙/宫格）。引擎行为测试 tests/align_content.rs（center 行组居中） |
 | layout | `right / bottom` | supported | supported | supported | L2 | 直映射 | universal | ★批次 8（2026-10-04）：引擎 `LStyle.right/bottom` + `NodeDto` + taffy inset 映射（absolute/relative 的右/下边缘锚定）；编译器入 APP_LAYOUT_FIELDS + style-object + Android LEN_SCALARS/LAYOUT_KEYS。★**超级应用刚需**：角标 / FAB / 关闭按钮 / 底部弹层锚点。引擎行为测试 tests/inset_right_bottom.rs（right=10/bottom=5 ⇒ 落父右下角） |
+| layout | `inset（top/right/bottom/left 的 1–4 值缩写）` | — | — | supported | L2 | 编译期折叠 | conditional | ★批次 38（对齐 Web · 削减胶水）：编译期展开为 top/right/bottom/left（引擎四边已支持）；真项目 15 处（路由层/浮层/scrim 的 position:absolute; inset:0）。auto 边 = 默认偏移（该边不设）。 |
 | layout | `order` | supported | supported | absent | L2 | 直映射 | conditional | 引擎无字段 |
 | layer | `z-index` | supported | supported | absent | L3 | 语义组件 | conditional | 本仓已定案**语义化**（layer="content\|navigation\|mask\|popout"，见 contracts/layers.ts）——数值禁止（跨端无意义 + 推高合成层内存） |
 | paint | `box-shadow` | supported | supported | supported | L3 | 编译期折叠 | universal | ★批次 10（2026-10-04）：单层解析为结构化 `boxShadow {dx,dy,blur,spread,color}`（多重取首个；inset 诊断跳过）。**三端绘制**：iOS `CALayer.shadow*`（原生；有阴影时不开 masksToBounds——圆角裁剪会裁掉阴影）· Android **分层圆角矩形近似**（硬件加速下 setShadowLayer 只支持文本）· 鸿蒙 `OH_ArkUI_RenderNodeUtils_SetShadow*`（原生；spread 无原生项）。★超级应用卡片抬升视觉刚需 |
@@ -141,6 +142,7 @@
 | `CSS 自定义属性（design tokens）var(--x)` | — | — | supported | ★批次 9（2026-10-04）：从项目 `globalStyle`（如 styles/tokens.css，与 Web/MP 同一份）解析 `--name: value`，SF |
 | `display: grid + grid-template-columns/rows（显式轨迹）` | partial | not-listed | supported | ★批次 12（2026-10-04）：引擎 `Display::Grid` + `LStyle.grid_template_columns/rows`（字符串轨迹）+ `NodeD |
 | `aspect-ratio` | not-measured | not-listed | supported | ★批次 24（2026-10-04 · ★基准 = Web）：宽高比（媒体卡/占位图）。`<n>`（1.5）/`<w>/<h>`（16/9，含空格）→ 比值；`auto` = 默认 |
+| `inset（top/right/bottom/left 的 1–4 值缩写）` | — | — | supported | ★批次 38（对齐 Web · 削减胶水）：编译期展开为 top/right/bottom/left（引擎四边已支持）；真项目 15 处（路由层/浮层/scrim 的 positi |
 | `order` | supported | supported | absent | 引擎无字段 |
 | `z-index` | supported | supported | absent | 本仓已定案**语义化**（layer="content\|navigation\|mask\|popout"，见 contracts/layers.ts）——数值禁止（跨端无意义  |
 | `filter / backdrop-filter` | supported | supported | absent | 离屏/额外缓冲；走 <p-glass> / <p-filter> 语义组件 |

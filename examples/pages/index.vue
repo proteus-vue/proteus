@@ -154,6 +154,11 @@ function go(name: 'forms' | 'config-demo' | 'user') {
       <div class="sel-item">mid</div>
       <div class="sel-item">last</div>
     </div>
+
+    <!-- ★inset 简写演示（批次 38）：position:absolute; inset:0（覆盖层免手写四边） -->
+    <div class="inset-demo">
+      <div class="inset-fill">inset: 0 覆盖层</div>
+    </div>
   </div>
 </template>
 
@@ -457,5 +462,23 @@ function go(name: 'forms' | 'config-demo' | 'user') {
 }
 .sel-item:nth-child(2) {
   color: #7c3aed;
+}
+/* ★inset 简写演示（批次 38）——absolute + inset:0 铺满父盒 */
+.inset-demo {
+  position: relative;
+  width: 200px;
+  height: 44px;
+  margin: 16px auto;
+  background-color: #eef2ff;
+  border-radius: 8px;
+}
+.inset-fill {
+  position: absolute;
+  inset: 0;
+  background-color: #7c3aed;
+  color: #ffffff;
+  font-size: 12px;
+  text-align: center;
+  border-radius: 8px;
 }
 </style>
