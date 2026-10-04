@@ -782,7 +782,7 @@
       "app": "supported",
       "tier": "L1",
       "strategy": "编译期折叠",
-      "note": "同上颜色归一",
+      "note": "颜色归一（hex/rgb/rgba/hsl/命名色/4 位 hex/transparent）；★批次 23：`color-mix(in srgb, A [pa%], B [pb%])` **常量折叠**（var() 已置换 ⇒ 两色已知 ⇒ sRGB 预乘 alpha 混合）——组件库 16 处令牌着色；非 srgb 色彩空间（oklab/lab…）诊断",
       "supportTier": "universal"
     },
     {

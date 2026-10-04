@@ -1099,6 +1099,10 @@ export function normalizeCssColor(raw: string): string | undefined {
   // ★命名色（148 个标准色；Web 一律生效，此前直接丢弃 ⇒ App 失样式）。核心只认 hex ⇒ 编译期查表。
   const named = CSS_NAMED_COLORS[s]
   if (named) return named
+  // ★批次 23（CSS 兼容对齐 · 以 Web 为基准）：`color-mix(in srgb, …)` 常量折叠——
+  //   设计令牌的**着色/淡化**写法（组件库 16 处：`color-mix(in srgb, var(--pf-accent,#...), 18%, transparent)`）。
+  //   var() 已在前置换 ⇒ 两色已知 ⇒ 编译期按 sRGB（预乘 alpha）混合。其余色彩空间 ⇒ undefined（诊断）。
+  if (/^color-mix\(/i.test(s)) return foldColorMix(s)
   // ── 函数式：rgb/rgba/hsl/hsla ──
   const m = /^(rgba?|hsla?)\(([^)]*)\)$/.exec(s)
   if (!m) return undefined
@@ -1183,6 +1187,64 @@ function hslToRgb(h: number, s: number, l: number): number[] {
     return 255 * (l - a * Math.max(-1, Math.min(k - 3, 9 - k, 1)))
   }
   return [f(0), f(8), f(4)].map((x) => Math.round(x))
+}
+
+/** 顶层逗号切分（括号深度 0；`rgb(0,0,0)` 内的逗号不算）。 */
+function splitTopLevelComma(s: string): string[] {
+  const out: string[] = []; let d = 0; let cur = ''
+  for (const ch of s) {
+    if (ch === '(') d++
+    else if (ch === ')') d--
+    if (ch === ',' && d === 0) { out.push(cur); cur = ''; continue }
+    cur += ch
+  }
+  out.push(cur)
+  return out
+}
+
+/** color-mix 操作数：`<color> [<pct>%]?` → { hex(归一), pct? }。非法色 ⇒ undefined。 */
+function parseMixOperand(t: string): { hex: string; pct?: number } | undefined {
+  const s = t.trim()
+  const m = /^(.*?)\s+(\d+(?:\.\d+)?)%$/.exec(s)
+  const colorStr = (m ? m[1]! : s).trim()
+  const pct = m ? Number(m[2]) : undefined
+  const hex = normalizeCssColor(colorStr)
+  if (!hex) return undefined
+  return { hex, pct }
+}
+
+/** `color-mix(in srgb, A [pa%], B [pb%])` → hex（sRGB 预乘 alpha 混合）；其余空间/非法 ⇒ undefined。 */
+function foldColorMix(v: string): string | undefined {
+  const m = /^color-mix\(\s*in\s+srgb\s*,([\s\S]*)\)$/i.exec(v.trim())
+  if (!m) return undefined
+  const parts = splitTopLevelComma(m[1]!)
+  if (parts.length !== 2) return undefined
+  const a = parseMixOperand(parts[0]!), b = parseMixOperand(parts[1]!)
+  if (!a || !b) return undefined
+  const rgba = (hex: string): { r: number; g: number; b: number; a: number } => {
+    let h = hex.replace('#', '')
+    if (h.length === 3) h = h[0]! + h[0]! + h[1]! + h[1]! + h[2]! + h[2]!   // ★批次 23：展开 #RGB
+    else if (h.length === 4) h = h[0]! + h[0]! + h[1]! + h[1]! + h[2]! + h[2]! + h[3]! + h[3]!   // #RGBA
+    return {
+      r: parseInt(h.slice(0, 2), 16), g: parseInt(h.slice(2, 4), 16), b: parseInt(h.slice(4, 6), 16),
+      a: h.length === 8 ? parseInt(h.slice(6, 8), 16) / 255 : 1,
+    }
+  }
+  let w1: number; let w2: number
+  if (a.pct !== undefined && b.pct !== undefined) { w1 = a.pct; w2 = b.pct }
+  else if (a.pct !== undefined) { w1 = a.pct; w2 = 100 - a.pct }
+  else if (b.pct !== undefined) { w2 = b.pct; w1 = 100 - b.pct }
+  else { w1 = 50; w2 = 50 }
+  const tot = w1 + w2
+  if (!(tot > 0)) return undefined
+  w1 /= tot; w2 /= tot
+  const c1 = rgba(a.hex); const c2 = rgba(b.hex)
+  const alpha = c1.a * w1 + c2.a * w2
+  if (alpha <= 0) return '#00000000'
+  const mixc = (x: number, y: number): number => Math.round((x * c1.a * w1 + y * c2.a * w2) / alpha)
+  const hx = (n: number): string => Math.max(0, Math.min(255, n)).toString(16).padStart(2, '0')
+  const base = '#' + hx(mixc(c1.r, c2.r)) + hx(mixc(c1.g, c2.g)) + hx(mixc(c1.b, c2.b))
+  return alpha >= 1 ? base : base + hx(Math.round(alpha * 255))
 }
 
 
@@ -1413,7 +1475,7 @@ function parseBorderShorthand(raw: string): { width?: number; color?: string; st
   const out: { width?: number; color?: string; style?: string } = {}
   const STYLES = new Set(['solid', 'dashed', 'dotted', 'double', 'none', 'hidden', 'groove', 'ridge', 'inset', 'outset'])
   const KEYWORDS = new Set(['thin', 'medium', 'thick', 'currentcolor'])
-  for (const tok of raw.trim().split(/\s+/).filter(Boolean)) {
+  for (const tok of splitTopLevelSpaces(raw)) {   // ★批次 23：括号感知（color-mix() 内空格不切）
     const low = tok.toLowerCase()
     if (STYLES.has(low)) { out.style = low; continue }
     if (KEYWORDS.has(low)) continue

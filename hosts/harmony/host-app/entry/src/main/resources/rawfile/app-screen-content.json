@@ -5484,6 +5484,29 @@
         "textAlign": "center",
         "text": "calc(20×1.5) → 30px",
         "semantic": "div"
+      },
+      {
+        "id": 62,
+        "parentId": 0,
+        "width": 200,
+        "height": 24,
+        "margin": {
+          "top": 16,
+          "bottom": 16
+        },
+        "marginAuto": {
+          "right": true,
+          "left": true
+        },
+        "backgroundColor": "#1a7af833",
+        "borderWidth": 1,
+        "borderColor": "#1a7af866",
+        "borderRadius": 6,
+        "color": "#1a7af8",
+        "fontSize": 12,
+        "textAlign": "center",
+        "text": "color-mix 20% 品牌色",
+        "semantic": "div"
       }
     ]
   },
