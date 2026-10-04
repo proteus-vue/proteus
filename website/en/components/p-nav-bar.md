@@ -1,7 +1,7 @@
 ---
 title: p-nav-bar
 group: 内容与表单
-order: 1016
+order: 1018
 ---
 
 # p-nav-bar

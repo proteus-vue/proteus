@@ -110,7 +110,7 @@ A1/A2（构建目标 + 产物契约）
 | 阶段 0 | D3（host-rounding 加鸿蒙） | ✅ 已完成（2026-10-04） | 扫描面加鸿蒙 ets；当场抓到并登记 1 处（非几何） |
 | 阶段 1a | **B2（宿主落真实页面子树）+ B1 装配侧**（Android 先行） | ✅ 已收口（2026-10-04） | `ScreenContent` 契约（`screen.mount.content`）+ executor `contentOf` 提供者 + Android `ScreenHost.mount` 消费内容建真实节点（非 3 占位）；真机 ⑦.8 = **真建 8 个内容节点**；iOS 如实报"未接（阶段 2）" |
 | 阶段 1b-C | **B5（SFC 产物 → 屏内容）** | ✅ 已收口（2026-10-04） | 转换器 `screenContentFromLayoutTemplate`（LayoutTemplate→ScreenContent，**style 展平到顶层**）+ 构建期生成器 `gen-app-screen-content.mjs`（用编译器 `buildLayoutTemplate` 吃**真实 SFC**）⇒ 端上 ⑦.8 = **真建 10 个内容节点**（来自 SFC 产物，非手写 stub）；两端共用一份生成产物；测试 `tests/screen-content-b5.test.ts` 5 组 |
-| 阶段 1b-A | **A1（`proteus build --target app`）** | ✅ 已收口（2026-10-04） | CLI `--target app` → `buildAppScreenContent(root)`（路由 auto-routes 驱动逐页编译 SFC → `dist/app/screen-content.json`）；hosts 生成器**委托它**（一处实现）；屏名来自项目路由（44 页，非硬编码）；`webOnly` gen-routes 不破坏 MP dist；真机 ⑦.8 = **102 节点** |
+| 阶段 1b-A | **A1（标准构建目标：`--target web\|skyline\|ios\|android\|harmony\|all`）** | ✅ 已收口（2026-10-04） | ★**标准目标集**（与全仓 `CONCRETE_PLATFORMS` 一致；**不自造笼统 `app`**）——App 端 = **三具体平台**，产物分目录 `dist/app/<platform>/screen-content.json`；CLI `packages/cli/src/targets.ts`（SSOT）+ `buildAppScreenContent(root, platform)`；hosts 生成器委托它（一处实现）；`all` 逐端全构建（3 App + web + skyline）；`webOnly` gen-routes 非破坏；真机 ⑦.8 = **102 节点** |
 | 阶段 2a | **iOS 宿主接 content**（B4 部分） | ✅ 已收口（2026-10-04） | iOS `screen-host.swift` 与 Android 同契约消费 `content.nodes`（id 重映射/逐字段透传）；真机 ⑦.8 = **真建 8 个内容节点** |
 | 阶段 2b | 鸿蒙宿主接 content（ArkTS ScreenHost） | ⏳ 待办 | 鸿蒙暂未接 ScreenExecutor（既有）⇒ 整组跳过 |
 | 阶段 2 | B3/B4（三端接入同一产物/链） | ⏳ 待办 |  |

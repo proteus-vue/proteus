@@ -14,7 +14,7 @@ generated: true
 ### `proteus build`
 
 ```bash
-proteus build <dir> [--out <dir>] [--debug] [--no-px2rpx] [--rpx-ratio <n>] [--rules <json>] [--compiler <node|rust>] [--target <web|skyline|all>]
+proteus build <dir> [--out <dir>] [--debug] [--no-px2rpx] [--rpx-ratio <n>] [--rules <json>] [--compiler <node|rust>] [--target <web|skyline|ios|android|harmony|all>]
 ```
 
 Scan all .vue files under <dir> and compile them into the mini-program four-file set (.wxml / .js / .wxss) to <out>

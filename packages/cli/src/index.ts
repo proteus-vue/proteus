@@ -59,9 +59,11 @@ async function main(): Promise<void> {
       //   有 vite.config.ts（遗留工程）→ 旧路径（spawn 工程构建脚本）
       if (args.target) {
         try {
-          // ★A1（2026-10-04）：`app` 目标**恒走程序化路径**（无对应 npm 脚本——屏内容构建是框架职责，
-          //   不是工程脚本；遗留 vite.config.ts 工程也一样）。
-          if (!hasLegacyViteConfig(process.cwd()) || args.target === 'app') {
+          // ★A1（2026-10-04）：App 平台（ios/android/harmony）与 `all` **恒走程序化路径**——
+          //   App 屏内容构建是框架职责（无对应 npm 脚本），而 `all` 含 App 端；只有纯 vite 目标
+          //   （web/skyline）在遗留 vite.config.ts 工程里走旧的 spawn 路径。
+          const isViteT = args.target === 'web' || args.target === 'skyline'
+          if (!hasLegacyViteConfig(process.cwd()) || !isViteT) {
             const r = await runTargetedBuildProgrammatic(args.target)
             if (!r.ok) process.exitCode = 1
           } else {
