@@ -229,6 +229,15 @@ else
   echo "    ⚠ 未见 $BUNDLE_AS —— 缺它只影响 app-stack 测试路径"
 fi
 
+# ★★★App 三端对齐 · 视觉合成（2026-10-04）：App 屏内容产物 → assets（真机真画屏用）
+APP_SC="$ROOT/examples/dist/app/android/screen-content.json"
+if [ -f "$APP_SC" ]; then
+  cp "$APP_SC" "$APP/src/main/assets/app-screen-content.json"
+  echo "    app-screen-content.json 已入 assets（$(du -h "$APP_SC" | awk '{print $1}')）"
+else
+  echo "    ⚠ 未见 $APP_SC —— 缺它只影响视觉合成路径（先跑 examples 的 build:android）"
+fi
+
 # ★★G-39：宿主运行时 bundle（第三个 entry，同 build-batch.mjs）
 BUNDLE_HR="$HERE/bridge/dist/bundle-host-runtime.js"
 ENTRY_HR="$HERE/../shared/bridge/entry-host-runtime.ts"  # ★两个壳共用（平台中立入口）

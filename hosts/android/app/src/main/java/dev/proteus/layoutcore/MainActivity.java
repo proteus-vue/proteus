@@ -1040,6 +1040,52 @@ public class MainActivity extends Activity {
             out.put("e_jobs_pumped", QuickJsEngine.nativeRunPendingJobs());
             out.put("e_async", "执行器结果异步写 app-stack-executor.json（动画由宿主帧循环推进）");
             startExecutorReportPoller(root);
+            // ★★★App 三端对齐 · 视觉合成（2026-10-04）：**把 App 屏内容真画到屏上**。
+            //   复用 VaporRenderHost（已实现"内核树 → 指令 → ProteusHostView 自绘 → 像素自检"全路径，
+            //   一处实现）：取 app-screen-content.json 的入口页内容 → mount → 采样像素数。
+            //   ⇒ 证明「内容不只是进内核树，还真的画出来了」（painted_samples > 0）。
+            try {
+                String scAsset = readAsset("app-screen-content.json");
+                org.json.JSONObject scAll = new org.json.JSONObject(scAsset);
+                String page = scAll.has("index") ? "index" : scAll.keys().next().toString();
+                org.json.JSONArray nodes = scAll.getJSONObject(page).getJSONArray("nodes");
+                org.json.JSONObject tree = new org.json.JSONObject();
+                tree.put("viewport", new org.json.JSONObject().put("width", 390).put("height", 844));
+                tree.put("nodes", nodes);
+                VaporRenderHost comp = new VaporRenderHost(this, root);
+                int nodeCount = nodes.length();
+                String mr = comp.mount(tree.toString());
+                org.json.JSONObject mo = new org.json.JSONObject(mr);
+                org.json.JSONObject cor = new org.json.JSONObject();
+                cor.put("ok", mo.optBoolean("ok", false));
+                cor.put("page", page);
+                cor.put("content_nodes", nodeCount);
+                cor.put("cmds_live", mo.optInt("cmds_live", -1));
+                cor.put("painted_samples", mo.optInt("painted_samples", -1));
+                if (comp.view() != null) comp.view().invalidate();
+                // ★★最强证据：把合成结果渲染成 PNG 落盘（真机截图级证据）。
+                try {
+                    int W = 1080, H = 2400;
+                    android.graphics.Bitmap bmp = android.graphics.Bitmap.createBitmap(W, H, android.graphics.Bitmap.Config.ARGB_8888);
+                    android.graphics.Canvas cv = new android.graphics.Canvas(bmp);
+                    comp.view().draw(cv);
+                    java.io.File png = new java.io.File(reportDir(), "app-screen-composite.png");
+                    java.io.FileOutputStream pf = new java.io.FileOutputStream(png);
+                    bmp.compress(android.graphics.Bitmap.CompressFormat.PNG, 100, pf);
+                    pf.close();
+                    bmp.recycle();
+                    cor.put("png", png.getName());
+                } catch (Throwable pe) {
+                    cor.put("png_error", pe.getClass().getSimpleName());
+                }
+                writeReport("app-screen-composite.json", cor.toString(2));
+                out.put("composite_ok", cor.optBoolean("ok", false));
+                out.put("composite_painted_samples", cor.optInt("painted_samples", -1));
+            } catch (Throwable ct) {
+                out.put("composite_error", ct.getClass().getSimpleName() + ": " + ct.getMessage());
+                writeReport("app-screen-composite.json",
+                        "{\"ok\":false,\"error\":\"" + ct.getClass().getSimpleName() + "\"}");
+            }
             // 引擎侧自报 ok + 本次 bundle 可加载 ⇒ 报告 ok（判据细节由 python 侧查，不在这里重复判定）
             out.put("ok", r.optBoolean("ok"));
         } catch (Throwable t) {
