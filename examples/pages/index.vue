@@ -87,6 +87,12 @@ function go(name: 'forms' | 'config-demo' | 'user') {
       <h3>文本截断（text-overflow: ellipsis）</h3>
       <div class="trunc-row">这是一段很长的列表项文本，超过容器宽度时应在行尾以省略号结尾，而不是换行或溢出容器</div>
     </div>
+
+    <!-- ★border-radius:50% 演示（批次 18）：正方盒 + 50% 圆角 = 精确圆（头像/圆点，Web 基准） -->
+    <div class="circle-demo">
+      <div class="avatar">A</div>
+      <div class="dot"></div>
+    </div>
   </div>
 </template>
 
@@ -162,5 +168,28 @@ function go(name: 'forms' | 'config-demo' | 'user') {
   text-align: left;
   color: #666;
   font-size: 13px;
+}
+/* ★border-radius:50% 演示（批次 18）——正方盒 + 50% = 精确圆 */
+.circle-demo {
+  display: flex;
+  gap: 12px;
+  justify-content: center;
+  align-items: center;
+  margin: 16px auto;
+}
+.avatar {
+  width: 48px;
+  height: 48px;
+  border-radius: 50%;
+  background-color: #1a7af8;
+  color: #ffffff;
+  font-size: 20px;
+  text-align: center;
+}
+.dot {
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  background-color: #07c160;
 }
 </style>

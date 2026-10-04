@@ -1328,7 +1328,11 @@ final class VaporRenderHost {
 
         // ★★**Cmd 上的绘制通道**（与 LightsHost 的构造逐项对齐）：
         //   radius（圆角）/ gradient（渐变）/ glow（发光）/ mask（软遮罩）
-        final float radius = (float) spec.optDouble("borderRadius", 0);
+        // ★批次 18（CSS 兼容对齐 · 以 Web 为基准）：`border-radius` 百分比 ⇒ radius = pct × min(w,h)
+        //   （正方盒 = 内切圆，与 Web `border-radius:50%` 一致；比例字段不乘密度，w/h 已是物理 px）。
+        float radius = (float) spec.optDouble("borderRadius", 0);
+        final double radiusPct = spec.optDouble("borderRadiusPct", 0);
+        if (radiusPct > 0) radius = (float) (radiusPct * Math.min(w, h));
         final ProteusHostView.GradSpec grad = parseGrad(spec.optJSONObject("fillGradient"));
         final float[] glowSpec = parseGlow(spec.optJSONObject("glow"));
         final float[] maskSpec = parseMask(spec.optJSONObject("mask"));

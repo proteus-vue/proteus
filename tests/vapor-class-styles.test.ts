@@ -219,6 +219,23 @@ describe('★C1 最小切片 · SFC <style> 单类规则 → class→节点样�
     expect((s5 as { marginAuto?: Record<string, boolean> }).marginAuto, '左右 auto').toEqual({ left: true, right: true })
   })
 
+  it('★⑦f border-radius 百分比（批次 18 · ★基准 = Web）：50% 折为 borderRadiusPct', () => {
+    // 【为什么（以 web 为基准）】Web border-radius:50% = 内切圆/椭圆（头像/圆点）；此前被丢弃。
+    const s1 = parseStaticStyle('border-radius: 50%', () => {})
+    expect((s1 as { borderRadiusPct?: number }).borderRadiusPct, '50% ⇒ 0.5').toBe(0.5)
+    const s2 = parseStaticStyle('border-radius: 100%', () => {})
+    expect((s2 as { borderRadiusPct?: number }).borderRadiusPct, '100% ⇒ 1').toBe(1)
+    // 数值圆角仍走 borderRadius（既有，零行为变化）
+    const s3 = parseStaticStyle('border-radius: 8px', () => {})
+    expect((s3 as { borderRadius?: number }).borderRadius, 'px 圆角').toBe(8)
+    expect((s3 as { borderRadiusPct?: number }).borderRadiusPct, 'px 不产 pct').toBeUndefined()
+    // 多值逐角简写未支持 ⇒ 诊断（不猜）
+    const d: string[] = []
+    const s4 = parseStaticStyle('border-radius: 8px 4px', (m: string) => d.push(m))
+    expect((s4 as { borderRadius?: number }).borderRadius, '多值不落字段').toBeUndefined()
+    expect(d.some((x) => x.includes('border-radius')), '多值有诊断').toBe(true)
+  })
+
   it('★⑧ 元素/类型选择器 + @keyframes 跳过（C1 收尾）', () => {
     // 【真项目形态】examples 有 9 处元素选择器（h3/code…）+ 6 处 @keyframes 关键帧被误当选择器
     const sfc = `<template>

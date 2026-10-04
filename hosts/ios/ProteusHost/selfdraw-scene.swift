@@ -818,6 +818,7 @@ final class SelfDrawView: UIView {
             layer.frame = lineBoxFrame(CGRect(x: item.rect.minX - parentOrigin.x,
                                  y: item.rect.minY - parentOrigin.y,
                                  width: item.rect.width, height: item.rect.height), style: item.style)
+            applyRadiusPct(layer, style: item.style, size: item.rect.size)
             builtFrames[item.id] = layer.frame
             builtParents[item.id] = item.parentId ?? -1
             layersById[item.id] = layer
@@ -2098,6 +2099,7 @@ final class SelfDrawView: UIView {
                        width: abs.width, height: abs.height)
         // ★批次 13：文本层声明 lineHeight ⇒ 可视 frame 居中收缩（从 meta 取样式，与建层同源）
         layer.frame = metaByNodeId[id].map { lineBoxFrame(f, style: $0) } ?? f
+        if let st = metaByNodeId[id] { applyRadiusPct(layer, style: st, size: f.size) }
         builtFrames[id] = layer.frame
         rectsByNodeId[id] = abs
     }
@@ -2750,6 +2752,7 @@ final class SelfDrawView: UIView {
             let f = CGRect(x: abs.minX - parentOrigin.x, y: abs.minY - parentOrigin.y,
                            width: abs.width, height: abs.height)
             layer.frame = lineBoxFrame(f, style: style)
+            applyRadiusPct(layer, style: style, size: f.size)
             if let pidAny = spec["parentId"] as? Int, pidAny >= 0 {
                 if id == row.root {
                     insertRowLayer(layer, rowIndex: rowIndex, parentId: pidAny)
@@ -2977,6 +2980,16 @@ final class SelfDrawView: UIView {
         return CGRect(x: f.origin.x, y: cy - contentH * 0.5, width: f.width, height: contentH)
     }
 
+    /// ★批次 18（CSS 兼容对齐 · 以 Web 为基准）：`border-radius` **百分比** → `cornerRadius`。
+    ///   半径 = `pct × min(w, h)`：正方盒 = 精确内切圆（与 Web `border-radius:50%` 一致）；
+    ///   非正方盒为统一圆角（Web 为椭圆——如实近似边界）。仅在**声明了** `borderRadiusPct` 时生效（零行为变化）。
+    private func applyRadiusPct(_ layer: CALayer, style: [String: Any], size: CGSize) {
+        guard let pct = style["borderRadiusPct"] as? CGFloat, pct > 0 else { return }
+        let r = pct * min(size.width, size.height)
+        layer.cornerRadius = r
+        layer.masksToBounds = (style["boxShadow"] as? [String: Any]) == nil
+    }
+
     /// ★批次 5（CSS 兼容对齐 · 边框）：uniform 边框 → `CALayer.borderWidth/borderColor`。
     ///   `borderWidth<=0` 或缺颜色 ⇒ 清零（缺省无边框，与既有路径零行为变化）。
     private func applyBorder(_ layer: CALayer, style: [String: Any]) {
@@ -3102,6 +3115,7 @@ final class SelfDrawView: UIView {
             let f = CGRect(x: abs.minX - parentOrigin.x, y: abs.minY - parentOrigin.y,
                            width: abs.width, height: abs.height)
             layer.frame = lineBoxFrame(f, style: style)
+            applyRadiusPct(layer, style: style, size: f.size)
             if pid >= 0 {
                 (layersById[pid] ?? self.layer).addSublayer(layer)
                 childrenById[pid, default: []].append(id)
@@ -3161,6 +3175,7 @@ final class SelfDrawView: UIView {
                            width: abs.width, height: abs.height)
             // ★批次 13：文本层声明 lineHeight ⇒ 可视 frame 居中收缩（从 meta 取样式，与建层同源）
             layer.frame = metaByNodeId[id].map { lineBoxFrame(f, style: $0) } ?? f
+            if let st = metaByNodeId[id] { applyRadiusPct(layer, style: st, size: f.size) }
             builtFrames[id] = layer.frame
             rectsByNodeId[id] = abs
             if let spec = nodesById[id] {

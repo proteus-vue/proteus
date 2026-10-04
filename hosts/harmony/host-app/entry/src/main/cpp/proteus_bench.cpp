@@ -268,6 +268,7 @@ static std::vector<double> splitTopLevelNumbers(const std::string& arr) {
 struct SfcStyle {
     uint32_t bg = 0;             // 0 = 无背景（透明）
     double radius = 0;
+    double radiusPct = 0; // ★批次 18：border-radius 百分比（0..1；>0 时按盒 min(w,h) 算半径）
     uint32_t textColor = 0xFFFFFFFFu;
     double fontSize = 24;
     int fontWeight = 400;        // ★批次 3：字重（`font-weight` 折叠值）
@@ -377,6 +378,7 @@ static void parseSfcStyles(const std::string& fixture, std::vector<std::pair<int
         std::string bgCss;
         if (jstr(item.c_str(), item.size(), "backgroundColor", &bgCss)) st.bg = hexToArgb(bgCss);
         jnum(item.c_str(), item.size(), "borderRadius", &st.radius);
+        jnum(item.c_str(), item.size(), "borderRadiusPct", &st.radiusPct);
         std::string colorCss;
         if (jstr(item.c_str(), item.size(), "color", &colorCss)) st.textColor = hexToArgb(colorCss);
         jnum(item.c_str(), item.size(), "fontSize", &st.fontSize);
@@ -1429,7 +1431,7 @@ static napi_value SfcStressCommands(napi_env env, napi_callback_info info) {
                  "%s{\"kind\":\"background\",\"x\":%.2f,\"y\":%.2f,\"w\":%.2f,\"h\":%.2f,"
                  "\"color\":%u,\"radius\":%.2f",
                  emitted > 0 ? "," : "", r.x * density, r.y * density, r.w * density, r.h * density,
-                 st.bg, st.radius * density);
+                 st.bg, (st.radiusPct > 0 ? st.radiusPct * (r.w < r.h ? r.w : r.h) * density : st.radius * density));
         arr += head;
         if (st.borderWidth > 0 && st.borderColor > 0) {
             char bb[96]; snprintf(bb, sizeof(bb), ",\"borderWidth\":%.2f,\"borderColor\":%u", st.borderWidth * density, st.borderColor);
@@ -4260,6 +4262,7 @@ static napi_value AppScreenCommands(napi_env env, napi_callback_info info) {
         const Rect& r = ri->second;
         uint32_t bg = 0; std::string bgCss; if (jstr(it.c_str(), it.size(), "backgroundColor", &bgCss)) bg = hexToArgb(bgCss);
         double radius = 0; jnum(it.c_str(), it.size(), "borderRadius", &radius);
+        { double rp = 0; jnum(it.c_str(), it.size(), "borderRadiusPct", &rp); if (rp > 0) radius = rp * (r.w < r.h ? r.w : r.h); } // ★批次 18
         std::string text; jstr(it.c_str(), it.size(), "text", &text);
         double fs = 24; jnum(it.c_str(), it.size(), "fontSize", &fs);
         double fw = 400; jnum(it.c_str(), it.size(), "fontWeight", &fw);   // ★批次 3：字重
