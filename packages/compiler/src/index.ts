@@ -107,6 +107,7 @@ export {
   APP_EDGE_FIELDS,
   APP_DERIVED_FIELDS,
   APP_SPECIAL_FIELDS,
+  APP_ENUM_VALUES,
 } from './vapor'
 export type {
   ReactiveSource,

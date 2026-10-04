@@ -51,6 +51,7 @@
 | **D2** | ~~鸿蒙无任何 `check:*` 接入~~ **✅ 已收口（2026-10-04）**：鸿蒙接入 `check:app-stack` + `check:host-runtime`（`hosts/harmony/results/*.json`；判据如实跳过未接组、不假绿） | `package.json` | 鸿蒙 | ✅ |
 | **D3** | ~~`check:host-rounding` 不含鸿蒙~~ **✅ 已收口（2026-10-04）**：扫描面加 `hosts/harmony/.../ets`（含 .ets/.ts）——当场抓到并登记 1 处（`app-stack-probe.ts` 的栈深度取半，非几何、已 `I2-ALLOW`） | `scripts/check-host-rounding.mjs` | 鸿蒙 | ✅ |
 | **D4** | **唯一真三端门禁只覆盖 Vapor 夹具**：`check:vapor-three-end`（三端指纹逐值比对）是真正三端门禁，但输入是 Vapor 夹具、非项目页面 | `scripts/check-vapor-three-end.mjs` | 三端 | — |
+| **D5** | **App 屏内容产物无静态门禁**（本轮真机缺陷的机器版）：C1 折叠面铺开后 `display:block` 等非法值透传 ⇒ 内核建树失败 ⇒ 页面全崩，而构建期零告警 | **✅ 已收口（2026-10-04）**：`check:app-screen-content` 对产物做**内核契约**静态校验（枚举封闭集（取自 `APP_ENUM_VALUES` SSOT）/ id 唯一 / parent 可达无环 / 数值有限）；破坏性验证（注入非法枚举值 + 悬空父 ⇒ 红） | `scripts/check-app-screen-content.mjs` · `tests/app-screen-content-gate.test.ts` 5 组 | 三端 | ✅ |
 
 ### E 层 · 文档/状态（非代码，但会误导后续排期）
 
