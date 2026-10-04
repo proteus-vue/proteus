@@ -119,8 +119,10 @@ describe('★C1 最小切片 · SFC <style> 单类规则 → class→节点样�
     expect(normalizeCssColor('transparent')).toBe('#00000000')
     expect(normalizeCssColor('#FFF')).toBe('#fff')
     expect(normalizeCssColor('#12345678')).toBe('#12345678')
-    expect(normalizeCssColor('red'), '命名色不支持 ⇒ undefined').toBeUndefined()
-    expect(normalizeCssColor('hsl(0,0%,0%)')).toBeUndefined()
+    expect(normalizeCssColor('red'), '★批次 14：命名色现支持 ⇒ #ff0000（Web 一致）').toBe('#ff0000')
+    expect(normalizeCssColor('white'), '命名色 white').toBe('#ffffff')
+    expect(normalizeCssColor('rebeccapurple'), '命名色 rebeccapurple').toBe('#663399')
+    expect(normalizeCssColor('hsl(0,0%,0%)'), 'hsl 仍不支持 ⇒ undefined').toBeUndefined()
     // 端到端：<style> 里的 rgba 折成 hex
     const m = parseClassStyles('.c { color: rgba(255, 255, 255, 0.8) }')
     expect((m.c as { color?: string }).color, 'class 里的 rgba 归一为 hex').toBe('#ffffffcc')
@@ -652,5 +654,51 @@ describe('★批次 13 · line-height（行盒高）', () => {
     const r = buildLayoutTemplate(sfc, 'pages/s.vue')
     const leaf = r.template.nodes.find((x) => x.tag === 'text')
     expect((leaf?.style as { lineHeight?: string }).lineHeight, '行高继承到 text').toBe('1.7')
+  })
+})
+
+// ★★★批次 14（多端一致性审计修）：把「App 折叠但与 Web 语义不一致」的项对齐 CSS 标准——2026-10-04
+describe('★批次 14 · 多端一致性审计修（对齐 CSS 标准）', () => {
+  it('① 命名色（Web 生效）现归一为 hex —— 此前丢弃致 App 失样式', () => {
+    expect(normalizeCssColor('red')).toBe('#ff0000')
+    expect(normalizeCssColor('Blue')).toBe('#0000ff')
+    expect(normalizeCssColor('white')).toBe('#ffffff')
+    expect(parseStaticStyle('color: red', () => {}).color).toBe('#ff0000')
+    expect(parseStaticStyle('background-color: white', () => {}).backgroundColor).toBe('#ffffff')
+  })
+
+  it('② 非 solid 边框线型 ⇒ **诊断跳过**（不静默画成实线冒充 Web 虚线）', () => {
+    const d: string[] = []
+    expect(parseStaticStyle('border: 1px dashed #ccc', (m) => d.push(m))).toEqual({})
+    expect(d.some((m) => m.includes('dashed'))).toBe(true)
+    // solid 仍正常
+    expect(parseStaticStyle('border: 1px solid #ccc', () => {})).toEqual({ borderWidth: 1, borderColor: '#ccc' })
+  })
+
+  it('③ text-align 作为**继承**属性沿树传播（CSS 标准）', () => {
+    const sfc = `<template><view class="root"><view class="mid"><text class="leaf">x</text></view></view></template>
+<script setup>const z = 1</script>
+<style>
+.root { text-align: center }
+</style>`
+    const r = buildLayoutTemplate(sfc, 'pages/s.vue')
+    const leaf = r.template.nodes.find((x) => x.tag === 'text')
+    expect((leaf?.style as { textAlign?: string }).textAlign, 'text-align 继承到深层 text').toBe('center')
+  })
+
+  it('④ 枚举关键字**大小写不敏感**（CSS：`display: FLEX` Web 生效）', () => {
+    expect(parseStaticStyle('display: FLEX', () => {}).display).toBe('flex')
+    expect(parseStaticStyle('overflow: HIDDEN', () => {}).overflow).toBe('hidden')
+    expect(parseStaticStyle('flex-direction: ROW-REVERSE', () => {}).flexDirection).toBe('row-reverse')
+    expect(parseStaticStyle('justify-content: CENTER', () => {}).justifyContent).toBe('center')
+    const d: string[] = []
+    expect(parseStaticStyle('display: bogus', (m) => d.push(m)).display, '真非法仍诊断').toBeUndefined()
+    expect(d.length).toBeGreaterThan(0)
+  })
+
+  it('⑤ box-sizing 非 border-box（App 恒 border-box）⇒ 诊断', () => {
+    const d: string[] = []
+    parseStaticStyle('box-sizing: content-box', (m) => d.push(m))
+    expect(d.some((m) => m.includes('box-sizing'))).toBe(true)
   })
 })

@@ -85,7 +85,7 @@ pub const FLAG_HAS_STYLE_KEY: u8 = 1 << 3;
 const FLEX_DIRECTION_VALUES: [&str; 4] = ["row", "column", "row-reverse", "column-reverse"];
 const JUSTIFY_VALUES: [&str; 6] = ["flex-start", "center", "flex-end", "space-between", "space-around", "space-evenly"];
 const ALIGN_VALUES: [&str; 5] = ["stretch", "flex-start", "center", "flex-end", "baseline"];
-const DISPLAY_VALUES: [&str; 2] = ["flex", "none"];
+const DISPLAY_VALUES: [&str; 3] = ["flex", "none", "grid"];
 const POSITION_VALUES: [&str; 3] = ["static", "relative", "absolute"];
 const OVERFLOW_VALUES: [&str; 4] = ["visible", "hidden", "scroll", "auto"];
 

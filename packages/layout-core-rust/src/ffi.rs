@@ -687,6 +687,7 @@ pub(crate) fn style_from_dto(dto: &NodeDto) -> Result<LStyle, String> {
     if let Some(d) = dto.display.as_deref() {
         style.display = match d {
             "flex" => crate::style::Display::Flex,
+            "grid" => crate::style::Display::Grid,
             "none" => crate::style::Display::None,
             other => return Err(format!("未知 display：{other}")),
         };
@@ -1754,6 +1755,7 @@ impl StylePatch {
             node.style.display = match d.as_str() {
                 "none" => crate::style::Display::None,
                 "flex" => crate::style::Display::Flex,
+                "grid" => crate::style::Display::Grid,
                 other => return Err(format!("未知 display：{other}")),
             };
         }
@@ -4411,6 +4413,42 @@ mod tests {
         // 但其子树结构仍在（children 保留——结构完整性）
         assert_eq!(row_b["children"][0]["path"], "1.0");
         assert_eq!(row_b["children"][0]["nodeId"], 5);
+    }
+
+    /// ★★★DTO 解析路径覆盖（2026-10-04 修 bug 的回归）：**引擎枚举经 FFI JSON 都必须能解析**。
+    ///
+    /// 【这份测试在防什么（实测缺陷）】批次 12 加了 `Display::Grid`（style.rs）+ taffy 映射 +
+    ///   **直建 LStyle 的引擎测试**，却漏了 `style_from_dto` 里的 `"grid" => Display::Grid` 分支。
+    ///   ⇒ `display:grid` 页面在**真机（JSON 路径）整树建失败**（返回 0，屏幕全空），
+    ///   而桌面 Rust 单测（直建 LStyle）全绿——**测试走的是另一条路径**。
+    ///   ★教训：内核枚举新增后，DTO parse arm 是**必配**的一环；只测直建 LStyle = 测了个不相干的入口。
+    #[test]
+    fn dto_parses_all_engine_enums_through_ffi_json() {
+        // 每个可扩展枚举都给一个**合法值**：整树必须建成功（任何 arm 缺失 ⇒ 这里红）
+        let tree = serde_json::json!({
+            "viewport": {"width": 300.0, "height": 300.0},
+            "nodes": [
+                {"id": 1, "parentId": null, "width": 300.0, "height": 300.0,
+                 "display": "grid", "gridTemplateColumns": "1fr 1fr", "gridTemplateRows": "100px"},
+                {"id": 2, "parentId": 1, "width": 100.0, "height": 100.0,
+                 "flexWrap": "wrap", "alignContent": "space-between"},
+                {"id": 3, "parentId": 1, "width": 100.0, "height": 100.0,
+                 "position": "absolute", "right": 10.0, "bottom": 12.0},
+                {"id": 4, "parentId": 1, "width": 50.0, "height": 50.0, "display": "flex"},
+                {"id": 5, "parentId": 1, "width": 50.0, "height": 50.0, "overflow": "hidden"}
+            ]
+        });
+        let h = unsafe { proteus_layout_create(std::ffi::CString::new(tree.to_string()).unwrap().as_ptr()) };
+        assert!(h > 0, "★全部合法枚举值经 JSON 都必须可解析建树（任一 arm 缺失即整树失败）");
+        unsafe { proteus_layout_destroy(h) };
+
+        // 破坏性：未知 display 值必须**失败**（证明校验 arm 真的在跑，而不是无脑放行）
+        let bad = serde_json::json!({
+            "viewport": {"width": 100.0, "height": 100.0},
+            "nodes": [{"id": 1, "parentId": null, "width": 100.0, "height": 100.0, "display": "inline-grid"}]
+        });
+        let hb = unsafe { proteus_layout_create(std::ffi::CString::new(bad.to_string()).unwrap().as_ptr()) };
+        assert_eq!(hb, 0, "未知 display 值（inline-grid）应被拒绝（校验有效，非静默放行）");
     }
 
     /// VC4-b：多根树 → 合成根（path 语义与单根一致：子从 "0" 起）

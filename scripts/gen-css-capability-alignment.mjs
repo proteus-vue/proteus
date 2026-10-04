@@ -329,6 +329,7 @@ function buildAlignment() {
     tiers: appProfile.model.tiers,
     noteOnTier: appProfile.model.noteOnTier,
     superappGoal: appProfile.model.superappGoal,
+    auditNote: appProfile.model.auditNote,
     relationNote: '支持度维度（web/skyline/app 现状）与成本分级（L0–L5）是**正交**维度：成本分级决定"怎么实现/贵不贵"，支持度决定"哪端能不能用、App 加它多贵"。App 端为自研引擎 ⇒ 候选特性带 tier 即为"可扩展档位"。',
     tierRule: 'universal = web∧skyline∧app 现状全 supported；unsupported = 三端皆不可用；其余 = conditional',
     partialSupport: partial,
@@ -381,6 +382,12 @@ function toMarkdown(m) {
   L.push('')
   L.push(`> ${m.profile.noteOnTier}`)
   L.push('')
+  if (m.profile.auditNote) {
+    L.push('## 多端一致性审计（批 14 · 对齐 CSS 标准）')
+    L.push('')
+    L.push(`> ${m.profile.auditNote}`)
+    L.push('')
+  }
   if (m.profile.superappGoal) {
     L.push('## 超级应用能力清单（★优先口径：不按 demo 使用频次）')
     L.push('')
