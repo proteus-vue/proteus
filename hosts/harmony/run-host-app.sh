@@ -130,6 +130,17 @@ if [ -n "$READY_LINE" ]; then
     echo "  ⚠ 未见 PROTEUS_APP_SCREEN_CONTENT 读数——跳过"
   fi
 
+  # ── 6.45 ★★★App 三端对齐 · 鸿蒙 executor（2026-10-04）：跑同一份 bundle-app-stack.js ──
+  EX_LINE="$(HDC shell "hilog -x | grep 'PROTEUS_APP_EXECUTOR {' | tail -1" 2>/dev/null | head -1)"
+  EX_JSON="$(printf '%s' "$EX_LINE" | sed -n 's/.*PROTEUS_APP_EXECUTOR //p')"
+  if [ -n "$EX_JSON" ]; then
+    printf '%s' "$EX_JSON" > "$RESULTS/app-stack-executor.json"
+    echo
+    echo "  ✓ 鸿蒙 executor（同 bundle-app-stack.js）：$EX_JSON"
+  else
+    echo "  ⚠ 未见 PROTEUS_APP_EXECUTOR 读数——跳过"
+  fi
+
   # ── 6.5 ★探针集（命中 / 复用池 / 结构变更 / 文本通道 / SFC 压力）——与 Android 能力域对齐 ──
   PROBE_LOG="$(HDC shell "hilog -x | grep -E 'PROTEUS_HIT_PROBE \{|PROTEUS_RECYCLE \{|PROTEUS_SPLICE \{|PROTEUS_TEXT \{|PROTEUS_SCROLL_DONE|PROTEUS_KERNELANIM \{|PROTEUS_MEM \{|PROTEUS_SFCSTRESS \{|PROTEUS_JSVM \{|PROTEUS_VAPOR \{|PROTEUS_PLATFORMANIM_END \{|PROTEUS_MOUNTVIRT \{|PROTEUS_HOSTRT_DONE \{|PROTEUS_SHELLINSTALL \{|PROTEUS_SHELLEVENT \{|PROTEUS_SCROLL_CORE \{|PROTEUS_PLATFORMANIM \{|PROTEUS_GESTURE_INSTALL_JS \{|PROTEUS_FONTFAMILY_PROBE \{' | tail -23" 2>/dev/null)"
   echo

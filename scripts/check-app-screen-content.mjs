@@ -63,6 +63,30 @@ const EDGE_KEYS = ['margin', 'padding']
 const COLOR_KEYS = ['color', 'backgroundColor', 'borderColor']
 const HEX_COLOR_RE = /^#[0-9a-f]{3}$|^#[0-9a-f]{6}$|^#[0-9a-f]{8}$/i
 
+/* ── ★★★设备腿（鸿蒙 executor）：hosts/harmony/results/app-stack-executor.json ——
+ *   鸿蒙跑同一份 bundle-app-stack.js（注入 proteusHost.invoke → C++ screen.* 真内核树）的读数。
+ *   判据：exec_content_nodes>0（内容→内核树）+ exec_commands>0（编排链跑了）+ exec_errors 空。── */
+{
+  const exFile = path.join(ROOT, 'hosts', 'harmony', 'results', 'app-stack-executor.json')
+  if (fs.existsSync(exFile)) {
+    try {
+      const d = JSON.parse(fs.readFileSync(exFile, 'utf-8'))
+      const cn = Number(d.exec_content_nodes ?? 0)
+      const cmds = Number(d.exec_commands ?? 0)
+      const errs = Array.isArray(d.exec_errors) ? d.exec_errors : []
+      if (cn <= 0 || cmds <= 0) {
+        problems.push(`[hosts/harmony/results/app-stack-executor.json] 鸿蒙 executor 未跑通（content_nodes=${cn} commands=${cmds}）`)
+      } else if (errs.length > 0) {
+        problems.push(`[hosts/harmony/results/app-stack-executor.json] 鸿蒙 executor 报错：${JSON.stringify(errs)}`)
+      } else {
+        console.log(`  ✅ 鸿蒙 executor 设备腿：内容 ${cn} 节点 · ${cmds} 命令 · 零错误`)
+      }
+    } catch (e) {
+      problems.push(`[hosts/harmony/results/app-stack-executor.json] 读取失败：${e.message}`)
+    }
+  }
+}
+
 const files = process.argv.slice(2).filter((a) => !a.startsWith('-'))
 const targets = files.length
   ? files

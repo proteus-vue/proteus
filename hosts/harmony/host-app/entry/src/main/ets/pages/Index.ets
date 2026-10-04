@@ -16,6 +16,7 @@ import { deviceInfo } from '@kit.BasicServicesKit';
 import { hilog } from '@kit.PerformanceAnalysisKit';
 import { NodeContent, FrameCallback, UIContext } from '@kit.ArkUI';
 import { util } from '@kit.ArkTS';
+import { fileIo } from '@kit.CoreFileKit';
 import { display } from '@kit.ArkUI';
 import { hidebug } from '@kit.PerformanceAnalysisKit';
 // ★矩阵 #17：App 路由栈场景探针（移植副本，与 Android/iOS 同口径）
@@ -23,7 +24,7 @@ import { runAppStackProbe } from '../core/app-stack-probe';
 import { attach, renderCommands, stats, ProteusRenderStats, platformAnimBegin, platformAnimStep, platformAnimEnd, platformAnimSave, clearRoot, scrollRoot, gestureInstall, gestureSample } from 'libproteus_render.so';
 // ★P3-3：宿主动画入口（`<Transition>` 桥的鸿蒙腿——与 Android/iOS 同形）
 import { animTick, animActive } from 'libproteus_bench.so';
-import { bench4050, hitProbe, recycleProbe, spliceProbe, textProbe, kernelAnimProbe, memProbe, sfcStressProbe, sfcStressCommands, jsvmProbe, vaporProbe, animCurveBezier, hostRuntimeProbe, hostRtShellInstall, mountVirtualProbe, gestureHitPrepare, gestureHitAt, fontFamilyProbe, nodeRect, screenContentProbe, version as rustVersion } from 'libproteus_bench.so';
+import { bench4050, hitProbe, recycleProbe, spliceProbe, textProbe, kernelAnimProbe, memProbe, sfcStressProbe, sfcStressCommands, jsvmProbe, vaporProbe, animCurveBezier, hostRuntimeProbe, hostRtShellInstall, mountVirtualProbe, gestureHitPrepare, gestureHitAt, fontFamilyProbe, nodeRect, screenContentProbe, appStackExecutorProbe, version as rustVersion } from 'libproteus_bench.so';
 
 const DOMAIN = 0x0002;
 const TAG = 'ProteusRender';
@@ -840,6 +841,29 @@ struct Index {
         }
         return;
       }
+        // ★★★App 三端对齐 · 鸿蒙 executor（2026-10-04）：**跑同一份 bundle-app-stack.js**（与 Android/iOS 同源）。
+        //   注入 proteusHost.invoke（C++ screen.* 真内核树）⇒ 执行器的建/隐/销编排 + 内容→内核树全链。
+        try {
+          const ctxEX = getContext(this);
+          const eb: Uint8Array = ctxEX.resourceManager.getRawFileContentSync('bundle-app-stack.js');
+          const ebStr: string = util.TextDecoder.create('utf-8').decodeToString(eb);
+          const exArgs: Record<string, Object> = { 'bundle': ebStr, 'filesDir': ctxEX.filesDir };
+          const exOut: string = appStackExecutorProbe(JSON.stringify(exArgs));
+          // ArkTS 解析完整返回（napi 返回未截断；hilog 单行有长度上限 ⇒ 只记摘要 + 全文落盘）
+          const ex = JSON.parse(exOut) as Record<string, Object>;
+          const rd = (ex['exec_read'] ?? {}) as Record<string, Object>;
+          const es = (rd['e_stats'] ?? {}) as Record<string, Object>;
+          const summary: string = `{"ok":${ex['ok']},"host":"harmony","exec_content_nodes":${ex['exec_content_nodes']},` +
+            `"exec_mounts":${ex['exec_mounts']},"exec_visible":${ex['exec_visible']},"exec_destroy":${ex['exec_destroy']},` +
+            `"exec_commands":${es['commands']},"exec_transitions":${es['transitions']},"exec_errors":${JSON.stringify(es['errors'] ?? [])}}`;
+          hilog.info(DOMAIN, BENCH_TAG, 'PROTEUS_APP_EXECUTOR %{public}s', summary);
+          const rf = ctxEX.filesDir + '/app-stack-executor.json';
+          const fd = fileIo.openSync(rf, fileIo.OpenMode.READ_WRITE | fileIo.OpenMode.CREATE | fileIo.OpenMode.TRUNC);
+          fileIo.writeSync(fd.fd, exOut);
+          fileIo.closeSync(fd.fd);
+        } catch (exe) {
+          hilog.error(DOMAIN, BENCH_TAG, 'PROTEUS_APP_EXECUTOR_ERROR %{public}s', JSON.stringify(exe) ?? '');
+        }
         // ★★★App 三端对齐 · 鸿蒙 B2 腿（2026-10-04）：**消费 App 屏内容建真实内核树**。
         //   rawfile app-screen-content.json = 项目路由 → 真实 SFC → 编译器 的屏内容（三端同源）。
         //   逐页取 nodes → screenContentProbe 建内核树 ⇒ 证明「真实页面内容 → 鸿蒙内核树」这条链。
