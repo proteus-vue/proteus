@@ -72,6 +72,38 @@ final class AppStackScene: NSObject {
             writeRaw("app-stack.json", mainOut)
         }
         NSLog("[proteus] app-stack 主场景完成（含项目驱动 p_* 读数）")
+        // ★★★App 三端对齐 · 视觉合成（2026-10-04）：**把 App 屏内容真画到屏上**。
+        //   selfdraw 桥（proteusSelfDraw，绑好 view）在同一 JSContext ⇒ 直接 eval 取 entry 页内容 +
+        //   proteusSelfDraw.mount 建树（真 CALayer）+ snapshot 落 PNG ⇒ 真机"真画屏"证据。
+        _ = ctx.evaluateScript("var __PROTEUS_VIEWPORT__ = {\"width\": \(UIScreen.main.bounds.width), \"height\": \(UIScreen.main.bounds.height)};")
+        var composite: [String: Any] = ["ok": false]
+        if let path = Bundle.main.path(forResource: "app-screen-content", ofType: "json"),
+           let scData = try? Data(contentsOf: URL(fileURLWithPath: path)),
+           let scAll = (try? JSONSerialization.jsonObject(with: scData)) as? [String: Any] {
+            let page = scAll["index"] != nil ? "index" : (scAll.keys.first ?? "index")
+            if let sc = scAll[page] as? [String: Any], let nodes = sc["nodes"] as? [[String: Any]] {
+                let tree: [String: Any] = ["viewport": ["width": 390, "height": 844], "nodes": nodes]
+                if let td = try? JSONSerialization.data(withJSONObject: tree),
+                   let treeJson = String(data: td, encoding: .utf8) {
+                    // 经 JS 调 proteusSelfDraw.mount（JSExport 对象在 JSContext 里）
+                    ctx.setObject(treeJson as NSString, forKeyedSubscript: "__appScreenTree" as NSString)
+                    let mountOut = evalJs?("proteusSelfDraw.mount(__appScreenTree)") ?? "null"
+                    var mo: [String: Any] = [:]
+                    if let md = mountOut.data(using: .utf8), let m = (try? JSONSerialization.jsonObject(with: md)) as? [String: Any] { mo = m }
+                    SelfDrawBridge.snapshotName = "app-screen-composite"
+                    let shot = evalJs?("proteusSelfDraw.snapshot('app-screen-composite')") ?? "null"
+                    let shotOk = !shot.contains("null") && !shot.isEmpty
+                    var imgPath = shot.trimmingCharacters(in: .whitespacesAndNewlines)
+                    if imgPath.hasPrefix("\"") { imgPath = String(imgPath.dropFirst().dropLast()) }
+                    composite = ["ok": (mo["ok"] as? Bool) ?? false, "page": page, "content_nodes": nodes.count,
+                                 "layer_count": mo["layer_count"] ?? -1, "snapshot": shotOk, "snapshot_path": imgPath]
+                }
+            }
+        }
+        if let cd = try? JSONSerialization.data(withJSONObject: composite, options: [.prettyPrinted, .sortedKeys]) {
+            try? cd.write(to: reportDir.appendingPathComponent("app-screen-composite.json"))
+        }
+        NSLog("[proteus] 视觉合成：%@", (try? String(data: JSONSerialization.data(withJSONObject: composite), encoding: .utf8)) ?? "?")
 
         // ⑤ 执行器两相：kick → **非阻塞轮询**（见文件头）→ 写第二份报告
         _ = evalJs?("__proteusAppStackExecutorKick()")
