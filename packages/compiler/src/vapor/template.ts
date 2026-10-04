@@ -108,6 +108,8 @@ export const APP_SPECIAL_FIELDS = ['boxSizing'] as const
  *   背景/边框/圆角/不透明度在内核语义里**不继承**（见 Profile §3 可继承/不可继承表）⇒ 不得纳入。
  */
 export const APP_INHERITABLE_FIELDS = ['color', 'fontSize', 'fontWeight', 'lineHeight', 'textAlign', 'textOverflow', 'letterSpacing'] as const
+/** ★批次 28：支持 `inherit` 关键字的字段集（可继承 + visibility）。 */
+const INHERIT_KEY_SET = new Set<string>([...APP_INHERITABLE_FIELDS, 'visibility'])
 
 /**
  * ★★**结构化绘制声明**（2026-10-01 · 绘制通道补齐）——`style="{...}"` 装不下的那些通道，
@@ -489,6 +491,13 @@ export function parseStaticStyle(
     //   否则覆盖不了低优先级的 `.a{border:1px solid}`（级联失效，实测过）。无 App 字段的（transform 等）⇒ 空记录。
     const noop = noOpResetValue(key, rawVal)
     if (noop !== null) { for (const nk in noop) { out[nk] = noop[nk]; markImportant(nk) } continue }
+    // ★批次 28（CSS 兼容对齐 · 以 Web 为基准）：`inherit` 关键字（可继承属性）——**显式取父值**。
+    //   语义：`\.b{color:inherit}` 覆盖 `.a{color:red}` ⇒ b 应取**父节点**的 color（非 red）。
+    //   记哨兵 `'inherit'`，由下方继承 walk 解析为父的 computed 值。
+    if (rawVal.trim().toLowerCase() === 'inherit') {
+      if (INHERIT_KEY_SET.has(key)) { out[key] = 'inherit'; markImportant(key) }
+      continue
+    }
     // 四边：`margin-bottom` / `padding-left` …
     const edge = key.match(/^(margin|padding)(Top|Right|Bottom|Left)$/)
     if (edge) {
@@ -2254,11 +2263,14 @@ export function buildLayoutTemplate(
       //   CSS 语义：子节点自己的声明（含来自 class/style）覆盖继承值 ⇒ 继承只在**缺失**时填。
       const childInherited: Record<string, unknown> = { ...inherited }
       for (const f of APP_INHERITABLE_FIELDS) {
+        // ★批次 28：`inherit` 哨兵 ⇒ 显式取父值（父无 ⇒ 回落 undefined = 默认）
+        if (style[f] === 'inherit') style[f] = inherited[f]
         if (style[f] === undefined && inherited[f] !== undefined) style[f] = inherited[f]
         if (style[f] !== undefined) childInherited[f] = style[f]
       }
       // ★批次 25（visibility 继承 —— 语义与文本字段略异）：父 hidden ⇒ 子默认 hidden；
       //   子**显式** visible 可**覆盖**为可见（CSS 规定）。⇒ 单独处理，不并入 APP_INHERITABLE_FIELDS。
+      if (style.visibility === 'inherit') style.visibility = inherited.visibility
       if (style.visibility === undefined && inherited.visibility !== undefined) style.visibility = inherited.visibility
       if (style.visibility !== undefined) childInherited.visibility = style.visibility
       const node: LayoutNode = { id, parentId, tag, style }

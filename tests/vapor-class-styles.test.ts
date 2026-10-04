@@ -396,6 +396,27 @@ describe('★C1 最小切片 · SFC <style> 单类规则 → class→节点样�
     expect((v?.style as { borderWidth?: number })?.borderWidth, '重置覆盖 ⇒ borderWidth 0').toBe(0)
   })
 
+  it('★⑦p inherit 关键字（批次 28 · ★基准 = Web）：显式取父值', () => {
+    // 【为什么（以 web 为基准）】`color: inherit` 等 = 显式取父 computed 值（覆盖低优先级声明）。
+    expect((parseStaticStyle('color: inherit', () => {}) as { color?: string }).color, 'color inherit 记哨兵').toBe('inherit')
+    const sfc = `<template>
+      <view class="row"><text class="b">B</text></view>
+    </template>
+    <style>
+      .row { color: #ff0000; font-size: 20px }
+      .b { color: inherit; font-size: inherit }
+    </style>`
+    const r = buildLayoutTemplate(sfc, 'inherit-kw.vue')
+    const t = r.template.nodes.find((n) => (n as { text?: string }).text === 'B')
+    expect((t?.style as { color?: string })?.color, 'inherit ⇒ 父 color').toBe('#ff0000')
+    expect((t?.style as { fontSize?: number })?.fontSize, 'inherit ⇒ 父 fontSize').toBe(20)
+    // 非可继承字段的 inherit 不落键、不诊断（无法在编译期解析）
+    const d: string[] = []
+    const w = parseStaticStyle('width: inherit', (m: string) => d.push(m))
+    expect((w as { width?: number }).width, 'width:inherit 不落键').toBeUndefined()
+    expect(d.length, 'width:inherit 不诊断').toBe(0)
+  })
+
   it('★⑧ 元素/类型选择器 + @keyframes 跳过（C1 收尾）', () => {
     // 【真项目形态】examples 有 9 处元素选择器（h3/code…）+ 6 处 @keyframes 关键帧被误当选择器
     const sfc = `<template>
