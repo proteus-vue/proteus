@@ -1,7 +1,7 @@
-installed_at=2026-10-02T17:06:48Z
+installed_at=2026-10-04T04:40:49Z
 hap=/Volumes/data1/work/office/debug/proteus/hosts/harmony/host-app/entry/build/default/outputs/default/entry-default-signed.hap
-ready_line=10-03 01:06:45.250 35283 35283 I A00001/dev.proteus.host/ProteusHost: PROTEUS_HOST_READY model=KLE-AL00U os=OpenHarmony-7.0.0.105 api=26 display=KLE-AL00 7.0.0.109(SP6C00E105R3P3)
-render_line=10-03 01:06:45.332 35283 35283 I A00002/dev.proteus.host/ProteusRender: PROTEUS_RENDER_DONE nodes=4 parsed=4 texts=4
-bench_line=10-03 01:06:45.920 35283 35283 I A00002/dev.proteus.host/ProteusBench: PROTEUS_BENCH_RESULT limit=4050 wall_ms=68 {"ok":true,"engine":"proteus-layout-core 0.1.0 · engine=taffy-0.14 · taffy 锁定 0.14（0.13 有 measure 指数退化）","node_count":4051,"rect_count":4051,"bg_node_count":4000,"built_render_nodes":4000,"scope_ms":58.86,"layout_ms":12.08,"emit_ms":46.78,"note":"鸿蒙腿：Rust 核（aarch64-unknown-linux-ohos）+ RenderNode 直绘树构建；文本绘制未实现（只建带背景色节点）"}
-native_line=10-03 01:06:47.356 35283 35283 I A00002/dev.proteus.host/ProteusBench: PROTEUS_BENCH_NATIVE wall_ms=634 appeared=4050
-native_warm_line=10-03 01:06:48.435 35283 35283 I A00002/dev.proteus.host/ProteusBench: PROTEUS_BENCH_NATIVE_WARM wall_ms=578 appeared=4050
+ready_line=10-04 12:40:47.584  9642  9642 I A00001/dev.proteus.host/ProteusHost: PROTEUS_HOST_READY model=KLE-AL00U os=OpenHarmony-7.0.0.105 api=26 display=KLE-AL00 7.0.0.109(SP6C00E105R3P3)
+render_line=10-04 12:40:49.072  9642  9642 I A00002/dev.proteus.host/ProteusRender: PROTEUS_RENDER_DONE nodes=12 parsed=12 texts=8
+bench_line=10-04 12:40:49.772  9642  9642 I A00002/dev.proteus.host/ProteusBench: PROTEUS_BENCH_RESULT limit=4050 wall_ms=72 {"ok":true,"engine":"proteus-layout-core 0.1.0 · engine=taffy-0.14 · taffy 锁定 0.14（0.13 有 measure 指数退化）","node_count":4051,"rect_count":4051,"bg_node_count":4000,"built_render_nodes":4000,"scope_ms":61.88,"layout_ms":13.84,"emit_ms":48.04,"note":"鸿蒙腿：Rust 核（aarch64-unknown-linux-ohos）+ RenderNode 直绘树构建；文本绘制未实现（只建带背景色节点）"}
+native_line=none
+native_warm_line=none

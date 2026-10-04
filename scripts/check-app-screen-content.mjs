@@ -59,6 +59,9 @@ if (!APP_ENUM_VALUES) {
 /** 已知的数值键（内核读顶层数值） */
 const NUMERIC_KEYS = ['width', 'height', 'minWidth', 'maxWidth', 'minHeight', 'maxHeight', 'top', 'left', 'gap', 'flexGrow', 'flexShrink', 'flexBasis', 'fontSize', 'borderRadius', 'borderWidth', 'opacity', 'widthRatio', 'heightRatio']
 const EDGE_KEYS = ['margin', 'padding']
+/** 颜色键（内核 parse_css_color 只认 #RGB/#RRGGBB/#RRGGBBAA——rgb()/rgba() 会致整树建不起来） */
+const COLOR_KEYS = ['color', 'backgroundColor', 'borderColor']
+const HEX_COLOR_RE = /^#[0-9a-f]{3}$|^#[0-9a-f]{6}$|^#[0-9a-f]{8}$/i
 
 const files = process.argv.slice(2).filter((a) => !a.startsWith('-'))
 const targets = files.length
@@ -81,6 +84,32 @@ if (targets.length === 0) {
 const problems = []
 let checkedPages = 0
 let checkedNodes = 0
+
+/* ── ★★★设备腿（B4 鸿蒙）：hosts/harmony/results/app-screen-content.json ——
+ *   鸿蒙宿主消费 App 屏内容建内核树的真机读数（run-host-app.sh 捕获）。
+ *   判据：pages_mounted == pages（全部页建树成功）+ content_nodes_total > 0 + failed 为空。── */
+{
+  const devFile = path.join(ROOT, 'hosts', 'harmony', 'results', 'app-screen-content.json')
+  if (fs.existsSync(devFile)) {
+    try {
+      const d = JSON.parse(fs.readFileSync(devFile, 'utf-8'))
+      const pages = Number(d.pages ?? 0)
+      const mounted = Number(d.pages_mounted ?? 0)
+      const nodes = Number(d.content_nodes_total ?? 0)
+      const failed = Array.isArray(d.failed) ? d.failed : []
+      if (pages <= 0 || nodes <= 0) {
+        problems.push(`[hosts/harmony/results/app-screen-content.json] 鸿蒙屏内容建树为空（pages=${pages} nodes=${nodes}）——App 内容→鸿蒙内核树这条链没通`)
+      } else if (mounted !== pages || failed.length > 0) {
+        problems.push(`[hosts/harmony/results/app-screen-content.json] 鸿蒙有 ${failed.length} 页建树失败（${failed.join(',')}）——${mounted}/${pages} 页成功`)
+      } else {
+        console.log(`  ✅ 鸿蒙设备腿：${pages} 页全部建树（${nodes} 节点）`)
+      }
+    } catch (e) {
+      problems.push(`[hosts/harmony/results/app-screen-content.json] 读取失败：${e.message}`)
+    }
+  }
+}
+
 
 for (const f of targets) {
   const rel = path.relative(ROOT, f)
@@ -156,6 +185,14 @@ for (const f of targets) {
           problems.push(`[${rel}] ${page}: 节点 ${n.id} ${k}=${JSON.stringify(n[k])} 非有限数`)
         }
       }
+      // ⑤b 颜色键：必须为 hex（内核只认 #RGB/#RRGGBB/#RRGGBBAA——rgb()/rgba() 致整树建不起来）
+      for (const k of COLOR_KEYS) {
+        if (k in n && n[k] !== undefined) {
+          if (typeof n[k] !== 'string' || !HEX_COLOR_RE.test(n[k])) {
+            problems.push(`[${rel}] ${page}: 节点 ${n.id} ${k}=${JSON.stringify(n[k])} 非 hex 颜色（内核只认 #RGB/#RRGGBB/#RRGGBBAA）——真机建树会失败`)
+          }
+        }
+      }
       for (const k of EDGE_KEYS) {
         if (k in n && n[k] !== undefined) {
           if (typeof n[k] !== 'object' || n[k] === null) {
@@ -176,7 +213,7 @@ for (const f of targets) {
 console.log('App 屏内容产物门禁（内核契约：枚举封闭集 + 树结构不变量）')
 console.log(`  产物 ${targets.length} 份 · 页 ${checkedPages} · 节点 ${checkedNodes}`)
 if (problems.length === 0) {
-  console.log('  ✅ 全部合规（id 唯一 / parent 可达无环 / 枚举值在内核封闭集 / 数值有限）')
+  console.log('  ✅ 全部合规（id 唯一 / parent 可达无环 / 枚举值在内核封闭集 / 颜色为 hex / 数值有限）')
   process.exit(0)
 }
 console.log(`  ❌ ${problems.length} 项：`)
