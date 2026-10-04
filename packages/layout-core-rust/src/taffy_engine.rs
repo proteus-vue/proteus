@@ -20,6 +20,8 @@ use std::collections::HashMap;
 // ★刻意**不用** `taffy::prelude::*`（它导出的 `Rect`/`Size`/`Point` 与本 crate 的
 //   `style::Rect`/`style::Size` 撞名，glob 下解析结果不直观）——只按需导入具体符号。
 use taffy::prelude::{auto, fr, length, percent, AlignContent, AlignItems, BoxSizing, Dimension, JustifyContent, LengthPercentageAuto};
+// ★批次 41：grid item 放置（GridPlacement::from_line_index）
+use taffy::style_helpers::TaffyGridLine;
 use taffy::{AvailableSpace as TaffyAvailableSpace, NodeId, Style, TaffyTree};
 
 use crate::engine::{AvailableSpace, LayoutEngine, LayoutOutput, RootConstraint, TextMeasurer};
@@ -175,6 +177,21 @@ impl TaffyEngine {
             if let Some(rows) = style.grid_template_rows.as_deref() {
                 out.grid_template_rows = parse_grid_tracks(rows);
             }
+        }
+
+        // ★批次 41：grid item 放置（grid-column / grid-row 线号 → taffy Line<GridPlacement>）——
+        //   对**容器里的 item** 生效（taffy 忽略非 grid 子项的该属性，故无需 display 门控）。
+        if let Some((s, e)) = style.grid_column {
+            out.grid_column = taffy::Line {
+                start: taffy::GridPlacement::from_line_index(s),
+                end: match e { Some(x) => taffy::GridPlacement::from_line_index(x), None => taffy::GridPlacement::Auto },
+            };
+        }
+        if let Some((s, e)) = style.grid_row {
+            out.grid_row = taffy::Line {
+                start: taffy::GridPlacement::from_line_index(s),
+                end: match e { Some(x) => taffy::GridPlacement::from_line_index(x), None => taffy::GridPlacement::Auto },
+            };
         }
 
         // ③ flex 主轴 / 对齐 / 伸缩

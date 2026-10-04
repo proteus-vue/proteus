@@ -427,6 +427,13 @@ pub struct LStyle {
     pub grid_template_columns: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub grid_template_rows: Option<String>,
+    /// ★批次 41：grid item 放置（CSS `grid-column` 线号）——`(start, Option<end>)`；线号可为负（-1 = 最后一条线）。
+    ///   `end=None` ⇒ auto（跨 1 轨）。仅对 **grid 容器里的 item** 生效（taffy `Line<GridPlacement>`）。
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub grid_column: Option<(i16, Option<i16>)>,
+    /// ★批次 41：`grid-row` 线号放置（同 `grid_column`）
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub grid_row: Option<(i16, Option<i16>)>,
 
     // ── ★RT0/RT2（2026-09-30）：绘制层变换 + 视觉属性（**不参与布局**）──
     //
@@ -651,6 +658,8 @@ impl Default for LStyle {
             overflow: Overflow::default(),
             grid_template_columns: None,
             grid_template_rows: None,
+            grid_column: None,
+            grid_row: None,
             translate_x: 0.0,
             translate_y: 0.0,
             scale: 1.0,

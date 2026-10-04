@@ -183,14 +183,14 @@
         "why": "★批次 9（2026-10-04）：从项目 `globalStyle`（如 styles/tokens.css，与 Web/MP 同一份）解析 `--name: value`，SFC 内 `var(--x)` **编译期替换为字面值**（递归展开引用令牌；支持 fallback；未知令牌诊断）。★**超级应用承载关键**：组件库/主题化全靠设计令牌（真项目 242 处 var()）。诚实边界：只折**字面值**令牌；calc()/env() 动态令牌值不折"
       },
       {
-        "css": "display: grid + grid-template-columns/rows（显式轨迹）",
+        "css": "display: grid + grid-template-columns/rows（显式轨迹）+ grid-column/row 线号放置",
         "id": "grid",
         "ends": {
           "web": "partial",
           "skyline": "not-listed",
           "app": "supported"
         },
-        "why": "★批次 12（2026-10-04）：引擎 `Display::Grid` + `LStyle.grid_template_columns/rows`（字符串轨迹）+ `NodeDto` + taffy grid_template_* 映射（parse_grid_tracks：fr/px/数字）；编译器 display:grid 入封闭集 + `grid-template-columns/rows` 解析（**显式轨迹**，`repeat(N,X)` 编译期展开）。★**诚实边界**：仅显式轨迹（fr/px/数字）——auto/minmax/fit-content/命名线/隐式行（grid-auto-*）/grid-area 定位**未支持**，诊断跳过；Skyline 端实测退化为 block ⇒ 有条件可用"
+        "why": "★批次 12（2026-10-04）：引擎 `Display::Grid` + `LStyle.grid_template_columns/rows`（字符串轨迹）+ `NodeDto` + taffy grid_template_* 映射（parse_grid_tracks：fr/px/数字）；编译器 display:grid 入封闭集 + `grid-template-columns/rows` 解析（**显式轨迹**，`repeat(N,X)` 编译期展开）。★批次 41（2026-10-04）：`grid-column`/`grid-row` **线号放置**（`<n>` / `<start> / <end>`，线号可负——`1 / -1` 跨全宽）已支持（内核 taffy `Line<GridPlacement>`）。★**诚实边界**：显式轨迹（fr/px/数字）+ 线号放置（非 span/非命名线）——auto/minmax/fit-content/命名线/隐式行（grid-auto-*）/`span`/`grid-area` 定位**未支持**，诊断跳过；Skyline 端实测退化为 block ⇒ 有条件可用"
       },
       {
         "css": "aspect-ratio",
@@ -460,6 +460,8 @@
       "overflow",
       "gridTemplateColumns",
       "gridTemplateRows",
+      "gridColumn",
+      "gridRow",
       "aspectRatio",
       "pointerEvents"
     ],
@@ -1121,18 +1123,20 @@
     },
     {
       "id": "grid",
-      "css": "display: grid + grid-template-columns/rows（显式轨迹）",
+      "css": "display: grid + grid-template-columns/rows（显式轨迹）+ grid-column/row 线号放置",
       "category": "layout",
       "compilerFields": [
         "gridTemplateColumns",
-        "gridTemplateRows"
+        "gridTemplateRows",
+        "gridColumn",
+        "gridRow"
       ],
       "web": "partial",
       "skyline": "not-listed",
       "app": "supported",
       "tier": "L2",
       "strategy": "直映射",
-      "note": "★批次 12（2026-10-04）：引擎 `Display::Grid` + `LStyle.grid_template_columns/rows`（字符串轨迹）+ `NodeDto` + taffy grid_template_* 映射（parse_grid_tracks：fr/px/数字）；编译器 display:grid 入封闭集 + `grid-template-columns/rows` 解析（**显式轨迹**，`repeat(N,X)` 编译期展开）。★**诚实边界**：仅显式轨迹（fr/px/数字）——auto/minmax/fit-content/命名线/隐式行（grid-auto-*）/grid-area 定位**未支持**，诊断跳过；Skyline 端实测退化为 block ⇒ 有条件可用",
+      "note": "★批次 12（2026-10-04）：引擎 `Display::Grid` + `LStyle.grid_template_columns/rows`（字符串轨迹）+ `NodeDto` + taffy grid_template_* 映射（parse_grid_tracks：fr/px/数字）；编译器 display:grid 入封闭集 + `grid-template-columns/rows` 解析（**显式轨迹**，`repeat(N,X)` 编译期展开）。★批次 41（2026-10-04）：`grid-column`/`grid-row` **线号放置**（`<n>` / `<start> / <end>`，线号可负——`1 / -1` 跨全宽）已支持（内核 taffy `Line<GridPlacement>`）。★**诚实边界**：显式轨迹（fr/px/数字）+ 线号放置（非 span/非命名线）——auto/minmax/fit-content/命名线/隐式行（grid-auto-*）/`span`/`grid-area` 定位**未支持**，诊断跳过；Skyline 端实测退化为 block ⇒ 有条件可用",
       "supportTier": "conditional"
     },
     {
