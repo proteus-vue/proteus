@@ -4005,6 +4005,75 @@ static napi_value AppStackExecutorProbe(napi_env env, napi_callback_info info) {
     napi_value r; napi_create_string_utf8(env, out.c_str(), out.size(), &r); return r;
 }
 
+/**
+ * ★★★App 三端对齐 · 鸿蒙视觉合成（2026-10-04）：**App 屏内容 → 内核树 → 渲染指令数组**。
+ *
+ * 【它解决什么】鸿蒙此前只把 App 屏内容建进内核树（screenContentProbe），**没真上屏**。
+ *   本函数产出 `renderCommands` 的输入（RenderCmd：x/y/w/h/color/radius/text/fontSize/textColor，
+ *   物理 px）——ArkTS `attach + renderCommands` 即真画到屏（与 sfcStressCommands 同形）。
+ * 【入参】argsJson = { nodes: string(某页 nodes 数组串), density, vpW, vpH }。
+ * 【出参】JSON 数组串（RenderCmd[]）+ 落盘 filesDir/app-screen-composite.json（给 filesDir 时）。
+ */
+static napi_value AppScreenCommands(napi_env env, napi_callback_info info) {
+    size_t argc = 1; napi_value args[1] = {nullptr};
+    napi_get_cb_info(env, info, &argc, args, nullptr, nullptr);
+    std::string argsJson;
+    if (argc >= 1 && args[0] != nullptr) {
+        size_t len = 0; napi_get_value_string_utf8(env, args[0], nullptr, 0, &len);
+        argsJson.resize(len + 1); napi_get_value_string_utf8(env, args[0], &argsJson[0], len + 1, &len); argsJson.resize(len);
+    }
+    std::string nodes, page, filesDir; double density = 1.0, vpW = 390, vpH = 844;
+    jstr(argsJson.c_str(), argsJson.size(), "nodes", &nodes);
+    jstr(argsJson.c_str(), argsJson.size(), "page", &page);
+    jstr(argsJson.c_str(), argsJson.size(), "filesDir", &filesDir);
+    jnum(argsJson.c_str(), argsJson.size(), "density", &density);
+    jnum(argsJson.c_str(), argsJson.size(), "vpW", &vpW);
+    jnum(argsJson.c_str(), argsJson.size(), "vpH", &vpH);
+    if (density <= 0) density = 1.0;
+    if (nodes.empty()) { napi_value o; napi_create_string_utf8(env, "[]", NAPI_AUTO_LENGTH, &o); return o; }
+    // 建树（内容节点扁平键与内核 create 契约同源——直接透传）
+    char vpb[96]; snprintf(vpb, sizeof(vpb), "{\"width\":%.2f,\"height\":%.2f}", vpW, vpH);
+    std::string req = "{\"viewport\":" + std::string(vpb) + ",\"nodes\":" + nodes + "}";
+    uint64_t handle = proteus_layout_create(req.c_str());
+    if (handle == 0) { napi_value o; napi_create_string_utf8(env, "[]", NAPI_AUTO_LENGTH, &o); return o; }
+    char* rp = proteus_layout_rects(handle);
+    std::string rects = rp ? rp : "{}";
+    if (rp) proteus_layout_free_string(rp);
+    proteus_layout_destroy(handle);
+    std::unordered_map<int, Rect> rectMap; parseRects(rects, rectMap);
+    std::vector<std::string> items = splitJsonObjects(nodes);
+    std::string arr = "["; int emitted = 0;
+    for (const auto& it : items) {
+        double id = -1; jnum(it.c_str(), it.size(), "id", &id);
+        auto ri = rectMap.find((int)id); if (ri == rectMap.end()) continue;
+        const Rect& r = ri->second;
+        uint32_t bg = 0; std::string bgCss; if (jstr(it.c_str(), it.size(), "backgroundColor", &bgCss)) bg = hexToArgb(bgCss);
+        double radius = 0; jnum(it.c_str(), it.size(), "borderRadius", &radius);
+        std::string text; jstr(it.c_str(), it.size(), "text", &text);
+        double fs = 24; jnum(it.c_str(), it.size(), "fontSize", &fs);
+        uint32_t tc = 0xFFFFFFFFu; std::string tcCss; if (jstr(it.c_str(), it.size(), "color", &tcCss)) tc = hexToArgb(tcCss);
+        char head[320];
+        snprintf(head, sizeof(head), "%s{\"kind\":\"background\",\"x\":%.2f,\"y\":%.2f,\"w\":%.2f,\"h\":%.2f,\"color\":%u,\"radius\":%.2f",
+                 emitted > 0 ? "," : "", r.x * density, r.y * density, r.w * density, r.h * density, bg, radius * density);
+        arr += head;
+        if (!text.empty()) {
+            char tail[96]; snprintf(tail, sizeof(tail), ",\"fontSize\":%.2f,\"textColor\":%u", fs * density, tc);
+            arr += tail; arr += ",\"text\":\"" + jsonEscape(text) + "\"";
+        }
+        arr += "}"; emitted++;
+    }
+    arr += "]";
+    char lb[128]; snprintf(lb, sizeof(lb), "PROTEUS_APP_SCREEN_CMDS page=%s nodes=%d", page.c_str(), emitted);
+    OH_LOG_Print(LOG_APP, LOG_INFO, PROTEUS_BENCH_DOMAIN, PROTEUS_BENCH_TAG, "%{public}s", lb);
+    if (!filesDir.empty()) {
+        char sum[240]; snprintf(sum, sizeof(sum), "{\"ok\":%s,\"page\":\"%s\",\"content_nodes\":%d,\"cmds\":%d}",
+                 emitted > 0 ? "true" : "false", page.c_str(), (int)items.size(), emitted);
+        std::string path = filesDir + "/app-screen-composite.json";
+        FILE* f = fopen(path.c_str(), "w"); if (f) { fwrite(sum, 1, strlen(sum), f); fclose(f); }
+    }
+    napi_value out; napi_create_string_utf8(env, arr.c_str(), arr.size(), &out); return out;
+}
+
 static napi_value BenchInit(napi_env env, napi_value exports) {
     napi_property_descriptor desc[] = {
         {"bench4050", nullptr, Bench4050, nullptr, nullptr, nullptr, napi_default, nullptr},
@@ -4019,6 +4088,7 @@ static napi_value BenchInit(napi_env env, napi_value exports) {
         {"jsvmProbe", nullptr, JsvmProbe, nullptr, nullptr, nullptr, napi_default, nullptr},
         {"vaporProbe", nullptr, VaporProbe, nullptr, nullptr, nullptr, napi_default, nullptr},
         {"screenContentProbe", nullptr, ScreenContentProbe, nullptr, nullptr, nullptr, napi_default, nullptr},
+        {"appScreenCommands", nullptr, AppScreenCommands, nullptr, nullptr, nullptr, napi_default, nullptr},
         {"appStackExecutorProbe", nullptr, AppStackExecutorProbe, nullptr, nullptr, nullptr, napi_default, nullptr},
         {"animCurveBezier", nullptr, AnimCurveBezier, nullptr, nullptr, nullptr, napi_default, nullptr},
         {"hostRuntimeProbe", nullptr, HostRuntimeProbe, nullptr, nullptr, nullptr, napi_default, nullptr},

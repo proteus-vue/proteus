@@ -141,6 +141,17 @@ if [ -n "$READY_LINE" ]; then
     echo "  ⚠ 未见 PROTEUS_APP_EXECUTOR 读数——跳过"
   fi
 
+  # ── 6.47 ★★★App 三端对齐 · 鸿蒙视觉合成（2026-10-04）：App 屏内容 → RenderNode 真建 ──
+  CP_LINE="$(HDC shell "hilog -x | grep 'PROTEUS_APP_SCREEN_COMPOSITE {' | tail -1" 2>/dev/null | head -1)"
+  CP_JSON="$(printf '%s' "$CP_LINE" | sed -n 's/.*PROTEUS_APP_SCREEN_COMPOSITE //p')"
+  if [ -n "$CP_JSON" ]; then
+    printf '%s' "$CP_JSON" > "$RESULTS/app-screen-composite.json"
+    echo
+    echo "  ✓ 鸿蒙视觉合成：$CP_JSON"
+  else
+    echo "  ⚠ 未见 PROTEUS_APP_SCREEN_COMPOSITE 读数——跳过"
+  fi
+
   # ── 6.5 ★探针集（命中 / 复用池 / 结构变更 / 文本通道 / SFC 压力）——与 Android 能力域对齐 ──
   PROBE_LOG="$(HDC shell "hilog -x | grep -E 'PROTEUS_HIT_PROBE \{|PROTEUS_RECYCLE \{|PROTEUS_SPLICE \{|PROTEUS_TEXT \{|PROTEUS_SCROLL_DONE|PROTEUS_KERNELANIM \{|PROTEUS_MEM \{|PROTEUS_SFCSTRESS \{|PROTEUS_JSVM \{|PROTEUS_VAPOR \{|PROTEUS_PLATFORMANIM_END \{|PROTEUS_MOUNTVIRT \{|PROTEUS_HOSTRT_DONE \{|PROTEUS_SHELLINSTALL \{|PROTEUS_SHELLEVENT \{|PROTEUS_SCROLL_CORE \{|PROTEUS_PLATFORMANIM \{|PROTEUS_GESTURE_INSTALL_JS \{|PROTEUS_FONTFAMILY_PROBE \{' | tail -23" 2>/dev/null)"
   echo

@@ -24,7 +24,7 @@ import { runAppStackProbe } from '../core/app-stack-probe';
 import { attach, renderCommands, stats, ProteusRenderStats, platformAnimBegin, platformAnimStep, platformAnimEnd, platformAnimSave, clearRoot, scrollRoot, gestureInstall, gestureSample } from 'libproteus_render.so';
 // ★P3-3：宿主动画入口（`<Transition>` 桥的鸿蒙腿——与 Android/iOS 同形）
 import { animTick, animActive } from 'libproteus_bench.so';
-import { bench4050, hitProbe, recycleProbe, spliceProbe, textProbe, kernelAnimProbe, memProbe, sfcStressProbe, sfcStressCommands, jsvmProbe, vaporProbe, animCurveBezier, hostRuntimeProbe, hostRtShellInstall, mountVirtualProbe, gestureHitPrepare, gestureHitAt, fontFamilyProbe, nodeRect, screenContentProbe, appStackExecutorProbe, version as rustVersion } from 'libproteus_bench.so';
+import { bench4050, hitProbe, recycleProbe, spliceProbe, textProbe, kernelAnimProbe, memProbe, sfcStressProbe, sfcStressCommands, jsvmProbe, vaporProbe, animCurveBezier, hostRuntimeProbe, hostRtShellInstall, mountVirtualProbe, gestureHitPrepare, gestureHitAt, fontFamilyProbe, nodeRect, screenContentProbe, appStackExecutorProbe, appScreenCommands, version as rustVersion } from 'libproteus_bench.so';
 
 const DOMAIN = 0x0002;
 const TAG = 'ProteusRender';
@@ -892,6 +892,31 @@ struct Index {
           }
           const sum: string = `{"ok":true,"pages":${names.length},"pages_mounted":${pagesDone},"content_nodes_total":${nodesDone},"failed":${JSON.stringify(failed)}}`;
           hilog.info(DOMAIN, BENCH_TAG, 'PROTEUS_APP_SCREEN_CONTENT %{public}s', sum);
+          // ★★★App 三端对齐 · 鸿蒙视觉合成（2026-10-04）：**把 App 屏内容真画到屏上**。
+          //   复用既有渲染通道（attach + renderCommands，与 sfcStress 同形）：
+          //   entry 页内容 → appScreenCommands（内容→内核树→渲染指令）→ renderCommands 真建 RenderNode。
+          try {
+            const entryName: string = pages['index'] ? 'index' : Object.keys(pages)[0];
+            const entryNodes: Object = pages[entryName]['nodes'];
+            const dispC = display.getDefaultDisplaySync();
+            const cvw: number = px2vp(dispC.width);
+            const cvh: number = px2vp(dispC.height);
+            attach(this.content, vp2px(1), cvw, cvh);
+            const cArgs: Record<string, Object> = {
+              'nodes': JSON.stringify(entryNodes),
+              'density': vp2px(1),
+              'vpW': cvw,
+              'vpH': cvh,
+              'page': entryName,
+              'filesDir': ctxSC.filesDir,
+            };
+            const cmdsJson: string = appScreenCommands(JSON.stringify(cArgs));
+            const cn: number = renderCommands(cmdsJson);
+            const cOut: string = `{"ok":${cn > 0},"page":"${entryName}","content_nodes":${(entryNodes as Array<Object>).length},"render_nodes":${cn}}`;
+            hilog.info(DOMAIN, BENCH_TAG, 'PROTEUS_APP_SCREEN_COMPOSITE %{public}s', cOut);
+          } catch (cce) {
+            hilog.error(DOMAIN, BENCH_TAG, 'PROTEUS_APP_SCREEN_COMPOSITE_ERROR %{public}s', JSON.stringify(cce) ?? '');
+          }
         } catch (sce) {
           hilog.error(DOMAIN, BENCH_TAG, 'PROTEUS_APP_SCREEN_CONTENT_ERROR %{public}s', JSON.stringify(sce) ?? '');
         }

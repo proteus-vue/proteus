@@ -95,6 +95,7 @@ const HEX_COLOR_RE = /^#[0-9a-f]{3}$|^#[0-9a-f]{6}$|^#[0-9a-f]{8}$/i
 for (const [label, rel, ok] of [
   ['Android', 'hosts/android/results/app-screen-composite.json', (d) => d.ok && Number(d.painted_samples ?? 0) > 0 && Number(d.content_nodes ?? 0) > 0],
   ['iOS', 'hosts/ios/results/app-screen-composite.json', (d) => d.ok && Number(d.content_nodes ?? 0) > 0 && Number(d.layer_count ?? 0) > 0 && d.snapshot === true],
+  ['鸿蒙', 'hosts/harmony/results/app-screen-composite.json', (d) => d.ok && Number(d.content_nodes ?? 0) > 0 && Number(d.render_nodes ?? 0) > 0],
 ]) {
   const cf = path.join(ROOT, rel)
   if (!fs.existsSync(cf)) continue
@@ -105,7 +106,7 @@ for (const [label, rel, ok] of [
     } else {
       const extra = label === 'Android'
         ? `${Number(d.painted_samples)} 采样像素`
-        : `${Number(d.layer_count)} 层 + PNG`
+        : label === 'iOS' ? `${Number(d.layer_count)} 层 + PNG` : `${Number(d.render_nodes)} 渲染节点`
       console.log(`  ✅ ${label} 视觉合成设备腿：真画屏（${Number(d.content_nodes)} 内容节点 → ${extra}）`)
     }
   } catch (e) {
