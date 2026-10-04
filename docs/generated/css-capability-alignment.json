@@ -97,6 +97,16 @@
         "why": "C1：祖先类链匹配"
       },
       {
+        "css": "特异性 / 继承 / !important",
+        "id": "specificity-inheritance",
+        "ends": {
+          "web": "—",
+          "skyline": "—",
+          "app": "supported"
+        },
+        "why": "★批次 1（2026-10-04）：规则按 (!important, 特异性 (id,class,tag), 源序) 层叠；color/fontSize 沿树继承（CSS 可继承子集；编译期一次性算进 computed style，运行时零匹配）"
+      },
+      {
         "css": "display: grid / grid-template-*",
         "id": "grid",
         "ends": {
@@ -884,16 +894,16 @@
     },
     {
       "id": "specificity-inheritance",
-      "css": "特异性 / 继承",
+      "css": "特异性 / 继承 / !important",
       "category": "cascade",
       "compilerFields": [],
       "web": "—",
       "skyline": "—",
-      "app": "absent",
+      "app": "supported",
       "tier": "L0",
       "strategy": "编译期折叠",
-      "note": "当前仅按源序层叠、无特异性/继承（Profile L0 要求完整实现）",
-      "supportTier": "unsupported"
+      "note": "★批次 1（2026-10-04）：规则按 (!important, 特异性 (id,class,tag), 源序) 层叠；color/fontSize 沿树继承（CSS 可继承子集；编译期一次性算进 computed style，运行时零匹配）",
+      "supportTier": "conditional"
     },
     {
       "id": "at-media",

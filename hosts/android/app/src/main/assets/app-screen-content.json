@@ -479,18 +479,24 @@
       {
         "id": 3,
         "parentId": 2,
+        "color": "#888",
+        "fontSize": 13,
         "text": "本页演示 ",
         "semantic": "p-text"
       },
       {
         "id": 4,
         "parentId": 2,
+        "color": "#888",
+        "fontSize": 13,
         "text": "proteus.config.ts",
         "semantic": "code"
       },
       {
         "id": 5,
         "parentId": 2,
+        "color": "#888",
+        "fontSize": 13,
         "text": " 的规则覆盖：改配置 → 重新构建 → 产物即时变化",
         "semantic": "p-text"
       },
@@ -632,17 +638,20 @@
       {
         "id": 22,
         "parentId": 21,
+        "fontSize": 13,
         "semantic": "p"
       },
       {
         "id": 23,
         "parentId": 22,
+        "fontSize": 13,
         "text": "试玩三个开关",
         "semantic": "b"
       },
       {
         "id": 24,
         "parentId": 22,
+        "fontSize": 13,
         "text": "（编辑 proteus.config.ts 的 rules 段后 ",
         "semantic": "p-text"
       },
@@ -657,17 +666,20 @@
       {
         "id": 26,
         "parentId": 22,
+        "fontSize": 13,
         "text": "）：",
         "semantic": "p-text"
       },
       {
         "id": 27,
         "parentId": 21,
+        "fontSize": 13,
         "semantic": "ul"
       },
       {
         "id": 28,
         "parentId": 27,
+        "fontSize": 13,
         "semantic": "li"
       },
       {
@@ -681,12 +693,14 @@
       {
         "id": 30,
         "parentId": 28,
+        "fontSize": 13,
         "text": "：新增标签映射（本页 demo-box）",
         "semantic": "p-text"
       },
       {
         "id": 31,
         "parentId": 27,
+        "fontSize": 13,
         "semantic": "li"
       },
       {
@@ -700,12 +714,14 @@
       {
         "id": 33,
         "parentId": 31,
+        "fontSize": 13,
         "text": "：改写映射（如 'tag/link-to-view': { a: 'text' }）",
         "semantic": "p-text"
       },
       {
         "id": 34,
         "parentId": 27,
+        "fontSize": 13,
         "semantic": "li"
       },
       {
@@ -719,6 +735,7 @@
       {
         "id": 36,
         "parentId": 34,
+        "fontSize": 13,
         "text": "：禁用规则（如 'directive/v-if'，v-if 将被忽略 + 编译期警告）",
         "semantic": "p-text"
       }
@@ -1019,11 +1036,13 @@
       {
         "id": 19,
         "parentId": 18,
+        "fontSize": 12,
         "semantic": "p-text"
       },
       {
         "id": 20,
         "parentId": 18,
+        "fontSize": 12,
         "semantic": "template"
       },
       {
@@ -1344,6 +1363,7 @@
       {
         "id": 1,
         "parentId": 0,
+        "fontSize": 13,
         "text": "Open API 演示 · 第三方自己的 DevTools 面板",
         "semantic": "h2"
       },
@@ -1351,11 +1371,14 @@
         "id": 2,
         "parentId": 0,
         "color": "#666",
+        "fontSize": 13,
         "semantic": "p"
       },
       {
         "id": 3,
         "parentId": 2,
+        "color": "#666",
+        "fontSize": 13,
         "text": " 本页不依赖 ",
         "semantic": "p-text"
       },
@@ -1364,12 +1387,15 @@
         "parentId": 2,
         "borderRadius": 3,
         "fontSize": 12,
+        "color": "#666",
         "text": "@proteus-vue/devtools",
         "semantic": "code"
       },
       {
         "id": 5,
         "parentId": 2,
+        "color": "#666",
+        "fontSize": 13,
         "text": " 包——原生 WebSocket 直连 ",
         "semantic": "p-text"
       },
@@ -1378,12 +1404,15 @@
         "parentId": 2,
         "borderRadius": 3,
         "fontSize": 12,
+        "color": "#666",
         "text": "/proteus-panel",
         "semantic": "code"
       },
       {
         "id": 7,
         "parentId": 2,
+        "color": "#666",
+        "fontSize": 13,
         "text": "，按 Proteus 开放协议（15-open-api.md）接入应用全部 devtools 数据。 等价包级 API：",
         "semantic": "p-text"
       },
@@ -1392,12 +1421,15 @@
         "parentId": 2,
         "borderRadius": 3,
         "fontSize": 12,
+        "color": "#666",
         "text": "createDevtoolsWsSource(url)",
         "semantic": "code"
       },
       {
         "id": 9,
         "parentId": 2,
+        "color": "#666",
+        "fontSize": 13,
         "text": " + ",
         "semantic": "p-text"
       },
@@ -1406,12 +1438,15 @@
         "parentId": 2,
         "borderRadius": 3,
         "fontSize": 12,
+        "color": "#666",
         "text": "onEvent / appInfo() / deviceInfo() / sendCommand()",
         "semantic": "code"
       },
       {
         "id": 11,
         "parentId": 2,
+        "color": "#666",
+        "fontSize": 13,
         "text": "。 ",
         "semantic": "p-text"
       },
@@ -1419,6 +1454,7 @@
         "id": 12,
         "parentId": 0,
         "borderRadius": 4,
+        "fontSize": 13,
         "semantic": "div"
       },
       {
@@ -1426,12 +1462,14 @@
         "parentId": 0,
         "display": "flex",
         "gap": 8,
+        "fontSize": 13,
         "semantic": "div"
       },
       {
         "id": 14,
         "parentId": 13,
         "borderRadius": 4,
+        "fontSize": 13,
         "text": "读取 appInfo（路由表）",
         "semantic": "button"
       },
@@ -1439,6 +1477,7 @@
         "id": 15,
         "parentId": 13,
         "borderRadius": 4,
+        "fontSize": 13,
         "text": "读取 deviceInfo（环境/能力）",
         "semantic": "button"
       },
@@ -1446,6 +1485,7 @@
         "id": 16,
         "parentId": 0,
         "borderRadius": 6,
+        "fontSize": 13,
         "semantic": "div"
       },
       {
@@ -1453,6 +1493,7 @@
         "parentId": 16,
         "display": "flex",
         "gap": 8,
+        "fontSize": 13,
         "semantic": "div"
       },
       {
@@ -1466,6 +1507,7 @@
         "id": 19,
         "parentId": 17,
         "borderRadius": 4,
+        "fontSize": 13,
         "text": "下发命令",
         "semantic": "button"
       },
@@ -1489,6 +1531,7 @@
         "parentId": 0,
         "display": "flex",
         "gap": 6,
+        "fontSize": 13,
         "semantic": "div"
       },
       {
@@ -1511,16 +1554,19 @@
         "id": 25,
         "parentId": 0,
         "gap": 16,
+        "fontSize": 13,
         "semantic": "div"
       },
       {
         "id": 26,
         "parentId": 25,
+        "fontSize": 13,
         "semantic": "div"
       },
       {
         "id": 27,
         "parentId": 26,
+        "fontSize": 13,
         "text": "事件流（自绘迷你时间线 · 最新 60 条）",
         "semantic": "h3"
       },
@@ -1529,6 +1575,7 @@
         "parentId": 26,
         "borderRadius": 6,
         "maxHeight": 320,
+        "fontSize": 13,
         "semantic": "div"
       },
       {
@@ -1559,6 +1606,7 @@
       {
         "id": 32,
         "parentId": 29,
+        "fontSize": 12,
         "semantic": "span"
       },
       {
@@ -1579,11 +1627,13 @@
       {
         "id": 35,
         "parentId": 25,
+        "fontSize": 13,
         "semantic": "div"
       },
       {
         "id": 36,
         "parentId": 35,
+        "fontSize": 13,
         "text": "协议日志",
         "semantic": "h3"
       },
@@ -1592,6 +1642,7 @@
         "parentId": 35,
         "borderRadius": 6,
         "maxHeight": 320,
+        "fontSize": 13,
         "semantic": "div"
       },
       {
@@ -1603,6 +1654,7 @@
       {
         "id": 39,
         "parentId": 35,
+        "fontSize": 13,
         "text": "查询结果",
         "semantic": "h3"
       },
@@ -1747,6 +1799,7 @@
       {
         "id": 3,
         "parentId": 2,
+        "color": "#666",
         "text": " 声明式语义布局：",
         "semantic": "p-text"
       },
@@ -1754,12 +1807,14 @@
         "id": 4,
         "parentId": 2,
         "borderRadius": 3,
+        "color": "#666",
         "text": "p-grid",
         "semantic": "code"
       },
       {
         "id": 5,
         "parentId": 2,
+        "color": "#666",
         "text": " 只声明每列最小宽度（160px）——320px→1 列、768px→4 列、1440px→8 列，框架自动求解。 ",
         "semantic": "p-text"
       },
@@ -1875,18 +1930,21 @@
       {
         "id": 3,
         "parentId": 2,
+        "color": "#666",
         "text": " 响应式基准是",
         "semantic": "p-text"
       },
       {
         "id": 4,
         "parentId": 2,
+        "color": "#666",
         "text": "容器",
         "semantic": "strong"
       },
       {
         "id": 5,
         "parentId": 2,
+        "color": "#666",
         "text": "而非视口——折叠屏/平板/车机/多窗口场景下，组件按自身容器宽度求解。 拖动窗口或缩放容器看实时变化。 ",
         "semantic": "p-text"
       },
@@ -2247,17 +2305,23 @@
       {
         "id": 40,
         "parentId": 39,
+        "color": "#999",
+        "fontSize": 12,
         "text": "display-mode：",
         "semantic": "p-text"
       },
       {
         "id": 41,
         "parentId": 39,
+        "color": "#999",
+        "fontSize": 12,
         "semantic": "strong"
       },
       {
         "id": 42,
         "parentId": 39,
+        "color": "#999",
+        "fontSize": 12,
         "text": "（DevTools 折叠屏模拟 → fold/span/expand）",
         "semantic": "p-text"
       },
@@ -2271,12 +2335,16 @@
       {
         "id": 44,
         "parentId": 43,
+        "color": "#999",
+        "fontSize": 12,
         "text": "方向：",
         "semantic": "p-text"
       },
       {
         "id": 45,
         "parentId": 43,
+        "color": "#999",
+        "fontSize": 12,
         "semantic": "strong"
       },
       {
@@ -2289,12 +2357,16 @@
       {
         "id": 47,
         "parentId": 46,
+        "color": "#999",
+        "fontSize": 12,
         "text": "动效门（drive-mode / prefers-reduced-motion）：",
         "semantic": "p-text"
       },
       {
         "id": 48,
         "parentId": 46,
+        "color": "#999",
+        "fontSize": 12,
         "semantic": "strong"
       },
       {
@@ -2431,18 +2503,24 @@
       {
         "id": 64,
         "parentId": 63,
+        "color": "#999",
+        "fontSize": 12,
         "text": "字号级别 0-3（小/标准/大/特大）+ 密度（compact/regular/comfortable）——子项用 em 继承随缩放； :root 设置 ",
         "semantic": "p-text"
       },
       {
         "id": 65,
         "parentId": 63,
+        "color": "#999",
+        "fontSize": 12,
         "text": "--proteus-font-scale",
         "semantic": "code"
       },
       {
         "id": 66,
         "parentId": 63,
+        "color": "#999",
+        "fontSize": 12,
         "text": " 可叠加系统字号缩放",
         "semantic": "p-text"
       },
@@ -2585,17 +2663,23 @@
       {
         "id": 79,
         "parentId": 78,
+        "color": "#999",
+        "fontSize": 12,
         "text": "形态 ",
         "semantic": "p-text"
       },
       {
         "id": 80,
         "parentId": 78,
+        "color": "#999",
+        "fontSize": 12,
         "semantic": "strong"
       },
       {
         "id": 81,
         "parentId": 78,
+        "color": "#999",
+        "fontSize": 12,
         "text": "（sheet < 600 / dialog 600-840 / popover ≥ 840）—— 拖拽窗口实时切换，或用下方预设宽度验证不同窗口大小",
         "semantic": "p-text"
       },
@@ -2720,17 +2804,23 @@
       {
         "id": 96,
         "parentId": 95,
+        "color": "#999",
+        "fontSize": 12,
         "text": "当前弹窗形态：",
         "semantic": "p-text"
       },
       {
         "id": 97,
         "parentId": 95,
+        "color": "#999",
+        "fontSize": 12,
         "semantic": "strong"
       },
       {
         "id": 98,
         "parentId": 95,
+        "color": "#999",
+        "fontSize": 12,
         "semantic": "p-text"
       },
       {
@@ -7946,6 +8036,7 @@
       {
         "id": 192,
         "parentId": 191,
+        "fontSize": 12,
         "semantic": "p-text"
       },
       {

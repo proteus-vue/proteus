@@ -83,6 +83,17 @@ export const APP_DERIVED_FIELDS = ['widthRatio', 'heightRatio'] as const
 export const APP_SPECIAL_FIELDS = ['boxSizing'] as const
 
 /**
+ * ★★★批次 1（CSS 兼容对齐 · 层叠正确性）：**可继承的引擎字段**（App 文本模型的子集）。
+ *
+ * 【为什么必须编译期折叠】App 端**无运行时 CSS 引擎** ⇒ 继承（CSS 默认：`color`/`font-size` 等
+ *   沿树向下传播）必须在**编译期**算进每个节点的 computed style（Profile §3 L0「继承」）。
+ *   Web/Skyline 由各自 CSS 引擎按标准处理，本仓**不干预**（只折叠 App 面）。
+ * 【为什么只有这两个】App 折叠面里语义上可继承的只有文本色/字号；背景/边框/圆角/不透明度
+ *   在 CSS 里**不继承**（见 Profile §3 可继承/不可继承表）⇒ 不得纳入。
+ */
+export const APP_INHERITABLE_FIELDS = ['color', 'fontSize'] as const
+
+/**
  * ★★**结构化绘制声明**（2026-10-01 · 绘制通道补齐）——`style="{...}"` 装不下的那些通道，
  * 用**属性**声明（与 CSS 语义同名，kebab 形式）：
  *   · `fill-gradient='{"kind":"linear","angle":90,"stops":[…] }'`（JSON 串；也接受 `fill-gradient-to`）
@@ -288,6 +299,8 @@ const kebabToCamel = (s: string): string => s.replace(/-([a-z])/g, (_, c: string
 export function parseStaticStyle(
   css: string,
   pushDiag: (msg: string, hint?: string) => void,
+  /** ★批次 1：**逐属性**记录哪些引擎字段来自 `!important` 声明（层叠排序用；缺省不记） */
+  importantOut?: Set<string>,
 ): Record<string, unknown> {
   const out: Record<string, unknown> = {}
   for (const part of css.split(';')) {
@@ -296,8 +309,13 @@ export function parseStaticStyle(
     const idx = t.indexOf(':')
     if (idx < 0) continue
     const rawKey = t.slice(0, idx).trim()
-    const rawVal = t.slice(idx + 1).trim()
+    let rawVal = t.slice(idx + 1).trim()
     if (!rawKey || !rawVal) continue
+    // ★批次 1：识别并剥离 `!important`（逐声明）——重要性参与层叠排序（见 cascadeStyles）
+    let important = false
+    const impMatch = /^(.*?)\s*!important\s*$/i.exec(rawVal)
+    if (impMatch) { rawVal = impMatch[1]!.trim(); important = true }
+    const markImportant = (engineKey: string): void => { if (important) importantOut?.add(engineKey) }
     const key = kebabToCamel(rawKey)
     // 四边：`margin-bottom` / `padding-left` …
     const edge = key.match(/^(margin|padding)(Top|Right|Bottom|Left)$/)
@@ -309,12 +327,14 @@ export function parseStaticStyle(
       const cur = (out[f] as Record<string, number> | undefined) ?? {}
       cur[side] = num
       out[f] = cur
+      markImportant(f)
       continue
     }
     if (EDGE_FIELDS.has(key)) {
       const num = numOf(rawVal)
       if (num === undefined) { pushDiag(`style 里 \`${rawKey}: ${rawVal}\` 不是纯数值`); continue }
       out[key] = { top: num, right: num, bottom: num, left: num }
+      markImportant(key)
       continue
     }
     // ★★`box-sizing`（2026-10-02）：**Web/MP 由 CSS 引擎读**（百分比宽度 + 横向 padding 要
@@ -323,6 +343,7 @@ export function parseStaticStyle(
     //   ⇒ 该键进产物后对端上是无副作用的忠实记录（Rust serde 忽略未知键、Android 白名单不收）。
     if (key === 'boxSizing') {
       out[key] = rawVal
+      markImportant(key)
       continue
     }
     if (LAYOUT_FIELDS.has(key)) {
@@ -339,6 +360,7 @@ export function parseStaticStyle(
           continue
         }
         out[key] = rawVal
+        markImportant(key)
         continue
       }
       // ★★百分比宽高 → **比例字段**（2026-10-02：单位模型在模板产物里缺的一环）
@@ -354,13 +376,16 @@ export function parseStaticStyle(
       if (key === 'width' || key === 'height') {
         const pct = /^(\d+(?:\.\d+)?)%$/.exec(rawVal)
         if (pct) {
-          out[key === 'width' ? 'widthRatio' : 'heightRatio'] = Number(pct[1]) / 100
+          const ratioKey = key === 'width' ? 'widthRatio' : 'heightRatio'
+          out[ratioKey] = Number(pct[1]) / 100
+          markImportant(ratioKey)
           continue
         }
       }
       const num = numOf(rawVal)
       if (num === undefined) { pushDiag(`style 里 \`${rawKey}: ${rawVal}\` 不是纯数值（支持 px/数字/百分比宽高）`); continue }
       out[key] = num
+      markImportant(key)
       continue
     }
     if (PAINT_FIELDS.has(key)) {
@@ -382,6 +407,7 @@ export function parseStaticStyle(
         if (num === undefined) { pushDiag(`style 里 \`${rawKey}: ${rawVal}\` 不是纯数值`); continue }
         out[key] = num
       }
+      markImportant(key)
       continue
     }
     // 认不出的键：诊断（可能是指令/伪类等不需要的键——故用 hint 说明而非 error）
@@ -421,12 +447,31 @@ export interface ClassStyleRule {
   combinators: string[]
   /** 该规则折叠出的引擎字段声明（源序） */
   decls: Record<string, unknown>
+  /** ★批次 1：**特异性** `(id, class, tag)`（只支持 class/tag ⇒ id 恒 0；`.a.b`=(0,2,0)、`h3.x`=(0,1,1)） */
+  specificity: [number, number, number]
+  /** ★批次 1：**来自 `!important` 的引擎字段**（层叠排序用——important 声明优先于非 important） */
+  important: Set<string>
+  /** ★批次 1：**源序**（样式表里的出现序；相同 (importance, specificity) 时后写的胜） */
+  order: number
+}
+
+/** 计算选择器链的特异性 `(id, class, tag)`——只统计 class 段与 tag 段（id 选择器不支持 ⇒ 恒 0） */
+function specificityOf(segments: ClassStyleSegment[]): [number, number, number] {
+  let a = 0 // id
+  let b = 0 // class
+  let c = 0 // type
+  for (const seg of segments) {
+    b += seg.classes.length
+    if (seg.tag) c += 1
+  }
+  return [a, b, c]
 }
 
 /** 解析 `<style>` 文本 → 选择器规则表（源序）；不支持的整条跳过并计数（调用方决定是否诊断） */
 export function parseClassRules(css: string): { rules: ClassStyleRule[]; skipped: number } {
   const rules: ClassStyleRule[] = []
   let skipped = 0
+  let order = 0
   // ★先剔除 `@keyframes` 块（含嵌套 `{}`）——其 `from/to/0%` 不是选择器（旧实现误当元素选择器 ⇒ 噪音）。
   const noKf = stripAtRuleBlocks(css.replace(/\/\*[\s\S]*?\*\//g, ''), 'keyframes')
   const ruleRe = /([^{}]+)\{([^{}]*)\}/g
@@ -447,9 +492,17 @@ export function parseClassRules(css: string): { rules: ClassStyleRule[]; skipped
         skipped++
         continue
       }
-      const style = parseStaticStyle(decls, () => {})
+      const important = new Set<string>()
+      const style = parseStaticStyle(decls, () => {}, important)
       if (Object.keys(style).length === 0) continue
-      rules.push({ segments: parsed.segments, combinators: parsed.combinators, decls: style })
+      rules.push({
+        segments: parsed.segments,
+        combinators: parsed.combinators,
+        decls: style,
+        specificity: specificityOf(parsed.segments),
+        important,
+        order: order++,
+      })
     }
   }
   return { rules, skipped }
@@ -524,22 +577,45 @@ function segmentMatches(seg: ClassStyleSegment, node: StyleMatchNode): boolean {
 }
 
 /**
- * 按**祖先链 + 自身**（tag+class）匹配规则表，返回合并后的声明（源序叠加：后声明胜）。
+ * 按**祖先链 + 自身**（tag+class）匹配规则表，返回合并后的声明。
+ *
+ * 【层叠（★批次 1 修正）】命中规则按 **特异性升序 + 源序** 依次应用（后应用者胜）；
+ *   `!important` 声明进入独立层，**始终优先**于非 important（与 CSS 一致——important 与特异性正交）。
+ *   ★修正了此前"只按源序"的缺陷（`.a` 后写本不该盖过 `#id`/`.a.b` 的高特异性）。
  * @param rules parseClassRules 产物
  * @param ancestors 祖先链（根 → 父）
  * @param self 本节点
  */
+/** `resolveClassStyles` 的产物：合并后的引擎声明 + **哪些键来自 `!important`**（供与 inline 层比较） */
+export interface ResolvedClassStyles {
+  styles: Record<string, unknown>
+  important: Set<string>
+}
+
 export function resolveClassStyles(
   rules: ClassStyleRule[],
   ancestors: StyleMatchNode[],
   self: StyleMatchNode,
-): Record<string, unknown> {
-  const out: Record<string, unknown> = {}
-  for (const rule of rules) {
-    if (!matchChain(rule, ancestors, self)) continue
-    Object.assign(out, rule.decls) // 源序：后声明覆盖前声明
+): ResolvedClassStyles {
+  const matched = rules.filter((rule) => matchChain(rule, ancestors, self))
+  // 特异性升序 + 源序（后应用者胜）；特异性比较按 (id, class, tag) 字典序
+  matched.sort((x, y) => {
+    for (let i = 0; i < 3; i++) {
+      const d = (x.specificity[i] ?? 0) - (y.specificity[i] ?? 0)
+      if (d !== 0) return d
+    }
+    return x.order - y.order
+  })
+  const normal: Record<string, unknown> = {}
+  const important: Record<string, unknown> = {}
+  const importantKeys = new Set<string>()
+  for (const rule of matched) {
+    for (const [k, v] of Object.entries(rule.decls)) {
+      if (rule.important.has(k)) { important[k] = v; importantKeys.add(k) }
+      else normal[k] = v
+    }
   }
-  return out
+  return { styles: { ...normal, ...important }, important: importantKeys } // important 优先
 }
 
 /** 选择器链匹配（从右往左：自身匹配末段，再按组合符回溯祖先） */
@@ -852,6 +928,11 @@ export function buildLayoutTemplate(
      *   （`.a .b` / `.a > .b`）。递归时把当前元素的类追加进来。
      */
     ancestorClasses: StyleMatchNode[] = [],
+    /**
+     * ★批次 1（层叠正确性）：**从祖先继承下来的可继承字段值**（`color`/`fontSize`）——
+     *   节点无显式值时填入，并（更新后）继续向下传。根为空。
+     */
+    inherited: Record<string, unknown> = {},
   ): void => {
     // ★★★**混排归一化**（2026-10-03 · 三处遍历的唯一入口）：`<p>文字 <b>x</b></p>` 这类
     //   元素+文本混排 ⇒ 每段连续文本合成一个 `p-text` 叶（自绘树里文本是元素属性，
@@ -901,7 +982,7 @@ export function buildLayoutTemplate(
           }
           // 内容根标记：仅在「组件孩子」上下文中才有意义（slotCtx 决定标记名）
           walk((n.children ?? []) as unknown[], parentId, pendingTransition,
-            slotCtx?.parentIsComponent ? { slotContentOf: name, scopeVar, scopeBindings } : slotCtx, ancestorClasses)
+            slotCtx?.parentIsComponent ? { slotContentOf: name, scopeVar, scopeBindings } : slotCtx, ancestorClasses, inherited)
           continue
         }
         if (slotCtx?.parentIsComponent) {
@@ -923,7 +1004,7 @@ export function buildLayoutTemplate(
         if (tag === 'Transition') {
           // Transition：props 编成预设规格，挂到**直接子元素**
           const t = transitionOfElement(n, diag)
-          walk((n.children ?? []) as unknown[], parentId, t ?? pendingTransition, slotCtx, ancestorClasses)
+          walk((n.children ?? []) as unknown[], parentId, t ?? pendingTransition, slotCtx, ancestorClasses, inherited)
         } else if (tag === 'Suspense') {
           // ★Suspense：只走 `#default`（我方无异步 ⇒ 永远 resolved）；`#fallback` 跳过。
           //   【为什么不能两个都走】两棵子树都会建 ⇒ 内容**双份**（fallback 永不隐藏 ⇒ 叠影）。
@@ -946,9 +1027,9 @@ export function buildLayoutTemplate(
               flattened.push(c)
             }
           }
-          walk(flattened, parentId, pendingTransition, slotCtx, ancestorClasses)
+          walk(flattened, parentId, pendingTransition, slotCtx, ancestorClasses, inherited)
         } else {
-          walk((n.children ?? []) as unknown[], parentId, pendingTransition, slotCtx, ancestorClasses)
+          walk((n.children ?? []) as unknown[], parentId, pendingTransition, slotCtx, ancestorClasses, inherited)
         }
         continue
       }
@@ -967,13 +1048,16 @@ export function buildLayoutTemplate(
       })
 
       const style: Record<string, unknown> = {}
-      // ★★★C1：按 `class`（静态类名）+ **祖先类链**匹配 `<style>` 规则表——**先合并类样式**，
-      //   随后 props 循环里的 inline `style` 覆盖之（inline 优先，符合同元素 inline > class 直觉）。
-      //   支持单类/复合/后代/子组合；层叠按样式表**源序**（修正"按 class 属性序"的错误层叠）。
+      // ★★★C1 + 批次 1：按 `class`（静态类名）+ **祖先类链**匹配 `<style>` 规则表——先合并类样式
+      //   （按 **!important + 特异性 + 源序** 层叠，见 resolveClassStyles），随后 inline `style` 覆盖之。
       //   ★只处理**静态** class（ATTRIBUTE）；动态 `:class` 的值形态不可静态展开（既有诊断覆盖）。
       const selfClasses = new Set<string>()
       /** ★C1：本节点的匹配上下文（tag + 类）——供选择器（含元素/类型）匹配与祖先链 */
       let selfMatch: StyleMatchNode | undefined
+      /** ★批次 1：class 层里来自 `!important` 的字段（inline 普通声明**不能**盖过它） */
+      let classImportant = new Set<string>()
+      /** ★批次 1：inline `style` 里来自 `!important` 的字段（可盖过 class 普通；但不能盖 class important） */
+      let inlineImportant = new Set<string>()
       {
         const clsAttr = (n.props ?? []).find(
           (p) => p.type === 6 /* ATTRIBUTE */ && p.name === 'class' && p.value?.content,
@@ -983,7 +1067,9 @@ export function buildLayoutTemplate(
         // ★C1：元素/类型选择器按**节点原始 tag** 匹配（`tag` 已是 normalize 后的形态：`h3`/`code`/`p-button`）
         selfMatch = { classes: selfClasses, tag }
         if ((selfClasses.size || tag) && classRules.length) {
-          Object.assign(style, resolveClassStyles(classRules, ancestorClasses, selfMatch))
+          const resolved = resolveClassStyles(classRules, ancestorClasses, selfMatch)
+          Object.assign(style, resolved.styles)
+          classImportant = resolved.important
         }
       }
       // 本元素并入祖先链（tag+classes），供子节点组合匹配（`.a .b` / `h3 .x` / `.a > .b`）
@@ -1126,7 +1212,15 @@ export function buildLayoutTemplate(
       }
       for (const p of n.props ?? []) {
         if (p.type === 6 /* ATTRIBUTE */ && p.name === 'style' && p.value?.content) {
-          Object.assign(style, parseStaticStyle(p.value.content, (m, hint) => diag(`${tag}(id=${id}) ${m}`, hint)))
+          const inlineImportantThis = new Set<string>()
+          const inline = parseStaticStyle(p.value.content, (m, hint) => diag(`${tag}(id=${id}) ${m}`, hint), inlineImportantThis)
+          // ★批次 1 层叠（与 CSS 一致）：inline `!important` > class `!important` > inline 普通 > class 普通。
+          //   class 里 important 的字段不被 inline 普通声明覆盖（除非 inline 那条也是 important）。
+          for (const [k, v] of Object.entries(inline)) {
+            if (classImportant.has(k) && !inlineImportantThis.has(k)) continue // class !important 保护
+            style[k] = v
+          }
+          for (const k of inlineImportantThis) inlineImportant.add(k)
         }
         if (p.type === 7 /* DIRECTIVE */ && p.name === 'bind' && p.arg?.content === 'style') {
           // ★★★**`:style` 对象字面量**（2026-10-03 · 静默失效批次）——分三种情形：
@@ -1160,10 +1254,13 @@ export function buildLayoutTemplate(
             }
             if (isAllConstantObject(parsed)) {
               // ① 全字面量 ⇒ 折进静态 style（与 parseStaticStyle 同一形态：键归一化 + 数值/字符串原样）
+              //   ★批次 1：`:style` 视作 inline 层 ⇒ 受 class `!important` 保护（同 static style 的规则）
               for (const e of parsed.entries) {
                 const mapped = mapStyleObjectKey(e.key)
                 if (!mapped) continue
-                style[mapped.slice(mapped.indexOf('.') + 1)] = e.constValue
+                const fld = mapped.slice(mapped.indexOf('.') + 1)
+                if (classImportant.has(fld)) continue
+                style[fld] = e.constValue
               }
               hasDynamicStyle = false
             } else {
@@ -1303,6 +1400,14 @@ export function buildLayoutTemplate(
           if (scopedProps.length > 0) slotOutletProps = scopedProps
         }
       }
+      // ★★★批次 1（CSS 兼容对齐 · 继承）：可继承字段（color/fontSize）在**本节点无显式值**时
+      //   取祖先继承值；随后把本节点"生效值"更新进 `childInherited` 传给子节点。
+      //   CSS 语义：子节点自己的声明（含来自 class/style）覆盖继承值 ⇒ 继承只在**缺失**时填。
+      const childInherited: Record<string, unknown> = { ...inherited }
+      for (const f of APP_INHERITABLE_FIELDS) {
+        if (style[f] === undefined && inherited[f] !== undefined) style[f] = inherited[f]
+        if (style[f] !== undefined) childInherited[f] = style[f]
+      }
       const node: LayoutNode = { id, parentId, tag, style }
       if (nodeListId !== undefined) node.listId = nodeListId
       if (isComponentTag) node.component = tag
@@ -1441,7 +1546,7 @@ export function buildLayoutTemplate(
       // ★P3-3：`pendingTransition` **只作用于直接子元素**（Vue 同：Transition 只包一个元素）
       // ★★P1-3 插槽分发：组件元素的**直接子元素**是默认插槽内容根（打 `slotFor`）；
       //   非组件元素无插槽语义（slotCtx 缺省 ⇒ 不标记）。
-      walk(subChildren, id, undefined, isComponentTag ? { parentIsComponent: true } : undefined, childAncestors)
+      walk(subChildren, id, undefined, isComponentTag ? { parentIsComponent: true } : undefined, childAncestors, childInherited)
 
       // 行子树收集结束（pre-order ⇒ 子树连续；此处收尾）
       if (nodeListId !== undefined) {

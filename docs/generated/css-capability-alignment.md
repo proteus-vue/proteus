@@ -71,7 +71,7 @@
 | selector | `伪类 :hover / :active / :first-child / :nth-child` | — | — | absent | L0 | 编译期折叠 | unsupported | 静态部分可编译期折叠（Profile L0）；动态交互态需运行时状态通道（成本更高） |
 | selector | `属性选择器 [data-x]` | — | — | absent | L0 | 编译期折叠 | unsupported | 编译期可判（属性在模板里静态可枚举） |
 | selector | `兄弟组合 +~ / 通配 *` | — | — | absent | L5 | 禁止 | unsupported | 语义弱、跨端难统一（Skyline 亦不支持）——建议改写为类选择器 |
-| cascade | `特异性 / 继承` | — | — | absent | L0 | 编译期折叠 | unsupported | 当前仅按源序层叠、无特异性/继承（Profile L0 要求完整实现） |
+| cascade | `特异性 / 继承 / !important` | — | — | supported | L0 | 编译期折叠 | conditional | ★批次 1（2026-10-04）：规则按 (!important, 特异性 (id,class,tag), 源序) 层叠；color/fontSize 沿树继承（CSS 可继承子集；编译期一次性算进 computed style，运行时零匹配） |
 | at-rule | `@media（响应式）` | — | — | absent | L3 | 降级 | unsupported | 编译期无法唯一确定断点；跨端建议走 flex/比例布局 + 框架流体能力 |
 | at-rule | `@keyframes（动画）` | — | — | absent | L3 | 降级 | unsupported | 块整体剔除（旧实现误当元素选择器）；动画走引擎动画桥（animStart/animTick） |
 | unit | `em / rem / vw / vh / calc / clamp / var()` | — | — | absent | L0 | 编译期折叠 | unsupported | 仅收 px/数字（宽高另支持 %）；其余单位编译期无法在无上下文时求值 ⇒ 诊断跳过 |
@@ -99,6 +99,7 @@
 | `类选择器 .a / .a.b` | — | — | supported | C1：<style> 类规则编译期匹配合并（按源序；无特异性权重） |
 | `元素/类型选择器 h3 / p.foo` | — | — | supported | C1：按节点原始 tag 匹配（含祖先链） |
 | `后代 / 子组合 .a .b / .a > .b` | — | — | supported | C1：祖先类链匹配 |
+| `特异性 / 继承 / !important` | — | — | supported | ★批次 1（2026-10-04）：规则按 (!important, 特异性 (id,class,tag), 源序) 层叠；color/fontSize 沿树继承（CSS 可继承子 |
 | `display: grid / grid-template-*` | supported | not-listed | absent | ★引擎未接：taffy 有完整 Grid 能力但 Rust `Display` 枚举无 Grid、to_taffy 未设置（Profile §3 已定案开放 L2）——加 = 引擎 |
 | `flex-wrap / align-content` | supported | supported | absent | 引擎无字段（Yoga 亦排除）——多处改动 |
 | `right / bottom` | supported | supported | absent | 引擎 LStyle 无 right/bottom（恒 auto）——加 = 引擎+DTO+taffy |

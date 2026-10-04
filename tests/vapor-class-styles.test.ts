@@ -161,3 +161,114 @@ describe('★C1 最小切片 · SFC <style> 单类规则 → class→节点样�
     expect((m.full as { height?: number }).height, 'height:50 → 50').toBe(50)
   })
 })
+
+// ★★★批次 1（CSS 兼容对齐 · 层叠正确性）：特异性 + 继承 + `!important`（2026-10-04）
+describe('★批次 1 · CSS 层叠正确性（特异性 / 继承 / !important）', () => {
+  it('① 特异性：高特异性类盖过低特异性（.a.b > .a，即使 .a 后写）', () => {
+    // .a 写在后（源序更晚）但特异性低 ⇒ 高特异性的 .a.b 应胜出（修正"只按源序"的旧缺陷）
+    const sfc = `<template><view class="a b">x</view></template>
+<script setup>const z = 1</script>
+<style>
+.a.b { color: #111111 }
+.a { color: #999999 }
+</style>`
+    const r = buildLayoutTemplate(sfc, 'pages/s.vue')
+    expect(r.ok).toBe(true)
+    const n = r.template.nodes.find((x) => (x.style as { color?: string }).color)
+    expect((n!.style as { color?: string }).color, '高特异性 .a.b 胜（不是后写的 .a）').toBe('#111111')
+  })
+
+  it('①b 同特异性：后写者胜（源序）', () => {
+    const sfc = `<template><view class="a b">x</view></template>
+<script setup>const z = 1</script>
+<style>
+.a { color: #111111 }
+.b { color: #222222 }
+</style>`
+    const r = buildLayoutTemplate(sfc, 'pages/s.vue')
+    const n = r.template.nodes.find((x) => (x.style as { color?: string }).color)
+    expect((n!.style as { color?: string }).color, '同特异性后写 .b 胜').toBe('#222222')
+  })
+
+  it('② 继承：color/fontSize 沿树向下传播（子节点无显式值时继承）', () => {
+    const sfc = `<template>
+      <view class="root">
+        <view class="mid"><text class="leaf">深层文本</text></view>
+      </view>
+    </template>
+<script setup>const z = 1</script>
+<style>
+.root { color: #334455; font-size: 18 }
+</style>`
+    const r = buildLayoutTemplate(sfc, 'pages/s.vue')
+    expect(r.ok).toBe(true)
+    // 深层 text 节点（无自己的 color/font-size）应继承 root 的颜色与字号
+    const leaf = r.template.nodes.find((x) => x.tag === 'text')
+    expect((leaf?.style as { color?: string }).color, 'color 继承到深层文本').toBe('#334455')
+    expect((leaf?.style as { fontSize?: number }).fontSize, 'font-size 继承到深层文本').toBe(18)
+  })
+
+  it('②b 继承：子节点自己的声明覆盖继承值；**背景色不继承**（CSS 语义）', () => {
+    const sfc = `<template>
+      <view class="root"><text class="leaf">x</text></view>
+    </template>
+<script setup>const z = 1</script>
+<style>
+.root { color: #111111; background-color: #eeeeee }
+.leaf { color: #ff0000 }
+</style>`
+    const r = buildLayoutTemplate(sfc, 'pages/s.vue')
+    const leaf = r.template.nodes.find((x) => x.tag === 'text')
+    expect((leaf?.style as { color?: string }).color, '子自己的 color 覆盖继承').toBe('#ff0000')
+    expect(
+      (leaf?.style as { backgroundColor?: string }).backgroundColor,
+      '背景色**不**继承（background 不属可继承属性）',
+    ).toBeUndefined()
+  })
+
+  it('③ !important：class !important 盖过 inline 普通声明', () => {
+    const sfc = `<template>
+      <view class="a" style="color: #00ff00">x</view>
+    </template>
+<script setup>const z = 1</script>
+<style>
+.a { color: #ff0000 !important }
+</style>`
+    const r = buildLayoutTemplate(sfc, 'pages/s.vue')
+    const n = r.template.nodes.find((x) => (x.style as { color?: string }).color)
+    expect((n!.style as { color?: string }).color, 'class !important 胜 inline 普通').toBe('#ff0000')
+  })
+
+  it('③b !important：inline !important 盖过 class !important（层叠：inline important 最高）', () => {
+    const sfc = `<template>
+      <view class="a" style="color: #0000ff !important">x</view>
+    </template>
+<script setup>const z = 1</script>
+<style>
+.a { color: #ff0000 !important }
+</style>`
+    const r = buildLayoutTemplate(sfc, 'pages/s.vue')
+    const n = r.template.nodes.find((x) => (x.style as { color?: string }).color)
+    expect((n!.style as { color?: string }).color, 'inline !important 胜 class !important').toBe('#0000ff')
+  })
+
+  it('③c !important 与特异性正交：important 的低特异性也盖过高特异性普通', () => {
+    const sfc = `<template><view class="a b">x</view></template>
+<script setup>const z = 1</script>
+<style>
+.a.b { color: #111111 }
+.a { color: #999999 !important }
+</style>`
+    const r = buildLayoutTemplate(sfc, 'pages/s.vue')
+    const n = r.template.nodes.find((x) => (x.style as { color?: string }).color)
+    expect((n!.style as { color?: string }).color, 'important 优先于特异性').toBe('#999999')
+  })
+
+  it('④ parseStaticStyle 剥离 !important 并标记逐属性（保留原值）', () => {
+    const imp = new Set<string>()
+    const out = parseStaticStyle('width: 100px !important; color: #ffffff', () => {}, imp)
+    expect(out.width, '值剥离 !important（100px → 100）').toBe(100)
+    expect(out.color).toBe('#ffffff')
+    expect([...imp], '仅 width 标记为 important').toEqual(['width'])
+  })
+})
