@@ -211,6 +211,9 @@ if [ ! -f "$BUNDLE_AS" ]; then NEED_BUILD_AS=1; fi
 if [ -f "$ENTRY_AS" ] && [ -f "$BUNDLE_AS" ] && [ "$ENTRY_AS" -nt "$BUNDLE_AS" ]; then NEED_BUILD_AS=1; fi
 # ★app-stack 入口还依赖 packages/router/src —— 那几个文件更新也要重建（否则真机测旧代码）
 if [ -f "$BUNDLE_AS" ] && [ "$HERE/../../packages/router/src/app-stack.ts" -nt "$BUNDLE_AS" ]; then NEED_BUILD_AS=1; fi
+# ★★阶段 1（2026-10-04）：app-stack 入口还消费 render-backend 的执行器/端口 —— 那两处改了也要重建
+if [ -f "$BUNDLE_AS" ] && [ "$HERE/../../packages/render-backend/src/screen-executor.ts" -nt "$BUNDLE_AS" ]; then NEED_BUILD_AS=1; fi
+if [ -f "$BUNDLE_AS" ] && [ "$HERE/../../packages/render-backend/src/screen-executor-host.ts" -nt "$BUNDLE_AS" ]; then NEED_BUILD_AS=1; fi
 if [ "$NEED_BUILD_AS" = "1" ]; then
   echo "    构建 app-stack bundle（缺产物 或 入口/核心更新）…"
   if ! node "$HERE/bridge/build-batch.mjs" 2>&1 | sed 's/^/    /'; then

@@ -59,6 +59,8 @@ public final class ScreenHost {
 
     // ── 诊断记账（判据读：证明动作是真发生的，而非壳自述） ──
     private int mountCalls, visibleCalls, destroyCalls, animCalls, animCompleted, animHookMissing;
+    /** ★阶段 1：真建进内核树的**页面内容节点**累计数（判据读它证"路由页面真落地"，非 3 占位） */
+    private int contentNodeTotal;
     /** ★跨页面共享元素计数（2026-10-01；判据读它证明"这条链真的走过"） */
     private int rectCalls, sharedCalls;
     private final List<String> callLog = new ArrayList<>();
@@ -212,9 +214,44 @@ public final class ScreenHost {
         }
         // 内容节点挂到 **page 层**（若计划没给 page 层则回落挂屏根——向后兼容：老行为不变）
         int contentParent = layerIds.optInt("page", rootId);
-        nodes.put(node(rootId + 11, contentParent, 0, 0, 1080, 200, 0xFF3355AA));
-        nodes.put(node(rootId + 12, contentParent, 0, 200, 1080, 200, 0xFFAA5533));
-        nodes.put(node(rootId + 13, contentParent, 0, 400, 1080, 200, 0xFF33AA55));
+        // ★★★阶段 1（2026-10-04 · App 三端对齐 B1+B2）：**屏内容**（真实页面渲染产物）。
+        //   ① `content` 存在且非空 ⇒ 建**真实页面子树**（节点描述来自页面渲染器，
+        //      字段名与内核 `create` 契约同源——逐字段透传，未知键由内核 serde 安全忽略）。
+        //   ② 缺省（老装置/老调用方）⇒ 保持 3 个几何占位节点（**零行为变化**，向后兼容）。
+        //   ★id 空间：`content` 里的 `id`/`parentId` 是**内容局部**空间 ⇒ 重映射到屏 id 空间
+        //     （基址 1000，与屏根/层容器/占位不冲突）；`parentId:null`/悬空 ⇒ 挂 `contentParent`（page 容器）。
+        //   【诚实边界】本处证明"内容被真建进内核树"（节点数/几何由判据读）；**视觉合成**
+        //     （把该屏真画到屏上）走既有 `ProteusHostView` 单树路径，不在本类范围。
+        //   ★载荷形态：`content` 是 `{nodes:[...], viewport:{...}}`（`ScreenContent` 契约）——
+        //     取 `.nodes`（**不是**直接把 content 当数组，那会静默落占位——本仓首次实现时就踩了）。
+        org.json.JSONObject contentObj = args.optJSONObject("content");
+        org.json.JSONArray content = contentObj != null ? contentObj.optJSONArray("nodes") : null;
+        final List<Integer> contentNodeIds = new ArrayList<>();
+        if (content != null && content.length() > 0) {
+            final Map<Integer, Integer> idMap = new HashMap<>();
+            for (int i = 0; i < content.length(); i++) {
+                JSONObject cn = content.optJSONObject(i);
+                if (cn == null || !cn.has("id")) continue;
+                idMap.put(cn.getInt("id"), 1000 + i);
+            }
+            for (int i = 0; i < content.length(); i++) {
+                JSONObject cn = content.optJSONObject(i);
+                if (cn == null || !cn.has("id")) continue;
+                int newId = idMap.get(cn.getInt("id"));
+                Integer parentId = contentParent; // 根/悬空父 ⇒ 挂 page 内容容器
+                if (cn.has("parentId") && !cn.isNull("parentId")) {
+                    Integer mapped = idMap.get(cn.optInt("parentId", Integer.MIN_VALUE));
+                    if (mapped != null) parentId = mapped;
+                }
+                nodes.put(contentNode(newId, parentId, cn));
+                contentNodeIds.add(newId);
+            }
+        } else {
+            // 向后兼容：无 content ⇒ 3 个几何占位节点（老行为不变）
+            nodes.put(node(rootId + 11, contentParent, 0, 0, 1080, 200, 0xFF3355AA));
+            nodes.put(node(rootId + 12, contentParent, 0, 200, 1080, 200, 0xFFAA5533));
+            nodes.put(node(rootId + 13, contentParent, 0, 400, 1080, 200, 0xFF33AA55));
+        }
         JSONObject req = new JSONObject();
         req.put("viewport", new JSONObject().put("width", 1080).put("height", 2400));
         req.put("nodes", nodes);
@@ -235,17 +272,45 @@ public final class ScreenHost {
             }
         }
         for (int i = 11; i <= 13; i++) nodeToScreen.put(rootId + i, st);
+        // ★阶段 1：内容节点也注册（动画按树分发靠它；内容节点 id 重映射到 1000+i）
+        for (int id : contentNodeIds) nodeToScreen.put(id, st);
         mountCalls++;
+        contentNodeTotal += contentNodeIds.size();
         JSONObject d = new JSONObject();
         d.put("rootNodeId", rootId);
-        d.put("nodes", layerCount + 4);
+        // 节点总数：屏根(1) + 层容器(layerCount) + 内容（真实内容节点 或 3 占位）
+        d.put("nodes", 1 + layerCount + (contentNodeIds.isEmpty() ? 3 : contentNodeIds.size()));
         d.put("rebuild", rebuild);
         d.put("handle", h);
         // ★GP3-c 读数：三层容器 id（判据读它证明"层结构真建了"——不是壳自述）
         d.put("layerCount", layerCount);
         d.put("globalLayerId", globalLayerId); // ★跨路由存活的层（-1 = 无）
         d.put("layerIds", layerIds);
+        // ★★★阶段 1 读数：**屏内容节点数**（真页面内容 vs 3 占位——判据读它证"路由页面真落地"）
+        d.put("contentNodes", contentNodeIds.size());
+        d.put("contentIds", new JSONArray(contentNodeIds));
         return ok(d);
+    }
+
+    /**
+     * ★★★阶段 1（2026-10-04 · App 三端对齐 B2）：由**页面内容描述**构造内核节点请求。
+     *
+     * 【为什么透传而不是白名单转写】内容描述的字段名**与内核 `create` 契约同源**
+     *   （由页面渲染器 `@proteus-vue/renderer-app` 的 selfdraw 适配器产出）⇒ 逐字段透传是
+     *   **最忠实**的（新字段随渲染器演进自动流通）；内核 serde 默认忽略未知键 ⇒ 安全。
+     *   只重映射 `id`/`parentId`（内容局部空间 → 屏 id 空间，见 mount 注释）。
+     */
+    private static JSONObject contentNode(int id, Integer parentId, JSONObject cn) throws Exception {
+        JSONObject n = new JSONObject();
+        java.util.Iterator<String> keys = cn.keys();
+        while (keys.hasNext()) {
+            String k = keys.next();
+            if ("id".equals(k) || "parentId".equals(k)) continue; // 已重映射
+            n.put(k, cn.get(k));
+        }
+        n.put("id", id);
+        if (parentId != null) n.put("parentId", parentId);
+        return n;
     }
 
     private static JSONObject node(int id, Integer parentId, float x, float y, float w, float h, Integer color) throws Exception {
@@ -486,6 +551,8 @@ public final class ScreenHost {
         o.put("anim_hook_missing", animHookMissing);
         o.put("rect_calls", rectCalls);
         o.put("shared_calls", sharedCalls);
+        // ★阶段 1：真建进内核树的页面内容节点累计数（有 content ⇒ >0；老装置无 content ⇒ 0）
+        o.put("content_node_total", contentNodeTotal);
         o.put("live_screens", screens.size());
         JSONArray log = new JSONArray();
         int from = Math.max(0, callLog.size() - 32);

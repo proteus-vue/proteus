@@ -15,9 +15,9 @@
 - **包规模**：**45 个 @proteus-vue/* npm 包**（+ `packages/layout-core-rust` = **cargo crate，非 npm 包**，故不计数）（★2026-09-29 layout-core = App 排版核心）（check:pkg 0 error · `pnpm check:stats` 校验 ✓；31→38 修正 → G-07 glass 39 → Skyline 收口 worklet 40 → ★2026-09-14 组件库拆包 `@proteus-vue/components` 41 → ★Vapor 线新增 `@proteus-vue/slot-runtime` 42 + `@proteus-vue/layout-core` 43 → ★2026-09-30 MA1 新增 `@proteus-vue/animation` 44；版本统一 0.3.0-beta.8，见「当前状态速览」）
 - **文档**：`docs/proteus-architecture.md`（L0 规约·真理来源）→ `docs/board-inventory.md`（全景索引）→ `docs/roadmap.md`（版本线）→ `roadmap-2-plan`（里程碑线）→ 各 plan
 
+## 当前状态速览（最近一次更新：**2026-10-04·（一三二）· **App 三端对齐 — 阶段 1a：路由页面真正落地（Android 先行）**（决策 #478）——用户「继续」（承接「先整理缺口，再逐个收口」）。★**缺口回顾**：B2「宿主 `screen.mount` 建**空壳容器**」+ B1「装配侧不带页面内容」⇒「路由在走、页面没渲染」。★**实现一条链四处**：契约 `ScreenContent{ nodes, viewport? }`（`screen.mount.content`，节点字段与内核 create 同源）+ `ScreenContentProvider`·执行器 `contentOf?`（缺省向后兼容）·宿主端口透传（**首轮漏转 ⇒ 真机红当场抓**）·**Android `ScreenHost` 消费 `content.nodes` 建真实页面节点**（id 重映射/逐字段透传；无 content 保持 3 占位）·装置注入真实内容。★**判据（真机+分层）**：`check-app-stack` 新增 **⑦.8**——读宿主记账 `content_node_total`：**Android 真机=真建 8 个内容节点**✅ / **iOS 如实报"未接（阶段 2）"**（不假绿）。单测 `tests/screen-content.test.ts` 5 组。★**诚实边界**：本轮证「路由切页→屏里真有页面内容节点」（B1+B2 链路证明）；尚未——内容由装置内联提供（A1 生产构建目标待做）· 视觉合成走既有 `ProteusHostView` 单树路径 · iOS/鸿蒙宿主未消费 content（阶段 2）。★全量 **5050/5050** 绿。下一步：阶段 1b（A1 App 构建目标 + B5 SFC 产物→content 生产接线）或阶段 2（iOS/鸿蒙宿主接 content）**）★新会话以此为准
 ## 当前状态速览（最近一次更新：**2026-10-04·（一三一）· **App 三端（安卓+iOS+鸿蒙）对齐 — 阶段 0：缺口登记 + App CSS 支持面机器化**（决策 #477）——用户：「做 App 三端对齐，看有没有拦截条件（比如 CSS 全兼容、路由页面真正落地），有的话先整理缺口，再逐个收口」。★**三端设备确认在线**（Android d67e31a3 · iOS yunlai的iPhone · 鸿蒙 69F9K26126005311）。★**缺口整理**（`docs/Proteus_App三端对齐缺口与收口路线.md`）：**三端低层矩阵 22/22 成立，但「应用级链路」（真实 pages/*.vue → App 渲染管线 → 路由页面真正落地）是分段夹具验证、没串成一条链** —— 14 条拦截条件（A 构建/B 渲染路由/C CSS/D 门禁/E 文档），要点：**无 App 构建目标**（CLI `--target` 仅 web/skyline）· **路由屏规格不带页面组件**（`AppScreenSpec` 无 component ⇒ 路由到不了页面）· **宿主 screen.mount 建空树**· **App 端 CSS 无兼容矩阵/门禁**（`end-support-matrix` 的 App 列从 Skyline 派生）。生死关 = A（构建目标+产物契约）→ B1（路由带组件）→ B2（宿主落页面子树）。★**阶段 0 收口**：把**三张样式表**（compiler App 折叠面 / style-safety / CSS 矩阵 G-21）机器化对照——`APP_*_FIELDS` SSOT 导出 + `check:app-css-surface`（生成 `docs/generated/app-css-surface.md` + **棘轮判据**：App 引擎面 ∩ FORBIDDEN ⊆ 已登记集，新增未登记分歧即红）。★**一轮自我纠错**：初版判据把 `FORBIDDEN` 当"错误"报（display/position/overflow）——真因是**层级错配**（FORBIDDEN 是语义/动态守卫层、折叠面是引擎字段层，交集不构成缺陷）⇒ 判据改分层棘轮。破坏性验证过（注入 float ⇒ 红）。回归锁 `tests/app-css-surface.test.ts` 10 组。★全量 **5045/5045** 绿（393 文件）。下一步：阶段 1（A1 app 构建目标 + B1 屏规格带组件 + B2 宿主落页面 —— Android 先行）**）★新会话以此为准
 ## 当前状态速览（最近一次更新：**2026-10-04·（一三〇）· **GP7 Global 层内存常驻监控落地 + GP2-d 编译期补齐 + ★B1 CJS 悬空回归修复（真机抓出）**（决策 #476）——★**GP7 四项必做全落地**：`stats()` **分端口径**读数（共享状态 + 每页初值 × 页面栈——MP 形态；字段数/字节由插件按真实壳片段**烘焙进产物**）· `unmount(k)` 对偶 API（释放 + 墓碑 + 通知订阅者；页面桥 `__proteusGlUnmount`）· 预算告警（契约 65536B，超限 warn **一次不刷屏**，`setBudget` 显式调大）· **GP2-d 编译期层同补**（App 壳大数组≥16/Map/Set ⇒ 警告；脚本引用 `useRoute/usePageParam` ⇒ **CompilerError**——C3 script 侧补全，useRouter 事件回调不拦）。★验收：`tests/global-layer-memory-gp7.test.ts` **20 组**（含 **node:vm 真跑模块**：unmount 释放前后对比/告警只报一次/口径算式核对）+ superapp verify ⑨ 行 + **MP e2e 59.5s 全绿**（真机 unmount 2000B→0B）+ **Web e2e 7/7**。★★★**顺带抓出 B1 潜伏回归（比 GP7 更重）**：`@vue/*` 单例化后 vue 的 **CJS 入口** `require('@vue/shared')` 被外部化，而收集 BFS **只扫 ESM** ⇒ 目标从未产出 ⇒ 模拟器 `module '_proteus/@vue/shared.js' is not defined` **全页面挂**（构建期零告警；三工程各 7 处悬空——B1 当天"构建 rc=0"是**假绿**：构建过 ≠ 跑得起来）⇒ 修复 = 产物后扫自身相对 require 找缺口 + 链式补全（`findMissingExternalTargets`）+ **门禁化**（`check:mp-artifacts` 新增 require 悬空判据，破坏性验证过）+ 回归锁 6 组。★全量 **5035/5035** 绿。下一步：GP6 例外通道（依赖 GP0-b/c/d 各端实测）或 MP 纵向收尾**）★新会话以此为准
-## 当前状态速览（最近一次更新：**2026-10-04·（一二九）· **B1 外部模块导入——修掉"小程序没模块化就不支持导入外部 ts"的一刀切**（决策 #475）——用户点名：「小程序没有模块化就直接判定我们也不支持模块化太一刀切了，**不支持导入外部 ts 这个会劝退大部分开发者**，跨端框架的基本任务就是**让开发者在业务开发代码里面不感知平台环境差异**，不是直接把限制丢给开发者自己」。★**取证**：真缺口 = npm 裸包（dayjs/nanoid/axios…全不支持）+ 路径别名（`@/x` 只有 Web 端 vite 认）；误报 = `@proteus-vue/components` 组件 import（已走 usingComponents 却刷 **236 条**告警）；附bug = router 的 index re-export scan ⇒ **796KB @vue/compiler-sfc 进小程序产物**。★**B1 四能力**：npm 裸包（esbuild 构建期打包，**browser 条件优先**——nanoid 实测 require 分支 `require("crypto")` 崩；**leaf** BFS 不深入；已知叶子单例 external → `_proteus/npm/<id>.js`）· 路径别名（复用 vite resolve.alias，**与 Web 同源**）· 框架包子路径（exports 直解）· `node:path` polyfill（纯字符串函数；其余 Node 内置**显式报错**不做假实现）。★**警告分级**：逐条**准确原因** + 设计语义静默（232 条噪音→0）。★**顺带修**：router scan 改子路径导出 + `@vue/*` 三包 vendor 单例化。★**验收**：`tests/module-npm-b1.test.ts` 12 组（polyfill 与 Node 原生 19 组对拍）+ 端到端 demo（`import ms` → `require("../../../_proteus/npm/ms.js")`）+ **全量 5009/5009** + 三工程 MP 构建 rc=0 零噪音；★**首次实战 test:coupled**（上轮立的工具：改 plugin → 自动推导 16 文件 398 用例 11.6s，并把 B1 测试补进耦合表）。★诚实边界：依赖 Node 内置且无 browser 分支的包 → 构建期显式报错；npm 包进代码包体积（大包按需子路径）。下一步：GP6/GP7（原「MP 纵向堆叠排查」= S56b，已由 ed4da92c 双类名发射修复关闭）**）★新会话以此为准
 
 
 
@@ -51,13 +51,13 @@
 
 | 文件 | 内容 |
 |---|---|
-| `docs/project-memory-archive/2026-10.md` | 里程碑详细叙事（三十九～一三一）+ 状态速览历史栈（约 4.5k 行） |
+| `docs/project-memory-archive/2026-10.md` | 里程碑详细叙事（三十九～一三二）+ 状态速览历史栈（约 4.5k 行） |
 | `docs/project-memory-archive/2026-09.md` | 09 月全部叙事 + 柔性系统重组历史 + 2026-08 进度快照 + 已落地文件 + 09-19 验证状态（约 6.5k 行） |
-| `docs/project-memory-archive/decisions.md` | 决策链全文 #1–#477——按号检索 |
+| `docs/project-memory-archive/decisions.md` | 决策链全文 #1–#478——按号检索 |
 
 检索示例：`grep -n "2026-09-29\|判据建错靶" docs/project-memory-archive/2026-09.md`
 
-## 关键决策与文档偏差（#1–#477 → 归档速查）
+## 关键决策与文档偏差（#1–#478 → 归档速查）
 
 **全文在 `docs/project-memory-archive/decisions.md`**（按号检索：`grep -n "^290\." docs/project-memory-archive/decisions.md`）。
 决策号**只增不改号**（外部文档按号引用）；新决策追加到该文件末尾（号 +1）。

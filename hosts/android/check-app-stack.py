@@ -308,6 +308,35 @@ def main() -> int:
                 else:
                     report(f"⑦ 宿主屏保留语义正确：pop 后 detail 已销毁、home 仍在册（{ids}）")
 
+            # ── ⑦.8★★阶段 1（2026-10-04）：**路由页面真正落地**（B1+B2）──
+            #   【要证明什么】此前屏 = 空壳容器（宿主塞 3 个占位几何节点）⇒「路由在走、页面没渲染」。
+            #   本组证明：路由切页时，宿主 `ScreenHost.mount` 真建了**页面内容节点**（来自
+            #   executor 的 `contentOf` 提供者），而不是占位。
+            #   【证据来自宿主记账】`content_node_total`（ScreenHost 累计真建的内容节点数）——
+            #   不是 JS 自述（与 ⑦.6 同一纪律）。
+            #   【★分端推进（如实不假绿）】`content_node_total` 字段是**阶段 1 Android 先行**的产物；
+            #     尚未接的端（iOS 的 Swift ScreenHost）报告里**无该字段** ⇒ 如实报"未接（阶段 2）"，
+            #     不判红（与 ⑦ 组对鸿蒙"未接 ScreenExecutor"同样处理）。字段在 ⇒ 必须 >0（真落地）。
+            if isinstance(hs, dict) and not hs.get("error"):
+                if "content_node_total" not in hs:
+                    report(
+                        "⑦.8 路由页面落地：本端 ScreenHost 尚未接屏内容（阶段 1 Android 先行）——如实跳过（不假绿）；"
+                        "阶段 2 三端对齐时补齐"
+                    )
+                else:
+                    cnt = hs.get("content_node_total", 0)
+                    if cnt <= 0:
+                        fail(
+                            "⑦.8 路由页面未真正落地：宿主 content_node_total=" + str(cnt) +
+                            "（应 >0——屏里应是页面内容节点，不是 3 个占位几何节点）。"
+                            "查：executor 是否注入 contentOf / ScreenHost.mount 是否消费 content"
+                        )
+                    else:
+                        report(
+                            f"⑦.8 ★路由页面真正落地（宿主记账）：真建页面内容节点累计 {cnt} 个"
+                            f"（非 3 占位——路由→内容→内核树这条链通了）"
+                        )
+
             # ── ⑦.7★E4：**跨页面共享元素**（2026-10-01 收诚实边界）──
             #   【收的是什么】边界原文"跨页面的稳态几何回传需页面栈层配合（未做）"。
             #   本组证明页面栈层已把它接上：目标页 mount 后取节点矩形（内核算）+ 源页矩形

@@ -72,7 +72,7 @@ A1/A2（构建目标 + 产物契约）
                                       └─→ D（三端门禁把上面每一项锁住）
 ```
 
-**关键判断（★2026-10-04 修正：B 与 C 是耦合的，不是"先后"）**：`A → B1 → B2` 是**生死关**；但**实测确认 `B1/B2 依赖 C1`**——App（Vapor/selfdraw）路径**不处理 CSS class**（无 CSS 引擎：只折叠 inline `style` 与结构化 paint 声明，见 `packages/compiler/src/vapor/template.ts` 的 `parseStaticStyle`/`parsePaintDeclAttr`），而真实项目（superapp/showcase）样式**全在 class 里** ⇒ **不先有「CSS class/选择器 → 每节点折叠样式」的编译，真实页面在 App 端就是"裸结构无样式"**。⇒ 阶段 1（B）与阶段 3（C1）**必须并进**：先跑通"能渲染的页面"用 inline 样式的页面（验证 B 链路），C1 落地后再接 class 样式页面。（否则只是"夹具上的属性折叠面"）。
+**关键判断（★2026-10-04 修正：B 与 C 是耦合的，不是"先后"）**：`A → B1 → B2` 是**生死关**；但**实测确认 `B1/B2 依赖 C1`**——App（Vapor/selfdraw）路径**不处理 CSS class**（无 CSS 引擎：只折叠 inline `style` 与结构化 paint 声明，见 `packages/compiler/src/vapor/template.ts` 的 `parseStaticStyle`/`parsePaintDeclAttr`），而真实项目（superapp/showcase）样式**全在 class 里** ⇒ **不先有「CSS class/选择器 → 每节点折叠样式」的编译，真实页面在 App 端就是"裸结构无样式"**。⇒ 阶段 1（B）与阶段 3（C1）**必须并进**：先跑通"能渲染的页面"用 inline 样式的页面（验证 B 链路），C1 落地后再接 class 样式页面。**★阶段 1a 已落地（Android 先行）**：`screen.mount.content` 契约 + executor `contentOf` + Android `ScreenHost` 消费内容——真机证明「路由切页 → 屏里真有页面内容节点（非空壳）」。（否则只是"夹具上的属性折叠面"）。
 
 ---
 
@@ -108,7 +108,9 @@ A1/A2（构建目标 + 产物契约）
 | 阶段 0 | D1（app-stack 三端化） | ✅ 已完成（2026-10-04） | `check:app-stack` 跑 android/ios/harmony 三端结果 |
 | 阶段 0 | D2（鸿蒙接入 check:*） | ✅ 已完成（2026-10-04） | 鸿蒙接入 app-stack + host-runtime |
 | 阶段 0 | D3（host-rounding 加鸿蒙） | ✅ 已完成（2026-10-04） | 扫描面加鸿蒙 ets；当场抓到并登记 1 处（非几何） |
-| 阶段 1 | A1/B1/B2/B5（构建目标 + 路由页面落地，Android 先行） | ⏳ 待办 | **真正的生存关** |
+| 阶段 1a | **B2（宿主落真实页面子树）+ B1 装配侧**（Android 先行） | ✅ 已收口（2026-10-04） | `ScreenContent` 契约（`screen.mount.content`）+ executor `contentOf` 提供者 + Android `ScreenHost.mount` 消费内容建真实节点（非 3 占位）；真机 ⑦.8 = **真建 8 个内容节点**；iOS 如实报"未接（阶段 2）" |
+| 阶段 1b | A1（App 构建目标）+ B5（SFC 产物 → content 的生产接线） | ⏳ 待办 | 本阶段 content 由**装置内联**提供（证明链路）；生产形态接页面渲染器（renderer-app selfdraw `buildRequest`） |
+| 阶段 2 | B3/B4（三端接入同一产物/链：iOS/harmony 宿主的 ScreenHost 消费 content） | ⏳ 待办 | 本阶段 iOS ⑦.8 如实跳过 |
 | 阶段 2 | B3/B4（三端接入同一产物/链） | ⏳ 待办 |  |
 | 阶段 3 | C1/C3（CSS 折叠面扩展 + **CSS class 解析编译** + 矩阵级别决策） | ⏳ 待办（**与阶段 1 并进**） | ★实测确认：App 路径不吃 CSS class ⇒ 真实页面样式需 C1；阶段 0 已铺度量前置 |
 | 阶段 4 | E1（文档回填） | ⏳ 待办 |  |
