@@ -18,6 +18,26 @@ pub struct Edges {
     pub left: f32,
 }
 
+/**
+ * ★批次 17（CSS 兼容对齐 · 以 Web 为基准）：**逐边 auto 外距标记**。
+ *
+ * 【为什么单独一型】`Edges` 是 f32（表达不了 CSS 的 `auto`）。Web 里 `margin: 0 auto` 是
+ *   **水平居中**的常用写法（flex 项的 auto 外距吸收剩余空间）——此前编译器**静默丢掉 auto** ⇒ App 不居中、
+ *   Web 居中（多端不一致且静默）。⇒ 用逐边布尔标记表达 auto；taffy 的 `LengthPercentageAuto` 原生支持。
+ * 【单位】auto 与 `margin` 的 f32 值互斥（同一边：auto 为真 ⇒ 忽略该边的 f32 值）。
+ */
+#[derive(Debug, Clone, Copy, PartialEq, Default, serde::Serialize, serde::Deserialize)]
+pub struct MarginAuto {
+    pub top: bool,
+    pub right: bool,
+    pub bottom: bool,
+    pub left: bool,
+}
+
+impl MarginAuto {
+    pub const NONE: Self = Self { top: false, right: false, bottom: false, left: false };
+}
+
 impl Edges {
     pub const ZERO: Self = Self { top: 0.0, right: 0.0, bottom: 0.0, left: 0.0 };
 
@@ -326,6 +346,9 @@ pub struct LStyle {
 
     #[serde(default)]
     pub margin: Edges,
+    /// ★批次 17：逐边 auto 外距标记（见 MarginAuto 注释）。auto 为真 ⇒ 忽略该边的 margin f32。
+    #[serde(default)]
+    pub margin_auto: MarginAuto,
     #[serde(default)]
     pub padding: Edges,
 
@@ -575,6 +598,7 @@ impl Default for LStyle {
             min_height: None,
             max_height: None,
             margin: Edges::ZERO,
+            margin_auto: MarginAuto::NONE,
             padding: Edges::ZERO,
             flex_direction: FlexDirection::default(),
             flex_wrap: FlexWrap::default(),

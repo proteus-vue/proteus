@@ -64,6 +64,11 @@ pub const F_FLEX_BASIS: u32 = 1 << 18;
 pub const F_GAP: u32 = 1 << 19;
 pub const F_TOP: u32 = 1 << 20;
 pub const F_LEFT: u32 = 1 << 21;
+// ★批次 17：margin auto 逐边标记（不进 f32 段——位图仅作「有 auto」的集合标记，值写入 flags 高位）
+pub const F_MARGIN_AUTO_T: u32 = 1 << 22;
+pub const F_MARGIN_AUTO_R: u32 = 1 << 23;
+pub const F_MARGIN_AUTO_B: u32 = 1 << 24;
+pub const F_MARGIN_AUTO_L: u32 = 1 << 25;
 
 /* ── 枚举字段位图（u8）── */
 pub const E_FLEX_DIRECTION: u8 = 1 << 0;
@@ -220,6 +225,12 @@ pub fn encode(req: &LayoutRequest) -> Vec<u8> {
         set(F_GAP, n.gap.is_some(), &mut fm);
         set(F_TOP, n.top.is_some(), &mut fm);
         set(F_LEFT, n.left.is_some(), &mut fm);
+        // ★批次 17：margin auto 标记进 field_mask（值区不写 f32，仅集合标记）
+        let ma = n.margin_auto.unwrap_or_default();
+        set(F_MARGIN_AUTO_T, ma.top, &mut fm);
+        set(F_MARGIN_AUTO_R, ma.right, &mut fm);
+        set(F_MARGIN_AUTO_B, ma.bottom, &mut fm);
+        set(F_MARGIN_AUTO_L, ma.left, &mut fm);
 
         // 统计枚举位图
         let mut em: u8 = 0;
@@ -246,6 +257,11 @@ pub fn encode(req: &LayoutRequest) -> Vec<u8> {
         }
 
         let mut flags: u8 = 0;
+        // ★批次 17：margin auto 逐边（flags 高位 4 位——低 4 位已被 TEXT/NATIVE/STYLE_KEY 占用）
+        if ma.top { flags |= 1 << 4; }
+        if ma.right { flags |= 1 << 5; }
+        if ma.bottom { flags |= 1 << 6; }
+        if ma.left { flags |= 1 << 7; }
         if n.is_text {
             flags |= FLAG_IS_TEXT;
         }
@@ -463,6 +479,15 @@ pub fn decode(buf: &[u8]) -> Result<LayoutRequest> {
         }
         n.is_text = flags & FLAG_IS_TEXT != 0;
         n.native_host = flags & FLAG_NATIVE_HOST != 0;
+        // ★批次 17：margin auto 逐边（flags 高位 4 位）
+        if flags & 0xF0 != 0 {
+            n.margin_auto = Some(crate::ffi::MarginAutoDto {
+                top: flags & (1 << 4) != 0,
+                right: flags & (1 << 5) != 0,
+                bottom: flags & (1 << 6) != 0,
+                left: flags & (1 << 7) != 0,
+            });
+        }
         if flags & FLAG_HAS_STYLE_KEY != 0 {
             n.text_style_key = Some(r.u32()?);
         }

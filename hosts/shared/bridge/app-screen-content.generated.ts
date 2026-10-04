@@ -1664,6 +1664,10 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
           "top": 0,
           "bottom": 0
         },
+        "marginAuto": {
+          "right": true,
+          "left": true
+        },
         "padding": {
           "top": 24,
           "right": 16,
@@ -2297,6 +2301,10 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
           "top": 0,
           "bottom": 0
         },
+        "marginAuto": {
+          "right": true,
+          "left": true
+        },
         "padding": {
           "top": 24,
           "right": 16,
@@ -2483,6 +2491,10 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
         "margin": {
           "top": 0,
           "bottom": 0
+        },
+        "marginAuto": {
+          "right": true,
+          "left": true
         },
         "padding": {
           "top": 24,
@@ -5115,6 +5127,10 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
           "top": 20,
           "bottom": 20
         },
+        "marginAuto": {
+          "right": true,
+          "left": true
+        },
         "maxWidth": 360,
         "padding": {
           "top": 12,
@@ -5204,6 +5220,10 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
         "margin": {
           "top": 20,
           "bottom": 20
+        },
+        "marginAuto": {
+          "right": true,
+          "left": true
         },
         "maxWidth": 300,
         "padding": {

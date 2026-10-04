@@ -83,6 +83,9 @@ pub(crate) struct NodeDto {
     pub(crate) max_height: Option<f32>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub(crate) margin: Option<EdgesDto>,
+    /// ★批次 17：逐边 auto 外距（见 MarginAutoDto）。与 `margin` 平行——auto 为真 ⇒ 忽略该边数值。
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub(crate) margin_auto: Option<MarginAutoDto>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub(crate) padding: Option<EdgesDto>,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -206,6 +209,17 @@ pub(crate) struct NodeDto {
     pub(crate) text_style_key: Option<u32>,
 }
 
+/// ★批次 17：逐边 **auto 外距**标记（CSS `margin: 0 auto` 水平居中；与 `EdgesDto` 平行）。
+///   true 的边 ⇒ 内核映射为 taffy `auto()`（吸收剩余空间），忽略同边 `EdgesDto` 的数值。
+#[derive(serde::Deserialize, serde::Serialize, Clone, Copy, Default)]
+#[serde(rename_all = "camelCase", default)]
+pub(crate) struct MarginAutoDto {
+    pub(crate) top: bool,
+    pub(crate) right: bool,
+    pub(crate) bottom: bool,
+    pub(crate) left: bool,
+}
+
 #[derive(serde::Deserialize, serde::Serialize, Clone, Copy, Default)]
 pub(crate) struct EdgesDto {
     #[serde(default)]
@@ -239,6 +253,7 @@ impl NodeDto {
             min_height: None,
             max_height: None,
             margin: None,
+            margin_auto: None,
             padding: None,
             flex_direction: None,
             flex_wrap: None,
@@ -643,6 +658,11 @@ pub(crate) fn style_from_dto(dto: &NodeDto) -> Result<LStyle, String> {
     style.max_height = dto.max_height;
     if let Some(m) = dto.margin {
         style.margin = m.into();
+    }
+    if let Some(ma) = dto.margin_auto {
+        style.margin_auto = crate::style::MarginAuto {
+            top: ma.top, right: ma.right, bottom: ma.bottom, left: ma.left,
+        };
     }
     if let Some(p) = dto.padding {
         style.padding = p.into();
@@ -1736,6 +1756,7 @@ pub(crate) struct PatchStyle {
     gap: Option<f32>,
     display: Option<String>,
     margin: Option<EdgesDto>,
+    margin_auto: Option<MarginAutoDto>,
     padding: Option<EdgesDto>,
     #[serde(default)]
     text: Option<String>,
@@ -1761,6 +1782,9 @@ impl StylePatch {
         }
         if let Some(m) = &s.margin {
             node.style.margin = Edges { top: m.top, right: m.right, bottom: m.bottom, left: m.left };
+        }
+        if let Some(ma) = &s.margin_auto {
+            node.style.margin_auto = crate::style::MarginAuto { top: ma.top, right: ma.right, bottom: ma.bottom, left: ma.left };
         }
         if let Some(p) = &s.padding {
             node.style.padding = Edges { top: p.top, right: p.right, bottom: p.bottom, left: p.left };

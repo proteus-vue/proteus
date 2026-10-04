@@ -197,6 +197,28 @@ describe('★C1 最小切片 · SFC <style> 单类规则 → class→节点样�
     expect((textNode?.style as { textOverflow?: string })?.textOverflow, '子文本节点继承 text-overflow').toBe('ellipsis')
   })
 
+  it('★⑦e margin auto（批次 17 · ★基准 = Web）：margin:0 auto 折出 marginAuto 标记', () => {
+    // 【为什么（以 web 为基准）】Web 里 margin:0 auto 把剩余空间平分到左右 ⇒ 水平居中；
+    //   此前 auto 被**静默丢弃** ⇒ App 不居中（Web 居中）＝静默多端不一致。
+    const s1 = parseStaticStyle('margin: 0 auto', () => {})
+    expect((s1 as { margin?: Record<string, number> }).margin, '上下数值').toEqual({ top: 0, bottom: 0 })
+    expect((s1 as { marginAuto?: Record<string, boolean> }).marginAuto, '左右 auto').toEqual({ left: true, right: true })
+    // 简写 auto（四边）
+    const s2 = parseStaticStyle('margin: auto', () => {})
+    expect((s2 as { marginAuto?: Record<string, boolean> }).marginAuto).toEqual({ top: true, right: true, bottom: true, left: true })
+    // 逐边
+    const s3 = parseStaticStyle('margin-left: auto', () => {})
+    expect((s3 as { marginAuto?: Record<string, boolean> }).marginAuto, '逐边 auto').toEqual({ left: true })
+    // 普通数值 margin 不产 marginAuto（零行为变化）
+    const s4 = parseStaticStyle('margin: 8px 12px', () => {})
+    expect((s4 as { marginAuto?: Record<string, boolean> }).marginAuto, '无 auto ⇒ 不产标记').toBeUndefined()
+    expect((s4 as { margin?: Record<string, number> }).margin).toEqual({ top: 8, right: 12, bottom: 8, left: 12 })
+    // 混合：margin: 0 auto 12px —— 三值展开
+    const s5 = parseStaticStyle('margin: 0 auto 12px', () => {})
+    expect((s5 as { margin?: Record<string, number> }).margin, 'top/bottom 数值').toEqual({ top: 0, bottom: 12 })
+    expect((s5 as { marginAuto?: Record<string, boolean> }).marginAuto, '左右 auto').toEqual({ left: true, right: true })
+  })
+
   it('★⑧ 元素/类型选择器 + @keyframes 跳过（C1 收尾）', () => {
     // 【真项目形态】examples 有 9 处元素选择器（h3/code…）+ 6 处 @keyframes 关键帧被误当选择器
     const sfc = `<template>
