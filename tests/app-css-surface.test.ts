@@ -80,6 +80,7 @@ describe('★App CSS 支持面 · ② SSOT 与折叠实现同源（真折叠，�
       if (f === 'fontWeight') return 'bold'
       if (f === 'textAlign') return 'center'
       if (f === 'boxShadow') return '0 1px 2px #000000'
+      if (f === 'gridTemplateColumns' || f === 'gridTemplateRows') return '1fr 1fr'
       return '10'
     }
     const notFolded: string[] = []
@@ -134,8 +135,8 @@ describe('★App CSS 支持面 · ④ 派生/特殊字段语义', () => {
 
   it('认不出的键产出诊断（不静默吞——本仓纪律）', () => {
     const diags: string[] = []
-    parseStaticStyle('grid-template-columns: 1fr 1fr', (m) => diags.push(m))
-    expect(diags.length, 'grid-template-columns 不在 App 折叠面 ⇒ 有诊断').toBeGreaterThan(0)
+    parseStaticStyle('column-count: 2', (m) => diags.push(m))
+    expect(diags.length, 'column-count 不在 App 折叠面 ⇒ 有诊断').toBeGreaterThan(0)
   })
 })
 

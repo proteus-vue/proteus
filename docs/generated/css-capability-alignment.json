@@ -49,7 +49,7 @@
         {
           "capability": "栅格 / 复杂排布（grid）",
           "why": "仪表盘 / 复杂页面",
-          "status": "absent（[Rust]：引擎 Display 未开放 Grid）"
+          "status": "supported（批 12：引擎 Display::Grid + 显式轨迹 fr/px + repeat 展开；诚实边界：auto/minmax/gr、id-area 定位未支持）"
         },
         {
           "capability": "动效（transition / transform / keyframes）",
@@ -162,14 +162,14 @@
         "why": "★批次 9（2026-10-04）：从项目 `globalStyle`（如 styles/tokens.css，与 Web/MP 同一份）解析 `--name: value`，SFC 内 `var(--x)` **编译期替换为字面值**（递归展开引用令牌；支持 fallback；未知令牌诊断）。★**超级应用承载关键**：组件库/主题化全靠设计令牌（真项目 242 处 var()）。诚实边界：只折**字面值**令牌；calc()/env() 动态令牌值不折"
       },
       {
-        "css": "display: grid / grid-template-*",
+        "css": "display: grid + grid-template-columns/rows（显式轨迹）",
         "id": "grid",
         "ends": {
-          "web": "supported",
+          "web": "partial",
           "skyline": "not-listed",
-          "app": "absent"
+          "app": "supported"
         },
-        "why": "★引擎未接：taffy 有完整 Grid 能力但 Rust `Display` 枚举无 Grid、to_taffy 未设置（Profile §3 已定案开放 L2）——加 = 引擎+DTO+taffy 三处；Skyline 端实测退化为 block ⇒ 有条件可用"
+        "why": "★批次 12（2026-10-04）：引擎 `Display::Grid` + `LStyle.grid_template_columns/rows`（字符串轨迹）+ `NodeDto` + taffy grid_template_* 映射（parse_grid_tracks：fr/px/数字）；编译器 display:grid 入封闭集 + `grid-template-columns/rows` 解析（**显式轨迹**，`repeat(N,X)` 编译期展开）。★**诚实边界**：仅显式轨迹（fr/px/数字）——auto/minmax/fit-content/命名线/隐式行（grid-auto-*）/grid-area 定位**未支持**，诊断跳过；Skyline 端实测退化为 block ⇒ 有条件可用"
       },
       {
         "css": "order",
@@ -414,7 +414,9 @@
       "left",
       "right",
       "bottom",
-      "overflow"
+      "overflow",
+      "gridTemplateColumns",
+      "gridTemplateRows"
     ],
     "paint": [
       "backgroundColor",
@@ -1024,15 +1026,18 @@
     },
     {
       "id": "grid",
-      "css": "display: grid / grid-template-*",
+      "css": "display: grid + grid-template-columns/rows（显式轨迹）",
       "category": "layout",
-      "compilerFields": [],
-      "web": "supported",
+      "compilerFields": [
+        "gridTemplateColumns",
+        "gridTemplateRows"
+      ],
+      "web": "partial",
       "skyline": "not-listed",
-      "app": "absent",
+      "app": "supported",
       "tier": "L2",
       "strategy": "直映射",
-      "note": "★引擎未接：taffy 有完整 Grid 能力但 Rust `Display` 枚举无 Grid、to_taffy 未设置（Profile §3 已定案开放 L2）——加 = 引擎+DTO+taffy 三处；Skyline 端实测退化为 block ⇒ 有条件可用",
+      "note": "★批次 12（2026-10-04）：引擎 `Display::Grid` + `LStyle.grid_template_columns/rows`（字符串轨迹）+ `NodeDto` + taffy grid_template_* 映射（parse_grid_tracks：fr/px/数字）；编译器 display:grid 入封闭集 + `grid-template-columns/rows` 解析（**显式轨迹**，`repeat(N,X)` 编译期展开）。★**诚实边界**：仅显式轨迹（fr/px/数字）——auto/minmax/fit-content/命名线/隐式行（grid-auto-*）/grid-area 定位**未支持**，诊断跳过；Skyline 端实测退化为 block ⇒ 有条件可用",
       "supportTier": "conditional"
     },
     {

@@ -15,9 +15,9 @@
 - **包规模**：**45 个 @proteus-vue/* npm 包**（+ `packages/layout-core-rust` = **cargo crate，非 npm 包**，故不计数）（★2026-09-29 layout-core = App 排版核心）（check:pkg 0 error · `pnpm check:stats` 校验 ✓；31→38 修正 → G-07 glass 39 → Skyline 收口 worklet 40 → ★2026-09-14 组件库拆包 `@proteus-vue/components` 41 → ★Vapor 线新增 `@proteus-vue/slot-runtime` 42 + `@proteus-vue/layout-core` 43 → ★2026-09-30 MA1 新增 `@proteus-vue/animation` 44；版本统一 0.3.0-beta.8，见「当前状态速览」）
 - **文档**：`docs/proteus-architecture.md`（L0 规约·真理来源）→ `docs/board-inventory.md`（全景索引）→ `docs/roadmap.md`（版本线）→ `roadmap-2-plan`（里程碑线）→ 各 plan
 
+## 当前状态速览（最近一次更新：**2026-10-04·（一五九）· **CSS 兼容对齐 · 批次 12：CSS Grid（[Rust] 栅格，超级应用仪表盘/宫格）**（决策 #505）——用户「继续」。★**选批**：grid **宿主无关**（宿主按内核 rects 绘制），可写引擎行为测试、零渲染回归、无需真机 ⇒ 选它。★**实现**：引擎 `Display::Grid` + `LStyle.grid_template_columns/rows`（字符串轨迹）+ `NodeDto` + `taffy_engine::parse_grid_tracks`（fr/px/数字）；编译器 `display:grid` 入封闭集 + `parseGridTemplate`（显式轨迹 + `repeat(N,X)` 编译期展开；auto/minmax 诊断跳过）+ Android LAYOUT_KEYS。★判据：引擎行为测试 `tests/grid.rs`（`1fr 1fr 100px` ⇒ 子项 x=0/100/200；破坏性验证：不设轨迹⇒红）；编译器 tests 56 组；capability 源 grid absent→supported（**如实边界**：仅显式轨迹）。★全量 **5133/5133** 绿 · Rust 10 测试二进制全绿 · 三端编译 + vue-tsc 0 错。★诚实：M1 61.0%→59.5%。★**剩余超级应用缺口**：line-height/text-overflow（需真机验证基线/截断像素）· transform 静态折叠面）★新会话以此为准
 ## 当前状态速览（最近一次更新：**2026-10-04·（一五八）· **CSS 兼容对齐 · 批次 11：align-content（[Rust]，补完弹性流式布局）**（决策 #504）——用户「继续」。★**选批含一次诚实改判**：初选 line-height，侦察后改判——它要改三端文本引擎的度量高度+垂直基线（iOS·Android 各异，无设备无法验证像素回归）⇒ 按"先取证再断言"不在无真机验证时做；改用 align-content（与 flex-wrap 同构，纯引擎+taffy，可写引擎行为测试）。★**实现**：Rust LStyle.align_content（open string）+ NodeDto + taffy parse_align_content 映射；编译器入 APP_LAYOUT_FIELDS + Android LAYOUT_KEYS。★判据：引擎行为测试 tests/align_content.rs（center 行组居中；破坏性验证：恒 STRETCH⇒红）；编译器 tests 52 组；capability 源 align-content absent→supported。★全量 **5129/5129** 绿 · Rust 全绿 · 三端编译 + vue-tsc 0 错。★诚实：M1 62.6%→61.0%。★**剩余超级应用缺口**：line-height/text-overflow（需真机验证基线/截断像素）· grid（[Rust]）· transform 静态折叠面）★新会话以此为准
 ## 当前状态速览（最近一次更新：**2026-10-04·（一五七）· **CSS 兼容对齐 · 批次 10：box-shadow（超级应用卡片视觉）**（决策 #503）——用户「继续」。★**取证选批**：超级应用剩余 box-shadow（卡片抬升刚需）/line-height/grid([Rust])/transform；iOS·鸿蒙有原生 shadow API、Android 分层近似 ⇒ 选 box-shadow。★**实现**：编译器 box-shadow → 结构化 `boxShadow {dx,dy,blur,spread,color}`（单层/多重取首个/括号深度切逗号/inset 跳过）+ APP_PAINT_FIELDS；**iOS** CALayer.shadow*（有阴影不开 masksToBounds）· **Android** 分层圆角矩形近似（setShadowLayer 只支持文本）· **鸿蒙** OH_ArkUI_RenderNodeUtils_SetShadow*。★判据 tests 50 组；★破坏性验证暴露真 bug（裸 indexOf(',') 切分 ⇒ 含空格 rgba 多重阴影 2 组红——真项目样例 `0 8px 24px rgba(0, 0, 0, 0.15)` 实测暴露）已修；capability 源 box-shadow absent→supported + 超级应用清单更新。★全量 **5127/5127** 绿 · 三端编译 + vue-tsc 0 错。★**剩余超级应用缺口**：line-height/text-overflow（文本呈现）· grid（[Rust]）· transform 静态折叠面）★新会话以此为准
-## 当前状态速览（最近一次更新：**2026-10-04·（一五六）· **CSS 兼容对齐 · 批次 9：CSS 变量（设计令牌）编译期折叠 —— 超级应用承载关键**（决策 #502）——用户「继续。我们的目标是承载超级应用」。★**为什么关键**：现代前端/组件库全靠设计令牌（var(--x)，真项目 242 处），App 折叠面无运行时 CSS 引擎 ⇒ var() 不折就整条丢弃。★**实现**：编译器 `parseCssVarTokens` + `substituteCssVars`（递归/fallback）+ parseStaticStyle/parseClassRules/buildLayoutTemplate/buildVaporSubscriptions 线程化 tokens；令牌来源 = `proteus.config.ts` 的 `globalStyle`（与 Web/MP 同一份令牌文件），`buildAppScreenContent` 从 config 加载。★**真机级证据**：showcase（371 处 var()）跑 App 内容 ⇒ **产物 var(-- 计数=0**（全折为字面值），120 页；examples（0 var）零回归。★判据 tests 47 组（破坏性验证：令牌置空⇒3 组红）。★全量 **5124/5124** 绿 · vue-tsc 0 错。★**剩余超级应用缺口**：box-shadow（⏳需阴影通道）· line-height/text-overflow（⏳）· grid（[Rust]）· transform 静态折叠面）★新会话以此为准
 
 
 
@@ -53,11 +53,11 @@
 |---|---|
 | `docs/project-memory-archive/2026-10.md` | 里程碑详细叙事（三十九～一四五）+ 状态速览历史栈（约 4.5k 行） |
 | `docs/project-memory-archive/2026-09.md` | 09 月全部叙事 + 柔性系统重组历史 + 2026-08 进度快照 + 已落地文件 + 09-19 验证状态（约 6.5k 行） |
-| `docs/project-memory-archive/decisions.md` | 决策链全文 #1–#504——按号检索 |
+| `docs/project-memory-archive/decisions.md` | 决策链全文 #1–#505——按号检索 |
 
 检索示例：`grep -n "2026-09-29\|判据建错靶" docs/project-memory-archive/2026-09.md`
 
-## 关键决策与文档偏差（#1–#504 → 归档速查）
+## 关键决策与文档偏差（#1–#505 → 归档速查）
 
 **全文在 `docs/project-memory-archive/decisions.md`**（按号检索：`grep -n "^290\." docs/project-memory-archive/decisions.md`）。
 决策号**只增不改号**（外部文档按号引用）；新决策追加到该文件末尾（号 +1）。

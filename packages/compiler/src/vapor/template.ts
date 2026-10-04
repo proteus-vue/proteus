@@ -55,6 +55,7 @@ export const APP_LAYOUT_FIELDS = [
   'width', 'height', 'minWidth', 'maxWidth', 'minHeight', 'maxHeight',
   'margin', 'padding', 'flexDirection', 'flexWrap', 'justifyContent', 'alignItems', 'alignContent', 'alignSelf',
   'flexGrow', 'flexShrink', 'flexBasis', 'gap', 'display', 'position', 'top', 'left', 'right', 'bottom', 'overflow',
+  'gridTemplateColumns', 'gridTemplateRows',
 ] as const
 const LAYOUT_FIELDS = new Set<string>(APP_LAYOUT_FIELDS)
 /**
@@ -66,7 +67,7 @@ const LAYOUT_FIELDS = new Set<string>(APP_LAYOUT_FIELDS)
  *   ★诚实边界：这是"App 端 CSS 支持面收窄"的落点之一（CSS 里合法的值在 App 未必有对等）。
  */
 export const APP_ENUM_VALUES: Record<string, readonly string[]> = {
-  display: ['flex', 'none'],
+  display: ['flex', 'grid', 'none'],
   position: ['static', 'relative', 'absolute'],
   overflow: ['visible', 'hidden', 'scroll', 'auto'],
   flexDirection: ['row', 'column', 'row-reverse', 'column-reverse'],
@@ -304,6 +305,52 @@ const kebabToCamel = (s: string): string => s.replace(/-([a-z])/g, (_, c: string
  *   本函数对**认不出的键/值**产出诊断（不静默吞——本仓纪律）。
  */
 /**
+ * ★批次 12（CSS Grid）：显式轨迹串 → 归一化的空格分隔串（内核再解析）。
+ *   · `<n>fr` / `<n>px` / 纯数字 保留；`repeat(N, X)` 展开为 N 个 X（`repeat(3, 1fr)` → `1fr 1fr 1fr`）；
+ *   · `auto`/`minmax`/`fit-content`/命名线 等**未支持** ⇒ 返回 null（调用方诊断——不猜）。
+ */
+function parseGridTemplate(raw: string): string | null {
+  const out: string[] = []
+  const toks = splitTopLevelSpaces(raw)
+  if (toks.length === 0) return null
+  for (const tok of toks) {
+    const rep = /^repeat\(\s*(\d+)\s*,\s*(.+?)\s*\)$/i.exec(tok)
+    if (rep) {
+      const n = Number(rep[1])
+      const inner = rep[2]!.trim().split(/\s+/).filter(Boolean)
+      if (inner.length === 0 || inner.some((x) => !isGridTrack(x))) return null
+      for (let i = 0; i < n; i++) out.push(...inner)
+      continue
+    }
+    if (!isGridTrack(tok)) return null
+    out.push(tok)
+  }
+  return out.length > 0 ? out.join(' ') : null
+}
+
+/** 按**括号深度 0** 处的空白切 token（`repeat(3, 1fr)` 内的空格不算） */
+function splitTopLevelSpaces(s: string): string[] {
+  const out: string[] = []
+  let d = 0
+  let cur = ''
+  for (const ch of s) {
+    if (ch === '(') d++
+    else if (ch === ')') d--
+    if (/\s/.test(ch) && d === 0) { if (cur) { out.push(cur); cur = '' } continue }
+    cur += ch
+  }
+  if (cur) out.push(cur)
+  return out
+}
+
+/** 单个网格轨迹是否受支持：`<n>fr` / `<n>px` / 纯数字（非负） */
+function isGridTrack(t: string): boolean {
+  if (/^\d*\.?\d+fr$/.test(t)) return true
+  if (/^\d*\.?\d+px$/.test(t)) return true
+  return /^\d*\.?\d+$/.test(t)
+}
+
+/**
  * ★批次 10：`box-shadow` 解析（单层：`<dx> <dy> <blur> [<spread>] <color>`）。
  *   · 长度 token → 数值（px）；颜色 token → `normalizeCssColor` 归一 hex；
  *   · `inset` / 多重阴影（含 `,`）⇒ 只取第一层（调用方诊断）；解析不出 ⇒ null。
@@ -446,6 +493,21 @@ export function parseStaticStyle(
       continue
     }
     if (LAYOUT_FIELDS.has(key)) {
+      // ★批次 12（CSS Grid）：`grid-template-columns/rows` —— 显式轨迹串（`1fr 1fr 200px`）；
+      //   `repeat(N, X)` 展开为 N 个 X；不支持的形态（`auto`/`minmax`/`fit-content`）诊断跳过。
+      if (key === 'gridTemplateColumns' || key === 'gridTemplateRows') {
+        const tracks = parseGridTemplate(rawVal)
+        if (tracks === null) {
+          pushDiag(
+            `\`${rawKey}: ${rawVal}\` 未解析（支持显式轨迹：` + '`1fr 1fr 200px` / `repeat(3, 1fr)`）——已跳过',
+            'App 端 CSS Grid 为**显式轨迹**子集：fr / px / repeat(N,X)；auto/minmax/fit-content/命名线 暂不支持',
+          )
+          continue
+        }
+        out[key] = tracks
+        markImportant(key)
+        continue
+      }
       if (key === 'flexDirection' || key === 'flexWrap' || key === 'justifyContent' || key === 'alignItems' || key === 'alignContent' || key === 'alignSelf' || key === 'position' || key === 'display' || key === 'overflow') {
         // ★★★枚举值**校验**（2026-10-04 修：真机 RustLayout.create 失败暴露）——内核只认封闭集；
         //   不支持的值（如 `display: block/grid`、`position: sticky`）⇒ **诊断 + 跳过**（用内核默认），

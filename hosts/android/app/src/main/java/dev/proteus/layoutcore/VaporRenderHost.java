@@ -1110,6 +1110,7 @@ final class VaporRenderHost {
             "width", "height", "minWidth", "maxWidth", "minHeight", "maxHeight",
             "margin", "padding", "flexDirection", "flexWrap", "justifyContent", "alignItems", "alignContent", "alignSelf",
             "flexGrow", "flexShrink", "flexBasis", "gap", "display", "position", "top", "left", "right", "bottom",
+            "gridTemplateColumns", "gridTemplateRows",
             "widthRatio", "heightRatio", "overflow",
             // ★静态基态声明（内核要解析）：裁剪形状 + 路径本体（+ 描边色/宽随 svgPath 一起进）
             "clipPath", "svgPath", "svgPathTo", "perspective"));

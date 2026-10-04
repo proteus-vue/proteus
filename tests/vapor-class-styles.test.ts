@@ -94,9 +94,10 @@ describe('★C1 最小切片 · SFC <style> 单类规则 → class→节点样�
     expect((m.bar as { height?: number }).height).toBe(40)
   })
 
-  it('★⑥ 枚举值校验：display: block/grid 等 App 不支持值 ⇒ 跳过 + 诊断（不传非法值给内核）', () => {
-    // 【真机缺陷回归】真机 RustLayout.create 失败暴露：CSS display:block/inline-block/grid/inline-flex
-    //   此前**原样透传** ⇒ 内核只认 flex/none ⇒ **整棵树建不起来**（页面全崩）。现改为诊断+跳过。
+  it('★⑥ 枚举值校验：display: block/inline-block 等 App 不支持值 ⇒ 跳过 + 诊断（不传非法值给内核）', () => {
+    // 【真机缺陷回归】真机 RustLayout.create 失败暴露：CSS display:block/inline-block/inline-flex
+    //   此前**原样透传** ⇒ 内核只认 flex/grid/none ⇒ **整棵树建不起来**（页面全崩）。现改为诊断+跳过。
+    //   ★批次 12：`grid` 已支持（内核开放 Display::Grid）⇒ 本用例改用仍不支持的 `inline-flex`。
     const m = parseClassStyles('.x { display: block; height: 10 }', () => {})
     expect((m.x as { display?: string }).display, 'display:block 被跳过（不传非法值）').toBeUndefined()
     expect((m.x as { height?: number }).height, '同规则其它合法声明仍在').toBe(10)
@@ -105,8 +106,8 @@ describe('★C1 最小切片 · SFC <style> 单类规则 → class→节点样�
     expect((m2.y as { position?: string }).position, 'position:sticky 不支持 ⇒ 跳过').toBeUndefined()
     // 真机建树契约：折叠出的值必须在内核封闭集内
     const diag: string[] = []
-    parseStaticStyle('display: grid', (x) => diag.push(x))
-    expect(diag.length, 'inline display:grid 也诊断').toBeGreaterThan(0)
+    parseStaticStyle('display: inline-flex', (x) => diag.push(x))
+    expect(diag.length, 'inline display:inline-flex 也诊断').toBeGreaterThan(0)
   })
 
   it('★⑦ 颜色归一：rgb()/rgba()/transparent → hex（内核只认 hex）', () => {
@@ -593,5 +594,37 @@ describe('★批次 11 · align-content（多行容器行间对齐）', () => {
     const r = buildLayoutTemplate(sfc, 'pages/tags.vue')
     const n = r.template.nodes.find((x) => (x.style as { alignContent?: string }).alignContent)
     expect((n!.style as { alignContent?: string }).alignContent).toBe('center')
+  })
+})
+
+// ★★★批次 12（CSS 兼容对齐 · [Rust] 栅格）：CSS Grid 显式轨迹——2026-10-04
+describe('★批次 12 · CSS Grid（display:grid + 显式轨迹）', () => {
+  it('① display: grid 入封闭集', () => {
+    expect(parseStaticStyle('display: grid', () => {})).toEqual({ display: 'grid' })
+  })
+
+  it('② 显式轨迹 fr/px/数字；repeat(n, X) 展开', () => {
+    expect(parseStaticStyle('grid-template-columns: 1fr 1fr 200px', () => {}).gridTemplateColumns).toBe('1fr 1fr 200px')
+    expect(parseStaticStyle('grid-template-columns: repeat(3, 1fr)', () => {}).gridTemplateColumns).toBe('1fr 1fr 1fr')
+    expect(parseStaticStyle('grid-template-columns: 200px repeat(2, 1fr)', () => {}).gridTemplateColumns).toBe('200px 1fr 1fr')
+    expect(parseStaticStyle('grid-template-rows: 100px 100px', () => {}).gridTemplateRows).toBe('100px 100px')
+  })
+
+  it('③ 未支持形态（auto/minmax）⇒ 诊断跳过（不猜）', () => {
+    const d: string[] = []
+    expect(parseStaticStyle('grid-template-columns: auto 1fr', (m) => d.push(m)).gridTemplateColumns).toBeUndefined()
+    expect(d.some((m) => m.includes('grid-template'))).toBe(true)
+  })
+
+  it('④ 端到端：grid 容器经 <style> class 折进节点 style', () => {
+    const sfc = `<template><view class="dash">x</view></template>
+<script setup>const z = 1</script>
+<style>
+.dash { display: grid; grid-template-columns: repeat(2, 1fr); gap: 12 }
+</style>`
+    const r = buildLayoutTemplate(sfc, 'pages/dash.vue')
+    const n = r.template.nodes.find((x) => (x.style as { display?: string }).display === 'grid')
+    expect((n!.style as { gridTemplateColumns?: string }).gridTemplateColumns).toBe('1fr 1fr')
+    expect((n!.style as { gap?: number }).gap).toBe(12)
   })
 })

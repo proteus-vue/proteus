@@ -19,7 +19,7 @@ use std::collections::HashMap;
 
 // ★刻意**不用** `taffy::prelude::*`（它导出的 `Rect`/`Size`/`Point` 与本 crate 的
 //   `style::Rect`/`style::Size` 撞名，glob 下解析结果不直观）——只按需导入具体符号。
-use taffy::prelude::{auto, length, percent, AlignContent, AlignItems, BoxSizing, Dimension, JustifyContent, LengthPercentageAuto};
+use taffy::prelude::{auto, fr, length, percent, AlignContent, AlignItems, BoxSizing, Dimension, JustifyContent, LengthPercentageAuto};
 use taffy::{AvailableSpace as TaffyAvailableSpace, NodeId, Style, TaffyTree};
 
 use crate::engine::{AvailableSpace, LayoutEngine, LayoutOutput, RootConstraint, TextMeasurer};
@@ -161,11 +161,21 @@ impl TaffyEngine {
             ..Default::default()
         };
 
-        // ② display（CSS 无盒）
+        // ② display（CSS 无盒 / 栅格）
         out.display = match style.display {
             Display::Flex => taffy::Display::Flex,
+            Display::Grid => taffy::Display::Grid,
             Display::None => taffy::Display::None,
         };
+        // ★批次 12（CSS Grid）：显式轨迹（`1fr 1fr 200px`）→ taffy grid_template_*（仅 grid 容器）
+        if matches!(style.display, Display::Grid) {
+            if let Some(cols) = style.grid_template_columns.as_deref() {
+                out.grid_template_columns = parse_grid_tracks(cols);
+            }
+            if let Some(rows) = style.grid_template_rows.as_deref() {
+                out.grid_template_rows = parse_grid_tracks(rows);
+            }
+        }
 
         // ③ flex 主轴 / 对齐 / 伸缩
         out.flex_direction = match style.flex_direction {
@@ -1226,6 +1236,33 @@ fn parse_align_items(s: &str) -> AlignItems {
         "baseline" => AlignItems::BASELINE,
         _ => AlignItems::STRETCH,
     }
+}
+
+/// ★批次 12：显式网格轨迹串 `1fr 1fr 200px` → taffy `GridTemplateComponent` 列表。
+///   支持 `<n>fr`（弹性）与 `<n>px`/纯数字（定长）；`auto`/`minmax`/`repeat` **未支持**（编译器已展开
+///   repeat，其余 token 保守跳过——宁漏勿误，不猜）。
+fn parse_grid_tracks(s: &str) -> Vec<taffy::GridTemplateComponent<String>> {
+    let mut out: Vec<taffy::GridTemplateComponent<String>> = Vec::new();
+    for tok in s.split_whitespace() {
+        let t = tok.trim();
+        if let Some(fr_str) = t.strip_suffix("fr") {
+            if let Ok(v) = fr_str.trim().parse::<f32>() {
+                out.push(taffy::GridTemplateComponent::Single(fr(v)));
+                continue;
+            }
+        }
+        if let Some(px_str) = t.strip_suffix("px") {
+            if let Ok(v) = px_str.trim().parse::<f32>() {
+                out.push(taffy::GridTemplateComponent::Single(length(v)));
+                continue;
+            }
+        }
+        if let Ok(v) = t.parse::<f32>() {
+            out.push(taffy::GridTemplateComponent::Single(length(v)));
+        }
+        // 其余（auto/minmax/…）⇒ 跳过（不猜）
+    }
+    out
 }
 
 /// ★批次 11：`align-content`（多行容器行间对齐；open string，未知值落默认 stretch）

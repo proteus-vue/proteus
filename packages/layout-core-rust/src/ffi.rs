@@ -122,6 +122,11 @@ pub(crate) struct NodeDto {
     pub(crate) bottom: Option<f32>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub(crate) overflow: Option<String>,
+    /// ★批次 12（CSS Grid）：显式轨迹串（`1fr 1fr 200px`；repeat() 由编译器展开）
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub(crate) grid_template_columns: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub(crate) grid_template_rows: Option<String>,
     /// ★★**背景色**（2026-10-01，颜色动画的**底色**来源）——接受 CSS 形态：
     ///   `#RGB` / `#RRGGBB` / `#AARRGGBB` / `#RRGGBBAA`（后两者靠长度区分）。
     ///
@@ -251,6 +256,8 @@ impl NodeDto {
             left: None,
             right: None,
             bottom: None,
+            grid_template_columns: None,
+            grid_template_rows: None,
             overflow: None,
             // ★颜色：blob 形态暂无这两个字段（按位图解码；未提供 ⇒ 该节点不进颜色轨道）
             background_color: None,
@@ -696,6 +703,9 @@ pub(crate) fn style_from_dto(dto: &NodeDto) -> Result<LStyle, String> {
     style.left = dto.left;
     style.right = dto.right;
     style.bottom = dto.bottom;
+    // ★批次 12（CSS Grid）：显式轨迹串（原样透传，内核解析）
+    style.grid_template_columns = dto.grid_template_columns.clone();
+    style.grid_template_rows = dto.grid_template_rows.clone();
     if let Some(o) = dto.overflow.as_deref() {
         style.overflow = match o {
             "visible" => Overflow::Visible,
