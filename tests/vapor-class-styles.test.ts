@@ -115,17 +115,58 @@ describe('★C1 最小切片 · SFC <style> 单类规则 → class→节点样�
     expect(normalizeCssColor('rgb(255, 255, 255)')).toBe('#ffffff')
     expect(normalizeCssColor('rgba(255, 255, 255, 0.8)')).toBe('#ffffffcc')
     expect(normalizeCssColor('rgba(0, 0, 0, 0.5)')).toBe('#00000080')
-    expect(normalizeCssColor('rgba(255,0,0,1)')).toBe('#ff0000ff')
+    expect(normalizeCssColor('rgba(255,0,0,1)'), 'alpha=1 ⇒ 不透明，省略 alpha（#ff0000）').toBe('#ff0000')
     expect(normalizeCssColor('transparent')).toBe('#00000000')
     expect(normalizeCssColor('#FFF')).toBe('#fff')
     expect(normalizeCssColor('#12345678')).toBe('#12345678')
     expect(normalizeCssColor('red'), '★批次 14：命名色现支持 ⇒ #ff0000（Web 一致）').toBe('#ff0000')
     expect(normalizeCssColor('white'), '命名色 white').toBe('#ffffff')
     expect(normalizeCssColor('rebeccapurple'), '命名色 rebeccapurple').toBe('#663399')
-    expect(normalizeCssColor('hsl(0,0%,0%)'), 'hsl 仍不支持 ⇒ undefined').toBeUndefined()
+    expect(normalizeCssColor('hsl(0,0%,0%)'), '★批次 15：hsl 现支持（Web 基准）⇒ #000000').toBe('#000000')
     // 端到端：<style> 里的 rgba 折成 hex
     const m = parseClassStyles('.c { color: rgba(255, 255, 255, 0.8) }')
     expect((m.c as { color?: string }).color, 'class 里的 rgba 归一为 hex').toBe('#ffffffcc')
+  })
+
+  it('★⑦b 颜色归一（批次 15 · ★基准 = Web）：4 位 hex / hsl / 现代语法 / alpha 越界→clamp', () => {
+    // 【为什么（用户 2026-10-04「以 web 为基准对齐」）】凡 Web 合法的颜色形态都不得丢弃；
+    //   Web 对越界 alpha 是 **clamp 到 1**（旧实现 >1 ⇒ /255 会把 rgba(...,2) 画成近乎透明，与 Web 不符）。
+    // ① 4 位 hex #RGBA（Web 合法；内核不认 ⇒ 编译期展开为 8 位）
+    expect(normalizeCssColor('#f00f'), '#RGBA 展开为 #RRGGBBAA').toBe('#ff0000ff')
+    expect(normalizeCssColor('#0f08'), ' #RGBA 含 alpha').toBe('#00ff0088')
+    // ② hsl / hsla（三种色相单位 + 现代空格/斜杠语法）
+    expect(normalizeCssColor('hsl(0, 100%, 50%)'), 'hsl 红').toBe('#ff0000')
+    expect(normalizeCssColor('hsl(120, 100%, 50%)'), 'hsl 绿').toBe('#00ff00')
+    expect(normalizeCssColor('hsl(240 100% 50%)'), '现代空格语法').toBe('#0000ff')
+    expect(normalizeCssColor('hsla(0, 100%, 50%, 0.5)'), 'hsla alpha').toBe('#ff000080')
+    expect(normalizeCssColor('hsl(0 100% 50% / 50%)'), '现代斜杠 alpha').toBe('#ff000080')
+    expect(normalizeCssColor('hsl(120deg, 100%, 50%)'), 'deg 单位').toBe('#00ff00')
+    expect(normalizeCssColor('hsl(0.5turn, 100%, 50%)'), 'turn 单位').toBe('#00ffff')
+    expect(normalizeCssColor('hsl(0, 0%, 50%)'), '无饱和 ⇒ 灰').toBe('#808080')
+    // ③ 传统/现代 rgb 语法 + % 通道
+    expect(normalizeCssColor('rgb(255 0 0)'), '现代空格 rgb').toBe('#ff0000')
+    expect(normalizeCssColor('rgb(100%, 0%, 0%)'), '% 通道').toBe('#ff0000')
+    expect(normalizeCssColor('rgb(255 0 0 / 0.5)'), '现代斜杠 alpha').toBe('#ff000080')
+    // ④ alpha 按 Web 语义 clamp（越界 ⇒ 1 而非 /255）
+    expect(normalizeCssColor('rgba(255, 0, 0, 2)'), 'alpha=2 ⇒ clamp 到 1（不透明，非 /255）').toBe('#ff0000')
+    expect(normalizeCssColor('rgba(255, 0, 0, -1)'), 'alpha=-1 ⇒ clamp 到 0').toBe('#ff000000')
+    // ⑤ 未支持（Web 合法但需运行时/CSS4 新空间）⇒ 诊断跳过（不猜）
+    expect(normalizeCssColor('currentColor'), 'currentColor 需运行时 color ⇒ undefined').toBeUndefined()
+    expect(normalizeCssColor('oklch(0.7 0.1 200)'), 'CSS4 新空间未支持').toBeUndefined()
+  })
+
+  it('★⑦c opacity 按 Web 语义 clamp 到 0..1（批次 15 · ★基准 = Web）', () => {
+    // 【为什么（以 web 为基准）】Web 对 opacity 越界值一律夹取到 [0,1]；% 也收。
+    const s1 = parseStaticStyle('opacity: 1.5', () => {})
+    expect((s1 as { opacity?: number }).opacity, 'opacity:1.5 ⇒ clamp 到 1').toBe(1)
+    const s2 = parseStaticStyle('opacity: -0.2', () => {})
+    expect((s2 as { opacity?: number }).opacity, 'opacity:-0.2 ⇒ clamp 到 0').toBe(0)
+    const s3 = parseStaticStyle('opacity: 0.35', () => {})
+    expect((s3 as { opacity?: number }).opacity, '区间内原样').toBe(0.35)
+    const s4 = parseStaticStyle('opacity: 50%', () => {})
+    expect((s4 as { opacity?: number }).opacity, '百分比 ⇒ 0.5').toBe(0.5)
+    const s5 = parseStaticStyle('opacity: 150%', () => {})
+    expect((s5 as { opacity?: number }).opacity, '百分比越界 ⇒ clamp 到 1').toBe(1)
   })
 
   it('★⑧ 元素/类型选择器 + @keyframes 跳过（C1 收尾）', () => {

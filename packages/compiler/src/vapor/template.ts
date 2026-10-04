@@ -629,11 +629,18 @@ export function parseStaticStyle(
         if (!norm) {
           pushDiag(
             `颜色 \`${rawKey}: ${rawVal}\` 无法归一为 App 引擎接受的十六进制（#RGB/#RRGGBB/#RRGGBBAA）——已跳过`,
-            'App 端颜色只支持 hex / rgb() / rgba() / transparent；命名色（red 等）请改 hex',
+            'App 端颜色支持 hex / rgb() / rgba() / hsl() / hsla() / 命名色 / transparent；其余形态（currentColor / CSS4 新空间 lab/oklch 等）请改 hex',
           )
           continue
         }
         out[key] = norm
+      } else if (key === 'opacity') {
+        // ★批次 15（以 Web 为基准）：Web 对 `opacity` 越界值一律 clamp 到 0..1（含 `%`）
+        //   ⇒ App 同语义（此前原样透传 1.5 等，与 Web 不符）。
+        const p = /^(\d*\.?\d+)%$/.exec(rawVal.trim())
+        const n = p ? Number(p[1]) / 100 : numOf(rawVal)
+        if (n === undefined) { pushDiag(`style 里 \`${rawKey}: ${rawVal}\` 不是合法数值（0..1 或 %）`); continue }
+        out[key] = Math.max(0, Math.min(1, n))
       } else {
         const num = numOf(rawVal)
         if (num === undefined) { pushDiag(`style 里 \`${rawKey}: ${rawVal}\` 不是纯数值`); continue }
@@ -984,43 +991,124 @@ export function parseClassStyles(
 /**
  * ★★★C1 颜色归一（2026-10-04 修：真机 `RustLayout.create` 失败暴露）——CSS 颜色 → 内核接受的 hex。
  *
- * 【为什么需要】内核 `parse_css_color` 只认 `#RGB/#RRGGBB/#RRGGBBAA`；CSS 常见的 `rgb()/rgba()`
- *   （真实项目大量使用）原样透传 ⇒ create 拒绝 ⇒ **整棵树建不起来**。⇒ 编译期归一。
- * 【支持】`#rgb`/`#rrggbb`/`#rrggbbaa`（原样）· `rgb(r,g,b)` · `rgba(r,g,b,a)`（a 可为 0..1 小数或 0-255）·
- *   `transparent`（→ #00000000）。其余（命名色 / hsl / var()）⇒ 返回 undefined（调用方诊断 + 跳过）。
- * 【输出序】`#RRGGBB`（不透明）或 `#RRGGBBAA`（含 alpha）——与内核 parse_css_color 的 CSS4 序一致。
+ * 【为什么需要】内核 `parse_css_color` 只认 `#RGB/#RRGGBB/#RRGGBBAA`；CSS 其它合法形态
+ *   （`rgb()/rgba()/hsl()/hsla()`、4 位 hex）原样透传 ⇒ create 拒绝 ⇒ **整棵树建不起来**。⇒ 编译期归一。
+ *
+ * 【★基准 = Web（2026-10-04 用户指定「以 web 为基准对齐」）】凡 **Web 合法**的颜色形态都归一，不丢：
+ *   · hex：`#RGB` / `#RGBA`（4 位，Web 合法）/ `#RRGGBB` / `#RRGGBBAA`
+ *   · 函数式：`rgb()/rgba()` · `hsl()/hsla()`——**两种语法都收**：
+ *     传统逗号 `rgb(255, 0, 0)` 与 现代空格 `rgb(255 0 0)`，alpha 走 4 参或 `/ a`；
+ *     通道可 `%`（`rgb(100%, 0%, 0%)`）；hsl 色相带 `deg/rad/grad/turn` 或裸数（度）。
+ *   · 关键字：`transparent`（→ `#00000000`）· 148 个命名色（查表）。
+ *   · alpha：`%` ⇒ /100；数值**按 Web 语义 clamp 到 0..1**（旧实现的 `>1 ⇒ /255` 是 Web 偏差，
+ *     Web 对越界 alpha 一律 clamp 到 1）。
+ * 【未支持 ⇒ 返回 undefined（调用方诊断 + 跳过，不猜）】`currentColor`（依赖运行时 color，
+ *   编译期无上下文）· `lab()/lch()/oklab()/oklch()/color()/hwb()` 等 CSS4 新空间 · `var()`（由 var 折叠前置处理）。
+ * 【输出序】`#RRGGBB`（不透明，小写）或 `#RRGGBBAA`（含 alpha）——与内核 parse_css_color 的 CSS4 序一致。
  */
 export function normalizeCssColor(raw: string): string | undefined {
   const s = raw.trim().toLowerCase()
   if (!s) return undefined
-  if (/^#[0-9a-f]{3}$|^#[0-9a-f]{6}$|^#[0-9a-f]{8}$/.test(s)) return s
+  // ── hex：3 / 6 / 8 位原样（内核展开 3 位）；★4 位 `#RGBA` Web 合法但内核不认 ⇒ 展开为 8 位 ──
+  const hexm = /^#([0-9a-f]{3}|[0-9a-f]{4}|[0-9a-f]{6}|[0-9a-f]{8})$/.exec(s)
+  if (hexm) {
+    const h = hexm[1]!
+    if (h.length === 4) {
+      const [r, g, b, a] = h
+      return ('#' + r! + r! + g! + g! + b! + b! + a! + a!)
+    }
+    return s
+  }
   if (s === 'transparent') return '#00000000'
-  // ★批次 14（多端一致性审计修）：**CSS 命名色**（`red`/`white`… 148 个标准色）——Web 一律生效，
-  //   此前直接丢弃 ⇒ App 失样式。核心 `parse_css_color` 只认 hex ⇒ 编译期查表归一为 hex。
+  // ★命名色（148 个标准色；Web 一律生效，此前直接丢弃 ⇒ App 失样式）。核心只认 hex ⇒ 编译期查表。
   const named = CSS_NAMED_COLORS[s]
   if (named) return named
-  const m = /^rgba?\(([^)]*)\)$/.exec(s)
+  // ── 函数式：rgb/rgba/hsl/hsla ──
+  const m = /^(rgba?|hsla?)\(([^)]*)\)$/.exec(s)
   if (!m) return undefined
-  const parts = m[1].split(',').map((x) => x.trim())
+  const fn = m[1]!
+  const parts = splitColorArgs(m[2]!)
   if (parts.length < 3) return undefined
-  const ch = (t: string): number | undefined => {
-    if (/%$/.test(t)) { const n = Number(t.slice(0, -1)); return Number.isFinite(n) ? Math.round((n / 100) * 255) : undefined }
-    const n = Number(t)
-    return Number.isFinite(n) ? Math.round(n) : undefined
+  let rgb: number[] | undefined
+  if (fn === 'rgb' || fn === 'rgba') {
+    const r = cssChannel(parts[0]!), g = cssChannel(parts[1]!), b = cssChannel(parts[2]!)
+    if (r === undefined || g === undefined || b === undefined) return undefined
+    rgb = [r, g, b]
+  } else {
+    const h = cssHue(parts[0]!), sat = cssPercent01(parts[1]!), light = cssPercent01(parts[2]!)
+    if (h === undefined || sat === undefined || light === undefined) return undefined
+    rgb = hslToRgb(h, sat, light)
   }
-  const r = ch(parts[0]), g = ch(parts[1]), b = ch(parts[2])
-  if (r === undefined || g === undefined || b === undefined) return undefined
-  const cl = (n: number): number => Math.max(0, Math.min(255, n))
-  const hx = (n: number): string => cl(n).toString(16).padStart(2, '0')
+  const hx = (n: number): string => Math.max(0, Math.min(255, n)).toString(16).padStart(2, '0')
+  const out = '#' + hx(rgb[0]!) + hx(rgb[1]!) + hx(rgb[2]!)
   if (parts.length >= 4) {
-    let a = 1
-    const at = parts[3]
-    if (/%$/.test(at)) { const n = Number(at.slice(0, -1)); if (Number.isFinite(n)) a = n / 100 }
-    else { const n = Number(at); if (Number.isFinite(n)) a = n > 1 ? n / 255 : n }
-    return '#' + hx(r) + hx(g) + hx(b) + hx(Math.round(a * 255))
+    const a = cssAlpha01(parts[3]!)
+    if (a !== undefined && a < 1) return out + hx(Math.round(a * 255))
   }
-  return '#' + hx(r) + hx(g) + hx(b)
+  return out
 }
+
+/** 颜色实参切分：传统逗号 `a, b, c[, d]` 或 现代空格 `a b c[/ d]` ⇒ 3~4 个 token。 */
+function splitColorArgs(body: string): string[] {
+  const b = body.trim()
+  if (b.includes(',')) return b.split(',').map((x) => x.trim())
+  const slash = b.split('/')
+  const head = (slash[0] ?? '').trim().split(/\s+/).filter(Boolean)
+  if (slash.length > 1) head.push((slash.slice(1).join('/')).trim())
+  return head
+}
+
+/** rgb 通道：`n`（0..255）或 `n%`。 */
+function cssChannel(t: string): number | undefined {
+  const s = t.trim()
+  if (/%$/.test(s)) { const n = Number(s.slice(0, -1)); return Number.isFinite(n) ? Math.round((n / 100) * 255) : undefined }
+  const n = Number(s)
+  return Number.isFinite(n) ? Math.round(n) : undefined
+}
+
+/** hsl 的 s/l：`n%` ⇒ /100；裸数按 0..100 百分比处理。 */
+function cssPercent01(t: string): number | undefined {
+  const s = t.trim()
+  if (/%$/.test(s)) { const n = Number(s.slice(0, -1)); return Number.isFinite(n) ? n / 100 : undefined }
+  const n = Number(s)
+  return Number.isFinite(n) ? n / 100 : undefined
+}
+
+/** alpha：`%` ⇒ /100；数值**按 Web 语义 clamp 到 0..1**。 */
+function cssAlpha01(t: string): number | undefined {
+  const s = t.trim()
+  if (!s) return undefined
+  if (/%$/.test(s)) { const n = Number(s.slice(0, -1)); return Number.isFinite(n) ? Math.max(0, Math.min(1, n / 100)) : undefined }
+  const n = Number(s)
+  return Number.isFinite(n) ? Math.max(0, Math.min(1, n)) : undefined
+}
+
+/** hsl 色相：裸数（度）或 `deg/rad/grad/turn`。 */
+function cssHue(t: string): number | undefined {
+  const s = t.trim().toLowerCase()
+  const m = /^(-?(?:\d+\.?\d*|\.\d+))(deg|grad|rad|turn)?$/.exec(s)
+  if (!m) return undefined
+  const n = Number(m[1])
+  if (!Number.isFinite(n)) return undefined
+  switch (m[2]) {
+    case 'grad': return n * 0.9
+    case 'rad': return (n * 180) / Math.PI
+    case 'turn': return n * 360
+    default: return n
+  }
+}
+
+/** CSS hsl → rgb（0..255）；s/l ∈ 0..1。标准公式（CSS Color 4）。 */
+function hslToRgb(h: number, s: number, l: number): number[] {
+  const ht = (((h % 360) + 360) % 360) / 30
+  const a = s * Math.min(l, 1 - l)
+  const f = (n: number): number => {
+    const k = (n + ht) % 12
+    return 255 * (l - a * Math.max(-1, Math.min(k - 3, 9 - k, 1)))
+  }
+  return [f(0), f(8), f(4)].map((x) => Math.round(x))
+}
+
 
 /** ★批次 14：CSS 标准命名色 → hex（148 个；取自 CSS Color Level 4）。核心只认 hex ⇒ 编译期查表。 */
 const CSS_NAMED_COLORS: Record<string, string> = {

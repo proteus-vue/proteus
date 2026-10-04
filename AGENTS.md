@@ -268,6 +268,30 @@
 - **接线位置（不靠记忆）**：`pnpm test:coupled`（package.json）· `deny-blind-verify`
   被拦时的定向建议（`packages/{compiler,plugin-vite,runtime}/` → 建议本工具）· 本段纪律。
 
+### ★★★CSS 多端一致性的**基准 = Web（浏览器真值）**——不是「三端内部自洽」（2026-10-04 用户指定：「以后就按这个来，以 web 为基准对齐」）
+
+- **规则**：App/MP/Web 三端的 CSS 语义，**一律以 Web（浏览器真 CSS）为对齐基准**。
+  「三端彼此一致」**不等于**「与 Web 一致」——三端都是**自研/原生绘制**（Web 浏览器 CSS 引擎 ·
+  Skyline 微信容器 · App 自绘 Rust 引擎 + 宿主），**容易互相看齐却集体偏离 Web**。
+  ⇒ 判定多端一致性，**只认 Web 真值**；三端内部自洽不构成证据。
+- **操作（每个 CSS 特性，无论新增还是已实现）**：
+  1. 先查 Web 标准语义（行高半行距 / 命名色 / 继承属性 / 简写展开 / 默认值…），把它当**唯一判据**；
+  2. 再逐端对照实现，凡与 Web 不符的 ⇒ **诊断或修正**（**不得静默近似**——静默画成实线/顶对齐那类
+     会让"看起来对、其实差"的偏差溜过去）；
+  3. 用 Web 可复现的样例（真项目 CSS 片段）做破坏性验证。
+- **落点（工具/工件）**：能力清单 `docs/generated/css-capability-alignment.{json,md}`（源 =
+  `docs/generated/css-capability-sources/app-profile-features.json`，含 `auditNote` 审计口径），
+  门禁 `pnpm check:css-capability-alignment`；编译器折叠面 `packages/compiler/src/vapor/template.ts`
+  + 判据 `tests/vapor-class-styles.test.ts`；引擎面 `packages/layout-core-rust`。
+- **实证两次（都写进记忆）**：
+  · 批 13 `line-height` 首版做成**顶对齐**（理由"iOS/鸿蒙本就顶对齐"**没验证**）⇒
+    与 Web 的**半行距居中**不符，被用户当场抓出（决策 #507）；
+  · 批 14 多端一致性审计（决策 #508）：命名色 148 色被整条丢弃、非 solid 边框静默画实线、
+    `text-align` 漏继承、`box-sizing:content-box` 静默忽略、枚举大小写 —— 五项都是
+    「App 与 Web 不符」的偏差。
+- ★**同一"基准"纪律的推广**：任何"多端对齐"任务，先问一句「**Web/标准的真值是什么**」，
+  再问「各端差在哪」——顺序反了就会拿"三端自洽"当绿灯。
+
 ## ★★★三端同步纪律（2026-10-03 用户指定：「后面的 vapor 推进就三端同步走」）
 
 **判据（机器强制）**：`pnpm check:vapor-three-end`（已接 `verify` 链 + CI）——
