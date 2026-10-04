@@ -62,6 +62,8 @@ final class ScreenHost: NSObject {
 
     // ── 诊断记账（判据读：证明动作真发生，非壳自述） ──
     private var mountCalls = 0, visibleCalls = 0, destroyCalls = 0, animCalls = 0, animCompleted = 0, animHookMissing = 0
+    /// ★阶段 1：真建进内核树的**页面内容节点**累计数（判据读它证"路由页面真落地"，非 3 占位）
+    private var contentNodeTotal = 0
     /// ★跨页面共享元素计数（2026-10-01；判据读它证明"这条链真的走过"）
     private var rectCalls = 0, sharedCalls = 0
     private var callLog: [String] = []
@@ -184,9 +186,32 @@ final class ScreenHost: NSObject {
         }
         // 内容节点挂到 **page 层**（无计划则回落屏根——向后兼容：老行为不变）
         let contentParent = layerIds["page"] ?? rootId
-        nodes.append(node(rootId + 11, contentParent, 0, 0, 1080, 200, 0x3355AA))
-        nodes.append(node(rootId + 12, contentParent, 0, 200, 1080, 200, 0xAA5533))
-        nodes.append(node(rootId + 13, contentParent, 0, 400, 1080, 200, 0x33AA55))
+        // ★★★阶段 1（2026-10-04 · App 三端对齐 B1+B2 · 与 Android 腿同契约）：**屏内容**。
+        //   ① `content.nodes` 存在且非空 ⇒ 建**真实页面子树**（节点字段与内核 create 契约同源，逐字段透传）。
+        //   ② 缺省（老装置/老调用方）⇒ 保持 3 个几何占位节点（**零行为变化**，向后兼容）。
+        //   ★id 空间：内容局部 id → 屏 id 空间（基址 1000）；`parentId` 缺失/悬空 ⇒ 挂 page 容器。
+        //   【诚实边界】本处证明"内容被真建进内核树"；视觉合成走既有单树路径，不在本类范围。
+        var contentNodeIds: [Int] = []
+        let contentNodes = (args["content"] as? [String: Any])?["nodes"] as? [[String: Any]]
+        if let cns = contentNodes, !cns.isEmpty {
+            var idMap: [Int: Int] = [:]
+            for (i, cn) in cns.enumerated() {
+                if let cid = cn["id"] as? Int { idMap[cid] = 1000 + i }
+            }
+            for (i, cn) in cns.enumerated() {
+                guard let cid = cn["id"] as? Int else { continue }
+                let newId = idMap[cid] ?? (1000 + i)
+                var parentId = contentParent
+                if let pid = cn["parentId"] as? Int, let mapped = idMap[pid] { parentId = mapped }
+                nodes.append(contentNode(newId, parentId, cn))
+                contentNodeIds.append(newId)
+            }
+        } else {
+            // 向后兼容：无 content ⇒ 3 个几何占位节点（老行为不变）
+            nodes.append(node(rootId + 11, contentParent, 0, 0, 1080, 200, 0x3355AA))
+            nodes.append(node(rootId + 12, contentParent, 0, 200, 1080, 200, 0xAA5533))
+            nodes.append(node(rootId + 13, contentParent, 0, 400, 1080, 200, 0x33AA55))
+        }
         let req: [String: Any] = ["viewport": ["width": 1080, "height": 2400], "nodes": nodes]
         guard let reqData = try? JSONSerialization.data(withJSONObject: req),
               let reqJson = String(data: reqData, encoding: .utf8) else {
@@ -201,17 +226,33 @@ final class ScreenHost: NSObject {
         nodeToScreen[rootId] = st
         for off in layerIds.values { nodeToScreen[off] = st }
         for i in 11...13 { nodeToScreen[rootId + i] = st }
+        // ★阶段 1：内容节点也注册（动画按树分发靠它）
+        for id in contentNodeIds { nodeToScreen[id] = st }
         mountCalls += 1
+        contentNodeTotal += contentNodeIds.count
         return ok([
             "rootNodeId": rootId,
-            "nodes": layerCount + 4,
+            "nodes": 1 + layerCount + (contentNodeIds.isEmpty ? 3 : contentNodeIds.count),
             "rebuild": rebuild,
             "handle": Int(handle),
             // ★GP3-c 读数：三层容器（判据读它证明"层结构真建了"——不是壳自述）
             "layerCount": layerCount,
             "globalLayerId": globalLayerId,
             "layerIds": layerIds,
+            // ★阶段 1 读数：屏内容节点数（真页面内容 vs 3 占位）
+            "contentNodes": contentNodeIds.count,
         ])
+    }
+
+    /// ★阶段 1（2026-10-04 · App 三端对齐 B2）：由**页面内容描述**构造内核节点请求
+    ///   （逐字段透传——字段名与内核 create 契约同源；内核 serde 忽略未知键）。
+    private func contentNode(_ id: Int, _ parentId: Int?, _ cn: [String: Any]) -> [String: Any] {
+        var n = cn
+        n.removeValue(forKey: "id")
+        n.removeValue(forKey: "parentId") // 已重映射
+        n["id"] = id
+        if let p = parentId { n["parentId"] = p }
+        return n
     }
 
     private func node(_ id: Int, _ parentId: Int?, _ x: Double, _ y: Double, _ w: Double, _ h: Double, _ color: Int?) -> [String: Any] {
@@ -457,6 +498,8 @@ final class ScreenHost: NSObject {
             "anim_hook_missing": animHookMissing,
             "rect_calls": rectCalls,
             "shared_calls": sharedCalls,
+            // ★阶段 1：真建进内核树的页面内容节点累计数（有 content ⇒ >0）
+            "content_node_total": contentNodeTotal,
             "live_screens": screens.count,
             "calls": Array(callLog[from...]),
             "screens": screensOut,
