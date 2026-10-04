@@ -110,7 +110,8 @@ A1/A2（构建目标 + 产物契约）
 | 阶段 0 | D3（host-rounding 加鸿蒙） | ✅ 已完成（2026-10-04） | 扫描面加鸿蒙 ets；当场抓到并登记 1 处（非几何） |
 | 阶段 1a | **B2（宿主落真实页面子树）+ B1 装配侧**（Android 先行） | ✅ 已收口（2026-10-04） | `ScreenContent` 契约（`screen.mount.content`）+ executor `contentOf` 提供者 + Android `ScreenHost.mount` 消费内容建真实节点（非 3 占位）；真机 ⑦.8 = **真建 8 个内容节点**；iOS 如实报"未接（阶段 2）" |
 | 阶段 1b | A1（App 构建目标）+ B5（SFC 产物 → content 的生产接线） | ⏳ 待办 | 本阶段 content 由**装置内联**提供（证明链路）；生产形态接页面渲染器（renderer-app selfdraw `buildRequest`） |
-| 阶段 2 | B3/B4（三端接入同一产物/链：iOS/harmony 宿主的 ScreenHost 消费 content） | ⏳ 待办 | 本阶段 iOS ⑦.8 如实跳过 |
+| 阶段 2a | **iOS 宿主接 content**（B4 部分） | ✅ 已收口（2026-10-04） | iOS `screen-host.swift` 与 Android 同契约消费 `content.nodes`（id 重映射/逐字段透传）；真机 ⑦.8 = **真建 8 个内容节点** |
+| 阶段 2b | 鸿蒙宿主接 content（ArkTS ScreenHost） | ⏳ 待办 | 鸿蒙暂未接 ScreenExecutor（既有）⇒ 整组跳过 |
 | 阶段 2 | B3/B4（三端接入同一产物/链） | ⏳ 待办 |  |
 | 阶段 3 | C1/C3（CSS 折叠面扩展 + **CSS class 解析编译** + 矩阵级别决策） | ⏳ 待办（**与阶段 1 并进**） | ★实测确认：App 路径不吃 CSS class ⇒ 真实页面样式需 C1；阶段 0 已铺度量前置 |
 | 阶段 4 | E1（文档回填） | ⏳ 待办 |  |
