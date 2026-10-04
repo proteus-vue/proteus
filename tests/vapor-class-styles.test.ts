@@ -1102,3 +1102,112 @@ describe('★批次 14 · 多端一致性审计修（对齐 CSS 标准）', () =
     expect(d.some((m) => m.includes('box-sizing'))).toBe(true)
   })
 })
+
+// ★★★批次 37（对齐 Web · 选择器面扩展）：**静态结构伪类**（:first-child / :last-child / :nth-child）
+//   + **通配 `*`** + **`:not(<简单选择器>)`** + **Vue 作用域穿透 `:deep()/::v-deep()/>>>`**（2026-10-04）
+//
+// 【为什么能做】App 无 CSS 引擎，但**元素兄弟序在编译期树遍历里已知** ⇒ 结构伪类编译期算一次。
+// 【诚实边界】**状态伪类**（:hover/:active/:focus/:checked）需运行时状态通道 ⇒ 仍诊断跳过；
+//   `:not()` 只支持**单段简单选择器**（类/标签/通配/结构伪类）；`::before/::after` 伪元素、属性/兄弟选择器不支持。
+describe('★批次 37 · 静态结构伪类 + 通配 + :not + :deep（对齐 Web 选择器）', () => {
+  const styleOf = (n: { style?: unknown }) => (n.style ?? {}) as Record<string, unknown>
+
+  it('① :first-child / :last-child（元素兄弟序，编译期定位）', () => {
+    const sfc = `<template><view class="list"><view>a</view><view>b</view><view>c</view></view></template>
+<style>
+.list > view:first-child { background-color: #111111 }
+.list > view:last-child { background-color: #222222 }
+</style>`
+    const r = buildLayoutTemplate(sfc, 'first.vue')
+    expect(r.ok).toBe(true)
+    const first = r.template.nodes.find((n) => styleOf(n).backgroundColor === '#111111')
+    const last = r.template.nodes.find((n) => styleOf(n).backgroundColor === '#222222')
+    expect(first, ':first-child 命中').toBeTruthy()
+    expect(last, ':last-child 命中').toBeTruthy()
+    expect(first!.id, '首个子节点').toBe(1)
+    expect(last!.id, '末个子节点').toBe(3)
+  })
+
+  it('② :nth-child(odd/even/An+B)（含 2n 与整数位置）', () => {
+    const sfc = `<template><view><view>1</view><view>2</view><view>3</view><view>4</view></view></template>
+<style>
+view:nth-child(odd) { color: #aa0000 }
+view:nth-child(2n) { font-size: 20 }
+view:nth-child(3) { color: #00aa00 }
+</style>`
+    const r = buildLayoutTemplate(sfc, 'nth.vue')
+    const kids = r.template.nodes.filter((n) => n.parentId === 0)
+    expect(kids.length, '4 个元素子节点').toBe(4)
+    // odd ⇒ 1/3 命中 #aa0000；第 3 个被更晚同特异性的 :nth-child(3) 覆盖为 #00aa00
+    expect(styleOf(kids[0]!).color, '第 1（odd）').toBe('#aa0000')
+    expect(styleOf(kids[1]!).fontSize, '第 2（2n）').toBe(20)
+    expect(styleOf(kids[2]!).color, '第 3（nth-child(3) 覆盖 odd）').toBe('#00aa00')
+    expect(styleOf(kids[3]!).fontSize, '第 4（2n）').toBe(20)
+  })
+
+  it('③ 通配 *（.box > * 匹配任意元素子）', () => {
+    const sfc = `<template><view class="box"><text>a</text><view>b</view></view></template>
+<style>
+.box > * { border-width: 2 }
+</style>`
+    const r = buildLayoutTemplate(sfc, 'star.vue')
+    const kids = r.template.nodes.filter((n) => n.parentId === 0)
+    for (const k of kids) expect(styleOf(k).borderWidth, `${k.tag} 命中通配`).toBe(2)
+  })
+
+  it('④ :not(.x) 取反（命中非该类的兄弟）', () => {
+    const sfc = `<template><view><view class="x">a</view><view class="y">b</view><view class="x">c</view></view></template>
+<style>
+view:not(.x) { background-color: #333333 }
+</style>`
+    const r = buildLayoutTemplate(sfc, 'not.vue')
+    const kids = r.template.nodes.filter((n) => n.parentId === 0)
+    expect(styleOf(kids[0]!).backgroundColor, '.x 不命中').toBeUndefined()
+    expect(styleOf(kids[1]!).backgroundColor, '.y 命中').toBe('#333333')
+    expect(styleOf(kids[2]!).backgroundColor, '.x 不命中').toBeUndefined()
+  })
+
+  it('⑤ Vue :deep() 展开为后代选择器（穿透子组件的类）', () => {
+    const sfc = `<template><view class="wrap"><text class="inner">a</text></view></template>
+<style>
+.wrap :deep(.inner) { color: #008800 }
+</style>`
+    const r = buildLayoutTemplate(sfc, 'deep.vue')
+    const inner = r.template.nodes.find((n) => n.tag === 'text')
+    expect(styleOf(inner!).color, ':deep(.inner) 命中').toBe('#008800')
+  })
+
+  it('⑥ 状态伪类仍诊断跳过（:hover 需运行时状态通道，不静默）', () => {
+    const sfc = `<template><view class="btn">a</view></template>
+<style>
+.btn:hover { background-color: #999999 }
+</style>`
+    const r = buildLayoutTemplate(sfc, 'hover.vue')
+    const btn = r.template.nodes.find((n) => n.tag === 'view')
+    expect(styleOf(btn!).backgroundColor, ':hover 不生效').toBeUndefined()
+    expect(r.diagnostics.some((d) => d.code === 'VAPOR_STYLE_SELECTOR_UNSUPPORTED'), '产选择器诊断').toBe(true)
+  })
+
+  it('⑦ 行内（v-for）结构伪类 ⇒ 诊断（不静默：运行期每行克隆同一模板）', () => {
+    const sfc = `<template><view class="list"><view class="item" v-for="it in items">{{ it }}</view></view></template>
+<style>
+.item:first-child { background-color: #111111 }
+</style>`
+    const r = buildLayoutTemplate(sfc, 'vfor.vue')
+    expect(
+      r.diagnostics.some((d) => d.code === 'VAPOR_STRUCTURAL_PSEUDO_IN_LIST'),
+      'v-for 行内结构伪类产诊断',
+    ).toBe(true)
+    // 非行内（静态兄弟）不产该诊断
+    const sfc2 = `<template><view><view class="a">1</view><view class="a">2</view></view></template>
+<style>
+.a:first-child { background-color: #111111 }
+</style>`
+    const r2 = buildLayoutTemplate(sfc2, 'static.vue')
+    expect(
+      r2.diagnostics.some((d) => d.code === 'VAPOR_STRUCTURAL_PSEUDO_IN_LIST'),
+      '静态兄弟结构伪类不产该诊断',
+    ).toBe(false)
+  })
+
+})

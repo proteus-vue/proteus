@@ -88,9 +88,12 @@
 | selector | `类选择器 .a / .a.b` | — | — | supported | L0 | 编译期折叠 | conditional | C1：<style> 类规则编译期匹配合并（按源序；无特异性权重） |
 | selector | `元素/类型选择器 h3 / p.foo` | — | — | supported | L0 | 编译期折叠 | conditional | C1：按节点原始 tag 匹配（含祖先链） |
 | selector | `后代 / 子组合 .a .b / .a > .b` | — | — | supported | L0 | 编译期折叠 | conditional | C1：祖先类链匹配 |
-| selector | `伪类 :hover / :active / :first-child / :nth-child` | — | — | absent | L0 | 编译期折叠 | unsupported | 静态部分可编译期折叠（Profile L0）；动态交互态需运行时状态通道（成本更高） |
+| selector | `静态结构伪类 :first-child / :last-child / :nth-child(An+B|odd|even) / :not(简单选择器)` | — | — | supported | L0 | 编译期折叠 | conditional | ★批次 37（对齐 Web）：元素兄弟序在编译期树遍历里已知 ⇒ 结构伪类**编译期算一次**（:first-child/:last-child/:nth-child + :not 单段简单选择器）；节点无祖先 CSS 引擎。 |
+| selector | `状态伪类 :hover / :active / :focus / :checked` | — | — | absent | L2 | 降级 | unsupported | ★批次 37：需**运行时状态通道**（App 自绘手势层无 hover 概念）；状态切换改用动态 :class 或语义组件。 |
 | selector | `属性选择器 [data-x]` | — | — | absent | L0 | 编译期折叠 | unsupported | 编译期可判（属性在模板里静态可枚举） |
-| selector | `兄弟组合 +~ / 通配 *` | — | — | absent | L5 | 禁止 | unsupported | 语义弱、跨端难统一（Skyline 亦不支持）——建议改写为类选择器 |
+| selector | `Vue 作用域穿透 :deep() / ::v-deep() / >>>` | — | — | supported | L0 | 编译期折叠 | conditional | ★批次 37：编译期展开为普通后代选择器（本仓无 scope 后缀之外的作用域处理）；`>>>` 等价 `:deep()`。 |
+| selector | `兄弟组合 + / ~` | — | — | absent | L5 | 禁止 | unsupported | 语义弱、跨端难统一（Skyline 亦不支持）——建议改写为类选择器。 |
+| selector | `通配 *` | — | — | supported | L0 | 编译期折叠 | conditional | ★批次 37（对齐 Web）：`*` 单段匹配任意元素（特异性 0）；`.box > *` 这类"所有直接子"常见于设计与重置样式。 |
 | cascade | `特异性 / 继承 / !important` | — | — | supported | L0 | 编译期折叠 | conditional | ★批次 1（2026-10-04）：规则按 (!important, 特异性 (id,class,tag), 源序) 层叠；color/fontSize 沿树继承（CSS 可继承子集；编译期一次性算进 computed style，运行时零匹配） |
 | at-rule | `@media（响应式）` | — | — | absent | L3 | 降级 | unsupported | 编译期无法唯一确定断点；跨端建议走 flex/比例布局 + 框架流体能力 |
 | at-rule | `@keyframes（动画）` | — | — | absent | L3 | 降级 | unsupported | 块整体剔除（旧实现误当元素选择器）；动画走引擎动画桥（animStart/animTick） |
@@ -131,6 +134,9 @@
 | `类选择器 .a / .a.b` | — | — | supported | C1：<style> 类规则编译期匹配合并（按源序；无特异性权重） |
 | `元素/类型选择器 h3 / p.foo` | — | — | supported | C1：按节点原始 tag 匹配（含祖先链） |
 | `后代 / 子组合 .a .b / .a > .b` | — | — | supported | C1：祖先类链匹配 |
+| `静态结构伪类 :first-child / :last-child / :nth-child(An+B|odd|even) / :not(简单选择器)` | — | — | supported | ★批次 37（对齐 Web）：元素兄弟序在编译期树遍历里已知 ⇒ 结构伪类**编译期算一次**（:first-child/:last-child/:nth-child + :not |
+| `Vue 作用域穿透 :deep() / ::v-deep() / >>>` | — | — | supported | ★批次 37：编译期展开为普通后代选择器（本仓无 scope 后缀之外的作用域处理）；`>>>` 等价 `:deep()`。 |
+| `通配 *` | — | — | supported | ★批次 37（对齐 Web）：`*` 单段匹配任意元素（特异性 0）；`.box > *` 这类"所有直接子"常见于设计与重置样式。 |
 | `特异性 / 继承 / !important` | — | — | supported | ★批次 1（2026-10-04）：规则按 (!important, 特异性 (id,class,tag), 源序) 层叠；color/fontSize 沿树继承（CSS 可继承子 |
 | `CSS 自定义属性（design tokens）var(--x)` | — | — | supported | ★批次 9（2026-10-04）：从项目 `globalStyle`（如 styles/tokens.css，与 Web/MP 同一份）解析 `--name: value`，SF |
 | `display: grid + grid-template-columns/rows（显式轨迹）` | partial | not-listed | supported | ★批次 12（2026-10-04）：引擎 `Display::Grid` + `LStyle.grid_template_columns/rows`（字符串轨迹）+ `NodeD |

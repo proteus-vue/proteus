@@ -118,7 +118,7 @@
     "anim_hook_missing": 0,
     "rect_calls": 2,
     "shared_calls": 1,
-    "content_node_total": 160,
+    "content_node_total": 168,
     "live_screens": 2,
     "calls": [
       "screen.mount",
@@ -191,7 +191,7 @@
       "anim_hook_missing": 0,
       "rect_calls": 1,
       "shared_calls": 0,
-      "content_node_total": 160,
+      "content_node_total": 168,
       "live_screens": 3,
       "calls": [
         "screen.mount",
@@ -235,5 +235,5 @@
     }
   },
   "f_note": "统一 API（createRouter）→ 虚拟栈 → 执行器 → 宿主 全链（零胶水形态）",
-  "e_pump_rounds": 71
+  "e_pump_rounds": 70
 }

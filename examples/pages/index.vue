@@ -147,6 +147,13 @@ function go(name: 'forms' | 'config-demo' | 'user') {
 
     <!-- ★font-family 演示（批次 36）：等宽字体（字体角色 monospace） -->
     <div class="mono-demo">font-family: monospace</div>
+
+    <!-- ★静态结构伪类演示（批次 37）：:first-child / :last-child / :nth-child（编译期定位，免手写 :class 映射） -->
+    <div class="sel-demo">
+      <div class="sel-item">first</div>
+      <div class="sel-item">mid</div>
+      <div class="sel-item">last</div>
+    </div>
   </div>
 </template>
 
@@ -427,5 +434,28 @@ function go(name: 'forms' | 'config-demo' | 'user') {
   color: #333;
   font-size: 13px;
   text-align: center;
+}
+/* ★静态结构伪类演示（批次 37）——:first-child 蓝底 / :last-child 橙底 / :nth-child(2) 紫字 */
+.sel-demo {
+  width: 240px;
+  margin: 16px auto;
+}
+.sel-item {
+  height: 24px;
+  font-size: 12px;
+  text-align: center;
+  color: #666666;
+  background-color: #f0f0f0;
+}
+.sel-item:first-child {
+  background-color: #1a7af8;
+  color: #ffffff;
+}
+.sel-item:last-child {
+  background-color: #ff6b35;
+  color: #ffffff;
+}
+.sel-item:nth-child(2) {
+  color: #7c3aed;
 }
 </style>

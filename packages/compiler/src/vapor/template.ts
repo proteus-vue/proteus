@@ -946,6 +946,17 @@ export interface ClassStyleSegment {
   classes: string[]
   /** 该段要求的类型（元素）名（`h3` / `code`；可空） */
   tag?: string
+  /** ★批次 37（对齐 Web · 选择器）：通配段 `*`——匹配任意元素（特异性 0） */
+  universal?: boolean
+  /**
+   * ★批次 37：**静态结构伪类**（编译期可判——位置在模板树里是确定的）。
+   *   `:first-child` / `:last-child` / `:nth-child(An+B|odd|even|n)`。
+   *   【为什么能静态判】App 无 CSS 引擎，但**元素兄弟序在编译期树遍历里已知** ⇒ 编译期算一次。
+   *   诚实边界：状态伪类（`:hover`/`:active`/`:focus`/`:checked`）需运行时状态通道 ⇒ 仍诊断跳过。
+   */
+  pseudo?: { kind: 'first-child' | 'last-child' | 'nth-child'; a: number; b: number }
+  /** ★批次 37：`:not(<简单选择器>)` 的取反段（当前支持单段：类/标签/通配/结构伪类） */
+  not?: ClassStyleSegment
 }
 
 export interface ClassStyleRule {
@@ -970,7 +981,11 @@ function specificityOf(segments: ClassStyleSegment[]): [number, number, number] 
   let c = 0 // type
   for (const seg of segments) {
     b += seg.classes.length
+    // ★批次 37：伪类按 **class 级**计（CSS 规则：`:first-child` 特异性同类）；`:not(x)` 计 x 的特异性。
+    if (seg.pseudo) b += 1
+    if (seg.not) { const s = specificityOf([seg.not]); a += s[0]; b += s[1]; c += s[2] }
     if (seg.tag) c += 1
+    // 通配 `*` 不贡献特异性（CSS 规则）
   }
   return [a, b, c]
 }
@@ -1042,13 +1057,17 @@ function stripAtRuleBlocks(css: string, name: string): string {
   return out
 }
 
-/** 解析单条选择器为「段 + 组合符」链；不支持的形态返回 null（伪类/属性/`*`/兄弟等） */
+/** 解析单条选择器为「段 + 组合符」链；不支持的形态返回 null（状态伪类/属性/兄弟/伪元素等） */
 function parseSelectorChain(sel: string): { segments: ClassStyleSegment[]; combinators: Array<' ' | '>'> } | null {
   if (!sel) return null
-  // 不支持：伪类/伪元素、属性选择器、兄弟组合、插值、通配
-  if (/[:[\]*]|\+~/.test(sel)) return null
+  // ★批次 37：先展开 Vue **作用域穿透选择器**（`:deep()`/`::v-deep()`/`>>>`）——展开后按普通选择器解析。
+  let work = sel.replace(/\s*>>>\s*/g, ' ')
+  work = unwrapDeep(work)
+  if (work === null) return null
+  // 不支持：属性选择器、兄弟组合、插值、花括号
+  if (/[\[\]{}]|\+~|[$@]/.test(work)) return null
   // 按 `>`（子）与空白（后代）切段；先统一 `A>B` → `A > B`
-  const normalized = sel.replace(/\s*>\s*/g, ' > ')
+  const normalized = work.replace(/\s*>\s*/g, ' > ')
   const parts = normalized.split(/\s+/).filter(Boolean)
   const segments: ClassStyleSegment[] = []
   const combinators: Array<' ' | '>'> = []
@@ -1058,17 +1077,102 @@ function parseSelectorChain(sel: string): { segments: ClassStyleSegment[]; combi
       combinators[segments.length - 1] = '>'
       continue
     }
-    // 段：可选**类型名** + 零或多类（`.a.b` ⇒ classes=['a','b']；`h3` ⇒ tag='h3'；`p.foo` ⇒ tag='p' + ['foo']）
-    const classes = [...part.matchAll(/\.([A-Za-z_][\w-]*)/g)].map((x) => stripScopeSuffix(x[1]!))
-    const tagPart = part.replace(/\.[A-Za-z_][\w-]*/g, '')
-    // 类型名合法形态：单个标识符（字母开头）；其余（含 `#id`、残留符号）⇒ 不支持
-    if (tagPart && !/^[A-Za-z][\w-]*$/.test(tagPart)) return null
-    if (!tagPart && classes.length === 0) return null // 空段
+    const seg = parseSelectorSegment(part)
+    if (!seg) return null
     if (segments.length > 0 && combinators[segments.length - 1] === undefined) combinators[segments.length - 1] = ' '
-    segments.push(tagPart ? { classes, tag: tagPart } : { classes })
+    segments.push(seg)
   }
   if (segments.length === 0) return null
   return { segments, combinators }
+}
+
+/**
+ * ★批次 37：展开 Vue 作用域穿透选择器 `:deep(<inner>)` / `::v-deep(<inner>)`（含括号平衡）。
+ *   展开即成普通后代选择器（本仓不做 scope 后缀之外的作用域处理）；`>>>` 由调用方先替换为空格。
+ * @returns 展开后的选择器；括号不平衡 ⇒ null（不支持的形态）
+ */
+function unwrapDeep(sel: string): string | null {
+  const re = /:{1,2}(?:deep|v-deep)\s*\(/i
+  let out = sel
+  for (let guard = 0; guard < 16; guard++) {
+    const m = re.exec(out)
+    if (!m) return out
+    const open = out.indexOf('(', m.index)
+    let depth = 0
+    let close = -1
+    for (let i = open; i < out.length; i++) {
+      if (out[i] === '(') depth++
+      else if (out[i] === ')') { depth--; if (depth === 0) { close = i; break } }
+    }
+    if (close < 0) return null
+    const inner = out.slice(open + 1, close).trim()
+    out = out.slice(0, m.index) + ' ' + inner + ' ' + out.slice(close + 1)
+  }
+  return null
+}
+
+/** `:nth-child(...)` 参数 → `{a,b}`（`An+B` / `odd` / `even` / 整数）；不合法 ⇒ null */
+function parseNth(arg: string): { a: number; b: number } | null {
+  const s = arg.trim().toLowerCase()
+  if (!s) return null
+  if (s === 'odd') return { a: 2, b: 1 }
+  if (s === 'even') return { a: 2, b: 0 }
+  if (/^[+-]?\d+$/.test(s)) return { a: 0, b: Number(s) }
+  const m = /^([+-]?\d*)n([+-]\d+)?$/.exec(s)
+  if (!m) return null
+  const a = m[1] === '' || m[1] === '+' ? 1 : m[1] === '-' ? -1 : Number(m[1])
+  return { a, b: m[2] ? Number(m[2]) : 0 }
+}
+
+/**
+ * 解析**单段**（可选标签 + 类 + 通配 + 结构伪类 + `:not(简单选择器)`）。
+ * 不支持的形态（状态伪类 / 伪元素 / 多伪类叠加等）⇒ null（整条规则跳过 + 诊断，不静默半支持）。
+ */
+function parseSelectorSegment(part: string): ClassStyleSegment | null {
+  let rest = part
+  const pseudos: Array<{ name: string; arg?: string }> = []
+  rest = rest.replace(/:([a-z-]+)(?:\(([^()]*)\))?/gi, (_m, name: string, arg: string | undefined) => {
+    pseudos.push({ name: String(name).toLowerCase(), arg: arg === undefined ? undefined : String(arg) })
+    return ''
+  })
+  if (rest.includes(':')) return null // 残留（伪元素 `::before` 等）⇒ 不支持
+  let universal = false
+  let pseudo: ClassStyleSegment['pseudo']
+  let not: ClassStyleSegment | undefined
+  for (const p of pseudos) {
+    if (p.name === 'first-child') { if (pseudo) return null; pseudo = { kind: 'first-child', a: 0, b: 1 }; continue }
+    if (p.name === 'last-child') { if (pseudo) return null; pseudo = { kind: 'last-child', a: 0, b: 1 }; continue }
+    if (p.name === 'nth-child') {
+      if (pseudo) return null
+      const n = parseNth(p.arg ?? '')
+      if (!n) return null
+      pseudo = { kind: 'nth-child', a: n.a, b: n.b }
+      continue
+    }
+    if (p.name === 'not') {
+      if (not) return null
+      const inner = parseSelectorSegment((p.arg ?? '').trim())
+      if (!inner || inner.not) return null // 递归拒绝嵌套 `:not`
+      not = inner
+      continue
+    }
+    return null // 状态伪类（:hover/:active/:focus/...）与其余未支持伪类
+  }
+  const classes = [...rest.matchAll(/\.([A-Za-z_][\w-]*)/g)].map((x) => stripScopeSuffix(x[1]!))
+  rest = rest.replace(/\.[A-Za-z_][\w-]*/g, '')
+  if (rest === '*') { universal = true; rest = '' }
+  let tag: string | undefined
+  if (rest) {
+    if (!/^[A-Za-z][\w-]*$/.test(rest)) return null // 类型名合法形态：单标识符
+    tag = rest
+  }
+  if (!universal && !tag && classes.length === 0 && !pseudo && !not) return null // 空段
+  const seg: ClassStyleSegment = { classes }
+  if (tag) seg.tag = tag
+  if (universal) seg.universal = true
+  if (pseudo) seg.pseudo = pseudo
+  if (not) seg.not = not
+  return seg
 }
 
 /** 节点匹配上下文：类集合 + 类型名（tag） */
@@ -1076,12 +1180,40 @@ export interface StyleMatchNode {
   classes: Set<string>
   /** 节点原始 tag（如 `h3`/`code`/`div`/`p-button`）；用于类型选择器匹配 */
   tag?: string
+  /** ★批次 37：该节点在**元素兄弟**中的序号（0-based；仅计真元素）——结构伪类匹配用 */
+  index?: number
+  /** ★批次 37：同级**元素兄弟**总数——`:last-child`/`:nth-child` 计算用 */
+  count?: number
 }
 
-/** 该节点是否满足某段要求（段的每个类都在集合里 + tag 相符） */
+/**
+ * 该节点是否满足某段要求（标签/类/通配 + 结构伪类 + `:not` 取反）。
+ * ★批次 37：结构伪类靠节点自身的**元素兄弟序**（`index`/`count`，见 StyleMatchNode）。
+ */
 function segmentMatches(seg: ClassStyleSegment, node: StyleMatchNode): boolean {
-  if (seg.tag && seg.tag !== node.tag) return false
-  return seg.classes.every((c) => node.classes.has(c))
+  if (!seg.universal) {
+    if (seg.tag && seg.tag !== node.tag) return false
+    if (!seg.classes.every((c) => node.classes.has(c))) return false
+  }
+  if (seg.pseudo) {
+    if (node.index === undefined || node.count === undefined) return false
+    if (seg.pseudo.kind === 'last-child') {
+      if (node.index !== node.count - 1) return false
+    } else if (!matchNth(seg.pseudo, node.index + 1)) {
+      return false
+    }
+  }
+  if (seg.not && segmentMatches(seg.not, node)) return false
+  return true
+}
+
+/** `nth-child` 是否命中（`pos` = 1-based 位置）：存在整数 n≥0 使 pos = a·n + b */
+function matchNth(p: NonNullable<ClassStyleSegment['pseudo']>, pos: number): boolean {
+  if (p.kind === 'first-child') return pos === 1
+  const { a, b } = p
+  if (a === 0) return pos === b
+  const d = pos - b
+  return d % a === 0 && d / a >= 0
 }
 
 /**
@@ -1098,6 +1230,11 @@ function segmentMatches(seg: ClassStyleSegment, node: StyleMatchNode): boolean {
 export interface ResolvedClassStyles {
   styles: Record<string, unknown>
   important: Set<string>
+  /**
+   * ★批次 37：是否有**命中的规则带静态结构伪类**（`:first-child`/`:last-child`/`:nth-child`）——
+   *   供模板侧判断"行内（v-for）结构伪类"（运行期每行克隆同一模板 ⇒ 静态求值会作用于**所有行**，非 Web 语义）⇒ 诊断。
+   */
+  structural: boolean
 }
 
 export function resolveClassStyles(
@@ -1117,13 +1254,15 @@ export function resolveClassStyles(
   const normal: Record<string, unknown> = {}
   const important: Record<string, unknown> = {}
   const importantKeys = new Set<string>()
+  // ★批次 37：命中规则里是否含**结构伪类**（行内 v-for 需诊断——见 ResolvedClassStyles.structural）
+  const structural = matched.some((rule) => rule.segments.some((seg) => seg.pseudo !== undefined))
   for (const rule of matched) {
     for (const [k, v] of Object.entries(rule.decls)) {
       if (rule.important.has(k)) { important[k] = v; importantKeys.add(k) }
       else normal[k] = v
     }
   }
-  return { styles: { ...normal, ...important }, important: importantKeys } // important 优先
+  return { styles: { ...normal, ...important }, important: importantKeys, structural } // important 优先
 }
 
 /**
@@ -1210,8 +1349,8 @@ export function parseClassStyles(
   }
   if (skipped > 0 && pushDiag) {
     pushDiag(
-      `<style> 中有 ${skipped} 条**不支持的选择器**规则被跳过（支持：类/元素选择器 + 后代/子组合）`,
-      'App 端无 CSS 引擎：伪类/属性/兄弟/`@media` 等暂不支持；把关键样式改为类/元素选择器或 inline style，或保留 Web 端渲染',
+      `<style> 中有 ${skipped} 条**不支持的选择器**规则被跳过（支持：类/元素/通配选择器 + 后代/子组合 + 静态结构伪类 :first-child / :last-child / :nth-child / :not(...)，以及 Vue :deep()/::v-deep()/>>>）`,
+      'App 端无 CSS 引擎：**状态伪类**（:hover/:active/:focus/:checked）与属性/兄弟选择器/伪元素/@media 仍不支持；把关键样式改为类/元素/结构伪类选择器或 inline style，或保留 Web 端渲染',
     )
   }
   return out
@@ -1922,8 +2061,8 @@ export function buildLayoutTemplate(
     classRules.push(...rules)
     if (skipped > 0) {
       diag(
-        `<style> 中有 ${skipped} 条**不支持的选择器**规则被跳过（支持：类选择器 + 后代/子组合）`,
-        'App 端无 CSS 引擎：伪类/属性/元素选择器等暂不支持；把关键样式改为类选择器或 inline style，或保留 Web 端渲染',
+        `<style> 中有 ${skipped} 条**不支持的选择器**规则被跳过（支持：类/元素/通配选择器 + 后代/子组合 + 静态结构伪类 :first-child / :last-child / :nth-child / :not(...)，以及 Vue :deep()/::v-deep()/>>>）`,
+        'App 端无 CSS 引擎：**状态伪类**（:hover/:active/:focus/:checked）与属性/兄弟选择器/伪元素/@media 仍不支持；把关键样式改为类/元素/结构伪类选择器或 inline style，或保留 Web 端渲染',
         'VAPOR_STYLE_SELECTOR_UNSUPPORTED',
       )
     }
@@ -2010,7 +2149,14 @@ export function buildLayoutTemplate(
     //   没有独立文本节点）——与元素兄弟按**文档序**排布（与 B 路适配器同构）。
     //   ★非混排 ⇒ **引用原样**（既有产物逐字节不变）；空白压缩逐条照抄 Vue condense
     //     （见 text-runs.ts 头注——不对齐会合成一堆缩进空白叶、节点数全错）。
-    for (const raw of normalizedChildSequence(children)) {
+    const elemSeq = normalizedChildSequence(children)
+    // ★批次 37：本层**元素兄弟表**（供静态结构伪类 `:first-child`/`:last-child`/`:nth-child` 计数）——
+    //   只计**真元素**（排除混排合成的文本 run 与不产节点的 `<template>`），与 Web「元素兄弟」语义一致。
+    const elemSiblings = elemSeq.filter((x) => {
+      const e = x as Node & { __syntheticTextRun?: boolean }
+      return e.type === 1 && !e.__syntheticTextRun && normalizeBuiltinTag(e.tag ?? '') !== 'template'
+    })
+    for (const raw of elemSeq) {
       const n = raw as Node
       if (n.type !== 1 /* ELEMENT */) {
         // 文本/插值节点在**父元素**上处理（本函数只在元素遍历里被调用，见下方 children 过滤）
@@ -2136,11 +2282,26 @@ export function buildLayoutTemplate(
         const clsStr = clsAttr?.value?.content?.trim()
         if (clsStr) for (const cn of clsStr.split(/\s+/).filter(Boolean)) selfClasses.add(cn)
         // ★C1：元素/类型选择器按**节点原始 tag** 匹配（`tag` 已是 normalize 后的形态：`h3`/`code`/`p-button`）
-        selfMatch = { classes: selfClasses, tag }
+        // ★批次 37：带上**元素兄弟序**（结构伪类匹配用；非本层真元素 ⇒ 不带）
+        const sibIdx = elemSiblings.indexOf(n)
+        selfMatch = sibIdx >= 0
+          ? { classes: selfClasses, tag, index: sibIdx, count: elemSiblings.length }
+          : { classes: selfClasses, tag }
         if ((selfClasses.size || tag) && classRules.length) {
           const resolved = resolveClassStyles(classRules, ancestorClasses, selfMatch)
           Object.assign(style, resolved.styles)
           classImportant = resolved.important
+          // ★批次 37（诚实边界 · 不静默半支持）：**行内（v-for）结构伪类**——Element 兄弟序在编译期
+          //   按**模板序**求值；而 v-for 行是**运行期克隆同一模板节点** ⇒ 该结构伪类会作用于**所有行**
+          //   （Web 只作用于第 1 行 / 末行）。⇒ 如实诊断（行级首末应走 :class 或数据驱动）。
+          if (resolved.structural && (forCode !== undefined || activeListStack.length > 0)) {
+            diag(
+              `${tag}(id=${id}) 行内（v-for）的**结构伪类**（:first-child/:last-child/:nth-child）按**模板序**静态求值——` +
+                `运行期每行克隆同一模板节点 ⇒ 实际会作用于**所有行**（Web 只作用于首/末行）`,
+              '行级首末样式改用动态 :class（按数据判首末）或组件属性；结构伪类只用于**静态兄弟**（非 v-for 行）',
+              'VAPOR_STRUCTURAL_PSEUDO_IN_LIST',
+            )
+          }
         }
       }
       // 本元素并入祖先链（tag+classes），供子节点组合匹配（`.a .b` / `h3 .x` / `.a > .b`）
