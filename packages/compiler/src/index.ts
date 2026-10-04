@@ -93,6 +93,9 @@ export {
   slotKindOf,
   buildLayoutTemplate,
   parseStaticStyle,
+  // ★C1 最小切片（2026-10-04）：SFC <style> 单类规则 → class→声明 表
+  parseClassStyles,
+  stripScopeSuffix,
   parsePaintDeclAttr,
   isPaintDeclAttr,
   compileEvents,

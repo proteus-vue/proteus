@@ -15,9 +15,9 @@
 - **包规模**：**45 个 @proteus-vue/* npm 包**（+ `packages/layout-core-rust` = **cargo crate，非 npm 包**，故不计数）（★2026-09-29 layout-core = App 排版核心）（check:pkg 0 error · `pnpm check:stats` 校验 ✓；31→38 修正 → G-07 glass 39 → Skyline 收口 worklet 40 → ★2026-09-14 组件库拆包 `@proteus-vue/components` 41 → ★Vapor 线新增 `@proteus-vue/slot-runtime` 42 + `@proteus-vue/layout-core` 43 → ★2026-09-30 MA1 新增 `@proteus-vue/animation` 44；版本统一 0.3.0-beta.8，见「当前状态速览」）
 - **文档**：`docs/proteus-architecture.md`（L0 规约·真理来源）→ `docs/board-inventory.md`（全景索引）→ `docs/roadmap.md`（版本线）→ `roadmap-2-plan`（里程碑线）→ 各 plan
 
+## 当前状态速览（最近一次更新：**2026-10-04·（一三五）· **App 三端对齐 — 缺口 C1 最小切片：SFC `<style>` 单类规则 → class→节点样式**（决策 #481）——用户「继续」。★**缺口 C1**：App 路径**无 CSS 引擎**（只吃 inline style）⇒ 真实项目「有结构无样式」。★**实现**：`parseClassStyles`（`compiler/src/vapor/template.ts`）把 `<style>` 的**单一简单类选择器**规则折成「类名→引擎字段」+ `buildLayoutTemplate` 建 `classStyles` + **模板节点按静态 `class` 合并**（★inline 覆盖 class，合并非替换）+ scoped 后缀类自动匹配；不支持选择器（组合/伪类/属性）⇒ 跳过+诊断 `VAPOR_STYLE_SELECTOR_UNSUPPORTED`（不静默）。★**判据**：`tests/vapor-class-styles.test.ts` 5 组；★真项目 **44 页 40 页有样式·894/1625 节点带样式**（此前近乎 0）；真机 ⑦.8 仍 102 节点（bundle 398→482KB）。★**诚实边界**：无层叠/继承/特异性 · 只静态 class · 只单一简单类选择器 · grid/box-shadow/媒体查询仍不支持。★同轮先做**标准构建目标集**（`web|skyline|ios|android|harmony|all`，弃笼统 app，产物分 `dist/app/<platform>/`）。★全量 **5066/5066** 绿。下一步：C1 余下批次（层叠/伪类/选择器收敛模型）或阶段 2b（鸿蒙接 ScreenExecutor+content）**）★新会话以此为准
 ## 当前状态速览（最近一次更新：**2026-10-04·（一三四）· **App 三端对齐 — 阶段 1b-A（A1）：`proteus build --target app`（路由驱动的 App 屏内容）**（决策 #480）——用户「继续」。★承接阶段 1b（SFC 产物→屏内容）：本轮把**硬编码屏名**换成**项目路由驱动**。★**实现（★标准目标集，非笼统 app）**：CLI `--target web|skyline|ios|android|harmony|all`（与全仓 CONCRETE_PLATFORMS 一致）——App 端 = **三具体平台**，产物分目录 `dist/app/<platform>/screen-content.json`；`buildAppScreenContent(root, platform)`（读 `router/auto-routes.ts` → 逐页 `buildLayoutTemplate` → `screenContentFromLayoutTemplate`；缺产物/零页 ⇒ 报错不静默）；目标名 SSOT `packages/cli/src/targets.ts`；`all` = 逐端全构建（3 App + web + skyline）· args/build/index 接入 · ★**webOnly gen-routes**（不清 MP dist——默认会清 ⇒ check:mp-artifacts 红，实测踩到）· ★**一处实现**：hosts 装置生成器**委托** CLI 构建器 · npm `build:app`。★**判据（真机）**：Android+iOS ⑦.8 均绿——**真建 102 个内容节点**（项目 44 页真实 SFC 产物，非硬编码）；测试 `tests/app-content-cli.test.ts` 5 组。★**诚实边界**：App 路径不吃 CSS class（缺口 C1）⇒ 屏内容眼下主要是**结构** + inline style；真实页面诊断如实（v-model 回写/v-html/Teleport 等 36 类）。★全量 **5060/5060** 绿。下一步：C1（CSS class → 每节点样式折叠——真实页面带样式的最后一跳）或阶段 2b（鸿蒙接 ScreenExecutor+content）**）★新会话以此为准
 ## 当前状态速览（最近一次更新：**2026-10-04·（一三三）· **App 三端对齐 — 阶段 1b（B5）：SFC 产物 → 屏内容**（决策 #479）——用户「继续」。★承接阶段 1a/2a（Android+iOS 已能建屏内容）：本轮把「**装置内联内容**」换成「**真实 SFC 产物**」。★**实现**：转换器 `screenContentFromLayoutTemplate`（LayoutTemplate→ScreenContent，**关键=style 展平到节点顶层**——嵌套 `LayoutNode.style` vs 内核顶层键，不展平静默丢样式）+ 构建期生成器 `gen-app-screen-content.mjs`（编译器 `buildLayoutTemplate` 吃**真实 SFC** → `APP_SCREEN_CONTENT`）+ 装置 contentOf 改读生成产物 + 两端构建接入（Android build-batch / iOS build-app-stack，同源一份）。★**判据（真机）**：两端 ⑦.8 均绿——**真建 10 个内容节点**（来自 SFC 产物，非 stub）；三端 check:app-stack 绿；测试 `tests/screen-content-b5.test.ts` 5 组。★**诚实边界**：演示 SFC 用 **inline style**（CSS class 展开属缺口 C1）· 屏名**硬编码**于生成器（生产须从项目路由驱动，属缺口 A1）· 视觉合成走既有单树路径。★全量 **5055/5055** 绿。下一步：A1（`proteus build --target app` + 从 auto-routes 驱动逐一编译 SFC → content）或 C1（CSS class → 样式折叠）**）★新会话以此为准
-## 当前状态速览（最近一次更新：**2026-10-04·（一三二）· **App 三端对齐 — 阶段 1a：路由页面真正落地（Android 先行）**（决策 #478）——用户「继续」（承接「先整理缺口，再逐个收口」）。★**缺口回顾**：B2「宿主 `screen.mount` 建**空壳容器**」+ B1「装配侧不带页面内容」⇒「路由在走、页面没渲染」。★**实现一条链**：契约 `ScreenContent{ nodes, viewport? }`（`screen.mount.content`，节点字段与内核 create 同源）+ `ScreenContentProvider`·执行器 `contentOf?`（缺省向后兼容）·宿主端口透传（**首轮漏转 ⇒ 真机红当场抓**）·**Android + iOS `ScreenHost` 消费 `content.nodes` 建真实页面节点**（id 重映射/逐字段透传；无 content 保持 3 占位）·装置注入真实内容。★**判据（真机+分层）**：`check-app-stack` 新增 **⑦.8**——读宿主记账 `content_node_total`：**Android + iOS 真机均=真建 8 个内容节点**✅（两端宿主同契约消费 content）/ **鸿蒙**（未接 ScreenExecutor）如实跳过（不假绿）。单测 `tests/screen-content.test.ts` 5 组。★**诚实边界**：本轮证「路由切页→屏里真有页面内容节点」（B1+B2 链路证明）；尚未——内容由装置内联提供（A1 生产构建目标待做）· 视觉合成走既有单树路径 · 鸿蒙宿主未接（阶段 2b，需先接 ScreenExecutor）。★全量 **5050/5050** 绿。下一步：阶段 1b（A1 App 构建目标 + B5 SFC 产物→content 生产接线）或阶段 2b（鸿蒙接 ScreenExecutor + 消费 content）**）★新会话以此为准
 
 
 
@@ -51,13 +51,13 @@
 
 | 文件 | 内容 |
 |---|---|
-| `docs/project-memory-archive/2026-10.md` | 里程碑详细叙事（三十九～一三四）+ 状态速览历史栈（约 4.5k 行） |
+| `docs/project-memory-archive/2026-10.md` | 里程碑详细叙事（三十九～一三五）+ 状态速览历史栈（约 4.5k 行） |
 | `docs/project-memory-archive/2026-09.md` | 09 月全部叙事 + 柔性系统重组历史 + 2026-08 进度快照 + 已落地文件 + 09-19 验证状态（约 6.5k 行） |
-| `docs/project-memory-archive/decisions.md` | 决策链全文 #1–#480——按号检索 |
+| `docs/project-memory-archive/decisions.md` | 决策链全文 #1–#481——按号检索 |
 
 检索示例：`grep -n "2026-09-29\|判据建错靶" docs/project-memory-archive/2026-09.md`
 
-## 关键决策与文档偏差（#1–#480 → 归档速查）
+## 关键决策与文档偏差（#1–#481 → 归档速查）
 
 **全文在 `docs/project-memory-archive/decisions.md`**（按号检索：`grep -n "^290\." docs/project-memory-archive/decisions.md`）。
 决策号**只增不改号**（外部文档按号引用）；新决策追加到该文件末尾（号 +1）。

@@ -11,6 +11,12 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
       {
         "id": 0,
         "parentId": null,
+        "padding": {
+          "top": 24,
+          "right": 24,
+          "bottom": 24,
+          "left": 24
+        },
         "semantic": "div"
       },
       {
@@ -22,12 +28,27 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
       {
         "id": 2,
         "parentId": 0,
+        "color": "#888",
+        "fontSize": 13,
+        "margin": {
+          "bottom": 16
+        },
         "text": "p-progress（<progress>）/ p-label（<label>）/ p-selection（<selection>）",
         "semantic": "p"
       },
       {
         "id": 3,
         "parentId": 0,
+        "borderRadius": 8,
+        "padding": {
+          "top": 16,
+          "right": 16,
+          "bottom": 16,
+          "left": 16
+        },
+        "margin": {
+          "bottom": 16
+        },
         "semantic": "p-view"
       },
       {
@@ -53,6 +74,16 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
       {
         "id": 8,
         "parentId": 0,
+        "borderRadius": 8,
+        "padding": {
+          "top": 16,
+          "right": 16,
+          "bottom": 16,
+          "left": 16
+        },
+        "margin": {
+          "bottom": 16
+        },
         "semantic": "p-view"
       },
       {
@@ -69,6 +100,16 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
       {
         "id": 11,
         "parentId": 0,
+        "borderRadius": 8,
+        "padding": {
+          "top": 16,
+          "right": 16,
+          "bottom": 16,
+          "left": 16
+        },
+        "margin": {
+          "bottom": 16
+        },
         "semantic": "p-view"
       },
       {
@@ -85,6 +126,7 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
       {
         "id": 14,
         "parentId": 11,
+        "display": "block",
         "semantic": "p-text"
       },
       {
@@ -96,17 +138,33 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
       {
         "id": 16,
         "parentId": 0,
+        "color": "#888",
+        "fontSize": 13,
+        "margin": {
+          "bottom": 16
+        },
         "text": "p-view 容器 / p-text 文本 / p-button 防重复 / p-image 懒加载",
         "semantic": "p"
       },
       {
         "id": 17,
         "parentId": 0,
+        "borderRadius": 8,
+        "padding": {
+          "top": 16,
+          "right": 16,
+          "bottom": 16,
+          "left": 16
+        },
+        "margin": {
+          "bottom": 16
+        },
         "semantic": "p-view"
       },
       {
         "id": 18,
         "parentId": 17,
+        "display": "block",
         "text": "p-view 容器 + p-text 文本（selectable）",
         "semantic": "p-text"
       },
@@ -119,16 +177,28 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
       {
         "id": 20,
         "parentId": 17,
+        "display": "block",
         "semantic": "p-text"
       },
       {
         "id": 21,
         "parentId": 0,
+        "borderRadius": 8,
+        "padding": {
+          "top": 16,
+          "right": 16,
+          "bottom": 16,
+          "left": 16
+        },
+        "margin": {
+          "bottom": 16
+        },
         "semantic": "p-image"
       },
       {
         "id": 22,
         "parentId": 0,
+        "display": "block",
         "semantic": "p-text"
       },
       {
@@ -140,12 +210,27 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
       {
         "id": 24,
         "parentId": 0,
+        "color": "#888",
+        "fontSize": 13,
+        "margin": {
+          "bottom": 16
+        },
         "text": "p-scroll-view 包裹 + p-list-view 虚拟窗口（10000 条，行数恒定）",
         "semantic": "p"
       },
       {
         "id": 25,
         "parentId": 0,
+        "borderRadius": 8,
+        "padding": {
+          "top": 16,
+          "right": 16,
+          "bottom": 16,
+          "left": 16
+        },
+        "margin": {
+          "bottom": 16
+        },
         "semantic": "p-scroll-view"
       },
       {
@@ -162,12 +247,27 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
       {
         "id": 28,
         "parentId": 0,
+        "color": "#888",
+        "fontSize": 13,
+        "margin": {
+          "bottom": 16
+        },
         "text": "p-input / p-textarea（:value + @input，载荷 { value } 跨端归一）",
         "semantic": "p"
       },
       {
         "id": 29,
         "parentId": 0,
+        "borderRadius": 8,
+        "padding": {
+          "top": 16,
+          "right": 16,
+          "bottom": 16,
+          "left": 16
+        },
+        "margin": {
+          "bottom": 16
+        },
         "semantic": "p-view"
       },
       {
@@ -183,6 +283,7 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
       {
         "id": 32,
         "parentId": 29,
+        "display": "block",
         "semantic": "p-text"
       },
       {
@@ -194,12 +295,27 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
       {
         "id": 34,
         "parentId": 0,
+        "color": "#888",
+        "fontSize": 13,
+        "margin": {
+          "bottom": 16
+        },
         "text": "p-popup（转场动画）/ p-toast（自动关闭）/ p-loading / p-mask",
         "semantic": "p"
       },
       {
         "id": 35,
         "parentId": 0,
+        "borderRadius": 8,
+        "padding": {
+          "top": 16,
+          "right": 16,
+          "bottom": 16,
+          "left": 16
+        },
+        "margin": {
+          "bottom": 16
+        },
         "semantic": "p-view"
       },
       {
@@ -222,11 +338,18 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
       {
         "id": 39,
         "parentId": 38,
+        "padding": {
+          "top": 16,
+          "right": 16,
+          "bottom": 16,
+          "left": 16
+        },
         "semantic": "p-view"
       },
       {
         "id": 40,
         "parentId": 39,
+        "display": "block",
         "text": "弹层内容（bottom + slide 转场）",
         "semantic": "p-text"
       },
@@ -250,6 +373,11 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
       {
         "id": 44,
         "parentId": 0,
+        "color": "#888",
+        "fontSize": 13,
+        "margin": {
+          "bottom": 16
+        },
         "text": "p-nav-bar（back 仅 emit，页面决定导航）+ p-skeleton（加载态）",
         "semantic": "p"
       },
@@ -261,6 +389,16 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
       {
         "id": 46,
         "parentId": 0,
+        "borderRadius": 8,
+        "padding": {
+          "top": 16,
+          "right": 16,
+          "bottom": 16,
+          "left": 16
+        },
+        "margin": {
+          "bottom": 16
+        },
         "semantic": "p-view"
       },
       {
@@ -276,6 +414,7 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
       {
         "id": 49,
         "parentId": 46,
+        "display": "block",
         "text": "数据已加载",
         "semantic": "p-text"
       }
@@ -286,6 +425,12 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
       {
         "id": 0,
         "parentId": null,
+        "padding": {
+          "top": 24,
+          "right": 24,
+          "bottom": 24,
+          "left": 24
+        },
         "semantic": "div"
       },
       {
@@ -297,6 +442,8 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
       {
         "id": 2,
         "parentId": 0,
+        "color": "#888",
+        "fontSize": 13,
         "text": "父页面使用 <counter>（defineProps / emit → triggerEvent，usingComponents 自动注入）",
         "semantic": "p"
       },
@@ -322,6 +469,12 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
       {
         "id": 0,
         "parentId": null,
+        "padding": {
+          "top": 24,
+          "right": 24,
+          "bottom": 24,
+          "left": 24
+        },
         "semantic": "div"
       },
       {
@@ -333,6 +486,8 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
       {
         "id": 2,
         "parentId": 0,
+        "color": "#888",
+        "fontSize": 13,
         "semantic": "p"
       },
       {
@@ -356,6 +511,14 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
       {
         "id": 6,
         "parentId": 0,
+        "display": "block",
+        "padding": {
+          "top": 16,
+          "right": 16,
+          "bottom": 16,
+          "left": 16
+        },
+        "borderRadius": 8,
         "text": "customTags：'demo-box' → view（config 启用）",
         "semantic": "demo-box"
       },
@@ -373,6 +536,13 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
       {
         "id": 9,
         "parentId": 0,
+        "padding": {
+          "top": 12,
+          "right": 12,
+          "bottom": 12,
+          "left": 12
+        },
+        "borderRadius": 8,
         "semantic": "div"
       },
       {
@@ -384,11 +554,20 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
       {
         "id": 11,
         "parentId": 9,
+        "color": "#888",
+        "fontSize": 13,
         "semantic": "p"
       },
       {
         "id": 12,
         "parentId": 0,
+        "padding": {
+          "top": 12,
+          "right": 12,
+          "bottom": 12,
+          "left": 12
+        },
+        "borderRadius": 8,
         "semantic": "div"
       },
       {
@@ -400,11 +579,20 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
       {
         "id": 14,
         "parentId": 12,
+        "color": "#888",
+        "fontSize": 13,
         "semantic": "p"
       },
       {
         "id": 15,
         "parentId": 0,
+        "padding": {
+          "top": 12,
+          "right": 12,
+          "bottom": 12,
+          "left": 12
+        },
+        "borderRadius": 8,
         "semantic": "div"
       },
       {
@@ -416,16 +604,22 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
       {
         "id": 17,
         "parentId": 15,
+        "color": "#888",
+        "fontSize": 13,
         "semantic": "p"
       },
       {
         "id": 18,
         "parentId": 15,
+        "color": "#888",
+        "fontSize": 13,
         "semantic": "p"
       },
       {
         "id": 19,
         "parentId": 15,
+        "color": "#888",
+        "fontSize": 13,
         "semantic": "p"
       },
       {
@@ -437,6 +631,17 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
       {
         "id": 21,
         "parentId": 0,
+        "margin": {
+          "top": 20
+        },
+        "padding": {
+          "top": 12,
+          "right": 12,
+          "bottom": 12,
+          "left": 12
+        },
+        "borderRadius": 8,
+        "fontSize": 13,
         "semantic": "div"
       },
       {
@@ -641,100 +846,186 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
       {
         "id": 1,
         "parentId": 0,
+        "display": "flex",
+        "flexDirection": "column",
         "semantic": "view"
       },
       {
         "id": 2,
         "parentId": 1,
+        "fontSize": 24,
         "text": "调试基座即宿主",
         "semantic": "text"
       },
       {
         "id": 3,
         "parentId": 1,
+        "fontSize": 13,
+        "opacity": 0.65,
+        "margin": {
+          "top": 6
+        },
         "text": "基座是常驻宿主，不是构建产物——装一次，换插件，永不重打（渲染与能力走可插拔后端，不是 WebView 套壳）",
         "semantic": "text"
       },
       {
         "id": 4,
         "parentId": 0,
+        "borderRadius": 12,
+        "padding": {
+          "top": 14,
+          "right": 14,
+          "bottom": 14,
+          "left": 14
+        },
+        "margin": {
+          "bottom": 14
+        },
         "semantic": "view"
       },
       {
         "id": 5,
         "parentId": 4,
+        "fontSize": 15,
+        "margin": {
+          "bottom": 10
+        },
+        "display": "block",
         "text": "① 业务侧（编译器生成的转发桩）",
         "semantic": "text"
       },
       {
         "id": 6,
         "parentId": 4,
+        "display": "flex",
+        "gap": 8,
+        "margin": {
+          "bottom": 8
+        },
         "semantic": "view"
       },
       {
         "id": 7,
         "parentId": 6,
+        "fontSize": 13,
+        "borderRadius": 8,
+        "borderColor": "rgba(59,130,246,0.45)",
         "text": "调用 scanQR()",
         "semantic": "view"
       },
       {
         "id": 8,
         "parentId": 4,
+        "fontSize": 12,
+        "opacity": 0.75,
+        "display": "block",
+        "margin": {
+          "top": 4
+        },
         "semantic": "text"
       },
       {
         "id": 9,
         "parentId": 4,
+        "fontSize": 12,
+        "opacity": 0.75,
+        "display": "block",
+        "margin": {
+          "top": 4
+        },
         "semantic": "text"
       },
       {
         "id": 10,
         "parentId": 0,
+        "borderRadius": 12,
+        "padding": {
+          "top": 14,
+          "right": 14,
+          "bottom": 14,
+          "left": 14
+        },
+        "margin": {
+          "bottom": 14
+        },
         "semantic": "view"
       },
       {
         "id": 11,
         "parentId": 10,
+        "fontSize": 15,
+        "margin": {
+          "bottom": 10
+        },
+        "display": "block",
         "text": "② 原生插件推送（dev server push → 装载即验证）",
         "semantic": "text"
       },
       {
         "id": 12,
         "parentId": 10,
+        "display": "flex",
+        "gap": 8,
+        "margin": {
+          "bottom": 8
+        },
         "semantic": "view"
       },
       {
         "id": 13,
         "parentId": 12,
+        "fontSize": 13,
+        "borderRadius": 8,
+        "borderColor": "rgba(59,130,246,0.45)",
         "text": "push scanner@1.0.0",
         "semantic": "view"
       },
       {
         "id": 14,
         "parentId": 12,
+        "fontSize": 13,
+        "borderRadius": 8,
+        "borderColor": "rgba(59,130,246,0.45)",
         "text": "push scanner@2.0.0（热升级）",
         "semantic": "view"
       },
       {
         "id": 15,
         "parentId": 10,
+        "display": "flex",
+        "gap": 8,
+        "margin": {
+          "bottom": 8
+        },
         "semantic": "view"
       },
       {
         "id": 16,
         "parentId": 15,
+        "fontSize": 13,
+        "borderRadius": 8,
+        "borderColor": "rgba(239,68,68,0.4)",
         "text": "push 坏签名（应拒绝）",
         "semantic": "view"
       },
       {
         "id": 17,
         "parentId": 15,
+        "fontSize": 13,
+        "borderRadius": 8,
+        "borderColor": "rgba(239,68,68,0.4)",
         "text": "push 坏 shape（应拒绝+降级）",
         "semantic": "view"
       },
       {
         "id": 18,
         "parentId": 10,
+        "fontSize": 12,
+        "opacity": 0.75,
+        "display": "block",
+        "margin": {
+          "top": 4
+        },
         "semantic": "text"
       },
       {
@@ -750,171 +1041,309 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
       {
         "id": 21,
         "parentId": 0,
+        "borderRadius": 12,
+        "padding": {
+          "top": 14,
+          "right": 14,
+          "bottom": 14,
+          "left": 14
+        },
+        "margin": {
+          "bottom": 14
+        },
         "semantic": "view"
       },
       {
         "id": 22,
         "parentId": 21,
+        "fontSize": 15,
+        "margin": {
+          "bottom": 10
+        },
+        "display": "block",
         "text": "③ 双层构建缓存（基座 cacheKey 与业务规模无关）",
         "semantic": "text"
       },
       {
         "id": 23,
         "parentId": 21,
+        "display": "flex",
+        "gap": 8,
+        "margin": {
+          "bottom": 8
+        },
         "semantic": "view"
       },
       {
         "id": 24,
         "parentId": 23,
+        "fontSize": 13,
+        "borderRadius": 8,
         "text": "业务再写 30 页",
         "semantic": "view"
       },
       {
         "id": 25,
         "parentId": 21,
+        "fontSize": 12,
+        "opacity": 0.75,
+        "display": "block",
+        "margin": {
+          "top": 4
+        },
         "semantic": "text"
       },
       {
         "id": 26,
         "parentId": 0,
+        "borderRadius": 12,
+        "padding": {
+          "top": 14,
+          "right": 14,
+          "bottom": 14,
+          "left": 14
+        },
+        "margin": {
+          "bottom": 14
+        },
         "semantic": "view"
       },
       {
         "id": 27,
         "parentId": 26,
+        "fontSize": 15,
+        "margin": {
+          "bottom": 10
+        },
+        "display": "block",
         "text": "④ DevHost 指标（G-45.5 全链可观测）",
         "semantic": "text"
       },
       {
         "id": 28,
         "parentId": 26,
+        "display": "flex",
+        "gap": 10,
         "semantic": "view"
       },
       {
         "id": 29,
         "parentId": 28,
+        "minWidth": 72,
+        "borderRadius": 10,
+        "display": "flex",
+        "flexDirection": "column",
+        "alignItems": "center",
         "semantic": "view"
       },
       {
         "id": 30,
         "parentId": 29,
+        "fontSize": 20,
         "semantic": "text"
       },
       {
         "id": 31,
         "parentId": 29,
+        "fontSize": 11,
+        "opacity": 0.65,
+        "margin": {
+          "top": 2
+        },
         "text": "装载",
         "semantic": "text"
       },
       {
         "id": 32,
         "parentId": 28,
+        "minWidth": 72,
+        "borderRadius": 10,
+        "display": "flex",
+        "flexDirection": "column",
+        "alignItems": "center",
         "semantic": "view"
       },
       {
         "id": 33,
         "parentId": 32,
+        "fontSize": 20,
         "semantic": "text"
       },
       {
         "id": 34,
         "parentId": 32,
+        "fontSize": 11,
+        "opacity": 0.65,
+        "margin": {
+          "top": 2
+        },
         "text": "热升级",
         "semantic": "text"
       },
       {
         "id": 35,
         "parentId": 28,
+        "minWidth": 72,
+        "borderRadius": 10,
+        "display": "flex",
+        "flexDirection": "column",
+        "alignItems": "center",
         "semantic": "view"
       },
       {
         "id": 36,
         "parentId": 35,
+        "fontSize": 20,
         "semantic": "text"
       },
       {
         "id": 37,
         "parentId": 35,
+        "fontSize": 11,
+        "opacity": 0.65,
+        "margin": {
+          "top": 2
+        },
         "text": "拒绝",
         "semantic": "text"
       },
       {
         "id": 38,
         "parentId": 28,
+        "minWidth": 72,
+        "borderRadius": 10,
+        "display": "flex",
+        "flexDirection": "column",
+        "alignItems": "center",
         "semantic": "view"
       },
       {
         "id": 39,
         "parentId": 38,
+        "fontSize": 20,
         "semantic": "text"
       },
       {
         "id": 40,
         "parentId": 38,
+        "fontSize": 11,
+        "opacity": 0.65,
+        "margin": {
+          "top": 2
+        },
         "text": "降级",
         "semantic": "text"
       },
       {
         "id": 41,
         "parentId": 28,
+        "minWidth": 72,
+        "borderRadius": 10,
+        "display": "flex",
+        "flexDirection": "column",
+        "alignItems": "center",
         "semantic": "view"
       },
       {
         "id": 42,
         "parentId": 41,
+        "fontSize": 20,
         "semantic": "text"
       },
       {
         "id": 43,
         "parentId": 41,
+        "fontSize": 11,
+        "opacity": 0.65,
+        "margin": {
+          "top": 2
+        },
         "text": "回放",
         "semantic": "text"
       },
       {
         "id": 44,
         "parentId": 28,
+        "minWidth": 72,
+        "borderRadius": 10,
+        "display": "flex",
+        "flexDirection": "column",
+        "alignItems": "center",
         "semantic": "view"
       },
       {
         "id": 45,
         "parentId": 44,
+        "fontSize": 20,
         "semantic": "text"
       },
       {
         "id": 46,
         "parentId": 44,
+        "fontSize": 11,
+        "opacity": 0.65,
+        "margin": {
+          "top": 2
+        },
         "text": "基座重打",
         "semantic": "text"
       },
       {
         "id": 47,
         "parentId": 0,
+        "borderRadius": 12,
+        "padding": {
+          "top": 14,
+          "right": 14,
+          "bottom": 14,
+          "left": 14
+        },
+        "margin": {
+          "bottom": 14
+        },
         "semantic": "view"
       },
       {
         "id": 48,
         "parentId": 47,
+        "fontSize": 15,
+        "margin": {
+          "bottom": 10
+        },
+        "display": "block",
         "text": "⑤ 事件链（loaded / upgraded / rejected / fallback / replay）",
         "semantic": "text"
       },
       {
         "id": 49,
         "parentId": 47,
+        "display": "flex",
+        "gap": 8,
         "semantic": "view"
       },
       {
         "id": 50,
         "parentId": 49,
+        "fontSize": 11,
+        "opacity": 0.5,
+        "flexShrink": 0,
         "semantic": "text"
       },
       {
         "id": 51,
         "parentId": 49,
+        "fontSize": 12,
         "semantic": "text"
       },
       {
         "id": 52,
         "parentId": 47,
+        "fontSize": 12,
+        "opacity": 0.75,
+        "display": "block",
+        "margin": {
+          "top": 4
+        },
         "text": "（暂无事件——点上面的按钮开始）",
         "semantic": "text"
       }
@@ -925,6 +1354,8 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
       {
         "id": 0,
         "parentId": null,
+        "maxWidth": 860,
+        "fontSize": 13,
         "semantic": "div"
       },
       {
@@ -936,6 +1367,7 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
       {
         "id": 2,
         "parentId": 0,
+        "color": "#666",
         "semantic": "p"
       },
       {
@@ -995,76 +1427,101 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
       {
         "id": 12,
         "parentId": 0,
+        "display": "inline-block",
+        "borderRadius": 4,
         "semantic": "div"
       },
       {
         "id": 13,
         "parentId": 0,
+        "display": "flex",
+        "gap": 8,
         "semantic": "div"
       },
       {
         "id": 14,
         "parentId": 13,
+        "borderRadius": 4,
         "text": "读取 appInfo（路由表）",
         "semantic": "button"
       },
       {
         "id": 15,
         "parentId": 13,
+        "borderRadius": 4,
         "text": "读取 deviceInfo（环境/能力）",
         "semantic": "button"
       },
       {
         "id": 16,
         "parentId": 0,
+        "borderRadius": 6,
         "semantic": "div"
       },
       {
         "id": 17,
         "parentId": 16,
+        "display": "flex",
+        "gap": 8,
         "semantic": "div"
       },
       {
         "id": 18,
         "parentId": 17,
+        "borderRadius": 4,
+        "fontSize": 12,
         "semantic": "input"
       },
       {
         "id": 19,
         "parentId": 17,
+        "borderRadius": 4,
         "text": "下发命令",
         "semantic": "button"
       },
       {
         "id": 20,
         "parentId": 16,
+        "borderRadius": 4,
+        "fontSize": 12,
         "semantic": "input"
       },
       {
         "id": 21,
         "parentId": 16,
+        "color": "#999",
+        "fontSize": 12,
         "text": "命令经 relay 转发到应用侧执行（如 restoreStores 时间旅行恢复真实状态）——双向调试通道",
         "semantic": "p"
       },
       {
         "id": 22,
         "parentId": 0,
+        "display": "flex",
+        "gap": 6,
         "semantic": "div"
       },
       {
         "id": 23,
         "parentId": 22,
+        "borderRadius": 3,
+        "fontSize": 12,
+        "color": "#fff",
         "semantic": "span"
       },
       {
         "id": 24,
         "parentId": 22,
+        "color": "#999",
+        "fontSize": 12,
         "text": "暂无事件（页面路由/API 操作后出现）",
         "semantic": "span"
       },
       {
         "id": 25,
         "parentId": 0,
+        "display": "grid",
+        "gap": 16,
         "semantic": "div"
       },
       {
@@ -1086,16 +1543,26 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
       {
         "id": 29,
         "parentId": 28,
+        "display": "flex",
+        "alignItems": "center",
+        "gap": 6,
+        "fontSize": 12,
         "semantic": "div"
       },
       {
         "id": 30,
         "parentId": 29,
+        "borderRadius": 3,
+        "color": "#fff",
+        "fontSize": 11,
         "semantic": "span"
       },
       {
         "id": 31,
         "parentId": 29,
+        "fontSize": 11,
+        "color": "#666",
+        "width": 44,
         "semantic": "span"
       },
       {
@@ -1106,11 +1573,15 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
       {
         "id": 33,
         "parentId": 29,
+        "color": "#bbb",
+        "fontSize": 11,
         "semantic": "span"
       },
       {
         "id": 34,
         "parentId": 28,
+        "color": "#999",
+        "fontSize": 12,
         "text": "暂无事件（页面路由/API 操作后出现）",
         "semantic": "p"
       },
@@ -1133,6 +1604,7 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
       {
         "id": 38,
         "parentId": 37,
+        "fontSize": 11,
         "semantic": "div"
       },
       {
@@ -1144,6 +1616,16 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
       {
         "id": 40,
         "parentId": 35,
+        "borderRadius": 6,
+        "padding": {
+          "top": 8,
+          "right": 8,
+          "bottom": 8,
+          "left": 8
+        },
+        "fontSize": 11,
+        "maxHeight": 240,
+        "overflow": "auto",
         "semantic": "pre"
       }
     ]
@@ -1169,6 +1651,7 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
       {
         "id": 3,
         "parentId": 1,
+        "color": "#666a73",
         "text": "本页内容由 Markdown 经 @proteus-vue/docs 编译渲染——文档也是编译产物",
         "semantic": "text"
       },
@@ -1185,6 +1668,7 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
       {
         "id": 6,
         "parentId": 4,
+        "color": "#9aa0aa",
         "semantic": "text"
       },
       {
@@ -1225,6 +1709,7 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
       {
         "id": 14,
         "parentId": 12,
+        "color": "#9aa0aa",
         "semantic": "text"
       },
       {
@@ -1235,11 +1720,13 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
       {
         "id": 16,
         "parentId": 15,
+        "color": "#666a73",
         "semantic": "text"
       },
       {
         "id": 17,
         "parentId": 15,
+        "color": "#666a73",
         "semantic": "text"
       }
     ]
@@ -1249,6 +1736,7 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
       {
         "id": 0,
         "parentId": null,
+        "maxWidth": 900,
         "semantic": "div"
       },
       {
@@ -1260,6 +1748,7 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
       {
         "id": 2,
         "parentId": 0,
+        "color": "#666",
         "semantic": "p"
       },
       {
@@ -1283,48 +1772,87 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
       {
         "id": 6,
         "parentId": 0,
+        "color": "#07c160",
+        "borderRadius": 4,
         "text": "展开 12 卡片 + 8 标签",
         "semantic": "button"
       },
       {
         "id": 7,
         "parentId": 0,
+        "margin": {
+          "bottom": 20
+        },
         "semantic": "p-grid"
       },
       {
         "id": 8,
         "parentId": 7,
+        "borderRadius": 8,
+        "padding": {
+          "top": 16,
+          "right": 16,
+          "bottom": 16,
+          "left": 16
+        },
+        "minHeight": 64,
+        "boxSizing": "border-box",
         "semantic": "div"
       },
       {
         "id": 9,
         "parentId": 8,
+        "margin": {
+          "top": 0,
+          "right": 0,
+          "bottom": 0,
+          "left": 0
+        },
+        "color": "#07c160",
         "semantic": "p"
       },
       {
         "id": 10,
         "parentId": 0,
+        "margin": {
+          "bottom": 20
+        },
         "semantic": "p-stack"
       },
       {
         "id": 11,
         "parentId": 10,
+        "borderRadius": 12,
+        "fontSize": 12,
         "semantic": "span"
       },
       {
         "id": 12,
         "parentId": 0,
+        "borderRadius": 8,
+        "padding": {
+          "top": 16,
+          "right": 16,
+          "bottom": 16,
+          "left": 16
+        },
+        "margin": {
+          "bottom": 16
+        },
         "semantic": "div"
       },
       {
         "id": 13,
         "parentId": 12,
+        "color": "#fff",
+        "borderRadius": 6,
         "text": "内容驱动宽度（fit-content · 最大 80%）",
         "semantic": "p-fit"
       },
       {
         "id": 14,
         "parentId": 0,
+        "color": "#1d6fb8",
         "text": "p-fluid=\"font-size(14,20) margin(16,32)\" —— 字号与外边距随窗口宽度流式变化",
         "semantic": "p"
       }
@@ -1335,6 +1863,7 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
       {
         "id": 0,
         "parentId": null,
+        "maxWidth": 1000,
         "semantic": "div"
       },
       {
@@ -1346,6 +1875,7 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
       {
         "id": 2,
         "parentId": 0,
+        "color": "#666",
         "semantic": "p"
       },
       {
@@ -1369,12 +1899,25 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
       {
         "id": 6,
         "parentId": 0,
+        "color": "#1d6fb8",
+        "borderRadius": 4,
         "text": "展开 8 卡片",
         "semantic": "button"
       },
       {
         "id": 7,
         "parentId": 0,
+        "borderRadius": 8,
+        "padding": {
+          "top": 10,
+          "right": 10,
+          "bottom": 10,
+          "left": 10
+        },
+        "margin": {
+          "bottom": 20
+        },
+        "minHeight": 120,
         "semantic": "p-split"
       },
       {
@@ -1391,6 +1934,8 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
       {
         "id": 10,
         "parentId": 8,
+        "color": "#999",
+        "fontSize": 12,
         "text": "容器 < 640px → 堆叠在顶部；≥ 640px → 并排左侧",
         "semantic": "p"
       },
@@ -1408,140 +1953,273 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
       {
         "id": 13,
         "parentId": 11,
+        "color": "#999",
+        "fontSize": 12,
         "text": "内容随容器宽度重排——平板横屏/车机分屏场景",
         "semantic": "p"
       },
       {
         "id": 14,
         "parentId": 0,
+        "margin": {
+          "bottom": 20
+        },
         "semantic": "p-zone"
       },
       {
         "id": 15,
         "parentId": 14,
+        "borderRadius": 8,
+        "padding": {
+          "top": 12,
+          "right": 12,
+          "bottom": 12,
+          "left": 12
+        },
+        "margin": {
+          "bottom": 8
+        },
         "text": "sm 布局：单列堆叠（容器 < 188px）",
         "semantic": "div"
       },
       {
         "id": 16,
         "parentId": 14,
+        "borderRadius": 8,
+        "padding": {
+          "top": 12,
+          "right": 12,
+          "bottom": 12,
+          "left": 12
+        },
+        "margin": {
+          "bottom": 8
+        },
         "text": "md 布局：两列（容器 ≥ 328px）",
         "semantic": "div"
       },
       {
         "id": 17,
         "parentId": 14,
+        "borderRadius": 8,
+        "padding": {
+          "top": 12,
+          "right": 12,
+          "bottom": 12,
+          "left": 12
+        },
+        "margin": {
+          "bottom": 8
+        },
         "text": "lg 布局：三列（容器 ≥ 469px）",
         "semantic": "div"
       },
       {
         "id": 18,
         "parentId": 14,
+        "borderRadius": 8,
+        "padding": {
+          "top": 12,
+          "right": 12,
+          "bottom": 12,
+          "left": 12
+        },
+        "margin": {
+          "bottom": 8
+        },
         "text": "xl 布局：四列（容器 ≥ 609px）",
         "semantic": "div"
       },
       {
         "id": 19,
         "parentId": 0,
+        "margin": {
+          "top": 8
+        },
         "semantic": "p-grid"
       },
       {
         "id": 20,
         "parentId": 19,
+        "borderRadius": 6,
+        "padding": {
+          "top": 10,
+          "right": 10,
+          "bottom": 10,
+          "left": 10
+        },
+        "fontSize": 12,
         "semantic": "div"
       },
       {
         "id": 21,
         "parentId": 0,
+        "fontSize": 16,
         "text": "S2 · 安全区避让（p-safe）",
         "semantic": "h3"
       },
       {
         "id": 22,
         "parentId": 0,
+        "color": "#999",
+        "fontSize": 12,
         "text": " Web 端 env(safe-area-inset-*) 需 viewport-fit=cover（已注入）；桌面 env()=0 → fallback 兜底「至少 Npx」。 折叠屏 hinge 用 DevTools 设备模拟（display-mode: fold/span）验证。 ",
         "semantic": "p"
       },
       {
         "id": 23,
         "parentId": 0,
+        "borderRadius": 8,
+        "margin": {
+          "bottom": 10
+        },
         "semantic": "p-safe"
       },
       {
         "id": 24,
         "parentId": 23,
+        "padding": {
+          "top": 12,
+          "right": 12,
+          "bottom": 12,
+          "left": 12
+        },
+        "fontSize": 13,
         "text": "顶部避让 · fallback 44px（模拟刘海/状态栏）",
         "semantic": "div"
       },
       {
         "id": 25,
         "parentId": 0,
+        "borderRadius": 8,
+        "margin": {
+          "bottom": 10
+        },
         "semantic": "p-safe"
       },
       {
         "id": 26,
         "parentId": 25,
+        "padding": {
+          "top": 12,
+          "right": 12,
+          "bottom": 12,
+          "left": 12
+        },
+        "fontSize": 13,
         "text": "底部避让 · fallback 34px（模拟 Home Indicator）",
         "semantic": "div"
       },
       {
         "id": 27,
         "parentId": 0,
+        "borderRadius": 8,
+        "margin": {
+          "bottom": 10
+        },
         "semantic": "p-safe"
       },
       {
         "id": 28,
         "parentId": 27,
+        "padding": {
+          "top": 12,
+          "right": 12,
+          "bottom": 12,
+          "left": 12
+        },
+        "fontSize": 13,
         "text": "四边避让 · fallback 8px",
         "semantic": "div"
       },
       {
         "id": 29,
         "parentId": 0,
+        "borderRadius": 8,
+        "margin": {
+          "bottom": 10
+        },
+        "borderColor": "#ffe58f",
         "semantic": "p-safe"
       },
       {
         "id": 30,
         "parentId": 29,
+        "padding": {
+          "top": 12,
+          "right": 12,
+          "bottom": 12,
+          "left": 12
+        },
+        "fontSize": 13,
         "text": "折叠屏 hinge 避让（display-mode fold/span 时左右避开折叠区）",
         "semantic": "div"
       },
       {
         "id": 31,
         "parentId": 0,
+        "fontSize": 16,
         "text": "S2 · 纵横比容器（p-aspect）",
         "semantic": "h3"
       },
       {
         "id": 32,
         "parentId": 0,
+        "display": "flex",
+        "gap": 12,
         "semantic": "div"
       },
       {
         "id": 33,
         "parentId": 32,
+        "borderRadius": 8,
+        "overflow": "hidden",
         "semantic": "p-aspect"
       },
       {
         "id": 34,
         "parentId": 33,
+        "display": "flex",
+        "alignItems": "center",
+        "justifyContent": "center",
+        "color": "#666",
+        "fontSize": 13,
+        "heightRatio": 1,
         "text": "16:9",
         "semantic": "div"
       },
       {
         "id": 35,
         "parentId": 32,
+        "borderRadius": 8,
+        "overflow": "hidden",
         "semantic": "p-aspect"
       },
       {
         "id": 36,
         "parentId": 35,
+        "display": "flex",
+        "alignItems": "center",
+        "justifyContent": "center",
+        "color": "#666",
+        "fontSize": 13,
+        "heightRatio": 1,
         "text": "1:1",
         "semantic": "div"
       },
       {
         "id": 37,
         "parentId": 0,
+        "margin": {
+          "top": 24
+        },
+        "padding": {
+          "top": 12,
+          "right": 12,
+          "bottom": 12,
+          "left": 12
+        },
+        "borderRadius": 8,
         "semantic": "div"
       },
       {
@@ -1553,6 +2231,8 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
       {
         "id": 39,
         "parentId": 37,
+        "color": "#999",
+        "fontSize": 12,
         "semantic": "p"
       },
       {
@@ -1575,6 +2255,8 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
       {
         "id": 43,
         "parentId": 37,
+        "color": "#999",
+        "fontSize": 12,
         "semantic": "p"
       },
       {
@@ -1591,6 +2273,8 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
       {
         "id": 46,
         "parentId": 37,
+        "color": "#999",
+        "fontSize": 12,
         "semantic": "p"
       },
       {
@@ -1607,47 +2291,77 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
       {
         "id": 49,
         "parentId": 0,
+        "fontSize": 16,
         "text": "S3 · 自适应导航栏（p-sidebar）",
         "semantic": "h3"
       },
       {
         "id": 50,
         "parentId": 0,
+        "color": "#999",
+        "fontSize": 12,
         "text": "容器 < 640px → 底部导航条；≥ 640px → 左侧侧栏（Arrow 方向键在导航项间移动焦点）",
         "semantic": "p"
       },
       {
         "id": 51,
         "parentId": 0,
+        "borderRadius": 8,
+        "minHeight": 200,
+        "margin": {
+          "bottom": 20
+        },
         "semantic": "p-sidebar"
       },
       {
         "id": 52,
         "parentId": 51,
+        "display": "block",
+        "color": "#1d6fb8",
+        "borderRadius": 4,
+        "fontSize": 13,
         "text": "首页",
         "semantic": "a"
       },
       {
         "id": 53,
         "parentId": 51,
+        "display": "block",
+        "color": "#1d6fb8",
+        "borderRadius": 4,
+        "fontSize": 13,
         "text": "导航",
         "semantic": "a"
       },
       {
         "id": 54,
         "parentId": 51,
+        "display": "block",
+        "color": "#1d6fb8",
+        "borderRadius": 4,
+        "fontSize": 13,
         "text": "媒体",
         "semantic": "a"
       },
       {
         "id": 55,
         "parentId": 51,
+        "display": "block",
+        "color": "#1d6fb8",
+        "borderRadius": 4,
+        "fontSize": 13,
         "text": "设置",
         "semantic": "a"
       },
       {
         "id": 56,
         "parentId": 51,
+        "padding": {
+          "top": 12,
+          "right": 12,
+          "bottom": 12,
+          "left": 12
+        },
         "semantic": "div"
       },
       {
@@ -1659,35 +2373,54 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
       {
         "id": 58,
         "parentId": 56,
+        "color": "#999",
+        "fontSize": 12,
         "text": "窄屏时导航沉底为 bottom-bar；宽屏（平板/车机/桌面）时左侧垂直 side-rail",
         "semantic": "p"
       },
       {
         "id": 59,
         "parentId": 0,
+        "fontSize": 16,
         "text": "S3 · 工具栏溢出折叠（p-toolbar）",
         "semantic": "h3"
       },
       {
         "id": 60,
         "parentId": 0,
+        "color": "#999",
+        "fontSize": 12,
         "text": "容器放不下时多余项收进「更多」（车机/平板有限宽度场景）",
         "semantic": "p"
       },
       {
         "id": 61,
         "parentId": 0,
+        "borderRadius": 8,
+        "padding": {
+          "top": 4,
+          "right": 4,
+          "bottom": 4,
+          "left": 4
+        },
+        "position": "relative",
+        "margin": {
+          "bottom": 8
+        },
         "semantic": "p-toolbar"
       },
       {
         "id": 62,
         "parentId": 0,
+        "fontSize": 16,
         "text": "S4 · 动态字号/密度（p-scale）",
         "semantic": "h3"
       },
       {
         "id": 63,
         "parentId": 0,
+        "color": "#999",
+        "fontSize": 12,
         "semantic": "p"
       },
       {
@@ -1711,68 +2444,137 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
       {
         "id": 67,
         "parentId": 0,
+        "display": "flex",
+        "flexDirection": "column",
+        "gap": 10,
         "semantic": "div"
       },
       {
         "id": 68,
         "parentId": 67,
+        "borderRadius": 8,
+        "padding": {
+          "top": 12,
+          "right": 12,
+          "bottom": 12,
+          "left": 12
+        },
         "semantic": "p-scale"
       },
       {
         "id": 69,
         "parentId": 68,
+        "margin": {
+          "top": 0,
+          "right": 0,
+          "bottom": 0,
+          "left": 0
+        },
+        "color": "#333",
         "text": "level 0 · 小字号（compact 密度）",
         "semantic": "p"
       },
       {
         "id": 70,
         "parentId": 68,
+        "margin": {
+          "top": 0,
+          "right": 0,
+          "bottom": 0,
+          "left": 0
+        },
+        "color": "#333",
         "text": "行高 1.4 / 间距 8px",
         "semantic": "p"
       },
       {
         "id": 71,
         "parentId": 67,
+        "borderRadius": 8,
+        "padding": {
+          "top": 12,
+          "right": 12,
+          "bottom": 12,
+          "left": 12
+        },
         "semantic": "p-scale"
       },
       {
         "id": 72,
         "parentId": 71,
+        "margin": {
+          "top": 0,
+          "right": 0,
+          "bottom": 0,
+          "left": 0
+        },
+        "color": "#333",
         "text": "level 1 · 标准（regular 密度）",
         "semantic": "p"
       },
       {
         "id": 73,
         "parentId": 71,
+        "margin": {
+          "top": 0,
+          "right": 0,
+          "bottom": 0,
+          "left": 0
+        },
+        "color": "#333",
         "text": "行高 1.6 / 间距 12px",
         "semantic": "p"
       },
       {
         "id": 74,
         "parentId": 67,
+        "borderRadius": 8,
+        "padding": {
+          "top": 12,
+          "right": 12,
+          "bottom": 12,
+          "left": 12
+        },
         "semantic": "p-scale"
       },
       {
         "id": 75,
         "parentId": 74,
+        "margin": {
+          "top": 0,
+          "right": 0,
+          "bottom": 0,
+          "left": 0
+        },
+        "color": "#333",
         "text": "level 3 · 特大（comfortable 无障碍密度）",
         "semantic": "p"
       },
       {
         "id": 76,
         "parentId": 74,
+        "margin": {
+          "top": 0,
+          "right": 0,
+          "bottom": 0,
+          "left": 0
+        },
+        "color": "#333",
         "text": "行高 1.8 / 间距 16px",
         "semantic": "p"
       },
       {
         "id": 77,
         "parentId": 0,
+        "fontSize": 16,
         "text": "p-adaptive · 容器形态自适应（B1 求解 + B2 组件 + B4 p-modal）",
         "semantic": "h3"
       },
       {
         "id": 78,
         "parentId": 0,
+        "color": "#999",
+        "fontSize": 12,
         "semantic": "p"
       },
       {
@@ -1795,61 +2597,102 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
       {
         "id": 82,
         "parentId": 0,
+        "borderRadius": 8,
+        "padding": {
+          "top": 16,
+          "right": 16,
+          "bottom": 16,
+          "left": 16
+        },
+        "margin": {
+          "bottom": 8
+        },
         "semantic": "div"
       },
       {
         "id": 83,
         "parentId": 82,
+        "fontSize": 28,
+        "color": "#1d6fb8",
+        "margin": {
+          "bottom": 8
+        },
         "semantic": "div"
       },
       {
         "id": 84,
         "parentId": 82,
+        "display": "flex",
+        "gap": 8,
+        "justifyContent": "center",
         "semantic": "div"
       },
       {
         "id": 85,
         "parentId": 84,
+        "borderRadius": 12,
+        "color": "#999",
+        "fontSize": 12,
         "text": "sheet",
         "semantic": "span"
       },
       {
         "id": 86,
         "parentId": 84,
+        "borderRadius": 12,
+        "color": "#999",
+        "fontSize": 12,
         "text": "dialog",
         "semantic": "span"
       },
       {
         "id": 87,
         "parentId": 84,
+        "borderRadius": 12,
+        "color": "#999",
+        "fontSize": 12,
         "text": "popover",
         "semantic": "span"
       },
       {
         "id": 88,
         "parentId": 82,
+        "display": "flex",
+        "alignItems": "center",
+        "gap": 6,
+        "justifyContent": "center",
         "semantic": "div"
       },
       {
         "id": 89,
         "parentId": 88,
+        "color": "#999",
+        "fontSize": 12,
         "text": "验证窗口大小：",
         "semantic": "span"
       },
       {
         "id": 90,
         "parentId": 88,
+        "color": "#333",
+        "borderRadius": 4,
+        "fontSize": 12,
         "semantic": "button"
       },
       {
         "id": 91,
         "parentId": 88,
+        "color": "#333",
+        "borderRadius": 4,
+        "fontSize": 12,
         "text": "跟随窗口",
         "semantic": "button"
       },
       {
         "id": 92,
         "parentId": 82,
+        "color": "#1d6fb8",
+        "borderRadius": 4,
         "semantic": "button"
       },
       {
@@ -1865,6 +2708,8 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
       {
         "id": 95,
         "parentId": 94,
+        "color": "#999",
+        "fontSize": 12,
         "semantic": "p"
       },
       {
@@ -1886,6 +2731,8 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
       {
         "id": 99,
         "parentId": 94,
+        "color": "#999",
+        "fontSize": 12,
         "text": "sheet 底部自动避让 Home Indicator（G-09 安全区协同）；popover 锚定「打开弹窗」按钮下方",
         "semantic": "p"
       },
@@ -1897,12 +2744,16 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
       {
         "id": 101,
         "parentId": 100,
+        "color": "#1d6fb8",
+        "borderRadius": 4,
         "text": "取消",
         "semantic": "button"
       },
       {
         "id": 102,
         "parentId": 100,
+        "color": "#1d6fb8",
+        "borderRadius": 4,
         "text": "确定",
         "semantic": "button"
       }
@@ -1924,11 +2775,29 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
       {
         "id": 2,
         "parentId": 0,
+        "display": "block",
+        "widthRatio": 1,
+        "padding": {
+          "top": 8,
+          "right": 8,
+          "bottom": 8,
+          "left": 8
+        },
+        "borderRadius": 8,
         "semantic": "input"
       },
       {
         "id": 3,
         "parentId": 0,
+        "display": "block",
+        "widthRatio": 1,
+        "padding": {
+          "top": 8,
+          "right": 8,
+          "bottom": 8,
+          "left": 8
+        },
+        "borderRadius": 8,
         "semantic": "textarea"
       },
       {
@@ -1957,6 +2826,13 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
       {
         "id": 8,
         "parentId": 0,
+        "padding": {
+          "top": 12,
+          "right": 12,
+          "bottom": 12,
+          "left": 12
+        },
+        "borderRadius": 8,
         "semantic": "div"
       },
       {
@@ -1984,16 +2860,31 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
       {
         "id": 13,
         "parentId": 0,
+        "fontSize": 13,
         "semantic": "p"
       },
       {
         "id": 14,
         "parentId": 0,
+        "padding": {
+          "top": 12,
+          "right": 12,
+          "bottom": 12,
+          "left": 12
+        },
+        "borderRadius": 8,
         "semantic": "div"
       },
       {
         "id": 15,
         "parentId": 0,
+        "padding": {
+          "top": 12,
+          "right": 12,
+          "bottom": 12,
+          "left": 12
+        },
+        "borderRadius": 8,
         "semantic": "div"
       },
       {
@@ -2004,12 +2895,30 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
       {
         "id": 17,
         "parentId": 15,
+        "margin": {
+          "top": 10
+        },
+        "padding": {
+          "top": 14,
+          "right": 14,
+          "bottom": 14,
+          "left": 14
+        },
+        "borderRadius": 8,
+        "fontSize": 14,
         "text": "过渡卡片：切换时先播 fade 动画再移除（Web 原生 / MP 状态机）",
         "semantic": "div"
       },
       {
         "id": 18,
         "parentId": 0,
+        "padding": {
+          "top": 12,
+          "right": 12,
+          "bottom": 12,
+          "left": 12
+        },
+        "borderRadius": 8,
         "semantic": "div"
       },
       {
@@ -2021,6 +2930,7 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
       {
         "id": 20,
         "parentId": 18,
+        "fontSize": 13,
         "semantic": "p"
       }
     ]
@@ -2030,6 +2940,12 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
       {
         "id": 0,
         "parentId": null,
+        "padding": {
+          "top": 16,
+          "right": 16,
+          "bottom": 16,
+          "left": 16
+        },
         "semantic": "div"
       },
       {
@@ -2041,12 +2957,18 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
       {
         "id": 2,
         "parentId": 0,
+        "display": "block",
+        "color": "#666",
+        "fontSize": 13,
         "text": "统一入口 <pg-glass> → 各端映射到该端最强玻璃；L1 基础玻璃全端必达，降级不崩溃",
         "semantic": "p-text"
       },
       {
         "id": 3,
         "parentId": 0,
+        "margin": {
+          "bottom": 28
+        },
         "semantic": "section"
       },
       {
@@ -2058,32 +2980,60 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
       {
         "id": 5,
         "parentId": 3,
+        "display": "block",
+        "color": "#888",
+        "fontSize": 12,
         "text": "preset = 经验证的最佳参数组合，业务优先用 preset；下方为各预设默认外观",
         "semantic": "p-text"
       },
       {
         "id": 6,
         "parentId": 3,
+        "display": "grid",
+        "gap": 12,
+        "padding": {
+          "top": 20,
+          "right": 20,
+          "bottom": 20,
+          "left": 20
+        },
+        "borderRadius": 12,
         "semantic": "div"
       },
       {
         "id": 7,
         "parentId": 6,
+        "minHeight": 76,
         "semantic": "div"
       },
       {
         "id": 8,
         "parentId": 7,
+        "display": "flex",
+        "alignItems": "center",
+        "justifyContent": "center",
+        "minHeight": 76,
+        "padding": {
+          "top": 12,
+          "right": 12,
+          "bottom": 12,
+          "left": 12
+        },
         "semantic": "pg-glass"
       },
       {
         "id": 9,
         "parentId": 8,
+        "fontSize": 13,
+        "color": "#fff",
         "semantic": "p-text"
       },
       {
         "id": 10,
         "parentId": 0,
+        "margin": {
+          "bottom": 28
+        },
         "semantic": "section"
       },
       {
@@ -2095,32 +3045,60 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
       {
         "id": 12,
         "parentId": 10,
+        "display": "block",
+        "color": "#888",
+        "fontSize": 12,
         "text": "同一 custom 预设，不同模糊厚度（none=0 → ultra 最厚）",
         "semantic": "p-text"
       },
       {
         "id": 13,
         "parentId": 10,
+        "display": "grid",
+        "gap": 12,
+        "padding": {
+          "top": 20,
+          "right": 20,
+          "bottom": 20,
+          "left": 20
+        },
+        "borderRadius": 12,
         "semantic": "div"
       },
       {
         "id": 14,
         "parentId": 13,
+        "minHeight": 76,
         "semantic": "div"
       },
       {
         "id": 15,
         "parentId": 14,
+        "display": "flex",
+        "alignItems": "center",
+        "justifyContent": "center",
+        "minHeight": 76,
+        "padding": {
+          "top": 12,
+          "right": 12,
+          "bottom": 12,
+          "left": 12
+        },
         "semantic": "pg-glass"
       },
       {
         "id": 16,
         "parentId": 15,
+        "fontSize": 13,
+        "color": "#fff",
         "semantic": "p-text"
       },
       {
         "id": 17,
         "parentId": 0,
+        "margin": {
+          "bottom": 28
+        },
         "semantic": "section"
       },
       {
@@ -2132,65 +3110,119 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
       {
         "id": 19,
         "parentId": 17,
+        "display": "block",
+        "color": "#888",
+        "fontSize": 12,
         "text": "noise > 0 渲染噪点层；border 控制高光边（Web/Skyline CSS 模拟）",
         "semantic": "p-text"
       },
       {
         "id": 20,
         "parentId": 17,
+        "display": "grid",
+        "gap": 12,
+        "padding": {
+          "top": 20,
+          "right": 20,
+          "bottom": 20,
+          "left": 20
+        },
+        "borderRadius": 12,
         "semantic": "div"
       },
       {
         "id": 21,
         "parentId": 20,
+        "minHeight": 76,
         "semantic": "div"
       },
       {
         "id": 22,
         "parentId": 21,
+        "display": "flex",
+        "alignItems": "center",
+        "justifyContent": "center",
+        "minHeight": 76,
+        "padding": {
+          "top": 12,
+          "right": 12,
+          "bottom": 12,
+          "left": 12
+        },
         "semantic": "pg-glass"
       },
       {
         "id": 23,
         "parentId": 22,
+        "fontSize": 13,
+        "color": "#fff",
         "text": "noise 0.08",
         "semantic": "p-text"
       },
       {
         "id": 24,
         "parentId": 20,
+        "minHeight": 76,
         "semantic": "div"
       },
       {
         "id": 25,
         "parentId": 24,
+        "display": "flex",
+        "alignItems": "center",
+        "justifyContent": "center",
+        "minHeight": 76,
+        "padding": {
+          "top": 12,
+          "right": 12,
+          "bottom": 12,
+          "left": 12
+        },
         "semantic": "pg-glass"
       },
       {
         "id": 26,
         "parentId": 25,
+        "fontSize": 13,
+        "color": "#fff",
         "text": "border=false",
         "semantic": "p-text"
       },
       {
         "id": 27,
         "parentId": 20,
+        "minHeight": 76,
         "semantic": "div"
       },
       {
         "id": 28,
         "parentId": 27,
+        "display": "flex",
+        "alignItems": "center",
+        "justifyContent": "center",
+        "minHeight": 76,
+        "padding": {
+          "top": 12,
+          "right": 12,
+          "bottom": 12,
+          "left": 12
+        },
         "semantic": "pg-glass"
       },
       {
         "id": 29,
         "parentId": 28,
+        "fontSize": 13,
+        "color": "#fff",
         "text": "custom 紫",
         "semantic": "p-text"
       },
       {
         "id": 30,
         "parentId": 0,
+        "margin": {
+          "bottom": 28
+        },
         "semantic": "section"
       },
       {
@@ -2202,12 +3234,24 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
       {
         "id": 32,
         "parentId": 30,
+        "display": "block",
+        "color": "#888",
+        "fontSize": 12,
         "text": "props → 环境 → 层级：能力不足降实色，绝不白屏/黑块",
         "semantic": "p-text"
       },
       {
         "id": 33,
         "parentId": 30,
+        "margin": {
+          "top": 0,
+          "right": 0,
+          "bottom": 0,
+          "left": 0
+        },
+        "color": "#9fd3c7",
+        "borderRadius": 8,
+        "fontSize": 12,
         "semantic": "pre"
       }
     ]
@@ -2217,28 +3261,52 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
       {
         "id": 0,
         "parentId": null,
+        "padding": {
+          "top": 16,
+          "right": 16,
+          "bottom": 16,
+          "left": 16
+        },
+        "display": "flex",
+        "flexDirection": "column",
+        "gap": 12,
         "semantic": "view"
       },
       {
         "id": 1,
         "parentId": 0,
+        "fontSize": 18,
         "text": "GP0-a · root-portal 点击穿透实测",
         "semantic": "text"
       },
       {
         "id": 2,
         "parentId": 0,
+        "fontSize": 12,
+        "color": "#666",
         "text": "tap 主树按钮与 portal 内按钮，比较两者是否都触发",
         "semantic": "text"
       },
       {
         "id": 3,
         "parentId": 0,
+        "padding": {
+          "top": 12,
+          "right": 12,
+          "bottom": 12,
+          "left": 12
+        },
+        "borderRadius": 8,
+        "display": "flex",
+        "flexDirection": "column",
+        "gap": 6,
         "semantic": "view"
       },
       {
         "id": 4,
         "parentId": 3,
+        "fontSize": 12,
+        "color": "#333",
         "text": "① 主树（无 teleport）",
         "semantic": "text"
       },
@@ -2250,6 +3318,16 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
       {
         "id": 6,
         "parentId": 0,
+        "position": "absolute",
+        "left": 24,
+        "top": 320,
+        "padding": {
+          "top": 10,
+          "right": 10,
+          "bottom": 10,
+          "left": 10
+        },
+        "borderRadius": 8,
         "semantic": "view"
       },
       {
@@ -2265,27 +3343,45 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
       {
         "id": 9,
         "parentId": 6,
+        "fontSize": 12,
+        "color": "#666",
         "semantic": "text"
       },
       {
         "id": 10,
         "parentId": 0,
+        "padding": {
+          "top": 12,
+          "right": 12,
+          "bottom": 12,
+          "left": 12
+        },
+        "borderRadius": 8,
+        "display": "flex",
+        "flexDirection": "column",
+        "gap": 6,
         "semantic": "view"
       },
       {
         "id": 11,
         "parentId": 10,
+        "fontSize": 12,
+        "color": "#333",
         "text": "计数（e2e 断言面）",
         "semantic": "text"
       },
       {
         "id": 12,
         "parentId": 10,
+        "fontSize": 12,
+        "color": "#666",
         "semantic": "text"
       },
       {
         "id": 13,
         "parentId": 10,
+        "fontSize": 12,
+        "color": "#666",
         "semantic": "text"
       }
     ]
@@ -2295,6 +3391,8 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
       {
         "id": 0,
         "parentId": null,
+        "display": "flex",
+        "flexDirection": "column",
         "semantic": "view"
       },
       {
@@ -2306,12 +3404,15 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
       {
         "id": 2,
         "parentId": 0,
+        "color": "#666",
         "text": "全局状态条声明在 App.mp.vue（唯一声明处），本页不引入任何全局内容",
         "semantic": "text"
       },
       {
         "id": 3,
         "parentId": 0,
+        "display": "flex",
+        "flexDirection": "column",
         "semantic": "view"
       },
       {
@@ -2323,28 +3424,35 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
       {
         "id": 5,
         "parentId": 3,
+        "backgroundColor": "#f2f3f5",
+        "color": "#333",
         "semantic": "button"
       },
       {
         "id": 6,
         "parentId": 0,
+        "display": "flex",
+        "flexDirection": "column",
         "semantic": "view"
       },
       {
         "id": 7,
         "parentId": 6,
+        "color": "#999",
         "text": "跨页验证：开启后跳「首页 / 组件演示」，状态条应仍在（共享状态）",
         "semantic": "text"
       },
       {
         "id": 8,
         "parentId": 6,
+        "color": "#1a7af8",
         "text": "去首页",
         "semantic": "navigator"
       },
       {
         "id": 9,
         "parentId": 6,
+        "color": "#1a7af8",
         "text": "去组件演示",
         "semantic": "navigator"
       }
@@ -2355,6 +3463,12 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
       {
         "id": 0,
         "parentId": null,
+        "padding": {
+          "top": 24,
+          "right": 24,
+          "bottom": 24,
+          "left": 24
+        },
         "semantic": "div"
       },
       {
@@ -2366,12 +3480,20 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
       {
         "id": 2,
         "parentId": 0,
+        "color": "#888",
+        "fontSize": 13,
+        "margin": {
+          "bottom": 16
+        },
         "text": "@proteus-vue/i18n：类型安全 t() + ICU 子集（插值/复数）",
         "semantic": "p"
       },
       {
         "id": 3,
         "parentId": 0,
+        "display": "flex",
+        "alignItems": "center",
+        "gap": 8,
         "semantic": "div"
       },
       {
@@ -2404,6 +3526,9 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
       {
         "id": 9,
         "parentId": 0,
+        "display": "flex",
+        "alignItems": "center",
+        "gap": 8,
         "semantic": "div"
       },
       {
@@ -2415,6 +3540,7 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
       {
         "id": 11,
         "parentId": 9,
+        "minWidth": 32,
         "semantic": "span"
       },
       {
@@ -2478,6 +3604,9 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
       {
         "id": 7,
         "parentId": 0,
+        "margin": {
+          "top": 24
+        },
         "semantic": "div"
       },
       {
@@ -2615,6 +3744,12 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
       {
         "id": 30,
         "parentId": 0,
+        "margin": {
+          "top": 32
+        },
+        "padding": {
+          "top": 16
+        },
         "semantic": "div"
       },
       {
@@ -2626,18 +3761,22 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
       {
         "id": 32,
         "parentId": 30,
+        "fontSize": 12,
+        "color": "#888",
         "text": "静态/动态 SVG、use 展开、文字提升、事件命中、动画（CSS/canvas）",
         "semantic": "p"
       },
       {
         "id": 33,
         "parentId": 30,
+        "color": "#7c3aed",
         "text": "★ SVG 能力综合演示（炫丽效果）",
         "semantic": "a"
       },
       {
         "id": 34,
         "parentId": 30,
+        "color": "#7c3aed",
         "text": "★ SVG 骨骼动画（嵌套变换复合 / 层级运动学）",
         "semantic": "a"
       },
@@ -2703,6 +3842,8 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
       {
         "id": 45,
         "parentId": 0,
+        "maxWidth": 360,
+        "borderRadius": 8,
         "semantic": "div"
       },
       {
@@ -2714,6 +3855,8 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
       {
         "id": 47,
         "parentId": 45,
+        "fontSize": 12,
+        "color": "#888",
         "text": "嵌套链：首页 → 用户中心 → 个人资料（user-profile 的 parent 是 user）",
         "semantic": "p"
       },
@@ -2732,6 +3875,8 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
       {
         "id": 50,
         "parentId": 45,
+        "fontSize": 12,
+        "color": "#888",
         "text": "进入用户中心后点「个人资料」→ route 面板连续两条嵌套记录",
         "semantic": "p"
       }
@@ -2762,34 +3907,72 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
       {
         "id": 0,
         "parentId": null,
+        "padding": {
+          "top": 24,
+          "right": 24,
+          "bottom": 24,
+          "left": 24
+        },
         "semantic": "view"
       },
       {
         "id": 1,
         "parentId": 0,
+        "display": "block",
+        "fontSize": 20,
+        "margin": {
+          "bottom": 8
+        },
+        "color": "rgba(255, 255, 255, 0.8)",
         "text": "小程序语义1（14-mp-first-semantics）",
         "semantic": "text"
       },
       {
         "id": 2,
         "parentId": 0,
+        "display": "block",
+        "color": "rgba(255, 255, 255, 0.5)",
+        "fontSize": 13,
+        "margin": {
+          "bottom": 16
+        },
         "text": "view/text/button/image/input + wx API —— MP 原生 / Web 模拟层对齐",
         "semantic": "text"
       },
       {
         "id": 3,
         "parentId": 0,
+        "borderRadius": 8,
+        "padding": {
+          "top": 12,
+          "right": 12,
+          "bottom": 12,
+          "left": 12
+        },
+        "margin": {
+          "bottom": 12
+        },
+        "borderColor": "rgba(255, 255, 255, 0.1)",
         "semantic": "view"
       },
       {
         "id": 4,
         "parentId": 3,
+        "display": "block",
+        "color": "rgba(255, 255, 255, 0.5)",
+        "fontSize": 12,
+        "margin": {
+          "bottom": 8
+        },
         "text": "容器与文本（selectable 可选）",
         "semantic": "text"
       },
       {
         "id": 5,
         "parentId": 3,
+        "display": "flex",
+        "alignItems": "center",
+        "gap": 8,
         "semantic": "view"
       },
       {
@@ -2801,11 +3984,28 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
       {
         "id": 7,
         "parentId": 0,
+        "borderRadius": 8,
+        "padding": {
+          "top": 12,
+          "right": 12,
+          "bottom": 12,
+          "left": 12
+        },
+        "margin": {
+          "bottom": 12
+        },
+        "borderColor": "rgba(255, 255, 255, 0.1)",
         "semantic": "view"
       },
       {
         "id": 8,
         "parentId": 7,
+        "display": "block",
+        "color": "rgba(255, 255, 255, 0.5)",
+        "fontSize": 12,
+        "margin": {
+          "bottom": 8
+        },
         "text": "button open-type（开放能力：MP 原生 / Web 降级事件）",
         "semantic": "text"
       },
@@ -2824,58 +4024,110 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
       {
         "id": 11,
         "parentId": 0,
+        "borderRadius": 8,
+        "padding": {
+          "top": 12,
+          "right": 12,
+          "bottom": 12,
+          "left": 12
+        },
+        "margin": {
+          "bottom": 12
+        },
+        "borderColor": "rgba(255, 255, 255, 0.1)",
         "semantic": "view"
       },
       {
         "id": 12,
         "parentId": 11,
+        "display": "block",
+        "color": "rgba(255, 255, 255, 0.5)",
+        "fontSize": 12,
+        "margin": {
+          "bottom": 8
+        },
         "text": "button 变体（type/size/disabled/loading/plain，对齐 weui.io/#button_default）",
         "semantic": "text"
       },
       {
         "id": 13,
         "parentId": 11,
+        "margin": {
+          "top": 8
+        },
         "text": "type=\"primary\"（绿）",
         "semantic": "button"
       },
       {
         "id": 14,
         "parentId": 11,
+        "margin": {
+          "top": 8
+        },
         "text": "type=\"warn\"（红）",
         "semantic": "button"
       },
       {
         "id": 15,
         "parentId": 11,
+        "margin": {
+          "top": 8
+        },
         "text": "size=\"mini\"",
         "semantic": "button"
       },
       {
         "id": 16,
         "parentId": 11,
+        "margin": {
+          "top": 8
+        },
         "text": "disabled",
         "semantic": "button"
       },
       {
         "id": 17,
         "parentId": 11,
+        "margin": {
+          "top": 8
+        },
         "text": "loading",
         "semantic": "button"
       },
       {
         "id": 18,
         "parentId": 11,
+        "margin": {
+          "top": 8
+        },
         "text": "plain",
         "semantic": "button"
       },
       {
         "id": 19,
         "parentId": 0,
+        "borderRadius": 8,
+        "padding": {
+          "top": 12,
+          "right": 12,
+          "bottom": 12,
+          "left": 12
+        },
+        "margin": {
+          "bottom": 12
+        },
+        "borderColor": "rgba(255, 255, 255, 0.1)",
         "semantic": "view"
       },
       {
         "id": 20,
         "parentId": 19,
+        "display": "block",
+        "color": "rgba(255, 255, 255, 0.5)",
+        "fontSize": 12,
+        "margin": {
+          "bottom": 8
+        },
         "text": "wx API（路由/存储/交互/系统信息）",
         "semantic": "text"
       },
@@ -2912,48 +4164,107 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
       {
         "id": 26,
         "parentId": 0,
+        "borderRadius": 8,
+        "padding": {
+          "top": 12,
+          "right": 12,
+          "bottom": 12,
+          "left": 12
+        },
+        "margin": {
+          "bottom": 12
+        },
+        "borderColor": "rgba(255, 255, 255, 0.1)",
         "semantic": "view"
       },
       {
         "id": 27,
         "parentId": 26,
+        "display": "block",
+        "color": "rgba(255, 255, 255, 0.5)",
+        "fontSize": 12,
+        "margin": {
+          "bottom": 8
+        },
         "text": "image（mode=\"widthFix\"）+ input",
         "semantic": "text"
       },
       {
         "id": 28,
         "parentId": 26,
+        "display": "block",
+        "margin": {
+          "bottom": 8
+        },
         "semantic": "image"
       },
       {
         "id": 29,
         "parentId": 26,
+        "boxSizing": "border-box",
+        "widthRatio": 1,
+        "borderRadius": 6,
+        "fontSize": 14,
+        "borderColor": "rgba(255, 255, 255, 0.2)",
+        "color": "rgba(255, 255, 255, 0.8)",
         "semantic": "input"
       },
       {
         "id": 30,
         "parentId": 26,
+        "display": "block",
+        "color": "#7d90a9",
+        "fontSize": 13,
+        "margin": {
+          "top": 6
+        },
         "semantic": "text"
       },
       {
         "id": 31,
         "parentId": 0,
+        "borderRadius": 8,
+        "padding": {
+          "top": 12,
+          "right": 12,
+          "bottom": 12,
+          "left": 12
+        },
+        "margin": {
+          "bottom": 12
+        },
+        "borderColor": "rgba(255, 255, 255, 0.1)",
         "semantic": "view"
       },
       {
         "id": 32,
         "parentId": 31,
+        "display": "block",
+        "color": "rgba(255, 255, 255, 0.5)",
+        "fontSize": 12,
+        "margin": {
+          "bottom": 8
+        },
         "text": "扩展组件（批次3：textarea/switch/slider/icon/progress/navigator）",
         "semantic": "text"
       },
       {
         "id": 33,
         "parentId": 31,
+        "boxSizing": "border-box",
+        "widthRatio": 1,
+        "borderRadius": 6,
+        "fontSize": 14,
+        "borderColor": "rgba(255, 255, 255, 0.2)",
+        "color": "rgba(255, 255, 255, 0.8)",
         "semantic": "textarea"
       },
       {
         "id": 34,
         "parentId": 31,
+        "display": "flex",
+        "alignItems": "center",
+        "gap": 8,
         "semantic": "view"
       },
       {
@@ -2964,27 +4275,39 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
       {
         "id": 36,
         "parentId": 34,
+        "fontSize": 13,
+        "color": "rgba(255, 255, 255, 0.8)",
         "text": "switch（默认开）",
         "semantic": "text"
       },
       {
         "id": 37,
         "parentId": 31,
+        "display": "flex",
+        "alignItems": "center",
+        "gap": 8,
         "semantic": "view"
       },
       {
         "id": 38,
         "parentId": 37,
+        "widthRatio": 0.6,
+        "display": "block",
         "semantic": "slider"
       },
       {
         "id": 39,
         "parentId": 37,
+        "fontSize": 13,
+        "color": "rgba(255, 255, 255, 0.8)",
         "semantic": "text"
       },
       {
         "id": 40,
         "parentId": 31,
+        "display": "flex",
+        "alignItems": "center",
+        "gap": 8,
         "semantic": "view"
       },
       {
@@ -3000,6 +4323,8 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
       {
         "id": 43,
         "parentId": 40,
+        "fontSize": 13,
+        "color": "rgba(255, 255, 255, 0.8)",
         "text": "icon（success/warn + color 调色）",
         "semantic": "text"
       },
@@ -3011,17 +4336,24 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
       {
         "id": 45,
         "parentId": 31,
+        "display": "flex",
+        "alignItems": "center",
+        "gap": 8,
         "semantic": "view"
       },
       {
         "id": 46,
         "parentId": 45,
+        "color": "#7d90a9",
         "text": "navigator → showcase",
         "semantic": "navigator"
       },
       {
         "id": 47,
         "parentId": 31,
+        "display": "flex",
+        "alignItems": "center",
+        "gap": 8,
         "semantic": "view"
       },
       {
@@ -3032,11 +4364,16 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
       {
         "id": 49,
         "parentId": 48,
+        "fontSize": 13,
+        "color": "rgba(255, 255, 255, 0.8)",
         "semantic": "text"
       },
       {
         "id": 50,
         "parentId": 31,
+        "display": "flex",
+        "alignItems": "center",
+        "gap": 8,
         "semantic": "view"
       },
       {
@@ -3047,22 +4384,43 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
       {
         "id": 52,
         "parentId": 51,
+        "fontSize": 13,
+        "color": "rgba(255, 255, 255, 0.8)",
         "semantic": "text"
       },
       {
         "id": 53,
         "parentId": 0,
+        "borderRadius": 8,
+        "padding": {
+          "top": 12,
+          "right": 12,
+          "bottom": 12,
+          "left": 12
+        },
+        "margin": {
+          "bottom": 12
+        },
+        "borderColor": "rgba(255, 255, 255, 0.1)",
         "semantic": "view"
       },
       {
         "id": 54,
         "parentId": 53,
+        "display": "block",
+        "color": "rgba(255, 255, 255, 0.5)",
+        "fontSize": 12,
+        "margin": {
+          "bottom": 8
+        },
         "text": "onPageScroll 桥接（15-page-scroll-container 批次2/3）",
         "semantic": "text"
       },
       {
         "id": 55,
         "parentId": 53,
+        "fontSize": 13,
+        "color": "rgba(255, 255, 255, 0.8)",
         "semantic": "text"
       },
       {
@@ -3074,21 +4432,43 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
       {
         "id": 57,
         "parentId": 0,
+        "borderRadius": 8,
+        "padding": {
+          "top": 12,
+          "right": 12,
+          "bottom": 12,
+          "left": 12
+        },
+        "margin": {
+          "bottom": 12
+        },
+        "borderColor": "rgba(255, 255, 255, 0.1)",
         "semantic": "view"
       },
       {
         "id": 58,
         "parentId": 57,
+        "display": "block",
+        "color": "rgba(255, 255, 255, 0.5)",
+        "fontSize": 12,
+        "margin": {
+          "bottom": 8
+        },
         "semantic": "text"
       },
       {
         "id": 59,
         "parentId": 57,
+        "display": "flex",
+        "alignItems": "center",
+        "gap": 8,
         "semantic": "view"
       },
       {
         "id": 60,
         "parentId": 59,
+        "fontSize": 13,
+        "color": "rgba(255, 255, 255, 0.8)",
         "semantic": "text"
       }
     ]
@@ -3098,6 +4478,12 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
       {
         "id": 0,
         "parentId": null,
+        "padding": {
+          "top": 24,
+          "right": 24,
+          "bottom": 24,
+          "left": 24
+        },
         "semantic": "div"
       },
       {
@@ -3109,6 +4495,11 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
       {
         "id": 2,
         "parentId": 0,
+        "color": "#888",
+        "fontSize": 13,
+        "margin": {
+          "bottom": 16
+        },
         "text": "camera / map / web-view / ad / keyboard-accessory（对齐小程序内置组件）",
         "semantic": "p"
       },
@@ -3126,6 +4517,9 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
       {
         "id": 5,
         "parentId": 0,
+        "display": "block",
+        "color": "#666",
+        "fontSize": 13,
         "semantic": "p-text"
       },
       {
@@ -3142,6 +4536,9 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
       {
         "id": 8,
         "parentId": 0,
+        "display": "block",
+        "color": "#666",
+        "fontSize": 13,
         "semantic": "p-text"
       },
       {
@@ -3153,6 +4550,11 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
       {
         "id": 10,
         "parentId": 0,
+        "display": "flex",
+        "gap": 8,
+        "margin": {
+          "bottom": 8
+        },
         "semantic": "div"
       },
       {
@@ -3168,6 +4570,9 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
       {
         "id": 13,
         "parentId": 0,
+        "display": "block",
+        "color": "#999",
+        "fontSize": 12,
         "semantic": "p-text"
       },
       {
@@ -3183,6 +4588,9 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
       {
         "id": 16,
         "parentId": 0,
+        "display": "block",
+        "color": "#666",
+        "fontSize": 13,
         "semantic": "p-text"
       },
       {
@@ -3199,6 +4607,9 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
       {
         "id": 19,
         "parentId": 0,
+        "display": "block",
+        "color": "#666",
+        "fontSize": 13,
         "semantic": "p-text"
       },
       {
@@ -3220,6 +4631,8 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
       {
         "id": 23,
         "parentId": 22,
+        "display": "flex",
+        "gap": 8,
         "semantic": "p-view"
       },
       {
@@ -3241,6 +4654,12 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
       {
         "id": 0,
         "parentId": null,
+        "padding": {
+          "top": 24,
+          "right": 24,
+          "bottom": 24,
+          "left": 24
+        },
         "semantic": "div"
       },
       {
@@ -3252,12 +4671,15 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
       {
         "id": 2,
         "parentId": 0,
+        "color": "#888",
+        "fontSize": 13,
         "text": "同一份 stores/player.ts 四端一致：播放/暂停 + 音量 + 历史（volume/history 持久化）",
         "semantic": "p"
       },
       {
         "id": 3,
         "parentId": 0,
+        "fontSize": 16,
         "semantic": "p"
       },
       {
@@ -3296,600 +4718,1118 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
       {
         "id": 0,
         "parentId": null,
+        "padding": {
+          "top": 24,
+          "right": 24,
+          "bottom": 24,
+          "left": 24
+        },
         "semantic": "view"
       },
       {
         "id": 1,
         "parentId": 0,
+        "display": "block",
+        "fontSize": 20,
+        "margin": {
+          "bottom": 8
+        },
+        "color": "rgba(255, 255, 255, 0.8)",
         "text": "PlatformAPI 收口演示（B9）",
         "semantic": "text"
       },
       {
         "id": 2,
         "parentId": 0,
+        "display": "block",
+        "color": "rgba(255, 255, 255, 0.5)",
+        "fontSize": 13,
+        "margin": {
+          "bottom": 16
+        },
         "text": "业务代码零 wx.* —— request / storage / router / ui 统一走 createPlatformAPI",
         "semantic": "text"
       },
       {
         "id": 3,
         "parentId": 0,
+        "borderRadius": 8,
+        "padding": {
+          "top": 12,
+          "right": 12,
+          "bottom": 12,
+          "left": 12
+        },
+        "margin": {
+          "bottom": 12
+        },
+        "borderColor": "rgba(255, 255, 255, 0.1)",
         "semantic": "view"
       },
       {
         "id": 4,
         "parentId": 3,
+        "display": "block",
+        "color": "rgba(255, 255, 255, 0.5)",
+        "fontSize": 12,
+        "margin": {
+          "bottom": 8
+        },
         "text": "① request（wx.request → platformAPI.request）",
         "semantic": "text"
       },
       {
         "id": 5,
         "parentId": 3,
+        "boxSizing": "border-box",
+        "widthRatio": 1,
+        "borderRadius": 6,
+        "fontSize": 14,
+        "margin": {
+          "bottom": 8
+        },
+        "borderColor": "rgba(255, 255, 255, 0.2)",
+        "color": "rgba(255, 255, 255, 0.8)",
         "semantic": "input"
       },
       {
         "id": 6,
         "parentId": 3,
+        "display": "flex",
+        "alignItems": "center",
+        "gap": 8,
         "semantic": "view"
       },
       {
         "id": 7,
         "parentId": 6,
+        "margin": {
+          "top": 4
+        },
         "text": "GET 请求",
         "semantic": "button"
       },
       {
         "id": 8,
         "parentId": 6,
+        "display": "block",
+        "color": "#7d90a9",
+        "fontSize": 13,
+        "margin": {
+          "top": 6
+        },
         "semantic": "text"
       },
       {
         "id": 9,
         "parentId": 0,
+        "borderRadius": 8,
+        "padding": {
+          "top": 12,
+          "right": 12,
+          "bottom": 12,
+          "left": 12
+        },
+        "margin": {
+          "bottom": 12
+        },
+        "borderColor": "rgba(255, 255, 255, 0.1)",
         "semantic": "view"
       },
       {
         "id": 10,
         "parentId": 9,
+        "display": "block",
+        "color": "rgba(255, 255, 255, 0.5)",
+        "fontSize": 12,
+        "margin": {
+          "bottom": 8
+        },
         "text": "② storage（wx.setStorageSync → platformAPI.storage，JSON 往返）",
         "semantic": "text"
       },
       {
         "id": 11,
         "parentId": 9,
+        "display": "flex",
+        "alignItems": "center",
+        "gap": 8,
         "semantic": "view"
       },
       {
         "id": 12,
         "parentId": 11,
+        "margin": {
+          "top": 4
+        },
         "text": "写入",
         "semantic": "button"
       },
       {
         "id": 13,
         "parentId": 11,
+        "margin": {
+          "top": 4
+        },
         "text": "读取",
         "semantic": "button"
       },
       {
         "id": 14,
         "parentId": 11,
+        "margin": {
+          "top": 4
+        },
         "text": "删除",
         "semantic": "button"
       },
       {
         "id": 15,
         "parentId": 9,
+        "display": "block",
+        "color": "#7d90a9",
+        "fontSize": 13,
+        "margin": {
+          "top": 6
+        },
         "semantic": "text"
       },
       {
         "id": 16,
         "parentId": 0,
+        "borderRadius": 8,
+        "padding": {
+          "top": 12,
+          "right": 12,
+          "bottom": 12,
+          "left": 12
+        },
+        "margin": {
+          "bottom": 12
+        },
+        "borderColor": "rgba(255, 255, 255, 0.1)",
         "semantic": "view"
       },
       {
         "id": 17,
         "parentId": 16,
+        "display": "block",
+        "color": "rgba(255, 255, 255, 0.5)",
+        "fontSize": 12,
+        "margin": {
+          "bottom": 8
+        },
         "text": "③ router（wx.navigateTo → platformAPI.router）",
         "semantic": "text"
       },
       {
         "id": 18,
         "parentId": 16,
+        "display": "flex",
+        "alignItems": "center",
+        "gap": 8,
         "semantic": "view"
       },
       {
         "id": 19,
         "parentId": 18,
+        "margin": {
+          "top": 4
+        },
         "text": "push → showcase",
         "semantic": "button"
       },
       {
         "id": 20,
         "parentId": 18,
+        "margin": {
+          "top": 4
+        },
         "text": "back（带参数 delta）",
         "semantic": "button"
       },
       {
         "id": 21,
         "parentId": 0,
+        "borderRadius": 8,
+        "padding": {
+          "top": 12,
+          "right": 12,
+          "bottom": 12,
+          "left": 12
+        },
+        "margin": {
+          "bottom": 12
+        },
+        "borderColor": "rgba(255, 255, 255, 0.1)",
         "semantic": "view"
       },
       {
         "id": 22,
         "parentId": 21,
+        "display": "block",
+        "color": "rgba(255, 255, 255, 0.5)",
+        "fontSize": 12,
+        "margin": {
+          "bottom": 8
+        },
         "text": "④ ui（wx.showToast / showModal / showActionSheet → platformAPI.ui）",
         "semantic": "text"
       },
       {
         "id": 23,
         "parentId": 21,
+        "display": "flex",
+        "alignItems": "center",
+        "gap": 8,
         "semantic": "view"
       },
       {
         "id": 24,
         "parentId": 23,
+        "margin": {
+          "top": 4
+        },
         "text": "showModal",
         "semantic": "button"
       },
       {
         "id": 25,
         "parentId": 23,
+        "margin": {
+          "top": 4
+        },
         "text": "showActionSheet",
         "semantic": "button"
       },
       {
         "id": 26,
         "parentId": 23,
+        "margin": {
+          "top": 4
+        },
         "text": "showLoading（2s 自动关）",
         "semantic": "button"
       },
       {
         "id": 27,
         "parentId": 23,
+        "margin": {
+          "top": 4
+        },
         "text": "hideLoading",
         "semantic": "button"
       },
       {
         "id": 28,
         "parentId": 21,
+        "display": "block",
+        "color": "#7d90a9",
+        "fontSize": 13,
+        "margin": {
+          "top": 6
+        },
         "semantic": "text"
       },
       {
         "id": 29,
         "parentId": 0,
+        "borderRadius": 8,
+        "padding": {
+          "top": 12,
+          "right": 12,
+          "bottom": 12,
+          "left": 12
+        },
+        "margin": {
+          "bottom": 12
+        },
+        "borderColor": "rgba(255, 255, 255, 0.1)",
         "semantic": "view"
       },
       {
         "id": 30,
         "parentId": 29,
+        "display": "block",
+        "color": "rgba(255, 255, 255, 0.5)",
+        "fontSize": 12,
+        "margin": {
+          "bottom": 8
+        },
         "text": "⑤ 能力 Hook（G-32：useDevice/useNetwork/useClipboard → Result<T> 无回调）",
         "semantic": "text"
       },
       {
         "id": 31,
         "parentId": 29,
+        "display": "flex",
+        "alignItems": "center",
+        "gap": 8,
         "semantic": "view"
       },
       {
         "id": 32,
         "parentId": 31,
+        "margin": {
+          "top": 4
+        },
         "text": "useDevice",
         "semantic": "button"
       },
       {
         "id": 33,
         "parentId": 31,
+        "margin": {
+          "top": 4
+        },
         "text": "useNetwork",
         "semantic": "button"
       },
       {
         "id": 34,
         "parentId": 31,
+        "margin": {
+          "top": 4
+        },
         "text": "useClipboard",
         "semantic": "button"
       },
       {
         "id": 35,
         "parentId": 31,
+        "margin": {
+          "top": 4
+        },
         "text": "useFetch",
         "semantic": "button"
       },
       {
         "id": 36,
         "parentId": 29,
+        "display": "block",
+        "color": "#7d90a9",
+        "fontSize": 13,
+        "margin": {
+          "top": 6
+        },
         "semantic": "text"
       },
       {
         "id": 37,
         "parentId": 29,
+        "display": "block",
+        "color": "rgba(255, 255, 255, 0.5)",
+        "fontSize": 13,
+        "margin": {
+          "bottom": 16
+        },
         "text": "useFetch = G-32 C26（迁移文档：wx.request → await useFetch(url)）· usePermission/useStorage 见 @proteus-vue/api/capability.ts（probe 降级 + createReactiveStorage 响应式）",
         "semantic": "text"
       },
       {
         "id": 38,
         "parentId": 0,
+        "borderRadius": 8,
+        "padding": {
+          "top": 12,
+          "right": 12,
+          "bottom": 12,
+          "left": 12
+        },
+        "margin": {
+          "bottom": 12
+        },
+        "borderColor": "rgba(255, 255, 255, 0.1)",
         "semantic": "view"
       },
       {
         "id": 39,
         "parentId": 38,
+        "display": "block",
+        "color": "rgba(255, 255, 255, 0.5)",
+        "fontSize": 12,
+        "margin": {
+          "bottom": 8
+        },
         "text": "⑥ 能力 Hook 三期（useSensor/useBiometric/useAuth/useQRCode——web 缺能力 → Err 降级）",
         "semantic": "text"
       },
       {
         "id": 40,
         "parentId": 38,
+        "display": "flex",
+        "alignItems": "center",
+        "gap": 8,
         "semantic": "view"
       },
       {
         "id": 41,
         "parentId": 40,
+        "margin": {
+          "top": 4
+        },
         "text": "useSensor",
         "semantic": "button"
       },
       {
         "id": 42,
         "parentId": 40,
+        "margin": {
+          "top": 4
+        },
         "text": "useBiometric",
         "semantic": "button"
       },
       {
         "id": 43,
         "parentId": 40,
+        "margin": {
+          "top": 4
+        },
         "text": "useAuth 登录",
         "semantic": "button"
       },
       {
         "id": 44,
         "parentId": 40,
+        "margin": {
+          "top": 4
+        },
         "text": "登出",
         "semantic": "button"
       },
       {
         "id": 45,
         "parentId": 40,
+        "margin": {
+          "top": 4
+        },
         "text": "useQRCode",
         "semantic": "button"
       },
       {
         "id": 46,
         "parentId": 38,
+        "display": "block",
+        "color": "#7d90a9",
+        "fontSize": 13,
+        "margin": {
+          "top": 6
+        },
         "semantic": "text"
       },
       {
         "id": 47,
         "parentId": 38,
+        "display": "block",
+        "color": "rgba(255, 255, 255, 0.5)",
+        "fontSize": 13,
+        "margin": {
+          "bottom": 16
+        },
         "text": "useBiometric → web 无 WebAuthn 时 data:false（feature detection）；useQRCode web 需摄像头取流源 → Err · 小程序端 wx.scanCode 直通",
         "semantic": "text"
       },
       {
         "id": 48,
         "parentId": 0,
+        "borderRadius": 8,
+        "padding": {
+          "top": 12,
+          "right": 12,
+          "bottom": 12,
+          "left": 12
+        },
+        "margin": {
+          "bottom": 12
+        },
+        "borderColor": "rgba(255, 255, 255, 0.1)",
         "semantic": "view"
       },
       {
         "id": 49,
         "parentId": 48,
+        "display": "block",
+        "color": "rgba(255, 255, 255, 0.5)",
+        "fontSize": 12,
+        "margin": {
+          "bottom": 8
+        },
         "text": "⑦ 能力 Hook 四期（useWebSocket/useAnalytics/useLog/useFileSystem——网络与工程类）",
         "semantic": "text"
       },
       {
         "id": 50,
         "parentId": 48,
+        "display": "flex",
+        "alignItems": "center",
+        "gap": 8,
         "semantic": "view"
       },
       {
         "id": 51,
         "parentId": 50,
+        "margin": {
+          "top": 4
+        },
         "text": "useWebSocket",
         "semantic": "button"
       },
       {
         "id": 52,
         "parentId": 50,
+        "margin": {
+          "top": 4
+        },
         "text": "useAnalytics 埋点",
         "semantic": "button"
       },
       {
         "id": 53,
         "parentId": 50,
+        "margin": {
+          "top": 4
+        },
         "text": "useLog",
         "semantic": "button"
       },
       {
         "id": 54,
         "parentId": 50,
+        "margin": {
+          "top": 4
+        },
         "text": "useFileSystem",
         "semantic": "button"
       },
       {
         "id": 55,
         "parentId": 48,
+        "display": "block",
+        "color": "#7d90a9",
+        "fontSize": 13,
+        "margin": {
+          "top": 6
+        },
         "semantic": "text"
       },
       {
         "id": 56,
         "parentId": 48,
+        "display": "block",
+        "color": "rgba(255, 255, 255, 0.5)",
+        "fontSize": 13,
+        "margin": {
+          "bottom": 16
+        },
         "text": "useWebSocket/useAnalytics 小程序端走 wx.connectSocket/reportEvent；useFileSystem web 端内存降级（非持久）· useUpload/useDownload 见 @proteus-vue/api/capability.ts",
         "semantic": "text"
       },
       {
         "id": 57,
         "parentId": 0,
+        "borderRadius": 8,
+        "padding": {
+          "top": 12,
+          "right": 12,
+          "bottom": 12,
+          "left": 12
+        },
+        "margin": {
+          "bottom": 12
+        },
+        "borderColor": "rgba(255, 255, 255, 0.1)",
         "semantic": "view"
       },
       {
         "id": 58,
         "parentId": 57,
+        "display": "block",
+        "color": "rgba(255, 255, 255, 0.5)",
+        "fontSize": 12,
+        "margin": {
+          "bottom": 8
+        },
         "text": "⑧ 能力 Hook 五期（useNotification/useAppLifecycle/useContact/useCalendar/useArchive/useShortcut）",
         "semantic": "text"
       },
       {
         "id": 59,
         "parentId": 57,
+        "display": "flex",
+        "alignItems": "center",
+        "gap": 8,
         "semantic": "view"
       },
       {
         "id": 60,
         "parentId": 59,
+        "margin": {
+          "top": 4
+        },
         "text": "useNotification",
         "semantic": "button"
       },
       {
         "id": 61,
         "parentId": 59,
+        "margin": {
+          "top": 4
+        },
         "text": "useAppLifecycle",
         "semantic": "button"
       },
       {
         "id": 62,
         "parentId": 59,
+        "margin": {
+          "top": 4
+        },
         "text": "useContact",
         "semantic": "button"
       },
       {
         "id": 63,
         "parentId": 59,
+        "margin": {
+          "top": 4
+        },
         "text": "useCalendar",
         "semantic": "button"
       },
       {
         "id": 64,
         "parentId": 59,
+        "margin": {
+          "top": 4
+        },
         "text": "useArchive",
         "semantic": "button"
       },
       {
         "id": 65,
         "parentId": 59,
+        "margin": {
+          "top": 4
+        },
         "text": "useShortcut",
         "semantic": "button"
       },
       {
         "id": 66,
         "parentId": 57,
+        "display": "block",
+        "color": "#7d90a9",
+        "fontSize": 13,
+        "margin": {
+          "top": 6
+        },
         "semantic": "text"
       },
       {
         "id": 67,
         "parentId": 57,
+        "display": "block",
+        "color": "rgba(255, 255, 255, 0.5)",
+        "fontSize": 13,
+        "margin": {
+          "bottom": 16
+        },
         "text": "小程序端走 wx.requestSubscribeMessage/chooseContact/addPhoneCalendar/compressFile/addToDesktop + App 钩子；web 端仅 Notification 与 visibilitychange 有原生对应，其余诚实降级 → Err",
         "semantic": "text"
       },
       {
         "id": 68,
         "parentId": 0,
+        "borderRadius": 8,
+        "padding": {
+          "top": 12,
+          "right": 12,
+          "bottom": 12,
+          "left": 12
+        },
+        "margin": {
+          "bottom": 12
+        },
+        "borderColor": "rgba(255, 255, 255, 0.1)",
         "semantic": "view"
       },
       {
         "id": 69,
         "parentId": 68,
+        "display": "block",
+        "color": "rgba(255, 255, 255, 0.5)",
+        "fontSize": 12,
+        "margin": {
+          "bottom": 8
+        },
         "text": "⑨ 能力 Hook 六期（usePageLifecycle/useBluetooth/useNFC/useCamera/useMicrophone/useKeyboard——媒体与近场）",
         "semantic": "text"
       },
       {
         "id": 70,
         "parentId": 68,
+        "display": "flex",
+        "alignItems": "center",
+        "gap": 8,
         "semantic": "view"
       },
       {
         "id": 71,
         "parentId": 70,
+        "margin": {
+          "top": 4
+        },
         "text": "usePageLifecycle",
         "semantic": "button"
       },
       {
         "id": 72,
         "parentId": 70,
+        "margin": {
+          "top": 4
+        },
         "text": "useBluetooth",
         "semantic": "button"
       },
       {
         "id": 73,
         "parentId": 70,
+        "margin": {
+          "top": 4
+        },
         "text": "useNFC",
         "semantic": "button"
       },
       {
         "id": 74,
         "parentId": 70,
+        "margin": {
+          "top": 4
+        },
         "text": "useCamera",
         "semantic": "button"
       },
       {
         "id": 75,
         "parentId": 70,
+        "margin": {
+          "top": 4
+        },
         "text": "useMicrophone",
         "semantic": "button"
       },
       {
         "id": 76,
         "parentId": 70,
+        "margin": {
+          "top": 4
+        },
         "text": "useKeyboard",
         "semantic": "button"
       },
       {
         "id": 77,
         "parentId": 68,
+        "display": "block",
+        "color": "#7d90a9",
+        "fontSize": 13,
+        "margin": {
+          "top": 6
+        },
         "semantic": "text"
       },
       {
         "id": 78,
         "parentId": 68,
+        "display": "block",
+        "color": "rgba(255, 255, 255, 0.5)",
+        "fontSize": 13,
+        "margin": {
+          "bottom": 16
+        },
         "text": "小程序端走 wx.openBluetoothAdapter/getHCEState/authorize/onKeyboardHeightChange/onPageShow·onPageHide；web 端蓝牙·NFC 为特性探测，相机·麦克风走 getUserMedia（需 HTTPS），键盘走 visualViewport 启发式",
         "semantic": "text"
       },
       {
         "id": 79,
         "parentId": 0,
+        "borderRadius": 8,
+        "padding": {
+          "top": 12,
+          "right": 12,
+          "bottom": 12,
+          "left": 12
+        },
+        "margin": {
+          "bottom": 12
+        },
+        "borderColor": "rgba(255, 255, 255, 0.1)",
         "semantic": "view"
       },
       {
         "id": 80,
         "parentId": 79,
+        "display": "block",
+        "color": "rgba(255, 255, 255, 0.5)",
+        "fontSize": 12,
+        "margin": {
+          "bottom": 8
+        },
         "text": "⑩ 工程原语（G-32 B5：useState/useComputed/usePageParam——injectable vue reactivity）",
         "semantic": "text"
       },
       {
         "id": 81,
         "parentId": 79,
+        "display": "flex",
+        "alignItems": "center",
+        "gap": 8,
         "semantic": "view"
       },
       {
         "id": 82,
         "parentId": 81,
+        "margin": {
+          "top": 4
+        },
         "text": "useState 自增",
         "semantic": "button"
       },
       {
         "id": 83,
         "parentId": 81,
+        "margin": {
+          "top": 4
+        },
         "text": "useState/Computed 读",
         "semantic": "button"
       },
       {
         "id": 84,
         "parentId": 81,
+        "margin": {
+          "top": 4
+        },
         "text": "usePageParam",
         "semantic": "button"
       },
       {
         "id": 85,
         "parentId": 79,
+        "display": "block",
+        "color": "#7d90a9",
+        "fontSize": 13,
+        "margin": {
+          "top": 6
+        },
         "semantic": "text"
       },
       {
         "id": 86,
         "parentId": 79,
+        "display": "block",
+        "color": "rgba(255, 255, 255, 0.5)",
+        "fontSize": 13,
+        "margin": {
+          "bottom": 16
+        },
         "text": "createEngineering 注入 Vue reactivity——useState=ref 语义 / useComputed=computed / usePageParam 读页面参数（api 包零 vue 依赖，消费方注入）",
         "semantic": "text"
       },
       {
         "id": 87,
         "parentId": 0,
+        "borderRadius": 8,
+        "padding": {
+          "top": 12,
+          "right": 12,
+          "bottom": 12,
+          "left": 12
+        },
+        "margin": {
+          "bottom": 12
+        },
+        "borderColor": "rgba(255, 255, 255, 0.1)",
         "semantic": "view"
       },
       {
         "id": 88,
         "parentId": 87,
+        "display": "block",
+        "color": "rgba(255, 255, 255, 0.5)",
+        "fontSize": 12,
+        "margin": {
+          "bottom": 8
+        },
         "text": "⑪ 路由语义化（G-32 B5 续：createRouterEngineering——E10 useRoute / E11-E15 导航语义 / E16-E17 守卫）",
         "semantic": "text"
       },
       {
         "id": 89,
         "parentId": 87,
+        "display": "flex",
+        "alignItems": "center",
+        "gap": 8,
         "semantic": "view"
       },
       {
         "id": 90,
         "parentId": 89,
+        "margin": {
+          "top": 4
+        },
         "text": "push",
         "semantic": "button"
       },
       {
         "id": 91,
         "parentId": 89,
+        "margin": {
+          "top": 4
+        },
         "text": "replace",
         "semantic": "button"
       },
       {
         "id": 92,
         "parentId": 89,
+        "margin": {
+          "top": 4
+        },
         "text": "back",
         "semantic": "button"
       },
       {
         "id": 93,
         "parentId": 89,
+        "margin": {
+          "top": 4
+        },
         "text": "switchTab",
         "semantic": "button"
       },
       {
         "id": 94,
         "parentId": 89,
+        "margin": {
+          "top": 4
+        },
         "text": "reLaunch",
         "semantic": "button"
       },
       {
         "id": 95,
         "parentId": 89,
+        "margin": {
+          "top": 4
+        },
         "text": "useRoute",
         "semantic": "button"
       },
       {
         "id": 96,
         "parentId": 87,
+        "display": "block",
+        "color": "#7d90a9",
+        "fontSize": 13,
+        "margin": {
+          "top": 6
+        },
         "semantic": "text"
       },
       {
         "id": 97,
         "parentId": 87,
+        "display": "block",
+        "color": "rgba(255, 255, 255, 0.5)",
+        "fontSize": 13,
+        "margin": {
+          "bottom": 16
+        },
         "text": "createRouterEngineering 注入兼容 router（mock 录制调用，不真实导航）——E11-E15 语义委托既有 router（replace=replace:true / switchTab / reLaunch 标志）；E10 useRoute 读注入 getCurrentRoute 源；E16/E17 守卫委托（router 缺省时安全 no-op）",
         "semantic": "text"
       },
       {
         "id": 98,
         "parentId": 0,
+        "borderRadius": 8,
+        "padding": {
+          "top": 12,
+          "right": 12,
+          "bottom": 12,
+          "left": 12
+        },
+        "margin": {
+          "bottom": 12
+        },
+        "borderColor": "rgba(255, 255, 255, 0.1)",
         "semantic": "view"
       },
       {
         "id": 99,
         "parentId": 98,
+        "display": "block",
+        "color": "rgba(255, 255, 255, 0.5)",
+        "fontSize": 12,
+        "margin": {
+          "bottom": 8
+        },
         "text": "⑫ 动画语义（G-32 B5 续二：p-transition E19 / p-animate E20 / useAnimation E21-E23 注入式）",
         "semantic": "text"
       },
       {
         "id": 100,
         "parentId": 98,
+        "display": "flex",
+        "alignItems": "center",
+        "gap": 8,
         "semantic": "view"
       },
       {
         "id": 101,
         "parentId": 100,
+        "margin": {
+          "top": 4
+        },
         "text": "p-transition 显隐",
         "semantic": "button"
       },
       {
         "id": 102,
         "parentId": 100,
+        "margin": {
+          "top": 4
+        },
         "text": "useAnimation",
         "semantic": "button"
       },
       {
         "id": 103,
         "parentId": 100,
+        "margin": {
+          "top": 4
+        },
         "text": "useGestureAnimation",
         "semantic": "button"
       },
       {
         "id": 104,
         "parentId": 100,
+        "margin": {
+          "top": 4
+        },
         "text": "useScrollAnimation",
         "semantic": "button"
       },
       {
         "id": 105,
         "parentId": 98,
+        "display": "flex",
+        "alignItems": "center",
+        "justifyContent": "center",
+        "height": 88,
+        "borderRadius": 8,
         "semantic": "view"
       },
       {
@@ -3905,199 +5845,373 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
       {
         "id": 108,
         "parentId": 107,
+        "display": "inline-block",
+        "borderRadius": 8,
+        "color": "#fff",
+        "fontSize": 16,
         "text": "Proteus",
         "semantic": "text"
       },
       {
         "id": 109,
         "parentId": 98,
+        "display": "block",
+        "color": "#7d90a9",
+        "fontSize": 13,
+        "margin": {
+          "top": 6
+        },
         "semantic": "text"
       },
       {
         "id": 110,
         "parentId": 98,
+        "display": "block",
+        "color": "rgba(255, 255, 255, 0.5)",
+        "fontSize": 13,
+        "margin": {
+          "bottom": 16
+        },
         "text": "E19 p-transition（CSS 显隐过渡）· E20 p-animate（CSS 动画声明——组件形态，纯 CSS 双端）；E21 useAnimation（wx.createAnimation 语义构建器）/ E22 useGestureAnimation（增量累积→提交帧）/ E23 useScrollAnimation（进度→插值）——reactivity/driver 注入式，web 端 WAAPI 播放（MP/无 driver 安全 no-op）",
         "semantic": "text"
       },
       {
         "id": 111,
         "parentId": 0,
+        "borderRadius": 8,
+        "padding": {
+          "top": 12,
+          "right": 12,
+          "bottom": 12,
+          "left": 12
+        },
+        "margin": {
+          "bottom": 12
+        },
+        "borderColor": "rgba(255, 255, 255, 0.1)",
         "semantic": "view"
       },
       {
         "id": 112,
         "parentId": 111,
+        "display": "block",
+        "color": "rgba(255, 255, 255, 0.5)",
+        "fontSize": 12,
+        "margin": {
+          "bottom": 8
+        },
         "text": "⑬ 工程化（G-32 B5 续三：useDevTools E24 / useInspector E25 / usePerformance E26 / defineComponent E27 / defineCapability E28）",
         "semantic": "text"
       },
       {
         "id": 113,
         "parentId": 111,
+        "display": "flex",
+        "alignItems": "center",
+        "gap": 8,
         "semantic": "view"
       },
       {
         "id": 114,
         "parentId": 113,
+        "margin": {
+          "top": 4
+        },
         "text": "useDevTools",
         "semantic": "button"
       },
       {
         "id": 115,
         "parentId": 113,
+        "margin": {
+          "top": 4
+        },
         "text": "useInspector",
         "semantic": "button"
       },
       {
         "id": 116,
         "parentId": 113,
+        "margin": {
+          "top": 4
+        },
         "text": "usePerformance",
         "semantic": "button"
       },
       {
         "id": 117,
         "parentId": 113,
+        "margin": {
+          "top": 4
+        },
         "text": "defineComponent",
         "semantic": "button"
       },
       {
         "id": 118,
         "parentId": 113,
+        "margin": {
+          "top": 4
+        },
         "text": "defineCapability",
         "semantic": "button"
       },
       {
         "id": 119,
         "parentId": 111,
+        "display": "block",
+        "color": "#7d90a9",
+        "fontSize": 13,
+        "margin": {
+          "top": 6
+        },
         "semantic": "text"
       },
       {
         "id": 120,
         "parentId": 111,
+        "display": "block",
+        "color": "rgba(255, 255, 255, 0.5)",
+        "fontSize": 13,
+        "margin": {
+          "bottom": 16
+        },
         "text": "E24 useDevTools（dev 事件面）/ E25 useInspector（组件树快照）/ E26 usePerformance（wx.reportPerformance 语义）→ 注入式 Hook；E27 defineComponent（类型化组件定义含 C-IR 元信息 + 声明期校验）/ E28 defineCapability（G-30 降级链声明 + 解析）→ 纯函数声明工具——工程原语 28 收口",
         "semantic": "text"
       },
       {
         "id": 121,
         "parentId": 0,
+        "borderRadius": 8,
+        "padding": {
+          "top": 12,
+          "right": 12,
+          "bottom": 12,
+          "left": 12
+        },
+        "margin": {
+          "bottom": 12
+        },
+        "borderColor": "rgba(255, 255, 255, 0.1)",
         "semantic": "view"
       },
       {
         "id": 122,
         "parentId": 121,
+        "display": "block",
+        "color": "rgba(255, 255, 255, 0.5)",
+        "fontSize": 12,
+        "margin": {
+          "bottom": 8
+        },
         "text": "⑭ 能力收官（G-32 B3 七/八期：Capability 50/50——map·sms·background·socket-task·data-channel·cookie·face-id·IAP·mini-program·embedded·live·extension）",
         "semantic": "text"
       },
       {
         "id": 123,
         "parentId": 121,
+        "display": "flex",
+        "alignItems": "center",
+        "gap": 8,
         "semantic": "view"
       },
       {
         "id": 124,
         "parentId": 123,
+        "margin": {
+          "top": 4
+        },
         "text": "useCookie",
         "semantic": "button"
       },
       {
         "id": 125,
         "parentId": 123,
+        "margin": {
+          "top": 4
+        },
         "text": "useBackground",
         "semantic": "button"
       },
       {
         "id": 126,
         "parentId": 123,
+        "margin": {
+          "top": 4
+        },
         "text": "useFaceID",
         "semantic": "button"
       },
       {
         "id": 127,
         "parentId": 123,
+        "margin": {
+          "top": 4
+        },
         "text": "useMap",
         "semantic": "button"
       },
       {
         "id": 128,
         "parentId": 123,
+        "margin": {
+          "top": 4
+        },
         "text": "useMiniProgram",
         "semantic": "button"
       },
       {
         "id": 129,
         "parentId": 123,
+        "margin": {
+          "top": 4
+        },
         "text": "useExtension",
         "semantic": "button"
       },
       {
         "id": 130,
         "parentId": 121,
+        "display": "block",
+        "color": "#7d90a9",
+        "fontSize": 13,
+        "margin": {
+          "top": 6
+        },
         "semantic": "text"
       },
       {
         "id": 131,
         "parentId": 121,
+        "display": "block",
+        "color": "rgba(255, 255, 255, 0.5)",
+        "fontSize": 13,
+        "margin": {
+          "bottom": 16
+        },
         "text": "Capability 50/50 收官——web 真实能力（cookie=document.cookie / background=visibilitychange / face-id=WebAuthn）+ wx 原生（map=createMapContext / mini-program=navigateToMiniProgram）+ 宿主桥（data-channel / embedded / live / extension）——web 无标准 → 诚实 Err 降级",
         "semantic": "text"
       },
       {
         "id": 132,
         "parentId": 0,
+        "borderRadius": 8,
+        "padding": {
+          "top": 12,
+          "right": 12,
+          "bottom": 12,
+          "left": 12
+        },
+        "margin": {
+          "bottom": 12
+        },
+        "borderColor": "rgba(255, 255, 255, 0.1)",
         "semantic": "view"
       },
       {
         "id": 133,
         "parentId": 132,
+        "display": "block",
+        "color": "rgba(255, 255, 255, 0.5)",
+        "fontSize": 12,
+        "margin": {
+          "bottom": 8
+        },
         "text": "⑮ 请求数据层（G-32 B6 前置：createRequestEngineering——R1 策略请求 / R2 useQuery SWR / R3 enqueue 队列 / R4 dedupe）",
         "semantic": "text"
       },
       {
         "id": 134,
         "parentId": 132,
+        "display": "flex",
+        "alignItems": "center",
+        "gap": 8,
         "semantic": "view"
       },
       {
         "id": 135,
         "parentId": 134,
+        "margin": {
+          "top": 4
+        },
         "text": "useQuery",
         "semantic": "button"
       },
       {
         "id": 136,
         "parentId": 134,
+        "margin": {
+          "top": 4
+        },
         "text": "enqueue",
         "semantic": "button"
       },
       {
         "id": 137,
         "parentId": 134,
+        "margin": {
+          "top": 4
+        },
         "text": "request 缓存",
         "semantic": "button"
       },
       {
         "id": 138,
         "parentId": 132,
+        "display": "block",
+        "color": "#7d90a9",
+        "fontSize": 13,
+        "margin": {
+          "top": 6
+        },
         "semantic": "text"
       },
       {
         "id": 139,
         "parentId": 132,
+        "display": "block",
+        "color": "rgba(255, 255, 255, 0.5)",
+        "fontSize": 13,
+        "margin": {
+          "bottom": 16
+        },
         "text": "注入式请求数据层（mock client + compat storage 缓存底座，无真实网络）——R2 useQuery SWR（缓存命中即用 + in-flight 去重 + refresh/mutate/invalidate）；R3 enqueue 并发队列（FIFO + 上限 + 失败隔离）；R1 request 策略请求（ttl 缓存 + dedupe 合并 + 可选排队）——与四工厂同族注入式可单测；useQuery 点两次看第二次缓存命中",
         "semantic": "text"
       },
       {
         "id": 140,
         "parentId": 0,
+        "borderRadius": 8,
+        "padding": {
+          "top": 12,
+          "right": 12,
+          "bottom": 12,
+          "left": 12
+        },
+        "margin": {
+          "bottom": 12
+        },
+        "borderColor": "rgba(255, 255, 255, 0.1)",
         "semantic": "view"
       },
       {
         "id": 141,
         "parentId": 140,
+        "display": "block",
+        "color": "rgba(255, 255, 255, 0.5)",
+        "fontSize": 12,
+        "margin": {
+          "bottom": 8
+        },
         "text": "⑯ 声明式导航（G-32 B5 尾巴：p-router-link E18——点击 emit navigate → createRouterEngineering 响应）",
         "semantic": "text"
       },
       {
         "id": 142,
         "parentId": 140,
+        "display": "flex",
+        "alignItems": "center",
+        "gap": 8,
         "semantic": "view"
       },
       {
@@ -4121,79 +6235,158 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
       {
         "id": 146,
         "parentId": 140,
+        "display": "block",
+        "color": "#7d90a9",
+        "fontSize": 13,
+        "margin": {
+          "top": 6
+        },
         "semantic": "text"
       },
       {
         "id": 147,
         "parentId": 140,
+        "display": "block",
+        "color": "rgba(255, 255, 255, 0.5)",
+        "fontSize": 13,
+        "margin": {
+          "bottom": 16
+        },
         "text": "E18 p-router-link 声明式导航（engineering.router-link，B5 工程原语最后节点）——点击 emit('navigate', { to, replace, switchTab })；父级 @navigate 调 rx.push/replace/switchTab（E11-E14 语义委托 mock router 录制，不真实导航）；组件零平台依赖（审计合规）+ web role=\"link\" 可访问性 · MP bindtap",
         "semantic": "text"
       },
       {
         "id": 148,
         "parentId": 0,
+        "borderRadius": 8,
+        "padding": {
+          "top": 12,
+          "right": 12,
+          "bottom": 12,
+          "left": 12
+        },
+        "margin": {
+          "bottom": 12
+        },
+        "borderColor": "rgba(255, 255, 255, 0.1)",
         "semantic": "view"
       },
       {
         "id": 149,
         "parentId": 148,
+        "display": "block",
+        "color": "rgba(255, 255, 255, 0.5)",
+        "fontSize": 12,
+        "margin": {
+          "bottom": 8
+        },
         "text": "⑰ WebMCP 接入（E30：useMCP——把框架能力暴露为浏览器内 agent 可调用工具）",
         "semantic": "text"
       },
       {
         "id": 150,
         "parentId": 148,
+        "display": "flex",
+        "alignItems": "center",
+        "gap": 8,
         "semantic": "view"
       },
       {
         "id": 151,
         "parentId": 150,
+        "margin": {
+          "top": 4
+        },
         "text": "探测支持",
         "semantic": "button"
       },
       {
         "id": 152,
         "parentId": 150,
+        "margin": {
+          "top": 4
+        },
         "text": "注册能力工具",
         "semantic": "button"
       },
       {
         "id": 153,
         "parentId": 150,
+        "margin": {
+          "top": 4
+        },
         "text": "调用工具",
         "semantic": "button"
       },
       {
         "id": 154,
         "parentId": 150,
+        "margin": {
+          "top": 4
+        },
         "text": "注销",
         "semantic": "button"
       },
       {
         "id": 155,
         "parentId": 148,
+        "display": "block",
+        "color": "#7d90a9",
+        "fontSize": 13,
+        "margin": {
+          "top": 6
+        },
         "semantic": "text"
       },
       {
         "id": 156,
         "parentId": 148,
+        "display": "block",
+        "color": "rgba(255, 255, 255, 0.5)",
+        "fontSize": 13,
+        "margin": {
+          "bottom": 16
+        },
         "text": "E30 engineering.mcp——规范面：document.modelContext.registerTool + signal 注销（★非 navigator；规范无 unregisterTool）；框架差异化：能力面统一 CapResult<T> 契约 → 能力可自动派生为工具（ok→结果 / Err→isError+错误码）。本机浏览器未实现 WebMCP 时如实降级（isSupported=false，不抛错）——可用下面「调用工具」验证派生工具的归一行为（不依赖浏览器支持）。",
         "semantic": "text"
       },
       {
         "id": 157,
         "parentId": 0,
+        "borderRadius": 8,
+        "padding": {
+          "top": 12,
+          "right": 12,
+          "bottom": 12,
+          "left": 12
+        },
+        "margin": {
+          "bottom": 12
+        },
+        "borderColor": "rgba(255, 255, 255, 0.1)",
         "semantic": "view"
       },
       {
         "id": 158,
         "parentId": 157,
+        "display": "block",
+        "color": "rgba(255, 255, 255, 0.5)",
+        "fontSize": 12,
+        "margin": {
+          "bottom": 8
+        },
         "text": "对照（wx.* 直写 → platformAPI.* 收口）",
         "semantic": "text"
       },
       {
         "id": 159,
         "parentId": 157,
+        "display": "block",
+        "color": "rgba(255, 255, 255, 0.5)",
+        "fontSize": 13,
+        "margin": {
+          "bottom": 16
+        },
         "text": " wx.showToast → api.ui.showToast · wx.showModal → api.ui.showModal · wx.showActionSheet → api.ui.showActionSheet · wx.setStorageSync → api.storage.set · wx.navigateTo → api.router.push · wx.switchTab → api.router.switchTab · wx.request → api.request ",
         "semantic": "text"
       }
@@ -4204,6 +6397,12 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
       {
         "id": 0,
         "parentId": null,
+        "padding": {
+          "top": 24,
+          "right": 24,
+          "bottom": 24,
+          "left": 24
+        },
         "semantic": "div"
       },
       {
@@ -4215,6 +6414,8 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
       {
         "id": 2,
         "parentId": 0,
+        "color": "#888",
+        "fontSize": 13,
         "text": "页面 provide → 组件 inject（getApp().__proteusProvides 全局注册表桥）",
         "semantic": "p"
       },
@@ -4232,6 +6433,8 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
       {
         "id": 5,
         "parentId": 0,
+        "color": "#888",
+        "fontSize": 13,
         "semantic": "p"
       }
     ]
@@ -4241,6 +6444,12 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
       {
         "id": 0,
         "parentId": null,
+        "padding": {
+          "top": 16,
+          "right": 16,
+          "bottom": 16,
+          "left": 16
+        },
         "semantic": "div"
       },
       {
@@ -4252,6 +6461,7 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
       {
         "id": 2,
         "parentId": 0,
+        "color": "#888",
         "text": "同一份 C-IR 组件树 → 换 flag 切渲染后端——「语义收敛 + 后端实现」肉眼可见",
         "semantic": "p-text"
       },
@@ -4269,16 +6479,25 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
       {
         "id": 5,
         "parentId": 3,
+        "display": "flex",
+        "gap": 8,
         "semantic": "div"
       },
       {
         "id": 6,
         "parentId": 5,
+        "borderRadius": 6,
+        "fontSize": 13,
         "semantic": "button"
       },
       {
         "id": 7,
         "parentId": 3,
+        "color": "#666",
+        "fontSize": 13,
+        "margin": {
+          "top": 8
+        },
         "semantic": "p-text"
       },
       {
@@ -4316,17 +6535,33 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
       {
         "id": 14,
         "parentId": 13,
+        "display": "block",
+        "color": "#555",
+        "fontSize": 13,
         "text": "vue-dom 真实 DOM（后端内联渲染）：",
         "semantic": "p-text"
       },
       {
         "id": 15,
         "parentId": 13,
+        "borderRadius": 8,
+        "padding": {
+          "top": 12,
+          "right": 12,
+          "bottom": 12,
+          "left": 12
+        },
+        "minHeight": 60,
+        "display": "flex",
+        "gap": 8,
         "semantic": "div"
       },
       {
         "id": 16,
         "parentId": 11,
+        "display": "block",
+        "color": "#555",
+        "fontSize": 13,
         "text": "各端控件快照（renderComponentSnapshot readback）：",
         "semantic": "p-text"
       },
@@ -4342,6 +6577,12 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
       {
         "id": 0,
         "parentId": null,
+        "padding": {
+          "top": 16,
+          "right": 16,
+          "bottom": 16,
+          "left": 16
+        },
         "semantic": "div"
       },
       {
@@ -4353,12 +6594,23 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
       {
         "id": 2,
         "parentId": 0,
+        "color": "#969799",
         "text": "128 原语 SSOT 已冻结——本页演示 B2 落地的 13 个新组件",
         "semantic": "p-text"
       },
       {
         "id": 3,
         "parentId": 0,
+        "margin": {
+          "bottom": 20
+        },
+        "padding": {
+          "top": 12,
+          "right": 12,
+          "bottom": 12,
+          "left": 12
+        },
+        "borderRadius": 8,
         "semantic": "section"
       },
       {
@@ -4375,11 +6627,16 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
       {
         "id": 6,
         "parentId": 3,
+        "display": "flex",
+        "alignItems": "center",
+        "gap": 8,
         "semantic": "div"
       },
       {
         "id": 7,
         "parentId": 6,
+        "minWidth": 120,
+        "color": "#646566",
         "text": "p-inline（行内容器）：",
         "semantic": "p-text"
       },
@@ -4391,40 +6648,55 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
       {
         "id": 9,
         "parentId": 8,
+        "borderRadius": 4,
+        "fontSize": 13,
         "text": "A",
         "semantic": "span"
       },
       {
         "id": 10,
         "parentId": 8,
+        "borderRadius": 4,
+        "fontSize": 13,
         "text": "B",
         "semantic": "span"
       },
       {
         "id": 11,
         "parentId": 8,
+        "borderRadius": 4,
+        "fontSize": 13,
         "text": "C",
         "semantic": "span"
       },
       {
         "id": 12,
         "parentId": 3,
+        "display": "flex",
+        "alignItems": "center",
+        "gap": 8,
         "semantic": "div"
       },
       {
         "id": 13,
         "parentId": 12,
+        "minWidth": 120,
+        "color": "#646566",
         "text": "p-spacer（弹性空白）：",
         "semantic": "p-text"
       },
       {
         "id": 14,
         "parentId": 12,
+        "display": "flex",
+        "alignItems": "center",
         "semantic": "div"
       },
       {
         "id": 15,
         "parentId": 14,
+        "borderRadius": 4,
+        "fontSize": 13,
         "text": "左",
         "semantic": "span"
       },
@@ -4436,17 +6708,24 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
       {
         "id": 17,
         "parentId": 14,
+        "borderRadius": 4,
+        "fontSize": 13,
         "text": "右",
         "semantic": "span"
       },
       {
         "id": 18,
         "parentId": 3,
+        "display": "flex",
+        "alignItems": "center",
+        "gap": 8,
         "semantic": "div"
       },
       {
         "id": 19,
         "parentId": 18,
+        "minWidth": 120,
+        "color": "#646566",
         "text": "p-divider（分隔线）：",
         "semantic": "p-text"
       },
@@ -4458,32 +6737,57 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
       {
         "id": 21,
         "parentId": 3,
+        "display": "flex",
+        "alignItems": "center",
+        "gap": 8,
         "semantic": "div"
       },
       {
         "id": 22,
         "parentId": 21,
+        "minWidth": 120,
+        "color": "#646566",
         "text": "p-scroll（滚动容器）：",
         "semantic": "p-text"
       },
       {
         "id": 23,
         "parentId": 21,
+        "height": 120,
+        "borderRadius": 6,
+        "padding": {
+          "top": 4,
+          "right": 4,
+          "bottom": 4,
+          "left": 4
+        },
         "semantic": "p-scroll"
       },
       {
         "id": 24,
         "parentId": 23,
+        "padding": {
+          "top": 8,
+          "right": 8,
+          "bottom": 8,
+          "left": 8
+        },
+        "fontSize": 13,
         "semantic": "div"
       },
       {
         "id": 25,
         "parentId": 3,
+        "display": "flex",
+        "alignItems": "center",
+        "gap": 8,
         "semantic": "div"
       },
       {
         "id": 26,
         "parentId": 25,
+        "minWidth": 120,
+        "color": "#646566",
         "text": "p-masonry（瀑布流）：",
         "semantic": "p-text"
       },
@@ -4495,16 +6799,27 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
       {
         "id": 28,
         "parentId": 27,
+        "borderRadius": 6,
+        "display": "flex",
+        "alignItems": "center",
+        "justifyContent": "center",
+        "fontSize": 12,
+        "color": "#646566",
         "semantic": "div"
       },
       {
         "id": 29,
         "parentId": 3,
+        "display": "flex",
+        "alignItems": "center",
+        "gap": 8,
         "semantic": "div"
       },
       {
         "id": 30,
         "parentId": 29,
+        "minWidth": 120,
+        "color": "#646566",
         "text": "p-virtual-list（虚拟列表）：",
         "semantic": "p-text"
       },
@@ -4516,32 +6831,63 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
       {
         "id": 32,
         "parentId": 3,
+        "display": "flex",
+        "alignItems": "center",
+        "gap": 8,
         "semantic": "div"
       },
       {
         "id": 33,
         "parentId": 32,
+        "minWidth": 120,
+        "color": "#646566",
         "text": "p-stack snap + loop（轮播 = swiper 语义消灭形态）：",
         "semantic": "p-text"
       },
       {
         "id": 34,
         "parentId": 32,
+        "widthRatio": 1,
+        "borderRadius": 6,
+        "padding": {
+          "top": 4,
+          "right": 4,
+          "bottom": 4,
+          "left": 4
+        },
         "semantic": "p-stack"
       },
       {
         "id": 35,
         "parentId": 34,
+        "height": 80,
+        "display": "flex",
+        "alignItems": "center",
+        "justifyContent": "center",
+        "borderRadius": 6,
+        "fontSize": 13,
+        "color": "#07c160",
         "semantic": "div"
       },
       {
         "id": 36,
         "parentId": 32,
+        "color": "#07c160",
         "semantic": "p-text"
       },
       {
         "id": 37,
         "parentId": 0,
+        "margin": {
+          "bottom": 20
+        },
+        "padding": {
+          "top": 12,
+          "right": 12,
+          "bottom": 12,
+          "left": 12
+        },
+        "borderRadius": 8,
         "semantic": "section"
       },
       {
@@ -4558,6 +6904,9 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
       {
         "id": 40,
         "parentId": 37,
+        "display": "flex",
+        "alignItems": "center",
+        "gap": 8,
         "semantic": "div"
       },
       {
@@ -4569,6 +6918,9 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
       {
         "id": 42,
         "parentId": 37,
+        "display": "flex",
+        "alignItems": "center",
+        "gap": 8,
         "semantic": "div"
       },
       {
@@ -4599,11 +6951,16 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
       {
         "id": 48,
         "parentId": 37,
+        "display": "flex",
+        "alignItems": "center",
+        "gap": 8,
         "semantic": "div"
       },
       {
         "id": 49,
         "parentId": 48,
+        "minWidth": 120,
+        "color": "#646566",
         "text": "p-switch（开关）：",
         "semantic": "p-text"
       },
@@ -4615,16 +6972,22 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
       {
         "id": 51,
         "parentId": 48,
+        "color": "#07c160",
         "semantic": "p-text"
       },
       {
         "id": 52,
         "parentId": 37,
+        "display": "flex",
+        "alignItems": "center",
+        "gap": 8,
         "semantic": "div"
       },
       {
         "id": 53,
         "parentId": 52,
+        "minWidth": 120,
+        "color": "#646566",
         "text": "p-slider（滑块）：",
         "semantic": "p-text"
       },
@@ -4636,11 +6999,22 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
       {
         "id": 55,
         "parentId": 52,
+        "color": "#07c160",
         "semantic": "p-text"
       },
       {
         "id": 56,
         "parentId": 0,
+        "margin": {
+          "bottom": 20
+        },
+        "padding": {
+          "top": 12,
+          "right": 12,
+          "bottom": 12,
+          "left": 12
+        },
+        "borderRadius": 8,
         "semantic": "section"
       },
       {
@@ -4657,11 +7031,16 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
       {
         "id": 59,
         "parentId": 56,
+        "display": "flex",
+        "alignItems": "center",
+        "gap": 8,
         "semantic": "div"
       },
       {
         "id": 60,
         "parentId": 59,
+        "minWidth": 120,
+        "color": "#646566",
         "text": "p-nav（导航栏）：",
         "semantic": "p-text"
       },
@@ -4683,11 +7062,16 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
       {
         "id": 64,
         "parentId": 56,
+        "display": "flex",
+        "alignItems": "center",
+        "gap": 8,
         "semantic": "div"
       },
       {
         "id": 65,
         "parentId": 64,
+        "minWidth": 120,
+        "color": "#646566",
         "text": "p-tabbar（底部标签）：",
         "semantic": "p-text"
       },
@@ -4699,11 +7083,16 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
       {
         "id": 67,
         "parentId": 56,
+        "display": "flex",
+        "alignItems": "center",
+        "gap": 8,
         "semantic": "div"
       },
       {
         "id": 68,
         "parentId": 67,
+        "minWidth": 120,
+        "color": "#646566",
         "text": "p-drawer（侧滑抽屉）：",
         "semantic": "p-text"
       },
@@ -4727,6 +7116,12 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
       {
         "id": 72,
         "parentId": 71,
+        "padding": {
+          "top": 16,
+          "right": 16,
+          "bottom": 16,
+          "left": 16
+        },
         "semantic": "div"
       },
       {
@@ -4749,6 +7144,12 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
       {
         "id": 76,
         "parentId": 75,
+        "padding": {
+          "top": 16,
+          "right": 16,
+          "bottom": 16,
+          "left": 16
+        },
         "semantic": "div"
       },
       {
@@ -4766,11 +7167,16 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
       {
         "id": 79,
         "parentId": 56,
+        "display": "flex",
+        "alignItems": "center",
+        "gap": 8,
         "semantic": "div"
       },
       {
         "id": 80,
         "parentId": 79,
+        "minWidth": 120,
+        "color": "#646566",
         "text": "p-segment（分段）：",
         "semantic": "p-text"
       },
@@ -4782,11 +7188,16 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
       {
         "id": 82,
         "parentId": 56,
+        "display": "flex",
+        "alignItems": "center",
+        "gap": 8,
         "semantic": "div"
       },
       {
         "id": 83,
         "parentId": 82,
+        "minWidth": 120,
+        "color": "#646566",
         "text": "p-popover（气泡）：",
         "semantic": "p-text"
       },
@@ -4810,11 +7221,16 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
       {
         "id": 87,
         "parentId": 56,
+        "display": "flex",
+        "alignItems": "center",
+        "gap": 8,
         "semantic": "div"
       },
       {
         "id": 88,
         "parentId": 87,
+        "minWidth": 120,
+        "color": "#646566",
         "text": "p-action-sheet（动作面板）：",
         "semantic": "p-text"
       },
@@ -4832,11 +7248,22 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
       {
         "id": 91,
         "parentId": 87,
+        "color": "#07c160",
         "semantic": "p-text"
       },
       {
         "id": 92,
         "parentId": 0,
+        "margin": {
+          "bottom": 20
+        },
+        "padding": {
+          "top": 12,
+          "right": 12,
+          "bottom": 12,
+          "left": 12
+        },
+        "borderRadius": 8,
         "semantic": "section"
       },
       {
@@ -4853,11 +7280,16 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
       {
         "id": 95,
         "parentId": 92,
+        "display": "flex",
+        "alignItems": "center",
+        "gap": 8,
         "semantic": "div"
       },
       {
         "id": 96,
         "parentId": 95,
+        "minWidth": 120,
+        "color": "#646566",
         "text": "p-rich-text（富文本）：",
         "semantic": "p-text"
       },
@@ -4869,11 +7301,16 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
       {
         "id": 98,
         "parentId": 92,
+        "display": "flex",
+        "alignItems": "center",
+        "gap": 8,
         "semantic": "div"
       },
       {
         "id": 99,
         "parentId": 98,
+        "minWidth": 120,
+        "color": "#646566",
         "text": "p-avatar（头像）：",
         "semantic": "p-text"
       },
@@ -4890,11 +7327,16 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
       {
         "id": 102,
         "parentId": 92,
+        "display": "flex",
+        "alignItems": "center",
+        "gap": 8,
         "semantic": "div"
       },
       {
         "id": 103,
         "parentId": 102,
+        "minWidth": 120,
+        "color": "#646566",
         "text": "p-canvas（画布）：",
         "semantic": "p-text"
       },
@@ -4906,11 +7348,16 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
       {
         "id": 105,
         "parentId": 92,
+        "display": "flex",
+        "alignItems": "center",
+        "gap": 8,
         "semantic": "div"
       },
       {
         "id": 106,
         "parentId": 105,
+        "minWidth": 120,
+        "color": "#646566",
         "text": "p-svg（矢量）：",
         "semantic": "p-text"
       },
@@ -4927,11 +7374,16 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
       {
         "id": 109,
         "parentId": 92,
+        "display": "flex",
+        "alignItems": "center",
+        "gap": 8,
         "semantic": "div"
       },
       {
         "id": 110,
         "parentId": 109,
+        "minWidth": 120,
+        "color": "#646566",
         "text": "p-select（选择器）：",
         "semantic": "p-text"
       },
@@ -4943,11 +7395,16 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
       {
         "id": 112,
         "parentId": 92,
+        "display": "flex",
+        "alignItems": "center",
+        "gap": 8,
         "semantic": "div"
       },
       {
         "id": 113,
         "parentId": 112,
+        "minWidth": 120,
+        "color": "#646566",
         "text": "p-checkbox（多选）：",
         "semantic": "p-text"
       },
@@ -4966,11 +7423,16 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
       {
         "id": 116,
         "parentId": 92,
+        "display": "flex",
+        "alignItems": "center",
+        "gap": 8,
         "semantic": "div"
       },
       {
         "id": 117,
         "parentId": 116,
+        "minWidth": 120,
+        "color": "#646566",
         "text": "p-radio（单选）：",
         "semantic": "p-text"
       },
@@ -4989,11 +7451,16 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
       {
         "id": 120,
         "parentId": 92,
+        "display": "flex",
+        "alignItems": "center",
+        "gap": 8,
         "semantic": "div"
       },
       {
         "id": 121,
         "parentId": 120,
+        "minWidth": 120,
+        "color": "#646566",
         "text": "p-picker（日期）：",
         "semantic": "p-text"
       },
@@ -5005,11 +7472,16 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
       {
         "id": 123,
         "parentId": 92,
+        "display": "flex",
+        "alignItems": "center",
+        "gap": 8,
         "semantic": "div"
       },
       {
         "id": 124,
         "parentId": 123,
+        "minWidth": 120,
+        "color": "#646566",
         "text": "p-form（表单）：",
         "semantic": "p-text"
       },
@@ -5026,6 +7498,8 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
       {
         "id": 127,
         "parentId": 125,
+        "color": "#fa5151",
+        "fontSize": 12,
         "semantic": "p-text"
       },
       {
@@ -5037,11 +7511,26 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
       {
         "id": 129,
         "parentId": 125,
+        "color": "#07c160",
+        "fontSize": 12,
+        "margin": {
+          "top": 4
+        },
         "semantic": "p-text"
       },
       {
         "id": 130,
         "parentId": 0,
+        "margin": {
+          "bottom": 20
+        },
+        "padding": {
+          "top": 12,
+          "right": 12,
+          "bottom": 12,
+          "left": 12
+        },
+        "borderRadius": 8,
         "semantic": "section"
       },
       {
@@ -5058,11 +7547,16 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
       {
         "id": 133,
         "parentId": 130,
+        "display": "flex",
+        "alignItems": "center",
+        "gap": 8,
         "semantic": "div"
       },
       {
         "id": 134,
         "parentId": 133,
+        "minWidth": 120,
+        "color": "#646566",
         "text": "p-draggable（可拖拽）：",
         "semantic": "p-text"
       },
@@ -5080,16 +7574,22 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
       {
         "id": 137,
         "parentId": 133,
+        "color": "#07c160",
         "semantic": "p-text"
       },
       {
         "id": 138,
         "parentId": 130,
+        "display": "flex",
+        "alignItems": "center",
+        "gap": 8,
         "semantic": "div"
       },
       {
         "id": 139,
         "parentId": 138,
+        "minWidth": 120,
+        "color": "#646566",
         "text": "p-scrollable（可滚动+触底加载）：",
         "semantic": "p-text"
       },
@@ -5101,16 +7601,28 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
       {
         "id": 141,
         "parentId": 140,
+        "padding": {
+          "top": 8,
+          "right": 8,
+          "bottom": 8,
+          "left": 8
+        },
+        "fontSize": 13,
         "semantic": "div"
       },
       {
         "id": 142,
         "parentId": 130,
+        "display": "flex",
+        "alignItems": "center",
+        "gap": 8,
         "semantic": "div"
       },
       {
         "id": 143,
         "parentId": 142,
+        "minWidth": 120,
+        "color": "#646566",
         "text": "v-gesture（指令）：",
         "semantic": "p-text"
       },
@@ -5122,6 +7634,16 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
       {
         "id": 145,
         "parentId": 0,
+        "margin": {
+          "bottom": 20
+        },
+        "padding": {
+          "top": 12,
+          "right": 12,
+          "bottom": 12,
+          "left": 12
+        },
+        "borderRadius": 8,
         "semantic": "section"
       },
       {
@@ -5138,11 +7660,16 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
       {
         "id": 148,
         "parentId": 145,
+        "display": "flex",
+        "alignItems": "center",
+        "gap": 8,
         "semantic": "div"
       },
       {
         "id": 149,
         "parentId": 148,
+        "minWidth": 120,
+        "color": "#646566",
         "text": "v-p-hover（悬停 lift）：",
         "semantic": "p-text"
       },
@@ -5155,11 +7682,16 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
       {
         "id": 151,
         "parentId": 145,
+        "display": "flex",
+        "alignItems": "center",
+        "gap": 8,
         "semantic": "div"
       },
       {
         "id": 152,
         "parentId": 151,
+        "minWidth": 120,
+        "color": "#646566",
         "text": "v-p-shortcut（mod+s 保存）：",
         "semantic": "p-text"
       },
@@ -5171,11 +7703,16 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
       {
         "id": 154,
         "parentId": 145,
+        "display": "flex",
+        "alignItems": "center",
+        "gap": 8,
         "semantic": "div"
       },
       {
         "id": 155,
         "parentId": 154,
+        "minWidth": 120,
+        "color": "#646566",
         "text": "v-p-context-menu（右键菜单）：",
         "semantic": "p-text"
       },
@@ -5187,11 +7724,16 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
       {
         "id": 157,
         "parentId": 145,
+        "display": "flex",
+        "alignItems": "center",
+        "gap": 8,
         "semantic": "div"
       },
       {
         "id": 158,
         "parentId": 157,
+        "minWidth": 120,
+        "color": "#646566",
         "text": "v-p-focus-trap（焦点陷阱）：",
         "semantic": "p-text"
       },
@@ -5214,6 +7756,16 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
       {
         "id": 162,
         "parentId": 0,
+        "margin": {
+          "bottom": 20
+        },
+        "padding": {
+          "top": 12,
+          "right": 12,
+          "bottom": 12,
+          "left": 12
+        },
+        "borderRadius": 8,
         "semantic": "section"
       },
       {
@@ -5230,16 +7782,24 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
       {
         "id": 165,
         "parentId": 162,
+        "display": "block",
+        "color": "#888",
+        "fontSize": 12,
         "semantic": "p-text"
       },
       {
         "id": 166,
         "parentId": 162,
+        "display": "flex",
+        "alignItems": "center",
+        "gap": 8,
         "semantic": "div"
       },
       {
         "id": 167,
         "parentId": 166,
+        "minWidth": 120,
+        "color": "#646566",
         "text": "p-notify + p-permission 门禁（先授权后发送）：",
         "semantic": "p-text"
       },
@@ -5262,11 +7822,16 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
       {
         "id": 171,
         "parentId": 162,
+        "display": "flex",
+        "alignItems": "center",
+        "gap": 8,
         "semantic": "div"
       },
       {
         "id": 172,
         "parentId": 171,
+        "minWidth": 120,
+        "color": "#646566",
         "text": "p-clipboard（复制/读取——Clipboard API → 降级）：",
         "semantic": "p-text"
       },
@@ -5290,11 +7855,16 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
       {
         "id": 176,
         "parentId": 162,
+        "display": "flex",
+        "alignItems": "center",
+        "gap": 8,
         "semantic": "div"
       },
       {
         "id": 177,
         "parentId": 176,
+        "minWidth": 120,
+        "color": "#646566",
         "text": "p-deeplink（parse + 参数化匹配）：",
         "semantic": "p-text"
       },
@@ -5312,6 +7882,16 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
       {
         "id": 180,
         "parentId": 0,
+        "margin": {
+          "bottom": 20
+        },
+        "padding": {
+          "top": 12,
+          "right": 12,
+          "bottom": 12,
+          "left": 12
+        },
+        "borderRadius": 8,
         "semantic": "section"
       },
       {
@@ -5328,16 +7908,24 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
       {
         "id": 183,
         "parentId": 180,
+        "display": "block",
+        "color": "#888",
+        "fontSize": 12,
         "semantic": "p-text"
       },
       {
         "id": 184,
         "parentId": 180,
+        "display": "flex",
+        "alignItems": "center",
+        "gap": 8,
         "semantic": "div"
       },
       {
         "id": 185,
         "parentId": 184,
+        "minWidth": 120,
+        "color": "#646566",
         "semantic": "p-text"
       },
       {
@@ -5361,17 +7949,27 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
       {
         "id": 189,
         "parentId": 180,
+        "display": "flex",
+        "alignItems": "center",
+        "gap": 8,
         "semantic": "div"
       },
       {
         "id": 190,
         "parentId": 189,
+        "minWidth": 120,
+        "color": "#646566",
         "text": "p-tabs（桌面标签——关闭激活迁移）：",
         "semantic": "p-text"
       },
       {
         "id": 191,
         "parentId": 189,
+        "display": "inline-flex",
+        "alignItems": "center",
+        "gap": 4,
+        "borderRadius": 4,
+        "fontSize": 12,
         "semantic": "span"
       },
       {
@@ -5382,6 +7980,8 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
       {
         "id": 193,
         "parentId": 191,
+        "color": "#999",
+        "fontSize": 12,
         "text": "×",
         "semantic": "button"
       },
@@ -5399,17 +7999,23 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
       {
         "id": 196,
         "parentId": 180,
+        "display": "flex",
+        "alignItems": "center",
+        "gap": 8,
         "semantic": "div"
       },
       {
         "id": 197,
         "parentId": 196,
+        "minWidth": 120,
+        "color": "#646566",
         "text": "p-command（⌘K 面板数据层——输入过滤 + ↑↓ 选择）：",
         "semantic": "p-text"
       },
       {
         "id": 198,
         "parentId": 196,
+        "width": 220,
         "semantic": "p-input"
       },
       {
@@ -5438,11 +8044,16 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
       {
         "id": 203,
         "parentId": 180,
+        "display": "flex",
+        "alignItems": "center",
+        "gap": 8,
         "semantic": "div"
       },
       {
         "id": 204,
         "parentId": 203,
+        "minWidth": 120,
+        "color": "#646566",
         "text": "p-breadcrumb（路由栈推导）：",
         "semantic": "p-text"
       },
@@ -5460,6 +8071,16 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
       {
         "id": 207,
         "parentId": 0,
+        "margin": {
+          "bottom": 20
+        },
+        "padding": {
+          "top": 12,
+          "right": 12,
+          "bottom": 12,
+          "left": 12
+        },
+        "borderRadius": 8,
         "semantic": "section"
       },
       {
@@ -5476,16 +8097,24 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
       {
         "id": 210,
         "parentId": 207,
+        "display": "block",
+        "color": "#888",
+        "fontSize": 12,
         "semantic": "p-text"
       },
       {
         "id": 211,
         "parentId": 207,
+        "display": "flex",
+        "alignItems": "center",
+        "gap": 8,
         "semantic": "div"
       },
       {
         "id": 212,
         "parentId": 211,
+        "minWidth": 120,
+        "color": "#646566",
         "text": "p-network-status：",
         "semantic": "p-text"
       },
@@ -5503,11 +8132,16 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
       {
         "id": 215,
         "parentId": 207,
+        "display": "flex",
+        "alignItems": "center",
+        "gap": 8,
         "semantic": "div"
       },
       {
         "id": 216,
         "parentId": 215,
+        "minWidth": 120,
+        "color": "#646566",
         "text": "p-low-power：",
         "semantic": "p-text"
       },
@@ -5525,11 +8159,16 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
       {
         "id": 219,
         "parentId": 207,
+        "display": "flex",
+        "alignItems": "center",
+        "gap": 8,
         "semantic": "div"
       },
       {
         "id": 220,
         "parentId": 219,
+        "minWidth": 120,
+        "color": "#646566",
         "text": "p-state-restoration（刷新恢复）：",
         "semantic": "p-text"
       },
@@ -5557,6 +8196,12 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
       {
         "id": 0,
         "parentId": null,
+        "padding": {
+          "top": 24,
+          "right": 24,
+          "bottom": 24,
+          "left": 24
+        },
         "semantic": "div"
       },
       {
@@ -5568,12 +8213,21 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
       {
         "id": 2,
         "parentId": 0,
+        "color": "#888",
+        "fontSize": 14,
         "text": "进入时底部滑入 + 放大，前页下沉缩放联动",
         "semantic": "p"
       },
       {
         "id": 3,
         "parentId": 0,
+        "borderRadius": 12,
+        "padding": {
+          "top": 16,
+          "right": 16,
+          "bottom": 16,
+          "left": 16
+        },
         "semantic": "div"
       },
       {
@@ -5589,6 +8243,9 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
       {
         "id": 6,
         "parentId": 0,
+        "margin": {
+          "top": 20
+        },
         "semantic": "div"
       },
       {
@@ -5604,6 +8261,11 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
       {
         "id": 0,
         "parentId": null,
+        "display": "flex",
+        "flexDirection": "column",
+        "alignItems": "center",
+        "gap": 6,
+        "boxSizing": "border-box",
         "semantic": "view"
       },
       {
@@ -5614,18 +8276,30 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
       {
         "id": 2,
         "parentId": 0,
+        "fontSize": 20,
+        "color": "#e0f2fe",
         "text": "SVG 能量核心",
         "semantic": "text"
       },
       {
         "id": 3,
         "parentId": 0,
+        "fontSize": 11,
+        "color": "#7dd3fc",
+        "opacity": 0.8,
         "text": "渐变 · 滤镜辉光 · 进度环 · 轨道粒子 · 脉冲 · 交互",
         "semantic": "text"
       },
       {
         "id": 4,
         "parentId": 0,
+        "margin": {
+          "top": 8
+        },
+        "display": "flex",
+        "alignItems": "center",
+        "justifyContent": "center",
+        "position": "relative",
         "semantic": "view"
       },
       {
@@ -5796,51 +8470,91 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
       {
         "id": 38,
         "parentId": 4,
+        "position": "absolute",
+        "width": 200,
+        "height": 200,
+        "margin": {
+          "left": -100,
+          "top": -100
+        },
         "semantic": "view"
       },
       {
         "id": 39,
         "parentId": 0,
+        "fontSize": 13,
+        "color": "#a5f3fc",
+        "margin": {
+          "top": 4
+        },
         "semantic": "text"
       },
       {
         "id": 40,
         "parentId": 0,
+        "fontSize": 13,
+        "color": "#a5f3fc",
+        "margin": {
+          "top": 4
+        },
         "semantic": "text"
       },
       {
         "id": 41,
         "parentId": 0,
+        "fontSize": 12,
+        "color": "#fca5a5",
         "semantic": "text"
       },
       {
         "id": 42,
         "parentId": 0,
+        "fontSize": 12,
+        "color": "#fca5a5",
         "semantic": "text"
       },
       {
         "id": 43,
         "parentId": 0,
+        "fontSize": 12,
+        "color": "#fca5a5",
         "semantic": "text"
       },
       {
         "id": 44,
         "parentId": 0,
+        "fontSize": 12,
+        "color": "#fca5a5",
         "semantic": "text"
       },
       {
         "id": 45,
         "parentId": 0,
+        "fontSize": 12,
+        "color": "#fca5a5",
         "semantic": "text"
       },
       {
         "id": 46,
         "parentId": 0,
+        "display": "flex",
+        "flexDirection": "row",
+        "justifyContent": "center",
+        "gap": 12,
+        "margin": {
+          "top": 20
+        },
+        "widthRatio": 1,
         "semantic": "view"
       },
       {
         "id": 47,
         "parentId": 46,
+        "display": "flex",
+        "flexDirection": "column",
+        "alignItems": "center",
+        "gap": 4,
+        "width": 88,
         "semantic": "view"
       },
       {
@@ -5882,12 +8596,19 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
       {
         "id": 55,
         "parentId": 47,
+        "fontSize": 10,
+        "color": "#93c5fd",
         "text": "linearGradient",
         "semantic": "text"
       },
       {
         "id": 56,
         "parentId": 46,
+        "display": "flex",
+        "flexDirection": "column",
+        "alignItems": "center",
+        "gap": 4,
+        "width": 88,
         "semantic": "view"
       },
       {
@@ -5923,12 +8644,19 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
       {
         "id": 63,
         "parentId": 56,
+        "fontSize": 10,
+        "color": "#93c5fd",
         "text": "滤镜辉光",
         "semantic": "text"
       },
       {
         "id": 64,
         "parentId": 46,
+        "display": "flex",
+        "flexDirection": "column",
+        "alignItems": "center",
+        "gap": 4,
+        "width": 88,
         "semantic": "view"
       },
       {
@@ -5969,12 +8697,19 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
       {
         "id": 72,
         "parentId": 64,
+        "fontSize": 10,
+        "color": "#93c5fd",
         "text": "clipPath",
         "semantic": "text"
       },
       {
         "id": 73,
         "parentId": 46,
+        "display": "flex",
+        "flexDirection": "column",
+        "alignItems": "center",
+        "gap": 4,
+        "width": 88,
         "semantic": "view"
       },
       {
@@ -6000,12 +8735,19 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
       {
         "id": 78,
         "parentId": 73,
+        "fontSize": 10,
+        "color": "#93c5fd",
         "text": "描边进度",
         "semantic": "text"
       },
       {
         "id": 79,
         "parentId": 46,
+        "display": "flex",
+        "flexDirection": "column",
+        "alignItems": "center",
+        "gap": 4,
+        "width": 88,
         "semantic": "view"
       },
       {
@@ -6026,12 +8768,19 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
       {
         "id": 83,
         "parentId": 79,
+        "fontSize": 10,
+        "color": "#93c5fd",
         "text": "脉冲",
         "semantic": "text"
       },
       {
         "id": 84,
         "parentId": 46,
+        "display": "flex",
+        "flexDirection": "column",
+        "alignItems": "center",
+        "gap": 4,
+        "width": 88,
         "semantic": "view"
       },
       {
@@ -6052,12 +8801,19 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
       {
         "id": 88,
         "parentId": 84,
+        "fontSize": 10,
+        "color": "#93c5fd",
         "text": "路径运动",
         "semantic": "text"
       },
       {
         "id": 89,
         "parentId": 46,
+        "display": "flex",
+        "flexDirection": "column",
+        "alignItems": "center",
+        "gap": 4,
+        "width": 88,
         "semantic": "view"
       },
       {
@@ -6093,12 +8849,19 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
       {
         "id": 96,
         "parentId": 89,
+        "fontSize": 10,
+        "color": "#93c5fd",
         "text": "CSS 旋转",
         "semantic": "text"
       },
       {
         "id": 97,
         "parentId": 46,
+        "display": "flex",
+        "flexDirection": "column",
+        "alignItems": "center",
+        "gap": 4,
+        "width": 88,
         "semantic": "view"
       },
       {
@@ -6119,12 +8882,19 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
       {
         "id": 101,
         "parentId": 97,
+        "fontSize": 10,
+        "color": "#93c5fd",
         "text": "path",
         "semantic": "text"
       },
       {
         "id": 102,
         "parentId": 0,
+        "fontSize": 11,
+        "color": "#64748b",
+        "margin": {
+          "top": 16
+        },
         "text": "点击核心有反馈 · 8 项能力同时运行",
         "semantic": "text"
       }
@@ -6135,6 +8905,11 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
       {
         "id": 0,
         "parentId": null,
+        "display": "flex",
+        "flexDirection": "column",
+        "alignItems": "center",
+        "gap": 6,
+        "boxSizing": "border-box",
         "semantic": "view"
       },
       {
@@ -6145,41 +8920,68 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
       {
         "id": 2,
         "parentId": 0,
+        "fontSize": 20,
+        "color": "#e0f2fe",
         "text": "SVG 骨骼动画",
         "semantic": "text"
       },
       {
         "id": 3,
         "parentId": 0,
+        "fontSize": 12,
+        "color": "#7dd3fc",
+        "opacity": 0.85,
         "text": "嵌套变换复合 · 层级运动学 · 可交互",
         "semantic": "text"
       },
       {
         "id": 4,
         "parentId": 0,
+        "display": "flex",
+        "flexDirection": "row",
+        "gap": 10,
+        "margin": {
+          "top": 10
+        },
         "semantic": "view"
       },
       {
         "id": 5,
         "parentId": 4,
+        "fontSize": 13,
+        "color": "#94a3b8",
+        "borderRadius": 18,
         "text": "行走",
         "semantic": "text"
       },
       {
         "id": 6,
         "parentId": 4,
+        "fontSize": 13,
+        "color": "#94a3b8",
+        "borderRadius": 18,
         "text": "奔跑",
         "semantic": "text"
       },
       {
         "id": 7,
         "parentId": 4,
+        "fontSize": 13,
+        "color": "#94a3b8",
+        "borderRadius": 18,
         "text": "跳跃",
         "semantic": "text"
       },
       {
         "id": 8,
         "parentId": 0,
+        "margin": {
+          "top": 8
+        },
+        "display": "flex",
+        "alignItems": "center",
+        "justifyContent": "center",
+        "position": "relative",
         "semantic": "view"
       },
       {
@@ -7035,149 +9837,239 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
       {
         "id": 179,
         "parentId": 8,
+        "position": "absolute",
+        "left": 0,
+        "top": 0,
         "semantic": "view"
       },
       {
         "id": 180,
         "parentId": 0,
+        "display": "flex",
+        "flexDirection": "row",
+        "justifyContent": "center",
+        "gap": 8,
+        "margin": {
+          "top": 10
+        },
         "semantic": "view"
       },
       {
         "id": 181,
         "parentId": 180,
+        "fontSize": 12,
+        "color": "#94a3b8",
+        "borderRadius": 14,
         "text": "慢放",
         "semantic": "text"
       },
       {
         "id": 182,
         "parentId": 180,
+        "fontSize": 12,
+        "color": "#94a3b8",
+        "borderRadius": 14,
         "text": "原速",
         "semantic": "text"
       },
       {
         "id": 183,
         "parentId": 180,
+        "fontSize": 12,
+        "color": "#94a3b8",
+        "borderRadius": 14,
         "text": "快放",
         "semantic": "text"
       },
       {
         "id": 184,
         "parentId": 180,
+        "fontSize": 12,
+        "color": "#94a3b8",
+        "borderRadius": 14,
         "text": "倒放",
         "semantic": "text"
       },
       {
         "id": 185,
         "parentId": 180,
+        "fontSize": 12,
+        "color": "#94a3b8",
+        "borderRadius": 14,
         "text": "定格",
         "semantic": "text"
       },
       {
         "id": 186,
         "parentId": 0,
+        "fontSize": 13,
+        "color": "#a5f3fc",
+        "margin": {
+          "top": 4
+        },
         "semantic": "text"
       },
       {
         "id": 187,
         "parentId": 0,
+        "fontSize": 13,
+        "color": "#a5f3fc",
+        "margin": {
+          "top": 4
+        },
         "semantic": "text"
       },
       {
         "id": 188,
         "parentId": 0,
+        "fontSize": 12,
+        "color": "#fca5a5",
         "semantic": "text"
       },
       {
         "id": 189,
         "parentId": 0,
+        "fontSize": 12,
+        "color": "#fca5a5",
         "semantic": "text"
       },
       {
         "id": 190,
         "parentId": 0,
+        "fontSize": 12,
+        "color": "#fca5a5",
         "semantic": "text"
       },
       {
         "id": 191,
         "parentId": 0,
+        "fontSize": 12,
+        "color": "#fca5a5",
         "semantic": "text"
       },
       {
         "id": 192,
         "parentId": 0,
+        "display": "flex",
+        "flexDirection": "column",
+        "gap": 6,
+        "margin": {
+          "top": 18
+        },
+        "widthRatio": 1,
+        "maxWidth": 300,
+        "borderRadius": 12,
+        "boxSizing": "border-box",
         "semantic": "view"
       },
       {
         "id": 193,
         "parentId": 192,
+        "display": "flex",
+        "flexDirection": "row",
+        "justifyContent": "space-between",
+        "alignItems": "center",
         "semantic": "view"
       },
       {
         "id": 194,
         "parentId": 193,
+        "fontSize": 12,
+        "color": "#7dd3fc",
         "text": "根 → 髋",
         "semantic": "text"
       },
       {
         "id": 195,
         "parentId": 193,
+        "fontSize": 12,
+        "color": "#94a3b8",
         "text": "translate（整体定位/腾空）",
         "semantic": "text"
       },
       {
         "id": 196,
         "parentId": 192,
+        "display": "flex",
+        "flexDirection": "row",
+        "justifyContent": "space-between",
+        "alignItems": "center",
         "semantic": "view"
       },
       {
         "id": 197,
         "parentId": 196,
+        "fontSize": 12,
+        "color": "#7dd3fc",
         "text": "髋 → 大腿",
         "semantic": "text"
       },
       {
         "id": 198,
         "parentId": 196,
+        "fontSize": 12,
+        "color": "#94a3b8",
         "text": "rotate 摆动",
         "semantic": "text"
       },
       {
         "id": 199,
         "parentId": 192,
+        "display": "flex",
+        "flexDirection": "row",
+        "justifyContent": "space-between",
+        "alignItems": "center",
         "semantic": "view"
       },
       {
         "id": 200,
         "parentId": 199,
+        "fontSize": 12,
+        "color": "#7dd3fc",
         "text": "大腿 → 小腿",
         "semantic": "text"
       },
       {
         "id": 201,
         "parentId": 199,
+        "fontSize": 12,
+        "color": "#94a3b8",
         "text": "rotate 屈膝（相对父级）",
         "semantic": "text"
       },
       {
         "id": 202,
         "parentId": 192,
+        "display": "flex",
+        "flexDirection": "row",
+        "justifyContent": "space-between",
+        "alignItems": "center",
         "semantic": "view"
       },
       {
         "id": 203,
         "parentId": 202,
+        "fontSize": 12,
+        "color": "#7dd3fc",
         "text": "动作切换",
         "semantic": "text"
       },
       {
         "id": 204,
         "parentId": 202,
+        "fontSize": 12,
+        "color": "#94a3b8",
         "text": "独立场景 :playing 控制（停表不耗回传）",
         "semantic": "text"
       },
       {
         "id": 205,
         "parentId": 0,
+        "fontSize": 12,
+        "color": "#64748b",
+        "margin": {
+          "top": 16
+        },
         "text": "父级变换 × 子级变换 沿链累乘 · 切动作 / 变速 / 点机甲",
         "semantic": "text"
       }
@@ -7259,6 +10151,12 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
       {
         "id": 0,
         "parentId": null,
+        "padding": {
+          "top": 24,
+          "right": 24,
+          "bottom": 24,
+          "left": 24
+        },
         "semantic": "div"
       },
       {
@@ -7270,6 +10168,11 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
       {
         "id": 2,
         "parentId": 0,
+        "color": "#888",
+        "fontSize": 13,
+        "margin": {
+          "bottom": 16
+        },
         "text": "10000 条数据，只渲染可视区（VirtualList 组件，item 高度 44）",
         "semantic": "p"
       },
@@ -7290,12 +10193,15 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
       {
         "id": 1,
         "parentId": 0,
+        "display": "block",
         "text": "★G12 v-model MP 复测（Skyline）",
         "semantic": "text"
       },
       {
         "id": 2,
         "parentId": 0,
+        "display": "block",
+        "color": "#888",
         "text": "p-* 组件 v-model 双绑回传——单段事件 bind:update-*（G12 候选 B）在 Skyline/WebView 是否工作",
         "semantic": "text"
       },
@@ -7307,6 +10213,7 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
       {
         "id": 4,
         "parentId": 3,
+        "display": "block",
         "text": "① p-modal v-model:visible（update-visible 单段事件契约）",
         "semantic": "text"
       },
@@ -7335,6 +10242,8 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
       {
         "id": 9,
         "parentId": 3,
+        "display": "block",
+        "color": "#07c160",
         "semantic": "text"
       },
       {
@@ -7345,12 +10254,16 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
       {
         "id": 11,
         "parentId": 10,
+        "display": "block",
         "text": "② p-switch v-model（update-modelValue 契约）",
         "semantic": "text"
       },
       {
         "id": 12,
         "parentId": 10,
+        "display": "flex",
+        "flexDirection": "row",
+        "alignItems": "center",
         "semantic": "view"
       },
       {
@@ -7361,6 +10274,8 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
       {
         "id": 14,
         "parentId": 12,
+        "display": "block",
+        "color": "#07c160",
         "semantic": "text"
       },
       {
@@ -7371,6 +10286,7 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
       {
         "id": 16,
         "parentId": 15,
+        "display": "block",
         "text": "③ p-slider v-model（update-modelValue 契约——MP 映射已落地：原生 slider 双端）",
         "semantic": "text"
       },
@@ -7382,11 +10298,15 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
       {
         "id": 18,
         "parentId": 15,
+        "display": "block",
+        "color": "#07c160",
         "semantic": "text"
       },
       {
         "id": 19,
         "parentId": 15,
+        "display": "block",
+        "color": "#888",
         "text": "注：p-slider 模板已换原生 slider 标签（Web = proteus-slider 模拟 / MP = 微信原生）——拖动测回传",
         "semantic": "text"
       },
@@ -7398,6 +10318,7 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
       {
         "id": 21,
         "parentId": 20,
+        "display": "block",
         "text": "④ p-input（受控组件：:value + @input，非 v-model）",
         "semantic": "text"
       },
@@ -7409,6 +10330,8 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
       {
         "id": 23,
         "parentId": 20,
+        "display": "block",
+        "color": "#07c160",
         "semantic": "text"
       }
     ]
@@ -7423,12 +10346,15 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
       {
         "id": 1,
         "parentId": 0,
+        "display": "block",
         "text": "Vue 能力对齐",
         "semantic": "text"
       },
       {
         "id": 2,
         "parentId": 0,
+        "display": "block",
+        "color": "#888",
         "text": "逐能力真机验收（ref/computed/watch/v-model/指令/transition/provide·inject/defineModel）",
         "semantic": "text"
       },
@@ -7440,12 +10366,16 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
       {
         "id": 4,
         "parentId": 3,
+        "display": "block",
         "text": "① ref / computed / watch",
         "semantic": "text"
       },
       {
         "id": 5,
         "parentId": 3,
+        "display": "flex",
+        "flexDirection": "row",
+        "alignItems": "center",
         "semantic": "view"
       },
       {
@@ -7457,6 +10387,8 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
       {
         "id": 7,
         "parentId": 3,
+        "display": "block",
+        "color": "#07c160",
         "semantic": "text"
       },
       {
@@ -7467,17 +10399,24 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
       {
         "id": 9,
         "parentId": 8,
+        "display": "block",
         "text": "② v-model（input 双绑）",
         "semantic": "text"
       },
       {
         "id": 10,
         "parentId": 8,
+        "borderRadius": 6,
+        "fontSize": 14,
+        "widthRatio": 1,
+        "boxSizing": "border-box",
         "semantic": "input"
       },
       {
         "id": 11,
         "parentId": 8,
+        "display": "block",
+        "color": "#07c160",
         "semantic": "text"
       },
       {
@@ -7488,12 +10427,16 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
       {
         "id": 13,
         "parentId": 12,
+        "display": "block",
         "text": "③ v-if 条件链 / v-show",
         "semantic": "text"
       },
       {
         "id": 14,
         "parentId": 12,
+        "display": "flex",
+        "flexDirection": "row",
+        "alignItems": "center",
         "semantic": "view"
       },
       {
@@ -7505,24 +10448,32 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
       {
         "id": 16,
         "parentId": 12,
+        "display": "block",
+        "color": "#07c160",
         "text": "agree=true → 显示本行（v-if）",
         "semantic": "text"
       },
       {
         "id": 17,
         "parentId": 12,
+        "display": "block",
+        "color": "#07c160",
         "text": "agree=false → 显示本行（v-else）",
         "semantic": "text"
       },
       {
         "id": 18,
         "parentId": 12,
+        "display": "block",
+        "color": "#07c160",
         "text": "v-show：agree 为真才显示（hidden 切换）",
         "semantic": "text"
       },
       {
         "id": 19,
         "parentId": 12,
+        "display": "block",
+        "color": "#07c160",
         "semantic": "text"
       },
       {
@@ -7533,12 +10484,15 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
       {
         "id": 21,
         "parentId": 20,
+        "display": "block",
         "text": "④ v-for",
         "semantic": "text"
       },
       {
         "id": 22,
         "parentId": 20,
+        "display": "block",
+        "color": "#07c160",
         "semantic": "text"
       },
       {
@@ -7549,6 +10503,7 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
       {
         "id": 24,
         "parentId": 23,
+        "display": "block",
         "text": "⑤ v-html / :class / :style",
         "semantic": "text"
       },
@@ -7570,12 +10525,16 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
       {
         "id": 28,
         "parentId": 27,
+        "display": "block",
         "text": "⑥ transition（离开动画状态机）",
         "semantic": "text"
       },
       {
         "id": 29,
         "parentId": 27,
+        "display": "flex",
+        "flexDirection": "row",
+        "alignItems": "center",
         "semantic": "view"
       },
       {
@@ -7597,6 +10556,7 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
       {
         "id": 33,
         "parentId": 32,
+        "display": "block",
         "text": "⑦ provide / inject",
         "semantic": "text"
       },
@@ -7608,6 +10568,9 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
       {
         "id": 35,
         "parentId": 32,
+        "display": "flex",
+        "flexDirection": "row",
+        "alignItems": "center",
         "semantic": "view"
       },
       {
@@ -7619,6 +10582,8 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
       {
         "id": 37,
         "parentId": 32,
+        "display": "block",
+        "color": "#07c160",
         "semantic": "text"
       },
       {
@@ -7629,6 +10594,7 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
       {
         "id": 39,
         "parentId": 38,
+        "display": "block",
         "text": "⑧ defineModel（v-model 组件契约）",
         "semantic": "text"
       },
@@ -7640,6 +10606,8 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
       {
         "id": 41,
         "parentId": 38,
+        "display": "block",
+        "color": "#07c160",
         "semantic": "text"
       },
       {
@@ -7650,12 +10618,16 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
       {
         "id": 43,
         "parentId": 42,
+        "display": "block",
         "text": "⑨ reactivity-runtime（reactive / readonly 真 Proxy）",
         "semantic": "text"
       },
       {
         "id": 44,
         "parentId": 42,
+        "display": "flex",
+        "flexDirection": "row",
+        "alignItems": "center",
         "semantic": "view"
       },
       {
@@ -7667,6 +10639,8 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
       {
         "id": 46,
         "parentId": 42,
+        "display": "block",
+        "color": "#07c160",
         "semantic": "text"
       },
       {
@@ -7677,12 +10651,16 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
       {
         "id": 48,
         "parentId": 47,
+        "display": "block",
         "text": "⑩ toRef / toRefs（运行时真 ref）",
         "semantic": "text"
       },
       {
         "id": 49,
         "parentId": 47,
+        "display": "flex",
+        "flexDirection": "row",
+        "alignItems": "center",
         "semantic": "view"
       },
       {
@@ -7694,6 +10672,8 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
       {
         "id": 51,
         "parentId": 47,
+        "display": "block",
+        "color": "#07c160",
         "semantic": "text"
       },
       {
@@ -7704,12 +10684,16 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
       {
         "id": 53,
         "parentId": 52,
+        "display": "block",
         "text": "⑪ markRaw / customRef（运行时真语义）",
         "semantic": "text"
       },
       {
         "id": 54,
         "parentId": 52,
+        "display": "flex",
+        "flexDirection": "row",
+        "alignItems": "center",
         "semantic": "view"
       },
       {
@@ -7721,6 +10705,8 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
       {
         "id": 56,
         "parentId": 52,
+        "display": "block",
+        "color": "#07c160",
         "semantic": "text"
       },
       {
@@ -7731,12 +10717,16 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
       {
         "id": 58,
         "parentId": 57,
+        "display": "block",
         "text": "⑫ teleport → root-portal（弹层层叠）",
         "semantic": "text"
       },
       {
         "id": 59,
         "parentId": 57,
+        "display": "flex",
+        "flexDirection": "row",
+        "alignItems": "center",
         "semantic": "view"
       },
       {
@@ -7747,6 +10737,8 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
       {
         "id": 61,
         "parentId": 57,
+        "display": "block",
+        "color": "#07c160",
         "semantic": "text"
       },
       {
@@ -7793,6 +10785,8 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
       {
         "id": 0,
         "parentId": null,
+        "display": "flex",
+        "flexDirection": "column",
         "semantic": "view"
       },
       {
@@ -7804,17 +10798,21 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
       {
         "id": 2,
         "parentId": 0,
+        "color": "#666",
         "text": "模拟\"页面内请求返回 401\"：弹窗出现且不可取消，唯一出口是登录态恢复",
         "semantic": "text"
       },
       {
         "id": 3,
         "parentId": 0,
+        "display": "flex",
+        "flexDirection": "column",
         "semantic": "view"
       },
       {
         "id": 4,
         "parentId": 3,
+        "color": "#999",
         "text": "① 触发（模拟请求拦截器里的 401 上报）",
         "semantic": "text"
       },
@@ -7827,23 +10825,30 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
       {
         "id": 6,
         "parentId": 3,
+        "backgroundColor": "#f2f3f5",
+        "color": "#333",
         "text": "模拟登录成功（弹窗消失）",
         "semantic": "button"
       },
       {
         "id": 7,
         "parentId": 0,
+        "display": "flex",
+        "flexDirection": "column",
         "semantic": "view"
       },
       {
         "id": 8,
         "parentId": 7,
+        "color": "#999",
         "text": "② 证明\"不可取消\"：下面的按钮在弹窗出现时应**点不动**",
         "semantic": "text"
       },
       {
         "id": 9,
         "parentId": 7,
+        "backgroundColor": "#f2f3f5",
+        "color": "#333",
         "semantic": "button"
       },
       {
@@ -7854,17 +10859,21 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
       {
         "id": 11,
         "parentId": 0,
+        "display": "flex",
+        "flexDirection": "column",
         "semantic": "view"
       },
       {
         "id": 12,
         "parentId": 11,
+        "color": "#999",
         "text": "读数（e2e 断言面）",
         "semantic": "text"
       },
       {
         "id": 13,
         "parentId": 11,
+        "color": "#07c160",
         "semantic": "text"
       }
     ]
@@ -7874,6 +10883,8 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
       {
         "id": 0,
         "parentId": null,
+        "display": "flex",
+        "flexDirection": "column",
         "semantic": "view"
       },
       {
@@ -7885,17 +10896,21 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
       {
         "id": 2,
         "parentId": 0,
+        "color": "#666",
         "text": "对照 uni.showLoading（全局单例）：可多实例共存 / 三种遮罩范围 / 范围外不受影响",
         "semantic": "text"
       },
       {
         "id": 3,
         "parentId": 0,
+        "display": "flex",
+        "flexDirection": "column",
         "semantic": "view"
       },
       {
         "id": 4,
         "parentId": 3,
+        "color": "#999",
         "text": "① 多实例（两个不同 id 同时存在）",
         "semantic": "text"
       },
@@ -7908,29 +10923,38 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
       {
         "id": 6,
         "parentId": 3,
+        "backgroundColor": "#f2f3f5",
+        "color": "#333",
         "text": "结束 A",
         "semantic": "button"
       },
       {
         "id": 7,
         "parentId": 3,
+        "backgroundColor": "#f2f3f5",
+        "color": "#333",
         "text": "结束 B",
         "semantic": "button"
       },
       {
         "id": 8,
         "parentId": 3,
+        "backgroundColor": "#f2f3f5",
+        "color": "#333",
         "text": "同名替换（A 换文案）",
         "semantic": "button"
       },
       {
         "id": 9,
         "parentId": 0,
+        "display": "flex",
+        "flexDirection": "column",
         "semantic": "view"
       },
       {
         "id": 10,
         "parentId": 9,
+        "color": "#999",
         "text": "② 全局范围（跨页存活）",
         "semantic": "text"
       },
@@ -7943,23 +10967,29 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
       {
         "id": 12,
         "parentId": 9,
+        "backgroundColor": "#f2f3f5",
+        "color": "#333",
         "text": "结束 global",
         "semantic": "button"
       },
       {
         "id": 13,
         "parentId": 9,
+        "color": "#1a7af8",
         "text": "去首页（global 应仍在；page 级的应已清理）",
         "semantic": "navigator"
       },
       {
         "id": 14,
         "parentId": 0,
+        "display": "flex",
+        "flexDirection": "column",
         "semantic": "view"
       },
       {
         "id": 15,
         "parentId": 14,
+        "color": "#999",
         "text": "③ 区域范围（就地包裹；拦内不拦外）",
         "semantic": "text"
       },
@@ -7972,6 +11002,12 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
       {
         "id": 17,
         "parentId": 14,
+        "position": "relative",
+        "backgroundColor": "#f7f8fa",
+        "display": "flex",
+        "flexDirection": "column",
+        "alignItems": "center",
+        "justifyContent": "center",
         "semantic": "view"
       },
       {
@@ -7982,33 +11018,42 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
       {
         "id": 19,
         "parentId": 17,
+        "color": "#666",
         "text": "区域内容（active 时点这里不应有反应）",
         "semantic": "text"
       },
       {
         "id": 20,
         "parentId": 17,
+        "color": "#07c160",
         "semantic": "text"
       },
       {
         "id": 21,
         "parentId": 14,
+        "backgroundColor": "#f2f3f5",
+        "color": "#333",
         "semantic": "button"
       },
       {
         "id": 22,
         "parentId": 0,
+        "display": "flex",
+        "flexDirection": "column",
         "semantic": "view"
       },
       {
         "id": 23,
         "parentId": 22,
+        "backgroundColor": "#f2f3f5",
+        "color": "#333",
         "text": "全部结束",
         "semantic": "button"
       },
       {
         "id": 24,
         "parentId": 22,
+        "color": "#07c160",
         "semantic": "text"
       }
     ]
@@ -8018,6 +11063,8 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
       {
         "id": 0,
         "parentId": null,
+        "display": "flex",
+        "flexDirection": "column",
         "semantic": "view"
       },
       {
@@ -8029,17 +11076,21 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
       {
         "id": 2,
         "parentId": 0,
+        "color": "#666",
         "text": "对照 uni.showToast：可排队 / 可自定义位置与色彩 / 可手动关闭 / 有上限与丢弃策略",
         "semantic": "text"
       },
       {
         "id": 3,
         "parentId": 0,
+        "display": "flex",
+        "flexDirection": "column",
         "semantic": "view"
       },
       {
         "id": 4,
         "parentId": 3,
+        "color": "#999",
         "text": "① 排队（核心判据）",
         "semantic": "text"
       },
@@ -8052,120 +11103,155 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
       {
         "id": 6,
         "parentId": 3,
+        "backgroundColor": "#f2f3f5",
+        "color": "#333",
         "text": "单条（默认）",
         "semantic": "button"
       },
       {
         "id": 7,
         "parentId": 0,
+        "display": "flex",
+        "flexDirection": "column",
         "semantic": "view"
       },
       {
         "id": 8,
         "parentId": 7,
+        "color": "#999",
         "text": "② 位置（Overlay 层内锚点）",
         "semantic": "text"
       },
       {
         "id": 9,
         "parentId": 7,
+        "backgroundColor": "#f2f3f5",
+        "color": "#333",
         "text": "顶部",
         "semantic": "button"
       },
       {
         "id": 10,
         "parentId": 7,
+        "backgroundColor": "#f2f3f5",
+        "color": "#333",
         "text": "底部",
         "semantic": "button"
       },
       {
         "id": 11,
         "parentId": 0,
+        "display": "flex",
+        "flexDirection": "column",
         "semantic": "view"
       },
       {
         "id": 12,
         "parentId": 11,
+        "color": "#999",
         "text": "③ 色彩语义（可经 CSS 变量换色）",
         "semantic": "text"
       },
       {
         "id": 13,
         "parentId": 11,
+        "backgroundColor": "#f2f3f5",
+        "color": "#333",
         "text": "success / warn / error",
         "semantic": "button"
       },
       {
         "id": 14,
         "parentId": 0,
+        "display": "flex",
+        "flexDirection": "column",
         "semantic": "view"
       },
       {
         "id": 15,
         "parentId": 14,
+        "color": "#999",
         "text": "④ 常驻与手动关闭（duration=0）",
         "semantic": "text"
       },
       {
         "id": 16,
         "parentId": 14,
+        "backgroundColor": "#f2f3f5",
+        "color": "#333",
         "text": "常驻提示",
         "semantic": "button"
       },
       {
         "id": 17,
         "parentId": 14,
+        "backgroundColor": "#f2f3f5",
+        "color": "#333",
         "text": "关闭最后一条",
         "semantic": "button"
       },
       {
         "id": 18,
         "parentId": 14,
+        "backgroundColor": "#f2f3f5",
+        "color": "#333",
         "text": "全部清空",
         "semantic": "button"
       },
       {
         "id": 19,
         "parentId": 0,
+        "display": "flex",
+        "flexDirection": "column",
         "semantic": "view"
       },
       {
         "id": 20,
         "parentId": 19,
+        "color": "#999",
         "text": "⑤ 上限与丢弃策略（防刷屏）",
         "semantic": "text"
       },
       {
         "id": 21,
         "parentId": 19,
+        "backgroundColor": "#f2f3f5",
+        "color": "#333",
         "text": "先清空再连发 8 条（上限 3）",
         "semantic": "button"
       },
       {
         "id": 22,
         "parentId": 19,
+        "backgroundColor": "#f2f3f5",
+        "color": "#333",
         "text": "恢复配置",
         "semantic": "button"
       },
       {
         "id": 23,
         "parentId": 0,
+        "display": "flex",
+        "flexDirection": "column",
         "semantic": "view"
       },
       {
         "id": 24,
         "parentId": 23,
+        "color": "#999",
         "text": "读数（e2e 断言面）",
         "semantic": "text"
       },
       {
         "id": 25,
         "parentId": 23,
+        "color": "#07c160",
         "semantic": "text"
       },
       {
         "id": 26,
         "parentId": 23,
+        "color": "#07c160",
         "semantic": "text"
       }
     ]
@@ -8175,6 +11261,8 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
       {
         "id": 0,
         "parentId": null,
+        "display": "flex",
+        "flexDirection": "column",
         "semantic": "view"
       },
       {
@@ -8186,12 +11274,15 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
       {
         "id": 2,
         "parentId": 0,
+        "color": "#666",
         "text": "本页源码零全局声明——悬浮球/音乐条/主题/角标全部来自 App 壳 Global 层（声明一次）",
         "semantic": "text"
       },
       {
         "id": 3,
         "parentId": 0,
+        "display": "flex",
+        "flexDirection": "column",
         "semantic": "view"
       },
       {
@@ -8221,34 +11312,44 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
       {
         "id": 8,
         "parentId": 3,
+        "backgroundColor": "#f2f3f5",
+        "color": "#1f2328",
         "text": "IM 未读清零",
         "semantic": "button"
       },
       {
         "id": 9,
         "parentId": 3,
+        "backgroundColor": "#f2f3f5",
+        "color": "#1f2328",
         "text": "刷新读数",
         "semantic": "button"
       },
       {
         "id": 10,
         "parentId": 3,
+        "color": "#8a6d3b",
+        "backgroundColor": "#fff7e6",
         "semantic": "text"
       },
       {
         "id": 11,
         "parentId": 0,
+        "display": "flex",
+        "flexDirection": "column",
         "semantic": "view"
       },
       {
         "id": 12,
         "parentId": 11,
+        "color": "#999",
         "text": "跨页验证：开启后跳其它页，全局内容仍在（共享状态）",
         "semantic": "text"
       },
       {
         "id": 13,
         "parentId": 11,
+        "color": "#3355aa",
         "text": "去首页",
         "semantic": "navigator"
       }
@@ -8259,49 +11360,76 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
       {
         "id": 0,
         "parentId": null,
+        "display": "flex",
+        "flexDirection": "column",
+        "alignItems": "center",
+        "gap": 12,
         "semantic": "view"
       },
       {
         "id": 1,
         "parentId": 0,
+        "fontSize": 18,
         "text": "P0 image + SVG data-URI 验证",
         "semantic": "text"
       },
       {
         "id": 2,
         "parentId": 0,
+        "fontSize": 13,
+        "color": "#666",
         "text": "三个图标：base64 / urlencoded / 对照",
         "semantic": "text"
       },
       {
         "id": 3,
         "parentId": 0,
+        "display": "flex",
+        "flexDirection": "row",
+        "gap": 16,
+        "margin": {
+          "top": 8
+        },
         "semantic": "view"
       },
       {
         "id": 4,
         "parentId": 3,
+        "width": 80,
+        "height": 80,
         "semantic": "image"
       },
       {
         "id": 5,
         "parentId": 3,
+        "width": 80,
+        "height": 80,
         "semantic": "image"
       },
       {
         "id": 6,
         "parentId": 3,
+        "width": 80,
+        "height": 80,
         "semantic": "image"
       },
       {
         "id": 7,
         "parentId": 0,
+        "fontSize": 13,
+        "color": "#666",
         "text": "↓ 编译器 lowering 产物（静态 <svg> 零改代码）",
         "semantic": "text"
       },
       {
         "id": 8,
         "parentId": 0,
+        "display": "flex",
+        "flexDirection": "row",
+        "gap": 16,
+        "margin": {
+          "top": 8
+        },
         "semantic": "view"
       },
       {
@@ -8322,28 +11450,46 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
       {
         "id": 12,
         "parentId": 0,
+        "fontSize": 13,
+        "color": "#666",
         "text": "↓ P1 手写动态 SVG（encodeURIComponent，非 base64——btoa 不存在）",
         "semantic": "text"
       },
       {
         "id": 13,
         "parentId": 0,
+        "display": "flex",
+        "flexDirection": "row",
+        "gap": 16,
+        "margin": {
+          "top": 8
+        },
         "semantic": "view"
       },
       {
         "id": 14,
         "parentId": 13,
+        "width": 80,
+        "height": 80,
         "semantic": "image"
       },
       {
         "id": 15,
         "parentId": 0,
+        "fontSize": 13,
+        "color": "#666",
         "text": "↓ P1 编译器 lowering：动态 <svg :d :fill> 零改代码",
         "semantic": "text"
       },
       {
         "id": 16,
         "parentId": 0,
+        "display": "flex",
+        "flexDirection": "row",
+        "gap": 16,
+        "margin": {
+          "top": 8
+        },
         "semantic": "view"
       },
       {
@@ -8374,6 +11520,8 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
       {
         "id": 0,
         "parentId": null,
+        "display": "flex",
+        "flexDirection": "column",
         "semantic": "view"
       },
       {
@@ -8385,6 +11533,7 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
       {
         "id": 2,
         "parentId": 0,
+        "color": "#666",
         "text": "点按钮调用 ms 格式化时长——MP 端由 _proteus/npm/ms.js 提供（require 缓存单例）",
         "semantic": "text"
       },
@@ -8411,22 +11560,35 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
       {
         "id": 0,
         "parentId": null,
+        "display": "flex",
+        "flexDirection": "column",
+        "alignItems": "center",
+        "gap": 10,
         "semantic": "view"
       },
       {
         "id": 1,
         "parentId": 0,
+        "fontSize": 16,
         "text": "SVG 动画方案验证",
         "semantic": "text"
       },
       {
         "id": 2,
         "parentId": 0,
+        "display": "flex",
+        "flexDirection": "row",
+        "justifyContent": "center",
+        "gap": 16,
         "semantic": "view"
       },
       {
         "id": 3,
         "parentId": 2,
+        "display": "flex",
+        "flexDirection": "column",
+        "alignItems": "center",
+        "gap": 4,
         "semantic": "view"
       },
       {
@@ -8457,12 +11619,18 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
       {
         "id": 9,
         "parentId": 3,
+        "fontSize": 11,
+        "color": "#333",
         "text": "A 旋转(编译器转CSS)",
         "semantic": "text"
       },
       {
         "id": 10,
         "parentId": 2,
+        "display": "flex",
+        "flexDirection": "column",
+        "alignItems": "center",
+        "gap": 4,
         "semantic": "view"
       },
       {
@@ -8488,12 +11656,18 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
       {
         "id": 15,
         "parentId": 10,
+        "fontSize": 11,
+        "color": "#333",
         "text": "B 淡入淡出(编译器转CSS)",
         "semantic": "text"
       },
       {
         "id": 16,
         "parentId": 2,
+        "display": "flex",
+        "flexDirection": "column",
+        "alignItems": "center",
+        "gap": 4,
         "semantic": "view"
       },
       {
@@ -8519,12 +11693,18 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
       {
         "id": 21,
         "parentId": 16,
+        "fontSize": 11,
+        "color": "#333",
         "text": "C 缩放(编译器转CSS)",
         "semantic": "text"
       },
       {
         "id": 22,
         "parentId": 2,
+        "display": "flex",
+        "flexDirection": "column",
+        "alignItems": "center",
+        "gap": 4,
         "semantic": "view"
       },
       {
@@ -8545,12 +11725,16 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
       {
         "id": 26,
         "parentId": 22,
+        "fontSize": 11,
+        "color": "#333",
         "text": "D SMIL(对照)",
         "semantic": "text"
       },
       {
         "id": 27,
         "parentId": 0,
+        "fontSize": 11,
+        "color": "#666",
         "text": "A/B/C 应持续动；D 应静止（SVG 内部动画不播放）",
         "semantic": "text"
       }
@@ -8561,33 +11745,55 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
       {
         "id": 0,
         "parentId": null,
+        "display": "flex",
+        "flexDirection": "column",
+        "alignItems": "center",
+        "gap": 8,
         "semantic": "view"
       },
       {
         "id": 1,
         "parentId": 0,
+        "fontSize": 15,
         "text": "Canvas 方案调研探针",
         "semantic": "text"
       },
       {
         "id": 2,
         "parentId": 0,
+        "width": 120,
+        "height": 120,
         "semantic": "canvas"
       },
       {
         "id": 3,
         "parentId": 0,
+        "width": 120,
+        "height": 120,
         "semantic": "image"
       },
       {
         "id": 4,
         "parentId": 0,
+        "margin": {
+          "top": 4
+        },
         "text": "重跑探针",
         "semantic": "button"
       },
       {
         "id": 5,
         "parentId": 0,
+        "fontSize": 11,
+        "color": "#333",
+        "padding": {
+          "top": 8,
+          "right": 8,
+          "bottom": 8,
+          "left": 8
+        },
+        "widthRatio": 1,
+        "boxSizing": "border-box",
         "semantic": "text"
       }
     ]
@@ -8597,28 +11803,46 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
       {
         "id": 0,
         "parentId": null,
+        "display": "flex",
+        "flexDirection": "column",
+        "alignItems": "center",
+        "gap": 8,
         "semantic": "view"
       },
       {
         "id": 1,
         "parentId": 0,
+        "fontSize": 16,
         "text": "Canvas 通道动画验证",
         "semantic": "text"
       },
       {
         "id": 2,
         "parentId": 0,
+        "fontSize": 11,
+        "color": "#666",
         "text": "以下均为 SVG 内部形状动画（image 方案不播放）",
         "semantic": "text"
       },
       {
         "id": 3,
         "parentId": 0,
+        "display": "flex",
+        "flexDirection": "row",
+        "justifyContent": "center",
+        "gap": 12,
+        "margin": {
+          "top": 8
+        },
         "semantic": "view"
       },
       {
         "id": 4,
         "parentId": 3,
+        "display": "flex",
+        "flexDirection": "column",
+        "alignItems": "center",
+        "gap": 4,
         "semantic": "view"
       },
       {
@@ -8639,12 +11863,18 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
       {
         "id": 8,
         "parentId": 4,
+        "fontSize": 10,
+        "color": "#333",
         "text": "① 位置移动 (cx)",
         "semantic": "text"
       },
       {
         "id": 9,
         "parentId": 3,
+        "display": "flex",
+        "flexDirection": "column",
+        "alignItems": "center",
+        "gap": 4,
         "semantic": "view"
       },
       {
@@ -8665,12 +11895,18 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
       {
         "id": 13,
         "parentId": 9,
+        "fontSize": 10,
+        "color": "#333",
         "text": "② 描边进度 (dashoffset)",
         "semantic": "text"
       },
       {
         "id": 14,
         "parentId": 3,
+        "display": "flex",
+        "flexDirection": "column",
+        "alignItems": "center",
+        "gap": 4,
         "semantic": "view"
       },
       {
@@ -8691,12 +11927,18 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
       {
         "id": 18,
         "parentId": 14,
+        "fontSize": 10,
+        "color": "#333",
         "text": "③ 半径变化 (r)",
         "semantic": "text"
       },
       {
         "id": 19,
         "parentId": 3,
+        "display": "flex",
+        "flexDirection": "column",
+        "alignItems": "center",
+        "gap": 4,
         "semantic": "view"
       },
       {
@@ -8717,18 +11959,30 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
       {
         "id": 23,
         "parentId": 19,
+        "fontSize": 10,
+        "color": "#333",
         "text": "④ 路径运动 (animateMotion)",
         "semantic": "text"
       },
       {
         "id": 24,
         "parentId": 0,
+        "fontSize": 11,
+        "color": "#666",
+        "margin": {
+          "top": 8
+        },
         "text": "四个图形应持续动（离屏 canvas + 定时器驱动）",
         "semantic": "text"
       },
       {
         "id": 25,
         "parentId": 0,
+        "fontSize": 13,
+        "color": "#e74c3c",
+        "margin": {
+          "top": 4
+        },
         "semantic": "text"
       }
     ]
@@ -8738,22 +11992,37 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
       {
         "id": 0,
         "parentId": null,
+        "display": "flex",
+        "flexDirection": "column",
+        "alignItems": "center",
+        "padding": {
+          "top": 16,
+          "right": 16,
+          "bottom": 16,
+          "left": 16
+        },
+        "gap": 8,
         "semantic": "view"
       },
       {
         "id": 1,
         "parentId": 0,
+        "fontSize": 16,
         "text": "SVG 事件命中验证",
         "semantic": "text"
       },
       {
         "id": 2,
         "parentId": 0,
+        "fontSize": 14,
+        "color": "#e74c3c",
         "semantic": "text"
       },
       {
         "id": 3,
         "parentId": 0,
+        "display": "flex",
+        "justifyContent": "center",
         "semantic": "view"
       },
       {
@@ -8779,18 +12048,23 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
       {
         "id": 8,
         "parentId": 0,
+        "fontSize": 11,
+        "color": "#666",
         "text": "红圆(30,30) / 蓝圆(70,70) / 绿方(60-90,10-40)",
         "semantic": "text"
       },
       {
         "id": 9,
         "parentId": 0,
+        "fontSize": 16,
         "text": "SVG text 提升验证",
         "semantic": "text"
       },
       {
         "id": 10,
         "parentId": 0,
+        "display": "flex",
+        "justifyContent": "center",
         "semantic": "view"
       },
       {
@@ -8812,6 +12086,8 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
       {
         "id": 14,
         "parentId": 0,
+        "fontSize": 11,
+        "color": "#666",
         "text": "↑ 文字应为「Hello SVG」（编译期提升为原生 text 叠加）",
         "semantic": "text"
       }
@@ -8822,34 +12098,65 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
       {
         "id": 0,
         "parentId": null,
+        "display": "flex",
+        "flexDirection": "column",
+        "padding": {
+          "top": 8,
+          "right": 8,
+          "bottom": 8,
+          "left": 8
+        },
         "semantic": "view"
       },
       {
         "id": 1,
         "parentId": 0,
+        "fontSize": 15,
         "text": "SVG 高级特性渲染对照",
         "semantic": "text"
       },
       {
         "id": 2,
         "parentId": 0,
+        "fontSize": 11,
+        "color": "#666",
+        "margin": {
+          "bottom": 6
+        },
         "text": "每格一个特性——看哪个渲染、哪个空白",
         "semantic": "text"
       },
       {
         "id": 3,
         "parentId": 0,
+        "fontSize": 11,
+        "color": "#666",
+        "margin": {
+          "bottom": 6
+        },
         "semantic": "text"
       },
       {
         "id": 4,
         "parentId": 0,
+        "fontSize": 11,
+        "color": "#666",
+        "margin": {
+          "bottom": 6
+        },
         "text": "↓ 编译器 lowering：<use href> 零改代码（编译期展开）",
         "semantic": "text"
       },
       {
         "id": 5,
         "parentId": 0,
+        "display": "flex",
+        "flexDirection": "column",
+        "alignItems": "center",
+        "widthRatio": 0.25,
+        "margin": {
+          "bottom": 8
+        },
         "semantic": "view"
       },
       {
@@ -8885,12 +12192,22 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
       {
         "id": 12,
         "parentId": 5,
+        "fontSize": 9,
+        "color": "#333",
+        "margin": {
+          "top": 2
+        },
         "text": "use 编译器展开",
         "semantic": "text"
       },
       {
         "id": 13,
         "parentId": 0,
+        "fontSize": 11,
+        "color": "#666",
+        "margin": {
+          "bottom": 6
+        },
         "text": "↓ 对照：含 text vs 不含 text（同一 SVG，看 rect 是否显示）",
         "semantic": "text"
       },
@@ -8902,68 +12219,128 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
       {
         "id": 15,
         "parentId": 14,
+        "display": "flex",
+        "flexDirection": "column",
+        "alignItems": "center",
+        "widthRatio": 0.25,
+        "margin": {
+          "bottom": 8
+        },
         "semantic": "view"
       },
       {
         "id": 16,
         "parentId": 15,
+        "width": 64,
+        "height": 64,
         "semantic": "image"
       },
       {
         "id": 17,
         "parentId": 15,
+        "fontSize": 9,
+        "color": "#333",
+        "margin": {
+          "top": 2
+        },
         "text": "含 text",
         "semantic": "text"
       },
       {
         "id": 18,
         "parentId": 14,
+        "display": "flex",
+        "flexDirection": "column",
+        "alignItems": "center",
+        "widthRatio": 0.25,
+        "margin": {
+          "bottom": 8
+        },
         "semantic": "view"
       },
       {
         "id": 19,
         "parentId": 18,
+        "width": 64,
+        "height": 64,
         "semantic": "image"
       },
       {
         "id": 20,
         "parentId": 18,
+        "fontSize": 9,
+        "color": "#333",
+        "margin": {
+          "top": 2
+        },
         "text": "不含 text",
         "semantic": "text"
       },
       {
         "id": 21,
         "parentId": 0,
+        "fontSize": 11,
+        "color": "#666",
+        "margin": {
+          "bottom": 6
+        },
         "semantic": "text"
       },
       {
         "id": 22,
         "parentId": 0,
+        "display": "flex",
+        "flexDirection": "row",
+        "gap": 2,
+        "padding": {
+          "top": 4,
+          "right": 4,
+          "bottom": 4,
+          "left": 4
+        },
         "semantic": "view"
       },
       {
         "id": 23,
         "parentId": 22,
+        "width": 24,
+        "height": 24,
         "semantic": "image"
       },
       {
         "id": 24,
         "parentId": 0,
+        "display": "flex",
+        "flexDirection": "row",
         "semantic": "view"
       },
       {
         "id": 25,
         "parentId": 24,
+        "display": "flex",
+        "flexDirection": "column",
+        "alignItems": "center",
+        "widthRatio": 0.25,
+        "margin": {
+          "bottom": 8
+        },
         "semantic": "view"
       },
       {
         "id": 26,
         "parentId": 25,
+        "width": 64,
+        "height": 64,
         "semantic": "image"
       },
       {
         "id": 27,
         "parentId": 25,
+        "fontSize": 9,
+        "color": "#333",
+        "margin": {
+          "top": 2
+        },
         "semantic": "text"
       }
     ]
@@ -8973,44 +12350,70 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
       {
         "id": 0,
         "parentId": null,
+        "display": "flex",
+        "flexDirection": "column",
+        "alignItems": "center",
+        "gap": 8,
         "semantic": "view"
       },
       {
         "id": 1,
         "parentId": 0,
+        "fontSize": 16,
         "text": "canvas node 通道探测 v2",
         "semantic": "text"
       },
       {
         "id": 2,
         "parentId": 0,
+        "fontSize": 12,
+        "color": "#666",
         "semantic": "text"
       },
       {
         "id": 3,
         "parentId": 0,
+        "width": 240,
+        "height": 120,
         "semantic": "canvas"
       },
       {
         "id": 4,
         "parentId": 0,
+        "margin": {
+          "top": 4
+        },
         "text": "跑探测",
         "semantic": "button"
       },
       {
         "id": 5,
         "parentId": 0,
+        "fontSize": 11,
+        "color": "#333",
+        "padding": {
+          "top": 8,
+          "right": 8,
+          "bottom": 8,
+          "left": 8
+        },
+        "widthRatio": 1,
+        "boxSizing": "border-box",
         "semantic": "text"
       },
       {
         "id": 6,
         "parentId": 0,
+        "fontSize": 12,
+        "color": "#666",
         "text": "离屏 canvas 绘制 → image 显示（F 通道）",
         "semantic": "text"
       },
       {
         "id": 7,
         "parentId": 0,
+        "width": 240,
+        "height": 120,
         "semantic": "image"
       }
     ]
