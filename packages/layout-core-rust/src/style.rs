@@ -60,6 +60,8 @@ pub struct Rect {
 #[serde(rename_all = "lowercase")]
 pub enum Display {
     Flex,
+    /// ★批次 12（CSS 兼容对齐 · 超级应用 栅格）：CSS Grid（taffy 原生；显式轨迹）
+    Grid,
     None,
 }
 
@@ -373,6 +375,13 @@ pub struct LStyle {
     #[serde(default)]
     pub overflow: Overflow,
 
+    // ── ★批次 12（CSS 兼容对齐 · 超级应用 栅格）：CSS Grid 显式轨迹 ──
+    //   空格分隔的 token 串（`1fr 1fr 200px`）；宿主/内核只解析这一层（repeat() 由编译器展开）
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub grid_template_columns: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub grid_template_rows: Option<String>,
+
     // ── ★RT0/RT2（2026-09-30）：绘制层变换 + 视觉属性（**不参与布局**）──
     //
     // 【为什么放在内核（而不是让宿主自己算）】指令驱动动画（RT0/V6）要把曲线求值结果
@@ -585,6 +594,8 @@ impl Default for LStyle {
             right: None,
             bottom: None,
             overflow: Overflow::default(),
+            grid_template_columns: None,
+            grid_template_rows: None,
             translate_x: 0.0,
             translate_y: 0.0,
             scale: 1.0,

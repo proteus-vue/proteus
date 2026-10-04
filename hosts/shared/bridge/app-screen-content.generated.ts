@@ -1954,6 +1954,8 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
       {
         "id": 25,
         "parentId": 0,
+        "display": "grid",
+        "gridTemplateColumns": "1fr",
         "gap": 16,
         "fontSize": 13,
         "semantic": "div"
@@ -3896,6 +3898,7 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
       {
         "id": 6,
         "parentId": 3,
+        "display": "grid",
         "gap": 12,
         "padding": {
           "top": 20,
@@ -3966,6 +3969,7 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
       {
         "id": 13,
         "parentId": 10,
+        "display": "grid",
         "gap": 12,
         "padding": {
           "top": 20,
@@ -4036,6 +4040,7 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
       {
         "id": 20,
         "parentId": 17,
+        "display": "grid",
         "gap": 12,
         "padding": {
           "top": 20,
