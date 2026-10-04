@@ -68,6 +68,7 @@
         }
       ]
     },
+    "auditNote": "★批次 14（2026-10-04 · 多端一致性审计，用户「再看下我们已经实现的CSS哪些没有按照多端一致性实现的」）：对批 1–13 已实现的每个特性逐一对照 **CSS 标准（Web 为真值）**——★基准是 Web（浏览器真值），**不是「三端内部自洽」**（三端都是自研/原生绘制，容易互相看齐却集体偏离 Web）。已修：① line-height 顶对齐→**半行距居中**（批 13 修正）；② **命名色**（148 标准色）丢弃→归一（Web 生效）；③ **非 solid 边框线型**静默画成实线→**诊断跳过**；④ **text-align 语义级不可继承**→作为**继承**属性沿树传播；⑤ **box-sizing: content-box** 静默忽略→**诊断**；⑥ **枚举关键字大小写敏感**（`display: FLEX` 丢弃）→**大小写不敏感**（CSS 标准）。已确认对齐（无需改）：弹性轴默认（框架**显式声明** flex-direction 使其 3 端一致，绕过 Web(row)/Skyline(column) 默认分歧）、background 纯色、margin/padding/flex/background 简写展开。",
     "relationNote": "支持度维度（web/skyline/app 现状）与成本分级（L0–L5）是**正交**维度：成本分级决定\"怎么实现/贵不贵\"，支持度决定\"哪端能不能用、App 加它多贵\"。App 端为自研引擎 ⇒ 候选特性带 tier 即为\"可扩展档位\"。",
     "tierRule": "universal = web∧skyline∧app 现状全 supported；unsupported = 三端皆不可用；其余 = conditional",
     "partialSupport": [
@@ -764,7 +765,7 @@
       "app": "supported",
       "tier": "L1",
       "strategy": "编译期折叠",
-      "note": "颜色编译期归一为 hex（rgb/rgba/transparent → hex；命名色/hsl/var ⇒ 诊断跳过）；★`background` 纯色简写折进 backgroundColor（渐变/图片诊断跳过，走引擎 fill-gradient 通道）",
+      "note": "颜色编译期归一为 hex：hex / rgb() / rgba() / **命名色（148 个标准色，批 14）** / transparent；hsl/var ⇒ 诊断跳过。★`background` 纯色简写折进 backgroundColor（渐变/图片诊断跳过）。★批 14 多端一致性审计修：命名色此前丢弃（Web 生效）⇒ 现查表归一（核心只认 hex）",
       "supportTier": "universal"
     },
     {
@@ -853,7 +854,7 @@
       "app": "supported",
       "tier": "L1",
       "strategy": "编译期折叠",
-      "note": "★批次 5（2026-10-04）：`border: <width> <style> <color>` 简写解析为 borderWidth + borderColor（uniform 实线；逐边/styled 诊断跳过；var() 令牌色如实诊断）；**三端宿主真画**：iOS CALayer.border* · Android borderPaint 描边（含圆角路径）· 鸿蒙 OH_ArkUI_RenderNodeUtils_SetBorderWidth/Color。此前为 folded-only（折叠透传但宿主不画）——本批补齐绘制",
+      "note": "★批次 5（2026-10-04）：`border: <width> <style> <color>` 简写解析为 borderWidth + borderColor（uniform **实线**）；**逐边**/非 solid 线型（dashed/dotted…）诊断跳过（★批 14 审计修：非 solid 此前**静默画成实线**=与 Web 偏差 ⇒ 现诊断跳过）；var() 令牌色如实诊断。**三端宿主真画**：iOS CALayer.border* · Android borderPaint 描边（含圆角路径）· 鸿蒙 OH_ArkUI_RenderNodeUtils_SetBorderWidth/Color",
       "supportTier": "universal"
     },
     {

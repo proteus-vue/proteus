@@ -490,6 +490,7 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
       {
         "id": 1,
         "parentId": 0,
+        "textAlign": "center",
         "text": "组件系统",
         "semantic": "h2"
       },
@@ -498,22 +499,26 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
         "parentId": 0,
         "color": "#888",
         "fontSize": 13,
+        "textAlign": "center",
         "text": "父页面使用 <counter>（defineProps / emit → triggerEvent，usingComponents 自动注入）",
         "semantic": "p"
       },
       {
         "id": 3,
         "parentId": 0,
+        "textAlign": "center",
         "semantic": "counter"
       },
       {
         "id": 4,
         "parentId": 0,
+        "textAlign": "center",
         "semantic": "p"
       },
       {
         "id": 5,
         "parentId": 0,
+        "textAlign": "center",
         "semantic": "panel"
       }
     ]
@@ -535,6 +540,7 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
       {
         "id": 1,
         "parentId": 0,
+        "textAlign": "center",
         "text": "proteus.config rules",
         "semantic": "h2"
       },
@@ -543,6 +549,7 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
         "parentId": 0,
         "color": "#888",
         "fontSize": 13,
+        "textAlign": "center",
         "semantic": "p"
       },
       {
@@ -550,6 +557,7 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
         "parentId": 2,
         "color": "#888",
         "fontSize": 13,
+        "textAlign": "center",
         "text": "本页演示 ",
         "semantic": "p-text"
       },
@@ -558,6 +566,7 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
         "parentId": 2,
         "color": "#888",
         "fontSize": 13,
+        "textAlign": "center",
         "text": "proteus.config.ts",
         "semantic": "code"
       },
@@ -566,6 +575,7 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
         "parentId": 2,
         "color": "#888",
         "fontSize": 13,
+        "textAlign": "center",
         "text": " 的规则覆盖：改配置 → 重新构建 → 产物即时变化",
         "semantic": "p-text"
       },
@@ -586,18 +596,21 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
           "bottom": 12,
           "left": 0
         },
+        "textAlign": "center",
         "text": "customTags：'demo-box' → view（config 启用）",
         "semantic": "demo-box"
       },
       {
         "id": 7,
         "parentId": 0,
+        "textAlign": "center",
         "text": "style-safety：display:flex 被拦截（color 保留）",
         "semantic": "div"
       },
       {
         "id": 8,
         "parentId": 0,
+        "textAlign": "center",
         "semantic": "button"
       },
       {
@@ -617,11 +630,13 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
         },
         "backgroundColor": "#f5f6f7",
         "borderRadius": 8,
+        "textAlign": "center",
         "semantic": "div"
       },
       {
         "id": 10,
         "parentId": 9,
+        "textAlign": "center",
         "text": "复制（Capability）",
         "semantic": "button"
       },
@@ -630,6 +645,7 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
         "parentId": 9,
         "color": "#888",
         "fontSize": 13,
+        "textAlign": "center",
         "semantic": "p"
       },
       {
@@ -649,11 +665,13 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
         },
         "backgroundColor": "#f5f6f7",
         "borderRadius": 8,
+        "textAlign": "center",
         "semantic": "div"
       },
       {
         "id": 13,
         "parentId": 12,
+        "textAlign": "center",
         "text": "设备信息（@proteus-vue/api）",
         "semantic": "button"
       },
@@ -662,6 +680,7 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
         "parentId": 12,
         "color": "#888",
         "fontSize": 13,
+        "textAlign": "center",
         "semantic": "p"
       },
       {
@@ -681,11 +700,13 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
         },
         "backgroundColor": "#f5f6f7",
         "borderRadius": 8,
+        "textAlign": "center",
         "semantic": "div"
       },
       {
         "id": 16,
         "parentId": 15,
+        "textAlign": "center",
         "text": "app.config（应用运行时配置）",
         "semantic": "h3"
       },
@@ -694,6 +715,7 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
         "parentId": 15,
         "color": "#888",
         "fontSize": 13,
+        "textAlign": "center",
         "semantic": "p"
       },
       {
@@ -701,6 +723,7 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
         "parentId": 15,
         "color": "#888",
         "fontSize": 13,
+        "textAlign": "center",
         "semantic": "p"
       },
       {
@@ -708,11 +731,13 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
         "parentId": 15,
         "color": "#888",
         "fontSize": 13,
+        "textAlign": "center",
         "semantic": "p"
       },
       {
         "id": 20,
         "parentId": 15,
+        "textAlign": "center",
         "text": "切换 glassEffect（setConfig 运行时更新）",
         "semantic": "button"
       },
@@ -738,12 +763,14 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
         "id": 22,
         "parentId": 21,
         "fontSize": 13,
+        "textAlign": "left",
         "semantic": "p"
       },
       {
         "id": 23,
         "parentId": 22,
         "fontSize": 13,
+        "textAlign": "left",
         "text": "试玩三个开关",
         "semantic": "b"
       },
@@ -751,6 +778,7 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
         "id": 24,
         "parentId": 22,
         "fontSize": 13,
+        "textAlign": "left",
         "text": "（编辑 proteus.config.ts 的 rules 段后 ",
         "semantic": "p-text"
       },
@@ -766,6 +794,7 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
         },
         "borderRadius": 4,
         "fontSize": 12,
+        "textAlign": "left",
         "text": "npm run build:mp",
         "semantic": "code"
       },
@@ -773,6 +802,7 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
         "id": 26,
         "parentId": 22,
         "fontSize": 13,
+        "textAlign": "left",
         "text": "）：",
         "semantic": "p-text"
       },
@@ -780,12 +810,14 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
         "id": 27,
         "parentId": 21,
         "fontSize": 13,
+        "textAlign": "left",
         "semantic": "ul"
       },
       {
         "id": 28,
         "parentId": 27,
         "fontSize": 13,
+        "textAlign": "left",
         "semantic": "li"
       },
       {
@@ -800,6 +832,7 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
         },
         "borderRadius": 4,
         "fontSize": 12,
+        "textAlign": "left",
         "text": "customTags",
         "semantic": "code"
       },
@@ -807,6 +840,7 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
         "id": 30,
         "parentId": 28,
         "fontSize": 13,
+        "textAlign": "left",
         "text": "：新增标签映射（本页 demo-box）",
         "semantic": "p-text"
       },
@@ -814,6 +848,7 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
         "id": 31,
         "parentId": 27,
         "fontSize": 13,
+        "textAlign": "left",
         "semantic": "li"
       },
       {
@@ -828,6 +863,7 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
         },
         "borderRadius": 4,
         "fontSize": 12,
+        "textAlign": "left",
         "text": "mapping",
         "semantic": "code"
       },
@@ -835,6 +871,7 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
         "id": 33,
         "parentId": 31,
         "fontSize": 13,
+        "textAlign": "left",
         "text": "：改写映射（如 'tag/link-to-view': { a: 'text' }）",
         "semantic": "p-text"
       },
@@ -842,6 +879,7 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
         "id": 34,
         "parentId": 27,
         "fontSize": 13,
+        "textAlign": "left",
         "semantic": "li"
       },
       {
@@ -856,6 +894,7 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
         },
         "borderRadius": 4,
         "fontSize": 12,
+        "textAlign": "left",
         "text": "disabled",
         "semantic": "code"
       },
@@ -863,6 +902,7 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
         "id": 36,
         "parentId": 34,
         "fontSize": 13,
+        "textAlign": "left",
         "text": "：禁用规则（如 'directive/v-if'，v-if 将被忽略 + 编译期警告）",
         "semantic": "p-text"
       }
@@ -1832,8 +1872,6 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
       {
         "id": 16,
         "parentId": 0,
-        "borderWidth": 1,
-        "borderColor": "#d0d0d0",
         "borderRadius": 6,
         "padding": {
           "top": 8,
@@ -2370,6 +2408,7 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
         },
         "color": "#07c160",
         "fontWeight": 600,
+        "textAlign": "center",
         "semantic": "p"
       },
       {
@@ -2398,8 +2437,6 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
         "id": 12,
         "parentId": 0,
         "backgroundColor": "#f8f9fa",
-        "borderWidth": 1,
-        "borderColor": "#ccc",
         "borderRadius": 8,
         "padding": {
           "top": 16,
@@ -2518,8 +2555,6 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
       {
         "id": 7,
         "parentId": 0,
-        "borderWidth": 1,
-        "borderColor": "#ccc",
         "borderRadius": 8,
         "padding": {
           "top": 10,
@@ -3020,8 +3055,6 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
       {
         "id": 51,
         "parentId": 0,
-        "borderWidth": 1,
-        "borderColor": "#ccc",
         "borderRadius": 8,
         "minHeight": 200,
         "margin": {
@@ -3399,6 +3432,7 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
         "margin": {
           "bottom": 8
         },
+        "textAlign": "center",
         "semantic": "div"
       },
       {
@@ -3407,6 +3441,7 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
         "display": "flex",
         "gap": 8,
         "justifyContent": "center",
+        "textAlign": "center",
         "semantic": "div"
       },
       {
@@ -3422,6 +3457,7 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
         "backgroundColor": "#eee",
         "color": "#999",
         "fontSize": 12,
+        "textAlign": "center",
         "text": "sheet",
         "semantic": "span"
       },
@@ -3438,6 +3474,7 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
         "backgroundColor": "#eee",
         "color": "#999",
         "fontSize": 12,
+        "textAlign": "center",
         "text": "dialog",
         "semantic": "span"
       },
@@ -3454,6 +3491,7 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
         "backgroundColor": "#eee",
         "color": "#999",
         "fontSize": 12,
+        "textAlign": "center",
         "text": "popover",
         "semantic": "span"
       },
@@ -3471,6 +3509,7 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
           "bottom": 10,
           "left": 0
         },
+        "textAlign": "center",
         "semantic": "div"
       },
       {
@@ -3478,6 +3517,7 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
         "parentId": 88,
         "color": "#999",
         "fontSize": 12,
+        "textAlign": "center",
         "text": "验证窗口大小：",
         "semantic": "span"
       },
@@ -3496,6 +3536,7 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
           "left": 10
         },
         "fontSize": 12,
+        "textAlign": "center",
         "semantic": "button"
       },
       {
@@ -3513,6 +3554,7 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
           "left": 10
         },
         "fontSize": 12,
+        "textAlign": "center",
         "text": "跟随窗口",
         "semantic": "button"
       },
@@ -3536,6 +3578,7 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
           "bottom": 16,
           "left": 0
         },
+        "textAlign": "center",
         "semantic": "button"
       },
       {
@@ -3772,8 +3815,6 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
           "bottom": 12,
           "left": 12
         },
-        "borderWidth": 1,
-        "borderColor": "#ddd",
         "borderRadius": 8,
         "semantic": "div"
       },
@@ -4584,22 +4625,26 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
       {
         "id": 1,
         "parentId": 0,
+        "textAlign": "center",
         "semantic": "p-safe"
       },
       {
         "id": 2,
         "parentId": 0,
+        "textAlign": "center",
         "semantic": "h1"
       },
       {
         "id": 3,
         "parentId": 0,
+        "textAlign": "center",
         "text": "One Vue source. Every form.",
         "semantic": "p"
       },
       {
         "id": 4,
         "parentId": 0,
+        "textAlign": "center",
         "semantic": "p"
       },
       {
@@ -4611,11 +4656,13 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
           "bottom": 4,
           "left": 0
         },
+        "textAlign": "center",
         "semantic": "div"
       },
       {
         "id": 6,
         "parentId": 0,
+        "textAlign": "center",
         "text": "tap",
         "semantic": "button"
       },
@@ -4625,6 +4672,7 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
         "margin": {
           "top": 24
         },
+        "textAlign": "center",
         "semantic": "div"
       },
       {
@@ -4637,6 +4685,7 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
           "left": 0
         },
         "color": "#1a7af8",
+        "textAlign": "center",
         "text": "表单与指令",
         "semantic": "a"
       },
@@ -4650,6 +4699,7 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
           "left": 0
         },
         "color": "#1a7af8",
+        "textAlign": "center",
         "text": "配置演示",
         "semantic": "a"
       },
@@ -4663,6 +4713,7 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
           "left": 0
         },
         "color": "#1a7af8",
+        "textAlign": "center",
         "text": "组件演示",
         "semantic": "a"
       },
@@ -4676,6 +4727,7 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
           "left": 0
         },
         "color": "#1a7af8",
+        "textAlign": "center",
         "text": "小程序语义（MP 组件/API）",
         "semantic": "a"
       },
@@ -4689,6 +4741,7 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
           "left": 0
         },
         "color": "#1a7af8",
+        "textAlign": "center",
         "text": "PlatformAPI 收口",
         "semantic": "a"
       },
@@ -4702,6 +4755,7 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
           "left": 0
         },
         "color": "#1a7af8",
+        "textAlign": "center",
         "text": "柔性布局（Fluid）",
         "semantic": "a"
       },
@@ -4715,6 +4769,7 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
           "left": 0
         },
         "color": "#1a7af8",
+        "textAlign": "center",
         "text": "Fluid System（折叠屏/车机）",
         "semantic": "a"
       },
@@ -4728,6 +4783,7 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
           "left": 0
         },
         "color": "#1a7af8",
+        "textAlign": "center",
         "text": "G-32 语义原语（B2）",
         "semantic": "a"
       },
@@ -4741,6 +4797,7 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
           "left": 0
         },
         "color": "#1a7af8",
+        "textAlign": "center",
         "text": "v-model MP 复测（G12）",
         "semantic": "a"
       },
@@ -4754,6 +4811,7 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
           "left": 0
         },
         "color": "#1a7af8",
+        "textAlign": "center",
         "text": "渲染后端可插拔（G-27）",
         "semantic": "a"
       },
@@ -4767,6 +4825,7 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
           "left": 0
         },
         "color": "#1a7af8",
+        "textAlign": "center",
         "text": "液态玻璃（G-07）",
         "semantic": "a"
       },
@@ -4780,6 +4839,7 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
           "left": 0
         },
         "color": "#1a7af8",
+        "textAlign": "center",
         "text": "文档引擎（md 编译渲染）",
         "semantic": "a"
       },
@@ -4793,6 +4853,7 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
           "left": 0
         },
         "color": "#1a7af8",
+        "textAlign": "center",
         "text": "开放 API 演示（第三方面板）",
         "semantic": "a"
       },
@@ -4806,6 +4867,7 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
           "left": 0
         },
         "color": "#1a7af8",
+        "textAlign": "center",
         "text": "内置组件",
         "semantic": "a"
       },
@@ -4819,6 +4881,7 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
           "left": 0
         },
         "color": "#1a7af8",
+        "textAlign": "center",
         "text": "原生能力组件（camera/map/ad）",
         "semantic": "a"
       },
@@ -4832,6 +4895,7 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
           "left": 0
         },
         "color": "#1a7af8",
+        "textAlign": "center",
         "text": "国际化",
         "semantic": "a"
       },
@@ -4845,6 +4909,7 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
           "left": 0
         },
         "color": "#1a7af8",
+        "textAlign": "center",
         "text": "注入演示",
         "semantic": "a"
       },
@@ -4858,6 +4923,7 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
           "left": 0
         },
         "color": "#1a7af8",
+        "textAlign": "center",
         "text": "虚拟列表",
         "semantic": "a"
       },
@@ -4871,6 +4937,7 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
           "left": 0
         },
         "color": "#1a7af8",
+        "textAlign": "center",
         "text": "状态管理",
         "semantic": "a"
       },
@@ -4884,6 +4951,7 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
           "left": 0
         },
         "color": "#1a7af8",
+        "textAlign": "center",
         "text": "用户中心",
         "semantic": "a"
       },
@@ -4897,6 +4965,7 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
           "left": 0
         },
         "color": "#1a7af8",
+        "textAlign": "center",
         "text": "个人资料",
         "semantic": "a"
       },
@@ -4910,6 +4979,7 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
           "left": 0
         },
         "color": "#1a7af8",
+        "textAlign": "center",
         "text": "订单列表",
         "semantic": "a"
       },
@@ -4922,6 +4992,7 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
         "padding": {
           "top": 16
         },
+        "textAlign": "center",
         "semantic": "div"
       },
       {
@@ -4931,6 +5002,7 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
         "margin": {
           "bottom": 8
         },
+        "textAlign": "center",
         "text": "SVG → Skyline 专项",
         "semantic": "h3"
       },
@@ -4945,6 +5017,7 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
         },
         "fontSize": 12,
         "color": "#888",
+        "textAlign": "center",
         "text": "静态/动态 SVG、use 展开、文字提升、事件命中、动画（CSS/canvas）",
         "semantic": "p"
       },
@@ -4953,6 +5026,7 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
         "parentId": 30,
         "fontWeight": 700,
         "color": "#7c3aed",
+        "textAlign": "center",
         "text": "★ SVG 能力综合演示（炫丽效果）",
         "semantic": "a"
       },
@@ -4961,65 +5035,76 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
         "parentId": 30,
         "fontWeight": 700,
         "color": "#7c3aed",
+        "textAlign": "center",
         "text": "★ SVG 骨骼动画（嵌套变换复合 / 层级运动学）",
         "semantic": "a"
       },
       {
         "id": 35,
         "parentId": 30,
+        "textAlign": "center",
         "text": "① SVG 事件命中 + 文字提升",
         "semantic": "a"
       },
       {
         "id": 36,
         "parentId": 30,
+        "textAlign": "center",
         "text": "② SVG 动画（CSS 转译）",
         "semantic": "a"
       },
       {
         "id": 37,
         "parentId": 30,
+        "textAlign": "center",
         "text": "③ SVG 动画（Canvas 通道·形状变化）",
         "semantic": "a"
       },
       {
         "id": 38,
         "parentId": 30,
+        "textAlign": "center",
         "text": "④ SVG 特性支持矩阵（实测对照）",
         "semantic": "a"
       },
       {
         "id": 39,
         "parentId": 30,
+        "textAlign": "center",
         "text": "⑤ SVG → image data-URI 验证",
         "semantic": "a"
       },
       {
         "id": 40,
         "parentId": 30,
+        "textAlign": "center",
         "text": "⑥ Canvas 能力探针（性能/API）",
         "semantic": "a"
       },
       {
         "id": 41,
         "parentId": 30,
+        "textAlign": "center",
         "text": "⑦ Canvas node 通道探针",
         "semantic": "a"
       },
       {
         "id": 42,
         "parentId": 0,
+        "textAlign": "center",
         "semantic": "div"
       },
       {
         "id": 43,
         "parentId": 42,
+        "textAlign": "center",
         "text": "router.push → 表单与指令",
         "semantic": "button"
       },
       {
         "id": 44,
         "parentId": 42,
+        "textAlign": "center",
         "text": "router.push → 配置演示",
         "semantic": "button"
       },
@@ -5037,8 +5122,6 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
           "bottom": 12,
           "left": 16
         },
-        "borderWidth": 1,
-        "borderColor": "#1a7af8",
         "borderRadius": 8,
         "textAlign": "center",
         "semantic": "div"
@@ -5053,6 +5136,7 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
           "left": 0
         },
         "fontSize": 15,
+        "textAlign": "center",
         "text": "路由嵌套演示",
         "semantic": "h3"
       },
@@ -5067,6 +5151,7 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
         },
         "fontSize": 12,
         "color": "#888",
+        "textAlign": "center",
         "text": "嵌套链：首页 → 用户中心 → 个人资料（user-profile 的 parent 是 user）",
         "semantic": "p"
       },
@@ -5080,6 +5165,7 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
           "left": 0
         },
         "color": "#1a7af8",
+        "textAlign": "center",
         "text": "① 进入用户中心（a 链接·嵌套入口）",
         "semantic": "a"
       },
@@ -5093,6 +5179,7 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
           "left": 0
         },
         "color": "#1a7af8",
+        "textAlign": "center",
         "text": "② router.push → 用户中心（push 路径）",
         "semantic": "button"
       },
@@ -5107,6 +5194,7 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
         },
         "fontSize": 12,
         "color": "#888",
+        "textAlign": "center",
         "text": "进入用户中心后点「个人资料」→ route 面板连续两条嵌套记录",
         "semantic": "p"
       }
@@ -5129,11 +5217,13 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
       {
         "id": 1,
         "parentId": 0,
+        "textAlign": "center",
         "semantic": "h2"
       },
       {
         "id": 2,
         "parentId": 0,
+        "textAlign": "center",
         "text": "Tab 页（2/2）",
         "semantic": "p"
       }
@@ -5162,6 +5252,7 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
           "bottom": 8
         },
         "color": "#ffffffcc",
+        "textAlign": "left",
         "text": "小程序语义1（14-mp-first-semantics）",
         "semantic": "text"
       },
@@ -5173,6 +5264,7 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
         "margin": {
           "bottom": 16
         },
+        "textAlign": "left",
         "text": "view/text/button/image/input + wx API —— MP 原生 / Web 模拟层对齐",
         "semantic": "text"
       },
@@ -5191,6 +5283,7 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
         "margin": {
           "bottom": 12
         },
+        "textAlign": "left",
         "semantic": "view"
       },
       {
@@ -5201,6 +5294,7 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
         "margin": {
           "bottom": 8
         },
+        "textAlign": "left",
         "text": "容器与文本（selectable 可选）",
         "semantic": "text"
       },
@@ -5216,11 +5310,13 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
           "bottom": 4,
           "left": 0
         },
+        "textAlign": "left",
         "semantic": "view"
       },
       {
         "id": 6,
         "parentId": 5,
+        "textAlign": "left",
         "text": "可选中文本（selectable）",
         "semantic": "text"
       },
@@ -5239,6 +5335,7 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
         "margin": {
           "bottom": 12
         },
+        "textAlign": "left",
         "semantic": "view"
       },
       {
@@ -5249,18 +5346,21 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
         "margin": {
           "bottom": 8
         },
+        "textAlign": "left",
         "text": "button open-type（开放能力：MP 原生 / Web 降级事件）",
         "semantic": "text"
       },
       {
         "id": 9,
         "parentId": 7,
+        "textAlign": "left",
         "text": "分享（open-type=\"share\"）",
         "semantic": "button"
       },
       {
         "id": 10,
         "parentId": 7,
+        "textAlign": "left",
         "text": "客服（open-type=\"contact\"）",
         "semantic": "button"
       },
@@ -5279,6 +5379,7 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
         "margin": {
           "bottom": 12
         },
+        "textAlign": "left",
         "semantic": "view"
       },
       {
@@ -5289,6 +5390,7 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
         "margin": {
           "bottom": 8
         },
+        "textAlign": "left",
         "text": "button 变体（type/size/disabled/loading/plain，对齐 weui.io/#button_default）",
         "semantic": "text"
       },
@@ -5298,6 +5400,7 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
         "margin": {
           "top": 8
         },
+        "textAlign": "left",
         "text": "type=\"primary\"（绿）",
         "semantic": "button"
       },
@@ -5307,6 +5410,7 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
         "margin": {
           "top": 8
         },
+        "textAlign": "left",
         "text": "type=\"warn\"（红）",
         "semantic": "button"
       },
@@ -5316,6 +5420,7 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
         "margin": {
           "top": 8
         },
+        "textAlign": "left",
         "text": "size=\"mini\"",
         "semantic": "button"
       },
@@ -5325,6 +5430,7 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
         "margin": {
           "top": 8
         },
+        "textAlign": "left",
         "text": "disabled",
         "semantic": "button"
       },
@@ -5334,6 +5440,7 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
         "margin": {
           "top": 8
         },
+        "textAlign": "left",
         "text": "loading",
         "semantic": "button"
       },
@@ -5343,6 +5450,7 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
         "margin": {
           "top": 8
         },
+        "textAlign": "left",
         "text": "plain",
         "semantic": "button"
       },
@@ -5361,6 +5469,7 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
         "margin": {
           "bottom": 12
         },
+        "textAlign": "left",
         "semantic": "view"
       },
       {
@@ -5371,36 +5480,42 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
         "margin": {
           "bottom": 8
         },
+        "textAlign": "left",
         "text": "wx API（路由/存储/交互/系统信息）",
         "semantic": "text"
       },
       {
         "id": 21,
         "parentId": 19,
+        "textAlign": "left",
         "text": "wx.showToast",
         "semantic": "button"
       },
       {
         "id": 22,
         "parentId": 19,
+        "textAlign": "left",
         "text": "wx.setStorageSync / getStorageSync",
         "semantic": "button"
       },
       {
         "id": 23,
         "parentId": 19,
+        "textAlign": "left",
         "text": "wx.showModal",
         "semantic": "button"
       },
       {
         "id": 24,
         "parentId": 19,
+        "textAlign": "left",
         "text": "wx.navigateTo（showcase）",
         "semantic": "button"
       },
       {
         "id": 25,
         "parentId": 19,
+        "textAlign": "left",
         "text": "wx.getSystemInfoSync",
         "semantic": "button"
       },
@@ -5419,6 +5534,7 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
         "margin": {
           "bottom": 12
         },
+        "textAlign": "left",
         "semantic": "view"
       },
       {
@@ -5429,6 +5545,7 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
         "margin": {
           "bottom": 8
         },
+        "textAlign": "left",
         "text": "image（mode=\"widthFix\"）+ input",
         "semantic": "text"
       },
@@ -5438,6 +5555,7 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
         "margin": {
           "bottom": 8
         },
+        "textAlign": "left",
         "semantic": "image"
       },
       {
@@ -5457,6 +5575,7 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
         "fontSize": 14,
         "backgroundColor": "#191919",
         "color": "#ffffffcc",
+        "textAlign": "left",
         "semantic": "input"
       },
       {
@@ -5467,6 +5586,7 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
         "margin": {
           "top": 6
         },
+        "textAlign": "left",
         "semantic": "text"
       },
       {
@@ -5484,6 +5604,7 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
         "margin": {
           "bottom": 12
         },
+        "textAlign": "left",
         "semantic": "view"
       },
       {
@@ -5494,6 +5615,7 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
         "margin": {
           "bottom": 8
         },
+        "textAlign": "left",
         "text": "扩展组件（批次3：textarea/switch/slider/icon/progress/navigator）",
         "semantic": "text"
       },
@@ -5514,6 +5636,7 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
         "fontSize": 14,
         "backgroundColor": "#191919",
         "color": "#ffffffcc",
+        "textAlign": "left",
         "semantic": "textarea"
       },
       {
@@ -5528,11 +5651,13 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
           "bottom": 4,
           "left": 0
         },
+        "textAlign": "left",
         "semantic": "view"
       },
       {
         "id": 35,
         "parentId": 34,
+        "textAlign": "left",
         "semantic": "switch"
       },
       {
@@ -5541,6 +5666,7 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
         "fontSize": 13,
         "color": "#ffffffcc",
         "lineHeight": "1.6",
+        "textAlign": "left",
         "text": "switch（默认开）",
         "semantic": "text"
       },
@@ -5556,12 +5682,14 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
           "bottom": 4,
           "left": 0
         },
+        "textAlign": "left",
         "semantic": "view"
       },
       {
         "id": 38,
         "parentId": 37,
         "widthRatio": 0.6,
+        "textAlign": "left",
         "semantic": "slider"
       },
       {
@@ -5570,6 +5698,7 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
         "fontSize": 13,
         "color": "#ffffffcc",
         "lineHeight": "1.6",
+        "textAlign": "left",
         "semantic": "text"
       },
       {
@@ -5584,16 +5713,19 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
           "bottom": 4,
           "left": 0
         },
+        "textAlign": "left",
         "semantic": "view"
       },
       {
         "id": 41,
         "parentId": 40,
+        "textAlign": "left",
         "semantic": "icon"
       },
       {
         "id": 42,
         "parentId": 40,
+        "textAlign": "left",
         "semantic": "icon"
       },
       {
@@ -5602,12 +5734,14 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
         "fontSize": 13,
         "color": "#ffffffcc",
         "lineHeight": "1.6",
+        "textAlign": "left",
         "text": "icon（success/warn + color 调色）",
         "semantic": "text"
       },
       {
         "id": 44,
         "parentId": 31,
+        "textAlign": "left",
         "semantic": "progress"
       },
       {
@@ -5622,12 +5756,14 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
           "bottom": 4,
           "left": 0
         },
+        "textAlign": "left",
         "semantic": "view"
       },
       {
         "id": 46,
         "parentId": 45,
         "color": "#7d90a9",
+        "textAlign": "left",
         "text": "navigator → showcase",
         "semantic": "navigator"
       },
@@ -5643,11 +5779,13 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
           "bottom": 4,
           "left": 0
         },
+        "textAlign": "left",
         "semantic": "view"
       },
       {
         "id": 48,
         "parentId": 47,
+        "textAlign": "left",
         "semantic": "picker"
       },
       {
@@ -5656,6 +5794,7 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
         "fontSize": 13,
         "color": "#ffffffcc",
         "lineHeight": "1.6",
+        "textAlign": "left",
         "semantic": "text"
       },
       {
@@ -5670,11 +5809,13 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
           "bottom": 4,
           "left": 0
         },
+        "textAlign": "left",
         "semantic": "view"
       },
       {
         "id": 51,
         "parentId": 50,
+        "textAlign": "left",
         "semantic": "picker"
       },
       {
@@ -5683,6 +5824,7 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
         "fontSize": 13,
         "color": "#ffffffcc",
         "lineHeight": "1.6",
+        "textAlign": "left",
         "semantic": "text"
       },
       {
@@ -5700,6 +5842,7 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
         "margin": {
           "bottom": 12
         },
+        "textAlign": "left",
         "semantic": "view"
       },
       {
@@ -5710,6 +5853,7 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
         "margin": {
           "bottom": 8
         },
+        "textAlign": "left",
         "text": "onPageScroll 桥接（15-page-scroll-container 批次2/3）",
         "semantic": "text"
       },
@@ -5719,11 +5863,13 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
         "fontSize": 13,
         "color": "#ffffffcc",
         "lineHeight": "1.6",
+        "textAlign": "left",
         "semantic": "text"
       },
       {
         "id": 56,
         "parentId": 53,
+        "textAlign": "left",
         "text": "wx.pageScrollTo 回到顶部",
         "semantic": "button"
       },
@@ -5742,6 +5888,7 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
         "margin": {
           "bottom": 12
         },
+        "textAlign": "left",
         "semantic": "view"
       },
       {
@@ -5752,6 +5899,7 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
         "margin": {
           "bottom": 8
         },
+        "textAlign": "left",
         "semantic": "text"
       },
       {
@@ -5766,6 +5914,7 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
           "bottom": 4,
           "left": 0
         },
+        "textAlign": "left",
         "semantic": "view"
       },
       {
@@ -5774,6 +5923,7 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
         "fontSize": 13,
         "color": "#ffffffcc",
         "lineHeight": "1.6",
+        "textAlign": "left",
         "semantic": "text"
       }
     ]
@@ -6037,6 +6187,7 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
       {
         "id": 1,
         "parentId": 0,
+        "textAlign": "center",
         "text": "Pinia 状态管理（player store）",
         "semantic": "h2"
       },
@@ -6045,6 +6196,7 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
         "parentId": 0,
         "color": "#888",
         "fontSize": 13,
+        "textAlign": "center",
         "text": "同一份 stores/player.ts 四端一致：播放/暂停 + 音量 + 历史（volume/history 持久化）",
         "semantic": "p"
       },
@@ -6059,6 +6211,7 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
           "bottom": 12,
           "left": 0
         },
+        "textAlign": "center",
         "semantic": "p"
       },
       {
@@ -6070,6 +6223,7 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
           "bottom": 8,
           "left": 0
         },
+        "textAlign": "center",
         "semantic": "p"
       },
       {
@@ -6081,6 +6235,7 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
           "bottom": 0,
           "left": 6
         },
+        "textAlign": "center",
         "text": "▶ 播放",
         "semantic": "button"
       },
@@ -6093,6 +6248,7 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
           "bottom": 0,
           "left": 6
         },
+        "textAlign": "center",
         "text": "⏯ 暂停/继续",
         "semantic": "button"
       },
@@ -6105,6 +6261,7 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
           "bottom": 0,
           "left": 6
         },
+        "textAlign": "center",
         "text": "音量 -",
         "semantic": "button"
       },
@@ -6117,6 +6274,7 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
           "bottom": 0,
           "left": 6
         },
+        "textAlign": "center",
         "text": "音量 +",
         "semantic": "button"
       }
@@ -6145,6 +6303,7 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
           "bottom": 8
         },
         "color": "#ffffffcc",
+        "textAlign": "left",
         "text": "PlatformAPI 收口演示（B9）",
         "semantic": "text"
       },
@@ -6157,6 +6316,7 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
           "bottom": 16
         },
         "lineHeight": "1.6",
+        "textAlign": "left",
         "text": "业务代码零 wx.* —— request / storage / router / ui 统一走 createPlatformAPI",
         "semantic": "text"
       },
@@ -6175,6 +6335,7 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
         "margin": {
           "bottom": 12
         },
+        "textAlign": "left",
         "semantic": "view"
       },
       {
@@ -6185,6 +6346,7 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
         "margin": {
           "bottom": 8
         },
+        "textAlign": "left",
         "text": "① request（wx.request → platformAPI.request）",
         "semantic": "text"
       },
@@ -6208,6 +6370,7 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
         },
         "backgroundColor": "#191919",
         "color": "#ffffffcc",
+        "textAlign": "left",
         "semantic": "input"
       },
       {
@@ -6223,6 +6386,7 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
           "left": 0
         },
         "flexWrap": "wrap",
+        "textAlign": "left",
         "semantic": "view"
       },
       {
@@ -6231,6 +6395,7 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
         "margin": {
           "top": 4
         },
+        "textAlign": "left",
         "text": "GET 请求",
         "semantic": "button"
       },
@@ -6242,6 +6407,7 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
         "margin": {
           "top": 6
         },
+        "textAlign": "left",
         "semantic": "text"
       },
       {
@@ -6259,6 +6425,7 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
         "margin": {
           "bottom": 12
         },
+        "textAlign": "left",
         "semantic": "view"
       },
       {
@@ -6269,6 +6436,7 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
         "margin": {
           "bottom": 8
         },
+        "textAlign": "left",
         "text": "② storage（wx.setStorageSync → platformAPI.storage，JSON 往返）",
         "semantic": "text"
       },
@@ -6285,6 +6453,7 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
           "left": 0
         },
         "flexWrap": "wrap",
+        "textAlign": "left",
         "semantic": "view"
       },
       {
@@ -6293,6 +6462,7 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
         "margin": {
           "top": 4
         },
+        "textAlign": "left",
         "text": "写入",
         "semantic": "button"
       },
@@ -6302,6 +6472,7 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
         "margin": {
           "top": 4
         },
+        "textAlign": "left",
         "text": "读取",
         "semantic": "button"
       },
@@ -6311,6 +6482,7 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
         "margin": {
           "top": 4
         },
+        "textAlign": "left",
         "text": "删除",
         "semantic": "button"
       },
@@ -6322,6 +6494,7 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
         "margin": {
           "top": 6
         },
+        "textAlign": "left",
         "semantic": "text"
       },
       {
@@ -6339,6 +6512,7 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
         "margin": {
           "bottom": 12
         },
+        "textAlign": "left",
         "semantic": "view"
       },
       {
@@ -6349,6 +6523,7 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
         "margin": {
           "bottom": 8
         },
+        "textAlign": "left",
         "text": "③ router（wx.navigateTo → platformAPI.router）",
         "semantic": "text"
       },
@@ -6365,6 +6540,7 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
           "left": 0
         },
         "flexWrap": "wrap",
+        "textAlign": "left",
         "semantic": "view"
       },
       {
@@ -6373,6 +6549,7 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
         "margin": {
           "top": 4
         },
+        "textAlign": "left",
         "text": "push → showcase",
         "semantic": "button"
       },
@@ -6382,6 +6559,7 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
         "margin": {
           "top": 4
         },
+        "textAlign": "left",
         "text": "back（带参数 delta）",
         "semantic": "button"
       },
@@ -6400,6 +6578,7 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
         "margin": {
           "bottom": 12
         },
+        "textAlign": "left",
         "semantic": "view"
       },
       {
@@ -6410,6 +6589,7 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
         "margin": {
           "bottom": 8
         },
+        "textAlign": "left",
         "text": "④ ui（wx.showToast / showModal / showActionSheet → platformAPI.ui）",
         "semantic": "text"
       },
@@ -6426,6 +6606,7 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
           "left": 0
         },
         "flexWrap": "wrap",
+        "textAlign": "left",
         "semantic": "view"
       },
       {
@@ -6434,6 +6615,7 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
         "margin": {
           "top": 4
         },
+        "textAlign": "left",
         "text": "showModal",
         "semantic": "button"
       },
@@ -6443,6 +6625,7 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
         "margin": {
           "top": 4
         },
+        "textAlign": "left",
         "text": "showActionSheet",
         "semantic": "button"
       },
@@ -6452,6 +6635,7 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
         "margin": {
           "top": 4
         },
+        "textAlign": "left",
         "text": "showLoading（2s 自动关）",
         "semantic": "button"
       },
@@ -6461,6 +6645,7 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
         "margin": {
           "top": 4
         },
+        "textAlign": "left",
         "text": "hideLoading",
         "semantic": "button"
       },
@@ -6472,6 +6657,7 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
         "margin": {
           "top": 6
         },
+        "textAlign": "left",
         "semantic": "text"
       },
       {
@@ -6489,6 +6675,7 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
         "margin": {
           "bottom": 12
         },
+        "textAlign": "left",
         "semantic": "view"
       },
       {
@@ -6499,6 +6686,7 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
         "margin": {
           "bottom": 8
         },
+        "textAlign": "left",
         "text": "⑤ 能力 Hook（G-32：useDevice/useNetwork/useClipboard → Result<T> 无回调）",
         "semantic": "text"
       },
@@ -6515,6 +6703,7 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
           "left": 0
         },
         "flexWrap": "wrap",
+        "textAlign": "left",
         "semantic": "view"
       },
       {
@@ -6523,6 +6712,7 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
         "margin": {
           "top": 4
         },
+        "textAlign": "left",
         "text": "useDevice",
         "semantic": "button"
       },
@@ -6532,6 +6722,7 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
         "margin": {
           "top": 4
         },
+        "textAlign": "left",
         "text": "useNetwork",
         "semantic": "button"
       },
@@ -6541,6 +6732,7 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
         "margin": {
           "top": 4
         },
+        "textAlign": "left",
         "text": "useClipboard",
         "semantic": "button"
       },
@@ -6550,6 +6742,7 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
         "margin": {
           "top": 4
         },
+        "textAlign": "left",
         "text": "useFetch",
         "semantic": "button"
       },
@@ -6561,6 +6754,7 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
         "margin": {
           "top": 6
         },
+        "textAlign": "left",
         "semantic": "text"
       },
       {
@@ -6572,6 +6766,7 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
           "bottom": 16
         },
         "lineHeight": "1.6",
+        "textAlign": "left",
         "text": "useFetch = G-32 C26（迁移文档：wx.request → await useFetch(url)）· usePermission/useStorage 见 @proteus-vue/api/capability.ts（probe 降级 + createReactiveStorage 响应式）",
         "semantic": "text"
       },
@@ -6590,6 +6785,7 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
         "margin": {
           "bottom": 12
         },
+        "textAlign": "left",
         "semantic": "view"
       },
       {
@@ -6600,6 +6796,7 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
         "margin": {
           "bottom": 8
         },
+        "textAlign": "left",
         "text": "⑥ 能力 Hook 三期（useSensor/useBiometric/useAuth/useQRCode——web 缺能力 → Err 降级）",
         "semantic": "text"
       },
@@ -6616,6 +6813,7 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
           "left": 0
         },
         "flexWrap": "wrap",
+        "textAlign": "left",
         "semantic": "view"
       },
       {
@@ -6624,6 +6822,7 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
         "margin": {
           "top": 4
         },
+        "textAlign": "left",
         "text": "useSensor",
         "semantic": "button"
       },
@@ -6633,6 +6832,7 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
         "margin": {
           "top": 4
         },
+        "textAlign": "left",
         "text": "useBiometric",
         "semantic": "button"
       },
@@ -6642,6 +6842,7 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
         "margin": {
           "top": 4
         },
+        "textAlign": "left",
         "text": "useAuth 登录",
         "semantic": "button"
       },
@@ -6651,6 +6852,7 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
         "margin": {
           "top": 4
         },
+        "textAlign": "left",
         "text": "登出",
         "semantic": "button"
       },
@@ -6660,6 +6862,7 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
         "margin": {
           "top": 4
         },
+        "textAlign": "left",
         "text": "useQRCode",
         "semantic": "button"
       },
@@ -6671,6 +6874,7 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
         "margin": {
           "top": 6
         },
+        "textAlign": "left",
         "semantic": "text"
       },
       {
@@ -6682,6 +6886,7 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
           "bottom": 16
         },
         "lineHeight": "1.6",
+        "textAlign": "left",
         "text": "useBiometric → web 无 WebAuthn 时 data:false（feature detection）；useQRCode web 需摄像头取流源 → Err · 小程序端 wx.scanCode 直通",
         "semantic": "text"
       },
@@ -6700,6 +6905,7 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
         "margin": {
           "bottom": 12
         },
+        "textAlign": "left",
         "semantic": "view"
       },
       {
@@ -6710,6 +6916,7 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
         "margin": {
           "bottom": 8
         },
+        "textAlign": "left",
         "text": "⑦ 能力 Hook 四期（useWebSocket/useAnalytics/useLog/useFileSystem——网络与工程类）",
         "semantic": "text"
       },
@@ -6726,6 +6933,7 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
           "left": 0
         },
         "flexWrap": "wrap",
+        "textAlign": "left",
         "semantic": "view"
       },
       {
@@ -6734,6 +6942,7 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
         "margin": {
           "top": 4
         },
+        "textAlign": "left",
         "text": "useWebSocket",
         "semantic": "button"
       },
@@ -6743,6 +6952,7 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
         "margin": {
           "top": 4
         },
+        "textAlign": "left",
         "text": "useAnalytics 埋点",
         "semantic": "button"
       },
@@ -6752,6 +6962,7 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
         "margin": {
           "top": 4
         },
+        "textAlign": "left",
         "text": "useLog",
         "semantic": "button"
       },
@@ -6761,6 +6972,7 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
         "margin": {
           "top": 4
         },
+        "textAlign": "left",
         "text": "useFileSystem",
         "semantic": "button"
       },
@@ -6772,6 +6984,7 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
         "margin": {
           "top": 6
         },
+        "textAlign": "left",
         "semantic": "text"
       },
       {
@@ -6783,6 +6996,7 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
           "bottom": 16
         },
         "lineHeight": "1.6",
+        "textAlign": "left",
         "text": "useWebSocket/useAnalytics 小程序端走 wx.connectSocket/reportEvent；useFileSystem web 端内存降级（非持久）· useUpload/useDownload 见 @proteus-vue/api/capability.ts",
         "semantic": "text"
       },
@@ -6801,6 +7015,7 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
         "margin": {
           "bottom": 12
         },
+        "textAlign": "left",
         "semantic": "view"
       },
       {
@@ -6811,6 +7026,7 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
         "margin": {
           "bottom": 8
         },
+        "textAlign": "left",
         "text": "⑧ 能力 Hook 五期（useNotification/useAppLifecycle/useContact/useCalendar/useArchive/useShortcut）",
         "semantic": "text"
       },
@@ -6827,6 +7043,7 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
           "left": 0
         },
         "flexWrap": "wrap",
+        "textAlign": "left",
         "semantic": "view"
       },
       {
@@ -6835,6 +7052,7 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
         "margin": {
           "top": 4
         },
+        "textAlign": "left",
         "text": "useNotification",
         "semantic": "button"
       },
@@ -6844,6 +7062,7 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
         "margin": {
           "top": 4
         },
+        "textAlign": "left",
         "text": "useAppLifecycle",
         "semantic": "button"
       },
@@ -6853,6 +7072,7 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
         "margin": {
           "top": 4
         },
+        "textAlign": "left",
         "text": "useContact",
         "semantic": "button"
       },
@@ -6862,6 +7082,7 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
         "margin": {
           "top": 4
         },
+        "textAlign": "left",
         "text": "useCalendar",
         "semantic": "button"
       },
@@ -6871,6 +7092,7 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
         "margin": {
           "top": 4
         },
+        "textAlign": "left",
         "text": "useArchive",
         "semantic": "button"
       },
@@ -6880,6 +7102,7 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
         "margin": {
           "top": 4
         },
+        "textAlign": "left",
         "text": "useShortcut",
         "semantic": "button"
       },
@@ -6891,6 +7114,7 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
         "margin": {
           "top": 6
         },
+        "textAlign": "left",
         "semantic": "text"
       },
       {
@@ -6902,6 +7126,7 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
           "bottom": 16
         },
         "lineHeight": "1.6",
+        "textAlign": "left",
         "text": "小程序端走 wx.requestSubscribeMessage/chooseContact/addPhoneCalendar/compressFile/addToDesktop + App 钩子；web 端仅 Notification 与 visibilitychange 有原生对应，其余诚实降级 → Err",
         "semantic": "text"
       },
@@ -6920,6 +7145,7 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
         "margin": {
           "bottom": 12
         },
+        "textAlign": "left",
         "semantic": "view"
       },
       {
@@ -6930,6 +7156,7 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
         "margin": {
           "bottom": 8
         },
+        "textAlign": "left",
         "text": "⑨ 能力 Hook 六期（usePageLifecycle/useBluetooth/useNFC/useCamera/useMicrophone/useKeyboard——媒体与近场）",
         "semantic": "text"
       },
@@ -6946,6 +7173,7 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
           "left": 0
         },
         "flexWrap": "wrap",
+        "textAlign": "left",
         "semantic": "view"
       },
       {
@@ -6954,6 +7182,7 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
         "margin": {
           "top": 4
         },
+        "textAlign": "left",
         "text": "usePageLifecycle",
         "semantic": "button"
       },
@@ -6963,6 +7192,7 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
         "margin": {
           "top": 4
         },
+        "textAlign": "left",
         "text": "useBluetooth",
         "semantic": "button"
       },
@@ -6972,6 +7202,7 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
         "margin": {
           "top": 4
         },
+        "textAlign": "left",
         "text": "useNFC",
         "semantic": "button"
       },
@@ -6981,6 +7212,7 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
         "margin": {
           "top": 4
         },
+        "textAlign": "left",
         "text": "useCamera",
         "semantic": "button"
       },
@@ -6990,6 +7222,7 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
         "margin": {
           "top": 4
         },
+        "textAlign": "left",
         "text": "useMicrophone",
         "semantic": "button"
       },
@@ -6999,6 +7232,7 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
         "margin": {
           "top": 4
         },
+        "textAlign": "left",
         "text": "useKeyboard",
         "semantic": "button"
       },
@@ -7010,6 +7244,7 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
         "margin": {
           "top": 6
         },
+        "textAlign": "left",
         "semantic": "text"
       },
       {
@@ -7021,6 +7256,7 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
           "bottom": 16
         },
         "lineHeight": "1.6",
+        "textAlign": "left",
         "text": "小程序端走 wx.openBluetoothAdapter/getHCEState/authorize/onKeyboardHeightChange/onPageShow·onPageHide；web 端蓝牙·NFC 为特性探测，相机·麦克风走 getUserMedia（需 HTTPS），键盘走 visualViewport 启发式",
         "semantic": "text"
       },
@@ -7039,6 +7275,7 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
         "margin": {
           "bottom": 12
         },
+        "textAlign": "left",
         "semantic": "view"
       },
       {
@@ -7049,6 +7286,7 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
         "margin": {
           "bottom": 8
         },
+        "textAlign": "left",
         "text": "⑩ 工程原语（G-32 B5：useState/useComputed/usePageParam——injectable vue reactivity）",
         "semantic": "text"
       },
@@ -7065,6 +7303,7 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
           "left": 0
         },
         "flexWrap": "wrap",
+        "textAlign": "left",
         "semantic": "view"
       },
       {
@@ -7073,6 +7312,7 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
         "margin": {
           "top": 4
         },
+        "textAlign": "left",
         "text": "useState 自增",
         "semantic": "button"
       },
@@ -7082,6 +7322,7 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
         "margin": {
           "top": 4
         },
+        "textAlign": "left",
         "text": "useState/Computed 读",
         "semantic": "button"
       },
@@ -7091,6 +7332,7 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
         "margin": {
           "top": 4
         },
+        "textAlign": "left",
         "text": "usePageParam",
         "semantic": "button"
       },
@@ -7102,6 +7344,7 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
         "margin": {
           "top": 6
         },
+        "textAlign": "left",
         "semantic": "text"
       },
       {
@@ -7113,6 +7356,7 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
           "bottom": 16
         },
         "lineHeight": "1.6",
+        "textAlign": "left",
         "text": "createEngineering 注入 Vue reactivity——useState=ref 语义 / useComputed=computed / usePageParam 读页面参数（api 包零 vue 依赖，消费方注入）",
         "semantic": "text"
       },
@@ -7131,6 +7375,7 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
         "margin": {
           "bottom": 12
         },
+        "textAlign": "left",
         "semantic": "view"
       },
       {
@@ -7141,6 +7386,7 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
         "margin": {
           "bottom": 8
         },
+        "textAlign": "left",
         "text": "⑪ 路由语义化（G-32 B5 续：createRouterEngineering——E10 useRoute / E11-E15 导航语义 / E16-E17 守卫）",
         "semantic": "text"
       },
@@ -7157,6 +7403,7 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
           "left": 0
         },
         "flexWrap": "wrap",
+        "textAlign": "left",
         "semantic": "view"
       },
       {
@@ -7165,6 +7412,7 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
         "margin": {
           "top": 4
         },
+        "textAlign": "left",
         "text": "push",
         "semantic": "button"
       },
@@ -7174,6 +7422,7 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
         "margin": {
           "top": 4
         },
+        "textAlign": "left",
         "text": "replace",
         "semantic": "button"
       },
@@ -7183,6 +7432,7 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
         "margin": {
           "top": 4
         },
+        "textAlign": "left",
         "text": "back",
         "semantic": "button"
       },
@@ -7192,6 +7442,7 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
         "margin": {
           "top": 4
         },
+        "textAlign": "left",
         "text": "switchTab",
         "semantic": "button"
       },
@@ -7201,6 +7452,7 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
         "margin": {
           "top": 4
         },
+        "textAlign": "left",
         "text": "reLaunch",
         "semantic": "button"
       },
@@ -7210,6 +7462,7 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
         "margin": {
           "top": 4
         },
+        "textAlign": "left",
         "text": "useRoute",
         "semantic": "button"
       },
@@ -7221,6 +7474,7 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
         "margin": {
           "top": 6
         },
+        "textAlign": "left",
         "semantic": "text"
       },
       {
@@ -7232,6 +7486,7 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
           "bottom": 16
         },
         "lineHeight": "1.6",
+        "textAlign": "left",
         "text": "createRouterEngineering 注入兼容 router（mock 录制调用，不真实导航）——E11-E15 语义委托既有 router（replace=replace:true / switchTab / reLaunch 标志）；E10 useRoute 读注入 getCurrentRoute 源；E16/E17 守卫委托（router 缺省时安全 no-op）",
         "semantic": "text"
       },
@@ -7250,6 +7505,7 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
         "margin": {
           "bottom": 12
         },
+        "textAlign": "left",
         "semantic": "view"
       },
       {
@@ -7260,6 +7516,7 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
         "margin": {
           "bottom": 8
         },
+        "textAlign": "left",
         "text": "⑫ 动画语义（G-32 B5 续二：p-transition E19 / p-animate E20 / useAnimation E21-E23 注入式）",
         "semantic": "text"
       },
@@ -7276,6 +7533,7 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
           "left": 0
         },
         "flexWrap": "wrap",
+        "textAlign": "left",
         "semantic": "view"
       },
       {
@@ -7284,6 +7542,7 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
         "margin": {
           "top": 4
         },
+        "textAlign": "left",
         "text": "p-transition 显隐",
         "semantic": "button"
       },
@@ -7293,6 +7552,7 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
         "margin": {
           "top": 4
         },
+        "textAlign": "left",
         "text": "useAnimation",
         "semantic": "button"
       },
@@ -7302,6 +7562,7 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
         "margin": {
           "top": 4
         },
+        "textAlign": "left",
         "text": "useGestureAnimation",
         "semantic": "button"
       },
@@ -7311,6 +7572,7 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
         "margin": {
           "top": 4
         },
+        "textAlign": "left",
         "text": "useScrollAnimation",
         "semantic": "button"
       },
@@ -7327,19 +7589,21 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
           "bottom": 8,
           "left": 0
         },
-        "borderWidth": 1,
         "borderRadius": 8,
         "backgroundColor": "#1a7af80f",
+        "textAlign": "left",
         "semantic": "view"
       },
       {
         "id": 106,
         "parentId": 105,
+        "textAlign": "left",
         "semantic": "p-transition"
       },
       {
         "id": 107,
         "parentId": 106,
+        "textAlign": "left",
         "semantic": "p-animate"
       },
       {
@@ -7355,6 +7619,7 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
         "color": "#fff",
         "fontSize": 16,
         "fontWeight": 700,
+        "textAlign": "left",
         "text": "Proteus",
         "semantic": "text"
       },
@@ -7366,6 +7631,7 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
         "margin": {
           "top": 6
         },
+        "textAlign": "left",
         "semantic": "text"
       },
       {
@@ -7377,6 +7643,7 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
           "bottom": 16
         },
         "lineHeight": "1.6",
+        "textAlign": "left",
         "text": "E19 p-transition（CSS 显隐过渡）· E20 p-animate（CSS 动画声明——组件形态，纯 CSS 双端）；E21 useAnimation（wx.createAnimation 语义构建器）/ E22 useGestureAnimation（增量累积→提交帧）/ E23 useScrollAnimation（进度→插值）——reactivity/driver 注入式，web 端 WAAPI 播放（MP/无 driver 安全 no-op）",
         "semantic": "text"
       },
@@ -7395,6 +7662,7 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
         "margin": {
           "bottom": 12
         },
+        "textAlign": "left",
         "semantic": "view"
       },
       {
@@ -7405,6 +7673,7 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
         "margin": {
           "bottom": 8
         },
+        "textAlign": "left",
         "text": "⑬ 工程化（G-32 B5 续三：useDevTools E24 / useInspector E25 / usePerformance E26 / defineComponent E27 / defineCapability E28）",
         "semantic": "text"
       },
@@ -7421,6 +7690,7 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
           "left": 0
         },
         "flexWrap": "wrap",
+        "textAlign": "left",
         "semantic": "view"
       },
       {
@@ -7429,6 +7699,7 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
         "margin": {
           "top": 4
         },
+        "textAlign": "left",
         "text": "useDevTools",
         "semantic": "button"
       },
@@ -7438,6 +7709,7 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
         "margin": {
           "top": 4
         },
+        "textAlign": "left",
         "text": "useInspector",
         "semantic": "button"
       },
@@ -7447,6 +7719,7 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
         "margin": {
           "top": 4
         },
+        "textAlign": "left",
         "text": "usePerformance",
         "semantic": "button"
       },
@@ -7456,6 +7729,7 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
         "margin": {
           "top": 4
         },
+        "textAlign": "left",
         "text": "defineComponent",
         "semantic": "button"
       },
@@ -7465,6 +7739,7 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
         "margin": {
           "top": 4
         },
+        "textAlign": "left",
         "text": "defineCapability",
         "semantic": "button"
       },
@@ -7476,6 +7751,7 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
         "margin": {
           "top": 6
         },
+        "textAlign": "left",
         "semantic": "text"
       },
       {
@@ -7487,6 +7763,7 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
           "bottom": 16
         },
         "lineHeight": "1.6",
+        "textAlign": "left",
         "text": "E24 useDevTools（dev 事件面）/ E25 useInspector（组件树快照）/ E26 usePerformance（wx.reportPerformance 语义）→ 注入式 Hook；E27 defineComponent（类型化组件定义含 C-IR 元信息 + 声明期校验）/ E28 defineCapability（G-30 降级链声明 + 解析）→ 纯函数声明工具——工程原语 28 收口",
         "semantic": "text"
       },
@@ -7505,6 +7782,7 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
         "margin": {
           "bottom": 12
         },
+        "textAlign": "left",
         "semantic": "view"
       },
       {
@@ -7515,6 +7793,7 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
         "margin": {
           "bottom": 8
         },
+        "textAlign": "left",
         "text": "⑭ 能力收官（G-32 B3 七/八期：Capability 50/50——map·sms·background·socket-task·data-channel·cookie·face-id·IAP·mini-program·embedded·live·extension）",
         "semantic": "text"
       },
@@ -7531,6 +7810,7 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
           "left": 0
         },
         "flexWrap": "wrap",
+        "textAlign": "left",
         "semantic": "view"
       },
       {
@@ -7539,6 +7819,7 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
         "margin": {
           "top": 4
         },
+        "textAlign": "left",
         "text": "useCookie",
         "semantic": "button"
       },
@@ -7548,6 +7829,7 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
         "margin": {
           "top": 4
         },
+        "textAlign": "left",
         "text": "useBackground",
         "semantic": "button"
       },
@@ -7557,6 +7839,7 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
         "margin": {
           "top": 4
         },
+        "textAlign": "left",
         "text": "useFaceID",
         "semantic": "button"
       },
@@ -7566,6 +7849,7 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
         "margin": {
           "top": 4
         },
+        "textAlign": "left",
         "text": "useMap",
         "semantic": "button"
       },
@@ -7575,6 +7859,7 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
         "margin": {
           "top": 4
         },
+        "textAlign": "left",
         "text": "useMiniProgram",
         "semantic": "button"
       },
@@ -7584,6 +7869,7 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
         "margin": {
           "top": 4
         },
+        "textAlign": "left",
         "text": "useExtension",
         "semantic": "button"
       },
@@ -7595,6 +7881,7 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
         "margin": {
           "top": 6
         },
+        "textAlign": "left",
         "semantic": "text"
       },
       {
@@ -7606,6 +7893,7 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
           "bottom": 16
         },
         "lineHeight": "1.6",
+        "textAlign": "left",
         "text": "Capability 50/50 收官——web 真实能力（cookie=document.cookie / background=visibilitychange / face-id=WebAuthn）+ wx 原生（map=createMapContext / mini-program=navigateToMiniProgram）+ 宿主桥（data-channel / embedded / live / extension）——web 无标准 → 诚实 Err 降级",
         "semantic": "text"
       },
@@ -7624,6 +7912,7 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
         "margin": {
           "bottom": 12
         },
+        "textAlign": "left",
         "semantic": "view"
       },
       {
@@ -7634,6 +7923,7 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
         "margin": {
           "bottom": 8
         },
+        "textAlign": "left",
         "text": "⑮ 请求数据层（G-32 B6 前置：createRequestEngineering——R1 策略请求 / R2 useQuery SWR / R3 enqueue 队列 / R4 dedupe）",
         "semantic": "text"
       },
@@ -7650,6 +7940,7 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
           "left": 0
         },
         "flexWrap": "wrap",
+        "textAlign": "left",
         "semantic": "view"
       },
       {
@@ -7658,6 +7949,7 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
         "margin": {
           "top": 4
         },
+        "textAlign": "left",
         "text": "useQuery",
         "semantic": "button"
       },
@@ -7667,6 +7959,7 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
         "margin": {
           "top": 4
         },
+        "textAlign": "left",
         "text": "enqueue",
         "semantic": "button"
       },
@@ -7676,6 +7969,7 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
         "margin": {
           "top": 4
         },
+        "textAlign": "left",
         "text": "request 缓存",
         "semantic": "button"
       },
@@ -7687,6 +7981,7 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
         "margin": {
           "top": 6
         },
+        "textAlign": "left",
         "semantic": "text"
       },
       {
@@ -7698,6 +7993,7 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
           "bottom": 16
         },
         "lineHeight": "1.6",
+        "textAlign": "left",
         "text": "注入式请求数据层（mock client + compat storage 缓存底座，无真实网络）——R2 useQuery SWR（缓存命中即用 + in-flight 去重 + refresh/mutate/invalidate）；R3 enqueue 并发队列（FIFO + 上限 + 失败隔离）；R1 request 策略请求（ttl 缓存 + dedupe 合并 + 可选排队）——与四工厂同族注入式可单测；useQuery 点两次看第二次缓存命中",
         "semantic": "text"
       },
@@ -7716,6 +8012,7 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
         "margin": {
           "bottom": 12
         },
+        "textAlign": "left",
         "semantic": "view"
       },
       {
@@ -7726,6 +8023,7 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
         "margin": {
           "bottom": 8
         },
+        "textAlign": "left",
         "text": "⑯ 声明式导航（G-32 B5 尾巴：p-router-link E18——点击 emit navigate → createRouterEngineering 响应）",
         "semantic": "text"
       },
@@ -7742,23 +8040,27 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
           "left": 0
         },
         "flexWrap": "wrap",
+        "textAlign": "left",
         "semantic": "view"
       },
       {
         "id": 143,
         "parentId": 142,
+        "textAlign": "left",
         "text": "首页",
         "semantic": "p-router-link"
       },
       {
         "id": 144,
         "parentId": 142,
+        "textAlign": "left",
         "text": "个人中心",
         "semantic": "p-router-link"
       },
       {
         "id": 145,
         "parentId": 142,
+        "textAlign": "left",
         "text": "我的（switchTab）",
         "semantic": "p-router-link"
       },
@@ -7770,6 +8072,7 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
         "margin": {
           "top": 6
         },
+        "textAlign": "left",
         "semantic": "text"
       },
       {
@@ -7781,6 +8084,7 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
           "bottom": 16
         },
         "lineHeight": "1.6",
+        "textAlign": "left",
         "text": "E18 p-router-link 声明式导航（engineering.router-link，B5 工程原语最后节点）——点击 emit('navigate', { to, replace, switchTab })；父级 @navigate 调 rx.push/replace/switchTab（E11-E14 语义委托 mock router 录制，不真实导航）；组件零平台依赖（审计合规）+ web role=\"link\" 可访问性 · MP bindtap",
         "semantic": "text"
       },
@@ -7799,6 +8103,7 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
         "margin": {
           "bottom": 12
         },
+        "textAlign": "left",
         "semantic": "view"
       },
       {
@@ -7809,6 +8114,7 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
         "margin": {
           "bottom": 8
         },
+        "textAlign": "left",
         "text": "⑰ WebMCP 接入（E30：useMCP——把框架能力暴露为浏览器内 agent 可调用工具）",
         "semantic": "text"
       },
@@ -7825,6 +8131,7 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
           "left": 0
         },
         "flexWrap": "wrap",
+        "textAlign": "left",
         "semantic": "view"
       },
       {
@@ -7833,6 +8140,7 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
         "margin": {
           "top": 4
         },
+        "textAlign": "left",
         "text": "探测支持",
         "semantic": "button"
       },
@@ -7842,6 +8150,7 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
         "margin": {
           "top": 4
         },
+        "textAlign": "left",
         "text": "注册能力工具",
         "semantic": "button"
       },
@@ -7851,6 +8160,7 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
         "margin": {
           "top": 4
         },
+        "textAlign": "left",
         "text": "调用工具",
         "semantic": "button"
       },
@@ -7860,6 +8170,7 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
         "margin": {
           "top": 4
         },
+        "textAlign": "left",
         "text": "注销",
         "semantic": "button"
       },
@@ -7871,6 +8182,7 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
         "margin": {
           "top": 6
         },
+        "textAlign": "left",
         "semantic": "text"
       },
       {
@@ -7882,6 +8194,7 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
           "bottom": 16
         },
         "lineHeight": "1.6",
+        "textAlign": "left",
         "text": "E30 engineering.mcp——规范面：document.modelContext.registerTool + signal 注销（★非 navigator；规范无 unregisterTool）；框架差异化：能力面统一 CapResult<T> 契约 → 能力可自动派生为工具（ok→结果 / Err→isError+错误码）。本机浏览器未实现 WebMCP 时如实降级（isSupported=false，不抛错）——可用下面「调用工具」验证派生工具的归一行为（不依赖浏览器支持）。",
         "semantic": "text"
       },
@@ -7900,6 +8213,7 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
         "margin": {
           "bottom": 12
         },
+        "textAlign": "left",
         "semantic": "view"
       },
       {
@@ -7910,6 +8224,7 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
         "margin": {
           "bottom": 8
         },
+        "textAlign": "left",
         "text": "对照（wx.* 直写 → platformAPI.* 收口）",
         "semantic": "text"
       },
@@ -7922,6 +8237,7 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
           "bottom": 16
         },
         "lineHeight": "1.6",
+        "textAlign": "left",
         "text": " wx.showToast → api.ui.showToast · wx.showModal → api.ui.showModal · wx.showActionSheet → api.ui.showActionSheet · wx.setStorageSync → api.storage.set · wx.navigateTo → api.router.push · wx.switchTab → api.router.switchTab · wx.request → api.request ",
         "semantic": "text"
       }
@@ -7944,6 +8260,7 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
       {
         "id": 1,
         "parentId": 0,
+        "textAlign": "center",
         "text": "provide / inject",
         "semantic": "h2"
       },
@@ -7958,17 +8275,20 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
           "bottom": 8,
           "left": 0
         },
+        "textAlign": "center",
         "text": "页面 provide → 组件 inject（getApp().__proteusProvides 全局注册表桥）",
         "semantic": "p"
       },
       {
         "id": 3,
         "parentId": 0,
+        "textAlign": "center",
         "semantic": "inject-consumer"
       },
       {
         "id": 4,
         "parentId": 0,
+        "textAlign": "center",
         "text": "切换 user（裸 ref 联动 → 组件自动刷新）",
         "semantic": "button"
       },
@@ -7983,6 +8303,7 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
           "bottom": 8,
           "left": 0
         },
+        "textAlign": "center",
         "semantic": "p"
       }
     ]
@@ -8004,6 +8325,7 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
       {
         "id": 1,
         "parentId": 0,
+        "textAlign": "left",
         "text": "渲染后端可插拔（G-27）",
         "semantic": "p-heading"
       },
@@ -8011,6 +8333,7 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
         "id": 2,
         "parentId": 0,
         "color": "#888",
+        "textAlign": "left",
         "text": "同一份 C-IR 组件树 → 换 flag 切渲染后端——「语义收敛 + 后端实现」肉眼可见",
         "semantic": "p-text"
       },
@@ -8023,11 +8346,13 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
           "bottom": 16,
           "left": 0
         },
+        "textAlign": "left",
         "semantic": "section"
       },
       {
         "id": 4,
         "parentId": 3,
+        "textAlign": "left",
         "text": "① 选择后端（flag）",
         "semantic": "p-heading"
       },
@@ -8037,6 +8362,7 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
         "display": "flex",
         "flexWrap": "wrap",
         "gap": 8,
+        "textAlign": "left",
         "semantic": "div"
       },
       {
@@ -8053,6 +8379,7 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
         "borderRadius": 6,
         "backgroundColor": "#fff",
         "fontSize": 13,
+        "textAlign": "left",
         "semantic": "button"
       },
       {
@@ -8063,6 +8390,7 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
         "margin": {
           "top": 8
         },
+        "textAlign": "left",
         "semantic": "p-text"
       },
       {
@@ -8074,11 +8402,13 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
           "bottom": 16,
           "left": 0
         },
+        "textAlign": "left",
         "semantic": "section"
       },
       {
         "id": 9,
         "parentId": 8,
+        "textAlign": "left",
         "text": "② 来源：同一份 C-IR 树",
         "semantic": "p-heading"
       },
@@ -8097,6 +8427,7 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
         },
         "fontSize": 12,
         "lineHeight": "1.5",
+        "textAlign": "left",
         "semantic": "pre"
       },
       {
@@ -8108,17 +8439,20 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
           "bottom": 16,
           "left": 0
         },
+        "textAlign": "left",
         "semantic": "section"
       },
       {
         "id": 12,
         "parentId": 11,
+        "textAlign": "left",
         "text": "③ 渲染产出",
         "semantic": "p-heading"
       },
       {
         "id": 13,
         "parentId": 11,
+        "textAlign": "left",
         "semantic": "div"
       },
       {
@@ -8132,14 +8466,13 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
           "bottom": 4,
           "left": 0
         },
+        "textAlign": "left",
         "text": "vue-dom 真实 DOM（后端内联渲染）：",
         "semantic": "p-text"
       },
       {
         "id": 15,
         "parentId": 13,
-        "borderWidth": 1,
-        "borderColor": "#1a7af8",
         "borderRadius": 8,
         "padding": {
           "top": 12,
@@ -8152,6 +8485,7 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
         "flexWrap": "wrap",
         "gap": 8,
         "backgroundColor": "#1a7af80a",
+        "textAlign": "left",
         "semantic": "div"
       },
       {
@@ -8165,6 +8499,7 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
           "bottom": 4,
           "left": 0
         },
+        "textAlign": "left",
         "text": "各端控件快照（renderComponentSnapshot readback）：",
         "semantic": "p-text"
       },
@@ -8183,6 +8518,7 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
         },
         "fontSize": 12,
         "lineHeight": "1.5",
+        "textAlign": "left",
         "semantic": "pre"
       }
     ]
@@ -10239,6 +10575,7 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
       {
         "id": 1,
         "parentId": 0,
+        "textAlign": "center",
         "text": "缩放转场演示",
         "semantic": "h2"
       },
@@ -10247,6 +10584,7 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
         "parentId": 0,
         "color": "#888",
         "fontSize": 14,
+        "textAlign": "center",
         "text": "进入时底部滑入 + 放大，前页下沉缩放联动",
         "semantic": "p"
       },
@@ -10280,6 +10618,7 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
           "left": 0
         },
         "fontSize": 16,
+        "textAlign": "left",
         "semantic": "h3"
       },
       {
@@ -10293,6 +10632,7 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
         },
         "color": "#666",
         "fontSize": 13,
+        "textAlign": "left",
         "semantic": "p"
       },
       {
@@ -10301,6 +10641,7 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
         "margin": {
           "top": 20
         },
+        "textAlign": "center",
         "semantic": "div"
       },
       {
@@ -10313,6 +10654,7 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
           "left": 0
         },
         "color": "#1a7af8",
+        "textAlign": "center",
         "text": "→ 个人资料（层叠缩放：本页下沉 + 目标页滑入）",
         "semantic": "a"
       }
@@ -12285,18 +12627,21 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
       {
         "id": 1,
         "parentId": 0,
+        "textAlign": "center",
         "text": "用户中心",
         "semantic": "h2"
       },
       {
         "id": 2,
         "parentId": 0,
+        "textAlign": "center",
         "text": "（自定义路由需从非 tab 页发起）",
         "semantic": "p"
       },
       {
         "id": 3,
         "parentId": 0,
+        "textAlign": "center",
         "semantic": "div"
       },
       {
@@ -12309,6 +12654,7 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
           "left": 0
         },
         "color": "#1a7af8",
+        "textAlign": "center",
         "text": "转场演示（缩放-综合能力）",
         "semantic": "a"
       },
@@ -12322,6 +12668,7 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
           "left": 0
         },
         "color": "#1a7af8",
+        "textAlign": "center",
         "text": "订单列表（缩放进入）",
         "semantic": "a"
       },
@@ -12335,6 +12682,7 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
           "left": 0
         },
         "color": "#1a7af8",
+        "textAlign": "center",
         "text": "个人资料（半屏-自定义）",
         "semantic": "a"
       },
@@ -12348,6 +12696,7 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
           "left": 0
         },
         "color": "#1a7af8",
+        "textAlign": "center",
         "text": "个人资料（slideUp 自定义）",
         "semantic": "a"
       },
@@ -12361,6 +12710,7 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
           "left": 0
         },
         "color": "#1a7af8",
+        "textAlign": "center",
         "text": "个人资料（半屏-微信预设）",
         "semantic": "a"
       }
@@ -12383,6 +12733,7 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
       {
         "id": 1,
         "parentId": 0,
+        "textAlign": "center",
         "text": "个人资料",
         "semantic": "h2"
       }
@@ -12405,6 +12756,7 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
       {
         "id": 1,
         "parentId": 0,
+        "textAlign": "center",
         "text": "虚拟列表",
         "semantic": "h2"
       },
@@ -12416,12 +12768,14 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
         "margin": {
           "bottom": 16
         },
+        "textAlign": "center",
         "text": "10000 条数据，只渲染可视区（VirtualList 组件，item 高度 44）",
         "semantic": "p"
       },
       {
         "id": 3,
         "parentId": 0,
+        "textAlign": "center",
         "semantic": "virtual-list"
       }
     ]
@@ -13032,12 +13386,14 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
       {
         "id": 1,
         "parentId": 0,
+        "textAlign": "center",
         "text": "订单列表（分包）",
         "semantic": "h2"
       },
       {
         "id": 2,
         "parentId": 0,
+        "textAlign": "center",
         "semantic": "div"
       },
       {
@@ -13050,6 +13406,7 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
           "left": 0
         },
         "color": "#1a7af8",
+        "textAlign": "center",
         "text": "转场演示（层叠缩放：本页下沉 + 演示页滑入）",
         "semantic": "a"
       }

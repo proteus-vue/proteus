@@ -37,6 +37,10 @@
 
 > tier 是**加入该能力的成本档位**（人工按 Profile §3 标注，非实测毫秒）；supported 项的 tier = 它落地时所处档位；absent 候选的 tier = 若实现将归入的档位。
 
+## 多端一致性审计（批 14 · 对齐 CSS 标准）
+
+> ★批次 14（2026-10-04 · 多端一致性审计，用户「再看下我们已经实现的CSS哪些没有按照多端一致性实现的」）：对批 1–13 已实现的每个特性逐一对照 **CSS 标准（Web 为真值）**——★基准是 Web（浏览器真值），**不是「三端内部自洽」**（三端都是自研/原生绘制，容易互相看齐却集体偏离 Web）。已修：① line-height 顶对齐→**半行距居中**（批 13 修正）；② **命名色**（148 标准色）丢弃→归一（Web 生效）；③ **非 solid 边框线型**静默画成实线→**诊断跳过**；④ **text-align 语义级不可继承**→作为**继承**属性沿树传播；⑤ **box-sizing: content-box** 静默忽略→**诊断**；⑥ **枚举关键字大小写敏感**（`display: FLEX` 丢弃）→**大小写不敏感**（CSS 标准）。已确认对齐（无需改）：弹性轴默认（框架**显式声明** flex-direction 使其 3 端一致，绕过 Web(row)/Skyline(column) 默认分歧）、background 纯色、margin/padding/flex/background 简写展开。
+
 ## 超级应用能力清单（★优先口径：不按 demo 使用频次）
 
 > ★优先口径（用户 2026-10-04 明示）：「我们的目标不仅仅是当前项目使用到的，我们的目标是**承载超级应用**」。⇒ 批次选择**不按 demo 使用频次**，而按「超级应用是否会用到」+ 三端可实现性。下表的 status 用 today 取值（supported/folded-only/engine-only/absent）。
@@ -72,13 +76,13 @@
 | layout | `overflow: visible / hidden / scroll / auto` | supported | supported | supported | L2 | 直映射 | universal | 引擎封闭集；auto 折叠为 taffy Scroll |
 | value | `margin/padding 1–4 值简写 + background 纯色简写 + flex 简写` | — | — | supported | L1 | 编译期折叠 | conditional | ★批次 2/7（2026-10-04）：a) `margin: 8px 0` / `padding: 8px 12px` 按 CSS 标准展开为 {top,right,bottom,left}（auto 的边忽略）；b) `background: #fff`/`rgba(...)` 归一折进 backgroundColor；c) `flex: <g> [<s> [<b>]]` / `none` / `auto` 展开到 flexGrow/flexShrink/flexBasis（CSS 语义：省略 shrink=1、省略 basis=0）。取证：真项目这些简写高频。渐变/图片简写诊断跳过 |
 | unit | `width/height 百分比` | — | — | supported | L1 | 编译期折叠 | conditional | → widthRatio/heightRatio（比例字段） |
-| paint | `background-color（+ background 纯色简写）` | supported | supported | supported | L1 | 编译期折叠 | universal | 颜色编译期归一为 hex（rgb/rgba/transparent → hex；命名色/hsl/var ⇒ 诊断跳过）；★`background` 纯色简写折进 backgroundColor（渐变/图片诊断跳过，走引擎 fill-gradient 通道） |
+| paint | `background-color（+ background 纯色简写）` | supported | supported | supported | L1 | 编译期折叠 | universal | 颜色编译期归一为 hex：hex / rgb() / rgba() / **命名色（148 个标准色，批 14）** / transparent；hsl/var ⇒ 诊断跳过。★`background` 纯色简写折进 backgroundColor（渐变/图片诊断跳过）。★批 14 多端一致性审计修：命名色此前丢弃（Web 生效）⇒ 现查表归一（核心只认 hex） |
 | paint | `color` | supported | supported | supported | L1 | 编译期折叠 | universal | 同上颜色归一 |
 | paint | `font-size` | supported | supported | supported | L1 | 编译期折叠 | universal | px/数字（不支持百分比/keyword） |
 | paint | `border-radius` | supported | supported | supported | L1 | 编译期折叠 | universal | px/数字（宿主圆角绘制） |
 | paint | `opacity` | supported | supported | supported | L1 | 编译期折叠 | universal | 0–1 |
 | special | `box-sizing` | supported | supported | supported | L1 | 直映射 | universal | 两内核恒 border-box ⇒ 只作忠实记录、无副作用 |
-| paint | `border（简写）/ border-color / border-width` | supported | supported | supported | L1 | 编译期折叠 | universal | ★批次 5（2026-10-04）：`border: <width> <style> <color>` 简写解析为 borderWidth + borderColor（uniform 实线；逐边/styled 诊断跳过；var() 令牌色如实诊断）；**三端宿主真画**：iOS CALayer.border* · Android borderPaint 描边（含圆角路径）· 鸿蒙 OH_ArkUI_RenderNodeUtils_SetBorderWidth/Color。此前为 folded-only（折叠透传但宿主不画）——本批补齐绘制 |
+| paint | `border（简写）/ border-color / border-width` | supported | supported | supported | L1 | 编译期折叠 | universal | ★批次 5（2026-10-04）：`border: <width> <style> <color>` 简写解析为 borderWidth + borderColor（uniform **实线**）；**逐边**/非 solid 线型（dashed/dotted…）诊断跳过（★批 14 审计修：非 solid 此前**静默画成实线**=与 Web 偏差 ⇒ 现诊断跳过）；var() 令牌色如实诊断。**三端宿主真画**：iOS CALayer.border* · Android borderPaint 描边（含圆角路径）· 鸿蒙 OH_ArkUI_RenderNodeUtils_SetBorderWidth/Color |
 | motion | `transform（translate/scale/rotate/skew/perspective）` | supported | supported | engine-only | L1 | 编译期折叠 | conditional | ★引擎/宿主已支持（LStyle 的绘制通道 paint-only + 宿主动画桥），但编译期折叠面（parseStaticStyle）**未接 transform** ⇒ 「可扩展」现成落点：加进 APP_PAINT_FIELDS 即可 |
 | motion | `transform-origin` | supported | supported | engine-only | L2 | 编译期折叠 | conditional | 引擎有 transform_origin_x/y（paint-only），编译面未接 |
 | selector | `类选择器 .a / .a.b` | — | — | supported | L0 | 编译期折叠 | conditional | C1：<style> 类规则编译期匹配合并（按源序；无特异性权重） |
