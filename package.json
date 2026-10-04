@@ -19,6 +19,7 @@
     "bench:update": "tsx scripts/benchmark.ts --update",
     "build:aar": "bash platform/android/build-aar.sh",
     "build:mp": "pnpm --filter proteus-examples build:mp",
+    "build:app": "pnpm --filter proteus-examples build:app",
     "build:packages": "node scripts/build-packages.mjs",
     "build:showcase:mp": "pnpm --filter proteus-showcase build:mp",
     "build:showcase:web": "pnpm --filter proteus-showcase build:web",

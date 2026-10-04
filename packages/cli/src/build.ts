@@ -1,7 +1,7 @@
 // packages/cli/src/build.ts
 // proteus build —— 编译引擎独立可用（脱离 Vite）：扫描目录 .vue → 小程序四件套中的三件（wxml/js/wxss）
 // 说明：.json（page.json/app.json）由路由生成器负责（框架内 scripts/gen-routes.ts），CLI 专注页面编译
-// ★cli-plus M2：--target web|skyline|all 工程构建（复用项目 Vite 管线，spawn 计划纯函数）
+// ★cli-plus M2：--target web|skyline|app|all 工程构建（复用项目 Vite 管线，spawn 计划纯函数；app 见 buildAppScreenContent）
 // ★G-29 阶段 A：--compiler rust → 每页 Node/Rust 双编译语义等价校验（verifyDualCompilerEquivalence）——不一致构建红
 import fs from 'node:fs'
 import path from 'node:path'
@@ -73,12 +73,37 @@ function hasVueTsc(root: string): boolean {
  * 返回 { ok, target, outDir }——纯异步（测试注入 root）
  */
 export async function runTargetedBuildProgrammatic(
-  target: 'web' | 'skyline' | 'all',
+  target: 'web' | 'skyline' | 'app' | 'all',
   root = process.cwd(),
 ): Promise<{ ok: boolean; results: Array<{ target: string; ok: boolean }> }> {
   const cfgFile = path.join(root, 'proteus.config.ts')
   if (!fs.existsSync(cfgFile)) throw new Error(`缺少 ${path.relative(root, cfgFile)}——proteus build 需要框架配置驱动（create-proteus 模板自带）`)
   const config = (await loadProjectConfig(cfgFile)) as Record<string, unknown>
+  // ★★★A1（2026-10-04）：`app` 目标——App 端屏内容构建（路由 → 真实 SFC → 编译器 → 屏内容）。
+  //   先跑 gen-routes（mp，保证 auto-routes 最新）→ 逐页编译 → dist/app/screen-content.json。
+  if (target === 'app') {
+    console.log('[proteus] build --target app（App 屏内容：路由 → 真实 SFC → 编译器）')
+    try {
+      // ★webOnly:true —— 只更新**应用侧路由表**（auto-routes.ts），**不产 MP 专属产物、不清
+      //   dist/mp-weixin**（本仓既有语义，见下方 web 分支注释）。App 屏内容只依赖路由表；
+      //   用默认 gen-routes 会清 MP dist ⇒ 破坏 check:mp-artifacts（实测踩到）。
+      runGenRoutes({ config: config as never, root, webOnly: true })
+      const { buildAppScreenContent } = await import('./app-content')
+      const r = await buildAppScreenContent(root)
+      console.log(
+        `[proteus] ✅ App 屏内容 → ${path.relative(root, r.outFile)}（编译 ${r.compiled} 页 / 跳过 ${r.skipped}）`,
+      )
+      if (r.diagnostics.length) {
+        const uniq = [...new Set(r.diagnostics)]
+        console.warn(`[proteus] ⚠ ${uniq.length} 类页面诊断（多为 CSS class / 不支持语法；App 路径不吃 class 属缺口 C1）：`)
+        for (const d of uniq.slice(0, 8)) console.warn(`    · ${d}`)
+      }
+      return { ok: true, results: [{ target: 'app', ok: true }] }
+    } catch (e) {
+      console.error(`[proteus] App 屏内容构建失败：${(e as Error).message}`)
+      return { ok: false, results: [{ target: 'app', ok: false }] }
+    }
+  }
   const targets = target === 'all' ? (['web', 'skyline'] as const) : ([target] as const)
   const results: Array<{ target: string; ok: boolean }> = []
   for (const t of targets) {
@@ -120,7 +145,7 @@ export async function runTargetedBuildProgrammatic(
 }
 
 /** 工程构建计划（纯函数）：校验 package.json 脚本存在性 → spawn 参数列表（M2，复用 Vite 管线） */
-export function planTargetedBuild(root: string, target: 'web' | 'skyline' | 'all'): { command: string; args: string[]; script: string }[] {
+export function planTargetedBuild(root: string, target: 'web' | 'skyline' | 'app' | 'all'): { command: string; args: string[]; script: string }[] {
   const pkgPath = path.join(root, 'package.json')
   let scripts: Record<string, string> = {}
   if (fs.existsSync(pkgPath)) {
@@ -130,7 +155,8 @@ export function planTargetedBuild(root: string, target: 'web' | 'skyline' | 'all
       scripts = {}
     }
   }
-  const targets = target === 'all' ? (['web', 'skyline'] as const) : [target]
+  // ★app 无 npm 脚本（框架职责，恒走程序化路径）——此函数仅服务 web/skyline 的 spawn 计划。
+  const targets = target === 'all' ? (['web', 'skyline'] as const) : ((target === 'app' ? [] : [target]) as readonly ('web' | 'skyline')[])
   const plans: { command: string; args: string[]; script: string }[] = []
   for (const t of targets) {
     const script = TARGET_BUILD_SCRIPTS[t]
