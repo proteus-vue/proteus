@@ -477,6 +477,10 @@ func physFootprintMB() -> Double {
     ///   宿主真实触摸判定同用 500ms（见 `SelfDrawView` 的 `longpressMinDuration`）——
     ///   注入入口绕过时序（直接声明类型），真实触摸路径由 `touchesEnded` 按实测时长分流。
     func longpressAt(_ x: Double, _ y: Double) -> String
+    /// ★★★真触摸序列（「真实触摸事件对齐」2026-10-04）：宿主喂入 down→held→up，
+    ///   走 `SelfDrawView.classifyAndEmit`（与 `touchesEnded` 同一分流器）⇒ 按真实时长/位移判型。
+    ///   不同于 `tapAt`（直接声明类型，绕过时序）——本入口**覆盖时长/速度分流**这一环。
+    func simulateTouch(_ x: Double, _ y: Double, _ heldMs: Double) -> String
     /// ★V9：手势统计（命中/未命中/错误——证明"触摸真的走到了核心"）
     func gestureStatsJson() -> String
     /// ★★V4 A/B 开关：'v4'（默认：二进制返回 + 只更可见层）| 'v3'（旧路径：JSON 返回 + 全部层）
@@ -2236,10 +2240,23 @@ final class SelfDrawView: UIView {
         defer { touchStart = nil }
         guard let t = touches.first, let start = touchStart else { return }
         let p = t.location(in: self)
-        let dx = Double(p.x) - start.x
-        let dy = Double(p.y) - start.y
-        let dist = (dx * dx + dy * dy).squareRoot()
         let dt = CFAbsoluteTimeGetCurrent() - start.t
+        classifyAndEmit(startX: start.x, startY: start.y,
+                        endX: Double(p.x), endY: Double(p.y), dt: dt)
+    }
+
+    /// ★★★触摸分流器（tap / longpress / swipe）——**真触摸与宿主注入共用同一实现**（一处逻辑）。
+    ///
+    /// 【为什么抽出来】「真实触摸事件对齐」（2026-10-04）要求三端都能由**真事件序列**驱动交互，
+    ///   而 iOS 的 `UITouch` 无法从 JS/宿主伪造（见 `tapAt` 诚实边界）⇒ 宿主改为按**真实时长**
+    ///   喂入 down→held→up（`feedTouchSequence`），并**复用本分流器**——不再是 `tapAt` 那样
+    ///   直接声明类型、完全绕过时序判定。⇒ 三端一致：Android 平台 `GestureDetector`、
+    ///   iOS 本分流器、鸿蒙 ArkTS `.onTouch`（真时间戳）。
+    private func classifyAndEmit(startX: Double, startY: Double,
+                                endX: Double, endY: Double, dt: TimeInterval) {
+        let dx = endX - startX
+        let dy = endY - startY
+        let dist = (dx * dx + dy * dy).squareRoot()
         // ★★V10/V17：按「位移 + 时长 + 速度」**三分流**（此前大位移被静默丢弃）：
         //   · 小位移 + 短时（≤ tapMaxDuration）      → tap
         //   · 小位移 + 长时（≥ longpressMinDuration） → longpress
@@ -2250,8 +2267,8 @@ final class SelfDrawView: UIView {
         //     两时长阈值相等不留空档：tapMaxDuration == longpressMinDuration。
         // ★用**绝对内容坐标**（核心的 rects 是内容坐标；self.bounds 是视口）
         //   ⇒ 加上滚动偏移（内容被移了，但核心坐标不动）
-        let ax = Double(p.x) + Double(contentOffset.x)
-        let ay = Double(p.y) + Double(contentOffset.y)
+        let ax = endX + Double(contentOffset.x)
+        let ay = endY + Double(contentOffset.y)
         if dist > tapSlop {
             // 大位移：按**释放速度**判 swipe（px/ms，与 gesture 层同量纲）
             let speed = dt > 0 ? dist / (dt * 1000) : 0
@@ -2272,6 +2289,22 @@ final class SelfDrawView: UIView {
         }
         emitGesture(x: ax, y: ay, type: type)
     }
+
+    /// ★★★宿主喂入一次**真触摸序列**（down → held → up）——走 `classifyAndEmit`（与 `touchesEnded` 同一分流器）。
+    ///
+    /// 【与 `tapAt` 的分界】`tapAt` **直接声明类型 "tap"**（绕过时序判定）；本入口按**真实时长/位移**分流
+    ///   ⇒ 覆盖「时长/速度 → 语义手势」这一环（此前 iOS 侧唯一未覆盖处）。
+    ///   与 Android 注入真 `MotionEvent`（平台 GestureDetector）、鸿蒙 `uitest uiInput`（系统输入栈）同族。
+    /// - Parameters: x/y 内容坐标；heldMs 按住时长；dx/dy 位移（判 swipe）
+    @discardableResult
+    func feedTouchSequence(x: Double, y: Double, heldMs: Double, dx: Double = 0, dy: Double = 0) -> Int {
+        touchFeedCount += 1
+        classifyAndEmit(startX: x, startY: y, endX: x + dx, endY: y + dy, dt: heldMs / 1000.0)
+        return touchFeedCount
+    }
+
+    /// 宿主喂入的真触摸序列计数（判据：证明"事件确实进过分流器"）
+    private(set) var touchFeedCount = 0
 
     override func touchesCancelled(_ touches: Set<UITouch>, with event: UIEvent?) {
         touchStart = nil
@@ -3867,6 +3900,21 @@ final class SelfDrawBridge: NSObject, SelfDrawExports {
         let lastChain = gestureStats["last_chain_len"] ?? 0
         return jsonString(["ok": true, "x": x, "y": y, "target": lastTarget,
                            "chain_len": lastChain, "stats": gestureStats])
+    }
+
+    /// 见协议声明（`simulateTouch`）——★真触摸序列：喂 down→held→up 走 `classifyAndEmit`（按真实时长分流）。
+    func simulateTouch(_ x: Double, _ y: Double, _ heldMs: Double) -> String {
+        guard handle != 0 else { return "{\"ok\":false,\"error\":\"未建树\"}" }
+        guard let v = view else { return "{\"ok\":false,\"error\":\"视图未建\"}" }
+        let before = gestureDispatchCount
+        _ = v.feedTouchSequence(x: x, y: y, heldMs: heldMs)
+        let lastTarget = gestureStats["last_target"] ?? -1
+        let lastChain = gestureStats["last_chain_len"] ?? 0
+        return jsonString(["ok": true, "x": x, "y": y, "held_ms": heldMs,
+                           "target": lastTarget, "chain_len": lastChain,
+                           "touch_feeds": v.touchFeedCount,
+                           "gestures_fired": gestureDispatchCount - before,
+                           "stats": gestureStats])
     }
 
     /// ★矩阵 #7：**注入一次 swipe**（类型 = `swipe:<dir>`——与真实触摸路径的编码同形）。

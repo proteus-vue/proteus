@@ -656,6 +656,8 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
       {
         "id": 25,
         "parentId": 22,
+        "borderRadius": 4,
+        "fontSize": 12,
         "text": "npm run build:mp",
         "semantic": "code"
       },
@@ -678,6 +680,8 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
       {
         "id": 29,
         "parentId": 28,
+        "borderRadius": 4,
+        "fontSize": 12,
         "text": "customTags",
         "semantic": "code"
       },
@@ -695,6 +699,8 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
       {
         "id": 32,
         "parentId": 31,
+        "borderRadius": 4,
+        "fontSize": 12,
         "text": "mapping",
         "semantic": "code"
       },
@@ -712,6 +718,8 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
       {
         "id": 35,
         "parentId": 34,
+        "borderRadius": 4,
+        "fontSize": 12,
         "text": "disabled",
         "semantic": "code"
       },
@@ -1361,6 +1369,8 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
       {
         "id": 4,
         "parentId": 2,
+        "borderRadius": 3,
+        "fontSize": 12,
         "text": "@proteus-vue/devtools",
         "semantic": "code"
       },
@@ -1373,6 +1383,8 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
       {
         "id": 6,
         "parentId": 2,
+        "borderRadius": 3,
+        "fontSize": 12,
         "text": "/proteus-panel",
         "semantic": "code"
       },
@@ -1385,6 +1397,8 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
       {
         "id": 8,
         "parentId": 2,
+        "borderRadius": 3,
+        "fontSize": 12,
         "text": "createDevtoolsWsSource(url)",
         "semantic": "code"
       },
@@ -1397,6 +1411,8 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
       {
         "id": 10,
         "parentId": 2,
+        "borderRadius": 3,
+        "fontSize": 12,
         "text": "onEvent / appInfo() / deviceInfo() / sendCommand()",
         "semantic": "code"
       },
@@ -1744,6 +1760,7 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
       {
         "id": 4,
         "parentId": 2,
+        "borderRadius": 3,
         "text": "p-grid",
         "semantic": "code"
       },
@@ -2223,6 +2240,7 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
       {
         "id": 38,
         "parentId": 37,
+        "fontSize": 14,
         "text": "当前设备形态",
         "semantic": "h3"
       },
@@ -3761,6 +3779,10 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
       {
         "id": 31,
         "parentId": 30,
+        "fontSize": 16,
+        "margin": {
+          "bottom": 8
+        },
         "text": "SVG → Skyline 专项",
         "semantic": "h3"
       },
@@ -3855,6 +3877,7 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
       {
         "id": 46,
         "parentId": 45,
+        "fontSize": 15,
         "text": "路由嵌套演示",
         "semantic": "h3"
       },
@@ -4501,6 +4524,7 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
       {
         "id": 3,
         "parentId": 0,
+        "fontSize": 15,
         "text": "p-camera（<camera>）",
         "semantic": "h3"
       },
@@ -4519,6 +4543,7 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
       {
         "id": 6,
         "parentId": 0,
+        "fontSize": 15,
         "text": "p-map（<map>）",
         "semantic": "h3"
       },
@@ -4537,6 +4562,7 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
       {
         "id": 9,
         "parentId": 0,
+        "fontSize": 15,
         "text": "p-webview（<web-view>）",
         "semantic": "h3"
       },
@@ -4587,6 +4613,7 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
       {
         "id": 17,
         "parentId": 0,
+        "fontSize": 15,
         "text": "p-ad（<ad>）",
         "semantic": "h3"
       },
@@ -4605,6 +4632,7 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
       {
         "id": 20,
         "parentId": 0,
+        "fontSize": 15,
         "text": "p-keyboard-accessory（<keyboard-accessory>）",
         "semantic": "h3"
       },

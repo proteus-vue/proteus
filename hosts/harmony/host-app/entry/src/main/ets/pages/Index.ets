@@ -24,7 +24,7 @@ import { runAppStackProbe } from '../core/app-stack-probe';
 import { attach, renderCommands, stats, ProteusRenderStats, platformAnimBegin, platformAnimStep, platformAnimEnd, platformAnimSave, clearRoot, scrollRoot, gestureInstall, gestureSample } from 'libproteus_render.so';
 // ★P3-3：宿主动画入口（`<Transition>` 桥的鸿蒙腿——与 Android/iOS 同形）
 import { animTick, animActive } from 'libproteus_bench.so';
-import { bench4050, hitProbe, recycleProbe, spliceProbe, textProbe, kernelAnimProbe, memProbe, sfcStressProbe, sfcStressCommands, jsvmProbe, vaporProbe, animCurveBezier, hostRuntimeProbe, hostRtShellInstall, mountVirtualProbe, gestureHitPrepare, gestureHitAt, fontFamilyProbe, nodeRect, screenContentProbe, appStackExecutorProbe, appScreenCommands, version as rustVersion } from 'libproteus_bench.so';
+import { bench4050, hitProbe, recycleProbe, spliceProbe, textProbe, kernelAnimProbe, memProbe, sfcStressProbe, sfcStressCommands, jsvmProbe, vaporProbe, animCurveBezier, hostRuntimeProbe, hostRtShellInstall, mountVirtualProbe, gestureHitPrepare, gestureHitAt, fontFamilyProbe, nodeRect, screenContentProbe, appStackExecutorProbe, appScreenCommands, appScreenHitAt, version as rustVersion } from 'libproteus_bench.so';
 
 const DOMAIN = 0x0002;
 const TAG = 'ProteusRender';
@@ -373,6 +373,9 @@ struct Index {
   /** ★手势场景模式（`--ps scene gesture`）：只装真触摸接收器 + 渲染 SFC 夹具——不跑任何探针
    *  （探针日志会冲掉触摸样本行——实测：正常场景跑完 bench 后 PROTEUS_TOUCH 行被挤出缓冲区） */
   private gestureScene: boolean = (AppStorage.get<string>('proteusScene') ?? '') === 'gesture';
+  /** ★★★App 合成页真实触摸就绪（2026-10-04）：合成页建树完成 ⇒ 开启 `.onTouch → appScreenHitAt`。
+   *  非场景开关，是**时序门**（建树前触摸无处可打——由合成场景分支在 renderCommands 后置真）。 */
+  @State appTouchMode: boolean = false;
   /** ★Vapor A/B 场景（`--ps scene vapor-ab`，矩阵 #14 续）：Vapor vs Vue 运行时逐节点几何对照
    *  ——落独立报告 `vapor-ab.json`（不覆盖 runShort 的 vapor.json 证据） */
   private vaporAbScene: boolean = (AppStorage.get<string>('proteusScene') ?? '') === 'vapor-ab';
@@ -679,28 +682,46 @@ struct Index {
     .backgroundColor('#F7F7F9')
     .onTouch((e: TouchEvent) => {
       // ★矩阵 #7：手势场景——真触摸样本落盘（标准触摸链；uitest uiInput 真注入驱动）
-      if (!this.gestureScene) return;
-      try {
-        let typeName: string = 'other';
-        if (e.type === TouchType.Down) typeName = 'down';
-        else if (e.type === TouchType.Up) typeName = 'up';
-        else if (e.type === TouchType.Move) typeName = 'move';
-        else if (e.type === TouchType.Cancel) typeName = 'cancel';
-        const arr: TouchObject[] = (typeName === 'up' || typeName === 'cancel') ? e.changedTouches : e.touches;
-        if (arr.length > 0) {
-          const pt: TouchObject = arr[0];
-          const line: TouchSampleLine = { t: typeName, x: pt.x, y: pt.y, ts: e.timestamp };
-          gestureSample(JSON.stringify(line));
-          if (typeName === 'down') {
-            // 命中测试打在**按下点**（与 GestureDetector 的 ACTION_DOWN 语义同）
-            const hit: string = gestureHitAt(pt.x, pt.y);
-            gestureSample('{"hit":' + hit + ',"hx":' + pt.x.toFixed(2) + ',"hy":' + pt.y.toFixed(2) + '}');
-            hilog.info(DOMAIN, BENCH_TAG, 'PROTEUS_GESTURE_HIT x=%{public}s y=%{public}s %{public}s',
-              pt.x.toFixed(1), pt.y.toFixed(1), hit);
+      if (this.gestureScene) {
+        try {
+          let typeName: string = 'other';
+          if (e.type === TouchType.Down) typeName = 'down';
+          else if (e.type === TouchType.Up) typeName = 'up';
+          else if (e.type === TouchType.Move) typeName = 'move';
+          else if (e.type === TouchType.Cancel) typeName = 'cancel';
+          const arr: TouchObject[] = (typeName === 'up' || typeName === 'cancel') ? e.changedTouches : e.touches;
+          if (arr.length > 0) {
+            const pt: TouchObject = arr[0];
+            const line: TouchSampleLine = { t: typeName, x: pt.x, y: pt.y, ts: e.timestamp };
+            gestureSample(JSON.stringify(line));
+            if (typeName === 'down') {
+              // 命中测试打在**按下点**（与 GestureDetector 的 ACTION_DOWN 语义同）
+              const hit: string = gestureHitAt(pt.x, pt.y);
+              gestureSample('{"hit":' + hit + ',"hx":' + pt.x.toFixed(2) + ',"hy":' + pt.y.toFixed(2) + '}');
+              hilog.info(DOMAIN, BENCH_TAG, 'PROTEUS_GESTURE_HIT x=%{public}s y=%{public}s %{public}s',
+                pt.x.toFixed(1), pt.y.toFixed(1), hit);
+            }
           }
+        } catch (te) {
+          hilog.error(DOMAIN, BENCH_TAG, 'PROTEUS_GESTURE_TOUCH_ERROR %{public}s', JSON.stringify(te) ?? '');
         }
-      } catch (te) {
-        hilog.error(DOMAIN, BENCH_TAG, 'PROTEUS_GESTURE_TOUCH_ERROR %{public}s', JSON.stringify(te) ?? '');
+        return;
+      }
+      // ★★★App 合成页真实触摸（2026-10-04）：「真实触摸事件对齐」鸿蒙腿——`uitest uiInput` 真注入
+      //   → ArkTS `.onTouch`（真时间戳/坐标）→ `appScreenHitAt`（保留的合成内核树 hitTest）。
+      //   与 Android 真 MotionEvent、iOS `classifyAndEmit` 真触摸序列同族（真事件驱动交互，非装置内直调）。
+      if (this.appTouchMode) {
+        try {
+          const at: TouchObject[] = e.touches;
+          if (at.length > 0) {
+            const ptc: TouchObject = at[0];
+            const rh: string = appScreenHitAt(ptc.x, ptc.y);
+            hilog.info(DOMAIN, BENCH_TAG, 'PROTEUS_APP_TOUCH_JS x=%{public}s y=%{public}s %{public}s',
+              ptc.x.toFixed(1), ptc.y.toFixed(1), rh.substring(0, 80));
+          }
+        } catch (ate) {
+          hilog.error(DOMAIN, BENCH_TAG, 'PROTEUS_APP_TOUCH_ERROR %{public}s', JSON.stringify(ate) ?? '');
+        }
       }
     })
     .onAppear(() => {
@@ -913,6 +934,9 @@ struct Index {
             };
             const cmdsJson: string = appScreenCommands(JSON.stringify(cArgs));
             const cn: number = renderCommands(cmdsJson);
+            // ★★★真实触摸就绪（2026-10-04）：建树+上屏完成 ⇒ 开启 `.onTouch → appScreenHitAt`
+            //   （此后 `uitest uiInput` 真注入即驱动保留的合成树命中，读数累计进 app-screen-composite.json）。
+            this.appTouchMode = true;
             // ★C++ 侧同一次调用已建树+命中并写沙箱文件——ArkTS 读回它（含 hit_* 读数）转发到 hilog
             let cOut: string = `{"ok":${cn > 0},"page":"${entryName}","content_nodes":${(entryNodes as Array<Object>).length},"render_nodes":${cn}}`;
             try {

@@ -1075,23 +1075,48 @@ public class MainActivity extends Activity {
                     pf.close();
                     bmp.recycle();
                     cor.put("png", png.getName());
-                // ★★★交互上屏（2026-10-04）：在渲染出的页面上做**真机点按命中**（内核 hitTest，
-                //   与真实触摸同一条 dispatchHit 路径）⇒ 证明"渲染的页面可命中交互"。
+                // ★★★交互上屏 · 真实触摸（2026-10-04）：**注入真实 MotionEvent 序列**，走平台触摸栈
+                //   （`dispatchTouchEvent` → `onTouchEvent` → `GestureDetector` 定时/位移分流 → `report`）。
+                //   ★与上一版的分界：此前用 `dispatchHit(x,y)` **直调内核 hitTest**（装置内点按，绕过了
+                //     平台事件通道与 GestureDetector）⇒ 只能证明"内核能命中"，不能证明"真实触摸能驱动交互"。
+                //     本版与 `VaporRenderHost.tapAt` 同一条先例（进程内真 MotionEvent，无需 INJECT_EVENTS 权限）。
                 try {
-                    // ★命中坐标用**树的坐标空间**（app-screen-content 是设计单位 390×844——未物理化），
-                    //   不是视图物理像素（本仓"命中必须与核心同源"纪律）。
+                    // ★坐标空间与内核树一致（app-screen-content 设计单位 390×844，经 physicalizeTree 后
+                    //   即内核/视图空间；`onTouchEvent` 用 `ev.getX()/getY()` 直取——与 dispatchHit 同源）。
                     float vw = 390f, vh = 844f;
                     int hits = 0;
                     int firstTarget = -1;
-                    // 纵向扫若干点（页面内容自上而下）——统计命中数 + 首个目标节点
+                    int tapsRecognized = 0;
+                    // 纵向扫若干点（页面内容自上而下）——每点注入 DOWN+MOVE+UP 真序列
                     for (int k = 1; k <= 20; k++) {
-                        float py = vh * (k / 22f);
-                        comp.view().dispatchHit(vw * 0.3f, py);
+                        float px = vw * 0.3f, py = vh * (k / 22f);
+                        // ★时间戳**逐次前推 1 秒**（同 tapAt 先例）：相邻注入的 down−prev.up 间隔恒 >双击窗口
+                        //   ⇒ 不被判成双击（否则 GestureDetector 吞掉 tap，识别为 0）。
+                        long tTap = android.os.SystemClock.uptimeMillis() + 1000L * k;
+                        android.view.MotionEvent down = android.view.MotionEvent.obtain(
+                                tTap, tTap, android.view.MotionEvent.ACTION_DOWN, px, py, 0);
+                        comp.view().dispatchTouchEvent(down);
+                        down.recycle();
+                        android.view.MotionEvent move = android.view.MotionEvent.obtain(
+                                tTap, tTap + 20, android.view.MotionEvent.ACTION_MOVE, px + 1f, py + 1f, 0);
+                        comp.view().dispatchTouchEvent(move);
+                        move.recycle();
+                        android.view.MotionEvent up = android.view.MotionEvent.obtain(
+                                tTap, tTap + 40, android.view.MotionEvent.ACTION_UP, px + 1f, py + 1f, 0);
+                        comp.view().dispatchTouchEvent(up);
+                        up.recycle();
                         if (comp.view().lastHitTarget >= 0) { hits++; if (firstTarget < 0) firstTarget = comp.view().lastHitTarget; }
+                        if ("tap".equals(comp.view().lastGestureType)) tapsRecognized++;
                     }
                     cor.put("hit_points_hit", hits);
                     cor.put("hit_first_target", firstTarget);
                     cor.put("hit_chain_len", comp.view().lastHitChain.length);
+                    // ★真触摸证据（非装置内直调）：事件确实进过平台触摸栈 + 识别器判出了语义手势
+                    cor.put("real_touch", true);
+                    cor.put("touch_events", comp.view().touchEventCount);
+                    cor.put("gesture_type", comp.view().lastGestureType);
+                    cor.put("gesture_target", comp.view().lastGestureTarget);
+                    cor.put("taps_recognized", tapsRecognized);
                 } catch (Throwable he) {
                     cor.put("hit_error", he.getClass().getSimpleName() + ": " + he.getMessage());
                 }
