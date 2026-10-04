@@ -303,11 +303,54 @@ const kebabToCamel = (s: string): string => s.replace(/-([a-z])/g, (_, c: string
  *   `style="height: 56px; ..."`；不支持它等于"模板里的样式全部丢失且无提示"。
  *   本函数对**认不出的键/值**产出诊断（不静默吞——本仓纪律）。
  */
+/**
+ * ★批次 9（CSS 兼容对齐 · 超级应用承载）：**CSS 自定义属性（设计令牌）→ 编译期折叠**。
+ *
+ * 【为什么必须有（超级应用最大的结构缺口）】现代前端/组件库几乎全靠设计令牌
+ *   （`var(--sp-3)` / `var(--brand)`）——真项目里 `var()` 出现 **242 处**。App 折叠面**无运行时
+ *   CSS 引擎** ⇒ `var()` 编译期不解析就整条丢弃（"布局对、样式空"）。Web/Skyline 由各自 CSS
+ *   运行时处理 `var()`（本仓不干预），App 端在编译期把令牌**替换成字面值**。
+ *
+ * 【令牌来源】项目 `proteus.config.ts` 的 `globalStyle`（如 `styles/tokens.css`）——同一份
+ *   令牌文件 Web/MP/App 三端消费（单一事实源）。本函数解析其中的 `--name: value` 声明。
+ *
+ * 【诚实边界】只支持**字面值**令牌（含 `var()` 引用另一令牌 ⇒ 递归展开）；`calc()`/`env()` 等
+ *   动态令牌值不解析（保留 `var()` 由调用方诊断）。`@media` 内的令牌同样被提取（无媒体上下文，
+ *   取声明值——与"取任一值"的保守一致）。
+ */
+export function parseCssVarTokens(css: string): Record<string, string> {
+  const out: Record<string, string> = {}
+  const body = css.replace(/\/\*[\s\S]*?\*\//g, '')
+  const re = /(--[A-Za-z0-9_-]+)\s*:\s*([^;{}]+)/g
+  let m: RegExpExecArray | null
+  while ((m = re.exec(body))) out[m[1]!.trim()] = m[2]!.trim()
+  return out
+}
+
+/** 把 `var(--x[, fallback])` 替换为令牌值（递归展开；未知且无 fallback ⇒ 原样保留）。 */
+export function substituteCssVars(value: string, tokens: Record<string, string>): string {
+  if (!value.includes('var(')) return value
+  let v = value
+  for (let i = 0; i < 8; i++) {
+    let changed = false
+    v = v.replace(/var\(\s*(--[A-Za-z0-9_-]+)\s*(?:,\s*([^()]*))?\)/g, (full, name: string, fallback?: string) => {
+      const t = tokens[name]
+      if (t !== undefined) { changed = true; return t }
+      if (fallback !== undefined) { changed = true; return fallback.trim() }
+      return full
+    })
+    if (!changed) break
+  }
+  return v
+}
+
 export function parseStaticStyle(
   css: string,
   pushDiag: (msg: string, hint?: string) => void,
   /** ★批次 1：**逐属性**记录哪些引擎字段来自 `!important` 声明（层叠排序用；缺省不记） */
   importantOut?: Set<string>,
+  /** ★批次 9：设计令牌表（`--name` → 值）——`var()` 编译期折叠；缺省则 var() 原样（会在后续诊断） */
+  tokens?: Record<string, string>,
 ): Record<string, unknown> {
   const out: Record<string, unknown> = {}
   for (const part of css.split(';')) {
@@ -322,6 +365,8 @@ export function parseStaticStyle(
     let important = false
     const impMatch = /^(.*?)\s*!important\s*$/i.exec(rawVal)
     if (impMatch) { rawVal = impMatch[1]!.trim(); important = true }
+    // ★批次 9：`var()` 令牌折叠（在键/值解析**之前**——令牌可能承载整个值或一段）
+    if (tokens) rawVal = substituteCssVars(rawVal, tokens)
     const markImportant = (engineKey: string): void => { if (important) importantOut?.add(engineKey) }
     const key = kebabToCamel(rawKey)
     // 四边：`margin-bottom` / `padding-left` …
@@ -563,7 +608,7 @@ function specificityOf(segments: ClassStyleSegment[]): [number, number, number] 
 }
 
 /** 解析 `<style>` 文本 → 选择器规则表（源序）；不支持的整条跳过并计数（调用方决定是否诊断） */
-export function parseClassRules(css: string): { rules: ClassStyleRule[]; skipped: number } {
+export function parseClassRules(css: string, tokens?: Record<string, string>): { rules: ClassStyleRule[]; skipped: number } {
   const rules: ClassStyleRule[] = []
   let skipped = 0
   let order = 0
@@ -588,7 +633,7 @@ export function parseClassRules(css: string): { rules: ClassStyleRule[]; skipped
         continue
       }
       const important = new Set<string>()
-      const style = parseStaticStyle(decls, () => {}, important)
+      const style = parseStaticStyle(decls, () => {}, important, tokens)
       if (Object.keys(style).length === 0) continue
       rules.push({
         segments: parsed.segments,
@@ -749,8 +794,9 @@ function matchChain(rule: ClassStyleRule, ancestors: StyleMatchNode[], self: Sty
 export function parseClassStyles(
   css: string,
   pushDiag?: (msg: string, hint?: string) => void,
+  tokens?: Record<string, string>,
 ): Record<string, Record<string, unknown>> {
-  const { rules, skipped } = parseClassRules(css)
+  const { rules, skipped } = parseClassRules(css, tokens)
   const out: Record<string, Record<string, unknown>> = {}
   for (const r of rules) {
     // 兼容旧形态：只收「单段、纯类」规则（`segments[0]` 无 tag 且恰一个类）
@@ -1019,6 +1065,8 @@ export function buildLayoutTemplate(
   source: string,
   filename = 'anonymous.vue',
   compat?: Pick<VueCompatDeps, 'sfcParse' | 'domParse'>,
+  /** ★批次 9：设计令牌表（`--name`→值，来自项目 `globalStyle`）——SFC 内 `var()` 编译期折叠 */
+  tokens?: Record<string, string>,
 ): LayoutTemplateResult {
   const diagnostics: VaporDiagnostic[] = []
   const nodes: LayoutNode[] = []
@@ -1057,7 +1105,7 @@ export function buildLayoutTemplate(
   const classRules: ClassStyleRule[] = []
   for (const blk of desc.styles ?? []) {
     if (!blk?.content) continue
-    const { rules, skipped } = parseClassRules(blk.content)
+    const { rules, skipped } = parseClassRules(blk.content, tokens)
     classRules.push(...rules)
     if (skipped > 0) {
       diag(
@@ -1423,7 +1471,7 @@ export function buildLayoutTemplate(
       for (const p of n.props ?? []) {
         if (p.type === 6 /* ATTRIBUTE */ && p.name === 'style' && p.value?.content) {
           const inlineImportantThis = new Set<string>()
-          const inline = parseStaticStyle(p.value.content, (m, hint) => diag(`${tag}(id=${id}) ${m}`, hint), inlineImportantThis)
+          const inline = parseStaticStyle(p.value.content, (m, hint) => diag(`${tag}(id=${id}) ${m}`, hint), inlineImportantThis, tokens)
           // ★批次 1 层叠（与 CSS 一致）：inline `!important` > class `!important` > inline 普通 > class 普通。
           //   class 里 important 的字段不被 inline 普通声明覆盖（除非 inline 那条也是 important）。
           for (const [k, v] of Object.entries(inline)) {

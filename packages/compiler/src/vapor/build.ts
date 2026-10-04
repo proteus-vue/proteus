@@ -72,6 +72,8 @@ export interface VaporBuildOptions {
    * 缺省用本仓锁定的版本（`package.json` 的 `@vue/compiler-sfc`）。
    */
   compat?: import('./sources').VueCompatDeps
+  /** ★批次 9：设计令牌表（`--name`→值）——SFC 内 `var()` 编译期折叠（与屏内容路径同源） */
+  tokens?: Record<string, string>
 }
 
 /**
@@ -200,7 +202,7 @@ export function buildVaporSubscriptions(source: string, filename = 'anonymous.vu
   //   ★单段插值（`{{ x }}`，无静态段）**不合成**——产物与既有逐字节一致（既有回归锁）。
   const textSegsByNode = new Map<number, TextSegment[]>()
   {
-    const tplRes = buildLayoutTemplate(source, filename, opts.compat)
+    const tplRes = buildLayoutTemplate(source, filename, opts.compat, opts.tokens)
     for (const n of tplRes.template.nodes) {
       if (n.textSegments && n.textSegments.length > 0) textSegsByNode.set(n.id, n.textSegments)
     }

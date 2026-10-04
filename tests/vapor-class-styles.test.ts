@@ -12,7 +12,7 @@
 //   ⑤ 认不出的声明值仍走 parseStaticStyle 折叠面（px/数字；百分比宽高→比例）
 
 import { describe, it, expect } from 'vitest'
-import { buildLayoutTemplate, parseClassStyles, parseStaticStyle, stripScopeSuffix, normalizeCssColor } from '@proteus-vue/compiler'
+import { buildLayoutTemplate, parseClassStyles, parseStaticStyle, stripScopeSuffix, normalizeCssColor, parseCssVarTokens, substituteCssVars } from '@proteus-vue/compiler'
 
 const SFC = `<template>
   <view class="card">
@@ -503,5 +503,48 @@ describe('★批次 8 · right/bottom（absolute 定位）', () => {
     expect((n!.style as { right?: number }).right).toBe(6)
     expect((n!.style as { bottom?: number }).bottom).toBe(6)
     expect((n!.style as { position?: string }).position).toBe('absolute')
+  })
+})
+
+// ★★★批次 9（CSS 兼容对齐 · 超级应用承载）：CSS 自定义属性（设计令牌）编译期折叠——2026-10-04
+describe('★批次 9 · CSS 变量（var() 令牌）编译期折叠', () => {
+  it('① parseCssVarTokens：解析 --name: value（含注释剔除）', () => {
+    const t = parseCssVarTokens('/* c */ :root { --sp-3: 12px; --text: #1c1b22; --brand-soft: rgba(124, 92, 255, 0.10) }')
+    expect(t['--sp-3']).toBe('12px')
+    expect(t['--text']).toBe('#1c1b22')
+    expect(t['--brand-soft']).toBe('rgba(124, 92, 255, 0.10)')
+  })
+
+  it('② substituteCssVars：递归展开 + fallback + 未知保留', () => {
+    const t = parseCssVarTokens('--a: var(--b); --b: 8px; --c: #fff')
+    expect(substituteCssVars('var(--a)', t), '递归 --a→--b→8px').toBe('8px')
+    expect(substituteCssVars('var(--missing, 4px)', t), 'fallback').toBe('4px')
+    expect(substituteCssVars('var(--missing)', t), '未知无 fallback ⇒ 原样').toBe('var(--missing)')
+  })
+
+  it('③ parseStaticStyle + tokens：令牌值折进引擎字段（长度/颜色/多值简写）', () => {
+    const t = parseCssVarTokens('--sp-3: 12px; --sp-text: #1c1b22; --gap: 8px')
+    expect(parseStaticStyle('padding: var(--sp-3)', () => {}, undefined, t)).toEqual({ padding: { top: 12, right: 12, bottom: 12, left: 12 } })
+    expect(parseStaticStyle('color: var(--sp-text)', () => {}, undefined, t)).toEqual({ color: '#1c1b22' })
+    expect(parseStaticStyle('padding: var(--sp-3) var(--gap)', () => {}, undefined, t)).toEqual({ padding: { top: 12, right: 8, bottom: 12, left: 8 } })
+  })
+
+  it('④ 无 tokens（null）⇒ var() 不折（原样，走既有诊断——不静默）', () => {
+    const d: string[] = []
+    expect(parseStaticStyle('padding: var(--sp-3)', (m) => d.push(m))).toEqual({})
+    expect(d.length).toBeGreaterThan(0)
+  })
+
+  it('⑤ 端到端：<style> class 里的 var() 经 tokens 折进节点 style', () => {
+    const tokens = parseCssVarTokens('--sp-3: 12px; --line: #e8e9f0; --radius-md: 12px')
+    const sfc = `<template><view class="card">x</view></template>
+<script setup>const z = 1</script>
+<style>
+.card { padding: var(--sp-3); border-radius: var(--radius-md); background-color: var(--line) }
+</style>`
+    const r = buildLayoutTemplate(sfc, 'pages/card.vue', undefined, tokens)
+    const n = r.template.nodes.find((x) => (x.style as { borderRadius?: number }).borderRadius === 12)
+    expect((n!.style as { padding?: unknown }).padding).toEqual({ top: 12, right: 12, bottom: 12, left: 12 })
+    expect((n!.style as { backgroundColor?: string }).backgroundColor).toBe('#e8e9f0')
   })
 })

@@ -99,6 +99,9 @@ export {
   resolveClassStyles,
   normalizeCssColor,
   stripScopeSuffix,
+  // ★批次 9（2026-10-04）：CSS 自定义属性（设计令牌）编译期折叠
+  parseCssVarTokens,
+  substituteCssVars,
   parsePaintDeclAttr,
   isPaintDeclAttr,
   compileEvents,
