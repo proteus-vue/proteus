@@ -242,6 +242,14 @@ public class ProteusHostView extends ViewGroup {
         nodeRadiusCorners.put(nodeId, mask);
     }
 
+    /** ★批次 36：节点 id → 字体角色（`fontFamily` 归一；缺省不存 = system） */
+    private final Map<Integer, String> nodeFontRole = new HashMap<>();
+    /** 场景注入某节点的字体角色 */
+    public void setNodeFontRole(int nodeId, String role) {
+        if (role == null || role.isEmpty()) { nodeFontRole.remove(nodeId); return; }
+        nodeFontRole.put(nodeId, role);
+    }
+
     /** 场景注入某节点的变换原点（`[x, y]` 盒分数）——建树时由 LightsHost/MainActivity 调用 */
     public void setNodeTransformOrigin(int nodeId, float ox, float oy) {
         nodeTransformOrigin.put(nodeId, new float[]{ox, oy});
@@ -1126,6 +1134,7 @@ public class ProteusHostView extends ViewGroup {
         nodeClipKindAndBase.clear();
         nodeTransformOrigin.clear();
         nodeRadiusCorners.clear();
+        nodeFontRole.clear();
         animTx.clear();
         animColor.clear();
         animTextColor.clear();
@@ -2157,6 +2166,7 @@ public class ProteusHostView extends ViewGroup {
         int lastWeight = -1;   // ★批次 3：字重变化才重建 typeface（-1 = 首次必设，与默认 paint 对齐）
         float lastLetter = Float.NaN;   // ★批次 20：字距变化才 setLetterSpacing（NaN = 首次必设）
         int lastDecor = -1;   // ★批次 35：装饰变化才设下划线/删除线
+        String lastFamRole = null;   // ★批次 36：字体角色变化才重设 typeface
         int lastAlign = -1;    // ★批次 4：文本对齐变化才设 Paint.Align
         final java.util.Set<Integer> skip = skipCmdIndices;   // ★被载体提升的指令：跳过（否则重影）
         final int[] ids = cmdNodeIds;
@@ -2454,9 +2464,12 @@ public class ProteusHostView extends ViewGroup {
                 }
                 // ★批次 3：字重只在**变化时**设置 typeface（>=600 ⇒ BOLD；缺省 400 = normal，
                 //   与既有 `typefaceOf(role, weight)` 同判据）——同字重连排时零开销。
-                if (c.fontWeight != lastWeight) {
-                    textPaint.setTypeface(ProteusHostView.typefaceOf(null, c.fontWeight, null));
+                // ★批次 36：字体角色（节点侧表）优先——角色或字重变化都重设 typeface
+                final String famRole = (ids != null && i < ids.length) ? nodeFontRole.get(ids[i]) : null;
+                if (c.fontWeight != lastWeight || !java.util.Objects.equals(famRole, lastFamRole)) {
+                    textPaint.setTypeface(ProteusHostView.typefaceOf(famRole, c.fontWeight, null));
                     lastWeight = c.fontWeight;
+                    lastFamRole = famRole;
                 }
                 // ★批次 20：字距（仅在变化时设——同字距连排零开销）；Android 单位 em ⇒ px/字号
                 if (c.letterSpacing != lastLetter) {

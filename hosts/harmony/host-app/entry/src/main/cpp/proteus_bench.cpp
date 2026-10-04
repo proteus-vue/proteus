@@ -4326,6 +4326,8 @@ static napi_value AppScreenCommands(napi_env env, napi_callback_info info) {
             { std::string to; if (jstr(it.c_str(), it.size(), "textOverflow", &to) && to == "ellipsis") arr += ",\"textOverflowEllipsis\":1"; }
             // ★批次 35：文本装饰（underline / line-through）
             { std::string td; if (jstr(it.c_str(), it.size(), "textDecoration", &td) && td != "none") arr += ",\"textDecoration\":\"" + jsonEscape(td) + "\""; }
+            // ★批次 36：字体角色（font-family → role；鸿蒙按可用字族映射，缺则回落默认）
+            { std::string ff; if (jstr(it.c_str(), it.size(), "fontFamily", &ff) && !ff.empty()) arr += ",\"fontFamily\":\"" + jsonEscape(ff) + "\""; }
             // ★批次 13：行盒高（lineHeight token → 物理 px；倍数×fs 或 px）——半行距居中用
             {
                 std::string lhTok; jstr(it.c_str(), it.size(), "lineHeight", &lhTok);

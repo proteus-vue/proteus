@@ -1921,6 +1921,7 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
           "bottom": 5,
           "left": 8
         },
+        "fontFamily": "monospace",
         "fontSize": 12,
         "semantic": "input"
       },
@@ -1956,6 +1957,7 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
           "bottom": 5,
           "left": 8
         },
+        "fontFamily": "monospace",
         "fontSize": 12,
         "semantic": "input"
       },
@@ -2093,6 +2095,7 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
         "parentId": 29,
         "color": "#bbb",
         "fontSize": 11,
+        "fontFamily": "monospace",
         "semantic": "span"
       },
       {
@@ -2135,6 +2138,7 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
       {
         "id": 38,
         "parentId": 37,
+        "fontFamily": "monospace",
         "fontSize": 11,
         "padding": {
           "top": 1,
@@ -5827,6 +5831,24 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
         "textAlign": "center",
         "text": "line-through 删除线",
         "semantic": "span"
+      },
+      {
+        "id": 79,
+        "parentId": 0,
+        "margin": {
+          "top": 12,
+          "bottom": 12
+        },
+        "marginAuto": {
+          "right": true,
+          "left": true
+        },
+        "fontFamily": "monospace",
+        "color": "#333",
+        "fontSize": 13,
+        "textAlign": "center",
+        "text": "font-family: monospace",
+        "semantic": "div"
       }
     ]
   },

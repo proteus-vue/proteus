@@ -511,6 +511,19 @@ describe('★C1 最小切片 · SFC <style> 单类规则 → class→节点样�
     expect((t?.style as { textDecoration?: string })?.textDecoration, '子继承 underline').toBe('underline')
   })
 
+  it('★⑦v font-family → 字体角色（批次 36 · ★基准 = Web）：清单归一 + 继承 + 自定义族', () => {
+    // 【为什么（以 web 为基准）】`font-family` 候选清单 → 角色（与 renderer-app 同一映射）；可继承。
+    expect((parseStaticStyle('font-family: monospace', () => {}) as { fontFamily?: string }).fontFamily, 'monospace').toBe('monospace')
+    expect((parseStaticStyle("font-family: 'SF Mono', Consolas, monospace", () => {}) as { fontFamily?: string }).fontFamily, '清单首命中').toBe('monospace')
+    expect((parseStaticStyle('font-family: system-ui', () => {}) as { fontFamily?: string }).fontFamily, 'system-ui ⇒ system').toBe('system')
+    expect((parseStaticStyle("font-family: 'Dancing Script'", () => {}) as { fontFamily?: string }).fontFamily, '自定义族透传').toBe('custom:Dancing Script')
+    // 继承：父声明 ⇒ 子文本继承
+    const sfc = `<template>\n  <view class="m"><text>code</text></view>\n</template>\n<style>\n.m { font-family: monospace }\n</style>`
+    const r = buildLayoutTemplate(sfc, 'ff.vue')
+    const t = r.template.nodes.find((n) => (n as { text?: string }).text === 'code')
+    expect((t?.style as { fontFamily?: string })?.fontFamily, '子继承 monospace').toBe('monospace')
+  })
+
   it('★⑧ 元素/类型选择器 + @keyframes 跳过（C1 收尾）', () => {
     // 【真项目形态】examples 有 9 处元素选择器（h3/code…）+ 6 处 @keyframes 关键帧被误当选择器
     const sfc = `<template>
