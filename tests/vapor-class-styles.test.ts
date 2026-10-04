@@ -125,6 +125,36 @@ describe('★C1 最小切片 · SFC <style> 单类规则 → class→节点样�
     expect((m.c as { color?: string }).color, 'class 里的 rgba 归一为 hex').toBe('#ffffffcc')
   })
 
+  it('★⑧ 元素/类型选择器 + @keyframes 跳过（C1 收尾）', () => {
+    // 【真项目形态】examples 有 9 处元素选择器（h3/code…）+ 6 处 @keyframes 关键帧被误当选择器
+    const sfc = `<template>
+      <view class="doc">
+        <text>普通</text>
+        <code>let x = 1</code>
+        <h3>标题</h3>
+      </view>
+    </template>
+    <script setup>const z = 1</script>
+    <style scoped>
+    .doc code { background-color: #f5f5f5; border-radius: 4 }
+    h3 { font-size: 22; color: #111111 }
+    @keyframes spin { from { opacity: 0 } to { opacity: 1 } 0% { opacity: 0 } 100% { opacity: 1 } }
+    </style>`
+    const r = buildLayoutTemplate(sfc, 'pages/doc.vue')
+    expect(r.ok).toBe(true)
+    // 元素选择器 `.doc code`：code 节点拿到背景色（类链 .doc + 元素 code）
+    const codeNode = r.template.nodes.find((n) => (n.style as { backgroundColor?: string }).backgroundColor === '#f5f5f5')
+    expect(codeNode, '★元素选择器 .doc code 匹配到 code 节点').toBeTruthy()
+    expect(codeNode!.tag, '确实是 code 节点').toBe('code')
+    // 纯元素选择器 h3：h3 节点拿到字号
+    const h3Node = r.template.nodes.find((n) => (n.style as { fontSize?: number }).fontSize === 22)
+    expect(h3Node, '★纯元素选择器 h3 匹配').toBeTruthy()
+    expect(h3Node!.tag, '确实是 h3 节点').toBe('h3')
+    // @keyframes 的 from/to/0% 不产生样式（不应用到任何节点）
+    const anyOpacity = r.template.nodes.some((n) => 'opacity' in (n.style as object))
+    expect(anyOpacity, '@keyframes 关键帧不误当选择器').toBe(false)
+  })
+
   it('⑤ 折叠面同源：百分比宽高 → 比例字段（与 inline style 同一 parseStaticStyle）', () => {
     const m = parseClassStyles('.full { width: 100%; height: 50 }')
     expect((m.full as { widthRatio?: number }).widthRatio, 'width:100% → widthRatio 1').toBe(1)
