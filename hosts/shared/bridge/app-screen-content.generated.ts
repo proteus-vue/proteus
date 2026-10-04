@@ -4029,6 +4029,24 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
           "left": 20
         },
         "borderRadius": 12,
+        "fillGradient": {
+          "kind": "linear",
+          "angle": 135,
+          "stops": [
+            {
+              "offset": 0,
+              "color": "#7c5cff"
+            },
+            {
+              "offset": 0.5,
+              "color": "#39d0c4"
+            },
+            {
+              "offset": 1,
+              "color": "#ff6b9d"
+            }
+          ]
+        },
         "semantic": "div"
       },
       {
@@ -4100,6 +4118,24 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
           "left": 20
         },
         "borderRadius": 12,
+        "fillGradient": {
+          "kind": "linear",
+          "angle": 135,
+          "stops": [
+            {
+              "offset": 0,
+              "color": "#7c5cff"
+            },
+            {
+              "offset": 0.5,
+              "color": "#39d0c4"
+            },
+            {
+              "offset": 1,
+              "color": "#ff6b9d"
+            }
+          ]
+        },
         "semantic": "div"
       },
       {
@@ -4171,6 +4207,24 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
           "left": 20
         },
         "borderRadius": 12,
+        "fillGradient": {
+          "kind": "linear",
+          "angle": 135,
+          "stops": [
+            {
+              "offset": 0,
+              "color": "#7c5cff"
+            },
+            {
+              "offset": 0.5,
+              "color": "#39d0c4"
+            },
+            {
+              "offset": 1,
+              "color": "#ff6b9d"
+            }
+          ]
+        },
         "semantic": "div"
       },
       {
@@ -5677,6 +5731,40 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
         "fontSize": 12,
         "textAlign": "center",
         "text": "覆盖层（pointer-events:none）",
+        "semantic": "div"
+      },
+      {
+        "id": 74,
+        "parentId": 0,
+        "width": 240,
+        "height": 48,
+        "margin": {
+          "top": 16,
+          "bottom": 16
+        },
+        "marginAuto": {
+          "right": true,
+          "left": true
+        },
+        "fillGradient": {
+          "kind": "linear",
+          "angle": 135,
+          "stops": [
+            {
+              "offset": 0,
+              "color": "#1a7af8"
+            },
+            {
+              "offset": 1,
+              "color": "#7c5cff"
+            }
+          ]
+        },
+        "borderRadius": 8,
+        "color": "#ffffff",
+        "fontSize": 12,
+        "textAlign": "center",
+        "text": "linear-gradient 135°",
         "semantic": "div"
       }
     ]
@@ -8097,6 +8185,20 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
           "left": 22
         },
         "borderRadius": 8,
+        "fillGradient": {
+          "kind": "linear",
+          "angle": 135,
+          "stops": [
+            {
+              "offset": 0,
+              "color": "#1a7af8"
+            },
+            {
+              "offset": 1,
+              "color": "#7b5ce0"
+            }
+          ]
+        },
         "color": "#fff",
         "fontSize": 16,
         "fontWeight": 700,

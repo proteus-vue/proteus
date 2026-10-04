@@ -460,6 +460,28 @@ describe('★C1 最小切片 · SFC <style> 单类规则 → class→节点样�
     expect((tx?.style as { pointerEvents?: boolean })?.pointerEvents, '子 auto 覆盖').toBe(true)
   })
 
+  it('★⑦s CSS 渐变 → fillGradient（批次 33 · ★基准 = Web）：linear/radial + 角度 + 显式位置 + alpha', () => {
+    // 【为什么（以 web 为基准）】真实项目用 `background: linear-gradient(...)`；此前要求手写 fill-gradient JSON。
+    const g1 = parseStaticStyle('background: linear-gradient(135deg, #1a7af8, #7b5ce0)', () => {}) as { fillGradient?: { kind: string; angle: number; stops: Array<{ offset: number; color: string }> } }
+    expect(g1.fillGradient?.kind, 'linear').toBe('linear')
+    expect(g1.fillGradient?.angle, '135deg').toBe(135)
+    expect(g1.fillGradient?.stops.map((s) => s.color), '两端色').toEqual(['#1a7af8', '#7b5ce0'])
+    expect(g1.fillGradient?.stops.map((s) => s.offset), '缺省位置均分').toEqual([0, 1])
+    // 方向关键字 + 显式 % 位置
+    const g2 = parseStaticStyle('background: linear-gradient(to right, red, blue)', () => {}) as { fillGradient?: { angle: number } }
+    expect(g2.fillGradient?.angle, 'to right ⇒ 90').toBe(90)
+    const g3 = parseStaticStyle('background: linear-gradient(90deg, #eee 25%, #f5f5f5 37%)', () => {}) as { fillGradient?: { stops: Array<{ offset: number }> } }
+    expect(g3.fillGradient?.stops.map((s) => s.offset), '显式位置保留').toEqual([0.25, 0.37])
+    // rgba alpha ⇒ 独立 alpha 字段
+    const g4 = parseStaticStyle('background: linear-gradient(180deg, rgba(0,0,0,0.5) 0%, transparent 100%)', () => {}) as { fillGradient?: { stops: Array<{ alpha?: number }> } }
+    expect(g4.fillGradient?.stops[0]?.alpha, 'rgba 0.5 ⇒ alpha 0.5').toBeCloseTo(0.5, 2)
+    // radial + background-image
+    const g5 = parseStaticStyle('background-image: radial-gradient(circle, #fff, #000)', () => {}) as { fillGradient?: { kind: string } }
+    expect(g5.fillGradient?.kind, 'radial').toBe('radial')
+    // 纯色仍走 backgroundColor（零行为变化）
+    expect((parseStaticStyle('background: #fff', () => {}) as { backgroundColor?: string }).backgroundColor, '纯色').toBe('#fff')
+  })
+
   it('★⑧ 元素/类型选择器 + @keyframes 跳过（C1 收尾）', () => {
     // 【真项目形态】examples 有 9 处元素选择器（h3/code…）+ 6 处 @keyframes 关键帧被误当选择器
     const sfc = `<template>
@@ -628,11 +650,15 @@ describe('★批次 2 · 值/简写归一化（四值简写 + background）', ()
     expect(parseStaticStyle('background: transparent', () => {}).backgroundColor).toBe('#00000000')
   })
 
-  it('②b background 渐变/图片 ⇒ 跳过 + 诊断（不静默；渐变走引擎 fill-gradient 通道）', () => {
+  it('②b background 渐变 → fillGradient（批次 33）；图片 url() ⇒ 诊断', () => {
     const diags: string[] = []
     const out = parseStaticStyle('background: linear-gradient(135deg, #fff 0%, #000 100%)', (m) => diags.push(m))
     expect(out.backgroundColor, '渐变不折成 backgroundColor').toBeUndefined()
-    expect(diags.some((m) => m.includes('background 简写')), '产诊断').toBe(true)
+    expect((out as { fillGradient?: { kind?: string } }).fillGradient?.kind, '★批次 33：渐变折进 fillGradient').toBe('linear')
+    // 图片 url() 仍不支持 ⇒ 诊断（不静默）
+    const d2: string[] = []
+    parseStaticStyle('background: url(x.png) no-repeat', (m) => d2.push(m))
+    expect(d2.some((m) => m.includes('background')), '图片产诊断').toBe(true)
   })
 
   it('③ 端到端：多值简写经 <style> class 折进节点 style', () => {

@@ -7495,6 +7495,24 @@
             "left": 20
           },
           "borderRadius": 12,
+          "fillGradient": {
+            "kind": "linear",
+            "angle": 135,
+            "stops": [
+              {
+                "offset": 0,
+                "color": "#7c5cff"
+              },
+              {
+                "offset": 0.5,
+                "color": "#39d0c4"
+              },
+              {
+                "offset": 1,
+                "color": "#ff6b9d"
+              }
+            ]
+          },
           "semantic": "div"
         },
         {
@@ -7566,6 +7584,24 @@
             "left": 20
           },
           "borderRadius": 12,
+          "fillGradient": {
+            "kind": "linear",
+            "angle": 135,
+            "stops": [
+              {
+                "offset": 0,
+                "color": "#7c5cff"
+              },
+              {
+                "offset": 0.5,
+                "color": "#39d0c4"
+              },
+              {
+                "offset": 1,
+                "color": "#ff6b9d"
+              }
+            ]
+          },
           "semantic": "div"
         },
         {
@@ -7637,6 +7673,24 @@
             "left": 20
           },
           "borderRadius": 12,
+          "fillGradient": {
+            "kind": "linear",
+            "angle": 135,
+            "stops": [
+              {
+                "offset": 0,
+                "color": "#7c5cff"
+              },
+              {
+                "offset": 0.5,
+                "color": "#39d0c4"
+              },
+              {
+                "offset": 1,
+                "color": "#ff6b9d"
+              }
+            ]
+          },
           "semantic": "div"
         },
         {
@@ -9143,6 +9197,40 @@
           "fontSize": 12,
           "textAlign": "center",
           "text": "\u8986\u76D6\u5C42\uFF08pointer-events:none\uFF09",
+          "semantic": "div"
+        },
+        {
+          "id": 74,
+          "parentId": 0,
+          "width": 240,
+          "height": 48,
+          "margin": {
+            "top": 16,
+            "bottom": 16
+          },
+          "marginAuto": {
+            "right": true,
+            "left": true
+          },
+          "fillGradient": {
+            "kind": "linear",
+            "angle": 135,
+            "stops": [
+              {
+                "offset": 0,
+                "color": "#1a7af8"
+              },
+              {
+                "offset": 1,
+                "color": "#7c5cff"
+              }
+            ]
+          },
+          "borderRadius": 8,
+          "color": "#ffffff",
+          "fontSize": 12,
+          "textAlign": "center",
+          "text": "linear-gradient 135\xB0",
           "semantic": "div"
         }
       ]
@@ -11563,6 +11651,20 @@
             "left": 22
           },
           "borderRadius": 8,
+          "fillGradient": {
+            "kind": "linear",
+            "angle": 135,
+            "stops": [
+              {
+                "offset": 0,
+                "color": "#1a7af8"
+              },
+              {
+                "offset": 1,
+                "color": "#7b5ce0"
+              }
+            ]
+          },
           "color": "#fff",
           "fontSize": 16,
           "fontWeight": 700,
