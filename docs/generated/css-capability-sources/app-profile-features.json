@@ -61,7 +61,7 @@
     { "id": "selector-pseudo", "css": "伪类 :hover / :active / :first-child / :nth-child", "category": "selector", "today": "absent", "tier": "L0", "strategy": "编译期折叠", "probe": [], "note": "静态部分可编译期折叠（Profile L0）；动态交互态需运行时状态通道（成本更高）" },
     { "id": "selector-attr", "css": "属性选择器 [data-x]", "category": "selector", "today": "absent", "tier": "L0", "strategy": "编译期折叠", "probe": [], "note": "编译期可判（属性在模板里静态可枚举）" },
     { "id": "selector-sibling-wildcard", "css": "兄弟组合 +~ / 通配 *", "category": "selector", "today": "absent", "tier": "L5", "strategy": "禁止", "probe": [], "note": "语义弱、跨端难统一（Skyline 亦不支持）——建议改写为类选择器" },
-    { "id": "specificity-inheritance", "css": "特异性 / 继承", "category": "cascade", "today": "absent", "tier": "L0", "strategy": "编译期折叠", "probe": [], "note": "当前仅按源序层叠、无特异性/继承（Profile L0 要求完整实现）" },
+    { "id": "specificity-inheritance", "css": "特异性 / 继承 / !important", "category": "cascade", "today": "supported", "tier": "L0", "strategy": "编译期折叠", "probe": [], "note": "★批次 1（2026-10-04）：规则按 (!important, 特异性 (id,class,tag), 源序) 层叠；color/fontSize 沿树继承（CSS 可继承子集；编译期一次性算进 computed style，运行时零匹配）" },
     { "id": "at-media", "css": "@media（响应式）", "category": "at-rule", "today": "absent", "tier": "L3", "strategy": "降级", "probe": [], "note": "编译期无法唯一确定断点；跨端建议走 flex/比例布局 + 框架流体能力" },
     { "id": "keyframes", "css": "@keyframes（动画）", "category": "at-rule", "today": "absent", "tier": "L3", "strategy": "降级", "probe": [], "note": "块整体剔除（旧实现误当元素选择器）；动画走引擎动画桥（animStart/animTick）" },
     { "id": "unit-relative", "css": "em / rem / vw / vh / calc / clamp / var()", "category": "unit", "today": "absent", "tier": "L0", "strategy": "编译期折叠", "probe": [], "note": "仅收 px/数字（宽高另支持 %）；其余单位编译期无法在无上下文时求值 ⇒ 诊断跳过" },
