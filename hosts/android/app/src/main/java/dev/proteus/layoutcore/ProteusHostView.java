@@ -68,6 +68,10 @@ public class ProteusHostView extends ViewGroup {
          *   映射到 `Paint.Align`（LEFT/CENTER/RIGHT）+ 绘制 x 按对齐换算（见 drawCmds）。
          */
         final int textAlign;
+        /** ★批次 5（CSS 兼容对齐 · 边框）：uniform 边框宽度（px；0=无边框，零行为变化）。 */
+        final float borderWidth;
+        /** ★批次 5：uniform 边框颜色（ARGB；borderWidth>0 时生效）。 */
+        final int borderColor;
         /**
          * ★★圆角半径（px；0 = 直角）——纯绘制属性（内核不收，只影响观感）。
          *
@@ -111,10 +115,14 @@ public class ProteusHostView extends ViewGroup {
         }
         Cmd(float x, float y, float w, float h, int color, String text, float fontSize, int textColor, float radius,
             GradSpec gradient, float[] glow, float[] mask) {
-            this(x, y, w, h, color, text, fontSize, textColor, radius, gradient, glow, mask, 400, 0);
+            this(x, y, w, h, color, text, fontSize, textColor, radius, gradient, glow, mask, 400, 0, 0f, 0);
         }
         Cmd(float x, float y, float w, float h, int color, String text, float fontSize, int textColor, float radius,
             GradSpec gradient, float[] glow, float[] mask, int fontWeight, int textAlign) {
+            this(x, y, w, h, color, text, fontSize, textColor, radius, gradient, glow, mask, fontWeight, textAlign, 0f, 0);
+        }
+        Cmd(float x, float y, float w, float h, int color, String text, float fontSize, int textColor, float radius,
+            GradSpec gradient, float[] glow, float[] mask, int fontWeight, int textAlign, float borderWidth, int borderColor) {
             this.x = x; this.y = y; this.w = w; this.h = h; this.color = color; this.text = text;
             this.fontSize = fontSize;
             this.textColor = textColor;
@@ -124,6 +132,8 @@ public class ProteusHostView extends ViewGroup {
             this.mask = mask;
             this.fontWeight = fontWeight;
             this.textAlign = textAlign;
+            this.borderWidth = borderWidth;
+            this.borderColor = borderColor;
         }
     }
 
@@ -318,6 +328,8 @@ public class ProteusHostView extends ViewGroup {
     private final android.text.TextPaint textPaint = new android.text.TextPaint(android.graphics.Paint.ANTI_ALIAS_FLAG);
     /** ★★C2：描边笔（STROKE 风格——与填充用的 bgPaint 分开；圆头圆角与 iOS 一致） */
     private final android.graphics.Paint strokePaint = new android.graphics.Paint(android.graphics.Paint.ANTI_ALIAS_FLAG);
+    /** ★批次 5：边框描边专用（与 SVG/glow 的 strokePaint 分开——避免相互污染 STROKE 样式/宽度）。 */
+    private final android.graphics.Paint borderPaint = new android.graphics.Paint(android.graphics.Paint.ANTI_ALIAS_FLAG);
     /** ★★软边遮罩合成用（mask v1）：`渐变 shader + DST_IN`（见 drawCmds 的遮罩合成段） */
     private final android.graphics.Paint maskPaint = new android.graphics.Paint(android.graphics.Paint.ANTI_ALIAS_FLAG);
 
@@ -1469,6 +1481,8 @@ public class ProteusHostView extends ViewGroup {
         strokePaint.setStyle(android.graphics.Paint.Style.STROKE);
         strokePaint.setStrokeCap(android.graphics.Paint.Cap.ROUND);
         strokePaint.setStrokeJoin(android.graphics.Paint.Join.ROUND);
+        // ★批次 5：边框笔（STROKE 一次设定，绘制时只改色/宽）
+        borderPaint.setStyle(android.graphics.Paint.Style.STROKE);
     }
 
     public void setCmds(List<Cmd> value) {
@@ -2385,6 +2399,16 @@ public class ProteusHostView extends ViewGroup {
                 final float tx = c.textAlign == 1 ? c.x + c.w * 0.5f
                         : c.textAlign == 2 ? c.x + c.w - 1f : c.x + 1f;
                 canvas.drawText(c.text, tx, c.y + c.h * 0.8f, textPaint);
+            }
+            // ★批次 5（CSS 兼容对齐 · 边框）：uniform 边框（stroke 半内缩：strokeWidth/2 居中于边线）。
+            if (c.borderWidth > 0 && c.borderColor != 0) {
+                borderPaint.setColor(c.borderColor);
+                borderPaint.setStrokeWidth(c.borderWidth);
+                borderPaint.setAlpha(op < 1f ? Math.max(0, Math.min(255, (int) (Color.alpha(c.borderColor) * op))) : Color.alpha(c.borderColor));
+                final float inset = c.borderWidth * 0.5f;
+                final float l = c.x + inset, t = c.y + inset, rr = c.x + c.w - inset, bb = c.y + c.h - inset;
+                if (c.radius > 0) canvas.drawRoundRect(l, t, rr, bb, c.radius, c.radius, borderPaint);
+                else canvas.drawRect(l, t, rr, bb, borderPaint);
             }
             // ★★软边遮罩合成（mask v1）：**在全部内容（含文字/描边/发光）之后**用
             //   `渐变 shader + DST_IN` 把本层按揭示色标"擦"出来——

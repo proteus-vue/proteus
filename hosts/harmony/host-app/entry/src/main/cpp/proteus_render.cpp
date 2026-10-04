@@ -557,6 +557,10 @@ static int renderCommandsImpl(const char* jsonCStr, bool fromProbe) {
         jsonNumber(it, "h", &h);
         jsonNumber(it, "color", &color);
         jsonNumber(it, "radius", &radius);
+        // ★批次 5（CSS 兼容对齐 · 边框）：uniform 边框宽度/颜色
+        double borderWidth = 0, borderColor = 0;
+        jsonNumber(it, "borderWidth", &borderWidth);
+        jsonNumber(it, "borderColor", &borderColor);
 
         ArkUI_RenderNodeHandle node = OH_ArkUI_RenderNodeUtils_CreateNode();
         if (node == nullptr) {
@@ -581,6 +585,21 @@ static int renderCommandsImpl(const char* jsonCStr, bool fromProbe) {
                     br, static_cast<uint32_t>(radius), ARKUI_CORNER_DIRECTION_ALL);
                 OH_ArkUI_RenderNodeUtils_SetBorderRadius(node, br);
                 OH_ArkUI_RenderNodeUtils_DisposeNodeBorderRadiusOption(br);
+            }
+        }
+        // ★批次 5（CSS 兼容对齐 · 边框）：uniform 边框（宽度 + 颜色，四边 ALL）
+        if (borderWidth > 0 && borderColor > 0) {
+            ArkUI_NodeBorderWidthOption* bwo = OH_ArkUI_RenderNodeUtils_CreateNodeBorderWidthOption();
+            if (bwo != nullptr) {
+                OH_ArkUI_RenderNodeUtils_SetNodeBorderWidthOptionEdgeWidth(bwo, static_cast<float>(borderWidth), ARKUI_EDGE_DIRECTION_ALL);
+                OH_ArkUI_RenderNodeUtils_SetBorderWidth(node, bwo);
+                OH_ArkUI_RenderNodeUtils_DisposeNodeBorderWidthOption(bwo);
+            }
+            ArkUI_NodeBorderColorOption* bco = OH_ArkUI_RenderNodeUtils_CreateNodeBorderColorOption();
+            if (bco != nullptr) {
+                OH_ArkUI_RenderNodeUtils_SetNodeBorderColorOptionEdgeColor(bco, static_cast<uint32_t>(borderColor), ARKUI_EDGE_DIRECTION_ALL);
+                OH_ArkUI_RenderNodeUtils_SetBorderColor(node, bco);
+                OH_ArkUI_RenderNodeUtils_DisposeNodeBorderColorOption(bco);
             }
         }
         // ★★★文本上屏（2026-10-02）：指令带 "text" ⇒ 给该节点挂 content modifier，

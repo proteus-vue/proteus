@@ -272,6 +272,8 @@ struct SfcStyle {
     double fontSize = 24;
     int fontWeight = 400;        // ★批次 3：字重（`font-weight` 折叠值）
     std::string textAlign;       // ★批次 4：文本水平对齐（left/center/right）
+    double borderWidth = 0;      // ★批次 5：uniform 边框宽度
+    uint32_t borderColor = 0;    // ★批次 5：uniform 边框颜色
     std::string text;
     /* ── ★★绘制四通道（2026-10-03 · 三端打通绘制通道）──
      *
@@ -377,6 +379,8 @@ static void parseSfcStyles(const std::string& fixture, std::vector<std::pair<int
         jnum(item.c_str(), item.size(), "fontSize", &st.fontSize);
         double fwv = 400; jnum(item.c_str(), item.size(), "fontWeight", &fwv); st.fontWeight = (int)fwv;
         jstr(item.c_str(), item.size(), "textAlign", &st.textAlign);
+        jnum(item.c_str(), item.size(), "borderWidth", &st.borderWidth);
+        { std::string bcCss; if (jstr(item.c_str(), item.size(), "borderColor", &bcCss)) st.borderColor = hexToArgb(bcCss); }
         jstr(item.c_str(), item.size(), "text", &st.text);
         // ★★绘制四通道（2026-10-03）：从 style 子对象抽（`extractValueAfterKey` 找的是
         //   **该键后首个配对括号块** ⇒ 直接对整节点 JSON 抽即可，不必先切 style）
@@ -1406,6 +1410,10 @@ static napi_value SfcStressCommands(napi_env env, napi_callback_info info) {
                  emitted > 0 ? "," : "", r.x * density, r.y * density, r.w * density, r.h * density,
                  st.bg, st.radius * density);
         arr += head;
+        if (st.borderWidth > 0 && st.borderColor > 0) {
+            char bb[96]; snprintf(bb, sizeof(bb), ",\"borderWidth\":%.2f,\"borderColor\":%u", st.borderWidth * density, st.borderColor);
+            arr += bb;
+        }
         if (!st.text.empty()) {
             char tail[128];
             snprintf(tail, sizeof(tail), ",\"fontSize\":%.2f,\"fontWeight\":%d,\"textColor\":%u",
@@ -1740,6 +1748,10 @@ static std::string vaporMountImpl(const std::string& treeJson) {
                  emitted > 0 ? "," : "", kv.first, r.x * g_vaporDensity, r.y * g_vaporDensity,
                  r.w * g_vaporDensity, r.h * g_vaporDensity, st.bg, st.radius * g_vaporDensity);
         cmds += head;
+        if (st.borderWidth > 0 && st.borderColor > 0) {
+            char bb[96]; snprintf(bb, sizeof(bb), ",\"borderWidth\":%.2f,\"borderColor\":%u", st.borderWidth * g_vaporDensity, st.borderColor);
+            cmds += bb;
+        }
         if (!st.text.empty()) {
             char tail[128];
             snprintf(tail, sizeof(tail), ",\"fontSize\":%.2f,\"fontWeight\":%d,\"textColor\":%u",
@@ -4224,10 +4236,17 @@ static napi_value AppScreenCommands(napi_env env, napi_callback_info info) {
         double fw = 400; jnum(it.c_str(), it.size(), "fontWeight", &fw);   // ★批次 3：字重
         std::string ta; jstr(it.c_str(), it.size(), "textAlign", &ta);      // ★批次 4：对齐
         uint32_t tc = 0xFFFFFFFFu; std::string tcCss; if (jstr(it.c_str(), it.size(), "color", &tcCss)) tc = hexToArgb(tcCss);
+        // ★批次 5：uniform 边框（宽度 + 颜色）
+        double bw = 0; jnum(it.c_str(), it.size(), "borderWidth", &bw);
+        uint32_t bc = 0; std::string bcCss; if (jstr(it.c_str(), it.size(), "borderColor", &bcCss)) bc = hexToArgb(bcCss);
         char head[320];
         snprintf(head, sizeof(head), "%s{\"kind\":\"background\",\"x\":%.2f,\"y\":%.2f,\"w\":%.2f,\"h\":%.2f,\"color\":%u,\"radius\":%.2f",
                  emitted > 0 ? "," : "", r.x * density, r.y * density, r.w * density, r.h * density, bg, radius * density);
         arr += head;
+        if (bw > 0 && bc > 0) {
+            char bb[96]; snprintf(bb, sizeof(bb), ",\"borderWidth\":%.2f,\"borderColor\":%u", bw * density, bc);
+            arr += bb;
+        }
         if (!text.empty()) {
             char tail[128]; snprintf(tail, sizeof(tail), ",\"fontSize\":%.2f,\"fontWeight\":%d,\"textColor\":%u", fs * density, (int)fw, tc);
             arr += tail;

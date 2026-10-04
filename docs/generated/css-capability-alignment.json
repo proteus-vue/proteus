@@ -47,16 +47,6 @@
         "why": "→ widthRatio/heightRatio（比例字段）"
       },
       {
-        "css": "border-color / border-width",
-        "id": "border-color-width",
-        "ends": {
-          "web": "supported",
-          "skyline": "supported",
-          "app": "folded-only"
-        },
-        "why": "★诚实修正：在 APP_PAINT_FIELDS 折叠透传，但**三端宿主均未真画边框**（VaporRenderHost/selfdraw/proteus_render 的绘制通道无 border）⇒ 只到内核树，未上屏"
-      },
-      {
         "css": "transform（translate/scale/rotate/skew/perspective）",
         "id": "transform",
         "ends": {
@@ -819,7 +809,7 @@
     },
     {
       "id": "border-color-width",
-      "css": "border-color / border-width",
+      "css": "border（简写）/ border-color / border-width",
       "category": "paint",
       "compilerFields": [
         "borderColor",
@@ -827,11 +817,11 @@
       ],
       "web": "supported",
       "skyline": "supported",
-      "app": "folded-only",
+      "app": "supported",
       "tier": "L1",
-      "strategy": "语义组件",
-      "note": "★诚实修正：在 APP_PAINT_FIELDS 折叠透传，但**三端宿主均未真画边框**（VaporRenderHost/selfdraw/proteus_render 的绘制通道无 border）⇒ 只到内核树，未上屏",
-      "supportTier": "conditional"
+      "strategy": "编译期折叠",
+      "note": "★批次 5（2026-10-04）：`border: <width> <style> <color>` 简写解析为 borderWidth + borderColor（uniform 实线；逐边/styled 诊断跳过；var() 令牌色如实诊断）；**三端宿主真画**：iOS CALayer.border* · Android borderPaint 描边（含圆角路径）· 鸿蒙 OH_ArkUI_RenderNodeUtils_SetBorderWidth/Color。此前为 folded-only（折叠透传但宿主不画）——本批补齐绘制",
+      "supportTier": "universal"
     },
     {
       "id": "transform",

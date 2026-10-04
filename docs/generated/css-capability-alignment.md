@@ -63,7 +63,7 @@
 | paint | `border-radius` | supported | supported | supported | L1 | 编译期折叠 | universal | px/数字（宿主圆角绘制） |
 | paint | `opacity` | supported | supported | supported | L1 | 编译期折叠 | universal | 0–1 |
 | special | `box-sizing` | supported | supported | supported | L1 | 直映射 | universal | 两内核恒 border-box ⇒ 只作忠实记录、无副作用 |
-| paint | `border-color / border-width` | supported | supported | folded-only | L1 | 语义组件 | conditional | ★诚实修正：在 APP_PAINT_FIELDS 折叠透传，但**三端宿主均未真画边框**（VaporRenderHost/selfdraw/proteus_render 的绘制通道无 border）⇒ 只到内核树，未上屏 |
+| paint | `border（简写）/ border-color / border-width` | supported | supported | supported | L1 | 编译期折叠 | universal | ★批次 5（2026-10-04）：`border: <width> <style> <color>` 简写解析为 borderWidth + borderColor（uniform 实线；逐边/styled 诊断跳过；var() 令牌色如实诊断）；**三端宿主真画**：iOS CALayer.border* · Android borderPaint 描边（含圆角路径）· 鸿蒙 OH_ArkUI_RenderNodeUtils_SetBorderWidth/Color。此前为 folded-only（折叠透传但宿主不画）——本批补齐绘制 |
 | motion | `transform（translate/scale/rotate/skew/perspective）` | supported | supported | engine-only | L1 | 编译期折叠 | conditional | ★引擎/宿主已支持（LStyle 的绘制通道 paint-only + 宿主动画桥），但编译期折叠面（parseStaticStyle）**未接 transform** ⇒ 「可扩展」现成落点：加进 APP_PAINT_FIELDS 即可 |
 | motion | `transform-origin` | supported | supported | engine-only | L2 | 编译期折叠 | conditional | 引擎有 transform_origin_x/y（paint-only），编译面未接 |
 | selector | `类选择器 .a / .a.b` | — | — | supported | L0 | 编译期折叠 | conditional | C1：<style> 类规则编译期匹配合并（按源序；无特异性权重） |
@@ -97,7 +97,6 @@
 |---|---|---|---|---|
 | `margin/padding 1–4 值简写 + background 纯色简写` | — | — | supported | ★批次 2（2026-10-04）：`margin: 8px 0` / `padding: 8px 12px` 按 CSS 标准展开为 {top,right,bottom,left |
 | `width/height 百分比` | — | — | supported | → widthRatio/heightRatio（比例字段） |
-| `border-color / border-width` | supported | supported | folded-only | ★诚实修正：在 APP_PAINT_FIELDS 折叠透传，但**三端宿主均未真画边框**（VaporRenderHost/selfdraw/proteus_render 的绘制通 |
 | `transform（translate/scale/rotate/skew/perspective）` | supported | supported | engine-only | ★引擎/宿主已支持（LStyle 的绘制通道 paint-only + 宿主动画桥），但编译期折叠面（parseStaticStyle）**未接 transform** ⇒ 「可扩 |
 | `transform-origin` | supported | supported | engine-only | 引擎有 transform_origin_x/y（paint-only），编译面未接 |
 | `类选择器 .a / .a.b` | — | — | supported | C1：<style> 类规则编译期匹配合并（按源序；无特异性权重） |

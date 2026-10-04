@@ -453,6 +453,45 @@ export function parseStaticStyle(
       markImportant('backgroundColor')
       continue
     }
+    // ★批次 5（CSS 兼容对齐 · 边框）：`border` 简写 → borderWidth + borderColor（uniform solid）。
+    if (key === 'border') {
+      const b = parseBorderShorthand(rawVal)
+      if (b.width === undefined && b.color === undefined) {
+        pushDiag(
+          `border 简写 \`${rawVal}\` 未解析出宽度/颜色（仅支持 uniform 单色实线，如 \`1px solid #ccc\`）——已跳过`,
+          'App 端边框为**统一实线**：`border: <width> solid <color>`；虚线/逐边（border-bottom 等）/var() 暂不支持',
+        )
+        continue
+      }
+      if (b.width !== undefined) { out.borderWidth = b.width; markImportant('borderWidth') }
+      if (b.color !== undefined) { out.borderColor = b.color; markImportant('borderColor') }
+      else {
+        // 宽度有、颜色没解析出（多为 var() 令牌色）⇒ 边框不可见，如实诊断（不静默当已支持）
+        pushDiag(
+          `border 简写 \`${rawVal}\` 的颜色未解析（` +
+            (/\bvar\(/.test(rawVal) ? 'var() 编译期不可解析' : '非 hex/rgb/rgba 颜色') +
+            '）——该边框不会绘制',
+          '把颜色写为 hex（如 #e3e6eb）；var() 令牌色当前不在 App 折叠面内',
+        )
+      }
+      continue
+    }
+    // `border-style`：宿主只画**实线**——solid 视为无操作，其余如实诊断（不静默当实线）
+    if (key === 'borderStyle') {
+      const s = rawVal.trim().toLowerCase()
+      if (s !== 'solid' && s !== 'none') {
+        pushDiag(`\`border-style: ${rawVal}\` 未支持（App 端边框仅实线 solid）——已按无边框处理`)
+      }
+      continue
+    }
+    // 逐边边框（`border-bottom` 等）：引擎/宿主只支持**统一**边框 ⇒ 如实诊断（不静默丢弃）
+    if (/^border(Top|Right|Bottom|Left)(Width|Color|Style)?$/.test(key) || /^border(Top|Right|Bottom|Left)$/.test(key)) {
+      pushDiag(
+        `\`${rawKey}\` 逐边边框未支持（App 端仅统一 \`border\`）——已跳过`,
+        '改用统一 `border: 1px solid #ccc`；或该边用独立元素/背景色近似',
+      )
+      continue
+    }
     // 认不出的键：诊断（可能是指令/伪类等不需要的键——故用 hint 说明而非 error）
     pushDiag(`style 里 \`${rawKey}\` 不在引擎字段表内（已忽略）`, '引擎字段见 packages/compiler/src/vapor/template.ts 的 LAYOUT_FIELDS/PAINT_FIELDS')
   }
@@ -801,6 +840,32 @@ function normalizeFontWeight(raw: string): number | undefined {
   const n = Number(v)
   if (Number.isFinite(n) && n >= 1 && n <= 1000) return Math.round(n)
   return undefined
+}
+
+/**
+ * ★批次 5：`border` 简写解析（`<width> <style> <color>` 任意顺序）→ `{ width?, color? }`。
+ *   · width：长度 token（`1px`/`2`）→ 数值；`thin/medium/thick` 无内核对等 ⇒ 忽略；
+ *   · style：solid/dashed/dotted/double/none —— 仅记录（宿主只画实线；由调用方决定诊断）；
+ *   · color：`normalizeCssColor` 可归一者（hex/rgb/rgba/transparent）；`var()`/命名色 ⇒ 忽略。
+ *   ★`var(--x)` 编译期无法解析（token 源不在 SFC 内）⇒ 该维度为 undefined（如实反映）。
+ */
+function parseBorderShorthand(raw: string): { width?: number; color?: string } {
+  const out: { width?: number; color?: string } = {}
+  const STYLES = new Set(['solid', 'dashed', 'dotted', 'double', 'none', 'hidden', 'groove', 'ridge', 'inset', 'outset'])
+  const KEYWORDS = new Set(['thin', 'medium', 'thick', 'currentcolor'])
+  for (const tok of raw.trim().split(/\s+/).filter(Boolean)) {
+    const low = tok.toLowerCase()
+    if (STYLES.has(low) || KEYWORDS.has(low)) continue
+    if (out.color === undefined) {
+      const c = normalizeCssColor(tok)
+      if (c) { out.color = c; continue }
+    }
+    if (out.width === undefined) {
+      const n = numOf(tok)
+      if (n !== undefined && n > 0) { out.width = n; continue }
+    }
+  }
+  return out
 }
 
 /**
