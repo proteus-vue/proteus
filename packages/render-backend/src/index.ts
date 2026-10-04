@@ -173,6 +173,10 @@ export type {
   ScreenExecutorOptions,
   ScreenExecutorStats,
   AnimLike,
+  // ★★★阶段 1（2026-10-04 · App 三端对齐）：屏内容契约（真实页面渲染产物 → screen.mount）
+  ScreenContent,
+  ScreenContentNode,
+  ScreenContentProvider,
 } from './screen-executor'
 
 // ★★M5 执行器的**生产端口**（宿主通道适配：树操作/动画转发 + 完成回调接回；2026-09-30）

@@ -76,6 +76,45 @@ export type RouteTransitionPlanner = (
 ) => RouteTransitionPlanLike
 
 /**
+ * ★★★**屏内容节点**（2026-10-04 · App 三端对齐 阶段 1）：一页渲染产物的**内核节点描述**。
+ *
+ * 【字段名与内核契约同源】与 `@proteus-vue/renderer-app` 的 `SelfDrawNodeSpec` 结构兼容
+ *   （`id/parentId/width/height/text/flexDirection/justifyContent/alignItems/gap/display/position/…`），
+ *   也与 Rust 内核 `create` 请求的 `NodeDto`（camelCase）同形——**一处命名，三处消费**。
+ * 【为什么用宽松类型】本包**不 import renderer-app**（依赖方向：renderer-app → render-backend 的反向会成环）；
+ *   故按**结构**声明 `id`/`parentId` + 其余内核字段（`Record<string, unknown>`）。定义处的强类型在
+ *   `SelfDrawNodeSpec`（SSOT）——本处只承诺"这是能被宿主透传给内核的节点描述"。
+ */
+export interface ScreenContentNode extends Record<string, unknown> {
+  id: number
+  parentId: number | null
+}
+
+/**
+ * ★★★**屏内容**（一页的渲染产物）——`screen.mount` 的 `content` 字段载荷。
+ *
+ * 【它解决什么用户可见问题】此前屏 = 空壳容器（宿主塞占位几何节点）⇒「路由在走、页面没渲染」。
+ *   本载荷把**真实页面内容**（由页面渲染器从 SFC 产物产出）送到宿主建树路径 ⇒ 屏里真有页面。
+ * 【id 空间】`nodes[].id`/`parentId` 是**内容局部**空间；宿主建屏时重映射到屏 id 空间（见 mountScreen 注释）。
+ * 【viewport 可选】缺省用屏尺寸（宿主已知）；提供时用于内容按视口求解（如百分比基准）。
+ */
+export interface ScreenContent {
+  viewport?: { width: number; height: number }
+  nodes: readonly ScreenContentNode[]
+}
+
+/**
+ * 屏内容提供者（执行器选项）：按屏名/路径取该页渲染产物。
+ *
+ * 【为什么是"提供者"而不是塞进屏注册表】屏注册表（`AppScreenSpec`）在 **router 包**——
+ *   若把它与"渲染产物"（render-backend 概念）耦合，会让 router 依赖渲染层（方向错）。
+ *   ⇒ 由**装配层**（宿主桥/应用入口）注入 `name → ScreenContent` 解析（缺省无内容 ⇒ 向后兼容老行为）。
+ */
+export type ScreenContentProvider = (
+  screen: { name: string; path: string },
+) => ScreenContent | undefined
+
+/**
  * 树操作端口（宿主实现——Android/iOS 各自对接 Host ABI 的树接口）。
  * ★三个方法都是"屏粒度"：宿主内部怎么落子树（load_tree / splice / 五原子销毁）不由本层约束。
  */
@@ -87,6 +126,24 @@ export interface ScreenTreeHost {
     path: string
     params: unknown
     rebuild: boolean
+    /**
+     * ★★★**屏内容**（2026-10-04 · App 三端对齐 阶段 1 · B1+B2）：该页**渲染产物**——内核节点描述列表。
+     *
+     * 【这是什么（消灭"屏 = 空壳容器"的关键）】此前 `screen.mount` 建的是**空子树**（宿主塞 3 个
+     *   占位几何节点）⇒ "路由在走、页面没渲染"（缺口 B2）。本字段携带**真实页面内容**：
+     *   由页面渲染器（`@proteus-vue/renderer-app` 的 selfdraw 适配器 `buildRequest`）从 SFC 产物
+     *   产出——`{ nodes: SelfDrawNodeSpec[] }`，字段名与内核 `create` 契约**同源**
+     *   （`id/parentId/width/text/flexDirection/...`）。
+     *
+     * 【★ id 空间（宿主职责）】content 里的 `id`/`parentId` 属**内容局部**空间（通常 1..N）。
+     *   宿主建屏时**必须重映射到屏 id 空间**（与层容器/屏根不冲突）——契约只承诺
+     *   "节点间的父子关系由 parentId 表达"，不约束宿主怎么分配最终 id（与
+     *   `mountLayerNodeId` 的"偏移量而非绝对 id"同一哲学）。`parentId === null` ⇒ 挂到
+     *   **page 内容容器**（层计划里的 page 层；无层计划则挂屏根）。
+     * 【诚实边界】本字段只保证"内容被下发"；内核对它建没建、建得对不对，由宿主读数
+     *   （`contentNodes` 数 / 几何探针）与判据证明——本层不声称。
+     */
+    content?: ScreenContent
     /**
      * ★★★GP3-c（2026-10-03）：**三层挂载容器计划**（宿主据此在屏根下建三层容器）。
      *
@@ -145,6 +202,15 @@ export interface ScreenExecutorOptions {
   host: ScreenTreeHost
   anim: ScreenAnimHost
   plan: RouteTransitionPlanner
+  /**
+   * ★★★（2026-10-04 · App 三端对齐 阶段 1）：**屏内容提供者**——按屏名/路径取该页渲染产物。
+   *   · 提供 ⇒ 屏里是**真实页面内容**（`screen.mount` 带 `content`）；
+   *   · 缺省（未提供）⇒ 向后兼容：不带 `content`，宿主按老行为建（空壳/占位）——
+   *     老宿主与老装置不受影响（零行为变化）。
+   *   ★诚实边界：本项只负责"把内容送到宿主建树路径"；内容**从哪来**（SFC 产物 → 节点描述）
+   *     由装配层（`@proteus-vue/renderer-app` 的 selfdraw `buildRequest`）决定，本层不声称。
+   */
+  contentOf?: ScreenContentProvider
   /** 建屏完成通知（接 `AppStack.markRebuilt`——契约要求"执行器建完调 markRebuilt"） */
   onScreenMounted?: (screenId: string, rebuild: boolean) => void
   /** 诊断事件（记录端口调用顺序——真机判据/测试断言读它） */
@@ -161,7 +227,7 @@ export interface ScreenExecutor {
 }
 
 export function createScreenExecutor(opts: ScreenExecutorOptions): ScreenExecutor {
-  const { host, anim, plan, onScreenMounted, onEvent } = opts
+  const { host, anim, plan, contentOf, onScreenMounted, onEvent } = opts
 
   /** screenId → 子树根节点 id */
   const nodes = new Map<string, number>()
@@ -195,12 +261,18 @@ export function createScreenExecutor(opts: ScreenExecutorOptions): ScreenExecuto
     switch (cmd.op) {
       case 'mount': {
         const rebuild = cmd.rebuild === true
+        const name = cmd.name ?? cmd.screenId
+        const path = cmd.path ?? ''
+        // ★阶段 1（B2）：屏内容（真实页面渲染产物）——由装配层注入的提供者按屏解析；
+        //   缺省 undefined ⇒ 不带 content（向后兼容老宿主/老装置：行为不变）。
+        const content = contentOf?.({ name, path })
         const node = await host.mountScreen({
           screenId: cmd.screenId,
-          name: cmd.name ?? cmd.screenId,
-          path: cmd.path ?? '',
+          name,
+          path,
           params: cmd.params ?? null,
           rebuild,
+          ...(content ? { content } : {}),
           // ★GP3-c：三层容器计划（由**契约**算，宿主只消费——偏移量而非绝对 id，见类型注释）
           layerContainers: mountLayerContainerPlans(),
         })
@@ -208,7 +280,7 @@ export function createScreenExecutor(opts: ScreenExecutorOptions): ScreenExecuto
         txn.mounted.set(cmd.screenId, rebuild)
         if (rebuild) stats.mounts.rebuild++
         else stats.mounts.first++
-        emit('mount', cmd.screenId, { rebuild, node })
+        emit('mount', cmd.screenId, { rebuild, node, contentNodes: content?.nodes.length ?? 0 })
         // 契约：执行器建完屏内容后调 markRebuilt（清除 needsRebuild 标记）
         onScreenMounted?.(cmd.screenId, rebuild)
         return

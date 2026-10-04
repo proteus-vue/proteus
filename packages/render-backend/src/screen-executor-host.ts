@@ -177,7 +177,10 @@ export function createHostScreenPorts(opts: HostScreenPortsOptions): HostScreenP
         //   执行器已按契约算好（见 screen-executor.ts）；本层只做**透传**（不再重复计算——
         //   本仓纪律：同一件事两份实现 = 修一份等于没修）。
         ...(screen.layerContainers ? { layerContainers: screen.layerContainers } : {}),
-      }) as { rootNodeId?: number; nodes?: number; layers?: Record<string, number> } | null
+        // ★★★阶段 1（2026-10-04 · App 三端对齐 B1+B2）：**屏内容**（真实页面渲染产物）透传。
+        //   执行器按 `contentOf` 提供者解析后放入 mountScreen 入参；本层只做转发（与上方同款纪律）。
+        ...(screen.content ? { content: screen.content } : {}),
+      }) as { rootNodeId?: number; nodes?: number; contentNodes?: number; layers?: Record<string, number> } | null
       const rootNodeId = Number(d?.rootNodeId ?? 0)
       if (!rootNodeId) {
         throw new Error(`[screen-host] screen.mount 未返回 rootNodeId（${JSON.stringify(d)}）——宿主实现不完整`)

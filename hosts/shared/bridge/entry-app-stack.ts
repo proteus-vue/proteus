@@ -250,6 +250,20 @@ async function runExecutorScenario(): Promise<Record<string, unknown>> {
     },
     plan: (t: unknown, targets: { incoming?: number; outgoing?: number }, o?: { direction?: 'forward' | 'back' }) =>
       routeTransitionBatches(t, targets, o ?? {}),
+    // ★★★阶段 1（2026-10-04 · App 三端对齐 B1+B2）：**屏内容提供者**——
+    //   给每屏下发一段**真实页面内容**（内核节点描述，字段名与内核 create 契约同源）
+    //   ⇒ 宿主 `ScreenHost.mount` 建**真实页面子树**（不再是 3 个占位几何节点）。
+    //   ★本装置用**内联内容**（最少够证明"路由 → 内容 → 内核树"这条链）；生产形态由页面
+    //     渲染器（renderer-app selfdraw buildRequest）从 SFC 产物产出——同一 `content` 契约。
+    contentOf: (s) => ({
+      nodes: [
+        { id: 1, parentId: null, widthRatio: 1, flexDirection: 'column', padding: { top: 24, right: 16, bottom: 24, left: 16 } },
+        { id: 2, parentId: 1, height: 56, justifyContent: 'center', backgroundColor: '#5B5BD6' },
+        { id: 3, parentId: 2, height: 24, text: `${s.name} 页`, color: '#FFFFFF', fontSize: 20 },
+        { id: 4, parentId: 1, height: 120, backgroundColor: '#FFFFFF' },
+      ],
+      viewport: { width: 390, height: 844 },
+    }),
     onScreenMounted: (id: string) => eStack.markRebuilt(id),
   })
   const ePump = () => eExecutor.applyCommands(eStack.drainCommands())
