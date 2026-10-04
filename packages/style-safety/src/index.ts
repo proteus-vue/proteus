@@ -5,7 +5,7 @@
 //   · createStyleGuard：patch 逐属性校验 → 非法剔除/降级 + 记录 rejected（★DevTools style-safety Inspector 数据源）
 // ★纯逻辑零依赖；mode 'off' 零开销（生产默认）；MP 产物安全（决策 #32/#36）
 
-/** 白名单属性分类（✅ 直映射五端原生）：长度类 */
+/** 白名单属性分类（✅ 直映射三端原生）：长度类 */
 export const LENGTH_PROPS = [
   'width', 'height', 'minWidth', 'maxWidth', 'minHeight', 'maxHeight',
   'padding', 'paddingTop', 'paddingRight', 'paddingBottom', 'paddingLeft',

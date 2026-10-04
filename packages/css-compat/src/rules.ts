@@ -74,10 +74,10 @@ export const CSS_RULES: CssRule[] = [
     name: 'float 禁止',
     nameEn: 'float forbidden',
     severity: 'error',
-    description: 'float 在 Skyline/原生端无对应，五端无法统一',
-    descriptionEn: 'float has no equivalent on Skyline/native renderers — cannot unify across all five targets',
+    description: 'float 在 Skyline / App 自绘引擎无对应，三端无法统一',
+    descriptionEn: 'float has no equivalent on Skyline / the self-drawn App engine — cannot unify across the three targets',
     fixable: false,
-    checkDeclaration: (prop) => (prop === 'float' ? '使用 float：五端无法统一（Skyline/原生端不支持）' : null),
+    checkDeclaration: (prop) => (prop === 'float' ? '使用 float：三端无法统一（Skyline / App 自绘引擎不支持）' : null),
   },
   {
     code: 'CSS002',
@@ -89,7 +89,7 @@ export const CSS_RULES: CssRule[] = [
     fixable: false,
     checkDeclaration: (prop, value) =>
       prop === 'display' && /^inline(-block)?$/.test(value.trim())
-        ? 'display: ' + value.trim() + ' 仅 Web 语义：五端原生不支持（文本内嵌套场景走 <p-text> 语义）'
+        ? 'display: ' + value.trim() + ' 仅 Web 语义：三端原生不支持（文本内嵌套场景走 <p-text> 语义）'
         : null,
   },
   {
@@ -97,33 +97,33 @@ export const CSS_RULES: CssRule[] = [
     name: '通用选择器禁止',
     nameEn: 'Universal selector forbidden',
     severity: 'error',
-    description: '* 在 Skyline/原生端无选择器概念',
-    descriptionEn: 'No selector concept for * on Skyline/native renderers',
+    description: '* 在 Skyline / App 无选择器概念',
+    descriptionEn: 'No selector concept for * on Skyline / the App engine',
     fixable: false,
-    checkSelector: (selector) => (UNIVERSAL_SELECTOR_RE.test(selector) ? '通用选择器 *：Skyline/原生端不支持' : null),
+    checkSelector: (selector) => (UNIVERSAL_SELECTOR_RE.test(selector) ? '通用选择器 *：Skyline / App 不支持' : null),
   },
   {
     code: 'CSS004',
     name: '属性选择器禁止',
     nameEn: 'Attribute selector forbidden',
     severity: 'error',
-    description: '[attr] 在 Skyline/原生端无对应',
-    descriptionEn: 'No equivalent for [attr] on Skyline/native renderers',
+    description: '[attr] 在 Skyline / App 无对应',
+    descriptionEn: 'No equivalent for [attr] on Skyline / the App engine',
     fixable: false,
-    checkSelector: (selector) => (selector.includes('[') ? '属性选择器 [attr]：Skyline/原生端不支持（用类名 + 变体）' : null),
+    checkSelector: (selector) => (selector.includes('[') ? '属性选择器 [attr]：Skyline / App 不支持（用类名 + 变体）' : null),
   },
   {
     code: 'CSS005',
     name: '元素选择器禁止',
     nameEn: 'Element selector forbidden',
     severity: 'error',
-    description: 'div{} / span{} 等元素选择器依赖 UA 样式，原生端无',
-    descriptionEn: 'Element selectors such as div{} / span{} rely on UA styles, which native renderers lack',
+    description: 'div{} / span{} 等元素选择器依赖 UA 样式，App 引擎无',
+    descriptionEn: 'Element selectors such as div{} / span{} rely on UA styles, which the App engine lacks',
     fixable: false,
     checkSelector: (selector) => {
       // ★exec 而非 match：带 g 标志的 match 不返回捕获组（m[2] 拿不到标签名）
       const m = new RegExp(TAG_RE.source, TAG_RE.flags).exec(selector)
-      return m ? `元素选择器 ${m[2]}：原生端无 UA 样式（用类名选择器）` : null
+      return m ? `元素选择器 ${m[2]}：App 引擎无 UA 样式（用类名选择器）` : null
     },
   },
   {
@@ -144,10 +144,10 @@ export const CSS_RULES: CssRule[] = [
     name: 'z-index 依赖 stacking context',
     nameEn: 'z-index depends on stacking context',
     severity: 'warn',
-    description: '跨父级 stacking 无法五端统一（B1 保守提示，精确判定需 IR 上下文）',
-    descriptionEn: 'Cross-parent stacking contexts cannot be unified across all five targets (B1 conservative hint — precise judgement needs IR context)',
+    description: '跨父级 stacking 无法三端统一（B1 保守提示，精确判定需 IR 上下文）',
+    descriptionEn: 'Cross-parent stacking contexts cannot be unified across the three targets (B1 conservative hint — precise judgement needs IR context)',
     fixable: false,
-    checkDeclaration: (prop) => (prop === 'z-index' ? 'z-index 依赖 stacking context：跨父级无法五端统一（B1 保守提示，精确判定需 IR 上下文）' : null),
+    checkDeclaration: (prop) => (prop === 'z-index' ? 'z-index 依赖 stacking context：跨父级无法三端统一（B1 保守提示，精确判定需 IR 上下文）' : null),
   },
   {
     code: 'CSS008',

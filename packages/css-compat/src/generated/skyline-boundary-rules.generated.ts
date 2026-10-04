@@ -1,4 +1,4 @@
-// GENERATED - do not edit（scripts/gen-end-support-matrix.mjs 从官方文档派生）
+// GENERATED - do not edit（scripts/gen-css-capability-alignment.mjs 从官方文档派生）
 // 来源：《Skyline WXSS 样式支持与差异》属性表的**纯枚举 formats**（含 <占位符> 的不判——宁漏勿误）
 
 export interface SkylineBoundaryRule {

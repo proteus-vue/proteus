@@ -82,7 +82,7 @@ const compare = computed(() => [
 
 /** 证据链（标准 §10.3——每项主张指向机器产物） */
 const evidence = computed(() => [
-  { k: isEn.value ? 'L1 support matrix (28 fields × 3 ends)' : 'L1 支持度矩阵（28 字段 × 3 端实测）', v: 'end-support-matrix.json', gate: 'check:end-support' },
+  { k: isEn.value ? 'L1 capability alignment (28 fields × 3 ends: Web/Skyline/App)' : 'L1 CSS 能力对齐（28 字段 × 3 端 Web/Skyline/App）', v: 'css-capability-alignment.json', gate: 'check:css-capability-alignment' },
   { k: isEn.value ? 'L1 boundary rules (24, from official formats)' : 'L1 边界规则（官方 formats 派生 24 条）', v: 'skyline-boundary-rules.generated.ts', gate: 'check:profile-boundary' },
   { k: isEn.value ? 'Ratchet baselines (debt visible, only shrinks)' : '存量债务棘轮基线（可见且只减不增）', v: 'profile-boundary-baseline.json', gate: 'check:profile-baseline' },
   { k: isEn.value ? 'M1–M4 metrics' : 'M1–M4 指标', v: 'consistency-metrics.json', gate: 'check:consistency-metrics' },

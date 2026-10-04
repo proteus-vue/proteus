@@ -448,7 +448,7 @@ Android 真机截图（Skia 编码）内嵌 **Display P3** ICC：同一声明色
 
 | 主张 | 机器产物 | 门禁 |
 |---|---|---|
-| L1 各端支持度登记（28 字段 × 3 端实测） | `docs/generated/end-support-matrix.json` | `check:end-support`（防漂移） |
+| L1 各端支持度登记（28 字段 × 3 端实测） | `docs/generated/css-capability-alignment.json` | `check:css-capability-alignment`（防漂移） |
 | L1 边界规则（官方 formats 派生 24 条） | `packages/css-compat/src/generated/skyline-boundary-rules.generated.ts` | 同上 |
 | 编译期拦截（Web/MP 双链，error 级） | `packages/plugin-vite/src/profile-boundary-plugin.ts` | 构建即门禁 |
 | 存量债务可见且只减不增 | `examples|showcase/profile-boundary-baseline.json` | `check:profile-baseline` |

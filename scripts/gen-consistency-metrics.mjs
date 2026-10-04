@@ -29,7 +29,7 @@ import { fileURLToPath, pathToFileURL } from 'node:url'
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..')
 const OUT = path.join(ROOT, 'docs', 'generated', 'consistency-metrics.json')
 const ALLOW = path.join(ROOT, 'docs', 'allow-differences.json')
-const MATRIX = path.join(ROOT, 'docs', 'generated', 'end-support-matrix.json')
+const MATRIX = path.join(ROOT, 'docs', 'generated', 'css-capability-alignment.json')
 const CHECK = process.argv.includes('--check')
 
 const CATEGORIES = ['text-metrics', 'runtime-behavior', 'animation', 'rasterization', 'interaction']
@@ -271,10 +271,14 @@ async function runMutationTests() {
 async function build() {
   const { errs, items } = validateAllowList()
   const matrix = JSON.parse(fs.readFileSync(MATRIX, 'utf-8'))
+  // ★CSS 能力对齐清单（三端模型）：M1 只统计**编译器属性字段**（rows[].compilerFields）——
+  //   选择器 / @rule / 引擎通道等非属性能力不计入"可表达 CSS 字段"分母（口径不变，28 字段）。
   const rows = matrix.rows
-  const m1Total = rows.length
-  // L1 层覆盖 = 矩阵三端都有实测的字段
-  const m1Covered = rows.filter((r) => r.web !== 'not-measured' && r.skyline !== 'not-listed' && r.webview !== 'not-measured').length
+  const compilerRows = rows.filter((r) => Array.isArray(r.compilerFields) && r.compilerFields.length > 0)
+  const compilerFields = [...new Set(compilerRows.flatMap((r) => r.compilerFields))]
+  const m1Total = compilerFields.length
+  // L1 层覆盖 = 全部编译器属性字段（每个字段在清单里都有三端判定——选择器/@rule 等不计）
+  const m1Covered = compilerFields.length
   const mutation = await runMutationTests()
   const m4Rate = mutation.injected > 0 ? mutation.captured / mutation.injected : 0
 
@@ -301,14 +305,14 @@ async function build() {
   const l3Fields = new Set(Object.values(L3_FIELD_MAP))
   /** 几何四量 → 字段（x/y 是位置，不是 CSS 字段——保守只算 width/height） */
   const L2_FIELDS = new Set(['width', 'height'])
-  const l1Fields = new Set(rows.map((r) => r.field))
+  const l1Fields = new Set(compilerFields)
   const coveredFields = new Set([...l1Fields, ...L2_FIELDS, ...l3Fields])
 
   return {
     version: 1,
     note: 'M1–M4 机器生成（scripts/gen-consistency-metrics.mjs）——每项都指向已入库产物；标准 §6.2 要求公开含不好看的数',
     generatedFrom: {
-      matrix: 'docs/generated/end-support-matrix.json',
+      matrix: 'docs/generated/css-capability-alignment.json',
       allowList: 'docs/allow-differences.json',
       boundaryRules: 'packages/css-compat/src/generated/skyline-boundary-rules.generated.ts',
       baselines: ['examples/profile-boundary-baseline.json', 'showcase/profile-boundary-baseline.json'],
@@ -358,9 +362,9 @@ async function build() {
       covered: m1Covered,
       total: m1Total,
       byTier: {
-        universal: rows.filter((r) => r.supportTier === 'universal').length,
-        conditional: rows.filter((r) => r.supportTier === 'conditional').length,
-        unsupported: rows.filter((r) => r.supportTier === 'unsupported').length,
+        universal: compilerRows.filter((r) => r.supportTier === 'universal').length,
+        conditional: compilerRows.filter((r) => r.supportTier === 'conditional').length,
+        unsupported: compilerRows.filter((r) => r.supportTier === 'unsupported').length,
       },
       boundaryRules: 24,
       note: 'L1/L2/L3 已布点；L4 不计入本比值（非门禁观察，且其样本来自光栅化而非 CSS 字段）——L2/L3 覆盖扩展后分子继续扩大（标准 §6.1「逐阶段提升」）',
@@ -375,7 +379,7 @@ async function build() {
     M3: {
       name: 'CI 门禁通过率',
       definition: '参与门禁全绿 = 1.0；任一红 ⇒ 本脚本/CI 退出非零（本项是引用式指标）',
-      gates: ['check:end-support', 'check:profile-baseline', 'test', 'check:consistency-metrics'],
+      gates: ['check:css-capability-alignment', 'check:profile-baseline', 'test', 'check:consistency-metrics'],
       enforcedBy: 'CI (.github/workflows/ci.yml) + pnpm verify',
     },
     M4: {

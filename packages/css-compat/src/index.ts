@@ -17,7 +17,7 @@ export { CSS_BUDGETS, checkCssBudget, formatBudgetCheck } from './budget'
 export type { CssBudgetMetric, CssGlobalReport, BudgetCheckResult } from './budget'
 export { CSS_RULES, CSS_RULE_MAP, defaultStrictOptions } from './rules'
 export type { CssRule } from './rules'
-// ★VC2-b：编译期静态校验（官方 Skyline 支持格式白名单——生成物派生，见 scripts/gen-end-support-matrix.mjs）
+// ★VC2-b：编译期静态校验（官方 Skyline 支持格式白名单——生成物派生，见 scripts/gen-css-capability-alignment.mjs）
 export { checkProfileBoundary, formatProfileBoundaryViolation } from './profile-boundary'
 export type { ProfileBoundaryViolation, ProfileBoundaryResult } from './profile-boundary'
 export { SKYLINE_BOUNDARY_RULES } from './generated/skyline-boundary-rules.generated'

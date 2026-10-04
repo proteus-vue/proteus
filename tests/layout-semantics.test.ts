@@ -17,7 +17,7 @@ import {
 } from '@proteus-vue/css-compat/layout-semantics'
 
 describe('LAYOUT_SEMANTICS_MAP（05 §二 布局容器映射）', () => {
-  it('完整性：5 语义 × 5 端全非空', () => {
+  it('完整性：5 语义 × 3 端（Web / Skyline / App）全非空', () => {
     for (const sem of LAYOUT_SEMANTICS) {
       for (const p of CSS_PLATFORMS) {
         expect(LAYOUT_SEMANTICS_MAP[sem][p], `${sem}@${p}`).toBeTruthy()
@@ -25,9 +25,13 @@ describe('LAYOUT_SEMANTICS_MAP（05 §二 布局容器映射）', () => {
     }
   })
 
-  it('flex-row：iOS → UIStackView 水平', () => {
-    expect(LAYOUT_SEMANTICS_MAP['flex-row'].ios).toContain('UIStackView')
-    expect(LAYOUT_SEMANTICS_MAP['flex-row'].ios).toContain('horizontal')
+  it('★三端模型：CSS_PLATFORMS 收敛为 web/skyline/app（App = 自研引擎，不再分 iOS/Android/鸿蒙）', () => {
+    expect(CSS_PLATFORMS).toEqual(['web', 'skyline', 'app'])
+  })
+
+  it('flex-row：App → 自研内核 taffy flex（不再按 iOS/Android 分列）', () => {
+    expect(LAYOUT_SEMANTICS_MAP['flex-row'].app).toContain('taffy')
+    expect(LAYOUT_SEMANTICS_MAP['flex-row'].app).toContain('flex')
   })
 
   it('scroll：Skyline → scroll-view（05 §五 裸 overflow 禁止）', () => {
@@ -36,7 +40,7 @@ describe('LAYOUT_SEMANTICS_MAP（05 §二 布局容器映射）', () => {
 })
 
 describe('VISUAL_MAP（05 §四 视觉映射）', () => {
-  it('完整性：4 属性 × 5 端全非空', () => {
+  it('完整性：4 属性 × 3 端全非空', () => {
     for (const prop of VISUAL_PROPERTIES) {
       for (const p of CSS_PLATFORMS) {
         expect(VISUAL_MAP[prop][p], `${prop}@${p}`).toBeTruthy()
@@ -44,10 +48,9 @@ describe('VISUAL_MAP（05 §四 视觉映射）', () => {
     }
   })
 
-  it('opacity：iOS/Android → alpha；backdrop-filter 走系统玻璃', () => {
-    expect(VISUAL_MAP.opacity.ios).toBe('alpha')
-    expect(VISUAL_MAP.opacity.android).toBe('alpha')
-    expect(VISUAL_MAP['backdrop-filter'].ios).toBe('UIGlassEffect')
+  it('opacity：App → 引擎 opacity 通道；backdrop-filter 走语义组件', () => {
+    expect(VISUAL_MAP.opacity.app).toContain('opacity')
+    expect(VISUAL_MAP['backdrop-filter'].app).toContain('p-glass')
   })
 })
 
@@ -68,12 +71,12 @@ describe('SEMANTIC_COMPONENTS（04 §一 语义样式组件清单）', () => {
 
 describe('resolve 查询函数', () => {
   it('resolveLayoutSemantic：已知 → 端实现；未知语义 → undefined', () => {
-    expect(resolveLayoutSemantic('grid', 'harmony')).toBe('Grid()')
+    expect(resolveLayoutSemantic('grid', 'app')).toContain('taffy')
     expect(resolveLayoutSemantic('float', 'web')).toBeUndefined()
   })
 
   it('resolveVisual：已知 → 端属性；未知属性 → undefined', () => {
-    expect(resolveVisual('color', 'harmony')).toBe('fontColor')
+    expect(resolveVisual('color', 'app')).toContain('textColor')
     expect(resolveVisual('display', 'web')).toBeUndefined()
   })
 

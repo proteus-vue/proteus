@@ -13,13 +13,13 @@ generated: true
 
 | code | 规则 | 级别 | 检测维度 | 可自动修复 | 说明 |
 |---|---|---|---|---|---|
-| CSS001 | float 禁止 | error | 声明 | — | float 在 Skyline/原生端无对应，五端无法统一 |
+| CSS001 | float 禁止 | error | 声明 | — | float 在 Skyline / App 自绘引擎无对应，三端无法统一 |
 | CSS002 | display: inline 禁止 | error | 声明 | — | inline/inline-block 仅 Web 语义（文本内嵌套除外） |
-| CSS003 | 通用选择器禁止 | error | 选择器 | — | * 在 Skyline/原生端无选择器概念 |
-| CSS004 | 属性选择器禁止 | error | 选择器 | — | [attr] 在 Skyline/原生端无对应 |
-| CSS005 | 元素选择器禁止 | error | 选择器 | — | div{} / span{} 等元素选择器依赖 UA 样式，原生端无 |
+| CSS003 | 通用选择器禁止 | error | 选择器 | — | * 在 Skyline / App 无选择器概念 |
+| CSS004 | 属性选择器禁止 | error | 选择器 | — | [attr] 在 Skyline / App 无对应 |
+| CSS005 | 元素选择器禁止 | error | 选择器 | — | div{} / span{} 等元素选择器依赖 UA 样式，App 引擎无 |
 | CSS006 | 深层后代组合禁止 | error | 选择器 | — | 超过 2 级后代/子代组合（.a .b .c） |
-| CSS007 | z-index 依赖 stacking context | warn | 声明 | — | 跨父级 stacking 无法五端统一（B1 保守提示，精确判定需 IR 上下文） |
+| CSS007 | z-index 依赖 stacking context | warn | 声明 | — | 跨父级 stacking 无法三端统一（B1 保守提示，精确判定需 IR 上下文） |
 | CSS008 | calc()/vh/vw 需编译期重写 | error | 声明 | ✅ | ArkUI 早期不支持 calc；vh/vw 键盘弹出不收缩 |
 | CSS009 | 裸 backdrop-filter 禁止 | error | 声明 | ✅ | 必须走 <p-glass> 语义组件 |
 | CSS010 | :nth-child 复杂表达式 | warn | 选择器 | — | 仅 :first/:last 形态可跨端（B2 展开） |
@@ -32,7 +32,7 @@ generated: true
 
 - **级别**：error（strict 模式 error 阻断 / warn 警告）
 - **可自动修复**：否
-- **说明**：float 在 Skyline/原生端无对应，五端无法统一
+- **说明**：float 在 Skyline / App 自绘引擎无对应，三端无法统一
 
 ### CSS002 display: inline 禁止
 
@@ -44,19 +44,19 @@ generated: true
 
 - **级别**：error（strict 模式 error 阻断 / warn 警告）
 - **可自动修复**：否
-- **说明**：* 在 Skyline/原生端无选择器概念
+- **说明**：* 在 Skyline / App 无选择器概念
 
 ### CSS004 属性选择器禁止
 
 - **级别**：error（strict 模式 error 阻断 / warn 警告）
 - **可自动修复**：否
-- **说明**：[attr] 在 Skyline/原生端无对应
+- **说明**：[attr] 在 Skyline / App 无对应
 
 ### CSS005 元素选择器禁止
 
 - **级别**：error（strict 模式 error 阻断 / warn 警告）
 - **可自动修复**：否
-- **说明**：div{} / span{} 等元素选择器依赖 UA 样式，原生端无
+- **说明**：div{} / span{} 等元素选择器依赖 UA 样式，App 引擎无
 
 ### CSS006 深层后代组合禁止
 
@@ -68,7 +68,7 @@ generated: true
 
 - **级别**：warn（strict 模式 error 阻断 / warn 警告）
 - **可自动修复**：否
-- **说明**：跨父级 stacking 无法五端统一（B1 保守提示，精确判定需 IR 上下文）
+- **说明**：跨父级 stacking 无法三端统一（B1 保守提示，精确判定需 IR 上下文）
 
 ### CSS008 calc()/vh/vw 需编译期重写
 

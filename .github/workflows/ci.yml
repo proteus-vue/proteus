@@ -113,8 +113,8 @@ jobs:
       - name: 坐标吸附跨语言 golden（卡 I2：TS ⇄ Rust 同输入同输出——三端差 1px 的机器判据）
         run: pnpm run check:pixel-snap
 
-      - name: 端支持度矩阵漂移（VC1：编译器属性集 ⇄ 三端矩阵 ⇄ 源工件；防矩阵落后于编译器/源）
-        run: pnpm run check:end-support
+      - name: CSS 能力对齐清单漂移（三端 Web/Skyline/App：编译器属性集 ⇄ 清单 ⇄ 源工件；防清单落后于编译器/源）
+        run: pnpm run check:css-capability-alignment
 
       - name: Profile 边界基线漂移（VC2-b：存量只减不增——新增越界样式必须修或在评审中显式刷新基线）
         run: pnpm run check:profile-baseline

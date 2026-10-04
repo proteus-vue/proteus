@@ -6,7 +6,7 @@
 //   ⇒ 本插件在 **Web 与 MP 两条构建链都注册**（见 vite-config.ts）。
 //
 // 【判定数据】官方《Skyline WXSS 样式支持与差异》属性表的纯枚举 formats（生成物
-//   `@proteus-vue/css-compat` 的 SKYLINE_BOUNDARY_RULES——由 scripts/gen-end-support-matrix.mjs
+//   `@proteus-vue/css-compat` 的 SKYLINE_BOUNDARY_RULES——由 scripts/gen-css-capability-alignment.mjs
 //   派生，官方文档更新 ⇒ 重新生成 ⇒ 本插件自动跟上）。
 //
 // 【插件形态（为什么挂在 transform 上）】每个 `.vue` 经 transform 流时提取 `<style>` 块做校验；

@@ -1,14 +1,14 @@
 // packages/css-compat/src/profile-boundary.ts
 // VC2-b：**编译期静态校验**——「使用了某端不支持的样式」在编译期报错（不是警告）。
 //
-// 【这一层补的是什么（卡片 VC2-b 原文）】Profile 已有 CSS001-012（五端统一性规则），但它们
+// 【这一层补的是什么（卡片 VC2-b 原文）】Profile 已有 CSS001-012（三端统一性规则），但它们
 //   按"框架自定语义"手写；而**官方 Skyline 支持格式**是另一份权威事实（"display 只认
 //   none/flex/block"、"overflow 只认 hidden/visible"、"position 只认 relative/absolute/fixed"…）。
 //   开发者写 `overflow: scroll`（Skyline 不支持）或 `display: grid`（Skyline 退化）时，
 //   Web 端浏览器照常渲染 ⇒ 问题在 App/Skyline 才暴露。本模块把官方 formats 白名单变成
 //   **编译期错误**，让"Web 跑通 = 全端一致"。
 //
-// 【数据来源（SSOT 纪律）】规则**由官方文档派生**（`scripts/gen-end-support-matrix.mjs`
+// 【数据来源（SSOT 纪律）】规则**由官方文档派生**（`scripts/gen-css-capability-alignment.mjs`
 //   生成 `src/generated/skyline-boundary-rules.generated.ts`）——不手抄、不凭印象；
 //   官方文档更新 ⇒ 重新生成 ⇒ 本模块自动跟上。
 //

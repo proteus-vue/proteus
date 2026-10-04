@@ -83,7 +83,7 @@ export const CONSISTENCY_PAGE = {
   },
   "m3": {
     "gates": [
-      "check:end-support",
+      "check:css-capability-alignment",
       "check:profile-baseline",
       "test",
       "check:consistency-metrics"
@@ -1124,8 +1124,17 @@ export const CONSISTENCY_PAGE = {
   "sfc": {
     "source": "examples/pages/consistency-stress.vue（真 SFC：44 节点 · 10 行 v-for · 行内动态绑定）",
     "gate": false,
-    "endCount": 5,
+    "endCount": 6,
     "pairs": [
+      {
+        "id": "sfc:android-vs-harmony",
+        "mode": "cross-runtime",
+        "verdict": "changed",
+        "diffPixels": 6401,
+        "sampleCount": 245520,
+        "diffRatio": 0.02607,
+        "hashDistance": 4
+      },
       {
         "id": "sfc:android-vs-ios-device",
         "mode": "cross-runtime",
@@ -1161,6 +1170,42 @@ export const CONSISTENCY_PAGE = {
         "sampleCount": 245520,
         "diffRatio": 0.01903,
         "hashDistance": 0
+      },
+      {
+        "id": "sfc:harmony-vs-ios-device",
+        "mode": "cross-runtime",
+        "verdict": "changed",
+        "diffPixels": 6035,
+        "sampleCount": 245520,
+        "diffRatio": 0.02458,
+        "hashDistance": 4
+      },
+      {
+        "id": "sfc:harmony-vs-ios",
+        "mode": "cross-runtime",
+        "verdict": "changed",
+        "diffPixels": 6000,
+        "sampleCount": 245520,
+        "diffRatio": 0.02444,
+        "hashDistance": 4
+      },
+      {
+        "id": "sfc:harmony-vs-mp.skyline",
+        "mode": "cross-runtime",
+        "verdict": "changed",
+        "diffPixels": 7591,
+        "sampleCount": 245520,
+        "diffRatio": 0.03092,
+        "hashDistance": 4
+      },
+      {
+        "id": "sfc:harmony-vs-web",
+        "mode": "cross-runtime",
+        "verdict": "changed",
+        "diffPixels": 6487,
+        "sampleCount": 245520,
+        "diffRatio": 0.02642,
+        "hashDistance": 4
       },
       {
         "id": "sfc:ios-device-vs-ios",
@@ -1226,6 +1271,16 @@ export const CONSISTENCY_PAGE = {
         "srcSize": {
           "width": 1200,
           "height": 2608
+        }
+      },
+      {
+        "end": "harmony",
+        "label": "HarmonyOS 真机（RenderNode 直绘）",
+        "file": "sfc.harmony.png",
+        "scale": 0.285715,
+        "srcSize": {
+          "width": 1320,
+          "height": 2856
         }
       },
       {

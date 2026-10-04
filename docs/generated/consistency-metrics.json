@@ -2,7 +2,7 @@
   "version": 1,
   "note": "M1–M4 机器生成（scripts/gen-consistency-metrics.mjs）——每项都指向已入库产物；标准 §6.2 要求公开含不好看的数",
   "generatedFrom": {
-    "matrix": "docs/generated/end-support-matrix.json",
+    "matrix": "docs/generated/css-capability-alignment.json",
     "allowList": "docs/allow-differences.json",
     "boundaryRules": "packages/css-compat/src/generated/skyline-boundary-rules.generated.ts",
     "baselines": [
@@ -49,8 +49,8 @@
     "covered": 28,
     "total": 28,
     "byTier": {
-      "universal": 25,
-      "conditional": 3,
+      "universal": 19,
+      "conditional": 1,
       "unsupported": 0
     },
     "boundaryRules": 24,
@@ -76,7 +76,7 @@
     "name": "CI 门禁通过率",
     "definition": "参与门禁全绿 = 1.0；任一红 ⇒ 本脚本/CI 退出非零（本项是引用式指标）",
     "gates": [
-      "check:end-support",
+      "check:css-capability-alignment",
       "check:profile-baseline",
       "test",
       "check:consistency-metrics"
