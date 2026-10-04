@@ -1247,6 +1247,10 @@ final class VaporRenderHost {
             float fs = (float) spec.optDouble("fontSize", 14);
             android.text.TextPaint tp = new android.text.TextPaint();
             tp.setTextSize(fs);
+            // ★批次 3：度量与绘制**同源**（bold 字形更宽 —— 度量不带字重会与绘制不一致，本仓已踩过
+            //   "度量用一支字体/绘制用另一支"的坑）。缺省 400 = normal ⇒ 既有路径零变化。
+            int mw = (int) spec.optDouble("fontWeight", 400);
+            tp.setTypeface(ProteusHostView.typefaceOf(null, mw, null));
             float w = tp.measureText(t);
             android.graphics.Paint.FontMetrics fm = tp.getFontMetrics();
             float h = fm.descent - fm.ascent;   // ★真实字体度量（原 fs×1.4 近似已删）
@@ -1308,7 +1312,9 @@ final class VaporRenderHost {
             float fs = (float) spec.optDouble("fontSize", 14);
             String tc = spec.optString("color", null);
             int textColor = tc != null ? parseColor(tc) : 0xFFFFFFFF;
-            return new ProteusHostView.Cmd(x, y, w, h, color, t, fs, textColor, radius, grad, glowSpec, maskSpec);
+            // ★批次 3：字重（`font-weight` 折叠值；缺省 400 = normal）
+            int fw = (int) spec.optDouble("fontWeight", 400);
+            return new ProteusHostView.Cmd(x, y, w, h, color, t, fs, textColor, radius, grad, glowSpec, maskSpec, fw);
         }
         return new ProteusHostView.Cmd(x, y, w, h, color, null, 0f, 0, radius, grad, glowSpec, maskSpec);
     }
@@ -1419,9 +1425,10 @@ final class VaporRenderHost {
             final float fs = (float) spec.optDouble("fontSize", 14);
             String tc = spec.optString("color", null);
             final int textColor = tc != null ? parseColor(tc) : prev.textColor;
-            return new ProteusHostView.Cmd(prev.x, prev.y, prev.w, prev.h, color, t, fs, textColor);
+            final int fw = (int) spec.optDouble("fontWeight", prev.fontWeight);
+            return new ProteusHostView.Cmd(prev.x, prev.y, prev.w, prev.h, color, t, fs, textColor, prev.radius, prev.gradient, prev.glow, prev.mask, fw);
         }
-        return new ProteusHostView.Cmd(prev.x, prev.y, prev.w, prev.h, color, prev.text, prev.fontSize, prev.textColor);
+        return new ProteusHostView.Cmd(prev.x, prev.y, prev.w, prev.h, color, prev.text, prev.fontSize, prev.textColor, prev.radius, prev.gradient, prev.glow, prev.mask, prev.fontWeight);
     }
 
     /** 全量：几何 → 指令（矩形 + 文本 + 底色） */

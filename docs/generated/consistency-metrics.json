@@ -13,26 +13,26 @@
   "M1": {
     "name": "数值一致性覆盖率",
     "definition": "Σ(L1|L2|L3 各层**折算到同一 CSS 字段集**后的覆盖数) / (可表达字段数 × 3)（分层加总 · 折算口径）｜★L2.5/L2.6（交互层）**不计入本比值**：它们校验的不是 CSS 字段（是\"结果态等价\"与\"6 类不变量\"），计入会让分母失去意义——覆盖状态单列在 byLayer，由门禁与 M4 算子承担。",
-    "value": 0.6786,
+    "value": 0.6667,
     "union": {
-      "covered": 28,
-      "total": 28,
+      "covered": 29,
+      "total": 29,
       "value": 1
     },
     "byLayer": {
       "L1": {
-        "covered": 28,
-        "total": 28,
+        "covered": 29,
+        "total": 29,
         "note": "支持度矩阵 + 边界门禁 + 棘轮基线（逐字段，已落地）"
       },
       "L2": {
         "covered": 2,
-        "total": 28,
+        "total": 29,
         "note": "比对引擎已落地 + 三端实测通过；**折算口径**：几何 w/h → 字段 width/height（x/y 是位置不是字段——保守计 2）"
       },
       "L3": {
         "covered": 27,
-        "total": 28,
+        "total": 29,
         "note": "实测比对已落地（VC6：Web ⇄ WebView，硬门禁 + A-6 豁免）；**折算口径**：可比样式键 → 27 个字段（四角/四边归并；集外键不计）"
       },
       "L2_5": {
@@ -46,11 +46,11 @@
         "note": "连续交互不变量：6 类全绿（structure/sizes/gaps/order/containment/translation）+ 实测滚动 200/500px + M4 算子 4 个（含\"纯滚动不应报\"对照组）"
       }
     },
-    "covered": 28,
-    "total": 28,
+    "covered": 29,
+    "total": 29,
     "byTier": {
       "universal": 19,
-      "conditional": 1,
+      "conditional": 2,
       "unsupported": 0
     },
     "boundaryRules": 24,

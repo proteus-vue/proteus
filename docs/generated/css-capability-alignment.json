@@ -187,14 +187,24 @@
         "why": "离屏/额外缓冲；走 <p-glass> / <p-filter> 语义组件"
       },
       {
-        "css": "line-height / letter-spacing / text-align / font-weight / white-space",
+        "css": "font-weight",
+        "id": "font-weight",
+        "ends": {
+          "web": "not-measured",
+          "skyline": "supported",
+          "app": "supported"
+        },
+        "why": "★批次 3（2026-10-04）：`normal`→400 / `bold`→700 / 100–900 数值归一；作为**文本可继承**字段沿树继承。三端宿主：iOS 已读 `fontWeight`（≥600 bold 判据）、Android 新接线（Cmd.fontWeight + 绘制/度量同源 typeface）、鸿蒙新接线（OH_Drawing_SetTextStyleFontWeight）"
+      },
+      {
+        "css": "line-height / letter-spacing / text-align / white-space",
         "id": "text-attrs",
         "ends": {
           "web": "supported",
           "skyline": "supported",
           "app": "absent"
         },
-        "why": "文本度量与排版走平台文本引擎（不自研）；当前 App 折叠面仅 fontSize/color（Web 探针取三代表）"
+        "why": "文本度量与排版走平台文本引擎（不自研）；当前 App 折叠面文本维 = fontSize/color/fontWeight（需扩引擎/宿主文本通道，属后续）"
       },
       {
         "css": "visibility",
@@ -381,6 +391,7 @@
       "backgroundColor",
       "color",
       "fontSize",
+      "fontWeight",
       "borderRadius",
       "borderColor",
       "borderWidth",
@@ -1059,8 +1070,23 @@
       "supportTier": "conditional"
     },
     {
+      "id": "font-weight",
+      "css": "font-weight",
+      "category": "text",
+      "compilerFields": [
+        "fontWeight"
+      ],
+      "web": "not-measured",
+      "skyline": "supported",
+      "app": "supported",
+      "tier": "L1",
+      "strategy": "编译期折叠",
+      "note": "★批次 3（2026-10-04）：`normal`→400 / `bold`→700 / 100–900 数值归一；作为**文本可继承**字段沿树继承。三端宿主：iOS 已读 `fontWeight`（≥600 bold 判据）、Android 新接线（Cmd.fontWeight + 绘制/度量同源 typeface）、鸿蒙新接线（OH_Drawing_SetTextStyleFontWeight）",
+      "supportTier": "conditional"
+    },
+    {
       "id": "text-attrs",
-      "css": "line-height / letter-spacing / text-align / font-weight / white-space",
+      "css": "line-height / letter-spacing / text-align / white-space",
       "category": "text",
       "compilerFields": [],
       "web": "supported",
@@ -1068,7 +1094,7 @@
       "app": "absent",
       "tier": "L4",
       "strategy": "降级",
-      "note": "文本度量与排版走平台文本引擎（不自研）；当前 App 折叠面仅 fontSize/color（Web 探针取三代表）",
+      "note": "文本度量与排版走平台文本引擎（不自研）；当前 App 折叠面文本维 = fontSize/color/fontWeight（需扩引擎/宿主文本通道，属后续）",
       "supportTier": "conditional"
     },
     {

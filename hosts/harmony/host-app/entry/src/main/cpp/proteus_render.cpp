@@ -220,6 +220,9 @@ struct TextDrawSpec {
     double fontSizePx = 24.0;
     uint32_t color = 0xFFFFFFFFu;
     std::string family;
+    /** ★批次 3（CSS 兼容对齐）：文本字重（`font-weight` 折叠值 100–900；缺省 400）。
+     *   映射到 `OH_Drawing_FontWeight`（100→0 … 900→8）——见 typography 设置处。 */
+    int fontWeight = 400;
     /** 节点声明宽（vp）——用于**单位标定**：canvas 若是物理 px，字号需按比例换算（见回调注释） */
     double widthVp = 0.0;
     /* ── ★★四通道（2026-10-03）——在 content modifier 的 canvas 上画（RenderNode 无这些属性 API）── */
@@ -349,6 +352,12 @@ static void drawChannelsAndText(OH_Drawing_Canvas* canvas, const TextDrawSpec* s
             OH_Drawing_TextStyle* tstyle = OH_Drawing_CreateTextStyle();
             OH_Drawing_SetTextStyleColor(tstyle, spec->color);
             OH_Drawing_SetTextStyleFontSize(tstyle, spec->fontSizePx);
+            // ★批次 3：字重（`OH_Drawing_FontWeight` = FONT_WEIGHT_100..900 ⇒ 索引 (w/100)-1，钳 [0,8]）
+            {
+                int wi = spec->fontWeight / 100 - 1;
+                if (wi < 0) wi = 0; else if (wi > 8) wi = 8;
+                OH_Drawing_SetTextStyleFontWeight(tstyle, wi);
+            }
             OH_Drawing_TypographyCreate* handler = OH_Drawing_CreateTypographyHandler(ts, fc);
             if (handler != nullptr) {
                 OH_Drawing_TypographyHandlerPushTextStyle(handler, tstyle);
@@ -577,12 +586,15 @@ static int renderCommandsImpl(const char* jsonCStr, bool fromProbe) {
         jsonNumber(it, "fontSize", &fs);
         double tc = 0xFFFFFFFFu;
         jsonNumber(it, "textColor", &tc);
+        // ★批次 3：字重（`font-weight` 折叠值；缺省 400）
+        double fw = 400;
+        jsonNumber(it, "fontWeight", &fw);
         // ★★★绘制四通道解析 + 登记（2026-10-03）：指令里带 grad/glow/clip/stroke ⇒
         //   ① 填进 spec（回调据此在画布上真画）；② 登记进 `g_channelStates`（探针回读；
         //   **建什么记什么**——与 Android 读自家 spec 表同性质，不是复述模板声明）。
         {
             bool hasAnyChannel = false;
-            auto* spec = new TextDrawSpec{textVal, fs, static_cast<uint32_t>(tc), "", w};
+            auto* spec = new TextDrawSpec{textVal, fs, static_cast<uint32_t>(tc), "", static_cast<int>(fw), w};
             spec->w = w;
             spec->h = h;
             spec->radius = radius;
