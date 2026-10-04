@@ -15,9 +15,9 @@
 - **包规模**：**45 个 @proteus-vue/* npm 包**（+ `packages/layout-core-rust` = **cargo crate，非 npm 包**，故不计数）（★2026-09-29 layout-core = App 排版核心）（check:pkg 0 error · `pnpm check:stats` 校验 ✓；31→38 修正 → G-07 glass 39 → Skyline 收口 worklet 40 → ★2026-09-14 组件库拆包 `@proteus-vue/components` 41 → ★Vapor 线新增 `@proteus-vue/slot-runtime` 42 + `@proteus-vue/layout-core` 43 → ★2026-09-30 MA1 新增 `@proteus-vue/animation` 44；版本统一 0.3.0-beta.8，见「当前状态速览」）
 - **文档**：`docs/proteus-architecture.md`（L0 规约·真理来源）→ `docs/board-inventory.md`（全景索引）→ `docs/roadmap.md`（版本线）→ `roadmap-2-plan`（里程碑线）→ 各 plan
 
+## 当前状态速览（最近一次更新：**2026-10-04·（一四四）· **App 三端对齐 — iOS/鸿蒙 交互上屏（三端渲染页全可命中）**（决策 #490）——用户「继续」。★承接 Android 命中：**iOS/鸿蒙 也接上"渲染页真机命中"**（三端齐 **20/20 命中**）。★iOS：`proteusSelfDraw.tapAt(x,y)`（内核 `proteus_layout_hit_test`）⇒ 20/20 · target=0。★鸿蒙：踩过一个真坑——**C++ 建树必须注入 `textMeasures`**（文本节点无高度 ⇒ 布局塌缩 ⇒ 命中全 miss），注入后 20/20 · target=9。门禁三端均加命中断言（破坏性验证过）。★**里程碑：App 三端「渲染页可命中交互」全对齐**（同一条内核 hitTest 路径）。★诚实边界：装置内点按（非真实触摸事件注入）。★全量 **5074/5074** 绿。★**全链现状（三端齐）**：路由→SFC（含类样式）→编译器→屏内容→executor→内核树→真画屏→转场逐帧→可命中交互**）★新会话以此为准
 ## 当前状态速览（最近一次更新：**2026-10-04·（一四三）· **App 三端对齐 — Android 交互上屏（渲染页真机可命中交互）**（决策 #489）——用户「继续」。★承接三端视觉合成/anim：**给渲染出的页面加"真机点按命中"**——复用 `ProteusHostView.dispatchHit`（内核 `hitTest`，与真实触摸**同一条路径**）：合成探针在渲染页纵扫 20 点 ⇒ 真机 **20/20 命中 · target=0 · 冒泡链=3**（证明"渲染的页面可命中交互"，非只画不动）。门禁加命中断言（破坏性验证过）。★诚实边界：仅 Android 接了命中（iOS/鸿蒙 ⏳）；且是**装置内点按**（非真实触摸事件注入）。★全量 **5074/5074** 绿。★**App 三端全链现状**：项目路由→SFC（含类样式）→编译器→屏内容→executor→内核树→**真画屏**→**转场逐帧**→（Android）**可命中交互**。下一步：iOS/鸿蒙命中，或 C1 收尾**）★新会话以此为准
 ## 当前状态速览（最近一次更新：**2026-10-04·（一四二）· **App 三端对齐 — 鸿蒙 anim 逐帧打通（三端转场全对齐）**（决策 #488）——用户「继续」。★承接三端视觉合成：**鸿蒙 anim 从"即时"变"真逐帧"**——修 key bug（`screen.mount` **无真屏根** ⇒ 转场动画目标不存在 ⇒ 内核拒绝 ⇒ 此前 `exec_anim_started=0`；现加合成根 + 内容根 parentId 指它，**带空格**序列化精确匹配）+ 探针循环**每轮 tick（模拟 16.7ms 帧）+ 到点回推 done**（免 ArkTS 帧循环）。★真机 **exec_anim_started=13**，executor 全链与 Android/iOS **计数一致**（8 命令/3 转场/forward 2/back 1/镜像对成立/零错误）；门禁加 anim 断言（破坏性验证过）。★**里程碑：App 三端「转场动画」真逐帧对齐**（Android/iOS CADisplayLink/Choreographer、鸿蒙模拟帧）。★诚实边界：鸿蒙无 vsync 帧回调通道（用模拟帧，观感等价、不跟随显示器节拍）。★全量 **5074/5074** 绿。下一步：C1 收尾（伪类/元素，规模小）或真机交互上屏**）★新会话以此为准
-## 当前状态速览（最近一次更新：**2026-10-04·（一四一）· **App 三端对齐 — 三端视觉合成全打通（内容→内核树→真画屏）**（决策 #487）——用户「继续」。★承接 Android/iOS：**鸿蒙也真画屏了**——新增 `appScreenCommands`（内容→内核树→RenderCmd 数组）+ ArkTS `attach + renderCommands` 真建 RenderNode ⇒ 真机 **51 内容节点 → 51 渲染节点**。`check:app-screen-content` 视觉合成设备腿**三端齐**（Android 283 像素 / iOS 51 层+PNG / 鸿蒙 51 渲染节点；破坏性验证过）。★**里程碑：App 三端「项目路由 → 真实 SFC（含类样式）→ 编译器 → 屏内容 → executor → 内核树 → 真画屏」全链闭环**。★诚实边界：鸿蒙 anim 即时（无逐帧）· 三端合成均为"入口页静态画屏"（未接真机交互/滚动上屏）。★全量 **5074/5074** 绿。下一步：C1 收尾（伪类/元素选择器）或三端 anim 逐帧/交互**）★新会话以此为准
 
 
 
@@ -51,13 +51,13 @@
 
 | 文件 | 内容 |
 |---|---|
-| `docs/project-memory-archive/2026-10.md` | 里程碑详细叙事（三十九～一四三）+ 状态速览历史栈（约 4.5k 行） |
+| `docs/project-memory-archive/2026-10.md` | 里程碑详细叙事（三十九～一四四）+ 状态速览历史栈（约 4.5k 行） |
 | `docs/project-memory-archive/2026-09.md` | 09 月全部叙事 + 柔性系统重组历史 + 2026-08 进度快照 + 已落地文件 + 09-19 验证状态（约 6.5k 行） |
-| `docs/project-memory-archive/decisions.md` | 决策链全文 #1–#489——按号检索 |
+| `docs/project-memory-archive/decisions.md` | 决策链全文 #1–#490——按号检索 |
 
 检索示例：`grep -n "2026-09-29\|判据建错靶" docs/project-memory-archive/2026-09.md`
 
-## 关键决策与文档偏差（#1–#489 → 归档速查）
+## 关键决策与文档偏差（#1–#490 → 归档速查）
 
 **全文在 `docs/project-memory-archive/decisions.md`**（按号检索：`grep -n "^290\." docs/project-memory-archive/decisions.md`）。
 决策号**只增不改号**（外部文档按号引用）；新决策追加到该文件末尾（号 +1）。

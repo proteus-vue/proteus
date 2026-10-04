@@ -97,6 +97,18 @@ final class AppStackScene: NSObject {
                     if imgPath.hasPrefix("\"") { imgPath = String(imgPath.dropFirst().dropLast()) }
                     composite = ["ok": (mo["ok"] as? Bool) ?? false, "page": page, "content_nodes": nodes.count,
                                  "layer_count": mo["layer_count"] ?? -1, "snapshot": shotOk, "snapshot_path": imgPath]
+                    // ★★★交互上屏（2026-10-04）：在渲染页（真 CALayer 树）上做真机命中（proteus_layout_hit_test）。
+                    var hitCount = 0
+                    var firstTarget = -1
+                    for k in 1...20 {
+                        let py: Double = 844.0 * (Double(k) / 22.0)
+                        let r = evalJs?("proteusSelfDraw.tapAt(117.0, \(py))") ?? "null"
+                        if let rd = r.data(using: .utf8), let ro = (try? JSONSerialization.jsonObject(with: rd)) as? [String: Any] {
+                            if let t = ro["target"] as? Int, t >= 0 { hitCount += 1; if firstTarget < 0 { firstTarget = t } }
+                        }
+                    }
+                    composite["hit_points_hit"] = hitCount
+                    composite["hit_first_target"] = firstTarget
                 }
             }
         }

@@ -913,7 +913,17 @@ struct Index {
             };
             const cmdsJson: string = appScreenCommands(JSON.stringify(cArgs));
             const cn: number = renderCommands(cmdsJson);
-            const cOut: string = `{"ok":${cn > 0},"page":"${entryName}","content_nodes":${(entryNodes as Array<Object>).length},"render_nodes":${cn}}`;
+            // ★C++ 侧同一次调用已建树+命中并写沙箱文件——ArkTS 读回它（含 hit_* 读数）转发到 hilog
+            let cOut: string = `{"ok":${cn > 0},"page":"${entryName}","content_nodes":${(entryNodes as Array<Object>).length},"render_nodes":${cn}}`;
+            try {
+              const rf: string = ctxSC.filesDir + '/app-screen-composite.json';
+              const fst = fileIo.statSync(rf);
+              const rbuf = new ArrayBuffer(fst.size);
+              const rfd = fileIo.openSync(rf, fileIo.OpenMode.READ_ONLY);
+              fileIo.readSync(rfd.fd, rbuf);
+              fileIo.closeSync(rfd.fd);
+              cOut = util.TextDecoder.create('utf-8').decodeToString(new Uint8Array(rbuf));
+            } catch (re) { /* 读回失败：用本地摘要（不阻断） */ }
             hilog.info(DOMAIN, BENCH_TAG, 'PROTEUS_APP_SCREEN_COMPOSITE %{public}s', cOut);
           } catch (cce) {
             hilog.error(DOMAIN, BENCH_TAG, 'PROTEUS_APP_SCREEN_COMPOSITE_ERROR %{public}s', JSON.stringify(cce) ?? '');
