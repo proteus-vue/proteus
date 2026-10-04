@@ -331,9 +331,12 @@ export function parseStaticStyle(
       continue
     }
     if (EDGE_FIELDS.has(key)) {
-      const num = numOf(rawVal)
-      if (num === undefined) { pushDiag(`style 里 \`${rawKey}: ${rawVal}\` 不是纯数值`); continue }
-      out[key] = { top: num, right: num, bottom: num, left: num }
+      // ★批次 2（值归一化）：四值简写 `margin/padding: a [b [c [d]]]`（CSS 标准展开）——
+      //   真项目高频（`margin: 8px 0`、`padding: 8px 12px`），此前**整体丢弃 + 诊断**。
+      //   `auto` 无内核对等 ⇒ 该边不设（其余边照设），不拖垮整条规则。
+      const box = expandBoxShorthand(rawVal, numOf)
+      if (!box) { pushDiag(`style 里 \`${rawKey}: ${rawVal}\` 无法解析为四值简写（支持 1–4 个 px/数字；auto 忽略）`); continue }
+      out[key] = box
       markImportant(key)
       continue
     }
@@ -408,6 +411,20 @@ export function parseStaticStyle(
         out[key] = num
       }
       markImportant(key)
+      continue
+    }
+    // ★批次 2（值/简写归一化）：`background` 简写 → backgroundColor（仅纯色；渐变/图片另走通道）
+    if (key === 'background') {
+      const color = extractBackgroundColor(rawVal)
+      if (!color) {
+        pushDiag(
+          `background 简写 \`${rawVal}\` 未归一为纯色（仅支持单色；渐变请用引擎 \`fill-gradient\` 通道）——已跳过`,
+          '纯色 `background: #fff` 会折进 backgroundColor；`linear-gradient` 等请改用 fill-gradient 属性',
+        )
+        continue
+      }
+      out.backgroundColor = color
+      markImportant('backgroundColor')
       continue
     }
     // 认不出的键：诊断（可能是指令/伪类等不需要的键——故用 hint 说明而非 error）
@@ -720,6 +737,49 @@ function numOf(v: string): number | undefined {
   const t = v.trim().replace(/px$/i, '')
   const n = Number(t)
   return Number.isFinite(n) ? n : undefined
+}
+
+/**
+ * ★批次 2（值归一化）：`margin`/`padding` 的 **1–4 值简写** → `{top,right,bottom,left}`（CSS 标准展开）。
+ *   `auto` / 不可解析的边 ⇒ 该边**不设**（其余边照设）；整条全是非数值 ⇒ 返回 undefined（调用方诊断）。
+ *   ★为什么忽略 auto：内核对等无 auto（浏览器才有的"均分剩余空间"）——设一个错误数值反而更糟。
+ */
+function expandBoxShorthand(rawVal: string, toNum: (v: string) => number | undefined): Record<string, number> | null {
+  const toks = rawVal.trim().split(/\s+/).filter(Boolean)
+  if (toks.length === 0 || toks.length > 4) return null
+  const n = toks.map(toNum) // undefined = 该边忽略（auto 等）
+  let top: number | undefined
+  let right: number | undefined
+  let bottom: number | undefined
+  let left: number | undefined
+  if (n.length === 1) { top = right = bottom = left = n[0] }
+  else if (n.length === 2) { top = bottom = n[0]; right = left = n[1] }
+  else if (n.length === 3) { top = n[0]; right = left = n[1]; bottom = n[2] }
+  else { top = n[0]; right = n[1]; bottom = n[2]; left = n[3] }
+  const box: Record<string, number> = {}
+  if (top !== undefined) box.top = top
+  if (right !== undefined) box.right = right
+  if (bottom !== undefined) box.bottom = bottom
+  if (left !== undefined) box.left = left
+  return Object.keys(box).length > 0 ? box : null
+}
+
+/**
+ * ★批次 2（值归一化）：`background` 简写 → 可用的**纯色**值（hex/rgb/rgba/transparent 归一为 hex）。
+ *   `none` / `url()` / `gradient()` 等无单一颜色 ⇒ undefined（调用方诊断；渐变需走引擎 fill-gradient 通道，属后续）。
+ */
+function extractBackgroundColor(rawVal: string): string | undefined {
+  const v = rawVal.trim()
+  if (!v || /^none$/i.test(v)) return undefined
+  if (/url\(|gradient\(/i.test(v)) return undefined // 图片/渐变 ⇒ 非纯色（渐变走引擎通道，属后续批次）
+  const whole = normalizeCssColor(v)
+  if (whole) return whole
+  // 复合值（`#fff url(...) no-repeat`）：逐 token 找第一个可归一为颜色的（normalizeCssColor 对非颜色返回 undefined）
+  for (const tok of v.split(/\s+/)) {
+    const c = normalizeCssColor(tok)
+    if (c) return c
+  }
+  return undefined
 }
 
 /**

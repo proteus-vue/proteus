@@ -15,9 +15,9 @@
 - **包规模**：**45 个 @proteus-vue/* npm 包**（+ `packages/layout-core-rust` = **cargo crate，非 npm 包**，故不计数）（★2026-09-29 layout-core = App 排版核心）（check:pkg 0 error · `pnpm check:stats` 校验 ✓；31→38 修正 → G-07 glass 39 → Skyline 收口 worklet 40 → ★2026-09-14 组件库拆包 `@proteus-vue/components` 41 → ★Vapor 线新增 `@proteus-vue/slot-runtime` 42 + `@proteus-vue/layout-core` 43 → ★2026-09-30 MA1 新增 `@proteus-vue/animation` 44；版本统一 0.3.0-beta.8，见「当前状态速览」）
 - **文档**：`docs/proteus-architecture.md`（L0 规约·真理来源）→ `docs/board-inventory.md`（全景索引）→ `docs/roadmap.md`（版本线）→ `roadmap-2-plan`（里程碑线）→ 各 plan
 
+## 当前状态速览（最近一次更新：**2026-10-04·（一四九）· **CSS 兼容对齐 · 批次 2：值/简写归一化（margin/padding 多值 + background 简写）**（决策 #495）——用户「继续」。★**路线修正（取证驱动）**：原计划批 2 属性选择器/静态伪类被**取证否定**（真项目 0 使用）⇒ 改用使用证据重排（扫 45 个 .vue 统计被丢弃声明）。★**实现（引擎无关·单包 compiler）**：① `margin/padding` **1–4 值简写**按 CSS 标准展开（`margin: 8px 0`，此前整体丢弃；auto 边忽略）；② `background` 纯色简写 → backgroundColor（hex/rgba/transparent 归一；渐变诊断跳过走 fill-gradient）。★判据 tests/vapor-class-styles.test.ts 21 组（破坏性验证：交换两值映射⇒3 组红）；capability 源 +value-shorthand 行；重生成清单（44 行·App 全通 26）+ app-screen-content（451 节点获 margin·255 获 padding，三端 assets 同步）。★全量 **5098/5098** 绿。★**剩余 backlog**：font-weight/text-align/line-height + border（半 [Rust]）· flex-wrap/grid（[Rust]）· box-shadow/transform（[Rust]）；属性选择器/伪类降级）★新会话以此为准
 ## 当前状态速览（最近一次更新：**2026-10-04·（一四八）· **CSS 兼容对齐 · 批次 1：层叠正确性（继承 + 特异性 + `!important`）**（决策 #494）——用户「不错，现在专攻 CSS 兼容对齐」。★**路线**：从新清单 css-capability-alignment 提炼，先做**引擎无关**项（改编译器、三端同受益）——批 1 层叠正确性 → 批 2 属性选择器/静态伪类 → 批 3 em/rem/calc → 批 4 文本属性 → 批 5 grid/flex-wrap/right·bottom [Rust] → 批 6 box-shadow/transform [Rust]。★**批 1 实现（单包 compiler）**：① 特异性 `(id,class,tag)`；② 层叠由"只按源序"改为**按 (!important, 特异性, 源序) 升序应用**（修 `.a` 后写盖过 `.a.b` 缺陷）；③ `!important` 逐属性剥离 + 优先级 inline! > class! > inline > class；④ **继承** `APP_INHERITABLE_FIELDS=['color','fontSize']`（walk 线程化 inherited；背景/边框不继承）。★判据：tests/vapor-class-styles.test.ts 16 组（破坏性验证：反转源序⇒红）；capability 源 `specificity-inheritance` absent→supported；重生成清单 + app-screen-content（91 处节点获继承，三端 assets 同步）。★全量 **5093/5093** 绿）★新会话以此为准
 ## 当前状态速览（最近一次更新：**2026-10-04·（一四七）· **CSS 能力对齐清单重构（五端 → 三端：Web / Skyline / App）**（决策 #493）——用户：「App 端是自绘 Rust 引擎，Rust 排版引擎支持自定义扩展 CSS 支持度 ⇒ CSS 真正的平台兼容性只有一个 Skyline ⇒ 原来的跨端兼容规则不适用了，重做 CSS 能力对齐清单」。★**模型变更**：App 端是**自研自绘 Rust 引擎（一套，覆盖 iOS/Android/鸿蒙）——CSS 面由我们定义、可扩展** ⇒ 旧 iOS=UIStackView/Android=ConstraintLayout/鸿蒙=Row 三列**已失效**，合并为 **App**（webview 折入 Skyline）。新三端 = **Web（浏览器超集）· Skyline（微信容器，唯一刚性外部约束）· App（自研引擎，可扩展）**。★**平台适配**（StylePlatform/原生组件/安全区/导航）是**另一条轴**，不动。★**实现**：新数据源 `css-capability-sources/app-profile-features.json`（App 现状 supported/folded-only/engine-only/absent + **可扩展档位 L0–L5**，核对代码事实；诚实修正 border=folded-only、transform=engine-only）；生成器 `gen-css-capability-alignment` → 产物 `css-capability-alignment.{json,md}`（删旧表）；消费者全重指（M1 口径不变 67.9%）；CSS 表面「五端」→「三端」重锚（layout-semantics mappings 收敛 web|skyline|app、rules 文案、Profile 规格、官网页）。★全量 **5085/5085** 绿）★新会话以此为准
-## 当前状态速览（最近一次更新：**2026-10-04·（一四六）· **App 三端对齐 — 真实触摸事件对齐（B7，三端真事件驱动交互）**（决策 #492）——用户「感觉现在需要补齐真实触摸事件对齐了」。★**缺口**：合成页此前"可命中"是**装置内直调**（`dispatchHit`/`tapAt`/`hit_test`，绕过平台事件通道）⇒ 只证"内核能命中"，不证"真实触摸驱动交互"。★**实现（一条命中链）**：**Android** 注真 `MotionEvent`（DOWN+MOVE+UP）→ `dispatchTouchEvent` → 平台 `GestureDetector`；**iOS** 抽 `classifyAndEmit` 分流器 + `simulateTouch` 喂 down→held→up **按真实时长判型**；**鸿蒙** `uitest uiInput` 系统栈真注入 → ArkTS `.onTouch` → 保留的合成树 `appScreenHitAt`。★**真机证据**：Android 60 事件/20 tap · iOS 20 tap · 鸿蒙 6 命中。判据 SSOT `scripts/lib/app-composite-verdict.mjs`（门禁+单测共用），缺 `real_touch` ⇒ 红。★**顺带剪两真 bug**：门禁 `problems` TDZ（设备腿红了才炸）+ iOS 合成报告取回误放 launch 前（取旧件）。★全量 **5079/5079** 绿。★**App 全链（三端齐）**：路由→SFC→编译器→屏内容→executor→内核树→真画屏→转场逐帧→**真实触摸驱动交互**）★新会话以此为准
 
 
 
@@ -53,11 +53,11 @@
 |---|---|
 | `docs/project-memory-archive/2026-10.md` | 里程碑详细叙事（三十九～一四五）+ 状态速览历史栈（约 4.5k 行） |
 | `docs/project-memory-archive/2026-09.md` | 09 月全部叙事 + 柔性系统重组历史 + 2026-08 进度快照 + 已落地文件 + 09-19 验证状态（约 6.5k 行） |
-| `docs/project-memory-archive/decisions.md` | 决策链全文 #1–#494——按号检索 |
+| `docs/project-memory-archive/decisions.md` | 决策链全文 #1–#495——按号检索 |
 
 检索示例：`grep -n "2026-09-29\|判据建错靶" docs/project-memory-archive/2026-09.md`
 
-## 关键决策与文档偏差（#1–#494 → 归档速查）
+## 关键决策与文档偏差（#1–#495 → 归档速查）
 
 **全文在 `docs/project-memory-archive/decisions.md`**（按号检索：`grep -n "^290\." docs/project-memory-archive/decisions.md`）。
 决策号**只增不改号**（外部文档按号引用）；新决策追加到该文件末尾（号 +1）。

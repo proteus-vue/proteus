@@ -44,8 +44,8 @@
 | layout | `width` | supported | supported | supported | L1 | 编译期折叠 | universal | px/数字 → 长度；百分比 → widthRatio（比例字段，非长度） |
 | layout | `height` | supported | supported | supported | L1 | 编译期折叠 | universal | px/数字 → 长度；百分比 → heightRatio |
 | layout | `min-width / max-width / min-height / max-height` | supported | supported | supported | L1 | 编译期折叠 | universal | px/数字 |
-| layout | `margin（+ 四边简写）` | supported | supported | supported | L1 | 编译期折叠 | universal | px/数字 → {top,right,bottom,left}（Web 探针取 margin-top 代表） |
-| layout | `padding（+ 四边简写）` | supported | supported | supported | L1 | 编译期折叠 | universal | px/数字 → {top,right,bottom,left}（Web 探针取 padding-top 代表） |
+| layout | `margin（+ 四边简写 + 1–4 值 shorthand）` | supported | supported | supported | L1 | 编译期折叠 | universal | px/数字 → {top,right,bottom,left}；1–4 值简写按 CSS 标准展开（`margin: 8px 0`；auto 的边忽略）；Web 探针取 margin-top 代表 |
+| layout | `padding（+ 四边简写 + 1–4 值 shorthand）` | supported | supported | supported | L1 | 编译期折叠 | universal | px/数字 → {top,right,bottom,left}；1–4 值简写按 CSS 标准展开（`padding: 8px 12px`）；Web 探针取 padding-top 代表 |
 | layout | `display: flex / none` | supported | supported | supported | L2 | 直映射 | universal | 引擎封闭集仅 flex/none（block/inline-block/inline-flex/grid ⇒ 诊断跳过） |
 | layout | `flex-direction` | supported | supported | supported | L2 | 直映射 | universal | 封闭集 row/column/row-reverse/column-reverse |
 | layout | `justify-content` | supported | supported | supported | L2 | 直映射 | universal | 引擎为**开放字符串**（未知值静默落默认，不崩） |
@@ -55,8 +55,9 @@
 | layout | `position: static / relative / absolute` | supported | supported | supported | L2 | 直映射 | universal | 引擎封闭集；sticky/fixed ⇒ 诊断跳过 |
 | layout | `top / left` | supported | supported | supported | L2 | 直映射 | universal | 配合 absolute；引擎无 right/bottom（见候选） |
 | layout | `overflow: visible / hidden / scroll / auto` | supported | supported | supported | L2 | 直映射 | universal | 引擎封闭集；auto 折叠为 taffy Scroll |
+| value | `margin/padding 1–4 值简写 + background 纯色简写` | — | — | supported | L1 | 编译期折叠 | conditional | ★批次 2（2026-10-04）：`margin: 8px 0` / `padding: 8px 12px` 按 CSS 标准展开为 {top,right,bottom,left}（auto 的边忽略）；`background: #fff`/`rgba(...)` 归一折进 backgroundColor。取证：真项目多值简写高频（此前整体丢弃）。渐变/图片简写诊断跳过 |
 | unit | `width/height 百分比` | — | — | supported | L1 | 编译期折叠 | conditional | → widthRatio/heightRatio（比例字段） |
-| paint | `background-color` | supported | supported | supported | L1 | 编译期折叠 | universal | 颜色编译期归一为 hex（rgb/rgba/transparent → hex；命名色/hsl/var ⇒ 诊断跳过） |
+| paint | `background-color（+ background 纯色简写）` | supported | supported | supported | L1 | 编译期折叠 | universal | 颜色编译期归一为 hex（rgb/rgba/transparent → hex；命名色/hsl/var ⇒ 诊断跳过）；★`background` 纯色简写折进 backgroundColor（渐变/图片诊断跳过，走引擎 fill-gradient 通道） |
 | paint | `color` | supported | supported | supported | L1 | 编译期折叠 | universal | 同上颜色归一 |
 | paint | `font-size` | supported | supported | supported | L1 | 编译期折叠 | universal | px/数字（不支持百分比/keyword） |
 | paint | `border-radius` | supported | supported | supported | L1 | 编译期折叠 | universal | px/数字（宿主圆角绘制） |
@@ -92,6 +93,7 @@
 
 | CSS | Web | Skyline | App | 受限原因 |
 |---|---|---|---|---|
+| `margin/padding 1–4 值简写 + background 纯色简写` | — | — | supported | ★批次 2（2026-10-04）：`margin: 8px 0` / `padding: 8px 12px` 按 CSS 标准展开为 {top,right,bottom,left |
 | `width/height 百分比` | — | — | supported | → widthRatio/heightRatio（比例字段） |
 | `border-color / border-width` | supported | supported | folded-only | ★诚实修正：在 APP_PAINT_FIELDS 折叠透传，但**三端宿主均未真画边框**（VaporRenderHost/selfdraw/proteus_render 的绘制通 |
 | `transform（translate/scale/rotate/skew/perspective）` | supported | supported | engine-only | ★引擎/宿主已支持（LStyle 的绘制通道 paint-only + 宿主动画桥），但编译期折叠面（parseStaticStyle）**未接 transform** ⇒ 「可扩 |
