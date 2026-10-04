@@ -93,8 +93,10 @@ export {
   slotKindOf,
   buildLayoutTemplate,
   parseStaticStyle,
-  // ★C1 最小切片（2026-10-04）：SFC <style> 单类规则 → class→声明 表
+  // ★C1（2026-10-04）：SFC <style> 类规则 → class→节点样式（选择器链 + 层叠）
   parseClassStyles,
+  parseClassRules,
+  resolveClassStyles,
   stripScopeSuffix,
   parsePaintDeclAttr,
   isPaintDeclAttr,
@@ -128,6 +130,7 @@ export type {
   EventHandlers,
   EventCompileResult,
 } from './vapor'
+export type { ClassStyleRule } from './vapor'
 export type { SfcMacros, MacroModelRef } from './sfc-macros'
 
 // 阶段二：决策 trace（explainTransform 输出源码触发的全部转换规则）

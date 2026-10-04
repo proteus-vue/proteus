@@ -57,6 +57,21 @@ export const APP_LAYOUT_FIELDS = [
   'flexGrow', 'flexShrink', 'flexBasis', 'gap', 'display', 'position', 'top', 'left', 'overflow',
 ] as const
 const LAYOUT_FIELDS = new Set<string>(APP_LAYOUT_FIELDS)
+/**
+ * ★★★**App 引擎的枚举值封闭集**（2026-10-04 修：真机 `RustLayout.create` 失败暴露）——
+ *   内核（`layout-core-rust/src/ffi.rs`）对 `display`/`position`/`overflow`/`flexDirection` 只认**固定值**，
+ *   其余值 ⇒ `RustLayout.create` 失败（**整个小程序/App 树建不起来**）。
+ *   ⇒ 编译期折叠这些键时**必须校验**：CSS 里的 `display: block/inline-block/grid/inline-flex`（App 无对等）
+ *     以前**原样透传** ⇒ 端上崩。现改为：不支持的值 ⇒ **诊断 + 跳过**（用内核默认，不传非法值）。
+ *   ★诚实边界：这是"App 端 CSS 支持面收窄"的落点之一（CSS 里合法的值在 App 未必有对等）。
+ */
+export const APP_ENUM_VALUES: Record<string, readonly string[]> = {
+  display: ['flex', 'none'],
+  position: ['static', 'relative', 'absolute'],
+  overflow: ['visible', 'hidden', 'scroll', 'auto'],
+  flexDirection: ['row', 'column', 'row-reverse', 'column-reverse'],
+}
+
 /** 绘制字段（宿主自绘读这些键；模板照样要带上，否则挂载后无底色/无字色） */
 export const APP_PAINT_FIELDS = ['backgroundColor', 'color', 'fontSize', 'borderRadius', 'borderColor', 'borderWidth', 'opacity'] as const
 const PAINT_FIELDS = new Set<string>(APP_PAINT_FIELDS)
@@ -312,6 +327,17 @@ export function parseStaticStyle(
     }
     if (LAYOUT_FIELDS.has(key)) {
       if (key === 'flexDirection' || key === 'justifyContent' || key === 'alignItems' || key === 'alignSelf' || key === 'position' || key === 'display' || key === 'overflow') {
+        // ★★★枚举值**校验**（2026-10-04 修：真机 RustLayout.create 失败暴露）——内核只认封闭集；
+        //   不支持的值（如 `display: block/grid`、`position: sticky`）⇒ **诊断 + 跳过**（用内核默认），
+        //   否则原样透传会让**整棵树建不起来**（App/小程序端页面全崩）。
+        const allowed = APP_ENUM_VALUES[key]
+        if (allowed && !allowed.includes(rawVal)) {
+          pushDiag(
+            `\`${rawKey}: ${rawVal}\` 不是 App 引擎支持的值（${key} 仅认：${allowed.join(' / ')}）——已跳过（用引擎默认）`,
+            'App 端无浏览器 CSS 布局引擎：把该样式改为引擎支持的值，或保留 Web 端渲染（该值在 Web/MP 由 CSS 引擎处理）',
+          )
+          continue
+        }
         out[key] = rawVal
         continue
       }
@@ -354,57 +380,157 @@ export function parseStaticStyle(
 }
 
 /**
- * ★★★C1 最小切片（2026-10-04 · App 三端对齐缺口 C1）：**SFC `<style>` 单类规则 → `class → 声明` 表**。
+ * ★★★C1（2026-10-04 · App 三端对齐缺口 C1）：**SFC `<style>` 类规则 → 可匹配的规则表**。
  *
  * 【为什么需要】App 路径**没有 CSS 引擎**——`buildLayoutTemplate` 只吃节点上的 **inline `style`**；
- *   真实项目的样式多在 **`<style>` + `class`** 里 ⇒ App 端页面「有结构、无样式」。本函数把 `<style>`
- *   里**可静态解析的类规则**抽成「类名 → 引擎字段声明」，供模板节点按 `class` 合并。
+ *   真实项目的样式多在 **`<style>` + `class`** 里 ⇒ App 端页面「有结构、无样式」。本族函数把 `<style>`
+ *   里**可静态解析的类选择器**规则抽成结构，供模板节点按 `class`（+ 祖先链）匹配合并。
  *
- * 【最小切片范围（如实，不假装全支持）】只处理：
- *   · **单一简单选择器**规则（`.foo { … }`）；选择器含组合（空格/`>`/`,`/`&`）、伪类（`:`）、属性选择器
- *     等 ⇒ **跳过整条规则**（不猜，交给更完整的批次）；
- *   · **声明体**走既有 `parseStaticStyle`（同一折叠面/同一诊断）——`inherit`/`var()`/`calc()` 等
- *     非 px/数值会被它诊断忽略（不静默）；
- *   · ★**scope / 后缀类**：`scoped` 会给类加后缀（如 `foo-data-v-xxx`），故**同时**登记**去后缀名**
- *     （`stripScopeSuffix`，只匹配元素上的原始类名）——否则 `class="foo"` 找不到 `.foo-data-v-xxx`。
- *
- * 【诚实边界（写进诊断/文档）】① **无选择器特异性/层叠/顺序**——同属性「后声明者胜」（源序），
- *   与多类共存时的优先级**不完备**；② **无继承**（父类样式不传给子节点）；③ 只覆盖**静态**类
- *   （动态 `:class` 的值/Vue 变量形态不可静态展开，见既有 VAPOR_STYLE_DYNAMIC_OBJECT 诊断）。
- *   ⇒ 这是让真实页面**拿到大部分静态样式**的第一步；完整 CSS 收敛模型属后续批次。
+ * 【支持的选择器子集（如实，不假装全支持）】
+ *   · 单一/复合类选择器：`.a` · `.a.b`（同元素须同时有这些类）；
+ *   · 后代/子组合：`.a .b`（后代）· `.a > .b`（直接子）——用**祖先类链**匹配；
+ *   · 其余（伪类 `:` / 属性 `[x]` / 元素/`*` / `,` 分组 / `+`~` 兄弟 / `@media` 等）⇒ **整条跳过 + 诊断**。
+ *   ★scoped：规则里的类名带后缀（`.a-data-v-x`）⇒ 抽出时**去后缀**（`stripScopeSuffix`），与元素原始类名对齐。
+ * 【层叠】规则**按源序**依次 Object.assign（同属性后声明胜）——★修正了"按 class 属性序"的错误层叠。
+ * 【诚实边界】无**特异性**权重（只按源序）· 无继承 · 只静态类（动态 `:class` 值形态不可展开）。
+ */
+export interface ClassStyleRule {
+  /** 每段 = 该段要求的类名集合（复合 `.a.b` ⇒ `['a','b']`） */
+  segments: string[][]
+  /** 段间组合符（长度 = segments.length - 1；空格 = 后代、`>` = 直接子）——用 string[] 避免泛型嵌套歧义 */
+  combinators: string[]
+  /** 该规则折叠出的引擎字段声明（源序） */
+  decls: Record<string, unknown>
+}
+
+/** 解析 `<style>` 文本 → 类规则表（源序）；不支持的整条跳过并计数（调用方决定是否诊断） */
+export function parseClassRules(css: string): { rules: ClassStyleRule[]; skipped: number } {
+  const rules: ClassStyleRule[] = []
+  let skipped = 0
+  const body = css.replace(/\/\*[\s\S]*?\*\//g, '')
+  const ruleRe = /([^{}]+)\{([^{}]*)\}/g
+  let m: RegExpExecArray | null
+  while ((m = ruleRe.exec(body))) {
+    const selector = m[1]!.trim()
+    const decls = m[2]!.trim()
+    if (!decls || !selector) continue
+    // 分组选择器 `a, b`：逐条拆（只保留可解析的）
+    for (const one of selector.split(',')) {
+      const parsed = parseSelectorChain(one.trim())
+      if (!parsed) {
+        skipped++
+        continue
+      }
+      const style = parseStaticStyle(decls, () => {})
+      if (Object.keys(style).length === 0) continue
+      rules.push({ segments: parsed.segments, combinators: parsed.combinators, decls: style })
+    }
+  }
+  return { rules, skipped }
+}
+
+/** 解析单条选择器为「段 + 组合符」链；不支持的形态返回 null（伪类/属性/元素/`*`/兄弟等） */
+function parseSelectorChain(sel: string): { segments: string[][]; combinators: Array<' ' | '>'> } | null {
+  if (!sel) return null
+  // 不支持：伪类/伪元素、属性选择器、兄弟组合、插值、通配
+  if (/[:[\]*]|\+~/.test(sel)) return null
+  // 按 `>`（子）与空白（后代）切段；先统一 `A>B` → `A > B`
+  const normalized = sel.replace(/\s*>\s*/g, ' > ')
+  const parts = normalized.split(/\s+/).filter(Boolean)
+  const segments: string[][] = []
+  const combinators: Array<' ' | '>'> = []
+  for (const part of parts) {
+    if (part === '>') {
+      if (segments.length === 0) return null // 以 > 开头
+      combinators[segments.length - 1] = '>'
+      continue
+    }
+    // 段必须是类（可复合）：`.a.b` ⇒ ['a','b']；含元素/其它 ⇒ 不支持
+    const classes = [...part.matchAll(/\.([A-Za-z_][\w-]*)/g)].map((x) => stripScopeSuffix(x[1]!))
+    if (classes.length === 0) return null // 元素选择器 / 裸标签 —— 不支持
+    // 段内除了类名不该有别的东西（如 `a.foo`：`a` 是元素 ⇒ 不支持，保守跳过）
+    const residual = part.replace(/\.[A-Za-z_][\w-]*/g, '')
+    if (residual.length > 0) return null
+    if (segments.length > 0 && combinators[segments.length - 1] === undefined) combinators[segments.length - 1] = ' '
+    segments.push(classes)
+  }
+  if (segments.length === 0) return null
+  return { segments, combinators }
+}
+
+/** 该类名集是否满足某段要求（段要求的每个类都在集合里） */
+function segmentMatches(seg: string[], classes: Set<string>): boolean {
+  return seg.every((c) => classes.has(c))
+}
+
+/**
+ * 按**祖先类链 + 自身类**匹配规则表，返回合并后的声明（源序叠加：后声明胜）。
+ * @param rules parseClassRules 产物
+ * @param ancestors 祖先类链（根 → 父；每项是该祖先的类集合）
+ * @param self 本节点的类集合
+ */
+export function resolveClassStyles(
+  rules: ClassStyleRule[],
+  ancestors: Array<Set<string>>,
+  self: Set<string>,
+): Record<string, unknown> {
+  const out: Record<string, unknown> = {}
+  for (const rule of rules) {
+    if (!matchChain(rule, ancestors, self)) continue
+    Object.assign(out, rule.decls) // 源序：后声明覆盖前声明
+  }
+  return out
+}
+
+/** 选择器链匹配（从右往左：自身匹配末段，再按组合符回溯祖先） */
+function matchChain(rule: ClassStyleRule, ancestors: Array<Set<string>>, self: Set<string>): boolean {
+  const { segments, combinators } = rule
+  const last = segments.length - 1
+  if (!segmentMatches(segments[last]!, self)) return false
+  // 依次匹配前缀段（i 从 last-1 到 0）；组合符 combinators[i] 描述段 i 与 i+1 的关系
+  let ai = ancestors.length - 1 // 当前可用的最近祖先下标（从父往上）
+  for (let i = last - 1; i >= 0; i--) {
+    const comb = combinators[i]!
+    if (comb === '>') {
+      if (ai < 0 || !segmentMatches(segments[i]!, ancestors[ai]!)) return false
+      ai--
+    } else {
+      // 后代：在剩余祖先里向上找**任一**匹配段
+      let found = false
+      while (ai >= 0) {
+        if (segmentMatches(segments[i]!, ancestors[ai]!)) {
+          found = true
+          ai--
+          break
+        }
+        ai--
+      }
+      if (!found) return false
+    }
+  }
+  return true
+}
+
+/**
+ * 兼容旧 API：`<style>` → 「单一简单类 → 声明」平坦表（仅单段规则；供无需祖先链的简用处/测试）。
+ * ★内部复用 parseClassRules（**一处实现**）。
  */
 export function parseClassStyles(
   css: string,
   pushDiag?: (msg: string, hint?: string) => void,
 ): Record<string, Record<string, unknown>> {
+  const { rules, skipped } = parseClassRules(css)
   const out: Record<string, Record<string, unknown>> = {}
-  // 去注释后按 `}` 切块（CSS 无嵌套取巧；本切片只处理扁平单类规则）
-  const body = css.replace(/\/\*[\s\S]*?\*\//g, '')
-  const ruleRe = /([^{}]+)\{([^{}]*)\}/g
-  let m: RegExpExecArray | null
-  let skipped = 0
-  while ((m = ruleRe.exec(body))) {
-    const selector = m[1]!.trim()
-    const decls = m[2]!.trim()
-    if (!decls) continue
-    // 只认「单一简单类选择器」：`.foo`（可带 scope 后缀）；其余（组合/伪类/@media/元素选择器等）跳过
-    const single = /^\.([A-Za-z_][\w-]*)$/.exec(selector)
-    if (!single) {
-      skipped++
-      continue
+  for (const r of rules) {
+    if (r.segments.length === 1 && r.segments[0]!.length === 1) {
+      const name = r.segments[0]![0]!
+      out[name] = { ...(out[name] ?? {}), ...r.decls }
     }
-    const rawName = single[1]!
-    const name = stripScopeSuffix(rawName)
-    const style = parseStaticStyle(decls, () => {}) // 声明体诊断不外抛（此处静默收集；调用方已按需打印）
-    if (Object.keys(style).length === 0) continue
-    // 去后缀名优先登记（元素上写的是原始类名）；同时保留带后缀名（若有人显式用）
-    out[name] = { ...(out[name] ?? {}), ...style }
-    if (name !== rawName) out[rawName] = { ...(out[rawName] ?? {}), ...style }
   }
   if (skipped > 0 && pushDiag) {
     pushDiag(
-      `<style> 中有 ${skipped} 条**不支持的选择器**规则被跳过（只处理单一简单类选择器 \`.foo{}\`）`,
-      'App 端无 CSS 引擎：组合/伪类/属性选择器等暂不支持；把关键样式改为独立单类或 inline style，或保留 Web 端渲染',
+      `<style> 中有 ${skipped} 条**不支持的选择器**规则被跳过（支持：类选择器 + 后代/子组合）`,
+      'App 端无 CSS 引擎：伪类/属性/元素选择器等暂不支持；把关键样式改为类选择器或 inline style，或保留 Web 端渲染',
     )
   }
   return out
@@ -541,14 +667,21 @@ export function buildLayoutTemplate(
   }
   const ast = dom(desc.template.content, { comments: false }) as unknown as { children: unknown[] }
 
-  // ★★★C1 最小切片（2026-10-04）：把 SFC `<style>` 的**单类规则**折成 `class → 声明` 表——
-  //   供模板节点按 `class` 合并（App 路径无 CSS 引擎；真实项目样式多在 `<style>`+class 里）。
-  //   ★诚实边界见 parseClassStyles（只处理单一简单类选择器；无层叠/继承）。
-  const classStyles: Record<string, Record<string, unknown>> = {}
+  // ★★★C1（2026-10-04）：把 SFC `<style>` 的**类规则**抽成规则表——
+  //   供模板节点按 `class`（+ 祖先类链）匹配合并（App 路径无 CSS 引擎；真实项目样式多在 `<style>`+class）。
+  //   支持：单类 `.a` / 复合 `.a.b` / 后代 `.a .b` / 子 `.a>.b`；其余跳过 + 诊断（见 parseClassRules）。
+  const classRules: ClassStyleRule[] = []
   for (const blk of desc.styles ?? []) {
     if (!blk?.content) continue
-    const parsed = parseClassStyles(blk.content, (msg, hint) => diag(msg, hint, 'VAPOR_STYLE_SELECTOR_UNSUPPORTED'))
-    for (const [k, v] of Object.entries(parsed)) classStyles[k] = { ...(classStyles[k] ?? {}), ...v }
+    const { rules, skipped } = parseClassRules(blk.content)
+    classRules.push(...rules)
+    if (skipped > 0) {
+      diag(
+        `<style> 中有 ${skipped} 条**不支持的选择器**规则被跳过（支持：类选择器 + 后代/子组合）`,
+        'App 端无 CSS 引擎：伪类/属性/元素选择器等暂不支持；把关键样式改为类选择器或 inline style，或保留 Web 端渲染',
+        'VAPOR_STYLE_SELECTOR_UNSUPPORTED',
+      )
+    }
   }
 
   // ★与 deps.ts 完全同源的两套计数器（见文件头「id 约定」）
@@ -616,6 +749,11 @@ export function buildLayoutTemplate(
       /** ★解构绑定（`{ errors }` ⇒ local/key 对；与 scopeVar 互斥） */
       scopeBindings?: Array<{ local: string; key: string }>
     },
+    /**
+     * ★C1（2026-10-04）：**祖先类链**（根 → 父；每项是那个祖先的类集合）——用于选择器组合匹配
+     *   （`.a .b` / `.a > .b`）。递归时把当前元素的类追加进来。
+     */
+    ancestorClasses: Array<Set<string>> = [],
   ): void => {
     // ★★★**混排归一化**（2026-10-03 · 三处遍历的唯一入口）：`<p>文字 <b>x</b></p>` 这类
     //   元素+文本混排 ⇒ 每段连续文本合成一个 `p-text` 叶（自绘树里文本是元素属性，
@@ -665,7 +803,7 @@ export function buildLayoutTemplate(
           }
           // 内容根标记：仅在「组件孩子」上下文中才有意义（slotCtx 决定标记名）
           walk((n.children ?? []) as unknown[], parentId, pendingTransition,
-            slotCtx?.parentIsComponent ? { slotContentOf: name, scopeVar, scopeBindings } : slotCtx)
+            slotCtx?.parentIsComponent ? { slotContentOf: name, scopeVar, scopeBindings } : slotCtx, ancestorClasses)
           continue
         }
         if (slotCtx?.parentIsComponent) {
@@ -687,7 +825,7 @@ export function buildLayoutTemplate(
         if (tag === 'Transition') {
           // Transition：props 编成预设规格，挂到**直接子元素**
           const t = transitionOfElement(n, diag)
-          walk((n.children ?? []) as unknown[], parentId, t ?? pendingTransition, slotCtx)
+          walk((n.children ?? []) as unknown[], parentId, t ?? pendingTransition, slotCtx, ancestorClasses)
         } else if (tag === 'Suspense') {
           // ★Suspense：只走 `#default`（我方无异步 ⇒ 永远 resolved）；`#fallback` 跳过。
           //   【为什么不能两个都走】两棵子树都会建 ⇒ 内容**双份**（fallback 永不隐藏 ⇒ 叠影）。
@@ -710,9 +848,9 @@ export function buildLayoutTemplate(
               flattened.push(c)
             }
           }
-          walk(flattened, parentId, pendingTransition, slotCtx)
+          walk(flattened, parentId, pendingTransition, slotCtx, ancestorClasses)
         } else {
-          walk((n.children ?? []) as unknown[], parentId, pendingTransition, slotCtx)
+          walk((n.children ?? []) as unknown[], parentId, pendingTransition, slotCtx, ancestorClasses)
         }
         continue
       }
@@ -731,21 +869,23 @@ export function buildLayoutTemplate(
       })
 
       const style: Record<string, unknown> = {}
-      // ★★★C1 最小切片：按 `class`（静态类名）合并 `<style>` 单类规则——**先合并类样式**，
+      // ★★★C1：按 `class`（静态类名）+ **祖先类链**匹配 `<style>` 规则表——**先合并类样式**，
       //   随后 props 循环里的 inline `style` 覆盖之（inline 优先，符合同元素 inline > class 直觉）。
+      //   支持单类/复合/后代/子组合；层叠按样式表**源序**（修正"按 class 属性序"的错误层叠）。
       //   ★只处理**静态** class（ATTRIBUTE）；动态 `:class` 的值形态不可静态展开（既有诊断覆盖）。
+      const selfClasses = new Set<string>()
       {
         const clsAttr = (n.props ?? []).find(
           (p) => p.type === 6 /* ATTRIBUTE */ && p.name === 'class' && p.value?.content,
         ) as { value?: { content?: string } } | undefined
         const clsStr = clsAttr?.value?.content?.trim()
-        if (clsStr && Object.keys(classStyles).length) {
-          for (const cn of clsStr.split(/\s+/).filter(Boolean)) {
-            const cs = classStyles[cn]
-            if (cs) Object.assign(style, cs)
-          }
+        if (clsStr) for (const cn of clsStr.split(/\s+/).filter(Boolean)) selfClasses.add(cn)
+        if (selfClasses.size && classRules.length) {
+          Object.assign(style, resolveClassStyles(classRules, ancestorClasses, selfClasses))
         }
       }
+      // 本元素的类并入祖先链，供子节点组合匹配（`.a .b` / `.a > .b`）
+      const childAncestors = selfClasses.size ? [...ancestorClasses, selfClasses] : ancestorClasses
       let hasDynamicStyle = false
       // ★P3-5 宿主指令收集器（声明在 props 扫描**之前**——扫描循环里 push；挂在节点上见下）
       let hostDirectives: NonNullable<LayoutNode['directives']> | undefined
@@ -1199,7 +1339,7 @@ export function buildLayoutTemplate(
       // ★P3-3：`pendingTransition` **只作用于直接子元素**（Vue 同：Transition 只包一个元素）
       // ★★P1-3 插槽分发：组件元素的**直接子元素**是默认插槽内容根（打 `slotFor`）；
       //   非组件元素无插槽语义（slotCtx 缺省 ⇒ 不标记）。
-      walk(subChildren, id, undefined, isComponentTag ? { parentIsComponent: true } : undefined)
+      walk(subChildren, id, undefined, isComponentTag ? { parentIsComponent: true } : undefined, childAncestors)
 
       // 行子树收集结束（pre-order ⇒ 子树连续；此处收尾）
       if (nodeListId !== undefined) {
