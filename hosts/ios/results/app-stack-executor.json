@@ -15,6 +15,10 @@
       "screen.mount",
       "screen.visible",
       "screen.anim",
+      "screen.rect",
+      "screen.mount",
+      "screen.visible",
+      "screen.anim",
       "screen.visible",
       "screen.visible",
       "screen.destroy",
@@ -22,10 +26,6 @@
       "screen.visible",
       "screen.destroy",
       "screen.stats",
-      "screen.rect",
-      "screen.mount",
-      "screen.visible",
-      "screen.anim",
       "screen.visible",
       "screen.rect",
       "screen.shared",
@@ -34,20 +34,20 @@
       "screen.destroy",
       "screen.stats"
     ],
-    "content_node_total" : 152,
+    "content_node_total" : 158,
     "destroy_calls" : 3,
     "live_screens" : 2,
     "mount_calls" : 5,
     "rect_calls" : 2,
     "screens" : [
       {
-        "rootNodeId" : 120,
-        "screenId" : "r-user#3",
+        "rootNodeId" : 100,
+        "screenId" : "home#1",
         "visible" : true
       },
       {
-        "rootNodeId" : 100,
-        "screenId" : "home#1",
+        "rootNodeId" : 130,
+        "screenId" : "r-user#3",
         "visible" : true
       }
     ],
@@ -97,8 +97,8 @@
     }
   ],
   "e2_log" : [
-    "mount:detail:rebuild=false:node=120",
-    "visible:detail#2:true:node=120",
+    "mount:detail:rebuild=false:node=130",
+    "visible:detail#2:true:node=130",
     "visible:home#1:false:node=100"
   ],
   "e2_plays" : [
@@ -115,7 +115,7 @@
   ],
   "e3_log" : [
     "visible:home#1:true:node=100",
-    "destroy:detail#2:pop:node=120"
+    "destroy:detail#2:pop:node=130"
   ],
   "e3_plays" : [
     {
@@ -151,7 +151,7 @@
       "y" : 0
     },
     "source_screen" : "home#1",
-    "target_node" : 122,
+    "target_node" : 132,
     "target_rect" : {
       "h" : 2400,
       "w" : 1080,
@@ -183,8 +183,8 @@
   },
   "f_host_stats" : {
     "data" : {
-      "anim_calls" : 2,
-      "anim_completed" : 0,
+      "anim_calls" : 3,
+      "anim_completed" : 1,
       "anim_hook_missing" : 0,
       "calls" : [
         "screen.mount",
@@ -192,6 +192,10 @@
         "screen.anim",
         "screen.mount",
         "screen.visible",
+        "screen.mount",
+        "screen.visible",
+        "screen.anim",
+        "screen.rect",
         "screen.mount",
         "screen.visible",
         "screen.anim",
@@ -203,25 +207,30 @@
         "screen.destroy",
         "screen.stats"
       ],
-      "content_node_total" : 76,
+      "content_node_total" : 158,
       "destroy_calls" : 2,
-      "live_screens" : 2,
-      "mount_calls" : 4,
-      "rect_calls" : 0,
+      "live_screens" : 3,
+      "mount_calls" : 5,
+      "rect_calls" : 1,
       "screens" : [
         {
-          "rootNodeId" : 120,
-          "screenId" : "r-user#3",
+          "rootNodeId" : 130,
+          "screenId" : "detail#2",
           "visible" : true
         },
         {
           "rootNodeId" : 100,
           "screenId" : "home#1",
           "visible" : true
+        },
+        {
+          "rootNodeId" : 130,
+          "screenId" : "r-user#3",
+          "visible" : true
         }
       ],
       "shared_calls" : 0,
-      "visible_calls" : 6
+      "visible_calls" : 7
     },
     "ok" : true
   },

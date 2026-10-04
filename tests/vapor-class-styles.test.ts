@@ -499,6 +499,18 @@ describe('★C1 最小切片 · SFC <style> 单类规则 → class→节点样�
     expect(d.length > 0, '不一致半径 ⇒ 诊断').toBe(true)
   })
 
+  it('★⑦u text-decoration（批次 35 · ★基准 = Web）：underline/line-through + 继承 + none 不发射', () => {
+    // 【为什么（以 web 为基准）】链接下划线/删除线；CSS 可继承。
+    expect((parseStaticStyle('text-decoration: underline', () => {}) as { textDecoration?: string }).textDecoration, 'underline').toBe('underline')
+    expect((parseStaticStyle('text-decoration: line-through', () => {}) as { textDecoration?: string }).textDecoration, 'line-through').toBe('line-through')
+    expect((parseStaticStyle('text-decoration: none', () => {}) as { textDecoration?: string }).textDecoration, 'none 不发射').toBeUndefined()
+    // 继承：父声明 ⇒ 子文本继承
+    const sfc = `<template>\n  <view class="u"><text>link</text></view>\n</template>\n<style>\n.u { text-decoration: underline }\n</style>`
+    const r = buildLayoutTemplate(sfc, 'td.vue')
+    const t = r.template.nodes.find((n) => (n as { text?: string }).text === 'link')
+    expect((t?.style as { textDecoration?: string })?.textDecoration, '子继承 underline').toBe('underline')
+  })
+
   it('★⑧ 元素/类型选择器 + @keyframes 跳过（C1 收尾）', () => {
     // 【真项目形态】examples 有 9 处元素选择器（h3/code…）+ 6 处 @keyframes 关键帧被误当选择器
     const sfc = `<template>

@@ -75,7 +75,7 @@ export const APP_ENUM_VALUES: Record<string, readonly string[]> = {
 }
 
 /** 绘制字段（宿主自绘读这些键；模板照样要带上，否则挂载后无底色/无字色） */
-export const APP_PAINT_FIELDS = ['backgroundColor', 'color', 'fontSize', 'fontWeight', 'textAlign', 'lineHeight', 'textOverflow', 'letterSpacing', 'visibility', 'borderRadius', 'borderColor', 'borderWidth', 'opacity', 'boxShadow'] as const
+export const APP_PAINT_FIELDS = ['backgroundColor', 'color', 'fontSize', 'fontWeight', 'textAlign', 'lineHeight', 'textOverflow', 'letterSpacing', 'textDecoration', 'visibility', 'borderRadius', 'borderColor', 'borderWidth', 'opacity', 'boxShadow'] as const
 const PAINT_FIELDS = new Set<string>(APP_PAINT_FIELDS)
 /**
  * ★批次 4（CSS 兼容对齐）：`text-align` 的**封闭集**（App 自绘文本在盒内的水平对齐）。
@@ -107,7 +107,7 @@ export const APP_SPECIAL_FIELDS = ['boxSizing'] as const
  *   `font-weight`/`line-height`/`text-align`/`text-overflow`（批 16）。
  *   背景/边框/圆角/不透明度在内核语义里**不继承**（见 Profile §3 可继承/不可继承表）⇒ 不得纳入。
  */
-export const APP_INHERITABLE_FIELDS = ['color', 'fontSize', 'fontWeight', 'lineHeight', 'textAlign', 'textOverflow', 'letterSpacing'] as const
+export const APP_INHERITABLE_FIELDS = ['color', 'fontSize', 'fontWeight', 'lineHeight', 'textAlign', 'textOverflow', 'letterSpacing', 'textDecoration'] as const
 /** ★批次 28：支持 `inherit` 关键字的字段集（可继承 + visibility）。 */
 const INHERIT_KEY_SET = new Set<string>([...APP_INHERITABLE_FIELDS, 'visibility'])
 
@@ -723,6 +723,15 @@ export function parseStaticStyle(
         if (v !== 'visible' && v !== 'hidden') { pushDiag(`\`${rawKey}: ${rawVal}\` 不是合法值（仅 visible / hidden）——已跳过`); continue }
         out[key] = v
         markImportant(key)
+        continue
+      }
+      if (key === 'textDecoration') {
+        // ★批次 35（对齐 Web）：text-decoration（none/underline/line-through；继承）。
+        //   `none` = 默认 ⇒ 不发射；underline/line-through → 枚举字符串。
+        const v = rawVal.trim().toLowerCase()
+        if (v === 'none') continue   // 默认
+        if (v === 'underline' || v === 'line-through') { out[key] = v; markImportant(key); continue }
+        pushDiag(`style 里 \`${rawKey}: ${rawVal}\` 未支持（仅 none / underline / line-through）——已跳过`)
         continue
       }
       if (key === 'lineHeight') {

@@ -250,7 +250,7 @@
           "skyline": "supported",
           "app": "absent"
         },
-        "why": "字距/白空格走平台文本引擎（不自研）；当前 App 折叠面文本维 = fontSize/color/fontWeight/textAlign/line-height/text-overflow/letter-spacing——white-space 未支持"
+        "why": "白空格（多行/保留空白）走平台文本引擎（不自研）——App 仅支持 `nowrap`（= App 单行默认，no-op）；`normal`/`pre`/`pre-wrap`/`pre-line` 未支持（诊断）。★文本维已含 fontSize/color/fontWeight/textAlign/line-height/text-overflow/letter-spacing/**text-decoration**（批 35）"
       },
       {
         "css": "pointer-events",
@@ -452,6 +452,7 @@
       "lineHeight",
       "textOverflow",
       "letterSpacing",
+      "textDecoration",
       "visibility",
       "borderRadius",
       "borderColor",
@@ -1202,6 +1203,21 @@
       "supportTier": "conditional"
     },
     {
+      "id": "text-decoration",
+      "css": "text-decoration",
+      "category": "text",
+      "compilerFields": [
+        "textDecoration"
+      ],
+      "web": "supported",
+      "skyline": "supported",
+      "app": "supported",
+      "tier": "L1",
+      "strategy": "编译期折叠",
+      "note": "★批次 35（2026-10-04 · ★基准 = Web）：`underline` / `line-through`（`none` = 默认不发射）；CSS **可继承**（沿树传播）。三端宿主：iOS `NSAttributedString.underlineStyle/strikethroughStyle` · Android `Paint.setUnderlineText/setStrikeThruText` · 鸿蒙 `OH_Drawing_SetTextStyleDecoration`。诚实边界：`overline`/颜色/线型未支持（诊断）",
+      "supportTier": "universal"
+    },
+    {
       "id": "text-align",
       "css": "text-align",
       "category": "text",
@@ -1271,7 +1287,7 @@
       "app": "absent",
       "tier": "L4",
       "strategy": "降级",
-      "note": "字距/白空格走平台文本引擎（不自研）；当前 App 折叠面文本维 = fontSize/color/fontWeight/textAlign/line-height/text-overflow/letter-spacing——white-space 未支持",
+      "note": "白空格（多行/保留空白）走平台文本引擎（不自研）——App 仅支持 `nowrap`（= App 单行默认，no-op）；`normal`/`pre`/`pre-wrap`/`pre-line` 未支持（诊断）。★文本维已含 fontSize/color/fontWeight/textAlign/line-height/text-overflow/letter-spacing/**text-decoration**（批 35）",
       "supportTier": "conditional"
     },
     {

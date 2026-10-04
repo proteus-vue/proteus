@@ -3024,11 +3024,15 @@ final class SelfDrawView: UIView {
     /// ★批次 20（CSS 兼容对齐 · 以 Web 为基准）：文本层的 `string` 值——声明 `letterSpacing` 时用
     ///   带 `kern` 的 `NSAttributedString`（字距真生效）；未声明 ⇒ 返回原字符串（零行为变化）。
     private func textLayerString(_ text: String, style: [String: Any], font: UIFont, color: CGColor) -> Any {
-        guard let raw = style["letterSpacing"],
-              let ls = (raw as? Double).map({ CGFloat($0) }) ?? (raw as? CGFloat), ls != 0 else { return text }
-        return NSAttributedString(string: text, attributes: [
-            .kern: ls, .font: font, .foregroundColor: UIColor(cgColor: color),
-        ])
+        // ★批次 35：文本装饰（underline / line-through）也走富文本属性
+        let deco = style["textDecoration"] as? String
+        let kern = (style["letterSpacing"] as? Double).map({ CGFloat($0) }) ?? (style["letterSpacing"] as? CGFloat) ?? 0
+        if kern == 0 && (deco == nil || deco == "none") { return text }
+        var attrs: [NSAttributedString.Key: Any] = [.font: font, .foregroundColor: UIColor(cgColor: color)]
+        if kern != 0 { attrs[.kern] = kern }
+        if deco == "underline" { attrs[.underlineStyle] = NSUnderlineStyle.single.rawValue }
+        else if deco == "line-through" { attrs[.strikethroughStyle] = NSUnderlineStyle.single.rawValue }
+        return NSAttributedString(string: text, attributes: attrs)
     }
 
     /// ★批次 25（CSS 兼容对齐 · 以 Web 为基准）：`visibility:hidden` ⇒ 层**仍占位、不显示**。
