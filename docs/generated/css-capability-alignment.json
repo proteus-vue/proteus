@@ -103,16 +103,6 @@
         "why": "→ widthRatio/heightRatio（比例字段）"
       },
       {
-        "css": "transform-origin",
-        "id": "transform-origin",
-        "ends": {
-          "web": "supported",
-          "skyline": "supported",
-          "app": "engine-only"
-        },
-        "why": "引擎有 transform_origin_x/y（paint-only），编译面未接"
-      },
-      {
         "css": "类选择器 .a / .a.b",
         "id": "selector-class",
         "ends": {
@@ -941,11 +931,11 @@
       "compilerFields": [],
       "web": "supported",
       "skyline": "supported",
-      "app": "engine-only",
+      "app": "supported",
       "tier": "L2",
       "strategy": "编译期折叠",
-      "note": "引擎有 transform_origin_x/y（paint-only），编译面未接",
-      "supportTier": "conditional"
+      "note": "★批次 40（2026-10-04 · 补齐批 39）：编译期折成盒分数 {x,y}（关键字 left/center/right/top/bottom 1–2 值 / 百分比 / 0）⇒ 三端宿主变换锚点（Android injectTransformOrigin · iOS 建层快照 + applyTransform · 鸿蒙 SetPivot 规范化坐标）。非零 px 需盒尺寸 ⇒ 诊断跳过；默认中心不发射",
+      "supportTier": "universal"
     },
     {
       "id": "selector-class",

@@ -162,6 +162,9 @@ function go(name: 'forms' | 'config-demo' | 'user') {
 
     <!-- ★transform 静态折叠演示（批次 39）：translate + scale（免手写引擎动画） -->
     <div class="tf-demo">transform: translateY(6px) scale(0.92)</div>
+
+    <!-- ★transform-origin 演示（批次 40）：绕底部锚点旋转 -->
+    <div class="to-demo">transform-origin: bottom + rotate(8deg)</div>
   </div>
 </template>
 
@@ -483,6 +486,19 @@ function go(name: 'forms' | 'config-demo' | 'user') {
   font-size: 12px;
   text-align: center;
   border-radius: 8px;
+}
+/* ★transform-origin 演示（批次 40）——绕「底部中点」旋转 */
+.to-demo {
+  width: 220px;
+  height: 36px;
+  margin: 16px auto;
+  background-color: #12b886;
+  color: #ffffff;
+  font-size: 12px;
+  text-align: center;
+  border-radius: 8px;
+  transform: rotate(8deg);
+  transform-origin: bottom;
 }
 /* ★transform 静态折叠演示（批次 39）——位移 + 等比缩放 */
 .tf-demo {

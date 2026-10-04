@@ -1068,6 +1068,13 @@ public class MainActivity extends Activity {
                         if (tn != null && tn.has("transform") && !tn.isNull("transform")) tfCount++;
                     }
                     cor.put("transformed_nodes", tfCount);
+                    // ★批次 40：带 transform-origin 的节点数（变换锚点）
+                    int toCount = 0;
+                    for (int oi = 0; oi < nodeCount; oi++) {
+                        org.json.JSONObject tn = nodes.optJSONObject(oi);
+                        if (tn != null && tn.has("transformOrigin") && !tn.isNull("transformOrigin")) toCount++;
+                    }
+                    cor.put("transform_origin_nodes", toCount);
                 }
                 cor.put("cmds_live", mo.optInt("cmds_live", -1));
                 cor.put("painted_samples", mo.optInt("painted_samples", -1));

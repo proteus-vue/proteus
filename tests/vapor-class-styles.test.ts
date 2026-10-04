@@ -1295,3 +1295,41 @@ describe('★批次 39 · 静态 transform（对齐 Web 2D 变换）', () => {
     expect((chip?.style as { transform?: Record<string, number> })?.transform).toMatchObject({ tyPx: 6, sx: 0.92 })
   })
 })
+
+// ★批次 40（对齐 Web · 补齐批 39）：**`transform-origin`** —— 旋转/缩放锚点（盒分数）——2026-10-04
+//   宿主通道已在（Android/iOS 建层读 + 动画 applyTransform）⇒ 编译器折成 {x,y} 即可。
+describe('★批次 40 · transform-origin（变换锚点，对齐 Web）', () => {
+  const to = (css: string) => (parseStaticStyle(css, () => {}) as { transformOrigin?: { x: number; y: number } }).transformOrigin
+
+  it('① 关键字（单/双值；轴序无关）', () => {
+    expect(to('transform-origin: center')).toBeUndefined()   // 默认居中 ⇒ 不发射
+    expect(to('transform-origin: bottom')).toEqual({ x: 0.5, y: 1 })
+    expect(to('transform-origin: left')).toEqual({ x: 0, y: 0.5 })
+    expect(to('transform-origin: top left')).toEqual({ x: 0, y: 0 })
+    expect(to('transform-origin: left top')).toEqual({ x: 0, y: 0 })
+    expect(to('transform-origin: center bottom')).toEqual({ x: 0.5, y: 1 })
+  })
+
+  it('② 百分比 / 0 → 分数', () => {
+    expect(to('transform-origin: 0 0')).toEqual({ x: 0, y: 0 })
+    expect(to('transform-origin: 50% 100%')).toEqual({ x: 0.5, y: 1 })
+    expect(to('transform-origin: 100% 50%')).toEqual({ x: 1, y: 0.5 })
+  })
+
+  it('③ 非零 px 需盒尺寸 ⇒ 如实诊断跳过', () => {
+    const d: string[] = []
+    expect((parseStaticStyle('transform-origin: 100px 100px', (m) => d.push(m)) as { transformOrigin?: unknown }).transformOrigin).toBeUndefined()
+    expect(d.length).toBeGreaterThan(0)
+  })
+
+  it('④ 端到端：class 里的 transform-origin → 节点 style', () => {
+    const sfc = `<template><view class="wrap"><view class="tip">x</view></view></template>
+<style>
+.tip { width: 80px; height: 40px; background-color: #ff8a3d; transform: rotate(10deg); transform-origin: bottom }
+</style>`
+    const r = buildLayoutTemplate(sfc, 'to.vue')
+    const tip = r.template.nodes.find((n) => (n.style as { backgroundColor?: string }).backgroundColor === '#ff8a3d')
+    expect((tip?.style as { transformOrigin?: { x: number; y: number } })?.transformOrigin).toEqual({ x: 0.5, y: 1 })
+    expect((tip?.style as { transform?: Record<string, number> })?.transform).toMatchObject({ rotate: 10 })
+  })
+})

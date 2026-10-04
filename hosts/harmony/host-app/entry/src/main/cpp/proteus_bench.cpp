@@ -4137,6 +4137,7 @@ static int g_appTouchContentNodes = 0;
 static int g_appTouchCmdCount = 0;
 static int g_appTouchHitCount = 0;      // 装置内命中（合成时 20 点，向后兼容旧读数）
 static int g_appTouchTransformCount = 0; // ★批次 39：带静态变换的节点数（编译期 CSS transform）
+static int g_appTouchOriginCount = 0;    // ★批次 40：带 transform-origin 的节点数
 static int g_appTouchHitFirst = -1;
 static int g_appTouchRealCount = 0;     // ★真实触摸事件数（.onTouch → appScreenHitAt）
 static int g_appTouchRealHits = 0;      // ★真实触摸命中数
@@ -4150,10 +4151,10 @@ static void writeAppScreenComposite() {
              "{\"ok\":%s,\"page\":\"%s\",\"content_nodes\":%d,\"cmds\":%d,\"render_nodes\":%d,"
              "\"hit_points_hit\":%d,\"hit_first_target\":%d,"
              "\"real_touch\":true,\"touch_count\":%d,\"real_touch_hits\":%d,\"real_touch_first_target\":%d,"
-             "\"transformed_nodes\":%d}",
+             "\"transformed_nodes\":%d,\"transform_origin_nodes\":%d}",
              g_appTouchCmdCount > 0 ? "true" : "false", g_appTouchPage.c_str(), g_appTouchContentNodes,
              g_appTouchCmdCount, g_appTouchCmdCount, g_appTouchHitCount, g_appTouchHitFirst,
-             g_appTouchRealCount, g_appTouchRealHits, g_appTouchRealFirst, g_appTouchTransformCount);
+             g_appTouchRealCount, g_appTouchRealHits, g_appTouchRealFirst, g_appTouchTransformCount, g_appTouchOriginCount);
     std::string path = g_appTouchFilesDir + "/app-screen-composite.json";
     FILE* f = fopen(path.c_str(), "w"); if (f) { fwrite(sum, 1, strlen(sum), f); fclose(f); }
 }
@@ -4264,7 +4265,7 @@ static napi_value AppScreenCommands(napi_env env, napi_callback_info info) {
         }
     }
     std::vector<std::string> items = splitJsonObjects(nodes);
-    std::string arr = "["; int emitted = 0; int tfCount = 0;
+    std::string arr = "["; int emitted = 0; int tfCount = 0; int toCount = 0;
     for (const auto& it : items) {
         double id = -1; jnum(it.c_str(), it.size(), "id", &id);
         auto ri = rectMap.find((int)id); if (ri == rectMap.end()) continue;
@@ -4341,6 +4342,20 @@ static napi_value AppScreenCommands(napi_env env, napi_callback_info info) {
                 }
             }
         }
+        // ★批次 40：transform-origin（盒分数 toX/toY）——宿主 SetPivot 用（旋转/缩放锚点）
+        {
+            std::string oSub = extractValueAfterKey(it, "transformOrigin", '{', '}');
+            if (!oSub.empty()) {
+                double ox = 0.5, oy = 0.5;
+                jnum(oSub.c_str(), oSub.size(), "x", &ox);
+                jnum(oSub.c_str(), oSub.size(), "y", &oy);
+                if (ox != 0.5 || oy != 0.5) {
+                    char ob[64]; snprintf(ob, sizeof(ob), ",\"toX\":%.4f,\"toY\":%.4f", ox, oy);
+                    arr += ob;
+                    toCount++;
+                }
+            }
+        }
         if (!text.empty()) {
             char tail[128]; snprintf(tail, sizeof(tail), ",\"fontSize\":%.2f,\"fontWeight\":%d,\"textColor\":%u", fs * density, (int)fw, tc);
             arr += tail;
@@ -4369,6 +4384,7 @@ static napi_value AppScreenCommands(napi_env env, napi_callback_info info) {
     arr += "]";
     g_appTouchCmdCount = emitted;
     g_appTouchTransformCount = tfCount;
+    g_appTouchOriginCount = toCount;
     char lb[128]; snprintf(lb, sizeof(lb), "PROTEUS_APP_SCREEN_CMDS page=%s nodes=%d", page.c_str(), emitted);
     OH_LOG_Print(LOG_APP, LOG_INFO, PROTEUS_BENCH_DOMAIN, PROTEUS_BENCH_TAG, "%{public}s", lb);
     writeAppScreenComposite();
