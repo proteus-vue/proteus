@@ -77,6 +77,8 @@ const COUPLING = [
       'tests/app-config-mp.test.ts',
       'tests/mp-global-layer-inject.test.ts',
       'tests/compiler-ir-m4.test.ts',
+      // ★GP7（2026-10-04）：App 壳 script 约束（useRoute 报错/大集合告警）+ 页面内存桥
+      'tests/global-layer-memory-gp7.test.ts',
     ],
     why: '脚本 → js 产物（生命周期/ref 改写/watch/TS 类型剥除/顶层调用）——js 形态断言',
   },
@@ -214,6 +216,8 @@ const COUPLING = [
       'tests/module-import.test.ts',
       'tests/mp-transform-exclude.test.ts',
       'tests/component-b4.test.ts',
+      // ★GP7（2026-10-04）：共享状态模块内存记账（stats/unmount/预算）+ 烘焙值调用点
+      'tests/global-layer-memory-gp7.test.ts',
     ],
     why: 'MP 插件（壳片段注入/宿主注入/编译缓存键）',
   },

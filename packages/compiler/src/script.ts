@@ -12,6 +12,8 @@ import { transpileMpSafe } from './es5'
 // ★★2026-09-08 立项（proteus-compiler-vue-align-plan）：Vue 全能力基准线——vue 命名导入逐个查对齐状态，
 //   aligned 静默 / partial·unsupported+degrade 警告 / unsupported 无降级 抛 CompilerError（反黑盒 fail-closed）
 import { CompilerError } from './validate'
+// ★★★GP7（2026-10-04）：Global 层业务数据集合告警的数值 SSOT（与运行时预算同源在 contracts）
+import { GLOBAL_LAYER_COLLECTION_WARN_LENGTH } from '@proteus-vue/contracts'
 // ★2026-09-20（外部报告 F-27/Bug D）：v-model 路径安全的 handler 名与 setData 键（与 template 侧同源）
 import { inputModelHandler, setDataEntry } from './model-path'
 import { vueCompatStatus, vueCompatLevel, VUE_PUBLIC_CONSTS } from './vue-compat'
@@ -3351,6 +3353,27 @@ export function transformScriptToPage(
   const appShell = extra.appShell === true
   // ★GP3-b1：**页面侧收到注入片段**时的合并开关（页面才是运行者——由页面产物承载外壳内容的运行）
   const injectLayer = !appShell && !extra.isComponent && extra.globalLayer !== undefined
+  /* ★★★GP7（2026-10-04，GP2-d 补齐）：**App 壳的脚本级路由约束**——C3 的 script 侧补全。
+   *
+   * 【为什么】（方案 §3.4 + 任务卡 GP2-d）Global 层**不参与路由栈** ⇒ 页面级路由状态在全局层
+   *   无意义（useRoute 读的是"当前页"的响应式路由，而全局层不属于任何页；usePageParam 读页面参数
+   *   更直接——全局层根本没有页面参数）。模板侧 `<navigator>` 等已在 GP2-d 的 C3 落地（error 级）；
+   *   本处补**脚本侧**同一语义（模板能拦、脚本更要拦——否则是半接线）。
+   * ★边界（与既有 C3 提示一致）：`useRouter().push` **事件回调里允许**（不依赖页面上下文，
+   *   是 C3 明确给出的替代路径）——本检查**不拦** useRouter；只拦"读页面路由状态/页面参数"。
+   */
+  if (appShell) {
+    const routeRead = /\buseRoute\s*\(|\busePageParam\s*\(/.exec(source)
+    if (routeRead) {
+      throw new CompilerError(
+        extra.file ?? 'App.vue',
+        `App 壳脚本引用了 ${routeRead[0].replace(/\s*\($/, '').replace(/\s+$/, '')}()——Global 层**不参与路由栈**（方案 §3.4 / GP2-d C3）：` +
+          'useRoute 读的是"当前页"的响应式路由、usePageParam 读页面参数，两者在全局层都无页面上下文。\n' +
+          '        修法：把该逻辑移到页面；全局层要响应导航请在事件回调里用 useRouter()（允许——不依赖页面上下文），' +
+          '或把"当前路由"作为**共享状态**由页面写入、全局层只读状态。',
+      )
+    }
+  }
   const { data, computed, runtimeInits, reactiveInits, letHandles, constSourceTypes } = disabled.has('script/const-to-data')
     ? { data: {}, computed: {}, runtimeInits: [] as Array<{ name: string; call: string }>, reactiveInits: [] as Array<{ name: string; srcType: string }>, letHandles: [] as string[], constSourceTypes: new Map<string, string>() }
     : extractData(source, warnings, trace)
@@ -3624,6 +3647,8 @@ export function transformScriptToPage(
   const gl = injectLayer ? extra.globalLayer! : undefined
   if (gl) {
     requireLines.push(`const __proteusGlobal = require(${JSON.stringify(gl.requirePath ?? './_proteus/global-layer.js')})`)
+    // ★GP7：全局句柄（诊断/e2e 从任意上下文读取——同探针注册表模式；只增引用不改状态语义）
+    requireLines.push("if (typeof globalThis !== 'undefined') globalThis.__proteusGlobal = __proteusGlobal")
   }
   const glData = gl ? gl.data.filter(([k]) => !(k in data) && !(k in dataExtra)) : []
   const glKeys = glData.map(([k]) => k)
@@ -3741,6 +3766,31 @@ export function transformScriptToPage(
   }
 
   const dataEntries = [...Object.entries(data), ...Object.entries(dataExtra), ...glData]
+  /* ★★★GP7（2026-10-04，GP2-d 补齐）：**Global 层持有业务数据集合** ⇒ 编译期警告。
+   *
+   * 【任务卡 GP2-d 原文】「检查全局层是否持有业务数据集合（大数组、Map 等）→ 告警」
+   *   ——这是"双层防护"的**编译期层**（运行时层见 GP7 的共享状态 stats/预算告警）。
+   * 【为什么只查 App 壳侧】**壳自己声明的 data** 才是"Global 层持有的数据"；
+   *   页面 data 是页面自己的（随页面销毁，不是常驻负担）——注入方向（页面拿壳初值）不重复报。
+   * 【判据】数组长度 ≥ 契约 `GLOBAL_LAYER_COLLECTION_WARN_LENGTH`（16）⇒ 警告；
+   *   仅告警不报错（小集合有合法用途——误报面要可控，这与 C2 上限的 error 分工不同）。
+   */
+  if (appShell) {
+    for (const [k, v] of Object.entries(data)) {
+      if (Array.isArray(v) && v.length >= GLOBAL_LAYER_COLLECTION_WARN_LENGTH) {
+        warnings.push(
+          `Global 层声明了大数组 ${k}（${v.length} 项）——Global 层**常驻内存**` +
+            `（MP 端：状态一份 + 每页初值 × 页面栈，N = 页面栈深度）。` +
+            `业务数据集合（列表/缓存）建议放页面或状态管理（store）；确需常驻请知悉其分端成本（GP2-d/GP7）`,
+        )
+      } else if (v instanceof Map || v instanceof Set) {
+        warnings.push(
+          `Global 层声明了 ${v instanceof Map ? 'Map' : 'Set'} 类型字段 ${k}——Global 层**常驻内存**且小程序侧无该类型的模板绑定通道；` +
+            '业务数据集合建议放页面或状态管理（store）（GP2-d/GP7）',
+        )
+      }
+    }
+  }
   if (dataEntries.length) {
     lines.push('  data: {')
     for (const [k, v] of dataEntries) {
@@ -4437,9 +4487,24 @@ ${indentBody([unsubLine, appConfigUnsubLine, semGridOffLine, storeDisposeLine, r
         '  },',
       ].join('\n'),
     )
+    /* ★★★GP7（2026-10-04）：页面侧内存监控桥 + 全局句柄。
+     *
+     * 【为什么需要桥】页面业务代码**不 import 外部模块**（MP 侧跨目录 import 会落 undefined——
+     *   superapp 已验证的约束）⇒ 共享状态模块只能经页面实例方法触达。
+     * 【为什么要全局句柄】诊断/e2e 从**任意上下文**查询（`automation_evaluate` 在 appservice
+     *   globalThis 上读）——与探针注册表 `__PROTEUS_PROBES__` 同一模式；同时给"非页面上下文"
+     *   （如 app.js 骨架、调试工具）一个只读入口。
+     * 【分端口径的落点】`stats()` 里 residentEstimateBytes = 共享状态一份 + 每页初值 × 页面栈
+     *   （MP 形态）；Web/自绘端无页面栈 ⇒ 恒 1 份（契约 MOUNT_LAYER_SEMANTICS 的分端诚实）。
+     */
+    methodNames.add('__proteusGlStats')
+    methodNames.add('__proteusGlUnmount')
+    methodLines.push('  __proteusGlStats() { return __proteusGlobal.stats() },')
+    methodLines.push('  __proteusGlUnmount(k) { __proteusGlobal.unmount(k); return __proteusGlobal.unmounted(k) },')
+    methodLines.push('  __proteusGlSetBudget(b) { return __proteusGlobal.setBudget(b) },')
     trace?.add('script/global-layer-merge', {
       before: `App 壳 Global 层（${glKeys.length} 字段 / ${glMethods.length} 方法）`,
-      after: '注入页面：data 初值直读共享状态 + setData 写镜像 + onShow 拉取（实例每页一份、状态一份）',
+      after: '注入页面：data 初值直读共享状态 + setData 写镜像 + onShow 拉取 + GP7 内存桥（stats/unmount/预算）',
     })
   }
 

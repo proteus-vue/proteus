@@ -206,6 +206,27 @@ function t8b(): void {
   else { const b: any = webBridge(); if (b && b.setUnread) b.setUnread(0) }
   log('⑧ 未读清零')
 }
+
+/* ⑨ Global 层内存（GP7：常驻监控——分端口径） */
+const memReadout: any = ref('—')
+/** 统一格式化（MP：页实例桥 __proteusGlStats；Web：global-state 的 glStats——字段名同形） */
+function fmtStats(x: any): string {
+  if (!x) return '（本端不可用）'
+  return (
+    '共享状态 ' + x.bytes + 'B（keys ' + x.keys + '）· 预算 ' + x.budgetBytes + 'B' + (x.overBudget ? '（★超预算）' : '') +
+    ' · 常驻估算 ' + x.residentEstimateBytes + 'B = 状态 + 每页 ' + x.perPageBytes + 'B × 栈 ' + x.pageStack
+  )
+}
+function t9(): void {
+  const s = shell()
+  if (s && s.__proteusGlStats) {
+    memReadout.value = fmtStats(s.__proteusGlStats())
+  } else {
+    const b: any = webBridge()
+    memReadout.value = b && b.glStats ? fmtStats(b.glStats()) : '（本端不可用）'
+  }
+  log('⑨ GP7 内存读数：' + memReadout.value)
+}
 </script>
 
 <template>
@@ -345,6 +366,22 @@ function t8b(): void {
           <view class="vf-btns">
             <view id="vf-8a" class="vf-btn" @click="t8">+1</view>
             <view id="vf-8b" class="vf-btn vf-btn--ghost" @click="t8b">清零</view>
+          </view>
+        </view>
+      </view>
+    </view>
+
+    <!-- ⑨ Global 层内存（GP7：常驻监控——分端口径） -->
+    <view class="sa-card">
+      <view class="sa-card__body">
+        <view class="vf-row">
+          <view class="vf-info">
+            <text class="vf-name">⑨ Global 层内存（GP7）</text>
+            <text class="vf-desc">常驻监控 · 分端口径（MP：状态一份 + 每页初值 × 页面栈）</text>
+            <text id="vf-read-mem" class="vf-read">{{ memReadout }}</text>
+          </view>
+          <view class="vf-btns">
+            <view id="vf-9a" class="vf-btn" @click="t9">读内存</view>
           </view>
         </view>
       </view>

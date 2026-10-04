@@ -188,11 +188,41 @@ describe.skipIf(!ENABLED)('超级应用验收 · 首模块：全局挂载八条�
     tap('#vf-3b')
     await driver.waitFor(500)
 
-    // ── ⑧ 零 error 门禁 ──
+    // ── ⑨ ★GP7：Global 层内存（运行时真实可观测 + unmount 释放前后对比） ──
+    //   ★判据读的是**共享模块 stats()**（跑了才知道）＋ **验收控制台读数**（业务面）两条——
+    //     只断言"产物里有字段"不算数（那是单测的覆盖面；这里证端上行为）。
+    const memStats = JSON.parse(String(await driver.evaluate(`function () {
+      var s = globalThis.__proteusGlobal
+      if (!s || typeof s.stats !== 'function') return JSON.stringify(null)
+      return JSON.stringify(s.stats())
+    }`))) as { keys: number; bytes: number; budgetBytes: number; perPageBytes: number; pageStack: number; residentEstimateBytes: number } | null
+    expect(memStats, '★GP7：共享状态内存读数可查（globalThis.__proteusGlobal.stats）').toBeTruthy()
+    expect(memStats!.keys, '至少已写入过场景状态').toBeGreaterThan(0)
+    expect(memStats!.perPageBytes, '★每页初值字节（编译期烘焙进产物）').toBeGreaterThan(0)
+    expect(memStats!.pageStack, '★页面栈深度被读到（MP 分端口径的 N 倍部分）').toBeGreaterThanOrEqual(1)
+    expect(memStats!.residentEstimateBytes, '★分端口径：状态一份 + 每页 × 栈').toBeGreaterThanOrEqual(memStats!.bytes)
+
+    const released = JSON.parse(String(await driver.evaluate(`function () {
+      var s = globalThis.__proteusGlobal
+      s.set('gp7_selftest', 'x'.repeat(2000))
+      var before = s.stats().bytes
+      s.unmount('gp7_selftest')
+      var after = s.stats().bytes
+      return JSON.stringify({ ok: after < before && s.unmounted('gp7_selftest'), before: before, after: after })
+    }`))) as { ok: boolean; before: number; after: number }
+    expect(released.ok, `★GP7：unmount 后内存确实释放（${released.before}B → ${released.after}B，前后对比）`).toBe(true)
+
+    // 业务面读数（验收控制台 ⑨ 行——走页实例桥 __proteusGlStats）
+    tap('#vf-9a')
+    await driver.waitFor(500)
+    const memPage = await pageData()
+    expect(String(memPage.data.memReadout), '★验收控制台 ⑨ 行可读到内存（分端口径文案）').toContain('共享状态')
+
+    // ── ⑩ 零 error 门禁 ──
     const logs = await driver.consoleLogs()
     const errLines = logs.filter((l) => /not defined|ReferenceError|MiniProgramError|Fatal|TypeError/i.test(l.text))
     expect(errLines, '全流程不应有 error').toEqual([])
 
-    console.log('[SUPERAPP] ✅ 八条场景走真实业务路径：网络条(首页) → 音乐条(首页) → 角标(消息页) → 主题/客服球(设置页) → 跨页一致 → 验收台触发 ①②③')
+    console.log('[SUPERAPP] ✅ 八条场景走真实业务路径：网络条(首页) → 音乐条(首页) → 角标(消息页) → 主题/客服球(设置页) → 跨页一致 → 验收台触发 ①②③ → ⑨ GP7 内存读数/卸载释放')
   })
 })

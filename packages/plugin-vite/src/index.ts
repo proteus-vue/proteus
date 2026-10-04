@@ -12,6 +12,8 @@ export {
   npmModuleRelNoExt,
   splitNpmSource,
   resolveNpmEntry,
+  // ★★★B1 修复（2026-10-04）：external 闭包缺口扫描（CJS require 悬空回归的回归锁）
+  findMissingExternalTargets,
 } from './plugin'
 export type { ModuleAlias } from './plugin'
 export { MP_PATH_POLYFILL_CODE } from './path-polyfill'

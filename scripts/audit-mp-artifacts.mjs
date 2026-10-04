@@ -245,6 +245,24 @@ function auditJsOutputs() {
     // ③ 参数位残留类型注解（Bug A 的产物形态；语法校验通常先抓到，此处给出更明确归因）
     const anno = /proteusSet\w+\([^)]*:/.exec(src)
     if (anno) issues.push({ kind: 'param-type-annotation', via: path.relative(MP_DIR, f), detail: `参数位残留 TS 注解：${anno[0].slice(0, 80)}` })
+    // ④ ★★★2026-10-04（B1 回归的门禁化）：**相对 require 的目标必须存在**。
+    //   【为什么必须在这里（不是构建期）】外部化（esbuild external）**不校验目标是否存在**
+    //     ⇒ 收集侧漏了目标时，构建零告警、此处此前也全绿，**只有模拟器/真机跑起来才崩**
+    //     （实测：`module '_proteus/@vue/shared.js' is not defined` ⇒ 所有页面挂）。
+    //   ⇒ 机器判据：产物里每个 `require("./x.js")` 相对目标必须真实存在。
+    //     这正是"声明引用闭环"的**代码级孪生**——四件套查 wxml/json 引用，本查 js require 引用。
+    const reqRe = /require\(\s*(["'])((?:\.\.?\/)[^"']+\.js)\1\s*\)/g
+    let rm
+    while ((rm = reqRe.exec(src))) {
+      const target = path.resolve(path.dirname(f), rm[2])
+      if (!fs.existsSync(target)) {
+        issues.push({
+          kind: 'dangling-require',
+          via: path.relative(MP_DIR, f),
+          detail: `require(${rm[2]}) 目标不存在（${path.relative(MP_DIR, target)}）——运行时会 "module ... is not defined"，整个小程序挂`,
+        })
+      }
+    }
   }
 }
 
@@ -257,7 +275,7 @@ if (asJson) {
   console.log(`  页面 ${checkedPages} 个 · 组件引用 ${checkedRefs} 处 · js 产物 ${checkedJs} 个 · 框架组件 ${checkedFrameworkComponents} 个`)
   if (ok) {
     console.log('  ✅ 全部声明引用均有完整产物（页面四件套 + usingComponents 递归）')
-    console.log('  ✅ 全部 js 产物语法可解析、无正则改写/参数注解残留')
+    console.log('  ✅ 全部 js 产物语法可解析、无正则改写/参数注解残留、无 require 悬空（★2026-10-04 加）')
     if (warnings.length) {
       console.log(`  ⚠ ${warnings.length} 项提示（不判失败）：`)
       for (const w of warnings.slice(0, 8)) console.log(`    - [${w.kind}] ${w.via}（缺 ${w.missing.join('/')}）：${w.detail}`)
@@ -274,6 +292,7 @@ if (asJson) {
       else if (i.kind === 'regex-mangled') console.log(`    - [正则被改写] ${i.via}：${i.detail}`)
       else if (i.kind === 'framework-component-incomplete') console.log(`    - [框架组件产物不完整] ${i.via}（缺 ${i.missing.join('/')}）：${i.detail}`)
       else if (i.kind === 'param-type-annotation') console.log(`    - [参数残留 TS 注解] ${i.via}：${i.detail}`)
+      else if (i.kind === 'dangling-require') console.log(`    - [require 悬空] ${i.via}：${i.detail}`)
       else console.log(`    - [${i.kind}] ${i.via}：${i.detail}`)
     }
     if (issues.length > 30) console.log(`    …另有 ${issues.length - 30} 项`)

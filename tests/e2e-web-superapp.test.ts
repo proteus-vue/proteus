@@ -204,4 +204,27 @@ describe.skipIf(!ENABLED)('★超级应用验收（Web）· 首模块：全局�
     page.on('pageerror', (e) => errors.push(String(e)))
     expect(errors, '全流程不应有 page error').toEqual([])
   })
+
+  it('⑦ ★GP7：Global 层内存读数（Web 端分端口径——恒 1 份）', { timeout: 30_000 }, async () => {
+    // ★与 ⑥ 同一条导航通道（wx 门面 → 适配器；勿用 history.pushState——RouterView 未必消费）
+    await page.evaluate(() => (globalThis as unknown as { wx: { navigateTo: (o: { url: string }) => void } }).wx.navigateTo({ url: '/pages/verify' }))
+    await page.waitForSelector('#vf-9a', { timeout: 10_000 })
+
+    // ★上一用例结束时留有一个 Loading（mask 会拦鼠标命中）⇒ 用 element.click() 直发事件绕过命中测试
+    //   （判据读的是**读数**不是"能不能点到"——可点性由 ⑥ 用例负责）
+    await page.evaluate(() => (document.querySelector('#vf-9a') as HTMLElement | null)?.click())
+    await page.waitForTimeout(500)
+    const readout = String(await page.textContent('#vf-read-mem'))
+    expect(readout, '★⑨ 行可读到内存（分端口径文案）').toContain('共享状态')
+    expect(readout, '★Web 端口径：恒 1 份（栈 1）').toContain('栈 1')
+
+    // 桥面：globalThis.__SUPERAPP_GLOBAL__.glStats() 直接可查（诊断/e2e 通道）
+    const stats = await page.evaluate(() => {
+      const g = globalThis as unknown as { __SUPERAPP_GLOBAL__?: { glStats?: () => Record<string, unknown> } }
+      return g.__SUPERAPP_GLOBAL__?.glStats?.() ?? null
+    })
+    expect(stats, '★GP7 Web 桥：glStats 可查').toBeTruthy()
+    expect(String(stats!.budgetBytes), '预算与契约同值（65536）').toBe('65536')
+    expect(Number(stats!.residentEstimateBytes), '★Web 分端口径：resident = 状态本身（1 份）').toBe(Number(stats!.bytes))
+  })
 })
