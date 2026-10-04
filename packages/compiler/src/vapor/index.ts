@@ -15,7 +15,8 @@ export type {
   VaporBuildResult,
 } from './build'
 // ★V4：LayoutTemplate（模板 → 初始节点树）—— 「全量 SFC → 端上渲染」的静态结构产物
-export { buildLayoutTemplate, parseStaticStyle, parseClassStyles, stripScopeSuffix } from './template'
+export { buildLayoutTemplate, parseStaticStyle, parseClassStyles, parseClassRules, resolveClassStyles, stripScopeSuffix } from './template'
+export type { ClassStyleRule } from './template'
 // ★App 端 CSS 支持面 SSOT（2026-10-04：对照矩阵 / check:app-css-surface 消费）
 export {
   APP_LAYOUT_FIELDS,

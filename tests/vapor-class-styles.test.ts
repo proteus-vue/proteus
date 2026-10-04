@@ -12,7 +12,7 @@
 //   ⑤ 认不出的声明值仍走 parseStaticStyle 折叠面（px/数字；百分比宽高→比例）
 
 import { describe, it, expect } from 'vitest'
-import { buildLayoutTemplate, parseClassStyles, stripScopeSuffix } from '@proteus-vue/compiler'
+import { buildLayoutTemplate, parseClassStyles, parseStaticStyle, stripScopeSuffix } from '@proteus-vue/compiler'
 
 const SFC = `<template>
   <view class="card">
@@ -57,20 +57,56 @@ describe('★C1 最小切片 · SFC <style> 单类规则 → class→节点样�
     expect((inlineNode!.style as { height?: number }).height, 'class 的 height 仍在（合并）').toBe(120)
   })
 
-  it('③ 不支持的选择器 ⇒ 跳过 + 诊断（不静默）', () => {
-    const codes = r.diagnostics.map((d) => d.code)
-    expect(codes, '有选择器不支持诊断').toContain('VAPOR_STYLE_SELECTOR_UNSUPPORTED')
-    // 组合/伪类规则**未**被合进样式（.card > .title 的 margin-top 不应出现在 title 节点上）
-    const anyMargin = r.template.nodes.some((n) => (n.style as { marginTop?: number }).marginTop === 8)
-    expect(anyMargin, '.card > .title 组合选择器未被误当单类合并').toBe(false)
+  it('③ ★选择器链：复合 .a.b / 后代 .a .b / 子 .a>.b 均可匹配', () => {
+    const chainSfc = `<template>
+      <view class="list">
+        <view class="row active"><text class="label">A</text></view>
+      </view>
+    </template>
+    <script setup>const y = 1</script>
+    <style scoped>
+    .row { height: 40 }
+    .row.active { background-color: #EEEEEE }
+    .list .label { color: #111111 }
+    .row > .label { font-size: 18 }
+    .label:hover { color: #FF0000 }
+    </style>`
+    const rc = buildLayoutTemplate(chainSfc, 'pages/list.vue')
+    expect(rc.ok).toBe(true)
+    const row = rc.template.nodes.find((n) => (n.style as { backgroundColor?: string }).backgroundColor === '#EEEEEE')
+    expect(row, '★复合 .row.active 匹配').toBeTruthy()
+    expect((row!.style as { height?: number }).height, '单类 .row 也并到该节点').toBe(40)
+    const label = rc.template.nodes.find((n) => (n.style as { fontSize?: number }).fontSize === 18)
+    expect(label, '★子选择器 .row > .label 匹配').toBeTruthy()
+    expect((label!.style as { color?: string }).color, '★后代选择器 .list .label 匹配').toBe('#111111')
+    // 伪类规则仍跳过（.label:hover 的红色不应出现）
+    const anyRed = rc.template.nodes.some((n) => (n.style as { color?: string }).color === '#FF0000')
+    expect(anyRed, '伪类 .label:hover 仍跳过（不支持）').toBe(false)
+    expect(rc.diagnostics.map((d) => d.code), '仍有不支持选择器诊断').toContain('VAPOR_STYLE_SELECTOR_UNSUPPORTED')
   })
 
   it('④ scoped 后缀类名也能匹配（stripScopeSuffix）', () => {
     expect(stripScopeSuffix('foo-data-v-abc123')).toBe('foo')
     expect(stripScopeSuffix('foo')).toBe('foo')
+    // 规则里的类名带 scoped 后缀 ⇒ 抽出时去后缀（与元素原始类名对齐）
     const m = parseClassStyles('.bar-data-v-xyz { height: 40 }')
-    expect(m.bar, '去后缀名 bar 登记').toBeTruthy()
-    expect(m['bar-data-v-xyz'], '带后缀名也登记（防显式使用）').toBeTruthy()
+    expect(m.bar, '规则里的 .bar-data-v-xyz 去后缀后以 bar 登记').toBeTruthy()
+    expect((m.bar as { height?: number }).height).toBe(40)
+  })
+
+  it('★⑥ 枚举值校验：display: block/grid 等 App 不支持值 ⇒ 跳过 + 诊断（不传非法值给内核）', () => {
+    // 【真机缺陷回归】真机 RustLayout.create 失败暴露：CSS display:block/inline-block/grid/inline-flex
+    //   此前**原样透传** ⇒ 内核只认 flex/none ⇒ **整棵树建不起来**（页面全崩）。现改为诊断+跳过。
+    const m = parseClassStyles('.x { display: block; height: 10 }', () => {})
+    expect((m.x as { display?: string }).display, 'display:block 被跳过（不传非法值）').toBeUndefined()
+    expect((m.x as { height?: number }).height, '同规则其它合法声明仍在').toBe(10)
+    const m2 = parseClassStyles('.y { display: flex; position: sticky }', () => {})
+    expect((m2.y as { display?: string }).display, 'display:flex 合法保留').toBe('flex')
+    expect((m2.y as { position?: string }).position, 'position:sticky 不支持 ⇒ 跳过').toBeUndefined()
+    // 真机建树契约：折叠出的值必须在内核封闭集内
+    const diag: string[] = []
+    parseStaticStyle('display: grid', (x) => diag.push(x))
+    expect(diag.length, 'inline display:grid 也诊断').toBeGreaterThan(0)
   })
 
   it('⑤ 折叠面同源：百分比宽高 → 比例字段（与 inline style 同一 parseStaticStyle）', () => {

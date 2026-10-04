@@ -126,7 +126,6 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
       {
         "id": 14,
         "parentId": 11,
-        "display": "block",
         "semantic": "p-text"
       },
       {
@@ -164,7 +163,6 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
       {
         "id": 18,
         "parentId": 17,
-        "display": "block",
         "text": "p-view 容器 + p-text 文本（selectable）",
         "semantic": "p-text"
       },
@@ -177,7 +175,6 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
       {
         "id": 20,
         "parentId": 17,
-        "display": "block",
         "semantic": "p-text"
       },
       {
@@ -198,7 +195,6 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
       {
         "id": 22,
         "parentId": 0,
-        "display": "block",
         "semantic": "p-text"
       },
       {
@@ -283,7 +279,6 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
       {
         "id": 32,
         "parentId": 29,
-        "display": "block",
         "semantic": "p-text"
       },
       {
@@ -349,7 +344,6 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
       {
         "id": 40,
         "parentId": 39,
-        "display": "block",
         "text": "弹层内容（bottom + slide 转场）",
         "semantic": "p-text"
       },
@@ -414,7 +408,6 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
       {
         "id": 49,
         "parentId": 46,
-        "display": "block",
         "text": "数据已加载",
         "semantic": "p-text"
       }
@@ -511,7 +504,6 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
       {
         "id": 6,
         "parentId": 0,
-        "display": "block",
         "padding": {
           "top": 16,
           "right": 16,
@@ -890,7 +882,6 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
         "margin": {
           "bottom": 10
         },
-        "display": "block",
         "text": "① 业务侧（编译器生成的转发桩）",
         "semantic": "text"
       },
@@ -918,7 +909,6 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
         "parentId": 4,
         "fontSize": 12,
         "opacity": 0.75,
-        "display": "block",
         "margin": {
           "top": 4
         },
@@ -929,7 +919,6 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
         "parentId": 4,
         "fontSize": 12,
         "opacity": 0.75,
-        "display": "block",
         "margin": {
           "top": 4
         },
@@ -957,7 +946,6 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
         "margin": {
           "bottom": 10
         },
-        "display": "block",
         "text": "② 原生插件推送（dev server push → 装载即验证）",
         "semantic": "text"
       },
@@ -1022,7 +1010,6 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
         "parentId": 10,
         "fontSize": 12,
         "opacity": 0.75,
-        "display": "block",
         "margin": {
           "top": 4
         },
@@ -1060,7 +1047,6 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
         "margin": {
           "bottom": 10
         },
-        "display": "block",
         "text": "③ 双层构建缓存（基座 cacheKey 与业务规模无关）",
         "semantic": "text"
       },
@@ -1087,7 +1073,6 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
         "parentId": 21,
         "fontSize": 12,
         "opacity": 0.75,
-        "display": "block",
         "margin": {
           "top": 4
         },
@@ -1115,7 +1100,6 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
         "margin": {
           "bottom": 10
         },
-        "display": "block",
         "text": "④ DevHost 指标（G-45.5 全链可观测）",
         "semantic": "text"
       },
@@ -1310,7 +1294,6 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
         "margin": {
           "bottom": 10
         },
-        "display": "block",
         "text": "⑤ 事件链（loaded / upgraded / rejected / fallback / replay）",
         "semantic": "text"
       },
@@ -1340,7 +1323,6 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
         "parentId": 47,
         "fontSize": 12,
         "opacity": 0.75,
-        "display": "block",
         "margin": {
           "top": 4
         },
@@ -1427,7 +1409,6 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
       {
         "id": 12,
         "parentId": 0,
-        "display": "inline-block",
         "borderRadius": 4,
         "semantic": "div"
       },
@@ -1520,7 +1501,6 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
       {
         "id": 25,
         "parentId": 0,
-        "display": "grid",
         "gap": 16,
         "semantic": "div"
       },
@@ -1538,6 +1518,8 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
       {
         "id": 28,
         "parentId": 26,
+        "borderRadius": 6,
+        "maxHeight": 320,
         "semantic": "div"
       },
       {
@@ -1599,6 +1581,8 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
       {
         "id": 37,
         "parentId": 35,
+        "borderRadius": 6,
+        "maxHeight": 320,
         "semantic": "div"
       },
       {
@@ -1923,6 +1907,13 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
       {
         "id": 8,
         "parentId": 7,
+        "borderRadius": 8,
+        "padding": {
+          "top": 12,
+          "right": 12,
+          "bottom": 12,
+          "left": 12
+        },
         "semantic": "div"
       },
       {
@@ -1942,6 +1933,13 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
       {
         "id": 11,
         "parentId": 7,
+        "borderRadius": 8,
+        "padding": {
+          "top": 12,
+          "right": 12,
+          "bottom": 12,
+          "left": 12
+        },
         "semantic": "div"
       },
       {
@@ -2316,7 +2314,6 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
       {
         "id": 52,
         "parentId": 51,
-        "display": "block",
         "color": "#1d6fb8",
         "borderRadius": 4,
         "fontSize": 13,
@@ -2326,7 +2323,6 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
       {
         "id": 53,
         "parentId": 51,
-        "display": "block",
         "color": "#1d6fb8",
         "borderRadius": 4,
         "fontSize": 13,
@@ -2336,7 +2332,6 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
       {
         "id": 54,
         "parentId": 51,
-        "display": "block",
         "color": "#1d6fb8",
         "borderRadius": 4,
         "fontSize": 13,
@@ -2346,7 +2341,6 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
       {
         "id": 55,
         "parentId": 51,
-        "display": "block",
         "color": "#1d6fb8",
         "borderRadius": 4,
         "fontSize": 13,
@@ -2775,7 +2769,6 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
       {
         "id": 2,
         "parentId": 0,
-        "display": "block",
         "widthRatio": 1,
         "padding": {
           "top": 8,
@@ -2789,7 +2782,6 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
       {
         "id": 3,
         "parentId": 0,
-        "display": "block",
         "widthRatio": 1,
         "padding": {
           "top": 8,
@@ -2957,7 +2949,6 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
       {
         "id": 2,
         "parentId": 0,
-        "display": "block",
         "color": "#666",
         "fontSize": 13,
         "text": "统一入口 <pg-glass> → 各端映射到该端最强玻璃；L1 基础玻璃全端必达，降级不崩溃",
@@ -2980,7 +2971,6 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
       {
         "id": 5,
         "parentId": 3,
-        "display": "block",
         "color": "#888",
         "fontSize": 12,
         "text": "preset = 经验证的最佳参数组合，业务优先用 preset；下方为各预设默认外观",
@@ -2989,7 +2979,6 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
       {
         "id": 6,
         "parentId": 3,
-        "display": "grid",
         "gap": 12,
         "padding": {
           "top": 20,
@@ -3045,7 +3034,6 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
       {
         "id": 12,
         "parentId": 10,
-        "display": "block",
         "color": "#888",
         "fontSize": 12,
         "text": "同一 custom 预设，不同模糊厚度（none=0 → ultra 最厚）",
@@ -3054,7 +3042,6 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
       {
         "id": 13,
         "parentId": 10,
-        "display": "grid",
         "gap": 12,
         "padding": {
           "top": 20,
@@ -3110,7 +3097,6 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
       {
         "id": 19,
         "parentId": 17,
-        "display": "block",
         "color": "#888",
         "fontSize": 12,
         "text": "noise > 0 渲染噪点层；border 控制高光边（Web/Skyline CSS 模拟）",
@@ -3119,7 +3105,6 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
       {
         "id": 20,
         "parentId": 17,
-        "display": "grid",
         "gap": 12,
         "padding": {
           "top": 20,
@@ -3234,7 +3219,6 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
       {
         "id": 32,
         "parentId": 30,
-        "display": "block",
         "color": "#888",
         "fontSize": 12,
         "text": "props → 环境 → 层级：能力不足降实色，绝不白屏/黑块",
@@ -3612,132 +3596,154 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
       {
         "id": 8,
         "parentId": 7,
+        "color": "#1a7af8",
         "text": "表单与指令",
         "semantic": "a"
       },
       {
         "id": 9,
         "parentId": 7,
+        "color": "#1a7af8",
         "text": "配置演示",
         "semantic": "a"
       },
       {
         "id": 10,
         "parentId": 7,
+        "color": "#1a7af8",
         "text": "组件演示",
         "semantic": "a"
       },
       {
         "id": 11,
         "parentId": 7,
+        "color": "#1a7af8",
         "text": "小程序语义（MP 组件/API）",
         "semantic": "a"
       },
       {
         "id": 12,
         "parentId": 7,
+        "color": "#1a7af8",
         "text": "PlatformAPI 收口",
         "semantic": "a"
       },
       {
         "id": 13,
         "parentId": 7,
+        "color": "#1a7af8",
         "text": "柔性布局（Fluid）",
         "semantic": "a"
       },
       {
         "id": 14,
         "parentId": 7,
+        "color": "#1a7af8",
         "text": "Fluid System（折叠屏/车机）",
         "semantic": "a"
       },
       {
         "id": 15,
         "parentId": 7,
+        "color": "#1a7af8",
         "text": "G-32 语义原语（B2）",
         "semantic": "a"
       },
       {
         "id": 16,
         "parentId": 7,
+        "color": "#1a7af8",
         "text": "v-model MP 复测（G12）",
         "semantic": "a"
       },
       {
         "id": 17,
         "parentId": 7,
+        "color": "#1a7af8",
         "text": "渲染后端可插拔（G-27）",
         "semantic": "a"
       },
       {
         "id": 18,
         "parentId": 7,
+        "color": "#1a7af8",
         "text": "液态玻璃（G-07）",
         "semantic": "a"
       },
       {
         "id": 19,
         "parentId": 7,
+        "color": "#1a7af8",
         "text": "文档引擎（md 编译渲染）",
         "semantic": "a"
       },
       {
         "id": 20,
         "parentId": 7,
+        "color": "#1a7af8",
         "text": "开放 API 演示（第三方面板）",
         "semantic": "a"
       },
       {
         "id": 21,
         "parentId": 7,
+        "color": "#1a7af8",
         "text": "内置组件",
         "semantic": "a"
       },
       {
         "id": 22,
         "parentId": 7,
+        "color": "#1a7af8",
         "text": "原生能力组件（camera/map/ad）",
         "semantic": "a"
       },
       {
         "id": 23,
         "parentId": 7,
+        "color": "#1a7af8",
         "text": "国际化",
         "semantic": "a"
       },
       {
         "id": 24,
         "parentId": 7,
+        "color": "#1a7af8",
         "text": "注入演示",
         "semantic": "a"
       },
       {
         "id": 25,
         "parentId": 7,
+        "color": "#1a7af8",
         "text": "虚拟列表",
         "semantic": "a"
       },
       {
         "id": 26,
         "parentId": 7,
+        "color": "#1a7af8",
         "text": "状态管理",
         "semantic": "a"
       },
       {
         "id": 27,
         "parentId": 7,
+        "color": "#1a7af8",
         "text": "用户中心",
         "semantic": "a"
       },
       {
         "id": 28,
         "parentId": 7,
+        "color": "#1a7af8",
         "text": "个人资料",
         "semantic": "a"
       },
       {
         "id": 29,
         "parentId": 7,
+        "color": "#1a7af8",
         "text": "订单列表",
         "semantic": "a"
       },
@@ -3863,12 +3869,14 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
       {
         "id": 48,
         "parentId": 45,
+        "color": "#1a7af8",
         "text": "① 进入用户中心（a 链接·嵌套入口）",
         "semantic": "a"
       },
       {
         "id": 49,
         "parentId": 45,
+        "color": "#1a7af8",
         "text": "② router.push → 用户中心（push 路径）",
         "semantic": "button"
       },
@@ -3918,7 +3926,6 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
       {
         "id": 1,
         "parentId": 0,
-        "display": "block",
         "fontSize": 20,
         "margin": {
           "bottom": 8
@@ -3930,7 +3937,6 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
       {
         "id": 2,
         "parentId": 0,
-        "display": "block",
         "color": "rgba(255, 255, 255, 0.5)",
         "fontSize": 13,
         "margin": {
@@ -3958,7 +3964,6 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
       {
         "id": 4,
         "parentId": 3,
-        "display": "block",
         "color": "rgba(255, 255, 255, 0.5)",
         "fontSize": 12,
         "margin": {
@@ -4000,7 +4005,6 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
       {
         "id": 8,
         "parentId": 7,
-        "display": "block",
         "color": "rgba(255, 255, 255, 0.5)",
         "fontSize": 12,
         "margin": {
@@ -4040,7 +4044,6 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
       {
         "id": 12,
         "parentId": 11,
-        "display": "block",
         "color": "rgba(255, 255, 255, 0.5)",
         "fontSize": 12,
         "margin": {
@@ -4122,7 +4125,6 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
       {
         "id": 20,
         "parentId": 19,
-        "display": "block",
         "color": "rgba(255, 255, 255, 0.5)",
         "fontSize": 12,
         "margin": {
@@ -4180,7 +4182,6 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
       {
         "id": 27,
         "parentId": 26,
-        "display": "block",
         "color": "rgba(255, 255, 255, 0.5)",
         "fontSize": 12,
         "margin": {
@@ -4192,7 +4193,6 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
       {
         "id": 28,
         "parentId": 26,
-        "display": "block",
         "margin": {
           "bottom": 8
         },
@@ -4212,7 +4212,6 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
       {
         "id": 30,
         "parentId": 26,
-        "display": "block",
         "color": "#7d90a9",
         "fontSize": 13,
         "margin": {
@@ -4239,7 +4238,6 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
       {
         "id": 32,
         "parentId": 31,
-        "display": "block",
         "color": "rgba(255, 255, 255, 0.5)",
         "fontSize": 12,
         "margin": {
@@ -4292,7 +4290,6 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
         "id": 38,
         "parentId": 37,
         "widthRatio": 0.6,
-        "display": "block",
         "semantic": "slider"
       },
       {
@@ -4407,7 +4404,6 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
       {
         "id": 54,
         "parentId": 53,
-        "display": "block",
         "color": "rgba(255, 255, 255, 0.5)",
         "fontSize": 12,
         "margin": {
@@ -4448,7 +4444,6 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
       {
         "id": 58,
         "parentId": 57,
-        "display": "block",
         "color": "rgba(255, 255, 255, 0.5)",
         "fontSize": 12,
         "margin": {
@@ -4517,7 +4512,6 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
       {
         "id": 5,
         "parentId": 0,
-        "display": "block",
         "color": "#666",
         "fontSize": 13,
         "semantic": "p-text"
@@ -4536,7 +4530,6 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
       {
         "id": 8,
         "parentId": 0,
-        "display": "block",
         "color": "#666",
         "fontSize": 13,
         "semantic": "p-text"
@@ -4570,7 +4563,6 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
       {
         "id": 13,
         "parentId": 0,
-        "display": "block",
         "color": "#999",
         "fontSize": 12,
         "semantic": "p-text"
@@ -4588,7 +4580,6 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
       {
         "id": 16,
         "parentId": 0,
-        "display": "block",
         "color": "#666",
         "fontSize": 13,
         "semantic": "p-text"
@@ -4607,7 +4598,6 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
       {
         "id": 19,
         "parentId": 0,
-        "display": "block",
         "color": "#666",
         "fontSize": 13,
         "semantic": "p-text"
@@ -4729,7 +4719,6 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
       {
         "id": 1,
         "parentId": 0,
-        "display": "block",
         "fontSize": 20,
         "margin": {
           "bottom": 8
@@ -4741,7 +4730,6 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
       {
         "id": 2,
         "parentId": 0,
-        "display": "block",
         "color": "rgba(255, 255, 255, 0.5)",
         "fontSize": 13,
         "margin": {
@@ -4769,7 +4757,6 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
       {
         "id": 4,
         "parentId": 3,
-        "display": "block",
         "color": "rgba(255, 255, 255, 0.5)",
         "fontSize": 12,
         "margin": {
@@ -4812,7 +4799,6 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
       {
         "id": 8,
         "parentId": 6,
-        "display": "block",
         "color": "#7d90a9",
         "fontSize": 13,
         "margin": {
@@ -4839,7 +4825,6 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
       {
         "id": 10,
         "parentId": 9,
-        "display": "block",
         "color": "rgba(255, 255, 255, 0.5)",
         "fontSize": 12,
         "margin": {
@@ -4886,7 +4871,6 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
       {
         "id": 15,
         "parentId": 9,
-        "display": "block",
         "color": "#7d90a9",
         "fontSize": 13,
         "margin": {
@@ -4913,7 +4897,6 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
       {
         "id": 17,
         "parentId": 16,
-        "display": "block",
         "color": "rgba(255, 255, 255, 0.5)",
         "fontSize": 12,
         "margin": {
@@ -4967,7 +4950,6 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
       {
         "id": 22,
         "parentId": 21,
-        "display": "block",
         "color": "rgba(255, 255, 255, 0.5)",
         "fontSize": 12,
         "margin": {
@@ -5023,7 +5005,6 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
       {
         "id": 28,
         "parentId": 21,
-        "display": "block",
         "color": "#7d90a9",
         "fontSize": 13,
         "margin": {
@@ -5050,7 +5031,6 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
       {
         "id": 30,
         "parentId": 29,
-        "display": "block",
         "color": "rgba(255, 255, 255, 0.5)",
         "fontSize": 12,
         "margin": {
@@ -5106,7 +5086,6 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
       {
         "id": 36,
         "parentId": 29,
-        "display": "block",
         "color": "#7d90a9",
         "fontSize": 13,
         "margin": {
@@ -5117,7 +5096,6 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
       {
         "id": 37,
         "parentId": 29,
-        "display": "block",
         "color": "rgba(255, 255, 255, 0.5)",
         "fontSize": 13,
         "margin": {
@@ -5145,7 +5123,6 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
       {
         "id": 39,
         "parentId": 38,
-        "display": "block",
         "color": "rgba(255, 255, 255, 0.5)",
         "fontSize": 12,
         "margin": {
@@ -5210,7 +5187,6 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
       {
         "id": 46,
         "parentId": 38,
-        "display": "block",
         "color": "#7d90a9",
         "fontSize": 13,
         "margin": {
@@ -5221,7 +5197,6 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
       {
         "id": 47,
         "parentId": 38,
-        "display": "block",
         "color": "rgba(255, 255, 255, 0.5)",
         "fontSize": 13,
         "margin": {
@@ -5249,7 +5224,6 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
       {
         "id": 49,
         "parentId": 48,
-        "display": "block",
         "color": "rgba(255, 255, 255, 0.5)",
         "fontSize": 12,
         "margin": {
@@ -5305,7 +5279,6 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
       {
         "id": 55,
         "parentId": 48,
-        "display": "block",
         "color": "#7d90a9",
         "fontSize": 13,
         "margin": {
@@ -5316,7 +5289,6 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
       {
         "id": 56,
         "parentId": 48,
-        "display": "block",
         "color": "rgba(255, 255, 255, 0.5)",
         "fontSize": 13,
         "margin": {
@@ -5344,7 +5316,6 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
       {
         "id": 58,
         "parentId": 57,
-        "display": "block",
         "color": "rgba(255, 255, 255, 0.5)",
         "fontSize": 12,
         "margin": {
@@ -5418,7 +5389,6 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
       {
         "id": 66,
         "parentId": 57,
-        "display": "block",
         "color": "#7d90a9",
         "fontSize": 13,
         "margin": {
@@ -5429,7 +5399,6 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
       {
         "id": 67,
         "parentId": 57,
-        "display": "block",
         "color": "rgba(255, 255, 255, 0.5)",
         "fontSize": 13,
         "margin": {
@@ -5457,7 +5426,6 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
       {
         "id": 69,
         "parentId": 68,
-        "display": "block",
         "color": "rgba(255, 255, 255, 0.5)",
         "fontSize": 12,
         "margin": {
@@ -5531,7 +5499,6 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
       {
         "id": 77,
         "parentId": 68,
-        "display": "block",
         "color": "#7d90a9",
         "fontSize": 13,
         "margin": {
@@ -5542,7 +5509,6 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
       {
         "id": 78,
         "parentId": 68,
-        "display": "block",
         "color": "rgba(255, 255, 255, 0.5)",
         "fontSize": 13,
         "margin": {
@@ -5570,7 +5536,6 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
       {
         "id": 80,
         "parentId": 79,
-        "display": "block",
         "color": "rgba(255, 255, 255, 0.5)",
         "fontSize": 12,
         "margin": {
@@ -5617,7 +5582,6 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
       {
         "id": 85,
         "parentId": 79,
-        "display": "block",
         "color": "#7d90a9",
         "fontSize": 13,
         "margin": {
@@ -5628,7 +5592,6 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
       {
         "id": 86,
         "parentId": 79,
-        "display": "block",
         "color": "rgba(255, 255, 255, 0.5)",
         "fontSize": 13,
         "margin": {
@@ -5656,7 +5619,6 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
       {
         "id": 88,
         "parentId": 87,
-        "display": "block",
         "color": "rgba(255, 255, 255, 0.5)",
         "fontSize": 12,
         "margin": {
@@ -5730,7 +5692,6 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
       {
         "id": 96,
         "parentId": 87,
-        "display": "block",
         "color": "#7d90a9",
         "fontSize": 13,
         "margin": {
@@ -5741,7 +5702,6 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
       {
         "id": 97,
         "parentId": 87,
-        "display": "block",
         "color": "rgba(255, 255, 255, 0.5)",
         "fontSize": 13,
         "margin": {
@@ -5769,7 +5729,6 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
       {
         "id": 99,
         "parentId": 98,
-        "display": "block",
         "color": "rgba(255, 255, 255, 0.5)",
         "fontSize": 12,
         "margin": {
@@ -5845,7 +5804,6 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
       {
         "id": 108,
         "parentId": 107,
-        "display": "inline-block",
         "borderRadius": 8,
         "color": "#fff",
         "fontSize": 16,
@@ -5855,7 +5813,6 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
       {
         "id": 109,
         "parentId": 98,
-        "display": "block",
         "color": "#7d90a9",
         "fontSize": 13,
         "margin": {
@@ -5866,7 +5823,6 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
       {
         "id": 110,
         "parentId": 98,
-        "display": "block",
         "color": "rgba(255, 255, 255, 0.5)",
         "fontSize": 13,
         "margin": {
@@ -5894,7 +5850,6 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
       {
         "id": 112,
         "parentId": 111,
-        "display": "block",
         "color": "rgba(255, 255, 255, 0.5)",
         "fontSize": 12,
         "margin": {
@@ -5959,7 +5914,6 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
       {
         "id": 119,
         "parentId": 111,
-        "display": "block",
         "color": "#7d90a9",
         "fontSize": 13,
         "margin": {
@@ -5970,7 +5924,6 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
       {
         "id": 120,
         "parentId": 111,
-        "display": "block",
         "color": "rgba(255, 255, 255, 0.5)",
         "fontSize": 13,
         "margin": {
@@ -5998,7 +5951,6 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
       {
         "id": 122,
         "parentId": 121,
-        "display": "block",
         "color": "rgba(255, 255, 255, 0.5)",
         "fontSize": 12,
         "margin": {
@@ -6072,7 +6024,6 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
       {
         "id": 130,
         "parentId": 121,
-        "display": "block",
         "color": "#7d90a9",
         "fontSize": 13,
         "margin": {
@@ -6083,7 +6034,6 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
       {
         "id": 131,
         "parentId": 121,
-        "display": "block",
         "color": "rgba(255, 255, 255, 0.5)",
         "fontSize": 13,
         "margin": {
@@ -6111,7 +6061,6 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
       {
         "id": 133,
         "parentId": 132,
-        "display": "block",
         "color": "rgba(255, 255, 255, 0.5)",
         "fontSize": 12,
         "margin": {
@@ -6158,7 +6107,6 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
       {
         "id": 138,
         "parentId": 132,
-        "display": "block",
         "color": "#7d90a9",
         "fontSize": 13,
         "margin": {
@@ -6169,7 +6117,6 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
       {
         "id": 139,
         "parentId": 132,
-        "display": "block",
         "color": "rgba(255, 255, 255, 0.5)",
         "fontSize": 13,
         "margin": {
@@ -6197,7 +6144,6 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
       {
         "id": 141,
         "parentId": 140,
-        "display": "block",
         "color": "rgba(255, 255, 255, 0.5)",
         "fontSize": 12,
         "margin": {
@@ -6235,7 +6181,6 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
       {
         "id": 146,
         "parentId": 140,
-        "display": "block",
         "color": "#7d90a9",
         "fontSize": 13,
         "margin": {
@@ -6246,7 +6191,6 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
       {
         "id": 147,
         "parentId": 140,
-        "display": "block",
         "color": "rgba(255, 255, 255, 0.5)",
         "fontSize": 13,
         "margin": {
@@ -6274,7 +6218,6 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
       {
         "id": 149,
         "parentId": 148,
-        "display": "block",
         "color": "rgba(255, 255, 255, 0.5)",
         "fontSize": 12,
         "margin": {
@@ -6330,7 +6273,6 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
       {
         "id": 155,
         "parentId": 148,
-        "display": "block",
         "color": "#7d90a9",
         "fontSize": 13,
         "margin": {
@@ -6341,7 +6283,6 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
       {
         "id": 156,
         "parentId": 148,
-        "display": "block",
         "color": "rgba(255, 255, 255, 0.5)",
         "fontSize": 13,
         "margin": {
@@ -6369,7 +6310,6 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
       {
         "id": 158,
         "parentId": 157,
-        "display": "block",
         "color": "rgba(255, 255, 255, 0.5)",
         "fontSize": 12,
         "margin": {
@@ -6381,7 +6321,6 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
       {
         "id": 159,
         "parentId": 157,
-        "display": "block",
         "color": "rgba(255, 255, 255, 0.5)",
         "fontSize": 13,
         "margin": {
@@ -6514,6 +6453,14 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
       {
         "id": 10,
         "parentId": 8,
+        "borderRadius": 8,
+        "padding": {
+          "top": 10,
+          "right": 10,
+          "bottom": 10,
+          "left": 10
+        },
+        "fontSize": 12,
         "semantic": "pre"
       },
       {
@@ -6535,7 +6482,6 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
       {
         "id": 14,
         "parentId": 13,
-        "display": "block",
         "color": "#555",
         "fontSize": 13,
         "text": "vue-dom 真实 DOM（后端内联渲染）：",
@@ -6559,7 +6505,6 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
       {
         "id": 16,
         "parentId": 11,
-        "display": "block",
         "color": "#555",
         "fontSize": 13,
         "text": "各端控件快照（renderComponentSnapshot readback）：",
@@ -6568,6 +6513,14 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
       {
         "id": 17,
         "parentId": 11,
+        "borderRadius": 8,
+        "padding": {
+          "top": 10,
+          "right": 10,
+          "bottom": 10,
+          "left": 10
+        },
+        "fontSize": 12,
         "semantic": "pre"
       }
     ]
@@ -7782,7 +7735,6 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
       {
         "id": 165,
         "parentId": 162,
-        "display": "block",
         "color": "#888",
         "fontSize": 12,
         "semantic": "p-text"
@@ -7908,7 +7860,6 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
       {
         "id": 183,
         "parentId": 180,
-        "display": "block",
         "color": "#888",
         "fontSize": 12,
         "semantic": "p-text"
@@ -7965,7 +7916,6 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
       {
         "id": 191,
         "parentId": 189,
-        "display": "inline-flex",
         "alignItems": "center",
         "gap": 4,
         "borderRadius": 4,
@@ -8097,7 +8047,6 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
       {
         "id": 210,
         "parentId": 207,
-        "display": "block",
         "color": "#888",
         "fontSize": 12,
         "semantic": "p-text"
@@ -8233,11 +8182,20 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
       {
         "id": 4,
         "parentId": 3,
+        "fontSize": 16,
         "semantic": "h3"
       },
       {
         "id": 5,
         "parentId": 3,
+        "margin": {
+          "top": 0,
+          "right": 0,
+          "bottom": 0,
+          "left": 0
+        },
+        "color": "#666",
+        "fontSize": 13,
         "semantic": "p"
       },
       {
@@ -8251,6 +8209,7 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
       {
         "id": 7,
         "parentId": 6,
+        "color": "#1a7af8",
         "text": "→ 个人资料（层叠缩放：本页下沉 + 目标页滑入）",
         "semantic": "a"
       }
@@ -10102,30 +10061,35 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
       {
         "id": 4,
         "parentId": 3,
+        "color": "#1a7af8",
         "text": "转场演示（缩放-综合能力）",
         "semantic": "a"
       },
       {
         "id": 5,
         "parentId": 3,
+        "color": "#1a7af8",
         "text": "订单列表（缩放进入）",
         "semantic": "a"
       },
       {
         "id": 6,
         "parentId": 3,
+        "color": "#1a7af8",
         "text": "个人资料（半屏-自定义）",
         "semantic": "a"
       },
       {
         "id": 7,
         "parentId": 3,
+        "color": "#1a7af8",
         "text": "个人资料（slideUp 自定义）",
         "semantic": "a"
       },
       {
         "id": 8,
         "parentId": 3,
+        "color": "#1a7af8",
         "text": "个人资料（半屏-微信预设）",
         "semantic": "a"
       }
@@ -10193,14 +10157,12 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
       {
         "id": 1,
         "parentId": 0,
-        "display": "block",
         "text": "★G12 v-model MP 复测（Skyline）",
         "semantic": "text"
       },
       {
         "id": 2,
         "parentId": 0,
-        "display": "block",
         "color": "#888",
         "text": "p-* 组件 v-model 双绑回传——单段事件 bind:update-*（G12 候选 B）在 Skyline/WebView 是否工作",
         "semantic": "text"
@@ -10213,7 +10175,6 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
       {
         "id": 4,
         "parentId": 3,
-        "display": "block",
         "text": "① p-modal v-model:visible（update-visible 单段事件契约）",
         "semantic": "text"
       },
@@ -10242,7 +10203,6 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
       {
         "id": 9,
         "parentId": 3,
-        "display": "block",
         "color": "#07c160",
         "semantic": "text"
       },
@@ -10254,7 +10214,6 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
       {
         "id": 11,
         "parentId": 10,
-        "display": "block",
         "text": "② p-switch v-model（update-modelValue 契约）",
         "semantic": "text"
       },
@@ -10274,7 +10233,6 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
       {
         "id": 14,
         "parentId": 12,
-        "display": "block",
         "color": "#07c160",
         "semantic": "text"
       },
@@ -10286,7 +10244,6 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
       {
         "id": 16,
         "parentId": 15,
-        "display": "block",
         "text": "③ p-slider v-model（update-modelValue 契约——MP 映射已落地：原生 slider 双端）",
         "semantic": "text"
       },
@@ -10298,14 +10255,12 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
       {
         "id": 18,
         "parentId": 15,
-        "display": "block",
         "color": "#07c160",
         "semantic": "text"
       },
       {
         "id": 19,
         "parentId": 15,
-        "display": "block",
         "color": "#888",
         "text": "注：p-slider 模板已换原生 slider 标签（Web = proteus-slider 模拟 / MP = 微信原生）——拖动测回传",
         "semantic": "text"
@@ -10318,7 +10273,6 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
       {
         "id": 21,
         "parentId": 20,
-        "display": "block",
         "text": "④ p-input（受控组件：:value + @input，非 v-model）",
         "semantic": "text"
       },
@@ -10330,7 +10284,6 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
       {
         "id": 23,
         "parentId": 20,
-        "display": "block",
         "color": "#07c160",
         "semantic": "text"
       }
@@ -10346,14 +10299,12 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
       {
         "id": 1,
         "parentId": 0,
-        "display": "block",
         "text": "Vue 能力对齐",
         "semantic": "text"
       },
       {
         "id": 2,
         "parentId": 0,
-        "display": "block",
         "color": "#888",
         "text": "逐能力真机验收（ref/computed/watch/v-model/指令/transition/provide·inject/defineModel）",
         "semantic": "text"
@@ -10366,7 +10317,6 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
       {
         "id": 4,
         "parentId": 3,
-        "display": "block",
         "text": "① ref / computed / watch",
         "semantic": "text"
       },
@@ -10387,7 +10337,6 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
       {
         "id": 7,
         "parentId": 3,
-        "display": "block",
         "color": "#07c160",
         "semantic": "text"
       },
@@ -10399,7 +10348,6 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
       {
         "id": 9,
         "parentId": 8,
-        "display": "block",
         "text": "② v-model（input 双绑）",
         "semantic": "text"
       },
@@ -10415,7 +10363,6 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
       {
         "id": 11,
         "parentId": 8,
-        "display": "block",
         "color": "#07c160",
         "semantic": "text"
       },
@@ -10427,7 +10374,6 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
       {
         "id": 13,
         "parentId": 12,
-        "display": "block",
         "text": "③ v-if 条件链 / v-show",
         "semantic": "text"
       },
@@ -10448,7 +10394,6 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
       {
         "id": 16,
         "parentId": 12,
-        "display": "block",
         "color": "#07c160",
         "text": "agree=true → 显示本行（v-if）",
         "semantic": "text"
@@ -10456,7 +10401,6 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
       {
         "id": 17,
         "parentId": 12,
-        "display": "block",
         "color": "#07c160",
         "text": "agree=false → 显示本行（v-else）",
         "semantic": "text"
@@ -10464,7 +10408,6 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
       {
         "id": 18,
         "parentId": 12,
-        "display": "block",
         "color": "#07c160",
         "text": "v-show：agree 为真才显示（hidden 切换）",
         "semantic": "text"
@@ -10472,7 +10415,6 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
       {
         "id": 19,
         "parentId": 12,
-        "display": "block",
         "color": "#07c160",
         "semantic": "text"
       },
@@ -10484,14 +10426,12 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
       {
         "id": 21,
         "parentId": 20,
-        "display": "block",
         "text": "④ v-for",
         "semantic": "text"
       },
       {
         "id": 22,
         "parentId": 20,
-        "display": "block",
         "color": "#07c160",
         "semantic": "text"
       },
@@ -10503,7 +10443,6 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
       {
         "id": 24,
         "parentId": 23,
-        "display": "block",
         "text": "⑤ v-html / :class / :style",
         "semantic": "text"
       },
@@ -10525,7 +10464,6 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
       {
         "id": 28,
         "parentId": 27,
-        "display": "block",
         "text": "⑥ transition（离开动画状态机）",
         "semantic": "text"
       },
@@ -10556,7 +10494,6 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
       {
         "id": 33,
         "parentId": 32,
-        "display": "block",
         "text": "⑦ provide / inject",
         "semantic": "text"
       },
@@ -10582,7 +10519,6 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
       {
         "id": 37,
         "parentId": 32,
-        "display": "block",
         "color": "#07c160",
         "semantic": "text"
       },
@@ -10594,7 +10530,6 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
       {
         "id": 39,
         "parentId": 38,
-        "display": "block",
         "text": "⑧ defineModel（v-model 组件契约）",
         "semantic": "text"
       },
@@ -10606,7 +10541,6 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
       {
         "id": 41,
         "parentId": 38,
-        "display": "block",
         "color": "#07c160",
         "semantic": "text"
       },
@@ -10618,7 +10552,6 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
       {
         "id": 43,
         "parentId": 42,
-        "display": "block",
         "text": "⑨ reactivity-runtime（reactive / readonly 真 Proxy）",
         "semantic": "text"
       },
@@ -10639,7 +10572,6 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
       {
         "id": 46,
         "parentId": 42,
-        "display": "block",
         "color": "#07c160",
         "semantic": "text"
       },
@@ -10651,7 +10583,6 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
       {
         "id": 48,
         "parentId": 47,
-        "display": "block",
         "text": "⑩ toRef / toRefs（运行时真 ref）",
         "semantic": "text"
       },
@@ -10672,7 +10603,6 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
       {
         "id": 51,
         "parentId": 47,
-        "display": "block",
         "color": "#07c160",
         "semantic": "text"
       },
@@ -10684,7 +10614,6 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
       {
         "id": 53,
         "parentId": 52,
-        "display": "block",
         "text": "⑪ markRaw / customRef（运行时真语义）",
         "semantic": "text"
       },
@@ -10705,7 +10634,6 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
       {
         "id": 56,
         "parentId": 52,
-        "display": "block",
         "color": "#07c160",
         "semantic": "text"
       },
@@ -10717,7 +10645,6 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
       {
         "id": 58,
         "parentId": 57,
-        "display": "block",
         "text": "⑫ teleport → root-portal（弹层层叠）",
         "semantic": "text"
       },
@@ -10737,7 +10664,6 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
       {
         "id": 61,
         "parentId": 57,
-        "display": "block",
         "color": "#07c160",
         "semantic": "text"
       },
@@ -10775,6 +10701,7 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
       {
         "id": 3,
         "parentId": 2,
+        "color": "#1a7af8",
         "text": "转场演示（层叠缩放：本页下沉 + 演示页滑入）",
         "semantic": "a"
       }
