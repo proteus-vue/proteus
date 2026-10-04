@@ -204,6 +204,14 @@ describe('★批次 30 · 动态 :class（对齐 Web · 削减胶水）', () => 
     vapor.writeSlotsOfSource('open', { read })
     expect(log.some(([, k, v]) => k === 'paint.backgroundColor' && v === undefined), 'open=false ⇒ 清除背景').toBe(true)
   })
+
+  it('⑤ 诚实边界：动态 :class 设**布局字段** ⇒ 如实诊断（绘制字段无诊断）', () => {
+    const P = "<template><view :class=\"{ on: x }\">x</view></template>\n<script setup>const x=ref(1)</script>\n"
+    const sfcPaint = P + '<style>.on{background-color:#f00}</style>'
+    const sfcLayout = P + '<style>.on{width:200px}</style>'
+    expect(buildVaporSubscriptions(sfcPaint, 'p.vue').diagnostics.map((d) => d.code), '绘制字段 ⇒ 无诊断').not.toContain('VAPOR_DYNCLASS_LAYOUT_UNSUPPORTED')
+    expect(buildVaporSubscriptions(sfcLayout, 'l.vue').diagnostics.map((d) => d.code), '布局字段 ⇒ 诊断').toContain('VAPOR_DYNCLASS_LAYOUT_UNSUPPORTED')
+  })
 })
 
 describe('V4 · ★★SFC 产物 → 实例化成端上节点树', () => {

@@ -31,7 +31,7 @@ import type { ReactiveSource } from './sources'
 import { analyzeExprDeps, collectTemplateBindings } from './deps'
 import type { ExprDeps, TemplateBindingRef } from './deps'
 // ★混合文本合成绑定（P2-2）：段表来自**模板产物**（唯一实现）——不在此处重算切分
-import { buildLayoutTemplate } from './template'
+import { buildLayoutTemplate, APP_LAYOUT_FIELDS } from './template'
 import type { TextSegment } from '@proteus-vue/slot-runtime'
 // ★P1-3 生命周期：脚本级钩子诊断要读 `<script setup>` 源码（复用唯一的 SFC 解析入口）
 import { parse as sfcParse } from '@vue/compiler-sfc'
@@ -657,6 +657,22 @@ export function buildVaporSubscriptions(source: string, filename = 'anonymous.vu
   const l0 = slotRecords.length - l1
   void SlotRuntime // 类型引用（产物与运行时同源）
 
+  // 批次 30（诚实边界）：动态 :class 目前只解析**绘制字段**（颜色/字号/圆角/透明度…）；
+  //   若自匹配类里含**布局字段**（width/height/margin/padding/gap/flex…），运行期无法经绘制通道下发
+  //   ⇒ 如实诊断（不静默丢弃——否则「类改宽度不生效」又是一处静默失效）。
+  {
+    const layoutKeys = new Set<string>(APP_LAYOUT_FIELDS as readonly string[])
+    const bad = new Set<string>()
+    for (const r of tplDynamicClassRules ?? []) for (const k of Object.keys(r.decls)) if (layoutKeys.has(k)) bad.add(k)
+    if (bad.size > 0) {
+      diagnostics.push({
+        severity: 'warn',
+        code: 'VAPOR_DYNCLASS_LAYOUT_UNSUPPORTED',
+        message: '动态 :class 的自匹配类含**布局字段**（' + [...bad].join(' / ') + '）——App 端动态类当前仅支持绘制字段（颜色/字号/圆角/透明度…）',
+        hint: '把这些布局样式放静态 style 或静态 class；动态类用于状态色/字体/圆角等**绘制**属性',
+      })
+    }
+  }
   return {
     diagnostics,
     hasErrors: diagnostics.some((d) => d.severity === 'error'),
