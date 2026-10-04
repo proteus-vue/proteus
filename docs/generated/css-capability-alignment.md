@@ -50,7 +50,7 @@
 | 栅格 / 复杂排布（grid） | 仪表盘 / 复杂页面 | absent（[Rust]：引擎 Display 未开放 Grid） |
 | 动效（transition / transform / keyframes） | 转场 / 反馈 / 加载 | 引擎 anim 通道 ✅（transition 走 <Transition>/宿主指令）；**transform 静态折叠面 ⏳** |
 | 滚动容器（overflow + 滚动） | 长列表 / 弹层内容 | supported（overflow + 虚拟列表） |
-| 层叠与主题（继承 / 变量令牌 / 特异性） | 主题化 / 组件库 | 继承/特异性/!important ✅（批 1）；**CSS 变量 var() 令牌 ⏳（跨 SFC 令牌表，未折叠）** |
+| 层叠与主题（继承 / 变量令牌 / 特异性） | 主题化 / 组件库 | supported（批 1 继承/特异性/!important；**批 9 CSS 变量 var() 令牌编译期折叠**——从 globalStyle 解析，超级应用承载关键） |
 
 ## CSS 能力矩阵
 
@@ -90,7 +90,8 @@
 | cascade | `特异性 / 继承 / !important` | — | — | supported | L0 | 编译期折叠 | conditional | ★批次 1（2026-10-04）：规则按 (!important, 特异性 (id,class,tag), 源序) 层叠；color/fontSize 沿树继承（CSS 可继承子集；编译期一次性算进 computed style，运行时零匹配） |
 | at-rule | `@media（响应式）` | — | — | absent | L3 | 降级 | unsupported | 编译期无法唯一确定断点；跨端建议走 flex/比例布局 + 框架流体能力 |
 | at-rule | `@keyframes（动画）` | — | — | absent | L3 | 降级 | unsupported | 块整体剔除（旧实现误当元素选择器）；动画走引擎动画桥（animStart/animTick） |
-| unit | `em / rem / vw / vh / calc / clamp / var()` | — | — | absent | L0 | 编译期折叠 | unsupported | 仅收 px/数字（宽高另支持 %）；其余单位编译期无法在无上下文时求值 ⇒ 诊断跳过 |
+| cascade | `CSS 自定义属性（design tokens）var(--x)` | — | — | supported | L0 | 编译期折叠 | conditional | ★批次 9（2026-10-04）：从项目 `globalStyle`（如 styles/tokens.css，与 Web/MP 同一份）解析 `--name: value`，SFC 内 `var(--x)` **编译期替换为字面值**（递归展开引用令牌；支持 fallback；未知令牌诊断）。★**超级应用承载关键**：组件库/主题化全靠设计令牌（真项目 242 处 var()）。诚实边界：只折**字面值**令牌；calc()/env() 动态令牌值不折 |
+| unit | `em / rem / vw / vh / calc / clamp` | — | — | absent | L0 | 编译期折叠 | unsupported | 仅收 px/数字（宽高另支持 %）；其余单位编译期无法在无上下文时求值 ⇒ 诊断跳过（`var()` 令牌见 css-vars 行——已支持） |
 | layout | `display: grid / grid-template-*` | supported | not-listed | absent | L2 | 直映射 | conditional | ★引擎未接：taffy 有完整 Grid 能力但 Rust `Display` 枚举无 Grid、to_taffy 未设置（Profile §3 已定案开放 L2）——加 = 引擎+DTO+taffy 三处；Skyline 端实测退化为 block ⇒ 有条件可用 |
 | layout | `flex-wrap` | supported | supported | supported | L2 | 直映射 | universal | ★批次 6（2026-10-04）：引擎新增 `FlexWrap`（Rust `LStyle.flex_wrap` + `NodeDto` + taffy `flex_wrap` 映射，闭合集 nowrap/wrap/wrap-reverse）；编译器入 APP_LAYOUT_FIELDS + APP_ENUM_VALUES + Android LAYOUT_KEYS 白名单。引擎行为测试 tests/flex_wrap.rs（wrap 换行/nowrap 不换行） |
 | layout | `align-content` | supported | supported | absent | L2 | 直映射 | conditional | 引擎无字段（多行弹性容器的行间对齐；需引擎+DTO+taffy）——后续批次 |
@@ -119,6 +120,7 @@
 | `元素/类型选择器 h3 / p.foo` | — | — | supported | C1：按节点原始 tag 匹配（含祖先链） |
 | `后代 / 子组合 .a .b / .a > .b` | — | — | supported | C1：祖先类链匹配 |
 | `特异性 / 继承 / !important` | — | — | supported | ★批次 1（2026-10-04）：规则按 (!important, 特异性 (id,class,tag), 源序) 层叠；color/fontSize 沿树继承（CSS 可继承子 |
+| `CSS 自定义属性（design tokens）var(--x)` | — | — | supported | ★批次 9（2026-10-04）：从项目 `globalStyle`（如 styles/tokens.css，与 Web/MP 同一份）解析 `--name: value`，SF |
 | `display: grid / grid-template-*` | supported | not-listed | absent | ★引擎未接：taffy 有完整 Grid 能力但 Rust `Display` 枚举无 Grid、to_taffy 未设置（Profile §3 已定案开放 L2）——加 = 引擎 |
 | `align-content` | supported | supported | absent | 引擎无字段（多行弹性容器的行间对齐；需引擎+DTO+taffy）——后续批次 |
 | `order` | supported | supported | absent | 引擎无字段 |

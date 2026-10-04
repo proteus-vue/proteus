@@ -64,7 +64,7 @@
         {
           "capability": "层叠与主题（继承 / 变量令牌 / 特异性）",
           "why": "主题化 / 组件库",
-          "status": "继承/特异性/!important ✅（批 1）；**CSS 变量 var() 令牌 ⏳（跨 SFC 令牌表，未折叠）**"
+          "status": "supported（批 1 继承/特异性/!important；**批 9 CSS 变量 var() 令牌编译期折叠**——从 globalStyle 解析，超级应用承载关键）"
         }
       ]
     },
@@ -150,6 +150,16 @@
           "app": "supported"
         },
         "why": "★批次 1（2026-10-04）：规则按 (!important, 特异性 (id,class,tag), 源序) 层叠；color/fontSize 沿树继承（CSS 可继承子集；编译期一次性算进 computed style，运行时零匹配）"
+      },
+      {
+        "css": "CSS 自定义属性（design tokens）var(--x)",
+        "id": "css-vars",
+        "ends": {
+          "web": "—",
+          "skyline": "—",
+          "app": "supported"
+        },
+        "why": "★批次 9（2026-10-04）：从项目 `globalStyle`（如 styles/tokens.css，与 Web/MP 同一份）解析 `--name: value`，SFC 内 `var(--x)` **编译期替换为字面值**（递归展开引用令牌；支持 fallback；未知令牌诊断）。★**超级应用承载关键**：组件库/主题化全靠设计令牌（真项目 242 处 var()）。诚实边界：只折**字面值**令牌；calc()/env() 动态令牌值不折"
       },
       {
         "css": "display: grid / grid-template-*",
@@ -1005,8 +1015,21 @@
       "supportTier": "unsupported"
     },
     {
+      "id": "css-vars",
+      "css": "CSS 自定义属性（design tokens）var(--x)",
+      "category": "cascade",
+      "compilerFields": [],
+      "web": "—",
+      "skyline": "—",
+      "app": "supported",
+      "tier": "L0",
+      "strategy": "编译期折叠",
+      "note": "★批次 9（2026-10-04）：从项目 `globalStyle`（如 styles/tokens.css，与 Web/MP 同一份）解析 `--name: value`，SFC 内 `var(--x)` **编译期替换为字面值**（递归展开引用令牌；支持 fallback；未知令牌诊断）。★**超级应用承载关键**：组件库/主题化全靠设计令牌（真项目 242 处 var()）。诚实边界：只折**字面值**令牌；calc()/env() 动态令牌值不折",
+      "supportTier": "conditional"
+    },
+    {
       "id": "unit-relative",
-      "css": "em / rem / vw / vh / calc / clamp / var()",
+      "css": "em / rem / vw / vh / calc / clamp",
       "category": "unit",
       "compilerFields": [],
       "web": "—",
@@ -1014,7 +1037,7 @@
       "app": "absent",
       "tier": "L0",
       "strategy": "编译期折叠",
-      "note": "仅收 px/数字（宽高另支持 %）；其余单位编译期无法在无上下文时求值 ⇒ 诊断跳过",
+      "note": "仅收 px/数字（宽高另支持 %）；其余单位编译期无法在无上下文时求值 ⇒ 诊断跳过（`var()` 令牌见 css-vars 行——已支持）",
       "supportTier": "unsupported"
     },
     {

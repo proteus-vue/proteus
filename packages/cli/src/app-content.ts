@@ -22,7 +22,7 @@
 import fs from 'node:fs'
 import path from 'node:path'
 import { pathToFileURL } from 'node:url'
-import { buildLayoutTemplate } from '@proteus-vue/compiler'
+import { buildLayoutTemplate, parseCssVarTokens } from '@proteus-vue/compiler'
 import { screenContentFromLayoutTemplate } from '@proteus-vue/render-backend'
 import { APP_PLATFORMS, type AppPlatform } from './targets'
 
@@ -53,6 +53,20 @@ export async function buildAppScreenContent(root: string, platform: AppPlatform 
   if (!fs.existsSync(autoRoutes)) {
     throw new Error(`缺 ${path.relative(root, autoRoutes)}——先运行 gen-routes（proteus build --target skyline/web 会产出）`)
   }
+  // ★批次 9：设计令牌（`globalStyle` 声明的 CSS 变量文件）——SFC 内 `var()` 编译期折叠
+  //   （App 端无运行时 CSS 引擎）。与 Web/MP 消费同一份令牌文件（单一事实源）。
+  let tokens: Record<string, string> | undefined
+  try {
+    const cfgPath = path.join(root, 'proteus.config.ts')
+    if (fs.existsSync(cfgPath)) {
+      const { loadProjectConfig } = await import('./config-loader')
+      const cfg = (await loadProjectConfig(cfgPath)) as { globalStyle?: string }
+      const gs = cfg?.globalStyle ? path.resolve(root, cfg.globalStyle) : undefined
+      if (gs && fs.existsSync(gs)) tokens = parseCssVarTokens(fs.readFileSync(gs, 'utf-8'))
+    }
+  } catch {
+    /* 无配置/加载失败 ⇒ 不折叠 var()（保持既有行为，不阻断） */
+  }
   const routerDir = path.dirname(autoRoutes)
   // 动态加载（TS 直接 import；auto-routes 仅 type import ⇒ 无运行时依赖）
   const mod = (await import(pathToFileURL(autoRoutes).href)) as {
@@ -78,7 +92,7 @@ export async function buildAppScreenContent(root: string, platform: AppPlatform 
       skipped++
       continue
     }
-    const res = buildLayoutTemplate(fs.readFileSync(abs, 'utf-8'), path.relative(root, abs))
+    const res = buildLayoutTemplate(fs.readFileSync(abs, 'utf-8'), path.relative(root, abs), undefined, tokens)
     if (!res.ok) {
       diagnostics.push(`${r.name}: 模板编译失败`)
       skipped++
