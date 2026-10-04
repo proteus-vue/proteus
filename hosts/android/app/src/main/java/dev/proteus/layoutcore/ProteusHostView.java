@@ -76,6 +76,9 @@ public class ProteusHostView extends ViewGroup {
         final float[] boxShadow;
         /** ★批次 13（line-height）：行盒高（px；0 = 用字形度量高，字形基线沿用旧 0.8h——零行为变化）。 */
         final float lineHeight;
+        /** ★批次 20（CSS 兼容对齐 · 以 Web 为基准）：`letter-spacing`（字距，**px**；0=默认 normal，零行为变化）。
+         *   绘制/度量均按 `setLetterSpacing(px / fontSize)`（Android 该 API 的单位是 **em**）。 */
+        final float letterSpacing;
         /**
          * ★★圆角半径（px；0 = 直角）——纯绘制属性（内核不收，只影响观感）。
          *
@@ -135,6 +138,10 @@ public class ProteusHostView extends ViewGroup {
         }
         Cmd(float x, float y, float w, float h, int color, String text, float fontSize, int textColor, float radius,
             GradSpec gradient, float[] glow, float[] mask, int fontWeight, int textAlign, float borderWidth, int borderColor, float[] boxShadow, float lineHeight) {
+            this(x, y, w, h, color, text, fontSize, textColor, radius, gradient, glow, mask, fontWeight, textAlign, borderWidth, borderColor, boxShadow, lineHeight, 0f);
+        }
+        Cmd(float x, float y, float w, float h, int color, String text, float fontSize, int textColor, float radius,
+            GradSpec gradient, float[] glow, float[] mask, int fontWeight, int textAlign, float borderWidth, int borderColor, float[] boxShadow, float lineHeight, float letterSpacing) {
             this.x = x; this.y = y; this.w = w; this.h = h; this.color = color; this.text = text;
             this.fontSize = fontSize;
             this.textColor = textColor;
@@ -148,6 +155,7 @@ public class ProteusHostView extends ViewGroup {
             this.borderColor = borderColor;
             this.boxShadow = boxShadow;
             this.lineHeight = lineHeight;
+            this.letterSpacing = letterSpacing;
         }
     }
 
@@ -2117,6 +2125,7 @@ public class ProteusHostView extends ViewGroup {
         // ★字号只在**变化时**设置（同字号连排时零开销；见 Cmd.fontSize 注释）
         float lastSize = textPaint.getTextSize();
         int lastWeight = -1;   // ★批次 3：字重变化才重建 typeface（-1 = 首次必设，与默认 paint 对齐）
+        float lastLetter = Float.NaN;   // ★批次 20：字距变化才 setLetterSpacing（NaN = 首次必设）
         int lastAlign = -1;    // ★批次 4：文本对齐变化才设 Paint.Align
         final java.util.Set<Integer> skip = skipCmdIndices;   // ★被载体提升的指令：跳过（否则重影）
         final int[] ids = cmdNodeIds;
@@ -2415,6 +2424,11 @@ public class ProteusHostView extends ViewGroup {
                 if (c.fontWeight != lastWeight) {
                     textPaint.setTypeface(ProteusHostView.typefaceOf(null, c.fontWeight, null));
                     lastWeight = c.fontWeight;
+                }
+                // ★批次 20：字距（仅在变化时设——同字距连排零开销）；Android 单位 em ⇒ px/字号
+                if (c.letterSpacing != lastLetter) {
+                    textPaint.setLetterSpacing(c.fontSize > 0f ? c.letterSpacing / c.fontSize : 0f);
+                    lastLetter = c.letterSpacing;
                 }
                 // ★批次 4：文本水平对齐（仅在变化时设 Align——同对齐连排零开销）
                 if (c.textAlign != lastAlign) {

@@ -223,16 +223,18 @@ final class ProteusTextAdapter {
     private(set) static var lastUnknownFontFamily = ""
 
     static func measureText(_ text: String, fontSize: CGFloat, fontWeight: CGFloat = 400,
-                            fontFamily: String = "system", lineHeight: String? = nil) -> CGSize {
+                            fontFamily: String = "system", lineHeight: String? = nil, letterSpacing: CGFloat = 0) -> CGSize {
         if text.isEmpty { return .zero }
         // ★缓存键必须含**字重与字族**（本仓实测的同一类缺陷：键不含某维度 ⇒ 不同字体共用度量 ⇒ 静默错几何）
         //   ★三层维度与适配器 `fontSignature` 的输入**逐项对应**（新增维度必须两边同时加）
         //   ★批次 13：键含 `lineHeight`（影响行盒高）
-        let key = "\(fontSize)\u{1}\(fontWeight)\u{1}\(fontFamily)\u{1}\(lineHeight ?? "")\u{1}\(text)"
+        let key = "\(fontSize)\u{1}\(fontWeight)\u{1}\(fontFamily)\u{1}\(lineHeight ?? "")\u{1}\(letterSpacing)\u{1}\(text)"
         if let hit = measureCache[key] { measureCacheHits += 1; return hit }
         measureCacheMisses += 1
         let font = ProteusTextAdapter.font(size: fontSize, weight: fontWeight, family: fontFamily)
-        let attrs: [NSAttributedString.Key: Any] = [.font: font]
+        var attrs: [NSAttributedString.Key: Any] = [.font: font]
+        // ★批次 20（CSS 兼容对齐 · 以 Web 为基准）：字距（kern）影响文本宽度 ⇒ 必须进度量
+        if letterSpacing != 0 { attrs[.kern] = letterSpacing as NSNumber }
         let size = (text as NSString).size(withAttributes: attrs)
         // ★批次 13（line-height）：声明行高 ⇒ **行盒高** = 行高（无单位倍数×fontSize / 绝对 px），
         //   覆盖字形度量高（字形由 CATextLayer 顶对齐绘制——三端一致，见宿主注释）

@@ -8810,6 +8810,24 @@
           "textAlign": "center",
           "text": "max-width:100% \u21D2 \u4E0D\u6EA2\u51FA\u7236\u5BB9\u5668",
           "semantic": "div"
+        },
+        {
+          "id": 59,
+          "parentId": 0,
+          "margin": {
+            "top": 16,
+            "bottom": 16
+          },
+          "marginAuto": {
+            "right": true,
+            "left": true
+          },
+          "letterSpacing": 4,
+          "color": "#1a7af8",
+          "fontSize": 14,
+          "textAlign": "center",
+          "text": "LETTER SPACING \u5B57\u8DDD",
+          "semantic": "div"
         }
       ]
     },
@@ -14303,6 +14321,7 @@
           "fontSize": 20,
           "fontWeight": 700,
           "color": "#e0f2fe",
+          "letterSpacing": 2,
           "text": "SVG \u80FD\u91CF\u6838\u5FC3",
           "semantic": "text"
         },
@@ -14971,6 +14990,7 @@
           "fontSize": 20,
           "fontWeight": 700,
           "color": "#e0f2fe",
+          "letterSpacing": 2,
           "text": "SVG \u9AA8\u9ABC\u52A8\u753B",
           "semantic": "text"
         },

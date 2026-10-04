@@ -250,6 +250,21 @@ describe('★C1 最小切片 · SFC <style> 单类规则 → class→节点样�
     expect((s4 as { maxWidthPct?: number }).maxWidthPct, 'px 不产 Pct').toBeUndefined()
   })
 
+  it('★⑦h letter-spacing（批次 20 · ★基准 = Web）：px 折值 + normal 不发射 + 继承', () => {
+    // 【为什么（以 web 为基准）】字距是排版能力；Web normal = 0；px 字距常用。作为文本可继承属性。
+    const s1 = parseStaticStyle('letter-spacing: 2px', () => {})
+    expect((s1 as { letterSpacing?: number }).letterSpacing, 'px 字距').toBe(2)
+    const s2 = parseStaticStyle('letter-spacing: 0.5', () => {})
+    expect((s2 as { letterSpacing?: number }).letterSpacing, '数字字距').toBe(0.5)
+    // normal = 默认 ⇒ 不发射（零行为变化）
+    const s3 = parseStaticStyle('letter-spacing: normal', () => {})
+    expect((s3 as { letterSpacing?: number }).letterSpacing, 'normal 不发射').toBeUndefined()
+    // em 未支持 ⇒ 诊断
+    const d: string[] = []
+    parseStaticStyle('letter-spacing: 1.5em', (m: string) => d.push(m))
+    expect(d.some((x) => x.includes('letter-spacing')), 'em 有诊断').toBe(true)
+  })
+
   it('★⑧ 元素/类型选择器 + @keyframes 跳过（C1 收尾）', () => {
     // 【真项目形态】examples 有 9 处元素选择器（h3/code…）+ 6 处 @keyframes 关键帧被误当选择器
     const sfc = `<template>

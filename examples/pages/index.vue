@@ -98,6 +98,9 @@ function go(name: 'forms' | 'config-demo' | 'user') {
     <div class="clamp-demo">
       <div class="clamp-child">max-width:100% ⇒ 不溢出父容器</div>
     </div>
+
+    <!-- ★letter-spacing 演示（批次 20）：字距 4px（Web 基准，三端一致） -->
+    <div class="spacing-demo">LETTER SPACING 字距</div>
   </div>
 </template>
 
@@ -213,6 +216,14 @@ function go(name: 'forms' | 'config-demo' | 'user') {
   padding: 6px;
   color: #666;
   font-size: 12px;
+  text-align: center;
+}
+/* ★letter-spacing 演示（批次 20） */
+.spacing-demo {
+  margin: 16px auto;
+  letter-spacing: 4px;
+  color: #1a7af8;
+  font-size: 14px;
   text-align: center;
 }
 </style>

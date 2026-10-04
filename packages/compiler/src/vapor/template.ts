@@ -75,7 +75,7 @@ export const APP_ENUM_VALUES: Record<string, readonly string[]> = {
 }
 
 /** 绘制字段（宿主自绘读这些键；模板照样要带上，否则挂载后无底色/无字色） */
-export const APP_PAINT_FIELDS = ['backgroundColor', 'color', 'fontSize', 'fontWeight', 'textAlign', 'lineHeight', 'textOverflow', 'borderRadius', 'borderColor', 'borderWidth', 'opacity', 'boxShadow'] as const
+export const APP_PAINT_FIELDS = ['backgroundColor', 'color', 'fontSize', 'fontWeight', 'textAlign', 'lineHeight', 'textOverflow', 'letterSpacing', 'borderRadius', 'borderColor', 'borderWidth', 'opacity', 'boxShadow'] as const
 const PAINT_FIELDS = new Set<string>(APP_PAINT_FIELDS)
 /**
  * ★批次 4（CSS 兼容对齐）：`text-align` 的**封闭集**（App 自绘文本在盒内的水平对齐）。
@@ -107,7 +107,7 @@ export const APP_SPECIAL_FIELDS = ['boxSizing'] as const
  *   `font-weight`/`line-height`/`text-align`/`text-overflow`（批 16）。
  *   背景/边框/圆角/不透明度在内核语义里**不继承**（见 Profile §3 可继承/不可继承表）⇒ 不得纳入。
  */
-export const APP_INHERITABLE_FIELDS = ['color', 'fontSize', 'fontWeight', 'lineHeight', 'textAlign', 'textOverflow'] as const
+export const APP_INHERITABLE_FIELDS = ['color', 'fontSize', 'fontWeight', 'lineHeight', 'textAlign', 'textOverflow', 'letterSpacing'] as const
 
 /**
  * ★★**结构化绘制声明**（2026-10-01 · 绘制通道补齐）——`style="{...}"` 装不下的那些通道，
@@ -641,6 +641,18 @@ export function parseStaticStyle(
           continue
         }
         out[key] = v
+        markImportant(key)
+        continue
+      }
+      if (key === 'letterSpacing') {
+        // ★批次 20（CSS 兼容对齐 · 以 Web 为基准）：`letter-spacing`（字距，超级应用排版）。
+        //   Web 默认 `normal`（= 0，不发射即可）；`<n>px`/`<n>` → 数值（宿主文本通道按 px 应用）。
+        //   相对单位（em/rem）本仓未支持 ⇒ 诊断（不猜）。作为**文本可继承**属性沿树继承。
+        const v = rawVal.trim().toLowerCase()
+        if (v === 'normal') continue   // 默认值 ⇒ 不发射（零行为变化）
+        const n = numOf(rawVal)
+        if (n === undefined) { pushDiag(`style 里 \`${rawKey}: ${rawVal}\` 未解析（支持 normal / px / 数字）——已跳过`); continue }
+        out[key] = n
         markImportant(key)
         continue
       }
@@ -1898,7 +1910,7 @@ export function buildLayoutTemplate(
                 `${tag}(id=${id}) \`:style\` 的键 \`${e.key}\` 不支持**动态**更新` +
                   `（内核通道为数值几何；字符串类布局值/未知绘制字段不可动态）`,
                 `请把 \`${e.key}\` 放静态 \`style\`（值固定时），或改用受支持的键` +
-                  `（布局数值键 + 绘制键 backgroundColor/color/fontSize/fontWeight/textAlign/lineHeight/textOverflow/borderRadius/borderColor/borderWidth/opacity）`,
+                  `（布局数值键 + 绘制键 backgroundColor/color/fontSize/fontWeight/textAlign/lineHeight/textOverflow/letterSpacing/borderRadius/borderColor/borderWidth/opacity）`,
                 'VAPOR_STYLE_KEY_UNSUPPORTED',
               )
             }

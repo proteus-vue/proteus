@@ -108,7 +108,8 @@
 | text | `text-align` | not-measured | supported | supported | L1 | 编译期折叠 | conditional | ★批次 4（2026-10-04）：封闭集 left/center/right（justify/st 等诊断跳过）。宿主：iOS CATextLayer.alignmentMode · Android Paint.Align（绘制 x 按对齐换算）· 鸿蒙 OH_Drawing_SetTypographyTextAlign。真项目 28 处（22 center） |
 | text | `line-height` | supported | supported | supported | L1 | 编译期折叠 | universal | ★批次 13（2026-10-04，含真机修正确标准）：无单位倍数 / 百分比（→倍数）/ 绝对 px 归一为 token；作为**文本可继承**字段沿树继承。三端宿主实现 **CSS 语义**（非仅行盒高）：行盒变高、字形内容区在行盒内**垂直居中**（半行距）——与 Web/Skyline 真 CSS 一致：iOS measureText 行盒高 + 文本层**可视 frame 居中收缩**（层中心不变 ⇒ 不影响锚点动画）· Android buildMeasures 行盒高 + drawCmds 基线 `盒心 − (ascent+descent)/2` · 鸿蒙 measureTextTypoPx 行盒高 + TypographyPaint `offsetY = (盒高−字形高)/2`。★真机实测 CATextLayer 是顶对齐（故必须显式居中收缩才对齐 Web）。诚实边界：letter-spacing 未支持 |
 | text | `text-overflow` | supported | supported | supported | L1 | 编译期折叠 | universal | ★批次 16（2026-10-04 · ★基准 = Web）：CSS 默认 clip（截断不省略）；ellipsis ⇒ 自绘文本**单行**行尾以 … 截断（超级应用列表项/标签截断刚需）。封闭集 clip/ellipsis（大小写不敏感；其余诊断跳过）；作为**文本可继承**字段沿树继承。三端宿主：iOS CATextLayer.truncationMode（ellipsis ⇒ .end；其余 ⇒ .none——★此前**恒 .end** 是 Web 偏差）· Android TextUtils.ellipsize(TruncateAt.END)（挂载/更新时算好 = 绘制零开销）· 鸿蒙 OH_Drawing_SetTypographyTextEllipsis（maxLines=1 + 尾部 modal + Layout 按盒宽）。诚实边界：仅**单行**（本仓文本无自动换行）；多行 -webkit-line-clamp、fade（渐隐）未支持 |
-| text | `letter-spacing / white-space` | supported | supported | absent | L4 | 降级 | conditional | 字距/白空格走平台文本引擎（不自研）；当前 App 折叠面文本维 = fontSize/color/fontWeight/textAlign/line-height/text-overflow——letter-spacing/white-space 未支持 |
+| text | `letter-spacing` | supported | supported | supported | L1 | 编译期折叠 | universal | ★批次 20（2026-10-04 · ★基准 = Web）：字距（超级应用排版）；Web 默认 normal（=0，不发射）；`<n>px`/`<n>` → 数值 + 作为**文本可继承**沿树继承（相对单位 em/rem 未支持 ⇒ 诊断）。三端宿主：iOS `NSAttributedString` kern（`textLayerString` helper；度量/绘制同源）· Android `Paint.setLetterSpacing`（em：px/字号；度量+绘制）· 鸿蒙 `OH_Drawing_SetTextStyleLetterSpacing`（物理 px） |
+| text | `white-space` | supported | supported | absent | L4 | 降级 | conditional | 字距/白空格走平台文本引擎（不自研）；当前 App 折叠面文本维 = fontSize/color/fontWeight/textAlign/line-height/text-overflow/letter-spacing——white-space 未支持 |
 | paint | `visibility` | supported | supported | absent | L1 | 直映射 | conditional | 引擎无 visibility 字段（可用 display:none 或 opacity 近似） |
 
 > 表中**带编译器字段**的行（对应 `packages/compiler/src/vapor/template.ts` 的 LAYOUT/PAINT_FIELDS）是
@@ -133,7 +134,7 @@
 | `filter / backdrop-filter` | supported | supported | absent | 离屏/额外缓冲；走 <p-glass> / <p-filter> 语义组件 |
 | `font-weight` | not-measured | supported | supported | ★批次 3（2026-10-04）：`normal`→400 / `bold`→700 / 100–900 数值归一；作为**文本可继承**字段沿树继承。三端宿主：iOS 已读 ` |
 | `text-align` | not-measured | supported | supported | ★批次 4（2026-10-04）：封闭集 left/center/right（justify/st 等诊断跳过）。宿主：iOS CATextLayer.alignmentMode |
-| `letter-spacing / white-space` | supported | supported | absent | 字距/白空格走平台文本引擎（不自研）；当前 App 折叠面文本维 = fontSize/color/fontWeight/textAlign/line-height/text-ov |
+| `white-space` | supported | supported | absent | 字距/白空格走平台文本引擎（不自研）；当前 App 折叠面文本维 = fontSize/color/fontWeight/textAlign/line-height/text-ov |
 | `visibility` | supported | supported | absent | 引擎无 visibility 字段（可用 display:none 或 opacity 近似） |
 
 ## 官方 Skyline 对齐开关
