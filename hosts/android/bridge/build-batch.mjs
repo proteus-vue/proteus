@@ -77,6 +77,18 @@ if (result.warnings.length) {
   for (const w of result.warnings) console.warn(`  ⚠ ${w.text}`)
 }
 
+// ★★★阶段 1b（B5 · 2026-10-04）：**先把 SFC 产物 → 屏内容**（app-stack 入口 import 它）。
+//   生成脚本用编译器 buildLayoutTemplate + 转换器（构建期做，端上跑不了 @vue/compiler-sfc）。
+{
+  const { execFileSync } = await import('node:child_process')
+  try {
+    execFileSync('npx', ['tsx', path.join(ROOT, 'hosts/shared/bridge/gen-app-screen-content.mjs')], { cwd: ROOT, stdio: 'inherit' })
+  } catch (e) {
+    console.error(`✗ 生成 app-screen-content 失败（B5：SFC 产物 → 屏内容）：${String(e)}`)
+    process.exit(3)
+  }
+}
+
 // ══════════════════════════════════════════════════════════════════
 // ★★M5：第二个 entry —— 路由虚拟栈（app-stack）
 //

@@ -23,6 +23,17 @@ if (!fs.existsSync(ENTRY)) {
   process.exit(2)
 }
 
+// ★★★阶段 1b（B5 · 2026-10-04）：先刷新 **SFC 产物 → 屏内容**（入口 import 它；与 Android 同源一份）。
+{
+  const { execFileSync } = await import('node:child_process')
+  try {
+    execFileSync('npx', ['tsx', path.join(ROOT, 'hosts/shared/bridge/gen-app-screen-content.mjs')], { cwd: ROOT, stdio: 'inherit' })
+  } catch (e) {
+    console.error(`✗ 生成 app-screen-content 失败（B5）：${String(e)}`)
+    process.exit(3)
+  }
+}
+
 await build({
   entryPoints: [ENTRY],
   outfile: OUT,

@@ -115,6 +115,49 @@ export type ScreenContentProvider = (
 ) => ScreenContent | undefined
 
 /**
+ * ★★★**LayoutTemplate → ScreenContent**（2026-10-04 · App 三端对齐 阶段 1b · B5）：
+ *   把编译器产出的**页面布局模板**（`buildLayoutTemplate` 的 `LayoutTemplate`，来自 SFC）
+ *   转成宿主建树用的屏内容节点。
+ *
+ * 【为什么需要（把"链路证明"变成"真实页面"）】阶段 1a 的 `contentOf` 用**装置内联**内容
+ *   （手写 4 个节点）证明链路；生产形态必须让内容来自 **SFC 产物**。本函数是那条"从产物到内容"
+ *   的**唯一转换点**（一处实现，两端宿主 + 测试共用）。
+ *
+ * 【转换规则（LayoutNode → 内核节点）】
+ *   · `id`/`parentId`/`text` 直接搬（内容局部 id 空间——宿主会重映射到屏 id 空间）；
+ *   · `style`（嵌套引擎字段对象）**展平到节点顶层**（内核 `create` 的 NodeDto 是**顶层**键：
+ *     `width`/`flexDirection`/`padding`/`backgroundColor`…）——这是本函数存在的**关键**：
+ *     `LayoutNode.style` 是嵌套的，内核要顶层，直接搬会静默丢样式（本仓踩过同款"字段形态不对"坑）。
+ *   · `tag` → `semantic`（诊断用；内核不解析标签，只透传）。
+ *
+ * 【★结构类型（不 import 编译器/slot-runtime）】本包**不依赖** compiler/slot-runtime
+ *   （依赖方向纪律）⇒ 入参用**结构**描述 `LayoutTemplate` 的最小子集（`nodes` 的
+ *   `{id,parentId,style,text?,tag?}`）——编译器产物天然满足（多字段无妨）。
+ *
+ * 【诚实边界】本函数只做**结构转换**；`LayoutNode.style` 已由编译器折叠成**引擎字段**
+ *   （px/数值/比例——见 `parseStaticStyle`），本函数**不做 CSS 解析**（那是编译期 C1 的职责）。
+ *   即：CSS class → style 的展开**尚未**支持（见 App 三端对齐缺口 C1）——本函数吃的是
+ *   已折叠的 `style`（来自 inline style / 结构化 paint 声明）。
+ */
+export function screenContentFromLayoutTemplate(
+  template: { nodes: ReadonlyArray<{ id: number; parentId: number | null; style?: Record<string, unknown>; text?: string; tag?: string }> },
+  viewport?: { width: number; height: number },
+): ScreenContent {
+  const nodes: ScreenContentNode[] = template.nodes.map((n) => {
+    const out: Record<string, unknown> = {
+      id: n.id,
+      parentId: n.parentId,
+      // ★展平：`style` 的引擎字段提到顶层（内核 NodeDto 读顶层键）
+      ...(n.style ?? {}),
+    }
+    if (typeof n.text === 'string' && n.text.length > 0) out.text = n.text
+    if (typeof n.tag === 'string' && n.tag.length > 0) out.semantic = n.tag // 标签→语义（诊断用）
+    return out as unknown as ScreenContentNode
+  })
+  return viewport ? { viewport, nodes } : { nodes }
+}
+
+/**
  * 树操作端口（宿主实现——Android/iOS 各自对接 Host ABI 的树接口）。
  * ★三个方法都是"屏粒度"：宿主内部怎么落子树（load_tree / splice / 五原子销毁）不由本层约束。
  */
