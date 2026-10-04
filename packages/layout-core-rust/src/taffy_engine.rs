@@ -19,7 +19,7 @@ use std::collections::HashMap;
 
 // ★刻意**不用** `taffy::prelude::*`（它导出的 `Rect`/`Size`/`Point` 与本 crate 的
 //   `style::Rect`/`style::Size` 撞名，glob 下解析结果不直观）——只按需导入具体符号。
-use taffy::prelude::{auto, length, percent, AlignItems, BoxSizing, Dimension, JustifyContent, LengthPercentageAuto};
+use taffy::prelude::{auto, length, percent, AlignContent, AlignItems, BoxSizing, Dimension, JustifyContent, LengthPercentageAuto};
 use taffy::{AvailableSpace as TaffyAvailableSpace, NodeId, Style, TaffyTree};
 
 use crate::engine::{AvailableSpace, LayoutEngine, LayoutOutput, RootConstraint, TextMeasurer};
@@ -182,6 +182,8 @@ impl TaffyEngine {
         };
         out.justify_content = Some(parse_justify(&style.justify_content));
         out.align_items = Some(parse_align_items(&style.align_items));
+        // ★批次 11：`align-content`（多行容器行间对齐）
+        out.align_content = Some(parse_align_content(&style.align_content));
         if let Some(a) = style.align_self.as_deref() {
             out.align_self = Some(parse_align_items(a));
         }
@@ -1223,6 +1225,19 @@ fn parse_align_items(s: &str) -> AlignItems {
         "flex-end" | "end" => AlignItems::FLEX_END,
         "baseline" => AlignItems::BASELINE,
         _ => AlignItems::STRETCH,
+    }
+}
+
+/// ★批次 11：`align-content`（多行容器行间对齐；open string，未知值落默认 stretch）
+fn parse_align_content(s: &str) -> AlignContent {
+    match s {
+        "center" => AlignContent::CENTER,
+        "flex-start" | "start" => AlignContent::FLEX_START,
+        "flex-end" | "end" => AlignContent::FLEX_END,
+        "space-between" => AlignContent::SPACE_BETWEEN,
+        "space-around" => AlignContent::SPACE_AROUND,
+        "space-evenly" => AlignContent::SPACE_EVENLY,
+        _ => AlignContent::STRETCH,
     }
 }
 
