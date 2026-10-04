@@ -4093,9 +4093,23 @@ static napi_value AppScreenCommands(napi_env env, napi_callback_info info) {
     jnum(argsJson.c_str(), argsJson.size(), "vpH", &vpH);
     if (density <= 0) density = 1.0;
     if (nodes.empty()) { napi_value o; napi_create_string_utf8(env, "[]", NAPI_AUTO_LENGTH, &o); return o; }
-    // 建树（内容节点扁平键与内核 create 契约同源——直接透传）
+    // 建树（内容节点扁平键与内核 create 契约同源——直接透传）。★必须注入 textMeasures
+    //   （与 Android/iOS 同）：否则文本节点 0 高 ⇒ 布局塌缩 ⇒ 命中落空（本仓实测：无测量 hit 全 miss）。
+    std::vector<std::string> nItems = splitJsonObjects(nodes);
+    std::string measures = "{"; int mc = 0;
+    for (const auto& it : nItems) {
+        std::string tx; if (!jstr(it.c_str(), it.size(), "text", &tx) || tx.empty()) continue;
+        double id = -1, fs = 14;
+        jnum(it.c_str(), it.size(), "id", &id);
+        jnum(it.c_str(), it.size(), "fontSize", &fs);
+        double wpx = 0, hpx = 0;
+        measureTextTypoPx(tx, fs * density, &wpx, &hpx);
+        char mb[160]; snprintf(mb, sizeof(mb), "%s\"%d\":{\"width\":%.2f,\"height\":%.2f}", mc > 0 ? "," : "", (int)id, wpx / density, hpx / density);
+        measures += mb; mc++;
+    }
+    measures += "}";
     char vpb[96]; snprintf(vpb, sizeof(vpb), "{\"width\":%.2f,\"height\":%.2f}", vpW, vpH);
-    std::string req = "{\"viewport\":" + std::string(vpb) + ",\"nodes\":" + nodes + "}";
+    std::string req = "{\"viewport\":" + std::string(vpb) + ",\"nodes\":" + nodes + ",\"textMeasures\":" + measures + "}";
     uint64_t handle = proteus_layout_create(req.c_str());
     if (handle == 0) { napi_value o; napi_create_string_utf8(env, "[]", NAPI_AUTO_LENGTH, &o); return o; }
     char* rp = proteus_layout_rects(handle);
@@ -4103,6 +4117,27 @@ static napi_value AppScreenCommands(napi_env env, napi_callback_info info) {
     if (rp) proteus_layout_free_string(rp);
     proteus_layout_destroy(handle);
     std::unordered_map<int, Rect> rectMap; parseRects(rects, rectMap);
+    // ★★★交互上屏（2026-10-04）：在渲染页（真内核树）上做真机命中（proteus_layout_hit_test）。
+    //   ★命中点用**真实 rects 的中心**（几何真源——不猜坐标空间；本仓"命中必须与核心同源"纪律）。
+    int hitCount = 0, firstTarget = -1;
+    {
+        uint64_t h2 = proteus_layout_create(req.c_str());
+        if (h2 != 0) {
+            int n = 0;
+            for (const auto& kv : rectMap) {
+                if (n >= 20) break;
+                float cx = kv.second.x + kv.second.w * 0.5f;
+                float cy = kv.second.y + kv.second.h * 0.5f;
+                char* hRaw = proteus_layout_hit_test(h2, cx, cy);
+                if (hRaw) {
+                    std::string hs = hRaw; proteus_layout_free_string(hRaw);
+                    double t = -1; if (jnum(hs.c_str(), hs.size(), "target", &t) && t >= 0) { hitCount++; if (firstTarget < 0) firstTarget = (int)t; }
+                }
+                n++;
+            }
+            proteus_layout_destroy(h2);
+        }
+    }
     std::vector<std::string> items = splitJsonObjects(nodes);
     std::string arr = "["; int emitted = 0;
     for (const auto& it : items) {
@@ -4128,8 +4163,8 @@ static napi_value AppScreenCommands(napi_env env, napi_callback_info info) {
     char lb[128]; snprintf(lb, sizeof(lb), "PROTEUS_APP_SCREEN_CMDS page=%s nodes=%d", page.c_str(), emitted);
     OH_LOG_Print(LOG_APP, LOG_INFO, PROTEUS_BENCH_DOMAIN, PROTEUS_BENCH_TAG, "%{public}s", lb);
     if (!filesDir.empty()) {
-        char sum[240]; snprintf(sum, sizeof(sum), "{\"ok\":%s,\"page\":\"%s\",\"content_nodes\":%d,\"cmds\":%d}",
-                 emitted > 0 ? "true" : "false", page.c_str(), (int)items.size(), emitted);
+        char sum[300]; snprintf(sum, sizeof(sum), "{\"ok\":%s,\"page\":\"%s\",\"content_nodes\":%d,\"cmds\":%d,\"hit_points_hit\":%d,\"hit_first_target\":%d}",
+                 emitted > 0 ? "true" : "false", page.c_str(), (int)items.size(), emitted, hitCount, firstTarget);
         std::string path = filesDir + "/app-screen-composite.json";
         FILE* f = fopen(path.c_str(), "w"); if (f) { fwrite(sum, 1, strlen(sum), f); fclose(f); }
     }

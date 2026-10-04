@@ -220,12 +220,12 @@
         },
         {
           "rootNodeId" : 130,
-          "screenId" : "r-user#3",
+          "screenId" : "detail#2",
           "visible" : true
         },
         {
           "rootNodeId" : 130,
-          "screenId" : "detail#2",
+          "screenId" : "r-user#3",
           "visible" : true
         }
       ],
