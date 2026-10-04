@@ -87,24 +87,29 @@ const HEX_COLOR_RE = /^#[0-9a-f]{3}$|^#[0-9a-f]{6}$|^#[0-9a-f]{8}$/i
   }
 }
 
-/* ── ★★★设备腿（Android 视觉合成）：hosts/android/results/app-screen-composite.json ——
- *   把 App 屏内容真画到屏上（复用 VaporRenderHost 树→指令→自绘路径）的读数。
- *   判据：painted_samples > 0（真的画出了像素，非"只进内核树"）+ content_nodes > 0。── */
-{
-  const cf = path.join(ROOT, 'hosts', 'android', 'results', 'app-screen-composite.json')
-  if (fs.existsSync(cf)) {
-    try {
-      const d = JSON.parse(fs.readFileSync(cf, 'utf-8'))
-      const painted = Number(d.painted_samples ?? 0)
-      const nodes = Number(d.content_nodes ?? 0)
-      if (!d.ok || painted <= 0 || nodes <= 0) {
-        problems.push(`[hosts/android/results/app-screen-composite.json] Android 视觉合成未真上屏（ok=${d.ok} painted_samples=${painted} nodes=${nodes}）`)
-      } else {
-        console.log(`  ✅ Android 视觉合成设备腿：真画屏（${nodes} 内容节点 → ${painted} 采样像素）`)
-      }
-    } catch (e) {
-      problems.push(`[hosts/android/results/app-screen-composite.json] 读取失败：${e.message}`)
+/* ── ★★★设备腿（视觉合成）：把 App 屏内容真画到屏上 ──
+ *   Android：hosts/android/results/app-screen-composite.json（复用 VaporRenderHost 树→指令→自绘；
+ *            判据 painted_samples>0 + content_nodes>0）
+ *   iOS：hosts/ios/results/app-screen-composite.json（proteusSelfDraw.mount → CALayer + snapshot；
+ *        判据 ok + content_nodes>0 + layer_count>0 + snapshot）── */
+for (const [label, rel, ok] of [
+  ['Android', 'hosts/android/results/app-screen-composite.json', (d) => d.ok && Number(d.painted_samples ?? 0) > 0 && Number(d.content_nodes ?? 0) > 0],
+  ['iOS', 'hosts/ios/results/app-screen-composite.json', (d) => d.ok && Number(d.content_nodes ?? 0) > 0 && Number(d.layer_count ?? 0) > 0 && d.snapshot === true],
+]) {
+  const cf = path.join(ROOT, rel)
+  if (!fs.existsSync(cf)) continue
+  try {
+    const d = JSON.parse(fs.readFileSync(cf, 'utf-8'))
+    if (!ok(d)) {
+      problems.push(`[${rel}] ${label} 视觉合成未真上屏（${JSON.stringify(d)}）`)
+    } else {
+      const extra = label === 'Android'
+        ? `${Number(d.painted_samples)} 采样像素`
+        : `${Number(d.layer_count)} 层 + PNG`
+      console.log(`  ✅ ${label} 视觉合成设备腿：真画屏（${Number(d.content_nodes)} 内容节点 → ${extra}）`)
     }
+  } catch (e) {
+    problems.push(`[${rel}] 读取失败：${e.message}`)
   }
 }
 

@@ -41,13 +41,13 @@
     "rect_calls" : 2,
     "screens" : [
       {
-        "rootNodeId" : 130,
-        "screenId" : "r-user#3",
+        "rootNodeId" : 100,
+        "screenId" : "home#1",
         "visible" : true
       },
       {
-        "rootNodeId" : 100,
-        "screenId" : "home#1",
+        "rootNodeId" : 130,
+        "screenId" : "r-user#3",
         "visible" : true
       }
     ],
@@ -214,6 +214,11 @@
       "rect_calls" : 1,
       "screens" : [
         {
+          "rootNodeId" : 100,
+          "screenId" : "home#1",
+          "visible" : true
+        },
+        {
           "rootNodeId" : 130,
           "screenId" : "r-user#3",
           "visible" : true
@@ -221,11 +226,6 @@
         {
           "rootNodeId" : 130,
           "screenId" : "detail#2",
-          "visible" : true
-        },
-        {
-          "rootNodeId" : 100,
-          "screenId" : "home#1",
           "visible" : true
         }
       ],

@@ -174,6 +174,14 @@ cp "$HERE/bridge/dist/bundle-bench.js" "$APP/bundle-bench.js"
 cp "$HERE/bridge/dist/bundle-host-runtime.js" "$APP/bundle-host-runtime.js"
 # ★M5：执行器场景 bundle（`--app-stack` 模式用）
 cp "$HERE/bridge/dist/bundle-app-stack.js" "$APP/bundle-app-stack.js"
+# ★★★App 三端对齐 · 视觉合成（2026-10-04）：App 屏内容产物 → .app（真机真画屏用）
+APP_SC="$ROOT/examples/dist/app/ios/screen-content.json"
+if [ -f "$APP_SC" ]; then
+  cp "$APP_SC" "$APP/app-screen-content.json"
+  echo "    app-screen-content.json 已入 .app（$(du -h "$APP_SC" | awk '{print $1}')）"
+else
+  echo "    ⚠ 未见 $APP_SC —— 缺它只影响视觉合成（先跑 examples 的 build:ios）"
+fi
 # ★Morpheus 炫技场 bundle（`--showcase` 模式用）
 cp "$HERE/bridge/dist/bundle-showcase.js" "$APP/bundle-showcase.js"
 # ★★A/B（矩阵 #14 续）：与 Android **同一份** `bundle-vapor.js` + `vapor-artifacts.json`
@@ -307,6 +315,21 @@ if [ "$MODE" = "native-mix" ]; then REPORT_FILE="native-mix.json"; SNAP_FILE="na
 if [ "$MODE" = "vapor-ab" ]; then REPORT_FILE="vapor-ab.json"; SNAP_FILE="vapor-ab.png"; fi
 if [ "$MODE" = "vapor" ]; then REPORT_FILE="vapor.json"; SNAP_FILE="vapor.png"; fi
 # ★G-39：宿主运行时模式写独立报告（不污染既有产物命名）
+# ★★★App 三端对齐 · 视觉合成（2026-10-04）：取回合成报告 + PNG（真机真画屏证据）
+if [ "$MODE" = "app-stack" ]; then
+  xcrun devicectl device copy from --device "$UDID" --domain-type appDataContainer \
+    --domain-identifier "$BUNDLE_ID" --source "Documents/app-screen-composite.json" \
+    --destination "$HERE/results/app-screen-composite.json" >/dev/null 2>&1 || echo "  ⚠ 合成报告未取到"
+  # 快照名：优先 app-screen-composite.png，回退 selfdraw-final.png（JS 桥快照名可能被静态默认覆盖）
+  if ! xcrun devicectl device copy from --device "$UDID" --domain-type appDataContainer \
+      --domain-identifier "$BUNDLE_ID" --source "Documents/app-screen-composite.png" \
+      --destination "$HERE/results/app-screen-composite.png" >/dev/null 2>&1; then
+    xcrun devicectl device copy from --device "$UDID" --domain-type appDataContainer \
+      --domain-identifier "$BUNDLE_ID" --source "Documents/selfdraw-final.png" \
+      --destination "$HERE/results/app-screen-composite.png" >/dev/null 2>&1 || echo "  ⚠ 合成 PNG 未取到"
+  fi
+fi
+
 if [ "$MODE" = "host-runtime" ]; then REPORT_FILE="host-runtime.json"; SNAP_FILE="host-shell.json"; fi
 # ★M5：执行器场景两份报告（主 + 执行器；判据合并读）
 if [ "$MODE" = "app-stack" ]; then REPORT_FILE="app-stack.json"; SNAP_FILE="app-stack-executor.json"; fi
