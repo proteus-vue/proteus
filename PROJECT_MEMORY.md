@@ -15,9 +15,9 @@
 - **包规模**：**45 个 @proteus-vue/* npm 包**（+ `packages/layout-core-rust` = **cargo crate，非 npm 包**，故不计数）（★2026-09-29 layout-core = App 排版核心）（check:pkg 0 error · `pnpm check:stats` 校验 ✓；31→38 修正 → G-07 glass 39 → Skyline 收口 worklet 40 → ★2026-09-14 组件库拆包 `@proteus-vue/components` 41 → ★Vapor 线新增 `@proteus-vue/slot-runtime` 42 + `@proteus-vue/layout-core` 43 → ★2026-09-30 MA1 新增 `@proteus-vue/animation` 44；版本统一 0.3.0-beta.8，见「当前状态速览」）
 - **文档**：`docs/proteus-architecture.md`（L0 规约·真理来源）→ `docs/board-inventory.md`（全景索引）→ `docs/roadmap.md`（版本线）→ `roadmap-2-plan`（里程碑线）→ 各 plan
 
+## 当前状态速览（最近一次更新：**2026-10-04·（一六一）· **批次 13 修正：line-height 改为 CSS 标准（半行距居中）—— 用户抓出多端一致性缺陷**（决策 #507）——用户追问「**如果不是CSS标准行高的话那不是多端一致性就没了吗？**」。★**缺陷**：批 13 首版把 line-height 做成「行盒变高、字形**顶对齐**」（理由"iOS/鸿蒙本就顶对齐"**没验证**）；真 CSS 是**半行距居中** ⇒ App 与 Web/Skyline 对不上。★**取证**：Swift 渲染 CATextLayer（层高 100/200 ⇒ 墨迹都 [5,23]）证实顶对齐。★**修正（三端统一 CSS 语义）**：iOS 文本层**可视 frame 居中收缩**（中心不变⇒不影响动画）· Android 基线 `盒心−(ascent+descent)/2` · 鸿蒙 TypographyPaint `(盒高−字形高)/2`。★**复验（三端真机全在线）**：Android 308 采样+20 tap · iOS 51 层+20 tap · 鸿蒙 51 节点+6 命中；命中仍 20/20。★全量 **5136/5136** 绿 · 三端编译+真机全过 · vue-tsc 0 错。★**纪律教训**：① 下断言前先取证；② ★**"三端彼此一致"≠"与 Web 一致"**——多端一致性基准是 Web 真值，非三端内部自洽）★新会话以此为准
 ## 当前状态速览（最近一次更新：**2026-10-04·（一六〇）· **CSS 兼容对齐 · 批次 13：line-height（三端宿主 + 真机验证）**（决策 #506）——用户「继续…承载超级应用」，并纠正「**App设备全部在线啊，为什么你一直说当前无设备**」。★**纪律教训**：我此前反复以"无设备"为由推迟文本改动 = 没取证就下否定结论；当场取证三端全在线（Android d67e31a3 · 鸿蒙 69F9K26126005311 · iOS yunlai的iPhone）。★**实现**：编译器 line-height 归一为 token（倍数/%/px）+ 可继承；**iOS** measureText 行盒高 + styleOf 透传 · **Android** lineHeightPxOf + buildMeasures + drawCmds 顶对齐基线 · **鸿蒙** measureTextTypoPx 覆盖。★**真机验证（三端全绿）**：Android painted_samples **284→308**（行盒变高真影响渲染）· iOS 51 层 + 真触摸 20 tap · 鸿蒙 51 节点 + 真触摸命中 6。★判据 tests 59 组（破坏性验证：% 归一改错⇒红）。★全量 **5136/5136** 绿 · 三端编译 + 真机跑全过 · vue-tsc 0 错。★诚实：M1 59.5%→58.8%。★**剩余**：text-overflow（单行省略号，可真机验证）· transform 静态折叠面（[Rust]））★新会话以此为准
 ## 当前状态速览（最近一次更新：**2026-10-04·（一五九）· **CSS 兼容对齐 · 批次 12：CSS Grid（[Rust] 栅格，超级应用仪表盘/宫格）**（决策 #505）——用户「继续」。★**选批**：grid **宿主无关**（宿主按内核 rects 绘制），可写引擎行为测试、零渲染回归、无需真机 ⇒ 选它。★**实现**：引擎 `Display::Grid` + `LStyle.grid_template_columns/rows`（字符串轨迹）+ `NodeDto` + `taffy_engine::parse_grid_tracks`（fr/px/数字）；编译器 `display:grid` 入封闭集 + `parseGridTemplate`（显式轨迹 + `repeat(N,X)` 编译期展开；auto/minmax 诊断跳过）+ Android LAYOUT_KEYS。★判据：引擎行为测试 `tests/grid.rs`（`1fr 1fr 100px` ⇒ 子项 x=0/100/200；破坏性验证：不设轨迹⇒红）；编译器 tests 56 组；capability 源 grid absent→supported（**如实边界**：仅显式轨迹）。★全量 **5133/5133** 绿 · Rust 10 测试二进制全绿 · 三端编译 + vue-tsc 0 错。★诚实：M1 61.0%→59.5%。★**剩余超级应用缺口**：line-height/text-overflow（需真机验证基线/截断像素）· transform 静态折叠面）★新会话以此为准
-## 当前状态速览（最近一次更新：**2026-10-04·（一五八）· **CSS 兼容对齐 · 批次 11：align-content（[Rust]，补完弹性流式布局）**（决策 #504）——用户「继续」。★**选批含一次诚实改判**：初选 line-height，侦察后改判——它要改三端文本引擎的度量高度+垂直基线（iOS·Android 各异，无设备无法验证像素回归）⇒ 按"先取证再断言"不在无真机验证时做；改用 align-content（与 flex-wrap 同构，纯引擎+taffy，可写引擎行为测试）。★**实现**：Rust LStyle.align_content（open string）+ NodeDto + taffy parse_align_content 映射；编译器入 APP_LAYOUT_FIELDS + Android LAYOUT_KEYS。★判据：引擎行为测试 tests/align_content.rs（center 行组居中；破坏性验证：恒 STRETCH⇒红）；编译器 tests 52 组；capability 源 align-content absent→supported。★全量 **5129/5129** 绿 · Rust 全绿 · 三端编译 + vue-tsc 0 错。★诚实：M1 62.6%→61.0%。★**剩余超级应用缺口**：line-height/text-overflow（需真机验证基线/截断像素）· grid（[Rust]）· transform 静态折叠面）★新会话以此为准
 
 
 
@@ -53,11 +53,11 @@
 |---|---|
 | `docs/project-memory-archive/2026-10.md` | 里程碑详细叙事（三十九～一四五）+ 状态速览历史栈（约 4.5k 行） |
 | `docs/project-memory-archive/2026-09.md` | 09 月全部叙事 + 柔性系统重组历史 + 2026-08 进度快照 + 已落地文件 + 09-19 验证状态（约 6.5k 行） |
-| `docs/project-memory-archive/decisions.md` | 决策链全文 #1–#506——按号检索 |
+| `docs/project-memory-archive/decisions.md` | 决策链全文 #1–#507——按号检索 |
 
 检索示例：`grep -n "2026-09-29\|判据建错靶" docs/project-memory-archive/2026-09.md`
 
-## 关键决策与文档偏差（#1–#506 → 归档速查）
+## 关键决策与文档偏差（#1–#507 → 归档速查）
 
 **全文在 `docs/project-memory-archive/decisions.md`**（按号检索：`grep -n "^290\." docs/project-memory-archive/decisions.md`）。
 决策号**只增不改号**（外部文档按号引用）；新决策追加到该文件末尾（号 +1）。

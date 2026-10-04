@@ -272,6 +272,7 @@ struct SfcStyle {
     double fontSize = 24;
     int fontWeight = 400;        // ★批次 3：字重（`font-weight` 折叠值）
     std::string textAlign;       // ★批次 4：文本水平对齐（left/center/right）
+    double lineHeight = 0;       // ★批次 13：行盒高（设计单位；0 = 未声明）
     double borderWidth = 0;      // ★批次 5：uniform 边框宽度
     uint32_t borderColor = 0;    // ★批次 5：uniform 边框颜色
     std::string text;
@@ -364,6 +365,7 @@ static bool parseStrokeInto(const std::string& nodeJson, SfcStyle& st) {
 }
 
 /** 按**文档序**解析样式表（id → SfcStyle）——顺序即绘制层序（父先子后） */
+static double lineHeightDesignPx(const std::string& token, double fontSizeDesign);   // 前向声明（定义在下方）
 static void parseSfcStyles(const std::string& fixture, std::vector<std::pair<int, SfcStyle>>& out) {
     std::string arr = extractNodesArray(fixture);
     if (arr.empty()) return;
@@ -379,6 +381,7 @@ static void parseSfcStyles(const std::string& fixture, std::vector<std::pair<int
         jnum(item.c_str(), item.size(), "fontSize", &st.fontSize);
         double fwv = 400; jnum(item.c_str(), item.size(), "fontWeight", &fwv); st.fontWeight = (int)fwv;
         jstr(item.c_str(), item.size(), "textAlign", &st.textAlign);
+        { std::string lhTok; if (jstr(item.c_str(), item.size(), "lineHeight", &lhTok)) st.lineHeight = lineHeightDesignPx(lhTok, st.fontSize); }
         jnum(item.c_str(), item.size(), "borderWidth", &st.borderWidth);
         { std::string bcCss; if (jstr(item.c_str(), item.size(), "borderColor", &bcCss)) st.borderColor = hexToArgb(bcCss); }
         jstr(item.c_str(), item.size(), "text", &st.text);
@@ -1436,6 +1439,7 @@ static napi_value SfcStressCommands(napi_env env, napi_callback_info info) {
                      st.fontSize * density, st.fontWeight, st.textColor);
             arr += tail;
             if (!st.textAlign.empty()) arr += ",\"textAlign\":\"" + jsonEscape(st.textAlign) + "\"";
+            if (st.lineHeight > 0) { char lb2[48]; snprintf(lb2, sizeof(lb2), ",\"lineHeightPx\":%.2f", st.lineHeight * density); arr += lb2; }
             arr += ",\"text\":\"" + jsonEscape(st.text) + "\"";
         }
         arr += "}";
@@ -1774,6 +1778,7 @@ static std::string vaporMountImpl(const std::string& treeJson) {
                      st.fontSize * g_vaporDensity, st.fontWeight, st.textColor);
             cmds += tail;
             if (!st.textAlign.empty()) cmds += ",\"textAlign\":\"" + jsonEscape(st.textAlign) + "\"";
+            if (st.lineHeight > 0) { char lb2[48]; snprintf(lb2, sizeof(lb2), ",\"lineHeightPx\":%.2f", st.lineHeight * g_vaporDensity); cmds += lb2; }
             cmds += ",\"text\":\"" + jsonEscape(st.text) + "\"";
         }
         // ★★绘制四通道进指令（2026-10-03）：渲染层据这些键**真正建出**通道
@@ -4286,7 +4291,17 @@ static napi_value AppScreenCommands(napi_env env, napi_callback_info info) {
         if (!text.empty()) {
             char tail[128]; snprintf(tail, sizeof(tail), ",\"fontSize\":%.2f,\"fontWeight\":%d,\"textColor\":%u", fs * density, (int)fw, tc);
             arr += tail;
-            if (!ta.empty()) arr += ",\"textAlign\":\"" + jsonEscape(ta) + "\""; arr += ",\"text\":\"" + jsonEscape(text) + "\"";
+            if (!ta.empty()) arr += ",\"textAlign\":\"" + jsonEscape(ta) + "\"";
+            // ★批次 13：行盒高（lineHeight token → 物理 px；倍数×fs 或 px）——半行距居中用
+            {
+                std::string lhTok; jstr(it.c_str(), it.size(), "lineHeight", &lhTok);
+                double lhDesign = lineHeightDesignPx(lhTok, fs);
+                if (lhDesign > 0) {
+                    char lb[48]; snprintf(lb, sizeof(lb), ",\"lineHeightPx\":%.2f", lhDesign * density);
+                    arr += lb;
+                }
+            }
+            arr += ",\"text\":\"" + jsonEscape(text) + "\"";
         }
         arr += "}"; emitted++;
     }

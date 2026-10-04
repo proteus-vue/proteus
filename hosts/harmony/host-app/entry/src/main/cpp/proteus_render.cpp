@@ -227,6 +227,9 @@ struct TextDrawSpec {
     double widthVp = 0.0;
     /** ★批次 4（CSS 兼容对齐）：文本水平对齐（`text-align`；left/center/right）。映射到 OH_Drawing_TextAlign。 */
     std::string textAlign = "left";
+    /** ★批次 13（line-height · CSS 半行距居中）：行盒高（物理 px；0 = 未声明 ⇒ 用字形高、顶对齐）。
+     *   声明时字形内容区在行盒内**垂直居中**（与 Web/Skyline 的真 CSS 一致）。 */
+    double lineHeightPx = 0;
     /* ── ★★四通道（2026-10-03）——在 content modifier 的 canvas 上画（RenderNode 无这些属性 API）── */
     double w = 0, h = 0, radius = 0;          // 物理 px（与 canvas 同坐标系）
     bool hasGrad = false;
@@ -371,7 +374,15 @@ static void drawChannelsAndText(OH_Drawing_Canvas* canvas, const TextDrawSpec* s
                 OH_Drawing_Typography* typo = OH_Drawing_CreateTypography(handler);
                 if (typo != nullptr) {
                     OH_Drawing_TypographyLayout(typo, 10000.0);
-                    OH_Drawing_TypographyPaint(typo, canvas, 0.0, 0.0);
+                    // ★批次 13（CSS 半行距居中）：声明行高 ⇒ 字形内容区在行盒内垂直居中
+                    //   （typoH 为字形内容高；offset = (盒高 − 字形高)/2）；未声明 ⇒ 顶对齐（既有）。
+                    double offY = 0.0;
+                    if (spec->lineHeightPx > 0) {
+                        double typoH = OH_Drawing_TypographyGetHeight(typo);
+                        offY = (spec->h - typoH) * 0.5;
+                        if (offY < 0) offY = 0;
+                    }
+                    OH_Drawing_TypographyPaint(typo, canvas, 0.0, offY);
                     OH_Drawing_DestroyTypography(typo);
                 }
                 OH_Drawing_DestroyTypographyHandler(handler);
@@ -631,6 +642,9 @@ static int renderCommandsImpl(const char* jsonCStr, bool fromProbe) {
         // ★批次 4：文本水平对齐（text-align；缺省 left）
         std::string taStr;
         jsonString(it, "textAlign", &taStr);
+        // ★批次 13：行盒高（扁平数值键 `lineHeightPx`，由指令生成方折出；缺省 0）
+        double lhPx = 0;
+        jsonNumber(it, "lineHeightPx", &lhPx);
         // ★★★绘制四通道解析 + 登记（2026-10-03）：指令里带 grad/glow/clip/stroke ⇒
         //   ① 填进 spec（回调据此在画布上真画）；② 登记进 `g_channelStates`（探针回读；
         //   **建什么记什么**——与 Android 读自家 spec 表同性质，不是复述模板声明）。
@@ -638,6 +652,7 @@ static int renderCommandsImpl(const char* jsonCStr, bool fromProbe) {
             bool hasAnyChannel = false;
             auto* spec = new TextDrawSpec{textVal, fs, static_cast<uint32_t>(tc), "", static_cast<int>(fw), w};
             if (!taStr.empty()) spec->textAlign = taStr;
+            spec->lineHeightPx = lhPx;
             spec->w = w;
             spec->h = h;
             spec->radius = radius;
