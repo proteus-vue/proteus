@@ -635,6 +635,7 @@ final class SelfDrawView: UIView {
             tl.contentsScale = UIScreen.main.scale
             tl.isWrapped = false
             applyBorder(tl, style: style)
+            applyShadow(tl, style: style)
             SelfDrawBridge.applyPaintHint(tl, style: style)
             return tl
         }
@@ -647,9 +648,14 @@ final class SelfDrawView: UIView {
         }
         // ★批次 5（CSS 兼容对齐 · 边框）：uniform 边框（borderWidth + borderColor）——CALayer 原生边框。
         applyBorder(layer, style: style)
+        // ★批次 10：盒阴影（在 masksToBounds 之前——CORNER 圆角裁剪会裁掉阴影，见下方）
+        let hasShadow = (style["boxShadow"] as? [String: Any]) != nil
+        applyShadow(layer, style: style)
         if let r = style["borderRadius"] as? CGFloat, r > 0 {
             layer.cornerRadius = r
-            layer.masksToBounds = true
+            // ★批次 10：有阴影 ⇒ 不开 masksToBounds（否则 CALayer 圆角裁剪会裁掉阴影——
+            //   二者在 CoreAnimation 里互斥）。自绘节点是**叶子层**（无子层可裁）⇒ 安全。
+            layer.masksToBounds = !hasShadow
         }
         // ★B 批 3D：透视快照（建层时读一次——动画期 applyTransform 只查表，不回读树样式）
         if let d = style["perspective"] as? CGFloat, d > 0 {
@@ -2858,6 +2864,8 @@ final class SelfDrawView: UIView {
         if let fw = n["fontWeight"] as? CGFloat { style["fontWeight"] = fw }
         if let br = n["borderRadius"] as? Double { style["borderRadius"] = CGFloat(br) }
         if let br = n["borderRadius"] as? CGFloat { style["borderRadius"] = br }
+        // ★批次 10（CSS 兼容对齐 · 超级应用视觉）：盒阴影（结构化对象）透传——本函数是建层必经之路
+        if let bs = n["boxShadow"] as? [String: Any] { style["boxShadow"] = bs }
         // ★★C1/B（2026-10-01）：两个**内核动画的静态基态**必须透传（本函数是建层必经之路）——
         //   `clipPath`（裁剪形状：类型 + 基态参数，mask 的来源）/ `perspective`（3D 透视距离）。
         //   ★漏透传的后果（真机实测抓到）：内核里动画被受理（started=4）但宿主读不到声明 ⇒
@@ -2935,9 +2943,12 @@ final class SelfDrawView: UIView {
         layer.backgroundColor = (style["backgroundColor"] as? String).flatMap(parseHexColor)?.cgColor
         // ★批次 5：边框复用路径同样重配（缺省清零）
         applyBorder(layer, style: style)
+        // ★批次 10：盒阴影复用路径同样重配（缺省清零）
+        let hasShadow2 = (style["boxShadow"] as? [String: Any]) != nil
+        applyShadow(layer, style: style)
         let r = (style["borderRadius"] as? CGFloat) ?? 0
         layer.cornerRadius = r
-        layer.masksToBounds = r > 0
+        layer.masksToBounds = r > 0 && !hasShadow2
         layer.opacity = 1
     }
 
@@ -2951,6 +2962,25 @@ final class SelfDrawView: UIView {
         } else {
             layer.borderWidth = 0
         }
+    }
+
+    /// ★批次 10（CSS 兼容对齐 · 超级应用视觉）：盒阴影 → `CALayer.shadow*`（系统原生）。
+    ///   结构化字段 `{dx, dy, blur, spread, color}`（编译期折出）。缺省/非法 ⇒ 清零（零行为变化）。
+    ///   ★`spread` 用 `shadowPath` 外扩近似（CALayer 无原生 spread）。
+    private func applyShadow(_ layer: CALayer, style: [String: Any]) {
+        guard let sh = style["boxShadow"] as? [String: Any],
+              let color = (sh["color"] as? String).flatMap(parseHexColor) else {
+            layer.shadowOpacity = 0
+            return
+        }
+        let dx = (sh["dx"] as? CGFloat) ?? ((sh["dx"] as? Double).map { CGFloat($0) } ?? 0)
+        let dy = (sh["dy"] as? CGFloat) ?? ((sh["dy"] as? Double).map { CGFloat($0) } ?? 0)
+        let blur = (sh["blur"] as? CGFloat) ?? ((sh["blur"] as? Double).map { CGFloat($0) } ?? 0)
+        // CALayer.shadowRadius ≈ blur/2（Core Animation 半径 ≈ 视觉模糊半径的一半）
+        layer.shadowColor = color.cgColor
+        layer.shadowOffset = CGSize(width: dx, height: dy)
+        layer.shadowRadius = max(0, blur / 2)
+        layer.shadowOpacity = 1
     }
 
     /// 虚拟化读数（判据 + 诊断）

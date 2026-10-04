@@ -548,3 +548,30 @@ describe('★批次 9 · CSS 变量（var() 令牌）编译期折叠', () => {
     expect((n!.style as { backgroundColor?: string }).backgroundColor).toBe('#e8e9f0')
   })
 })
+
+// ★★★批次 10（CSS 兼容对齐 · 超级应用视觉）：box-shadow——2026-10-04
+describe('★批次 10 · box-shadow（结构化 + 三端宿主绘制）', () => {
+  it('① 单层解析：dx/dy/blur[/spread]/color（颜色归一 hex）', () => {
+    expect(parseStaticStyle('box-shadow: 0 2px 8px rgba(0,0,0,0.15)', () => {}).boxShadow).toEqual({ dx: 0, dy: 2, blur: 8, spread: 0, color: '#00000026' })
+    expect(parseStaticStyle('box-shadow: 0 0 4px 2px #123456', () => {}).boxShadow).toEqual({ dx: 0, dy: 0, blur: 4, spread: 2, color: '#123456' })
+  })
+
+  it('② 多重阴影取首个（含 rgba 内逗号不误切）；inset ⇒ 诊断跳过', () => {
+    const multi = parseStaticStyle('box-shadow: 0 1px 2px rgba(0,0,0,0.06), 0 4px 14px rgba(0,0,0,0.08)', () => {}).boxShadow
+    expect((multi as { dy?: number }).dy, '取首个（dy=1）').toBe(1)
+    const d: string[] = []
+    expect(parseStaticStyle('box-shadow: inset 0 1px 2px #000', (m) => d.push(m)).boxShadow).toBeUndefined()
+    expect(d.some((m) => m.includes('box-shadow'))).toBe(true)
+  })
+
+  it('③ 端到端：box-shadow 经 <style> class 折进节点 style（结构化对象）', () => {
+    const sfc = `<template><view class="card">x</view></template>
+<script setup>const z = 1</script>
+<style>
+.card { box-shadow: 0 4px 14px rgba(28,27,34,0.08) }
+</style>`
+    const r = buildLayoutTemplate(sfc, 'pages/card.vue')
+    const n = r.template.nodes.find((x) => (x.style as { boxShadow?: unknown }).boxShadow)
+    expect((n!.style as { boxShadow?: { blur?: number } }).boxShadow?.blur).toBe(14)
+  })
+})

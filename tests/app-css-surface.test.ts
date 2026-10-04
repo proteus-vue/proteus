@@ -35,7 +35,7 @@ const APP_FIELDS = [...APP_LAYOUT_FIELDS, ...APP_PAINT_FIELDS, ...APP_EDGE_FIELD
 const FORBIDDEN = new Set<string>(FORBIDDEN_PROPS)
 const MATRIX_KEYS = new Set<string>(Object.keys(STYLE_PROP_LEVELS))
 /** ★已登记的分层差异（引擎字段层需要 FORBIDDEN 名的属性）——与 check-app-css-surface.mjs 同源维护 */
-const APP_ENGINE_LEVEL_FIELDS = new Set(['display', 'position', 'overflow'])
+const APP_ENGINE_LEVEL_FIELDS = new Set(['display', 'position', 'overflow', 'boxShadow'])
 
 describe('★App CSS 支持面 · ① SSOT 完备性', () => {
   it('五组常量各自非空、各自无重复（防导出/生成器腐化）', () => {
@@ -79,6 +79,7 @@ describe('★App CSS 支持面 · ② SSOT 与折叠实现同源（真折叠，�
       if (f === 'boxSizing') return 'border-box'
       if (f === 'fontWeight') return 'bold'
       if (f === 'textAlign') return 'center'
+      if (f === 'boxShadow') return '0 1px 2px #000000'
       return '10'
     }
     const notFolded: string[] = []
@@ -133,8 +134,8 @@ describe('★App CSS 支持面 · ④ 派生/特殊字段语义', () => {
 
   it('认不出的键产出诊断（不静默吞——本仓纪律）', () => {
     const diags: string[] = []
-    parseStaticStyle('box-shadow: 0 0 4px #000', (m) => diags.push(m))
-    expect(diags.length, 'box-shadow 不在 App 折叠面 ⇒ 有诊断').toBeGreaterThan(0)
+    parseStaticStyle('grid-template-columns: 1fr 1fr', (m) => diags.push(m))
+    expect(diags.length, 'grid-template-columns 不在 App 折叠面 ⇒ 有诊断').toBeGreaterThan(0)
   })
 })
 

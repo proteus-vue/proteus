@@ -4243,6 +4243,22 @@ static napi_value AppScreenCommands(napi_env env, napi_callback_info info) {
         snprintf(head, sizeof(head), "%s{\"kind\":\"background\",\"x\":%.2f,\"y\":%.2f,\"w\":%.2f,\"h\":%.2f,\"color\":%u,\"radius\":%.2f",
                  emitted > 0 ? "," : "", r.x * density, r.y * density, r.w * density, r.h * density, bg, radius * density);
         arr += head;
+        // ★批次 10：盒阴影（扁平数值键）
+        {
+            std::string shSub = extractValueAfterKey(it, "boxShadow", '{', '}');
+            if (!shSub.empty()) {
+                double sdx = 0, sdy = 0, sblur = 0, scolor = 0; std::string scc;
+                jnum(shSub.c_str(), shSub.size(), "dx", &sdx);
+                jnum(shSub.c_str(), shSub.size(), "dy", &sdy);
+                jnum(shSub.c_str(), shSub.size(), "blur", &sblur);
+                if (jstr(shSub.c_str(), shSub.size(), "color", &scc)) scolor = hexToArgb(scc);
+                if (sblur > 0 && scolor > 0) {
+                    char sb[128]; snprintf(sb, sizeof(sb), ",\"shadowDx\":%.2f,\"shadowDy\":%.2f,\"shadowBlur\":%.2f,\"shadowColor\":%u",
+                             sdx * density, sdy * density, sblur * density, (uint32_t)scolor);
+                    arr += sb;
+                }
+            }
+        }
         if (bw > 0 && bc > 0) {
             char bb[96]; snprintf(bb, sizeof(bb), ",\"borderWidth\":%.2f,\"borderColor\":%u", bw * density, bc);
             arr += bb;

@@ -74,7 +74,7 @@ export const APP_ENUM_VALUES: Record<string, readonly string[]> = {
 }
 
 /** 绘制字段（宿主自绘读这些键；模板照样要带上，否则挂载后无底色/无字色） */
-export const APP_PAINT_FIELDS = ['backgroundColor', 'color', 'fontSize', 'fontWeight', 'textAlign', 'borderRadius', 'borderColor', 'borderWidth', 'opacity'] as const
+export const APP_PAINT_FIELDS = ['backgroundColor', 'color', 'fontSize', 'fontWeight', 'textAlign', 'borderRadius', 'borderColor', 'borderWidth', 'opacity', 'boxShadow'] as const
 const PAINT_FIELDS = new Set<string>(APP_PAINT_FIELDS)
 /**
  * ★批次 4（CSS 兼容对齐）：`text-align` 的**封闭集**（App 自绘文本在盒内的水平对齐）。
@@ -304,6 +304,50 @@ const kebabToCamel = (s: string): string => s.replace(/-([a-z])/g, (_, c: string
  *   本函数对**认不出的键/值**产出诊断（不静默吞——本仓纪律）。
  */
 /**
+ * ★批次 10：`box-shadow` 解析（单层：`<dx> <dy> <blur> [<spread>] <color>`）。
+ *   · 长度 token → 数值（px）；颜色 token → `normalizeCssColor` 归一 hex；
+ *   · `inset` / 多重阴影（含 `,`）⇒ 只取第一层（调用方诊断）；解析不出 ⇒ null。
+ *   ★诚实边界：无 blur 渲染时各端用 blur 近似（见宿主）；`inset` 内阴影不支持。
+ */
+function parseBoxShadow(raw: string, toNum: (v: string) => number | undefined): { dx: number; dy: number; blur: number; spread: number; color: string } | null {
+  // 多重阴影：取第一段（逗号分隔，**括号深度 0 处**才切——`rgba(0,0,0,..)` 内的逗号不算）
+  let depth = 0
+  let cut = raw.length
+  for (let i = 0; i < raw.length; i++) {
+    const ch = raw[i]
+    if (ch === '(') depth++
+    else if (ch === ')') depth--
+    else if (ch === ',' && depth === 0) { cut = i; break }
+  }
+  const first = raw.slice(0, cut).trim()
+  if (!first || /\binset\b/i.test(first)) return null
+  // 按**括号深度 0 处的空白**切 token（`rgba(0, 0, 0, 0.15)` 内的空格不算——不能裸 split）
+  const toks: string[] = []
+  {
+    let d = 0
+    let cur = ''
+    for (const ch of first) {
+      if (ch === '(') d++
+      else if (ch === ')') d--
+      if (/\s/.test(ch) && d === 0) { if (cur) { toks.push(cur); cur = '' } continue }
+      cur += ch
+    }
+    if (cur) toks.push(cur)
+  }
+  let color: string | undefined
+  const nums: number[] = []
+  for (const tok of toks) {
+    if (/^[a-z]+$/i.test(tok) && !/^0$/.test(tok)) continue // 关键字（none 等）
+    const c = normalizeCssColor(tok)
+    if (c !== undefined && /^#|rgb|hsl|var\(|transparent/i.test(tok)) { color = c; continue }
+    const n = toNum(tok)
+    if (n !== undefined) nums.push(n)
+  }
+  if (color === undefined || nums.length < 2) return null
+  return { dx: nums[0] ?? 0, dy: nums[1] ?? 0, blur: nums[2] ?? 0, spread: nums[3] ?? 0, color }
+}
+
+/**
  * ★批次 9（CSS 兼容对齐 · 超级应用承载）：**CSS 自定义属性（设计令牌）→ 编译期折叠**。
  *
  * 【为什么必须有（超级应用最大的结构缺口）】现代前端/组件库几乎全靠设计令牌
@@ -462,6 +506,20 @@ export function parseStaticStyle(
         }
         out[key] = v
         markImportant(key)
+        continue
+      }
+      if (key === 'boxShadow') {
+        // ★批次 10：`box-shadow` → 结构化 boxShadow（宿主绘制；见 parseBoxShadow）
+        const sh = parseBoxShadow(rawVal, numOf)
+        if (!sh) {
+          pushDiag(
+            `box-shadow \`${rawVal}\` 未解析（支持 dx dy blur [spread] color；多重阴影取首个）——已跳过`,
+            'App 端盒阴影为单层：`box-shadow: 0 2px 8px rgba(0,0,0,0.15)`；`inset`/多重阴影暂不支持',
+          )
+          continue
+        }
+        out.boxShadow = sh
+        markImportant('boxShadow')
         continue
       }
       if (key === 'backgroundColor' || key === 'color' || key === 'borderColor') {
