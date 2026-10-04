@@ -103,16 +103,6 @@
         "why": "→ widthRatio/heightRatio（比例字段）"
       },
       {
-        "css": "transform（translate/scale/rotate/skew/perspective）",
-        "id": "transform",
-        "ends": {
-          "web": "supported",
-          "skyline": "supported",
-          "app": "engine-only"
-        },
-        "why": "★引擎/宿主已支持（LStyle 的绘制通道 paint-only + 宿主动画桥），但编译期折叠面（parseStaticStyle）**未接 transform** ⇒ 「可扩展」现成落点：加进 APP_PAINT_FIELDS 即可"
-      },
-      {
         "css": "transform-origin",
         "id": "transform-origin",
         "ends": {
@@ -499,7 +489,8 @@
       "borderColor",
       "borderWidth",
       "opacity",
-      "boxShadow"
+      "boxShadow",
+      "transform"
     ],
     "declAttrs": [
       "fill-gradient",
@@ -930,16 +921,18 @@
     },
     {
       "id": "transform",
-      "css": "transform（translate/scale/rotate/skew/perspective）",
+      "css": "transform（2D：translate / scale / rotate）",
       "category": "motion",
-      "compilerFields": [],
+      "compilerFields": [
+        "transform"
+      ],
       "web": "supported",
       "skyline": "supported",
-      "app": "engine-only",
+      "app": "supported",
       "tier": "L1",
       "strategy": "编译期折叠",
-      "note": "★引擎/宿主已支持（LStyle 的绘制通道 paint-only + 宿主动画桥），但编译期折叠面（parseStaticStyle）**未接 transform** ⇒ 「可扩展」现成落点：加进 APP_PAINT_FIELDS 即可",
-      "supportTier": "conditional"
+      "note": "★批次 39（2026-10-04 · 对齐 Web · 削减胶水）：静态 transform 编译期折成数值集（txPx/tyPx + txPct/tyPct 盒比例 + 等比 scale + rotate）⇒ 三端宿主逐节点变换通道应用（复用动画表：静态为基态、动画覆盖之）。支持 2D 子集；3D/skew/matrix/非等比缩放 ⇒ 诊断跳过（如实）",
+      "supportTier": "universal"
     },
     {
       "id": "transform-origin",

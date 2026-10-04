@@ -88,6 +88,7 @@ describe('★App CSS 支持面 · ② SSOT 与折叠实现同源（真折叠，�
       if (f === 'pointerEvents') return 'none'
       if (f === 'textDecoration') return 'underline'
       if (f === 'fontFamily') return 'monospace'
+      if (f === 'transform') return 'translateY(4px)'
       return '10'
     }
     const notFolded: string[] = []

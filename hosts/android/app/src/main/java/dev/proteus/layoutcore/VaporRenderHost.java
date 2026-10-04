@@ -1187,6 +1187,13 @@ final class VaporRenderHost {
         if (glow != null && glow.has("radius") && glow.get("radius") instanceof Number) {
             glow.put("radius", glow.getDouble("radius") * lengthScale);
         }
+        // ★批次 39：静态变换（transform）的 **px 位移**按密度缩放（txPct/tyPct 是盒比例、scale/rotate 无量纲——不动）
+        JSONObject tf = spec.optJSONObject("transform");
+        if (tf != null) {
+            for (String k : new String[]{"txPx", "tyPx"}) {
+                if (tf.has(k) && tf.get(k) instanceof Number) tf.put(k, tf.getDouble(k) * lengthScale);
+            }
+        }
         // ★批次 10：盒阴影长度（dx/dy/blur/spread 是长度，缩放；color 不动）
         JSONObject shadow = spec.optJSONObject("boxShadow");
         if (shadow != null) {
@@ -1433,6 +1440,7 @@ final class VaporRenderHost {
             int id = spec.getInt("id");
             injectClipPath(id, spec);
             injectTransformOrigin(id, spec);
+            injectTransform(id, spec);
             injectRadiusCorners(id, spec);
             injectFontRole(id, spec);
         }
@@ -1457,6 +1465,24 @@ final class VaporRenderHost {
         if (torig == null) return;
         view.setNodeTransformOrigin(id,
                 (float) torig.optDouble("x", 0.5), (float) torig.optDouble("y", 0.5));
+    }
+
+    /**
+     * ★批次 39：**静态变换注入**（编译期 CSS `transform`）——写进宿主"静态变换表"（与动画同格式）。
+     *   px 位移直接用（已随 spec physicalize）；**盒比例**位移（txPct/tyPct）随表下发，由 drawCmds 按盒尺寸换算。
+     *   缩放取等比（sx===sy —— 编译器已拒绝非等比）。无 transform ⇒ 不注入（零行为变化）。
+     */
+    private void injectTransform(int id, JSONObject spec) {
+        if (view == null) return;
+        JSONObject t = spec.optJSONObject("transform");
+        if (t == null) return;
+        view.setNodeTransform(id,
+                (float) t.optDouble("txPx", 0),
+                (float) t.optDouble("tyPx", 0),
+                (float) t.optDouble("sx", 1),
+                (float) t.optDouble("rotate", 0),
+                (float) t.optDouble("txPct", 0),
+                (float) t.optDouble("tyPct", 0));
     }
 
     /** ★批次 34：逐角圆角掩码注入（`borderRadiusCorners` 对象 → bit0=TL/1=TR/2=BR/3=BL；全 true ⇒ 不注入） */

@@ -9398,6 +9398,36 @@
           "borderRadius": 8,
           "text": "inset: 0 \u8986\u76D6\u5C42",
           "semantic": "div"
+        },
+        {
+          "id": 86,
+          "parentId": 0,
+          "width": 220,
+          "height": 40,
+          "margin": {
+            "top": 16,
+            "bottom": 16
+          },
+          "marginAuto": {
+            "right": true,
+            "left": true
+          },
+          "backgroundColor": "#ff8a3d",
+          "color": "#ffffff",
+          "fontSize": 12,
+          "textAlign": "center",
+          "borderRadius": 8,
+          "transform": {
+            "txPx": 0,
+            "tyPx": 6,
+            "txPct": 0,
+            "tyPct": 0,
+            "sx": 0.92,
+            "sy": 0.92,
+            "rotate": 0
+          },
+          "text": "transform: translateY(6px) scale(0.92)",
+          "semantic": "div"
         }
       ]
     },
