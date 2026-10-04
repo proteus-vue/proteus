@@ -356,6 +356,10 @@ pub struct LStyle {
     /// ★批次 24（CSS 兼容对齐 · 以 Web 为基准）：宽高比（`aspect-ratio: 1.5` / `16/9`）——taffy 原生。
     #[serde(skip_serializing_if = "Option::is_none")]
     pub aspect_ratio: Option<f32>,
+    /// ★批次 32（CSS 兼容对齐 · 以 Web 为基准）：`pointer-events`（`none` ⇒ 该节点**不参与命中测试**，
+    ///   事件穿透到其下）。`None`/`true` = `auto`（默认）。★**可继承**（CSS 语义；子 `auto` 可覆盖）。
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub pointer_events: Option<bool>,
 
     #[serde(default)]
     pub margin: Edges,
@@ -621,6 +625,7 @@ impl Default for LStyle {
             min_height_pct: None,
             max_height_pct: None,
             aspect_ratio: None,
+            pointer_events: None,
             margin: Edges::ZERO,
             margin_auto: MarginAuto::NONE,
             padding: Edges::ZERO,

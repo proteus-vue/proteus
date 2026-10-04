@@ -9094,6 +9094,56 @@
           "textAlign": "center",
           "text": "C",
           "semantic": "div"
+        },
+        {
+          "id": 71,
+          "parentId": 0,
+          "position": "relative",
+          "width": 200,
+          "height": 40,
+          "margin": {
+            "top": 16,
+            "bottom": 16
+          },
+          "marginAuto": {
+            "right": true,
+            "left": true
+          },
+          "textAlign": "center",
+          "semantic": "div"
+        },
+        {
+          "id": 72,
+          "parentId": 71,
+          "position": "absolute",
+          "top": 0,
+          "left": 0,
+          "width": 200,
+          "height": 40,
+          "backgroundColor": "#e8f7ee",
+          "borderRadius": 4,
+          "color": "#07c160",
+          "fontSize": 12,
+          "textAlign": "center",
+          "text": "\u5E95\u5C42\u53EF\u70B9",
+          "semantic": "div"
+        },
+        {
+          "id": 73,
+          "parentId": 71,
+          "position": "absolute",
+          "top": 0,
+          "left": 0,
+          "width": 200,
+          "height": 40,
+          "backgroundColor": "#7c3aed26",
+          "borderRadius": 4,
+          "pointerEvents": false,
+          "color": "#7c3aed",
+          "fontSize": 12,
+          "textAlign": "center",
+          "text": "\u8986\u76D6\u5C42\uFF08pointer-events:none\uFF09",
+          "semantic": "div"
         }
       ]
     },

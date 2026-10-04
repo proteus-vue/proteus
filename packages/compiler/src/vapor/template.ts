@@ -55,7 +55,7 @@ export const APP_LAYOUT_FIELDS = [
   'width', 'height', 'minWidth', 'maxWidth', 'minHeight', 'maxHeight',
   'margin', 'padding', 'flexDirection', 'flexWrap', 'justifyContent', 'alignItems', 'alignContent', 'alignSelf',
   'flexGrow', 'flexShrink', 'flexBasis', 'gap', 'rowGap', 'columnGap', 'display', 'position', 'top', 'left', 'right', 'bottom', 'overflow',
-  'gridTemplateColumns', 'gridTemplateRows', 'aspectRatio',
+  'gridTemplateColumns', 'gridTemplateRows', 'aspectRatio', 'pointerEvents',
 ] as const
 const LAYOUT_FIELDS = new Set<string>(APP_LAYOUT_FIELDS)
 /**
@@ -568,6 +568,15 @@ export function parseStaticStyle(
           continue
         }
         out[key] = tracks
+        markImportant(key)
+        continue
+      }
+      if (key === 'pointerEvents') {
+        // ★批次 32（CSS 兼容对齐 · 以 Web 为基准）：pointer-events（none ⇒ 不参与命中，事件穿透）。
+        //   折成布尔（none ⇒ false / auto ⇒ true）；缺省 = auto ⇒ 不发射（零行为变化）。
+        const v = rawVal.trim().toLowerCase()
+        if (v !== 'none' && v !== 'auto') { pushDiag(`style 里 \`${rawKey}: ${rawVal}\` 未支持（仅 none / auto）——已跳过`); continue }
+        out[key] = v === 'none' ? false : true
         markImportant(key)
         continue
       }
@@ -2335,6 +2344,9 @@ export function buildLayoutTemplate(
       //   子**显式** visible 可**覆盖**为可见（CSS 规定）。⇒ 单独处理，不并入 APP_INHERITABLE_FIELDS。
       if (style.visibility === 'inherit') style.visibility = inherited.visibility
       if (style.visibility === undefined && inherited.visibility !== undefined) style.visibility = inherited.visibility
+      // ★批次 32：pointer-events 可继承（CSS 语义）——父 none ⇒ 子默认 none，子显式 auto 可覆盖
+      if (style.pointerEvents === undefined && inherited.pointerEvents !== undefined) style.pointerEvents = inherited.pointerEvents
+      if (style.pointerEvents !== undefined) childInherited.pointerEvents = style.pointerEvents
       if (style.visibility !== undefined) childInherited.visibility = style.visibility
       const node: LayoutNode = { id, parentId, tag, style }
       if (nodeListId !== undefined) node.listId = nodeListId
