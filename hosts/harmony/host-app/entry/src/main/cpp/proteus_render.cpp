@@ -561,6 +561,12 @@ static int renderCommandsImpl(const char* jsonCStr, bool fromProbe) {
         double borderWidth = 0, borderColor = 0;
         jsonNumber(it, "borderWidth", &borderWidth);
         jsonNumber(it, "borderColor", &borderColor);
+        // ★批次 10：盒阴影（扁平数值键——与 borderWidth/borderColor 同形态；由指令生成方折出）
+        double shadowDx = 0, shadowDy = 0, shadowRadius = -1, shadowColor = 0;
+        jsonNumber(it, "shadowDx", &shadowDx);
+        jsonNumber(it, "shadowDy", &shadowDy);
+        jsonNumber(it, "shadowBlur", &shadowRadius);
+        jsonNumber(it, "shadowColor", &shadowColor);
 
         ArkUI_RenderNodeHandle node = OH_ArkUI_RenderNodeUtils_CreateNode();
         if (node == nullptr) {
@@ -601,6 +607,14 @@ static int renderCommandsImpl(const char* jsonCStr, bool fromProbe) {
                 OH_ArkUI_RenderNodeUtils_SetBorderColor(node, bco);
                 OH_ArkUI_RenderNodeUtils_DisposeNodeBorderColorOption(bco);
             }
+        }
+        // ★批次 10（CSS 兼容对齐 · 超级应用视觉）：盒阴影 → RenderNode 原生 shadow API
+        //   （color/offset/radius/alpha；spread 无原生项——近似忽略）
+        if (shadowRadius > 0 && shadowColor > 0) {
+            OH_ArkUI_RenderNodeUtils_SetShadowColor(node, static_cast<uint32_t>(shadowColor));
+            OH_ArkUI_RenderNodeUtils_SetShadowOffset(node, static_cast<int32_t>(shadowDx), static_cast<int32_t>(shadowDy));
+            OH_ArkUI_RenderNodeUtils_SetShadowRadius(node, static_cast<float>(shadowRadius));
+            OH_ArkUI_RenderNodeUtils_SetShadowAlpha(node, 1.0f);
         }
         // ★★★文本上屏（2026-10-02）：指令带 "text" ⇒ 给该节点挂 content modifier，
         //   在绘制阶段用 typography 画文字（Color/字号从指令取；缺省白字 24px）。

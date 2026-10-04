@@ -44,7 +44,7 @@
 | 超级应用能力 | 用途 | 现状 |
 |---|---|---|
 | 定位锚点（absolute + top/left/right/bottom + z 序） | 角标 / FAB / 关闭按钮 / 底部弹层 / 悬浮层 | supported（批 8 补 right/bottom；层序走层容器） |
-| 卡片外观（background / border / border-radius / shadow / 内边距） | 列表项 / 卡片 / 面板 | background/border/border-radius/padding ✅；**box-shadow ⏳（Android 硬件加速下 setShadowLayer 仅支持文本，需阴影通道）** |
+| 卡片外观（background / border / border-radius / shadow / 内边距） | 列表项 / 卡片 / 面板 | supported（background/border/border-radius/padding ✅ 批 2/5；**box-shadow ✅ 批 10**——iOS/鸿蒙原生、Android 分层近似） |
 | 弹性流式布局（flex + wrap + gap + align/justify + 百分比） | 响应式排布 / 标签墙 / 宫格 | supported（批 6 补 flex-wrap；缺 align-content） |
 | 文本呈现（size / weight / align / color / line-height / 截断） | 标题 / 正文 / 单行截断 | font-size/weight/align/color ✅；**line-height ⏳ / text-overflow ⏳** |
 | 栅格 / 复杂排布（grid） | 仪表盘 / 复杂页面 | absent（[Rust]：引擎 Display 未开放 Grid） |
@@ -98,7 +98,7 @@
 | layout | `right / bottom` | supported | supported | supported | L2 | 直映射 | universal | ★批次 8（2026-10-04）：引擎 `LStyle.right/bottom` + `NodeDto` + taffy inset 映射（absolute/relative 的右/下边缘锚定）；编译器入 APP_LAYOUT_FIELDS + style-object + Android LEN_SCALARS/LAYOUT_KEYS。★**超级应用刚需**：角标 / FAB / 关闭按钮 / 底部弹层锚点。引擎行为测试 tests/inset_right_bottom.rs（right=10/bottom=5 ⇒ 落父右下角） |
 | layout | `order` | supported | supported | absent | L2 | 直映射 | conditional | 引擎无字段 |
 | layer | `z-index` | supported | supported | absent | L3 | 语义组件 | conditional | 本仓已定案**语义化**（layer="content\|navigation\|mask\|popout"，见 contracts/layers.ts）——数值禁止（跨端无意义 + 推高合成层内存） |
-| paint | `box-shadow` | supported | supported | absent | L3 | 语义组件 | conditional | 离屏渲染；走 <p-shadow> 语义组件（各端原生阴影） |
+| paint | `box-shadow` | supported | supported | supported | L3 | 编译期折叠 | universal | ★批次 10（2026-10-04）：单层解析为结构化 `boxShadow {dx,dy,blur,spread,color}`（多重取首个；inset 诊断跳过）。**三端绘制**：iOS `CALayer.shadow*`（原生；有阴影时不开 masksToBounds——圆角裁剪会裁掉阴影）· Android **分层圆角矩形近似**（硬件加速下 setShadowLayer 只支持文本）· 鸿蒙 `OH_ArkUI_RenderNodeUtils_SetShadow*`（原生；spread 无原生项）。★超级应用卡片抬升视觉刚需 |
 | paint | `filter / backdrop-filter` | supported | supported | absent | L3 | 语义组件 | conditional | 离屏/额外缓冲；走 <p-glass> / <p-filter> 语义组件 |
 | text | `font-weight` | not-measured | supported | supported | L1 | 编译期折叠 | conditional | ★批次 3（2026-10-04）：`normal`→400 / `bold`→700 / 100–900 数值归一；作为**文本可继承**字段沿树继承。三端宿主：iOS 已读 `fontWeight`（≥600 bold 判据）、Android 新接线（Cmd.fontWeight + 绘制/度量同源 typeface）、鸿蒙新接线（OH_Drawing_SetTextStyleFontWeight） |
 | text | `text-align` | not-measured | supported | supported | L1 | 编译期折叠 | conditional | ★批次 4（2026-10-04）：封闭集 left/center/right（justify/st 等诊断跳过）。宿主：iOS CATextLayer.alignmentMode · Android Paint.Align（绘制 x 按对齐换算）· 鸿蒙 OH_Drawing_SetTypographyTextAlign。真项目 28 处（22 center） |
@@ -125,7 +125,6 @@
 | `align-content` | supported | supported | absent | 引擎无字段（多行弹性容器的行间对齐；需引擎+DTO+taffy）——后续批次 |
 | `order` | supported | supported | absent | 引擎无字段 |
 | `z-index` | supported | supported | absent | 本仓已定案**语义化**（layer="content\|navigation\|mask\|popout"，见 contracts/layers.ts）——数值禁止（跨端无意义  |
-| `box-shadow` | supported | supported | absent | 离屏渲染；走 <p-shadow> 语义组件（各端原生阴影） |
 | `filter / backdrop-filter` | supported | supported | absent | 离屏/额外缓冲；走 <p-glass> / <p-filter> 语义组件 |
 | `font-weight` | not-measured | supported | supported | ★批次 3（2026-10-04）：`normal`→400 / `bold`→700 / 100–900 数值归一；作为**文本可继承**字段沿树继承。三端宿主：iOS 已读 ` |
 | `text-align` | not-measured | supported | supported | ★批次 4（2026-10-04）：封闭集 left/center/right（justify/st 等诊断跳过）。宿主：iOS CATextLayer.alignmentMode |

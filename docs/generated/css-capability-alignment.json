@@ -34,7 +34,7 @@
         {
           "capability": "卡片外观（background / border / border-radius / shadow / 内边距）",
           "why": "列表项 / 卡片 / 面板",
-          "status": "background/border/border-radius/padding ✅；**box-shadow ⏳（Android 硬件加速下 setShadowLayer 仅支持文本，需阴影通道）**"
+          "status": "supported（background/border/border-radius/padding ✅ 批 2/5；**box-shadow ✅ 批 10**——iOS/鸿蒙原生、Android 分层近似）"
         },
         {
           "capability": "弹性流式布局（flex + wrap + gap + align/justify + 百分比）",
@@ -200,16 +200,6 @@
           "app": "absent"
         },
         "why": "本仓已定案**语义化**（layer=\"content|navigation|mask|popout\"，见 contracts/layers.ts）——数值禁止（跨端无意义 + 推高合成层内存）"
-      },
-      {
-        "css": "box-shadow",
-        "id": "box-shadow",
-        "ends": {
-          "web": "supported",
-          "skyline": "supported",
-          "app": "absent"
-        },
-        "why": "离屏渲染；走 <p-shadow> 语义组件（各端原生阴影）"
       },
       {
         "css": "filter / backdrop-filter",
@@ -444,7 +434,8 @@
       "borderRadius",
       "borderColor",
       "borderWidth",
-      "opacity"
+      "opacity",
+      "boxShadow"
     ],
     "declAttrs": [
       "fill-gradient",
@@ -1127,14 +1118,16 @@
       "id": "box-shadow",
       "css": "box-shadow",
       "category": "paint",
-      "compilerFields": [],
+      "compilerFields": [
+        "boxShadow"
+      ],
       "web": "supported",
       "skyline": "supported",
-      "app": "absent",
+      "app": "supported",
       "tier": "L3",
-      "strategy": "语义组件",
-      "note": "离屏渲染；走 <p-shadow> 语义组件（各端原生阴影）",
-      "supportTier": "conditional"
+      "strategy": "编译期折叠",
+      "note": "★批次 10（2026-10-04）：单层解析为结构化 `boxShadow {dx,dy,blur,spread,color}`（多重取首个；inset 诊断跳过）。**三端绘制**：iOS `CALayer.shadow*`（原生；有阴影时不开 masksToBounds——圆角裁剪会裁掉阴影）· Android **分层圆角矩形近似**（硬件加速下 setShadowLayer 只支持文本）· 鸿蒙 `OH_ArkUI_RenderNodeUtils_SetShadow*`（原生；spread 无原生项）。★超级应用卡片抬升视觉刚需",
+      "supportTier": "universal"
     },
     {
       "id": "filter-backdrop",

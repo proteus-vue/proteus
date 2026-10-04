@@ -72,6 +72,8 @@ public class ProteusHostView extends ViewGroup {
         final float borderWidth;
         /** ★批次 5：uniform 边框颜色（ARGB；borderWidth>0 时生效）。 */
         final int borderColor;
+        /** ★批次 10（CSS 兼容对齐 · 超级应用视觉）：盒阴影规格 `{dx,dy,blur,spread,color}`；null=无阴影（零行为变化）。 */
+        final float[] boxShadow;
         /**
          * ★★圆角半径（px；0 = 直角）——纯绘制属性（内核不收，只影响观感）。
          *
@@ -123,6 +125,10 @@ public class ProteusHostView extends ViewGroup {
         }
         Cmd(float x, float y, float w, float h, int color, String text, float fontSize, int textColor, float radius,
             GradSpec gradient, float[] glow, float[] mask, int fontWeight, int textAlign, float borderWidth, int borderColor) {
+            this(x, y, w, h, color, text, fontSize, textColor, radius, gradient, glow, mask, fontWeight, textAlign, borderWidth, borderColor, null);
+        }
+        Cmd(float x, float y, float w, float h, int color, String text, float fontSize, int textColor, float radius,
+            GradSpec gradient, float[] glow, float[] mask, int fontWeight, int textAlign, float borderWidth, int borderColor, float[] boxShadow) {
             this.x = x; this.y = y; this.w = w; this.h = h; this.color = color; this.text = text;
             this.fontSize = fontSize;
             this.textColor = textColor;
@@ -134,6 +140,7 @@ public class ProteusHostView extends ViewGroup {
             this.textAlign = textAlign;
             this.borderWidth = borderWidth;
             this.borderColor = borderColor;
+            this.boxShadow = boxShadow;
         }
     }
 
@@ -330,6 +337,8 @@ public class ProteusHostView extends ViewGroup {
     private final android.graphics.Paint strokePaint = new android.graphics.Paint(android.graphics.Paint.ANTI_ALIAS_FLAG);
     /** ★批次 5：边框描边专用（与 SVG/glow 的 strokePaint 分开——避免相互污染 STROKE 样式/宽度）。 */
     private final android.graphics.Paint borderPaint = new android.graphics.Paint(android.graphics.Paint.ANTI_ALIAS_FLAG);
+    /** ★批次 10：盒阴影填充专用（分层近似——与 border/glow 分开避免相互污染）。 */
+    private final android.graphics.Paint shadowPaint = new android.graphics.Paint(android.graphics.Paint.ANTI_ALIAS_FLAG);
     /** ★★软边遮罩合成用（mask v1）：`渐变 shader + DST_IN`（见 drawCmds 的遮罩合成段） */
     private final android.graphics.Paint maskPaint = new android.graphics.Paint(android.graphics.Paint.ANTI_ALIAS_FLAG);
 
@@ -2271,6 +2280,29 @@ public class ProteusHostView extends ViewGroup {
                 }
             }
             if (gradShader != null) bgPaint.setShader(gradShader);
+            // ★批次 10（CSS 兼容对齐 · 超级应用视觉）：盒阴影——**分层圆角矩形近似**（N 层 alpha 衰减）。
+            //   ★为什么不用 setShadowLayer：Android 硬件加速下它**只支持文本**（对 Path/Rect 无效）——
+            //     真机静默不画（见下方 glow 的同款注释）。分层填充是确定性的且 GPU 廉价。
+            if (c.boxShadow != null) {
+                final float sdx = c.boxShadow[0];
+                final float sdy = c.boxShadow[1];
+                final float sblur = c.boxShadow[2];
+                final int scol = (int) c.boxShadow[4];
+                final float scAlpha = Color.alpha(scol) / 255f;
+                final int scRgb = scol & 0x00FFFFFF;
+                final int SHADOW_LAYERS = 6;
+                final int ssave = canvas.save();
+                canvas.translate(sdx, sdy);
+                for (int s = SHADOW_LAYERS; s >= 1; s--) {
+                    final float t = (float) s / SHADOW_LAYERS; // 1(最外) → 1/N(最内)
+                    final float exp = c.radius > 0f ? c.radius + sblur * t : sblur * t;
+                    final int a = Math.max(0, Math.min(255, (int) (scAlpha * (1f - t) * (255f / SHADOW_LAYERS) * 2f * op)));
+                    shadowPaint.setColor((a << 24) | scRgb);
+                    if (c.radius > 0f) canvas.drawRoundRect(c.x - sblur * t, c.y - sblur * t, c.x + c.w + sblur * t, c.y + c.h + sblur * t, exp, exp, shadowPaint);
+                    else canvas.drawRect(c.x - sblur * t, c.y - sblur * t, c.x + c.w + sblur * t, c.y + c.h + sblur * t, shadowPaint);
+                }
+                canvas.restoreToCount(ssave);
+            }
             // ★圆角（灯光秀的灯珠）：radius > 0 走 drawRoundRect——纯绘制属性，默认 0 零行为变化
             if (c.radius > 0f) canvas.drawRoundRect(c.x, c.y, c.x + c.w, c.y + c.h, c.radius, c.radius, bgPaint);
             else canvas.drawRect(c.x, c.y, c.x + c.w, c.y + c.h, bgPaint);

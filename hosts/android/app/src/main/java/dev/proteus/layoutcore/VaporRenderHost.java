@@ -1186,6 +1186,13 @@ final class VaporRenderHost {
         if (glow != null && glow.has("radius") && glow.get("radius") instanceof Number) {
             glow.put("radius", glow.getDouble("radius") * lengthScale);
         }
+        // ★批次 10：盒阴影长度（dx/dy/blur/spread 是长度，缩放；color 不动）
+        JSONObject shadow = spec.optJSONObject("boxShadow");
+        if (shadow != null) {
+            for (String k : new String[]{"dx", "dy", "blur", "spread"}) {
+                if (shadow.has(k) && shadow.get(k) instanceof Number) shadow.put(k, shadow.getDouble(k) * lengthScale);
+            }
+        }
     }
 
     /** 物理化整棵树（viewport + 全部 nodes）——mount / mountVirtual 的入口各调一次 */
@@ -1310,6 +1317,8 @@ final class VaporRenderHost {
         final float bw = (float) spec.optDouble("borderWidth", 0);
         String bcStr = spec.optString("borderColor", null);
         final int bc = bcStr != null ? parseColor(bcStr) : 0;
+        // ★批次 10：盒阴影（结构化 {dx,dy,blur,spread,color} → float[]）
+        final float[] shadowSpec = parseBoxShadow(spec.optJSONObject("boxShadow"));
 
         String t = spec.optString("text", null);
         if (t != null && !t.isEmpty()) {
@@ -1320,9 +1329,9 @@ final class VaporRenderHost {
             int fw = (int) spec.optDouble("fontWeight", 400);
             // ★批次 4：文本水平对齐（text-align → 0/1/2）
             int ta = alignOf(spec.optString("textAlign", null));
-            return new ProteusHostView.Cmd(x, y, w, h, color, t, fs, textColor, radius, grad, glowSpec, maskSpec, fw, ta, bw, bc);
+            return new ProteusHostView.Cmd(x, y, w, h, color, t, fs, textColor, radius, grad, glowSpec, maskSpec, fw, ta, bw, bc, shadowSpec);
         }
-        return new ProteusHostView.Cmd(x, y, w, h, color, null, 0f, 0, radius, grad, glowSpec, maskSpec, 400, 0, bw, bc);
+        return new ProteusHostView.Cmd(x, y, w, h, color, null, 0f, 0, radius, grad, glowSpec, maskSpec, 400, 0, bw, bc, shadowSpec);
     }
 
     /** ★批次 4：`text-align` 字符串 → 码（0=left / 1=center / 2=right；未知 ⇒ 0） */
@@ -1414,6 +1423,20 @@ final class VaporRenderHost {
         }
     }
 
+    /** ★批次 10：盒阴影声明 → `[dx, dy, blur, spread, color(ARGB)]`（无 ⇒ null；缺色 ⇒ null） */
+    private float[] parseBoxShadow(JSONObject bs) {
+        if (bs == null) return null;
+        String colS = bs.optString("color", "");
+        int col = colS.startsWith("#") ? parseColor(colS) : 0;
+        if (col == 0) return null;
+        return new float[]{
+                (float) bs.optDouble("dx", 0),
+                (float) bs.optDouble("dy", 0),
+                (float) bs.optDouble("blur", 0),
+                (float) bs.optDouble("spread", 0),
+                (float) col};
+    }
+
     /** 遮罩声明 → `[kind, angle, cx, cy, r, softness, progress]`（与 LightsHost 同口径） */
     private float[] parseMask(JSONObject mo) {
         if (mo == null) return null;
@@ -1443,9 +1466,10 @@ final class VaporRenderHost {
             final int ta = spec.has("textAlign") ? alignOf(spec.optString("textAlign", null)) : prev.textAlign;
             final float bw = spec.has("borderWidth") ? (float) spec.optDouble("borderWidth", prev.borderWidth) : prev.borderWidth;
             final int bc = spec.has("borderColor") ? parseColor(spec.optString("borderColor", null)) : prev.borderColor;
-            return new ProteusHostView.Cmd(prev.x, prev.y, prev.w, prev.h, color, t, fs, textColor, prev.radius, prev.gradient, prev.glow, prev.mask, fw, ta, bw, bc);
+            final float[] sh = spec.has("boxShadow") ? parseBoxShadow(spec.optJSONObject("boxShadow")) : prev.boxShadow;
+            return new ProteusHostView.Cmd(prev.x, prev.y, prev.w, prev.h, color, t, fs, textColor, prev.radius, prev.gradient, prev.glow, prev.mask, fw, ta, bw, bc, sh);
         }
-        return new ProteusHostView.Cmd(prev.x, prev.y, prev.w, prev.h, color, prev.text, prev.fontSize, prev.textColor, prev.radius, prev.gradient, prev.glow, prev.mask, prev.fontWeight, prev.textAlign, prev.borderWidth, prev.borderColor);
+        return new ProteusHostView.Cmd(prev.x, prev.y, prev.w, prev.h, color, prev.text, prev.fontSize, prev.textColor, prev.radius, prev.gradient, prev.glow, prev.mask, prev.fontWeight, prev.textAlign, prev.borderWidth, prev.borderColor, prev.boxShadow);
     }
 
     /** 全量：几何 → 指令（矩形 + 文本 + 底色） */

@@ -72,7 +72,7 @@ const undeclared = APP_FIELDS.filter((f) => !MATRIX_KEYS.has(f) && !DERIVED.has(
 //     两层职责不同，交集本身不构成缺陷；但**新增**交集（未登记）意味着"开发者能在 App 写一个语义层禁止的属性"
 //     ⇒ 收敛模型的新逃生口 ⇒ 必须显式登记（棘轮），故判据② = 交集 ⊆ APP_ENGINE_LEVEL_FIELDS。
 const forbiddenHits = APP_FIELDS.filter((f) => FORBIDDEN.has(f))
-const APP_ENGINE_LEVEL_FIELDS = new Set(['display', 'position', 'overflow']) // ★已登记：引擎字段层需要（内核默认模型 + 语义组件映射目标）
+const APP_ENGINE_LEVEL_FIELDS = new Set(['display', 'position', 'overflow', 'boxShadow']) // ★已登记：引擎字段层需要（内核默认模型 / 语义组件映射目标 / 自绘盒阴影）
 const forbiddenUnregistered = forbiddenHits.filter((f) => !APP_ENGINE_LEVEL_FIELDS.has(f))
 /* ── ③ 分层差异：App 引擎接受面不在 runtime 白名单（同为分层差异，informational）── */
 const RUNTIME_ALIAS_OK = (f) => RUNTIME_ALLOW.has(f) || RUNTIME_ALLOW.has(`${f}Top`) || MATRIX_KEYS.has(f)
