@@ -485,6 +485,18 @@ export function parseStaticStyle(
       }
       continue
     }
+    // ★批次 7（CSS 兼容对齐 · flex 简写）：`flex` → flexGrow/flexShrink/flexBasis（引擎已支持这三者）
+    if (key === 'flex') {
+      const f = parseFlexShorthand(rawVal, numOf)
+      if (!f) {
+        pushDiag(`\`flex: ${rawVal}\` 未解析（支持 grow [shrink [basis]] / none / auto）——已跳过`)
+        continue
+      }
+      if (f.grow !== undefined) { out.flexGrow = f.grow; markImportant('flexGrow') }
+      if (f.shrink !== undefined) { out.flexShrink = f.shrink; markImportant('flexShrink') }
+      if (f.basis !== undefined) { out.flexBasis = f.basis; markImportant('flexBasis') }
+      continue
+    }
     // 逐边边框（`border-bottom` 等）：引擎/宿主只支持**统一**边框 ⇒ 如实诊断（不静默丢弃）
     if (/^border(Top|Right|Bottom|Left)(Width|Color|Style)?$/.test(key) || /^border(Top|Right|Bottom|Left)$/.test(key)) {
       pushDiag(
@@ -841,6 +853,39 @@ function normalizeFontWeight(raw: string): number | undefined {
   const n = Number(v)
   if (Number.isFinite(n) && n >= 1 && n <= 1000) return Math.round(n)
   return undefined
+}
+
+/**
+ * ★批次 7：`flex` 简写 → `{ grow?, shrink?, basis? }`（CSS `flex` 简写：`<grow> <shrink>? <basis>?`）。
+ *   · `flex: <n>` ⇒ grow=n, shrink=1, basis=0（CSS 语义）；`flex: <g> <s>` ⇒ basis=0；
+ *   · `flex: <g> <s> <b>` ⇒ basis=数值（`auto`/`content` 无内核对等 ⇒ basis 略过）；
+ *   · `flex: none` ⇒ grow=0, shrink=0；`flex: auto` ⇒ grow=1, shrink=1（basis auto ⇒ 略过）。
+ */
+function parseFlexShorthand(raw: string, toNum: (v: string) => number | undefined): {
+  grow?: number; shrink?: number; basis?: number
+} | null {
+  const toks = raw.trim().split(/\s+/).filter(Boolean)
+  if (toks.length === 0 || toks.length > 3) return null
+  const low = toks[0]!.toLowerCase()
+  if (low === 'none') return { grow: 0, shrink: 0 }
+  if (low === 'auto') return { grow: 1, shrink: 1 }
+  const grow = toNum(toks[0]!)
+  if (grow === undefined) return null
+  const out: { grow?: number; shrink?: number; basis?: number } = { grow }
+  if (toks[1] !== undefined) {
+    const shrink = toNum(toks[1]!)
+    if (shrink === undefined) return null
+    out.shrink = shrink
+  } else {
+    out.shrink = 1 // CSS：`flex:<n>` 的默认 shrink = 1
+  }
+  if (toks[2] !== undefined) {
+    const basis = toNum(toks[2]!) // `auto`/`content` 等 ⇒ undefined（略过 basis）
+    if (basis !== undefined) out.basis = basis
+  } else {
+    out.basis = 0 // CSS：省略 basis ⇒ 0
+  }
+  return out
 }
 
 /**

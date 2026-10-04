@@ -1856,6 +1856,9 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
       {
         "id": 18,
         "parentId": 17,
+        "flexGrow": 1,
+        "flexShrink": 1,
+        "flexBasis": 0,
         "borderWidth": 1,
         "borderColor": "#d0d0d0",
         "borderRadius": 4,
@@ -1888,6 +1891,9 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
       {
         "id": 20,
         "parentId": 16,
+        "flexGrow": 1,
+        "flexShrink": 1,
+        "flexBasis": 0,
         "borderWidth": 1,
         "borderColor": "#d0d0d0",
         "borderRadius": 4,
@@ -2021,6 +2027,9 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
       {
         "id": 32,
         "parentId": 29,
+        "flexGrow": 1,
+        "flexShrink": 1,
+        "flexBasis": 0,
         "fontSize": 12,
         "semantic": "span"
       },
@@ -2512,6 +2521,9 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
           "bottom": 12,
           "left": 12
         },
+        "flexGrow": 1,
+        "flexShrink": 1,
+        "flexBasis": 0,
         "backgroundColor": "#eef4fb",
         "borderWidth": 1,
         "borderColor": "#d6e4f5",
@@ -2541,6 +2553,9 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
           "bottom": 12,
           "left": 12
         },
+        "flexGrow": 1,
+        "flexShrink": 1,
+        "flexBasis": 0,
         "backgroundColor": "#e8f7ee",
         "borderWidth": 1,
         "borderColor": "#cdeeda",
@@ -2807,6 +2822,9 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
       {
         "id": 33,
         "parentId": 32,
+        "flexGrow": 1,
+        "flexShrink": 1,
+        "flexBasis": 0,
         "borderRadius": 8,
         "overflow": "hidden",
         "borderWidth": 1,
@@ -2829,6 +2847,9 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
       {
         "id": 35,
         "parentId": 32,
+        "flexGrow": 1,
+        "flexShrink": 1,
+        "flexBasis": 0,
         "borderRadius": 8,
         "overflow": "hidden",
         "borderWidth": 1,
@@ -8282,6 +8303,9 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
         "parentId": 12,
         "display": "flex",
         "alignItems": "center",
+        "flexGrow": 1,
+        "flexShrink": 1,
+        "flexBasis": 0,
         "semantic": "div"
       },
       {
@@ -8387,6 +8411,9 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
           "bottom": 4,
           "left": 4
         },
+        "flexGrow": 1,
+        "flexShrink": 1,
+        "flexBasis": 0,
         "semantic": "p-scroll"
       },
       {
@@ -8512,6 +8539,9 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
       {
         "id": 35,
         "parentId": 34,
+        "flexGrow": 0,
+        "flexShrink": 0,
+        "flexBasis": 232,
         "height": 80,
         "display": "flex",
         "alignItems": "center",

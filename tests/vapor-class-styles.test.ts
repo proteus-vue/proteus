@@ -448,3 +448,39 @@ describe('★批次 6 · flex-wrap（引擎闭合集 + 编译折叠）', () => {
     expect((n!.style as { flexWrap?: string }).flexWrap).toBe('wrap')
   })
 })
+
+// ★★★批次 7（CSS 兼容对齐 · flex 简写）：flex → flexGrow/flexShrink/flexBasis——2026-10-04
+describe('★批次 7 · flex 简写（展开到引擎已支持的三字段）', () => {
+  it('① `flex: <n>` ⇒ grow=n, shrink=1, basis=0（CSS 语义）', () => {
+    expect(parseStaticStyle('flex: 1', () => {})).toEqual({ flexGrow: 1, flexShrink: 1, flexBasis: 0 })
+    expect(parseStaticStyle('flex: 2', () => {})).toEqual({ flexGrow: 2, flexShrink: 1, flexBasis: 0 })
+  })
+
+  it('② `flex: <g> <s> [<b>]` 三值形态', () => {
+    expect(parseStaticStyle('flex: 1 0 auto', () => {}), 'auto basis 略过').toEqual({ flexGrow: 1, flexShrink: 0 })
+    expect(parseStaticStyle('flex: 2 1 40px', () => {})).toEqual({ flexGrow: 2, flexShrink: 1, flexBasis: 40 })
+  })
+
+  it('③ 关键字 none/auto', () => {
+    expect(parseStaticStyle('flex: none', () => {})).toEqual({ flexGrow: 0, flexShrink: 0 })
+    expect(parseStaticStyle('flex: auto', () => {})).toEqual({ flexGrow: 1, flexShrink: 1 })
+  })
+
+  it('④ 非法值 ⇒ 诊断跳过', () => {
+    const d: string[] = []
+    expect(parseStaticStyle('flex: bogus', (m) => d.push(m))).toEqual({})
+    expect(d.some((m) => m.includes('flex'))).toBe(true)
+  })
+
+  it('⑤ 端到端：flex: 1 经 <style> class 折进节点 style', () => {
+    const sfc = `<template><view class="grow">x</view></template>
+<script setup>const z = 1</script>
+<style>
+.grow { flex: 1 }
+</style>`
+    const r = buildLayoutTemplate(sfc, 'pages/g.vue')
+    const n = r.template.nodes.find((x) => (x.style as { flexGrow?: number }).flexGrow)
+    expect((n!.style as { flexGrow?: number }).flexGrow).toBe(1)
+    expect((n!.style as { flexShrink?: number }).flexShrink).toBe(1)
+  })
+})
