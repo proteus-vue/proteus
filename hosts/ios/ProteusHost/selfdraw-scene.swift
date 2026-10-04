@@ -627,6 +627,7 @@ final class SelfDrawView: UIView {
             tl.fontSize = fs
             let textCg = (style["color"] as? String).flatMap(parseHexColor)?.cgColor ?? UIColor.white.cgColor
             tl.foregroundColor = textCg
+            tl.string = textLayerString(text, style: style, font: ufont, color: textCg)
             // ★记文字色快照（复位目标；见 `layerOriginalTextColor` 注释）
             layerOriginalTextColor[nodeId] = textCg
             tl.alignmentMode = alignmentMode(style["textAlign"] as? String)
@@ -2077,7 +2078,12 @@ final class SelfDrawView: UIView {
         for (k, v) in updates {
             guard let id = Int(k), let text = v as? String, let layer = layersById[id] else { continue }
             if let tl = layer as? CATextLayer {
-                tl.string = text
+                // ★批次 20：按 meta 样式重建（声明字距时用带 kern 的富文本，避免纯文本清掉 kern）
+                let m = metaByNodeId[id] ?? [:]
+                let uf = ProteusTextAdapter.font(size: (m["fontSize"] as? CGFloat) ?? 14,
+                                                 weight: (m["fontWeight"] as? CGFloat) ?? 400,
+                                                 family: (m["fontFamily"] as? String) ?? "system")
+                tl.string = textLayerString(text, style: m, font: uf, color: tl.foregroundColor ?? UIColor.white.cgColor)
                 applied += 1
             }
             // 更新 meta（层 dump / 诊断读它）
@@ -2392,6 +2398,11 @@ final class SelfDrawView: UIView {
     /// ★批次 13：取某节点建层时记录的 `lineHeight`（文本度量用——与绘制同源）
     func lineHeightOf(id: Int) -> String? {
         metaByNodeId[id]?["lineHeight"] as? String
+    }
+
+    /// ★批次 20：字距（px）——度量与绘制同源。
+    func letterSpacingOf(id: Int) -> CGFloat {
+        (metaByNodeId[id]?["letterSpacing"] as? Double).map { CGFloat($0) } ?? 0
     }
 
     /// ★★**层序对账**（⚠ **设计有误，仅作诊断读数——勿当判据**，见下）
@@ -2940,6 +2951,7 @@ final class SelfDrawView: UIView {
                 tl.fontSize = fs
                 tl.foregroundColor = (style["color"] as? String).flatMap(parseHexColor)?.cgColor
                     ?? UIColor.white.cgColor
+                tl.string = textLayerString(text, style: style, font: ProteusTextAdapter.font(size: fs, weight: fw, family: (style["fontFamily"] as? String) ?? "system"), color: (style["color"] as? String).flatMap(parseHexColor)?.cgColor ?? UIColor.white.cgColor)
                 tl.alignmentMode = alignmentMode(style["textAlign"] as? String)
                 tl.truncationMode = ((style["textOverflow"] as? String) == "ellipsis") ? .end : .none  // ★批次 16：text-overflow（仅 ellipsis 截断，其余 clip 不省略）
                 tl.isWrapped = false
@@ -2988,6 +3000,16 @@ final class SelfDrawView: UIView {
         let r = pct * min(size.width, size.height)
         layer.cornerRadius = r
         layer.masksToBounds = (style["boxShadow"] as? [String: Any]) == nil
+    }
+
+    /// ★批次 20（CSS 兼容对齐 · 以 Web 为基准）：文本层的 `string` 值——声明 `letterSpacing` 时用
+    ///   带 `kern` 的 `NSAttributedString`（字距真生效）；未声明 ⇒ 返回原字符串（零行为变化）。
+    private func textLayerString(_ text: String, style: [String: Any], font: UIFont, color: CGColor) -> Any {
+        guard let raw = style["letterSpacing"],
+              let ls = (raw as? Double).map({ CGFloat($0) }) ?? (raw as? CGFloat), ls != 0 else { return text }
+        return NSAttributedString(string: text, attributes: [
+            .kern: ls, .font: font, .foregroundColor: UIColor(cgColor: color),
+        ])
     }
 
     /// ★批次 5（CSS 兼容对齐 · 边框）：uniform 边框 → `CALayer.borderWidth/borderColor`。
@@ -3407,7 +3429,7 @@ final class SelfDrawBridge: NSObject, SelfDrawExports {
             let fs = (n["fontSize"] as? Double).map { CGFloat($0) } ?? 14
             let fw = (n["fontWeight"] as? Double).map { CGFloat($0) } ?? 400
             let fam = (n["fontFamily"] as? String) ?? "system"
-            let sz = ProteusTextAdapter.measureText(text, fontSize: fs, fontWeight: fw, fontFamily: fam)
+            let sz = ProteusTextAdapter.measureText(text, fontSize: fs, fontWeight: fw, fontFamily: fam, letterSpacing: (n["letterSpacing"] as? Double).map { CGFloat($0) } ?? 0)
             textMeasures["\(id)"] = ["width": Double(sz.width), "height": Double(sz.height)]
         }
         let req: [String: Any] = [
@@ -3685,7 +3707,7 @@ final class SelfDrawBridge: NSObject, SelfDrawExports {
                 let fw = (view.fontWeightOf(id: id)).map { CGFloat($0) } ?? 400
                 // ★字族也取宿主 meta（与绘制同源）——漏了它 ⇒ 度量的字体与绘制的字体不同
                 let fam = view.fontFamilyOf(id: id) ?? "system"
-                let sz = ProteusTextAdapter.measureText(text, fontSize: fs, fontWeight: fw, fontFamily: fam, lineHeight: view.lineHeightOf(id: id))
+                let sz = ProteusTextAdapter.measureText(text, fontSize: fs, fontWeight: fw, fontFamily: fam, lineHeight: view.lineHeightOf(id: id), letterSpacing: view.letterSpacingOf(id: id))
                 measures["\(id)"] = ["width": Double(sz.width), "height": Double(sz.height)]
             }
         }
@@ -3836,7 +3858,7 @@ final class SelfDrawBridge: NSObject, SelfDrawExports {
                     let fw = (n["fontWeight"] as? Double).map { CGFloat($0) } ?? 400
                     let fam = (n["fontFamily"] as? String) ?? "system"
                     let lh = n["lineHeight"] as? String
-                    let sz = ProteusTextAdapter.measureText(text, fontSize: fontSize, fontWeight: fw, fontFamily: fam, lineHeight: lh)
+                    let sz = ProteusTextAdapter.measureText(text, fontSize: fontSize, fontWeight: fw, fontFamily: fam, lineHeight: lh, letterSpacing: (n["letterSpacing"] as? Double).map { CGFloat($0) } ?? 0)
                     measures["\(id)"] = ["width": Double(sz.width), "height": Double(sz.height)]
                 }
             }
@@ -5303,7 +5325,7 @@ final class SelfDrawBridge: NSObject, SelfDrawExports {
                 let fw = (n["fontWeight"] as? Double).map { CGFloat($0) } ?? 400
                 let fam = (n["fontFamily"] as? String) ?? "system"
                 let lh = n["lineHeight"] as? String
-                let sz = ProteusTextAdapter.measureText(text, fontSize: fs, fontWeight: fw, fontFamily: fam, lineHeight: lh)
+                let sz = ProteusTextAdapter.measureText(text, fontSize: fs, fontWeight: fw, fontFamily: fam, lineHeight: lh, letterSpacing: (n["letterSpacing"] as? Double).map { CGFloat($0) } ?? 0)
                 measures["\(id)"] = ["width": Double(sz.width), "height": Double(sz.height)]
             }
             root["textMeasures"] = measures
@@ -5773,7 +5795,7 @@ final class SelfDrawBridge: NSObject, SelfDrawExports {
             let fw = (n["fontWeight"] as? Double).map { CGFloat($0) } ?? 400
             let fam = (n["fontFamily"] as? String) ?? "system"
             let lh = n["lineHeight"] as? String
-            let sz = ProteusTextAdapter.measureText(text, fontSize: fontSize, fontWeight: fw, fontFamily: fam, lineHeight: lh)
+            let sz = ProteusTextAdapter.measureText(text, fontSize: fontSize, fontWeight: fw, fontFamily: fam, lineHeight: lh, letterSpacing: (n["letterSpacing"] as? Double).map { CGFloat($0) } ?? 0)
             textMeasures["\(id)"] = ["width": Double(sz.width), "height": Double(sz.height)]
         }
         let measureMs = (CFAbsoluteTimeGetCurrent() - tMeasure0) * 1000

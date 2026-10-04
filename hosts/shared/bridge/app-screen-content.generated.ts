@@ -5344,6 +5344,24 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
         "textAlign": "center",
         "text": "max-width:100% ⇒ 不溢出父容器",
         "semantic": "div"
+      },
+      {
+        "id": 59,
+        "parentId": 0,
+        "margin": {
+          "top": 16,
+          "bottom": 16
+        },
+        "marginAuto": {
+          "right": true,
+          "left": true
+        },
+        "letterSpacing": 4,
+        "color": "#1a7af8",
+        "fontSize": 14,
+        "textAlign": "center",
+        "text": "LETTER SPACING 字距",
+        "semantic": "div"
       }
     ]
   },
@@ -10837,6 +10855,7 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
         "fontSize": 20,
         "fontWeight": 700,
         "color": "#e0f2fe",
+        "letterSpacing": 2,
         "text": "SVG 能量核心",
         "semantic": "text"
       },
@@ -11505,6 +11524,7 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
         "fontSize": 20,
         "fontWeight": 700,
         "color": "#e0f2fe",
+        "letterSpacing": 2,
         "text": "SVG 骨骼动画",
         "semantic": "text"
       },

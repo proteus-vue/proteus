@@ -274,6 +274,7 @@ struct SfcStyle {
     int fontWeight = 400;        // ★批次 3：字重（`font-weight` 折叠值）
     std::string textAlign;       // ★批次 4：文本水平对齐（left/center/right）
     double lineHeight = 0;       // ★批次 13：行盒高（设计单位；0 = 未声明）
+    double letterSpacing = 0;    // ★批次 20：字距（设计单位 px；0 = 未声明）
     int textOverflowEllipsis = 0; // ★批次 16：text-overflow:ellipsis（单行截断）
     double borderWidth = 0;      // ★批次 5：uniform 边框宽度
     uint32_t borderColor = 0;    // ★批次 5：uniform 边框颜色
@@ -386,6 +387,7 @@ static void parseSfcStyles(const std::string& fixture, std::vector<std::pair<int
         jstr(item.c_str(), item.size(), "textAlign", &st.textAlign);
         { std::string to; if (jstr(item.c_str(), item.size(), "textOverflow", &to) && to == "ellipsis") st.textOverflowEllipsis = 1; }
         { std::string lhTok; if (jstr(item.c_str(), item.size(), "lineHeight", &lhTok)) st.lineHeight = lineHeightDesignPx(lhTok, st.fontSize); }
+        jnum(item.c_str(), item.size(), "letterSpacing", &st.letterSpacing);
         jnum(item.c_str(), item.size(), "borderWidth", &st.borderWidth);
         { std::string bcCss; if (jstr(item.c_str(), item.size(), "borderColor", &bcCss)) st.borderColor = hexToArgb(bcCss); }
         jstr(item.c_str(), item.size(), "text", &st.text);
@@ -444,7 +446,7 @@ static double lineHeightDesignPx(const std::string& token, double fontSizeDesign
     }
 }
 
-static void measureTextTypoPx(const std::string& text, double fontPx, double* outW, double* outH) {
+static void measureTextTypoPx(const std::string& text, double fontPx, double* outW, double* outH, double letterSpacingPx = 0) {
     *outW = 0;
     *outH = 0;
     if (text.empty() || fontPx <= 0) return;
@@ -453,6 +455,8 @@ static void measureTextTypoPx(const std::string& text, double fontPx, double* ou
     OH_Drawing_TypographyStyle* ts = OH_Drawing_CreateTypographyStyle();
     OH_Drawing_TextStyle* tstyle = OH_Drawing_CreateTextStyle();
     OH_Drawing_SetTextStyleFontSize(tstyle, fontPx);
+    // ★批次 20：字距（物理 px）——影响文本宽度，必须进度量
+    if (letterSpacingPx != 0) OH_Drawing_SetTextStyleLetterSpacing(tstyle, letterSpacingPx);
     OH_Drawing_TypographyCreate* handler = OH_Drawing_CreateTypographyHandler(ts, fc);
     if (handler != nullptr) {
         OH_Drawing_TypographyHandlerPushTextStyle(handler, tstyle);
@@ -487,7 +491,7 @@ static uint64_t layoutSfcFixture(const std::string& fixture, double vpW, double 
     for (const auto& kv : stylesForMeasure) {
         if (kv.second.text.empty()) continue;
         double wpx = 0, hpx = 0;
-        measureTextTypoPx(kv.second.text, kv.second.fontSize * density, &wpx, &hpx);
+        measureTextTypoPx(kv.second.text, kv.second.fontSize * density, &wpx, &hpx, kv.second.letterSpacing * density);
         char mb[160];
         snprintf(mb, sizeof(mb), "%s\"%d\":{\"width\":%.4f,\"height\":%.4f}",
                  mCount > 0 ? "," : "", kv.first, wpx / density, hpx / density);
@@ -1445,6 +1449,7 @@ static napi_value SfcStressCommands(napi_env env, napi_callback_info info) {
             if (!st.textAlign.empty()) arr += ",\"textAlign\":\"" + jsonEscape(st.textAlign) + "\"";
             if (st.textOverflowEllipsis) arr += ",\"textOverflowEllipsis\":1";
             if (st.lineHeight > 0) { char lb2[48]; snprintf(lb2, sizeof(lb2), ",\"lineHeightPx\":%.2f", st.lineHeight * density); arr += lb2; }
+            if (st.letterSpacing != 0) { char lsb[48]; snprintf(lsb, sizeof(lsb), ",\"letterSpacing\":%.2f", st.letterSpacing * density); arr += lsb; }
             arr += ",\"text\":\"" + jsonEscape(st.text) + "\"";
         }
         arr += "}";
@@ -1732,7 +1737,7 @@ static std::string vaporMountImpl(const std::string& treeJson) {
     for (const auto& kv : styles) {
         if (kv.second.text.empty()) continue;
         double wpx = 0, hpx = 0;
-        measureTextTypoPx(kv.second.text, kv.second.fontSize * g_vaporDensity, &wpx, &hpx);
+        measureTextTypoPx(kv.second.text, kv.second.fontSize * g_vaporDensity, &wpx, &hpx, kv.second.letterSpacing * g_vaporDensity);
         char mb[200];
         snprintf(mb, sizeof(mb), "%s\"%d\":{\"width\":%.4f,\"height\":%.4f}",
                  mc > 0 ? "," : "", kv.first, wpx / g_vaporDensity, hpx / g_vaporDensity);
@@ -1785,6 +1790,7 @@ static std::string vaporMountImpl(const std::string& treeJson) {
             if (!st.textAlign.empty()) cmds += ",\"textAlign\":\"" + jsonEscape(st.textAlign) + "\"";
             if (st.textOverflowEllipsis) cmds += ",\"textOverflowEllipsis\":1";
             if (st.lineHeight > 0) { char lb2[48]; snprintf(lb2, sizeof(lb2), ",\"lineHeightPx\":%.2f", st.lineHeight * g_vaporDensity); cmds += lb2; }
+            if (st.letterSpacing != 0) { char lsb[48]; snprintf(lsb, sizeof(lsb), ",\"letterSpacing\":%.2f", st.letterSpacing * g_vaporDensity); cmds += lsb; }
             cmds += ",\"text\":\"" + jsonEscape(st.text) + "\"";
         }
         // ★★绘制四通道进指令（2026-10-03）：渲染层据这些键**真正建出**通道
@@ -4212,7 +4218,8 @@ static napi_value AppScreenCommands(napi_env env, napi_callback_info info) {
         jnum(it.c_str(), it.size(), "id", &id);
         jnum(it.c_str(), it.size(), "fontSize", &fs);
         double wpx = 0, hpx = 0;
-        measureTextTypoPx(tx, fs * density, &wpx, &hpx);
+        double lsDesign = 0; jnum(it.c_str(), it.size(), "letterSpacing", &lsDesign);   // ★批次 20：字距（设计 px）
+        measureTextTypoPx(tx, fs * density, &wpx, &hpx, lsDesign * density);
         // ★批次 13：line-height ⇒ 行盒高覆盖字形高
         std::string lhTok; jstr(it.c_str(), it.size(), "lineHeight", &lhTok);
         double lhDesign = lineHeightDesignPx(lhTok, fs);
@@ -4309,6 +4316,8 @@ static napi_value AppScreenCommands(napi_env env, napi_callback_info info) {
                     char lb[48]; snprintf(lb, sizeof(lb), ",\"lineHeightPx\":%.2f", lhDesign * density);
                     arr += lb;
                 }
+            // ★批次 20：字距（设计 px ⇒ 物理 px）
+            { double lsD = 0; jnum(it.c_str(), it.size(), "letterSpacing", &lsD); if (lsD != 0) { char lsb[48]; snprintf(lsb, sizeof(lsb), ",\"letterSpacing\":%.2f", lsD * density); arr += lsb; } }
             }
             arr += ",\"text\":\"" + jsonEscape(text) + "\"";
         }

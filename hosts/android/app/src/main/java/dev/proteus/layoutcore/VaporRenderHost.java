@@ -1160,7 +1160,7 @@ final class VaporRenderHost {
     private static final String[] LEN_SCALARS = {
         "width", "height", "minWidth", "maxWidth", "minHeight", "maxHeight",
         "top", "left", "right", "bottom", "gap", "flexBasis",
-        "fontSize", "borderRadius", "borderWidth", "perspective",
+        "fontSize", "letterSpacing", "borderRadius", "borderWidth", "perspective",
         "borderTopLeftRadius", "borderTopRightRadius", "borderBottomLeftRadius", "borderBottomRightRadius",
         "marginTop", "marginRight", "marginBottom", "marginLeft",
         "paddingTop", "paddingRight", "paddingBottom", "paddingLeft",
@@ -1259,6 +1259,9 @@ final class VaporRenderHost {
             //   "度量用一支字体/绘制用另一支"的坑）。缺省 400 = normal ⇒ 既有路径零变化。
             int mw = (int) spec.optDouble("fontWeight", 400);
             tp.setTypeface(ProteusHostView.typefaceOf(null, mw, null));
+            // ★批次 20：字距（px ⇒ em；与绘制同源，否则度量窄、绘制宽）
+            float ls = (float) spec.optDouble("letterSpacing", 0);
+            if (ls != 0f && fs > 0f) tp.setLetterSpacing(ls / fs);
             float w = tp.measureText(t);
             android.graphics.Paint.FontMetrics fm = tp.getFontMetrics();
             float glyphH = fm.descent - fm.ascent;   // ★真实字体度量（原 fs×1.4 近似已删）
@@ -1364,7 +1367,9 @@ final class VaporRenderHost {
             int ta = alignOf(spec.optString("textAlign", null));
             // ★批次 13：行高（px；0 = 缺省）
             float lh = lineHeightPxOf(spec, fs);
-            return new ProteusHostView.Cmd(x, y, w, h, color, t, fs, textColor, radius, grad, glowSpec, maskSpec, fw, ta, bw, bc, shadowSpec, lh);
+            // ★批次 20：字距（px）
+            float ls = (float) spec.optDouble("letterSpacing", 0);
+            return new ProteusHostView.Cmd(x, y, w, h, color, t, fs, textColor, radius, grad, glowSpec, maskSpec, fw, ta, bw, bc, shadowSpec, lh, ls);
         }
         return new ProteusHostView.Cmd(x, y, w, h, color, null, 0f, 0, radius, grad, glowSpec, maskSpec, 400, 0, bw, bc, shadowSpec);
     }
