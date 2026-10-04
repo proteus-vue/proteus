@@ -210,6 +210,16 @@ export interface SubscriptionTable {
     /** 表达式源码（诊断/对账） */
     expr: string
   }>
+  /**
+   * ★★★**动态 `:class` 的自匹配类规则**（批次 30，2026-10-04）——编译期从 `<style>` 投影。
+   *
+   * 【为什么必须单列（本仓实测的静默失效）】`:class="{on: open}"` 的绑定**已发射**（`paint.class`），
+   *   但运行时**无解析**（类名集 → 样式字段）⇒ 动态类切换不生效 ⇒ 开发者只能用静态 class + 手写 :style。
+   *   ⇒ 单列本表：运行期收 `paint.class` 值 → 解析活跃类名集 → 匹配本表 → 逐字段下发（复用绘制通道）。
+   * 【★只投影**自匹配**规则】选择器为**单段、纯类**（`.a` / `.a.b`，无 tag、无后代/子组合）——
+   *   动态情境无祖先上下文；含 tag/组合的规则如实**不投影**（由静态路径处理其静态情形）。
+   */
+  classRules?: DynamicClassRule[]
   /** 未走 L1 的槽位（诊断：解释"为什么这个绑定没有加速"） */
   l0Slots: Array<{ slotId: number; nodeId: number; propKey: string; reason: string }>
   /** 统计（棘轮 / 覆盖率度量用） */
@@ -219,4 +229,60 @@ export interface SubscriptionTable {
     /** L1 覆盖率 = l1 / (l1 + l0)（§10 验收：≥70%） */
     l1Rate: number
   }
+}
+
+/** ★批次 30：动态 `:class` 的自匹配类规则（见 SubscriptionTable.classRules）。 */
+export interface DynamicClassRule {
+  /** 必须**同时具备**的类名（复合 `.a.b` ⇒ ['a','b']；恒非空） */
+  classes: string[]
+  /** 该类规则折叠出的引擎字段声明（源序；字段名与内核/宿主契约同——layout.* / paint.* 由消费端分派） */
+  decls: Record<string, unknown>
+  /** 特异性 `(id, class, tag)`（层叠排序用） */
+  specificity: [number, number, number]
+  /** 来自 `!important` 的字段（层叠排序优先） */
+  important: string[]
+  /** 源序 */
+  order: number
+}
+
+
+/**
+ * ★批次 30（对齐 Web · 削减胶水）：**动态 `:class` 解析**（`onPaintProp` 拿到 `class` 时调用）。
+ *
+ * 【语义（对齐 Vue）】`:class` 的值可为：对象（truthy 键为类）/ 数组（元素递归）/ 字符串（空白切分）。
+ *   合成**活跃类名集** → 匹配自匹配规则（`rules`）→ 按 (特异性, 源序) 升序覆盖 → 返回引擎字段声明。
+ *
+ * 【通道】返回的字段名与内核/宿主契约同名（`layout.*` / `paint.*` 由调用方分派——见 runtime 的绘制出口）。
+ *   空集 ⇒ `{}`（不改任何字段）。
+ */
+export function resolveDynamicClasses(
+  classValue: unknown,
+  rules: readonly DynamicClassRule[],
+): Record<string, unknown> {
+  const active = collectActiveClasses(classValue)
+  if (active.size === 0 || rules.length === 0) return {}
+  const normal: Record<string, unknown> = {}
+  const important: Record<string, unknown> = {}
+  for (const r of rules) {                       // rules 已按 (特异性, 源序) 升序 ⇒ 顺序覆盖 = 后胜
+    if (r.classes.length === 0) continue
+    if (!r.classes.every((c) => active.has(c))) continue
+    for (const [k, v] of Object.entries(r.decls)) {
+      if (r.important.includes(k)) important[k] = v
+      else normal[k] = v
+    }
+  }
+  return { ...normal, ...important }
+}
+
+/** 收集活跃类名（对象→truthy 键；数组→递归；字符串→空白切分；其余忽略）。 */
+export function collectActiveClasses(v: unknown): Set<string> {
+  const out = new Set<string>()
+  const walk = (x: unknown): void => {
+    if (!x) return
+    if (typeof x === 'string') { for (const c of x.split(/\s+/)) if (c) out.add(c); return }
+    if (Array.isArray(x)) { for (const e of x) walk(e); return }
+    if (typeof x === 'object') { for (const [k, vv] of Object.entries(x as Record<string, unknown>)) if (vv) out.add(k); return }
+  }
+  walk(v)
+  return out
 }

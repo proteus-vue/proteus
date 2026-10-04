@@ -14,6 +14,7 @@
 import { describe, it, expect } from 'vitest'
 import { buildVaporSubscriptions, buildLayoutTemplate } from '@proteus-vue/compiler'
 import { ListRegistry, OpCode, PropKeyTable, StringPool, SlotRuntime, VaporRuntime, decodeOps, instantiateTemplate } from '@proteus-vue/slot-runtime'
+import { resolveDynamicClasses } from '@proteus-vue/slot-runtime'
 import type { EvalContext } from '@proteus-vue/slot-runtime'
 import type { LayoutTemplate, SubscriptionTable } from '@proteus-vue/slot-runtime'
 
@@ -151,6 +152,57 @@ describe('V4 · ★全量 SFC → 模板产物', () => {
       r.diagnostics.some((d) => d.message.includes('margin-left: 5%')),
       'margin 百分比仍应如实诊断（能力边界不扩大）',
     ).toBe(true)
+  })
+})
+
+describe('★批次 30 · 动态 :class（对齐 Web · 削减胶水）', () => {
+  const DYN_SFC = [
+    '<template><view class="base" :class="{ on: open }"><text>x</text></view></template>',
+    '<script setup>import { ref } from \'vue\'\nconst open = ref(true)</script>',
+    '<style>\n.base { padding: 4px }\n.on { background-color: #ff0000; border-radius: 8px }\n</style>',
+  ].join('\n')
+  const data: Record<string, unknown> = { open: true }
+  const read = (n: string): unknown => data[n]
+
+  it('① 编译器投影：只投影**自匹配纯类**规则（.base / .on）', () => {
+    const { table } = buildVaporSubscriptions(DYN_SFC, 'dyn.vue')
+    expect(Array.isArray(table.classRules), '有动态 :class ⇒ 发射 classRules').toBe(true)
+    const cls = (table.classRules ?? []).map((r) => r.classes.join('.'))
+    expect(cls).toContain('base')
+    expect(cls).toContain('on')
+  })
+
+  it('② 运行期解析：对象/数组/字符串三形态', () => {
+    const rules = buildVaporSubscriptions(DYN_SFC, 'dyn.vue').table.classRules ?? []
+    expect(resolveDynamicClasses({ on: true }, rules)).toEqual({ backgroundColor: '#ff0000', borderRadius: 8 })
+    expect(resolveDynamicClasses({ on: false }, rules), '关掉 ⇒ 空').toEqual({})
+    expect(resolveDynamicClasses(['on'], rules)).toEqual({ backgroundColor: '#ff0000', borderRadius: 8 })
+    expect(resolveDynamicClasses('on', rules)).toEqual({ backgroundColor: '#ff0000', borderRadius: 8 })
+  })
+
+  it('③ 首帧回填：open=true ⇒ 节点带 on 类字段', () => {
+    const tpl = buildLayoutTemplate(DYN_SFC, 'dyn.vue').template
+    const { table } = buildVaporSubscriptions(DYN_SFC, 'dyn.vue')
+    const inst = instantiateTemplate(tpl, { viewport: { width: 390, height: 844 }, read, table, registry: new ListRegistry() })
+    const root = inst.nodes.find((n) => n.id === 0)!
+    expect((root as { backgroundColor?: string }).backgroundColor, '动态类 on ⇒ 背景红（首帧）').toBe('#ff0000')
+    expect((root as { borderRadius?: number }).borderRadius, '动态类 on ⇒ 圆角 8').toBe(8)
+  })
+
+  it('④ 运行期写：open 翻转 ⇒ 下发 / 清除字段（onPaintProp 记录）', () => {
+    const { table } = buildVaporSubscriptions(DYN_SFC, 'dyn.vue')
+    const rt = new SlotRuntime(new PropKeyTable(), new StringPool(), () => {})
+    const log: Array<[number, string, unknown]> = []
+    const vapor = new VaporRuntime(
+      table, rt, VaporRuntime.buildEvaluators(table.evaluators), new ListRegistry(),
+      undefined, 0, undefined, (id, key, val) => log.push([id, key, val]),
+    )
+    vapor.writeSlotsOfSource('open', { read })
+    expect(log.some(([, k, v]) => k === 'paint.backgroundColor' && v === '#ff0000'), 'open=true ⇒ 下发背景红').toBe(true)
+    log.length = 0
+    data.open = false
+    vapor.writeSlotsOfSource('open', { read })
+    expect(log.some(([, k, v]) => k === 'paint.backgroundColor' && v === undefined), 'open=false ⇒ 清除背景').toBe(true)
   })
 })
 

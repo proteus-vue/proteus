@@ -153,6 +153,9 @@ export function buildVaporSubscriptions(source: string, filename = 'anonymous.vu
   }
 
   const bindings = collectTemplateBindings(source, filename, opts.compat)
+  // ★批次 30（对齐 Web · 削减胶水）：动态 `:class`——规则表（下面块内捕获）+ 是否真的用到
+  let tplDynamicClassRules: import('./template').DynamicClassRule[] | undefined
+  const hasDynamicClass = bindings.some((b) => b.propKey === 'paint.class')
   /* ═══════════ ★★★P1-3 生命周期诊断（2026-10-03）═══════════
    *
    * 【为什么必须有（本仓实测的静默缺陷）】Vapor 的分工是"**端上不执行 script**"
@@ -203,6 +206,8 @@ export function buildVaporSubscriptions(source: string, filename = 'anonymous.vu
   const textSegsByNode = new Map<number, TextSegment[]>()
   {
     const tplRes = buildLayoutTemplate(source, filename, opts.compat, opts.tokens)
+    // ★批次 30：捕获动态类规则（同一次模板产物，零额外开销）
+    tplDynamicClassRules = tplRes.dynamicClassRules
     for (const n of tplRes.template.nodes) {
       if (n.textSegments && n.textSegments.length > 0) textSegsByNode.set(n.id, n.textSegments)
     }
@@ -668,6 +673,8 @@ export function buildVaporSubscriptions(source: string, filename = 'anonymous.vu
       ...(slotScopedSlots.length > 0 ? { slotScopedSlots } : {}),
       // ★P3 动态组件 `:is`（无 ⇒ 不产出字段）
       ...(componentIs.length > 0 ? { componentIs } : {}),
+      // ★批次 30：动态 `:class` 自匹配类规则（**仅在存在动态 :class 且规则非空时**发射——既有产物逐字节不变）
+      ...(hasDynamicClass && (tplDynamicClassRules?.length ?? 0) > 0 ? { classRules: tplDynamicClassRules } : {}),
       stats: { l1, l0, l1Rate: l1 + l0 === 0 ? 0 : Math.round((l1 / (l1 + l0)) * 10000) / 10000 },
     },
     sources: srcScan.sources,

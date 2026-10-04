@@ -1046,6 +1046,40 @@ export function resolveClassStyles(
   return { styles: { ...normal, ...important }, important: importantKeys } // important 优先
 }
 
+/**
+ * ★批次 30（对齐 Web · 削减胶水）：**动态 `:class` 的自匹配类规则**。
+ *   投影口径：只保留**单段、纯类**规则（`.a` / `.a.b`，无 tag、无后代/子组合）——
+ *   动态情境（运行期才知道活跃类）无祖先上下文；含 tag 或组合的规则如实**不投影**。
+ *   返回按 (特异性, 源序) 升序（运行期「后应用者胜」可直接顺序覆盖）。
+ */
+export interface DynamicClassRule {
+  classes: string[]
+  decls: Record<string, unknown>
+  specificity: [number, number, number]
+  important: string[]
+  order: number
+}
+export function projectDynamicClassRules(rules: ClassStyleRule[]): DynamicClassRule[] {
+  const out: DynamicClassRule[] = []
+  for (const r of rules) {
+    if (r.combinators.length !== 0) continue          // 后代/子组合 ⇒ 无祖先上下文，舍去
+    const seg = r.segments[0]
+    if (!seg || seg.tag || !seg.classes || seg.classes.length === 0) continue  // 需 tag 匹配 或 无类 ⇒ 舍去
+    out.push({
+      classes: [...seg.classes],
+      decls: r.decls,
+      specificity: r.specificity,
+      important: [...r.important],
+      order: r.order,
+    })
+  }
+  out.sort((x, y) => {
+    for (let i = 0; i < 3; i++) { const d = (x.specificity[i] ?? 0) - (y.specificity[i] ?? 0); if (d !== 0) return d }
+    return x.order - y.order
+  })
+  return out
+}
+
 /** 选择器链匹配（从右往左：自身匹配末段，再按组合符回溯祖先） */
 function matchChain(rule: ClassStyleRule, ancestors: StyleMatchNode[], self: StyleMatchNode): boolean {
   const { segments, combinators } = rule
@@ -1667,6 +1701,8 @@ export interface LayoutTemplateResult {
   template: LayoutTemplate
   diagnostics: VaporDiagnostic[]
   ok: boolean
+  /** ★批次 30：投影后的**动态类规则**（仅自匹配、纯类；供动态 `:class` 运行期解析） */
+  dynamicClassRules?: DynamicClassRule[]
 }
 
 export function buildLayoutTemplate(
@@ -2434,5 +2470,5 @@ export function buildLayoutTemplate(
   walk(ast.children ?? [], null)
   const ok = !diagnostics.some((d) => d.severity === 'error')
   // ★产物本身不带诊断（干净形状便于跨端序列化）；诊断放在包装层
-  return { template: { nodes, lists, roots, ok }, diagnostics, ok }
+  return { template: { nodes, lists, roots, ok }, diagnostics, ok, dynamicClassRules: projectDynamicClassRules(classRules) }
 }
