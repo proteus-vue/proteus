@@ -69,6 +69,7 @@ describe('★App CSS 支持面 · ② SSOT 与折叠实现同源（真折叠，�
     // 合法值样例（按需给具体值；未列到的一律用 0——px/数字面）
     const valueOf = (f: string): string => {
       if (f === 'flexDirection') return 'row'
+      if (f === 'flexWrap') return 'wrap'
       if (f === 'justifyContent') return 'center'
       if (f === 'alignItems' || f === 'alignSelf') return 'center'
       if (f === 'display') return 'flex'

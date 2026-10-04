@@ -77,7 +77,8 @@
 | at-rule | `@keyframes（动画）` | — | — | absent | L3 | 降级 | unsupported | 块整体剔除（旧实现误当元素选择器）；动画走引擎动画桥（animStart/animTick） |
 | unit | `em / rem / vw / vh / calc / clamp / var()` | — | — | absent | L0 | 编译期折叠 | unsupported | 仅收 px/数字（宽高另支持 %）；其余单位编译期无法在无上下文时求值 ⇒ 诊断跳过 |
 | layout | `display: grid / grid-template-*` | supported | not-listed | absent | L2 | 直映射 | conditional | ★引擎未接：taffy 有完整 Grid 能力但 Rust `Display` 枚举无 Grid、to_taffy 未设置（Profile §3 已定案开放 L2）——加 = 引擎+DTO+taffy 三处；Skyline 端实测退化为 block ⇒ 有条件可用 |
-| layout | `flex-wrap / align-content` | supported | supported | absent | L2 | 直映射 | conditional | 引擎无字段（Yoga 亦排除）——多处改动 |
+| layout | `flex-wrap` | supported | supported | supported | L2 | 直映射 | universal | ★批次 6（2026-10-04）：引擎新增 `FlexWrap`（Rust `LStyle.flex_wrap` + `NodeDto` + taffy `flex_wrap` 映射，闭合集 nowrap/wrap/wrap-reverse）；编译器入 APP_LAYOUT_FIELDS + APP_ENUM_VALUES + Android LAYOUT_KEYS 白名单。引擎行为测试 tests/flex_wrap.rs（wrap 换行/nowrap 不换行） |
+| layout | `align-content` | supported | supported | absent | L2 | 直映射 | conditional | 引擎无字段（多行弹性容器的行间对齐；需引擎+DTO+taffy）——后续批次 |
 | layout | `right / bottom` | supported | supported | absent | L2 | 直映射 | conditional | 引擎 LStyle 无 right/bottom（恒 auto）——加 = 引擎+DTO+taffy |
 | layout | `order` | supported | supported | absent | L2 | 直映射 | conditional | 引擎无字段 |
 | layer | `z-index` | supported | supported | absent | L3 | 语义组件 | conditional | 本仓已定案**语义化**（layer="content\|navigation\|mask\|popout"，见 contracts/layers.ts）——数值禁止（跨端无意义 + 推高合成层内存） |
@@ -104,7 +105,7 @@
 | `后代 / 子组合 .a .b / .a > .b` | — | — | supported | C1：祖先类链匹配 |
 | `特异性 / 继承 / !important` | — | — | supported | ★批次 1（2026-10-04）：规则按 (!important, 特异性 (id,class,tag), 源序) 层叠；color/fontSize 沿树继承（CSS 可继承子 |
 | `display: grid / grid-template-*` | supported | not-listed | absent | ★引擎未接：taffy 有完整 Grid 能力但 Rust `Display` 枚举无 Grid、to_taffy 未设置（Profile §3 已定案开放 L2）——加 = 引擎 |
-| `flex-wrap / align-content` | supported | supported | absent | 引擎无字段（Yoga 亦排除）——多处改动 |
+| `align-content` | supported | supported | absent | 引擎无字段（多行弹性容器的行间对齐；需引擎+DTO+taffy）——后续批次 |
 | `right / bottom` | supported | supported | absent | 引擎 LStyle 无 right/bottom（恒 auto）——加 = 引擎+DTO+taffy |
 | `order` | supported | supported | absent | 引擎无字段 |
 | `z-index` | supported | supported | absent | 本仓已定案**语义化**（layer="content\|navigation\|mask\|popout"，见 contracts/layers.ts）——数值禁止（跨端无意义  |

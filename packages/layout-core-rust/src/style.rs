@@ -91,6 +91,21 @@ impl FlexDirection {
     }
 }
 
+/// ★★★批次 6（CSS 兼容对齐 · App 三端）：`flex-wrap` —— 闭合集（taffy 原生支持）。
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "kebab-case")]
+pub enum FlexWrap {
+    Nowrap,
+    Wrap,
+    WrapReverse,
+}
+
+impl Default for FlexWrap {
+    fn default() -> Self {
+        Self::Nowrap
+    }
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "kebab-case")]
 pub enum Position {
@@ -314,6 +329,9 @@ pub struct LStyle {
 
     #[serde(default)]
     pub flex_direction: FlexDirection,
+    /// ★批次 6：`flex-wrap`（`nowrap` / `wrap` / `wrap-reverse`；默认 nowrap）
+    #[serde(default)]
+    pub flex_wrap: FlexWrap,
     /// `justify-content`（字符串形态：`flex-start` / `center` / `space-between` …）
     #[serde(default = "default_justify")]
     pub justify_content: String,
@@ -536,6 +554,7 @@ impl Default for LStyle {
             margin: Edges::ZERO,
             padding: Edges::ZERO,
             flex_direction: FlexDirection::default(),
+            flex_wrap: FlexWrap::default(),
             justify_content: default_justify(),
             align_items: default_align(),
             align_self: None,
