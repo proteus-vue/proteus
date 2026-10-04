@@ -81,6 +81,12 @@ function go(name: 'forms' | 'config-demo' | 'user') {
       <button class="link" @click="go('user')">② router.push → 用户中心（push 路径）</button>
       <p class="nest-tip">进入用户中心后点「个人资料」→ route 面板连续两条嵌套记录</p>
     </div>
+
+    <!-- ★text-overflow:ellipsis 演示（批次 16）：单行超出容器宽 ⇒ 行尾省略号（三端一致，Web 基准） -->
+    <div class="trunc-demo">
+      <h3>文本截断（text-overflow: ellipsis）</h3>
+      <div class="trunc-row">这是一段很长的列表项文本，超过容器宽度时应在行尾以省略号结尾，而不是换行或溢出容器</div>
+    </div>
   </div>
 </template>
 
@@ -135,5 +141,26 @@ function go(name: 'forms' | 'config-demo' | 'user') {
   display: block;
   padding: 6px 0;
   color: #1a7af8;
+}
+/* ★text-overflow:ellipsis 演示（批次 16）——受约束宽度容器 + 单行截断 */
+.trunc-demo {
+  margin: 20px auto;
+  max-width: 300px;
+  padding: 12px 16px;
+  border: 1px dashed #ddd;
+  border-radius: 8px;
+}
+.trunc-demo h3 {
+  margin: 0 0 6px;
+  font-size: 15px;
+}
+.trunc-row {
+  width: 100%;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  text-align: left;
+  color: #666;
+  font-size: 13px;
 }
 </style>

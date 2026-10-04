@@ -8663,6 +8663,50 @@
           "textAlign": "center",
           "text": "\u8FDB\u5165\u7528\u6237\u4E2D\u5FC3\u540E\u70B9\u300C\u4E2A\u4EBA\u8D44\u6599\u300D\u2192 route \u9762\u677F\u8FDE\u7EED\u4E24\u6761\u5D4C\u5957\u8BB0\u5F55",
           "semantic": "p"
+        },
+        {
+          "id": 51,
+          "parentId": 0,
+          "margin": {
+            "top": 20,
+            "bottom": 20
+          },
+          "maxWidth": 300,
+          "padding": {
+            "top": 12,
+            "right": 16,
+            "bottom": 12,
+            "left": 16
+          },
+          "borderRadius": 8,
+          "textAlign": "center",
+          "semantic": "div"
+        },
+        {
+          "id": 52,
+          "parentId": 51,
+          "margin": {
+            "top": 0,
+            "right": 0,
+            "bottom": 6,
+            "left": 0
+          },
+          "fontSize": 15,
+          "textAlign": "center",
+          "text": "\u6587\u672C\u622A\u65AD\uFF08text-overflow: ellipsis\uFF09",
+          "semantic": "h3"
+        },
+        {
+          "id": 53,
+          "parentId": 51,
+          "widthRatio": 1,
+          "overflow": "hidden",
+          "textOverflow": "ellipsis",
+          "textAlign": "left",
+          "color": "#666",
+          "fontSize": 13,
+          "text": "\u8FD9\u662F\u4E00\u6BB5\u5F88\u957F\u7684\u5217\u8868\u9879\u6587\u672C\uFF0C\u8D85\u8FC7\u5BB9\u5668\u5BBD\u5EA6\u65F6\u5E94\u5728\u884C\u5C3E\u4EE5\u7701\u7565\u53F7\u7ED3\u5C3E\uFF0C\u800C\u4E0D\u662F\u6362\u884C\u6216\u6EA2\u51FA\u5BB9\u5668",
+          "semantic": "div"
         }
       ]
     },

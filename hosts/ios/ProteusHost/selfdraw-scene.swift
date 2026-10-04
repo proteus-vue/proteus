@@ -630,7 +630,7 @@ final class SelfDrawView: UIView {
             // ★记文字色快照（复位目标；见 `layerOriginalTextColor` 注释）
             layerOriginalTextColor[nodeId] = textCg
             tl.alignmentMode = alignmentMode(style["textAlign"] as? String)
-            tl.truncationMode = .end
+            tl.truncationMode = ((style["textOverflow"] as? String) == "ellipsis") ? .end : .none  // ★批次 16：text-overflow（仅 ellipsis 截断，其余 clip 不省略）
             // ★contentsScale 必须显式设置：否则 Retina 上文本模糊（CATextLayer 不继承自动缩放）
             tl.contentsScale = UIScreen.main.scale
             tl.isWrapped = false
@@ -2938,7 +2938,7 @@ final class SelfDrawView: UIView {
                 tl.foregroundColor = (style["color"] as? String).flatMap(parseHexColor)?.cgColor
                     ?? UIColor.white.cgColor
                 tl.alignmentMode = alignmentMode(style["textAlign"] as? String)
-                tl.truncationMode = .end
+                tl.truncationMode = ((style["textOverflow"] as? String) == "ellipsis") ? .end : .none  // ★批次 16：text-overflow（仅 ellipsis 截断，其余 clip 不省略）
                 tl.isWrapped = false
                 tl.contentsScale = UIScreen.main.scale
             }

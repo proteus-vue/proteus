@@ -230,7 +230,7 @@
           "skyline": "supported",
           "app": "absent"
         },
-        "why": "字距/白空格走平台文本引擎（不自研）；当前 App 折叠面文本维 = fontSize/color/fontWeight/textAlign/line-height——letter-spacing/white-space 未支持"
+        "why": "字距/白空格走平台文本引擎（不自研）；当前 App 折叠面文本维 = fontSize/color/fontWeight/textAlign/line-height/text-overflow——letter-spacing/white-space 未支持"
       },
       {
         "css": "visibility",
@@ -426,6 +426,7 @@
       "fontWeight",
       "textAlign",
       "lineHeight",
+      "textOverflow",
       "borderRadius",
       "borderColor",
       "borderWidth",
@@ -1188,6 +1189,21 @@
       "supportTier": "universal"
     },
     {
+      "id": "text-overflow",
+      "css": "text-overflow",
+      "category": "text",
+      "compilerFields": [
+        "textOverflow"
+      ],
+      "web": "supported",
+      "skyline": "supported",
+      "app": "supported",
+      "tier": "L1",
+      "strategy": "编译期折叠",
+      "note": "★批次 16（2026-10-04 · ★基准 = Web）：CSS 默认 clip（截断不省略）；ellipsis ⇒ 自绘文本**单行**行尾以 … 截断（超级应用列表项/标签截断刚需）。封闭集 clip/ellipsis（大小写不敏感；其余诊断跳过）；作为**文本可继承**字段沿树继承。三端宿主：iOS CATextLayer.truncationMode（ellipsis ⇒ .end；其余 ⇒ .none——★此前**恒 .end** 是 Web 偏差）· Android TextUtils.ellipsize(TruncateAt.END)（挂载/更新时算好 = 绘制零开销）· 鸿蒙 OH_Drawing_SetTypographyTextEllipsis（maxLines=1 + 尾部 modal + Layout 按盒宽）。诚实边界：仅**单行**（本仓文本无自动换行）；多行 -webkit-line-clamp、fade（渐隐）未支持",
+      "supportTier": "universal"
+    },
+    {
       "id": "text-attrs",
       "css": "letter-spacing / white-space",
       "category": "text",
@@ -1197,7 +1213,7 @@
       "app": "absent",
       "tier": "L4",
       "strategy": "降级",
-      "note": "字距/白空格走平台文本引擎（不自研）；当前 App 折叠面文本维 = fontSize/color/fontWeight/textAlign/line-height——letter-spacing/white-space 未支持",
+      "note": "字距/白空格走平台文本引擎（不自研）；当前 App 折叠面文本维 = fontSize/color/fontWeight/textAlign/line-height/text-overflow——letter-spacing/white-space 未支持",
       "supportTier": "conditional"
     },
     {

@@ -75,7 +75,7 @@ export const APP_ENUM_VALUES: Record<string, readonly string[]> = {
 }
 
 /** 绘制字段（宿主自绘读这些键；模板照样要带上，否则挂载后无底色/无字色） */
-export const APP_PAINT_FIELDS = ['backgroundColor', 'color', 'fontSize', 'fontWeight', 'textAlign', 'lineHeight', 'borderRadius', 'borderColor', 'borderWidth', 'opacity', 'boxShadow'] as const
+export const APP_PAINT_FIELDS = ['backgroundColor', 'color', 'fontSize', 'fontWeight', 'textAlign', 'lineHeight', 'textOverflow', 'borderRadius', 'borderColor', 'borderWidth', 'opacity', 'boxShadow'] as const
 const PAINT_FIELDS = new Set<string>(APP_PAINT_FIELDS)
 /**
  * ★批次 4（CSS 兼容对齐）：`text-align` 的**封闭集**（App 自绘文本在盒内的水平对齐）。
@@ -83,6 +83,13 @@ const PAINT_FIELDS = new Set<string>(APP_PAINT_FIELDS)
  *   `justify`/`start`/`end` 等未列 ⇒ 诊断跳过（不静默当默认）。
  */
 export const APP_TEXT_ALIGN_VALUES = ['left', 'center', 'right'] as const
+/**
+ * ★批次 16（CSS 兼容对齐）：`text-overflow` 的**封闭集**（App 自绘文本单行溢出处理）。
+ *   Web 默认 `clip`（截断不省略）；`ellipsis` ⇒ 超出盒宽时行尾以 `…` 表示。
+ *   宿主映射：iOS `CATextLayer.truncationMode` · Android `TextUtils.ellipsize` ·
+ *   鸿蒙 `OH_Drawing_SetTypographyTextEllipsis`。其余（如 `fade`）⇒ 诊断跳过（不猜）。
+ */
+export const APP_TEXT_OVERFLOW_VALUES = ['clip', 'ellipsis'] as const
 /** 四边简写字段（`margin`/`padding` → 结构化 `{top,right,bottom,left}`） */
 export const APP_EDGE_FIELDS = ['margin', 'padding'] as const
 /** 百分比宽高折叠出的**比例字段**（App 端原生支持 `widthRatio`/`heightRatio`；非长度、不乘密度） */
@@ -96,10 +103,11 @@ export const APP_SPECIAL_FIELDS = ['boxSizing'] as const
  * 【为什么必须编译期折叠】App 端**无运行时 CSS 引擎** ⇒ 继承（CSS 默认：`color`/`font-size` 等
  *   沿树向下传播）必须在**编译期**算进每个节点的 computed style（Profile §3 L0「继承」）。
  *   Web/Skyline 由各自 CSS 引擎按标准处理，本仓**不干预**（只折叠 App 面）。
- * 【为什么只有这两个】App 折叠面里语义上可继承的只有文本色/字号；背景/边框/圆角/不透明度
- *   在 CSS 里**不继承**（见 Profile §3 可继承/不可继承表）⇒ 不得纳入。
+ * 【纳入哪些（以 Web 为基准）】只纳**CSS 里确实继承**的文本类属性：`color`/`font-size`/
+ *   `font-weight`/`line-height`/`text-align`/`text-overflow`（批 16）。
+ *   背景/边框/圆角/不透明度在内核语义里**不继承**（见 Profile §3 可继承/不可继承表）⇒ 不得纳入。
  */
-export const APP_INHERITABLE_FIELDS = ['color', 'fontSize', 'fontWeight', 'lineHeight', 'textAlign'] as const
+export const APP_INHERITABLE_FIELDS = ['color', 'fontSize', 'fontWeight', 'lineHeight', 'textAlign', 'textOverflow'] as const
 
 /**
  * ★★**结构化绘制声明**（2026-10-01 · 绘制通道补齐）——`style="{...}"` 装不下的那些通道，
@@ -589,6 +597,19 @@ export function parseStaticStyle(
         const v = rawVal.trim().toLowerCase()
         if (!(APP_TEXT_ALIGN_VALUES as readonly string[]).includes(v)) {
           pushDiag(`\`${rawKey}: ${rawVal}\` 不是 App 支持的对齐（仅 ${APP_TEXT_ALIGN_VALUES.join(' / ')}）——已跳过`)
+          continue
+        }
+        out[key] = v
+        markImportant(key)
+        continue
+      }
+      if (key === 'textOverflow') {
+        // ★批次 16（CSS 兼容对齐 · 以 Web 为基准）：`text-overflow` —— App 自绘文本**单行**溢出处理。
+        //   Web 默认 `clip`（截断不省略）；`ellipsis` ⇒ 行尾 `…`（列表项/标签截断的超级应用刚需）。
+        //   ★仅 `white-space:nowrap` 单行语义（本仓文本无自动换行）：多行 `-webkit-line-clamp` 不支持。
+        const v = rawVal.trim().toLowerCase()
+        if (!(APP_TEXT_OVERFLOW_VALUES as readonly string[]).includes(v)) {
+          pushDiag(`\`${rawKey}: ${rawVal}\` 不是 App 支持的值（仅 ${APP_TEXT_OVERFLOW_VALUES.join(' / ')}）——已跳过`)
           continue
         }
         out[key] = v
@@ -1801,7 +1822,7 @@ export function buildLayoutTemplate(
                 `${tag}(id=${id}) \`:style\` 的键 \`${e.key}\` 不支持**动态**更新` +
                   `（内核通道为数值几何；字符串类布局值/未知绘制字段不可动态）`,
                 `请把 \`${e.key}\` 放静态 \`style\`（值固定时），或改用受支持的键` +
-                  `（布局数值键 + 绘制键 backgroundColor/color/fontSize/fontWeight/textAlign/lineHeight/borderRadius/borderColor/borderWidth/opacity）`,
+                  `（布局数值键 + 绘制键 backgroundColor/color/fontSize/fontWeight/textAlign/lineHeight/textOverflow/borderRadius/borderColor/borderWidth/opacity）`,
                 'VAPOR_STYLE_KEY_UNSUPPORTED',
               )
             }

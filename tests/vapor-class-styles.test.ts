@@ -169,6 +169,34 @@ describe('★C1 最小切片 · SFC <style> 单类规则 → class→节点样�
     expect((s5 as { opacity?: number }).opacity, '百分比越界 ⇒ clamp 到 1').toBe(1)
   })
 
+  it('★⑦d text-overflow（批次 16 · ★基准 = Web）：ellipsis 折叠 + 继承 + 未知值诊断', () => {
+    // 【为什么（以 web 为基准）】Web 默认 clip（不省略）；ellipsis ⇒ 单行行尾 … 截断（超级应用列表项刚需）。
+    const s1 = parseStaticStyle('text-overflow: ellipsis', () => {})
+    expect((s1 as { textOverflow?: string }).textOverflow, 'ellipsis 折叠').toBe('ellipsis')
+    const s2 = parseStaticStyle('text-overflow: clip', () => {})
+    expect((s2 as { textOverflow?: string }).textOverflow, 'clip 折叠').toBe('clip')
+    // 大小写不敏感（Web）
+    const s3 = parseStaticStyle('text-overflow: ELLIPSIS', () => {})
+    expect((s3 as { textOverflow?: string }).textOverflow, '大小写不敏感').toBe('ellipsis')
+    // 未知值 ⇒ 诊断 + 跳过（不猜；fade 是 Web 值但 App 不画渐隐）
+    const diags: string[] = []
+    const s4 = parseStaticStyle('text-overflow: fade', (m: string) => diags.push(m))
+    expect((s4 as { textOverflow?: string }).textOverflow, '未知值不落字段').toBeUndefined()
+    expect(diags.some((d) => d.includes('text-overflow')), '未知值有诊断').toBe(true)
+    // 继承（CSS text-overflow 可继承）：父声明 ⇒ 子文本节点无显式值时继承
+    const sfc = `<template>
+      <view class="row">
+        <text>一段很长的列表项文本内容</text>
+      </view>
+    </template>
+    <style>
+      .row { text-overflow: ellipsis; width: 120 }
+    </style>`
+    const r = buildLayoutTemplate(sfc, 'text-overflow-inherit.vue')
+    const textNode = r.template.nodes.find((n) => (n as { text?: string }).text != null)
+    expect((textNode?.style as { textOverflow?: string })?.textOverflow, '子文本节点继承 text-overflow').toBe('ellipsis')
+  })
+
   it('★⑧ 元素/类型选择器 + @keyframes 跳过（C1 收尾）', () => {
     // 【真项目形态】examples 有 9 处元素选择器（h3/code…）+ 6 处 @keyframes 关键帧被误当选择器
     const sfc = `<template>

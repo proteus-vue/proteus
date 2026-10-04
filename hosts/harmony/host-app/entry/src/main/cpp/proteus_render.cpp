@@ -230,6 +230,9 @@ struct TextDrawSpec {
     /** ★批次 13（line-height · CSS 半行距居中）：行盒高（物理 px；0 = 未声明 ⇒ 用字形高、顶对齐）。
      *   声明时字形内容区在行盒内**垂直居中**（与 Web/Skyline 的真 CSS 一致）。 */
     double lineHeightPx = 0;
+    /** ★批次 16（CSS 兼容对齐 · 以 Web 为基准）：`text-overflow` 是否 ellipsis（单行溢出以 … 截断）。
+     *   1 ⇒ 设 typography maxLines=1 + 尾部省略号 + 按盒宽 Layout（Web 语义）。 */
+    int textOverflowEllipsis = 0;
     /* ── ★★四通道（2026-10-03）——在 content modifier 的 canvas 上画（RenderNode 无这些属性 API）── */
     double w = 0, h = 0, radius = 0;          // 物理 px（与 canvas 同坐标系）
     bool hasGrad = false;
@@ -367,13 +370,21 @@ static void drawChannelsAndText(OH_Drawing_Canvas* canvas, const TextDrawSpec* s
                 if (wi < 0) wi = 0; else if (wi > 8) wi = 8;
                 OH_Drawing_SetTextStyleFontWeight(tstyle, wi);
             }
+            // ★批次 16（CSS 兼容对齐 · 以 Web 为基准）：`text-overflow:ellipsis` ⇒ 单行尾部省略号。
+            //   maxLines=1 + 尾部 modal + “…” 省略串；Layout 宽度按盒宽（否则不截断）。
+            const bool ellipsis = spec->textOverflowEllipsis != 0 && spec->w > 1.0;
+            if (ellipsis) {
+                OH_Drawing_SetTypographyTextMaxLines(ts, 1);
+                OH_Drawing_SetTypographyTextEllipsisModal(ts, 2); // ELLIPSIS_MODAL_TAIL
+                OH_Drawing_SetTypographyTextEllipsis(ts, "\u2026");
+            }
             OH_Drawing_TypographyCreate* handler = OH_Drawing_CreateTypographyHandler(ts, fc);
             if (handler != nullptr) {
                 OH_Drawing_TypographyHandlerPushTextStyle(handler, tstyle);
                 OH_Drawing_TypographyHandlerAddText(handler, spec->text.c_str());
                 OH_Drawing_Typography* typo = OH_Drawing_CreateTypography(handler);
                 if (typo != nullptr) {
-                    OH_Drawing_TypographyLayout(typo, 10000.0);
+                    OH_Drawing_TypographyLayout(typo, ellipsis ? spec->w : 10000.0);
                     // ★批次 13（CSS 半行距居中）：声明行高 ⇒ 字形内容区在行盒内垂直居中
                     //   （typoH 为字形内容高；offset = (盒高 − 字形高)/2）；未声明 ⇒ 顶对齐（既有）。
                     double offY = 0.0;
@@ -653,6 +664,7 @@ static int renderCommandsImpl(const char* jsonCStr, bool fromProbe) {
             auto* spec = new TextDrawSpec{textVal, fs, static_cast<uint32_t>(tc), "", static_cast<int>(fw), w};
             if (!taStr.empty()) spec->textAlign = taStr;
             spec->lineHeightPx = lhPx;
+            { double toe = 0; jsonNumber(it, "textOverflowEllipsis", &toe); spec->textOverflowEllipsis = toe > 0 ? 1 : 0; }
             spec->w = w;
             spec->h = h;
             spec->radius = radius;

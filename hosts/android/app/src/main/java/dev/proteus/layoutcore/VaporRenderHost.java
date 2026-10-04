@@ -1346,6 +1346,16 @@ final class VaporRenderHost {
             int textColor = tc != null ? parseColor(tc) : 0xFFFFFFFF;
             // ★批次 3：字重（`font-weight` 折叠值；缺省 400 = normal）
             int fw = (int) spec.optDouble("fontWeight", 400);
+            // ★批次 16（CSS 兼容对齐 · 以 Web 为基准）：`text-overflow: ellipsis` —— **单行**溢出以 … 截断。
+            //   ★在 mkCmd（挂载/更新各一次）算好并替换文本 ⇒ **绘制路径零额外开销**（与 StaticLayout
+            //     缓存同理）；`clip`/未声明 ⇒ 原样（既有零行为变化）。Web 语义：本仓文本无自动换行。
+            if ("ellipsis".equals(spec.optString("textOverflow", null)) && w > 1f) {
+                android.text.TextPaint etp = new android.text.TextPaint(); // 度量与绘制同源（字号 + 字重）
+                etp.setTextSize(fs);
+                etp.setTypeface(ProteusHostView.typefaceOf(null, fw, null));
+                t = android.text.TextUtils.ellipsize(t, etp, Math.max(1f, w - 2f),
+                        android.text.TextUtils.TruncateAt.END).toString();
+            }
             // ★批次 4：文本水平对齐（text-align → 0/1/2）
             int ta = alignOf(spec.optString("textAlign", null));
             // ★批次 13：行高（px；0 = 缺省）
