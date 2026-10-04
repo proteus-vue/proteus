@@ -62,7 +62,7 @@ if (!APP_ENUM_VALUES) {
 }
 
 /** 已知的数值键（内核读顶层数值） */
-const NUMERIC_KEYS = ['width', 'height', 'minWidth', 'maxWidth', 'minHeight', 'maxHeight', 'top', 'left', 'gap', 'flexGrow', 'flexShrink', 'flexBasis', 'fontSize', 'borderRadius', 'borderWidth', 'opacity', 'widthRatio', 'heightRatio', 'borderRadiusPct']
+const NUMERIC_KEYS = ['width', 'height', 'minWidth', 'maxWidth', 'minHeight', 'maxHeight', 'top', 'left', 'gap', 'flexGrow', 'flexShrink', 'flexBasis', 'fontSize', 'borderRadius', 'borderWidth', 'opacity', 'widthRatio', 'heightRatio', 'borderRadiusPct', 'minWidthPct', 'maxWidthPct', 'minHeightPct', 'maxHeightPct']
 const EDGE_KEYS = ['margin', 'padding']
 /** ★批次 17：margin 的逐边 auto 标记（对象；值为布尔） */
 const MARGIN_AUTO_KEY = 'marginAuto'

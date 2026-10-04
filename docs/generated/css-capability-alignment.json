@@ -556,7 +556,7 @@
       "app": "supported",
       "tier": "L1",
       "strategy": "编译期折叠",
-      "note": "px/数字",
+      "note": "px/数字；★批次 19：**百分比**（`max-width:100%` 不溢出 / `min-height:100%` 撑满）折为 `*Pct`（0..1）⇒ 内核 taffy 按父内容盒解析（min 缺省 0 / max 缺省 auto 语义不变）",
       "supportTier": "universal"
     },
     {

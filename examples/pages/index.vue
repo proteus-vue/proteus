@@ -93,6 +93,11 @@ function go(name: 'forms' | 'config-demo' | 'user') {
       <div class="avatar">A</div>
       <div class="dot"></div>
     </div>
+
+    <!-- ★min/max 百分比演示（批次 19）：子声明 width:300px 但 max-width:100% ⇒ 钳到父宽（不溢出，Web 基准） -->
+    <div class="clamp-demo">
+      <div class="clamp-child">max-width:100% ⇒ 不溢出父容器</div>
+    </div>
   </div>
 </template>
 
@@ -191,5 +196,23 @@ function go(name: 'forms' | 'config-demo' | 'user') {
   height: 16px;
   border-radius: 50%;
   background-color: #07c160;
+}
+/* ★min/max 百分比演示（批次 19）——子宽 300px 但 max-width:100% 被钳到父宽 */
+.clamp-demo {
+  width: 240px;
+  margin: 16px auto;
+  padding: 8px;
+  background-color: #f5f6f7;
+  border-radius: 6px;
+}
+.clamp-child {
+  width: 300px;
+  max-width: 100%;
+  background-color: #e3e6eb;
+  border-radius: 4px;
+  padding: 6px;
+  color: #666;
+  font-size: 12px;
+  text-align: center;
 }
 </style>

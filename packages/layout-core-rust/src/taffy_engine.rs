@@ -213,10 +213,17 @@ impl TaffyEngine {
         out.size = taffy::Size { width: dim(style.width, style.width_ratio), height: dim(style.height, style.height_ratio) };
         // ★注意类型差异：`size` 用 `Dimension`，而 `min_size`/`max_size` 用 `LengthPercentageAuto`
         //   （后者额外允许 `auto` 关键字）——两者不可混用，这里分别映射。
-        out.min_size = taffy::Size { width: opt_lpa(style.min_width), height: opt_lpa(style.min_height) };
+        // ★批次 19（CSS 兼容对齐 · 以 Web 为基准）：min/max 支持**百分比**（`ltp` = length-or-percent-or-auto）
+        out.min_size = taffy::Size {
+            width: ltp(style.min_width, style.min_width_pct, length(0.0)),
+            height: ltp(style.min_height, style.min_height_pct, length(0.0)),
+        };
         // ★max 未指定**必须**是 `auto`（= 无上限）——与 min 相反：清零会让所有节点被压成 0。
         //   ⇒ max 用各自独立的映射（`None → auto()`），**不可**复用上面的 `opt_lpa`。
-        out.max_size = taffy::Size { width: opt_max_lpa(style.max_width), height: opt_max_lpa(style.max_height) };
+        out.max_size = taffy::Size {
+            width: ltp(style.max_width, style.max_width_pct, auto()),
+            height: ltp(style.max_height, style.max_height_pct, auto()),
+        };
 
         // ⑤ 盒模型
         out.padding = taffy::Rect {
@@ -1211,13 +1218,25 @@ fn dim(v: Option<f32>, ratio: Option<f32>) -> Dimension {
 /// 【为什么改引擎而不是改测试（本仓纪律）】golden 是**浏览器实测真值**（它是独立事实源），
 ///   用它去迁就引擎就是把真值改坏；且参考实现（Node/Rust 双份）早已是"不建模"，
 ///   改这里让**三份实现口径统一**。
+#[allow(dead_code)] // ★批次 19：已被 ltp 取代（保留作 min 缺省=0 的语义参照）
 fn opt_lpa(v: Option<f32>) -> LengthPercentageAuto {
     v.map(length).unwrap_or(length(0.0))
 }
 
 /** `max_size` 专用：未指定 = `auto`（无上限）。★与 `opt_lpa`（min 用，未指定 = 0）语义相反，勿混用。 */
+#[allow(dead_code)] // ★批次 19：已被 ltp 取代（保留作 max 缺省=auto 的语义参照）
 fn opt_max_lpa(v: Option<f32>) -> LengthPercentageAuto {
     v.map(length).unwrap_or(auto())
+}
+
+/// ★批次 19：min/max 的 length / percent / 缺省 三态映射（`dflt` = 缺省值：min 用 `length(0)`、max 用 `auto`）。
+///   百分比优先于长度（与 `dim` 一致：恰一个有效——编译器只产其一）。
+fn ltp(v: Option<f32>, pct: Option<f32>, dflt: LengthPercentageAuto) -> LengthPercentageAuto {
+    match (v, pct) {
+        (Some(v), _) => length(v),
+        (None, Some(p)) => percent(p),
+        _ => dflt,
+    }
 }
 
 fn parse_justify(s: &str) -> JustifyContent {

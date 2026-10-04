@@ -96,7 +96,7 @@ const BN = { snapshot: 'selfdraw-final' }
 
 // ★构建标识（每次构建由 hosts/ios/bridge/inject-build-id.mjs 注入；与 entry-bench 同机制）
 //   —— 「设备上跑的是哪份代码」必须可**一眼判定**（报告新鲜度判据的内容锚点）。
-const BUILD_ID = '85af3538-184316'
+const BUILD_ID = 'f9faade2-190009'
 
 const VP = (globalThis as unknown as { __PROTEUS_VIEWPORT__?: { width: number; height: number } })
   .__PROTEUS_VIEWPORT__ ?? { width: 390, height: 844 }

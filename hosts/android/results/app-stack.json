@@ -1,9 +1,9 @@
 {
   "engine_available": true,
-  "bundle_chars": 552040,
+  "bundle_chars": 553074,
   "bundle_load_ok": true,
   "run_ok": true,
-  "total_ms": 160,
+  "total_ms": 187,
   "ok": true,
   "scene": "app-stack",
   "depth": 20000,
@@ -11,8 +11,8 @@
   "budget": 1000,
   "screens": 32,
   "a_depth_reached": 20000,
-  "a_push_ms": 36,
-  "a_pop_ms": 6,
+  "a_push_ms": 44,
+  "a_pop_ms": 7,
   "a_depth_after_pop_to_root": 1,
   "a_mounts": 20000,
   "a_enters": 20000,
@@ -23,7 +23,7 @@
   "b_active_nodes": 960,
   "b_over_budget": false,
   "b_freeze_unmounts": 19985,
-  "b_push_ms": 59,
+  "b_push_ms": 67,
   "b_depth": 20000,
   "c_frozen_before_pop": 1,
   "c_rebuild_mounts": 1,
@@ -32,7 +32,7 @@
   "d_unmounts": 2500,
   "d_enters": 1,
   "d_depth": 2500,
-  "d_nav_ms": 2,
+  "d_nav_ms": 3,
   "p_run_ok": true,
   "p_ok": true,
   "p_scene": "app-project",
@@ -107,5 +107,5 @@
   "e_jobs_pumped": 0,
   "e_async": "执行器结果异步写 app-stack-executor.json（动画由宿主帧循环推进）",
   "composite_ok": true,
-  "composite_painted_samples": 315
+  "composite_painted_samples": 394
 }
