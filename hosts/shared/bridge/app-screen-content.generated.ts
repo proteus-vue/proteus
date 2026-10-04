@@ -10671,6 +10671,7 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
       {
         "id": 193,
         "parentId": 191,
+        "borderWidth": 0,
         "backgroundColor": "#00000000",
         "color": "#999",
         "fontSize": 12,

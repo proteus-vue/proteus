@@ -98,9 +98,12 @@ describe('★C1 最小切片 · SFC <style> 单类规则 → class→节点样�
     // 【真机缺陷回归】真机 RustLayout.create 失败暴露：CSS display:block/inline-block/inline-flex
     //   此前**原样透传** ⇒ 内核只认 flex/grid/none ⇒ **整棵树建不起来**（页面全崩）。现改为诊断+跳过。
     //   ★批次 12：`grid` 已支持（内核开放 Display::Grid）⇒ 本用例改用仍不支持的 `inline-flex`。
+    //   ★批次 26/27：`display:block` = App 默认（flex-direction:column·block-like）⇒ 记为 flex（重置值，非非法值）。
     const m = parseClassStyles('.x { display: block; height: 10 }', () => {})
-    expect((m.x as { display?: string }).display, 'display:block 被跳过（不传非法值）').toBeUndefined()
+    expect((m.x as { display?: string }).display, 'display:block ⇒ 空记录（App 默认 block-like，不落键）').toBeUndefined()
     expect((m.x as { height?: number }).height, '同规则其它合法声明仍在').toBe(10)
+    const mIf = parseClassStyles('.z { display: inline-flex; height: 5 }', () => {})
+    expect((mIf.z as { display?: string }).display, 'display:inline-flex 不支持 ⇒ 跳过（不传非法值）').toBeUndefined()
     const m2 = parseClassStyles('.y { display: flex; position: sticky }', () => {})
     expect((m2.y as { display?: string }).display, 'display:flex 合法保留').toBe('flex')
     expect((m2.y as { position?: string }).position, 'position:sticky 不支持 ⇒ 跳过').toBeUndefined()
@@ -356,15 +359,20 @@ describe('★C1 最小切片 · SFC <style> 单类规则 → class→节点样�
     expect((overridden?.style as { visibility?: string })?.visibility, '子 visible 覆盖').toBe('visible')
   })
 
-  it('★⑦n Web 默认值/无操作声明（批次 26）：不诊断、不落键', () => {
+  it('★⑦n Web 默认值/重置声明（批次 26/27）：不诊断；有 App 字段的记默认值', () => {
     // 【为什么（以 web 为基准）】这些是「无视觉变化」或「= App 默认」的写法；报成缺口是假阳性。
-    for (const css of ['transform: none', 'border: none', 'border: 0', 'background: none',
-      'box-shadow: none', 'text-decoration: none', 'outline: none', 'background-image: none', 'display: block']) {
+    //   ★批次 27：有 App 字段的**必须记录默认值**（否则 `.b{border:none}` 覆盖不了 `.a{border:1px}`）。
+    // 无 App 字段 ⇒ 空记录（不落键）：transform / text-decoration / outline / background-image
+    for (const css of ['transform: none', 'text-decoration: none', 'outline: none', 'background-image: none']) {
       const d: string[] = []
       const out = parseStaticStyle(css, (m: string) => d.push(m))
       expect(d.length, css + ' 不应诊断').toBe(0)
       expect(Object.keys(out).length, css + ' 不应落键').toBe(0)
     }
+    // 有 App 字段 ⇒ 记默认值（重置语义）
+    expect((parseStaticStyle('border: none', () => {}) as { borderWidth?: number }).borderWidth, 'border:none ⇒ borderWidth 0').toBe(0)
+    expect((parseStaticStyle('background: none', () => {}) as { backgroundColor?: string }).backgroundColor, 'background:none ⇒ 透明').toBe('#00000000')
+    expect((parseStaticStyle('display: block', () => {}) as { display?: string }).display, 'display:block ⇒ 空记录（App 默认 block-like）').toBeUndefined()
     // 真缺口仍诊断（inline 才是不支持；block 是默认）
     const d2: string[] = []
     parseStaticStyle('display: inline', (m: string) => d2.push(m))
@@ -372,6 +380,20 @@ describe('★C1 最小切片 · SFC <style> 单类规则 → class→节点样�
     const d3: string[] = []
     parseStaticStyle('transform: scale(2)', (m: string) => d3.push(m))
     expect(d3.length > 0, 'transform:scale 仍诊断（未支持）').toBe(true)
+  })
+
+  it('★⑦o 重置声明的级联覆盖（批次 27 · 修级联缺陷）：b 类 border:none 覆盖 a 类 border:1px', () => {
+    // 【为什么（以 web 为基准）】高优先级重置声明必须覆盖低优先级声明；此前**直接 skip** ⇒ 覆盖失效。
+    const sfc = `<template>
+      <view class="a b"><text>x</text></view>
+    </template>
+    <style>
+      .a { border: 1px solid #cccccc }
+      .b { border: none }
+    </style>`
+    const r = buildLayoutTemplate(sfc, 'cascade-reset.vue')
+    const v = r.template.nodes.find((n) => (n as { tag?: string }).tag === 'view')
+    expect((v?.style as { borderWidth?: number })?.borderWidth, '重置覆盖 ⇒ borderWidth 0').toBe(0)
   })
 
   it('★⑧ 元素/类型选择器 + @keyframes 跳过（C1 收尾）', () => {
