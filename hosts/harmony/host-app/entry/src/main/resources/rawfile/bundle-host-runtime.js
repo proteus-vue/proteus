@@ -3451,7 +3451,7 @@
   }
   var g = globalThis;
   var HOST_ID = g.__PROTEUS_HOST_ID__ ?? "quickjs-desktop";
-  var BUILD_ID = "ef0a838e-221348";
+  var BUILD_ID = "0022fca4-222534";
   var FRAME_DRIVER = g.__PROTEUS_HOST_FRAME_DRIVER__ ?? "manual";
   var shellLog = [];
   var shellRt = null;

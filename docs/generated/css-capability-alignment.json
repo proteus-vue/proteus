@@ -153,6 +153,36 @@
         "why": "C1：祖先类链匹配"
       },
       {
+        "css": "静态结构伪类 :first-child / :last-child / :nth-child(An+B|odd|even) / :not(简单选择器)",
+        "id": "selector-pseudo-structural",
+        "ends": {
+          "web": "—",
+          "skyline": "—",
+          "app": "supported"
+        },
+        "why": "★批次 37（对齐 Web）：元素兄弟序在编译期树遍历里已知 ⇒ 结构伪类**编译期算一次**（:first-child/:last-child/:nth-child + :not 单段简单选择器）；节点无祖先 CSS 引擎。"
+      },
+      {
+        "css": "Vue 作用域穿透 :deep() / ::v-deep() / >>>",
+        "id": "selector-deep",
+        "ends": {
+          "web": "—",
+          "skyline": "—",
+          "app": "supported"
+        },
+        "why": "★批次 37：编译期展开为普通后代选择器（本仓无 scope 后缀之外的作用域处理）；`>>>` 等价 `:deep()`。"
+      },
+      {
+        "css": "通配 *",
+        "id": "selector-wildcard",
+        "ends": {
+          "web": "—",
+          "skyline": "—",
+          "app": "supported"
+        },
+        "why": "★批次 37（对齐 Web）：`*` 单段匹配任意元素（特异性 0）；`.box > *` 这类\"所有直接子\"常见于设计与重置样式。"
+      },
+      {
         "css": "特异性 / 继承 / !important",
         "id": "specificity-inheritance",
         "ends": {
@@ -954,16 +984,29 @@
       "supportTier": "conditional"
     },
     {
-      "id": "selector-pseudo",
-      "css": "伪类 :hover / :active / :first-child / :nth-child",
+      "id": "selector-pseudo-structural",
+      "css": "静态结构伪类 :first-child / :last-child / :nth-child(An+B|odd|even) / :not(简单选择器)",
+      "category": "selector",
+      "compilerFields": [],
+      "web": "—",
+      "skyline": "—",
+      "app": "supported",
+      "tier": "L0",
+      "strategy": "编译期折叠",
+      "note": "★批次 37（对齐 Web）：元素兄弟序在编译期树遍历里已知 ⇒ 结构伪类**编译期算一次**（:first-child/:last-child/:nth-child + :not 单段简单选择器）；节点无祖先 CSS 引擎。",
+      "supportTier": "conditional"
+    },
+    {
+      "id": "selector-pseudo-state",
+      "css": "状态伪类 :hover / :active / :focus / :checked",
       "category": "selector",
       "compilerFields": [],
       "web": "—",
       "skyline": "—",
       "app": "absent",
-      "tier": "L0",
-      "strategy": "编译期折叠",
-      "note": "静态部分可编译期折叠（Profile L0）；动态交互态需运行时状态通道（成本更高）",
+      "tier": "L2",
+      "strategy": "降级",
+      "note": "★批次 37：需**运行时状态通道**（App 自绘手势层无 hover 概念）；状态切换改用动态 :class 或语义组件。",
       "supportTier": "unsupported"
     },
     {
@@ -980,8 +1023,21 @@
       "supportTier": "unsupported"
     },
     {
-      "id": "selector-sibling-wildcard",
-      "css": "兄弟组合 +~ / 通配 *",
+      "id": "selector-deep",
+      "css": "Vue 作用域穿透 :deep() / ::v-deep() / >>>",
+      "category": "selector",
+      "compilerFields": [],
+      "web": "—",
+      "skyline": "—",
+      "app": "supported",
+      "tier": "L0",
+      "strategy": "编译期折叠",
+      "note": "★批次 37：编译期展开为普通后代选择器（本仓无 scope 后缀之外的作用域处理）；`>>>` 等价 `:deep()`。",
+      "supportTier": "conditional"
+    },
+    {
+      "id": "selector-sibling",
+      "css": "兄弟组合 + / ~",
       "category": "selector",
       "compilerFields": [],
       "web": "—",
@@ -989,8 +1045,21 @@
       "app": "absent",
       "tier": "L5",
       "strategy": "禁止",
-      "note": "语义弱、跨端难统一（Skyline 亦不支持）——建议改写为类选择器",
+      "note": "语义弱、跨端难统一（Skyline 亦不支持）——建议改写为类选择器。",
       "supportTier": "unsupported"
+    },
+    {
+      "id": "selector-wildcard",
+      "css": "通配 *",
+      "category": "selector",
+      "compilerFields": [],
+      "web": "—",
+      "skyline": "—",
+      "app": "supported",
+      "tier": "L0",
+      "strategy": "编译期折叠",
+      "note": "★批次 37（对齐 Web）：`*` 单段匹配任意元素（特异性 0）；`.box > *` 这类\"所有直接子\"常见于设计与重置样式。",
+      "supportTier": "conditional"
     },
     {
       "id": "specificity-inheritance",
