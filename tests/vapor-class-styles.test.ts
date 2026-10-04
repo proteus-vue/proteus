@@ -373,6 +373,16 @@ describe('★C1 最小切片 · SFC <style> 单类规则 → class→节点样�
     expect((parseStaticStyle('border: none', () => {}) as { borderWidth?: number }).borderWidth, 'border:none ⇒ borderWidth 0').toBe(0)
     expect((parseStaticStyle('background: none', () => {}) as { backgroundColor?: string }).backgroundColor, 'background:none ⇒ 透明').toBe('#00000000')
     expect((parseStaticStyle('display: block', () => {}) as { display?: string }).display, 'display:block ⇒ 空记录（App 默认 block-like）').toBeUndefined()
+    // ★批次 29：white-space:nowrap（App 单行模型 = 默认）/ overflow-x|y:visible（默认）⇒ no-op 不诊断
+    for (const css of ['white-space: nowrap', 'overflow-x: visible', 'overflow-y: visible']) {
+      const d: string[] = []
+      parseStaticStyle(css, (m: string) => d.push(m))
+      expect(d.length, css + ' 不应诊断').toBe(0)
+    }
+    // white-space:pre / overflow-y:hidden 仍是真缺口 ⇒ 诊断
+    const dw: string[] = []
+    parseStaticStyle('white-space: pre', (m: string) => dw.push(m))
+    expect(dw.length > 0, 'white-space:pre 仍诊断').toBe(true)
     // 真缺口仍诊断（inline 才是不支持；block 是默认）
     const d2: string[] = []
     parseStaticStyle('display: inline', (m: string) => d2.push(m))

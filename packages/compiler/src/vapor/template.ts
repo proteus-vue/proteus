@@ -1128,6 +1128,14 @@ function noOpResetValue(key: string, val: string): Record<string, unknown> | nul
       // App 默认 display = flex 且 flex-direction = column（= block-like）⇒ `display:block` **无行为差异** ⇒
       //   空记录（不落键；避免给每个 block 元素平白加 display:flex 的 churn）。`inline*` 才是真缺口。
       return v === 'block' ? {} : null
+    case 'whiteSpace':
+      // ★批次 29：App 文本模型是**单行**（不自动换行）⇒ `nowrap` = App 默认行为（no-op）。
+      //   `normal`（Web 默认=自动换行）/ `pre` / `pre-wrap` 等需要**多行/保留空白**支持（真缺口 ⇒ 诊断）。
+      return v === 'nowrap' ? {} : null
+    case 'overflowX':
+    case 'overflowY':
+      // ★批次 29：单轴 `overflow-*: visible` = 默认（no-op）；`hidden`/`auto` 等需分轴支持（诊断）。
+      return v === 'visible' ? {} : null
     default:
       return null
   }
