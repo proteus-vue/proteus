@@ -328,6 +328,7 @@ function buildAlignment() {
     todayValues: appProfile.model.todayValues,
     tiers: appProfile.model.tiers,
     noteOnTier: appProfile.model.noteOnTier,
+    superappGoal: appProfile.model.superappGoal,
     relationNote: '支持度维度（web/skyline/app 现状）与成本分级（L0–L5）是**正交**维度：成本分级决定"怎么实现/贵不贵"，支持度决定"哪端能不能用、App 加它多贵"。App 端为自研引擎 ⇒ 候选特性带 tier 即为"可扩展档位"。',
     tierRule: 'universal = web∧skyline∧app 现状全 supported；unsupported = 三端皆不可用；其余 = conditional',
     partialSupport: partial,
@@ -380,6 +381,16 @@ function toMarkdown(m) {
   L.push('')
   L.push(`> ${m.profile.noteOnTier}`)
   L.push('')
+  if (m.profile.superappGoal) {
+    L.push('## 超级应用能力清单（★优先口径：不按 demo 使用频次）')
+    L.push('')
+    L.push(`> ${m.profile.superappGoal.note}`)
+    L.push('')
+    L.push('| 超级应用能力 | 用途 | 现状 |')
+    L.push('|---|---|---|')
+    for (const c of m.profile.superappGoal.checklist) L.push(`| ${c.capability} | ${c.why} | ${c.status} |`)
+    L.push('')
+  }
   L.push('## CSS 能力矩阵')
   L.push('')
   L.push('| 类别 | CSS | Web | Skyline | App 现状 | App 可扩展 | 策略 | 对齐 | 说明 |')

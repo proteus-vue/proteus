@@ -137,7 +137,7 @@ export function mapStyleObjectKey(key: string): string | null {
   // 布局数值键（内核 apply_style_key 已登记的那些——**只收数值语义的**）
   const LAYOUT_NUMERIC = new Set([
     'width', 'height', 'minWidth', 'maxWidth', 'minHeight', 'maxHeight',
-    'flexGrow', 'flexShrink', 'flexBasis', 'gap', 'top', 'left',
+    'flexGrow', 'flexShrink', 'flexBasis', 'gap', 'top', 'left', 'right', 'bottom',
   ])
   if (LAYOUT_NUMERIC.has(camel)) return `layout.${camel}`
   // 绘制键（宿主 mkCmd 认的扁平字段：backgroundColor / color / fontSize / borderRadius / …）

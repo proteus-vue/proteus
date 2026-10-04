@@ -361,6 +361,12 @@ pub struct LStyle {
     pub top: Option<f32>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub left: Option<f32>,
+    /// ★批次 8（CSS 兼容对齐 · 定位）：`right`（absolute 的右边缘 inset；含 `right` 时与 `left` 互斥由 taffy 定）
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub right: Option<f32>,
+    /// ★批次 8：`bottom`（absolute 的下边缘 inset）
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub bottom: Option<f32>,
     #[serde(default)]
     pub overflow: Overflow,
 
@@ -567,6 +573,8 @@ impl Default for LStyle {
             position: Position::default(),
             top: None,
             left: None,
+            right: None,
+            bottom: None,
             overflow: Overflow::default(),
             translate_x: 0.0,
             translate_y: 0.0,
