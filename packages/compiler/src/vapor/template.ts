@@ -75,7 +75,7 @@ export const APP_ENUM_VALUES: Record<string, readonly string[]> = {
 }
 
 /** 绘制字段（宿主自绘读这些键；模板照样要带上，否则挂载后无底色/无字色） */
-export const APP_PAINT_FIELDS = ['backgroundColor', 'color', 'fontSize', 'fontWeight', 'fontFamily', 'textAlign', 'lineHeight', 'textOverflow', 'letterSpacing', 'textDecoration', 'visibility', 'borderRadius', 'borderColor', 'borderWidth', 'opacity', 'boxShadow'] as const
+export const APP_PAINT_FIELDS = ['backgroundColor', 'color', 'fontSize', 'fontWeight', 'fontFamily', 'textAlign', 'lineHeight', 'textOverflow', 'letterSpacing', 'textDecoration', 'visibility', 'borderRadius', 'borderColor', 'borderWidth', 'opacity', 'boxShadow', 'transform'] as const
 const PAINT_FIELDS = new Set<string>(APP_PAINT_FIELDS)
 /**
  * ★批次 4（CSS 兼容对齐）：`text-align` 的**封闭集**（App 自绘文本在盒内的水平对齐）。
@@ -681,6 +681,21 @@ export function parseStaticStyle(
       continue
     }
     if (PAINT_FIELDS.has(key)) {
+      if (key === 'transform') {
+        // ★批次 38（对齐 Web · 削减胶水）：**静态 `transform`** —— 位移/缩放/旋转一次性折成数值（**不可继承**）。
+        //   App 自绘宿主已有逐节点变换表（动画期用）⇒ 静态值写入**同一张表**（作为动画的基态）。
+        //   支持：translate(x[,y]) / translateX / translateY（px/数字/%）、scale(s[,sy]) / scaleX / scaleY、rotate(<deg|rad|turn|grad>)。
+        //   不支持（诊断跳过）：skew / matrix / translate3d / rotate3d / perspective（App 变换模型为 2D 位移+缩放+旋转）。
+        const t = parseCssTransform(rawVal)
+        if (t === false) {
+          pushDiag(`style 里 \`${rawKey}: ${rawVal}\` 未支持（仅 translate/translateX/translateY · scale/scaleX/scaleY · rotate；3D/skew/matrix 暂不支持）——已跳过`)
+          continue
+        }
+        if (t === null) continue   // `none` / 单位变换 ⇒ 不发射（零行为变化）
+        out.transform = t
+        markImportant('transform')
+        continue
+      }
       if (key === 'fontWeight') {
         // ★批次 3：`font-weight`（真项目第 2 高频丢弃项）——`normal`/`bold` 关键字 + 100–900 数值
         //   归一为**数值**（宿主按 `weight >= 600 ⇒ bold` 判定——见 Android typefaceOf / iOS）。
@@ -1376,11 +1391,13 @@ function noOpResetValue(key: string, val: string): Record<string, unknown> | nul
   const v = val.trim().toLowerCase()
   switch (key) {
     // 无 App 对应字段 ⇒ 空记录（级联无关，直接跳过）
-    case 'transform':
     case 'textDecoration':
     case 'outline':
     case 'backgroundImage':
       return v === 'none' ? {} : null
+    // ★批次 38：transform 已成真字段 ⇒ 记录重置（级联须能覆盖低优先级的 translate/scale/rotate）
+    case 'transform':
+      return v === 'none' ? { transform: null } : null
     // 有 App 字段 ⇒ 记录**默认值**（保证级联覆盖生效）
     case 'boxShadow':
       return v === 'none' ? { boxShadow: null } : null
@@ -1403,6 +1420,83 @@ function noOpResetValue(key: string, val: string): Record<string, unknown> | nul
     default:
       return null
   }
+}
+
+/**
+ * ★批次 38（对齐 Web）：CSS transform（**静态**）→ 引擎变换数值集。
+ *   支持 2D 子集：translate/translateX/translateY（px/数字/%）、scale/scaleX/scaleY、rotate（deg/rad/grad/turn）。
+ *   不支持 ⇒ false（诊断跳过）；无变换 ⇒ null（不发射）。
+ *   【为什么位移分 px / pct 两栏】translate(-50%,-50%) 是居中标准写法（% 相对自身盒）——编译期不知盒尺寸，
+ *   存盒比例，由宿主按 pct × w/h 落成物理位移（三端同一口径）。
+ */
+function parseCssTransform(val: string): { txPx: number; tyPx: number; txPct: number; tyPct: number; sx: number; sy: number; rotate: number } | false | null {
+  const v = val.trim()
+  if (v === '' || v.toLowerCase() === 'none') return null
+  const fnRe = /([a-zA-Z][a-zA-Z0-9]*)\(([^()]*)\)/g
+  let m: RegExpExecArray | null
+  const out = { txPx: 0, tyPx: 0, txPct: 0, tyPct: 0, sx: 1, sy: 1, rotate: 0 }
+  const len = (s: string): { px?: number; pct?: number } | null => {
+    const t = s.trim()
+    const mm = /^([+-]?(?:\d+\.?\d*|\.\d+))(px|rpx|%)?$/.exec(t)
+    if (!mm) return null
+    const n = Number(mm[1])
+    if (!Number.isFinite(n)) return null
+    const u = mm[2]
+    if (u === '%') return { pct: n / 100 }
+    if (u === 'rpx') return { px: n * 0.5 }
+    return { px: n }
+  }
+  const ang = (s: string): number | null => {
+    const t = s.trim().toLowerCase()
+    const mm = /^([+-]?(?:\d+\.?\d*|\.\d+))(deg|rad|grad|turn)?$/.exec(t)
+    if (!mm) return null
+    const n = Number(mm[1])
+    if (!Number.isFinite(n)) return null
+    const u = mm[2]
+    if (u === 'rad') return (n * 180) / Math.PI
+    if (u === 'turn') return n * 360
+    if (u === 'grad') return (n * 360) / 400
+    return n
+  }
+  let covered = 0
+  while ((m = fnRe.exec(v))) {
+    covered += m[0].length
+    const name = m[1]!.toLowerCase()
+    const args = m[2]!.split(',').map((s) => s.trim()).filter((s) => s !== '')
+    if (name === 'translatex' || name === 'translatey' || name === 'translate') {
+      if (name === 'translate') {
+        const a = len(args[0] ?? '')
+        if (!a) return false
+        if (a.px !== undefined) out.txPx = a.px; else out.txPct = a.pct!
+        if (args[1] !== undefined) { const b = len(args[1]); if (!b) return false; if (b.px !== undefined) out.tyPx = b.px; else out.tyPct = b.pct! }
+      } else {
+        const a = len(args[0] ?? '')
+        if (!a) return false
+        if (name === 'translatex') { if (a.px !== undefined) out.txPx = a.px; else out.txPct = a.pct! }
+        else { if (a.px !== undefined) out.tyPx = a.px; else out.tyPct = a.pct! }
+      }
+      continue
+    }
+    if (name === 'scale' || name === 'scalex' || name === 'scaley') {
+      const sx = Number(args[0])
+      if (!Number.isFinite(sx)) return false
+      if (name === 'scaley') { out.sy = sx } else { out.sx = sx; if (name === 'scale') out.sy = Number.isFinite(Number(args[1])) ? Number(args[1]) : sx }
+      continue
+    }
+    if (name === 'rotate') {
+      const a = ang(args[0] ?? '')
+      if (a === null) return false
+      out.rotate = a
+      continue
+    }
+    return false
+  }
+  if (v.replace(/[a-zA-Z][a-zA-Z0-9]*\([^()]*\)/g, '').trim() !== '') return false
+  if (covered === 0) return null
+  // App 宿主变换模型为单一缩放 ⇒ 非等比缩放（scaleX/scaleY 单独或不等）如实拒绝（不静默按 x 冒充）
+  if (out.sx !== out.sy) return false
+  if (out.txPx === 0 && out.tyPx === 0 && out.txPct === 0 && out.tyPct === 0 && out.sx === 1 && out.sy === 1 && out.rotate === 0) return null
+  return out
 }
 
 /**

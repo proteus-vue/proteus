@@ -83,7 +83,7 @@
 | paint | `opacity` | supported | supported | supported | L1 | 编译期折叠 | universal | 0–1 |
 | special | `box-sizing` | supported | supported | supported | L1 | 直映射 | universal | 两内核恒 border-box ⇒ 只作忠实记录、无副作用 |
 | paint | `border（简写）/ border-color / border-width` | supported | supported | supported | L1 | 编译期折叠 | universal | ★批次 5（2026-10-04）：`border: <width> <style> <color>` 简写解析为 borderWidth + borderColor（uniform **实线**）；**逐边**/非 solid 线型（dashed/dotted…）诊断跳过（★批 14 审计修：非 solid 此前**静默画成实线**=与 Web 偏差 ⇒ 现诊断跳过）；var() 令牌色如实诊断。**三端宿主真画**：iOS CALayer.border* · Android borderPaint 描边（含圆角路径）· 鸿蒙 OH_ArkUI_RenderNodeUtils_SetBorderWidth/Color |
-| motion | `transform（translate/scale/rotate/skew/perspective）` | supported | supported | engine-only | L1 | 编译期折叠 | conditional | ★引擎/宿主已支持（LStyle 的绘制通道 paint-only + 宿主动画桥），但编译期折叠面（parseStaticStyle）**未接 transform** ⇒ 「可扩展」现成落点：加进 APP_PAINT_FIELDS 即可 |
+| motion | `transform（2D：translate / scale / rotate）` | supported | supported | supported | L1 | 编译期折叠 | universal | ★批次 39（2026-10-04 · 对齐 Web · 削减胶水）：静态 transform 编译期折成数值集（txPx/tyPx + txPct/tyPct 盒比例 + 等比 scale + rotate）⇒ 三端宿主逐节点变换通道应用（复用动画表：静态为基态、动画覆盖之）。支持 2D 子集；3D/skew/matrix/非等比缩放 ⇒ 诊断跳过（如实） |
 | motion | `transform-origin` | supported | supported | engine-only | L2 | 编译期折叠 | conditional | 引擎有 transform_origin_x/y（paint-only），编译面未接 |
 | selector | `类选择器 .a / .a.b` | — | — | supported | L0 | 编译期折叠 | conditional | C1：<style> 类规则编译期匹配合并（按源序；无特异性权重） |
 | selector | `元素/类型选择器 h3 / p.foo` | — | — | supported | L0 | 编译期折叠 | conditional | C1：按节点原始 tag 匹配（含祖先链） |
@@ -130,7 +130,6 @@
 | `gap（+ row-gap / column-gap）` | partial | partial | supported | px/数字；★批次 31：**两值** `gap:<row> <col>` 与 **轴级** `row-gap`/`column-gap`（内核 `LStyle.row_gap/c |
 | `margin/padding 1–4 值简写 + background 纯色简写 + flex 简写` | — | — | supported | ★批次 2/7（2026-10-04）：a) `margin: 8px 0` / `padding: 8px 12px` 按 CSS 标准展开为 {top,right,bottom |
 | `width/height 百分比` | — | — | supported | → widthRatio/heightRatio（比例字段） |
-| `transform（translate/scale/rotate/skew/perspective）` | supported | supported | engine-only | ★引擎/宿主已支持（LStyle 的绘制通道 paint-only + 宿主动画桥），但编译期折叠面（parseStaticStyle）**未接 transform** ⇒ 「可扩 |
 | `transform-origin` | supported | supported | engine-only | 引擎有 transform_origin_x/y（paint-only），编译面未接 |
 | `类选择器 .a / .a.b` | — | — | supported | C1：<style> 类规则编译期匹配合并（按源序；无特异性权重） |
 | `元素/类型选择器 h3 / p.foo` | — | — | supported | C1：按节点原始 tag 匹配（含祖先链） |

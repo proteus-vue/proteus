@@ -1060,6 +1060,15 @@ public class MainActivity extends Activity {
                 cor.put("ok", mo.optBoolean("ok", false));
                 cor.put("page", page);
                 cor.put("content_nodes", nodeCount);
+                // ★批次 39：静态变换节点数（编译期 CSS transform）——每端独立读数（与鸿蒙 transformed_nodes 同口径）
+                {
+                    int tfCount = 0;
+                    for (int ti = 0; ti < nodeCount; ti++) {
+                        org.json.JSONObject tn = nodes.optJSONObject(ti);
+                        if (tn != null && tn.has("transform") && !tn.isNull("transform")) tfCount++;
+                    }
+                    cor.put("transformed_nodes", tfCount);
+                }
                 cor.put("cmds_live", mo.optInt("cmds_live", -1));
                 cor.put("painted_samples", mo.optInt("painted_samples", -1));
                 if (comp.view() != null) comp.view().invalidate();

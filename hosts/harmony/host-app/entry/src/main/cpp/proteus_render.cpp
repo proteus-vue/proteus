@@ -18,6 +18,7 @@
 //   （转换放 JS 侧：一处实现，不散落在 C++）。
 #include <string>
 #include <cstdint>
+#include <cmath>
 #include <cstdio>
 #include <vector>
 #include <hilog/log.h>
@@ -597,6 +598,12 @@ static int renderCommandsImpl(const char* jsonCStr, bool fromProbe) {
         jsonNumber(it, "color", &color);
         jsonNumber(it, "radius", &radius);
         { double rcm = 0; if (jsonNumber(it, "radiusCorners", &rcm)) radiusMask = (int)rcm; }
+        // ★批次 39：静态变换（编译期 CSS transform）——位移（物理 px）+ 等比缩放 + 旋转
+        double tfTx = 0, tfTy = 0, tfScale = 1, tfRotate = 0;
+        jsonNumber(it, "tx", &tfTx);
+        jsonNumber(it, "ty", &tfTy);
+        jsonNumber(it, "scale", &tfScale);
+        jsonNumber(it, "rotate", &tfRotate);
         // ★批次 5（CSS 兼容对齐 · 边框）：uniform 边框宽度/颜色
         double borderWidth = 0, borderColor = 0;
         jsonNumber(it, "borderWidth", &borderWidth);
@@ -615,6 +622,20 @@ static int renderCommandsImpl(const char* jsonCStr, bool fromProbe) {
         }
         OH_ArkUI_RenderNodeUtils_SetSize(node, static_cast<int32_t>(w), static_cast<int32_t>(h));
         OH_ArkUI_RenderNodeUtils_SetPosition(node, static_cast<int32_t>(x), static_cast<int32_t>(y));
+        // ★批次 39：静态变换（与 platformAnimStep 同通道：SetTransform 4×4 列主序 + SetScale）
+        if (tfTx != 0 || tfTy != 0 || tfScale != 1 || tfRotate != 0) {
+            double rad = tfRotate * 3.14159265358979323846 / 180.0;
+            double co = std::cos(rad), si = std::sin(rad);
+            // 列主序：m00/m10 = 旋转；m30/m31 = 平移（物理 px）
+            float m[16] = {
+                (float)co, (float)si, 0, 0,
+                (float)-si, (float)co, 0, 0,
+                0, 0, 1, 0,
+                (float)tfTx, (float)tfTy, 0, 1
+            };
+            OH_ArkUI_RenderNodeUtils_SetTransform(node, m);
+            if (tfScale != 1) OH_ArkUI_RenderNodeUtils_SetScale(node, (float)tfScale, (float)tfScale);
+        }
         // ★取证日志（2026-10-02）：下发值必须可直接核对（"渲染去哪了"这类问题不能靠猜）
         //   ★hilog 不吃 `%.1f`（打 <private>）⇒ snprintf 预格式化 + %{public}s（与 ArkTS 侧同坑）
         {

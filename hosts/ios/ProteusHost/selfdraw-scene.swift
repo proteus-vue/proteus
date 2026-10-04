@@ -845,6 +845,17 @@ final class SelfDrawView: UIView {
             //   建层时父必已建好 ⇒ 直接 parent 深度 +1，O(1)。
             depthById[item.id] = item.parentId.flatMap { depthById[$0] }.map { $0 + 1 } ?? 0
         }
+        // ★批次 39：**静态变换**（编译期 CSS transform）——建层后应用（此时 layer.bounds 已定）。
+        //   位移分 px（直接用）与**盒比例**（txPct/tyPct × 盒尺寸：translate(-50%,-50%) 居中刚需）；
+        //   缩放取等比（编译器已拒绝非等比）。与动画同一条 `applyTransform` 通道（静态是基态，动画覆盖之）。
+        for item in flat {
+            guard let t = Self.staticTransform(style: item.style),
+                  let lyr = layersById[item.id] else { continue }
+            let b = lyr.bounds
+            let tx = CGFloat(t.txPx) + CGFloat(t.txPct) * b.width
+            let ty = CGFloat(t.tyPx) + CGFloat(t.tyPct) * b.height
+            _ = applyTransform(nodeId: item.id, tx: tx, ty: ty, scale: CGFloat(t.scale), rotate: CGFloat(t.rotate))
+        }
         builtLayerCount = layerNodes.count
         // ★V4：建层后清延迟更新簿记（新树 ⇒ 旧簿记失效）
         pendingOffscreen.removeAll(keepingCapacity: true)
@@ -1406,6 +1417,17 @@ final class SelfDrawView: UIView {
     ///
     /// 实现：`CATransform3D` 以**层中心**为锚点做缩放（等价 CSS `transform: scale()` 默认 origin=center）。
     @discardableResult
+    /// ★批次 39：解析节点样式里的**静态变换** `{"txPx","tyPx","sx","rotate","txPct","tyPct"}`（编译期 CSS transform）。
+    ///   返回 nil ⇔ 无 transform / 单位变换（不应用）。缩放取 sx（编译器已保证 sx===sy）。
+    static func staticTransform(style: [String: Any]) -> (txPx: Double, tyPx: Double, scale: Double, rotate: Double, txPct: Double, tyPct: Double)? {
+        guard let t = style["transform"] as? [String: Any] else { return nil }
+        func num(_ k: String, _ d: Double) -> Double { (t[k] as? NSNumber)?.doubleValue ?? d }
+        let txPx = num("txPx", 0), tyPx = num("tyPx", 0), txPct = num("txPct", 0), tyPct = num("tyPct", 0)
+        let scale = num("sx", 1), rotate = num("rotate", 0)
+        if txPx == 0 && tyPx == 0 && txPct == 0 && tyPct == 0 && scale == 1 && rotate == 0 { return nil }
+        return (txPx, tyPx, scale, rotate, txPct, tyPct)
+    }
+
     func applyTransform(
         nodeId: Int, tx: CGFloat, ty: CGFloat, scale: CGFloat,
         rotate: CGFloat = 0, rotateX: CGFloat = 0, rotateY: CGFloat = 0,

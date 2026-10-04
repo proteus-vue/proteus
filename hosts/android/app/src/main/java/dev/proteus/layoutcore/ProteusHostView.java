@@ -255,6 +255,21 @@ public class ProteusHostView extends ViewGroup {
         nodeTransformOrigin.put(nodeId, new float[]{ox, oy});
     }
 
+    /**
+     * ★批次 39：节点 id → **静态变换**。格式与 `animTx` **前 9 位同构** `[txPx,tyPx,scale,rotate,opacity,rotX,rotY,skewX,skewY]`，
+     *   末尾追加 `txPct,tyPct`（位移的**盒比例**分量；绘制时按盒尺寸换算——`translate(-50%,-50%)` 居中刚需）。
+     *   缺省不存 = 无变换。动画表缺该节点时退回本表（静态是动画的基态）。
+     */
+    private final Map<Integer, float[]> nodeStaticTx = new HashMap<>();
+    /** 场景注入某节点的静态变换（编译期 CSS `transform`）——px 位移 + 盒比例位移 + 等比缩放 + 旋转 */
+    public void setNodeTransform(int nodeId, float txPx, float tyPx, float scale, float rotate, float txPct, float tyPct) {
+        if (txPx == 0f && tyPx == 0f && txPct == 0f && tyPct == 0f && scale == 1f && rotate == 0f) {
+            nodeStaticTx.remove(nodeId);
+            return;
+        }
+        nodeStaticTx.put(nodeId, new float[]{txPx, tyPx, scale, rotate, 1f, 0f, 0f, 0f, 0f, txPct, tyPct});
+    }
+
     /** 节点 id → Rust 几何（**位置/尺寸的唯一来源**；子 View 的 measure/layout 都用它） */
     private final Map<Integer, RectF> nativeRects = new HashMap<>();
 
@@ -1133,6 +1148,7 @@ public class ProteusHostView extends ViewGroup {
         nodeSvgStroke.clear();
         nodeClipKindAndBase.clear();
         nodeTransformOrigin.clear();
+        nodeStaticTx.clear();
         nodeRadiusCorners.clear();
         nodeFontRole.clear();
         animTx.clear();
@@ -2176,13 +2192,23 @@ public class ProteusHostView extends ViewGroup {
             // ★★逐节点变换（内核动画的**绘制落点**）：按并行表查该指令的节点变换
             //   变换语义与 iOS `applyTransform` **同构**：平移 → 以**元素中心**为锚旋转/缩放。
             float[] tf = (ids != null && i < ids.length && ids[i] >= 0) ? animTx.get(ids[i]) : null;
+            // ★批次 39：无动画值时退回**静态变换**（编译期 CSS transform —— 前 9 位与 animTx 同构）
+            boolean fromStatic = false;
+            if (tf == null && ids != null && i < ids.length && ids[i] >= 0) {
+                tf = nodeStaticTx.get(ids[i]);
+                fromStatic = tf != null;
+            }
             final float rotX = tf != null && tf.length >= 7 ? tf[5] : 0f;
             final float rotY = tf != null && tf.length >= 7 ? tf[6] : 0f;
             final boolean has3d = rotX != 0f || rotY != 0f;
+            // ★批次 39：静态位移的**盒比例**分量按本节点绘制盒换算（translate(-50%,-50%) 居中）
+            float tfTx = tf != null ? tf[0] : 0f;
+            float tfTy = tf != null ? tf[1] : 0f;
+            if (fromStatic && tf != null && tf.length >= 11) { tfTx += tf[9] * c.w; tfTy += tf[10] * c.h; }
             // ★C1：有裁剪也必须 save/restore（clipPath 是画布状态，不 restore 会**泄漏到后面所有指令**）
             // ★C1：有裁剪声明就必须 save/restore（**含静态裁剪**——首版只认动画中的 ⇒ 静态漏 restore）
             final boolean hasClip = ids != null && i < ids.length && clipKindOf(ids[i]) > 0;
-            final boolean xf = (tf != null && (tf[0] != 0f || tf[1] != 0f || tf[2] != 1f || tf[3] != 0f || has3d))
+            final boolean xf = (tf != null && (tfTx != 0f || tfTy != 0f || tf[2] != 1f || tf[3] != 0f || has3d))
                     || hasClip;
             final int save = xf ? canvas.save() : -1;
             // ★★软边遮罩（mask v1）：**saveLayer 包裹**（开层 → 画内容 → 用 DST_IN 叠渐变 → 还原）。
@@ -2204,7 +2230,8 @@ public class ProteusHostView extends ViewGroup {
             final float tfSkewY = tf != null && tf.length >= 9 ? tf[8] : 0f;
             if (xf) {
                 // ★tf 可能为 null 而仅因裁剪进入本分支（C1）——兜底为零变换
-                canvas.translate(tf != null ? tf[0] : 0f, tf != null ? tf[1] : 0f);
+                // ★批次 39：tfTx/tfTy 已含静态位移的盒比例分量（见上）
+                canvas.translate(tfTx, tfTy);
                 // ★★变换原点（transform-origin v1）：缺省 (0.5, 0.5) = 元素中心（既有行为零变化）——
                 //   放底部（0.5, 1.0）= "从根部弯折"（与水草/旗帜的物理直觉一致）。
                 final float[] org = nodeTransformOrigin.get(ids != null && i < ids.length ? ids[i] : -1);

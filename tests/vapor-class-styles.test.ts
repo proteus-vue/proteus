@@ -362,13 +362,15 @@ describe('★C1 最小切片 · SFC <style> 单类规则 → class→节点样�
   it('★⑦n Web 默认值/重置声明（批次 26/27）：不诊断；有 App 字段的记默认值', () => {
     // 【为什么（以 web 为基准）】这些是「无视觉变化」或「= App 默认」的写法；报成缺口是假阳性。
     //   ★批次 27：有 App 字段的**必须记录默认值**（否则 `.b{border:none}` 覆盖不了 `.a{border:1px}`）。
-    // 无 App 字段 ⇒ 空记录（不落键）：transform / text-decoration / outline / background-image
-    for (const css of ['transform: none', 'text-decoration: none', 'outline: none', 'background-image: none']) {
+    // 无 App 字段 ⇒ 空记录（不落键）：text-decoration / outline / background-image
+    for (const css of ['text-decoration: none', 'outline: none', 'background-image: none']) {
       const d: string[] = []
       const out = parseStaticStyle(css, (m: string) => d.push(m))
       expect(d.length, css + ' 不应诊断').toBe(0)
       expect(Object.keys(out).length, css + ' 不应落键').toBe(0)
     }
+    // ★批次 39：transform 已成真字段 ⇒ `transform:none` 记录重置（null），级联能覆盖低优先级的 translate/scale/rotate
+    expect((parseStaticStyle('transform: none', () => {}) as { transform?: unknown }).transform, 'transform:none ⇒ 重置 null').toBeNull()
     // 有 App 字段 ⇒ 记默认值（重置语义）
     expect((parseStaticStyle('border: none', () => {}) as { borderWidth?: number }).borderWidth, 'border:none ⇒ borderWidth 0').toBe(0)
     expect((parseStaticStyle('background: none', () => {}) as { backgroundColor?: string }).backgroundColor, 'background:none ⇒ 透明').toBe('#00000000')
@@ -387,9 +389,10 @@ describe('★C1 最小切片 · SFC <style> 单类规则 → class→节点样�
     const d2: string[] = []
     parseStaticStyle('display: inline', (m: string) => d2.push(m))
     expect(d2.length > 0, 'display:inline 仍诊断').toBe(true)
+    // ★批次 39：transform 已支持 2D 子集 ⇒ 未支持的是 3D/skew/matrix（此处用 skewX 验证仍诊断）
     const d3: string[] = []
-    parseStaticStyle('transform: scale(2)', (m: string) => d3.push(m))
-    expect(d3.length > 0, 'transform:scale 仍诊断（未支持）').toBe(true)
+    parseStaticStyle('transform: skewX(10deg)', (m: string) => d3.push(m))
+    expect(d3.length > 0, 'transform:skewX 仍诊断（3D/skew 未支持）').toBe(true)
   })
 
   it('★⑦o 重置声明的级联覆盖（批次 27 · 修级联缺陷）：b 类 border:none 覆盖 a 类 border:1px', () => {
@@ -1240,5 +1243,55 @@ describe('★批次 38 · inset 简写（对齐 Web 定位缩写）', () => {
     expect(scrim, 'scrim 节点命中').toBeTruthy()
     expect([styleOf(scrim!).top, styleOf(scrim!).right, styleOf(scrim!).bottom, styleOf(scrim!).left], '四边 0').toEqual([0, 0, 0, 0])
     expect(styleOf(scrim!).position, 'absolute').toBe('absolute')
+  })
+})
+
+// ★批次 39（对齐 Web · 削减胶水）：**静态 `transform`** —— 位移/缩放/旋转折成数值集（宿主逐节点变换通道复用）——2026-10-04
+//   真项目 73 处 transform（多为 transition 态；静态折叠面给"静态摆位"用）；
+//   支持 2D 子集（translate/scale/rotate），3D/skew/matrix 如实诊断。
+describe('★批次 39 · 静态 transform（对齐 Web 2D 变换）', () => {
+  const tf = (css: string) => (parseStaticStyle(css, () => {}) as { transform?: Record<string, number> }).transform
+
+  it('① translate / translateX / translateY（px；%→盒比例）', () => {
+    expect(tf('transform: translateY(-2px)')).toMatchObject({ tyPx: -2 })
+    expect(tf('transform: translateX(10px)')).toMatchObject({ txPx: 10 })
+    expect(tf('transform: translate(4px, 8px)')).toMatchObject({ txPx: 4, tyPx: 8 })
+    expect(tf('transform: translate(-50%,-50%)')).toMatchObject({ txPct: -0.5, tyPct: -0.5 })
+  })
+
+  it('② scale / rotate（等比 + 角度单位）', () => {
+    expect(tf('transform: scale(1.5)')).toMatchObject({ sx: 1.5, sy: 1.5 })
+    expect(tf('transform: rotate(45deg)')).toMatchObject({ rotate: 45 })
+    expect(tf('transform: rotate(0.5turn)')).toMatchObject({ rotate: 180 })
+    expect(tf('transform: rotate(100grad)')).toMatchObject({ rotate: 90 })
+  })
+
+  it('③ 复合：translateX(10px) scale(2)', () => {
+    expect(tf('transform: translateX(10px) scale(2)')).toMatchObject({ txPx: 10, sx: 2, sy: 2 })
+  })
+
+  it('④ none ⇒ 级联重置标记（null）；单位变换 ⇒ 不发射', () => {
+    // `transform: none` 记录重置（null）——让级联能覆盖低优先级的 translate/scale/rotate（批 27 纪律）
+    expect(tf('transform: none')).toBeNull()
+    // 单位变换（visual no-op）⇒ 不发射（undefined）
+    expect(tf('transform: translate(0,0)')).toBeUndefined()
+  })
+
+  it('⑤ 不支持形态如实诊断（3D/skew/matrix/非等比）', () => {
+    for (const bad of ['transform: skewX(10deg)', 'transform: matrix(1,0,0,1,0,0)', 'transform: translate3d(0,0,0)', 'transform: scaleX(2)']) {
+      const d: string[] = []
+      expect((parseStaticStyle(bad, (m) => d.push(m)) as { transform?: unknown }).transform, bad).toBeUndefined()
+      expect(d.length, `${bad} 应诊断`).toBeGreaterThan(0)
+    }
+  })
+
+  it('⑥ 端到端：class 里的 transform → 节点 style', () => {
+    const sfc = `<template><view class="wrap"><view class="chip">x</view></view></template>
+<style>
+.chip { width: 100px; height: 30px; background-color: #ff8a3d; transform: translateY(6px) scale(0.92) }
+</style>`
+    const r = buildLayoutTemplate(sfc, 'tf.vue')
+    const chip = r.template.nodes.find((n) => (n.style as { backgroundColor?: string }).backgroundColor === '#ff8a3d')
+    expect((chip?.style as { transform?: Record<string, number> })?.transform).toMatchObject({ tyPx: 6, sx: 0.92 })
   })
 })

@@ -1,7 +1,8 @@
 {
   "ok": true,
   "page": "index",
-  "content_nodes": 86,
+  "content_nodes": 87,
+  "transformed_nodes": 1,
   "cmds_live": -1,
   "painted_samples": 710,
   "png": "app-screen-composite.png",

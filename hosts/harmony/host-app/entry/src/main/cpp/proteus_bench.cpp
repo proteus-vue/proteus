@@ -4136,6 +4136,7 @@ static std::string g_appTouchFilesDir;
 static int g_appTouchContentNodes = 0;
 static int g_appTouchCmdCount = 0;
 static int g_appTouchHitCount = 0;      // 装置内命中（合成时 20 点，向后兼容旧读数）
+static int g_appTouchTransformCount = 0; // ★批次 39：带静态变换的节点数（编译期 CSS transform）
 static int g_appTouchHitFirst = -1;
 static int g_appTouchRealCount = 0;     // ★真实触摸事件数（.onTouch → appScreenHitAt）
 static int g_appTouchRealHits = 0;      // ★真实触摸命中数
@@ -4148,10 +4149,11 @@ static void writeAppScreenComposite() {
     snprintf(sum, sizeof(sum),
              "{\"ok\":%s,\"page\":\"%s\",\"content_nodes\":%d,\"cmds\":%d,\"render_nodes\":%d,"
              "\"hit_points_hit\":%d,\"hit_first_target\":%d,"
-             "\"real_touch\":true,\"touch_count\":%d,\"real_touch_hits\":%d,\"real_touch_first_target\":%d}",
+             "\"real_touch\":true,\"touch_count\":%d,\"real_touch_hits\":%d,\"real_touch_first_target\":%d,"
+             "\"transformed_nodes\":%d}",
              g_appTouchCmdCount > 0 ? "true" : "false", g_appTouchPage.c_str(), g_appTouchContentNodes,
              g_appTouchCmdCount, g_appTouchCmdCount, g_appTouchHitCount, g_appTouchHitFirst,
-             g_appTouchRealCount, g_appTouchRealHits, g_appTouchRealFirst);
+             g_appTouchRealCount, g_appTouchRealHits, g_appTouchRealFirst, g_appTouchTransformCount);
     std::string path = g_appTouchFilesDir + "/app-screen-composite.json";
     FILE* f = fopen(path.c_str(), "w"); if (f) { fwrite(sum, 1, strlen(sum), f); fclose(f); }
 }
@@ -4262,7 +4264,7 @@ static napi_value AppScreenCommands(napi_env env, napi_callback_info info) {
         }
     }
     std::vector<std::string> items = splitJsonObjects(nodes);
-    std::string arr = "["; int emitted = 0;
+    std::string arr = "["; int emitted = 0; int tfCount = 0;
     for (const auto& it : items) {
         double id = -1; jnum(it.c_str(), it.size(), "id", &id);
         auto ri = rectMap.find((int)id); if (ri == rectMap.end()) continue;
@@ -4318,6 +4320,27 @@ static napi_value AppScreenCommands(napi_env env, napi_callback_info info) {
             arr += bb;
         }
         if (rcMask > 0 && rcMask != 15) { char rcb[48]; snprintf(rcb, sizeof(rcb), ",\"radiusCorners\":%d", rcMask); arr += rcb; }
+        // ★批次 39：静态变换（编译期 CSS transform）——位移分 px 与盒比例（% 按盒尺寸换算），等比缩放 + 旋转。
+        {
+            std::string tSub = extractValueAfterKey(it, "transform", '{', '}');
+            if (!tSub.empty()) {
+                double txPx = 0, tyPx = 0, txPct = 0, tyPct = 0, sx = 1, rot = 0;
+                jnum(tSub.c_str(), tSub.size(), "txPx", &txPx);
+                jnum(tSub.c_str(), tSub.size(), "tyPx", &tyPx);
+                jnum(tSub.c_str(), tSub.size(), "txPct", &txPct);
+                jnum(tSub.c_str(), tSub.size(), "tyPct", &tyPct);
+                jnum(tSub.c_str(), tSub.size(), "sx", &sx);
+                jnum(tSub.c_str(), tSub.size(), "rotate", &rot);
+                double txD = (txPx + txPct * r.w) * density;
+                double tyD = (tyPx + tyPct * r.h) * density;
+                if (txD != 0 || tyD != 0 || sx != 1 || rot != 0) {
+                    char tb[160];
+                    snprintf(tb, sizeof(tb), ",\"tx\":%.2f,\"ty\":%.2f,\"scale\":%.4f,\"rotate\":%.3f", txD, tyD, sx, rot);
+                    arr += tb;
+                    tfCount++;
+                }
+            }
+        }
         if (!text.empty()) {
             char tail[128]; snprintf(tail, sizeof(tail), ",\"fontSize\":%.2f,\"fontWeight\":%d,\"textColor\":%u", fs * density, (int)fw, tc);
             arr += tail;
@@ -4345,6 +4368,7 @@ static napi_value AppScreenCommands(napi_env env, napi_callback_info info) {
     }
     arr += "]";
     g_appTouchCmdCount = emitted;
+    g_appTouchTransformCount = tfCount;
     char lb[128]; snprintf(lb, sizeof(lb), "PROTEUS_APP_SCREEN_CMDS page=%s nodes=%d", page.c_str(), emitted);
     OH_LOG_Print(LOG_APP, LOG_INFO, PROTEUS_BENCH_DOMAIN, PROTEUS_BENCH_TAG, "%{public}s", lb);
     writeAppScreenComposite();

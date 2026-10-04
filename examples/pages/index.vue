@@ -159,6 +159,9 @@ function go(name: 'forms' | 'config-demo' | 'user') {
     <div class="inset-demo">
       <div class="inset-fill">inset: 0 覆盖层</div>
     </div>
+
+    <!-- ★transform 静态折叠演示（批次 39）：translate + scale（免手写引擎动画） -->
+    <div class="tf-demo">transform: translateY(6px) scale(0.92)</div>
   </div>
 </template>
 
@@ -480,5 +483,17 @@ function go(name: 'forms' | 'config-demo' | 'user') {
   font-size: 12px;
   text-align: center;
   border-radius: 8px;
+}
+/* ★transform 静态折叠演示（批次 39）——位移 + 等比缩放 */
+.tf-demo {
+  width: 220px;
+  height: 40px;
+  margin: 16px auto;
+  background-color: #ff8a3d;
+  color: #ffffff;
+  font-size: 12px;
+  text-align: center;
+  border-radius: 8px;
+  transform: translateY(6px) scale(0.92);
 }
 </style>
