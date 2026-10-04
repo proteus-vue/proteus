@@ -634,6 +634,7 @@ final class SelfDrawView: UIView {
             // ★contentsScale 必须显式设置：否则 Retina 上文本模糊（CATextLayer 不继承自动缩放）
             tl.contentsScale = UIScreen.main.scale
             tl.isWrapped = false
+            applyBorder(tl, style: style)
             SelfDrawBridge.applyPaintHint(tl, style: style)
             return tl
         }
@@ -644,6 +645,8 @@ final class SelfDrawView: UIView {
             //   故由 `id` 参数写入（`makeLayer` 已带 nodeId）
             layerOriginalBg[nodeId] = bg.cgColor
         }
+        // ★批次 5（CSS 兼容对齐 · 边框）：uniform 边框（borderWidth + borderColor）——CALayer 原生边框。
+        applyBorder(layer, style: style)
         if let r = style["borderRadius"] as? CGFloat, r > 0 {
             layer.cornerRadius = r
             layer.masksToBounds = true
@@ -2841,9 +2844,11 @@ final class SelfDrawView: UIView {
     /// 把节点规格里的绘制字段取出来（与全量路径同款；单一实现避免分叉）
     static func styleOf(_ n: [String: Any]) -> [String: Any] {
         var style: [String: Any] = [:]
-        for k in ["backgroundColor", "color", "text", "fontFamily", "textAlign"] {
+        for k in ["backgroundColor", "color", "text", "fontFamily", "textAlign", "borderColor"] {
             if let v = n[k] as? String { style[k] = v }
         }
+        if let bw = n["borderWidth"] as? Double { style["borderWidth"] = CGFloat(bw) }
+        if let bw = n["borderWidth"] as? CGFloat { style["borderWidth"] = bw }
         // ★★I3：绘制提示必须**透传**——本函数是 `acquireLayer`/`buildLayers` 的必经之路，
         //   不透传则 `applyPaintHint` 永远读不到 hint（接线断在这里，且**无任何报错**）。
         if let h = n["paintHint"] as? [String: Any] { style["paintHint"] = h }
@@ -2928,10 +2933,24 @@ final class SelfDrawView: UIView {
         }
         // 非文本属性：**缺省即清零**（不留上一个节点的痕迹）
         layer.backgroundColor = (style["backgroundColor"] as? String).flatMap(parseHexColor)?.cgColor
+        // ★批次 5：边框复用路径同样重配（缺省清零）
+        applyBorder(layer, style: style)
         let r = (style["borderRadius"] as? CGFloat) ?? 0
         layer.cornerRadius = r
         layer.masksToBounds = r > 0
         layer.opacity = 1
+    }
+
+    /// ★批次 5（CSS 兼容对齐 · 边框）：uniform 边框 → `CALayer.borderWidth/borderColor`。
+    ///   `borderWidth<=0` 或缺颜色 ⇒ 清零（缺省无边框，与既有路径零行为变化）。
+    private func applyBorder(_ layer: CALayer, style: [String: Any]) {
+        let bw = (style["borderWidth"] as? CGFloat) ?? 0
+        if bw > 0, let bc = (style["borderColor"] as? String).flatMap(parseHexColor) {
+            layer.borderWidth = bw
+            layer.borderColor = bc.cgColor
+        } else {
+            layer.borderWidth = 0
+        }
     }
 
     /// 虚拟化读数（判据 + 诊断）

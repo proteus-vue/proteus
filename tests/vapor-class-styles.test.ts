@@ -378,3 +378,50 @@ describe('★批次 4 · text-align（封闭集 + 端到端）', () => {
     expect((n!.style as { textAlign?: string }).textAlign).toBe('center')
   })
 })
+
+// ★★★批次 5（CSS 兼容对齐 · 边框）：border 简写 → borderWidth + borderColor（uniform）——2026-10-04
+describe('★批次 5 · border 简写（uniform 实线）', () => {
+  it('① `border: <width> <style> <color>` 任意顺序 → borderWidth + borderColor（颜色归一 hex）', () => {
+    expect(parseStaticStyle('border: 1px solid #e3e6eb', () => {})).toEqual({ borderWidth: 1, borderColor: '#e3e6eb' })
+    expect(parseStaticStyle('border: solid 2px rgba(0,0,0,0.35)', () => {})).toEqual({ borderWidth: 2, borderColor: '#00000059' })
+  })
+
+  it('② 逐边边框（border-bottom 等）⇒ 诊断跳过（仅支持统一边框）', () => {
+    const d: string[] = []
+    expect(parseStaticStyle('border-bottom: 1px solid #eee', (m) => d.push(m))).toEqual({})
+    expect(d.some((m) => m.includes('逐边边框'))).toBe(true)
+  })
+
+  it('③ border-style 非 solid ⇒ 诊断（不静默当实线）；solid/none 无操作', () => {
+    const d: string[] = []
+    parseStaticStyle('border-style: dashed', (m) => d.push(m))
+    expect(d.some((m) => m.includes('border-style'))).toBe(true)
+    const d2: string[] = []
+    parseStaticStyle('border-style: solid', (m) => d2.push(m))
+    expect(d2.length).toBe(0)
+  })
+
+  it('④ var() 令牌色的边框 ⇒ 宽度保留、颜色诊断（诚实反映不可解析）', () => {
+    const d: string[] = []
+    const out = parseStaticStyle('border: 1px solid var(--sp-line)', (m) => d.push(m))
+    expect(out.borderWidth).toBe(1)
+    expect(out.borderColor, 'var() 不可编译期解析 ⇒ 无颜色').toBeUndefined()
+    expect(d.some((m) => m.includes('var()'))).toBe(true)
+  })
+
+  it('⑤ 直接写 border-width/border-color（引擎折叠面）', () => {
+    expect(parseStaticStyle('border-color: #cccccc; border-width: 2', () => {})).toEqual({ borderColor: '#cccccc', borderWidth: 2 })
+  })
+
+  it('⑥ 端到端：border 简写经 <style> class 折进节点 style', () => {
+    const sfc = `<template><view class="card">x</view></template>
+<script setup>const z = 1</script>
+<style>
+.card { border: 1px solid #ddd; border-radius: 8 }
+</style>`
+    const r = buildLayoutTemplate(sfc, 'pages/card.vue')
+    const n = r.template.nodes.find((x) => (x.style as { borderWidth?: number }).borderWidth)
+    expect((n!.style as { borderWidth?: number }).borderWidth).toBe(1)
+    expect((n!.style as { borderColor?: string }).borderColor).toBe('#ddd')
+  })
+})

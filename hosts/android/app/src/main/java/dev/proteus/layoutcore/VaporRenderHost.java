@@ -1306,6 +1306,10 @@ final class VaporRenderHost {
         final ProteusHostView.GradSpec grad = parseGrad(spec.optJSONObject("fillGradient"));
         final float[] glowSpec = parseGlow(spec.optJSONObject("glow"));
         final float[] maskSpec = parseMask(spec.optJSONObject("mask"));
+        // ★批次 5：uniform 边框（宽度 + 颜色；颜色缺省 0 ⇒ 不画边框）
+        final float bw = (float) spec.optDouble("borderWidth", 0);
+        String bcStr = spec.optString("borderColor", null);
+        final int bc = bcStr != null ? parseColor(bcStr) : 0;
 
         String t = spec.optString("text", null);
         if (t != null && !t.isEmpty()) {
@@ -1316,9 +1320,9 @@ final class VaporRenderHost {
             int fw = (int) spec.optDouble("fontWeight", 400);
             // ★批次 4：文本水平对齐（text-align → 0/1/2）
             int ta = alignOf(spec.optString("textAlign", null));
-            return new ProteusHostView.Cmd(x, y, w, h, color, t, fs, textColor, radius, grad, glowSpec, maskSpec, fw, ta);
+            return new ProteusHostView.Cmd(x, y, w, h, color, t, fs, textColor, radius, grad, glowSpec, maskSpec, fw, ta, bw, bc);
         }
-        return new ProteusHostView.Cmd(x, y, w, h, color, null, 0f, 0, radius, grad, glowSpec, maskSpec);
+        return new ProteusHostView.Cmd(x, y, w, h, color, null, 0f, 0, radius, grad, glowSpec, maskSpec, 400, 0, bw, bc);
     }
 
     /** ★批次 4：`text-align` 字符串 → 码（0=left / 1=center / 2=right；未知 ⇒ 0） */
@@ -1437,9 +1441,11 @@ final class VaporRenderHost {
             final int textColor = tc != null ? parseColor(tc) : prev.textColor;
             final int fw = (int) spec.optDouble("fontWeight", prev.fontWeight);
             final int ta = spec.has("textAlign") ? alignOf(spec.optString("textAlign", null)) : prev.textAlign;
-            return new ProteusHostView.Cmd(prev.x, prev.y, prev.w, prev.h, color, t, fs, textColor, prev.radius, prev.gradient, prev.glow, prev.mask, fw, ta);
+            final float bw = spec.has("borderWidth") ? (float) spec.optDouble("borderWidth", prev.borderWidth) : prev.borderWidth;
+            final int bc = spec.has("borderColor") ? parseColor(spec.optString("borderColor", null)) : prev.borderColor;
+            return new ProteusHostView.Cmd(prev.x, prev.y, prev.w, prev.h, color, t, fs, textColor, prev.radius, prev.gradient, prev.glow, prev.mask, fw, ta, bw, bc);
         }
-        return new ProteusHostView.Cmd(prev.x, prev.y, prev.w, prev.h, color, prev.text, prev.fontSize, prev.textColor, prev.radius, prev.gradient, prev.glow, prev.mask, prev.fontWeight, prev.textAlign);
+        return new ProteusHostView.Cmd(prev.x, prev.y, prev.w, prev.h, color, prev.text, prev.fontSize, prev.textColor, prev.radius, prev.gradient, prev.glow, prev.mask, prev.fontWeight, prev.textAlign, prev.borderWidth, prev.borderColor);
     }
 
     /** 全量：几何 → 指令（矩形 + 文本 + 底色） */

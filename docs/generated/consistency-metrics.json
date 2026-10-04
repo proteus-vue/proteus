@@ -49,8 +49,8 @@
     "covered": 30,
     "total": 30,
     "byTier": {
-      "universal": 19,
-      "conditional": 3,
+      "universal": 20,
+      "conditional": 2,
       "unsupported": 0
     },
     "boundaryRules": 24,
