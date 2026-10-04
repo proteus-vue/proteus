@@ -5197,6 +5197,50 @@ export const APP_SCREEN_CONTENT: Record<string, ScreenContent> = {
         "textAlign": "center",
         "text": "进入用户中心后点「个人资料」→ route 面板连续两条嵌套记录",
         "semantic": "p"
+      },
+      {
+        "id": 51,
+        "parentId": 0,
+        "margin": {
+          "top": 20,
+          "bottom": 20
+        },
+        "maxWidth": 300,
+        "padding": {
+          "top": 12,
+          "right": 16,
+          "bottom": 12,
+          "left": 16
+        },
+        "borderRadius": 8,
+        "textAlign": "center",
+        "semantic": "div"
+      },
+      {
+        "id": 52,
+        "parentId": 51,
+        "margin": {
+          "top": 0,
+          "right": 0,
+          "bottom": 6,
+          "left": 0
+        },
+        "fontSize": 15,
+        "textAlign": "center",
+        "text": "文本截断（text-overflow: ellipsis）",
+        "semantic": "h3"
+      },
+      {
+        "id": 53,
+        "parentId": 51,
+        "widthRatio": 1,
+        "overflow": "hidden",
+        "textOverflow": "ellipsis",
+        "textAlign": "left",
+        "color": "#666",
+        "fontSize": 13,
+        "text": "这是一段很长的列表项文本，超过容器宽度时应在行尾以省略号结尾，而不是换行或溢出容器",
+        "semantic": "div"
       }
     ]
   },

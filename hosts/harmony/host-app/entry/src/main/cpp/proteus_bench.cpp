@@ -273,6 +273,7 @@ struct SfcStyle {
     int fontWeight = 400;        // ★批次 3：字重（`font-weight` 折叠值）
     std::string textAlign;       // ★批次 4：文本水平对齐（left/center/right）
     double lineHeight = 0;       // ★批次 13：行盒高（设计单位；0 = 未声明）
+    int textOverflowEllipsis = 0; // ★批次 16：text-overflow:ellipsis（单行截断）
     double borderWidth = 0;      // ★批次 5：uniform 边框宽度
     uint32_t borderColor = 0;    // ★批次 5：uniform 边框颜色
     std::string text;
@@ -381,6 +382,7 @@ static void parseSfcStyles(const std::string& fixture, std::vector<std::pair<int
         jnum(item.c_str(), item.size(), "fontSize", &st.fontSize);
         double fwv = 400; jnum(item.c_str(), item.size(), "fontWeight", &fwv); st.fontWeight = (int)fwv;
         jstr(item.c_str(), item.size(), "textAlign", &st.textAlign);
+        { std::string to; if (jstr(item.c_str(), item.size(), "textOverflow", &to) && to == "ellipsis") st.textOverflowEllipsis = 1; }
         { std::string lhTok; if (jstr(item.c_str(), item.size(), "lineHeight", &lhTok)) st.lineHeight = lineHeightDesignPx(lhTok, st.fontSize); }
         jnum(item.c_str(), item.size(), "borderWidth", &st.borderWidth);
         { std::string bcCss; if (jstr(item.c_str(), item.size(), "borderColor", &bcCss)) st.borderColor = hexToArgb(bcCss); }
@@ -1439,6 +1441,7 @@ static napi_value SfcStressCommands(napi_env env, napi_callback_info info) {
                      st.fontSize * density, st.fontWeight, st.textColor);
             arr += tail;
             if (!st.textAlign.empty()) arr += ",\"textAlign\":\"" + jsonEscape(st.textAlign) + "\"";
+            if (st.textOverflowEllipsis) arr += ",\"textOverflowEllipsis\":1";
             if (st.lineHeight > 0) { char lb2[48]; snprintf(lb2, sizeof(lb2), ",\"lineHeightPx\":%.2f", st.lineHeight * density); arr += lb2; }
             arr += ",\"text\":\"" + jsonEscape(st.text) + "\"";
         }
@@ -1778,6 +1781,7 @@ static std::string vaporMountImpl(const std::string& treeJson) {
                      st.fontSize * g_vaporDensity, st.fontWeight, st.textColor);
             cmds += tail;
             if (!st.textAlign.empty()) cmds += ",\"textAlign\":\"" + jsonEscape(st.textAlign) + "\"";
+            if (st.textOverflowEllipsis) cmds += ",\"textOverflowEllipsis\":1";
             if (st.lineHeight > 0) { char lb2[48]; snprintf(lb2, sizeof(lb2), ",\"lineHeightPx\":%.2f", st.lineHeight * g_vaporDensity); cmds += lb2; }
             cmds += ",\"text\":\"" + jsonEscape(st.text) + "\"";
         }
@@ -4292,6 +4296,8 @@ static napi_value AppScreenCommands(napi_env env, napi_callback_info info) {
             char tail[128]; snprintf(tail, sizeof(tail), ",\"fontSize\":%.2f,\"fontWeight\":%d,\"textColor\":%u", fs * density, (int)fw, tc);
             arr += tail;
             if (!ta.empty()) arr += ",\"textAlign\":\"" + jsonEscape(ta) + "\"";
+            // ★批次 16：text-overflow:ellipsis ⇒ 扁平键（渲染侧据此设 maxLines=1 + 尾部省略号）
+            { std::string to; if (jstr(it.c_str(), it.size(), "textOverflow", &to) && to == "ellipsis") arr += ",\"textOverflowEllipsis\":1"; }
             // ★批次 13：行盒高（lineHeight token → 物理 px；倍数×fs 或 px）——半行距居中用
             {
                 std::string lhTok; jstr(it.c_str(), it.size(), "lineHeight", &lhTok);
