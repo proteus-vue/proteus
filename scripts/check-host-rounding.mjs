@@ -27,11 +27,14 @@ import { fileURLToPath } from 'node:url'
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..')
 
-/** 扫描面：宿主绘制/几何代码（Java/Swift/ObJ-C++/Rust JNI） */
+/** 扫描面：宿主绘制/几何代码（Java/Swift/ObJ-C++/Rust JNI/ArkTS） */
 const TARGETS = [
   'hosts/android/app/src/main/java/dev/proteus/layoutcore',
   'hosts/ios/ProteusHost',
   'hosts/ios/experiments',
+  // ★2026-10-04（App 三端对齐 · D3）：鸿蒙宿主 ArkTS 源码——此前不在扫描面 ⇒ 三端舍入纪律**缺一端**。
+  //   ★只扫 `src/main/ets`（不含 `entry/build/**` 生成物）；扩展名见下方 walk 的 .ets/.ts。
+  'hosts/harmony/host-app/entry/src/main/ets',
 ]
 
 /** 舍入调用形态（跨语言） */
@@ -72,7 +75,7 @@ function walk(dir) {
   for (const e of fs.readdirSync(dir, { withFileTypes: true })) {
     const p = path.join(dir, e.name)
     if (e.isDirectory()) out.push(...walk(p))
-    else if (/\.(java|swift|mm|m|h|kt)$/.test(e.name)) out.push(p)
+    else if (/\.(java|swift|mm|m|h|kt|ets|ts)$/.test(e.name)) out.push(p)
   }
   return out
 }
@@ -106,7 +109,7 @@ for (const target of TARGETS) {
 }
 
 console.log('卡 I2 · 平台层零舍入检查（内核已吸附 ⇒ 平台不得再舍入）')
-console.log(`  扫描 ${scanned} 个宿主源文件（Android layoutcore / iOS ProteusHost / iOS experiments）`)
+console.log(`  扫描 ${scanned} 个宿主源文件（Android layoutcore / iOS ProteusHost / iOS experiments / 鸿蒙 ArkTS ets）`)
 console.log(`  已登记例外 ${allowed.length} 处（I2-ALLOW 或统计/报告行）`)
 
 if (failures.length) {

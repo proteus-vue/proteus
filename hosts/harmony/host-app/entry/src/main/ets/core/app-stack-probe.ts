@@ -98,6 +98,7 @@ export function runAppStackProbe(argsJson?: string): string {
   const nav = createAppStack({ screens })
   for (let i = 0; i < navDepth; i++) nav.push(names[i % fans]!)
   nav.drainCommands()
+  // I2-ALLOW: 非几何——栈深度取半（构建"深栈→留前半"测试场景的帧数计数，与坐标/尺寸无关）
   const keep = Math.floor(navDepth / 2)
   const frames: Array<{ name: string }> = []
   for (let i = 0; i < keep; i++) frames.push({ name: names[i % fans]! })
