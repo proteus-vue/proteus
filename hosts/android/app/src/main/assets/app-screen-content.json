@@ -5955,6 +5955,40 @@
         },
         "text": "transform: translateY(6px) scale(0.92)",
         "semantic": "div"
+      },
+      {
+        "id": 87,
+        "parentId": 0,
+        "width": 220,
+        "height": 36,
+        "margin": {
+          "top": 16,
+          "bottom": 16
+        },
+        "marginAuto": {
+          "right": true,
+          "left": true
+        },
+        "backgroundColor": "#12b886",
+        "color": "#ffffff",
+        "fontSize": 12,
+        "textAlign": "center",
+        "borderRadius": 8,
+        "transform": {
+          "txPx": 0,
+          "tyPx": 0,
+          "txPct": 0,
+          "tyPct": 0,
+          "sx": 1,
+          "sy": 1,
+          "rotate": 8
+        },
+        "transformOrigin": {
+          "x": 0.5,
+          "y": 1
+        },
+        "text": "transform-origin: bottom + rotate(8deg)",
+        "semantic": "div"
       }
     ]
   },

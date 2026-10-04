@@ -97,8 +97,10 @@ final class AppStackScene: NSObject {
                     if imgPath.hasPrefix("\"") { imgPath = String(imgPath.dropFirst().dropLast()) }
                     // ★批次 39：静态变换节点数（编译期 CSS transform）——每端独立读数（与 Android/鸿蒙同口径）
                     let tfCount = nodes.filter { ($0["transform"] as? [String: Any]) != nil }.count
+                    let toCount = nodes.filter { ($0["transformOrigin"] as? [String: Any]) != nil }.count
                     composite = ["ok": (mo["ok"] as? Bool) ?? false, "page": page, "content_nodes": nodes.count,
                                  "layer_count": mo["layer_count"] ?? -1, "transformed_nodes": tfCount,
+                                 "transform_origin_nodes": toCount,
                                  "snapshot": shotOk, "snapshot_path": imgPath]
                     // ★★★交互上屏 · 真实触摸（2026-10-04）：宿主喂入**真触摸序列**（down→held→up），
                     //   走 `SelfDrawView.classifyAndEmit`（与 `touchesEnded` 同一分流器，按真实时长判型）

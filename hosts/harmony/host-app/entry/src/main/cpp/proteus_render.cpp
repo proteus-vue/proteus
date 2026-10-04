@@ -604,6 +604,10 @@ static int renderCommandsImpl(const char* jsonCStr, bool fromProbe) {
         jsonNumber(it, "ty", &tfTy);
         jsonNumber(it, "scale", &tfScale);
         jsonNumber(it, "rotate", &tfRotate);
+        // ★批次 40：transform-origin（盒分数）—— 旋转/缩放锚点
+        double toX = 0.5, toY = 0.5;
+        jsonNumber(it, "toX", &toX);
+        jsonNumber(it, "toY", &toY);
         // ★批次 5（CSS 兼容对齐 · 边框）：uniform 边框宽度/颜色
         double borderWidth = 0, borderColor = 0;
         jsonNumber(it, "borderWidth", &borderWidth);
@@ -635,6 +639,10 @@ static int renderCommandsImpl(const char* jsonCStr, bool fromProbe) {
             };
             OH_ArkUI_RenderNodeUtils_SetTransform(node, m);
             if (tfScale != 1) OH_ArkUI_RenderNodeUtils_SetScale(node, (float)tfScale, (float)tfScale);
+        }
+        // ★批次 40：变换锚点（transform-origin，盒分数 0..1）——SetPivot 是**规范化**坐标（与 iOS/Android 同口径）
+        if (toX != 0.5 || toY != 0.5) {
+            OH_ArkUI_RenderNodeUtils_SetPivot(node, (float)toX, (float)toY);
         }
         // ★取证日志（2026-10-02）：下发值必须可直接核对（"渲染去哪了"这类问题不能靠猜）
         //   ★hilog 不吃 `%.1f`（打 <private>）⇒ snprintf 预格式化 + %{public}s（与 ArkTS 侧同坑）

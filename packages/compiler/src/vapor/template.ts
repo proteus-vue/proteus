@@ -93,7 +93,7 @@ export const APP_TEXT_OVERFLOW_VALUES = ['clip', 'ellipsis'] as const
 /** 四边简写字段（`margin`/`padding` → 结构化 `{top,right,bottom,left}`） */
 export const APP_EDGE_FIELDS = ['margin', 'padding'] as const
 /** 百分比宽高折叠出的**比例字段**（App 端原生支持 `widthRatio`/`heightRatio`；非长度、不乘密度） */
-export const APP_DERIVED_FIELDS = ['widthRatio', 'heightRatio', 'marginAuto', 'borderRadiusCorners', 'borderRadiusPct', 'minWidthPct', 'maxWidthPct', 'minHeightPct', 'maxHeightPct'] as const
+export const APP_DERIVED_FIELDS = ['widthRatio', 'heightRatio', 'marginAuto', 'borderRadiusCorners', 'borderRadiusPct', 'transformOrigin', 'minWidthPct', 'maxWidthPct', 'minHeightPct', 'maxHeightPct'] as const
 /** 特殊透传键（App 两内核恒 border-box ⇒ `box-sizing` 只作忠实记录、无副作用） */
 export const APP_SPECIAL_FIELDS = ['boxSizing'] as const
 
@@ -566,6 +566,20 @@ export function parseStaticStyle(
       }
       continue
     }
+      if (key === 'transformOrigin') {
+        // ★批次 40（对齐 Web · 补齐批 39）：**`transform-origin`** —— 旋转/缩放的锚点（盒分数）。
+        //   宿主通道已在（Android `injectTransformOrigin` / iOS 建层快照 + applyTransform）⇒ 编译器折成 `{x,y}` 即可。
+        //   支持：关键字（left/center/right/top/bottom，1–2 值）/ 百分比 / `0`；非零 px 需盒尺寸（编译期不可知）⇒ 诊断跳过。
+        const o = parseTransformOrigin(rawVal)
+        if (o === null) {
+          pushDiag(`style 里 \`${rawKey}: ${rawVal}\` 未解析（支持 关键字 left/center/right/top/bottom · 百分比 · 0；非零 px 需盒尺寸）——已跳过`)
+          continue
+        }
+        if (o.x === 0.5 && o.y === 0.5) continue   // 默认（元素中心）⇒ 不发射（零行为变化）
+        out.transformOrigin = o
+        markImportant('transformOrigin')
+        continue
+      }
     if (LAYOUT_FIELDS.has(key)) {
       // ★批次 12（CSS Grid）：`grid-template-columns/rows` —— 显式轨迹串（`1fr 1fr 200px`）；
       //   `repeat(N, X)` 展开为 N 个 X；不支持的形态（`auto`/`minmax`/`fit-content`）诊断跳过。
@@ -1420,6 +1434,42 @@ function noOpResetValue(key: string, val: string): Record<string, unknown> | nul
     default:
       return null
   }
+}
+
+/**
+ * ★批次 40（对齐 Web）：CSS `transform-origin` → 盒分数 `{x, y}`（宿主变换锚点）。
+ *   支持：关键字（left/center/right/top/bottom；1 值 `top`/`bottom` 定 y、`left`/`right` 定 x、`center` 两轴 0.5）
+ *   · 百分比（→ 分数）· `0`。**非零 px/rpx 需盒尺寸**（编译期不可知）⇒ 返回 null（调用方诊断跳过）。
+ */
+function parseTransformOrigin(val: string): { x: number; y: number } | null {
+  const toks = val.trim().toLowerCase().split(/\s+/).filter(Boolean)
+  if (toks.length === 0 || toks.length > 2) return null
+  const frac = (t: string): number | undefined => {
+    const pct = /^([+-]?(?:\d+\.?\d*|\.\d+))%$/.exec(t)
+    if (pct) return Number(pct[1]) / 100
+    if (t === '0' || t === '0px' || t === '0rpx') return 0
+    return undefined   // 非零 px/rpx / 其它单位 ⇒ 需盒尺寸（不可编译期求）
+  }
+  const xOf = (t: string): number | undefined => t === 'left' ? 0 : t === 'center' ? 0.5 : t === 'right' ? 1 : frac(t)
+  const yOf = (t: string): number | undefined => t === 'top' ? 0 : t === 'center' ? 0.5 : t === 'bottom' ? 1 : frac(t)
+  if (toks.length === 1) {
+    const t = toks[0]!
+    if (t === 'top') return { x: 0.5, y: 0 }
+    if (t === 'bottom') return { x: 0.5, y: 1 }
+    if (t === 'left') return { x: 0, y: 0.5 }
+    if (t === 'right') return { x: 1, y: 0.5 }
+    if (t === 'center') return { x: 0.5, y: 0.5 }
+    const f = frac(t)
+    return f === undefined ? null : { x: f, y: 0.5 }
+  }
+  // 两值：第一个是纵向关键字（top/bottom）⇒ 交换（CSS 允许 `top left` 顺序）
+  const a = toks[0]!
+  const b = toks[1]!
+  const aIsVert = a === 'top' || a === 'bottom'
+  const x = aIsVert ? xOf(b) : xOf(a)
+  const y = aIsVert ? yOf(a) : yOf(b)
+  if (x === undefined || y === undefined) return null
+  return { x, y }
 }
 
 /**
