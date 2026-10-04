@@ -223,6 +223,16 @@
         "why": "★批次 24（2026-10-04 · ★基准 = Web）：宽高比（媒体卡/占位图）。`<n>`（1.5）/`<w>/<h>`（16/9，含空格）→ 比值；`auto` = 默认不发射。内核 `LStyle.aspect_ratio` → taffy `aspect_ratio`（原生；定一轴派生另一轴）"
       },
       {
+        "css": "inset（top/right/bottom/left 的 1–4 值缩写）",
+        "id": "inset",
+        "ends": {
+          "web": "—",
+          "skyline": "—",
+          "app": "supported"
+        },
+        "why": "★批次 38（对齐 Web · 削减胶水）：编译期展开为 top/right/bottom/left（引擎四边已支持）；真项目 15 处（路由层/浮层/scrim 的 position:absolute; inset:0）。auto 边 = 默认偏移（该边不设）。"
+      },
+      {
         "css": "order",
         "id": "order",
         "ends": {
@@ -1202,6 +1212,19 @@
       "strategy": "直映射",
       "note": "★批次 8（2026-10-04）：引擎 `LStyle.right/bottom` + `NodeDto` + taffy inset 映射（absolute/relative 的右/下边缘锚定）；编译器入 APP_LAYOUT_FIELDS + style-object + Android LEN_SCALARS/LAYOUT_KEYS。★**超级应用刚需**：角标 / FAB / 关闭按钮 / 底部弹层锚点。引擎行为测试 tests/inset_right_bottom.rs（right=10/bottom=5 ⇒ 落父右下角）",
       "supportTier": "universal"
+    },
+    {
+      "id": "inset",
+      "css": "inset（top/right/bottom/left 的 1–4 值缩写）",
+      "category": "layout",
+      "compilerFields": [],
+      "web": "—",
+      "skyline": "—",
+      "app": "supported",
+      "tier": "L2",
+      "strategy": "编译期折叠",
+      "note": "★批次 38（对齐 Web · 削减胶水）：编译期展开为 top/right/bottom/left（引擎四边已支持）；真项目 15 处（路由层/浮层/scrim 的 position:absolute; inset:0）。auto 边 = 默认偏移（该边不设）。",
+      "supportTier": "conditional"
     },
     {
       "id": "order",

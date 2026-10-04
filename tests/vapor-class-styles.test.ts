@@ -1211,3 +1211,34 @@ view:not(.x) { background-color: #333333 }
   })
 
 })
+
+// ★批次 38（对齐 Web · 削减胶水）：**`inset` 简写**（`top/right/bottom/left` 的 1–4 值缩写）——2026-10-04
+//   真项目 15 处（路由层/浮层/scrim 的 `position:absolute; inset:0`）；纯编译期展开为四边数值。
+describe('★批次 38 · inset 简写（对齐 Web 定位缩写）', () => {
+  const styleOf = (n: { style?: unknown }) => (n.style ?? {}) as Record<string, unknown>
+
+  it('① 1–4 值展开为 top/right/bottom/left（CSS 标准）', () => {
+    expect(parseStaticStyle('inset: 0', () => {})).toEqual({ top: 0, right: 0, bottom: 0, left: 0 })
+    expect(parseStaticStyle('inset: 10px', () => {})).toEqual({ top: 10, right: 10, bottom: 10, left: 10 })
+    expect(parseStaticStyle('inset: 8px 12px', () => {})).toEqual({ top: 8, right: 12, bottom: 8, left: 12 })
+    expect(parseStaticStyle('inset: 1px 2px 3px 4px', () => {})).toEqual({ top: 1, right: 2, bottom: 3, left: 4 })
+  })
+
+  it('② auto 边 = 默认偏移（该边不设，忠实不猜）', () => {
+    expect(parseStaticStyle('inset: 0 auto', () => {})).toEqual({ top: 0, bottom: 0 })
+    expect(parseStaticStyle('inset: 8px 0', () => {})).toEqual({ top: 8, right: 0, bottom: 8, left: 0 })
+  })
+
+  it('③ 端到端：class 里的 inset:0 → 节点 style 四边 0（覆盖层刚需）', () => {
+    const sfc = `<template><view class="wrap"><view class="scrim">x</view></view></template>
+<style>
+.wrap { position: relative; width: 200px; height: 100px }
+.scrim { position: absolute; inset: 0; background-color: #000000 }
+</style>`
+    const r = buildLayoutTemplate(sfc, 'inset.vue')
+    const scrim = r.template.nodes.find((n) => styleOf(n).backgroundColor === '#000000')
+    expect(scrim, 'scrim 节点命中').toBeTruthy()
+    expect([styleOf(scrim!).top, styleOf(scrim!).right, styleOf(scrim!).bottom, styleOf(scrim!).left], '四边 0').toEqual([0, 0, 0, 0])
+    expect(styleOf(scrim!).position, 'absolute').toBe('absolute')
+  })
+})
