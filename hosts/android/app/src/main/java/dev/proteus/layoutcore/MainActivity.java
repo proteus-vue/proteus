@@ -1075,6 +1075,26 @@ public class MainActivity extends Activity {
                     pf.close();
                     bmp.recycle();
                     cor.put("png", png.getName());
+                // ★★★交互上屏（2026-10-04）：在渲染出的页面上做**真机点按命中**（内核 hitTest，
+                //   与真实触摸同一条 dispatchHit 路径）⇒ 证明"渲染的页面可命中交互"。
+                try {
+                    // ★命中坐标用**树的坐标空间**（app-screen-content 是设计单位 390×844——未物理化），
+                    //   不是视图物理像素（本仓"命中必须与核心同源"纪律）。
+                    float vw = 390f, vh = 844f;
+                    int hits = 0;
+                    int firstTarget = -1;
+                    // 纵向扫若干点（页面内容自上而下）——统计命中数 + 首个目标节点
+                    for (int k = 1; k <= 20; k++) {
+                        float py = vh * (k / 22f);
+                        comp.view().dispatchHit(vw * 0.3f, py);
+                        if (comp.view().lastHitTarget >= 0) { hits++; if (firstTarget < 0) firstTarget = comp.view().lastHitTarget; }
+                    }
+                    cor.put("hit_points_hit", hits);
+                    cor.put("hit_first_target", firstTarget);
+                    cor.put("hit_chain_len", comp.view().lastHitChain.length);
+                } catch (Throwable he) {
+                    cor.put("hit_error", he.getClass().getSimpleName() + ": " + he.getMessage());
+                }
                 } catch (Throwable pe) {
                     cor.put("png_error", pe.getClass().getSimpleName());
                 }
